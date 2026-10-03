@@ -62,6 +62,7 @@ let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
 let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
 const K = {}; // keys held, by KeyboardEvent.code
+const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
 let paused = false;
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
@@ -219,14 +220,14 @@ const ADS = ['DRINK COLA', 'NEO PHONES', 'EAT AT JOES', 'MEGA BANK', 'FLY AIR 9'
 const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
   'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
   'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE','STORAGE',
-  'BURGERS','CHICKEN','JUICE','ICE CREAM','TOYS','THRIFT','TOBACCO'];
+  'BURGERS','CHICKEN','JUICE','ICE CREAM','TOYS','THRIFT','TOBACCO','CARS','REALTY'];
 const PRODUCE = ['GROCERY','MARKET','FRUIT','BAKERY','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
   chinatown: ['DUMPLINGS','NOODLES','TEA HOUSE','HERBS','KARAOKE','BAKERY','DIM SUM','JADE','RAMEN','PHO','MAHJONG'],
-  downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR','SPORTS','JUICE','BURGERS'],
-  industrial: ['AUTO REPAIR','STORAGE','TIRES','HARDWARE','DINER','BAR','WELDING','24/7','CHICKEN','TOBACCO'],
-  brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP','SKATE','BAGELS','THRIFT','ICE CREAM','TOYS'],
+  downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR','SPORTS','JUICE','BURGERS','REALTY','CARS'],
+  industrial: ['AUTO REPAIR','STORAGE','TIRES','HARDWARE','DINER','BAR','WELDING','24/7','CHICKEN','TOBACCO','CARS'],
+  brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP','SKATE','BAGELS','THRIFT','ICE CREAM','TOYS','REALTY'],
 };
 const GLYPHS = { BOOKS: '|][|', RECORDS: '()O', VIDEO: '[]', LIQUOR: 'il!', BAR: 'il!Y', PHARMACY: '+=o', PHONES: '[]#',
   HARDWARE: 'T7/', FLORIST: '*@&', 'PET SHOP': '~>o', ARCADE: '[]#', TATTOO: '*%', LAUNDRY: 'O@', HERBS: '%&*', JADE: 'o@*',
@@ -235,7 +236,7 @@ const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, so
 // opening hours [open, close) in game hours; close < open wraps past midnight; [0, 24] never closes
 const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
-  BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
+  CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
   NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24], STORAGE: [0, 24] };
 const hoursOf = word => HOURS[word] || [9, 20];
@@ -970,7 +971,7 @@ function stepEmergency(dt) {
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
 function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
-  for (const c of cars) if (c.parked && Math.hypot(rel(c.x - px), rel(c.y - py)) > 45) { c.parked = c.mine = false; c.v = 0; toLane(c); } // left behind: back into the traffic
+  for (const c of cars) if (c.parked && !c.owned && Math.hypot(rel(c.x - px), rel(c.y - py)) > 45) { c.parked = c.mine = false; c.v = 0; toLane(c); } // left behind: back into the traffic
   stepEmergency(dt);
   fillGrid(carGrid, cars, 'ex', 'ey'); fillGrid(pplGrid, people, 'x', 'y');
   // a car crossing our path sideways is long (0.45), one in line with us is narrow (0.2). Around an emergency vehicle
@@ -1277,13 +1278,13 @@ function settle(p) {
 // A block takes a minute to walk but a game hour lasts 20 seconds, so a routine walked out in full would run hours
 // behind the clock. Only people you can see walk: out of sight they settle instantly, and anyone coming back into
 // the simulated area after a while frozen catches up the same way.
-const SEEN_R = 28;
+const SEEN_R = 28, VIS_R = MAXD + 4; // beyond SEEN_R, anyone a building hides from you; beyond VIS_R, anyone at all
 function stepPeople(dt, t, everywhere = false) {
   for (const p of people) {
     if (!everywhere && !p.follow && !simulated(p.x, p.y)) continue;
     if (!everywhere && !p.follow && !(p.talk > 0)) {
       if (p.simT !== undefined && T - p.simT > 2) settle(p);
-      else if (p.goal && !p.hidden && Math.hypot(rel(p.x - px), rel(p.y - py)) > SEEN_R) settle(p);
+      else if (p.goal && !p.hidden) { const d = Math.hypot(rel(p.x - px), rel(p.y - py)); if (d > VIS_R || d > SEEN_R && !lineOfSight(px, py, p.x, p.y)) settle(p); } // (never vanishing in plain view)
       p.simT = T;
     }
     if (p.talk > 0) { p.talk -= dt; continue; } // stopped to chat with you
@@ -1513,6 +1514,7 @@ function audioMix(s) {
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
+    if (k === 'lighthouse' || k === 'lamproom') { out.waves = 0.55; out.wind = k === 'lamproom' ? 0.5 : 0.15; out.city = 0; } // the sea all round
     if (k === 'train') out.rumble = 0.9;
     return out;
   }
@@ -1579,12 +1581,17 @@ const ITEMS = {
   thaitea: { name: 'Thai iced tea', price: 4, kind: 'drink', uses: 4, caffeine: 30 },
   herbaltea: { name: 'herbal tea', price: 3, kind: 'drink', uses: 3, sober: 0.35 }, // clears your head a bit
   // smoke
-  cigarettes: { name: 'cigarettes', price: 10, kind: 'smoke', uses: 5 },
+  cigarettes: { name: 'cigarettes', price: 10, kind: 'smoke', uses: 5 }, pipe: { name: 'pipe', price: 18, kind: 'smoke', uses: 4 },
+  vape: { name: 'mango vape', price: 25, kind: 'gear' },
   // gear
   skateboard: { name: 'skateboard', price: 60, kind: 'gear' }, ball: { name: 'soccer ball', price: 20, kind: 'gear' },
   boombox: { name: 'boombox', price: 45, kind: 'gear' }, umbrella: { name: 'umbrella', price: 12, kind: 'gear' },
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
   vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
+  // property (property.js): not carried, owned
+  car_hatch: { name: 'old hatchback', price: 450, kind: 'car' }, car_sedan: { name: 'sedan', price: 1500, kind: 'car' },
+  car_sports: { name: 'sports car', price: 4000, kind: 'car' },
+  home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 8000, kind: 'home' },
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
@@ -1615,7 +1622,8 @@ const STOCK_WORD = {
   'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['sushi', 'tea'], VIDEO: ['vhs', 'candy', 'soda'], THAI: ['padthai', 'greencurry', 'mangorice', 'thaitea'],
   BURGERS: ['burger', 'fries', 'milkshake', 'soda'], CHICKEN: ['chicken', 'fries', 'soda'], JUICE: ['smoothie', 'water', 'apple'],
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
-  THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'newspaper', 'candy'],
+  THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
+  CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft'],
   'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
@@ -1630,7 +1638,7 @@ const inv = []; // { id, uses }
 let held = 0; // which slot is in your hand; -1 = nothing, hands empty
 // take slot k in hand, or (if it's already there) put it away and hold nothing
 const holdSlot = k => { held = held === k ? -1 : k; };
-const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0 };
+const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0 };
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
@@ -1639,6 +1647,7 @@ let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
 const heldItem = () => inv[held] || null;
 function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
+  if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }
   if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   inv.push({ id, uses: it.uses || 0 }); held = inv.length - 1;
@@ -1647,18 +1656,18 @@ function buy(id) { // false + why, if you can't
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
 // your storage unit: one unit, the same at every STORAGE place in town
-const STORE_SIZE = 30, stored = [];
+const STORE_SIZE = 30, stored = [], closet = []; // (closet: the stash at home, same rules)
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
   held = k; removeHeld();
   held = was < 0 ? -1 : clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1)); // (empty hands stay empty)
   return it;
 }
-function storeSlot(k) { // carried slot k -> the unit
+function storeSlot(k, list = stored, where = 'your unit') { // carried slot k -> the unit (or the closet)
   if (!inv[k]) return [false, 'Nothing there.'];
-  if (stored.length >= STORE_SIZE) return [false, 'Your unit is full.'];
-  const it = takeSlot(k); stored.push(it);
-  return [true, `You put the ${ITEMS[it.id].name} in your unit.`];
+  if (list.length >= STORE_SIZE) return [false, `${cap(where)} is full.`];
+  const it = takeSlot(k); list.push(it);
+  return [true, `You put the ${ITEMS[it.id].name} in ${where}.`];
 }
 // pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
 const SELL_RATE = { PAWN: 0.4 };
@@ -1670,11 +1679,11 @@ function sellSlot(k, rate) {
   takeSlot(k); earn(p);
   return [true, `You sell the ${name} for ${fmt$(p)}.`];
 }
-function retrieveSlot(k) { // the unit's item k -> your hands
-  if (!stored[k]) return [false, 'Nothing there.'];
+function retrieveSlot(k, list = stored, where = 'your unit') { // the unit's item k -> your hands
+  if (!list[k]) return [false, 'Nothing there.'];
   if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
-  const it = stored.splice(k, 1)[0]; inv.push(it);
-  return [true, `You take the ${ITEMS[it.id].name} out of your unit.`];
+  const it = list.splice(k, 1)[0]; inv.push(it);
+  return [true, `You take the ${ITEMS[it.id].name} out of ${where}.`];
 }
 function removeHeld() {
   const it = inv[held];
@@ -1701,11 +1710,16 @@ function useHeld(near) {
   }
   if (d.kind === 'smoke') {
     if (fx.smoke > 0) { cigTip = 1; return ['You take a drag.', 'drag']; }
-    it.uses--; fx.smoke = 45; cigTip = 1;
+    const pipe = it.id === 'pipe';
+    it.uses--; fx.smoke = pipe ? 70 : 45; fx.pipe = pipe; cigTip = 1;
     if (it.uses <= 0) removeHeld();
+    if (pipe) return [`You pack the bowl and light the pipe.${it.uses > 0 ? ` (${it.uses} bowls left)` : ' The last of the tobacco.'}`, 'light'];
     return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
   }
   switch (it.id) {
+    case 'vape': // hold Q to pull, let go to blow it out (stepGoods)
+      if (fx.vape > 0) return ['', null];
+      fx.vape = 0.001; return ['', 'drag'];
     case 'skateboard':
       if (near.indoors) return ['Not in here.', null];
       fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
@@ -1766,6 +1780,11 @@ function stepGoods(dt) {
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
   fx.yoyo = Math.max(0, fx.yoyo - dt); fx.spark = Math.max(0, fx.spark - dt);
   cigTip = Math.max(0, cigTip - dt * 0.8);
+  if (fx.vape > 0) { // pulling on the vape: the longer, the bigger the cloud
+    const it = heldItem();
+    if (K.KeyQ && it && it.id === 'vape') fx.vape = Math.min(3, fx.vape + dt);
+    else { fx.cloud = fx.vape; fx.vape = 0; }
+  }
   return stepBall(dt);
 }
 // how fast you walk, from what you've had and what you're riding
@@ -2019,6 +2038,69 @@ GAMES.serve = (rnd = Math.random) => {
   return g;
 };
 
+// tending bar (a shift at a bar): the classic. Four bars, a tap at the end of each, thirsty customers walking up
+// them. Hold SPACE to pour, let go when the mug's full (too soon and you keep pouring next time, too long and it
+// spills) and it slides down the bar. A customer who catches one is pushed back toward the door while they drink,
+// and may slide the empty back: be at that bar to catch it. A mug nobody catches, an empty you miss, a spill, or a
+// customer reaching your end: a mistake. Five and you're done; 75 seconds otherwise.
+GAMES.tapper = (rnd = Math.random) => {
+  const W = 34, H = 12, LANES = [1, 4, 7, 10], g = { id: 'tapper', title: 'LAST ORDERS', W, H, score: 0, over: false, shift: true };
+  let lane = 0, cust = [], mugs = [], empties = [], misses = 0, t = 0, spawn = 1, fill = 0, pouring = false;
+  const FULL = [0.85, 1.15];
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (k.upP && lane > 0) { lane--; fill = 0; pouring = false; } // (a different tap: start a fresh mug)
+    if (k.downP && lane < 3) { lane++; fill = 0; pouring = false; }
+    if (k.act) {
+      pouring = true; fill += dt / 0.9;
+      if (fill > 1.35) { fill = 0; pouring = false; misses++; ev.push('wrong'); } // all over the floor
+    } else if (pouring) { // let go
+      pouring = false;
+      if (fill >= FULL[0] && fill <= FULL[1]) { mugs.push({ lane, x: 2 }); fill = 0; ev.push('slide'); }
+      else if (fill > FULL[1]) { fill = 0; misses++; ev.push('wrong'); }
+    }
+    if ((spawn -= dt) <= 0) { cust.push({ lane: rnd() * 4 | 0, x: W - 1, sp: 0.9 + rnd() * 0.6 + t * 0.015, drink: 0 }); spawn = Math.max(0.9, 2.6 - t * 0.022) * (0.7 + rnd() * 0.6); }
+    for (const c of cust) {
+      if (c.drink > 0) { c.drink -= dt; if (c.drink <= 0 && rnd() < 0.55) empties.push({ lane: c.lane, x: c.x - 1 }); continue; }
+      c.x -= c.sp * dt;
+    }
+    for (const m of mugs) {
+      m.x += 12 * dt;
+      const c = cust.filter(o => o.lane === m.lane && o.drink <= 0 && o.x <= m.x + 0.5).sort((a_, b) => a_.x - b.x)[0];
+      if (c) { m.done = true; g.score++; ev.push('serve'); c.x += 7; c.drink = 1.6; if (c.x >= W - 1) c.gone = true; } // shoved back (out of the door, if far enough)
+      else if (m.x >= W - 1) { m.done = true; misses++; ev.push('break'); }
+    }
+    for (const e of empties) {
+      e.x -= 9 * dt;
+      if (e.x <= 1.5) { e.done = true; if (e.lane === lane) { ev.push('place'); g.score += 0.5; } else { misses++; ev.push('break'); } }
+    }
+    mugs = mugs.filter(m => !m.done); empties = empties.filter(e => !e.done);
+    for (const c of cust) if (c.x <= 2) { c.gone = true; misses++; ev.push('angry'); }
+    cust = cust.filter(c => !c.gone);
+    if (misses >= 5 || t >= 75) { g.over = true; ev.push('end'); }
+    return ev;
+  };
+  g.draw = put => {
+    LANES.forEach((y, k) => {
+      for (let x = 2; x < W; x++) put(x, y + 1, '=', C(BRICK, 9), C(BRICK, 2)); // the bar
+      put(1, y, '}', C(GRAY, 12)); put(1, y + 1, '|', C(GRAY, 9)); // the tap
+      put(0, y, k === lane ? '@' : ' ', C(WHITE, 15)); put(0, y + 1, k === lane ? 'A' : ' ', C(WHITE, 13));
+    });
+    // the mug under the tap, filling: froth on top once it's full, red past full
+    const y = LANES[lane], lvl = Math.min(3, Math.floor(fill * 3));
+    if (fill > 0) put(2, y, fill > FULL[1] ? '%' : lvl >= 3 ? '@' : lvl >= 2 ? 'U' : lvl >= 1 ? 'u' : '_', fill > FULL[1] ? C(RED, 15) : fill >= FULL[0] ? C(WHITE, 15) : C(YEL, 13), C(YEL, 2 + lvl));
+    for (const c of cust) put(Math.round(c.x), LANES[c.lane], c.drink > 0 ? 'Q' : 'o', C(YEL, 15), C(MAG, 3));
+    for (const m of mugs) put(Math.round(m.x), LANES[m.lane], 'U', C(YEL, 15), C(ORANGE, 3));
+    for (const e of empties) put(Math.round(e.x), LANES[e.lane], 'u', C(GRAY, 13), C(GRAY, 3));
+  };
+  g.status = () => `SERVED ${Math.floor(g.score)}   MISTAKES ${misses}/5   ${Math.max(0, 75 - t) | 0}s   UP/DOWN bar, HOLD SPACE pour, let go to slide`;
+  g.reward = () => Math.max(0, Math.round((4 * Math.min(1, t / 75) + g.score * 1.3 - misses * 0.8) * 100) / 100);
+  g.state = () => ({ lane, fill, cust, mugs, empties, misses });
+  return g;
+};
+
 // stocking shelves (a shift at a store): each shelf holds one kind of thing, and what they are depends on the shop
 // (STOCK_THEMES, by its sign); shoppers keep taking them. Put each box that comes off the truck in an empty slot on
 // its own shelf. 60 seconds. Pays for every box shelved right, less for the ones put in the wrong place.
@@ -2184,8 +2266,77 @@ GAMES.lockpick = (rnd = Math.random) => {
   return g;
 };
 
+// breaking out of jail: sneak from your cell (bottom left) to the door (top right) while a guard walks his rounds
+// with a flashlight. Crates block the beam. Step into the light, or bump into him, and he's got you. One cell per
+// arrow press (held, it repeats). 45 seconds before the shift changes and they count heads.
+GAMES.jailbreak = (rnd = Math.random) => {
+  const W = 30, H = 13, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true };
+  const cell = (x, y) => y * W + x, solid = new Set();
+  for (let x = 0; x < W; x++) solid.add(cell(x, 0)).add(cell(x, 10));
+  for (let y = 0; y <= 10; y++) solid.add(cell(0, y)).add(cell(W - 1, y));
+  const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 8], [11, 8]], [[17, 8]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
+  for (const grp of CRATES) for (const [x, y] of grp) solid.add(cell(x, y));
+  const door = [W - 2, 1], you = [2, 9], ROUTE = [[3, 2], [26, 2], [26, 8], [3, 8]];
+  let gx = 3, gy = 2, leg = 1, wait = 0, fx_ = 1, fy_ = 0, t = 0, rep = 0;
+  const lit = new Set();
+  const clear = (x0, y0, x1, y1) => { // nothing solid on the way from (x0, y0) to (x1, y1)
+    for (let s = 1; s < 8; s++) { const x = Math.round(x0 + (x1 - x0) * s / 8), y = Math.round(y0 + (y1 - y0) * s / 8); if (solid.has(cell(x, y)) && !(x === x1 && y === y1)) return false; }
+    return true;
+  };
+  const shine = () => { // the cone: six cells ahead, widening
+    lit.clear();
+    const ox = Math.round(gx), oy = Math.round(gy);
+    for (let d = 1; d <= 6; d++) for (let o = -(d >> 1); o <= d >> 1; o++) {
+      const x = ox + fx_ * d - fy_ * o, y = oy + fy_ * d + fx_ * o;
+      if (x < 0 || y < 0 || x >= W || y > 10 || solid.has(cell(x, y)) || !clear(ox, oy, x, y)) continue;
+      lit.add(cell(x, y));
+    }
+  };
+  shine();
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    // you: a cell per press, repeating while held
+    const dir = k.leftP || k.left ? [-1, 0] : k.rightP || k.right ? [1, 0] : k.upP || k.up ? [0, -1] : k.downP || k.down ? [0, 1] : null;
+    if (k.leftP || k.rightP || k.upP || k.downP) rep = 0;
+    if (dir && (rep -= dt) <= 0) {
+      rep = 0.16;
+      const nx = you[0] + dir[0], ny = you[1] + dir[1];
+      if (!solid.has(cell(nx, ny))) { you[0] = nx; you[1] = ny; ev.push('hop'); } else ev.push('bump');
+    }
+    // the guard: along his round, pausing at each corner to look about
+    if (wait > 0) { wait -= dt; if (wait < 0.5) { const n = ROUTE[leg]; fx_ = Math.sign(n[0] - gx); fy_ = Math.sign(n[1] - gy); } }
+    else {
+      const [tx, ty] = ROUTE[leg], d = Math.hypot(tx - gx, ty - gy), s = Math.min(d, 3.2 * dt);
+      fx_ = Math.sign(tx - gx); fy_ = Math.sign(ty - gy);
+      gx += fx_ * s; gy += fy_ * s;
+      if (d - s < 1e-6) { leg = (leg + 1) % ROUTE.length; wait = 1.1; }
+    }
+    shine();
+    if (you[0] === door[0] && you[1] === door[1]) { g.over = g.success = true; g.score = 1; ev.push('clear'); return ev; }
+    if (lit.has(cell(you[0], you[1])) || Math.abs(gx - you[0]) + Math.abs(gy - you[1]) < 1.2 || t > 45) { g.over = true; ev.push('die'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let y = 0; y <= 10; y++) for (let x = 0; x < W; x++) {
+      const i = cell(x, y);
+      if (solid.has(i)) { const wall = x === 0 || y === 0 || x === W - 1 || y === 10; put(x, y, wall ? '#' : '=', wall ? C(GRAY, 8) : C(BRICK, 12), wall ? C(GRAY, 2) : C(BRICK, 3)); }
+      else if (lit.has(i)) put(x, y, '.', C(YEL, 12), C(YEL, 3));
+    }
+    put(door[0], door[1], 'D', C(GREEN, 15), C(GREEN, 4));
+    put(Math.round(gx), Math.round(gy), 'G', C(BLUE, 15), C(BLUE, 4));
+    put(you[0], you[1], '@', C(WHITE, 15), lit.has(cell(you[0], you[1])) ? C(RED, 6) : NONE);
+    text(0, 12, `${Math.max(0, 45 - t) | 0}s till the head count`, C(t > 35 ? RED : GRAY, 12));
+  };
+  g.status = () => 'ARROWS sneak to the door (D). Stay out of the light.';
+  g.reward = () => 0;
+  g.state = () => ({ you, gx, gy, lit, door, solid, t });
+  return g;
+};
+
 // which shift each room offers
-const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock' };
+const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
 const ARCADE_GAMES = ['snake', 'breakout', 'crosser', 'pong'], CREDIT = 1;
 
@@ -2312,7 +2463,7 @@ function callUnits() {
       const p = randomLane(30, wanted.lastX, wanted.lastY);
       c = addCar({ ...p, kind: 'police', body: BLUE, patrol: true, extra: true });
     }
-    Object.assign(c, { pursuit: true, cruise: 2.0, dest: [wanted.lastX, wanted.lastY] });
+    Object.assign(c, { pursuit: true, cruise: 2.5, dest: [wanted.lastX, wanted.lastY] }); // (faster than you drive, unless you floor it)
   }
 }
 function clearWanted() {
@@ -2355,13 +2506,21 @@ function stepCrime(dt) {
     c.dropped = true;
     footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true });
   }
+  // in a car with a cruiser on your bumper: told to pull over, and if you don't, a PIT manoeuvre spins you out
+  let told = false;
+  if (mode === 'drive' && me) {
+    const tail = cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.3);
+    wanted.tailT = tail ? (wanted.tailT || 0) + dt : Math.max(0, (wanted.tailT || 0) - dt * 0.5);
+    if (tail && T > (wanted.toldT || 0)) { wanted.toldT = T + 8; told = true; }
+    if (wanted.tailT > 4 && Math.abs(me.v) > 0.5) { wanted.tailT = 0; me.spunT = T + 2.5; return 'pit'; }
+  }
   // caught: a hand on your shoulder, or boxed in and stopped
   const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22)
     || inside && footCops.some(c => c.chase && near(c.x, c.y, wx, wy) < 0.35); // inside: they come in through the door after you
-  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.0) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
+  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
-  return wanted.seen ? 'seen' : 'hiding';
+  return told ? 'pullover' : wanted.seen ? 'seen' : 'hiding';
 }
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
 function tidyPolice() {
@@ -2380,6 +2539,66 @@ const JAIL_T = 60;
 function goToJail() {
   inv.length = 0; held = -1; fx.skating = false; fx.boombox = false;
   clearWanted();
+}
+// ===== owning things: a car from a CAR LOT, a home from a REALTY office. Pure (no DOM), so the node tests can buy
+// them; save.js keeps them (and your money and things) in localStorage between visits.
+// A car you own is a car in `cars` flagged `owned`: always parked where you left it (never handed back to the
+// traffic), yours to get into without it being a crime, faster or slower depending on the model.
+const CAR_MODELS = {
+  car_hatch: { body: GREEN, top: 2.0, boost: 2.9 }, car_sedan: { body: BLUE, top: 2.3, boost: 3.3 }, car_sports: { body: RED, top: 2.8, boost: 4.2 },
+};
+// a home is the apartment building on a lot (any cell of it: they share one SHOP), and how big a place you bought
+const owned = { cars: [], homes: [] }; // cars: the car objects; homes: { cell, kind }
+const homeAt = sh => owned.homes.find(h => SHOP[h.cell] === sh) || null;
+
+// a car you get out of stays where it is: pulled in to the kerb if it's on a street, nobody drives it away
+function parkCar(c) {
+  const r = ROAD[idx(Math.floor(c.x), Math.floor(c.y))];
+  if (r === 1 || r === 2) { // square it up to the street and into the kerb lane on the side it's nearer
+    const vert = r === 1, base = Math.floor((vert ? c.x : c.y) / 8) * 8 + 1, side = Math.sign((vert ? c.x : c.y) - base) || 1;
+    if (vert) { c.x = base + side * 0.72; c.hx = 0; c.hy = c.hy >= 0 ? 1 : -1; } else { c.y = base + side * 0.72; c.hy = 0; c.hx = c.hx >= 0 ? 1 : -1; }
+  }
+  c.off = 0; c.ex = c.x; c.ey = c.y; c.parked = true;
+}
+// the street lane nearest (x, y), on the side of the street you're on: {x, y, hx, hy}
+function laneNear(x, y) {
+  const X = Math.round((x - 1) / 8) * 8 + 1, Y = Math.round((y - 1) / 8) * 8 + 1, bx = Math.floor(x / 8) & (NB - 1), by = Math.floor(y / 8) & (NB - 1);
+  const vOK = vseg(Math.round((x - 1) / 8) & (NB - 1), by), hOK = hseg(bx, Math.round((y - 1) / 8) & (NB - 1));
+  const useV = vOK && (!hOK || Math.abs(rel(x - X)) < Math.abs(rel(y - Y)));
+  if (useV) { const dir = Math.sign(rel(x - X)) || 1; return { x: mod(X + 0.4 * dir, N), y, hx: 0, hy: dir }; }
+  const dir = -(Math.sign(rel(y - Y)) || 1); return { x, y: mod(Y - 0.4 * dir, N), hx: dir, hy: 0 };
+}
+// a car of yours, parked at (x, y) facing (hx, hy) (exactly there, or pulled in to the kerb)
+function spawnOwnedCar(model, x, y, hx, hy, exact = false) {
+  const m = CAR_MODELS[model], c = addCar({ x, y, hx, hy, body: m.body, owned: true, model, top: m.top, boost: m.boost, mine: true });
+  if (!exact) parkCar(c); else { c.ex = c.x; c.ey = c.y; c.parked = true; }
+  owned.cars.push(c);
+  return c;
+}
+// the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
+function freeHomeNear(x, y) {
+  let best = -1, bd = 30;
+  for (let dy = -24; dy <= 24; dy++) for (let dx = -24; dx <= 24; dx++) {
+    const i = idx(mod(Math.floor(x) + dx, N), mod(Math.floor(y) + dy, N)), sh = SHOP[i];
+    if (!sh || sh.kind !== SHOP_APTS || !map[i] || homeAt(sh)) continue;
+    const d = Math.hypot(dx, dy);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+// buying a car or a home (from buy()): x, y = where you are (the shop's door)
+function buyProperty(id, x, y) {
+  const it = ITEMS[id];
+  if (it.kind === 'car') {
+    if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
+    const l = laneNear(x, y); spawnOwnedCar(id, l.x, l.y, l.hx, l.hy);
+    return [true, `You buy ${aOrSome(it.name)}. It's parked out front (C on your map).`];
+  }
+  const cell = freeHomeNear(x, y);
+  if (cell < 0) return [false, '"Nothing on the market round here right now."'];
+  if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
+  owned.homes.push({ cell, kind: id });
+  return [true, `You buy ${aOrSome(it.name)} at ${SHOP[cell].word}. Your keys. (H on your map)`];
 }
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
@@ -2465,6 +2684,9 @@ const sk0 = seed => seed * 1e4 | 0;
 // 14 art deco, 15 parking garage, 16 balcony apartments)
 const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE];
 const ARCADE_SIGN = new Set(['ARCADE']);
+// a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
+const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448 };
+const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
@@ -2473,11 +2695,18 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   BG[i] = bgAt(FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d);
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
-    if (z > 0.33) {
+    if (z > 0.32) {
       const w = sh.word, m = w.length + 3, p = mod(Math.floor(u * 10), m);
       // up close a letter spans many cells: draw it once, in the middle cell of its span
-      const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.365, d / projY);
+      const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.36, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
+      // closer still, big enough for it: the letter drawn large in blocks, so the sign grows as you walk up to it
+      if (p < w.length && GLYPH5[w[p]] !== undefined && 0.1 / uStep >= 4 && 0.08 / (d / projY) >= 5) {
+        const gx = Math.floor(fract(u * 10) * 4), gy = Math.floor((0.4 - z) / 0.08 * 5); // (a column's gap after each letter)
+        const col = ARCADE_SIGN.has(w) && open ? NEON[(p + Math.floor(T * 6)) & 3] : sh.neon, on = glyphOn(w[p], gx, gy);
+        if (on) BG[i] = C(col, Math.min(lvl, 15) * 0.25);
+        return set(i, on ? '#' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+      }
       if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between
         const lit = Math.max(lvl, 13), chase = Math.floor(T * 6);
         if (p < w.length) return set(i, centered ? w[p] : ' ', C(NEON[(p + chase) & 3], lit));
@@ -3599,6 +3828,38 @@ function towerCell(i, u, z, du, dz, L, hw) {
   return false;
 }
 
+// one el car as a real box running east-west: steel sides with a red stripe, a band of windows (lit warm after dark),
+// a pair of doors each side, a driver's cab with headlights at the leading and trailing ends (cab: +1 / -1 = which
+// end, 0 = none), an air-conditioning hump on the roof and a dark underframe
+const EL_HL = EL_CAR_LEN / 2 - 0.03, EL_HW = 0.14, EL_H = 0.32;
+function drawElCar(vx, vy, cab) {
+  const z0 = EL_TOP + 0.02, lit = Math.max(night, overcast * 0.6);
+  drawBox(boxAt(vx, vy, 1, 0, EL_HL, EL_HW, z0, z0 + EL_H), (i, t, L) => {
+    const f = HIT.face, u = HIT.u, w = HIT.w - z0, k = shadeFace(f);
+    BG[i] = C(GRAY, (2 + L * 0.5) * k);
+    if (f === 6) return set(i, ' ', 0), true;
+    if (w < 0.04) { BG[i] = C(GRAY, 1); return set(i, '=', C(GRAY, L * 0.4)), true; } // the underframe
+    if (f === 5) return set(i, Math.abs(u) < 0.25 ? '#' : fract(u * 6) < 0.1 ? '|' : ' ', C(GRAY, L * 0.8)), true; // roof, ribs, the AC unit
+    if (f === 1 || f === 2) { // the ends: a cab with windscreen and lamps, or the gangway to the next car
+      const end = (f === 1 ? 1 : -1) === cab, v = Math.abs(HIT.v);
+      if (end && w > 0.17 && w < 0.27 && v < EL_HW * 0.85) { BG[i] = C(CYAN, 1 + L * 0.15); return set(i, ' ', 0), true; }
+      if (end && w > 0.07 && w < 0.11 && v > EL_HW * 0.55) return set(i, 'O', C(f === 1 ? WHITE : RED, 15)), true;
+      if (!end && v < 0.06 && w < 0.27) { BG[i] = C(GRAY, 1); return set(i, '|', C(GRAY, L * 0.5)), true; }
+      return set(i, w > 0.12 && w < 0.14 ? '=' : ' ', C(RED, L)), true;
+    }
+    // the sides
+    const door = [-0.45, 0.45].some(d => Math.abs(u - d * EL_HL) < 0.09);
+    if (door && w > 0.05 && w < 0.29) { BG[i] = C(GRAY, (3 + L * 0.5) * k); return set(i, Math.abs(fract((u + 1) * 11) - 0.5) < 0.1 ? '|' : w > 0.18 && w < 0.26 ? '#' : ' ', w > 0.18 ? C(WARM, Math.max(L * 0.5, lit * 13)) : C(GRAY, L * 0.6)), true; }
+    if (w > 0.12 && w < 0.14) return set(i, '=', C(RED, Math.max(L, 6))), true; // the stripe
+    if (w > 0.17 && w < 0.27 && Math.abs(u) < EL_HL - 0.06) { // the windows
+      const pane = fract(u * 4) < 0.12;
+      if (pane) return set(i, '|', C(GRAY, L)), true;
+      BG[i] = lit > 0.3 ? C(WARM, 3 + lit * 6) : C(CYAN, 1 + L * 0.15);
+      return set(i, lit > 0.3 && hash(Math.floor(u * 4 + vx), 1, 9) > 0.6 ? 'o' : ' ', C(SKIN, 8)), true; // the odd passenger
+    }
+    return set(i, ' ', 0), true;
+  });
+}
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
 function elSprites() {
   forNear(elPillarsB, p => drawArt(...R(p.x, p.y), 0, 0.09, EL_BOT, PILLAR, (c, row, L) => C(GRAY, L * 0.9)));
@@ -3608,10 +3869,8 @@ function elSprites() {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
       const [vx, vy] = R(t.x - t.dir * (j - 1) * EL_CAR_LEN, EL_TRACK[t.tr]);
-      if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-      const s = Math.abs(across(1, 0, vx, vy)), side = s > 0.3;
-      drawArt(vx, vy, EL_TOP, side ? EL_CAR_LEN * s + 0.18 : 0.2, 0.3, side ? ART.elSide : ART.elEnd, (c, row, L) =>
-        c === '#' ? C(WARM, Math.max(L * 0.8, night * 14)) : c === 'o' ? C(WHITE, 14) : row === 2 ? C(RED, L) : C(GRAY, L * 1.1));
+      if (Math.abs(vx) > vis + 2 || Math.abs(vy) > vis + 2) continue;
+      drawElCar(vx, vy, j === 0 ? t.dir : j === EL_CARS - 1 ? -t.dir : 0);
     }
   }
 }
@@ -3670,6 +3929,7 @@ for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM', 'SUSHI']) RO
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
 for (const w of ['TEA HOUSE', 'MAHJONG']) ROOM_FOR[w] = 'tea';
 ROOM_FOR.HOSPITAL = 'hospital';
+ROOM_FOR.CARS = 'showroom'; ROOM_FOR.REALTY = 'realty';
 ROOM_FOR.STORAGE = 'storage';
 
 const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
@@ -3821,7 +4081,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [];
       for (const y of [5, 6.5, 8, 9.5]) for (const cx of [4.2, 9.8]) { // two blocks of seats, an aisle up the middle from the door
-        p.push(BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
+        p.push({ ...BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), seatRow: { x0: cx - 1.5, x1: cx + 1.5, y, fx: 0, fy: -1 } }, BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
         if (chance(0.7)) p.push(sitting(cx - 1.4 + Math.random() * 2.8, y + 0.05, shirt(), 0.35, true));
       }
       return p;
@@ -3973,6 +4233,41 @@ const ROOM_DEFS = {
     props: r => [BX(1.9, 1.55, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // the bunk: a blanket on a steel frame
                  BX(1.9, 1.55, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; }),
                  BX(5.4, 1.4, 0.28, 0.28, 0, 0.45, solid(WHITE, { top: 'o', bright: 2 }))] }, // the steel toilet
+  // the lighthouse: whitewashed stone, little deep-set windows on the sea, the keeper at his desk, and a spiral
+  // staircase winding up through the middle to the lamp room
+  lighthouse: { grid: boxRoom(8, 8), light: 0.55, floor: 'concrete', ceil: 'dark', wall: lighthouseWall, keeper: [6.2, 2.2],
+    props: r => [
+      BX(6.2, 1.5, 0.8, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), // the desk, the logbook open on it
+      BX(6.0, 1.45, 0.22, 0.15, 0.8, 0.84, (i, t, L) => { BG[i] = C(WHITE, 3 + L * 0.2); return set(i, HIT.face === 5 ? '~' : '-', C(GRAY, L * 0.7)), true; }),
+      standing(6.2, 2.2, BLUE),
+      BX(4, 3.6, 0.09, 0.09, 0, 2.6, solid(GRAY, { panel: 0.3 })), // the newel post
+      ...Array.from({ length: 12 }, (_, k) => { // the steps, a quarter turn every three
+        const th = k / 12 * Math.PI * 2, c = Math.cos(th), s_ = Math.sin(th);
+        return BX(4 + c * 0.55, 3.6 + s_ * 0.55, 0.45, 0.16, k * 0.2, k * 0.2 + 0.06, solid(GRAY, { top: '=' }), c, s_);
+      }),
+      SP(1.4, 1.4, 0.6, 0.5, ['  ___ ', ' (@@@)', '(@@@@@)'], (c, row, L) => C(WARM, L)), // a coil of rope
+    ] },
+  // the lamp room: glass all round, the sea and the sky outside, the great lens turning in the middle
+  lamproom: { grid: boxRoom(6, 6, {}, false), light: 0.45, floor: 'concrete', ceil: 'dark', wall: lampRoomWall,
+    props: r => [
+      BX(3, 3, 0.35, 0.35, 0, 0.9, solid(GRAY, { panel: 0.4, top: '=' })), // the pedestal
+      BX(3, 3, 0.5, 0.5, 0.9, 1.9, (i, t, L) => { // the lens: rings of glass, blazing on the side the beam's on
+        const f = HIT.face, side = f === 1 ? 0 : f === 2 ? Math.PI : f === 3 ? -Math.PI / 2 : Math.PI / 2;
+        const on = beamLit() ? Math.max(0, Math.cos(beamAng() - side)) ** 3 : 0;
+        BG[i] = C(YEL, 3 + on * 12);
+        return set(i, f >= 5 ? '@' : Math.abs(fract(HIT.w * 6) - 0.5) < 0.15 ? '=' : '(', C(on > 0.5 ? WHITE : YEL, 8 + on * 7)), true;
+      }),
+    ] },
+  // a car lot's showroom: polished floor, three cars on display, the salesman at his desk
+  showroom: { grid: boxRoom(12, 9), light: 1, floor: 'marble', ceil: 'strip', sign: true, signAt: 2.6, keeper: [9.6, 2.2],
+    props: r => [BX(9.6, 1.5, 1.0, 0.35, 0, 0.8, solid(GRAY, { panel: 0.4, top: '=' })), standing(9.6, 2.2, BLUE),
+      ...[[2.5, 3.5, GREEN], [5.6, 5.4, BLUE], [2.6, 7.0, RED]].flatMap(([x, y, col]) => showCar(x, y, col))] },
+  // an estate agent's: listings in the window, a desk
+  realty: { grid: boxRoom(9, 7), light: 0.9, floor: 'carpet', ceil: 'pendant', sign: true, signAt: 2.6, wall: realtyWall, keeper: [4.5, 2.0],
+    props: r => [BX(4.5, 1.4, 1.2, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), standing(4.5, 2.0, GREEN),
+      SP(1.3, 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(7.2, 4.6, -1, 0)] },
+  // home: a bed, a closet, a sofa facing the telly, a window on the city. A studio, or a loft twice the size
+  home: homeDef(7, 6), loft: homeDef(11, 8),
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -4124,6 +4419,61 @@ function jailWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(GRAY, 3 + L * 0.12); // painted cinder blocks: courses every 20cm, the joints staggered
   const row = Math.floor(z * 5), joint = fract(z * 5) < 0.14 || fract(u * 2.5 + (row & 1) * 0.5) < 0.05;
   return set(i, joint ? (fract(z * 5) < 0.14 ? '_' : '|') : ' ', C(GRAY, L * 0.7)), true;
+}
+function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
+  if (my !== room.H - 1 && Math.abs(fract(u / 3) - 0.5) < 0.1 && z > 1.3 && z < 1.9) { // a deep-set window: sea below, sky above
+    BG[i] = z < 1.5 ? C(BLUE, 2 + day * 3) : C(day > 0.5 ? CYAN : BLUE, 1 + day * 5);
+    return set(i, z < 1.5 ? '~' : ' ', C(CYAN, 6 + day * 6)), true;
+  }
+  BG[i] = C(WHITE, 2 + L * 0.15); // whitewashed stone in courses
+  const row = Math.floor(z * 3), joint = fract(z * 3) < 0.08 || fract(u * 1.5 + (row & 1) * 0.5) < 0.04;
+  return set(i, joint ? (fract(z * 3) < 0.08 ? '_' : '|') : ' ', C(GRAY, L * 0.6)), true;
+}
+function lampRoomWall(i, u, uStep, z, d, mx, my, L) {
+  if (z < 0.9 || z > 2.5) { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, z < 0.9 && fract(z * 4) < 0.15 ? '=' : ' ', C(GRAY, L)), true; } // ironwork below and above the glass
+  if (fract(u * 1.2) < 0.05) { BG[i] = C(GRAY, 2); return set(i, '|', C(GRAY, L)), true; } // the mullions
+  if (z < 1.45) { BG[i] = C(BLUE, 1 + day * 3); return set(i, hash(Math.floor(u * 6 + T * 0.5), Math.floor(z * 20), 3) > 0.8 ? '~' : ' ', C(CYAN, 5 + day * 6)), true; } // the sea, far below
+  BG[i] = C(day > 0.5 ? CYAN : BLUE, day > 0.5 ? 3 + day * 3 : 1);
+  return set(i, night > 0.5 && hash(Math.floor(u * 9), Math.floor(z * 15), 4) > 0.93 ? '.' : ' ', C(WHITE, 12)), true; // the sky, stars at night
+}
+// a car on display: body, glass, wheels (metres)
+function showCar(x, y, col) {
+  return [BX(x, y, 1.0, 0.45, 0.15, 0.75, (i, t, L) => { BG[i] = C(col, (3 + L * 0.5) * shadeFace(HIT.face)); return set(i, HIT.face >= 5 ? ' ' : HIT.w < 0.3 ? '_' : ' ', C(GRAY, L * 0.6)), true; }),
+    BX(x - 0.1, y, 0.55, 0.4, 0.75, 1.15, (i, t, L) => { BG[i] = HIT.face >= 5 ? C(col, 3 + L * 0.4) : C(CYAN, 1 + L * 0.15); return set(i, ' ', 0), true; }),
+    ...[-0.65, 0.65].map(u => BX(x + u, y, 0.18, 0.47, 0, 0.32, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.7)), true; }))];
+}
+function realtyWall(i, u, uStep, z, d, mx, my, L) {
+  if (my === 0 && z > 1.0 && z < 1.9 && fract(u / 1.6) < 0.7) { // listings pinned up: a little house, a price
+    const fu = fract(u / 1.6) / 0.7, fz = (z - 1.0) / 0.9;
+    BG[i] = C(WHITE, 4 + L * 0.2);
+    if (fz > 0.45 && fz < 0.85 && Math.abs(fu - 0.5) < 0.3 - (fz - 0.45)) return set(i, '^', C(BRICK, 12)), true; // the roof
+    if (fz > 0.15 && fz <= 0.45 && Math.abs(fu - 0.5) < 0.22) return set(i, Math.abs(fu - 0.5) < 0.05 ? '|' : '#', C(GRAY, 9)), true;
+    return set(i, fz < 0.12 && fract(fu * 6) < 0.6 ? '$' : ' ', C(GREEN, 12)), true;
+  }
+  BG[i] = C(WARM, 2 + L * 0.15); return set(i, fract(u * 2) < 0.04 ? '|' : ' ', C(WARM, L * 0.5)), true;
+}
+function homeDef(w, h) {
+  const big = w > 8, bed = [1.6, 1.6], closet = [w - 1.5, 1.2], sofa = [w / 2, h - 2.4], tv = [w / 2, 1.0];
+  return { grid: boxRoom(w, h), light: 0.75, floor: 'wood', ceil: 'pendant', wall: homeWall, spots: { bed, closet, tv },
+    props: r => [
+      BX(bed[0], bed[1] + 0.2, 1.0, 0.8, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
+      BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
+      BX(tv[0], tv[1] - 0.3, 0.7, 0.12, 0.6, 1.3, (i, t, L) => { // the telly: static, or a show on
+        if (HIT.face !== 4 && HIT.face !== 3) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
+        if (!r.tv) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
+        BG[i] = C(NEON[(T * 0.7 | 0) & 3], 3 + hash(Math.floor(HIT.u * 20), Math.floor(HIT.w * 20), T * 4 | 0) * 6); return set(i, ' ', 0), true;
+      }),
+      BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
+      BENCHP(sofa[0], sofa[1], 0, -1), ...(big ? [SP(w - 1.3, h - 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(sofa[0] - 2.4, sofa[1], 0, -1)] : []),
+    ] };
+}
+function homeWall(i, u, uStep, z, d, mx, my, L) {
+  if (mx === 0 && z > 1.0 && z < 2.1 && Math.abs(fract(u / 3) - 0.5) < 0.2) { // a window on the city: lit windows across the street at night
+    BG[i] = C(day > 0.5 ? CYAN : BLUE, day > 0.5 ? 4 : 1);
+    return set(i, night > 0.3 && hash(Math.floor(u * 8), Math.floor(z * 8), 7) > 0.6 ? '#' : fract(u * 2) < 0.04 ? '|' : ' ', night > 0.3 ? C(WARM, 12) : C(GRAY, 8)), true;
+  }
+  BG[i] = C(WARM, 2 + L * 0.2); // wallpaper with a little pattern
+  return set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 3 ? ' ' : '.', C(BRICK, L * 0.5)), true;
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall
@@ -4340,7 +4690,8 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
     const z = eye + (hor - r - 0.5) * dz - z0;
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth < ZB[i] && fn(i, (c + 0.5 - cx) * du, z, du, dz, L)) { ZB[i] = depth; FL[i] = 0; }
+      const bg = BG[i];
+      if (depth < ZB[i] && fn(i, (c + 0.5 - cx) * du, z, du, dz, L)) { ZB[i] = depth; FL[i] = 0; if (BG[i] !== bg) ZBG[i] = depth; } // (a background it paints is its own, for the fog)
     }
   }
 }
@@ -4404,6 +4755,7 @@ function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17
       : mode === 'walk' ? 0.17 : chaseOn ? 0.28 : 0.12;
+  eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows + shake() | 0;
   dx = Math.cos(a); dy = Math.sin(a);
@@ -4568,15 +4920,21 @@ const nearExit = () => {
     if (roomAt(x, y) === 'D' && Math.hypot(x + 0.5 - px, y + 0.5 - py) < 1.6) return true;
   return false;
 };
+const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px), rel(LIGHTHOUSE.y - py)) < LIGHTHOUSE.r + 0.12;
+// in your own place: which thing you're by (bed, closet, tv)
+const homeSpot = () => { const s = room.def.spots; if (!s) return null; for (const k in s) if (Math.hypot(px - s[k][0], py - s[k][1]) < 1.3) return k; return null; };
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   const cp = crimePrompt();
   if (cp) return cp;
   if (mode === 'room') {
-    if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go` : 'E: the guard lets you out';
+    if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go${room.tried ? '' : '   E: try to break out (one chance)'}` : 'E: the guard lets you out';
     if (room.kind === 'train') return room.dest == null
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
+    if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
+    if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
     if (nearElevator()) return 'E: elevator to the roof';
@@ -4607,7 +4965,7 @@ function promptText() {
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
-  if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : 'E: take this car';
+  if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   const who = nearPerson();
   if (who) return task && task.who === who ? (task.kind === 'fetch' && task.have ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
@@ -4618,6 +4976,7 @@ function promptText() {
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
+  if (nearLighthouse()) return 'E: go into the lighthouse';
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base === 'amb') return 'E: go into the hospital';
@@ -4662,6 +5021,8 @@ function minimap() {
   for (const c of cars) if (c !== me) mark(c.x, c.y, c.pursuit ? 'P' : 'o', c.pursuit ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : PAL[C(c.body, 13)]);
   for (const c of footCops) mark(c.x, c.y, 'p', c.chase ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : '#69f');
   for (const s of stations) mark(s.x, s.y, 'S', '#4f4');
+  for (const c of owned.cars) if (c !== me) mark(c.x, c.y, 'C', '#fff');
+  for (const h of owned.homes) mark(h.cell % N + 0.5, Math.floor(h.cell / N) + 0.5, 'H', '#ff4');
   for (const s of EL_STATIONS) mark(s.x, EL_Y + 1, 'E', '#f84');
   for (const v of vendors) mark(v.x, v.y, '$', '#fa3');
   const tt = taskTarget(); if (tt) mark(tt.x, tt.y, '?', '#4ff');
@@ -4689,7 +5050,7 @@ function hud() {
   const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
-                 settings.help ? TOUCH ? 'stick: move | drag: look | E use | Q item | I bag | M map | hold T: time' : 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
+                 settings.help ? TOUCH ? 'stick: move | drag: look | E use | Q item | I bag | M map | hold T: time' : 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
   if (task) { // the favour you're doing, under the help line
@@ -4720,15 +5081,6 @@ function tipDriver() {
   if (!pay(TIP)) return say(`You don't have ${fmt$(TIP)} to spare.`);
   me.rush = true;
   say(pick(['"Hold on to something."', '"You got it, boss." The meter ticks faster than ever.', '"Lights? What lights?"']), 3);
-}
-// a car you get out of stays where it is: pulled in to the kerb if it's on a street, nobody drives it away
-function parkCar(c) {
-  const r = ROAD[idx(Math.floor(c.x), Math.floor(c.y))];
-  if (r === 1 || r === 2) { // square it up to the street and into the kerb lane on the side it's nearer
-    const vert = r === 1, base = Math.floor((vert ? c.x : c.y) / 8) * 8 + 1, side = Math.sign((vert ? c.x : c.y) - base) || 1;
-    if (vert) { c.x = base + side * 0.72; c.hx = 0; c.hy = c.hy >= 0 ? 1 : -1; } else { c.y = base + side * 0.72; c.hy = 0; c.hx = c.hx >= 0 ? 1 : -1; }
-  }
-  c.off = 0; c.ex = c.x; c.ey = c.y; c.parked = true;
 }
 // the driver of a car you've just taken: out onto the sidewalk beside it, shouting (someone from far off stands in)
 function ejectDriver(c) {
@@ -4813,7 +5165,27 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
-    if (room.kind === 'jail') return T < room.until ? say(`Locked in. ${Math.ceil(room.until - T)}s to go.`) : (say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom());
+    if (room.kind === 'home' || room.kind === 'loft') { // your place: sleep whenever you like, your closet, the telly
+      const hs = homeSpot();
+      if (hs === 'bed') { sleep = { t: 0, home: true }; return say('You crawl into your own bed.', 3); }
+      if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', 'Kept at home, whichever home you go to');
+      if (hs === 'tv') { room.tv = !room.tv; return say(room.tv ? 'The telly flickers on.' : 'You switch the telly off.', 2); }
+    }
+    if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
+      enterRoom('lamproom', { word: 'LAMP ROOM', below: { word: room.word, ret: room.ret, line: room.line } }, [1.6, 4.4, -Math.PI / 4]);
+      return say('Round and round and up and up. The lamp room.', 3);
+    }
+    if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? enterRoom('lighthouse', room.below, [4, 5.6, -Math.PI / 2]) : say('The hatch down is in the corner.', 2);
+    if (room.kind === 'jail') {
+      if (T >= room.until) return say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom();
+      if (room.tried) return say(`Locked in. ${Math.ceil(room.until - T)}s to go.`);
+      room.tried = true; // one shot at it
+      return startCrime('jailbreak', ok => {
+        if (ok === 'abort') return say('You lose your nerve. No second chances.', 3);
+        if (!ok) { room.until += 30; return say('"Nice try." Thirty more seconds for that.', 4); }
+        room.until = T; leaveRoom(); say('You slip out past the front desk. Nobody saw a thing.', 4);
+      });
+    }
     if (room.burgled && nearKeeper()) return emptyTill();
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
@@ -4831,7 +5203,7 @@ function interact() {
       if (cab) return cab.busy ? say('Somebody\'s on this one.') : playCabinet(cab);
       if (nearKeeper()) return openPrizes();
     }
-    if (room.kind === 'storage' && nearKeeper()) return openStorage();
+    if (room.kind === 'storage' && nearKeeper()) return openStorage(stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town');
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
     if (room.kind === 'hospital' && nearKeeper()) return say(`"${pick(NURSE_LINES)}"`, 3); // (healing would go here)
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
@@ -4857,7 +5229,8 @@ function interact() {
     }
     else { // a stolen car: if anyone saw, the police hear about it
       mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx);
-      if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
+      if (c.owned) { c.parked = false; say(`You get into your ${ITEMS[c.model].name}.`, 2); } // yours, bought and paid for
+      else if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
       else {
         c.mine = true; ejectDriver(c);
         const w = crime('steal', c.x, c.y);
@@ -4880,11 +5253,14 @@ function interact() {
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
+  if (nearLighthouse()) return enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [px, py, a], line: 'Mind the stairs. Two hundred and twelve of them.' }, [4, 6.2, -Math.PI / 2]);
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say('Closed.');
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
+    const home = homeAt(sh);
+    if (home) return enterRoom(home.kind === 'home_loft' ? 'loft' : 'home', { word: 'HOME', ret: [px, py, a], cell: [lookHit.mx, lookHit.my] }, [ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid[0].length / 2, ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid.length - 1.6, -Math.PI / 2]), say('Home.', 1.5);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
     const r = { ...sh, cell: [lookHit.mx, lookHit.my], ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
     enterRoom(kind, r, [0, 0, -Math.PI / 2]);
@@ -4909,7 +5285,7 @@ function stepSleep(dt) {
     sleep.done = true;
     tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
-    enterRoom('hotelroom', { lobby: sleep.lobby }, [3.4, 3.2, -Math.PI / 2]);
+    if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby }, [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
   }
   if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say('7:00. You slept well, and the sky has cleared.', 4); }
   if (sleep.t > 5) { sleep = null; fade = 0; }
@@ -5356,6 +5732,7 @@ function buildPause() {
       <h1>Paused</h1>
       <p class="sub">ASCII City</p>
       <button class="item" data-act="resume">Resume</button>
+      <button class="item" data-act="newgame">Start over</button>
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
@@ -5369,6 +5746,7 @@ function buildPause() {
       <div class="keys">
         <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock)</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
+        <b>space</b><span>jump (on a board: ollie; with A / D / S: tricks)</span><b>C</b><span>crouch (hold) / sit</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
         <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
@@ -5400,6 +5778,7 @@ function buildPause() {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'resume') closePause(true);
+    if (b.dataset.act === 'newgame') { if (b.dataset.sure) newGame(); else { b.dataset.sure = 1; b.textContent = 'Start over: lose your money, things, home and car? Click again'; } }
     if (b.dataset.toggle) settings[b.dataset.toggle] = !settings[b.dataset.toggle];
     if (b.dataset.detail) settings.detail = b.dataset.detail;
     if (b.dataset.toggle || b.dataset.detail) { saveSettings(); applySettings(); show(); }
@@ -5547,8 +5926,12 @@ const HAND = {
     (c, r) => r < 2 ? C(ITEM_COL[(c.charCodeAt(0) + r * 3) & 7], 15) : r > 3 ? C(BRICK, 12) : C(GREEN, 13)],
   ball: () => [['   ____', '  / \\/ \\', ' |  /\\  |', ' | /  \\ |', '  \\_\\/_/'], (c, r) => c === '/' || c === '\\' ? C(GRAY, 9) : C(WHITE, 15)],
   boombox: () => [['  _[======]_', ' |  [    ]  |', ' |(O) == (O)|', ' |(_) == (_)|', ' |__________|'], (c, r) => c === 'O' ? C(GRAY, 14) : c === '=' ? C(CYAN, 14) : C(GRAY, 12)],
-  skateboard: () => [['  ___', ' (o o)', ' |   |', ' |   |', ' |   |', ' |   |', ' (o o)'], (c, r) => c === 'o' ? C(WHITE, 14) : C(RED, 13)],
+  skateboard: () => [['   .---.', '  /     \\', ' O=======O', ' |#######|', ' |%%%%%%%|', ' |#######|', ' |%%%%%%%|', ' O=======O', '  \\     /', "   '---'"],
+    (c, r) => c === 'O' ? C(WHITE, 15) : c === '=' ? C(GRAY, 12) : c === '#' ? C(RED, 13) : c === '%' ? C(YEL, 14) : C(BRICK, 12)],
   yoyo: () => [[' .-.', '(-@-)', " '-'", '  |', '  |'], (c, r) => r > 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
+  vape: () => [[' .-.', ' |' + (fx.vape > 0 ? '@' : 'o') + '|', ' |M|', ' |A|', ' |N|', ' |G|', ' |O|', " '-'"],
+    (c, r) => c === '@' ? C(ORANGE, 10 + fx.vape * 1.7) : c === 'o' ? C(GRAY, 9) : /[A-Z]/.test(c) ? C(YEL, 14) : C(ORANGE, 12)],
+  pipe: () => [['  ___', ' (___)', '  | |___', '  |_____|'], (c, r) => r < 2 ? C(BRICK, 12) : C(BRICK, 10)],
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
@@ -5559,10 +5942,9 @@ const heldArt = it => (HAND[it.id] || HAND.book)(it, usesLeft(it));
 let smokePuffs = []; // [x, y, life, drift] in screen px
 const putCell = (r, c, ch, col) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ') return; const i = r * cols + c; set(i, ch, col); FOGS[i] = FOGB[i] = 0; };
 function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r)))); }
-const BOARD_UNDER = [['  _____________', ' (_____________)', '   o         o'], (c, r) => r < 2 ? C(RED, 12) : C(WHITE, 13)];
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
-  if (fx.skating && mode === 'walk') putArt(BOARD_UNDER[0], rows - 3, (cols >> 1) - 8, BOARD_UNDER[1]); // the board under your feet
+  if (fx.skating && mode === 'walk') drawBoard3D(); // the board under your feet
 }
 
 // ---- drawn big over the finished frame, in characters with a dark outline instead of a background
@@ -5599,6 +5981,7 @@ function charLine(x0, y0, x1, y1, w, size, col) {
 function drawHeldBig() {
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && fx.smoke > 0) drawCigarette();
+  drawVapeCloud();
   const it = heldItem();
   if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
@@ -5649,12 +6032,13 @@ function drawCigarette() {
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, len = 1 + Math.round(6 * fx.smoke / 45);
   const x0 = cv.width * 0.5 - w, y0 = cv.height - s * 0.9, dx = w * 0.95, dy = -s * 0.32;
-  const chars = ['#', '#', ...Array(len).fill('='), '*'];
+  const chars = fx.pipe ? ['=', '=', '=', '=', 'U', '*'] : ['#', '#', ...Array(len).fill('='), '*']; // a pipe: the stem, and the bowl with its glow
   g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
   chars.forEach((ch, k) => {
     const x = x0 + k * dx, y = y0 + k * dy, ember = k === chars.length - 1;
-    g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
-    g.strokeText(ch, x, y); g.fillText(ch, x, y);
+    g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : fx.pipe ? C(BRICK, 12) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
+    const yy = fx.pipe && ember ? y + s * 0.55 : y; // (the pipe's glow sits in the bowl)
+    g.strokeText(ch, x, yy); g.fillText(ch, x, yy);
   });
   // the smoke: small wisps at the world's own character size, rising fast and swaying, '~' fading to '.'; a drag
   // puffs out a lot more
@@ -5668,6 +6052,31 @@ function drawCigarette() {
     const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS; // on the grid, each wisp in its own black cell (the one exception to no backgrounds: it looks right)
     g.fillStyle = '#000'; g.fillRect(x, y, cw, FS);
     g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', x, y);
+  }
+}
+// the vape: a message while you hold it in, then on letting go a fat mango cloud, every wisp in its own coloured
+// cell, rolling out from your mouth, spreading and thinning
+let cloudPuffs = [];
+function drawVapeCloud() {
+  const dt = Math.min(0.05, T - (drawVapeCloud.t ?? T)); drawVapeCloud.t = T;
+  if (fx.vape > 0) msgText = 'Holding it in... ' + '#'.repeat(Math.ceil(fx.vape * 4)), msgT = 0.3;
+  if (fx.cloud > 0) { // just let it out
+    const n = Math.round(20 + fx.cloud * 70), big = fx.cloud;
+    for (let k = 0; k < n; k++) {
+      const ang = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = (6 + Math.random() * 16) * (0.5 + big * 0.5);
+      cloudPuffs.push([cv.width / 2 + (Math.random() - 0.5) * cw * 6, cv.height - FS * 2, Math.cos(ang) * sp * cw, Math.sin(ang) * sp * FS * 0.8, 1 + big * 0.5]);
+    }
+    say(fx.cloud > 2.5 ? 'You blow out an enormous cloud of mango.' : fx.cloud > 1.2 ? 'A fat cloud of mango vapour rolls out.' : 'A little puff of mango.', 2.5);
+    fx.cloud = 0; if (actx) sfxUse('drag');
+  }
+  if (!cloudPuffs.length) return;
+  g.font = FS + 'px monospace';
+  cloudPuffs = cloudPuffs.filter(p => (p[4] -= dt * 0.3) > 0);
+  for (const p of cloudPuffs) {
+    p[0] += p[2] * dt; p[1] += p[3] * dt; p[2] *= 1 - dt * 0.8; p[3] = p[3] * (1 - dt * 0.8) - FS * dt * 0.6; // slowing, drifting up
+    const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS, f = Math.min(1, p[4]);
+    g.fillStyle = PAL[C(f > 0.6 ? ORANGE : WARM, 4 + f * 5)]; g.fillRect(x, y, cw, FS);
+    g.fillStyle = PAL[C(f > 0.5 ? YEL : WHITE, 6 + f * 8)]; g.fillText(f > 0.7 ? '@' : f > 0.4 ? '%' : '~', x, y);
   }
 }
 // a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
@@ -5744,7 +6153,7 @@ function openShop(title, stock, vendor = null) {
   const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate);
     return `<button class="item" data-sell="${k}" ${p ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
   const work = shiftHere();
-  const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${work === 'serve' ? 'Wait tables for a shift' : 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
+  const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${{ serve: 'Wait tables for a shift', tapper: 'Tend bar for a shift' }[work] || 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
   showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
     ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${stock.length} buy${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
   shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); else if (e.target.closest('[data-work]')) startShift(); };
@@ -5776,18 +6185,20 @@ function openInventory() {
 const closeInventory = () => hidePanel(invEl);
 // your storage unit: click a carried thing to put it in, a stored thing to take it out
 let storeEl = null;
-function openStorage() {
+let storeCtx = [stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town'];
+function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3]) {
+  storeCtx = [list, where, title, sub];
   storeEl = storeEl || panel('storage');
   const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
   const carried = inv.length ? inv.map((it, k) => `<button class="item" data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
-  const unit = stored.length ? stored.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
-  showPanel(storeEl, `<h1>Storage unit</h1><p class="sub">The same unit at every storage place in town</p>
+  const unit = list.length ? list.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
+  showPanel(storeEl, `<h1>${title}</h1><p class="sub">${sub}</p>
     <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
-    <h2>in the unit ${stored.length}/${STORE_SIZE}</h2>${unit}
+    <h2>in ${where.replace('your ', 'the ')} ${list.length}/${STORE_SIZE}</h2>${unit}
     <p class="hint">1-${INV_SIZE} store &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
-    if (s) say(storeSlot(+s.dataset.store)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take)[1], 2); else return;
+    if (s) say(storeSlot(+s.dataset.store, list, where)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
     openStorage();
   };
 }
@@ -5797,7 +6208,7 @@ function panelKey(e) {
   if (storeEl && storeEl.style.display === 'flex') {
     const n = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
-    else if (n) { say((e.shiftKey ? retrieveSlot(n[1] - 1) : storeSlot(n[1] - 1))[1], 2); openStorage(); }
+    else if (n) { say((e.shiftKey ? retrieveSlot(n[1] - 1, storeCtx[0], storeCtx[1]) : storeSlot(n[1] - 1, storeCtx[0], storeCtx[1]))[1], 2); openStorage(); }
     return true;
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
@@ -5818,7 +6229,7 @@ const HEADLINES = () => [`${pick(stations).name} station closed for repairs`, 'M
 function useHeldItem() {
   const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
     water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
-  say(line, 3);
+  if (line) say(line, 3);
   if (actx && sound) sfxUse(sound);
 }
 function sfxUse(s) {
@@ -5911,7 +6322,7 @@ function drawGame() {
   FOGS.fill(0); FOGB.fill(0);
   const s = clamp(Math.floor(Math.min((rows - 9) / g.H, (cols - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
   const gw = g.W * bw, gh = g.H * bh, x0 = (cols - gw) >> 1, y0 = Math.max(4, (rows - gh) >> 1);
-  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : g.id === 'serve' ? ORANGE : CYAN;
+  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : g.id === 'serve' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
     const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;
@@ -6126,6 +6537,134 @@ function crimePrompt() {
   if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`;
   return '';
 }
+// ===== on your feet: Space jumps, C held crouches, C by a bench or a seat sits you down (C again, or walk, to get
+// up). On the skateboard Space pops an ollie, and what you're holding as you pop makes it a trick: A kickflip,
+// D heelflip, S pop shuvit, A+S 360 flip, D+S varial heelflip. The board under you is a little 3D model in front of
+// the camera (like a held weapon), so it really flips and spins.
+const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
+// [name, flips (+ kick, - heel), body turns of the board]
+const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5] };
+const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+const skatingNow = () => fx.skating && mode === 'walk';
+
+function jump() {
+  if (body.z > 0 || body.vz > 0) return;
+  if (body.seat) return standUp();
+  if (skatingNow()) {
+    const key = (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
+    body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
+  } else body.vz = JUMP_V;
+  if (actx) sfxUse(skatingNow() ? 'board' : 'kick');
+}
+// a seat within reach: a bench (indoors or out) or a cinema seat. {x, y, fx, fy}: where you sit and which way you face
+function nearSeat() {
+  if (mode === 'room') {
+    let best = null, bd = 1.1;
+    for (const s of room.props) {
+      const r = s.seatRow, sx = r ? clamp(px, r.x0, r.x1) : s.x, sy = r ? r.y : s.y;
+      if (!s.bench && !r) continue;
+      const d = Math.hypot(sx - px, sy - py);
+      if (d < bd) { bd = d; best = { x: sx, y: sy, fx: r ? r.fx : s.fx, fy: r ? r.fy : s.fy }; }
+    }
+    return best;
+  }
+  if (mode !== 'walk' || fx.skating) return null;
+  let best = null, bd = 0.15;
+  for (const b of benchesB[bi(Math.floor(px / 8), Math.floor(py / 8))]) { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); if (d < bd) { bd = d; best = b; } }
+  return best;
+}
+function sitDown() {
+  const s = nearSeat();
+  if (!s) return false;
+  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = 0;
+  say('You sit down.', 1.5);
+  return true;
+}
+function standUp() { // back where you sat down from (it was walkable)
+  [px, py] = body.seat.from; body.seat = null;
+}
+// every frame: gravity, the crouch easing in and out, a trick's progress, landing
+function stepBody(dt) {
+  if (!onFootMode() || sleep) { body.z = body.vz = 0; body.trick = null; body.seat = null; return; }
+  body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
+  if (body.z > 0 || body.vz > 0) {
+    body.vz -= GRAV * dt; body.z += body.vz * dt;
+    if (body.trick) body.trick.t += dt;
+    if (body.z <= 0) { // landed
+      body.z = body.vz = 0;
+      if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('board'); }
+    }
+  }
+}
+// how far your eyes are off standing height (metres): up in a jump, down crouching or sitting, up a little on the board
+const eyeLift = () => onFootMode() ? body.z + (skatingNow() ? BOARD_H : 0) - (body.seat ? SIT_H : body.crouch * CROUCH_H) : 0;
+const footSlow = () => body.crouch > 0.5 ? 0.45 : 1;
+
+// ---- the board under your feet, in camera space: x right, y down, z ahead (metres), drawn into the character grid
+// point by point with its own depth test. Grip tape on top, a coloured graphic underneath, trucks and wheels.
+const BOARD_L = 0.4, BOARD_W = 0.105, BOARD_T = 0.025;
+const boardZ = new Float32Array(1 << 14);
+function drawBoard3D() {
+  const tr = body.trick, p = tr ? clamp(tr.t / tr.air, 0, 1) : 0, e = p * p * (3 - 2 * p); // eased through the air
+  const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
+  const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
+  const cy = 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob, cz = 1.15; // the board lifts with you (and a bit more)
+  const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
+  const pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS, ox = cols / 2, oy = rows / 2;
+  const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
+  // a point on the board (u along, v across, h up) to the screen
+  const plot = (u, v, h, ch, col, bg) => {
+    let y1 = v * cr - h * sr, h1 = v * sr + h * cr; // the flip, round the long axis
+    let u1 = u * cw_ - y1 * sw, v1 = u * sw + y1 * cw_; // the shuvit, round the vertical
+    const u2 = u1 * cp - h1 * sp, h2 = u1 * sp + h1 * cp; // the pop
+    const X = v1, Y = cy - h2, Z = cz + u2;
+    if (Z < 0.2) return;
+    const c = Math.round(ox + X / Z * pX), r = Math.round(oy + Y / Z * pY);
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+    const i = r * cols + c;
+    if (Z >= boardZ[i]) return;
+    boardZ[i] = Z; set(i, ch, col); BG[i] = bg; FOGS[i] = FOGB[i] = 0;
+  };
+  const step = 0.012;
+  for (let u = -BOARD_L; u <= BOARD_L; u += step) for (let v = -BOARD_W; v <= BOARD_W; v += step / 2) {
+    const end = Math.abs(u) > BOARD_L - 0.06, w = end ? Math.sqrt(Math.max(0, 1 - ((Math.abs(u) - BOARD_L + 0.06) / 0.06) ** 2)) * BOARD_W : BOARD_W; // rounded nose and tail
+    if (Math.abs(v) > w) continue;
+    const edge = Math.abs(v) > w - 0.012;
+    plot(u, v, BOARD_T / 2, edge ? '=' : ':', edge ? C(BRICK, 13) : C(GRAY, 7), edge ? C(BRICK, 4) : C(GRAY, 0)); // grip tape
+    const stripe = Math.floor((u + BOARD_L) * 6) & 1;
+    plot(u, v, -BOARD_T / 2, edge ? '=' : '#', edge ? C(BRICK, 13) : C(stripe ? RED : YEL, 14), C(stripe ? RED : YEL, 5)); // the graphic underneath
+  }
+  for (const tu of [-0.27, 0.27]) { // trucks and wheels
+    for (let v = -0.09; v <= 0.09; v += 0.01) plot(tu, v, -BOARD_T / 2 - 0.03, '-', C(GRAY, 12), C(GRAY, 3));
+    for (const wv of [-0.1, 0.1]) for (let dh = 0; dh < 0.05; dh += 0.01) plot(tu, wv, -BOARD_T / 2 - 0.035 - dh, 'O', C(WHITE, 15), C(GRAY, 4));
+  }
+}
+// ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
+// your cars are parked), kept in localStorage every few seconds and when you leave. Not saved: where you are, the
+// time, the police (you start each visit clean, on the street).
+const SAVE_KEY = 'ascii-city-save';
+function saveGame() {
+  const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
+  const data = { v: 1, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
+    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })) };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
+}
+function loadGame() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return; }
+  if (!d || d.v !== 1) return;
+  const items = (list, into) => { into.length = 0; for (const it of list || []) if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses }); };
+  money = d.money ?? money; tickets = d.tickets || 0;
+  items(d.inv, inv); items(d.stored, stored); items(d.closet, closet);
+  held = clamp(d.held ?? -1, -1, inv.length - 1);
+  owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
+  for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
+}
+function newGame() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ } location.reload(); }
+loadGame();
+setInterval(saveGame, 10000);
+addEventListener('pagehide', saveGame);
 // closing a menu with E, I or J (a key press the browser lets us use) takes the mouse straight back; Esc leaves it
 // free, like any other page, and a click takes it back
 function relock(e) {
@@ -6148,6 +6687,8 @@ onkeydown = e => {
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
+    if (e.code === 'Space') jump();
+    if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
     if (e.code === 'KeyI') openInventory();
     if (e.code === 'KeyX') dropHere();
     const slot = /^Digit([1-8])$/.exec(e.code);
@@ -6197,9 +6738,11 @@ function move(fx, fy) {
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
 function drive(dt) {
-  const c = me, f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  const spun = me.spunT > T; // spun out by the police: no say in it till you've stopped turning
+  const c = me, f = spun ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = spun ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (me.spunT - T) / 2.5; }
   if (f > 0) c.v += (c.v < 0 ? 2.5 : 1) * dt; else if (f < 0) c.v -= (c.v > 0 ? 2.5 : 0.8) * dt; else c.v *= 1 - 0.7 * dt;
-  c.v = clamp(c.v, -0.5, K.ShiftLeft || K.ShiftRight ? 3.2 : 2.2);
+  c.v = clamp(c.v, -0.5, K.ShiftLeft || K.ShiftRight ? c.boost || 3.2 : c.top || 2.2); // (a car you own goes as fast as its model)
   a += s * dt * 1.8 * clamp(c.v / 0.5, -1, 1);
   const hx = Math.cos(a), hy = Math.sin(a), nx = c.x + hx * c.v * dt, ny = c.y + hy * c.v * dt;
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
@@ -6240,18 +6783,22 @@ function loop(t) {
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
-    move((cx * f - cy * (s + lurch)) * sp, (cy * f + cx * (s + lurch)) * sp);
+    if (body.seat && (f || s)) standUp(); // walking gets you up
+    if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
   } else if (mode === 'drive') drive(dt);
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
   }
+  stepBody(dt);
   stepTraffic(dt, T);
   stepTask(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
   else if (law === 'lost') say('You lost them.', 3);
+  else if (law === 'pullover') say('"PULL OVER!" booms from the cruiser on your tail.', 3);
+  else if (law === 'pit') { say('The cruiser clips your back corner and you spin out.', 3); if (actx) playClip('crash', 0.6); }
   else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
     const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
     say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);
@@ -6325,7 +6872,7 @@ addEventListener('wheel', e => { if (!paused && inv.length) held = mod(held + 1 
 // through the same key handlers as the keyboard (synthetic keydown / keyup), so nothing in the game knows the
 // difference. Menus are plain HTML: tap their rows.
 const TOUCH_KEYS = [ // [label, key, when it shows (always if absent)]
-  ['A', 'Space', () => !!game], ['E', 'KeyE'], ['Q', 'KeyQ', () => !game && !me], ['I', 'KeyI', () => !game && !me], ['M', 'KeyM', () => !game],
+  ['A', 'Space', () => !!game || onFootMode() && !me], ['C', 'KeyC', () => !game && onFootMode()], ['E', 'KeyE'], ['Q', 'KeyQ', () => !game && !me], ['I', 'KeyI', () => !game && !me], ['M', 'KeyM', () => !game],
   ['H', 'KeyH', () => !game && mode === 'walk'], ['G', 'KeyG', () => !game && (mode === 'walk' || mode === 'room' || mode === 'taxi')],
   ['T', 'KeyT', () => !game], ['Y', 'KeyY', () => !game],
 ];

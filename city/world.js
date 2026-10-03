@@ -2,14 +2,14 @@
 const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
   'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
   'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE','STORAGE',
-  'BURGERS','CHICKEN','JUICE','ICE CREAM','TOYS','THRIFT','TOBACCO'];
+  'BURGERS','CHICKEN','JUICE','ICE CREAM','TOYS','THRIFT','TOBACCO','CARS','REALTY'];
 const PRODUCE = ['GROCERY','MARKET','FRUIT','BAKERY','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
   chinatown: ['DUMPLINGS','NOODLES','TEA HOUSE','HERBS','KARAOKE','BAKERY','DIM SUM','JADE','RAMEN','PHO','MAHJONG'],
-  downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR','SPORTS','JUICE','BURGERS'],
-  industrial: ['AUTO REPAIR','STORAGE','TIRES','HARDWARE','DINER','BAR','WELDING','24/7','CHICKEN','TOBACCO'],
-  brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP','SKATE','BAGELS','THRIFT','ICE CREAM','TOYS'],
+  downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR','SPORTS','JUICE','BURGERS','REALTY','CARS'],
+  industrial: ['AUTO REPAIR','STORAGE','TIRES','HARDWARE','DINER','BAR','WELDING','24/7','CHICKEN','TOBACCO','CARS'],
+  brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP','SKATE','BAGELS','THRIFT','ICE CREAM','TOYS','REALTY'],
 };
 const GLYPHS = { BOOKS: '|][|', RECORDS: '()O', VIDEO: '[]', LIQUOR: 'il!', BAR: 'il!Y', PHARMACY: '+=o', PHONES: '[]#',
   HARDWARE: 'T7/', FLORIST: '*@&', 'PET SHOP': '~>o', ARCADE: '[]#', TATTOO: '*%', LAUNDRY: 'O@', HERBS: '%&*', JADE: 'o@*',
@@ -18,7 +18,7 @@ const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, so
 // opening hours [open, close) in game hours; close < open wraps past midnight; [0, 24] never closes
 const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
-  BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
+  CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
   NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24], STORAGE: [0, 24] };
 const hoursOf = word => HOURS[word] || [9, 20];

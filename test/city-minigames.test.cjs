@@ -165,3 +165,40 @@ test('the shelves you stock are what the shop sells', () => {
   ev("var g = GAMES.stock(undefined, 'RECORDS'), labels = []; g.draw(() => {}, (x, y, s) => labels.push(s))");
   assert.ok(ev("labels.includes('VINYL') && !labels.includes('CANS')"));
 });
+
+test('jailbreak: there is a way past the guard, and walking straight into his light gets you caught', () => {
+  const { ev } = fresh();
+  // the guard ignores you, so record his light at every tick, then search for a route to the door through it
+  const found = ev(`(() => {
+    const g = GAMES.jailbreak(), DT = 0.16, steps = Math.floor(44 / DT), lit = [], guard = [];
+    const s0 = g.state(), W = g.W, solid = s0.solid, door = s0.door;
+    for (let k = 0; k <= steps; k++) { const s = g.state(); lit.push(new Set(s.lit)); guard.push([s.gx, s.gy]); s.you[0] = 1; s.you[1] = 9; g.step(DT, {}); }
+    let front = [[2, 9]], seen = new Set();
+    for (let k = 1; k <= steps; k++) {
+      const next = [];
+      for (const [x, y] of front) for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy, c = ny * W + nx;
+        if (solid.has(c) || lit[k].has(c) || Math.abs(guard[k][0] - nx) + Math.abs(guard[k][1] - ny) < 1.2) continue;
+        if (nx === door[0] && ny === door[1]) return k * DT;
+        const key = c + ',' + k; if (seen.has(key)) continue; seen.add(key); next.push([nx, ny]);
+      }
+      front = next;
+    }
+    return -1;
+  })()`);
+  assert.ok(found > 0, 'a route exists (' + found + 's)');
+  ev('var g = GAMES.jailbreak()');
+  const r = ev(`(() => { for (let t = 0; t < 46 && !g.over; t += 0.05) g.step(0.05, { up: 1 }); return [g.over, g.success].join(); })()`);
+  assert.strictEqual(r, 'true,false', 'charging out gets you caught');
+});
+
+test('tapper: pour to the line and let go to slide a beer; hold too long and it spills', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.tapper(() => 0)'); // every customer on the first bar
+  // pour a full mug and let go, again and again, at the first customer's bar
+  const served = ev(`(() => { let held = 0; for (let k = 0; k < 600 && !g.over; k++) { const s = g.state(); const pour = s.fill < 0.95;
+    g.step(1 / 60, pour ? { act: 1 } : {}); } return g.score; })()`);
+  assert.ok(served >= 3, 'served ' + served);
+  ev('var g = GAMES.tapper(() => 0)');
+  assert.strictEqual(ev('(() => { for (let k = 0; k < 120; k++) g.step(1 / 60, { act: 1 }); return g.state().misses; })()'), 1, 'one spill');
+});

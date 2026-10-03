@@ -42,6 +42,7 @@ function audioMix(s) {
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
+    if (k === 'lighthouse' || k === 'lamproom') { out.waves = 0.55; out.wind = k === 'lamproom' ? 0.5 : 0.15; out.city = 0; } // the sea all round
     if (k === 'train') out.rumble = 0.9;
     return out;
   }

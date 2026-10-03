@@ -4,6 +4,9 @@ const sk0 = seed => seed * 1e4 | 0;
 // 14 art deco, 15 parking garage, 16 balcony apartments)
 const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE];
 const ARCADE_SIGN = new Set(['ARCADE']);
+// a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
+const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448 };
+const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
@@ -12,11 +15,18 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   BG[i] = bgAt(FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d);
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
-    if (z > 0.33) {
+    if (z > 0.32) {
       const w = sh.word, m = w.length + 3, p = mod(Math.floor(u * 10), m);
       // up close a letter spans many cells: draw it once, in the middle cell of its span
-      const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.365, d / projY);
+      const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.36, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
+      // closer still, big enough for it: the letter drawn large in blocks, so the sign grows as you walk up to it
+      if (p < w.length && GLYPH5[w[p]] !== undefined && 0.1 / uStep >= 4 && 0.08 / (d / projY) >= 5) {
+        const gx = Math.floor(fract(u * 10) * 4), gy = Math.floor((0.4 - z) / 0.08 * 5); // (a column's gap after each letter)
+        const col = ARCADE_SIGN.has(w) && open ? NEON[(p + Math.floor(T * 6)) & 3] : sh.neon, on = glyphOn(w[p], gx, gy);
+        if (on) BG[i] = C(col, Math.min(lvl, 15) * 0.25);
+        return set(i, on ? '#' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+      }
       if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between
         const lit = Math.max(lvl, 13), chase = Math.floor(T * 6);
         if (p < w.length) return set(i, centered ? w[p] : ' ', C(NEON[(p + chase) & 3], lit));

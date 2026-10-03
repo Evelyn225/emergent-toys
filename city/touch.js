@@ -3,7 +3,7 @@
 // through the same key handlers as the keyboard (synthetic keydown / keyup), so nothing in the game knows the
 // difference. Menus are plain HTML: tap their rows.
 const TOUCH_KEYS = [ // [label, key, when it shows (always if absent)]
-  ['A', 'Space', () => !!game], ['E', 'KeyE'], ['Q', 'KeyQ', () => !game && !me], ['I', 'KeyI', () => !game && !me], ['M', 'KeyM', () => !game],
+  ['A', 'Space', () => !!game || onFootMode() && !me], ['C', 'KeyC', () => !game && onFootMode()], ['E', 'KeyE'], ['Q', 'KeyQ', () => !game && !me], ['I', 'KeyI', () => !game && !me], ['M', 'KeyM', () => !game],
   ['H', 'KeyH', () => !game && mode === 'walk'], ['G', 'KeyG', () => !game && (mode === 'walk' || mode === 'room' || mode === 'taxi')],
   ['T', 'KeyT', () => !game], ['Y', 'KeyY', () => !game],
 ];

@@ -116,8 +116,12 @@ const HAND = {
     (c, r) => r < 2 ? C(ITEM_COL[(c.charCodeAt(0) + r * 3) & 7], 15) : r > 3 ? C(BRICK, 12) : C(GREEN, 13)],
   ball: () => [['   ____', '  / \\/ \\', ' |  /\\  |', ' | /  \\ |', '  \\_\\/_/'], (c, r) => c === '/' || c === '\\' ? C(GRAY, 9) : C(WHITE, 15)],
   boombox: () => [['  _[======]_', ' |  [    ]  |', ' |(O) == (O)|', ' |(_) == (_)|', ' |__________|'], (c, r) => c === 'O' ? C(GRAY, 14) : c === '=' ? C(CYAN, 14) : C(GRAY, 12)],
-  skateboard: () => [['  ___', ' (o o)', ' |   |', ' |   |', ' |   |', ' |   |', ' (o o)'], (c, r) => c === 'o' ? C(WHITE, 14) : C(RED, 13)],
+  skateboard: () => [['   .---.', '  /     \\', ' O=======O', ' |#######|', ' |%%%%%%%|', ' |#######|', ' |%%%%%%%|', ' O=======O', '  \\     /', "   '---'"],
+    (c, r) => c === 'O' ? C(WHITE, 15) : c === '=' ? C(GRAY, 12) : c === '#' ? C(RED, 13) : c === '%' ? C(YEL, 14) : C(BRICK, 12)],
   yoyo: () => [[' .-.', '(-@-)', " '-'", '  |', '  |'], (c, r) => r > 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
+  vape: () => [[' .-.', ' |' + (fx.vape > 0 ? '@' : 'o') + '|', ' |M|', ' |A|', ' |N|', ' |G|', ' |O|', " '-'"],
+    (c, r) => c === '@' ? C(ORANGE, 10 + fx.vape * 1.7) : c === 'o' ? C(GRAY, 9) : /[A-Z]/.test(c) ? C(YEL, 14) : C(ORANGE, 12)],
+  pipe: () => [['  ___', ' (___)', '  | |___', '  |_____|'], (c, r) => r < 2 ? C(BRICK, 12) : C(BRICK, 10)],
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
@@ -128,10 +132,9 @@ const heldArt = it => (HAND[it.id] || HAND.book)(it, usesLeft(it));
 let smokePuffs = []; // [x, y, life, drift] in screen px
 const putCell = (r, c, ch, col) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ') return; const i = r * cols + c; set(i, ch, col); FOGS[i] = FOGB[i] = 0; };
 function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r)))); }
-const BOARD_UNDER = [['  _____________', ' (_____________)', '   o         o'], (c, r) => r < 2 ? C(RED, 12) : C(WHITE, 13)];
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
-  if (fx.skating && mode === 'walk') putArt(BOARD_UNDER[0], rows - 3, (cols >> 1) - 8, BOARD_UNDER[1]); // the board under your feet
+  if (fx.skating && mode === 'walk') drawBoard3D(); // the board under your feet
 }
 
 // ---- drawn big over the finished frame, in characters with a dark outline instead of a background
@@ -168,6 +171,7 @@ function charLine(x0, y0, x1, y1, w, size, col) {
 function drawHeldBig() {
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && fx.smoke > 0) drawCigarette();
+  drawVapeCloud();
   const it = heldItem();
   if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
@@ -218,12 +222,13 @@ function drawCigarette() {
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, len = 1 + Math.round(6 * fx.smoke / 45);
   const x0 = cv.width * 0.5 - w, y0 = cv.height - s * 0.9, dx = w * 0.95, dy = -s * 0.32;
-  const chars = ['#', '#', ...Array(len).fill('='), '*'];
+  const chars = fx.pipe ? ['=', '=', '=', '=', 'U', '*'] : ['#', '#', ...Array(len).fill('='), '*']; // a pipe: the stem, and the bowl with its glow
   g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
   chars.forEach((ch, k) => {
     const x = x0 + k * dx, y = y0 + k * dy, ember = k === chars.length - 1;
-    g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
-    g.strokeText(ch, x, y); g.fillText(ch, x, y);
+    g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : fx.pipe ? C(BRICK, 12) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
+    const yy = fx.pipe && ember ? y + s * 0.55 : y; // (the pipe's glow sits in the bowl)
+    g.strokeText(ch, x, yy); g.fillText(ch, x, yy);
   });
   // the smoke: small wisps at the world's own character size, rising fast and swaying, '~' fading to '.'; a drag
   // puffs out a lot more
@@ -237,6 +242,31 @@ function drawCigarette() {
     const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS; // on the grid, each wisp in its own black cell (the one exception to no backgrounds: it looks right)
     g.fillStyle = '#000'; g.fillRect(x, y, cw, FS);
     g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', x, y);
+  }
+}
+// the vape: a message while you hold it in, then on letting go a fat mango cloud, every wisp in its own coloured
+// cell, rolling out from your mouth, spreading and thinning
+let cloudPuffs = [];
+function drawVapeCloud() {
+  const dt = Math.min(0.05, T - (drawVapeCloud.t ?? T)); drawVapeCloud.t = T;
+  if (fx.vape > 0) msgText = 'Holding it in... ' + '#'.repeat(Math.ceil(fx.vape * 4)), msgT = 0.3;
+  if (fx.cloud > 0) { // just let it out
+    const n = Math.round(20 + fx.cloud * 70), big = fx.cloud;
+    for (let k = 0; k < n; k++) {
+      const ang = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = (6 + Math.random() * 16) * (0.5 + big * 0.5);
+      cloudPuffs.push([cv.width / 2 + (Math.random() - 0.5) * cw * 6, cv.height - FS * 2, Math.cos(ang) * sp * cw, Math.sin(ang) * sp * FS * 0.8, 1 + big * 0.5]);
+    }
+    say(fx.cloud > 2.5 ? 'You blow out an enormous cloud of mango.' : fx.cloud > 1.2 ? 'A fat cloud of mango vapour rolls out.' : 'A little puff of mango.', 2.5);
+    fx.cloud = 0; if (actx) sfxUse('drag');
+  }
+  if (!cloudPuffs.length) return;
+  g.font = FS + 'px monospace';
+  cloudPuffs = cloudPuffs.filter(p => (p[4] -= dt * 0.3) > 0);
+  for (const p of cloudPuffs) {
+    p[0] += p[2] * dt; p[1] += p[3] * dt; p[2] *= 1 - dt * 0.8; p[3] = p[3] * (1 - dt * 0.8) - FS * dt * 0.6; // slowing, drifting up
+    const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS, f = Math.min(1, p[4]);
+    g.fillStyle = PAL[C(f > 0.6 ? ORANGE : WARM, 4 + f * 5)]; g.fillRect(x, y, cw, FS);
+    g.fillStyle = PAL[C(f > 0.5 ? YEL : WHITE, 6 + f * 8)]; g.fillText(f > 0.7 ? '@' : f > 0.4 ? '%' : '~', x, y);
   }
 }
 // a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
@@ -313,7 +343,7 @@ function openShop(title, stock, vendor = null) {
   const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate);
     return `<button class="item" data-sell="${k}" ${p ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
   const work = shiftHere();
-  const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${work === 'serve' ? 'Wait tables for a shift' : 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
+  const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${{ serve: 'Wait tables for a shift', tapper: 'Tend bar for a shift' }[work] || 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
   showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
     ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${stock.length} buy${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
   shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); else if (e.target.closest('[data-work]')) startShift(); };
@@ -345,18 +375,20 @@ function openInventory() {
 const closeInventory = () => hidePanel(invEl);
 // your storage unit: click a carried thing to put it in, a stored thing to take it out
 let storeEl = null;
-function openStorage() {
+let storeCtx = [stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town'];
+function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3]) {
+  storeCtx = [list, where, title, sub];
   storeEl = storeEl || panel('storage');
   const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
   const carried = inv.length ? inv.map((it, k) => `<button class="item" data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
-  const unit = stored.length ? stored.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
-  showPanel(storeEl, `<h1>Storage unit</h1><p class="sub">The same unit at every storage place in town</p>
+  const unit = list.length ? list.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
+  showPanel(storeEl, `<h1>${title}</h1><p class="sub">${sub}</p>
     <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
-    <h2>in the unit ${stored.length}/${STORE_SIZE}</h2>${unit}
+    <h2>in ${where.replace('your ', 'the ')} ${list.length}/${STORE_SIZE}</h2>${unit}
     <p class="hint">1-${INV_SIZE} store &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
-    if (s) say(storeSlot(+s.dataset.store)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take)[1], 2); else return;
+    if (s) say(storeSlot(+s.dataset.store, list, where)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
     openStorage();
   };
 }
@@ -366,7 +398,7 @@ function panelKey(e) {
   if (storeEl && storeEl.style.display === 'flex') {
     const n = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
-    else if (n) { say((e.shiftKey ? retrieveSlot(n[1] - 1) : storeSlot(n[1] - 1))[1], 2); openStorage(); }
+    else if (n) { say((e.shiftKey ? retrieveSlot(n[1] - 1, storeCtx[0], storeCtx[1]) : storeSlot(n[1] - 1, storeCtx[0], storeCtx[1]))[1], 2); openStorage(); }
     return true;
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
@@ -387,7 +419,7 @@ const HEADLINES = () => [`${pick(stations).name} station closed for repairs`, 'M
 function useHeldItem() {
   const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
     water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
-  say(line, 3);
+  if (line) say(line, 3);
   if (actx && sound) sfxUse(sound);
 }
 function sfxUse(s) {

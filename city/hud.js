@@ -63,15 +63,21 @@ const nearExit = () => {
     if (roomAt(x, y) === 'D' && Math.hypot(x + 0.5 - px, y + 0.5 - py) < 1.6) return true;
   return false;
 };
+const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px), rel(LIGHTHOUSE.y - py)) < LIGHTHOUSE.r + 0.12;
+// in your own place: which thing you're by (bed, closet, tv)
+const homeSpot = () => { const s = room.def.spots; if (!s) return null; for (const k in s) if (Math.hypot(px - s[k][0], py - s[k][1]) < 1.3) return k; return null; };
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   const cp = crimePrompt();
   if (cp) return cp;
   if (mode === 'room') {
-    if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go` : 'E: the guard lets you out';
+    if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go${room.tried ? '' : '   E: try to break out (one chance)'}` : 'E: the guard lets you out';
     if (room.kind === 'train') return room.dest == null
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
+    if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
+    if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
     if (nearElevator()) return 'E: elevator to the roof';
@@ -102,7 +108,7 @@ function promptText() {
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
-  if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : 'E: take this car';
+  if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   const who = nearPerson();
   if (who) return task && task.who === who ? (task.kind === 'fetch' && task.have ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
@@ -113,6 +119,7 @@ function promptText() {
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
+  if (nearLighthouse()) return 'E: go into the lighthouse';
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base === 'amb') return 'E: go into the hospital';
@@ -157,6 +164,8 @@ function minimap() {
   for (const c of cars) if (c !== me) mark(c.x, c.y, c.pursuit ? 'P' : 'o', c.pursuit ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : PAL[C(c.body, 13)]);
   for (const c of footCops) mark(c.x, c.y, 'p', c.chase ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : '#69f');
   for (const s of stations) mark(s.x, s.y, 'S', '#4f4');
+  for (const c of owned.cars) if (c !== me) mark(c.x, c.y, 'C', '#fff');
+  for (const h of owned.homes) mark(h.cell % N + 0.5, Math.floor(h.cell / N) + 0.5, 'H', '#ff4');
   for (const s of EL_STATIONS) mark(s.x, EL_Y + 1, 'E', '#f84');
   for (const v of vendors) mark(v.x, v.y, '$', '#fa3');
   const tt = taskTarget(); if (tt) mark(tt.x, tt.y, '?', '#4ff');
@@ -184,7 +193,7 @@ function hud() {
   const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
-                 settings.help ? TOUCH ? 'stick: move | drag: look | E use | Q item | I bag | M map | hold T: time' : 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
+                 settings.help ? TOUCH ? 'stick: move | drag: look | E use | Q item | I bag | M map | hold T: time' : 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
   if (task) { // the favour you're doing, under the help line

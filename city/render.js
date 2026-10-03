@@ -42,7 +42,8 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
     const z = eye + (hor - r - 0.5) * dz - z0;
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth < ZB[i] && fn(i, (c + 0.5 - cx) * du, z, du, dz, L)) { ZB[i] = depth; FL[i] = 0; }
+      const bg = BG[i];
+      if (depth < ZB[i] && fn(i, (c + 0.5 - cx) * du, z, du, dz, L)) { ZB[i] = depth; FL[i] = 0; if (BG[i] !== bg) ZBG[i] = depth; } // (a background it paints is its own, for the fog)
     }
   }
 }
@@ -106,6 +107,7 @@ function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17
       : mode === 'walk' ? 0.17 : chaseOn ? 0.28 : 0.12;
+  eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows + shake() | 0;
   dx = Math.cos(a); dy = Math.sin(a);

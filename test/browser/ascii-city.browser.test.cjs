@@ -211,8 +211,11 @@ test('busted: no fine money means a cell; a minute later the guard lets you out 
   assert.strictEqual(await page.evaluate(() => mode), 'walk');
   await page.keyboard.press('Digit2');
   assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, inv.length, money, wanted.stars]), ['room', 'jail', 0, 17, 0]);
+  await page.keyboard.press('KeyE'); // the one try at breaking out: back off from it
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'jailbreak');
+  await page.keyboard.press('Escape');
   await page.keyboard.press('KeyE');
-  assert.strictEqual(await page.evaluate(() => room && room.kind), 'jail', 'still locked in');
+  assert.deepStrictEqual(await page.evaluate(() => [room && room.kind, !!game]), ['jail', false], 'still locked in, no second try');
   await page.evaluate(() => { room.until = T; });
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [mode, Math.min(...SERVICES.filter(b => b.kind === 'police').map(b => Math.hypot(rel(b.x - px), rel(b.y - py)))) < 1.5]), ['walk', true], 'out, by the station');
@@ -257,3 +260,49 @@ test('on a phone: the stick walks, a drag looks round, the buttons work the menu
     assert.strictEqual(await page.evaluate(() => paused), false);
   } finally { await browser.close(); }
 });
+
+test('on your feet: Space jumps, a trick on the board lands with its name, C sits you on a cinema seat and walking gets you up', () => withPage(async page => {
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(150);
+  assert.ok(await page.evaluate(() => body.z) > 0, 'up in the air');
+  await page.waitForTimeout(800);
+  assert.strictEqual(await page.evaluate(() => body.z), 0, 'and down again');
+  await page.evaluate(() => { fx.skating = true; });
+  await page.keyboard.down('KeyA'); await page.keyboard.press('Space'); await page.keyboard.up('KeyA');
+  assert.strictEqual(await page.evaluate(() => body.trick && body.trick.name), 'kickflip');
+  await page.waitForTimeout(900);
+  assert.strictEqual(await page.evaluate(() => msgText), 'KICKFLIP!');
+  await page.evaluate(() => { fx.skating = false; enterRoom('cinema', { word: 'CINEMA', ret: [px, py, a] }, [7, 10.5, -Math.PI / 2]); px = 4.2; py = 9.0; });
+  await page.keyboard.press('KeyC');
+  assert.ok(await page.evaluate(() => !!body.seat && Math.abs(py - 9.5) < 0.01), 'in the seat');
+  await page.keyboard.down('KeyS'); await page.waitForTimeout(100); await page.keyboard.up('KeyS');
+  assert.strictEqual(await page.evaluate(() => body.seat), null, 'up again');
+}));
+
+test('buy a car and a home: both are still yours after a reload, and the building door takes you home to your own bed', () => withPage(async page => {
+  await page.evaluate(() => { money = 5000; buy('car_sedan'); buy('home_studio'); saveGame(); });
+  await page.reload(); await page.waitForTimeout(300);
+  assert.deepStrictEqual(await page.evaluate(() => [owned.cars.length, owned.homes.length, money]), [1, 1, 1000]);
+  // stand on the sidewalk in front of the building, facing it, and press E
+  const ok = await page.evaluate(() => {
+    const sh = SHOP[owned.homes[0].cell];
+    for (let i = 0; i < N * N; i++) {
+      if (SHOP[i] !== sh || !map[i]) continue;
+      const x = i % N, y = Math.floor(i / N);
+      for (const [ox, oy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) if (!map[idx(x + ox, y + oy)]) {
+        px = x + 0.5 + ox * 0.75; py = y + 0.5 + oy * 0.75; a = Math.atan2(-oy, -ox); mode = 'walk';
+        for (const p of people) { p.x = mod(px + 60, N); p.path = []; } for (const c of cars) if (!c.owned) { c.x = mod(px + 60, N); c.ex = c.x; } return true; // (nobody to talk to, no car to take instead)
+      }
+    }
+    return false;
+  });
+  assert.ok(ok, 'found the door');
+  await page.waitForTimeout(100);
+  const pr = await page.evaluate(() => promptText() + ' | ' + (lookHit && lookHit.d) + ' | ' + msgText);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => room && room.kind), 'home', pr);
+  await page.evaluate(() => { [px, py] = room.def.spots.bed; py += 1; });
+  await page.keyboard.press('KeyE');
+  await page.waitForTimeout(2000);
+  assert.deepStrictEqual(await page.evaluate(() => [room.kind, Math.floor(tod)]), ['home', 7], 'woke at home at 7');
+}));

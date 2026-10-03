@@ -110,7 +110,7 @@ function callUnits() {
       const p = randomLane(30, wanted.lastX, wanted.lastY);
       c = addCar({ ...p, kind: 'police', body: BLUE, patrol: true, extra: true });
     }
-    Object.assign(c, { pursuit: true, cruise: 2.0, dest: [wanted.lastX, wanted.lastY] });
+    Object.assign(c, { pursuit: true, cruise: 2.5, dest: [wanted.lastX, wanted.lastY] }); // (faster than you drive, unless you floor it)
   }
 }
 function clearWanted() {
@@ -153,13 +153,21 @@ function stepCrime(dt) {
     c.dropped = true;
     footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true });
   }
+  // in a car with a cruiser on your bumper: told to pull over, and if you don't, a PIT manoeuvre spins you out
+  let told = false;
+  if (mode === 'drive' && me) {
+    const tail = cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.3);
+    wanted.tailT = tail ? (wanted.tailT || 0) + dt : Math.max(0, (wanted.tailT || 0) - dt * 0.5);
+    if (tail && T > (wanted.toldT || 0)) { wanted.toldT = T + 8; told = true; }
+    if (wanted.tailT > 4 && Math.abs(me.v) > 0.5) { wanted.tailT = 0; me.spunT = T + 2.5; return 'pit'; }
+  }
   // caught: a hand on your shoulder, or boxed in and stopped
   const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22)
     || inside && footCops.some(c => c.chase && near(c.x, c.y, wx, wy) < 0.35); // inside: they come in through the door after you
-  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.0) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
+  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
-  return wanted.seen ? 'seen' : 'hiding';
+  return told ? 'pullover' : wanted.seen ? 'seen' : 'hiding';
 }
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
 function tidyPolice() {

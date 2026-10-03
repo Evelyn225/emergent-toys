@@ -26,12 +26,17 @@ const ITEMS = {
   thaitea: { name: 'Thai iced tea', price: 4, kind: 'drink', uses: 4, caffeine: 30 },
   herbaltea: { name: 'herbal tea', price: 3, kind: 'drink', uses: 3, sober: 0.35 }, // clears your head a bit
   // smoke
-  cigarettes: { name: 'cigarettes', price: 10, kind: 'smoke', uses: 5 },
+  cigarettes: { name: 'cigarettes', price: 10, kind: 'smoke', uses: 5 }, pipe: { name: 'pipe', price: 18, kind: 'smoke', uses: 4 },
+  vape: { name: 'mango vape', price: 25, kind: 'gear' },
   // gear
   skateboard: { name: 'skateboard', price: 60, kind: 'gear' }, ball: { name: 'soccer ball', price: 20, kind: 'gear' },
   boombox: { name: 'boombox', price: 45, kind: 'gear' }, umbrella: { name: 'umbrella', price: 12, kind: 'gear' },
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
   vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
+  // property (property.js): not carried, owned
+  car_hatch: { name: 'old hatchback', price: 450, kind: 'car' }, car_sedan: { name: 'sedan', price: 1500, kind: 'car' },
+  car_sports: { name: 'sports car', price: 4000, kind: 'car' },
+  home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 8000, kind: 'home' },
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
@@ -62,7 +67,8 @@ const STOCK_WORD = {
   'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['sushi', 'tea'], VIDEO: ['vhs', 'candy', 'soda'], THAI: ['padthai', 'greencurry', 'mangorice', 'thaitea'],
   BURGERS: ['burger', 'fries', 'milkshake', 'soda'], CHICKEN: ['chicken', 'fries', 'soda'], JUICE: ['smoothie', 'water', 'apple'],
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
-  THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'newspaper', 'candy'],
+  THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
+  CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft'],
   'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
@@ -77,7 +83,7 @@ const inv = []; // { id, uses }
 let held = 0; // which slot is in your hand; -1 = nothing, hands empty
 // take slot k in hand, or (if it's already there) put it away and hold nothing
 const holdSlot = k => { held = held === k ? -1 : k; };
-const fx = { caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0 };
+const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0 };
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
@@ -86,6 +92,7 @@ let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
 const heldItem = () => inv[held] || null;
 function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
+  if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }
   if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   inv.push({ id, uses: it.uses || 0 }); held = inv.length - 1;
@@ -94,18 +101,18 @@ function buy(id) { // false + why, if you can't
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
 // your storage unit: one unit, the same at every STORAGE place in town
-const STORE_SIZE = 30, stored = [];
+const STORE_SIZE = 30, stored = [], closet = []; // (closet: the stash at home, same rules)
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
   held = k; removeHeld();
   held = was < 0 ? -1 : clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1)); // (empty hands stay empty)
   return it;
 }
-function storeSlot(k) { // carried slot k -> the unit
+function storeSlot(k, list = stored, where = 'your unit') { // carried slot k -> the unit (or the closet)
   if (!inv[k]) return [false, 'Nothing there.'];
-  if (stored.length >= STORE_SIZE) return [false, 'Your unit is full.'];
-  const it = takeSlot(k); stored.push(it);
-  return [true, `You put the ${ITEMS[it.id].name} in your unit.`];
+  if (list.length >= STORE_SIZE) return [false, `${cap(where)} is full.`];
+  const it = takeSlot(k); list.push(it);
+  return [true, `You put the ${ITEMS[it.id].name} in ${where}.`];
 }
 // pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
 const SELL_RATE = { PAWN: 0.4 };
@@ -117,11 +124,11 @@ function sellSlot(k, rate) {
   takeSlot(k); earn(p);
   return [true, `You sell the ${name} for ${fmt$(p)}.`];
 }
-function retrieveSlot(k) { // the unit's item k -> your hands
-  if (!stored[k]) return [false, 'Nothing there.'];
+function retrieveSlot(k, list = stored, where = 'your unit') { // the unit's item k -> your hands
+  if (!list[k]) return [false, 'Nothing there.'];
   if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
-  const it = stored.splice(k, 1)[0]; inv.push(it);
-  return [true, `You take the ${ITEMS[it.id].name} out of your unit.`];
+  const it = list.splice(k, 1)[0]; inv.push(it);
+  return [true, `You take the ${ITEMS[it.id].name} out of ${where}.`];
 }
 function removeHeld() {
   const it = inv[held];
@@ -148,11 +155,16 @@ function useHeld(near) {
   }
   if (d.kind === 'smoke') {
     if (fx.smoke > 0) { cigTip = 1; return ['You take a drag.', 'drag']; }
-    it.uses--; fx.smoke = 45; cigTip = 1;
+    const pipe = it.id === 'pipe';
+    it.uses--; fx.smoke = pipe ? 70 : 45; fx.pipe = pipe; cigTip = 1;
     if (it.uses <= 0) removeHeld();
+    if (pipe) return [`You pack the bowl and light the pipe.${it.uses > 0 ? ` (${it.uses} bowls left)` : ' The last of the tobacco.'}`, 'light'];
     return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
   }
   switch (it.id) {
+    case 'vape': // hold Q to pull, let go to blow it out (stepGoods)
+      if (fx.vape > 0) return ['', null];
+      fx.vape = 0.001; return ['', 'drag'];
     case 'skateboard':
       if (near.indoors) return ['Not in here.', null];
       fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
@@ -213,6 +225,11 @@ function stepGoods(dt) {
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
   fx.yoyo = Math.max(0, fx.yoyo - dt); fx.spark = Math.max(0, fx.spark - dt);
   cigTip = Math.max(0, cigTip - dt * 0.8);
+  if (fx.vape > 0) { // pulling on the vape: the longer, the bigger the cloud
+    const it = heldItem();
+    if (K.KeyQ && it && it.id === 'vape') fx.vape = Math.min(3, fx.vape + dt);
+    else { fx.cloud = fx.vape; fx.vape = 0; }
+  }
   return stepBall(dt);
 }
 // how fast you walk, from what you've had and what you're riding

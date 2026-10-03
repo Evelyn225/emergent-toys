@@ -220,6 +220,69 @@ GAMES.serve = (rnd = Math.random) => {
   return g;
 };
 
+// tending bar (a shift at a bar): the classic. Four bars, a tap at the end of each, thirsty customers walking up
+// them. Hold SPACE to pour, let go when the mug's full (too soon and you keep pouring next time, too long and it
+// spills) and it slides down the bar. A customer who catches one is pushed back toward the door while they drink,
+// and may slide the empty back: be at that bar to catch it. A mug nobody catches, an empty you miss, a spill, or a
+// customer reaching your end: a mistake. Five and you're done; 75 seconds otherwise.
+GAMES.tapper = (rnd = Math.random) => {
+  const W = 34, H = 12, LANES = [1, 4, 7, 10], g = { id: 'tapper', title: 'LAST ORDERS', W, H, score: 0, over: false, shift: true };
+  let lane = 0, cust = [], mugs = [], empties = [], misses = 0, t = 0, spawn = 1, fill = 0, pouring = false;
+  const FULL = [0.85, 1.15];
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (k.upP && lane > 0) { lane--; fill = 0; pouring = false; } // (a different tap: start a fresh mug)
+    if (k.downP && lane < 3) { lane++; fill = 0; pouring = false; }
+    if (k.act) {
+      pouring = true; fill += dt / 0.9;
+      if (fill > 1.35) { fill = 0; pouring = false; misses++; ev.push('wrong'); } // all over the floor
+    } else if (pouring) { // let go
+      pouring = false;
+      if (fill >= FULL[0] && fill <= FULL[1]) { mugs.push({ lane, x: 2 }); fill = 0; ev.push('slide'); }
+      else if (fill > FULL[1]) { fill = 0; misses++; ev.push('wrong'); }
+    }
+    if ((spawn -= dt) <= 0) { cust.push({ lane: rnd() * 4 | 0, x: W - 1, sp: 0.9 + rnd() * 0.6 + t * 0.015, drink: 0 }); spawn = Math.max(0.9, 2.6 - t * 0.022) * (0.7 + rnd() * 0.6); }
+    for (const c of cust) {
+      if (c.drink > 0) { c.drink -= dt; if (c.drink <= 0 && rnd() < 0.55) empties.push({ lane: c.lane, x: c.x - 1 }); continue; }
+      c.x -= c.sp * dt;
+    }
+    for (const m of mugs) {
+      m.x += 12 * dt;
+      const c = cust.filter(o => o.lane === m.lane && o.drink <= 0 && o.x <= m.x + 0.5).sort((a_, b) => a_.x - b.x)[0];
+      if (c) { m.done = true; g.score++; ev.push('serve'); c.x += 7; c.drink = 1.6; if (c.x >= W - 1) c.gone = true; } // shoved back (out of the door, if far enough)
+      else if (m.x >= W - 1) { m.done = true; misses++; ev.push('break'); }
+    }
+    for (const e of empties) {
+      e.x -= 9 * dt;
+      if (e.x <= 1.5) { e.done = true; if (e.lane === lane) { ev.push('place'); g.score += 0.5; } else { misses++; ev.push('break'); } }
+    }
+    mugs = mugs.filter(m => !m.done); empties = empties.filter(e => !e.done);
+    for (const c of cust) if (c.x <= 2) { c.gone = true; misses++; ev.push('angry'); }
+    cust = cust.filter(c => !c.gone);
+    if (misses >= 5 || t >= 75) { g.over = true; ev.push('end'); }
+    return ev;
+  };
+  g.draw = put => {
+    LANES.forEach((y, k) => {
+      for (let x = 2; x < W; x++) put(x, y + 1, '=', C(BRICK, 9), C(BRICK, 2)); // the bar
+      put(1, y, '}', C(GRAY, 12)); put(1, y + 1, '|', C(GRAY, 9)); // the tap
+      put(0, y, k === lane ? '@' : ' ', C(WHITE, 15)); put(0, y + 1, k === lane ? 'A' : ' ', C(WHITE, 13));
+    });
+    // the mug under the tap, filling: froth on top once it's full, red past full
+    const y = LANES[lane], lvl = Math.min(3, Math.floor(fill * 3));
+    if (fill > 0) put(2, y, fill > FULL[1] ? '%' : lvl >= 3 ? '@' : lvl >= 2 ? 'U' : lvl >= 1 ? 'u' : '_', fill > FULL[1] ? C(RED, 15) : fill >= FULL[0] ? C(WHITE, 15) : C(YEL, 13), C(YEL, 2 + lvl));
+    for (const c of cust) put(Math.round(c.x), LANES[c.lane], c.drink > 0 ? 'Q' : 'o', C(YEL, 15), C(MAG, 3));
+    for (const m of mugs) put(Math.round(m.x), LANES[m.lane], 'U', C(YEL, 15), C(ORANGE, 3));
+    for (const e of empties) put(Math.round(e.x), LANES[e.lane], 'u', C(GRAY, 13), C(GRAY, 3));
+  };
+  g.status = () => `SERVED ${Math.floor(g.score)}   MISTAKES ${misses}/5   ${Math.max(0, 75 - t) | 0}s   UP/DOWN bar, HOLD SPACE pour, let go to slide`;
+  g.reward = () => Math.max(0, Math.round((4 * Math.min(1, t / 75) + g.score * 1.3 - misses * 0.8) * 100) / 100);
+  g.state = () => ({ lane, fill, cust, mugs, empties, misses });
+  return g;
+};
+
 // stocking shelves (a shift at a store): each shelf holds one kind of thing, and what they are depends on the shop
 // (STOCK_THEMES, by its sign); shoppers keep taking them. Put each box that comes off the truck in an empty slot on
 // its own shelf. 60 seconds. Pays for every box shelved right, less for the ones put in the wrong place.
@@ -385,8 +448,77 @@ GAMES.lockpick = (rnd = Math.random) => {
   return g;
 };
 
+// breaking out of jail: sneak from your cell (bottom left) to the door (top right) while a guard walks his rounds
+// with a flashlight. Crates block the beam. Step into the light, or bump into him, and he's got you. One cell per
+// arrow press (held, it repeats). 45 seconds before the shift changes and they count heads.
+GAMES.jailbreak = (rnd = Math.random) => {
+  const W = 30, H = 13, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true };
+  const cell = (x, y) => y * W + x, solid = new Set();
+  for (let x = 0; x < W; x++) solid.add(cell(x, 0)).add(cell(x, 10));
+  for (let y = 0; y <= 10; y++) solid.add(cell(0, y)).add(cell(W - 1, y));
+  const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 8], [11, 8]], [[17, 8]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
+  for (const grp of CRATES) for (const [x, y] of grp) solid.add(cell(x, y));
+  const door = [W - 2, 1], you = [2, 9], ROUTE = [[3, 2], [26, 2], [26, 8], [3, 8]];
+  let gx = 3, gy = 2, leg = 1, wait = 0, fx_ = 1, fy_ = 0, t = 0, rep = 0;
+  const lit = new Set();
+  const clear = (x0, y0, x1, y1) => { // nothing solid on the way from (x0, y0) to (x1, y1)
+    for (let s = 1; s < 8; s++) { const x = Math.round(x0 + (x1 - x0) * s / 8), y = Math.round(y0 + (y1 - y0) * s / 8); if (solid.has(cell(x, y)) && !(x === x1 && y === y1)) return false; }
+    return true;
+  };
+  const shine = () => { // the cone: six cells ahead, widening
+    lit.clear();
+    const ox = Math.round(gx), oy = Math.round(gy);
+    for (let d = 1; d <= 6; d++) for (let o = -(d >> 1); o <= d >> 1; o++) {
+      const x = ox + fx_ * d - fy_ * o, y = oy + fy_ * d + fx_ * o;
+      if (x < 0 || y < 0 || x >= W || y > 10 || solid.has(cell(x, y)) || !clear(ox, oy, x, y)) continue;
+      lit.add(cell(x, y));
+    }
+  };
+  shine();
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    // you: a cell per press, repeating while held
+    const dir = k.leftP || k.left ? [-1, 0] : k.rightP || k.right ? [1, 0] : k.upP || k.up ? [0, -1] : k.downP || k.down ? [0, 1] : null;
+    if (k.leftP || k.rightP || k.upP || k.downP) rep = 0;
+    if (dir && (rep -= dt) <= 0) {
+      rep = 0.16;
+      const nx = you[0] + dir[0], ny = you[1] + dir[1];
+      if (!solid.has(cell(nx, ny))) { you[0] = nx; you[1] = ny; ev.push('hop'); } else ev.push('bump');
+    }
+    // the guard: along his round, pausing at each corner to look about
+    if (wait > 0) { wait -= dt; if (wait < 0.5) { const n = ROUTE[leg]; fx_ = Math.sign(n[0] - gx); fy_ = Math.sign(n[1] - gy); } }
+    else {
+      const [tx, ty] = ROUTE[leg], d = Math.hypot(tx - gx, ty - gy), s = Math.min(d, 3.2 * dt);
+      fx_ = Math.sign(tx - gx); fy_ = Math.sign(ty - gy);
+      gx += fx_ * s; gy += fy_ * s;
+      if (d - s < 1e-6) { leg = (leg + 1) % ROUTE.length; wait = 1.1; }
+    }
+    shine();
+    if (you[0] === door[0] && you[1] === door[1]) { g.over = g.success = true; g.score = 1; ev.push('clear'); return ev; }
+    if (lit.has(cell(you[0], you[1])) || Math.abs(gx - you[0]) + Math.abs(gy - you[1]) < 1.2 || t > 45) { g.over = true; ev.push('die'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let y = 0; y <= 10; y++) for (let x = 0; x < W; x++) {
+      const i = cell(x, y);
+      if (solid.has(i)) { const wall = x === 0 || y === 0 || x === W - 1 || y === 10; put(x, y, wall ? '#' : '=', wall ? C(GRAY, 8) : C(BRICK, 12), wall ? C(GRAY, 2) : C(BRICK, 3)); }
+      else if (lit.has(i)) put(x, y, '.', C(YEL, 12), C(YEL, 3));
+    }
+    put(door[0], door[1], 'D', C(GREEN, 15), C(GREEN, 4));
+    put(Math.round(gx), Math.round(gy), 'G', C(BLUE, 15), C(BLUE, 4));
+    put(you[0], you[1], '@', C(WHITE, 15), lit.has(cell(you[0], you[1])) ? C(RED, 6) : NONE);
+    text(0, 12, `${Math.max(0, 45 - t) | 0}s till the head count`, C(t > 35 ? RED : GRAY, 12));
+  };
+  g.status = () => 'ARROWS sneak to the door (D). Stay out of the light.';
+  g.reward = () => 0;
+  g.state = () => ({ you, gx, gy, lit, door, solid, t });
+  return g;
+};
+
 // which shift each room offers
-const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock' };
+const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
 const ARCADE_GAMES = ['snake', 'breakout', 'crosser', 'pong'], CREDIT = 1;
 

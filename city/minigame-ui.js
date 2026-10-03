@@ -66,7 +66,7 @@ function drawGame() {
   FOGS.fill(0); FOGB.fill(0);
   const s = clamp(Math.floor(Math.min((rows - 9) / g.H, (cols - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
   const gw = g.W * bw, gh = g.H * bh, x0 = (cols - gw) >> 1, y0 = Math.max(4, (rows - gh) >> 1);
-  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : g.id === 'serve' ? ORANGE : CYAN;
+  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : g.id === 'serve' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
     const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;

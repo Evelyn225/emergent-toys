@@ -53,6 +53,7 @@ for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM', 'SUSHI']) RO
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
 for (const w of ['TEA HOUSE', 'MAHJONG']) ROOM_FOR[w] = 'tea';
 ROOM_FOR.HOSPITAL = 'hospital';
+ROOM_FOR.CARS = 'showroom'; ROOM_FOR.REALTY = 'realty';
 ROOM_FOR.STORAGE = 'storage';
 
 const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
@@ -204,7 +205,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [];
       for (const y of [5, 6.5, 8, 9.5]) for (const cx of [4.2, 9.8]) { // two blocks of seats, an aisle up the middle from the door
-        p.push(BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
+        p.push({ ...BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), seatRow: { x0: cx - 1.5, x1: cx + 1.5, y, fx: 0, fy: -1 } }, BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
         if (chance(0.7)) p.push(sitting(cx - 1.4 + Math.random() * 2.8, y + 0.05, shirt(), 0.35, true));
       }
       return p;
@@ -356,6 +357,41 @@ const ROOM_DEFS = {
     props: r => [BX(1.9, 1.55, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // the bunk: a blanket on a steel frame
                  BX(1.9, 1.55, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; }),
                  BX(5.4, 1.4, 0.28, 0.28, 0, 0.45, solid(WHITE, { top: 'o', bright: 2 }))] }, // the steel toilet
+  // the lighthouse: whitewashed stone, little deep-set windows on the sea, the keeper at his desk, and a spiral
+  // staircase winding up through the middle to the lamp room
+  lighthouse: { grid: boxRoom(8, 8), light: 0.55, floor: 'concrete', ceil: 'dark', wall: lighthouseWall, keeper: [6.2, 2.2],
+    props: r => [
+      BX(6.2, 1.5, 0.8, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), // the desk, the logbook open on it
+      BX(6.0, 1.45, 0.22, 0.15, 0.8, 0.84, (i, t, L) => { BG[i] = C(WHITE, 3 + L * 0.2); return set(i, HIT.face === 5 ? '~' : '-', C(GRAY, L * 0.7)), true; }),
+      standing(6.2, 2.2, BLUE),
+      BX(4, 3.6, 0.09, 0.09, 0, 2.6, solid(GRAY, { panel: 0.3 })), // the newel post
+      ...Array.from({ length: 12 }, (_, k) => { // the steps, a quarter turn every three
+        const th = k / 12 * Math.PI * 2, c = Math.cos(th), s_ = Math.sin(th);
+        return BX(4 + c * 0.55, 3.6 + s_ * 0.55, 0.45, 0.16, k * 0.2, k * 0.2 + 0.06, solid(GRAY, { top: '=' }), c, s_);
+      }),
+      SP(1.4, 1.4, 0.6, 0.5, ['  ___ ', ' (@@@)', '(@@@@@)'], (c, row, L) => C(WARM, L)), // a coil of rope
+    ] },
+  // the lamp room: glass all round, the sea and the sky outside, the great lens turning in the middle
+  lamproom: { grid: boxRoom(6, 6, {}, false), light: 0.45, floor: 'concrete', ceil: 'dark', wall: lampRoomWall,
+    props: r => [
+      BX(3, 3, 0.35, 0.35, 0, 0.9, solid(GRAY, { panel: 0.4, top: '=' })), // the pedestal
+      BX(3, 3, 0.5, 0.5, 0.9, 1.9, (i, t, L) => { // the lens: rings of glass, blazing on the side the beam's on
+        const f = HIT.face, side = f === 1 ? 0 : f === 2 ? Math.PI : f === 3 ? -Math.PI / 2 : Math.PI / 2;
+        const on = beamLit() ? Math.max(0, Math.cos(beamAng() - side)) ** 3 : 0;
+        BG[i] = C(YEL, 3 + on * 12);
+        return set(i, f >= 5 ? '@' : Math.abs(fract(HIT.w * 6) - 0.5) < 0.15 ? '=' : '(', C(on > 0.5 ? WHITE : YEL, 8 + on * 7)), true;
+      }),
+    ] },
+  // a car lot's showroom: polished floor, three cars on display, the salesman at his desk
+  showroom: { grid: boxRoom(12, 9), light: 1, floor: 'marble', ceil: 'strip', sign: true, signAt: 2.6, keeper: [9.6, 2.2],
+    props: r => [BX(9.6, 1.5, 1.0, 0.35, 0, 0.8, solid(GRAY, { panel: 0.4, top: '=' })), standing(9.6, 2.2, BLUE),
+      ...[[2.5, 3.5, GREEN], [5.6, 5.4, BLUE], [2.6, 7.0, RED]].flatMap(([x, y, col]) => showCar(x, y, col))] },
+  // an estate agent's: listings in the window, a desk
+  realty: { grid: boxRoom(9, 7), light: 0.9, floor: 'carpet', ceil: 'pendant', sign: true, signAt: 2.6, wall: realtyWall, keeper: [4.5, 2.0],
+    props: r => [BX(4.5, 1.4, 1.2, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), standing(4.5, 2.0, GREEN),
+      SP(1.3, 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(7.2, 4.6, -1, 0)] },
+  // home: a bed, a closet, a sofa facing the telly, a window on the city. A studio, or a loft twice the size
+  home: homeDef(7, 6), loft: homeDef(11, 8),
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -507,6 +543,61 @@ function jailWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(GRAY, 3 + L * 0.12); // painted cinder blocks: courses every 20cm, the joints staggered
   const row = Math.floor(z * 5), joint = fract(z * 5) < 0.14 || fract(u * 2.5 + (row & 1) * 0.5) < 0.05;
   return set(i, joint ? (fract(z * 5) < 0.14 ? '_' : '|') : ' ', C(GRAY, L * 0.7)), true;
+}
+function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
+  if (my !== room.H - 1 && Math.abs(fract(u / 3) - 0.5) < 0.1 && z > 1.3 && z < 1.9) { // a deep-set window: sea below, sky above
+    BG[i] = z < 1.5 ? C(BLUE, 2 + day * 3) : C(day > 0.5 ? CYAN : BLUE, 1 + day * 5);
+    return set(i, z < 1.5 ? '~' : ' ', C(CYAN, 6 + day * 6)), true;
+  }
+  BG[i] = C(WHITE, 2 + L * 0.15); // whitewashed stone in courses
+  const row = Math.floor(z * 3), joint = fract(z * 3) < 0.08 || fract(u * 1.5 + (row & 1) * 0.5) < 0.04;
+  return set(i, joint ? (fract(z * 3) < 0.08 ? '_' : '|') : ' ', C(GRAY, L * 0.6)), true;
+}
+function lampRoomWall(i, u, uStep, z, d, mx, my, L) {
+  if (z < 0.9 || z > 2.5) { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, z < 0.9 && fract(z * 4) < 0.15 ? '=' : ' ', C(GRAY, L)), true; } // ironwork below and above the glass
+  if (fract(u * 1.2) < 0.05) { BG[i] = C(GRAY, 2); return set(i, '|', C(GRAY, L)), true; } // the mullions
+  if (z < 1.45) { BG[i] = C(BLUE, 1 + day * 3); return set(i, hash(Math.floor(u * 6 + T * 0.5), Math.floor(z * 20), 3) > 0.8 ? '~' : ' ', C(CYAN, 5 + day * 6)), true; } // the sea, far below
+  BG[i] = C(day > 0.5 ? CYAN : BLUE, day > 0.5 ? 3 + day * 3 : 1);
+  return set(i, night > 0.5 && hash(Math.floor(u * 9), Math.floor(z * 15), 4) > 0.93 ? '.' : ' ', C(WHITE, 12)), true; // the sky, stars at night
+}
+// a car on display: body, glass, wheels (metres)
+function showCar(x, y, col) {
+  return [BX(x, y, 1.0, 0.45, 0.15, 0.75, (i, t, L) => { BG[i] = C(col, (3 + L * 0.5) * shadeFace(HIT.face)); return set(i, HIT.face >= 5 ? ' ' : HIT.w < 0.3 ? '_' : ' ', C(GRAY, L * 0.6)), true; }),
+    BX(x - 0.1, y, 0.55, 0.4, 0.75, 1.15, (i, t, L) => { BG[i] = HIT.face >= 5 ? C(col, 3 + L * 0.4) : C(CYAN, 1 + L * 0.15); return set(i, ' ', 0), true; }),
+    ...[-0.65, 0.65].map(u => BX(x + u, y, 0.18, 0.47, 0, 0.32, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.7)), true; }))];
+}
+function realtyWall(i, u, uStep, z, d, mx, my, L) {
+  if (my === 0 && z > 1.0 && z < 1.9 && fract(u / 1.6) < 0.7) { // listings pinned up: a little house, a price
+    const fu = fract(u / 1.6) / 0.7, fz = (z - 1.0) / 0.9;
+    BG[i] = C(WHITE, 4 + L * 0.2);
+    if (fz > 0.45 && fz < 0.85 && Math.abs(fu - 0.5) < 0.3 - (fz - 0.45)) return set(i, '^', C(BRICK, 12)), true; // the roof
+    if (fz > 0.15 && fz <= 0.45 && Math.abs(fu - 0.5) < 0.22) return set(i, Math.abs(fu - 0.5) < 0.05 ? '|' : '#', C(GRAY, 9)), true;
+    return set(i, fz < 0.12 && fract(fu * 6) < 0.6 ? '$' : ' ', C(GREEN, 12)), true;
+  }
+  BG[i] = C(WARM, 2 + L * 0.15); return set(i, fract(u * 2) < 0.04 ? '|' : ' ', C(WARM, L * 0.5)), true;
+}
+function homeDef(w, h) {
+  const big = w > 8, bed = [1.6, 1.6], closet = [w - 1.5, 1.2], sofa = [w / 2, h - 2.4], tv = [w / 2, 1.0];
+  return { grid: boxRoom(w, h), light: 0.75, floor: 'wood', ceil: 'pendant', wall: homeWall, spots: { bed, closet, tv },
+    props: r => [
+      BX(bed[0], bed[1] + 0.2, 1.0, 0.8, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
+      BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
+      BX(tv[0], tv[1] - 0.3, 0.7, 0.12, 0.6, 1.3, (i, t, L) => { // the telly: static, or a show on
+        if (HIT.face !== 4 && HIT.face !== 3) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
+        if (!r.tv) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
+        BG[i] = C(NEON[(T * 0.7 | 0) & 3], 3 + hash(Math.floor(HIT.u * 20), Math.floor(HIT.w * 20), T * 4 | 0) * 6); return set(i, ' ', 0), true;
+      }),
+      BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
+      BENCHP(sofa[0], sofa[1], 0, -1), ...(big ? [SP(w - 1.3, h - 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(sofa[0] - 2.4, sofa[1], 0, -1)] : []),
+    ] };
+}
+function homeWall(i, u, uStep, z, d, mx, my, L) {
+  if (mx === 0 && z > 1.0 && z < 2.1 && Math.abs(fract(u / 3) - 0.5) < 0.2) { // a window on the city: lit windows across the street at night
+    BG[i] = C(day > 0.5 ? CYAN : BLUE, day > 0.5 ? 4 : 1);
+    return set(i, night > 0.3 && hash(Math.floor(u * 8), Math.floor(z * 8), 7) > 0.6 ? '#' : fract(u * 2) < 0.04 ? '|' : ' ', night > 0.3 ? C(WARM, 12) : C(GRAY, 8)), true;
+  }
+  BG[i] = C(WARM, 2 + L * 0.2); // wallpaper with a little pattern
+  return set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 3 ? ' ' : '.', C(BRICK, L * 0.5)), true;
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall

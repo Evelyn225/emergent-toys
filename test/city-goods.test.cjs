@@ -153,3 +153,21 @@ test('the boombox: a random tape when you switch it on, B steps through them in 
   const before = ev('fx.song'); ev('nextSong(); nextSong(); nextSong(); nextSong()');
   assert.strictEqual(ev('fx.song'), before, 'once round and you are back where you started');
 });
+
+test('property: a car from the lot is parked on the street outside, yours, and stays put; a home is the nearest apartment building', () => {
+  const { ev } = loadCity();
+  ev("money = 10000; mode = 'walk'; px = 5 * 8 + 2.1; py = 9 * 8 + 4");
+  assert.strictEqual(ev("buy('car_sports')[0]"), true);
+  const c = ev('(() => { const c = owned.cars[0]; return { road: ROAD[idx(Math.floor(c.x), Math.floor(c.y))], owned: c.owned, parked: c.parked, d: Math.hypot(rel(c.x - px), rel(c.y - py)) }; })()');
+  assert.ok(c.road === 1 || c.road === 2, 'on a street');
+  assert.ok(c.owned && c.parked && c.d < 2, JSON.stringify(c));
+  ev('var at = [owned.cars[0].x, owned.cars[0].y]; px += 100; for (let k = 0; k < 200; k++) stepTraffic(0.05, T += 0.05)');
+  assert.ok(ev('owned.cars[0].x === at[0] && owned.cars[0].y === at[1] && owned.cars[0].parked'), 'nobody takes it, however far you go');
+  ev('px -= 100');
+  assert.strictEqual(ev("money"), 6000);
+  assert.strictEqual(ev("buy('home_studio')[0]"), true);
+  assert.strictEqual(ev('SHOP[owned.homes[0].cell].kind === SHOP_APTS'), true);
+  assert.strictEqual(ev("buy('home_loft')[0] && owned.homes[1].cell !== owned.homes[0].cell"), false, "can't afford a loft now (and it would be a different building)");
+  assert.strictEqual(ev("buy('car_hatch')[0] && money"), 3050, 'a second car, for what was left');
+  assert.strictEqual(ev("buy('car_sports')[1]"), "Sports car is $4000.00. You can't afford it.");
+});

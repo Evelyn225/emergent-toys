@@ -166,7 +166,7 @@ function stepEmergency(dt) {
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
 function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
-  for (const c of cars) if (c.parked && Math.hypot(rel(c.x - px), rel(c.y - py)) > 45) { c.parked = c.mine = false; c.v = 0; toLane(c); } // left behind: back into the traffic
+  for (const c of cars) if (c.parked && !c.owned && Math.hypot(rel(c.x - px), rel(c.y - py)) > 45) { c.parked = c.mine = false; c.v = 0; toLane(c); } // left behind: back into the traffic
   stepEmergency(dt);
   fillGrid(carGrid, cars, 'ex', 'ey'); fillGrid(pplGrid, people, 'x', 'y');
   // a car crossing our path sideways is long (0.45), one in line with us is narrow (0.2). Around an emergency vehicle

@@ -17,6 +17,7 @@ function buildPause() {
       <h1>Paused</h1>
       <p class="sub">ASCII City</p>
       <button class="item" data-act="resume">Resume</button>
+      <button class="item" data-act="newgame">Start over</button>
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
@@ -30,6 +31,7 @@ function buildPause() {
       <div class="keys">
         <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock)</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
+        <b>space</b><span>jump (on a board: ollie; with A / D / S: tricks)</span><b>C</b><span>crouch (hold) / sit</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
         <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
@@ -61,6 +63,7 @@ function buildPause() {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'resume') closePause(true);
+    if (b.dataset.act === 'newgame') { if (b.dataset.sure) newGame(); else { b.dataset.sure = 1; b.textContent = 'Start over: lose your money, things, home and car? Click again'; } }
     if (b.dataset.toggle) settings[b.dataset.toggle] = !settings[b.dataset.toggle];
     if (b.dataset.detail) settings.detail = b.dataset.detail;
     if (b.dataset.toggle || b.dataset.detail) { saveSettings(); applySettings(); show(); }
