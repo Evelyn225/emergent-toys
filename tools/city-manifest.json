@@ -24,6 +24,7 @@
     "city/rooms.js",
     "city/aquarium.js",
     "city/cathedral.js",
+    "city/shotengai.js",
     "city/render.js",
     "city/hud.js",
     "city/actions.js",

@@ -511,3 +511,30 @@ test('graffiti: murals on some walls; spray paint from the hardware store tags a
   await page.keyboard.press('KeyQ');
   assert.ok(await page.evaluate(() => wanted.stars >= 1 && wanted.crime === 'vandalism'), 'wanted for vandalism');
 }));
+
+test('the Shotengai: a roof over its streets, dry in the rain; pachinko pays tickets, the crane can win you a plush, a capsule for the night', () => withPage(async page => {
+  const st = await page.evaluate(() => { for (let by = 17; by <= 20; by++) for (let bx = 11; bx <= 15; bx++) if (vseg(bx, by) && vseg(bx, by + 1) && blockKind(bx, by) === '' && blockKind(bx - 1, by) === '') return [bx * 8 + 1.35, by * 8 + 7.5]; });
+  assert.ok(st, 'a covered street');
+  await page.evaluate(([x, y]) => { tod = 13; weather = 'rain'; rain = 1; px = x; py = y; a = -Math.PI / 2; pitch = 0.9; }, st);
+  await page.waitForTimeout(300);
+  assert.strictEqual(await page.evaluate(() => districtAt(px, py)), 'shotengai');
+  assert.ok(await page.evaluate(() => { let roof = 0; for (let i = 0; i < cols * 6; i++) if (ZB[i] > 0 && ZB[i] < 40) roof++; return roof > cols * 3; }), 'the roof overhead, not sky');
+  assert.ok(!(await page.evaluate(() => CH.join(''))).includes('!'), 'no rain falling under it');
+  await page.evaluate(() => enterRoom('pachinko', { word: 'PACHINKO', neon: MAG, ret: [px, py, a] }, [7, 9.4, -Math.PI / 2]));
+  await page.evaluate(() => { const m = room.props.find(s => s.pachi && !s.busy); px = m.cx; py = m.cy + m.fy * 0.75; });
+  assert.match(await page.evaluate(() => promptText()), /pachinko/);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'pachinko');
+  await page.evaluate(() => { game.g.score = 80; });
+  await page.keyboard.press('KeyE'); // cash out
+  assert.strictEqual(await page.evaluate(() => tickets), 10, '80 balls, 10 tickets');
+  await page.evaluate(() => { game = null; enterRoom('cranes', { word: 'CRANE GAME', neon: MAG, ret: [px, py, a] }, [5.5, 6.4, -Math.PI / 2]); px = 4.8; py = 2.4; });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'crane');
+  await page.evaluate(() => { game.g.prize = 'plushcat'; game.g.over = true; });
+  await page.waitForTimeout(200);
+  assert.ok(await page.evaluate(() => inv.some(it => it.id === 'plushcat')), 'won a lucky cat');
+  await page.evaluate(() => { game = null; enterRoom('capsule', { word: 'CAPSULE', neon: CYAN, ret: [px, py, a] }, [3.5, 10.4, -Math.PI / 2]); py = 9.9; tod = 15; });
+  await page.keyboard.press('KeyE');
+  assert.ok(await page.evaluate(() => !!sleep), 'asleep in a pod');
+}));

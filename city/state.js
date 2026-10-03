@@ -57,7 +57,7 @@ function env(dt) {
   const lapse = K.KeyT ? 40 : 1; // 20s per game hour; hold T to fast-forward (clouds race along too)
   const t0 = tod;
   tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
-  if (tod < t0) dayNum++; // midnight
+  if (tod < t0 - 12) dayNum++; // midnight (a real wrap round, not a tiny step back)
   if ((wTimer -= dt) < 0) { weather = pick(['clear', 'clear', 'rain', 'fog', 'storm']); wTimer = 60 + Math.random() * 90; }
   rain += clamp((weather === 'rain' || weather === 'storm') - rain, -dt / 6, dt / 6);
   storm += clamp((weather === 'storm') - storm, -dt / 8, dt / 8);

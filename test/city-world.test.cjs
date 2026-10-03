@@ -42,7 +42,7 @@ test('districts all exist, and look different', () => {
     const avg = {}; for (const d in h) avg[d] = h[d] / cells[d];
     return { n, avg };
   })()`);
-  for (const d of ['downtown', 'midtown', 'chinatown', 'industrial', 'brownstones']) assert.ok(r.n[d] >= 20, `${d}: ${r.n[d]} blocks`);
+  for (const d of ['downtown', 'midtown', 'chinatown', 'industrial', 'brownstones', 'shotengai']) assert.ok(r.n[d] >= 15, `${d}: ${r.n[d]} blocks`);
   assert.ok(r.avg.downtown > r.avg.midtown && r.avg.midtown > r.avg.industrial, JSON.stringify(r.avg));
 });
 

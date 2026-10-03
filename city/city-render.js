@@ -2,7 +2,7 @@
 const sk0 = seed => seed * 1e4 | 0;
 // background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse,
 // 14 art deco, 15 parking garage, 16 balcony apartments)
-const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE];
+const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE, GRAY];
 const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
 const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448 };
@@ -10,6 +10,8 @@ const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
+  const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
+  if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   if (graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return; // a mural, or somebody's tag
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
@@ -37,6 +39,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       return set(i, '-', C(GRAY, L));
     }
     if (sh.aqua) return aquaFront(i, u, uStep, z, d, side, L);
+    if (sty === 17 && sh.kind !== SHOP_APTS) return shotengaiFront(i, u, z, sh, sk, open, L, night * fog * 14);
     if (sh.base) return serviceFront(i, u, z, sh.base, L, Math.max(L, night * fog * 14));
     if (sty === 8) { // warehouse: big roll-up doors
       const fd = fract(u * 0.8);
@@ -69,6 +72,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   }
   if (sh.aqua) return aquaUpper(i, u, uStep, z, d, L);
   const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
+  if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
   if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   if (sty === 8) { // warehouse: corrugated sheet metal, a band of high windows under the roof
     const top = h - z < 0.3, fw = fract(u * 2);
@@ -452,6 +456,7 @@ function shake() {
 function skyCell(i, r, x, rx, ry) {
   ZB[i] = Infinity; FL[i] = 0;
   const up = (hor - r - 0.5) / projY, az = Math.atan2(ry, rx); // up = tan(elevation)
+  if (arcadeSky(i, rx, ry, up)) return; // the Shotengai's roof overhead
   BG[i] = rain > 0.5 ? C(GRAY, 1 + day * 6) : fogAmt > 0.5 ? bgAt(GRAY, day * 4)
         : dusk > 0.3 && up < 0.3 ? bgAt(up < 0.1 ? ORANGE : MAG, dusk * (up < 0.1 ? 8 : 4) * (1 - overcast), 0)
         : day > 0.15 ? bgAt(up < 0.08 ? CYAN : BLUE, day * (9 - Math.min(4, up * 8)), 0)
@@ -542,7 +547,8 @@ function reflect() {
 const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
 function rainFx(dt) {
   const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
-  const n = drops.length * rain * (under ? 0.3 : 1) | 0;
+  const roofed = eye < ARCADE_Z && arcadeAt(px, py); // under the Shotengai's roof: dry
+  const n = roofed ? 0 : drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];
     if ((d[1] += d[2] * dt * 1.8) > 1) { d[1] -= 1; d[0] = Math.random(); }

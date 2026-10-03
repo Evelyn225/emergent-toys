@@ -227,3 +227,25 @@ test('high striker: three swings, each scored by how high the puck went; the bel
   assert.strictEqual(rings, 3, 'DING x3');
   assert.strictEqual(ev('g.reward()'), 60);
 });
+
+test('pachinko: balls fired land in pockets now and then (any column can be reached), and cashing out is 8 balls a ticket', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.pachinko(); g.score = 10000');
+  const events = play(ev, 120, '() => ({ act: 1 })');
+  assert.ok(events.includes('score') && events.includes('eat'), 'both kinds of pocket hit');
+  assert.ok(ev('g.score') < 10000, 'the house wins over time');
+  ev('g.score = 40');
+  assert.strictEqual(ev('g.reward()'), 5);
+});
+
+test('crane: a drop either grabs something and brings it home as a prize, or comes up empty; one go', () => {
+  let wins = 0;
+  for (let s = 1; s <= 20; s++) {
+    const { ev } = require('./helpers/load-city.cjs').loadCity(s);
+    ev('var g = GAMES.crane()');
+    play(ev, 30, '(t) => ({ right: t < 0.6, actP: Math.abs(t - 0.7) < 0.01 })');
+    assert.ok(ev('g.over'));
+    if (ev('g.prize')) { wins++; assert.ok(ev('!!ITEMS[g.prize]'), 'a real item'); }
+  }
+  assert.ok(wins > 0 && wins < 20, `${wins}/20`);
+});

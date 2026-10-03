@@ -597,6 +597,108 @@ GAMES.strength = (rnd = Math.random) => {
 };
 const FAIR_GAMES = ['ringtoss', 'strength'];
 
+// ---- the Shotengai's parlours
+// pachinko: hold GO and balls fly up and rain down through a forest of pins; steer where they come in with the
+// stick. Most fall away. The pockets pay balls back; the middle one spins the reels, and three of a kind is FEVER.
+// A credit buys 40 balls; walk away (E) whenever you like and what's left is swapped for tickets, 8 balls a ticket.
+GAMES.pachinko = (rnd = Math.random) => {
+  const W = 23, H = 20, g = { id: 'pachinko', title: 'PACHINKO', W, H, score: 40, over: false };
+  const pin = (x, y) => y >= 3 && y <= 15 && y % 2 === 1 && (x + (y >> 1)) % 2 === 0 && x > 0 && x < W - 1;
+  const POCKETS = { 11: 'start', 5: 'small', 17: 'small' }; // which bottom columns catch a ball
+  let aim = 11, fire = 0, balls = [], tick = 0, reel = null, fever = 0, best = '';
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if (k.left) aim = Math.max(1, aim - dt * 8); if (k.right) aim = Math.min(W - 2, aim + dt * 8);
+    fire -= dt;
+    if (k.act && fire <= 0 && g.score > 0) { g.score--; fire = 0.22; balls.push({ x: Math.round(aim), y: 1 }); ev.push('launch'); }
+    tick += dt;
+    while (tick > 0.06) { // every ball falls a row; a pin bumps it one way or the other
+      tick -= 0.06;
+      for (const b of balls) {
+        if (pin(b.x, b.y + 1) && rnd() < 0.7) { b.x = clamp(b.x + (rnd() < 0.5 ? -1 : 1) * (rnd() < 0.3 ? 2 : 1), 1, W - 2); ev.push('bump'); } // (a ball can slip past a pin)
+        b.y++;
+      }
+      for (const b of balls.filter(b => b.y >= H - 2)) {
+        const p = POCKETS[b.x];
+        if (p === 'small') { g.score += 2; ev.push('eat'); }
+        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 }; }
+        b.dead = true;
+      }
+      balls = balls.filter(b => !b.dead);
+    }
+    if (reel && (reel.t -= dt) <= 0) {
+      if (reel.hit) { reel.r = [7, 7, 7]; g.score += 50; fever = 3; ev.push('clear'); best = 'FEVER! 777'; } else ev.push('miss');
+      reel.shown = reel.r; reel = null;
+    }
+    fever = Math.max(0, fever - dt);
+    if (g.score <= 0 && !balls.length && !reel) { g.over = true; ev.push('end'); }
+    if (reel) g.lastReel = reel.r.map((v, i) => reel.t > 0.4 + i * 0.4 ? 1 + (rnd() * 9 | 0) : v); // the reels spinning, stopping one by one
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let y = 0; y < H; y++) { put(0, y, '|', C(GRAY, 9)); put(W - 1, y, '|', C(GRAY, 9)); }
+    for (let y = 3; y <= 15; y++) for (let x = 1; x < W - 1; x++) if (pin(x, y)) put(x, y, '.', C(YEL, fever > 0 ? 15 : 10));
+    for (let x = 1; x < W - 1; x++) { const p = POCKETS[x]; put(x, H - 1, p ? 'U' : '_', p === 'start' ? C(RED, 15) : p ? C(GREEN, 14) : C(GRAY, 6)); }
+    put(Math.round(aim), 0, 'v', C(WHITE, 15));
+    for (const b of balls) put(b.x, b.y, 'o', C(WHITE, 15));
+    const r = g.lastReel || [7, 7, 7];
+    text(8, 17, `[ ${r.join(' ')} ]`, reel ? C(YEL, 15) : fever > 0 ? C(NEON[(Math.floor(fever * 8)) & 3], 15) : C(WHITE, 11));
+    if (best && fever > 0) text(7, 2, best, C(MAG, 15));
+  };
+  g.status = () => `BALLS ${g.score}   HOLD SPACE fire   ARROWS aim   E cash out`;
+  g.reward = () => Math.floor(g.score / 8);
+  return g;
+};
+// the crane game: steer the claw over a prize, GO drops it. It grips, maybe, and carries it to the chute; one try a
+// credit. What it drops in the chute is yours.
+const CRANE_PRIZES = ['plushcat', 'plushbear', 'sharkplush', 'duck', 'plushcat', 'yoyo'];
+GAMES.crane = (rnd = Math.random) => {
+  const W = 22, H = 14, g = { id: 'crane', title: 'CRANE GAME', W, H, score: 0, over: false, prize: null };
+  const pile = Array.from({ length: 6 }, (_, k) => ({ x: 5 + k * 3 + (rnd() * 2 | 0), id: CRANE_PRIZES[rnd() * CRANE_PRIZES.length | 0] }));
+  let cx = 3, cy = 1, state = 'aim', held = null, t = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (state === 'aim') {
+      if (k.left) cx = Math.max(2, cx - dt * 6); if (k.right) cx = Math.min(W - 2, cx + dt * 6);
+      if (k.actP || t > 20) { state = 'down'; ev.push('launch'); }
+    } else if (state === 'down') {
+      cy += dt * 6;
+      if (cy >= H - 3) {
+        cy = H - 3; state = 'up';
+        const p = pile.find(q => Math.abs(q.x - cx) <= 1);
+        if (p && rnd() < 0.5) { held = p; pile.splice(pile.indexOf(p), 1); ev.push('place'); } else ev.push('bump');
+      }
+    } else if (state === 'up') {
+      cy -= dt * 5;
+      if (held && cy < 4 && rnd() < dt * 0.25) { pile.push({ ...held, x: Math.round(cx) }); held = null; ev.push('miss'); } // it slips...
+      if (cy <= 1) { cy = 1; state = 'home'; }
+    } else if (state === 'home') {
+      cx -= dt * 6;
+      if (cx <= 1) {
+        g.over = true;
+        if (held) { g.prize = held.id; g.score = 1; ev.push('clear'); } else ev.push('end');
+      }
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let x = 0; x < W; x++) put(x, 0, '=', C(GRAY, 10));
+    put(0, H - 2, '\\', C(GRAY, 10)); put(1, H - 2, '_', C(GRAY, 10)); put(1, H - 1, 'v', C(YEL, 13)); // the chute
+    const x = Math.round(cx), y = Math.round(cy);
+    for (let r = 1; r < y; r++) put(x, r, '|', C(GRAY, 12));
+    put(x - 1, y, held ? '[' : '/', C(WHITE, 15)); put(x + 1, y, held ? ']' : '\\', C(WHITE, 15));
+    if (held) put(x, y + 1, '@', C(ITEM_COL[CRANE_PRIZES.indexOf(held.id) & 7], 15));
+    for (const p of pile) put(p.x, H - 2, '@', C(ITEM_COL[CRANE_PRIZES.indexOf(p.id) & 7], 14));
+    for (let x2 = 2; x2 < W; x2++) put(x2, H - 1, '#', C(MAG, 5));
+  };
+  g.status = () => state === 'aim' ? `ARROWS move the claw   SPACE drop (${Math.max(0, 20 - t) | 0}s)` : state === 'home' && held ? 'Got one... got one...' : '...';
+  g.reward = () => 0;
+  return g;
+};
+
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
