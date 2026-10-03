@@ -56,7 +56,7 @@ function bustedChoice(how) {
   if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."`, 4);
   const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
   goToJail();
-  enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T }, [2.5, 2.4, Math.PI / 2]);
+  enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T }, [11, 3.2, Math.PI / 2]); // facing the bars
   say('The cell door slams. Everything you were carrying is in an evidence bag.', 5);
 }
 

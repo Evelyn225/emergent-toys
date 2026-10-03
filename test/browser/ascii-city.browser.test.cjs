@@ -351,3 +351,110 @@ test('buy a car and a home: both are still yours after a reload, and the buildin
   await page.waitForTimeout(2000);
   assert.deepStrictEqual(await page.evaluate(() => [room.kind, Math.floor(tod)]), ['home', 7], 'woke at home at 7');
 }));
+
+test('the pleasure pier: once round the Ferris wheel and back to the platform, a horse on the carousel, a go at ring toss', () => withPage(async page => {
+  await page.evaluate(() => { tod = 15; px = WHEEL_BOARD.x; py = WHEEL_BOARD.y; a = Math.PI / 2; });
+  await page.waitForTimeout(100);
+  assert.match(await page.evaluate(() => promptText()), /ride the Ferris wheel/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, money]), ['fair', 95]);
+  await page.evaluate(() => { T = fairRide.end - WHEEL.rev / 2; });
+  await page.waitForTimeout(150);
+  assert.ok(await page.evaluate(() => fairEye > WHEEL.hub + WHEEL.R * 0.9), 'at the top');
+  await page.evaluate(() => { T = fairRide.end - 0.05; });
+  await page.waitForTimeout(300);
+  assert.deepStrictEqual(await page.evaluate(() => [mode, Math.hypot(px - WHEEL_BOARD.x, py - WHEEL_BOARD.y) < 0.3]), ['walk', true], 'off at the bottom');
+  await page.evaluate(() => { px = CAROUSEL.x; py = CAROUSEL.y - CAROUSEL.r - 0.2; });
+  await page.keyboard.press('KeyE');
+  const p0 = await page.evaluate(() => [px, py]);
+  await page.waitForTimeout(500);
+  assert.ok(await page.evaluate(([x, y]) => mode === 'fair' && Math.hypot(px - x, py - y) > 0.05, p0), 'going round');
+  await page.evaluate(() => { T = fairRide.end; });
+  await page.waitForTimeout(150);
+  assert.ok(await page.evaluate(() => mode === 'walk' && !fairBlocked(px, py)), 'off, beside it');
+  await page.evaluate(() => { px = BOOTHS[0].at[0]; py = BOOTHS[0].at[1]; });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'ringtoss');
+  await page.evaluate(() => { tod = 4; game = null; px = WHEEL_BOARD.x; py = WHEEL_BOARD.y; });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => mode), 'walk', 'the rides are shut at 4am');
+}));
+
+test('the laundromat: a load at the back wall, done in its time; clean clothes lose the police if they cannot see you', () => withPage(async page => {
+  await page.evaluate(() => { tod = 3; enterRoom('laundry', { word: 'LAUNDRY', neon: CYAN, ret: [px, py, a], cell: [10, 10] }, [4, 1.6, -Math.PI / 2]); });
+  assert.match(await page.evaluate(() => promptText()), /run a wash/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [!!wash, money]), [true, 97]);
+  await page.keyboard.press('KeyE');
+  assert.match(await page.evaluate(() => msgText), /Still spinning/);
+  await page.evaluate(() => { T = wash.done + 0.1; wanted.stars = 2; wanted.seen = false; });
+  await page.waitForTimeout(100);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [wash, wanted.stars, fx.fresh > 0]), [null, 0, true]);
+}));
+
+test('the aquarium: admission at the door, fish in every kind of tank, a touch pool, a gift shop; fish in the windows outside', () => withPage(async page => {
+  const glyphs = () => page.evaluate(() => CH.join(''));
+  await page.evaluate(() => { tod = 12; weather = 'clear'; px = AQUARIUM.doorU + 0.3; py = AQUARIUM.by * 8 + 9.2; a = -Math.PI / 2; pitch = 0; });
+  await page.waitForTimeout(300);
+  assert.match(await glyphs(), /><|<>|=o>|<o=/, 'fish in the windows');
+  await page.evaluate(() => { px = AQUARIUM.doorU; py = AQUARIUM.by * 8 + 8.25; });
+  await page.waitForTimeout(100);
+  assert.match(await page.evaluate(() => promptText()), /enter AQUARIUM \(\$8\.00\)/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, money]), ['room', 'aquarium', 92]);
+  for (const [name, at] of [['ocean', [12, 3.6, -Math.PI / 2]], ['reef', [20.4, 7.5, 0]], ['jelly', [3.4, 7.5, Math.PI]], ['kelp', [18.5, 5.5, -Math.PI / 2]], ['seahorses', [2.6, 12.5, Math.PI]]]) {
+    await page.evaluate(([x, y, ang]) => { px = x; py = y; a = ang; pitch = 0; }, at);
+    await page.waitForTimeout(250);
+    const s = await glyphs();
+    assert.ok(/[<>"]/.test(s) || /[()|]{3}/.test(s), `${name}: something swimming`);
+  }
+  assert.ok(await page.evaluate(() => { px = 12; py = 9; a = -Math.PI / 2; pitch = 0.5; return !ROOMW.cell(12, 9); }), 'the tunnel floor is walkable');
+  await page.evaluate(() => { px = 5.5; py = 14.2; });
+  assert.match(await page.evaluate(() => promptText()), /touch pool/);
+  await page.keyboard.press('KeyE');
+  assert.ok(await page.evaluate(() => TOUCH_LINES.includes(msgText)));
+  await page.evaluate(() => { px = 20.5; py = 14.6; });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the gift shop');
+  assert.ok(await page.evaluate(() => shopCtx.stock.includes('sharkplush')));
+}));
+
+test('the cathedral: in through the great doors, a seat in a pew, a candle lit, up the bell tower and back down, out again', () => withPage(async page => {
+  await page.evaluate(() => { tod = 15; for (const [k, v] of landmarkOf) if (v === 'cathedral') { px = (k % NB) * 8 + 5; py = Math.floor(k / NB) * 8 + 3.7; a = Math.PI / 2; break; } });
+  await page.waitForTimeout(100);
+  assert.match(await page.evaluate(() => promptText()), /go into the cathedral/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, room.def.height]), ['room', 'cathedral', 16]);
+  await page.evaluate(() => { px = 9; py = 15.6; });
+  await page.keyboard.press('KeyC');
+  assert.ok(await page.evaluate(() => !!body.seat), 'sitting in a pew');
+  await page.evaluate(() => { body.seat = null; px = 19; py = 35.3; });
+  const lit = await page.evaluate(() => room.candles);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [room.candles, money]), [lit + 1, 99]);
+  await page.evaluate(() => { px = CATH_TOWER[0]; py = CATH_TOWER[1] - 0.2; });
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, roofH]), ['roof', 8], 'up the tower, 80m');
+  await page.waitForTimeout(200);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind]), ['room', 'cathedral'], 'back down');
+  await page.evaluate(() => { px = 11; py = 38.3; a = Math.PI / 2; });
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(400); await page.keyboard.up('KeyW');
+  assert.strictEqual(await page.evaluate(() => mode), 'walk', 'out the doors');
+  await page.evaluate(() => { tod = 23; for (const [k, v] of landmarkOf) if (v === 'cathedral') { px = (k % NB) * 8 + 5; py = Math.floor(k / NB) * 8 + 3.7; break; } });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => mode), 'walk', 'locked at night');
+}));
+
+test('the cell block: you stay in your cell, the bars are see-through and there is a whole block beyond them', () => withPage(async page => {
+  await page.evaluate(() => enterRoom('jail', { word: 'JAIL', ret: [px, py, a], until: T + 60 }, [11, 3.2, Math.PI / 2]));
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
+  assert.ok(await page.evaluate(() => py < JAIL_BARS_NEAR - 0.2), 'stopped at the bars');
+  // looking through them: something is drawn far past the bars (the cells across the corridor)
+  const far = await page.evaluate(() => { let n = 0; for (let i = 0; i < ZB.length; i++) if (ZB[i] > JAIL_BARS_FAR - py && ZB[i] < 50) n++; return n; });
+  assert.ok(far > 200, `the far side of the corridor is in view (${far} cells)`);
+  const g0 = await page.evaluate(() => room.props.find(s => s.tick && s.y === 7.5).x);
+  await page.waitForTimeout(500);
+  assert.notStrictEqual(await page.evaluate(() => room.props.find(s => s.tick && s.y === 7.5).x), g0, 'the guard is walking');
+}));

@@ -200,7 +200,9 @@ const ROOM_DEFS = {
       return p;
     } },
   laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: laundryWall,
-    props: r => [BENCHP(2.8, 3.6, 0, -1), sitting(2.8, 3.58, shirt(), 0.45), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L))] },
+    props: r => [BENCHP(2.8, 3.6, 0, -1), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L)),
+      BX(6.2, 3.3, 0.9, 0.35, 0, 0.85, solid(WHITE, { top: '_', panel: 0.4 })), // the folding table
+      ...(tod > 7 && tod < 23 || chance(0.3) ? [sitting(2.8, 3.58, shirt(), 0.45)] : [])] }, // (somebody waiting on a load, mostly in the day)
   cinema: { grid: boxRoom(14, 12), light: 0.3, floor: 'carpet', ceil: 'dark', wall: cinemaWall,
     props: r => {
       const p = [];
@@ -352,11 +354,9 @@ const ROOM_DEFS = {
                     '#.LL.LL.LL.L.#', '#............#', '#............#', '######DD######'],
     light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: storageWall, keeper: [11.5, 7.15],
     props: r => [BX(11.5, 7.75, 1.1, 0.3, 0, 1.05, solid(GRAY, { panel: 0.5, trim: 0.99, top: '=' })), standing(11.5, 7.15, ORANGE)] },
-  // a holding cell: concrete, a bunk, a steel toilet, bars across the front (no door: the guard lets you out)
-  jail: { grid: boxRoom(7, 6, {}, false), light: 0.7, floor: 'concrete', ceil: 'strip', wall: jailWall,
-    props: r => [BX(1.9, 1.55, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // the bunk: a blanket on a steel frame
-                 BX(1.9, 1.55, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; }),
-                 BX(5.4, 1.4, 0.28, 0.28, 0, 0.45, solid(WHITE, { top: 'o', bright: 2 }))] }, // the steel toilet
+  // the cell block (jail.js): your cell in a row of three, real bars across its front, a corridor with a guard
+  // pacing it, three more cells across the way. You only ever stand in yours (the guard lets you out)
+  jail: { grid: JAIL_GRID, light: 0.95, floor: 'jail', ceil: 'jail', wall: jailWall, block: jailBlock, props: jailProps },
   // the lighthouse: whitewashed stone, little deep-set windows on the sea, the keeper at his desk, and a spiral
   // staircase winding up through the middle to the lamp room
   lighthouse: { grid: boxRoom(8, 8), light: 0.55, floor: 'concrete', ceil: 'dark', wall: lighthouseWall, keeper: [6.2, 2.2],
@@ -461,11 +461,15 @@ function arcadeWall(i, u, uStep, z, d, mx, my, L) { // dark walls with a neon zi
   if (Math.abs(z - zig) < 0.05) { set(i, '~', C(NEON[Math.floor(u) & 3], 15)); return true; }
   set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 7 ? ' ' : '.', C(MAG, 3)); return true;
 }
-function laundryWall(i, u, uStep, z, d, mx, my, L) { // a row of washing machines with spinning drums
+function laundryWall(i, u, uStep, z, d, mx, my, L) { // a row of washing machines with spinning drums (yours, if it's in one)
+  if (my === 0 && z >= 1.9) return wallText(i, u, uStep, z, d, 'OPEN 24 HOURS', room.W / 2, 2.05, 0.22, 0.25, C(CYAN, fract(T * 0.7) < 0.93 ? 15 : 6)); // (the tube flickers)
   if (z >= 1.9 || !(my === 0 || mx === 0 || mx === room.W - 1)) return false;
   const n = Math.floor(u / 0.75), fu = fract(u / 0.75), du = (fu - 0.5) * 0.75, dz = z - 0.85, rr = Math.hypot(du, dz);
+  const mine = my === 0 && myLaundromat() && wash.n === n, done = mine && T >= wash.done;
   if (fu < 0.05 || z < 0.1) { set(i, '|', C(GRAY, L)); return true; }
-  if (rr < 0.2) { const ang = mod(Math.atan2(dz, du) + T * 6 * (n & 1 ? 1 : -1), 6.283); set(i, '@o.'[ang / 2.1 | 0], C(ITEM_COL[n & 7], L)); return true; }
+  if (mine && z > 1.25 && z < 1.4 && Math.abs(du) < 0.2) { set(i, done ? (fract(T * 2) < 0.5 ? '*' : ' ') : ':', C(done ? GREEN : YEL, 15)); return true; } // its little light
+  if (rr < 0.2 && done) { set(i, '~', C(WHITE, 14)); return true; } // still, and clean
+  if (rr < 0.2) { const ang = mod(Math.atan2(dz, du) + T * (mine ? 12 : 6) * (n & 1 ? 1 : -1), 6.283); set(i, '@o.'[ang / 2.1 | 0], C(mine ? WHITE : ITEM_COL[n & 7], mine ? 15 : L)); return true; }
   if (rr < 0.26) { set(i, 'O', C(GRAY, L * 1.2)); return true; }
   if (z > 1.55) { set(i, fract(u * 4) < 0.3 ? 'o' : '=', C(CYAN, L)); return true; }
   set(i, '#', C(WHITE, L * 0.5)); return true;
@@ -527,22 +531,6 @@ function hospitalWall(i, u, uStep, z, d, mx, my, L) {
   if (Math.abs(z - 0.95) < 0.04) return set(i, '=', C(GRAY, L * 1.1)), true; // the handrail
   if (Math.abs(z - 0.55) < 0.05) { BG[i] = C(GREEN, 5); return set(i, ' ', 0), true; } // the guide stripe
   return set(i, fract(u * 3.3) < 0.06 || fract(z * 3.3) < 0.06 ? '+' : ' ', C(GREEN, L * 0.35)), true; // tiles
-}
-// cell walls: bars across the front, tally marks scratched by the bunk, bare concrete
-function jailWall(i, u, uStep, z, d, mx, my, L) {
-  if (my === room.H - 1 && z < 2.4) { // the bars, and through them the corridor: its floor, the cells across it, a light
-    const bar = fract(u * 4) < 0.16;
-    if (bar || z > 2.28 || z < 0.08) { BG[i] = C(GRAY, 3); return set(i, bar ? '|' : '=', C(WHITE, L * 1.3)), true; }
-    BG[i] = C(GRAY, 1);
-    if (z < 0.45) return set(i, fract(u * 2 + z * 7) < 0.25 ? '.' : ' ', C(GRAY, L * 0.7)), true; // the corridor floor
-    if (z > 1.85 && z < 2.05) return Math.abs(fract(u / 3) - 0.5) < 0.12 ? (BG[i] = C(YEL, 2), set(i, '=', C(YEL, 13))) : set(i, ' ', 0), true; // strip lights
-    if (z > 1.6) return set(i, z < 1.66 ? '_' : ' ', C(GRAY, L * 0.6)), true;
-    return set(i, fract(u * 9) < 0.22 ? '|' : z > 0.95 && z < 1.0 ? '-' : ' ', C(GRAY, L * 0.9)), true; // the cells opposite, behind their own bars
-  }
-  if (my === 0 && z > 1 && z < 1.4 && u > 1 && u < 2.8) return BG[i] = C(GRAY, 3 + L * 0.12), set(i, fract(u * 9) < 0.35 ? '|' : z > 1.3 && fract(u * 1.8) < 0.5 ? '/' : ' ', C(WHITE, L * 0.8)), true;
-  BG[i] = C(GRAY, 3 + L * 0.12); // painted cinder blocks: courses every 20cm, the joints staggered
-  const row = Math.floor(z * 5), joint = fract(z * 5) < 0.14 || fract(u * 2.5 + (row & 1) * 0.5) < 0.05;
-  return set(i, joint ? (fract(z * 5) < 0.14 ? '_' : '|') : ' ', C(GRAY, L * 0.7)), true;
 }
 function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== room.H - 1 && Math.abs(fract(u / 3) - 0.5) < 0.1 && z > 1.3 && z < 1.9) { // a deep-set window: sea below, sky above
@@ -676,10 +664,10 @@ function trainWall(i, u, uStep, z, d, mx, my, L) {
   return false;
 }
 
-function roomWall(i, u, uStep, z, h, d, side, mx, my, fog) {
+function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const R = room, D = R.def, c = roomAt(mx, my), L = fog * (side ? 10 : 14) * D.light;
   BG[i] = NONE;
-  if (c === 'D') { // the way out: glass doors, or stairs up from the subway
+  if (c === 'D' && R.kind !== 'cathedral') { // the way out: glass doors, or stairs up from the subway
     if (R.kind === 'station') {
       if (z > 1.6 + STATION_STAIRS.rise) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, 1.8 + STATION_STAIRS.rise, 0.25, 0.3, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
       set(i, ' ', 0); BG[i] = C(day > 0.3 ? WHITE : WARM, 3 + day * 7); return; // daylight (or streetlight) from the top
@@ -692,6 +680,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog) {
     BG[i] = C(GRAY, 2);
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
+  if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
   if (c === 'S' || D.shelves && my === 0 && z < 2) { // shelves: islands, and along the back wall
@@ -718,6 +707,9 @@ function roomFloor(i, r, x, rx, ry) {
     case 'train': return set(i, fract(wx * 4) < 0.2 ? '|' : ' ', C(GRAY, L));
     case 'rubber': return set(i, (r * 7 + x * 3) % 11 ? ' ' : '.', C(GRAY, L));
     case 'concrete': { const h = hash(Math.floor(wx * 2), Math.floor(wy * 2), 37); return set(i, h > 0.9 ? '%' : (r + x) % 4 ? ' ' : '.', C(h > 0.9 ? BRICK : GRAY, L * (h > 0.9 ? 0.6 : 1))); }
+    case 'aqua': return aquaFloor(i, f, wx, wy);
+    case 'cathedral': return cathedralFloor(i, f, wx, wy);
+    case 'jail': return jailFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
       if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
@@ -750,12 +742,16 @@ function roomCeil(i, r, x, rx, ry) {
     const on = hash(Math.floor(wx * 3), Math.floor(wy * 3), 9) > 0.88;
     return set(i, on ? '*' : ' ', C(NEON[(Math.floor(wx * 3 + wy * 2 + T * 3)) & 3], 15));
   }
+  if (st === 'aqua') return aquaCeil(i, r, x, wx, wy);
+  if (st === 'cathedral') return cathedralCeil(i, wx, wy);
+  if (st === 'jail') return jailCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
   const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {
   for (const s of room.props) {
+    if (s.tick) s.tick(s); // (someone walking about)
     if (s.box) { drawBox({ ...s.box, x: s.box.x - px, y: s.box.y - py }, s.shade); continue; }
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
     drawArt(s.x - px, s.y - py, s.z, s.w, s.h, typeof s.art === 'function' ? s.art() : s.art, s.col);

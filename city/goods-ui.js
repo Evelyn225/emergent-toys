@@ -71,6 +71,14 @@ const HAND = {
     (c, r) => r === 0 ? C(GREEN, 14) : c === '%' || c === '~' ? C(GREEN, 12) : C(WHITE, 13)],
   mangorice: (it, f) => [bitten(['  .-~~~~-.', ' (@@@@@@@@)', ' (::::::::)', "(==========)"], f, 'top'),
     (c, r) => c === '@' || c === '~' && r === 0 ? C(YEL, 15) : c === ':' ? C(WHITE, 15) : c === '=' ? C(GREEN, 12) : C(YEL, 12)],
+  cottoncandy: (it, f) => [bitten(['  .@@@@@.', ' @@@@@@@@@', '@@@@@@@@@@@', ' @@@@@@@@@', "  '@@@@@'", '     |', '     |', '     |'], 0.4 + f * 0.6, 'top'),
+    (c, r) => c === '|' ? C(WHITE, 13) : C(MAG, (r + 13) % 3 ? 13 : 15)],
+  corndog: (it, f) => [bitten(['  .-------.', ' (@@@@@@@@@)', "  '-------'", '      |', '      |', '      |'], f, 'top'),
+    (c, r) => r > 2 ? C(WARM, 12) : c === '@' ? C(ORANGE, 13) : C(YEL, 13)],
+  popcorn: (it, f) => [bitten([' o O o O o', 'oOoOoOoOoO', '|=|=|=|=|=|', '| POPCORN |', ' \\_______/'], f, 'top'),
+    (c, r) => r < 2 ? C(WHITE, 15) : /[A-Z]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
+  lemonade: (it, f) => [filled(['    \\', ' .___\\__.', ' |      |', ' |      |', ' |      |', '  \\____/'], [[2, 2, 7], [3, 2, 7], [4, 2, 7]], f, ':', '~'),
+    (c, r) => r < 2 && c === '\\' ? C(RED, 14) : c === ':' || c === '~' ? C(YEL, 15) : C(WHITE, 11)],
   fries: (it, f) => [bitten(['  | |||| |', '  ||||||||', ' \\========/', '  | FRIES|', '  |______|'], f, 'top'),
     (c, r) => r < 2 ? C(YEL, 15) : /[A-Z]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
   chicken: (it, f) => [bitten([' (@) (@)(@)', '.----------.', '| CHICKEN  |', '|==========|', " \\________/"], f, 'top'),
@@ -123,6 +131,8 @@ const HAND = {
     (c, r) => c === '@' ? C(ORANGE, 10 + fx.vape * 1.7) : c === 'o' ? C(GRAY, 9) : /[A-Z]/.test(c) ? C(YEL, 14) : C(ORANGE, 12)],
   pipe: () => [['  ___', ' (___)', '  | |___', '  |_____|'], (c, r) => r < 2 ? C(BRICK, 12) : C(BRICK, 10)],
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
+  sharkplush: () => [['        /|', '  ___.-/ |__', '<(________o_>', "      \\/  \\/"], (c, r) => c === 'o' ? C(WHITE, 15) : r === 2 && c === '_' ? C(WHITE, 13) : C(GRAY, 13)],
+  snowglobe: () => [['  .-----.', ' / . * . \\', '|  ><>  * |', ' \\ * . . /', "  '-----'", ' [=======]'], (c, r) => r === 5 ? C(BRICK, 13) : c === '>' || c === '<' ? C(ORANGE, 15) : c === '*' || c === '.' ? C(WHITE, 15) : C(CYAN, 12)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
   umbrella: () => [['     .', '    /|\\', '   / | \\', '  |  |  |', '  |==|==|', '  |  |  |', '   \\ | /', '    \\|/', '     |', '     |'],
@@ -312,7 +322,7 @@ function drawDropped(d, vx, vy, s) {
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
 // left of the buttons)
-const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze);
+const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh);
 function hotbar() {
   if (!hotbarUp()) return;
   const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0);
@@ -324,7 +334,7 @@ function hotbar() {
     g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.fresh > 0 && 'fresh clothes', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
   if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 

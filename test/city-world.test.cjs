@@ -289,3 +289,32 @@ test('a taxi tipped to step on it runs the red light; an ordinary one stops at i
   assert.ok(run(false) < 0, 'waits before the junction');
   assert.ok(run(true) > 0, 'straight through it');
 });
+
+test('the pleasure pier: a deck off the shore you can walk out on, booths you can reach, the wheel clear of the water', () => {
+  const { loadCity } = require('./helpers/load-city.cjs');
+  const { ev } = loadCity();
+  assert.notStrictEqual(ev('districtOf(FAIR_BX, SHORE_S - 1)'), 'industrial');
+  assert.ok(!ev('BRIDGE_X.includes(FAIR_BX)') && ev('FAIR_BX') !== ev('ISLE_BX'));
+  assert.ok(ev('FAIR.y0 < shoreS(FAIR.cx)'), 'it starts on land');
+  for (let y = ev('FAIR.y0') + 0.3; y < ev('FAIR.y1'); y += 0.5) assert.ok(!ev(`isWater(FAIR.cx + 1.5, ${y})`), `deck at y ${y}`);
+  assert.ok(ev('isWater(FAIR.cx, FAIR.y1 + 0.5)'), 'and it ends at sea');
+  assert.strictEqual(ev('PIERS.filter(p => Math.floor(p[0] / 8) === FAIR_BX).length'), 1, 'no second pier on top of it');
+  for (const b of JSON.parse(ev('JSON.stringify(BOOTHS.map(b => b.at))')))
+    assert.ok(!ev(`solidAt(${b[0]}, ${b[1]}, 0.03) || fairBlocked(${b[0]}, ${b[1]}, 0.03) || isWater(${b[0]}, ${b[1]})`), `the counter at ${b} is reachable`);
+  assert.ok(!ev('fairBlocked(WHEEL_BOARD.x, WHEEL_BOARD.y, 0.03)'), 'the wheel platform is clear');
+  assert.ok(ev('WHEEL.x - WHEEL.R > FAIR.x0 && WHEEL.x + WHEEL.R < FAIR.x1 && WHEEL.hub - WHEEL.R > 0.2'), 'the wheel fits on the pier, its cars clear the deck');
+  const bottom = ev('Array.from({ length: WHEEL.n }, (_, k) => Math.sin(wheelAngle(k, 0))).filter(s => s < -0.99).length');
+  assert.strictEqual(bottom, 1, 'a car at the bottom to board at t=0');
+});
+
+test('the aquarium: its own building across the shore road from the pier, its front on the road', () => {
+  const { loadCity } = require('./helpers/load-city.cjs');
+  const { ev } = loadCity();
+  const front = ev('AQUARIUM.by * 8 + 7'), road = ev('AQUARIUM.by * 8 + 8');
+  for (let x = ev('AQUARIUM.x0'); x < ev('AQUARIUM.x1'); x++) {
+    assert.strictEqual(ev(`SHOP[idx(${x}, ${front})] === AQUARIUM.sh && map[idx(${x}, ${front})] > 0`), true, `x ${x} is the aquarium`);
+    assert.strictEqual(ev(`ROAD[idx(${x}, ${road})]`) > 0, true, `with the road in front at x ${x}`);
+  }
+  assert.ok(ev('AQUARIUM.doorU > FAIR.x0 && AQUARIUM.doorU < FAIR.x1'), 'its door faces the pier');
+  assert.deepStrictEqual(JSON.parse(ev('JSON.stringify(AQUARIUM.sh.hours)')), [9, 21]);
+});

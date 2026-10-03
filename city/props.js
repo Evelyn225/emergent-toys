@@ -130,7 +130,7 @@ const solidBox = (x, y, alongX, hl, hw, z0, z1, kind, k) => solids.push({ x, y, 
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bi(bx, by)), kind = blockKind(bx, by);
   if (lm === 'cathedral') for (const x of [3.5, 6.5])
-    extras.push({ x: X + x, y: Y + 3.5, z: 8, w: 0.9, h: 3, art: ART.spire, col: (c, row, L) => C(c === '+' ? YEL : GRAY, c === '+' ? Math.max(L, night * 15) : L) });
+    extras.push({ spire: true, x: X + x, y: Y + 3.5, z: 8, w: 0.9, h: 3, art: ART.spire, col: (c, row, L) => C(c === '+' ? YEL : GRAY, c === '+' ? Math.max(L, night * 15) : L) });
   if (lm === 'radio') radios.push({ x: X + 5, y: Y + 5 });
   if (kind === 'construction') {
     cranes.push({ x: X + 7, y: Y + 6.2, H: 7 + hash(bx, by, 98) * 2, slew: hash(bx, by, 99) * 6.28 });
@@ -153,8 +153,33 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
   }
 }
+// the pleasure pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
+// boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
+// side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
+const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -1, 3.6, { game: 'strength' }],
+                ['PRIZES', 1, 2.3, { prizes: true }], ['FAIR FOOD', 1, 3.6, { stock: true }]].map(([word, side, dy, what], k) => {
+  const x = side < 0 ? FAIR.x0 + 0.27 : FAIR.x1 - 0.27, y = FAIR.y0 + dy;
+  solidBox(x, y, false, 0.5, 0.22, 0, 0.34, 'booth', k);
+  const o = solids[solids.length - 1];
+  return Object.assign(o, { word, side, fs: side < 0 ? -1 : 1, at: [x - side * 0.42, y], awning: [RED, BLUE, MAG, GREEN][k], ...what });
+});
+for (let y = FAIR.y0 + 1; y < FAIR.y1 - 0.5; y += 1.5) for (const x of [FAIR.x0 + 0.06, FAIR.x1 - 0.06])
+  extras.push({ x, y, z: 0, w: 0.05, h: 0.4, art: ['(*)', ' | ', ' | ', ' | ', ' | '], col: (c, row, L) => row ? C(GRAY, L) :
+    C([YEL, RED, CYAN, MAG][(Math.floor(T * 2) + Math.round(y)) & 3], Math.max(L, night * 15)) });
+const fairFolk = [];
+for (let k = 0; k < 14; k++) { // somewhere on the boardwalk clear of everything, or in the wheel's queue
+  const queue = k < 3, x = queue ? WHEEL_BOARD.x - 0.15 + k * 0.12 : FAIR.x0 + 0.9 + hash(k, 1, 57) * (FAIR.x1 - FAIR.x0 - 1.8);
+  const y = queue ? WHEEL_BOARD.y - 0.12 - k * 0.1 : FAIR.y0 + 0.8 + hash(k, 2, 57) * (WHEEL.y - FAIR.y0 - 1.6);
+  if (!queue && fairBlocked(x, y, 0.15)) continue;
+  const shirt = [RED, BLUE, GREEN, YEL, MAG, WHITE][k % 6], pants = [BLUE, GRAY, BRICK][k % 3];
+  fairFolk.push({ x, y });
+  extras.push({ x, y, z: 0, w: 0.06, h: 0.18, art: ART.walkB, col: (c, row, L) => C(row < 2 ? SKIN : row === 2 ? shirt : pants, L) });
+}
+// the aquarium's sign over its doors: a big neon fish, lit after dark
+extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, w: 0.3, h: 0.13, art: pad(['    _.--._', "><(( o  ))>", "    `--'"]),
+  col: (c, row, L) => C(c === 'o' ? WHITE : c === '>' || c === '<' ? ORANGE : CYAN, Math.max(L, night * 15 * (fract(T * 0.4) < 0.96 ? 1 : 0.4))) });
 // dockside cranes on the industrial piers
-for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
+for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && x0 !== FAIR.x0 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
 function solidAt(x, y, pad) {
@@ -220,6 +245,10 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
   if (hash(bx, by, o === 'h' ? 200 : 202) < 0.03 && !blockKind(bx, by) && districtOf(bx, by) !== 'industrial')
     vendors.push({ x, y, ox: o === 'v' ? 0.12 : 0, oy: o === 'h' ? 0.12 : 0, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
 });
+// and a cotton candy cart at the foot of the pleasure pier
+const CANDY_CART = { name: 'COTTON CANDY', item: 'a cotton candy', price: 3, color: MAG, w: 0.3, art: [
+  ['  @@@@  ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O'], ['  @@@@@ ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O']].map(pad) };
+vendors.push({ x: FAIR.cx + 1.1, y: FAIR.y0 + 0.9, ox: 0.12, oy: 0, type: CANDY_CART, shirt: WHITE });
 
 // subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
 // hole in the sidewalk SUBWAY_HOLE (half length along the street, half width) round the entrance point

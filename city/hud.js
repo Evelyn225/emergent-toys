@@ -87,6 +87,9 @@ function promptText() {
       if (cab) return cab.busy ? 'Somebody\'s playing this one' : `E: play ${GAMES[cab.game]().title} (${fmt$(CREDIT)} a credit)`;
       if (nearKeeper()) return `E: prize counter (${tickets} tickets)`;
     }
+    if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
+    if (nearTouchPool()) return 'E: touch the touch pool';
+    if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
@@ -94,7 +97,8 @@ function promptText() {
     if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
     return '';
   }
-  if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : 'E: take the stairs down'; }
+  if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : room && room.kind === 'cathedral' ? 'The bell tower, 80m up.   E: back down the stairs' : 'E: take the stairs down'; }
+  if (mode === 'fair') return fairRidePrompt();
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
     if (elHere()) return 'E: board the train';
@@ -117,9 +121,12 @@ function promptText() {
   const st = nearStation();
   if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
+  const fsp = fairSpot();
+  if (fsp) return fairPrompt(fsp);
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';
+  if (churchDoor()) return cathOpen() ? 'E: go into the cathedral' : 'The cathedral: locked for the night (opens at 7)';
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base === 'amb') return 'E: go into the hospital';
@@ -127,7 +134,7 @@ function promptText() {
     if (sh.kind === SHOP_SHUT) return 'Closed.';
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
-    return `E: enter ${sh.word}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : ''}`;
+    return `E: enter ${sh.word}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : sh.aqua ? ` (${fmt$(AQUA_FEE)})` : ''}`;
   }
   if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
   return '';
@@ -169,6 +176,7 @@ function minimap() {
   for (const h of owned.homes) mark(h.cell % N + 0.5, Math.floor(h.cell / N) + 0.5, 'H', '#ff4');
   for (const s of EL_STATIONS) mark(s.x, EL_Y + 1, 'E', '#f84');
   for (const v of vendors) mark(v.x, v.y, '$', '#fa3');
+  mark(WHEEL.x, WHEEL.y, '*', fract(T) < 0.5 ? '#f6f' : '#ff6'); // the Ferris wheel
   const tt = taskTarget(); if (tt) mark(tt.x, tt.y, '?', '#4ff');
   const jt = jobTarget(); if (jt && fract(T * 2) < 0.7) mark(jt.x, jt.y, '!', '#ff0');
   if (me && me.dest) mark(me.dest[0], me.dest[1], 'X', '#f4f');
@@ -202,7 +210,7 @@ let hudBottom = 0; // where the text block top left ends (px), for the map and t
 function hud() {
   drawHeldBig();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : '';
+  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Pleasure Pier' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
     : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';

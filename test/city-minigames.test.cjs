@@ -202,3 +202,28 @@ test('tapper: pour to the line and let go to slide a beer; hold too long and it 
   ev('var g = GAMES.tapper(() => 0)');
   assert.strictEqual(ev('(() => { for (let k = 0; k < 120; k++) g.step(1 / 60, { act: 1 }); return g.state().misses; })()'), 1, 'one spill');
 });
+
+test('ring toss: a ring thrown dead on a bottle neck rings it; six rings and it is over', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.ringtoss(() => 0)'); // every ring lands on the far row
+  const events = play(ev, 20, '(t) => ({ actP: Math.floor(t * 60) % 40 === 0 })');
+  assert.ok(ev('g.over'), 'out of rings');
+  assert.strictEqual(events.filter(e => e === 'launch').length, 6);
+  assert.strictEqual(events.filter(e => e === 'score' || e === 'miss').length, 6, 'every ring lands somewhere');
+  assert.strictEqual(ev('g.reward()'), ev('g.score') * 4);
+});
+
+test('high striker: three swings, each scored by how high the puck went; the bell pays most', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.strength(() => 0)');
+  play(ev, 30, '(t) => ({ actP: Math.floor(t * 60) % 120 === 0 })');
+  assert.ok(ev('g.over'), 'three swings and done');
+  assert.ok(ev('g.score') >= 0 && ev('g.score') <= 30);
+  // swing whenever the meter is at its peak: every swing rings the bell
+  ev('var g = GAMES.strength(() => 0)');
+  const rings = ev(`(() => { let n = 0, prev = 0, rising = false; for (let i = 0; i < 20000 && !g.over; i++) {
+    const evs = g.step(1 / 240, {}); n += evs.filter(e => e === 'clear').length;
+    const p = g.meter(); if (rising && p < prev && p > 0.97) g.step(0, { actP: 1 }); rising = p > prev; prev = p; } return n; })()`);
+  assert.strictEqual(rings, 3, 'DING x3');
+  assert.strictEqual(ev('g.reward()'), 60);
+});

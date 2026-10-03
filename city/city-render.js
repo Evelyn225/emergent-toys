@@ -10,7 +10,7 @@ const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
-  if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc);
+  if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
   BG[i] = bgAt(FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d);
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
@@ -35,6 +35,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       if (p < w.length) return set(i, centered ? w[p] : ' ', C(sh.neon, lvl));
       return set(i, '-', C(GRAY, L));
     }
+    if (sh.aqua) return aquaFront(i, u, uStep, z, d, side, L);
     if (sh.base) return serviceFront(i, u, z, sh.base, L, Math.max(L, night * fog * 14));
     if (sty === 8) { // warehouse: big roll-up doors
       const fd = fract(u * 0.8);
@@ -65,6 +66,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (sh.kind === SHOP_NEON) return set(i, on ? (fract(z * 30) < 0.5 ? ':' : '.') : '.', C(on ? sh.neon : GRAY, on ? Math.max(L, glowL) : L * 0.3));
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
+  if (sh.aqua) return aquaUpper(i, u, uStep, z, d, L);
   const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
   if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   if (sty === 8) { // warehouse: corrugated sheet metal, a band of high windows under the roof
@@ -230,7 +232,7 @@ function serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL) {
 
 // wc = world coordinate along the wall; lu = position across the face from the block's middle, left-to-right on screen
 const TICKER = ADS.join('   *   ') + '   *   ';
-function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc) {
+function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
   const L = fog * amb * (side ? 10 : 15), lu = (mod(wc, 8) - 5) * (Math.abs(u - wc) < 1e-6 ? 1 : -1);
   if (sty === 3) { // clock tower: stone, with a clock face showing the game time on every side
     BG[i] = bgAt(GRAY, day * 5 * (0.5 + 0.5 * fog));
@@ -248,6 +250,20 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc) {
   }
   if (sty === 4) { // cathedral: stone with tall pointed stained-glass windows
     BG[i] = bgAt(GRAY, day * 5 * (0.5 + 0.5 * fog));
+    if (side && mod(my, 8) === 4 && h < 4 && rel(py - my) < 0) { // the west front, between the towers: the great doors, a rose window over them
+      const dx = mod(wc, 8) - 5, ad = Math.abs(dx), rz = z - 1.75, rr = Math.hypot(dx, rz), glow = Math.max(L * 0.6, night * fog * 13, 4);
+      if (rr < 0.5) {
+        if (rr > 0.45 || Math.abs(fract((Math.atan2(dx, rz) + Math.PI) / (Math.PI / 6)) - 0.5) > 0.45 && rr > 0.1) return set(i, '+', C(GRAY, L));
+        BG[i] = C(rr < 0.1 ? YEL : GLASS[Math.floor((Math.atan2(dx, rz) + Math.PI) / (Math.PI / 6)) + Math.floor(rr * 6) & 7], glow * 0.5);
+        return set(i, rr < 0.1 ? '*' : ' ', C(WHITE, glow));
+      }
+      const top = 0.62 - 0.25 * Math.min(1, ad / 0.18) ** 0.7;
+      if (ad < 0.2 && z < top + 0.04) {
+        if (ad > 0.18 || z > top) return set(i, '#', C(GRAY, L * 1.1));
+        BG[i] = C(BRICK, 1 + L * 0.15 + (cathOpen() ? night * 2 : 0));
+        return set(i, ad < 0.006 ? '|' : hash(Math.floor(dx * 60), Math.floor(z * 60), 506) > 0.93 ? 'o' : fract(dx * 25) < 0.15 ? '|' : ' ', C(ad < 0.006 ? GRAY : BRICK, L * 1.2));
+      }
+    }
     const fu = fract(u * 1.5), wcen = Math.abs(fu - 0.5), top = (h > 4 ? h - 1.5 : 2.3) - wcen * 1.2;
     if (wcen < 0.2 && z > 0.6 && z < top) {
       if (wcen > 0.16) return set(i, '|', C(GRAY, L));

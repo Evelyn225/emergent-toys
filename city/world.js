@@ -20,7 +20,7 @@ const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1]
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
-  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24], STORAGE: [0, 24] };
+  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [0, 24], BODEGA: [0, 24], STORAGE: [0, 24], AQUARIUM: [9, 21] };
 const hoursOf = word => HOURS[word] || [9, 20];
 const openAt = (sh, t) => { // is this shop open at game hour t?
   if (sh.kind === SHOP_APTS) return true;
@@ -185,13 +185,27 @@ function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cel
 }
 const onIsland = (x, y) => isleEdge(x, y) > 0;
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
+// the pleasure pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
+// docks or a bridge. Game booths and a prize stall down its sides, a carousel in the middle, the Ferris wheel out at
+// the end (its wheel stands across the pier, east-west, so you see it face on from the promenade).
+const FAIR_BX = (() => { for (let bx = ISLE_BX + 3; ; bx++) if (!BRIDGE_X.includes(bx) && districtOf(bx, SHORE_S - 1) !== 'industrial') return bx; })();
+const FAIR = { x0: FAIR_BX * 8 + 2.2, x1: FAIR_BX * 8 + 7.8, y0: SHORE_S * 8 + 3, y1: SHORE_S * 8 + 17 };
+FAIR.cx = (FAIR.x0 + FAIR.x1) / 2;
+const WHEEL = { x: FAIR.cx, y: FAIR.y1 - 2.6, R: 1.9, hub: 2.2, n: 12, rev: 60 }; // 19m radius, 42m to the top, once round a minute
+const CAROUSEL = { x: FAIR.cx, y: FAIR.y0 + 4.6, r: 0.55, rev: 9 };
+const WHEEL_BOARD = { x: WHEEL.x, y: WHEEL.y - 0.55 }; // where you queue: the platform in front of the bottom car
+// where the wheel's car k is (angle round the hub, 0 = level with it on the east side), at time t
+const wheelAngle = (k, t) => TAU * (t / WHEEL.rev + k / WHEEL.n) - Math.PI / 2;
+// the carousel's drum and the wheel's legs are in the way; the booths are solids (props.js)
+const fairBlocked = (x, y, pad = 0) => Math.hypot(rel(x - CAROUSEL.x), rel(y - CAROUSEL.y)) < CAROUSEL.r + pad ||
+  Math.abs(rel(x - WHEEL.x)) < 0.35 + pad && Math.abs(rel(y - WHEEL.y)) < 0.35 + pad;
 // piers: walkable decks out over the water [x0, y0, x1, y1]; wider docks along the industrial shore
-const PIERS = [];
+const PIERS = [[FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1]];
 for (let bx = 0; bx < NB; bx++) {
   if (BRIDGE_X.includes(bx) || bx === ISLE_BX) continue;
   const dock = districtOf(bx, SHORE_S - 1) === 'industrial';
   if (dock && hash(bx, 4, 43) < 0.5) PIERS.push([bx * 8 + 3.6, SHORE_S * 8 + 3, bx * 8 + 6.4, SHORE_S * 8 + 11]);
-  else if (hash(bx, 5, 43) < 0.35) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
+  else if (hash(bx, 5, 43) < 0.35 && bx !== FAIR_BX) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
   if (hash(bx, 6, 43) < 0.25) PIERS.push([bx * 8 + 4.6, N + SHORE_N * 8 - 9, bx * 8 + 5.4, N + SHORE_N * 8 + 5]);
 }
 const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y);
@@ -291,6 +305,14 @@ const SERVICES = [];
       SERVICES.push({ kind, bx, by, x: bx * 8 + 3.4, y: by * 8 + 1.74, lane: by * 8 + 1.4, out: false });
     }
   }
+}
+
+// ---- the aquarium: the south half of the block across the shore road from the pleasure pier, one building, its
+// front on the promenade (aquarium.js has the inside, and the fish in its windows)
+const AQUARIUM = { bx: FAIR_BX, by: SHORE_S - 1, x0: FAIR_BX * 8 + 2, x1: FAIR_BX * 8 + 8, doorU: FAIR_BX * 8 + 5 };
+{
+  const sh = AQUARIUM.sh = { kind: SHOP_LIT, word: 'AQUARIUM', neon: CYAN, glyphs: 'o#=@', hours: hoursOf('AQUARIUM'), aqua: true };
+  for (let y = 5; y <= 7; y++) for (let x = 2; x <= 7; x++) { const i = idx(AQUARIUM.bx * 8 + x, AQUARIUM.by * 8 + y); map[i] = 1.8; STY[i] = 2; SHOP[i] = sh; }
 }
 
 // ---- street names, for talk, directions and the HUD
