@@ -18,6 +18,7 @@
   "dom": [
     "city/screen.js",
     "city/city-render.js",
+    "city/graffiti.js",
     "city/city-sprites.js",
     "city/jail.js",
     "city/rooms.js",

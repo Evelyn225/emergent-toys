@@ -492,3 +492,22 @@ test('the calendar: midnight turns the day over; Saturday night there are firewo
   await page.waitForTimeout(2000);
   assert.strictEqual(await page.evaluate(() => shells.length), 0, 'nothing on a Tuesday');
 }));
+
+test('graffiti: murals on some walls; spray paint from the hardware store tags a wall, the tag is kept, and a cop seeing it means trouble', () => withPage(async page => {
+  assert.ok(await page.evaluate(() => { let n = 0; for (let y = 8; y < 190; y++) for (let x = 0; x < N; x++) if (map[idx(x, y)] && muralSeed(idx(x, y), x, y, 'S') >= 0) n++; return n; }) > 30, 'murals round town');
+  assert.ok(await page.evaluate(() => stockFor('', 'HARDWARE').includes('spraypaint')));
+  const spot = await page.evaluate(() => { for (let y = 8; y < 190; y++) for (let x = 0; x < N; x++) if (map[idx(x, y)] > 0.5 && STY[idx(x, y)] < 3 && !map[idx(x, y + 1)] && ROAD[idx(x, y + 1)] === 2) return [x, y]; });
+  await page.evaluate(([x, y]) => { px = x + 0.5; py = y + 1.12; a = -Math.PI / 2; pitch = 0; inv.push({ id: 'spraypaint', uses: 6 }); held = inv.length - 1;
+    for (const c of cars) if (c.patrol) { c.x = mod(px + 80, N); c.ex = c.x; } for (const c of footCops) c.x = mod(px + 80, N); }, spot);
+  await page.waitForTimeout(150);
+  await page.keyboard.press('KeyQ');
+  assert.deepStrictEqual(await page.evaluate(() => [tags.length, inv[held].uses, wanted.stars]), [1, 5, 0], 'tagged, nobody official watching');
+  await page.evaluate(() => { saveGame(); });
+  await page.reload(); await page.waitForTimeout(300);
+  assert.strictEqual(await page.evaluate(() => tags.length), 1, 'still there after a reload');
+  await page.evaluate(([x, y]) => { px = x + 1.5; py = y + 1.12; a = -Math.PI / 2; inv.push({ id: 'spraypaint', uses: 6 }); held = inv.length - 1;
+    footCops[0].x = px + 0.5; footCops[0].y = py + 0.3; }, spot);
+  await page.waitForTimeout(150);
+  await page.keyboard.press('KeyQ');
+  assert.ok(await page.evaluate(() => wanted.stars >= 1 && wanted.crime === 'vandalism'), 'wanted for vandalism');
+}));
