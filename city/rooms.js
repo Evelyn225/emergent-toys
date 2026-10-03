@@ -36,16 +36,18 @@ const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
     return set(i, HIT.w > top - 0.03 ? '_' : ' ', C(GRAY, L * 0.6)), true; // a plain riser with a lip
   }, 1, 0), walk: true }; // long axis across the stairwell (x): wall to wall, dy deep
 });
-const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 0, DUMPLINGS: 0, THAI: 0, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4 };
+const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 6, DUMPLINGS: 0, THAI: 7, SUSHI: 9, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4, BURGERS: 5, CHICKEN: 8 };
 const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRITO 7', 'NACHOS 5', 'SODA 2'],
                     ['SLICE 3', 'WHOLE 18', 'KNOTS 4', 'SODA 2'], ['LATTE 4', 'DONUT 2', 'BAGEL 3', 'TEA 2'],
-                    ['KEBAB 8', 'FALAFEL 6', 'FRIES 3', 'AYRAN 2'], ['BURGER 6', 'FRIES 3', 'SHAKE 4', 'PIE 3']];
-const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', VIDEO: 'arcade', LAUNDRY: 'laundry',
+                    ['KEBAB 8', 'FALAFEL 6', 'FRIES 3', 'AYRAN 2'], ['BURGER 6', 'FRIES 3', 'SHAKE 4', 'PIE 3'],
+                    ['PHO 11', 'BANH MI 7', 'ROLLS 5', 'TEA 2'], ['PAD THAI 11', 'CURRY 12', 'MANGO 6', 'THAI TEA 4'],
+                    ['CHICKEN 9', 'WINGS 7', 'FRIES 3', 'SODA 2'], ['NIGIRI 12', 'MAKI 8', 'MISO 3', 'TEA 2']];
+const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', LAUNDRY: 'laundry',
                    CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber', TATTOO: 'barber',
                    BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };
 const LYRICS = ['SWEET CAROLINE', 'BAH BAH BAH', 'SO GOOD SO GOOD SO GOOD', 'SWEET CAROLINE']; // what the karaoke bar's playing (audio/ascii-city/karaoke.mp3)
 for (const w in MENUS) ROOM_FOR[w] = 'diner';
-for (const w of ['CAFE', 'COFFEE', 'DONUTS', 'BAKERY']) ROOM_FOR[w] = 'cafe';
+for (const w of ['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'JUICE', 'ICE CREAM', 'BAGELS']) ROOM_FOR[w] = 'cafe';
 for (const w of ['BOOKS', 'RECORDS']) ROOM_FOR[w] = 'books';
 for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM', 'SUSHI']) ROOM_FOR[w] = 'noodle';
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
@@ -350,9 +352,10 @@ const ROOM_DEFS = {
     light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: storageWall, keeper: [11.5, 7.15],
     props: r => [BX(11.5, 7.75, 1.1, 0.3, 0, 1.05, solid(GRAY, { panel: 0.5, trim: 0.99, top: '=' })), standing(11.5, 7.15, ORANGE)] },
   // a holding cell: concrete, a bunk, a steel toilet, bars across the front (no door: the guard lets you out)
-  jail: { grid: boxRoom(6, 5, {}, false), light: 0.55, floor: 'concrete', ceil: 'strip', wall: jailWall,
-    props: r => [BX(1.7, 1.5, 0.9, 0.4, 0.4, 0.55, solid(GRAY, { top: '=' })), BX(1.7, 1.5, 0.85, 0.35, 0, 0.4, solid(GRAY, { panel: 0.5 })),
-                 BX(4.5, 1.4, 0.25, 0.25, 0, 0.45, solid(WHITE, { top: 'o' }))] },
+  jail: { grid: boxRoom(7, 6, {}, false), light: 0.7, floor: 'concrete', ceil: 'strip', wall: jailWall,
+    props: r => [BX(1.9, 1.55, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // the bunk: a blanket on a steel frame
+                 BX(1.9, 1.55, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; }),
+                 BX(5.4, 1.4, 0.28, 0.28, 0, 0.45, solid(WHITE, { top: 'o', bright: 2 }))] }, // the steel toilet
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -491,9 +494,19 @@ function hospitalWall(i, u, uStep, z, d, mx, my, L) {
 }
 // cell walls: bars across the front, tally marks scratched by the bunk, bare concrete
 function jailWall(i, u, uStep, z, d, mx, my, L) {
-  if (my === room.H - 1) { BG[i] = C(GRAY, 1); return set(i, fract(u * 5) < 0.22 ? '|' : z > 2.3 || z < 0.1 ? '=' : ' ', C(GRAY, L * 1.3)), true; }
-  if (my === 0 && z > 1 && z < 1.4 && u > 1 && u < 2.8) return set(i, fract(u * 9) < 0.35 ? '|' : z > 1.3 && fract(u * 1.8) < 0.5 ? '/' : ' ', C(WHITE, L * 0.8)), true;
-  BG[i] = C(GRAY, 2 + L * 0.1); return set(i, (Math.floor(u * 2) + Math.floor(z * 3)) % 7 ? ' ' : '.', C(GRAY, L * 0.5)), true;
+  if (my === room.H - 1 && z < 2.4) { // the bars, and through them the corridor: its floor, the cells across it, a light
+    const bar = fract(u * 4) < 0.16;
+    if (bar || z > 2.28 || z < 0.08) { BG[i] = C(GRAY, 3); return set(i, bar ? '|' : '=', C(WHITE, L * 1.3)), true; }
+    BG[i] = C(GRAY, 1);
+    if (z < 0.45) return set(i, fract(u * 2 + z * 7) < 0.25 ? '.' : ' ', C(GRAY, L * 0.7)), true; // the corridor floor
+    if (z > 1.85 && z < 2.05) return Math.abs(fract(u / 3) - 0.5) < 0.12 ? (BG[i] = C(YEL, 2), set(i, '=', C(YEL, 13))) : set(i, ' ', 0), true; // strip lights
+    if (z > 1.6) return set(i, z < 1.66 ? '_' : ' ', C(GRAY, L * 0.6)), true;
+    return set(i, fract(u * 9) < 0.22 ? '|' : z > 0.95 && z < 1.0 ? '-' : ' ', C(GRAY, L * 0.9)), true; // the cells opposite, behind their own bars
+  }
+  if (my === 0 && z > 1 && z < 1.4 && u > 1 && u < 2.8) return BG[i] = C(GRAY, 3 + L * 0.12), set(i, fract(u * 9) < 0.35 ? '|' : z > 1.3 && fract(u * 1.8) < 0.5 ? '/' : ' ', C(WHITE, L * 0.8)), true;
+  BG[i] = C(GRAY, 3 + L * 0.12); // painted cinder blocks: courses every 20cm, the joints staggered
+  const row = Math.floor(z * 5), joint = fract(z * 5) < 0.14 || fract(u * 2.5 + (row & 1) * 0.5) < 0.05;
+  return set(i, joint ? (fract(z * 5) < 0.14 ? '_' : '|') : ' ', C(GRAY, L * 0.7)), true;
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall

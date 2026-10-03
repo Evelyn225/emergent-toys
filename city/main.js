@@ -2,8 +2,7 @@
 // free, like any other page, and a click takes it back
 function relock(e) {
   if (e.code === 'Escape' || paused || document.pointerLockElement) return;
-  const p = cv.requestPointerLock();
-  if (p && p.catch) p.catch(() => {}); // refused: a click will do it
+  lockMouse();
 }
 onkeydown = e => {
   if (bustedKey(e)) return; // caught: nothing till you've chosen
@@ -30,6 +29,7 @@ onkeydown = e => {
     if (e.code === 'KeyB' && heldItem() && heldItem().id === 'boombox' && fx.boombox) { say(`Next tape: ${nextSong()}.`, 2); if (actx) sfxUse('click'); }
   }
   if (e.code === 'KeyH') hail();
+  if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
@@ -39,16 +39,17 @@ onkeydown = e => {
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
 };
 onkeyup = e => K[e.code] = 0;
-cv.onclick = () => { audioStart(); if (!paused) cv.requestPointerLock(); };
+cv.onclick = () => { audioStart(); if (!paused) lockMouse(); };
 // how far you can look down / up; behind the wheel (or in the back of a cab) only a little down, not at your feet
 const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
-onmousemove = e => {
-  if (!document.pointerLockElement) return;
-  if (paused) return;
+// turn your head by (mx, my) mouse pixels' worth (the mouse, or a drag on a touch screen)
+function turnBy(mx, my) {
+  if (paused || game) return;
   const s = settings.sensitivity;
-  if (mode === 'taxi') look += e.movementX * 0.003 * s; else if (mode !== 'drive') a += e.movementX * 0.003 * s;
-  pitch -= e.movementY * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
-};
+  if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive') a += mx * 0.003 * s;
+  pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
+}
+onmousemove = e => { if (document.pointerLockElement) turnBy(e.movementX, e.movementY); };
 
 const free = (x, y) => {
   if (mode === 'room') return !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
@@ -123,6 +124,10 @@ function loop(t) {
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
   else if (law === 'lost') say('You lost them.', 3);
+  else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
+    const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
+    say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);
+  }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
   if (mode === 'taxi') {

@@ -37,6 +37,7 @@ function citySprites() {
       row < 3 ? C(t.color, Math.max(L, night * 12)) : c === 'O' ? C(GRAY, L * 0.5) : C(t.color, L));
     drawArt(...R(v.x + v.ox, v.y + v.oy), 0, 0.06, 0.18, ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? v.shirt : GRAY, L));
   }
+  for (const r of radios) { const [vx, vy] = R(r.x, r.y); if (Math.hypot(vx, vy) < vis + 2) drawRadioTower(vx, vy); }
   for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis) drawStationEntrance(s, vx, vy); }
   forNear(roofsB, o => {
     const blink = fract(T * 0.8 + o.x) < 0.5;
@@ -151,7 +152,66 @@ const VEHICLES = {
   police: [0.22, 0.09, 0.075, 0.13, 0.11, -0.02], amb: [0.25, 0.1, 0.15, 0, 0, 0], fire: [0.37, 0.1, 0.14, 0.17, 0.06, 0.29],
 };
 const shadeFace = f => f === 5 ? 1 : f === 1 || f === 2 ? 0.85 : 0.7; // a little light from above, a little less on the sides
+// the ambulance: a tall white box module behind a low cab. Red stripe and a star of life down the sides, a red cross on
+// the roof, rear doors with chevrons and little windows, the light bar along the top front edge of the box
+function drawAmbulance(m, vx, vy, hx, hy) {
+  const hl = 0.25, hw = 0.1, MH = 0.165, CH = 0.11, mhl = hl * 0.68, mo = -hl + mhl, chl = hl - mhl, co = hl - chl;
+  const lightsOn = night > 0.4 || overcast > 0.5, braking = m.brake || m.v < 0.05;
+  const white = (f, L) => C(WHITE, (2.5 + L * 0.7) * shadeFace(f));
+  const sill = (i, w, L) => { BG[i] = C(GRAY, 1); return set(i, '_', C(GRAY, L * 0.3)), true; };
+  const wheel = (i, L) => { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; };
+  drawBox(boxAt(vx + hx * mo, vy + hy * mo, hx, hy, mhl, hw, 0.012, MH), (i, t, L) => { // the box
+    const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
+    BG[i] = white(f, L);
+    if (f === 6) return set(i, ' ', 0), true;
+    if (f === 5) return set(i, Math.abs(u) < 0.045 && Math.abs(v) < 0.012 || Math.abs(v) < 0.045 && Math.abs(u) < 0.012 ? '#' : ' ', C(RED, 13)), true;
+    if (f === 1) return set(i, ' ', 0), true; // (above the cab)
+    if (f === 2) { // the back: two doors, windows up top, chevrons along the bottom, tail lights
+      if (w < 0.022) return sill(i, w, L);
+      if (Math.abs(v) < 0.006) return set(i, '|', C(GRAY, L * 0.6)), true;
+      if (w > 0.11 && w < 0.145 && Math.abs(v) > 0.02 && Math.abs(v) < 0.075) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; }
+      if (w < 0.05 && Math.abs(v) > hw * 0.75) return set(i, ']', C(RED, braking ? 15 : 8)), true;
+      if (w < 0.06) { const c = fract((v * (v > 0 ? 1 : -1) + w) * 18) < 0.5; BG[i] = C(c ? RED : YEL, c ? 9 : 12); return set(i, ' ', 0), true; }
+      return set(i, ' ', 0), true;
+    }
+    // the sides
+    if (w < 0.035 && Math.abs(u + mhl * 0.55) < 0.04) return wheel(i, L);
+    if (w < 0.022) return sill(i, w, L);
+    if (w > 0.062 && w < 0.078) { BG[i] = C(RED, 9 + L * 0.2); return set(i, ' ', 0), true; } // the stripe
+    const su = u - mhl * 0.1, sw = w - 0.118; // the star of life
+    if (Math.abs(su) < 0.03 && Math.abs(sw) < 0.03 && (Math.abs(su) < 0.009 || Math.abs(sw) < 0.009 || Math.abs(Math.abs(su) - Math.abs(sw)) < 0.008)) { BG[i] = C(BLUE, 9); return set(i, ' ', 0), true; }
+    if (u > mhl * 0.6 && w > 0.1 && w < 0.14) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; } // a little side window
+    return set(i, ' ', 0), true;
+  });
+  drawBox(boxAt(vx + hx * co, vy + hy * co, hx, hy, chl, hw * 0.94, 0.012, CH), (i, t, L) => { // the cab
+    const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
+    BG[i] = white(f, L);
+    if (f === 6 || f === 2) return set(i, ' ', 0), true;
+    if (f === 5) return set(i, ' ', 0), true;
+    if (f === 1) { // the windscreen, headlights, a grille
+      if (w > 0.07 && Math.abs(v) < hw * 0.82) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, w > 0.1 ? '-' : ' ', C(GRAY, 5)), true; }
+      if (w < 0.05 && Math.abs(v) > hw * 0.55) return set(i, 'O', C(WHITE, lightsOn ? 15 : 10)), true;
+      if (w < 0.045) return set(i, '=', C(GRAY, L * 0.5)), true;
+      return set(i, ' ', 0), true;
+    }
+    if (w < 0.035 && Math.abs(u) < 0.04) return wheel(i, L);
+    if (w < 0.022) return sill(i, w, L);
+    if (w > 0.062 && w < 0.078) { BG[i] = C(RED, 9 + L * 0.2); return set(i, ' ', 0), true; }
+    if (w > 0.072 && u > -chl * 0.6 && u < chl * 0.75) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; } // the door window
+    return set(i, Math.abs(u + chl * 0.65) < 0.004 ? '|' : ' ', C(GRAY, L * 0.5)), true;
+  });
+  const lb = mo + mhl - 0.02; // the light bar, and a lamp on each back corner
+  drawBox(boxAt(vx + hx * lb, vy + hy * lb, hx, hy, 0.018, hw * 0.85, MH, MH + 0.016), (i, t, L) => {
+    const side = HIT.v > 0 ? RED : BLUE, on = lightsOn_(m) && strobe() === side;
+    BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
+  });
+  for (const s of [-1, 1]) drawBox(boxAt(vx + hx * (mo - mhl + 0.012) - hy * s * hw * 0.8, vy + hy * (mo - mhl + 0.012) + hx * s * hw * 0.8, hx, hy, 0.01, 0.012, MH, MH + 0.012), (i, t, L) => {
+    const on = lightsOn_(m) && strobe() === (s > 0 ? RED : BLUE);
+    BG[i] = C(RED, on ? 15 : 4); return set(i, on ? '*' : ' ', C(WHITE, 15)), true;
+  });
+}
 function drawVehicle(m, vx, vy, hx, hy) {
+  if (m.kind === 'amb') return drawAmbulance(m, vx, vy, hx, hy);
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], lightsOn = night > 0.4 || overcast > 0.5;
   const braking = m.brake || m.v < 0.05, body = m.body;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
@@ -392,8 +452,52 @@ function drawStationEntrance(s, vx, vy) {
     const cellU = t / projX / (2 * hw) * (name.length + 2); // how much of one letter a screen cell covers
     return set(i, k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) ? name[k] : ' ', C(WHITE, 15)), true;
   });
+  // and a tall lit blade on a post at two corners, SUBWAY down both faces and a green lamp on top: seen from down the
+  // block either way
+  for (const e of [-1, 1]) subwayBlade(vx + e * (hl + 0.02), vy - e * (hw + 0.025), iron);
+}
+function subwayBlade(tx, ty, iron) {
+  const Z0 = 0.13, Z1 = 0.33, word = 'SUBWAY', lit = 9 + night * 6;
+  drawBox(boxAt(tx, ty, 1, 0, 0.005, 0.005, 0, Z0), iron);
+  drawBox(boxAt(tx, ty, 0, 1, 0.022, 0.006, Z0, Z1), (i, t, L) => {
+    BG[i] = C(GREEN, 5 + night * 4);
+    if (HIT.face !== 3 && HIT.face !== 4) return set(i, '|', C(GREEN, lit)), true; // its edges (3 / 4: the broad faces)
+    // one letter per cell: in the middle row of its span and the middle column across the blade
+    const q = (Z1 - HIT.w) / (Z1 - Z0) * word.length, k = Math.floor(q), cellV = t / projY / ((Z1 - Z0) / word.length), cellU = t / projX / 0.044;
+    const mid = (cellV > 0.6 || Math.abs(fract(q) - 0.5) < cellV / 2) && (cellU > 0.6 || Math.abs(HIT.u) / 0.044 < cellU / 2);
+    return set(i, k >= 0 && k < word.length && mid ? word[k] : ' ', C(WHITE, 15)), true;
+  });
+  drawBox(boxAt(tx, ty, 1, 0, 0.012, 0.012, Z1, Z1 + 0.024), (i, t, L) => { BG[i] = C(GREEN, 7 + night * 7); return set(i, 'O', C(WHITE, 15)), true; });
 }
 
+// the radio mast: 160m of red and white lattice, tapering in sections. Each section is four corner legs (thickened
+// with distance so they never break up) and see-through faces with X bracing and a girder along the bottom; red lamps
+// blink at every other joint and on the very top
+const RADIO_H = 16, RADIO_SEC = 8, radioHalf = z => 0.9 - 0.78 * z / RADIO_H;
+function drawRadioTower(vx, vy) {
+  const d = Math.hypot(vx, vy), leg = Math.max(0.03, 0.6 * d / projX), sh = RADIO_H / RADIO_SEC;
+  for (let k = 0; k < RADIO_SEC; k++) {
+    const z0 = k * sh, z1 = z0 + sh, h0 = radioHalf(z0), h1 = radioHalf(z1), hs = (h0 + h1) / 2, col = k & 1 ? WHITE : RED;
+    for (let q = 0; q < 4; q++) { // the legs, stepped in a little every quarter section: the taper
+      const q0 = z0 + q * sh / 4, hq = radioHalf(q0 + sh / 8);
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
+        drawBox(boxAt(vx + sx * hq, vy + sy * hq, 1, 0, leg, leg, q0, q0 + sh / 4), (i, t, L) => set(i, HIT.face > 4 ? '=' : '#', C(col, Math.max(L, 6))) || true);
+    }
+    drawBox(boxAt(vx, vy, 1, 0, hs, hs, z0, z1), (i, t, L) => { // the bracing on its faces; the gaps show what's behind
+      if (HIT.face > 4) return false;
+      const s = (HIT.face < 3 ? HIT.v : HIT.u) / hs, h = (HIT.w - z0) / sh * 2 - 1, cell = t / projX / hs * 1.2; // s, h: -1..1 across, up
+      if (h < -1 + cell * 0.6) return set(i, '=', C(col, Math.max(L, 5))), true;
+      if (Math.abs(s - h) < cell) return set(i, '/', C(col, Math.max(L * 0.9, 4))), true;
+      if (Math.abs(s + h) < cell) return set(i, '\\', C(col, Math.max(L * 0.9, 4))), true;
+      return false;
+    });
+    if (k & 1) for (const [sx, sy] of [[-1, -1], [1, 1]]) drawBox(boxAt(vx + sx * h1, vy + sy * h1, 1, 0, leg * 1.4, leg * 1.4, z1 - leg * 2, z1 + leg), (i, t, L) =>
+      (BG[i] = C(RED, fract(T * 0.7 + k * 0.1) < 0.5 ? 6 : 0), set(i, '*', C(RED, fract(T * 0.7 + k * 0.1) < 0.5 ? 15 : 4)), true));
+  }
+  drawBox(boxAt(vx, vy, 1, 0, leg, leg, RADIO_H, RADIO_H + 1.2), (i, t, L) => set(i, '|', C(WHITE, Math.max(L, 6))) || true); // the aerial
+  drawBox(boxAt(vx, vy, 1, 0, leg * 2, leg * 2, RADIO_H + 1.2, RADIO_H + 1.2 + leg * 3), (i, t, L) =>
+    (BG[i] = C(RED, fract(T * 0.7) < 0.5 ? 8 : 0), set(i, '*', C(RED, fract(T * 0.7) < 0.5 ? 15 : 4)), true));
+}
 // chinatown lanterns: a cord sagging across the street (short box segments) with red paper lanterns hanging off it,
 // glowing after dark. Real 3D, so it stays put across the street as you walk round it.
 const sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street

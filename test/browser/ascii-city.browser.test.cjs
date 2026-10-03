@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
 const { pathToFileURL } = require('url');
-const { chromium } = require('playwright');
+const { chromium, devices } = require('playwright');
 
 const PAGE = pathToFileURL(path.join(__dirname, '..', '..', 'ascii-city.html')).href;
 
@@ -91,6 +91,7 @@ test('the pause menu stops the game and keeps its settings', async () => {
     await page.waitForTimeout(300);
     await page.keyboard.press('Escape');
     assert.strictEqual(await page.evaluate(() => paused), true);
+    assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('home')).display), 'block', 'the home button, only now');
     const t0 = await page.evaluate(() => T);
     await page.waitForTimeout(400);
     assert.strictEqual(await page.evaluate(() => T), t0, 'time stands still');
@@ -98,6 +99,7 @@ test('the pause menu stops the game and keeps its settings', async () => {
     assert.strictEqual(await page.evaluate(() => FS), 15);
     await page.keyboard.press('Escape');
     assert.strictEqual(await page.evaluate(() => paused), false);
+    assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('home')).display), 'none', 'and gone again');
     await page.reload(); await page.waitForTimeout(300);
     assert.strictEqual(await page.evaluate(() => [settings.detail, FS].join()), 'low,15', 'remembered after a reload');
   } finally {
@@ -200,3 +202,58 @@ test('vending machines sell from arm\'s reach, at an angle, even with a car at t
   await page.keyboard.press('Digit1');
   assert.strictEqual(await page.evaluate(() => inv.length), 1);
 }));
+
+test('busted: no fine money means a cell; a minute later the guard lets you out by the police station', () => withPage(async page => {
+  await page.evaluate(() => { money = 20; buy('coffee'); const c = footCops[0]; px = c.x + 0.1; py = c.y; mode = 'walk'; addWanted('hit', px, py, true); c.chase = true; });
+  await page.waitForTimeout(400);
+  assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('busted')).display), 'flex', 'busted');
+  await page.keyboard.press('Digit1'); // can't afford the fine: nothing happens
+  assert.strictEqual(await page.evaluate(() => mode), 'walk');
+  await page.keyboard.press('Digit2');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, inv.length, money, wanted.stars]), ['room', 'jail', 0, 17, 0]);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => room && room.kind), 'jail', 'still locked in');
+  await page.evaluate(() => { room.until = T; });
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, Math.min(...SERVICES.filter(b => b.kind === 'police').map(b => Math.hypot(rel(b.x - px), rel(b.y - py)))) < 1.5]), ['walk', true], 'out, by the station');
+}));
+
+test('stealing a car drags the driver out onto the sidewalk; the car stays where you leave it', () => withPage(async page => {
+  await page.evaluate(() => { const c = cars.find(c => c.body !== TAXI && !c.ev && !c.patrol && ROAD[idx(Math.floor(c.x), Math.floor(c.y))]); c.v = 0; px = c.x + c.hy * 0.3; py = c.y - c.hx * 0.3; });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => mode), 'drive');
+  assert.ok(await page.evaluate(() => people.some(p => !p.hidden && p.talk > 0 && Math.hypot(rel(p.x - me.x), rel(p.y - me.y)) < 1.5)), 'the driver, out and shouting');
+  const at = await page.evaluate(() => { const c = me; leaveCar(); window.parked = c; return [c.x, c.y]; });
+  await page.waitForTimeout(1500);
+  assert.deepStrictEqual(await page.evaluate(() => [parked.x, parked.y, parked.parked]), [...at, true], 'nobody drives it away');
+}));
+
+test('on a phone: the stick walks, a drag looks round, the buttons work the menus', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ ...devices['iPhone 13 landscape'] }), page = await ctx.newPage();
+    await page.goto(PAGE); await page.waitForTimeout(300);
+    assert.strictEqual(await page.evaluate(() => getComputedStyle(document.getElementById('touch')).display), 'block');
+    const cdp = await ctx.newCDPSession(page), at = (x, y) => [{ x, y, id: 1 }];
+    const p0 = await page.evaluate(() => [px, py]);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(120, 300) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(120, 250) });
+    await page.waitForTimeout(400);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert.ok(await page.evaluate(([x, y]) => Math.hypot(px - x, py - y), p0) > 0.1, 'walked');
+    assert.strictEqual(await page.evaluate(() => K.KeyW), 0, 'and stopped on letting go');
+    const a0 = await page.evaluate(() => a);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(600, 200) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(660, 200) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert.ok(await page.evaluate(() => a) > a0, 'looked right');
+    await page.tap('#touch [data-key="KeyI"]');
+    assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the bag');
+    await page.tap('#touch [data-key="KeyE"]');
+    assert.strictEqual(await page.evaluate(() => panelOpen()), false, 'E closes it');
+    await page.tap('#touch [data-key="Escape"]');
+    assert.strictEqual(await page.evaluate(() => paused), true);
+    await page.tap('#pause [data-act="resume"]');
+    assert.strictEqual(await page.evaluate(() => paused), false);
+  } finally { await browser.close(); }
+});

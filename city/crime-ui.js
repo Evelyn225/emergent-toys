@@ -10,8 +10,9 @@ function wantedHud() {
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, stars = [1, 2, 3].map(k => k <= wanted.stars ? '*' : '.').join(' ');
   const line = pend ? "someone's calling the police..." : `WANTED  ${stars}`, x = cv.width / 2 - line.length * w / 2;
-  const flash = fract(T * 2.5) < 0.5 ? RED : BLUE;
-  artText([line], x, y, s, (c, r, k) => pend ? C(GRAY, 12) : k < 6 ? C(WHITE, 14) : c === '*' ? (wanted.seen ? C(flash, 15) : C(GRAY, 12)) : C(GRAY, 7));
+  const flash = fract(T * 3) < 0.5, hue = wanted.seen ? (flash ? RED : BLUE) : flash ? WHITE : GRAY;
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - w, y - s * 0.15, (line.length + 2) * w, s * 1.3);
+  artText([line], x, y, s, (c, r, k) => pend ? C(GRAY, 12) : c === '.' ? C(GRAY, 7) : C(hue, 15)); // flashing: you can't miss it
   if (!pend && !wanted.seen) {
     const left = Math.max(0, ESCAPE_T[wanted.stars] - wanted.hideT), sub = `out of sight: losing them in ${Math.ceil(left)}s`;
     g.font = FS + 'px monospace';
@@ -26,6 +27,7 @@ function wantedHud() {
 let bustedEl = null, finePaid = 0;
 function openBusted() {
   if (bustedEl && bustedEl.style.display === 'flex') return;
+  if (actx) tickSirens(mode === 'room'); // the sirens cut out (they'd hang on one note while this is up)
   bustedEl = bustedEl || panel('busted');
   const f = fineFor(wanted.stars), can = money >= f;
   showPanel(bustedEl, `<h1>Busted</h1><p class="sub">${wanted.crime || 'trouble'} &middot; ${'*'.repeat(wanted.stars)}</p>
@@ -43,8 +45,8 @@ function bustedKey(e) { // nothing else while they've got you: not even Esc
 function outOfCar() { // they take you out of whatever you were driving
   if (!me) return;
   const c = me;
-  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); c.ex = c.x; c.ey = c.y; }
-  else { c.rider = c.dest = c.arrived = false; plan(c); }
+  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); }
+  else { c.rider = c.dest = c.arrived = c.rush = false; plan(c); }
   me = null; mode = 'walk';
 }
 function bustedChoice(how) {
@@ -153,6 +155,6 @@ function crimePrompt() {
   if (mode === 'room' && room.burgled) return 'G: take something   E (at the counter): the till';
   if (pickTarget()) return 'G: pick their pocket';
   const sh = lockTarget();
-  if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.signed ? sh.word : 'Shop'}: closed   L: pick the lock`;
+  if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`;
   return '';
 }

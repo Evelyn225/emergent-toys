@@ -7,8 +7,7 @@ const GAME_KEYS = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 
                     ArrowDown: 'down', KeyS: 'down', Space: 'act', Enter: 'act' };
 function startGame(id, kind, word = '') { // word: the shop's sign, for what's on its shelves
   for (const k in K) K[k] = 0;
-  game = { g: GAMES[id](Math.random, word), kind, paid: false, pressed: {} };
-  if (document.pointerLockElement) document.exitPointerLock();
+  game = { g: GAMES[id](Math.random, word), kind, paid: false, pressed: {} }; // (the mouse stays locked: it just doesn't turn you)
 }
 // keys while a game's up; true if handled (every key is, while playing)
 function gameKey(e) {

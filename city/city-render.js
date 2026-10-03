@@ -1,7 +1,9 @@
 // ===== city world =====
 const sk0 = seed => seed * 1e4 | 0;
-// background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse)
-const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE];
+// background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse,
+// 14 art deco, 15 parking garage, 16 balcony apartments)
+const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE];
+const ARCADE_SIGN = new Set(['ARCADE']);
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
@@ -15,7 +17,12 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       // up close a letter spans many cells: draw it once, in the middle cell of its span
       const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.365, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
-      if (sh.signed && p < w.length) return set(i, centered ? w[p] : ' ', C(sh.neon, lvl));
+      if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between
+        const lit = Math.max(lvl, 13), chase = Math.floor(T * 6);
+        if (p < w.length) return set(i, centered ? w[p] : ' ', C(NEON[(p + chase) & 3], lit));
+        return set(i, centered ? '*' : ' ', (p + chase) & 1 ? C(YEL, lit) : C(GRAY, L * 0.5));
+      }
+      if (p < w.length) return set(i, centered ? w[p] : ' ', C(sh.neon, lvl));
       return set(i, '-', C(GRAY, L));
     }
     if (sh.base) return serviceFront(i, u, z, sh.base, L, Math.max(L, night * fog * 14));
@@ -49,7 +56,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
   const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
-  if (sty >= 11) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
+  if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   if (sty === 8) { // warehouse: corrugated sheet metal, a band of high windows under the roof
     const top = h - z < 0.3, fw = fract(u * 2);
     if (top && fw > 0.08 && fw < 0.92 && z < h - 0.08) return set(i, '#', hash(Math.floor(u * 2), 7, sk) > 0.7 ? C(YEL, Math.max(L * 0.5, glowL * 0.8)) : C(GRAY, L * 0.4));
@@ -75,6 +82,36 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     const wu = fract(u * 3);
     if (wu > 0.2 && wu < 0.8 && fz > 0.25 && fz < 0.8)
       return hash(Math.floor(u * 3), fl, sk) > litT - 0.1 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, '.', C(GRAY, L * 0.3));
+    return set(i, ' ', 0);
+  }
+  if (sty === 14) { // art deco: limestone piers running the full height, gold chevrons round the crown, spandrels between floors
+    const fu = fract(u * 4), crown = h - z < 0.32;
+    if (fu < 0.16) return set(i, '|', C(WHITE, L * 0.9)); // the piers
+    if (crown) return set(i, (Math.floor(u * 16) + Math.floor(z * 24)) & 1 ? '^' : 'v', C(YEL, Math.max(L, night * fog * 11)));
+    if (fz < 0.2) return set(i, fract(u * 16) < 0.5 ? '=' : '#', C(WARM, L * 0.55)); // spandrel panel
+    return hash(Math.floor(u * 4), fl, sk) > litT ? set(i, '#', C(YEL, Math.max(L * 0.8, glowL))) : set(i, ':', C(day > 0.5 ? CYAN : GRAY, L * 0.4));
+  }
+  if (sty === 15) { // parking garage: open concrete decks, cars nose-out behind the parapet, sodium lamps at night
+    const fu = fract(u * 2);
+    if (fu < 0.06) return set(i, '|', C(GRAY, L)); // columns
+    if (fz < 0.22) return set(i, '=', C(GRAY, L * 1.1)); // the deck edge and parapet
+    if (fz > 0.85 && Math.abs(fract(u * 4) - 0.5) < 0.08) return set(i, 'o', C(ORANGE, Math.max(L * 0.6, night * fog * 14)));
+    const bay = Math.floor(u * 3), car = hash(bay, fl, sk + 9);
+    if (car > 0.4 && fz < 0.55 && Math.abs(fract(u * 3) - 0.5) < 0.32) {
+      if (fz > 0.45) return set(i, '_', C(GRAY, L * 0.7)); // the roofline
+      return set(i, Math.abs(fract(u * 3) - 0.5) > 0.24 && fz < 0.33 ? 'o' : '#', C(ITEM_COL[car * 97 & 7], L * 0.8));
+    }
+    BG[i] = C(GRAY, 1); return set(i, ' ', 0); // dark inside
+  }
+  if (sty === 16) { // modern apartments: a balcony a bay, glass rails, sliding doors, the odd plant
+    const fu = fract(u * 2), bay = Math.floor(u * 2);
+    if (fu < 0.05) return set(i, '|', C(WHITE, L * 0.8));
+    if (fz < 0.08) return set(i, '=', C(WHITE, L * 1.1)); // the balcony slab
+    if (fz < 0.36) { // the glass rail, a plant behind it now and then
+      if (hash(bay, fl, sk + 4) > 0.75 && Math.abs(fu - 0.75) < 0.1) return set(i, '%', C(GREEN, L));
+      return set(i, fz > 0.32 ? '-' : ':', C(CYAN, L * (fz > 0.32 ? 0.9 : 0.4)));
+    }
+    if (fu > 0.15 && fu < 0.85 && fz < 0.88) return hash(bay, fl, sk) > litT - 0.05 ? set(i, fu < 0.5 ? '#' : '|', C(WARM, Math.max(L, glowL))) : set(i, fu < 0.5 ? ':' : '|', C(CYAN, L * 0.5));
     return set(i, ' ', 0);
   }
   if (sty === 0) { // office
@@ -312,7 +349,8 @@ function floorCell(i, r, x, rx, ry) {
     } else if (fract(lx * 2) < 0.06 || fract(ly * 2) < 0.06) ch = '+'; // paving
   } else if (road === 2 && (stHole = subwayHole(wx, wy, bx, by)) >= 0) { // a subway entrance's stairs, going down
     const deep = stHole;
-    set(i, fract(deep * 8) < 0.3 ? '=' : ' ', C(GRAY, L * (1 - deep * 0.85) * 1.5)); BG[i] = C(GRAY, 1 + (1 - deep) * 2);
+    set(i, fract(deep * 8) < 0.3 ? '=' : ' ', C(deep > 0.5 ? YEL : GRAY, deep > 0.5 ? 8 + night * 5 : L * (1 - deep * 0.85) * 1.5)); // the station's light, coming up the stairs
+    BG[i] = deep > 0.5 ? C(YEL, 2 + (deep - 0.5) * 6 + night * 3) : C(GRAY, 1 + (1 - deep) * 2);
     return;
   } else if (road === 3) { // intersection: crosswalks across the streets that come in, plain sidewalk where none does
     const n = ly < 0.3 ? vseg(bx, by - 1) : ly > 1.7 ? vseg(bx, by) : -1, w = lx < 0.3 ? hseg(bx - 1, by) : lx > 1.7 ? hseg(bx, by) : -1;

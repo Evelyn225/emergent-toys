@@ -40,7 +40,7 @@ function audioMix(s) {
     if (k === 'karaoke') out.karaoke = 0.9; // somebody's always singing Sweet Caroline
     if (k === 'arcade') out.arcade = 0.85; // chiptunes over the cabinets' bleeps
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
-    out.rain = 0.25 * s.rain;
+    out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
     if (k === 'train') out.rumble = 0.9;
     return out;

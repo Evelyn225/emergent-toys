@@ -68,3 +68,11 @@ function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the 
   return v;
 }
 
+
+// a phone or tablet: no mouse to lock, touch controls instead (touch.js)
+const TOUCH = matchMedia('(pointer: coarse)').matches; // (primary pointer a finger: not a touchscreen laptop with a mouse)
+function lockMouse() { // take the mouse (refused or impossible: a click will do it, or there's no mouse at all)
+  if (TOUCH || !cv.requestPointerLock) return;
+  const p = cv.requestPointerLock();
+  if (p && p.catch) p.catch(() => {});
+}
