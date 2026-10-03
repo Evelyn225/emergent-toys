@@ -77,7 +77,9 @@ function gameFS(g) {
   return clamp(Math.floor(Math.min(DETAIL[settings.detail], (innerWidth - cr) / ((2 * g.W + 6) * ratio), (innerHeight - cb) / (g.H + 9))), 5, 40);
 }
 // what the screen says to press: on a phone, the buttons' names
-const gameText = s => TOUCH ? s.replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/\bUP\b/g, 'MAHJONG').replace(/SPACE/g, 'GO') : s;
+// (on a phone: what the buttons are called. UP is the Mahjong! button only at the mahjong table; lockpicking's HOLD UP
+// is the stick held up)
+const gameText = (s, g) => !TOUCH ? s : (g && g.id === 'mahjong' ? s.replace(/\bUP\b/g, 'MAHJONG') : s).replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/SPACE/g, 'GO');
 // the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
 function drawGame() {
   const g = game.g, fs = gameFS(g);
@@ -105,7 +107,7 @@ function drawGame() {
     }
   }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col)); // a label, at normal size
   // the status under the screen, in two lines if it's wider than the cabinet
-  const st = gameText(g.status()), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
+  const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
   const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';

@@ -25,11 +25,20 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.36, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
       // closer still, big enough for it: the letter drawn large in blocks, so the sign grows as you walk up to it
-      if (p < w.length && GLYPH5[w[p]] !== undefined && 0.1 / uStep >= 4 && 0.08 / (d / projY) >= 5) {
-        const gx = Math.floor(fract(u * 10) * 4), gy = Math.floor((0.4 - z) / 0.08 * 5); // (a column's gap after each letter)
-        const col = ARCADE_SIGN.has(w) && open ? NEON[(p + Math.floor(T * 6)) & 3] : sh.neon, on = glyphOn(w[p], gx, gy);
-        if (on) BG[i] = C(col, Math.min(lvl, 15) * 0.25);
-        return set(i, on ? '#' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+      // From a little further off, while a letter's still only a few cells big, each cell shows how much of the letters
+      // falls in it (sampled 3 x 3), so they firm up smoothly instead of breaking into bits
+      const du = uStep, dz = d / projY;
+      if (0.1 / du >= 2.2 && 0.08 / dz >= 2.8) {
+        let on = 0, pk = -1;
+        for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
+          const uu = u + (a - 1) * du / 3, zz = z + (b - 1) * dz / 3, q = mod(Math.floor(uu * 10), m);
+          if (q < w.length && GLYPH5[w[q]] !== undefined && zz > 0.32 && zz < 0.4 && glyphOn(w[q], Math.floor(fract(uu * 10) * 4), Math.floor((0.4 - zz) / 0.08 * 5))) { on++; pk = q; }
+        }
+        if (p < w.length && GLYPH5[w[p]] !== undefined || on) {
+          const col = ARCADE_SIGN.has(w) && open ? NEON[((pk < 0 ? p : pk) + Math.floor(T * 6)) & 3] : sh.neon, f = on / 9;
+          if (f > 0.4) BG[i] = C(col, Math.min(lvl, 15) * 0.25 * f);
+          return set(i, f > 0.75 ? '#' : f > 0.5 ? '+' : f > 0.25 ? ':' : f > 0 ? '.' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+        }
       }
       if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between
         const lit = Math.max(lvl, 13), chase = Math.floor(T * 6);

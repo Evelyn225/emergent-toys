@@ -12,7 +12,24 @@ const gardenLawn = (x, y) => { // grass you could sit down on
 const BED_PAL = [[MAG, WHITE, RED], [YEL, ORANGE, RED], [BLUE, MAG, WHITE], [RED, YEL, WHITE], [CYAN, BLUE, WHITE], [ORANGE, YEL, MAG], [MAG, RED, YEL]];
 
 // ---- the ground
+// sat down on the lawn: a picnic blanket under you, red and white check with a fringe, squared up with the way you
+// face, from under you out in front (2.4m wide, 4m long: the near end's under you, out of sight); a wicker basket on it
+const PICNIC_HALF = 0.12, PICNIC_LONG = 0.2, PICNIC_AHEAD = 0.18;
+const picnicLocal = (wx, wy) => { // where (wx, wy) is on the blanket: [along, across], or null off it
+  const s = body.seat;
+  if (!s || !s.grass) return null;
+  const dx = rel(wx - s.x), dy = rel(wy - s.y), along = dx * s.fx + dy * s.fy - PICNIC_AHEAD, across = -dx * s.fy + dy * s.fx;
+  return Math.abs(along) < PICNIC_LONG && Math.abs(across) < PICNIC_HALF ? [along, across] : null;
+};
 function gardenFloor(i, r, x, wx, wy, L) { // true if it painted the cell itself; else [ch, base, k]
+  const pic = picnicLocal(wx, wy);
+  if (pic) {
+    const [al, ac] = pic, edge = Math.min(PICNIC_LONG - Math.abs(al), PICNIC_HALF - Math.abs(ac));
+    if (edge < 0.006) return set(i, (r + x) & 1 ? '|' : '\'', C(WHITE, L * 1.3)), true; // the fringe
+    const red = (Math.floor((al + PICNIC_LONG) / 0.04) + Math.floor((ac + PICNIC_HALF) / 0.04)) & 1, stripe = Math.abs(fract((al + PICNIC_LONG) / 0.04) - 0.5) < 0.12 || Math.abs(fract((ac + PICNIC_HALF) / 0.04) - 0.5) < 0.12;
+    BG[i] = red ? C(RED, 2 + L * 0.35) : C(WHITE, 2 + L * 0.3);
+    return set(i, stripe ? '+' : red ? '#' : ':', red ? C(RED, L * 1.4) : C(WHITE, L * 1.2)), true;
+  }
   const [gx, gy] = gardenLocal(wx, wy), e = gardenLakeEdge(gx, gy);
   if (onJetty(gx, gy)) return [Math.abs(gy - JETTY.gy) > JETTY.hw * 0.8 ? '|' : fract(gx * 6) < 0.2 ? '=' : '-', BRICK, 1.3];
   if (e > 0) { // the lake: ripples, lily pads near the edge, the sky in it
@@ -172,8 +189,13 @@ function gardenSprites() {
     art(pgx2 - 0.04, pgy2 - 0.01, 0, 0.05, 0.1, ART.sitter, (c, row, L) => C(row < 3 ? SKIN : [YEL, BLUE, GREEN][k - 1], L));
     art(pgx2 + 0.05, pgy2 + 0.01, 0, 0.05, 0.1, ART.sitter, (c, row, L) => C(row < 3 ? SKIN : [MAG, RED, WHITE][k - 1], L));
   }
+  if (body.seat && body.seat.grass) { // the picnic basket, on the blanket's far left corner
+    const s = body.seat, al = PICNIC_AHEAD + PICNIC_LONG * 0.55, ac = -PICNIC_HALF * 0.55, bx = s.x + s.fx * al - s.fy * ac, by = s.y + s.fy * al + s.fx * ac;
+    drawArt(rel(bx - px), rel(by - py), 0, 0.045, 0.04, PICNIC_BASKET, (c, row, L) => c === '#' ? C(RED, Math.max(L, 6)) : C(WARM, Math.max(L, 6)));
+  }
   if (boat) return;
 }
+const PICNIC_BASKET = pad(['  .--.  ', ' /    \\ ', '|######|', '|%%%%%%|', '|%%%%%%|', "'------'"]);
 
 // ---- out on the lake in a swan boat (mode 'boat')
 const nearJettyFoot = () => mode === 'walk' && (() => { const [gx, gy] = gardenLocal(px, py); return inGardens(px, py) && Math.abs(gx - JETTY.gx0 - 0.25) < 0.45 && Math.abs(gy - JETTY.gy) < 0.45; })();

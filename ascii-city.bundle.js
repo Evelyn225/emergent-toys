@@ -3303,11 +3303,20 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.36, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
       // closer still, big enough for it: the letter drawn large in blocks, so the sign grows as you walk up to it
-      if (p < w.length && GLYPH5[w[p]] !== undefined && 0.1 / uStep >= 4 && 0.08 / (d / projY) >= 5) {
-        const gx = Math.floor(fract(u * 10) * 4), gy = Math.floor((0.4 - z) / 0.08 * 5); // (a column's gap after each letter)
-        const col = ARCADE_SIGN.has(w) && open ? NEON[(p + Math.floor(T * 6)) & 3] : sh.neon, on = glyphOn(w[p], gx, gy);
-        if (on) BG[i] = C(col, Math.min(lvl, 15) * 0.25);
-        return set(i, on ? '#' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+      // From a little further off, while a letter's still only a few cells big, each cell shows how much of the letters
+      // falls in it (sampled 3 x 3), so they firm up smoothly instead of breaking into bits
+      const du = uStep, dz = d / projY;
+      if (0.1 / du >= 2.2 && 0.08 / dz >= 2.8) {
+        let on = 0, pk = -1;
+        for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
+          const uu = u + (a - 1) * du / 3, zz = z + (b - 1) * dz / 3, q = mod(Math.floor(uu * 10), m);
+          if (q < w.length && GLYPH5[w[q]] !== undefined && zz > 0.32 && zz < 0.4 && glyphOn(w[q], Math.floor(fract(uu * 10) * 4), Math.floor((0.4 - zz) / 0.08 * 5))) { on++; pk = q; }
+        }
+        if (p < w.length && GLYPH5[w[p]] !== undefined || on) {
+          const col = ARCADE_SIGN.has(w) && open ? NEON[((pk < 0 ? p : pk) + Math.floor(T * 6)) & 3] : sh.neon, f = on / 9;
+          if (f > 0.4) BG[i] = C(col, Math.min(lvl, 15) * 0.25 * f);
+          return set(i, f > 0.75 ? '#' : f > 0.5 ? '+' : f > 0.25 ? ':' : f > 0 ? '.' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+        }
       }
       if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between
         const lit = Math.max(lvl, 13), chase = Math.floor(T * 6);
@@ -6344,7 +6353,24 @@ const gardenLawn = (x, y) => { // grass you could sit down on
 const BED_PAL = [[MAG, WHITE, RED], [YEL, ORANGE, RED], [BLUE, MAG, WHITE], [RED, YEL, WHITE], [CYAN, BLUE, WHITE], [ORANGE, YEL, MAG], [MAG, RED, YEL]];
 
 // ---- the ground
+// sat down on the lawn: a picnic blanket under you, red and white check with a fringe, squared up with the way you
+// face, from under you out in front (2.4m wide, 4m long: the near end's under you, out of sight); a wicker basket on it
+const PICNIC_HALF = 0.12, PICNIC_LONG = 0.2, PICNIC_AHEAD = 0.18;
+const picnicLocal = (wx, wy) => { // where (wx, wy) is on the blanket: [along, across], or null off it
+  const s = body.seat;
+  if (!s || !s.grass) return null;
+  const dx = rel(wx - s.x), dy = rel(wy - s.y), along = dx * s.fx + dy * s.fy - PICNIC_AHEAD, across = -dx * s.fy + dy * s.fx;
+  return Math.abs(along) < PICNIC_LONG && Math.abs(across) < PICNIC_HALF ? [along, across] : null;
+};
 function gardenFloor(i, r, x, wx, wy, L) { // true if it painted the cell itself; else [ch, base, k]
+  const pic = picnicLocal(wx, wy);
+  if (pic) {
+    const [al, ac] = pic, edge = Math.min(PICNIC_LONG - Math.abs(al), PICNIC_HALF - Math.abs(ac));
+    if (edge < 0.006) return set(i, (r + x) & 1 ? '|' : '\'', C(WHITE, L * 1.3)), true; // the fringe
+    const red = (Math.floor((al + PICNIC_LONG) / 0.04) + Math.floor((ac + PICNIC_HALF) / 0.04)) & 1, stripe = Math.abs(fract((al + PICNIC_LONG) / 0.04) - 0.5) < 0.12 || Math.abs(fract((ac + PICNIC_HALF) / 0.04) - 0.5) < 0.12;
+    BG[i] = red ? C(RED, 2 + L * 0.35) : C(WHITE, 2 + L * 0.3);
+    return set(i, stripe ? '+' : red ? '#' : ':', red ? C(RED, L * 1.4) : C(WHITE, L * 1.2)), true;
+  }
   const [gx, gy] = gardenLocal(wx, wy), e = gardenLakeEdge(gx, gy);
   if (onJetty(gx, gy)) return [Math.abs(gy - JETTY.gy) > JETTY.hw * 0.8 ? '|' : fract(gx * 6) < 0.2 ? '=' : '-', BRICK, 1.3];
   if (e > 0) { // the lake: ripples, lily pads near the edge, the sky in it
@@ -6504,8 +6530,13 @@ function gardenSprites() {
     art(pgx2 - 0.04, pgy2 - 0.01, 0, 0.05, 0.1, ART.sitter, (c, row, L) => C(row < 3 ? SKIN : [YEL, BLUE, GREEN][k - 1], L));
     art(pgx2 + 0.05, pgy2 + 0.01, 0, 0.05, 0.1, ART.sitter, (c, row, L) => C(row < 3 ? SKIN : [MAG, RED, WHITE][k - 1], L));
   }
+  if (body.seat && body.seat.grass) { // the picnic basket, on the blanket's far left corner
+    const s = body.seat, al = PICNIC_AHEAD + PICNIC_LONG * 0.55, ac = -PICNIC_HALF * 0.55, bx = s.x + s.fx * al - s.fy * ac, by = s.y + s.fy * al + s.fx * ac;
+    drawArt(rel(bx - px), rel(by - py), 0, 0.045, 0.04, PICNIC_BASKET, (c, row, L) => c === '#' ? C(RED, Math.max(L, 6)) : C(WARM, Math.max(L, 6)));
+  }
   if (boat) return;
 }
+const PICNIC_BASKET = pad(['  .--.  ', ' /    \\ ', '|######|', '|%%%%%%|', '|%%%%%%|', "'------'"]);
 
 // ---- out on the lake in a swan boat (mode 'boat')
 const nearJettyFoot = () => mode === 'walk' && (() => { const [gx, gy] = gardenLocal(px, py); return inGardens(px, py) && Math.abs(gx - JETTY.gx0 - 0.25) < 0.45 && Math.abs(gy - JETTY.gy) < 0.45; })();
@@ -9457,7 +9488,9 @@ function gameFS(g) {
   return clamp(Math.floor(Math.min(DETAIL[settings.detail], (innerWidth - cr) / ((2 * g.W + 6) * ratio), (innerHeight - cb) / (g.H + 9))), 5, 40);
 }
 // what the screen says to press: on a phone, the buttons' names
-const gameText = s => TOUCH ? s.replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/\bUP\b/g, 'MAHJONG').replace(/SPACE/g, 'GO') : s;
+// (on a phone: what the buttons are called. UP is the Mahjong! button only at the mahjong table; lockpicking's HOLD UP
+// is the stick held up)
+const gameText = (s, g) => !TOUCH ? s : (g && g.id === 'mahjong' ? s.replace(/\bUP\b/g, 'MAHJONG') : s).replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/SPACE/g, 'GO');
 // the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
 function drawGame() {
   const g = game.g, fs = gameFS(g);
@@ -9485,7 +9518,7 @@ function drawGame() {
     }
   }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col)); // a label, at normal size
   // the status under the screen, in two lines if it's wider than the cabinet
-  const st = gameText(g.status()), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
+  const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
   const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
@@ -9729,7 +9762,7 @@ function nearSeat() {
 function sitDown() {
   const s = nearSeat();
   if (!s) return false;
-  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = 0;
+  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = s.grass ? -0.4 : 0; // (on the grass: looking down at the picnic)
   say(s.grass ? 'You sit down on the grass.' : 'You sit down.', 1.5);
   return true;
 }

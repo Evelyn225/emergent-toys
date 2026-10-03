@@ -38,7 +38,7 @@ function nearSeat() {
 function sitDown() {
   const s = nearSeat();
   if (!s) return false;
-  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = 0;
+  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = s.grass ? -0.4 : 0; // (on the grass: looking down at the picnic)
   say(s.grass ? 'You sit down on the grass.' : 'You sit down.', 1.5);
   return true;
 }
