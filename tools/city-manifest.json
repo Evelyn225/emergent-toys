@@ -24,6 +24,8 @@
     "city/hud.js",
     "city/actions.js",
     "city/taxi-job.js",
+    "city/fair.js",
+    "city/laundry.js",
     "city/audio.js",
     "city/menu.js",
     "city/pause.js",

@@ -48,7 +48,7 @@ function audioMix(s) {
   }
   const d = AUDIO_DISTRICT[s.district] || AUDIO_DISTRICT.midtown;
   // up high (a roof, the el) the street is further away and the wind gets at you
-  const height = s.mode === 'roof' ? s.roofH : s.mode === 'el' || s.mode === 'elplat' ? 0.7 : 0;
+  const height = s.mode === 'roof' ? s.roofH : s.mode === 'el' || s.mode === 'elplat' ? 0.7 : s.mode === 'fair' ? s.fairEye || 0 : 0;
   const far = 1 / (1 + height * 0.25);
   out.city = far * d.city * (0.3 + 0.7 * s.day) * (1 - 0.35 * s.rain);
   out.crowd = far * d.crowd * busyHour(s.tod) * (1 - 0.7 * s.rain);
@@ -57,6 +57,10 @@ function audioMix(s) {
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
+  if (s.fairNear) { // the pleasure pier: a crowd, and the booths' bleeps and jingles drifting over it
+    out.crowd = Math.max(out.crowd, 0.7 * s.fairNear * (s.tod >= 9 || s.tod < 2 ? 1 : 0.2));
+    out.arcade = 0.4 * s.fairNear * far;
+  }
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
   out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : 0;

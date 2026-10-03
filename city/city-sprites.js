@@ -69,6 +69,7 @@ function citySprites() {
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
   islandSprites();
+  fairSprites();
   forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
@@ -257,6 +258,29 @@ function drawVehicle(m, vx, vy, hx, hy) {
 // fences and shipping containers (solids, see props.js): how each kind's faces look
 const CONTAINER_COL = [RED, BLUE, ORANGE, GREEN, GRAY, CYAN];
 const SOLID_SHADE = {
+  // a booth on the pier: candy-striped canvas, a lit sign over the counter, prizes hanging in the dark inside
+  booth: o => (i, t, L) => {
+    const f = HIT.face, w = HIT.w, glow = Math.max(night, overcast * 0.6), stripe = c => C(fract(HIT.u * 7) < 0.5 ? o.awning : WHITE, c);
+    if (f === 5) { BG[i] = stripe(3 + L * 0.3); return set(i, ' ', 0), true; }
+    const front = (f === 3 || f === 4) && Math.sign(HIT.v) === o.fs;
+    if (!front) { BG[i] = stripe((1.5 + L * 0.3) * shadeFace(f)); return set(i, w > 0.3 ? '~' : ' ', C(WHITE, L * 0.5)), true; }
+    const q = (HIT.u * o.fs / o.hl + 1) / 2;
+    if (w > 0.25) { // the sign
+      BG[i] = C(o.awning, 3 + glow * 6);
+      const n = o.word.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * o.hl) * n;
+      const on = Math.abs(w - 0.295) < t / projY / 2 && k >= 0 && k < o.word.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
+      if (on) return set(i, o.word[k], C(WHITE, 15)), true;
+      return set(i, glow > 0.3 && Math.abs(w - 0.295) > 0.035 && fract(q * 14 - T * 2) < 0.3 ? '*' : ' ', C(YEL, 15)), true; // bulbs chasing round it
+    }
+    if (w > 0.11) { // the opening: what's on offer, in the dark behind the counter
+      BG[i] = C(GRAY, 1 + glow * 2);
+      const row = Math.floor((w - 0.11) / 0.045), col = Math.floor(q * 9);
+      const ch = o.game === 'ringtoss' ? (row === 0 ? 'i' : ' ') : o.game === 'strength' ? (col === 4 ? '|' : ' ') : o.stock ? (row === 0 ? 'o' : ' ') : row < 3 && (col + row) & 1 ? '@' : ' ';
+      return set(i, ch, C(o.game === 'ringtoss' ? GREEN : o.stock ? ORANGE : ITEM_COL[(col + row * 3) & 7], Math.max(L, glow * 12))), true;
+    }
+    BG[i] = C(o.awning, 1.5 + L * 0.25); // the counter
+    return set(i, w > 0.095 ? '=' : fract(q * 10) < 0.5 ? '|' : ' ', C(WHITE, L * 0.8)), true;
+  },
   // construction hoarding: an orange-and-white striped top rail on posts, see-through between
   hoarding: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u, f = HIT.face;
@@ -607,4 +631,100 @@ function elSprites() {
       drawElCar(vx, vy, j === 0 ? t.dir : j === EL_CARS - 1 ? -t.dir : 0);
     }
   }
+}
+
+// ===== the pleasure pier: the Ferris wheel, the carousel, and the arch over the way in
+// the wheel is a billboard turned to its real angle: sq = how face-on it is (its east-west axis across the screen),
+// so from the side it narrows to an ellipse and then a line. Cars are real-sized whatever the angle.
+function wheelCell(i, u, z, du, dz, L, sq) {
+  const R = WHEEL.R, hub = WHEEL.hub, as = Math.max(Math.abs(sq), 0.05), U = u / (sq < 0 ? -as : as), Zc = z - hub;
+  const tolU = du / as / 2, tol = Math.max(tolU, dz / 2), lit = night > 0.25 || overcast > 0.6;
+  for (let k = 0; k < WHEEL.n; k++) { // the cars, hanging under their pivots on the rim
+    if (fairRide && fairRide.kind === 'wheel' && fairRide.k === k) continue; // (you're in this one)
+    const ph = wheelAngle(k, T), gu = R * Math.cos(ph) * (sq < 0 ? -as : as), gz = hub + R * Math.sin(ph), top = gz - 0.06, bot = gz - 0.24;
+    if (Math.abs(u - gu) < 0.1 && z < top && z > bot) {
+      const col = [RED, YEL, CYAN, MAG, GREEN, ORANGE][k % 6], r = (top - z) / (top - bot);
+      if (r < 0.15) return set(i, '_', C(col, L * 1.1)), true;
+      if (r < 0.55) { BG[i] = C(col, 1.5 + L * 0.2); return set(i, Math.abs(u - gu) > 0.08 ? '|' : ':', lit ? C(YEL, 13) : C(CYAN, L)), true; }
+      BG[i] = C(col, 2 + L * 0.3); return set(i, r > 0.9 ? '=' : ' ', C(col, L)), true;
+    }
+    if (onLine(u - gu, du, 0, 0) && z <= gz && z >= top) return set(i, '|', C(GRAY, L)), true;
+  }
+  const rr = Math.hypot(U, Zc), ang = Math.atan2(Zc, U);
+  if (rr < 0.13) return set(i, '@', C(WHITE, L * 1.2)), true; // the hub
+  if (z < 0.05 && Math.abs(u) < 1.1 * as + 0.15) return set(i, '=', C(BRICK, L)), true; // the platform
+  for (const side of [-1, 1]) { // the A-frame legs, hub to deck
+    const lu = side * 0.95 * (hub - z) / hub;
+    if (z < hub && Math.abs(U - lu) < Math.max(tolU, dz * 0.95 / hub / 2) * 1.2) return set(i, side * Math.sign(sq || 1) < 0 ? '/' : '\\', C(GRAY, L * 1.15)), true;
+  }
+  if (Math.abs(rr - R) < tol * 1.2) { // the rim, strung with bulbs that chase round after dark
+    const on = lit && fract(ang * 24 / TAU - T * 1.5) < 0.5;
+    return set(i, on ? '*' : 'o', on ? C([YEL, MAG, CYAN, RED][Math.floor(ang * 24 / TAU - T * 1.5) & 3], 15) : C(WHITE, L)), true;
+  }
+  if (Math.abs(rr - R * 0.55) < tol) return set(i, '.', C(GRAY, L)), true; // an inner ring
+  if (rr < R) { // spokes
+    const th = TAU * T / WHEEL.rev;
+    for (let j = 0; j < 16; j++) {
+      const sa = th + j * TAU / 16, d = ang - sa;
+      if (Math.cos(d) > 0 && Math.abs(rr * Math.sin(d)) < tol) {
+        const sx = Math.cos(sa) * as, sy = Math.sin(sa), slope = Math.abs(sy / (sx || 1e-6));
+        return set(i, slope > 2.5 ? '|' : slope < 0.4 ? '-' : (sx > 0) === (sy > 0) === (sq > 0) ? '/' : '\\', lit ? C(WHITE, Math.max(L, 9)) : C(GRAY, L)), true;
+      }
+    }
+  }
+  return false;
+}
+// the carousel: a striped canopy with a scalloped edge of bulbs, a mirrored drum in the middle, horses going round
+// and up and down on their poles. Round, so it looks the same from anywhere: drawn as a billboard.
+function carouselCell(i, u, z, du, dz, L, s) {
+  const r = CAROUSEL.r, rot = TAU * T / CAROUSEL.rev, lit = night > 0.25 || overcast > 0.6;
+  if (z > 0.5 || Math.abs(u) > r + 0.03) return false;
+  if (z > 0.33) { // the canopy, coming to a point
+    const w = r * (1 - (z - 0.33) / 0.17) + 0.03;
+    if (Math.abs(u) > w) return false;
+    const a = Math.asin(clamp(u / w, -1, 1)) + rot;
+    BG[i] = C(Math.floor(a / (TAU / 16)) & 1 ? RED : WHITE, 3 + L * 0.3);
+    return set(i, z > 0.48 ? '^' : ' ', C(YEL, 15)), true;
+  }
+  if (z > 0.3) { // the valance: scallops, a bulb in each
+    BG[i] = C(YEL, 2 + L * 0.2);
+    return set(i, lit && fract(u * 12 + T) < 0.4 ? '*' : 'v', lit ? C(YEL, 15) : C(YEL, L)), true;
+  }
+  if (z < 0.04) return set(i, '=', C(BRICK, L)), true; // the turntable
+  if (Math.abs(u) < 0.1) { BG[i] = C(CYAN, 1 + (lit ? 3 : 1)); return set(i, fract(z * 30 + T) < 0.2 ? '*' : ':', C(WHITE, Math.max(L, lit ? 12 : 0))), true; } // the drum
+  for (let pass = 0; pass < 2; pass++) for (let j = 0; j < 8; j++) { // the near horses first, then the far ones
+    const ps = rot + j * TAU / 8, front = Math.cos(ps) > 0;
+    if (front !== (pass === 0)) continue;
+    const hu = 0.42 * Math.sin(ps), hz = 0.14 + 0.04 * Math.sin(ps * 2 + T * 4), dim = front ? 1 : 0.55;
+    const col = [WHITE, YEL, BRICK, WHITE, MAG, YEL, BRICK, CYAN][j], dir = front ? 1 : -1;
+    if (onLine(u - hu, du, 0, 0) && z > 0.04) return set(i, '|', C(YEL, L * dim)), true; // the brass pole
+    if (Math.abs(z - hz) < 0.025 && Math.abs(u - hu) < 0.06) return set(i, '=', C(col, L * dim)), true; // body
+    if (Math.abs(z - hz - 0.04) < 0.02 && Math.abs(u - hu - dir * 0.06) < 0.025) return set(i, dir > 0 ? '>' : '<', C(col, L * dim)), true; // head
+    if (Math.abs(z - hz + 0.045) < 0.02 && Math.abs(Math.abs(u - hu) - 0.04) < 0.015) return set(i, '/', C(col, L * dim * 0.8)), true; // legs
+  }
+  return false;
+}
+const FAIR_SIGN = 'PLEASURE PIER';
+function fairSprites() {
+  const [wx, wy] = R(WHEEL.x, WHEEL.y);
+  if (Math.hypot(wx, wy) < vis + 4) {
+    const sq = across(1, 0, wx, wy), hw = (WHEEL.R + 0.15) * Math.max(Math.abs(sq), 0.06) + 0.12;
+    drawShape(wx, wy, 0, hw, WHEEL.hub + WHEEL.R + 0.1, (i, u, z, du, dz, L) => wheelCell(i, u, z, du, dz, L, sq));
+  }
+  const [cx, cy] = R(CAROUSEL.x, CAROUSEL.y);
+  if (Math.hypot(cx, cy) < vis) drawShape(cx, cy, 0, CAROUSEL.r + 0.04, 0.52, carouselCell);
+  // the arch over the way in, its name in bulbs
+  const [gx, gy] = R(FAIR.cx, FAIR.y0 + 0.2), hw = 1.3;
+  if (Math.hypot(gx, gy) > vis) return;
+  const post = (i, t, L) => { BG[i] = C(RED, 2 + L * 0.2); return set(i, '|', C(WHITE, L)), true; };
+  for (const sd of [-1, 1]) drawBox(boxAt(gx + sd * hw, gy, 1, 0, 0.03, 0.03, 0, 0.5), post);
+  drawBox(boxAt(gx, gy, 1, 0, hw + 0.03, 0.01, 0.42, 0.52), (i, t, L) => {
+    const glow = Math.max(night, overcast * 0.6);
+    BG[i] = C(RED, 2 + glow * 4);
+    if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(YEL, L)), true;
+    const n = FAIR_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.03) + 1) / 2 * n - 1, k = Math.floor(q), cellU = t / projX / (2 * hw) * n;
+    const on = k >= 0 && k < FAIR_SIGN.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) && Math.abs(HIT.w - 0.47) <= t / projY / 2 + 1e-4;
+    if (on) return set(i, FAIR_SIGN[k], C(YEL, 15)), true;
+    return set(i, glow > 0.3 && Math.abs(HIT.w - 0.47) > 0.03 && fract(q * 0.5 - T * 2) < 0.25 ? '*' : ' ', C(WHITE, 15)), true; // (bulbs above and below the letters)
+  });
 }

@@ -238,7 +238,7 @@ const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1]
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
-  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [7, 22], BODEGA: [0, 24], STORAGE: [0, 24] };
+  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [0, 24], BODEGA: [0, 24], STORAGE: [0, 24] };
 const hoursOf = word => HOURS[word] || [9, 20];
 const openAt = (sh, t) => { // is this shop open at game hour t?
   if (sh.kind === SHOP_APTS) return true;
@@ -403,13 +403,27 @@ function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cel
 }
 const onIsland = (x, y) => isleEdge(x, y) > 0;
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
+// the pleasure pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
+// docks or a bridge. Game booths and a prize stall down its sides, a carousel in the middle, the Ferris wheel out at
+// the end (its wheel stands across the pier, east-west, so you see it face on from the promenade).
+const FAIR_BX = (() => { for (let bx = ISLE_BX + 3; ; bx++) if (!BRIDGE_X.includes(bx) && districtOf(bx, SHORE_S - 1) !== 'industrial') return bx; })();
+const FAIR = { x0: FAIR_BX * 8 + 2.2, x1: FAIR_BX * 8 + 7.8, y0: SHORE_S * 8 + 3, y1: SHORE_S * 8 + 17 };
+FAIR.cx = (FAIR.x0 + FAIR.x1) / 2;
+const WHEEL = { x: FAIR.cx, y: FAIR.y1 - 2.6, R: 1.9, hub: 2.2, n: 12, rev: 60 }; // 19m radius, 42m to the top, once round a minute
+const CAROUSEL = { x: FAIR.cx, y: FAIR.y0 + 4.6, r: 0.55, rev: 9 };
+const WHEEL_BOARD = { x: WHEEL.x, y: WHEEL.y - 0.55 }; // where you queue: the platform in front of the bottom car
+// where the wheel's car k is (angle round the hub, 0 = level with it on the east side), at time t
+const wheelAngle = (k, t) => TAU * (t / WHEEL.rev + k / WHEEL.n) - Math.PI / 2;
+// the carousel's drum and the wheel's legs are in the way; the booths are solids (props.js)
+const fairBlocked = (x, y, pad = 0) => Math.hypot(rel(x - CAROUSEL.x), rel(y - CAROUSEL.y)) < CAROUSEL.r + pad ||
+  Math.abs(rel(x - WHEEL.x)) < 0.35 + pad && Math.abs(rel(y - WHEEL.y)) < 0.35 + pad;
 // piers: walkable decks out over the water [x0, y0, x1, y1]; wider docks along the industrial shore
-const PIERS = [];
+const PIERS = [[FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1]];
 for (let bx = 0; bx < NB; bx++) {
   if (BRIDGE_X.includes(bx) || bx === ISLE_BX) continue;
   const dock = districtOf(bx, SHORE_S - 1) === 'industrial';
   if (dock && hash(bx, 4, 43) < 0.5) PIERS.push([bx * 8 + 3.6, SHORE_S * 8 + 3, bx * 8 + 6.4, SHORE_S * 8 + 11]);
-  else if (hash(bx, 5, 43) < 0.35) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
+  else if (hash(bx, 5, 43) < 0.35 && bx !== FAIR_BX) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
   if (hash(bx, 6, 43) < 0.25) PIERS.push([bx * 8 + 4.6, N + SHORE_N * 8 - 9, bx * 8 + 5.4, N + SHORE_N * 8 + 5]);
 }
 const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y);
@@ -680,8 +694,30 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
   }
 }
+// the pleasure pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
+// boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
+// side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
+const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -1, 3.6, { game: 'strength' }],
+                ['PRIZES', 1, 2.3, { prizes: true }], ['FAIR FOOD', 1, 3.6, { stock: true }]].map(([word, side, dy, what], k) => {
+  const x = side < 0 ? FAIR.x0 + 0.27 : FAIR.x1 - 0.27, y = FAIR.y0 + dy;
+  solidBox(x, y, false, 0.5, 0.22, 0, 0.34, 'booth', k);
+  const o = solids[solids.length - 1];
+  return Object.assign(o, { word, side, fs: side < 0 ? -1 : 1, at: [x - side * 0.42, y], awning: [RED, BLUE, MAG, GREEN][k], ...what });
+});
+for (let y = FAIR.y0 + 1; y < FAIR.y1 - 0.5; y += 1.5) for (const x of [FAIR.x0 + 0.06, FAIR.x1 - 0.06])
+  extras.push({ x, y, z: 0, w: 0.05, h: 0.4, art: ['(*)', ' | ', ' | ', ' | ', ' | '], col: (c, row, L) => row ? C(GRAY, L) :
+    C([YEL, RED, CYAN, MAG][(Math.floor(T * 2) + Math.round(y)) & 3], Math.max(L, night * 15)) });
+const fairFolk = [];
+for (let k = 0; k < 14; k++) { // somewhere on the boardwalk clear of everything, or in the wheel's queue
+  const queue = k < 3, x = queue ? WHEEL_BOARD.x - 0.15 + k * 0.12 : FAIR.x0 + 0.9 + hash(k, 1, 57) * (FAIR.x1 - FAIR.x0 - 1.8);
+  const y = queue ? WHEEL_BOARD.y - 0.12 - k * 0.1 : FAIR.y0 + 0.8 + hash(k, 2, 57) * (WHEEL.y - FAIR.y0 - 1.6);
+  if (!queue && fairBlocked(x, y, 0.15)) continue;
+  const shirt = [RED, BLUE, GREEN, YEL, MAG, WHITE][k % 6], pants = [BLUE, GRAY, BRICK][k % 3];
+  fairFolk.push({ x, y });
+  extras.push({ x, y, z: 0, w: 0.06, h: 0.18, art: ART.walkB, col: (c, row, L) => C(row < 2 ? SKIN : row === 2 ? shirt : pants, L) });
+}
 // dockside cranes on the industrial piers
-for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
+for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && x0 !== FAIR.x0 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
 function solidAt(x, y, pad) {
@@ -747,6 +783,10 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
   if (hash(bx, by, o === 'h' ? 200 : 202) < 0.03 && !blockKind(bx, by) && districtOf(bx, by) !== 'industrial')
     vendors.push({ x, y, ox: o === 'v' ? 0.12 : 0, oy: o === 'h' ? 0.12 : 0, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
 });
+// and a cotton candy cart at the foot of the pleasure pier
+const CANDY_CART = { name: 'COTTON CANDY', item: 'a cotton candy', price: 3, color: MAG, w: 0.3, art: [
+  ['  @@@@  ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O'], ['  @@@@@ ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O']].map(pad) };
+vendors.push({ x: FAIR.cx + 1.1, y: FAIR.y0 + 0.9, ox: 0.12, oy: 0, type: CANDY_CART, shirt: WHITE });
 
 // subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
 // hole in the sidewalk SUBWAY_HOLE (half length along the street, half width) round the entrance point
@@ -1520,7 +1560,7 @@ function audioMix(s) {
   }
   const d = AUDIO_DISTRICT[s.district] || AUDIO_DISTRICT.midtown;
   // up high (a roof, the el) the street is further away and the wind gets at you
-  const height = s.mode === 'roof' ? s.roofH : s.mode === 'el' || s.mode === 'elplat' ? 0.7 : 0;
+  const height = s.mode === 'roof' ? s.roofH : s.mode === 'el' || s.mode === 'elplat' ? 0.7 : s.mode === 'fair' ? s.fairEye || 0 : 0;
   const far = 1 / (1 + height * 0.25);
   out.city = far * d.city * (0.3 + 0.7 * s.day) * (1 - 0.35 * s.rain);
   out.crowd = far * d.crowd * busyHour(s.tod) * (1 - 0.7 * s.rain);
@@ -1529,6 +1569,10 @@ function audioMix(s) {
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
+  if (s.fairNear) { // the pleasure pier: a crowd, and the booths' bleeps and jingles drifting over it
+    out.crowd = Math.max(out.crowd, 0.7 * s.fairNear * (s.tod >= 9 || s.tod < 2 ? 1 : 0.2));
+    out.arcade = 0.4 * s.fairNear * far;
+  }
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
   out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : 0;
@@ -1570,6 +1614,8 @@ const ITEMS = {
   pho: { name: 'pho', price: 11, kind: 'food', uses: 5 }, banhmi: { name: 'banh mi', price: 7, kind: 'food', uses: 4 },
   padthai: { name: 'pad thai', price: 11, kind: 'food', uses: 5 }, greencurry: { name: 'green curry', price: 12, kind: 'food', uses: 5 },
   mangorice: { name: 'mango sticky rice', price: 6, kind: 'food', uses: 3 },
+  cottoncandy: { name: 'cotton candy', price: 3, kind: 'food', uses: 3 }, corndog: { name: 'corn dog', price: 4, kind: 'food', uses: 3 },
+  popcorn: { name: 'popcorn', price: 3, kind: 'food', uses: 5 }, lemonade: { name: 'lemonade', price: 3, kind: 'drink', uses: 3 },
   ginseng: { name: 'ginseng root', price: 6, kind: 'food', uses: 2, caffeine: 70 }, // a bitter chew, and a kick like coffee
   // drink
   coffee: { name: 'coffee', price: 3, kind: 'drink', uses: 4, caffeine: 60 }, latte: { name: 'latte', price: 5, kind: 'drink', uses: 4, caffeine: 50 },
@@ -1610,6 +1656,7 @@ function claimPrize(id) {
 }
 // what each kind of place sells: by shop word first, then by room kind
 const STOCK_WORD = {
+  'FAIR FOOD': ['corndog', 'popcorn', 'cottoncandy', 'lemonade'],
   '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella'],
   BODEGA: ['sandwich', 'chips', 'apple', 'soda', 'energy', 'cigarettes', 'newspaper'], DELI: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'],
   LIQUOR: ['beer', 'whiskey', 'cigarettes', 'chips'], PHARMACY: ['water', 'energy', 'umbrella'],
@@ -1630,7 +1677,7 @@ const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'co
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
 const stockFor = (kind, word) => STOCK_WORD[word] || STOCK_ROOM[kind] || [];
 // the street carts
-const VENDOR_STOCK = { 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 'ICE CREAM': ['icecream'], COFFEE: ['coffee', 'donut'], NOODLES: ['noodlebox', 'tea'] };
+const VENDOR_STOCK = { 'COTTON CANDY': ['cottoncandy', 'lemonade'], 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 'ICE CREAM': ['icecream'], COFFEE: ['coffee', 'donut'], NOODLES: ['noodlebox', 'tea'] };
 
 // ---- what you carry: 8 slots, one held. Effects wear off with time.
 const INV_SIZE = 8;
@@ -1638,7 +1685,7 @@ const inv = []; // { id, uses }
 let held = 0; // which slot is in your hand; -1 = nothing, hands empty
 // take slot k in hand, or (if it's already there) put it away and hold nothing
 const holdSlot = k => { held = held === k ? -1 : k; };
-const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0 };
+const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0 };
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
@@ -1778,7 +1825,7 @@ function pickUpDropped(d) {
 function stepGoods(dt) {
   if (fx.skating && mode !== 'walk') fx.skating = false;
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
-  fx.yoyo = Math.max(0, fx.yoyo - dt); fx.spark = Math.max(0, fx.spark - dt);
+  fx.yoyo = Math.max(0, fx.yoyo - dt); fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt);
   cigTip = Math.max(0, cigTip - dt * 0.8);
   if (fx.vape > 0) { // pulling on the vape: the longer, the bigger the cloud
     const it = heldItem();
@@ -2334,6 +2381,86 @@ GAMES.jailbreak = (rnd = Math.random) => {
   g.state = () => ({ you, gx, gy, lit, door, solid, t });
   return g;
 };
+
+// ---- the pleasure pier's booths. Like the cabinets: a credit a go, tickets for how you did.
+// ring toss: rows of bottles; the ring swings back and forth in front of you, GO throws it straight up the board.
+// It lands on a bottle neck only if it's dead on (the far rows count double). Six rings.
+GAMES.ringtoss = (rnd = Math.random) => {
+  const W = 29, H = 12, ROWS = [2, 4, 6], g = { id: 'ringtoss', title: 'RING TOSS', W, H, score: 0, over: false };
+  const necks = [];
+  for (const y of ROWS) for (let x = 2 + (y >> 1 & 1) * 2; x < W - 1; x += 4) necks.push({ x, y, ringed: false });
+  let rings = 6, aim = 1, dir = 1, speed = 11, fly = null, hits = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if (fly) { // up the board, landing on its row
+      fly.y -= dt * 22;
+      if (fly.y <= fly.to) {
+        const n = necks.find(q => q.x === fly.x && q.y === fly.to && !q.ringed);
+        if (n) { n.ringed = true; hits++; g.score += n.y === ROWS[0] ? 2 : 1; ev.push('score'); } else ev.push('miss');
+        fly = null;
+        if (rings === 0) { g.over = true; ev.push('end'); }
+      }
+      return ev;
+    }
+    aim += dir * speed * dt;
+    if (aim < 1 || aim > W - 2) { dir = -dir; aim = clamp(aim, 1, W - 2); }
+    if (k.actP && rings > 0) { rings--; fly = { x: Math.round(aim), y: H - 2, to: ROWS[rnd() * 3 | 0] }; speed *= 1.08; ev.push('launch'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let x = 0; x < W; x++) put(x, H - 3, '-', C(BRICK, 6)); // the line you throw from
+    for (const n of necks) { put(n.x, n.y, n.ringed ? 'O' : 'i', n.ringed ? C(YEL, 15) : C(GREEN, 12)); put(n.x, n.y + 1, 'U', C(GREEN, 8)); }
+    if (fly) put(fly.x, Math.round(fly.y), 'o', C(YEL, 15));
+    else if (rings) { put(Math.round(aim), H - 2, 'O', C(YEL, 15)); put(Math.round(aim), H - 1, '^', C(WHITE, 10)); }
+    text(0, 0, `rings: ${'O'.repeat(rings)}${'.'.repeat(6 - rings)}`, C(WHITE, 13));
+  };
+  g.status = () => `RINGED ${hits}   POINTS ${g.score}   SPACE throw`;
+  g.reward = () => g.score * 4;
+  return g;
+};
+// high striker: the power meter swings up and down; GO brings the mallet down at whatever it's at, and the puck
+// flies that high up the tower. Ring the bell (the very top) for the big prize. Three swings.
+const STRIKER_MARKS = [[0.95, 'DING!'], [0.8, 'HERCULES'], [0.6, 'STRONGMAN'], [0.4, 'NOT BAD'], [0.2, 'TICKLE'], [0, 'WEAKLING']];
+GAMES.strength = (rnd = Math.random) => {
+  const W = 26, H = 14, TOP = 1, BOT = H - 2, g = { id: 'strength', title: 'HIGH STRIKER', W, H, score: 0, over: false };
+  let swings = 3, power = 0, t = rnd() * 3, puck = null, best = 0, last = '';
+  const meter = g.meter = () => 0.5 - 0.5 * Math.cos(t * (3.2 + (3 - swings) * 0.8)); // faster each swing
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (puck) {
+      puck.h += (puck.up ? 1 : -1) * dt * 2.2;
+      if (puck.up && puck.h >= puck.to) {
+        puck.up = false; puck.h = puck.to; last = STRIKER_MARKS.find(m => puck.to >= m[0])[1];
+        g.score += puck.to >= 0.95 ? 10 : puck.to >= 0.8 ? 5 : puck.to >= 0.6 ? 3 : puck.to >= 0.4 ? 1 : 0;
+        ev.push(puck.to >= 0.95 ? 'clear' : 'bump');
+      }
+      if (!puck.up && puck.h <= 0) { puck = null; if (swings === 0) { g.over = true; ev.push('end'); } }
+      return ev;
+    }
+    power = meter();
+    if (k.actP && swings > 0) { swings--; puck = { h: 0, to: power, up: true }; best = Math.max(best, power); ev.push('brick'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    const row = h => Math.round(BOT - h * (BOT - TOP));
+    for (let y = TOP; y <= BOT; y++) put(13, y, '|', C(GRAY, 9)); // the tower
+    put(13, TOP, '@', puck && !puck.up && puck.to >= 0.95 ? C(YEL, 15) : C(YEL, 9)); // the bell
+    for (const [h, name] of STRIKER_MARKS.slice(1)) text(15, row(h), name, C([RED, ORANGE, YEL, GREEN, CYAN][STRIKER_MARKS.findIndex(m => m[1] === name) - 1], 11));
+    put(13, row(puck ? puck.h : 0), '#', C(RED, 15));
+    put(12, BOT + 1, '=', C(BRICK, 12)); put(13, BOT + 1, '=', C(BRICK, 12)); put(14, BOT + 1, '=', C(BRICK, 12));
+    const m = puck ? 0 : power; // the meter, left
+    for (let y = TOP; y <= BOT; y++) { const on = y >= row(m); put(4, y, on ? '#' : ':', on ? C(y < row(0.8) ? RED : y < row(0.5) ? YEL : GREEN, 14) : C(GRAY, 5)); }
+    text(0, 0, `swings ${'*'.repeat(swings)}${'.'.repeat(3 - swings)}`, C(WHITE, 13));
+    if (last) text(0, BOT + 1, last, C(YEL, 15));
+  };
+  g.status = () => `POINTS ${g.score}   BEST ${Math.round(best * 100)}%   SPACE swing`;
+  g.reward = () => g.score * 2;
+  return g;
+};
+const FAIR_GAMES = ['ringtoss', 'strength'];
 
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
@@ -3337,6 +3464,7 @@ function citySprites() {
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
   islandSprites();
+  fairSprites();
   forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
@@ -3525,6 +3653,29 @@ function drawVehicle(m, vx, vy, hx, hy) {
 // fences and shipping containers (solids, see props.js): how each kind's faces look
 const CONTAINER_COL = [RED, BLUE, ORANGE, GREEN, GRAY, CYAN];
 const SOLID_SHADE = {
+  // a booth on the pier: candy-striped canvas, a lit sign over the counter, prizes hanging in the dark inside
+  booth: o => (i, t, L) => {
+    const f = HIT.face, w = HIT.w, glow = Math.max(night, overcast * 0.6), stripe = c => C(fract(HIT.u * 7) < 0.5 ? o.awning : WHITE, c);
+    if (f === 5) { BG[i] = stripe(3 + L * 0.3); return set(i, ' ', 0), true; }
+    const front = (f === 3 || f === 4) && Math.sign(HIT.v) === o.fs;
+    if (!front) { BG[i] = stripe((1.5 + L * 0.3) * shadeFace(f)); return set(i, w > 0.3 ? '~' : ' ', C(WHITE, L * 0.5)), true; }
+    const q = (HIT.u * o.fs / o.hl + 1) / 2;
+    if (w > 0.25) { // the sign
+      BG[i] = C(o.awning, 3 + glow * 6);
+      const n = o.word.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * o.hl) * n;
+      const on = Math.abs(w - 0.295) < t / projY / 2 && k >= 0 && k < o.word.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
+      if (on) return set(i, o.word[k], C(WHITE, 15)), true;
+      return set(i, glow > 0.3 && Math.abs(w - 0.295) > 0.035 && fract(q * 14 - T * 2) < 0.3 ? '*' : ' ', C(YEL, 15)), true; // bulbs chasing round it
+    }
+    if (w > 0.11) { // the opening: what's on offer, in the dark behind the counter
+      BG[i] = C(GRAY, 1 + glow * 2);
+      const row = Math.floor((w - 0.11) / 0.045), col = Math.floor(q * 9);
+      const ch = o.game === 'ringtoss' ? (row === 0 ? 'i' : ' ') : o.game === 'strength' ? (col === 4 ? '|' : ' ') : o.stock ? (row === 0 ? 'o' : ' ') : row < 3 && (col + row) & 1 ? '@' : ' ';
+      return set(i, ch, C(o.game === 'ringtoss' ? GREEN : o.stock ? ORANGE : ITEM_COL[(col + row * 3) & 7], Math.max(L, glow * 12))), true;
+    }
+    BG[i] = C(o.awning, 1.5 + L * 0.25); // the counter
+    return set(i, w > 0.095 ? '=' : fract(q * 10) < 0.5 ? '|' : ' ', C(WHITE, L * 0.8)), true;
+  },
   // construction hoarding: an orange-and-white striped top rail on posts, see-through between
   hoarding: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u, f = HIT.face;
@@ -3876,6 +4027,102 @@ function elSprites() {
     }
   }
 }
+
+// ===== the pleasure pier: the Ferris wheel, the carousel, and the arch over the way in
+// the wheel is a billboard turned to its real angle: sq = how face-on it is (its east-west axis across the screen),
+// so from the side it narrows to an ellipse and then a line. Cars are real-sized whatever the angle.
+function wheelCell(i, u, z, du, dz, L, sq) {
+  const R = WHEEL.R, hub = WHEEL.hub, as = Math.max(Math.abs(sq), 0.05), U = u / (sq < 0 ? -as : as), Zc = z - hub;
+  const tolU = du / as / 2, tol = Math.max(tolU, dz / 2), lit = night > 0.25 || overcast > 0.6;
+  for (let k = 0; k < WHEEL.n; k++) { // the cars, hanging under their pivots on the rim
+    if (fairRide && fairRide.kind === 'wheel' && fairRide.k === k) continue; // (you're in this one)
+    const ph = wheelAngle(k, T), gu = R * Math.cos(ph) * (sq < 0 ? -as : as), gz = hub + R * Math.sin(ph), top = gz - 0.06, bot = gz - 0.24;
+    if (Math.abs(u - gu) < 0.1 && z < top && z > bot) {
+      const col = [RED, YEL, CYAN, MAG, GREEN, ORANGE][k % 6], r = (top - z) / (top - bot);
+      if (r < 0.15) return set(i, '_', C(col, L * 1.1)), true;
+      if (r < 0.55) { BG[i] = C(col, 1.5 + L * 0.2); return set(i, Math.abs(u - gu) > 0.08 ? '|' : ':', lit ? C(YEL, 13) : C(CYAN, L)), true; }
+      BG[i] = C(col, 2 + L * 0.3); return set(i, r > 0.9 ? '=' : ' ', C(col, L)), true;
+    }
+    if (onLine(u - gu, du, 0, 0) && z <= gz && z >= top) return set(i, '|', C(GRAY, L)), true;
+  }
+  const rr = Math.hypot(U, Zc), ang = Math.atan2(Zc, U);
+  if (rr < 0.13) return set(i, '@', C(WHITE, L * 1.2)), true; // the hub
+  if (z < 0.05 && Math.abs(u) < 1.1 * as + 0.15) return set(i, '=', C(BRICK, L)), true; // the platform
+  for (const side of [-1, 1]) { // the A-frame legs, hub to deck
+    const lu = side * 0.95 * (hub - z) / hub;
+    if (z < hub && Math.abs(U - lu) < Math.max(tolU, dz * 0.95 / hub / 2) * 1.2) return set(i, side * Math.sign(sq || 1) < 0 ? '/' : '\\', C(GRAY, L * 1.15)), true;
+  }
+  if (Math.abs(rr - R) < tol * 1.2) { // the rim, strung with bulbs that chase round after dark
+    const on = lit && fract(ang * 24 / TAU - T * 1.5) < 0.5;
+    return set(i, on ? '*' : 'o', on ? C([YEL, MAG, CYAN, RED][Math.floor(ang * 24 / TAU - T * 1.5) & 3], 15) : C(WHITE, L)), true;
+  }
+  if (Math.abs(rr - R * 0.55) < tol) return set(i, '.', C(GRAY, L)), true; // an inner ring
+  if (rr < R) { // spokes
+    const th = TAU * T / WHEEL.rev;
+    for (let j = 0; j < 16; j++) {
+      const sa = th + j * TAU / 16, d = ang - sa;
+      if (Math.cos(d) > 0 && Math.abs(rr * Math.sin(d)) < tol) {
+        const sx = Math.cos(sa) * as, sy = Math.sin(sa), slope = Math.abs(sy / (sx || 1e-6));
+        return set(i, slope > 2.5 ? '|' : slope < 0.4 ? '-' : (sx > 0) === (sy > 0) === (sq > 0) ? '/' : '\\', lit ? C(WHITE, Math.max(L, 9)) : C(GRAY, L)), true;
+      }
+    }
+  }
+  return false;
+}
+// the carousel: a striped canopy with a scalloped edge of bulbs, a mirrored drum in the middle, horses going round
+// and up and down on their poles. Round, so it looks the same from anywhere: drawn as a billboard.
+function carouselCell(i, u, z, du, dz, L, s) {
+  const r = CAROUSEL.r, rot = TAU * T / CAROUSEL.rev, lit = night > 0.25 || overcast > 0.6;
+  if (z > 0.5 || Math.abs(u) > r + 0.03) return false;
+  if (z > 0.33) { // the canopy, coming to a point
+    const w = r * (1 - (z - 0.33) / 0.17) + 0.03;
+    if (Math.abs(u) > w) return false;
+    const a = Math.asin(clamp(u / w, -1, 1)) + rot;
+    BG[i] = C(Math.floor(a / (TAU / 16)) & 1 ? RED : WHITE, 3 + L * 0.3);
+    return set(i, z > 0.48 ? '^' : ' ', C(YEL, 15)), true;
+  }
+  if (z > 0.3) { // the valance: scallops, a bulb in each
+    BG[i] = C(YEL, 2 + L * 0.2);
+    return set(i, lit && fract(u * 12 + T) < 0.4 ? '*' : 'v', lit ? C(YEL, 15) : C(YEL, L)), true;
+  }
+  if (z < 0.04) return set(i, '=', C(BRICK, L)), true; // the turntable
+  if (Math.abs(u) < 0.1) { BG[i] = C(CYAN, 1 + (lit ? 3 : 1)); return set(i, fract(z * 30 + T) < 0.2 ? '*' : ':', C(WHITE, Math.max(L, lit ? 12 : 0))), true; } // the drum
+  for (let pass = 0; pass < 2; pass++) for (let j = 0; j < 8; j++) { // the near horses first, then the far ones
+    const ps = rot + j * TAU / 8, front = Math.cos(ps) > 0;
+    if (front !== (pass === 0)) continue;
+    const hu = 0.42 * Math.sin(ps), hz = 0.14 + 0.04 * Math.sin(ps * 2 + T * 4), dim = front ? 1 : 0.55;
+    const col = [WHITE, YEL, BRICK, WHITE, MAG, YEL, BRICK, CYAN][j], dir = front ? 1 : -1;
+    if (onLine(u - hu, du, 0, 0) && z > 0.04) return set(i, '|', C(YEL, L * dim)), true; // the brass pole
+    if (Math.abs(z - hz) < 0.025 && Math.abs(u - hu) < 0.06) return set(i, '=', C(col, L * dim)), true; // body
+    if (Math.abs(z - hz - 0.04) < 0.02 && Math.abs(u - hu - dir * 0.06) < 0.025) return set(i, dir > 0 ? '>' : '<', C(col, L * dim)), true; // head
+    if (Math.abs(z - hz + 0.045) < 0.02 && Math.abs(Math.abs(u - hu) - 0.04) < 0.015) return set(i, '/', C(col, L * dim * 0.8)), true; // legs
+  }
+  return false;
+}
+const FAIR_SIGN = 'PLEASURE PIER';
+function fairSprites() {
+  const [wx, wy] = R(WHEEL.x, WHEEL.y);
+  if (Math.hypot(wx, wy) < vis + 4) {
+    const sq = across(1, 0, wx, wy), hw = (WHEEL.R + 0.15) * Math.max(Math.abs(sq), 0.06) + 0.12;
+    drawShape(wx, wy, 0, hw, WHEEL.hub + WHEEL.R + 0.1, (i, u, z, du, dz, L) => wheelCell(i, u, z, du, dz, L, sq));
+  }
+  const [cx, cy] = R(CAROUSEL.x, CAROUSEL.y);
+  if (Math.hypot(cx, cy) < vis) drawShape(cx, cy, 0, CAROUSEL.r + 0.04, 0.52, carouselCell);
+  // the arch over the way in, its name in bulbs
+  const [gx, gy] = R(FAIR.cx, FAIR.y0 + 0.2), hw = 1.3;
+  if (Math.hypot(gx, gy) > vis) return;
+  const post = (i, t, L) => { BG[i] = C(RED, 2 + L * 0.2); return set(i, '|', C(WHITE, L)), true; };
+  for (const sd of [-1, 1]) drawBox(boxAt(gx + sd * hw, gy, 1, 0, 0.03, 0.03, 0, 0.5), post);
+  drawBox(boxAt(gx, gy, 1, 0, hw + 0.03, 0.01, 0.42, 0.52), (i, t, L) => {
+    const glow = Math.max(night, overcast * 0.6);
+    BG[i] = C(RED, 2 + glow * 4);
+    if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(YEL, L)), true;
+    const n = FAIR_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.03) + 1) / 2 * n - 1, k = Math.floor(q), cellU = t / projX / (2 * hw) * n;
+    const on = k >= 0 && k < FAIR_SIGN.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) && Math.abs(HIT.w - 0.47) <= t / projY / 2 + 1e-4;
+    if (on) return set(i, FAIR_SIGN[k], C(YEL, 15)), true;
+    return set(i, glow > 0.3 && Math.abs(HIT.w - 0.47) > 0.03 && fract(q * 0.5 - T * 2) < 0.25 ? '*' : ' ', C(WHITE, 15)), true; // (bulbs above and below the letters)
+  });
+}
 // ===== interiors (1 unit = 1m) =====
 // Grid: '#' wall 3m, 'S' shelf island 2.2m, 'D' way out, 'E' elevator to the roof, '.' floor.
 // Every room type reuses the same renderer; a type supplies its grid, lighting, floor/ceiling style, wall art and props.
@@ -4078,7 +4325,9 @@ const ROOM_DEFS = {
       return p;
     } },
   laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: laundryWall,
-    props: r => [BENCHP(2.8, 3.6, 0, -1), sitting(2.8, 3.58, shirt(), 0.45), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L))] },
+    props: r => [BENCHP(2.8, 3.6, 0, -1), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L)),
+      BX(6.2, 3.3, 0.9, 0.35, 0, 0.85, solid(WHITE, { top: '_', panel: 0.4 })), // the folding table
+      ...(tod > 7 && tod < 23 || chance(0.3) ? [sitting(2.8, 3.58, shirt(), 0.45)] : [])] }, // (somebody waiting on a load, mostly in the day)
   cinema: { grid: boxRoom(14, 12), light: 0.3, floor: 'carpet', ceil: 'dark', wall: cinemaWall,
     props: r => {
       const p = [];
@@ -4339,11 +4588,15 @@ function arcadeWall(i, u, uStep, z, d, mx, my, L) { // dark walls with a neon zi
   if (Math.abs(z - zig) < 0.05) { set(i, '~', C(NEON[Math.floor(u) & 3], 15)); return true; }
   set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 7 ? ' ' : '.', C(MAG, 3)); return true;
 }
-function laundryWall(i, u, uStep, z, d, mx, my, L) { // a row of washing machines with spinning drums
+function laundryWall(i, u, uStep, z, d, mx, my, L) { // a row of washing machines with spinning drums (yours, if it's in one)
+  if (my === 0 && z >= 1.9) return wallText(i, u, uStep, z, d, 'OPEN 24 HOURS', room.W / 2, 2.05, 0.22, 0.25, C(CYAN, fract(T * 0.7) < 0.93 ? 15 : 6)); // (the tube flickers)
   if (z >= 1.9 || !(my === 0 || mx === 0 || mx === room.W - 1)) return false;
   const n = Math.floor(u / 0.75), fu = fract(u / 0.75), du = (fu - 0.5) * 0.75, dz = z - 0.85, rr = Math.hypot(du, dz);
+  const mine = my === 0 && myLaundromat() && wash.n === n, done = mine && T >= wash.done;
   if (fu < 0.05 || z < 0.1) { set(i, '|', C(GRAY, L)); return true; }
-  if (rr < 0.2) { const ang = mod(Math.atan2(dz, du) + T * 6 * (n & 1 ? 1 : -1), 6.283); set(i, '@o.'[ang / 2.1 | 0], C(ITEM_COL[n & 7], L)); return true; }
+  if (mine && z > 1.25 && z < 1.4 && Math.abs(du) < 0.2) { set(i, done ? (fract(T * 2) < 0.5 ? '*' : ' ') : ':', C(done ? GREEN : YEL, 15)); return true; } // its little light
+  if (rr < 0.2 && done) { set(i, '~', C(WHITE, 14)); return true; } // still, and clean
+  if (rr < 0.2) { const ang = mod(Math.atan2(dz, du) + T * (mine ? 12 : 6) * (n & 1 ? 1 : -1), 6.283); set(i, '@o.'[ang / 2.1 | 0], C(mine ? WHITE : ITEM_COL[n & 7], mine ? 15 : L)); return true; }
   if (rr < 0.26) { set(i, 'O', C(GRAY, L * 1.2)); return true; }
   if (z > 1.55) { set(i, fract(u * 4) < 0.3 ? 'o' : '=', C(CYAN, L)); return true; }
   set(i, '#', C(WHITE, L * 0.5)); return true;
@@ -4755,7 +5008,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
-  eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17
+  eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : chaseOn ? 0.28 : 0.12;
   eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
@@ -4823,6 +5076,7 @@ function render(dt) {
   if (city) { reflect(); fogSteps(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (mode === 'drive' || mode === 'taxi') dash();
   if (mode === 'el') elFrame();
+  if (mode === 'fair') fairFrame();
   drawHeld(dt); // what's in your hand (or mouth, or under your feet)
   present();
   if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
@@ -4946,6 +5200,7 @@ function promptText() {
       if (cab) return cab.busy ? 'Somebody\'s playing this one' : `E: play ${GAMES[cab.game]().title} (${fmt$(CREDIT)} a credit)`;
       if (nearKeeper()) return `E: prize counter (${tickets} tickets)`;
     }
+    if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
@@ -4954,6 +5209,7 @@ function promptText() {
     return '';
   }
   if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : 'E: take the stairs down'; }
+  if (mode === 'fair') return fairRidePrompt();
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
     if (elHere()) return 'E: board the train';
@@ -4976,6 +5232,8 @@ function promptText() {
   const st = nearStation();
   if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
+  const fsp = fairSpot();
+  if (fsp) return fairPrompt(fsp);
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';
@@ -5028,6 +5286,7 @@ function minimap() {
   for (const h of owned.homes) mark(h.cell % N + 0.5, Math.floor(h.cell / N) + 0.5, 'H', '#ff4');
   for (const s of EL_STATIONS) mark(s.x, EL_Y + 1, 'E', '#f84');
   for (const v of vendors) mark(v.x, v.y, '$', '#fa3');
+  mark(WHEEL.x, WHEEL.y, '*', fract(T) < 0.5 ? '#f6f' : '#ff6'); // the Ferris wheel
   const tt = taskTarget(); if (tt) mark(tt.x, tt.y, '?', '#4ff');
   const jt = jobTarget(); if (jt && fract(T * 2) < 0.7) mark(jt.x, jt.y, '!', '#ff0');
   if (me && me.dest) mark(me.dest[0], me.dest[1], 'X', '#f4f');
@@ -5061,7 +5320,7 @@ let hudBottom = 0; // where the text block top left ends (px), for the map and t
 function hud() {
   drawHeldBig();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : '';
+  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Pleasure Pier' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
     : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
@@ -5216,6 +5475,7 @@ function interact() {
       });
     }
     if (room.burgled && nearKeeper()) return emptyTill();
+    if (room.kind === 'laundry' && useLaundry()) return;
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
       roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0;
@@ -5242,6 +5502,7 @@ function interact() {
   if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
+  if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
@@ -5276,6 +5537,8 @@ function interact() {
   const el = nearElStairs();
   if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
+  const fsp = fairSpot();
+  if (fsp) return useFair(fsp);
   const ven = nearVendor();
   if (ven) return openShop(ven.type.name, VENDOR_STOCK[ven.type.name], ven);
   const st = nearStation();
@@ -5445,6 +5708,135 @@ function jobArrow() {
   const lw = g.measureText(label).width;
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - lw / 2 - 6, y + s * 3.1, lw + 12, FS + 6);
   g.fillStyle = col; g.fillText(label, x - lw / 2, y + s * 3.1 + 3);
+}
+// ===== the pleasure pier (world.js lays it out, props.js puts up the booths, city-sprites.js draws the rides):
+// riding the Ferris wheel and the carousel, and what E does at the booths. The rides run 9am till 2am.
+const WHEEL_FARE = 5, CAROUSEL_FARE = 3;
+const fairOpen = () => tod >= 9 || tod < 2;
+let fairRide = null, fairEye = 0.17; // {kind: 'wheel' | 'carousel', end, ...} while you're on one; your eye height
+const onFair = (x, y) => mod(x - FAIR.x0, N) < FAIR.x1 - FAIR.x0 && mod(y - FAIR.y0, N) < FAIR.y1 - FAIR.y0;
+// what's within reach on the pier: a booth's counter, the wheel's platform, the carousel's rail
+function fairSpot() {
+  if (mode !== 'walk' || !onFair(px, py)) return null;
+  const near = (x, y, r) => Math.hypot(rel(x - px), rel(y - py)) < r;
+  const b = BOOTHS.find(o => near(o.at[0], o.at[1], 0.3));
+  if (b) return { kind: 'booth', b };
+  if (near(WHEEL_BOARD.x, WHEEL_BOARD.y, 0.35)) return { kind: 'wheel' };
+  if (near(CAROUSEL.x, CAROUSEL.y, CAROUSEL.r + 0.3)) return { kind: 'carousel' };
+  return null;
+}
+function fairPrompt(sp) {
+  if (sp.kind === 'booth') {
+    const b = sp.b;
+    if (!fairOpen()) return `${b.word}: shuttered till morning`;
+    return b.game ? `E: play ${GAMES[b.game]().title} (${fmt$(CREDIT)} a go)` : b.prizes ? `E: prize stall (${tickets} tickets)` : 'E: buy fair food';
+  }
+  const name = sp.kind === 'wheel' ? 'Ferris wheel' : 'carousel';
+  if (!fairOpen()) return `The ${name}'s shut for the night. It opens at 9.`;
+  return `E: ride the ${name} (${fmt$(sp.kind === 'wheel' ? WHEEL_FARE : CAROUSEL_FARE)})`;
+}
+function useFair(sp) {
+  if (!fairOpen()) return say(sp.kind === 'booth' ? 'Shuttered. Come back in the morning.' : 'Chained up for the night. The rides start again at 9.', 2);
+  if (sp.kind === 'booth') {
+    const b = sp.b;
+    if (b.game) return pay(CREDIT) ? startGame(b.game, 'arcade') : say(`It's ${fmt$(CREDIT)} a go.`);
+    if (b.prizes) return openPrizes();
+    return openShop(b.word, stockFor('', b.word));
+  }
+  const fare = sp.kind === 'wheel' ? WHEEL_FARE : CAROUSEL_FARE;
+  if (!pay(fare)) return say(`The ride's ${fmt$(fare)}. You're short.`);
+  if (sp.kind === 'wheel') { // into the car that's at the bottom, round once until it's back there
+    let k = 0, bd = Infinity;
+    for (let j = 0; j < WHEEL.n; j++) { const d = Math.abs(mod(wheelAngle(j, T) + Math.PI / 2 + Math.PI, TAU) - Math.PI); if (d < bd) { bd = d; k = j; } }
+    const left = mod(-Math.PI / 2 - wheelAngle(k, T), TAU) / TAU * WHEEL.rev;
+    fairRide = { kind: 'wheel', k, end: T + (left < WHEEL.rev / 2 ? left + WHEEL.rev : left) };
+    a = -Math.PI / 2; pitch = 0; // facing the city
+    say('The bar clicks shut and up you go.', 3);
+  } else { // onto the nearest horse, three times round
+    fairRide = { kind: 'carousel', ps0: Math.atan2(rel(py - CAROUSEL.y), rel(px - CAROUSEL.x)), t0: T, end: T + CAROUSEL.rev * 3 };
+    look = 0; pitch = 0;
+    say(pick(['You climb onto a painted horse called Buttercup.', 'You get the one with the gold mane.', 'The organ wheezes into a waltz.']), 3);
+  }
+  mode = 'fair';
+  stepFair(0);
+}
+function stepFair(dt) {
+  const f = fairRide, turn = ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
+  if (f.kind === 'wheel') {
+    const ph = wheelAngle(f.k, T);
+    px = WHEEL.x + WHEEL.R * Math.cos(ph); py = WHEEL.y - 0.12; fairEye = WHEEL.hub + WHEEL.R * Math.sin(ph) - 0.12;
+    a += turn;
+  } else {
+    const ps = f.ps0 + TAU * (T - f.t0) / CAROUSEL.rev;
+    px = CAROUSEL.x + 0.38 * Math.cos(ps); py = CAROUSEL.y + 0.38 * Math.sin(ps); fairEye = 0.155 + 0.012 * Math.sin(T * 4);
+    look += turn; a = ps + Math.PI / 2 + look; // facing the way you're going, plus wherever you turn your head
+  }
+  if (T >= f.end) endFairRide();
+}
+function endFairRide() {
+  const f = fairRide;
+  fairRide = null; mode = 'walk'; fairEye = 0.17; look = 0;
+  if (f.kind === 'wheel') { px = WHEEL_BOARD.x; py = WHEEL_BOARD.y - 0.1; a = -Math.PI / 2; say('Round and back down. Your ears pop.', 3); }
+  else {
+    const ps = Math.atan2(rel(py - CAROUSEL.y), rel(px - CAROUSEL.x));
+    px = CAROUSEL.x + (CAROUSEL.r + 0.15) * Math.cos(ps); py = CAROUSEL.y + (CAROUSEL.r + 0.15) * Math.sin(ps); a = ps;
+    say('The music winds down. You climb off, a little dizzy.', 3);
+  }
+}
+function fairRidePrompt() {
+  const left = Math.ceil(fairRide.end - T), look_ = TOUCH ? 'drag' : 'mouse';
+  if (fairRide.kind === 'carousel') return `Round and round: ${left}s   ${look_}: look about`;
+  return fairEye > WHEEL.hub + WHEEL.R * 0.8 ? `The top. The whole city. (${left}s)` : `Going round: ${left}s   ${look_}: look about`;
+}
+// what's round you on a ride: the car you're sitting in, or the pole and the horse's neck
+function fairFrame() {
+  if (fairRide.kind === 'wheel') {
+    const col = [RED, YEL, CYAN, MAG, GREEN, ORANGE][fairRide.k % 6];
+    for (let r = 0; r < rows; r++) for (let x = 0; x < cols; x++) {
+      const i = r * cols + x, top = r < 2, bot = r >= rows - 4, post = x < 2 || x >= cols - 2;
+      if (!top && !bot && !post) continue;
+      FOGS[i] = FOGB[i] = 0; BG[i] = C(col, top || bot ? 2 : 3);
+      set(i, top ? (r === 1 ? '_' : ' ') : bot ? (r === rows - 4 ? '=' : r === rows - 3 ? '-' : ' ') : '|', C(col, 8));
+    }
+    return;
+  }
+  const mid = cols >> 1;
+  for (let r = 0; r < rows - 3; r++) { const i = r * cols + mid; FOGS[i] = FOGB[i] = 0; set(i, (r + Math.floor(T * 6)) % 4 ? '|' : '/', C(YEL, 14)); BG[i] = C(YEL, 3); }
+  ['   ,/\\_/\\,', '  (  o    >', "  /`---.__/", " /  ~~~~ \\"].forEach((l, k) => putText(rows - 4 + k, mid - 6, l, C(WHITE, 13)));
+}
+// ===== the laundromat: open all night. Put a load in one of the machines along the back wall, wait (the bench is
+// there for it), and come back for clean clothes. Change into them while the police are after someone in what you
+// had on, and they lose you.
+const WASH_FEE = 3, WASH_T = 45;
+let wash = null; // { cell: the laundromat (its door's cell), n: which machine, done: when it finishes, told }
+const myLaundromat = () => !!wash && mode === 'room' && room.kind === 'laundry' && !!room.cell && room.cell[0] === wash.cell[0] && room.cell[1] === wash.cell[1];
+// the machine you're standing at, along the back wall (0.75m each), or -1
+const machineHere = () => mode === 'room' && room.kind === 'laundry' && py < 1.9 && px > 1.1 && px < room.W - 1.1 ? Math.floor(px / 0.75) : -1;
+function laundryPrompt() {
+  const n = machineHere();
+  if (n < 0) return '';
+  if (myLaundromat() && wash.n === n) return T < wash.done ? `Your wash: ${Math.ceil(wash.done - T)}s to go` : 'E: take out your clean clothes';
+  if (wash) return myLaundromat() ? 'Your load is in a machine along from this one' : 'You have a load going at another laundromat';
+  return `E: run a wash (${fmt$(WASH_FEE)})`;
+}
+function useLaundry() { // true if E did something here
+  const n = machineHere();
+  if (n < 0) return false;
+  if (myLaundromat() && wash.n === n) {
+    if (T < wash.done) return say(`Still spinning. ${Math.ceil(wash.done - T)}s.`, 2), true;
+    wash = null; fx.fresh = 300;
+    if (wanted.stars && !wanted.seen) { clearWanted(); say("You change into clean clothes in the back. Whoever they're looking for, they're not dressed like you.", 5); }
+    else say('Warm, clean, smells like a meadow. You change into them.', 3);
+    return true;
+  }
+  if (wash) return say(myLaundromat() ? 'Your load is in a machine along from this one.' : "You've got a load going somewhere else. One at a time.", 3), true;
+  if (!pay(WASH_FEE)) return say(`It takes quarters. ${fmt$(WASH_FEE)} of them.`), true;
+  wash = { cell: room.cell.slice(), n, done: T + WASH_T, told: false };
+  say('Clothes in, quarters in. The drum starts turning.', 3);
+  return true;
+}
+function stepLaundry() {
+  if (wash && !wash.told && T >= wash.done) { wash.told = true; say(myLaundromat() ? 'Your machine clunks to a stop.' : 'Your laundry will be done by now.', 3); }
 }
 // ===== audio: recorded beds and synthesised layers, glided toward audioMix()'s targets every frame, plus one-shots
 // (footsteps, sirens, the till, the shop bell, train clatter). Starts on the first key press or click (browsers
@@ -5660,7 +6052,8 @@ function audioTick(dt) {
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
-    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0 });
+    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0,
+    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0 });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
@@ -5913,6 +6306,14 @@ const HAND = {
     (c, r) => r === 0 ? C(GREEN, 14) : c === '%' || c === '~' ? C(GREEN, 12) : C(WHITE, 13)],
   mangorice: (it, f) => [bitten(['  .-~~~~-.', ' (@@@@@@@@)', ' (::::::::)', "(==========)"], f, 'top'),
     (c, r) => c === '@' || c === '~' && r === 0 ? C(YEL, 15) : c === ':' ? C(WHITE, 15) : c === '=' ? C(GREEN, 12) : C(YEL, 12)],
+  cottoncandy: (it, f) => [bitten(['  .@@@@@.', ' @@@@@@@@@', '@@@@@@@@@@@', ' @@@@@@@@@', "  '@@@@@'", '     |', '     |', '     |'], 0.4 + f * 0.6, 'top'),
+    (c, r) => c === '|' ? C(WHITE, 13) : C(MAG, (r + 13) % 3 ? 13 : 15)],
+  corndog: (it, f) => [bitten(['  .-------.', ' (@@@@@@@@@)', "  '-------'", '      |', '      |', '      |'], f, 'top'),
+    (c, r) => r > 2 ? C(WARM, 12) : c === '@' ? C(ORANGE, 13) : C(YEL, 13)],
+  popcorn: (it, f) => [bitten([' o O o O o', 'oOoOoOoOoO', '|=|=|=|=|=|', '| POPCORN |', ' \\_______/'], f, 'top'),
+    (c, r) => r < 2 ? C(WHITE, 15) : /[A-Z]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
+  lemonade: (it, f) => [filled(['    \\', ' .___\\__.', ' |      |', ' |      |', ' |      |', '  \\____/'], [[2, 2, 7], [3, 2, 7], [4, 2, 7]], f, ':', '~'),
+    (c, r) => r < 2 && c === '\\' ? C(RED, 14) : c === ':' || c === '~' ? C(YEL, 15) : C(WHITE, 11)],
   fries: (it, f) => [bitten(['  | |||| |', '  ||||||||', ' \\========/', '  | FRIES|', '  |______|'], f, 'top'),
     (c, r) => r < 2 ? C(YEL, 15) : /[A-Z]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
   chicken: (it, f) => [bitten([' (@) (@)(@)', '.----------.', '| CHICKEN  |', '|==========|', " \\________/"], f, 'top'),
@@ -6154,7 +6555,7 @@ function drawDropped(d, vx, vy, s) {
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
 // left of the buttons)
-const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze);
+const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh);
 function hotbar() {
   if (!hotbarUp()) return;
   const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0);
@@ -6166,7 +6567,7 @@ function hotbar() {
     g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.fresh > 0 && 'fresh clothes', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
   if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 
@@ -6765,7 +7166,7 @@ const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 function turnBy(mx, my) {
   if (paused || game) return;
   const s = settings.sensitivity;
-  if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive') a += mx * 0.003 * s;
+  if (mode === 'taxi' || mode === 'fair' && fairRide.kind === 'carousel') look += mx * 0.003 * s; else if (mode !== 'drive') a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
 onmousemove = e => { if (document.pointerLockElement) turnBy(e.movementX, e.movementY); };
@@ -6775,7 +7176,7 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) &&
     Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
@@ -6837,6 +7238,7 @@ function loop(t) {
     if (body.seat && (f || s)) standUp(); // walking gets you up
     if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
   } else if (mode === 'drive') drive(dt);
+  else if (mode === 'fair') stepFair(dt);
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
@@ -6844,6 +7246,7 @@ function loop(t) {
   stepBody(dt);
   stepTraffic(dt, T);
   stepTask(dt);
+  stepLaundry();
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
@@ -6960,7 +7363,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Leave'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';

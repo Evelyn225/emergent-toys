@@ -117,6 +117,7 @@ function interact() {
       });
     }
     if (room.burgled && nearKeeper()) return emptyTill();
+    if (room.kind === 'laundry' && useLaundry()) return;
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
       roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0;
@@ -143,6 +144,7 @@ function interact() {
   if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
+  if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
@@ -177,6 +179,8 @@ function interact() {
   const el = nearElStairs();
   if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
+  const fsp = fairSpot();
+  if (fsp) return useFair(fsp);
   const ven = nearVendor();
   if (ven) return openShop(ven.type.name, VENDOR_STOCK[ven.type.name], ven);
   const st = nearStation();

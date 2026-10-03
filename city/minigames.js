@@ -517,6 +517,86 @@ GAMES.jailbreak = (rnd = Math.random) => {
   return g;
 };
 
+// ---- the pleasure pier's booths. Like the cabinets: a credit a go, tickets for how you did.
+// ring toss: rows of bottles; the ring swings back and forth in front of you, GO throws it straight up the board.
+// It lands on a bottle neck only if it's dead on (the far rows count double). Six rings.
+GAMES.ringtoss = (rnd = Math.random) => {
+  const W = 29, H = 12, ROWS = [2, 4, 6], g = { id: 'ringtoss', title: 'RING TOSS', W, H, score: 0, over: false };
+  const necks = [];
+  for (const y of ROWS) for (let x = 2 + (y >> 1 & 1) * 2; x < W - 1; x += 4) necks.push({ x, y, ringed: false });
+  let rings = 6, aim = 1, dir = 1, speed = 11, fly = null, hits = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if (fly) { // up the board, landing on its row
+      fly.y -= dt * 22;
+      if (fly.y <= fly.to) {
+        const n = necks.find(q => q.x === fly.x && q.y === fly.to && !q.ringed);
+        if (n) { n.ringed = true; hits++; g.score += n.y === ROWS[0] ? 2 : 1; ev.push('score'); } else ev.push('miss');
+        fly = null;
+        if (rings === 0) { g.over = true; ev.push('end'); }
+      }
+      return ev;
+    }
+    aim += dir * speed * dt;
+    if (aim < 1 || aim > W - 2) { dir = -dir; aim = clamp(aim, 1, W - 2); }
+    if (k.actP && rings > 0) { rings--; fly = { x: Math.round(aim), y: H - 2, to: ROWS[rnd() * 3 | 0] }; speed *= 1.08; ev.push('launch'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let x = 0; x < W; x++) put(x, H - 3, '-', C(BRICK, 6)); // the line you throw from
+    for (const n of necks) { put(n.x, n.y, n.ringed ? 'O' : 'i', n.ringed ? C(YEL, 15) : C(GREEN, 12)); put(n.x, n.y + 1, 'U', C(GREEN, 8)); }
+    if (fly) put(fly.x, Math.round(fly.y), 'o', C(YEL, 15));
+    else if (rings) { put(Math.round(aim), H - 2, 'O', C(YEL, 15)); put(Math.round(aim), H - 1, '^', C(WHITE, 10)); }
+    text(0, 0, `rings: ${'O'.repeat(rings)}${'.'.repeat(6 - rings)}`, C(WHITE, 13));
+  };
+  g.status = () => `RINGED ${hits}   POINTS ${g.score}   SPACE throw`;
+  g.reward = () => g.score * 4;
+  return g;
+};
+// high striker: the power meter swings up and down; GO brings the mallet down at whatever it's at, and the puck
+// flies that high up the tower. Ring the bell (the very top) for the big prize. Three swings.
+const STRIKER_MARKS = [[0.95, 'DING!'], [0.8, 'HERCULES'], [0.6, 'STRONGMAN'], [0.4, 'NOT BAD'], [0.2, 'TICKLE'], [0, 'WEAKLING']];
+GAMES.strength = (rnd = Math.random) => {
+  const W = 26, H = 14, TOP = 1, BOT = H - 2, g = { id: 'strength', title: 'HIGH STRIKER', W, H, score: 0, over: false };
+  let swings = 3, power = 0, t = rnd() * 3, puck = null, best = 0, last = '';
+  const meter = g.meter = () => 0.5 - 0.5 * Math.cos(t * (3.2 + (3 - swings) * 0.8)); // faster each swing
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (puck) {
+      puck.h += (puck.up ? 1 : -1) * dt * 2.2;
+      if (puck.up && puck.h >= puck.to) {
+        puck.up = false; puck.h = puck.to; last = STRIKER_MARKS.find(m => puck.to >= m[0])[1];
+        g.score += puck.to >= 0.95 ? 10 : puck.to >= 0.8 ? 5 : puck.to >= 0.6 ? 3 : puck.to >= 0.4 ? 1 : 0;
+        ev.push(puck.to >= 0.95 ? 'clear' : 'bump');
+      }
+      if (!puck.up && puck.h <= 0) { puck = null; if (swings === 0) { g.over = true; ev.push('end'); } }
+      return ev;
+    }
+    power = meter();
+    if (k.actP && swings > 0) { swings--; puck = { h: 0, to: power, up: true }; best = Math.max(best, power); ev.push('brick'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    const row = h => Math.round(BOT - h * (BOT - TOP));
+    for (let y = TOP; y <= BOT; y++) put(13, y, '|', C(GRAY, 9)); // the tower
+    put(13, TOP, '@', puck && !puck.up && puck.to >= 0.95 ? C(YEL, 15) : C(YEL, 9)); // the bell
+    for (const [h, name] of STRIKER_MARKS.slice(1)) text(15, row(h), name, C([RED, ORANGE, YEL, GREEN, CYAN][STRIKER_MARKS.findIndex(m => m[1] === name) - 1], 11));
+    put(13, row(puck ? puck.h : 0), '#', C(RED, 15));
+    put(12, BOT + 1, '=', C(BRICK, 12)); put(13, BOT + 1, '=', C(BRICK, 12)); put(14, BOT + 1, '=', C(BRICK, 12));
+    const m = puck ? 0 : power; // the meter, left
+    for (let y = TOP; y <= BOT; y++) { const on = y >= row(m); put(4, y, on ? '#' : ':', on ? C(y < row(0.8) ? RED : y < row(0.5) ? YEL : GREEN, 14) : C(GRAY, 5)); }
+    text(0, 0, `swings ${'*'.repeat(swings)}${'.'.repeat(3 - swings)}`, C(WHITE, 13));
+    if (last) text(0, BOT + 1, last, C(YEL, 15));
+  };
+  g.status = () => `POINTS ${g.score}   BEST ${Math.round(best * 100)}%   SPACE swing`;
+  g.reward = () => g.score * 2;
+  return g;
+};
+const FAIR_GAMES = ['ringtoss', 'strength'];
+
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
