@@ -53,6 +53,67 @@ Things get crossed off (deleted) once they're in the game.
 - Buildings: graffiti hall, a tunnel market, a speakeasy, an illegal fight ring.
 - Hook: pitch dark without a flashlight item; a good place to hide while wanted.
 
+### What makes a district feel like its own place
+The levers the engine already has, so a new district can pull every one of them:
+- **Facades**: its own building style (a new STY in city-render.js): shape of windows, colours, what's on the ground floor.
+- **Block layout**: lot shapes and heights (BUILD in world.js), or something that breaks the grid entirely.
+- **Street furniture**: its own lamps, signs strung across the street, trees, stalls (props.js).
+- **Shop signs**: its own word list (DIST_WORDS) and opening hours.
+- **Sound**: its own ambience bed and music (audio-mix.js).
+- **People**: what they say (talk.js DISTRICT_LINES), how they dress, how many are about and when.
+- **One signature building** with a real interior, and **one thing to do** there you can't do anywhere else.
+
+## More district concepts, with flavour first
+
+### The Canals (a little Venice / Amsterdam)
+- Some streets are water: canals with stone edges, humpbacked footbridges, houseboats moored along them, lamps
+  reflected wobbling in the water at night.
+- Tall narrow gabled houses leaning together, flower boxes, bikes chained to railings.
+- Water taxis instead of cabs (a boat ride like the el); a canal-side cafe terrace; a floating flower market.
+- Signature: a glass-roofed covered market hall over the water. Thing to do: pole a boat yourself.
+- Sound: lapping water, bicycle bells, an accordion. Engine: water rendering exists already; canals are new road kinds.
+
+### Shotengai / Little Tokyo
+- Covered shopping arcades: a roof over the street hung with paper banners and lanterns, the light under it warm
+  even when it rains outside.
+- Vending machines every few metres, tiny bars with noren curtains, a pachinko parlour roaring with light.
+- Signature: a capsule hotel (sleep in a pod) or a sento bathhouse. Thing to do: a crane game that pays prizes,
+  pachinko, a ramen counter with a slurp minigame.
+- Sound: arcade jingles, shop greetings, the rattle of pachinko. Engine: the covered street is a new roof-over-road
+  prop; vending machines and lanterns exist.
+
+### The Arts Quarter (old warehouses gone creative)
+- Every blank wall is a mural: procedural ASCII graffiti that's different on every building, tags, paste-ups.
+- Food trucks instead of carts, fairy lights strung over a yard, street performers (a juggler, a sax player you can
+  tip, a living statue).
+- Signature: a gallery whose paintings are generated art (it could borrow from the other toys on the site), and a
+  print studio. Thing to do: paint your own mural on a wall that stays there (saved).
+- Sound: a busker, a DJ in a yard, chatter. Engine: murals are facade art; buskers are people with a spot.
+
+### Civic Centre (City Hall and the marble quarter)
+- Wide boulevards, marble and columns, a domed City Hall, statues on plinths, a big fountain plaza with pigeons.
+- Signature: City Hall interior (rotunda under the dome, a mayor's office), the courthouse (go to court instead of
+  paying a fine), the museum (with a heist).
+- Thing to do: feed pigeons that flock, a protest or parade some days, pay off your record.
+- Sound: fountains, pigeons, footsteps echoing on marble.
+
+### The Night Market (a district that comes alive after dark)
+- Quiet car parks and shuttered shops by day; at dusk stalls roll out, strings of bulbs go up, smoke rises off grills.
+- Dozens of food stalls with things you can't get elsewhere, games (balloon darts, goldfish scooping), a fortune teller.
+- Signature: it exists only at night, and it's packed. Thing to do: eat your way down the rows; a stall-cooking shift.
+- Sound: sizzling, hawkers calling, music from somewhere. Engine: time-of-day props, like the pier's lights.
+
+### The Greenhouse Quarter / Botanical Gardens
+- A park district: winding paths that ignore the grid, a lake with paddle boats, a hedge maze.
+- Signature: a giant glass conservatory with a jungle inside (steamy, palms, a waterfall, butterflies) and a desert
+  room; a small zoo or an aviary.
+- Thing to do: get lost in the maze, rent a paddle boat, find a rare flower for someone's task.
+- Sound: birdsong, the waterfall, rain on glass. Engine: the maze and paths are new block kinds.
+
+### Hilltop / the Heights (harder: the world is flat today)
+- Rich houses up winding roads, a funicular railway up the hill, a lookout over the whole city at the top.
+- Would need terrain height in the raycaster: big but it'd change how the whole city looks.
+
 ## Buildings for the districts we have
 
 ### Downtown
