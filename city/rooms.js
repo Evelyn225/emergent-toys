@@ -356,6 +356,31 @@ const ROOM_DEFS = {
     props: r => [BX(1.9, 1.55, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // the bunk: a blanket on a steel frame
                  BX(1.9, 1.55, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; }),
                  BX(5.4, 1.4, 0.28, 0.28, 0, 0.45, solid(WHITE, { top: 'o', bright: 2 }))] }, // the steel toilet
+  // the lighthouse: whitewashed stone, little deep-set windows on the sea, the keeper at his desk, and a spiral
+  // staircase winding up through the middle to the lamp room
+  lighthouse: { grid: boxRoom(8, 8), light: 0.55, floor: 'concrete', ceil: 'dark', wall: lighthouseWall, keeper: [6.2, 2.2],
+    props: r => [
+      BX(6.2, 1.5, 0.8, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), // the desk, the logbook open on it
+      BX(6.0, 1.45, 0.22, 0.15, 0.8, 0.84, (i, t, L) => { BG[i] = C(WHITE, 3 + L * 0.2); return set(i, HIT.face === 5 ? '~' : '-', C(GRAY, L * 0.7)), true; }),
+      standing(6.2, 2.2, BLUE),
+      BX(4, 3.6, 0.09, 0.09, 0, 2.6, solid(GRAY, { panel: 0.3 })), // the newel post
+      ...Array.from({ length: 12 }, (_, k) => { // the steps, a quarter turn every three
+        const th = k / 12 * Math.PI * 2, c = Math.cos(th), s_ = Math.sin(th);
+        return BX(4 + c * 0.55, 3.6 + s_ * 0.55, 0.45, 0.16, k * 0.2, k * 0.2 + 0.06, solid(GRAY, { top: '=' }), c, s_);
+      }),
+      SP(1.4, 1.4, 0.6, 0.5, ['  ___ ', ' (@@@)', '(@@@@@)'], (c, row, L) => C(WARM, L)), // a coil of rope
+    ] },
+  // the lamp room: glass all round, the sea and the sky outside, the great lens turning in the middle
+  lamproom: { grid: boxRoom(6, 6, {}, false), light: 0.45, floor: 'concrete', ceil: 'dark', wall: lampRoomWall,
+    props: r => [
+      BX(3, 3, 0.35, 0.35, 0, 0.9, solid(GRAY, { panel: 0.4, top: '=' })), // the pedestal
+      BX(3, 3, 0.5, 0.5, 0.9, 1.9, (i, t, L) => { // the lens: rings of glass, blazing on the side the beam's on
+        const f = HIT.face, side = f === 1 ? 0 : f === 2 ? Math.PI : f === 3 ? -Math.PI / 2 : Math.PI / 2;
+        const on = beamLit() ? Math.max(0, Math.cos(beamAng() - side)) ** 3 : 0;
+        BG[i] = C(YEL, 3 + on * 12);
+        return set(i, f >= 5 ? '@' : Math.abs(fract(HIT.w * 6) - 0.5) < 0.15 ? '=' : '(', C(on > 0.5 ? WHITE : YEL, 8 + on * 7)), true;
+      }),
+    ] },
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -507,6 +532,22 @@ function jailWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(GRAY, 3 + L * 0.12); // painted cinder blocks: courses every 20cm, the joints staggered
   const row = Math.floor(z * 5), joint = fract(z * 5) < 0.14 || fract(u * 2.5 + (row & 1) * 0.5) < 0.05;
   return set(i, joint ? (fract(z * 5) < 0.14 ? '_' : '|') : ' ', C(GRAY, L * 0.7)), true;
+}
+function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
+  if (my !== room.H - 1 && Math.abs(fract(u / 3) - 0.5) < 0.1 && z > 1.3 && z < 1.9) { // a deep-set window: sea below, sky above
+    BG[i] = z < 1.5 ? C(BLUE, 2 + day * 3) : C(day > 0.5 ? CYAN : BLUE, 1 + day * 5);
+    return set(i, z < 1.5 ? '~' : ' ', C(CYAN, 6 + day * 6)), true;
+  }
+  BG[i] = C(WHITE, 2 + L * 0.15); // whitewashed stone in courses
+  const row = Math.floor(z * 3), joint = fract(z * 3) < 0.08 || fract(u * 1.5 + (row & 1) * 0.5) < 0.04;
+  return set(i, joint ? (fract(z * 3) < 0.08 ? '_' : '|') : ' ', C(GRAY, L * 0.6)), true;
+}
+function lampRoomWall(i, u, uStep, z, d, mx, my, L) {
+  if (z < 0.9 || z > 2.5) { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, z < 0.9 && fract(z * 4) < 0.15 ? '=' : ' ', C(GRAY, L)), true; } // ironwork below and above the glass
+  if (fract(u * 1.2) < 0.05) { BG[i] = C(GRAY, 2); return set(i, '|', C(GRAY, L)), true; } // the mullions
+  if (z < 1.45) { BG[i] = C(BLUE, 1 + day * 3); return set(i, hash(Math.floor(u * 6 + T * 0.5), Math.floor(z * 20), 3) > 0.8 ? '~' : ' ', C(CYAN, 5 + day * 6)), true; } // the sea, far below
+  BG[i] = C(day > 0.5 ? CYAN : BLUE, day > 0.5 ? 3 + day * 3 : 1);
+  return set(i, night > 0.5 && hash(Math.floor(u * 9), Math.floor(z * 15), 4) > 0.93 ? '.' : ' ', C(WHITE, 12)), true; // the sky, stars at night
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall

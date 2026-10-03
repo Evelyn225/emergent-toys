@@ -42,7 +42,8 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
     const z = eye + (hor - r - 0.5) * dz - z0;
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth < ZB[i] && fn(i, (c + 0.5 - cx) * du, z, du, dz, L)) { ZB[i] = depth; FL[i] = 0; }
+      const bg = BG[i];
+      if (depth < ZB[i] && fn(i, (c + 0.5 - cx) * du, z, du, dz, L)) { ZB[i] = depth; FL[i] = 0; if (BG[i] !== bg) ZBG[i] = depth; } // (a background it paints is its own, for the fog)
     }
   }
 }

@@ -63,6 +63,7 @@ const nearExit = () => {
     if (roomAt(x, y) === 'D' && Math.hypot(x + 0.5 - px, y + 0.5 - py) < 1.6) return true;
   return false;
 };
+const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px), rel(LIGHTHOUSE.y - py)) < LIGHTHOUSE.r + 0.12;
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   const cp = crimePrompt();
@@ -72,6 +73,8 @@ function promptText() {
     if (room.kind === 'train') return room.dest == null
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
+    if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
+    if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
     if (nearElevator()) return 'E: elevator to the roof';
@@ -113,6 +116,7 @@ function promptText() {
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
+  if (nearLighthouse()) return 'E: go into the lighthouse';
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base === 'amb') return 'E: go into the hospital';

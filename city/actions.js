@@ -104,6 +104,11 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
+    if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
+      enterRoom('lamproom', { word: 'LAMP ROOM', below: { word: room.word, ret: room.ret, line: room.line } }, [1.6, 4.4, -Math.PI / 4]);
+      return say('Round and round and up and up. The lamp room.', 3);
+    }
+    if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? enterRoom('lighthouse', room.below, [4, 5.6, -Math.PI / 2]) : say('The hatch down is in the corner.', 2);
     if (room.kind === 'jail') {
       if (T >= room.until) return say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom();
       if (room.tried) return say(`Locked in. ${Math.ceil(room.until - T)}s to go.`);
@@ -180,6 +185,7 @@ function interact() {
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
+  if (nearLighthouse()) return enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [px, py, a], line: 'Mind the stairs. Two hundred and twelve of them.' }, [4, 6.2, -Math.PI / 2]);
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));

@@ -1514,6 +1514,7 @@ function audioMix(s) {
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
+    if (k === 'lighthouse' || k === 'lamproom') { out.waves = 0.55; out.wind = k === 'lamproom' ? 0.5 : 0.15; out.city = 0; } // the sea all round
     if (k === 'train') out.rumble = 0.9;
     return out;
   }
@@ -4135,6 +4136,31 @@ const ROOM_DEFS = {
     props: r => [BX(1.9, 1.55, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // the bunk: a blanket on a steel frame
                  BX(1.9, 1.55, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; }),
                  BX(5.4, 1.4, 0.28, 0.28, 0, 0.45, solid(WHITE, { top: 'o', bright: 2 }))] }, // the steel toilet
+  // the lighthouse: whitewashed stone, little deep-set windows on the sea, the keeper at his desk, and a spiral
+  // staircase winding up through the middle to the lamp room
+  lighthouse: { grid: boxRoom(8, 8), light: 0.55, floor: 'concrete', ceil: 'dark', wall: lighthouseWall, keeper: [6.2, 2.2],
+    props: r => [
+      BX(6.2, 1.5, 0.8, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), // the desk, the logbook open on it
+      BX(6.0, 1.45, 0.22, 0.15, 0.8, 0.84, (i, t, L) => { BG[i] = C(WHITE, 3 + L * 0.2); return set(i, HIT.face === 5 ? '~' : '-', C(GRAY, L * 0.7)), true; }),
+      standing(6.2, 2.2, BLUE),
+      BX(4, 3.6, 0.09, 0.09, 0, 2.6, solid(GRAY, { panel: 0.3 })), // the newel post
+      ...Array.from({ length: 12 }, (_, k) => { // the steps, a quarter turn every three
+        const th = k / 12 * Math.PI * 2, c = Math.cos(th), s_ = Math.sin(th);
+        return BX(4 + c * 0.55, 3.6 + s_ * 0.55, 0.45, 0.16, k * 0.2, k * 0.2 + 0.06, solid(GRAY, { top: '=' }), c, s_);
+      }),
+      SP(1.4, 1.4, 0.6, 0.5, ['  ___ ', ' (@@@)', '(@@@@@)'], (c, row, L) => C(WARM, L)), // a coil of rope
+    ] },
+  // the lamp room: glass all round, the sea and the sky outside, the great lens turning in the middle
+  lamproom: { grid: boxRoom(6, 6, {}, false), light: 0.45, floor: 'concrete', ceil: 'dark', wall: lampRoomWall,
+    props: r => [
+      BX(3, 3, 0.35, 0.35, 0, 0.9, solid(GRAY, { panel: 0.4, top: '=' })), // the pedestal
+      BX(3, 3, 0.5, 0.5, 0.9, 1.9, (i, t, L) => { // the lens: rings of glass, blazing on the side the beam's on
+        const f = HIT.face, side = f === 1 ? 0 : f === 2 ? Math.PI : f === 3 ? -Math.PI / 2 : Math.PI / 2;
+        const on = beamLit() ? Math.max(0, Math.cos(beamAng() - side)) ** 3 : 0;
+        BG[i] = C(YEL, 3 + on * 12);
+        return set(i, f >= 5 ? '@' : Math.abs(fract(HIT.w * 6) - 0.5) < 0.15 ? '=' : '(', C(on > 0.5 ? WHITE : YEL, 8 + on * 7)), true;
+      }),
+    ] },
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -4286,6 +4312,22 @@ function jailWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(GRAY, 3 + L * 0.12); // painted cinder blocks: courses every 20cm, the joints staggered
   const row = Math.floor(z * 5), joint = fract(z * 5) < 0.14 || fract(u * 2.5 + (row & 1) * 0.5) < 0.05;
   return set(i, joint ? (fract(z * 5) < 0.14 ? '_' : '|') : ' ', C(GRAY, L * 0.7)), true;
+}
+function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
+  if (my !== room.H - 1 && Math.abs(fract(u / 3) - 0.5) < 0.1 && z > 1.3 && z < 1.9) { // a deep-set window: sea below, sky above
+    BG[i] = z < 1.5 ? C(BLUE, 2 + day * 3) : C(day > 0.5 ? CYAN : BLUE, 1 + day * 5);
+    return set(i, z < 1.5 ? '~' : ' ', C(CYAN, 6 + day * 6)), true;
+  }
+  BG[i] = C(WHITE, 2 + L * 0.15); // whitewashed stone in courses
+  const row = Math.floor(z * 3), joint = fract(z * 3) < 0.08 || fract(u * 1.5 + (row & 1) * 0.5) < 0.04;
+  return set(i, joint ? (fract(z * 3) < 0.08 ? '_' : '|') : ' ', C(GRAY, L * 0.6)), true;
+}
+function lampRoomWall(i, u, uStep, z, d, mx, my, L) {
+  if (z < 0.9 || z > 2.5) { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, z < 0.9 && fract(z * 4) < 0.15 ? '=' : ' ', C(GRAY, L)), true; } // ironwork below and above the glass
+  if (fract(u * 1.2) < 0.05) { BG[i] = C(GRAY, 2); return set(i, '|', C(GRAY, L)), true; } // the mullions
+  if (z < 1.45) { BG[i] = C(BLUE, 1 + day * 3); return set(i, hash(Math.floor(u * 6 + T * 0.5), Math.floor(z * 20), 3) > 0.8 ? '~' : ' ', C(CYAN, 5 + day * 6)), true; } // the sea, far below
+  BG[i] = C(day > 0.5 ? CYAN : BLUE, day > 0.5 ? 3 + day * 3 : 1);
+  return set(i, night > 0.5 && hash(Math.floor(u * 9), Math.floor(z * 15), 4) > 0.93 ? '.' : ' ', C(WHITE, 12)), true; // the sky, stars at night
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall
@@ -4502,7 +4544,8 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
     const z = eye + (hor - r - 0.5) * dz - z0;
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth < ZB[i] && fn(i, (c + 0.5 - cx) * du, z, du, dz, L)) { ZB[i] = depth; FL[i] = 0; }
+      const bg = BG[i];
+      if (depth < ZB[i] && fn(i, (c + 0.5 - cx) * du, z, du, dz, L)) { ZB[i] = depth; FL[i] = 0; if (BG[i] !== bg) ZBG[i] = depth; } // (a background it paints is its own, for the fog)
     }
   }
 }
@@ -4731,6 +4774,7 @@ const nearExit = () => {
     if (roomAt(x, y) === 'D' && Math.hypot(x + 0.5 - px, y + 0.5 - py) < 1.6) return true;
   return false;
 };
+const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px), rel(LIGHTHOUSE.y - py)) < LIGHTHOUSE.r + 0.12;
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   const cp = crimePrompt();
@@ -4740,6 +4784,8 @@ function promptText() {
     if (room.kind === 'train') return room.dest == null
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
+    if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
+    if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
     if (nearElevator()) return 'E: elevator to the roof';
@@ -4781,6 +4827,7 @@ function promptText() {
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
+  if (nearLighthouse()) return 'E: go into the lighthouse';
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base === 'amb') return 'E: go into the hospital';
@@ -4976,6 +5023,11 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
+    if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
+      enterRoom('lamproom', { word: 'LAMP ROOM', below: { word: room.word, ret: room.ret, line: room.line } }, [1.6, 4.4, -Math.PI / 4]);
+      return say('Round and round and up and up. The lamp room.', 3);
+    }
+    if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? enterRoom('lighthouse', room.below, [4, 5.6, -Math.PI / 2]) : say('The hatch down is in the corner.', 2);
     if (room.kind === 'jail') {
       if (T >= room.until) return say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom();
       if (room.tried) return say(`Locked in. ${Math.ceil(room.until - T)}s to go.`);
@@ -5052,6 +5104,7 @@ function interact() {
   if (st && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
+  if (nearLighthouse()) return enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [px, py, a], line: 'Mind the stairs. Two hundred and twelve of them.' }, [4, 6.2, -Math.PI / 2]);
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
