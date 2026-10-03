@@ -291,7 +291,7 @@ test('buy a car and a home: both are still yours after a reload, and the buildin
       const x = i % N, y = Math.floor(i / N);
       for (const [ox, oy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) if (!map[idx(x + ox, y + oy)]) {
         px = x + 0.5 + ox * 0.75; py = y + 0.5 + oy * 0.75; a = Math.atan2(-oy, -ox); mode = 'walk';
-        for (const p of people) { p.x = mod(px + 60, N); p.path = []; } return true; // (nobody to talk to instead)
+        for (const p of people) { p.x = mod(px + 60, N); p.path = []; } for (const c of cars) if (!c.owned) { c.x = mod(px + 60, N); c.ex = c.x; } return true; // (nobody to talk to, no car to take instead)
       }
     }
     return false;
