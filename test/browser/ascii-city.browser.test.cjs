@@ -678,3 +678,20 @@ test('smoke hangs in the air: a drag leaves puffs in front of you, gone in secon
   });
   assert.deepStrictEqual(r, [true, true, 0, true, true]);
 }));
+
+test('street life: manholes in the road (some steaming), and pigeons that take off when you walk up to them', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    let holes = 0, steaming = 0;
+    for (let y = 0; y < N; y += 1) for (let x = 0; x < N; x += 1) { const m = manholeAt(x + 0.5, y + 0.5); if (m && Math.floor(m[0]) === x && Math.floor(m[1]) === y) { holes++; if (m[2]) steaming++; } }
+    tod = 11; mode = 'walk'; haze.length = 0;
+    const m = (() => { for (let y = 60; y < 200; y++) for (let x = 60; x < 200; x++) { const mm = manholeAt(x + 0.5, y + 0.5); if (mm && mm[2]) return mm; } })();
+    px = m[0]; py = m[1] + 0.4; steamT = 0; stepSteam(0.05);
+    const steam = haze.some(p => p.kind === 'steam');
+    px = 12 * 8 + 0.15; py = 10 * 8 + 4; flocks.length = 0;
+    flocks.push({ x: px, y: py + 0.6, birds: [0, 1, 2, 3].map(k => ({ dx: k * 0.02, dy: 0, ph: k, dir: 1, z: 0 })), scared: 0 });
+    stepPigeons(0.05); const calm = !flocks[0].scared;
+    py += 0.4; stepPigeons(0.05); for (let k = 0; k < 20; k++) stepPigeons(0.05);
+    return [holes > 40, steaming > 10, steam, calm, !!flocks[0].scared, flocks[0].birds.every(b => b.z > 0)];
+  });
+  assert.deepStrictEqual(r, [true, true, true, true, true, true]);
+}));

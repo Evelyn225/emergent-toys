@@ -27,7 +27,7 @@ function stepHaze(dt) {
     const p = haze[k], out = p.at === '';
     p.x += (p.vx + (out ? HAZE_WIND[0] : 0)) * dt; p.y += (p.vy + (out ? HAZE_WIND[1] : 0)) * dt;
     p.vx *= 1 - Math.min(1, dt * 1.2); p.vy *= 1 - Math.min(1, dt * 1.2); // the breath slows; then it's just the air moving it
-    p.z += 0.08 * p.s * dt; p.r += (p.rMax - p.r) * Math.min(1, dt * (out ? 0.6 : 0.3)); // rising, spreading out to a limit
+    p.z += (p.vz ?? 0.08 * p.s) * dt; p.r += (p.rMax - p.r) * Math.min(1, dt * (out ? 0.6 : 0.3)); // rising, spreading out to a limit
     if ((p.life -= p.fade * dt) <= 0) haze.splice(k, 1);
   }
 }
@@ -35,7 +35,7 @@ function stepHaze(dt) {
 // world showing between them. Behind a wall, hidden.
 function drawHaze() {
   if (!haze.length) return;
-  const at = placeKey(), room_ = mode === 'room';
+  const room_ = mode === 'room', at = room_ ? placeKey() : ''; // (outdoors, from a car or a boat too)
   let inside = 0, insideKind = 'smoke';
   for (const p of haze) {
     if (p.at !== at) continue;
@@ -61,7 +61,7 @@ function drawHaze() {
   }
 }
 function hazeCell(i, dens, kind) {
-  const vape = kind === 'vape', lit = Math.max(0.35, amb);
+  const vape = kind === 'vape', lit = Math.max(0.35, amb) * (kind === 'steam' ? 1.25 : 1); // (steam: whiter)
   set(i, dens > 0.7 ? '%' : dens > 0.5 ? '~' : dens > 0.33 ? ':' : '.', C(vape ? (dens > 0.55 ? YEL : WARM) : dens > 0.55 ? WHITE : GRAY, (5 + dens * 9) * lit));
   if (dens > 0.7) BG[i] = C(vape ? ORANGE : GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
   FOGS[i] = 0;
