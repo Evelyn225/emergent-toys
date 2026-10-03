@@ -210,13 +210,13 @@ function settle(p) {
 // A block takes a minute to walk but a game hour lasts 20 seconds, so a routine walked out in full would run hours
 // behind the clock. Only people you can see walk: out of sight they settle instantly, and anyone coming back into
 // the simulated area after a while frozen catches up the same way.
-const SEEN_R = 28;
+const SEEN_R = 28, VIS_R = MAXD + 4; // beyond SEEN_R, anyone a building hides from you; beyond VIS_R, anyone at all
 function stepPeople(dt, t, everywhere = false) {
   for (const p of people) {
     if (!everywhere && !p.follow && !simulated(p.x, p.y)) continue;
     if (!everywhere && !p.follow && !(p.talk > 0)) {
       if (p.simT !== undefined && T - p.simT > 2) settle(p);
-      else if (p.goal && !p.hidden && Math.hypot(rel(p.x - px), rel(p.y - py)) > SEEN_R) settle(p);
+      else if (p.goal && !p.hidden) { const d = Math.hypot(rel(p.x - px), rel(p.y - py)); if (d > VIS_R || d > SEEN_R && !lineOfSight(px, py, p.x, p.y)) settle(p); } // (never vanishing in plain view)
       p.simT = T;
     }
     if (p.talk > 0) { p.talk -= dt; continue; } // stopped to chat with you
