@@ -90,6 +90,8 @@ function promptText() {
     if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
     if (nearTouchPool()) return 'E: touch the touch pool';
     if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
+    const cs = casinoSpot();
+    if (cs) return `E: play ${CASINO_NAMES[cs]} ($5 to $100 a go)`;
     if (aviaryKeeper()) return T - seedT < 12 ? 'The birds are all over you.' : `"Seed for the birds? Hold it out flat."   E: a cup of seed (${fmt$(1)})`;
     { const sp = shotengaiPrompt(); if (sp) return sp; }
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;

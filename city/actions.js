@@ -128,10 +128,13 @@ function interact() {
         room.until = T; leaveRoom(); say('You slip out past the front desk. Nobody saw a thing.', 4);
       });
     }
+    if (room.burgled && nearVault()) return crackVault();
     if (room.burgled && nearKeeper()) return emptyTill();
     if (room.kind === 'laundry' && useLaundry()) return;
     if (nearTouchPool()) return say(pick(TOUCH_LINES), 3);
     if (room.kind === 'cathedral' && useCathedral()) return;
+    const cs = casinoSpot(); // a seat at a table, or a slot machine
+    if (cs) return startGame(cs, 'casino');
     if (aviaryKeeper()) { if (T - seedT < 12) return say('You\'ve still got seed. Hold still.', 2); if (!pay(1)) return say('"A dollar a cup."'); seedT = T; return say('You hold out a cup of seed. A dozen birds land on your arms at once.', 4); }
     if (useShotengai()) return;
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into

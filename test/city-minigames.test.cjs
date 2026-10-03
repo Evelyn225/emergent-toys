@@ -257,15 +257,16 @@ test('mahjong: four sets and a pair wins, the waits are right, and a sensible pl
   assert.strictEqual(ev('mjWins([7,8,9, 0,0,0, 1,1,1, 2,2,2, 3,3])'), false, '8o 9o 1| is not a run (no wrapping across suits)');
   assert.deepStrictEqual(JSON.parse(ev('JSON.stringify(mjWaits([0,0,0, 1,2,3, 9,10,11, 20,20,20, 26]))')), [26]);
   const tally = {};
-  for (let s = 1; s <= 40; s++) {
-    const { ev: e } = require('./helpers/load-city.cjs').loadCity(s);
-    const w = e(`(() => { const g = GAMES.mahjong(); for (let i = 0; i < 60 * 900 && !g.over; i++) { const st = g.state(); let k = {};
+  for (let s = 1; s <= 60; s++) { // (each deal its own seeded shuffle, so the world's own random numbers don't shift it)
+    const w = ev(`(() => { let q = ${s * 7919}; const rnd = () => { q = q + 0x6D2B79F5 | 0; let t = Math.imul(q ^ q >>> 15, 1 | q); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+      const g = GAMES.mahjong(rnd); for (let i = 0; i < 60 * 900 && !g.over; i++) { const st = g.state(); let k = {};
       if (st === 'you') k = mjWins(g.hands[0]) ? { upP: 1 } : g.cursor() === mjDiscard(g.hands[0], () => 0.5) ? { actP: 1 } : { rightP: 1 }; else if (st === 'claim') k = { upP: 1 };
       g.step(1 / 30, k); } return g.over ? g.result.winner : 'stuck'; })()`);
     tally[w] = (tally[w] || 0) + 1;
   }
   assert.ok(!tally.stuck, JSON.stringify(tally));
-  assert.ok(tally[0] >= 3, `you won ${tally[0]} of 40 (${JSON.stringify(tally)})`);
+  const others = ((tally[1] || 0) + (tally[2] || 0) + (tally[3] || 0)) / 3;
+  assert.ok((tally[0] || 0) >= others * 0.5, `you won ${tally[0]} of 60, each of the others about ${others.toFixed(1)} (${JSON.stringify(tally)})`);
   ev('var g = GAMES.mahjong(); g.result = { winner: 0 }');
   assert.strictEqual(ev('g.reward()'), 20, 'the pot');
 });

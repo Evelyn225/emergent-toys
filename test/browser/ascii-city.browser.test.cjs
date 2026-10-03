@@ -695,3 +695,48 @@ test('street life: manholes in the road (some steaming), and pigeons that take o
   });
   assert.deepStrictEqual(r, [true, true, true, true, true, true]);
 }));
+
+test('the casino: blackjack, roulette and slots take your stake and pay out; jade helps', () => withPage(async page => {
+  await page.evaluate(() => { money = 500; enterRoom('casino', { word: 'CASINO', neon: YEL, ret: [px, py, a], line: '' }, [11, 14, -Math.PI / 2]); });
+  for (const [id, x, y] of [['blackjack', 5, 7.4], ['roulette', 11, 10.4], ['slots', 2.2, 4.5]]) {
+    await page.evaluate(([x, y]) => { px = x; py = y; }, [x, y]);
+    assert.match(await page.evaluate(() => promptText()), new RegExp(`play ${id === 'slots' ? 'the slots' : id}`));
+    await page.keyboard.press('KeyE');
+    assert.deepStrictEqual(await page.evaluate(() => [game.kind, game.g.id]), ['casino', id]);
+    const before = await page.evaluate(() => money);
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(150);
+    assert.ok(await page.evaluate(b => money !== b || game.g.state() !== 'bet', before), `${id}: the stake goes down`);
+    await page.waitForTimeout(id === 'roulette' ? 4500 : 1500);
+    if (id === 'blackjack' && await page.evaluate(() => game.g.state() === 'play')) { await page.keyboard.press('Space'); await page.waitForTimeout(3000); }
+    assert.strictEqual(await page.evaluate(() => game.g.state()), 'done', `${id}: a round finishes`);
+    await page.keyboard.press('KeyE');
+  }
+  // the house edge, and jade tipping it: the same slots, many pulls, with and without luck
+  const rtp = await page.evaluate(() => {
+    const run = lucky => { inv.length = 0; if (lucky) inv.push({ id: 'jadebangle', uses: 0 }, { id: 'jadedragon', uses: 0 }); let q = 99; const rnd = () => { q = q * 16807 % 2147483647; return q / 2147483647; };
+      let back = 0; for (let k = 0; k < 20000; k++) { let r = slotPull(rnd); if (!slotPays(r) && rnd() < luck() * 1.5) r = slotPull(rnd); back += slotPays(r); } return back / 20000; };
+    return [run(false), run(true)];
+  });
+  assert.ok(rtp[0] > 0.75 && rtp[0] < 0.97, `the slots keep a bit: ${rtp[0]}`);
+  assert.ok(rtp[1] > rtp[0], `jade helps: ${rtp[1]} vs ${rtp[0]}`);
+}));
+
+test('breaking in at night: the till pays well but sets off the alarm, the police come at once; a bank\'s vault pays a fortune and brings everyone', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    tod = 23; money = 0;
+    enterRoom('store', { word: 'DELI', neon: RED, ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]);
+    px = room.def.keeper[0]; py = room.def.keeper[1] + 0.5; interact();
+    const shop = [money, wanted.stars, room.alarm, /ALARM/.test(promptText())];
+    leaveRoom(); clearWanted(); money = 0;
+    enterRoom('bank', { word: 'BANK', neon: BLUE, ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]);
+    px = room.W - 2; py = room.H / 2;
+    const vaultPrompt = /crack the vault/.test(promptText());
+    interact(); // the safecracking game comes up
+    const g = game && game.g.id;
+    game.onDone(true); game = null;
+    return [shop, vaultPrompt, g, money >= 1000, wanted.stars];
+  });
+  assert.ok(r[0][0] >= 120 && r[0][1] >= 2 && r[0][2] && r[0][3], `the shop till: ${JSON.stringify(r[0])}`);
+  assert.deepStrictEqual(r.slice(1), [true, 'lockpick', true, 3]);
+}));
