@@ -59,13 +59,25 @@ function sfxGame(e) {
   else if (e === 'end') [784, 659, 523].forEach((f, k) => tone(at + k * 0.1, f, 0.12, 0.05, 'square'));
 }
 
+// on a phone the buttons keep part of the screen (the bottom, held upright; the right, sideways): px to leave clear
+const gameClear = () => !TOUCH ? [0, 0] : innerWidth > innerHeight ? [TOUCH_PAD_W - 30, 0] : [0, TOUCH_PAD_H];
+// the character size that fits the whole cabinet on screen, never bigger than the detail setting's
+function gameFS(g) {
+  const [cr, cb] = gameClear(), ratio = cw / FS; // (a character's width per px of height, in this font)
+  return clamp(Math.floor(Math.min(DETAIL[settings.detail], (innerWidth - cr) / ((2 * g.W + 6) * ratio), (innerHeight - cb) / (g.H + 9))), 5, 40);
+}
+// what the screen says to press: on a phone, the buttons' names
+const gameText = s => TOUCH ? s.replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS/g, 'STICK').replace(/SPACE/g, 'GO') : s;
 // the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
 function drawGame() {
-  const g = game.g, n = rows * cols;
+  const g = game.g, fs = gameFS(g);
+  if (fs !== FS) { FS = fs; resize(); } // (put back when the game's done: see loop)
+  const n = rows * cols;
   for (let i = 0; i < n; i++) { CH[i] = ' '; COL[i] = 0; BG[i] = C(GRAY, 0); }
   FOGS.fill(0); FOGB.fill(0);
-  const s = clamp(Math.floor(Math.min((rows - 9) / g.H, (cols - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
-  const gw = g.W * bw, gh = g.H * bh, x0 = (cols - gw) >> 1, y0 = Math.max(4, (rows - gh) >> 1);
+  const [cr, cb] = gameClear(), ac = cols - Math.ceil(cr / cw), ar = rows - Math.ceil(cb / FS); // the columns and rows we can use
+  const s = clamp(Math.floor(Math.min((ar - 9) / g.H, (ac - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
+  const gw = g.W * bw, gh = g.H * bh, x0 = (ac - gw) >> 1, y0 = Math.max(4, (ar - gh) >> 1);
   const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : g.id === 'serve' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
@@ -82,15 +94,18 @@ function drawGame() {
       set(i, ch, col); if (bg !== undefined && bg !== NONE) BG[i] = bg;
     }
   }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col)); // a label, at normal size
-  const st = g.status();
-  putText(y0 + gh + 2, x0 + ((gw - st.length) >> 1), st, C(WHITE, 12));
-  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}   E / ESC leave` : game.kind === 'crime' ? 'E / ESC back off' : `${fmt$(money)}   E / ESC clock off`;
-  putText(Math.min(rows - 1, y0 + gh + 3), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
+  // the status under the screen, in two lines if it's wider than the cabinet
+  const st = gameText(g.status()), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
+  const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
+  sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
+  const leave = TOUCH ? '' : game.kind === 'arcade' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
+  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
+  putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over && game.kind !== 'crime') { // the results card
     const r = g.reward(), lines = game.kind === 'arcade'
-      ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, '', `SPACE play again (${fmt$(CREDIT)})   E leave`]
-      : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, '', 'E or SPACE to finish'];
-    const w = Math.max(...lines.map(l => l.length)) + 6, h = lines.length + 2, cx = (cols - w) >> 1, cy = (rows - h) >> 1;
+      ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, ...TOUCH ? [] : ['', `SPACE play again (${fmt$(CREDIT)})   E leave`]]
+      : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, ...TOUCH ? [] : ['', 'E or SPACE to finish']];
+    const w = Math.min(ac, Math.max(...lines.map(l => l.length)) + 6), h = lines.length + 2, cx = (ac - w) >> 1, cy = (ar - h) >> 1;
     for (let y = cy; y < cy + h; y++) for (let x = cx; x < cx + w; x++) {
       const i = y * cols + x; set(i, ' ', 0); BG[i] = C(GRAY, 1);
       if (y === cy || y === cy + h - 1) set(i, '-', C(frame, 10));

@@ -15,7 +15,7 @@ function dash() {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
   } else {
     putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
-    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
+    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
   }
 }
 
@@ -101,8 +101,8 @@ function promptText() {
     const next = elTrains(T).filter(t => t.tr === plat.tr && EL_STATIONS[t.next] === plat.s && !t.stopped).map(t => t.left);
     return `E: stairs down${next.length ? `   (next train in ${Math.ceil(Math.min(...next))}s)` : ''}`;
   }
-  if (mode === 'drive') return 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
-  if (mode === 'taxi') return 'mouse: look around | V: camera | E: get out';
+  if (mode === 'drive') return TOUCH ? 'stick: gas, brake and steer (to the rim: floor it)   get out when slow' : 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
+  if (mode === 'taxi') return TOUCH ? 'drag: look around' : 'mouse: look around | V: camera | E: get out';
   const c = nearestCar(0.5);
   const dr = droppedHere();
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
@@ -150,7 +150,8 @@ function mapTile(mx, my) {
 function minimap() {
   if (!showMap || mode === 'room') return;
   const fs = Math.max(8, Math.round(cv.height / 100)); g.font = fs + 'px monospace'; // ~270px across at 900 tall
-  const cw_ = g.measureText('M').width, n = MAP_R * 2 + 1, W = n * 2 * cw_, H = n * fs, x0 = Math.round(cv.width - W - 14), y0 = 44;
+  const cw_ = g.measureText('M').width, n = MAP_R * 2 + 1, W = n * 2 * cw_, H = n * fs, x0 = Math.round(cv.width - W - 14 - (TOUCH && cv.width > cv.height ? TOUCH_PAD_W - 40 : 0)); // (sideways on a phone: left of the buttons)
+  const y0 = TOUCH || cv.width < 700 ? Math.max(56, hudBottom) + fs * 1.2 : 44; // (clear of the buttons and the text on a phone)
   g.fillStyle = 'rgba(0,0,0,0.82)'; g.fillRect(x0 - cw_ * 1.5, y0 - fs * 1.2, W + cw_ * 3, H + fs * 2.4);
   const ox = Math.floor(px), oy = Math.floor(py), tw = 2 * cw_;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { g.fillStyle = mapTile(ox + i - MAP_R, oy + j - MAP_R); g.fillRect(x0 + i * tw, y0 + j * fs, tw + 0.5, fs + 0.5); }
@@ -183,31 +184,57 @@ function minimap() {
 
 const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks',
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay' };
+// a line of HUD text broken to fit maxW px: at the wide gaps between its parts first, then between words
+function wrapText(s, maxW) {
+  const out = [];
+  for (const part of s.split(/(?<=\S)(?=\s{3})/)) { // each part keeps its leading gap
+    const prev = out.length ? out[out.length - 1] : null;
+    if (prev !== null && g.measureText(prev + part).width <= maxW) { out[out.length - 1] = prev + part; continue; }
+    let line = '';
+    for (const w of part.trim().split(/\s+/)) {
+      if (line && g.measureText(line + ' ' + w).width > maxW) { out.push(line); line = w; } else line = line ? line + ' ' + w : w;
+    }
+    if (line) out.push(line);
+  }
+  return out;
+}
+let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
   drawHeldBig();
+  const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
+  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : '';
+  const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
+  const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
+    : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
+  // on a phone the buttons take the top right: the text stays left of them
+  const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
+  const lines = [...wrapText(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
+                 ...(help ? wrapText(help, maxW) : [])];
+  const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
+  hudBottom = (lines.length + task_.length) * FS + 10;
   wantedHud();
   if (job && mode === 'drive') jobArrow();
   minimap();
   hotbar();
-  const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : '';
-  const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
-  const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
-                 settings.help ? TOUCH ? 'stick: move | drag: look | E use | Q item | I bag | M map | hold T: time' : 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
-  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
+  g.font = FS + 'px monospace';
+  const w = Math.max(...lines.map(l => g.measureText(l).width));
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, w + 8, FS * lines.length + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
-  if (task) { // the favour you're doing, under the help line
-    const s = 'TASK: ' + taskText(), w = g.measureText(s).width;
-    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, FS * 2 + 6, w + 8, FS + 4);
-    g.fillStyle = '#4ff'; g.fillText(s, 4, FS * 2 + 8);
+  if (task_.length) { // the favour you're doing, under the help line
+    const y = FS * lines.length + 6, tw = Math.max(...task_.map(l => g.measureText(l).width));
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
+    g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
   }
-  const p = promptText(), y = (mode === 'drive' || mode === 'taxi' ? rows - 6 : rows - 3) * FS;
-  for (const [s, yy, col] of [[p, y, '#ff8'], [msgT > 0 ? msgText : '', FS * 4, '#fff']]) {
-    if (!s) continue;
-    const w = g.measureText(s).width;
-    g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect((cv.width - w) / 2 - 6, yy - 3, w + 12, FS + 6);
-    g.fillStyle = col; g.fillText(s, (cv.width - w) / 2, yy);
+  // the prompt near the bottom (on a phone, in the space left of the buttons), any message under the text block
+  const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
+  const prompt = wrapText(keyless(promptText()), left), pb = (mode === 'drive' || mode === 'taxi' ? rows - 5 : rows - 2) * FS - (TOUCH && hotbarUp() ? FS * 2 + 12 : 0);
+  const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
+  for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
+                                   [msg, Math.max(FS * 4, hudBottom + FS * 1.5), '#fff', cv.width / 2]]) {
+    ls.forEach((s, k) => {
+      const w = g.measureText(s).width, yy = y0 + k * (FS + 4);
+      g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(cx - w / 2 - 6, yy - 3, w + 12, FS + 6);
+      g.fillStyle = col; g.fillText(s, cx - w / 2, yy);
+    });
   }
 }
-
-

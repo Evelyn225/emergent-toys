@@ -39,8 +39,11 @@ const MENU_CSS = `
   .menu .keys { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 1px 12px; padding-left: 18px; color: rgba(255, 255, 255, 0.38); }
   .menu .keys b { font-weight: normal; color: rgba(255, 255, 255, 0.85); }`;
 let menuStyled = false;
-function menuEl(id, z, html) { // a hidden full-screen menu layer; the stylesheet goes in with the first one
+function menuStyle() { // the stylesheet goes in once, with the first menu (or the touch buttons, for the font)
   if (!menuStyled) { const s = document.createElement('style'); s.textContent = MENU_CSS; document.head.appendChild(s); menuStyled = true; }
+}
+function menuEl(id, z, html) { // a hidden full-screen menu layer
+  menuStyle();
   const el = document.createElement('div');
   el.id = id; el.className = 'menu'; el.style.zIndex = z; el.innerHTML = html;
   document.body.appendChild(el);

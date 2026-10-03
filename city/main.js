@@ -104,6 +104,7 @@ function loop(t) {
   if (paused) { t0 = t; requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   const dt = Math.min(0.05, (t - t0) / 1000); t0 = t; T += dt; msgT -= dt;
   env(dt);
+  if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { // a cabinet or a shift has the screen; the world carries on behind it
     stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); audioTick(dt);
     requestAnimationFrame(loop); return;
