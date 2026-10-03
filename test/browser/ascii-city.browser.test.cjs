@@ -250,14 +250,59 @@ test('on a phone: the stick walks, a drag looks round, the buttons work the menu
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(660, 200) });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     assert.ok(await page.evaluate(() => a) > a0, 'looked right');
-    await page.tap('#touch [data-key="KeyI"]');
+    await page.tap('#touch button:text-is("Bag")');
     assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the bag');
-    await page.tap('#touch [data-key="KeyE"]');
-    assert.strictEqual(await page.evaluate(() => panelOpen()), false, 'E closes it');
+    await page.tap('#touch .main:text-is("Close")');
+    assert.strictEqual(await page.evaluate(() => panelOpen()), false, 'Close shuts it');
+    await page.tap('#touch [data-more]');
+    assert.ok(await page.isVisible('#touch .sheet button:text-is("Weather")'), 'the More sheet');
+    const w0 = await page.evaluate(() => weather);
+    await page.tap('#touch .sheet button:text-is("Weather")');
+    assert.notStrictEqual(await page.evaluate(() => weather), w0, 'Weather changes it');
+    assert.ok(!(await page.isVisible('#touch .sheet')), 'and the sheet goes away');
     await page.tap('#touch [data-key="Escape"]');
     assert.strictEqual(await page.evaluate(() => paused), true);
     await page.tap('#pause [data-act="resume"]');
     assert.strictEqual(await page.evaluate(() => paused), false);
+  } finally { await browser.close(); }
+});
+
+test('on a phone the buttons say what they do and only show when they apply', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ ...devices['iPhone 13'] }), page = await ctx.newPage();
+    await page.goto(PAGE); await page.waitForTimeout(300);
+    const pad = () => page.waitForTimeout(250).then(() => page.$$eval('#touch .pad button', bs => bs.map(b => b.textContent)));
+    await page.evaluate(() => { me = cars.find(c => c.kind === 'taxi'); me.rider = true; me.fare = 0; mode = 'taxi'; });
+    assert.deepStrictEqual(await pad(), ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway', 'Camera', 'Get out']);
+    await page.tap('#touch .pad button:text-is("Subway")');
+    assert.ok(await page.evaluate(() => /station$/.test(me.destName)), 'a stop button picks the stop');
+    assert.ok((await pad()).includes('Tip $20.00'), 'then you can tip');
+    await page.evaluate(() => { leaveCar(); enterRoom('bar', { word: 'BAR', neon: MAG, ret: [px, py, a] }, [6, 6, -Math.PI / 2]); });
+    const inBar = await pad();
+    assert.ok(inBar.includes('Jump') && !inBar.includes('Camera'), inBar.join());
+  } finally { await browser.close(); }
+});
+
+test('on a phone held upright: long HUD lines wrap, and a minigame shrinks to fit then puts the text size back', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ ...devices['iPhone 13'] }), page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(PAGE); await page.waitForTimeout(300);
+    assert.ok(await page.evaluate(() => wrapText('WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk', cv.width - 24)
+      .every(l => g.measureText(l).width <= cv.width - 24)), 'every line fits');
+    const fs0 = await page.evaluate(() => FS);
+    await page.evaluate(() => startGame('serve', 'shift', 'DINER'));
+    await page.waitForTimeout(300);
+    const fit = await page.evaluate(() => [cols >= 2 * game.g.W + 6, rows * FS <= innerHeight, FS]);
+    assert.deepStrictEqual(fit.slice(0, 2), [true, true], `the cabinet fits across (text ${fit[2]}px)`);
+    assert.ok(fit[2] < fs0, 'by making the text smaller');
+    await page.evaluate(() => { game = null; });
+    await page.waitForTimeout(200);
+    assert.strictEqual(await page.evaluate(() => FS), fs0, 'and back afterwards');
+    assert.deepStrictEqual(errors, []);
   } finally { await browser.close(); }
 });
 

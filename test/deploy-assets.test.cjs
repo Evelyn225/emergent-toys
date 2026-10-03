@@ -142,3 +142,23 @@ test('every url() in os/os.css points at a file that exists and is deployed', ()
     assert.ok(isDeployed(rel), `os/os.css references ${ref} (${rel}), which matches no vercel.json build src`);
   }
 });
+
+// ASCII City installs as an app: Chrome wants a manifest it can fetch (same origin, so not raw.githubusercontent)
+// with a name, a start page and 192 / 512 icons, and a service worker. All of it has to actually deploy.
+test('ASCII City is installable: its manifest, icons and service worker deploy', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'ascii-city.html'), 'utf8');
+  const href = /<link rel="manifest" href="([^"]+)"/.exec(html)[1];
+  assert.ok(!/^https?:/.test(href), 'the manifest is served from the site itself');
+  assert.ok(isDeployed(href), `${href} deploys`);
+  const m = JSON.parse(fs.readFileSync(path.join(ROOT, href), 'utf8'));
+  assert.ok(m.name && m.start_url && m.display, 'name, start page and display mode');
+  for (const size of ['192x192', '512x512']) {
+    const icon = m.icons.find(i => i.sizes === size);
+    assert.ok(icon, `a ${size} icon`);
+    assert.ok(fs.existsSync(path.join(ROOT, icon.src)) && isDeployed(icon.src), `${icon.src} exists and deploys`);
+  }
+  const sw = /serviceWorker\.register\('([^']+)'/.exec(html)[1];
+  assert.ok(fs.existsSync(path.join(ROOT, sw)) && isDeployed(sw), `${sw} exists and deploys`);
+  for (const f of /const SHELL = (\[[^\]]+\])/.exec(fs.readFileSync(path.join(ROOT, sw), 'utf8'))[1].match(/'[^']+'/g).map(q => q.slice(1, -1)))
+    assert.ok(fs.existsSync(path.join(ROOT, f)) && isDeployed(f), `the worker precaches ${f}, which must exist and deploy`);
+});
