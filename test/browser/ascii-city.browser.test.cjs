@@ -446,3 +446,15 @@ test('the cathedral: in through the great doors, a seat in a pew, a candle lit, 
   await page.keyboard.press('KeyE');
   assert.strictEqual(await page.evaluate(() => mode), 'walk', 'locked at night');
 }));
+
+test('the cell block: you stay in your cell, the bars are see-through and there is a whole block beyond them', () => withPage(async page => {
+  await page.evaluate(() => enterRoom('jail', { word: 'JAIL', ret: [px, py, a], until: T + 60 }, [11, 3.2, Math.PI / 2]));
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
+  assert.ok(await page.evaluate(() => py < JAIL_BARS_NEAR - 0.2), 'stopped at the bars');
+  // looking through them: something is drawn far past the bars (the cells across the corridor)
+  const far = await page.evaluate(() => { let n = 0; for (let i = 0; i < ZB.length; i++) if (ZB[i] > JAIL_BARS_FAR - py && ZB[i] < 50) n++; return n; });
+  assert.ok(far > 200, `the far side of the corridor is in view (${far} cells)`);
+  const g0 = await page.evaluate(() => room.props.find(s => s.tick && s.y === 7.5).x);
+  await page.waitForTimeout(500);
+  assert.notStrictEqual(await page.evaluate(() => room.props.find(s => s.tick && s.y === 7.5).x), g0, 'the guard is walking');
+}));

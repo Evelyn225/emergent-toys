@@ -19,6 +19,7 @@
     "city/screen.js",
     "city/city-render.js",
     "city/city-sprites.js",
+    "city/jail.js",
     "city/rooms.js",
     "city/aquarium.js",
     "city/cathedral.js",

@@ -105,3 +105,41 @@ Things get crossed off (deleted) once they're in the game.
 - District reputation: regulars warm to you, or get wary if you commit crimes there.
 - A calendar of events: Saturday farmers market, Sunday parade, weekly fireworks over the bay.
 - The city changes over time: construction sites finish into new buildings as days pass.
+
+## Sounds to find
+
+What's in `audio/ascii-city/` now: city day and night beds, rain, crowd, restaurant, coffee shop, bossa nova,
+karaoke, arcade, crash, eat, drink, lighter and cigarette drags, skateboard, harmonica. Everything else is
+synthesised on the fly (sirens, beeps, the organ notes at the candles) and would sound better as a real recording.
+Loops want to be seamless, 30s to a couple of minutes; one-shots short and dry. Free sources: freesound.org (check
+the licence on each), Pixabay sound effects, the BBC sound effects archive (personal use).
+
+### Music and ambience loops
+- **Cathedral**: organ music (something slow, Bach-ish), a choir, and a big empty-church room tone with echo.
+  Church bells for the hour, and for the top of the bell tower.
+- **Pleasure pier**: carnival / calliope music, a carousel band organ (the classic oom-pah waltz), the crowd at a fair,
+  seagulls.
+- **Aquarium**: underwater ambience, tank bubblers and pump hum, a muffled crowd, maybe a soft ambient pad.
+- **Jail**: echoey cell block room tone, distant shouting, a radio, a buzzing fluorescent light.
+- **Laundromat**: washers churning, dryers tumbling, a fluorescent hum, late-night radio.
+- **Waterfront**: waves on the pier pilings, gulls, a foghorn, the ferry horn.
+- **Subway and el**: a train arriving and braking, the doors' chime, a platform announcement, an el going overhead.
+- **Districts**: Chinatown street music, the docks' cranes and ship horns, birds in the brownstones' parks.
+
+### One-shots for places and things
+- **Fair**: the ring toss ring clinking on a bottle, the high striker's mallet thud and the bell's DING, a prize
+  win jingle, the Ferris wheel's creak and its bar clunking shut, a cotton candy machine whirring.
+- **Cathedral**: the great doors' heavy creak and boom, a match striking (lighting a candle), footsteps on stone.
+- **Aquarium**: splashing hands in the touch pool, a shop door chime.
+- **Jail**: the cell door clanging shut, a key in a lock, keys jangling on the guard's belt.
+- **Laundromat**: coins in the slot, a washer starting, the end-of-cycle buzzer, the door clunking open.
+- **Street**: vending machine thunk and coins, a taxi horn, a car door, a dog barking, a shop door bell, footsteps
+  on wood (the pier) and on metal (the el stairs).
+
+### Item sounds
+- A soda can cracking open and fizzing, a beer pour, ice in a glass.
+- Crunchier bites for chips and apples, a slurp for noodles and pho.
+- A newspaper rustle and a book page turning.
+- An umbrella opening, rain on the umbrella.
+- A yo-yo whirr, sparklers crackling, the rubber duck squeak, the plush shark squeak, a snow globe shake.
+- A boombox tape clunking in and play pressed, the skateboard ollie snap.
