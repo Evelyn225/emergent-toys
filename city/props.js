@@ -72,6 +72,25 @@ alongStreets(5, CURB, (x, y, ax, ay, bx, by, o) => {
 alongStreets(5, 2 - CURB, (x, y, ax, ay, bx, by) => { if (districtOf(bx, by) === 'brownstones') trees.push({ x, y, s: 0.75 }); });
 // the island: benches looking out to sea either side of the lighthouse
 benches.push({ x: ISLE.x - 2.2, y: ISLE.y + 0.8, fx: -1, fy: 0 }, { x: ISLE.x + 2.6, y: ISLE.y - 0.6, fx: 1, fy: 0 });
+// the Botanical Gardens: trees wherever there's lawn to spare, benches along the paths facing across them
+const gx2w = (gx, gy) => [GARDEN.x0 + gx, GARDEN.y0 + gy];
+const GARDEN_PENS = [{ gx0: 16, gy0: 0.5, gx1: 21.4, gy1: 2.7, kind: 'bear' }, { gx0: 5.2, gy0: 10.6, gx1: 7.8, gy1: 12.8, kind: 'tortoise' }];
+const GARDEN_BEDS = [[4.5, 5.6, 1.4, 0.45], [12.5, 1.2, 2.2, 0.5], [18.4, 4.7, 1.2, 0.4], [14.5, 13.3, 2.4, 0.35], [1.0, 4.0, 0.45, 1.6], [9.6, 5.4, 0.6, 0.6], [1.4, 12.6, 0.8, 0.5]];
+const GARDEN_SHED = { gx: 21, gy: 12.9 };
+const inPen = (gx, gy, pad = 0) => GARDEN_PENS.find(p => gx > p.gx0 - pad && gx < p.gx1 + pad && gy > p.gy0 - pad && gy < p.gy1 + pad) || null;
+const inBed = (gx, gy) => GARDEN_BEDS.findIndex(([x, y, rx, ry]) => Math.hypot((gx - x) / rx, (gy - y) / ry) < 1);
+const gardenBuilt = (gx, gy, pad) => GLASSHOUSES.some(g => gx > g.gx0 - pad && gx < g.gx1 + 1 + pad && gy > g.gy0 - pad && gy < g.gy1 + 1 + pad);
+for (let k = 0; k < 280; k++) {
+  const gx = 0.6 + hash(k, 1, 801) * (GARDEN.w - 1.2), gy = 0.6 + hash(k, 2, 801) * (GARDEN.h - 1.2);
+  if (gardenPathDist(gx, gy) < 0.55 || gardenLakeEdge(gx, gy) > -0.5 || inPen(gx, gy, 0.4) || inBed(gx, gy) >= 0 || gardenBuilt(gx, gy, 0.5) || GLASSHOUSES.some(g => Math.hypot(gx - g.door[0], gy - g.door[1]) < 1.6) || Math.hypot(gx - GARDEN_SHED.gx, gy - GARDEN_SHED.gy) < 1) continue;
+  const [x, y] = gx2w(gx, gy); trees.push({ x, y, s: 0.8 + hash(k, 3, 801) * 0.6 });
+}
+for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k += 2) { // a bench beside every other bend, facing the path
+  const [ax, ay] = pl[k - 1], [bx, by] = pl[k], mx = (ax + bx) / 2, my = (ay + by) / 2, l = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / l, ny = (bx - ax) / l;
+  const gx = mx + nx * 0.4, gy = my + ny * 0.4;
+  if (gardenLakeEdge(gx, gy) > -0.2 || inPen(gx, gy, 0.2) || gardenBuilt(gx, gy, 0.2)) continue;
+  const [x, y] = gx2w(gx, gy); benches.push({ x, y, fx: -nx, fy: -ny });
+}
 const treesB = bucketed(trees), benchesB = bucketed(benches);
 
 // boats out on the sea, each on a route: a racetrack loop (out along one lane, a U-turn, back along the lane beside
@@ -153,7 +172,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
   }
 }
-// the pleasure pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
+// the Sunset Pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
 // boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
 // side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
 const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -1, 3.6, { game: 'strength' }],
@@ -191,6 +210,23 @@ for (const s of [2.6, 3.4, 5.6, 7.2]) for (const off of [0.16, 1.84]) alongStree
   const col = [RED, BLUE, GREEN, WHITE, YEL][hash(bx, by + s, 704) * 5 | 0];
   extras.push({ x, y, z: 0, w: 0.07, h: 0.06, art: pad(['   __o', ' _ \<,_', '(_)/ (_)']), col: (c, row, L) => row === 2 ? C(GRAY, L) : C(col, L) });
 });
+// the Gardens' railings (gaps for the gates), the pens' fences, lamp posts along the paths, the gardeners' shed
+for (const [gate, along, len] of [['h', 0.1, GARDEN.w], ['h', GARDEN.h - 0.1, GARDEN.w], ['v', 0.1, GARDEN.h], ['v', GARDEN.w - 0.1, GARDEN.h]])
+  for (let s = 0; s < len; s += 1) {
+    const mid = s + 0.5, gx = gate === 'h' ? mid : along, gy = gate === 'h' ? along : mid;
+    if (GARDEN_GATES.some(([x, y]) => Math.abs(gx - x) < 0.8 && Math.abs(gy - y) < 0.8)) continue;
+    const [x, y] = gx2w(gx, gy); solidBox(x, y, gate === 'h', 0.5, 0.01, 0, 0.2, 'railing', 0);
+  }
+for (const p of GARDEN_PENS) for (const [ax, ay, bx, by] of [[p.gx0, p.gy0, p.gx1, p.gy0], [p.gx0, p.gy1, p.gx1, p.gy1], [p.gx0, p.gy0, p.gx0, p.gy1], [p.gx1, p.gy0, p.gx1, p.gy1]]) {
+  const alongX = ay === by, len = alongX ? bx - ax : by - ay;
+  for (let s = 0; s < len - 0.01; s += 1) { const l = Math.min(1, len - s), [x, y] = gx2w(alongX ? ax + s + l / 2 : ax, alongX ? ay : ay + s + l / 2); solidBox(x, y, alongX, l / 2, 0.01, 0, 0.12, 'railing', 1); }
+}
+for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k++) if (k % 2 === 0) {
+  const [gx, gy] = pl[k]; if (gardenLakeEdge(gx + 0.3, gy + 0.3) > -0.1) continue;
+  const [x, y] = gx2w(gx + 0.28, gy + 0.28);
+  extras.push({ x, y, z: 0, w: 0.04, h: 0.36, art: [' (O) ', '  |  ', '  |  ', '  |  ', '  |  ', ' _|_ '], col: (c, row, L) => c === 'O' ? C(YEL, Math.max(L, lampsOn * 15)) : C(GRAY, L) });
+}
+{ const [x, y] = gx2w(GARDEN_SHED.gx, GARDEN_SHED.gy); solidBox(x, y, true, 0.35, 0.25, 0, 0.3, 'shed', 2); }
 // dockside cranes on the industrial piers
 for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && x0 !== FAIR.x0 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
@@ -259,7 +295,7 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
   if (hash(bx, by, o === 'h' ? 200 : 202) < 0.03 && !blockKind(bx, by) && districtOf(bx, by) !== 'industrial')
     vendors.push({ x, y, ox: o === 'v' ? 0.12 : 0, oy: o === 'h' ? 0.12 : 0, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
 });
-// and a cotton candy cart at the foot of the pleasure pier
+// and a cotton candy cart at the foot of the Sunset Pier
 const CANDY_CART = { name: 'COTTON CANDY', item: 'a cotton candy', price: 3, color: MAG, w: 0.3, art: [
   ['  @@@@  ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O'], ['  @@@@@ ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O']].map(pad) };
 vendors.push({ x: FAIR.cx + 1.1, y: FAIR.y0 + 0.9, ox: 0.12, oy: 0, type: CANDY_CART, shirt: WHITE });

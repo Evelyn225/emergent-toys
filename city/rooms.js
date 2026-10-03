@@ -92,13 +92,7 @@ function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city
   if (my !== 0 || Math.abs(u - room.W / 2) > 1.6 || z < 0.9 || z > 2.3) return false;
   const du = u - room.W / 2;
   if (Math.abs(du) > 1.45 || z < 0.97 || z > 2.23 || Math.abs(du) < 0.04) { set(i, Math.abs(du) > 1.45 ? '|' : '=', C(GRAY, L)); BG[i] = C(WARM, 2); return true; } // frame
-  const col = Math.floor(du * 7), hgt = 0.97 + hash(col, 3, 71) * 0.7 + (Math.abs(col) < 2 ? 0.3 : 0); // the skyline
-  if (z < hgt) {
-    const lit = hash(col, Math.floor(z * 12), 72) > 0.55 + day * 0.4;
-    BG[i] = C(GRAY, 1 + day * 3); set(i, lit && fract(z * 12) > 0.4 ? '#' : ' ', C(YEL, 13)); return true;
-  }
-  BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 3 + day * 8) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
-  set(i, night > 0.5 && hash(Math.floor(du * 20), Math.floor(z * 20), 73) > 0.96 ? '.' : ' ', C(WHITE, 12)); return true;
+  viewOut(i, u, z, 14, 18); return true; // six floors up, across the avenue
 }
 function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a bay every 1.2m, numbered
   if (z > 2.45) { set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 6 ? ' ' : '.', C(GRAY, L * 0.4)); return true; }
@@ -534,8 +528,10 @@ function hospitalWall(i, u, uStep, z, d, mx, my, L) {
 }
 function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== room.H - 1 && Math.abs(fract(u / 3) - 0.5) < 0.1 && z > 1.3 && z < 1.9) { // a deep-set window: sea below, sky above
-    BG[i] = z < 1.5 ? C(BLUE, 2 + day * 3) : C(day > 0.5 ? CYAN : BLUE, 1 + day * 5);
-    return set(i, z < 1.5 ? '~' : ' ', C(CYAN, 6 + day * 6)), true;
+    const [su, sz] = glassSlopes(u, z); // the horizon's at your eye, wherever you stand; the sea, 30m down
+    if (sz < 0) { const q = (-30 - z) / sz, n = noise((u + su * q) * 0.2 + T * 0.3, q * 0.2, 887); BG[i] = C(BLUE, 2 + day * 3); return set(i, n > 0.6 ? '~' : n > 0.45 ? '-' : ' ', C(CYAN, 6 + day * 6)), true; }
+    BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 2 + day * 6) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
+    return set(i, night > 0.5 && hash(Math.floor(Math.atan(su) * 120), Math.floor(sz * 120), 888) > 0.95 ? '.' : ' ', C(WHITE, 12)), true;
   }
   BG[i] = C(WHITE, 2 + L * 0.15); // whitewashed stone in courses
   const row = Math.floor(z * 3), joint = fract(z * 3) < 0.08 || fract(u * 1.5 + (row & 1) * 0.5) < 0.04;
@@ -581,8 +577,9 @@ function homeDef(w, h) {
 }
 function homeWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === 0 && z > 1.0 && z < 2.1 && Math.abs(fract(u / 3) - 0.5) < 0.2) { // a window on the city: lit windows across the street at night
-    BG[i] = C(day > 0.5 ? CYAN : BLUE, day > 0.5 ? 4 : 1);
-    return set(i, night > 0.3 && hash(Math.floor(u * 8), Math.floor(z * 8), 7) > 0.6 ? '#' : fract(u * 2) < 0.04 ? '|' : ' ', night > 0.3 ? C(WARM, 12) : C(GRAY, 8)), true;
+    const fw = fract(u / 3);
+    if (Math.abs(fw - 0.5) > 0.19 || z < 1.04 || z > 2.06 || Math.abs(fw - 0.5) < 0.01) { BG[i] = C(WARM, 2); return set(i, Math.abs(fw - 0.5) > 0.19 ? '|' : '=', C(WHITE, L)), true; } // the frame
+    return viewOut(i, u, z, 12, 4), true; // across the street from the first floor
   }
   BG[i] = C(WARM, 2 + L * 0.2); // wallpaper with a little pattern
   return set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 3 ? ' ' : '.', C(BRICK, L * 0.5)), true;
@@ -710,6 +707,8 @@ function roomFloor(i, r, x, rx, ry) {
     case 'aqua': return aquaFloor(i, f, wx, wy);
     case 'cathedral': return cathedralFloor(i, f, wx, wy);
     case 'jail': return jailFloor(i, f, wx, wy);
+    case 'conservatory': return conservatoryFloor(i, f, wx, wy);
+    case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
       if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
@@ -745,6 +744,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'aqua') return aquaCeil(i, r, x, wx, wy);
   if (st === 'cathedral') return cathedralCeil(i, wx, wy);
   if (st === 'jail') return jailCeil(i, wx, wy);
+  if (st === 'glass') return glassCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
   const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
@@ -763,6 +763,6 @@ function roomSprites() {
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
   }
 }
-const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : room.def.height || 3; },
+const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 

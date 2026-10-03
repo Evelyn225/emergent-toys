@@ -101,7 +101,7 @@ const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8)
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea
 const KIND = new Array(NB * NB).fill('');
 // superblocks: [x0, y0, x1, y1, kind] - the streets inside are removed
-const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 'yard'], [15, 14, 16, 14, 'plaza']];
+const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 'yard'], [15, 14, 16, 14, 'plaza'], [7, 10, 9, 11, 'gardens']];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const d = DIST[bi(bx, by)], h = hash(bx, by, 7);
   KIND[bi(bx, by)] = d === 'waterfront' ? 'waterfront' : d === 'sea' ? 'sea'
@@ -194,7 +194,7 @@ function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cel
 }
 const onIsland = (x, y) => isleEdge(x, y) > 0;
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
-// the pleasure pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
+// the Sunset Pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
 // docks or a bridge. Game booths and a prize stall down its sides, a carousel in the middle, the Ferris wheel out at
 // the end (its wheel stands across the pier, east-west, so you see it face on from the promenade).
 const FAIR_BX = (() => { for (let bx = ISLE_BX + 3; ; bx++) if (!BRIDGE_X.includes(bx) && districtOf(bx, SHORE_S - 1) !== 'industrial') return bx; })();
@@ -219,8 +219,45 @@ for (let bx = 0; bx < NB; bx++) {
 }
 const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y);
 const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy); };
+// ---- the Botanical Gardens: a walled garden over three blocks by two (the streets inside it are gone). In garden
+// coordinates gx, gy (cells from its north-west inside corner): a lake to the east with a jetty for the swan boats,
+// the glass conservatory to the north-west, the aviary to the south-west, enclosures, winding gravel paths between.
+const GARDEN = { x0: 7 * 8 + 2, y0: 10 * 8 + 2, w: 22, h: 14 };
+const gardenLocal = (x, y) => [mod(x, N) - GARDEN.x0, mod(y, N) - GARDEN.y0];
+const inGardens = (x, y) => { const [gx, gy] = gardenLocal(x, y); return gx >= 0 && gy >= 0 && gx < GARDEN.w && gy < GARDEN.h; };
+const LAKE = { x: 15, y: 8.2, rx: 4.6, ry: 3.4 };
+function gardenLakeEdge(gx, gy) { // how far inside the lake's shore (gx, gy) is (cells, roughly); negative on land
+  const ex = (gx - LAKE.x) / LAKE.rx, ey = (gy - LAKE.y) / LAKE.ry, ang = Math.atan2(ey, ex);
+  const r = 1 + 0.12 * Math.sin(3 * ang + 1) + 0.07 * Math.sin(5 * ang + 2);
+  return (r - Math.hypot(ex, ey)) * Math.min(LAKE.rx, LAKE.ry);
+}
+const JETTY = { gx0: 9.3, gx1: 11.6, gy: 8.2, hw: 0.18 }; // a wooden jetty out from the west shore
+const onJetty = (gx, gy) => gx > JETTY.gx0 && gx < JETTY.gx1 && Math.abs(gy - JETTY.gy) < JETTY.hw;
+const gardenLake = (x, y) => { if (!inGardens(x, y)) return false; const [gx, gy] = gardenLocal(x, y); return gardenLakeEdge(gx, gy) > 0 && !onJetty(gx, gy); };
+// the paths: gravel, 2.5m wide, winding between the four gates and round the lake (garden coordinates)
+const GARDEN_PATHS = [
+  [[11, 0], [10.4, 2.2], [8.2, 4.4], [7.6, 6.6], [8.4, 8.2], [10, 8.2]],                 // north gate, past the conservatory, to the jetty
+  [[0, 7], [2.6, 6.8], [5.2, 7.6], [7.6, 6.6]],                                          // the west gate
+  [[11, 14], [10.4, 12.2], [8.6, 10.6], [8.4, 8.2]],                                     // the south gate
+  [[22, 7], [20.6, 6.4], [20.4, 3.6], [17.2, 3.4], [13.2, 3.6], [10.4, 2.2]],           // the east gate, round the top of the lake
+  [[20.6, 6.4], [21, 9.6], [19.6, 12.4], [15.4, 12.8], [11.6, 12.6], [10.4, 12.2]],     // and round the bottom
+  [[4.2, 4.6], [5.2, 7.6], [4.6, 8.6]],                                                  // the conservatory door to the aviary door
+];
+function gardenPathDist(gx, gy) {
+  let best = Infinity;
+  for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k++) {
+    const [ax, ay] = pl[k - 1], [bx, by] = pl[k], vx = bx - ax, vy = by - ay, t = clamp(((gx - ax) * vx + (gy - ay) * vy) / (vx * vx + vy * vy), 0, 1);
+    best = Math.min(best, Math.hypot(gx - ax - vx * t, gy - ay - vy * t));
+  }
+  return best;
+}
+const GARDEN_GATES = [[11, 0, 'h'], [11, 14, 'h'], [0, 7, 'v'], [22, 7, 'v']]; // gx, gy of each gate's middle, and which way the railing runs
+const gardensOpen = t => t >= 8 && t < 20;
+// the two glass houses: cells of the map, with a shop each for their doors (STY 18 the conservatory, 19 the aviary)
+const GLASSHOUSES = [{ word: 'CONSERVATORY', gx0: 2, gy0: 1, gx1: 6, gy1: 3, h: 1.1, dome: 1.6, sty: 18, fee: 5, door: [4.5, 4] },
+                     { word: 'AVIARY', gx0: 2, gy0: 9, gx1: 4, gy1: 11, h: 0.9, dome: 1.2, sty: 19, fee: 0, door: [3.5, 9] }];
 // open water you can't walk or drive on (park ponds are separate, see inPond)
-const isWater = (wx, wy) => seaAt(wx, wy) && !(ROAD[idx(Math.floor(wx), Math.floor(wy))]) && !onPier(wx, wy);
+const isWater = (wx, wy) => seaAt(wx, wy) && !(ROAD[idx(Math.floor(wx), Math.floor(wy))]) && !onPier(wx, wy) || gardenLake(wx, wy);
 
 // ---- buildings: N x N cell heights (1 = 10m), facade style, per-lot seed and shop
 // STY 0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 chinatown shophouse;
@@ -320,12 +357,21 @@ const SERVICES = [];
   }
 }
 
-// ---- the aquarium: the south half of the block across the shore road from the pleasure pier, one building, its
+// ---- the aquarium: the south half of the block across the shore road from the Sunset Pier, one building, its
 // front on the promenade (aquarium.js has the inside, and the fish in its windows)
 const AQUARIUM = { bx: FAIR_BX, by: SHORE_S - 1, x0: FAIR_BX * 8 + 2, x1: FAIR_BX * 8 + 8, doorU: FAIR_BX * 8 + 5 };
 {
   const sh = AQUARIUM.sh = { kind: SHOP_LIT, word: 'AQUARIUM', neon: CYAN, glyphs: 'o#=@', hours: hoursOf('AQUARIUM'), aqua: true };
   for (let y = 5; y <= 7; y++) for (let x = 2; x <= 7; x++) { const i = idx(AQUARIUM.bx * 8 + x, AQUARIUM.by * 8 + y); map[i] = 1.8; STY[i] = 2; SHOP[i] = sh; }
+}
+
+// the glass houses go up in the Gardens
+for (const gh of GLASSHOUSES) {
+  const sh = gh.sh = { kind: SHOP_LIT, word: gh.word, neon: GREEN, glyphs: '%*@', hours: [9, 19], fee: gh.fee, glass: gh.sty };
+  for (let gy = gh.gy0; gy <= gh.gy1; gy++) for (let gx = gh.gx0; gx <= gh.gx1; gx++) {
+    const i = idx(GARDEN.x0 + gx, GARDEN.y0 + gy), mid = gx > gh.gx0 && gx < gh.gx1 && gy > gh.gy0 && gy < gh.gy1;
+    map[i] = mid || gh.gx1 - gh.gx0 === 2 && gx === gh.gx0 + 1 && gy === gh.gy0 + 1 ? gh.dome : gh.h; STY[i] = gh.sty; SHOP[i] = sh; SEED[i] = 0.5;
+  }
 }
 
 // ---- street names, for talk, directions and the HUD

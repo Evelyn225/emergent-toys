@@ -1,4 +1,4 @@
-// ===== the pleasure pier (world.js lays it out, props.js puts up the booths, city-sprites.js draws the rides):
+// ===== the Sunset Pier (world.js lays it out, props.js puts up the booths, city-sprites.js draws the rides):
 // riding the Ferris wheel and the carousel, and what E does at the booths. The rides run 9am till 2am.
 const WHEEL_FARE = 5, CAROUSEL_FARE = 3;
 const fairOpen = () => tod >= 9 || tod < 2;

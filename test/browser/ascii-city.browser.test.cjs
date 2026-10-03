@@ -353,7 +353,7 @@ test('buy a car and a home: both are still yours after a reload, and the buildin
   assert.deepStrictEqual(await page.evaluate(() => [room.kind, Math.floor(tod)]), ['home', 7], 'woke at home at 7');
 }));
 
-test('the pleasure pier: once round the Ferris wheel and back to the platform, a horse on the carousel, a go at ring toss', () => withPage(async page => {
+test('the Sunset Pier: once round the Ferris wheel and back to the platform, a horse on the carousel, a go at ring toss', () => withPage(async page => {
   await page.evaluate(() => { tod = 15; px = WHEEL_BOARD.x; py = WHEEL_BOARD.y; a = Math.PI / 2; });
   await page.waitForTimeout(100);
   assert.match(await page.evaluate(() => promptText()), /ride the Ferris wheel/);
@@ -554,4 +554,75 @@ test('mahjong at the tea house: the buy-in goes in the pot, walking away loses i
   await page.keyboard.press('ArrowUp'); // MAHJONG!
   await page.waitForTimeout(150);
   assert.deepStrictEqual(await page.evaluate(() => [game.g.result.winner, money]), [0, 110], 'won the pot: $20');
+}));
+
+test('the Botanical Gardens: gates locked at night, a swan boat on the lake, ducks to feed, the conservatory and the aviary, a gardener\'s shift, a seat on the grass', () => withPage(async page => {
+  const at = (gx, gy, ang = 0) => page.evaluate(([x, y, an]) => { mode = 'walk'; px = GARDEN.x0 + x; py = GARDEN.y0 + y; a = an; pitch = 0; }, [gx, gy, ang]);
+  const prompt = () => page.evaluate(() => promptText());
+  await page.evaluate(() => { tod = 12; weather = 'clear'; money = 100; });
+  await at(11, -0.5, Math.PI / 2); // outside the north gate
+  assert.ok(await page.evaluate(() => free(GARDEN.x0 + 11, GARDEN.y0 + 0.2)), 'open by day');
+  await page.evaluate(() => { tod = 22; });
+  assert.ok(await page.evaluate(() => !free(GARDEN.x0 + 11, GARDEN.y0 + 0.2)), 'locked at night');
+  assert.match(await prompt(), /gates are locked/);
+  await at(11, 1, -Math.PI / 2);
+  assert.ok(await page.evaluate(() => free(GARDEN.x0 + 11, GARDEN.y0 - 0.3)), 'you can always let yourself out');
+  await page.evaluate(() => { tod = 12; });
+  // the boats
+  await page.evaluate(() => { window.JF = [JETTY.gx0 + 0.25, JETTY.gy]; window.SHED = [GARDEN_SHED.gx, GARDEN_SHED.gy - 0.45]; });
+  await at(...await page.evaluate(() => JF));
+  assert.match(await prompt(), /rent a swan boat \(\$4\.00\)/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, money]), ['boat', 96]);
+  const before = await page.evaluate(() => [px, py]);
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(1200); await page.keyboard.up('KeyW');
+  const after = await page.evaluate(() => [px, py, gardenLake(px, py)]);
+  assert.ok(Math.hypot(after[0] - before[0], after[1] - before[1]) > 0.05 && after[2], 'paddled out, still on the water');
+  await page.evaluate(() => { boat.gx = LAKE.x + 1; boat.gy = LAKE.y; });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => mode), 'boat', 'only out at the jetty');
+  await page.evaluate(() => { boat.gx = JETTY.gx1 + 0.3; boat.gy = JETTY.gy; });
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, onJetty(...gardenLocal(px, py))]), ['walk', true]);
+  // the ducks
+  const shore = await page.evaluate(() => { for (let k = 0; k < 360; k++) { const th = k * Math.PI / 180, gx = LAKE.x + Math.cos(th) * (LAKE.rx + 0.45), gy = LAKE.y + Math.sin(th) * (LAKE.ry + 0.45);
+    if (gardenLakeEdge(gx, gy) < -0.25 && gardenLakeEdge(gx, gy) > -0.4 && !onJetty(gx, gy) && Math.abs(gy - JETTY.gy) > 1) return [gx, gy, th + Math.PI]; } });
+  await at(...shore);
+  await page.evaluate(() => { inv.push({ id: 'bagel', uses: 3 }); held = inv.length - 1; });
+  assert.match(await prompt(), /feed the ducks/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [!!duckFeed, heldItem().uses]), [true, 2]);
+  // a seat on the grass
+  const lawn = await page.evaluate(() => { for (let gy = 1; gy < GARDEN.h; gy += 0.5) for (let gx = 1; gx < GARDEN.w; gx += 0.5) if (gardenLawn(GARDEN.x0 + gx, GARDEN.y0 + gy) && !benchesB.flat().some(b => Math.hypot(b.x - GARDEN.x0 - gx, b.y - GARDEN.y0 - gy) < 0.3)) return [gx, gy]; });
+  await at(...lawn);
+  await page.keyboard.press('KeyC');
+  assert.ok(await page.evaluate(() => body.seat && body.seat.grass), 'sat down on the grass');
+  await page.keyboard.press('KeyC');
+  // the conservatory: $5, in by the boardwalk, not stuck in a wall
+  const cons = await page.evaluate(() => GLASSHOUSES[0].door);
+  await at(cons[0], cons[1] + 0.2, -Math.PI / 2);
+  await page.waitForTimeout(150);
+  assert.match(await prompt(), /enter CONSERVATORY \(\$5\.00\)/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, money, free(px, py)]), ['room', 'conservatory', 91, true]);
+  await page.evaluate(() => { px = 18; py = 9; a = 0; });
+  await page.waitForTimeout(150);
+  assert.match(await page.evaluate(() => CH.join('')), /[|]{2}/, 'cacti in the desert house');
+  await page.evaluate(() => leaveRoom());
+  // the aviary: free; a cup of seed from the keeper
+  const av = await page.evaluate(() => GLASSHOUSES[1].door);
+  await at(av[0], av[1] - 0.2, Math.PI / 2);
+  await page.waitForTimeout(150);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, money]), ['room', 'aviary', 91]);
+  await page.evaluate(() => { px = 11.5; py = 8.4; });
+  assert.match(await prompt(), /cup of seed/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [money, T - seedT < 1]), [90, true]);
+  await page.evaluate(() => leaveRoom());
+  // the gardeners' shed
+  await at(...await page.evaluate(() => SHED));
+  assert.match(await prompt(), /work a shift with the gardeners/);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'garden');
 }));

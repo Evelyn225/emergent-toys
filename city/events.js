@@ -1,5 +1,5 @@
 // ===== the calendar: which day of the week it is, and what's on. Days tick over at midnight (and when you sleep
-// through one). Starting simple: every Saturday night, fireworks over the bay off the pleasure pier.
+// through one). Starting simple: every Saturday night, fireworks over the bay off the Sunset Pier.
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const weekday = () => WEEKDAYS[mod(dayNum, 7)];
 // what's on: [weekday, from hour, to hour, what, a line for the newspaper and the gossip]

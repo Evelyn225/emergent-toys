@@ -290,7 +290,7 @@ test('a taxi tipped to step on it runs the red light; an ordinary one stops at i
   assert.ok(run(true) > 0, 'straight through it');
 });
 
-test('the pleasure pier: a deck off the shore you can walk out on, booths you can reach, the wheel clear of the water', () => {
+test('the Sunset Pier: a deck off the shore you can walk out on, booths you can reach, the wheel clear of the water', () => {
   const { loadCity } = require('./helpers/load-city.cjs');
   const { ev } = loadCity();
   assert.notStrictEqual(ev('districtOf(FAIR_BX, SHORE_S - 1)'), 'industrial');
@@ -317,4 +317,31 @@ test('the aquarium: its own building across the shore road from the pier, its fr
   }
   assert.ok(ev('AQUARIUM.doorU > FAIR.x0 && AQUARIUM.doorU < FAIR.x1'), 'its door faces the pier');
   assert.deepStrictEqual(JSON.parse(ev('JSON.stringify(AQUARIUM.sh.hours)')), [9, 21]);
+});
+
+test('the Botanical Gardens: one big walled park, no streets through it, a lake you can\'t walk on (but a jetty you can), glasshouses, gates that shut at night', () => {
+  const r = j(`(() => {
+    const cells = [], out = {};
+    for (let gy = 0.5; gy < GARDEN.h; gy++) for (let gx = 0.5; gx < GARDEN.w; gx++) cells.push([GARDEN.x0 + gx, GARDEN.y0 + gy]);
+    out.roads = cells.filter(([x, y]) => ROAD[idx(Math.floor(x), Math.floor(y))]).length;
+    out.lake = cells.filter(([x, y]) => gardenLake(x, y)).length;
+    out.lakeIsWater = cells.filter(([x, y]) => gardenLake(x, y)).every(([x, y]) => isWater(x, y));
+    out.jettyDry = !isWater(GARDEN.x0 + (JETTY.gx0 + JETTY.gx1) / 2, GARDEN.y0 + JETTY.gy);
+    out.houses = GLASSHOUSES.map(g => { const sh = SHOP[idx(GARDEN.x0 + g.gx0, GARDEN.y0 + g.gy0)]; return [g.word, map[idx(GARDEN.x0 + g.gx0, GARDEN.y0 + g.gy0)] > 0, sh && sh.word, sh && sh.fee]; });
+    out.gatesOnEdge = GARDEN_GATES.every(([gx, gy]) => gx === 0 || gy === 0 || gx === GARDEN.w || gy === GARDEN.h);
+    out.open = [7.9, 8, 13, 19.9, 20, 2].map(t => gardensOpen(t));
+    out.district = blockKind(8, 10);
+    out.treesInLake = treesB.flat().filter(t => gardenLake(t.x, t.y)).length;
+    out.trees = treesB.flat().filter(t => inGardens(t.x, t.y)).length;
+    return out;
+  })()`);
+  assert.strictEqual(r.roads, 0, 'the streets inside are gone');
+  assert.ok(r.lake > 20 && r.lakeIsWater, `a lake of ${r.lake} cells`);
+  assert.ok(r.jettyDry, 'the jetty is walkable');
+  assert.deepStrictEqual(r.houses, [['CONSERVATORY', true, 'CONSERVATORY', 5], ['AVIARY', true, 'AVIARY', 0]]);
+  assert.ok(r.gatesOnEdge);
+  assert.deepStrictEqual(r.open, [false, true, true, true, false, false], 'open 8am to 8pm');
+  assert.strictEqual(r.district, 'gardens');
+  assert.strictEqual(r.treesInLake, 0);
+  assert.ok(r.trees > 40, `${r.trees} trees`);
 });

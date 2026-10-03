@@ -1,4 +1,4 @@
-// ===== the aquarium, across the shore road from the pleasure pier (world.js gives it its lot). Inside: the open
+// ===== the aquarium, across the shore road from the Sunset Pier (world.js gives it its lot). Inside: the open
 // ocean window across the back of the main hall, a walk-through tunnel with sharks and rays going over your head,
 // a dark gallery of jellyfish, a bright one of reef tanks and a kelp forest, seahorses by the door, a touch pool
 // and a gift shop. Outside: the ground floor is one long tank behind glass, fish swimming past the windows.
@@ -6,6 +6,7 @@
 // Tanks are cells of the room grid, so they're solid and the raycaster draws their glass like any wall. A run of the
 // same tank letter is one tank: the fish in it swim its whole length, and you see them through either side.
 const AQUA_FEE = 8;
+AQUARIUM.sh.fee = AQUA_FEE;
 // O open ocean, R coral reef, J jellyfish, K kelp forest, H seahorses
 const AQUA_GRID = [
   '########################',

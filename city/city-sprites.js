@@ -20,6 +20,7 @@ function citySprites() {
   forNear(treesB, t => drawArt(...R(t.x, t.y), 0, 0.45 * t.s, 0.6 * t.s, ART.tree,
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
+  gardenSprites();
   for (const b of boats) {
     const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
@@ -633,7 +634,7 @@ function elSprites() {
   }
 }
 
-// ===== the pleasure pier: the Ferris wheel, the carousel, and the arch over the way in
+// ===== the Sunset Pier: the Ferris wheel, the carousel, and the arch over the way in
 // the wheel is a billboard turned to its real angle: sq = how face-on it is (its east-west axis across the screen),
 // so from the side it narrows to an ellipse and then a line. Cars are real-sized whatever the angle.
 function wheelCell(i, u, z, du, dz, L, sq) {
@@ -704,7 +705,7 @@ function carouselCell(i, u, z, du, dz, L, s) {
   }
   return false;
 }
-const FAIR_SIGN = 'PLEASURE PIER';
+const FAIR_SIGN = 'SUNSET PIER';
 function fairSprites() {
   const [wx, wy] = R(WHEEL.x, WHEEL.y);
   if (Math.hypot(wx, wy) < vis + 4) {

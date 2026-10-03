@@ -61,7 +61,7 @@ test('the skateboard only rolls outside; the ball rolls, stops, and comes back',
   assert.match(j("useHeld({ indoors: true })")[0], /Not in here/);
   ev("useHeld({ indoors: false })");
   assert.strictEqual(ev('fx.skating && footSpeed() > 1.5'), true);
-  ev("mode = 'walk'; px = 9 * 8 + 1; py = 10 * 8 + 4; buy('ball'); held = 1; useHeld({ indoors: false, x: px, y: py, a: Math.PI / 2 })");
+  ev("mode = 'walk'; px = 12 * 8 + 1; py = 10 * 8 + 4; buy('ball'); held = 1; useHeld({ indoors: false, x: px, y: py, a: Math.PI / 2 })");
   assert.ok(ev('!!ball'), 'kicked out into the street');
   assert.strictEqual(ev("inv.some(i => i.id === 'ball')"), false);
   ev('for (let k = 0; k < 400; k++) stepGoods(0.05)');
