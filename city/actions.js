@@ -104,7 +104,16 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
-    if (room.kind === 'jail') return T < room.until ? say(`Locked in. ${Math.ceil(room.until - T)}s to go.`) : (say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom());
+    if (room.kind === 'jail') {
+      if (T >= room.until) return say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom();
+      if (room.tried) return say(`Locked in. ${Math.ceil(room.until - T)}s to go.`);
+      room.tried = true; // one shot at it
+      return startCrime('jailbreak', ok => {
+        if (ok === 'abort') return say('You lose your nerve. No second chances.', 3);
+        if (!ok) { room.until += 30; return say('"Nice try." Thirty more seconds for that.', 4); }
+        room.until = T; leaveRoom(); say('You slip out past the front desk. Nobody saw a thing.', 4);
+      });
+    }
     if (room.burgled && nearKeeper()) return emptyTill();
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;

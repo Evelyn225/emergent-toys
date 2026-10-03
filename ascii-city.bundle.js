@@ -2185,6 +2185,75 @@ GAMES.lockpick = (rnd = Math.random) => {
   return g;
 };
 
+// breaking out of jail: sneak from your cell (bottom left) to the door (top right) while a guard walks his rounds
+// with a flashlight. Crates block the beam. Step into the light, or bump into him, and he's got you. One cell per
+// arrow press (held, it repeats). 45 seconds before the shift changes and they count heads.
+GAMES.jailbreak = (rnd = Math.random) => {
+  const W = 30, H = 13, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true };
+  const cell = (x, y) => y * W + x, solid = new Set();
+  for (let x = 0; x < W; x++) solid.add(cell(x, 0)).add(cell(x, 10));
+  for (let y = 0; y <= 10; y++) solid.add(cell(0, y)).add(cell(W - 1, y));
+  const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 8], [11, 8]], [[17, 8]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
+  for (const grp of CRATES) for (const [x, y] of grp) solid.add(cell(x, y));
+  const door = [W - 2, 1], you = [2, 9], ROUTE = [[3, 2], [26, 2], [26, 8], [3, 8]];
+  let gx = 3, gy = 2, leg = 1, wait = 0, fx_ = 1, fy_ = 0, t = 0, rep = 0;
+  const lit = new Set();
+  const clear = (x0, y0, x1, y1) => { // nothing solid on the way from (x0, y0) to (x1, y1)
+    for (let s = 1; s < 8; s++) { const x = Math.round(x0 + (x1 - x0) * s / 8), y = Math.round(y0 + (y1 - y0) * s / 8); if (solid.has(cell(x, y)) && !(x === x1 && y === y1)) return false; }
+    return true;
+  };
+  const shine = () => { // the cone: six cells ahead, widening
+    lit.clear();
+    const ox = Math.round(gx), oy = Math.round(gy);
+    for (let d = 1; d <= 6; d++) for (let o = -(d >> 1); o <= d >> 1; o++) {
+      const x = ox + fx_ * d - fy_ * o, y = oy + fy_ * d + fx_ * o;
+      if (x < 0 || y < 0 || x >= W || y > 10 || solid.has(cell(x, y)) || !clear(ox, oy, x, y)) continue;
+      lit.add(cell(x, y));
+    }
+  };
+  shine();
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    // you: a cell per press, repeating while held
+    const dir = k.leftP || k.left ? [-1, 0] : k.rightP || k.right ? [1, 0] : k.upP || k.up ? [0, -1] : k.downP || k.down ? [0, 1] : null;
+    if (k.leftP || k.rightP || k.upP || k.downP) rep = 0;
+    if (dir && (rep -= dt) <= 0) {
+      rep = 0.16;
+      const nx = you[0] + dir[0], ny = you[1] + dir[1];
+      if (!solid.has(cell(nx, ny))) { you[0] = nx; you[1] = ny; ev.push('hop'); } else ev.push('bump');
+    }
+    // the guard: along his round, pausing at each corner to look about
+    if (wait > 0) { wait -= dt; if (wait < 0.5) { const n = ROUTE[leg]; fx_ = Math.sign(n[0] - gx); fy_ = Math.sign(n[1] - gy); } }
+    else {
+      const [tx, ty] = ROUTE[leg], d = Math.hypot(tx - gx, ty - gy), s = Math.min(d, 3.2 * dt);
+      fx_ = Math.sign(tx - gx); fy_ = Math.sign(ty - gy);
+      gx += fx_ * s; gy += fy_ * s;
+      if (d - s < 1e-6) { leg = (leg + 1) % ROUTE.length; wait = 1.1; }
+    }
+    shine();
+    if (you[0] === door[0] && you[1] === door[1]) { g.over = g.success = true; g.score = 1; ev.push('clear'); return ev; }
+    if (lit.has(cell(you[0], you[1])) || Math.abs(gx - you[0]) + Math.abs(gy - you[1]) < 1.2 || t > 45) { g.over = true; ev.push('die'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let y = 0; y <= 10; y++) for (let x = 0; x < W; x++) {
+      const i = cell(x, y);
+      if (solid.has(i)) { const wall = x === 0 || y === 0 || x === W - 1 || y === 10; put(x, y, wall ? '#' : '=', wall ? C(GRAY, 8) : C(BRICK, 12), wall ? C(GRAY, 2) : C(BRICK, 3)); }
+      else if (lit.has(i)) put(x, y, '.', C(YEL, 12), C(YEL, 3));
+    }
+    put(door[0], door[1], 'D', C(GREEN, 15), C(GREEN, 4));
+    put(Math.round(gx), Math.round(gy), 'G', C(BLUE, 15), C(BLUE, 4));
+    put(you[0], you[1], '@', C(WHITE, 15), lit.has(cell(you[0], you[1])) ? C(RED, 6) : NONE);
+    text(0, 12, `${Math.max(0, 45 - t) | 0}s till the head count`, C(t > 35 ? RED : GRAY, 12));
+  };
+  g.status = () => 'ARROWS sneak to the door (D). Stay out of the light.';
+  g.reward = () => 0;
+  g.state = () => ({ you, gx, gy, lit, door, solid, t });
+  return g;
+};
+
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
@@ -2313,7 +2382,7 @@ function callUnits() {
       const p = randomLane(30, wanted.lastX, wanted.lastY);
       c = addCar({ ...p, kind: 'police', body: BLUE, patrol: true, extra: true });
     }
-    Object.assign(c, { pursuit: true, cruise: 2.0, dest: [wanted.lastX, wanted.lastY] });
+    Object.assign(c, { pursuit: true, cruise: 2.5, dest: [wanted.lastX, wanted.lastY] }); // (faster than you drive, unless you floor it)
   }
 }
 function clearWanted() {
@@ -2356,13 +2425,21 @@ function stepCrime(dt) {
     c.dropped = true;
     footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true });
   }
+  // in a car with a cruiser on your bumper: told to pull over, and if you don't, a PIT manoeuvre spins you out
+  let told = false;
+  if (mode === 'drive' && me) {
+    const tail = cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.3);
+    wanted.tailT = tail ? (wanted.tailT || 0) + dt : Math.max(0, (wanted.tailT || 0) - dt * 0.5);
+    if (tail && T > (wanted.toldT || 0)) { wanted.toldT = T + 8; told = true; }
+    if (wanted.tailT > 4 && Math.abs(me.v) > 0.5) { wanted.tailT = 0; me.spunT = T + 2.5; return 'pit'; }
+  }
   // caught: a hand on your shoulder, or boxed in and stopped
   const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22)
     || inside && footCops.some(c => c.chase && near(c.x, c.y, wx, wy) < 0.35); // inside: they come in through the door after you
-  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.0) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
+  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
-  return wanted.seen ? 'seen' : 'hiding';
+  return told ? 'pullover' : wanted.seen ? 'seen' : 'hiding';
 }
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
 function tidyPolice() {
@@ -4575,7 +4652,7 @@ function promptText() {
   const cp = crimePrompt();
   if (cp) return cp;
   if (mode === 'room') {
-    if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go` : 'E: the guard lets you out';
+    if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go${room.tried ? '' : '   E: try to break out (one chance)'}` : 'E: the guard lets you out';
     if (room.kind === 'train') return room.dest == null
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
@@ -4815,7 +4892,16 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
-    if (room.kind === 'jail') return T < room.until ? say(`Locked in. ${Math.ceil(room.until - T)}s to go.`) : (say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom());
+    if (room.kind === 'jail') {
+      if (T >= room.until) return say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom();
+      if (room.tried) return say(`Locked in. ${Math.ceil(room.until - T)}s to go.`);
+      room.tried = true; // one shot at it
+      return startCrime('jailbreak', ok => {
+        if (ok === 'abort') return say('You lose your nerve. No second chances.', 3);
+        if (!ok) { room.until += 30; return say('"Nice try." Thirty more seconds for that.', 4); }
+        room.until = T; leaveRoom(); say('You slip out past the front desk. Nobody saw a thing.', 4);
+      });
+    }
     if (room.burgled && nearKeeper()) return emptyTill();
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
@@ -6304,7 +6390,9 @@ function move(fx, fy) {
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
 function drive(dt) {
-  const c = me, f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  const spun = me.spunT > T; // spun out by the police: no say in it till you've stopped turning
+  const c = me, f = spun ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = spun ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (me.spunT - T) / 2.5; }
   if (f > 0) c.v += (c.v < 0 ? 2.5 : 1) * dt; else if (f < 0) c.v -= (c.v > 0 ? 2.5 : 0.8) * dt; else c.v *= 1 - 0.7 * dt;
   c.v = clamp(c.v, -0.5, K.ShiftLeft || K.ShiftRight ? 3.2 : 2.2);
   a += s * dt * 1.8 * clamp(c.v / 0.5, -1, 1);
@@ -6361,6 +6449,8 @@ function loop(t) {
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
   else if (law === 'lost') say('You lost them.', 3);
+  else if (law === 'pullover') say('"PULL OVER!" booms from the cruiser on your tail.', 3);
+  else if (law === 'pit') { say('The cruiser clips your back corner and you spin out.', 3); if (actx) playClip('crash', 0.6); }
   else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
     const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
     say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);

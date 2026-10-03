@@ -211,8 +211,11 @@ test('busted: no fine money means a cell; a minute later the guard lets you out 
   assert.strictEqual(await page.evaluate(() => mode), 'walk');
   await page.keyboard.press('Digit2');
   assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, inv.length, money, wanted.stars]), ['room', 'jail', 0, 17, 0]);
+  await page.keyboard.press('KeyE'); // the one try at breaking out: back off from it
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'jailbreak');
+  await page.keyboard.press('Escape');
   await page.keyboard.press('KeyE');
-  assert.strictEqual(await page.evaluate(() => room && room.kind), 'jail', 'still locked in');
+  assert.deepStrictEqual(await page.evaluate(() => [room && room.kind, !!game]), ['jail', false], 'still locked in, no second try');
   await page.evaluate(() => { room.until = T; });
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [mode, Math.min(...SERVICES.filter(b => b.kind === 'police').map(b => Math.hypot(rel(b.x - px), rel(b.y - py)))) < 1.5]), ['walk', true], 'out, by the station');
