@@ -62,7 +62,6 @@ let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet =
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
 let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
-let skateThird = true, skater = null; // on the board: watch yourself from behind (V toggles); where you really are while the camera's back there
 const K = {}; // keys held, by KeyboardEvent.code
 const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
@@ -4111,7 +4110,6 @@ function citySprites() {
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
-  if (skater) drawSkater();
   for (const b of boats) {
     const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
@@ -6817,10 +6815,10 @@ function drawDeck(x, rx, ry, t0, t1) {
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
-      : skater ? 0.25 : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : chaseOn ? 0.28 : 0.12;
-  eye += skater ? 0 : eyeLift() * (mode === 'room' ? 1 : 0.1); // (the camera behind you doesn't jump when you do) // jumping, crouching, sitting (metres; a cell outdoors is 10)
+      : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : chaseOn ? 0.28 : 0.12;
+  eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
-  hor = (rows >> 1) + (pitch - (skater ? 0.16 : 0)) * rows + shake() | 0; // (looking down a little at yourself on the board)
+  hor = (rows >> 1) + pitch * rows + shake() | 0;
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
   for (let x = 0; x < cols; x++) {
@@ -8357,7 +8355,7 @@ function drawHeldBig() {
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();
-  if (!it || !onFoot || skater || fx.skating && it.id === 'skateboard') return;
+  if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
@@ -9764,8 +9762,8 @@ function drawBoard3D() {
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
-  const cy = skater ? eye * 10 - body.z - 0.09 : 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
-  const cz = skater ? skater.back * 10 : 1.15; // a few metres ahead when you're watching from behind
+  const cy = 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
+  const cz = 1.15;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   const pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS, ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
   const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
@@ -9795,18 +9793,6 @@ function drawBoard3D() {
     for (let v = -0.09; v <= 0.09; v += 0.01) plot(tu, v, -BOARD_T / 2 - 0.03, '-', C(GRAY, 12), C(GRAY, 3));
     for (const wv of [-0.1, 0.1]) for (let dh = 0; dh < 0.05; dh += 0.01) plot(tu, wv, -BOARD_T / 2 - 0.035 - dh, 'O', C(WHITE, 15), C(GRAY, 4));
   }
-}
-
-// you, seen from behind on the board: knees bent riding, tucked in the air, arms out for balance
-const SKATER_ART = {
-  ride: pad(['   ___   ', '  /%%%\  ', '  \%%%/  ', '  _|#|_  ', ' /#####\ ', '//#####\\', '"|#####|"', '  |###|  ', '  |/ \|  ', '  /   \  ', ' /     \ ', '[]     []']),
-  air: pad(['"  ___  "', '\\/%%%\//', '  \%%%/  ', '  _|#|_  ', '  |###|  ', '  |###|  ', '  |###|  ', '  |###|  ', '  /| |\  ', ' |_| |_| ', '         ', '         ']),
-};
-function drawSkater() {
-  const [vx, vy] = R(skater.x, skater.y), moving = K.KeyW || K.KeyS;
-  const art = body.z > 0.05 ? SKATER_ART.air : SKATER_ART.ride, shirt = fx.fresh > 0 ? CYAN : RED;
-  drawArt(vx, vy, body.z * 0.1 + 0.01, 0.075, 0.17 - body.crouch * 0.03 + (moving ? Math.sin(T * 4) * 0.002 : 0), art,
-    (c, row, L) => C(row < 3 ? BRICK : c === '"' ? SKIN : row < 7 ? shirt : c === '[' || c === ']' ? WHITE : BLUE, Math.max(L, 7))); // hair, shirt, jeans, sneakers
 }
 // ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
 // your cars are parked), kept in localStorage every few seconds and when you leave. Not saved: where you are, the
@@ -9870,7 +9856,6 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && me) third = !third;
-  else if (e.code === 'KeyV' && skatingNow()) { skateThird = !skateThird; say(skateThird ? 'Camera: behind you' : 'Camera: your eyes', 1.2); }
   if (e.code === 'KeyM') showMap = !showMap;
   if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
   const n = /^Digit([1-6])$/.exec(e.code);
@@ -9993,14 +9978,9 @@ function loop(t) {
     if (room.rideT <= 0) arriveAt(room.dest);
   }
   chaseOn = !!me && third;
-  skater = skatingNow() && skateThird && !sleep ? { x: px, y: py, back: 0.34 } : null;
   if (chaseOn) { // render from behind the car, then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
-  } else if (skater) { // skating: from a few metres behind you, so you can watch your tricks
-    const bx = Math.cos(a), by = Math.sin(a);
-    while (skater.back > 0.08 && !free(px - bx * skater.back, py - by * skater.back)) skater.back -= 0.02;
-    px -= bx * skater.back; py -= by * skater.back; render(dt); [px, py] = [skater.x, skater.y];
   } else { // a drink or two and the world sways; more and you're seeing double
     camYaw = a; const wob = Math.min(1.3, fx.booze);
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
@@ -10126,7 +10106,6 @@ function touchActions() {
     if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
     if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
-    if (skatingNow()) out.push(['Camera', 'KeyV', 'pop']);
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push(['Jump', 'Space', 'jump']);
   }
