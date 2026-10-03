@@ -627,14 +627,8 @@ test('the Botanical Gardens: gates locked at night, a swan boat on the lake, duc
   assert.strictEqual(await page.evaluate(() => game && game.g.id), 'garden');
 }));
 
-test('on the board the camera sits behind you (V for your own eyes); shut-down shops say so; each district paints its own walls', () => withPage(async page => {
-  await page.evaluate(() => { tod = 13; weather = 'clear'; fx.skating = true; mode = 'walk'; px = 12 * 8 + 1; py = 10 * 8 + 4; a = Math.PI / 2; });
-  await page.waitForTimeout(200);
-  assert.deepStrictEqual(await page.evaluate(() => [!!skater, skater && skater.back > 0.05, px, py]), [true, true, 12 * 8 + 1, 10 * 8 + 4], 'watching from behind; you stay where you are');
-  await page.keyboard.press('KeyV');
-  await page.waitForTimeout(100);
-  assert.strictEqual(await page.evaluate(() => skater), null, 'V: back to your own eyes');
-  await page.evaluate(() => { fx.skating = false; });
+test('shut-down shops say so; each district paints its own walls', () => withPage(async page => {
+  await page.evaluate(() => { tod = 13; weather = 'clear'; mode = 'walk'; });
   const shut = await page.evaluate(() => { for (let k = 0; k < N * N; k++) { const sh = SHOP[k], x = k % N, y = k / N | 0; if (sh && sh.kind === SHOP_SHUT && !map[idx(x, y + 1)] && ROAD[idx(x, y + 1)]) return [x, y]; } });
   await page.evaluate(([x, y]) => { px = x + 0.5; py = y + 1.25; a = -Math.PI / 2; pitch = 0; }, shut);
   await page.waitForTimeout(150);
@@ -657,4 +651,47 @@ test('every food and drink shows itself being used up (a level going down, steam
     return out;
   });
   assert.deepStrictEqual(same, []);
+}));
+
+test('a shop you\'ve broken into: E means the till only at the counter, the way out only by the door', () => withPage(async page => {
+  await page.evaluate(() => { enterRoom('store', { word: 'DELI', neon: RED, ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]); });
+  const at = (x, y) => page.evaluate(([x, y]) => { px = x; py = y; return [promptText(), eLabel(promptText())]; }, [x, y]);
+  const keeper = await page.evaluate(() => room.def.keeper);
+  assert.deepStrictEqual(await at(keeper[0], keeper[1] + 0.5), ['G: take something   E: the till', 'Till']);
+  const door = await page.evaluate(() => [room.W / 2, room.H - 1.6]);
+  assert.deepStrictEqual(await at(door[0], door[1]), ['G: take something   E: leave', 'Exit']);
+  await page.evaluate(() => { px = 1.6; py = room.H / 2; });
+  if (await page.evaluate(() => !nearKeeper() && !nearExit())) assert.strictEqual(await page.evaluate(() => promptText()), 'G: take something');
+}));
+
+test('smoke hangs in the air: a drag leaves puffs in front of you, gone in seconds outside and lingering indoors', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    tod = 15; mode = 'walk'; haze.length = 0;
+    cigTip = 1; stepHaze(0.05); for (let k = 0; k < 20; k++) stepHaze(0.05); // breathe it out
+    const out = haze.length, ahead = haze.every(p => Math.cos(a) * rel(p.x - px) + Math.sin(a) * rel(p.y - py) > 0);
+    for (let k = 0; k < 200; k++) stepHaze(0.05); // ten seconds
+    const outLater = haze.length;
+    enterRoom('bar', { word: 'BAR', neon: MAG, ret: [px, py, a], line: '' }, [6, 6, -Math.PI / 2]);
+    cigTip = 0; stepHaze(0.05); cigTip = 1; for (let k = 0; k < 21; k++) stepHaze(0.05);
+    const inside = haze.length; for (let k = 0; k < 200; k++) stepHaze(0.05);
+    return [out > 0, ahead, outLater, inside > 0, haze.length === inside];
+  });
+  assert.deepStrictEqual(r, [true, true, 0, true, true]);
+}));
+
+test('street life: manholes in the road (some steaming), and pigeons that take off when you walk up to them', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    let holes = 0, steaming = 0;
+    for (let y = 0; y < N; y += 1) for (let x = 0; x < N; x += 1) { const m = manholeAt(x + 0.5, y + 0.5); if (m && Math.floor(m[0]) === x && Math.floor(m[1]) === y) { holes++; if (m[2]) steaming++; } }
+    tod = 11; mode = 'walk'; haze.length = 0;
+    const m = (() => { for (let y = 60; y < 200; y++) for (let x = 60; x < 200; x++) { const mm = manholeAt(x + 0.5, y + 0.5); if (mm && mm[2]) return mm; } })();
+    px = m[0]; py = m[1] + 0.4; steamT = 0; stepSteam(0.05);
+    const steam = haze.some(p => p.kind === 'steam');
+    px = 12 * 8 + 0.15; py = 10 * 8 + 4; flocks.length = 0;
+    flocks.push({ x: px, y: py + 0.6, birds: [0, 1, 2, 3].map(k => ({ dx: k * 0.02, dy: 0, ph: k, dir: 1, z: 0 })), scared: 0 });
+    stepPigeons(0.05); const calm = !flocks[0].scared;
+    py += 0.4; stepPigeons(0.05); for (let k = 0; k < 20; k++) stepPigeons(0.05);
+    return [holes > 40, steaming > 10, steam, calm, !!flocks[0].scared, flocks[0].birds.every(b => b.z > 0)];
+  });
+  assert.deepStrictEqual(r, [true, true, true, true, true, true]);
 }));

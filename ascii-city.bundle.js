@@ -62,7 +62,6 @@ let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet =
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
 let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
-let skateThird = true, skater = null; // on the board: watch yourself from behind (V toggles); where you really are while the camera's back there
 const K = {}; // keys held, by KeyboardEvent.code
 const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
@@ -1780,7 +1779,7 @@ const ITEMS = {
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
-  duck: { name: 'rubber duck', price: 3, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
+  duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
   spraypaint: { name: 'spray paint', price: 8, kind: 'toy', uses: 6 }, // (graffiti.js)
 };
 // the arcade's prize counter: what tickets buy
@@ -1813,7 +1812,7 @@ const STOCK_WORD = {
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft'],
-  'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
+  'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
@@ -1829,6 +1828,10 @@ let held = 0; // which slot is in your hand; -1 = nothing, hands empty
 const holdSlot = k => { held = held === k ? -1 : k; };
 const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0 };
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
+// luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
+// anything, the dragon's a bit more, and they add up
+const luck = () => (inv.some(it => it.id === 'jadebangle') ? 0.03 : 0) + (inv.some(it => it.id === 'jadedragon') ? 0.08 : 0);
+const YOYO_DUR = 2.4; // how long a yo-yo trick takes (fx.yoyoTrick says which: see drawYoyo)
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
@@ -1923,11 +1926,13 @@ function useHeld(near) {
     case 'book': return [pick(BOOK_LINES), 'page'];
     case 'newspaper': return [`Headline: ${pick(near.headlines)}`, 'page'];
     case 'vinyl': return ['You admire the sleeve. Shame you don\'t have a record player.', null];
+    case 'jadebangle': return [pick(['You turn the bangle round your wrist. Cool and smooth. Lucky, they say.', 'The jade catches the light. You feel a tiny bit luckier.']), null];
+    case 'jadedragon': return [pick(['You rub the dragon\'s head for luck.', 'The little jade dragon stares back, very sure of itself.', 'You give the dragon a pat. Good fortune, apparently, follows.']), null];
     case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head.']), null];
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.']), null];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
-    case 'yoyo': fx.yoyo = 1.4; return [pick(['Walk the dog.', 'Around the world.', 'Rock the baby.', 'It sleeps at the bottom, then snaps back up.']), 'whirr'];
+    case 'yoyo': fx.yoyoTrick = Math.random() * 4 | 0; fx.yoyo = YOYO_DUR; return [['Walk the dog.', 'Around the world.', 'Rock the baby.', 'It sleeps at the bottom, then snaps back up.'][fx.yoyoTrick], 'whirr'];
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something
         near.person.talk = 4;
@@ -2631,9 +2636,10 @@ GAMES.pachinko = (rnd = Math.random) => {
         b.y++;
       }
       for (const b of balls.filter(b => b.y >= H - 2)) {
-        const p = POCKETS[b.x];
+        let p = POCKETS[b.x];
+        if (!p && rnd() < luck() * 2.5) for (const o of [-1, 1]) if (POCKETS[b.x + o]) { p = POCKETS[b.x + o]; break; } // (lucky: it rolls in after all)
         if (p === 'small') { g.score += 2; ev.push('eat'); }
-        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 }; }
+        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 + luck() * 0.5 }; }
         b.dead = true;
       }
       balls = balls.filter(b => !b.dead);
@@ -2751,7 +2757,14 @@ GAMES.mahjong = (rnd = Math.random) => {
   let turn = 0, state = 'you', wait = 0, cur = 0, drawn = null, last = null, msg = 'Your turn. Draw done: pick a tile to throw away.';
   const sortHand = h => h.sort((a, b) => a - b);
   const end = (winner, how) => { g.over = true; g.result = { winner, how }; g.score = winner === 0 ? 1 : 0; };
-  const draw = p => { if (!wall.length) { end(-1, 'the wall ran out'); return null; } const t = wall.shift(); hands[p].push(t); return t; };
+  const draw = p => {
+    if (!wall.length) { end(-1, 'the wall ran out'); return null; }
+    if (p === 0 && hands[0].length === 13 && rnd() < luck()) { // lucky: the tile you're waiting on turns up, if it's near the top of the wall
+      const ws = mjWaits(hands[0]), k = wall.slice(0, 6).findIndex(t => ws.includes(t));
+      if (k > 0) [wall[0], wall[k]] = [wall[k], wall[0]];
+    }
+    const t = wall.shift(); hands[p].push(t); return t;
+  };
   drawn = draw(0); cur = hands[0].indexOf(drawn); sortHand(hands[0]); cur = hands[0].lastIndexOf(drawn);
   // a discard by p: does anyone want it to win? (you first, then the others in turn order)
   const afterDiscard = (p, t) => {
@@ -3303,11 +3316,20 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       const centered = (uStep >= 0.1 || oneCell((fract(u * 10) - 0.5) * 0.1, uStep)) && oneCell(z - 0.36, d / projY);
       const lvl = !open ? L * 0.5 : sh.kind === SHOP_APTS ? L : Math.max(L, night * 15 * Math.max(fog, 0.5)); // closed: sign off
       // closer still, big enough for it: the letter drawn large in blocks, so the sign grows as you walk up to it
-      if (p < w.length && GLYPH5[w[p]] !== undefined && 0.1 / uStep >= 4 && 0.08 / (d / projY) >= 5) {
-        const gx = Math.floor(fract(u * 10) * 4), gy = Math.floor((0.4 - z) / 0.08 * 5); // (a column's gap after each letter)
-        const col = ARCADE_SIGN.has(w) && open ? NEON[(p + Math.floor(T * 6)) & 3] : sh.neon, on = glyphOn(w[p], gx, gy);
-        if (on) BG[i] = C(col, Math.min(lvl, 15) * 0.25);
-        return set(i, on ? '#' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+      // From a little further off, while a letter's still only a few cells big, each cell shows how much of the letters
+      // falls in it (sampled 3 x 3), so they firm up smoothly instead of breaking into bits
+      const du = uStep, dz = d / projY;
+      if (0.1 / du >= 2.2 && 0.08 / dz >= 2.8) {
+        let on = 0, pk = -1;
+        for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
+          const uu = u + (a - 1) * du / 3, zz = z + (b - 1) * dz / 3, q = mod(Math.floor(uu * 10), m);
+          if (q < w.length && GLYPH5[w[q]] !== undefined && zz > 0.32 && zz < 0.4 && glyphOn(w[q], Math.floor(fract(uu * 10) * 4), Math.floor((0.4 - zz) / 0.08 * 5))) { on++; pk = q; }
+        }
+        if (p < w.length && GLYPH5[w[p]] !== undefined || on) {
+          const col = ARCADE_SIGN.has(w) && open ? NEON[((pk < 0 ? p : pk) + Math.floor(T * 6)) & 3] : sh.neon, f = on / 9;
+          if (f > 0.4) BG[i] = C(col, Math.min(lvl, 15) * 0.25 * f);
+          return set(i, f > 0.75 ? '#' : f > 0.5 ? '+' : f > 0.25 ? ':' : f > 0 ? '.' : ' ', C(col, ARCADE_SIGN.has(w) && open ? Math.max(lvl, 13) : lvl));
+        }
       }
       if (ARCADE_SIGN.has(w) && open) { // flashier than the rest: a chasing rainbow, bulbs between
         const lit = Math.max(lvl, 13), chase = Math.floor(T * 6);
@@ -3680,6 +3702,8 @@ function floorCell(i, r, x, rx, ry) {
     else if (n === 1 && fract(lx * 4) < 0.5 || w === 1 && fract(ly * 4) < 0.5) { ch = '='; base = WHITE; }
   } else {
     const e = road === 1 ? lx : ly, along = road === 1 ? wy : wx, bridge = road === 1 && onBridge(bx, by);
+    const mh = manholeCell(wx, wy, L); // a manhole cover
+    if (mh) { set(i, mh[0], mh[1]); BG[i] = mh[2]; return; }
     if (bridge && (e < 0.06 || e > 1.94)) { ch = '|'; k = 1.6; } // railings
     else if (e < 0.3 || e > 1.7) { ch = bridge ? '=' : ','; k = 1.3; } // sidewalk (on a bridge, a walkway of plates)
     else if (Math.abs(e - 1) < 0.04 && fract(along * 2) < 0.5) { ch = '='; base = YEL; k = 1.5; }
@@ -4110,7 +4134,7 @@ function citySprites() {
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
-  if (skater) drawSkater();
+  drawPigeons();
   for (const b of boats) {
     const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
@@ -5612,6 +5636,7 @@ function roomFloor(i, r, x, rx, ry) {
     case 'cathedral': return cathedralFloor(i, f, wx, wy);
     case 'jail': return jailFloor(i, f, wx, wy);
     case 'conservatory': return conservatoryFloor(i, f, wx, wy);
+    case 'jade': return jadeFloor(i, f, wx, wy);
     case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
@@ -6345,7 +6370,24 @@ const gardenLawn = (x, y) => { // grass you could sit down on
 const BED_PAL = [[MAG, WHITE, RED], [YEL, ORANGE, RED], [BLUE, MAG, WHITE], [RED, YEL, WHITE], [CYAN, BLUE, WHITE], [ORANGE, YEL, MAG], [MAG, RED, YEL]];
 
 // ---- the ground
+// sat down on the lawn: a picnic blanket under you, red and white check with a fringe, squared up with the way you
+// face, from under you out in front (2.4m wide, 4m long: the near end's under you, out of sight); a wicker basket on it
+const PICNIC_HALF = 0.12, PICNIC_LONG = 0.2, PICNIC_AHEAD = 0.18;
+const picnicLocal = (wx, wy) => { // where (wx, wy) is on the blanket: [along, across], or null off it
+  const s = body.seat;
+  if (!s || !s.grass) return null;
+  const dx = rel(wx - s.x), dy = rel(wy - s.y), along = dx * s.fx + dy * s.fy - PICNIC_AHEAD, across = -dx * s.fy + dy * s.fx;
+  return Math.abs(along) < PICNIC_LONG && Math.abs(across) < PICNIC_HALF ? [along, across] : null;
+};
 function gardenFloor(i, r, x, wx, wy, L) { // true if it painted the cell itself; else [ch, base, k]
+  const pic = picnicLocal(wx, wy);
+  if (pic) {
+    const [al, ac] = pic, edge = Math.min(PICNIC_LONG - Math.abs(al), PICNIC_HALF - Math.abs(ac));
+    if (edge < 0.006) return set(i, (r + x) & 1 ? '|' : '\'', C(WHITE, L * 1.3)), true; // the fringe
+    const red = (Math.floor((al + PICNIC_LONG) / 0.04) + Math.floor((ac + PICNIC_HALF) / 0.04)) & 1, stripe = Math.abs(fract((al + PICNIC_LONG) / 0.04) - 0.5) < 0.12 || Math.abs(fract((ac + PICNIC_HALF) / 0.04) - 0.5) < 0.12;
+    BG[i] = red ? C(RED, 2 + L * 0.35) : C(WHITE, 2 + L * 0.3);
+    return set(i, stripe ? '+' : red ? '#' : ':', red ? C(RED, L * 1.4) : C(WHITE, L * 1.2)), true;
+  }
   const [gx, gy] = gardenLocal(wx, wy), e = gardenLakeEdge(gx, gy);
   if (onJetty(gx, gy)) return [Math.abs(gy - JETTY.gy) > JETTY.hw * 0.8 ? '|' : fract(gx * 6) < 0.2 ? '=' : '-', BRICK, 1.3];
   if (e > 0) { // the lake: ripples, lily pads near the edge, the sky in it
@@ -6505,8 +6547,13 @@ function gardenSprites() {
     art(pgx2 - 0.04, pgy2 - 0.01, 0, 0.05, 0.1, ART.sitter, (c, row, L) => C(row < 3 ? SKIN : [YEL, BLUE, GREEN][k - 1], L));
     art(pgx2 + 0.05, pgy2 + 0.01, 0, 0.05, 0.1, ART.sitter, (c, row, L) => C(row < 3 ? SKIN : [MAG, RED, WHITE][k - 1], L));
   }
+  if (body.seat && body.seat.grass) { // the picnic basket, on the blanket's far left corner
+    const s = body.seat, al = PICNIC_AHEAD + PICNIC_LONG * 0.55, ac = -PICNIC_HALF * 0.55, bx = s.x + s.fx * al - s.fy * ac, by = s.y + s.fy * al + s.fx * ac;
+    drawArt(rel(bx - px), rel(by - py), 0, 0.045, 0.04, PICNIC_BASKET, (c, row, L) => c === '#' ? C(RED, Math.max(L, 6)) : C(WARM, Math.max(L, 6)));
+  }
   if (boat) return;
 }
+const PICNIC_BASKET = pad(['  .--.  ', ' /    \\ ', '|######|', '|%%%%%%|', '|%%%%%%|', "'------'"]);
 
 // ---- out on the lake in a swan boat (mode 'boat')
 const nearJettyFoot = () => mode === 'walk' && (() => { const [gx, gy] = gardenLocal(px, py); return inGardens(px, py) && Math.abs(gx - JETTY.gx0 - 0.25) < 0.45 && Math.abs(gy - JETTY.gy) < 0.45; })();
@@ -6708,6 +6755,69 @@ Object.assign(ROOM_DEFS, {
 });
 Object.assign(ROOM_FOR, { CONSERVATORY: 'conservatory', AVIARY: 'aviary' });
 const aviaryKeeper = () => mode === 'room' && room.kind === 'aviary' && nearKeeper();
+// ===== the jade shop, in Chinatown: red lacquer walls with gold trim and a lattice, a carved jade dragon coiling
+// across the back wall through gold clouds, hanging scrolls, red lanterns overhead, glass cases of bangles and little
+// figures, a tall vase in the corner, a lucky cat waving on the counter, incense curling up. The bangles and dragons
+// it sells are lucky (see luck() in goods.js).
+const JADE_W = 12, JADE_H = 9;
+function jadeWall(i, su, uStep, z, d, mx, my, L) {
+  const u = Math.abs(su);
+  if (z < 0.85) { BG[i] = C(BRICK, 1 + L * 0.1); return set(i, fract(z / 0.28) < 0.12 ? '=' : fract(u * 1.5) < 0.06 ? '|' : ' ', C(BRICK, L * 0.8)), true; } // dark wood panelling
+  if (Math.abs(z - 0.88) < 0.04 || Math.abs(z - 2.62) < 0.04) return set(i, '=', C(YEL, Math.max(L, 10))), true; // gold trim
+  if (my === 0 && z > 0.95 && z < 2.55) { // the back wall: a jade dragon in relief, coiling through gold clouds
+    const body = 1.72 + 0.42 * Math.sin(u * 1.25 - 0.8), dz = Math.abs(z - body);
+    if (dz < 0.13 && u > 1.5 && u < JADE_W - 2.2) { BG[i] = C(GREEN, 2 + L * 0.1); return set(i, dz < 0.05 ? '=' : (Math.floor(u * 6) + Math.floor(z * 8)) & 1 ? '%' : '#', C(GREEN, Math.max(L * 1.2, 9))), true; }
+    if (u > JADE_W - 2.4 && u < JADE_W - 1.3 && Math.abs(z - (1.72 + 0.42 * Math.sin((JADE_W - 2.2) * 1.25 - 0.8))) < 0.32) { // its head, an eye, whiskers
+      BG[i] = C(GREEN, 2.5); return set(i, Math.abs(u - (JADE_W - 1.8)) < 0.12 && Math.abs(z - 1.86) < 0.08 ? '@' : '%', C(Math.abs(u - (JADE_W - 1.8)) < 0.12 ? RED : GREEN, 13)), true; }
+    if (dz > 0.18 && noise(u * 1.4, z * 2.2, 1301) > 0.68) { BG[i] = C(YEL, 2); return set(i, '@', C(YEL, Math.max(L, 9))), true; } // the clouds
+    BG[i] = C(RED, 1.5 + L * 0.12); return set(i, ' ', 0), true;
+  }
+  if (z > 2.62) { BG[i] = C(RED, 1 + L * 0.08); return set(i, ' ', 0), true; }
+  const scroll = Math.abs(fract(u / 2.6) - 0.5) < 0.12 && z > 1.05 && z < 2.45; // hanging scrolls between the lattice
+  if (scroll) { BG[i] = C(WHITE, 3 + L * 0.1); return set(i, hash(Math.floor(u * 4), Math.floor(z * 5), 1302) > 0.45 ? '#' : ' ', C(GRAY, 3)), true; }
+  BG[i] = C(RED, 1.5 + L * 0.12); // red lacquer with a gold lattice worked over it
+  return set(i, fract(u * 2 + z * 2) < 0.07 || fract(u * 2 - z * 2) < 0.07 ? '+' : ' ', C(YEL, L * 0.55)), true;
+}
+function jadeFloor(i, f, wx, wy) { // dark red tiles, a patterned runner up the middle
+  if (Math.abs(wx - JADE_W / 2) < 1) { BG[i] = C(RED, 1 + f * 1.5); return set(i, Math.abs(wx - JADE_W / 2) > 0.85 ? '|' : (Math.floor(wy * 2) & 1) ? '+' : 'o', C(YEL, 3 + f * 6)); }
+  BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(BRICK, 1 + f * 1.4) : C(RED, 0.8 + f);
+  return set(i, ' ', 0);
+}
+// a glass display case on a red base: jade laid out on red velvet inside, seen through the glass top and sides
+const jadeCase = (x, y, hl, hw, items) => BX(x, y, hl, hw, 0, 1, (i, t, L) => {
+  const f = HIT.face, w = HIT.w, u = HIT.u + 9, v = (HIT.v ?? 0) + 9;
+  const piece = (a, b) => { const k = hash(Math.floor(a * 3), Math.floor(b * 3), x * 7 + y); return k > 0.5 && Math.abs(fract(a * 3) - 0.5) < 0.3 && Math.abs(fract(b * 3) - 0.5) < 0.3 ? items[k * 97 % items.length | 0] : null; };
+  if (f === 5) { // looking down through the glass top
+    if (Math.abs(HIT.u) > hl - 0.06 || Math.abs(HIT.v ?? 0) > hw - 0.06) return set(i, '=', C(YEL, Math.max(L, 9))), true; // the gold frame
+    const pc = piece(u, v);
+    BG[i] = C(RED, 1 + L * 0.08);
+    return set(i, pc || (hash(Math.floor(u * 9), Math.floor(v * 9), 1303) > 0.96 ? '/' : ' '), pc ? C(GREEN, Math.max(L * 1.2, 11)) : C(WHITE, 8)), true; // (a glint on the glass)
+  }
+  if (w < 0.45) { BG[i] = C(RED, (1 + L * 0.15) * shadeFace(f)); return set(i, w > 0.41 ? '=' : ' ', C(YEL, L)), true; } // the base
+  if (w > 0.95) return set(i, '=', C(YEL, Math.max(L, 9))), true; // the frame along the top
+  const pc = w > 0.5 && w < 0.88 ? piece(u, w * 2) : null; // through the side: the pieces on their stands
+  BG[i] = pc ? C(RED, 1) : C(CYAN, 0.8);
+  return set(i, pc || (Math.abs(fract(u * 2) - 0.5) < 0.03 ? '|' : ' '), pc ? C(GREEN, Math.max(L * 1.2, 11)) : C(WHITE, L * 0.5)), true;
+});
+const JADE_VASE = pad(['  ___  ', ' (___) ', '  ) (  ', ' /%%%\\ ', '(%%@%%)', '(%%%%%)', ' \\%%%/ ', '  ===  ']);
+const JADE_CAT = pad([' /\\_/\\ ', '( ^.^ )/', ' (=Y=) ', ' (___) ']);
+ROOM_DEFS.jade = { grid: boxRoom(JADE_W, JADE_H), light: 0.75, floor: 'jade', ceil: 'lantern', sign: true, signAt: 3, wall: jadeWall, keeper: [6, 1.6],
+  props: r => {
+    const p = [...counterBox(6, 2.2, 1.6), standing(6, 1.6, GREEN)];
+    p.push({ ...SP(7.1, 2.2, 0.45, 0.5, JADE_CAT, (c, row, L) => c === '^' || c === 'Y' ? C(RED, 14) : C(WHITE, Math.max(L, 10)), 1.05), tick: s => { s.art = fract(T * 1.3) < 0.5 ? JADE_CAT : JADE_CAT.map((l, k) => k === 1 ? l.replace(')/', ')-') : l); } }); // waving
+    for (const [x, y] of [[2.2, 4.2], [9.8, 4.2], [2.2, 6.6], [9.8, 6.6]]) p.push(jadeCase(x, y, 0.9, 0.45, ['o', 'O', '&', '@', '8']));
+    p.push(SP(10.9, 1.4, 0.7, 1.5, JADE_VASE, (c, row, L) => c === '%' || c === '@' ? C(GREEN, Math.max(L * 1.2, 9)) : C(YEL, Math.max(L, 8))));
+    p.push(SP(1.2, 1.4, 0.35, 0.6, pad([' | ', ' | ', '[_]']), (c, row, L) => row < 2 ? C(RED, 14) : C(YEL, 12))); // the incense
+    if (chance(0.5)) p.push(standing(4.2, 5.4, shirt()));
+    return p;
+  } };
+ROOM_FOR.JADE = 'jade';
+let jadeIncenseT = 0;
+function stepJadeIncense(dt) { // a thread of incense smoke curling up in the corner, into the haze
+  if (mode !== 'room' || room.kind !== 'jade' || (jadeIncenseT -= dt) > 0) return;
+  jadeIncenseT = 0.7;
+  haze.push({ at: placeKey(), kind: 'smoke', s: 1, x: 1.2 + (Math.random() - 0.5) * 0.05, y: 1.4, z: 0.75, r: 0.1, rMax: 0.45, vx: 0, vy: 0.02, vz: 0.35, life: 0.8, fade: 1 / 5, seed: Math.random() * 100 });
+}
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
 function drawArt(rx_, ry_, z, w, h, art, colFn) {
@@ -6816,10 +6926,10 @@ function drawDeck(x, rx, ry, t0, t1) {
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
-      : skater ? 0.25 : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : chaseOn ? 0.28 : 0.12;
-  eye += skater ? 0 : eyeLift() * (mode === 'room' ? 1 : 0.1); // (the camera behind you doesn't jump when you do) // jumping, crouching, sitting (metres; a cell outdoors is 10)
+      : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : chaseOn ? 0.28 : 0.12;
+  eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
-  hor = (rows >> 1) + (pitch - (skater ? 0.16 : 0)) * rows + shake() | 0; // (looking down a little at yourself on the board)
+  hor = (rows >> 1) + pitch * rows + shake() | 0;
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
   for (let x = 0; x < cols; x++) {
@@ -6881,6 +6991,7 @@ function render(dt) {
   if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
   W.sprites();
+  drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (mode === 'drive' || mode === 'taxi') dash();
   if (mode === 'el') elFrame();
@@ -8304,6 +8415,8 @@ const HAND = {
   bento: (it, f) => [bitten([' .--------.', ' |@@|oo|~~|', ' |@@|oo|~~|', " '--------'"], f, 'top'), (c, r) => c === '@' ? C(WHITE, 15) : c === 'o' ? C(RED, 13) : c === '~' ? C(GREEN, 13) : C(BRICK, 13)],
   sake: (it, f) => [bitten(['   _', '  | |', ' /   \\', '|~~~~~|', '|_____|'], 0.45 + f * 0.55), (c, r) => c === '~' ? C(WHITE, 12) : C(WHITE, 15)],
   melonsoda: (it, f) => [filled(['   @  /', ' .---/-.', ' |    |', ' |    |', ' |    |', "  '--'"], [[2, 2, 5], [3, 2, 5], [4, 2, 5]], f, ':', '~'), (c, r) => c === '@' ? C(RED, 15) : c === ':' || c === '~' ? C(GREEN, 14) : C(WHITE, 12)],
+  jadebangle: () => [['  .-~~-.', ' / .--. \\', '| |    | |', ' \\ `--` /', "  `-~~-'"], (c, r) => C(GREEN, 13)],
+  jadedragon: () => [['   __/\\_', '  (@  ~~>', '  /|  \\', ' ~~\\__/~', ' [=====]'], (c, r) => c === '@' ? C(RED, 15) : r === 4 ? C(BRICK, 12) : C(GREEN, 13)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
   umbrella: () => [['     .', '    /|\\', '   / | \\', '  |  |  |', '  |==|==|', '  |  |  |', '   \\ | /', '    \\|/', '     |', '     |'],
@@ -8356,11 +8469,12 @@ function drawHeldBig() {
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();
-  if (!it || !onFoot || skater || fx.skating && it.id === 'skateboard') return;
+  if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const cx = Math.round(cv.width * 0.84), hy = Math.round(cv.height - 5.6 * hsz + bob); // the top of the fist: all of it on screen, a short arm to the edge
+  const lift = it.id === 'yoyo' && fx.yoyo > 0 ? Math.min(1, (YOYO_DUR - fx.yoyo) / 0.25, fx.yoyo / 0.25) : 0; // (your hand comes up in front of you for a yo-yo trick)
+  const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (drawHeldDense(it, cx, hy, hsz, grip)); // (the dense-art trial: the item drawn finer, the same hand)
   else if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
@@ -8375,28 +8489,31 @@ function drawHeldBig() {
     if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
   }
   drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
-  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(cx, grip, isz);
+  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(cx, grip);
   g.font = FS + 'px monospace';
 }
 // the umbrella open over you, seen from underneath: panels of fabric between ribs fanning out from the hub (just off
 // the top of the screen) to a scalloped rim that hangs lowest straight ahead, drips falling off the tips, and the
 // shaft running from your fist up to the hub. All characters.
 function drawCanopy(cx, grip, size, bob) {
-  const W = cv.width, H = cv.height, s = Math.round(size * 0.9);
+  const W = cv.width, H = cv.height, u = Math.max(14, H / 36), s = Math.round(u * 0.72); // (the world's own character size, like the items)
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, ribs = 9, hubX = W * 0.56, off = bob * 0.4;
   charLine(cx, grip, hubX, -s, w, s, PAL[C(GRAY, 13)]); // the shaft
   for (let c = 0; c * w < W + w; c++) {
     const x = c * w, t = (x - W / 2) / (W * 0.62), seg = (t + 1) / 2 * ribs, k = Math.floor(seg), m = Math.abs(fract(seg) - 0.5);
     const rim = H * (0.34 - t * t * 0.32) - (0.5 - m) * s * 1.4 + off; // scalloped: rises between the ribs
-    const rib = m > 0.44, ribCh = Math.abs(t) < 0.08 ? '|' : t < 0 ? '\\' : '/';
+    const rib = m > 0.45, ribCh = Math.abs(t) < 0.08 ? '|' : t < 0 ? '\\' : '/';
     for (let y = 0; y < rim - s; y += s) {
-      if (rib) { g.fillStyle = PAL[C(GRAY, 11)]; g.fillText(ribCh, x, y); continue; }
-      g.fillStyle = PAL[C(BLUE, (k & 1 ? 7 : 5) - y / H * 2)];
-      g.fillText(k & 1 ? '#' : '%', x, y);
+      if (rib) { g.fillStyle = PAL[C(BLUE, 1)]; g.fillRect(x, y, w + 0.5, s + 0.5); g.fillStyle = PAL[C(GRAY, 11)]; g.fillText(ribCh, x, y); continue; }
+      // each panel bellies down between its ribs: lighter in the middle and toward the rim (the light comes through)
+      const b = clamp((0.35 + 0.45 * Math.cos(m * Math.PI * 1.9)) * (0.55 + 0.45 * y / Math.max(rim, 1)) + (k & 1 ? 0.08 : 0), 0, 1);
+      g.fillStyle = PAL[C(BLUE, 1 + b * 2.5)]; g.fillRect(x, y, w + 0.5, s + 0.5); // the fabric itself: nothing shows through it
+      g.fillStyle = PAL[C(k & 1 ? BLUE : CYAN, 4 + b * 7)];
+      g.fillText(dFill(b), x, y);
     }
-    g.fillStyle = PAL[C(BLUE, 11)]; g.fillText(rib ? 'V' : '_', x, rim - s); // the rim
-    if (rib && fract(T * 1.1 + c * 0.37) < 0.6) { g.fillStyle = PAL[C(CYAN, 12)]; g.fillText('.', x, rim + fract(T * 1.1 + c * 0.37) * H * 0.4); } // drips
+    g.fillStyle = PAL[C(BLUE, 12)]; g.fillText(rib ? 'V' : m < 0.2 ? '_' : '-', x, rim - s); // the rim
+    if (rib && fract(T * 1.1 + c * 0.37) < 0.6) { g.fillStyle = PAL[C(CYAN, 12)]; g.fillText(fract(T * 1.1 + c * 0.37) < 0.08 ? 'o' : '|', x, rim + fract(T * 1.1 + c * 0.37) * H * 0.4); } // drips gathering at the tips and falling
   }
 }
 // a cigarette between your lips: filter, paper burning down as it's smoked (fx.smoke counts down), the ember glowing
@@ -8441,6 +8558,7 @@ function drawVapeCloud() {
       cloudPuffs.push([cv.width / 2 + (Math.random() - 0.5) * cw * 6, cv.height - FS * 2, Math.cos(ang) * sp * cw, Math.sin(ang) * sp * FS * 0.8, 1 + big * 0.5]);
     }
     say(fx.cloud > 2.5 ? 'You blow out an enormous cloud of mango.' : fx.cloud > 1.2 ? 'A fat cloud of mango vapour rolls out.' : 'A little puff of mango.', 2.5);
+    hazeExhale(fx.cloud, 'vape'); // (and it hangs in the air)
     fx.cloud = 0; if (actx) sfxUse('drag');
   }
   if (!cloudPuffs.length) return;
@@ -8453,14 +8571,41 @@ function drawVapeCloud() {
     g.fillStyle = PAL[C(f > 0.5 ? YEL : WHITE, 6 + f * 8)]; g.fillText(f > 0.7 ? '@' : f > 0.4 ? '%' : '~', x, y);
   }
 }
-// a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
-// following its slope
-function drawYoyo(x, y, size) {
-  g.font = size + 'px monospace';
-  const w = g.measureText('M').width, th = (1 - fx.yoyo / 1.4) * Math.PI * 2, R = 2.4;
-  const yx = x + Math.sin(th) * R * w * 1.7, yy = y - (1 - Math.cos(th)) * R * size;
-  charLine(x, y, yx, yy, w, size, PAL[C(WHITE, 11)]);
-  artText(['(' + '@*o*'[(T * 16 | 0) & 3] + ')'], yx - 1.5 * w, yy - size / 2, size, c => c === '(' || c === ')' ? C(RED, 14) : C(WHITE, 15));
+// a yo-yo trick, fx.yoyo counting down from YOYO_DUR, at the world's own character size: 0 walk the dog (down to
+// the pavement, rolling off and back), 1 around the world (a big loop out in front), 2 rock the baby (the string
+// pulled into a cradle, the yo-yo swinging through it), 3 the sleeper (spinning at the bottom, then snapped back
+// up). Every one drops fast and comes back faster; the yo-yo spins the whole time and smears when it's moving quick
+function yoyoAt(t, trick, x, y, L) {
+  const W = cv.width, H = cv.height, mid = clamp((t - 0.18) / 0.67, 0, 1);
+  if (trick === 0) L = Math.max(L, H - y - H * 0.06); // walking the dog: all the way down to the pavement
+  const d = t < 0.18 ? L * (t / 0.18) ** 2 : t > 0.85 ? L * (1 - (t - 0.85) / 0.15) ** 2 : L; // down, out, back up
+  if (t < 0.18 || t > 0.85 || trick === 3) return { x: x + (trick === 3 && t >= 0.18 && t <= 0.85 ? Math.sin(t * 9) * L * 0.03 : 0), y: y + d };
+  if (trick === 1) { const th = mid * Math.PI * 2; return { x: x + Math.sin(th) * L * 0.62, y: y + Math.cos(th) * L }; }
+  if (trick === 0) return { x: x - Math.sin(mid * Math.PI) * W * 0.3, y: y + L - Math.sin(mid * Math.PI) * H * 0.05 }; // rolls away along the pavement (a little further off, so a little higher) and back
+  const apex = { x: x - W * 0.13, y: y - L * 0.3 }, sw = Math.sin(mid * Math.PI * 4) * 0.55 * Math.sin(mid * Math.PI); // the cradle, rocking
+  return { x: apex.x + Math.sin(sw) * L * 0.55, y: apex.y + Math.cos(sw) * L * 0.55, apex };
+}
+function drawYoyo(x, y) {
+  const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72);
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width, L = cv.height * 0.3, trick = fx.yoyoTrick || 0, t = clamp(1 - fx.yoyo / YOYO_DUR, 0, 1);
+  const p = yoyoAt(t, trick, x, y, L), str = PAL[C(WHITE, 11)];
+  if (p.apex) { // rock the baby: the string from your hand round a triangle, the yo-yo hanging from its top corner
+    const b1 = { x: p.apex.x - L * 0.22, y: p.apex.y + L * 0.62 }, b2 = { x: p.apex.x + L * 0.22, y: p.apex.y + L * 0.62 };
+    charLine(x, y, b2.x, b2.y, w, s, str); charLine(b2.x, b2.y, b1.x, b1.y, w, s, str); charLine(b1.x, b1.y, p.apex.x, p.apex.y, w, s, str);
+    charLine(p.apex.x, p.apex.y, p.x, p.y, w, s, str);
+  } else charLine(x, y, p.x, p.y, w, s, str);
+  const q = yoyoAt(clamp(t - 0.025, 0, 1), trick, x, y, L), fast = Math.hypot(p.x - q.x, p.y - q.y) > s * 0.8;
+  if (fast) for (const k of [1, 2]) { const r = yoyoAt(clamp(t - 0.02 * k, 0, 1), trick, x, y, L); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
+  const spin = T * (trick === 0 && t > 0.18 && t < 0.85 ? 40 : 25); // (faster rolling along the ground)
+  const [art, col] = sculpt(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
+    const r = Math.hypot(cx, cy * 1.1) * 2.5 / 3.2;
+    if (r > 2.5) return null;
+    if (r < 0.6) return ['@', C(WHITE, 15)];
+    const an = Math.atan2(cy, cx) + spin, spoke = Math.cos(an * 3) > 0.55;
+    return r > 2.1 ? ['o', C(RED, 11)] : [spoke ? '#' : dFill(dSphere(cx, cy * 1.1, 2.5)), spoke ? C(RED, 6) : C(RED, 7 + dSphere(cx, cy * 1.1, 2.5) * 8)];
+  });
+  artText(art, p.x - 5.5 * w, p.y - 3.5 * s, s, col);
 }
 // a lit sparkler: a fizzing ball at the tip, sparks spitting out every which way (fx.spark counts down)
 function drawSparks(x, y, size) {
@@ -8638,18 +8783,18 @@ function drawBall() {
   const [vx, vy] = R(ball.x, ball.y);
   drawArt(vx, vy, ball.z, 0.035, 0.035, ['O'], (c, row, L) => C(WHITE, Math.max(L, 6)));
 }
-// ===== held items, the dense way (a trial: ?items=dense; the hand stays as it is). Drawn at a little over the world's own character size
+// ===== held items, the dense way (?items=old for the old big-lettered ones; the hand stays as it is). Drawn at a little over the world's own character size
 // with twice the detail: each picture is sculpted cell by cell from a shape, shaded through a ramp of characters
 // with a light from the top left, like an ASCII-art image, instead of being outlined in big letters.
-const DENSE_ON = typeof location !== 'undefined' && /[?&]items=dense\b/.test(location.search);
+const DENSE_ON = !(typeof location !== 'undefined' && /[?&]items=old\b/.test(location.search)); // (?items=old: the big-lettered ones, for comparing)
 const D_RAMP = ' .:-=+*#%@', D_ASPECT = 0.6; // a character is about 0.6 as wide as it is tall
 const dRamp = b => D_RAMP[clamp(Math.round(b * (D_RAMP.length - 1)), 1, D_RAMP.length - 1)];
 const D_FILL = '=+*#%@', dFill = b => D_FILL[clamp(Math.round(b * (D_FILL.length - 1)), 0, D_FILL.length - 1)]; // solid: light shows in the colour
-// a picture W x H cells: fn(x, y) for each cell's centre (in row heights from the middle, so circles come out round)
+// a picture W x H cells (a column sits on x = 0, so thin upright things down the middle show): fn(x, y) for each cell's centre (in row heights from the middle, so circles come out round)
 // gives null (nothing there) or [character, colour]. Returns [lines, colour of cell (ch, row, col)]
 function sculpt(W, H, fn) {
   const cells = [];
-  for (let r = 0; r < H; r++) { const row = []; for (let k = 0; k < W; k++) row.push(fn((k + 0.5 - W / 2) * D_ASPECT, r + 0.5 - H / 2) || null); cells.push(row); }
+  for (let r = 0; r < H; r++) { const row = []; for (let k = 0; k < W; k++) row.push(fn((k - (W >> 1)) * D_ASPECT, r + 0.5 - H / 2) || null); cells.push(row); }
   return [cells.map(row => row.map(c => c ? c[0] : ' ').join('')), (ch, r, k) => cells[r][k] ? cells[r][k][1] : 0];
 }
 // light on a surface with normal (nx, ny up-is-negative, nz toward you): from the top left, a little in front
@@ -8727,14 +8872,811 @@ const DENSE = {
 };
 // in place of the big-lettered item (false: not one of the examples). The hand is drawn as usual afterwards
 function drawHeldDense(it, cx, hy, hsz, grip) {
-  if (!DENSE_ON || !DENSE[it.id]) return false;
+  if (!DENSE_ON || !DENSE[it.id] || it.id === 'umbrella' && rain > 0.2 && mode !== 'room') return false; // (open in the rain: the canopy)
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72); // a little over the world's character size
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, [art, col] = DENSE[it.id](it, usesLeft(it)), artW = Math.max(...art.map(l => l.length)), top = grip + 0.6 * s - art.length * s;
-  g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
-  artText(art, cx - artW * w / 2, top, s, col); g.restore();
+  if (!(it.id === 'yoyo' && fx.yoyo > 0)) { // (a yo-yo on the go is drawn by drawYoyo)
+    g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
+    artText(art, cx - artW * w / 2, top, s, col); g.restore();
+  }
+  if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - s * 0.4, s * 2);
   g.font = FS + 'px monospace';
   return true;
+}
+// ===== the rest of the held items, sculpted the dense way (see held-dense.js). Each is (it, f) => sculpt(W, H, fn):
+// x across and y down in row heights from the middle, f how much is left. Whatever you eat or drink shows it going:
+// a level dropping, steam fading, fewer pieces, or bites out of it.
+const dCol = (col, b, lo = 6, hi = 15) => C(col, lo + clamp(b, 0, 1) * (hi - lo));
+const dLit = (b, col, lo, hi) => [dFill(b), dCol(col, b, lo, hi)];
+const dEll = (x, y, cx, cy, rx, ry) => Math.hypot((x - cx) / rx, (y - cy) / ry); // under 1: inside
+const dBall = (x, y, cx, cy, rx, ry = rx) => dSphere((x - cx) / rx, (y - cy) / ry, 1); // the light on it, -1 outside
+// a word across, centred on (cx, cy), a column a letter
+const dText = (x, y, cx, cy, word) => { if (Math.abs(y - cy) >= 0.5) return null; const k = Math.floor((x - cx) / D_ASPECT + word.length / 2); return k >= 0 && k < word.length && word[k] !== ' ' ? word[k] : null; };
+// bites marching in from the right, one per use gone: true in a bite, 'rim' along its edge
+function dBitesR(x, y, f, x1, r, cy = 0, n = 3) {
+  const gone = Math.round((1 - f) * n);
+  let rim = false;
+  for (let k = 0; k < gone; k++) { const d = Math.hypot(x - (x1 - k * r * 1.1), (y - cy - (k & 1 ? 0.4 : -0.4)) * 1.2) - r; if (d < 0) return true; if (d < 0.6) rim = true; }
+  return rim ? 'rim' : false;
+}
+// eaten from the top down: gone above a scalloped line that drops as f does; 'rim' just under it
+function dBitesTop(x, y, f, top, depth) {
+  const e = (1 - f) * depth;
+  if (e <= 0) return false;
+  const line = top + e + 0.8 - Math.abs(Math.sin(x * 0.9)) * 1.1;
+  return y < line ? true : y < line + 0.6 ? 'rim' : false;
+}
+// a glass (or a clear cup): hw(y) its half-width at y, from top to bot; full to f of the way with liq ([colour, char])
+// under a surface; foam: a head on it. Returns a cell, null (clear, nothing there) or undefined (not the glass)
+function dGlass(x, y, top, bot, hw, f, liq, foam = null) {
+  if (y < top || y > bot) return undefined;
+  const w = hw(y);
+  if (Math.abs(x) > w) return undefined;
+  if (y > bot - 0.7) return ['_', C(WHITE, 12)];
+  if (Math.abs(x) > w - 0.42) return ['|', C(WHITE, x < 0 ? 14 : 10)];
+  const lvl = bot - 0.7 - (bot - 0.7 - top - 0.8) * f, b = dCyl(x, w);
+  if (f > 0 && y >= lvl) {
+    if (foam && y < lvl + 1.2) return [foam[1], dCol(foam[0], 0.6 + b * 0.4, 9)];
+    if (y < lvl + 0.6) return ['~', dCol(liq[0], b, 9)];
+    return [liq[1] || dFill(b), dCol(liq[0], b, 6, 14)];
+  }
+  return Math.abs(x + w * 0.55) < 0.25 ? [':', C(WHITE, 7)] : null; // a glint on the empty glass
+}
+const dStraw = (x, y, x0, y0, x1, y1, col) => { // a straight straw from (x0, y0) to (x1, y1), striped
+  const t = clamp(((x - x0) * (x1 - x0) + (y - y0) * (y1 - y0)) / ((x1 - x0) ** 2 + (y1 - y0) ** 2), 0, 1), d = Math.hypot(x - x0 - t * (x1 - x0), y - y0 - t * (y1 - y0));
+  return d < 0.42 ? [Math.abs(x1 - x0) < Math.abs(y1 - y0) * 0.3 ? '|' : (x1 - x0) * (y1 - y0) < 0 ? '/' : '\\', (Math.floor(t * 8) & 1) ? C(WHITE, 14) : col] : null;
+};
+const dSteam = (x, y, top, f, xs, h = 3.4) => { // wisps curling up from top while there's enough left
+  if (y >= top || y < top - h || f <= 0.3) return null;
+  for (const s of xs) { const ph = y * 1.3 + T * 2.5 + s * 2, wx = s + Math.sin(ph) * 0.5; if (Math.abs(x - wx) < 0.22) return [Math.cos(ph) > 0 ? '(' : ')', C(WHITE, 6 + (y - top + h) * 1.5)]; }
+  return null;
+};
+// a drinks can: a colour, a word, a stripe; bites out of it as it goes
+const dCan = (col, word, stripe, deco) => (it, f) => sculpt(26, 15, (x, y) => {
+  const hw = 4.3, top = -6.2, bot = 6.5;
+  if (y < top || y > bot || Math.abs(x) > hw + (y < top + 0.8 || y > bot - 0.8 ? -0.35 : 0)) return null;
+  if (dBites(x, y, 0.45 + f * 0.55, hw) === true) return null;
+  const b = dCyl(x, hw);
+  if (y < top + 0.8) return Math.abs(x - 1) < 0.6 && y < top + 0.4 ? ['o', C(GRAY, 14)] : ['=', dCol(GRAY, b, 7)];
+  if (y > bot - 0.8) return ['_', dCol(GRAY, b, 7)];
+  const t = dText(x, y, 0, -1.6, word); if (t) return [t, C(stripe, 15)];
+  const d = deco && deco(x, y); if (d) return d;
+  return [b > 0.92 ? '|' : dFill(b), b > 0.92 ? C(WHITE, 15) : dCol(col, b)];
+});
+// n pieces in a row along a tray (sushi, dumplings, takoyaki): which piece (x, y) is in, and where in it
+const dPieces = (x, n, x0, step) => { const k = Math.floor((x - x0) / step); return k >= 0 && k < n ? [k, x - x0 - (k + 0.5) * step] : null; };
+
+Object.assign(DENSE, {
+  // ---- drinks
+  latte: (it, f) => sculpt(30, 14, (x, y) => { // a glass mug: espresso under a white head, a handle
+    const handle = dEll(x, y, 4.6, 0.6, 1.6, 2.6);
+    if (handle < 1 && handle > 0.62 && x > 3.6) return ['(', C(WHITE, 12)];
+    const g = dGlass(x + 0.6, y, -5.5, 6.5, () => 4, f, [BRICK, null], [WHITE, '@']);
+    return g === undefined ? null : g;
+  }),
+  tea: (it, f) => sculpt(30, 15, (x, y) => { // a glass cup of tea on its saucer, steaming
+    const st = dSteam(x, y, -3.6, f, [-1.2, 1.2]); if (st) return st;
+    if (y > 5.6 && y < 6.6 && Math.abs(x) < 6) return ['=', dCol(WHITE, 1 - Math.abs(x) / 6, 9)];
+    const handle = dEll(x, y, 4.5, 0.8, 1.4, 2.2);
+    if (handle < 1 && handle > 0.6 && x > 3.6) return [')', C(WHITE, 12)];
+    const g = dGlass(x, y, -3.5, 5.6, yy => 4 - Math.max(0, yy - 2) * 0.35, f, [ORANGE, null]);
+    return g === undefined ? null : g;
+  }),
+  energy: dCan(GREEN, 'ZAP', YEL, (x, y) => Math.abs(x - (y > 1.5 ? 0.5 : -0.2) + (y - 1.5) * 0.25) < 0.4 && y > -0.6 && y < 4.4 ? ['/', C(YEL, 15)] : null), // a lightning bolt
+  water: (it, f) => sculpt(22, 17, (x, y) => { // a plastic bottle: blue cap, a label round the middle, the water going down
+    if (y < -7 && Math.abs(x) < 1.3) return dLit(0.4 + 0.5 * dCyl(x, 1.3), BLUE, 8);
+    const hw = yy => yy < -5.2 ? 1.1 : yy < -3 ? 1.1 + (yy + 5.2) * 1.1 : 3.5;
+    if (y > -1.2 && y < 1.8 && Math.abs(x) < 3.5) { const t = dText(x, y, 0, 0.3, 'AQUA'); return t ? [t, C(BLUE, 15)] : dLit(dCyl(x, 3.5), WHITE, 8); }
+    const g = dGlass(x, y, -7, 8, hw, f, [CYAN, null]);
+    return g === undefined ? null : g;
+  }),
+  beer: (it, f) => sculpt(26, 16, (x, y) => { // a pint, wider at the top, a foamy head
+    const g = dGlass(x, y, -7, 7.5, yy => 4.2 - (yy + 7) * 0.08, f, [YEL, null], [WHITE, '@']);
+    return g === undefined ? null : g;
+  }),
+  whiskey: (it, f) => sculpt(28, 11, (x, y) => { // a tumbler: short, heavy-bottomed, ice in it
+    if (y > 3.6 && Math.abs(x) < 4.8) return ['#', C(WHITE, 9)]; // the thick base
+    const lvl = 3.6 - 7.6 * f;
+    for (const [ix, iy] of [[-1.5, lvl + 1.1], [1.4, lvl + 0.8]]) if (f > 0.2 && Math.abs(x - ix) < 1 && Math.abs(y - iy) < 0.8) return [Math.abs(x - ix) > 0.7 || Math.abs(y - iy) > 0.5 ? '+' : ' ', C(WHITE, 14)]; // ice cubes
+    const g = dGlass(x, y, -5, 4.4, () => 4.8, f, [ORANGE, null]);
+    return g === undefined ? null : g;
+  }),
+  cocktail: (it, f) => sculpt(28, 15, (x, y) => { // a martini glass with an olive on a pick
+    { const s = dStraw(x, y, 2.6, -7, 0.6, -2.6, C(GRAY, 13)); if (s) return [s[0], C(GRAY, 13)]; } // the pick
+    if (dEll(x, y, 1.1, -3.6, 0.8, 0.7) < 1) return ['@', C(GREEN, 13)];
+    if (y > 6.4 && Math.abs(x) < 3) return ['=', C(WHITE, 12)];
+    if (y > 1 && Math.abs(x) < 0.3) return ['|', C(WHITE, 12)];
+    const g = dGlass(x, y, -5.5, 1.6, yy => Math.max(0.5, 5.4 * (1.6 - yy) / 7.1), f, [MAG, null]);
+    return g === undefined ? null : g;
+  }),
+  milkshake: (it, f) => sculpt(26, 18, (x, y) => { // a tall glass, whipped cream, a cherry, a striped straw
+    const s = dStraw(x, y, 0.8, -3, 3, -8.5, C(RED, 13)); if (s) return s;
+    if (f > 0.4 && dEll(x, y, -0.6, -6.6, 0.8, 0.7) < 1) return ['@', C(RED, 15)];
+    if (f > 0.4 && y < -4 && y > -6.2 && Math.abs(x) < 3.8 - (y + 6.2) * -0.2 + (y < -5.2 ? -1.2 : 0)) return ['@', dCol(WHITE, dBall(x, y, 0, -4, 3.8, 2.4), 10)];
+    const g = dGlass(x, y, -4, 8.5, yy => 3.6 - (yy + 4) * 0.08, f, [MAG, null]);
+    return g === undefined ? null : g;
+  }),
+  smoothie: (it, f) => sculpt(24, 17, (x, y) => { // a clear cup with a domed lid and a fat green straw
+    const s = dStraw(x, y, 0.4, -2, 1.4, -8.5, C(GREEN, 13)); if (s) return s;
+    if (y < -3.6 && y > -6 && dEll(x, y, 0, -3.6, 3.9, 2.4) < 1 && dEll(x, y, 0, -3.6, 3.4, 1.9) > 1) return ['-', C(WHITE, 11)];
+    const g = dGlass(x, y, -3.6, 8, yy => 3.9 - (yy + 3.6) * 0.07, f, [ORANGE, null]);
+    return g === undefined ? null : g;
+  }),
+  thaitea: (it, f) => sculpt(24, 17, (x, y) => { // orange tea, cream swirling down through it
+    const s = dStraw(x, y, 0.6, -2, 1.6, -8.5, C(WHITE, 12)); if (s) return s;
+    const g = dGlass(x, y, -4, 8, yy => 3.9 - (yy + 4) * 0.07, f, [ORANGE, null]);
+    if (g && !'|_:~'.includes(g[0]) && Math.sin(x * 1.6 + y * 0.9 + T * 0.3) > 0.6 && y > -4 + 12 * (1 - f)) return ['~', C(WARM, 15)];
+    return g === undefined ? null : g;
+  }),
+  herbaltea: (it, f) => sculpt(30, 13, (x, y) => { // green tea in a glass cup, a leaf floating, steam
+    const st = dSteam(x, y, -2.6, f, [-1, 1]); if (st) return st;
+    const handle = dEll(x, y, 4.6, 1.2, 1.4, 2);
+    if (handle < 1 && handle > 0.6 && x > 3.6) return [')', C(WHITE, 12)];
+    const g = dGlass(x, y, -2.5, 5.8, yy => 4.2 - Math.max(0, yy - 2) * 0.4, f, [GREEN, null]);
+    if (g && g[0] === '~' && Math.abs(x + 1) < 0.8) return ['%', C(GREEN, 15)];
+    return g === undefined ? null : g;
+  }),
+  sake: (it, f) => sculpt(20, 9, (x, y) => { // a little white cup, a blue ring round it; bites out of it anyway
+    const hw = 3.3 - Math.max(0, y - 1) * 0.5;
+    if (y < -3.5 || y > 3.6 || Math.abs(x) > hw) return null;
+    if (dBites(x, y, 0.45 + f * 0.55, 3.3) === true) return null;
+    const b = dCyl(x, hw);
+    if (Math.abs(y + 1.6) < 0.45) return ['=', C(BLUE, 13)];
+    if (y < -3) return ['~', C(WHITE, 15)];
+    return dLit(b, WHITE, 8);
+  }),
+  melonsoda: (it, f) => sculpt(24, 18, (x, y) => { // bright green soda, bubbles rising, a scoop of vanilla and a cherry on top
+    const s = dStraw(x, y, 1.6, -2, 3, -8.5, C(GREEN, 12)); if (s) return s;
+    if (f > 0.5 && dEll(x, y, 0.4, -7.2, 0.8, 0.7) < 1) return ['@', C(RED, 15)];
+    if (f > 0.5 && dEll(x, y, 0, -4.8, 2.8, 2) < 1 && y < -3.6) return dLit(dBall(x, y, 0, -4.8, 2.8, 2), WHITE, 9);
+    const g = dGlass(x, y, -4, 8.5, () => 3.4, f, [GREEN, null]);
+    if (g && g[0] !== '|' && g[0] !== '_' && g[0] !== '~' && g[0] !== ':' && hash(Math.floor(x * 3), Math.floor(y + T * 3), 961) > 0.86) return ['o', C(WHITE, 13)];
+    return g === undefined ? null : g;
+  }),
+  lemonade: (it, f) => sculpt(26, 16, (x, y) => { // a jar of lemonade, a slice of lemon on the rim, a straw
+    const s = dStraw(x, y, -0.6, -2, -2, -8, C(RED, 13)); if (s) return s;
+    const lw = dEll(x, y, 3.2, -5, 1.8, 1.8);
+    if (lw < 1) return [lw > 0.8 ? 'O' : (Math.floor(Math.atan2(y + 5, x - 3.2) * 2.5) & 1) ? '*' : ':', C(YEL, lw > 0.8 ? 12 : 15)];
+    if (y < -4.8 && y > -5.6 && Math.abs(x) < 4) return ['=', C(GRAY, 12)]; // the jar's thread
+    const g = dGlass(x, y, -4.8, 7.5, () => 4, f, [YEL, null]);
+    return g === undefined ? null : g;
+  }),
+  // ---- food
+  hotdog: (it, f) => sculpt(32, 9, (x, y) => {
+    const bite = dBitesR(x, y, f, 9, 1.6); if (bite === true) return null;
+    const saus = dEll(x, y, 0, -0.3, 9.4, 1.15);
+    if (saus < 1) {
+      if (Math.abs(y + 0.9 - Math.sin(x * 2.6) * 0.35) < 0.3 && Math.abs(x) < 7.6) return ['~', C(YEL, 15)]; // mustard
+      return dLit(dBall(x, y, 0, -0.3, 9.4, 1.15), RED, 6, 14);
+    }
+    const bun = dEll(x, y, 0, 0.6, 8.2, 2.4);
+    if (bun < 1 && y > -0.6) return bite === 'rim' ? [':', C(WARM, 14)] : dLit(dBall(x, y, 0, 0.6, 8.2, 2.4), ORANGE, 7);
+    return null;
+  }),
+  taco: (it, f) => sculpt(30, 12, (x, y) => {
+    const bite = dBites(x, y, f, 6.5); if (bite === true) return null;
+    const r = Math.hypot(x, (y + 1.5) * 1.05);
+    if (y > -1.5 && r < 6.6) return bite === 'rim' ? [':', C(YEL, 14)] : [r > 5.9 ? '#' : (Math.floor(x * 2) + Math.floor(y * 2)) % 5 ? dFill(0.6 - (y + 1.5) * 0.06) : '.', dCol(YEL, 0.85 - (y + 1.5) * 0.08)];
+    if (y > -3.4 && y <= -1.5 && Math.abs(x) < 5.6 && y > -3.2 + Math.abs(Math.sin(x * 2.1)) * 0.9) { // the filling, poking out of the top
+      const n = hash(Math.floor(x * 2), Math.floor(y * 2), 962);
+      return n > 0.8 ? ['o', C(RED, 14)] : n > 0.55 ? ['#', C(BRICK, 11)] : n > 0.4 ? [':', C(YEL, 15)] : ['%', C(GREEN, 13)];
+    }
+    return null;
+  }),
+  icecream: (it, f) => sculpt(20, 18, (x, y) => { // two scoops on a waffle cone, eaten from the top
+    const bite = dBitesTop(x, y, 0.3 + f * 0.7, -8.6, 7); if (bite === true) return null;
+    if (y > 0.4 && Math.abs(x) < 3.2 * (8.6 - y) / 8.2) return [(Math.floor((x + y) * 1.4) & 1) ^ (Math.floor((x - y) * 1.4) & 1) ? '#' : '+', dCol(ORANGE, 0.8 - Math.abs(x) * 0.12, 7)];
+    for (const [cy, r, col] of [[-1.4, 3.3, MAG], [-5.6, 2.8, WHITE]]) {
+      if (Math.hypot(x, y - cy) < r) return bite === 'rim' ? [':', C(col, 15)] : dLit(dBall(x, y, 0, cy, r), col, 7);
+    }
+    return null;
+  }),
+  noodlebox: (it, f) => sculpt(28, 16, (x, y) => { // a white takeout box, noodles heaped in it, chopsticks
+    for (const o of [0, 1]) { const s = dStraw(x, y, 4.3 + o, -1, 1.2 + o, -7.6, C(BRICK, 13)); if (s) return [s[0], C(BRICK, 13)]; }
+    const hw = 4.6 - (y + 1.4) * 0.14;
+    if (y > -1.4 && y < 6.8 && Math.abs(x) < hw) {
+      if (dEll(x, y, 0, 2.6, 1.3, 1.3) < 1) return ['@', C(RED, 13)]; // the printed mark
+      return dLit(0.55 + 0.45 * dCyl(x, hw), WHITE, 7);
+    }
+    const heap = -1.4 - 2.6 * f;
+    if (y <= -1.4 && y > heap + Math.abs(Math.sin(x * 1.3)) * 0.6 && Math.abs(x) < 4.2) return ['~', dCol(YEL, 0.6 + 0.4 * Math.sin(x * 3 + y * 5), 9)];
+    return null;
+  }),
+  ramen: (it, f) => sculpt(32, 13, (x, y) => { // a red bowl, the broth from above: noodles, an egg, nori; less of it each time
+    for (const o of [0, 1]) { const s = dStraw(x, y, -1, -2.2 - o, 9, -5.8 - o, C(BRICK, 13)); if (s) return [s[0], C(BRICK, 13)]; } // chopsticks
+    if (y > -0.6 && dEll(x, y, 0, -0.6, 8.2, 6) < 1) { const b = dBall(x, y, 0, -0.6, 8.2, 6.6); return Math.abs(y - 2.4) < 0.4 ? ['=', C(WHITE, 13)] : dLit(b, RED, 6); }
+    if (dEll(x, y, 0, -0.6, 7.8, 1.6) < 1) { // the top of the broth
+      if (f > 0.6 && dEll(x, y, -3.6, -0.9, 1.4, 0.8) < 1) return [dEll(x, y, -3.6, -0.9, 0.6, 0.4) < 1 ? '@' : 'O', C(dEll(x, y, -3.6, -0.9, 0.6, 0.4) < 1 ? YEL : WHITE, 15)];
+      if (f > 0.3 && x > 2.4 && x < 4.6 && y > -2) return ['#', C(GREEN, 6)];
+      if (hash(Math.floor(x * 3), Math.floor(y * 2), 963) < f * 0.9) return ['~', C(YEL, 14)];
+      return [':', C(WARM, 10)];
+    }
+    return null;
+  }),
+  pho: (it, f) => sculpt(32, 14, (x, y) => { // a white bowl, beef, herbs and noodles in clear broth
+    for (const o of [0, 1]) { const s = dStraw(x, y, -1, -2.3 - o, 9, -5.9 - o, C(BRICK, 13)); if (s) return [s[0], C(BRICK, 13)]; }
+    if (y > -0.6 && dEll(x, y, 0, -0.6, 8.2, 6) < 1) { const b = dBall(x, y, 0, -0.6, 8.2, 6.6); return Math.abs(y - 2.4) < 0.4 ? ['~', C(BLUE, 13)] : dLit(b, WHITE, 7); }
+    if (dEll(x, y, 0, -0.6, 7.8, 1.6) < 1) {
+      const n = hash(Math.floor(x * 3), Math.floor(y * 2), 964);
+      if (n < f * 0.25) return [',', C(GREEN, 15)];
+      if (n < f * 0.45) return ['=', C(BRICK, 12)];
+      if (n < f * 0.95) return ['~', C(WHITE, 14)];
+      return [':', C(WARM, 11)];
+    }
+    return null;
+  }),
+  banhmi: (it, f) => sculpt(32, 9, (x, y) => { // a baguette split and stuffed
+    const bite = dBitesR(x, y, f, 9.4, 1.7); if (bite === true) return null;
+    const d = dEll(x, y, 0, 0.3, 9.6, 2.6);
+    if (d > 1) return null;
+    if (bite === 'rim') return [':', C(WARM, 14)];
+    if (Math.abs(y + 0.4 - Math.sin(x * 1.7) * 0.3) < 0.55 && Math.abs(x) < 8.6) { const n = hash(Math.floor(x * 2), 1, 965); return [n > 0.66 ? '%' : n > 0.33 ? '=' : '~', C(n > 0.66 ? GREEN : n > 0.33 ? RED : ORANGE, 13)]; }
+    const b = dBall(x, y, 0, 0.3, 9.6, 2.6);
+    return Math.abs(fract(x * 0.4 - y * 0.3) - 0.5) < 0.06 && y < 0 ? ['/', C(BRICK, 10)] : dLit(b, ORANGE, 7);
+  }),
+  padthai: (it, f) => sculpt(30, 12, (x, y) => { // a heap of noodles on a plate, shrimp and peanuts, getting smaller
+    if (y > 2.6 && y < 4 && Math.abs(x) < 8.6 - (y - 2.6)) return ['=', dCol(WHITE, 0.8 - Math.abs(x) * 0.05, 9)];
+    const h = 1 + 5 * f, d = dEll(x, y, 0, 2.6, 7.2 * (0.55 + 0.45 * f), h);
+    if (y <= 2.6 && d < 1) {
+      const n = hash(Math.floor(x * 2.5), Math.floor(y * 2), 966);
+      if (n > 0.9) return ['@', C(BRICK, 14)];
+      if (n > 0.82) return ['*', C(YEL, 15)];
+      if (n > 0.76) return [',', C(GREEN, 15)];
+      return ['~', dCol(ORANGE, dBall(x, y, 0, 2.6, 7.2, h), 8)];
+    }
+    return null;
+  }),
+  greencurry: (it, f) => sculpt(30, 12, (x, y) => { // a bowl of green curry: chunks of chicken and veg, fewer each spoonful
+    if (y > -1 && dEll(x, y, 0, -1, 7.6, 5.6) < 1) return dLit(dBall(x, y, 0, -1, 7.6, 6), WHITE, 7);
+    if (dEll(x, y, 0, -1, 7.2, 1.5) < 1) {
+      const n = hash(Math.floor(x * 1.6), Math.floor(y * 1.5), 967);
+      if (n < f * 0.35) return ['o', C(WHITE, 14)];
+      if (n < f * 0.5) return ['%', C(RED, 13)];
+      return ['~', dCol(GREEN, 0.5 + 0.5 * Math.sin(x * 2 + y * 3 + T), 9)];
+    }
+    if (f > 0.5 && y < -2.4 && y > -4 && Math.abs(x - 1.4 - Math.sin(y * 3) * 0.4) < 0.3) return [',', C(GREEN, 15)]; // a basil sprig
+    return null;
+  }),
+  mangorice: (it, f) => sculpt(30, 11, (x, y) => { // sticky rice, a fan of mango slices on top
+    if (y > 2.6 && y < 3.8 && Math.abs(x) < 8 - (y - 2.6)) return ['=', C(GREEN, 12)]; // the leaf plate
+    const slices = Math.ceil(f * 3);
+    for (let k = 0; k < slices; k++) { const cx = -3.6 + k * 3.6, d = dEll(x, y, cx, -1.4, 1.9, 2.6); if (d < 1 && y < 0.4) return dLit(dBall(x, y, cx, -1.4, 1.9, 2.6), YEL, 9); }
+    if (y <= 2.6 && dEll(x, y, 0, 2.6, 7, 3.2) < 1) return [hash(Math.floor(x * 3), Math.floor(y * 2), 968) > 0.85 ? '.' : ':', dCol(WHITE, dBall(x, y, 0, 2.6, 7, 3.2), 10)];
+    return null;
+  }),
+  cottoncandy: (it, f) => sculpt(26, 18, (x, y) => { // a pink cloud on a stick, eaten from the top
+    if (y > 2 && Math.abs(x) < 0.3) return ['|', C(WHITE, 13)];
+    if (dBitesTop(x, y, 0.35 + f * 0.65, -8.4, 8) === true) return null;
+    const blobs = [[0, -3.2, 4.6], [-3.2, -2.4, 3], [3.2, -2.6, 3], [0, -6.2, 3]];
+    for (const [bx, by, r] of blobs) if (Math.hypot(x - bx, y - by) < r * (0.85 + 0.15 * noise(x * 2, y * 2, 969))) return [noise(x * 4, y * 4, 970) > 0.5 ? '@' : '%', C(MAG, 10 + noise(x * 3, y * 3, 971) * 5)];
+    return null;
+  }),
+  corndog: (it, f) => sculpt(20, 17, (x, y) => { // golden batter on a stick, bites from the top
+    if (y > 3.4 && Math.abs(x) < 0.3) return ['|', C(WARM, 12)];
+    const bite = dBitesTop(x, y, f, -8, 7); if (bite === true) return null;
+    if (dEll(x, y, 0, -2.4, 2.6, 5.8) < 1) return bite === 'rim' ? ['=', C(RED, 13)] : dLit(dBall(x, y, 0, -2.4, 2.6, 5.8), ORANGE, 7);
+    return null;
+  }),
+  popcorn: (it, f) => sculpt(28, 17, (x, y) => { // a striped bucket, the heap on top going down
+    const hw = 4.6 - (y + 2) * 0.12;
+    if (y > -2 && y < 8 && Math.abs(x) < hw) { const t = dText(x, y, 0, 2.4, 'POPCORN'); if (t) return [t, C(WHITE, 15)]; return [Math.floor((x + 6) * 1.2) & 1 ? '|' : '#', (Math.floor((x + 6) * 1.2) & 1) ? C(WHITE, 13) : dCol(RED, 0.5 + 0.5 * dCyl(x, hw), 8)]; }
+    const top = -2 - 5.5 * f;
+    if (y <= -2 && y > top + Math.abs(Math.sin(x * 1.8)) * 1.2 && Math.abs(x) < 4.6) return [hash(Math.floor(x * 2), Math.floor(y), 972) > 0.5 ? 'o' : 'O', C(hash(Math.floor(x * 2), Math.floor(y), 973) > 0.8 ? YEL : WHITE, 14)];
+    return null;
+  }),
+  fries: (it, f) => sculpt(24, 17, (x, y) => { // a red carton of fries, fewer sticking up as they go
+    const hw = 3.4 + (y > 0 ? 0 : 0) - Math.max(0, y - 0.5) * 0.15;
+    if (y > 0 && y < 8 && Math.abs(x) < hw) { const t = dText(x, y, 0, 3.4, 'FRIES'); if (t) return [t, C(YEL, 15)]; return dLit(0.5 + 0.5 * dCyl(x, hw), RED, 7); }
+    if (y <= 0 && Math.abs(x) < 3.2) {
+      const k = Math.floor((x + 3.2) / 0.9), tall = 4 + hash(k, 0, 974) * 3.4;
+      if (hash(k, 1, 975) < f * 1.1 && y > -tall && fract((x + 3.2) / 0.9) > 0.25) return ['|', dCol(YEL, 0.6 + 0.4 * Math.sin(k), 11)];
+    }
+    return null;
+  }),
+  chicken: (it, f) => sculpt(30, 16, (x, y) => { // a striped bucket, drumsticks poking out, one fewer each time
+    const hw = 5 - (y + 1) * 0.12;
+    if (y > -1 && y < 7.5 && Math.abs(x) < hw) { const t = dText(x, y, 0, 2.4, 'CHICKEN'); if (t) return [t, C(WHITE, 15)]; return (Math.floor((x + 6) * 0.9) & 1) ? ['#', dCol(RED, 0.5 + 0.5 * dCyl(x, hw), 8)] : dLit(0.6, WHITE, 9); }
+    const n = clamp(it.uses, 0, 4);
+    for (let k = 0; k < n; k++) { const cx = -3.3 + k * 2.2, cy = -3 - (k & 1) * 0.8; if (dEll(x, y, cx, cy, 1.4, 2) < 1 && y < -0.8) return [noise(x * 4, y * 4, 976) > 0.5 ? '%' : '#', dCol(ORANGE, dBall(x, y, cx, cy, 1.4, 2), 8)]; }
+    return null;
+  }),
+  croissant: (it, f) => sculpt(30, 10, (x, y) => { // a crescent, flaky bands, bites from the right
+    const bite = dBites(x, y, f, 8); if (bite === true) return null;
+    const outer = dEll(x, y, 0, 1, 8.6, 4.4), inner = dEll(x, y, 0, 4.2, 5, 3.4);
+    if (outer > 1 || inner < 1) return null;
+    if (bite === 'rim') return [':', C(YEL, 14)];
+    const band = Math.abs(fract(x * 0.32 + 0.5) - 0.5) < 0.06;
+    return band ? ['(', C(BRICK, 11)] : dLit(dBall(x, y, 0, 1, 8.6, 4.4), ORANGE, 7);
+  }),
+  donut: (it, f) => sculpt(28, 13, (x, y) => { // pink icing, sprinkles, the hole; bites from the right
+    const bite = dBites(x, y, f, 7); if (bite === true) return null;
+    const d = dEll(x, y, 0, 0, 7.4, 5.6);
+    if (d > 1 || dEll(x, y, 0, -0.3, 2.2, 1.4) < 1) return null;
+    if (bite === 'rim') return [':', C(WARM, 14)];
+    const icing = y < 1.6 + Math.sin(x * 2.2) * 0.6 && d < 0.92;
+    if (icing && hash(Math.floor(x * 2.5), Math.floor(y * 1.5), 977) > 0.82) return ['-', C(ITEM_COL[hash(Math.floor(x * 2.5), Math.floor(y * 1.5), 978) * 8 | 0], 15)];
+    return dLit(dBall(x, y, 0, 0, 7.4, 5.6), icing ? MAG : WARM, 7);
+  }),
+  bagel: (it, f) => sculpt(28, 13, (x, y) => {
+    const bite = dBites(x, y, f, 7); if (bite === true) return null;
+    const d = dEll(x, y, 0, 0, 7.2, 5.4);
+    if (d > 1 || dEll(x, y, 0, -0.2, 1.8, 1.2) < 1) return null;
+    if (bite === 'rim') return [':', C(WHITE, 14)];
+    if (y < 0 && hash(Math.floor(x * 2.5), Math.floor(y * 1.5), 979) > 0.88) return ['.', C(WHITE, 15)]; // sesame
+    return dLit(dBall(x, y, 0, 0, 7.2, 5.4), WARM, 6);
+  }),
+  sandwich: (it, f) => sculpt(30, 11, (x, y) => { // bread, lettuce, tomato, cheese, bread
+    const bite = dBites(x, y, f, 7.6); if (bite === true) return null;
+    if (Math.abs(x) > 7.8) return null;
+    if (y < -1.8 && y > -4.6 + Math.pow(x / 7.8, 2) * 1.2) return dLit(0.4 + 0.55 * (1 - (y + 4.6) / 3), WARM, 8);
+    if (y >= -1.8 && y < -0.9 - Math.abs(Math.sin(x * 2.4)) * 0.3) return ['%', C(GREEN, 13)];
+    if (y >= -0.9 && y < 0.2) return ['=', C(RED, 13)];
+    if (y >= 0.2 && y < 1.1) return ['~', C(YEL, 15)];
+    if (y >= 1.1 && y < 3.6) return dLit(0.75 - (y - 1.1) * 0.15, WARM, 7);
+    return null;
+  }),
+  chips: (it, f) => sculpt(26, 17, (x, y) => { // a crinkly bag, CHIPS on it, chips poking out of the top
+    const n = Math.ceil(f * 4);
+    for (let k = 0; k < n; k++) { const cx = -2.4 + k * 1.6, cy = -6.4 - (k & 1) * 0.7; if (dEll(x, y, cx, cy, 1, 0.8) < 1) return [dEll(x, y, cx, cy, 1, 0.8) > 0.7 ? 'o' : '~', C(YEL, 15)]; }
+    if (y < -6 || y > 7.4 || Math.abs(x) > 4.4 - (y < -5.2 ? 0 : 0)) return null;
+    if (y < -5.2 || y > 6.6) return [(Math.floor(x / 0.6) & 1) ? '^' : 'v', C(RED, 12)];
+    const t = dText(x, y, 0, -1, 'CHIPS'); if (t) return [t, C(YEL, 15)];
+    if (dEll(x, y, 0, 2.6, 2, 1.6) < 1) return ['@', C(YEL, 14)];
+    return dLit(0.4 + 0.5 * dCyl(x, 4.4) + Math.sin(y * 3) * 0.08, RED, 7);
+  }),
+  burger: (it, f) => sculpt(30, 12, (x, y) => { // sesame bun, lettuce, cheese, patty, bun
+    const bite = dBites(x, y, f, 7.4); if (bite === true) return null;
+    const top = dEll(x, y, 0, -1.4, 7.6, 4.2);
+    if (y < -1.4 && top < 1) return hash(Math.floor(x * 2.4), Math.floor(y * 1.6), 980) > 0.86 ? ['.', C(WHITE, 15)] : dLit(dBall(x, y, 0, -1.4, 7.6, 4.2), ORANGE, 7);
+    if (Math.abs(x) > 7.9) return null;
+    if (y >= -1.4 && y < -0.5 - Math.abs(Math.sin(x * 2.2)) * 0.3) return ['%', C(GREEN, 13)];
+    if (y >= -0.5 && y < 0.3 || y >= 0.3 && y < 0.9 && Math.abs(fract(x * 0.4) - 0.5) < 0.12) return ['~', C(YEL, 15)];
+    if (y >= 0.3 && y < 2.2) return dLit(0.5 + Math.sin(x * 5) * 0.1, BRICK, 6);
+    if (y >= 2.2 && y < 4.4 - Math.pow(x / 7.9, 2) * 1.2) return dLit(0.7 - (y - 2.2) * 0.15, ORANGE, 7);
+    return null;
+  }),
+  kebab: (it, f) => sculpt(24, 16, (x, y) => { // a wrap in paper, meat and salad at the top, eaten down
+    const hw = 3.8 - Math.max(0, y - 1) * 0.35;
+    if (y > 0.4 && y < 7.6 && Math.abs(x) < hw) return dLit(0.55 + 0.4 * dCyl(x, hw), WHITE, 8);
+    const bite = dBitesTop(x, y, 0.3 + f * 0.7, -7.4, 7); if (bite === true) return null;
+    if (y <= 0.4 && y > -7.4 && Math.abs(x) < 3.6) {
+      if (Math.abs(x) > 3) return ['(', C(WARM, 12)];
+      const n = hash(Math.floor(x * 2), Math.floor(y * 1.5), 981);
+      return n > 0.65 ? ['%', C(GREEN, 13)] : n > 0.5 ? ['o', C(RED, 13)] : ['#', C(BRICK, 11 + n * 2)];
+    }
+    return null;
+  }),
+  sushi: it => sculpt(32, 9, (x, y) => { // nigiri on a board, one fewer each time
+    if (y > 1.8 && y < 3.4 && Math.abs(x) < 9) return ['=', dCol(BRICK, 0.7 - Math.abs(x) * 0.03, 9)];
+    if (y > 3.4 && y < 4.4 && (Math.abs(x - 6) < 0.8 || Math.abs(x + 6) < 0.8)) return ['#', C(BRICK, 9)];
+    const p = dPieces(x, clamp(it.uses, 0, 4), -8.4, 4.2);
+    if (!p) return null;
+    const [k, dx] = p;
+    if (y > -0.6 && y <= 1.8 && Math.abs(dx) < 1.8) return dLit(0.65 + 0.3 * dCyl(dx, 1.8), WHITE, 9);
+    if (y > -2.4 && y <= -0.6 && Math.abs(dx) < 2 - (y < -1.8 ? 0.4 : 0)) return [(Math.floor((dx + y) * 2) & 1) ? '=' : '#', (Math.floor((dx + y) * 2) & 1) ? C(WHITE, 14) : C(k & 1 ? RED : ORANGE, 14)];
+    return null;
+  }),
+  vhs: () => sculpt(30, 10, (x, y) => { // a black cassette, two reels behind its window, a label
+    if (Math.abs(x) > 8.4 || Math.abs(y) > 4.2) return null;
+    const t = dText(x, y, 0, -2.8, 'MOVIE NITE'); if (t) return [t, C(GRAY, 6)];
+    if (y < -2 && Math.abs(x) < 6) return ['=', C(WHITE, 13)];
+    for (const cx of [-3, 3]) { const d = dEll(x, y, cx, 0.8, 1.6, 1.6); if (d < 1) return [d < 0.4 ? 'o' : '*', C(WHITE, d < 0.4 ? 14 : 10)]; }
+    if (y > -0.8 && y < 2.4 && Math.abs(x) < 4.8) return [':', C(GRAY, 5)];
+    return dLit(0.3 + 0.2 * (x < -8 || y < -4 ? 1 : 0), GRAY, 3, 8);
+  }),
+  dumplings: it => sculpt(30, 12, (x, y) => { // a bamboo steamer, dumplings two by two, one fewer each time
+    if (y > 1.6 && y < 4.6 && Math.abs(x) < 8.4) return [Math.abs(y - 3.1) < 0.4 ? '=' : '#', dCol(WARM, 0.7 - Math.abs(x) * 0.04 - (Math.abs(y - 3.1) < 0.4 ? 0.2 : 0), 8)];
+    const n = clamp(it.uses, 0, 4), spots = [[-4.6, -0.4], [-1.5, -0.4], [1.6, -0.4], [4.7, -0.4]].slice(0, n);
+    for (const [cx, cy] of spots) { const d = dEll(x, y, cx, cy, 1.8, 2); if (d < 1 && y < 1.6) return y < cy - 1.4 && Math.abs(x - cx) < 0.4 ? ['^', C(WHITE, 11)] : dLit(dBall(x, y, cx, cy, 1.8, 2), WHITE, 9); }
+    return null;
+  }),
+  mooncake: (it, f) => sculpt(26, 12, (x, y) => { // fluted edge, a pattern pressed in the top
+    const bite = dBites(x, y, f, 6.4); if (bite === true) return null;
+    const a = Math.atan2(y, x / 1.1), r = Math.hypot(x / 1.1, y), R = 5.4 * (1 + 0.05 * Math.cos(a * 12));
+    if (r > R) return null;
+    if (bite === 'rim') return [':', C(YEL, 15)];
+    if (r < 2.4 && Math.abs(r - 1.8) < 0.3 || r < 0.8) return ['*', C(YEL, 15)];
+    if (Math.abs(r - 3.6) < 0.25) return ['o', C(BRICK, 11)];
+    return dLit(dSphere(x / 1.1, y, R), ORANGE, 7);
+  }),
+  ginseng: (it, f) => sculpt(22, 17, (x, y) => { // a forked root, leaves at the top
+    const bite = dBitesR(x, y, 0.4 + f * 0.6, 3, 1.4, 1.6, 2); if (bite === true) return null;
+    if (y < -4 && Math.abs(x - Math.sin(y) * 0.6) < 2.2 - (y + 8) * -0.1 && y > -8 && noise(x * 3, y * 3, 982) > 0.35) return ['%', C(GREEN, 13)];
+    const main = Math.abs(x) < 1.5 - (y + 4) * 0.04 && y > -4 && y < 3;
+    const legs = y >= 2 && y < 8 && (Math.abs(x + (y - 2) * 0.45) < 0.8 || Math.abs(x - (y - 2) * 0.5) < 0.7);
+    if (main || legs) return bite === 'rim' ? [':', C(WHITE, 14)] : [Math.abs(fract(y * 1.1) - 0.5) < 0.1 ? '-' : dFill(0.6 - x * 0.08), dCol(WARM, 0.75 - x * 0.08, 8)];
+    return null;
+  }),
+  candy: (it, f) => sculpt(30, 7, (x, y) => { // a wrapped bar: the wrapper peeled back as it's eaten, chocolate showing
+    if (Math.abs(y) > 2.6 || x < -8.4) return null;
+    const left = 8.6 - (1 - f) * 6, wrapEnd = left - 4.2;
+    if (x > left + Math.sin(y * 3) * 0.3) return null; // bitten off
+    if (x > wrapEnd) return [(Math.floor(x * 1.6) & 1) ? '#' : '=', dCol(BRICK, 0.7 - Math.abs(y) * 0.12, 7)];
+    if (x > wrapEnd - 0.6) return ['>', C(MAG, 12)];
+    const t = dText(x, y, -2.6, 0, 'CANDY'); if (t) return [t, C(WHITE, 15)];
+    return dLit(0.75 - (y + 2.6) * 0.1, MAG, 7);
+  }),
+  // ---- things
+  cigarettes: it => sculpt(22, 16, (x, y) => { // the pack, as many sticking out as are left
+    const n = Math.max(0, it.uses);
+    if (y < -3 && y > -7 && Math.abs(x) < 2.6) { const k = Math.floor((x + 2.6) / 1.05); if (k < n && fract((x + 2.6) / 1.05) > 0.3) return y < -6.2 + k * 0.2 ? ['#', C(ORANGE, 13)] : ['|', C(WHITE, 15)]; }
+    if (y < -3 || y > 7.4 || Math.abs(x) > 3.6) return null;
+    const t = dText(x, y, 0, -0.6, 'SMOKES'); if (t) return [t, C(WHITE, 15)];
+    if (y < 1 && y > -2) return dLit(0.6 + 0.3 * dCyl(x, 3.6), RED, 7);
+    return dLit(0.55 + 0.4 * dCyl(x, 3.6), WHITE, 8);
+  }),
+  book: () => sculpt(28, 15, (x, y) => { // a hardback: blue cover, pages along the edge, a title
+    if (x > 6.6 && x < 7.4 && y > -5.6 && y < 6.6) return ['|', C(WHITE, 13)];
+    if (y > 6 && y < 6.8 && x > -5.6 && x < 7.4) return ['_', C(WHITE, 13)];
+    if (x < -6.6 || x > 6.6 || y < -6.6 || y > 6) return null;
+    if (x < -5.6) return ['|', C(BLUE, 8)];
+    const t = dText(x, y, 0.4, -2.6, 'NOVEL'); if (t) return [t, C(YEL, 15)];
+    if (Math.abs(y - 1) < 0.4 && Math.abs(x - 0.4) < 3) return ['~', C(YEL, 12)];
+    return dLit(0.75 - (y + 6.6) * 0.04 - (x + 5.6) * 0.02, BLUE, 6);
+  }),
+  newspaper: () => sculpt(30, 14, (x, y) => { // folded: the masthead, a headline, a photo, columns
+    if (Math.abs(x) > 8.4 || Math.abs(y) > 6.4) return null;
+    const t = dText(x, y, 0, -5, 'THE DAILY'); if (t) return [t, C(GRAY, 3)];
+    if (Math.abs(y + 3.8) < 0.3) return ['=', C(GRAY, 6)];
+    if (y > -3 && y < 1 && x < -1.4 && x > -7.6) return [noise(x * 2, y * 2, 983) > 0.5 ? '#' : '+', C(GRAY, 6 + noise(x * 3, y * 3, 984) * 4)];
+    if (fract(y) < 0.4 && (x > -0.6 || y > 1.4) && hash(Math.floor(x * 2), Math.floor(y), 985) > 0.2 && Math.abs(fract(x * 0.3) - 0.5) < 0.42) return ['-', C(GRAY, 7)];
+    return dLit(0.85 - Math.abs(x) * 0.02, WHITE, 11, 15);
+  }),
+  vinyl: () => sculpt(30, 15, (x, y) => { // the record sliding out of its sleeve
+    const d = Math.hypot(x - 2.6, (y + 1.4) * 1.05);
+    if (d < 6.2 && (x > 3 || y < -5.4)) { if (d < 0.4) return ['o', C(WHITE, 15)]; if (d < 1.8) return ['@', C(RED, 13)]; return [Math.abs(fract(d * 1.2) - 0.5) < 0.12 ? ':' : '#', C(GRAY, d > 5.6 ? 8 : 4)]; }
+    if (Math.abs(x + 0.6) > 6.4 || y < -5.4 || y > 6.6) return null;
+    const t = dText(x, y, -0.6, 3.6, 'GREATEST HITS'); if (t) return [t, C(WHITE, 15)];
+    if (dEll(x, y, -0.6, -0.6, 3, 3) < 1) return dLit(dBall(x, y, -0.6, -0.6, 3), YEL, 9);
+    return dLit(0.7 - (y + 5.4) * 0.03, MAG, 7);
+  }),
+  flowers: () => sculpt(28, 17, (x, y) => { // a bouquet in brown paper
+    const heads = [[-3, -5.4, RED], [0, -6.4, YEL], [3, -5.4, MAG], [-1.6, -3.4, WHITE], [1.6, -3.4, ORANGE], [-4.2, -2.4, MAG], [4.2, -2.4, RED]];
+    for (const [cx, cy, col] of heads) { const d = dEll(x, y, cx, cy, 1.4, 1.3); if (d < 1) return [d < 0.35 ? '@' : '*', d < 0.35 ? C(YEL, 15) : dCol(col, dBall(x, y, cx, cy, 1.4, 1.3), 9)]; }
+    if (y > -2 && y < 2 && Math.abs(x) < 3.5 - (y + 2) * 0.4 && fract(x * 1.1) < 0.35) return ['|', C(GREEN, 13)];
+    if (y > 0.4 && y < 8 && Math.abs(x) < 4.2 - (y - 0.4) * 0.38) return [fract(x * 0.5 - y * 0.3) < 0.1 ? '\\' : dFill(0.6), dCol(BRICK, 0.7 - Math.abs(x) * 0.06, 8)];
+    return null;
+  }),
+  ball: () => sculpt(24, 12, (x, y) => { // a football: white, black patches
+    const b = dBall(x, y, 0, 0, 5.6);
+    if (b < 0) return null;
+    const ax = x / 5.6, ay = y / 5.6, az = Math.sqrt(Math.max(0, 1 - ax * ax - ay * ay));
+    const patch = [[0, 0, 1], [0.8, -0.5, 0.35], [-0.8, -0.5, 0.35], [0, 0.9, 0.4], [0.6, 0.7, 0.4], [-0.6, 0.7, 0.4], [0, -0.95, 0.3]].some(([px, py, pz]) => { const l = Math.hypot(px, py, pz); return (ax * px + ay * py + az * pz) / l > 0.93; });
+    return patch ? ['#', C(GRAY, 2 + b * 3)] : dLit(b, WHITE, 7);
+  }),
+  boombox: () => sculpt(32, 13, (x, y) => { // two speakers, a tape deck, a handle, an aerial
+    if (Math.abs(x - 6 - (y + 6) * 0.6) < 0.2 && y < -2.8 && y > -6.4) return ['/', C(GRAY, 13)];
+    if (y < -2.6 && y > -4.2 && Math.abs(x) < 5 && (Math.abs(x) > 4.4 || y < -3.6)) return ['=', C(GRAY, 12)];
+    if (Math.abs(x) > 9 || y < -2.6 || y > 5.8) return null;
+    for (const cx of [-5.6, 5.6]) { const d = dEll(x, y, cx, 1.8, 2.8, 2.8); if (d < 1) return [d < 0.3 ? 'O' : Math.abs(fract(d * 3) - 0.5) < 0.15 ? 'o' : ':', C(GRAY, d < 0.3 ? 14 : 6 + d * 4)]; }
+    if (Math.abs(x) < 2.2 && y > -1.4 && y < 1.8) return y < -0.6 ? ['=', C(CYAN, 14)] : dEll(x, y, -0.9, 0.6, 0.5, 0.5) < 1 || dEll(x, y, 0.9, 0.6, 0.5, 0.5) < 1 ? ['o', C(WHITE, 14)] : [':', C(GRAY, 6)];
+    if (Math.abs(x) < 2.2 && y > 3 && y < 4) return ['#', C(RED, 13)];
+    return dLit(0.6 - (y + 2.6) * 0.05, GRAY, 6, 12);
+  }),
+  skateboard: () => sculpt(16, 17, (x, y) => { // held up on end: the deck's graphic, trucks and wheels
+    for (const ty of [-5.2, 5.2]) {
+      if (Math.abs(y - ty) < 0.3 && Math.abs(x) < 2.4) return ['=', C(GRAY, 13)];
+      if (Math.abs(y - ty) < 0.8 && Math.abs(Math.abs(x) - 2.8) < 0.5) return ['O', C(WHITE, 15)];
+    }
+    if (dEll(x, y, 0, 0, 2.2, 8.2) > 1) return null;
+    const stripe = Math.floor((y + 8) * 0.6) & 1;
+    return dLit(0.55 + 0.4 * dCyl(x, 2.2), stripe ? RED : YEL, 7);
+  }),
+  yoyo: () => sculpt(18, 15, (x, y) => { // the yo-yo hanging from your finger on its string
+    if (y < -1 && Math.abs(x) < 0.15) return ['|', C(WHITE, 11)];
+    const d = dEll(x, y, 0, 2.6, 3.6, 3.6);
+    if (d > 1) return null;
+    if (d < 0.25) return ['@', C(WHITE, 15)];
+    return [Math.abs(d - 0.6) < 0.06 ? 'o' : dFill(dBall(x, y, 0, 2.6, 3.6)), dCol(RED, dBall(x, y, 0, 2.6, 3.6), 7)];
+  }),
+  vape: () => sculpt(12, 17, (x, y) => { // a mango vape pen; the tip glows when you draw on it
+    if (y < -7 && Math.abs(x) < 0.9) return fx.vape > 0 ? ['@', C(ORANGE, 10 + fx.vape * 1.7)] : ['o', C(GRAY, 10)];
+    if (Math.abs(x) > 1.6 || y < -7 || y > 8) return null;
+    const k = Math.floor((y + 4) / 1.4), word = 'MANGO';
+    if (Math.abs(x) < 0.4 && k >= 0 && k < 5 && Math.abs(fract((y + 4) / 1.4) - 0.5) < 0.36) return [word[k], C(YEL, 15)];
+    return dLit(0.5 + 0.45 * dCyl(x, 1.6), ORANGE, 7);
+  }),
+  pipe: () => sculpt(28, 10, (x, y) => { // a briar pipe: the bowl, the stem off to the right
+    const hw = 2.2 - Math.max(0, y - 1) * 0.5;
+    if (x < 1.2 && x > -3.6 && y > -3.4 && y < 3.6 && Math.abs(x + 1.2) < hw) return y < -2.8 ? ['=', C(BRICK, 8)] : dLit(0.5 + 0.45 * dCyl(x + 1.2, hw), BRICK, 6);
+    if (y > 1.4 && y < 2.6 - (x - 1) * 0.08 && x >= 0.6 && x < 8) return ['=', dCol(BRICK, 0.6 - (y - 1.4) * 0.3, 5)];
+    return null;
+  }),
+  harmonica: () => sculpt(32, 7, (x, y) => { // chrome covers, a row of holes
+    if (Math.abs(x) > 9 || Math.abs(y) > 2.6) return null;
+    if (Math.abs(y) < 0.7) return Math.abs(fract(x * 0.7) - 0.5) < 0.22 ? ['o', C(GRAY, 4)] : ['|', C(BRICK, 11)];
+    return dLit(0.6 + 0.35 * (y < 0 ? 1 - Math.abs(y + 1.6) / 1 : -0.3) - Math.abs(x) * 0.02, WHITE, 6);
+  }),
+  sharkplush: () => sculpt(32, 11, (x, y) => { // a grey shark, white belly, fin and tail, a stitched eye
+    if (y < -1 && y > -5 && x > -1 && x < 2.4 - (y + 5) * 0.2 && x > -1 + (y + 5) * 0.6 - 2.4) return ['#', C(GRAY, 9)];
+    const tail = x > 6.4 && x < 9.4 && Math.abs(y) < (x - 6.4) * 0.9;
+    const body = dEll(x, y, -0.6, 0.6, 7.6, 2.8);
+    if (body < 1 || tail) {
+      if (dEll(x, y, -5.4, -0.2, 0.4, 0.4) < 1) return ['o', C(GRAY, 2)];
+      if (y > 1.2 && x < 5 && !tail) return dLit(0.8, WHITE, 11);
+      return dLit(tail ? 0.6 : dBall(x, y, -0.6, 0.6, 7.6, 2.8), GRAY, 7, 13);
+    }
+    return null;
+  }),
+  snowglobe: () => sculpt(24, 15, (x, y) => { // a glass globe: snow drifting down round a little fish, a wooden base
+    if (y > 4.4 && y < 7 && Math.abs(x) < 4.6 - (y - 4.4) * -0.3) return dLit(0.6 - (y - 4.4) * 0.1, BRICK, 7);
+    const d = dEll(x, y, 0, -1.2, 5.4, 5.4);
+    if (d > 1 || y > 4.4) return null;
+    if (d > 0.92) return ['|', C(WHITE, 12)];
+    if (dEll(x, y, 0, 0.6, 1.6, 0.8) < 1) return [x < -1 ? '<' : x > 1.2 ? '>' : 'o', C(ORANGE, 15)];
+    const fl = hash(Math.floor(x * 1.8), Math.floor(y + T * 1.5), 986) > 0.88;
+    return fl ? ['*', C(WHITE, 15)] : Math.abs(x + 2.6) < 0.3 && y < -3 ? [':', C(WHITE, 9)] : [' ', 0];
+  }),
+  spraypaint: it => sculpt(20, 16, (x, y) => { // a spray can, its colour the one in it, the nozzle on top
+    const col = [MAG, CYAN, GREEN, ORANGE][it.uses & 3], hw = 3;
+    if (y < -6 && Math.abs(x) < 0.9) return y < -7 ? ['o', C(WHITE, 14)] : ['#', C(GRAY, 13)];
+    if (y >= -6 && y < -4.6 && Math.abs(x) < hw - (y < -5.4 ? 1 : 0)) return dLit(0.5 + 0.4 * dCyl(x, hw), GRAY, 8);
+    if (y < -4.6 || y > 7.4 || Math.abs(x) > hw) return null;
+    const t = dText(x, y, 0, 0.6, 'ZAP'); if (t) return [t, C(WHITE, 15)];
+    return [dCyl(x, hw) > 0.92 ? '|' : dFill(dCyl(x, hw)), dCyl(x, hw) > 0.92 ? C(WHITE, 15) : dCol(col, dCyl(x, hw))];
+  }),
+  plushcat: () => sculpt(26, 14, (x, y) => { // a lucky cat, one paw up and waving
+    const wave = Math.sin(T * 4) * 0.5;
+    if (dEll(x, y, 4.6 + wave * 0.4, -3 + wave, 1.2, 1.6) < 1) return dLit(0.8, WHITE, 11);
+    for (const s of [-1, 1]) if (y > -6.4 && y < -3.6 && Math.abs(x - s * 2.4) < 1.2 - (y + 6.4) * -0.1 && Math.abs(x - s * 2.4) < (y + 6.4) * 0.5) return ['^', C(s > 0 ? WHITE : WHITE, 13)];
+    const head = dEll(x, y, 0, -2.4, 3.8, 3);
+    if (head < 1) {
+      for (const s of [-1, 1]) if (dEll(x, y, s * 1.4, -2.8, 0.5, 0.5) < 1) return ['o', C(GREEN, 15)];
+      if (dEll(x, y, 0, -1.6, 0.4, 0.3) < 1) return ['v', C(MAG, 15)];
+      return dLit(dBall(x, y, 0, -2.4, 3.8, 3), WHITE, 9);
+    }
+    if (dEll(x, y, 0, 3, 4.2, 3.6) < 1) return Math.abs(y - 0.8) < 0.35 && Math.abs(x) < 3.6 ? ['=', C(RED, 14)] : dLit(dBall(x, y, 0, 3, 4.2, 3.6), WHITE, 9);
+    return null;
+  }),
+  plushbear: () => sculpt(26, 15, (x, y) => { // a brown teddy, sitting
+    for (const s of [-1, 1]) if (dEll(x, y, s * 2.8, -5.4, 1.2, 1.2) < 1) return dLit(0.6, BRICK, 8);
+    const head = dEll(x, y, 0, -2.8, 3.4, 2.8);
+    if (head < 1) {
+      for (const s of [-1, 1]) if (dEll(x, y, s * 1.3, -3.2, 0.4, 0.4) < 1) return ['o', C(GRAY, 2)];
+      if (dEll(x, y, 0, -1.8, 1.2, 0.9) < 1) return [dEll(x, y, 0, -2, 0.4, 0.3) < 1 ? '@' : '%', C(WARM, 12)];
+      return dLit(dBall(x, y, 0, -2.8, 3.4, 2.8), BRICK, 7);
+    }
+    for (const s of [-1, 1]) if (dEll(x, y, s * 3.6, 1.6, 1.2, 2) < 1) return dLit(0.55, BRICK, 7);
+    if (dEll(x, y, 0, 3, 3.6, 3.6) < 1) return dLit(dBall(x, y, 0, 3, 3.6), BRICK, 7);
+    return null;
+  }),
+  yakitori: (it, f) => sculpt(26, 16, (x, y) => { // chunks of chicken on a skewer, glazed; one fewer each time
+    { const s = dStraw(x, y, 3.3, -7.6, -1.9, 7.6, C(WARM, 12)); if (s) return [s[0], C(WARM, 12)]; } // the skewer
+    const n = Math.ceil(f * 3);
+    for (let k = 0; k < n; k++) { const cy = 3.6 - k * 3.2, cx = 3.3 - (cy + 7.6) * 5.2 / 15.2, // (on the skewer)
+      d = dEll(x, y, cx, cy, 2.4, 1.5); if (d < 1) return [noise(x * 3, y * 3, 987) > 0.6 ? '%' : '#', dCol(BRICK, dBall(x, y, cx, cy, 2.4, 1.5), 7)]; }
+    return null;
+  }),
+  takoyaki: it => sculpt(30, 11, (x, y) => { // a paper boat of takoyaki, sauce and flakes on top, one fewer each time
+    if (y > 1.2 && y < 4.2 && Math.abs(x) < 8.4 - (y - 1.2) * 0.9) return dLit(0.65 - (y - 1.2) * 0.1, WARM, 8);
+    const n = clamp(it.uses, 0, 4);
+    for (let k = 0; k < n; k++) { const cx = -5.1 + k * 3.4, cy = 0, d = dEll(x, y, cx, cy, 1.7, 1.7); if (d < 1) {
+      if (Math.abs(y + 0.5 + Math.sin((x - cx) * 2.5) * 0.25) < 0.25) return ['~', C(BRICK, 12)]; // the sauce
+      if (y < -0.9 && hash(Math.floor(x * 3), Math.floor(y * 2), 988) > 0.7) return ['\'', C(WARM, 14)]; // bonito flakes
+      return dLit(dBall(x, y, cx, cy, 1.7), ORANGE, 7);
+    } }
+    return null;
+  }),
+  onigiri: (it, f) => sculpt(26, 14, (x, y) => { // a rice triangle, a band of nori, a pickled plum peeking out
+    const bite = dBitesTop(x, y, 0.35 + f * 0.65, -6.4, 7); if (bite === true) return null;
+    if (y < -6.4 || y > 6 || Math.abs(x) > (y + 6.4) * 0.68) return null;
+    if (y > 2.4 && Math.abs(x) < 3) return ['#', C(GREEN, 4)];
+    if (bite === 'rim' && Math.abs(x) < 1.2) return ['@', C(RED, 13)];
+    return [hash(Math.floor(x * 2.5), Math.floor(y * 1.5), 989) > 0.8 ? '.' : dFill(0.7 - y * 0.03 - x * 0.03), dCol(WHITE, 0.85 - (y + 6.4) * 0.03, 10)];
+  }),
+  bento: (it, f) => sculpt(30, 11, (x, y) => { // a box in four compartments, each emptied in turn
+    if (Math.abs(x) > 8.4 || Math.abs(y) > 4.4) return null;
+    if (Math.abs(x) > 7.8 || Math.abs(y) > 3.8 || Math.abs(x + 2) < 0.3 || Math.abs(x - 3) < 0.3 && y > -3.8 || Math.abs(y) < 0.3 && x > -2) return ['#', C(BRICK, 9)];
+    const left = Math.ceil(f * 4), cell = x < -2 ? 0 : y < 0 ? (x < 3 ? 1 : 2) : 3;
+    if (cell >= left) return [':', C(BRICK, 4)]; // eaten: the bare box
+    if (cell === 0) return [hash(Math.floor(x * 3), Math.floor(y * 2), 990) > 0.9 ? '.' : '@', C(WHITE, 15)]; // rice, sesame
+    if (cell === 1) return dEll(x, y, 0.5, -2, 1.2, 1) < 1 ? ['@', C(RED, 13)] : ['o', C(RED, 11)]; // sausages
+    if (cell === 2) return ['%', C(GREEN, 13)]; // greens
+    return ['=', C(YEL, 14)]; // tamagoyaki
+  }),
+  duck: () => sculpt(24, 12, (x, y) => { // a rubber duck
+    if (dEll(x, y, -4.4, -1.6, 1.4, 0.7) < 1) return ['>', C(ORANGE, 15)];
+    const head = dEll(x, y, -1.6, -2.4, 2.4, 2.2);
+    if (head < 1) return dEll(x, y, -2.4, -3, 0.4, 0.4) < 1 ? ['o', C(GRAY, 2)] : dLit(dBall(x, y, -1.6, -2.4, 2.4, 2.2), YEL, 9);
+    if (dEll(x, y, 0.8, 1.8, 5.2, 2.8) < 1) return dLit(dBall(x, y, 0.8, 1.8, 5.2, 2.8), YEL, 9);
+    if (x > 4 && x < 6.6 && y < 1 && y > -1.6 + (6.6 - x) * 0.3) return dLit(0.7, YEL, 9); // the tail
+    return null;
+  }),
+  jadebangle: () => sculpt(24, 11, (x, y) => { // a jade bangle, seen at a tilt: a ring, light running round it
+    const d = dEll(x, y, 0, 0, 5.2, 4.2), inner = dEll(x, y, 0, 0, 3.7, 2.8);
+    if (d > 1 || inner < 1) return null;
+    const a = Math.atan2(y, x), b = 0.45 + 0.4 * Math.cos(a + 2.3) + (noise(x * 2, y * 2, 1311) - 0.5) * 0.3; // (veins in the stone)
+    return [b > 0.85 ? '@' : dFill(b), C(b > 0.85 ? WHITE : GREEN, 6 + clamp(b, 0, 1) * 9)];
+  }),
+  jadedragon: () => sculpt(26, 14, (x, y) => { // a little carved jade dragon on a wooden stand
+    if (y > 4.6 && y < 6.4 && Math.abs(x) < 5.2 - (y - 4.6) * -0.4) return dLit(0.7 - (y - 4.6) * 0.2, BRICK, 7);
+    if (dEll(x, y, 2.6, -3.6, 0.35, 0.35) < 1) return ['@', C(RED, 15)]; // its eye
+    if (y < -2 && y > -4.8 && Math.abs(x - 3.2) < 1.8 + (y + 2) * 0.2) return dLit(dBall(x, y, 3, -3.4, 2, 1.5), GREEN, 8); // the head
+    if (Math.abs(y + 3.3) < 0.25 && x > 4.6 && x < 6.6) return ['~', C(GREEN, 12)]; // whiskers
+    const path = [[-6.4, 1.2], [-4.8, 3], [-2.8, 0.8], [-0.8, 3], [1, 0.6], [2.2, -2.2]]; // the body, coiling from the tail up to the head
+    let dmin = 9, along = 0;
+    for (let k = 0; k < path.length - 1; k++) {
+      const [ax, ay] = path[k], [bx, by] = path[k + 1], t = clamp(((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2), 0, 1), dd = Math.hypot(x - ax - t * (bx - ax), y - ay - t * (by - ay));
+      if (dd < dmin) { dmin = dd; along = k + t; }
+    }
+    const thick = 0.35 + Math.min(1, along / 1.5) * 0.75; // thin at the tail
+    if (dmin < thick) return [dmin < thick * 0.3 && Math.floor(along * 4) & 1 ? '=' : dFill(0.5 + 0.45 * (1 - dmin / thick) - (y > 1 ? 0.1 : 0)), dCol(GREEN, 0.5 + 0.45 * (1 - dmin / thick), 7)];
+    return null;
+  }),
+  sparklers: () => sculpt(10, 15, (x, y) => (Math.abs(x) < 0.2 ? [y < -4 ? '#' : '|', y < -4 ? C(GRAY, 7) : C(GRAY, 12)] : null)), // the wire; drawSparks puts the fizz on top
+  umbrella: () => sculpt(16, 19, (x, y) => { // furled, a strap round it, the hooked handle
+    if (y > 5 && Math.abs(x) < 0.2) return ['|', C(BRICK, 12)];
+    if (y > 8 && dEll(x, y, 1, 8.4, 1.2, 1) < 1 && dEll(x, y, 1, 8.4, 0.6, 0.4) > 1 && y > 8.4) return ['J', C(BRICK, 12)];
+    if (y < -8.6 && Math.abs(x) < 0.15) return ['|', C(GRAY, 14)];
+    const hw = (y + 8.6) / 13.6 * 2.2 * (y > 2 ? (5 - y) / 3 : 1);
+    if (y >= -8.6 && y <= 5 && Math.abs(x) < Math.max(0.2, hw)) return Math.abs(y + 1) < 0.4 ? ['=', C(WHITE, 14)] : [Math.abs(fract(x * 1.5 + y * 0.2) - 0.5) < 0.1 ? '/' : dFill(0.6 + 0.35 * dCyl(x, Math.max(0.2, hw))), dCol(BLUE, 0.6 + 0.35 * dCyl(x, Math.max(0.2, hw)), 7)];
+    return null;
+  }),
+});
+// ===== smoke and vapour that hangs in the air. Every drag you breathe out leaves a few puffs in front of you, a lit
+// cigarette sends up the odd wisp, and the vape's cloud is a lot more (mango-coloured). Outside they drift off on the
+// wind and are gone in a few seconds; indoors they hang about for half a minute, so a room you keep smoking in gets
+// hazy. Walk into a cloud and it fogs your view. (The close-up wisps on the screen, goods-ui.js, are as they were.)
+const haze = []; // { at: placeKey, kind: 'smoke' | 'vape', x, y, z, r, vx, vy, s (world units a metre), life 1..0, fade, seed }
+let hazeLastTip = 0, hazeDue = 0, hazeWisp = 0;
+const HAZE_WIND = [0.035, 0.012]; // outside, in cells a second (a light breeze)
+// breathe out (amount 0..3: a wisp, a drag, a big vape cloud) in front of you
+function hazeExhale(amount, kind) {
+  const at = placeKey();
+  if (at === null) return;
+  const s = mode === 'room' ? 1 : 0.1, n = Math.max(1, Math.round(2 + amount * 4));
+  for (let k = 0; k < n; k++) {
+    const sp = (Math.random() - 0.5) * (0.5 + amount * 0.3), d = (0.7 + Math.random() * 0.5 + amount * 0.35) * s, r = (0.14 + amount * 0.1 + Math.random() * 0.08) * s;
+    haze.push({ at, kind, s, x: px + Math.cos(a + sp) * d, y: py + Math.sin(a + sp) * d, z: (1.45 + Math.random() * 0.3) * s,
+      r, rMax: r * 2 + 0.15 * s, vx: Math.cos(a + sp) * (0.3 + amount * 0.25) * s, vy: Math.sin(a + sp) * (0.3 + amount * 0.25) * s,
+      life: 1, fade: mode === 'room' ? 1 / 25 : 1 / 6, seed: Math.random() * 100 });
+  }
+  while (haze.length > 90) haze.shift();
+}
+function stepHaze(dt) {
+  if (cigTip > hazeLastTip + 0.5) hazeDue = 0.8; // a drag (or lighting up): breathe it out in a moment
+  hazeLastTip = cigTip;
+  if (hazeDue > 0 && (hazeDue -= dt) <= 0) hazeExhale(0.45, 'smoke');
+  if (fx.smoke > 0 && onFootMode() && (hazeWisp -= dt) <= 0) { hazeWisp = 1.4 + Math.random() * 1.2; hazeExhale(-0.3, 'smoke'); } // off the end of it
+  for (let k = haze.length - 1; k >= 0; k--) {
+    const p = haze[k], out = p.at === '';
+    p.x += (p.vx + (out ? HAZE_WIND[0] : 0)) * dt; p.y += (p.vy + (out ? HAZE_WIND[1] : 0)) * dt;
+    p.vx *= 1 - Math.min(1, dt * 1.2); p.vy *= 1 - Math.min(1, dt * 1.2); // the breath slows; then it's just the air moving it
+    p.z += (p.vz ?? 0.08 * p.s) * dt; p.r += (p.rMax - p.r) * Math.min(1, dt * (out ? 0.6 : 0.3)); // rising, spreading out to a limit
+    if ((p.life -= p.fade * dt) <= 0) haze.splice(k, 1);
+  }
+}
+// drawn last in the scene (after the walls and the people), see-through: a soft core, wisps round its edge, the
+// world showing between them. Behind a wall, hidden.
+function drawHaze() {
+  if (!haze.length) return;
+  const room_ = mode === 'room', at = room_ ? placeKey() : ''; // (outdoors, from a car or a boat too)
+  let inside = 0, insideKind = 'smoke';
+  for (const p of haze) {
+    if (p.at !== at) continue;
+    const rx_ = room_ ? p.x - px : rel(p.x - px), ry_ = room_ ? p.y - py : rel(p.y - py), depth = dx * rx_ + dy * ry_;
+    const near = Math.hypot(rx_, ry_, p.z - eye) / p.r;
+    if (near < 1 && p.life * (1 - near) > inside) { inside = p.life * (1 - near); insideKind = p.kind; }
+    if (depth < 0.05 * p.s * 10 || depth > vis) continue;
+    const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc, rw = p.r * sc, cy = hor - (p.z - eye) * projY / depth, rh = p.r * projY / depth * 0.75;
+    const c0 = Math.max(0, Math.floor(cx - rw)), c1 = Math.min(cols, Math.ceil(cx + rw)), r0 = Math.max(0, Math.floor(cy - rh)), r1 = Math.min(rows, Math.ceil(cy + rh));
+    for (let r = r0; r < r1; r++) for (let c = c0; c < c1; c++) {
+      const i = r * cols + c;
+      if (depth >= ZB[i]) continue;
+      const nx = (c + 0.5 - cx) / rw, ny = (r + 0.5 - cy) / rh, d = Math.hypot(nx, ny);
+      if (d >= 1) continue;
+      const dens = (1 - d * d) * (0.3 + 0.8 * noise(nx * 2.6 + p.seed, ny * 2.6 - T * 0.25, 991)) * p.life * 0.85;
+      if (dens < 0.22 || dens < 0.4 && hash(c, r, 993) > 0.6) continue; // thin: the world shows through
+      hazeCell(i, dens, p.kind);
+    }
+  }
+  if (inside > 0.12) for (let i = 0; i < CH.length; i++) { // in the thick of it: the whole view clouds over
+    const dens = inside * (0.3 + 0.7 * noise((i % cols) * 0.15, (i / cols | 0) * 0.3 - T * 0.3, 992));
+    if (dens > 0.3 && hash(i, 7, 994) > 0.35) hazeCell(i, dens * 0.6, insideKind);
+  }
+}
+function hazeCell(i, dens, kind) {
+  const vape = kind === 'vape', lit = Math.max(0.35, amb) * (kind === 'steam' ? 1.25 : 1); // (steam: whiter)
+  set(i, dens > 0.7 ? '%' : dens > 0.5 ? '~' : dens > 0.33 ? ':' : '.', C(vape ? (dens > 0.55 ? YEL : WARM) : dens > 0.55 ? WHITE : GRAY, (5 + dens * 9) * lit));
+  if (dens > 0.7) BG[i] = C(vape ? ORANGE : GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
+  FOGS[i] = 0;
+}
+// ===== little things on the street: manhole covers in the road (some with steam pouring out, as from a city's steam
+// pipes), and now and then a flock of pigeons pecking about on a sidewalk, in a park or a plaza, that bursts up and
+// flies off when you get close.
+
+// ---- manholes: one in a lane now and then (deterministic, so they're always in the same places). [x, y, steams]
+// of the one in the road cell at (wx, wy), or null. Not on the bridges.
+function manholeAt(wx, wy) {
+  const road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
+  if (road !== 1 && road !== 2) return null;
+  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8);
+  if (road === 1 && onBridge(bx, by)) return null;
+  const e = road === 1 ? mod(wx, 8) : mod(wy, 8), lane = e < 1 ? 0.65 : 1.35, seg = Math.floor(road === 1 ? wy : wx);
+  const h = hash(seg, Math.floor((road === 1 ? bx : by) * 2 + (e < 1 ? 0 : 1)), road === 1 ? 1201 : 1203);
+  if (h > 0.045) return null;
+  const across = (road === 1 ? bx : by) * 8 + lane;
+  return road === 1 ? [across, seg + 0.5, h < 0.028] : [seg + 0.5, across, h < 0.028];
+}
+// the cover, drawn into the road: an iron disc with a grid cast in it and a rim (0.06 cells, 60cm, across)
+function manholeCell(wx, wy, L) {
+  const m = manholeAt(wx, wy);
+  if (!m) return null;
+  const dx = rel(wx - m[0]), dy = rel(wy - m[1]), r = Math.hypot(dx, dy);
+  if (r > 0.03) return null;
+  if (r > 0.025) return ['O', C(GRAY, L * 1.1), C(GRAY, 1)];
+  const grid = Math.abs(fract(dx * 120) - 0.5) < 0.18 || Math.abs(fract(dy * 120) - 0.5) < 0.18;
+  return [grid ? '#' : '+', C(GRAY, L * (grid ? 0.9 : 0.6)), C(GRAY, 1 + L * 0.06)];
+}
+// steam from the ones near you: puffs into the haze (smoke.js), rising fast, thinning as they go
+let steamT = 0;
+function stepSteam(dt) {
+  if (mode !== 'walk' && mode !== 'drive' && mode !== 'taxi' || (steamT -= dt) > 0) return;
+  steamT = 0.22;
+  const seen = new Set();
+  for (let y = Math.floor(py - 3); y <= py + 3; y++) for (let x = Math.floor(px - 3); x <= px + 3; x++) {
+    const m = manholeAt(x + 0.5, y + 0.5);
+    if (!m || !m[2]) continue;
+    const key = Math.round(m[0] * 10) + ',' + Math.round(m[1] * 10);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    haze.push({ at: '', kind: 'steam', s: 0.1, x: m[0] + (Math.random() - 0.5) * 0.02, y: m[1] + (Math.random() - 0.5) * 0.02, z: 0.01, r: 0.035, rMax: 0.12, vx: 0, vy: 0, vz: 0.05,
+      life: 1.15, fade: 1 / 3.5, seed: Math.random() * 100 });
+  }
+  while (haze.length > 120) haze.shift();
+}
+
+// ---- pigeons: a flock of 5 to 9, by day, out of the rain, somewhere you could walk. They peck and shuffle about;
+// get within a few metres and they all take off at once, away from you, wings going, up and gone
+const flocks = []; // { x, y, birds: [{ dx, dy, ph, dir, fx, fy, fz }], scared: 0 (or the time they went up) }
+let flockT = 0;
+const PIGEON = { peck: pad([' _ ', '(o>', ' "']), look: pad([' _ ', '(o>', '/ \\']), up: ['\\v/'], down: ['/^\\'] };
+const pigeonSpot = (x, y) => { // somewhere a pigeon would be: open ground or a sidewalk, not out in the traffic
+  if (map[idx(Math.floor(x), Math.floor(y))] || isWater(x, y) || !free(x, y) || inGardens(x, y)) return false;
+  const road = ROAD[idx(Math.floor(x), Math.floor(y))];
+  if (!road) return true;
+  if (road === 3) return false;
+  const e = road === 1 ? mod(x, 8) : mod(y, 8);
+  return e < 0.28 || e > 1.72;
+};
+function stepPigeons(dt) {
+  for (let k = flocks.length - 1; k >= 0; k--) { // the ones you've scared, flying off; ones you've left far behind
+    const f = flocks[k], d = Math.hypot(rel(f.x - px), rel(f.y - py));
+    if (!f.scared && mode === 'walk' && d < 0.3) {
+      f.scared = T;
+      for (const b of f.birds) { const ax = rel(f.x + b.dx - px), ay = rel(f.y + b.dy - py), n = Math.hypot(ax, ay) || 1, sp = 0.18 + Math.random() * 0.12;
+        b.fx = ax / n * sp + (Math.random() - 0.5) * 0.12; b.fy = ay / n * sp + (Math.random() - 0.5) * 0.12; b.fz = 0.06 + Math.random() * 0.05; b.z = 0; }
+      if (actx) burst(actx.currentTime, 0.6, [filt('bandpass', 1500, 0.7)], 0.1); // a clatter of wings
+    }
+    if (f.scared) for (const b of f.birds) { b.dx += b.fx * dt; b.dy += b.fy * dt; b.z += b.fz * dt; b.fz += 0.02 * dt; }
+    if (f.scared && T - f.scared > 5 || d > 7) flocks.splice(k, 1);
+  }
+  if ((flockT -= dt) > 0 || mode !== 'walk') return;
+  flockT = 6;
+  if (flocks.length >= 2 || tod < 6.5 || tod > 19.5 || rain > 0.3 || Math.random() > 0.3) return; // (rare)
+  for (let tries = 0; tries < 20; tries++) {
+    const ang = Math.random() * Math.PI * 2, dist = 1.3 + Math.random() * 2.5, x = mod(px + Math.cos(ang) * dist, N), y = mod(py + Math.sin(ang) * dist, N);
+    if (!pigeonSpot(x, y)) continue;
+    const n = 5 + (Math.random() * 5 | 0), birds = [];
+    for (let k = 0; k < n; k++) { const bx = (Math.random() - 0.5) * 0.12, by = (Math.random() - 0.5) * 0.12; if (pigeonSpot(x + bx, y + by)) birds.push({ dx: bx, dy: by, ph: Math.random() * 9, dir: Math.random() < 0.5 ? 1 : -1, z: 0 }); }
+    if (birds.length >= 3) { flocks.push({ x, y, birds, scared: 0 }); return; }
+  }
+}
+function drawPigeons() {
+  for (const f of flocks) for (const b of f.birds) {
+    const vx = rel(f.x + b.dx - px), vy = rel(f.y + b.dy - py);
+    if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
+    let art;
+    if (f.scared) art = fract(T * 7 + b.ph) < 0.5 ? PIGEON.up : PIGEON.down;
+    else { // pecking, looking about, shuffling a step now and then
+      const t = fract(T * 0.35 + b.ph * 0.1);
+      art = t < 0.55 ? (fract(T * 2.5 + b.ph) < 0.5 ? PIGEON.peck : PIGEON.look) : PIGEON.look;
+      if (t > 0.9) b.dx += b.dir * 0.004 * (1 / 60);
+    }
+    if (!f.scared && b.dir < 0) art = art.map(l => [...l].reverse().join('').replace(/>/g, '<'));
+    drawArt(vx, vy, b.z || 0, f.scared ? 0.022 : 0.03, f.scared ? 0.007 : 0.028, art, (c, row, L) => c === '>' || c === '<' ? C(ORANGE, Math.max(L, 6)) : row === 1 && c === 'o' ? C(WHITE, Math.max(L, 8)) : C(GRAY, Math.max(L, 6)));
+  }
 }
 // ===== playing a minigame (minigames.js): an arcade cabinet or a work shift takes over the screen. The game's grid is
 // drawn into the same character grid as the world, scaled up into blocks, inside a cabinet-style frame, with its
@@ -8815,7 +9757,9 @@ function gameFS(g) {
   return clamp(Math.floor(Math.min(DETAIL[settings.detail], (innerWidth - cr) / ((2 * g.W + 6) * ratio), (innerHeight - cb) / (g.H + 9))), 5, 40);
 }
 // what the screen says to press: on a phone, the buttons' names
-const gameText = s => TOUCH ? s.replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/\bUP\b/g, 'MAHJONG').replace(/SPACE/g, 'GO') : s;
+// (on a phone: what the buttons are called. UP is the Mahjong! button only at the mahjong table; lockpicking's HOLD UP
+// is the stick held up)
+const gameText = (s, g) => !TOUCH ? s : (g && g.id === 'mahjong' ? s.replace(/\bUP\b/g, 'MAHJONG') : s).replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/SPACE/g, 'GO');
 // the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
 function drawGame() {
   const g = game.g, fs = gameFS(g);
@@ -8843,7 +9787,7 @@ function drawGame() {
     }
   }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col)); // a label, at normal size
   // the status under the screen, in two lines if it's wider than the cabinet
-  const st = gameText(g.status()), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
+  const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
   const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
@@ -9041,7 +9985,7 @@ function crimeKey(code) {
 }
 // what G / L would do here, for the prompt line
 function crimePrompt() {
-  if (mode === 'room' && room.burgled) return 'G: take something   E (at the counter): the till';
+  if (mode === 'room' && room.burgled) return 'G: take something' + (nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter or the door)
   if (pickTarget()) return 'G: pick their pocket';
   const sh = lockTarget();
   if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`;
@@ -9087,7 +10031,7 @@ function nearSeat() {
 function sitDown() {
   const s = nearSeat();
   if (!s) return false;
-  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = 0;
+  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = s.grass ? -0.4 : 0; // (on the grass: looking down at the picnic)
   say(s.grass ? 'You sit down on the grass.' : 'You sit down.', 1.5);
   return true;
 }
@@ -9120,8 +10064,8 @@ function drawBoard3D() {
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
-  const cy = skater ? eye * 10 - body.z - 0.09 : 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
-  const cz = skater ? skater.back * 10 : 1.15; // a few metres ahead when you're watching from behind
+  const cy = 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
+  const cz = 1.15;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   const pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS, ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
   const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
@@ -9151,18 +10095,6 @@ function drawBoard3D() {
     for (let v = -0.09; v <= 0.09; v += 0.01) plot(tu, v, -BOARD_T / 2 - 0.03, '-', C(GRAY, 12), C(GRAY, 3));
     for (const wv of [-0.1, 0.1]) for (let dh = 0; dh < 0.05; dh += 0.01) plot(tu, wv, -BOARD_T / 2 - 0.035 - dh, 'O', C(WHITE, 15), C(GRAY, 4));
   }
-}
-
-// you, seen from behind on the board: knees bent riding, tucked in the air, arms out for balance
-const SKATER_ART = {
-  ride: pad(['   ___   ', '  /%%%\  ', '  \%%%/  ', '  _|#|_  ', ' /#####\ ', '//#####\\', '"|#####|"', '  |###|  ', '  |/ \|  ', '  /   \  ', ' /     \ ', '[]     []']),
-  air: pad(['"  ___  "', '\\/%%%\//', '  \%%%/  ', '  _|#|_  ', '  |###|  ', '  |###|  ', '  |###|  ', '  |###|  ', '  /| |\  ', ' |_| |_| ', '         ', '         ']),
-};
-function drawSkater() {
-  const [vx, vy] = R(skater.x, skater.y), moving = K.KeyW || K.KeyS;
-  const art = body.z > 0.05 ? SKATER_ART.air : SKATER_ART.ride, shirt = fx.fresh > 0 ? CYAN : RED;
-  drawArt(vx, vy, body.z * 0.1 + 0.01, 0.075, 0.17 - body.crouch * 0.03 + (moving ? Math.sin(T * 4) * 0.002 : 0), art,
-    (c, row, L) => C(row < 3 ? BRICK : c === '"' ? SKIN : row < 7 ? shirt : c === '[' || c === ']' ? WHITE : BLUE, Math.max(L, 7))); // hair, shirt, jeans, sneakers
 }
 // ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
 // your cars are parked), kept in localStorage every few seconds and when you leave. Not saved: where you are, the
@@ -9226,7 +10158,6 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && me) third = !third;
-  else if (e.code === 'KeyV' && skatingNow()) { skateThird = !skateThird; say(skateThird ? 'Camera: behind you' : 'Camera: your eyes', 1.2); }
   if (e.code === 'KeyM') showMap = !showMap;
   if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
   const n = /^Digit([1-6])$/.exec(e.code);
@@ -9325,6 +10256,10 @@ function loop(t) {
   stepLaundry();
   stepEvents(dt);
   stepGardens(dt);
+  stepHaze(dt);
+  stepSteam(dt);
+  stepPigeons(dt);
+  stepJadeIncense(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
@@ -9349,14 +10284,9 @@ function loop(t) {
     if (room.rideT <= 0) arriveAt(room.dest);
   }
   chaseOn = !!me && third;
-  skater = skatingNow() && skateThird && !sleep ? { x: px, y: py, back: 0.34 } : null;
   if (chaseOn) { // render from behind the car, then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
-  } else if (skater) { // skating: from a few metres behind you, so you can watch your tricks
-    const bx = Math.cos(a), by = Math.sin(a);
-    while (skater.back > 0.08 && !free(px - bx * skater.back, py - by * skater.back)) skater.back -= 0.02;
-    px -= bx * skater.back; py -= by * skater.back; render(dt); [px, py] = [skater.x, skater.y];
   } else { // a drink or two and the world sways; more and you're seeing double
     camYaw = a; const wob = Math.min(1.3, fx.booze);
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
@@ -9444,7 +10374,7 @@ function keyUp(code) { onkeyup({ code }); }
 const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
   [/^get off/, 'Get off'], [/^board/, 'Board'], [/^pick up/, 'Pick up'], [/^buy/, 'Buy'], [/^shop/, 'Shop'], [/^play/, 'Play'],
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
-  [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Leave'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
+  [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
   [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
 function eLabel(p) {
@@ -9482,7 +10412,6 @@ function touchActions() {
     if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
     if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
-    if (skatingNow()) out.push(['Camera', 'KeyV', 'pop']);
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push(['Jump', 'Space', 'jump']);
   }

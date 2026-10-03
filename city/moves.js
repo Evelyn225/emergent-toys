@@ -38,7 +38,7 @@ function nearSeat() {
 function sitDown() {
   const s = nearSeat();
   if (!s) return false;
-  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = 0;
+  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = s.grass ? -0.4 : 0; // (on the grass: looking down at the picnic)
   say(s.grass ? 'You sit down on the grass.' : 'You sit down.', 1.5);
   return true;
 }
@@ -71,8 +71,8 @@ function drawBoard3D() {
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
-  const cy = skater ? eye * 10 - body.z - 0.09 : 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
-  const cz = skater ? skater.back * 10 : 1.15; // a few metres ahead when you're watching from behind
+  const cy = 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
+  const cz = 1.15;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   const pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS, ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
   const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
@@ -102,16 +102,4 @@ function drawBoard3D() {
     for (let v = -0.09; v <= 0.09; v += 0.01) plot(tu, v, -BOARD_T / 2 - 0.03, '-', C(GRAY, 12), C(GRAY, 3));
     for (const wv of [-0.1, 0.1]) for (let dh = 0; dh < 0.05; dh += 0.01) plot(tu, wv, -BOARD_T / 2 - 0.035 - dh, 'O', C(WHITE, 15), C(GRAY, 4));
   }
-}
-
-// you, seen from behind on the board: knees bent riding, tucked in the air, arms out for balance
-const SKATER_ART = {
-  ride: pad(['   ___   ', '  /%%%\  ', '  \%%%/  ', '  _|#|_  ', ' /#####\ ', '//#####\\', '"|#####|"', '  |###|  ', '  |/ \|  ', '  /   \  ', ' /     \ ', '[]     []']),
-  air: pad(['"  ___  "', '\\/%%%\//', '  \%%%/  ', '  _|#|_  ', '  |###|  ', '  |###|  ', '  |###|  ', '  |###|  ', '  /| |\  ', ' |_| |_| ', '         ', '         ']),
-};
-function drawSkater() {
-  const [vx, vy] = R(skater.x, skater.y), moving = K.KeyW || K.KeyS;
-  const art = body.z > 0.05 ? SKATER_ART.air : SKATER_ART.ride, shirt = fx.fresh > 0 ? CYAN : RED;
-  drawArt(vx, vy, body.z * 0.1 + 0.01, 0.075, 0.17 - body.crouch * 0.03 + (moving ? Math.sin(T * 4) * 0.002 : 0), art,
-    (c, row, L) => C(row < 3 ? BRICK : c === '"' ? SKIN : row < 7 ? shirt : c === '[' || c === ']' ? WHITE : BLUE, Math.max(L, 7))); // hair, shirt, jeans, sneakers
 }

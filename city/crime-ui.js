@@ -152,7 +152,7 @@ function crimeKey(code) {
 }
 // what G / L would do here, for the prompt line
 function crimePrompt() {
-  if (mode === 'room' && room.burgled) return 'G: take something   E (at the counter): the till';
+  if (mode === 'room' && room.burgled) return 'G: take something' + (nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter or the door)
   if (pickTarget()) return 'G: pick their pocket';
   const sh = lockTarget();
   if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`;

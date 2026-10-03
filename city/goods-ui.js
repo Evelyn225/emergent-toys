@@ -143,6 +143,8 @@ const HAND = {
   bento: (it, f) => [bitten([' .--------.', ' |@@|oo|~~|', ' |@@|oo|~~|', " '--------'"], f, 'top'), (c, r) => c === '@' ? C(WHITE, 15) : c === 'o' ? C(RED, 13) : c === '~' ? C(GREEN, 13) : C(BRICK, 13)],
   sake: (it, f) => [bitten(['   _', '  | |', ' /   \\', '|~~~~~|', '|_____|'], 0.45 + f * 0.55), (c, r) => c === '~' ? C(WHITE, 12) : C(WHITE, 15)],
   melonsoda: (it, f) => [filled(['   @  /', ' .---/-.', ' |    |', ' |    |', ' |    |', "  '--'"], [[2, 2, 5], [3, 2, 5], [4, 2, 5]], f, ':', '~'), (c, r) => c === '@' ? C(RED, 15) : c === ':' || c === '~' ? C(GREEN, 14) : C(WHITE, 12)],
+  jadebangle: () => [['  .-~~-.', ' / .--. \\', '| |    | |', ' \\ `--` /', "  `-~~-'"], (c, r) => C(GREEN, 13)],
+  jadedragon: () => [['   __/\\_', '  (@  ~~>', '  /|  \\', ' ~~\\__/~', ' [=====]'], (c, r) => c === '@' ? C(RED, 15) : r === 4 ? C(BRICK, 12) : C(GREEN, 13)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
   umbrella: () => [['     .', '    /|\\', '   / | \\', '  |  |  |', '  |==|==|', '  |  |  |', '   \\ | /', '    \\|/', '     |', '     |'],
@@ -195,11 +197,12 @@ function drawHeldBig() {
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();
-  if (!it || !onFoot || skater || fx.skating && it.id === 'skateboard') return;
+  if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const cx = Math.round(cv.width * 0.84), hy = Math.round(cv.height - 5.6 * hsz + bob); // the top of the fist: all of it on screen, a short arm to the edge
+  const lift = it.id === 'yoyo' && fx.yoyo > 0 ? Math.min(1, (YOYO_DUR - fx.yoyo) / 0.25, fx.yoyo / 0.25) : 0; // (your hand comes up in front of you for a yo-yo trick)
+  const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (drawHeldDense(it, cx, hy, hsz, grip)); // (the dense-art trial: the item drawn finer, the same hand)
   else if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
@@ -214,28 +217,31 @@ function drawHeldBig() {
     if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
   }
   drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
-  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(cx, grip, isz);
+  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(cx, grip);
   g.font = FS + 'px monospace';
 }
 // the umbrella open over you, seen from underneath: panels of fabric between ribs fanning out from the hub (just off
 // the top of the screen) to a scalloped rim that hangs lowest straight ahead, drips falling off the tips, and the
 // shaft running from your fist up to the hub. All characters.
 function drawCanopy(cx, grip, size, bob) {
-  const W = cv.width, H = cv.height, s = Math.round(size * 0.9);
+  const W = cv.width, H = cv.height, u = Math.max(14, H / 36), s = Math.round(u * 0.72); // (the world's own character size, like the items)
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, ribs = 9, hubX = W * 0.56, off = bob * 0.4;
   charLine(cx, grip, hubX, -s, w, s, PAL[C(GRAY, 13)]); // the shaft
   for (let c = 0; c * w < W + w; c++) {
     const x = c * w, t = (x - W / 2) / (W * 0.62), seg = (t + 1) / 2 * ribs, k = Math.floor(seg), m = Math.abs(fract(seg) - 0.5);
     const rim = H * (0.34 - t * t * 0.32) - (0.5 - m) * s * 1.4 + off; // scalloped: rises between the ribs
-    const rib = m > 0.44, ribCh = Math.abs(t) < 0.08 ? '|' : t < 0 ? '\\' : '/';
+    const rib = m > 0.45, ribCh = Math.abs(t) < 0.08 ? '|' : t < 0 ? '\\' : '/';
     for (let y = 0; y < rim - s; y += s) {
-      if (rib) { g.fillStyle = PAL[C(GRAY, 11)]; g.fillText(ribCh, x, y); continue; }
-      g.fillStyle = PAL[C(BLUE, (k & 1 ? 7 : 5) - y / H * 2)];
-      g.fillText(k & 1 ? '#' : '%', x, y);
+      if (rib) { g.fillStyle = PAL[C(BLUE, 1)]; g.fillRect(x, y, w + 0.5, s + 0.5); g.fillStyle = PAL[C(GRAY, 11)]; g.fillText(ribCh, x, y); continue; }
+      // each panel bellies down between its ribs: lighter in the middle and toward the rim (the light comes through)
+      const b = clamp((0.35 + 0.45 * Math.cos(m * Math.PI * 1.9)) * (0.55 + 0.45 * y / Math.max(rim, 1)) + (k & 1 ? 0.08 : 0), 0, 1);
+      g.fillStyle = PAL[C(BLUE, 1 + b * 2.5)]; g.fillRect(x, y, w + 0.5, s + 0.5); // the fabric itself: nothing shows through it
+      g.fillStyle = PAL[C(k & 1 ? BLUE : CYAN, 4 + b * 7)];
+      g.fillText(dFill(b), x, y);
     }
-    g.fillStyle = PAL[C(BLUE, 11)]; g.fillText(rib ? 'V' : '_', x, rim - s); // the rim
-    if (rib && fract(T * 1.1 + c * 0.37) < 0.6) { g.fillStyle = PAL[C(CYAN, 12)]; g.fillText('.', x, rim + fract(T * 1.1 + c * 0.37) * H * 0.4); } // drips
+    g.fillStyle = PAL[C(BLUE, 12)]; g.fillText(rib ? 'V' : m < 0.2 ? '_' : '-', x, rim - s); // the rim
+    if (rib && fract(T * 1.1 + c * 0.37) < 0.6) { g.fillStyle = PAL[C(CYAN, 12)]; g.fillText(fract(T * 1.1 + c * 0.37) < 0.08 ? 'o' : '|', x, rim + fract(T * 1.1 + c * 0.37) * H * 0.4); } // drips gathering at the tips and falling
   }
 }
 // a cigarette between your lips: filter, paper burning down as it's smoked (fx.smoke counts down), the ember glowing
@@ -280,6 +286,7 @@ function drawVapeCloud() {
       cloudPuffs.push([cv.width / 2 + (Math.random() - 0.5) * cw * 6, cv.height - FS * 2, Math.cos(ang) * sp * cw, Math.sin(ang) * sp * FS * 0.8, 1 + big * 0.5]);
     }
     say(fx.cloud > 2.5 ? 'You blow out an enormous cloud of mango.' : fx.cloud > 1.2 ? 'A fat cloud of mango vapour rolls out.' : 'A little puff of mango.', 2.5);
+    hazeExhale(fx.cloud, 'vape'); // (and it hangs in the air)
     fx.cloud = 0; if (actx) sfxUse('drag');
   }
   if (!cloudPuffs.length) return;
@@ -292,14 +299,41 @@ function drawVapeCloud() {
     g.fillStyle = PAL[C(f > 0.5 ? YEL : WHITE, 6 + f * 8)]; g.fillText(f > 0.7 ? '@' : f > 0.4 ? '%' : '~', x, y);
   }
 }
-// a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
-// following its slope
-function drawYoyo(x, y, size) {
-  g.font = size + 'px monospace';
-  const w = g.measureText('M').width, th = (1 - fx.yoyo / 1.4) * Math.PI * 2, R = 2.4;
-  const yx = x + Math.sin(th) * R * w * 1.7, yy = y - (1 - Math.cos(th)) * R * size;
-  charLine(x, y, yx, yy, w, size, PAL[C(WHITE, 11)]);
-  artText(['(' + '@*o*'[(T * 16 | 0) & 3] + ')'], yx - 1.5 * w, yy - size / 2, size, c => c === '(' || c === ')' ? C(RED, 14) : C(WHITE, 15));
+// a yo-yo trick, fx.yoyo counting down from YOYO_DUR, at the world's own character size: 0 walk the dog (down to
+// the pavement, rolling off and back), 1 around the world (a big loop out in front), 2 rock the baby (the string
+// pulled into a cradle, the yo-yo swinging through it), 3 the sleeper (spinning at the bottom, then snapped back
+// up). Every one drops fast and comes back faster; the yo-yo spins the whole time and smears when it's moving quick
+function yoyoAt(t, trick, x, y, L) {
+  const W = cv.width, H = cv.height, mid = clamp((t - 0.18) / 0.67, 0, 1);
+  if (trick === 0) L = Math.max(L, H - y - H * 0.06); // walking the dog: all the way down to the pavement
+  const d = t < 0.18 ? L * (t / 0.18) ** 2 : t > 0.85 ? L * (1 - (t - 0.85) / 0.15) ** 2 : L; // down, out, back up
+  if (t < 0.18 || t > 0.85 || trick === 3) return { x: x + (trick === 3 && t >= 0.18 && t <= 0.85 ? Math.sin(t * 9) * L * 0.03 : 0), y: y + d };
+  if (trick === 1) { const th = mid * Math.PI * 2; return { x: x + Math.sin(th) * L * 0.62, y: y + Math.cos(th) * L }; }
+  if (trick === 0) return { x: x - Math.sin(mid * Math.PI) * W * 0.3, y: y + L - Math.sin(mid * Math.PI) * H * 0.05 }; // rolls away along the pavement (a little further off, so a little higher) and back
+  const apex = { x: x - W * 0.13, y: y - L * 0.3 }, sw = Math.sin(mid * Math.PI * 4) * 0.55 * Math.sin(mid * Math.PI); // the cradle, rocking
+  return { x: apex.x + Math.sin(sw) * L * 0.55, y: apex.y + Math.cos(sw) * L * 0.55, apex };
+}
+function drawYoyo(x, y) {
+  const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72);
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width, L = cv.height * 0.3, trick = fx.yoyoTrick || 0, t = clamp(1 - fx.yoyo / YOYO_DUR, 0, 1);
+  const p = yoyoAt(t, trick, x, y, L), str = PAL[C(WHITE, 11)];
+  if (p.apex) { // rock the baby: the string from your hand round a triangle, the yo-yo hanging from its top corner
+    const b1 = { x: p.apex.x - L * 0.22, y: p.apex.y + L * 0.62 }, b2 = { x: p.apex.x + L * 0.22, y: p.apex.y + L * 0.62 };
+    charLine(x, y, b2.x, b2.y, w, s, str); charLine(b2.x, b2.y, b1.x, b1.y, w, s, str); charLine(b1.x, b1.y, p.apex.x, p.apex.y, w, s, str);
+    charLine(p.apex.x, p.apex.y, p.x, p.y, w, s, str);
+  } else charLine(x, y, p.x, p.y, w, s, str);
+  const q = yoyoAt(clamp(t - 0.025, 0, 1), trick, x, y, L), fast = Math.hypot(p.x - q.x, p.y - q.y) > s * 0.8;
+  if (fast) for (const k of [1, 2]) { const r = yoyoAt(clamp(t - 0.02 * k, 0, 1), trick, x, y, L); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
+  const spin = T * (trick === 0 && t > 0.18 && t < 0.85 ? 40 : 25); // (faster rolling along the ground)
+  const [art, col] = sculpt(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
+    const r = Math.hypot(cx, cy * 1.1) * 2.5 / 3.2;
+    if (r > 2.5) return null;
+    if (r < 0.6) return ['@', C(WHITE, 15)];
+    const an = Math.atan2(cy, cx) + spin, spoke = Math.cos(an * 3) > 0.55;
+    return r > 2.1 ? ['o', C(RED, 11)] : [spoke ? '#' : dFill(dSphere(cx, cy * 1.1, 2.5)), spoke ? C(RED, 6) : C(RED, 7 + dSphere(cx, cy * 1.1, 2.5) * 8)];
+  });
+  artText(art, p.x - 5.5 * w, p.y - 3.5 * s, s, col);
 }
 // a lit sparkler: a fizzing ball at the tip, sparks spitting out every which way (fx.spark counts down)
 function drawSparks(x, y, size) {

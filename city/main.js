@@ -34,7 +34,6 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && me) third = !third;
-  else if (e.code === 'KeyV' && skatingNow()) { skateThird = !skateThird; say(skateThird ? 'Camera: behind you' : 'Camera: your eyes', 1.2); }
   if (e.code === 'KeyM') showMap = !showMap;
   if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
   const n = /^Digit([1-6])$/.exec(e.code);
@@ -133,6 +132,10 @@ function loop(t) {
   stepLaundry();
   stepEvents(dt);
   stepGardens(dt);
+  stepHaze(dt);
+  stepSteam(dt);
+  stepPigeons(dt);
+  stepJadeIncense(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
@@ -157,14 +160,9 @@ function loop(t) {
     if (room.rideT <= 0) arriveAt(room.dest);
   }
   chaseOn = !!me && third;
-  skater = skatingNow() && skateThird && !sleep ? { x: px, y: py, back: 0.34 } : null;
   if (chaseOn) { // render from behind the car, then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
-  } else if (skater) { // skating: from a few metres behind you, so you can watch your tricks
-    const bx = Math.cos(a), by = Math.sin(a);
-    while (skater.back > 0.08 && !free(px - bx * skater.back, py - by * skater.back)) skater.back -= 0.02;
-    px -= bx * skater.back; py -= by * skater.back; render(dt); [px, py] = [skater.x, skater.y];
   } else { // a drink or two and the world sways; more and you're seeing double
     camYaw = a; const wob = Math.min(1.3, fx.booze);
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
