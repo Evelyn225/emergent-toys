@@ -126,11 +126,33 @@ function pickLock(sh) {
     else say('The lock gives. Inside, it\'s dark and quiet.', 3);
   });
 }
-// in a shop you've broken into: E at the counter empties the till, G takes something off the shelves
+// in a shop you've broken into: E at the counter empties the till (a night's takings: a lot), G takes something off the
+// shelves. Touch the money and the alarm goes: the police are on their way at once (a bank: all of them). In a bank
+// there's the vault too, on the right-hand wall: crack it (the lockpick game) for a fortune
+const nearVault = () => mode === 'room' && room.burgled && room.kind === 'bank' && px > room.W - 2.4 && Math.abs(py - room.H / 2) < 1.4;
+function raiseAlarm(bank) {
+  if (room.alarm) return;
+  room.alarm = true;
+  addWanted(bank ? 'bankjob' : 'alarm', room.ret[0], room.ret[1], true); // (they head for the door you came in by)
+  if (actx) { const at = actx.currentTime; for (let k = 0; k < 24; k++) tone(at + k * 0.11, k & 1 ? 1800 : 2400, 0.09, 0.05, 'square'); } // the bell
+}
 function emptyTill() {
   if (room.tillTaken) return say('The till\'s empty.');
-  room.tillTaken = true; const c = Math.round((10 + Math.random() * 35) * 4) / 4; earn(c);
-  return say(`You empty the till: ${fmt$(c)}.`, 3);
+  room.tillTaken = true;
+  const bank = room.kind === 'bank', c = Math.round((bank ? 300 + Math.random() * 300 : 120 + Math.random() * 200) * 4) / 4;
+  earn(c); raiseAlarm(bank);
+  return say(`You empty the till: ${fmt$(c)}. An alarm starts shrieking. The police are on their way: get out!`, 4);
+}
+function crackVault() {
+  if (room.vaultTaken) return say('The vault\'s empty. You took it all.');
+  startCrime('lockpick', ok => {
+    if (ok === 'abort') return;
+    raiseAlarm(true);
+    if (!ok) return say('The dial won\'t give, and every alarm in the building goes off. RUN.', 4);
+    room.vaultTaken = true;
+    const c = Math.round((1000 + Math.random() * 1500) / 10) * 10; earn(c);
+    say(`The vault door swings open. You stuff ${fmt$(c)} into your bag. Alarms everywhere: every cop in town is coming!`, 5);
+  });
 }
 function grabStock() {
   const stock = stockFor(room.kind, room.word);
@@ -152,7 +174,7 @@ function crimeKey(code) {
 }
 // what G / L would do here, for the prompt line
 function crimePrompt() {
-  if (mode === 'room' && room.burgled) return 'G: take something' + (nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter or the door)
+  if (mode === 'room' && room.burgled) return (room.alarm ? 'ALARM! Get out!   ' : '') + 'G: take something' + (nearVault() ? '   E: crack the vault' : nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter, the vault or the door)
   if (pickTarget()) return 'G: pick their pocket';
   const sh = lockTarget();
   if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`;

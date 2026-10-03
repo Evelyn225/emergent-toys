@@ -238,7 +238,7 @@ const GLYPHS = { BOOKS: '|][|', RECORDS: '()O', VIDEO: '[]', LIQUOR: 'il!', BAR:
   'TEA HOUSE': 'oc]', TIRES: 'O0o', 'AUTO REPAIR': 'T7/', SPORTS: 'oO@', SKATE: '=_o', TOYS: 'o*@&', THRIFT: '|]&', TOBACCO: 'i=', MANGA: '|][|', DRUGSTORE: '+=o', GACHA: 'oO@' };
 const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, sorry.', 'Nice weather, huh?', 'Take your time.'];
 // opening hours [open, close) in game hours; close < open wraps past midnight; [0, 24] never closes
-const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
+const HOURS = { CASINO: [10, 6], BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
@@ -585,6 +585,14 @@ const AQUARIUM = { bx: FAIR_BX, by: SHORE_S - 1, x0: FAIR_BX * 8 + 2, x1: FAIR_B
 {
   const sh = AQUARIUM.sh = { kind: SHOP_LIT, word: 'AQUARIUM', neon: CYAN, glyphs: 'o#=@', hours: hoursOf('AQUARIUM'), aqua: true };
   for (let y = 5; y <= 7; y++) for (let x = 2; x <= 7; x++) { const i = idx(AQUARIUM.bx * 8 + x, AQUARIUM.by * 8 + y); map[i] = 1.8; STY[i] = 2; SHOP[i] = sh; }
+}
+
+// ---- the casino: downtown, on the block just south of the plaza, its doors facing the plaza across the street (casino.js
+// has its front and its inside)
+const CASINO = { bx: 15, by: 15 };
+{
+  const sh = CASINO.sh = { kind: SHOP_NEON, word: 'CASINO', neon: YEL, glyphs: '7$o*', hours: hoursOf('CASINO'), casino: true };
+  for (let y = 2; y <= 5; y++) for (let x = 2; x <= 7; x++) { const i = idx(CASINO.bx * 8 + x, CASINO.by * 8 + y); map[i] = 2.6; STY[i] = 20; SHOP[i] = sh; SEED[i] = 0.5; }
 }
 
 // the glass houses go up in the Gardens
@@ -1654,7 +1662,7 @@ const AUDIO_DISTRICT = {
 const ROOM_AUDIO = {
   bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
-  hotel: [0.2, 0.4, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
+  hotel: [0.2, 0.4, 0], casino: [0.7, 0, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -1675,7 +1683,8 @@ function audioMix(s) {
     out.bossa = cafe ? 0.8 : bossa;
     out.coffee = cafe ? 0 : coffee;
     if (k === 'karaoke') out.karaoke = 0.9; // somebody's always singing Sweet Caroline
-    if (k === 'arcade') out.arcade = 0.85; // chiptunes over the cabinets' bleeps
+    if (k === 'arcade') out.arcade = 0.85;
+    if (k === 'casino') out.arcade = 0.55; // the slots chiming over the crowd // chiptunes over the cabinets' bleeps
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
@@ -1812,7 +1821,7 @@ const STOCK_WORD = {
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft'],
-  'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
+  'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], CASINO: ['cocktail', 'whiskey', 'water'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
@@ -2898,6 +2907,205 @@ function taxiPay(dist, took, harsh, crashed, route = dist) {
   const stars = crashed ? 1 : 1 + Math.round(4 * (speed + smooth) / 2);
   return { fare, tip, stars, speed, smooth };
 }
+
+// ---- the casino: blackjack, roulette and slots. Each keeps going hand after hand until you get up: the game asks for
+// your stake with a 'stake' event (minigame-ui.js takes the money, or calls g.refused() if you can't cover it) and
+// pays out with 'payout' (g.win, the whole amount handed back). Luck (luck() in goods.js) nudges them your way a bit.
+const CASINO_BETS = [5, 10, 25, 50, 100];
+const betStep = (bet, dir) => CASINO_BETS[clamp(CASINO_BETS.indexOf(bet) + dir, 0, CASINO_BETS.length - 1)];
+// blackjack: get closer to 21 than the dealer without going over. Picture cards are 10, an ace 1 or 11. The dealer
+// draws to 17. A win pays 2 to 1 (your stake and as much again), a blackjack (21 in two cards) 3 to 2, a tie gives
+// your stake back. Double: twice the stake, one more card, then you stand.
+const CARD_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], CARD_SUITS = 'SHDC';
+const cardVal = c => Math.min(10, c % 13 + 1);
+function bjTotal(hand) { let t = 0, aces = 0; for (const c of hand) { const v = cardVal(c); t += v; if (v === 1) aces++; } if (aces && t + 10 <= 21) t += 10; return t; }
+function cardText(text, x, y, c, down) { // a card, three cells by four rows: rank and suit, or the back
+  const red = (c / 13 | 0) % 4 === 1 || (c / 13 | 0) % 4 === 2, r = CARD_RANKS[c % 13], s = CARD_SUITS[(c / 13 | 0) % 4];
+  const rows = down ? ['.----.', '|////|', '|////|', "'----'"] : ['.----.', `|${r.padEnd(4)}|`, `| ${s}  |`, `'-${r.padStart(2, '-')}-'`];
+  rows.forEach((l, k) => text(x, y + k, l, down ? C(BLUE, 12) : red && k > 0 && k < 3 ? C(RED, 14) : C(WHITE, 15)));
+}
+GAMES.blackjack = (rnd = Math.random) => {
+  const W = 32, H = 19, g = { id: 'blackjack', title: 'BLACKJACK', W, H, score: 0, over: false, bet: 10, win: 0 };
+  let shoe = [], state = 'bet', you = [], dealer = [], wait = 0, doubled = false, msg = 'Place your bet.', ev = [];
+  const fill = () => { shoe = []; for (let d = 0; d < 6; d++) for (let c = 0; c < 52; c++) shoe.push(c); for (let i = shoe.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [shoe[i], shoe[j]] = [shoe[j], shoe[i]]; } };
+  fill();
+  // a card off the shoe. Lucky: you don't bust if a card near the top would have saved you; the dealer does
+  const deal = (hand, who) => {
+    if (shoe.length < 20) fill();
+    if (who === 'you' && bjTotal([...hand, shoe[0]]) > 21 && rnd() < luck() * 2) { const k = shoe.slice(1, 5).findIndex(c => bjTotal([...hand, c]) <= 21); if (k >= 0) [shoe[0], shoe[k + 1]] = [shoe[k + 1], shoe[0]]; }
+    if (who === 'dealer' && rnd() < luck()) { const t = bjTotal([...hand, shoe[0]]); if (t >= 17 && t <= 21 && t >= bjTotal(you)) { const k = shoe.slice(1, 5).findIndex(c => bjTotal([...hand, c]) > 21); if (k >= 0) [shoe[0], shoe[k + 1]] = [shoe[k + 1], shoe[0]]; } }
+    hand.push(shoe.shift()); ev.push('place');
+  };
+  const settle = () => {
+    const stake = g.bet * (doubled ? 2 : 1), y = bjTotal(you), d = bjTotal(dealer), natural = you.length === 2 && y === 21, dNatural = dealer.length === 2 && d === 21;
+    g.win = y > 21 ? 0 : natural && !dNatural ? g.bet * 2.5 : dNatural && !natural ? 0 : d > 21 || y > d ? stake * 2 : y === d ? stake : 0;
+    msg = y > 21 ? `Bust with ${y}. The house takes ${fmt$(stake)}.` : g.win > stake ? `${natural ? 'BLACKJACK!' : d > 21 ? `Dealer busts with ${d}.` : `${y} beats ${d}.`} You win ${fmt$(g.win - stake)}.` : g.win === stake ? `Push at ${y}. Your stake back.` : `Dealer's ${d} beats your ${y}.`;
+    state = 'done'; ev.push(g.win > stake ? 'score' : g.win ? 'place' : 'miss'); if (g.win) ev.push('payout');
+  };
+  g.refused = () => { state = 'bet'; you = []; dealer = []; msg = "You can't cover that bet."; };
+  g.inRound = () => state === 'play' || state === 'dealer';
+  g.state = () => state; g.hands = () => [you, dealer]; // (for the tests)
+  g.step = (dt, k) => {
+    ev = [];
+    if (state === 'bet' || state === 'done') {
+      if (k.upP) g.bet = betStep(g.bet, 1); if (k.downP) g.bet = betStep(g.bet, -1);
+      if (k.actP && money < g.bet) msg = "You can't cover that bet.";
+      else if (k.actP) {
+        you = []; dealer = []; doubled = false; g.win = 0; ev.push('stake');
+        deal(you, 'you'); deal(dealer, 'dealer'); deal(you, 'you'); deal(dealer, 'dealer');
+        state = 'play'; msg = 'UP hit   SPACE stand   DOWN double';
+        if (bjTotal(you) === 21 || bjTotal(dealer) === 21) { state = 'dealer'; wait = 0.6; }
+      }
+    } else if (state === 'play') {
+      if (k.upP) { deal(you, 'you'); if (bjTotal(you) > 21) settle(); else if (bjTotal(you) === 21) { state = 'dealer'; wait = 0.5; } }
+      else if (k.downP && you.length === 2 && money < g.bet) msg = "You can't cover doubling. UP hit, SPACE stand.";
+      else if (k.downP && you.length === 2) { doubled = true; ev.push('double'); deal(you, 'you'); if (bjTotal(you) > 21) settle(); else { state = 'dealer'; wait = 0.5; } }
+      else if (k.actP) { state = 'dealer'; wait = 0.4; }
+    } else if (state === 'dealer' && (wait -= dt) <= 0) {
+      if (bjTotal(dealer) < 17 && !(you.length === 2 && bjTotal(you) === 21)) { deal(dealer, 'dealer'); wait = 0.6; } else settle();
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    const hide = state === 'play'; // the dealer's second card stays face down till you stand
+    text(0, 0, `DEALER${hide ? '' : '  ' + bjTotal(dealer)}`, C(WHITE, 13));
+    dealer.forEach((c, i) => cardText(text, 1 + i * 4, 1, c, hide && i === 1));
+    text(0, 6, `YOU  ${you.length ? bjTotal(you) : ''}${doubled ? '   (doubled)' : ''}`, C(YEL, 14));
+    you.forEach((c, i) => cardText(text, 1 + i * 4, 7, c, false));
+    for (let x = 0; x < W; x++) put(x, 12, '=', C(GREEN, 6));
+    text(0, 13, msg.slice(0, 62), C(WHITE, 15));
+    text(0, 15, `BET ${fmt$(g.bet)}${state === 'bet' || state === 'done' ? '   UP/DOWN change it' : ''}`, C(YEL, 14));
+    text(0, 16, `CASH ${fmt$(money)}`, C(GREEN, 13));
+    if (luck() > 0) text(0, 17, 'Your jade feels warm.', C(GREEN, 9));
+  };
+  g.status = () => state === 'play' ? 'UP hit   SPACE stand   DOWN double   E leave' : `SPACE deal (${fmt$(g.bet)})   UP/DOWN bet   E leave`;
+  g.reward = () => 0;
+  return g;
+};
+// roulette: a European wheel, 0 to 36. Bet on a colour, odd or even, a half, a dozen, or a single number; the ball
+// goes round, slows, drops. Even money for the halves, 2 to 1 for a dozen, 35 to 1 for a number. Lucky: a losing
+// spin sometimes gets a second go
+const RL_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+const RL_WHEEL = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+const RL_BETS = [['RED', n => RL_RED.has(n), 2], ['BLACK', n => n > 0 && !RL_RED.has(n), 2], ['ODD', n => n % 2 === 1, 2], ['EVEN', n => n > 0 && n % 2 === 0, 2],
+  ['1-18', n => n >= 1 && n <= 18, 2], ['19-36', n => n >= 19, 2], ['1ST 12', n => n >= 1 && n <= 12, 3], ['2ND 12', n => n >= 13 && n <= 24, 3], ['3RD 12', n => n >= 25, 3],
+  ['7', n => n === 7, 36], ['17', n => n === 17, 36], ['ZERO', n => n === 0, 36]];
+const rlCol = n => n === 0 ? GREEN : RL_RED.has(n) ? RED : GRAY;
+GAMES.roulette = (rnd = Math.random) => {
+  const W = 32, H = 19, g = { id: 'roulette', title: 'ROULETTE', W, H, score: 0, over: false, bet: 10, win: 0 };
+  let state = 'bet', pick_ = 0, pos = 0, spinT = 0, spinLen = 0, start = 0, target = 0, result = null, msg = 'Pick a bet, then spin.', ev = [];
+  g.refused = () => { state = 'bet'; msg = "You can't cover that bet."; };
+  g.inRound = () => state === 'spin';
+  g.state = () => state; g.result = () => result; g.choose = k => { pick_ = k; }; // (for the tests)
+  g.step = (dt, k) => {
+    ev = [];
+    if (state === 'bet' || state === 'done') {
+      if (k.leftP) pick_ = (pick_ + RL_BETS.length - 1) % RL_BETS.length; if (k.rightP) pick_ = (pick_ + 1) % RL_BETS.length;
+      if (k.upP) g.bet = betStep(g.bet, 1); if (k.downP) g.bet = betStep(g.bet, -1);
+      if (k.actP && money < g.bet) msg = "You can't cover that bet.";
+      else if (k.actP) {
+        ev.push('stake'); g.win = 0; result = null;
+        let n = RL_WHEEL[rnd() * 37 | 0];
+        if (!RL_BETS[pick_][1](n) && rnd() < luck()) n = RL_WHEEL[rnd() * 37 | 0]; // (lucky: another go)
+        target = RL_WHEEL.indexOf(n); start = pos; spinLen = 3.2 + rnd() * 0.8; spinT = 0; state = 'spin'; msg = 'No more bets...';
+        target = Math.round(start) + ((RL_WHEEL.indexOf(n) - Math.round(start) % 37) + 37) % 37 + 37 * 3; // three times round, then on to it
+      }
+    } else if (state === 'spin') {
+      spinT += dt; const p = Math.min(1, spinT / spinLen), e = 1 - (1 - p) ** 3; // slowing down
+      const np = start + (target - start) * e; if (Math.floor(np) !== Math.floor(pos)) ev.push('bump'); pos = np;
+      if (p >= 1) {
+        result = RL_WHEEL[Math.round(target) % 37]; const [name, wins, pays] = RL_BETS[pick_];
+        g.win = wins(result) ? g.bet * pays : 0; state = 'done';
+        msg = `${result} ${result === 0 ? 'GREEN' : RL_RED.has(result) ? 'RED' : 'BLACK'}. ${g.win ? `${name} wins! You get ${fmt$(g.win)}.` : `${name} loses.`}`;
+        ev.push(g.win ? 'score' : 'miss'); if (g.win) ev.push('payout');
+      }
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    // the wheel, seen as a strip of its pockets going past, the ball over the middle one
+    const c = Math.round(pos);
+    text(15, 0, 'v', C(WHITE, 15));
+    for (let k = -7; k <= 7; k++) {
+      const n = RL_WHEEL[((c + k) % 37 + 37) % 37], x = 15 + k * 2;
+      put(x, 1, ' ', 0, C(rlCol(n), k === 0 ? 10 : 5)); put(x, 2, ' ', 0, C(rlCol(n), k === 0 ? 10 : 5));
+      text(x, 1, String(n).padStart(2), C(WHITE, k === 0 ? 15 : 10));
+    }
+    text(15, 3, '^', C(WHITE, 15));
+    // the bets, the one you're on lit up
+    RL_BETS.forEach(([name, , pays], k) => {
+      const x = (k % 4) * 8, y = 5 + (k / 4 | 0) * 2, on = k === pick_;
+      text(x, y, `${on ? '>' : ' '}${name}`.padEnd(9), C(on ? YEL : WHITE, on ? 15 : 10));
+      text(x, y + 1, ` ${pays - 1}:1`, C(GRAY, 9));
+    });
+    text(0, 12, msg.slice(0, 62), C(WHITE, 15));
+    text(0, 14, `BET ${fmt$(g.bet)} on ${RL_BETS[pick_][0]}`, C(YEL, 14));
+    text(0, 15, `CASH ${fmt$(money)}`, C(GREEN, 13));
+    if (luck() > 0) text(0, 17, 'Your jade feels warm.', C(GREEN, 9));
+  };
+  g.status = () => state === 'spin' ? 'Round it goes...' : `LEFT/RIGHT bet   UP/DOWN stake   SPACE spin (${fmt$(g.bet)})   E leave`;
+  g.reward = () => 0;
+  return g;
+};
+// slots: three reels. Three alike on the line pays (sevens the most), and any cherries pay something back.
+// Lucky: a losing pull sometimes spins again
+const SLOT_SYMS = [['7', 1, 120, RED], ['BAR', 2, 40, WHITE], ['$', 3, 20, GREEN], ['BELL', 4, 12, YEL], ['CHERRY', 6, 6, MAG], ['PLUM', 7, 4, BLUE]];
+const SLOT_GLYPH = { '7': '7', BAR: '=', $: '$', BELL: 'A', CHERRY: 'o', PLUM: '@' };
+const SLOT_WEIGHT = SLOT_SYMS.reduce((s, x) => s + x[1], 0);
+function slotPull(rnd) { const r = []; for (let k = 0; k < 3; k++) { let w = rnd() * SLOT_WEIGHT, i = 0; while ((w -= SLOT_SYMS[i][1]) > 0) i++; r.push(i); } return r; }
+function slotPays(r) { // times the stake
+  if (r[0] === r[1] && r[1] === r[2]) return SLOT_SYMS[r[0]][2];
+  const ch = r.filter(i => SLOT_SYMS[i][0] === 'CHERRY').length;
+  return ch === 2 ? 2 : ch === 1 ? 0.5 : 0;
+}
+GAMES.slots = (rnd = Math.random) => {
+  const W = 26, H = 16, g = { id: 'slots', title: 'SLOTS', W, H, score: 0, over: false, bet: 5, win: 0 };
+  let state = 'bet', reels = [0, 1, 2], spinT = 0, msg = 'Pull the lever.', ev = [], shown = [0, 1, 2];
+  g.refused = () => { state = 'bet'; msg = "You can't cover that."; };
+  g.inRound = () => false; // (a pull's over in a second)
+  g.state = () => state; g.reels = () => reels;
+  g.step = (dt, k) => {
+    ev = [];
+    if (state !== 'spin') {
+      if (k.upP) g.bet = betStep(g.bet, 1); if (k.downP) g.bet = betStep(g.bet, -1);
+      if (k.actP && money < g.bet) msg = "You can't cover that.";
+      else if (k.actP) {
+        ev.push('stake', 'launch'); g.win = 0; reels = slotPull(rnd);
+        if (!slotPays(reels) && rnd() < luck() * 1.5) reels = slotPull(rnd); // (lucky: it spins again)
+        spinT = 0; state = 'spin'; msg = '';
+      }
+    } else {
+      spinT += dt;
+      for (let k2 = 0; k2 < 3; k2++) shown[k2] = spinT < 0.7 + k2 * 0.35 ? (spinT * 14 + k2 * 2 | 0) % SLOT_SYMS.length : reels[k2]; // stopping left to right
+      if (spinT > 0.7 + 2 * 0.35) {
+        g.win = Math.round(g.bet * slotPays(reels) * 100) / 100; state = 'done';
+        msg = g.win ? `${slotPays(reels) >= 4 ? 'JACKPOT-ish! ' : ''}Pays ${fmt$(g.win)}.` : 'Nothing.'; ev.push(g.win > g.bet ? 'clear' : g.win ? 'eat' : 'miss'); if (g.win) ev.push('payout');
+      }
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let x = 2; x < 23; x++) { put(x, 1, '=', C(YEL, 12)); put(x, 9, '=', C(YEL, 12)); }
+    for (let k = 0; k < 3; k++) { // three reels, the one above and below showing too
+      const x = 4 + k * 6;
+      for (let d = -1; d <= 1; d++) {
+        const s = SLOT_SYMS[((state === 'spin' ? shown[k] : reels[k]) + d + SLOT_SYMS.length) % SLOT_SYMS.length], y = 5 + d * 2;
+        for (let dx = 0; dx < 4; dx++) put(x + dx, y, ' ', 0, C(WHITE, d ? 3 : 14));
+        const label = s[0] === 'CHERRY' ? 'CHRY' : s[0].length < 3 ? ` ${s[0]}${s[0]}${s[0]}` : s[0]; // (the symbol, as big as the window lets it be)
+        text(x, y, label.padStart(Math.ceil((8 + label.length) / 2)).padEnd(8), C(s[3], d ? 7 : 15));
+      }
+    }
+    text(1, 5, '>', C(RED, 15)); text(46, 5, '<', C(RED, 15));
+    text(0, 10, msg, C(WHITE, 15));
+    text(0, 11, '777 x120  BAR x40  $$$ x20  BELL x12', C(GRAY, 9));
+    text(0, 12, 'CHERRIES x6  PLUMS x4  2 cherries x2', C(GRAY, 9));
+    text(0, 13, `BET ${fmt$(g.bet)}   CASH ${fmt$(money)}`, C(YEL, 14));
+    if (luck() > 0) text(0, 14, 'Your jade feels warm.', C(GREEN, 9));
+  };
+  g.status = () => `SPACE pull (${fmt$(g.bet)})   UP/DOWN bet   E leave`;
+  g.reward = () => 0;
+  return g;
+};
 // ---- crime and the police. Pure (no DOM), so the node tests can run it; crime-ui.js draws it and asks what you do
 // when they catch you.
 //
@@ -2915,7 +3123,8 @@ const FINE = [0, 60, 150, 300];              // what they'll take instead of a c
 const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 'hitting someone with a car' },
                  crash: { stars: 1, name: 'reckless driving' }, redlight: { stars: 1, name: 'running a red light' },
                  pickpocket: { stars: 1, name: 'pickpocketing' }, shoplift: { stars: 1, name: 'shoplifting' },
-                 burglary: { stars: 2, name: 'breaking and entering' }, graffiti: { stars: 1, name: 'vandalism' } };
+                 burglary: { stars: 2, name: 'breaking and entering' }, graffiti: { stars: 1, name: 'vandalism' },
+                 alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -3303,6 +3512,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
   const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
   if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
+  if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 18 || sty === 19) return glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty);
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   if (graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return; // a mural, or somebody's tag
@@ -3980,7 +4190,7 @@ const TAG_WORDS = ['ACE', 'ZAP', 'YO', 'KAT', 'REX', 'OK', 'WOW', 'RAD', 'BAM', 
 const designCount = TAG_ART.length + TAG_WORDS.length;
 
 // a mural on this face? deterministic per face, so it's always there
-const paintable = k => { const sh = SHOP[k]; return sh && !sh.base && !sh.aqua && !sh.glass && !(STY[k] >= 3 && STY[k] <= 6) && !(STY[k] >= 11 && STY[k] <= 13); };
+const paintable = k => { const sh = SHOP[k]; return sh && !sh.base && !sh.aqua && !sh.glass && !sh.casino && !(STY[k] >= 3 && STY[k] <= 6) && !(STY[k] >= 11 && STY[k] <= 13); };
 function muralSeed(k, mx, my, face) {
   if (!paintable(k)) return -1;
   const fx_ = face === 'E' ? 1 : face === 'W' ? -1 : 0, fy = face === 'S' ? 1 : face === 'N' ? -1 : 0;
@@ -5637,6 +5847,7 @@ function roomFloor(i, r, x, rx, ry) {
     case 'jail': return jailFloor(i, f, wx, wy);
     case 'conservatory': return conservatoryFloor(i, f, wx, wy);
     case 'jade': return jadeFloor(i, f, wx, wy);
+    case 'casino': return casinoFloor(i, f, wx, wy);
     case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
@@ -5674,6 +5885,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'cathedral') return cathedralCeil(i, wx, wy);
   if (st === 'jail') return jailCeil(i, wx, wy);
   if (st === 'glass') return glassCeil(i, wx, wy);
+  if (st === 'chandelier') return casinoCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
   const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
@@ -6818,6 +7030,103 @@ function stepJadeIncense(dt) { // a thread of incense smoke curling up in the co
   jadeIncenseT = 0.7;
   haze.push({ at: placeKey(), kind: 'smoke', s: 1, x: 1.2 + (Math.random() - 0.5) * 0.05, y: 1.4, z: 0.75, r: 0.1, rMax: 0.45, vx: 0, vy: 0.02, vz: 0.35, life: 0.8, fade: 1 / 5, seed: Math.random() * 100 });
 }
+// ===== the casino: downtown, facing the plaza across the street (world.js puts it up). Outside: black glass and gold,
+// CASINO in big letters lit up in chasing colours, bulbs running round the edge of every face, a red carpet up to the
+// doors. Inside: red-and-gold carpet, chandeliers, two blackjack tables, a roulette wheel, rows of slot machines down
+// both walls, and the cashier's cage at the back (a drink while you're there). Luck (goods.js) helps at every table.
+function casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const L = fog * amb * (side ? 10 : 15), glow = Math.max(night, overcast * 0.5, 0.35), sgn = Math.sign(u * wc) || 1;
+  const c = CASINO, x0 = c.bx * 8 + 2, x1 = c.bx * 8 + 8, y0 = c.by * 8 + 2, y1 = c.by * 8 + 6;
+  const front = side && Math.abs(rel((my + (rel(py - my) < 0 ? 0 : 1)) - y0)) < 0.01; // the face on the plaza
+  const a0 = side ? x0 : y0, a1 = side ? x1 : y1, along = wc - a0, len = a1 - a0; // along this face, in cells
+  const chase = Math.floor(T * 8);
+  if (along < 0.05 || along > len - 0.05 || z > h - 0.06) { // bulbs round the edge of the face, chasing
+    const k = Math.floor((along + z) * 12);
+    BG[i] = C(BRICK, 1);
+    return set(i, 'o', (k + chase) % 3 === 0 ? C(YEL, 15) : C(ORANGE, Math.max(L, glow * 7)));
+  }
+  if (front && z < 0.42) { // the entrance: gold columns, glass doors, the red carpet running up to them
+    const mid = Math.abs(along - len / 2);
+    if (mid < 1.2 && z < 0.32) { if (Math.abs(fract(along * 4) - 0.5) < 0.06) return set(i, '|', C(YEL, 14)); BG[i] = C(YEL, 2 + glow * 3); return set(i, ':', C(WHITE, 9)); }
+    if (z > 0.32) return set(i, '=', C(YEL, Math.max(L, 12)));
+    if (Math.abs(fract(along) - 0.5) < 0.08) { BG[i] = C(YEL, 2); return set(i, '#', C(YEL, Math.max(L, 12))); } // a column
+    BG[i] = C(GRAY, 0.6); return set(i, fract(along * 6) < 0.1 ? '|' : ' ', C(MAG, Math.max(L * 0.6, glow * 6)));
+  }
+  if (front && z > 0.5 && z < 1.05) { // CASINO, in big block letters, each one lit in a different colour, the colours chasing
+    const word = 'CASINO', q = (u - sgn * (a0 + len / 2)) / (len * 0.9 / word.length) + word.length / 2, k = Math.floor(q), gy = Math.floor((1.05 - z) / 0.55 * 5);
+    if (k >= 0 && k < word.length && gy >= 0 && gy < 5) {
+      const on = glyphOn(word[k], Math.floor(fract(q) * 4), gy), col = NEON[(k + chase) & 3];
+      BG[i] = on ? C(col, 5) : C(GRAY, 0.5);
+      return set(i, on ? '#' : ' ', C(col, 15));
+    }
+  }
+  // the rest: black glass with gold mullions, lit from inside at night
+  if (Math.abs(fract(along * 2) - 0.5) < 0.04) return set(i, '|', C(YEL, Math.max(L * 0.8, glow * 9)));
+  if (Math.abs(fract(z * 5) - 0.5) < 0.04) return set(i, '-', C(YEL, Math.max(L * 0.6, glow * 7)));
+  BG[i] = C(MAG, 0.6 + glow * 1.5);
+  return set(i, hash(Math.floor(along * 6), Math.floor(z * 10), 1401) > 0.9 ? '.' : ' ', C(YEL, 12));
+}
+
+// ---- inside
+const CASINO_W = 22, CASINO_H = 16;
+function casinoWall(i, su, uStep, z, d, mx, my, L) {
+  const u = Math.abs(su);
+  if (Math.abs(fract(u / 2.5) - 0.5) < 0.06) return set(i, '|', C(YEL, Math.max(L, 9))), true; // gold pilasters
+  if (z < 0.9) { BG[i] = C(BRICK, 1 + L * 0.1); return set(i, fract(z / 0.3) < 0.1 ? '=' : ' ', C(YEL, L * 0.6)), true; }
+  if (Math.abs(z - 0.95) < 0.05 || Math.abs(z - 3.1) < 0.05) return set(i, '=', C(YEL, Math.max(L, 9))), true;
+  if (z > 1.2 && z < 2.9) { BG[i] = C(GRAY, 1 + L * 0.06); return set(i, hash(Math.floor(u * 5), Math.floor(z * 5), 1402) > 0.94 ? '*' : ' ', C(YEL, 10)), true; } // mirrors, the lights twinkling in them
+  BG[i] = C(RED, 1 + L * 0.1); return set(i, ' ', 0), true;
+}
+function casinoFloor(i, f, wx, wy) { // the carpet: red, a gold diamond pattern, busy enough to keep you awake
+  const a = fract((wx + wy) * 0.8), b = fract((wx - wy) * 0.8), edge = a < 0.08 || b < 0.08, dot = Math.abs(a - 0.5) < 0.12 && Math.abs(b - 0.5) < 0.12;
+  BG[i] = C(RED, 1 + f * 1.4);
+  return set(i, edge ? '+' : dot ? '*' : ' ', C(YEL, 3 + f * 6));
+}
+function casinoCeil(i, wx, wy) { // chandeliers
+  const d = Math.hypot(fract(wx / 4) - 0.5, fract(wy / 4) - 0.5) * 4;
+  if (d < 0.32) { BG[i] = C(YEL, 3 + (d < 0.15 ? 4 : 0)); return set(i, hash(Math.floor(wx * 9), Math.floor(wy * 9), Math.floor(T * 4)) > 0.7 ? '*' : 'o', C(WHITE, 15)); }
+  return set(i, d < 0.7 && hash(Math.floor(wx * 6), Math.floor(wy * 6), 1403) > 0.7 ? '.' : ' ', C(YEL, 6));
+}
+const SLOT_ART = pad([' .---. ', ' |7=7| ', ' |---|o', ' |___|/', ' [###] ', ' [###] ']);
+const felt = (shade) => (i, t, L) => { // a gaming table: green felt on top, a padded rail round it, wood below
+  const f = HIT.face;
+  if (f === 5) { const s = shade && shade(i, L); if (s) return true; BG[i] = C(GREEN, 2 + L * 0.06); return set(i, ' ', 0), true; }
+  BG[i] = C(BRICK, (1 + L * 0.15) * shadeFace(f));
+  return set(i, HIT.w > 0.78 ? '=' : ' ', C(BRICK, L)), true;
+};
+ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6, floor: 'casino', ceil: 'chandelier', sign: true, signAt: CASINO_W / 2, wall: casinoWall, keeper: [11, 1.5],
+  props: r => {
+    const p = [...counterBox(11, 2.2, 2.4, 1.1), standing(11, 1.5, GREEN)];
+    for (const x of [8.4, 9.6, 10.8, 12, 13.2]) p.push(BX(x, 2.5, 0.03, 0.03, 1.1, 2.4, solid(YEL))); // the cage's bars
+    for (const [x, y] of [[5, 6.5], [17, 6.5]]) { // blackjack: cards out on the felt, the dealer behind
+      p.push({ casino: 'blackjack', cx: x, cy: y + 0.9, ...BX(x, y, 1.3, 0.6, 0, 0.8, felt((i, L) => {
+        if (HIT.v > 0.25 && Math.abs(fract(HIT.u * 2.2) - 0.5) < 0.18) { BG[i] = C(WHITE, 8); return set(i, ':', C(RED, 10)), true; } // the cards dealt round the rail
+        return false; })) });
+      p.push(standing(x, y - 0.9, WHITE));
+      for (const ox of [-0.8, 0.8]) if (chance(0.6)) p.push(standing(x + ox, y + 0.95, shirt()));
+    }
+    p.push({ casino: 'roulette', cx: 11, cy: 10.4, ...BX(11, 9.3, 1.8, 0.7, 0, 0.8, felt((i, L) => { // the roulette table: the wheel at one end, spinning, the layout of numbers
+      const wx = HIT.u + 1.2, d = Math.hypot(wx, HIT.v);
+      if (d < 0.55) { const an = Math.atan2(HIT.v, wx) + T * 2; BG[i] = d < 0.15 ? C(YEL, 6) : (Math.floor(an / (Math.PI * 2) * 37 + 37) & 1) ? C(RED, 5) : C(GRAY, 1.5); return set(i, d < 0.15 ? '+' : ' ', C(YEL, 15)), true; }
+      if (HIT.u > -0.4) { BG[i] = (Math.floor((HIT.u + 0.4) * 5) + Math.floor((HIT.v + 0.7) * 3)) & 1 ? C(RED, 3) : C(GRAY, 1.5); return set(i, Math.abs(fract((HIT.u + 0.4) * 5) - 0.5) < 0.1 ? '|' : ' ', C(WHITE, 8)), true; }
+      return false; })) });
+    p.push(standing(11, 8.3, WHITE));
+    for (const ox of [-1.2, 0, 1.2]) if (chance(0.5)) p.push(standing(11 + ox, 10.35, shirt()));
+    for (const x of [1.3, CASINO_W - 1.3]) for (let y = 4.5; y < CASINO_H - 2; y += 1.6) { // slot machines down both walls, lights going
+      const ph = x * 3 + y;
+      p.push({ casino: 'slots', cx: x + (x < 5 ? 0.9 : -0.9), cy: y, ...SP(x, y, 0.75, 1.7, SLOT_ART, (c, row, L) => c === '7' ? C(RED, 15) : c === '=' && row === 1 ? C(YEL, 15) : c === 'o' ? C(RED, 14) : row === 0 ? C(NEON[(Math.floor(T * 5 + ph)) & 3], 15) : C(GRAY, Math.max(L, 8))) });
+      if (chance(0.3)) p.push(sitting(x + (x < 5 ? 0.7 : -0.7), y, shirt(), 0.45, x > 5));
+    }
+    return p;
+  } };
+ROOM_FOR.CASINO = 'casino';
+const CASINO_NAMES = { blackjack: 'blackjack', roulette: 'roulette', slots: 'the slots' };
+const casinoSpot = () => { // the table or machine you're at, if any
+  if (mode !== 'room' || room.kind !== 'casino') return null;
+  let best = null, bd = 1.4;
+  for (const s of room.props) if (s.casino) { const d = Math.hypot(px - s.cx, py - s.cy); if (d < bd) { bd = d; best = s.casino; } }
+  return best;
+};
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
 function drawArt(rx_, ry_, z, w, h, art, colFn) {
@@ -7123,6 +7432,8 @@ function promptText() {
     if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
     if (nearTouchPool()) return 'E: touch the touch pool';
     if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
+    const cs = casinoSpot();
+    if (cs) return `E: play ${CASINO_NAMES[cs]} ($5 to $100 a go)`;
     if (aviaryKeeper()) return T - seedT < 12 ? 'The birds are all over you.' : `"Seed for the birds? Hold it out flat."   E: a cup of seed (${fmt$(1)})`;
     { const sp = shotengaiPrompt(); if (sp) return sp; }
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
@@ -7416,10 +7727,13 @@ function interact() {
         room.until = T; leaveRoom(); say('You slip out past the front desk. Nobody saw a thing.', 4);
       });
     }
+    if (room.burgled && nearVault()) return crackVault();
     if (room.burgled && nearKeeper()) return emptyTill();
     if (room.kind === 'laundry' && useLaundry()) return;
     if (nearTouchPool()) return say(pick(TOUCH_LINES), 3);
     if (room.kind === 'cathedral' && useCathedral()) return;
+    const cs = casinoSpot(); // a seat at a table, or a slot machine
+    if (cs) return startGame(cs, 'casino');
     if (aviaryKeeper()) { if (T - seedT < 12) return say('You\'ve still got seed. Hold still.', 2); if (!pay(1)) return say('"A dollar a cup."'); seedT = T; return say('You hold out a cup of seed. A dozen birds land on your arms at once.', 4); }
     if (useShotengai()) return;
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
@@ -9702,6 +10016,7 @@ function gameKey(e) {
     return true;
   }
   if (e.code === 'Escape' || e.code === 'KeyE') { // walk away: a shift pays for what you did, a game its tickets; a crime you just don't do
+    if (game.kind === 'casino') { if (game.g.inRound()) say('You get up mid-hand. Your bet stays on the table.', 3); game = null; return true; }
     if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
     finishGame(true); game = null; return true;
   }
@@ -9714,6 +10029,7 @@ function finishGame(quit) {
   if (game.paid) return;
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
+  if (game.kind === 'casino') return; // (its money changes hands round by round)
   const r = g.reward();
   if (game.kind === 'table') { // the mahjong table: the pot if you won, your stake back if nobody did
     const res = g.result;
@@ -9734,6 +10050,10 @@ function stepGame(dt) {
   for (const code in GAME_KEYS) if (K[code]) keys[GAME_KEYS[code]] = 1;
   game.pressed = {};
   const ev = g.step(dt, keys);
+  if (game.kind === 'casino') for (const e of ev) { // the casino: your stake on the table, your winnings back
+    if ((e === 'stake' || e === 'double') && !pay(g.bet)) g.refused();
+    if (e === 'payout') earn(g.win);
+  }
   if (actx) for (const e of new Set(ev)) sfxGame(e);
   if (g.over) finishGame(false);
 }
@@ -9790,7 +10110,7 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over && game.kind !== 'crime') { // the results card
@@ -9959,11 +10279,33 @@ function pickLock(sh) {
     else say('The lock gives. Inside, it\'s dark and quiet.', 3);
   });
 }
-// in a shop you've broken into: E at the counter empties the till, G takes something off the shelves
+// in a shop you've broken into: E at the counter empties the till (a night's takings: a lot), G takes something off the
+// shelves. Touch the money and the alarm goes: the police are on their way at once (a bank: all of them). In a bank
+// there's the vault too, on the right-hand wall: crack it (the lockpick game) for a fortune
+const nearVault = () => mode === 'room' && room.burgled && room.kind === 'bank' && px > room.W - 2.4 && Math.abs(py - room.H / 2) < 1.4;
+function raiseAlarm(bank) {
+  if (room.alarm) return;
+  room.alarm = true;
+  addWanted(bank ? 'bankjob' : 'alarm', room.ret[0], room.ret[1], true); // (they head for the door you came in by)
+  if (actx) { const at = actx.currentTime; for (let k = 0; k < 24; k++) tone(at + k * 0.11, k & 1 ? 1800 : 2400, 0.09, 0.05, 'square'); } // the bell
+}
 function emptyTill() {
   if (room.tillTaken) return say('The till\'s empty.');
-  room.tillTaken = true; const c = Math.round((10 + Math.random() * 35) * 4) / 4; earn(c);
-  return say(`You empty the till: ${fmt$(c)}.`, 3);
+  room.tillTaken = true;
+  const bank = room.kind === 'bank', c = Math.round((bank ? 300 + Math.random() * 300 : 120 + Math.random() * 200) * 4) / 4;
+  earn(c); raiseAlarm(bank);
+  return say(`You empty the till: ${fmt$(c)}. An alarm starts shrieking. The police are on their way: get out!`, 4);
+}
+function crackVault() {
+  if (room.vaultTaken) return say('The vault\'s empty. You took it all.');
+  startCrime('lockpick', ok => {
+    if (ok === 'abort') return;
+    raiseAlarm(true);
+    if (!ok) return say('The dial won\'t give, and every alarm in the building goes off. RUN.', 4);
+    room.vaultTaken = true;
+    const c = Math.round((1000 + Math.random() * 1500) / 10) * 10; earn(c);
+    say(`The vault door swings open. You stuff ${fmt$(c)} into your bag. Alarms everywhere: every cop in town is coming!`, 5);
+  });
 }
 function grabStock() {
   const stock = stockFor(room.kind, room.word);
@@ -9985,7 +10327,7 @@ function crimeKey(code) {
 }
 // what G / L would do here, for the prompt line
 function crimePrompt() {
-  if (mode === 'room' && room.burgled) return 'G: take something' + (nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter or the door)
+  if (mode === 'room' && room.burgled) return (room.alarm ? 'ALARM! Get out!   ' : '') + 'G: take something' + (nearVault() ? '   E: crack the vault' : nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter, the vault or the door)
   if (pickTarget()) return 'G: pick their pocket';
   const sh = lockTarget();
   if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`;
@@ -10376,7 +10718,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
@@ -10392,6 +10734,12 @@ function touchActions() {
   if (panelOpen() || prizeEl && prizeEl.style.display === 'flex') return [['Close', 'KeyE', 'main']];
   if (game) {
     if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : game.kind === 'table' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(MJ_BUYIN)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
+    if (game.kind === 'casino') { // the casino: what the buttons do depends on where the hand's at
+      const st = game.g.state(), id = game.g.id;
+      if (id === 'blackjack' && st === 'play') return [['Leave', 'KeyE', 'pop'], ['Double', 'ArrowDown', 'pop'], ['Hit', 'ArrowUp', 'pop'], ['Stand', 'Space', 'main']];
+      if (st === 'spin' || st === 'dealer') return [['Leave', 'KeyE', 'pop']];
+      return [['Leave', 'KeyE', 'pop'], ...id === 'roulette' ? [['Bet <', 'ArrowLeft', 'pop'], ['Bet >', 'ArrowRight', 'pop']] : [], ['Stake -', 'ArrowDown', 'pop'], ['Stake +', 'ArrowUp', 'pop'], [id === 'slots' ? 'Pull' : id === 'roulette' ? 'Spin' : 'Deal', 'Space', 'main']];
+    }
     if (game.g.id === 'mahjong') return [['Leave', 'KeyE', 'pop'], ['Mahjong!', 'ArrowUp', 'pop'], [game.g.state() === 'claim' ? 'Pass' : 'Throw', 'Space', 'main']];
     return [[game.kind === 'shift' ? 'Clock off' : game.kind === 'crime' ? 'Back off' : 'Leave', 'KeyE', 'pop'], ['Go', 'Space', 'main']];
   }

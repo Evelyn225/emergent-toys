@@ -189,8 +189,6 @@ Guards on patrol routes, cameras on the walls, a gift shop.
 - **A phone**: messages from people you've done favours for, an alarm before an event, a map app.
 - **Gardens extras**: a hedge maze (the gardens' south lawn has room), rare flowers for someone's task, a night
   tour or a lantern festival, a koi pond in the conservatory, feeding time at the bear pen, the boats racing.
-- **A casino** (later): roulette, blackjack, slots, a high-roller room. Luck (the jade bangle and dragon from the
-  Chinatown jade shop, luck() in goods.js) already tips pachinko and mahjong; it would matter most here.
 - **Home extras**: decorate your place with what you carry (put the lucky cat on the shelf), a fridge for food,
   a pet that waits for you.
 

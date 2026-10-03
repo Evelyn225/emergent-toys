@@ -27,6 +27,7 @@
     "city/shotengai.js",
     "city/gardens.js",
     "city/jade.js",
+    "city/casino.js",
     "city/render.js",
     "city/hud.js",
     "city/actions.js",

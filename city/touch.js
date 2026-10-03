@@ -40,7 +40,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
@@ -56,6 +56,12 @@ function touchActions() {
   if (panelOpen() || prizeEl && prizeEl.style.display === 'flex') return [['Close', 'KeyE', 'main']];
   if (game) {
     if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : game.kind === 'table' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(MJ_BUYIN)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
+    if (game.kind === 'casino') { // the casino: what the buttons do depends on where the hand's at
+      const st = game.g.state(), id = game.g.id;
+      if (id === 'blackjack' && st === 'play') return [['Leave', 'KeyE', 'pop'], ['Double', 'ArrowDown', 'pop'], ['Hit', 'ArrowUp', 'pop'], ['Stand', 'Space', 'main']];
+      if (st === 'spin' || st === 'dealer') return [['Leave', 'KeyE', 'pop']];
+      return [['Leave', 'KeyE', 'pop'], ...id === 'roulette' ? [['Bet <', 'ArrowLeft', 'pop'], ['Bet >', 'ArrowRight', 'pop']] : [], ['Stake -', 'ArrowDown', 'pop'], ['Stake +', 'ArrowUp', 'pop'], [id === 'slots' ? 'Pull' : id === 'roulette' ? 'Spin' : 'Deal', 'Space', 'main']];
+    }
     if (game.g.id === 'mahjong') return [['Leave', 'KeyE', 'pop'], ['Mahjong!', 'ArrowUp', 'pop'], [game.g.state() === 'claim' ? 'Pass' : 'Throw', 'Space', 'main']];
     return [[game.kind === 'shift' ? 'Clock off' : game.kind === 'crime' ? 'Back off' : 'Leave', 'KeyE', 'pop'], ['Go', 'Space', 'main']];
   }

@@ -22,6 +22,7 @@ function gameKey(e) {
     return true;
   }
   if (e.code === 'Escape' || e.code === 'KeyE') { // walk away: a shift pays for what you did, a game its tickets; a crime you just don't do
+    if (game.kind === 'casino') { if (game.g.inRound()) say('You get up mid-hand. Your bet stays on the table.', 3); game = null; return true; }
     if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
     finishGame(true); game = null; return true;
   }
@@ -34,6 +35,7 @@ function finishGame(quit) {
   if (game.paid) return;
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
+  if (game.kind === 'casino') return; // (its money changes hands round by round)
   const r = g.reward();
   if (game.kind === 'table') { // the mahjong table: the pot if you won, your stake back if nobody did
     const res = g.result;
@@ -54,6 +56,10 @@ function stepGame(dt) {
   for (const code in GAME_KEYS) if (K[code]) keys[GAME_KEYS[code]] = 1;
   game.pressed = {};
   const ev = g.step(dt, keys);
+  if (game.kind === 'casino') for (const e of ev) { // the casino: your stake on the table, your winnings back
+    if ((e === 'stake' || e === 'double') && !pay(g.bet)) g.refused();
+    if (e === 'payout') earn(g.win);
+  }
   if (actx) for (const e of new Set(ev)) sfxGame(e);
   if (g.over) finishGame(false);
 }
@@ -110,7 +116,7 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over && game.kind !== 'crime') { // the results card

@@ -882,3 +882,202 @@ function taxiPay(dist, took, harsh, crashed, route = dist) {
   const stars = crashed ? 1 : 1 + Math.round(4 * (speed + smooth) / 2);
   return { fare, tip, stars, speed, smooth };
 }
+
+// ---- the casino: blackjack, roulette and slots. Each keeps going hand after hand until you get up: the game asks for
+// your stake with a 'stake' event (minigame-ui.js takes the money, or calls g.refused() if you can't cover it) and
+// pays out with 'payout' (g.win, the whole amount handed back). Luck (luck() in goods.js) nudges them your way a bit.
+const CASINO_BETS = [5, 10, 25, 50, 100];
+const betStep = (bet, dir) => CASINO_BETS[clamp(CASINO_BETS.indexOf(bet) + dir, 0, CASINO_BETS.length - 1)];
+// blackjack: get closer to 21 than the dealer without going over. Picture cards are 10, an ace 1 or 11. The dealer
+// draws to 17. A win pays 2 to 1 (your stake and as much again), a blackjack (21 in two cards) 3 to 2, a tie gives
+// your stake back. Double: twice the stake, one more card, then you stand.
+const CARD_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], CARD_SUITS = 'SHDC';
+const cardVal = c => Math.min(10, c % 13 + 1);
+function bjTotal(hand) { let t = 0, aces = 0; for (const c of hand) { const v = cardVal(c); t += v; if (v === 1) aces++; } if (aces && t + 10 <= 21) t += 10; return t; }
+function cardText(text, x, y, c, down) { // a card, three cells by four rows: rank and suit, or the back
+  const red = (c / 13 | 0) % 4 === 1 || (c / 13 | 0) % 4 === 2, r = CARD_RANKS[c % 13], s = CARD_SUITS[(c / 13 | 0) % 4];
+  const rows = down ? ['.----.', '|////|', '|////|', "'----'"] : ['.----.', `|${r.padEnd(4)}|`, `| ${s}  |`, `'-${r.padStart(2, '-')}-'`];
+  rows.forEach((l, k) => text(x, y + k, l, down ? C(BLUE, 12) : red && k > 0 && k < 3 ? C(RED, 14) : C(WHITE, 15)));
+}
+GAMES.blackjack = (rnd = Math.random) => {
+  const W = 32, H = 19, g = { id: 'blackjack', title: 'BLACKJACK', W, H, score: 0, over: false, bet: 10, win: 0 };
+  let shoe = [], state = 'bet', you = [], dealer = [], wait = 0, doubled = false, msg = 'Place your bet.', ev = [];
+  const fill = () => { shoe = []; for (let d = 0; d < 6; d++) for (let c = 0; c < 52; c++) shoe.push(c); for (let i = shoe.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [shoe[i], shoe[j]] = [shoe[j], shoe[i]]; } };
+  fill();
+  // a card off the shoe. Lucky: you don't bust if a card near the top would have saved you; the dealer does
+  const deal = (hand, who) => {
+    if (shoe.length < 20) fill();
+    if (who === 'you' && bjTotal([...hand, shoe[0]]) > 21 && rnd() < luck() * 2) { const k = shoe.slice(1, 5).findIndex(c => bjTotal([...hand, c]) <= 21); if (k >= 0) [shoe[0], shoe[k + 1]] = [shoe[k + 1], shoe[0]]; }
+    if (who === 'dealer' && rnd() < luck()) { const t = bjTotal([...hand, shoe[0]]); if (t >= 17 && t <= 21 && t >= bjTotal(you)) { const k = shoe.slice(1, 5).findIndex(c => bjTotal([...hand, c]) > 21); if (k >= 0) [shoe[0], shoe[k + 1]] = [shoe[k + 1], shoe[0]]; } }
+    hand.push(shoe.shift()); ev.push('place');
+  };
+  const settle = () => {
+    const stake = g.bet * (doubled ? 2 : 1), y = bjTotal(you), d = bjTotal(dealer), natural = you.length === 2 && y === 21, dNatural = dealer.length === 2 && d === 21;
+    g.win = y > 21 ? 0 : natural && !dNatural ? g.bet * 2.5 : dNatural && !natural ? 0 : d > 21 || y > d ? stake * 2 : y === d ? stake : 0;
+    msg = y > 21 ? `Bust with ${y}. The house takes ${fmt$(stake)}.` : g.win > stake ? `${natural ? 'BLACKJACK!' : d > 21 ? `Dealer busts with ${d}.` : `${y} beats ${d}.`} You win ${fmt$(g.win - stake)}.` : g.win === stake ? `Push at ${y}. Your stake back.` : `Dealer's ${d} beats your ${y}.`;
+    state = 'done'; ev.push(g.win > stake ? 'score' : g.win ? 'place' : 'miss'); if (g.win) ev.push('payout');
+  };
+  g.refused = () => { state = 'bet'; you = []; dealer = []; msg = "You can't cover that bet."; };
+  g.inRound = () => state === 'play' || state === 'dealer';
+  g.state = () => state; g.hands = () => [you, dealer]; // (for the tests)
+  g.step = (dt, k) => {
+    ev = [];
+    if (state === 'bet' || state === 'done') {
+      if (k.upP) g.bet = betStep(g.bet, 1); if (k.downP) g.bet = betStep(g.bet, -1);
+      if (k.actP && money < g.bet) msg = "You can't cover that bet.";
+      else if (k.actP) {
+        you = []; dealer = []; doubled = false; g.win = 0; ev.push('stake');
+        deal(you, 'you'); deal(dealer, 'dealer'); deal(you, 'you'); deal(dealer, 'dealer');
+        state = 'play'; msg = 'UP hit   SPACE stand   DOWN double';
+        if (bjTotal(you) === 21 || bjTotal(dealer) === 21) { state = 'dealer'; wait = 0.6; }
+      }
+    } else if (state === 'play') {
+      if (k.upP) { deal(you, 'you'); if (bjTotal(you) > 21) settle(); else if (bjTotal(you) === 21) { state = 'dealer'; wait = 0.5; } }
+      else if (k.downP && you.length === 2 && money < g.bet) msg = "You can't cover doubling. UP hit, SPACE stand.";
+      else if (k.downP && you.length === 2) { doubled = true; ev.push('double'); deal(you, 'you'); if (bjTotal(you) > 21) settle(); else { state = 'dealer'; wait = 0.5; } }
+      else if (k.actP) { state = 'dealer'; wait = 0.4; }
+    } else if (state === 'dealer' && (wait -= dt) <= 0) {
+      if (bjTotal(dealer) < 17 && !(you.length === 2 && bjTotal(you) === 21)) { deal(dealer, 'dealer'); wait = 0.6; } else settle();
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    const hide = state === 'play'; // the dealer's second card stays face down till you stand
+    text(0, 0, `DEALER${hide ? '' : '  ' + bjTotal(dealer)}`, C(WHITE, 13));
+    dealer.forEach((c, i) => cardText(text, 1 + i * 4, 1, c, hide && i === 1));
+    text(0, 6, `YOU  ${you.length ? bjTotal(you) : ''}${doubled ? '   (doubled)' : ''}`, C(YEL, 14));
+    you.forEach((c, i) => cardText(text, 1 + i * 4, 7, c, false));
+    for (let x = 0; x < W; x++) put(x, 12, '=', C(GREEN, 6));
+    text(0, 13, msg.slice(0, 62), C(WHITE, 15));
+    text(0, 15, `BET ${fmt$(g.bet)}${state === 'bet' || state === 'done' ? '   UP/DOWN change it' : ''}`, C(YEL, 14));
+    text(0, 16, `CASH ${fmt$(money)}`, C(GREEN, 13));
+    if (luck() > 0) text(0, 17, 'Your jade feels warm.', C(GREEN, 9));
+  };
+  g.status = () => state === 'play' ? 'UP hit   SPACE stand   DOWN double   E leave' : `SPACE deal (${fmt$(g.bet)})   UP/DOWN bet   E leave`;
+  g.reward = () => 0;
+  return g;
+};
+// roulette: a European wheel, 0 to 36. Bet on a colour, odd or even, a half, a dozen, or a single number; the ball
+// goes round, slows, drops. Even money for the halves, 2 to 1 for a dozen, 35 to 1 for a number. Lucky: a losing
+// spin sometimes gets a second go
+const RL_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+const RL_WHEEL = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+const RL_BETS = [['RED', n => RL_RED.has(n), 2], ['BLACK', n => n > 0 && !RL_RED.has(n), 2], ['ODD', n => n % 2 === 1, 2], ['EVEN', n => n > 0 && n % 2 === 0, 2],
+  ['1-18', n => n >= 1 && n <= 18, 2], ['19-36', n => n >= 19, 2], ['1ST 12', n => n >= 1 && n <= 12, 3], ['2ND 12', n => n >= 13 && n <= 24, 3], ['3RD 12', n => n >= 25, 3],
+  ['7', n => n === 7, 36], ['17', n => n === 17, 36], ['ZERO', n => n === 0, 36]];
+const rlCol = n => n === 0 ? GREEN : RL_RED.has(n) ? RED : GRAY;
+GAMES.roulette = (rnd = Math.random) => {
+  const W = 32, H = 19, g = { id: 'roulette', title: 'ROULETTE', W, H, score: 0, over: false, bet: 10, win: 0 };
+  let state = 'bet', pick_ = 0, pos = 0, spinT = 0, spinLen = 0, start = 0, target = 0, result = null, msg = 'Pick a bet, then spin.', ev = [];
+  g.refused = () => { state = 'bet'; msg = "You can't cover that bet."; };
+  g.inRound = () => state === 'spin';
+  g.state = () => state; g.result = () => result; g.choose = k => { pick_ = k; }; // (for the tests)
+  g.step = (dt, k) => {
+    ev = [];
+    if (state === 'bet' || state === 'done') {
+      if (k.leftP) pick_ = (pick_ + RL_BETS.length - 1) % RL_BETS.length; if (k.rightP) pick_ = (pick_ + 1) % RL_BETS.length;
+      if (k.upP) g.bet = betStep(g.bet, 1); if (k.downP) g.bet = betStep(g.bet, -1);
+      if (k.actP && money < g.bet) msg = "You can't cover that bet.";
+      else if (k.actP) {
+        ev.push('stake'); g.win = 0; result = null;
+        let n = RL_WHEEL[rnd() * 37 | 0];
+        if (!RL_BETS[pick_][1](n) && rnd() < luck()) n = RL_WHEEL[rnd() * 37 | 0]; // (lucky: another go)
+        target = RL_WHEEL.indexOf(n); start = pos; spinLen = 3.2 + rnd() * 0.8; spinT = 0; state = 'spin'; msg = 'No more bets...';
+        target = Math.round(start) + ((RL_WHEEL.indexOf(n) - Math.round(start) % 37) + 37) % 37 + 37 * 3; // three times round, then on to it
+      }
+    } else if (state === 'spin') {
+      spinT += dt; const p = Math.min(1, spinT / spinLen), e = 1 - (1 - p) ** 3; // slowing down
+      const np = start + (target - start) * e; if (Math.floor(np) !== Math.floor(pos)) ev.push('bump'); pos = np;
+      if (p >= 1) {
+        result = RL_WHEEL[Math.round(target) % 37]; const [name, wins, pays] = RL_BETS[pick_];
+        g.win = wins(result) ? g.bet * pays : 0; state = 'done';
+        msg = `${result} ${result === 0 ? 'GREEN' : RL_RED.has(result) ? 'RED' : 'BLACK'}. ${g.win ? `${name} wins! You get ${fmt$(g.win)}.` : `${name} loses.`}`;
+        ev.push(g.win ? 'score' : 'miss'); if (g.win) ev.push('payout');
+      }
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    // the wheel, seen as a strip of its pockets going past, the ball over the middle one
+    const c = Math.round(pos);
+    text(15, 0, 'v', C(WHITE, 15));
+    for (let k = -7; k <= 7; k++) {
+      const n = RL_WHEEL[((c + k) % 37 + 37) % 37], x = 15 + k * 2;
+      put(x, 1, ' ', 0, C(rlCol(n), k === 0 ? 10 : 5)); put(x, 2, ' ', 0, C(rlCol(n), k === 0 ? 10 : 5));
+      text(x, 1, String(n).padStart(2), C(WHITE, k === 0 ? 15 : 10));
+    }
+    text(15, 3, '^', C(WHITE, 15));
+    // the bets, the one you're on lit up
+    RL_BETS.forEach(([name, , pays], k) => {
+      const x = (k % 4) * 8, y = 5 + (k / 4 | 0) * 2, on = k === pick_;
+      text(x, y, `${on ? '>' : ' '}${name}`.padEnd(9), C(on ? YEL : WHITE, on ? 15 : 10));
+      text(x, y + 1, ` ${pays - 1}:1`, C(GRAY, 9));
+    });
+    text(0, 12, msg.slice(0, 62), C(WHITE, 15));
+    text(0, 14, `BET ${fmt$(g.bet)} on ${RL_BETS[pick_][0]}`, C(YEL, 14));
+    text(0, 15, `CASH ${fmt$(money)}`, C(GREEN, 13));
+    if (luck() > 0) text(0, 17, 'Your jade feels warm.', C(GREEN, 9));
+  };
+  g.status = () => state === 'spin' ? 'Round it goes...' : `LEFT/RIGHT bet   UP/DOWN stake   SPACE spin (${fmt$(g.bet)})   E leave`;
+  g.reward = () => 0;
+  return g;
+};
+// slots: three reels. Three alike on the line pays (sevens the most), and any cherries pay something back.
+// Lucky: a losing pull sometimes spins again
+const SLOT_SYMS = [['7', 1, 120, RED], ['BAR', 2, 40, WHITE], ['$', 3, 20, GREEN], ['BELL', 4, 12, YEL], ['CHERRY', 6, 6, MAG], ['PLUM', 7, 4, BLUE]];
+const SLOT_GLYPH = { '7': '7', BAR: '=', $: '$', BELL: 'A', CHERRY: 'o', PLUM: '@' };
+const SLOT_WEIGHT = SLOT_SYMS.reduce((s, x) => s + x[1], 0);
+function slotPull(rnd) { const r = []; for (let k = 0; k < 3; k++) { let w = rnd() * SLOT_WEIGHT, i = 0; while ((w -= SLOT_SYMS[i][1]) > 0) i++; r.push(i); } return r; }
+function slotPays(r) { // times the stake
+  if (r[0] === r[1] && r[1] === r[2]) return SLOT_SYMS[r[0]][2];
+  const ch = r.filter(i => SLOT_SYMS[i][0] === 'CHERRY').length;
+  return ch === 2 ? 2 : ch === 1 ? 0.5 : 0;
+}
+GAMES.slots = (rnd = Math.random) => {
+  const W = 26, H = 16, g = { id: 'slots', title: 'SLOTS', W, H, score: 0, over: false, bet: 5, win: 0 };
+  let state = 'bet', reels = [0, 1, 2], spinT = 0, msg = 'Pull the lever.', ev = [], shown = [0, 1, 2];
+  g.refused = () => { state = 'bet'; msg = "You can't cover that."; };
+  g.inRound = () => false; // (a pull's over in a second)
+  g.state = () => state; g.reels = () => reels;
+  g.step = (dt, k) => {
+    ev = [];
+    if (state !== 'spin') {
+      if (k.upP) g.bet = betStep(g.bet, 1); if (k.downP) g.bet = betStep(g.bet, -1);
+      if (k.actP && money < g.bet) msg = "You can't cover that.";
+      else if (k.actP) {
+        ev.push('stake', 'launch'); g.win = 0; reels = slotPull(rnd);
+        if (!slotPays(reels) && rnd() < luck() * 1.5) reels = slotPull(rnd); // (lucky: it spins again)
+        spinT = 0; state = 'spin'; msg = '';
+      }
+    } else {
+      spinT += dt;
+      for (let k2 = 0; k2 < 3; k2++) shown[k2] = spinT < 0.7 + k2 * 0.35 ? (spinT * 14 + k2 * 2 | 0) % SLOT_SYMS.length : reels[k2]; // stopping left to right
+      if (spinT > 0.7 + 2 * 0.35) {
+        g.win = Math.round(g.bet * slotPays(reels) * 100) / 100; state = 'done';
+        msg = g.win ? `${slotPays(reels) >= 4 ? 'JACKPOT-ish! ' : ''}Pays ${fmt$(g.win)}.` : 'Nothing.'; ev.push(g.win > g.bet ? 'clear' : g.win ? 'eat' : 'miss'); if (g.win) ev.push('payout');
+      }
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let x = 2; x < 23; x++) { put(x, 1, '=', C(YEL, 12)); put(x, 9, '=', C(YEL, 12)); }
+    for (let k = 0; k < 3; k++) { // three reels, the one above and below showing too
+      const x = 4 + k * 6;
+      for (let d = -1; d <= 1; d++) {
+        const s = SLOT_SYMS[((state === 'spin' ? shown[k] : reels[k]) + d + SLOT_SYMS.length) % SLOT_SYMS.length], y = 5 + d * 2;
+        for (let dx = 0; dx < 4; dx++) put(x + dx, y, ' ', 0, C(WHITE, d ? 3 : 14));
+        const label = s[0] === 'CHERRY' ? 'CHRY' : s[0].length < 3 ? ` ${s[0]}${s[0]}${s[0]}` : s[0]; // (the symbol, as big as the window lets it be)
+        text(x, y, label.padStart(Math.ceil((8 + label.length) / 2)).padEnd(8), C(s[3], d ? 7 : 15));
+      }
+    }
+    text(1, 5, '>', C(RED, 15)); text(46, 5, '<', C(RED, 15));
+    text(0, 10, msg, C(WHITE, 15));
+    text(0, 11, '777 x120  BAR x40  $$$ x20  BELL x12', C(GRAY, 9));
+    text(0, 12, 'CHERRIES x6  PLUMS x4  2 cherries x2', C(GRAY, 9));
+    text(0, 13, `BET ${fmt$(g.bet)}   CASH ${fmt$(money)}`, C(YEL, 14));
+    if (luck() > 0) text(0, 14, 'Your jade feels warm.', C(GREEN, 9));
+  };
+  g.status = () => `SPACE pull (${fmt$(g.bet)})   UP/DOWN bet   E leave`;
+  g.reward = () => 0;
+  return g;
+};

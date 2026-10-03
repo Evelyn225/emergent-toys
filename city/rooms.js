@@ -709,6 +709,7 @@ function roomFloor(i, r, x, rx, ry) {
     case 'jail': return jailFloor(i, f, wx, wy);
     case 'conservatory': return conservatoryFloor(i, f, wx, wy);
     case 'jade': return jadeFloor(i, f, wx, wy);
+    case 'casino': return casinoFloor(i, f, wx, wy);
     case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
@@ -746,6 +747,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'cathedral') return cathedralCeil(i, wx, wy);
   if (st === 'jail') return jailCeil(i, wx, wy);
   if (st === 'glass') return glassCeil(i, wx, wy);
+  if (st === 'chandelier') return casinoCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
   const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
