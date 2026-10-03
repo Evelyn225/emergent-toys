@@ -682,7 +682,7 @@ function trainWall(i, u, uStep, z, d, mx, my, L) {
   return false;
 }
 
-function roomWall(i, u, uStep, z, h, d, side, mx, my, fog) {
+function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const R = room, D = R.def, c = roomAt(mx, my), L = fog * (side ? 10 : 14) * D.light;
   BG[i] = NONE;
   if (c === 'D') { // the way out: glass doors, or stairs up from the subway
@@ -698,6 +698,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog) {
     BG[i] = C(GRAY, 2);
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
+  if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
   if (c === 'S' || D.shelves && my === 0 && z < 2) { // shelves: islands, and along the back wall
@@ -724,6 +725,7 @@ function roomFloor(i, r, x, rx, ry) {
     case 'train': return set(i, fract(wx * 4) < 0.2 ? '|' : ' ', C(GRAY, L));
     case 'rubber': return set(i, (r * 7 + x * 3) % 11 ? ' ' : '.', C(GRAY, L));
     case 'concrete': { const h = hash(Math.floor(wx * 2), Math.floor(wy * 2), 37); return set(i, h > 0.9 ? '%' : (r + x) % 4 ? ' ' : '.', C(h > 0.9 ? BRICK : GRAY, L * (h > 0.9 ? 0.6 : 1))); }
+    case 'aqua': return aquaFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
       if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
@@ -756,6 +758,7 @@ function roomCeil(i, r, x, rx, ry) {
     const on = hash(Math.floor(wx * 3), Math.floor(wy * 3), 9) > 0.88;
     return set(i, on ? '*' : ' ', C(NEON[(Math.floor(wx * 3 + wy * 2 + T * 3)) & 3], 15));
   }
+  if (st === 'aqua') return aquaCeil(i, r, x, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
   const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));

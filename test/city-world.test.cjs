@@ -306,3 +306,15 @@ test('the pleasure pier: a deck off the shore you can walk out on, booths you ca
   const bottom = ev('Array.from({ length: WHEEL.n }, (_, k) => Math.sin(wheelAngle(k, 0))).filter(s => s < -0.99).length');
   assert.strictEqual(bottom, 1, 'a car at the bottom to board at t=0');
 });
+
+test('the aquarium: its own building across the shore road from the pier, its front on the road', () => {
+  const { loadCity } = require('./helpers/load-city.cjs');
+  const { ev } = loadCity();
+  const front = ev('AQUARIUM.by * 8 + 7'), road = ev('AQUARIUM.by * 8 + 8');
+  for (let x = ev('AQUARIUM.x0'); x < ev('AQUARIUM.x1'); x++) {
+    assert.strictEqual(ev(`SHOP[idx(${x}, ${front})] === AQUARIUM.sh && map[idx(${x}, ${front})] > 0`), true, `x ${x} is the aquarium`);
+    assert.strictEqual(ev(`ROAD[idx(${x}, ${road})]`) > 0, true, `with the road in front at x ${x}`);
+  }
+  assert.ok(ev('AQUARIUM.doorU > FAIR.x0 && AQUARIUM.doorU < FAIR.x1'), 'its door faces the pier');
+  assert.deepStrictEqual(JSON.parse(ev('JSON.stringify(AQUARIUM.sh.hours)')), [9, 21]);
+});

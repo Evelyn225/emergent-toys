@@ -392,3 +392,30 @@ test('the laundromat: a load at the back wall, done in its time; clean clothes l
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [wash, wanted.stars, fx.fresh > 0]), [null, 0, true]);
 }));
+
+test('the aquarium: admission at the door, fish in every kind of tank, a touch pool, a gift shop; fish in the windows outside', () => withPage(async page => {
+  const glyphs = () => page.evaluate(() => CH.join(''));
+  await page.evaluate(() => { tod = 12; weather = 'clear'; px = AQUARIUM.doorU + 0.3; py = AQUARIUM.by * 8 + 9.2; a = -Math.PI / 2; pitch = 0; });
+  await page.waitForTimeout(300);
+  assert.match(await glyphs(), /><|<>|=o>|<o=/, 'fish in the windows');
+  await page.evaluate(() => { px = AQUARIUM.doorU; py = AQUARIUM.by * 8 + 8.25; });
+  await page.waitForTimeout(100);
+  assert.match(await page.evaluate(() => promptText()), /enter AQUARIUM \(\$8\.00\)/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, money]), ['room', 'aquarium', 92]);
+  for (const [name, at] of [['ocean', [12, 3.6, -Math.PI / 2]], ['reef', [20.4, 7.5, 0]], ['jelly', [3.4, 7.5, Math.PI]], ['kelp', [18.5, 5.5, -Math.PI / 2]], ['seahorses', [2.6, 12.5, Math.PI]]]) {
+    await page.evaluate(([x, y, ang]) => { px = x; py = y; a = ang; pitch = 0; }, at);
+    await page.waitForTimeout(250);
+    const s = await glyphs();
+    assert.ok(/[<>"]/.test(s) || /[()|]{3}/.test(s), `${name}: something swimming`);
+  }
+  assert.ok(await page.evaluate(() => { px = 12; py = 9; a = -Math.PI / 2; pitch = 0.5; return !ROOMW.cell(12, 9); }), 'the tunnel floor is walkable');
+  await page.evaluate(() => { px = 5.5; py = 14.2; });
+  assert.match(await page.evaluate(() => promptText()), /touch pool/);
+  await page.keyboard.press('KeyE');
+  assert.ok(await page.evaluate(() => TOUCH_LINES.includes(msgText)));
+  await page.evaluate(() => { px = 20.5; py = 14.6; });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the gift shop');
+  assert.ok(await page.evaluate(() => shopCtx.stock.includes('sharkplush')));
+}));

@@ -1,8 +1,7 @@
 # ASCII City: ideas for later
 
 A wishlist of districts and buildings to look over. Nothing here is promised; pick what sounds fun.
-Done so far: the amusement pier (Ferris wheel, carousel, booths) and the 24-hour laundromat. The pawn shop already
-existed.
+Things get crossed off (deleted) once they're in the game.
 
 ## New districts
 
@@ -89,7 +88,6 @@ existed.
 
 ### Waterfront
 - Boat rental: putter round the bay.
-- Aquarium.
 
 ## Weird and special buildings
 - Pay phones: call a number scrawled on a wall, get a strange task.
