@@ -38,6 +38,7 @@
     "city/pause.js",
     "city/goods-ui.js",
     "city/held-dense.js",
+    "city/held-dense-items.js",
     "city/minigame-ui.js",
     "city/crime-ui.js",
     "city/moves.js",

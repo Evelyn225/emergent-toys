@@ -1,15 +1,15 @@
-// ===== held items, the dense way (a trial: ?items=dense; the hand stays as it is). Drawn at a little over the world's own character size
+// ===== held items, the dense way (?items=old for the old big-lettered ones; the hand stays as it is). Drawn at a little over the world's own character size
 // with twice the detail: each picture is sculpted cell by cell from a shape, shaded through a ramp of characters
 // with a light from the top left, like an ASCII-art image, instead of being outlined in big letters.
-const DENSE_ON = typeof location !== 'undefined' && /[?&]items=dense\b/.test(location.search);
+const DENSE_ON = !(typeof location !== 'undefined' && /[?&]items=old\b/.test(location.search)); // (?items=old: the big-lettered ones, for comparing)
 const D_RAMP = ' .:-=+*#%@', D_ASPECT = 0.6; // a character is about 0.6 as wide as it is tall
 const dRamp = b => D_RAMP[clamp(Math.round(b * (D_RAMP.length - 1)), 1, D_RAMP.length - 1)];
 const D_FILL = '=+*#%@', dFill = b => D_FILL[clamp(Math.round(b * (D_FILL.length - 1)), 0, D_FILL.length - 1)]; // solid: light shows in the colour
-// a picture W x H cells: fn(x, y) for each cell's centre (in row heights from the middle, so circles come out round)
+// a picture W x H cells (a column sits on x = 0, so thin upright things down the middle show): fn(x, y) for each cell's centre (in row heights from the middle, so circles come out round)
 // gives null (nothing there) or [character, colour]. Returns [lines, colour of cell (ch, row, col)]
 function sculpt(W, H, fn) {
   const cells = [];
-  for (let r = 0; r < H; r++) { const row = []; for (let k = 0; k < W; k++) row.push(fn((k + 0.5 - W / 2) * D_ASPECT, r + 0.5 - H / 2) || null); cells.push(row); }
+  for (let r = 0; r < H; r++) { const row = []; for (let k = 0; k < W; k++) row.push(fn((k - (W >> 1)) * D_ASPECT, r + 0.5 - H / 2) || null); cells.push(row); }
   return [cells.map(row => row.map(c => c ? c[0] : ' ').join('')), (ch, r, k) => cells[r][k] ? cells[r][k][1] : 0];
 }
 // light on a surface with normal (nx, ny up-is-negative, nz toward you): from the top left, a little in front
@@ -87,12 +87,15 @@ const DENSE = {
 };
 // in place of the big-lettered item (false: not one of the examples). The hand is drawn as usual afterwards
 function drawHeldDense(it, cx, hy, hsz, grip) {
-  if (!DENSE_ON || !DENSE[it.id]) return false;
+  if (!DENSE_ON || !DENSE[it.id] || it.id === 'umbrella' && rain > 0.2 && mode !== 'room') return false; // (open in the rain: the canopy)
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72); // a little over the world's character size
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, [art, col] = DENSE[it.id](it, usesLeft(it)), artW = Math.max(...art.map(l => l.length)), top = grip + 0.6 * s - art.length * s;
-  g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
-  artText(art, cx - artW * w / 2, top, s, col); g.restore();
+  if (!(it.id === 'yoyo' && fx.yoyo > 0)) { // (a yo-yo on the go is drawn by drawYoyo)
+    g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
+    artText(art, cx - artW * w / 2, top, s, col); g.restore();
+  }
+  if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - s * 0.4, s * 2);
   g.font = FS + 'px monospace';
   return true;
 }
