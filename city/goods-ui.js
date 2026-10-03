@@ -119,6 +119,9 @@ const HAND = {
   skateboard: () => [['   .---.', '  /     \\', ' O=======O', ' |#######|', ' |%%%%%%%|', ' |#######|', ' |%%%%%%%|', ' O=======O', '  \\     /', "   '---'"],
     (c, r) => c === 'O' ? C(WHITE, 15) : c === '=' ? C(GRAY, 12) : c === '#' ? C(RED, 13) : c === '%' ? C(YEL, 14) : C(BRICK, 12)],
   yoyo: () => [[' .-.', '(-@-)', " '-'", '  |', '  |'], (c, r) => r > 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
+  vape: () => [[' .-.', ' |' + (fx.vape > 0 ? '@' : 'o') + '|', ' |M|', ' |A|', ' |N|', ' |G|', ' |O|', " '-'"],
+    (c, r) => c === '@' ? C(ORANGE, 10 + fx.vape * 1.7) : c === 'o' ? C(GRAY, 9) : /[A-Z]/.test(c) ? C(YEL, 14) : C(ORANGE, 12)],
+  pipe: () => [['  ___', ' (___)', '  | |___', '  |_____|'], (c, r) => r < 2 ? C(BRICK, 12) : C(BRICK, 10)],
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
@@ -168,6 +171,7 @@ function charLine(x0, y0, x1, y1, w, size, col) {
 function drawHeldBig() {
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && fx.smoke > 0) drawCigarette();
+  drawVapeCloud();
   const it = heldItem();
   if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
@@ -218,12 +222,13 @@ function drawCigarette() {
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, len = 1 + Math.round(6 * fx.smoke / 45);
   const x0 = cv.width * 0.5 - w, y0 = cv.height - s * 0.9, dx = w * 0.95, dy = -s * 0.32;
-  const chars = ['#', '#', ...Array(len).fill('='), '*'];
+  const chars = fx.pipe ? ['=', '=', '=', '=', 'U', '*'] : ['#', '#', ...Array(len).fill('='), '*']; // a pipe: the stem, and the bowl with its glow
   g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
   chars.forEach((ch, k) => {
     const x = x0 + k * dx, y = y0 + k * dy, ember = k === chars.length - 1;
-    g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
-    g.strokeText(ch, x, y); g.fillText(ch, x, y);
+    g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : fx.pipe ? C(BRICK, 12) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
+    const yy = fx.pipe && ember ? y + s * 0.55 : y; // (the pipe's glow sits in the bowl)
+    g.strokeText(ch, x, yy); g.fillText(ch, x, yy);
   });
   // the smoke: small wisps at the world's own character size, rising fast and swaying, '~' fading to '.'; a drag
   // puffs out a lot more
@@ -237,6 +242,31 @@ function drawCigarette() {
     const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS; // on the grid, each wisp in its own black cell (the one exception to no backgrounds: it looks right)
     g.fillStyle = '#000'; g.fillRect(x, y, cw, FS);
     g.fillStyle = PAL[C(GRAY, 4 + p[2] * 8)]; g.fillText(p[2] > 0.6 ? '~' : '.', x, y);
+  }
+}
+// the vape: a message while you hold it in, then on letting go a fat mango cloud, every wisp in its own coloured
+// cell, rolling out from your mouth, spreading and thinning
+let cloudPuffs = [];
+function drawVapeCloud() {
+  const dt = Math.min(0.05, T - (drawVapeCloud.t ?? T)); drawVapeCloud.t = T;
+  if (fx.vape > 0) msgText = 'Holding it in... ' + '#'.repeat(Math.ceil(fx.vape * 4)), msgT = 0.3;
+  if (fx.cloud > 0) { // just let it out
+    const n = Math.round(20 + fx.cloud * 70), big = fx.cloud;
+    for (let k = 0; k < n; k++) {
+      const ang = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = (6 + Math.random() * 16) * (0.5 + big * 0.5);
+      cloudPuffs.push([cv.width / 2 + (Math.random() - 0.5) * cw * 6, cv.height - FS * 2, Math.cos(ang) * sp * cw, Math.sin(ang) * sp * FS * 0.8, 1 + big * 0.5]);
+    }
+    say(fx.cloud > 2.5 ? 'You blow out an enormous cloud of mango.' : fx.cloud > 1.2 ? 'A fat cloud of mango vapour rolls out.' : 'A little puff of mango.', 2.5);
+    fx.cloud = 0; if (actx) sfxUse('drag');
+  }
+  if (!cloudPuffs.length) return;
+  g.font = FS + 'px monospace';
+  cloudPuffs = cloudPuffs.filter(p => (p[4] -= dt * 0.3) > 0);
+  for (const p of cloudPuffs) {
+    p[0] += p[2] * dt; p[1] += p[3] * dt; p[2] *= 1 - dt * 0.8; p[3] = p[3] * (1 - dt * 0.8) - FS * dt * 0.6; // slowing, drifting up
+    const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS, f = Math.min(1, p[4]);
+    g.fillStyle = PAL[C(f > 0.6 ? ORANGE : WARM, 4 + f * 5)]; g.fillRect(x, y, cw, FS);
+    g.fillStyle = PAL[C(f > 0.5 ? YEL : WHITE, 6 + f * 8)]; g.fillText(f > 0.7 ? '@' : f > 0.4 ? '%' : '~', x, y);
   }
 }
 // a yo-yo trick (fx.yoyo counts down): around the world, a loop up in front of you and back to your hand, the string
@@ -387,7 +417,7 @@ const HEADLINES = () => [`${pick(stations).name} station closed for repairs`, 'M
 function useHeldItem() {
   const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
     water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
-  say(line, 3);
+  if (line) say(line, 3);
   if (actx && sound) sfxUse(sound);
 }
 function sfxUse(s) {
