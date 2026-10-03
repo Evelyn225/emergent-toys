@@ -539,3 +539,19 @@ test('the Shotengai: a roof over its streets, dry in the rain; pachinko pays tic
   await page.keyboard.press('KeyE');
   assert.ok(await page.evaluate(() => !!sleep), 'asleep in a pod');
 }));
+
+test('mahjong at the tea house: the buy-in goes in the pot, walking away loses it, a win pays the pot', () => withPage(async page => {
+  await page.evaluate(() => enterRoom('tea', { word: 'MAHJONG', neon: RED, ret: [px, py, a], line: 'Hi' }, [3, 5.2, -Math.PI / 2]));
+  assert.match(await page.evaluate(() => promptText()), /mahjong/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, game.kind, money, game.g.hands[0].length]), ['mahjong', 'table', 95, 14]);
+  await page.keyboard.press('Space'); // throw a tile
+  assert.strictEqual(await page.evaluate(() => game.g.hands[0].length), 13);
+  await page.keyboard.press('KeyE'); // get up mid-hand
+  assert.deepStrictEqual(await page.evaluate(() => [game, money]), [null, 95], 'the stake stays in the pot');
+  await page.keyboard.press('KeyE');
+  await page.evaluate(() => { game.g.hands[0].splice(0, 14, 0, 0, 0, 1, 2, 3, 9, 10, 11, 20, 20, 20, 26, 26); });
+  await page.keyboard.press('ArrowUp'); // MAHJONG!
+  await page.waitForTimeout(150);
+  assert.deepStrictEqual(await page.evaluate(() => [game.g.result.winner, money]), [0, 110], 'won the pot: $20');
+}));

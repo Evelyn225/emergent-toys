@@ -341,10 +341,10 @@ const ROOM_DEFS = {
     props: r => {
       const p = [...counterBox(6, 1.7, 1.4), standing(6, 1.1, RED)];
       for (const [x, y] of [[3, 4], [9, 4], [3, 6.8], [9, 6.8]]) {
-        p.push(BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
+        p.push({ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
           const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
           return set(i, f === 5 && Math.abs(Math.abs(HIT.u) - 0.32) < 0.06 || f === 5 && Math.abs(Math.abs(HIT.v) - 0.32) < 0.06 ? '#' : ' ', C(WHITE, 13)), true;
-        }), BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK)));
+        }) }, BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK)));
         for (const [ox, oy] of [[-0.75, 0], [0.75, 0], [0, 0.75], [0, -0.75]]) if (chance(0.6)) p.push(sitting(x + ox, y + oy, shirt(), 0.45, oy < 0));
       }
       return p;

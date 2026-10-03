@@ -2622,6 +2622,118 @@ GAMES.crane = (rnd = Math.random) => {
   return g;
 };
 
+// ---- mahjong, the simple version: three suits (dots o, bamboo |, characters #) numbered 1-9, four of each, 108
+// tiles. Four players, 13 tiles each; on your turn you draw one and discard one. 14 tiles that make four sets (three
+// the same, or a run of three in one suit) and a pair is mahjong: you win the pot. You can also win off another
+// player's discard if it's the tile you were waiting for. No other claiming, no honours, no scoring: just that.
+const MJ_SUITS = ['o', '|', '#'], MJ_NAMES = ['YOU', 'WONG', 'MEI', 'LO'];
+const mjName = t => `${t % 9 + 1}${MJ_SUITS[t / 9 | 0]}`;
+function mjSets(c) { // can these counts be split entirely into sets of three?
+  const i = c.findIndex(v => v > 0);
+  if (i < 0) return true;
+  if (c[i] >= 3) { c[i] -= 3; const ok = mjSets(c); c[i] += 3; if (ok) return true; }
+  if (i % 9 <= 6 && c[i + 1] && c[i + 2]) { c[i]--; c[i + 1]--; c[i + 2]--; const ok = mjSets(c); c[i]++; c[i + 1]++; c[i + 2]++; if (ok) return true; }
+  return false;
+}
+function mjWins(tiles) { // 14 tiles: four sets and a pair?
+  if (tiles.length !== 14) return false;
+  const c = new Array(27).fill(0);
+  for (const t of tiles) c[t]++;
+  for (let p = 0; p < 27; p++) if (c[p] >= 2) { c[p] -= 2; const ok = mjSets(c); c[p] += 2; if (ok) return true; }
+  return false;
+}
+// what a 13-tile hand is waiting for (any tile that would complete it, that isn't all used up in it)
+const mjWaits = hand => Array.from({ length: 27 }, (_, t) => t).filter(t => hand.filter(x => x === t).length < 4 && mjWins([...hand, t]));
+// which tile an opponent throws away: the one doing least for its hand (alone, far from its neighbours)
+function mjDiscard(hand, rnd) {
+  let best = 0, bv = Infinity;
+  hand.forEach((t, k) => {
+    const n = d => hand.some((x, j) => j !== k && x === t + d && (x / 9 | 0) === (t / 9 | 0));
+    const v = (hand.filter(x => x === t).length - 1) * 3 + (n(-1) + n(1)) * 2 + (n(-2) + n(2)) + (t % 9 === 0 || t % 9 === 8 ? -0.3 : 0) + rnd() * 0.2;
+    if (v < bv) { bv = v; best = k; }
+  });
+  return best;
+}
+GAMES.mahjong = (rnd = Math.random) => {
+  const W = 32, H = 19, g = { id: 'mahjong', title: 'MAHJONG', W, H, score: 0, over: false, result: null };
+  const wall = [];
+  for (let t = 0; t < 27; t++) for (let k = 0; k < 4; k++) wall.push(t);
+  for (let i = wall.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [wall[i], wall[j]] = [wall[j], wall[i]]; }
+  const hands = [0, 1, 2, 3].map(() => wall.splice(0, 13).sort((a, b) => a - b)), rivers = [[], [], [], []];
+  let turn = 0, state = 'you', wait = 0, cur = 0, drawn = null, last = null, msg = 'Your turn. Draw done: pick a tile to throw away.';
+  const sortHand = h => h.sort((a, b) => a - b);
+  const end = (winner, how) => { g.over = true; g.result = { winner, how }; g.score = winner === 0 ? 1 : 0; };
+  const draw = p => { if (!wall.length) { end(-1, 'the wall ran out'); return null; } const t = wall.shift(); hands[p].push(t); return t; };
+  drawn = draw(0); cur = hands[0].indexOf(drawn); sortHand(hands[0]); cur = hands[0].lastIndexOf(drawn);
+  // a discard by p: does anyone want it to win? (you first, then the others in turn order)
+  const afterDiscard = (p, t) => {
+    last = { p, t };
+    if (p !== 0 && mjWins([...hands[0], t])) { state = 'claim'; wait = 3.5; msg = `${MJ_NAMES[p]} throws ${mjName(t)}: that's your winning tile! UP to claim it`; return; }
+    for (let q = 1; q <= 3; q++) if (q !== p && mjWins([...hands[q], t])) { hands[q].push(t); end(q, `on ${MJ_NAMES[p] === 'YOU' ? 'your' : MJ_NAMES[p] + "'s"} discard`); return; }
+    next(p);
+  };
+  const next = p => {
+    turn = (p + 1) % 4;
+    if (turn === 0) { drawn = draw(0); if (g.over) return; sortHand(hands[0]); cur = hands[0].lastIndexOf(drawn); state = 'you'; msg = `You draw ${mjName(drawn)}.`; }
+    else { state = 'ai'; wait = 0.7; }
+  };
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if (state === 'you') {
+      if (k.leftP) cur = (cur + 13) % 14; if (k.rightP) cur = (cur + 1) % 14;
+      if (k.upP && mjWins(hands[0])) { end(0, 'by drawing it yourself'); ev.push('clear'); return ev; }
+      if (k.actP) { const t = hands[0].splice(cur, 1)[0]; rivers[0].push(t); cur = Math.min(cur, 12); msg = `You throw ${mjName(t)}.`; ev.push('place'); afterDiscard(0, t); }
+    } else if (state === 'claim') {
+      wait -= dt;
+      if (k.upP) { hands[0].push(last.t); sortHand(hands[0]); end(0, `on ${MJ_NAMES[last.p]}'s discard`); ev.push('clear'); return ev; }
+      if (wait <= 0 || k.actP) { msg = 'You let it go.'; next(last.p); }
+    } else if (state === 'ai' && (wait -= dt) <= 0) { // an opponent's go: draw, maybe win, discard
+      const p = turn, t = draw(p);
+      if (g.over) return ev;
+      if (mjWins(hands[p])) { end(p, 'by drawing it'); ev.push('die'); return ev; }
+      const d = hands[p].splice(mjDiscard(hands[p], rnd), 1)[0];
+      rivers[p].push(d); msg = `${MJ_NAMES[p]} throws ${mjName(d)}.`; ev.push('bump');
+      afterDiscard(p, d);
+      if (g.over) ev.push('die');
+    }
+    return ev;
+  };
+  const SUIT_COL = [RED, GREEN, BLUE];
+  const tileText = (text, x, y, t, hi) => text(x, y, mjName(t), C(SUIT_COL[t / 9 | 0], hi ? 15 : 12));
+  g.draw = (put, text) => {
+    // the other three: how many tiles, and what they've thrown away (the last discard picked out)
+    for (let p = 1; p <= 3; p++) {
+      const y = (p - 1) * 2;
+      text(0, y, `${turn === p && !g.over ? '>' : ' '}${MJ_NAMES[p]} [${hands[p].length}]`, C(turn === p ? YEL : WHITE, 13));
+      const rv = rivers[p].slice(-11);
+      rv.forEach((t, k) => tileText(text, 6 + k * 2, y, t, last && last.p === p && k === rv.length - 1));
+    }
+    text(0, 6, ` YOUR THROWS`, C(GRAY, 10));
+    rivers[0].slice(-11).forEach((t, k) => tileText(text, 6 + k * 2, 6, t, false));
+    text(0, 8, `WALL ${wall.length}`, C(GRAY, 11));
+    text(0, 9, msg.slice(0, 62), C(WHITE, 14));
+    // your hand: fourteen (or thirteen) tiles across the bottom, the one you're on raised
+    const hand = hands[0];
+    hand.forEach((t, k) => {
+      const sel = state === 'you' && k === cur, y = sel ? 11 : 12;
+      put(1 + k * 2, y, ' ', 0, C(WHITE, sel ? 15 : 11)); text(1 + k * 2, y, mjName(t), C(SUIT_COL[t / 9 | 0], 5)); // an ivory tile, its number and suit
+    });
+    if (state === 'you') text(1 + cur * 2, 13, '^^', C(YEL, 15));
+    // the help: what you're waiting for, if you're one tile away
+    const h13 = state === 'you' ? hand.filter((_, k) => k !== cur) : hand;
+    const w = h13.length === 13 ? mjWaits(h13) : [];
+    text(0, 15, w.length ? `${state === 'you' ? 'Throw that and you' : 'You'}'re one away! Winning tiles: ${w.map(mjName).join(' ')}` : 'Make 4 sets + a pair. A set: three alike, or a run of 3 in one suit.', C(w.length ? YEL : GRAY, w.length ? 15 : 10));
+    if (state === 'you' && mjWins(hand)) text(0, 16, 'MAHJONG! You have a winning hand: press UP to declare it', C(MAG, 15));
+    if (g.over && g.result) text(0, 17, g.result.winner === 0 ? `MAHJONG! You win ${g.result.how}.` : g.result.winner < 0 ? 'Nobody won: the wall ran out.' : `${MJ_NAMES[g.result.winner]} wins ${g.result.how}.`, C(g.result.winner === 0 ? YEL : WHITE, 15));
+  };
+  g.status = () => state === 'claim' ? `UP claim it   SPACE let it go (${Math.ceil(wait)}s)` : state === 'you' ? 'LEFT/RIGHT pick   SPACE throw it   UP declare mahjong' : 'Waiting for the others...';
+  g.reward = () => g.result ? g.result.winner === 0 ? 20 : g.result.winner < 0 ? MJ_BUYIN : 0 : 0;
+  g.hands = hands; g.wallLeft = () => wall.length; g.state = () => state; g.cursor = () => cur; // (for the tests)
+  return g;
+};
+const MJ_BUYIN = 5;
+
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
@@ -4836,10 +4948,10 @@ const ROOM_DEFS = {
     props: r => {
       const p = [...counterBox(6, 1.7, 1.4), standing(6, 1.1, RED)];
       for (const [x, y] of [[3, 4], [9, 4], [3, 6.8], [9, 6.8]]) {
-        p.push(BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
+        p.push({ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
           const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
           return set(i, f === 5 && Math.abs(Math.abs(HIT.u) - 0.32) < 0.06 || f === 5 && Math.abs(Math.abs(HIT.v) - 0.32) < 0.06 ? '#' : ' ', C(WHITE, 13)), true;
-        }), BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK)));
+        }) }, BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK)));
         for (const [ox, oy] of [[-0.75, 0], [0.75, 0], [0, 0.75], [0, -0.75]]) if (chance(0.6)) p.push(sitting(x + ox, y + oy, shirt(), 0.45, oy < 0));
       }
       return p;
@@ -5857,7 +5969,9 @@ const crane = (x, y, k) => ({ ...BX(x, y, 0.45, 0.45, 0, 1.95, (i, t, L) => { //
 }), crane: true, cx: x, cy: y });
 const nearPachinko = () => mode === 'room' && room.props.find(s => s.pachi && Math.abs(px - s.cx) < 0.4 && Math.abs(py - (s.cy + s.fy * 0.75)) < 0.4) || null;
 const nearCrane = () => mode === 'room' && room.props.find(s => s.crane && Math.abs(px - s.cx) < 0.6 && py > s.cy + 0.4 && py < s.cy + 1.4) || null;
+const nearMahjong = () => mode === 'room' && room.kind === 'tea' && room.props.find(s => s.mj && Math.hypot(px - s.cx, py - s.cy) < 1.3) || null;
 function shotengaiPrompt() {
+  if (nearMahjong()) return `E: sit in on a hand of mahjong (${fmt$(MJ_BUYIN)} in the pot)`;
   const pm = nearPachinko();
   if (pm) return pm.busy ? 'Somebody\'s on this one' : `E: play pachinko (${fmt$(CREDIT)} for 40 balls)`;
   if (room.kind === 'pachinko' && nearKeeper()) return `E: swap tickets for prizes (${tickets} tickets)`;
@@ -5866,7 +5980,8 @@ function shotengaiPrompt() {
   return '';
 }
 const CAPSULE_RATE = 15;
-function useShotengai() { // true if E did something
+function useShotengai() { // true if E did something (and the mahjong tables in the tea houses)
+  if (nearMahjong()) { if (!pay(MJ_BUYIN)) say(`The buy-in's ${fmt$(MJ_BUYIN)}.`); else { startGame('mahjong', 'table'); say('"Sit, sit. Four sets and a pair, yes? We play the simple way here."', 4); } return true; }
   const pm = nearPachinko();
   if (pm) { if (pm.busy) say('Somebody\'s on this one. He doesn\'t look up.'); else if (!pay(CREDIT)) say(`It's ${fmt$(CREDIT)} for a tray of balls.`); else startGame('pachinko', 'arcade'); return true; }
   if (room.kind === 'pachinko' && nearKeeper()) { openPrizes(); return true; }
@@ -7849,6 +7964,7 @@ function gameKey(e) {
   if (e.repeat) return true;
   if (game.g.over) { // the results screen: go again, or walk away
     if ((k === 'act') && game.kind === 'arcade') { if (pay(CREDIT)) { const id = game.g.id; startGame(id, 'arcade'); } else say(`A credit's ${fmt$(CREDIT)}. You're out of cash.`); }
+    else if (k === 'act' && game.kind === 'table') { if (pay(MJ_BUYIN)) startGame(game.g.id, 'table'); else say(`The buy-in's ${fmt$(MJ_BUYIN)}. You're out of cash.`); } // another hand
     else if (e.code === 'Escape' || e.code === 'KeyE' || k === 'act') game = null;
     return true;
   }
@@ -7866,6 +7982,12 @@ function finishGame(quit) {
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
   const r = g.reward();
+  if (game.kind === 'table') { // the mahjong table: the pot if you won, your stake back if nobody did
+    const res = g.result;
+    if (r > 0) earn(r);
+    say(quit && !res ? 'You get up from the table. Your stake stays in the pot.' : !res ? '' : res.winner === 0 ? `MAHJONG! You take the pot: ${fmt$(r)}.` : res.winner < 0 ? 'A draw: the wall ran out. Everyone takes their stake back.' : `${MJ_NAMES[res.winner]} wins. Your ${fmt$(MJ_BUYIN)} goes in their pocket.`, 4);
+    return;
+  }
   if (game.kind === 'arcade' && g.prize) { // the crane dropped something in the chute
     if (inv.length < INV_SIZE) { inv.push({ id: g.prize, uses: ITEMS[g.prize].uses || 0 }); held = inv.length - 1; say(`It drops down the chute: ${aOrSome(ITEMS[g.prize].name)}! Yours.`, 4); }
     else say(`It drops down the chute, but your hands are full. You leave ${aOrSome(ITEMS[g.prize].name)} for the next kid.`, 4);
@@ -7902,7 +8024,7 @@ function gameFS(g) {
   return clamp(Math.floor(Math.min(DETAIL[settings.detail], (innerWidth - cr) / ((2 * g.W + 6) * ratio), (innerHeight - cb) / (g.H + 9))), 5, 40);
 }
 // what the screen says to press: on a phone, the buttons' names
-const gameText = s => TOUCH ? s.replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS/g, 'STICK').replace(/SPACE/g, 'GO') : s;
+const gameText = s => TOUCH ? s.replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/\bUP\b/g, 'MAHJONG').replace(/SPACE/g, 'GO') : s;
 // the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
 function drawGame() {
   const g = game.g, fs = gameFS(g);
@@ -7913,7 +8035,7 @@ function drawGame() {
   const [cr, cb] = gameClear(), ac = cols - Math.ceil(cr / cw), ar = rows - Math.ceil(cb / FS); // the columns and rows we can use
   const s = clamp(Math.floor(Math.min((ar - 9) / g.H, (ac - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
   const gw = g.W * bw, gh = g.H * bh, x0 = (ac - gw) >> 1, y0 = Math.max(4, (ar - gh) >> 1);
-  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : g.id === 'serve' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
+  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : game.kind === 'table' ? GREEN : g.id === 'serve' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
     const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;
@@ -7933,11 +8055,14 @@ function drawGame() {
   const st = gameText(g.status()), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over && game.kind !== 'crime') { // the results card
-    const r = g.reward(), lines = game.kind === 'arcade'
+    const r = g.reward(), res = g.result, lines = game.kind === 'table'
+      ? [res && res.winner === 0 ? 'MAHJONG!' : 'HAND OVER', !res ? 'You left the table.' : res.winner === 0 ? `You win ${res.how}` : res.winner < 0 ? 'The wall ran out' : `${MJ_NAMES[res.winner]} wins ${res.how}`,
+         r > MJ_BUYIN ? `+${fmt$(r)}` : r ? 'Stakes returned' : `-${fmt$(MJ_BUYIN)}`, ...TOUCH ? [] : ['', `SPACE another hand (${fmt$(MJ_BUYIN)})   E leave`]]
+      : game.kind === 'arcade'
       ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, ...TOUCH ? [] : ['', `SPACE play again (${fmt$(CREDIT)})   E leave`]]
       : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, ...TOUCH ? [] : ['', 'E or SPACE to finish']];
     const w = Math.min(ac, Math.max(...lines.map(l => l.length)) + 6), h = lines.length + 2, cx = (ac - w) >> 1, cy = (ar - h) >> 1;
@@ -8508,7 +8633,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Leave'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^climb/, 'Climb'], [/^go into/, 'Enter'], [/^back down/, 'Go down']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^go into/, 'Enter'], [/^back down/, 'Go down']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
@@ -8523,7 +8648,8 @@ function touchActions() {
   if (sleep || bustedEl && bustedEl.style.display === 'flex') return []; // (busted: tap a row)
   if (panelOpen() || prizeEl && prizeEl.style.display === 'flex') return [['Close', 'KeyE', 'main']];
   if (game) {
-    if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
+    if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : game.kind === 'table' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(MJ_BUYIN)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
+    if (game.g.id === 'mahjong') return [['Leave', 'KeyE', 'pop'], ['Mahjong!', 'ArrowUp', 'pop'], [game.g.state() === 'claim' ? 'Pass' : 'Throw', 'Space', 'main']];
     return [[game.kind === 'shift' ? 'Clock off' : game.kind === 'crime' ? 'Back off' : 'Leave', 'KeyE', 'pop'], ['Go', 'Space', 'main']];
   }
   const out = [], p = promptText(), e = eLabel(p);

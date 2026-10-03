@@ -110,7 +110,9 @@ const crane = (x, y, k) => ({ ...BX(x, y, 0.45, 0.45, 0, 1.95, (i, t, L) => { //
 }), crane: true, cx: x, cy: y });
 const nearPachinko = () => mode === 'room' && room.props.find(s => s.pachi && Math.abs(px - s.cx) < 0.4 && Math.abs(py - (s.cy + s.fy * 0.75)) < 0.4) || null;
 const nearCrane = () => mode === 'room' && room.props.find(s => s.crane && Math.abs(px - s.cx) < 0.6 && py > s.cy + 0.4 && py < s.cy + 1.4) || null;
+const nearMahjong = () => mode === 'room' && room.kind === 'tea' && room.props.find(s => s.mj && Math.hypot(px - s.cx, py - s.cy) < 1.3) || null;
 function shotengaiPrompt() {
+  if (nearMahjong()) return `E: sit in on a hand of mahjong (${fmt$(MJ_BUYIN)} in the pot)`;
   const pm = nearPachinko();
   if (pm) return pm.busy ? 'Somebody\'s on this one' : `E: play pachinko (${fmt$(CREDIT)} for 40 balls)`;
   if (room.kind === 'pachinko' && nearKeeper()) return `E: swap tickets for prizes (${tickets} tickets)`;
@@ -119,7 +121,8 @@ function shotengaiPrompt() {
   return '';
 }
 const CAPSULE_RATE = 15;
-function useShotengai() { // true if E did something
+function useShotengai() { // true if E did something (and the mahjong tables in the tea houses)
+  if (nearMahjong()) { if (!pay(MJ_BUYIN)) say(`The buy-in's ${fmt$(MJ_BUYIN)}.`); else { startGame('mahjong', 'table'); say('"Sit, sit. Four sets and a pair, yes? We play the simple way here."', 4); } return true; }
   const pm = nearPachinko();
   if (pm) { if (pm.busy) say('Somebody\'s on this one. He doesn\'t look up.'); else if (!pay(CREDIT)) say(`It's ${fmt$(CREDIT)} for a tray of balls.`); else startGame('pachinko', 'arcade'); return true; }
   if (room.kind === 'pachinko' && nearKeeper()) { openPrizes(); return true; }
