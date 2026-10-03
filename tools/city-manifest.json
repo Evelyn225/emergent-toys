@@ -28,6 +28,7 @@
     "city/actions.js",
     "city/taxi-job.js",
     "city/fair.js",
+    "city/events.js",
     "city/laundry.js",
     "city/audio.js",
     "city/menu.js",

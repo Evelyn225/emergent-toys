@@ -60,7 +60,7 @@ function touchActions() {
   }
   const out = [], p = promptText(), e = eLabel(p);
   if (mode === 'taxi') {
-    if (!me.dest) TAXI_STOPS.forEach((s, k) => out.push([s, 'Digit' + (k + 1), 'pop']));
+    if (!me.dest) { TAXI_STOPS.forEach((s, k) => out.push([s, 'Digit' + (k + 1), 'pop'])); if (owned.homes.length) out.push(['Home', 'Digit6', 'pop']); }
     else if (!me.rush) out.push([`Tip ${fmt$(TIP)}`, 'KeyG', 'pop']);
     out.push(['Camera', 'KeyV', 'pop'], ['Get out', 'KeyE', 'main']);
     return out;

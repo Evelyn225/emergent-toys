@@ -59,6 +59,7 @@ function audioMix(s) {
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
+  if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the pleasure pier: a crowd, and the booths' bleeps and jingles drifting over it
     out.crowd = Math.max(out.crowd, 0.7 * s.fairNear * (s.tod >= 9 || s.tod < 2 ? 1 : 0.2));
     out.arcade = 0.4 * s.fairNear * far;

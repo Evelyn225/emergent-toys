@@ -15,7 +15,7 @@ function dash() {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
   } else {
     putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
-    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
+    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway' + (owned.homes.length ? '   6: home' : ''), C(WHITE, 12));
   }
 }
 
@@ -216,7 +216,7 @@ function hud() {
     : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
-  const lines = [...wrapText(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
+  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
   hudBottom = (lines.length + task_.length) * FS + 10;

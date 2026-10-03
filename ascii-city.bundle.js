@@ -57,6 +57,7 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
 // ---- game state
 let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
 let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0;
+let dayNum = 4; // days since a Monday: you arrive on a Friday evening (events.js)
 let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0, storm = 0;
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
@@ -110,7 +111,9 @@ const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
 function env(dt) {
   const lapse = K.KeyT ? 40 : 1; // 20s per game hour; hold T to fast-forward (clouds race along too)
+  const t0 = tod;
   tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
+  if (tod < t0) dayNum++; // midnight
   if ((wTimer -= dt) < 0) { weather = pick(['clear', 'clear', 'rain', 'fog', 'storm']); wTimer = 60 + Math.random() * 90; }
   rain += clamp((weather === 'rain' || weather === 'storm') - rain, -dt / 6, dt / 6);
   storm += clamp((weather === 'storm') - storm, -dt / 8, dt / 8);
@@ -1582,6 +1585,7 @@ function audioMix(s) {
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
+  if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the pleasure pier: a crowd, and the booths' bleeps and jingles drifting over it
     out.crowd = Math.max(out.crowd, 0.7 * s.fairNear * (s.tod >= 9 || s.tod < 2 ? 1 : 0.2));
     out.arcade = 0.4 * s.fairNear * far;
@@ -5661,7 +5665,7 @@ function render(dt) {
   if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
   W.sprites();
-  if (city) { reflect(); fogSteps(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
+  if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (mode === 'drive' || mode === 'taxi') dash();
   if (mode === 'el') elFrame();
   if (mode === 'fair') fairFrame();
@@ -5716,7 +5720,7 @@ function dash() {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
   } else {
     putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
-    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
+    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway' + (owned.homes.length ? '   6: home' : ''), C(WHITE, 12));
   }
 }
 
@@ -5917,7 +5921,7 @@ function hud() {
     : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
-  const lines = [...wrapText(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
+  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
   hudBottom = (lines.length + task_.length) * FS + 10;
@@ -5983,6 +5987,15 @@ function leaveCar() {
   me = null; mode = 'walk';
 }
 // taxi destinations: always a point in the middle of a street that exists
+const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
+function homeKerb(x, y) { // the middle of the street nearest a building's cell (x, y): one of its block's four sides
+  const bx = x >> 3, by = y >> 3, opts = [];
+  if (vseg(bx & (NB - 1), by & (NB - 1))) opts.push([bx * 8 + 1, y + 0.5]);
+  if (vseg((bx + 1) & (NB - 1), by & (NB - 1))) opts.push([(bx + 1) * 8 + 1, y + 0.5]);
+  if (hseg(bx & (NB - 1), by & (NB - 1))) opts.push([x + 0.5, by * 8 + 1]);
+  if (hseg(bx & (NB - 1), (by + 1) & (NB - 1))) opts.push([x + 0.5, (by + 1) * 8 + 1]);
+  return opts.reduce((b, p) => Math.hypot(p[0] - x, p[1] - y) < Math.hypot(b[0] - x, b[1] - y) ? p : b).map(v => mod(v, N));
+}
 function setDest(n) {
   const c = me, far = p => Math.hypot(rel(p[0] - c.x), rel(p[1] - c.y));
   const nearest = pts => pts.reduce((b, p) => far(p) < far(b) ? p : b);
@@ -5992,6 +6005,9 @@ function setDest(n) {
   else if (n === 4) { // the shore road, south or north, level with you
     const bx = Math.floor(c.x / 8);
     c.dest = nearest([[bx * 8 + 5, SHORE_S * 8 + 1], [bx * 8 + 5, (SHORE_N + 1) * 8 + 1]]); c.destName = 'the waterfront';
+  } else if (n === 6 && owned.homes.length) { // home: the street in front of whichever of your places is nearest
+    const h = owned.homes.reduce((b, h) => homeDist(h, c) < homeDist(b, c) ? h : b), x = h.cell % N, y = Math.floor(h.cell / N);
+    c.dest = homeKerb(x, y); c.destName = `home (${SHOP[h.cell].word})`;
   } else if (n === 5) { // the street in front of the nearest station entrance
     const s = stations.reduce((b, s) => far([s.x, s.y]) < far([b.x, b.y]) ? s : b);
     c.dest = [s.x, s.y - mod(s.y, 8) + 1]; c.destName = `${s.name} station`;
@@ -6173,6 +6189,7 @@ function stepSleep(dt) {
   fade = sleep.t < 1.5 ? sleep.t / 1.5 : sleep.t < 3 ? 1 : clamp(1 - (sleep.t - 3) / 2, 0, 1);
   if (sleep.t >= 1.5 && !sleep.done) {
     sleep.done = true;
+    if (tod > 7) dayNum++; // slept through midnight
     tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
     if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby }, [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
@@ -6401,6 +6418,89 @@ function fairFrame() {
   const mid = cols >> 1;
   for (let r = 0; r < rows - 3; r++) { const i = r * cols + mid; FOGS[i] = FOGB[i] = 0; set(i, (r + Math.floor(T * 6)) % 4 ? '|' : '/', C(YEL, 14)); BG[i] = C(YEL, 3); }
   ['   ,/\\_/\\,', '  (  o    >', "  /`---.__/", " /  ~~~~ \\"].forEach((l, k) => putText(rows - 4 + k, mid - 6, l, C(WHITE, 13)));
+}
+// ===== the calendar: which day of the week it is, and what's on. Days tick over at midnight (and when you sleep
+// through one). Starting simple: every Saturday night, fireworks over the bay off the pleasure pier.
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const weekday = () => WEEKDAYS[mod(dayNum, 7)];
+// what's on: [weekday, from hour, to hour, what, a line for the newspaper and the gossip]
+const EVENTS = [['Sat', 21, 24, 'fireworks', 'Fireworks over the bay, Saturday at 9']];
+const eventNow = kind => EVENTS.some(([d, h0, h1, k]) => k === kind && d === weekday() && tod >= h0 && tod < h1);
+const eventToday = kind => EVENTS.find(([d, , , k]) => k === kind && d === weekday()) || null;
+let toldEvent = '';
+function stepEvents(dt) {
+  const fw = eventToday('fireworks'), key = dayNum + ':fw';
+  if (fw && tod >= 20 && tod < 21 && toldEvent !== key + ':soon') { toldEvent = key + ':soon'; say('Fireworks over the bay at 9 tonight. Head down to the waterfront.', 5); }
+  if (fw && tod >= 21 && tod < 21.1 && toldEvent !== key + ':go') { toldEvent = key + ':go'; say(weather === 'storm' ? 'The fireworks are off: too much wind.' : 'BOOM. The fireworks have started over the bay.', 4); }
+  stepFireworks(dt);
+}
+
+// ---- the fireworks: shells launched from barges out in the bay south of the pier, a few a second, a finale at the end.
+// Each climbs on a trail of sparks, bursts into a shell of stars that fall and fade. Drawn into the sky as points in
+// the world (so buildings hide them and they're bigger close up), with a flash on the sky round each burst.
+const FW_COLS = [RED, YEL, CYAN, MAG, GREEN, WHITE, ORANGE, BLUE];
+const shells = [];
+const fwBase = () => ({ x: FAIR.cx, y: FAIR.y1 + 18 }); // the barges
+function stepFireworks(dt) {
+  for (let k = shells.length - 1; k >= 0; k--) if (T - shells[k].t0 > shells[k].rise + 3.5) shells.splice(k, 1);
+  if (!eventNow('fireworks') || weather === 'storm' || mode === 'room') return;
+  const finale = tod > 23.6, rate = finale ? 6 : 1.4;
+  if (Math.random() < dt * rate) {
+    const b = fwBase(), kind = pick(['peony', 'peony', 'willow', 'ring', 'crackle']);
+    shells.push({ x: b.x + (Math.random() - 0.5) * 30, y: b.y + (Math.random() - 0.5) * 8, h: 18 + Math.random() * 14, t0: T, rise: 1.6 + Math.random() * 0.8,
+      col: pick(FW_COLS), col2: pick(FW_COLS), kind, n: kind === 'ring' ? 28 : 46, seed: Math.random() * 1e4, boomed: false });
+  }
+  for (const s of shells) if (!s.boomed && T - s.t0 > s.rise) { s.boomed = true; fwBoom(s); }
+}
+// where star k of shell s is, t seconds after the burst
+function starAt(s, k, t) {
+  const g = s.kind === 'willow' ? 3 : 1.6, sp = s.kind === 'willow' ? 3.2 : 4.5;
+  let dxs, dys, dzs;
+  if (s.kind === 'ring') { const th = k / s.n * TAU; dxs = Math.cos(th); dys = 0.3 * Math.sin(th); dzs = Math.sin(th); }
+  else { // spread evenly over a sphere (a Fibonacci spiral)
+    const zz = 1 - 2 * (k + 0.5) / s.n, rr = Math.sqrt(1 - zz * zz), th = k * 2.39996 + s.seed;
+    dxs = rr * Math.cos(th); dys = rr * Math.sin(th); dzs = zz;
+  }
+  const d = sp * (1 - Math.exp(-t * 1.6)); // fast out, then hanging
+  return [s.x + dxs * d, s.y + dys * d, s.h + dzs * d - g * t * t * 0.5];
+}
+function drawFireworks() {
+  if (!shells.length) return;
+  const put = (wx, wy, wz, ch, col, glow) => {
+    const vx = rel(wx - px), vy = rel(wy - py), depth = dx * vx + dy * vy;
+    if (depth < 1) return;
+    const c = Math.round(cols / 2 + (-dy * vx + dx * vy) * projX / depth), r = Math.round(hor - (wz - eye) * projY / depth);
+    if (c < 0 || c >= cols || r < 0 || r >= rows) return;
+    const i = r * cols + c;
+    if (ZB[i] < depth) return; // behind a building
+    set(i, ch, col); FOGS[i] = 0;
+    if (glow && ZB[i] === Infinity) { BG[i] = glow; FOGB[i] = 0; } // a glow on the sky behind it
+  };
+  for (const s of shells) {
+    const t = T - s.t0;
+    if (t < s.rise) { // climbing: a bright head, a trail of sparks behind it
+      const f = t / s.rise, z = s.h * (1 - (1 - f) ** 2);
+      put(s.x, s.y, z, '^', C(YEL, 15));
+      for (let k = 1; k < 5; k++) put(s.x + Math.sin(k * 3 + s.seed) * 0.05, s.y, Math.max(0, z - k * 0.5), '.', C(ORANGE, 12 - k * 2));
+      continue;
+    }
+    const bt = t - s.rise, life = s.kind === 'willow' ? 3.4 : 2.4;
+    if (bt > life) continue;
+    const fade = 1 - bt / life, ch = bt < 0.25 ? '@' : fade > 0.6 ? '*' : fade > 0.3 ? '+' : s.kind === 'willow' ? '|' : '.';
+    if (bt < 0.15) put(s.x, s.y, s.h, '#', C(WHITE, 15), C(s.col, 4)); // the burst's flash
+    for (let k = 0; k < s.n; k++) {
+      if (s.kind === 'crackle' && bt > 1.2 && hash(k, Math.floor(T * 12), s.seed) > 0.5) continue; // crackling: twinkling on and off
+      const [x, y, z] = starAt(s, k, bt);
+      put(x, y, z, ch, C(k & 1 && s.col2 !== s.col ? s.col2 : s.col, 5 + fade * 10), bt < 0.5 && k % 12 === 0 ? C(s.col, 1 + fade * 3) : 0);
+    }
+  }
+}
+// the boom: as far off as it is, it arrives that much later (sound does 34 cells a second)
+function fwBoom(s) {
+  if (!actx) return;
+  const dist = Math.hypot(rel(s.x - px), rel(s.y - py), s.h), at = actx.currentTime + dist / 34, loud = clamp(1.6 - dist / 120, 0.15, 1);
+  burst(at, 1.4, [filt('lowpass', 180 + Math.random() * 60, 0.7)], 0.5 * loud);
+  if (s.kind === 'crackle') for (let k = 0; k < 14; k++) burst(at + 1.2 + k * 0.07 + Math.random() * 0.05, 0.05, [filt('highpass', 2500, 1)], 0.08 * loud);
 }
 // ===== the laundromat: open all night. Put a load in one of the machines along the back wall, wait (the bench is
 // there for it), and come back for clean clothes. Change into them while the police are after someone in what you
@@ -6651,7 +6751,7 @@ function audioTick(dt) {
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0,
-    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0 });
+    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm' });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
@@ -7261,7 +7361,7 @@ function panelKey(e) {
 // ---- using things: the sounds that go with them
 const HEADLINES = () => [`${pick(stations).name} station closed for repairs`, 'Mayor vows to fix the el (again)', 'Bridge tolls to rise',
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
-  'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters'];
+  'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
   const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
     water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
@@ -7697,7 +7797,7 @@ function drawBoard3D() {
 const SAVE_KEY = 'ascii-city-save';
 function saveGame() {
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
-  const data = { v: 1, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
+  const data = { v: 1, day: dayNum, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })) };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
@@ -7706,7 +7806,7 @@ function loadGame() {
   try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return; }
   if (!d || d.v !== 1) return;
   const items = (list, into) => { into.length = 0; for (const it of list || []) if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses }); };
-  money = d.money ?? money; tickets = d.tickets || 0;
+  money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   items(d.inv, inv); items(d.stored, stored); items(d.closet, closet);
   held = clamp(d.held ?? -1, -1, inv.length - 1);
   owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
@@ -7754,8 +7854,8 @@ onkeydown = e => {
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
-  const n = /^Digit([1-5])$/.exec(e.code);
-  if (n && mode === 'taxi' && !me.dest) setDest(+n[1]);
+  const n = /^Digit([1-6])$/.exec(e.code);
+  if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
 };
 onkeyup = e => K[e.code] = 0;
@@ -7847,6 +7947,7 @@ function loop(t) {
   stepTraffic(dt, T);
   stepTask(dt);
   stepLaundry();
+  stepEvents(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
@@ -7983,7 +8084,7 @@ function touchActions() {
   }
   const out = [], p = promptText(), e = eLabel(p);
   if (mode === 'taxi') {
-    if (!me.dest) TAXI_STOPS.forEach((s, k) => out.push([s, 'Digit' + (k + 1), 'pop']));
+    if (!me.dest) { TAXI_STOPS.forEach((s, k) => out.push([s, 'Digit' + (k + 1), 'pop'])); if (owned.homes.length) out.push(['Home', 'Digit6', 'pop']); }
     else if (!me.rush) out.push([`Tip ${fmt$(TIP)}`, 'KeyG', 'pop']);
     out.push(['Camera', 'KeyV', 'pop'], ['Get out', 'KeyE', 'main']);
     return out;

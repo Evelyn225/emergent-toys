@@ -36,8 +36,8 @@ onkeydown = e => {
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
-  const n = /^Digit([1-5])$/.exec(e.code);
-  if (n && mode === 'taxi' && !me.dest) setDest(+n[1]);
+  const n = /^Digit([1-6])$/.exec(e.code);
+  if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
 };
 onkeyup = e => K[e.code] = 0;
@@ -129,6 +129,7 @@ function loop(t) {
   stepTraffic(dt, T);
   stepTask(dt);
   stepLaundry();
+  stepEvents(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();

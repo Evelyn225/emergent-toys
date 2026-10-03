@@ -458,3 +458,37 @@ test('the cell block: you stay in your cell, the bars are see-through and there 
   await page.waitForTimeout(500);
   assert.notStrictEqual(await page.evaluate(() => room.props.find(s => s.tick && s.y === 7.5).x), g0, 'the guard is walking');
 }));
+
+test('your home: things put in the closet are still there after a reload; a taxi takes you to your nearest home', () => withPage(async page => {
+  await page.evaluate(() => { money = 5000; buy('home_studio'); inv.push({ id: 'book', uses: 0 }, { id: 'umbrella', uses: 0 });
+    enterRoom('home', { word: 'HOME', ret: [px, py, a], cell: [0, 0] }, [ROOM_DEFS.home.grid[0].length / 2, 3, -Math.PI / 2]); [px, py] = room.def.spots.closet; py += 0.6; });
+  assert.match(await page.evaluate(() => promptText()), /your closet/);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the closet opens');
+  await page.keyboard.press('Digit1');
+  assert.deepStrictEqual(await page.evaluate(() => [closet.map(it => it.id), inv.map(it => it.id)]), [['book'], ['umbrella']]);
+  await page.keyboard.press('KeyE');
+  await page.evaluate(() => saveGame());
+  await page.reload(); await page.waitForTimeout(300);
+  assert.deepStrictEqual(await page.evaluate(() => closet.map(it => it.id)), ['book'], 'kept');
+  const d = await page.evaluate(() => {
+    leaveRoom && room && leaveRoom(); mode = 'walk';
+    me = cars.find(c => c.kind === 'taxi'); me.rider = true; me.fare = 0; mode = 'taxi'; return 0; });
+  await page.keyboard.press('Digit6');
+  const r = await page.evaluate(() => { const h = owned.homes[0], x = h.cell % N, y = Math.floor(h.cell / N);
+    return [me.destName.startsWith('home'), ROAD[idx(Math.floor(me.dest[0]), Math.floor(me.dest[1]))] > 0, Math.hypot(rel(me.dest[0] - x), rel(me.dest[1] - y)) < 7]; });
+  assert.deepStrictEqual(r, [true, true, true], 'to the street outside home');
+}));
+
+test('the calendar: midnight turns the day over; Saturday night there are fireworks over the bay, and not on a Tuesday', () => withPage(async page => {
+  await page.evaluate(() => { dayNum = 4; tod = 23.99; });
+  await page.waitForTimeout(400);
+  assert.strictEqual(await page.evaluate(() => weekday()), 'Sat', 'Friday became Saturday at midnight');
+  await page.evaluate(() => { tod = 21.2; weather = 'clear'; px = FAIR.cx; py = SHORE_S * 8 + 2.4; a = Math.PI / 2; pitch = 0.45; });
+  await page.waitForTimeout(4000);
+  assert.ok(await page.evaluate(() => shells.length) > 0, 'shells in the air');
+  assert.match(await page.evaluate(() => CH.join('')), /[*@+]/, 'and on screen');
+  await page.evaluate(() => { dayNum = 1; shells.length = 0; });
+  await page.waitForTimeout(2000);
+  assert.strictEqual(await page.evaluate(() => shells.length), 0, 'nothing on a Tuesday');
+}));

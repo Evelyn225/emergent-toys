@@ -34,6 +34,15 @@ function leaveCar() {
   me = null; mode = 'walk';
 }
 // taxi destinations: always a point in the middle of a street that exists
+const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
+function homeKerb(x, y) { // the middle of the street nearest a building's cell (x, y): one of its block's four sides
+  const bx = x >> 3, by = y >> 3, opts = [];
+  if (vseg(bx & (NB - 1), by & (NB - 1))) opts.push([bx * 8 + 1, y + 0.5]);
+  if (vseg((bx + 1) & (NB - 1), by & (NB - 1))) opts.push([(bx + 1) * 8 + 1, y + 0.5]);
+  if (hseg(bx & (NB - 1), by & (NB - 1))) opts.push([x + 0.5, by * 8 + 1]);
+  if (hseg(bx & (NB - 1), (by + 1) & (NB - 1))) opts.push([x + 0.5, (by + 1) * 8 + 1]);
+  return opts.reduce((b, p) => Math.hypot(p[0] - x, p[1] - y) < Math.hypot(b[0] - x, b[1] - y) ? p : b).map(v => mod(v, N));
+}
 function setDest(n) {
   const c = me, far = p => Math.hypot(rel(p[0] - c.x), rel(p[1] - c.y));
   const nearest = pts => pts.reduce((b, p) => far(p) < far(b) ? p : b);
@@ -43,6 +52,9 @@ function setDest(n) {
   else if (n === 4) { // the shore road, south or north, level with you
     const bx = Math.floor(c.x / 8);
     c.dest = nearest([[bx * 8 + 5, SHORE_S * 8 + 1], [bx * 8 + 5, (SHORE_N + 1) * 8 + 1]]); c.destName = 'the waterfront';
+  } else if (n === 6 && owned.homes.length) { // home: the street in front of whichever of your places is nearest
+    const h = owned.homes.reduce((b, h) => homeDist(h, c) < homeDist(b, c) ? h : b), x = h.cell % N, y = Math.floor(h.cell / N);
+    c.dest = homeKerb(x, y); c.destName = `home (${SHOP[h.cell].word})`;
   } else if (n === 5) { // the street in front of the nearest station entrance
     const s = stations.reduce((b, s) => far([s.x, s.y]) < far([b.x, b.y]) ? s : b);
     c.dest = [s.x, s.y - mod(s.y, 8) + 1]; c.destName = `${s.name} station`;
@@ -224,6 +236,7 @@ function stepSleep(dt) {
   fade = sleep.t < 1.5 ? sleep.t / 1.5 : sleep.t < 3 ? 1 : clamp(1 - (sleep.t - 3) / 2, 0, 1);
   if (sleep.t >= 1.5 && !sleep.done) {
     sleep.done = true;
+    if (tod > 7) dayNum++; // slept through midnight
     tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
     if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby }, [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
