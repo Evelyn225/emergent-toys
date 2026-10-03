@@ -33,6 +33,10 @@ const ITEMS = {
   boombox: { name: 'boombox', price: 45, kind: 'gear' }, umbrella: { name: 'umbrella', price: 12, kind: 'gear' },
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
   vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
+  // property (property.js): not carried, owned
+  car_hatch: { name: 'old hatchback', price: 450, kind: 'car' }, car_sedan: { name: 'sedan', price: 1500, kind: 'car' },
+  car_sports: { name: 'sports car', price: 4000, kind: 'car' },
+  home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 8000, kind: 'home' },
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
@@ -64,6 +68,7 @@ const STOCK_WORD = {
   BURGERS: ['burger', 'fries', 'milkshake', 'soda'], CHICKEN: ['chicken', 'fries', 'soda'], JUICE: ['smoothie', 'water', 'apple'],
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
+  CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft'],
   'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
@@ -87,6 +92,7 @@ let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
 const heldItem = () => inv[held] || null;
 function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
+  if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }
   if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   inv.push({ id, uses: it.uses || 0 }); held = inv.length - 1;
@@ -95,18 +101,18 @@ function buy(id) { // false + why, if you can't
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
 // your storage unit: one unit, the same at every STORAGE place in town
-const STORE_SIZE = 30, stored = [];
+const STORE_SIZE = 30, stored = [], closet = []; // (closet: the stash at home, same rules)
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
   held = k; removeHeld();
   held = was < 0 ? -1 : clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1)); // (empty hands stay empty)
   return it;
 }
-function storeSlot(k) { // carried slot k -> the unit
+function storeSlot(k, list = stored, where = 'your unit') { // carried slot k -> the unit (or the closet)
   if (!inv[k]) return [false, 'Nothing there.'];
-  if (stored.length >= STORE_SIZE) return [false, 'Your unit is full.'];
-  const it = takeSlot(k); stored.push(it);
-  return [true, `You put the ${ITEMS[it.id].name} in your unit.`];
+  if (list.length >= STORE_SIZE) return [false, `${cap(where)} is full.`];
+  const it = takeSlot(k); list.push(it);
+  return [true, `You put the ${ITEMS[it.id].name} in ${where}.`];
 }
 // pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
 const SELL_RATE = { PAWN: 0.4 };
@@ -118,11 +124,11 @@ function sellSlot(k, rate) {
   takeSlot(k); earn(p);
   return [true, `You sell the ${name} for ${fmt$(p)}.`];
 }
-function retrieveSlot(k) { // the unit's item k -> your hands
-  if (!stored[k]) return [false, 'Nothing there.'];
+function retrieveSlot(k, list = stored, where = 'your unit') { // the unit's item k -> your hands
+  if (!list[k]) return [false, 'Nothing there.'];
   if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
-  const it = stored.splice(k, 1)[0]; inv.push(it);
-  return [true, `You take the ${ITEMS[it.id].name} out of your unit.`];
+  const it = list.splice(k, 1)[0]; inv.push(it);
+  return [true, `You take the ${ITEMS[it.id].name} out of ${where}.`];
 }
 function removeHeld() {
   const it = inv[held];

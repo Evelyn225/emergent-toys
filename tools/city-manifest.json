@@ -12,7 +12,8 @@
     "city/audio-mix.js",
     "city/goods.js",
     "city/minigames.js",
-    "city/crime.js"
+    "city/crime.js",
+    "city/property.js"
   ],
   "dom": [
     "city/screen.js",
@@ -30,6 +31,7 @@
     "city/minigame-ui.js",
     "city/crime-ui.js",
     "city/moves.js",
+    "city/save.js",
     "city/main.js",
     "city/touch.js"
   ]

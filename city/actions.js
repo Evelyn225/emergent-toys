@@ -12,15 +12,6 @@ function tipDriver() {
   me.rush = true;
   say(pick(['"Hold on to something."', '"You got it, boss." The meter ticks faster than ever.', '"Lights? What lights?"']), 3);
 }
-// a car you get out of stays where it is: pulled in to the kerb if it's on a street, nobody drives it away
-function parkCar(c) {
-  const r = ROAD[idx(Math.floor(c.x), Math.floor(c.y))];
-  if (r === 1 || r === 2) { // square it up to the street and into the kerb lane on the side it's nearer
-    const vert = r === 1, base = Math.floor((vert ? c.x : c.y) / 8) * 8 + 1, side = Math.sign((vert ? c.x : c.y) - base) || 1;
-    if (vert) { c.x = base + side * 0.72; c.hx = 0; c.hy = c.hy >= 0 ? 1 : -1; } else { c.y = base + side * 0.72; c.hy = 0; c.hx = c.hx >= 0 ? 1 : -1; }
-  }
-  c.off = 0; c.ex = c.x; c.ey = c.y; c.parked = true;
-}
 // the driver of a car you've just taken: out onto the sidewalk beside it, shouting (someone from far off stands in)
 function ejectDriver(c) {
   const p = people.find(q => !q.follow && !q.hailing && Math.hypot(rel(q.x - px), rel(q.y - py)) > 40);
@@ -104,6 +95,12 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
+    if (room.kind === 'home' || room.kind === 'loft') { // your place: sleep whenever you like, your closet, the telly
+      const hs = homeSpot();
+      if (hs === 'bed') { sleep = { t: 0, home: true }; return say('You crawl into your own bed.', 3); }
+      if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', 'Kept at home, whichever home you go to');
+      if (hs === 'tv') { room.tv = !room.tv; return say(room.tv ? 'The telly flickers on.' : 'You switch the telly off.', 2); }
+    }
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
       enterRoom('lamproom', { word: 'LAMP ROOM', below: { word: room.word, ret: room.ret, line: room.line } }, [1.6, 4.4, -Math.PI / 4]);
       return say('Round and round and up and up. The lamp room.', 3);
@@ -136,7 +133,7 @@ function interact() {
       if (cab) return cab.busy ? say('Somebody\'s on this one.') : playCabinet(cab);
       if (nearKeeper()) return openPrizes();
     }
-    if (room.kind === 'storage' && nearKeeper()) return openStorage();
+    if (room.kind === 'storage' && nearKeeper()) return openStorage(stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town');
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
     if (room.kind === 'hospital' && nearKeeper()) return say(`"${pick(NURSE_LINES)}"`, 3); // (healing would go here)
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
@@ -162,7 +159,8 @@ function interact() {
     }
     else { // a stolen car: if anyone saw, the police hear about it
       mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx);
-      if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
+      if (c.owned) { c.parked = false; say(`You get into your ${ITEMS[c.model].name}.`, 2); } // yours, bought and paid for
+      else if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
       else {
         c.mine = true; ejectDriver(c);
         const w = crime('steal', c.x, c.y);
@@ -191,6 +189,8 @@ function interact() {
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say('Closed.');
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
+    const home = homeAt(sh);
+    if (home) return enterRoom(home.kind === 'home_loft' ? 'loft' : 'home', { word: 'HOME', ret: [px, py, a], cell: [lookHit.mx, lookHit.my] }, [ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid[0].length / 2, ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid.length - 1.6, -Math.PI / 2]), say('Home.', 1.5);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
     const r = { ...sh, cell: [lookHit.mx, lookHit.my], ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
     enterRoom(kind, r, [0, 0, -Math.PI / 2]);
@@ -215,7 +215,7 @@ function stepSleep(dt) {
     sleep.done = true;
     tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
-    enterRoom('hotelroom', { lobby: sleep.lobby }, [3.4, 3.2, -Math.PI / 2]);
+    if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby }, [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
   }
   if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say('7:00. You slept well, and the sky has cleared.', 4); }
   if (sleep.t > 5) { sleep = null; fade = 0; }

@@ -278,3 +278,31 @@ test('on your feet: Space jumps, a trick on the board lands with its name, C sit
   await page.keyboard.down('KeyS'); await page.waitForTimeout(100); await page.keyboard.up('KeyS');
   assert.strictEqual(await page.evaluate(() => body.seat), null, 'up again');
 }));
+
+test('buy a car and a home: both are still yours after a reload, and the building door takes you home to your own bed', () => withPage(async page => {
+  await page.evaluate(() => { money = 5000; buy('car_sedan'); buy('home_studio'); saveGame(); });
+  await page.reload(); await page.waitForTimeout(300);
+  assert.deepStrictEqual(await page.evaluate(() => [owned.cars.length, owned.homes.length, money]), [1, 1, 1000]);
+  // stand on the sidewalk in front of the building, facing it, and press E
+  const ok = await page.evaluate(() => {
+    const sh = SHOP[owned.homes[0].cell];
+    for (let i = 0; i < N * N; i++) {
+      if (SHOP[i] !== sh || !map[i]) continue;
+      const x = i % N, y = Math.floor(i / N);
+      for (const [ox, oy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) if (!map[idx(x + ox, y + oy)]) {
+        px = x + 0.5 + ox * 0.75; py = y + 0.5 + oy * 0.75; a = Math.atan2(-oy, -ox); mode = 'walk';
+        for (const p of people) { p.x = mod(px + 60, N); p.path = []; } return true; // (nobody to talk to instead)
+      }
+    }
+    return false;
+  });
+  assert.ok(ok, 'found the door');
+  await page.waitForTimeout(100);
+  const pr = await page.evaluate(() => promptText() + ' | ' + (lookHit && lookHit.d) + ' | ' + msgText);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => room && room.kind), 'home', pr);
+  await page.evaluate(() => { [px, py] = room.def.spots.bed; py += 1; });
+  await page.keyboard.press('KeyE');
+  await page.waitForTimeout(2000);
+  assert.deepStrictEqual(await page.evaluate(() => [room.kind, Math.floor(tod)]), ['home', 7], 'woke at home at 7');
+}));
