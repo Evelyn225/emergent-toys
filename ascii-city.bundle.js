@@ -3762,6 +3762,38 @@ function towerCell(i, u, z, du, dz, L, hw) {
   return false;
 }
 
+// one el car as a real box running east-west: steel sides with a red stripe, a band of windows (lit warm after dark),
+// a pair of doors each side, a driver's cab with headlights at the leading and trailing ends (cab: +1 / -1 = which
+// end, 0 = none), an air-conditioning hump on the roof and a dark underframe
+const EL_HL = EL_CAR_LEN / 2 - 0.03, EL_HW = 0.14, EL_H = 0.32;
+function drawElCar(vx, vy, cab) {
+  const z0 = EL_TOP + 0.02, lit = Math.max(night, overcast * 0.6);
+  drawBox(boxAt(vx, vy, 1, 0, EL_HL, EL_HW, z0, z0 + EL_H), (i, t, L) => {
+    const f = HIT.face, u = HIT.u, w = HIT.w - z0, k = shadeFace(f);
+    BG[i] = C(GRAY, (2 + L * 0.5) * k);
+    if (f === 6) return set(i, ' ', 0), true;
+    if (w < 0.04) { BG[i] = C(GRAY, 1); return set(i, '=', C(GRAY, L * 0.4)), true; } // the underframe
+    if (f === 5) return set(i, Math.abs(u) < 0.25 ? '#' : fract(u * 6) < 0.1 ? '|' : ' ', C(GRAY, L * 0.8)), true; // roof, ribs, the AC unit
+    if (f === 1 || f === 2) { // the ends: a cab with windscreen and lamps, or the gangway to the next car
+      const end = (f === 1 ? 1 : -1) === cab, v = Math.abs(HIT.v);
+      if (end && w > 0.17 && w < 0.27 && v < EL_HW * 0.85) { BG[i] = C(CYAN, 1 + L * 0.15); return set(i, ' ', 0), true; }
+      if (end && w > 0.07 && w < 0.11 && v > EL_HW * 0.55) return set(i, 'O', C(f === 1 ? WHITE : RED, 15)), true;
+      if (!end && v < 0.06 && w < 0.27) { BG[i] = C(GRAY, 1); return set(i, '|', C(GRAY, L * 0.5)), true; }
+      return set(i, w > 0.12 && w < 0.14 ? '=' : ' ', C(RED, L)), true;
+    }
+    // the sides
+    const door = [-0.45, 0.45].some(d => Math.abs(u - d * EL_HL) < 0.09);
+    if (door && w > 0.05 && w < 0.29) { BG[i] = C(GRAY, (3 + L * 0.5) * k); return set(i, Math.abs(fract((u + 1) * 11) - 0.5) < 0.1 ? '|' : w > 0.18 && w < 0.26 ? '#' : ' ', w > 0.18 ? C(WARM, Math.max(L * 0.5, lit * 13)) : C(GRAY, L * 0.6)), true; }
+    if (w > 0.12 && w < 0.14) return set(i, '=', C(RED, Math.max(L, 6))), true; // the stripe
+    if (w > 0.17 && w < 0.27 && Math.abs(u) < EL_HL - 0.06) { // the windows
+      const pane = fract(u * 4) < 0.12;
+      if (pane) return set(i, '|', C(GRAY, L)), true;
+      BG[i] = lit > 0.3 ? C(WARM, 3 + lit * 6) : C(CYAN, 1 + L * 0.15);
+      return set(i, lit > 0.3 && hash(Math.floor(u * 4 + vx), 1, 9) > 0.6 ? 'o' : ' ', C(SKIN, 8)), true; // the odd passenger
+    }
+    return set(i, ' ', 0), true;
+  });
+}
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
 function elSprites() {
   forNear(elPillarsB, p => drawArt(...R(p.x, p.y), 0, 0.09, EL_BOT, PILLAR, (c, row, L) => C(GRAY, L * 0.9)));
@@ -3771,10 +3803,8 @@ function elSprites() {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
       const [vx, vy] = R(t.x - t.dir * (j - 1) * EL_CAR_LEN, EL_TRACK[t.tr]);
-      if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-      const s = Math.abs(across(1, 0, vx, vy)), side = s > 0.3;
-      drawArt(vx, vy, EL_TOP, side ? EL_CAR_LEN * s + 0.18 : 0.2, 0.3, side ? ART.elSide : ART.elEnd, (c, row, L) =>
-        c === '#' ? C(WARM, Math.max(L * 0.8, night * 14)) : c === 'o' ? C(WHITE, 14) : row === 2 ? C(RED, L) : C(GRAY, L * 1.1));
+      if (Math.abs(vx) > vis + 2 || Math.abs(vy) > vis + 2) continue;
+      drawElCar(vx, vy, j === 0 ? t.dir : j === EL_CARS - 1 ? -t.dir : 0);
     }
   }
 }
