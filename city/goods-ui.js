@@ -187,7 +187,9 @@ function charLine(x0, y0, x1, y1, w, size, col) {
   g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)'; g.fillStyle = col;
   for (let k = 0; k <= n; k++) { const x = x0 + (x1 - x0) * k / n - w / 2, y = y0 + (y1 - y0) * k / n - size / 2; g.strokeText(ch, x, y); g.fillText(ch, x, y); }
 }
+let handDrawn = null; // what the hand held in the last frame drawn ({ id, t }), or null: for the tests
 function drawHeldBig() {
+  handDrawn = null;
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
@@ -209,7 +211,7 @@ function drawHeldBig() {
     }
     if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
   }
-  drawHand(cx, hy, hsz);
+  drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
   if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(cx, grip, isz);
   g.font = FS + 'px monospace';
 }
