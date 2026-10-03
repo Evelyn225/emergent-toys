@@ -8361,8 +8361,8 @@ function drawHeldBig() {
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
   const cx = Math.round(cv.width * 0.84), hy = Math.round(cv.height - 5.6 * hsz + bob); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
-  if (drawHeldDense(it, cx, bob)) { handDrawn = { id: it.id, t: T }; return; } // (the dense-art trial)
-  if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
+  if (drawHeldDense(it, cx, hy, hsz, grip)); // (the dense-art trial: the item drawn finer, the same hand)
+  else if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
   else {
     const [art, col] = heldArt(it);
     g.font = isz + 'px monospace';
@@ -8637,7 +8637,7 @@ function drawBall() {
   const [vx, vy] = R(ball.x, ball.y);
   drawArt(vx, vy, ball.z, 0.035, 0.035, ['O'], (c, row, L) => C(WHITE, Math.max(L, 6)));
 }
-// ===== held items, the dense way (a trial: ?items=dense). Drawn at a little over the world's own character size
+// ===== held items, the dense way (a trial: ?items=dense; the hand stays as it is). Drawn at a little over the world's own character size
 // with twice the detail: each picture is sculpted cell by cell from a shape, shaded through a ramp of characters
 // with a light from the top left, like an ASCII-art image, instead of being outlined in big letters.
 const DENSE_ON = typeof location !== 'undefined' && /[?&]items=dense\b/.test(location.search);
@@ -8722,35 +8722,14 @@ const DENSE = {
     return [n > 0.72 ? 'o' : dFill(b), C(n > 0.72 ? ORANGE : YEL, 7 + b * 8)];
   }),
 };
-// the fist, drawn the same size: four fingers curled round from the left, each a band lit along its top and creased
-// along its bottom, the thumb over the top, the arm running off to the right edge. '~' cells repeat to reach it
-const DENSE_HAND = [
-  '    ______________________',
-  "  .'%%%%%%%%%%%%%%%%%%%%%%'.      .~",
-  ' (%%%%%%%%%%%%%%%%%%%%%%%%%%)  .-\'%~',
-  ' (############################).-\'%%%%~',
-  '(%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%~',
-  '(______________________________)####~',
-  '(%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%)####~',
-  '(______________________________)-.##~',
-  ' (%%%%%%%%%%%%%%%%%%%%%%%%%%%%)   \'-~',
-  "  '--------------------------'     ~"];
-const DENSE_GRIP = 14;
-function denseHand(reach) {
-  const lines = DENSE_HAND.map(l => l.endsWith('~') ? l.slice(0, -1).padEnd(reach, l[l.length - 2] === ' ' ? ' ' : l[l.length - 2]) : l);
-  return [lines, (ch, r, k) => ch === '%' ? C(SKIN, 15 - r * 0.6 - Math.max(0, 6 - k) * 0.3) : ch === '#' ? C(SKIN, 10 - r * 0.4) : C(SKIN, 9), DENSE_GRIP];
-}
-// in place of the item and the fist, when trying it out (null: not one of the examples)
-function drawHeldDense(it, cx, bob) {
+// in place of the big-lettered item (false: not one of the examples). The hand is drawn as usual afterwards
+function drawHeldDense(it, cx, hy, hsz, grip) {
   if (!DENSE_ON || !DENSE[it.id]) return false;
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72); // a little over the world's character size
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, hTop = Math.round(cv.height - 9.6 * s + bob), grip = hTop + 1.6 * s;
-  const reach = Math.ceil((cv.width - cx) / w) + 12, [hl, hc, gk] = denseHand(reach), x0 = cx - (gk + 0.5) * w;
-  const [art, col] = DENSE[it.id](it, usesLeft(it)), artW = Math.max(...art.map(l => l.length)), top = grip + 0.6 * s - art.length * s;
-  g.save(); g.beginPath(); g.rect(0, 0, cv.width, hTop + 1.6 * s); g.clip(); // the fingers hide its bottom
+  const w = g.measureText('M').width, [art, col] = DENSE[it.id](it, usesLeft(it)), artW = Math.max(...art.map(l => l.length)), top = grip + 0.6 * s - art.length * s;
+  g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
   artText(art, cx - artW * w / 2, top, s, col); g.restore();
-  artText(hl, x0, hTop, s, hc);
   g.font = FS + 'px monospace';
   return true;
 }
