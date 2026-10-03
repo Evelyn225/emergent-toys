@@ -200,6 +200,7 @@ function drawHeldBig() {
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
   const cx = Math.round(cv.width * 0.84), hy = Math.round(cv.height - 5.6 * hsz + bob); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
+  if (drawHeldDense(it, cx, bob)) { handDrawn = { id: it.id, t: T }; return; } // (the dense-art trial)
   if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
   else {
     const [art, col] = heldArt(it);
