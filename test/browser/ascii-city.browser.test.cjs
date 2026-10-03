@@ -257,3 +257,21 @@ test('on a phone: the stick walks, a drag looks round, the buttons work the menu
     assert.strictEqual(await page.evaluate(() => paused), false);
   } finally { await browser.close(); }
 });
+
+test('on your feet: Space jumps, a trick on the board lands with its name, C sits you on a cinema seat and walking gets you up', () => withPage(async page => {
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(150);
+  assert.ok(await page.evaluate(() => body.z) > 0, 'up in the air');
+  await page.waitForTimeout(800);
+  assert.strictEqual(await page.evaluate(() => body.z), 0, 'and down again');
+  await page.evaluate(() => { fx.skating = true; });
+  await page.keyboard.down('KeyA'); await page.keyboard.press('Space'); await page.keyboard.up('KeyA');
+  assert.strictEqual(await page.evaluate(() => body.trick && body.trick.name), 'kickflip');
+  await page.waitForTimeout(900);
+  assert.strictEqual(await page.evaluate(() => msgText), 'KICKFLIP!');
+  await page.evaluate(() => { fx.skating = false; enterRoom('cinema', { word: 'CINEMA', ret: [px, py, a] }, [7, 10.5, -Math.PI / 2]); px = 4.2; py = 9.0; });
+  await page.keyboard.press('KeyC');
+  assert.ok(await page.evaluate(() => !!body.seat && Math.abs(py - 9.5) < 0.01), 'in the seat');
+  await page.keyboard.down('KeyS'); await page.waitForTimeout(100); await page.keyboard.up('KeyS');
+  assert.strictEqual(await page.evaluate(() => body.seat), null, 'up again');
+}));

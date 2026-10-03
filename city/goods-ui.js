@@ -116,7 +116,8 @@ const HAND = {
     (c, r) => r < 2 ? C(ITEM_COL[(c.charCodeAt(0) + r * 3) & 7], 15) : r > 3 ? C(BRICK, 12) : C(GREEN, 13)],
   ball: () => [['   ____', '  / \\/ \\', ' |  /\\  |', ' | /  \\ |', '  \\_\\/_/'], (c, r) => c === '/' || c === '\\' ? C(GRAY, 9) : C(WHITE, 15)],
   boombox: () => [['  _[======]_', ' |  [    ]  |', ' |(O) == (O)|', ' |(_) == (_)|', ' |__________|'], (c, r) => c === 'O' ? C(GRAY, 14) : c === '=' ? C(CYAN, 14) : C(GRAY, 12)],
-  skateboard: () => [['  ___', ' (o o)', ' |   |', ' |   |', ' |   |', ' |   |', ' (o o)'], (c, r) => c === 'o' ? C(WHITE, 14) : C(RED, 13)],
+  skateboard: () => [['   .---.', '  /     \\', ' O=======O', ' |#######|', ' |%%%%%%%|', ' |#######|', ' |%%%%%%%|', ' O=======O', '  \\     /', "   '---'"],
+    (c, r) => c === 'O' ? C(WHITE, 15) : c === '=' ? C(GRAY, 12) : c === '#' ? C(RED, 13) : c === '%' ? C(YEL, 14) : C(BRICK, 12)],
   yoyo: () => [[' .-.', '(-@-)', " '-'", '  |', '  |'], (c, r) => r > 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
@@ -128,10 +129,9 @@ const heldArt = it => (HAND[it.id] || HAND.book)(it, usesLeft(it));
 let smokePuffs = []; // [x, y, life, drift] in screen px
 const putCell = (r, c, ch, col) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ') return; const i = r * cols + c; set(i, ch, col); FOGS[i] = FOGB[i] = 0; };
 function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r)))); }
-const BOARD_UNDER = [['  _____________', ' (_____________)', '   o         o'], (c, r) => r < 2 ? C(RED, 12) : C(WHITE, 13)];
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
-  if (fx.skating && mode === 'walk') putArt(BOARD_UNDER[0], rows - 3, (cols >> 1) - 8, BOARD_UNDER[1]); // the board under your feet
+  if (fx.skating && mode === 'walk') drawBoard3D(); // the board under your feet
 }
 
 // ---- drawn big over the finished frame, in characters with a dark outline instead of a background

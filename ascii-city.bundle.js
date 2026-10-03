@@ -62,6 +62,7 @@ let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
 let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
 const K = {}; // keys held, by KeyboardEvent.code
+const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
 let paused = false;
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
@@ -3821,7 +3822,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [];
       for (const y of [5, 6.5, 8, 9.5]) for (const cx of [4.2, 9.8]) { // two blocks of seats, an aisle up the middle from the door
-        p.push(BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
+        p.push({ ...BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), seatRow: { x0: cx - 1.5, x1: cx + 1.5, y, fx: 0, fy: -1 } }, BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
         if (chance(0.7)) p.push(sitting(cx - 1.4 + Math.random() * 2.8, y + 0.05, shirt(), 0.35, true));
       }
       return p;
@@ -4404,6 +4405,7 @@ function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17
       : mode === 'walk' ? 0.17 : chaseOn ? 0.28 : 0.12;
+  eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows + shake() | 0;
   dx = Math.cos(a); dy = Math.sin(a);
@@ -4689,7 +4691,7 @@ function hud() {
   const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const lines = [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`,
-                 settings.help ? TOUCH ? 'stick: move | drag: look | E use | Q item | I bag | M map | hold T: time' : 'WASD move | mouse or arrows look | R/F up/down | shift run | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
+                 settings.help ? TOUCH ? 'stick: move | drag: look | E use | Q item | I bag | M map | hold T: time' : 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause'];
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, g.measureText(lines[1]).width + 8, FS * 2 + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
   if (task) { // the favour you're doing, under the help line
@@ -5547,7 +5549,8 @@ const HAND = {
     (c, r) => r < 2 ? C(ITEM_COL[(c.charCodeAt(0) + r * 3) & 7], 15) : r > 3 ? C(BRICK, 12) : C(GREEN, 13)],
   ball: () => [['   ____', '  / \\/ \\', ' |  /\\  |', ' | /  \\ |', '  \\_\\/_/'], (c, r) => c === '/' || c === '\\' ? C(GRAY, 9) : C(WHITE, 15)],
   boombox: () => [['  _[======]_', ' |  [    ]  |', ' |(O) == (O)|', ' |(_) == (_)|', ' |__________|'], (c, r) => c === 'O' ? C(GRAY, 14) : c === '=' ? C(CYAN, 14) : C(GRAY, 12)],
-  skateboard: () => [['  ___', ' (o o)', ' |   |', ' |   |', ' |   |', ' |   |', ' (o o)'], (c, r) => c === 'o' ? C(WHITE, 14) : C(RED, 13)],
+  skateboard: () => [['   .---.', '  /     \\', ' O=======O', ' |#######|', ' |%%%%%%%|', ' |#######|', ' |%%%%%%%|', ' O=======O', '  \\     /', "   '---'"],
+    (c, r) => c === 'O' ? C(WHITE, 15) : c === '=' ? C(GRAY, 12) : c === '#' ? C(RED, 13) : c === '%' ? C(YEL, 14) : C(BRICK, 12)],
   yoyo: () => [[' .-.', '(-@-)', " '-'", '  |', '  |'], (c, r) => r > 2 ? C(WHITE, 10) : c === '@' ? C(WHITE, 15) : C(RED, 14)],
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
@@ -5559,10 +5562,9 @@ const heldArt = it => (HAND[it.id] || HAND.book)(it, usesLeft(it));
 let smokePuffs = []; // [x, y, life, drift] in screen px
 const putCell = (r, c, ch, col) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ') return; const i = r * cols + c; set(i, ch, col); FOGS[i] = FOGB[i] = 0; };
 function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r)))); }
-const BOARD_UNDER = [['  _____________', ' (_____________)', '   o         o'], (c, r) => r < 2 ? C(RED, 12) : C(WHITE, 13)];
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
-  if (fx.skating && mode === 'walk') putArt(BOARD_UNDER[0], rows - 3, (cols >> 1) - 8, BOARD_UNDER[1]); // the board under your feet
+  if (fx.skating && mode === 'walk') drawBoard3D(); // the board under your feet
 }
 
 // ---- drawn big over the finished frame, in characters with a dark outline instead of a background
@@ -6126,6 +6128,109 @@ function crimePrompt() {
   if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`;
   return '';
 }
+// ===== on your feet: Space jumps, C held crouches, C by a bench or a seat sits you down (C again, or walk, to get
+// up). On the skateboard Space pops an ollie, and what you're holding as you pop makes it a trick: A kickflip,
+// D heelflip, S pop shuvit, A+S 360 flip, D+S varial heelflip. The board under you is a little 3D model in front of
+// the camera (like a held weapon), so it really flips and spins.
+const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
+// [name, flips (+ kick, - heel), body turns of the board]
+const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5] };
+const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+const skatingNow = () => fx.skating && mode === 'walk';
+
+function jump() {
+  if (body.z > 0 || body.vz > 0) return;
+  if (body.seat) return standUp();
+  if (skatingNow()) {
+    const key = (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
+    body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
+  } else body.vz = JUMP_V;
+  if (actx) sfxUse(skatingNow() ? 'board' : 'kick');
+}
+// a seat within reach: a bench (indoors or out) or a cinema seat. {x, y, fx, fy}: where you sit and which way you face
+function nearSeat() {
+  if (mode === 'room') {
+    let best = null, bd = 1.1;
+    for (const s of room.props) {
+      const r = s.seatRow, sx = r ? clamp(px, r.x0, r.x1) : s.x, sy = r ? r.y : s.y;
+      if (!s.bench && !r) continue;
+      const d = Math.hypot(sx - px, sy - py);
+      if (d < bd) { bd = d; best = { x: sx, y: sy, fx: r ? r.fx : s.fx, fy: r ? r.fy : s.fy }; }
+    }
+    return best;
+  }
+  if (mode !== 'walk' || fx.skating) return null;
+  let best = null, bd = 0.15;
+  for (const b of benchesB[bi(Math.floor(px / 8), Math.floor(py / 8))]) { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); if (d < bd) { bd = d; best = b; } }
+  return best;
+}
+function sitDown() {
+  const s = nearSeat();
+  if (!s) return false;
+  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = 0;
+  say('You sit down.', 1.5);
+  return true;
+}
+function standUp() { // back where you sat down from (it was walkable)
+  [px, py] = body.seat.from; body.seat = null;
+}
+// every frame: gravity, the crouch easing in and out, a trick's progress, landing
+function stepBody(dt) {
+  if (!onFootMode() || sleep) { body.z = body.vz = 0; body.trick = null; body.seat = null; return; }
+  body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
+  if (body.z > 0 || body.vz > 0) {
+    body.vz -= GRAV * dt; body.z += body.vz * dt;
+    if (body.trick) body.trick.t += dt;
+    if (body.z <= 0) { // landed
+      body.z = body.vz = 0;
+      if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('board'); }
+    }
+  }
+}
+// how far your eyes are off standing height (metres): up in a jump, down crouching or sitting, up a little on the board
+const eyeLift = () => onFootMode() ? body.z + (skatingNow() ? BOARD_H : 0) - (body.seat ? SIT_H : body.crouch * CROUCH_H) : 0;
+const footSlow = () => body.crouch > 0.5 ? 0.45 : 1;
+
+// ---- the board under your feet, in camera space: x right, y down, z ahead (metres), drawn into the character grid
+// point by point with its own depth test. Grip tape on top, a coloured graphic underneath, trucks and wheels.
+const BOARD_L = 0.4, BOARD_W = 0.105, BOARD_T = 0.025;
+const boardZ = new Float32Array(1 << 14);
+function drawBoard3D() {
+  const tr = body.trick, p = tr ? clamp(tr.t / tr.air, 0, 1) : 0, e = p * p * (3 - 2 * p); // eased through the air
+  const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
+  const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
+  const cy = 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob, cz = 1.15; // the board lifts with you (and a bit more)
+  const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
+  const pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS, ox = cols / 2, oy = rows / 2;
+  const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
+  // a point on the board (u along, v across, h up) to the screen
+  const plot = (u, v, h, ch, col, bg) => {
+    let y1 = v * cr - h * sr, h1 = v * sr + h * cr; // the flip, round the long axis
+    let u1 = u * cw_ - y1 * sw, v1 = u * sw + y1 * cw_; // the shuvit, round the vertical
+    const u2 = u1 * cp - h1 * sp, h2 = u1 * sp + h1 * cp; // the pop
+    const X = v1, Y = cy - h2, Z = cz + u2;
+    if (Z < 0.2) return;
+    const c = Math.round(ox + X / Z * pX), r = Math.round(oy + Y / Z * pY);
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+    const i = r * cols + c;
+    if (Z >= boardZ[i]) return;
+    boardZ[i] = Z; set(i, ch, col); BG[i] = bg; FOGS[i] = FOGB[i] = 0;
+  };
+  const step = 0.012;
+  for (let u = -BOARD_L; u <= BOARD_L; u += step) for (let v = -BOARD_W; v <= BOARD_W; v += step / 2) {
+    const end = Math.abs(u) > BOARD_L - 0.06, w = end ? Math.sqrt(Math.max(0, 1 - ((Math.abs(u) - BOARD_L + 0.06) / 0.06) ** 2)) * BOARD_W : BOARD_W; // rounded nose and tail
+    if (Math.abs(v) > w) continue;
+    const edge = Math.abs(v) > w - 0.012;
+    plot(u, v, BOARD_T / 2, edge ? '=' : ':', edge ? C(BRICK, 13) : C(GRAY, 7), edge ? C(BRICK, 4) : C(GRAY, 0)); // grip tape
+    const stripe = Math.floor((u + BOARD_L) * 6) & 1;
+    plot(u, v, -BOARD_T / 2, edge ? '=' : '#', edge ? C(BRICK, 13) : C(stripe ? RED : YEL, 14), C(stripe ? RED : YEL, 5)); // the graphic underneath
+  }
+  for (const tu of [-0.27, 0.27]) { // trucks and wheels
+    for (let v = -0.09; v <= 0.09; v += 0.01) plot(tu, v, -BOARD_T / 2 - 0.03, '-', C(GRAY, 12), C(GRAY, 3));
+    for (const wv of [-0.1, 0.1]) for (let dh = 0; dh < 0.05; dh += 0.01) plot(tu, wv, -BOARD_T / 2 - 0.035 - dh, 'O', C(WHITE, 15), C(GRAY, 4));
+  }
+}
 // closing a menu with E, I or J (a key press the browser lets us use) takes the mouse straight back; Esc leaves it
 // free, like any other page, and a click takes it back
 function relock(e) {
@@ -6148,6 +6253,8 @@ onkeydown = e => {
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
+    if (e.code === 'Space') jump();
+    if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
     if (e.code === 'KeyI') openInventory();
     if (e.code === 'KeyX') dropHere();
     const slot = /^Digit([1-8])$/.exec(e.code);
@@ -6240,12 +6347,14 @@ function loop(t) {
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
-    move((cx * f - cy * (s + lurch)) * sp, (cy * f + cx * (s + lurch)) * sp);
+    if (body.seat && (f || s)) standUp(); // walking gets you up
+    if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
   } else if (mode === 'drive') drive(dt);
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
   }
+  stepBody(dt);
   stepTraffic(dt, T);
   stepTask(dt);
   stepTaxiJob(dt);
@@ -6325,7 +6434,7 @@ addEventListener('wheel', e => { if (!paused && inv.length) held = mod(held + 1 
 // through the same key handlers as the keyboard (synthetic keydown / keyup), so nothing in the game knows the
 // difference. Menus are plain HTML: tap their rows.
 const TOUCH_KEYS = [ // [label, key, when it shows (always if absent)]
-  ['A', 'Space', () => !!game], ['E', 'KeyE'], ['Q', 'KeyQ', () => !game && !me], ['I', 'KeyI', () => !game && !me], ['M', 'KeyM', () => !game],
+  ['A', 'Space', () => !!game || onFootMode() && !me], ['C', 'KeyC', () => !game && onFootMode()], ['E', 'KeyE'], ['Q', 'KeyQ', () => !game && !me], ['I', 'KeyI', () => !game && !me], ['M', 'KeyM', () => !game],
   ['H', 'KeyH', () => !game && mode === 'walk'], ['G', 'KeyG', () => !game && (mode === 'walk' || mode === 'room' || mode === 'taxi')],
   ['T', 'KeyT', () => !game], ['Y', 'KeyY', () => !game],
 ];

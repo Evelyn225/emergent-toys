@@ -20,6 +20,8 @@ onkeydown = e => {
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
+    if (e.code === 'Space') jump();
+    if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
     if (e.code === 'KeyI') openInventory();
     if (e.code === 'KeyX') dropHere();
     const slot = /^Digit([1-8])$/.exec(e.code);
@@ -112,12 +114,14 @@ function loop(t) {
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
-    move((cx * f - cy * (s + lurch)) * sp, (cy * f + cx * (s + lurch)) * sp);
+    if (body.seat && (f || s)) standUp(); // walking gets you up
+    if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
   } else if (mode === 'drive') drive(dt);
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
   }
+  stepBody(dt);
   stepTraffic(dt, T);
   stepTask(dt);
   stepTaxiJob(dt);
