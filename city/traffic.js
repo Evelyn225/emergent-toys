@@ -224,7 +224,7 @@ function stepTraffic(dt, t, everywhere = false) {
     if (c.state === 'scene') room_ = 0;
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
-    if (c.rider && !c.dest) room_ = 0;
+    if (c.rider && !c.dest || c.stopT > T) room_ = 0; // (a cab whose driver's been arrested sits there a while)
     if (c.pursuit && mode === 'walk' && Math.hypot(rel(px - c.x), rel(py - c.y)) < 1.2) room_ = 0; // pulled up next to you
     if (c.dest && !c.pursuit && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
       if (c.ev) { if (ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) evArrive(c); } // not in the middle of a junction

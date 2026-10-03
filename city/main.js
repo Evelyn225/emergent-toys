@@ -124,6 +124,10 @@ function loop(t) {
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
   else if (law === 'lost') say('You lost them.', 3);
+  else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
+    const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
+    say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);
+  }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
   if (mode === 'taxi') {

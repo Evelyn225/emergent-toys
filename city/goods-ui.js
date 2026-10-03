@@ -89,6 +89,12 @@ const HAND = {
     (c, r) => c === '%' ? C(GREEN, 13) : c === '=' ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(ORANGE, 13)],
   kebab: (it, f) => [bitten(['  _______', ' /%%%%%%%\\', ' |%=%=%=%|', ' |%%%%%%%|', ' \\_______/', '   |___|'], f, 'top'),
     (c, r) => c === '%' ? C(GREEN, 12) : c === '=' ? C(BRICK, 12) : C(WARM, 13)],
+  sushi: it => { // a board of nigiri, one fewer each bite
+    const n = clamp(it.uses, 1, 4);
+    return [[' ' + ' _~_ '.repeat(n), ' ' + '(###)'.repeat(n), '[' + '='.repeat(n * 5) + ']'],
+      (c, r) => r === 0 ? C(ORANGE, 14) : r === 1 ? C(WHITE, 15) : C(BRICK, 12)];
+  },
+  vhs: () => [[' ___________', '|  _     _  |', '| (_)===(_) |', '|___________|'], (c, r) => c === '(' || c === ')' || c === '_' && r === 2 ? C(WHITE, 13) : c === '=' ? C(GRAY, 9) : C(GRAY, 12)],
   dumplings: it => { // a tray of them, two by two, one fewer each time
     const n = clamp(it.uses, 1, 4), row = k => ' ' + ' .-. '.repeat(k).trimEnd(), body = k => ' ' + '(   )'.repeat(k);
     const lines = n > 2 ? [row(n - 2), body(n - 2), row(2), body(2)] : [row(n), body(n)];
@@ -169,7 +175,7 @@ function drawHeldBig() {
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
   const cx = Math.round(cv.width * 0.84), hy = Math.round(cv.height - 5.6 * hsz + bob); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
-  if (it.id === 'umbrella' && rain > 0.2) drawCanopy(cx, grip, isz, bob);
+  if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
   else {
     const [art, col] = heldArt(it);
     g.font = isz + 'px monospace';

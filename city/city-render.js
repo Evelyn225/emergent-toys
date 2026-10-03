@@ -3,7 +3,7 @@ const sk0 = seed => seed * 1e4 | 0;
 // background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse,
 // 14 art deco, 15 parking garage, 16 balcony apartments)
 const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE];
-const ARCADE_SIGN = new Set(['ARCADE', 'VIDEO']);
+const ARCADE_SIGN = new Set(['ARCADE']);
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);

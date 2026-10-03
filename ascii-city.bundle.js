@@ -1028,7 +1028,7 @@ function stepTraffic(dt, t, everywhere = false) {
     if (c.state === 'scene') room_ = 0;
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
-    if (c.rider && !c.dest) room_ = 0;
+    if (c.rider && !c.dest || c.stopT > T) room_ = 0; // (a cab whose driver's been arrested sits there a while)
     if (c.pursuit && mode === 'walk' && Math.hypot(rel(px - c.x), rel(py - c.y)) < 1.2) room_ = 0; // pulled up next to you
     if (c.dest && !c.pursuit && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
       if (c.ev) { if (ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) evArrive(c); } // not in the middle of a junction
@@ -1564,6 +1564,7 @@ const ITEMS = {
   kebab: { name: 'kebab', price: 8, kind: 'food', uses: 4 }, ramen: { name: 'ramen', price: 10, kind: 'food', uses: 5 },
   dumplings: { name: 'dumplings', price: 6, kind: 'food', uses: 4 }, mooncake: { name: 'mooncake', price: 4, kind: 'food', uses: 2 },
   fries: { name: 'fries', price: 3, kind: 'food', uses: 3 }, chicken: { name: 'fried chicken', price: 9, kind: 'food', uses: 4 },
+  sushi: { name: 'sushi', price: 12, kind: 'food', uses: 4 },
   pho: { name: 'pho', price: 11, kind: 'food', uses: 5 }, banhmi: { name: 'banh mi', price: 7, kind: 'food', uses: 4 },
   padthai: { name: 'pad thai', price: 11, kind: 'food', uses: 5 }, greencurry: { name: 'green curry', price: 12, kind: 'food', uses: 5 },
   mangorice: { name: 'mango sticky rice', price: 6, kind: 'food', uses: 3 },
@@ -1585,6 +1586,7 @@ const ITEMS = {
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
   vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
+  vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
   duck: { name: 'rubber duck', price: 3, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
 };
@@ -1610,7 +1612,7 @@ const STOCK_WORD = {
   CAFE: ['coffee', 'latte', 'croissant', 'donut'], COFFEE: ['coffee', 'latte', 'croissant'], DONUTS: ['donut', 'coffee'], BAKERY: ['bagel', 'croissant', 'donut'],
   PIZZA: ['slice', 'soda'], TACOS: ['taco', 'soda'], KEBAB: ['kebab', 'soda'], DINER: ['burger', 'coffee', 'soda'],
   RAMEN: ['ramen', 'tea'], NOODLES: ['ramen', 'dumplings', 'tea'], PHO: ['pho', 'banhmi', 'tea'], DUMPLINGS: ['dumplings', 'tea'],
-  'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['tea', 'dumplings'], THAI: ['padthai', 'greencurry', 'mangorice', 'thaitea'],
+  'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['sushi', 'tea'], VIDEO: ['vhs', 'candy', 'soda'], THAI: ['padthai', 'greencurry', 'mangorice', 'thaitea'],
   BURGERS: ['burger', 'fries', 'milkshake', 'soda'], CHICKEN: ['chicken', 'fries', 'soda'], JUICE: ['smoothie', 'water', 'apple'],
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'newspaper', 'candy'],
@@ -2022,6 +2024,7 @@ GAMES.serve = (rnd = Math.random) => {
 // its own shelf. 60 seconds. Pays for every box shelved right, less for the ones put in the wrong place.
 const STOCK_THEMES = {
   DEFAULT: [['CANS', 'c', RED], ['CEREAL', '#', YEL], ['BOTTLES', 'i', CYAN], ['SOAP', 'o', MAG]],
+  VIDEO: [['NEW', '=', RED], ['COMEDY', '=', YEL], ['HORROR', '=', MAG], ['KIDS', '=', CYAN]],
   TOYS: [['YO-YOS', 'o', RED], ['DUCKS', '@', YEL], ['BALLS', 'O', WHITE], ['KITES', '&', CYAN]],
   THRIFT: [['COATS', '#', BRICK], ['SHOES', 'b', GRAY], ['LAMPS', 'T', YEL], ['RECORDS', 'o', MAG]],
   TOBACCO: [['CIGARS', '=', BRICK], ['PAPERS', '#', WHITE], ['LIGHTERS', 'i', RED], ['PIPES', 'J', WARM]],
@@ -2208,7 +2211,7 @@ function taxiPay(dist, took, harsh, crashed, route = dist) {
 // Police: patrol cars cruising in the traffic (cars with patrol: true; in pursuit they run lights and siren and steer
 // for you), and officers on foot walking beats round the police stations (footCops), who chase you on foot.
 const COP_SIGHT = 13, CIV_SIGHT = 8, DISPATCH_R = 45, REPORT_DELAY = 5;
-const ESCAPE_T = [0, 18, 28, 40];            // seconds out of sight to lose them, by stars
+const ESCAPE_T = [0, 25, 40, 60];            // seconds out of sight to lose them, by stars
 const UNITS = [0, 2, 3, 5];                  // patrol cars after you, by stars
 const FINE = [0, 60, 150, 300];              // what they'll take instead of a cell
 const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 'hitting someone with a car' },
@@ -2278,10 +2281,12 @@ for (let n = 0; n < PATROLS; n++) {
 
 // ---- a crime, here and now: who saw it, and what follows
 // returns 'cop' (wanted now), 'reported' (somebody will call it in), or '' (nobody saw)
+// can any cop, in a car or on foot, see (x, y)?
+const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y))
+  || footCops.some(c => near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y));
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
-  const copSees = cars.some(c => c.patrol && near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y))
-    || footCops.some(c => near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y));
-  if (copSees) { addWanted(kind, x, y, true); return 'cop'; }
+  const copSees_ = copSees(x, y);
+  if (copSees_) { addWanted(kind, x, y, true); return 'cop'; }
   const civSees = people.some(p => !p.hidden && near(p.x, p.y, x, y) < CIV_SIGHT && lineOfSight(p.x, p.y, x, y)) || kind === 'steal' || kind === 'shoplift';
   if (civSees) { reports.push({ t: T + REPORT_DELAY, x, y, kind }); return 'reported'; } // (a carjacked driver, or a clerk, always calls it in)
   return '';
@@ -2328,14 +2333,17 @@ function stepCrime(dt) {
     if (policeNear(r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened
   }
   for (const c of footCops) if (!c.chase) patrolStep(c, dt);
+  // a cab you've paid to step on it, seen by a cop: pulled over, and the driver's arrested
+  if (mode === 'taxi' && me && me.rush && Math.abs(me.v) > 1.5 && copSees(me.x, me.y)) return 'cab';
   if (!wanted.stars) return;
   const [wx, wy] = crimePos(), inside = mode === 'room';
   const sees = c => !inside && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
   wanted.seen = cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
   if (wanted.seen) { wanted.lastX = wx; wanted.lastY = wy; wanted.hideT = 0; wanted.tipT = 0; }
   else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
-  else if (wanted.hideT < ESCAPE_T[wanted.stars] * 0.5 && (wanted.tipT = (wanted.tipT || 0) - dt) <= 0) { // a tip on the radio: roughly where you are
-    wanted.tipT = 6; wanted.lastX = mod(wx + (Math.random() - 0.5) * 3, N); wanted.lastY = mod(wy + (Math.random() - 0.5) * 3, N);
+  else if (wanted.hideT < ESCAPE_T[wanted.stars] * 0.75 && (wanted.tipT = (wanted.tipT || 0) - dt) <= 0) { // a tip on the radio: roughly where you are
+    const off = inside ? 0 : 3; // (ducked into a building: somebody saw which door)
+    wanted.tipT = 4; wanted.lastX = mod(wx + (Math.random() - 0.5) * off, N); wanted.lastY = mod(wy + (Math.random() - 0.5) * off, N);
   }
   for (const c of cars) if (c.pursuit) c.dest = [wanted.lastX, wanted.lastY]; // steering for you, or where you were
   const onFoot = mode === 'walk';
@@ -2343,12 +2351,13 @@ function stepCrime(dt) {
     if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < 20) c.chase = true;
     if (c.chase) chaseStep(c, wanted.lastX, wanted.lastY, dt);
   }
-  if (onFoot) for (const c of cars) if (c.pursuit && !c.dropped && near(c.x, c.y, px, py) < 1.4) { // pulls up, an officer jumps out
+  if (onFoot || inside) for (const c of cars) if (c.pursuit && !c.dropped && near(c.x, c.y, wx, wy) < 1.4) { // pulls up, an officer jumps out
     c.dropped = true;
     footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true });
   }
   // caught: a hand on your shoulder, or boxed in and stopped
-  const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22);
+  const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22)
+    || inside && footCops.some(c => c.chase && near(c.x, c.y, wx, wy) < 0.35); // inside: they come in through the door after you
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.0) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
@@ -2455,7 +2464,7 @@ const sk0 = seed => seed * 1e4 | 0;
 // background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse,
 // 14 art deco, 15 parking garage, 16 balcony apartments)
 const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE];
-const ARCADE_SIGN = new Set(['ARCADE', 'VIDEO']);
+const ARCADE_SIGN = new Set(['ARCADE']);
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
@@ -3644,13 +3653,13 @@ const stairSteps = s => Array.from({ length: 10 }, (_, k) => {
     return set(i, HIT.w > top - 0.03 ? '_' : ' ', C(GRAY, L * 0.6)), true; // a plain riser with a lip
   }, 1, 0), walk: true }; // long axis across the stairwell (x): wall to wall, dy deep
 });
-const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 6, DUMPLINGS: 0, THAI: 7, SUSHI: 0, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4, BURGERS: 5, CHICKEN: 8 };
+const MENUS = { RAMEN: 0, NOODLES: 0, PHO: 6, DUMPLINGS: 0, THAI: 7, SUSHI: 9, TACOS: 1, PIZZA: 2, CAFE: 3, COFFEE: 3, DONUTS: 3, KEBAB: 4, BURGERS: 5, CHICKEN: 8 };
 const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRITO 7', 'NACHOS 5', 'SODA 2'],
                     ['SLICE 3', 'WHOLE 18', 'KNOTS 4', 'SODA 2'], ['LATTE 4', 'DONUT 2', 'BAGEL 3', 'TEA 2'],
                     ['KEBAB 8', 'FALAFEL 6', 'FRIES 3', 'AYRAN 2'], ['BURGER 6', 'FRIES 3', 'SHAKE 4', 'PIE 3'],
                     ['PHO 11', 'BANH MI 7', 'ROLLS 5', 'TEA 2'], ['PAD THAI 11', 'CURRY 12', 'MANGO 6', 'THAI TEA 4'],
-                    ['CHICKEN 9', 'WINGS 7', 'FRIES 3', 'SODA 2']];
-const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', VIDEO: 'arcade', LAUNDRY: 'laundry',
+                    ['CHICKEN 9', 'WINGS 7', 'FRIES 3', 'SODA 2'], ['NIGIRI 12', 'MAKI 8', 'MISO 3', 'TEA 2']];
+const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', LAUNDRY: 'laundry',
                    CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber', TATTOO: 'barber',
                    BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };
 const LYRICS = ['SWEET CAROLINE', 'BAH BAH BAH', 'SO GOOD SO GOOD SO GOOD', 'SWEET CAROLINE']; // what the karaoke bar's playing (audio/ascii-city/karaoke.mp3)
@@ -5350,7 +5359,7 @@ function buildPause() {
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
-      ${slider('fov', 'Field of view', 50, 100, 1)}
+      ${slider('fov', 'Field of view', 50, 120, 1)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
       <h2>mouse</h2>
@@ -5511,6 +5520,12 @@ const HAND = {
     (c, r) => c === '%' ? C(GREEN, 13) : c === '=' ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(ORANGE, 13)],
   kebab: (it, f) => [bitten(['  _______', ' /%%%%%%%\\', ' |%=%=%=%|', ' |%%%%%%%|', ' \\_______/', '   |___|'], f, 'top'),
     (c, r) => c === '%' ? C(GREEN, 12) : c === '=' ? C(BRICK, 12) : C(WARM, 13)],
+  sushi: it => { // a board of nigiri, one fewer each bite
+    const n = clamp(it.uses, 1, 4);
+    return [[' ' + ' _~_ '.repeat(n), ' ' + '(###)'.repeat(n), '[' + '='.repeat(n * 5) + ']'],
+      (c, r) => r === 0 ? C(ORANGE, 14) : r === 1 ? C(WHITE, 15) : C(BRICK, 12)];
+  },
+  vhs: () => [[' ___________', '|  _     _  |', '| (_)===(_) |', '|___________|'], (c, r) => c === '(' || c === ')' || c === '_' && r === 2 ? C(WHITE, 13) : c === '=' ? C(GRAY, 9) : C(GRAY, 12)],
   dumplings: it => { // a tray of them, two by two, one fewer each time
     const n = clamp(it.uses, 1, 4), row = k => ' ' + ' .-. '.repeat(k).trimEnd(), body = k => ' ' + '(   )'.repeat(k);
     const lines = n > 2 ? [row(n - 2), body(n - 2), row(2), body(2)] : [row(n), body(n)];
@@ -5591,7 +5606,7 @@ function drawHeldBig() {
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
   const cx = Math.round(cv.width * 0.84), hy = Math.round(cv.height - 5.6 * hsz + bob); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
-  if (it.id === 'umbrella' && rain > 0.2) drawCanopy(cx, grip, isz, bob);
+  if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
   else {
     const [art, col] = heldArt(it);
     g.font = isz + 'px monospace';
@@ -6237,6 +6252,10 @@ function loop(t) {
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
   else if (law === 'lost') say('You lost them.', 3);
+  else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
+    const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
+    say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);
+  }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
   if (mode === 'taxi') {

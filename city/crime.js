@@ -9,7 +9,7 @@
 // Police: patrol cars cruising in the traffic (cars with patrol: true; in pursuit they run lights and siren and steer
 // for you), and officers on foot walking beats round the police stations (footCops), who chase you on foot.
 const COP_SIGHT = 13, CIV_SIGHT = 8, DISPATCH_R = 45, REPORT_DELAY = 5;
-const ESCAPE_T = [0, 18, 28, 40];            // seconds out of sight to lose them, by stars
+const ESCAPE_T = [0, 25, 40, 60];            // seconds out of sight to lose them, by stars
 const UNITS = [0, 2, 3, 5];                  // patrol cars after you, by stars
 const FINE = [0, 60, 150, 300];              // what they'll take instead of a cell
 const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 'hitting someone with a car' },
@@ -79,10 +79,12 @@ for (let n = 0; n < PATROLS; n++) {
 
 // ---- a crime, here and now: who saw it, and what follows
 // returns 'cop' (wanted now), 'reported' (somebody will call it in), or '' (nobody saw)
+// can any cop, in a car or on foot, see (x, y)?
+const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y))
+  || footCops.some(c => near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y));
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
-  const copSees = cars.some(c => c.patrol && near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y))
-    || footCops.some(c => near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y));
-  if (copSees) { addWanted(kind, x, y, true); return 'cop'; }
+  const copSees_ = copSees(x, y);
+  if (copSees_) { addWanted(kind, x, y, true); return 'cop'; }
   const civSees = people.some(p => !p.hidden && near(p.x, p.y, x, y) < CIV_SIGHT && lineOfSight(p.x, p.y, x, y)) || kind === 'steal' || kind === 'shoplift';
   if (civSees) { reports.push({ t: T + REPORT_DELAY, x, y, kind }); return 'reported'; } // (a carjacked driver, or a clerk, always calls it in)
   return '';
@@ -129,14 +131,17 @@ function stepCrime(dt) {
     if (policeNear(r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened
   }
   for (const c of footCops) if (!c.chase) patrolStep(c, dt);
+  // a cab you've paid to step on it, seen by a cop: pulled over, and the driver's arrested
+  if (mode === 'taxi' && me && me.rush && Math.abs(me.v) > 1.5 && copSees(me.x, me.y)) return 'cab';
   if (!wanted.stars) return;
   const [wx, wy] = crimePos(), inside = mode === 'room';
   const sees = c => !inside && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
   wanted.seen = cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
   if (wanted.seen) { wanted.lastX = wx; wanted.lastY = wy; wanted.hideT = 0; wanted.tipT = 0; }
   else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
-  else if (wanted.hideT < ESCAPE_T[wanted.stars] * 0.5 && (wanted.tipT = (wanted.tipT || 0) - dt) <= 0) { // a tip on the radio: roughly where you are
-    wanted.tipT = 6; wanted.lastX = mod(wx + (Math.random() - 0.5) * 3, N); wanted.lastY = mod(wy + (Math.random() - 0.5) * 3, N);
+  else if (wanted.hideT < ESCAPE_T[wanted.stars] * 0.75 && (wanted.tipT = (wanted.tipT || 0) - dt) <= 0) { // a tip on the radio: roughly where you are
+    const off = inside ? 0 : 3; // (ducked into a building: somebody saw which door)
+    wanted.tipT = 4; wanted.lastX = mod(wx + (Math.random() - 0.5) * off, N); wanted.lastY = mod(wy + (Math.random() - 0.5) * off, N);
   }
   for (const c of cars) if (c.pursuit) c.dest = [wanted.lastX, wanted.lastY]; // steering for you, or where you were
   const onFoot = mode === 'walk';
@@ -144,12 +149,13 @@ function stepCrime(dt) {
     if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < 20) c.chase = true;
     if (c.chase) chaseStep(c, wanted.lastX, wanted.lastY, dt);
   }
-  if (onFoot) for (const c of cars) if (c.pursuit && !c.dropped && near(c.x, c.y, px, py) < 1.4) { // pulls up, an officer jumps out
+  if (onFoot || inside) for (const c of cars) if (c.pursuit && !c.dropped && near(c.x, c.y, wx, wy) < 1.4) { // pulls up, an officer jumps out
     c.dropped = true;
     footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true });
   }
   // caught: a hand on your shoulder, or boxed in and stopped
-  const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22);
+  const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22)
+    || inside && footCops.some(c => c.chase && near(c.x, c.y, wx, wy) < 0.35); // inside: they come in through the door after you
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.0) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }

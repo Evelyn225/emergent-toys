@@ -94,3 +94,11 @@ test('crime minigames: stop the marker in the green to pick a pocket, set every 
   ev('var g = GAMES.lockpick()');
   assert.strictEqual(ev('(() => { for (let t = 0; t < 60 && !g.over; t += 1 / 60) g.step(1 / 60, { up: 1 }); return g.success; })()'), false, 'shove it up and it slips');
 });
+
+test('ducking into a shop is no hiding place: a cop who reaches the door comes in after you', () => {
+  const { ev, step } = scene();
+  ev("addWanted('hit', px, py, true)");
+  ev("mode = 'room'; room = { ret: [px, py, 0], def: {}, kind: 'store' }");
+  ev('footCops[0].x = px + 0.2; footCops[0].y = py; footCops[0].chase = true');
+  assert.strictEqual(step(1), 'busted');
+});
