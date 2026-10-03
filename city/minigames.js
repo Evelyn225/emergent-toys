@@ -620,9 +620,10 @@ GAMES.pachinko = (rnd = Math.random) => {
         b.y++;
       }
       for (const b of balls.filter(b => b.y >= H - 2)) {
-        const p = POCKETS[b.x];
+        let p = POCKETS[b.x];
+        if (!p && rnd() < luck() * 2.5) for (const o of [-1, 1]) if (POCKETS[b.x + o]) { p = POCKETS[b.x + o]; break; } // (lucky: it rolls in after all)
         if (p === 'small') { g.score += 2; ev.push('eat'); }
-        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 }; }
+        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 + luck() * 0.5 }; }
         b.dead = true;
       }
       balls = balls.filter(b => !b.dead);
@@ -740,7 +741,14 @@ GAMES.mahjong = (rnd = Math.random) => {
   let turn = 0, state = 'you', wait = 0, cur = 0, drawn = null, last = null, msg = 'Your turn. Draw done: pick a tile to throw away.';
   const sortHand = h => h.sort((a, b) => a - b);
   const end = (winner, how) => { g.over = true; g.result = { winner, how }; g.score = winner === 0 ? 1 : 0; };
-  const draw = p => { if (!wall.length) { end(-1, 'the wall ran out'); return null; } const t = wall.shift(); hands[p].push(t); return t; };
+  const draw = p => {
+    if (!wall.length) { end(-1, 'the wall ran out'); return null; }
+    if (p === 0 && hands[0].length === 13 && rnd() < luck()) { // lucky: the tile you're waiting on turns up, if it's near the top of the wall
+      const ws = mjWaits(hands[0]), k = wall.slice(0, 6).findIndex(t => ws.includes(t));
+      if (k > 0) [wall[0], wall[k]] = [wall[k], wall[0]];
+    }
+    const t = wall.shift(); hands[p].push(t); return t;
+  };
   drawn = draw(0); cur = hands[0].indexOf(drawn); sortHand(hands[0]); cur = hands[0].lastIndexOf(drawn);
   // a discard by p: does anyone want it to win? (you first, then the others in turn order)
   const afterDiscard = (p, t) => {

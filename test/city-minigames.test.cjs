@@ -290,3 +290,17 @@ test('the gardeners: leave the beds and they die; water the driest and pull the 
   assert.ok(good[0] >= 12, `tended, ${good[0]} of 18 survive`);
   assert.ok(good[1] > idle[1] + 5 && good[1] < 40, `pay: ${good[1]} vs ${idle[1]} idle`);
 });
+
+test('jade: the shop sells a bangle and a dragon; carrying them adds a little luck, and luck tips the pachinko pockets your way', () => {
+  const { ev, j } = fresh();
+  assert.deepStrictEqual(j("stockFor('jade', 'JADE')"), ['jadebangle', 'jadedragon']);
+  assert.strictEqual(ev('luck()'), 0);
+  ev("inv.push({ id: 'jadebangle', uses: 0 })"); assert.strictEqual(ev('luck()'), 0.03);
+  ev("inv.push({ id: 'jadedragon', uses: 0 })"); assert.ok(Math.abs(ev('luck()') - 0.11) < 1e-9);
+  // the same balls, the same seed: with luck, at least as many land in a pocket
+  const run = lucky => { const { ev: e } = require('./helpers/load-city.cjs').loadCity(7);
+    if (lucky) e("inv.push({ id: 'jadebangle', uses: 0 }, { id: 'jadedragon', uses: 0 })");
+    e('var g = GAMES.pachinko(); g.score = 400');
+    return e(`(() => { let pockets = 0; for (let t = 0; t < 120 && !g.over; t += 1 / 60) for (const v of g.step(1 / 60, { act: true, left: Math.sin(t) > 0, right: Math.sin(t) < 0 })) if (v === 'eat' || v === 'score') pockets++; return pockets; })()`); };
+  assert.ok(run(true) > run(false), 'luck helps');
+});

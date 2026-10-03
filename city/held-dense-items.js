@@ -597,6 +597,27 @@ Object.assign(DENSE, {
     if (x > 4 && x < 6.6 && y < 1 && y > -1.6 + (6.6 - x) * 0.3) return dLit(0.7, YEL, 9); // the tail
     return null;
   }),
+  jadebangle: () => sculpt(24, 11, (x, y) => { // a jade bangle, seen at a tilt: a ring, light running round it
+    const d = dEll(x, y, 0, 0, 5.2, 4.2), inner = dEll(x, y, 0, 0, 3.7, 2.8);
+    if (d > 1 || inner < 1) return null;
+    const a = Math.atan2(y, x), b = 0.45 + 0.4 * Math.cos(a + 2.3) + (noise(x * 2, y * 2, 1311) - 0.5) * 0.3; // (veins in the stone)
+    return [b > 0.85 ? '@' : dFill(b), C(b > 0.85 ? WHITE : GREEN, 6 + clamp(b, 0, 1) * 9)];
+  }),
+  jadedragon: () => sculpt(26, 14, (x, y) => { // a little carved jade dragon on a wooden stand
+    if (y > 4.6 && y < 6.4 && Math.abs(x) < 5.2 - (y - 4.6) * -0.4) return dLit(0.7 - (y - 4.6) * 0.2, BRICK, 7);
+    if (dEll(x, y, 2.6, -3.6, 0.35, 0.35) < 1) return ['@', C(RED, 15)]; // its eye
+    if (y < -2 && y > -4.8 && Math.abs(x - 3.2) < 1.8 + (y + 2) * 0.2) return dLit(dBall(x, y, 3, -3.4, 2, 1.5), GREEN, 8); // the head
+    if (Math.abs(y + 3.3) < 0.25 && x > 4.6 && x < 6.6) return ['~', C(GREEN, 12)]; // whiskers
+    const path = [[-6.4, 1.2], [-4.8, 3], [-2.8, 0.8], [-0.8, 3], [1, 0.6], [2.2, -2.2]]; // the body, coiling from the tail up to the head
+    let dmin = 9, along = 0;
+    for (let k = 0; k < path.length - 1; k++) {
+      const [ax, ay] = path[k], [bx, by] = path[k + 1], t = clamp(((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2), 0, 1), dd = Math.hypot(x - ax - t * (bx - ax), y - ay - t * (by - ay));
+      if (dd < dmin) { dmin = dd; along = k + t; }
+    }
+    const thick = 0.35 + Math.min(1, along / 1.5) * 0.75; // thin at the tail
+    if (dmin < thick) return [dmin < thick * 0.3 && Math.floor(along * 4) & 1 ? '=' : dFill(0.5 + 0.45 * (1 - dmin / thick) - (y > 1 ? 0.1 : 0)), dCol(GREEN, 0.5 + 0.45 * (1 - dmin / thick), 7)];
+    return null;
+  }),
   sparklers: () => sculpt(10, 15, (x, y) => (Math.abs(x) < 0.2 ? [y < -4 ? '#' : '|', y < -4 ? C(GRAY, 7) : C(GRAY, 12)] : null)), // the wire; drawSparks puts the fizz on top
   umbrella: () => sculpt(16, 19, (x, y) => { // furled, a strap round it, the hooked handle
     if (y > 5 && Math.abs(x) < 0.2) return ['|', C(BRICK, 12)];

@@ -1779,7 +1779,7 @@ const ITEMS = {
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
-  duck: { name: 'rubber duck', price: 3, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
+  duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
   spraypaint: { name: 'spray paint', price: 8, kind: 'toy', uses: 6 }, // (graffiti.js)
 };
 // the arcade's prize counter: what tickets buy
@@ -1812,7 +1812,7 @@ const STOCK_WORD = {
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft'],
-  'TEA HOUSE': ['tea', 'mooncake'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
+  'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
@@ -1828,6 +1828,9 @@ let held = 0; // which slot is in your hand; -1 = nothing, hands empty
 const holdSlot = k => { held = held === k ? -1 : k; };
 const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0 };
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
+// luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
+// anything, the dragon's a bit more, and they add up
+const luck = () => (inv.some(it => it.id === 'jadebangle') ? 0.03 : 0) + (inv.some(it => it.id === 'jadedragon') ? 0.08 : 0);
 const YOYO_DUR = 2.4; // how long a yo-yo trick takes (fx.yoyoTrick says which: see drawYoyo)
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
@@ -1923,6 +1926,8 @@ function useHeld(near) {
     case 'book': return [pick(BOOK_LINES), 'page'];
     case 'newspaper': return [`Headline: ${pick(near.headlines)}`, 'page'];
     case 'vinyl': return ['You admire the sleeve. Shame you don\'t have a record player.', null];
+    case 'jadebangle': return [pick(['You turn the bangle round your wrist. Cool and smooth. Lucky, they say.', 'The jade catches the light. You feel a tiny bit luckier.']), null];
+    case 'jadedragon': return [pick(['You rub the dragon\'s head for luck.', 'The little jade dragon stares back, very sure of itself.', 'You give the dragon a pat. Good fortune, apparently, follows.']), null];
     case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head.']), null];
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.']), null];
@@ -2631,9 +2636,10 @@ GAMES.pachinko = (rnd = Math.random) => {
         b.y++;
       }
       for (const b of balls.filter(b => b.y >= H - 2)) {
-        const p = POCKETS[b.x];
+        let p = POCKETS[b.x];
+        if (!p && rnd() < luck() * 2.5) for (const o of [-1, 1]) if (POCKETS[b.x + o]) { p = POCKETS[b.x + o]; break; } // (lucky: it rolls in after all)
         if (p === 'small') { g.score += 2; ev.push('eat'); }
-        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 }; }
+        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 + luck() * 0.5 }; }
         b.dead = true;
       }
       balls = balls.filter(b => !b.dead);
@@ -2751,7 +2757,14 @@ GAMES.mahjong = (rnd = Math.random) => {
   let turn = 0, state = 'you', wait = 0, cur = 0, drawn = null, last = null, msg = 'Your turn. Draw done: pick a tile to throw away.';
   const sortHand = h => h.sort((a, b) => a - b);
   const end = (winner, how) => { g.over = true; g.result = { winner, how }; g.score = winner === 0 ? 1 : 0; };
-  const draw = p => { if (!wall.length) { end(-1, 'the wall ran out'); return null; } const t = wall.shift(); hands[p].push(t); return t; };
+  const draw = p => {
+    if (!wall.length) { end(-1, 'the wall ran out'); return null; }
+    if (p === 0 && hands[0].length === 13 && rnd() < luck()) { // lucky: the tile you're waiting on turns up, if it's near the top of the wall
+      const ws = mjWaits(hands[0]), k = wall.slice(0, 6).findIndex(t => ws.includes(t));
+      if (k > 0) [wall[0], wall[k]] = [wall[k], wall[0]];
+    }
+    const t = wall.shift(); hands[p].push(t); return t;
+  };
   drawn = draw(0); cur = hands[0].indexOf(drawn); sortHand(hands[0]); cur = hands[0].lastIndexOf(drawn);
   // a discard by p: does anyone want it to win? (you first, then the others in turn order)
   const afterDiscard = (p, t) => {
@@ -5623,6 +5636,7 @@ function roomFloor(i, r, x, rx, ry) {
     case 'cathedral': return cathedralFloor(i, f, wx, wy);
     case 'jail': return jailFloor(i, f, wx, wy);
     case 'conservatory': return conservatoryFloor(i, f, wx, wy);
+    case 'jade': return jadeFloor(i, f, wx, wy);
     case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
@@ -6741,6 +6755,69 @@ Object.assign(ROOM_DEFS, {
 });
 Object.assign(ROOM_FOR, { CONSERVATORY: 'conservatory', AVIARY: 'aviary' });
 const aviaryKeeper = () => mode === 'room' && room.kind === 'aviary' && nearKeeper();
+// ===== the jade shop, in Chinatown: red lacquer walls with gold trim and a lattice, a carved jade dragon coiling
+// across the back wall through gold clouds, hanging scrolls, red lanterns overhead, glass cases of bangles and little
+// figures, a tall vase in the corner, a lucky cat waving on the counter, incense curling up. The bangles and dragons
+// it sells are lucky (see luck() in goods.js).
+const JADE_W = 12, JADE_H = 9;
+function jadeWall(i, su, uStep, z, d, mx, my, L) {
+  const u = Math.abs(su);
+  if (z < 0.85) { BG[i] = C(BRICK, 1 + L * 0.1); return set(i, fract(z / 0.28) < 0.12 ? '=' : fract(u * 1.5) < 0.06 ? '|' : ' ', C(BRICK, L * 0.8)), true; } // dark wood panelling
+  if (Math.abs(z - 0.88) < 0.04 || Math.abs(z - 2.62) < 0.04) return set(i, '=', C(YEL, Math.max(L, 10))), true; // gold trim
+  if (my === 0 && z > 0.95 && z < 2.55) { // the back wall: a jade dragon in relief, coiling through gold clouds
+    const body = 1.72 + 0.42 * Math.sin(u * 1.25 - 0.8), dz = Math.abs(z - body);
+    if (dz < 0.13 && u > 1.5 && u < JADE_W - 2.2) { BG[i] = C(GREEN, 2 + L * 0.1); return set(i, dz < 0.05 ? '=' : (Math.floor(u * 6) + Math.floor(z * 8)) & 1 ? '%' : '#', C(GREEN, Math.max(L * 1.2, 9))), true; }
+    if (u > JADE_W - 2.4 && u < JADE_W - 1.3 && Math.abs(z - (1.72 + 0.42 * Math.sin((JADE_W - 2.2) * 1.25 - 0.8))) < 0.32) { // its head, an eye, whiskers
+      BG[i] = C(GREEN, 2.5); return set(i, Math.abs(u - (JADE_W - 1.8)) < 0.12 && Math.abs(z - 1.86) < 0.08 ? '@' : '%', C(Math.abs(u - (JADE_W - 1.8)) < 0.12 ? RED : GREEN, 13)), true; }
+    if (dz > 0.18 && noise(u * 1.4, z * 2.2, 1301) > 0.68) { BG[i] = C(YEL, 2); return set(i, '@', C(YEL, Math.max(L, 9))), true; } // the clouds
+    BG[i] = C(RED, 1.5 + L * 0.12); return set(i, ' ', 0), true;
+  }
+  if (z > 2.62) { BG[i] = C(RED, 1 + L * 0.08); return set(i, ' ', 0), true; }
+  const scroll = Math.abs(fract(u / 2.6) - 0.5) < 0.12 && z > 1.05 && z < 2.45; // hanging scrolls between the lattice
+  if (scroll) { BG[i] = C(WHITE, 3 + L * 0.1); return set(i, hash(Math.floor(u * 4), Math.floor(z * 5), 1302) > 0.45 ? '#' : ' ', C(GRAY, 3)), true; }
+  BG[i] = C(RED, 1.5 + L * 0.12); // red lacquer with a gold lattice worked over it
+  return set(i, fract(u * 2 + z * 2) < 0.07 || fract(u * 2 - z * 2) < 0.07 ? '+' : ' ', C(YEL, L * 0.55)), true;
+}
+function jadeFloor(i, f, wx, wy) { // dark red tiles, a patterned runner up the middle
+  if (Math.abs(wx - JADE_W / 2) < 1) { BG[i] = C(RED, 1 + f * 1.5); return set(i, Math.abs(wx - JADE_W / 2) > 0.85 ? '|' : (Math.floor(wy * 2) & 1) ? '+' : 'o', C(YEL, 3 + f * 6)); }
+  BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(BRICK, 1 + f * 1.4) : C(RED, 0.8 + f);
+  return set(i, ' ', 0);
+}
+// a glass display case on a red base: jade laid out on red velvet inside, seen through the glass top and sides
+const jadeCase = (x, y, hl, hw, items) => BX(x, y, hl, hw, 0, 1, (i, t, L) => {
+  const f = HIT.face, w = HIT.w, u = HIT.u + 9, v = (HIT.v ?? 0) + 9;
+  const piece = (a, b) => { const k = hash(Math.floor(a * 3), Math.floor(b * 3), x * 7 + y); return k > 0.5 && Math.abs(fract(a * 3) - 0.5) < 0.3 && Math.abs(fract(b * 3) - 0.5) < 0.3 ? items[k * 97 % items.length | 0] : null; };
+  if (f === 5) { // looking down through the glass top
+    if (Math.abs(HIT.u) > hl - 0.06 || Math.abs(HIT.v ?? 0) > hw - 0.06) return set(i, '=', C(YEL, Math.max(L, 9))), true; // the gold frame
+    const pc = piece(u, v);
+    BG[i] = C(RED, 1 + L * 0.08);
+    return set(i, pc || (hash(Math.floor(u * 9), Math.floor(v * 9), 1303) > 0.96 ? '/' : ' '), pc ? C(GREEN, Math.max(L * 1.2, 11)) : C(WHITE, 8)), true; // (a glint on the glass)
+  }
+  if (w < 0.45) { BG[i] = C(RED, (1 + L * 0.15) * shadeFace(f)); return set(i, w > 0.41 ? '=' : ' ', C(YEL, L)), true; } // the base
+  if (w > 0.95) return set(i, '=', C(YEL, Math.max(L, 9))), true; // the frame along the top
+  const pc = w > 0.5 && w < 0.88 ? piece(u, w * 2) : null; // through the side: the pieces on their stands
+  BG[i] = pc ? C(RED, 1) : C(CYAN, 0.8);
+  return set(i, pc || (Math.abs(fract(u * 2) - 0.5) < 0.03 ? '|' : ' '), pc ? C(GREEN, Math.max(L * 1.2, 11)) : C(WHITE, L * 0.5)), true;
+});
+const JADE_VASE = pad(['  ___  ', ' (___) ', '  ) (  ', ' /%%%\\ ', '(%%@%%)', '(%%%%%)', ' \\%%%/ ', '  ===  ']);
+const JADE_CAT = pad([' /\\_/\\ ', '( ^.^ )/', ' (=Y=) ', ' (___) ']);
+ROOM_DEFS.jade = { grid: boxRoom(JADE_W, JADE_H), light: 0.75, floor: 'jade', ceil: 'lantern', sign: true, signAt: 3, wall: jadeWall, keeper: [6, 1.6],
+  props: r => {
+    const p = [...counterBox(6, 2.2, 1.6), standing(6, 1.6, GREEN)];
+    p.push({ ...SP(7.1, 2.2, 0.45, 0.5, JADE_CAT, (c, row, L) => c === '^' || c === 'Y' ? C(RED, 14) : C(WHITE, Math.max(L, 10)), 1.05), tick: s => { s.art = fract(T * 1.3) < 0.5 ? JADE_CAT : JADE_CAT.map((l, k) => k === 1 ? l.replace(')/', ')-') : l); } }); // waving
+    for (const [x, y] of [[2.2, 4.2], [9.8, 4.2], [2.2, 6.6], [9.8, 6.6]]) p.push(jadeCase(x, y, 0.9, 0.45, ['o', 'O', '&', '@', '8']));
+    p.push(SP(10.9, 1.4, 0.7, 1.5, JADE_VASE, (c, row, L) => c === '%' || c === '@' ? C(GREEN, Math.max(L * 1.2, 9)) : C(YEL, Math.max(L, 8))));
+    p.push(SP(1.2, 1.4, 0.35, 0.6, pad([' | ', ' | ', '[_]']), (c, row, L) => row < 2 ? C(RED, 14) : C(YEL, 12))); // the incense
+    if (chance(0.5)) p.push(standing(4.2, 5.4, shirt()));
+    return p;
+  } };
+ROOM_FOR.JADE = 'jade';
+let jadeIncenseT = 0;
+function stepJadeIncense(dt) { // a thread of incense smoke curling up in the corner, into the haze
+  if (mode !== 'room' || room.kind !== 'jade' || (jadeIncenseT -= dt) > 0) return;
+  jadeIncenseT = 0.7;
+  haze.push({ at: placeKey(), kind: 'smoke', s: 1, x: 1.2 + (Math.random() - 0.5) * 0.05, y: 1.4, z: 0.75, r: 0.1, rMax: 0.45, vx: 0, vy: 0.02, vz: 0.35, life: 0.8, fade: 1 / 5, seed: Math.random() * 100 });
+}
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
 function drawArt(rx_, ry_, z, w, h, art, colFn) {
@@ -8338,6 +8415,8 @@ const HAND = {
   bento: (it, f) => [bitten([' .--------.', ' |@@|oo|~~|', ' |@@|oo|~~|', " '--------'"], f, 'top'), (c, r) => c === '@' ? C(WHITE, 15) : c === 'o' ? C(RED, 13) : c === '~' ? C(GREEN, 13) : C(BRICK, 13)],
   sake: (it, f) => [bitten(['   _', '  | |', ' /   \\', '|~~~~~|', '|_____|'], 0.45 + f * 0.55), (c, r) => c === '~' ? C(WHITE, 12) : C(WHITE, 15)],
   melonsoda: (it, f) => [filled(['   @  /', ' .---/-.', ' |    |', ' |    |', ' |    |', "  '--'"], [[2, 2, 5], [3, 2, 5], [4, 2, 5]], f, ':', '~'), (c, r) => c === '@' ? C(RED, 15) : c === ':' || c === '~' ? C(GREEN, 14) : C(WHITE, 12)],
+  jadebangle: () => [['  .-~~-.', ' / .--. \\', '| |    | |', ' \\ `--` /', "  `-~~-'"], (c, r) => C(GREEN, 13)],
+  jadedragon: () => [['   __/\\_', '  (@  ~~>', '  /|  \\', ' ~~\\__/~', ' [=====]'], (c, r) => c === '@' ? C(RED, 15) : r === 4 ? C(BRICK, 12) : C(GREEN, 13)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
   umbrella: () => [['     .', '    /|\\', '   / | \\', '  |  |  |', '  |==|==|', '  |  |  |', '   \\ | /', '    \\|/', '     |', '     |'],
@@ -9404,6 +9483,27 @@ Object.assign(DENSE, {
     if (x > 4 && x < 6.6 && y < 1 && y > -1.6 + (6.6 - x) * 0.3) return dLit(0.7, YEL, 9); // the tail
     return null;
   }),
+  jadebangle: () => sculpt(24, 11, (x, y) => { // a jade bangle, seen at a tilt: a ring, light running round it
+    const d = dEll(x, y, 0, 0, 5.2, 4.2), inner = dEll(x, y, 0, 0, 3.7, 2.8);
+    if (d > 1 || inner < 1) return null;
+    const a = Math.atan2(y, x), b = 0.45 + 0.4 * Math.cos(a + 2.3) + (noise(x * 2, y * 2, 1311) - 0.5) * 0.3; // (veins in the stone)
+    return [b > 0.85 ? '@' : dFill(b), C(b > 0.85 ? WHITE : GREEN, 6 + clamp(b, 0, 1) * 9)];
+  }),
+  jadedragon: () => sculpt(26, 14, (x, y) => { // a little carved jade dragon on a wooden stand
+    if (y > 4.6 && y < 6.4 && Math.abs(x) < 5.2 - (y - 4.6) * -0.4) return dLit(0.7 - (y - 4.6) * 0.2, BRICK, 7);
+    if (dEll(x, y, 2.6, -3.6, 0.35, 0.35) < 1) return ['@', C(RED, 15)]; // its eye
+    if (y < -2 && y > -4.8 && Math.abs(x - 3.2) < 1.8 + (y + 2) * 0.2) return dLit(dBall(x, y, 3, -3.4, 2, 1.5), GREEN, 8); // the head
+    if (Math.abs(y + 3.3) < 0.25 && x > 4.6 && x < 6.6) return ['~', C(GREEN, 12)]; // whiskers
+    const path = [[-6.4, 1.2], [-4.8, 3], [-2.8, 0.8], [-0.8, 3], [1, 0.6], [2.2, -2.2]]; // the body, coiling from the tail up to the head
+    let dmin = 9, along = 0;
+    for (let k = 0; k < path.length - 1; k++) {
+      const [ax, ay] = path[k], [bx, by] = path[k + 1], t = clamp(((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2), 0, 1), dd = Math.hypot(x - ax - t * (bx - ax), y - ay - t * (by - ay));
+      if (dd < dmin) { dmin = dd; along = k + t; }
+    }
+    const thick = 0.35 + Math.min(1, along / 1.5) * 0.75; // thin at the tail
+    if (dmin < thick) return [dmin < thick * 0.3 && Math.floor(along * 4) & 1 ? '=' : dFill(0.5 + 0.45 * (1 - dmin / thick) - (y > 1 ? 0.1 : 0)), dCol(GREEN, 0.5 + 0.45 * (1 - dmin / thick), 7)];
+    return null;
+  }),
   sparklers: () => sculpt(10, 15, (x, y) => (Math.abs(x) < 0.2 ? [y < -4 ? '#' : '|', y < -4 ? C(GRAY, 7) : C(GRAY, 12)] : null)), // the wire; drawSparks puts the fizz on top
   umbrella: () => sculpt(16, 19, (x, y) => { // furled, a strap round it, the hooked handle
     if (y > 5 && Math.abs(x) < 0.2) return ['|', C(BRICK, 12)];
@@ -10159,6 +10259,7 @@ function loop(t) {
   stepHaze(dt);
   stepSteam(dt);
   stepPigeons(dt);
+  stepJadeIncense(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
