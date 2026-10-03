@@ -21,6 +21,7 @@
     "city/city-sprites.js",
     "city/rooms.js",
     "city/aquarium.js",
+    "city/cathedral.js",
     "city/render.js",
     "city/hud.js",
     "city/actions.js",

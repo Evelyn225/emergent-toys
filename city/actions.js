@@ -119,6 +119,7 @@ function interact() {
     if (room.burgled && nearKeeper()) return emptyTill();
     if (room.kind === 'laundry' && useLaundry()) return;
     if (nearTouchPool()) return say(pick(TOUCH_LINES), 3);
+    if (room.kind === 'cathedral' && useCathedral()) return;
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
       roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0;
@@ -143,6 +144,7 @@ function interact() {
     return say('The way out is over by the door.', 2);
   }
   if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
+  if (mode === 'roof' && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; return say('Down and down and round and round.', 2); }
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
@@ -189,6 +191,8 @@ function interact() {
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
   if (nearLighthouse()) return enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [px, py, a], line: 'Mind the stairs. Two hundred and twelve of them.' }, [4, 6.2, -Math.PI / 2]);
+  const cd = churchDoor();
+  if (cd) return enterCathedral(cd);
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));

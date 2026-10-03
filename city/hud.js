@@ -89,6 +89,7 @@ function promptText() {
     }
     if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
     if (nearTouchPool()) return 'E: touch the touch pool';
+    if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
@@ -96,7 +97,7 @@ function promptText() {
     if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
     return '';
   }
-  if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : 'E: take the stairs down'; }
+  if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : room && room.kind === 'cathedral' ? 'The bell tower, 80m up.   E: back down the stairs' : 'E: take the stairs down'; }
   if (mode === 'fair') return fairRidePrompt();
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
@@ -125,6 +126,7 @@ function promptText() {
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';
+  if (churchDoor()) return cathOpen() ? 'E: go into the cathedral' : 'The cathedral: locked for the night (opens at 7)';
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base === 'amb') return 'E: go into the hospital';

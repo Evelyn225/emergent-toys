@@ -30,7 +30,7 @@ Things get crossed off (deleted) once they're in the game.
 
 ### Old Town / Cobblestones
 - Crooked lanes that break the grid, gas lamps, the oldest buildings in the city.
-- Buildings: antique shop (weird one-off items), clockmaker, haunted inn, a church bell tower you can climb, a fortune teller.
+- Buildings: antique shop (weird one-off items), clockmaker, haunted inn, a fortune teller.
 - Hook: the fortune teller hints at something that actually happens later that day.
 
 ### Suburbs / the Edge of Town

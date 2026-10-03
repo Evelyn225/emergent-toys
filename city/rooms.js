@@ -685,7 +685,7 @@ function trainWall(i, u, uStep, z, d, mx, my, L) {
 function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const R = room, D = R.def, c = roomAt(mx, my), L = fog * (side ? 10 : 14) * D.light;
   BG[i] = NONE;
-  if (c === 'D') { // the way out: glass doors, or stairs up from the subway
+  if (c === 'D' && R.kind !== 'cathedral') { // the way out: glass doors, or stairs up from the subway
     if (R.kind === 'station') {
       if (z > 1.6 + STATION_STAIRS.rise) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, 1.8 + STATION_STAIRS.rise, 0.25, 0.3, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
       set(i, ' ', 0); BG[i] = C(day > 0.3 ? WHITE : WARM, 3 + day * 7); return; // daylight (or streetlight) from the top
@@ -726,6 +726,7 @@ function roomFloor(i, r, x, rx, ry) {
     case 'rubber': return set(i, (r * 7 + x * 3) % 11 ? ' ' : '.', C(GRAY, L));
     case 'concrete': { const h = hash(Math.floor(wx * 2), Math.floor(wy * 2), 37); return set(i, h > 0.9 ? '%' : (r + x) % 4 ? ' ' : '.', C(h > 0.9 ? BRICK : GRAY, L * (h > 0.9 ? 0.6 : 1))); }
     case 'aqua': return aquaFloor(i, f, wx, wy);
+    case 'cathedral': return cathedralFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
       if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
@@ -759,6 +760,7 @@ function roomCeil(i, r, x, rx, ry) {
     return set(i, on ? '*' : ' ', C(NEON[(Math.floor(wx * 3 + wy * 2 + T * 3)) & 3], 15));
   }
   if (st === 'aqua') return aquaCeil(i, r, x, wx, wy);
+  if (st === 'cathedral') return cathedralCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
   const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));

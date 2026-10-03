@@ -29,7 +29,7 @@ function citySprites() {
     else if (b.kind === 'tug') drawArt(vx, vy, 0, 0.7, 0.45, ART.tug, (c, row, L) => c === 'o' ? lit(c, L) : C(row === 0 ? GRAY : RED, L));
     else drawArt(vx, vy, 0, 1.6, 0.6, FERRY, (c, row, L) => c === 'o' ? lit(c, L) : C(row < 2 ? WHITE : row === 2 ? BLUE : GRAY, L));
   }
-  forNear(extrasB, o => drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col));
+  forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8)) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
   for (const v of vendors) {
     const t = v.type, frame = t.art[(T * 2 | 0) & 1];
     drawArt(...R(v.x, v.y), 0, t.w, 0.22, frame, (c, row, L) =>

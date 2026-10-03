@@ -419,3 +419,30 @@ test('the aquarium: admission at the door, fish in every kind of tank, a touch p
   assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the gift shop');
   assert.ok(await page.evaluate(() => shopCtx.stock.includes('sharkplush')));
 }));
+
+test('the cathedral: in through the great doors, a seat in a pew, a candle lit, up the bell tower and back down, out again', () => withPage(async page => {
+  await page.evaluate(() => { tod = 15; for (const [k, v] of landmarkOf) if (v === 'cathedral') { px = (k % NB) * 8 + 5; py = Math.floor(k / NB) * 8 + 3.7; a = Math.PI / 2; break; } });
+  await page.waitForTimeout(100);
+  assert.match(await page.evaluate(() => promptText()), /go into the cathedral/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, room.def.height]), ['room', 'cathedral', 16]);
+  await page.evaluate(() => { px = 9; py = 15.6; });
+  await page.keyboard.press('KeyC');
+  assert.ok(await page.evaluate(() => !!body.seat), 'sitting in a pew');
+  await page.evaluate(() => { body.seat = null; px = 19; py = 35.3; });
+  const lit = await page.evaluate(() => room.candles);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [room.candles, money]), [lit + 1, 99]);
+  await page.evaluate(() => { px = CATH_TOWER[0]; py = CATH_TOWER[1] - 0.2; });
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, roofH]), ['roof', 8], 'up the tower, 80m');
+  await page.waitForTimeout(200);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind]), ['room', 'cathedral'], 'back down');
+  await page.evaluate(() => { px = 11; py = 38.3; a = Math.PI / 2; });
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(400); await page.keyboard.up('KeyW');
+  assert.strictEqual(await page.evaluate(() => mode), 'walk', 'out the doors');
+  await page.evaluate(() => { tod = 23; for (const [k, v] of landmarkOf) if (v === 'cathedral') { px = (k % NB) * 8 + 5; py = Math.floor(k / NB) * 8 + 3.7; break; } });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => mode), 'walk', 'locked at night');
+}));

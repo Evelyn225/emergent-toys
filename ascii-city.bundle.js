@@ -679,7 +679,7 @@ const solidBox = (x, y, alongX, hl, hw, z0, z1, kind, k) => solids.push({ x, y, 
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bi(bx, by)), kind = blockKind(bx, by);
   if (lm === 'cathedral') for (const x of [3.5, 6.5])
-    extras.push({ x: X + x, y: Y + 3.5, z: 8, w: 0.9, h: 3, art: ART.spire, col: (c, row, L) => C(c === '+' ? YEL : GRAY, c === '+' ? Math.max(L, night * 15) : L) });
+    extras.push({ spire: true, x: X + x, y: Y + 3.5, z: 8, w: 0.9, h: 3, art: ART.spire, col: (c, row, L) => C(c === '+' ? YEL : GRAY, c === '+' ? Math.max(L, night * 15) : L) });
   if (lm === 'radio') radios.push({ x: X + 5, y: Y + 5 });
   if (kind === 'construction') {
     cranes.push({ x: X + 7, y: Y + 6.2, H: 7 + hash(bx, by, 98) * 2, slew: hash(bx, by, 99) * 6.28 });
@@ -1540,7 +1540,7 @@ const AUDIO_DISTRICT = {
 const ROOM_AUDIO = {
   bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
-  hotel: [0.2, 0.4, 0], aquarium: [0.2, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
+  hotel: [0.2, 0.4, 0], aquarium: [0.2, 0, 0], cathedral: [0.06, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -1567,6 +1567,7 @@ function audioMix(s) {
     if (k === 'station') out.tunnel = 0.7;
     if (k === 'lighthouse' || k === 'lamproom') { out.waves = 0.55; out.wind = k === 'lamproom' ? 0.5 : 0.15; out.city = 0; } // the sea all round
     if (k === 'train') out.rumble = 0.9;
+    if (k === 'cathedral') out.city = 0.015; // thick walls
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
     return out;
   }
@@ -2833,7 +2834,7 @@ const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
-  if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc);
+  if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
   BG[i] = bgAt(FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d);
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
@@ -3055,7 +3056,7 @@ function serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL) {
 
 // wc = world coordinate along the wall; lu = position across the face from the block's middle, left-to-right on screen
 const TICKER = ADS.join('   *   ') + '   *   ';
-function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc) {
+function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
   const L = fog * amb * (side ? 10 : 15), lu = (mod(wc, 8) - 5) * (Math.abs(u - wc) < 1e-6 ? 1 : -1);
   if (sty === 3) { // clock tower: stone, with a clock face showing the game time on every side
     BG[i] = bgAt(GRAY, day * 5 * (0.5 + 0.5 * fog));
@@ -3073,6 +3074,20 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc) {
   }
   if (sty === 4) { // cathedral: stone with tall pointed stained-glass windows
     BG[i] = bgAt(GRAY, day * 5 * (0.5 + 0.5 * fog));
+    if (side && mod(my, 8) === 4 && h < 4 && rel(py - my) < 0) { // the west front, between the towers: the great doors, a rose window over them
+      const dx = mod(wc, 8) - 5, ad = Math.abs(dx), rz = z - 1.75, rr = Math.hypot(dx, rz), glow = Math.max(L * 0.6, night * fog * 13, 4);
+      if (rr < 0.5) {
+        if (rr > 0.45 || Math.abs(fract((Math.atan2(dx, rz) + Math.PI) / (Math.PI / 6)) - 0.5) > 0.45 && rr > 0.1) return set(i, '+', C(GRAY, L));
+        BG[i] = C(rr < 0.1 ? YEL : GLASS[Math.floor((Math.atan2(dx, rz) + Math.PI) / (Math.PI / 6)) + Math.floor(rr * 6) & 7], glow * 0.5);
+        return set(i, rr < 0.1 ? '*' : ' ', C(WHITE, glow));
+      }
+      const top = 0.62 - 0.25 * Math.min(1, ad / 0.18) ** 0.7;
+      if (ad < 0.2 && z < top + 0.04) {
+        if (ad > 0.18 || z > top) return set(i, '#', C(GRAY, L * 1.1));
+        BG[i] = C(BRICK, 1 + L * 0.15 + (cathOpen() ? night * 2 : 0));
+        return set(i, ad < 0.006 ? '|' : hash(Math.floor(dx * 60), Math.floor(z * 60), 506) > 0.93 ? 'o' : fract(dx * 25) < 0.15 ? '|' : ' ', C(ad < 0.006 ? GRAY : BRICK, L * 1.2));
+      }
+    }
     const fu = fract(u * 1.5), wcen = Math.abs(fu - 0.5), top = (h > 4 ? h - 1.5 : 2.3) - wcen * 1.2;
     if (wcen < 0.2 && z > 0.6 && z < top) {
       if (wcen > 0.16) return set(i, '|', C(GRAY, L));
@@ -3440,7 +3455,7 @@ function citySprites() {
     else if (b.kind === 'tug') drawArt(vx, vy, 0, 0.7, 0.45, ART.tug, (c, row, L) => c === 'o' ? lit(c, L) : C(row === 0 ? GRAY : RED, L));
     else drawArt(vx, vy, 0, 1.6, 0.6, FERRY, (c, row, L) => c === 'o' ? lit(c, L) : C(row < 2 ? WHITE : row === 2 ? BLUE : GRAY, L));
   }
-  forNear(extrasB, o => drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col));
+  forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8)) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
   for (const v of vendors) {
     const t = v.type, frame = t.art[(T * 2 | 0) & 1];
     drawArt(...R(v.x, v.y), 0, t.w, 0.22, frame, (c, row, L) =>
@@ -4826,7 +4841,7 @@ function trainWall(i, u, uStep, z, d, mx, my, L) {
 function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const R = room, D = R.def, c = roomAt(mx, my), L = fog * (side ? 10 : 14) * D.light;
   BG[i] = NONE;
-  if (c === 'D') { // the way out: glass doors, or stairs up from the subway
+  if (c === 'D' && R.kind !== 'cathedral') { // the way out: glass doors, or stairs up from the subway
     if (R.kind === 'station') {
       if (z > 1.6 + STATION_STAIRS.rise) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, 1.8 + STATION_STAIRS.rise, 0.25, 0.3, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
       set(i, ' ', 0); BG[i] = C(day > 0.3 ? WHITE : WARM, 3 + day * 7); return; // daylight (or streetlight) from the top
@@ -4867,6 +4882,7 @@ function roomFloor(i, r, x, rx, ry) {
     case 'rubber': return set(i, (r * 7 + x * 3) % 11 ? ' ' : '.', C(GRAY, L));
     case 'concrete': { const h = hash(Math.floor(wx * 2), Math.floor(wy * 2), 37); return set(i, h > 0.9 ? '%' : (r + x) % 4 ? ' ' : '.', C(h > 0.9 ? BRICK : GRAY, L * (h > 0.9 ? 0.6 : 1))); }
     case 'aqua': return aquaFloor(i, f, wx, wy);
+    case 'cathedral': return cathedralFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
       if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
@@ -4900,6 +4916,7 @@ function roomCeil(i, r, x, rx, ry) {
     return set(i, on ? '*' : ' ', C(NEON[(Math.floor(wx * 3 + wy * 2 + T * 3)) & 3], 15));
   }
   if (st === 'aqua') return aquaCeil(i, r, x, wx, wy);
+  if (st === 'cathedral') return cathedralCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
   const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
@@ -5199,6 +5216,211 @@ function aquaUpper(i, u, uStep, z, d, L) {
   BG[i] = C(BLUE, ((Math.floor(u * 16) + Math.floor(z * 32)) & 1 ? 1.5 : 2.5) + L * 0.1); // tiles, two blues
   return set(i, ' ', 0);
 }
+// ===== the cathedral (a landmark: world.js builds it, its spires are props), now with a way in. Through the great
+// doors between the towers: a nave 38m long under a 16m vault, two rows of pillars down it, pews, tall stained-glass
+// windows down both sides throwing coloured light on the floor when the sun's up, a rose window over the altar,
+// organ pipes over the doors, candles to light, and the stairs up one of the towers to the bell.
+const CATH_H = 16, CATH_W = 22, CATH_D = 40; // vault height, width, length (m)
+const CATH_GRID = Array.from({ length: CATH_D }, (_, y) => Array.from({ length: CATH_W }, (_, x) => {
+  if (y === CATH_D - 1 && (x === 10 || x === 11)) return 'D';
+  if (x === 0 || y === 0 || x === CATH_W - 1 || y === CATH_D - 1) return '#';
+  if ((x === 6 || x === 15) && y >= 7 && y <= 31 && (y - 7) % 4 === 0) return 'P'; // the arcade's pillars
+  return '.';
+}).join(''));
+const CATH_BAYS = [9, 13, 17, 21, 25, 29]; // window bays down each side, between the pillars
+const CATH_TOWER = [2.2, 37.6]; // the tower stair door, in the corner by the entrance
+const GLASS = [RED, BLUE, YEL, GREEN, MAG, CYAN, BLUE, RED];
+const cathOpen = () => tod >= 7 && tod < 22;
+// the great doors, from outside: a cathedral block, standing in the forecourt between the towers
+function churchDoor() {
+  if (mode !== 'walk') return null;
+  const bx = Math.floor(px / 8), by = Math.floor(py / 8);
+  if (landmarkOf.get(bi(bx, by)) !== 'cathedral') return null;
+  const lx = mod(px, 8), ly = mod(py, 8);
+  return Math.abs(lx - 5) < 0.4 && ly > 3.4 && ly < 4 ? { bx: mod(bx, NB), by: mod(by, NB) } : null;
+}
+function enterCathedral(cd) {
+  if (!cathOpen()) return say('The great doors are locked for the night. Open again at 7.', 3);
+  enterRoom('cathedral', { word: 'CATHEDRAL', neon: YEL, ret: [px, py, a], tower: [cd.bx * 8 + 3.5, cd.by * 8 + 3.5], candles: 3 + (Math.random() * 6 | 0),
+    line: pick(['Peace be with you.', 'All are welcome here.', 'Mind the step by the font.', 'Evensong is at six, if you\'d like to stay.']) }, [11, CATH_D - 1.6, -Math.PI / 2]);
+  say(pick(['The doors close behind you and the city goes quiet.', 'Cool air, old stone, a hush. Your footsteps echo.']), 3);
+}
+// inside: what's in reach
+const nearCandles = () => room.kind === 'cathedral' && Math.hypot(px - 19, py - 34.6) < 1.3;
+const nearTowerStair = () => room.kind === 'cathedral' && Math.hypot(px - CATH_TOWER[0], py - CATH_TOWER[1]) < 1.3;
+function cathedralPrompt() {
+  if (nearCandles()) return `E: light a candle (${fmt$(1)})`;
+  if (nearTowerStair()) return 'E: climb the bell tower';
+  return '';
+}
+function useCathedral() { // true if E did something
+  if (nearCandles()) {
+    if (!pay(1)) return say('A coin in the box for a candle. You have nothing.'), true;
+    room.candles = Math.min(24, room.candles + 1);
+    say(pick(['You light a candle and watch it catch.', 'A small flame, for someone.', 'You light a candle. It flickers, then holds.']), 3);
+    if (actx) [262, 330, 392, 523].forEach((f, k) => tone(actx.currentTime + k * 0.25, f, 1.6, 0.025)); // somewhere, the organ
+    return true;
+  }
+  if (nearTowerStair()) { // up the tower: stand on its top, by the bell, 80m over the square
+    mode = 'roof'; roofH = map[idx(Math.floor(room.tower[0]), Math.floor(room.tower[1]))]; px = room.tower[0]; py = room.tower[1]; a = -Math.PI / 2; pitch = -0.1;
+    say('Three hundred and twelve steps. The bell hangs over you and the whole city spreads out below.', 5);
+    return true;
+  }
+  return false;
+}
+
+// ---- the walls
+// a lancet window: pointed top. du = across from its middle, z0..z1 its height, hw half width. Returns 0 outside it,
+// 1 in the glass, 2 on its stone frame
+function lancet(du, z, z0, z1, hw) {
+  const ad = Math.abs(du), zs = z1 - hw * 1.6; // where the arch springs from its straight sides
+  if (ad > hw + 0.12 || z < z0 - 0.15) return 0;
+  const top = z1 - (z1 - zs) * Math.min(1, ad / hw) ** 0.7; // two curves meeting in a point
+  if (z > top + 0.15) return 0;
+  return z < z0 || z > top || ad > hw ? 2 : 1;
+}
+// stained glass: leaded panes in jewel colours, a round medallion up the middle; it glows with the daylight
+function glassCell(i, du, z, seed, cz, hw) {
+  const lit = 4 + day * 10 + dusk * 3, rr = Math.hypot(du, (z - cz) * 0.9);
+  if (rr < hw * 0.75) { // the medallion: rings, a gold halo in the middle
+    if (Math.abs(rr - hw * 0.72) < 0.05) { BG[i] = C(GRAY, 1); return set(i, 'o', C(GRAY, 6)); }
+    const ring = Math.floor(rr / (hw * 0.18)), sec = Math.floor((Math.atan2(du, z - cz) + Math.PI) / (Math.PI / 4));
+    BG[i] = C(ring === 0 ? YEL : GLASS[(ring * 3 + sec + seed) & 7], lit * (ring === 0 ? 1.1 : 0.8));
+    return set(i, ring === 0 ? '+' : (sec + ring) & 1 ? ' ' : '.', C(WHITE, lit));
+  }
+  if (fract(du / 0.28 + 0.5) < 0.1 || fract(z / 0.4) < 0.08) { BG[i] = C(GRAY, 1); return set(i, '+', C(GRAY, 5)); } // the leading
+  const k = hash(Math.floor(du / 0.28 + 0.5) + seed * 7, Math.floor(z / 0.4), 501);
+  BG[i] = C(GLASS[k * 8 | 0], lit * (0.6 + 0.4 * k));
+  return set(i, k > 0.85 ? '*' : ' ', C(WHITE, lit));
+}
+const stone = (i, u, z, L) => { // coursed stone blocks
+  BG[i] = C(GRAY, 1 + L * 0.12);
+  return set(i, fract(z / 0.5) < 0.08 ? '-' : fract(u + (Math.floor(z / 0.5) & 1) * 0.5) < 0.05 ? '|' : ' ', C(GRAY, L * 0.7));
+};
+function cathedralWall(i, su, uStep, z, d, mx, my, L) {
+  const u = Math.abs(su), c = roomAt(mx, my);
+  if (c === 'P') { // a clustered pillar: shafts running up into the vault, a carved capital
+    BG[i] = C(GRAY, 1.5 + L * 0.15);
+    if (z < 0.6) return set(i, fract(z / 0.2) < 0.2 ? '=' : '#', C(GRAY, L)), true; // the base
+    if (z > 7 && z < 7.7) return set(i, z > 7.55 ? '=' : '%', C(z > 7.55 ? GRAY : YEL, L * (z > 7.55 ? 1 : 0.6))), true; // capital, leaves picked out in gilt
+    return set(i, fract(u / 0.2) < 0.25 ? '|' : ' ', C(GRAY, L)), true;
+  }
+  if (my === CATH_D - 1) { // the west end: the great doors, the organ gallery over them
+    const dx = u - 11;
+    const door = lancet(dx, z, 0, 5, 1.2);
+    if (door === 1) { BG[i] = C(BRICK, 2 + L * 0.2); return set(i, Math.abs(dx) < 0.04 ? '|' : hash(Math.floor(dx * 6), Math.floor(z * 6), 502) > 0.92 ? 'o' : fract(dx * 4) < 0.15 ? '|' : ' ', C(Math.abs(dx) < 0.04 ? GRAY : BRICK, L * 1.1)), true; }
+    if (door === 2) return set(i, '#', C(GRAY, L)), true;
+    if (Math.abs(z - 5.8) < 0.15 && Math.abs(dx) < 7) return set(i, '=', C(BRICK, L * 1.2)), true; // the gallery rail
+    if (z > 6 && Math.abs(dx) < 6.5) { // organ pipes, tallest in the middle and at the towers either side
+      const p = Math.floor(dx / 0.3), top = 13 - Math.abs(p) * 0.18 + (Math.abs(p) % 7 === 0 ? 1.2 : 0) + 0.5 * Math.cos(p * 0.9);
+      if (z > top) return stone(i, u, z, L), true;
+      const fp = fract(dx / 0.3);
+      if (fp < 0.15 || fp > 0.85) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
+      BG[i] = C(Math.abs(p) % 7 === 0 ? YEL : GRAY, 2 + L * 0.25);
+      return set(i, z < 6.6 && z > 6.35 ? 'v' : fract(fp * 3) < 0.3 ? '|' : ' ', C(WHITE, L * 1.2)), true;
+    }
+    if (Math.abs(u - CATH_TOWER[0]) < 0.6 && z < 2.4) { // the tower stair's little door
+      BG[i] = C(BRICK, 1.5); return set(i, z > 2.25 || Math.abs(u - CATH_TOWER[0]) > 0.5 ? '#' : fract(u * 5) < 0.2 ? '|' : ' ', C(GRAY, L)), true;
+    }
+    if (Math.abs(u - CATH_TOWER[0]) < 1 && Math.abs(z - 2.75) < 0.2 && wallText(i, su, uStep, z, d, 'TOWER', CATH_TOWER[0] * Math.sign(su), 2.75, 0.18, 0.25, C(WHITE, 13))) return true;
+    return stone(i, u, z, L), true;
+  }
+  if (my === 0) { // the east end: the rose window, three lancets, a gilded reredos behind the altar
+    const dx = u - 11, rz = z - 11, rr = Math.hypot(dx, rz);
+    if (rr < 3.6) {
+      if (rr > 3.3) { BG[i] = C(GRAY, 2); return set(i, '#', C(GRAY, L)), true; }
+      const ang = Math.atan2(dx, rz), sec = Math.floor((ang + Math.PI) / (Math.PI / 6)), lit = 4 + day * 10 + dusk * 3;
+      const rings = [0.7, 1.6, 2.5, 3.3], ring = rings.findIndex(q => rr < q);
+      if (rings.some(q => Math.abs(rr - q) < 0.07) || Math.abs(fract((ang + Math.PI) / (Math.PI / 6)) - 0.5) > 0.47 && rr > 0.7) { BG[i] = C(GRAY, 1); return set(i, '+', C(GRAY, 6)), true; } // the tracery
+      const petal = ring === 2 ? Math.hypot(fract((ang + Math.PI) / (Math.PI / 6)) - 0.5, (rr - 2.05) / 0.9) < 0.42 : true;
+      BG[i] = C(ring === 0 ? YEL : petal ? GLASS[(sec + ring * 2) & 7] : BLUE, lit * (ring === 0 ? 1.2 : 0.85));
+      return set(i, ring === 0 ? '*' : petal && ring === 2 ? '.' : ' ', C(WHITE, lit)), true;
+    }
+    for (const [cx, hw] of [[8.3, 0.7], [11, 0.9], [13.7, 0.7]]) {
+      const w = lancet(u - cx, z, 3, cx === 11 ? 7.2 : 6.6, hw);
+      if (w === 1) return glassCell(i, u - cx, z, cx | 0, cx === 11 ? 5.6 : 5.2, hw), true;
+      if (w === 2) { BG[i] = C(GRAY, 1.5); return set(i, '#', C(GRAY, L)), true; }
+    }
+    if (Math.abs(dx) < 3.2 && z > 0.9 && z < 2.6) { // the reredos: gilt niches
+      BG[i] = C(YEL, 2 + L * 0.2);
+      const nf = fract((dx + 3.2) / 0.8);
+      return set(i, nf < 0.1 ? '|' : z > 2.4 ? '^' : nf > 0.3 && nf < 0.7 && z > 1.2 && z < 2.2 ? (z > 1.9 ? 'o' : '|') : ' ', C(YEL, Math.max(L * 1.3, 9))), true;
+    }
+    return stone(i, u, z, L), true;
+  }
+  // the long walls: a tall window in every bay, the stations of the cross small and framed below them
+  for (const [k, by] of CATH_BAYS.entries()) {
+    const w = lancet(u - by, z, 3.5, 11.5, 1.05);
+    if (w === 1) return glassCell(i, u - by, z, k * 3 + (mx ? 1 : 0), 8.6, 1.05), true;
+    if (w === 2) { BG[i] = C(GRAY, 1.5); return set(i, '#', C(GRAY, L)), true; }
+    if (Math.abs(u - by) < 0.35 && z > 1.6 && z < 2.3) { // a station of the cross: a small carved panel
+      BG[i] = C(BRICK, 1.5);
+      return set(i, Math.abs(u - by) > 0.3 || z < 1.65 || z > 2.25 ? '#' : Math.abs(u - by) < 0.04 || Math.abs(z - 2.05) < 0.03 ? '+' : ' ', C(YEL, L)), true;
+    }
+  }
+  if (z < 1.1) { BG[i] = C(BRICK, 1 + L * 0.1); return set(i, z > 1.02 ? '=' : fract(u / 0.6) < 0.1 ? '|' : ' ', C(BRICK, L)), true; } // oak panelling
+  return stone(i, u, z, L), true;
+}
+// overhead: a ribbed vault, bay by bay, the nave's webs painted deep blue with gold stars
+function cathedralCeil(i, wx, wy) {
+  const bay = (wy - 7) / 4, ly = fract(bay), nave = wx > 6 && wx < 16, x0 = nave ? 6 : wx < 6 ? 0 : 16, x1 = nave ? 16 : wx < 6 ? 6 : CATH_W;
+  const lx = (wx - x0) / (x1 - x0), e = 0.035;
+  if (ly < e * 1.2 || ly > 1 - e * 1.2 || Math.abs(lx - ly) < e || Math.abs(lx + ly - 1) < e || nave && Math.abs(wx - 11) < 0.08 || lx < 0.02 || lx > 0.98) {
+    BG[i] = C(GRAY, 2); return set(i, '=', C(GRAY, 8)); // the ribs
+  }
+  if (Math.abs(lx - 0.5) < 0.04 && Math.abs(ly - 0.5) < 0.04) return set(i, '@', C(YEL, 12)); // a gilt boss where they cross
+  if (nave) { BG[i] = C(BLUE, 1.5); return set(i, hash(Math.floor(wx * 3), Math.floor(wy * 3), 503) > 0.9 ? '*' : ' ', C(YEL, 10)); }
+  BG[i] = C(GRAY, 1); return set(i, (Math.floor(wx * 2) + Math.floor(wy * 2)) % 5 ? ' ' : '.', C(GRAY, 4));
+}
+// underfoot: worn flagstones, a red runner up the middle aisle, and pools of coloured light under the windows
+function cathedralFloor(i, f, wx, wy) {
+  if (Math.abs(wx - 11) < 0.65 && wy > 6.5) { BG[i] = C(RED, 1.5 + f * 2); return set(i, Math.abs(wx - 11) > 0.55 ? '|' : ' ', C(YEL, 4 + f * 6)); }
+  if (day > 0.2) for (const [k, by] of CATH_BAYS.entries()) for (const side of [0, 1]) { // the sun through the glass
+    const off = side ? CATH_W - wx : wx, shift = (tod - 12) * 0.25 * (side ? -1 : 1);
+    if (off > 1 && off < 4.5 && Math.abs(wy - by - shift) < 0.9) {
+      const kk = hash(Math.floor((wy - by - shift) / 0.28), Math.floor(off / 0.5) + k * 3, 504);
+      BG[i] = C(GLASS[kk * 8 | 0], 1 + day * 3 * f * (1 - Math.abs(off - 2.5) / 2.5));
+      return set(i, ' ', 0);
+    }
+  }
+  const edge = fract(wx / 1.2) < 0.04 || fract(wy / 1.2 + (Math.floor(wx / 1.2) & 1) * 0.5) < 0.04;
+  BG[i] = C(GRAY, (Math.floor(wx / 1.2) + Math.floor(wy / 1.2)) & 1 ? 1 : 1.6);
+  return set(i, edge ? '+' : ' ', C(GRAY, 3 + f * 4));
+}
+
+ROOM_DEFS.cathedral = { grid: CATH_GRID, light: 0.8, height: CATH_H, floor: 'cathedral', ceil: 'cathedral', wall: cathedralWall, keeper: [11, 4.9],
+  props: r => {
+    const gold = solid(YEL, { top: '=', bright: 1.4 }), white = solid(WHITE, { top: '~', trim: 0.92 });
+    const flame = (x, y, z) => SP(x, y, 0.05, 0.12, ['*', '|'], (c, row, L) => row ? C(WHITE, 14) : C(fract(T * 7 + x * 3) < 0.5 ? YEL : ORANGE, 15), z);
+    const p = [
+      { ...BX(11, 4, 5, 2.2, 0, 0.3, solid(GRAY, { top: '.', panel: 1 })), walk: true }, // the sanctuary steps
+      BX(11, 3.1, 1.5, 0.5, 0, 1.0, white), // the altar, under its cloth
+      BX(11, 2.5, 0.06, 0.06, 1.0, 2.8, gold), BX(11, 2.5, 0.45, 0.06, 2.15, 2.3, gold), // the cross
+      BX(9.2, 3.2, 0.05, 0.05, 0, 1.5, gold), BX(12.8, 3.2, 0.05, 0.05, 0, 1.5, gold), flame(9.2, 3.2, 1.5), flame(12.8, 3.2, 1.5),
+      BX(8.65, 6.4, 1.65, 0.06, 0, 0.9, solid(BRICK, { panel: 0.3, top: '=' })), BX(13.35, 6.4, 1.65, 0.06, 0, 0.9, solid(BRICK, { panel: 0.3, top: '=' })), // the altar rail
+      BX(7.8, 7.4, 0.4, 0.4, 0, 1.3, solid(BRICK, { panel: 0.2, trim: 1.2, top: '=' })), // the pulpit
+      standing(11, 4.9, WHITE), // the priest
+      BX(11, 36, 0.5, 0.5, 0, 1.0, (i, t, L) => { // the font
+        if (HIT.face === 5) { BG[i] = C(CYAN, 2 + noise(HIT.u * 6 + T * 0.3, HIT.v * 6, 505) * 2); return set(i, Math.hypot(HIT.u, HIT.v) > 0.42 ? '#' : '~', C(WHITE, 10)), true; }
+        BG[i] = C(GRAY, (1.5 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.w > 0.9 ? '=' : HIT.w < 0.15 ? '#' : (Math.floor(HIT.u * 8) & 1) ? '|' : ' ', C(GRAY, L)), true;
+      }),
+      BX(19, 34, 0.8, 0.25, 0, 0.9, (i, t, L) => { // the votive stand: rows of little candles, as many lit as there are
+        if (HIT.face !== 5) { BG[i] = C(BRICK, (1 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.w > 0.84 ? '=' : ' ', C(YEL, L)), true; }
+        const slot = Math.floor((HIT.u + 0.8) / 0.2) + Math.floor((HIT.v + 0.25) / 0.17) * 8;
+        BG[i] = C(BRICK, 2);
+        return set(i, slot < room.candles ? '*' : 'i', slot < room.candles ? C(fract(T * 6 + slot * 0.37) < 0.5 ? YEL : ORANGE, 15) : C(WHITE, 8)), true;
+      }),
+    ];
+    for (let y = 11; y <= 30; y += 2.1) for (const cx of [8.8, 13.2]) { // the pews, either side of the aisle
+      p.push({ ...BX(cx, y, 1.6, 0.22, 0, 0.45, solid(BRICK, { top: '=', bright: 1.3 })), seatRow: { x0: cx - 1.4, x1: cx + 1.4, y, fx: 0, fy: -1 } },
+             BX(cx, y + 0.26, 1.6, 0.05, 0.45, 1.0, solid(BRICK, { panel: 0.4, trim: 0.94, bright: 1.3 })));
+      if (chance(0.3)) p.push(sitting(cx - 1.2 + Math.random() * 2.4, y + 0.02, pick([GRAY, BLUE, BRICK, WHITE, GREEN]), 0.45, true));
+    }
+    for (const y of [13, 21, 29]) p.push(SP(11, y, 0.5, 3, pad(['  |', '  |', '  |', '  |', ' _|_', '*-o-*', " \\_/"]), // chandeliers on long chains
+      (c, row, L) => c === '*' ? C(fract(T * 5 + y) < 0.5 ? YEL : ORANGE, 15) : row < 4 ? C(GRAY, L * 0.8) : C(YEL, Math.max(L, 9)), 6));
+    for (const [x, y] of [[3, 20], [18.5, 14], [4, 33], [17, 26]]) if (chance(0.5)) p.push(standing(x, y, pick([GRAY, BLUE, BRICK, GREEN]))); // a few sightseers in the aisles
+    return p;
+  } };
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
 function drawArt(rx_, ry_, z, w, h, art, colFn) {
@@ -5500,6 +5722,7 @@ function promptText() {
     }
     if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
     if (nearTouchPool()) return 'E: touch the touch pool';
+    if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
@@ -5507,7 +5730,7 @@ function promptText() {
     if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
     return '';
   }
-  if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : 'E: take the stairs down'; }
+  if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : room && room.kind === 'cathedral' ? 'The bell tower, 80m up.   E: back down the stairs' : 'E: take the stairs down'; }
   if (mode === 'fair') return fairRidePrompt();
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
@@ -5536,6 +5759,7 @@ function promptText() {
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';
+  if (churchDoor()) return cathOpen() ? 'E: go into the cathedral' : 'The cathedral: locked for the night (opens at 7)';
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base === 'amb') return 'E: go into the hospital';
@@ -5776,6 +6000,7 @@ function interact() {
     if (room.burgled && nearKeeper()) return emptyTill();
     if (room.kind === 'laundry' && useLaundry()) return;
     if (nearTouchPool()) return say(pick(TOUCH_LINES), 3);
+    if (room.kind === 'cathedral' && useCathedral()) return;
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
       roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0;
@@ -5800,6 +6025,7 @@ function interact() {
     return say('The way out is over by the door.', 2);
   }
   if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
+  if (mode === 'roof' && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; return say('Down and down and round and round.', 2); }
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
@@ -5846,6 +6072,8 @@ function interact() {
   if (st) say(`Swipe: -${fmt$(SUBWAY_FARE)}`);
   if (st) return enterRoom('station', { st: stations.indexOf(st), word: st.name, t0: T - 30, ret: [px, py, a] }, [11.5, 7.6, Math.PI / 2]); // at the foot of the stairs, facing the platform
   if (nearLighthouse()) return enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [px, py, a], line: 'Mind the stairs. Two hundred and twelve of them.' }, [4, 6.2, -Math.PI / 2]);
+  const cd = churchDoor();
+  if (cd) return enterCathedral(cd);
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
@@ -7667,7 +7895,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Leave'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^climb/, 'Climb'], [/^go into/, 'Enter'], [/^back down/, 'Go down']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
