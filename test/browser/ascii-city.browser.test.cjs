@@ -652,3 +652,14 @@ test('every food and drink shows itself being used up (a level going down, steam
   });
   assert.deepStrictEqual(same, []);
 }));
+
+test('a shop you\'ve broken into: E means the till only at the counter, the way out only by the door', () => withPage(async page => {
+  await page.evaluate(() => { enterRoom('store', { word: 'DELI', neon: RED, ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]); });
+  const at = (x, y) => page.evaluate(([x, y]) => { px = x; py = y; return [promptText(), eLabel(promptText())]; }, [x, y]);
+  const keeper = await page.evaluate(() => room.def.keeper);
+  assert.deepStrictEqual(await at(keeper[0], keeper[1] + 0.5), ['G: take something   E: the till', 'Till']);
+  const door = await page.evaluate(() => [room.W / 2, room.H - 1.6]);
+  assert.deepStrictEqual(await at(door[0], door[1]), ['G: take something   E: leave', 'Exit']);
+  await page.evaluate(() => { px = 1.6; py = room.H / 2; });
+  if (await page.evaluate(() => !nearKeeper() && !nearExit())) assert.strictEqual(await page.evaluate(() => promptText()), 'G: take something');
+}));
