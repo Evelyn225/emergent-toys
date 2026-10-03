@@ -129,10 +129,11 @@ test('shops: E at the counter opens the menu, number keys buy; E only leaves at 
     await page.keyboard.press('KeyE');
     assert.strictEqual(await page.evaluate(() => mode), 'walk');
     await page.waitForTimeout(200);
-    assert.ok(await page.evaluate(() => { // the hand is drawn on the canvas over the frame: count its skin-tone pixels
-      const skin = [PALRGB[C(SKIN, 10)], PALRGB[C(SKIN, 13)]], d = g.getImageData(cv.width * 0.5, cv.height * 0.6, cv.width * 0.45, cv.height * 0.4).data; let n = 0;
+    assert.deepStrictEqual(await page.evaluate(() => handDrawn && handDrawn.id), 'coffee', 'the cup is in your hand');
+    assert.ok(await page.evaluate(() => { // and something hand-coloured really is on screen down there (any shade of skin)
+      const skin = [9, 10, 11, 12, 13, 14].map(l => PALRGB[C(SKIN, l)]), d = g.getImageData(cv.width * 0.5, cv.height * 0.6, cv.width * 0.45, cv.height * 0.4).data; let n = 0;
       for (let i = 0; i < d.length; i += 4) if (skin.some(([sr, sg, sb]) => Math.abs(d[i] - sr) < 6 && Math.abs(d[i + 1] - sg) < 6 && Math.abs(d[i + 2] - sb) < 6)) n++;
-      return n; }) > 200, 'the cup is in your hand');
+      return n; }) > 50, 'the hand drawn on the canvas');
     assert.deepStrictEqual(errors, []);
   } finally {
     await browser.close();
@@ -457,4 +458,100 @@ test('the cell block: you stay in your cell, the bars are see-through and there 
   const g0 = await page.evaluate(() => room.props.find(s => s.tick && s.y === 7.5).x);
   await page.waitForTimeout(500);
   assert.notStrictEqual(await page.evaluate(() => room.props.find(s => s.tick && s.y === 7.5).x), g0, 'the guard is walking');
+}));
+
+test('your home: things put in the closet are still there after a reload; a taxi takes you to your nearest home', () => withPage(async page => {
+  await page.evaluate(() => { money = 5000; buy('home_studio'); inv.push({ id: 'book', uses: 0 }, { id: 'umbrella', uses: 0 });
+    enterRoom('home', { word: 'HOME', ret: [px, py, a], cell: [0, 0] }, [ROOM_DEFS.home.grid[0].length / 2, 3, -Math.PI / 2]); [px, py] = room.def.spots.closet; py += 0.6; });
+  assert.match(await page.evaluate(() => promptText()), /your closet/);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the closet opens');
+  await page.keyboard.press('Digit1');
+  assert.deepStrictEqual(await page.evaluate(() => [closet.map(it => it.id), inv.map(it => it.id)]), [['book'], ['umbrella']]);
+  await page.keyboard.press('KeyE');
+  await page.evaluate(() => saveGame());
+  await page.reload(); await page.waitForTimeout(300);
+  assert.deepStrictEqual(await page.evaluate(() => closet.map(it => it.id)), ['book'], 'kept');
+  const d = await page.evaluate(() => {
+    leaveRoom && room && leaveRoom(); mode = 'walk';
+    me = cars.find(c => c.kind === 'taxi'); me.rider = true; me.fare = 0; mode = 'taxi'; return 0; });
+  await page.keyboard.press('Digit6');
+  const r = await page.evaluate(() => { const h = owned.homes[0], x = h.cell % N, y = Math.floor(h.cell / N);
+    return [me.destName.startsWith('home'), ROAD[idx(Math.floor(me.dest[0]), Math.floor(me.dest[1]))] > 0, Math.hypot(rel(me.dest[0] - x), rel(me.dest[1] - y)) < 7]; });
+  assert.deepStrictEqual(r, [true, true, true], 'to the street outside home');
+}));
+
+test('the calendar: midnight turns the day over; Saturday night there are fireworks over the bay, and not on a Tuesday', () => withPage(async page => {
+  await page.evaluate(() => { dayNum = 4; tod = 23.99; });
+  await page.waitForTimeout(400);
+  assert.strictEqual(await page.evaluate(() => weekday()), 'Sat', 'Friday became Saturday at midnight');
+  await page.evaluate(() => { tod = 21.2; weather = 'clear'; px = FAIR.cx; py = SHORE_S * 8 + 2.4; a = Math.PI / 2; pitch = 0.45; });
+  await page.waitForTimeout(4000);
+  assert.ok(await page.evaluate(() => shells.length) > 0, 'shells in the air');
+  assert.match(await page.evaluate(() => CH.join('')), /[*@+]/, 'and on screen');
+  await page.evaluate(() => { dayNum = 1; shells.length = 0; });
+  await page.waitForTimeout(2000);
+  assert.strictEqual(await page.evaluate(() => shells.length), 0, 'nothing on a Tuesday');
+}));
+
+test('graffiti: murals on some walls; spray paint from the hardware store tags a wall, the tag is kept, and a cop seeing it means trouble', () => withPage(async page => {
+  assert.ok(await page.evaluate(() => { let n = 0; for (let y = 8; y < 190; y++) for (let x = 0; x < N; x++) if (map[idx(x, y)] && muralSeed(idx(x, y), x, y, 'S') >= 0) n++; return n; }) > 30, 'murals round town');
+  assert.ok(await page.evaluate(() => stockFor('', 'HARDWARE').includes('spraypaint')));
+  const spot = await page.evaluate(() => { for (let y = 8; y < 190; y++) for (let x = 0; x < N; x++) if (map[idx(x, y)] > 0.5 && STY[idx(x, y)] < 3 && !map[idx(x, y + 1)] && ROAD[idx(x, y + 1)] === 2) return [x, y]; });
+  await page.evaluate(([x, y]) => { px = x + 0.5; py = y + 1.12; a = -Math.PI / 2; pitch = 0; inv.push({ id: 'spraypaint', uses: 6 }); held = inv.length - 1;
+    for (const c of cars) if (c.patrol) { c.x = mod(px + 80, N); c.ex = c.x; } for (const c of footCops) c.x = mod(px + 80, N); }, spot);
+  await page.waitForTimeout(150);
+  await page.keyboard.press('KeyQ');
+  assert.deepStrictEqual(await page.evaluate(() => [tags.length, inv[held].uses, wanted.stars]), [1, 5, 0], 'tagged, nobody official watching');
+  await page.evaluate(() => { saveGame(); });
+  await page.reload(); await page.waitForTimeout(300);
+  assert.strictEqual(await page.evaluate(() => tags.length), 1, 'still there after a reload');
+  await page.evaluate(([x, y]) => { px = x + 1.5; py = y + 1.12; a = -Math.PI / 2; inv.push({ id: 'spraypaint', uses: 6 }); held = inv.length - 1;
+    footCops[0].x = px + 0.5; footCops[0].y = py + 0.3; }, spot);
+  await page.waitForTimeout(150);
+  await page.keyboard.press('KeyQ');
+  assert.ok(await page.evaluate(() => wanted.stars >= 1 && wanted.crime === 'vandalism'), 'wanted for vandalism');
+}));
+
+test('the Shotengai: a roof over its streets, dry in the rain; pachinko pays tickets, the crane can win you a plush, a capsule for the night', () => withPage(async page => {
+  const st = await page.evaluate(() => { for (let by = 17; by <= 20; by++) for (let bx = 11; bx <= 15; bx++) if (vseg(bx, by) && vseg(bx, by + 1) && blockKind(bx, by) === '' && blockKind(bx - 1, by) === '') return [bx * 8 + 1.35, by * 8 + 7.5]; });
+  assert.ok(st, 'a covered street');
+  await page.evaluate(([x, y]) => { tod = 13; weather = 'rain'; rain = 1; px = x; py = y; a = -Math.PI / 2; pitch = 0.9; }, st);
+  await page.waitForTimeout(300);
+  assert.strictEqual(await page.evaluate(() => districtAt(px, py)), 'shotengai');
+  assert.ok(await page.evaluate(() => { let roof = 0; for (let i = 0; i < cols * 6; i++) if (ZB[i] > 0 && ZB[i] < 40) roof++; return roof > cols * 3; }), 'the roof overhead, not sky');
+  assert.ok(!(await page.evaluate(() => CH.join(''))).includes('!'), 'no rain falling under it');
+  await page.evaluate(() => enterRoom('pachinko', { word: 'PACHINKO', neon: MAG, ret: [px, py, a] }, [7, 9.4, -Math.PI / 2]));
+  await page.evaluate(() => { const m = room.props.find(s => s.pachi && !s.busy); px = m.cx; py = m.cy + m.fy * 0.75; });
+  assert.match(await page.evaluate(() => promptText()), /pachinko/);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'pachinko');
+  await page.evaluate(() => { game.g.score = 80; });
+  await page.keyboard.press('KeyE'); // cash out
+  assert.strictEqual(await page.evaluate(() => tickets), 10, '80 balls, 10 tickets');
+  await page.evaluate(() => { game = null; enterRoom('cranes', { word: 'CRANE GAME', neon: MAG, ret: [px, py, a] }, [5.5, 6.4, -Math.PI / 2]); px = 4.8; py = 2.4; });
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'crane');
+  await page.evaluate(() => { game.g.prize = 'plushcat'; game.g.over = true; });
+  await page.waitForTimeout(200);
+  assert.ok(await page.evaluate(() => inv.some(it => it.id === 'plushcat')), 'won a lucky cat');
+  await page.evaluate(() => { game = null; enterRoom('capsule', { word: 'CAPSULE', neon: CYAN, ret: [px, py, a] }, [3.5, 10.4, -Math.PI / 2]); py = 9.9; tod = 15; });
+  await page.keyboard.press('KeyE');
+  assert.ok(await page.evaluate(() => !!sleep), 'asleep in a pod');
+}));
+
+test('mahjong at the tea house: the buy-in goes in the pot, walking away loses it, a win pays the pot', () => withPage(async page => {
+  await page.evaluate(() => enterRoom('tea', { word: 'MAHJONG', neon: RED, ret: [px, py, a], line: 'Hi' }, [3, 5.2, -Math.PI / 2]));
+  assert.match(await page.evaluate(() => promptText()), /mahjong/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, game.kind, money, game.g.hands[0].length]), ['mahjong', 'table', 95, 14]);
+  await page.keyboard.press('Space'); // throw a tile
+  assert.strictEqual(await page.evaluate(() => game.g.hands[0].length), 13);
+  await page.keyboard.press('KeyE'); // get up mid-hand
+  assert.deepStrictEqual(await page.evaluate(() => [game, money]), [null, 95], 'the stake stays in the pot');
+  await page.keyboard.press('KeyE');
+  await page.evaluate(() => { game.g.hands[0].splice(0, 14, 0, 0, 0, 1, 2, 3, 9, 10, 11, 20, 20, 20, 26, 26); });
+  await page.keyboard.press('ArrowUp'); // MAHJONG!
+  await page.waitForTimeout(150);
+  assert.deepStrictEqual(await page.evaluate(() => [game.g.result.winner, money]), [0, 110], 'won the pot: $20');
 }));

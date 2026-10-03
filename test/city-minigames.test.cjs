@@ -227,3 +227,45 @@ test('high striker: three swings, each scored by how high the puck went; the bel
   assert.strictEqual(rings, 3, 'DING x3');
   assert.strictEqual(ev('g.reward()'), 60);
 });
+
+test('pachinko: balls fired land in pockets now and then (any column can be reached), and cashing out is 8 balls a ticket', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.pachinko(); g.score = 10000');
+  const events = play(ev, 120, '() => ({ act: 1 })');
+  assert.ok(events.includes('score') && events.includes('eat'), 'both kinds of pocket hit');
+  assert.ok(ev('g.score') < 10000, 'the house wins over time');
+  ev('g.score = 40');
+  assert.strictEqual(ev('g.reward()'), 5);
+});
+
+test('crane: a drop either grabs something and brings it home as a prize, or comes up empty; one go', () => {
+  let wins = 0;
+  for (let s = 1; s <= 20; s++) {
+    const { ev } = require('./helpers/load-city.cjs').loadCity(s);
+    ev('var g = GAMES.crane()');
+    play(ev, 30, '(t) => ({ right: t < 0.6, actP: Math.abs(t - 0.7) < 0.01 })');
+    assert.ok(ev('g.over'));
+    if (ev('g.prize')) { wins++; assert.ok(ev('!!ITEMS[g.prize]'), 'a real item'); }
+  }
+  assert.ok(wins > 0 && wins < 20, `${wins}/20`);
+});
+
+test('mahjong: four sets and a pair wins, the waits are right, and a sensible player wins about as often as anyone', () => {
+  const { ev } = fresh();
+  assert.strictEqual(ev('mjWins([0,0,0, 1,2,3, 9,10,11, 20,20,20, 26,26])'), true, 'a pung, two runs, a pung, a pair');
+  assert.strictEqual(ev('mjWins([0,1,2,3,4,5,6,7,8,9,10,11,12,13])'), false, 'no pair');
+  assert.strictEqual(ev('mjWins([7,8,9, 0,0,0, 1,1,1, 2,2,2, 3,3])'), false, '8o 9o 1| is not a run (no wrapping across suits)');
+  assert.deepStrictEqual(JSON.parse(ev('JSON.stringify(mjWaits([0,0,0, 1,2,3, 9,10,11, 20,20,20, 26]))')), [26]);
+  const tally = {};
+  for (let s = 1; s <= 40; s++) {
+    const { ev: e } = require('./helpers/load-city.cjs').loadCity(s);
+    const w = e(`(() => { const g = GAMES.mahjong(); for (let i = 0; i < 60 * 900 && !g.over; i++) { const st = g.state(); let k = {};
+      if (st === 'you') k = mjWins(g.hands[0]) ? { upP: 1 } : g.cursor() === mjDiscard(g.hands[0], () => 0.5) ? { actP: 1 } : { rightP: 1 }; else if (st === 'claim') k = { upP: 1 };
+      g.step(1 / 30, k); } return g.over ? g.result.winner : 'stuck'; })()`);
+    tally[w] = (tally[w] || 0) + 1;
+  }
+  assert.ok(!tally.stuck, JSON.stringify(tally));
+  assert.ok(tally[0] >= 3, `you won ${tally[0]} of 40 (${JSON.stringify(tally)})`);
+  ev('var g = GAMES.mahjong(); g.result = { winner: 0 }');
+  assert.strictEqual(ev('g.reward()'), 20, 'the pot');
+});

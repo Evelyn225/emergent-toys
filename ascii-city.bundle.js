@@ -57,6 +57,7 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
 // ---- game state
 let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
 let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0;
+let dayNum = 4; // days since a Monday: you arrive on a Friday evening (events.js)
 let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0, storm = 0;
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
@@ -110,7 +111,9 @@ const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
 function env(dt) {
   const lapse = K.KeyT ? 40 : 1; // 20s per game hour; hold T to fast-forward (clouds race along too)
+  const t0 = tod;
   tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
+  if (tod < t0 - 12) dayNum++; // midnight (a real wrap round, not a tiny step back)
   if ((wTimer -= dt) < 0) { weather = pick(['clear', 'clear', 'rain', 'fog', 'storm']); wTimer = 60 + Math.random() * 90; }
   rain += clamp((weather === 'rain' || weather === 'storm') - rain, -dt / 6, dt / 6);
   storm += clamp((weather === 'storm') - storm, -dt / 8, dt / 8);
@@ -228,17 +231,19 @@ const DIST_WORDS = {
   downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR','SPORTS','JUICE','BURGERS','REALTY','CARS'],
   industrial: ['AUTO REPAIR','STORAGE','TIRES','HARDWARE','DINER','BAR','WELDING','24/7','CHICKEN','TOBACCO','CARS'],
   brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP','SKATE','BAGELS','THRIFT','ICE CREAM','TOYS','REALTY'],
+  shotengai: ['PACHINKO','CRANE GAME','IZAKAYA','YAKITORI','TAKOYAKI','RAMEN','SUSHI','BENTO','KARAOKE','CAPSULE','MANGA','RECORDS','DRUGSTORE','ARCADE','KISSATEN','24/7','GACHA','HARDWARE'],
 };
 const GLYPHS = { BOOKS: '|][|', RECORDS: '()O', VIDEO: '[]', LIQUOR: 'il!', BAR: 'il!Y', PHARMACY: '+=o', PHONES: '[]#',
   HARDWARE: 'T7/', FLORIST: '*@&', 'PET SHOP': '~>o', ARCADE: '[]#', TATTOO: '*%', LAUNDRY: 'O@', HERBS: '%&*', JADE: 'o@*',
-  'TEA HOUSE': 'oc]', TIRES: 'O0o', 'AUTO REPAIR': 'T7/', SPORTS: 'oO@', SKATE: '=_o', TOYS: 'o*@&', THRIFT: '|]&', TOBACCO: 'i=' };
+  'TEA HOUSE': 'oc]', TIRES: 'O0o', 'AUTO REPAIR': 'T7/', SPORTS: 'oO@', SKATE: '=_o', TOYS: 'o*@&', THRIFT: '|]&', TOBACCO: 'i=', MANGA: '|][|', DRUGSTORE: '+=o', GACHA: 'oO@' };
 const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, sorry.', 'Nice weather, huh?', 'Take your time.'];
 // opening hours [open, close) in game hours; close < open wraps past midnight; [0, 24] never closes
 const HOURS = { BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
-  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [0, 24], BODEGA: [0, 24], STORAGE: [0, 24], AQUARIUM: [9, 21] };
+  NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [0, 24], BODEGA: [0, 24], STORAGE: [0, 24], AQUARIUM: [9, 21],
+  PACHINKO: [10, 23], 'CRANE GAME': [10, 2], IZAKAYA: [17, 3], YAKITORI: [17, 2], TAKOYAKI: [11, 23], BENTO: [7, 21], CAPSULE: [0, 24], MANGA: [10, 23], DRUGSTORE: [9, 23], KISSATEN: [7, 20], GACHA: [10, 22] };
 const hoursOf = word => HOURS[word] || [9, 20];
 const openAt = (sh, t) => { // is this shop open at game hour t?
   if (sh.kind === SHOP_APTS) return true;
@@ -253,6 +258,7 @@ function shopOf(seed, dist) {
   const apts = dist === 'brownstones' ? 0.75 : dist === 'industrial' ? 0.15 : 0.5;
   if (kind === SHOP_SHUT && fract(seed * 331) < apts) kind = SHOP_APTS;
   if (dist === 'brownstones' && kind !== SHOP_APTS && fract(seed * 77) < 0.5) kind = SHOP_APTS; // mostly front doors
+  if (dist === 'shotengai' && kind !== SHOP_PRODUCE && fract(seed * 57) < 0.8) kind = fract(seed * 91) < 0.4 ? SHOP_NEON : SHOP_LIT; // shops, shops, shops
   const local = DIST_WORDS[dist], words = kind === SHOP_PRODUCE ? PRODUCE : local && fract(seed * 13) < 0.7 ? local : WORDS;
   const word = kind === SHOP_APTS ? 'No.' + (100 + (seed * 900 | 0)) : words[(seed * 104729 | 0) % words.length];
   return { kind, word, neon: kind === SHOP_APTS ? WHITE : dist === 'chinatown' ? pickBy(seed, [RED, YEL, RED, GREEN]) : NEON[(seed * 1000 | 0) % 4],
@@ -277,7 +283,7 @@ const idx = (x, y) => (y & (N - 1)) * N + (x & (N - 1));
 // districts: small neighbourhoods (~5 blocks across, a few minutes' walk) from a jittered grid of seeds, nearest seed
 // wins (wrapping east-west), with wobbly borders. Downtown sits round the middle of town, industry along the shores,
 // the rest a mix.
-const DISTRICTS = ['downtown', 'midtown', 'chinatown', 'industrial', 'brownstones'];
+const DISTRICTS = ['downtown', 'midtown', 'chinatown', 'industrial', 'brownstones', 'shotengai'];
 const DIST_SEEDS = [];
 for (let j = 0; j < 5; j++) for (let i = 0; i < 6; i++)
   DIST_SEEDS.push([(i + 0.2 + hash(i, j, 61) * 0.6) * NB / 6, SHORE_N + 1 + (j + 0.2 + hash(i, j, 62) * 0.6) * (SHORE_S - SHORE_N - 1) / 5, '']);
@@ -292,6 +298,12 @@ for (const seed of DIST_SEEDS) {
   let x = r * pool.reduce((t, k) => t + weights[k], 0), k = 0;
   while ((x -= weights[pool[k]]) > 0) k++;
   seed[2] = pool[k];
+}
+// the Shotengai: the midtown neighbourhood nearest the south side of downtown becomes covered shopping streets
+{
+  let best = null, bd = Infinity;
+  for (const s of DIST_SEEDS) if (s[2] === 'midtown') { const d = Math.hypot(relB(s[0] - NB / 2), s[1] - (SHORE_S + SHORE_N) / 2 - 5); if (d < bd) { bd = d; best = s; } }
+  best[2] = 'shotengai';
 }
 const DIST = new Array(NB * NB);
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
@@ -345,7 +357,7 @@ const onBridge = (bx, by) => BRIDGE_X.includes(bx & (NB - 1)) && (by & (NB - 1))
 // one; downtown is mostly planned. A street only goes if no intersection is left a dead end and every street can
 // still reach every other.
 const AVENUE_V = bx => bx % 6 === 0 || BRIDGE_X.includes(bx), AVENUE_H = by => by % 6 === 4 || by === EL_ROW || by === SHORE_N + 1 || by === SHORE_S;
-const LOSE = { brownstones: 0.12, chinatown: 0.15, industrial: 0.3, midtown: 0.1, downtown: 0.03 }; // chance a side street goes
+const LOSE = { brownstones: 0.12, chinatown: 0.15, industrial: 0.3, midtown: 0.1, downtown: 0.03, shotengai: 0.06 }; // chance a side street goes
 const STAGGER = { brownstones: 0.8, chinatown: 0.8 };                                              // and of the old-town stagger
 function connected() { // can every intersection with streets reach every other?
   const seen = new Uint8Array(NB * NB), stack = [];
@@ -455,7 +467,11 @@ const BUILD = {
   chinatown: { lots: () => LOTS.rows, height: h => 2 + Math.floor(h * 3.5), sty: s => s < 0.75 ? 10 : 7 },
   industrial: { lots: h => h < 0.5 ? LOTS.whole : LOTS.halves, height: h => 1 + Math.round(h * 2) / 2, sty: s => s < 0.75 ? 8 : s < 0.9 ? 15 : 2 },
   brownstones: { lots: () => LOTS.rows, height: h => 1.3 + Math.round(h * 5) / 10, sty: s => s < 0.75 ? 9 : s < 0.9 ? 16 : 2 },
+  shotengai: { lots: () => LOTS.rows, height: h => 1.6 + Math.round(h * 6) / 4, sty: () => 17 }, // narrow, 16-30m, every one with signs
 };
+// the Shotengai's streets have a roof over them (city-render.js draws it, from underneath)
+const ARCADE_Z = 0.62; // 6m up
+const arcadeAt = (x, y) => ROAD[idx(Math.floor(x), Math.floor(y))] > 0 && districtAt(x, y) === 'shotengai';
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const kind = blockKind(bx, by), lm = landmarkOf.get(bi(bx, by));
   if (lm === 'clock') setCells(bx, by, 4, 4, 5, 5, 12, 3);
@@ -727,6 +743,19 @@ for (let k = 0; k < 14; k++) { // somewhere on the boardwalk clear of everything
 // the aquarium's sign over its doors: a big neon fish, lit after dark
 extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, w: 0.3, h: 0.13, art: pad(['    _.--._', "><(( o  ))>", "    `--'"]),
   col: (c, row, L) => C(c === 'o' ? WHITE : c === '>' || c === '<' ? ORANGE : CYAN, Math.max(L, night * 15 * (fract(T * 0.4) < 0.96 ? 1 : 0.4))) });
+// the Shotengai: banners hanging from the arcade roof across the street, bicycles parked along the shopfronts
+const BANNER_WORDS = ['SALE', 'WELCOME', 'OPEN', 'FESTIVAL', 'LUCKY', 'NEW', 'RAMEN', 'KARAOKE', 'SMILE'];
+for (const s of [3.5, 6.5]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
+  if (districtOf(bx, by) !== 'shotengai' && districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by) !== 'shotengai') return;
+  const w = BANNER_WORDS[hash(bx * 7 + s, by, 701) * BANNER_WORDS.length | 0], col = NEON[hash(bx, by * 3 + s, 702) * 4 | 0];
+  extras.push({ x, y, z: 0.42, w: 0.045 * (w.length + 4), h: 0.1, art: pad(['.' + '-'.repeat(w.length + 4) + '.', '|  ' + w + '  |', "'" + '-'.repeat(w.length + 4) + "'", ' |' + ' '.repeat(w.length + 2) + '| ']),
+    col: (c, row, L) => row === 1 && /[A-Z]/.test(c) ? C(WHITE, Math.max(L, 10)) : row === 3 ? C(GRAY, L) : C(col, Math.max(L, night * 12)) });
+});
+for (const s of [2.6, 3.4, 5.6, 7.2]) for (const off of [0.16, 1.84]) alongStreets(s, off, (x, y, ax, ay, bx, by, o) => {
+  if (districtOf(bx, by) !== 'shotengai' || hash(bx * 13 + s * 7, by * 5 + off, 703) > 0.35 || !map[idx(x - ax * 0.25, y - ay * 0.25)] && !map[idx(x + ax * 0.25, y + ay * 0.25)]) return;
+  const col = [RED, BLUE, GREEN, WHITE, YEL][hash(bx, by + s, 704) * 5 | 0];
+  extras.push({ x, y, z: 0, w: 0.07, h: 0.06, art: pad(['   __o', ' _ \<,_', '(_)/ (_)']), col: (c, row, L) => row === 2 ? C(GRAY, L) : C(col, L) });
+});
 // dockside cranes on the industrial piers
 for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && x0 !== FAIR.x0 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
@@ -744,8 +773,9 @@ function solidAt(x, y, pad) {
 // strung wall to wall, so only where there's a building on both sides of the street to tie it to
 const LANTERN_SPAN = 0.95, lanterns = [];
 for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
-  const side = o === 'h' ? districtOf(bx, by) === 'chinatown' || districtOf(bx, by - 1) === 'chinatown'
-                         : districtOf(bx, by) === 'chinatown' || districtOf(bx - 1, by) === 'chinatown';
+  const lanternDist = d => d === 'chinatown' || d === 'shotengai';
+  const side = o === 'h' ? lanternDist(districtOf(bx, by)) || lanternDist(districtOf(bx, by - 1))
+                         : lanternDist(districtOf(bx, by)) || lanternDist(districtOf(bx - 1, by));
   ax = Math.abs(ax); ay = Math.abs(ay);
   const walls = map[idx(x - ax * 1.2, y - ay * 1.2)] > 0 && map[idx(x + ax * 1.2, y + ay * 1.2)] > 0;
   if (side && walls) lanterns.push({ x, y, ax, ay });
@@ -826,11 +856,11 @@ const VENDING = { DRINKS: { title: 'DRINK MACHINE', stock: ['soda', 'water', 'en
 const VM_HL = 0.045, VM_HW = 0.035, VM_H = 0.19, machines = [];
 for (const s of [2.12, 4.88, 6.12]) for (const o of [VM_HW + 0.005, 2 - VM_HW - 0.005]) alongStreets(s, o, (x, y, ax, ay, bx, by, ori) => {
   const r = hash(bx * 3 + s, by * 5 + o, ori === 'h' ? 210 : 211);
-  if (r > (districtOf(bx, by) === 'industrial' ? 0.03 : 0.07)) return;
+  if (r > ({ industrial: 0.03, shotengai: 0.3 }[districtOf(bx, by)] || 0.07)) return; // (the Shotengai: one on every corner)
   const wall = idx(x - ax * 0.1, y - ay * 0.1); // the cell behind it
   if (!map[wall] || stations.some(t => Math.hypot(rel(t.x - x), t.y - y) < 0.7)) return;
   const c = Math.abs(ay), sn = Math.abs(ax);
-  machines.push({ x, y, kind: Object.keys(VENDING)[Math.floor(r / 0.07 * 3) % 3], c, s: sn, fs: Math.sign(-sn * ax + c * ay) });
+  machines.push({ x, y, kind: Object.keys(VENDING)[Math.floor(r / 0.07 * 3 + s) % 3], c, s: sn, fs: Math.sign(-sn * ax + c * ay) });
 });
 const machinesB = bucketed(machines);
 const machineAt = (x, y, pad) => machinesB[bi(Math.floor(x / 8), Math.floor(y / 8))].some(m =>
@@ -1382,6 +1412,7 @@ function directions(x, y, tx, ty) {
 }
 const DISTRICT_LINES = {
   chinatown: ['Best dumplings in the city are round here.', 'Mind the lanterns, they just put them up.'],
+  shotengai: ['The roof keeps the rain off. Best street in the city when it pours.', 'Try the takoyaki. Mind, they\'re hot.', 'I won a cat at the crane game. Took forty tries.', 'Pachinko? I only go for the noise.', 'You can sleep in a capsule for fifteen bucks, you know.'],
   industrial: ['Shift starts soon.', 'Smells like diesel round here.', 'Used to be a factory on every corner.'],
   waterfront: ['Love watching the boats.', 'You can walk right out to the end of the pier.', 'Smell that sea air.'],
   downtown: ['Everyone downtown is in such a hurry.', 'My office is up on the fortieth floor.'],
@@ -1533,14 +1564,14 @@ const AUDIO_DISTRICT = {
   downtown: { city: 1, crowd: 0.8, night: 0.4 }, midtown: { city: 1, crowd: 0.8, night: 0.5 },
   chinatown: { city: 0.85, crowd: 1, night: 0.5 }, industrial: { city: 0.7, crowd: 0.15, night: 0.7 },
   brownstones: { city: 0.5, crowd: 0.35, night: 1 }, waterfront: { city: 0.35, crowd: 0.5, night: 0.9 },
-  sea: { city: 0.15, crowd: 0, night: 0.8 },
+  sea: { city: 0.15, crowd: 0, night: 0.8 }, shotengai: { city: 0.55, crowd: 1, night: 0.4 },
 };
 // which room plays what: [restaurant crowd, bossa nova, coffee jazz]. Music only where a shop would have it on:
 // cafes and restaurants, bars, the shops and hotel lobbies; not apartment lobbies, the bank, the gym, the cinema or the subway
 const ROOM_AUDIO = {
   bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
-  hotel: [0.2, 0.4, 0], aquarium: [0.2, 0, 0], cathedral: [0.06, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
+  hotel: [0.2, 0.4, 0], aquarium: [0.2, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -1568,6 +1599,8 @@ function audioMix(s) {
     if (k === 'lighthouse' || k === 'lamproom') { out.waves = 0.55; out.wind = k === 'lamproom' ? 0.5 : 0.15; out.city = 0; } // the sea all round
     if (k === 'train') out.rumble = 0.9;
     if (k === 'cathedral') out.city = 0.015; // thick walls
+    if (k === 'pachinko') out.arcade = 1; // the roar of a thousand steel balls and jingles
+    if (k === 'cranes') out.arcade = 0.75;
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
     return out;
   }
@@ -1582,6 +1615,8 @@ function audioMix(s) {
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
+  if (s.district === 'shotengai') out.arcade = Math.max(out.arcade, 0.28 * far); // jingles spilling out of the parlours under the roof
+  if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the pleasure pier: a crowd, and the booths' bleeps and jingles drifting over it
     out.crowd = Math.max(out.crowd, 0.7 * s.fairNear * (s.tod >= 9 || s.tod < 2 ? 1 : 0.2));
     out.arcade = 0.4 * s.fairNear * far;
@@ -1629,6 +1664,9 @@ const ITEMS = {
   mangorice: { name: 'mango sticky rice', price: 6, kind: 'food', uses: 3 },
   cottoncandy: { name: 'cotton candy', price: 3, kind: 'food', uses: 3 }, corndog: { name: 'corn dog', price: 4, kind: 'food', uses: 3 },
   popcorn: { name: 'popcorn', price: 3, kind: 'food', uses: 5 }, lemonade: { name: 'lemonade', price: 3, kind: 'drink', uses: 3 },
+  yakitori: { name: 'yakitori', price: 6, kind: 'food', uses: 3 }, takoyaki: { name: 'takoyaki', price: 5, kind: 'food', uses: 4 },
+  onigiri: { name: 'onigiri', price: 3, kind: 'food', uses: 2 }, bento: { name: 'bento box', price: 9, kind: 'food', uses: 5 },
+  sake: { name: 'sake', price: 7, kind: 'drink', uses: 2, booze: 0.35 }, melonsoda: { name: 'melon soda', price: 3, kind: 'drink', uses: 3 },
   ginseng: { name: 'ginseng root', price: 6, kind: 'food', uses: 2, caffeine: 70 }, // a bitter chew, and a kick like coffee
   // drink
   coffee: { name: 'coffee', price: 3, kind: 'drink', uses: 4, caffeine: 60 }, latte: { name: 'latte', price: 5, kind: 'drink', uses: 4, caffeine: 50 },
@@ -1654,7 +1692,8 @@ const ITEMS = {
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
-  duck: { name: 'rubber duck', price: 3, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
+  duck: { name: 'rubber duck', price: 3, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
+  spraypaint: { name: 'spray paint', price: 8, kind: 'toy', uses: 6 }, // (graffiti.js)
 };
 // the arcade's prize counter: what tickets buy
 let tickets = 0;
@@ -1670,12 +1709,14 @@ function claimPrize(id) {
 // what each kind of place sells: by shop word first, then by room kind
 const STOCK_WORD = {
   'FAIR FOOD': ['corndog', 'popcorn', 'cottoncandy', 'lemonade'],
+  YAKITORI: ['yakitori', 'beer', 'sake'], TAKOYAKI: ['takoyaki', 'melonsoda'], BENTO: ['bento', 'onigiri', 'tea'], IZAKAYA: ['beer', 'sake', 'yakitori'],
+  KISSATEN: ['coffee', 'melonsoda', 'sandwich'], DRUGSTORE: ['water', 'energy', 'umbrella', 'candy'], MANGA: ['book'], CAPSULE: ['water', 'onigiri'],
   '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella'],
   BODEGA: ['sandwich', 'chips', 'apple', 'soda', 'energy', 'cigarettes', 'newspaper'], DELI: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'],
   LIQUOR: ['beer', 'whiskey', 'cigarettes', 'chips'], PHARMACY: ['water', 'energy', 'umbrella'],
   GROCERY: ['apple', 'chips', 'water', 'soda'], MARKET: ['apple', 'chips', 'water'], FRUIT: ['apple'],
-  PAWN: ['skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda'],
-  HARDWARE: ['umbrella'], RECORDS: ['vinyl', 'boombox'], BOOKS: ['book', 'newspaper', 'coffee'], FLORIST: ['flowers'],
+  PAWN: ['skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda', 'spraypaint'],
+  HARDWARE: ['umbrella', 'spraypaint'], RECORDS: ['vinyl', 'boombox'], BOOKS: ['book', 'newspaper', 'coffee'], FLORIST: ['flowers'],
   CAFE: ['coffee', 'latte', 'croissant', 'donut'], COFFEE: ['coffee', 'latte', 'croissant'], DONUTS: ['donut', 'coffee'], BAKERY: ['bagel', 'croissant', 'donut'],
   PIZZA: ['slice', 'soda'], TACOS: ['taco', 'soda'], KEBAB: ['kebab', 'soda'], DINER: ['burger', 'coffee', 'soda'],
   RAMEN: ['ramen', 'tea'], NOODLES: ['ramen', 'dumplings', 'tea'], PHO: ['pho', 'banhmi', 'tea'], DUMPLINGS: ['dumplings', 'tea'],
@@ -1794,6 +1835,8 @@ function useHeld(near) {
     case 'book': return [pick(BOOK_LINES), 'page'];
     case 'newspaper': return [`Headline: ${pick(near.headlines)}`, 'page'];
     case 'vinyl': return ['You admire the sleeve. Shame you don\'t have a record player.', null];
+    case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head.']), null];
+    case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.']), null];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
     case 'yoyo': fx.yoyo = 1.4; return [pick(['Walk the dog.', 'Around the world.', 'Rock the baby.', 'It sleeps at the bottom, then snaps back up.']), 'whirr'];
@@ -2477,6 +2520,220 @@ GAMES.strength = (rnd = Math.random) => {
 };
 const FAIR_GAMES = ['ringtoss', 'strength'];
 
+// ---- the Shotengai's parlours
+// pachinko: hold GO and balls fly up and rain down through a forest of pins; steer where they come in with the
+// stick. Most fall away. The pockets pay balls back; the middle one spins the reels, and three of a kind is FEVER.
+// A credit buys 40 balls; walk away (E) whenever you like and what's left is swapped for tickets, 8 balls a ticket.
+GAMES.pachinko = (rnd = Math.random) => {
+  const W = 23, H = 20, g = { id: 'pachinko', title: 'PACHINKO', W, H, score: 40, over: false };
+  const pin = (x, y) => y >= 3 && y <= 15 && y % 2 === 1 && (x + (y >> 1)) % 2 === 0 && x > 0 && x < W - 1;
+  const POCKETS = { 11: 'start', 5: 'small', 17: 'small' }; // which bottom columns catch a ball
+  let aim = 11, fire = 0, balls = [], tick = 0, reel = null, fever = 0, best = '';
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if (k.left) aim = Math.max(1, aim - dt * 8); if (k.right) aim = Math.min(W - 2, aim + dt * 8);
+    fire -= dt;
+    if (k.act && fire <= 0 && g.score > 0) { g.score--; fire = 0.22; balls.push({ x: Math.round(aim), y: 1 }); ev.push('launch'); }
+    tick += dt;
+    while (tick > 0.06) { // every ball falls a row; a pin bumps it one way or the other
+      tick -= 0.06;
+      for (const b of balls) {
+        if (pin(b.x, b.y + 1) && rnd() < 0.7) { b.x = clamp(b.x + (rnd() < 0.5 ? -1 : 1) * (rnd() < 0.3 ? 2 : 1), 1, W - 2); ev.push('bump'); } // (a ball can slip past a pin)
+        b.y++;
+      }
+      for (const b of balls.filter(b => b.y >= H - 2)) {
+        const p = POCKETS[b.x];
+        if (p === 'small') { g.score += 2; ev.push('eat'); }
+        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 }; }
+        b.dead = true;
+      }
+      balls = balls.filter(b => !b.dead);
+    }
+    if (reel && (reel.t -= dt) <= 0) {
+      if (reel.hit) { reel.r = [7, 7, 7]; g.score += 50; fever = 3; ev.push('clear'); best = 'FEVER! 777'; } else ev.push('miss');
+      reel.shown = reel.r; reel = null;
+    }
+    fever = Math.max(0, fever - dt);
+    if (g.score <= 0 && !balls.length && !reel) { g.over = true; ev.push('end'); }
+    if (reel) g.lastReel = reel.r.map((v, i) => reel.t > 0.4 + i * 0.4 ? 1 + (rnd() * 9 | 0) : v); // the reels spinning, stopping one by one
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let y = 0; y < H; y++) { put(0, y, '|', C(GRAY, 9)); put(W - 1, y, '|', C(GRAY, 9)); }
+    for (let y = 3; y <= 15; y++) for (let x = 1; x < W - 1; x++) if (pin(x, y)) put(x, y, '.', C(YEL, fever > 0 ? 15 : 10));
+    for (let x = 1; x < W - 1; x++) { const p = POCKETS[x]; put(x, H - 1, p ? 'U' : '_', p === 'start' ? C(RED, 15) : p ? C(GREEN, 14) : C(GRAY, 6)); }
+    put(Math.round(aim), 0, 'v', C(WHITE, 15));
+    for (const b of balls) put(b.x, b.y, 'o', C(WHITE, 15));
+    const r = g.lastReel || [7, 7, 7];
+    text(8, 17, `[ ${r.join(' ')} ]`, reel ? C(YEL, 15) : fever > 0 ? C(NEON[(Math.floor(fever * 8)) & 3], 15) : C(WHITE, 11));
+    if (best && fever > 0) text(7, 2, best, C(MAG, 15));
+  };
+  g.status = () => `BALLS ${g.score}   HOLD SPACE fire   ARROWS aim   E cash out`;
+  g.reward = () => Math.floor(g.score / 8);
+  return g;
+};
+// the crane game: steer the claw over a prize, GO drops it. It grips, maybe, and carries it to the chute; one try a
+// credit. What it drops in the chute is yours.
+const CRANE_PRIZES = ['plushcat', 'plushbear', 'sharkplush', 'duck', 'plushcat', 'yoyo'];
+GAMES.crane = (rnd = Math.random) => {
+  const W = 22, H = 14, g = { id: 'crane', title: 'CRANE GAME', W, H, score: 0, over: false, prize: null };
+  const pile = Array.from({ length: 6 }, (_, k) => ({ x: 5 + k * 3 + (rnd() * 2 | 0), id: CRANE_PRIZES[rnd() * CRANE_PRIZES.length | 0] }));
+  let cx = 3, cy = 1, state = 'aim', held = null, t = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (state === 'aim') {
+      if (k.left) cx = Math.max(2, cx - dt * 6); if (k.right) cx = Math.min(W - 2, cx + dt * 6);
+      if (k.actP || t > 20) { state = 'down'; ev.push('launch'); }
+    } else if (state === 'down') {
+      cy += dt * 6;
+      if (cy >= H - 3) {
+        cy = H - 3; state = 'up';
+        const p = pile.find(q => Math.abs(q.x - cx) <= 1);
+        if (p && rnd() < 0.5) { held = p; pile.splice(pile.indexOf(p), 1); ev.push('place'); } else ev.push('bump');
+      }
+    } else if (state === 'up') {
+      cy -= dt * 5;
+      if (held && cy < 4 && rnd() < dt * 0.25) { pile.push({ ...held, x: Math.round(cx) }); held = null; ev.push('miss'); } // it slips...
+      if (cy <= 1) { cy = 1; state = 'home'; }
+    } else if (state === 'home') {
+      cx -= dt * 6;
+      if (cx <= 1) {
+        g.over = true;
+        if (held) { g.prize = held.id; g.score = 1; ev.push('clear'); } else ev.push('end');
+      }
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let x = 0; x < W; x++) put(x, 0, '=', C(GRAY, 10));
+    put(0, H - 2, '\\', C(GRAY, 10)); put(1, H - 2, '_', C(GRAY, 10)); put(1, H - 1, 'v', C(YEL, 13)); // the chute
+    const x = Math.round(cx), y = Math.round(cy);
+    for (let r = 1; r < y; r++) put(x, r, '|', C(GRAY, 12));
+    put(x - 1, y, held ? '[' : '/', C(WHITE, 15)); put(x + 1, y, held ? ']' : '\\', C(WHITE, 15));
+    if (held) put(x, y + 1, '@', C(ITEM_COL[CRANE_PRIZES.indexOf(held.id) & 7], 15));
+    for (const p of pile) put(p.x, H - 2, '@', C(ITEM_COL[CRANE_PRIZES.indexOf(p.id) & 7], 14));
+    for (let x2 = 2; x2 < W; x2++) put(x2, H - 1, '#', C(MAG, 5));
+  };
+  g.status = () => state === 'aim' ? `ARROWS move the claw   SPACE drop (${Math.max(0, 20 - t) | 0}s)` : state === 'home' && held ? 'Got one... got one...' : '...';
+  g.reward = () => 0;
+  return g;
+};
+
+// ---- mahjong, the simple version: three suits (dots o, bamboo |, characters #) numbered 1-9, four of each, 108
+// tiles. Four players, 13 tiles each; on your turn you draw one and discard one. 14 tiles that make four sets (three
+// the same, or a run of three in one suit) and a pair is mahjong: you win the pot. You can also win off another
+// player's discard if it's the tile you were waiting for. No other claiming, no honours, no scoring: just that.
+const MJ_SUITS = ['o', '|', '#'], MJ_NAMES = ['YOU', 'WONG', 'MEI', 'LO'];
+const mjName = t => `${t % 9 + 1}${MJ_SUITS[t / 9 | 0]}`;
+function mjSets(c) { // can these counts be split entirely into sets of three?
+  const i = c.findIndex(v => v > 0);
+  if (i < 0) return true;
+  if (c[i] >= 3) { c[i] -= 3; const ok = mjSets(c); c[i] += 3; if (ok) return true; }
+  if (i % 9 <= 6 && c[i + 1] && c[i + 2]) { c[i]--; c[i + 1]--; c[i + 2]--; const ok = mjSets(c); c[i]++; c[i + 1]++; c[i + 2]++; if (ok) return true; }
+  return false;
+}
+function mjWins(tiles) { // 14 tiles: four sets and a pair?
+  if (tiles.length !== 14) return false;
+  const c = new Array(27).fill(0);
+  for (const t of tiles) c[t]++;
+  for (let p = 0; p < 27; p++) if (c[p] >= 2) { c[p] -= 2; const ok = mjSets(c); c[p] += 2; if (ok) return true; }
+  return false;
+}
+// what a 13-tile hand is waiting for (any tile that would complete it, that isn't all used up in it)
+const mjWaits = hand => Array.from({ length: 27 }, (_, t) => t).filter(t => hand.filter(x => x === t).length < 4 && mjWins([...hand, t]));
+// which tile an opponent throws away: the one doing least for its hand (alone, far from its neighbours)
+function mjDiscard(hand, rnd) {
+  let best = 0, bv = Infinity;
+  hand.forEach((t, k) => {
+    const n = d => hand.some((x, j) => j !== k && x === t + d && (x / 9 | 0) === (t / 9 | 0));
+    const v = (hand.filter(x => x === t).length - 1) * 3 + (n(-1) + n(1)) * 2 + (n(-2) + n(2)) + (t % 9 === 0 || t % 9 === 8 ? -0.3 : 0) + rnd() * 0.2;
+    if (v < bv) { bv = v; best = k; }
+  });
+  return best;
+}
+GAMES.mahjong = (rnd = Math.random) => {
+  const W = 32, H = 19, g = { id: 'mahjong', title: 'MAHJONG', W, H, score: 0, over: false, result: null };
+  const wall = [];
+  for (let t = 0; t < 27; t++) for (let k = 0; k < 4; k++) wall.push(t);
+  for (let i = wall.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [wall[i], wall[j]] = [wall[j], wall[i]]; }
+  const hands = [0, 1, 2, 3].map(() => wall.splice(0, 13).sort((a, b) => a - b)), rivers = [[], [], [], []];
+  let turn = 0, state = 'you', wait = 0, cur = 0, drawn = null, last = null, msg = 'Your turn. Draw done: pick a tile to throw away.';
+  const sortHand = h => h.sort((a, b) => a - b);
+  const end = (winner, how) => { g.over = true; g.result = { winner, how }; g.score = winner === 0 ? 1 : 0; };
+  const draw = p => { if (!wall.length) { end(-1, 'the wall ran out'); return null; } const t = wall.shift(); hands[p].push(t); return t; };
+  drawn = draw(0); cur = hands[0].indexOf(drawn); sortHand(hands[0]); cur = hands[0].lastIndexOf(drawn);
+  // a discard by p: does anyone want it to win? (you first, then the others in turn order)
+  const afterDiscard = (p, t) => {
+    last = { p, t };
+    if (p !== 0 && mjWins([...hands[0], t])) { state = 'claim'; wait = 3.5; msg = `${MJ_NAMES[p]} throws ${mjName(t)}: that's your winning tile! UP to claim it`; return; }
+    for (let q = 1; q <= 3; q++) if (q !== p && mjWins([...hands[q], t])) { hands[q].push(t); end(q, `on ${MJ_NAMES[p] === 'YOU' ? 'your' : MJ_NAMES[p] + "'s"} discard`); return; }
+    next(p);
+  };
+  const next = p => {
+    turn = (p + 1) % 4;
+    if (turn === 0) { drawn = draw(0); if (g.over) return; sortHand(hands[0]); cur = hands[0].lastIndexOf(drawn); state = 'you'; msg = `You draw ${mjName(drawn)}.`; }
+    else { state = 'ai'; wait = 0.7; }
+  };
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if (state === 'you') {
+      if (k.leftP) cur = (cur + 13) % 14; if (k.rightP) cur = (cur + 1) % 14;
+      if (k.upP && mjWins(hands[0])) { end(0, 'by drawing it yourself'); ev.push('clear'); return ev; }
+      if (k.actP) { const t = hands[0].splice(cur, 1)[0]; rivers[0].push(t); cur = Math.min(cur, 12); msg = `You throw ${mjName(t)}.`; ev.push('place'); afterDiscard(0, t); }
+    } else if (state === 'claim') {
+      wait -= dt;
+      if (k.upP) { hands[0].push(last.t); sortHand(hands[0]); end(0, `on ${MJ_NAMES[last.p]}'s discard`); ev.push('clear'); return ev; }
+      if (wait <= 0 || k.actP) { msg = 'You let it go.'; next(last.p); }
+    } else if (state === 'ai' && (wait -= dt) <= 0) { // an opponent's go: draw, maybe win, discard
+      const p = turn, t = draw(p);
+      if (g.over) return ev;
+      if (mjWins(hands[p])) { end(p, 'by drawing it'); ev.push('die'); return ev; }
+      const d = hands[p].splice(mjDiscard(hands[p], rnd), 1)[0];
+      rivers[p].push(d); msg = `${MJ_NAMES[p]} throws ${mjName(d)}.`; ev.push('bump');
+      afterDiscard(p, d);
+      if (g.over) ev.push('die');
+    }
+    return ev;
+  };
+  const SUIT_COL = [RED, GREEN, BLUE];
+  const tileText = (text, x, y, t, hi) => text(x, y, mjName(t), C(SUIT_COL[t / 9 | 0], hi ? 15 : 12));
+  g.draw = (put, text) => {
+    // the other three: how many tiles, and what they've thrown away (the last discard picked out)
+    for (let p = 1; p <= 3; p++) {
+      const y = (p - 1) * 2;
+      text(0, y, `${turn === p && !g.over ? '>' : ' '}${MJ_NAMES[p]} [${hands[p].length}]`, C(turn === p ? YEL : WHITE, 13));
+      const rv = rivers[p].slice(-11);
+      rv.forEach((t, k) => tileText(text, 6 + k * 2, y, t, last && last.p === p && k === rv.length - 1));
+    }
+    text(0, 6, ` YOUR THROWS`, C(GRAY, 10));
+    rivers[0].slice(-11).forEach((t, k) => tileText(text, 6 + k * 2, 6, t, false));
+    text(0, 8, `WALL ${wall.length}`, C(GRAY, 11));
+    text(0, 9, msg.slice(0, 62), C(WHITE, 14));
+    // your hand: fourteen (or thirteen) tiles across the bottom, the one you're on raised
+    const hand = hands[0];
+    hand.forEach((t, k) => {
+      const sel = state === 'you' && k === cur, y = sel ? 11 : 12;
+      put(1 + k * 2, y, ' ', 0, C(WHITE, sel ? 15 : 11)); text(1 + k * 2, y, mjName(t), C(SUIT_COL[t / 9 | 0], 5)); // an ivory tile, its number and suit
+    });
+    if (state === 'you') text(1 + cur * 2, 13, '^^', C(YEL, 15));
+    // the help: what you're waiting for, if you're one tile away
+    const h13 = state === 'you' ? hand.filter((_, k) => k !== cur) : hand;
+    const w = h13.length === 13 ? mjWaits(h13) : [];
+    text(0, 15, w.length ? `${state === 'you' ? 'Throw that and you' : 'You'}'re one away! Winning tiles: ${w.map(mjName).join(' ')}` : 'Make 4 sets + a pair. A set: three alike, or a run of 3 in one suit.', C(w.length ? YEL : GRAY, w.length ? 15 : 10));
+    if (state === 'you' && mjWins(hand)) text(0, 16, 'MAHJONG! You have a winning hand: press UP to declare it', C(MAG, 15));
+    if (g.over && g.result) text(0, 17, g.result.winner === 0 ? `MAHJONG! You win ${g.result.how}.` : g.result.winner < 0 ? 'Nobody won: the wall ran out.' : `${MJ_NAMES[g.result.winner]} wins ${g.result.how}.`, C(g.result.winner === 0 ? YEL : WHITE, 15));
+  };
+  g.status = () => state === 'claim' ? `UP claim it   SPACE let it go (${Math.ceil(wait)}s)` : state === 'you' ? 'LEFT/RIGHT pick   SPACE throw it   UP declare mahjong' : 'Waiting for the others...';
+  g.reward = () => g.result ? g.result.winner === 0 ? 20 : g.result.winner < 0 ? MJ_BUYIN : 0 : 0;
+  g.hands = hands; g.wallLeft = () => wall.length; g.state = () => state; g.cursor = () => cur; // (for the tests)
+  return g;
+};
+const MJ_BUYIN = 5;
+
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
@@ -2510,7 +2767,7 @@ const FINE = [0, 60, 150, 300];              // what they'll take instead of a c
 const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 'hitting someone with a car' },
                  crash: { stars: 1, name: 'reckless driving' }, redlight: { stars: 1, name: 'running a red light' },
                  pickpocket: { stars: 1, name: 'pickpocketing' }, shoplift: { stars: 1, name: 'shoplifting' },
-                 burglary: { stars: 2, name: 'breaking and entering' } };
+                 burglary: { stars: 2, name: 'breaking and entering' }, graffiti: { stars: 1, name: 'vandalism' } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -2826,7 +3083,7 @@ function lockMouse() { // take the mouse (refused or impossible: a click will do
 const sk0 = seed => seed * 1e4 | 0;
 // background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse,
 // 14 art deco, 15 parking garage, 16 balcony apartments)
-const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE];
+const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE, GRAY];
 const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
 const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448 };
@@ -2834,7 +3091,10 @@ const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
+  const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
+  if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
+  if (graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return; // a mural, or somebody's tag
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
   BG[i] = bgAt(FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d);
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
@@ -2860,6 +3120,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       return set(i, '-', C(GRAY, L));
     }
     if (sh.aqua) return aquaFront(i, u, uStep, z, d, side, L);
+    if (sty === 17 && sh.kind !== SHOP_APTS) return shotengaiFront(i, u, z, sh, sk, open, L, night * fog * 14);
     if (sh.base) return serviceFront(i, u, z, sh.base, L, Math.max(L, night * fog * 14));
     if (sty === 8) { // warehouse: big roll-up doors
       const fd = fract(u * 0.8);
@@ -2892,6 +3153,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   }
   if (sh.aqua) return aquaUpper(i, u, uStep, z, d, L);
   const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
+  if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
   if (sty >= 11 && sty <= 13) return serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL);
   if (sty === 8) { // warehouse: corrugated sheet metal, a band of high windows under the roof
     const top = h - z < 0.3, fw = fract(u * 2);
@@ -3275,6 +3537,7 @@ function shake() {
 function skyCell(i, r, x, rx, ry) {
   ZB[i] = Infinity; FL[i] = 0;
   const up = (hor - r - 0.5) / projY, az = Math.atan2(ry, rx); // up = tan(elevation)
+  if (arcadeSky(i, rx, ry, up)) return; // the Shotengai's roof overhead
   BG[i] = rain > 0.5 ? C(GRAY, 1 + day * 6) : fogAmt > 0.5 ? bgAt(GRAY, day * 4)
         : dusk > 0.3 && up < 0.3 ? bgAt(up < 0.1 ? ORANGE : MAG, dusk * (up < 0.1 ? 8 : 4) * (1 - overcast), 0)
         : day > 0.15 ? bgAt(up < 0.08 ? CYAN : BLUE, day * (9 - Math.min(4, up * 8)), 0)
@@ -3365,7 +3628,8 @@ function reflect() {
 const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
 function rainFx(dt) {
   const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
-  const n = drops.length * rain * (under ? 0.3 : 1) | 0;
+  const roofed = eye < ARCADE_Z && arcadeAt(px, py); // under the Shotengai's roof: dry
+  const n = roofed ? 0 : drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];
     if ((d[1] += d[2] * dt * 1.8) > 1) { d[1] -= 1; d[0] = Math.random(); }
@@ -3424,6 +3688,110 @@ function craneCell(i, u, z, du, dz, L, k, p) {
 const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites,
                deck: true, slabFace, slabEdge };
 
+// ===== graffiti: murals painted across some buildings' upper floors (more on the docks, fewer downtown), and the tags
+// you spray yourself with a can from the hardware store. Police don't like it: spraying is vandalism, and if a cop
+// sees you, you're wanted. Your tags stay where you put them (save.js keeps them).
+const MURAL_WORDS = ['ASCII', 'DREAM', 'LOVE', 'CITY', 'HOPE', 'WAVE', 'NOW', 'YES', 'GLOW', 'ZAP', 'RISE', 'FREE'];
+const MURAL_CHANCE = { industrial: 0.16, brownstones: 0.06, midtown: 0.07, chinatown: 0.04, downtown: 0.025 };
+const tags = []; // { cell, face: 'N' | 'S' | 'E' | 'W', u (along the wall, world), z (height, cells), design }
+const TAG_MAX = 60, TAG_W = 0.26, TAG_H = 0.12;
+let tagIndex = new Map(); // cell -> its tags, for the facade to check quickly
+const reindexTags = () => { tagIndex = new Map(); for (const t of tags) { if (!tagIndex.has(t.cell)) tagIndex.set(t.cell, []); tagIndex.get(t.cell).push(t); } };
+// which face of cell (mx, my) we're looking at, from where we stand
+const faceOf = (side, mx, my) => side ? (rel(py - (my + 0.5)) < 0 ? 'N' : 'S') : (rel(px - (mx + 0.5)) < 0 ? 'W' : 'E');
+// tag designs: small pieces of ASCII art, or a word in bubble letters, in two colours
+const TAG_ART = [
+  { art: [' .---. ', '/ o o \\', '\\ \\_/ /', " '---' "], col: () => YEL },
+  { art: ['\\^/\\^/\\', ' |#o#| ', " '---' "], col: (c) => c === 'o' ? RED : YEL },
+  { art: [' _   _ ', '( \\_/ )', ' \\   / ', '  \\_/  '], col: () => RED },
+  { art: ['  /\\_/\\ ', ' ( o.o )', '  > ^ < '], col: (c) => c === 'o' ? GREEN : ORANGE },
+  { art: ['  ___ ', ' (o o)', '  |=| ', ' /|_|\\'], col: (c) => c === 'o' ? WHITE : MAG },
+];
+const TAG_WORDS = ['ACE', 'ZAP', 'YO', 'KAT', 'REX', 'OK', 'WOW', 'RAD'];
+const designCount = TAG_ART.length + TAG_WORDS.length;
+
+// a mural on this face? deterministic per face, so it's always there
+function muralSeed(k, mx, my, face) {
+  const sh = SHOP[k];
+  if (!sh || sh.base || sh.aqua || STY[k] >= 3 && STY[k] <= 6 || STY[k] >= 11 && STY[k] <= 13) return -1;
+  const fx_ = face === 'E' ? 1 : face === 'W' ? -1 : 0, fy = face === 'S' ? 1 : face === 'N' ? -1 : 0;
+  if (map[idx(mx + fx_, my + fy)]) return -1; // a wall nobody can see
+  const h = hash(mx * 3 + fx_, my * 3 + fy, 601);
+  return h < (MURAL_CHANCE[districtAt(mx, my)] || 0.05) ? hash(mx, my, 602) : -1;
+}
+// a mural cell: lu across the face (0..1, left to right on screen), lz up it (0..1)
+function muralCell(i, lu, lz, seed, L) {
+  const style = seed * 5 | 0, lit = Math.max(L * 0.9, 3), pal = [[MAG, ORANGE, YEL], [BLUE, CYAN, GREEN], [RED, MAG, BLUE], [GREEN, YEL, ORANGE], [CYAN, MAG, WHITE]][(seed * 37 | 0) % 5];
+  // the ground: bands, waves, a sunburst, blobs or mountains
+  const bgOf = () => {
+    if (style === 0) return pal[Math.floor(lz * 3) % 3]; // sunset bands
+    if (style === 1) return pal[Math.floor(lz * 6 + Math.sin(lu * 9) * 0.6) % 3]; // waves
+    if (style === 2) return pal[Math.floor((Math.atan2(lz - 0.15, lu - 0.5) + 3.2) * 3) % 3]; // a sunburst
+    if (style === 3) return pal[noise(lu * 4, lz * 4, seed * 50) * 3 | 0]; // blobs
+    return lz < 0.35 + 0.25 * Math.abs(fract(lu * 2.5) - 0.5) ? pal[0] : lz < 0.7 ? pal[1] : pal[2]; // mountains
+  };
+  // over it, a word in big bubble letters with a dark outline
+  const word = MURAL_WORDS[(seed * 911 | 0) % MURAL_WORDS.length], n = word.length * 4 - 1;
+  const gx = Math.floor((lu - 0.06) / 0.88 * n), gy = Math.floor((0.72 - lz) / 0.4 * 5), li = Math.floor(gx / 4), lx = gx % 4;
+  const on = (x, y) => { const l = Math.floor(x / 4), xx = x % 4; return x >= 0 && x < n && xx < 3 && glyphOn(word[l], xx, y); };
+  if (gx >= 0 && gx < n && gy >= -1 && gy <= 5) {
+    if (lx < 3 && on(gx, gy)) { BG[i] = C(WHITE, lit * 0.8); return set(i, '#', C(pal[(li + 1) % 3], lit)); }
+    if (on(gx - 1, gy) || on(gx + 1, gy) || on(gx, gy - 1) || on(gx, gy + 1)) { BG[i] = C(GRAY, 1); return set(i, ' ', 0); } // the outline
+  }
+  BG[i] = C(bgOf(), lit * 0.45);
+  return set(i, hash(Math.floor(lu * 40), Math.floor(lz * 40), seed * 99) > 0.93 ? '*' : ' ', C(WHITE, lit)); // spatter
+}
+// a tag cell: q across it (0..1, left to right), r down it (0..1)
+function tagCell(i, q, r, t, L) {
+  const lit = Math.max(L * 1.1, 5);
+  if (t.design < TAG_ART.length) {
+    const d = TAG_ART[t.design], W = Math.max(...d.art.map(l => l.length)), ch = (d.art[Math.floor(r * d.art.length)] || '')[Math.floor(q * W)];
+    if (!ch || ch === ' ') return false;
+    return set(i, ch, C(d.col(ch), lit)), true;
+  }
+  const word = TAG_WORDS[t.design - TAG_ART.length], n = word.length * 4 - 1, gx = Math.floor(q * n), gy = Math.floor(r * 5);
+  if (gx % 4 < 3 && glyphOn(word[Math.floor(gx / 4)], gx % 4, gy)) { BG[i] = C([MAG, CYAN, GREEN, ORANGE][t.design & 3], lit * 0.5); return set(i, '#', C(WHITE, lit)), true; }
+  return false;
+}
+// the facade asks first: graffiti here? (true if it painted the cell)
+function graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const k = idx(mx, my), face = faceOf(side, mx, my), L = fog * amb * (side ? 10 : 15), flip = u < 0 !== wc < 0 ? -1 : 1;
+  const mine = tagIndex.get(k);
+  if (mine) for (const t of mine) {
+    if (t.face !== face || Math.abs(rel(wc - t.u)) > TAG_W / 2 || Math.abs(z - t.z) > TAG_H / 2) continue;
+    const q = rel(wc - t.u) / TAG_W * flip + 0.5, r = (t.z + TAG_H / 2 - z) / TAG_H;
+    if (tagCell(i, q, r, t, L)) return true;
+  }
+  if (z < 0.45 || z > Math.min(h - 0.1, 1.9)) return false;
+  const seed = muralSeed(k, mx, my, face);
+  if (seed < 0) return false;
+  const f = fract(wc);
+  return muralCell(i, flip > 0 ? f : 1 - f, (z - 0.45) / (Math.min(h - 0.1, 1.9) - 0.45), seed, L), true;
+}
+
+// ---- spraying: hold the can, face a wall up close, Q
+function sprayTarget() {
+  if (mode !== 'walk' || !lookHit || lookHit.d > 0.3) return null;
+  const k = idx(lookHit.mx, lookHit.my);
+  if (!map[k] || STY[k] >= 3 && STY[k] <= 6) return null; // (not the landmarks)
+  const hx = px + Math.cos(a) * lookHit.d, hy = py + Math.sin(a) * lookHit.d, fx_ = fract(hx), fy = fract(hy);
+  const ex = Math.min(fx_, 1 - fx_), ey = Math.min(fy, 1 - fy), side = ey < ex; // which edge of the cell we hit
+  const face = faceOf(side, lookHit.mx, lookHit.my);
+  return { cell: k, face, u: side ? mod(hx, N) : mod(hy, N), z: 0.16 };
+}
+function sprayTag() {
+  const it = heldItem(), tg = sprayTarget();
+  if (!tg) return say(mode === 'walk' ? 'Get up close to a wall.' : 'Not here.');
+  if (tags.some(t => t.cell === tg.cell && t.face === tg.face && Math.abs(rel(t.u - tg.u)) < TAG_W)) return say('There\'s a tag there already. Find a clean wall.');
+  tags.push({ ...tg, design: Math.random() * designCount | 0 });
+  if (tags.length > TAG_MAX) tags.shift(); // (the council scrubs the oldest)
+  reindexTags();
+  if (actx) burst(actx.currentTime, 1.1, [filt('highpass', 3500, 0.7)], 0.14); // psssssht
+  const empty = --it.uses <= 0;
+  if (empty) removeHeld();
+  const w = crime('graffiti', px, py);
+  say((w === 'cop' ? '"HEY! You! Drop the can!"' : w === 'reported' ? 'Psssht. Somebody across the street gets their phone out.' : pick(['Psssht. Nice.', 'Psssht. Your mark on the city.', 'Psssht. Nobody saw. Probably.'])) + (empty ? ' The can rattles empty.' : ''), 3);
+}
 // ===== city sprites: everything drawn over the raycast scene, nearest-first order doesn't matter (drawArt depth-tests)
 // visit the props in the blocks within draw distance
 function forNear(b, fn) {
@@ -4580,10 +4948,10 @@ const ROOM_DEFS = {
     props: r => {
       const p = [...counterBox(6, 1.7, 1.4), standing(6, 1.1, RED)];
       for (const [x, y] of [[3, 4], [9, 4], [3, 6.8], [9, 6.8]]) {
-        p.push(BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
+        p.push({ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
           const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
           return set(i, f === 5 && Math.abs(Math.abs(HIT.u) - 0.32) < 0.06 || f === 5 && Math.abs(Math.abs(HIT.v) - 0.32) < 0.06 ? '#' : ' ', C(WHITE, 13)), true;
-        }), BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK)));
+        }) }, BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK)));
         for (const [ox, oy] of [[-0.75, 0], [0.75, 0], [0, 0.75], [0, -0.75]]) if (chance(0.6)) p.push(sitting(x + ox, y + oy, shirt(), 0.45, oy < 0));
       }
       return p;
@@ -5489,6 +5857,182 @@ ROOM_DEFS.cathedral = { grid: CATH_GRID, light: 0.8, height: CATH_H, floor: 'cat
     for (const [x, y] of [[3, 20], [18.5, 14], [4, 33], [17, 26]]) if (chance(0.5)) p.push(standing(x, y, pick([GRAY, BLUE, BRICK, GREEN]))); // a few sightseers in the aisles
     return p;
   } };
+// ===== the Shotengai: a few blocks of covered shopping streets south of downtown (world.js picks the neighbourhood).
+// Narrow buildings hung all over with vertical neon signs, air-conditioners and lit upstairs signboards; shops with
+// noren curtains and paper lanterns at the door; a roof of ribbed translucent panels over every street, lamps along
+// it, banners hanging from it; vending machines on every corner. Inside: a pachinko parlour, crane game shops, a
+// capsule hotel, and izakayas, yakitori, takoyaki and bento counters.
+
+// ---- facades (STY 17)
+const NOREN = [RED, BLUE, GRAY, BRICK];
+function shotengaiFront(i, u, z, sh, sk, open, L, glowL) { // the ground floor, under the shop sign
+  const fs = fract(u * 2), lit = Math.max(L, glowL);
+  if (fs < 0.06) return set(i, '|', C(BRICK, L));
+  if (!open) return set(i, fract(z * 60) < 0.5 ? '=' : '-', C(GRAY, L * 0.6)); // shutters down
+  if ((Math.abs(fs - 0.14) < 0.05 || Math.abs(fs - 0.86) < 0.05) && z > 0.17 && z < 0.28) { // paper lanterns either side of the door
+    BG[i] = C(RED, 3 + night * 5); return set(i, z > 0.265 || z < 0.18 ? '=' : fract(z * 40) < 0.4 ? '-' : 'O', C(z > 0.265 || z < 0.18 ? GRAY : YEL, lit));
+  }
+  if (z > 0.24 && fs > 0.22 && fs < 0.78) { // the noren: cloth panels hanging in the doorway, split, the shop's mark on them
+    if (fract(fs * 8) < 0.12) return set(i, ' ', 0);
+    BG[i] = C(NOREN[sk & 3], 2 + L * 0.15);
+    return set(i, Math.abs(fs - 0.5) < 0.05 && z > 0.27 ? 'o' : ' ', C(WHITE, lit));
+  }
+  if (z < 0.24 && fs > 0.22 && fs < 0.78) { BG[i] = C(WARM, 2 + glowL * 0.15); return set(i, fract(z * 30) < 0.15 ? '-' : ':', C(WARM, lit)); } // the warm doorway
+  // display windows: plastic food, capsule toys, magazines, whatever they sell
+  BG[i] = C(GRAY, 1 + glowL * 0.1);
+  if (fract(z * 16) < 0.2) return set(i, '=', C(GRAY, L));
+  return set(i, sh.glyphs[hash(Math.floor(u * 20), Math.floor(z * 16), sk) * sh.glyphs.length | 0], C(ITEM_COL[hash(Math.floor(u * 20), Math.floor(z * 16), sk + 1) * 8 | 0], lit));
+}
+function shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL) {
+  const bays = 1.5, fu = fract(u * bays), bay = Math.floor(u * bays);
+  // a vertical neon sign down the edge of every bay: the shop's name, top to bottom, chasing lights along its edges
+  if (fu > 0.04 && fu < 0.16 && zz < h - 0.55 && zz > 0.05) {
+    const w = sh.kind === SHOP_APTS ? ['HOTEL', 'BAR', 'KARAOKE', 'MAHJONG', 'CLINIC', 'DANCE'][(bay + sk) % 6] : sh.word, col = NEON[(bay + sk) & 3];
+    BG[i] = C(col, 2 + night * 2);
+    if (fu < 0.05 || fu > 0.15) return set(i, fract(zz * 12 - T * 2) < 0.4 ? '*' : '|', C(YEL, Math.max(L, night * 15)));
+    const q = (h - 0.65 - zz) / 0.09, p = Math.floor(q);
+    const on = oneCell((fract(q) - 0.5) * 0.09, d / projY) && (uStep >= 0.06 || oneCell((fu - 0.1) * 0.66, uStep));
+    return set(i, on && p >= 0 && p < w.length ? w[p] : ' ', C(WHITE, Math.max(L, night * 15)));
+  }
+  if (fz > 0.8) { // a lit signboard across each floor: somebody's bar, clinic, mahjong parlour
+    const lit_ = hash(bay, fl, sk + 3) > 0.3;
+    BG[i] = C(lit_ ? NEON[(bay * 3 + fl) & 3] : GRAY, lit_ ? 2 + night * 4 : 1);
+    return set(i, lit_ && fract(u * 9) < 0.5 ? '=' : ' ', C(WHITE, Math.max(L, lit_ ? night * 13 : 0)));
+  }
+  if (fz > 0.12 && fz < 0.32 && fu > 0.7 && fu < 0.82 && hash(bay, fl, sk + 5) > 0.4) return set(i, fz > 0.29 || fz < 0.15 ? '-' : '#', C(GRAY, L)); // an air-conditioner
+  const wu = fract(u * bays * 2);
+  if (fu > 0.2 && wu > 0.2 && wu < 0.8 && fz > 0.25 && fz < 0.72) { // small windows: lamp-lit, TV-blue, or dark
+    const k = hash(Math.floor(u * bays * 2), fl, sk);
+    if (k > litT - 0.1) return set(i, fract(wu * 3) < 0.15 ? '|' : '#', C(k > 0.93 ? CYAN : WARM, Math.max(L, glowL)));
+    return set(i, '.', C(GRAY, L * 0.3));
+  }
+  return set(i, (Math.floor(u * 10) + Math.floor(zz * 20)) % 6 ? ' ' : '.', C(GRAY, L * 0.6)); // tiled render
+}
+
+// ---- the arcade roof over the streets, seen from underneath
+function arcadeRoofCell(i, wx, wy) {
+  const k = idx(Math.floor(wx), Math.floor(wy)), r = ROAD[k], ns = r === 1 || r === 3 && fract(wy / 8) >= 0.25;
+  const across = (ns ? mod(wx, 8) : mod(wy, 8)) / 2, along = ns ? wy : wx;
+  if (across < 0.04 || across > 0.96) { BG[i] = C(GRAY, 2); return set(i, '#', C(GRAY, 7)); } // the side beams
+  if (fract(along * 2) < 0.07) { BG[i] = C(GRAY, 2); return set(i, '=', C(GRAY, 9)); } // ribs every 5m
+  const lamp = Math.hypot(fract(along) - 0.5, (Math.abs(across - 0.5) - 0.25) * 2) < 0.07;
+  if (lamp) { BG[i] = C(WARM, 4 + night * 6); return set(i, 'o', C(WHITE, 15)); }
+  const pane = Math.floor(along * 2) % 3; // fibreglass panels, yellowed and greened with age, daylight coming through them
+  BG[i] = day > 0.3 ? C([WHITE, YEL, GREEN][pane], (pane ? 2 : 3) + day * (pane ? 3 : 5) * (1 - overcast * 0.5)) : C(WARM, 1 + lampsOn * 1.5); // (or the lamps' glow at night)
+  return set(i, Math.abs(across - 0.5) < 0.02 ? '|' : (Math.floor(along * 6) + Math.floor(across * 10)) % 7 ? ' ' : '.', C(GRAY, 6));
+}
+// does the ray to this wall cell pass under the arcade roof first? (wall points above it are hidden by it)
+function arcadeRoofHit(z, side, mx, my, wc) {
+  if (eye >= ARCADE_Z || z <= ARCADE_Z) return null;
+  const f = (ARCADE_Z - eye) / (z - eye), wx = side ? wc : mx + (rel(px - mx) < 0 ? 0 : 1), wy = side ? my + (rel(py - my) < 0 ? 0 : 1) : wc;
+  const hx = px + rel(wx - px) * f, hy = py + rel(wy - py) * f;
+  return arcadeAt(hx, hy) ? [hx, hy] : null;
+}
+// and the sky: where the roof is over you, that's what you see looking up
+function arcadeSky(i, rx, ry, up) {
+  if (eye >= ARCADE_Z || up <= 0) return false;
+  const t = (ARCADE_Z - eye) / up;
+  if (t > 40) return false;
+  const hx = px + rx * t, hy = py + ry * t;
+  if (!arcadeAt(hx, hy)) return false;
+  ZB[i] = t; arcadeRoofCell(i, mod(hx, N), mod(hy, N));
+  return true;
+}
+
+// ---- inside: the pachinko parlour, the crane game shop, the capsule hotel
+// a pachinko machine: chrome and lights, the glass full of pins with silver balls raining down, a tray of balls
+const pachinkoMachine = (x, y, k, fy) => ({ ...BX(x, y, 0.3, 0.25, 0, 1.9, (i, t, L) => {
+  const f = HIT.face, w = HIT.w, v = HIT.v;
+  BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(f));
+  if (f !== 1) return set(i, f === 5 ? ' ' : fract(w * 5) < 0.1 ? '-' : ' ', C(GRAY, L)), true;
+  if (w > 1.7) { BG[i] = C(NEON[k & 3], 4); return set(i, fract(v * 8 + T * 3) < 0.5 ? '*' : ' ', C(YEL, 15)), true; } // the lit crown
+  if (w > 0.95 && Math.abs(v) < 0.24) { // the glass: pins, balls falling, the reels in the middle
+    BG[i] = C(BLUE, 1);
+    if (Math.abs(w - 1.3) < 0.07 && Math.abs(v) < 0.1) return set(i, '7', C(RED, 15)), true;
+    if (hash(Math.floor(v * 30), Math.floor(w * 25 + T * 6), k) > 0.93) return set(i, 'o', C(WHITE, 15)), true;
+    return set(i, (Math.floor(v * 30) + Math.floor(w * 25)) & 1 ? ' ' : '.', C(YEL, 9)), true;
+  }
+  if (w > 0.75 && w < 0.92) return set(i, 'o', C(WHITE, 13)), true; // the tray of balls
+  return set(i, Math.abs(v) < 0.04 && w > 0.5 && w < 0.7 ? '@' : ' ', C(GRAY, L)), true; // the handle
+}, 0, fy), pachi: true, cx: x, cy: y, fy });
+const crane = (x, y, k) => ({ ...BX(x, y, 0.45, 0.45, 0, 1.95, (i, t, L) => { // a crane cabinet: a glass case of plush, the claw above
+  const f = HIT.face, w = HIT.w;
+  if (f === 5 || w > 1.75) { BG[i] = C([MAG, CYAN, YEL, GREEN][k & 3], 4); return set(i, f === 5 ? ' ' : fract(HIT.u * 6 + T * 2) < 0.5 ? '*' : '=', C(WHITE, 15)), true; }
+  if (w < 0.7) { BG[i] = C([MAG, CYAN, YEL, GREEN][k & 3], 2 + L * 0.2); return set(i, w > 0.6 ? '=' : w > 0.35 && w < 0.45 && (f === 1 || f === 2) ? 'o' : ' ', C(WHITE, L)), true; }
+  BG[i] = C(CYAN, 1); // the glass
+  const a = f <= 2 ? HIT.v : HIT.u;
+  if (w < 1.05) return set(i, '@', C(ITEM_COL[hash(Math.floor(a * 10), Math.floor(w * 10), k) * 8 | 0], 13)), true; // the pile of prizes
+  const cx = 0.25 * Math.sin(T * 0.7 + k);
+  if (Math.abs(a - cx) < 0.04 && w > 1.35) return set(i, '|', C(GRAY, 12)), true;
+  if (Math.abs(w - 1.32) < 0.04 && Math.abs(a - cx) < 0.1) return set(i, Math.abs(a - cx) > 0.05 ? (a < cx ? '/' : '\\') : 'V', C(WHITE, 14)), true;
+  return set(i, ' ', 0), true;
+}), crane: true, cx: x, cy: y });
+const nearPachinko = () => mode === 'room' && room.props.find(s => s.pachi && Math.abs(px - s.cx) < 0.4 && Math.abs(py - (s.cy + s.fy * 0.75)) < 0.4) || null;
+const nearCrane = () => mode === 'room' && room.props.find(s => s.crane && Math.abs(px - s.cx) < 0.6 && py > s.cy + 0.4 && py < s.cy + 1.4) || null;
+const nearMahjong = () => mode === 'room' && room.kind === 'tea' && room.props.find(s => s.mj && Math.hypot(px - s.cx, py - s.cy) < 1.3) || null;
+function shotengaiPrompt() {
+  if (nearMahjong()) return `E: sit in on a hand of mahjong (${fmt$(MJ_BUYIN)} in the pot)`;
+  const pm = nearPachinko();
+  if (pm) return pm.busy ? 'Somebody\'s on this one' : `E: play pachinko (${fmt$(CREDIT)} for 40 balls)`;
+  if (room.kind === 'pachinko' && nearKeeper()) return `E: swap tickets for prizes (${tickets} tickets)`;
+  if (nearCrane()) return `E: try the crane (${fmt$(CREDIT)})`;
+  if (room.kind === 'capsule' && nearKeeper()) return `E: a pod for the night (${fmt$(CAPSULE_RATE)})`;
+  return '';
+}
+const CAPSULE_RATE = 15;
+function useShotengai() { // true if E did something (and the mahjong tables in the tea houses)
+  if (nearMahjong()) { if (!pay(MJ_BUYIN)) say(`The buy-in's ${fmt$(MJ_BUYIN)}.`); else { startGame('mahjong', 'table'); say('"Sit, sit. Four sets and a pair, yes? We play the simple way here."', 4); } return true; }
+  const pm = nearPachinko();
+  if (pm) { if (pm.busy) say('Somebody\'s on this one. He doesn\'t look up.'); else if (!pay(CREDIT)) say(`It's ${fmt$(CREDIT)} for a tray of balls.`); else startGame('pachinko', 'arcade'); return true; }
+  if (room.kind === 'pachinko' && nearKeeper()) { openPrizes(); return true; }
+  if (nearCrane()) { if (!pay(CREDIT)) say(`It's ${fmt$(CREDIT)} a go.`); else startGame('crane', 'arcade'); return true; }
+  if (room.kind === 'capsule' && nearKeeper()) {
+    if (!pay(CAPSULE_RATE)) { say(`A pod's ${fmt$(CAPSULE_RATE)}.`); return true; }
+    sleep = { t: 0, home: true };
+    say(`Pod ${100 + (Math.random() * 300 | 0)}. You crawl in, pull the blind down and the hum of the air vent puts you straight to sleep.`, 4);
+    return true;
+  }
+  return false;
+}
+function pachinkoWall(i, u, uStep, z, d, mx, my, L) { // mirrored panels, a neon band, the prize list over the counter
+  if (Math.abs(z - 2.5) < 0.06) return set(i, '=', C(NEON[Math.floor(Math.abs(u) * 2 + T * 4) & 3], 15)), true;
+  if (mx === room.W - 1 && z > 1.6 && z < 2.3 && wallText(i, u, uStep, z, d, 'PRIZES', 8.5 * Math.sign(u), 1.95, 0.2, 0.3, C(YEL, 15), C(RED, 3))) return true;
+  BG[i] = C(MAG, 1 + L * 0.05);
+  return set(i, (Math.floor(Math.abs(u) * 4) + Math.floor(z * 4)) % 5 ? ' ' : '*', C(YEL, 8)), true;
+}
+function capsuleWall(i, u, uStep, z, d, mx, my, L) { // the side walls are pods, two high: round-cornered holes, blinds, a glow
+  if (mx !== 0 && mx !== room.W - 1 || z > 2.4) { BG[i] = C(WHITE, 2 + L * 0.1); return set(i, z > 2.4 && fract(Math.abs(u) * 2) < 0.1 ? '|' : ' ', C(GRAY, L)), true; }
+  const au = Math.abs(u), pu = fract(au / 1.1), pz = z < 1.2 ? z / 1.2 : (z - 1.2) / 1.2, pod = Math.floor(au / 1.1) * 2 + (z < 1.2 ? 0 : 1);
+  BG[i] = C(WHITE, 3 + L * 0.1);
+  if (pu < 0.1 || pu > 0.9 || pz < 0.12 || pz > 0.88) return set(i, pz > 0.95 || pz < 0.04 ? '_' : ' ', C(GRAY, L)), true;
+  if (hash(pod, mx, 7) > 0.55) { BG[i] = C(GRAY, 2); return set(i, fract(pz * 10) < 0.5 ? '=' : '-', C(GRAY, L * 0.8)), true; } // blind down: somebody's in
+  BG[i] = C(WARM, 2 + L * 0.15); return set(i, pz < 0.3 ? '~' : ' ', C(BLUE, 12)), true; // an empty pod: the futon, the little lamp
+}
+const SHOTENGAI_ROOMS = {
+  pachinko: { grid: boxRoom(14, 11), light: 1, floor: 'carpet', ceil: 'disco', wall: pachinkoWall, keeper: [12.3, 8.6],
+    props: r => {
+      const p = [];
+      for (let x = 2; x <= 12; x += 0.85) p.push({ ...pachinkoMachine(x, 1.5, Math.round(x * 3), 1), busy: chance(0.55) });
+      for (let x = 2.4; x <= 10.4; x += 0.85) { p.push({ ...pachinkoMachine(x, 4.9, Math.round(x * 5), -1), busy: chance(0.5) }, { ...pachinkoMachine(x, 5.45, Math.round(x * 7), 1), busy: chance(0.5) }); }
+      for (const s of p.slice()) if (s.busy) p.push(sitting(s.cx, s.cy + s.fy * 0.6, shirt(), 0.45, s.fy > 0));
+      p.push(...counterBox(12.3, 9.2, 0.9), standing(12.3, 8.6, RED));
+      return p;
+    } },
+  cranes: { grid: boxRoom(11, 8), light: 1, floor: 'carpet', ceil: 'disco', wall: arcadeWall,
+    props: r => {
+      const p = [];
+      for (const [x, y] of [[2, 1.5], [3.4, 1.5], [4.8, 1.5], [6.2, 1.5], [7.6, 1.5], [9, 1.5], [3, 4.4], [4.4, 4.4], [6.6, 4.4], [8, 4.4]]) p.push(crane(x, y, Math.round(x * 3 + y)));
+      if (chance(0.6)) p.push(standing(3.4, 2.6, shirt())); if (chance(0.6)) p.push(SP(8, 5.5, 0.4, 1.15, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? MAG : BLUE, L)));
+      return p;
+    } },
+  capsule: { grid: boxRoom(7, 12), light: 0.9, floor: 'wood', ceil: 'strip', wall: capsuleWall, keeper: [3.5, 9.6],
+    props: r => [...counterBox(3.5, 10.2, 1.1), standing(3.5, 9.6, BLUE), SP(1.4, 10.6, 0.7, 1.3, ART.plant, plantCol)] },
+};
+Object.assign(ROOM_DEFS, SHOTENGAI_ROOMS);
+Object.assign(ROOM_FOR, { PACHINKO: 'pachinko', 'CRANE GAME': 'cranes', GACHA: 'cranes', CAPSULE: 'capsule', IZAKAYA: 'bar', KISSATEN: 'cafe', MANGA: 'books', DRUGSTORE: 'store',
+  YAKITORI: 'diner', TAKOYAKI: 'diner', BENTO: 'diner' });
+MENU_ITEMS.push(['YAKITORI 6', 'EDAMAME 3', 'SAKE 7', 'BEER 6'], ['TAKOYAKI 5', 'RAMUNE 2', 'ONIGIRI 3', 'TEA 2'], ['BENTO 9', 'ONIGIRI 3', 'MISO 3', 'TEA 2']);
+Object.assign(MENUS, { YAKITORI: MENU_ITEMS.length - 3, TAKOYAKI: MENU_ITEMS.length - 2, BENTO: MENU_ITEMS.length - 1 });
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
 function drawArt(rx_, ry_, z, w, h, art, colFn) {
@@ -5661,7 +6205,7 @@ function render(dt) {
   if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
   W.sprites();
-  if (city) { reflect(); fogSteps(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
+  if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (mode === 'drive' || mode === 'taxi') dash();
   if (mode === 'el') elFrame();
   if (mode === 'fair') fairFrame();
@@ -5716,7 +6260,7 @@ function dash() {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
   } else {
     putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
-    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway', C(WHITE, 12));
+    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway' + (owned.homes.length ? '   6: home' : ''), C(WHITE, 12));
   }
 }
 
@@ -5791,6 +6335,7 @@ function promptText() {
     if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
     if (nearTouchPool()) return 'E: touch the touch pool';
     if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
+    { const sp = shotengaiPrompt(); if (sp) return sp; }
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
@@ -5811,6 +6356,7 @@ function promptText() {
   const c = nearestCar(0.5);
   const dr = droppedHere();
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
+  if (heldItem() && heldItem().id === 'spraypaint' && sprayTarget()) return 'Q: spray a tag (if the police see, it\'s vandalism)';
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
@@ -5892,7 +6438,7 @@ function minimap() {
 }
 
 const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks',
-                         brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay' };
+                         brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay', shotengai: 'the Shotengai' };
 // a line of HUD text broken to fit maxW px: at the wide gaps between its parts first, then between words
 function wrapText(s, maxW) {
   const out = [];
@@ -5917,7 +6463,7 @@ function hud() {
     : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
-  const lines = [...wrapText(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
+  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
   hudBottom = (lines.length + task_.length) * FS + 10;
@@ -5983,6 +6529,15 @@ function leaveCar() {
   me = null; mode = 'walk';
 }
 // taxi destinations: always a point in the middle of a street that exists
+const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
+function homeKerb(x, y) { // the middle of the street nearest a building's cell (x, y): one of its block's four sides
+  const bx = x >> 3, by = y >> 3, opts = [];
+  if (vseg(bx & (NB - 1), by & (NB - 1))) opts.push([bx * 8 + 1, y + 0.5]);
+  if (vseg((bx + 1) & (NB - 1), by & (NB - 1))) opts.push([(bx + 1) * 8 + 1, y + 0.5]);
+  if (hseg(bx & (NB - 1), by & (NB - 1))) opts.push([x + 0.5, by * 8 + 1]);
+  if (hseg(bx & (NB - 1), (by + 1) & (NB - 1))) opts.push([x + 0.5, (by + 1) * 8 + 1]);
+  return opts.reduce((b, p) => Math.hypot(p[0] - x, p[1] - y) < Math.hypot(b[0] - x, b[1] - y) ? p : b).map(v => mod(v, N));
+}
 function setDest(n) {
   const c = me, far = p => Math.hypot(rel(p[0] - c.x), rel(p[1] - c.y));
   const nearest = pts => pts.reduce((b, p) => far(p) < far(b) ? p : b);
@@ -5992,6 +6547,9 @@ function setDest(n) {
   else if (n === 4) { // the shore road, south or north, level with you
     const bx = Math.floor(c.x / 8);
     c.dest = nearest([[bx * 8 + 5, SHORE_S * 8 + 1], [bx * 8 + 5, (SHORE_N + 1) * 8 + 1]]); c.destName = 'the waterfront';
+  } else if (n === 6 && owned.homes.length) { // home: the street in front of whichever of your places is nearest
+    const h = owned.homes.reduce((b, h) => homeDist(h, c) < homeDist(b, c) ? h : b), x = h.cell % N, y = Math.floor(h.cell / N);
+    c.dest = homeKerb(x, y); c.destName = `home (${SHOP[h.cell].word})`;
   } else if (n === 5) { // the street in front of the nearest station entrance
     const s = stations.reduce((b, s) => far([s.x, s.y]) < far([b.x, b.y]) ? s : b);
     c.dest = [s.x, s.y - mod(s.y, 8) + 1]; c.destName = `${s.name} station`;
@@ -6069,6 +6627,7 @@ function interact() {
     if (room.kind === 'laundry' && useLaundry()) return;
     if (nearTouchPool()) return say(pick(TOUCH_LINES), 3);
     if (room.kind === 'cathedral' && useCathedral()) return;
+    if (useShotengai()) return;
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
       roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0;
@@ -6173,6 +6732,7 @@ function stepSleep(dt) {
   fade = sleep.t < 1.5 ? sleep.t / 1.5 : sleep.t < 3 ? 1 : clamp(1 - (sleep.t - 3) / 2, 0, 1);
   if (sleep.t >= 1.5 && !sleep.done) {
     sleep.done = true;
+    if (tod > 7) dayNum++; // slept through midnight
     tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
     if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby }, [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
@@ -6401,6 +6961,89 @@ function fairFrame() {
   const mid = cols >> 1;
   for (let r = 0; r < rows - 3; r++) { const i = r * cols + mid; FOGS[i] = FOGB[i] = 0; set(i, (r + Math.floor(T * 6)) % 4 ? '|' : '/', C(YEL, 14)); BG[i] = C(YEL, 3); }
   ['   ,/\\_/\\,', '  (  o    >', "  /`---.__/", " /  ~~~~ \\"].forEach((l, k) => putText(rows - 4 + k, mid - 6, l, C(WHITE, 13)));
+}
+// ===== the calendar: which day of the week it is, and what's on. Days tick over at midnight (and when you sleep
+// through one). Starting simple: every Saturday night, fireworks over the bay off the pleasure pier.
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const weekday = () => WEEKDAYS[mod(dayNum, 7)];
+// what's on: [weekday, from hour, to hour, what, a line for the newspaper and the gossip]
+const EVENTS = [['Sat', 21, 24, 'fireworks', 'Fireworks over the bay, Saturday at 9']];
+const eventNow = kind => EVENTS.some(([d, h0, h1, k]) => k === kind && d === weekday() && tod >= h0 && tod < h1);
+const eventToday = kind => EVENTS.find(([d, , , k]) => k === kind && d === weekday()) || null;
+let toldEvent = '';
+function stepEvents(dt) {
+  const fw = eventToday('fireworks'), key = dayNum + ':fw';
+  if (fw && tod >= 20 && tod < 21 && toldEvent !== key + ':soon') { toldEvent = key + ':soon'; say('Fireworks over the bay at 9 tonight. Head down to the waterfront.', 5); }
+  if (fw && tod >= 21 && tod < 21.1 && toldEvent !== key + ':go') { toldEvent = key + ':go'; say(weather === 'storm' ? 'The fireworks are off: too much wind.' : 'BOOM. The fireworks have started over the bay.', 4); }
+  stepFireworks(dt);
+}
+
+// ---- the fireworks: shells launched from barges out in the bay south of the pier, a few a second, a finale at the end.
+// Each climbs on a trail of sparks, bursts into a shell of stars that fall and fade. Drawn into the sky as points in
+// the world (so buildings hide them and they're bigger close up), with a flash on the sky round each burst.
+const FW_COLS = [RED, YEL, CYAN, MAG, GREEN, WHITE, ORANGE, BLUE];
+const shells = [];
+const fwBase = () => ({ x: FAIR.cx, y: FAIR.y1 + 18 }); // the barges
+function stepFireworks(dt) {
+  for (let k = shells.length - 1; k >= 0; k--) if (T - shells[k].t0 > shells[k].rise + 3.5) shells.splice(k, 1);
+  if (!eventNow('fireworks') || weather === 'storm' || mode === 'room') return;
+  const finale = tod > 23.6, rate = finale ? 6 : 1.4;
+  if (Math.random() < dt * rate) {
+    const b = fwBase(), kind = pick(['peony', 'peony', 'willow', 'ring', 'crackle']);
+    shells.push({ x: b.x + (Math.random() - 0.5) * 30, y: b.y + (Math.random() - 0.5) * 8, h: 18 + Math.random() * 14, t0: T, rise: 1.6 + Math.random() * 0.8,
+      col: pick(FW_COLS), col2: pick(FW_COLS), kind, n: kind === 'ring' ? 28 : 46, seed: Math.random() * 1e4, boomed: false });
+  }
+  for (const s of shells) if (!s.boomed && T - s.t0 > s.rise) { s.boomed = true; fwBoom(s); }
+}
+// where star k of shell s is, t seconds after the burst
+function starAt(s, k, t) {
+  const g = s.kind === 'willow' ? 3 : 1.6, sp = s.kind === 'willow' ? 3.2 : 4.5;
+  let dxs, dys, dzs;
+  if (s.kind === 'ring') { const th = k / s.n * TAU; dxs = Math.cos(th); dys = 0.3 * Math.sin(th); dzs = Math.sin(th); }
+  else { // spread evenly over a sphere (a Fibonacci spiral)
+    const zz = 1 - 2 * (k + 0.5) / s.n, rr = Math.sqrt(1 - zz * zz), th = k * 2.39996 + s.seed;
+    dxs = rr * Math.cos(th); dys = rr * Math.sin(th); dzs = zz;
+  }
+  const d = sp * (1 - Math.exp(-t * 1.6)); // fast out, then hanging
+  return [s.x + dxs * d, s.y + dys * d, s.h + dzs * d - g * t * t * 0.5];
+}
+function drawFireworks() {
+  if (!shells.length) return;
+  const put = (wx, wy, wz, ch, col, glow) => {
+    const vx = rel(wx - px), vy = rel(wy - py), depth = dx * vx + dy * vy;
+    if (depth < 1) return;
+    const c = Math.round(cols / 2 + (-dy * vx + dx * vy) * projX / depth), r = Math.round(hor - (wz - eye) * projY / depth);
+    if (c < 0 || c >= cols || r < 0 || r >= rows) return;
+    const i = r * cols + c;
+    if (ZB[i] < depth) return; // behind a building
+    set(i, ch, col); FOGS[i] = 0;
+    if (glow && ZB[i] === Infinity) { BG[i] = glow; FOGB[i] = 0; } // a glow on the sky behind it
+  };
+  for (const s of shells) {
+    const t = T - s.t0;
+    if (t < s.rise) { // climbing: a bright head, a trail of sparks behind it
+      const f = t / s.rise, z = s.h * (1 - (1 - f) ** 2);
+      put(s.x, s.y, z, '^', C(YEL, 15));
+      for (let k = 1; k < 5; k++) put(s.x + Math.sin(k * 3 + s.seed) * 0.05, s.y, Math.max(0, z - k * 0.5), '.', C(ORANGE, 12 - k * 2));
+      continue;
+    }
+    const bt = t - s.rise, life = s.kind === 'willow' ? 3.4 : 2.4;
+    if (bt > life) continue;
+    const fade = 1 - bt / life, ch = bt < 0.25 ? '@' : fade > 0.6 ? '*' : fade > 0.3 ? '+' : s.kind === 'willow' ? '|' : '.';
+    if (bt < 0.15) put(s.x, s.y, s.h, '#', C(WHITE, 15), C(s.col, 4)); // the burst's flash
+    for (let k = 0; k < s.n; k++) {
+      if (s.kind === 'crackle' && bt > 1.2 && hash(k, Math.floor(T * 12), s.seed) > 0.5) continue; // crackling: twinkling on and off
+      const [x, y, z] = starAt(s, k, bt);
+      put(x, y, z, ch, C(k & 1 && s.col2 !== s.col ? s.col2 : s.col, 5 + fade * 10), bt < 0.5 && k % 12 === 0 ? C(s.col, 1 + fade * 3) : 0);
+    }
+  }
+}
+// the boom: as far off as it is, it arrives that much later (sound does 34 cells a second)
+function fwBoom(s) {
+  if (!actx) return;
+  const dist = Math.hypot(rel(s.x - px), rel(s.y - py), s.h), at = actx.currentTime + dist / 34, loud = clamp(1.6 - dist / 120, 0.15, 1);
+  burst(at, 1.4, [filt('lowpass', 180 + Math.random() * 60, 0.7)], 0.5 * loud);
+  if (s.kind === 'crackle') for (let k = 0; k < 14; k++) burst(at + 1.2 + k * 0.07 + Math.random() * 0.05, 0.05, [filt('highpass', 2500, 1)], 0.08 * loud);
 }
 // ===== the laundromat: open all night. Put a load in one of the machines along the back wall, wait (the bench is
 // there for it), and come back for clean clothes. Change into them while the police are after someone in what you
@@ -6651,7 +7294,7 @@ function audioTick(dt) {
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0,
-    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0 });
+    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm' });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
@@ -6966,6 +7609,15 @@ const HAND = {
   harmonica: () => [[' __________', '[|:|:|:|:|:]', ' ----------'], (c, r) => c === ':' ? C(GRAY, 7) : C(GRAY, 14)],
   sharkplush: () => [['        /|', '  ___.-/ |__', '<(________o_>', "      \\/  \\/"], (c, r) => c === 'o' ? C(WHITE, 15) : r === 2 && c === '_' ? C(WHITE, 13) : C(GRAY, 13)],
   snowglobe: () => [['  .-----.', ' / . * . \\', '|  ><>  * |', ' \\ * . . /', "  '-----'", ' [=======]'], (c, r) => r === 5 ? C(BRICK, 13) : c === '>' || c === '<' ? C(ORANGE, 15) : c === '*' || c === '.' ? C(WHITE, 15) : C(CYAN, 12)],
+  spraypaint: (it, f) => [['   _', '  [o]', ' .---.', ' |   |', ' |ZAP|', ' |   |', " '---'"], (c, r) => r < 2 ? C(GRAY, 13) : c === 'Z' || c === 'A' || c === 'P' ? C(WHITE, 15) : C([MAG, CYAN, GREEN, ORANGE][it.uses & 3], 13)],
+  plushcat: () => [['  /\_/\ ', ' ( o.o )/', '  > ^ <', ' (_____)'], (c, r) => c === 'o' ? C(GREEN, 15) : r === 1 && c === '/' && r ? C(RED, 14) : C(WHITE, 14)],
+  plushbear: () => [[' (\_/)', ' (o o)', '/(   )\\', ' (___)'], (c, r) => c === 'o' ? C(GRAY, 4) : C(BRICK, 13)],
+  yakitori: (it, f) => [bitten(['  @@@@@@=', '  @@@@@@==', '  @@@@@@=', '        \\', '         \\'], f), (c, r) => c === '@' ? C(BRICK, 13) : C(WARM, 12)],
+  takoyaki: (it, f) => [bitten(['  ~ ~ ~ ~', ' (@)(@)(@)', ' (@)(@)(@)', " '-------'"], f, 'top'), (c, r) => c === '~' ? C(WHITE, 13) : c === '@' ? C(BRICK, 13) : c === '(' || c === ')' ? C(ORANGE, 13) : C(WARM, 12)],
+  onigiri: (it, f) => [bitten(['    /\\', '   /  \\', '  / :: \\', ' /######\\'], f, 'top'), (c, r) => c === '#' ? C(GREEN, 6) : c === ':' ? C(RED, 12) : C(WHITE, 15)],
+  bento: (it, f) => [bitten([' .--------.', ' |@@|oo|~~|', ' |@@|oo|~~|', " '--------'"], f, 'top'), (c, r) => c === '@' ? C(WHITE, 15) : c === 'o' ? C(RED, 13) : c === '~' ? C(GREEN, 13) : C(BRICK, 13)],
+  sake: (it, f) => [filled(['   _', '  | |', ' /   \\', '|     |', '|_____|'], [[3, 1, 5]], f, '~', '~'), (c, r) => c === '~' ? C(WHITE, 12) : C(WHITE, 15)],
+  melonsoda: (it, f) => [filled(['   @  /', ' .---/-.', ' |    |', ' |    |', ' |    |', "  '--'"], [[2, 2, 5], [3, 2, 5], [4, 2, 5]], f, ':', '~'), (c, r) => c === '@' ? C(RED, 15) : c === ':' || c === '~' ? C(GREEN, 14) : C(WHITE, 12)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
   umbrella: () => [['     .', '    /|\\', '   / | \\', '  |  |  |', '  |==|==|', '  |  |  |', '   \\ | /', '    \\|/', '     |', '     |'],
@@ -7011,7 +7663,9 @@ function charLine(x0, y0, x1, y1, w, size, col) {
   g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)'; g.fillStyle = col;
   for (let k = 0; k <= n; k++) { const x = x0 + (x1 - x0) * k / n - w / 2, y = y0 + (y1 - y0) * k / n - size / 2; g.strokeText(ch, x, y); g.fillText(ch, x, y); }
 }
+let handDrawn = null; // what the hand held in the last frame drawn ({ id, t }), or null: for the tests
 function drawHeldBig() {
+  handDrawn = null;
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
@@ -7033,7 +7687,7 @@ function drawHeldBig() {
     }
     if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
   }
-  drawHand(cx, hy, hsz);
+  drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
   if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(cx, grip, isz);
   g.font = FS + 'px monospace';
 }
@@ -7261,8 +7915,9 @@ function panelKey(e) {
 // ---- using things: the sounds that go with them
 const HEADLINES = () => [`${pick(stations).name} station closed for repairs`, 'Mayor vows to fix the el (again)', 'Bridge tolls to rise',
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
-  'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters'];
+  'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
+  if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
   const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
     water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
   if (line) say(line, 3);
@@ -7309,6 +7964,7 @@ function gameKey(e) {
   if (e.repeat) return true;
   if (game.g.over) { // the results screen: go again, or walk away
     if ((k === 'act') && game.kind === 'arcade') { if (pay(CREDIT)) { const id = game.g.id; startGame(id, 'arcade'); } else say(`A credit's ${fmt$(CREDIT)}. You're out of cash.`); }
+    else if (k === 'act' && game.kind === 'table') { if (pay(MJ_BUYIN)) startGame(game.g.id, 'table'); else say(`The buy-in's ${fmt$(MJ_BUYIN)}. You're out of cash.`); } // another hand
     else if (e.code === 'Escape' || e.code === 'KeyE' || k === 'act') game = null;
     return true;
   }
@@ -7326,7 +7982,16 @@ function finishGame(quit) {
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
   const r = g.reward();
-  if (game.kind === 'arcade') { tickets += r; say(r ? `${r} tickets.` : 'No tickets this time.', 3); }
+  if (game.kind === 'table') { // the mahjong table: the pot if you won, your stake back if nobody did
+    const res = g.result;
+    if (r > 0) earn(r);
+    say(quit && !res ? 'You get up from the table. Your stake stays in the pot.' : !res ? '' : res.winner === 0 ? `MAHJONG! You take the pot: ${fmt$(r)}.` : res.winner < 0 ? 'A draw: the wall ran out. Everyone takes their stake back.' : `${MJ_NAMES[res.winner]} wins. Your ${fmt$(MJ_BUYIN)} goes in their pocket.`, 4);
+    return;
+  }
+  if (game.kind === 'arcade' && g.prize) { // the crane dropped something in the chute
+    if (inv.length < INV_SIZE) { inv.push({ id: g.prize, uses: ITEMS[g.prize].uses || 0 }); held = inv.length - 1; say(`It drops down the chute: ${aOrSome(ITEMS[g.prize].name)}! Yours.`, 4); }
+    else say(`It drops down the chute, but your hands are full. You leave ${aOrSome(ITEMS[g.prize].name)} for the next kid.`, 4);
+  } else if (game.kind === 'arcade') { tickets += r; say(r ? `${r} tickets.` : g.id === 'crane' ? 'The claw comes up empty.' : 'No tickets this time.', 3); }
   else { if (r > 0) earn(r); say(quit ? `You clock off early. You earned ${fmt$(r)} (less for the hours you didn't work).` : `Shift's over. You earned ${fmt$(r)}.`, 4); }
 }
 function stepGame(dt) {
@@ -7359,7 +8024,7 @@ function gameFS(g) {
   return clamp(Math.floor(Math.min(DETAIL[settings.detail], (innerWidth - cr) / ((2 * g.W + 6) * ratio), (innerHeight - cb) / (g.H + 9))), 5, 40);
 }
 // what the screen says to press: on a phone, the buttons' names
-const gameText = s => TOUCH ? s.replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS/g, 'STICK').replace(/SPACE/g, 'GO') : s;
+const gameText = s => TOUCH ? s.replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/\bUP\b/g, 'MAHJONG').replace(/SPACE/g, 'GO') : s;
 // the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
 function drawGame() {
   const g = game.g, fs = gameFS(g);
@@ -7370,7 +8035,7 @@ function drawGame() {
   const [cr, cb] = gameClear(), ac = cols - Math.ceil(cr / cw), ar = rows - Math.ceil(cb / FS); // the columns and rows we can use
   const s = clamp(Math.floor(Math.min((ar - 9) / g.H, (ac - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
   const gw = g.W * bw, gh = g.H * bh, x0 = (ac - gw) >> 1, y0 = Math.max(4, (ar - gh) >> 1);
-  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : g.id === 'serve' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
+  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' ? RED : game.kind === 'table' ? GREEN : g.id === 'serve' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
     const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;
@@ -7390,11 +8055,14 @@ function drawGame() {
   const st = gameText(g.status()), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over && game.kind !== 'crime') { // the results card
-    const r = g.reward(), lines = game.kind === 'arcade'
+    const r = g.reward(), res = g.result, lines = game.kind === 'table'
+      ? [res && res.winner === 0 ? 'MAHJONG!' : 'HAND OVER', !res ? 'You left the table.' : res.winner === 0 ? `You win ${res.how}` : res.winner < 0 ? 'The wall ran out' : `${MJ_NAMES[res.winner]} wins ${res.how}`,
+         r > MJ_BUYIN ? `+${fmt$(r)}` : r ? 'Stakes returned' : `-${fmt$(MJ_BUYIN)}`, ...TOUCH ? [] : ['', `SPACE another hand (${fmt$(MJ_BUYIN)})   E leave`]]
+      : game.kind === 'arcade'
       ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, ...TOUCH ? [] : ['', `SPACE play again (${fmt$(CREDIT)})   E leave`]]
       : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, ...TOUCH ? [] : ['', 'E or SPACE to finish']];
     const w = Math.min(ac, Math.max(...lines.map(l => l.length)) + 6), h = lines.length + 2, cx = (ac - w) >> 1, cy = (ar - h) >> 1;
@@ -7697,7 +8365,7 @@ function drawBoard3D() {
 const SAVE_KEY = 'ascii-city-save';
 function saveGame() {
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
-  const data = { v: 1, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
+  const data = { v: 1, day: dayNum, tags, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })) };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
@@ -7706,7 +8374,8 @@ function loadGame() {
   try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return; }
   if (!d || d.v !== 1) return;
   const items = (list, into) => { into.length = 0; for (const it of list || []) if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses }); };
-  money = d.money ?? money; tickets = d.tickets || 0;
+  money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
+  tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   items(d.inv, inv); items(d.stored, stored); items(d.closet, closet);
   held = clamp(d.held ?? -1, -1, inv.length - 1);
   owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
@@ -7754,8 +8423,8 @@ onkeydown = e => {
   if (e.code === 'KeyV' && me) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
-  const n = /^Digit([1-5])$/.exec(e.code);
-  if (n && mode === 'taxi' && !me.dest) setDest(+n[1]);
+  const n = /^Digit([1-6])$/.exec(e.code);
+  if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
 };
 onkeyup = e => K[e.code] = 0;
@@ -7847,6 +8516,7 @@ function loop(t) {
   stepTraffic(dt, T);
   stepTask(dt);
   stepLaundry();
+  stepEvents(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
@@ -7963,7 +8633,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Leave'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^climb/, 'Climb'], [/^go into/, 'Enter'], [/^back down/, 'Go down']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^go into/, 'Enter'], [/^back down/, 'Go down']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
@@ -7978,12 +8648,13 @@ function touchActions() {
   if (sleep || bustedEl && bustedEl.style.display === 'flex') return []; // (busted: tap a row)
   if (panelOpen() || prizeEl && prizeEl.style.display === 'flex') return [['Close', 'KeyE', 'main']];
   if (game) {
-    if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
+    if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : game.kind === 'table' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(MJ_BUYIN)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
+    if (game.g.id === 'mahjong') return [['Leave', 'KeyE', 'pop'], ['Mahjong!', 'ArrowUp', 'pop'], [game.g.state() === 'claim' ? 'Pass' : 'Throw', 'Space', 'main']];
     return [[game.kind === 'shift' ? 'Clock off' : game.kind === 'crime' ? 'Back off' : 'Leave', 'KeyE', 'pop'], ['Go', 'Space', 'main']];
   }
   const out = [], p = promptText(), e = eLabel(p);
   if (mode === 'taxi') {
-    if (!me.dest) TAXI_STOPS.forEach((s, k) => out.push([s, 'Digit' + (k + 1), 'pop']));
+    if (!me.dest) { TAXI_STOPS.forEach((s, k) => out.push([s, 'Digit' + (k + 1), 'pop'])); if (owned.homes.length) out.push(['Home', 'Digit6', 'pop']); }
     else if (!me.rush) out.push([`Tip ${fmt$(TIP)}`, 'KeyG', 'pop']);
     out.push(['Camera', 'KeyV', 'pop'], ['Get out', 'KeyE', 'main']);
     return out;
@@ -7997,7 +8668,7 @@ function touchActions() {
     if (/\bG: take/.test(p)) out.push(['Grab', 'KeyG', 'pop']);
     if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
-    if (it) { out.push([ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
+    if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push(['Jump', 'Space', 'jump']);
   }

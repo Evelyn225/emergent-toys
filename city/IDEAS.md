@@ -73,21 +73,13 @@ The levers the engine already has, so a new district can pull every one of them:
 - Signature: a glass-roofed covered market hall over the water. Thing to do: pole a boat yourself.
 - Sound: lapping water, bicycle bells, an accordion. Engine: water rendering exists already; canals are new road kinds.
 
-### Shotengai / Little Tokyo
-- Covered shopping arcades: a roof over the street hung with paper banners and lanterns, the light under it warm
-  even when it rains outside.
-- Vending machines every few metres, tiny bars with noren curtains, a pachinko parlour roaring with light.
-- Signature: a capsule hotel (sleep in a pod) or a sento bathhouse. Thing to do: a crane game that pays prizes,
-  pachinko, a ramen counter with a slurp minigame.
-- Sound: arcade jingles, shop greetings, the rattle of pachinko. Engine: the covered street is a new roof-over-road
-  prop; vending machines and lanterns exist.
-
 ### The Arts Quarter (old warehouses gone creative)
-- Every blank wall is a mural: procedural ASCII graffiti that's different on every building, tags, paste-ups.
+- Murals are on every blank wall here (the city has a few already, and you can spray tags): denser, bigger pieces,
+  paste-ups, stencils, a hall of fame wall the writers repaint every week.
 - Food trucks instead of carts, fairy lights strung over a yard, street performers (a juggler, a sax player you can
   tip, a living statue).
 - Signature: a gallery whose paintings are generated art (it could borrow from the other toys on the site), and a
-  print studio. Thing to do: paint your own mural on a wall that stays there (saved).
+  print studio. Thing to do: paint a whole mural yourself (pick the colours and the word), not just a tag.
 - Sound: a busker, a DJ in a yard, chatter. Engine: murals are facade art; buskers are people with a spot.
 
 ### Civic Centre (City Hall and the marble quarter)
@@ -103,7 +95,7 @@ The levers the engine already has, so a new district can pull every one of them:
 - Signature: it exists only at night, and it's packed. Thing to do: eat your way down the rows; a stall-cooking shift.
 - Sound: sizzling, hawkers calling, music from somewhere. Engine: time-of-day props, like the pier's lights.
 
-### The Greenhouse Quarter / Botanical Gardens
+### The Greenhouse Quarter / Botanical Gardens (next up, probably)
 - A park district: winding paths that ignore the grid, a lake with paddle boats, a hedge maze.
 - Signature: a giant glass conservatory with a jungle inside (steamy, palms, a waterfall, butterflies) and a desert
   room; a small zoo or an aviary.
@@ -120,7 +112,7 @@ The levers the engine already has, so a new district can pull every one of them:
 - Skyscraper observation deck: an elevator ride up, pay-per-look telescopes.
 - Stock exchange: buy low, sell high on a moving price line.
 - Courthouse: go to court after being busted instead of paying, argue your case in dialogue.
-- Museum: ASCII exhibits (dinosaur skeleton, paintings); a night heist as a big crime.
+- Museum: see the heist plan below.
 - Newspaper office: the source of the headlines; a paper route by bike.
 
 ### Midtown
@@ -150,6 +142,30 @@ The levers the engine already has, so a new district can pull every one of them:
 ### Waterfront
 - Boat rental: putter round the bay.
 
+## The museum, and how the heist could work
+
+**The museum by day**: a grand building downtown (columns, a dome, banners for the current show). $10 in. Halls
+of exhibits drawn in ASCII: a dinosaur skeleton you walk under, Egyptian room with a sarcophagus, a gallery of
+paintings (generated art, so it's different every visit), a gem room with the city's famous diamond under glass.
+Guards on patrol routes, cameras on the walls, a gift shop.
+
+**The heist, step by step** (a few evenings' work, not one button):
+1. **Case the joint.** Visit by day. Each guard walks a fixed loop; watching tells you the timing. Cameras sweep a
+   cone; you can see it on the floor. The game remembers what you've seen and draws it on a floor plan in your bag.
+2. **Get the tools.** A lockpick (have one: the lock minigame), a crowbar from the hardware store, a disguise
+   (a guard uniform from a laundromat dryer, or a hard hat), and a getaway car (owned or stolen) parked nearby.
+3. **Get in after dark.** Pick the back door lock, or climb the fire escape to the roof skylight.
+4. **Inside: stealth.** It's dark; guards carry torches (a cone of light). Stay out of their cones and the cameras'.
+   If one sees you: a few seconds of "huh?" to get out of sight, then alarms and four stars.
+5. **The vault.** The diamond's case: a harder lock minigame on a timer, or cut the glass (hold still, a meter
+   that wobbles if a guard's near).
+6. **Get out and away.** Back the way you came, to the car, lose the police. Then fence the diamond at the pawn
+   shop (a big payout) or keep it at home in your closet as a trophy.
+- Smaller crimes on the way could be optional shortcuts: pickpocket a guard's keycard, cut the power at a box in
+  the alley (the cameras go dark for a minute).
+- The engine already has: rooms with props, people with paths, the lock and pickpocket minigames, wanted stars,
+  owned cars. New: guards that see in a cone, darkness with torch light, and the plan on paper.
+
 ## Weird and special buildings
 - Pay phones: call a number scrawled on a wall, get a strange task.
 - A tower with no door: the city's mystery, with clues scattered round town.
@@ -164,8 +180,22 @@ The levers the engine already has, so a new district can pull every one of them:
 ## Bigger city-wide ideas
 - Each district gets its own music and ambience (the audio mix system can carry it).
 - District reputation: regulars warm to you, or get wary if you commit crimes there.
-- A calendar of events: Saturday farmers market, Sunday parade, weekly fireworks over the bay.
+- More on the calendar (fireworks are in): a Saturday farmers market, a Sunday parade down Broadway, a monthly
+  lantern festival in Chinatown, a festival under the Shotengai roof (stalls, goldfish scooping, a portable shrine
+  carried down the street), Halloween with trick-or-treaters, snow at New Year. A page in the pause menu showing
+  the week ahead.
 - The city changes over time: construction sites finish into new buildings as days pass.
+
+## New ideas since last time
+- **Shotengai extras**: a sento bathhouse (soak: sobers you up, warms you through), a gacha machine wall
+  (a random capsule toy for $1), a maid cafe, a rhythm game cabinet, the summer festival under the roof.
+- **Graffiti extras**: the council's clean-up crew scrubbing tags you've left; your tags slowly fading; other
+  writers tagging over yours; a reputation for it (people mention your tag).
+- **Rain gear and weather**: puddles you can splash, umbrellas for sale under the Shotengai roof when it pours.
+- **Bikes**: rent one, park it, steal one; faster than walking, slower than a car, can go down alleys.
+- **A phone**: messages from people you've done favours for, an alarm before an event, a map app.
+- **Home extras**: decorate your place with what you carry (put the lucky cat on the shelf), a fridge for food,
+  a pet that waits for you.
 
 ## Sounds to find
 
@@ -178,6 +208,9 @@ the licence on each), Pixabay sound effects, the BBC sound effects archive (pers
 ### Music and ambience loops
 - **Cathedral**: organ music (something slow, Bach-ish), a choir, and a big empty-church room tone with echo.
   Church bells for the hour, and for the top of the bell tower.
+- **Shotengai**: pachinko parlour roar (thousands of steel balls, jingles), shop greetings shouted from doorways,
+  a crane game's tune, the hum under the roof, rain drumming on it.
+- **Fireworks**: real bursts and crackles (it synthesises a thud now), the crowd going "ooh".
 - **Pleasure pier**: carnival / calliope music, a carousel band organ (the classic oom-pah waltz), the crowd at a fair,
   seagulls.
 - **Aquarium**: underwater ambience, tank bubblers and pump hum, a muffled crowd, maybe a soft ambient pad.

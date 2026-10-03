@@ -597,6 +597,220 @@ GAMES.strength = (rnd = Math.random) => {
 };
 const FAIR_GAMES = ['ringtoss', 'strength'];
 
+// ---- the Shotengai's parlours
+// pachinko: hold GO and balls fly up and rain down through a forest of pins; steer where they come in with the
+// stick. Most fall away. The pockets pay balls back; the middle one spins the reels, and three of a kind is FEVER.
+// A credit buys 40 balls; walk away (E) whenever you like and what's left is swapped for tickets, 8 balls a ticket.
+GAMES.pachinko = (rnd = Math.random) => {
+  const W = 23, H = 20, g = { id: 'pachinko', title: 'PACHINKO', W, H, score: 40, over: false };
+  const pin = (x, y) => y >= 3 && y <= 15 && y % 2 === 1 && (x + (y >> 1)) % 2 === 0 && x > 0 && x < W - 1;
+  const POCKETS = { 11: 'start', 5: 'small', 17: 'small' }; // which bottom columns catch a ball
+  let aim = 11, fire = 0, balls = [], tick = 0, reel = null, fever = 0, best = '';
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if (k.left) aim = Math.max(1, aim - dt * 8); if (k.right) aim = Math.min(W - 2, aim + dt * 8);
+    fire -= dt;
+    if (k.act && fire <= 0 && g.score > 0) { g.score--; fire = 0.22; balls.push({ x: Math.round(aim), y: 1 }); ev.push('launch'); }
+    tick += dt;
+    while (tick > 0.06) { // every ball falls a row; a pin bumps it one way or the other
+      tick -= 0.06;
+      for (const b of balls) {
+        if (pin(b.x, b.y + 1) && rnd() < 0.7) { b.x = clamp(b.x + (rnd() < 0.5 ? -1 : 1) * (rnd() < 0.3 ? 2 : 1), 1, W - 2); ev.push('bump'); } // (a ball can slip past a pin)
+        b.y++;
+      }
+      for (const b of balls.filter(b => b.y >= H - 2)) {
+        const p = POCKETS[b.x];
+        if (p === 'small') { g.score += 2; ev.push('eat'); }
+        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 }; }
+        b.dead = true;
+      }
+      balls = balls.filter(b => !b.dead);
+    }
+    if (reel && (reel.t -= dt) <= 0) {
+      if (reel.hit) { reel.r = [7, 7, 7]; g.score += 50; fever = 3; ev.push('clear'); best = 'FEVER! 777'; } else ev.push('miss');
+      reel.shown = reel.r; reel = null;
+    }
+    fever = Math.max(0, fever - dt);
+    if (g.score <= 0 && !balls.length && !reel) { g.over = true; ev.push('end'); }
+    if (reel) g.lastReel = reel.r.map((v, i) => reel.t > 0.4 + i * 0.4 ? 1 + (rnd() * 9 | 0) : v); // the reels spinning, stopping one by one
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let y = 0; y < H; y++) { put(0, y, '|', C(GRAY, 9)); put(W - 1, y, '|', C(GRAY, 9)); }
+    for (let y = 3; y <= 15; y++) for (let x = 1; x < W - 1; x++) if (pin(x, y)) put(x, y, '.', C(YEL, fever > 0 ? 15 : 10));
+    for (let x = 1; x < W - 1; x++) { const p = POCKETS[x]; put(x, H - 1, p ? 'U' : '_', p === 'start' ? C(RED, 15) : p ? C(GREEN, 14) : C(GRAY, 6)); }
+    put(Math.round(aim), 0, 'v', C(WHITE, 15));
+    for (const b of balls) put(b.x, b.y, 'o', C(WHITE, 15));
+    const r = g.lastReel || [7, 7, 7];
+    text(8, 17, `[ ${r.join(' ')} ]`, reel ? C(YEL, 15) : fever > 0 ? C(NEON[(Math.floor(fever * 8)) & 3], 15) : C(WHITE, 11));
+    if (best && fever > 0) text(7, 2, best, C(MAG, 15));
+  };
+  g.status = () => `BALLS ${g.score}   HOLD SPACE fire   ARROWS aim   E cash out`;
+  g.reward = () => Math.floor(g.score / 8);
+  return g;
+};
+// the crane game: steer the claw over a prize, GO drops it. It grips, maybe, and carries it to the chute; one try a
+// credit. What it drops in the chute is yours.
+const CRANE_PRIZES = ['plushcat', 'plushbear', 'sharkplush', 'duck', 'plushcat', 'yoyo'];
+GAMES.crane = (rnd = Math.random) => {
+  const W = 22, H = 14, g = { id: 'crane', title: 'CRANE GAME', W, H, score: 0, over: false, prize: null };
+  const pile = Array.from({ length: 6 }, (_, k) => ({ x: 5 + k * 3 + (rnd() * 2 | 0), id: CRANE_PRIZES[rnd() * CRANE_PRIZES.length | 0] }));
+  let cx = 3, cy = 1, state = 'aim', held = null, t = 0;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (state === 'aim') {
+      if (k.left) cx = Math.max(2, cx - dt * 6); if (k.right) cx = Math.min(W - 2, cx + dt * 6);
+      if (k.actP || t > 20) { state = 'down'; ev.push('launch'); }
+    } else if (state === 'down') {
+      cy += dt * 6;
+      if (cy >= H - 3) {
+        cy = H - 3; state = 'up';
+        const p = pile.find(q => Math.abs(q.x - cx) <= 1);
+        if (p && rnd() < 0.5) { held = p; pile.splice(pile.indexOf(p), 1); ev.push('place'); } else ev.push('bump');
+      }
+    } else if (state === 'up') {
+      cy -= dt * 5;
+      if (held && cy < 4 && rnd() < dt * 0.25) { pile.push({ ...held, x: Math.round(cx) }); held = null; ev.push('miss'); } // it slips...
+      if (cy <= 1) { cy = 1; state = 'home'; }
+    } else if (state === 'home') {
+      cx -= dt * 6;
+      if (cx <= 1) {
+        g.over = true;
+        if (held) { g.prize = held.id; g.score = 1; ev.push('clear'); } else ev.push('end');
+      }
+    }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    for (let x = 0; x < W; x++) put(x, 0, '=', C(GRAY, 10));
+    put(0, H - 2, '\\', C(GRAY, 10)); put(1, H - 2, '_', C(GRAY, 10)); put(1, H - 1, 'v', C(YEL, 13)); // the chute
+    const x = Math.round(cx), y = Math.round(cy);
+    for (let r = 1; r < y; r++) put(x, r, '|', C(GRAY, 12));
+    put(x - 1, y, held ? '[' : '/', C(WHITE, 15)); put(x + 1, y, held ? ']' : '\\', C(WHITE, 15));
+    if (held) put(x, y + 1, '@', C(ITEM_COL[CRANE_PRIZES.indexOf(held.id) & 7], 15));
+    for (const p of pile) put(p.x, H - 2, '@', C(ITEM_COL[CRANE_PRIZES.indexOf(p.id) & 7], 14));
+    for (let x2 = 2; x2 < W; x2++) put(x2, H - 1, '#', C(MAG, 5));
+  };
+  g.status = () => state === 'aim' ? `ARROWS move the claw   SPACE drop (${Math.max(0, 20 - t) | 0}s)` : state === 'home' && held ? 'Got one... got one...' : '...';
+  g.reward = () => 0;
+  return g;
+};
+
+// ---- mahjong, the simple version: three suits (dots o, bamboo |, characters #) numbered 1-9, four of each, 108
+// tiles. Four players, 13 tiles each; on your turn you draw one and discard one. 14 tiles that make four sets (three
+// the same, or a run of three in one suit) and a pair is mahjong: you win the pot. You can also win off another
+// player's discard if it's the tile you were waiting for. No other claiming, no honours, no scoring: just that.
+const MJ_SUITS = ['o', '|', '#'], MJ_NAMES = ['YOU', 'WONG', 'MEI', 'LO'];
+const mjName = t => `${t % 9 + 1}${MJ_SUITS[t / 9 | 0]}`;
+function mjSets(c) { // can these counts be split entirely into sets of three?
+  const i = c.findIndex(v => v > 0);
+  if (i < 0) return true;
+  if (c[i] >= 3) { c[i] -= 3; const ok = mjSets(c); c[i] += 3; if (ok) return true; }
+  if (i % 9 <= 6 && c[i + 1] && c[i + 2]) { c[i]--; c[i + 1]--; c[i + 2]--; const ok = mjSets(c); c[i]++; c[i + 1]++; c[i + 2]++; if (ok) return true; }
+  return false;
+}
+function mjWins(tiles) { // 14 tiles: four sets and a pair?
+  if (tiles.length !== 14) return false;
+  const c = new Array(27).fill(0);
+  for (const t of tiles) c[t]++;
+  for (let p = 0; p < 27; p++) if (c[p] >= 2) { c[p] -= 2; const ok = mjSets(c); c[p] += 2; if (ok) return true; }
+  return false;
+}
+// what a 13-tile hand is waiting for (any tile that would complete it, that isn't all used up in it)
+const mjWaits = hand => Array.from({ length: 27 }, (_, t) => t).filter(t => hand.filter(x => x === t).length < 4 && mjWins([...hand, t]));
+// which tile an opponent throws away: the one doing least for its hand (alone, far from its neighbours)
+function mjDiscard(hand, rnd) {
+  let best = 0, bv = Infinity;
+  hand.forEach((t, k) => {
+    const n = d => hand.some((x, j) => j !== k && x === t + d && (x / 9 | 0) === (t / 9 | 0));
+    const v = (hand.filter(x => x === t).length - 1) * 3 + (n(-1) + n(1)) * 2 + (n(-2) + n(2)) + (t % 9 === 0 || t % 9 === 8 ? -0.3 : 0) + rnd() * 0.2;
+    if (v < bv) { bv = v; best = k; }
+  });
+  return best;
+}
+GAMES.mahjong = (rnd = Math.random) => {
+  const W = 32, H = 19, g = { id: 'mahjong', title: 'MAHJONG', W, H, score: 0, over: false, result: null };
+  const wall = [];
+  for (let t = 0; t < 27; t++) for (let k = 0; k < 4; k++) wall.push(t);
+  for (let i = wall.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [wall[i], wall[j]] = [wall[j], wall[i]]; }
+  const hands = [0, 1, 2, 3].map(() => wall.splice(0, 13).sort((a, b) => a - b)), rivers = [[], [], [], []];
+  let turn = 0, state = 'you', wait = 0, cur = 0, drawn = null, last = null, msg = 'Your turn. Draw done: pick a tile to throw away.';
+  const sortHand = h => h.sort((a, b) => a - b);
+  const end = (winner, how) => { g.over = true; g.result = { winner, how }; g.score = winner === 0 ? 1 : 0; };
+  const draw = p => { if (!wall.length) { end(-1, 'the wall ran out'); return null; } const t = wall.shift(); hands[p].push(t); return t; };
+  drawn = draw(0); cur = hands[0].indexOf(drawn); sortHand(hands[0]); cur = hands[0].lastIndexOf(drawn);
+  // a discard by p: does anyone want it to win? (you first, then the others in turn order)
+  const afterDiscard = (p, t) => {
+    last = { p, t };
+    if (p !== 0 && mjWins([...hands[0], t])) { state = 'claim'; wait = 3.5; msg = `${MJ_NAMES[p]} throws ${mjName(t)}: that's your winning tile! UP to claim it`; return; }
+    for (let q = 1; q <= 3; q++) if (q !== p && mjWins([...hands[q], t])) { hands[q].push(t); end(q, `on ${MJ_NAMES[p] === 'YOU' ? 'your' : MJ_NAMES[p] + "'s"} discard`); return; }
+    next(p);
+  };
+  const next = p => {
+    turn = (p + 1) % 4;
+    if (turn === 0) { drawn = draw(0); if (g.over) return; sortHand(hands[0]); cur = hands[0].lastIndexOf(drawn); state = 'you'; msg = `You draw ${mjName(drawn)}.`; }
+    else { state = 'ai'; wait = 0.7; }
+  };
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    if (state === 'you') {
+      if (k.leftP) cur = (cur + 13) % 14; if (k.rightP) cur = (cur + 1) % 14;
+      if (k.upP && mjWins(hands[0])) { end(0, 'by drawing it yourself'); ev.push('clear'); return ev; }
+      if (k.actP) { const t = hands[0].splice(cur, 1)[0]; rivers[0].push(t); cur = Math.min(cur, 12); msg = `You throw ${mjName(t)}.`; ev.push('place'); afterDiscard(0, t); }
+    } else if (state === 'claim') {
+      wait -= dt;
+      if (k.upP) { hands[0].push(last.t); sortHand(hands[0]); end(0, `on ${MJ_NAMES[last.p]}'s discard`); ev.push('clear'); return ev; }
+      if (wait <= 0 || k.actP) { msg = 'You let it go.'; next(last.p); }
+    } else if (state === 'ai' && (wait -= dt) <= 0) { // an opponent's go: draw, maybe win, discard
+      const p = turn, t = draw(p);
+      if (g.over) return ev;
+      if (mjWins(hands[p])) { end(p, 'by drawing it'); ev.push('die'); return ev; }
+      const d = hands[p].splice(mjDiscard(hands[p], rnd), 1)[0];
+      rivers[p].push(d); msg = `${MJ_NAMES[p]} throws ${mjName(d)}.`; ev.push('bump');
+      afterDiscard(p, d);
+      if (g.over) ev.push('die');
+    }
+    return ev;
+  };
+  const SUIT_COL = [RED, GREEN, BLUE];
+  const tileText = (text, x, y, t, hi) => text(x, y, mjName(t), C(SUIT_COL[t / 9 | 0], hi ? 15 : 12));
+  g.draw = (put, text) => {
+    // the other three: how many tiles, and what they've thrown away (the last discard picked out)
+    for (let p = 1; p <= 3; p++) {
+      const y = (p - 1) * 2;
+      text(0, y, `${turn === p && !g.over ? '>' : ' '}${MJ_NAMES[p]} [${hands[p].length}]`, C(turn === p ? YEL : WHITE, 13));
+      const rv = rivers[p].slice(-11);
+      rv.forEach((t, k) => tileText(text, 6 + k * 2, y, t, last && last.p === p && k === rv.length - 1));
+    }
+    text(0, 6, ` YOUR THROWS`, C(GRAY, 10));
+    rivers[0].slice(-11).forEach((t, k) => tileText(text, 6 + k * 2, 6, t, false));
+    text(0, 8, `WALL ${wall.length}`, C(GRAY, 11));
+    text(0, 9, msg.slice(0, 62), C(WHITE, 14));
+    // your hand: fourteen (or thirteen) tiles across the bottom, the one you're on raised
+    const hand = hands[0];
+    hand.forEach((t, k) => {
+      const sel = state === 'you' && k === cur, y = sel ? 11 : 12;
+      put(1 + k * 2, y, ' ', 0, C(WHITE, sel ? 15 : 11)); text(1 + k * 2, y, mjName(t), C(SUIT_COL[t / 9 | 0], 5)); // an ivory tile, its number and suit
+    });
+    if (state === 'you') text(1 + cur * 2, 13, '^^', C(YEL, 15));
+    // the help: what you're waiting for, if you're one tile away
+    const h13 = state === 'you' ? hand.filter((_, k) => k !== cur) : hand;
+    const w = h13.length === 13 ? mjWaits(h13) : [];
+    text(0, 15, w.length ? `${state === 'you' ? 'Throw that and you' : 'You'}'re one away! Winning tiles: ${w.map(mjName).join(' ')}` : 'Make 4 sets + a pair. A set: three alike, or a run of 3 in one suit.', C(w.length ? YEL : GRAY, w.length ? 15 : 10));
+    if (state === 'you' && mjWins(hand)) text(0, 16, 'MAHJONG! You have a winning hand: press UP to declare it', C(MAG, 15));
+    if (g.over && g.result) text(0, 17, g.result.winner === 0 ? `MAHJONG! You win ${g.result.how}.` : g.result.winner < 0 ? 'Nobody won: the wall ran out.' : `${MJ_NAMES[g.result.winner]} wins ${g.result.how}.`, C(g.result.winner === 0 ? YEL : WHITE, 15));
+  };
+  g.status = () => state === 'claim' ? `UP claim it   SPACE let it go (${Math.ceil(wait)}s)` : state === 'you' ? 'LEFT/RIGHT pick   SPACE throw it   UP declare mahjong' : 'Waiting for the others...';
+  g.reward = () => g.result ? g.result.winner === 0 ? 20 : g.result.winner < 0 ? MJ_BUYIN : 0 : 0;
+  g.hands = hands; g.wallLeft = () => wall.length; g.state = () => state; g.cursor = () => cur; // (for the tests)
+  return g;
+};
+const MJ_BUYIN = 5;
+
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar

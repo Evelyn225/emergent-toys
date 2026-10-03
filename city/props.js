@@ -178,6 +178,19 @@ for (let k = 0; k < 14; k++) { // somewhere on the boardwalk clear of everything
 // the aquarium's sign over its doors: a big neon fish, lit after dark
 extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, w: 0.3, h: 0.13, art: pad(['    _.--._', "><(( o  ))>", "    `--'"]),
   col: (c, row, L) => C(c === 'o' ? WHITE : c === '>' || c === '<' ? ORANGE : CYAN, Math.max(L, night * 15 * (fract(T * 0.4) < 0.96 ? 1 : 0.4))) });
+// the Shotengai: banners hanging from the arcade roof across the street, bicycles parked along the shopfronts
+const BANNER_WORDS = ['SALE', 'WELCOME', 'OPEN', 'FESTIVAL', 'LUCKY', 'NEW', 'RAMEN', 'KARAOKE', 'SMILE'];
+for (const s of [3.5, 6.5]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
+  if (districtOf(bx, by) !== 'shotengai' && districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by) !== 'shotengai') return;
+  const w = BANNER_WORDS[hash(bx * 7 + s, by, 701) * BANNER_WORDS.length | 0], col = NEON[hash(bx, by * 3 + s, 702) * 4 | 0];
+  extras.push({ x, y, z: 0.42, w: 0.045 * (w.length + 4), h: 0.1, art: pad(['.' + '-'.repeat(w.length + 4) + '.', '|  ' + w + '  |', "'" + '-'.repeat(w.length + 4) + "'", ' |' + ' '.repeat(w.length + 2) + '| ']),
+    col: (c, row, L) => row === 1 && /[A-Z]/.test(c) ? C(WHITE, Math.max(L, 10)) : row === 3 ? C(GRAY, L) : C(col, Math.max(L, night * 12)) });
+});
+for (const s of [2.6, 3.4, 5.6, 7.2]) for (const off of [0.16, 1.84]) alongStreets(s, off, (x, y, ax, ay, bx, by, o) => {
+  if (districtOf(bx, by) !== 'shotengai' || hash(bx * 13 + s * 7, by * 5 + off, 703) > 0.35 || !map[idx(x - ax * 0.25, y - ay * 0.25)] && !map[idx(x + ax * 0.25, y + ay * 0.25)]) return;
+  const col = [RED, BLUE, GREEN, WHITE, YEL][hash(bx, by + s, 704) * 5 | 0];
+  extras.push({ x, y, z: 0, w: 0.07, h: 0.06, art: pad(['   __o', ' _ \<,_', '(_)/ (_)']), col: (c, row, L) => row === 2 ? C(GRAY, L) : C(col, L) });
+});
 // dockside cranes on the industrial piers
 for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && x0 !== FAIR.x0 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
@@ -195,8 +208,9 @@ function solidAt(x, y, pad) {
 // strung wall to wall, so only where there's a building on both sides of the street to tie it to
 const LANTERN_SPAN = 0.95, lanterns = [];
 for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
-  const side = o === 'h' ? districtOf(bx, by) === 'chinatown' || districtOf(bx, by - 1) === 'chinatown'
-                         : districtOf(bx, by) === 'chinatown' || districtOf(bx - 1, by) === 'chinatown';
+  const lanternDist = d => d === 'chinatown' || d === 'shotengai';
+  const side = o === 'h' ? lanternDist(districtOf(bx, by)) || lanternDist(districtOf(bx, by - 1))
+                         : lanternDist(districtOf(bx, by)) || lanternDist(districtOf(bx - 1, by));
   ax = Math.abs(ax); ay = Math.abs(ay);
   const walls = map[idx(x - ax * 1.2, y - ay * 1.2)] > 0 && map[idx(x + ax * 1.2, y + ay * 1.2)] > 0;
   if (side && walls) lanterns.push({ x, y, ax, ay });
@@ -277,11 +291,11 @@ const VENDING = { DRINKS: { title: 'DRINK MACHINE', stock: ['soda', 'water', 'en
 const VM_HL = 0.045, VM_HW = 0.035, VM_H = 0.19, machines = [];
 for (const s of [2.12, 4.88, 6.12]) for (const o of [VM_HW + 0.005, 2 - VM_HW - 0.005]) alongStreets(s, o, (x, y, ax, ay, bx, by, ori) => {
   const r = hash(bx * 3 + s, by * 5 + o, ori === 'h' ? 210 : 211);
-  if (r > (districtOf(bx, by) === 'industrial' ? 0.03 : 0.07)) return;
+  if (r > ({ industrial: 0.03, shotengai: 0.3 }[districtOf(bx, by)] || 0.07)) return; // (the Shotengai: one on every corner)
   const wall = idx(x - ax * 0.1, y - ay * 0.1); // the cell behind it
   if (!map[wall] || stations.some(t => Math.hypot(rel(t.x - x), t.y - y) < 0.7)) return;
   const c = Math.abs(ay), sn = Math.abs(ax);
-  machines.push({ x, y, kind: Object.keys(VENDING)[Math.floor(r / 0.07 * 3) % 3], c, s: sn, fs: Math.sign(-sn * ax + c * ay) });
+  machines.push({ x, y, kind: Object.keys(VENDING)[Math.floor(r / 0.07 * 3 + s) % 3], c, s: sn, fs: Math.sign(-sn * ax + c * ay) });
 });
 const machinesB = bucketed(machines);
 const machineAt = (x, y, pad) => machinesB[bi(Math.floor(x / 8), Math.floor(y / 8))].some(m =>

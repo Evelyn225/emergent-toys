@@ -8,6 +8,7 @@ function directions(x, y, tx, ty) {
 }
 const DISTRICT_LINES = {
   chinatown: ['Best dumplings in the city are round here.', 'Mind the lanterns, they just put them up.'],
+  shotengai: ['The roof keeps the rain off. Best street in the city when it pours.', 'Try the takoyaki. Mind, they\'re hot.', 'I won a cat at the crane game. Took forty tries.', 'Pachinko? I only go for the noise.', 'You can sleep in a capsule for fifteen bucks, you know.'],
   industrial: ['Shift starts soon.', 'Smells like diesel round here.', 'Used to be a factory on every corner.'],
   waterfront: ['Love watching the boats.', 'You can walk right out to the end of the pier.', 'Smell that sea air.'],
   downtown: ['Everyone downtown is in such a hurry.', 'My office is up on the fortieth floor.'],
