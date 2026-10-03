@@ -52,7 +52,7 @@ test('footstep surfaces', () => {
     const pier = PIERS[0], park = parks[0], bridgeY = SHORE_S * 8 + 20;
     return {
       pier: surfaceAt('walk', null, (pier[0] + pier[2]) / 2, pier[3] - 0.5),
-      street: surfaceAt('walk', null, 9 * 8 + 1, 10 * 8 + 4),
+      street: surfaceAt('walk', null, 12 * 8 + 1, 10 * 8 + 4), // (not 9*8: that street's inside the Gardens now)
       bridge: surfaceAt('walk', null, BRIDGE_X[0] * 8 + 1, bridgeY),
       park: surfaceAt('walk', null, park[0] * 8 + 6.5, park[1] * 8 + 6.5),
       platform: surfaceAt('elplat', null, 0, 0),

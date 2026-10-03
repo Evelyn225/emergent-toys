@@ -322,7 +322,7 @@ const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8)
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea
 const KIND = new Array(NB * NB).fill('');
 // superblocks: [x0, y0, x1, y1, kind] - the streets inside are removed
-const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 'yard'], [15, 14, 16, 14, 'plaza']];
+const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 'yard'], [15, 14, 16, 14, 'plaza'], [7, 10, 9, 11, 'gardens']];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const d = DIST[bi(bx, by)], h = hash(bx, by, 7);
   KIND[bi(bx, by)] = d === 'waterfront' ? 'waterfront' : d === 'sea' ? 'sea'
@@ -440,8 +440,45 @@ for (let bx = 0; bx < NB; bx++) {
 }
 const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y);
 const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy); };
+// ---- the Botanical Gardens: a walled garden over three blocks by two (the streets inside it are gone). In garden
+// coordinates gx, gy (cells from its north-west inside corner): a lake to the east with a jetty for the swan boats,
+// the glass conservatory to the north-west, the aviary to the south-west, enclosures, winding gravel paths between.
+const GARDEN = { x0: 7 * 8 + 2, y0: 10 * 8 + 2, w: 22, h: 14 };
+const gardenLocal = (x, y) => [mod(x, N) - GARDEN.x0, mod(y, N) - GARDEN.y0];
+const inGardens = (x, y) => { const [gx, gy] = gardenLocal(x, y); return gx >= 0 && gy >= 0 && gx < GARDEN.w && gy < GARDEN.h; };
+const LAKE = { x: 15, y: 8.2, rx: 4.6, ry: 3.4 };
+function gardenLakeEdge(gx, gy) { // how far inside the lake's shore (gx, gy) is (cells, roughly); negative on land
+  const ex = (gx - LAKE.x) / LAKE.rx, ey = (gy - LAKE.y) / LAKE.ry, ang = Math.atan2(ey, ex);
+  const r = 1 + 0.12 * Math.sin(3 * ang + 1) + 0.07 * Math.sin(5 * ang + 2);
+  return (r - Math.hypot(ex, ey)) * Math.min(LAKE.rx, LAKE.ry);
+}
+const JETTY = { gx0: 9.3, gx1: 11.6, gy: 8.2, hw: 0.18 }; // a wooden jetty out from the west shore
+const onJetty = (gx, gy) => gx > JETTY.gx0 && gx < JETTY.gx1 && Math.abs(gy - JETTY.gy) < JETTY.hw;
+const gardenLake = (x, y) => { if (!inGardens(x, y)) return false; const [gx, gy] = gardenLocal(x, y); return gardenLakeEdge(gx, gy) > 0 && !onJetty(gx, gy); };
+// the paths: gravel, 2.5m wide, winding between the four gates and round the lake (garden coordinates)
+const GARDEN_PATHS = [
+  [[11, 0], [10.4, 2.2], [8.2, 4.4], [7.6, 6.6], [8.4, 8.2], [10, 8.2]],                 // north gate, past the conservatory, to the jetty
+  [[0, 7], [2.6, 6.8], [5.2, 7.6], [7.6, 6.6]],                                          // the west gate
+  [[11, 14], [10.4, 12.2], [8.6, 10.6], [8.4, 8.2]],                                     // the south gate
+  [[22, 7], [20.6, 6.4], [20.4, 3.6], [17.2, 3.4], [13.2, 3.6], [10.4, 2.2]],           // the east gate, round the top of the lake
+  [[20.6, 6.4], [21, 9.6], [19.6, 12.4], [15.4, 12.8], [11.6, 12.6], [10.4, 12.2]],     // and round the bottom
+  [[4.2, 4.6], [5.2, 7.6], [4.6, 8.6]],                                                  // the conservatory door to the aviary door
+];
+function gardenPathDist(gx, gy) {
+  let best = Infinity;
+  for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k++) {
+    const [ax, ay] = pl[k - 1], [bx, by] = pl[k], vx = bx - ax, vy = by - ay, t = clamp(((gx - ax) * vx + (gy - ay) * vy) / (vx * vx + vy * vy), 0, 1);
+    best = Math.min(best, Math.hypot(gx - ax - vx * t, gy - ay - vy * t));
+  }
+  return best;
+}
+const GARDEN_GATES = [[11, 0, 'h'], [11, 14, 'h'], [0, 7, 'v'], [22, 7, 'v']]; // gx, gy of each gate's middle, and which way the railing runs
+const gardensOpen = t => t >= 8 && t < 20;
+// the two glass houses: cells of the map, with a shop each for their doors (STY 18 the conservatory, 19 the aviary)
+const GLASSHOUSES = [{ word: 'CONSERVATORY', gx0: 2, gy0: 1, gx1: 6, gy1: 3, h: 1.1, dome: 1.6, sty: 18, fee: 5, door: [4.5, 4] },
+                     { word: 'AVIARY', gx0: 2, gy0: 9, gx1: 4, gy1: 11, h: 0.9, dome: 1.2, sty: 19, fee: 0, door: [3.5, 9] }];
 // open water you can't walk or drive on (park ponds are separate, see inPond)
-const isWater = (wx, wy) => seaAt(wx, wy) && !(ROAD[idx(Math.floor(wx), Math.floor(wy))]) && !onPier(wx, wy);
+const isWater = (wx, wy) => seaAt(wx, wy) && !(ROAD[idx(Math.floor(wx), Math.floor(wy))]) && !onPier(wx, wy) || gardenLake(wx, wy);
 
 // ---- buildings: N x N cell heights (1 = 10m), facade style, per-lot seed and shop
 // STY 0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 chinatown shophouse;
@@ -549,6 +586,15 @@ const AQUARIUM = { bx: FAIR_BX, by: SHORE_S - 1, x0: FAIR_BX * 8 + 2, x1: FAIR_B
   for (let y = 5; y <= 7; y++) for (let x = 2; x <= 7; x++) { const i = idx(AQUARIUM.bx * 8 + x, AQUARIUM.by * 8 + y); map[i] = 1.8; STY[i] = 2; SHOP[i] = sh; }
 }
 
+// the glass houses go up in the Gardens
+for (const gh of GLASSHOUSES) {
+  const sh = gh.sh = { kind: SHOP_LIT, word: gh.word, neon: GREEN, glyphs: '%*@', hours: [9, 19], fee: gh.fee, glass: gh.sty };
+  for (let gy = gh.gy0; gy <= gh.gy1; gy++) for (let gx = gh.gx0; gx <= gh.gx1; gx++) {
+    const i = idx(GARDEN.x0 + gx, GARDEN.y0 + gy), mid = gx > gh.gx0 && gx < gh.gx1 && gy > gh.gy0 && gy < gh.gy1;
+    map[i] = mid || gh.gx1 - gh.gx0 === 2 && gx === gh.gx0 + 1 && gy === gh.gy0 + 1 ? gh.dome : gh.h; STY[i] = gh.sty; SHOP[i] = sh; SEED[i] = 0.5;
+  }
+}
+
 // ---- street names, for talk, directions and the HUD
 const ord = n => n + ((n % 100 / 10 | 0) === 1 ? 'TH' : [, 'ST', 'ND', 'RD'][n % 10] || 'TH');
 const ST_NAMES = ['', 'BAYSIDE DR', 'KING ST', 'CANAL ST', 'MERCER ST', '5TH ST', 'GRAND ST', 'MOTT ST', 'HOUSTON ST', '9TH ST',
@@ -637,6 +683,25 @@ alongStreets(5, CURB, (x, y, ax, ay, bx, by, o) => {
 alongStreets(5, 2 - CURB, (x, y, ax, ay, bx, by) => { if (districtOf(bx, by) === 'brownstones') trees.push({ x, y, s: 0.75 }); });
 // the island: benches looking out to sea either side of the lighthouse
 benches.push({ x: ISLE.x - 2.2, y: ISLE.y + 0.8, fx: -1, fy: 0 }, { x: ISLE.x + 2.6, y: ISLE.y - 0.6, fx: 1, fy: 0 });
+// the Botanical Gardens: trees wherever there's lawn to spare, benches along the paths facing across them
+const gx2w = (gx, gy) => [GARDEN.x0 + gx, GARDEN.y0 + gy];
+const GARDEN_PENS = [{ gx0: 16, gy0: 0.5, gx1: 21.4, gy1: 2.7, kind: 'bear' }, { gx0: 5.2, gy0: 10.6, gx1: 7.8, gy1: 12.8, kind: 'tortoise' }];
+const GARDEN_BEDS = [[4.5, 5.6, 1.4, 0.45], [12.5, 1.2, 2.2, 0.5], [18.4, 4.7, 1.2, 0.4], [14.5, 13.3, 2.4, 0.35], [1.0, 4.0, 0.45, 1.6], [9.6, 5.4, 0.6, 0.6], [1.4, 12.6, 0.8, 0.5]];
+const GARDEN_SHED = { gx: 21, gy: 12.9 };
+const inPen = (gx, gy, pad = 0) => GARDEN_PENS.find(p => gx > p.gx0 - pad && gx < p.gx1 + pad && gy > p.gy0 - pad && gy < p.gy1 + pad) || null;
+const inBed = (gx, gy) => GARDEN_BEDS.findIndex(([x, y, rx, ry]) => Math.hypot((gx - x) / rx, (gy - y) / ry) < 1);
+const gardenBuilt = (gx, gy, pad) => GLASSHOUSES.some(g => gx > g.gx0 - pad && gx < g.gx1 + 1 + pad && gy > g.gy0 - pad && gy < g.gy1 + 1 + pad);
+for (let k = 0; k < 280; k++) {
+  const gx = 0.6 + hash(k, 1, 801) * (GARDEN.w - 1.2), gy = 0.6 + hash(k, 2, 801) * (GARDEN.h - 1.2);
+  if (gardenPathDist(gx, gy) < 0.55 || gardenLakeEdge(gx, gy) > -0.5 || inPen(gx, gy, 0.4) || inBed(gx, gy) >= 0 || gardenBuilt(gx, gy, 0.5) || GLASSHOUSES.some(g => Math.hypot(gx - g.door[0], gy - g.door[1]) < 1.6) || Math.hypot(gx - GARDEN_SHED.gx, gy - GARDEN_SHED.gy) < 1) continue;
+  const [x, y] = gx2w(gx, gy); trees.push({ x, y, s: 0.8 + hash(k, 3, 801) * 0.6 });
+}
+for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k += 2) { // a bench beside every other bend, facing the path
+  const [ax, ay] = pl[k - 1], [bx, by] = pl[k], mx = (ax + bx) / 2, my = (ay + by) / 2, l = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / l, ny = (bx - ax) / l;
+  const gx = mx + nx * 0.4, gy = my + ny * 0.4;
+  if (gardenLakeEdge(gx, gy) > -0.2 || inPen(gx, gy, 0.2) || gardenBuilt(gx, gy, 0.2)) continue;
+  const [x, y] = gx2w(gx, gy); benches.push({ x, y, fx: -nx, fy: -ny });
+}
 const treesB = bucketed(trees), benchesB = bucketed(benches);
 
 // boats out on the sea, each on a route: a racetrack loop (out along one lane, a U-turn, back along the lane beside
@@ -756,6 +821,23 @@ for (const s of [2.6, 3.4, 5.6, 7.2]) for (const off of [0.16, 1.84]) alongStree
   const col = [RED, BLUE, GREEN, WHITE, YEL][hash(bx, by + s, 704) * 5 | 0];
   extras.push({ x, y, z: 0, w: 0.07, h: 0.06, art: pad(['   __o', ' _ \<,_', '(_)/ (_)']), col: (c, row, L) => row === 2 ? C(GRAY, L) : C(col, L) });
 });
+// the Gardens' railings (gaps for the gates), the pens' fences, lamp posts along the paths, the gardeners' shed
+for (const [gate, along, len] of [['h', 0.1, GARDEN.w], ['h', GARDEN.h - 0.1, GARDEN.w], ['v', 0.1, GARDEN.h], ['v', GARDEN.w - 0.1, GARDEN.h]])
+  for (let s = 0; s < len; s += 1) {
+    const mid = s + 0.5, gx = gate === 'h' ? mid : along, gy = gate === 'h' ? along : mid;
+    if (GARDEN_GATES.some(([x, y]) => Math.abs(gx - x) < 0.8 && Math.abs(gy - y) < 0.8)) continue;
+    const [x, y] = gx2w(gx, gy); solidBox(x, y, gate === 'h', 0.5, 0.01, 0, 0.2, 'railing', 0);
+  }
+for (const p of GARDEN_PENS) for (const [ax, ay, bx, by] of [[p.gx0, p.gy0, p.gx1, p.gy0], [p.gx0, p.gy1, p.gx1, p.gy1], [p.gx0, p.gy0, p.gx0, p.gy1], [p.gx1, p.gy0, p.gx1, p.gy1]]) {
+  const alongX = ay === by, len = alongX ? bx - ax : by - ay;
+  for (let s = 0; s < len - 0.01; s += 1) { const l = Math.min(1, len - s), [x, y] = gx2w(alongX ? ax + s + l / 2 : ax, alongX ? ay : ay + s + l / 2); solidBox(x, y, alongX, l / 2, 0.01, 0, 0.12, 'railing', 1); }
+}
+for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k++) if (k % 2 === 0) {
+  const [gx, gy] = pl[k]; if (gardenLakeEdge(gx + 0.3, gy + 0.3) > -0.1) continue;
+  const [x, y] = gx2w(gx + 0.28, gy + 0.28);
+  extras.push({ x, y, z: 0, w: 0.04, h: 0.36, art: [' (O) ', '  |  ', '  |  ', '  |  ', '  |  ', ' _|_ '], col: (c, row, L) => c === 'O' ? C(YEL, Math.max(L, lampsOn * 15)) : C(GRAY, L) });
+}
+{ const [x, y] = gx2w(GARDEN_SHED.gx, GARDEN_SHED.gy); solidBox(x, y, true, 0.35, 0.25, 0, 0.3, 'shed', 2); }
 // dockside cranes on the industrial piers
 for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && x0 !== FAIR.x0 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
@@ -1571,7 +1653,7 @@ const AUDIO_DISTRICT = {
 const ROOM_AUDIO = {
   bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
-  hotel: [0.2, 0.4, 0], aquarium: [0.2, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
+  hotel: [0.2, 0.4, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -1601,6 +1683,8 @@ function audioMix(s) {
     if (k === 'cathedral') out.city = 0.015; // thick walls
     if (k === 'pachinko') out.arcade = 1; // the roar of a thousand steel balls and jingles
     if (k === 'cranes') out.arcade = 0.75;
+    if (k === 'conservatory') { out.waves = 0.3; out.city = 0.02; } // the waterfall
+    if (k === 'aviary') out.city = 0.04;
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
     return out;
   }
@@ -1615,6 +1699,7 @@ function audioMix(s) {
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
+  if (s.gardens) { out.city *= 0.35; out.crowd *= 0.4; out.night *= 0.5; out.waves = Math.max(out.waves, 0.15); } // the traffic's far off behind the trees; the lake lapping
   if (s.district === 'shotengai') out.arcade = Math.max(out.arcade, 0.28 * far); // jingles spilling out of the parlours under the roof
   if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the pleasure pier: a crowd, and the booths' bleeps and jingles drifting over it
@@ -1640,6 +1725,7 @@ function surfaceAt(mode, room, x, y) {
   if (k === 1 && onBridge(bx, by)) return 'metal';
   if (k) return 'stone';
   const kind = blockKind(bx, by);
+  if (kind === 'gardens' && inGardens(x, y)) { const [gx, gy] = gardenLocal(x, y); return onJetty(gx, gy) ? 'wood' : gardenPathDist(gx, gy) < 0.25 ? 'gravel' : 'grass'; }
   if (kind === 'park') return inPond(mod(x, 8), mod(y, 8), bx & (NB - 1), by & (NB - 1), 0.15) ? 'wood' : 'grass';
   if (kind === 'waterfront') return seaDist(x, y) < 1.6 && hash(bx & (NB - 1), (by & (NB - 1)) === SHORE_S ? 1 : 2, 47) < 0.35 ? 'sand' : 'stone';
   if (kind === 'construction' || kind === 'yard') return 'gravel';
@@ -2734,6 +2820,53 @@ GAMES.mahjong = (rnd = Math.random) => {
 };
 const MJ_BUYIN = 5;
 
+// the gardeners' shift: eighteen beds, each plant drying out at its own pace, weeds creeping in (they drink the water
+// twice as fast). Move round with the can: SPACE waters a plant, or pulls the weeds out first if there are any.
+// A plant left dry too long wilts for good. Pay for the hours, and for every plant still standing at the end.
+GAMES.garden = (rnd = Math.random) => {
+  const W = 26, H = 13, g = { id: 'garden', title: 'THE GARDENERS', W, H, score: 0, over: false, shift: true };
+  const beds = Array.from({ length: 18 }, (_, k) => ({ x: 2 + (k % 6) * 4, y: 2 + (k / 6 | 0) * 4, w: 0.6 + rnd() * 0.4, rate: 0.035 + rnd() * 0.04, weed: false, dead: false }));
+  let cur = 0, t = 0, LEN = 60;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (k.leftP && cur % 6) cur--; if (k.rightP && cur % 6 < 5) cur++; if (k.upP && cur >= 6) cur -= 6; if (k.downP && cur < 12) cur += 6;
+    if (k.actP) {
+      const b = beds[cur];
+      if (b.dead) ev.push('wrong');
+      else if (b.weed) { b.weed = false; ev.push('eat'); }
+      else { b.w = 1; ev.push('place'); }
+    }
+    for (const b of beds) {
+      if (b.dead) continue;
+      b.w -= dt * b.rate * (b.weed ? 2 : 1);
+      if (!b.weed && rnd() < dt * 0.025) b.weed = true;
+      if (b.w <= 0) { b.dead = true; ev.push('miss'); }
+      if (b.w > 0.5) g.score += dt; // time spent looking good
+    }
+    if (t >= LEN) { g.over = true; ev.push('end'); }
+    return ev;
+  };
+  g.alive = () => beds.filter(b => !b.dead).length;
+  g.beds = beds; g.cursor = () => cur; // (for the tests)
+  g.draw = (put, text) => {
+    for (let x = 0; x < W; x++) { put(x, 0, '"', C(GREEN, 6)); put(x, H - 1, '"', C(GREEN, 6)); }
+    beds.forEach((b, k) => {
+      for (let dx = -1; dx <= 1; dx++) put(b.x + dx, b.y + 1, '#', C(BRICK, 7), C(BRICK, 2)); // the bed
+      const ch = b.dead ? 'x' : b.w > 0.5 ? '*' : b.w > 0.2 ? ',' : '.', col = b.dead ? C(BRICK, 8) : b.w > 0.5 ? C([MAG, YEL, RED, WHITE][k & 3], 15) : b.w > 0.2 ? C(YEL, 11) : C(ORANGE, 9);
+      put(b.x, b.y - 1, ch, col); put(b.x, b.y, b.dead ? '_' : '|', b.dead ? C(BRICK, 8) : C(GREEN, b.w > 0.2 ? 13 : 7));
+      if (b.weed) { put(b.x - 1, b.y, 'w', C(GREEN, 10)); put(b.x + 1, b.y, 'w', C(GREEN, 10)); }
+      const lvl = Math.max(0, Math.round(b.w * 3)); // the water gauge under it
+      text(b.x - 1, b.y + 2, b.dead ? ' - ' : '~'.repeat(lvl).padEnd(3, '.'), C(CYAN, b.dead ? 4 : 12));
+      if (k === cur) { put(b.x - 2, b.y, '>', C(WHITE, 15)); put(b.x + 2, b.y, '<', C(WHITE, 15)); }
+    });
+  };
+  g.status = () => `PLANTS ${g.alive()}/18   ${Math.max(0, LEN - t) | 0}s   ARROWS move   SPACE water or weed`;
+  g.reward = () => Math.max(0, Math.round((3 * Math.min(1, t / LEN) + g.alive() * 0.6 + g.score * 0.012) * 100) / 100);
+  return g;
+};
+
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
@@ -3093,6 +3226,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
   const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
   if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
+  if (sty === 18 || sty === 19) return glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty);
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   if (graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return; // a mural, or somebody's tag
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
@@ -3451,6 +3585,10 @@ function floorCell(i, r, x, rx, ry) {
       ch = fract(lx * 3 + ly * 0.4) < 0.12 ? '=' : hash(Math.floor(wx * 12), Math.floor(wy * 12), 97) > 0.6 ? ':' : '.';
     } else if (kind === 'yard') { // cracked concrete, oil stains, painted bays
       ch = fract(lx * 1.5) < 0.04 ? '|' : hash(Math.floor(wx * 9), Math.floor(wy * 9), 98) > 0.92 ? '%' : (r + x) % 4 ? ' ' : '.'; k = 0.9;
+    } else if (kind === 'gardens' && inGardens(wx, wy)) {
+      const gf = gardenFloor(i, r, x, wx, wy, L);
+      if (gf === true) return;
+      [ch, base, k] = gf; soft = true;
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
@@ -3713,7 +3851,7 @@ const designCount = TAG_ART.length + TAG_WORDS.length;
 // a mural on this face? deterministic per face, so it's always there
 function muralSeed(k, mx, my, face) {
   const sh = SHOP[k];
-  if (!sh || sh.base || sh.aqua || STY[k] >= 3 && STY[k] <= 6 || STY[k] >= 11 && STY[k] <= 13) return -1;
+  if (!sh || sh.base || sh.aqua || sh.glass || STY[k] >= 3 && STY[k] <= 6 || STY[k] >= 11 && STY[k] <= 13) return -1;
   const fx_ = face === 'E' ? 1 : face === 'W' ? -1 : 0, fy = face === 'S' ? 1 : face === 'N' ? -1 : 0;
   if (map[idx(mx + fx_, my + fy)]) return -1; // a wall nobody can see
   const h = hash(mx * 3 + fx_, my * 3 + fy, 601);
@@ -3814,6 +3952,7 @@ function citySprites() {
   forNear(treesB, t => drawArt(...R(t.x, t.y), 0, 0.45 * t.s, 0.6 * t.s, ART.tree,
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
+  gardenSprites();
   for (const b of boats) {
     const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
@@ -5317,6 +5456,8 @@ function roomFloor(i, r, x, rx, ry) {
     case 'aqua': return aquaFloor(i, f, wx, wy);
     case 'cathedral': return cathedralFloor(i, f, wx, wy);
     case 'jail': return jailFloor(i, f, wx, wy);
+    case 'conservatory': return conservatoryFloor(i, f, wx, wy);
+    case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
       if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
@@ -5352,6 +5493,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'aqua') return aquaCeil(i, r, x, wx, wy);
   if (st === 'cathedral') return cathedralCeil(i, wx, wy);
   if (st === 'jail') return jailCeil(i, wx, wy);
+  if (st === 'glass') return glassCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
   const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
@@ -5370,7 +5512,7 @@ function roomSprites() {
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
   }
 }
-const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : room.def.height || 3; },
+const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 
 // ===== the aquarium, across the shore road from the pleasure pier (world.js gives it its lot). Inside: the open
@@ -5381,6 +5523,7 @@ const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 :
 // Tanks are cells of the room grid, so they're solid and the raycaster draws their glass like any wall. A run of the
 // same tank letter is one tank: the fish in it swim its whole length, and you see them through either side.
 const AQUA_FEE = 8;
+AQUARIUM.sh.fee = AQUA_FEE;
 // O open ocean, R coral reef, J jellyfish, K kelp forest, H seahorses
 const AQUA_GRID = [
   '########################',
@@ -6033,6 +6176,357 @@ Object.assign(ROOM_FOR, { PACHINKO: 'pachinko', 'CRANE GAME': 'cranes', GACHA: '
   YAKITORI: 'diner', TAKOYAKI: 'diner', BENTO: 'diner' });
 MENU_ITEMS.push(['YAKITORI 6', 'EDAMAME 3', 'SAKE 7', 'BEER 6'], ['TAKOYAKI 5', 'RAMUNE 2', 'ONIGIRI 3', 'TEA 2'], ['BENTO 9', 'ONIGIRI 3', 'MISO 3', 'TEA 2']);
 Object.assign(MENUS, { YAKITORI: MENU_ITEMS.length - 3, TAKOYAKI: MENU_ITEMS.length - 2, BENTO: MENU_ITEMS.length - 1 });
+// ===== the Botanical Gardens (world.js lays them out, props.js plants the trees and puts up the railings): lawns,
+// winding gravel paths, flower beds, a lake with ducks and swan boats you can rent, flamingos in the shallows, a
+// tortoise pen and a sleeping bear, the glass conservatory (a jungle room with a waterfall, a desert room) and the
+// aviary. Free in by day; the gates are locked 8pm to 8am (you can always let yourself out). Sit on the grass for a
+// picnic, feed the ducks, work a shift with the gardeners.
+const BOAT_FARE = 4;
+const gardenLawn = (x, y) => { // grass you could sit down on
+  if (!inGardens(x, y)) return false;
+  const [gx, gy] = gardenLocal(x, y);
+  return gardenPathDist(gx, gy) > 0.3 && gardenLakeEdge(gx, gy) < -0.2 && inBed(gx, gy) < 0 && !inPen(gx, gy, 0.1) && !gardenBuilt(gx, gy, 0.1);
+};
+const BED_PAL = [[MAG, WHITE, RED], [YEL, ORANGE, RED], [BLUE, MAG, WHITE], [RED, YEL, WHITE], [CYAN, BLUE, WHITE], [ORANGE, YEL, MAG], [MAG, RED, YEL]];
+
+// ---- the ground
+function gardenFloor(i, r, x, wx, wy, L) { // true if it painted the cell itself; else [ch, base, k]
+  const [gx, gy] = gardenLocal(wx, wy), e = gardenLakeEdge(gx, gy);
+  if (onJetty(gx, gy)) return [Math.abs(gy - JETTY.gy) > JETTY.hw * 0.8 ? '|' : fract(gx * 6) < 0.2 ? '=' : '-', BRICK, 1.3];
+  if (e > 0) { // the lake: ripples, lily pads near the edge, the sky in it
+    const n = noise(wx * 3 + T * 0.2, wy * 3 - T * 0.1, 811), lily = e < 0.7 && hash(Math.floor(wx * 8), Math.floor(wy * 8), 812) > 0.88;
+    set(i, lily ? 'o' : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
+    BG[i] = C(BLUE, 1 + day * 2.5); FL[i] = 3;
+    return true;
+  }
+  if (e > -0.18) return [(r + x) % 3 ? '|' : ',', GREEN, 0.9]; // reeds round the edge
+  const pen = inPen(gx, gy);
+  if (pen) { // the bear's: rough grass and boulders; the tortoises': sand
+    if (pen.kind === 'tortoise') return [(r * 5 + x) % 4 ? '.' : ':', YEL, 0.9];
+    const h = noise(wx * 4, wy * 4, 813);
+    return h > 0.62 ? ['%', GRAY, 1.2] : h > 0.55 ? [':', BRICK, 1] : [(r * 3 + x) % 5 ? '"' : ',', GREEN, 0.85];
+  }
+  if (gardenPathDist(gx, gy) < 0.25) return [(r * 7 + x * 3) % 5 ? ':' : '.', WARM, 1.1]; // gravel
+  const bed = inBed(gx, gy);
+  if (bed >= 0) { // a flower bed: blooms in three colours, set out in rows
+    const pal = BED_PAL[(bed + mod(dayNum, 7)) % BED_PAL.length], h = hash(Math.floor(wx * 14), Math.floor(wy * 14), 814 + bed);
+    if (h > 0.35) { set(i, h > 0.8 ? '@' : '*', C(pal[h * 3 | 0], L * 1.7)); BG[i] = C(BRICK, 1 + day); return true; }
+    return [',', GREEN, 0.9];
+  }
+  return [(r * 3 + x) % 4 ? '"' : ',', GREEN, 1.35]; // the lawns, greener than the park's
+}
+
+// ---- the glass houses from outside (STY 18 conservatory: iron and glass, palms pressing against it; 19 aviary: mesh)
+function glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty) {
+  const L = fog * amb * (side ? 10 : 15), gh = GLASSHOUSES.find(g => g.sty === sty), glow = Math.max(night, overcast * 0.5);
+  const [dgx, dgy] = gh.door, dx = GARDEN.x0 + dgx, dy = GARDEN.y0 + dgy, sgn = Math.sign(u * wc) || 1;
+  const onDoorFace = side && Math.abs(rel((my + (rel(py - my) < 0 ? 0 : 1)) - dy)) < 0.01;
+  if (onDoorFace && Math.abs(rel(wc - dx)) < 0.13 && z < 0.27) { // the doors
+    if (Math.abs(rel(wc - dx)) > 0.12 || z > 0.26 || Math.abs(rel(wc - dx)) < 0.005) return set(i, '|', C(WHITE, L));
+    BG[i] = C(sty === 18 ? GREEN : CYAN, 1 + glow * 2); return set(i, ':', C(WHITE, L * 0.5));
+  }
+  if (onDoorFace && Math.abs(z - 0.32) < 0.035 && wallText(i, u, uStep, z, d, gh.word, sgn * dx, 0.32, 0.045, 0.05, C(sty === 18 ? GREEN : CYAN, Math.max(L * 1.2, glow * 15)), C(WHITE, 2))) return;
+  if (z > h - 0.03) return set(i, '^', C(WHITE, L)); // the crest along the ridge
+  if (sty === 19) { // the aviary: a fine mesh, trees behind it, birds flitting about inside
+    const m = (Math.floor(u * 40) + Math.floor(z * 40)) & 1;
+    if (fract(u * 4) < 0.05 || fract(z * 4) < 0.04) return set(i, '|', C(GRAY, L * 1.1));
+    const bird = hash(Math.floor(u * 30 + T * 2), Math.floor(z * 30 - Math.sin(T + u) * 3), 821) > 0.985;
+    if (bird) return set(i, fract(T * 4 + u) < 0.5 ? 'v' : '^', C(NEON[Math.floor(u * 7) & 3], Math.max(L, 9)));
+    const leaf = noise(u * 6, z * 6, 822) > 0.55 - 0.3 * (1 - z / h);
+    BG[i] = leaf ? C(GREEN, 1 + L * 0.12) : C(day > 0.3 ? CYAN : BLUE, 1 + day * 2);
+    return set(i, m ? 'x' : ' ', C(GRAY, L * 0.5));
+  }
+  // the conservatory: white iron glazing bars, panes misted green with the jungle behind them, lit at night
+  if (fract(u * 8) < 0.07 || fract(z * 6) < 0.06) { BG[i] = C(WHITE, 1 + L * 0.12); return set(i, fract(z * 6) < 0.06 ? '-' : '|', C(WHITE, L * 1.1)); }
+  const frond = noise(u * 5, z * 4, 823), palm = Math.abs(fract(u * 1.3) - 0.5) < 0.04 && z < 0.7;
+  BG[i] = C(frond > 0.5 ? GREEN : CYAN, 1.5 + day * 2 + glow * 2);
+  return set(i, palm ? '|' : frond > 0.62 ? '%' : frond > 0.52 ? '"' : ' ', C(palm ? BRICK : GREEN, Math.max(L, glow * 11)));
+}
+
+// ---- solids: the railings (black iron, spear-topped), the gardeners' shed
+SOLID_SHADE.railing = o => (i, t, L) => {
+  const w = HIT.w, u = HIT.u;
+  if (HIT.face === 5 || w > o.z1 - 0.02) return set(i, '^', C(GRAY, L * 1.2)), true;
+  if (Math.abs(w - o.z1 * 0.85) < 0.008 || w < 0.01) return set(i, '=', C(GRAY, L)), true;
+  return Math.abs(fract(u * 12) - 0.5) < 0.15 ? (set(i, '|', C(GRAY, L)), true) : false; // see-through between the bars
+};
+SOLID_SHADE.shed = () => (i, t, L) => {
+  const f = HIT.face, w = HIT.w;
+  BG[i] = C(f === 5 ? GREEN : BRICK, (1.5 + L * 0.3) * shadeFace(f));
+  if (f === 5) return set(i, '=', C(GREEN, L)), true;
+  if (f === 3 && Math.abs(HIT.u) < 0.08 && w < 0.2) { BG[i] = C(BRICK, 1); return set(i, w > 0.19 ? '-' : Math.abs(HIT.u) > 0.07 ? '|' : ' ', C(GRAY, L)), true; } // the door
+  if (f === 3 && Math.abs(HIT.u - 0.22) < 0.06 && Math.abs(w - 0.15) < 0.04) return set(i, '#', C(YEL, Math.max(L, night * 12))), true; // the window
+  return set(i, fract(HIT.u * 20 + HIT.v * 20) < 0.15 ? '|' : ' ', C(BRICK, L * 0.7)), true; // boards
+};
+
+// ---- animals, ducks and boats
+const ANIMAL_ART = {
+  flamingo: pad(['  _', ' (o>', '  )', ' //', ' |', '/|']),
+  duck: pad(['  _', '<(o)__', ' (___/']),
+  tortoise: pad(['  ____', ' /####\\_', '/_/  \\_\\o']),
+  bear: pad(['   _    _', '  ( `--` )___', ' (  -  -     )', '  `----^-----`']),
+  peacock: pad([' \\|||/', '-(*@*)-', '  /o>', '  ||']),
+  swan: pad(['   __', '  (o >', '   \\\\', ' __||____', '(________)']),
+};
+const gw = (gx, gy) => [GARDEN.x0 + gx, GARDEN.y0 + gy];
+const lakeSpot = (lo, hi, seed) => { // somewhere on the lake lo..hi cells in from the shore
+  for (let k = 0; k < 400; k++) { const gx = LAKE.x + (hash(seed, k, 831) - 0.5) * LAKE.rx * 2, gy = LAKE.y + (hash(seed, k, 832) - 0.5) * LAKE.ry * 2, e = gardenLakeEdge(gx, gy); if (e > lo && e < hi && !onJetty(gx, gy)) return [gx, gy]; }
+  return [LAKE.x, LAKE.y];
+};
+const flamingos = Array.from({ length: 5 }, (_, k) => { const [gx, gy] = lakeSpot(0.05, 0.45, 40 + k * 3); return { gx, gy, k }; }).filter(f => f.gy > LAKE.y - 0.5);
+const ducks = Array.from({ length: 9 }, (_, k) => ({ k, gx: LAKE.x, gy: LAKE.y, ph: k * 0.7, r: 0.8 + (k % 3) * 0.8 }));
+const tortoises = [0, 1, 2].map(k => ({ k, ph: k * 2.1 }));
+const BOATS_PARKED = [[10.3, JETTY.gy - 0.36], [10.9, JETTY.gy - 0.36], [10.6, JETTY.gy + 0.36]];
+let duckFeed = null, boat = null; // { gx, gy, t0 } while the ducks have something to swim over for; your swan boat
+function stepGardens(dt) {
+  for (const d of ducks) { // round the lake in little loops, or (fed) over to where the crumbs are landing
+    const hx = LAKE.x + Math.cos(T * 0.05 + d.ph) * LAKE.rx * 0.45 + Math.cos(T * 0.3 + d.k) * 0.3 * d.r, hy = LAKE.y + Math.sin(T * 0.05 + d.ph) * LAKE.ry * 0.45 + Math.sin(T * 0.27 + d.k) * 0.3 * d.r;
+    const fed = duckFeed && T - duckFeed.t0 < 18, tx = fed ? duckFeed.gx + Math.cos(d.k * 2.3) * 0.25 : hx, ty = fed ? duckFeed.gy + Math.sin(d.k * 2.3) * 0.25 : hy;
+    const nx = d.gx + (tx - d.gx) * Math.min(1, dt * (fed ? 0.6 : 0.3)), ny = d.gy + (ty - d.gy) * Math.min(1, dt * (fed ? 0.6 : 0.3));
+    if (gardenLakeEdge(nx, ny) > 0.08) { d.dir = nx > d.gx ? 1 : -1; d.gx = nx; d.gy = ny; }
+  }
+  // the bell at closing time
+  const inside = inGardens(px, py) && mode === 'walk';
+  if (inside && !gardensOpen(tod) && !stepGardens.rang) { stepGardens.rang = true; say('A bell rings: the Gardens are closing. You can still let yourself out.', 4); }
+  if (gardensOpen(tod)) stepGardens.rang = false;
+}
+function gardenSprites() {
+  const [cx, cy] = gw(GARDEN.w / 2, GARDEN.h / 2);
+  if (Math.hypot(rel(cx - px), rel(cy - py)) > vis + 14) return;
+  const art = (gx, gy, z, w, h, a, col) => { const [x, y] = gw(gx, gy); drawArt(rel(x - px), rel(y - py), z, w, h, a, col); };
+  for (const f of flamingos) art(f.gx, f.gy, 0, 0.04, 0.13, Math.sin(T * 0.4 + f.k * 2) > 0.85 ? ANIMAL_ART.flamingo.map(l => l.replace('o>', 'o_')) : ANIMAL_ART.flamingo, (c, row, L) => row === 1 && c === '>' ? C(ORANGE, L) : C(MAG, Math.max(L, 6)));
+  for (const d of ducks) art(d.gx, d.gy, 0, 0.035, 0.035, d.dir < 0 ? ANIMAL_ART.duck : ANIMAL_ART.duck.map(l => [...l].reverse().join('').replace(/</g, '>').replace(/\(/g, '#').replace(/\)/g, '(').replace(/#/g, ')').replace(/\//g, '\\')),
+    (c, row, L) => row < 2 && c !== '<' && c !== '>' ? C(GREEN, L) : c === '<' || c === '>' ? C(YEL, L) : C(BRICK, L));
+  const tp = GARDEN_PENS.find(p => p.kind === 'tortoise'), bp = GARDEN_PENS.find(p => p.kind === 'bear');
+  for (const t of tortoises) art(tp.gx0 + 0.5 + (tp.gx1 - tp.gx0 - 1) * (0.5 + 0.45 * Math.sin(T * 0.015 + t.ph)), tp.gy0 + 0.6 + (tp.gy1 - tp.gy0 - 1.2) * (0.5 + 0.45 * Math.cos(T * 0.011 + t.ph * 1.7)), 0, 0.05, 0.035, ANIMAL_ART.tortoise, (c, row, L) => c === '#' ? C(BRICK, L) : C(GREEN, L));
+  art((bp.gx0 + bp.gx1) / 2, (bp.gy0 + bp.gy1) / 2, 0, 0.22, 0.13, ANIMAL_ART.bear, (c, row, L) => C(BRICK, Math.max(L, 4)));
+  art((bp.gx0 + bp.gx1) / 2 + 0.1, (bp.gy0 + bp.gy1) / 2, 0.14 + fract(T * 0.3) * 0.08, 0.025, 0.025, ['z'], () => C(WHITE, 12 * (1 - fract(T * 0.3)))); // zzz
+  const pk = T * 0.02, pgx = 12 + Math.cos(pk) * 1.4, pgy = 6.2 + Math.sin(pk * 2) * 0.5; // the peacock, strutting about the middle lawn
+  art(pgx, pgy, 0, 0.05, 0.1, ANIMAL_ART.peacock, (c, row, L) => row === 0 || c === '-' ? C(GREEN, L) : c === '*' || c === '@' ? C(CYAN, Math.max(L, 8)) : row === 1 ? C(BLUE, L) : C(BLUE, L));
+  for (const [bx, by] of BOATS_PARKED) art(bx, by, 0, 0.1, 0.11, ANIMAL_ART.swan, (c, row, L) => c === '>' ? C(ORANGE, L) : C(WHITE, Math.max(L, 5)));
+  for (let k = 0; k < (gardensOpen(tod) ? 2 : 0); k++) { // two boats out on the lake, being paddled round (by day)
+    const th = T * 0.03 + k * 3, bgx = LAKE.x + Math.cos(th) * LAKE.rx * 0.55, bgy = LAKE.y + Math.sin(th) * LAKE.ry * 0.55;
+    art(bgx, bgy, 0, 0.1, 0.11, ANIMAL_ART.swan, (c, row, L) => c === '>' ? C(ORANGE, L) : C(WHITE, Math.max(L, 5)));
+    art(bgx, bgy, 0.06, 0.03, 0.06, ART.walkB.slice(0, 3), (c, row, L) => C(row < 2 ? SKIN : [RED, BLUE][k], L));
+  }
+  // the gates: iron, open by day, shut at night, and the name over the main one
+  for (const [ggx, ggy, o] of GARDEN_GATES) {
+    const [x, y] = gw(ggx, ggy), vx = rel(x - px), vy = rel(y - py), along = o === 'h';
+    if (Math.hypot(vx, vy) > vis) continue;
+    const iron = (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.1); return set(i, '|', C(GRAY, L * 1.2)), true; };
+    for (const s of [-0.62, 0.62]) drawBox(boxAt(vx + (along ? s : 0), vy + (along ? 0 : s), 1, 0, 0.025, 0.025, 0, 0.26), iron);
+    const shut = !gardensOpen(tod);
+    for (const s of [-1, 1]) { // the two leaves: across the way, or swung back against the railings
+      const lx = shut ? s * 0.3 : s * 0.62, ly = shut ? 0 : 0.3, gxo = along ? lx : ly * (ggx === 0 ? 1 : -1), gyo = along ? ly * (ggy === 0 ? 1 : -1) : lx;
+      drawBox(boxAt(vx + gxo, vy + gyo, along === shut ? 1 : 0, along === shut ? 0 : 1, 0.3, 0.008, 0, 0.2), SOLID_SHADE.railing({ z1: 0.2 }));
+    }
+    if (ggy === 0) drawBox(boxAt(vx, vy, 1, 0, 0.66, 0.01, 0.24, 0.3), (i, t, L) => { // BOTANICAL GARDENS in iron letters over the north gate
+      BG[i] = C(GREEN, 1 + L * 0.1);
+      if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(GRAY, L)), true;
+      const word = 'BOTANICAL GARDENS', n = word.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / 0.66 + 1) / 2 * n - 1, kk = Math.floor(q), cellU = t / projX / 1.32 * n;
+      const on = kk >= 0 && kk < word.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) && Math.abs(HIT.w - 0.27) <= t / projY / 2 + 1e-4;
+      return set(i, on ? word[kk] : ' ', C(WHITE, Math.max(L * 1.2, night * 12))), true;
+    });
+  }
+  // picnickers on the grass: a checked blanket, two people, a basket
+  for (const [pgx2, pgy2, k] of [[16.5, 12.4, 1], [6.2, 8.6, 2], [18.6, 9.8, 3]]) {
+    if (!gardensOpen(tod) || day < 0.3) continue;
+    art(pgx2, pgy2, 0, 0.08, 0.012, ['########'], (c, row, L) => C((Math.floor(T * 0) + k) & 1 ? RED : WHITE, L));
+    art(pgx2 - 0.04, pgy2 - 0.01, 0, 0.05, 0.1, ART.sitter, (c, row, L) => C(row < 3 ? SKIN : [YEL, BLUE, GREEN][k - 1], L));
+    art(pgx2 + 0.05, pgy2 + 0.01, 0, 0.05, 0.1, ART.sitter, (c, row, L) => C(row < 3 ? SKIN : [MAG, RED, WHITE][k - 1], L));
+  }
+  if (boat) return;
+}
+
+// ---- out on the lake in a swan boat (mode 'boat')
+const nearJettyFoot = () => mode === 'walk' && (() => { const [gx, gy] = gardenLocal(px, py); return inGardens(px, py) && Math.abs(gx - JETTY.gx0 - 0.25) < 0.45 && Math.abs(gy - JETTY.gy) < 0.45; })();
+const nearShore = () => { if (mode !== 'walk' || !inGardens(px, py)) return false; const [gx, gy] = gardenLocal(px, py), e = gardenLakeEdge(gx + Math.cos(a) * 0.4, gy + Math.sin(a) * 0.4); return e > -0.2; };
+const nearShed = () => mode === 'walk' && inGardens(px, py) && (() => { const [gx, gy] = gardenLocal(px, py); return Math.hypot(gx - GARDEN_SHED.gx, gy - GARDEN_SHED.gy + 0.45) < 0.5; })();
+const gateShutHere = (x, y) => { // a closed gate, approached from outside
+  if (gardensOpen(tod) || inGardens(px, py)) return false;
+  const [gx, gy] = gardenLocal(x, y);
+  return GARDEN_GATES.some(([ggx, ggy]) => Math.abs(gx - ggx) < 0.75 && Math.abs(gy - ggy) < 0.75);
+};
+function gardensPrompt() {
+  if (mode === 'boat') { const [gx, gy] = [boat.gx, boat.gy]; return Math.hypot(gx - JETTY.gx1, gy - JETTY.gy) < 0.7 ? 'E: back to the jetty' : `W/S paddle, A/D steer${TOUCH ? '' : ''}   (back to the jetty to get out)`; }
+  if (!inGardens(px, py) && mode === 'walk') {
+    const [gx, gy] = gardenLocal(px + Math.cos(a) * 0.5, py + Math.sin(a) * 0.5);
+    if (!gardensOpen(tod) && GARDEN_GATES.some(([ggx, ggy]) => Math.abs(gx - ggx) < 0.8 && Math.abs(gy - ggy) < 0.8)) return 'The gates are locked. The Gardens open at 8.';
+    return '';
+  }
+  if (nearJettyFoot()) return gardensOpen(tod) ? `E: rent a swan boat (${fmt$(BOAT_FARE)})` : 'The boats are chained up for the night';
+  if (nearShed()) return gardensOpen(tod) ? 'E: work a shift with the gardeners' : '';
+  if (nearShore()) { const it = heldItem(); return it && ITEMS[it.id].kind === 'food' ? `E: feed the ducks (a bit of your ${ITEMS[it.id].name})` : 'The ducks paddle over, hopeful. (Hold some food to feed them)'; }
+  return '';
+}
+function useGardens() { // true if E did something
+  if (mode === 'boat') {
+    if (Math.hypot(boat.gx - JETTY.gx1, boat.gy - JETTY.gy) < 0.7) { [px, py] = gw(JETTY.gx1 - 0.3, JETTY.gy); a = Math.PI; mode = 'walk'; boat = null; say('You tie the swan up and climb back onto the jetty.', 3); }
+    else say('Paddle back to the end of the jetty to get out.', 2);
+    return true;
+  }
+  if (nearJettyFoot()) {
+    if (!gardensOpen(tod)) { say('Chained up till morning.'); return true; }
+    if (!pay(BOAT_FARE)) { say(`A swan boat's ${fmt$(BOAT_FARE)}.`); return true; }
+    boat = { gx: JETTY.gx1 + 0.3, gy: JETTY.gy, v: 0 }; mode = 'boat'; a = 0; pitch = 0;
+    say('You step down into a swan boat. Pedal with W, steer with A and D.', 4);
+    return true;
+  }
+  if (nearShed() && gardensOpen(tod)) { startGame('garden', 'shift'); say('"Grab a can. Water the dry ones, pull the weeds. Don\'t let anything die."', 4); return true; }
+  if (nearShore()) {
+    const it = heldItem();
+    if (!it || ITEMS[it.id].kind !== 'food') { say('You wave at the ducks. They wanted bread.', 2); return true; }
+    const [gx, gy] = gardenLocal(px + Math.cos(a) * 0.6, py + Math.sin(a) * 0.6);
+    duckFeed = { gx, gy, t0: T };
+    if (--it.uses <= 0) removeHeld();
+    say(pick(['You throw some crumbs. The ducks race over, quacking.', 'A duck snatches the crumb right out of the air.', 'The ducks paddle over in a hurry. One climbs right out to get closer.']), 3);
+    return true;
+  }
+  return false;
+}
+function stepBoat(dt) { // pedal and steer; the shore and the jetty stop you
+  const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  boat.v += (f * 0.25 - boat.v) * Math.min(1, dt * 1.5);
+  a += s * dt * 0.9;
+  const ngx = boat.gx + Math.cos(a) * boat.v * dt, ngy = boat.gy + Math.sin(a) * boat.v * dt;
+  if (gardenLakeEdge(ngx, ngy) > 0.15 && !(Math.abs(ngy - JETTY.gy) < JETTY.hw + 0.12 && ngx < JETTY.gx1 + 0.05)) { boat.gx = ngx; boat.gy = ngy; } else boat.v = 0;
+  [px, py] = gw(boat.gx, boat.gy);
+}
+function boatFrame() { // your swan's neck and head in front of you, its white sides at the bottom of the view
+  const mid = cols >> 1, art = ['   __', '  (o >', '   \\ \\', '    \\ \\', '     ) )', '    / /'];
+  art.forEach((l, k) => putText(rows - 10 + k, mid - 3, l, C(k === 1 && l.includes('>') ? WHITE : WHITE, 15)));
+  putText(rows - 9, mid + 2, '>', C(ORANGE, 15));
+  for (let r = rows - 3; r < rows; r++) for (let x = 0; x < cols; x++) { const i = r * cols + x; set(i, r === rows - 3 ? '_' : ' ', C(WHITE, 12)); BG[i] = C(WHITE, r === rows - 3 ? 0 : 5); FOGS[i] = FOGB[i] = 0; }
+}
+
+// ---- inside the conservatory: the tropical house (a waterfall into a pool, palms, butterflies, steam) and, through a
+// glass door, the desert house (cacti, sand, rocks, a lizard on a warm stone)
+const CONS_W = 26, CONS_H = 16;
+const CONS_GRID = Array.from({ length: CONS_H }, (_, y) => Array.from({ length: CONS_W }, (_, x) => {
+  if (y === CONS_H - 1 && (x === 6 || x === 7)) return 'D';
+  if (x === 0 || y === 0 || x === CONS_W - 1 || y === CONS_H - 1) return '#';
+  if (x === 13 && !(y >= 7 && y <= 8)) return 'G'; // the glass wall between the houses
+  return '.';
+}).join(''));
+const CONS_POOL = { x: 6.5, y: 3.4, rx: 2.6, ry: 1.5 };
+const inConsPool = (x, y) => Math.hypot((x - CONS_POOL.x) / CONS_POOL.rx, (y - CONS_POOL.y) / CONS_POOL.ry) < 1;
+const PLANT_ART = {
+  palm: pad(['  __ _ __', ' /  \\|/  \\', '/  .-+-.  \\', '    /|\\', '     |', '     |', '     |', '     |', '    /|\\']),
+  fern: pad(['\\ | /', ' \\|/ ', '--+--', ' /|\\ ']),
+  banana: pad([' \\\\ //', '  \\|/', '  (|)', '   |', '   |']),
+  saguaro: pad(['    _', '   | |', ' _ | |', '| || | _', '|_|| || |', '   | ||_|', '   | |', '   | |']),
+  barrel: pad([' .*. ', '(:::)', " `-' "]),
+  agave: pad(['\\ | /', ' \\|/', '--+--']),
+  butterfly: ['}{'], lizard: ['~=<'],
+};
+function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
+  const u = Math.abs(su), c = roomAt(mx, my), jungle = mx < 13 || mx === 13 && false;
+  if (c === 'G') { // the glass door wall: frame, panes, the other house through it, its name over the door
+    const word = px < 13 ? 'DESERT HOUSE' : 'TROPICAL HOUSE', u0 = u < 7.5 ? 4 : 11;
+    if (Math.abs(z - 3.3) < 0.2 && wallText(i, su, uStep, z, d, word, u0 * Math.sign(su), 3.3, 0.18, 0.3, C(WHITE, 14), C(px < 13 ? BRICK : GREEN, 3))) return true;
+    if (fract(u / 1.2) < 0.05 || fract(z / 1.5) < 0.03 || z > 3.92) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
+    // through the glass, the other house: sand and cacti, or the jungle; a streak of reflection now and then
+    const streak = fract((u + z) * 0.35) < 0.025 && hash(Math.floor((u + z) * 0.35), 7, 866) > 0.5;
+    if (px < 13) {
+      const cactus = z < 2.4 && hash(Math.floor(u * 1.5), 3, 861) > 0.7 && Math.abs(fract(u * 1.5) - 0.5) < 0.1;
+      BG[i] = z < 0.7 ? C(YEL, 3 + day * 2) : C(CYAN, 2 + day * 3);
+      return set(i, streak ? '/' : cactus ? '|' : z < 0.7 && (Math.floor(u * 6) + Math.floor(z * 6)) % 5 === 0 ? '.' : ' ', C(streak ? WHITE : cactus ? GREEN : WARM, streak ? 8 : 6)), true;
+    }
+    const leaf = noise(u * 1.4, z * 1.4, 862) > 0.42;
+    BG[i] = leaf ? C(GREEN, 2 + L * 0.1) : C(CYAN, 1.5 + day * 2);
+    return set(i, streak ? '/' : leaf ? (noise(u * 5, z * 5, 863) > 0.5 ? '%' : '"') : ' ', C(streak ? WHITE : GREEN, streak ? 8 : L * 1.3)), true;
+  }
+  if (z < 0.8) { BG[i] = C(BRICK, 1 + L * 0.12); return set(i, fract(z / 0.2) < 0.15 ? '_' : fract(u * 2 + (Math.floor(z * 5) & 1) * 0.5) < 0.08 ? '|' : ' ', C(BRICK, L)), true; } // the brick plinth
+  const left = mx < 13 || mx === 0;
+  if (my === 0 && left && Math.abs(u - CONS_POOL.x) < 1.1) { // the waterfall, pouring down the rocks into the pool
+    if (Math.abs(u - CONS_POOL.x) > 0.85) return set(i, '%', C(GRAY, L)), true;
+    const n = fract(z * 3 + T * 2.5 + Math.sin(u * 7) * 0.3);
+    BG[i] = C(CYAN, 2 + n * 3); return set(i, n < 0.3 ? '|' : n < 0.5 ? ':' : ' ', C(WHITE, 15)), true;
+  }
+  // glass all round: white bars, sky beyond, leaves pressed against it on the tropical side
+  if (fract(u / 1.2) < 0.04 || fract(z / 1.5) < 0.03) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
+  const leaf = left && noise(u * 1.5, z * 1.2, 841) > 0.5 - 0.35 * (1 - z / 9);
+  const city = !left && z < 2.5 + 3.5 * hash(Math.floor(u / 1.7), my + mx, 864); // the city's towers, beyond the glass
+  if (city) { BG[i] = C(GRAY, 1.5 + day * 2); return set(i, night > 0.4 && hash(Math.floor(u * 3), Math.floor(z * 3), 865) > 0.8 ? '.' : ' ', C(YEL, 12)), true; }
+  BG[i] = leaf ? C(GREEN, 1 + L * 0.1) : day > 0.3 ? C(CYAN, 2 + day * 4) : dusk > 0.3 ? C(ORANGE, 3) : C(BLUE, 1);
+  return set(i, leaf ? (noise(u * 6, z * 6, 842) > 0.5 ? '%' : '"') : ' ', C(GREEN, L * 1.3)), true;
+}
+function conservatoryFloor(i, f, wx, wy) {
+  if (wx > 13) { // sand, rippled by the wind that never blows in here
+    BG[i] = C(YEL, 1 + f * 1.5);
+    return set(i, fract(wy * 3 + Math.sin(wx * 2) * 0.3) < 0.2 ? '~' : hash(Math.floor(wx * 6), Math.floor(wy * 6), 843) > 0.92 ? '.' : ' ', C(WARM, 4 + f * 6));
+  }
+  if (inConsPool(wx, wy)) { const n = noise(wx * 3 + T * 0.5, wy * 3, 844); BG[i] = C(BLUE, 1 + f * 2); FL[i] = 3; return set(i, n > 0.6 ? '~' : n > 0.45 ? '-' : ' ', C(CYAN, 6 + f * 6)); }
+  if (Math.abs(wx - 6.5) < 0.6 && wy > 5) { BG[i] = C(BRICK, 1 + f); return set(i, fract(wy * 2) < 0.15 ? '=' : '|', C(WARM, 5 + f * 6)); } // a boardwalk up from the door
+  BG[i] = C(GREEN, f * 1.2); // moss and soil, steaming
+  const mist = noise(wx * 0.8 + T * 0.1, wy * 0.8, 845) > 0.62;
+  return set(i, mist ? '~' : hash(Math.floor(wx * 5), Math.floor(wy * 5), 846) > 0.6 ? '"' : '.', C(mist ? WHITE : GREEN, mist ? 5 : 3 + f * 5));
+}
+function glassCeil(i, wx, wy) { // the glass roof: ribs, the sky through it, vines hanging on the tropical side
+  if (fract(wx / 2) < 0.05 || fract(wy / 2) < 0.05) { BG[i] = C(WHITE, 2 + day * 2); return set(i, '=', C(WHITE, 9)); }
+  if (wx < 13 && noise(wx * 1.2, wy * 1.2, 847) > 0.6) { BG[i] = C(GREEN, 1); return set(i, '(', C(GREEN, 7)); }
+  BG[i] = day > 0.3 ? C(CYAN, 2 + day * 5) : dusk > 0.3 ? C(ORANGE, 3) : C(BLUE, 0.5);
+  return set(i, night > 0.5 && hash(Math.floor(wx * 5), Math.floor(wy * 5), 848) > 0.97 ? '.' : ' ', C(WHITE, 10));
+}
+// the aviary: a mesh dome, trees inside, a pond, birds everywhere; a keeper with cups of seed
+const AV_W = 14, AV_H = 12;
+let seedT = -99;
+function aviaryWall(i, su, uStep, z, d, mx, my, L) {
+  const u = Math.abs(su), m = (Math.floor(u * 25) + Math.floor(z * 25)) & 1;
+  if (fract(u / 2) < 0.03 || fract(z / 1.75) < 0.03) return set(i, '|', C(GRAY, L)), true;
+  const leaf = noise(u * 1.3, z * 1.3, 851) > 0.48 - 0.3 * (1 - z / 7);
+  BG[i] = leaf ? C(GREEN, 1 + L * 0.1) : day > 0.3 ? C(CYAN, 2 + day * 4) : C(BLUE, 1);
+  return set(i, m ? 'x' : ' ', C(GRAY, L * 0.45)), true;
+}
+const BIRD_COL = [RED, GREEN, BLUE, YEL, CYAN, ORANGE, MAG, WHITE];
+function aviaryProps(r) {
+  const p = [];
+  for (const [x, y, s] of [[3, 3, 1.2], [10.5, 3.5, 1.4], [4, 8.5, 1], [11, 8, 1.1]]) p.push(SP(x, y, 1.2 * s, 4 * s, ART.tree, (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : L)));
+  for (let k = 0; k < 16; k++) { // birds: loops round the dome, or (seed out) a flurry round you
+    const big = k < 6, col = BIRD_COL[k & 7];
+    p.push({ ...SP(7, 6, big ? 0.26 : 0.14, big ? 0.26 : 0.12, big ? ['  _', ' (o>', '//\\', 'V_/'] : ['v'], (c, row, L) => c === '>' ? C(YEL, 15) : C(col, Math.max(L, 10)), 3),
+      tick: s => {
+        const fed = T - seedT < 12, th = T * (0.4 + (k % 5) * 0.12) + k * 1.7;
+        const tx = fed ? px + Math.cos(th * 2) * (1.4 + (k % 3) * 0.4) : 7 + Math.cos(th) * (2 + (k % 4) * 0.8), ty = fed ? py + Math.sin(th * 2) * (1.4 + (k % 3) * 0.4) : 6 + Math.sin(th) * (1.5 + (k % 3) * 0.6);
+        s.x += (tx - s.x) * 0.05; s.y += (ty - s.y) * 0.05; s.z = fed ? 1.2 + Math.sin(th * 3) * 0.4 : 2 + Math.sin(th * 1.3) * 1.5;
+        s.art = big ? (fract(T * 3 + k / 7) < 0.5 ? ['  _', ' (o>', '//\\', 'V_/'] : ['  _', ' (o>', '\\\\/', 'V_/']) : [fract(T * 6 + k / 5) < 0.5 ? 'v' : '^'];
+      } });
+  }
+  p.push(...counterBox(11.5, 10, 0.8, 0.9), standing(11.5, 9.4, GREEN)); // the keeper with the seed
+  if (chance(0.6)) p.push(standing(5.5, 6.5, shirt())); if (chance(0.5)) p.push(SP(8.5, 9, 0.4, 1.15, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? YEL : BLUE, L)));
+  return p;
+}
+function aviaryFloor(i, f, wx, wy) {
+  if (Math.hypot((wx - 7) / 2, (wy - 6) / 1.2) < 1) { BG[i] = C(BLUE, 1 + f * 2); FL[i] = 3; return set(i, noise(wx * 3 + T * 0.3, wy * 3, 852) > 0.6 ? '~' : ' ', C(CYAN, 5 + f * 6)); } // the pond
+  if (Math.abs(wx - 7) < 0.5 && wy > 7.2) return set(i, ':', C(WARM, 4 + f * 6)); // the path in
+  BG[i] = C(GREEN, f * 1.1); return set(i, (Math.floor(wx * 6) + Math.floor(wy * 6)) % 3 ? '"' : ',', C(GREEN, 4 + f * 5));
+}
+function conservatoryProps(r) {
+  const p = [], plant = (k, x, y, w, h, col) => p.push(SP(x, y, w, h, PLANT_ART[k], col));
+  const green = (c, row, L) => C(GREEN, L), palmCol = (c, row, L) => row < 4 ? C(GREEN, L) : C(BRICK, L);
+  for (const [x, y, s] of [[2, 2, 1.3], [11, 2.2, 1.5], [2.2, 7, 1.2], [10.8, 6.5, 1.4], [3, 12, 1.1], [11, 12.4, 1.3], [8.8, 9.8, 1]]) plant('palm', x, y, 1.6 * s, 5 * s, palmCol);
+  for (const [x, y] of [[4.6, 6], [9, 5.4], [1.6, 9.6], [10.5, 9.6], [4.2, 10.8], [8.6, 13.2], [2, 4.6], [11.6, 4.4]]) plant('fern', x, y, 0.8, 0.8, green);
+  for (const [x, y] of [[5, 8.6], [8, 11.6], [12, 10.6]]) plant('banana', x, y, 0.8, 2.2, (c, row, L) => c === '(' || c === ')' ? C(YEL, L) : C(GREEN, L));
+  for (const [x, y, s] of [[16, 3, 1], [20.5, 2.5, 1.3], [23.5, 5, 0.9], [18, 9, 1.2], [22.5, 11.5, 1], [16.5, 12.5, 0.8]]) plant('saguaro', x, y, 0.9 * s, 3.4 * s, (c, row, L) => C(GREEN, Math.max(L * 1.4, 7)));
+  for (const [x, y] of [[15.2, 6], [19.4, 6.4], [24, 8.6], [17.6, 11.4], [21, 13.4], [14.8, 9.6]]) plant('barrel', x, y, 0.5, 0.5, (c, row, L) => c === '*' ? C(MAG, 15) : C(GREEN, L));
+  for (const [x, y] of [[21.8, 7.6], [15.6, 13], [24, 2.4]]) plant('agave', x, y, 0.8, 0.7, (c, row, L) => C(CYAN, L * 0.9));
+  for (const [x, y, w] of [[19.5, 4.4, 0.6], [23, 9.6, 0.8], [16.4, 7.4, 0.5]]) p.push(BX(x, y, w, w * 0.7, 0, w * 0.6, solid(BRICK, { top: '.', bright: 1.2 }))); // rocks
+  p.push({ ...SP(19.5, 4.4, 0.25, 0.08, PLANT_ART.lizard, (c, row, L) => C(GREEN, 12), 0.42), tick: s => { s.x = 19.5 + Math.sin(T * 0.2) * 0.25; } }); // a lizard basking on a warm rock
+  for (let k = 0; k < 10; k++) { const col = [YEL, ORANGE, BLUE, MAG, WHITE][k % 5]; // butterflies
+    p.push({ ...SP(6, 8, 0.18, 0.1, ['}{'], (c, row, L) => C(col, 15), 1.2), tick: s => {
+      const th = T * (0.5 + (k % 3) * 0.2) + k * 2.3;
+      s.x = 6.5 + Math.cos(th) * (2 + k % 4) + Math.sin(th * 2.7) * 0.6; s.y = 7.5 + Math.sin(th * 0.8) * (2.5 + k % 3); s.z = 1 + Math.sin(th * 3.1) * 0.6 + (k % 3) * 0.5;
+      s.art = [fract(T * 5 + k / 3) < 0.5 ? '}{' : '||']; } }); }
+  p.push(BENCHP(4, 13.2, 0, -1), BENCHP(19, 13.2, 0, -1));
+  if (chance(0.7)) p.push(standing(8.2, 8.4, shirt())); if (chance(0.6)) p.push(standing(18.5, 6.6, shirt()));
+  return p;
+}
+Object.assign(ROOM_DEFS, {
+  conservatory: { grid: CONS_GRID, spawn: [7, CONS_H - 1.6], light: 0.85, height: 9, floor: 'conservatory', ceil: 'glass', wall: conservatoryWall, block: (x, y) => inConsPool(x, y), props: conservatoryProps },
+  aviary: { grid: boxRoom(AV_W, AV_H), spawn: [7, AV_H - 1.6], light: 0.85, height: 7, floor: 'aviary', ceil: 'glass', wall: aviaryWall, keeper: [11.5, 9.4], block: (x, y) => Math.hypot((x - 7) / 2, (y - 6) / 1.2) < 1, props: aviaryProps },
+});
+Object.assign(ROOM_FOR, { CONSERVATORY: 'conservatory', AVIARY: 'aviary' });
+const aviaryKeeper = () => mode === 'room' && room.kind === 'aviary' && nearKeeper();
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
 function drawArt(rx_, ry_, z, w, h, art, colFn) {
@@ -6141,7 +6635,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
-      : mode === 'walk' ? 0.17 : chaseOn ? 0.28 : 0.12;
+      : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : chaseOn ? 0.28 : 0.12;
   eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows + shake() | 0;
@@ -6209,6 +6703,7 @@ function render(dt) {
   if (mode === 'drive' || mode === 'taxi') dash();
   if (mode === 'el') elFrame();
   if (mode === 'fair') fairFrame();
+  if (mode === 'boat') boatFrame();
   drawHeld(dt); // what's in your hand (or mouth, or under your feet)
   present();
   if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
@@ -6335,6 +6830,7 @@ function promptText() {
     if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
     if (nearTouchPool()) return 'E: touch the touch pool';
     if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
+    if (aviaryKeeper()) return T - seedT < 12 ? 'The birds are all over you.' : `"Seed for the birds? Hold it out flat."   E: a cup of seed (${fmt$(1)})`;
     { const sp = shotengaiPrompt(); if (sp) return sp; }
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
@@ -6345,6 +6841,7 @@ function promptText() {
   }
   if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : room && room.kind === 'cathedral' ? 'The bell tower, 80m up.   E: back down the stairs' : 'E: take the stairs down'; }
   if (mode === 'fair') return fairRidePrompt();
+  if (mode === 'boat') return gardensPrompt();
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
     if (elHere()) return 'E: board the train';
@@ -6359,6 +6856,8 @@ function promptText() {
   if (heldItem() && heldItem().id === 'spraypaint' && sprayTarget()) return 'Q: spray a tag (if the police see, it\'s vandalism)';
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
+  const gp = gardensPrompt();
+  if (gp) return gp;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   const who = nearPerson();
   if (who) return task && task.who === who ? (task.kind === 'fetch' && task.have ? 'E: hand it over' : 'E: talk') : 'E: talk';
@@ -6381,7 +6880,7 @@ function promptText() {
     if (sh.kind === SHOP_SHUT) return 'Closed.';
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
-    return `E: enter ${sh.word}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : sh.aqua ? ` (${fmt$(AQUA_FEE)})` : ''}`;
+    return `E: enter ${sh.word}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
   }
   if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
   return '';
@@ -6398,7 +6897,8 @@ function mapTile(mx, my) {
   if (Math.abs(rel(wx - FOOTBRIDGE.x)) < 0.6 && onFootbridge(FOOTBRIDGE.x, wy) || onPier(wx, wy)) return '#5a4030'; // (the bridge is thinner than a tile)
   if (onIsland(wx, wy)) return '#2a5a30';
   if (ROAD[k]) return underEl(wy) ? '#3a2420' : '#16161c';
-  if (seaAt(wx, wy)) return MAP_COL.sea;
+  if (seaAt(wx, wy) || gardenLake(wx, wy)) return MAP_COL.sea;
+  if (inGardens(wx, wy)) { const [gx, gy] = gardenLocal(wx, wy); return gardenPathDist(gx, gy) < 0.4 ? '#5a5038' : '#24662e'; }
   return MAP_COL[blockKind(Math.floor(mod(mx, N) / 8), Math.floor(mod(my, N) / 8))] || '#2a2a30';
 }
 function minimap() {
@@ -6457,7 +6957,7 @@ let hudBottom = 0; // where the text block top left ends (px), for the map and t
 function hud() {
   drawHeldBig();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Pleasure Pier' : '';
+  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Pleasure Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
     : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
@@ -6627,6 +7127,7 @@ function interact() {
     if (room.kind === 'laundry' && useLaundry()) return;
     if (nearTouchPool()) return say(pick(TOUCH_LINES), 3);
     if (room.kind === 'cathedral' && useCathedral()) return;
+    if (aviaryKeeper()) { if (T - seedT < 12) return say('You\'ve still got seed. Hold still.', 2); if (!pay(1)) return say('"A dollar a cup."'); seedT = T; return say('You hold out a cup of seed. A dozen birds land on your arms at once.', 4); }
     if (useShotengai()) return;
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
@@ -6655,6 +7156,7 @@ function interact() {
   if (mode === 'roof' && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; return say('Down and down and round and round.', 2); }
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
+  if (mode === 'boat') return useGardens();
   if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
@@ -6663,6 +7165,7 @@ function interact() {
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
+  if (useGardens()) return;
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -6708,12 +7211,12 @@ function interact() {
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh);
     if (home) return enterRoom(home.kind === 'home_loft' ? 'loft' : 'home', { word: 'HOME', ret: [px, py, a], cell: [lookHit.mx, lookHit.my] }, [ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid[0].length / 2, ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid.length - 1.6, -Math.PI / 2]), say('Home.', 1.5);
-    if (sh.aqua && !pay(AQUA_FEE)) return say(`Admission's ${fmt$(AQUA_FEE)}. You're short.`);
-    if (sh.aqua) say(`Admission: ${fmt$(AQUA_FEE)}. "Enjoy the fishes!"`, 3);
+    if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
+    if (sh.fee) say(`Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : 'Mind the butterflies.'}"`, 3);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
     const r = { ...sh, cell: [lookHit.mx, lookHit.my], ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
     enterRoom(kind, r, [0, 0, -Math.PI / 2]);
-    px = room.W / 2; py = room.H - 1.6;
+    [px, py] = room.def.spawn || [room.W / 2, room.H - 1.6];
   }
 }
 // the hotel: a night's sleep, from 6pm. Fade out, wake at 7:00 in a room upstairs to a clear morning,
@@ -7292,7 +7795,7 @@ function audioTick(dt) {
   const elNear = mode === 'room' ? 0 : clamp(1 - elDist / 7, 0, 1) *
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), barCrowd: room ? barCrowd() : 0,
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), barCrowd: room ? barCrowd() : 0,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm' });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
@@ -7918,6 +8421,12 @@ const HEADLINES = () => [`${pick(stations).name} station closed for repairs`, 'M
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
   if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
+  if (body.seat && body.seat.grass && heldItem() && ITEMS[heldItem().id].kind === 'food' && chance(0.5)) { // a picnic
+    const name = ITEMS[heldItem().id].name, [, sound] = useHeld({ indoors: false, x: px, y: py, a, rain, person: null, headlines: HEADLINES(), water: false });
+    say(rain > 0.3 ? `A soggy picnic. The ${name} is good anyway.` : pick([`A picnic on the grass. The ${name} tastes better out here.`, `You eat your ${name} on the lawn. A sparrow watches every bite.`, day > 0.3 ? `Sun on your back, ${name} in hand. Not a bad afternoon.` : `A picnic by moonlight. The ${name} and the crickets.`]), 3);
+    if (actx && sound) sfxUse(sound);
+    return;
+  }
   const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
     water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
   if (line) say(line, 3);
@@ -8290,13 +8799,14 @@ function nearSeat() {
   if (mode !== 'walk' || fx.skating) return null;
   let best = null, bd = 0.15;
   for (const b of benchesB[bi(Math.floor(px / 8), Math.floor(py / 8))]) { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); if (d < bd) { bd = d; best = b; } }
+  if (!best && gardenLawn(px, py)) best = { x: px, y: py, fx: Math.cos(a), fy: Math.sin(a), grass: true }; // down on the grass, facing where you were
   return best;
 }
 function sitDown() {
   const s = nearSeat();
   if (!s) return false;
   body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = 0;
-  say('You sit down.', 1.5);
+  say(s.grass ? 'You sit down on the grass.' : 'You sit down.', 1.5);
   return true;
 }
 function standUp() { // back where you sat down from (it was walkable)
@@ -8445,7 +8955,7 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
@@ -8508,6 +9018,7 @@ function loop(t) {
     if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
   } else if (mode === 'drive') drive(dt);
   else if (mode === 'fair') stepFair(dt);
+  else if (mode === 'boat') stepBoat(dt);
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
@@ -8517,6 +9028,7 @@ function loop(t) {
   stepTask(dt);
   stepLaundry();
   stepEvents(dt);
+  stepGardens(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
@@ -8633,7 +9145,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Leave'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^go into/, 'Enter'], [/^back down/, 'Go down']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';

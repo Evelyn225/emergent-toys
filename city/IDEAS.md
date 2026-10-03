@@ -95,13 +95,6 @@ The levers the engine already has, so a new district can pull every one of them:
 - Signature: it exists only at night, and it's packed. Thing to do: eat your way down the rows; a stall-cooking shift.
 - Sound: sizzling, hawkers calling, music from somewhere. Engine: time-of-day props, like the pier's lights.
 
-### The Greenhouse Quarter / Botanical Gardens (next up, probably)
-- A park district: winding paths that ignore the grid, a lake with paddle boats, a hedge maze.
-- Signature: a giant glass conservatory with a jungle inside (steamy, palms, a waterfall, butterflies) and a desert
-  room; a small zoo or an aviary.
-- Thing to do: get lost in the maze, rent a paddle boat, find a rare flower for someone's task.
-- Sound: birdsong, the waterfall, rain on glass. Engine: the maze and paths are new block kinds.
-
 ### Hilltop / the Heights (harder: the world is flat today)
 - Rich houses up winding roads, a funicular railway up the hill, a lookout over the whole city at the top.
 - Would need terrain height in the raycaster: big but it'd change how the whole city looks.
@@ -194,6 +187,8 @@ Guards on patrol routes, cameras on the walls, a gift shop.
 - **Rain gear and weather**: puddles you can splash, umbrellas for sale under the Shotengai roof when it pours.
 - **Bikes**: rent one, park it, steal one; faster than walking, slower than a car, can go down alleys.
 - **A phone**: messages from people you've done favours for, an alarm before an event, a map app.
+- **Gardens extras**: a hedge maze (the gardens' south lawn has room), rare flowers for someone's task, a night
+  tour or a lantern festival, a koi pond in the conservatory, feeding time at the bear pen, the boats racing.
 - **Home extras**: decorate your place with what you carry (put the lucky cat on the shelf), a fridge for food,
   a pet that waits for you.
 
@@ -215,6 +210,8 @@ the licence on each), Pixabay sound effects, the BBC sound effects archive (pers
   seagulls.
 - **Aquarium**: underwater ambience, tank bubblers and pump hum, a muffled crowd, maybe a soft ambient pad.
 - **Jail**: echoey cell block room tone, distant shouting, a radio, a buzzing fluorescent light.
+- **Botanical Gardens**: birdsong (the lawns by day), ducks quacking, the conservatory's waterfall and its
+  steamy drip, rain on the glass roof, a whole aviary of chatter, the closing bell, oars / pedals splashing.
 - **Laundromat**: washers churning, dryers tumbling, a fluorescent hum, late-night radio.
 - **Waterfront**: waves on the pier pilings, gulls, a foghorn, the ferry horn.
 - **Subway and el**: a train arriving and braking, the doors' chime, a platform announcement, an el going overhead.

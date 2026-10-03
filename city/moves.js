@@ -32,13 +32,14 @@ function nearSeat() {
   if (mode !== 'walk' || fx.skating) return null;
   let best = null, bd = 0.15;
   for (const b of benchesB[bi(Math.floor(px / 8), Math.floor(py / 8))]) { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); if (d < bd) { bd = d; best = b; } }
+  if (!best && gardenLawn(px, py)) best = { x: px, y: py, fx: Math.cos(a), fy: Math.sin(a), grass: true }; // down on the grass, facing where you were
   return best;
 }
 function sitDown() {
   const s = nearSeat();
   if (!s) return false;
   body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = 0;
-  say('You sit down.', 1.5);
+  say(s.grass ? 'You sit down on the grass.' : 'You sit down.', 1.5);
   return true;
 }
 function standUp() { // back where you sat down from (it was walkable)

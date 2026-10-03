@@ -23,7 +23,7 @@ const designCount = TAG_ART.length + TAG_WORDS.length;
 // a mural on this face? deterministic per face, so it's always there
 function muralSeed(k, mx, my, face) {
   const sh = SHOP[k];
-  if (!sh || sh.base || sh.aqua || STY[k] >= 3 && STY[k] <= 6 || STY[k] >= 11 && STY[k] <= 13) return -1;
+  if (!sh || sh.base || sh.aqua || sh.glass || STY[k] >= 3 && STY[k] <= 6 || STY[k] >= 11 && STY[k] <= 13) return -1;
   const fx_ = face === 'E' ? 1 : face === 'W' ? -1 : 0, fy = face === 'S' ? 1 : face === 'N' ? -1 : 0;
   if (map[idx(mx + fx_, my + fy)]) return -1; // a wall nobody can see
   const h = hash(mx * 3 + fx_, my * 3 + fy, 601);

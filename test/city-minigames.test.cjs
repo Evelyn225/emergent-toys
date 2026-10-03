@@ -269,3 +269,24 @@ test('mahjong: four sets and a pair wins, the waits are right, and a sensible pl
   ev('var g = GAMES.mahjong(); g.result = { winner: 0 }');
   assert.strictEqual(ev('g.reward()'), 20, 'the pot');
 });
+
+test('the gardeners: leave the beds and they die; water the driest and pull the weeds and most of them live, for better pay', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.garden()');
+  play(ev, 61);
+  const idle = [ev('g.alive()'), ev('g.reward()')];
+  assert.ok(ev('g.over'));
+  assert.ok(idle[0] < 6, `left alone, ${idle[0]} of 18 survive`);
+  ev('var g = GAMES.garden()');
+  // walk the cursor to whichever bed needs it most (a weed, or the least water) and tend it
+  play(ev, 61, `(() => { let tap = false; return () => {
+    tap = !tap; if (!tap) return {};
+    const b = g.beds, live = b.map((x, k) => [x, k]).filter(([x]) => !x.dead);
+    const [, want] = live.reduce((m, p) => (p[0].weed ? -1 : p[0].w) < (m[0].weed ? -1 : m[0].w) ? p : m);
+    const c = g.cursor(), cx = c % 6, cy = c / 6 | 0, wx = want % 6, wy = want / 6 | 0;
+    return wx < cx ? { leftP: 1 } : wx > cx ? { rightP: 1 } : wy < cy ? { upP: 1 } : wy > cy ? { downP: 1 } : { actP: 1 };
+  }; })()`);
+  const good = [ev('g.alive()'), ev('g.reward()')];
+  assert.ok(good[0] >= 12, `tended, ${good[0]} of 18 survive`);
+  assert.ok(good[1] > idle[1] + 5 && good[1] < 40, `pay: ${good[1]} vs ${idle[1]} idle`);
+});

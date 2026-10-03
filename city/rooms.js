@@ -710,6 +710,8 @@ function roomFloor(i, r, x, rx, ry) {
     case 'aqua': return aquaFloor(i, f, wx, wy);
     case 'cathedral': return cathedralFloor(i, f, wx, wy);
     case 'jail': return jailFloor(i, f, wx, wy);
+    case 'conservatory': return conservatoryFloor(i, f, wx, wy);
+    case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
       if (wy > ST_TRACK - 0.7) { // track bed: rails, sleepers, gravel
@@ -745,6 +747,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'aqua') return aquaCeil(i, r, x, wx, wy);
   if (st === 'cathedral') return cathedralCeil(i, wx, wy);
   if (st === 'jail') return jailCeil(i, wx, wy);
+  if (st === 'glass') return glassCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
   const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
@@ -763,6 +766,6 @@ function roomSprites() {
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
   }
 }
-const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : room.def.height || 3; },
+const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 

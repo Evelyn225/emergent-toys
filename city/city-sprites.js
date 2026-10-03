@@ -20,6 +20,7 @@ function citySprites() {
   forNear(treesB, t => drawArt(...R(t.x, t.y), 0, 0.45 * t.s, 0.6 * t.s, ART.tree,
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
+  gardenSprites();
   for (const b of boats) {
     const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;

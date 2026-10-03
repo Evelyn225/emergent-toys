@@ -811,6 +811,53 @@ GAMES.mahjong = (rnd = Math.random) => {
 };
 const MJ_BUYIN = 5;
 
+// the gardeners' shift: eighteen beds, each plant drying out at its own pace, weeds creeping in (they drink the water
+// twice as fast). Move round with the can: SPACE waters a plant, or pulls the weeds out first if there are any.
+// A plant left dry too long wilts for good. Pay for the hours, and for every plant still standing at the end.
+GAMES.garden = (rnd = Math.random) => {
+  const W = 26, H = 13, g = { id: 'garden', title: 'THE GARDENERS', W, H, score: 0, over: false, shift: true };
+  const beds = Array.from({ length: 18 }, (_, k) => ({ x: 2 + (k % 6) * 4, y: 2 + (k / 6 | 0) * 4, w: 0.6 + rnd() * 0.4, rate: 0.035 + rnd() * 0.04, weed: false, dead: false }));
+  let cur = 0, t = 0, LEN = 60;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (k.leftP && cur % 6) cur--; if (k.rightP && cur % 6 < 5) cur++; if (k.upP && cur >= 6) cur -= 6; if (k.downP && cur < 12) cur += 6;
+    if (k.actP) {
+      const b = beds[cur];
+      if (b.dead) ev.push('wrong');
+      else if (b.weed) { b.weed = false; ev.push('eat'); }
+      else { b.w = 1; ev.push('place'); }
+    }
+    for (const b of beds) {
+      if (b.dead) continue;
+      b.w -= dt * b.rate * (b.weed ? 2 : 1);
+      if (!b.weed && rnd() < dt * 0.025) b.weed = true;
+      if (b.w <= 0) { b.dead = true; ev.push('miss'); }
+      if (b.w > 0.5) g.score += dt; // time spent looking good
+    }
+    if (t >= LEN) { g.over = true; ev.push('end'); }
+    return ev;
+  };
+  g.alive = () => beds.filter(b => !b.dead).length;
+  g.beds = beds; g.cursor = () => cur; // (for the tests)
+  g.draw = (put, text) => {
+    for (let x = 0; x < W; x++) { put(x, 0, '"', C(GREEN, 6)); put(x, H - 1, '"', C(GREEN, 6)); }
+    beds.forEach((b, k) => {
+      for (let dx = -1; dx <= 1; dx++) put(b.x + dx, b.y + 1, '#', C(BRICK, 7), C(BRICK, 2)); // the bed
+      const ch = b.dead ? 'x' : b.w > 0.5 ? '*' : b.w > 0.2 ? ',' : '.', col = b.dead ? C(BRICK, 8) : b.w > 0.5 ? C([MAG, YEL, RED, WHITE][k & 3], 15) : b.w > 0.2 ? C(YEL, 11) : C(ORANGE, 9);
+      put(b.x, b.y - 1, ch, col); put(b.x, b.y, b.dead ? '_' : '|', b.dead ? C(BRICK, 8) : C(GREEN, b.w > 0.2 ? 13 : 7));
+      if (b.weed) { put(b.x - 1, b.y, 'w', C(GREEN, 10)); put(b.x + 1, b.y, 'w', C(GREEN, 10)); }
+      const lvl = Math.max(0, Math.round(b.w * 3)); // the water gauge under it
+      text(b.x - 1, b.y + 2, b.dead ? ' - ' : '~'.repeat(lvl).padEnd(3, '.'), C(CYAN, b.dead ? 4 : 12));
+      if (k === cur) { put(b.x - 2, b.y, '>', C(WHITE, 15)); put(b.x + 2, b.y, '<', C(WHITE, 15)); }
+    });
+  };
+  g.status = () => `PLANTS ${g.alive()}/18   ${Math.max(0, LEN - t) | 0}s   ARROWS move   SPACE water or weed`;
+  g.reward = () => Math.max(0, Math.round((3 * Math.min(1, t / LEN) + g.alive() * 0.6 + g.score * 0.012) * 100) / 100);
+  return g;
+};
+
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar

@@ -17,7 +17,7 @@ const AUDIO_DISTRICT = {
 const ROOM_AUDIO = {
   bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
-  hotel: [0.2, 0.4, 0], aquarium: [0.2, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
+  hotel: [0.2, 0.4, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -47,6 +47,8 @@ function audioMix(s) {
     if (k === 'cathedral') out.city = 0.015; // thick walls
     if (k === 'pachinko') out.arcade = 1; // the roar of a thousand steel balls and jingles
     if (k === 'cranes') out.arcade = 0.75;
+    if (k === 'conservatory') { out.waves = 0.3; out.city = 0.02; } // the waterfall
+    if (k === 'aviary') out.city = 0.04;
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
     return out;
   }
@@ -61,6 +63,7 @@ function audioMix(s) {
   out.waves = clamp(1 - s.seaDist / 22, 0, 1) ** 1.5;
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
+  if (s.gardens) { out.city *= 0.35; out.crowd *= 0.4; out.night *= 0.5; out.waves = Math.max(out.waves, 0.15); } // the traffic's far off behind the trees; the lake lapping
   if (s.district === 'shotengai') out.arcade = Math.max(out.arcade, 0.28 * far); // jingles spilling out of the parlours under the roof
   if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the pleasure pier: a crowd, and the booths' bleeps and jingles drifting over it
@@ -86,6 +89,7 @@ function surfaceAt(mode, room, x, y) {
   if (k === 1 && onBridge(bx, by)) return 'metal';
   if (k) return 'stone';
   const kind = blockKind(bx, by);
+  if (kind === 'gardens' && inGardens(x, y)) { const [gx, gy] = gardenLocal(x, y); return onJetty(gx, gy) ? 'wood' : gardenPathDist(gx, gy) < 0.25 ? 'gravel' : 'grass'; }
   if (kind === 'park') return inPond(mod(x, 8), mod(y, 8), bx & (NB - 1), by & (NB - 1), 0.15) ? 'wood' : 'grass';
   if (kind === 'waterfront') return seaDist(x, y) < 1.6 && hash(bx & (NB - 1), (by & (NB - 1)) === SHORE_S ? 1 : 2, 47) < 0.35 ? 'sand' : 'stone';
   if (kind === 'construction' || kind === 'yard') return 'gravel';
