@@ -19,8 +19,8 @@ const dCyl = (x, hw) => { const nx = x / hw; return Math.abs(nx) > 1 ? -1 : dLig
 // bites out of the right-hand side, more the less there's left: true inside a bite, 'rim' just inside its edge
 function dBites(x, y, f, R, n = 3) {
   const gone = Math.round((1 - f) * n);
-  for (let k = 0; k < gone; k++) { const bx = R * 1.05, by = (k - 1) * R * 0.7, d = Math.hypot(x - bx, y - by) - R * 0.5; if (d < 0) return true; }
-  for (let k = 0; k < gone; k++) { const bx = R * 1.05, by = (k - 1) * R * 0.7; if (Math.hypot(x - bx, y - by) - R * 0.5 < 0.7) return 'rim'; }
+  for (let k = 0; k < gone; k++) { const bx = R * 0.92, by = (k - 0.5) * R * 0.75, d = Math.hypot(x - bx, y - by) - R * 0.55; if (d < 0) return true; }
+  for (let k = 0; k < gone; k++) { const bx = R * 0.92, by = (k - 0.5) * R * 0.75; if (Math.hypot(x - bx, y - by) - R * 0.55 < 0.7) return 'rim'; }
   return false;
 }
 const DENSE = {
@@ -62,6 +62,7 @@ const DENSE = {
   soda: (it, f) => sculpt(26, 15, (x, y) => {
     const hw = 4.3, top = -6.2, bot = 6.5;
     if (y < top || y > bot || Math.abs(x) > hw + (y < top + 0.8 || y > bot - 0.8 ? -0.35 : 0)) return null;
+    if (dBites(x, y, f, hw) === true) return null; // (bites out of the can: why not)
     const b = dCyl(x, hw);
     if (y < top + 0.8) return Math.abs(x - 1) < 0.6 && y < top + 0.4 ? ['o', C(GRAY, 14)] : ['=', C(GRAY, 7 + b * 8)]; // the lid and its ring pull
     if (y > bot - 0.8) return ['_', C(GRAY, 7 + b * 8)];
@@ -73,8 +74,9 @@ const DENSE = {
   slice: (it, f) => sculpt(26, 14, (x, y) => {
     const top = -6, tip = 7, half = 7.4 * (tip - y) / (tip - top); // a wedge, point down
     if (y < top || y > tip || Math.abs(x) > half) return null;
-    if (y > top + 1.6 + (tip - top - 1.6) * f + Math.sin(x * 3) * 0.4) return null; // eaten from the tip up
-    if (y < top + 1.6) { const b = clamp(0.35 + 0.5 * Math.cos((y - top) / 1.6 * Math.PI - 0.6) - x * 0.02, 0, 1); return [dFill(b), C(BRICK, 6 + b * 9)]; } // the crust
+    const eaten = (1 - f) * (tip - top - 2.5); // eaten from the crust down (the tip stays in your hand), a bite-shaped edge
+    if (y < top + eaten + (eaten > 0 ? 0.9 - Math.abs(Math.sin(x * 0.9)) * 1.2 : 0)) return null;
+    if (y < top + 1.6 && eaten <= 0) { const b = clamp(0.35 + 0.5 * Math.cos((y - top) / 1.6 * Math.PI - 0.6) - x * 0.02, 0, 1); return [dFill(b), C(BRICK, 6 + b * 9)]; } // the crust
     for (const [px, py] of [[-2.6, -2.6], [1.8, -2.2], [-0.4, 0.4], [2.6, 0.9], [-1.3, 3.3]]) { // pepperoni
       const d = Math.hypot(x - px, y - py);
       if (d < 1.15) return [d < 0.5 ? '@' : 'O', C(RED, 8 + (1 - d) * 5)];

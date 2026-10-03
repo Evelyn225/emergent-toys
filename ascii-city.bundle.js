@@ -8185,6 +8185,7 @@ function bitten(lines, f, from = 'right', edge = '') { // edge: what the bitten 
     return d < 1 ? ' ' : edge && d < 1.25 && ch !== ' ' ? edge : ch;
   }).join('').replace(/\s+$/, ''));
 }
+// (bitten with 0.45 + f * 0.55: something you'd drink or slurp, bitten anyway, but never quite to nothing)
 const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars.includes(c)) return col; return dflt; };
 const HAND = {
   // drinks: a paper cup steams less as it goes; glasses show their level
@@ -8194,8 +8195,8 @@ const HAND = {
     (c, r) => c === ':' ? C(BRICK, 13) : c === '~' ? C(WHITE, 15) : C(WHITE, 12)],
   tea: (it, f) => [filled(['   ) )', ' ._______.', ' |       |\\', ' |       | )', '  \\_____/_/', ' ========='], [[2, 2, 8], [3, 2, 8]], f, ':', '~'),
     (c, r) => r === 0 ? C(WHITE, 7) : c === ':' || c === '~' ? C(ORANGE, 12) : C(WHITE, 13)],
-  soda: () => [[' _______', '(_______)', '|       |', '| C O L |', '|   A   |', '|  ~~~  |', '(_______)'], (c, r) => /[A-Z~]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
-  energy: () => [[' _______', '(_______)', '|  ZAP  |', '|   /   |', '|  /_   |', '|   /   |', '(_______)'], (c, r) => /[A-Z/_]/.test(c) && r > 1 && r < 6 ? C(YEL, 15) : C(GREEN, 12)],
+  soda: (it, f) => [bitten([' _______', '(_______)', '|       |', '| C O L |', '|   A   |', '|  ~~~  |', '(_______)'], 0.45 + f * 0.55), (c, r) => /[A-Z~]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
+  energy: (it, f) => [bitten([' _______', '(_______)', '|  ZAP  |', '|   /   |', '|  /_   |', '|   /   |', '(_______)'], 0.45 + f * 0.55), (c, r) => /[A-Z/_]/.test(c) && r > 1 && r < 6 ? C(YEL, 15) : C(GREEN, 12)],
   water: (it, f) => [filled(['   [=]', '   | |', '  /   \\', ' |     |', ' |     |', ' |     |', ' |_____|'], [[3, 2, 6], [4, 2, 6], [5, 2, 6]], f, ':', '~'),
     (c, r) => c === ':' || c === '~' ? C(CYAN, 14) : r === 0 ? C(BLUE, 13) : C(CYAN, 9)],
   beer: (it, f) => [filled([' ________', '|        |__', '|        |  |', '|        |  |', '|        |__|', '|        |', ' \\______/'], [[1, 1, 8], [2, 1, 8], [3, 1, 8], [4, 1, 8], [5, 1, 8]], f, '#', '@'),
@@ -8220,9 +8221,9 @@ const HAND = {
     (c, r) => c === '@' || c === 'v' ? C(MAG, 14) : C(ORANGE, 12)],
   noodlebox: (it, f) => [filled(['     //', '    //', ' __//____', '|~~~~~~~~|', '|~~~~~~~~|', ' \\______/'], [[3, 1, 8], [4, 1, 8]], f, '~'),
     (c, r) => r < 3 ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(WHITE, 13)],
-  ramen: (it, f) => [filled(['     ||', '  ___||_____', ' (~~~~~~~~~~)', '  \\________/'], [[2, 2, 11]], f, '~'),
+  ramen: (it, f) => [bitten(filled(['     ||', '  ___||_____', ' (~~~~~~~~~~)', '  \\________/'], [[2, 2, 11]], 1, '~'), 0.45 + f * 0.55, 'top'),
     (c, r) => r < 2 ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(RED, 12)],
-  pho: (it, f) => [filled(['     ||', '  _,_||_,_,_', ' (~~~~~~~~~~)', '  \\________/', '    \\____/'], [[2, 2, 11]], f, '~'),
+  pho: (it, f) => [bitten(filled(['     ||', '  _,_||_,_,_', ' (~~~~~~~~~~)', '  \\________/', '    \\____/'], [[2, 2, 11]], 1, '~'), 0.45 + f * 0.55, 'top'),
     (c, r) => c === ',' ? C(GREEN, 14) : r < 2 && c === '|' ? C(BRICK, 12) : c === '~' ? C(WARM, 14) : C(WHITE, 13)],
   banhmi: (it, f) => [bitten(['   ____________', ' /%%=%%=%%=%%=%\\', '(~~~~~~~~~~~~~~~)', " '-------------'"], f),
     (c, r) => c === '%' ? C(GREEN, 13) : c === '=' ? C(RED, 12) : c === '~' ? C(ORANGE, 12) : C(WARM, 13)],
@@ -8252,7 +8253,7 @@ const HAND = {
   chips: (it, f) => [[' .--------.', ' | CHIPS  |', ' |  ' + (f > 0.5 ? '(__)' : f > 0 ? ' __ ' : '    ') + '  |', ' |  ' + (f > 0.25 ? '(__)' : '    ') + '  |', " '--------'"],
     (c, r) => /[A-Z]/.test(c) ? C(WHITE, 15) : c === '(' || c === ')' || r > 1 && c === '_' ? C(YEL, 15) : C(RED, 12)],
   apple: (it, f) => [bitten(['     ,', '   .-|-.', '  /     \\', ' |       |', '  \\     /', "   `---'"], f, 'right', '('), (c, r) => r === 0 || c === '|' && r === 1 ? C(GREEN, 13) : c === '(' ? C(WHITE, 13) : C(RED, 13)],
-  slice: (it, f) => [bitten(['\\%%o%%%o%%/', ' \\%%%o%%%/', '  \\%o%%%/', '   \\%%%/', '    \\%/', '     V'], f, 'bottom'),
+  slice: (it, f) => [bitten(['\\%%o%%%o%%/', ' \\%%%o%%%/', '  \\%o%%%/', '   \\%%%/', '    \\%/', '     V'], 0.4 + f * 0.6, 'top'),
     (c, r) => c === 'o' ? C(RED, 14) : c === '%' ? C(YEL, 14) : C(ORANGE, 12)],
   burger: (it, f) => [bitten(['   .-----.', '  / . . . \\', ' (%%%%%%%%%)', ' (=========)', ' (~~~~~~~~~)', "  '-------'"], f),
     (c, r) => c === '%' ? C(GREEN, 13) : c === '=' ? C(BRICK, 12) : c === '~' ? C(YEL, 14) : C(ORANGE, 13)],
@@ -8301,7 +8302,7 @@ const HAND = {
   takoyaki: (it, f) => [bitten(['  ~ ~ ~ ~', ' (@)(@)(@)', ' (@)(@)(@)', " '-------'"], f, 'top'), (c, r) => c === '~' ? C(WHITE, 13) : c === '@' ? C(BRICK, 13) : c === '(' || c === ')' ? C(ORANGE, 13) : C(WARM, 12)],
   onigiri: (it, f) => [bitten(['    /\\', '   /  \\', '  / :: \\', ' /######\\'], f, 'top'), (c, r) => c === '#' ? C(GREEN, 6) : c === ':' ? C(RED, 12) : C(WHITE, 15)],
   bento: (it, f) => [bitten([' .--------.', ' |@@|oo|~~|', ' |@@|oo|~~|', " '--------'"], f, 'top'), (c, r) => c === '@' ? C(WHITE, 15) : c === 'o' ? C(RED, 13) : c === '~' ? C(GREEN, 13) : C(BRICK, 13)],
-  sake: (it, f) => [filled(['   _', '  | |', ' /   \\', '|     |', '|_____|'], [[3, 1, 5]], f, '~', '~'), (c, r) => c === '~' ? C(WHITE, 12) : C(WHITE, 15)],
+  sake: (it, f) => [bitten(['   _', '  | |', ' /   \\', '|~~~~~|', '|_____|'], 0.45 + f * 0.55), (c, r) => c === '~' ? C(WHITE, 12) : C(WHITE, 15)],
   melonsoda: (it, f) => [filled(['   @  /', ' .---/-.', ' |    |', ' |    |', ' |    |', "  '--'"], [[2, 2, 5], [3, 2, 5], [4, 2, 5]], f, ':', '~'), (c, r) => c === '@' ? C(RED, 15) : c === ':' || c === '~' ? C(GREEN, 14) : C(WHITE, 12)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
@@ -8658,8 +8659,8 @@ const dCyl = (x, hw) => { const nx = x / hw; return Math.abs(nx) > 1 ? -1 : dLig
 // bites out of the right-hand side, more the less there's left: true inside a bite, 'rim' just inside its edge
 function dBites(x, y, f, R, n = 3) {
   const gone = Math.round((1 - f) * n);
-  for (let k = 0; k < gone; k++) { const bx = R * 1.05, by = (k - 1) * R * 0.7, d = Math.hypot(x - bx, y - by) - R * 0.5; if (d < 0) return true; }
-  for (let k = 0; k < gone; k++) { const bx = R * 1.05, by = (k - 1) * R * 0.7; if (Math.hypot(x - bx, y - by) - R * 0.5 < 0.7) return 'rim'; }
+  for (let k = 0; k < gone; k++) { const bx = R * 0.92, by = (k - 0.5) * R * 0.75, d = Math.hypot(x - bx, y - by) - R * 0.55; if (d < 0) return true; }
+  for (let k = 0; k < gone; k++) { const bx = R * 0.92, by = (k - 0.5) * R * 0.75; if (Math.hypot(x - bx, y - by) - R * 0.55 < 0.7) return 'rim'; }
   return false;
 }
 const DENSE = {
@@ -8701,6 +8702,7 @@ const DENSE = {
   soda: (it, f) => sculpt(26, 15, (x, y) => {
     const hw = 4.3, top = -6.2, bot = 6.5;
     if (y < top || y > bot || Math.abs(x) > hw + (y < top + 0.8 || y > bot - 0.8 ? -0.35 : 0)) return null;
+    if (dBites(x, y, f, hw) === true) return null; // (bites out of the can: why not)
     const b = dCyl(x, hw);
     if (y < top + 0.8) return Math.abs(x - 1) < 0.6 && y < top + 0.4 ? ['o', C(GRAY, 14)] : ['=', C(GRAY, 7 + b * 8)]; // the lid and its ring pull
     if (y > bot - 0.8) return ['_', C(GRAY, 7 + b * 8)];
@@ -8712,8 +8714,9 @@ const DENSE = {
   slice: (it, f) => sculpt(26, 14, (x, y) => {
     const top = -6, tip = 7, half = 7.4 * (tip - y) / (tip - top); // a wedge, point down
     if (y < top || y > tip || Math.abs(x) > half) return null;
-    if (y > top + 1.6 + (tip - top - 1.6) * f + Math.sin(x * 3) * 0.4) return null; // eaten from the tip up
-    if (y < top + 1.6) { const b = clamp(0.35 + 0.5 * Math.cos((y - top) / 1.6 * Math.PI - 0.6) - x * 0.02, 0, 1); return [dFill(b), C(BRICK, 6 + b * 9)]; } // the crust
+    const eaten = (1 - f) * (tip - top - 2.5); // eaten from the crust down (the tip stays in your hand), a bite-shaped edge
+    if (y < top + eaten + (eaten > 0 ? 0.9 - Math.abs(Math.sin(x * 0.9)) * 1.2 : 0)) return null;
+    if (y < top + 1.6 && eaten <= 0) { const b = clamp(0.35 + 0.5 * Math.cos((y - top) / 1.6 * Math.PI - 0.6) - x * 0.02, 0, 1); return [dFill(b), C(BRICK, 6 + b * 9)]; } // the crust
     for (const [px, py] of [[-2.6, -2.6], [1.8, -2.2], [-0.4, 0.4], [2.6, 0.9], [-1.3, 3.3]]) { // pepperoni
       const d = Math.hypot(x - px, y - py);
       if (d < 1.15) return [d < 0.5 ? '@' : 'O', C(RED, 8 + (1 - d) * 5)];

@@ -642,3 +642,19 @@ test('on the board the camera sits behind you (V for your own eyes); shut-down s
   const themes = await page.evaluate(() => [MURAL_THEMES.chinatown.art.includes('dragon'), MURAL_THEMES.industrial.chance > MURAL_THEMES.downtown.chance * 4]);
   assert.deepStrictEqual(themes, [true, true]);
 }));
+
+test('every food and drink shows itself being used up (a level going down, steam going, or bites out of it), dense trial art included', () => withPage(async page => {
+  const same = await page.evaluate(() => {
+    const out = [];
+    for (const id in ITEMS) {
+      const I = ITEMS[id];
+      if (!(I.kind === 'food' || I.kind === 'drink') || !(I.uses > 1)) continue;
+      for (const [name, art] of [['', HAND[id]], ['dense:', DENSE[id]]]) {
+        if (!art) continue;
+        if (JSON.stringify(art({ id, uses: I.uses }, 1)[0]) === JSON.stringify(art({ id, uses: 1 }, 1 / I.uses)[0])) out.push(name + id);
+      }
+    }
+    return out;
+  });
+  assert.deepStrictEqual(same, []);
+}));
