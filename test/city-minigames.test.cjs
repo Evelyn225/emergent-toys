@@ -278,6 +278,62 @@ test('pachinko shows how each ball did (a +N in a pocket, an x where it drains, 
   assert.ok(dragon > 0.93 && dragon < 1.12, `with the jade dragon, about even: ${dragon.toFixed(2)} a ball`);
 });
 
+test('duck pond: dip the hook on a duck and up it comes with its tickets on the bottom; a miss costs nothing; three ducks a go', () => {
+  const { ev, j } = fresh();
+  ev('var g = GAMES.ducks()');
+  const worths = j('g.ducks.map(d => d.worth)');
+  assert.strictEqual(worths.length, 12);
+  assert.ok(worths.every(v => [1, 2, 3, 5, 10, 25, 50].includes(v)), JSON.stringify(worths));
+  // dip where nothing is: a splash, and you still have three hooks
+  ev('(() => { for (let k = 0; k < 600 && g.under(); k++) g.step(1 / 60, {}); })()');
+  const missed = play(ev, 0.5, '(t) => ({ actP: t < 0.02 })');
+  assert.ok(missed.includes('miss'), missed.join());
+  // three ducks: wait for one under the hook, dip, see its number, again
+  let total = 0;
+  for (let n = 0; n < 3; n++) {
+    ev('(() => { for (let k = 0; k < 2000 && !g.under(); k++) g.step(1 / 60, {}); })()');
+    const want = ev('g.under().worth');
+    const evs = play(ev, 4, '(t) => ({ actP: t < 0.02 })');
+    assert.ok(evs.includes('eat'), 'hooked one');
+    total += want;
+    assert.strictEqual(ev('g.score'), total, 'its tickets are the number on the bottom');
+  }
+  assert.strictEqual(ev('g.over'), true, 'three ducks and you are done');
+  assert.strictEqual(ev('g.ducks.length'), 9);
+  assert.strictEqual(ev('g.reward()'), total);
+  // over many ponds: about four tickets a duck, now and then a gold one
+  let golds = 0, sum = 0, n = 0;
+  for (let s = 1; s <= 40; s++) { const { ev: e } = require('./helpers/load-city.cjs').loadCity(s); const ds = JSON.parse(e('JSON.stringify(GAMES.ducks().ducks)')); golds += ds.some(d => d.gold); for (const d of ds) if (!d.gold) { sum += d.worth; n++; } }
+  assert.ok(sum / n > 3 && sum / n < 5.5, `a plain duck averages ${(sum / n).toFixed(2)} tickets`);
+  assert.ok(golds > 8 && golds < 32, `a gold duck in ${golds} ponds of 40`);
+});
+
+test('balloon darts: the aim wanders; a dart pops the balloon it lands on (3 tickets, a star card behind it 15 more), misses stick in the cork; three darts', () => {
+  const { ev, j } = fresh();
+  ev('var g = GAMES.darts()');
+  assert.strictEqual(ev('g.balloons.length'), 24);
+  assert.ok(ev('g.balloons.filter(b => b.star).length') >= 1, 'a star or two behind them');
+  const a0 = j('g.aim()'); ev('for (let k = 0; k < 40; k++) g.step(1 / 60, {})'); const a1 = j('g.aim()');
+  assert.ok(Math.hypot(a1[0] - a0[0], a1[1] - a0[1]) > 0.05, 'the reticle won\'t keep still');
+  // wait for a plain balloon under the reticle and throw: +3
+  ev('(() => { for (let k = 0; k < 3000; k++) { const b = g.hitAt(...g.aim().map(Math.round)); if (b && !b.star) return; g.step(1 / 60, { left: (k / 240 | 0) % 2 === 0, right: (k / 240 | 0) % 2 === 1, up: (k / 700 | 0) % 2 === 0, down: (k / 700 | 0) % 2 === 1 }); } })()');
+  let evs = play(ev, 1, '(t) => ({ actP: t < 0.02 })');
+  assert.ok(evs.includes('score'), evs.join()); assert.strictEqual(ev('g.score'), 3);
+  // a star: +18
+  ev('(() => { for (let k = 0; k < 6000; k++) { const b = g.hitAt(...g.aim().map(Math.round)); if (b && b.star) return; g.step(1 / 60, { left: (k / 240 | 0) % 2 === 0, right: (k / 240 | 0) % 2 === 1, up: (k / 700 | 0) % 2 === 0, down: (k / 700 | 0) % 2 === 1 }); } })()');
+  const before = ev('g.score');
+  if (ev('!!(g.hitAt(...g.aim().map(Math.round)) || {}).star')) { evs = play(ev, 1, '(t) => ({ actP: t < 0.02 })'); assert.ok(evs.includes('clear')); assert.ok(ev('g.score') - before >= 18); }
+  // the last dart, at nothing: into the cork, and that's the game
+  ev('(() => { for (let k = 0; k < 6000 && g.hitAt(...g.aim().map(Math.round)); k++) g.step(1 / 60, { left: (k / 240 | 0) % 2 === 0, right: (k / 240 | 0) % 2 === 1, up: (k / 700 | 0) % 2 === 0, down: (k / 700 | 0) % 2 === 1 }); })()');
+  if (!ev('g.over')) { evs = play(ev, 1, '(t) => ({ actP: t < 0.02 })'); assert.ok(evs.includes('end'), evs.join()); }
+  assert.strictEqual(ev('g.over'), true);
+  assert.strictEqual(ev('g.reward()'), ev('g.score'));
+  // three of a colour is a sweep: +6 on top
+  ev('var g = GAMES.darts(); for (const b of g.balloons) { b.col = RED; b.star = false; }');
+  for (let n = 0; n < 3; n++) { ev('(() => { for (let k = 0; k < 6000 && !g.hitAt(...g.aim().map(Math.round)); k++) g.step(1 / 60, { left: (k / 240 | 0) % 2 === 0, right: (k / 240 | 0) % 2 === 1, up: (k / 700 | 0) % 2 === 0, down: (k / 700 | 0) % 2 === 1 }); })()'); play(ev, 1, '(t) => ({ actP: t < 0.02 })'); }
+  assert.strictEqual(ev('g.score'), 3 * 3 + 6);
+});
+
 test('crane: a drop either grabs something and brings it home as a prize, or comes up empty; one go', () => {
   let wins = 0;
   for (let s = 1; s <= 20; s++) {

@@ -902,11 +902,11 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
 // boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
 // side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
 const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -1, 3.6, { game: 'strength' }],
-                ['PRIZES', 1, 2.3, { prizes: true }], ['FAIR FOOD', 1, 3.6, { stock: true }]].map(([word, side, dy, what], k) => {
+                ['PRIZES', 1, 2.3, { prizes: true }], ['FAIR FOOD', 1, 3.6, { stock: true }], ['DUCK POND', -1, 4.9, { game: 'ducks' }], ['DARTS', 1, 4.9, { game: 'darts' }]].map(([word, side, dy, what], k) => {
   const x = side < 0 ? FAIR.x0 + 0.27 : FAIR.x1 - 0.27, y = FAIR.y0 + dy;
   solidBox(x, y, false, 0.5, 0.22, 0, 0.34, 'booth', k);
   const o = solids[solids.length - 1];
-  return Object.assign(o, { word, side, fs: side < 0 ? -1 : 1, at: [x - side * 0.42, y], awning: [RED, BLUE, MAG, GREEN][k], ...what });
+  return Object.assign(o, { word, side, fs: side < 0 ? -1 : 1, at: [x - side * 0.42, y], awning: [RED, BLUE, MAG, GREEN, YEL, CYAN][k], ...what });
 });
 for (let y = FAIR.y0 + 1; y < FAIR.y1 - 0.5; y += 1.5) for (const x of [FAIR.x0 + 0.06, FAIR.x1 - 0.06])
   extras.push({ x, y, z: 0, w: 0.05, h: 0.4, art: ['(*)', ' | ', ' | ', ' | ', ' | '], col: (c, row, L) => row ? C(GRAY, L) :
@@ -2901,7 +2901,218 @@ GAMES.strength = (rnd = Math.random) => {
   g.reward = () => g.score * 2;
   return g;
 };
-const FAIR_GAMES = ['ringtoss', 'strength'];
+// a carnival booth's striped awning across the top two rows: its colour and white, a scalloped edge, bulbs chasing
+const awning = (put, text, W, t, col) => {
+  for (let x = 0; x < W; x++) {
+    const c = (x >> 1) % 2 === 0;
+    put(x, 0, ' ', 0, C(c ? col : WHITE, c ? 5 : 7));
+    put(x, 1, ' ', 0, x % 2 ? C(GRAY, 0.4) : C(c ? col : WHITE, c ? 4 : 6)); // the scallops
+  }
+  for (let x = 1; x < W; x += 3) text(x, 1, 'o', C((Math.floor(t * 4) + x) % 3 ? YEL : WHITE, 15));
+};
+// the duck pond: rubber ducks bob round a trough on the current; slide the hook along the near side and dip it to
+// pick one out. Each duck has its tickets written on the bottom, and you don't see which until you turn it over.
+// Three ducks a go. Now and then there's a gold one, a bit quicker than the rest, always worth a lot.
+const DUCK_TIERS = [[1, 0.28], [2, 0.26], [3, 0.18], [5, 0.14], [10, 0.1], [25, 0.04]];
+const DIGIT5 = { 0: 31599, 1: 11415, 2: 25255, 3: 25230, 4: 23497, 5: 31118, 6: 14831, 7: 29330, 8: 31727, 9: 31694 }; // 3x5 bitmaps, as on the signs
+GAMES.ducks = (rnd = Math.random) => {
+  const W = 36, H = 16, g = { id: 'ducks', title: 'DUCK POND', W, H, score: 0, over: false };
+  // the loop the ducks swim (a duck's left cell, its head row): along the near side to the right, up the far end,
+  // back along the far side to the left, down the near end
+  const LEGS = [[3, 10, 29, 10], [29, 10, 29, 4], [29, 4, 3, 4], [3, 4, 3, 10]], LAP = 64, SPEED = 3.2;
+  const at = s => { s = mod(s, LAP); for (const [x0, y0, x1, y1] of LEGS) { const len = Math.abs(x1 - x0) + Math.abs(y1 - y0); if (s <= len) { const f = s / len; return { x: x0 + (x1 - x0) * f, y: y0 + (y1 - y0) * f, dir: x1 > x0 ? 1 : x1 < x0 ? -1 : y1 < y0 ? 1 : -1, near: y0 === 10 && y1 === 10 }; } s -= len; } return at(0); };
+  const tier = () => { let r = rnd(); for (const [v, p] of DUCK_TIERS) if ((r -= p) < 0) return v; return 1; };
+  const gold = rnd() < 0.5 ? rnd() * 12 | 0 : -1;
+  const ducks = Array.from({ length: 12 }, (_, k) => ({ s: k * LAP / 12 + rnd() * 1.5, worth: k === gold ? (rnd() < 0.7 ? 25 : 50) : tier(), gold: k === gold, ph: rnd() * 6 }));
+  let hooks = 3, hx = 16, dip = 0, held = null, card = null, splash = null, t = 0;
+  g.ducks = ducks; // (for the tests)
+  const under = () => ducks.find(d => { const p = at(d.s); return p.near && hx >= p.x - 0.3 && hx <= p.x + 3.3; });
+  g.under = under;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    for (const d of ducks) if (d !== held) d.s += dt * SPEED * (d.gold ? 1.35 : 1);
+    if (splash && (splash.t -= dt) <= 0) splash = null;
+    if (card) { // turned over: the number on the bottom
+      if ((card.t -= dt) <= 0) { card = null; if (hooks === 0) { g.over = true; ev.push('end'); } }
+      return ev;
+    }
+    if (held) { // coming up out of the water
+      if ((held.up += dt * 1.8) >= 1) {
+        const d = held.d; let v = d.worth;
+        if (!d.gold && rnd() < luck() * 3) v = (DUCK_TIERS.find(([w]) => w > v) || [v])[0]; // (lucky: a better one than it looked)
+        g.score += v; ducks.splice(ducks.indexOf(d), 1);
+        card = { v, gold: d.gold, t: 1.8 }; held = null; ev.push(v >= 10 ? 'clear' : 'score');
+      }
+      return ev;
+    }
+    if (dip > 0) { // the hook's in the water
+      if ((dip -= dt) <= 0) {
+        const d = under();
+        if (d) { held = { d, up: 0, from: at(d.s) }; hooks--; ev.push('eat'); } else { splash = { x: hx, t: 0.6 }; ev.push('miss'); }
+        dip = 0;
+      }
+      return ev;
+    }
+    if (k.left) hx = Math.max(2, hx - dt * 12); if (k.right) hx = Math.min(33, hx + dt * 12);
+    if (k.actP && hooks > 0) { dip = 0.22; ev.push('launch'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    const wood = (x, y) => put(x, y, ' ', 0, C(BRICK, (x * 7 + y * 3) % 5 ? 2.4 : 2.9)); // planks
+    awning(put, text, W, t, RED);
+    text(Math.max(0, (W - 17) >> 1), 2, 'EVERY DUCK WINS!', C(YEL, 15));
+    // the trough: a wooden rim round the water, a prize island in the middle
+    for (let x = 1; x <= 34; x++) { wood(x, 3); wood(x, 12); }
+    for (let y = 3; y <= 12; y++) { wood(1, y); wood(34, y); }
+    for (let y = 4; y <= 11; y++) for (let x = 2; x <= 33; x++) {
+      if (x >= 8 && x <= 27 && y >= 6 && y <= 9) continue;
+      const flow = y >= 9 ? -1 : y <= 6 ? 1 : 0, w = Math.sin((x + flow * t * SPEED) * 1.3 + y * 2.1) + Math.sin((x - t * 1.1) * 0.7 + y);
+      put(x, y, ' ', 0, C(BLUE, 2.6 + (y === 4 || y === 11 ? -0.5 : 0) + Math.max(0, w) * 0.9)); // (darker under the rim)
+      if (w > 1.4) text(x, y, '~', C(CYAN, 11)); // a glint
+    }
+    for (let y = 6; y <= 9; y++) for (let x = 8; x <= 27; x++) put(x, y, ' ', 0, C(y === 6 ? BRICK : WARM, y === 6 ? 2.8 : 1.5));
+    // what's on the island: plushies on the shelf, a hand-painted sign
+    const PLUSH = [[YEL, '@'], [MAG, '&'], [CYAN, '@'], [GREEN, '%'], [RED, '@'], [ORANGE, '&'], [BLUE, '@'], [WHITE, '%']];
+    PLUSH.forEach(([c, ch], k) => { const x = 9 + k * 2 + (k > 3 ? 2 : 0); put(x, 7, ' ', 0, C(c, 4)); text(x, 7, ch, C(c, 15)); });
+    text(10, 9, 'TICKETS ON THE BOTTOM', C(WHITE, 13));
+    // a duck: pixels of yellow (gold: brighter, and it sparkles), an orange beak, an eye, a little wake behind it
+    const duck = (x, y, dir, gold, bob, wake) => {
+      const X = Math.round(x), Y = Math.round(y), body = C(YEL, gold ? 15 : 13), headC = C(YEL, 15);
+      const tail = dir >= 0 ? X : X + 3, head = dir >= 0 ? [X + 2, X + 3] : [X, X + 1], beak = dir >= 0 ? X + 4 : X - 1, eye = dir >= 0 ? X + 3 : X;
+      for (let c = 0; c < 4; c++) put(X + c, Y + 1, ' ', 0, c === (dir >= 0 ? 0 : 3) ? C(YEL, gold ? 13 : 11) : body);
+      if (bob) put(tail, Y, ' ', 0, C(YEL, gold ? 13 : 11)); // the tail flicks up
+      for (const hx_ of head) put(hx_, Y, ' ', 0, headC);
+      put(beak, Y, ' ', 0, C(ORANGE, 13));
+      text(eye, Y, 'o', C(GRAY, 0.5));
+      if (gold) text(X + (Math.floor(t * 6) & 3), Y + 1, '*', C(WHITE, 15));
+      if (wake) text(dir >= 0 ? X - 1 : X + 4, Y + 1, '=', C(WHITE, 9));
+    };
+    for (const d of ducks) if (!(held && d === held.d)) { const p = at(d.s); duck(p.x, p.y, p.dir, d.gold, Math.sin(t * 5 + d.ph) > 0, true); }
+    // the counter you lean over, and the hook on its pole
+    for (let x = 0; x < W; x++) { put(x, 13, ' ', 0, C(BRICK, 3)); put(x, 14, ' ', 0, C(BRICK, x % 4 ? 1.6 : 1.1)); put(x, 15, ' ', 0, C(GRAY, 0.4)); }
+    if (held) { // up it comes, dripping
+      const f = held.up, x = held.from.x + (15 - held.from.x) * f, y = held.from.y + (6 - held.from.y) * f;
+      text(Math.round(x + 2), Math.round(y) - 1, 'J', C(WHITE, 15));
+      duck(x, y, 1, held.d.gold, false, false);
+      if (f < 0.6) text(Math.round(x + 1), Math.round(y) + 2, "'", C(CYAN, 13));
+    } else if (!card && hooks > 0) {
+      const X = Math.round(hx), tip = dip > 0 ? 10 : 9, aim = under();
+      for (let y = tip + 1; y <= 12; y++) text(X, y, '|', C(WHITE, 12));
+      text(X, tip, 'J', C(aim ? YEL : WHITE, 15));
+      for (let x = X; x < W; x++) text(x, 13, '=', C(WHITE, 11)); // the pole, along the counter to your hand
+    }
+    if (splash) text(Math.round(splash.x), 10, '*', C(WHITE, 15));
+    // turned over: a card with the number off the duck's bottom, in big figures
+    if (card) {
+      const s_ = String(card.v), bw = s_.length * 4 + 3, x0 = (W - bw) >> 1, hot = card.v >= 10;
+      const col = card.gold || card.v >= 25 ? NEON[Math.floor(t * 8) & 3] : card.v >= 10 ? CYAN : card.v >= 5 ? GREEN : WHITE;
+      for (let y = 3; y <= 11; y++) for (let x = x0; x < x0 + bw; x++) { const rim = y === 3 || y === 11 || x === x0 || x === x0 + bw - 1; put(x, y, ' ', 0, C(rim ? (hot ? MAG : YEL) : GRAY, rim ? 6 : 1)); }
+      [...s_].forEach((ch, k) => { for (let gy = 0; gy < 5; gy++) for (let gx = 0; gx < 3; gx++) if (DIGIT5[ch] >> (14 - gy * 3 - gx) & 1) put(x0 + 2 + k * 4 + gx, 4 + gy, ' ', 0, C(col, 14)); });
+      const word = card.gold ? 'GOLDEN DUCK!' : card.v >= 25 ? 'JACKPOT!' : card.v >= 10 ? 'BIG ONE!' : card.v >= 5 ? 'NICE' : 'TICKETS';
+      text(x0 + ((bw - Math.ceil(word.length / 4)) >> 1), 10, word, C(col, 15));
+    }
+    text(1, 15, `hooks: ${'J'.repeat(hooks)}${'.'.repeat(3 - hooks)}`, C(WHITE, 13));
+    text(24, 15, `won ${g.score} tickets`, C(YEL, 14));
+  };
+  g.status = () => `TICKETS ${g.score}   ARROWS slide the hook   SPACE dip it   (the hook glows over a duck)`;
+  g.reward = () => g.score;
+  return g;
+};
+// balloon darts: three rows of balloons on a corkboard, a reticle that won't keep still (your hand isn't as steady
+// as you'd like), three darts. Every balloon you pop pays; a few have a gold star card behind them that pays a lot
+// more; pop three of one colour and that's a sweep.
+const DART_COLS = [RED, BLUE, GREEN, YEL, MAG, CYAN, ORANGE], DART_PAY = 3, STAR_PAY = 15, SWEEP_PAY = 6;
+GAMES.darts = (rnd = Math.random) => {
+  const W = 36, H = 19, g = { id: 'darts', title: 'BALLOON DARTS', W, H, score: 0, over: false };
+  const balloons = [];
+  for (const y of [3, 7, 11]) for (let k = 0; k < 8; k++) balloons.push({ x: 2 + k * 4, y, col: DART_COLS[rnd() * DART_COLS.length | 0], star: false, popped: 0, ph: rnd() * 6 });
+  for (let n = 0; n < 4; n++) { const b = balloons[rnd() * balloons.length | 0]; b.star = true; } // (two can land on one: then it's three)
+  let darts = 3, bx = 17, by = 8, t = rnd() * 9, fly = null, stuck = [], last = null, popCols = [], burst = null;
+  g.balloons = balloons; // (for the tests)
+  const sway = () => [1.3 * Math.sin(t * 1.7) + 0.6 * Math.sin(t * 3.1 + 2), 0.9 * Math.sin(t * 2.3 + 1) + 0.4 * Math.sin(t * 4.1)];
+  const aim = g.aim = () => { const [sx, sy] = sway(); return [clamp(bx + sx, 2, 33), clamp(by + sy, 3, 14)]; };
+  const hitAt = (x, y) => balloons.find(b => !b.popped && x >= b.x && x <= b.x + 2 && y >= b.y && y <= b.y + 2 && !((x === b.x || x === b.x + 2) && y === b.y + 2)); // (round: not the bottom corners)
+  g.hitAt = hitAt;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (last && (last.t -= dt) <= 0) last = null;
+    if (burst && (burst.t -= dt) <= 0) burst = null;
+    if (fly) { // the dart, on its way up the board
+      if ((fly.f += dt / 0.32) >= 1) {
+        const x = Math.round(fly.x), y = Math.round(fly.y);
+        let b = hitAt(x, y);
+        if (!b && rnd() < luck() * 3) b = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oy]) => hitAt(x + ox, y + oy)).find(Boolean); // (lucky: it just catches the edge)
+        if (b) {
+          b.popped = 1; popCols.push(b.col); burst = { x: b.x, y: b.y, col: b.col, t: 0.45 };
+          let won = DART_PAY, why = 'POP! +' + DART_PAY;
+          if (b.star) { won += STAR_PAY; why = `A STAR! +${DART_PAY + STAR_PAY}`; }
+          if (popCols.length === 3 && popCols.every(c => c === popCols[0])) { won += SWEEP_PAY; why += `  SWEEP +${SWEEP_PAY}`; }
+          g.score += won; last = { text: why, col: b.star ? YEL : GREEN, t: 1.4 }; ev.push(b.star ? 'clear' : 'score');
+        } else { stuck.push({ x, y }); last = { text: 'thunk. into the cork', col: GRAY, t: 1.2 }; ev.push('miss'); }
+        fly = null;
+        if (darts === 0) { g.over = true; ev.push('end'); }
+      }
+      return ev;
+    }
+    if (k.left) bx -= dt * 9; if (k.right) bx += dt * 9; if (k.up) by -= dt * 6; if (k.down) by += dt * 6;
+    bx = clamp(bx, 2, 33); by = clamp(by, 3, 14);
+    if (k.actP && darts > 0) { const [x, y] = aim(); darts--; fly = { x, y, f: 0 }; ev.push('launch'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    awning(put, text, W, t, BLUE);
+    text(Math.max(0, (W - 23) >> 1), 2, 'POP A STAR  -  WIN BIG!', C(YEL, 15));
+    // the board: a wooden frame round a speckled corkboard
+    for (let y = 3; y <= 15; y++) for (let x = 1; x <= 34; x++) {
+      const rim = y === 15 || x === 1 || x === 34;
+      put(x, y, ' ', 0, rim ? C(BRICK, (x * 7 + y * 3) % 5 ? 2.4 : 2.9) : C(WARM, 1.35 + hash(x, y, 71) * 0.45));
+      if (!rim && hash(x, y, 72) > 0.82) text(x, y, '.', C(BRICK, 6));
+    }
+    for (const d of stuck) { text(d.x, d.y, '+', C(WHITE, 13)); }
+    // the balloons: a round body with a shine on it, a knot, a string that waves about
+    for (const b of balloons) {
+      if (b.popped) { // what was behind it: a gold-rimmed star card, or the last of the rubber
+        if (b.star) { for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) put(b.x + x, b.y + y, ' ', 0, x === 1 && y === 1 ? C(WHITE, 9) : C(YEL, 9)); text(b.x + 1, b.y + 1, '*', C(YEL, 15)); }
+        else { text(b.x + 1, b.y + 2, ',', C(b.col, 10)); text(b.x, b.y + 1, "'", C(b.col, 8)); }
+        continue;
+      }
+      // round-ish: a 3x3 of pixels lit from the top left, the corners only half there, the bottom corners gone
+      const px_ = [[1, 0, 13], [0, 1, 12], [1, 1, 11], [2, 1, 8], [1, 2, 8]], half = [[0, 0, 15], [2, 0, 11]];
+      for (const [x, y, l] of px_) put(b.x + x, b.y + y, ' ', 0, C(b.col, l));
+      for (const [x, y, l] of half) put(b.x + x, b.y + y, ' ', 0, C(b.col, l * 0.7));
+      text(b.x + 1, b.y, "'", C(WHITE, 15)); // the shine
+      text(b.x + 1, b.y + 3, '(|)'[1 + Math.round(Math.sin(t * 3 + b.ph))], C(GRAY, 9)); // the knot and string, waving
+    }
+    if (burst) { // a pop: shreds flying out
+      const f = 1 - burst.t / 0.45, r = 1.2 + f * 1.8;
+      for (let k = 0; k < 8; k++) { const an = k * Math.PI / 4 + 0.3; text(Math.round(burst.x + 1 + Math.cos(an) * r), Math.round(burst.y + 1 + Math.sin(an) * r * 0.7), k & 1 ? '*' : "'", C(burst.col, 15)); }
+      text(burst.x + 1, burst.y + 1, 'POP!', C(WHITE, 15));
+    }
+    // the counter, and your darts on it
+    for (let x = 0; x < W; x++) { put(x, 16, ' ', 0, C(BRICK, 3)); put(x, 17, ' ', 0, C(BRICK, x % 4 ? 1.6 : 1.1)); put(x, 18, ' ', 0, C(GRAY, 0.4)); }
+    for (let k = 0; k < darts; k++) { text(2 + k * 3, 16, '<', C(RED, 13)); text(3 + k * 3, 16, '=', C(WHITE, 12)); text(4 + k * 3, 16, '-', C(YEL, 12)); } // flights, shaft, point
+    if (fly) { // up it goes, shrinking toward the board
+      const sx = fly.x, sy = 17 + (fly.y - 17) * fly.f;
+      text(Math.round(sx), Math.round(sy), fly.f < 0.5 ? '^' : "'", C(WHITE, 15));
+      if (fly.f < 0.7) text(Math.round(sx), Math.round(sy) + 1, '|', C(RED, 12));
+    } else if (darts > 0) { // the reticle, wandering about
+      const [ax, ay] = aim(), X = Math.round(ax), Y = Math.round(ay), on = hitAt(X, Y);
+      const rc = on ? (on.star ? YEL : WHITE) : GRAY;
+      text(X, Y, 'X', C(on ? YEL : WHITE, 15));
+      text(X - 1, Y, '-', C(rc, 12)); text(X + 1, Y, '-', C(rc, 12)); text(X, Y - 1, '|', C(rc, 12)); text(X, Y + 1, '|', C(rc, 12));
+    }
+    if (last) text(Math.max(1, (W - Math.ceil(last.text.length / 2)) >> 1), 17, last.text, C(last.col, 15));
+    text(24, 18, `won ${g.score} tickets`, C(YEL, 14));
+  };
+  g.status = () => `TICKETS ${g.score}   ARROWS aim (it wanders: pick your moment)   SPACE throw   ${DART_PAY} a balloon, a star +${STAR_PAY}, three of a colour +${SWEEP_PAY}`;
+  g.reward = () => g.score;
+  return g;
+};
+const FAIR_GAMES = ['ringtoss', 'strength', 'ducks', 'darts'];
 
 // ---- the Shotengai's parlours
 // pachinko: hold GO and balls fly up and rain down through a forest of pins; steer where they come in with the
@@ -5331,8 +5542,8 @@ const SOLID_SHADE = {
     if (w > 0.11) { // the opening: what's on offer, in the dark behind the counter
       BG[i] = C(GRAY, 1 + glow * 2);
       const row = Math.floor((w - 0.11) / 0.045), col = Math.floor(q * 9);
-      const ch = o.game === 'ringtoss' ? (row === 0 ? 'i' : ' ') : o.game === 'strength' ? (col === 4 ? '|' : ' ') : o.stock ? (row === 0 ? 'o' : ' ') : row < 3 && (col + row) & 1 ? '@' : ' ';
-      return set(i, ch, C(o.game === 'ringtoss' ? GREEN : o.stock ? ORANGE : ITEM_COL[(col + row * 3) & 7], Math.max(L, glow * 12))), true;
+      const ch = o.game === 'ringtoss' ? (row === 0 ? 'i' : ' ') : o.game === 'strength' ? (col === 4 ? '|' : ' ') : o.game === 'ducks' ? (row === 1 ? ' (o>'[mod(Math.floor(q * 28 - T * 3), 4)] : row === 0 ? '~' : ' ') : o.game === 'darts' ? (row >= 1 && row <= 2 ? (Math.floor(q * 18) + row) % 2 ? 'O' : ' ' : row === 0 ? (Math.floor(q * 18) % 2 ? '|' : ' ') : ' ') : o.stock ? (row === 0 ? 'o' : ' ') : row < 3 && (col + row) & 1 ? '@' : ' ';
+      return set(i, ch, C(o.game === 'ringtoss' ? GREEN : o.game === 'ducks' ? (row === 0 ? CYAN : mod(Math.floor(q * 28 - T * 3), 4) === 3 ? ORANGE : YEL) : o.game === 'darts' ? (row === 0 ? GRAY : DART_COLS[(Math.floor(q * 18) + row * 3) % DART_COLS.length]) : o.stock ? ORANGE : ITEM_COL[(col + row * 3) & 7], Math.max(L, glow * 12))), true;
     }
     BG[i] = C(o.awning, 1.5 + L * 0.25); // the counter
     return set(i, w > 0.095 ? '=' : fract(q * 10) < 0.5 ? '|' : ' ', C(WHITE, L * 0.8)), true;
