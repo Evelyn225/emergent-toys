@@ -72,6 +72,8 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
+  if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
+  if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
@@ -132,7 +134,8 @@ function loop(t) {
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
     if (body.seat && (f || s)) standUp(); // walking gets you up
-    if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
+    if (body.leap) move(body.leap[0] * dt, body.leap[1] * dt); // mid-leap: no steering
+    else if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
   } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);

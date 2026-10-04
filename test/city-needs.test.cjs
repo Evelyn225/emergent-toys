@@ -37,8 +37,8 @@ test('the meters run down in real time, thirst first; empty, your health goes; a
   ev('needs.health = 100'); assert.notStrictEqual(run(10 * 60, false), 'faint', 'driving: no faint');
   assert.strictEqual(j('needs.health'), 1);
   assert.strictEqual(run(5), 'faint');
-  ev('money = 90');
-  assert.strictEqual(j('hospitalised()'), 90, 'the bill, or all you have');
+  ev('money = 60');
+  assert.strictEqual(j('hospitalised()'), 60, 'the bill, or all you have');
   assert.deepStrictEqual(j('[money, needs.health, needs.drink >= 50]'), [0, 100, true]);
   // fed and watered, health comes back slowly
   ev('needs.food = needs.drink = 100; needs.health = 40'); run(60);

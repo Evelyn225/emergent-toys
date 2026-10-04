@@ -27,7 +27,10 @@ function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read 
   if (skatingNow()) {
     const key = trick ?? (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
     body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
-  } else body.vz = JUMP_V;
+  } else {
+    body.vz = JUMP_V;
+    if (mode === 'roof' && !roofFixed() && (K.ShiftLeft || K.ShiftRight) && (K.KeyW || K.ArrowUp)) body.leap = [Math.cos(a) * LEAP_V, Math.sin(a) * LEAP_V]; // a running leap
+  }
   if (actx) sfxUse(skatingNow() ? 'board' : 'kick');
 }
 // a seat within reach: a bench (indoors or out) or a cinema seat. {x, y, fx, fy}: where you sit and which way you face
@@ -60,13 +63,13 @@ function standUp() { // back where you sat down from (it was walkable)
 }
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js)
 function stepBody(dt) {
-  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; return; }
+  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.leap = null; return; }
   body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
   if (body.z > 0 || body.vz > 0) {
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
     if (body.z <= 0) { // landed
-      const fell = body.peak; body.z = body.vz = body.peak = 0;
+      const fell = body.peak; body.z = body.vz = body.peak = 0; body.leap = null;
       if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('board'); }
       const dmg = fallHurt(fell);
       if (dmg > 0) {
@@ -78,10 +81,12 @@ function stepBody(dt) {
   }
 }
 
-// ---- roofs: step across onto the roof next door if it's about level with yours (a storey up or down, near
-// enough); a bigger drop, or off the edge to the street, only on purpose, with a jump. You fall the rest of the way
-// (and a long way down hurts). The stairs are only on the roof you came up.
+// ---- roofs: no invisible walls. Step across onto the roof next door if it's about level (a storey up or down,
+// near enough), walk off any edge and fall (a long way down hurts), and a sprinting jump (shift + forward + space)
+// is a leap that'll clear a street onto a roof a bit lower than yours. A wall you're not above stops you, and you
+// slide down it. The stairs are only on the roof you came up.
 const ROOF_STEP = 0.35; // cells: 3.5m
+const LEAP_V = 1.8; // cells a second forward in a running leap off a roof
 let roofLot = null; // the cells of the roof you came up onto (where the stairs down are)
 function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the same height
   const h = map[idx(mx, my)], out = new Set([idx(mx, my)]), todo = [[mx, my]];
@@ -92,21 +97,27 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   return out;
 }
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
-function roofFree(x, y) { // can you be at (x, y) on the roofs?
+function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   const h = map[idx(Math.floor(x), Math.floor(y))];
   if (roofFixed()) return h === roofH;
-  if (h > 0 && Math.abs(h - roofH) <= ROOF_STEP) return true;
-  return h < roofH - ROOF_STEP && (body.z > 0 || body.vz > 0); // over the edge: only in a jump
+  return h <= roofH + ROOF_STEP + body.z / 10;
 }
-function stepRoof() { // onto another roof, or off them altogether
+const overRoof = (x, y) => { const h = map[idx(Math.floor(x), Math.floor(y))]; return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
+// your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
+function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
+function stepRoof() { // onto another roof, off them altogether, or (in a leap from the street side) down onto one
+  if (mode === 'walk' && overRoof(px, py)) { // came down on a roof
+    const h = map[idx(Math.floor(px), Math.floor(py))];
+    mode = 'roof'; roofH = h; shiftFeet(-h * 10); room = null; roofLot = new Set(); return;
+  }
   if (mode !== 'roof' || roofFixed()) return;
   const h = map[idx(Math.floor(px), Math.floor(py))];
   if (h === roofH) return;
-  if (h > 0) { body.z = Math.max(0, body.z + (roofH - h) * 10); roofH = h; return; } // (stepping down a little: a short drop)
-  body.z += roofH * 10; mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
+  if (h > 0) { shiftFeet((roofH - h) * 10); roofH = h; return; }
+  shiftFeet(roofH * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
 const onRoofLot = () => !roofLot || roofLot.has(idx(Math.floor(px), Math.floor(py)));
-// standing at the edge facing a drop you can't just step down: how far it is (metres), or 0
+// standing at the edge facing a drop bigger than a step: how far it is (metres), or 0
 function edgeDrop() {
   if (mode !== 'roof' || roofFixed()) return 0;
   const h = map[idx(Math.floor(px + Math.cos(a) * 0.45), Math.floor(py + Math.sin(a) * 0.45))];

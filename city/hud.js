@@ -109,7 +109,7 @@ function promptText() {
     return '';
   }
   if (mode === 'roof') {
-    const dr = droppedHere(), drop = edgeDrop(), edge = drop ? `Space: jump down (${drop}m)` : '';
+    const dr = droppedHere(), drop = edgeDrop(), edge = drop ? `edge: ${drop}m drop` : '';
     if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
     if (room && room.kind === 'cathedral') return 'The bell tower, 80m up.   E: back down the stairs';
     return onRoofLot() ? ['E: take the stairs down', edge].filter(Boolean).join('   ') : edge || 'No stairs on this roof';

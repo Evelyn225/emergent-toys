@@ -6,7 +6,7 @@
 const DRINK_LAST = 30 * 60, FOOD_LAST = 40 * 60; // seconds from full to empty
 const STARVE_T = 4 * 60; // seconds from full health to passing out with one meter empty (half that with both)
 const HEAL_T = 10 * 60; // seconds to get your health all the way back, fed and watered
-const MEDICAL_BILL = 150, NURSE_FEE = 40;
+const MEDICAL_BILL = 80, NURSE_FEE = 25;
 const FOOD_HEALS = 0.4; // health per point of hunger filled: a burger (50) is 20 health, a candy bar 8
 const needs = { food: 85, drink: 85, health: 100, warned: '' };
 
