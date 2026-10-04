@@ -51,23 +51,32 @@ function shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL
 }
 
 // ---- the arcade roof over the streets, seen from underneath
-function arcadeRoofCell(i, wx, wy) {
+// It's glass: the steel shows (beams down the sides, a rib every 5m, a bar down the middle and across between the
+// ribs, lamps hanging from it) and between them you see the sky, and the buildings above the roofline
+function arcadeRoofPart(wx, wy) {
   const k = idx(Math.floor(wx), Math.floor(wy)), r = ROAD[k], ns = r === 1 || r === 3 && fract(wy / 8) >= 0.25;
   const across = (ns ? mod(wx, 8) : mod(wy, 8)) / 2, along = ns ? wy : wx;
-  if (across < 0.04 || across > 0.96) { BG[i] = C(GRAY, 2); return set(i, '#', C(GRAY, 7)); } // the side beams
-  if (fract(along * 2) < 0.07) { BG[i] = C(GRAY, 2); return set(i, '=', C(GRAY, 9)); } // ribs every 5m
-  const lamp = Math.hypot(fract(along) - 0.5, (Math.abs(across - 0.5) - 0.25) * 2) < 0.07;
-  if (lamp) { BG[i] = C(WARM, 4 + night * 6); return set(i, 'o', C(WHITE, 15)); }
-  const pane = Math.floor(along * 2) % 3; // fibreglass panels, yellowed and greened with age, daylight coming through them
-  BG[i] = day > 0.3 ? C([WHITE, YEL, GREEN][pane], (pane ? 2 : 3) + day * (pane ? 3 : 5) * (1 - overcast * 0.5)) : C(WARM, 1 + lampsOn * 1.5); // (or the lamps' glow at night)
-  return set(i, Math.abs(across - 0.5) < 0.02 ? '|' : (Math.floor(along * 6) + Math.floor(across * 10)) % 7 ? ' ' : '.', C(GRAY, 6));
+  if (across < 0.02 || across > 0.98) return 'beam';
+  if (fract(along * 2) < 0.035) return 'rib';
+  if (Math.hypot(fract(along) - 0.5, (Math.abs(across - 0.5) - 0.25) * 2) < 0.07) return 'lamp';
+  if (Math.abs(across - 0.5) < 0.015 || Math.abs(fract(along * 2) - 0.5) < 0.025) return 'bar';
+  return null; // glass
+}
+function arcadeRoofCell(i, wx, wy) {
+  const part = arcadeRoofPart(wx, wy);
+  const steel = 4 + day * 4 + lampsOn * 2;
+  if (part === 'beam') { BG[i] = C(GRAY, steel); return set(i, '#', C(WHITE, 9)), true; }
+  if (part === 'rib') { BG[i] = C(GRAY, steel * 0.8); return set(i, '=', C(WHITE, 10)), true; }
+  if (part === 'lamp') { BG[i] = C(WARM, 4 + night * 6); return set(i, 'o', C(WHITE, 15)), true; }
+  if (part === 'bar') { BG[i] = C(GRAY, steel * 0.7); return set(i, '-', C(WHITE, 8)), true; }
+  return false;
 }
 // does the ray to this wall cell pass under the arcade roof first? (wall points above it are hidden by it)
 function arcadeRoofHit(z, side, mx, my, wc) {
   if (eye >= ARCADE_Z || z <= ARCADE_Z) return null;
   const f = (ARCADE_Z - eye) / (z - eye), wx = side ? wc : mx + (rel(px - mx) < 0 ? 0 : 1), wy = side ? my + (rel(py - my) < 0 ? 0 : 1) : wc;
   const hx = px + rel(wx - px) * f, hy = py + rel(wy - py) * f;
-  return arcadeAt(hx, hy) ? [hx, hy] : null;
+  return arcadeAt(hx, hy) && arcadeRoofPart(mod(hx, N), mod(hy, N)) ? [hx, hy] : null; // (through the glass: the wall)
 }
 // and the sky: where the roof is over you, that's what you see looking up
 function arcadeSky(i, rx, ry, up) {
@@ -75,7 +84,7 @@ function arcadeSky(i, rx, ry, up) {
   const t = (ARCADE_Z - eye) / up;
   if (t > 40) return false;
   const hx = px + rx * t, hy = py + ry * t;
-  if (!arcadeAt(hx, hy)) return false;
+  if (!arcadeAt(hx, hy) || !arcadeRoofPart(mod(hx, N), mod(hy, N))) return false; // (through the glass: the sky)
   ZB[i] = t; arcadeRoofCell(i, mod(hx, N), mod(hy, N));
   return true;
 }
@@ -166,8 +175,8 @@ const SHOTENGAI_ROOMS = {
       if (chance(0.6)) p.push(standing(3.4, 2.6, shirt())); if (chance(0.6)) p.push(SP(8, 5.5, 0.4, 1.15, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? MAG : BLUE, L)));
       return p;
     } },
-  capsule: { grid: boxRoom(7, 12), light: 0.9, floor: 'wood', ceil: 'strip', wall: capsuleWall, keeper: [3.5, 9.6],
-    props: r => [...counterBox(3.5, 10.2, 1.1), standing(3.5, 9.6, BLUE), SP(1.4, 10.6, 0.7, 1.3, ART.plant, plantCol)] },
+  capsule: { grid: boxRoom(7, 12), light: 0.9, floor: 'wood', ceil: 'strip', wall: capsuleWall, keeper: [5.2, 9.1], // (the desk off to one side: it used to stand right across the door)
+    props: r => [...counterBox(5.2, 9.7, 0.65), standing(5.2, 9.1, BLUE), SP(1.4, 10.6, 0.7, 1.3, ART.plant, plantCol)] },
 };
 Object.assign(ROOM_DEFS, SHOTENGAI_ROOMS);
 Object.assign(ROOM_FOR, { PACHINKO: 'pachinko', 'CRANE GAME': 'cranes', GACHA: 'cranes', CAPSULE: 'capsule', IZAKAYA: 'bar', KISSATEN: 'cafe', MANGA: 'books', DRUGSTORE: 'store',

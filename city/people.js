@@ -101,11 +101,21 @@ for (let n = 0; n < 1100; n++) spawnPerson();
 // a dog walker's dog is out with them while they're walking it, in daylight: on its lead a step behind and to one side,
 // stopping to sniff now and then
 const DOG_COLS = [BRICK, WARM, GRAY, WHITE, ORANGE, YEL];
-const walkingDog = p => p.role === 'dogwalker' && !p.hidden && p.act === 'wander' && tod >= 7 && tod < 20;
+// (with them whenever they're out in the daytime, whatever they're up to: it used to vanish whenever they stopped
+// wandering. And it trots after them: where it should be eases along, so it doesn't jump sides at every corner)
+const walkingDog = p => p.role === 'dogwalker' && !p.hidden && tod >= 7 && tod < 20;
 function dogOf(p) {
   const mx = p.last[0], my = p.last[1], side = (p.ph * 7 | 0) % 2 ? 1 : -1, sniff = Math.sin(T * 0.7 + p.ph) > 0.7;
   const back = 0.09 + (sniff ? 0.04 : 0) + Math.sin(T * 1.9 + p.ph) * 0.01, off = 0.035 * side + Math.sin(T * 1.3 + p.ph) * 0.012;
-  return { x: mod(p.x - mx * back - my * off, N), y: mod(p.y - my * back + mx * off, N), mx, my, sniff, col: DOG_COLS[(p.ph * 13 | 0) % DOG_COLS.length], small: (p.ph * 5 | 0) % 3 === 0 };
+  const tx = mod(p.x - mx * back - my * off, N), ty = mod(p.y - my * back + mx * off, N);
+  let d = p.dog;
+  if (!d || Math.hypot(rel(tx - d.x), rel(ty - d.y)) > 0.6) d = p.dog = { x: tx, y: ty, mx, my, t: T }; // (first sight of it, or the walker jumped: right there)
+  const k = 1 - Math.exp(-Math.max(0, Math.min(0.25, T - d.t)) * 5); d.t = T;
+  const ox = d.x, oy = d.y;
+  d.x = mod(d.x + rel(tx - d.x) * k, N); d.y = mod(d.y + rel(ty - d.y) * k, N);
+  const vx = rel(d.x - ox), vy = rel(d.y - oy), v = Math.hypot(vx, vy);
+  if (v > 1e-4) { d.mx += (vx / v - d.mx) * Math.min(1, k * 2); d.my += (vy / v - d.my) * Math.min(1, k * 2); } // faces the way it's going
+  return { x: d.x, y: d.y, mx: d.mx, my: d.my, sniff, col: DOG_COLS[(p.ph * 13 | 0) % DOG_COLS.length], small: (p.ph * 5 | 0) % 3 === 0 };
 }
 const nearWalkedDog = () => mode === 'walk' && people.find(p => walkingDog(p) && (() => { const d = dogOf(p); return Math.hypot(rel(d.x - px), rel(d.y - py)) < 0.15; })());
 

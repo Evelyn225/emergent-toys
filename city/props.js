@@ -22,6 +22,12 @@ for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x
 const FB_LAMP = 3;
 for (let y = FOOTBRIDGE.y0 + 1.5, k = 0; y < FOOTBRIDGE.y1; y += FB_LAMP, k++) { const s = k & 1 ? 1 : -1; lamps.push({ x: FOOTBRIDGE.x + s * FOOTBRIDGE.hw, y, ax: -s, ay: 0 }); }
 const lampsB = bucketed(lamps);
+// is (x, y) up against a lamp post (grown by pad)? They're solid: you walk round them
+function lampAt(x, y, pad) {
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const l of lampsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)])
+    if (Math.abs(rel(x - l.x)) < 0.028 + pad && Math.abs(rel(y - l.y)) < 0.028 + pad) return true;
+  return false;
+}
 // light pool on the ground, under the lamp heads of whichever streets exist here
 function glow(wx, wy) {
   const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), lx = wx - bx * 8, ly = wy - by * 8;
@@ -90,6 +96,17 @@ for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k += 2) { // a ben
   const gx = mx + nx * 0.4, gy = my + ny * 0.4;
   if (gardenLakeEdge(gx, gy) > -0.2 || inPen(gx, gy, 0.2) || gardenBuilt(gx, gy, 0.2)) continue;
   const [x, y] = gx2w(gx, gy); benches.push({ x, y, fx: -nx, fy: -ny });
+}
+// what kind each tree is: leafy round ones, pines, birches, poplars, and blossom (mostly in Chinatown, the Shotengai and
+// the Gardens). Weights per kind for where it stands
+const TREE_MIX = { street: { oak: 6, birch: 3, blossom: 1 }, waterfront: { pine: 1, poplar: 1 }, park: { oak: 9, pine: 4, birch: 4, poplar: 2, blossom: 1 },
+  eastern: { oak: 3, blossom: 4, pine: 2, birch: 1 }, gardens: { oak: 4, pine: 3, birch: 3, poplar: 2, blossom: 3 } };
+for (const t of trees) {
+  const bx = Math.floor(t.x / 8), by = Math.floor(t.y / 8), d = districtOf(bx, by), r = hash(Math.floor(t.x * 13), Math.floor(t.y * 13), 811);
+  const mix = inGardens(t.x, t.y) ? TREE_MIX.gardens : blockKind(bx, by) === 'waterfront' ? TREE_MIX.waterfront : t.s === 0.75 ? TREE_MIX.street : d === 'chinatown' || d === 'shotengai' ? TREE_MIX.eastern : TREE_MIX.park;
+  const tot = Object.values(mix).reduce((a, b) => a + b, 0);
+  let w = r * tot; t.kind = Object.keys(mix).find(k => (w -= mix[k]) < 0) || 'oak';
+  t.seed = hash(Math.floor(t.x * 7), Math.floor(t.y * 7), 812);
 }
 const treesB = bucketed(trees), benchesB = bucketed(benches);
 

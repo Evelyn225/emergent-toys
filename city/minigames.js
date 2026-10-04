@@ -521,18 +521,28 @@ GAMES.jailbreak = (rnd = Math.random) => {
 // ring toss: rows of bottles; the ring swings back and forth in front of you, GO throws it straight up the board.
 // It lands on a bottle neck only if it's dead on (the far rows count double). Six rings.
 GAMES.ringtoss = (rnd = Math.random) => {
-  const W = 29, H = 12, ROWS = [2, 4, 6], g = { id: 'ringtoss', title: 'RING TOSS', W, H, score: 0, over: false };
+  // the ring flies straight up from where you throw it and drops over the first bottle in its path (the front rows
+  // first: ring those and the ones behind open up). A dotted line shows which bottle that is. Dead on, it rings it;
+  // a column off, it might clip the neck and drop on anyway. The back row's worth most.
+  const W = 29, H = 12, ROWS = [2, 4, 6], PTS = { 2: 3, 4: 2, 6: 1 }, g = { id: 'ringtoss', title: 'RING TOSS', W, H, score: 0, over: false };
   const necks = [];
   for (const y of ROWS) for (let x = 2 + (y >> 1 & 1) * 2; x < W - 1; x += 4) necks.push({ x, y, ringed: false });
-  let rings = 6, aim = 1, dir = 1, speed = 11, fly = null, hits = 0;
+  let rings = 6, aim = 1, dir = 1, speed = 9, fly = null, hits = 0, last = null;
+  const target = x => { // the bottle a ring thrown up column x comes down on: dead on, or one beside it it'll clip
+    for (const y of [...ROWS].reverse()) { const n = necks.find(q => q.y === y && q.x === x && !q.ringed); if (n) return { n, exact: true }; }
+    for (const y of [...ROWS].reverse()) { const n = necks.find(q => q.y === y && Math.abs(q.x - x) === 1 && !q.ringed); if (n) return { n, exact: false }; }
+    return null;
+  };
+  g.target = () => fly ? null : target(Math.round(aim)); // (for the tests)
   g.step = (dt, k) => {
     const ev = [];
     if (g.over) return ev;
-    if (fly) { // up the board, landing on its row
+    if (last && (last.t -= dt) <= 0) last = null;
+    if (fly) { // up the board to where it'll come down
       fly.y -= dt * 22;
       if (fly.y <= fly.to) {
-        const n = necks.find(q => q.x === fly.x && q.y === fly.to && !q.ringed);
-        if (n) { n.ringed = true; hits++; g.score += n.y === ROWS[0] ? 2 : 1; ev.push('score'); } else ev.push('miss');
+        if (fly.n && (fly.exact || rnd() < 0.45)) { fly.n.ringed = true; hits++; g.score += PTS[fly.n.y]; ev.push('score'); last = { text: `RINGED! +${PTS[fly.n.y]}`, col: GREEN, t: 1.2 }; }
+        else { ev.push('miss'); last = { text: fly.n ? 'clink... off the rim' : 'nothing there', col: GRAY, t: 1.2 }; }
         fly = null;
         if (rings === 0) { g.over = true; ev.push('end'); }
       }
@@ -540,17 +550,26 @@ GAMES.ringtoss = (rnd = Math.random) => {
     }
     aim += dir * speed * dt;
     if (aim < 1 || aim > W - 2) { dir = -dir; aim = clamp(aim, 1, W - 2); }
-    if (k.actP && rings > 0) { rings--; fly = { x: Math.round(aim), y: H - 2, to: ROWS[rnd() * 3 | 0] }; speed *= 1.08; ev.push('launch'); }
+    if (k.actP && rings > 0) {
+      rings--; const x = Math.round(aim), tg = target(x);
+      fly = { x, y: H - 2, to: tg ? tg.n.y : 0, n: tg && tg.n, exact: tg && tg.exact }; speed *= 1.05; ev.push('launch');
+    }
     return ev;
   };
   g.draw = (put, text) => {
     for (let x = 0; x < W; x++) put(x, H - 3, '-', C(BRICK, 6)); // the line you throw from
-    for (const n of necks) { put(n.x, n.y, n.ringed ? 'O' : 'i', n.ringed ? C(YEL, 15) : C(GREEN, 12)); put(n.x, n.y + 1, 'U', C(GREEN, 8)); }
+    const tg = g.target();
+    if (tg && rings) for (let y = tg.n.y + 2; y < H - 3; y++) put(Math.round(aim), y, ':', C(tg.exact ? YEL : GRAY, tg.exact ? 9 : 6)); // where it'll go
+    for (const n of necks) {
+      const aimed = tg && tg.n === n;
+      put(n.x, n.y, n.ringed ? 'O' : 'i', n.ringed ? C(YEL, 15) : aimed ? C(tg.exact ? YEL : WHITE, 15) : C(GREEN, 12)); put(n.x, n.y + 1, 'U', C(GREEN, 8));
+    }
     if (fly) put(fly.x, Math.round(fly.y), 'o', C(YEL, 15));
     else if (rings) { put(Math.round(aim), H - 2, 'O', C(YEL, 15)); put(Math.round(aim), H - 1, '^', C(WHITE, 10)); }
     text(0, 0, `rings: ${'O'.repeat(rings)}${'.'.repeat(6 - rings)}`, C(WHITE, 13));
+    if (last) text(9, 0, last.text, C(last.col, 15));
   };
-  g.status = () => `RINGED ${hits}   POINTS ${g.score}   SPACE throw`;
+  g.status = () => `RINGED ${hits}   POINTS ${g.score} (back row 3, middle 2, front 1)   SPACE throw when the dots line up on a bottle`;
   g.reward = () => g.score * 4;
   return g;
 };
@@ -604,8 +623,14 @@ const FAIR_GAMES = ['ringtoss', 'strength'];
 GAMES.pachinko = (rnd = Math.random) => {
   const W = 23, H = 20, g = { id: 'pachinko', title: 'PACHINKO', W, H, score: 40, over: false };
   const pin = (x, y) => y >= 3 && y <= 15 && y % 2 === 1 && (x + (y >> 1)) % 2 === 0 && x > 0 && x < W - 1;
-  const POCKETS = { 11: 'start', 5: 'small', 17: 'small' }; // which bottom columns catch a ball
-  let aim = 11, fire = 0, balls = [], tick = 0, reel = null, fever = 0, best = '';
+  const POCKETS = { 11: 'start', 4: 'small', 5: 'small', 17: 'small', 18: 'small' }; // which bottom columns catch a ball
+  // tuned by simulation: aim for the red START pocket and a tray lasts a good while, coming out about even (a jackpot
+  // or two and you're well up); spray balls about and it drains, but not as fast as it used to
+  const PAY = { small: 3, start: 5 }, START = g.score;
+  // what just happened, drawn so you can't miss it: a +N where a ball dropped into a pocket, an x where one drained,
+  // and the reel's verdict (MISS, or 777 FEVER)
+  let aim = 11, fire = 0, balls = [], tick = 0, reel = null, fever = 0, best = '', pops = [], verdict = null;
+  g.pops = () => pops; g.verdict = () => verdict; // (for the tests)
   g.step = (dt, k) => {
     const ev = [];
     if (g.over) return ev;
@@ -622,17 +647,21 @@ GAMES.pachinko = (rnd = Math.random) => {
       for (const b of balls.filter(b => b.y >= H - 2)) {
         let p = POCKETS[b.x];
         if (!p && rnd() < luck() * 2.5) for (const o of [-1, 1]) if (POCKETS[b.x + o]) { p = POCKETS[b.x + o]; break; } // (lucky: it rolls in after all)
-        if (p === 'small') { g.score += 2; ev.push('eat'); }
-        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 + luck() * 0.5 }; }
+        if (p === 'small') { g.score += PAY.small; ev.push('eat'); }
+        if (p === 'start') { g.score += PAY.start; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 + luck() * 0.5 }; }
+        pops.push(p ? { x: b.x, text: `+${PAY[p]}`, col: p === 'start' ? YEL : GREEN, t: 0.9 } : { x: b.x, text: 'x', col: GRAY, t: 0.5 });
         b.dead = true;
       }
       balls = balls.filter(b => !b.dead);
     }
     if (reel && (reel.t -= dt) <= 0) {
-      if (reel.hit) { reel.r = [7, 7, 7]; g.score += 50; fever = 3; ev.push('clear'); best = 'FEVER! 777'; } else ev.push('miss');
+      if (reel.hit) { reel.r = [7, 7, 7]; g.score += 50; fever = 3; ev.push('clear'); best = 'FEVER! 777'; verdict = { text: '777 JACKPOT  +50 BALLS', col: MAG, t: 3 }; }
+      else { if (reel.r[0] === reel.r[1] && reel.r[1] === reel.r[2]) reel.r[2] = reel.r[2] % 7 + 1; ev.push('miss'); verdict = { text: 'no match', col: GRAY, t: 1.2 }; } // (three alike that isn't a win would be a lie)
       reel.shown = reel.r; reel = null;
     }
     fever = Math.max(0, fever - dt);
+    for (const q of pops) q.t -= dt; pops = pops.filter(q => q.t > 0);
+    if (verdict && (verdict.t -= dt) <= 0) verdict = null;
     if (g.score <= 0 && !balls.length && !reel) { g.over = true; ev.push('end'); }
     if (reel) g.lastReel = reel.r.map((v, i) => reel.t > 0.4 + i * 0.4 ? 1 + (rnd() * 9 | 0) : v); // the reels spinning, stopping one by one
     return ev;
@@ -643,11 +672,16 @@ GAMES.pachinko = (rnd = Math.random) => {
     for (let x = 1; x < W - 1; x++) { const p = POCKETS[x]; put(x, H - 1, p ? 'U' : '_', p === 'start' ? C(RED, 15) : p ? C(GREEN, 14) : C(GRAY, 6)); }
     put(Math.round(aim), 0, 'v', C(WHITE, 15));
     for (const b of balls) put(b.x, b.y, 'o', C(WHITE, 15));
+    for (const q of pops) text(Math.max(1, q.x - (q.text.length > 1 ? 1 : 0)), H - 2 - (q.text === 'x' ? 0 : Math.round((0.9 - q.t) * 3)), q.text, C(q.col, q.text === 'x' ? 8 : 15));
     const r = g.lastReel || [7, 7, 7];
     text(8, 17, `[ ${r.join(' ')} ]`, reel ? C(YEL, 15) : fever > 0 ? C(NEON[(Math.floor(fever * 8)) & 3], 15) : C(WHITE, 11));
+    if (reel) text(6, 16, 'reels spinning...', C(YEL, 12));
+    else if (verdict) text(Math.max(1, (W - verdict.text.length) >> 1), 16, verdict.text, C(verdict.col === MAG ? NEON[Math.floor(T * 8) & 3] : verdict.col, 15));
+    const up = g.score - START; // how you're doing against the tray you started with
+    text(1, 1, `BALLS ${g.score}`, C(WHITE, 14)); text(13, 1, up === 0 ? 'EVEN' : `${up > 0 ? 'UP +' : 'DOWN '}${up}`, C(up > 0 ? GREEN : up < 0 ? RED : GRAY, 15));
     if (best && fever > 0) text(7, 2, best, C(MAG, 15));
   };
-  g.status = () => `BALLS ${g.score}   HOLD SPACE fire   ARROWS aim   E cash out`;
+  g.status = () => `BALLS ${g.score} = ${g.reward()} TICKETS   HOLD SPACE fire   ARROWS aim (the red U spins the reels)   E cash out`;
   g.reward = () => Math.floor(g.score / 8);
   return g;
 };
@@ -785,8 +819,22 @@ GAMES.mahjong = (rnd = Math.random) => {
     return ev;
   };
   const SUIT_COL = [RED, GREEN, BLUE];
-  const tileText = (text, x, y, t, hi) => text(x, y, mjName(t), C(SUIT_COL[t / 9 | 0], hi ? 15 : 12));
-  g.draw = (put, text) => {
+  // a tile's face, as big as the patch allows: its number, then its suit as pips the way real tiles show them (dots
+  // in rows, bamboo sticks, character marks); too small for that, the number and a row of the suit's mark
+  const tileFace = t => (w, h) => {
+    const n = t % 9 + 1, s = MJ_SUITS[t / 9 | 0];
+    if (h < 3) return h < 2 ? [`${n}${s}`] : [`${n}`, s.repeat(Math.min(w, 3))];
+    const per = w >= 7 ? 3 : 2, rows_ = [];
+    for (let k = 0; k < n; k += per) rows_.push(Array.from({ length: Math.min(per, n - k) }, () => s).join(' '));
+    while (rows_.length > h - 1) { const a = rows_.pop(); rows_[rows_.length - 1] += ' ' + a; } // (squeeze them in)
+    return [`${n}`, ...rows_];
+  };
+  const smallTile = (put, area, text, x, y, t, hi) => { // a discard: one ivory cell, its number and suit
+    if (area) { put(x, y, ' ', 0, C(WHITE, hi ? 15 : 10)); area(x, y, 1, 1, (w) => [w >= 2 ? `${t % 9 + 1}${MJ_SUITS[t / 9 | 0]}` : `${t % 9 + 1}`], C(SUIT_COL[t / 9 | 0], 4)); }
+    else text(x, y, mjName(t), C(SUIT_COL[t / 9 | 0], hi ? 15 : 12));
+  };
+  g.draw = (put, text, chars, area) => {
+    const tileText = (text_, x, y, t, hi) => smallTile(put, area, text_, x, y, t, hi);
     // the other three: how many tiles, and what they've thrown away (the last discard picked out)
     for (let p = 1; p <= 3; p++) {
       const y = (p - 1) * 2;
@@ -800,11 +848,13 @@ GAMES.mahjong = (rnd = Math.random) => {
     text(0, 9, msg.slice(0, 62), C(WHITE, 14));
     // your hand: fourteen (or thirteen) tiles across the bottom, the one you're on raised
     const hand = hands[0];
-    hand.forEach((t, k) => {
-      const sel = state === 'you' && k === cur, y = sel ? 11 : 12;
-      put(1 + k * 2, y, ' ', 0, C(WHITE, sel ? 15 : 11)); text(1 + k * 2, y, mjName(t), C(SUIT_COL[t / 9 | 0], 5)); // an ivory tile, its number and suit
+    hand.forEach((t, k) => { // ivory tiles two cells wide and two high (the one you're on raised), each face filled
+      const sel = state === 'you' && k === cur, y = sel ? 10 : 11, x = 2 + k * 2;
+      if (!area) { put(x, y + 1, ' ', 0, C(WHITE, sel ? 15 : 11)); text(x, y + 1, mjName(t), C(SUIT_COL[t / 9 | 0], 5)); return; }
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) put(x + dx, y + dy, ' ', 0, C(WHITE, sel ? 15 : (k & 1 ? 11 : 12))); // (alternate shades: the tiles' edges)
+      area(x, y, 2, 2, tileFace(t), C(SUIT_COL[t / 9 | 0], 4));
     });
-    if (state === 'you') text(1 + cur * 2, 13, '^^', C(YEL, 15));
+    if (state === 'you') text(2 + cur * 2, 13, '^^', C(YEL, 15));
     // the help: what you're waiting for, if you're one tile away
     const h13 = state === 'you' ? hand.filter((_, k) => k !== cur) : hand;
     const w = h13.length === 13 ? mjWaits(h13) : [];
@@ -891,7 +941,7 @@ const betStep = (bet, dir) => CASINO_BETS[clamp(CASINO_BETS.indexOf(bet) + dir, 
 // blackjack: get closer to 21 than the dealer without going over. Picture cards are 10, an ace 1 or 11. The dealer
 // draws to 17. A win pays 2 to 1 (your stake and as much again), a blackjack (21 in two cards) 3 to 2, a tie gives
 // your stake back. Double: twice the stake, one more card, then you stand.
-const CARD_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], CARD_SUITS = 'SHDC';
+const CARD_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], CARD_SUITS = '♠♥♦♣'; // spades, hearts, diamonds, clubs
 const cardVal = c => Math.min(10, c % 13 + 1);
 function bjTotal(hand) { let t = 0, aces = 0; for (const c of hand) { const v = cardVal(c); t += v; if (v === 1) aces++; } if (aces && t + 10 <= 21) t += 10; return t; }
 function cardText(text, x, y, c, down) { // a card, three cells by four rows: rank and suit, or the back
@@ -1026,6 +1076,15 @@ GAMES.roulette = (rnd = Math.random) => {
 // Lucky: a losing pull sometimes spins again
 const SLOT_SYMS = [['7', 1, 120, RED], ['BAR', 2, 40, WHITE], ['$', 3, 20, GREEN], ['BELL', 4, 12, YEL], ['CHERRY', 6, 6, MAG], ['PLUM', 7, 4, BLUE]];
 const SLOT_GLYPH = { '7': '7', BAR: '=', $: '$', BELL: 'A', CHERRY: 'o', PLUM: '@' };
+// each symbol as a little picture, 5 x 5 blocks: # in the symbol's colour, g a green stem or leaf, . nothing
+const SLOT_PIX = {
+  '7': ['#####', '...#.', '..#..', '.#...', '.#...'],
+  BAR: ['#####', '.....', '#####', '.....', '#####'],
+  $: ['.###.', '#.#..', '.###.', '..#.#', '.###.'],
+  BELL: ['..#..', '.###.', '.###.', '#####', '..#..'],
+  CHERRY: ['...g.', '..g.g', '.g..g', '##.##', '##.##'],
+  PLUM: ['..g..', '.###.', '#####', '#####', '.###.'],
+};
 const SLOT_WEIGHT = SLOT_SYMS.reduce((s, x) => s + x[1], 0);
 function slotPull(rnd) { const r = []; for (let k = 0; k < 3; k++) { let w = rnd() * SLOT_WEIGHT, i = 0; while ((w -= SLOT_SYMS[i][1]) > 0) i++; r.push(i); } return r; }
 function slotPays(r) { // times the stake
@@ -1059,21 +1118,23 @@ GAMES.slots = (rnd = Math.random) => {
     }
     return ev;
   };
-  g.draw = (put, text) => {
-    for (let x = 2; x < 23; x++) { put(x, 1, '=', C(YEL, 12)); put(x, 9, '=', C(YEL, 12)); }
-    for (let k = 0; k < 3; k++) { // three reels, the one above and below showing too
-      const x = 4 + k * 6;
-      for (let d = -1; d <= 1; d++) {
-        const s = SLOT_SYMS[((state === 'spin' ? shown[k] : reels[k]) + d + SLOT_SYMS.length) % SLOT_SYMS.length], y = 5 + d * 2;
-        for (let dx = 0; dx < 4; dx++) put(x + dx, y, ' ', 0, C(WHITE, d ? 3 : 14));
-        const label = s[0] === 'CHERRY' ? 'CHRY' : s[0].length < 3 ? ` ${s[0]}${s[0]}${s[0]}` : s[0]; // (the symbol, as big as the window lets it be)
-        text(x, y, label.padStart(Math.ceil((8 + label.length) / 2)).padEnd(8), C(s[3], d ? 7 : 15));
-      }
+  g.draw = (put, text, chars) => {
+    for (let x = 1; x < W - 1; x++) { put(x, 1, '=', C(YEL, 12)); put(x, 9, '=', C(YEL, 12)); }
+    const sym = (k, d) => SLOT_SYMS[((state === 'spin' ? shown[k] : reels[k]) + d + SLOT_SYMS.length) % SLOT_SYMS.length];
+    const pix = (s, row, col, dim) => { const c = SLOT_PIX[s[0]][row][col]; return c === '#' ? C(s[3], dim ? 5 : 13) : c === 'g' ? C(GREEN, dim ? 4 : 11) : null; };
+    for (let k = 0; k < 3; k++) { // three reels: the symbol in the window as a picture, a glimpse of the ones above and below
+      const x = 3 + k * 7, s = sym(k, 0), up = sym(k, -1), dn = sym(k, 1);
+      for (let y = 2; y <= 8; y++) for (let dx = 0; dx < 5; dx++) put(x + dx, y, ' ', 0, C(WHITE, y === 2 || y === 8 ? 4 : 13));
+      for (let row = 0; row < 5; row++) for (let col = 0; col < 5; col++) { const c = pix(s, row, col, false); if (c !== null) put(x + col, 3 + row, ' ', 0, c); }
+      for (let col = 0; col < 5; col++) { const a = pix(up, 4, col, true), b = pix(dn, 0, col, true); if (a !== null) put(x + col, 2, ' ', 0, a); if (b !== null) put(x + col, 8, ' ', 0, b); }
     }
-    text(1, 5, '>', C(RED, 15)); text(46, 5, '<', C(RED, 15));
+    put(1, 5, '>', C(RED, 15)); put(W - 2, 5, '<', C(RED, 15));
     text(0, 10, msg, C(WHITE, 15));
-    text(0, 11, '777 x120  BAR x40  $$$ x20  BELL x12', C(GRAY, 9));
-    text(0, 12, 'CHERRIES x6  PLUMS x4  2 cherries x2', C(GRAY, 9));
+    const at = chars || ((c, y, str, col) => text(c / 2, y, str, col)); // the pay table, in the symbols' own colours
+    [[[0, 3, 'x120'], [1, 3, 'x40'], [2, 3, 'x20'], [3, 3, 'x12']], [[4, 3, 'x6'], [5, 3, 'x4'], [4, 2, 'x2']]].forEach((row, r) => {
+      let c = 0;
+      for (const [n, k, x] of row) { const s = SLOT_SYMS[n]; at(c, 11 + r, SLOT_GLYPH[s[0]].repeat(k), C(s[3], 15)); at(c + k + 1, 11 + r, x, C(GRAY, 10)); c += k + x.length + 4; }
+    });
     text(0, 13, `BET ${fmt$(g.bet)}   CASH ${fmt$(money)}`, C(YEL, 14));
     if (luck() > 0) text(0, 14, 'Your jade feels warm.', C(GREEN, 9));
   };

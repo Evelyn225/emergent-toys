@@ -27,8 +27,24 @@ function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE)
   if (Math.abs(z - z0) > bandH / 2) return false;
   const q = (u - u0) / cwid + text.length / 2, p = Math.floor(q);
   if (p < 0 || p >= text.length) return false;
+  if (wallTextBig(u, uStep, d, u0, cwid, bandH, text.length)) { // close enough: every letter drawn large in blocks
+    BG[i] = bgc; const ch = text[p];
+    return set(i, GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor(fract(q) * 4), Math.floor((z0 + bandH / 2 - z) / bandH * 5)) ? '#' : ' ', col), true;
+  }
   const centered = (uStep >= cwid || oneCell((fract(q) - 0.5) * cwid, uStep)) && oneCell(z - z0, d / projY);
   set(i, centered ? text[p] : ' ', col); BG[i] = bgc;
+  return true;
+}
+
+// is a wall text big enough on screen for block letters? Judged from its smallest (furthest) letter, so the whole text
+// switches together. From the ray that hit this wall (WH): how a step along the wall grows with distance along it
+function wallTextBig(u, uStep, d, u0, cwid, bandH, len) {
+  if (cwid / uStep < 1.5) return false;
+  const D = WH.dn, s0 = WH.sl * D, sgn = Math.sign(u * WH.wc) || 1, r0 = D * D + s0 * s0;
+  for (const e of [-1, 1]) {
+    const s = s0 + sgn * (u0 + e * (len / 2 - 0.5) * cwid - u), r = (D * D + s * s) / r0;
+    if (cwid / (uStep * r) < 2.2 || bandH * projY / (d * Math.sqrt(r)) < 2.8) return false;
+  }
   return true;
 }
 

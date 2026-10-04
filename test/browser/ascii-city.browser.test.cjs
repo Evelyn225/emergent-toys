@@ -837,3 +837,50 @@ test('the marina: buy a boat, take her out (chase camera and at the helm), tie u
   assert.deepStrictEqual(kept, [['cruiser', r.name, Math.round(moved.x * 10) / 10]]);
   await page.evaluate(() => localStorage.removeItem('ascii-city-save'));
 }));
+
+test('talking to people indoors: walk up to someone in a cafe or a station and they chat (the counter still serves you)', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    tod = 14; mode = 'walk';
+    enterRoom('cafe', { word: 'CAFE', neon: MAG, ret: [px, py, a], line: 'What can I get you?' }, [5, 6.3, -Math.PI / 2]);
+    const arts = [ART.keeper, ART.sitter, ART.sitterBack], k = room.def.keeper;
+    const s = room.props.find(o => arts.includes(o.art) && Math.hypot(o.x - k[0], o.y - k[1]) > 2);
+    px = s.x; py = s.y + 0.9; a = -Math.PI / 2;
+    const prompt = promptText(); interact();
+    const cafeLine = msgText;
+    px = k[0]; py = k[1] + 1; a = -Math.PI / 2; const counter = promptText();
+    leaveRoom(); enterRoom('station', { st: 0, word: stations[0].name, t0: T - 12, ret: [px, py, a] }, [11, 4.8, 0]);
+    let sprompt = ''; // (someone the train isn't standing beside: boarding it rightly comes first)
+    for (const p2 of room.props.filter(o => arts.includes(o.art))) { px = p2.x + 0.8; py = p2.y; a = Math.PI; sprompt = promptText(); if (sprompt === 'E: talk') break; }
+    interact();
+    return { prompt, cafeLine, counter, sprompt, stationLine: msgText };
+  });
+  assert.strictEqual(r.prompt, 'E: talk');
+  assert.ok(await page.evaluate(l => ROOM_TALK.cafe.some(x => l.includes(x)) || l.includes('coffee') || l.startsWith('"'), r.cafeLine), r.cafeLine);
+  assert.match(r.counter, /E: shop/);
+  assert.strictEqual(r.sprompt, 'E: talk');
+  assert.match(r.stationLine, /^".+"$/);
+}));
+
+test('the capsule hotel: in through the door and up the aisle without the front desk in the way; the desk still books a pod', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    tod = 22; mode = 'walk';
+    enterRoom('capsule', { word: 'CAPSULE', neon: CYAN, ret: [px, py, a], line: 'Welcome.' }, [3, 10.4, -Math.PI / 2]);
+    const blocked = []; for (let y = 10.6; y > 2; y -= 0.2) for (const x of [2.6, 3, 3.4]) if (!free(x, y)) blocked.push([x, +y.toFixed(1)]);
+    px = 5.2; py = 10.5; a = -Math.PI / 2;
+    return { blocked, desk: promptText() };
+  });
+  assert.deepStrictEqual(r.blocked, []);
+  assert.match(r.desk, /a pod for the night/);
+}));
+
+test('breaking into the casino: shut from 2am, so the lock can be picked before dawn; inside, the cashier\'s cage is the vault', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    const sh = CASINO.sh, shut3 = !openAt(sh, 3), open22 = openAt(sh, 22);
+    tod = 3; mode = 'walk';
+    enterRoom('casino', { ...sh, cell: [CASINO.bx * 8 + 4, CASINO.by * 8 + 5], ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]);
+    px = 11; py = 3.4; a = -Math.PI / 2;
+    return { shut3, open22, prompt: promptText(), noTables: casinoSpot() === null };
+  });
+  assert.deepStrictEqual([r.shut3, r.open22, r.noTables], [true, true, true]);
+  assert.match(r.prompt, /crack the vault/);
+}));

@@ -345,3 +345,56 @@ test('the Botanical Gardens: one big walled park, no streets through it, a lake 
   assert.strictEqual(r.treesInLake, 0);
   assert.ok(r.trees > 40, `${r.trees} trees`);
 });
+
+test('chatting indoors: every room people sit or stand about in has its own lines, never the same one twice running', () => {
+  const r = j(`(() => {
+    const kinds = ['store', 'bar', 'diner', 'arcade', 'laundry', 'cinema', 'hotel', 'apts', 'barber', 'hospital', 'bank', 'karaoke', 'petshop', 'florist', 'station', 'train', 'cafe', 'books', 'noodle', 'garage', 'tea', 'storage', 'jail', 'lighthouse', 'showroom', 'realty', 'aquarium', 'cathedral', 'pachinko', 'cranes', 'capsule', 'conservatory', 'aviary', 'jade', 'casino', 'exchange', 'stripclub'];
+    const missing = kinds.filter(k => !ROOM_TALK[k] || ROOM_TALK[k].length < 2);
+    let repeats = 0, prev = '', fromList = true;
+    for (let n = 0; n < 200; n++) { const l = roomTalkLine('cafe', 14); if (l === prev) repeats++; prev = l; }
+    return { missing, repeats, jail: roomTalkLine('jail', 3) };
+  })()`);
+  assert.deepStrictEqual(r.missing, []);
+  assert.ok(r.repeats < 3, `${r.repeats} repeats`);
+  assert.ok(j('ROOM_TALK.jail').includes(r.jail), 'no "shouldn\'t you be in bed" in a cell');
+});
+
+test('a walked dog stays with its walker whatever they are up to, and trots round corners instead of jumping sides', () => {
+  const r = j(`(() => {
+    tod = 10; const p = people.find(q => q.role === 'dogwalker'); p.hidden = false; p.act = 'shop'; p.dog = null; p.last = [1, 0];
+    const out = walkingDog(p), d0 = dogOf(p), a = [d0.x, d0.y];
+    p.last = [-1, 0]; T += 1 / 60; const d1 = dogOf(p), jump = Math.hypot(rel(d1.x - a[0]), rel(d1.y - a[1]));
+    for (let k = 0; k < 120; k++) { T += 1 / 60; dogOf(p); }
+    const d2 = dogOf(p), behind = rel(d2.x - p.x) > 0; // now walking west: the dog's caught up behind (east of) them
+    return { out, jump, behind };
+  })()`);
+  assert.ok(r.out, 'out with them while they shop');
+  assert.ok(r.jump < 0.03, `jumped ${r.jump}`);
+  assert.ok(r.behind);
+});
+
+test('street lamps are solid, and no emergency vehicle is parked on one', () => {
+  const r = j(`(() => {
+    const l = lamps[40];
+    const parkedOnLamp = SERVICES.filter(b => lamps.some(m => Math.abs(rel(m.x - b.x)) < 0.45 && Math.abs(rel(m.y - b.y)) < 0.2)).map(b => b.kind);
+    return { hit: lampAt(l.x, l.y, 0), beside: lampAt(l.x + 0.2, l.y, 0.03), parkedOnLamp };
+  })()`);
+  assert.deepStrictEqual(r, { hit: true, beside: false, parkedOnLamp: [] });
+});
+
+test('a car left in its lane (where you got out) is driven round: traffic behind it gets past instead of queueing for ever', () => {
+  const { ev: e } = loadCity(3);
+  const r = JSON.parse(e(`JSON.stringify((() => {
+    mode = 'walk';
+    // a car mid-block on a straight, left there; another coming up behind it in the same lane
+    const c = cars.find(o => !o.ev && !o.patrol && o.hx !== 0 && ROAD[idx(Math.floor(o.x), Math.floor(o.y))] === 2 && o.left > 3);
+    c.parked = true; c.v = 0; c.off = 0; c.ex = c.x; c.ey = c.y; px = c.x; py = c.y - 1.5;
+    const o = cars.find(q => q !== c && !q.ev && !q.patrol && Math.hypot(rel(q.x - c.x), rel(q.y - c.y)) > 20);
+    Object.assign(o, { x: mod(c.x - c.hx * 1.5, N), y: c.y, hx: c.hx, hy: 0, B: c.B, left: c.left + 1.5, nh: c.nh.slice(), v: 0.8, off: 0, parked: false });
+    o.ex = o.x; o.ey = o.y;
+    let ahead_ = -1;
+    for (let t = 0; t < 20 && ahead_ < 0.5; t += 0.05) { T += 0.05; stepTraffic(0.05, T); ahead_ = rel(o.x - c.x) * c.hx; }
+    return { got: ahead_ };
+  })())`));
+  assert.ok(r.got >= 0.5, JSON.stringify(r));
+});

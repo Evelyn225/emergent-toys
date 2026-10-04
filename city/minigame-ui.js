@@ -116,13 +116,18 @@ function drawGame() {
       set(i, ch, col); if (bg !== undefined && bg !== NONE) BG[i] = bg;
     }
   }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col), // a label, at normal size
-     (c, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + c, s_, col)); // one placed by character (a column in a table): c counts characters from the left
+     (c, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + c, s_, col), // one placed by character (a column in a table): c counts characters from the left
+     (x, y, w, h, fill, col) => { // lines of characters filling a w x h patch of cells, centred: fill(chars wide, chars high) gives them
+       const W_ = w * bw, H_ = h * bh, lines = fill(W_, H_).slice(0, H_), top = y0 + y * bh + ((H_ - lines.length) >> 1);
+       lines.forEach((l, r) => { const s_ = l.slice(0, W_); putText(top + r, x0 + x * bw + ((W_ - s_.length) >> 1), s_, col); });
+     });
   // the status under the screen, in two lines if it's wider than the cabinet
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
   const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
-  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
+  const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
+  const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over && game.kind !== 'crime' && game.kind !== 'show') { // the results card
     const r = g.reward(), res = g.result, lines = game.kind === 'table'

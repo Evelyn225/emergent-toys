@@ -216,6 +216,10 @@ test('ring toss: a ring thrown dead on a bottle neck rings it; six rings and it 
   assert.strictEqual(events.filter(e => e === 'launch').length, 6);
   assert.strictEqual(events.filter(e => e === 'score' || e === 'miss').length, 6, 'every ring lands somewhere');
   assert.strictEqual(ev('g.reward()'), ev('g.score') * 4);
+  // throw whenever the guide is dead on a bottle: every ring rings one (the old game dropped rings on a random row)
+  ev('var g = GAMES.ringtoss(() => 0.99)');
+  const hits = ev(`(() => { let n = 0; for (let i = 0; i < 6000 && !g.over; i++) { const t = g.target(); n += g.step(1 / 120, { actP: !!(t && t.exact) }).filter(e => e === 'score').length; } return n; })()`);
+  assert.strictEqual(hits, 6, 'six for six');
 });
 
 test('high striker: three swings, each scored by how high the puck went; the bell pays most', () => {
@@ -241,6 +245,24 @@ test('pachinko: balls fired land in pockets now and then (any column can be reac
   assert.ok(ev('g.score') < 10000, 'the house wins over time');
   ev('g.score = 40');
   assert.strictEqual(ev('g.reward()'), 5);
+});
+
+test('pachinko shows how each ball did (a +N in a pocket, an x where it drains, the reels\' verdict) and a careful player comes out about even', () => {
+  const { ev } = fresh();
+  ev('var g = GAMES.pachinko(), seen = { win: 0, drain: 0, verdict: 0 }');
+  ev('for (let t = 0; t < 40 && !g.over; t += 1 / 60) { g.step(1 / 60, { act: 1 }); for (const q of g.pops()) q.text === "x" ? seen.drain++ : seen.win++; if (g.verdict()) seen.verdict++; }');
+  const seen = JSON.parse(ev('JSON.stringify(seen)'));
+  assert.ok(seen.win && seen.drain && seen.verdict, JSON.stringify(seen));
+  // aiming at the middle, over a dozen trays: back roughly what you put in (not the old 85%)
+  let fired = 0, back = 0;
+  for (let s = 1; s <= 12; s++) {
+    const { ev: e } = require('./helpers/load-city.cjs').loadCity(s);
+    e('var g = GAMES.pachinko()');
+    const [f, end] = JSON.parse(e('JSON.stringify((() => { let n = 0; for (let t = 0; t < 400 && !g.over; t += 1 / 60) n += g.step(1 / 60, { act: 1 }).filter(x => x === "launch").length; for (let t = 0; t < 3; t += 1 / 60) g.step(1 / 60, {}); return [n, g.score]; })())'));
+    fired += f; back += end - 40 + f;
+  }
+  const ret = back / fired;
+  assert.ok(ret > 0.9 && ret < 1.05, `returns ${ret.toFixed(2)} a ball`);
 });
 
 test('crane: a drop either grabs something and brings it home as a prize, or comes up empty; one go', () => {
@@ -303,6 +325,7 @@ test('jade: the shop sells a bangle and a dragon; carrying them adds a little lu
   assert.strictEqual(ev('luck()'), 0);
   ev("inv.push({ id: 'jadebangle', uses: 0 })"); assert.strictEqual(ev('luck()'), 0.03);
   ev("inv.push({ id: 'jadedragon', uses: 0 })"); assert.ok(Math.abs(ev('luck()') - 0.11) < 1e-9);
+  ev("inv.push({ id: 'plushcat', uses: 0 })"); assert.ok(Math.abs(ev('luck()') - 0.13) < 1e-9, 'the lucky cat adds a little');
   // the same balls, the same seed: with luck, at least as many land in a pocket
   const run = lucky => { const { ev: e } = require('./helpers/load-city.cjs').loadCity(7);
     if (lucky) e("inv.push({ id: 'jadebangle', uses: 0 }, { id: 'jadedragon', uses: 0 })");

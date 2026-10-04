@@ -177,9 +177,8 @@ function gardenSprites() {
     if (ggy === 0) drawBox(boxAt(vx, vy, 1, 0, 0.66, 0.01, 0.24, 0.3), (i, t, L) => { // BOTANICAL GARDENS in iron letters over the north gate
       BG[i] = C(GREEN, 1 + L * 0.1);
       if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(GRAY, L)), true;
-      const word = 'BOTANICAL GARDENS', n = word.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / 0.66 + 1) / 2 * n - 1, kk = Math.floor(q), cellU = t / projX / 1.32 * n;
-      const on = kk >= 0 && kk < word.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) && Math.abs(HIT.w - 0.27) <= t / projY / 2 + 1e-4;
-      return set(i, on ? word[kk] : ' ', C(WHITE, Math.max(L * 1.2, night * 12))), true;
+      const word = 'BOTANICAL GARDENS', n = word.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / 0.66 + 1) / 2 * n - 1;
+      return set(i, signGlyph(word, q, (0.295 - HIT.w) / 0.05, t, 1.32 / n, 0.05, farDepth(vx, vy, 0.66)) || ' ', C(WHITE, Math.max(L * 1.2, night * 12))), true;
     });
   }
   // picnickers on the grass: a checked blanket, two people, a basket
