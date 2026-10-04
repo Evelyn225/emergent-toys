@@ -5,6 +5,8 @@ function relock(e) {
   lockMouse();
 }
 onkeydown = e => {
+  if (devKey(e)) return; // the dev tools (F2)
+  if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
   if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
