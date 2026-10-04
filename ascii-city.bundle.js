@@ -8877,7 +8877,7 @@ function drawVapeCloud() {
   }
   if (!cloudPuffs.length) return;
   g.font = FS + 'px monospace';
-  cloudPuffs = cloudPuffs.filter(p => (p[4] -= dt * 0.3) > 0);
+  cloudPuffs = cloudPuffs.filter(p => (p[4] -= dt * 0.75) > 0); // (gone in a couple of seconds: then it's the cloud out in the world you see)
   for (const p of cloudPuffs) {
     p[0] += p[2] * dt; p[1] += p[3] * dt; p[2] *= 1 - dt * 0.8; p[3] = p[3] * (1 - dt * 0.8) - FS * dt * 0.6; // slowing, drifting up
     const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS, f = Math.min(1, p[4]);
@@ -9843,8 +9843,8 @@ function hazeExhale(amount, kind) {
   for (let k = 0; k < n; k++) {
     const sp = (Math.random() - 0.5) * (0.5 + amount * 0.3), d = (0.7 + Math.random() * 0.5 + amount * 0.35) * s, r = (0.14 + amount * 0.1 + Math.random() * 0.08) * s;
     haze.push({ at, kind, s, x: px + Math.cos(a + sp) * d, y: py + Math.sin(a + sp) * d, z: (1.45 + Math.random() * 0.3) * s,
-      r, rMax: r * 2 + 0.15 * s, vx: Math.cos(a + sp) * (0.3 + amount * 0.25) * s, vy: Math.sin(a + sp) * (0.3 + amount * 0.25) * s,
-      life: 1, fade: mode === 'room' ? 1 / 25 : 1 / 6, seed: Math.random() * 100 });
+      r, rMax: r * (kind === 'vape' ? 2.5 : 2) + (kind === 'vape' ? 0.22 : 0.15) * s, vx: Math.cos(a + sp) * (0.3 + amount * 0.25) * s, vy: Math.sin(a + sp) * (0.3 + amount * 0.25) * s,
+      life: 1, fade: mode === 'room' ? 1 / 25 : kind === 'vape' ? 1 / 12 : 1 / 6, seed: Math.random() * 100 }); // (a vape cloud hangs about a while, even outside)
   }
   while (haze.length > 90) haze.shift();
 }
@@ -9880,7 +9880,7 @@ function drawHaze() {
       if (depth >= ZB[i]) continue;
       const nx = (c + 0.5 - cx) / rw, ny = (r + 0.5 - cy) / rh, d = Math.hypot(nx, ny);
       if (d >= 1) continue;
-      const dens = (1 - d * d) * (0.3 + 0.8 * noise(nx * 2.6 + p.seed, ny * 2.6 - T * 0.25, 991)) * p.life * 0.85;
+      const dens = (1 - d * d) * (0.3 + 0.8 * noise(nx * 2.6 + p.seed, ny * 2.6 - T * 0.25, 991)) * Math.min(1, p.life * 1.6) * (p.kind === 'vape' ? 1.15 : 0.85); // (holds together most of its life, thins out at the end)
       if (dens < 0.22 || dens < 0.4 && hash(c, r, 993) > 0.6) continue; // thin: the world shows through
       hazeCell(i, dens, p.kind);
     }
@@ -9891,9 +9891,9 @@ function drawHaze() {
   }
 }
 function hazeCell(i, dens, kind) {
-  const vape = kind === 'vape', lit = Math.max(0.35, amb) * (kind === 'steam' ? 1.25 : 1); // (steam: whiter)
+  const vape = kind === 'vape', lit = Math.max(vape ? 0.7 : 0.35, amb) * (kind === 'steam' ? 1.25 : 1); // (steam: whiter; a vape cloud's thick and pale, even at night)
   set(i, dens > 0.7 ? '%' : dens > 0.5 ? '~' : dens > 0.33 ? ':' : '.', C(vape ? (dens > 0.55 ? YEL : WARM) : dens > 0.55 ? WHITE : GRAY, (5 + dens * 9) * lit));
-  if (dens > 0.7) BG[i] = C(vape ? ORANGE : GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
+  if (dens > (vape ? 0.5 : 0.7)) BG[i] = vape ? C(WARM, (1.2 + dens * 2.2) * lit) : C(GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
   FOGS[i] = 0;
 }
 // ===== little things on the street: manhole covers in the road (some with steam pouring out, as from a city's steam
