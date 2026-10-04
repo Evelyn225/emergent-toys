@@ -4,7 +4,7 @@
 //
 // Recorded beds stream from audio/ascii-city/ through two <audio> elements each that crossfade at the loop point,
 // so nothing is decoded whole into memory and the loop never clicks. A bed that has been silent for a few seconds
-// pauses where it is and picks up from there when it's needed again.
+// pauses where it is and picks up from there when it's needed again; after a minute it lets its stream go.
 const AUDIO_DIR = 'audio/ascii-city/';
 const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
                     rain: 'rain.mp3', karaoke: 'karaoke.mp3', arcade: 'arcade.mp3' };
@@ -49,22 +49,34 @@ function toggleSound() {
 }
 
 // ---- recorded beds
+// Its two <audio> elements are only made when the bed is first wanted, and let go again after a minute of silence
+// (a phone only has room for so many streams: nine beds' worth, loaded all visit, was too many)
 function makeBed(file, bus) {
   const out = actx.createGain(); out.gain.value = 0; out.connect(bus);
-  const voices = [0, 1].map(() => {
-    const el = new Audio(AUDIO_DIR + file); el.preload = 'auto';
+  return { file, out, voices: null, cur: 0, idle: 99, xf: false };
+}
+function bedVoices(b) {
+  b.voices = [0, 1].map(() => {
+    const el = new Audio(AUDIO_DIR + b.file); el.preload = 'auto';
     const g = actx.createGain(); g.gain.value = 0;
-    actx.createMediaElementSource(el).connect(g); g.connect(out);
-    return { el, g };
+    const src = actx.createMediaElementSource(el); src.connect(g); g.connect(b.out);
+    return { el, g, src };
   });
-  // start somewhere random, so the beds never line up
-  voices[0].el.addEventListener('loadedmetadata', () => { voices[0].el.currentTime = Math.random() * Math.max(0, voices[0].el.duration - XF * 2); }, { once: true });
-  return { out, voices, cur: 0, idle: 99, xf: false };
+  b.cur = 0; b.xf = false;
+  const v = b.voices[0].el; // start somewhere random, so the beds never line up
+  v.addEventListener('loadedmetadata', () => { v.currentTime = Math.random() * Math.max(0, v.duration - XF * 2); }, { once: true });
+}
+function dropVoices(b) {
+  for (const v of b.voices) { v.el.pause(); v.el.removeAttribute('src'); v.el.load(); v.src.disconnect(); v.g.disconnect(); }
+  b.voices = null;
 }
 function tickBed(b, target, dt) {
-  const now = actx.currentTime, v = b.voices[b.cur], o = b.voices[1 - b.cur];
+  const now = actx.currentTime;
   b.out.gain.setTargetAtTime(target, now, GLIDE);
   b.idle = target < 0.002 ? b.idle + dt : 0;
+  if (!b.voices) { if (b.idle > 0) return; bedVoices(b); }
+  const v = b.voices[b.cur], o = b.voices[1 - b.cur];
+  if (b.idle > 60) return dropVoices(b); // silent for a minute: let the stream go
   if (b.idle > 4) { v.el.pause(); o.el.pause(); return; } // faded right out: pause, keeping our place
   if (b.idle > 0) return;
   if (v.el.paused) { // (re)starting, from wherever it paused
@@ -89,6 +101,10 @@ function noiseSrc(rate = 1) {
 }
 const filt = (type, freq, q = 0.7) => { const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; return f; };
 const chain = (...nodes) => { for (let k = 0; k < nodes.length - 1; k++) nodes[k].connect(nodes[k + 1]); return nodes[nodes.length - 1]; };
+// a one-shot: chained like chain(), and taken apart again when its source finishes. Safari only frees audio nodes once
+// they're disconnected, so without this every footstep left its filters running (silently) for the rest of the visit,
+// thousands of them after a while, until the phone killed the page
+const shot = (...nodes) => { nodes[0].onended = () => { for (let k = 0; k < nodes.length - 1; k++) nodes[k].disconnect(); }; return chain(...nodes); };
 function lfo(param, rate, depth) { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = rate; g.gain.value = depth; o.connect(g).connect(param); o.start(); }
 function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(ambBus); return g; }
 // a short recorded loop, decoded once and played round and round into `dest` (whose gain the mix drives)
@@ -122,13 +138,13 @@ function burst(at, len, filters, gain, pan = 0) {
   const s = actx.createBufferSource(); s.buffer = noiseBuf;
   const g = actx.createGain(), p = actx.createStereoPanner(); p.pan.value = pan;
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.008); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
-  chain(s, ...filters, g, p, sfxBus); s.start(at, Math.random() * 1.5, len + 0.05);
+  shot(s, ...filters, g, p, sfxBus); s.start(at, Math.random() * 1.5, len + 0.05);
 }
 function tone(at, freq, len, gain, type = 'sine', pan = 0) {
   const o = actx.createOscillator(), g = actx.createGain(), p = actx.createStereoPanner();
   o.type = type; o.frequency.value = freq; p.pan.value = pan;
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(gain, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, at + len);
-  chain(o, g, p, sfxBus); o.start(at); o.stop(at + len + 0.05);
+  shot(o, g, p, sfxBus); o.start(at); o.stop(at + len + 0.05);
 }
 // footsteps per surface: mostly a soft heel thud with a little scuff on top, nothing bright.
 // [scuff filter, freq, Q, tail seconds, level, thud Hz (0 = none)]
@@ -158,7 +174,7 @@ function playClip(name, gain) {
   CLIPS[name].then(buf => {
     if (!buf) return;
     const s = actx.createBufferSource(), g_ = actx.createGain();
-    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; chain(s, g_, sfxBus); s.start();
+    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; shot(s, g_, sfxBus); s.start();
   });
 }
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
@@ -173,7 +189,7 @@ function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
   for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
     const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
-    o.type = SIREN[c.kind].type; g.gain.value = 0; chain(o, lp, g, p, sfxBus); o.start();
+    o.type = SIREN[c.kind].type; g.gain.value = 0; shot(o, lp, g, p, sfxBus); o.start();
     sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
@@ -196,7 +212,7 @@ function sfxThunder(d, indoors) {
   g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(0.8 * k, at + (near > 0.7 ? 0.015 : 0.3)); // crack, or a far-off roll
   g.gain.exponentialRampToValueAtTime(0.25 * k, at + 0.7); g.gain.linearRampToValueAtTime(0.35 * k, at + 1.5);
   g.gain.exponentialRampToValueAtTime(0.0005, at + 4 + d / 30);
-  chain(s, lp, g, sfxBus); s.start(at, Math.random() * 1.5); s.stop(at + 5 + d / 30);
+  shot(s, lp, g, sfxBus); s.start(at, Math.random() * 1.5); s.stop(at + 5 + d / 30);
 }
 let heardBolt = null;
 
