@@ -356,6 +356,50 @@ test('skateboard tricks by flick: each way picks its trick, and on a phone a swi
   } finally { await browser.close(); }
 });
 
+test('roofs: step across onto the roof next door, jump off the edge and land hard on the street', () => withPage(async page => {
+  // a roof whose neighbour to the east is about level (but not the same), and one whose east side drops to the street
+  const spots = await page.evaluate(() => {
+    let across = null, edge = null;
+    for (let y = 0; y < N && !(across && edge); y++) for (let x = 0; x < N; x++) {
+      const h = map[idx(x, y)], e = map[idx(x + 1, y)];
+      if (!h || map[idx(x - 1, y)] !== h) continue;
+      if (!across && e && e !== h && Math.abs(e - h) <= ROOF_STEP) across = [x, y, h, e];
+      if (!edge && !e && h >= 1.4 && h <= 1.8 && ROAD[idx(x + 1, y)]) edge = [x, y, h];
+    }
+    return { across, edge };
+  });
+  assert.ok(spots.across && spots.edge, JSON.stringify(spots));
+  const [x, y, h, e] = spots.across;
+  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = { kind: 'store', def: { ex: 2 } }; roofLot = roofCells(x, y); px = x + 0.3; py = y + 0.5; a = 0; pitch = 0; }, [x, y, h]);
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, roofH, onRoofLot()]), ['roof', e, false], 'over on the next roof, away from the stairs');
+  // to the edge, facing the street: walking won't take you over, a jump does
+  const [ex, ey, eh] = spots.edge;
+  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; roofLot = roofCells(x, y); px = x + 0.5; py = y + 0.5; a = 0; refillNeeds(); }, [ex, ey, eh]);
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(1200);
+  assert.deepStrictEqual(await page.evaluate(() => [mode, edgeDrop() > 10]), ['roof', true], 'stopped at the edge');
+  await page.keyboard.press('Space'); await page.waitForTimeout(300); await page.keyboard.up('KeyW');
+  assert.strictEqual(await page.evaluate(() => mode), 'walk', 'over the edge');
+  await page.waitForTimeout(2500);
+  const r = await page.evaluate(() => [body.z, needs.health]);
+  assert.ok(r[0] === 0 && r[1] < 100 && r[1] > 0, `down, hurt but standing (${r})`);
+}));
+
+test('run dry and you pass out: the hospital, a bill, and the nurse patches you up; dev tools fill you up', () => withPage(async page => {
+  await page.evaluate(() => { money = 500; needs.food = 0; needs.drink = 0; needs.health = 0.05; });
+  await page.waitForTimeout(300);
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room && room.kind, money, needs.health]), ['room', 'hospital', 350, 100]);
+  assert.match(await page.evaluate(() => msgText), /hospital bed.*Dehydration.*\$150/);
+  await page.evaluate(() => { needs.health = 40; const [kx, ky] = room.def.keeper; px = kx; py = ky + 1.2; a = -Math.PI / 2; });
+  assert.match(await page.evaluate(() => promptText()), /patched up/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [needs.health, money]), [100, 310]);
+  await page.evaluate(() => { needs.food = 5; needs.drink = 5; });
+  await page.keyboard.press('F2'); await page.click('#dev [data-tab="other"]');
+  await page.evaluate(() => [...document.querySelectorAll('#dev [data-dev]')].find(b => b.textContent.startsWith('Fill food')).click());
+  assert.deepStrictEqual(await page.evaluate(() => [needs.food, needs.drink, needs.health]), [100, 100, 100]);
+}));
+
 test('where you were is saved: you come back to the same spot on the street, and inside a shop to its door', () => withPage(async page => {
   const spot = await page.evaluate(() => { gotoShop('BAKERY'); saveGame(); return [px, py, a]; });
   await page.reload(); await page.waitForTimeout(300);

@@ -130,6 +130,60 @@ function env(dt) {
   if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
 }
 
+// ===== hunger, thirst and health. Food fills `food`, drink fills `drink` (0-100); both run down as you play
+// (real time: neither fast-forward nor a night's sleep speeds them up), thirst a little faster. Run either dry and
+// your health starts to go, faster with both; at nothing you pass out and wake up in the hospital with a bill
+// (crime-ui.js / actions.js). Health comes back slowly while you're fed and watered, and the nurse at the hospital
+// patches you up for a fee. A long fall off a roof costs health too (moves.js).
+const DRINK_LAST = 30 * 60, FOOD_LAST = 40 * 60; // seconds from full to empty
+const STARVE_T = 4 * 60; // seconds from full health to passing out with one meter empty (half that with both)
+const HEAL_T = 10 * 60; // seconds to get your health all the way back, fed and watered
+const MEDICAL_BILL = 150, NURSE_FEE = 40;
+const needs = { food: 85, drink: 85, health: 100, warned: '' };
+
+// how much an item fills you up, all its bites or sips together: [food, drink]. Dearer food is more of a meal;
+// water is the best thing for thirst, booze the worst; a milkshake or a bowl of soup counts for both
+const SOUPY = { ramen: 1, pho: 1, noodlebox: 0.5, greencurry: 0.5, icecream: 0.5, apple: 0.5 };
+const FILLING = { milkshake: 1, smoothie: 1, lemonade: 0.3 };
+function nourish(id, d) {
+  if (d.kind === 'food') return [clamp(10 + d.price * 5, 15, 70), (SOUPY[id] || 0) * 30];
+  if (d.kind !== 'drink') return [0, 0];
+  const base = id === 'water' ? 55 : clamp(25 + d.price * 3, 25, 50);
+  return [(FILLING[id] || 0) * 30, d.booze ? base * 0.5 : base];
+}
+// a bite or a sip of it: returns a word about how you feel now, or ''
+function eatSome(id, d) {
+  const [f, w] = nourish(id, d), wasHungry = needs.food < 30, wasThirsty = needs.drink < 30;
+  needs.food = Math.min(100, needs.food + f / d.uses); needs.drink = Math.min(100, needs.drink + w / d.uses);
+  if (wasHungry && needs.food >= 30) return ' That takes the edge off.';
+  if (wasThirsty && needs.drink >= 30) return ' That\'s better.';
+  return '';
+}
+// every frame (on your feet or not). Returns 'faint' when you've gone down, or a warning to show once
+function stepNeeds(dt, canFaint) {
+  needs.food = Math.max(0, needs.food - dt * 100 / FOOD_LAST);
+  needs.drink = Math.max(0, needs.drink - dt * 100 / DRINK_LAST);
+  const empty = (needs.food <= 0) + (needs.drink <= 0);
+  if (empty) needs.health = Math.max(canFaint ? 0 : 1, needs.health - dt * 100 / STARVE_T * empty); // (not at the wheel: you hang on till you're out)
+  else if (needs.food > 30 && needs.drink > 30) needs.health = Math.min(100, needs.health + dt * 100 / HEAL_T);
+  if (needs.health <= 0) return 'faint';
+  // a word when things get bad: once per stage
+  const stage = needs.health < 35 ? 'weak' : needs.drink <= 0 ? 'parched' : needs.food <= 0 ? 'starving' : needs.drink < 20 ? 'thirsty' : needs.food < 20 ? 'hungry' : '';
+  if (stage === needs.warned) return '';
+  needs.warned = stage;
+  return { weak: 'Your vision swims. You need to eat and drink, now, or you\'ll pass out.', parched: 'Your mouth is bone dry. You\'re getting weaker.',
+    starving: 'Your stomach aches. You\'re getting weaker.', thirsty: 'You\'re thirsty.', hungry: 'You\'re getting hungry.' }[stage] || '';
+}
+// fell `m` metres: health it costs (a storey or so is nothing; past about 25m it's the hospital whatever)
+const fallHurt = m => m < 4 ? 0 : (m - 4) * 4.5;
+function hurt(n) { needs.health = Math.max(0, needs.health - n); return needs.health <= 0; }
+// after passing out: the hospital's done its bit
+function hospitalised() {
+  const bill = Math.min(MEDICAL_BILL, Math.max(0, money));
+  money -= bill; needs.health = 100; needs.food = Math.max(needs.food, 50); needs.drink = Math.max(needs.drink, 50); needs.warned = '';
+  return bill;
+}
+const refillNeeds = () => { needs.food = needs.drink = needs.health = 100; needs.warned = ''; };
 // ---- ascii sprites
 const pad = a => { const w = Math.max(...a.map(l => l.length)); return a.map(l => l.padEnd(w)); };
 const MIR = { '/': '\\', '\\': '/', '(': ')', ')': '(', '[': ']', ']': '[' };
@@ -2071,13 +2125,14 @@ function useHeld(near) {
   if (!it) return ['Your hands are empty.', null];
   const d = ITEMS[it.id];
   if (d.kind === 'food' || d.kind === 'drink') {
+    const feel = eatSome(it.id, d); // (needs.js)
     it.uses--;
     if (d.caffeine) fx.caffeine = Math.min(180, fx.caffeine + d.caffeine / d.uses);
     if (d.booze) fx.booze = Math.min(1.5, fx.booze + d.booze / d.uses);
     if (d.sober) fx.booze = Math.max(0, fx.booze - d.sober / d.uses);
     const done = it.uses <= 0;
     if (done) removeHeld();
-    return [done ? (d.kind === 'food' ? `You finish the ${d.name}.` : `You finish the ${d.name}.`) : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`,
+    return [(done ? `You finish the ${d.name}.` : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`) + feel,
             d.kind === 'food' ? 'bite' : 'sip'];
   }
   if (d.kind === 'smoke') {
@@ -8564,13 +8619,19 @@ function promptText() {
     { const sp = shotengaiPrompt(); if (sp) return sp; }
     if (roomPerson()) return 'E: talk';
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
+    if (room.kind === 'hospital' && nearKeeper() && needs.health < 95) return `E: get patched up (${fmt$(NURSE_FEE)})`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
     if (nearKeeper()) return `"${room.line}"`;
     if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
     return '';
   }
-  if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : room && room.kind === 'cathedral' ? 'The bell tower, 80m up.   E: back down the stairs' : 'E: take the stairs down'; }
+  if (mode === 'roof') {
+    const dr = droppedHere(), drop = edgeDrop(), edge = drop ? `Space: jump down (${drop}m)` : '';
+    if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
+    if (room && room.kind === 'cathedral') return 'The bell tower, 80m up.   E: back down the stairs';
+    return onRoofLot() ? ['E: take the stairs down', edge].filter(Boolean).join('   ') : edge || 'No stairs on this roof';
+  }
   if (mode === 'fair') return fairRidePrompt();
   if (mode === 'boat') return gardensPrompt();
   if (mode === 'sea') return marinaPrompt();
@@ -8686,6 +8747,16 @@ function wrapText(s, maxW) {
   }
   return out;
 }
+// [text, colour] for each meter: "food [######--]"
+function needMeters() {
+  const bar = (label, v) => {
+    const n = Math.round(v / 12.5), col = v <= 0 ? (fract(T * 2) < 0.5 ? '#f44' : '#822') : v < 20 ? '#f84' : v < 50 ? '#dd5' : '#7c7';
+    return [`${label} [${'#'.repeat(n)}${'-'.repeat(8 - n)}]`, col];
+  };
+  const out = [bar('food', needs.food), bar('drink', needs.drink)];
+  if (needs.health < 100) out.push(bar('health', needs.health));
+  return out;
+}
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
   drawHeldBig();
@@ -8699,7 +8770,8 @@ function hud() {
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
-  hudBottom = (lines.length + task_.length) * FS + 10;
+  const meters = needMeters();
+  hudBottom = (lines.length + task_.length + 1) * FS + 14;
   wantedHud();
   if (job && mode === 'drive') jobArrow();
   minimap();
@@ -8708,8 +8780,14 @@ function hud() {
   const w = Math.max(...lines.map(l => g.measureText(l).width));
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, w + 8, FS * lines.length + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
+  { // hunger, thirst and (once it's down) health, under the help line: short bars, red and blinking when empty
+    const y = FS * lines.length + 6;
+    let x0 = 4;
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, meters.reduce((t, m) => t + g.measureText(m[0]).width + g.measureText('  ').width, 4) + 4, FS + 4);
+    for (const [txt, col] of meters) { g.fillStyle = col; g.fillText(txt, x0, y + 2); x0 += g.measureText(txt + '  ').width; }
+  }
   if (task_.length) { // the favour you're doing, under the help line
-    const y = FS * lines.length + 6, tw = Math.max(...task_.map(l => g.measureText(l).width));
+    const y = FS * (lines.length + 1) + 10, tw = Math.max(...task_.map(l => g.measureText(l).width));
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
     g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
   }
@@ -8884,7 +8962,7 @@ function interact() {
     if (useShotengai()) return;
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
-      roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0;
+      roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0; roofLot = roofCells(mx, my);
       return say(`Roof, ${roofH * 10}m up`);
     }
     if (canBoard()) {
@@ -8901,14 +8979,19 @@ function interact() {
     if (roomPerson()) return talkInRoom();
     if (room.kind === 'storage' && nearKeeper()) return openStorage(stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town');
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
-    if (room.kind === 'hospital' && nearKeeper()) return say(`"${pick(NURSE_LINES)}"`, 3); // (healing would go here)
+    if (room.kind === 'hospital' && nearKeeper()) {
+      if (needs.health >= 95) return say(`"${pick(NURSE_LINES)}"`, 3);
+      if (!pay(NURSE_FEE)) return say(`"Treatment's ${fmt$(NURSE_FEE)}, I'm afraid." You can't cover it.`, 3);
+      needs.health = 100; return say('The nurse cleans you up, checks your eyes with a little light and sends you off with a lollipop. Good as new.', 4);
+    }
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
     return say('The way out is over by the door.', 2);
   }
   if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
   if (mode === 'roof' && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; return say('Down and down and round and round.', 2); }
-  if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
+  if (mode === 'roof' && !onRoofLot()) return say('No way down from this roof. Get back to the one you came up, or jump.', 3);
+  if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; roofLot = null; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'boat') return useGardens();
   if (mode === 'sea') return useMarina();
@@ -8976,6 +9059,19 @@ function interact() {
     [px, py] = room.def.spawn || [room.W / 2, room.H - 1.6];
   }
 }
+// out cold (hunger, thirst, a bad fall): you come to in a bed at the nearest hospital, and they've billed you
+let wakeT = 0;
+function passOut(why) {
+  if (me) outOfCar(); else if (mode === 'sea') { sea.v = 0; sea = null; }
+  body.seat = null; body.z = body.vz = 0; fx.skating = false; if (game) game = null;
+  const s = SERVICES.filter(b => b.kind === 'amb').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity])[0];
+  const bill = hospitalised();
+  clearWanted(); // (they lost you in the ambulance)
+  enterRoom('hospital', { word: 'HOSPITAL', ret: [s.x, s.y + 0.15, -Math.PI / 2] }, [10.5, 3.3, Math.PI]);
+  wakeT = 3; fade = 1;
+  say(`You come to in a hospital bed. "${why}" A nurse hands you the bill: ${fmt$(bill)}.`, 8);
+}
+function stepWake(dt) { if (wakeT > 0 && !sleep) { wakeT -= dt; fade = clamp(wakeT / 2, 0, 1); } }
 // the hotel: a night's sleep, from 6pm. Fade out, wake at 7:00 in a room upstairs to a clear morning,
 // with everyone outside already where their morning routine puts them
 const NURSE_LINES = ['Take a seat, someone will call your name.', 'Fill this in and bring it back up.', 'Are you hurt? No? Then you\'re in luck.',
@@ -9863,7 +9959,8 @@ function devBody() {
       <div class="grp">weather</div><div class="bar">${['clear', 'rain', 'storm', 'fog'].map(w => act(w, () => { weather = w; wTimer = 600; })).join('')}</div>`;
   }
   return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
-    <div class="grp">you</div><div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { inv.length = 0; held = -1; say('Pockets emptied.', 2); })}</div>
+    <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}</div>
+    <div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { inv.length = 0; held = -1; say('Pockets emptied.', 2); })}</div>
     <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
 }
 function renderDev(keepFocus) {
@@ -11924,18 +12021,59 @@ function sitDown() {
 function standUp() { // back where you sat down from (it was walkable)
   [px, py] = body.seat.from; body.seat = null;
 }
-// every frame: gravity, the crouch easing in and out, a trick's progress, landing
+// every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js)
 function stepBody(dt) {
-  if (!onFootMode() || sleep) { body.z = body.vz = 0; body.trick = null; body.seat = null; return; }
+  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; return; }
   body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
   if (body.z > 0 || body.vz > 0) {
-    body.vz -= GRAV * dt; body.z += body.vz * dt;
+    body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
     if (body.z <= 0) { // landed
-      body.z = body.vz = 0;
+      const fell = body.peak; body.z = body.vz = body.peak = 0;
       if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('board'); }
+      const dmg = fallHurt(fell);
+      if (dmg > 0) {
+        if (actx) sfxUse('kick');
+        if (hurt(dmg)) passOut(`You fell ${Math.round(fell)} metres. Somebody called an ambulance. You're lucky to be alive.`);
+        else say(fell > 15 ? 'You hit the ground hard. Something in your ankle goes crunch.' : 'Oof. You land hard.', 3);
+      }
     }
   }
+}
+
+// ---- roofs: step across onto the roof next door if it's about level with yours (a storey up or down, near
+// enough); a bigger drop, or off the edge to the street, only on purpose, with a jump. You fall the rest of the way
+// (and a long way down hurts). The stairs are only on the roof you came up.
+const ROOF_STEP = 0.35; // cells: 3.5m
+let roofLot = null; // the cells of the roof you came up onto (where the stairs down are)
+function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the same height
+  const h = map[idx(mx, my)], out = new Set([idx(mx, my)]), todo = [[mx, my]];
+  while (todo.length && out.size < 80) {
+    const [x, y] = todo.pop();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = idx(x + dx, y + dy); if (!out.has(k) && map[k] === h) { out.add(k); todo.push([x + dx, y + dy]); } }
+  }
+  return out;
+}
+const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
+function roofFree(x, y) { // can you be at (x, y) on the roofs?
+  const h = map[idx(Math.floor(x), Math.floor(y))];
+  if (roofFixed()) return h === roofH;
+  if (h > 0 && Math.abs(h - roofH) <= ROOF_STEP) return true;
+  return h < roofH - ROOF_STEP && (body.z > 0 || body.vz > 0); // over the edge: only in a jump
+}
+function stepRoof() { // onto another roof, or off them altogether
+  if (mode !== 'roof' || roofFixed()) return;
+  const h = map[idx(Math.floor(px), Math.floor(py))];
+  if (h === roofH) return;
+  if (h > 0) { body.z = Math.max(0, body.z + (roofH - h) * 10); roofH = h; return; } // (stepping down a little: a short drop)
+  body.z += roofH * 10; mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
+}
+const onRoofLot = () => !roofLot || roofLot.has(idx(Math.floor(px), Math.floor(py)));
+// standing at the edge facing a drop you can't just step down: how far it is (metres), or 0
+function edgeDrop() {
+  if (mode !== 'roof' || roofFixed()) return 0;
+  const h = map[idx(Math.floor(px + Math.cos(a) * 0.45), Math.floor(py + Math.sin(a) * 0.45))];
+  return h < roofH - ROOF_STEP ? Math.round((roofH - h) * 10) : 0;
 }
 // how far your eyes are off standing height (metres): up in a jump, down crouching or sitting, up a little on the board
 const eyeLift = () => onFootMode() ? body.z + (skatingNow() ? BOARD_H : 0) - (body.seat ? SIT_H : body.crouch * CROUCH_H) : 0;
@@ -11986,7 +12124,7 @@ function drawBoard3D() {
   }
 }
 // ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
-// your cars and boats are), and the last spot you stood on the street, kept in localStorage every few seconds and when
+// your cars and boats are), how hungry, thirsty and hurt you are, and the last spot you stood on the street, kept in localStorage every few seconds and when
 // you leave. Not saved: the time, the police (you start each visit clean, on the street where you left off).
 const SAVE_KEY = 'ascii-city-save';
 let streetSpot = null; // where you last were on foot outdoors (inside a shop or on a train, you come back out where you went in)
@@ -11999,7 +12137,7 @@ function saveGame() {
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tags, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot };
+    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, needs: { food: needs.food, drink: needs.drink, health: needs.health } };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
 function loadGame() {
@@ -12016,6 +12154,7 @@ function loadGame() {
   owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
   loadBoats(d.boats);
+  if (d.needs) for (const k of ['food', 'drink', 'health']) if (isFinite(d.needs[k])) needs[k] = clamp(d.needs[k], k === 'health' ? 1 : 0, 100);
   const at = d.at;
   if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
     px = mod(at.x, N); py = mod(at.y, N); a = at.a || 0; streetSpot = { x: px, y: py, a };
@@ -12097,7 +12236,7 @@ addEventListener('contextmenu', e => { if (document.pointerLockElement || skatin
 const free = (x, y) => {
   if (mode === 'room') return !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
-  if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
+  if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
@@ -12168,7 +12307,7 @@ function loop(t) {
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
   }
-  stepBody(dt);
+  stepBody(dt); stepRoof();
   stepTraffic(dt, T);
   stepTask(dt);
   stepLaundry();
@@ -12192,6 +12331,10 @@ function loop(t) {
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  const need = stepNeeds(dt, onFootMode() && !game && !sleep); // (at the wheel or mid-shift you hang on till you stop)
+  if (need === 'faint') passOut(needs.drink <= 0 ? 'You collapsed in the street. Dehydration. Drink some water, would you?' : 'You collapsed in the street. When did you last eat?');
+  else if (need) say(need, 4);
+  stepWake(dt);
   if (mode === 'taxi') {
     px = me.x; py = me.y;
     const target = Math.atan2(me.hy, me.hx) + look; // camera eases round corners

@@ -156,7 +156,7 @@ function interact() {
     if (useShotengai()) return;
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
-      roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0;
+      roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0; roofLot = roofCells(mx, my);
       return say(`Roof, ${roofH * 10}m up`);
     }
     if (canBoard()) {
@@ -173,14 +173,19 @@ function interact() {
     if (roomPerson()) return talkInRoom();
     if (room.kind === 'storage' && nearKeeper()) return openStorage(stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town');
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
-    if (room.kind === 'hospital' && nearKeeper()) return say(`"${pick(NURSE_LINES)}"`, 3); // (healing would go here)
+    if (room.kind === 'hospital' && nearKeeper()) {
+      if (needs.health >= 95) return say(`"${pick(NURSE_LINES)}"`, 3);
+      if (!pay(NURSE_FEE)) return say(`"Treatment's ${fmt$(NURSE_FEE)}, I'm afraid." You can't cover it.`, 3);
+      needs.health = 100; return say('The nurse cleans you up, checks your eyes with a little light and sends you off with a lollipop. Good as new.', 4);
+    }
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
     return say('The way out is over by the door.', 2);
   }
   if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
   if (mode === 'roof' && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; return say('Down and down and round and round.', 2); }
-  if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
+  if (mode === 'roof' && !onRoofLot()) return say('No way down from this roof. Get back to the one you came up, or jump.', 3);
+  if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; roofLot = null; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'boat') return useGardens();
   if (mode === 'sea') return useMarina();
@@ -248,6 +253,19 @@ function interact() {
     [px, py] = room.def.spawn || [room.W / 2, room.H - 1.6];
   }
 }
+// out cold (hunger, thirst, a bad fall): you come to in a bed at the nearest hospital, and they've billed you
+let wakeT = 0;
+function passOut(why) {
+  if (me) outOfCar(); else if (mode === 'sea') { sea.v = 0; sea = null; }
+  body.seat = null; body.z = body.vz = 0; fx.skating = false; if (game) game = null;
+  const s = SERVICES.filter(b => b.kind === 'amb').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity])[0];
+  const bill = hospitalised();
+  clearWanted(); // (they lost you in the ambulance)
+  enterRoom('hospital', { word: 'HOSPITAL', ret: [s.x, s.y + 0.15, -Math.PI / 2] }, [10.5, 3.3, Math.PI]);
+  wakeT = 3; fade = 1;
+  say(`You come to in a hospital bed. "${why}" A nurse hands you the bill: ${fmt$(bill)}.`, 8);
+}
+function stepWake(dt) { if (wakeT > 0 && !sleep) { wakeT -= dt; fade = clamp(wakeT / 2, 0, 1); } }
 // the hotel: a night's sleep, from 6pm. Fade out, wake at 7:00 in a room upstairs to a clear morning,
 // with everyone outside already where their morning routine puts them
 const NURSE_LINES = ['Take a seat, someone will call your name.', 'Fill this in and bring it back up.', 'Are you hurt? No? Then you\'re in luck.',

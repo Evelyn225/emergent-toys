@@ -170,13 +170,14 @@ function useHeld(near) {
   if (!it) return ['Your hands are empty.', null];
   const d = ITEMS[it.id];
   if (d.kind === 'food' || d.kind === 'drink') {
+    const feel = eatSome(it.id, d); // (needs.js)
     it.uses--;
     if (d.caffeine) fx.caffeine = Math.min(180, fx.caffeine + d.caffeine / d.uses);
     if (d.booze) fx.booze = Math.min(1.5, fx.booze + d.booze / d.uses);
     if (d.sober) fx.booze = Math.max(0, fx.booze - d.sober / d.uses);
     const done = it.uses <= 0;
     if (done) removeHeld();
-    return [done ? (d.kind === 'food' ? `You finish the ${d.name}.` : `You finish the ${d.name}.`) : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`,
+    return [(done ? `You finish the ${d.name}.` : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`) + feel,
             d.kind === 'food' ? 'bite' : 'sip'];
   }
   if (d.kind === 'smoke') {
