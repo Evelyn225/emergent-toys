@@ -130,6 +130,7 @@ function interact() {
       return say('Round and round and up and up. The lamp room.', 3);
     }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? enterRoom('lighthouse', room.below, [4, 5.6, -Math.PI / 2]) : say('The hatch down is in the corner.', 2);
+    if (room.kind === 'jail' && nearCabbie()) return talkToCabbie();
     if (room.kind === 'jail') {
       if (T >= room.until) return say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom();
       if (room.tried) return say(`Locked in. ${Math.ceil(room.until - T)}s to go.`);

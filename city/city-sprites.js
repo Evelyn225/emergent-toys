@@ -706,23 +706,39 @@ function elSprites() {
 // ===== the Sunset Pier: the Ferris wheel, the carousel, and the arch over the way in
 // the wheel is a billboard turned to its real angle: sq = how face-on it is (its east-west axis across the screen),
 // so from the side it narrows to an ellipse and then a line. Cars are real-sized whatever the angle.
-function wheelCell(i, u, z, du, dz, L, sq) {
+const WHEEL_GAP = 0.12; // half the gap between its two rims
+// riding the carousel: the mirrored drum in the middle, the striped canopy overhead, the other horses round you on
+// their poles (going round with you, so they hold still), as real things rather than the picture you see from outside
+function carouselInside(cx, cy) {
+  const rot = TAU * T / CAROUSEL.rev, lit = night > 0.25 || overcast > 0.6, r = CAROUSEL.r;
+  drawBox(boxAt(cx, cy, Math.cos(rot), Math.sin(rot), 0.065, 0.065, 0.04, 0.33), (i, t, L) => { // the drum
+    BG[i] = C(CYAN, 1 + (lit ? 3 : 1)); return set(i, fract(HIT.w * 30 + T) < 0.2 ? '*' : ':', C(WHITE, Math.max(L, lit ? 12 : 6))), true;
+  });
+  drawBox(boxAt(cx, cy, Math.cos(rot), Math.sin(rot), r, r, 0.33, 0.36), (i, t, L) => { // the canopy, from underneath: stripes out from the middle
+    const ang = Math.atan2(HIT.v, HIT.u), d = Math.hypot(HIT.u, HIT.v);
+    if (d > r) return false;
+    BG[i] = C(Math.floor(ang / (TAU / 16)) & 1 ? RED : WHITE, 2.5 + L * 0.25);
+    return set(i, d > r - 0.04 ? (lit && fract(ang * 6 + T) < 0.4 ? '*' : 'v') : ' ', C(YEL, lit ? 15 : L)), true;
+  });
+  const me_ = Math.atan2(rel(py - CAROUSEL.y), rel(px - CAROUSEL.x));
+  for (let j = 0; j < 8; j++) {
+    const ps = me_ + (j + 0.5) * TAU / 8; // (yours is the gap behind you)
+    const hx = cx + 0.42 * Math.cos(ps), hy = cy + 0.42 * Math.sin(ps), hz = 0.14 + 0.04 * Math.sin(ps * 2 + T * 4), col = [WHITE, YEL, BRICK, WHITE, MAG, YEL, BRICK, CYAN][j];
+    drawBox(boxAt(hx, hy, 1, 0, 0.005, 0.005, 0.04, 0.33), (i, t, L) => (set(i, '|', C(YEL, Math.max(L, 9))), true)); // its brass pole
+    const tx = -Math.sin(ps), ty = Math.cos(ps); // the way it's going
+    drawBox(boxAt(hx, hy, tx, ty, 0.06, 0.018, hz - 0.02, hz + 0.02), solidHorse(col)); // the body
+    drawBox(boxAt(hx + tx * 0.06, hy + ty * 0.06, tx, ty, 0.015, 0.012, hz + 0.01, hz + 0.06), solidHorse(col)); // the neck and head
+    for (const e of [-1, 1]) drawBox(boxAt(hx + tx * 0.04 * e, hy + ty * 0.04 * e, tx, ty, 0.006, 0.006, hz - 0.07, hz - 0.02), solidHorse(col)); // legs
+  }
+}
+const solidHorse = col => (i, t, L) => { BG[i] = C(col, (1.4 + L * 0.35) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '~' : ' ', C(YEL, L)), true; };
+function wheelCell(i, u, z, du, dz, L, sq, side = 1) {
   const R = WHEEL.R, hub = WHEEL.hub, as = Math.max(Math.abs(sq), 0.05), U = u / (sq < 0 ? -as : as), Zc = z - hub;
   const tolU = du / as / 2, tol = Math.max(tolU, dz / 2), lit = night > 0.25 || overcast > 0.6;
-  for (let k = 0; k < WHEEL.n; k++) { // the cars, hanging under their pivots on the rim
-    if (fairRide && fairRide.kind === 'wheel' && fairRide.k === k) continue; // (you're in this one)
-    const ph = wheelAngle(k, T), gu = R * Math.cos(ph) * (sq < 0 ? -as : as), gz = hub + R * Math.sin(ph), top = gz - 0.06, bot = gz - 0.24;
-    if (Math.abs(u - gu) < 0.1 && z < top && z > bot) {
-      const col = [RED, YEL, CYAN, MAG, GREEN, ORANGE][k % 6], r = (top - z) / (top - bot);
-      if (r < 0.15) return set(i, '_', C(col, L * 1.1)), true;
-      if (r < 0.55) { BG[i] = C(col, 1.5 + L * 0.2); return set(i, Math.abs(u - gu) > 0.08 ? '|' : ':', lit ? C(YEL, 13) : C(CYAN, L)), true; }
-      BG[i] = C(col, 2 + L * 0.3); return set(i, r > 0.9 ? '=' : ' ', C(col, L)), true;
-    }
-    if (onLine(u - gu, du, 0, 0) && z <= gz && z >= top) return set(i, '|', C(GRAY, L)), true;
-  }
+  if (side < 0) L *= 0.65; // (the far rim, in the shadow of the near one)
   const rr = Math.hypot(U, Zc), ang = Math.atan2(Zc, U);
   if (rr < 0.13) return set(i, '@', C(WHITE, L * 1.2)), true; // the hub
-  if (z < 0.05 && Math.abs(u) < 1.1 * as + 0.15) return set(i, '=', C(BRICK, L)), true; // the platform
+  if (side > 0 && z < 0.05 && Math.abs(u) < 1.1 * as + 0.15) return set(i, '=', C(BRICK, L)), true; // the platform
   for (const side of [-1, 1]) { // the A-frame legs, hub to deck
     const lu = side * 0.95 * (hub - z) / hub;
     if (z < hub && Math.abs(U - lu) < Math.max(tolU, dz * 0.95 / hub / 2) * 1.2) return set(i, side * Math.sign(sq || 1) < 0 ? '/' : '\\', C(GRAY, L * 1.15)), true;
@@ -777,12 +793,29 @@ function carouselCell(i, u, z, du, dz, L, s) {
 const FAIR_SIGN = 'SUNSET PIER';
 function fairSprites() {
   const [wx, wy] = R(WHEEL.x, WHEEL.y);
-  if (Math.hypot(wx, wy) < vis + 4) {
-    const sq = across(1, 0, wx, wy), hw = (WHEEL.R + 0.15) * Math.max(Math.abs(sq), 0.06) + 0.12;
-    drawShape(wx, wy, 0, hw, WHEEL.hub + WHEEL.R + 0.1, (i, u, z, du, dz, L) => wheelCell(i, u, z, du, dz, L, sq));
+  if (Math.hypot(wx, wy) < vis + 4) { // two rims a few metres apart (the far one dimmer), the axle between, the cars hanging in 3D
+    for (const side of [1, -1]) {
+      const vy = wy + side * WHEEL_GAP, sq = across(1, 0, wx, vy), hw = (WHEEL.R + 0.15) * Math.max(Math.abs(sq), 0.06) + 0.12;
+      drawShape(wx, vy, 0, hw, WHEEL.hub + WHEEL.R + 0.1, (i, u, z, du, dz, L) => wheelCell(i, u, z, du, dz, L, sq, side));
+    }
+    drawBox(boxAt(wx, wy, 0, 1, WHEEL_GAP + 0.03, 0.05, WHEEL.hub - 0.05, WHEEL.hub + 0.05), (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.3); return set(i, '=', C(WHITE, L)), true; });
+    const lit = night > 0.25 || overcast > 0.6;
+    for (let k = 0; k < WHEEL.n; k++) {
+      if (fairRide && fairRide.kind === 'wheel' && fairRide.k === k) continue; // (you're in this one)
+      const ph = wheelAngle(k, T), gx = wx + WHEEL.R * Math.cos(ph), gz = WHEEL.hub + WHEEL.R * Math.sin(ph), col = [RED, YEL, CYAN, MAG, GREEN, ORANGE][k % 6];
+      drawBox(boxAt(gx, wy, 1, 0, 0.004, 0.004, gz - 0.06, gz), STEEL.pole); // its hanger
+      drawBox(boxAt(gx, wy, 1, 0, 0.1, WHEEL_GAP - 0.03, gz - 0.24, gz - 0.06), (i, t, L) => { // the gondola: a roof, windows round the middle, a solid floor
+        const w = (gz - 0.06 - HIT.w) / 0.18, f = HIT.face;
+        BG[i] = C(col, (1.5 + L * 0.35) * shadeFace(f));
+        if (f === 5 || w < 0.15) return set(i, '_', C(col, L)), true;
+        if (w < 0.6 && f !== 6) { BG[i] = lit ? C(WARM, 3 + night * 5) : C(CYAN, 1 + L * 0.15); return set(i, Math.abs(fract((f <= 2 ? HIT.v : HIT.u) * 12) - 0.5) < 0.1 ? '|' : ' ', C(col, L)), true; }
+        return set(i, w > 0.9 ? '=' : ' ', C(col, L)), true;
+      });
+    }
   }
   const [cx, cy] = R(CAROUSEL.x, CAROUSEL.y);
-  if (Math.hypot(cx, cy) < vis) drawShape(cx, cy, 0, CAROUSEL.r + 0.04, 0.52, carouselCell);
+  if (fairRide && fairRide.kind === 'carousel') carouselInside(cx, cy); // on it: built round you, not a picture
+  else if (Math.hypot(cx, cy) < vis) drawShape(cx, cy, 0, CAROUSEL.r + 0.04, 0.52, carouselCell);
   // the arch over the way in, its name in bulbs
   const [gx, gy] = R(FAIR.cx, FAIR.y0 + 0.2), hw = 1.3;
   if (Math.hypot(gx, gy) > vis) return;

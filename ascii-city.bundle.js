@@ -1978,7 +1978,20 @@ const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, sk
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
 // anything, the dragon's a bit more, and they add up
 const luck = () => (inv.some(it => it.id === 'jadebangle') ? 0.03 : 0) + (inv.some(it => it.id === 'jadedragon') ? 0.08 : 0) + (inv.some(it => it.id === 'plushcat') ? 0.02 : 0); // (and the lucky cat, a little)
-const YOYO_DUR = 2.4; // how long a yo-yo trick takes (fx.yoyoTrick says which: see drawYoyo)
+// the yo-yo, out on its string: Q lets it drop (and Q again reels it in); while it's out the camera holds still and
+// the mouse (or a drag) swings it. A pendulum: len 0..1 of the string paid out, ang its swing from straight down
+// (round past the top is around the world), and when it hangs low enough it touches down and rolls along the
+// pavement (walk the dog). fx.yoyo is 1 while any of it is out of your hand
+const yoyo = { out: false, len: 0, ang: 0, angV: 0, spin: 0 };
+function stepYoyo(dt) {
+  yoyo.len = clamp(yoyo.len + (yoyo.out ? 4 : -3) * dt, 0, 1); // drops fast, climbs back a touch slower
+  yoyo.angV += -9 * Math.sin(yoyo.ang) * yoyo.len * dt; yoyo.angV *= 1 - Math.min(1, 0.9 * dt); yoyo.ang += yoyo.angV * dt;
+  yoyo.ang = mod(yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
+  yoyo.spin += dt * (20 + Math.abs(yoyo.angV) * 6);
+  if (!yoyo.out && yoyo.len === 0) { yoyo.ang = yoyo.angV = 0; }
+  fx.yoyo = yoyo.len > 0 || yoyo.out ? 1 : 0;
+}
+const yoyoSwing = dx => { yoyo.angV = clamp(yoyo.angV + dx * 0.012, -14, 14); }; // a flick of the wrist
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
@@ -2079,7 +2092,7 @@ function useHeld(near) {
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), null];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
-    case 'yoyo': fx.yoyoTrick = Math.random() * 4 | 0; fx.yoyo = YOYO_DUR; return [['Walk the dog.', 'Around the world.', 'Rock the baby.', 'It sleeps at the bottom, then snaps back up.'][fx.yoyoTrick], 'whirr'];
+    case 'yoyo': yoyo.out = !yoyo.out; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Swing it with the mouse: let it touch down to walk the dog, swing hard to go around the world.' : 'You reel it back in.', 'whirr'];
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something
         near.person.talk = 4;
@@ -2123,7 +2136,8 @@ function pickUpDropped(d) {
 function stepGoods(dt) {
   if (fx.skating && mode !== 'walk') fx.skating = false;
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
-  fx.yoyo = Math.max(0, fx.yoyo - dt); fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt);
+  stepYoyo(dt); if (!heldItem() || heldItem().id !== 'yoyo') yoyo.out = false; // (put it away and it comes back up)
+  fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt);
   cigTip = Math.max(0, cigTip - dt * 0.8);
   if (fx.vape > 0) { // pulling on the vape: the longer, the bigger the cloud
     const it = heldItem();
@@ -5569,23 +5583,39 @@ function elSprites() {
 // ===== the Sunset Pier: the Ferris wheel, the carousel, and the arch over the way in
 // the wheel is a billboard turned to its real angle: sq = how face-on it is (its east-west axis across the screen),
 // so from the side it narrows to an ellipse and then a line. Cars are real-sized whatever the angle.
-function wheelCell(i, u, z, du, dz, L, sq) {
+const WHEEL_GAP = 0.12; // half the gap between its two rims
+// riding the carousel: the mirrored drum in the middle, the striped canopy overhead, the other horses round you on
+// their poles (going round with you, so they hold still), as real things rather than the picture you see from outside
+function carouselInside(cx, cy) {
+  const rot = TAU * T / CAROUSEL.rev, lit = night > 0.25 || overcast > 0.6, r = CAROUSEL.r;
+  drawBox(boxAt(cx, cy, Math.cos(rot), Math.sin(rot), 0.065, 0.065, 0.04, 0.33), (i, t, L) => { // the drum
+    BG[i] = C(CYAN, 1 + (lit ? 3 : 1)); return set(i, fract(HIT.w * 30 + T) < 0.2 ? '*' : ':', C(WHITE, Math.max(L, lit ? 12 : 6))), true;
+  });
+  drawBox(boxAt(cx, cy, Math.cos(rot), Math.sin(rot), r, r, 0.33, 0.36), (i, t, L) => { // the canopy, from underneath: stripes out from the middle
+    const ang = Math.atan2(HIT.v, HIT.u), d = Math.hypot(HIT.u, HIT.v);
+    if (d > r) return false;
+    BG[i] = C(Math.floor(ang / (TAU / 16)) & 1 ? RED : WHITE, 2.5 + L * 0.25);
+    return set(i, d > r - 0.04 ? (lit && fract(ang * 6 + T) < 0.4 ? '*' : 'v') : ' ', C(YEL, lit ? 15 : L)), true;
+  });
+  const me_ = Math.atan2(rel(py - CAROUSEL.y), rel(px - CAROUSEL.x));
+  for (let j = 0; j < 8; j++) {
+    const ps = me_ + (j + 0.5) * TAU / 8; // (yours is the gap behind you)
+    const hx = cx + 0.42 * Math.cos(ps), hy = cy + 0.42 * Math.sin(ps), hz = 0.14 + 0.04 * Math.sin(ps * 2 + T * 4), col = [WHITE, YEL, BRICK, WHITE, MAG, YEL, BRICK, CYAN][j];
+    drawBox(boxAt(hx, hy, 1, 0, 0.005, 0.005, 0.04, 0.33), (i, t, L) => (set(i, '|', C(YEL, Math.max(L, 9))), true)); // its brass pole
+    const tx = -Math.sin(ps), ty = Math.cos(ps); // the way it's going
+    drawBox(boxAt(hx, hy, tx, ty, 0.06, 0.018, hz - 0.02, hz + 0.02), solidHorse(col)); // the body
+    drawBox(boxAt(hx + tx * 0.06, hy + ty * 0.06, tx, ty, 0.015, 0.012, hz + 0.01, hz + 0.06), solidHorse(col)); // the neck and head
+    for (const e of [-1, 1]) drawBox(boxAt(hx + tx * 0.04 * e, hy + ty * 0.04 * e, tx, ty, 0.006, 0.006, hz - 0.07, hz - 0.02), solidHorse(col)); // legs
+  }
+}
+const solidHorse = col => (i, t, L) => { BG[i] = C(col, (1.4 + L * 0.35) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '~' : ' ', C(YEL, L)), true; };
+function wheelCell(i, u, z, du, dz, L, sq, side = 1) {
   const R = WHEEL.R, hub = WHEEL.hub, as = Math.max(Math.abs(sq), 0.05), U = u / (sq < 0 ? -as : as), Zc = z - hub;
   const tolU = du / as / 2, tol = Math.max(tolU, dz / 2), lit = night > 0.25 || overcast > 0.6;
-  for (let k = 0; k < WHEEL.n; k++) { // the cars, hanging under their pivots on the rim
-    if (fairRide && fairRide.kind === 'wheel' && fairRide.k === k) continue; // (you're in this one)
-    const ph = wheelAngle(k, T), gu = R * Math.cos(ph) * (sq < 0 ? -as : as), gz = hub + R * Math.sin(ph), top = gz - 0.06, bot = gz - 0.24;
-    if (Math.abs(u - gu) < 0.1 && z < top && z > bot) {
-      const col = [RED, YEL, CYAN, MAG, GREEN, ORANGE][k % 6], r = (top - z) / (top - bot);
-      if (r < 0.15) return set(i, '_', C(col, L * 1.1)), true;
-      if (r < 0.55) { BG[i] = C(col, 1.5 + L * 0.2); return set(i, Math.abs(u - gu) > 0.08 ? '|' : ':', lit ? C(YEL, 13) : C(CYAN, L)), true; }
-      BG[i] = C(col, 2 + L * 0.3); return set(i, r > 0.9 ? '=' : ' ', C(col, L)), true;
-    }
-    if (onLine(u - gu, du, 0, 0) && z <= gz && z >= top) return set(i, '|', C(GRAY, L)), true;
-  }
+  if (side < 0) L *= 0.65; // (the far rim, in the shadow of the near one)
   const rr = Math.hypot(U, Zc), ang = Math.atan2(Zc, U);
   if (rr < 0.13) return set(i, '@', C(WHITE, L * 1.2)), true; // the hub
-  if (z < 0.05 && Math.abs(u) < 1.1 * as + 0.15) return set(i, '=', C(BRICK, L)), true; // the platform
+  if (side > 0 && z < 0.05 && Math.abs(u) < 1.1 * as + 0.15) return set(i, '=', C(BRICK, L)), true; // the platform
   for (const side of [-1, 1]) { // the A-frame legs, hub to deck
     const lu = side * 0.95 * (hub - z) / hub;
     if (z < hub && Math.abs(U - lu) < Math.max(tolU, dz * 0.95 / hub / 2) * 1.2) return set(i, side * Math.sign(sq || 1) < 0 ? '/' : '\\', C(GRAY, L * 1.15)), true;
@@ -5640,12 +5670,29 @@ function carouselCell(i, u, z, du, dz, L, s) {
 const FAIR_SIGN = 'SUNSET PIER';
 function fairSprites() {
   const [wx, wy] = R(WHEEL.x, WHEEL.y);
-  if (Math.hypot(wx, wy) < vis + 4) {
-    const sq = across(1, 0, wx, wy), hw = (WHEEL.R + 0.15) * Math.max(Math.abs(sq), 0.06) + 0.12;
-    drawShape(wx, wy, 0, hw, WHEEL.hub + WHEEL.R + 0.1, (i, u, z, du, dz, L) => wheelCell(i, u, z, du, dz, L, sq));
+  if (Math.hypot(wx, wy) < vis + 4) { // two rims a few metres apart (the far one dimmer), the axle between, the cars hanging in 3D
+    for (const side of [1, -1]) {
+      const vy = wy + side * WHEEL_GAP, sq = across(1, 0, wx, vy), hw = (WHEEL.R + 0.15) * Math.max(Math.abs(sq), 0.06) + 0.12;
+      drawShape(wx, vy, 0, hw, WHEEL.hub + WHEEL.R + 0.1, (i, u, z, du, dz, L) => wheelCell(i, u, z, du, dz, L, sq, side));
+    }
+    drawBox(boxAt(wx, wy, 0, 1, WHEEL_GAP + 0.03, 0.05, WHEEL.hub - 0.05, WHEEL.hub + 0.05), (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.3); return set(i, '=', C(WHITE, L)), true; });
+    const lit = night > 0.25 || overcast > 0.6;
+    for (let k = 0; k < WHEEL.n; k++) {
+      if (fairRide && fairRide.kind === 'wheel' && fairRide.k === k) continue; // (you're in this one)
+      const ph = wheelAngle(k, T), gx = wx + WHEEL.R * Math.cos(ph), gz = WHEEL.hub + WHEEL.R * Math.sin(ph), col = [RED, YEL, CYAN, MAG, GREEN, ORANGE][k % 6];
+      drawBox(boxAt(gx, wy, 1, 0, 0.004, 0.004, gz - 0.06, gz), STEEL.pole); // its hanger
+      drawBox(boxAt(gx, wy, 1, 0, 0.1, WHEEL_GAP - 0.03, gz - 0.24, gz - 0.06), (i, t, L) => { // the gondola: a roof, windows round the middle, a solid floor
+        const w = (gz - 0.06 - HIT.w) / 0.18, f = HIT.face;
+        BG[i] = C(col, (1.5 + L * 0.35) * shadeFace(f));
+        if (f === 5 || w < 0.15) return set(i, '_', C(col, L)), true;
+        if (w < 0.6 && f !== 6) { BG[i] = lit ? C(WARM, 3 + night * 5) : C(CYAN, 1 + L * 0.15); return set(i, Math.abs(fract((f <= 2 ? HIT.v : HIT.u) * 12) - 0.5) < 0.1 ? '|' : ' ', C(col, L)), true; }
+        return set(i, w > 0.9 ? '=' : ' ', C(col, L)), true;
+      });
+    }
   }
   const [cx, cy] = R(CAROUSEL.x, CAROUSEL.y);
-  if (Math.hypot(cx, cy) < vis) drawShape(cx, cy, 0, CAROUSEL.r + 0.04, 0.52, carouselCell);
+  if (fairRide && fairRide.kind === 'carousel') carouselInside(cx, cy); // on it: built round you, not a picture
+  else if (Math.hypot(cx, cy) < vis) drawShape(cx, cy, 0, CAROUSEL.r + 0.04, 0.52, carouselCell);
   // the arch over the way in, its name in bulbs
   const [gx, gy] = R(FAIR.cx, FAIR.y0 + 0.2), hw = 1.3;
   if (Math.hypot(gx, gy) > vis) return;
@@ -5705,6 +5752,7 @@ function jailProps(r) {
     p.push(...bunk(cx - 1.1, 1.55), ...toilet(cx + 1.9, 1.4, -1)); // ours: bunk along the back wall
     p.push(...bunk(cx - 1.1, JAIL_D - 2.55), ...toilet(cx + 1.9, JAIL_D - 2.4, 1)); // theirs, the mirror of it
   }
+  if (r.cabbie) p.push({ ...sitting(9.9, 1.75, YEL, 0.58), cabbie: true }); // your cab driver, on the bunk, arms folded, not looking at you
   // who's across the way: one at the bars, one asleep on his bunk, one pacing
   p.push(inmate(4.6, 9.6), inmate(10.2, JAIL_D - 2.55, true));
   p.push({ ...inmate(18, 10.6), tick: s => { s.x = 18 + 1.6 * Math.sin(T * 0.35); } });
@@ -8449,6 +8497,7 @@ function promptText() {
   const cp = crimePrompt();
   if (cp) return cp;
   if (mode === 'room') {
+    if (room.kind === 'jail' && nearCabbie()) return 'E: talk to your cab driver   (he does not want to talk to you)';
     if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go${room.tried ? '' : '   E: try to break out (one chance)'}` : 'E: the guard lets you out';
     if (room.kind === 'train') return room.dest == null
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
@@ -8772,6 +8821,7 @@ function interact() {
       return say('Round and round and up and up. The lamp room.', 3);
     }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? enterRoom('lighthouse', room.below, [4, 5.6, -Math.PI / 2]) : say('The hatch down is in the corner.', 2);
+    if (room.kind === 'jail' && nearCabbie()) return talkToCabbie();
     if (room.kind === 'jail') {
       if (T >= room.until) return say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom();
       if (room.tried) return say(`Locked in. ${Math.ceil(room.until - T)}s to go.`);
@@ -9100,7 +9150,7 @@ function stepFair(dt) {
   } else {
     const ps = f.ps0 + TAU * (T - f.t0) / CAROUSEL.rev;
     px = CAROUSEL.x + 0.38 * Math.cos(ps); py = CAROUSEL.y + 0.38 * Math.sin(ps); fairEye = 0.155 + 0.012 * Math.sin(T * 4);
-    look += turn; a = ps + Math.PI / 2 + look; // facing the way you're going, plus wherever you turn your head
+    a = ps + Math.PI; look = 0; // facing the middle the whole way round (the horses and the drum stay put; the world wheels past behind them)
   }
   if (T >= f.end) endFairRide();
 }
@@ -9116,7 +9166,7 @@ function endFairRide() {
 }
 function fairRidePrompt() {
   const left = Math.ceil(fairRide.end - T), look_ = TOUCH ? 'drag' : 'mouse';
-  if (fairRide.kind === 'carousel') return `Round and round: ${left}s   ${look_}: look about`;
+  if (fairRide.kind === 'carousel') return `Round and round: ${left}s`;
   return fairEye > WHEEL.hub + WHEEL.R * 0.8 ? `The top. The whole city. (${left}s)` : `Going round: ${left}s   ${look_}: look about`;
 }
 // what's round you on a ride: the car you're sitting in, or the pole and the horse's neck
@@ -9867,7 +9917,7 @@ function drawHeldBig() {
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const lift = it.id === 'yoyo' && fx.yoyo > 0 ? Math.min(1, (YOYO_DUR - fx.yoyo) / 0.25, fx.yoyo / 0.25) : 0; // (your hand comes up in front of you for a yo-yo trick)
+  const lift = it.id === 'yoyo' ? Math.min(1, yoyo.len * 3 + (yoyo.out ? 0.3 : 0)) : 0; // (your hand comes up in front of you to work the yo-yo)
   const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (drawHeldDense(it, cx, hy, hsz, grip)); // (the dense-art trial: the item drawn finer, the same hand)
@@ -9965,33 +10015,22 @@ function drawVapeCloud() {
     g.fillStyle = PAL[C(f > 0.5 ? YEL : WHITE, 6 + f * 8)]; g.fillText(f > 0.7 ? '@' : f > 0.4 ? '%' : '~', x, y);
   }
 }
-// a yo-yo trick, fx.yoyo counting down from YOYO_DUR, at the world's own character size: 0 walk the dog (down to
-// the pavement, rolling off and back), 1 around the world (a big loop out in front), 2 rock the baby (the string
-// pulled into a cradle, the yo-yo swinging through it), 3 the sleeper (spinning at the bottom, then snapped back
-// up). Every one drops fast and comes back faster; the yo-yo spins the whole time and smears when it's moving quick
-function yoyoAt(t, trick, x, y, L) {
-  const W = cv.width, H = cv.height, mid = clamp((t - 0.18) / 0.67, 0, 1);
-  if (trick === 0) L = Math.max(L, H - y - H * 0.06); // walking the dog: all the way down to the pavement
-  const d = t < 0.18 ? L * (t / 0.18) ** 2 : t > 0.85 ? L * (1 - (t - 0.85) / 0.15) ** 2 : L; // down, out, back up
-  if (t < 0.18 || t > 0.85 || trick === 3) return { x: x + (trick === 3 && t >= 0.18 && t <= 0.85 ? Math.sin(t * 9) * L * 0.03 : 0), y: y + d };
-  if (trick === 1) { const th = mid * Math.PI * 2; return { x: x + Math.sin(th) * L * 0.62, y: y + Math.cos(th) * L }; }
-  if (trick === 0) return { x: x - Math.sin(mid * Math.PI) * W * 0.3, y: y + L - Math.sin(mid * Math.PI) * H * 0.05 }; // rolls away along the pavement (a little further off, so a little higher) and back
-  const apex = { x: x - W * 0.13, y: y - L * 0.3 }, sw = Math.sin(mid * Math.PI * 4) * 0.55 * Math.sin(mid * Math.PI); // the cradle, rocking
-  return { x: apex.x + Math.sin(sw) * L * 0.55, y: apex.y + Math.cos(sw) * L * 0.55, apex };
+// the yo-yo out on its string (see yoyo in goods.js), at the world's own character size: hanging from your hand,
+// swinging as you swing it, rolling along the pavement when it reaches it; spinning the whole time, smeared when quick
+function yoyoPos(x, y, ang, len) {
+  const L = cv.height * 0.36 * len, ground = cv.height * 0.95;
+  let px_ = x + Math.sin(ang) * L, py_ = y + Math.cos(ang) * L;
+  const rolling = py_ > ground;
+  if (rolling) { px_ = x + Math.sin(ang) * L * 1.15; py_ = ground; } // on the ground: it runs on along it (walk the dog)
+  return { x: px_, y: py_, rolling };
 }
 function drawYoyo(x, y) {
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72);
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, L = cv.height * 0.3, trick = fx.yoyoTrick || 0, t = clamp(1 - fx.yoyo / YOYO_DUR, 0, 1);
-  const p = yoyoAt(t, trick, x, y, L), str = PAL[C(WHITE, 11)];
-  if (p.apex) { // rock the baby: the string from your hand round a triangle, the yo-yo hanging from its top corner
-    const b1 = { x: p.apex.x - L * 0.22, y: p.apex.y + L * 0.62 }, b2 = { x: p.apex.x + L * 0.22, y: p.apex.y + L * 0.62 };
-    charLine(x, y, b2.x, b2.y, w, s, str); charLine(b2.x, b2.y, b1.x, b1.y, w, s, str); charLine(b1.x, b1.y, p.apex.x, p.apex.y, w, s, str);
-    charLine(p.apex.x, p.apex.y, p.x, p.y, w, s, str);
-  } else charLine(x, y, p.x, p.y, w, s, str);
-  const q = yoyoAt(clamp(t - 0.025, 0, 1), trick, x, y, L), fast = Math.hypot(p.x - q.x, p.y - q.y) > s * 0.8;
-  if (fast) for (const k of [1, 2]) { const r = yoyoAt(clamp(t - 0.02 * k, 0, 1), trick, x, y, L); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
-  const spin = T * (trick === 0 && t > 0.18 && t < 0.85 ? 40 : 25); // (faster rolling along the ground)
+  const w = g.measureText('M').width, p = yoyoPos(x, y, yoyo.ang, yoyo.len), str = PAL[C(WHITE, 11)];
+  charLine(x, y, p.x, p.y, w, s, str);
+  if (Math.abs(yoyo.angV) > 3) for (const k of [1, 2]) { const r = yoyoPos(x, y, yoyo.ang - yoyo.angV * 0.02 * k, yoyo.len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
+  const spin = yoyo.spin * (p.rolling ? 1.6 : 1);
   const [art, col] = sculpt(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
     const r = Math.hypot(cx, cy * 1.1) * 2.5 / 3.2;
     if (r > 2.5) return null;
@@ -10758,12 +10797,12 @@ Object.assign(DENSE, {
     const stripe = Math.floor((y + 8) * 0.6) & 1;
     return dLit(0.55 + 0.4 * dCyl(x, 2.2), stripe ? RED : YEL, 7);
   }),
-  yoyo: () => sculpt(18, 15, (x, y) => { // the yo-yo hanging from your finger on its string
-    if (y < -1 && Math.abs(x) < 0.15) return ['|', C(WHITE, 11)];
-    const d = dEll(x, y, 0, 2.6, 3.6, 3.6);
+  yoyo: () => sculpt(18, 15, (x, y) => { // the yo-yo in your hand, its string looped round your finger below
+    if (y > 2.5 && Math.abs(x) < 0.15) return ['|', C(WHITE, 11)];
+    const d = dEll(x, y, 0, -2.4, 3.6, 3.6);
     if (d > 1) return null;
     if (d < 0.25) return ['@', C(WHITE, 15)];
-    return [Math.abs(d - 0.6) < 0.06 ? 'o' : dFill(dBall(x, y, 0, 2.6, 3.6)), dCol(RED, dBall(x, y, 0, 2.6, 3.6), 7)];
+    return [Math.abs(d - 0.6) < 0.06 ? 'o' : dFill(dBall(x, y, 0, -2.4, 3.6)), dCol(RED, dBall(x, y, 0, -2.4, 3.6), 7)];
   }),
   vape: () => sculpt(12, 17, (x, y) => { // a mango vape pen; the tip glows when you draw on it
     if (y < -7 && Math.abs(x) < 0.9) return fx.vape > 0 ? ['@', C(ORANGE, 10 + fx.vape * 1.7)] : ['o', C(GRAY, 10)];
@@ -11315,6 +11354,25 @@ function bustedChoice(how) {
   say('The cell door slams. Everything you were carrying is in an evidence bag.', 5);
 }
 
+// the cab you paid to step on it gets pulled over, and the officer runs your face too: you're both arrested, and you
+// share a cell. He has some things to say about that
+function jailWithCabbie() {
+  const c = me, ret = [c.x, c.y];
+  hidePanel(bustedEl); endTaxiShift(); outOfCar(); c.v = 0; c.stopT = T + 25;
+  const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - ret[0]), rel(b.y - ret[1]))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
+  goToJail();
+  enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T, cabbie: true }, [11, 3.2, Math.PI / 2]);
+  say('The cruiser boxes the cab in. The officer runs the driver\'s licence, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.', 7);
+}
+const CABBIE_LINES = ['Twenty bucks to step on it, you said. TWENTY BUCKS.', 'Nineteen years I\'ve driven this city. Clean record. Then you get in.', 'Don\'t talk to me.', 'You were WANTED? And you didn\'t think to mention that?', 'My wife\'s gonna kill me. Then she\'s gonna come for you.',
+  'When we get out of here, you\'re walking. Everywhere. Forever.', 'I want you to know the meter was still running.', '...', 'Don\'t sit on my bunk.', 'You owe me a cab. And a lawyer.'];
+let cabbieLast = -1;
+function talkToCabbie() {
+  let k = Math.random() * CABBIE_LINES.length | 0; if (k === cabbieLast) k = (k + 1) % CABBIE_LINES.length; cabbieLast = k;
+  return say(`Your cab driver: "${CABBIE_LINES[k]}"`, 4);
+}
+const nearCabbie = () => { const w = roomPerson(); return w && w.cabbie ? w : null; };
+
 // ---- the crime minigames: they take the screen like the arcade, then hand back success, failure or 'abort'
 function startCrime(id, done) { startGame(id, 'crime'); game.onDone = done; }
 
@@ -11513,7 +11571,10 @@ function drawBoard3D() {
   const cy = 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
   const cz = 1.15;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
-  const pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS, ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
+  let pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS;
+  const fit = Math.min(1, (rows * 0.8 - hor) / ((0.5 / cz) * pY + 1e-6)); // (on a wide screen it'd sit half off the bottom: scaled down to sit in the lower part of the view)
+  if (fit > 0.2) { pX *= fit; pY *= fit; }
+  const ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
   const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
   // a point on the board (u along, v across, h up) to the screen
   const plot = (u, v, h, ch, col, bg) => {
@@ -11622,7 +11683,8 @@ const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 function turnBy(mx, my) {
   if (paused || game) return;
   const s = settings.sensitivity;
-  if (mode === 'taxi' || mode === 'fair' && fairRide.kind === 'carousel') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea') a += mx * 0.003 * s;
+  if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s); // the yo-yo's out: the mouse swings it, the view holds still
+  if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
 onmousemove = e => { if (document.pointerLockElement) turnBy(e.movementX, e.movementY); };
@@ -11686,7 +11748,7 @@ function loop(t) {
   if (sleep) stepSleep(dt);
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
-    a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
+    if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyoSwing(((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 600 * dt); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.8 : 1); // sprint 29 km/h, cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
@@ -11718,6 +11780,7 @@ function loop(t) {
   else if (law === 'lost') say('You lost them.', 3);
   else if (law === 'pullover') say('"PULL OVER!" booms from the cruiser on your tail.', 3);
   else if (law === 'pit') { say('The cruiser clips your back corner and you spin out.', 3); if (actx) playClip('crash', 0.6); }
+  else if (law === 'cab' && wanted.stars > 0) jailWithCabbie(); // and you were wanted already: you both go down
   else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
     const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
     say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);

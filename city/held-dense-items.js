@@ -477,12 +477,12 @@ Object.assign(DENSE, {
     const stripe = Math.floor((y + 8) * 0.6) & 1;
     return dLit(0.55 + 0.4 * dCyl(x, 2.2), stripe ? RED : YEL, 7);
   }),
-  yoyo: () => sculpt(18, 15, (x, y) => { // the yo-yo hanging from your finger on its string
-    if (y < -1 && Math.abs(x) < 0.15) return ['|', C(WHITE, 11)];
-    const d = dEll(x, y, 0, 2.6, 3.6, 3.6);
+  yoyo: () => sculpt(18, 15, (x, y) => { // the yo-yo in your hand, its string looped round your finger below
+    if (y > 2.5 && Math.abs(x) < 0.15) return ['|', C(WHITE, 11)];
+    const d = dEll(x, y, 0, -2.4, 3.6, 3.6);
     if (d > 1) return null;
     if (d < 0.25) return ['@', C(WHITE, 15)];
-    return [Math.abs(d - 0.6) < 0.06 ? 'o' : dFill(dBall(x, y, 0, 2.6, 3.6)), dCol(RED, dBall(x, y, 0, 2.6, 3.6), 7)];
+    return [Math.abs(d - 0.6) < 0.06 ? 'o' : dFill(dBall(x, y, 0, -2.4, 3.6)), dCol(RED, dBall(x, y, 0, -2.4, 3.6), 7)];
   }),
   vape: () => sculpt(12, 17, (x, y) => { // a mango vape pen; the tip glows when you draw on it
     if (y < -7 && Math.abs(x) < 0.9) return fx.vape > 0 ? ['@', C(ORANGE, 10 + fx.vape * 1.7)] : ['o', C(GRAY, 10)];

@@ -884,3 +884,18 @@ test('breaking into the casino: shut from 2am, so the lock can be picked before 
   assert.deepStrictEqual([r.shut3, r.open22, r.noTables], [true, true, true]);
   assert.match(r.prompt, /crack the vault/);
 }));
+
+test('arrested along with your cab driver: a cell together, and he is not happy about it', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    me = cars.find(c => c.kind === 'taxi'); me.rider = true; me.fare = 0; mode = 'taxi'; setDest(5); me.rush = true;
+    addWanted('steal', px, py, false);
+    jailWithCabbie();
+    const cab = room.props.find(s => s.cabbie);
+    px = cab.x; py = cab.y + 0.9; a = -Math.PI / 2;
+    const prompt = promptText(); interact();
+    return { kind: room.kind, me, cab: !!cab, prompt, said: msgText, stars: wanted.stars };
+  });
+  assert.deepStrictEqual([r.kind, r.me, r.cab, r.stars], ['jail', null, true, 0]);
+  assert.match(r.prompt, /talk to your cab driver/);
+  assert.match(r.said, /^Your cab driver: "/);
+}));

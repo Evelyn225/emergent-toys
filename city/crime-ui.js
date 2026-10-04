@@ -69,6 +69,25 @@ function bustedChoice(how) {
   say('The cell door slams. Everything you were carrying is in an evidence bag.', 5);
 }
 
+// the cab you paid to step on it gets pulled over, and the officer runs your face too: you're both arrested, and you
+// share a cell. He has some things to say about that
+function jailWithCabbie() {
+  const c = me, ret = [c.x, c.y];
+  hidePanel(bustedEl); endTaxiShift(); outOfCar(); c.v = 0; c.stopT = T + 25;
+  const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - ret[0]), rel(b.y - ret[1]))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
+  goToJail();
+  enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T, cabbie: true }, [11, 3.2, Math.PI / 2]);
+  say('The cruiser boxes the cab in. The officer runs the driver\'s licence, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.', 7);
+}
+const CABBIE_LINES = ['Twenty bucks to step on it, you said. TWENTY BUCKS.', 'Nineteen years I\'ve driven this city. Clean record. Then you get in.', 'Don\'t talk to me.', 'You were WANTED? And you didn\'t think to mention that?', 'My wife\'s gonna kill me. Then she\'s gonna come for you.',
+  'When we get out of here, you\'re walking. Everywhere. Forever.', 'I want you to know the meter was still running.', '...', 'Don\'t sit on my bunk.', 'You owe me a cab. And a lawyer.'];
+let cabbieLast = -1;
+function talkToCabbie() {
+  let k = Math.random() * CABBIE_LINES.length | 0; if (k === cabbieLast) k = (k + 1) % CABBIE_LINES.length; cabbieLast = k;
+  return say(`Your cab driver: "${CABBIE_LINES[k]}"`, 4);
+}
+const nearCabbie = () => { const w = roomPerson(); return w && w.cabbie ? w : null; };
+
 // ---- the crime minigames: they take the screen like the arcade, then hand back success, failure or 'abort'
 function startCrime(id, done) { startGame(id, 'crime'); game.onDone = done; }
 
