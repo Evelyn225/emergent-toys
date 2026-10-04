@@ -83,6 +83,22 @@ const solid = (base, { panel = 0, top = ' ', trim = 0, bright = 1 } = {}) => (i,
 };
 const counterBox = (x, y, half, z1 = 1.05) => [BX(x, y, half, 0.3, 0, z1, solid(BRICK, { panel: 0.6, trim: z1 - 0.06, top: '=' })),
   BX(x - half * 0.6, y, 0.18, 0.15, z1, z1 + 0.25, (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return set(i, HIT.face === 1 || HIT.face === 4 ? '$' : '#', C(GREEN, L)), true; })]; // and the till
+// a wire laundry cart on castors, heaped with somebody's washing (each garment its own colour, and it stays that colour:
+// the old sprite picked a new one every frame, so the heap strobed)
+const laundryCart = (x, y) => {
+  const seed = Math.random() * 100;
+  return [BX(x, y, 0.36, 0.26, 0.12, 0.7, (i, t, L) => { // the wire basket: see-through between the wires
+    const f = HIT.face, a_ = f <= 2 ? HIT.v : HIT.u;
+    if (f === 5 || f === 6) return false;
+    if (HIT.w > 0.66 || HIT.w < 0.16 || Math.abs(fract(a_ * 8) - 0.5) > 0.4) return set(i, HIT.w > 0.66 ? '=' : '|', C(GRAY, L * 1.1)), true;
+    return Math.abs(fract(HIT.w * 10) - 0.5) > 0.42 ? (set(i, '-', C(GRAY, L * 0.8)), true) : false;
+  }), BX(x, y, 0.33, 0.23, 0.14, 0.78, (i, t, L) => { // the washing, piled up above the rim
+    if (HIT.face === 6) return false;
+    const k = hash(Math.floor((HIT.u + HIT.v) * 6), Math.floor(HIT.w * 9 + (HIT.u - HIT.v) * 3), Math.floor(seed));
+    if (HIT.w > 0.72 && hash(Math.floor(HIT.u * 9), Math.floor(HIT.v * 9), 7) > 0.6) return false; // a lumpy top
+    BG[i] = C(ITEM_COL[k * 8 | 0], (1.2 + L * 0.3) * shadeFace(HIT.face)); return set(i, k > 0.85 ? '~' : ' ', C(WHITE, L * 0.6)), true;
+  }), ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.3, y + sy * 0.2, 0.03, 0.03, 0, 0.12, (i, t, L) => (set(i, 'o', C(GRAY, L)), true))))];
+};
 const tableBox = (x, y, hl = 0.6, hw = 0.4) => [BX(x, y, hl, hw, 0.72, 0.78, solid(BRICK, { top: '=' })), BX(x, y, 0.06, 0.06, 0, 0.72, solid(GRAY))];
 const inBox = (b, x, y, pad) => { const qx = x - b.x, qy = y - b.y; return Math.abs(qx * b.c + qy * b.s) < b.hl + pad && Math.abs(-qx * b.s + qy * b.c) < b.hw + pad; };
 
@@ -194,7 +210,7 @@ const ROOM_DEFS = {
       return p;
     } },
   laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: laundryWall,
-    props: r => [BENCHP(2.8, 3.6, 0, -1), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L)),
+    props: r => [BENCHP(2.8, 3.6, 0, -1), ...laundryCart(7.6, 4.6),
       BX(6.2, 3.3, 0.9, 0.35, 0, 0.85, solid(WHITE, { top: '_', panel: 0.4 })), // the folding table
       ...(tod > 7 && tod < 23 || chance(0.3) ? [sitting(2.8, 3.58, shirt(), 0.45)] : [])] }, // (somebody waiting on a load, mostly in the day)
   cinema: { grid: boxRoom(14, 12), light: 0.3, floor: 'carpet', ceil: 'dark', wall: cinemaWall,

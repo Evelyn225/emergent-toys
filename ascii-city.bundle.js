@@ -580,7 +580,8 @@ const SERVICES = [];
         map[idx(tx, ty)] = 2.1;
       }
       if (kind === 'amb') sh.pad = [lot.reduce((s, c) => s + c[0], 0) / lot.length + 0.5, lot.reduce((s, c) => s + c[1], 0) / lot.length + 0.5];
-      SERVICES.push({ kind, bx, by, x: bx * 8 + 3.4, y: by * 8 + 1.74, lane: by * 8 + 1.4, out: false });
+      SERVICES.push({ kind, bx, by, x: bx * 8 + 5, y: by * 8 + 1.74, // (parked between the street lamps, not on one)
+        lane: by * 8 + 1.4, out: false });
     }
   }
 }
@@ -662,6 +663,12 @@ for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x
 const FB_LAMP = 3;
 for (let y = FOOTBRIDGE.y0 + 1.5, k = 0; y < FOOTBRIDGE.y1; y += FB_LAMP, k++) { const s = k & 1 ? 1 : -1; lamps.push({ x: FOOTBRIDGE.x + s * FOOTBRIDGE.hw, y, ax: -s, ay: 0 }); }
 const lampsB = bucketed(lamps);
+// is (x, y) up against a lamp post (grown by pad)? They're solid: you walk round them
+function lampAt(x, y, pad) {
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const l of lampsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)])
+    if (Math.abs(rel(x - l.x)) < 0.028 + pad && Math.abs(rel(y - l.y)) < 0.028 + pad) return true;
+  return false;
+}
 // light pool on the ground, under the lamp heads of whichever streets exist here
 function glow(wx, wy) {
   const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), lx = wx - bx * 8, ly = wy - by * 8;
@@ -5629,13 +5636,26 @@ const barShade = (i, t, L) => {
 const inmate = (x, y, sit) => sit ? sitting(x, y, ORANGE, 0.42) : standing(x, y, ORANGE);
 const bunk = (x, y) => [BX(x, y, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // a blanket on a steel frame
   BX(x, y, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; })];
-const toilet = (x, y) => BX(x, y, 0.28, 0.28, 0, 0.45, solid(WHITE, { top: 'o', bright: 2 }));
+// a cell's steel toilet: the cistern against the wall, a pedestal, and the bowl on it with a rim round the water. back:
+// which way the wall is (-1: toward -y)
+const steel = (i, t, L) => { BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : fract(HIT.w * 6) < 0.12 ? '-' : ' ', C(WHITE, L * 0.7)), true; };
+const toilet = (x, y, back = -1) => [
+  BX(x, y + back * 0.3, 0.24, 0.09, 0, 0.82, steel), // the cistern
+  BX(x + 0.16, y + back * 0.2, 0.025, 0.04, 0.68, 0.72, (i, t, L) => (set(i, '-', C(WHITE, L)), true)), // its flush handle
+  BX(x, y + back * 0.02, 0.11, 0.13, 0, 0.3, steel), // the pedestal
+  BX(x, y + back * 0.04, 0.21, 0.26, 0.3, 0.42, (i, t, L) => { // the bowl: an oval rim, water in the middle
+    if (HIT.face !== 5) { BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+    const e = Math.hypot(HIT.u / 0.21, HIT.v / 0.26);
+    if (e > 1) return false;
+    if (e > 0.68) { BG[i] = C(GRAY, 2.2 + L * 0.3); return set(i, 'o', C(WHITE, L)), true; }
+    BG[i] = C(BLUE, 1.4 + L * 0.15); return set(i, e < 0.3 && hash(Math.floor(T * 2), 1, 15) > 0.6 ? '~' : ' ', C(CYAN, L)), true;
+  })];
 function jailProps(r) {
   const p = [];
   for (const cx of [4, 11, 18]) { // the three cells on your side (yours is the middle) and the three across
     p.push(BX(cx, JAIL_BARS_NEAR, 3, 0.03, 0, 3, barShade), BX(cx, JAIL_BARS_FAR, 3, 0.03, 0, 3, barShade));
-    p.push(...bunk(cx - 1.1, 1.55), toilet(cx + 1.9, 1.4)); // ours: bunk along the back wall
-    p.push(...bunk(cx - 1.1, JAIL_D - 2.55), toilet(cx + 1.9, JAIL_D - 2.4)); // theirs, the mirror of it
+    p.push(...bunk(cx - 1.1, 1.55), ...toilet(cx + 1.9, 1.4, -1)); // ours: bunk along the back wall
+    p.push(...bunk(cx - 1.1, JAIL_D - 2.55), ...toilet(cx + 1.9, JAIL_D - 2.4, 1)); // theirs, the mirror of it
   }
   // who's across the way: one at the bars, one asleep on his bunk, one pacing
   p.push(inmate(4.6, 9.6), inmate(10.2, JAIL_D - 2.55, true));
@@ -5774,6 +5794,22 @@ const solid = (base, { panel = 0, top = ' ', trim = 0, bright = 1 } = {}) => (i,
 };
 const counterBox = (x, y, half, z1 = 1.05) => [BX(x, y, half, 0.3, 0, z1, solid(BRICK, { panel: 0.6, trim: z1 - 0.06, top: '=' })),
   BX(x - half * 0.6, y, 0.18, 0.15, z1, z1 + 0.25, (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return set(i, HIT.face === 1 || HIT.face === 4 ? '$' : '#', C(GREEN, L)), true; })]; // and the till
+// a wire laundry cart on castors, heaped with somebody's washing (each garment its own colour, and it stays that colour:
+// the old sprite picked a new one every frame, so the heap strobed)
+const laundryCart = (x, y) => {
+  const seed = Math.random() * 100;
+  return [BX(x, y, 0.36, 0.26, 0.12, 0.7, (i, t, L) => { // the wire basket: see-through between the wires
+    const f = HIT.face, a_ = f <= 2 ? HIT.v : HIT.u;
+    if (f === 5 || f === 6) return false;
+    if (HIT.w > 0.66 || HIT.w < 0.16 || Math.abs(fract(a_ * 8) - 0.5) > 0.4) return set(i, HIT.w > 0.66 ? '=' : '|', C(GRAY, L * 1.1)), true;
+    return Math.abs(fract(HIT.w * 10) - 0.5) > 0.42 ? (set(i, '-', C(GRAY, L * 0.8)), true) : false;
+  }), BX(x, y, 0.33, 0.23, 0.14, 0.78, (i, t, L) => { // the washing, piled up above the rim
+    if (HIT.face === 6) return false;
+    const k = hash(Math.floor((HIT.u + HIT.v) * 6), Math.floor(HIT.w * 9 + (HIT.u - HIT.v) * 3), Math.floor(seed));
+    if (HIT.w > 0.72 && hash(Math.floor(HIT.u * 9), Math.floor(HIT.v * 9), 7) > 0.6) return false; // a lumpy top
+    BG[i] = C(ITEM_COL[k * 8 | 0], (1.2 + L * 0.3) * shadeFace(HIT.face)); return set(i, k > 0.85 ? '~' : ' ', C(WHITE, L * 0.6)), true;
+  }), ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.3, y + sy * 0.2, 0.03, 0.03, 0, 0.12, (i, t, L) => (set(i, 'o', C(GRAY, L)), true))))];
+};
 const tableBox = (x, y, hl = 0.6, hw = 0.4) => [BX(x, y, hl, hw, 0.72, 0.78, solid(BRICK, { top: '=' })), BX(x, y, 0.06, 0.06, 0, 0.72, solid(GRAY))];
 const inBox = (b, x, y, pad) => { const qx = x - b.x, qy = y - b.y; return Math.abs(qx * b.c + qy * b.s) < b.hl + pad && Math.abs(-qx * b.s + qy * b.c) < b.hw + pad; };
 
@@ -5885,7 +5921,7 @@ const ROOM_DEFS = {
       return p;
     } },
   laundry: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: laundryWall,
-    props: r => [BENCHP(2.8, 3.6, 0, -1), SP(7.6, 4.6, 0.7, 0.8, ART.cart, (c, row, L) => C(row === 1 ? pick(ITEM_COL) : GRAY, L)),
+    props: r => [BENCHP(2.8, 3.6, 0, -1), ...laundryCart(7.6, 4.6),
       BX(6.2, 3.3, 0.9, 0.35, 0, 0.85, solid(WHITE, { top: '_', panel: 0.4 })), // the folding table
       ...(tod > 7 && tod < 23 || chance(0.3) ? [sitting(2.8, 3.58, shirt(), 0.45)] : [])] }, // (somebody waiting on a load, mostly in the day)
   cinema: { grid: boxRoom(14, 12), light: 0.3, floor: 'carpet', ceil: 'dark', wall: cinemaWall,
@@ -11513,7 +11549,7 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return map[idx(Math.floor(x), Math.floor(y))] === roofH; // stay on this roof
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {

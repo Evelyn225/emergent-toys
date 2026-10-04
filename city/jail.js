@@ -21,13 +21,26 @@ const barShade = (i, t, L) => {
 const inmate = (x, y, sit) => sit ? sitting(x, y, ORANGE, 0.42) : standing(x, y, ORANGE);
 const bunk = (x, y) => [BX(x, y, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // a blanket on a steel frame
   BX(x, y, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; })];
-const toilet = (x, y) => BX(x, y, 0.28, 0.28, 0, 0.45, solid(WHITE, { top: 'o', bright: 2 }));
+// a cell's steel toilet: the cistern against the wall, a pedestal, and the bowl on it with a rim round the water. back:
+// which way the wall is (-1: toward -y)
+const steel = (i, t, L) => { BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : fract(HIT.w * 6) < 0.12 ? '-' : ' ', C(WHITE, L * 0.7)), true; };
+const toilet = (x, y, back = -1) => [
+  BX(x, y + back * 0.3, 0.24, 0.09, 0, 0.82, steel), // the cistern
+  BX(x + 0.16, y + back * 0.2, 0.025, 0.04, 0.68, 0.72, (i, t, L) => (set(i, '-', C(WHITE, L)), true)), // its flush handle
+  BX(x, y + back * 0.02, 0.11, 0.13, 0, 0.3, steel), // the pedestal
+  BX(x, y + back * 0.04, 0.21, 0.26, 0.3, 0.42, (i, t, L) => { // the bowl: an oval rim, water in the middle
+    if (HIT.face !== 5) { BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+    const e = Math.hypot(HIT.u / 0.21, HIT.v / 0.26);
+    if (e > 1) return false;
+    if (e > 0.68) { BG[i] = C(GRAY, 2.2 + L * 0.3); return set(i, 'o', C(WHITE, L)), true; }
+    BG[i] = C(BLUE, 1.4 + L * 0.15); return set(i, e < 0.3 && hash(Math.floor(T * 2), 1, 15) > 0.6 ? '~' : ' ', C(CYAN, L)), true;
+  })];
 function jailProps(r) {
   const p = [];
   for (const cx of [4, 11, 18]) { // the three cells on your side (yours is the middle) and the three across
     p.push(BX(cx, JAIL_BARS_NEAR, 3, 0.03, 0, 3, barShade), BX(cx, JAIL_BARS_FAR, 3, 0.03, 0, 3, barShade));
-    p.push(...bunk(cx - 1.1, 1.55), toilet(cx + 1.9, 1.4)); // ours: bunk along the back wall
-    p.push(...bunk(cx - 1.1, JAIL_D - 2.55), toilet(cx + 1.9, JAIL_D - 2.4)); // theirs, the mirror of it
+    p.push(...bunk(cx - 1.1, 1.55), ...toilet(cx + 1.9, 1.4, -1)); // ours: bunk along the back wall
+    p.push(...bunk(cx - 1.1, JAIL_D - 2.55), ...toilet(cx + 1.9, JAIL_D - 2.4, 1)); // theirs, the mirror of it
   }
   // who's across the way: one at the bars, one asleep on his bunk, one pacing
   p.push(inmate(4.6, 9.6), inmate(10.2, JAIL_D - 2.55, true));

@@ -372,3 +372,12 @@ test('a walked dog stays with its walker whatever they are up to, and trots roun
   assert.ok(r.jump < 0.03, `jumped ${r.jump}`);
   assert.ok(r.behind);
 });
+
+test('street lamps are solid, and no emergency vehicle is parked on one', () => {
+  const r = j(`(() => {
+    const l = lamps[40];
+    const parkedOnLamp = SERVICES.filter(b => lamps.some(m => Math.abs(rel(m.x - b.x)) < 0.45 && Math.abs(rel(m.y - b.y)) < 0.2)).map(b => b.kind);
+    return { hit: lampAt(l.x, l.y, 0), beside: lampAt(l.x + 0.2, l.y, 0.03), parkedOnLamp };
+  })()`);
+  assert.deepStrictEqual(r, { hit: true, beside: false, parkedOnLamp: [] });
+});
