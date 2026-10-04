@@ -133,7 +133,7 @@ function marinaSprites() {
   const [vx, vy] = R(MARINA.x + 0.7, MARINA.office.y - 0.2); // the board at the foot of the jetty
   if (Math.hypot(vx, vy) < 8) drawArt(vx, vy, 0, 0.5, 0.42, MARINA_BOARD, (c, row, L) => row === 1 ? C(WHITE, Math.max(L, 11)) : row > 5 ? C(GRAY, L) : /[$0-9]/.test(c) ? C(YEL, Math.max(L, 9)) : C(WHITE, Math.max(L, 7)));
 }
-const MARINA_BOARD = pad(['.---------------.', '| BOATS FOR HIRE |', '| speed     $' + BOAT_KINDS.speedboat.rent + ' |', '| sail      $' + BOAT_KINDS.sailboat.rent + ' |', '| cruiser   $' + BOAT_KINDS.cruiser.rent + ' |',
+const MARINA_BOARD = pad(['.---------------.', '| BOATS FOR HIRE |', '| SPEED     $' + BOAT_KINDS.speedboat.rent + ' |', '| SAIL      $' + BOAT_KINDS.sailboat.rent + ' |', '| CRUISER   $' + BOAT_KINDS.cruiser.rent + ' |',
   "'---------------'", '       |||', '       |||']);
 // the marina office: white clapboard, a blue roof, MARINA over the door on the side facing the road, windows looking
 // down the jetty

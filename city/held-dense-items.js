@@ -618,7 +618,8 @@ Object.assign(DENSE, {
     if (dmin < thick) return [dmin < thick * 0.3 && Math.floor(along * 4) & 1 ? '=' : dFill(0.5 + 0.45 * (1 - dmin / thick) - (y > 1 ? 0.1 : 0)), dCol(GREEN, 0.5 + 0.45 * (1 - dmin / thick), 7)];
     return null;
   }),
-  sparklers: () => sculpt(10, 15, (x, y) => (Math.abs(x) < 0.2 ? [y < -4 ? '#' : '|', y < -4 ? C(GRAY, 7) : C(GRAY, 12)] : null)), // the wire; drawSparks puts the fizz on top
+  // the wire, its top two thirds coated silver; lit, it burns down from the tip, leaving grey ash (#) above the fizz
+  sparklers: () => { const front = sparkBurn() * 9 - 7; return sculpt(10, 15, (x, y) => Math.abs(x) >= 0.2 ? null : y < front ? ['#', C(GRAY, 6)] : y < 2 ? ['=', C(WHITE, 13)] : ['|', C(GRAY, 12)]); },
   umbrella: () => sculpt(16, 19, (x, y) => { // furled, a strap round it, the hooked handle
     if (y > 5 && Math.abs(x) < 0.2) return ['|', C(BRICK, 12)];
     if (y > 8 && dEll(x, y, 1, 8.4, 1.2, 1) < 1 && dEll(x, y, 1, 8.4, 0.6, 0.4) > 1 && y > 8.4) return ['J', C(BRICK, 12)];

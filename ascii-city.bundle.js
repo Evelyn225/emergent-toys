@@ -1832,6 +1832,7 @@ function audioMix(s) {
     if (k === 'cranes') out.arcade = 0.75;
     if (k === 'conservatory') { out.waves = 0.3; out.city = 0.02; } // the waterfall
     if (k === 'aviary') out.city = 0.04;
+    if (s.room.burgled) { out.restaurant = out.bossa = out.coffee = out.karaoke = out.arcade = 0; out.city *= 0.6; } // broken into at night: nobody here, nothing on, just the street outside
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
     return out;
   }
@@ -2076,7 +2077,7 @@ function useHeld(near) {
     case 'jadedragon': return [pick(['You rub the dragon\'s head for luck.', 'The little jade dragon stares back, very sure of itself.', 'You give the dragon a pat. Good fortune, apparently, follows.']), null];
     case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head. You feel a tiny bit luckier.', 'The lucky cat beckons good fortune your way. A little bit of it, anyway.']), null];
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
-    case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.']), null];
+    case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), null];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
     case 'yoyo': fx.yoyoTrick = Math.random() * 4 | 0; fx.yoyo = YOYO_DUR; return [['Walk the dog.', 'Around the world.', 'Rock the baby.', 'It sleeps at the bottom, then snaps back up.'][fx.yoyoTrick], 'whirr'];
     case 'harmonica':
@@ -4003,7 +4004,7 @@ const sk0 = seed => seed * 1e4 | 0;
 const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE, GRAY];
 const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
-const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448 };
+const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448, '$': 15518 };
 const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
 // a sign's letters: big enough on screen (judged once for the whole sign, from tFar, the depth of its far end) and each
 // letter is drawn large in blocks; smaller, one character per letter in the middle of its span. lq: how far across in
@@ -8126,7 +8127,7 @@ function marinaSprites() {
   const [vx, vy] = R(MARINA.x + 0.7, MARINA.office.y - 0.2); // the board at the foot of the jetty
   if (Math.hypot(vx, vy) < 8) drawArt(vx, vy, 0, 0.5, 0.42, MARINA_BOARD, (c, row, L) => row === 1 ? C(WHITE, Math.max(L, 11)) : row > 5 ? C(GRAY, L) : /[$0-9]/.test(c) ? C(YEL, Math.max(L, 9)) : C(WHITE, Math.max(L, 7)));
 }
-const MARINA_BOARD = pad(['.---------------.', '| BOATS FOR HIRE |', '| speed     $' + BOAT_KINDS.speedboat.rent + ' |', '| sail      $' + BOAT_KINDS.sailboat.rent + ' |', '| cruiser   $' + BOAT_KINDS.cruiser.rent + ' |',
+const MARINA_BOARD = pad(['.---------------.', '| BOATS FOR HIRE |', '| SPEED     $' + BOAT_KINDS.speedboat.rent + ' |', '| SAIL      $' + BOAT_KINDS.sailboat.rent + ' |', '| CRUISER   $' + BOAT_KINDS.cruiser.rent + ' |',
   "'---------------'", '       |||', '       |||']);
 // the marina office: white clapboard, a blue roof, MARINA over the door on the side facing the road, windows looking
 // down the jetty
@@ -8179,8 +8180,12 @@ function drawArt(rx_, ry_, z, w, h, art, colFn) {
       if (ch === ' ') continue;
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
-      if (stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1])) &&
-          (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
+      const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));
+      if (word && cellW >= 3 && cellH >= 3.5 && GLYPH5[ch] !== undefined) { // big enough: the letter drawn large in blocks (every letter of the art at once)
+        const fx = (c + 0.5 - left) / cellW - ax, fy = (r + 0.5 - top) / cellH - ay;
+        set(i, glyphOn(ch, Math.floor(fx * 4), Math.floor(fy * 5)) ? '#' : ' ', colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; continue;
+      }
+      if (word && (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
         set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue;
       }
       set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0;
@@ -10259,6 +10264,7 @@ const DENSE = {
     return [n > 0.72 ? 'o' : dFill(b), C(n > 0.72 ? ORANGE : YEL, 7 + b * 8)];
   }),
 };
+const sparkBurn = () => fx.spark > 0 ? clamp(1 - fx.spark / 25, 0, 1) : 0; // how far down a lit sparkler has burnt, 0..1
 // in place of the big-lettered item (false: not one of the examples). The hand is drawn as usual afterwards
 function drawHeldDense(it, cx, hy, hsz, grip) {
   if (!DENSE_ON || !DENSE[it.id] || it.id === 'umbrella' && rain > 0.2 && mode !== 'room') return false; // (open in the rain: the canopy)
@@ -10269,7 +10275,7 @@ function drawHeldDense(it, cx, hy, hsz, grip) {
     g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
     artText(art, cx - artW * w / 2, top, s, col); g.restore();
   }
-  if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - s * 0.4, s * 2);
+  if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top + (sparkBurn() * 9) * s, s * 2); // (at the burning point, working its way down)
   g.font = FS + 'px monospace';
   return true;
 }
@@ -10893,7 +10899,8 @@ Object.assign(DENSE, {
     if (dmin < thick) return [dmin < thick * 0.3 && Math.floor(along * 4) & 1 ? '=' : dFill(0.5 + 0.45 * (1 - dmin / thick) - (y > 1 ? 0.1 : 0)), dCol(GREEN, 0.5 + 0.45 * (1 - dmin / thick), 7)];
     return null;
   }),
-  sparklers: () => sculpt(10, 15, (x, y) => (Math.abs(x) < 0.2 ? [y < -4 ? '#' : '|', y < -4 ? C(GRAY, 7) : C(GRAY, 12)] : null)), // the wire; drawSparks puts the fizz on top
+  // the wire, its top two thirds coated silver; lit, it burns down from the tip, leaving grey ash (#) above the fizz
+  sparklers: () => { const front = sparkBurn() * 9 - 7; return sculpt(10, 15, (x, y) => Math.abs(x) >= 0.2 ? null : y < front ? ['#', C(GRAY, 6)] : y < 2 ? ['=', C(WHITE, 13)] : ['|', C(GRAY, 12)]); },
   umbrella: () => sculpt(16, 19, (x, y) => { // furled, a strap round it, the hooked handle
     if (y > 5 && Math.abs(x) < 0.2) return ['|', C(BRICK, 12)];
     if (y > 8 && dEll(x, y, 1, 8.4, 1.2, 1) < 1 && dEll(x, y, 1, 8.4, 0.6, 0.4) > 1 && y > 8.4) return ['J', C(BRICK, 12)];
@@ -11196,7 +11203,8 @@ function drawGame() {
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
   const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
   const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
-  const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
+  const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
+  const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over && game.kind !== 'crime' && game.kind !== 'show') { // the results card
     const r = g.reward(), res = g.result, lines = game.kind === 'table'

@@ -19,8 +19,12 @@ function drawArt(rx_, ry_, z, w, h, art, colFn) {
       if (ch === ' ') continue;
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
-      if (stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1])) &&
-          (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
+      const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));
+      if (word && cellW >= 3 && cellH >= 3.5 && GLYPH5[ch] !== undefined) { // big enough: the letter drawn large in blocks (every letter of the art at once)
+        const fx = (c + 0.5 - left) / cellW - ax, fy = (r + 0.5 - top) / cellH - ay;
+        set(i, glyphOn(ch, Math.floor(fx * 4), Math.floor(fy * 5)) ? '#' : ' ', colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; continue;
+      }
+      if (word && (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
         set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue;
       }
       set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0;
