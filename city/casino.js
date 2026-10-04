@@ -94,7 +94,7 @@ ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6,
 ROOM_FOR.CASINO = 'casino';
 const CASINO_NAMES = { blackjack: 'blackjack', roulette: 'roulette', slots: 'the slots' };
 const casinoSpot = () => { // the table or machine you're at, if any
-  if (mode !== 'room' || room.kind !== 'casino') return null;
+  if (mode !== 'room' || room.kind !== 'casino' || room.burgled) return null; // (no dealing to burglars)
   let best = null, bd = 1.4;
   for (const s of room.props) if (s.casino) { const d = Math.hypot(px - s.cx, py - s.cy); if (d < bd) { bd = d; best = s.casino; } }
   return best;

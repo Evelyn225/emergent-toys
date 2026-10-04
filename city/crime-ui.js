@@ -138,7 +138,8 @@ function pickLock(sh) {
 // in a shop you've broken into: E at the counter empties the till (a night's takings: a lot), G takes something off the
 // shelves. Touch the money and the alarm goes: the police are on their way at once (a bank: all of them). In a bank
 // there's the vault too, on the right-hand wall: crack it (the lockpick game) for a fortune
-const nearVault = () => mode === 'room' && room.burgled && room.kind === 'bank' && px > room.W - 2.4 && Math.abs(py - room.H / 2) < 1.4;
+const nearVault = () => mode === 'room' && room.burgled && (room.kind === 'bank' && px > room.W - 2.4 && Math.abs(py - room.H / 2) < 1.4
+  || room.kind === 'casino' && Math.hypot(px - 11, py - 3.2) < 1.6); // (the casino's: the cashier's cage, full of the night's takings)
 function raiseAlarm(bank) {
   if (room.alarm) return;
   room.alarm = true;
@@ -159,7 +160,8 @@ function crackVault() {
     raiseAlarm(true);
     if (!ok) return say('The dial won\'t give, and every alarm in the building goes off. RUN.', 4);
     room.vaultTaken = true;
-    const c = Math.round((1000 + Math.random() * 1500) / 10) * 10; earn(c);
+    const casino = room.kind === 'casino', c = Math.round(((casino ? 1500 : 1000) + Math.random() * (casino ? 2500 : 1500)) / 10) * 10; earn(c);
+    if (casino) return say(`The cage's safe swings open: the night's takings. You stuff ${fmt$(c)} into your bag. Alarms everywhere: every cop in town is coming!`, 5);
     say(`The vault door swings open. You stuff ${fmt$(c)} into your bag. Alarms everywhere: every cop in town is coming!`, 5);
   });
 }

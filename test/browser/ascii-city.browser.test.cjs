@@ -872,3 +872,15 @@ test('the capsule hotel: in through the door and up the aisle without the front 
   assert.deepStrictEqual(r.blocked, []);
   assert.match(r.desk, /a pod for the night/);
 }));
+
+test('breaking into the casino: shut from 2am, so the lock can be picked before dawn; inside, the cashier\'s cage is the vault', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    const sh = CASINO.sh, shut3 = !openAt(sh, 3), open22 = openAt(sh, 22);
+    tod = 3; mode = 'walk';
+    enterRoom('casino', { ...sh, cell: [CASINO.bx * 8 + 4, CASINO.by * 8 + 5], ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]);
+    px = 11; py = 3.4; a = -Math.PI / 2;
+    return { shut3, open22, prompt: promptText(), noTables: casinoSpot() === null };
+  });
+  assert.deepStrictEqual([r.shut3, r.open22, r.noTables], [true, true, true]);
+  assert.match(r.prompt, /crack the vault/);
+}));

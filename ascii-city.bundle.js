@@ -236,7 +236,7 @@ const GLYPHS = { BOOKS: '|][|', RECORDS: '()O', VIDEO: '[]', LIQUOR: 'il!', BAR:
   'TEA HOUSE': 'oc]', TIRES: 'O0o', 'AUTO REPAIR': 'T7/', SPORTS: 'oO@', SKATE: '=_o', TOYS: 'o*@&', THRIFT: '|]&', TOBACCO: 'i=', MANGA: '|][|', DRUGSTORE: '+=o', GACHA: 'oO@' };
 const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, sorry.', 'Nice weather, huh?', 'Take your time.'];
 // opening hours [open, close) in game hours; close < open wraps past midnight; [0, 24] never closes
-const HOURS = { VELVET: [20, 4], CASINO: [10, 6], EXCHANGE: [8, 19], BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
+const HOURS = { VELVET: [20, 4], CASINO: [14, 2], EXCHANGE: [8, 19], BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
@@ -7772,7 +7772,7 @@ ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6,
 ROOM_FOR.CASINO = 'casino';
 const CASINO_NAMES = { blackjack: 'blackjack', roulette: 'roulette', slots: 'the slots' };
 const casinoSpot = () => { // the table or machine you're at, if any
-  if (mode !== 'room' || room.kind !== 'casino') return null;
+  if (mode !== 'room' || room.kind !== 'casino' || room.burgled) return null; // (no dealing to burglars)
   let best = null, bd = 1.4;
   for (const s of room.props) if (s.casino) { const d = Math.hypot(px - s.cx, py - s.cy); if (d < bd) { bd = d; best = s.casino; } }
   return best;
@@ -11376,7 +11376,8 @@ function pickLock(sh) {
 // in a shop you've broken into: E at the counter empties the till (a night's takings: a lot), G takes something off the
 // shelves. Touch the money and the alarm goes: the police are on their way at once (a bank: all of them). In a bank
 // there's the vault too, on the right-hand wall: crack it (the lockpick game) for a fortune
-const nearVault = () => mode === 'room' && room.burgled && room.kind === 'bank' && px > room.W - 2.4 && Math.abs(py - room.H / 2) < 1.4;
+const nearVault = () => mode === 'room' && room.burgled && (room.kind === 'bank' && px > room.W - 2.4 && Math.abs(py - room.H / 2) < 1.4
+  || room.kind === 'casino' && Math.hypot(px - 11, py - 3.2) < 1.6); // (the casino's: the cashier's cage, full of the night's takings)
 function raiseAlarm(bank) {
   if (room.alarm) return;
   room.alarm = true;
@@ -11397,7 +11398,8 @@ function crackVault() {
     raiseAlarm(true);
     if (!ok) return say('The dial won\'t give, and every alarm in the building goes off. RUN.', 4);
     room.vaultTaken = true;
-    const c = Math.round((1000 + Math.random() * 1500) / 10) * 10; earn(c);
+    const casino = room.kind === 'casino', c = Math.round(((casino ? 1500 : 1000) + Math.random() * (casino ? 2500 : 1500)) / 10) * 10; earn(c);
+    if (casino) return say(`The cage's safe swings open: the night's takings. You stuff ${fmt$(c)} into your bag. Alarms everywhere: every cop in town is coming!`, 5);
     say(`The vault door swings open. You stuff ${fmt$(c)} into your bag. Alarms everywhere: every cop in town is coming!`, 5);
   });
 }
