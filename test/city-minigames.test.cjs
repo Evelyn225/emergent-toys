@@ -216,6 +216,10 @@ test('ring toss: a ring thrown dead on a bottle neck rings it; six rings and it 
   assert.strictEqual(events.filter(e => e === 'launch').length, 6);
   assert.strictEqual(events.filter(e => e === 'score' || e === 'miss').length, 6, 'every ring lands somewhere');
   assert.strictEqual(ev('g.reward()'), ev('g.score') * 4);
+  // throw whenever the guide is dead on a bottle: every ring rings one (the old game dropped rings on a random row)
+  ev('var g = GAMES.ringtoss(() => 0.99)');
+  const hits = ev(`(() => { let n = 0; for (let i = 0; i < 6000 && !g.over; i++) { const t = g.target(); n += g.step(1 / 120, { actP: !!(t && t.exact) }).filter(e => e === 'score').length; } return n; })()`);
+  assert.strictEqual(hits, 6, 'six for six');
 });
 
 test('high striker: three swings, each scored by how high the puck went; the bell pays most', () => {

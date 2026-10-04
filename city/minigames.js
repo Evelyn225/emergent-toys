@@ -521,18 +521,28 @@ GAMES.jailbreak = (rnd = Math.random) => {
 // ring toss: rows of bottles; the ring swings back and forth in front of you, GO throws it straight up the board.
 // It lands on a bottle neck only if it's dead on (the far rows count double). Six rings.
 GAMES.ringtoss = (rnd = Math.random) => {
-  const W = 29, H = 12, ROWS = [2, 4, 6], g = { id: 'ringtoss', title: 'RING TOSS', W, H, score: 0, over: false };
+  // the ring flies straight up from where you throw it and drops over the first bottle in its path (the front rows
+  // first: ring those and the ones behind open up). A dotted line shows which bottle that is. Dead on, it rings it;
+  // a column off, it might clip the neck and drop on anyway. The back row's worth most.
+  const W = 29, H = 12, ROWS = [2, 4, 6], PTS = { 2: 3, 4: 2, 6: 1 }, g = { id: 'ringtoss', title: 'RING TOSS', W, H, score: 0, over: false };
   const necks = [];
   for (const y of ROWS) for (let x = 2 + (y >> 1 & 1) * 2; x < W - 1; x += 4) necks.push({ x, y, ringed: false });
-  let rings = 6, aim = 1, dir = 1, speed = 11, fly = null, hits = 0;
+  let rings = 6, aim = 1, dir = 1, speed = 9, fly = null, hits = 0, last = null;
+  const target = x => { // the bottle a ring thrown up column x comes down on: dead on, or one beside it it'll clip
+    for (const y of [...ROWS].reverse()) { const n = necks.find(q => q.y === y && q.x === x && !q.ringed); if (n) return { n, exact: true }; }
+    for (const y of [...ROWS].reverse()) { const n = necks.find(q => q.y === y && Math.abs(q.x - x) === 1 && !q.ringed); if (n) return { n, exact: false }; }
+    return null;
+  };
+  g.target = () => fly ? null : target(Math.round(aim)); // (for the tests)
   g.step = (dt, k) => {
     const ev = [];
     if (g.over) return ev;
-    if (fly) { // up the board, landing on its row
+    if (last && (last.t -= dt) <= 0) last = null;
+    if (fly) { // up the board to where it'll come down
       fly.y -= dt * 22;
       if (fly.y <= fly.to) {
-        const n = necks.find(q => q.x === fly.x && q.y === fly.to && !q.ringed);
-        if (n) { n.ringed = true; hits++; g.score += n.y === ROWS[0] ? 2 : 1; ev.push('score'); } else ev.push('miss');
+        if (fly.n && (fly.exact || rnd() < 0.45)) { fly.n.ringed = true; hits++; g.score += PTS[fly.n.y]; ev.push('score'); last = { text: `RINGED! +${PTS[fly.n.y]}`, col: GREEN, t: 1.2 }; }
+        else { ev.push('miss'); last = { text: fly.n ? 'clink... off the rim' : 'nothing there', col: GRAY, t: 1.2 }; }
         fly = null;
         if (rings === 0) { g.over = true; ev.push('end'); }
       }
@@ -540,17 +550,26 @@ GAMES.ringtoss = (rnd = Math.random) => {
     }
     aim += dir * speed * dt;
     if (aim < 1 || aim > W - 2) { dir = -dir; aim = clamp(aim, 1, W - 2); }
-    if (k.actP && rings > 0) { rings--; fly = { x: Math.round(aim), y: H - 2, to: ROWS[rnd() * 3 | 0] }; speed *= 1.08; ev.push('launch'); }
+    if (k.actP && rings > 0) {
+      rings--; const x = Math.round(aim), tg = target(x);
+      fly = { x, y: H - 2, to: tg ? tg.n.y : 0, n: tg && tg.n, exact: tg && tg.exact }; speed *= 1.05; ev.push('launch');
+    }
     return ev;
   };
   g.draw = (put, text) => {
     for (let x = 0; x < W; x++) put(x, H - 3, '-', C(BRICK, 6)); // the line you throw from
-    for (const n of necks) { put(n.x, n.y, n.ringed ? 'O' : 'i', n.ringed ? C(YEL, 15) : C(GREEN, 12)); put(n.x, n.y + 1, 'U', C(GREEN, 8)); }
+    const tg = g.target();
+    if (tg && rings) for (let y = tg.n.y + 2; y < H - 3; y++) put(Math.round(aim), y, ':', C(tg.exact ? YEL : GRAY, tg.exact ? 9 : 6)); // where it'll go
+    for (const n of necks) {
+      const aimed = tg && tg.n === n;
+      put(n.x, n.y, n.ringed ? 'O' : 'i', n.ringed ? C(YEL, 15) : aimed ? C(tg.exact ? YEL : WHITE, 15) : C(GREEN, 12)); put(n.x, n.y + 1, 'U', C(GREEN, 8));
+    }
     if (fly) put(fly.x, Math.round(fly.y), 'o', C(YEL, 15));
     else if (rings) { put(Math.round(aim), H - 2, 'O', C(YEL, 15)); put(Math.round(aim), H - 1, '^', C(WHITE, 10)); }
     text(0, 0, `rings: ${'O'.repeat(rings)}${'.'.repeat(6 - rings)}`, C(WHITE, 13));
+    if (last) text(9, 0, last.text, C(last.col, 15));
   };
-  g.status = () => `RINGED ${hits}   POINTS ${g.score}   SPACE throw`;
+  g.status = () => `RINGED ${hits}   POINTS ${g.score} (back row 3, middle 2, front 1)   SPACE throw when the dots line up on a bottle`;
   g.reward = () => g.score * 4;
   return g;
 };
