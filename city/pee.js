@@ -1,14 +1,15 @@
-// ===== peeing, just for fun: P lets it go wherever you're standing. The stream leaves you level and falls under
-// gravity, whichever way you're looking (your eyes go down to it), and a yellow puddle spreads where it lands, then
+// ===== peeing, just for fun: P lets it go wherever you're standing. Like Postal 2, it comes up from the bottom of
+// the screen and you aim it with your eyes: look up and it arcs out further, down and it lands at your feet, gravity
+// bending it down either way. A yellow puddle spreads where it lands, then
 // dries up over a few minutes (quicker in the rain, slower indoors). How long you go is down to the bladder
 // (needs.js), which nothing shows and nothing ever makes you empty. P again cuts it off.
 // Stand by a toilet (bars, diners, home, the cell) and it goes in the bowl, and you flush. Anywhere else indoors the
 // staff throw you out; outside, a cop who sees it nicks you for public urination, and passers-by have a word.
-let pee = null; // { left: seconds of stream, t, at, pitch0, auto, loo: [x, y] or null, seen: when we last looked round, caught }
+let pee = null; // { left: seconds of stream, t, at, loo: [x, y] or null, seen: when we last looked round, caught }
 const peeDrops = []; // { at, s, x, y, z, vx, vy, vz, t0 }: the stream, in flight, oldest first
 const puddles = []; // { at, s, x, y, z, area, life, seed }: area in square metres
-let peeLook = null, peeN = 0; // easing your eyes back up; drops so far (for the ripples running down the stream)
-const PEE_DRY = 240, PEE_LOOK = -0.8; // seconds for a puddle to dry outside; where your eyes go while you're at it
+let peeN = 0; // drops so far (for the ripples running down the stream)
+const PEE_DRY = 240; // seconds for a puddle to dry outside
 const PEE_RATE = 60, PEE_DROP = 0.0022; // drops a second, and the puddle each one makes (m²): a full bladder's ~1.3m²
 const peeScale = () => mode === 'room' ? 1 : 0.1; // world units a metre
 const LOO_TOP = 0.42, LOO_R = 0.2, LOO_REACH = 1.4, COP_PEE = 4, CIV_PEE = 1.5; // the bowl; how near to use it; how near a cop / anyone notices (cells)
@@ -30,33 +31,26 @@ function peeGround(x, y) {
 }
 
 function startPee() {
-  if (pee) { peeLookBack(); pee = null; say('You stop.', 1.2); return; }
+  if (pee) { pee = null; say('You stop.', 1.2); return; }
   const at = placeKey();
   if (at === null || !onFootMode()) return say('Not here.');
   if (body.seat) return say('Stand up first.');
-  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, pitch0: pitch, auto: true, loo: looNear(), seen: 0, caught: false }; // (a short one even with nothing in you)
-  peeLook = null;
+  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, loo: looNear(), seen: 0, caught: false }; // (a short one even with nothing in you)
   say(pee.loo ? 'You use the toilet.' : needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
 }
-// done (or cut off): your eyes come back up to where they were, unless you've looked somewhere yourself
-function peeLookBack() { if (pee && pee.auto) peeLook = { to: pee.pitch0, t: 0.7 }; }
-const peeLookOff = () => { if (pee) pee.auto = false; peeLook = null; }; // (you moved the view yourself)
 
 function stepPee(dt) {
   if (pee) {
-    if (!onFootMode() || placeKey() !== pee.at || sleep || game) { pee = null; peeLook = null; }
+    if (!onFootMode() || placeKey() !== pee.at || sleep || game) { pee = null; }
     else {
       pee.t += dt; pee.left -= dt;
       needs.bladder = Math.max(0, needs.bladder - dt * 100 / 12.5);
-      if (pee.auto && pee.t < 1.2) pitch += (PEE_LOOK - pitch) * Math.min(1, dt * 5);
-      if (K.KeyR || K.KeyF) pee.auto = false;
       const flow = Math.min(1, 0.35 + pee.t * 1.6) * Math.min(1, Math.max(0, pee.left) / 1.4); // starts up, dribbles out
       for (let n = Math.round(PEE_RATE * dt + Math.random() * 0.5); n > 0; n--) peeSpray(flow);
       if ((pee.seen -= dt) <= 0) { pee.seen = 0.4; peeWitness(); }
-      if (pee && pee.left <= 0) { if (pee.loo) { flushT = T; say('You flush. Very civilised.', 2); } peeLookBack(); pee = null; }
+      if (pee && pee.left <= 0) { if (pee.loo) { flushT = T; say('You flush. Very civilised.', 2); } pee = null; }
     }
   }
-  if (peeLook) { pitch += (peeLook.to - pitch) * Math.min(1, dt * 5); if ((peeLook.t -= dt) <= 0) peeLook = null; }
   // the stream in the air
   const bowls = loos();
   for (let k = peeDrops.length - 1; k >= 0; k--) {
@@ -88,7 +82,7 @@ function peeWitness() {
     if (kind === 'jail') { if (!pee.caught) { pee.caught = true; say('The guard bangs on the bars. "Use the toilet, animal."', 3); } return; }
     if (!k || room.burgled || kind === 'home' || kind === 'loft' || kind === 'hotelroom') return; // (your own place, or nobody here: your own business)
     const there = loos().length ? ' The toilet\'s RIGHT THERE.' : '';
-    pee = null; peeLook = null; leaveRoom();
+    pee = null; leaveRoom();
     return say(`"Hey! HEY! Not in here!"${there} You're thrown out onto the street.`, 4);
   }
   if (mode !== 'walk' || pee.caught) return; // (up on a roof nobody's looking)
@@ -101,15 +95,17 @@ function peeWitness() {
 }
 // one drop, out in front of you at about hip height
 function peeSpray(flow) {
-  // aimed by which way you face, never by how far up or down you look: it leaves about level and gravity does the rest
+  // aimed where you look: well above the middle of the screen, so the arc comes down about where your eyes are
   const s = peeScale(), wob = Math.sin(T * 6) * 0.05 + Math.sin(T * 1.7) * 0.09;
-  let ang = a + wob, sp = 0.6 + flow * 2.4;
-  const up = 0.4 + flow * 0.7, ground = eye - eyeLift() * s - (mode === 'room' ? 1.7 : 0.17); // (eye height less the 1.7m you stand)
+  const look = Math.atan(pitch * rows / projY), el = clamp(look + 0.55, -1.3, 1.3) + Math.sin(T * 2.9) * 0.03;
+  let ang = a + wob, sp = 1.5 + flow * 4.5, up = Math.sin(el) * sp;
+  const ground = eye - eyeLift() * s - (mode === 'room' ? 1.7 : 0.17); // (eye height less the 1.7m you stand)
   const hip = Math.max(ground + 0.3 * s, eye - 0.8 * s); // (crouched, it's not coming out of the floor)
   const x = px + Math.cos(a) * 0.25 * s, y = py + Math.sin(a) * 0.25 * s;
-  if (pee.loo) { // at a toilet you aim: whatever speed lands it in the bowl (gravity still has the say on the way down)
+  sp *= Math.cos(el);
+  if (pee.loo) { // at a toilet you get some help: whatever lands it in the bowl (gravity still has the say on the way down)
     const [lx, ly] = pee.loo, d = Math.hypot(lx - x, ly - y), fall = Math.max(0.05, hip - LOO_TOP);
-    ang = Math.atan2(ly - y, lx - x) + wob * 0.15;
+    up = 0.4 + flow * 0.7; ang = Math.atan2(ly - y, lx - x) + wob * 0.15;
     sp = d * 9.8 / (up + Math.sqrt(up * up + 2 * 9.8 * fall)) * (0.96 + Math.random() * 0.08);
   }
   peeDrops.push({ at: pee.at, s, x, y, z: hip, vx: Math.cos(ang) * sp * s, vy: Math.sin(ang) * sp * s,
@@ -201,8 +197,16 @@ function peeDot(c, r, depth, ch, lit) {
   set(i, ch, C(YEL, Math.max(8, (1 - depth / vis) * 12) * lit)); FOGS[i] = 0;
 }
 function peeLine(p0, p1, lit, bright) {
-  const dc = p1.c - p0.c, dr = p1.r - p0.r, n = Math.min(80, Math.ceil(Math.max(Math.abs(dc), Math.abs(dr))));
-  if (n > 79 && (Math.max(p0.r, p1.r) < 0 || Math.min(p0.r, p1.r) > rows)) return; // (way off screen)
+  let t0 = 0, t1 = 1; // clip to the screen first (the stream comes up from below it, from way off the bottom)
+  const dc = p1.c - p0.c, dr = p1.r - p0.r;
+  for (const [o, d, lo, hi] of [[p0.c, dc, -1, cols], [p0.r, dr, -1, rows]]) {
+    if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return; continue; }
+    let a_ = (lo - o) / d, b_ = (hi - o) / d;
+    if (a_ > b_) [a_, b_] = [b_, a_];
+    t0 = Math.max(t0, a_); t1 = Math.min(t1, b_);
+    if (t0 > t1) return;
+  }
+  const n = Math.min(200, Math.ceil(Math.max(Math.abs(dc), Math.abs(dr)) * (t1 - t0)) + 1);
   const ch = Math.abs(dr) > Math.abs(dc) * 2 ? '|' : Math.abs(dc) > Math.abs(dr) * 2 ? '-' : (dc > 0) === (dr > 0) ? '\\' : '/';
-  for (let k = 0; k <= n; k++) { const f = n ? k / n : 0; peeDot(p0.c + dc * f, p0.r + dr * f, p0.depth + (p1.depth - p0.depth) * f, ch, lit * bright); }
+  for (let k = 0; k <= n; k++) { const f = t0 + (t1 - t0) * k / n; peeDot(p0.c + dc * f, p0.r + dr * f, p0.depth + (p1.depth - p0.depth) * f, ch, lit * bright); }
 }

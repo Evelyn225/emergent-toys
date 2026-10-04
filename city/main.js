@@ -56,7 +56,6 @@ function turnBy(mx, my) {
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
-  if (my) peeLookOff(); // (looking about yourself: your eyes stay where you put them)
 }
 // on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
 let flick = null;

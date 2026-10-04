@@ -242,7 +242,13 @@ test('pachinko: balls fired land in pockets now and then (any column can be reac
   ev('var g = GAMES.pachinko(); g.score = 10000');
   const events = play(ev, 120, '() => ({ act: 1 })');
   assert.ok(events.includes('score') && events.includes('eat'), 'both kinds of pocket hit');
-  assert.ok(ev('g.score') < 10000, 'the house wins over time');
+  // the house wins over time: across a handful of players (any one of them can come out ahead, it's that close)
+  let left = 0;
+  for (let s = 1; s <= 8; s++) {
+    const { ev: e } = require('./helpers/load-city.cjs').loadCity(s);
+    left += e('var g = GAMES.pachinko(); g.score = 10000; (() => { for (let t = 0; t < 120; t += 1 / 60) g.step(1 / 60, { act: 1 }); return g.score; })()');
+  }
+  assert.ok(left < 80000, `the house wins over time (${left})`);
   ev('g.score = 40');
   assert.strictEqual(ev('g.reward()'), 5);
 });

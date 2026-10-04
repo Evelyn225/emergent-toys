@@ -282,8 +282,8 @@ const ADS = ['DRINK COLA', 'NEO PHONES', 'EAT AT JOES', 'MEGA BANK', 'FLY AIR 9'
 const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
   'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
   'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE','STORAGE',
-  'BURGERS','CHICKEN','JUICE','ICE CREAM','TOYS','THRIFT','TOBACCO','CARS','REALTY'];
-const PRODUCE = ['GROCERY','MARKET','FRUIT','BAKERY','BODEGA'];
+  'BURGERS','CHICKEN','JUICE','ICE CREAM','TOYS','THRIFT','TOBACCO','REALTY'];
+const PRODUCE = ['GROCERY','MARKET','FRUIT','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
   chinatown: ['DUMPLINGS','NOODLES','TEA HOUSE','HERBS','KARAOKE','BAKERY','DIM SUM','JADE','RAMEN','PHO','MAHJONG'],
@@ -317,6 +317,7 @@ function shopOf(seed, dist) {
   const apts = dist === 'brownstones' ? 0.75 : dist === 'industrial' ? 0.15 : 0.5;
   if (kind === SHOP_SHUT && fract(seed * 331) < apts) kind = SHOP_APTS;
   if (kind === SHOP_SHUT && fract(seed * 53) < 0.5) kind = SHOP_LIT; // (not so many boarded-up shops)
+  if (kind === SHOP_PRODUCE && fract(seed * 197) < 0.7) kind = SHOP_LIT; // (a grocer on every corner, not every other door)
   if (dist === 'brownstones' && kind !== SHOP_APTS && fract(seed * 77) < 0.5) kind = SHOP_APTS; // mostly front doors
   if (dist === 'shotengai' && kind !== SHOP_PRODUCE && fract(seed * 57) < 0.8) kind = fract(seed * 91) < 0.4 ? SHOP_NEON : SHOP_LIT; // shops, shops, shops
   const local = DIST_WORDS[dist], words = kind === SHOP_PRODUCE ? PRODUCE : local && fract(seed * 13) < 0.7 ? local : WORDS;
@@ -365,18 +366,22 @@ for (const seed of DIST_SEEDS) {
   for (const s of DIST_SEEDS) if (s[2] === 'midtown') { const d = Math.hypot(relB(s[0] - NB / 2), s[1] - (SHORE_S + SHORE_N) / 2 - 5); if (d < bd) { bd = d; best = s; } }
   best[2] = 'shotengai';
 }
-const DIST = new Array(NB * NB);
+const DIST = new Array(NB * NB), DIST_OWNER = new Int16Array(NB * NB).fill(-1); // (which seed each block belongs to)
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   if (by === SHORE_N || by === SHORE_S) { DIST[bi(bx, by)] = 'waterfront'; continue; }
   if (by > SHORE_S) { DIST[bi(bx, by)] = 'sea'; continue; }
-  let best = '', bd = Infinity;
-  for (const [sx, sy, d] of DIST_SEEDS) {
+  let best = '', bd = Infinity, bk = -1;
+  DIST_SEEDS.forEach(([sx, sy, d], k) => {
     const dd = Math.hypot(relB(bx - sx), by - sy) + noise(bx * 0.9, by * 0.9, 77) * 1.6;
-    if (dd < bd) { bd = dd; best = d; }
-  }
-  DIST[bi(bx, by)] = best;
+    if (dd < bd) { bd = dd; best = d; bk = k; }
+  });
+  DIST[bi(bx, by)] = best; DIST_OWNER[bi(bx, by)] = bk;
+  if (by === SHORE_N + 1 || by === SHORE_S - 1) DIST_SEEDS[bk][3] = true; // reaches the waterfront
 }
 const districtOf = (bx, by) => DIST[bi(bx, by)];
+// what a neighbourhood is called: industry on the shore is the Docks; inland, with no water in sight, the Yards
+const seedName = s => s[2] === 'industrial' && !s[3] ? 'yards' : s[2];
+const districtName = (bx, by) => { const k = DIST_OWNER[bi(bx, by)]; return k < 0 ? DIST[bi(bx, by)] : seedName(DIST_SEEDS[k]); };
 const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8));
 
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea
@@ -8838,7 +8843,7 @@ function minimap() {
   g.font = FS + 'px monospace';
 }
 
-const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks',
+const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards',
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay', shotengai: 'the Shotengai' };
 // a line of HUD text broken to fit maxW px: at the wide gaps between its parts first, then between words
 function wrapText(s, maxW) {
@@ -8869,7 +8874,7 @@ function hud() {
   drawHeldBig();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
-  const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
+  const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
     : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
@@ -10005,7 +10010,7 @@ const devAt = (x, y, ang) => { devFree(); px = mod(x, N); py = mod(y, N); a = an
 // a street spot in a district: the middle of the street beside one of its plain blocks
 function districtSpot(d) {
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++)
-    if (districtOf(bx, by) === d && !blockKind(bx, by) && hseg(bx, by)) return [bx * 8 + 4, by * 8 + 1.6, -Math.PI / 2];
+    if (districtName(bx, by) === d && !blockKind(bx, by) && hseg(bx, by)) return [bx * 8 + 4, by * 8 + 1.6, -Math.PI / 2];
   return null;
 }
 // every place you can jump to: [group, label, go]
@@ -10036,7 +10041,7 @@ function devPlaces() {
   owned.homes.forEach((h, k) => out.push(['Your homes', `${ITEMS[h.kind].name} ${k + 1}`, () => { const [x, y] = homeKerb(h.cell % N, Math.floor(h.cell / N)); devAt(x, y, 0); }]));
   const words = new Map(); // every kind of shop, by its sign: you land outside the nearest one
   for (let k = 0; k < N * N; k++) { const sh = SHOP[k]; if (sh && sh.word && sh.kind !== SHOP_APTS) words.set(sh.word, (words.get(sh.word) || new Set()).add(sh)); }
-  for (const [w, set] of [...words].sort((p, q) => p[0] < q[0] ? -1 : 1)) out.push(['Shops (nearest)', `${w}${set.size > 1 ? ` (${set.size})` : ''}`, () => { devFree(); gotoShop(w); }]);
+  for (const [w, set] of [...words].sort((p, q) => p[0] < q[0] ? -1 : 1)) out.push(['Shops (nearest)', `${w} (${set.size})`, () => { devFree(); gotoShop(w); }]);
   return out;
 }
 function devItems() {
@@ -10152,7 +10157,7 @@ function bigMapRender() {
 // what's named on the map: [x, y, text, colour, kind]. kind: 'area' (always), 'place' (always), 'shop' (zoomed in)
 function bigMapLabels() {
   const out = [];
-  for (const [sx, sy, d] of DIST_SEEDS) out.push([sx * 8, sy * 8, (DISTRICT_TITLE[d] || d).replace(/^the /, 'The '), 'rgba(255,255,255,0.55)', 'area']);
+  for (const sd of DIST_SEEDS) { const [sx] = sd, d = seedName(sd), sy = d === 'industrial' ? (sd[1] > (SHORE_N + SHORE_S) / 2 ? SHORE_S - 0.4 : SHORE_N + 1.4) : sd[1]; out.push([sx * 8, sy * 8, (DISTRICT_TITLE[d] || d).replace(/^the /, 'The '), 'rgba(255,255,255,0.55)', 'area']); }
   const place = (x, y, t) => out.push([x, y, t, '#fd8', 'place']);
   place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
   place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
@@ -11603,17 +11608,18 @@ function hazeCell(i, dens, kind) {
   if (dens > (vape ? 0.5 : 0.7)) BG[i] = vape ? C(WARM, (1.2 + dens * 2.2) * lit) : C(GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
   FOGS[i] = 0;
 }
-// ===== peeing, just for fun: P lets it go wherever you're standing. The stream leaves you level and falls under
-// gravity, whichever way you're looking (your eyes go down to it), and a yellow puddle spreads where it lands, then
+// ===== peeing, just for fun: P lets it go wherever you're standing. Like Postal 2, it comes up from the bottom of
+// the screen and you aim it with your eyes: look up and it arcs out further, down and it lands at your feet, gravity
+// bending it down either way. A yellow puddle spreads where it lands, then
 // dries up over a few minutes (quicker in the rain, slower indoors). How long you go is down to the bladder
 // (needs.js), which nothing shows and nothing ever makes you empty. P again cuts it off.
 // Stand by a toilet (bars, diners, home, the cell) and it goes in the bowl, and you flush. Anywhere else indoors the
 // staff throw you out; outside, a cop who sees it nicks you for public urination, and passers-by have a word.
-let pee = null; // { left: seconds of stream, t, at, pitch0, auto, loo: [x, y] or null, seen: when we last looked round, caught }
+let pee = null; // { left: seconds of stream, t, at, loo: [x, y] or null, seen: when we last looked round, caught }
 const peeDrops = []; // { at, s, x, y, z, vx, vy, vz, t0 }: the stream, in flight, oldest first
 const puddles = []; // { at, s, x, y, z, area, life, seed }: area in square metres
-let peeLook = null, peeN = 0; // easing your eyes back up; drops so far (for the ripples running down the stream)
-const PEE_DRY = 240, PEE_LOOK = -0.8; // seconds for a puddle to dry outside; where your eyes go while you're at it
+let peeN = 0; // drops so far (for the ripples running down the stream)
+const PEE_DRY = 240; // seconds for a puddle to dry outside
 const PEE_RATE = 60, PEE_DROP = 0.0022; // drops a second, and the puddle each one makes (m²): a full bladder's ~1.3m²
 const peeScale = () => mode === 'room' ? 1 : 0.1; // world units a metre
 const LOO_TOP = 0.42, LOO_R = 0.2, LOO_REACH = 1.4, COP_PEE = 4, CIV_PEE = 1.5; // the bowl; how near to use it; how near a cop / anyone notices (cells)
@@ -11635,33 +11641,26 @@ function peeGround(x, y) {
 }
 
 function startPee() {
-  if (pee) { peeLookBack(); pee = null; say('You stop.', 1.2); return; }
+  if (pee) { pee = null; say('You stop.', 1.2); return; }
   const at = placeKey();
   if (at === null || !onFootMode()) return say('Not here.');
   if (body.seat) return say('Stand up first.');
-  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, pitch0: pitch, auto: true, loo: looNear(), seen: 0, caught: false }; // (a short one even with nothing in you)
-  peeLook = null;
+  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, loo: looNear(), seen: 0, caught: false }; // (a short one even with nothing in you)
   say(pee.loo ? 'You use the toilet.' : needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
 }
-// done (or cut off): your eyes come back up to where they were, unless you've looked somewhere yourself
-function peeLookBack() { if (pee && pee.auto) peeLook = { to: pee.pitch0, t: 0.7 }; }
-const peeLookOff = () => { if (pee) pee.auto = false; peeLook = null; }; // (you moved the view yourself)
 
 function stepPee(dt) {
   if (pee) {
-    if (!onFootMode() || placeKey() !== pee.at || sleep || game) { pee = null; peeLook = null; }
+    if (!onFootMode() || placeKey() !== pee.at || sleep || game) { pee = null; }
     else {
       pee.t += dt; pee.left -= dt;
       needs.bladder = Math.max(0, needs.bladder - dt * 100 / 12.5);
-      if (pee.auto && pee.t < 1.2) pitch += (PEE_LOOK - pitch) * Math.min(1, dt * 5);
-      if (K.KeyR || K.KeyF) pee.auto = false;
       const flow = Math.min(1, 0.35 + pee.t * 1.6) * Math.min(1, Math.max(0, pee.left) / 1.4); // starts up, dribbles out
       for (let n = Math.round(PEE_RATE * dt + Math.random() * 0.5); n > 0; n--) peeSpray(flow);
       if ((pee.seen -= dt) <= 0) { pee.seen = 0.4; peeWitness(); }
-      if (pee && pee.left <= 0) { if (pee.loo) { flushT = T; say('You flush. Very civilised.', 2); } peeLookBack(); pee = null; }
+      if (pee && pee.left <= 0) { if (pee.loo) { flushT = T; say('You flush. Very civilised.', 2); } pee = null; }
     }
   }
-  if (peeLook) { pitch += (peeLook.to - pitch) * Math.min(1, dt * 5); if ((peeLook.t -= dt) <= 0) peeLook = null; }
   // the stream in the air
   const bowls = loos();
   for (let k = peeDrops.length - 1; k >= 0; k--) {
@@ -11693,7 +11692,7 @@ function peeWitness() {
     if (kind === 'jail') { if (!pee.caught) { pee.caught = true; say('The guard bangs on the bars. "Use the toilet, animal."', 3); } return; }
     if (!k || room.burgled || kind === 'home' || kind === 'loft' || kind === 'hotelroom') return; // (your own place, or nobody here: your own business)
     const there = loos().length ? ' The toilet\'s RIGHT THERE.' : '';
-    pee = null; peeLook = null; leaveRoom();
+    pee = null; leaveRoom();
     return say(`"Hey! HEY! Not in here!"${there} You're thrown out onto the street.`, 4);
   }
   if (mode !== 'walk' || pee.caught) return; // (up on a roof nobody's looking)
@@ -11706,15 +11705,17 @@ function peeWitness() {
 }
 // one drop, out in front of you at about hip height
 function peeSpray(flow) {
-  // aimed by which way you face, never by how far up or down you look: it leaves about level and gravity does the rest
+  // aimed where you look: well above the middle of the screen, so the arc comes down about where your eyes are
   const s = peeScale(), wob = Math.sin(T * 6) * 0.05 + Math.sin(T * 1.7) * 0.09;
-  let ang = a + wob, sp = 0.6 + flow * 2.4;
-  const up = 0.4 + flow * 0.7, ground = eye - eyeLift() * s - (mode === 'room' ? 1.7 : 0.17); // (eye height less the 1.7m you stand)
+  const look = Math.atan(pitch * rows / projY), el = clamp(look + 0.55, -1.3, 1.3) + Math.sin(T * 2.9) * 0.03;
+  let ang = a + wob, sp = 1.5 + flow * 4.5, up = Math.sin(el) * sp;
+  const ground = eye - eyeLift() * s - (mode === 'room' ? 1.7 : 0.17); // (eye height less the 1.7m you stand)
   const hip = Math.max(ground + 0.3 * s, eye - 0.8 * s); // (crouched, it's not coming out of the floor)
   const x = px + Math.cos(a) * 0.25 * s, y = py + Math.sin(a) * 0.25 * s;
-  if (pee.loo) { // at a toilet you aim: whatever speed lands it in the bowl (gravity still has the say on the way down)
+  sp *= Math.cos(el);
+  if (pee.loo) { // at a toilet you get some help: whatever lands it in the bowl (gravity still has the say on the way down)
     const [lx, ly] = pee.loo, d = Math.hypot(lx - x, ly - y), fall = Math.max(0.05, hip - LOO_TOP);
-    ang = Math.atan2(ly - y, lx - x) + wob * 0.15;
+    up = 0.4 + flow * 0.7; ang = Math.atan2(ly - y, lx - x) + wob * 0.15;
     sp = d * 9.8 / (up + Math.sqrt(up * up + 2 * 9.8 * fall)) * (0.96 + Math.random() * 0.08);
   }
   peeDrops.push({ at: pee.at, s, x, y, z: hip, vx: Math.cos(ang) * sp * s, vy: Math.sin(ang) * sp * s,
@@ -11806,10 +11807,18 @@ function peeDot(c, r, depth, ch, lit) {
   set(i, ch, C(YEL, Math.max(8, (1 - depth / vis) * 12) * lit)); FOGS[i] = 0;
 }
 function peeLine(p0, p1, lit, bright) {
-  const dc = p1.c - p0.c, dr = p1.r - p0.r, n = Math.min(80, Math.ceil(Math.max(Math.abs(dc), Math.abs(dr))));
-  if (n > 79 && (Math.max(p0.r, p1.r) < 0 || Math.min(p0.r, p1.r) > rows)) return; // (way off screen)
+  let t0 = 0, t1 = 1; // clip to the screen first (the stream comes up from below it, from way off the bottom)
+  const dc = p1.c - p0.c, dr = p1.r - p0.r;
+  for (const [o, d, lo, hi] of [[p0.c, dc, -1, cols], [p0.r, dr, -1, rows]]) {
+    if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return; continue; }
+    let a_ = (lo - o) / d, b_ = (hi - o) / d;
+    if (a_ > b_) [a_, b_] = [b_, a_];
+    t0 = Math.max(t0, a_); t1 = Math.min(t1, b_);
+    if (t0 > t1) return;
+  }
+  const n = Math.min(200, Math.ceil(Math.max(Math.abs(dc), Math.abs(dr)) * (t1 - t0)) + 1);
   const ch = Math.abs(dr) > Math.abs(dc) * 2 ? '|' : Math.abs(dc) > Math.abs(dr) * 2 ? '-' : (dc > 0) === (dr > 0) ? '\\' : '/';
-  for (let k = 0; k <= n; k++) { const f = n ? k / n : 0; peeDot(p0.c + dc * f, p0.r + dr * f, p0.depth + (p1.depth - p0.depth) * f, ch, lit * bright); }
+  for (let k = 0; k <= n; k++) { const f = t0 + (t1 - t0) * k / n; peeDot(p0.c + dc * f, p0.r + dr * f, p0.depth + (p1.depth - p0.depth) * f, ch, lit * bright); }
 }
 // ===== little things on the street: manhole covers in the road (some with steam pouring out, as from a city's steam
 // pipes), and now and then a flock of pigeons pecking about on a sidewalk, in a park or a plaza, that bursts up and
@@ -12583,7 +12592,6 @@ function turnBy(mx, my) {
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
-  if (my) peeLookOff(); // (looking about yourself: your eyes stay where you put them)
 }
 // on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
 let flick = null;
