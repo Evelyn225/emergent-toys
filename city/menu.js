@@ -37,7 +37,17 @@ const MENU_CSS = `
   .menu .opt:hover, .menu .opt:focus-visible, .menu .tog:hover, .menu .tog:focus-visible { color: #fff; outline: none; }
   .menu .tog { justify-self: start; font: 14px/1 monospace; color: rgba(255, 255, 255, 0.6); }
   .menu .keys { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 1px 12px; padding-left: 18px; color: rgba(255, 255, 255, 0.38); }
-  .menu .keys b { font-weight: normal; color: rgba(255, 255, 255, 0.85); }`;
+  .menu .keys b { font-weight: normal; color: rgba(255, 255, 255, 0.85); }
+  .menu .panel { overflow-x: hidden; }
+  .menu .slider { min-width: 0; overflow: hidden; }
+  @media (max-width: 520px) { /* a phone held upright: scroll down, never sideways */
+    .menu .panel { padding: 20px 16px; }
+    .menu .row { grid-template-columns: 1fr auto; grid-template-areas: 'l v' 'c c'; gap: 2px 12px; margin: 6px 0; }
+    .menu .row > :nth-child(1) { grid-area: l; } .menu .row > :nth-child(2) { grid-area: c; } .menu .row > :nth-child(3) { grid-area: v; }
+    .menu .slider { font-size: 12px; padding: 4px 0; }
+    .menu .opts { flex-wrap: wrap; }
+    .menu .keys { grid-template-columns: auto 1fr; }
+  }`;
 let menuStyled = false;
 function menuStyle() { // the stylesheet goes in once, with the first menu (or the touch buttons, for the font)
   if (!menuStyled) { const s = document.createElement('style'); s.textContent = MENU_CSS; document.head.appendChild(s); menuStyled = true; }

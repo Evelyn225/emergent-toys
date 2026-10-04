@@ -2,8 +2,8 @@
 const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
   'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
   'PHONES','KEBAB','DONUTS','THAI','CINEMA','MOTEL','KARAOKE','DUMPLINGS','PET SHOP','HARDWARE','COFFEE','PHO','SPORTS','SKATE','STORAGE',
-  'BURGERS','CHICKEN','JUICE','ICE CREAM','TOYS','THRIFT','TOBACCO','CARS','REALTY'];
-const PRODUCE = ['GROCERY','MARKET','FRUIT','BAKERY','BODEGA'];
+  'BURGERS','CHICKEN','JUICE','ICE CREAM','TOYS','THRIFT','TOBACCO','REALTY'];
+const PRODUCE = ['GROCERY','MARKET','FRUIT','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
   chinatown: ['DUMPLINGS','NOODLES','TEA HOUSE','HERBS','KARAOKE','BAKERY','DIM SUM','JADE','RAMEN','PHO','MAHJONG'],
@@ -37,6 +37,7 @@ function shopOf(seed, dist) {
   const apts = dist === 'brownstones' ? 0.75 : dist === 'industrial' ? 0.15 : 0.5;
   if (kind === SHOP_SHUT && fract(seed * 331) < apts) kind = SHOP_APTS;
   if (kind === SHOP_SHUT && fract(seed * 53) < 0.5) kind = SHOP_LIT; // (not so many boarded-up shops)
+  if (kind === SHOP_PRODUCE && fract(seed * 197) < 0.7) kind = SHOP_LIT; // (a grocer on every corner, not every other door)
   if (dist === 'brownstones' && kind !== SHOP_APTS && fract(seed * 77) < 0.5) kind = SHOP_APTS; // mostly front doors
   if (dist === 'shotengai' && kind !== SHOP_PRODUCE && fract(seed * 57) < 0.8) kind = fract(seed * 91) < 0.4 ? SHOP_NEON : SHOP_LIT; // shops, shops, shops
   const local = DIST_WORDS[dist], words = kind === SHOP_PRODUCE ? PRODUCE : local && fract(seed * 13) < 0.7 ? local : WORDS;
@@ -85,18 +86,22 @@ for (const seed of DIST_SEEDS) {
   for (const s of DIST_SEEDS) if (s[2] === 'midtown') { const d = Math.hypot(relB(s[0] - NB / 2), s[1] - (SHORE_S + SHORE_N) / 2 - 5); if (d < bd) { bd = d; best = s; } }
   best[2] = 'shotengai';
 }
-const DIST = new Array(NB * NB);
+const DIST = new Array(NB * NB), DIST_OWNER = new Int16Array(NB * NB).fill(-1); // (which seed each block belongs to)
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   if (by === SHORE_N || by === SHORE_S) { DIST[bi(bx, by)] = 'waterfront'; continue; }
   if (by > SHORE_S) { DIST[bi(bx, by)] = 'sea'; continue; }
-  let best = '', bd = Infinity;
-  for (const [sx, sy, d] of DIST_SEEDS) {
+  let best = '', bd = Infinity, bk = -1;
+  DIST_SEEDS.forEach(([sx, sy, d], k) => {
     const dd = Math.hypot(relB(bx - sx), by - sy) + noise(bx * 0.9, by * 0.9, 77) * 1.6;
-    if (dd < bd) { bd = dd; best = d; }
-  }
-  DIST[bi(bx, by)] = best;
+    if (dd < bd) { bd = dd; best = d; bk = k; }
+  });
+  DIST[bi(bx, by)] = best; DIST_OWNER[bi(bx, by)] = bk;
+  if (by === SHORE_N + 1 || by === SHORE_S - 1) DIST_SEEDS[bk][3] = true; // reaches the waterfront
 }
 const districtOf = (bx, by) => DIST[bi(bx, by)];
+// what a neighbourhood is called: industry on the shore is the Docks; inland, with no water in sight, the Yards
+const seedName = s => s[2] === 'industrial' && !s[3] ? 'yards' : s[2];
+const districtName = (bx, by) => { const k = DIST_OWNER[bi(bx, by)]; return k < 0 ? DIST[bi(bx, by)] : seedName(DIST_SEEDS[k]); };
 const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8));
 
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea

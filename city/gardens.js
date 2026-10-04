@@ -200,10 +200,10 @@ const PICNIC_BASKET = pad(['  .--.  ', ' /    \\ ', '|######|', '|%%%%%%|', '|%%
 const nearJettyFoot = () => mode === 'walk' && (() => { const [gx, gy] = gardenLocal(px, py); return inGardens(px, py) && Math.abs(gx - JETTY.gx0 - 0.25) < 0.45 && Math.abs(gy - JETTY.gy) < 0.45; })();
 const nearShore = () => { if (mode !== 'walk' || !inGardens(px, py)) return false; const [gx, gy] = gardenLocal(px, py), e = gardenLakeEdge(gx + Math.cos(a) * 0.4, gy + Math.sin(a) * 0.4); return e > -0.2; };
 const nearShed = () => mode === 'walk' && inGardens(px, py) && (() => { const [gx, gy] = gardenLocal(px, py); return Math.hypot(gx - GARDEN_SHED.gx, gy - GARDEN_SHED.gy + 0.45) < 0.5; })();
-const gateShutHere = (x, y) => { // a closed gate, approached from outside
+const gateShutHere = (x, y) => { // a closed gate, approached from outside: just the gate itself, across the gap
   if (gardensOpen(tod) || inGardens(px, py)) return false;
   const [gx, gy] = gardenLocal(x, y);
-  return GARDEN_GATES.some(([ggx, ggy]) => Math.abs(gx - ggx) < 0.75 && Math.abs(gy - ggy) < 0.75);
+  return GARDEN_GATES.some(([ggx, ggy, run]) => run === 'h' ? Math.abs(gx - ggx) < 0.75 && Math.abs(gy - ggy) < 0.15 : Math.abs(gy - ggy) < 0.75 && Math.abs(gx - ggx) < 0.15);
 };
 function gardensPrompt() {
   if (mode === 'boat') { const [gx, gy] = [boat.gx, boat.gy]; return Math.hypot(gx - JETTY.gx1, gy - JETTY.gy) < 0.7 ? 'E: back to the jetty' : `W/S paddle, A/D steer${TOUCH ? '' : ''}   (back to the jetty to get out)`; }

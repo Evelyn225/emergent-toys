@@ -56,7 +56,6 @@ function turnBy(mx, my) {
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
-  if (my) peeLookOff(); // (looking about yourself: your eyes stay where you put them)
 }
 // on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
 let flick = null;
@@ -84,8 +83,9 @@ function move(fx, fy) {
   // walking into a way out (a shop's door, the top of the subway stairs) takes you through it
   const n = Math.hypot(fx, fy);
   if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * 0.45), Math.floor(py + fy / n * 0.45)) === 'D') return leaveRoom();
-  if (free(px + fx + Math.sign(fx) * m, py)) px += fx;
-  if (free(px, py + fy + Math.sign(fy) * m)) py += fy;
+  const stuck = !free(px, py); // (somewhere you shouldn't be, a teleport or a gate shutting on you: you can always walk out)
+  if (stuck || free(px + fx + Math.sign(fx) * m, py)) px += fx;
+  if (stuck || free(px, py + fy + Math.sign(fy) * m)) py += fy;
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
 function drive(dt) {

@@ -32,7 +32,7 @@ const devAt = (x, y, ang) => { devFree(); px = mod(x, N); py = mod(y, N); a = an
 // a street spot in a district: the middle of the street beside one of its plain blocks
 function districtSpot(d) {
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++)
-    if (districtOf(bx, by) === d && !blockKind(bx, by) && hseg(bx, by)) return [bx * 8 + 4, by * 8 + 1.6, -Math.PI / 2];
+    if (districtName(bx, by) === d && !blockKind(bx, by) && hseg(bx, by)) return [bx * 8 + 4, by * 8 + 1.6, -Math.PI / 2];
   return null;
 }
 // every place you can jump to: [group, label, go]
@@ -42,7 +42,7 @@ function devPlaces() {
     ['Marina', () => devAt(MARINA.x, MARINA.y0 + 0.6, Math.PI / 2)], ['Sunset Pier', () => devAt(FAIR.cx, FAIR.y0 - 0.5, Math.PI / 2)],
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
     ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],
-    ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.4, Math.PI / 2); }],
+    ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.6, Math.PI / 2); }],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
@@ -63,7 +63,7 @@ function devPlaces() {
   owned.homes.forEach((h, k) => out.push(['Your homes', `${ITEMS[h.kind].name} ${k + 1}`, () => { const [x, y] = homeKerb(h.cell % N, Math.floor(h.cell / N)); devAt(x, y, 0); }]));
   const words = new Map(); // every kind of shop, by its sign: you land outside the nearest one
   for (let k = 0; k < N * N; k++) { const sh = SHOP[k]; if (sh && sh.word && sh.kind !== SHOP_APTS) words.set(sh.word, (words.get(sh.word) || new Set()).add(sh)); }
-  for (const [w, set] of [...words].sort((p, q) => p[0] < q[0] ? -1 : 1)) out.push(['Shops (nearest)', `${w}${set.size > 1 ? ` (${set.size})` : ''}`, () => { devFree(); gotoShop(w); }]);
+  for (const [w, set] of [...words].sort((p, q) => p[0] < q[0] ? -1 : 1)) out.push(['Shops (nearest)', `${w} (${set.size})`, () => { devFree(); gotoShop(w); }]);
   return out;
 }
 function devItems() {

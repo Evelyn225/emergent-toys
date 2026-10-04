@@ -415,24 +415,26 @@ test('run dry and you pass out: the hospital, a bill, and the nurse patches you 
   assert.deepStrictEqual(await page.evaluate(() => [needs.food, needs.drink, needs.health]), [100, 100, 100]);
 }));
 
-test('P to pee, any time: a stream that falls even when you look up, a yellow puddle that dries up; Esc still pauses', () => withPage(async page => {
+test('P to pee, any time: aimed where you look (your view stays put), falls under gravity, a yellow puddle that dries up; Esc still pauses', () => withPage(async page => {
   await page.evaluate(() => { needs.bladder = 2; people.forEach(m => m.hidden = true); });
   await page.keyboard.press('KeyP'); // nothing in you: a short one all the same
   assert.deepStrictEqual(await page.evaluate(() => [!!pee, paused]), [true, false]);
   await page.waitForTimeout(2500);
   assert.strictEqual(await page.evaluate(() => !!pee), false, 'over quickly');
-  await page.evaluate(() => { needs.bladder = 90; for (const q of puddles) q.life = 0; });
+  await page.evaluate(() => { needs.bladder = 90; for (const q of puddles) q.life = 0; pitch = 0; });
   await page.keyboard.press('KeyP'); await page.waitForTimeout(1500);
-  const r = await page.evaluate(() => [!!pee, peeDrops.length > 5, puddles.length > 0, pitch < -0.5, needs.bladder < 90]);
-  assert.deepStrictEqual(r, [true, true, true, true, true], 'peeing: drops in the air, a puddle, eyes down');
-  // look straight up: it still comes down in front of you, not up at the sky
-  await page.evaluate(() => { peeLookOff(); pitch = 1.5; for (const q of puddles) q.area = 0.01; });
-  await page.waitForTimeout(1200);
-  const up = await page.evaluate(() => [pitch, Math.max(...peeDrops.map(p => p.z)) < eye - 0.05, puddles.reduce((t, q) => t + q.area, 0) > 0.1,
-    puddles.every(q => q.z === 0 && Math.hypot(rel(q.x - px), rel(q.y - py)) < 0.5)]);
-  assert.deepStrictEqual(up, [1.5, true, true, true]);
+  const r = await page.evaluate(() => [!!pee, peeDrops.length > 5, puddles.length > 0, pitch, needs.bladder < 90]);
+  assert.deepStrictEqual(r, [true, true, true, 0, true], 'peeing: drops in the air, a puddle, and the view left alone');
+  // look down, then up: it goes further when you aim higher, and comes back down to the ground either way
+  const reach = () => page.evaluate(() => Math.max(...peeDrops.filter(p => !p.splash).map(p => Math.hypot(rel(p.x - px), rel(p.y - py)))));
+  await page.evaluate(() => { pitch = -0.4; }); await page.waitForTimeout(900);
+  const low = await reach();
+  await page.evaluate(() => { pitch = 0.4; for (const q of puddles) q.life = 0; stepPee(0); }); await page.waitForTimeout(1200);
+  const high = await reach();
+  assert.ok(high > low * 1.2, `further aimed up (${low.toFixed(3)} -> ${high.toFixed(3)})`);
+  assert.deepStrictEqual(await page.evaluate(() => [puddles.length > 0, puddles.every(q => q.z === 0)]), [true, true], 'and it still lands');
   await page.keyboard.press('KeyP'); // cut it off
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(2000); // (what's still in the air comes down)
   assert.deepStrictEqual(await page.evaluate(() => [!!pee, peeDrops.length]), [false, 0]);
   await page.evaluate(() => { for (const q of puddles) q.life = 0.01; stepPee(5); });
   assert.strictEqual(await page.evaluate(() => puddles.length), 0, 'dried up');
@@ -474,6 +476,30 @@ test('a portapotty on a building site: E at its door, P in the bowl, E back out 
   await page.waitForTimeout(100);
   await page.keyboard.press('KeyE');
   assert.strictEqual(await page.evaluate(() => mode), 'walk');
+}));
+
+test('the pause menu on a narrow phone: scrolls down, never sideways', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
+    await page.goto(PAGE); await page.waitForTimeout(300);
+    await page.evaluate(() => togglePause()); await page.waitForTimeout(100);
+    const r = await page.evaluate(() => {
+      const pn = document.querySelector('#pause .panel');
+      return [pn.scrollWidth <= pn.clientWidth, pn.scrollHeight > pn.clientHeight, [...pn.querySelectorAll('*')].filter(e => e.getBoundingClientRect().right > innerWidth + 0.5).length];
+    });
+    assert.deepStrictEqual(r, [true, true, 0]);
+  } finally { await browser.close(); }
+});
+
+test('the Botanical Gardens at night: the dev jump lands you outside the locked gate and you can walk away; the gate still keeps you out', () => withPage(async page => {
+  await page.evaluate(() => { tod = 23; devPlaces().find(([g, l]) => l === 'Botanical Gardens')[2](); });
+  const at = await page.evaluate(() => [px, py]);
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(2000); await page.keyboard.up('KeyW'); // toward the gate
+  assert.deepStrictEqual(await page.evaluate(() => [inGardens(px, py), promptText()]), [false, 'The gates are locked. The Gardens open at 8.']);
+  await page.evaluate(() => { a = -Math.PI / 2; }); // and back the way you came
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(2000); await page.keyboard.up('KeyW');
+  assert.ok(await page.evaluate(([x, y]) => py < y - 0.1, at), 'walked away');
 }));
 
 test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
@@ -738,7 +764,7 @@ test('the Botanical Gardens: gates locked at night, a swan boat on the lake, duc
   await at(11, -0.5, Math.PI / 2); // outside the north gate
   assert.ok(await page.evaluate(() => free(GARDEN.x0 + 11, GARDEN.y0 + 0.2)), 'open by day');
   await page.evaluate(() => { tod = 22; });
-  assert.ok(await page.evaluate(() => !free(GARDEN.x0 + 11, GARDEN.y0 + 0.2)), 'locked at night');
+  assert.ok(await page.evaluate(() => !free(GARDEN.x0 + 11, GARDEN.y0)), 'locked at night'); // (the gate itself)
   assert.match(await prompt(), /gates are locked/);
   await at(11, 1, -Math.PI / 2);
   assert.ok(await page.evaluate(() => free(GARDEN.x0 + 11, GARDEN.y0 - 0.3)), 'you can always let yourself out');
