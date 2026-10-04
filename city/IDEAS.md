@@ -103,7 +103,6 @@ The levers the engine already has, so a new district can pull every one of them:
 
 ### Downtown
 - Skyscraper observation deck: an elevator ride up, pay-per-look telescopes.
-- Stock exchange: buy low, sell high on a moving price line.
 - Courthouse: go to court after being busted instead of paying, argue your case in dialogue.
 - Museum: see the heist plan below.
 - Newspaper office: the source of the headlines; a paper route by bike.

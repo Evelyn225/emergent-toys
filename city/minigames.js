@@ -95,13 +95,13 @@ GAMES.breakout = (rnd = Math.random) => {
 // street crosser: get across two carriageways of traffic to the far sidewalk, one hop at a time; faster each crossing
 GAMES.crosser = (rnd = Math.random) => {
   const W = 25, H = 13, g = { id: 'crosser', title: 'STREET CROSSER', W, H, score: 0, over: false };
-  let you = [12, 12], lives = 3, splat = 0, lanes;
+  let you = [12, 12], lives = 4, splat = 0, lanes;
   const make = () => {
     lanes = [];
     for (let y = 1; y < H - 1; y++) { // row 6 is the median, 0 and 12 the sidewalks
       if (y === 6) continue;
-      const dir = y < 6 ? -1 : 1, len = 2 + (rnd() * 3 | 0), gap = len + 3 + (rnd() * 5 | 0);
-      lanes.push({ y, dir, len, gap, sp: (2 + rnd() * 3) * (1 + g.score * 0.12), off: rnd() * gap, col: [RED, BLUE, TAXI, WHITE, GREEN][rnd() * 5 | 0] });
+      const dir = y < 6 ? -1 : 1, len = 2 + (rnd() * 3 | 0), gap = len + 4 + (rnd() * 5 | 0); // (room to slip through)
+      lanes.push({ y, dir, len, gap, sp: (1.6 + rnd() * 2.2) * (1 + g.score * 0.08), off: rnd() * gap, col: [RED, BLUE, TAXI, WHITE, GREEN][rnd() * 5 | 0] });
     }
   };
   make();
@@ -465,10 +465,10 @@ GAMES.jailbreak = (rnd = Math.random) => {
     for (let s = 1; s < 8; s++) { const x = Math.round(x0 + (x1 - x0) * s / 8), y = Math.round(y0 + (y1 - y0) * s / 8); if (solid.has(cell(x, y)) && !(x === x1 && y === y1)) return false; }
     return true;
   };
-  const shine = () => { // the cone: six cells ahead, widening
+  const shine = () => { // the cone: eight cells ahead, widening as it goes
     lit.clear();
     const ox = Math.round(gx), oy = Math.round(gy);
-    for (let d = 1; d <= 6; d++) for (let o = -(d >> 1); o <= d >> 1; o++) {
+    for (let d = 1; d <= 8; d++) for (let o = -((d + 1) >> 1); o <= (d + 1) >> 1; o++) {
       const x = ox + fx_ * d - fy_ * o, y = oy + fy_ * d + fx_ * o;
       if (x < 0 || y < 0 || x >= W || y > 10 || solid.has(cell(x, y)) || !clear(ox, oy, x, y)) continue;
       lit.add(cell(x, y));

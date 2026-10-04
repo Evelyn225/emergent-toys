@@ -90,6 +90,10 @@ function promptText() {
     if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
     if (nearTouchPool()) return 'E: touch the touch pool';
     if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
+    if (nearVip()) return `E: a private dance (${fmt$(LAPDANCE)})`;
+    if (nearStage()) return 'E: tip the dancer ($5)';
+    if (nearClubCigs()) return 'E: cigarette machine';
+    if (atBroker()) return `"Buying or selling?"   E: trade (${marketOpen() ? 'market open' : 'market closed'})`;
     const cs = casinoSpot();
     if (cs) return `E: play ${CASINO_NAMES[cs]} ($5 to $100 a go)`;
     if (aviaryKeeper()) return T - seedT < 12 ? 'The birds are all over you.' : `"Seed for the birds? Hold it out flat."   E: a cup of seed (${fmt$(1)})`;
@@ -121,6 +125,7 @@ function promptText() {
   const gp = gardensPrompt();
   if (gp) return gp;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
+  if (nearWalkedDog()) return 'E: pet the dog';
   const who = nearPerson();
   if (who) return task && task.who === who ? (task.kind === 'fetch' && task.have ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';

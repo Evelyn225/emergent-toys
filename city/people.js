@@ -41,10 +41,12 @@ const USES = { home: d => d.use === 'home', lobby: d => d.use === 'home' || d.us
 
 // ---- routines: what someone wants to be doing at game hour t. `jit` staggers people by up to an hour or so.
 // worker: home, work 7-17, a drink or errands, an evening stroll, home. owl: bars till 3:30, sleeps till noon, out
-// again at night. errands: shops in the morning and afternoon. Everyone's in by 4am bar a few stragglers.
+// again at night. errands: shops in the morning and afternoon. dogwalker: walks the dog first thing, at lunch and before
+// dinner (only in daylight hours), errands in between. Everyone's in by 4am bar a few stragglers.
 function activity(p, t) {
   const h = mod(t - p.jit, 24);
   if (p.role === 'worker') return h < 7 ? 'home' : h < 17 ? 'work' : h < 19.5 ? (p.social ? 'bar' : 'shop') : h < 21.5 ? 'wander' : 'home';
+  if (p.role === 'dogwalker') return h < 7.5 ? 'home' : h < 9 ? 'wander' : h < 12 ? 'shop' : h < 12.5 ? 'home' : h < 14 ? 'wander' : h < 17 ? 'shop' : h < 19.5 ? 'wander' : 'home';
   if (p.role === 'owl') return h < 3.5 ? 'bar' : h < 12 ? 'home' : h < 17 ? 'wander' : h < 19 ? 'shop' : 'bar';
   return h < 8 ? 'home' : h < 12 ? 'shop' : h < 15 ? 'wander' : h < 18.5 ? 'shop' : h < 21 ? 'wander' : 'home';
 }
@@ -78,7 +80,7 @@ function pickHome() {
 function spawnPerson() {
   const home = pickHome();
   const work = nearestDoor(home.x + (Math.random() - 0.5) * 24, home.y + (Math.random() - 0.5) * 24, d => d.use === 'work' || d.use === 'shop', 2) || pick(jobs);
-  const r = Math.random(), role = r < 0.5 ? 'worker' : r < 0.72 ? 'owl' : 'errands';
+  const r = Math.random(), role = r < 0.5 ? 'worker' : r < 0.72 ? 'owl' : r < 0.93 ? 'errands' : 'dogwalker';
   const p = { x: home.x, y: home.y, path: [], last: [0, 0], wait: 0, hidden: false, sp: 0.1 + Math.random() * 0.06, legs: 0,
               shirt: pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]), pants: pick([BLUE, GRAY]), ph: Math.random() * 9,
               home, work, role, social: Math.random() < 0.6, jit: Math.random() * 1.5 - 0.5, act: '', goal: null };
@@ -96,6 +98,16 @@ function snapToCorner(p) {
   else { const dir = pick([-1, 1]); p.path = [{ x: p.x, y: p.y - ly + (dir > 0 ? 8.12 : 1.88) }]; p.last = [0, dir]; }
 }
 for (let n = 0; n < 1100; n++) spawnPerson();
+// a dog walker's dog is out with them while they're walking it, in daylight: on its lead a step behind and to one side,
+// stopping to sniff now and then
+const DOG_COLS = [BRICK, WARM, GRAY, WHITE, ORANGE, YEL];
+const walkingDog = p => p.role === 'dogwalker' && !p.hidden && p.act === 'wander' && tod >= 7 && tod < 20;
+function dogOf(p) {
+  const mx = p.last[0], my = p.last[1], side = (p.ph * 7 | 0) % 2 ? 1 : -1, sniff = Math.sin(T * 0.7 + p.ph) > 0.7;
+  const back = 0.09 + (sniff ? 0.04 : 0) + Math.sin(T * 1.9 + p.ph) * 0.01, off = 0.035 * side + Math.sin(T * 1.3 + p.ph) * 0.012;
+  return { x: mod(p.x - mx * back - my * off, N), y: mod(p.y - my * back + mx * off, N), mx, my, sniff, col: DOG_COLS[(p.ph * 13 | 0) % DOG_COLS.length], small: (p.ph * 5 | 0) % 3 === 0 };
+}
+const nearWalkedDog = () => mode === 'walk' && people.find(p => walkingDog(p) && (() => { const d = dogOf(p); return Math.hypot(rel(d.x - px), rel(d.y - py)) < 0.15; })());
 
 // how far along the stretch from corner (x, y) heading (mx, my) a door is, if it's on that stretch (0 if not)
 function passesAt(x, y, mx, my, d) {

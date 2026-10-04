@@ -133,6 +133,10 @@ function interact() {
     if (room.kind === 'laundry' && useLaundry()) return;
     if (nearTouchPool()) return say(pick(TOUCH_LINES), 3);
     if (room.kind === 'cathedral' && useCathedral()) return;
+    if (atBroker()) return startGame('market', 'market');
+    if (nearVip()) { if (!pay(LAPDANCE)) return say(`"Private dances are ${fmt$(LAPDANCE)}, sweetie."`, 3); startGame('lapdance', 'show'); return say('The host pulls the curtain back. You sit. Hands on your knees.', 3); }
+    if (nearStage()) return tipDancer();
+    if (nearClubCigs()) return openShop(VENDING.CIGARETTES.title, VENDING.CIGARETTES.stock);
     const cs = casinoSpot(); // a seat at a table, or a slot machine
     if (cs) return startGame(cs, 'casino');
     if (aviaryKeeper()) { if (T - seedT < 12) return say('You\'ve still got seed. Hold still.', 2); if (!pay(1)) return say('"A dollar a cup."'); seedT = T; return say('You hold out a cup of seed. A dozen birds land on your arms at once.', 4); }
@@ -195,6 +199,7 @@ function interact() {
     return;
   }
   if (pickUpBall()) return say('You pick up the ball.');
+  if (nearWalkedDog()) { const p = nearWalkedDog(); p.talk = 3; return say(pick(['The dog leans into your hand. Its owner smiles: "She likes you."', 'A wet nose, a wag, a happy little snort.', '"He\'s friendly!" He is. Very.', 'The dog rolls straight over for a belly rub. Its owner sighs and waits.']), 3); }
   const who = nearPerson();
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }
@@ -219,8 +224,9 @@ function interact() {
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh);
     if (home) return enterRoom(home.kind === 'home_loft' ? 'loft' : 'home', { word: 'HOME', ret: [px, py, a], cell: [lookHit.mx, lookHit.my] }, [ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid[0].length / 2, ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid.length - 1.6, -Math.PI / 2]), say('Home.', 1.5);
+    if (sh.club && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
     if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
-    if (sh.fee) say(`Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : 'Mind the butterflies.'}"`, 3);
+    if (sh.fee) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : 'Mind the butterflies.'}"`, 3);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
     const r = { ...sh, cell: [lookHit.mx, lookHit.my], ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
     enterRoom(kind, r, [0, 0, -Math.PI / 2]);

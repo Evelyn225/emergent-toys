@@ -546,6 +546,7 @@ test('mahjong at the tea house: the buy-in goes in the pot, walking away loses i
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, game.kind, money, game.g.hands[0].length]), ['mahjong', 'table', 95, 14]);
   await page.keyboard.press('Space'); // throw a tile
+  await page.waitForTimeout(150); // (the game takes the key on its next frame)
   assert.strictEqual(await page.evaluate(() => game.g.hands[0].length), 13);
   await page.keyboard.press('KeyE'); // get up mid-hand
   assert.deepStrictEqual(await page.evaluate(() => [game, money]), [null, 95], 'the stake stays in the pot');
@@ -628,7 +629,7 @@ test('the Botanical Gardens: gates locked at night, a swan boat on the lake, duc
 }));
 
 test('shut-down shops say so; each district paints its own walls', () => withPage(async page => {
-  await page.evaluate(() => { tod = 13; weather = 'clear'; mode = 'walk'; });
+  await page.evaluate(() => { tod = 13; weather = 'clear'; mode = 'walk'; for (const p of people) p.hidden = true; cars.length = 0; flocks.length = 0; }); // (nobody passing to talk to, no car to take: just the shop)
   const shut = await page.evaluate(() => { for (let k = 0; k < N * N; k++) { const sh = SHOP[k], x = k % N, y = k / N | 0; if (sh && sh.kind === SHOP_SHUT && !map[idx(x, y + 1)] && ROAD[idx(x, y + 1)]) return [x, y]; } });
   await page.evaluate(([x, y]) => { px = x + 0.5; py = y + 1.25; a = -Math.PI / 2; pitch = 0; }, shut);
   await page.waitForTimeout(150);
@@ -739,4 +740,73 @@ test('breaking in at night: the till pays well but sets off the alarm, the polic
   });
   assert.ok(r[0][0] >= 120 && r[0][1] >= 2 && r[0][2] && r[0][3], `the shop till: ${JSON.stringify(r[0])}`);
   assert.deepStrictEqual(r.slice(1), [true, 'lockpick', true, 3]);
+}));
+
+test('dog walkers: out with their dogs in the morning, at lunch and before dinner, never at night; you can pet the dog', () => withPage(async page => {
+  const counts = await page.evaluate(() => {
+    const dogsAt = t => people.filter(p => p.role === 'dogwalker' && activity(p, t) === 'wander' && t >= 7 && t < 20).length;
+    return { walkers: people.filter(p => p.role === 'dogwalker').length, morning: dogsAt(8.3), lunch: dogsAt(13.3), evening: dogsAt(18.5), night: dogsAt(23), early: dogsAt(5) };
+  });
+  assert.ok(counts.walkers > 30, JSON.stringify(counts));
+  assert.ok(counts.morning > 10 && counts.lunch > 10 && counts.evening > 10, JSON.stringify(counts));
+  assert.strictEqual(counts.night + counts.early, 0);
+  const pet = await page.evaluate(() => {
+    tod = 8.3; mode = 'walk';
+    const m = people.find(p => p.role === 'dogwalker'); m.hidden = false; m.act = 'wander';
+    const d = dogOf(m); px = d.x; py = d.y + 0.05;
+    const prompt = promptText(); interact();
+    return [walkingDog(m), /pet the dog/.test(prompt) || /pick their pocket|talk/.test(prompt), msgText.length > 0];
+  });
+  assert.deepStrictEqual(pet, [true, true, true]);
+}));
+
+test('the stock exchange: trade with the broker while the market is open; your shares are still yours after a reload', () => withPage(async page => {
+  await page.evaluate(() => { dayNum = 1; tod = 11; money = 500; enterRoom('exchange', { word: 'EXCHANGE', neon: GREEN, ret: [px, py, a], line: '' }, [10, 5.6, -Math.PI / 2]); });
+  assert.match(await page.evaluate(() => promptText()), /trade \(market open\)/);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'market');
+  await page.keyboard.press('Space'); // lot of 10
+  await page.waitForTimeout(100);
+  await page.keyboard.press('ArrowRight'); // buy 10 DUMP
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => [shares.DUMP && shares.DUMP.n, money < 500]);
+  assert.deepStrictEqual(after, [10, true]);
+  await page.keyboard.press('KeyE');
+  await page.evaluate(() => saveGame());
+  await page.reload(); await page.waitForTimeout(400);
+  assert.strictEqual(await page.evaluate(() => shares.DUMP && shares.DUMP.n), 10, 'kept in the save');
+  await page.evaluate(() => newGame && localStorage.removeItem('ascii-city-save'));
+}));
+
+test('the Velvet Rope: $20 at the door (not with the cops after you), tip the dancers, $40 for a private dance', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    tod = 22; money = 200; mode = 'walk';
+    const sh = CLUB.sh, open = openAt(sh, 22) && !openAt(sh, 12);
+    wanted.stars = 1; lookHit = { d: 0.2, mx: CLUB.bx * 8 + 5, my: CLUB.by * 8 + 2 }; interact();
+    const refused = mode === 'walk' && /Not with the cops/.test(msgText);
+    wanted.stars = 0; interact();
+    const inside = [mode, room && room.kind, money];
+    px = 9; py = 4.6; const stagePrompt = promptText(); interact();
+    px = 13.4; py = 10.8; const vipPrompt = promptText(); interact();
+    return { open, refused, inside, stagePrompt, money, vipPrompt, game: game && game.g.id };
+  });
+  assert.ok(r.open && r.refused, JSON.stringify(r));
+  assert.deepStrictEqual(r.inside, ['room', 'stripclub', 180]);
+  assert.match(r.stagePrompt, /tip the dancer/);
+  assert.match(r.vipPrompt, /private dance/);
+  assert.deepStrictEqual([r.money, r.game], [135, 'lapdance']);
+  await page.keyboard.press('Space'); await page.waitForTimeout(150);
+  assert.ok(await page.evaluate(() => money === 134 && game.g.tips === 1), 'a dollar tip');
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game), null);
+}));
+
+test('the Velvet Rope\'s private dancer is six characters in every frame (the joke has to be accurate); a cigarette machine by the bar', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    const counts = LAP_FRAMES.map(f => f.join('').replace(/ /g, '').length);
+    enterRoom('stripclub', { word: 'VELVET', neon: MAG, ret: [px, py, a], line: '' }, [9, 11, -Math.PI / 2]);
+    px = 1.6; py = 9.8; const prompt = promptText(); interact();
+    return [counts, LAP_LINES.some(l => /six characters/.test(l)), prompt, panelOpen()];
+  });
+  assert.deepStrictEqual(r, [[6, 6, 6, 6, 6, 6, 6, 6], true, 'E: cigarette machine', true]);
 }));

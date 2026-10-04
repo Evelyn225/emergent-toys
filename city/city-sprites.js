@@ -11,7 +11,7 @@ const FERRY = pad(['   _|_ _|_', ' _|o_o_o_o|___', '|o o o o o o o|', '\\_______
 const PILLAR = pad(['[=]', '|#|', '|#|', '|#|', '|#|', '|#|', '|#|', '/#\\']);
 const EL_STAIRS = pad(['[ EL ]', '    _|', '   _| ', '  _|  ', ' _|   ', '_|    ']);
 const SAIL_R = mirror(ART.sail);
-const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']);
+const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']), DOG_R = mirror(DOG);
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
 // the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
 function strobe() { const p = Math.floor(fract(T * 1.4) * 10); return p === 0 || p === 2 ? RED : p === 5 || p === 7 ? BLUE : -1; }
@@ -21,6 +21,7 @@ function citySprites() {
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
+  clubSprites();
   drawPigeons();
   for (const b of boats) {
     const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
@@ -97,6 +98,11 @@ function citySprites() {
   for (const m of people) if (!m.hidden) {
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
             (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
+    if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
+      const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), right = -dy * d.mx + dx * d.my > 0, s = d.small ? 0.7 : 1;
+      drawArt(vx, vy, 0, 0.07 * s, 0.05 * s, right ? DOG_R : DOG, (c, row, L) => c === 'o' ? C(GRAY, 3) : C(d.col, L * 1.2));
+      for (let k = 1; k < 5; k++) { const t = k / 5; drawArt(hx + (vx - hx) * t, hy + (vy - hy) * t, 0.085 - 0.05 * t - Math.sin(t * Math.PI) * 0.012, 0.006, 0.006, ['.'], () => C(RED, 10)); }
+    }
     if (m.hailing) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.06, ['!'], () => C(YEL, fract(T * 3) < 0.6 ? 15 : 8)); // waving you down
   }
   drawBall();
@@ -422,16 +428,16 @@ function drawFootbridge() {
 // the flap you reach into at the bottom. Glows after dark.
 const VM_COL = { DRINKS: RED, SNACKS: BLUE, CIGARETTES: GRAY };
 const VM_GOODS = { DRINKS: ['o', [RED, BLUE, GREEN, YEL, WHITE]], SNACKS: ['#', [YEL, ORANGE, RED, GREEN, MAG]], CIGARETTES: ['=', [WHITE, RED, YEL, WHITE, CYAN]] };
-function drawVending(m, vx, vy) {
-  const body = VM_COL[m.kind], glow = Math.max(night, overcast * 0.6), [g_, cols_] = VM_GOODS[m.kind];
-  drawBox(boxAt(vx, vy, m.c, m.s, VM_HL, VM_HW, 0, VM_H), (i, t, L) => {
+function drawVending(m, vx, vy, sc = 1) { // sc: 10 indoors (metres, not cells)
+  const body = VM_COL[m.kind], glow = Math.max(night, overcast * 0.6), [g_, cols_] = VM_GOODS[m.kind], HL = VM_HL * sc, HH = VM_H * sc;
+  drawBox(boxAt(vx, vy, m.c, m.s, HL, VM_HW * sc, 0, HH), (i, t, L) => {
     const f = HIT.face, front = (f === 3 || f === 4) && Math.sign(HIT.v) === m.fs;
     if (!front) { BG[i] = C(body, (1.5 + L * 0.35) * shadeFace(f)); return set(i, f === 5 ? ' ' : HIT.w < 0.01 ? '_' : ' ', C(GRAY, L * 0.4)), true; }
-    const q = (HIT.u * m.fs / VM_HL + 1) / 2, z = HIT.w / VM_H; // across the front 0..1 (left to right), up it 0..1
+    const q = (HIT.u * m.fs / HL + 1) / 2, z = HIT.w / HH; // across the front 0..1 (left to right), up it 0..1
     if (z > 0.85) { // the lit header, with what it sells across it
       BG[i] = C(body, 5 + glow * 7);
-      const name = m.kind, n = name.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * VM_HL) * n;
-      const letter = Math.abs(z - 0.925) < t / projY / VM_H / 2 && k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
+      const name = m.kind, n = name.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * HL) * n;
+      const letter = Math.abs(z - 0.925) < t / projY / HH / 2 && k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
       return set(i, letter ? name[k] : ' ', C(WHITE, 15)), true;
     }
     if (q > 0.72) { // the control column: keypad, coin slot
