@@ -1281,10 +1281,12 @@ const USES = { home: d => d.use === 'home', lobby: d => d.use === 'home' || d.us
 
 // ---- routines: what someone wants to be doing at game hour t. `jit` staggers people by up to an hour or so.
 // worker: home, work 7-17, a drink or errands, an evening stroll, home. owl: bars till 3:30, sleeps till noon, out
-// again at night. errands: shops in the morning and afternoon. Everyone's in by 4am bar a few stragglers.
+// again at night. errands: shops in the morning and afternoon. dogwalker: walks the dog first thing, at lunch and before
+// dinner (only in daylight hours), errands in between. Everyone's in by 4am bar a few stragglers.
 function activity(p, t) {
   const h = mod(t - p.jit, 24);
   if (p.role === 'worker') return h < 7 ? 'home' : h < 17 ? 'work' : h < 19.5 ? (p.social ? 'bar' : 'shop') : h < 21.5 ? 'wander' : 'home';
+  if (p.role === 'dogwalker') return h < 7.5 ? 'home' : h < 9 ? 'wander' : h < 12 ? 'shop' : h < 12.5 ? 'home' : h < 14 ? 'wander' : h < 17 ? 'shop' : h < 19.5 ? 'wander' : 'home';
   if (p.role === 'owl') return h < 3.5 ? 'bar' : h < 12 ? 'home' : h < 17 ? 'wander' : h < 19 ? 'shop' : 'bar';
   return h < 8 ? 'home' : h < 12 ? 'shop' : h < 15 ? 'wander' : h < 18.5 ? 'shop' : h < 21 ? 'wander' : 'home';
 }
@@ -1318,7 +1320,7 @@ function pickHome() {
 function spawnPerson() {
   const home = pickHome();
   const work = nearestDoor(home.x + (Math.random() - 0.5) * 24, home.y + (Math.random() - 0.5) * 24, d => d.use === 'work' || d.use === 'shop', 2) || pick(jobs);
-  const r = Math.random(), role = r < 0.5 ? 'worker' : r < 0.72 ? 'owl' : 'errands';
+  const r = Math.random(), role = r < 0.5 ? 'worker' : r < 0.72 ? 'owl' : r < 0.93 ? 'errands' : 'dogwalker';
   const p = { x: home.x, y: home.y, path: [], last: [0, 0], wait: 0, hidden: false, sp: 0.1 + Math.random() * 0.06, legs: 0,
               shirt: pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]), pants: pick([BLUE, GRAY]), ph: Math.random() * 9,
               home, work, role, social: Math.random() < 0.6, jit: Math.random() * 1.5 - 0.5, act: '', goal: null };
@@ -1336,6 +1338,16 @@ function snapToCorner(p) {
   else { const dir = pick([-1, 1]); p.path = [{ x: p.x, y: p.y - ly + (dir > 0 ? 8.12 : 1.88) }]; p.last = [0, dir]; }
 }
 for (let n = 0; n < 1100; n++) spawnPerson();
+// a dog walker's dog is out with them while they're walking it, in daylight: on its lead a step behind and to one side,
+// stopping to sniff now and then
+const DOG_COLS = [BRICK, WARM, GRAY, WHITE, ORANGE, YEL];
+const walkingDog = p => p.role === 'dogwalker' && !p.hidden && p.act === 'wander' && tod >= 7 && tod < 20;
+function dogOf(p) {
+  const mx = p.last[0], my = p.last[1], side = (p.ph * 7 | 0) % 2 ? 1 : -1, sniff = Math.sin(T * 0.7 + p.ph) > 0.7;
+  const back = 0.09 + (sniff ? 0.04 : 0) + Math.sin(T * 1.9 + p.ph) * 0.01, off = 0.035 * side + Math.sin(T * 1.3 + p.ph) * 0.012;
+  return { x: mod(p.x - mx * back - my * off, N), y: mod(p.y - my * back + mx * off, N), mx, my, sniff, col: DOG_COLS[(p.ph * 13 | 0) % DOG_COLS.length], small: (p.ph * 5 | 0) % 3 === 0 };
+}
+const nearWalkedDog = () => mode === 'walk' && people.find(p => walkingDog(p) && (() => { const d = dogOf(p); return Math.hypot(rel(d.x - px), rel(d.y - py)) < 0.15; })());
 
 // how far along the stretch from corner (x, y) heading (mx, my) a door is, if it's on that stretch (0 if not)
 function passesAt(x, y, mx, my, d) {
@@ -4334,7 +4346,7 @@ const FERRY = pad(['   _|_ _|_', ' _|o_o_o_o|___', '|o o o o o o o|', '\\_______
 const PILLAR = pad(['[=]', '|#|', '|#|', '|#|', '|#|', '|#|', '|#|', '/#\\']);
 const EL_STAIRS = pad(['[ EL ]', '    _|', '   _| ', '  _|  ', ' _|   ', '_|    ']);
 const SAIL_R = mirror(ART.sail);
-const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']);
+const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']), DOG_R = mirror(DOG);
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
 // the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
 function strobe() { const p = Math.floor(fract(T * 1.4) * 10); return p === 0 || p === 2 ? RED : p === 5 || p === 7 ? BLUE : -1; }
@@ -4420,6 +4432,11 @@ function citySprites() {
   for (const m of people) if (!m.hidden) {
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
             (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
+    if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
+      const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), right = -dy * d.mx + dx * d.my > 0, s = d.small ? 0.7 : 1;
+      drawArt(vx, vy, 0, 0.07 * s, 0.05 * s, right ? DOG_R : DOG, (c, row, L) => c === 'o' ? C(GRAY, 3) : C(d.col, L * 1.2));
+      for (let k = 1; k < 5; k++) { const t = k / 5; drawArt(hx + (vx - hx) * t, hy + (vy - hy) * t, 0.085 - 0.05 * t - Math.sin(t * Math.PI) * 0.012, 0.006, 0.006, ['.'], () => C(RED, 10)); }
+    }
     if (m.hailing) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.06, ['!'], () => C(YEL, fract(T * 3) < 0.6 ? 15 : 8)); // waving you down
   }
   drawBall();
@@ -7463,6 +7480,7 @@ function promptText() {
   const gp = gardensPrompt();
   if (gp) return gp;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
+  if (nearWalkedDog()) return 'E: pet the dog';
   const who = nearPerson();
   if (who) return task && task.who === who ? (task.kind === 'fetch' && task.have ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
@@ -7794,6 +7812,7 @@ function interact() {
     return;
   }
   if (pickUpBall()) return say('You pick up the ball.');
+  if (nearWalkedDog()) { const p = nearWalkedDog(); p.talk = 3; return say(pick(['The dog leans into your hand. Its owner smiles: "She likes you."', 'A wet nose, a wag, a happy little snort.', '"He\'s friendly!" He is. Very.', 'The dog rolls straight over for a belly rub. Its owner sighs and waits.']), 3); }
   const who = nearPerson();
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }
@@ -10718,7 +10737,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';

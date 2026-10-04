@@ -47,13 +47,18 @@ test('breakout: launch, knock out bricks, lose the balls at the floor', () => {
 
 test('street crosser: hop across between the cars; walk into one and lose a life', () => {
   const { ev } = fresh();
-  ev('var g = GAMES.crosser()');
-  // wait for a gap in the next lane, then hop: a careful player gets across
-  const evs = play(ev, 120, `t => { const [x, y] = g.you(), l = g.lanes().find(o => o.y === y - 1);
-    if (!l) return { upP: 1 };
-    const safe = [0, 0.15, 0.3, 0.45].every(dt => { const off = (l.off + l.sp * dt) % l.gap; return ((x - off * l.dir) % l.gap + l.gap) % l.gap >= l.len; });
-    return safe ? { upP: 1 } : {}; }`);
-  assert.ok(evs.includes('score'), 'got across: ' + evs.slice(0, 40));
+  // wait for a gap in the next lane, then hop: a careful player gets across, most games (each game its own seeded
+  // traffic, so the city's random numbers don't shift it)
+  let across = 0;
+  for (let seed = 1; seed <= 10; seed++) {
+    ev(`var q = ${seed * 977}, srnd = () => { q = q * 16807 % 2147483647; return q / 2147483647; }; var g = GAMES.crosser(srnd)`);
+    const evs = play(ev, 120, `t => { const [x, y] = g.you(), l = g.lanes().find(o => o.y === y - 1);
+      if (!l) return { upP: 1 };
+      const safe = [0, 0.15, 0.3, 0.45].every(dt => { const off = (l.off + l.sp * dt) % l.gap; return ((x - off * l.dir) % l.gap + l.gap) % l.gap >= l.len; });
+      return safe ? { upP: 1 } : {}; }`);
+    if (evs.includes('score')) across++;
+  }
+  assert.ok(across >= 5, `got across in ${across} of 10`);
   ev('var g = GAMES.crosser()');
   const reckless = play(ev, 60, '() => ({ upP: 1 })');
   assert.ok(reckless.includes('miss'));

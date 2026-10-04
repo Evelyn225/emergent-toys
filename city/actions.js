@@ -195,6 +195,7 @@ function interact() {
     return;
   }
   if (pickUpBall()) return say('You pick up the ball.');
+  if (nearWalkedDog()) { const p = nearWalkedDog(); p.talk = 3; return say(pick(['The dog leans into your hand. Its owner smiles: "She likes you."', 'A wet nose, a wag, a happy little snort.', '"He\'s friendly!" He is. Very.', 'The dog rolls straight over for a belly rub. Its owner sighs and waits.']), 3); }
   const who = nearPerson();
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }

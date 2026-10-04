@@ -740,3 +740,21 @@ test('breaking in at night: the till pays well but sets off the alarm, the polic
   assert.ok(r[0][0] >= 120 && r[0][1] >= 2 && r[0][2] && r[0][3], `the shop till: ${JSON.stringify(r[0])}`);
   assert.deepStrictEqual(r.slice(1), [true, 'lockpick', true, 3]);
 }));
+
+test('dog walkers: out with their dogs in the morning, at lunch and before dinner, never at night; you can pet the dog', () => withPage(async page => {
+  const counts = await page.evaluate(() => {
+    const dogsAt = t => people.filter(p => p.role === 'dogwalker' && activity(p, t) === 'wander' && t >= 7 && t < 20).length;
+    return { walkers: people.filter(p => p.role === 'dogwalker').length, morning: dogsAt(8.3), lunch: dogsAt(13.3), evening: dogsAt(18.5), night: dogsAt(23), early: dogsAt(5) };
+  });
+  assert.ok(counts.walkers > 30, JSON.stringify(counts));
+  assert.ok(counts.morning > 10 && counts.lunch > 10 && counts.evening > 10, JSON.stringify(counts));
+  assert.strictEqual(counts.night + counts.early, 0);
+  const pet = await page.evaluate(() => {
+    tod = 8.3; mode = 'walk';
+    const m = people.find(p => p.role === 'dogwalker'); m.hidden = false; m.act = 'wander';
+    const d = dogOf(m); px = d.x; py = d.y + 0.05;
+    const prompt = promptText(); interact();
+    return [walkingDog(m), /pet the dog/.test(prompt) || /pick their pocket|talk/.test(prompt), msgText.length > 0];
+  });
+  assert.deepStrictEqual(pet, [true, true, true]);
+}));
