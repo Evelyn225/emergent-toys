@@ -51,3 +51,16 @@ test('falls: a storey is nothing, a few storeys hurt, a tall building is the hos
   assert.ok(ev('fallHurt(12)') > 20 && ev('fallHurt(12)') < 50);
   assert.ok(ev('fallHurt(30)') >= 100);
 });
+
+test('the bladder fills by itself and faster with drink, a beer more than water; the hospital empties it', () => {
+  const { ev } = loadCity();
+  const j = e => JSON.parse(ev(`JSON.stringify(${e})`));
+  ev('needs.bladder = 0; for (let t = 0; t < 60; t++) stepNeeds(1, true)');
+  const minute = j('needs.bladder');
+  assert.ok(minute > 3 && minute < 6, `a few points a minute on its own (${minute})`);
+  const after = id => ev(`needs.bladder = 0; inv.length = 0; buy('${id}'); held = 0; for (let k = 0; k < ITEMS['${id}'].uses; k++) useHeld(); needs.bladder`);
+  const beer = after('beer'), water = after('water'), burger = after('burger');
+  assert.ok(beer > water && water > 0 && burger === 0, `beer ${beer} > water ${water} > a burger ${burger}`);
+  ev('needs.bladder = 100; money = 500; hospitalised()');
+  assert.ok(j('needs.bladder') < 20);
+});

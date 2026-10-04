@@ -1,4 +1,4 @@
-// ===== pause menu: Esc or P (or the mouse lock being released). Freezes the game, fades the sound, and holds the
+// ===== pause menu: Esc (or the mouse lock being released). Freezes the game, fades the sound, and holds the
 // settings, which apply as you change them and are kept in localStorage.
 const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigger characters, fewer of them, faster
 let pauseEl = null;
@@ -39,6 +39,7 @@ function buildPause() {
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
         <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
+        <b>P</b><span>pee</span>
         <b>Esc</b><span>pause</span>
       </div>
       <h2></h2>

@@ -12,7 +12,7 @@ onkeydown = e => {
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
   if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
-  if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) return togglePause();
+  if (e.code === 'Escape' && !e.repeat) return togglePause();
   if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
   if (paused) return;
   K[e.code] = 1;
@@ -27,6 +27,7 @@ onkeydown = e => {
     if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
     if (e.code === 'KeyI') openInventory();
     if (e.code === 'KeyX') dropHere();
+    if (e.code === 'KeyP') startPee();
     const slot = /^Digit([1-8])$/.exec(e.code);
     if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) holdSlot(slot[1] - 1); // again: put it away
     if (e.code === 'Digit0' || e.code === 'Backquote') held = -1; // empty your hands
@@ -55,6 +56,7 @@ function turnBy(mx, my) {
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
+  if (my) peeLookOff(); // (looking about yourself: your eyes stay where you put them)
 }
 // on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
 let flick = null;
@@ -151,6 +153,7 @@ function loop(t) {
   stepEvents(dt);
   stepGardens(dt);
   stepHaze(dt);
+  stepPee(dt);
   stepSteam(dt);
   stepPigeons(dt);
   stepJadeIncense(dt);

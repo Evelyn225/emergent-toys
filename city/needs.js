@@ -8,7 +8,10 @@ const STARVE_T = 4 * 60; // seconds from full health to passing out with one met
 const HEAL_T = 10 * 60; // seconds to get your health all the way back, fed and watered
 const MEDICAL_BILL = 80, NURSE_FEE = 25;
 const FOOD_HEALS = 0.4; // health per point of hunger filled: a burger (50) is 20 health, a candy bar 8
-const needs = { food: 85, drink: 85, health: 100, warned: '' };
+const needs = { food: 85, drink: 85, health: 100, warned: '', bladder: 20 };
+// the bladder (0-100): never shown. Fills slowly by itself and faster with every drink, booze fastest; P empties it (pee.js)
+const BLADDER_FILL = 25 * 60; // seconds to fill up drinking nothing at all
+const wetting = (d, w) => d.booze ? w * 2.4 : w * 0.5; // bladder from `w` points of drink: a beer goes straight through you
 
 // how much an item fills you up, all its bites or sips together: [food, drink]. Dearer food is more of a meal;
 // water is the best thing for thirst, booze the worst; a milkshake or a bowl of soup counts for both
@@ -25,6 +28,7 @@ function eatSome(id, d) {
   const [f, w] = nourish(id, d), wasHungry = needs.food < 30, wasThirsty = needs.drink < 30;
   needs.food = Math.min(100, needs.food + f / d.uses); needs.drink = Math.min(100, needs.drink + w / d.uses);
   needs.health = Math.min(100, needs.health + f * FOOD_HEALS / d.uses); // a proper meal patches you up a bit
+  needs.bladder = Math.min(100, needs.bladder + wetting(d, w) / d.uses);
   if (wasHungry && needs.food >= 30) return ' That takes the edge off.';
   if (wasThirsty && needs.drink >= 30) return ' That\'s better.';
   return '';
@@ -33,6 +37,7 @@ function eatSome(id, d) {
 function stepNeeds(dt, canFaint) {
   needs.food = Math.max(0, needs.food - dt * 100 / FOOD_LAST);
   needs.drink = Math.max(0, needs.drink - dt * 100 / DRINK_LAST);
+  needs.bladder = Math.min(100, needs.bladder + dt * 100 / BLADDER_FILL);
   const empty = (needs.food <= 0) + (needs.drink <= 0);
   if (empty) needs.health = Math.max(canFaint ? 0 : 1, needs.health - dt * 100 / STARVE_T * empty); // (not at the wheel: you hang on till you're out)
   else if (needs.food > 30 && needs.drink > 30) needs.health = Math.min(100, needs.health + dt * 100 / HEAL_T);
@@ -50,7 +55,7 @@ function hurt(n) { needs.health = Math.max(0, needs.health - n); return needs.he
 // after passing out: the hospital's done its bit
 function hospitalised() {
   const bill = Math.min(MEDICAL_BILL, Math.max(0, money));
-  money -= bill; needs.health = 100; needs.food = Math.max(needs.food, 50); needs.drink = Math.max(needs.drink, 50); needs.warned = '';
+  money -= bill; needs.health = 100; needs.bladder = 10; needs.food = Math.max(needs.food, 50); needs.drink = Math.max(needs.drink, 50); needs.warned = '';
   return bill;
 }
 const refillNeeds = () => { needs.food = needs.drink = needs.health = 100; needs.warned = ''; };

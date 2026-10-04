@@ -50,6 +50,7 @@
     "city/held-dense.js",
     "city/held-dense-items.js",
     "city/smoke.js",
+    "city/pee.js",
     "city/ambient.js",
     "city/minigame-ui.js",
     "city/crime-ui.js",

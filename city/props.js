@@ -161,7 +161,7 @@ for (let k = 0; k < 28; k++) {
 
 // landmark, construction-site and industrial props. Fences and shipping containers are real boxes (solids): drawn
 // with drawBox and solid to walk or drive into. {x, y, c, s: long axis, hl, hw, z0, z1, kind, k: a per-thing seed}
-const extras = [], cranes = [], stacks = [], solids = [], radios = [];
+const extras = [], cranes = [], stacks = [], solids = [], radios = [], potties = [];
 const solidBox = (x, y, alongX, hl, hw, z0, z1, kind, k) => solids.push({ x, y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k });
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bi(bx, by)), kind = blockKind(bx, by);
@@ -173,6 +173,8 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     // the hoarding round the site: three panels a side, open at the corners
     for (const s of [3.5, 5, 6.5]) for (const [x, y, ax] of [[s, 2.1, 1], [s, 7.9, 1], [2.1, s, 0], [7.9, s, 0]])
       solidBox(X + x, Y + y, ax, 0.7, 0.012, 0, 0.22, 'hoarding', bx * 7 + by);
+    // a portapotty or two inside the fence, doors facing the site (west: the box's -u end, face 2)
+    for (let k = 0, n = hash(bx, by, 95) < 0.5 ? 2 : 1; k < n; k++) { solidBox(X + 7.3, Y + 2.95 + k * 0.15, true, 0.06, 0.065, 0, 0.23, 'potty', bx * 13 + by + k); potties.push(solids[solids.length - 1]); }
   }
   if (kind === 'yard') { // container stacks on a loose grid (so they never overlap), a chain-link fence with gates
     for (let k = 0; k < 6; k++) {
