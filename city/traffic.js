@@ -224,14 +224,34 @@ function stepTraffic(dt, t, everywhere = false) {
       const rx = rel(o.ex - c.x), ry = rel(o.ey - c.y), al = rx * c.hx + ry * c.hy;
       return Math.abs(rx * c.hy - ry * c.hx) < 0.24 && al > -0.6 && al < 1.6;
     });
-    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : passing ? -0.34 : 0; // at the scene: pulled in to the kerb
-    c.off += clamp(offTarget - c.off, -0.6 * dt, 0.6 * dt);
-    if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c)) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
+    // a cab you've paid to step on it: out into the oncoming lane round anything slower in front, if nothing's coming
+    // and there's no junction to get through first; back in once past
+    let overtake = false;
+    if (c.rush && !code(c) && c.left > 1 && line > 1.2 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) {
+      const slow = c.near.some(o => {
+        if (o === c || o.hx !== c.hx || o.hy !== c.hy || o.off < -0.3) return false;
+        const rx = rel(o.ex - c.x), ry = rel(o.ey - c.y), al = rx * c.hx + ry * c.hy;
+        return Math.abs(rx * c.hy - ry * c.hx) < 0.3 && al > -0.7 && al < 1.8 && o.v < c.cruise * 1.6;
+      });
+      const ox = c.x - c.hy * 0.8, oy = c.y + c.hx * 0.8; // the middle of the oncoming lane, beside us
+      const look = c.off < -0.4 ? 1.6 : 5; // pulling out: the whole block clear. Already out: only a car right on us aborts it
+      const coming = slow && cars.some(o => {
+        if (o === c || o.hx === c.hx && o.hy === c.hy && o.off > -0.3) return false;
+        const rx = rel(o.ex - ox), ry = rel(o.ey - oy), al = rx * c.hx + ry * c.hy;
+        return Math.abs(rx * c.hy - ry * c.hx) < 0.45 && al > -0.6 && al < look;
+      });
+      overtake = slow && !coming;
+    }
+    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : overtake ? -0.8 : passing ? -0.34 : 0; // at the scene: pulled in to the kerb
+    const sway = c.rush ? 1.6 : 0.6; // (a rushing cab swings out and back smartly)
+    c.off += clamp(offTarget - c.off, -sway * dt, sway * dt);
+    if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c) && !c.rush) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
     if (c.state === 'scene') room_ = 0;
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
     if (c.rider && !c.dest || c.stopT > T) room_ = 0; // (a cab whose driver's been arrested sits there a while)
-    if (c.pursuit && mode === 'walk' && Math.hypot(rel(px - c.x), rel(py - c.y)) < 1.2) room_ = 0; // pulled up next to you
+    // pulled up next to you to let an officer out; after that it keeps rolling alongside instead of stopping and starting
+    if (c.pursuit && mode === 'walk' && (!c.dropped || T - c.dropT < 0.8) && Math.hypot(rel(px - c.x), rel(py - c.y)) < 1.2) room_ = 0;
     if (c.dest && !c.pursuit && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
       if (c.ev) { if (ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) evArrive(c); } // not in the middle of a junction
       else { room_ = 0; c.arrived = true; }

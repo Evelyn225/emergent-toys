@@ -1,6 +1,6 @@
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
-let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE; // ZBG / FOGB: depth and fog of the background colour
+let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
 function resize() {
   cv.width = innerWidth; cv.height = innerHeight;
   g.font = FS + 'px monospace'; g.textBaseline = 'top';
@@ -8,7 +8,7 @@ function resize() {
   cols = Math.floor(innerWidth / cw); rows = Math.floor(innerHeight / FS);
   const n = cols * rows;
   CH = new Array(n); COL = new Uint8Array(n); BG = new Uint8Array(n); ZB = new Float32Array(n); ZBG = new Float32Array(n); FL = new Uint8Array(n);
-  FOGS = new Uint8Array(n); FOGB = new Uint8Array(n);
+  FOGS = new Uint8Array(n); FOGB = new Uint8Array(n); LAMPL = new Uint8Array(n);
   BASE = new Int32Array(cols);
 }
 addEventListener('resize', resize); resize();

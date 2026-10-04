@@ -7,6 +7,7 @@ function relock(e) {
 onkeydown = e => {
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
+  if (bigMapKey(e, true)) return; // the big map (from the pause menu) has the keys while it's up
   if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
@@ -55,7 +56,16 @@ function turnBy(mx, my) {
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
-onmousemove = e => { if (document.pointerLockElement) turnBy(e.movementX, e.movementY); };
+// on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
+let flick = null;
+onmousemove = e => {
+  if (!document.pointerLockElement) return;
+  if (flick) { flick.x += e.movementX; flick.y += e.movementY; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
+  turnBy(e.movementX, e.movementY);
+};
+addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && document.pointerLockElement && !paused && !body.z) flick = { x: 0, y: 0 }; });
+addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });
+addEventListener('contextmenu', e => { if (document.pointerLockElement || skatingNow()) e.preventDefault(); });
 
 const free = (x, y) => {
   if (mode === 'room') return !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&

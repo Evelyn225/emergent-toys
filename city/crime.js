@@ -60,8 +60,8 @@ function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn
   if (d <= s) { c.x = mod(gx, N); c.y = mod(gy, N); c.corner = c.goal; c.goal = null; }
   else { c.x = mod(c.x + dx / d * s, N); c.y = mod(c.y + dy / d * s, N); c.ph += dt * 4; }
 }
-function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls
-  const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = 0.78 * dt;
+function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls (just out of the car: a sprint)
+  const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = (c.burst > T ? 1.05 : 0.78) * dt;
   const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
   if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = mod(nx, N);
   if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = mod(ny, N);
@@ -117,7 +117,7 @@ function callUnits() {
 }
 function clearWanted() {
   wanted.stars = 0; wanted.seen = false; wanted.hideT = 0; wanted.bustT = 0; wanted.busted = false;
-  for (const c of cars) if (c.pursuit) { c.pursuit = false; c.dest = null; c.cruise = 1 + Math.random() * 0.5; c.dropped = false; }
+  for (const c of cars) if (c.pursuit) { c.pursuit = false; c.dest = null; c.cruise = 1 + Math.random() * 0.5; c.dropped = false; c.drops = 0; }
   for (const c of footCops) if (c.chase) backToBeat(c);
   reports.length = 0;
 }
@@ -151,9 +151,10 @@ function stepCrime(dt) {
     if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < 20) c.chase = true;
     if (c.chase) chaseStep(c, wanted.lastX, wanted.lastY, dt);
   }
-  if (onFoot || inside) for (const c of cars) if (c.pursuit && !c.dropped && near(c.x, c.y, wx, wy) < 1.4) { // pulls up, an officer jumps out
-    c.dropped = true;
-    footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true });
+  // pulls up, an officer jumps out and sprints for you; outrun him and the car comes round again for another go
+  if (onFoot || inside) for (const c of cars) if (c.pursuit && (!c.dropped || T - c.dropT > 8 && (c.drops || 0) < 3) && near(c.x, c.y, wx, wy) < 1.4) {
+    c.dropped = true; c.dropT = T; c.drops = (c.drops || 0) + 1;
+    footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true, burst: T + 5 });
   }
   // in a car with a cruiser on your bumper: told to pull over, and if you don't, a PIT manoeuvre spins you out
   let told = false;

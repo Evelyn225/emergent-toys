@@ -1,18 +1,31 @@
 // ===== on your feet: Space jumps, C held crouches, C by a bench or a seat sits you down (C again, or walk, to get
 // up). On the skateboard Space pops an ollie, and what you're holding as you pop makes it a trick: A kickflip,
-// D heelflip, S pop shuvit, A+S 360 flip, D+S varial heelflip. The board under you is a little 3D model in front of
-// the camera (like a held weapon), so it really flips and spins.
+// D heelflip, S pop shuvit, A+S 360 flip, D+S varial heelflip. Or, without touching where you're going, flick for it:
+// hold the right mouse button and flick (left kickflip, right heelflip, back shuvit, back-left 360 flip, back-right
+// varial heelflip, nothing or forward an ollie) and let go to pop; on a phone, swipe off the Ollie button the same
+// way. The board under you is a little 3D model in front of the camera (like a held weapon), so it really flips and spins.
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
 const skatingNow = () => fx.skating && mode === 'walk';
 
-function jump() {
+// a flick (screen pixels: x right, y down) to the trick it calls for: the nearest of the six directions
+const FLICK_DIRS = [['A', -1, 0], ['D', 1, 0], ['S', 0, 1], ['AS', -0.71, 0.71], ['DS', 0.71, 0.71], ['', 0, -1]];
+function flickTrick(dx, dy, min = 20) {
+  const d = Math.hypot(dx, dy);
+  if (d < min) return '';
+  let best = '', bd = -Infinity;
+  for (const [k, fx_, fy_] of FLICK_DIRS) { const dot = (dx * fx_ + dy * fy_) / d; if (dot > bd) { bd = dot; best = k; } }
+  return best;
+}
+const trickName = key => (TRICKS[key] || ['ollie'])[0];
+
+function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read off A / D / S
   if (body.z > 0 || body.vz > 0) return;
   if (body.seat) return standUp();
   if (skatingNow()) {
-    const key = (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
+    const key = trick ?? (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
     body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
   } else body.vz = JUMP_V;
   if (actx) sfxUse(skatingNow() ? 'board' : 'kick');

@@ -1242,14 +1242,34 @@ function stepTraffic(dt, t, everywhere = false) {
       const rx = rel(o.ex - c.x), ry = rel(o.ey - c.y), al = rx * c.hx + ry * c.hy;
       return Math.abs(rx * c.hy - ry * c.hx) < 0.24 && al > -0.6 && al < 1.6;
     });
-    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : passing ? -0.34 : 0; // at the scene: pulled in to the kerb
-    c.off += clamp(offTarget - c.off, -0.6 * dt, 0.6 * dt);
-    if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c)) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
+    // a cab you've paid to step on it: out into the oncoming lane round anything slower in front, if nothing's coming
+    // and there's no junction to get through first; back in once past
+    let overtake = false;
+    if (c.rush && !code(c) && c.left > 1 && line > 1.2 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) {
+      const slow = c.near.some(o => {
+        if (o === c || o.hx !== c.hx || o.hy !== c.hy || o.off < -0.3) return false;
+        const rx = rel(o.ex - c.x), ry = rel(o.ey - c.y), al = rx * c.hx + ry * c.hy;
+        return Math.abs(rx * c.hy - ry * c.hx) < 0.3 && al > -0.7 && al < 1.8 && o.v < c.cruise * 1.6;
+      });
+      const ox = c.x - c.hy * 0.8, oy = c.y + c.hx * 0.8; // the middle of the oncoming lane, beside us
+      const look = c.off < -0.4 ? 1.6 : 5; // pulling out: the whole block clear. Already out: only a car right on us aborts it
+      const coming = slow && cars.some(o => {
+        if (o === c || o.hx === c.hx && o.hy === c.hy && o.off > -0.3) return false;
+        const rx = rel(o.ex - ox), ry = rel(o.ey - oy), al = rx * c.hx + ry * c.hy;
+        return Math.abs(rx * c.hy - ry * c.hx) < 0.45 && al > -0.6 && al < look;
+      });
+      overtake = slow && !coming;
+    }
+    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : overtake ? -0.8 : passing ? -0.34 : 0; // at the scene: pulled in to the kerb
+    const sway = c.rush ? 1.6 : 0.6; // (a rushing cab swings out and back smartly)
+    c.off += clamp(offTarget - c.off, -sway * dt, sway * dt);
+    if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c) && !c.rush) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
     if (c.state === 'scene') room_ = 0;
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
     if (c.rider && !c.dest || c.stopT > T) room_ = 0; // (a cab whose driver's been arrested sits there a while)
-    if (c.pursuit && mode === 'walk' && Math.hypot(rel(px - c.x), rel(py - c.y)) < 1.2) room_ = 0; // pulled up next to you
+    // pulled up next to you to let an officer out; after that it keeps rolling alongside instead of stopping and starting
+    if (c.pursuit && mode === 'walk' && (!c.dropped || T - c.dropT < 0.8) && Math.hypot(rel(px - c.x), rel(py - c.y)) < 1.2) room_ = 0;
     if (c.dest && !c.pursuit && Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < (c.ev ? 1 : 1.2)) { // (1: the far lane of the street counts)
       if (c.ev) { if (ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) evArrive(c); } // not in the middle of a junction
       else { room_ = 0; c.arrived = true; }
@@ -2632,32 +2652,41 @@ GAMES.lockpick = (rnd = Math.random) => {
 };
 
 // breaking out of jail: sneak from your cell (bottom left) to the door (top right) while a guard walks his rounds
-// with a flashlight. Crates block the beam. Step into the light, or bump into him, and he's got you. One cell per
-// arrow press (held, it repeats). 45 seconds before the shift changes and they count heads.
+// with a flashlight and a second one paces the middle of the block. Crates block the beams. Step into the light, or
+// bump into either of them, and they've got you. One cell per arrow press (held, it repeats). 40 seconds before the
+// shift changes and they count heads.
 GAMES.jailbreak = (rnd = Math.random) => {
-  const W = 30, H = 13, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true };
+  const W = 30, H = 13, LIMIT = 40, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true };
   const cell = (x, y) => y * W + x, solid = new Set();
   for (let x = 0; x < W; x++) solid.add(cell(x, 0)).add(cell(x, 10));
   for (let y = 0; y <= 10; y++) solid.add(cell(0, y)).add(cell(W - 1, y));
   const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 8], [11, 8]], [[17, 8]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
   for (const grp of CRATES) for (const [x, y] of grp) solid.add(cell(x, y));
-  const door = [W - 2, 1], you = [2, 9], ROUTE = [[3, 2], [26, 2], [26, 8], [3, 8]];
-  let gx = 3, gy = 2, leg = 1, wait = 0, fx_ = 1, fy_ = 0, t = 0, rep = 0;
+  const door = [W - 2, 1], you = [2, 9];
+  // the guards: the old hand walks the whole block, the new one paces up and down the middle, slower but never far
+  const guards = [
+    { route: [[3, 2], [26, 2], [26, 8], [3, 8]], x: 3, y: 2, leg: 1, wait: 0, fx: 1, fy: 0, speed: 3.6, pause: 1.1 },
+    { route: [[16, 1], [16, 9]], x: 16, y: 9, leg: 0, wait: 0, fx: 0, fy: -1, speed: 2.2, pause: 1.6 },
+  ];
+  let t = 0, rep = 0;
   const lit = new Set();
   const clear = (x0, y0, x1, y1) => { // nothing solid on the way from (x0, y0) to (x1, y1)
     for (let s = 1; s < 8; s++) { const x = Math.round(x0 + (x1 - x0) * s / 8), y = Math.round(y0 + (y1 - y0) * s / 8); if (solid.has(cell(x, y)) && !(x === x1 && y === y1)) return false; }
     return true;
   };
-  const shine = () => { // the cone: eight cells ahead, widening as it goes
+  const shine = () => { // each cone: eight cells ahead, widening as it goes
     lit.clear();
-    const ox = Math.round(gx), oy = Math.round(gy);
-    for (let d = 1; d <= 8; d++) for (let o = -((d + 1) >> 1); o <= (d + 1) >> 1; o++) {
-      const x = ox + fx_ * d - fy_ * o, y = oy + fy_ * d + fx_ * o;
-      if (x < 0 || y < 0 || x >= W || y > 10 || solid.has(cell(x, y)) || !clear(ox, oy, x, y)) continue;
-      lit.add(cell(x, y));
+    for (const gd of guards) {
+      const ox = Math.round(gd.x), oy = Math.round(gd.y);
+      for (let d = 1; d <= 8; d++) for (let o = -((d + 1) >> 1); o <= (d + 1) >> 1; o++) {
+        const x = ox + gd.fx * d - gd.fy * o, y = oy + gd.fy * d + gd.fx * o;
+        if (x < 0 || y < 0 || x >= W || y > 10 || solid.has(cell(x, y)) || !clear(ox, oy, x, y)) continue;
+        lit.add(cell(x, y));
+      }
     }
   };
   shine();
+  const near = (x, y) => guards.some(gd => Math.abs(gd.x - x) + Math.abs(gd.y - y) < 1.2);
   g.step = (dt, k) => {
     const ev = [];
     if (g.over) return ev;
@@ -2670,17 +2699,19 @@ GAMES.jailbreak = (rnd = Math.random) => {
       const nx = you[0] + dir[0], ny = you[1] + dir[1];
       if (!solid.has(cell(nx, ny))) { you[0] = nx; you[1] = ny; ev.push('hop'); } else ev.push('bump');
     }
-    // the guard: along his round, pausing at each corner to look about
-    if (wait > 0) { wait -= dt; if (wait < 0.5) { const n = ROUTE[leg]; fx_ = Math.sign(n[0] - gx); fy_ = Math.sign(n[1] - gy); } }
-    else {
-      const [tx, ty] = ROUTE[leg], d = Math.hypot(tx - gx, ty - gy), s = Math.min(d, 3.2 * dt);
-      fx_ = Math.sign(tx - gx); fy_ = Math.sign(ty - gy);
-      gx += fx_ * s; gy += fy_ * s;
-      if (d - s < 1e-6) { leg = (leg + 1) % ROUTE.length; wait = 1.1; }
+    // the guards: along their rounds, pausing at each corner to look about
+    for (const gd of guards) {
+      if (gd.wait > 0) { gd.wait -= dt; if (gd.wait < 0.5) { const n = gd.route[gd.leg]; gd.fx = Math.sign(n[0] - gd.x); gd.fy = Math.sign(n[1] - gd.y); } }
+      else {
+        const [tx, ty] = gd.route[gd.leg], d = Math.hypot(tx - gd.x, ty - gd.y), s = Math.min(d, gd.speed * dt);
+        gd.fx = Math.sign(tx - gd.x); gd.fy = Math.sign(ty - gd.y);
+        gd.x += gd.fx * s; gd.y += gd.fy * s;
+        if (d - s < 1e-6) { gd.leg = (gd.leg + 1) % gd.route.length; gd.wait = gd.pause; }
+      }
     }
     shine();
     if (you[0] === door[0] && you[1] === door[1]) { g.over = g.success = true; g.score = 1; ev.push('clear'); return ev; }
-    if (lit.has(cell(you[0], you[1])) || Math.abs(gx - you[0]) + Math.abs(gy - you[1]) < 1.2 || t > 45) { g.over = true; ev.push('die'); }
+    if (lit.has(cell(you[0], you[1])) || near(you[0], you[1]) || t > LIMIT) { g.over = true; ev.push('die'); }
     return ev;
   };
   g.draw = (put, text) => {
@@ -2690,13 +2721,13 @@ GAMES.jailbreak = (rnd = Math.random) => {
       else if (lit.has(i)) put(x, y, '.', C(YEL, 12), C(YEL, 3));
     }
     put(door[0], door[1], 'D', C(GREEN, 15), C(GREEN, 4));
-    put(Math.round(gx), Math.round(gy), 'G', C(BLUE, 15), C(BLUE, 4));
+    for (const gd of guards) put(Math.round(gd.x), Math.round(gd.y), 'G', C(BLUE, 15), C(BLUE, 4));
     put(you[0], you[1], '@', C(WHITE, 15), lit.has(cell(you[0], you[1])) ? C(RED, 6) : NONE);
-    text(0, 12, `${Math.max(0, 45 - t) | 0}s till the head count`, C(t > 35 ? RED : GRAY, 12));
+    text(0, 12, `${Math.max(0, LIMIT - t) | 0}s till the head count`, C(t > LIMIT - 10 ? RED : GRAY, 12));
   };
   g.status = () => 'ARROWS sneak to the door (D). Stay out of the light.';
   g.reward = () => 0;
-  g.state = () => ({ you, gx, gy, lit, door, solid, t });
+  g.state = () => ({ you, gx: guards[0].x, gy: guards[0].y, guards: guards.map(gd => [gd.x, gd.y]), lit, door, solid, t, limit: LIMIT });
   return g;
 };
 
@@ -3514,8 +3545,8 @@ function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn
   if (d <= s) { c.x = mod(gx, N); c.y = mod(gy, N); c.corner = c.goal; c.goal = null; }
   else { c.x = mod(c.x + dx / d * s, N); c.y = mod(c.y + dy / d * s, N); c.ph += dt * 4; }
 }
-function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls
-  const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = 0.78 * dt;
+function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls (just out of the car: a sprint)
+  const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = (c.burst > T ? 1.05 : 0.78) * dt;
   const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
   if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = mod(nx, N);
   if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = mod(ny, N);
@@ -3571,7 +3602,7 @@ function callUnits() {
 }
 function clearWanted() {
   wanted.stars = 0; wanted.seen = false; wanted.hideT = 0; wanted.bustT = 0; wanted.busted = false;
-  for (const c of cars) if (c.pursuit) { c.pursuit = false; c.dest = null; c.cruise = 1 + Math.random() * 0.5; c.dropped = false; }
+  for (const c of cars) if (c.pursuit) { c.pursuit = false; c.dest = null; c.cruise = 1 + Math.random() * 0.5; c.dropped = false; c.drops = 0; }
   for (const c of footCops) if (c.chase) backToBeat(c);
   reports.length = 0;
 }
@@ -3605,9 +3636,10 @@ function stepCrime(dt) {
     if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < 20) c.chase = true;
     if (c.chase) chaseStep(c, wanted.lastX, wanted.lastY, dt);
   }
-  if (onFoot || inside) for (const c of cars) if (c.pursuit && !c.dropped && near(c.x, c.y, wx, wy) < 1.4) { // pulls up, an officer jumps out
-    c.dropped = true;
-    footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true });
+  // pulls up, an officer jumps out and sprints for you; outrun him and the car comes round again for another go
+  if (onFoot || inside) for (const c of cars) if (c.pursuit && (!c.dropped || T - c.dropT > 8 && (c.drops || 0) < 3) && near(c.x, c.y, wx, wy) < 1.4) {
+    c.dropped = true; c.dropT = T; c.drops = (c.drops || 0) + 1;
+    footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true, burst: T + 5 });
   }
   // in a car with a cruiser on your bumper: told to pull over, and if you don't, a PIT manoeuvre spins you out
   let told = false;
@@ -3855,7 +3887,7 @@ function loadBoats(list) {
 }
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
-let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE; // ZBG / FOGB: depth and fog of the background colour
+let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
 function resize() {
   cv.width = innerWidth; cv.height = innerHeight;
   g.font = FS + 'px monospace'; g.textBaseline = 'top';
@@ -3863,7 +3895,7 @@ function resize() {
   cols = Math.floor(innerWidth / cw); rows = Math.floor(innerHeight / FS);
   const n = cols * rows;
   CH = new Array(n); COL = new Uint8Array(n); BG = new Uint8Array(n); ZB = new Float32Array(n); ZBG = new Float32Array(n); FL = new Uint8Array(n);
-  FOGS = new Uint8Array(n); FOGB = new Uint8Array(n);
+  FOGS = new Uint8Array(n); FOGB = new Uint8Array(n); LAMPL = new Uint8Array(n);
   BASE = new Int32Array(cols);
 }
 addEventListener('resize', resize); resize();
@@ -4475,9 +4507,10 @@ function floorCell(i, r, x, rx, ry) {
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
   if (!soft && wet > 0.05 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
+  LAMPL[i] = 0;
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;
-    if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (ch === ' ') ch = '.'; }
+    if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (ch === ' ') ch = '.'; LAMPL[i] = gl * 13; }
   }
   if (siren) { // an emergency vehicle's lights wash over the street round it
     const s = 1 - Math.hypot(rel(wx - siren.ex), rel(wy - siren.ey)) / 1.2;
@@ -4617,8 +4650,12 @@ function reflect() {
       const i = r * cols + x, f = FL[i];
       if (f < 2) continue;
       const s = 2 * b - r - 1 + (f === 3 ? Math.round(Math.sin(r * 1.7 + T * 3) * 0.6) : 0), j = s * cols + x; // water ripples
-      if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ') { CH[i] = CH[j]; COL[i] = (COL[j] & 0xf0) | ((COL[j] & 15) * 0.55 | 0); }
-      else if (f === 2) set(i, '~', C(BLUE, 3 + day * 3));
+      const lamp = f === 2 ? LAMPL[i] : 0; // a puddle under a streetlamp holds its light as well as the reflection
+      if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ') {
+        const lv = (COL[j] & 15) * 0.55;
+        CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : (COL[j] & 0xf0) | (lv | 0);
+      } else if (f === 2) set(i, '~', lamp ? C(WARM, Math.max(3 + day * 3, lamp)) : C(BLUE, 3 + day * 3));
+      if (lamp > 2) BG[i] = C(WARM, Math.max(BG[i] === NONE ? 0 : BG[i] & 15, lamp * 0.2)); // and a warm sheen under it
     }
   }
 }
@@ -9638,6 +9675,7 @@ function buildPause() {
       <h1>Paused</h1>
       <p class="sub">ASCII City</p>
       <button class="item" data-act="resume">Resume</button>
+      <button class="item" data-act="map">Map of the city</button>
       <button class="item" data-act="newgame">Start over</button>
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
       <h2>sound</h2>
@@ -9653,7 +9691,7 @@ function buildPause() {
       <div class="keys">
         <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock)</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
-        <b>space</b><span>jump (on a board: ollie; with A / D / S: tricks)</span><b>C</b><span>crouch (hold) / sit</span>
+        <b>space</b><span>jump (on a board: ollie; with A / D / S: tricks)</span><b>right mouse</b><span>on a board: hold, flick a way, let go for a trick</span><b>C</b><span>crouch (hold) / sit</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
         <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
@@ -9686,6 +9724,7 @@ function buildPause() {
     if (!b) return;
     if (b.dataset.act === 'resume') closePause(true);
     if (b.dataset.act === 'dev') openDev();
+    if (b.dataset.act === 'map') openBigMap();
     if (b.dataset.act === 'newgame') { if (b.dataset.sure) newGame(); else { b.dataset.sure = 1; b.textContent = 'Start over: lose your money, things, home and car? Click again'; } }
     if (b.dataset.toggle) settings[b.dataset.toggle] = !settings[b.dataset.toggle];
     if (b.dataset.detail) settings.detail = b.dataset.detail;
@@ -9870,6 +9909,178 @@ function openDev() {
 }
 function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = false; lockMouse(); }
 const devKey = e => { if (e.code !== 'F2' || e.repeat) return false; e.preventDefault(); devOpen() ? closeDev() : openDev(); return true; };
+// ===== the big map: the whole city on one sheet, opened from the pause menu. Drag it about (mouse or finger),
+// zoom with the wheel, a pinch, or the + / - buttons; arrows or WASD pan too. Neighbourhood names always, the
+// landmarks and stations, and (zoomed in) every shop by its sign. Esc, M or the x closes it, back to the pause menu.
+let bigMapEl = null, bigMapCv = null, bigMapSheet = null;
+const BIGMAP = { cx: 0, cy: 0, z: 4, drag: null, pts: new Map(), pinch: null, keys: {} };
+const BIGMAP_Z = 48; // most px per cell: a shop front across the screen. The least: the whole city just fills the screen
+const bigMapMinZ = () => Math.max(bigMapCv.clientWidth, bigMapCv.clientHeight) / N;
+const BIGMAP_CSS = `
+  #bigmap { background: #000; }
+  #bigmap canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  #bigmap canvas.drag { cursor: grabbing; }
+  #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); display: flex; gap: 6px; }
+  #bigmap .bar button { min-width: 38px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
+  #bigmap .bar button:hover { border-color: #fff; }
+  #bigmap .tip { position: absolute; z-index: 2; left: calc(12px + env(safe-area-inset-left)); bottom: 10px; color: rgba(255, 255, 255, 0.45); pointer-events: none; }`;
+
+// the city drawn once, a pixel a cell, then scaled up crisp
+function bigMapRender() {
+  const c = bigMapSheet || (bigMapSheet = document.createElement('canvas'));
+  c.width = c.height = N;
+  const x = c.getContext('2d');
+  for (let my = 0; my < N; my++) for (let mx = 0; mx < N; mx++) { x.fillStyle = mapTile(mx, my); x.fillRect(mx, my, 1, 1); }
+}
+// what's named on the map: [x, y, text, colour, kind]. kind: 'area' (always), 'place' (always), 'shop' (zoomed in)
+function bigMapLabels() {
+  const out = [];
+  for (const [sx, sy, d] of DIST_SEEDS) out.push([sx * 8, sy * 8, (DISTRICT_TITLE[d] || d).replace(/^the /, 'The '), 'rgba(255,255,255,0.55)', 'area']);
+  const place = (x, y, t) => out.push([x, y, t, '#fd8', 'place']);
+  place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
+  place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
+  const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'Big screens', radio: 'Radio tower' };
+  for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { const lm = landmarkOf.get(bi(bx, by)); if (lm) place(bx * 8 + 5, by * 8 + 5, LM[lm] || lm); }
+  for (const s of SERVICES) place(s.x, s.y - 0.8, { police: 'Police', fire: 'Fire station', amb: 'Hospital' }[s.kind] || s.kind);
+  for (const s of stations) out.push([s.x, s.y - 0.8, s.name, '#6f6', 'place']);
+  for (const s of EL_STATIONS) out.push([s.x, EL_Y - 0.4, s.name, '#f96', 'place']);
+  const seen = new Set();
+  for (let k = 0; k < N * N; k++) {
+    const sh = SHOP[k]; if (!sh || !sh.word || sh.kind === SHOP_APTS || seen.has(sh)) continue;
+    seen.add(sh); out.push([k % N + 0.5, Math.floor(k / N) + 0.5, sh.word, '#ccd', 'shop']);
+  }
+  return out;
+}
+let bigMapNames = null;
+
+function bigMapDraw() {
+  if (!bigMapOpen()) return;
+  const cv_ = bigMapCv, dpr = devicePixelRatio || 1, W = cv_.clientWidth, H = cv_.clientHeight;
+  if (cv_.width !== Math.round(W * dpr) || cv_.height !== Math.round(H * dpr)) { cv_.width = Math.round(W * dpr); cv_.height = Math.round(H * dpr); }
+  BIGMAP.z = clamp(BIGMAP.z, bigMapMinZ(), BIGMAP_Z); // (the window may have changed)
+  const x = cv_.getContext('2d'), z = BIGMAP.z;
+  x.setTransform(dpr, 0, 0, dpr, 0, 0); x.imageSmoothingEnabled = false;
+  x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
+  // world (wx, wy) -> screen, taking the copy of the (wrapping) city nearest the middle of the view
+  const sx = wx => W / 2 + rel(wx - BIGMAP.cx) * z, sy = wy => H / 2 + rel(wy - BIGMAP.cy) * z;
+  const ox = W / 2 - BIGMAP.cx * z, oy = H / 2 - BIGMAP.cy * z, S = N * z;
+  for (let tx = Math.floor(-ox / S) - 1; tx * S + ox < W; tx++) for (let ty = Math.floor(-oy / S) - 1; ty * S + oy < H; ty++)
+    x.drawImage(bigMapSheet, ox + tx * S, oy + ty * S, S, S);
+  if (z >= 10) { // the street grid gets block lines once there's room
+    x.strokeStyle = 'rgba(255,255,255,0.05)'; x.lineWidth = 1;
+    for (let gx = Math.floor((BIGMAP.cx - W / 2 / z) / 8) * 8; gx < BIGMAP.cx + W / 2 / z; gx += 8) { const p = W / 2 + (gx - BIGMAP.cx) * z; x.beginPath(); x.moveTo(p, 0); x.lineTo(p, H); x.stroke(); }
+    for (let gy = Math.floor((BIGMAP.cy - H / 2 / z) / 8) * 8; gy < BIGMAP.cy + H / 2 / z; gy += 8) { const p = H / 2 + (gy - BIGMAP.cy) * z; x.beginPath(); x.moveTo(0, p); x.lineTo(W, p); x.stroke(); }
+  }
+  const onScreen = (X, Y, m = 40) => X > -m && Y > -m && X < W + m && Y < H + m;
+  const dot = (wx, wy, ch, col, size = 12) => {
+    const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y)) return;
+    x.font = `bold ${size}px monospace`; const w = x.measureText(ch).width + 4;
+    x.fillStyle = 'rgba(0,0,0,0.8)'; x.fillRect(X - w / 2, Y - size / 2 - 1, w, size + 2);
+    x.fillStyle = col; x.fillText(ch, X, Y + 1);
+  };
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  // names: biggest first, and nothing drawn over something already written
+  const taken = [];
+  const label = (wx, wy, t, col, size, bold) => {
+    const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y, 120)) return;
+    x.font = `${bold ? 'bold ' : ''}${size}px monospace`;
+    const w = x.measureText(t).width, r = [X - w / 2 - 3, Y - size / 2 - 2, X + w / 2 + 3, Y + size / 2 + 2];
+    if (taken.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) return;
+    taken.push(r);
+    x.fillStyle = 'rgba(0,0,0,0.6)'; x.fillRect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
+    x.fillStyle = col; x.fillText(t, X, Y + 1);
+  };
+  // you, and what's yours, go on first so nothing hides them
+  const ang = me ? Math.atan2(me.hy, me.hx) : a;
+  const youX = sx(px), youY = sy(py);
+  if (onScreen(youX, youY)) {
+    x.save(); x.translate(youX, youY); x.rotate(ang);
+    x.fillStyle = fract(T * 2) < 0.5 ? '#ff5' : '#fff'; x.strokeStyle = '#000'; x.lineWidth = 2;
+    x.beginPath(); x.moveTo(9, 0); x.lineTo(-6, -6); x.lineTo(-3, 0); x.lineTo(-6, 6); x.closePath(); x.stroke(); x.fill(); x.restore();
+    taken.push([youX - 10, youY - 10, youX + 10, youY + 10]);
+  }
+  for (const h of owned.homes) dot(h.cell % N + 0.5, Math.floor(h.cell / N) + 0.5, 'H', '#ff4');
+  for (const c of owned.cars) if (c !== me) dot(c.x, c.y, 'C', '#fff');
+  for (const b of fleet) if (b.deal === 'mine' && b !== sea) dot(b.x, b.y, 'B', '#fff');
+  const tt = taskTarget(); if (tt) dot(tt.x, tt.y, '?', '#4ff');
+  const jt = jobTarget(); if (jt) dot(jt.x, jt.y, '!', '#ff0');
+  if (me && me.dest) dot(me.dest[0], me.dest[1], 'X', '#f4f');
+  for (const c of cars) if (c.pursuit) dot(c.x, c.y, 'P', fract(T * 3) < 0.5 ? '#f44' : '#48f', 10);
+  const big = clamp(z * 1.4, 12, 22), mid = clamp(z * 1.1, 10, 14), small = clamp(z * 0.55, 9, 13);
+  for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'area') label(lx, ly, z < 7 ? t.toUpperCase() : t, col, big, true);
+  for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'place' && z >= 6) label(lx, ly, t, col, mid, false);
+  if (z >= 14) for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'shop') label(lx, ly, t, col, small, false);
+  x.textAlign = 'left'; x.textBaseline = 'alphabetic';
+}
+
+function bigMapZoom(f, X, Y) { // zoom by f about screen point (X, Y): the spot under it stays put
+  const W = bigMapCv.clientWidth, H = bigMapCv.clientHeight, z0 = BIGMAP.z, z1 = clamp(z0 * f, bigMapMinZ(), BIGMAP_Z);
+  if (X === undefined) { X = W / 2; Y = H / 2; }
+  BIGMAP.cx = mod(BIGMAP.cx + (X - W / 2) * (1 / z0 - 1 / z1), N); BIGMAP.cy = mod(BIGMAP.cy + (Y - H / 2) * (1 / z0 - 1 / z1), N);
+  BIGMAP.z = z1;
+}
+function bigMapPan(dx, dy) { BIGMAP.cx = mod(BIGMAP.cx - dx / BIGMAP.z, N); BIGMAP.cy = mod(BIGMAP.cy - dy / BIGMAP.z, N); }
+function bigMapCentre() { BIGMAP.cx = px; BIGMAP.cy = py; }
+
+function openBigMap() {
+  if (!bigMapEl) {
+    const st = document.createElement('style'); st.textContent = BIGMAP_CSS; document.head.appendChild(st);
+    bigMapEl = menuEl('bigmap', 900, `<canvas></canvas>
+      <div class="bar"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">-</button><button data-map="me">you</button><button data-map="close" aria-label="Close map">x</button></div>
+      <div class="tip">${TOUCH ? 'drag to move, pinch to zoom' : 'drag to move, wheel to zoom, Esc to close'}</div>`);
+    bigMapCv = bigMapEl.querySelector('canvas');
+    bigMapEl.addEventListener('click', e => {
+      const b = e.target.closest('[data-map]'); if (!b) return;
+      const m = b.dataset.map;
+      if (m === 'in') bigMapZoom(1.5); if (m === 'out') bigMapZoom(1 / 1.5); if (m === 'me') bigMapCentre(); if (m === 'close') closeBigMap();
+    });
+    bigMapCv.addEventListener('pointerdown', e => {
+      bigMapCv.setPointerCapture(e.pointerId); BIGMAP.pts.set(e.pointerId, [e.offsetX, e.offsetY]); bigMapCv.classList.add('drag');
+      BIGMAP.pinch = null;
+    });
+    bigMapCv.addEventListener('pointermove', e => {
+      const p = BIGMAP.pts.get(e.pointerId); if (!p) return;
+      if (BIGMAP.pts.size >= 2) { // two fingers: pinch to zoom (and drag with the pair)
+        p[0] = e.offsetX; p[1] = e.offsetY;
+        const [[ax, ay], [bx, by]] = [...BIGMAP.pts.values()], d = Math.hypot(bx - ax, by - ay), mx = (ax + bx) / 2, my = (ay + by) / 2;
+        if (BIGMAP.pinch) { bigMapPan(mx - BIGMAP.pinch.mx, my - BIGMAP.pinch.my); bigMapZoom(d / BIGMAP.pinch.d, mx, my); }
+        BIGMAP.pinch = { d: d || 1, mx, my };
+        return;
+      }
+      bigMapPan(e.offsetX - p[0], e.offsetY - p[1]); p[0] = e.offsetX; p[1] = e.offsetY;
+    });
+    const up = e => { BIGMAP.pts.delete(e.pointerId); BIGMAP.pinch = null; if (!BIGMAP.pts.size) bigMapCv.classList.remove('drag'); };
+    bigMapCv.addEventListener('pointerup', up); bigMapCv.addEventListener('pointercancel', up);
+    bigMapCv.addEventListener('wheel', e => { e.preventDefault(); bigMapZoom(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
+  }
+  bigMapRender(); bigMapNames = bigMapLabels(); bigMapCentre();
+  BIGMAP.z = clamp(Math.min(innerWidth, innerHeight) / 60, 4, 10); // a few blocks round you to start
+  BIGMAP.keys = {}; BIGMAP.pts.clear();
+  bigMapEl.style.display = 'block';
+  paused = true;
+  const tick = () => { if (!bigMapOpen()) return; bigMapStep(); bigMapDraw(); requestAnimationFrame(tick); };
+  BIGMAP.last = performance.now(); requestAnimationFrame(tick);
+}
+function bigMapStep() { // held keys pan smoothly, a screen's width every second or so
+  const now = performance.now(), dt = Math.min(0.05, (now - BIGMAP.last) / 1000), k = BIGMAP.keys, s = 700 * dt;
+  BIGMAP.last = now;
+  const dx = (k.ArrowLeft || k.KeyA ? 1 : 0) - (k.ArrowRight || k.KeyD ? 1 : 0), dy = (k.ArrowUp || k.KeyW ? 1 : 0) - (k.ArrowDown || k.KeyS ? 1 : 0);
+  if (dx || dy) bigMapPan(dx * s, dy * s);
+}
+function closeBigMap() { if (!bigMapOpen()) return; bigMapEl.style.display = 'none'; BIGMAP.keys = {}; if (pauseEl) pauseEl.querySelector('[data-act="map"]').focus(); }
+const bigMapOpen = () => !!bigMapEl && bigMapEl.style.display !== 'none';
+// keys while the map's up: it takes them all (the game's paused under it)
+function bigMapKey(e, down) {
+  if (!bigMapOpen()) return false;
+  if (down && !e.repeat && (e.code === 'Escape' || e.code === 'KeyM')) { closeBigMap(); return true; }
+  if (down && (e.key === '+' || e.key === '=')) bigMapZoom(1.25);
+  if (down && (e.key === '-' || e.key === '_')) bigMapZoom(0.8);
+  if (down && e.code === 'Space') bigMapCentre();
+  BIGMAP.keys[e.code] = down;
+  if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+  return true;
+}
+addEventListener('keyup', e => { if (bigMapOpen()) BIGMAP.keys[e.code] = false; });
 // ===== goods on screen: the shop menu, the inventory, the hotbar, and what's in your hand (or mouth, or underfoot)
 // ---- in your hand: ASCII art at the bottom right, bobbing as you walk. No backgrounds: every character has a thin
 // dark outline so it reads over anything, and the fingers hide the bottom of whatever you're holding. Things change
@@ -11655,19 +11866,32 @@ function crimePrompt() {
 }
 // ===== on your feet: Space jumps, C held crouches, C by a bench or a seat sits you down (C again, or walk, to get
 // up). On the skateboard Space pops an ollie, and what you're holding as you pop makes it a trick: A kickflip,
-// D heelflip, S pop shuvit, A+S 360 flip, D+S varial heelflip. The board under you is a little 3D model in front of
-// the camera (like a held weapon), so it really flips and spins.
+// D heelflip, S pop shuvit, A+S 360 flip, D+S varial heelflip. Or, without touching where you're going, flick for it:
+// hold the right mouse button and flick (left kickflip, right heelflip, back shuvit, back-left 360 flip, back-right
+// varial heelflip, nothing or forward an ollie) and let go to pop; on a phone, swipe off the Ollie button the same
+// way. The board under you is a little 3D model in front of the camera (like a held weapon), so it really flips and spins.
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
 const skatingNow = () => fx.skating && mode === 'walk';
 
-function jump() {
+// a flick (screen pixels: x right, y down) to the trick it calls for: the nearest of the six directions
+const FLICK_DIRS = [['A', -1, 0], ['D', 1, 0], ['S', 0, 1], ['AS', -0.71, 0.71], ['DS', 0.71, 0.71], ['', 0, -1]];
+function flickTrick(dx, dy, min = 20) {
+  const d = Math.hypot(dx, dy);
+  if (d < min) return '';
+  let best = '', bd = -Infinity;
+  for (const [k, fx_, fy_] of FLICK_DIRS) { const dot = (dx * fx_ + dy * fy_) / d; if (dot > bd) { bd = dot; best = k; } }
+  return best;
+}
+const trickName = key => (TRICKS[key] || ['ollie'])[0];
+
+function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read off A / D / S
   if (body.z > 0 || body.vz > 0) return;
   if (body.seat) return standUp();
   if (skatingNow()) {
-    const key = (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
+    const key = trick ?? (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
     body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
   } else body.vz = JUMP_V;
   if (actx) sfxUse(skatingNow() ? 'board' : 'kick');
@@ -11762,14 +11986,20 @@ function drawBoard3D() {
   }
 }
 // ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
-// your cars and boats are), kept in localStorage every few seconds and when you leave. Not saved: where you are, the
-// time, the police (you start each visit clean, on the street).
+// your cars and boats are), and the last spot you stood on the street, kept in localStorage every few seconds and when
+// you leave. Not saved: the time, the police (you start each visit clean, on the street where you left off).
 const SAVE_KEY = 'ascii-city-save';
+let streetSpot = null; // where you last were on foot outdoors (inside a shop or on a train, you come back out where you went in)
+function noteStreet() {
+  if (mode === 'walk') streetSpot = { x: px, y: py, a };
+  else if (mode === 'drive' && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) };
+}
 function saveGame() {
+  noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tags, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats() };
+    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
 function loadGame() {
@@ -11786,6 +12016,10 @@ function loadGame() {
   owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
   loadBoats(d.boats);
+  const at = d.at;
+  if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
+    px = mod(at.x, N); py = mod(at.y, N); a = at.a || 0; streetSpot = { x: px, y: py, a };
+  }
 }
 function newGame() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ } location.reload(); }
 loadGame();
@@ -11800,6 +12034,7 @@ function relock(e) {
 onkeydown = e => {
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
+  if (bigMapKey(e, true)) return; // the big map (from the pause menu) has the keys while it's up
   if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
@@ -11848,7 +12083,16 @@ function turnBy(mx, my) {
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
-onmousemove = e => { if (document.pointerLockElement) turnBy(e.movementX, e.movementY); };
+// on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
+let flick = null;
+onmousemove = e => {
+  if (!document.pointerLockElement) return;
+  if (flick) { flick.x += e.movementX; flick.y += e.movementY; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
+  turnBy(e.movementX, e.movementY);
+};
+addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && document.pointerLockElement && !paused && !body.z) flick = { x: 0, y: 0 }; });
+addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });
+addEventListener('contextmenu', e => { if (document.pointerLockElement || skatingNow()) e.preventDefault(); });
 
 const free = (x, y) => {
   if (mode === 'room') return !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
@@ -12099,7 +12343,7 @@ function touchActions() {
     const it = heldItem();
     if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
-    out.push(['Jump', 'Space', 'jump']);
+    out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
   }
   if (e) out.push([e, 'KeyE', 'main']);
   return out;
@@ -12114,6 +12358,29 @@ const SHEET = [
 function bindHold(b, k, after) { // a button holds its key down for as long as it's touched
   b.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); b.classList.add('down'); keyDown(k); }, { passive: false });
   const up = e => { e.preventDefault(); b.classList.remove('down'); keyUp(k); if (after) after(); };
+  b.addEventListener('touchend', up, { passive: false }); b.addEventListener('touchcancel', up, { passive: false });
+}
+// the Jump button on a skateboard: a tap is an ollie, a swipe off it a trick (the way you swipe picks it, as a mouse
+// flick does), popped as you let go. Off the board it's an ordinary held key
+function bindFlick(b) {
+  let start = null;
+  b.addEventListener('touchstart', e => {
+    e.preventDefault(); e.stopPropagation(); b.classList.add('down');
+    const t = e.changedTouches[0];
+    if (skatingNow()) start = [t.clientX, t.clientY, t.identifier]; else keyDown('Space');
+  }, { passive: false });
+  b.addEventListener('touchmove', e => {
+    if (!start) return; e.preventDefault();
+    const t = [...e.changedTouches].find(q => q.identifier === start[2]); if (!t) return;
+    const k = flickTrick(t.clientX - start[0], t.clientY - start[1], 24);
+    say(`let go: ${trickName(k).toUpperCase()}`, 0.6);
+  }, { passive: false });
+  const up = e => {
+    e.preventDefault(); b.classList.remove('down');
+    if (!start) return keyUp('Space');
+    const t = [...e.changedTouches].find(q => q.identifier === start[2]) || e.changedTouches[0], s = start; start = null;
+    if (e.type === 'touchend' && skatingNow() && !paused) { msgT = 0; jump(flickTrick(t.clientX - s[0], t.clientY - s[1], 24)); }
+  };
   b.addEventListener('touchend', up, { passive: false }); b.addEventListener('touchcancel', up, { passive: false });
 }
 function buildTouch() {
@@ -12145,7 +12412,7 @@ function showTouch() {
   const acts = touchActions(), sig = acts.map(x => x.join(':')).join('|');
   if (sig === padSig || touchEl.querySelector('.pad button.down')) return;
   padSig = sig;
-  const btn = ([l, k, kind]) => { const b = document.createElement('button'); b.textContent = l; b.dataset.key = k; if (kind !== 'pop') b.className = kind; bindHold(b, k); return b; };
+  const btn = ([l, k, kind]) => { const b = document.createElement('button'); b.textContent = l; b.dataset.key = k; if (kind !== 'pop') b.className = kind; if (kind === 'jump') bindFlick(b); else bindHold(b, k); return b; };
   const pops = touchEl.querySelector('.pops'), row = touchEl.querySelector('.row');
   pops.replaceChildren(...acts.filter(x => x[2] === 'pop').map(btn));
   row.replaceChildren(...acts.filter(x => x[2] !== 'pop').map(btn));

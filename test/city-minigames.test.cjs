@@ -171,19 +171,19 @@ test('the shelves you stock are what the shop sells', () => {
   assert.ok(ev("labels.includes('VINYL') && !labels.includes('CANS')"));
 });
 
-test('jailbreak: there is a way past the guard, and walking straight into his light gets you caught', () => {
+test('jailbreak: there is a way past the guards, and walking straight into the light gets you caught', () => {
   const { ev } = fresh();
-  // the guard ignores you, so record his light at every tick, then search for a route to the door through it
+  // the guards ignore you, so record their light at every tick, then search for a route to the door through it
   const found = ev(`(() => {
-    const g = GAMES.jailbreak(), DT = 0.16, steps = Math.floor(44 / DT), lit = [], guard = [];
+    const g = GAMES.jailbreak(), DT = 0.16, steps = Math.floor((g.state().limit - 1) / DT), lit = [], guard = [];
     const s0 = g.state(), W = g.W, solid = s0.solid, door = s0.door;
-    for (let k = 0; k <= steps; k++) { const s = g.state(); lit.push(new Set(s.lit)); guard.push([s.gx, s.gy]); s.you[0] = 1; s.you[1] = 9; g.step(DT, {}); }
+    for (let k = 0; k <= steps; k++) { const s = g.state(); lit.push(new Set(s.lit)); guard.push(s.guards.map(q => q.slice())); s.you[0] = 1; s.you[1] = 9; g.step(DT, {}); }
     let front = [[2, 9]], seen = new Set();
     for (let k = 1; k <= steps; k++) {
       const next = [];
       for (const [x, y] of front) for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy, c = ny * W + nx;
-        if (solid.has(c) || lit[k].has(c) || Math.abs(guard[k][0] - nx) + Math.abs(guard[k][1] - ny) < 1.2) continue;
+        if (solid.has(c) || lit[k].has(c) || guard[k].some(([gx, gy]) => Math.abs(gx - nx) + Math.abs(gy - ny) < 1.2)) continue;
         if (nx === door[0] && ny === door[1]) return k * DT;
         const key = c + ',' + k; if (seen.has(key)) continue; seen.add(key); next.push([nx, ny]);
       }

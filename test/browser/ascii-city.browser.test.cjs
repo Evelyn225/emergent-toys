@@ -328,6 +328,44 @@ test('on your feet: Space jumps, a trick on the board lands with its name, C sit
   assert.strictEqual(await page.evaluate(() => body.seat), null, 'up again');
 }));
 
+test('skateboard tricks by flick: each way picks its trick, and on a phone a swipe off the Ollie button pops it', async () => {
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ ...devices['iPhone 13'] }), page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(PAGE); await page.waitForTimeout(300);
+    assert.deepStrictEqual(await page.evaluate(() => [[-60, 0], [60, 0], [0, 60], [-50, 50], [50, 50], [0, -60], [3, 2]].map(([x, y]) => trickName(flickTrick(x, y)))),
+      ['kickflip', 'heelflip', 'pop shuvit', '360 flip', 'varial heelflip', 'ollie', 'ollie']);
+    await page.evaluate(() => { mode = 'walk'; fx.skating = true; });
+    await page.waitForTimeout(300); // the pad relabels
+    const swipe = (dx, dy) => page.evaluate(([dx, dy]) => {
+      const b = [...document.querySelectorAll('#touch .pad button')].find(x => x.textContent === 'Ollie'), r = b.getBoundingClientRect();
+      const at = (x, y) => new Touch({ identifier: 7, target: b, clientX: x, clientY: y });
+      const x0 = r.left + r.width / 2, y0 = r.top + r.height / 2;
+      b.dispatchEvent(new TouchEvent('touchstart', { changedTouches: [at(x0, y0)], touches: [at(x0, y0)], bubbles: true, cancelable: true }));
+      const mid = body.vz; // nothing yet: it pops when you let go
+      b.dispatchEvent(new TouchEvent('touchmove', { changedTouches: [at(x0 + dx, y0 + dy)], touches: [at(x0 + dx, y0 + dy)], bubbles: true, cancelable: true }));
+      b.dispatchEvent(new TouchEvent('touchend', { changedTouches: [at(x0 + dx, y0 + dy)], touches: [], bubbles: true, cancelable: true }));
+      return [mid, body.trick && body.trick.name];
+    }, [dx, dy]);
+    assert.deepStrictEqual(await swipe(70, 0), [0, 'heelflip']);
+    await page.waitForTimeout(1000);
+    assert.deepStrictEqual(await swipe(0, 0), [0, 'ollie'], 'a tap is an ollie');
+    assert.deepStrictEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('where you were is saved: you come back to the same spot on the street, and inside a shop to its door', () => withPage(async page => {
+  const spot = await page.evaluate(() => { gotoShop('BAKERY'); saveGame(); return [px, py, a]; });
+  await page.reload(); await page.waitForTimeout(300);
+  const back = await page.evaluate(() => [px, py, a, mode]);
+  assert.deepStrictEqual(back.map(v => typeof v === 'number' ? +v.toFixed(3) : v), [...spot.map(v => +v.toFixed(3)), 'walk']);
+  await page.evaluate(() => { enterRoom('bar', { word: 'BAR', neon: MAG, ret: [px, py, a] }, [6, 6, -Math.PI / 2]); saveGame(); });
+  await page.reload(); await page.waitForTimeout(300);
+  assert.deepStrictEqual(await page.evaluate(() => [+px.toFixed(3), +py.toFixed(3), mode]), [+spot[0].toFixed(3), +spot[1].toFixed(3), 'walk']);
+}));
+
 test('buy a car and a home: both are still yours after a reload, and the building door takes you home to your own bed', () => withPage(async page => {
   await page.evaluate(() => { money = 5000; buy('car_sedan'); buy('home_studio'); saveGame(); });
   await page.reload(); await page.waitForTimeout(300);
@@ -898,6 +936,23 @@ test('arrested along with your cab driver: a cell together, and he is not happy 
   assert.deepStrictEqual([r.kind, r.me, r.cab, r.stars], ['jail', null, true, 0]);
   assert.match(r.prompt, /talk to your cab driver/);
   assert.match(r.said, /^Your cab driver: "/);
+}));
+
+test('the big map: opened from the pause menu, dragged and zoomed, Esc back to the pause menu', () => withPage(async page => {
+  await page.evaluate(() => openPause());
+  await page.click('[data-act="map"]');
+  const start = await page.evaluate(() => [bigMapOpen(), BIGMAP.cx, BIGMAP.cy, BIGMAP.z, px, py]);
+  assert.ok(start[0] && Math.abs(start[1] - start[4]) < 0.01 && Math.abs(start[2] - start[5]) < 0.01, 'opens on you');
+  await page.mouse.move(640, 400); await page.mouse.down(); await page.mouse.move(440, 300, { steps: 4 }); await page.mouse.up();
+  const moved = await page.evaluate(() => [rel(BIGMAP.cx - px) * BIGMAP.z, rel(BIGMAP.cy - py) * BIGMAP.z]);
+  assert.ok(Math.abs(moved[0] - 200) < 2 && Math.abs(moved[1] - 100) < 2, 'the map follows the drag ' + moved);
+  await page.mouse.wheel(0, -500); await page.waitForTimeout(100);
+  assert.ok(await page.evaluate(z => BIGMAP.z > z, start[3]), 'the wheel zooms in');
+  for (let k = 0; k < 20; k++) await page.mouse.wheel(0, 800);
+  await page.waitForTimeout(100);
+  assert.ok(await page.evaluate(() => Math.abs(BIGMAP.z * N - Math.max(innerWidth, innerHeight)) < 1), 'zoomed out, the whole city just fills the screen');
+  await page.keyboard.press('Escape');
+  assert.deepStrictEqual(await page.evaluate(() => [bigMapOpen(), paused, pauseEl.style.display]), [false, true, 'flex']);
 }));
 
 test('dev tools (F2): search and jump to a place, spawn an item, give money, set the day, time and weather', () => withPage(async page => {
