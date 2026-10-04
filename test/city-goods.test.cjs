@@ -219,7 +219,7 @@ test('the night market: three stalls on a Chinatown street, open 8pm to 2am, sel
   assert.deepStrictEqual(j('STALLS.map(s => s.word)'), ['STREET FOOD', 'CHARMS', 'CURIOS']);
   assert.strictEqual(j('districtOf(NIGHT_MARKET.bx, NIGHT_MARKET.by)'), 'chinatown');
   assert.deepStrictEqual(j('[nightMarketOpen(21), nightMarketOpen(1), nightMarketOpen(12), nightMarketOpen(19.5)]'), [true, true, false, false]);
-  assert.deepStrictEqual(j("stockFor('', 'CURIOS')"), ['mysterybox', 'cityglobe']);
+  assert.deepStrictEqual(j("stockFor('', 'CURIOS')"), ['mysterybox', 'lantern', 'firecrackers', 'cityglobe']);
   for (const id of j("[...stockFor('', 'STREET FOOD'), ...stockFor('', 'CHARMS')]")) assert.ok(j(`!!ITEMS['${id}']`), id);
   ev('inv.length = 0'); const l0 = ev('luck()');
   ev("inv.push({ id: 'redstring', uses: 0 }, { id: 'luckycoin', uses: 0 })"); assert.ok(Math.abs(ev('luck()') - l0 - 0.05) < 1e-9, 'the charms add a little luck');
@@ -227,4 +227,21 @@ test('the night market: three stalls on a Chinatown street, open 8pm to 2am, sel
   const [m] = j('useHeld({})');
   assert.match(m, /tear/);
   assert.strictEqual(ev('inv.length'), 1); assert.ok(j('MYSTERY_BOX.some(([id]) => id === inv[0].id)'), 'something from the pile');
+});
+
+test('the night market\'s things all do something: bao heals, the waffle\'s a rush, stinky tofu fills you (and you smell), the fortune tips a stock that then goes up, tiger balm patches you up, firecrackers lose the cops, the lantern lights the way', () => {
+  const { ev, j } = fresh();
+  const eatAll = id => ev(`(() => { inv.length = 0; inv.push({ id: '${id}', uses: ITEMS['${id}'].uses }); held = 0; let m = ''; for (let k = 0; k < ITEMS['${id}'].uses; k++) m = useHeld({})[0]; return m; })()`);
+  ev('needs.health = 50; needs.food = 0'); eatAll('bao'); assert.ok(ev('needs.health') > 64, 'bao heals');
+  ev('fx.caffeine = 0'); eatAll('eggwaffle'); assert.ok(ev('fx.caffeine') > 40 && ev('footSpeed()') > 1, 'a sugar rush');
+  ev('needs.food = 0; fx.stink = 0'); eatAll('stinkytofu'); assert.ok(ev('needs.food') >= 59 && ev('fx.stink') > 0, 'filling, and smelly');
+  const m = eatAll('fortunecookie'); assert.match(m, /fortune reads/);
+  const tipped = j('STOCKS.filter(s => s.tip).map(s => s.sym)'); assert.strictEqual(tipped.length, 1);
+  ev('for (let k = 0; k < 400 && STOCKS.some(s => s.tip); k++) marketTick()');
+  assert.ok(j(`MARKET.news.some(n => n.sym === '${tipped[0]}' && n.up)`), 'and the tipped one gets good news');
+  ev("needs.health = 40; inv.length = 0; inv.push({ id: 'tigerbalm', uses: 3 }); held = 0; useHeld({})"); assert.strictEqual(ev('needs.health'), 70);
+  ev("inv.length = 0; inv.push({ id: 'firecrackers', uses: 3 }); held = 0; addWanted('pickpocket', px, py, true); wanted.hideT = 0");
+  assert.match(j('useHeld({})')[0], /cop/); assert.deepStrictEqual(j('[wanted.seen, wanted.hideT >= 6, inv[0].uses]'), [false, true, 2]);
+  ev("mode = 'walk'; inv.length = 0; px = 4.1; py = 4.1"); const dark = ev('glow(px, py)');
+  ev("inv.push({ id: 'lantern', uses: 0 }); held = 0"); assert.ok(ev('glow(px, py)') > dark + 0.5, 'the lantern lights round you');
 });
