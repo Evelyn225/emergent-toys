@@ -2516,10 +2516,10 @@ GAMES.jailbreak = (rnd = Math.random) => {
     for (let s = 1; s < 8; s++) { const x = Math.round(x0 + (x1 - x0) * s / 8), y = Math.round(y0 + (y1 - y0) * s / 8); if (solid.has(cell(x, y)) && !(x === x1 && y === y1)) return false; }
     return true;
   };
-  const shine = () => { // the cone: six cells ahead, widening
+  const shine = () => { // the cone: eight cells ahead, widening as it goes
     lit.clear();
     const ox = Math.round(gx), oy = Math.round(gy);
-    for (let d = 1; d <= 6; d++) for (let o = -(d >> 1); o <= d >> 1; o++) {
+    for (let d = 1; d <= 8; d++) for (let o = -((d + 1) >> 1); o <= (d + 1) >> 1; o++) {
       const x = ox + fx_ * d - fy_ * o, y = oy + fy_ * d + fx_ * o;
       if (x < 0 || y < 0 || x >= W || y > 10 || solid.has(cell(x, y)) || !clear(ox, oy, x, y)) continue;
       lit.add(cell(x, y));
