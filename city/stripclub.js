@@ -78,11 +78,10 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
     p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
     p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
     p.push(standing(13.4, 10.2, GRAY)); // the host by the curtain
-    p.push(SP(1.4, 9.8, 0.8, 1.7, CIG_MACHINE, (c, row, L) => row === 1 ? C(RED, 15) : c === '[' || c === ']' ? C(WHITE, 12) : c === 'o' ? C(YEL, 15) : C(GRAY, Math.max(L, 8)))); // a cigarette machine by the bar
+    p.push({ vm: { kind: 'CIGARETTES', c: 0, s: 1, fs: -1 }, x: 1.4, y: 9.8 }); // a cigarette machine by the bar, the same as the ones on the street
     return p;
   } };
 ROOM_FOR.VELVET = 'stripclub';
-const CIG_MACHINE = pad([' ______ ', '|SMOKES|', '|[][][]|', '|[][][]|', '|[][][]|', '| o __ |', '|__||__|']);
 const nearClubCigs = () => mode === 'room' && room.kind === 'stripclub' && Math.hypot(px - 1.6, py - 9.8) < 1.2;
 const nearVip = () => mode === 'room' && room.kind === 'stripclub' && Math.hypot(px - 13.4, py - 10.2) < 1.4;
 const nearStage = () => mode === 'room' && room.kind === 'stripclub' && py < 5.2 && px > 4 && px < 14;

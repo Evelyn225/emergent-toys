@@ -428,16 +428,16 @@ function drawFootbridge() {
 // the flap you reach into at the bottom. Glows after dark.
 const VM_COL = { DRINKS: RED, SNACKS: BLUE, CIGARETTES: GRAY };
 const VM_GOODS = { DRINKS: ['o', [RED, BLUE, GREEN, YEL, WHITE]], SNACKS: ['#', [YEL, ORANGE, RED, GREEN, MAG]], CIGARETTES: ['=', [WHITE, RED, YEL, WHITE, CYAN]] };
-function drawVending(m, vx, vy) {
-  const body = VM_COL[m.kind], glow = Math.max(night, overcast * 0.6), [g_, cols_] = VM_GOODS[m.kind];
-  drawBox(boxAt(vx, vy, m.c, m.s, VM_HL, VM_HW, 0, VM_H), (i, t, L) => {
+function drawVending(m, vx, vy, sc = 1) { // sc: 10 indoors (metres, not cells)
+  const body = VM_COL[m.kind], glow = Math.max(night, overcast * 0.6), [g_, cols_] = VM_GOODS[m.kind], HL = VM_HL * sc, HH = VM_H * sc;
+  drawBox(boxAt(vx, vy, m.c, m.s, HL, VM_HW * sc, 0, HH), (i, t, L) => {
     const f = HIT.face, front = (f === 3 || f === 4) && Math.sign(HIT.v) === m.fs;
     if (!front) { BG[i] = C(body, (1.5 + L * 0.35) * shadeFace(f)); return set(i, f === 5 ? ' ' : HIT.w < 0.01 ? '_' : ' ', C(GRAY, L * 0.4)), true; }
-    const q = (HIT.u * m.fs / VM_HL + 1) / 2, z = HIT.w / VM_H; // across the front 0..1 (left to right), up it 0..1
+    const q = (HIT.u * m.fs / HL + 1) / 2, z = HIT.w / HH; // across the front 0..1 (left to right), up it 0..1
     if (z > 0.85) { // the lit header, with what it sells across it
       BG[i] = C(body, 5 + glow * 7);
-      const name = m.kind, n = name.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * VM_HL) * n;
-      const letter = Math.abs(z - 0.925) < t / projY / VM_H / 2 && k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
+      const name = m.kind, n = name.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * HL) * n;
+      const letter = Math.abs(z - 0.925) < t / projY / HH / 2 && k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
       return set(i, letter ? name[k] : ' ', C(WHITE, 15)), true;
     }
     if (q > 0.72) { // the control column: keypad, coin slot
