@@ -629,7 +629,7 @@ test('the Botanical Gardens: gates locked at night, a swan boat on the lake, duc
 }));
 
 test('shut-down shops say so; each district paints its own walls', () => withPage(async page => {
-  await page.evaluate(() => { tod = 13; weather = 'clear'; mode = 'walk'; });
+  await page.evaluate(() => { tod = 13; weather = 'clear'; mode = 'walk'; for (const p of people) p.hidden = true; cars.length = 0; flocks.length = 0; }); // (nobody passing to talk to, no car to take: just the shop)
   const shut = await page.evaluate(() => { for (let k = 0; k < N * N; k++) { const sh = SHOP[k], x = k % N, y = k / N | 0; if (sh && sh.kind === SHOP_SHUT && !map[idx(x, y + 1)] && ROAD[idx(x, y + 1)]) return [x, y]; } });
   await page.evaluate(([x, y]) => { px = x + 0.5; py = y + 1.25; a = -Math.PI / 2; pitch = 0; }, shut);
   await page.waitForTimeout(150);
