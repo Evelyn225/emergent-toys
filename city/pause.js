@@ -15,7 +15,7 @@ function buildPause() {
   const el = menuEl('pause', 500, `
     <div class="panel" role="dialog" aria-label="Paused" style="width: min(520px, calc(100vw - 32px))">
       <h1>Paused</h1>
-      <p class="sub">ASCII City</p>
+      <p class="sub">Glyphport</p>
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="map">Map of the city</button>
       <button class="item" data-act="newgame">Start over</button>
