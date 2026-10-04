@@ -58,7 +58,7 @@ test('street crosser: hop across between the cars; walk into one and lose a life
       return safe ? { upP: 1 } : {}; }`);
     if (evs.includes('score')) across++;
   }
-  assert.ok(across >= 5, `got across in ${across} of 10`);
+  assert.ok(across >= 8, `got across in ${across} of 10`);
   ev('var g = GAMES.crosser()');
   const reckless = play(ev, 60, '() => ({ upP: 1 })');
   assert.ok(reckless.includes('miss'));

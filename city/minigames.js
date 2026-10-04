@@ -95,13 +95,13 @@ GAMES.breakout = (rnd = Math.random) => {
 // street crosser: get across two carriageways of traffic to the far sidewalk, one hop at a time; faster each crossing
 GAMES.crosser = (rnd = Math.random) => {
   const W = 25, H = 13, g = { id: 'crosser', title: 'STREET CROSSER', W, H, score: 0, over: false };
-  let you = [12, 12], lives = 3, splat = 0, lanes;
+  let you = [12, 12], lives = 4, splat = 0, lanes;
   const make = () => {
     lanes = [];
     for (let y = 1; y < H - 1; y++) { // row 6 is the median, 0 and 12 the sidewalks
       if (y === 6) continue;
-      const dir = y < 6 ? -1 : 1, len = 2 + (rnd() * 3 | 0), gap = len + 3 + (rnd() * 5 | 0);
-      lanes.push({ y, dir, len, gap, sp: (2 + rnd() * 3) * (1 + g.score * 0.12), off: rnd() * gap, col: [RED, BLUE, TAXI, WHITE, GREEN][rnd() * 5 | 0] });
+      const dir = y < 6 ? -1 : 1, len = 2 + (rnd() * 3 | 0), gap = len + 4 + (rnd() * 5 | 0); // (room to slip through)
+      lanes.push({ y, dir, len, gap, sp: (1.6 + rnd() * 2.2) * (1 + g.score * 0.08), off: rnd() * gap, col: [RED, BLUE, TAXI, WHITE, GREEN][rnd() * 5 | 0] });
     }
   };
   make();
