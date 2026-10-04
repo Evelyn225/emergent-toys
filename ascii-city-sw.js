@@ -1,4 +1,4 @@
-// ASCII City's service worker (scoped to /ascii-city*, not the rest of the site): what lets it install as an app and
+// Glyphport's service worker (scoped to /ascii-city*, not the rest of the site): what lets it install as an app and
 // open with no signal. The game itself (page and bundle) is fetched fresh whenever there's a network and the cached
 // copy is only the fallback, so an update is never stuck behind an old version; sounds, fonts and images don't
 // change, so those come from the cache once they're in it.

@@ -58,7 +58,7 @@ function citySprites() {
   drawPigeons();
   bayBoats(); // (marina.js: real 3D boats)
   marinaSprites();
-  forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8)) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
+  forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8) && (!o.when || o.when())) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
   for (const v of vendors) {
     const t = v.type, frame = t.art[(T * 2 | 0) & 1];
     drawArt(...R(v.x, v.y), 0, t.w, 0.22, frame, (c, row, L) =>
@@ -348,6 +348,31 @@ const SOLID_SHADE = {
     BG[i] = C(o.awning, 1.5 + L * 0.25); // the counter
     return set(i, w > 0.095 ? '=' : fract(q * 10) < 0.5 ? '|' : ' ', C(WHITE, L * 0.8)), true;
   },
+  // the night market's stalls (props.js): by day a blue tarp's roped down over everything
+  stall: o => (i, t, L) => { // the counter: planks along the front, the goods laid out on top
+    const f = HIT.face, w = HIT.w;
+    if (!nightMarketOpen(tod)) { BG[i] = C(BLUE, (1.4 + L * 0.3) * shadeFace(f)); return set(i, fract(HIT.u * 6 + w * 3) < 0.12 ? '\\' : ' ', C(GRAY, L * 0.7)), true; }
+    if (f !== 5) { BG[i] = C(BRICK, (1.8 + L * 0.25) * shadeFace(f)); return set(i, w > 0.09 ? '=' : fract(HIT.u * 12) < 0.12 ? '|' : ' ', C(BRICK, Math.max(L, 7))), true; }
+    BG[i] = C(WARM, 1.6 + night * 1.4); // a cloth on top, lit by the lanterns
+    const u = HIT.u * 13, m = mod(Math.floor(u * 3), 3), back = HIT.v * -o.fs < 0, col = mod(Math.floor(u), 60);
+    let ch = ' ', c = WHITE;
+    if (o.k === 0) { ch = back ? '([=])'[mod(Math.floor(u * 5), 5)] : 'oO'[col & 1]; c = back ? WARM : WHITE; } // steamer baskets at the back, buns at the front
+    else if (o.k === 1) { ch = back ? (col & 1 ? 'Y' : '|') : (col % 3 ? 'o' : '@'); c = back ? RED : col % 3 ? RED : YEL; } // tassels, knots, coins
+    else { ch = back ? '[#]'[m] : col % 3 === 1 ? (Math.sin(T * 2 + col) > 0.85 ? '*' : 'o') : col % 5 === 0 ? '?' : ' '; c = back ? ORANGE : col % 5 === 0 ? YEL : CYAN; } // boxes, glass jars
+    return set(i, ch, C(c, Math.max(L, 11))), true;
+  },
+  stallroof: o => (i, t, L) => { // the canopy: stripes, a scalloped valance along the front with the sign on it
+    const f = HIT.face, w = HIT.w, q = (HIT.u * o.fs / o.hl + 1) / 2, stripe = c => C(fract(HIT.u * 9) < 0.5 ? o.canopy : YEL, c);
+    if (!nightMarketOpen(tod)) { BG[i] = C(BLUE, (1.4 + L * 0.3) * shadeFace(f)); return set(i, w > 0.24 ? '~' : ' ', C(GRAY, L * 0.7)), true; }
+    if (f === 5 || f === 6) { BG[i] = stripe(f === 5 ? 3 + L * 0.3 : 1.8 + night * 1.5); return set(i, ' ', 0), true; }
+    const front = (f === 3 || f === 4) && Math.sign(HIT.v) === o.fs;
+    if (!front) { BG[i] = stripe((1.4 + L * 0.3) * shadeFace(f)); return set(i, ' ', 0), true; }
+    if (w < 0.215 && fract(q * 24) > 0.5) return false; // the scallops: you see past them
+    BG[i] = C(o.canopy, 3.4 + night * 3);
+    const n = o.word.length + 2, ch = signGlyph(o.word, q * n - 1, (0.255 - w) / 0.045, t, 2 * o.hl / n, 0.045, farDepth(rel(o.x - px), rel(o.y - py), o.hl));
+    return ch !== null && ch !== ' ' ? (set(i, ch, C(YEL, 15)), true) : (set(i, ' ', 0), true);
+  },
+  stallpole: () => (i, t, L) => { BG[i] = C(GRAY, 1.5); return set(i, '|', C(GRAY, Math.max(L, 8))), true; },
   // construction hoarding: an orange-and-white striped top rail on posts, see-through between
   hoarding: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u, f = HIT.face;

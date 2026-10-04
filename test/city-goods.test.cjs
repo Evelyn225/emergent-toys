@@ -190,3 +190,41 @@ test('property: a car from the lot is parked on the street outside, yours, and s
   assert.strictEqual(ev("buy('car_hatch')[0] && money"), 3050, 'a second car, for what was left');
   assert.strictEqual(ev("buy('car_sports')[1]"), "Sports car is $4000.00. You can't afford it.");
 });
+
+test('the pocket watch: the prize counters\' top prize, and only with it on you does T hurry the hours (or with the dev switch)', () => {
+  const { ev, j } = fresh();
+  assert.deepStrictEqual(j("PRIZES.find(p => p[0] === 'pocketwatch')"), ['pocketwatch', 1500]);
+  const run = () => ev('(() => { tod = 12; K.KeyT = 1; env(1); K.KeyT = 0; return tod; })()');
+  ev('inv.length = 0'); assert.ok(Math.abs(run() - 12.05) < 1e-6, 'no watch: time goes at its own pace');
+  ev('tickets = 1500'); assert.strictEqual(j("claimPrize('pocketwatch')")[0], true);
+  assert.strictEqual(ev('tickets'), 0);
+  assert.ok(Math.abs(run() - 14) < 1e-6, 'the watch: forty times as fast');
+  ev('inv.length = 0; devKeys = true'); assert.ok(Math.abs(run() - 14) < 1e-6, 'the dev switch too');
+});
+
+test('the Glyphport snow globe: shake it and the weather turns over (and holds); the snow has to settle first; Y needs it', () => {
+  const { ev, j } = fresh();
+  ev("inv.length = 0; weather = 'clear'; T = 100");
+  assert.strictEqual(ev('skyKeys()'), false);
+  ev("inv.push({ id: 'cityglobe', uses: 0 }); held = 0");
+  assert.strictEqual(ev('skyKeys()'), true);
+  const [m] = j('useHeld({})');
+  assert.match(m, /shake the globe/); assert.strictEqual(ev('weather'), 'rain'); assert.ok(ev('wTimer') >= 600, 'and it holds');
+  assert.match(j('useHeld({})')[0], /settling/); assert.strictEqual(ev('weather'), 'rain');
+  ev('T += 10'); j('useHeld({})'); assert.strictEqual(ev('weather'), 'storm');
+});
+
+test('the night market: three stalls on a Chinatown street, open 8pm to 2am, selling street food, charms (luck) and curios; a mystery box opens into something', () => {
+  const { ev, j } = fresh();
+  assert.deepStrictEqual(j('STALLS.map(s => s.word)'), ['STREET FOOD', 'CHARMS', 'CURIOS']);
+  assert.strictEqual(j('districtOf(NIGHT_MARKET.bx, NIGHT_MARKET.by)'), 'chinatown');
+  assert.deepStrictEqual(j('[nightMarketOpen(21), nightMarketOpen(1), nightMarketOpen(12), nightMarketOpen(19.5)]'), [true, true, false, false]);
+  assert.deepStrictEqual(j("stockFor('', 'CURIOS')"), ['mysterybox', 'cityglobe']);
+  for (const id of j("[...stockFor('', 'STREET FOOD'), ...stockFor('', 'CHARMS')]")) assert.ok(j(`!!ITEMS['${id}']`), id);
+  ev('inv.length = 0'); const l0 = ev('luck()');
+  ev("inv.push({ id: 'redstring', uses: 0 }, { id: 'luckycoin', uses: 0 })"); assert.ok(Math.abs(ev('luck()') - l0 - 0.05) < 1e-9, 'the charms add a little luck');
+  ev("inv.length = 0; inv.push({ id: 'mysterybox', uses: 1 }); held = 0");
+  const [m] = j('useHeld({})');
+  assert.match(m, /tear/);
+  assert.strictEqual(ev('inv.length'), 1); assert.ok(j('MYSTERY_BOX.some(([id]) => id === inv[0].id)'), 'something from the pile');
+});

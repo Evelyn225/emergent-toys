@@ -66,6 +66,7 @@ const K = {}; // keys held, by KeyboardEvent.code
 const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
 let paused = false;
+let devKeys = false; // the dev tools' switch: T and Y work without the watch and the globe
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
 const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true };
@@ -110,7 +111,7 @@ const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'clear' 
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
 function env(dt) {
-  const lapse = K.KeyT ? 40 : 1; // 20s per game hour; hold T to fast-forward (clouds race along too)
+  const lapse = K.KeyT && timeKeys() ? 40 : 1; // 20s per game hour; hold T to fast-forward with the pocket watch on you (clouds race along too)
   const t0 = tod;
   tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
   if (tod < t0 - 12) dayNum++; // midnight (a real wrap round, not a tiny step back)
@@ -148,7 +149,7 @@ const wetting = (d, w) => d.booze ? w * 2.4 : w * 0.5; // bladder from `w` point
 // how much an item fills you up, all its bites or sips together: [food, drink]. Dearer food is more of a meal;
 // water is the best thing for thirst, booze the worst; a milkshake or a bowl of soup counts for both
 const SOUPY = { ramen: 1, pho: 1, noodlebox: 0.5, greencurry: 0.5, icecream: 0.5, apple: 0.5 };
-const FILLING = { milkshake: 1, smoothie: 1, lemonade: 0.3 };
+const FILLING = { milkshake: 1, smoothie: 1, lemonade: 0.3, bubbletea: 0.5 };
 function nourish(id, d) {
   if (d.kind === 'food') return [clamp(10 + d.price * 5, 15, 70), (SOUPY[id] || 0) * 30];
   if (d.kind !== 'drink') return [0, 0];
@@ -898,6 +899,53 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
   }
 }
+// subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
+// hole in the sidewalk SUBWAY_HOLE (half length along the street, half width) round the entrance point
+const SUBWAY_HOLE = [0.14, 0.065];
+const stations = [], STATION_AT = new Map(); // block -> its station
+{
+  const cand = [];
+  for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++)
+    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW) cand.push([hash(bx, by, 71), bx, by]);
+  cand.sort((p, q) => p[0] - q[0]);
+  for (const [, bx, by] of cand) {
+    if (stations.length >= 20) break;
+    if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 5)) continue;
+    let name = ST_NAMES[by];
+    if (stations.some(s => s.name === name)) name = AVE_NAMES[bx].replace(' AVE', '') + ' AVE';
+    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84 });
+    STATION_AT.set(bi(bx, by), stations[stations.length - 1]);
+  }
+}
+
+// the Chinatown night market: three stalls along the sidewalk of one Chinatown street (the plain block nearest the
+// middle of Chinatown, off the el's street, with no subway steps in the way), facing the road, red lanterns strung
+// above. Open 8pm to 2am; by day they're tarped over. at = where you stand to be served
+const nightMarketOpen = t => t >= 20 || t < 2;
+const NIGHT_MARKET = (() => {
+  const seed = DIST_SEEDS.find(s => s[2] === 'chinatown'); let best = null, bd = Infinity;
+  for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++) {
+    if (districtOf(bx, by) !== 'chinatown' || blockKind(bx, by) || !hseg(bx, by) || by === EL_ROW || by === EL_ROW + 1 || STATION_AT.has(bi(bx, by))) continue;
+    const d = Math.hypot(relB(bx - seed[0]), by - seed[1]);
+    if (d < bd) { bd = d; best = { bx, by }; }
+  }
+  return best;
+})();
+// each stall: a waist-high counter with the goods laid out on it, two poles, a striped canopy above with the sign on
+// its front, and (after dark) someone behind the counter to sell to you
+const STALLS = NIGHT_MARKET ? [['STREET FOOD', 3.0, RED], ['CHARMS', 5.0, MAG], ['CURIOS', 7.0, ORANGE]].map(([word, dx, canopy], k) => {
+  const x = NIGHT_MARKET.bx * 8 + dx, y = NIGHT_MARKET.by * 8 + 1.78;
+  solidBox(x, y + 0.02, true, 0.78, 0.15, 0.21, 0.26, 'stallroof', k); Object.assign(solids[solids.length - 1], { word, canopy, fs: -1 });
+  for (const s of [-1, 1]) solidBox(x + s * 0.72, y - 0.08, true, 0.012, 0.012, 0, 0.21, 'stallpole', k);
+  solidBox(x, y, true, 0.7, 0.09, 0, 0.1, 'stall', k);
+  const shirt = [WHITE, RED, BLUE][k];
+  extras.push({ x: x + 0.15 - k * 0.12, y: y + 0.14, z: 0, w: 0.06, h: 0.18, art: ART.walkB, when: () => nightMarketOpen(tod), // the stallholder
+    col: (c, row, L) => C(row < 2 ? SKIN : row === 2 ? shirt : GRAY, Math.max(L, 6)) });
+  return Object.assign(solids[solids.length - 1], { word, canopy, fs: -1, at: [x, y - 0.3] });
+}) : [];
+if (NIGHT_MARKET) for (let x = NIGHT_MARKET.bx * 8 + 2.4; x < NIGHT_MARKET.bx * 8 + 7.8; x += 0.45) // the lanterns, on a string along the street
+  extras.push({ x, y: NIGHT_MARKET.by * 8 + 1.45, z: 0.3, w: 0.045, h: 0.07, art: ['-|-', '(@)', ' v '], lantern: true,
+    col: (c, row, L) => row === 0 ? C(GRAY, L * 0.7) : C(c === '@' ? YEL : RED, Math.max(L, (night > 0.3 ? 1 : 0.4) * (c === '@' ? 15 : 12))) });
 // the Sunset Pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
 // boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
 // side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
@@ -1028,25 +1076,6 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
 const CANDY_CART = { name: 'COTTON CANDY', item: 'a cotton candy', price: 3, color: MAG, w: 0.3, art: [
   ['  @@@@  ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O'], ['  @@@@@ ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O']].map(pad) };
 vendors.push({ x: FAIR.cx + 1.1, y: FAIR.y0 + 0.9, ox: 0.12, oy: 0, type: CANDY_CART, shirt: WHITE });
-
-// subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
-// hole in the sidewalk SUBWAY_HOLE (half length along the street, half width) round the entrance point
-const SUBWAY_HOLE = [0.14, 0.065];
-const stations = [], STATION_AT = new Map(); // block -> its station
-{
-  const cand = [];
-  for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++)
-    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW) cand.push([hash(bx, by, 71), bx, by]);
-  cand.sort((p, q) => p[0] - q[0]);
-  for (const [, bx, by] of cand) {
-    if (stations.length >= 20) break;
-    if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 5)) continue;
-    let name = ST_NAMES[by];
-    if (stations.some(s => s.name === name)) name = AVE_NAMES[bx].replace(' AVE', '') + ' AVE';
-    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84 });
-    STATION_AT.set(bi(bx, by), stations[stations.length - 1]);
-  }
-}
 
 // vending machines: on the sidewalk against a building, at the edge of a frontage (beside a shopfront, not across it),
 // clear of subway entrances, facing the street. {x, y, kind, c, s: the box's axis along the street, fs: which side of it (+-1) is the front}
@@ -2020,10 +2049,18 @@ const ITEMS = {
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
   duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
   spraypaint: { name: 'spray paint', price: 8, kind: 'toy', uses: 6 }, // (graffiti.js)
+  // the Chinatown night market (nightmarket.js): street food, charms, curios
+  bao: { name: 'pork bao', price: 4, kind: 'food', uses: 3 }, eggwaffle: { name: 'egg waffle', price: 5, kind: 'food', uses: 4 },
+  stinkytofu: { name: 'stinky tofu', price: 4, kind: 'food', uses: 3 }, bubbletea: { name: 'bubble tea', price: 5, kind: 'drink', uses: 4 },
+  redstring: { name: 'red string bracelet', price: 8, kind: 'gear' }, luckycoin: { name: 'lucky coin', price: 15, kind: 'gear' },
+  mysterybox: { name: 'mystery box', price: 20, kind: 'toy', uses: 1 },
+  // the two that bend the world: carry the watch and T hurries the hours along; shake the globe and the sky changes
+  pocketwatch: { name: 'cursed pocket watch', price: 300, kind: 'gear' }, // (the prize counters' top prize, for tickets)
+  cityglobe: { name: 'Glyphport snow globe', price: 350, kind: 'gear' },
 };
 // the arcade's prize counter: what tickets buy
 let tickets = 0;
-const PRIZES = [['candy', 8], ['duck', 20], ['yoyo', 30], ['sparklers', 35], ['harmonica', 60], ['ball', 90], ['skateboard', 300]];
+const PRIZES = [['candy', 8], ['duck', 20], ['yoyo', 30], ['sparklers', 35], ['harmonica', 60], ['ball', 90], ['skateboard', 300], ['pocketwatch', 1500]];
 function claimPrize(id) {
   const p = PRIZES.find(q => q[0] === id);
   if (!p) return [false, 'Not a prize.'];
@@ -2035,6 +2072,7 @@ function claimPrize(id) {
 // what each kind of place sells: by shop word first, then by room kind
 const STOCK_WORD = {
   'FAIR FOOD': ['corndog', 'popcorn', 'cottoncandy', 'lemonade'],
+  'STREET FOOD': ['bao', 'eggwaffle', 'stinkytofu', 'bubbletea'], CHARMS: ['redstring', 'luckycoin', 'mooncake'], CURIOS: ['mysterybox', 'cityglobe'], // (the night market's stalls)
   YAKITORI: ['yakitori', 'beer', 'sake'], TAKOYAKI: ['takoyaki', 'melonsoda'], BENTO: ['bento', 'onigiri', 'tea'], IZAKAYA: ['beer', 'sake', 'yakitori'],
   KISSATEN: ['coffee', 'melonsoda', 'sandwich'], DRUGSTORE: ['water', 'energy', 'umbrella', 'candy'], MANGA: ['book'], CAPSULE: ['water', 'onigiri'],
   '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella'],
@@ -2069,7 +2107,9 @@ const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, sk
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
 // anything, the dragon's a bit more, and they add up
-const luck = () => (inv.some(it => it.id === 'jadebangle') ? 0.03 : 0) + (inv.some(it => it.id === 'jadedragon') ? 0.08 : 0) + (inv.some(it => it.id === 'plushcat') ? 0.02 : 0); // (and the lucky cat, a little)
+const carrying = id => inv.some(it => it.id === id);
+const luck = () => (carrying('jadebangle') ? 0.03 : 0) + (carrying('jadedragon') ? 0.08 : 0) + (carrying('plushcat') ? 0.02 : 0) // (and the lucky cat, a little)
+  + (carrying('redstring') ? 0.02 : 0) + (carrying('luckycoin') ? 0.03 : 0); // (the night market's charms)
 // the yo-yo, out on its string: Q lets it drop (and Q again reels it in); while it's out the camera holds still and
 // the mouse (or a drag) swings it. A pendulum: len 0..1 of the string paid out, ang its swing from straight down
 // (round past the top is around the world), and when it hangs low enough it touches down and rolls along the
@@ -2199,12 +2239,37 @@ function useHeld(near) {
       it.uses--; fx.spark = 25;
       if (it.uses <= 0) removeHeld();
       return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
+    case 'pocketwatch': return [pick(['The second hand runs fast. Hold T and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
+    case 'cityglobe': return shakeGlobe();
+    case 'redstring': return [pick(['You tug the red string round your wrist. Luck, the stallholder said. Probably.', 'A thread of red. Keeps the bad stuff off, apparently.']), null];
+    case 'luckycoin': return [pick(['You flip the lucky coin. Heads. Of course it\'s heads.', 'You rub the square hole in the middle of the coin. It feels warm.']), 'click'];
+    case 'mysterybox': { // open it: something from the pile, nobody said what
+      removeHeld();
+      const id = pickWeighted(MYSTERY_BOX);
+      inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1;
+      return [id === 'jadedragon' || id === 'pocketwatch' ? `You tear it open. ${aOrSome(ITEMS[id].name).replace(/^./, c => c.toUpperCase())}?! No way.` : `You tear the box open: ${aOrSome(ITEMS[id].name)}.`, 'chime'];
+    }
     case 'flowers':
       if (near.person) { removeHeld(); near.person.talk = 4; return [`"For me? Oh!" ${pick(['They light up.', 'They blush.', 'They smell them and grin.'])}`, 'chime']; }
       return ['You sniff the flowers. Lovely.', null];
   }
   return ['Nothing happens.', null];
 }
+// the night market's mystery box: mostly cheap, now and then not [id, weight]
+const MYSTERY_BOX = [['duck', 14], ['candy', 12], ['yoyo', 10], ['sparklers', 10], ['harmonica', 8], ['plushcat', 8], ['sharkplush', 8], ['plushbear', 8], ['snowglobe', 7], ['vinyl', 6], ['jadebangle', 5], ['luckycoin', 3], ['jadedragon', 1], ['pocketwatch', 0.25]];
+const pickWeighted = list => { let r = Math.random() * list.reduce((t, [, w]) => t + w, 0); for (const [id, w] of list) if ((r -= w) < 0) return id; return list[0][0]; };
+// the Glyphport snow globe: the city in glass. Shake it and the sky outside turns to match (and stays a good while);
+// give the snow a few seconds to settle before you try again
+const GLOBE_SETTLE = 8;
+let globeT = -99;
+const GLOBE_SKY = { clear: 'the stars come out over the tiny towers', rain: 'rain streaks down the glass', storm: 'lightning flickers in the glass', fog: 'fog fills the globe' };
+function shakeGlobe() {
+  if (T - globeT < GLOBE_SETTLE) return ['The snow\'s still settling.', null];
+  globeT = T; weather = WEATHER_NEXT[weather]; wTimer = 600;
+  return [`You shake the globe. Inside, ${GLOBE_SKY[weather]}. Outside, too.`, 'chime'];
+}
+// may you hurry the hours along (hold T) or change the sky (Y)? With the watch / the globe on you, or the dev switch
+const timeKeys = () => devKeys || carrying('pocketwatch'), skyKeys = () => devKeys || carrying('cityglobe');
 // things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
 // Half-eaten stays half-eaten.
@@ -2924,7 +2989,7 @@ GAMES.ducks = (rnd = Math.random) => {
   const tier = () => { let r = rnd(); for (const [v, p] of DUCK_TIERS) if ((r -= p) < 0) return v; return 1; };
   const gold = rnd() < 0.5 ? rnd() * 12 | 0 : -1;
   const ducks = Array.from({ length: 12 }, (_, k) => ({ s: k * LAP / 12 + rnd() * 1.5, worth: k === gold ? (rnd() < 0.7 ? 25 : 50) : tier(), gold: k === gold, ph: rnd() * 6 }));
-  let hooks = 3, hx = 16, dip = 0, held = null, card = null, splash = null, t = 0;
+  let hooks = 3, hx = 16, dip = 0, dipOn = null, held = null, card = null, splash = null, t = 0;
   g.ducks = ducks; // (for the tests)
   const under = () => ducks.find(d => { const p = at(d.s); return p.near && hx >= p.x - 0.3 && hx <= p.x + 3.3; });
   g.under = under;
@@ -2949,14 +3014,14 @@ GAMES.ducks = (rnd = Math.random) => {
     }
     if (dip > 0) { // the hook's in the water
       if ((dip -= dt) <= 0) {
-        const d = under();
+        const d = dipOn; // (the duck that was under the hook when you dipped it: it doesn't get to swim off)
         if (d) { held = { d, up: 0, from: at(d.s) }; hooks--; ev.push('eat'); } else { splash = { x: hx, t: 0.6 }; ev.push('miss'); }
         dip = 0;
       }
       return ev;
     }
     if (k.left) hx = Math.max(2, hx - dt * 12); if (k.right) hx = Math.min(33, hx + dt * 12);
-    if (k.actP && hooks > 0) { dip = 0.22; ev.push('launch'); }
+    if (k.actP && hooks > 0) { dip = 0.22; dipOn = under(); ev.push('launch'); }
     return ev;
   };
   g.draw = (put, text) => {
@@ -5258,7 +5323,7 @@ function citySprites() {
   drawPigeons();
   bayBoats(); // (marina.js: real 3D boats)
   marinaSprites();
-  forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8)) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
+  forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8) && (!o.when || o.when())) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
   for (const v of vendors) {
     const t = v.type, frame = t.art[(T * 2 | 0) & 1];
     drawArt(...R(v.x, v.y), 0, t.w, 0.22, frame, (c, row, L) =>
@@ -5548,6 +5613,31 @@ const SOLID_SHADE = {
     BG[i] = C(o.awning, 1.5 + L * 0.25); // the counter
     return set(i, w > 0.095 ? '=' : fract(q * 10) < 0.5 ? '|' : ' ', C(WHITE, L * 0.8)), true;
   },
+  // the night market's stalls (props.js): by day a blue tarp's roped down over everything
+  stall: o => (i, t, L) => { // the counter: planks along the front, the goods laid out on top
+    const f = HIT.face, w = HIT.w;
+    if (!nightMarketOpen(tod)) { BG[i] = C(BLUE, (1.4 + L * 0.3) * shadeFace(f)); return set(i, fract(HIT.u * 6 + w * 3) < 0.12 ? '\\' : ' ', C(GRAY, L * 0.7)), true; }
+    if (f !== 5) { BG[i] = C(BRICK, (1.8 + L * 0.25) * shadeFace(f)); return set(i, w > 0.09 ? '=' : fract(HIT.u * 12) < 0.12 ? '|' : ' ', C(BRICK, Math.max(L, 7))), true; }
+    BG[i] = C(WARM, 1.6 + night * 1.4); // a cloth on top, lit by the lanterns
+    const u = HIT.u * 13, m = mod(Math.floor(u * 3), 3), back = HIT.v * -o.fs < 0, col = mod(Math.floor(u), 60);
+    let ch = ' ', c = WHITE;
+    if (o.k === 0) { ch = back ? '([=])'[mod(Math.floor(u * 5), 5)] : 'oO'[col & 1]; c = back ? WARM : WHITE; } // steamer baskets at the back, buns at the front
+    else if (o.k === 1) { ch = back ? (col & 1 ? 'Y' : '|') : (col % 3 ? 'o' : '@'); c = back ? RED : col % 3 ? RED : YEL; } // tassels, knots, coins
+    else { ch = back ? '[#]'[m] : col % 3 === 1 ? (Math.sin(T * 2 + col) > 0.85 ? '*' : 'o') : col % 5 === 0 ? '?' : ' '; c = back ? ORANGE : col % 5 === 0 ? YEL : CYAN; } // boxes, glass jars
+    return set(i, ch, C(c, Math.max(L, 11))), true;
+  },
+  stallroof: o => (i, t, L) => { // the canopy: stripes, a scalloped valance along the front with the sign on it
+    const f = HIT.face, w = HIT.w, q = (HIT.u * o.fs / o.hl + 1) / 2, stripe = c => C(fract(HIT.u * 9) < 0.5 ? o.canopy : YEL, c);
+    if (!nightMarketOpen(tod)) { BG[i] = C(BLUE, (1.4 + L * 0.3) * shadeFace(f)); return set(i, w > 0.24 ? '~' : ' ', C(GRAY, L * 0.7)), true; }
+    if (f === 5 || f === 6) { BG[i] = stripe(f === 5 ? 3 + L * 0.3 : 1.8 + night * 1.5); return set(i, ' ', 0), true; }
+    const front = (f === 3 || f === 4) && Math.sign(HIT.v) === o.fs;
+    if (!front) { BG[i] = stripe((1.4 + L * 0.3) * shadeFace(f)); return set(i, ' ', 0), true; }
+    if (w < 0.215 && fract(q * 24) > 0.5) return false; // the scallops: you see past them
+    BG[i] = C(o.canopy, 3.4 + night * 3);
+    const n = o.word.length + 2, ch = signGlyph(o.word, q * n - 1, (0.255 - w) / 0.045, t, 2 * o.hl / n, 0.045, farDepth(rel(o.x - px), rel(o.y - py), o.hl));
+    return ch !== null && ch !== ' ' ? (set(i, ch, C(YEL, 15)), true) : (set(i, ' ', 0), true);
+  },
+  stallpole: () => (i, t, L) => { BG[i] = C(GRAY, 1.5); return set(i, '|', C(GRAY, Math.max(L, 8))), true; },
   // construction hoarding: an orange-and-white striped top rail on posts, see-through between
   hoarding: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u, f = HIT.face;
@@ -8987,6 +9077,8 @@ function promptText() {
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
   const fsp = fairSpot();
   if (fsp) return fairPrompt(fsp);
+  const mk = marketSpot();
+  if (mk) return marketPrompt(mk);
   if (pottyNear()) return 'E: use the portapotty';
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
@@ -9089,10 +9181,10 @@ function hud() {
   const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
-    : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
+    : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi |${timeKeys() ? ' hold T: time |' : ''}${skyKeys() ? ' Y: weather |' : ''} M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
-  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
+  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT && timeKeys() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
   const meters = needMeters();
@@ -9359,6 +9451,8 @@ function interact() {
   if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
   const fsp = fairSpot();
   if (fsp) return useFair(fsp);
+  const mk = marketSpot();
+  if (mk) return useMarket(mk);
   const pot = pottyNear();
   if (pot) return enterPotty(pot), say(pick(['You hold your breath and step in.', 'The smell hits you before the door shuts.', 'It\'s exactly as nice as you\'d think.']), 2.5);
   const ven = nearVendor();
@@ -9644,6 +9738,21 @@ function fairFrame() {
   const mid = cols >> 1;
   for (let r = 0; r < rows - 3; r++) { const i = r * cols + mid; FOGS[i] = FOGB[i] = 0; set(i, (r + Math.floor(T * 6)) % 4 ? '|' : '/', C(YEL, 14)); BG[i] = C(YEL, 3); }
   ['   ,/\\_/\\,', '  (  o    >', "  /`---.__/", " /  ~~~~ \\"].forEach((l, k) => putText(rows - 4 + k, mid - 6, l, C(WHITE, 13)));
+}
+// ===== the Chinatown night market (props.js puts up the stalls): what E does at a stall, and what it says. Open 8pm
+// to 2am. STREET FOOD, CHARMS (a little luck) and CURIOS (a mystery box, and the Glyphport snow globe, which changes
+// the weather: goods.js)
+function marketSpot() {
+  if (mode !== 'walk') return null;
+  return STALLS.find(o => Math.hypot(rel(o.at[0] - px), rel(o.at[1] - py)) < 0.3) || null;
+}
+function marketPrompt(o) {
+  if (!nightMarketOpen(tod)) return `${o.word}: under a tarp till 8pm`;
+  return `E: ${o.word} stall`;
+}
+function useMarket(o) {
+  if (!nightMarketOpen(tod)) return say(pick(['A tarp\'s roped down over it. The market sets up after dark.', 'Nothing yet. Come back after eight.']), 2);
+  return openShop(o.word, stockFor('', o.word));
 }
 // ===== the calendar: which day of the week it is, and what's on. Days tick over at midnight (and when you sleep
 // through one). Starting simple: every Saturday night, fireworks over the bay off the Sunset Pier.
@@ -10106,7 +10215,7 @@ function buildPause() {
   const el = menuEl('pause', 500, `
     <div class="panel" role="dialog" aria-label="Paused" style="width: min(520px, calc(100vw - 32px))">
       <h1>Paused</h1>
-      <p class="sub">ASCII City</p>
+      <p class="sub">Glyphport</p>
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="map">Map of the city</button>
       <button class="item" data-act="newgame">Start over</button>
@@ -10128,7 +10237,7 @@ function buildPause() {
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
         <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
-        <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
+        <b>hold T</b><span>fast-forward (with the pocket watch)</span><b>Y</b><span>weather (with the snow globe)</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
         <b>P</b><span>pee</span>
         <b>Esc</b><span>pause</span>
@@ -10234,7 +10343,7 @@ function devPlaces() {
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
     ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],
     ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.6, Math.PI / 2); }],
-    ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
+    ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
   const nearestLm = {}; // (there are several of each: the nearest one)
@@ -10298,6 +10407,7 @@ function devBody() {
   }
   return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
     <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}${act('Bladder full', () => { needs.bladder = 100; })}</div>
+    <div class="grp">keys</div><div class="bar">${act(devKeys ? 'T / Y without the watch and globe: ON' : 'T / Y without the watch and globe: off', () => { devKeys = !devKeys; })}</div>
     <div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { inv.length = 0; held = -1; say('Pockets emptied.', 2); })}</div>
     <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
 }
@@ -10545,6 +10655,18 @@ function bitten(lines, f, from = 'right', edge = '') { // edge: what the bitten 
 // (bitten with 0.45 + f * 0.55: something you'd drink or slurp, bitten anyway, but never quite to nothing)
 const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars.includes(c)) return col; return dflt; };
 const HAND = {
+  // the night market's: street food, charms, curios, and the two that bend the world
+  bao: (it, f) => [bitten(['   _.~~._', '  ( ~ ~  )', ' (        )', "  `------'"], f), (c, r) => r < 2 && c === '~' ? C(GRAY, 12) : C(WHITE, 14)],
+  eggwaffle: (it, f) => [bitten([' .oOoOoOo.', ' oOoOoOoOo', ' oOoOoOoOo', " `oOoOoOo'"], f), (c, r) => c === 'O' ? C(YEL, 15) : C(ORANGE, 13)],
+  stinkytofu: (it, f) => [[' ~ ~ ~', ...Array.from({ length: Math.max(1, it.uses) }, () => ' [##]'), '   |', '   |'], (c, r) => c === '~' ? C(GREEN, 10) : c === '#' ? C(ORANGE, 14) : c === '|' ? C(BRICK, 12) : C(YEL, 13)],
+  bubbletea: (it, f) => [filled(['    //', '  .//__.', ' |      |', ' |      |', ' |      |', ' |oOoOoo|', "  `----'"], [[2, 2, 7], [3, 2, 7], [4, 2, 7]], f, ':', '~'),
+    (c, r) => r < 2 && c === '/' ? C(MAG, 13) : c === 'o' || c === 'O' ? C(BRICK, 10) : c === ':' || c === '~' ? C(WARM, 14) : C(WHITE, 11)],
+  redstring: () => [['  .----.', ' (      )', '  `-oo-\'', '     \\\\'], (c, r) => c === 'o' ? C(YEL, 15) : C(RED, 13)],
+  luckycoin: () => [['  .---.', ' / .-. \\', '| | # | |', ' \\ `-\' /', "  `---'"], (c, r) => c === '#' ? C(GRAY, 6) : C(YEL, 14)],
+  mysterybox: () => [['  _\\ /_', ' |  X  |', ' |  ?  |', ' |_____|'], (c, r) => c === '?' ? C(WHITE, 15) : c === 'X' || c === '\\' || c === '/' ? C(RED, 14) : C(BRICK, 13)],
+  pocketwatch: () => { const k = Math.floor(T * (K.KeyT && timeKeys() ? 12 : 1)) & 3; // the hands, round and round
+    return [['    o', '  .-^-.', ' / 12  \\', `|9  ${'|/-\\'[k]}  3|`, ' \\  6  /', "  `---'"], (c, r) => r === 0 ? C(GRAY, 12) : r === 3 && '|/-\\'.includes(c) ? C(GRAY, 3) : /[0-9]/.test(c) ? C(BRICK, 9) : r === 1 || c === '/' || c === '\\' || c === '`' || c === "'" || c === '|' ? C(YEL, 13) : C(WARM, 14)]; },
+  cityglobe: () => [['  .-----.', ' / * # * \\', '| #|#|#|# |', ' \\ ##### /', "  '-----'", ' [GLYPHPT]'], (c, r) => r === 5 ? (c === '[' || c === ']' ? C(BRICK, 13) : C(YEL, 12)) : c === '*' ? C(WHITE, 15) : c === '#' ? C(YEL, 13) : C(CYAN, 12)],
   // drinks: a paper cup steams less as it goes; glasses show their level
   coffee: (it, f) => [[f > 0.5 ? '  ( ( (' : '', f > 0.25 ? '   ) ) )' : '', ' ._______.', ' [_______]', '  |     |', '  |CAFE |', '  |     |', '   \\___/'],
     (c, r) => r < 2 ? C(WHITE, 8) : 'CAFE'.includes(c) ? C(GREEN, 13) : r < 4 ? C(GRAY, 12) : C(WHITE, 14)],
@@ -11186,6 +11308,90 @@ const dCan = (col, word, stripe, deco) => (it, f) => sculpt(26, 15, (x, y) => {
 const dPieces = (x, n, x0, step) => { const k = Math.floor((x - x0) / step); return k >= 0 && k < n ? [k, x - x0 - (k + 0.5) * step] : null; };
 
 Object.assign(DENSE, {
+  // ---- the night market's, and the two that bend the world
+  pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold T
+    const fast = K.KeyT && timeKeys(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
+    if (dEll(x, y, 0, -6.2, 1.1, 0.8) < 1 && dEll(x, y, 0, -6.2, 1.1, 0.8) > 0.55) return ['o', C(GRAY, 12)]; // the ring for the chain
+    if (Math.abs(x) < 0.7 && y > -5.6 && y < -4.4) return dLit(0.7, YEL, 8); // the crown
+    const d = dEll(x, y, cx, cy, R, R);
+    if (d > 1) return null;
+    if (d > 0.84) return dLit(0.35 + dBall(x, y, cx, cy, R) * 0.65, YEL, 9, 15); // the case
+    const rx = x - cx, ry = y - cy, r = Math.hypot(rx, ry), a = Math.atan2(rx, -ry);
+    if (r < 0.5) return ['o', C(YEL, 15)];
+    const hand = (an, len) => { const hx = Math.sin(an) * len, hy = -Math.cos(an) * len, t = clamp((rx * hx + ry * hy) / (len * len), 0, 1); return Math.hypot(rx - hx * t, ry - hy * t) < 0.38; };
+    if (hand(ang, R * 0.72)) return ['#', C(fast ? RED : WHITE, 15)];
+    if (hand(ang / 12, R * 0.45)) return ['#', C(WHITE, 12)];
+    if (r > R * 0.64 && Math.abs(fract(a / (Math.PI / 6) + 0.5) - 0.5) < 0.14) return ['+', C(YEL, 12)]; // the hour marks
+    if (Math.abs(rx * 0.7 - ry - 1.2) < 0.25 && rx > -1 && rx < 3.6) return ['/', C(CYAN, 10)]; // the crack across the glass
+    return ['.', C(WARM, 6 + dBall(x, y, cx, cy, R * 0.84) * 3)]; // the face, old and yellowed
+  }),
+  cityglobe: () => sculpt(26, 16, (x, y) => { // the city in glass: its towers lit, the sky outside's weather inside, snow swirling after a shake
+    if (y > 4.2 && y < 7.4 && Math.abs(x) < 4.8) { const t_ = dText(x, y, 0, 5.8, 'GLYPHPORT'); return t_ ? [t_, C(YEL, 14)] : dLit(0.55 - (y - 4.2) * 0.08, BRICK, 7); }
+    const d = dEll(x, y, 0, -1.2, 5.4, 5.4);
+    if (d > 1 || y > 4.2) return null;
+    if (d > 0.92) return ['|', C(WHITE, 12)];
+    const shaken = T - globeT < GLOBE_SETTLE, k = Math.floor(x / D_ASPECT + 20), towerH = 1 + hash(k >> 1, 3, 987) * 4.5;
+    if (y > 4.2 - towerH && y > -0.5 - (k & 1)) return hash(k, Math.floor(y * 1.6), 988) > 0.55 ? ['#', C(night > 0.3 || weather !== 'clear' ? YEL : WHITE, 13)] : ['|', C(GRAY, 4)]; // the towers
+    const snow = hash(Math.floor(x * 1.8), Math.floor(y + T * (shaken ? 4 : 0.6)), 986) > (shaken ? 0.7 : 0.94);
+    if (snow) return ['*', C(WHITE, 15)];
+    if (weather === 'rain' || weather === 'storm') { if (fract(x * 0.9 + y * 0.5 - T * 3) < 0.12) return ['/', C(CYAN, 11)]; if (weather === 'storm' && fract(T * 0.7) < 0.05) return [' ', 0, C(WHITE, 8)]; }
+    if (weather === 'fog' && hash(Math.floor(x * 2), Math.floor(y * 2 - T), 989) > 0.6) return [':', C(GRAY, 10)];
+    if (weather === 'clear' && hash(Math.floor(x * 3), Math.floor(y * 3), 990) > 0.96) return ['.', C(WHITE, 12)];
+    return [' ', 0];
+  }),
+  bubbletea: (it, f) => sculpt(24, 17, (x, y) => { // milk tea, tapioca pearls in the bottom, a fat straw
+    const s = dStraw(x, y, 0.8, -1, 2, -8.5, C(MAG, 13)); if (s) return s;
+    const g = dGlass(x, y, -4, 8, yy => 3.9 - (yy + 4) * 0.06, f, [WARM, null]);
+    if (g && !'|_'.includes(g[0]) && y > 4.6 && hash(Math.floor(x * 1.7), Math.floor(y * 1.2), 991) > 0.35) return ['o', C(BRICK, 9)];
+    return g === undefined ? null : g;
+  }),
+  bao: (it, f) => sculpt(26, 12, (x, y) => { // a steamed bun, pleated on top, bites out of it
+    const st = dSteam(x, y, -3.6, f, [-1.6, 1.4]); if (st) return st;
+    const d = dEll(x, y, 0, 0.8, 5.6, 3.8);
+    if (d > 1 || y > 3.6) return null;
+    const bite = dBites(x, y, f, 5); if (bite === true) return null; if (bite === 'rim') return [':', C(BRICK, 12)];
+    if (y < -1.2 && Math.abs(fract(Math.atan2(x, y + 3) * 2) - 0.5) < 0.12) return ['~', C(GRAY, 11)]; // the pleats
+    return dLit(dBall(x, y, 0, 0.8, 5.6, 3.8), WHITE, 9, 15);
+  }),
+  eggwaffle: (it, f) => sculpt(28, 12, (x, y) => { // a sheet of golden bubbles
+    const d = dEll(x, y, 0, 0, 7, 4.2);
+    if (d > 1) return null;
+    const bite = dBites(x, y, f, 6.5); if (bite === true) return null; if (bite === 'rim') return [':', C(WARM, 13)];
+    const bx = fract(x / 1.3 + (Math.floor(y / 1.4) & 1) * 0.5), by_ = fract(y / 1.4), bub = Math.hypot(bx - 0.5, by_ - 0.5) < 0.38;
+    return bub ? ['O', C(YEL, 12 + dBall(x, y, 0, 0, 7, 4.2) * 3)] : ['-', C(ORANGE, 9)];
+  }),
+  stinkytofu: (it, f) => sculpt(22, 17, (x, y) => { // golden cubes on a stick, one fewer a bite, and the smell rising off them
+    const n = Math.max(1, it.uses), top = 5.2 - n * 2.6;
+    if (Math.abs(x) < 0.25 && y > top) return ['|', C(BRICK, 12)];
+    for (let k = 0; k < n; k++) { const cy = 3.8 - k * 2.6; if (Math.abs(x) < 1.9 && Math.abs(y - cy) < 1.05) return dLit(0.4 + (1.9 - Math.abs(x + 0.5)) * 0.25, ORANGE, 8); }
+    if (y < top && y > top - 4) for (const s of [-1.4, 0.4, 1.8]) { const ph = y * 1.2 + T * 2 + s; if (Math.abs(x - s - Math.sin(ph) * 0.6) < 0.25) return ['~', C(GREEN, 7 + (y - top + 4) * 1.5)]; } // the stink
+    return null;
+  }),
+  redstring: () => sculpt(24, 10, (x, y) => { // a loop of red thread, a knot and a gold bead
+    if (dEll(x, y, 2.2, 3.2, 0.7, 0.6) < 1) return dLit(0.85, YEL, 10);
+    const d = dEll(x, y, 0, 0, 5.6, 3.4);
+    if (Math.abs(d - 1) < 0.1) return ['~', C(RED, 12 + Math.sin(x * 2) * 2)];
+    if (Math.abs(x - 3.4) < 0.3 && y > 3 && y < 4.6) return ['\\', C(RED, 12)];
+    return null;
+  }),
+  luckycoin: () => sculpt(22, 12, (x, y) => { // a gold coin with a square hole, characters round it
+    const d = dEll(x, y, 0, 0, 5, 5);
+    if (d > 1) return null;
+    if (Math.abs(x) < 1.1 && Math.abs(y) < 1.1) return null; // the hole
+    if (d > 0.88) return dLit(dBall(x, y, 0, 0, 5), YEL, 7, 14);
+    if (Math.abs(x) < 1.6 && Math.abs(y) < 1.6) return ['#', C(YEL, 9)];
+    const a = Math.atan2(y, x), mark = d > 0.5 && d < 0.75 && Math.abs(fract(a / (Math.PI / 2) + 0.5) - 0.5) < 0.12;
+    return mark ? ['%', C(BRICK, 9)] : dLit(dBall(x, y, 0, 0, 5) * 0.8, YEL, 8, 13);
+  }),
+  mysterybox: () => sculpt(24, 13, (x, y) => { // a cardboard box, a red ribbon, a question mark, rattling
+    const jig = Math.sin(T * 13) > 0.92 ? 0.3 : 0;
+    x -= jig;
+    if (y < -3.6 && y > -5.2 && Math.abs(x) < 2.2 && Math.abs(Math.abs(x) - 1.1) < 0.6) return ['8', C(RED, 13)]; // the bow
+    if (Math.abs(x) > 5 || y < -3.6 || y > 5.4) return null;
+    if (Math.abs(x) < 0.45 || Math.abs(y + 1.6) < 0.4) return ['#', C(RED, 12)];
+    const q = dText(x, y, 2.6, 2.2, '?'); if (q) return [q, C(WHITE, 15)];
+    return dLit(0.45 + (y < -2.5 ? 0.25 : 0) - x * 0.03, WARM, 6, 11); // cardboard
+  }),
   // ---- drinks
   latte: (it, f) => sculpt(30, 14, (x, y) => { // a glass mug: espresso under a white head, a handle
     const handle = dEll(x, y, 4.6, 0.6, 1.6, 2.6);
@@ -12788,7 +12994,8 @@ onkeydown = e => {
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && (me || mode === 'sea')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
-  if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
+  if (e.code === 'KeyY') { if (skyKeys()) { const [m] = shakeGlobe(); say(devKeys && !carrying('cityglobe') ? `Weather: ${weather}` : m); } else say('The sky does what it likes. (Something at the Chinatown night market might change its mind.)', 3); }
+  if (e.code === 'KeyT' && !timeKeys()) say('Time waits for no one. (A certain pocket watch might disagree: try the prize counters.)', 3);
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
@@ -13085,7 +13292,7 @@ function touchActions() {
 const SHEET = [
   ['Crouch', 'KeyC', () => onFootMode() && !body.seat, true], ['Drop item', 'KeyX', () => onFootMode() && !!heldItem()],
   ['Empty hands', 'Digit0', () => onFootMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
-  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Fast-forward', 'KeyT', null, true], ['Weather', 'KeyY'], ['Sound on/off', 'KeyN'],
+  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Fast-forward', 'KeyT', () => timeKeys(), true], ['Weather', 'KeyY', () => skyKeys()], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
 ];
 

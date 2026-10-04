@@ -47,10 +47,18 @@ const ITEMS = {
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
   duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
   spraypaint: { name: 'spray paint', price: 8, kind: 'toy', uses: 6 }, // (graffiti.js)
+  // the Chinatown night market (nightmarket.js): street food, charms, curios
+  bao: { name: 'pork bao', price: 4, kind: 'food', uses: 3 }, eggwaffle: { name: 'egg waffle', price: 5, kind: 'food', uses: 4 },
+  stinkytofu: { name: 'stinky tofu', price: 4, kind: 'food', uses: 3 }, bubbletea: { name: 'bubble tea', price: 5, kind: 'drink', uses: 4 },
+  redstring: { name: 'red string bracelet', price: 8, kind: 'gear' }, luckycoin: { name: 'lucky coin', price: 15, kind: 'gear' },
+  mysterybox: { name: 'mystery box', price: 20, kind: 'toy', uses: 1 },
+  // the two that bend the world: carry the watch and T hurries the hours along; shake the globe and the sky changes
+  pocketwatch: { name: 'cursed pocket watch', price: 300, kind: 'gear' }, // (the prize counters' top prize, for tickets)
+  cityglobe: { name: 'Glyphport snow globe', price: 350, kind: 'gear' },
 };
 // the arcade's prize counter: what tickets buy
 let tickets = 0;
-const PRIZES = [['candy', 8], ['duck', 20], ['yoyo', 30], ['sparklers', 35], ['harmonica', 60], ['ball', 90], ['skateboard', 300]];
+const PRIZES = [['candy', 8], ['duck', 20], ['yoyo', 30], ['sparklers', 35], ['harmonica', 60], ['ball', 90], ['skateboard', 300], ['pocketwatch', 1500]];
 function claimPrize(id) {
   const p = PRIZES.find(q => q[0] === id);
   if (!p) return [false, 'Not a prize.'];
@@ -62,6 +70,7 @@ function claimPrize(id) {
 // what each kind of place sells: by shop word first, then by room kind
 const STOCK_WORD = {
   'FAIR FOOD': ['corndog', 'popcorn', 'cottoncandy', 'lemonade'],
+  'STREET FOOD': ['bao', 'eggwaffle', 'stinkytofu', 'bubbletea'], CHARMS: ['redstring', 'luckycoin', 'mooncake'], CURIOS: ['mysterybox', 'cityglobe'], // (the night market's stalls)
   YAKITORI: ['yakitori', 'beer', 'sake'], TAKOYAKI: ['takoyaki', 'melonsoda'], BENTO: ['bento', 'onigiri', 'tea'], IZAKAYA: ['beer', 'sake', 'yakitori'],
   KISSATEN: ['coffee', 'melonsoda', 'sandwich'], DRUGSTORE: ['water', 'energy', 'umbrella', 'candy'], MANGA: ['book'], CAPSULE: ['water', 'onigiri'],
   '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella'],
@@ -96,7 +105,9 @@ const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, sk
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
 // anything, the dragon's a bit more, and they add up
-const luck = () => (inv.some(it => it.id === 'jadebangle') ? 0.03 : 0) + (inv.some(it => it.id === 'jadedragon') ? 0.08 : 0) + (inv.some(it => it.id === 'plushcat') ? 0.02 : 0); // (and the lucky cat, a little)
+const carrying = id => inv.some(it => it.id === id);
+const luck = () => (carrying('jadebangle') ? 0.03 : 0) + (carrying('jadedragon') ? 0.08 : 0) + (carrying('plushcat') ? 0.02 : 0) // (and the lucky cat, a little)
+  + (carrying('redstring') ? 0.02 : 0) + (carrying('luckycoin') ? 0.03 : 0); // (the night market's charms)
 // the yo-yo, out on its string: Q lets it drop (and Q again reels it in); while it's out the camera holds still and
 // the mouse (or a drag) swings it. A pendulum: len 0..1 of the string paid out, ang its swing from straight down
 // (round past the top is around the world), and when it hangs low enough it touches down and rolls along the
@@ -226,12 +237,37 @@ function useHeld(near) {
       it.uses--; fx.spark = 25;
       if (it.uses <= 0) removeHeld();
       return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
+    case 'pocketwatch': return [pick(['The second hand runs fast. Hold T and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
+    case 'cityglobe': return shakeGlobe();
+    case 'redstring': return [pick(['You tug the red string round your wrist. Luck, the stallholder said. Probably.', 'A thread of red. Keeps the bad stuff off, apparently.']), null];
+    case 'luckycoin': return [pick(['You flip the lucky coin. Heads. Of course it\'s heads.', 'You rub the square hole in the middle of the coin. It feels warm.']), 'click'];
+    case 'mysterybox': { // open it: something from the pile, nobody said what
+      removeHeld();
+      const id = pickWeighted(MYSTERY_BOX);
+      inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1;
+      return [id === 'jadedragon' || id === 'pocketwatch' ? `You tear it open. ${aOrSome(ITEMS[id].name).replace(/^./, c => c.toUpperCase())}?! No way.` : `You tear the box open: ${aOrSome(ITEMS[id].name)}.`, 'chime'];
+    }
     case 'flowers':
       if (near.person) { removeHeld(); near.person.talk = 4; return [`"For me? Oh!" ${pick(['They light up.', 'They blush.', 'They smell them and grin.'])}`, 'chime']; }
       return ['You sniff the flowers. Lovely.', null];
   }
   return ['Nothing happens.', null];
 }
+// the night market's mystery box: mostly cheap, now and then not [id, weight]
+const MYSTERY_BOX = [['duck', 14], ['candy', 12], ['yoyo', 10], ['sparklers', 10], ['harmonica', 8], ['plushcat', 8], ['sharkplush', 8], ['plushbear', 8], ['snowglobe', 7], ['vinyl', 6], ['jadebangle', 5], ['luckycoin', 3], ['jadedragon', 1], ['pocketwatch', 0.25]];
+const pickWeighted = list => { let r = Math.random() * list.reduce((t, [, w]) => t + w, 0); for (const [id, w] of list) if ((r -= w) < 0) return id; return list[0][0]; };
+// the Glyphport snow globe: the city in glass. Shake it and the sky outside turns to match (and stays a good while);
+// give the snow a few seconds to settle before you try again
+const GLOBE_SETTLE = 8;
+let globeT = -99;
+const GLOBE_SKY = { clear: 'the stars come out over the tiny towers', rain: 'rain streaks down the glass', storm: 'lightning flickers in the glass', fog: 'fog fills the globe' };
+function shakeGlobe() {
+  if (T - globeT < GLOBE_SETTLE) return ['The snow\'s still settling.', null];
+  globeT = T; weather = WEATHER_NEXT[weather]; wTimer = 600;
+  return [`You shake the globe. Inside, ${GLOBE_SKY[weather]}. Outside, too.`, 'chime'];
+}
+// may you hurry the hours along (hold T) or change the sky (Y)? With the watch / the globe on you, or the dev switch
+const timeKeys = () => devKeys || carrying('pocketwatch'), skyKeys = () => devKeys || carrying('cityglobe');
 // things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
 // Half-eaten stays half-eaten.

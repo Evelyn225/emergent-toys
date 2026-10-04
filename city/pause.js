@@ -15,7 +15,7 @@ function buildPause() {
   const el = menuEl('pause', 500, `
     <div class="panel" role="dialog" aria-label="Paused" style="width: min(520px, calc(100vw - 32px))">
       <h1>Paused</h1>
-      <p class="sub">ASCII City</p>
+      <p class="sub">Glyphport</p>
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="map">Map of the city</button>
       <button class="item" data-act="newgame">Start over</button>
@@ -37,7 +37,7 @@ function buildPause() {
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
         <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
-        <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
+        <b>hold T</b><span>fast-forward (with the pocket watch)</span><b>Y</b><span>weather (with the snow globe)</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
         <b>P</b><span>pee</span>
         <b>Esc</b><span>pause</span>

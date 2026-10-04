@@ -62,6 +62,90 @@ const dCan = (col, word, stripe, deco) => (it, f) => sculpt(26, 15, (x, y) => {
 const dPieces = (x, n, x0, step) => { const k = Math.floor((x - x0) / step); return k >= 0 && k < n ? [k, x - x0 - (k + 0.5) * step] : null; };
 
 Object.assign(DENSE, {
+  // ---- the night market's, and the two that bend the world
+  pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold T
+    const fast = K.KeyT && timeKeys(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
+    if (dEll(x, y, 0, -6.2, 1.1, 0.8) < 1 && dEll(x, y, 0, -6.2, 1.1, 0.8) > 0.55) return ['o', C(GRAY, 12)]; // the ring for the chain
+    if (Math.abs(x) < 0.7 && y > -5.6 && y < -4.4) return dLit(0.7, YEL, 8); // the crown
+    const d = dEll(x, y, cx, cy, R, R);
+    if (d > 1) return null;
+    if (d > 0.84) return dLit(0.35 + dBall(x, y, cx, cy, R) * 0.65, YEL, 9, 15); // the case
+    const rx = x - cx, ry = y - cy, r = Math.hypot(rx, ry), a = Math.atan2(rx, -ry);
+    if (r < 0.5) return ['o', C(YEL, 15)];
+    const hand = (an, len) => { const hx = Math.sin(an) * len, hy = -Math.cos(an) * len, t = clamp((rx * hx + ry * hy) / (len * len), 0, 1); return Math.hypot(rx - hx * t, ry - hy * t) < 0.38; };
+    if (hand(ang, R * 0.72)) return ['#', C(fast ? RED : WHITE, 15)];
+    if (hand(ang / 12, R * 0.45)) return ['#', C(WHITE, 12)];
+    if (r > R * 0.64 && Math.abs(fract(a / (Math.PI / 6) + 0.5) - 0.5) < 0.14) return ['+', C(YEL, 12)]; // the hour marks
+    if (Math.abs(rx * 0.7 - ry - 1.2) < 0.25 && rx > -1 && rx < 3.6) return ['/', C(CYAN, 10)]; // the crack across the glass
+    return ['.', C(WARM, 6 + dBall(x, y, cx, cy, R * 0.84) * 3)]; // the face, old and yellowed
+  }),
+  cityglobe: () => sculpt(26, 16, (x, y) => { // the city in glass: its towers lit, the sky outside's weather inside, snow swirling after a shake
+    if (y > 4.2 && y < 7.4 && Math.abs(x) < 4.8) { const t_ = dText(x, y, 0, 5.8, 'GLYPHPORT'); return t_ ? [t_, C(YEL, 14)] : dLit(0.55 - (y - 4.2) * 0.08, BRICK, 7); }
+    const d = dEll(x, y, 0, -1.2, 5.4, 5.4);
+    if (d > 1 || y > 4.2) return null;
+    if (d > 0.92) return ['|', C(WHITE, 12)];
+    const shaken = T - globeT < GLOBE_SETTLE, k = Math.floor(x / D_ASPECT + 20), towerH = 1 + hash(k >> 1, 3, 987) * 4.5;
+    if (y > 4.2 - towerH && y > -0.5 - (k & 1)) return hash(k, Math.floor(y * 1.6), 988) > 0.55 ? ['#', C(night > 0.3 || weather !== 'clear' ? YEL : WHITE, 13)] : ['|', C(GRAY, 4)]; // the towers
+    const snow = hash(Math.floor(x * 1.8), Math.floor(y + T * (shaken ? 4 : 0.6)), 986) > (shaken ? 0.7 : 0.94);
+    if (snow) return ['*', C(WHITE, 15)];
+    if (weather === 'rain' || weather === 'storm') { if (fract(x * 0.9 + y * 0.5 - T * 3) < 0.12) return ['/', C(CYAN, 11)]; if (weather === 'storm' && fract(T * 0.7) < 0.05) return [' ', 0, C(WHITE, 8)]; }
+    if (weather === 'fog' && hash(Math.floor(x * 2), Math.floor(y * 2 - T), 989) > 0.6) return [':', C(GRAY, 10)];
+    if (weather === 'clear' && hash(Math.floor(x * 3), Math.floor(y * 3), 990) > 0.96) return ['.', C(WHITE, 12)];
+    return [' ', 0];
+  }),
+  bubbletea: (it, f) => sculpt(24, 17, (x, y) => { // milk tea, tapioca pearls in the bottom, a fat straw
+    const s = dStraw(x, y, 0.8, -1, 2, -8.5, C(MAG, 13)); if (s) return s;
+    const g = dGlass(x, y, -4, 8, yy => 3.9 - (yy + 4) * 0.06, f, [WARM, null]);
+    if (g && !'|_'.includes(g[0]) && y > 4.6 && hash(Math.floor(x * 1.7), Math.floor(y * 1.2), 991) > 0.35) return ['o', C(BRICK, 9)];
+    return g === undefined ? null : g;
+  }),
+  bao: (it, f) => sculpt(26, 12, (x, y) => { // a steamed bun, pleated on top, bites out of it
+    const st = dSteam(x, y, -3.6, f, [-1.6, 1.4]); if (st) return st;
+    const d = dEll(x, y, 0, 0.8, 5.6, 3.8);
+    if (d > 1 || y > 3.6) return null;
+    const bite = dBites(x, y, f, 5); if (bite === true) return null; if (bite === 'rim') return [':', C(BRICK, 12)];
+    if (y < -1.2 && Math.abs(fract(Math.atan2(x, y + 3) * 2) - 0.5) < 0.12) return ['~', C(GRAY, 11)]; // the pleats
+    return dLit(dBall(x, y, 0, 0.8, 5.6, 3.8), WHITE, 9, 15);
+  }),
+  eggwaffle: (it, f) => sculpt(28, 12, (x, y) => { // a sheet of golden bubbles
+    const d = dEll(x, y, 0, 0, 7, 4.2);
+    if (d > 1) return null;
+    const bite = dBites(x, y, f, 6.5); if (bite === true) return null; if (bite === 'rim') return [':', C(WARM, 13)];
+    const bx = fract(x / 1.3 + (Math.floor(y / 1.4) & 1) * 0.5), by_ = fract(y / 1.4), bub = Math.hypot(bx - 0.5, by_ - 0.5) < 0.38;
+    return bub ? ['O', C(YEL, 12 + dBall(x, y, 0, 0, 7, 4.2) * 3)] : ['-', C(ORANGE, 9)];
+  }),
+  stinkytofu: (it, f) => sculpt(22, 17, (x, y) => { // golden cubes on a stick, one fewer a bite, and the smell rising off them
+    const n = Math.max(1, it.uses), top = 5.2 - n * 2.6;
+    if (Math.abs(x) < 0.25 && y > top) return ['|', C(BRICK, 12)];
+    for (let k = 0; k < n; k++) { const cy = 3.8 - k * 2.6; if (Math.abs(x) < 1.9 && Math.abs(y - cy) < 1.05) return dLit(0.4 + (1.9 - Math.abs(x + 0.5)) * 0.25, ORANGE, 8); }
+    if (y < top && y > top - 4) for (const s of [-1.4, 0.4, 1.8]) { const ph = y * 1.2 + T * 2 + s; if (Math.abs(x - s - Math.sin(ph) * 0.6) < 0.25) return ['~', C(GREEN, 7 + (y - top + 4) * 1.5)]; } // the stink
+    return null;
+  }),
+  redstring: () => sculpt(24, 10, (x, y) => { // a loop of red thread, a knot and a gold bead
+    if (dEll(x, y, 2.2, 3.2, 0.7, 0.6) < 1) return dLit(0.85, YEL, 10);
+    const d = dEll(x, y, 0, 0, 5.6, 3.4);
+    if (Math.abs(d - 1) < 0.1) return ['~', C(RED, 12 + Math.sin(x * 2) * 2)];
+    if (Math.abs(x - 3.4) < 0.3 && y > 3 && y < 4.6) return ['\\', C(RED, 12)];
+    return null;
+  }),
+  luckycoin: () => sculpt(22, 12, (x, y) => { // a gold coin with a square hole, characters round it
+    const d = dEll(x, y, 0, 0, 5, 5);
+    if (d > 1) return null;
+    if (Math.abs(x) < 1.1 && Math.abs(y) < 1.1) return null; // the hole
+    if (d > 0.88) return dLit(dBall(x, y, 0, 0, 5), YEL, 7, 14);
+    if (Math.abs(x) < 1.6 && Math.abs(y) < 1.6) return ['#', C(YEL, 9)];
+    const a = Math.atan2(y, x), mark = d > 0.5 && d < 0.75 && Math.abs(fract(a / (Math.PI / 2) + 0.5) - 0.5) < 0.12;
+    return mark ? ['%', C(BRICK, 9)] : dLit(dBall(x, y, 0, 0, 5) * 0.8, YEL, 8, 13);
+  }),
+  mysterybox: () => sculpt(24, 13, (x, y) => { // a cardboard box, a red ribbon, a question mark, rattling
+    const jig = Math.sin(T * 13) > 0.92 ? 0.3 : 0;
+    x -= jig;
+    if (y < -3.6 && y > -5.2 && Math.abs(x) < 2.2 && Math.abs(Math.abs(x) - 1.1) < 0.6) return ['8', C(RED, 13)]; // the bow
+    if (Math.abs(x) > 5 || y < -3.6 || y > 5.4) return null;
+    if (Math.abs(x) < 0.45 || Math.abs(y + 1.6) < 0.4) return ['#', C(RED, 12)];
+    const q = dText(x, y, 2.6, 2.2, '?'); if (q) return [q, C(WHITE, 15)];
+    return dLit(0.45 + (y < -2.5 ? 0.25 : 0) - x * 0.03, WARM, 6, 11); // cardboard
+  }),
   // ---- drinks
   latte: (it, f) => sculpt(30, 14, (x, y) => { // a glass mug: espresso under a white head, a handle
     const handle = dEll(x, y, 4.6, 0.6, 1.6, 2.6);

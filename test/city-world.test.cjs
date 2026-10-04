@@ -269,7 +269,7 @@ test('construction hoarding, yard fences and shipping containers are solid boxes
   assert.strictEqual(ev(`(() => { const g = solids.filter(s => s.kind === 'container' && s.z0 === 0); let n = 0;
     for (const a_ of g) for (const b of g) if (a_ !== b && Math.abs(rel(a_.x - b.x)) < (a_.c ? a_.hl : a_.hw) + (b.c ? b.hl : b.hw) &&
       Math.abs(rel(a_.y - b.y)) < (a_.c ? a_.hw : a_.hl) + (b.c ? b.hw : b.hl)) n++; return n; })()`), 0);
-  assert.strictEqual(ev('solids.some(s => ROAD[idx(Math.floor(s.x), Math.floor(s.y))])'), false, 'none of it out on the street');
+  assert.strictEqual(ev("solids.some(s => !s.kind.startsWith('stall') && ROAD[idx(Math.floor(s.x), Math.floor(s.y))])"), false, 'none of it out on the street (but the night market, on its sidewalk)');
 });
 
 test('a taxi tipped to step on it pulls out round a slow car when the other lane is clear; an ordinary one sits behind', () => {

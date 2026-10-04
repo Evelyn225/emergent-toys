@@ -258,6 +258,8 @@ test('on a phone: the stick walks, a drag looks round, the buttons work the menu
     assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the bag');
     await page.tap('#touch .main:text-is("Close")');
     assert.strictEqual(await page.evaluate(() => panelOpen()), false, 'Close shuts it');
+    await page.evaluate(() => inv.push({ id: 'cityglobe', uses: 0 })); // (Weather's there with the snow globe on you)
+    await page.waitForTimeout(200);
     await page.tap('#touch [data-more]');
     assert.ok(await page.isVisible('#touch .sheet button:text-is("Weather")'), 'the More sheet');
     const w0 = await page.evaluate(() => weather);
@@ -450,7 +452,7 @@ test('toilets: in a bar it goes in the bowl and you flush; on a diner floor you 
   assert.deepStrictEqual(await page.evaluate(() => [!!pee, puddles.filter(q => q.at === placeKey()).length, msgText]), [false, 0, 'You flush. Very civilised.']);
   // the diner, out in the middle of the floor
   await page.evaluate(() => { enterRoom('diner', { word: 'DINER', ret: [px, py, a] }, [8.5, 5, Math.PI / 2]); needs.bladder = 50; });
-  await page.keyboard.press('KeyP'); await page.waitForTimeout(1500);
+  await page.keyboard.press('KeyP'); await page.waitForFunction(() => mode === 'walk', null, { timeout: 15000 }); // (game time: slower than the clock on a busy machine)
   assert.deepStrictEqual(await page.evaluate(() => [mode, !!pee]), ['walk', false]);
   assert.match(await page.evaluate(() => msgText), /thrown out/);
   // the street: nobody about, nothing happens; a cop right there, you're wanted
@@ -459,7 +461,7 @@ test('toilets: in a bar it goes in the bowl and you flush; on a diner floor you 
   assert.deepStrictEqual(await page.evaluate(() => [!!pee, wanted.stars]), [true, 0]);
   await page.keyboard.press('KeyP');
   await page.evaluate(() => { footCops[0].x = px + 0.3; footCops[0].y = py; footCops[0].chase = false; });
-  await page.keyboard.press('KeyP'); await page.waitForTimeout(1500);
+  await page.keyboard.press('KeyP'); await page.waitForFunction(() => wanted.stars > 0, null, { timeout: 15000 });
   assert.deepStrictEqual(await page.evaluate(() => [wanted.stars, wanted.crime]), [1, 'public urination']);
 }));
 
@@ -507,8 +509,7 @@ test('the duck pond on the pier: $1 at the booth, hook a duck, its tickets count
   assert.strictEqual(await page.evaluate(() => promptText()), 'E: play DUCK POND ($1.00 a go)');
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, money]), ['ducks', 9]);
-  const want = await page.evaluate(() => { const g = game.g; for (let k = 0; k < 2000 && !g.under(); k++) g.step(1 / 60, {}); return g.under().worth; });
-  await page.keyboard.press('Space');
+  const want = await page.evaluate(() => { const g = game.g; for (let k = 0; k < 2000 && !g.under(); k++) g.step(1 / 60, {}); const w = g.under().worth; g.step(1 / 60, { actP: 1 }); return w; }); // (dipped the moment one's under it)
   await page.waitForFunction(() => game.g.score > 0, null, { timeout: 10000 });
   assert.strictEqual(await page.evaluate(() => game.g.score), want);
 }));
@@ -518,10 +519,31 @@ test('balloon darts on the pier: $1 at the booth, a dart on a balloon pops it', 
   assert.strictEqual(await page.evaluate(() => promptText()), 'E: play BALLOON DARTS ($1.00 a go)');
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, money]), ['darts', 9]);
-  await page.evaluate(() => { const g = game.g; for (let k = 0; k < 3000 && !g.hitAt(...g.aim().map(Math.round)); k++) g.step(1 / 60, {}); });
-  await page.keyboard.press('Space');
+  await page.evaluate(() => { const g = game.g; for (let k = 0; k < 3000 && !g.hitAt(...g.aim().map(Math.round)); k++) g.step(1 / 60, {}); g.step(1 / 60, { actP: 1 }); }); // (thrown the moment it's on one: the reticle won't wait)
   await page.waitForFunction(() => game.g.score > 0 || game.g.balloons.some(b => b.popped), null, { timeout: 10000 });
   assert.ok(await page.evaluate(() => game.g.balloons.filter(b => b.popped).length === 1 && game.g.score >= 3));
+}));
+
+test('the night market: tarped by day, a stall to buy from at night; T and Y need the watch and the globe', () => withPage(async page => {
+  await page.evaluate(() => { tod = 13; money = 500; inv.length = 0; const s = STALLS[2]; devAt(s.at[0], s.at[1], Math.PI / 2); });
+  assert.match(await page.evaluate(() => promptText()), /under a tarp/);
+  await page.keyboard.down('KeyT'); await page.waitForTimeout(500); await page.keyboard.up('KeyT');
+  assert.ok(await page.evaluate(() => tod < 13.2), 'no watch, no hurrying');
+  assert.match(await page.evaluate(() => msgText), /pocket watch/);
+  await page.keyboard.press('KeyY');
+  assert.match(await page.evaluate(() => msgText), /night market/);
+  await page.evaluate(() => { tod = 21; });
+  assert.strictEqual(await page.evaluate(() => promptText()), 'E: CURIOS stall');
+  await page.keyboard.press('KeyE');
+  await page.keyboard.press('Digit2'); // the snow globe
+  assert.deepStrictEqual(await page.evaluate(() => [inv.some(it => it.id === 'cityglobe'), money]), [true, 150]);
+  await page.keyboard.press('Escape');
+  const w0 = await page.evaluate(() => weather);
+  await page.keyboard.press('KeyY');
+  assert.notStrictEqual(await page.evaluate(() => weather), w0, 'the globe changes the sky');
+  await page.evaluate(() => { inv.push({ id: 'pocketwatch', uses: 0 }); tod = 12; });
+  await page.keyboard.down('KeyT'); await page.waitForTimeout(1500); await page.keyboard.up('KeyT');
+  assert.ok(await page.evaluate(() => tod > 12.5), 'the watch hurries the hours'); // (without it, 1.5s is 0.075h)
 }));
 
 test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {

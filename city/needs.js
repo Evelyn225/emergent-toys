@@ -16,7 +16,7 @@ const wetting = (d, w) => d.booze ? w * 2.4 : w * 0.5; // bladder from `w` point
 // how much an item fills you up, all its bites or sips together: [food, drink]. Dearer food is more of a meal;
 // water is the best thing for thirst, booze the worst; a milkshake or a bowl of soup counts for both
 const SOUPY = { ramen: 1, pho: 1, noodlebox: 0.5, greencurry: 0.5, icecream: 0.5, apple: 0.5 };
-const FILLING = { milkshake: 1, smoothie: 1, lemonade: 0.3 };
+const FILLING = { milkshake: 1, smoothie: 1, lemonade: 0.3, bubbletea: 0.5 };
 function nourish(id, d) {
   if (d.kind === 'food') return [clamp(10 + d.price * 5, 15, 70), (SOUPY[id] || 0) * 30];
   if (d.kind !== 'drink') return [0, 0];

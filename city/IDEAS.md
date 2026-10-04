@@ -1,4 +1,4 @@
-# ASCII City: ideas for later
+# Glyphport: ideas for later
 
 A wishlist of districts and buildings to look over. Nothing here is promised; pick what sounds fun.
 Things get crossed off (deleted) once they're in the game.

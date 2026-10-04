@@ -10,6 +10,7 @@ const K = {}; // keys held, by KeyboardEvent.code
 const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
 let paused = false;
+let devKeys = false; // the dev tools' switch: T and Y work without the watch and the globe
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
 const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true };
@@ -54,7 +55,7 @@ const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'clear' 
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
 function env(dt) {
-  const lapse = K.KeyT ? 40 : 1; // 20s per game hour; hold T to fast-forward (clouds race along too)
+  const lapse = K.KeyT && timeKeys() ? 40 : 1; // 20s per game hour; hold T to fast-forward with the pocket watch on you (clouds race along too)
   const t0 = tod;
   tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
   if (tod < t0 - 12) dayNum++; // midnight (a real wrap round, not a tiny step back)
