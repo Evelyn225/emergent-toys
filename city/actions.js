@@ -136,6 +136,7 @@ function interact() {
     if (atBroker()) return startGame('market', 'market');
     if (nearVip()) { if (!pay(LAPDANCE)) return say(`"Private dances are ${fmt$(LAPDANCE)}, sweetie."`, 3); startGame('lapdance', 'show'); return say('The host pulls the curtain back. You sit. Hands on your knees.', 3); }
     if (nearStage()) return tipDancer();
+    if (nearClubCigs()) return openShop(VENDING.CIGARETTES.title, VENDING.CIGARETTES.stock);
     const cs = casinoSpot(); // a seat at a table, or a slot machine
     if (cs) return startGame(cs, 'casino');
     if (aviaryKeeper()) { if (T - seedT < 12) return say('You\'ve still got seed. Hold still.', 2); if (!pay(1)) return say('"A dollar a cup."'); seedT = T; return say('You hold out a cup of seed. A dozen birds land on your arms at once.', 4); }

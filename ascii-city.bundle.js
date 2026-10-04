@@ -7375,7 +7375,7 @@ function stepExchange() {
 // blinking, GIRLS GIRLS GIRLS and LIVE DANCERS, a neon martini, a velvet rope and a bouncer who won't let you in with
 // the police on your tail. $20 at the door, 8pm to 4am. Inside: purple and pink, a stage with three poles and a
 // dancer on each (in sequins, spinning), a bar, and the VIP booth at the back where $40 buys a private dance: very
-// much like a certain game's, except the dancer is five characters tall.
+// much like a certain game's, except the dancer is six characters, all in.
 const CLUB_FEE = 20, LAPDANCE = 40;
 function clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const L = fog * amb * (side ? 10 : 15), glow = Math.max(night, overcast * 0.5, 0.3), sgn = Math.sign(u * wc) || 1;
@@ -7437,7 +7437,7 @@ function clubWall(i, su, uStep, z, d, mx, my, L) {
 const DANCER_FRAMES = [ // round the pole: she swings from one side of it to the other
   [' o ', '/|\\', ' |\\', '/ \\'], ['\\o/', ' | ', '/| ', '/ \\'], [' o/', '/| ', ' |\\', '/  '], ['\\o ', ' |\\', '/| ', '  \\']].map(pad);
 const SEQUINS = [MAG, CYAN, YEL, RED];
-ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), light: 0.45, floor: 'carpet', ceil: 'disco', sign: false, wall: clubWall, keeper: [2.2, 6],
+ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75 && Math.abs(y - 9.8) < 0.45, light: 0.45, floor: 'carpet', ceil: 'disco', sign: false, wall: clubWall, keeper: [2.2, 6],
   props: r => {
     const p = [BX(CLUB_W / 2, 2.2, 4.5, 1.3, 0, 0.5, solid(GRAY, { top: '=', bright: 1.4 }))]; // the stage
     p.push(...counterBox(2.2, 6, 0.9, 1.05).map(b => ({ ...b, box: { ...b.box, c: 0, s: 1 } })), standing(1.5, 6, MAG)); // the bar along the left wall, the bartender behind it
@@ -7451,9 +7451,12 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), light: 0.45, floor: 'carp
     p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
     p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
     p.push(standing(13.4, 10.2, GRAY)); // the host by the curtain
+    p.push(SP(1.4, 9.8, 0.8, 1.7, CIG_MACHINE, (c, row, L) => row === 1 ? C(RED, 15) : c === '[' || c === ']' ? C(WHITE, 12) : c === 'o' ? C(YEL, 15) : C(GRAY, Math.max(L, 8)))); // a cigarette machine by the bar
     return p;
   } };
 ROOM_FOR.VELVET = 'stripclub';
+const CIG_MACHINE = pad([' ______ ', '|SMOKES|', '|[][][]|', '|[][][]|', '|[][][]|', '| o __ |', '|__||__|']);
+const nearClubCigs = () => mode === 'room' && room.kind === 'stripclub' && Math.hypot(px - 1.6, py - 9.8) < 1.2;
 const nearVip = () => mode === 'room' && room.kind === 'stripclub' && Math.hypot(px - 13.4, py - 10.2) < 1.4;
 const nearStage = () => mode === 'room' && room.kind === 'stripclub' && py < 5.2 && px > 4 && px < 14;
 function tipDancer() {
@@ -7464,9 +7467,9 @@ function tipDancer() {
 // the private dance: you sit, she dances, you keep your hands to yourself. SPACE tips a dollar (the vibe goes up),
 // the bouncer looks in now and then; about twenty-five seconds and it's over
 const LAP_FRAMES = [
-  [' \\o/ ', '  |  ', ' / \\ '], [' _o_ ', '  |\\ ', ' / > '], ['  o/ ', ' /|  ', ' < \\ '], [' \\o  ', '  |\\ ', '  /\\ '],
-  ['  o  ', ' /|\\ ', '  /| '], [' _o  ', '  |\\_', ' / \\ '], ['  o_ ', '_/|  ', ' / \\ '], [' \\o/ ', '  |  ', '  |\\ ']];
-const LAP_LINES = ['She is doing a lot with five characters.', 'The music is loud. The bass is in your teeth.', 'You look her in the eyes. Both of them. (The two dots.)', 'Hands on your knees. The bouncer is watching.',
+  [' \\o/ ', '  |  ', ' / \\ '], [' _o_ ', '  |  ', ' / > '], ['  o/ ', ' /|  ', ' < \\ '], [' \\o  ', '  |\\ ', '  /\\ '],
+  ['  o  ', ' /|\\ ', '  /| '], [' _o  ', '  |\\_', '  |  '], ['  o_ ', '_/|  ', '  |  '], [' \\o/ ', '  |  ', '  |\\ ']];
+const LAP_LINES = ['She is doing a lot with six characters.', 'The music is loud. The bass is in your teeth.', 'You look her in the eyes. Both of them. (The two dots.)', 'Hands on your knees. The bouncer is watching.',
   'She does a spin. Well, the "o" goes round.', 'This is the most expensive ASCII you have ever seen.', 'Somewhere, a dial-up modem screams.', 'She whispers something. It\'s "do you want another song". It\'s $40.'];
 GAMES.lapdance = () => {
   const W = 32, H = 19, g = { id: 'lapdance', title: 'V I P', W, H, score: 0, over: false, vibe: 0, tips: 0 };
@@ -7488,7 +7491,7 @@ GAMES.lapdance = () => {
     for (let y = 0; y < H; y++) for (const x of [0, 1, W - 2, W - 1]) put(x, y, '|', C(RED, 10 + (y & 1) * 2), C(RED, 2)); // the curtains
     for (let x = 2; x < W - 2; x++) put(x, 15, '=', C(MAG, 6), C(MAG, 1)); // the floor, lit pink
     const f = LAP_FRAMES[Math.floor(t * 2.4) % LAP_FRAMES.length], cx = 16 + Math.round(Math.sin(t * 1.4) * 2);
-    f.forEach((l, r) => text(cx - 1, 12 + r, l, C(SEQUINS[Math.floor(t) & 3], 15))); // her, in sequins: all five characters of her, at the world's own size
+    f.forEach((l, r) => text(cx - 1, 12 + r, l, C(SEQUINS[Math.floor(t) & 3], 15))); // her, in sequins: all six characters of her (every frame, exactly six), at the world's own size
     for (let k = 0; k < Math.min(g.tips, 12); k++) text(4 + (k * 7) % 24, 14, '$', C(GREEN, 12)); // dollars on the floor
     if (peek > 0) { put(2, 6, '[', C(GRAY, 12)); put(3, 6, '=', C(GRAY, 4)); text(2, 7, '"No touching."', C(GRAY, 12)); } // the bouncer, peeking
     text(2, 1, LAP_LINES[line].slice(0, 56), C(WHITE, 14));
@@ -7807,6 +7810,7 @@ function promptText() {
     if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
     if (nearVip()) return `E: a private dance (${fmt$(LAPDANCE)})`;
     if (nearStage()) return 'E: tip the dancer ($5)';
+    if (nearClubCigs()) return 'E: cigarette machine';
     if (atBroker()) return `"Buying or selling?"   E: trade (${marketOpen() ? 'market open' : 'market closed'})`;
     const cs = casinoSpot();
     if (cs) return `E: play ${CASINO_NAMES[cs]} ($5 to $100 a go)`;
@@ -8112,6 +8116,7 @@ function interact() {
     if (atBroker()) return startGame('market', 'market');
     if (nearVip()) { if (!pay(LAPDANCE)) return say(`"Private dances are ${fmt$(LAPDANCE)}, sweetie."`, 3); startGame('lapdance', 'show'); return say('The host pulls the curtain back. You sit. Hands on your knees.', 3); }
     if (nearStage()) return tipDancer();
+    if (nearClubCigs()) return openShop(VENDING.CIGARETTES.title, VENDING.CIGARETTES.stock);
     const cs = casinoSpot(); // a seat at a table, or a slot machine
     if (cs) return startGame(cs, 'casino');
     if (aviaryKeeper()) { if (T - seedT < 12) return say('You\'ve still got seed. Hold still.', 2); if (!pay(1)) return say('"A dollar a cup."'); seedT = T; return say('You hold out a cup of seed. A dozen birds land on your arms at once.', 4); }

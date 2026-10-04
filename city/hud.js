@@ -92,6 +92,7 @@ function promptText() {
     if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
     if (nearVip()) return `E: a private dance (${fmt$(LAPDANCE)})`;
     if (nearStage()) return 'E: tip the dancer ($5)';
+    if (nearClubCigs()) return 'E: cigarette machine';
     if (atBroker()) return `"Buying or selling?"   E: trade (${marketOpen() ? 'market open' : 'market closed'})`;
     const cs = casinoSpot();
     if (cs) return `E: play ${CASINO_NAMES[cs]} ($5 to $100 a go)`;

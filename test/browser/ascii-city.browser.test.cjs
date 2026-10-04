@@ -800,3 +800,13 @@ test('the Velvet Rope: $20 at the door (not with the cops after you), tip the da
   await page.keyboard.press('KeyE');
   assert.strictEqual(await page.evaluate(() => game), null);
 }));
+
+test('the Velvet Rope\'s private dancer is six characters in every frame (the joke has to be accurate); a cigarette machine by the bar', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    const counts = LAP_FRAMES.map(f => f.join('').replace(/ /g, '').length);
+    enterRoom('stripclub', { word: 'VELVET', neon: MAG, ret: [px, py, a], line: '' }, [9, 11, -Math.PI / 2]);
+    px = 1.6; py = 9.8; const prompt = promptText(); interact();
+    return [counts, LAP_LINES.some(l => /six characters/.test(l)), prompt, panelOpen()];
+  });
+  assert.deepStrictEqual(r, [[6, 6, 6, 6, 6, 6, 6, 6], true, 'E: cigarette machine', true]);
+}));
