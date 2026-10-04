@@ -158,7 +158,11 @@ const ROOM_TALK = {
   jade: ['My grandmother swore by jade. Lived to 103.', 'Is it real? The man says it\'s real.', 'For luck. Need all of it this month.'],
   casino: ['Feeling lucky. Felt lucky an hour ago too.', 'House always wins. I\'m here to make it work for it.', 'No clocks, no windows. What day is it?', 'Red. It\'s always red. Except when it isn\'t.', 'One more spin and I\'m going home. That was nine spins ago.'],
   exchange: ['Buy low, sell high. I keep doing the other one.', 'BYTE\'s going to the moon. Or the floor.', 'I\'ve been staring at this ticker for six hours.', 'Diversify, they said. So now I lose money in seven places.'],
-  stripclub: ['I\'m only here for the wings.', 'Don\'t make eye contact with the bouncer.', 'My friend\'s bachelor party. He left an hour ago.', 'Those are six very talented characters.'],
+  stripclub: ['I\'m only here for the wings.', 'Don\'t make eye contact with the bouncer.', 'My friend\'s bachelor party. He left an hour ago.', 'Those are six very talented characters.',
+    'Twelve dollars for a soda. A SODA.', 'She remembered my name. She calls everyone "hon". Still.', 'I\'m an accountant. This is my one night.',
+    'The one on the left pole is putting herself through law school. Tip her.', 'Wife thinks I\'m at bowling. I don\'t even own the shoes.',
+    'Don\'t sit there, that chair\'s been sticky since 2003.', 'The VIP room is forty bucks for a song. A short song.', 'I come for the music. Honestly. Listen to that bass.',
+    'Shh. This is my favourite song.', 'Ran out of singles an hour ago. Just vibing now.'],
 };
 const GENERIC_ROOM_TALK = ['Hi.', 'Oh, hello.', 'Can I help you?', 'Lovely place, isn\'t it.', 'Do I know you?'];
 let lastRoomLine = '';

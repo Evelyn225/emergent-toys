@@ -409,6 +409,19 @@ test('run dry and you pass out: the hospital, a bill, and the nurse patches you 
   assert.deepStrictEqual(await page.evaluate(() => [needs.food, needs.drink, needs.health]), [100, 100, 100]);
 }));
 
+test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
+  await page.evaluate(() => { tod = 23; enterRoom('stripclub', { ...CLUB.sh, ret: [px, py, a], line: '' }, [9, 12.4, -Math.PI / 2]); });
+  const r = await page.evaluate(() => {
+    const seated = room.props.filter(s => s.art === ART.sitterBack), tables = room.props.filter(s => s.box && s.box.z0 > 0.6 && s.box.z1 < 0.8);
+    const p = seated[0]; px = p.x; py = p.y + 0.9; a = -Math.PI / 2; // behind them, facing the stage
+    return [seated.length, tables.length, promptText()];
+  });
+  assert.ok(r[0] >= 1 && r[1] === 5, `punters and tables (${r})`); // (how many come in is random)
+  assert.strictEqual(r[2], 'E: talk');
+  await page.keyboard.press('KeyE');
+  assert.ok(await page.evaluate(() => ROOM_TALK.stripclub.some(l => msgText === `"${l}"`) || /^"/.test(msgText)), 'they say something');
+}));
+
 test('where you were is saved: you come back to the same spot on the street, and inside a shop to its door', () => withPage(async page => {
   const spot = await page.evaluate(() => { gotoShop('BAKERY'); saveGame(); return [px, py, a]; });
   await page.reload(); await page.waitForTimeout(300);

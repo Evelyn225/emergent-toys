@@ -1798,7 +1798,11 @@ const ROOM_TALK = {
   jade: ['My grandmother swore by jade. Lived to 103.', 'Is it real? The man says it\'s real.', 'For luck. Need all of it this month.'],
   casino: ['Feeling lucky. Felt lucky an hour ago too.', 'House always wins. I\'m here to make it work for it.', 'No clocks, no windows. What day is it?', 'Red. It\'s always red. Except when it isn\'t.', 'One more spin and I\'m going home. That was nine spins ago.'],
   exchange: ['Buy low, sell high. I keep doing the other one.', 'BYTE\'s going to the moon. Or the floor.', 'I\'ve been staring at this ticker for six hours.', 'Diversify, they said. So now I lose money in seven places.'],
-  stripclub: ['I\'m only here for the wings.', 'Don\'t make eye contact with the bouncer.', 'My friend\'s bachelor party. He left an hour ago.', 'Those are six very talented characters.'],
+  stripclub: ['I\'m only here for the wings.', 'Don\'t make eye contact with the bouncer.', 'My friend\'s bachelor party. He left an hour ago.', 'Those are six very talented characters.',
+    'Twelve dollars for a soda. A SODA.', 'She remembered my name. She calls everyone "hon". Still.', 'I\'m an accountant. This is my one night.',
+    'The one on the left pole is putting herself through law school. Tip her.', 'Wife thinks I\'m at bowling. I don\'t even own the shoes.',
+    'Don\'t sit there, that chair\'s been sticky since 2003.', 'The VIP room is forty bucks for a song. A short song.', 'I come for the music. Honestly. Listen to that bass.',
+    'Shh. This is my favourite song.', 'Ran out of singles an hour ago. Just vibing now.'],
 };
 const GENERIC_ROOM_TALK = ['Hi.', 'Oh, hello.', 'Can I help you?', 'Lovely place, isn\'t it.', 'Do I know you?'];
 let lastRoomLine = '';
@@ -8006,7 +8010,7 @@ function stepExchange() {
 // ===== the Velvet Rope: a strip club in midtown (world.js puts it up). Outside: a black front, XXX in pink neon
 // blinking, GIRLS GIRLS GIRLS and LIVE DANCERS, a neon martini, a velvet rope and a bouncer who won't let you in with
 // the police on your tail. $20 at the door, 8pm to 4am. Inside: purple and pink, a stage with three poles and a
-// dancer on each (in sequins, spinning), a bar, and the VIP booth at the back where $40 buys a private dance: very
+// dancer on each (in sequins, spinning), a bar, cocktail tables with punters you can talk to, and the VIP booth at the back where $40 buys a private dance: very
 // much like a certain game's, except the dancer is six characters, all in.
 const CLUB_FEE = 20, LAPDANCE = 40;
 function clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
@@ -8041,9 +8045,40 @@ function clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       if (wallText(i, u, uStep, z, d, '* LIVE DANCERS *', sgn * (a0 + len / 2), 1.1, 0.055, 0.06, C(YEL, blink ? 15 : 8), C(GRAY, 0.4))) return;
     }
   }
-  // everywhere else: black glass, purple light leaking round blacked-out windows
-  if (Math.abs(fract(along * 2) - 0.5) < 0.04 || Math.abs(fract(z * 4) - 0.5) < 0.03) return set(i, '|', C(MAG, Math.max(L * 0.4, glow * 5)));
-  return set(i, hash(Math.floor(along * 5), Math.floor(z * 8), 1601) > 0.93 ? '.' : ' ', C(MAG, 8));
+  return clubSide(i, u, uStep, z, d, side, along, len, sgn, a0, L, glow, blink);
+}
+// the other three walls: a pink neon tube round the roofline, black quilted padding with pink portholes, on each
+// end wall a neon pole dancer (she swings round, frame by frame, like the ones inside) over OPEN TIL 4AM, and round
+// the back the stage door under its red bulb
+function clubSide(i, u, uStep, z, d, side, along, len, sgn, a0, L, glow, blink) {
+  if (z > 1.5 && z < 1.56) return set(i, '=', C(NEON[(Math.floor(along * 3 + T * 5)) & 3], Math.max(L, 13 * glow))); // the roofline tube
+  if (z < 0.06) { BG[i] = C(GRAY, 0.6); return set(i, '_', C(GRAY, Math.max(L * 0.5, 3))); } // the kick plate
+  const mid = len / 2;
+  if (!side) { // an end wall: the neon dancer
+    const art = DANCER_FRAMES[Math.floor(T * 1.6) % 4], x0 = mid - 0.45, col = Math.floor((along - x0) / 0.3), row = Math.floor((1.3 - z) / 0.2);
+    if (Math.abs(along - (mid + 0.6)) < Math.max(0.018, uStep * 0.5) && z > 0.42 && z < 1.4) { BG[i] = C(MAG, 1 + glow); return set(i, '|', C(WHITE, Math.max(L, 14 * glow))); } // the pole
+    if (col >= 0 && col < 3 && row >= 0 && row < 4 && art[row][col] !== ' ') { // each character of her a bent neon tube, one cell thick
+      const ch = art[row][col], lx = (along - x0) / 0.3 - col, lz = (1.3 - z) / 0.2 - row, w = Math.max(0.09, uStep / 0.3 * 0.6);
+      const on = ch === '|' ? Math.abs(lx - 0.5) < w : ch === '/' ? Math.abs(lx - (1 - lz)) < w : ch === '\\' ? Math.abs(lx - lz) < w
+        : ch === 'o' ? Math.abs(Math.hypot(lx - 0.5, (lz - 0.5) * 0.8) - 0.3) < w : Math.abs(lz - (ch === '_' ? 0.9 : 0.5)) < w;
+      if (on) { BG[i] = C(MAG, 1 + glow * 2); return set(i, ch === 'o' ? 'o' : ch, ch === 'o' ? C(SKIN, 15) : C(blink ? MAG : CYAN, Math.max(L, 15 * glow))); }
+      BG[i] = C(MAG, 0.5 + glow * 0.8); return set(i, ' ', 0); // (the glow round the tubes)
+    }
+    if (wallText(i, u, uStep, z, d, 'OPEN TIL 4AM', sgn * (a0 + mid), 0.3, 0.045, 0.05, C(YEL, blink ? 15 : 9), C(GRAY, 0.4))) return;
+  } else { // round the back: the stage door, a red bulb over it, and a sign asking nicely
+    const dx = along - 1.2;
+    if (z < 0.32 && Math.abs(dx) < 0.22) { BG[i] = C(GRAY, 1.2); return set(i, Math.abs(dx) > 0.19 ? '|' : z > 0.16 && z < 0.18 && dx > 0.1 ? 'o' : fract(z * 12) < 0.15 ? '-' : ' ', C(GRAY, Math.max(L, 6))); }
+    if (Math.abs(dx) < 0.03 && Math.abs(z - 0.37) < 0.025) { BG[i] = C(RED, 2 + glow * 3); return set(i, '@', C(RED, 15)); }
+    if (wallText(i, u, uStep, z, d, 'STAGE DOOR - NO LOITERING', sgn * (a0 + 1.2), 0.45, 0.04, 0.045, C(WHITE, Math.max(L, 8)), C(GRAY, 0.4))) return;
+  }
+  for (const wx of side ? [2.4, 3.4, 4.4] : [0.6, len - 0.6]) { // portholes, pink light behind frosted glass
+    const r = Math.hypot(along - wx, (z - 0.95) * 1.4);
+    if (r < 0.15) { BG[i] = C(MAG, r < 0.12 ? 2 + glow * 3 : 1); return set(i, r > 0.12 ? 'o' : hash(Math.floor(along * 9), Math.floor(z * 9), 1603) > 0.8 ? '.' : ' ', C(MAG, Math.max(L, 12 * glow))); }
+  }
+  // black quilted padding, a stud at every crossing
+  const qa = fract(along * 3), qz = fract(z * 4), cross = Math.abs(qa - qz) < 0.1 ? '\\' : Math.abs(qa + qz - 1) < 0.1 ? '/' : '';
+  if ((qa < 0.08 || qa > 0.92) && (qz < 0.1 || qz > 0.9)) return set(i, '*', C(MAG, Math.max(L * 0.5, glow * 7)));
+  return set(i, cross || ' ', C(MAG, Math.max(L * 0.35, glow * 3.5)));
 }
 // the bouncer and the velvet rope on the sidewalk outside
 const BOUNCER_ART = pad(['  ___ ', ' [=_=]', ' /###\\', '|#####|', ' |###|', ' || ||', ' ## ##']);
@@ -8069,6 +8104,12 @@ function clubWall(i, su, uStep, z, d, mx, my, L) {
 const DANCER_FRAMES = [ // round the pole: she swings from one side of it to the other
   [' o ', '/|\\', ' |\\', '/ \\'], ['\\o/', ' | ', '/| ', '/ \\'], [' o/', '/| ', ' |\\', '/  '], ['\\o ', ' |\\', '/| ', '  \\']].map(pad);
 const SEQUINS = [MAG, CYAN, YEL, RED];
+// buttoned velvet, for the chair backs: a stud in every diamond
+const tufted = (i, t, L) => {
+  BG[i] = C(MAG, (1.2 + L * 0.3) * shadeFace(HIT.face));
+  const a_ = fract(HIT.u * 9), b_ = fract(HIT.w * 9);
+  return set(i, a_ < 0.25 && b_ < 0.3 ? '*' : Math.abs(a_ - b_) < 0.12 ? '\\' : Math.abs(a_ + b_ - 1) < 0.12 ? '/' : ' ', C(MAG, L * 1.3)), true;
+};
 ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75 && Math.abs(y - 9.8) < 0.45, light: 0.45, floor: 'carpet', ceil: 'disco', sign: false, wall: clubWall, keeper: [2.2, 6],
   props: r => {
     const p = [BX(CLUB_W / 2, 2.2, 4.5, 1.3, 0, 0.5, solid(GRAY, { top: '=', bright: 1.4 }))]; // the stage
@@ -8079,7 +8120,18 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
       p.push({ ...SP(x, 2.05, 0.7, 1.7, DANCER_FRAMES[0], (c, row, L) => row === 0 && c === 'o' ? C(SKIN, 15) : C(col, 15), 0.5),
         tick: s => { const f = Math.floor(T * 1.6 + k * 1.3) % 4; s.art = DANCER_FRAMES[f]; s.x = x + Math.sin(T * 1.2 + k) * 0.28; s.y = 2.05 + Math.cos(T * 1.2 + k) * 0.12; } }); // (swinging round the pole)
     }
-    for (const [x, y] of [[6, 6], [9, 6.3], [12, 6], [7.5, 9], [10.5, 9]]) { if (chance(0.7)) p.push(sitting(x, y, shirt(), 0.45, true)); } // the punters, all eyes front
+    // little round cocktail tables, a candle on each, two velvet chairs apiece facing the stage; the punters in them, all eyes front
+    const busy = 0.45 + 0.4 * barCrowd();
+    for (const [x, y] of [[6, 6.4], [9.5, 6.4], [13, 6.4], [7.7, 9.2], [11.2, 9.2]]) {
+      p.push(BX(x, y, 0.32, 0.32, 0.68, 0.74, solid(GRAY, { top: '.', trim: 0.05, bright: 1.2 })), BX(x, y, 0.05, 0.05, 0, 0.68, solid(GRAY)));
+      p.push({ ...SP(x, y, 0.12, 0.14, ['*'], () => C(fract(T * 3 + x) < 0.85 ? YEL : ORANGE, 15), 0.74) }); // (the candle flickers)
+      for (const cx of [x - 0.42, x + 0.42]) {
+        const cy = y + 0.55;
+        p.push(BX(cx, cy, 0.22, 0.22, 0, 0.42, solid(MAG, { top: '=', bright: 1.6 })), BX(cx, cy + 0.2, 0.22, 0.04, 0.42, 0.72, tufted)); // (a low back: you can see who's in it)
+        if (chance(busy)) p.push(sitting(cx, cy - 0.04, shirt(), 0.42, true));
+      }
+    }
+    for (const y of [5.2, 6.8]) { p.push(SP(3.05, y, 0.4, 0.75, ART.stool, wood)); if (chance(busy)) p.push(sitting(3.05, y, shirt(), 0.45, true)); } // stools at the bar
     p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
     p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
     p.push(standing(13.4, 10.2, GRAY)); // the host by the curtain
