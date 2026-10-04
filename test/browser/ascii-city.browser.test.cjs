@@ -546,6 +546,7 @@ test('mahjong at the tea house: the buy-in goes in the pot, walking away loses i
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, game.kind, money, game.g.hands[0].length]), ['mahjong', 'table', 95, 14]);
   await page.keyboard.press('Space'); // throw a tile
+  await page.waitForTimeout(150); // (the game takes the key on its next frame)
   assert.strictEqual(await page.evaluate(() => game.g.hands[0].length), 13);
   await page.keyboard.press('KeyE'); // get up mid-hand
   assert.deepStrictEqual(await page.evaluate(() => [game, money]), [null, 95], 'the stake stays in the pot');
