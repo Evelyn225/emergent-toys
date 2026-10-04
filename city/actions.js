@@ -169,6 +169,7 @@ function interact() {
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'boat') return useGardens();
+  if (mode === 'sea') return useMarina();
   if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
@@ -177,7 +178,7 @@ function interact() {
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
-  if (useGardens()) return;
+  if (useGardens() || useMarina()) return;
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;

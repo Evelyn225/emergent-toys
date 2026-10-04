@@ -16,7 +16,8 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  crash: { stars: 1, name: 'reckless driving' }, redlight: { stars: 1, name: 'running a red light' },
                  pickpocket: { stars: 1, name: 'pickpocketing' }, shoplift: { stars: 1, name: 'shoplifting' },
                  burglary: { stars: 2, name: 'breaking and entering' }, graffiti: { stars: 1, name: 'vandalism' },
-                 alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' } };
+                 alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
+                 boattheft: { stars: 1, name: 'boat theft' } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -86,8 +87,8 @@ const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y,
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
   const copSees_ = copSees(x, y);
   if (copSees_) { addWanted(kind, x, y, true); return 'cop'; }
-  const civSees = people.some(p => !p.hidden && near(p.x, p.y, x, y) < CIV_SIGHT && lineOfSight(p.x, p.y, x, y)) || kind === 'steal' || kind === 'shoplift';
-  if (civSees) { reports.push({ t: T + REPORT_DELAY, x, y, kind }); return 'reported'; } // (a carjacked driver, or a clerk, always calls it in)
+  const civSees = people.some(p => !p.hidden && near(p.x, p.y, x, y) < CIV_SIGHT && lineOfSight(p.x, p.y, x, y)) || kind === 'steal' || kind === 'shoplift' || kind === 'boattheft';
+  if (civSees) { reports.push({ t: T + REPORT_DELAY, x, y, kind }); return 'reported'; } // (a carjacked driver, a clerk, or a boat's owner always calls it in)
   return '';
 }
 // a red light only counts with a cop right there

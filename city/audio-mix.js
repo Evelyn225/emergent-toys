@@ -73,7 +73,7 @@ function audioMix(s) {
   }
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
-  out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : 0;
+  out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
   for (const k in out) out[k] = clamp(out[k], 0, 1);
   return out;
 }

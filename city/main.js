@@ -33,7 +33,7 @@ onkeydown = e => {
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
-  if (e.code === 'KeyV' && me) third = !third;
+  if (e.code === 'KeyV' && (me || mode === 'sea')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
   const n = /^Digit([1-6])$/.exec(e.code);
@@ -48,7 +48,7 @@ const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 function turnBy(mx, my) {
   if (paused || game) return;
   const s = settings.sensitivity;
-  if (mode === 'taxi' || mode === 'fair' && fairRide.kind === 'carousel') look += mx * 0.003 * s; else if (mode !== 'drive') a += mx * 0.003 * s;
+  if (mode === 'taxi' || mode === 'fair' && fairRide.kind === 'carousel') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea') a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
 onmousemove = e => { if (document.pointerLockElement) turnBy(e.movementX, e.movementY); };
@@ -122,6 +122,7 @@ function loop(t) {
   } else if (mode === 'drive') drive(dt);
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
+  else if (mode === 'sea') stepSea(dt);
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
@@ -160,9 +161,9 @@ function loop(t) {
     room.track += dt * 2.5 * clamp(room.rideT / 2, 0, 1) * clamp((9 - room.rideT) / 2, 0, 1);
     if (room.rideT <= 0) arriveAt(room.dest);
   }
-  chaseOn = !!me && third;
-  if (chaseOn) { // render from behind the car, then put the real position back
-    const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
+  chaseOn = (!!me || mode === 'sea') && third;
+  if (chaseOn || mode === 'sea') { // render from behind the car (or boat, or at its helm), then put the real position back
+    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { // a drink or two and the world sways; more and you're seeing double
     camYaw = a; const wob = Math.min(1.3, fx.booze);

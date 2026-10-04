@@ -7,10 +7,8 @@ function forNear(b, fn) {
 const R = (x, y) => [rel(x - px), rel(y - py)];
 // how much a world direction (ax, ay) lies across our view of a point at (vx, vy): +1 = pointing right on screen
 const across = (ax, ay, vx, vy) => { const n = Math.hypot(vx, vy) || 1; return (ax * -vy + ay * vx) / n; };
-const FERRY = pad(['   _|_ _|_', ' _|o_o_o_o|___', '|o o o o o o o|', '\\_____________/']);
 const PILLAR = pad(['[=]', '|#|', '|#|', '|#|', '|#|', '|#|', '|#|', '/#\\']);
 const EL_STAIRS = pad(['[ EL ]', '    _|', '   _| ', '  _|  ', ' _|   ', '_|    ']);
-const SAIL_R = mirror(ART.sail);
 const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']), DOG_R = mirror(DOG);
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
 // the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
@@ -23,15 +21,8 @@ function citySprites() {
   gardenSprites();
   clubSprites();
   drawPigeons();
-  for (const b of boats) {
-    const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
-    if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    const toRight = across(p.dir, 0, vx, vy) > 0; // which way it's going across the screen: the sail fills the other way
-    const lit = (c, L) => C(YEL, Math.max(L, night * 15));
-    if (b.kind === 'sail') drawArt(vx, vy, 0, 0.6, 0.9, toRight ? SAIL_R : ART.sail, (c, row, L) => C(row < 4 ? WHITE : BRICK, L));
-    else if (b.kind === 'tug') drawArt(vx, vy, 0, 0.7, 0.45, ART.tug, (c, row, L) => c === 'o' ? lit(c, L) : C(row === 0 ? GRAY : RED, L));
-    else drawArt(vx, vy, 0, 1.6, 0.6, FERRY, (c, row, L) => c === 'o' ? lit(c, L) : C(row < 2 ? WHITE : row === 2 ? BLUE : GRAY, L));
-  }
+  bayBoats(); // (marina.js: real 3D boats)
+  marinaSprites();
   forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8)) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
   for (const v of vendors) {
     const t = v.type, frame = t.art[(T * 2 | 0) & 1];

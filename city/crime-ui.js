@@ -170,7 +170,7 @@ function crimeKey(code) {
     const p = pickTarget();
     if (p) return pickpocket(p);
   }
-  if (code === 'KeyL') { const sh = lockTarget(); if (sh) return pickLock(sh); }
+  if (code === 'KeyL') { if (stealBoat()) return; const sh = lockTarget(); if (sh) return pickLock(sh); }
 }
 // what G / L would do here, for the prompt line
 function crimePrompt() {

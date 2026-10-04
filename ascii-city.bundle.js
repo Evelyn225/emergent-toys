@@ -149,8 +149,6 @@ const ART = {
   keeper: pad(['  ___', ' (o o)', '  \\-/', ' /|#|\\', '/ |#| \\', '  |_|', '  / \\', ' /   \\']),
   sitter: pad(['  ___', ' (o o)', '  \\-/', ' /|#|\\', " '---'"]),
   sitterBack: pad(['  ___', ' (   )', '  | |', ' /|#|\\', " '---'"]), // seen from behind
-  sail: pad(['    |\\', '    | \\', '    |  \\', '    |___\\', ' ___|_____', ' \\_______/']),
-  tug: pad(['    _|_', ' __|o_o|__', ' \\_o__o__/']),
   stool: pad([' ___', '(___)', '  |', '  |', ' _|_']),
   barTop: pad([' __________________________________', '|  o   o    [$]    o    o     o   o |', '|==================================|', '|                                  |', '|__________________________________|']),
   table: pad([' _________', '|_________|', '    | |', '   _|_|_']),
@@ -432,8 +430,16 @@ const fairBlocked = (x, y, pad = 0) => Math.hypot(rel(x - CAROUSEL.x), rel(y - C
   Math.abs(rel(x - WHEEL.x)) < 0.35 + pad && Math.abs(rel(y - WHEEL.y)) < 0.35 + pad;
 // piers: walkable decks out over the water [x0, y0, x1, y1]; wider docks along the industrial shore
 const PIERS = [[FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1]];
+// the marina, on the industrial shore west of the island: a jetty straight out from the promenade, two long finger
+// piers across it and a T at the end. Boats lie in the slips along the fingers (boats.js says whose they are), and
+// the marina office stands on the promenade at the foot of the jetty
+const MARINA_BX = 13, MARINA = { x: MARINA_BX * 8 + 4, y0: SHORE_S * 8 + 3, fingers: [SHORE_S * 8 + 7, SHORE_S * 8 + 10], end: SHORE_S * 8 + 12.6, reach: 3.3 };
+MARINA.office = { x: MARINA.x - 2.2, y: SHORE_S * 8 + 3.55 };
+for (const p of [[MARINA.x - 0.2, MARINA.y0, MARINA.x + 0.2, MARINA.end], [MARINA.x - 1, MARINA.end - 0.3, MARINA.x + 1, MARINA.end],
+  ...MARINA.fingers.map(fy => [MARINA.x - MARINA.reach, fy - 0.15, MARINA.x + MARINA.reach, fy + 0.15])]) PIERS.push(Object.assign(p, { marina: true }));
+const inMarina = (x, y) => Math.abs(rel(x - MARINA.x)) < MARINA.reach + 1.2 && rel(y - MARINA.y0) > -1.2 && rel(y - MARINA.end) < 0.8;
 for (let bx = 0; bx < NB; bx++) {
-  if (BRIDGE_X.includes(bx) || bx === ISLE_BX) continue;
+  if (BRIDGE_X.includes(bx) || bx === ISLE_BX || bx === MARINA_BX) continue;
   const dock = districtOf(bx, SHORE_S - 1) === 'industrial';
   if (dock && hash(bx, 4, 43) < 0.5) PIERS.push([bx * 8 + 3.6, SHORE_S * 8 + 3, bx * 8 + 6.4, SHORE_S * 8 + 11]);
   else if (hash(bx, 5, 43) < 0.35 && bx !== FAIR_BX) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
@@ -862,7 +868,10 @@ for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k++) if (k % 2 ===
 }
 { const [x, y] = gx2w(GARDEN_SHED.gx, GARDEN_SHED.gy); solidBox(x, y, true, 0.35, 0.25, 0, 0.3, 'shed', 2); }
 // dockside cranes on the industrial piers
-for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && x0 !== FAIR.x0 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
+for (const [x0, y0, x1, y1] of PIERS.filter(p => !p.marina)) if (x1 - x0 > 2 && x0 !== FAIR.x0 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
+// the marina office: a clapboard hut at the foot of the jetty, its sign facing the road; bollards down the fingers
+solidBox(MARINA.office.x, MARINA.office.y, true, 0.55, 0.3, 0, 0.3, 'marina', 0);
+for (const fy of MARINA.fingers) for (const s of [-1, 1]) for (const ox of [-3.1, -1.2, 1.2, 3.1]) solidBox(MARINA.x + ox, fy + s * 0.12, true, 0.025, 0.025, 0, 0.04, 'bollard', 0);
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
 function solidAt(x, y, pad) {
@@ -1744,7 +1753,7 @@ function audioMix(s) {
   }
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
-  out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : 0;
+  out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
   for (const k in out) out[k] = clamp(out[k], 0, 1);
   return out;
 }
@@ -3277,7 +3286,8 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  crash: { stars: 1, name: 'reckless driving' }, redlight: { stars: 1, name: 'running a red light' },
                  pickpocket: { stars: 1, name: 'pickpocketing' }, shoplift: { stars: 1, name: 'shoplifting' },
                  burglary: { stars: 2, name: 'breaking and entering' }, graffiti: { stars: 1, name: 'vandalism' },
-                 alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' } };
+                 alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
+                 boattheft: { stars: 1, name: 'boat theft' } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -3347,8 +3357,8 @@ const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y,
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
   const copSees_ = copSees(x, y);
   if (copSees_) { addWanted(kind, x, y, true); return 'cop'; }
-  const civSees = people.some(p => !p.hidden && near(p.x, p.y, x, y) < CIV_SIGHT && lineOfSight(p.x, p.y, x, y)) || kind === 'steal' || kind === 'shoplift';
-  if (civSees) { reports.push({ t: T + REPORT_DELAY, x, y, kind }); return 'reported'; } // (a carjacked driver, or a clerk, always calls it in)
+  const civSees = people.some(p => !p.hidden && near(p.x, p.y, x, y) < CIV_SIGHT && lineOfSight(p.x, p.y, x, y)) || kind === 'steal' || kind === 'shoplift' || kind === 'boattheft';
+  if (civSees) { reports.push({ t: T + REPORT_DELAY, x, y, kind }); return 'reported'; } // (a carjacked driver, a clerk, or a boat's owner always calls it in)
   return '';
 }
 // a red light only counts with a cop right there
@@ -3508,6 +3518,156 @@ function buyProperty(id, x, y) {
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   owned.homes.push({ cell, kind: id });
   return [true, `You buy ${aOrSome(it.name)} at ${SHOP[cell].word}. Your keys. (H on your map)`];
+}
+// ===== boats of your own: at the marina (world.js lays out its jetty) you can rent one by the trip, buy one outright
+// (it's yours, tied up wherever you leave it, and kept in the save), or hotwire somebody else's (boat theft). Out on
+// the water it's mode 'sea': W throttle, S astern, A/D the helm, E to step off beside a jetty or the sea wall. The
+// whole bay is open to you, round the island and right across to the north shore; the bridges are too low to get
+// under. marina.js draws them (every boat in the bay is a real 3D one) and the marina itself.
+const BOAT_KINDS = { // hl, hw: half length and beam (cells: 10m), fb: how high the deck stands out of the water
+  speedboat: { name: 'speedboat', hl: 0.26, hw: 0.085, fb: 0.045, price: 1500, rent: 30, top: 1.8, acc: 1, turn: 1.7 },
+  sailboat: { name: 'sailboat', hl: 0.4, hw: 0.12, fb: 0.05, price: 3000, rent: 50, top: 0.85, acc: 0.3, turn: 1 },
+  cruiser: { name: 'cabin cruiser', hl: 0.55, hw: 0.16, fb: 0.065, price: 6000, rent: 80, top: 1.25, acc: 0.5, turn: 0.8 },
+  tug: { name: 'tug', hl: 0.35, hw: 0.12, fb: 0.06 }, ferry: { name: 'ferry', hl: 0.8, hw: 0.2, fb: 0.06 }, // (only out in the bay)
+};
+BOAT_KINDS.sail = BOAT_KINDS.sailboat;
+const MARINA_HOURS = [7, 21];
+const marinaOpen = (t = tod) => t >= MARINA_HOURS[0] && t < MARINA_HOURS[1];
+const BOAT_NAMES = ['Sea Biscuit', 'Reel Therapy', 'Knot Today', 'Nauti Buoy', 'Aqua Holic', 'Unsinkable II', 'Second Wind', 'Loan Shark',
+  'Pier Pressure', 'Shore Thing', 'Bad Decision', 'Liquid Asset', 'Dock Holiday', 'Seas the Day', 'Ship Happens', 'Hull Raiser'];
+// the slips: either side of each finger pier, west and east of the jetty, bows pointing out toward open water
+const SLOTS = [];
+for (const fy of MARINA.fingers) for (const side of [-1, 1]) for (const sx of [-1, 1]) SLOTS.push({ x: MARINA.x + sx * 1.9, y: fy + side * 0.38, hx: sx, hy: 0 });
+const SLOT_PLAN = [['speedboat', 'rent', WHITE], ['sailboat', 'rent', BLUE], ['cruiser', 'rent', WHITE], ['speedboat', 'sale', RED],
+  ['sailboat', 'sale', GREEN], ['cruiser', 'sale', BLUE], ['speedboat', 'private', YEL], ['cruiser', 'private', WHITE]];
+// every boat tied up somewhere (or under you): { kind, deal: rent | sale | private | mine | stolen, x, y, hx, hy, col,
+// name, v, slot, hired (a rental out on its trip) }
+const fleet = SLOTS.map((s, k) => ({ kind: SLOT_PLAN[k][0], deal: SLOT_PLAN[k][1], col: SLOT_PLAN[k][2], x: s.x, y: s.y, hx: s.hx, hy: s.hy,
+  name: BOAT_NAMES[(k * 5 + 3) % BOAT_NAMES.length], v: 0, slot: k }));
+let sea = null; // the boat you're at the helm of
+
+// how far (x, y) is from boat b's hull (0 inside it)
+function boatDist(b, x, y) {
+  const k = BOAT_KINDS[b.kind], qx = rel(x - b.x), qy = rel(y - b.y), u = qx * b.hx + qy * b.hy, v = -qx * b.hy + qy * b.hx;
+  return Math.hypot(Math.max(0, Math.abs(u) - k.hl), Math.max(0, Math.abs(v) - k.hw));
+}
+// the boat you're standing beside (the one you're facing, if there are two)
+function nearBoat() {
+  if (mode !== 'walk') return null;
+  let best = null, bd = 0.45;
+  for (const b of fleet) {
+    const d = boatDist(b, px, py) - 0.12 * (Math.cos(a) * rel(b.x - px) + Math.sin(a) * rel(b.y - py)) / (Math.hypot(rel(b.x - px), rel(b.y - py)) || 1);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+const nearOffice = () => mode === 'walk' && Math.abs(rel(px - MARINA.office.x)) < 0.8 && Math.abs(rel(py - MARINA.office.y)) < 0.6;
+const boatTitle = b => `the ${BOAT_KINDS[b.kind].name} '${b.name}'`;
+function marinaPrompt() {
+  if (mode === 'sea') {
+    const k = BOAT_KINDS[sea.kind];
+    if (landingSpot(sea)) return Math.abs(sea.v) > 0.25 ? 'Slow down to step off' : `E: tie up and step off${sea.hired ? ' (the rental goes back)' : ''}`;
+    return typeof TOUCH !== 'undefined' && TOUCH ? 'stick: throttle and helm' : `W throttle | S astern | A/D steer | V: camera   ${Math.round(Math.abs(sea.v) * 19.4)} knots${sea.v > k.top * 0.9 ? ' (flat out)' : ''}`;
+  }
+  const b = nearBoat();
+  if (!b) return nearOffice() ? (marinaOpen() ? 'MARINA: boats by the trip or to buy, down on the jetty.' : 'MARINA: shut. Open 7am till 9pm.') : '';
+  const k = BOAT_KINDS[b.kind], nm = boatTitle(b);
+  if (b.deal === 'mine' || b.deal === 'stolen') return `E: take ${nm} out`;
+  if (b.deal === 'rent') return marinaOpen() ? `E: rent ${nm} (${fmt$(k.rent)} a trip)   L: hotwire it` : 'The rentals are chained up till 7.   L: hotwire one';
+  if (b.deal === 'sale') return `${marinaOpen() ? `E: buy ${nm}` : `FOR SALE: ${nm}`} (${fmt$(k.price)})   L: hotwire it`;
+  return `${nm}: somebody's pride and joy.   L: hotwire it`;
+}
+function useMarina() { // true if E did something
+  if (mode === 'sea') { leaveBoat(); return true; }
+  const b = nearBoat();
+  if (!b) return false;
+  const k = BOAT_KINDS[b.kind];
+  if (b.deal === 'mine' || b.deal === 'stolen') { boardBoat(b); say(b.deal === 'mine' ? `You cast off the '${b.name}'.` : 'Back at the helm of your ill-gotten boat.', 3); return true; }
+  if (b.deal === 'private') { say("Somebody's boat. Not for hire. (L to hotwire it, if you're that kind of person.)", 3); return true; }
+  if (!marinaOpen()) { say('The marina\'s shut. Open 7am till 9pm.', 3); return true; }
+  if (b.deal === 'rent') {
+    if (!pay(k.rent)) { say(`That's ${fmt$(k.rent)} for the trip.`); return true; }
+    b.hired = true; boardBoat(b);
+    say(`"Have her back in one piece." The ${k.name}'s yours till you step off. W to go, A and D to steer.`, 4);
+    return true;
+  }
+  if (!pay(k.price)) { say(`The '${b.name}' is ${fmt$(k.price)}. You have ${fmt$(money)}.`, 3); return true; }
+  b.deal = 'mine';
+  say(`Sold! The '${b.name}' is yours. She stays tied up wherever you leave her. E to take her out.`, 4);
+  return true;
+}
+function stealBoat() { // L beside a boat that isn't yours: true if it did
+  const b = nearBoat();
+  if (!b || b.deal === 'mine' || b.deal === 'stolen') return false;
+  b.deal = 'stolen'; b.hired = false;
+  const seen = crime('boattheft', b.x, b.y);
+  boardBoat(b);
+  say(`You pry the panel off, twist two wires together, and the engine coughs into life.${seen === 'cop' ? ' A whistle blows on the promenade.' : seen ? ' Somebody on the jetty is on the phone.' : ''}`, 4);
+  return true;
+}
+function boardBoat(b) {
+  sea = b; b.v = 0; mode = 'sea'; px = b.x; py = b.y; a = Math.atan2(b.hy, b.hx); camYaw = a; pitch = 0;
+}
+// somewhere to step off: a jetty, the promenade, a beach, right beside the hull
+const dryLand = (x, y) => !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !solidAt(x, y, 0.06);
+function landingSpot(b) {
+  const k = BOAT_KINDS[b.kind];
+  for (const off of [0.2, 0.4]) for (const [u, v] of [[0, k.hw + off], [0, -k.hw - off], [k.hl * 0.5, k.hw + off], [k.hl * 0.5, -k.hw - off],
+    [-k.hl * 0.5, k.hw + off], [-k.hl * 0.5, -k.hw - off], [k.hl + off, 0], [-k.hl - off, 0]]) {
+    const x = b.x + b.hx * u - b.hy * v, y = b.y + b.hy * u + b.hx * v;
+    if (dryLand(x, y)) return [mod(x, N), mod(y, N)];
+  }
+  return null;
+}
+function leaveBoat() {
+  const b = sea;
+  if (Math.abs(b.v) > 0.25) return say('Slow down first.', 2);
+  const at = landingSpot(b);
+  if (!at) return say('Nowhere to step off. Pull up alongside a jetty or the sea wall.', 3);
+  a = Math.atan2(rel(at[1] - b.y), rel(at[0] - b.x)); [px, py] = at; mode = 'walk'; sea = null; b.v = 0;
+  if (b.hired) { // the rental goes back to its slip
+    const s = SLOTS[b.slot], home = inMarina(b.x, b.y);
+    b.hired = false; Object.assign(b, { x: s.x, y: s.y, hx: s.hx, hy: s.hy });
+    say(home ? 'You tie her up and hand the keys back.' : 'You tie her up. Someone from the marina will come and fetch her.', 3);
+  } else say(b.deal === 'mine' ? `You tie up the '${b.name}'. She'll be here when you get back.` : 'You tie her up and walk away whistling.', 3);
+}
+// out on the water: nothing solid at the hull's corners (the shore, a jetty, a bridge, a moored boat)
+const navigable = (x, y) => seaAt(x, y) && isWater(x, y);
+function hullPoints(b, x, y, hx, hy) {
+  const k = BOAT_KINDS[b.kind];
+  return [[k.hl, 0], [k.hl * 0.6, k.hw], [k.hl * 0.6, -k.hw], [0, k.hw], [0, -k.hw], [-k.hl, k.hw], [-k.hl, -k.hw]].map(([u, v]) => [x + hx * u - hy * v, y + hy * u + hx * v]);
+}
+const waterClear = (b, x, y, hx, hy) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
+function trafficClear(b, x, y, hx, hy, t = T) { // the boats going round the bay
+  const pts = hullPoints(b, x, y, hx, hy);
+  return !boats.some(o => { const p = boatAt(o, t), r = BOAT_HL[o.kind] * 0.85; return Math.abs(rel(p.x - x)) < 3 && pts.some(([qx, qy]) => Math.hypot(rel(p.x - qx), rel(p.y - qy)) < r); });
+}
+function stepSea(dt) { // throttle and helm; the shore and everything else in the water stops you
+  const b = sea, k = BOAT_KINDS[b.kind];
+  const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  if (f > 0) b.v += k.acc * (b.v < 0 ? 2 : 1) * dt; else if (f < 0) b.v -= k.acc * (b.v > 0 ? 1.5 : 0.6) * dt; else b.v *= 1 - 0.35 * dt; // no brakes: she coasts
+  b.v = clamp(b.v, -k.top * 0.3, k.top);
+  a += s * dt * k.turn * clamp(Math.abs(b.v) / 0.35, 0.25, 1) * (b.v < -0.02 ? -1 : 1); // (the rudder needs water moving past it)
+  const hx = Math.cos(a), hy = Math.sin(a), nx = b.x + hx * b.v * dt, ny = b.y + hy * b.v * dt;
+  const ok = waterClear(b, nx, ny, hx, hy) && (trafficClear(b, nx, ny, hx, hy) || !trafficClear(b, b.x, b.y, b.hx, b.hy)); // (something ran into you: you can get away)
+  if (ok) { b.x = mod(nx, N); b.y = mod(ny, N); b.hx = hx; b.hy = hy; }
+  else {
+    const sp = Math.abs(b.v);
+    if (sp > 0.7) { say(pick(['*THUNK*', '*CRUNCH* That\'ll buff out.', '*BONK*']), 1.5); if (typeof actx !== 'undefined' && actx) playClip('crash', clamp(0.2 + sp * 0.2, 0.2, 0.6)); }
+    if (waterClear(b, b.x, b.y, hx, hy)) { b.hx = hx; b.hy = hy; } else a = Math.atan2(b.hy, b.hx);
+    b.v = -b.v * 0.25;
+  }
+  px = b.x; py = b.y;
+}
+// saving: the boats you own (where they're tied up). One bought from the marina leaves its slip empty
+const savedBoats = () => fleet.filter(b => b.deal === 'mine').map(({ kind, x, y, hx, hy, col, name }) => ({ kind, x, y, hx, hy, col, name }));
+function loadBoats(list) {
+  for (const s of list || []) {
+    if (!BOAT_KINDS[s.kind] || !BOAT_KINDS[s.kind].price) continue;
+    const sold = fleet.findIndex(b => b.deal === 'sale' && b.kind === s.kind);
+    if (sold >= 0) fleet.splice(sold, 1);
+    fleet.push({ kind: s.kind, deal: 'mine', x: s.x, y: s.y, hx: s.hx, hy: s.hy, col: s.col ?? WHITE, name: s.name || 'Boaty', v: 0, slot: -1 });
+  }
 }
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
@@ -4485,10 +4645,8 @@ function forNear(b, fn) {
 const R = (x, y) => [rel(x - px), rel(y - py)];
 // how much a world direction (ax, ay) lies across our view of a point at (vx, vy): +1 = pointing right on screen
 const across = (ax, ay, vx, vy) => { const n = Math.hypot(vx, vy) || 1; return (ax * -vy + ay * vx) / n; };
-const FERRY = pad(['   _|_ _|_', ' _|o_o_o_o|___', '|o o o o o o o|', '\\_____________/']);
 const PILLAR = pad(['[=]', '|#|', '|#|', '|#|', '|#|', '|#|', '|#|', '/#\\']);
 const EL_STAIRS = pad(['[ EL ]', '    _|', '   _| ', '  _|  ', ' _|   ', '_|    ']);
-const SAIL_R = mirror(ART.sail);
 const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']), DOG_R = mirror(DOG);
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
 // the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
@@ -4501,15 +4659,8 @@ function citySprites() {
   gardenSprites();
   clubSprites();
   drawPigeons();
-  for (const b of boats) {
-    const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
-    if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    const toRight = across(p.dir, 0, vx, vy) > 0; // which way it's going across the screen: the sail fills the other way
-    const lit = (c, L) => C(YEL, Math.max(L, night * 15));
-    if (b.kind === 'sail') drawArt(vx, vy, 0, 0.6, 0.9, toRight ? SAIL_R : ART.sail, (c, row, L) => C(row < 4 ? WHITE : BRICK, L));
-    else if (b.kind === 'tug') drawArt(vx, vy, 0, 0.7, 0.45, ART.tug, (c, row, L) => c === 'o' ? lit(c, L) : C(row === 0 ? GRAY : RED, L));
-    else drawArt(vx, vy, 0, 1.6, 0.6, FERRY, (c, row, L) => c === 'o' ? lit(c, L) : C(row < 2 ? WHITE : row === 2 ? BLUE : GRAY, L));
-  }
+  bayBoats(); // (marina.js: real 3D boats)
+  marinaSprites();
   forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8)) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
   for (const v of vendors) {
     const t = v.type, frame = t.art[(T * 2 | 0) & 1];
@@ -7503,6 +7654,167 @@ GAMES.lapdance = () => {
   g.reward = () => 0;
   return g;
 };
+// ===== boats, drawn as real 3D boxes (drawBox) so they look right from any side and you can sail right up to them:
+// a hull with a stepped bow and a waterline, and on top whatever that kind of boat carries (a windscreen and an
+// outboard, a cabin and a mast with two sails, a wheelhouse and funnel, two decks of windows). Used for the boats going
+// round the bay, the ones in the marina, and the one you're at the helm of. Also: the marina office and its board.
+// the letter of a word painted across a face at q (0..1 along it) on the row dz from its middle line, or ' ': only
+// where it's big enough on screen to read (see the pier booths' signs)
+function signChar(word, q, dz, t, half) {
+  const n = word.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * half) * n;
+  return Math.abs(dz) < t / projY / 2 && k >= 0 && k < word.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
+}
+const boatBob = (x, y) => Math.sin(T * 1.3 + x * 3 + y * 2) * 0.0035;
+// b: { kind, col }. (vx, vy) relative to you, (hx, hy) the way the bow points. moving: 0..1 how hard it's going (a wake)
+function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
+  const k = BOAT_KINDS[b.kind], { hl, hw, fb } = k, z = boatBob(vx + px, vy + py), lit = Math.max(night, overcast * 0.5);
+  if (Math.hypot(vx, vy) > vis + hl) return;
+  const part = (u, phl, phw, z0, z1, shade, v = 0) => drawBox(boxAt(vx + hx * u - hy * v, vy + hy * u + hx * v, hx, hy, phl, phw, z0 + z, z1 + z), shade);
+  const hullCol = b.col ?? WHITE, deck = b.kind === 'tug' || b.kind === 'ferry' ? GRAY : b.kind === 'sail' || b.kind === 'sailboat' ? BRICK : WHITE;
+  // the hull: sides in its colour, a white rail along the top, a dark band at the waterline with a little wash
+  const hull = (top, stern) => (i, t, L) => {
+    const f = HIT.face, w = HIT.w - z;
+    if (f === 6) return false;
+    if (stern && f === 2 && b.name && w > 0.012 && w < top - 0.007) { // her name across the transom
+      BG[i] = C(hullCol, (1.4 + L * 0.45) * shadeFace(f));
+      const ch = signChar(b.name.toUpperCase(), (HIT.v / hw + 1) / 2, w - top * 0.5, t, hw);
+      return set(i, ch, C(hullCol === WHITE || hullCol === YEL ? BLUE : WHITE, Math.max(L, 9))), true;
+    }
+    if (f === 5) { BG[i] = C(deck, 1.5 + L * 0.35); return set(i, deck === BRICK && fract(HIT.u * 40) < 0.2 ? '=' : ' ', C(BRICK, L * 0.6)), true; }
+    BG[i] = C(hullCol, (1.4 + L * 0.45) * shadeFace(f));
+    if (w < 0.01) { BG[i] = C(b.kind === 'ferry' ? BLUE : GRAY, 1 + L * 0.15); return set(i, moving && hash(Math.floor(HIT.u * 60 - T * 9), 1, 1501) > 0.5 ? '~' : '_', C(WHITE, L * 0.8)), true; }
+    if (w > top - 0.007) return set(i, '=', C(hullCol === WHITE ? GRAY : WHITE, L)), true;
+    if (b.kind === 'tug' && w > 0.015 && w < 0.03 && Math.abs(fract(HIT.u * 9) - 0.5) < 0.18) { BG[i] = C(GRAY, 1); return set(i, 'O', C(GRAY, L * 0.6)), true; } // tyres for fenders
+    if ((b.kind === 'cruiser' || b.kind === 'speedboat') && Math.abs(w - top * 0.55) < 0.005) return set(i, '-', C(hullCol === BLUE ? WHITE : BLUE, L)), true; // a go-faster stripe
+    return set(i, ' ', 0), true;
+  };
+  const mainL = hl * 0.775, mainU = -hl + mainL; // the main hull runs from the stern to 0.55 hl; the bow is two narrower steps
+  part(mainU, mainL, hw, 0, fb, hull(fb, true));
+  part(hl * 0.685, hl * 0.135, hw * 0.7, 0, fb * 1.12, hull(fb * 1.12));
+  part(hl * 0.91, hl * 0.09, hw * 0.36, 0, fb * 1.25, hull(fb * 1.25));
+  if (moving > 0.05) part(-hl - hl * 1.2, hl * 1.2, hw * 3, 0, 0.002, (i, t, L) => { // the wake: a V of foam opening out behind
+    if (HIT.face !== 5) return false;
+    const q = (-hl - HIT.u) / (hl * 2.4), edge = hw * (0.7 + q * 2.2), av = Math.abs(HIT.v);
+    const n = hash(Math.floor(HIT.u * 50 - T * 6), Math.floor(HIT.v * 50), 1502);
+    if (Math.abs(av - edge) < 0.02 + q * 0.02 && n > q * 0.8) return set(i, '~', C(WHITE, L * (1.3 - q) * moving)), true;
+    if (av < hw * 0.4 * (1 - q) && n > 0.7 + q * 0.3) return set(i, n > 0.8 ? '~' : '-', C(WHITE, L * (1 - q) * moving)), true; // the propeller's wash
+    return false;
+  });
+  const glass = (frame) => (i, t, L) => { // windows: dark by day with a glint, lit up warm after dark
+    const f = HIT.face;
+    if (f === 5 || f === 6) { BG[i] = C(WHITE, 1.5 + L * 0.35); return set(i, ' ', 0), true; }
+    if (frame(f)) { BG[i] = C(WHITE, (1.5 + L * 0.4) * shadeFace(f)); return set(i, '|', C(GRAY, L * 0.6)), true; }
+    BG[i] = lit > 0.3 ? C(WARM, 2 + lit * 5) : C(CYAN, 1 + L * 0.12);
+    return set(i, lit > 0.3 ? ' ' : hash(Math.floor(HIT.u * 30), Math.floor(HIT.w * 40), 1503) > 0.92 ? '/' : ' ', C(WHITE, 12)), true;
+  };
+  const cabin = (wy0, wy1, ports) => (i, t, L) => { // white sides, a band of windows (or round portholes)
+    const f = HIT.face, w = HIT.w - z;
+    BG[i] = C(WHITE, (1.5 + L * 0.42) * shadeFace(f));
+    if (f === 5) return set(i, fract(HIT.u * 20) < 0.1 ? '-' : ' ', C(GRAY, L * 0.5)), true;
+    if (w > wy0 && w < wy1 && f !== 6) {
+      if (ports) return Math.abs(fract(HIT.u * ports + (f <= 2 ? HIT.v * ports : 0)) - 0.5) < 0.2 ? (set(i, 'o', C(lit > 0.3 ? YEL : CYAN, Math.max(L, lit * 15))), true) : (set(i, ' ', 0), true);
+      BG[i] = lit > 0.3 ? C(WARM, 2 + lit * 5) : C(CYAN, 1 + L * 0.12);
+      return set(i, Math.abs(fract(HIT.u * 12) - 0.5) < 0.06 ? '|' : ' ', C(WHITE, L * 0.7)), true;
+    }
+    return set(i, ' ', 0), true;
+  };
+  const solidCol = (col, top) => (i, t, L) => { BG[i] = C(col, (1.3 + L * 0.4) * shadeFace(HIT.face)); return set(i, top && HIT.w - z > top ? '=' : ' ', C(GRAY, L * 0.3)), true; };
+  if (b.kind === 'speedboat') {
+    part(hl * 0.12, 0.012, hw * 0.85, fb, fb + 0.035, glass(f => f <= 2 ? false : true)); // the windscreen
+    part(-hl * 0.25, hl * 0.25, hw * 0.65, fb, fb + 0.018, (i, t, L) => { BG[i] = C(hullCol === RED ? WHITE : RED, (1.4 + L * 0.4) * shadeFace(HIT.face)); return set(i, HIT.face === 5 && fract(HIT.u * 25) < 0.2 ? '-' : ' ', C(WHITE, L * 0.5)), true; }); // the seats
+    part(-hl - 0.012, 0.014, 0.025, 0.005, fb + 0.035, solidCol(GRAY, fb + 0.025)); // the outboard
+  } else if (b.kind === 'sail' || b.kind === 'sailboat') {
+    const mastU = hl * 0.18, mastTop = fb + 0.95;
+    part(-hl * 0.05, hl * 0.32, hw * 0.65, fb, fb + 0.04, cabin(fb + 0.012, fb + 0.03, 10));
+    part(mastU, 0.006, 0.006, fb + 0.04, mastTop, (i, t, L) => (HIT.w - z > mastTop - 0.02 && lit > 0.3 ? set(i, '*', C(WHITE, 15)) : set(i, '|', C(GRAY, L * 1.1)), true)); // the mast, a white light on top at night
+    const sail = (u0, u1, z0, z1, aft) => { // a triangle: the mainsail tapers back from the mast, the jib forward to the bow
+      const half = (u1 - u0) / 2;
+      part((u0 + u1) / 2, half, 0.004, z0, z1, (i, t, L) => { // (HIT.u is from the box's middle)
+        const h = (HIT.w - z - z0) / (z1 - z0), q = aft ? (half - HIT.u) / (2 * half) : (HIT.u + half) / (2 * half);
+        if (q > 1 - h) return false; // outside the triangle: see-through
+        BG[i] = C(WHITE, (2 + L * 0.5) * (HIT.face === 3 ? 1 : 0.85));
+        return set(i, Math.abs(fract(h * 7) - 0.5) < 0.06 ? '-' : ' ', C(GRAY, L * 0.5)), true;
+      });
+    };
+    sail(mastU - hl * 0.85, mastU - 0.008, fb + 0.07, mastTop - 0.04, true);
+    sail(mastU + 0.008, hl * 0.97, fb + 0.03, mastTop - 0.1, false);
+    part(mastU - hl * 0.42, hl * 0.43, 0.006, fb + 0.055, fb + 0.065, solidCol(GRAY)); // the boom
+  } else if (b.kind === 'cruiser') {
+    part(-hl * 0.05, hl * 0.5, hw * 0.82, fb, fb + 0.07, cabin(fb + 0.03, fb + 0.058, 0));
+    part(hl * 0.42, 0.015, hw * 0.8, fb + 0.01, fb + 0.065, glass(f => f >= 3)); // the windscreen at the front of the cabin
+    part(-hl * 0.18, hl * 0.22, hw * 0.65, fb + 0.07, fb + 0.1, glass(f => f >= 3 && Math.abs(fract(HIT.u * 8) - 0.5) < 0.1)); // the flybridge
+  } else if (b.kind === 'tug') {
+    part(hl * 0.1, 0.09, hw * 0.7, fb, fb + 0.1, cabin(fb + 0.06, fb + 0.09, 0)); // the wheelhouse
+    part(-hl * 0.3, 0.028, 0.028, fb, fb + 0.17, (i, t, L) => { BG[i] = HIT.w - z > fb + 0.15 ? C(GRAY, 0.6) : C(YEL, (1.6 + L * 0.4) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }); // the funnel
+  } else if (b.kind === 'ferry') {
+    part(-hl * 0.05, hl * 0.8, hw * 0.92, fb, fb + 0.07, cabin(fb + 0.025, fb + 0.05, 14));
+    part(-hl * 0.1, hl * 0.55, hw * 0.8, fb + 0.07, fb + 0.13, cabin(fb + 0.09, fb + 0.115, 14));
+    part(hl * 0.38, 0.07, hw * 0.85, fb + 0.13, fb + 0.17, cabin(fb + 0.14, fb + 0.165, 0)); // the bridge
+    part(-hl * 0.4, 0.045, 0.045, fb + 0.13, fb + 0.26, (i, t, L) => { BG[i] = HIT.w - z > fb + 0.23 ? C(GRAY, 0.6) : C(RED, (1.6 + L * 0.4) * shadeFace(HIT.face)); return set(i, ' ', 0), true; });
+  }
+  if (lit > 0.3) { // navigation lights: red to port, green to starboard
+    for (const [s, col] of [[-1, RED], [1, GREEN]]) {
+      const lx = vx + hx * hl * 0.45 - hy * hw * s, ly = vy + hy * hl * 0.45 + hx * hw * s;
+      drawArt(lx, ly, fb + z + 0.005, 0.02, 0.02, ['o'], () => C(col, 15));
+    }
+  }
+}
+// the boats going round the bay: heading from where they'll be a moment from now
+function bayBoats() {
+  for (const b of boats) {
+    const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
+    if (Math.abs(vx) > vis + 1 || Math.abs(vy) > vis + 1) continue;
+    const q = boatAt(b, T + 0.3), hx = rel(q.x - p.x), hy = rel(q.y - p.y), n = Math.hypot(hx, hy) || 1;
+    if (!b.col) b.col = b.kind === 'tug' ? RED : b.kind === 'ferry' ? WHITE : [WHITE, BLUE, WHITE, GREEN][hash(b.a, b.y, 1504) * 4 | 0];
+    drawBoat3D(b, vx, vy, hx / n, hy / n, 0.6);
+  }
+}
+const SALE_SIGN = pad(['.--------.', '|FOR SALE|', "'--------'"]), RENT_SIGN = pad(['.--------.', '| RENTAL |', "'--------'"]);
+function marinaSprites() {
+  for (const b of fleet) {
+    const [vx, vy] = R(b.x, b.y);
+    if (Math.hypot(vx, vy) > vis + 1) continue;
+    drawBoat3D(b, vx, vy, b.hx, b.hy, b === sea ? clamp(Math.abs(b.v) / 0.8, 0, 1) : 0);
+    if (b !== sea && (b.deal === 'sale' || b.deal === 'rent') && Math.hypot(vx, vy) < 6) { // a little board propped up on the deck
+      const k = BOAT_KINDS[b.kind];
+      drawArt(vx - b.hx * k.hl * 0.5, vy - b.hy * k.hl * 0.5, k.fb + 0.04, 0.14, 0.045, b.deal === 'sale' ? SALE_SIGN : RENT_SIGN, (c, row, L) => row === 1 && /[A-Z]/.test(c) ? C(b.deal === 'sale' ? RED : BLUE, Math.max(L, 10)) : C(WHITE, Math.max(L, 8)));
+    }
+  }
+  const [vx, vy] = R(MARINA.x + 0.7, MARINA.office.y - 0.2); // the board at the foot of the jetty
+  if (Math.hypot(vx, vy) < 8) drawArt(vx, vy, 0, 0.5, 0.42, MARINA_BOARD, (c, row, L) => row === 1 ? C(WHITE, Math.max(L, 11)) : row > 5 ? C(GRAY, L) : /[$0-9]/.test(c) ? C(YEL, Math.max(L, 9)) : C(WHITE, Math.max(L, 7)));
+}
+const MARINA_BOARD = pad(['.---------------.', '| BOATS FOR HIRE |', '| speed     $' + BOAT_KINDS.speedboat.rent + ' |', '| sail      $' + BOAT_KINDS.sailboat.rent + ' |', '| cruiser   $' + BOAT_KINDS.cruiser.rent + ' |',
+  "'---------------'", '       |||', '       |||']);
+// the marina office: white clapboard, a blue roof, MARINA over the door on the side facing the road, windows looking
+// down the jetty
+SOLID_SHADE.marina = o => (i, t, L) => {
+  const f = HIT.face, w = HIT.w, u = HIT.u, glow = Math.max(night, overcast * 0.6);
+  if (f === 5) { BG[i] = C(BLUE, 1.5 + L * 0.3); return set(i, fract(u * 10) < 0.15 ? '|' : ' ', C(BLUE, L * 0.5)), true; }
+  BG[i] = C(WHITE, (1.4 + L * 0.4) * shadeFace(f));
+  if (w > 0.27) { BG[i] = C(BLUE, 1.5 + L * 0.3); return set(i, '=', C(WHITE, L * 0.5)), true; } // the eaves
+  if (f === 4 && w > 0.2) { // MARINA over the door
+    BG[i] = C(BLUE, 2 + glow * 5);
+    return set(i, signChar('MARINA', (1 - u / o.hl) / 2, w - 0.235, t, o.hl), C(WHITE, 15)), true;
+  }
+  if (f === 4 && Math.abs(u) < 0.07 && w < 0.19) { BG[i] = C(BLUE, 1 + L * 0.1); return set(i, Math.abs(u) > 0.06 ? '|' : w > 0.18 ? '-' : ' ', C(WHITE, L)), true; } // the door
+  if ((f === 3 || f === 4) && Math.abs(Math.abs(u) - 0.3) < 0.08 && Math.abs(w - 0.13) < 0.045) { // windows
+    BG[i] = glow > 0.3 ? C(WARM, 2 + glow * 5) : C(CYAN, 1 + L * 0.12);
+    return set(i, Math.abs(Math.abs(u) - 0.3) < 0.006 ? '|' : ' ', C(WHITE, L)), true;
+  }
+  return set(i, fract(w * 30) < 0.18 ? '-' : ' ', C(GRAY, L * 0.5)), true; // the clapboard
+};
+SOLID_SHADE.bollard = () => (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return set(i, HIT.face === 5 ? 'o' : '|', C(GRAY, L)), true; };
+// where the camera goes out on the water: behind and above the boat (easing round), or at the helm
+function seaCam(dt, chase) {
+  const b = sea, k = BOAT_KINDS[b.kind];
+  if (!chase) { const back = k.hl * (b.kind === 'sailboat' ? 0.8 : 0.45); camYaw = a; return [mod(b.x - b.hx * back, N), mod(b.y - b.hy * back, N), a]; }
+  camYaw += (mod(a - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 4);
+  const bx = Math.cos(camYaw), by = Math.sin(camYaw);
+  let back = 0.7 + k.hl * 1.6;
+  while (back > 0.3 && map[idx(Math.floor(b.x - bx * back), Math.floor(b.y - by * back))]) back -= 0.05;
+  return [mod(b.x - bx * back, N), mod(b.y - by * back, N), camYaw];
+}
+const seaEye = () => { const k = BOAT_KINDS[sea.kind]; return chaseOn ? 0.22 + k.hl * 0.25 : k.fb + (sea.kind === 'cruiser' ? 0.25 : 0.16); }; // (the cruiser: up on the flybridge)
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
 function drawArt(rx_, ry_, z, w, h, art, colFn) {
@@ -7611,7 +7923,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
-      : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : chaseOn ? 0.28 : 0.12;
+      : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows + shake() | 0;
@@ -7826,6 +8138,7 @@ function promptText() {
   if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : room && room.kind === 'cathedral' ? 'The bell tower, 80m up.   E: back down the stairs' : 'E: take the stairs down'; }
   if (mode === 'fair') return fairRidePrompt();
   if (mode === 'boat') return gardensPrompt();
+  if (mode === 'sea') return marinaPrompt();
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
     if (elHere()) return 'E: board the train';
@@ -7840,7 +8153,7 @@ function promptText() {
   if (heldItem() && heldItem().id === 'spraypaint' && sprayTarget()) return 'Q: spray a tag (if the police see, it\'s vandalism)';
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
-  const gp = gardensPrompt();
+  const gp = gardensPrompt() || marinaPrompt();
   if (gp) return gp;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   if (nearWalkedDog()) return 'E: pet the dog';
@@ -7942,7 +8255,7 @@ let hudBottom = 0; // where the text block top left ends (px), for the map and t
 function hud() {
   drawHeldBig();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : '';
+  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
     : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
@@ -8149,6 +8462,7 @@ function interact() {
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'boat') return useGardens();
+  if (mode === 'sea') return useMarina();
   if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
   if (mode === 'elplat') return elBoard() || elDown();
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
@@ -8157,7 +8471,7 @@ function interact() {
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
-  if (useGardens()) return;
+  if (useGardens() || useMarina()) return;
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -8790,14 +9104,15 @@ function audioTick(dt) {
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), barCrowd: room ? barCrowd() : 0,
-    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : 0,
+    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm' });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
-  if (me) { // the engine note follows the car
-    synth.engineOsc.frequency.setTargetAtTime(38 + Math.abs(me.v) * 32, now, 0.08);
-    synth.engineLP.frequency.setTargetAtTime(300 + Math.abs(me.v) * 400, now, 0.1);
+  if (me || sea) { // the engine note follows the car (or the boat: lower, burbling)
+    const v = Math.abs((me || sea).v), m = me ? 1 : 0.7;
+    synth.engineOsc.frequency.setTargetAtTime((38 + v * 32) * m, now, 0.08);
+    synth.engineLP.frequency.setTargetAtTime(300 + v * 400 * m, now, 0.1);
   }
   // riding the el: wheels clatter over the rail joints, faster with speed
   if (mode === 'el') {
@@ -10715,7 +11030,7 @@ function crimeKey(code) {
     const p = pickTarget();
     if (p) return pickpocket(p);
   }
-  if (code === 'KeyL') { const sh = lockTarget(); if (sh) return pickLock(sh); }
+  if (code === 'KeyL') { if (stealBoat()) return; const sh = lockTarget(); if (sh) return pickLock(sh); }
 }
 // what G / L would do here, for the prompt line
 function crimePrompt() {
@@ -10831,14 +11146,14 @@ function drawBoard3D() {
   }
 }
 // ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
-// your cars are parked), kept in localStorage every few seconds and when you leave. Not saved: where you are, the
+// your cars and boats are), kept in localStorage every few seconds and when you leave. Not saved: where you are, the
 // time, the police (you start each visit clean, on the street).
 const SAVE_KEY = 'ascii-city-save';
 function saveGame() {
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tags, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })) };
+    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
 function loadGame() {
@@ -10854,6 +11169,7 @@ function loadGame() {
   if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }
   owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
+  loadBoats(d.boats);
 }
 function newGame() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ } location.reload(); }
 loadGame();
@@ -10894,7 +11210,7 @@ onkeydown = e => {
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
-  if (e.code === 'KeyV' && me) third = !third;
+  if (e.code === 'KeyV' && (me || mode === 'sea')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   if (e.code === 'KeyY') { weather = WEATHER_NEXT[weather]; wTimer = 150; say(`Weather: ${weather}`); }
   const n = /^Digit([1-6])$/.exec(e.code);
@@ -10909,7 +11225,7 @@ const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 function turnBy(mx, my) {
   if (paused || game) return;
   const s = settings.sensitivity;
-  if (mode === 'taxi' || mode === 'fair' && fairRide.kind === 'carousel') look += mx * 0.003 * s; else if (mode !== 'drive') a += mx * 0.003 * s;
+  if (mode === 'taxi' || mode === 'fair' && fairRide.kind === 'carousel') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea') a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
 onmousemove = e => { if (document.pointerLockElement) turnBy(e.movementX, e.movementY); };
@@ -10983,6 +11299,7 @@ function loop(t) {
   } else if (mode === 'drive') drive(dt);
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
+  else if (mode === 'sea') stepSea(dt);
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
@@ -11021,9 +11338,9 @@ function loop(t) {
     room.track += dt * 2.5 * clamp(room.rideT / 2, 0, 1) * clamp((9 - room.rideT) / 2, 0, 1);
     if (room.rideT <= 0) arriveAt(room.dest);
   }
-  chaseOn = !!me && third;
-  if (chaseOn) { // render from behind the car, then put the real position back
-    const saved = [px, py, a], [cx, cy, yaw] = chaseCam(dt);
+  chaseOn = (!!me || mode === 'sea') && third;
+  if (chaseOn || mode === 'sea') { // render from behind the car (or boat, or at its helm), then put the real position back
+    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { // a drink or two and the world sways; more and you're seeing double
     camYaw = a; const wob = Math.min(1.3, fx.booze);
@@ -11114,7 +11431,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^a private dance/, 'VIP dance'], [/^tip the dancer/, 'Tip'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^a private dance/, 'VIP dance'], [/^tip the dancer/, 'Tip'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^rent the/, 'Rent'], [/^buy the/, 'Buy'], [/^take the/, 'Take out'], [/^tie up/, 'Tie up'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
@@ -11149,13 +11466,14 @@ function touchActions() {
     return out;
   }
   if (mode === 'drive') return [['Camera', 'KeyV', 'pop'], ['Get out', 'KeyE', 'main']];
+  if (mode === 'sea') return [['Camera', 'KeyV', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
     if (/\bJ: /.test(p)) out.push(['Drive taxi', 'KeyJ', 'pop']);
     if (/\bH: /.test(p)) out.push(['Hail taxi', 'KeyH', 'pop']);
     if (/\bG: pick/.test(p)) out.push(['Pick pocket', 'KeyG', 'pop']);
     if (/\bG: take/.test(p)) out.push(['Grab', 'KeyG', 'pop']);
-    if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
+    if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
     if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
