@@ -52,8 +52,11 @@ function devPlaces() {
     const d = Math.hypot(rel(bx * 8 + 5 - px), rel(by * 8 + 5 - py));
     if (!nearestLm[lm] || d < nearestLm[lm][0]) nearestLm[lm] = [d, bx, by];
   }
-  for (const lm in nearestLm) { const [, bx, by] = nearestLm[lm]; out.push(['Landmarks', `${LM[lm] || lm} (nearest)`, () => devAt(bx * 8 + 5, (by + 1) * 8 + 0.6, -Math.PI / 2)]); }
-  for (const s of SERVICES) out.push(['Landmarks', `${{ police: 'Police station', fire: 'Fire station', amb: 'Hospital' }[s.kind]} (${s.bx},${s.by})`, () => devAt(s.x, s.y + 0.15, -Math.PI / 2)]);
+  for (const lm in nearestLm) { const [, bx, by] = nearestLm[lm]; out.push(['Landmarks', LM[lm] || lm, () => devAt(bx * 8 + 5, (by + 1) * 8 + 0.6, -Math.PI / 2)]); }
+  for (const [kind, label] of [['police', 'Police station'], ['fire', 'Fire station'], ['amb', 'Hospital']]) { // (one of each: the nearest)
+    const s = SERVICES.filter(b => b.kind === kind).sort((p, q) => Math.hypot(rel(p.x - px), rel(p.y - py)) - Math.hypot(rel(q.x - px), rel(q.y - py)))[0];
+    if (s) out.push(['Landmarks', label, () => devAt(s.x, s.y + 0.15, -Math.PI / 2)]);
+  }
   for (const d in DISTRICT_TITLE) { const sp = districtSpot(d); if (sp) out.push(['Districts', DISTRICT_TITLE[d].replace(/^the /, 'The '), () => devAt(...sp)]); }
   stations.forEach(s => out.push(['Subway stations', s.name, () => devAt(s.x - 0.25, s.y, 0)]));
   EL_STATIONS.forEach(s => out.push(['El stations', s.name, () => devAt(s.x, EL_Y + 0.12, Math.PI / 2)]));
