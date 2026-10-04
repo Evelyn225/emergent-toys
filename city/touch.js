@@ -97,6 +97,7 @@ const SHEET = [
   ['Crouch', 'KeyC', () => onFootMode() && !body.seat, true], ['Drop item', 'KeyX', () => onFootMode() && !!heldItem()],
   ['Empty hands', 'Digit0', () => onFootMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
   ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Fast-forward', 'KeyT', null, true], ['Weather', 'KeyY'], ['Sound on/off', 'KeyN'],
+  ['Pee', 'KeyP', () => onFootMode()],
 ];
 
 function bindHold(b, k, after) { // a button holds its key down for as long as it's touched

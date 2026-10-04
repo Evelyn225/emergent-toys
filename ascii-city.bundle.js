@@ -140,7 +140,10 @@ const STARVE_T = 4 * 60; // seconds from full health to passing out with one met
 const HEAL_T = 10 * 60; // seconds to get your health all the way back, fed and watered
 const MEDICAL_BILL = 80, NURSE_FEE = 25;
 const FOOD_HEALS = 0.4; // health per point of hunger filled: a burger (50) is 20 health, a candy bar 8
-const needs = { food: 85, drink: 85, health: 100, warned: '' };
+const needs = { food: 85, drink: 85, health: 100, warned: '', bladder: 20 };
+// the bladder (0-100): never shown. Fills slowly by itself and faster with every drink, booze fastest; P empties it (pee.js)
+const BLADDER_FILL = 25 * 60; // seconds to fill up drinking nothing at all
+const wetting = (d, w) => d.booze ? w * 2.4 : w * 0.5; // bladder from `w` points of drink: a beer goes straight through you
 
 // how much an item fills you up, all its bites or sips together: [food, drink]. Dearer food is more of a meal;
 // water is the best thing for thirst, booze the worst; a milkshake or a bowl of soup counts for both
@@ -157,6 +160,7 @@ function eatSome(id, d) {
   const [f, w] = nourish(id, d), wasHungry = needs.food < 30, wasThirsty = needs.drink < 30;
   needs.food = Math.min(100, needs.food + f / d.uses); needs.drink = Math.min(100, needs.drink + w / d.uses);
   needs.health = Math.min(100, needs.health + f * FOOD_HEALS / d.uses); // a proper meal patches you up a bit
+  needs.bladder = Math.min(100, needs.bladder + wetting(d, w) / d.uses);
   if (wasHungry && needs.food >= 30) return ' That takes the edge off.';
   if (wasThirsty && needs.drink >= 30) return ' That\'s better.';
   return '';
@@ -165,6 +169,7 @@ function eatSome(id, d) {
 function stepNeeds(dt, canFaint) {
   needs.food = Math.max(0, needs.food - dt * 100 / FOOD_LAST);
   needs.drink = Math.max(0, needs.drink - dt * 100 / DRINK_LAST);
+  needs.bladder = Math.min(100, needs.bladder + dt * 100 / BLADDER_FILL);
   const empty = (needs.food <= 0) + (needs.drink <= 0);
   if (empty) needs.health = Math.max(canFaint ? 0 : 1, needs.health - dt * 100 / STARVE_T * empty); // (not at the wheel: you hang on till you're out)
   else if (needs.food > 30 && needs.drink > 30) needs.health = Math.min(100, needs.health + dt * 100 / HEAL_T);
@@ -182,7 +187,7 @@ function hurt(n) { needs.health = Math.max(0, needs.health - n); return needs.he
 // after passing out: the hospital's done its bit
 function hospitalised() {
   const bill = Math.min(MEDICAL_BILL, Math.max(0, money));
-  money -= bill; needs.health = 100; needs.food = Math.max(needs.food, 50); needs.drink = Math.max(needs.drink, 50); needs.warned = '';
+  money -= bill; needs.health = 100; needs.bladder = 10; needs.food = Math.max(needs.food, 50); needs.drink = Math.max(needs.drink, 50); needs.warned = '';
   return bill;
 }
 const refillNeeds = () => { needs.food = needs.drink = needs.health = 100; needs.warned = ''; };
@@ -8529,7 +8534,9 @@ function render(dt) {
   }
   if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
+  drawPuddles(); // (under whoever's standing in one)
   W.sprites();
+  drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (mode === 'drive' || mode === 'taxi') dash();
@@ -8818,7 +8825,7 @@ function hud() {
   const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
-    : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
+    : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
@@ -9806,7 +9813,7 @@ function asciiBar(f) {
                                               : '<span style="color:rgba(255,255,255,0.14)">░</span>';
   return s;
 }
-// ===== pause menu: Esc or P (or the mouse lock being released). Freezes the game, fades the sound, and holds the
+// ===== pause menu: Esc (or the mouse lock being released). Freezes the game, fades the sound, and holds the
 // settings, which apply as you change them and are kept in localStorage.
 const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigger characters, fewer of them, faster
 let pauseEl = null;
@@ -9847,6 +9854,7 @@ function buildPause() {
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
         <b>hold T</b><span>fast-forward</span><b>Y</b><span>weather</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
+        <b>P</b><span>pee</span>
         <b>Esc</b><span>pause</span>
       </div>
       <h2></h2>
@@ -10013,7 +10021,7 @@ function devBody() {
       <div class="grp">weather</div><div class="bar">${['clear', 'rain', 'storm', 'fog'].map(w => act(w, () => { weather = w; wTimer = 600; })).join('')}</div>`;
   }
   return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
-    <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}</div>
+    <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}${act('Bladder full', () => { needs.bladder = 100; })}</div>
     <div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { inv.length = 0; held = -1; say('Pockets emptied.', 2); })}</div>
     <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
 }
@@ -11537,6 +11545,178 @@ function hazeCell(i, dens, kind) {
   if (dens > (vape ? 0.5 : 0.7)) BG[i] = vape ? C(WARM, (1.2 + dens * 2.2) * lit) : C(GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
   FOGS[i] = 0;
 }
+// ===== peeing. P lets it go wherever you're standing: a stream arcs out in front of you (your eyes go down to it),
+// and a yellow puddle spreads where it lands, then dries up over a few minutes (quicker in the rain, slower indoors).
+// How long you go is down to the bladder (needs.js), which nothing on screen shows: drink enough and you get a hint,
+// ignore it long enough and you don't get a say in it. P again cuts it off.
+let pee = null; // { left: seconds of stream, t, at, accident, pitch0, auto }
+const peeDrops = []; // { at, s, x, y, z, vx, vy, vz, t0 }: the stream, in flight, oldest first
+const puddles = []; // { at, s, x, y, z, area, life, seed }: area in square metres
+let peeHint = 0, peeBurst = 0, peeLook = null; // which hint you've had; how long you've been bursting; easing your eyes back up
+const PEE_DRY = 240, PEE_LOOK = -0.8; // seconds for a puddle to dry outside; where your eyes go while you're at it
+const PEE_RATE = 60, PEE_DROP = 0.0022; // drops a second, and the puddle each one makes (m²): a full bladder's ~1.3m²
+const peeScale = () => mode === 'room' ? 1 : 0.1; // world units a metre
+// how high the ground is at (x, y), and whether something's standing up out of it there (a wall: the stream stops)
+function peeGround(x, y) {
+  if (mode === 'room') { const h = ROOMW.cell(Math.floor(x), Math.floor(y)); return h ? { wall: h } : { z: stairRise(x, y) }; }
+  const h = map[idx(Math.floor(x), Math.floor(y))] || 0;
+  return h > (mode === 'roof' ? roofH + 1e-6 : 0) ? { wall: h } : { z: h }; // (off a roof's edge it falls to whatever's below)
+}
+
+function startPee(accident) {
+  if (pee) { if (!pee.accident) { peeLookBack(); pee = null; say('You stop.', 1.2); } return; }
+  const at = placeKey();
+  if (at === null || !onFootMode()) return accident ? null : say('Not here.');
+  if (body.seat && !accident) return say('Stand up first.');
+  if (needs.bladder < 8 && !accident) return say('You don\'t need to go.', 1.5);
+  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, accident: !!accident, pitch0: pitch, auto: true };
+  peeLook = null; peeHint = 0; peeBurst = 0;
+  if (accident) say('You couldn\'t hold it any longer. Everyone pretends not to notice.', 4);
+  else say(needs.bladder > 80 ? 'Ahh. That\'s better.' : 'You relieve yourself.', 2);
+}
+// done (or cut off): your eyes come back up to where they were, unless you've looked somewhere yourself
+function peeLookBack() { if (pee && pee.auto) peeLook = { to: pee.pitch0, t: 0.7 }; }
+const peeLookOff = () => { if (pee) pee.auto = false; peeLook = null; }; // (you moved the view yourself)
+
+function stepPee(dt) {
+  // the hints, and what happens if you ignore them
+  if (!pee && onFootMode() && !game && !sleep) {
+    if (needs.bladder >= 75 && peeHint < 1) { peeHint = 1; say('You need to pee. (P)', 3); }
+    if (needs.bladder >= 97 && peeHint < 2) { peeHint = 2; say('You\'re bursting. Find somewhere, quick. (P)', 3); }
+    if (needs.bladder >= 100 && (peeBurst += dt) > 45) startPee(true);
+  }
+  if (needs.bladder < 70) peeHint = 0;
+  if (pee) {
+    if (!onFootMode() || placeKey() !== pee.at || sleep || game) { pee = null; peeLook = null; }
+    else {
+      pee.t += dt; pee.left -= dt;
+      needs.bladder = Math.max(0, needs.bladder - dt * 100 / 12.5);
+      if (pee.auto && pee.t < 1.2) pitch += (PEE_LOOK - pitch) * Math.min(1, dt * 5);
+      if (K.KeyR || K.KeyF) pee.auto = false;
+      const flow = Math.min(1, 0.35 + pee.t * 1.6) * Math.min(1, Math.max(0, pee.left) / 1.4); // starts up, dribbles out
+      for (let n = Math.round(PEE_RATE * dt + Math.random() * 0.5); n > 0; n--) peeSpray(flow);
+      if (pee.left <= 0) { peeLookBack(); pee = null; }
+    }
+  }
+  if (peeLook) { pitch += (peeLook.to - pitch) * Math.min(1, dt * 5); if ((peeLook.t -= dt) <= 0) peeLook = null; }
+  // the stream in the air
+  for (let k = peeDrops.length - 1; k >= 0; k--) {
+    const p = peeDrops[k], ox = p.x, oy = p.y;
+    p.vz -= 9.8 * p.s * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+    if (T - p.t0 > 3) { peeDrops.splice(k, 1); continue; }
+    if (p.at !== (placeKey() ?? '-')) continue; // (left behind somewhere: frozen till it times out)
+    const g = peeGround(p.x, p.y);
+    if (g.wall && p.z < g.wall) { // splashes against a wall and runs down to its foot
+      const g0 = peeGround(ox, oy);
+      peeLand(p, ox, oy, g0.z ?? p.z); peeDrops.splice(k, 1);
+    } else if (!g.wall && p.z <= g.z) { peeLand(p, p.x, p.y, g.z); peeDrops.splice(k, 1); }
+  }
+  // puddles drying
+  for (let k = puddles.length - 1; k >= 0; k--) {
+    const q = puddles[k];
+    if ((q.life -= dt / PEE_DRY * (q.at === '' ? 1 + wet * 3 : 0.5)) <= 0) puddles.splice(k, 1);
+  }
+}
+// one drop, out in front of you at about hip height
+function peeSpray(flow) {
+  const s = peeScale(), acc = pee.accident;
+  const wob = Math.sin(T * 6) * 0.05 + Math.sin(T * 1.7) * 0.09, ang = a + wob;
+  const fwd = acc ? 0.05 : 0.25, sp = acc ? 0.15 : 0.6 + flow * 2.4, up = acc ? 0 : 0.4 + flow * 0.7;
+  const x = px + Math.cos(a) * fwd * s, y = py + Math.sin(a) * fwd * s;
+  peeDrops.push({ at: pee.at, s, x, y, z: eye - (acc ? 0.95 : 0.8) * s, vx: Math.cos(ang) * sp * s, vy: Math.sin(ang) * sp * s,
+    vz: (up + (Math.random() - 0.5) * 0.15) * s, t0: T });
+  while (peeDrops.length > 400) peeDrops.shift();
+}
+// where a drop comes down: onto a puddle that's already there (it spreads), or the start of a new one
+function peeLand(p, x, y, z) {
+  const room_ = p.at !== '';
+  if (p.splash) return;
+  if (Math.random() < 0.35) { // a splash: a droplet or two bouncing off
+    const ang = Math.random() * Math.PI * 2, sp = (0.3 + Math.random() * 0.5) * p.s;
+    peeDrops.push({ at: p.at, s: p.s, x, y, z: z + 0.01 * p.s, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, vz: (0.8 + Math.random() * 0.8) * p.s, t0: T, splash: true });
+  }
+  if (!room_) { x = mod(x, N); y = mod(y, N); }
+  let best = null, bd = Infinity;
+  for (const q of puddles) {
+    if (q.at !== p.at || Math.abs(q.z - z) > 0.05 * p.s) continue;
+    const d = Math.hypot(room_ ? x - q.x : rel(x - q.x), room_ ? y - q.y : rel(y - q.y)) / p.s, rr = Math.sqrt(q.area / Math.PI);
+    if (d < rr + 0.12 && d < bd) { best = q; bd = d; }
+  }
+  if (best) { // spreads, creeping a little toward where it's landing
+    const w = PEE_DROP / (best.area + PEE_DROP);
+    best.x += (room_ ? x - best.x : rel(x - best.x)) * w; best.y += (room_ ? y - best.y : rel(y - best.y)) * w;
+    best.area = Math.min(best.area + PEE_DROP, 2.5); best.life = 1;
+  } else {
+    puddles.push({ at: p.at, s: p.s, x, y, z, area: PEE_DROP * 4, life: 1, seed: Math.random() * 100 });
+    while (puddles.length > 40) puddles.shift();
+  }
+}
+
+// the puddles, drawn on the ground before the sprites (so anyone standing in one stands in front of it)
+function drawPuddles() {
+  const at = placeKey();
+  if (at === null || !puddles.length) return;
+  const room_ = mode === 'room', lit = Math.max(0.45, amb);
+  for (const q of puddles) {
+    if (q.at !== at) continue;
+    const rx_ = room_ ? q.x - px : rel(q.x - px), ry_ = room_ ? q.y - py : rel(q.y - py);
+    const R = Math.sqrt(q.area / Math.PI) * q.s * (0.35 + 0.65 * Math.sqrt(q.life)), k = (eye - q.z) * projY;
+    if (k <= 0 || Math.hypot(rx_, ry_) - R > vis) continue;
+    let c0 = cols, c1 = -1, r0 = rows, r1 = -1, behind = 0;
+    for (const su of [-1, 1]) for (const sv of [-1, 1]) {
+      const X = rx_ + su * R, Y = ry_ + sv * R, depth = dx * X + dy * Y;
+      if (depth < 0.01 * q.s) { behind++; continue; }
+      const col = cols / 2 + (-dy * X + dx * Y) * projX / depth, row = hor + k / depth;
+      c0 = Math.min(c0, col); c1 = Math.max(c1, col); r0 = Math.min(r0, row); r1 = Math.max(r1, row);
+    }
+    if (behind === 4) continue;
+    if (behind) { c0 = 0; c1 = cols; r1 = rows; r0 = Math.min(r0, rows); }
+    c0 = Math.max(0, Math.floor(c0)); c1 = Math.min(cols, Math.ceil(c1) + 1);
+    r0 = Math.max(0, Math.floor(r0), Math.ceil(hor)); r1 = Math.min(rows, Math.ceil(r1) + 1);
+    for (let c = c0; c < c1; c++) {
+      const cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
+      for (let r = r0; r < r1; r++) {
+        const i = r * cols + c, d = k / (r - hor + 0.5);
+        if (d <= 0 || ZB[i] >= 0 && ZB[i] < d * 0.97) continue; // something's standing in front of it
+        const ex = (rx * d - rx_) / R, ey = (ry * d - ry_) / R, e = Math.hypot(ex, ey) + (noise(ex * 1.7 + q.seed, ey * 1.7, 995) - 0.5) * 0.5;
+        if (e >= 1) continue;
+        const fresh = q.life, L = Math.max(0, 1 - d / vis) * lit * (7 + fresh * 6);
+        const shine = noise(ex * 3 + T * 0.4, ey * 3 + q.seed, 996);
+        set(i, e > 0.8 ? '.' : shine > 0.62 ? '~' : shine > 0.45 ? '-' : ' ', C(YEL, L * (e > 0.8 ? 0.8 : 1.2)));
+        BG[i] = C(YEL, (1 + fresh * 1.6) * lit * (1 - e * 0.4)); FL[i] = 0;
+      }
+    }
+  }
+}
+// the stream, over everything: each drop joined to the one just after it while it's still coming, so it reads as one arc
+function drawStream() {
+  const at = placeKey();
+  if (at === null || !peeDrops.length) return;
+  const room_ = mode === 'room', lit = Math.max(0.45, amb);
+  let prev = null;
+  for (const p of peeDrops) {
+    if (p.at !== at) { prev = null; continue; }
+    const rx_ = room_ ? p.x - px : rel(p.x - px), ry_ = room_ ? p.y - py : rel(p.y - py), depth = dx * rx_ + dy * ry_;
+    const cur = depth > 0.02 * p.s ? { c: cols / 2 + (-dy * rx_ + dx * ry_) * projX / depth, r: hor - (p.z - eye) * projY / depth, depth, t0: p.t0 } : null;
+    if (p.splash) { if (cur) peeDot(cur.c, cur.r, cur.depth, p.vz > 0 ? '\'' : '.', lit); continue; }
+    if (cur && prev && cur.t0 - prev.t0 < 0.06) peeLine(prev, cur, lit);
+    else if (cur) peeDot(cur.c, cur.r, cur.depth, '.', lit);
+    prev = cur;
+  }
+}
+function peeDot(c, r, depth, ch, lit) {
+  c = Math.floor(c); r = Math.floor(r);
+  if (c < 0 || c >= cols || r < 0 || r >= rows) return;
+  const i = r * cols + c;
+  if (ZB[i] >= 0 && depth >= ZB[i]) return;
+  set(i, ch, C(YEL, Math.max(6, (1 - depth / vis) * 15) * lit)); FOGS[i] = 0;
+}
+function peeLine(p0, p1, lit) {
+  const dc = p1.c - p0.c, dr = p1.r - p0.r, n = Math.min(80, Math.ceil(Math.max(Math.abs(dc), Math.abs(dr))));
+  if (n > 79 && (Math.max(p0.r, p1.r) < 0 || Math.min(p0.r, p1.r) > rows)) return; // (way off screen)
+  const ch = Math.abs(dr) > Math.abs(dc) * 2 ? '|' : Math.abs(dc) > Math.abs(dr) * 2 ? '-' : (dc > 0) === (dr > 0) ? '\\' : '/';
+  for (let k = 0; k <= n; k++) { const f = n ? k / n : 0; peeDot(p0.c + dc * f, p0.r + dr * f, p0.depth + (p1.depth - p0.depth) * f, ch, lit); }
+}
 // ===== little things on the street: manhole covers in the road (some with steam pouring out, as from a city's steam
 // pipes), and now and then a flock of pigeons pecking about on a sidewalk, in a park or a plaza, that bursts up and
 // flies off when you get close.
@@ -12224,7 +12404,7 @@ function saveGame() {
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tags, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, needs: { food: needs.food, drink: needs.drink, health: needs.health } };
+    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder } };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
 function loadGame() {
@@ -12241,7 +12421,7 @@ function loadGame() {
   owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
   loadBoats(d.boats);
-  if (d.needs) for (const k of ['food', 'drink', 'health']) if (isFinite(d.needs[k])) needs[k] = clamp(d.needs[k], k === 'health' ? 1 : 0, 100);
+  if (d.needs) for (const k of ['food', 'drink', 'health', 'bladder']) if (isFinite(d.needs[k])) needs[k] = clamp(d.needs[k], k === 'health' ? 1 : 0, 100);
   const at = d.at;
   if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
     px = mod(at.x, N); py = mod(at.y, N); a = at.a || 0; streetSpot = { x: px, y: py, a };
@@ -12265,7 +12445,7 @@ onkeydown = e => {
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
   if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
-  if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) return togglePause();
+  if (e.code === 'Escape' && !e.repeat) return togglePause();
   if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
   if (paused) return;
   K[e.code] = 1;
@@ -12280,6 +12460,7 @@ onkeydown = e => {
     if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
     if (e.code === 'KeyI') openInventory();
     if (e.code === 'KeyX') dropHere();
+    if (e.code === 'KeyP') startPee();
     const slot = /^Digit([1-8])$/.exec(e.code);
     if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) holdSlot(slot[1] - 1); // again: put it away
     if (e.code === 'Digit0' || e.code === 'Backquote') held = -1; // empty your hands
@@ -12308,6 +12489,7 @@ function turnBy(mx, my) {
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
+  if (my) peeLookOff(); // (looking about yourself: your eyes stay where you put them)
 }
 // on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
 let flick = null;
@@ -12404,6 +12586,7 @@ function loop(t) {
   stepEvents(dt);
   stepGardens(dt);
   stepHaze(dt);
+  stepPee(dt);
   stepSteam(dt);
   stepPigeons(dt);
   stepJadeIncense(dt);
@@ -12587,6 +12770,7 @@ const SHEET = [
   ['Crouch', 'KeyC', () => onFootMode() && !body.seat, true], ['Drop item', 'KeyX', () => onFootMode() && !!heldItem()],
   ['Empty hands', 'Digit0', () => onFootMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
   ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Fast-forward', 'KeyT', null, true], ['Weather', 'KeyY'], ['Sound on/off', 'KeyN'],
+  ['Pee', 'KeyP', () => onFootMode()],
 ];
 
 function bindHold(b, k, after) { // a button holds its key down for as long as it's touched
