@@ -440,6 +440,27 @@ test('P to pee, any time: a stream that falls even when you look up, a yellow pu
   assert.strictEqual(await page.evaluate(() => paused), true);
 }));
 
+test('toilets: in a bar it goes in the bowl and you flush; on a diner floor you are thrown out; a cop who sees you in the street nicks you', () => withPage(async page => {
+  await page.evaluate(() => { tod = 20; needs.bladder = 30; enterRoom('bar', { word: 'BAR', neon: MAG, ret: [px, py, a] }, [1.6, 5.3, Math.PI / 2]); });
+  await page.keyboard.press('KeyP');
+  assert.deepStrictEqual(await page.evaluate(() => [!!(pee && pee.loo), msgText]), [true, 'You use the toilet.']);
+  await page.waitForTimeout(6000);
+  assert.deepStrictEqual(await page.evaluate(() => [!!pee, puddles.filter(q => q.at === placeKey()).length, msgText]), [false, 0, 'You flush. Very civilised.']);
+  // the diner, out in the middle of the floor
+  await page.evaluate(() => { enterRoom('diner', { word: 'DINER', ret: [px, py, a] }, [8.5, 5, Math.PI / 2]); needs.bladder = 50; });
+  await page.keyboard.press('KeyP'); await page.waitForTimeout(1500);
+  assert.deepStrictEqual(await page.evaluate(() => [mode, !!pee]), ['walk', false]);
+  assert.match(await page.evaluate(() => msgText), /thrown out/);
+  // the street: nobody about, nothing happens; a cop right there, you're wanted
+  await page.evaluate(() => { for (const c of cars) if (c.patrol) c.x = mod(px + 80, N); for (const c of footCops) c.x = mod(px + 80, N); people.forEach(m => m.hidden = true); needs.bladder = 50; });
+  await page.keyboard.press('KeyP'); await page.waitForTimeout(1500);
+  assert.deepStrictEqual(await page.evaluate(() => [!!pee, wanted.stars]), [true, 0]);
+  await page.keyboard.press('KeyP');
+  await page.evaluate(() => { footCops[0].x = px + 0.3; footCops[0].y = py; footCops[0].chase = false; });
+  await page.keyboard.press('KeyP'); await page.waitForTimeout(1500);
+  assert.deepStrictEqual(await page.evaluate(() => [wanted.stars, wanted.crime]), [1, 'public urination']);
+}));
+
 test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
   await page.evaluate(() => { tod = 23; enterRoom('stripclub', { ...CLUB.sh, ret: [px, py, a], line: '' }, [9, 12.4, -Math.PI / 2]); });
   const r = await page.evaluate(() => {

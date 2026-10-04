@@ -2,13 +2,23 @@
 // gravity, whichever way you're looking (your eyes go down to it), and a yellow puddle spreads where it lands, then
 // dries up over a few minutes (quicker in the rain, slower indoors). How long you go is down to the bladder
 // (needs.js), which nothing shows and nothing ever makes you empty. P again cuts it off.
-let pee = null; // { left: seconds of stream, t, at, pitch0, auto }
+// Stand by a toilet (bars, diners, home, the cell) and it goes in the bowl, and you flush. Anywhere else indoors the
+// staff throw you out; outside, a cop who sees it nicks you for public urination, and passers-by have a word.
+let pee = null; // { left: seconds of stream, t, at, pitch0, auto, loo: [x, y] or null, seen: when we last looked round, caught }
 const peeDrops = []; // { at, s, x, y, z, vx, vy, vz, t0 }: the stream, in flight, oldest first
 const puddles = []; // { at, s, x, y, z, area, life, seed }: area in square metres
 let peeLook = null, peeN = 0; // easing your eyes back up; drops so far (for the ripples running down the stream)
 const PEE_DRY = 240, PEE_LOOK = -0.8; // seconds for a puddle to dry outside; where your eyes go while you're at it
 const PEE_RATE = 60, PEE_DROP = 0.0022; // drops a second, and the puddle each one makes (m²): a full bladder's ~1.3m²
 const peeScale = () => mode === 'room' ? 1 : 0.1; // world units a metre
+const LOO_TOP = 0.42, LOO_R = 0.2, LOO_REACH = 1.4, COP_PEE = 4, CIV_PEE = 1.5; // the bowl; how near to use it; how near a cop / anyone notices (cells)
+const loos = () => mode === 'room' && room.props ? room.props.filter(s => s.loo).map(s => s.loo) : [];
+function looNear() {
+  let best = null, bd = LOO_REACH;
+  for (const l of loos()) { const d = Math.hypot(l[0] - px, l[1] - py); if (d < bd) { best = l; bd = d; } }
+  return best;
+}
+const PEE_SEEN = ['"Ugh, seriously?"', '"There are kids around!"', '"Oh, come ON."', '"Gross."', '"Not on my street, pal."', '"Classy."'];
 // how high the ground is at (x, y), and whether something's standing up out of it there (a wall: the stream stops)
 function peeGround(x, y) {
   if (mode === 'room') { const h = ROOMW.cell(Math.floor(x), Math.floor(y)); return h ? { wall: h } : { z: stairRise(x, y) }; }
@@ -21,9 +31,9 @@ function startPee() {
   const at = placeKey();
   if (at === null || !onFootMode()) return say('Not here.');
   if (body.seat) return say('Stand up first.');
-  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, pitch0: pitch, auto: true }; // (a short one even with nothing in you)
+  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, pitch0: pitch, auto: true, loo: looNear(), seen: 0, caught: false }; // (a short one even with nothing in you)
   peeLook = null;
-  say(needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
+  say(pee.loo ? 'You use the toilet.' : needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
 }
 // done (or cut off): your eyes come back up to where they were, unless you've looked somewhere yourself
 function peeLookBack() { if (pee && pee.auto) peeLook = { to: pee.pitch0, t: 0.7 }; }
@@ -39,16 +49,22 @@ function stepPee(dt) {
       if (K.KeyR || K.KeyF) pee.auto = false;
       const flow = Math.min(1, 0.35 + pee.t * 1.6) * Math.min(1, Math.max(0, pee.left) / 1.4); // starts up, dribbles out
       for (let n = Math.round(PEE_RATE * dt + Math.random() * 0.5); n > 0; n--) peeSpray(flow);
-      if (pee.left <= 0) { peeLookBack(); pee = null; }
+      if ((pee.seen -= dt) <= 0) { pee.seen = 0.4; peeWitness(); }
+      if (pee && pee.left <= 0) { if (pee.loo) { flushT = T; say('You flush. Very civilised.', 2); } peeLookBack(); pee = null; }
     }
   }
   if (peeLook) { pitch += (peeLook.to - pitch) * Math.min(1, dt * 5); if ((peeLook.t -= dt) <= 0) peeLook = null; }
   // the stream in the air
+  const bowls = loos();
   for (let k = peeDrops.length - 1; k >= 0; k--) {
-    const p = peeDrops[k], ox = p.x, oy = p.y;
+    const p = peeDrops[k], ox = p.x, oy = p.y, oz = p.z;
     p.vz -= 9.8 * p.s * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
     if (T - p.t0 > 3) { peeDrops.splice(k, 1); continue; }
     if (p.at !== (placeKey() ?? '-')) continue; // (left behind somewhere: frozen till it times out)
+    if (oz > LOO_TOP && p.z <= LOO_TOP && bowls.length) { // coming down past the rim: where, exactly?
+      const f = (oz - LOO_TOP) / (oz - p.z), cx = ox + (p.x - ox) * f, cy = oy + (p.y - oy) * f;
+      if (bowls.some(l => Math.hypot(cx - l[0], cy - l[1]) < LOO_R)) { peeDrops.splice(k, 1); continue; } // in the bowl
+    }
     const g = peeGround(p.x, p.y);
     if (g.wall && p.z < g.wall) { // splashes against a wall and runs down to its foot
       const g0 = peeGround(ox, oy);
@@ -61,13 +77,39 @@ function stepPee(dt) {
     if ((q.life -= dt / PEE_DRY * (q.at === '' ? 1 + wet * 3 : 0.5)) <= 0) puddles.splice(k, 1);
   }
 }
+// who sees: the staff indoors (you're out), a cop outside (you're nicked), anyone else outside (they say so)
+function peeWitness() {
+  if (pee.loo || pee.t < 0.8) return;
+  if (mode === 'room') {
+    const k = room.def.keeper, kind = room.kind;
+    if (kind === 'jail') { if (!pee.caught) { pee.caught = true; say('The guard bangs on the bars. "Use the toilet, animal."', 3); } return; }
+    if (!k || room.burgled || kind === 'home' || kind === 'loft' || kind === 'hotelroom') return; // (your own place, or nobody here: your own business)
+    const there = loos().length ? ' The toilet\'s RIGHT THERE.' : '';
+    pee = null; peeLook = null; leaveRoom();
+    return say(`"Hey! HEY! Not in here!"${there} You're thrown out onto the street.`, 4);
+  }
+  if (mode !== 'walk' || pee.caught) return; // (up on a roof nobody's looking)
+  const cop = cars.some(c => c.patrol && !c.player && near(c.x, c.y, px, py) < COP_PEE && lineOfSight(c.x, c.y, px, py))
+    || footCops.some(c => near(c.x, c.y, px, py) < COP_PEE && lineOfSight(c.x, c.y, px, py));
+  if (cop) { pee.caught = true; addWanted('urination', px, py, true); return say('A cop saw that. Public urination!', 3); }
+  if (pee.t > 1.5 && !pee.heard && people.some(p => !p.hidden && near(p.x, p.y, px, py) < CIV_PEE && lineOfSight(p.x, p.y, px, py))) {
+    pee.heard = true; say(`Someone walking past: ${pick(PEE_SEEN)}`, 3);
+  }
+}
 // one drop, out in front of you at about hip height
 function peeSpray(flow) {
   // aimed by which way you face, never by how far up or down you look: it leaves about level and gravity does the rest
-  const s = peeScale(), wob = Math.sin(T * 6) * 0.05 + Math.sin(T * 1.7) * 0.09, ang = a + wob;
-  const sp = 0.6 + flow * 2.4, up = 0.4 + flow * 0.7, ground = eye - eyeLift() * s - (mode === 'room' ? 1.7 : 0.17); // (eye height less the 1.7m you stand)
+  const s = peeScale(), wob = Math.sin(T * 6) * 0.05 + Math.sin(T * 1.7) * 0.09;
+  let ang = a + wob, sp = 0.6 + flow * 2.4;
+  const up = 0.4 + flow * 0.7, ground = eye - eyeLift() * s - (mode === 'room' ? 1.7 : 0.17); // (eye height less the 1.7m you stand)
   const hip = Math.max(ground + 0.3 * s, eye - 0.8 * s); // (crouched, it's not coming out of the floor)
-  peeDrops.push({ at: pee.at, s, x: px + Math.cos(a) * 0.25 * s, y: py + Math.sin(a) * 0.25 * s, z: hip, vx: Math.cos(ang) * sp * s, vy: Math.sin(ang) * sp * s,
+  const x = px + Math.cos(a) * 0.25 * s, y = py + Math.sin(a) * 0.25 * s;
+  if (pee.loo) { // at a toilet you aim: whatever speed lands it in the bowl (gravity still has the say on the way down)
+    const [lx, ly] = pee.loo, d = Math.hypot(lx - x, ly - y), fall = Math.max(0.05, hip - LOO_TOP);
+    ang = Math.atan2(ly - y, lx - x) + wob * 0.15;
+    sp = d * 9.8 / (up + Math.sqrt(up * up + 2 * 9.8 * fall)) * (0.96 + Math.random() * 0.08);
+  }
+  peeDrops.push({ at: pee.at, s, x, y, z: hip, vx: Math.cos(ang) * sp * s, vy: Math.sin(ang) * sp * s,
     vz: (up + (Math.random() - 0.5) * 0.15) * s, t0: T, n: peeN++ });
   while (peeDrops.length > 400) peeDrops.shift();
 }
@@ -153,7 +195,7 @@ function peeDot(c, r, depth, ch, lit) {
   if (c < 0 || c >= cols || r < 0 || r >= rows) return;
   const i = r * cols + c;
   if (ZB[i] >= 0 && depth >= ZB[i]) return;
-  set(i, ch, C(YEL, Math.max(5, (1 - depth / vis) * 10) * lit)); FOGS[i] = 0;
+  set(i, ch, C(YEL, Math.max(8, (1 - depth / vis) * 12) * lit)); FOGS[i] = 0;
 }
 function peeLine(p0, p1, lit, bright) {
   const dc = p1.c - p0.c, dr = p1.r - p0.r, n = Math.min(80, Math.ceil(Math.max(Math.abs(dc), Math.abs(dr))));

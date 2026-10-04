@@ -3568,7 +3568,7 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  pickpocket: { stars: 1, name: 'pickpocketing' }, shoplift: { stars: 1, name: 'shoplifting' },
                  burglary: { stars: 2, name: 'breaking and entering' }, graffiti: { stars: 1, name: 'vandalism' },
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
-                 boattheft: { stars: 1, name: 'boat theft' } };
+                 boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -5834,20 +5834,30 @@ const barShade = (i, t, L) => {
 const inmate = (x, y, sit) => sit ? sitting(x, y, ORANGE, 0.42) : standing(x, y, ORANGE);
 const bunk = (x, y) => [BX(x, y, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // a blanket on a steel frame
   BX(x, y, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; })];
-// a cell's steel toilet: the cistern against the wall, a pedestal, and the bowl on it with a rim round the water. back:
-// which way the wall is (-1: toward -y)
+// a toilet: the cistern against the wall, a pedestal, and the bowl on it with a rim round the water. back: which way
+// the wall is (-1: toward -y). Steel in a cell, white porcelain anywhere nicer. The bowl carries `loo` (where it is),
+// which is how peeing finds it (pee.js); flushing swirls the water for a moment
 const steel = (i, t, L) => { BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : fract(HIT.w * 6) < 0.12 ? '-' : ' ', C(WHITE, L * 0.7)), true; };
-const toilet = (x, y, back = -1) => [
-  BX(x, y + back * 0.3, 0.24, 0.09, 0, 0.82, steel), // the cistern
+const porcelain = (i, t, L) => { BG[i] = C(WHITE, (3.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : ' ', C(GRAY, L * 0.7)), true; };
+let flushT = -9;
+const toilet = (x, y, back = -1, mat = steel) => [
+  BX(x, y + back * 0.3, 0.24, 0.09, 0, 0.82, mat), // the cistern
   BX(x + 0.16, y + back * 0.2, 0.025, 0.04, 0.68, 0.72, (i, t, L) => (set(i, '-', C(WHITE, L)), true)), // its flush handle
-  BX(x, y + back * 0.02, 0.11, 0.13, 0, 0.3, steel), // the pedestal
-  BX(x, y + back * 0.04, 0.21, 0.26, 0.3, 0.42, (i, t, L) => { // the bowl: an oval rim, water in the middle
-    if (HIT.face !== 5) { BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
-    const e = Math.hypot(HIT.u / 0.21, HIT.v / 0.26);
+  BX(x, y + back * 0.02, 0.11, 0.13, 0, 0.3, mat), // the pedestal
+  { ...BX(x, y + back * 0.04, 0.21, 0.26, 0.3, 0.42, (i, t, L) => { // the bowl: an oval rim, water in the middle
+    const rim = mat === steel ? GRAY : WHITE;
+    if (HIT.face !== 5) { BG[i] = C(rim, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+    const e = Math.hypot(HIT.u / 0.21, HIT.v / 0.26), swirl = T - flushT < 2.5;
     if (e > 1) return false;
-    if (e > 0.68) { BG[i] = C(GRAY, 2.2 + L * 0.3); return set(i, 'o', C(WHITE, L)), true; }
+    if (e > 0.68) { BG[i] = C(rim, 2.2 + L * 0.3); return set(i, 'o', C(mat === steel ? WHITE : GRAY, L)), true; }
+    if (swirl) { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, '@*o~'[(Math.floor(Math.atan2(HIT.v, HIT.u) * 2 + T * 12) & 3)], C(CYAN, L * 1.3)), true; }
     BG[i] = C(BLUE, 1.4 + L * 0.15); return set(i, e < 0.3 && hash(Math.floor(T * 2), 1, 15) > 0.6 ? '~' : ' ', C(CYAN, L)), true;
-  })];
+  }), loo: [x, y + back * 0.04] }];
+// a toilet with a partition either side of it, for a bar or a diner (no door: this isn't that kind of place)
+const stall = (x, y, back) => {
+  const panel = solid(BRICK, { panel: 0.3, top: '=' });
+  return [...toilet(x, y, back, porcelain), BX(x - 0.55, y + back * 0.1, 0.55, 0.03, 0, 1.8, panel, 0, 1), BX(x + 0.55, y + back * 0.1, 0.55, 0.03, 0, 1.8, panel, 0, 1)];
+};
 function jailProps(r) {
   const p = [];
   for (const cx of [4, 11, 18]) { // the three cells on your side (yours is the middle) and the three across
@@ -6093,13 +6103,13 @@ const ROOM_DEFS = {
   bar: { grid: boxRoom(12, 8), light: 0.6, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, neon: true, glyphs: 'il!Y', keeper: [6, 1.1],
     props: r => {
       const p = [...counterBox(6, 1.8, 4, 1.1), standing(6, 1.1, r.neon),
-                 SP(10.6, 5.5, 0.9, 1.5, ART.jukebox, (c, row, L) => C(NEON[(row + (T * 2 | 0)) & 3], 14))];
+                 SP(10.6, 5.5, 0.9, 1.5, ART.jukebox, (c, row, L) => C(NEON[(row + (T * 2 | 0)) & 3], 14)), ...stall(1.6, 6.4, 1)];
       for (let x = 3; x <= 9; x += 1.5) { p.push(SP(x, 2.65, 0.4, 0.75, ART.stool, wood)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.45, true)); }
       return p;
     } },
   diner: { grid: boxRoom(12, 8), light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, 1.1], wall: dinerWall,
     props: r => {
-      const p = [...counterBox(6, 1.75, 2), standing(6, 1.1, WHITE)];
+      const p = [...counterBox(6, 1.75, 2), standing(6, 1.1, WHITE), ...stall(1.6, 1.55, -1)];
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
         for (const s of [-0.95, 0.95]) { p.push(SP(x + s, y, 0.4, 0.75, ART.stool, wood)); if (chance(0.4)) p.push(sitting(x + s, y - 0.02, shirt())); }
@@ -6498,6 +6508,7 @@ function homeDef(w, h) {
         BG[i] = C(NEON[(T * 0.7 | 0) & 3], 3 + hash(Math.floor(HIT.u * 20), Math.floor(HIT.w * 20), T * 4 | 0) * 6); return set(i, ' ', 0), true;
       }),
       BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
+      ...toilet(1.3, h - 1.6, 1, porcelain), // (an open-plan bathroom)
       BENCHP(sofa[0], sofa[1], 0, -1), ...(big ? [SP(w - 1.3, h - 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(sofa[0] - 2.4, sofa[1], 0, -1)] : []),
     ] };
 }
@@ -8658,6 +8669,7 @@ function promptText() {
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
     if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
+    if (!pee && looNear()) return 'P: use the toilet';
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
     if (nearElevator()) return 'E: elevator to the roof';
@@ -11549,13 +11561,23 @@ function hazeCell(i, dens, kind) {
 // gravity, whichever way you're looking (your eyes go down to it), and a yellow puddle spreads where it lands, then
 // dries up over a few minutes (quicker in the rain, slower indoors). How long you go is down to the bladder
 // (needs.js), which nothing shows and nothing ever makes you empty. P again cuts it off.
-let pee = null; // { left: seconds of stream, t, at, pitch0, auto }
+// Stand by a toilet (bars, diners, home, the cell) and it goes in the bowl, and you flush. Anywhere else indoors the
+// staff throw you out; outside, a cop who sees it nicks you for public urination, and passers-by have a word.
+let pee = null; // { left: seconds of stream, t, at, pitch0, auto, loo: [x, y] or null, seen: when we last looked round, caught }
 const peeDrops = []; // { at, s, x, y, z, vx, vy, vz, t0 }: the stream, in flight, oldest first
 const puddles = []; // { at, s, x, y, z, area, life, seed }: area in square metres
 let peeLook = null, peeN = 0; // easing your eyes back up; drops so far (for the ripples running down the stream)
 const PEE_DRY = 240, PEE_LOOK = -0.8; // seconds for a puddle to dry outside; where your eyes go while you're at it
 const PEE_RATE = 60, PEE_DROP = 0.0022; // drops a second, and the puddle each one makes (m²): a full bladder's ~1.3m²
 const peeScale = () => mode === 'room' ? 1 : 0.1; // world units a metre
+const LOO_TOP = 0.42, LOO_R = 0.2, LOO_REACH = 1.4, COP_PEE = 4, CIV_PEE = 1.5; // the bowl; how near to use it; how near a cop / anyone notices (cells)
+const loos = () => mode === 'room' && room.props ? room.props.filter(s => s.loo).map(s => s.loo) : [];
+function looNear() {
+  let best = null, bd = LOO_REACH;
+  for (const l of loos()) { const d = Math.hypot(l[0] - px, l[1] - py); if (d < bd) { best = l; bd = d; } }
+  return best;
+}
+const PEE_SEEN = ['"Ugh, seriously?"', '"There are kids around!"', '"Oh, come ON."', '"Gross."', '"Not on my street, pal."', '"Classy."'];
 // how high the ground is at (x, y), and whether something's standing up out of it there (a wall: the stream stops)
 function peeGround(x, y) {
   if (mode === 'room') { const h = ROOMW.cell(Math.floor(x), Math.floor(y)); return h ? { wall: h } : { z: stairRise(x, y) }; }
@@ -11568,9 +11590,9 @@ function startPee() {
   const at = placeKey();
   if (at === null || !onFootMode()) return say('Not here.');
   if (body.seat) return say('Stand up first.');
-  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, pitch0: pitch, auto: true }; // (a short one even with nothing in you)
+  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, pitch0: pitch, auto: true, loo: looNear(), seen: 0, caught: false }; // (a short one even with nothing in you)
   peeLook = null;
-  say(needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
+  say(pee.loo ? 'You use the toilet.' : needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
 }
 // done (or cut off): your eyes come back up to where they were, unless you've looked somewhere yourself
 function peeLookBack() { if (pee && pee.auto) peeLook = { to: pee.pitch0, t: 0.7 }; }
@@ -11586,16 +11608,22 @@ function stepPee(dt) {
       if (K.KeyR || K.KeyF) pee.auto = false;
       const flow = Math.min(1, 0.35 + pee.t * 1.6) * Math.min(1, Math.max(0, pee.left) / 1.4); // starts up, dribbles out
       for (let n = Math.round(PEE_RATE * dt + Math.random() * 0.5); n > 0; n--) peeSpray(flow);
-      if (pee.left <= 0) { peeLookBack(); pee = null; }
+      if ((pee.seen -= dt) <= 0) { pee.seen = 0.4; peeWitness(); }
+      if (pee && pee.left <= 0) { if (pee.loo) { flushT = T; say('You flush. Very civilised.', 2); } peeLookBack(); pee = null; }
     }
   }
   if (peeLook) { pitch += (peeLook.to - pitch) * Math.min(1, dt * 5); if ((peeLook.t -= dt) <= 0) peeLook = null; }
   // the stream in the air
+  const bowls = loos();
   for (let k = peeDrops.length - 1; k >= 0; k--) {
-    const p = peeDrops[k], ox = p.x, oy = p.y;
+    const p = peeDrops[k], ox = p.x, oy = p.y, oz = p.z;
     p.vz -= 9.8 * p.s * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
     if (T - p.t0 > 3) { peeDrops.splice(k, 1); continue; }
     if (p.at !== (placeKey() ?? '-')) continue; // (left behind somewhere: frozen till it times out)
+    if (oz > LOO_TOP && p.z <= LOO_TOP && bowls.length) { // coming down past the rim: where, exactly?
+      const f = (oz - LOO_TOP) / (oz - p.z), cx = ox + (p.x - ox) * f, cy = oy + (p.y - oy) * f;
+      if (bowls.some(l => Math.hypot(cx - l[0], cy - l[1]) < LOO_R)) { peeDrops.splice(k, 1); continue; } // in the bowl
+    }
     const g = peeGround(p.x, p.y);
     if (g.wall && p.z < g.wall) { // splashes against a wall and runs down to its foot
       const g0 = peeGround(ox, oy);
@@ -11608,13 +11636,39 @@ function stepPee(dt) {
     if ((q.life -= dt / PEE_DRY * (q.at === '' ? 1 + wet * 3 : 0.5)) <= 0) puddles.splice(k, 1);
   }
 }
+// who sees: the staff indoors (you're out), a cop outside (you're nicked), anyone else outside (they say so)
+function peeWitness() {
+  if (pee.loo || pee.t < 0.8) return;
+  if (mode === 'room') {
+    const k = room.def.keeper, kind = room.kind;
+    if (kind === 'jail') { if (!pee.caught) { pee.caught = true; say('The guard bangs on the bars. "Use the toilet, animal."', 3); } return; }
+    if (!k || room.burgled || kind === 'home' || kind === 'loft' || kind === 'hotelroom') return; // (your own place, or nobody here: your own business)
+    const there = loos().length ? ' The toilet\'s RIGHT THERE.' : '';
+    pee = null; peeLook = null; leaveRoom();
+    return say(`"Hey! HEY! Not in here!"${there} You're thrown out onto the street.`, 4);
+  }
+  if (mode !== 'walk' || pee.caught) return; // (up on a roof nobody's looking)
+  const cop = cars.some(c => c.patrol && !c.player && near(c.x, c.y, px, py) < COP_PEE && lineOfSight(c.x, c.y, px, py))
+    || footCops.some(c => near(c.x, c.y, px, py) < COP_PEE && lineOfSight(c.x, c.y, px, py));
+  if (cop) { pee.caught = true; addWanted('urination', px, py, true); return say('A cop saw that. Public urination!', 3); }
+  if (pee.t > 1.5 && !pee.heard && people.some(p => !p.hidden && near(p.x, p.y, px, py) < CIV_PEE && lineOfSight(p.x, p.y, px, py))) {
+    pee.heard = true; say(`Someone walking past: ${pick(PEE_SEEN)}`, 3);
+  }
+}
 // one drop, out in front of you at about hip height
 function peeSpray(flow) {
   // aimed by which way you face, never by how far up or down you look: it leaves about level and gravity does the rest
-  const s = peeScale(), wob = Math.sin(T * 6) * 0.05 + Math.sin(T * 1.7) * 0.09, ang = a + wob;
-  const sp = 0.6 + flow * 2.4, up = 0.4 + flow * 0.7, ground = eye - eyeLift() * s - (mode === 'room' ? 1.7 : 0.17); // (eye height less the 1.7m you stand)
+  const s = peeScale(), wob = Math.sin(T * 6) * 0.05 + Math.sin(T * 1.7) * 0.09;
+  let ang = a + wob, sp = 0.6 + flow * 2.4;
+  const up = 0.4 + flow * 0.7, ground = eye - eyeLift() * s - (mode === 'room' ? 1.7 : 0.17); // (eye height less the 1.7m you stand)
   const hip = Math.max(ground + 0.3 * s, eye - 0.8 * s); // (crouched, it's not coming out of the floor)
-  peeDrops.push({ at: pee.at, s, x: px + Math.cos(a) * 0.25 * s, y: py + Math.sin(a) * 0.25 * s, z: hip, vx: Math.cos(ang) * sp * s, vy: Math.sin(ang) * sp * s,
+  const x = px + Math.cos(a) * 0.25 * s, y = py + Math.sin(a) * 0.25 * s;
+  if (pee.loo) { // at a toilet you aim: whatever speed lands it in the bowl (gravity still has the say on the way down)
+    const [lx, ly] = pee.loo, d = Math.hypot(lx - x, ly - y), fall = Math.max(0.05, hip - LOO_TOP);
+    ang = Math.atan2(ly - y, lx - x) + wob * 0.15;
+    sp = d * 9.8 / (up + Math.sqrt(up * up + 2 * 9.8 * fall)) * (0.96 + Math.random() * 0.08);
+  }
+  peeDrops.push({ at: pee.at, s, x, y, z: hip, vx: Math.cos(ang) * sp * s, vy: Math.sin(ang) * sp * s,
     vz: (up + (Math.random() - 0.5) * 0.15) * s, t0: T, n: peeN++ });
   while (peeDrops.length > 400) peeDrops.shift();
 }
@@ -11700,7 +11754,7 @@ function peeDot(c, r, depth, ch, lit) {
   if (c < 0 || c >= cols || r < 0 || r >= rows) return;
   const i = r * cols + c;
   if (ZB[i] >= 0 && depth >= ZB[i]) return;
-  set(i, ch, C(YEL, Math.max(5, (1 - depth / vis) * 10) * lit)); FOGS[i] = 0;
+  set(i, ch, C(YEL, Math.max(8, (1 - depth / vis) * 12) * lit)); FOGS[i] = 0;
 }
 function peeLine(p0, p1, lit, bright) {
   const dc = p1.c - p0.c, dr = p1.r - p0.r, n = Math.min(80, Math.ceil(Math.max(Math.abs(dc), Math.abs(dr))));

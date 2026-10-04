@@ -190,8 +190,6 @@ Guards on patrol routes, cameras on the walls, a gift shop.
   tour or a lantern festival, a koi pond in the conservatory, feeding time at the bear pen, the boats racing.
 - **Home extras**: decorate your place with what you carry (put the lucky cat on the shelf), a fridge for food,
   a pet that waits for you.
-- **Peeing extras**: toilets in bars, diners, the jail cell and home; going in the street is public urination if
-  a cop sees.
 
 ## Sounds to find
 

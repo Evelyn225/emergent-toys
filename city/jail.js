@@ -21,20 +21,30 @@ const barShade = (i, t, L) => {
 const inmate = (x, y, sit) => sit ? sitting(x, y, ORANGE, 0.42) : standing(x, y, ORANGE);
 const bunk = (x, y) => [BX(x, y, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // a blanket on a steel frame
   BX(x, y, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; })];
-// a cell's steel toilet: the cistern against the wall, a pedestal, and the bowl on it with a rim round the water. back:
-// which way the wall is (-1: toward -y)
+// a toilet: the cistern against the wall, a pedestal, and the bowl on it with a rim round the water. back: which way
+// the wall is (-1: toward -y). Steel in a cell, white porcelain anywhere nicer. The bowl carries `loo` (where it is),
+// which is how peeing finds it (pee.js); flushing swirls the water for a moment
 const steel = (i, t, L) => { BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : fract(HIT.w * 6) < 0.12 ? '-' : ' ', C(WHITE, L * 0.7)), true; };
-const toilet = (x, y, back = -1) => [
-  BX(x, y + back * 0.3, 0.24, 0.09, 0, 0.82, steel), // the cistern
+const porcelain = (i, t, L) => { BG[i] = C(WHITE, (3.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : ' ', C(GRAY, L * 0.7)), true; };
+let flushT = -9;
+const toilet = (x, y, back = -1, mat = steel) => [
+  BX(x, y + back * 0.3, 0.24, 0.09, 0, 0.82, mat), // the cistern
   BX(x + 0.16, y + back * 0.2, 0.025, 0.04, 0.68, 0.72, (i, t, L) => (set(i, '-', C(WHITE, L)), true)), // its flush handle
-  BX(x, y + back * 0.02, 0.11, 0.13, 0, 0.3, steel), // the pedestal
-  BX(x, y + back * 0.04, 0.21, 0.26, 0.3, 0.42, (i, t, L) => { // the bowl: an oval rim, water in the middle
-    if (HIT.face !== 5) { BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
-    const e = Math.hypot(HIT.u / 0.21, HIT.v / 0.26);
+  BX(x, y + back * 0.02, 0.11, 0.13, 0, 0.3, mat), // the pedestal
+  { ...BX(x, y + back * 0.04, 0.21, 0.26, 0.3, 0.42, (i, t, L) => { // the bowl: an oval rim, water in the middle
+    const rim = mat === steel ? GRAY : WHITE;
+    if (HIT.face !== 5) { BG[i] = C(rim, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+    const e = Math.hypot(HIT.u / 0.21, HIT.v / 0.26), swirl = T - flushT < 2.5;
     if (e > 1) return false;
-    if (e > 0.68) { BG[i] = C(GRAY, 2.2 + L * 0.3); return set(i, 'o', C(WHITE, L)), true; }
+    if (e > 0.68) { BG[i] = C(rim, 2.2 + L * 0.3); return set(i, 'o', C(mat === steel ? WHITE : GRAY, L)), true; }
+    if (swirl) { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, '@*o~'[(Math.floor(Math.atan2(HIT.v, HIT.u) * 2 + T * 12) & 3)], C(CYAN, L * 1.3)), true; }
     BG[i] = C(BLUE, 1.4 + L * 0.15); return set(i, e < 0.3 && hash(Math.floor(T * 2), 1, 15) > 0.6 ? '~' : ' ', C(CYAN, L)), true;
-  })];
+  }), loo: [x, y + back * 0.04] }];
+// a toilet with a partition either side of it, for a bar or a diner (no door: this isn't that kind of place)
+const stall = (x, y, back) => {
+  const panel = solid(BRICK, { panel: 0.3, top: '=' });
+  return [...toilet(x, y, back, porcelain), BX(x - 0.55, y + back * 0.1, 0.55, 0.03, 0, 1.8, panel, 0, 1), BX(x + 0.55, y + back * 0.1, 0.55, 0.03, 0, 1.8, panel, 0, 1)];
+};
 function jailProps(r) {
   const p = [];
   for (const cx of [4, 11, 18]) { // the three cells on your side (yours is the middle) and the three across
