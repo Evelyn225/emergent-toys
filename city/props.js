@@ -191,6 +191,53 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
   }
 }
+// subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
+// hole in the sidewalk SUBWAY_HOLE (half length along the street, half width) round the entrance point
+const SUBWAY_HOLE = [0.14, 0.065];
+const stations = [], STATION_AT = new Map(); // block -> its station
+{
+  const cand = [];
+  for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++)
+    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW) cand.push([hash(bx, by, 71), bx, by]);
+  cand.sort((p, q) => p[0] - q[0]);
+  for (const [, bx, by] of cand) {
+    if (stations.length >= 20) break;
+    if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 5)) continue;
+    let name = ST_NAMES[by];
+    if (stations.some(s => s.name === name)) name = AVE_NAMES[bx].replace(' AVE', '') + ' AVE';
+    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84 });
+    STATION_AT.set(bi(bx, by), stations[stations.length - 1]);
+  }
+}
+
+// the Chinatown night market: three stalls along the sidewalk of one Chinatown street (the plain block nearest the
+// middle of Chinatown, off the el's street, with no subway steps in the way), facing the road, red lanterns strung
+// above. Open 8pm to 2am; by day they're tarped over. at = where you stand to be served
+const nightMarketOpen = t => t >= 20 || t < 2;
+const NIGHT_MARKET = (() => {
+  const seed = DIST_SEEDS.find(s => s[2] === 'chinatown'); let best = null, bd = Infinity;
+  for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++) {
+    if (districtOf(bx, by) !== 'chinatown' || blockKind(bx, by) || !hseg(bx, by) || by === EL_ROW || by === EL_ROW + 1 || STATION_AT.has(bi(bx, by))) continue;
+    const d = Math.hypot(relB(bx - seed[0]), by - seed[1]);
+    if (d < bd) { bd = d; best = { bx, by }; }
+  }
+  return best;
+})();
+// each stall: a waist-high counter with the goods laid out on it, two poles, a striped canopy above with the sign on
+// its front, and (after dark) someone behind the counter to sell to you
+const STALLS = NIGHT_MARKET ? [['STREET FOOD', 3.0, RED], ['CHARMS', 5.0, MAG], ['CURIOS', 7.0, ORANGE]].map(([word, dx, canopy], k) => {
+  const x = NIGHT_MARKET.bx * 8 + dx, y = NIGHT_MARKET.by * 8 + 1.78;
+  solidBox(x, y + 0.02, true, 0.78, 0.15, 0.21, 0.26, 'stallroof', k); Object.assign(solids[solids.length - 1], { word, canopy, fs: -1 });
+  for (const s of [-1, 1]) solidBox(x + s * 0.72, y - 0.08, true, 0.012, 0.012, 0, 0.21, 'stallpole', k);
+  solidBox(x, y, true, 0.7, 0.09, 0, 0.1, 'stall', k);
+  const shirt = [WHITE, RED, BLUE][k];
+  extras.push({ x: x + 0.15 - k * 0.12, y: y + 0.14, z: 0, w: 0.06, h: 0.18, art: ART.walkB, when: () => nightMarketOpen(tod), // the stallholder
+    col: (c, row, L) => C(row < 2 ? SKIN : row === 2 ? shirt : GRAY, Math.max(L, 6)) });
+  return Object.assign(solids[solids.length - 1], { word, canopy, fs: -1, at: [x, y - 0.3] });
+}) : [];
+if (NIGHT_MARKET) for (let x = NIGHT_MARKET.bx * 8 + 2.4; x < NIGHT_MARKET.bx * 8 + 7.8; x += 0.45) // the lanterns, on a string along the street
+  extras.push({ x, y: NIGHT_MARKET.by * 8 + 1.45, z: 0.3, w: 0.045, h: 0.07, art: ['-|-', '(@)', ' v '], lantern: true,
+    col: (c, row, L) => row === 0 ? C(GRAY, L * 0.7) : C(c === '@' ? YEL : RED, Math.max(L, (night > 0.3 ? 1 : 0.4) * (c === '@' ? 15 : 12))) });
 // the Sunset Pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
 // boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
 // side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
@@ -321,25 +368,6 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
 const CANDY_CART = { name: 'COTTON CANDY', item: 'a cotton candy', price: 3, color: MAG, w: 0.3, art: [
   ['  @@@@  ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O'], ['  @@@@@ ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O']].map(pad) };
 vendors.push({ x: FAIR.cx + 1.1, y: FAIR.y0 + 0.9, ox: 0.12, oy: 0, type: CANDY_CART, shirt: WHITE });
-
-// subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
-// hole in the sidewalk SUBWAY_HOLE (half length along the street, half width) round the entrance point
-const SUBWAY_HOLE = [0.14, 0.065];
-const stations = [], STATION_AT = new Map(); // block -> its station
-{
-  const cand = [];
-  for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++)
-    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW) cand.push([hash(bx, by, 71), bx, by]);
-  cand.sort((p, q) => p[0] - q[0]);
-  for (const [, bx, by] of cand) {
-    if (stations.length >= 20) break;
-    if (stations.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 5)) continue;
-    let name = ST_NAMES[by];
-    if (stations.some(s => s.name === name)) name = AVE_NAMES[bx].replace(' AVE', '') + ' AVE';
-    stations.push({ name, bx, by, x: bx * 8 + 5, y: by * 8 + 1.84 });
-    STATION_AT.set(bi(bx, by), stations[stations.length - 1]);
-  }
-}
 
 // vending machines: on the sidewalk against a building, at the edge of a frontage (beside a shopfront, not across it),
 // clear of subway entrances, facing the street. {x, y, kind, c, s: the box's axis along the street, fs: which side of it (+-1) is the front}

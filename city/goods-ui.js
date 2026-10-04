@@ -27,6 +27,18 @@ function bitten(lines, f, from = 'right', edge = '') { // edge: what the bitten 
 // (bitten with 0.45 + f * 0.55: something you'd drink or slurp, bitten anyway, but never quite to nothing)
 const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars.includes(c)) return col; return dflt; };
 const HAND = {
+  // the night market's: street food, charms, curios, and the two that bend the world
+  bao: (it, f) => [bitten(['   _.~~._', '  ( ~ ~  )', ' (        )', "  `------'"], f), (c, r) => r < 2 && c === '~' ? C(GRAY, 12) : C(WHITE, 14)],
+  eggwaffle: (it, f) => [bitten([' .oOoOoOo.', ' oOoOoOoOo', ' oOoOoOoOo', " `oOoOoOo'"], f), (c, r) => c === 'O' ? C(YEL, 15) : C(ORANGE, 13)],
+  stinkytofu: (it, f) => [[' ~ ~ ~', ...Array.from({ length: Math.max(1, it.uses) }, () => ' [##]'), '   |', '   |'], (c, r) => c === '~' ? C(GREEN, 10) : c === '#' ? C(ORANGE, 14) : c === '|' ? C(BRICK, 12) : C(YEL, 13)],
+  bubbletea: (it, f) => [filled(['    //', '  .//__.', ' |      |', ' |      |', ' |      |', ' |oOoOoo|', "  `----'"], [[2, 2, 7], [3, 2, 7], [4, 2, 7]], f, ':', '~'),
+    (c, r) => r < 2 && c === '/' ? C(MAG, 13) : c === 'o' || c === 'O' ? C(BRICK, 10) : c === ':' || c === '~' ? C(WARM, 14) : C(WHITE, 11)],
+  redstring: () => [['  .----.', ' (      )', '  `-oo-\'', '     \\\\'], (c, r) => c === 'o' ? C(YEL, 15) : C(RED, 13)],
+  luckycoin: () => [['  .---.', ' / .-. \\', '| | # | |', ' \\ `-\' /', "  `---'"], (c, r) => c === '#' ? C(GRAY, 6) : C(YEL, 14)],
+  mysterybox: () => [['  _\\ /_', ' |  X  |', ' |  ?  |', ' |_____|'], (c, r) => c === '?' ? C(WHITE, 15) : c === 'X' || c === '\\' || c === '/' ? C(RED, 14) : C(BRICK, 13)],
+  pocketwatch: () => { const k = Math.floor(T * (K.KeyT && timeKeys() ? 12 : 1)) & 3; // the hands, round and round
+    return [['    o', '  .-^-.', ' / 12  \\', `|9  ${'|/-\\'[k]}  3|`, ' \\  6  /', "  `---'"], (c, r) => r === 0 ? C(GRAY, 12) : r === 3 && '|/-\\'.includes(c) ? C(GRAY, 3) : /[0-9]/.test(c) ? C(BRICK, 9) : r === 1 || c === '/' || c === '\\' || c === '`' || c === "'" || c === '|' ? C(YEL, 13) : C(WARM, 14)]; },
+  cityglobe: () => [['  .-----.', ' / * # * \\', '| #|#|#|# |', ' \\ ##### /', "  '-----'", ' [GLYPHPT]'], (c, r) => r === 5 ? (c === '[' || c === ']' ? C(BRICK, 13) : C(YEL, 12)) : c === '*' ? C(WHITE, 15) : c === '#' ? C(YEL, 13) : C(CYAN, 12)],
   // drinks: a paper cup steams less as it goes; glasses show their level
   coffee: (it, f) => [[f > 0.5 ? '  ( ( (' : '', f > 0.25 ? '   ) ) )' : '', ' ._______.', ' [_______]', '  |     |', '  |CAFE |', '  |     |', '   \\___/'],
     (c, r) => r < 2 ? C(WHITE, 8) : 'CAFE'.includes(c) ? C(GREEN, 13) : r < 4 ? C(GRAY, 12) : C(WHITE, 14)],

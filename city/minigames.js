@@ -648,7 +648,7 @@ GAMES.ducks = (rnd = Math.random) => {
   const tier = () => { let r = rnd(); for (const [v, p] of DUCK_TIERS) if ((r -= p) < 0) return v; return 1; };
   const gold = rnd() < 0.5 ? rnd() * 12 | 0 : -1;
   const ducks = Array.from({ length: 12 }, (_, k) => ({ s: k * LAP / 12 + rnd() * 1.5, worth: k === gold ? (rnd() < 0.7 ? 25 : 50) : tier(), gold: k === gold, ph: rnd() * 6 }));
-  let hooks = 3, hx = 16, dip = 0, held = null, card = null, splash = null, t = 0;
+  let hooks = 3, hx = 16, dip = 0, dipOn = null, held = null, card = null, splash = null, t = 0;
   g.ducks = ducks; // (for the tests)
   const under = () => ducks.find(d => { const p = at(d.s); return p.near && hx >= p.x - 0.3 && hx <= p.x + 3.3; });
   g.under = under;
@@ -673,14 +673,14 @@ GAMES.ducks = (rnd = Math.random) => {
     }
     if (dip > 0) { // the hook's in the water
       if ((dip -= dt) <= 0) {
-        const d = under();
+        const d = dipOn; // (the duck that was under the hook when you dipped it: it doesn't get to swim off)
         if (d) { held = { d, up: 0, from: at(d.s) }; hooks--; ev.push('eat'); } else { splash = { x: hx, t: 0.6 }; ev.push('miss'); }
         dip = 0;
       }
       return ev;
     }
     if (k.left) hx = Math.max(2, hx - dt * 12); if (k.right) hx = Math.min(33, hx + dt * 12);
-    if (k.actP && hooks > 0) { dip = 0.22; ev.push('launch'); }
+    if (k.actP && hooks > 0) { dip = 0.22; dipOn = under(); ev.push('launch'); }
     return ev;
   };
   g.draw = (put, text) => {
