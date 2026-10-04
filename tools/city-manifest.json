@@ -2,6 +2,7 @@
   "pure": [
     "city/core.js",
     "city/state.js",
+    "city/needs.js",
     "city/art.js",
     "city/world.js",
     "city/props.js",

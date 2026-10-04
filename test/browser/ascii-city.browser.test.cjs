@@ -356,6 +356,78 @@ test('skateboard tricks by flick: each way picks its trick, and on a phone a swi
   } finally { await browser.close(); }
 });
 
+test('roofs: step across onto the roof next door, walk off the edge and land hard, leap a street onto a lower roof', () => withPage(async page => {
+  // a roof whose neighbour to the east is about level (but not the same); one whose east side drops to the street;
+  // and one across a two-cell street from a roof 4-8m lower
+  const spots = await page.evaluate(() => {
+    let across = null, edge = null, leap = null;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const h = map[idx(x, y)], e = map[idx(x + 1, y)];
+      if (!h || map[idx(x - 1, y)] !== h || map[idx(x, y - 1)] !== h || map[idx(x, y + 1)] !== h) continue;
+      if (!across && e && e !== h && Math.abs(e - h) <= ROOF_STEP) across = [x, y, h, e];
+      if (!edge && !e && h >= 1.4 && h <= 1.8 && ROAD[idx(x + 1, y)]) edge = [x, y, h];
+      const far = map[idx(x + 3, y)];
+      if (!leap && !e && !map[idx(x + 2, y)] && far && map[idx(x + 4, y)] === far && (h - far) * 10 >= 4 && (h - far) * 10 <= 8) leap = [x, y, h, far];
+    }
+    return { across, edge, leap };
+  });
+  assert.ok(spots.across && spots.edge && spots.leap, JSON.stringify(spots));
+  const [x, y, h, e] = spots.across;
+  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = { kind: 'store', def: { ex: 2 } }; roofLot = roofCells(x, y); px = x + 0.3; py = y + 0.5; a = 0; pitch = 0; }, [x, y, h]);
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, roofH, onRoofLot()]), ['roof', e, false], 'over on the next roof, away from the stairs');
+  // to the edge, facing the street, and keep walking: there's no wall, you go over
+  const [ex, ey, eh] = spots.edge;
+  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; roofLot = roofCells(x, y); px = x + 0.6; py = y + 0.5; a = 0; refillNeeds(); }, [ex, ey, eh]);
+  assert.match(await page.evaluate(() => promptText()), /edge: \d+m drop/);
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(1200); await page.keyboard.up('KeyW');
+  assert.strictEqual(await page.evaluate(() => mode), 'walk', 'over the edge');
+  await page.waitForTimeout(2500);
+  const r = await page.evaluate(() => [body.z, needs.health]);
+  assert.ok(r[0] === 0 && r[1] < 100 && r[1] > 0, `down, hurt but standing (${r})`);
+  // a running leap from the edge clears the street and comes down on the lower roof across it
+  const [lx, ly, lh, far] = spots.leap;
+  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = null; roofLot = roofCells(x, y); px = x + 0.85; py = y + 0.5; a = 0; refillNeeds(); }, [lx, ly, lh]);
+  await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW'); await page.keyboard.press('Space');
+  await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
+  await page.waitForTimeout(2500);
+  assert.deepStrictEqual(await page.evaluate(() => [mode, roofH, body.z]), ['roof', far, 0], 'landed on the roof across the street');
+  // no stairs on this one: the fire escape takes you down to the sidewalk beside it
+  assert.match(await page.evaluate(() => promptText()), /E: fire escape down/);
+  const up = await page.evaluate(() => [px, py]);
+  await page.keyboard.press('KeyE');
+  const down = await page.evaluate(([x, y]) => [mode, map[idx(Math.floor(px), Math.floor(py))], free(px, py), Math.hypot(rel(px - x), rel(py - y)) < 4], up);
+  assert.deepStrictEqual(down, ['walk', 0, true, true], 'on the street beside the building, somewhere you can stand');
+}));
+
+test('run dry and you pass out: the hospital, a bill, and the nurse patches you up; dev tools fill you up', () => withPage(async page => {
+  await page.evaluate(() => { money = 500; needs.food = 0; needs.drink = 0; needs.health = 0.05; });
+  await page.waitForTimeout(300);
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room && room.kind, money, needs.health]), ['room', 'hospital', 420, 100]);
+  assert.match(await page.evaluate(() => msgText), /hospital bed.*Dehydration.*\$80/);
+  await page.evaluate(() => { needs.health = 40; const [kx, ky] = room.def.keeper; px = kx; py = ky + 1.2; a = -Math.PI / 2; });
+  assert.match(await page.evaluate(() => promptText()), /patched up/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [needs.health, money]), [100, 395]);
+  await page.evaluate(() => { needs.food = 5; needs.drink = 5; });
+  await page.keyboard.press('F2'); await page.click('#dev [data-tab="other"]');
+  await page.evaluate(() => [...document.querySelectorAll('#dev [data-dev]')].find(b => b.textContent.startsWith('Fill food')).click());
+  assert.deepStrictEqual(await page.evaluate(() => [needs.food, needs.drink, needs.health]), [100, 100, 100]);
+}));
+
+test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
+  await page.evaluate(() => { tod = 23; enterRoom('stripclub', { ...CLUB.sh, ret: [px, py, a], line: '' }, [9, 12.4, -Math.PI / 2]); });
+  const r = await page.evaluate(() => {
+    const seated = room.props.filter(s => s.art === ART.sitterBack), tables = room.props.filter(s => s.box && s.box.z0 > 0.6 && s.box.z1 < 0.8);
+    const p = seated[0]; px = p.x; py = p.y + 0.9; a = -Math.PI / 2; // behind them, facing the stage
+    return [seated.length, tables.length, promptText()];
+  });
+  assert.ok(r[0] >= 1 && r[1] === 5, `punters and tables (${r})`); // (how many come in is random)
+  assert.strictEqual(r[2], 'E: talk');
+  await page.keyboard.press('KeyE');
+  assert.ok(await page.evaluate(() => ROOM_TALK.stripclub.some(l => msgText === `"${l}"`) || /^"/.test(msgText)), 'they say something');
+}));
+
 test('where you were is saved: you come back to the same spot on the street, and inside a shop to its door', () => withPage(async page => {
   const spot = await page.evaluate(() => { gotoShop('BAKERY'); saveGame(); return [px, py, a]; });
   await page.reload(); await page.waitForTimeout(300);

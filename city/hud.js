@@ -101,13 +101,19 @@ function promptText() {
     { const sp = shotengaiPrompt(); if (sp) return sp; }
     if (roomPerson()) return 'E: talk';
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
+    if (room.kind === 'hospital' && nearKeeper() && needs.health < 95) return `E: get patched up (${fmt$(NURSE_FEE)})`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
     if (nearKeeper()) return `"${room.line}"`;
     if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
     return '';
   }
-  if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : room && room.kind === 'cathedral' ? 'The bell tower, 80m up.   E: back down the stairs' : 'E: take the stairs down'; }
+  if (mode === 'roof') {
+    const dr = droppedHere(), drop = edgeDrop(), edge = drop ? `edge: ${drop}m drop` : '';
+    if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
+    if (room && room.kind === 'cathedral') return 'The bell tower, 80m up.   E: back down the stairs';
+    return [onRoofLot() ? 'E: take the stairs down' : 'E: fire escape down', edge].filter(Boolean).join('   ');
+  }
   if (mode === 'fair') return fairRidePrompt();
   if (mode === 'boat') return gardensPrompt();
   if (mode === 'sea') return marinaPrompt();
@@ -223,6 +229,16 @@ function wrapText(s, maxW) {
   }
   return out;
 }
+// [text, colour] for each meter: "food [######--]"
+function needMeters() {
+  const bar = (label, v) => {
+    const n = Math.round(v / 12.5), col = v <= 0 ? (fract(T * 2) < 0.5 ? '#f44' : '#822') : v < 20 ? '#f84' : v < 50 ? '#dd5' : '#7c7';
+    return [`${label} [${'#'.repeat(n)}${'-'.repeat(8 - n)}]`, col];
+  };
+  const out = [bar('food', needs.food), bar('drink', needs.drink)];
+  if (needs.health < 100) out.push(bar('health', needs.health));
+  return out;
+}
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
   drawHeldBig();
@@ -236,7 +252,8 @@ function hud() {
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
-  hudBottom = (lines.length + task_.length) * FS + 10;
+  const meters = needMeters();
+  hudBottom = (lines.length + task_.length + 1) * FS + 14;
   wantedHud();
   if (job && mode === 'drive') jobArrow();
   minimap();
@@ -245,8 +262,14 @@ function hud() {
   const w = Math.max(...lines.map(l => g.measureText(l).width));
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, w + 8, FS * lines.length + 6);
   g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
+  { // hunger, thirst and (once it's down) health, under the help line: short bars, red and blinking when empty
+    const y = FS * lines.length + 6;
+    let x0 = 4;
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, meters.reduce((t, m) => t + g.measureText(m[0]).width + g.measureText('  ').width, 4) + 4, FS + 4);
+    for (const [txt, col] of meters) { g.fillStyle = col; g.fillText(txt, x0, y + 2); x0 += g.measureText(txt + '  ').width; }
+  }
   if (task_.length) { // the favour you're doing, under the help line
-    const y = FS * lines.length + 6, tw = Math.max(...task_.map(l => g.measureText(l).width));
+    const y = FS * (lines.length + 1) + 10, tw = Math.max(...task_.map(l => g.measureText(l).width));
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
     g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
   }
