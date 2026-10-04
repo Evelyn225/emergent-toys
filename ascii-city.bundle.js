@@ -56,7 +56,7 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
 }
 // ---- game state
 let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
-let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0;
+let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0, lookT = 0;
 let dayNum = 4; // days since a Monday: you arrive on a Friday evening (events.js)
 let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0, storm = 0;
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
@@ -8734,7 +8734,7 @@ function leaveCar() {
     else { const all = money; pay(all); say(`Fare's ${fmt$(fare)}. You've only got ${fmt$(all)}. The driver takes it, muttering.`, 4); }
     c.rider = c.dest = c.arrived = c.rush = false; plan(c);
   }
-  me = null; mode = 'walk';
+  me = null; mode = 'walk'; look = 0;
 }
 // taxi destinations: always a point in the middle of a street that exists
 const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
@@ -8892,7 +8892,7 @@ function interact() {
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
     }
     else { // a stolen car: if anyone saw, the police hear about it
-      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx);
+      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); look = 0;
       if (c.owned) { c.parked = false; say(`You get into your ${ITEMS[c.model].name}.`, 2); } // yours, bought and paid for
       else if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
       else {
@@ -11684,7 +11684,8 @@ function turnBy(mx, my) {
   if (paused || game) return;
   const s = settings.sensitivity;
   if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s); // the yo-yo's out: the mouse swings it, the view holds still
-  if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
+  if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
+  else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
 onmousemove = e => { if (document.pointerLockElement) turnBy(e.movementX, e.movementY); };
@@ -11755,7 +11756,7 @@ function loop(t) {
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
     if (body.seat && (f || s)) standUp(); // walking gets you up
     if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
-  } else if (mode === 'drive') drive(dt);
+  } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
   else if (mode === 'sea') stepSea(dt);
@@ -11803,9 +11804,10 @@ function loop(t) {
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { // a drink or two and the world sways; more and you're seeing double
-    camYaw = a; const wob = Math.min(1.3, fx.booze);
+    camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : 0; // (and at the wheel, wherever you're looking)
+    a += lk;
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
-    a += sa; pitch += sp_; render(dt); a -= sa; pitch -= sp_;
+    a += sa; pitch += sp_; render(dt); a -= sa + lk; pitch -= sp_;
     if (wob > 0.08) drunkVision(wob);
   }
   audioTick(dt);
@@ -11818,7 +11820,7 @@ function drunkVision(wob) {
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way
 function chaseCam(dt) {
-  const target = mode === 'taxi' ? a : Math.atan2(me.hy, me.hx);
+  const target = mode === 'taxi' ? a : Math.atan2(me.hy, me.hx) + look;
   camYaw += (mod(target - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 5);
   const bx = Math.cos(camYaw), by = Math.sin(camYaw);
   let back = 1.1;
