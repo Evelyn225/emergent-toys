@@ -59,6 +59,7 @@ function citySprites() {
   forNear(lampsB, ({ x, y, ax, ay }) => {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
     if (depth < 0.05 || depth > vis) return;
+    if (vx * vx + vy * vy < LAMP_3D * LAMP_3D) return drawLamp3D(vx, vy, ax, ay); // up close: a real one
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
@@ -143,6 +144,39 @@ function lampCell(i, u, z, du, dz, L, s) {
     }
   }
   return false;
+}
+
+// a lamp up close, built from boxes so it's solid from any side: a flared base, the pole with its collar, the swan
+// neck as a chain of short pieces round the half circle, and the lantern hanging off the end (glowing after dark).
+// Further off the billboard (lampCell) looks the same and costs far less.
+const LAMP_3D = 5, NECK_BITS = 7;
+const steelBox = ch => (i, t, L) => { BG[i] = C(GRAY, (0.9 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '.' : ch, C(GRAY, L * 1.15)), true; };
+const STEEL = { pole: steelBox('|'), base: steelBox('#'), arm: steelBox('='), cap: steelBox('_') };
+function drawLamp3D(vx, vy, ax, ay) {
+  const lit = lampsOn > 0.3, B = (u, z0, z1, hl, hw, shade) => drawBox(boxAt(vx + ax * u, vy + ay * u, ax, ay, hl, hw, z0, z1), shade);
+  B(0, 0, 0.06, 0.026, 0.026, STEEL.base);
+  B(0, 0.06, LAMP_TOP, 0.01, 0.01, STEEL.pole);
+  B(0, 0.41, 0.43, 0.016, 0.016, STEEL.cap);
+  for (let k = 0; k < NECK_BITS; k++) { // the neck: up and over from the top of the pole to the lantern
+    const t0 = Math.PI * (1 - k / NECK_BITS), t1 = Math.PI * (1 - (k + 1) / NECK_BITS);
+    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = LAMP_TOP + NECK * Math.sin(t0), z1 = LAMP_TOP + NECK * Math.sin(t1);
+    B((u0 + u1) / 2, Math.min(z0, z1) - 0.007, Math.max(z0, z1) + 0.007, Math.abs(u1 - u0) / 2 + 0.007, 0.008, STEEL.arm);
+  }
+  const hu = 2 * NECK, top = LAMP_TOP;
+  B(hu, top - 0.03, top, 0.004, 0.004, STEEL.pole); // the drop
+  B(hu, top - 0.055, top - 0.03, 0.032, 0.032, STEEL.cap);
+  B(hu, top - 0.125, top - 0.055, 0.024, 0.024, (i, t, L) => { // the glass
+    if (HIT.face === 6) { BG[i] = C(GRAY, 1); return set(i, 'v', C(GRAY, L)), true; }
+    const edge = Math.abs(Math.abs(HIT.face <= 2 ? HIT.v : HIT.u) - 0.024) < 0.004;
+    if (lit) BG[i] = C(WARM, 4 + lampsOn * 4);
+    return set(i, edge ? '|' : lit ? '#' : ':', lit && !edge ? C(WARM, 15) : C(GRAY, L * 0.8)), true;
+  });
+  B(hu, top - 0.14, top - 0.125, 0.008, 0.008, STEEL.pole);
+  if (lit) drawShape(vx + ax * hu, vy + ay * hu, top - 0.16, 0.075, 0.13, (i, u, z, du, dz) => { // the soft glow round the lantern
+    const halo = Math.hypot(u / 0.075, (z - 0.065) / 0.065);
+    if (halo >= 1) return false;
+    BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, ' ', 0), true;
+  });
 }
 
 // ---- vehicles as real boxes (see drawBox): a body, a cabin with glass, and whatever goes on the roof.

@@ -7,6 +7,22 @@ const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
 const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448 };
 const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
+// is a shop sign close enough for its letters to be drawn big? Decided for the whole sign at once (from its far end,
+// where the letters are smallest), so it never shows some letters big and the rest small. p = this letter's index.
+function signBig(u, uStep, d, side, mx, my, wc, p, len) {
+  if (0.1 / uStep < 1.2) return false; // (nowhere near)
+  const sgn = Math.sign(u * wc) || 1, line = side ? my + (rel(py - my) < 0 ? 0 : 1) : mx + (rel(px - mx) < 0 ? 0 : 1);
+  const qx = side ? rel(wc - px) : rel(line - px), qy = side ? rel(line - py) : rel(wc - py);
+  let small = Infinity;
+  for (const k of [0, len - 1]) { // the first and last letters: one of them is the furthest
+    const at = sgn * (Math.floor(u * 10) - p + k) / 10 - wc; // from here along the wall to the letter's left edge
+    const col = off => { const X = qx + (side ? at + off : 0), Y = qy + (side ? 0 : at + off), dep = dx * X + dy * Y; return dep > 0.05 ? [(-dy * X + dx * Y) / dep * projX, dep] : null; };
+    const a0 = col(0), a1 = col(0.1 * sgn);
+    if (!a0 || !a1) continue;
+    small = Math.min(small, Math.abs(a1[0] - a0[0]) / 2.2, 0.08 * projY / Math.max(a0[1], a1[1]) / 2.8);
+  }
+  return small >= 1 && small !== Infinity;
+}
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
@@ -19,7 +35,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   if (graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return; // a mural, or somebody's tag
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
-  BG[i] = bgAt(FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d);
+  BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
     if (z > 0.32) {
@@ -31,7 +47,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       // From a little further off, while a letter's still only a few cells big, each cell shows how much of the letters
       // falls in it (sampled 3 x 3), so they firm up smoothly instead of breaking into bits
       const du = uStep, dz = d / projY;
-      if (0.1 / du >= 2.2 && 0.08 / dz >= 2.8) {
+      if (signBig(u, uStep, d, side, mx, my, wc, p, w.length)) {
         let on = 0, pk = -1;
         for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
           const uu = u + (a - 1) * du / 3, zz = z + (b - 1) * dz / 3, q = mod(Math.floor(uu * 10), m);
@@ -85,7 +101,17 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
   if (sh.aqua) return aquaUpper(i, u, uStep, z, d, L);
-  const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
+  const zz = z - 0.4, fl = Math.floor(zz * 3);
+  let fz = fract(zz * 3);
+  // the top floor: when the roof cuts it short its windows are squeezed to fit below the cornice, and a sliver too
+  // thin for windows is a plain parapet (not windows jammed right up under the roof)
+  if (sty !== 1 && sty !== 14 && sty !== 8 && sty !== 17 && !(sty >= 11 && sty <= 13)) {
+    const base = 0.4 + fl / 3, room_ = h - 0.07 - base;
+    if (room_ < 1 / 3) {
+      if (room_ < 0.22) return set(i, fract(u * 6) < 0.08 ? '|' : z > h - 0.07 ? '_' : ' ', C(sty === 2 || sty === 9 ? BRICK : GRAY, L * 0.6));
+      fz = Math.min(1, (z - base) / room_);
+    }
+  }
   // a lit window up close: the room behind it, in depth (k windows a cell, so the room is the bay's width)
   const inside = (k, col) => d < 3.5 ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
   if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
@@ -159,6 +185,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (fz < 0.12) return set(i, '-', C(GRAY, L));
     if (hash(Math.floor(u * 8), fl, sk) > litT + 0.15) return set(i, '+', C(CYAN, Math.max(L, glowL)));
     if (fract((u * 0.7 + zz) * 2) < 0.06) return set(i, '/', C(CYAN, L * 0.6));
+    if (BG[i] === NONE) BG[i] = C(GRAY, 1); // dark glass at night, a shade off the sky so the tower doesn't vanish into it
     return set(i, ' ', 0);
   }
   if (sty === 7) { // tenement: cream plaster, two windows a bay, black fire escapes zig-zagging up the front

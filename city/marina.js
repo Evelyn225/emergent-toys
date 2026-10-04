@@ -8,6 +8,7 @@ function signChar(word, q, dz, t, half) {
   const n = word.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * half) * n;
   return Math.abs(dz) < t / projY / 2 && k >= 0 && k < word.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
 }
+const BOW_SLICES = 6;
 const boatBob = (x, y) => Math.sin(T * 1.3 + x * 3 + y * 2) * 0.0035;
 // b: { kind, col }. (vx, vy) relative to you, (hx, hy) the way the bow points. moving: 0..1 how hard it's going (a wake)
 function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
@@ -25,17 +26,22 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
       return set(i, ch, C(hullCol === WHITE || hullCol === YEL ? BLUE : WHITE, Math.max(L, 9))), true;
     }
     if (f === 5) { BG[i] = C(deck, 1.5 + L * 0.35); return set(i, deck === BRICK && fract(HIT.u * 40) < 0.2 ? '=' : ' ', C(BRICK, L * 0.6)), true; }
-    BG[i] = C(hullCol, (1.4 + L * 0.45) * shadeFace(f));
+    BG[i] = C(hullCol, (1.4 + L * 0.45) * (f <= 2 ? 0.75 : shadeFace(f)) * (w < top * 0.4 ? 0.7 : 1)); // (darker low down, where she curves under)
     if (w < 0.01) { BG[i] = C(b.kind === 'ferry' ? BLUE : GRAY, 1 + L * 0.15); return set(i, moving && hash(Math.floor(HIT.u * 60 - T * 9), 1, 1501) > 0.5 ? '~' : '_', C(WHITE, L * 0.8)), true; }
     if (w > top - 0.007) return set(i, '=', C(hullCol === WHITE ? GRAY : WHITE, L)), true;
     if (b.kind === 'tug' && w > 0.015 && w < 0.03 && Math.abs(fract(HIT.u * 9) - 0.5) < 0.18) { BG[i] = C(GRAY, 1); return set(i, 'O', C(GRAY, L * 0.6)), true; } // tyres for fenders
     if ((b.kind === 'cruiser' || b.kind === 'speedboat') && Math.abs(w - top * 0.55) < 0.005) return set(i, '-', C(hullCol === BLUE ? WHITE : BLUE, L)), true; // a go-faster stripe
     return set(i, ' ', 0), true;
   };
-  const mainL = hl * 0.775, mainU = -hl + mainL; // the main hull runs from the stern to 0.55 hl; the bow is two narrower steps
-  part(mainU, mainL, hw, 0, fb, hull(fb, true));
-  part(hl * 0.685, hl * 0.135, hw * 0.7, 0, fb * 1.12, hull(fb * 1.12));
-  part(hl * 0.91, hl * 0.09, hw * 0.36, 0, fb * 1.25, hull(fb * 1.25));
+  // the hull, in slices so it curves: a transom at the stern (her name on it), the body, then the bow narrowing to a
+  // point and rising a little (the sheer) in BOW_SLICES steps along a curve
+  part(-hl * 0.95, hl * 0.05, hw * 0.93, 0, fb, hull(fb, true));
+  part(-hl * 0.35, hl * 0.55, hw, 0, fb, hull(fb));
+  for (let k = 0; k < BOW_SLICES; k++) {
+    const t0 = k / BOW_SLICES, t1 = (k + 1) / BOW_SLICES, tm = (t0 + t1) / 2, u0 = hl * (0.2 + 0.8 * t0), u1 = hl * (0.2 + 0.8 * t1);
+    const top = fb * (1 + 0.28 * tm * tm);
+    part((u0 + u1) / 2, (u1 - u0) / 2 + 0.002, hw * Math.max(0.12, Math.sqrt(1 - tm ** 1.7)), 0, top, hull(top));
+  }
   if (moving > 0.05) part(-hl - hl * 1.2, hl * 1.2, hw * 3, 0, 0.002, (i, t, L) => { // the wake: a V of foam opening out behind
     if (HIT.face !== 5) return false;
     const q = (-hl - HIT.u) / (hl * 2.4), edge = hw * (0.7 + q * 2.2), av = Math.abs(HIT.v);

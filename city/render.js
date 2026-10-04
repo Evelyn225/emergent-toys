@@ -9,7 +9,7 @@ function drawArt(rx_, ry_, z, w, h, art, colFn) {
   const c0 = Math.max(0, Math.floor(left)), c1 = Math.min(cols, Math.ceil(right));
   const r0 = Math.max(0, Math.floor(top)), r1 = Math.min(rows, Math.ceil(bot));
   const L = (1 - depth / vis) * 15 * amb, AR = art.length, AC = art[0].length;
-  const cellW = (right - left) / AC, cellH = (bot - top) / AR, stretched = cellW > 1.5 || cellH > 1.5;
+  const cellW = (right - left) / AC, cellH = (bot - top) / AR, stretched = cellW > 1 || cellH > 1;
   for (let r = r0; r < r1; r++) {
     const ay = Math.min(AR - 1, Math.max(0, (r + 0.5 - top) / (bot - top) * AR | 0)), line = art[ay];
     for (let c = c0; c < c1; c++) {

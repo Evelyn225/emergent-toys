@@ -253,7 +253,7 @@ function hud() {
   const prompt = wrapText(keyless(promptText()), left), pb = (mode === 'drive' || mode === 'taxi' ? rows - 5 : rows - 2) * FS - (TOUCH && hotbarUp() ? FS * 2 + 12 : 0);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
-                                   [msg, Math.max(FS * 4, hudBottom + FS * 1.5), '#fff', cv.width / 2]]) {
+                                   [msg, Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8), '#fff', cv.width / 2]]) {
     ls.forEach((s, k) => {
       const w = g.measureText(s).width, yy = y0 + k * (FS + 4);
       g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(cx - w / 2 - 6, yy - 3, w + 12, FS + 6);

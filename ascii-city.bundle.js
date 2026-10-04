@@ -3820,6 +3820,22 @@ const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
 const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448 };
 const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
+// is a shop sign close enough for its letters to be drawn big? Decided for the whole sign at once (from its far end,
+// where the letters are smallest), so it never shows some letters big and the rest small. p = this letter's index.
+function signBig(u, uStep, d, side, mx, my, wc, p, len) {
+  if (0.1 / uStep < 1.2) return false; // (nowhere near)
+  const sgn = Math.sign(u * wc) || 1, line = side ? my + (rel(py - my) < 0 ? 0 : 1) : mx + (rel(px - mx) < 0 ? 0 : 1);
+  const qx = side ? rel(wc - px) : rel(line - px), qy = side ? rel(line - py) : rel(wc - py);
+  let small = Infinity;
+  for (const k of [0, len - 1]) { // the first and last letters: one of them is the furthest
+    const at = sgn * (Math.floor(u * 10) - p + k) / 10 - wc; // from here along the wall to the letter's left edge
+    const col = off => { const X = qx + (side ? at + off : 0), Y = qy + (side ? 0 : at + off), dep = dx * X + dy * Y; return dep > 0.05 ? [(-dy * X + dx * Y) / dep * projX, dep] : null; };
+    const a0 = col(0), a1 = col(0.1 * sgn);
+    if (!a0 || !a1) continue;
+    small = Math.min(small, Math.abs(a1[0] - a0[0]) / 2.2, 0.08 * projY / Math.max(a0[1], a1[1]) / 2.8);
+  }
+  return small >= 1 && small !== Infinity;
+}
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
@@ -3832,7 +3848,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   if (graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return; // a mural, or somebody's tag
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
-  BG[i] = bgAt(FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d);
+  BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
     if (z > 0.32) {
@@ -3844,7 +3860,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       // From a little further off, while a letter's still only a few cells big, each cell shows how much of the letters
       // falls in it (sampled 3 x 3), so they firm up smoothly instead of breaking into bits
       const du = uStep, dz = d / projY;
-      if (0.1 / du >= 2.2 && 0.08 / dz >= 2.8) {
+      if (signBig(u, uStep, d, side, mx, my, wc, p, w.length)) {
         let on = 0, pk = -1;
         for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
           const uu = u + (a - 1) * du / 3, zz = z + (b - 1) * dz / 3, q = mod(Math.floor(uu * 10), m);
@@ -3898,7 +3914,17 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
   if (sh.aqua) return aquaUpper(i, u, uStep, z, d, L);
-  const zz = z - 0.4, fl = Math.floor(zz * 3), fz = fract(zz * 3);
+  const zz = z - 0.4, fl = Math.floor(zz * 3);
+  let fz = fract(zz * 3);
+  // the top floor: when the roof cuts it short its windows are squeezed to fit below the cornice, and a sliver too
+  // thin for windows is a plain parapet (not windows jammed right up under the roof)
+  if (sty !== 1 && sty !== 14 && sty !== 8 && sty !== 17 && !(sty >= 11 && sty <= 13)) {
+    const base = 0.4 + fl / 3, room_ = h - 0.07 - base;
+    if (room_ < 1 / 3) {
+      if (room_ < 0.22) return set(i, fract(u * 6) < 0.08 ? '|' : z > h - 0.07 ? '_' : ' ', C(sty === 2 || sty === 9 ? BRICK : GRAY, L * 0.6));
+      fz = Math.min(1, (z - base) / room_);
+    }
+  }
   // a lit window up close: the room behind it, in depth (k windows a cell, so the room is the bay's width)
   const inside = (k, col) => d < 3.5 ? (litRoom(i, u, z, Math.floor(u * k) / k, (Math.floor(u * k) + 1) / k, 0.4 + fl / 3, 0.4 + (fl + 1) / 3, col, Math.max(L, glowL), Math.floor(u * k) * 7 + fl * 131 + sk), true) : false;
   if (sty === 17) return shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL);
@@ -3972,6 +3998,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (fz < 0.12) return set(i, '-', C(GRAY, L));
     if (hash(Math.floor(u * 8), fl, sk) > litT + 0.15) return set(i, '+', C(CYAN, Math.max(L, glowL)));
     if (fract((u * 0.7 + zz) * 2) < 0.06) return set(i, '/', C(CYAN, L * 0.6));
+    if (BG[i] === NONE) BG[i] = C(GRAY, 1); // dark glass at night, a shade off the sky so the tower doesn't vanish into it
     return set(i, ' ', 0);
   }
   if (sty === 7) { // tenement: cream plaster, two windows a bay, black fire escapes zig-zagging up the front
@@ -4697,6 +4724,7 @@ function citySprites() {
   forNear(lampsB, ({ x, y, ax, ay }) => {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
     if (depth < 0.05 || depth > vis) return;
+    if (vx * vx + vy * vy < LAMP_3D * LAMP_3D) return drawLamp3D(vx, vy, ax, ay); // up close: a real one
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
   });
@@ -4781,6 +4809,39 @@ function lampCell(i, u, z, du, dz, L, s) {
     }
   }
   return false;
+}
+
+// a lamp up close, built from boxes so it's solid from any side: a flared base, the pole with its collar, the swan
+// neck as a chain of short pieces round the half circle, and the lantern hanging off the end (glowing after dark).
+// Further off the billboard (lampCell) looks the same and costs far less.
+const LAMP_3D = 5, NECK_BITS = 7;
+const steelBox = ch => (i, t, L) => { BG[i] = C(GRAY, (0.9 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '.' : ch, C(GRAY, L * 1.15)), true; };
+const STEEL = { pole: steelBox('|'), base: steelBox('#'), arm: steelBox('='), cap: steelBox('_') };
+function drawLamp3D(vx, vy, ax, ay) {
+  const lit = lampsOn > 0.3, B = (u, z0, z1, hl, hw, shade) => drawBox(boxAt(vx + ax * u, vy + ay * u, ax, ay, hl, hw, z0, z1), shade);
+  B(0, 0, 0.06, 0.026, 0.026, STEEL.base);
+  B(0, 0.06, LAMP_TOP, 0.01, 0.01, STEEL.pole);
+  B(0, 0.41, 0.43, 0.016, 0.016, STEEL.cap);
+  for (let k = 0; k < NECK_BITS; k++) { // the neck: up and over from the top of the pole to the lantern
+    const t0 = Math.PI * (1 - k / NECK_BITS), t1 = Math.PI * (1 - (k + 1) / NECK_BITS);
+    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = LAMP_TOP + NECK * Math.sin(t0), z1 = LAMP_TOP + NECK * Math.sin(t1);
+    B((u0 + u1) / 2, Math.min(z0, z1) - 0.007, Math.max(z0, z1) + 0.007, Math.abs(u1 - u0) / 2 + 0.007, 0.008, STEEL.arm);
+  }
+  const hu = 2 * NECK, top = LAMP_TOP;
+  B(hu, top - 0.03, top, 0.004, 0.004, STEEL.pole); // the drop
+  B(hu, top - 0.055, top - 0.03, 0.032, 0.032, STEEL.cap);
+  B(hu, top - 0.125, top - 0.055, 0.024, 0.024, (i, t, L) => { // the glass
+    if (HIT.face === 6) { BG[i] = C(GRAY, 1); return set(i, 'v', C(GRAY, L)), true; }
+    const edge = Math.abs(Math.abs(HIT.face <= 2 ? HIT.v : HIT.u) - 0.024) < 0.004;
+    if (lit) BG[i] = C(WARM, 4 + lampsOn * 4);
+    return set(i, edge ? '|' : lit ? '#' : ':', lit && !edge ? C(WARM, 15) : C(GRAY, L * 0.8)), true;
+  });
+  B(hu, top - 0.14, top - 0.125, 0.008, 0.008, STEEL.pole);
+  if (lit) drawShape(vx + ax * hu, vy + ay * hu, top - 0.16, 0.075, 0.13, (i, u, z, du, dz) => { // the soft glow round the lantern
+    const halo = Math.hypot(u / 0.075, (z - 0.065) / 0.065);
+    if (halo >= 1) return false;
+    BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, ' ', 0), true;
+  });
 }
 
 // ---- vehicles as real boxes (see drawBox): a body, a cabin with glass, and whatever goes on the roof.
@@ -7664,6 +7725,7 @@ function signChar(word, q, dz, t, half) {
   const n = word.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * half) * n;
   return Math.abs(dz) < t / projY / 2 && k >= 0 && k < word.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
 }
+const BOW_SLICES = 6;
 const boatBob = (x, y) => Math.sin(T * 1.3 + x * 3 + y * 2) * 0.0035;
 // b: { kind, col }. (vx, vy) relative to you, (hx, hy) the way the bow points. moving: 0..1 how hard it's going (a wake)
 function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
@@ -7681,17 +7743,22 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
       return set(i, ch, C(hullCol === WHITE || hullCol === YEL ? BLUE : WHITE, Math.max(L, 9))), true;
     }
     if (f === 5) { BG[i] = C(deck, 1.5 + L * 0.35); return set(i, deck === BRICK && fract(HIT.u * 40) < 0.2 ? '=' : ' ', C(BRICK, L * 0.6)), true; }
-    BG[i] = C(hullCol, (1.4 + L * 0.45) * shadeFace(f));
+    BG[i] = C(hullCol, (1.4 + L * 0.45) * (f <= 2 ? 0.75 : shadeFace(f)) * (w < top * 0.4 ? 0.7 : 1)); // (darker low down, where she curves under)
     if (w < 0.01) { BG[i] = C(b.kind === 'ferry' ? BLUE : GRAY, 1 + L * 0.15); return set(i, moving && hash(Math.floor(HIT.u * 60 - T * 9), 1, 1501) > 0.5 ? '~' : '_', C(WHITE, L * 0.8)), true; }
     if (w > top - 0.007) return set(i, '=', C(hullCol === WHITE ? GRAY : WHITE, L)), true;
     if (b.kind === 'tug' && w > 0.015 && w < 0.03 && Math.abs(fract(HIT.u * 9) - 0.5) < 0.18) { BG[i] = C(GRAY, 1); return set(i, 'O', C(GRAY, L * 0.6)), true; } // tyres for fenders
     if ((b.kind === 'cruiser' || b.kind === 'speedboat') && Math.abs(w - top * 0.55) < 0.005) return set(i, '-', C(hullCol === BLUE ? WHITE : BLUE, L)), true; // a go-faster stripe
     return set(i, ' ', 0), true;
   };
-  const mainL = hl * 0.775, mainU = -hl + mainL; // the main hull runs from the stern to 0.55 hl; the bow is two narrower steps
-  part(mainU, mainL, hw, 0, fb, hull(fb, true));
-  part(hl * 0.685, hl * 0.135, hw * 0.7, 0, fb * 1.12, hull(fb * 1.12));
-  part(hl * 0.91, hl * 0.09, hw * 0.36, 0, fb * 1.25, hull(fb * 1.25));
+  // the hull, in slices so it curves: a transom at the stern (her name on it), the body, then the bow narrowing to a
+  // point and rising a little (the sheer) in BOW_SLICES steps along a curve
+  part(-hl * 0.95, hl * 0.05, hw * 0.93, 0, fb, hull(fb, true));
+  part(-hl * 0.35, hl * 0.55, hw, 0, fb, hull(fb));
+  for (let k = 0; k < BOW_SLICES; k++) {
+    const t0 = k / BOW_SLICES, t1 = (k + 1) / BOW_SLICES, tm = (t0 + t1) / 2, u0 = hl * (0.2 + 0.8 * t0), u1 = hl * (0.2 + 0.8 * t1);
+    const top = fb * (1 + 0.28 * tm * tm);
+    part((u0 + u1) / 2, (u1 - u0) / 2 + 0.002, hw * Math.max(0.12, Math.sqrt(1 - tm ** 1.7)), 0, top, hull(top));
+  }
   if (moving > 0.05) part(-hl - hl * 1.2, hl * 1.2, hw * 3, 0, 0.002, (i, t, L) => { // the wake: a V of foam opening out behind
     if (HIT.face !== 5) return false;
     const q = (-hl - HIT.u) / (hl * 2.4), edge = hw * (0.7 + q * 2.2), av = Math.abs(HIT.v);
@@ -7826,7 +7893,7 @@ function drawArt(rx_, ry_, z, w, h, art, colFn) {
   const c0 = Math.max(0, Math.floor(left)), c1 = Math.min(cols, Math.ceil(right));
   const r0 = Math.max(0, Math.floor(top)), r1 = Math.min(rows, Math.ceil(bot));
   const L = (1 - depth / vis) * 15 * amb, AR = art.length, AC = art[0].length;
-  const cellW = (right - left) / AC, cellH = (bot - top) / AR, stretched = cellW > 1.5 || cellH > 1.5;
+  const cellW = (right - left) / AC, cellH = (bot - top) / AR, stretched = cellW > 1 || cellH > 1;
   for (let r = r0; r < r1; r++) {
     const ay = Math.min(AR - 1, Math.max(0, (r + 0.5 - top) / (bot - top) * AR | 0)), line = art[ay];
     for (let c = c0; c < c1; c++) {
@@ -8283,7 +8350,7 @@ function hud() {
   const prompt = wrapText(keyless(promptText()), left), pb = (mode === 'drive' || mode === 'taxi' ? rows - 5 : rows - 2) * FS - (TOUCH && hotbarUp() ? FS * 2 + 12 : 0);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
-                                   [msg, Math.max(FS * 4, hudBottom + FS * 1.5), '#fff', cv.width / 2]]) {
+                                   [msg, Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8), '#fff', cv.width / 2]]) {
     ls.forEach((s, k) => {
       const w = g.measureText(s).width, yy = y0 + k * (FS + 4);
       g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(cx - w / 2 - 6, yy - 3, w + 12, FS + 6);
@@ -10863,22 +10930,31 @@ function prizeKey(e) {
 // L picks the lock of a shop that's shut for the night. The rules are in crime.js, the minigames in minigames.js.
 
 // ---- the stars, top middle: red and blue while they can see you, grey while you're hiding (and how long to go)
+// On a phone: smaller, down the left under the text block, clear of the buttons and the map, and shrunk to fit
+let wantedBottom = 0; // where it ends (px), so the message line goes under it
 function wantedHud() {
+  wantedBottom = 0;
   const pend = reports.length && !wanted.stars;
   if (!wanted.stars && !pend) return;
-  const s = Math.max(16, Math.round(cv.height / 34)), y = 44;
+  const stars = [1, 2, 3].map(k => k <= wanted.stars ? '*' : '.').join(' ');
+  const line = pend ? "someone's calling the police..." : `WANTED  ${stars}`, phone = TOUCH || cv.width < 700;
+  const room_ = phone ? cv.width * (showMap && mode !== 'room' && cv.width < cv.height ? 0.5 : 0.9) : cv.width;
+  let s = phone ? clamp(Math.round(cv.height / 48), 11, 18) : Math.max(16, Math.round(cv.height / 34));
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, stars = [1, 2, 3].map(k => k <= wanted.stars ? '*' : '.').join(' ');
-  const line = pend ? "someone's calling the police..." : `WANTED  ${stars}`, x = cv.width / 2 - line.length * w / 2;
+  const fit = room_ / ((line.length + 2) * g.measureText('M').width);
+  if (fit < 1) { s = Math.max(8, Math.floor(s * fit)); g.font = s + 'px monospace'; }
+  const w = g.measureText('M').width, y = phone ? Math.max(52, hudBottom + 6) : 44, x = phone ? w + 6 : cv.width / 2 - line.length * w / 2;
   const flash = fract(T * 3) < 0.5, hue = wanted.seen ? (flash ? RED : BLUE) : flash ? WHITE : GRAY;
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - w, y - s * 0.15, (line.length + 2) * w, s * 1.3);
   artText([line], x, y, s, (c, r, k) => pend ? C(GRAY, 12) : c === '.' ? C(GRAY, 7) : C(hue, 15)); // flashing: you can't miss it
+  wantedBottom = y + s * 1.2;
   if (!pend && !wanted.seen) {
-    const left = Math.max(0, ESCAPE_T[wanted.stars] - wanted.hideT), sub = `out of sight: losing them in ${Math.ceil(left)}s`;
-    g.font = FS + 'px monospace';
-    const sw = g.measureText(sub).width;
-    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(cv.width / 2 - sw / 2 - 6, y + s + 4, sw + 12, FS + 6);
-    g.fillStyle = PAL[C(GRAY, 13)]; g.fillText(sub, cv.width / 2 - sw / 2, y + s + 7);
+    const left = Math.max(0, ESCAPE_T[wanted.stars] - wanted.hideT), sub = `out of sight: losing them in ${Math.ceil(left)}s`, fs = phone ? Math.min(FS, Math.max(9, s - 2)) : FS;
+    g.font = fs + 'px monospace';
+    const sw = g.measureText(sub).width, sx = phone ? x - w + 6 : cv.width / 2 - sw / 2;
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(sx - 6, y + s + 4, sw + 12, fs + 6);
+    g.fillStyle = PAL[C(GRAY, 13)]; g.fillText(sub, sx, y + s + 7);
+    wantedBottom = y + s + fs + 12;
   }
   g.font = FS + 'px monospace';
 }
