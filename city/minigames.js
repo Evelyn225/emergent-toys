@@ -630,13 +630,15 @@ const FAIR_GAMES = ['ringtoss', 'strength'];
 // ---- the Shotengai's parlours
 // pachinko: hold GO and balls fly up and rain down through a forest of pins; steer where they come in with the
 // stick. Most fall away. The pockets pay balls back; the middle one spins the reels, and three of a kind is FEVER.
-// A credit buys 40 balls; walk away (E) whenever you like and what's left is swapped for tickets, 8 balls a ticket.
+// A credit buys 40 balls; walk away (E) whenever you like and what you've won over that is swapped for tickets, 8
+// balls a ticket (the tray you paid for isn't yours to cash in: no tickets for walking straight back out).
 GAMES.pachinko = (rnd = Math.random) => {
   const W = 23, H = 20, g = { id: 'pachinko', title: 'PACHINKO', W, H, score: 40, over: false };
   const pin = (x, y) => y >= 3 && y <= 15 && y % 2 === 1 && (x + (y >> 1)) % 2 === 0 && x > 0 && x < W - 1;
   const POCKETS = { 11: 'start', 4: 'small', 5: 'small', 17: 'small', 18: 'small' }; // which bottom columns catch a ball
-  // tuned by simulation: aim for the red START pocket and a tray lasts a good while, coming out about even (a jackpot
-  // or two and you're well up); spray balls about and it drains, but not as fast as it used to
+  // tuned by simulation: aim for the red START pocket and a tray lasts a good while but the house keeps about 13% of
+  // what you play (a jackpot or two and you're up, now and then); spray balls about and it drains faster. Luck (the
+  // jade, the lucky cat) tips it back: with the jade dragon a careful player comes out about even
   const PAY = { small: 3, start: 5 }, START = g.score;
   // what just happened, drawn so you can't miss it: a +N where a ball dropped into a pocket, an x where one drained,
   // and the reel's verdict (MISS, or 777 FEVER)
@@ -657,9 +659,9 @@ GAMES.pachinko = (rnd = Math.random) => {
       }
       for (const b of balls.filter(b => b.y >= H - 2)) {
         let p = POCKETS[b.x];
-        if (!p && rnd() < luck() * 2.5) for (const o of [-1, 1]) if (POCKETS[b.x + o]) { p = POCKETS[b.x + o]; break; } // (lucky: it rolls in after all)
+        if (!p && rnd() < luck() * 0.4) for (const o of [-1, 1]) if (POCKETS[b.x + o]) { p = POCKETS[b.x + o]; break; } // (lucky: it rolls in after all)
         if (p === 'small') { g.score += PAY.small; ev.push('eat'); }
-        if (p === 'start') { g.score += PAY.start; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 + luck() * 0.5 }; }
+        if (p === 'start') { g.score += PAY.start; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.085 + luck() * 0.4 }; }
         pops.push(p ? { x: b.x, text: `+${PAY[p]}`, col: p === 'start' ? YEL : GREEN, t: 0.9 } : { x: b.x, text: 'x', col: GRAY, t: 0.5 });
         b.dead = true;
       }
@@ -692,8 +694,8 @@ GAMES.pachinko = (rnd = Math.random) => {
     text(1, 1, `BALLS ${g.score}`, C(WHITE, 14)); text(13, 1, up === 0 ? 'EVEN' : `${up > 0 ? 'UP +' : 'DOWN '}${up}`, C(up > 0 ? GREEN : up < 0 ? RED : GRAY, 15));
     if (best && fever > 0) text(7, 2, best, C(MAG, 15));
   };
-  g.status = () => `BALLS ${g.score} = ${g.reward()} TICKETS   HOLD SPACE fire   ARROWS aim (the red U spins the reels)   E cash out`;
-  g.reward = () => Math.floor(g.score / 8);
+  g.status = () => `BALLS ${g.score}   WON ${g.reward()} TICKETS   HOLD SPACE fire   ARROWS aim (the red U spins the reels)   E cash out`;
+  g.reward = () => Math.floor(Math.max(0, g.score - START) / 8);
   return g;
 };
 // the crane game: steer the claw over a prize, GO drops it. It grips, maybe, and carries it to the chute; one try a

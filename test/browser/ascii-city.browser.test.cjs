@@ -446,7 +446,7 @@ test('toilets: in a bar it goes in the bowl and you flush; on a diner floor you 
   await page.evaluate(() => { tod = 20; needs.bladder = 30; enterRoom('bar', { word: 'BAR', neon: MAG, ret: [px, py, a] }, [1.6, 5.3, Math.PI / 2]); });
   await page.keyboard.press('KeyP');
   assert.deepStrictEqual(await page.evaluate(() => [!!(pee && pee.loo), msgText]), [true, 'You use the toilet.']);
-  await page.waitForTimeout(6000);
+  await page.waitForFunction(() => !pee, null, { timeout: 30000 }); // (game time: slower than the clock on a busy machine)
   assert.deepStrictEqual(await page.evaluate(() => [!!pee, puddles.filter(q => q.at === placeKey()).length, msgText]), [false, 0, 'You flush. Very civilised.']);
   // the diner, out in the middle of the floor
   await page.evaluate(() => { enterRoom('diner', { word: 'DINER', ret: [px, py, a] }, [8.5, 5, Math.PI / 2]); needs.bladder = 50; });
@@ -728,7 +728,7 @@ test('the Shotengai: a roof over its streets, dry in the rain; pachinko pays tic
   assert.strictEqual(await page.evaluate(() => game && game.g.id), 'pachinko');
   await page.evaluate(() => { game.g.score = 80; });
   await page.keyboard.press('KeyE'); // cash out
-  assert.strictEqual(await page.evaluate(() => tickets), 10, '80 balls, 10 tickets');
+  assert.strictEqual(await page.evaluate(() => tickets), 5, '80 balls: 40 up on the tray, 5 tickets');
   await page.evaluate(() => { game = null; enterRoom('cranes', { word: 'CRANE GAME', neon: MAG, ret: [px, py, a] }, [5.5, 6.4, -Math.PI / 2]); px = 4.8; py = 2.4; });
   await page.keyboard.press('KeyE');
   assert.strictEqual(await page.evaluate(() => game && game.g.id), 'crane');
