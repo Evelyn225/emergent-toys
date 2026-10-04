@@ -23,6 +23,7 @@ const TOUCH_CSS = `
   #touch .row { display: flex; align-items: flex-end; gap: 10px; }
   #touch .main { min-width: 92px; height: 64px; border-radius: 32px; font-size: 17px; background: rgba(255,240,140,0.18); border-color: rgba(255,240,140,0.6); color: #ffe98a; }
   #touch .jump { width: 56px; height: 56px; border-radius: 50%; padding: 0; }
+  #touch .jump.ollie { width: 84px; height: 84px; font-size: 18px; } /* (bigger on the board: you swipe off it for tricks) */
   #touch .stick { position: absolute; width: 110px; height: 110px; margin: -55px 0 0 -55px; border: 1px solid rgba(255,255,255,0.25);
     border-radius: 50%; display: none; }
   #touch .nub { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; background: rgba(255,255,255,0.25); border-radius: 50%; display: none; }
@@ -155,7 +156,7 @@ function showTouch() {
   const acts = touchActions(), sig = acts.map(x => x.join(':')).join('|');
   if (sig === padSig || touchEl.querySelector('.pad button.down')) return;
   padSig = sig;
-  const btn = ([l, k, kind]) => { const b = document.createElement('button'); b.textContent = l; b.dataset.key = k; if (kind !== 'pop') b.className = kind; if (kind === 'jump') bindFlick(b); else bindHold(b, k); return b; };
+  const btn = ([l, k, kind]) => { const b = document.createElement('button'); b.textContent = l; b.dataset.key = k; if (kind !== 'pop') b.className = kind; if (l === 'Ollie') b.classList.add('ollie'); if (kind === 'jump') bindFlick(b); else bindHold(b, k); return b; };
   const pops = touchEl.querySelector('.pops'), row = touchEl.querySelector('.row');
   pops.replaceChildren(...acts.filter(x => x[2] === 'pop').map(btn));
   row.replaceChildren(...acts.filter(x => x[2] !== 'pop').map(btn));

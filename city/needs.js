@@ -1,12 +1,13 @@
 // ===== hunger, thirst and health. Food fills `food`, drink fills `drink` (0-100); both run down as you play
 // (real time: neither fast-forward nor a night's sleep speeds them up), thirst a little faster. Run either dry and
 // your health starts to go, faster with both; at nothing you pass out and wake up in the hospital with a bill
-// (crime-ui.js / actions.js). Health comes back slowly while you're fed and watered, and the nurse at the hospital
-// patches you up for a fee. A long fall off a roof costs health too (moves.js).
+// (crime-ui.js / actions.js). Food heals a little as you eat it, health comes back slowly while you're fed and
+// watered, and the nurse at the hospital patches you up for a fee. A long fall off a roof costs health too (moves.js).
 const DRINK_LAST = 30 * 60, FOOD_LAST = 40 * 60; // seconds from full to empty
 const STARVE_T = 4 * 60; // seconds from full health to passing out with one meter empty (half that with both)
 const HEAL_T = 10 * 60; // seconds to get your health all the way back, fed and watered
 const MEDICAL_BILL = 150, NURSE_FEE = 40;
+const FOOD_HEALS = 0.4; // health per point of hunger filled: a burger (50) is 20 health, a candy bar 8
 const needs = { food: 85, drink: 85, health: 100, warned: '' };
 
 // how much an item fills you up, all its bites or sips together: [food, drink]. Dearer food is more of a meal;
@@ -23,6 +24,7 @@ function nourish(id, d) {
 function eatSome(id, d) {
   const [f, w] = nourish(id, d), wasHungry = needs.food < 30, wasThirsty = needs.drink < 30;
   needs.food = Math.min(100, needs.food + f / d.uses); needs.drink = Math.min(100, needs.drink + w / d.uses);
+  needs.health = Math.min(100, needs.health + f * FOOD_HEALS / d.uses); // a proper meal patches you up a bit
   if (wasHungry && needs.food >= 30) return ' That takes the edge off.';
   if (wasThirsty && needs.drink >= 30) return ' That\'s better.';
   return '';

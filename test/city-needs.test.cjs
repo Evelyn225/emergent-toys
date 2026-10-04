@@ -15,6 +15,11 @@ test('food fills hunger and drink fills thirst; water is best for thirst, a meal
   ev("needs.food = 10; needs.drink = 50; inv.length = 0; buy('burger'); held = 0; for (let k = 0; k < 4; k++) useHeld()");
   assert.ok(Math.abs(j('needs.food') - (10 + burger[0])) < 0.01 && j('needs.drink') === 50);
   assert.strictEqual(j('inv.length'), 0, 'all gone');
+  // food heals a little; drink doesn't
+  ev("needs.health = 50; buy('burger'); held = 0; for (let k = 0; k < 4; k++) useHeld()");
+  assert.ok(Math.abs(j('needs.health') - (50 + burger[0] * j('FOOD_HEALS'))) < 0.01, 'a burger patches you up');
+  ev("needs.health = 50; buy('water'); held = 0; for (let k = 0; k < 3; k++) useHeld()");
+  assert.strictEqual(j('needs.health'), 50);
 });
 
 test('the meters run down in real time, thirst first; empty, your health goes; at nothing you pass out, at the wheel you hang on', () => {
