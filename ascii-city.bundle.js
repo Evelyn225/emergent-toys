@@ -1648,6 +1648,74 @@ function talkTo(p) {
 const taskBuy = ven => { if (task && task.kind === 'fetch' && !task.have && ven.type === task.type) { task.have = true; return true; } return false; };
 // E on the lost dog
 const nearDog = () => task && task.kind === 'dog' && !task.dog.follow && Math.hypot(rel(task.dog.x - px), rel(task.dog.y - py)) < 0.5;
+
+// ---- chatting to people indoors (E on anyone sitting or standing about who isn't behind the counter): a line for
+// the kind of place, sometimes one for the hour. Just talk, no favours.
+const ROOM_TALK = {
+  store: ['They moved the bread again. Every week, new aisle.', "I only came in for milk. Look at this basket.", 'Is it me or are these prices going up daily?', 'The self-checkout hates me personally.'],
+  bar: ['First one\'s for the thirst. Second one\'s for the taste. Third one... I forget.', 'Don\'t order the house red. Trust me.', 'Barkeep knows my name. That\'s not a good sign, is it.', 'I come here to be alone. Together.', 'You look like you\'ve had a day.'],
+  diner: ['The coffee\'s terrible. Fourth cup.', 'Pie of the day is always cherry. Every day. Nobody knows why.', 'Been sitting in this booth since 1987.', 'They do breakfast all day. Civilisation peaked here.'],
+  arcade: ['I had the high score on that one for six years. Some kid took it last week.', 'Don\'t touch the claw machine. It\'s rigged. I\'ve spent forty bucks proving it.', 'Got any quarters? No? Tokens? No?', 'Nobody understands the pain of a continue screen.'],
+  laundry: ['Somebody stole one sock. Just one. Why.', 'This dryer eats coins. Use the one on the end.', 'I come here for the warm. Don\'t tell anyone.', 'Spin cycle\'s the best bit. Very relaxing.'],
+  cinema: ['Shh! It\'s the good part.', 'I\'ve seen this four times. It doesn\'t get better.', 'The popcorn costs more than the ticket.', 'If that guy kicks my seat one more time...'],
+  hotel: ['Room service took an hour and forgot the fork.', 'I\'m here for a conference. I think. Lost the badge.', 'The lifts are haunted. Fourth floor, every night, ding.', 'Checking out. Taking all the little soaps.'],
+  apts: ['The lift\'s been "being fixed" since March.', 'Whoever\'s cooking fish on three, I will find you.', 'Package room\'s a lottery. Never your parcel.', 'You new in the building? Don\'t park in 4B.'],
+  barber: ['Just a trim, I told him. Just. A. Trim.', 'Best gossip in the city is in this chair.', 'Don\'t let him talk you into the hot towel. Actually, do.', 'My barber knows more about me than my wife.'],
+  hospital: ['Been waiting two hours. My arm\'s fine now, honestly.', 'Vending machine\'s out of everything but the gross crisps.', 'Don\'t ask what happened. It involved a ladder.', 'They gave me a little bracelet. Feels like a festival.'],
+  bank: ['Forty minutes in this queue to deposit four dollars.', 'One window open. Five tellers. Ask me how.', 'The pens are chained down. What do they think we are?', 'Do you think the vault\'s really full of gold? Like in cartoons?'],
+  karaoke: ['I\'m doing Bohemian Rhapsody next. All of it. All the parts.', 'Liquid courage. It\'s working.', 'That guy\'s been singing the same song for an hour.', 'Pick a duet with me. Anything. Please.'],
+  petshop: ['That parrot called me a name.', 'I came for fish food and I\'m leaving with a hamster. Don\'t judge.', 'The puppies are a trap. A beautiful trap.', 'Do lizards get lonely? Asking for me.'],
+  florist: ['Anniversary. Forgot. Need the biggest bunch they\'ve got.', 'Is a cactus romantic? It lasts longer.', 'Smells amazing in here, doesn\'t it.'],
+  station: ['Train\'s late. Again. Again again.', 'Mind the gap. I always think they mean my life.', 'Someone\'s been busking that same song for a week.', 'I\'ve missed my stop three times this month. Reading.', 'Rats down here are the size of cats. Friendly though.'],
+  train: ['Don\'t sit there, it\'s sticky.', 'Next stop\'s mine. I think. Which line is this?', 'The guy over there is eating a whole rotisserie chicken.', 'Ten more minutes of sleep. Wake me at the end.'],
+  cafe: ['Third oat latte. I am now vibrating.', 'Writing a novel. Chapter one. Since 2019.', 'The wifi password is on the board. Good luck reading it.', 'This is my office now. They haven\'t noticed.', 'The pastries go by ten. Rookie mistake to come at eleven.'],
+  books: ['I came in for one book. I have six.', 'The cat that lives here judged my choice.', 'Don\'t tell anyone, I just read here. For free.', 'Have you read anything good lately? Don\'t say the phone book.'],
+  noodle: ['Slurping\'s a compliment here. Slurp loud.', 'Extra chilli was a mistake. A delicious mistake.', 'Best broth in the city. Simmers for two days.', 'I come here every night. They just bring my bowl.'],
+  garage: ['Funny noise when I brake. They\'re charging me for the funny noise.', 'Been here since noon. My car\'s "nearly done" since noon.', 'Tyres. Always tyres.'],
+  tea: ['Pung! ...no wait, sorry.', 'Don\'t play with Mrs Lau. She takes everything.', 'Green tea, mahjong, gossip. Perfect evening.', 'I\'ve been playing fifty years. Still lose to my sister.', 'The tiles are older than me. So are the players.'],
+  storage: ['Everything I own is in a ten-by-ten box. Very freeing.', 'I keep my ex\'s stuff here. Paying monthly. Petty, I know.', 'Unit 47 hums at night. I don\'t ask.'],
+  jail: ['I didn\'t do it. Well. I did that one.', 'Food\'s not bad. The company\'s worse.', 'First time? Keep your head down.', 'Officer! I demand my phone call! ...it was a pizza order.'],
+  lighthouse: ['Two hundred and twelve steps. I counted.', 'Keeper\'s been here thirty years. Talks to the gulls.', 'Best view in the city, if you can breathe at the top.'],
+  showroom: ['Just looking. Just looking. Is that heated seats?', 'Salesman\'s been circling me for twenty minutes.', 'I could never afford this. I\'m here for the free coffee.'],
+  realty: ['Four hundred a month for a closet with a window. A "cosy studio".', 'Location, location, location. And debt.', 'I\'m house hunting. The houses are winning.'],
+  aquarium: ['Look at the jellyfish. Just floating. No rent. No email.', 'That octopus looked right at me. It knows things.', 'Sharks are just ocean dogs. Big wet dogs.', 'My kid\'s named every fish. All of them are "Gerald".'],
+  cathedral: ['Shh. Lovely acoustics. Shh.', 'I just come in for the quiet.', 'Those windows took a hundred years to make.', 'Lit a candle for my nan. And one for my team.'],
+  pachinko: ['Silver balls. All day. I hear them in my sleep.', 'I\'m up. I think. It\'s hard to tell.', 'It\'s not gambling if you don\'t understand it.'],
+  cranes: ['Forty tries for a plush cat. Worth it.', 'The claw\'s weaker after nine. Science.'],
+  capsule: ['It\'s cosy. Like a coffin with wifi.', 'Don\'t sit up too fast.'],
+  conservatory: ['It\'s so warm in here. My glasses keep fogging.', 'That plant smells like rotting meat. On purpose!', 'I come here in winter and pretend I\'m on holiday.'],
+  aviary: ['A bird landed on my head. I\'m choosing to see it as a blessing.', 'They love the seed. They tolerate me.'],
+  jade: ['My grandmother swore by jade. Lived to 103.', 'Is it real? The man says it\'s real.', 'For luck. Need all of it this month.'],
+  casino: ['Feeling lucky. Felt lucky an hour ago too.', 'House always wins. I\'m here to make it work for it.', 'No clocks, no windows. What day is it?', 'Red. It\'s always red. Except when it isn\'t.', 'One more spin and I\'m going home. That was nine spins ago.'],
+  exchange: ['Buy low, sell high. I keep doing the other one.', 'BYTE\'s going to the moon. Or the floor.', 'I\'ve been staring at this ticker for six hours.', 'Diversify, they said. So now I lose money in seven places.'],
+  stripclub: ['I\'m only here for the wings.', 'Don\'t make eye contact with the bouncer.', 'My friend\'s bachelor party. He left an hour ago.', 'Those are six very talented characters.'],
+};
+const GENERIC_ROOM_TALK = ['Hi.', 'Oh, hello.', 'Can I help you?', 'Lovely place, isn\'t it.', 'Do I know you?'];
+let lastRoomLine = '';
+function roomTalkLine(kind, h = tod) {
+  const lines = [...(ROOM_TALK[kind] || GENERIC_ROOM_TALK)];
+  if (h >= 5 && h < 9 && kind !== 'jail') lines.push('Too early for people.', 'Haven\'t had my coffee yet. Speak slowly.');
+  if ((h >= 23 || h < 4) && kind !== 'jail') lines.push('Shouldn\'t you be in bed?', 'It\'s late. Why are we both here?');
+  if (rain > 0.4 && kind !== 'jail' && kind !== 'station' && kind !== 'train') lines.push('Waiting out the rain. You too?');
+  let line = pick(lines);
+  for (let k = 0; k < 4 && line === lastRoomLine; k++) line = pick(lines); // (not the same one twice running)
+  return (lastRoomLine = line);
+}
+// who you'd be talking to: someone sitting or standing within reach, roughly in front, nearer than the counter
+const PEOPLE_ART = () => [ART.keeper, ART.sitter, ART.sitterBack];
+function roomPerson() {
+  if (mode !== 'room' || !room || !room.props) return null;
+  const arts = PEOPLE_ART(), k = room.def.keeper, keeperD = k ? Math.hypot(px - k[0], py - k[1]) : Infinity;
+  let best = null, bd = 1.4;
+  for (const s of room.props) {
+    if (!arts.includes(s.art) || k && Math.hypot(s.x - k[0], s.y - k[1]) < 0.6) continue; // (not the one behind the counter)
+    const ex = s.x - px, ey = s.y - py, d = Math.hypot(ex, ey), facing = (Math.cos(a) * ex + Math.sin(a) * ey) / (d || 1);
+    const score = d - facing * 0.4;
+    if (d < 1.4 && facing > -0.2 && score < bd) { bd = score; best = s; }
+  }
+  return best && Math.hypot(best.x - px, best.y - py) < keeperD - 0.2 ? best : null;
+}
+const talkInRoom = () => say(`"${roomTalkLine(room.kind)}"`, 4);
 // ---- the elevated train: a steel deck on pillars over the whole length of H(., EL_ROW), which wraps round the world
 // east-west, so the line is a loop. Two tracks: westbound on the north half, eastbound on the south half.
 // Stations every 8 blocks, with narrow platforms over the sidewalks and stairs down to the street.
@@ -8195,6 +8263,7 @@ function promptText() {
     if (cs) return `E: play ${CASINO_NAMES[cs]} ($5 to $100 a go)`;
     if (aviaryKeeper()) return T - seedT < 12 ? 'The birds are all over you.' : `"Seed for the birds? Hold it out flat."   E: a cup of seed (${fmt$(1)})`;
     { const sp = shotengaiPrompt(); if (sp) return sp; }
+    if (roomPerson()) return 'E: talk';
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
@@ -8517,6 +8586,7 @@ function interact() {
       if (cab) return cab.busy ? say('Somebody\'s on this one.') : playCabinet(cab);
       if (nearKeeper()) return openPrizes();
     }
+    if (roomPerson()) return talkInRoom();
     if (room.kind === 'storage' && nearKeeper()) return openStorage(stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town');
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
     if (room.kind === 'hospital' && nearKeeper()) return say(`"${pick(NURSE_LINES)}"`, 3); // (healing would go here)

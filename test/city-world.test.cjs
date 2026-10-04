@@ -345,3 +345,16 @@ test('the Botanical Gardens: one big walled park, no streets through it, a lake 
   assert.strictEqual(r.treesInLake, 0);
   assert.ok(r.trees > 40, `${r.trees} trees`);
 });
+
+test('chatting indoors: every room people sit or stand about in has its own lines, never the same one twice running', () => {
+  const r = j(`(() => {
+    const kinds = ['store', 'bar', 'diner', 'arcade', 'laundry', 'cinema', 'hotel', 'apts', 'barber', 'hospital', 'bank', 'karaoke', 'petshop', 'florist', 'station', 'train', 'cafe', 'books', 'noodle', 'garage', 'tea', 'storage', 'jail', 'lighthouse', 'showroom', 'realty', 'aquarium', 'cathedral', 'pachinko', 'cranes', 'capsule', 'conservatory', 'aviary', 'jade', 'casino', 'exchange', 'stripclub'];
+    const missing = kinds.filter(k => !ROOM_TALK[k] || ROOM_TALK[k].length < 2);
+    let repeats = 0, prev = '', fromList = true;
+    for (let n = 0; n < 200; n++) { const l = roomTalkLine('cafe', 14); if (l === prev) repeats++; prev = l; }
+    return { missing, repeats, jail: roomTalkLine('jail', 3) };
+  })()`);
+  assert.deepStrictEqual(r.missing, []);
+  assert.ok(r.repeats < 3, `${r.repeats} repeats`);
+  assert.ok(j('ROOM_TALK.jail').includes(r.jail), 'no "shouldn\'t you be in bed" in a cell');
+});

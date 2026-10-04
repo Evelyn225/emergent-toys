@@ -837,3 +837,25 @@ test('the marina: buy a boat, take her out (chase camera and at the helm), tie u
   assert.deepStrictEqual(kept, [['cruiser', r.name, Math.round(moved.x * 10) / 10]]);
   await page.evaluate(() => localStorage.removeItem('ascii-city-save'));
 }));
+
+test('talking to people indoors: walk up to someone in a cafe or a station and they chat (the counter still serves you)', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    tod = 14; mode = 'walk';
+    enterRoom('cafe', { word: 'CAFE', neon: MAG, ret: [px, py, a], line: 'What can I get you?' }, [5, 6.3, -Math.PI / 2]);
+    const arts = [ART.keeper, ART.sitter, ART.sitterBack], k = room.def.keeper;
+    const s = room.props.find(o => arts.includes(o.art) && Math.hypot(o.x - k[0], o.y - k[1]) > 2);
+    px = s.x; py = s.y + 0.9; a = -Math.PI / 2;
+    const prompt = promptText(); interact();
+    const cafeLine = msgText;
+    px = k[0]; py = k[1] + 1; a = -Math.PI / 2; const counter = promptText();
+    leaveRoom(); enterRoom('station', { st: 0, word: stations[0].name, t0: T - 12, ret: [px, py, a] }, [11, 4.8, 0]);
+    const p2 = room.props.find(o => arts.includes(o.art)); px = p2.x + 0.8; py = p2.y; a = Math.PI;
+    const sprompt = promptText(); interact();
+    return { prompt, cafeLine, counter, sprompt, stationLine: msgText };
+  });
+  assert.strictEqual(r.prompt, 'E: talk');
+  assert.ok(await page.evaluate(l => ROOM_TALK.cafe.some(x => l.includes(x)) || l.includes('coffee') || l.startsWith('"'), r.cafeLine), r.cafeLine);
+  assert.match(r.counter, /E: shop/);
+  assert.strictEqual(r.sprompt, 'E: talk');
+  assert.match(r.stationLine, /^".+"$/);
+}));
