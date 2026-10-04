@@ -84,7 +84,7 @@ function stepBody(dt) {
 // ---- roofs: no invisible walls. Step across onto the roof next door if it's about level (a storey up or down,
 // near enough), walk off any edge and fall (a long way down hurts), and a sprinting jump (shift + forward + space)
 // is a leap that'll clear a street onto a roof a bit lower than yours. A wall you're not above stops you, and you
-// slide down it. The stairs are only on the roof you came up.
+// slide down it. The stairs are only on the roof you came up; any other roof has a fire escape down to the street.
 const ROOF_STEP = 0.35; // cells: 3.5m
 const LEAP_V = 1.8; // cells a second forward in a running leap off a roof
 let roofLot = null; // the cells of the roof you came up onto (where the stairs down are)
@@ -117,6 +117,28 @@ function stepRoof() { // onto another roof, off them altogether, or (in a leap f
   shiftFeet(roofH * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
 const onRoofLot = () => !roofLot || roofLot.has(idx(Math.floor(px), Math.floor(py)));
+// any other roof: the fire escape, down the side of the building to the nearest bit of sidewalk
+function fireEscape() {
+  const start = [Math.floor(px), Math.floor(py)], seen = new Set([idx(...start)]), todo = [start];
+  for (let n = 0; n < todo.length && n < 600; n++) {
+    const [x, y] = todo[n];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy, k = idx(nx, ny);
+      if (seen.has(k)) continue; seen.add(k);
+      if (map[k]) { todo.push([nx, ny]); continue; } // still building: keep looking
+      if (isWater(nx + 0.5, ny + 0.5)) continue;
+      const spots = [[nx + 0.5 - dx * 0.35, ny + 0.5 - dy * 0.35], [nx + 0.5, ny + 0.5]]; // (close in against the wall, if there's room)
+      const m0 = mode, z0 = body.z; mode = 'walk'; body.z = 0; // (asked as if already down there)
+      const at = spots.find(([sx, sy]) => free(sx, sy));
+      mode = m0; body.z = z0;
+      if (!at) continue;
+      mode = 'walk'; room = null; roofH = 0; roofLot = null; body.z = body.vz = body.peak = 0;
+      [px, py] = at; a = Math.atan2(dy, dx); // facing away from the building
+      return true;
+    }
+  }
+  return false;
+}
 // standing at the edge facing a drop bigger than a step: how far it is (metres), or 0
 function edgeDrop() {
   if (mode !== 'roof' || roofFixed()) return 0;

@@ -392,6 +392,12 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
   await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
   await page.waitForTimeout(2500);
   assert.deepStrictEqual(await page.evaluate(() => [mode, roofH, body.z]), ['roof', far, 0], 'landed on the roof across the street');
+  // no stairs on this one: the fire escape takes you down to the sidewalk beside it
+  assert.match(await page.evaluate(() => promptText()), /E: fire escape down/);
+  const up = await page.evaluate(() => [px, py]);
+  await page.keyboard.press('KeyE');
+  const down = await page.evaluate(([x, y]) => [mode, map[idx(Math.floor(px), Math.floor(py))], free(px, py), Math.hypot(rel(px - x), rel(py - y)) < 4], up);
+  assert.deepStrictEqual(down, ['walk', 0, true, true], 'on the street beside the building, somewhere you can stand');
 }));
 
 test('run dry and you pass out: the hospital, a bill, and the nurse patches you up; dev tools fill you up', () => withPage(async page => {
