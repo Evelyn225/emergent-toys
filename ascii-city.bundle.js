@@ -2732,8 +2732,14 @@ const FAIR_GAMES = ['ringtoss', 'strength'];
 GAMES.pachinko = (rnd = Math.random) => {
   const W = 23, H = 20, g = { id: 'pachinko', title: 'PACHINKO', W, H, score: 40, over: false };
   const pin = (x, y) => y >= 3 && y <= 15 && y % 2 === 1 && (x + (y >> 1)) % 2 === 0 && x > 0 && x < W - 1;
-  const POCKETS = { 11: 'start', 5: 'small', 17: 'small' }; // which bottom columns catch a ball
-  let aim = 11, fire = 0, balls = [], tick = 0, reel = null, fever = 0, best = '';
+  const POCKETS = { 11: 'start', 4: 'small', 5: 'small', 17: 'small', 18: 'small' }; // which bottom columns catch a ball
+  // tuned by simulation: aim for the red START pocket and a tray lasts a good while, coming out about even (a jackpot
+  // or two and you're well up); spray balls about and it drains, but not as fast as it used to
+  const PAY = { small: 3, start: 5 }, START = g.score;
+  // what just happened, drawn so you can't miss it: a +N where a ball dropped into a pocket, an x where one drained,
+  // and the reel's verdict (MISS, or 777 FEVER)
+  let aim = 11, fire = 0, balls = [], tick = 0, reel = null, fever = 0, best = '', pops = [], verdict = null;
+  g.pops = () => pops; g.verdict = () => verdict; // (for the tests)
   g.step = (dt, k) => {
     const ev = [];
     if (g.over) return ev;
@@ -2750,17 +2756,21 @@ GAMES.pachinko = (rnd = Math.random) => {
       for (const b of balls.filter(b => b.y >= H - 2)) {
         let p = POCKETS[b.x];
         if (!p && rnd() < luck() * 2.5) for (const o of [-1, 1]) if (POCKETS[b.x + o]) { p = POCKETS[b.x + o]; break; } // (lucky: it rolls in after all)
-        if (p === 'small') { g.score += 2; ev.push('eat'); }
-        if (p === 'start') { g.score += 3; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 + luck() * 0.5 }; }
+        if (p === 'small') { g.score += PAY.small; ev.push('eat'); }
+        if (p === 'start') { g.score += PAY.start; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.1 + luck() * 0.5 }; }
+        pops.push(p ? { x: b.x, text: `+${PAY[p]}`, col: p === 'start' ? YEL : GREEN, t: 0.9 } : { x: b.x, text: 'x', col: GRAY, t: 0.5 });
         b.dead = true;
       }
       balls = balls.filter(b => !b.dead);
     }
     if (reel && (reel.t -= dt) <= 0) {
-      if (reel.hit) { reel.r = [7, 7, 7]; g.score += 50; fever = 3; ev.push('clear'); best = 'FEVER! 777'; } else ev.push('miss');
+      if (reel.hit) { reel.r = [7, 7, 7]; g.score += 50; fever = 3; ev.push('clear'); best = 'FEVER! 777'; verdict = { text: '777 JACKPOT  +50 BALLS', col: MAG, t: 3 }; }
+      else { if (reel.r[0] === reel.r[1] && reel.r[1] === reel.r[2]) reel.r[2] = reel.r[2] % 7 + 1; ev.push('miss'); verdict = { text: 'no match', col: GRAY, t: 1.2 }; } // (three alike that isn't a win would be a lie)
       reel.shown = reel.r; reel = null;
     }
     fever = Math.max(0, fever - dt);
+    for (const q of pops) q.t -= dt; pops = pops.filter(q => q.t > 0);
+    if (verdict && (verdict.t -= dt) <= 0) verdict = null;
     if (g.score <= 0 && !balls.length && !reel) { g.over = true; ev.push('end'); }
     if (reel) g.lastReel = reel.r.map((v, i) => reel.t > 0.4 + i * 0.4 ? 1 + (rnd() * 9 | 0) : v); // the reels spinning, stopping one by one
     return ev;
@@ -2771,11 +2781,16 @@ GAMES.pachinko = (rnd = Math.random) => {
     for (let x = 1; x < W - 1; x++) { const p = POCKETS[x]; put(x, H - 1, p ? 'U' : '_', p === 'start' ? C(RED, 15) : p ? C(GREEN, 14) : C(GRAY, 6)); }
     put(Math.round(aim), 0, 'v', C(WHITE, 15));
     for (const b of balls) put(b.x, b.y, 'o', C(WHITE, 15));
+    for (const q of pops) text(Math.max(1, q.x - (q.text.length > 1 ? 1 : 0)), H - 2 - (q.text === 'x' ? 0 : Math.round((0.9 - q.t) * 3)), q.text, C(q.col, q.text === 'x' ? 8 : 15));
     const r = g.lastReel || [7, 7, 7];
     text(8, 17, `[ ${r.join(' ')} ]`, reel ? C(YEL, 15) : fever > 0 ? C(NEON[(Math.floor(fever * 8)) & 3], 15) : C(WHITE, 11));
+    if (reel) text(6, 16, 'reels spinning...', C(YEL, 12));
+    else if (verdict) text(Math.max(1, (W - verdict.text.length) >> 1), 16, verdict.text, C(verdict.col === MAG ? NEON[Math.floor(T * 8) & 3] : verdict.col, 15));
+    const up = g.score - START; // how you're doing against the tray you started with
+    text(1, 1, `BALLS ${g.score}`, C(WHITE, 14)); text(13, 1, up === 0 ? 'EVEN' : `${up > 0 ? 'UP +' : 'DOWN '}${up}`, C(up > 0 ? GREEN : up < 0 ? RED : GRAY, 15));
     if (best && fever > 0) text(7, 2, best, C(MAG, 15));
   };
-  g.status = () => `BALLS ${g.score}   HOLD SPACE fire   ARROWS aim   E cash out`;
+  g.status = () => `BALLS ${g.score} = ${g.reward()} TICKETS   HOLD SPACE fire   ARROWS aim (the red U spins the reels)   E cash out`;
   g.reward = () => Math.floor(g.score / 8);
   return g;
 };
@@ -10971,7 +10986,8 @@ function drawGame() {
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
   const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
-  const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
+  const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
+  const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over && game.kind !== 'crime' && game.kind !== 'show') { // the results card
     const r = g.reward(), res = g.result, lines = game.kind === 'table'
