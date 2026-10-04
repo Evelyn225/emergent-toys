@@ -356,6 +356,22 @@ const SOLID_SHADE = {
     if (w < 0.03) return set(i, '_', C(ORANGE, L * 0.7)), true; // a kick board
     return false;
   },
+  // a portapotty: blue ribbed plastic, a white roof, the door on its west end with a vent up top, a handle and the
+  // little VACANT / OCCUPIED slot (red while you're in one... which you can't see from in there, but still)
+  potty: o => (i, t, L) => {
+    const f = HIT.face, w = HIT.w, k = shadeFace(f);
+    if (f === 5 || w > 0.22) { BG[i] = C(WHITE, (2.5 + L * 0.3) * k); return set(i, f === 5 ? ' ' : '_', C(GRAY, L * 0.6)), true; } // the roof
+    BG[i] = C(BLUE, (1.6 + L * 0.35) * k);
+    if (f === 2) { // the door
+      const v = HIT.v;
+      if (Math.abs(v) > 0.05) return set(i, '|', C(BLUE, L)), true; // the frame
+      if (w > 0.19) return set(i, '=', C(GRAY, L * 0.8)), true; // the vent
+      if (w > 0.13 && w < 0.145 && v > 0.01 && v < 0.04) { BG[i] = C(GREEN, 4); return set(i, ' ', 0), true; } // VACANT
+      if (Math.abs(w - 0.11) < 0.008 && v > 0.025) return set(i, 'o', C(WHITE, L)), true; // the handle
+      return set(i, fract(w * 60) < 0.12 ? '-' : ' ', C(BLUE, L * 0.8)), true;
+    }
+    return set(i, fract(HIT.u * 70 + HIT.v * 70) < 0.2 ? '|' : ' ', C(BLUE, L * 0.8)), true; // ribs
+  },
   // chain-link: a top rail and posts, the mesh a lattice of x's you can see through
   chain: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u;

@@ -863,7 +863,7 @@ for (let k = 0; k < 28; k++) {
 
 // landmark, construction-site and industrial props. Fences and shipping containers are real boxes (solids): drawn
 // with drawBox and solid to walk or drive into. {x, y, c, s: long axis, hl, hw, z0, z1, kind, k: a per-thing seed}
-const extras = [], cranes = [], stacks = [], solids = [], radios = [];
+const extras = [], cranes = [], stacks = [], solids = [], radios = [], potties = [];
 const solidBox = (x, y, alongX, hl, hw, z0, z1, kind, k) => solids.push({ x, y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k });
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bi(bx, by)), kind = blockKind(bx, by);
@@ -875,6 +875,8 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     // the hoarding round the site: three panels a side, open at the corners
     for (const s of [3.5, 5, 6.5]) for (const [x, y, ax] of [[s, 2.1, 1], [s, 7.9, 1], [2.1, s, 0], [7.9, s, 0]])
       solidBox(X + x, Y + y, ax, 0.7, 0.012, 0, 0.22, 'hoarding', bx * 7 + by);
+    // a portapotty or two inside the fence, doors facing the site (west: the box's -u end, face 2)
+    for (let k = 0, n = hash(bx, by, 95) < 0.5 ? 2 : 1; k < n; k++) { solidBox(X + 7.3, Y + 2.95 + k * 0.15, true, 0.06, 0.065, 0, 0.23, 'potty', bx * 13 + by + k); potties.push(solids[solids.length - 1]); }
   }
   if (kind === 'yard') { // container stacks on a loose grid (so they never overlap), a chain-link fence with gates
     for (let k = 0; k < 6; k++) {
@@ -5336,6 +5338,22 @@ const SOLID_SHADE = {
     if (w < 0.03) return set(i, '_', C(ORANGE, L * 0.7)), true; // a kick board
     return false;
   },
+  // a portapotty: blue ribbed plastic, a white roof, the door on its west end with a vent up top, a handle and the
+  // little VACANT / OCCUPIED slot (red while you're in one... which you can't see from in there, but still)
+  potty: o => (i, t, L) => {
+    const f = HIT.face, w = HIT.w, k = shadeFace(f);
+    if (f === 5 || w > 0.22) { BG[i] = C(WHITE, (2.5 + L * 0.3) * k); return set(i, f === 5 ? ' ' : '_', C(GRAY, L * 0.6)), true; } // the roof
+    BG[i] = C(BLUE, (1.6 + L * 0.35) * k);
+    if (f === 2) { // the door
+      const v = HIT.v;
+      if (Math.abs(v) > 0.05) return set(i, '|', C(BLUE, L)), true; // the frame
+      if (w > 0.19) return set(i, '=', C(GRAY, L * 0.8)), true; // the vent
+      if (w > 0.13 && w < 0.145 && v > 0.01 && v < 0.04) { BG[i] = C(GREEN, 4); return set(i, ' ', 0), true; } // VACANT
+      if (Math.abs(w - 0.11) < 0.008 && v > 0.025) return set(i, 'o', C(WHITE, L)), true; // the handle
+      return set(i, fract(w * 60) < 0.12 ? '-' : ' ', C(BLUE, L * 0.8)), true;
+    }
+    return set(i, fract(HIT.u * 70 + HIT.v * 70) < 0.2 ? '|' : ' ', C(BLUE, L * 0.8)), true; // ribs
+  },
   // chain-link: a top rail and posts, the mesh a lattice of x's you can see through
   chain: () => (i, t, L) => {
     const w = HIT.w, u = HIT.u;
@@ -6302,6 +6320,10 @@ const ROOM_DEFS = {
       SP(1.4, 1.4, 0.6, 0.5, ['  ___ ', ' (@@@)', '(@@@@@)'], (c, row, L) => C(WARM, L)), // a coil of rope
     ] },
   // the lamp room: glass all round, the sea and the sky outside, the great lens turning in the middle
+  // inside a portapotty on a building site: blue plastic, a vent of daylight, a steel bowl, somebody's number
+  potty: { grid: boxRoom(4, 4), light: 0.55, floor: 'rubber', ceil: 'dark', wall: pottyWall, height: 2.3,
+    props: r => [...toilet(2, 1.45, -1),
+      BX(2.85, 1.6, 0.07, 0.07, 0.75, 0.9, (i, t, L) => { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, HIT.face === 5 ? '@' : ')', C(GRAY, L)), true; })] }, // the paper (one sad roll)
   lamproom: { grid: boxRoom(6, 6, {}, false), light: 0.45, floor: 'concrete', ceil: 'dark', wall: lampRoomWall,
     props: r => [
       BX(3, 3, 0.35, 0.35, 0, 0.9, solid(GRAY, { panel: 0.4, top: '=' })), // the pedestal
@@ -6511,6 +6533,17 @@ function homeDef(w, h) {
       ...toilet(1.3, h - 1.6, 1, porcelain), // (an open-plan bathroom)
       BENCHP(sofa[0], sofa[1], 0, -1), ...(big ? [SP(w - 1.3, h - 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(sofa[0] - 2.4, sofa[1], 0, -1)] : []),
     ] };
+}
+const POTTY_SCRAWL = ['FOR A GOOD', 'TIME CALL', '555-0142', '', 'DAVE WAS', 'HERE'];
+function pottyWall(i, u, uStep, z, d, mx, my, L) {
+  BG[i] = C(BLUE, 1.6 + L * 0.3);
+  if (z > 2.05) return set(i, fract(u * 10) < 0.5 ? '=' : ' ', C(WHITE, 10)), true; // the vent: daylight through the slats
+  if (mx === 0 && z > 0.95 && z < 1.75) { // the scrawl on the left wall, in marker (the sign font, small)
+    const LH = 0.13, CWID = 0.08, dz = (1.75 - z) / LH, row = Math.floor(dz), pos = (2.75 - Math.abs(u)) / CWID, ci = Math.floor(pos);
+    const ch = (POTTY_SCRAWL[row] || '')[ci];
+    if (ch && ch !== ' ' && glyphOn(ch, Math.floor((pos - ci) * 4), Math.floor((dz - row) * 6))) return set(i, '#', C(GRAY, 4 + L * 0.6)), true;
+  }
+  return set(i, fract(u * 6) < 0.12 ? '|' : ' ', C(BLUE, L * 0.8)), true; // ribs
 }
 function homeWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === 0 && z > 1.0 && z < 2.1 && Math.abs(fract(u / 3) - 0.5) < 0.2) { // a window on the city: lit windows across the street at night
@@ -8736,6 +8769,7 @@ function promptText() {
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
   const fsp = fairSpot();
   if (fsp) return fairPrompt(fsp);
+  if (pottyNear()) return 'E: use the portapotty';
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';
@@ -9107,6 +9141,8 @@ function interact() {
   if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
   const fsp = fairSpot();
   if (fsp) return useFair(fsp);
+  const pot = pottyNear();
+  if (pot) return enterPotty(pot), say(pick(['You hold your breath and step in.', 'The smell hits you before the door shuts.', 'It\'s exactly as nice as you\'d think.']), 2.5);
   const ven = nearVendor();
   if (ven) return openShop(ven.type.name, VENDOR_STOCK[ven.type.name], ven);
   const st = nearStation();
@@ -11577,6 +11613,9 @@ function looNear() {
   for (const l of loos()) { const d = Math.hypot(l[0] - px, l[1] - py); if (d < bd) { best = l; bd = d; } }
   return best;
 }
+// standing at a portapotty's door (props.js puts them on the building sites)
+const pottyNear = () => mode === 'walk' ? potties.find(o => Math.hypot(rel(o.x - o.hl - 0.06 - px), rel(o.y - py)) < 0.1) : null;
+const enterPotty = o => enterRoom('potty', { word: 'PORTAPOTTY', ret: [px, py, a] }, [2, 2.5, -Math.PI / 2]);
 const PEE_SEEN = ['"Ugh, seriously?"', '"There are kids around!"', '"Oh, come ON."', '"Gross."', '"Not on my street, pal."', '"Classy."'];
 // how high the ground is at (x, y), and whether something's standing up out of it there (a wall: the stream stops)
 function peeGround(x, y) {

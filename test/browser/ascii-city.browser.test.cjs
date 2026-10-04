@@ -461,6 +461,21 @@ test('toilets: in a bar it goes in the bowl and you flush; on a diner floor you 
   assert.deepStrictEqual(await page.evaluate(() => [wanted.stars, wanted.crime]), [1, 'public urination']);
 }));
 
+test('a portapotty on a building site: E at its door, P in the bowl, E back out the door', () => withPage(async page => {
+  await page.evaluate(() => { const o = potties[0]; px = o.x - o.hl - 0.06; py = o.y; a = 0; needs.bladder = 40; });
+  await page.waitForTimeout(100);
+  assert.deepStrictEqual(await page.evaluate(() => [blockKind(Math.floor(px / 8), Math.floor(py / 8)), promptText()]), ['construction', 'E: use the portapotty']);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind, promptText()]), ['room', 'potty', 'P: use the toilet']);
+  await page.keyboard.press('KeyP'); await page.waitForTimeout(500);
+  assert.ok(await page.evaluate(() => !!(pee && pee.loo)));
+  await page.keyboard.press('KeyP');
+  await page.evaluate(() => { py = 2.85; a = Math.PI / 2; });
+  await page.waitForTimeout(100);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => mode), 'walk');
+}));
+
 test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
   await page.evaluate(() => { tod = 23; enterRoom('stripclub', { ...CLUB.sh, ret: [px, py, a], line: '' }, [9, 12.4, -Math.PI / 2]); });
   const r = await page.evaluate(() => {

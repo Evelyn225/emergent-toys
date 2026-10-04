@@ -146,6 +146,7 @@ function promptText() {
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
   const fsp = fairSpot();
   if (fsp) return fairPrompt(fsp);
+  if (pottyNear()) return 'E: use the portapotty';
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';

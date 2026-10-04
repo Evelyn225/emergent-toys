@@ -382,6 +382,10 @@ const ROOM_DEFS = {
       SP(1.4, 1.4, 0.6, 0.5, ['  ___ ', ' (@@@)', '(@@@@@)'], (c, row, L) => C(WARM, L)), // a coil of rope
     ] },
   // the lamp room: glass all round, the sea and the sky outside, the great lens turning in the middle
+  // inside a portapotty on a building site: blue plastic, a vent of daylight, a steel bowl, somebody's number
+  potty: { grid: boxRoom(4, 4), light: 0.55, floor: 'rubber', ceil: 'dark', wall: pottyWall, height: 2.3,
+    props: r => [...toilet(2, 1.45, -1),
+      BX(2.85, 1.6, 0.07, 0.07, 0.75, 0.9, (i, t, L) => { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, HIT.face === 5 ? '@' : ')', C(GRAY, L)), true; })] }, // the paper (one sad roll)
   lamproom: { grid: boxRoom(6, 6, {}, false), light: 0.45, floor: 'concrete', ceil: 'dark', wall: lampRoomWall,
     props: r => [
       BX(3, 3, 0.35, 0.35, 0, 0.9, solid(GRAY, { panel: 0.4, top: '=' })), // the pedestal
@@ -591,6 +595,17 @@ function homeDef(w, h) {
       ...toilet(1.3, h - 1.6, 1, porcelain), // (an open-plan bathroom)
       BENCHP(sofa[0], sofa[1], 0, -1), ...(big ? [SP(w - 1.3, h - 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(sofa[0] - 2.4, sofa[1], 0, -1)] : []),
     ] };
+}
+const POTTY_SCRAWL = ['FOR A GOOD', 'TIME CALL', '555-0142', '', 'DAVE WAS', 'HERE'];
+function pottyWall(i, u, uStep, z, d, mx, my, L) {
+  BG[i] = C(BLUE, 1.6 + L * 0.3);
+  if (z > 2.05) return set(i, fract(u * 10) < 0.5 ? '=' : ' ', C(WHITE, 10)), true; // the vent: daylight through the slats
+  if (mx === 0 && z > 0.95 && z < 1.75) { // the scrawl on the left wall, in marker (the sign font, small)
+    const LH = 0.13, CWID = 0.08, dz = (1.75 - z) / LH, row = Math.floor(dz), pos = (2.75 - Math.abs(u)) / CWID, ci = Math.floor(pos);
+    const ch = (POTTY_SCRAWL[row] || '')[ci];
+    if (ch && ch !== ' ' && glyphOn(ch, Math.floor((pos - ci) * 4), Math.floor((dz - row) * 6))) return set(i, '#', C(GRAY, 4 + L * 0.6)), true;
+  }
+  return set(i, fract(u * 6) < 0.12 ? '|' : ' ', C(BLUE, L * 0.8)), true; // ribs
 }
 function homeWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === 0 && z > 1.0 && z < 2.1 && Math.abs(fract(u / 3) - 0.5) < 0.2) { // a window on the city: lit windows across the street at night

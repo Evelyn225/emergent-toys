@@ -18,6 +18,9 @@ function looNear() {
   for (const l of loos()) { const d = Math.hypot(l[0] - px, l[1] - py); if (d < bd) { best = l; bd = d; } }
   return best;
 }
+// standing at a portapotty's door (props.js puts them on the building sites)
+const pottyNear = () => mode === 'walk' ? potties.find(o => Math.hypot(rel(o.x - o.hl - 0.06 - px), rel(o.y - py)) < 0.1) : null;
+const enterPotty = o => enterRoom('potty', { word: 'PORTAPOTTY', ret: [px, py, a] }, [2, 2.5, -Math.PI / 2]);
 const PEE_SEEN = ['"Ugh, seriously?"', '"There are kids around!"', '"Oh, come ON."', '"Gross."', '"Not on my street, pal."', '"Classy."'];
 // how high the ground is at (x, y), and whether something's standing up out of it there (a wall: the stream stops)
 function peeGround(x, y) {
