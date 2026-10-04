@@ -92,7 +92,7 @@ function drawHeldDense(it, cx, hy, hsz, grip) {
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72); // a little over the world's character size
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, [art, col] = DENSE[it.id](it, usesLeft(it)), artW = Math.max(...art.map(l => l.length)), top = grip + 0.6 * s - art.length * s;
-  if (!(it.id === 'yoyo' && fx.yoyo > 0)) { // (a yo-yo on the go is drawn by drawYoyo)
+  if (it.id !== 'yoyo') { // (a yo-yo is drawn by drawYoyo, hanging from your fingers)
     g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
     artText(art, cx - artW * w / 2, top, s, col); g.restore();
   }

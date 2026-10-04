@@ -9917,7 +9917,7 @@ function drawHeldBig() {
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const lift = it.id === 'yoyo' ? Math.min(1, yoyo.len * 3 + (yoyo.out ? 0.3 : 0)) : 0; // (your hand comes up in front of you to work the yo-yo)
+  const lift = it.id === 'yoyo' ? Math.min(1, 0.55 + yoyo.len * 3) : 0; // (holding a yo-yo your hand's up, so it hangs below; higher still to work it)
   const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (drawHeldDense(it, cx, hy, hsz, grip)); // (the dense-art trial: the item drawn finer, the same hand)
@@ -9926,14 +9926,14 @@ function drawHeldBig() {
     const [art, col] = heldArt(it);
     g.font = isz + 'px monospace';
     const w = g.measureText('M').width, artW = Math.max(...art.map(l => l.length)), top = grip + 0.5 * isz - art.length * isz;
-    if (!(it.id === 'yoyo' && fx.yoyo > 0)) {
+    if (it.id !== 'yoyo') {
       g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
       artText(art, cx - artW * w / 2, top, isz, col); g.restore();
     }
     if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
   }
   drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
-  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(cx, grip);
+  if (it.id === 'yoyo') drawYoyo(cx - hsz * 0.2, hy + HAND_ART.length * hsz); // (in your hand or out on its string, it hangs from under your fist)
   g.font = FS + 'px monospace';
 }
 // the umbrella open over you, seen from underneath: panels of fabric between ribs fanning out from the hub (just off
@@ -10027,10 +10027,12 @@ function yoyoPos(x, y, ang, len) {
 function drawYoyo(x, y) {
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72);
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, p = yoyoPos(x, y, yoyo.ang, yoyo.len), str = PAL[C(WHITE, 11)];
+  const hang = 5 * s / (cv.height * 0.36); // (enough string to hang it clear of your hand)
+  const idle = !yoyo.out && yoyo.len < hang, len = Math.max(yoyo.len, hang), ang = idle ? Math.sin(T * 1.3) * 0.07 : yoyo.ang; // (just held: dangling on a short string, swaying a little)
+  const w = g.measureText('M').width, p = yoyoPos(x, y, ang, len), str = PAL[C(WHITE, 11)];
   charLine(x, y, p.x, p.y, w, s, str);
-  if (Math.abs(yoyo.angV) > 3) for (const k of [1, 2]) { const r = yoyoPos(x, y, yoyo.ang - yoyo.angV * 0.02 * k, yoyo.len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
-  const spin = yoyo.spin * (p.rolling ? 1.6 : 1);
+  if (Math.abs(yoyo.angV) > 3) for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * 0.02 * k, len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
+  const spin = idle ? 0 : yoyo.spin * (p.rolling ? 1.6 : 1); // (still, in your hand)
   const [art, col] = sculpt(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
     const r = Math.hypot(cx, cy * 1.1) * 2.5 / 3.2;
     if (r > 2.5) return null;
@@ -10310,7 +10312,7 @@ function drawHeldDense(it, cx, hy, hsz, grip) {
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72); // a little over the world's character size
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, [art, col] = DENSE[it.id](it, usesLeft(it)), artW = Math.max(...art.map(l => l.length)), top = grip + 0.6 * s - art.length * s;
-  if (!(it.id === 'yoyo' && fx.yoyo > 0)) { // (a yo-yo on the go is drawn by drawYoyo)
+  if (it.id !== 'yoyo') { // (a yo-yo is drawn by drawYoyo, hanging from your fingers)
     g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
     artText(art, cx - artW * w / 2, top, s, col); g.restore();
   }
