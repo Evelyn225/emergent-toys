@@ -2987,8 +2987,22 @@ GAMES.mahjong = (rnd = Math.random) => {
     return ev;
   };
   const SUIT_COL = [RED, GREEN, BLUE];
-  const tileText = (text, x, y, t, hi) => text(x, y, mjName(t), C(SUIT_COL[t / 9 | 0], hi ? 15 : 12));
-  g.draw = (put, text) => {
+  // a tile's face, as big as the patch allows: its number, then its suit as pips the way real tiles show them (dots
+  // in rows, bamboo sticks, character marks); too small for that, the number and a row of the suit's mark
+  const tileFace = t => (w, h) => {
+    const n = t % 9 + 1, s = MJ_SUITS[t / 9 | 0];
+    if (h < 3) return h < 2 ? [`${n}${s}`] : [`${n}`, s.repeat(Math.min(w, 3))];
+    const per = w >= 7 ? 3 : 2, rows_ = [];
+    for (let k = 0; k < n; k += per) rows_.push(Array.from({ length: Math.min(per, n - k) }, () => s).join(' '));
+    while (rows_.length > h - 1) { const a = rows_.pop(); rows_[rows_.length - 1] += ' ' + a; } // (squeeze them in)
+    return [`${n}`, ...rows_];
+  };
+  const smallTile = (put, area, text, x, y, t, hi) => { // a discard: one ivory cell, its number and suit
+    if (area) { put(x, y, ' ', 0, C(WHITE, hi ? 15 : 10)); area(x, y, 1, 1, (w) => [w >= 2 ? `${t % 9 + 1}${MJ_SUITS[t / 9 | 0]}` : `${t % 9 + 1}`], C(SUIT_COL[t / 9 | 0], 4)); }
+    else text(x, y, mjName(t), C(SUIT_COL[t / 9 | 0], hi ? 15 : 12));
+  };
+  g.draw = (put, text, chars, area) => {
+    const tileText = (text_, x, y, t, hi) => smallTile(put, area, text_, x, y, t, hi);
     // the other three: how many tiles, and what they've thrown away (the last discard picked out)
     for (let p = 1; p <= 3; p++) {
       const y = (p - 1) * 2;
@@ -3002,11 +3016,13 @@ GAMES.mahjong = (rnd = Math.random) => {
     text(0, 9, msg.slice(0, 62), C(WHITE, 14));
     // your hand: fourteen (or thirteen) tiles across the bottom, the one you're on raised
     const hand = hands[0];
-    hand.forEach((t, k) => {
-      const sel = state === 'you' && k === cur, y = sel ? 11 : 12;
-      put(1 + k * 2, y, ' ', 0, C(WHITE, sel ? 15 : 11)); text(1 + k * 2, y, mjName(t), C(SUIT_COL[t / 9 | 0], 5)); // an ivory tile, its number and suit
+    hand.forEach((t, k) => { // ivory tiles two cells wide and two high (the one you're on raised), each face filled
+      const sel = state === 'you' && k === cur, y = sel ? 10 : 11, x = 2 + k * 2;
+      if (!area) { put(x, y + 1, ' ', 0, C(WHITE, sel ? 15 : 11)); text(x, y + 1, mjName(t), C(SUIT_COL[t / 9 | 0], 5)); return; }
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) put(x + dx, y + dy, ' ', 0, C(WHITE, sel ? 15 : (k & 1 ? 11 : 12))); // (alternate shades: the tiles' edges)
+      area(x, y, 2, 2, tileFace(t), C(SUIT_COL[t / 9 | 0], 4));
     });
-    if (state === 'you') text(1 + cur * 2, 13, '^^', C(YEL, 15));
+    if (state === 'you') text(2 + cur * 2, 13, '^^', C(YEL, 15));
     // the help: what you're waiting for, if you're one tile away
     const h13 = state === 'you' ? hand.filter((_, k) => k !== cur) : hand;
     const w = h13.length === 13 ? mjWaits(h13) : [];
@@ -7067,23 +7083,32 @@ function shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL
 }
 
 // ---- the arcade roof over the streets, seen from underneath
-function arcadeRoofCell(i, wx, wy) {
+// It's glass: the steel shows (beams down the sides, a rib every 5m, a bar down the middle and across between the
+// ribs, lamps hanging from it) and between them you see the sky, and the buildings above the roofline
+function arcadeRoofPart(wx, wy) {
   const k = idx(Math.floor(wx), Math.floor(wy)), r = ROAD[k], ns = r === 1 || r === 3 && fract(wy / 8) >= 0.25;
   const across = (ns ? mod(wx, 8) : mod(wy, 8)) / 2, along = ns ? wy : wx;
-  if (across < 0.04 || across > 0.96) { BG[i] = C(GRAY, 2); return set(i, '#', C(GRAY, 7)); } // the side beams
-  if (fract(along * 2) < 0.07) { BG[i] = C(GRAY, 2); return set(i, '=', C(GRAY, 9)); } // ribs every 5m
-  const lamp = Math.hypot(fract(along) - 0.5, (Math.abs(across - 0.5) - 0.25) * 2) < 0.07;
-  if (lamp) { BG[i] = C(WARM, 4 + night * 6); return set(i, 'o', C(WHITE, 15)); }
-  const pane = Math.floor(along * 2) % 3; // fibreglass panels, yellowed and greened with age, daylight coming through them
-  BG[i] = day > 0.3 ? C([WHITE, YEL, GREEN][pane], (pane ? 2 : 3) + day * (pane ? 3 : 5) * (1 - overcast * 0.5)) : C(WARM, 1 + lampsOn * 1.5); // (or the lamps' glow at night)
-  return set(i, Math.abs(across - 0.5) < 0.02 ? '|' : (Math.floor(along * 6) + Math.floor(across * 10)) % 7 ? ' ' : '.', C(GRAY, 6));
+  if (across < 0.02 || across > 0.98) return 'beam';
+  if (fract(along * 2) < 0.035) return 'rib';
+  if (Math.hypot(fract(along) - 0.5, (Math.abs(across - 0.5) - 0.25) * 2) < 0.07) return 'lamp';
+  if (Math.abs(across - 0.5) < 0.015 || Math.abs(fract(along * 2) - 0.5) < 0.025) return 'bar';
+  return null; // glass
+}
+function arcadeRoofCell(i, wx, wy) {
+  const part = arcadeRoofPart(wx, wy);
+  const steel = 4 + day * 4 + lampsOn * 2;
+  if (part === 'beam') { BG[i] = C(GRAY, steel); return set(i, '#', C(WHITE, 9)), true; }
+  if (part === 'rib') { BG[i] = C(GRAY, steel * 0.8); return set(i, '=', C(WHITE, 10)), true; }
+  if (part === 'lamp') { BG[i] = C(WARM, 4 + night * 6); return set(i, 'o', C(WHITE, 15)), true; }
+  if (part === 'bar') { BG[i] = C(GRAY, steel * 0.7); return set(i, '-', C(WHITE, 8)), true; }
+  return false;
 }
 // does the ray to this wall cell pass under the arcade roof first? (wall points above it are hidden by it)
 function arcadeRoofHit(z, side, mx, my, wc) {
   if (eye >= ARCADE_Z || z <= ARCADE_Z) return null;
   const f = (ARCADE_Z - eye) / (z - eye), wx = side ? wc : mx + (rel(px - mx) < 0 ? 0 : 1), wy = side ? my + (rel(py - my) < 0 ? 0 : 1) : wc;
   const hx = px + rel(wx - px) * f, hy = py + rel(wy - py) * f;
-  return arcadeAt(hx, hy) ? [hx, hy] : null;
+  return arcadeAt(hx, hy) && arcadeRoofPart(mod(hx, N), mod(hy, N)) ? [hx, hy] : null; // (through the glass: the wall)
 }
 // and the sky: where the roof is over you, that's what you see looking up
 function arcadeSky(i, rx, ry, up) {
@@ -7091,7 +7116,7 @@ function arcadeSky(i, rx, ry, up) {
   const t = (ARCADE_Z - eye) / up;
   if (t > 40) return false;
   const hx = px + rx * t, hy = py + ry * t;
-  if (!arcadeAt(hx, hy)) return false;
+  if (!arcadeAt(hx, hy) || !arcadeRoofPart(mod(hx, N), mod(hy, N))) return false; // (through the glass: the sky)
   ZB[i] = t; arcadeRoofCell(i, mod(hx, N), mod(hy, N));
   return true;
 }
@@ -11160,7 +11185,11 @@ function drawGame() {
       set(i, ch, col); if (bg !== undefined && bg !== NONE) BG[i] = bg;
     }
   }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col), // a label, at normal size
-     (c, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + c, s_, col)); // one placed by character (a column in a table): c counts characters from the left
+     (c, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + c, s_, col), // one placed by character (a column in a table): c counts characters from the left
+     (x, y, w, h, fill, col) => { // lines of characters filling a w x h patch of cells, centred: fill(chars wide, chars high) gives them
+       const W_ = w * bw, H_ = h * bh, lines = fill(W_, H_).slice(0, H_), top = y0 + y * bh + ((H_ - lines.length) >> 1);
+       lines.forEach((l, r) => { const s_ = l.slice(0, W_); putText(top + r, x0 + x * bw + ((W_ - s_.length) >> 1), s_, col); });
+     });
   // the status under the screen, in two lines if it's wider than the cabinet
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;

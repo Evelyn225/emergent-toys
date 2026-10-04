@@ -819,8 +819,22 @@ GAMES.mahjong = (rnd = Math.random) => {
     return ev;
   };
   const SUIT_COL = [RED, GREEN, BLUE];
-  const tileText = (text, x, y, t, hi) => text(x, y, mjName(t), C(SUIT_COL[t / 9 | 0], hi ? 15 : 12));
-  g.draw = (put, text) => {
+  // a tile's face, as big as the patch allows: its number, then its suit as pips the way real tiles show them (dots
+  // in rows, bamboo sticks, character marks); too small for that, the number and a row of the suit's mark
+  const tileFace = t => (w, h) => {
+    const n = t % 9 + 1, s = MJ_SUITS[t / 9 | 0];
+    if (h < 3) return h < 2 ? [`${n}${s}`] : [`${n}`, s.repeat(Math.min(w, 3))];
+    const per = w >= 7 ? 3 : 2, rows_ = [];
+    for (let k = 0; k < n; k += per) rows_.push(Array.from({ length: Math.min(per, n - k) }, () => s).join(' '));
+    while (rows_.length > h - 1) { const a = rows_.pop(); rows_[rows_.length - 1] += ' ' + a; } // (squeeze them in)
+    return [`${n}`, ...rows_];
+  };
+  const smallTile = (put, area, text, x, y, t, hi) => { // a discard: one ivory cell, its number and suit
+    if (area) { put(x, y, ' ', 0, C(WHITE, hi ? 15 : 10)); area(x, y, 1, 1, (w) => [w >= 2 ? `${t % 9 + 1}${MJ_SUITS[t / 9 | 0]}` : `${t % 9 + 1}`], C(SUIT_COL[t / 9 | 0], 4)); }
+    else text(x, y, mjName(t), C(SUIT_COL[t / 9 | 0], hi ? 15 : 12));
+  };
+  g.draw = (put, text, chars, area) => {
+    const tileText = (text_, x, y, t, hi) => smallTile(put, area, text_, x, y, t, hi);
     // the other three: how many tiles, and what they've thrown away (the last discard picked out)
     for (let p = 1; p <= 3; p++) {
       const y = (p - 1) * 2;
@@ -834,11 +848,13 @@ GAMES.mahjong = (rnd = Math.random) => {
     text(0, 9, msg.slice(0, 62), C(WHITE, 14));
     // your hand: fourteen (or thirteen) tiles across the bottom, the one you're on raised
     const hand = hands[0];
-    hand.forEach((t, k) => {
-      const sel = state === 'you' && k === cur, y = sel ? 11 : 12;
-      put(1 + k * 2, y, ' ', 0, C(WHITE, sel ? 15 : 11)); text(1 + k * 2, y, mjName(t), C(SUIT_COL[t / 9 | 0], 5)); // an ivory tile, its number and suit
+    hand.forEach((t, k) => { // ivory tiles two cells wide and two high (the one you're on raised), each face filled
+      const sel = state === 'you' && k === cur, y = sel ? 10 : 11, x = 2 + k * 2;
+      if (!area) { put(x, y + 1, ' ', 0, C(WHITE, sel ? 15 : 11)); text(x, y + 1, mjName(t), C(SUIT_COL[t / 9 | 0], 5)); return; }
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) put(x + dx, y + dy, ' ', 0, C(WHITE, sel ? 15 : (k & 1 ? 11 : 12))); // (alternate shades: the tiles' edges)
+      area(x, y, 2, 2, tileFace(t), C(SUIT_COL[t / 9 | 0], 4));
     });
-    if (state === 'you') text(1 + cur * 2, 13, '^^', C(YEL, 15));
+    if (state === 'you') text(2 + cur * 2, 13, '^^', C(YEL, 15));
     // the help: what you're waiting for, if you're one tile away
     const h13 = state === 'you' ? hand.filter((_, k) => k !== cur) : hand;
     const w = h13.length === 13 ? mjWaits(h13) : [];
