@@ -151,7 +151,7 @@ const wetting = (d, w) => d.booze ? w * 2.4 : w * 0.5; // bladder from `w` point
 const SOUPY = { ramen: 1, pho: 1, noodlebox: 0.5, greencurry: 0.5, icecream: 0.5, apple: 0.5 };
 const FILLING = { milkshake: 1, smoothie: 1, lemonade: 0.3, bubbletea: 0.5 };
 function nourish(id, d) {
-  if (d.kind === 'food') return [clamp(10 + d.price * 5, 15, 70), (SOUPY[id] || 0) * 30];
+  if (d.kind === 'food') return [d.fill || clamp(10 + d.price * 5, 15, 70), (SOUPY[id] || 0) * 30];
   if (d.kind !== 'drink') return [0, 0];
   const base = id === 'water' ? 55 : clamp(25 + d.price * 3, 25, 50);
   return [(FILLING[id] || 0) * 30, d.booze ? base * 0.5 : base];
@@ -745,7 +745,8 @@ function glow(wx, wy) {
   if (vseg(bx + 1, by)) d = Math.min(d, Math.hypot(8 + HEAD - lx, ay));
   if (hseg(bx, by)) d = Math.min(d, Math.hypot(Math.min(Math.abs(ly - HEAD), Math.abs(ly - 2 + HEAD)), ax));
   if (hseg(bx, by + 1)) d = Math.min(d, Math.hypot(8 + HEAD - ly, ax));
-  return Math.max(0, 1 - d / 0.55);
+  const own = typeof heldItem === 'function' && heldItem() && heldItem().id === 'lantern' && mode === 'walk' ? Math.max(0, 1 - Math.hypot(rel(wx - px), rel(wy - py)) / 0.45) * 0.85 : 0; // a paper lantern in your hand
+  return Math.max(0, 1 - d / 0.55, own);
 }
 
 // parks: grass, a cross of dirt paths through each block (block-local centre 5), a pond, trees, benches.
@@ -1793,6 +1794,7 @@ function talkTo(p) {
   }
   if (!task && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
   p.talk = Math.max(p.talk || 0, 3);
+  if (fx.stink > 0 && Math.random() < 0.7) return say(pick(['They take a step back. "Oof. Stinky tofu?"', 'They wave a hand in front of their face. "Have you been at the night market?"', '"Whoa. Okay. Mints. Get some mints."']), 3);
   say(`"${talkLine(p)}"`, 4);
 }
 // E at a cart while you're fetching for someone
@@ -2050,9 +2052,14 @@ const ITEMS = {
   duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
   spraypaint: { name: 'spray paint', price: 8, kind: 'toy', uses: 6 }, // (graffiti.js)
   // the Chinatown night market (nightmarket.js): street food, charms, curios
-  bao: { name: 'pork bao', price: 4, kind: 'food', uses: 3 }, eggwaffle: { name: 'egg waffle', price: 5, kind: 'food', uses: 4 },
-  stinkytofu: { name: 'stinky tofu', price: 4, kind: 'food', uses: 3 }, bubbletea: { name: 'bubble tea', price: 5, kind: 'drink', uses: 4 },
+  // (each does something: heal = health back, a whole one; fill = hunger filled, a whole one, whatever the price; sugar = a rush like caffeine)
+  bao: { name: 'pork bao', price: 4, kind: 'food', uses: 3, heal: 15 }, eggwaffle: { name: 'egg waffle', price: 5, kind: 'food', uses: 4, sugar: 45 },
+  stinkytofu: { name: 'stinky tofu', price: 4, kind: 'food', uses: 3, fill: 60 }, bubbletea: { name: 'bubble tea', price: 5, kind: 'drink', uses: 4, caffeine: 30 },
+  fortunecookie: { name: 'fortune cookie', price: 2, kind: 'food', uses: 1 }, // a fortune with a stock tip in it that comes true (stocks.js)
   redstring: { name: 'red string bracelet', price: 8, kind: 'gear' }, luckycoin: { name: 'lucky coin', price: 15, kind: 'gear' },
+  tigerbalm: { name: 'tiger balm', price: 12, kind: 'toy', uses: 3 }, // rub it in: health back
+  lantern: { name: 'paper lantern', price: 10, kind: 'gear' }, // held after dark: light round you
+  firecrackers: { name: 'firecrackers', price: 6, kind: 'toy', uses: 3 }, // a distraction: the cops look the other way
   mysterybox: { name: 'mystery box', price: 20, kind: 'toy', uses: 1 },
   // the two that bend the world: carry the watch and T hurries the hours along; shake the globe and the sky changes
   pocketwatch: { name: 'cursed pocket watch', price: 300, kind: 'gear' }, // (the prize counters' top prize, for tickets)
@@ -2072,7 +2079,7 @@ function claimPrize(id) {
 // what each kind of place sells: by shop word first, then by room kind
 const STOCK_WORD = {
   'FAIR FOOD': ['corndog', 'popcorn', 'cottoncandy', 'lemonade'],
-  'STREET FOOD': ['bao', 'eggwaffle', 'stinkytofu', 'bubbletea'], CHARMS: ['redstring', 'luckycoin', 'mooncake'], CURIOS: ['mysterybox', 'cityglobe'], // (the night market's stalls)
+  'STREET FOOD': ['bao', 'eggwaffle', 'stinkytofu', 'bubbletea'], CHARMS: ['redstring', 'luckycoin', 'fortunecookie', 'tigerbalm'], CURIOS: ['mysterybox', 'lantern', 'firecrackers', 'cityglobe'], // (the night market's stalls)
   YAKITORI: ['yakitori', 'beer', 'sake'], TAKOYAKI: ['takoyaki', 'melonsoda'], BENTO: ['bento', 'onigiri', 'tea'], IZAKAYA: ['beer', 'sake', 'yakitori'],
   KISSATEN: ['coffee', 'melonsoda', 'sandwich'], DRUGSTORE: ['water', 'energy', 'umbrella', 'candy'], MANGA: ['book'], CAPSULE: ['water', 'onigiri'],
   '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella'],
@@ -2103,7 +2110,7 @@ const inv = []; // { id, uses }
 let held = 0; // which slot is in your hand; -1 = nothing, hands empty
 // take slot k in hand, or (if it's already there) put it away and hold nothing
 const holdSlot = k => { held = held === k ? -1 : k; };
-const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0 };
+const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0 };
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
 // anything, the dragon's a bit more, and they add up
@@ -2186,10 +2193,14 @@ function useHeld(near) {
     const feel = eatSome(it.id, d); // (needs.js)
     it.uses--;
     if (d.caffeine) fx.caffeine = Math.min(180, fx.caffeine + d.caffeine / d.uses);
+    if (d.sugar) fx.caffeine = Math.min(180, fx.caffeine + d.sugar / d.uses); // (a sugar rush: you go quicker, same as coffee)
+    if (d.heal) needs.health = Math.min(100, needs.health + d.heal / d.uses);
+    if (it.id === 'stinkytofu') fx.stink = 150; // (and you'll smell of it a while)
     if (d.booze) fx.booze = Math.min(1.5, fx.booze + d.booze / d.uses);
     if (d.sober) fx.booze = Math.max(0, fx.booze - d.sober / d.uses);
     const done = it.uses <= 0;
     if (done) removeHeld();
+    if (it.id === 'fortunecookie') return [`You crack it open. The fortune reads: "${fortune()}"`, 'bite'];
     return [(done ? `You finish the ${d.name}.` : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`) + feel,
             d.kind === 'food' ? 'bite' : 'sip'];
   }
@@ -2241,8 +2252,26 @@ function useHeld(near) {
       return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
     case 'pocketwatch': return [pick(['The second hand runs fast. Hold T and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
     case 'cityglobe': return shakeGlobe();
-    case 'redstring': return [pick(['You tug the red string round your wrist. Luck, the stallholder said. Probably.', 'A thread of red. Keeps the bad stuff off, apparently.']), null];
-    case 'luckycoin': return [pick(['You flip the lucky coin. Heads. Of course it\'s heads.', 'You rub the square hole in the middle of the coin. It feels warm.']), 'click'];
+    case 'redstring': return [pick(['You tug the red string round your wrist. A little luck at the tables and the games, the stallholder said.', 'A thread of red. Keeps the bad stuff off, and tips the odds a hair your way at the games.']), null];
+    case 'luckycoin': return [`You flip the lucky coin: ${Math.random() < 0.5 ? 'heads' : 'tails'}. (On you, it nudges the odds at the games.)`, 'click'];
+    case 'tigerbalm':
+      if (needs.health >= 99) return ['You smell the tiger balm. Camphor. You don\'t need it right now.', null];
+      it.uses--; needs.health = Math.min(100, needs.health + 30);
+      if (it.uses <= 0) removeHeld();
+      return [`You rub the tiger balm in. It burns, then it doesn't, and everything aches less.${it.uses > 0 ? ` (${it.uses} left)` : ' The tin\'s empty.'}`, null];
+    case 'lantern': return [night > 0.3 ? 'You hold the lantern up. Its warm light spills round you.' : 'A red paper lantern. It\'ll come into its own after dark.', null];
+    case 'firecrackers': {
+      if (near.indoors) return ['Not in here!', null];
+      it.uses--; if (it.uses <= 0) removeHeld();
+      fx.bang = 1.2;
+      if (wanted.stars > 0 && !wanted.busted) { // the cops wheel round toward the noise, and lose you for a moment
+        const an = Math.random() * Math.PI * 2;
+        wanted.seen = false; wanted.lastX = mod(px + Math.cos(an) * 2.5, N); wanted.lastY = mod(py + Math.sin(an) * 2.5, N); wanted.hideT += 6;
+        return ['BANG BANG BANG BANG! You toss the firecrackers and slip away while every cop on the street turns toward the racket.', 'kick'];
+      }
+      for (const p of people) if (!p.hidden && Math.hypot(rel(p.x - px), rel(p.y - py)) < 0.8) p.talk = 3;
+      return [pick(['BANG BANG BANG! Everyone nearby jumps out of their skin.', 'A string of firecrackers goes off at your feet. Somewhere a car alarm joins in.']) + (it.uses > 0 ? ` (${it.uses} left)` : ''), 'kick'];
+    }
     case 'mysterybox': { // open it: something from the pile, nobody said what
       removeHeld();
       const id = pickWeighted(MYSTERY_BOX);
@@ -2256,7 +2285,15 @@ function useHeld(near) {
   return ['Nothing happens.', null];
 }
 // the night market's mystery box: mostly cheap, now and then not [id, weight]
-const MYSTERY_BOX = [['duck', 14], ['candy', 12], ['yoyo', 10], ['sparklers', 10], ['harmonica', 8], ['plushcat', 8], ['sharkplush', 8], ['plushbear', 8], ['snowglobe', 7], ['vinyl', 6], ['jadebangle', 5], ['luckycoin', 3], ['jadedragon', 1], ['pocketwatch', 0.25]];
+const MYSTERY_BOX = [['duck', 14], ['candy', 12], ['yoyo', 10], ['sparklers', 10], ['firecrackers', 8], ['fortunecookie', 8], ['lantern', 5], ['tigerbalm', 5], ['harmonica', 8], ['plushcat', 8], ['sharkplush', 8], ['plushbear', 8], ['snowglobe', 7], ['vinyl', 6], ['jadebangle', 5], ['luckycoin', 3], ['jadedragon', 1], ['pocketwatch', 0.25]];
+// a fortune cookie's fortune: a hint at one of the city's companies, and that company really does get good news soon
+// (stocks.js: a tipped stock's news chance goes right up, and the news it gets is good)
+const FORTUNE_HINT = { DUMP: 'The golden dumpling will rise.', CABS: 'Fortune rides in the back of a yellow car.', ELRL: 'Look up: what runs above the street will climb.',
+  PIER: 'Joy by the water will soon be worth more.', JADE: 'Green stone brings green paper.', LUCK: 'The house will soon be luckier than you.', BYTE: 'A small wave of bytes becomes a big one.' };
+function fortune() {
+  const s = pick(STOCKS); s.tip = true;
+  return `${FORTUNE_HINT[s.sym]} Lucky numbers: ${[0, 0, 0].map(() => 1 + (Math.random() * 49 | 0)).join(', ')}`;
+}
 const pickWeighted = list => { let r = Math.random() * list.reduce((t, [, w]) => t + w, 0); for (const [id, w] of list) if ((r -= w) < 0) return id; return list[0][0]; };
 // the Glyphport snow globe: the city in glass. Shake it and the sky outside turns to match (and stays a good while);
 // give the snow a few seconds to settle before you try again
@@ -2294,6 +2331,7 @@ function pickUpDropped(d) {
 function stepGoods(dt) {
   if (fx.skating && mode !== 'walk') fx.skating = false;
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
+  fx.stink = Math.max(0, fx.stink - dt); fx.bang = Math.max(0, fx.bang - dt);
   stepYoyo(dt); if (!heldItem() || heldItem().id !== 'yoyo') yoyo.out = false; // (put it away and it comes back up)
   fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt);
   cigTip = Math.max(0, cigTip - dt * 0.8);
@@ -3740,10 +3778,10 @@ function marketTick(rnd = Math.random, gap = false) {
     const norm = (rnd() + rnd() + rnd() - 1.5) * 1.4; // roughly normal
     const avg = s.hist.reduce((a, b) => a + b, 0) / s.hist.length;
     let r = norm * s.vol * (gap ? 2.5 : 1) + s.mom * 0.3 + (avg - s.price) / avg * 0.01;
-    if (!gap && rnd() < 0.006) { // news
-      const up = rnd() < 0.5, line = `${s.name} ${pick_(up ? s.good : s.bad, rnd)}`;
+    if (!gap && rnd() < (s.tip ? 0.05 : 0.006)) { // news (a stock a fortune cookie tipped gets some soon, and it's good)
+      const up = s.tip || rnd() < 0.5, line = `${s.name} ${pick_(up ? s.good : s.bad, rnd)}`;
       r += (up ? 1 : -1) * (0.07 + rnd() * 0.12);
-      MARKET.news.unshift({ sym: s.sym, line, up, tick: MARKET.tick });
+      MARKET.news.unshift({ sym: s.sym, line, up, tick: MARKET.tick }); s.tip = false;
       MARKET.news.length = Math.min(MARKET.news.length, 6);
     }
     s.mom = s.mom * 0.6 + r * 0.4;
@@ -10663,6 +10701,10 @@ const HAND = {
     (c, r) => r < 2 && c === '/' ? C(MAG, 13) : c === 'o' || c === 'O' ? C(BRICK, 10) : c === ':' || c === '~' ? C(WARM, 14) : C(WHITE, 11)],
   redstring: () => [['  .----.', ' (      )', '  `-oo-\'', '     \\\\'], (c, r) => c === 'o' ? C(YEL, 15) : C(RED, 13)],
   luckycoin: () => [['  .---.', ' / .-. \\', '| | # | |', ' \\ `-\' /', "  `---'"], (c, r) => c === '#' ? C(GRAY, 6) : C(YEL, 14)],
+  fortunecookie: (it, f) => [['   .---.', "  /  .-'\\", ' (  (  ~~~', "  `--`"], (c, r) => c === '~' ? C(WHITE, 15) : C(YEL, 13)],
+  tigerbalm: it => [['  ._____.', ' |  /\\  |', ' | (oo) |', " |TIGER |", " `-----'"], (c, r) => r === 0 ? C(GRAY, 12) : c === 'o' || c === '/' || c === '\\' || c === '(' || c === ')' ? C(ORANGE, 15) : /[A-Z]/.test(c) ? C(YEL, 14) : C(RED, 12)],
+  lantern: () => [['    |', '  .-=-.', ' ( ||| )', ' ( ||| )', "  `-=-'", '    ~'], (c, r) => r === 0 ? C(GRAY, 10) : c === '=' || c === '~' ? C(YEL, 15) : c === '|' && r > 1 && r < 4 ? C(YEL, 14) : C(RED, 15)],
+  firecrackers: it => [['   *', '   \\', ...Array.from({ length: Math.max(1, it.uses) * 2 }, (_, k) => k & 1 ? '  ==]' : ' [==  '), '   |'], (c, r) => c === '*' ? C(YEL, 15) : c === '\\' || c === '|' ? C(GRAY, 11) : C(RED, 14)],
   mysterybox: () => [['  _\\ /_', ' |  X  |', ' |  ?  |', ' |_____|'], (c, r) => c === '?' ? C(WHITE, 15) : c === 'X' || c === '\\' || c === '/' ? C(RED, 14) : C(BRICK, 13)],
   pocketwatch: () => { const k = Math.floor(T * (K.KeyT && timeKeys() ? 12 : 1)) & 3; // the hands, round and round
     return [['    o', '  .-^-.', ' / 12  \\', `|9  ${'|/-\\'[k]}  3|`, ' \\  6  /', "  `---'"], (c, r) => r === 0 ? C(GRAY, 12) : r === 3 && '|/-\\'.includes(c) ? C(GRAY, 3) : /[0-9]/.test(c) ? C(BRICK, 9) : r === 1 || c === '/' || c === '\\' || c === '`' || c === "'" || c === '|' ? C(YEL, 13) : C(WARM, 14)]; },
@@ -11382,6 +11424,39 @@ Object.assign(DENSE, {
     if (Math.abs(x) < 1.6 && Math.abs(y) < 1.6) return ['#', C(YEL, 9)];
     const a = Math.atan2(y, x), mark = d > 0.5 && d < 0.75 && Math.abs(fract(a / (Math.PI / 2) + 0.5) - 0.5) < 0.12;
     return mark ? ['%', C(BRICK, 9)] : dLit(dBall(x, y, 0, 0, 5) * 0.8, YEL, 8, 13);
+  }),
+  fortunecookie: () => sculpt(24, 11, (x, y) => { // folded in a crescent, the slip of paper poking out
+    if (y > -0.6 && y < 0.3 && x > 2.4 && x < 7.4) { const t_ = dText(x, y, 4.9, -0.15, 'LUCK'); return t_ ? [t_, C(RED, 12)] : ['=', C(WHITE, 14)]; }
+    const d = dEll(x, y, -0.6, 0.4, 5, 3.4), notch = dEll(x, y, 2.2, 1.2, 2.6, 2);
+    if (d > 1 || notch < 1) return null;
+    return dLit(dBall(x, y, -0.6, 0.4, 5, 3.4), YEL, 7, 14);
+  }),
+  tigerbalm: it => sculpt(24, 12, (x, y) => { // a little round tin, a tiger on the lid
+    if (Math.abs(x) > 5.2 || y < -4.6 || y > 4.6) return null;
+    if (y < -3) return dLit(0.75 - Math.abs(x) * 0.05, GRAY, 8, 14); // the lid's rim
+    const t_ = dText(x, y, 0, 2.6, 'TIGER'); if (t_) return [t_, C(YEL, 15)];
+    if (dEll(x, y, 0, -0.6, 2.2, 1.6) < 1) return [Math.abs(x) < 0.4 && y > -0.6 ? 'v' : fract(x * 0.8) < 0.3 ? '|' : '%', C(ORANGE, 14)]; // the tiger's face, striped
+    return dLit(0.5 - x * 0.04, RED, 7, 12);
+  }),
+  lantern: () => sculpt(24, 16, (x, y) => { // a red paper lantern, ribbed, glowing from inside, a gold tassel
+    if (Math.abs(x) < 0.25 && y < -6) return ['|', C(GRAY, 10)];
+    if (y > 5.6 && y < 7.6 && Math.abs(x) < 0.6) return ['|', C(YEL, 13)];
+    if ((y < -5 && y > -6 || y > 4.6 && y < 5.6) && Math.abs(x) < 2.2) return ['=', C(YEL, 14)];
+    const d = dEll(x, y, 0, -0.2, 5, 4.8);
+    if (d > 1) return null;
+    const lit = (1 - d) * (night > 0.3 ? 1 : 0.6) + 0.25 * (0.5 + 0.5 * Math.sin(T * 7 + x));
+    if (Math.abs(fract(x / (5 * Math.sqrt(Math.max(0.05, 1 - (y / 4.8) ** 2))) * 3 + 0.5) - 0.5) < 0.07) return ['|', C(RED, 6 + lit * 4)]; // the ribs
+    return [dFill(clamp(lit, 0, 1)), C(lit > 0.7 ? YEL : lit > 0.45 ? ORANGE : RED, 8 + lit * 7)];
+  }),
+  firecrackers: it => sculpt(20, 17, (x, y) => { // a string of red crackers on a fuse, one pair fewer each time
+    const n = Math.max(1, it.uses), top = 6.6 - n * 3.6;
+    if (y < top - 0.4 && y > top - 3.4 && Math.abs(x - Math.sin(y * 2) * 0.4) < 0.3) return ['~', C(GRAY, 11)]; // the fuse
+    if (y < top - 3.4 && y > top - 4.6 && Math.abs(x) < 1) return ['*', C(T % 0.4 < 0.2 ? YEL : WHITE, 15)];
+    if (y < top || y > 7) return null;
+    if (Math.abs(x) < 0.25) return ['|', C(GRAY, 9)];
+    const k = Math.floor((y - top) / 1.8), side = (k & 1 ? 1 : -1), cx = side * 1.6;
+    if (Math.abs(x - cx) < 1.4 && fract((y - top) / 1.8) < 0.7) return Math.abs(x - cx) > 1.1 ? ['|', C(YEL, 12)] : dLit(0.5 - (x - cx) * 0.15, RED, 8, 14);
+    return null;
   }),
   mysterybox: () => sculpt(24, 13, (x, y) => { // a cardboard box, a red ribbon, a question mark, rattling
     const jig = Math.sin(T * 13) > 0.92 ? 0.3 : 0;

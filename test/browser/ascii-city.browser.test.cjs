@@ -535,7 +535,7 @@ test('the night market: tarped by day, a stall to buy from at night; T and Y nee
   await page.evaluate(() => { tod = 21; });
   assert.strictEqual(await page.evaluate(() => promptText()), 'E: CURIOS stall');
   await page.keyboard.press('KeyE');
-  await page.keyboard.press('Digit2'); // the snow globe
+  await page.keyboard.press('Digit4'); // the snow globe
   assert.deepStrictEqual(await page.evaluate(() => [inv.some(it => it.id === 'cityglobe'), money]), [true, 150]);
   await page.keyboard.press('Escape');
   const w0 = await page.evaluate(() => weather);

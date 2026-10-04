@@ -137,6 +137,39 @@ Object.assign(DENSE, {
     const a = Math.atan2(y, x), mark = d > 0.5 && d < 0.75 && Math.abs(fract(a / (Math.PI / 2) + 0.5) - 0.5) < 0.12;
     return mark ? ['%', C(BRICK, 9)] : dLit(dBall(x, y, 0, 0, 5) * 0.8, YEL, 8, 13);
   }),
+  fortunecookie: () => sculpt(24, 11, (x, y) => { // folded in a crescent, the slip of paper poking out
+    if (y > -0.6 && y < 0.3 && x > 2.4 && x < 7.4) { const t_ = dText(x, y, 4.9, -0.15, 'LUCK'); return t_ ? [t_, C(RED, 12)] : ['=', C(WHITE, 14)]; }
+    const d = dEll(x, y, -0.6, 0.4, 5, 3.4), notch = dEll(x, y, 2.2, 1.2, 2.6, 2);
+    if (d > 1 || notch < 1) return null;
+    return dLit(dBall(x, y, -0.6, 0.4, 5, 3.4), YEL, 7, 14);
+  }),
+  tigerbalm: it => sculpt(24, 12, (x, y) => { // a little round tin, a tiger on the lid
+    if (Math.abs(x) > 5.2 || y < -4.6 || y > 4.6) return null;
+    if (y < -3) return dLit(0.75 - Math.abs(x) * 0.05, GRAY, 8, 14); // the lid's rim
+    const t_ = dText(x, y, 0, 2.6, 'TIGER'); if (t_) return [t_, C(YEL, 15)];
+    if (dEll(x, y, 0, -0.6, 2.2, 1.6) < 1) return [Math.abs(x) < 0.4 && y > -0.6 ? 'v' : fract(x * 0.8) < 0.3 ? '|' : '%', C(ORANGE, 14)]; // the tiger's face, striped
+    return dLit(0.5 - x * 0.04, RED, 7, 12);
+  }),
+  lantern: () => sculpt(24, 16, (x, y) => { // a red paper lantern, ribbed, glowing from inside, a gold tassel
+    if (Math.abs(x) < 0.25 && y < -6) return ['|', C(GRAY, 10)];
+    if (y > 5.6 && y < 7.6 && Math.abs(x) < 0.6) return ['|', C(YEL, 13)];
+    if ((y < -5 && y > -6 || y > 4.6 && y < 5.6) && Math.abs(x) < 2.2) return ['=', C(YEL, 14)];
+    const d = dEll(x, y, 0, -0.2, 5, 4.8);
+    if (d > 1) return null;
+    const lit = (1 - d) * (night > 0.3 ? 1 : 0.6) + 0.25 * (0.5 + 0.5 * Math.sin(T * 7 + x));
+    if (Math.abs(fract(x / (5 * Math.sqrt(Math.max(0.05, 1 - (y / 4.8) ** 2))) * 3 + 0.5) - 0.5) < 0.07) return ['|', C(RED, 6 + lit * 4)]; // the ribs
+    return [dFill(clamp(lit, 0, 1)), C(lit > 0.7 ? YEL : lit > 0.45 ? ORANGE : RED, 8 + lit * 7)];
+  }),
+  firecrackers: it => sculpt(20, 17, (x, y) => { // a string of red crackers on a fuse, one pair fewer each time
+    const n = Math.max(1, it.uses), top = 6.6 - n * 3.6;
+    if (y < top - 0.4 && y > top - 3.4 && Math.abs(x - Math.sin(y * 2) * 0.4) < 0.3) return ['~', C(GRAY, 11)]; // the fuse
+    if (y < top - 3.4 && y > top - 4.6 && Math.abs(x) < 1) return ['*', C(T % 0.4 < 0.2 ? YEL : WHITE, 15)];
+    if (y < top || y > 7) return null;
+    if (Math.abs(x) < 0.25) return ['|', C(GRAY, 9)];
+    const k = Math.floor((y - top) / 1.8), side = (k & 1 ? 1 : -1), cx = side * 1.6;
+    if (Math.abs(x - cx) < 1.4 && fract((y - top) / 1.8) < 0.7) return Math.abs(x - cx) > 1.1 ? ['|', C(YEL, 12)] : dLit(0.5 - (x - cx) * 0.15, RED, 8, 14);
+    return null;
+  }),
   mysterybox: () => sculpt(24, 13, (x, y) => { // a cardboard box, a red ribbon, a question mark, rattling
     const jig = Math.sin(T * 13) > 0.92 ? 0.3 : 0;
     x -= jig;

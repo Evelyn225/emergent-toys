@@ -31,10 +31,10 @@ function marketTick(rnd = Math.random, gap = false) {
     const norm = (rnd() + rnd() + rnd() - 1.5) * 1.4; // roughly normal
     const avg = s.hist.reduce((a, b) => a + b, 0) / s.hist.length;
     let r = norm * s.vol * (gap ? 2.5 : 1) + s.mom * 0.3 + (avg - s.price) / avg * 0.01;
-    if (!gap && rnd() < 0.006) { // news
-      const up = rnd() < 0.5, line = `${s.name} ${pick_(up ? s.good : s.bad, rnd)}`;
+    if (!gap && rnd() < (s.tip ? 0.05 : 0.006)) { // news (a stock a fortune cookie tipped gets some soon, and it's good)
+      const up = s.tip || rnd() < 0.5, line = `${s.name} ${pick_(up ? s.good : s.bad, rnd)}`;
       r += (up ? 1 : -1) * (0.07 + rnd() * 0.12);
-      MARKET.news.unshift({ sym: s.sym, line, up, tick: MARKET.tick });
+      MARKET.news.unshift({ sym: s.sym, line, up, tick: MARKET.tick }); s.tip = false;
       MARKET.news.length = Math.min(MARKET.news.length, 6);
     }
     s.mom = s.mom * 0.6 + r * 0.4;

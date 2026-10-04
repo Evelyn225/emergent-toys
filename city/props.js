@@ -37,7 +37,8 @@ function glow(wx, wy) {
   if (vseg(bx + 1, by)) d = Math.min(d, Math.hypot(8 + HEAD - lx, ay));
   if (hseg(bx, by)) d = Math.min(d, Math.hypot(Math.min(Math.abs(ly - HEAD), Math.abs(ly - 2 + HEAD)), ax));
   if (hseg(bx, by + 1)) d = Math.min(d, Math.hypot(8 + HEAD - ly, ax));
-  return Math.max(0, 1 - d / 0.55);
+  const own = typeof heldItem === 'function' && heldItem() && heldItem().id === 'lantern' && mode === 'walk' ? Math.max(0, 1 - Math.hypot(rel(wx - px), rel(wy - py)) / 0.45) * 0.85 : 0; // a paper lantern in your hand
+  return Math.max(0, 1 - d / 0.55, own);
 }
 
 // parks: grass, a cross of dirt paths through each block (block-local centre 5), a pond, trees, benches.

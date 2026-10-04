@@ -18,7 +18,7 @@ const wetting = (d, w) => d.booze ? w * 2.4 : w * 0.5; // bladder from `w` point
 const SOUPY = { ramen: 1, pho: 1, noodlebox: 0.5, greencurry: 0.5, icecream: 0.5, apple: 0.5 };
 const FILLING = { milkshake: 1, smoothie: 1, lemonade: 0.3, bubbletea: 0.5 };
 function nourish(id, d) {
-  if (d.kind === 'food') return [clamp(10 + d.price * 5, 15, 70), (SOUPY[id] || 0) * 30];
+  if (d.kind === 'food') return [d.fill || clamp(10 + d.price * 5, 15, 70), (SOUPY[id] || 0) * 30];
   if (d.kind !== 'drink') return [0, 0];
   const base = id === 'water' ? 55 : clamp(25 + d.price * 3, 25, 50);
   return [(FILLING[id] || 0) * 30, d.booze ? base * 0.5 : base];
