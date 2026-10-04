@@ -625,6 +625,15 @@ GAMES.strength = (rnd = Math.random) => {
   g.reward = () => g.score * 2;
   return g;
 };
+// a carnival booth's striped awning across the top two rows: its colour and white, a scalloped edge, bulbs chasing
+const awning = (put, text, W, t, col) => {
+  for (let x = 0; x < W; x++) {
+    const c = (x >> 1) % 2 === 0;
+    put(x, 0, ' ', 0, C(c ? col : WHITE, c ? 5 : 7));
+    put(x, 1, ' ', 0, x % 2 ? C(GRAY, 0.4) : C(c ? col : WHITE, c ? 4 : 6)); // the scallops
+  }
+  for (let x = 1; x < W; x += 3) text(x, 1, 'o', C((Math.floor(t * 4) + x) % 3 ? YEL : WHITE, 15));
+};
 // the duck pond: rubber ducks bob round a trough on the current; slide the hook along the near side and dip it to
 // pick one out. Each duck has its tickets written on the bottom, and you don't see which until you turn it over.
 // Three ducks a go. Now and then there's a gold one, a bit quicker than the rest, always worth a lot.
@@ -676,13 +685,7 @@ GAMES.ducks = (rnd = Math.random) => {
   };
   g.draw = (put, text) => {
     const wood = (x, y) => put(x, y, ' ', 0, C(BRICK, (x * 7 + y * 3) % 5 ? 2.4 : 2.9)); // planks
-    // the awning: red and white stripes, a scalloped edge, bulbs that chase along it
-    for (let x = 0; x < W; x++) {
-      const red = (x >> 1) % 2 === 0;
-      put(x, 0, ' ', 0, C(red ? RED : WHITE, red ? 5 : 7));
-      put(x, 1, ' ', 0, x % 2 ? C(GRAY, 0.4) : C(red ? RED : WHITE, red ? 4 : 6)); // the scallops
-    }
-    for (let x = 1; x < W; x += 3) text(x, 1, 'o', C((Math.floor(t * 4) + x) % 3 ? YEL : WHITE, 15));
+    awning(put, text, W, t, RED);
     text(Math.max(0, (W - 17) >> 1), 2, 'EVERY DUCK WINS!', C(YEL, 15));
     // the trough: a wooden rim round the water, a prize island in the middle
     for (let x = 1; x <= 34; x++) { wood(x, 3); wood(x, 12); }
@@ -741,7 +744,99 @@ GAMES.ducks = (rnd = Math.random) => {
   g.reward = () => g.score;
   return g;
 };
-const FAIR_GAMES = ['ringtoss', 'strength', 'ducks'];
+// balloon darts: three rows of balloons on a corkboard, a reticle that won't keep still (your hand isn't as steady
+// as you'd like), three darts. Every balloon you pop pays; a few have a gold star card behind them that pays a lot
+// more; pop three of one colour and that's a sweep.
+const DART_COLS = [RED, BLUE, GREEN, YEL, MAG, CYAN, ORANGE], DART_PAY = 3, STAR_PAY = 15, SWEEP_PAY = 6;
+GAMES.darts = (rnd = Math.random) => {
+  const W = 36, H = 19, g = { id: 'darts', title: 'BALLOON DARTS', W, H, score: 0, over: false };
+  const balloons = [];
+  for (const y of [3, 7, 11]) for (let k = 0; k < 8; k++) balloons.push({ x: 2 + k * 4, y, col: DART_COLS[rnd() * DART_COLS.length | 0], star: false, popped: 0, ph: rnd() * 6 });
+  for (let n = 0; n < 4; n++) { const b = balloons[rnd() * balloons.length | 0]; b.star = true; } // (two can land on one: then it's three)
+  let darts = 3, bx = 17, by = 8, t = rnd() * 9, fly = null, stuck = [], last = null, popCols = [], burst = null;
+  g.balloons = balloons; // (for the tests)
+  const sway = () => [1.3 * Math.sin(t * 1.7) + 0.6 * Math.sin(t * 3.1 + 2), 0.9 * Math.sin(t * 2.3 + 1) + 0.4 * Math.sin(t * 4.1)];
+  const aim = g.aim = () => { const [sx, sy] = sway(); return [clamp(bx + sx, 2, 33), clamp(by + sy, 3, 14)]; };
+  const hitAt = (x, y) => balloons.find(b => !b.popped && x >= b.x && x <= b.x + 2 && y >= b.y && y <= b.y + 2 && !((x === b.x || x === b.x + 2) && y === b.y + 2)); // (round: not the bottom corners)
+  g.hitAt = hitAt;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (last && (last.t -= dt) <= 0) last = null;
+    if (burst && (burst.t -= dt) <= 0) burst = null;
+    if (fly) { // the dart, on its way up the board
+      if ((fly.f += dt / 0.32) >= 1) {
+        const x = Math.round(fly.x), y = Math.round(fly.y);
+        let b = hitAt(x, y);
+        if (!b && rnd() < luck() * 3) b = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oy]) => hitAt(x + ox, y + oy)).find(Boolean); // (lucky: it just catches the edge)
+        if (b) {
+          b.popped = 1; popCols.push(b.col); burst = { x: b.x, y: b.y, col: b.col, t: 0.45 };
+          let won = DART_PAY, why = 'POP! +' + DART_PAY;
+          if (b.star) { won += STAR_PAY; why = `A STAR! +${DART_PAY + STAR_PAY}`; }
+          if (popCols.length === 3 && popCols.every(c => c === popCols[0])) { won += SWEEP_PAY; why += `  SWEEP +${SWEEP_PAY}`; }
+          g.score += won; last = { text: why, col: b.star ? YEL : GREEN, t: 1.4 }; ev.push(b.star ? 'clear' : 'score');
+        } else { stuck.push({ x, y }); last = { text: 'thunk. into the cork', col: GRAY, t: 1.2 }; ev.push('miss'); }
+        fly = null;
+        if (darts === 0) { g.over = true; ev.push('end'); }
+      }
+      return ev;
+    }
+    if (k.left) bx -= dt * 9; if (k.right) bx += dt * 9; if (k.up) by -= dt * 6; if (k.down) by += dt * 6;
+    bx = clamp(bx, 2, 33); by = clamp(by, 3, 14);
+    if (k.actP && darts > 0) { const [x, y] = aim(); darts--; fly = { x, y, f: 0 }; ev.push('launch'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    awning(put, text, W, t, BLUE);
+    text(Math.max(0, (W - 23) >> 1), 2, 'POP A STAR  -  WIN BIG!', C(YEL, 15));
+    // the board: a wooden frame round a speckled corkboard
+    for (let y = 3; y <= 15; y++) for (let x = 1; x <= 34; x++) {
+      const rim = y === 15 || x === 1 || x === 34;
+      put(x, y, ' ', 0, rim ? C(BRICK, (x * 7 + y * 3) % 5 ? 2.4 : 2.9) : C(WARM, 1.35 + hash(x, y, 71) * 0.45));
+      if (!rim && hash(x, y, 72) > 0.82) text(x, y, '.', C(BRICK, 6));
+    }
+    for (const d of stuck) { text(d.x, d.y, '+', C(WHITE, 13)); }
+    // the balloons: a round body with a shine on it, a knot, a string that waves about
+    for (const b of balloons) {
+      if (b.popped) { // what was behind it: a gold-rimmed star card, or the last of the rubber
+        if (b.star) { for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) put(b.x + x, b.y + y, ' ', 0, x === 1 && y === 1 ? C(WHITE, 9) : C(YEL, 9)); text(b.x + 1, b.y + 1, '*', C(YEL, 15)); }
+        else { text(b.x + 1, b.y + 2, ',', C(b.col, 10)); text(b.x, b.y + 1, "'", C(b.col, 8)); }
+        continue;
+      }
+      // round-ish: a 3x3 of pixels lit from the top left, the corners only half there, the bottom corners gone
+      const px_ = [[1, 0, 13], [0, 1, 12], [1, 1, 11], [2, 1, 8], [1, 2, 8]], half = [[0, 0, 15], [2, 0, 11]];
+      for (const [x, y, l] of px_) put(b.x + x, b.y + y, ' ', 0, C(b.col, l));
+      for (const [x, y, l] of half) put(b.x + x, b.y + y, ' ', 0, C(b.col, l * 0.7));
+      text(b.x + 1, b.y, "'", C(WHITE, 15)); // the shine
+      text(b.x + 1, b.y + 3, '(|)'[1 + Math.round(Math.sin(t * 3 + b.ph))], C(GRAY, 9)); // the knot and string, waving
+    }
+    if (burst) { // a pop: shreds flying out
+      const f = 1 - burst.t / 0.45, r = 1.2 + f * 1.8;
+      for (let k = 0; k < 8; k++) { const an = k * Math.PI / 4 + 0.3; text(Math.round(burst.x + 1 + Math.cos(an) * r), Math.round(burst.y + 1 + Math.sin(an) * r * 0.7), k & 1 ? '*' : "'", C(burst.col, 15)); }
+      text(burst.x + 1, burst.y + 1, 'POP!', C(WHITE, 15));
+    }
+    // the counter, and your darts on it
+    for (let x = 0; x < W; x++) { put(x, 16, ' ', 0, C(BRICK, 3)); put(x, 17, ' ', 0, C(BRICK, x % 4 ? 1.6 : 1.1)); put(x, 18, ' ', 0, C(GRAY, 0.4)); }
+    for (let k = 0; k < darts; k++) { text(2 + k * 3, 16, '<', C(RED, 13)); text(3 + k * 3, 16, '=', C(WHITE, 12)); text(4 + k * 3, 16, '-', C(YEL, 12)); } // flights, shaft, point
+    if (fly) { // up it goes, shrinking toward the board
+      const sx = fly.x, sy = 17 + (fly.y - 17) * fly.f;
+      text(Math.round(sx), Math.round(sy), fly.f < 0.5 ? '^' : "'", C(WHITE, 15));
+      if (fly.f < 0.7) text(Math.round(sx), Math.round(sy) + 1, '|', C(RED, 12));
+    } else if (darts > 0) { // the reticle, wandering about
+      const [ax, ay] = aim(), X = Math.round(ax), Y = Math.round(ay), on = hitAt(X, Y);
+      const rc = on ? (on.star ? YEL : WHITE) : GRAY;
+      text(X, Y, 'X', C(on ? YEL : WHITE, 15));
+      text(X - 1, Y, '-', C(rc, 12)); text(X + 1, Y, '-', C(rc, 12)); text(X, Y - 1, '|', C(rc, 12)); text(X, Y + 1, '|', C(rc, 12));
+    }
+    if (last) text(Math.max(1, (W - Math.ceil(last.text.length / 2)) >> 1), 17, last.text, C(last.col, 15));
+    text(24, 18, `won ${g.score} tickets`, C(YEL, 14));
+  };
+  g.status = () => `TICKETS ${g.score}   ARROWS aim (it wanders: pick your moment)   SPACE throw   ${DART_PAY} a balloon, a star +${STAR_PAY}, three of a colour +${SWEEP_PAY}`;
+  g.reward = () => g.score;
+  return g;
+};
+const FAIR_GAMES = ['ringtoss', 'strength', 'ducks', 'darts'];
 
 // ---- the Shotengai's parlours
 // pachinko: hold GO and balls fly up and rain down through a forest of pins; steer where they come in with the

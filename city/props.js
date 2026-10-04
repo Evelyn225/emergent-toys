@@ -195,11 +195,11 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
 // boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
 // side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
 const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -1, 3.6, { game: 'strength' }],
-                ['PRIZES', 1, 2.3, { prizes: true }], ['FAIR FOOD', 1, 3.6, { stock: true }], ['DUCK POND', -1, 4.9, { game: 'ducks' }]].map(([word, side, dy, what], k) => {
+                ['PRIZES', 1, 2.3, { prizes: true }], ['FAIR FOOD', 1, 3.6, { stock: true }], ['DUCK POND', -1, 4.9, { game: 'ducks' }], ['DARTS', 1, 4.9, { game: 'darts' }]].map(([word, side, dy, what], k) => {
   const x = side < 0 ? FAIR.x0 + 0.27 : FAIR.x1 - 0.27, y = FAIR.y0 + dy;
   solidBox(x, y, false, 0.5, 0.22, 0, 0.34, 'booth', k);
   const o = solids[solids.length - 1];
-  return Object.assign(o, { word, side, fs: side < 0 ? -1 : 1, at: [x - side * 0.42, y], awning: [RED, BLUE, MAG, GREEN, YEL][k], ...what });
+  return Object.assign(o, { word, side, fs: side < 0 ? -1 : 1, at: [x - side * 0.42, y], awning: [RED, BLUE, MAG, GREEN, YEL, CYAN][k], ...what });
 });
 for (let y = FAIR.y0 + 1; y < FAIR.y1 - 0.5; y += 1.5) for (const x of [FAIR.x0 + 0.06, FAIR.x1 - 0.06])
   extras.push({ x, y, z: 0, w: 0.05, h: 0.4, art: ['(*)', ' | ', ' | ', ' | ', ' | '], col: (c, row, L) => row ? C(GRAY, L) :
