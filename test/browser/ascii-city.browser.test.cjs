@@ -777,3 +777,26 @@ test('the stock exchange: trade with the broker while the market is open; your s
   assert.strictEqual(await page.evaluate(() => shares.DUMP && shares.DUMP.n), 10, 'kept in the save');
   await page.evaluate(() => newGame && localStorage.removeItem('ascii-city-save'));
 }));
+
+test('the Velvet Rope: $20 at the door (not with the cops after you), tip the dancers, $40 for a private dance', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    tod = 22; money = 200; mode = 'walk';
+    const sh = CLUB.sh, open = openAt(sh, 22) && !openAt(sh, 12);
+    wanted.stars = 1; lookHit = { d: 0.2, mx: CLUB.bx * 8 + 5, my: CLUB.by * 8 + 2 }; interact();
+    const refused = mode === 'walk' && /Not with the cops/.test(msgText);
+    wanted.stars = 0; interact();
+    const inside = [mode, room && room.kind, money];
+    px = 9; py = 4.6; const stagePrompt = promptText(); interact();
+    px = 13.4; py = 10.8; const vipPrompt = promptText(); interact();
+    return { open, refused, inside, stagePrompt, money, vipPrompt, game: game && game.g.id };
+  });
+  assert.ok(r.open && r.refused, JSON.stringify(r));
+  assert.deepStrictEqual(r.inside, ['room', 'stripclub', 180]);
+  assert.match(r.stagePrompt, /tip the dancer/);
+  assert.match(r.vipPrompt, /private dance/);
+  assert.deepStrictEqual([r.money, r.game], [135, 'lapdance']);
+  await page.keyboard.press('Space'); await page.waitForTimeout(150);
+  assert.ok(await page.evaluate(() => money === 134 && game.g.tips === 1), 'a dollar tip');
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game), null);
+}));

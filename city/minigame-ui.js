@@ -23,6 +23,7 @@ function gameKey(e) {
   }
   if (e.code === 'Escape' || e.code === 'KeyE') { // walk away: a shift pays for what you did, a game its tickets; a crime you just don't do
     if (game.kind === 'market') { game = null; return true; }
+    if (game.kind === 'show') { game = null; say('You leave in the middle of the song. No refunds.', 3); return true; }
     if (game.kind === 'casino') { if (game.g.inRound()) say('You get up mid-hand. Your bet stays on the table.', 3); game = null; return true; }
     if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
     finishGame(true); game = null; return true;
@@ -37,6 +38,7 @@ function finishGame(quit) {
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
   if (game.kind === 'casino' || game.kind === 'market') return; // (its money changes hands round by round, or trade by trade)
+  if (game.kind === 'show') { say(g.endLine, 5); game.closeT = T + 0.6; return; }
   const r = g.reward();
   if (game.kind === 'table') { // the mahjong table: the pot if you won, your stake back if nobody did
     const res = g.result;
@@ -61,6 +63,7 @@ function stepGame(dt) {
     if ((e === 'stake' || e === 'double') && !pay(g.bet)) g.refused();
     if (e === 'payout') earn(g.win);
   }
+  if (game.kind === 'show') for (const e of ev) if (e === 'tip' && !pay(1)) g.noCash();
   if (actx) for (const e of new Set(ev)) sfxGame(e);
   if (g.over) finishGame(false);
 }
@@ -118,10 +121,10 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
-  if (g.over && game.kind !== 'crime') { // the results card
+  if (g.over && game.kind !== 'crime' && game.kind !== 'show') { // the results card
     const r = g.reward(), res = g.result, lines = game.kind === 'table'
       ? [res && res.winner === 0 ? 'MAHJONG!' : 'HAND OVER', !res ? 'You left the table.' : res.winner === 0 ? `You win ${res.how}` : res.winner < 0 ? 'The wall ran out' : `${MJ_NAMES[res.winner]} wins ${res.how}`,
          r > MJ_BUYIN ? `+${fmt$(r)}` : r ? 'Stakes returned' : `-${fmt$(MJ_BUYIN)}`, ...TOUCH ? [] : ['', `SPACE another hand (${fmt$(MJ_BUYIN)})   E leave`]]

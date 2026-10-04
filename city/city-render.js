@@ -12,6 +12,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
   const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
   if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
+  if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 21) return exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 18 || sty === 19) return glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty);

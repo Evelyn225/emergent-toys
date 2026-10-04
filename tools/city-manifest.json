@@ -30,6 +30,7 @@
     "city/jade.js",
     "city/casino.js",
     "city/exchange.js",
+    "city/stripclub.js",
     "city/render.js",
     "city/hud.js",
     "city/actions.js",

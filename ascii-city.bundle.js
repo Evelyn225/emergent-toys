@@ -238,7 +238,7 @@ const GLYPHS = { BOOKS: '|][|', RECORDS: '()O', VIDEO: '[]', LIQUOR: 'il!', BAR:
   'TEA HOUSE': 'oc]', TIRES: 'O0o', 'AUTO REPAIR': 'T7/', SPORTS: 'oO@', SKATE: '=_o', TOYS: 'o*@&', THRIFT: '|]&', TOBACCO: 'i=', MANGA: '|][|', DRUGSTORE: '+=o', GACHA: 'oO@' };
 const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, sorry.', 'Nice weather, huh?', 'Take your time.'];
 // opening hours [open, close) in game hours; close < open wraps past midnight; [0, 24] never closes
-const HOURS = { CASINO: [10, 6], EXCHANGE: [8, 19], BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
+const HOURS = { VELVET: [20, 4], CASINO: [10, 6], EXCHANGE: [8, 19], BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
@@ -600,6 +600,13 @@ const EXCHANGE = { bx: 16, by: 15 };
 {
   const sh = EXCHANGE.sh = { kind: SHOP_LIT, word: 'EXCHANGE', neon: GREEN, glyphs: '$%#', hours: hoursOf('EXCHANGE'), exchange: true };
   for (let y = 2; y <= 5; y++) for (let x = 2; x <= 7; x++) { const i = idx(EXCHANGE.bx * 8 + x, EXCHANGE.by * 8 + y); map[i] = 3.2; STY[i] = 21; SHOP[i] = sh; SEED[i] = 0.5; }
+}
+
+// ---- the Velvet Rope, a strip club in midtown (stripclub.js)
+const CLUB = { bx: 8, by: 2 };
+{
+  const sh = CLUB.sh = { kind: SHOP_NEON, word: 'VELVET', neon: MAG, glyphs: 'X*', hours: hoursOf('VELVET'), fee: 20, club: true };
+  for (let y = 2; y <= 5; y++) for (let x = 2; x <= 7; x++) { const i = idx(CLUB.bx * 8 + x, CLUB.by * 8 + y); map[i] = 1.6; STY[i] = 22; SHOP[i] = sh; SEED[i] = 0.5; }
 }
 
 // the glass houses go up in the Gardens
@@ -1681,7 +1688,7 @@ const AUDIO_DISTRICT = {
 const ROOM_AUDIO = {
   bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
-  hotel: [0.2, 0.4, 0], casino: [0.7, 0, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
+  hotel: [0.2, 0.4, 0], casino: [0.7, 0, 0], stripclub: [0.55, 0.8, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -1840,7 +1847,7 @@ const STOCK_WORD = {
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft'],
-  'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], CASINO: ['cocktail', 'whiskey', 'water'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
+  'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
@@ -3658,6 +3665,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
   const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
   if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
+  if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 21) return exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 18 || sty === 19) return glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty);
@@ -4337,7 +4345,7 @@ const TAG_WORDS = ['ACE', 'ZAP', 'YO', 'KAT', 'REX', 'OK', 'WOW', 'RAD', 'BAM', 
 const designCount = TAG_ART.length + TAG_WORDS.length;
 
 // a mural on this face? deterministic per face, so it's always there
-const paintable = k => { const sh = SHOP[k]; return sh && !sh.base && !sh.aqua && !sh.glass && !sh.casino && !sh.exchange && !(STY[k] >= 3 && STY[k] <= 6) && !(STY[k] >= 11 && STY[k] <= 13); };
+const paintable = k => { const sh = SHOP[k]; return sh && !sh.base && !sh.aqua && !sh.glass && !sh.casino && !sh.exchange && !sh.club && !(STY[k] >= 3 && STY[k] <= 6) && !(STY[k] >= 11 && STY[k] <= 13); };
 function muralSeed(k, mx, my, face) {
   if (!paintable(k)) return -1;
   const fx_ = face === 'E' ? 1 : face === 'W' ? -1 : 0, fy = face === 'S' ? 1 : face === 'N' ? -1 : 0;
@@ -4491,6 +4499,7 @@ function citySprites() {
     (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
+  clubSprites();
   drawPigeons();
   for (const b of boats) {
     const p = boatAt(b, T), [vx, vy] = R(p.x, p.y);
@@ -7362,6 +7371,135 @@ function stepExchange() {
     if (shares[n.sym] || mode === 'room' && room.kind === 'exchange') say(`NEWS: ${n.line}. ${n.sym} ${n.up ? 'jumps' : 'drops'} to ${fmt$(stockBy(n.sym).price)}.`, 5);
   }
 }
+// ===== the Velvet Rope: a strip club in midtown (world.js puts it up). Outside: a black front, XXX in pink neon
+// blinking, GIRLS GIRLS GIRLS and LIVE DANCERS, a neon martini, a velvet rope and a bouncer who won't let you in with
+// the police on your tail. $20 at the door, 8pm to 4am. Inside: purple and pink, a stage with three poles and a
+// dancer on each (in sequins, spinning), a bar, and the VIP booth at the back where $40 buys a private dance: very
+// much like a certain game's, except the dancer is five characters tall.
+const CLUB_FEE = 20, LAPDANCE = 40;
+function clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const L = fog * amb * (side ? 10 : 15), glow = Math.max(night, overcast * 0.5, 0.3), sgn = Math.sign(u * wc) || 1;
+  const c = CLUB, y0 = c.by * 8 + 2, a0 = side ? c.bx * 8 + 2 : y0, along = wc - a0, len = side ? 6 : 4;
+  const front = side && Math.abs(rel((my + (rel(py - my) < 0 ? 0 : 1)) - y0)) < 0.01, blink = fract(T * 1.3) < 0.7;
+  BG[i] = C(GRAY, 0.4);
+  if (front) {
+    if (z < 0.34 && Math.abs(along - len / 2) < 0.35) { // the door: padded, a porthole, light spilling out
+      if (Math.abs(along - len / 2) > 0.32) return set(i, '|', C(MAG, Math.max(L, 9)));
+      BG[i] = C(RED, 1 + glow * 1.5);
+      return set(i, Math.hypot((along - len / 2) * 3, z - 0.24) < 0.05 ? 'O' : fract(z * 25 + (along * 8 | 0) * 0.5) < 0.2 ? '+' : ' ', C(MAG, 12));
+    }
+    if (z > 0.38 && z < 0.5) { // VELVET ROPE, in a marquee of bulbs
+      if (wallText(i, u, uStep, z, d, 'THE VELVET ROPE', sgn * (a0 + len / 2), 0.44, 0.06, 0.07, C(MAG, 15), C(GRAY, 0.4))) return;
+      return set(i, (Math.floor(along * 10) + Math.floor(T * 6)) % 3 ? '.' : 'o', C(YEL, Math.max(L, 12 * glow)));
+    }
+    if (z > 0.56 && z < 0.98) { // XXX, big, pink, blinking; the martini glass in neon either side
+      const word = 'XXX', q = (u - sgn * (a0 + len / 2)) / (1.6 / word.length) + word.length / 2, k = Math.floor(q), gy = Math.floor((0.98 - z) / 0.42 * 5);
+      if (k >= 0 && k < 3 && gy >= 0 && gy < 5 && glyphOn('X', Math.floor(fract(q) * 4), gy)) { BG[i] = blink ? C(MAG, 5) : C(GRAY, 0.4); return set(i, '#', blink ? C(MAG, 15) : C(MAG, 4)); }
+      for (const mxp of [0.7, len - 0.7]) { // a martini glass with an olive
+        const dx = along - mxp, dz = z - 0.6;
+        if (dz > 0.18 && dz < 0.22 && Math.abs(dx) < 0.24) return set(i, '-', C(CYAN, 15));
+        if (dz > 0.06 && dz < 0.2 && Math.abs(Math.abs(dx) - (dz - 0.06) * 1.6) < 0.025) return set(i, Math.sign(dx) > 0 ? '/' : '\\', C(CYAN, 15));
+        if (dz > 0.18 && dz < 0.2 && Math.abs(dx - 0.08) < 0.025) return set(i, 'o', C(GREEN, 15));
+        if (dz > 0 && dz <= 0.06 && Math.abs(dx) < 0.02) return set(i, '|', C(CYAN, 14));
+        if (Math.abs(dz) < 0.012 && Math.abs(dx) < 0.1) return set(i, '_', C(CYAN, 14));
+      }
+    }
+    if (z > 1.05 && z < 1.25) { // GIRLS GIRLS GIRLS, and LIVE DANCERS under it, chasing
+      if (wallText(i, u, uStep, z, d, 'GIRLS  GIRLS  GIRLS', sgn * (a0 + len / 2), 1.2, 0.055, 0.06, C(NEON[Math.floor(T * 3) & 3], 15), C(GRAY, 0.4))) return;
+      if (wallText(i, u, uStep, z, d, '* LIVE DANCERS *', sgn * (a0 + len / 2), 1.1, 0.055, 0.06, C(YEL, blink ? 15 : 8), C(GRAY, 0.4))) return;
+    }
+  }
+  // everywhere else: black glass, purple light leaking round blacked-out windows
+  if (Math.abs(fract(along * 2) - 0.5) < 0.04 || Math.abs(fract(z * 4) - 0.5) < 0.03) return set(i, '|', C(MAG, Math.max(L * 0.4, glow * 5)));
+  return set(i, hash(Math.floor(along * 5), Math.floor(z * 8), 1601) > 0.93 ? '.' : ' ', C(MAG, 8));
+}
+// the bouncer and the velvet rope on the sidewalk outside
+const BOUNCER_ART = pad(['  ___ ', ' [=_=]', ' /###\\', '|#####|', ' |###|', ' || ||', ' ## ##']);
+function clubSprites() {
+  const dx_ = CLUB.bx * 8 + 2 + 3, dy_ = CLUB.by * 8 + 2 - 0.1, [vx, vy] = R(dx_, dy_);
+  if (Math.hypot(vx, vy) > vis) return;
+  drawArt(vx + 0.06, vy, 0, 0.07, 0.19, BOUNCER_ART, (c, row, L) => row === 1 ? (c === '=' ? C(GRAY, 3) : C(SKIN, Math.max(L, 6))) : row < 4 ? C(GRAY, Math.max(L * 0.5, 3)) : C(GRAY, Math.max(L * 0.3, 2)));
+  for (const s of [-0.13, -0.03]) drawArt(vx + s, vy, 0, 0.012, 0.07, ['o', '|', '|', '|', '='], () => C(YEL, 12)); // brass posts
+  drawArt(vx - 0.08, vy, 0.045, 0.09, 0.015, ['~~~~~~'], () => C(RED, 14)); // the rope
+}
+// ---- inside
+const CLUB_W = 18, CLUB_H = 14;
+function clubWall(i, su, uStep, z, d, mx, my, L) {
+  const u = Math.abs(su);
+  if (z > 2.4 && z < 2.55) return set(i, '=', C(NEON[(Math.floor(u * 2 + T * 4)) & 3], 14)), true; // a strip of light chasing round the room
+  if (my === 0 && z > 1.4 && z < 2.2 && Math.abs(u - CLUB_W / 2) < 2.5) { // XXX over the stage
+    if (wallText(i, su, uStep, z, d, 'X X X', CLUB_W / 2 * Math.sign(su), 1.8, 0.6, 0.6, C(MAG, fract(T * 1.3) < 0.7 ? 15 : 6), C(GRAY, 0.3))) return true;
+  }
+  if (z > 0.9 && z < 2.3 && Math.abs(fract(u / 3) - 0.5) < 0.3) { BG[i] = C(MAG, 0.8 + L * 0.05); return set(i, hash(Math.floor(u * 5), Math.floor(z * 5), Math.floor(T * 2)) > 0.95 ? '*' : ' ', C(WHITE, 12)), true; } // mirrors, the lights in them
+  BG[i] = C(MAG, 0.5 + L * 0.04); // padded purple velvet
+  return set(i, (Math.floor(u * 3) + Math.floor(z * 3)) & 1 ? '+' : ' ', C(MAG, L * 0.6)), true;
+}
+const DANCER_FRAMES = [ // round the pole: she swings from one side of it to the other
+  [' o ', '/|\\', ' |\\', '/ \\'], ['\\o/', ' | ', '/| ', '/ \\'], [' o/', '/| ', ' |\\', '/  '], ['\\o ', ' |\\', '/| ', '  \\']].map(pad);
+const SEQUINS = [MAG, CYAN, YEL, RED];
+ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), light: 0.45, floor: 'carpet', ceil: 'disco', sign: false, wall: clubWall, keeper: [2.2, 6],
+  props: r => {
+    const p = [BX(CLUB_W / 2, 2.2, 4.5, 1.3, 0, 0.5, solid(GRAY, { top: '=', bright: 1.4 }))]; // the stage
+    p.push(...counterBox(2.2, 6, 0.9, 1.05).map(b => ({ ...b, box: { ...b.box, c: 0, s: 1 } })), standing(1.5, 6, MAG)); // the bar along the left wall, the bartender behind it
+    for (let k = 0; k < 3; k++) { // three poles, a dancer on each
+      const x = 5.5 + k * 3.5, col = SEQUINS[k];
+      p.push(BX(x, 2, 0.04, 0.04, 0.5, 3, solid(WHITE, { bright: 1.6 })));
+      p.push({ ...SP(x, 2.05, 0.7, 1.7, DANCER_FRAMES[0], (c, row, L) => row === 0 && c === 'o' ? C(SKIN, 15) : C(col, 15), 0.5),
+        tick: s => { const f = Math.floor(T * 1.6 + k * 1.3) % 4; s.art = DANCER_FRAMES[f]; s.x = x + Math.sin(T * 1.2 + k) * 0.28; s.y = 2.05 + Math.cos(T * 1.2 + k) * 0.12; } }); // (swinging round the pole)
+    }
+    for (const [x, y] of [[6, 6], [9, 6.3], [12, 6], [7.5, 9], [10.5, 9]]) { if (chance(0.7)) p.push(sitting(x, y, shirt(), 0.45, true)); } // the punters, all eyes front
+    p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
+    p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
+    p.push(standing(13.4, 10.2, GRAY)); // the host by the curtain
+    return p;
+  } };
+ROOM_FOR.VELVET = 'stripclub';
+const nearVip = () => mode === 'room' && room.kind === 'stripclub' && Math.hypot(px - 13.4, py - 10.2) < 1.4;
+const nearStage = () => mode === 'room' && room.kind === 'stripclub' && py < 5.2 && px > 4 && px < 14;
+function tipDancer() {
+  if (!pay(5)) return say('You pat your pockets. Nothing.', 2);
+  return say(pick(['You tuck $5 in her garter. She gives you a little wave from the pole.', 'Five bucks on the stage. A spin, just for you.', '$5. The dancer blows you a kiss. Your heart, briefly, is full.']), 3);
+}
+
+// the private dance: you sit, she dances, you keep your hands to yourself. SPACE tips a dollar (the vibe goes up),
+// the bouncer looks in now and then; about twenty-five seconds and it's over
+const LAP_FRAMES = [
+  [' \\o/ ', '  |  ', ' / \\ '], [' _o_ ', '  |\\ ', ' / > '], ['  o/ ', ' /|  ', ' < \\ '], [' \\o  ', '  |\\ ', '  /\\ '],
+  ['  o  ', ' /|\\ ', '  /| '], [' _o  ', '  |\\_', ' / \\ '], ['  o_ ', '_/|  ', ' / \\ '], [' \\o/ ', '  |  ', '  |\\ ']];
+const LAP_LINES = ['She is doing a lot with five characters.', 'The music is loud. The bass is in your teeth.', 'You look her in the eyes. Both of them. (The two dots.)', 'Hands on your knees. The bouncer is watching.',
+  'She does a spin. Well, the "o" goes round.', 'This is the most expensive ASCII you have ever seen.', 'Somewhere, a dial-up modem screams.', 'She whispers something. It\'s "do you want another song". It\'s $40.'];
+GAMES.lapdance = () => {
+  const W = 32, H = 19, g = { id: 'lapdance', title: 'V I P', W, H, score: 0, over: false, vibe: 0, tips: 0 };
+  let t = 0, peek = 0, line = 0, lineT = 0, broke = false;
+  g.noCash = () => { broke = true; };
+  g.step = (dt, k) => {
+    const ev = [];
+    t += dt; lineT -= dt; g.vibe = Math.max(0, g.vibe - dt * 0.02);
+    if (lineT <= 0) { line = (line + 1 + (Math.random() * 3 | 0)) % LAP_LINES.length; lineT = 3.2; }
+    if (peek > 0) peek -= dt; else if (Math.random() < dt * 0.15) peek = 1.6; // the bouncer sticks his head round the curtain
+    if (k.actP) { g.tips++; g.vibe = Math.min(1, g.vibe + 0.12); broke = false; ev.push('tip'); }
+    if (t > 25) {
+      g.over = true; ev.push('end');
+      g.endLine = g.vibe > 0.7 ? 'She gives you a wink on the way out. ;) "Come back soon, big spender."' : g.vibe > 0.3 ? '"Thanks, hon." The song ends. You feel, somehow, poorer.' : 'The song ends. She is already looking at the next guy.';
+    }
+    return ev;
+  };
+  g.draw = (put, text, chars) => {
+    for (let y = 0; y < H; y++) for (const x of [0, 1, W - 2, W - 1]) put(x, y, '|', C(RED, 10 + (y & 1) * 2), C(RED, 2)); // the curtains
+    for (let x = 2; x < W - 2; x++) put(x, 15, '=', C(MAG, 6), C(MAG, 1)); // the floor, lit pink
+    const f = LAP_FRAMES[Math.floor(t * 2.4) % LAP_FRAMES.length], cx = 16 + Math.round(Math.sin(t * 1.4) * 2);
+    f.forEach((l, r) => text(cx - 1, 12 + r, l, C(SEQUINS[Math.floor(t) & 3], 15))); // her, in sequins: all five characters of her, at the world's own size
+    for (let k = 0; k < Math.min(g.tips, 12); k++) text(4 + (k * 7) % 24, 14, '$', C(GREEN, 12)); // dollars on the floor
+    if (peek > 0) { put(2, 6, '[', C(GRAY, 12)); put(3, 6, '=', C(GRAY, 4)); text(2, 7, '"No touching."', C(GRAY, 12)); } // the bouncer, peeking
+    text(2, 1, LAP_LINES[line].slice(0, 56), C(WHITE, 14));
+    const n = Math.round(g.vibe * 16);
+    text(2, 17, `VIBE [${'#'.repeat(n)}${'-'.repeat(16 - n)}]   TIPS $${g.tips}${broke ? '   (you are out of singles)' : ''}`, C(MAG, 14));
+    text(2, 18, `${Math.max(0, 25 - t) | 0}s left in the song`, C(GRAY, 10));
+  };
+  g.status = () => 'SPACE tip $1   E leave (no refunds)';
+  g.reward = () => 0;
+  return g;
+};
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
 function drawArt(rx_, ry_, z, w, h, art, colFn) {
@@ -7667,6 +7805,8 @@ function promptText() {
     if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
     if (nearTouchPool()) return 'E: touch the touch pool';
     if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
+    if (nearVip()) return `E: a private dance (${fmt$(LAPDANCE)})`;
+    if (nearStage()) return 'E: tip the dancer ($5)';
     if (atBroker()) return `"Buying or selling?"   E: trade (${marketOpen() ? 'market open' : 'market closed'})`;
     const cs = casinoSpot();
     if (cs) return `E: play ${CASINO_NAMES[cs]} ($5 to $100 a go)`;
@@ -7970,6 +8110,8 @@ function interact() {
     if (nearTouchPool()) return say(pick(TOUCH_LINES), 3);
     if (room.kind === 'cathedral' && useCathedral()) return;
     if (atBroker()) return startGame('market', 'market');
+    if (nearVip()) { if (!pay(LAPDANCE)) return say(`"Private dances are ${fmt$(LAPDANCE)}, sweetie."`, 3); startGame('lapdance', 'show'); return say('The host pulls the curtain back. You sit. Hands on your knees.', 3); }
+    if (nearStage()) return tipDancer();
     const cs = casinoSpot(); // a seat at a table, or a slot machine
     if (cs) return startGame(cs, 'casino');
     if (aviaryKeeper()) { if (T - seedT < 12) return say('You\'ve still got seed. Hold still.', 2); if (!pay(1)) return say('"A dollar a cup."'); seedT = T; return say('You hold out a cup of seed. A dozen birds land on your arms at once.', 4); }
@@ -8057,8 +8199,9 @@ function interact() {
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh);
     if (home) return enterRoom(home.kind === 'home_loft' ? 'loft' : 'home', { word: 'HOME', ret: [px, py, a], cell: [lookHit.mx, lookHit.my] }, [ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid[0].length / 2, ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid.length - 1.6, -Math.PI / 2]), say('Home.', 1.5);
+    if (sh.club && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
     if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
-    if (sh.fee) say(`Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : 'Mind the butterflies.'}"`, 3);
+    if (sh.fee) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : 'Mind the butterflies.'}"`, 3);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
     const r = { ...sh, cell: [lookHit.mx, lookHit.my], ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
     enterRoom(kind, r, [0, 0, -Math.PI / 2]);
@@ -10256,6 +10399,7 @@ function gameKey(e) {
   }
   if (e.code === 'Escape' || e.code === 'KeyE') { // walk away: a shift pays for what you did, a game its tickets; a crime you just don't do
     if (game.kind === 'market') { game = null; return true; }
+    if (game.kind === 'show') { game = null; say('You leave in the middle of the song. No refunds.', 3); return true; }
     if (game.kind === 'casino') { if (game.g.inRound()) say('You get up mid-hand. Your bet stays on the table.', 3); game = null; return true; }
     if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
     finishGame(true); game = null; return true;
@@ -10270,6 +10414,7 @@ function finishGame(quit) {
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
   if (game.kind === 'casino' || game.kind === 'market') return; // (its money changes hands round by round, or trade by trade)
+  if (game.kind === 'show') { say(g.endLine, 5); game.closeT = T + 0.6; return; }
   const r = g.reward();
   if (game.kind === 'table') { // the mahjong table: the pot if you won, your stake back if nobody did
     const res = g.result;
@@ -10294,6 +10439,7 @@ function stepGame(dt) {
     if ((e === 'stake' || e === 'double') && !pay(g.bet)) g.refused();
     if (e === 'payout') earn(g.win);
   }
+  if (game.kind === 'show') for (const e of ev) if (e === 'tip' && !pay(1)) g.noCash();
   if (actx) for (const e of new Set(ev)) sfxGame(e);
   if (g.over) finishGame(false);
 }
@@ -10351,10 +10497,10 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
-  if (g.over && game.kind !== 'crime') { // the results card
+  if (g.over && game.kind !== 'crime' && game.kind !== 'show') { // the results card
     const r = g.reward(), res = g.result, lines = game.kind === 'table'
       ? [res && res.winner === 0 ? 'MAHJONG!' : 'HAND OVER', !res ? 'You left the table.' : res.winner === 0 ? `You win ${res.how}` : res.winner < 0 ? 'The wall ran out' : `${MJ_NAMES[res.winner]} wins ${res.how}`,
          r > MJ_BUYIN ? `+${fmt$(r)}` : r ? 'Stakes returned' : `-${fmt$(MJ_BUYIN)}`, ...TOUCH ? [] : ['', `SPACE another hand (${fmt$(MJ_BUYIN)})   E leave`]]
@@ -10963,7 +11109,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^a private dance/, 'VIP dance'], [/^tip the dancer/, 'Tip'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
@@ -10979,6 +11125,7 @@ function touchActions() {
   if (panelOpen() || prizeEl && prizeEl.style.display === 'flex') return [['Close', 'KeyE', 'main']];
   if (game) {
     if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : game.kind === 'table' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(MJ_BUYIN)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
+    if (game.kind === 'show') return [['Leave', 'KeyE', 'pop'], ['Tip $1', 'Space', 'main']];
     if (game.kind === 'market') return [['Leave', 'KeyE', 'pop'], ['Up', 'ArrowUp', 'pop'], ['Down', 'ArrowDown', 'pop'], ['Sell', 'ArrowLeft', 'pop'], ['Buy', 'ArrowRight', 'pop'], [`Lot ${game.g.lot()}`, 'Space', 'main']];
     if (game.kind === 'casino') { // the casino: what the buttons do depends on where the hand's at
       const st = game.g.state(), id = game.g.id;
