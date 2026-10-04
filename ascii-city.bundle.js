@@ -2059,7 +2059,7 @@ function useHeld(near) {
       if (fx.vape > 0) return ['', null];
       fx.vape = 0.001; return ['', 'drag'];
     case 'skateboard':
-      if (near.indoors) return ['Not in here.', null];
+      if (near.indoors || mode !== 'walk') return [near.indoors ? 'Not in here.' : 'Not up here.', null];
       fx.skating = !fx.skating; return [fx.skating ? 'You drop the board and kick off.' : 'You flip the board up into your hand.', 'board'];
     case 'boombox': // a different tape each time you switch it on
       fx.boombox = !fx.boombox;
@@ -2137,17 +2137,23 @@ const footSpeed = () => (fx.skating ? 1.8 : 1) * (fx.caffeine > 0 ? 1.25 : 1);
 // ---- the soccer ball, once kicked: rolls, slows, bounces off walls, sinks in the sea; walk into it to dribble,
 // E to pick it up
 let ball = null; // { x, y, vx, vy, z, vz }
+// what stops it: buildings (unless it's sailing over a low one), and everything solid at street level: fences,
+// containers, booths, lamp posts, vending machines
+const ballBlocked = (x, y, z) => map[idx(Math.floor(x), Math.floor(y))] > z || z < 0.2 && (solidAt(x, y, 0.015) || lampAt(x, y, 0.01) || machineAt(x, y, 0.015) || fairBlocked(x, y, 0.015));
 function kickBall(x, y, a, power = 2.6) {
-  ball = { x: x + Math.cos(a) * 0.12, y: y + Math.sin(a) * 0.12, vx: Math.cos(a) * power, vy: Math.sin(a) * power, z: 0.02, vz: power * 0.25 };
+  let d = 0; // set down just in front of you, short of any wall you're standing against
+  while (d < 0.12 && !ballBlocked(x + Math.cos(a) * (d + 0.02), y + Math.sin(a) * (d + 0.02), 0.02)) d += 0.02;
+  ball = { x: mod(x + Math.cos(a) * d, N), y: mod(y + Math.sin(a) * d, N), vx: Math.cos(a) * power, vy: Math.sin(a) * power, z: 0.02, vz: power * 0.25 };
 }
 function stepBall(dt) {
   if (!ball) return;
   ball.vz -= 2 * dt; ball.z += ball.vz * dt;
   if (ball.z < 0) { ball.z = 0; ball.vz = Math.abs(ball.vz) > 0.08 ? -ball.vz * 0.5 : 0; }
   const f = Math.max(0, 1 - (ball.z > 0 ? 0.2 : 1.1) * dt); ball.vx *= f; ball.vy *= f;
-  for (const ax of ['x', 'y']) { // move one axis at a time, bouncing off whatever's solid
-    const nx = ax === 'x' ? ball.x + ball.vx * dt : ball.x, ny = ax === 'y' ? ball.y + ball.vy * dt : ball.y;
-    if (map[idx(Math.floor(nx), Math.floor(ny))] > ball.z) { if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
+  const n = Math.max(1, Math.ceil(Math.hypot(ball.vx, ball.vy) * dt / 0.01)); // (small steps: a fence is only 2cm thick)
+  for (let s = 0; s < n; s++) for (const ax of ['x', 'y']) { // move one axis at a time, bouncing off whatever's solid
+    const nx = ax === 'x' ? ball.x + ball.vx * dt / n : ball.x, ny = ax === 'y' ? ball.y + ball.vy * dt / n : ball.y;
+    if (ballBlocked(nx, ny, ball.z)) { if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
     else { ball.x = mod(nx, N); ball.y = mod(ny, N); }
   }
   if (isWater(ball.x, ball.y) && ball.z === 0) { ball = null; return 'lost'; } // into the drink

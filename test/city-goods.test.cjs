@@ -72,6 +72,25 @@ test('the skateboard only rolls outside; the ball rolls, stops, and comes back',
   assert.strictEqual(ev("inv.some(i => i.id === 'ball')"), true);
 });
 
+test('the ball bounces off fences, containers and lamp posts as well as buildings, and never starts inside a wall', () => {
+  const { ev, j } = fresh();
+  // straight at a thin fence (a construction site's hoarding), hard: it comes back off it
+  const r = j(`(() => {
+    const f = solids.find(o => o.kind === 'hoarding' && o.c === 1); // along x: kick across it, in y
+    mode = 'walk'; const side = Math.sign(rel(py - f.y)) || 1; px = f.x; py = mod(f.y + 0.3, N);
+    kickBall(px, py, -Math.PI / 2, 4); for (let k = 0; k < 200; k++) stepBall(0.05);
+    const throughFence = rel(ball.y - f.y) < 0;
+    const l = lamps[40]; px = mod(l.x - 0.3, N); py = l.y; kickBall(px, py, 0, 4); for (let k = 0; k < 6; k++) stepBall(0.05);
+    const throughLamp = rel(ball.x - l.x) > 0.05 && Math.abs(rel(ball.y - l.y)) < 0.02;
+    // against a wall, facing it: the ball stays on your side
+    let wx = 0, wy = 0; for (let k = 0; k < N * N; k++) { const x = k % N, y = k / N | 0; if (map[k] > 0.5 && !map[idx(x, y + 1)] && !map[idx(x, y + 2)]) { wx = x + 0.5; wy = y + 1.06; break; } }
+    px = wx; py = wy; kickBall(px, py, -Math.PI / 2); const inWall = map[idx(Math.floor(ball.x), Math.floor(ball.y))] > 0;
+    for (let k = 0; k < 100; k++) stepBall(0.05);
+    return { throughFence, throughLamp, inWall, after: map[idx(Math.floor(ball.x), Math.floor(ball.y))] > 0 };
+  })()`);
+  assert.deepStrictEqual(r, { throughFence: false, throughLamp: false, inWall: false, after: false });
+});
+
 test('storage: put things in your unit and take them out again; one unit, limited room', () => {
   const { ev, j } = fresh();
   ev("money = 500; buy('skateboard'); buy('beer'); buy('book'); held = 1");
