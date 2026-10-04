@@ -218,7 +218,13 @@ function stepTraffic(dt, t, everywhere = false) {
     const kerbTaken = c.off < 0.1 && c.near.some(o => o !== c && o.off > 0.1 && o.hx === c.hx && o.hy === c.hy &&
       Math.abs(rel(o.x - c.x) * c.hx + rel(o.y - c.y) * c.hy) < 0.55 && Math.abs(rel(o.x - c.x) * c.hy - rel(o.y - c.y) * c.hx) < 0.3);
     const pull = !code(c) && c.state !== 'scene' && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && !kerbTaken && evs.some(behind);
-    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : 0; // at the scene: pulled in to the kerb
+    // a parked car sitting in our lane (you leave yours wherever you get out): swing out round it, then back in
+    const passing = !code(c) && c.near.some(o => {
+      if (o === c || !o.parked) return false;
+      const rx = rel(o.ex - c.x), ry = rel(o.ey - c.y), al = rx * c.hx + ry * c.hy;
+      return Math.abs(rx * c.hy - ry * c.hx) < 0.24 && al > -0.6 && al < 1.6;
+    });
+    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : passing ? -0.34 : 0; // at the scene: pulled in to the kerb
     c.off += clamp(offTarget - c.off, -0.6 * dt, 0.6 * dt);
     if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c)) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
     if (c.state === 'scene') room_ = 0;

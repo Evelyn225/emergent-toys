@@ -20,11 +20,23 @@ function ejectDriver(c) {
   Object.assign(p, { x, y, hidden: false, inside: null, path: [], wait: 0, talk: 3, goal: null });
   snapToCorner(p);
 }
+// where you step out: right beside the car, whichever side (or end) has room; the kerb only if nowhere near does
+function exitSpot(c) {
+  const lx = c.hy, ly = -c.hx; // (the car's left)
+  for (const d of [0.22, 0.32, 0.45]) for (const [ox, oy] of [[lx, ly], [-lx, -ly], [-c.hx * 1.3, -c.hy * 1.3], [c.hx * 1.3, c.hy * 1.3]]) {
+    const x = mod(c.x + ox * d, N), y = mod(c.y + oy * d, N);
+    if (free(x, y) && !cars.some(o => o !== c && Math.hypot(rel(o.ex - x), rel(o.ey - y)) < 0.2)) return [x, y];
+  }
+  return curbOf(c);
+}
 function leaveCar() {
   const c = me;
   endTaxiShift();
-  [px, py] = curbOf(c);
-  if (mode === 'drive') { c.player = false; c.v = 0; parkCar(c); a += Math.PI / 2; }
+  [px, py] = exitSpot(c);
+  if (mode === 'drive') { // the car stays just where you stopped it (traffic goes round it)
+    c.player = false; c.v = 0; c.off = 0; c.ex = c.x; c.ey = c.y; c.parked = true;
+    a = Math.atan2(rel(py - c.y), rel(px - c.x));
+  }
   else { // settle up: all of it if you can, everything you've got if you can't
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);

@@ -1236,7 +1236,13 @@ function stepTraffic(dt, t, everywhere = false) {
     const kerbTaken = c.off < 0.1 && c.near.some(o => o !== c && o.off > 0.1 && o.hx === c.hx && o.hy === c.hy &&
       Math.abs(rel(o.x - c.x) * c.hx + rel(o.y - c.y) * c.hy) < 0.55 && Math.abs(rel(o.x - c.x) * c.hy - rel(o.y - c.y) * c.hx) < 0.3);
     const pull = !code(c) && c.state !== 'scene' && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && !kerbTaken && evs.some(behind);
-    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : 0; // at the scene: pulled in to the kerb
+    // a parked car sitting in our lane (you leave yours wherever you get out): swing out round it, then back in
+    const passing = !code(c) && c.near.some(o => {
+      if (o === c || !o.parked) return false;
+      const rx = rel(o.ex - c.x), ry = rel(o.ey - c.y), al = rx * c.hx + ry * c.hy;
+      return Math.abs(rx * c.hy - ry * c.hx) < 0.24 && al > -0.6 && al < 1.6;
+    });
+    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : passing ? -0.34 : 0; // at the scene: pulled in to the kerb
     c.off += clamp(offTarget - c.off, -0.6 * dt, 0.6 * dt);
     if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c)) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
     if (c.state === 'scene') room_ = 0;
@@ -6938,9 +6944,9 @@ function cathedralFloor(i, f, wx, wy) {
   if (Math.abs(wx - 11) < 0.65 && wy > 6.5) { BG[i] = C(RED, 1.5 + f * 2); return set(i, Math.abs(wx - 11) > 0.55 ? '|' : ' ', C(YEL, 4 + f * 6)); }
   if (day > 0.2) for (const [k, by] of CATH_BAYS.entries()) for (const side of [0, 1]) { // the sun through the glass
     const off = side ? CATH_W - wx : wx, shift = (tod - 12) * 0.25 * (side ? -1 : 1);
-    if (off > 1 && off < 4.5 && Math.abs(wy - by - shift) < 0.9) {
+    if (off > 2.2 && off < 5.8 && Math.abs(wy - by - shift) < 0.9) { // (thrown well out across the floor: the sun's coming in high)
       const kk = hash(Math.floor((wy - by - shift) / 0.28), Math.floor(off / 0.5) + k * 3, 504);
-      BG[i] = C(GLASS[kk * 8 | 0], 1 + day * 3 * f * (1 - Math.abs(off - 2.5) / 2.5));
+      BG[i] = C(GLASS[kk * 8 | 0], 1 + day * 3 * f * (1 - Math.abs(off - 4) / 2.5));
       return set(i, ' ', 0);
     }
   }
@@ -6978,7 +6984,8 @@ ROOM_DEFS.cathedral = { grid: CATH_GRID, light: 0.8, height: CATH_H, floor: 'cat
       if (chance(0.3)) p.push(sitting(cx - 1.2 + Math.random() * 2.4, y + 0.02, pick([GRAY, BLUE, BRICK, WHITE, GREEN]), 0.45, true));
     }
     for (const y of [13, 21, 29]) p.push(SP(11, y, 0.5, 3, pad(['  |', '  |', '  |', '  |', ' _|_', '*-o-*', " \\_/"]), // chandeliers on long chains
-      (c, row, L) => c === '*' ? C(fract(T * 5 + y) < 0.5 ? YEL : ORANGE, 15) : row < 4 ? C(GRAY, L * 0.8) : C(YEL, Math.max(L, 9)), 6));
+      (c, row, L) => c === '*' ? C(fract(T * 5 + y) < 0.5 ? YEL : ORANGE, 15) : row < 4 ? C(GRAY, L * 0.8) : C(YEL, Math.max(L, 9)), 6),
+      BX(11, y, 0.025, 0.025, 8.7, CATH_H, (i, t, L) => (set(i, fract(HIT.w * 3) < 0.5 ? '|' : ':', C(GRAY, L * 0.8)), true))); // the chain, right up to the vault
     for (const [x, y] of [[3, 20], [18.5, 14], [4, 33], [17, 26]]) if (chance(0.5)) p.push(standing(x, y, pick([GRAY, BLUE, BRICK, GREEN]))); // a few sightseers in the aisles
     return p;
   } };
@@ -8600,11 +8607,23 @@ function ejectDriver(c) {
   Object.assign(p, { x, y, hidden: false, inside: null, path: [], wait: 0, talk: 3, goal: null });
   snapToCorner(p);
 }
+// where you step out: right beside the car, whichever side (or end) has room; the kerb only if nowhere near does
+function exitSpot(c) {
+  const lx = c.hy, ly = -c.hx; // (the car's left)
+  for (const d of [0.22, 0.32, 0.45]) for (const [ox, oy] of [[lx, ly], [-lx, -ly], [-c.hx * 1.3, -c.hy * 1.3], [c.hx * 1.3, c.hy * 1.3]]) {
+    const x = mod(c.x + ox * d, N), y = mod(c.y + oy * d, N);
+    if (free(x, y) && !cars.some(o => o !== c && Math.hypot(rel(o.ex - x), rel(o.ey - y)) < 0.2)) return [x, y];
+  }
+  return curbOf(c);
+}
 function leaveCar() {
   const c = me;
   endTaxiShift();
-  [px, py] = curbOf(c);
-  if (mode === 'drive') { c.player = false; c.v = 0; parkCar(c); a += Math.PI / 2; }
+  [px, py] = exitSpot(c);
+  if (mode === 'drive') { // the car stays just where you stopped it (traffic goes round it)
+    c.player = false; c.v = 0; c.off = 0; c.ex = c.x; c.ey = c.y; c.parked = true;
+    a = Math.atan2(rel(py - c.y), rel(px - c.x));
+  }
   else { // settle up: all of it if you can, everything you've got if you can't
     const fare = Math.round(taxiFare(c.fare) * 100) / 100;
     if (pay(fare)) say(`Fare: ${fmt$(fare)}. Thanks!`);

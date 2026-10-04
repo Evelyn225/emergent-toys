@@ -381,3 +381,20 @@ test('street lamps are solid, and no emergency vehicle is parked on one', () => 
   })()`);
   assert.deepStrictEqual(r, { hit: true, beside: false, parkedOnLamp: [] });
 });
+
+test('a car left in its lane (where you got out) is driven round: traffic behind it gets past instead of queueing for ever', () => {
+  const { ev: e } = loadCity(3);
+  const r = JSON.parse(e(`JSON.stringify((() => {
+    mode = 'walk';
+    // a car mid-block on a straight, left there; another coming up behind it in the same lane
+    const c = cars.find(o => !o.ev && !o.patrol && o.hx !== 0 && ROAD[idx(Math.floor(o.x), Math.floor(o.y))] === 2 && o.left > 3);
+    c.parked = true; c.v = 0; c.off = 0; c.ex = c.x; c.ey = c.y; px = c.x; py = c.y - 1.5;
+    const o = cars.find(q => q !== c && !q.ev && !q.patrol && Math.hypot(rel(q.x - c.x), rel(q.y - c.y)) > 20);
+    Object.assign(o, { x: mod(c.x - c.hx * 1.5, N), y: c.y, hx: c.hx, hy: 0, B: c.B, left: c.left + 1.5, nh: c.nh.slice(), v: 0.8, off: 0, parked: false });
+    o.ex = o.x; o.ey = o.y;
+    let ahead_ = -1;
+    for (let t = 0; t < 20 && ahead_ < 0.5; t += 0.05) { T += 0.05; stepTraffic(0.05, T); ahead_ = rel(o.x - c.x) * c.hx; }
+    return { got: ahead_ };
+  })())`));
+  assert.ok(r.got >= 0.5, JSON.stringify(r));
+});
