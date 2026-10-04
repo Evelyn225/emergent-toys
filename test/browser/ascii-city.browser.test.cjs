@@ -476,6 +476,20 @@ test('a portapotty on a building site: E at its door, P in the bowl, E back out 
   assert.strictEqual(await page.evaluate(() => mode), 'walk');
 }));
 
+test('the pause menu on a narrow phone: scrolls down, never sideways', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
+    await page.goto(PAGE); await page.waitForTimeout(300);
+    await page.evaluate(() => togglePause()); await page.waitForTimeout(100);
+    const r = await page.evaluate(() => {
+      const pn = document.querySelector('#pause .panel');
+      return [pn.scrollWidth <= pn.clientWidth, pn.scrollHeight > pn.clientHeight, [...pn.querySelectorAll('*')].filter(e => e.getBoundingClientRect().right > innerWidth + 0.5).length];
+    });
+    assert.deepStrictEqual(r, [true, true, 0]);
+  } finally { await browser.close(); }
+});
+
 test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
   await page.evaluate(() => { tod = 23; enterRoom('stripclub', { ...CLUB.sh, ret: [px, py, a], line: '' }, [9, 12.4, -Math.PI / 2]); });
   const r = await page.evaluate(() => {
