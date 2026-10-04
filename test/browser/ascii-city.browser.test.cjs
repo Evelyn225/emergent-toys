@@ -492,6 +492,16 @@ test('the pause menu on a narrow phone: scrolls down, never sideways', async () 
   } finally { await browser.close(); }
 });
 
+test('the Botanical Gardens at night: the dev jump lands you outside the locked gate and you can walk away; the gate still keeps you out', () => withPage(async page => {
+  await page.evaluate(() => { tod = 23; devPlaces().find(([g, l]) => l === 'Botanical Gardens')[2](); });
+  const at = await page.evaluate(() => [px, py]);
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(2000); await page.keyboard.up('KeyW'); // toward the gate
+  assert.deepStrictEqual(await page.evaluate(() => [inGardens(px, py), promptText()]), [false, 'The gates are locked. The Gardens open at 8.']);
+  await page.evaluate(() => { a = -Math.PI / 2; }); // and back the way you came
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(2000); await page.keyboard.up('KeyW');
+  assert.ok(await page.evaluate(([x, y]) => py < y - 0.1, at), 'walked away');
+}));
+
 test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
   await page.evaluate(() => { tod = 23; enterRoom('stripclub', { ...CLUB.sh, ret: [px, py, a], line: '' }, [9, 12.4, -Math.PI / 2]); });
   const r = await page.evaluate(() => {
@@ -754,7 +764,7 @@ test('the Botanical Gardens: gates locked at night, a swan boat on the lake, duc
   await at(11, -0.5, Math.PI / 2); // outside the north gate
   assert.ok(await page.evaluate(() => free(GARDEN.x0 + 11, GARDEN.y0 + 0.2)), 'open by day');
   await page.evaluate(() => { tod = 22; });
-  assert.ok(await page.evaluate(() => !free(GARDEN.x0 + 11, GARDEN.y0 + 0.2)), 'locked at night');
+  assert.ok(await page.evaluate(() => !free(GARDEN.x0 + 11, GARDEN.y0)), 'locked at night'); // (the gate itself)
   assert.match(await prompt(), /gates are locked/);
   await at(11, 1, -Math.PI / 2);
   assert.ok(await page.evaluate(() => free(GARDEN.x0 + 11, GARDEN.y0 - 0.3)), 'you can always let yourself out');

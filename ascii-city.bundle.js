@@ -7618,10 +7618,10 @@ const PICNIC_BASKET = pad(['  .--.  ', ' /    \\ ', '|######|', '|%%%%%%|', '|%%
 const nearJettyFoot = () => mode === 'walk' && (() => { const [gx, gy] = gardenLocal(px, py); return inGardens(px, py) && Math.abs(gx - JETTY.gx0 - 0.25) < 0.45 && Math.abs(gy - JETTY.gy) < 0.45; })();
 const nearShore = () => { if (mode !== 'walk' || !inGardens(px, py)) return false; const [gx, gy] = gardenLocal(px, py), e = gardenLakeEdge(gx + Math.cos(a) * 0.4, gy + Math.sin(a) * 0.4); return e > -0.2; };
 const nearShed = () => mode === 'walk' && inGardens(px, py) && (() => { const [gx, gy] = gardenLocal(px, py); return Math.hypot(gx - GARDEN_SHED.gx, gy - GARDEN_SHED.gy + 0.45) < 0.5; })();
-const gateShutHere = (x, y) => { // a closed gate, approached from outside
+const gateShutHere = (x, y) => { // a closed gate, approached from outside: just the gate itself, across the gap
   if (gardensOpen(tod) || inGardens(px, py)) return false;
   const [gx, gy] = gardenLocal(x, y);
-  return GARDEN_GATES.some(([ggx, ggy]) => Math.abs(gx - ggx) < 0.75 && Math.abs(gy - ggy) < 0.75);
+  return GARDEN_GATES.some(([ggx, ggy, run]) => run === 'h' ? Math.abs(gx - ggx) < 0.75 && Math.abs(gy - ggy) < 0.15 : Math.abs(gy - ggy) < 0.75 && Math.abs(gx - ggx) < 0.15);
 };
 function gardensPrompt() {
   if (mode === 'boat') { const [gx, gy] = [boat.gx, boat.gy]; return Math.hypot(gx - JETTY.gx1, gy - JETTY.gy) < 0.7 ? 'E: back to the jetty' : `W/S paddle, A/D steer${TOUCH ? '' : ''}   (back to the jetty to get out)`; }
@@ -10020,7 +10020,7 @@ function devPlaces() {
     ['Marina', () => devAt(MARINA.x, MARINA.y0 + 0.6, Math.PI / 2)], ['Sunset Pier', () => devAt(FAIR.cx, FAIR.y0 - 0.5, Math.PI / 2)],
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
     ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],
-    ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.4, Math.PI / 2); }],
+    ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.6, Math.PI / 2); }],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
@@ -12619,8 +12619,9 @@ function move(fx, fy) {
   // walking into a way out (a shop's door, the top of the subway stairs) takes you through it
   const n = Math.hypot(fx, fy);
   if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * 0.45), Math.floor(py + fy / n * 0.45)) === 'D') return leaveRoom();
-  if (free(px + fx + Math.sign(fx) * m, py)) px += fx;
-  if (free(px, py + fy + Math.sign(fy) * m)) py += fy;
+  const stuck = !free(px, py); // (somewhere you shouldn't be, a teleport or a gate shutting on you: you can always walk out)
+  if (stuck || free(px + fx + Math.sign(fx) * m, py)) px += fx;
+  if (stuck || free(px, py + fy + Math.sign(fy) * m)) py += fy;
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
 function drive(dt) {
