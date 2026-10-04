@@ -415,17 +415,25 @@ test('run dry and you pass out: the hospital, a bill, and the nurse patches you 
   assert.deepStrictEqual(await page.evaluate(() => [needs.food, needs.drink, needs.health]), [100, 100, 100]);
 }));
 
-test('P to pee: not when you don\'t need to, a stream when you do, a yellow puddle that dries up; Esc still pauses', () => withPage(async page => {
+test('P to pee, any time: a stream that falls even when you look up, a yellow puddle that dries up; Esc still pauses', () => withPage(async page => {
   await page.evaluate(() => { needs.bladder = 2; people.forEach(m => m.hidden = true); });
-  await page.keyboard.press('KeyP');
-  assert.deepStrictEqual(await page.evaluate(() => [!!pee, paused, msgText]), [false, false, 'You don\'t need to go.']);
-  await page.evaluate(() => { needs.bladder = 90; });
+  await page.keyboard.press('KeyP'); // nothing in you: a short one all the same
+  assert.deepStrictEqual(await page.evaluate(() => [!!pee, paused]), [true, false]);
+  await page.waitForTimeout(2500);
+  assert.strictEqual(await page.evaluate(() => !!pee), false, 'over quickly');
+  await page.evaluate(() => { needs.bladder = 90; for (const q of puddles) q.life = 0; });
   await page.keyboard.press('KeyP'); await page.waitForTimeout(1500);
   const r = await page.evaluate(() => [!!pee, peeDrops.length > 5, puddles.length > 0, pitch < -0.5, needs.bladder < 90]);
   assert.deepStrictEqual(r, [true, true, true, true, true], 'peeing: drops in the air, a puddle, eyes down');
+  // look straight up: it still comes down in front of you, not up at the sky
+  await page.evaluate(() => { peeLookOff(); pitch = 1.5; for (const q of puddles) q.area = 0.01; });
+  await page.waitForTimeout(1200);
+  const up = await page.evaluate(() => [pitch, Math.max(...peeDrops.map(p => p.z)) < eye - 0.05, puddles.reduce((t, q) => t + q.area, 0) > 0.1,
+    puddles.every(q => q.z === 0 && Math.hypot(rel(q.x - px), rel(q.y - py)) < 0.5)]);
+  assert.deepStrictEqual(up, [1.5, true, true, true]);
   await page.keyboard.press('KeyP'); // cut it off
   await page.waitForTimeout(1000);
-  assert.deepStrictEqual(await page.evaluate(() => [!!pee, peeDrops.length, pitch > -0.2]), [false, 0, true]);
+  assert.deepStrictEqual(await page.evaluate(() => [!!pee, peeDrops.length]), [false, 0]);
   await page.evaluate(() => { for (const q of puddles) q.life = 0.01; stepPee(5); });
   assert.strictEqual(await page.evaluate(() => puddles.length), 0, 'dried up');
   await page.keyboard.press('Escape');

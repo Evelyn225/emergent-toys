@@ -11545,14 +11545,14 @@ function hazeCell(i, dens, kind) {
   if (dens > (vape ? 0.5 : 0.7)) BG[i] = vape ? C(WARM, (1.2 + dens * 2.2) * lit) : C(GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
   FOGS[i] = 0;
 }
-// ===== peeing. P lets it go wherever you're standing: a stream arcs out in front of you (your eyes go down to it),
-// and a yellow puddle spreads where it lands, then dries up over a few minutes (quicker in the rain, slower indoors).
-// How long you go is down to the bladder (needs.js), which nothing on screen shows: drink enough and you get a hint,
-// ignore it long enough and you don't get a say in it. P again cuts it off.
-let pee = null; // { left: seconds of stream, t, at, accident, pitch0, auto }
+// ===== peeing, just for fun: P lets it go wherever you're standing. The stream leaves you level and falls under
+// gravity, whichever way you're looking (your eyes go down to it), and a yellow puddle spreads where it lands, then
+// dries up over a few minutes (quicker in the rain, slower indoors). How long you go is down to the bladder
+// (needs.js), which nothing shows and nothing ever makes you empty. P again cuts it off.
+let pee = null; // { left: seconds of stream, t, at, pitch0, auto }
 const peeDrops = []; // { at, s, x, y, z, vx, vy, vz, t0 }: the stream, in flight, oldest first
 const puddles = []; // { at, s, x, y, z, area, life, seed }: area in square metres
-let peeHint = 0, peeBurst = 0, peeLook = null; // which hint you've had; how long you've been bursting; easing your eyes back up
+let peeLook = null, peeN = 0; // easing your eyes back up; drops so far (for the ripples running down the stream)
 const PEE_DRY = 240, PEE_LOOK = -0.8; // seconds for a puddle to dry outside; where your eyes go while you're at it
 const PEE_RATE = 60, PEE_DROP = 0.0022; // drops a second, and the puddle each one makes (m²): a full bladder's ~1.3m²
 const peeScale = () => mode === 'room' ? 1 : 0.1; // world units a metre
@@ -11563,29 +11563,20 @@ function peeGround(x, y) {
   return h > (mode === 'roof' ? roofH + 1e-6 : 0) ? { wall: h } : { z: h }; // (off a roof's edge it falls to whatever's below)
 }
 
-function startPee(accident) {
-  if (pee) { if (!pee.accident) { peeLookBack(); pee = null; say('You stop.', 1.2); } return; }
+function startPee() {
+  if (pee) { peeLookBack(); pee = null; say('You stop.', 1.2); return; }
   const at = placeKey();
-  if (at === null || !onFootMode()) return accident ? null : say('Not here.');
-  if (body.seat && !accident) return say('Stand up first.');
-  if (needs.bladder < 8 && !accident) return say('You don\'t need to go.', 1.5);
-  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, accident: !!accident, pitch0: pitch, auto: true };
-  peeLook = null; peeHint = 0; peeBurst = 0;
-  if (accident) say('You couldn\'t hold it any longer. Everyone pretends not to notice.', 4);
-  else say(needs.bladder > 80 ? 'Ahh. That\'s better.' : 'You relieve yourself.', 2);
+  if (at === null || !onFootMode()) return say('Not here.');
+  if (body.seat) return say('Stand up first.');
+  pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, pitch0: pitch, auto: true }; // (a short one even with nothing in you)
+  peeLook = null;
+  say(needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
 }
 // done (or cut off): your eyes come back up to where they were, unless you've looked somewhere yourself
 function peeLookBack() { if (pee && pee.auto) peeLook = { to: pee.pitch0, t: 0.7 }; }
 const peeLookOff = () => { if (pee) pee.auto = false; peeLook = null; }; // (you moved the view yourself)
 
 function stepPee(dt) {
-  // the hints, and what happens if you ignore them
-  if (!pee && onFootMode() && !game && !sleep) {
-    if (needs.bladder >= 75 && peeHint < 1) { peeHint = 1; say('You need to pee. (P)', 3); }
-    if (needs.bladder >= 97 && peeHint < 2) { peeHint = 2; say('You\'re bursting. Find somewhere, quick. (P)', 3); }
-    if (needs.bladder >= 100 && (peeBurst += dt) > 45) startPee(true);
-  }
-  if (needs.bladder < 70) peeHint = 0;
   if (pee) {
     if (!onFootMode() || placeKey() !== pee.at || sleep || game) { pee = null; peeLook = null; }
     else {
@@ -11619,12 +11610,12 @@ function stepPee(dt) {
 }
 // one drop, out in front of you at about hip height
 function peeSpray(flow) {
-  const s = peeScale(), acc = pee.accident;
-  const wob = Math.sin(T * 6) * 0.05 + Math.sin(T * 1.7) * 0.09, ang = a + wob;
-  const fwd = acc ? 0.05 : 0.25, sp = acc ? 0.15 : 0.6 + flow * 2.4, up = acc ? 0 : 0.4 + flow * 0.7;
-  const x = px + Math.cos(a) * fwd * s, y = py + Math.sin(a) * fwd * s;
-  peeDrops.push({ at: pee.at, s, x, y, z: eye - (acc ? 0.95 : 0.8) * s, vx: Math.cos(ang) * sp * s, vy: Math.sin(ang) * sp * s,
-    vz: (up + (Math.random() - 0.5) * 0.15) * s, t0: T });
+  // aimed by which way you face, never by how far up or down you look: it leaves about level and gravity does the rest
+  const s = peeScale(), wob = Math.sin(T * 6) * 0.05 + Math.sin(T * 1.7) * 0.09, ang = a + wob;
+  const sp = 0.6 + flow * 2.4, up = 0.4 + flow * 0.7, ground = eye - eyeLift() * s - (mode === 'room' ? 1.7 : 0.17); // (eye height less the 1.7m you stand)
+  const hip = Math.max(ground + 0.3 * s, eye - 0.8 * s); // (crouched, it's not coming out of the floor)
+  peeDrops.push({ at: pee.at, s, x: px + Math.cos(a) * 0.25 * s, y: py + Math.sin(a) * 0.25 * s, z: hip, vx: Math.cos(ang) * sp * s, vy: Math.sin(ang) * sp * s,
+    vz: (up + (Math.random() - 0.5) * 0.15) * s, t0: T, n: peeN++ });
   while (peeDrops.length > 400) peeDrops.shift();
 }
 // where a drop comes down: onto a puddle that's already there (it spreads), or the start of a new one
@@ -11699,7 +11690,7 @@ function drawStream() {
     const rx_ = room_ ? p.x - px : rel(p.x - px), ry_ = room_ ? p.y - py : rel(p.y - py), depth = dx * rx_ + dy * ry_;
     const cur = depth > 0.02 * p.s ? { c: cols / 2 + (-dy * rx_ + dx * ry_) * projX / depth, r: hor - (p.z - eye) * projY / depth, depth, t0: p.t0 } : null;
     if (p.splash) { if (cur) peeDot(cur.c, cur.r, cur.depth, p.vz > 0 ? '\'' : '.', lit); continue; }
-    if (cur && prev && cur.t0 - prev.t0 < 0.06) peeLine(prev, cur, lit);
+    if (cur && prev && cur.t0 - prev.t0 < 0.06) peeLine(prev, cur, lit, (p.n >> 2) % 3 ? 1 : 1.5); // brighter bands that ride down it, speeding up as they fall
     else if (cur) peeDot(cur.c, cur.r, cur.depth, '.', lit);
     prev = cur;
   }
@@ -11709,13 +11700,13 @@ function peeDot(c, r, depth, ch, lit) {
   if (c < 0 || c >= cols || r < 0 || r >= rows) return;
   const i = r * cols + c;
   if (ZB[i] >= 0 && depth >= ZB[i]) return;
-  set(i, ch, C(YEL, Math.max(6, (1 - depth / vis) * 15) * lit)); FOGS[i] = 0;
+  set(i, ch, C(YEL, Math.max(5, (1 - depth / vis) * 10) * lit)); FOGS[i] = 0;
 }
-function peeLine(p0, p1, lit) {
+function peeLine(p0, p1, lit, bright) {
   const dc = p1.c - p0.c, dr = p1.r - p0.r, n = Math.min(80, Math.ceil(Math.max(Math.abs(dc), Math.abs(dr))));
   if (n > 79 && (Math.max(p0.r, p1.r) < 0 || Math.min(p0.r, p1.r) > rows)) return; // (way off screen)
   const ch = Math.abs(dr) > Math.abs(dc) * 2 ? '|' : Math.abs(dc) > Math.abs(dr) * 2 ? '-' : (dc > 0) === (dr > 0) ? '\\' : '/';
-  for (let k = 0; k <= n; k++) { const f = n ? k / n : 0; peeDot(p0.c + dc * f, p0.r + dr * f, p0.depth + (p1.depth - p0.depth) * f, ch, lit); }
+  for (let k = 0; k <= n; k++) { const f = n ? k / n : 0; peeDot(p0.c + dc * f, p0.r + dr * f, p0.depth + (p1.depth - p0.depth) * f, ch, lit * bright); }
 }
 // ===== little things on the street: manhole covers in the road (some with steam pouring out, as from a city's steam
 // pipes), and now and then a flock of pigeons pecking about on a sidewalk, in a park or a plaza, that bursts up and
