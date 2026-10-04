@@ -55,6 +55,9 @@ function casinoCeil(i, wx, wy) { // chandeliers
   if (d < 0.32) { BG[i] = C(YEL, 3 + (d < 0.15 ? 4 : 0)); return set(i, hash(Math.floor(wx * 9), Math.floor(wy * 9), Math.floor(T * 4)) > 0.7 ? '*' : 'o', C(WHITE, 15)); }
   return set(i, d < 0.7 && hash(Math.floor(wx * 6), Math.floor(wy * 6), 1403) > 0.7 ? '.' : ' ', C(YEL, 6));
 }
+// cards lying on a blackjack table (u along it, v across: + toward the players): [u, v, pip, colour]
+const BJ_CARDS = [];
+for (const [u, v] of [[-0.85, 0.36], [0, 0.4], [0.85, 0.36], [-0.1, -0.3]]) for (const k of [0, 1]) BJ_CARDS.push([u + k * 0.09, v - k * 0.02, '♠♥♦♣'[(BJ_CARDS.length * 7) & 3], (BJ_CARDS.length * 7) & 3 && ((BJ_CARDS.length * 7) & 3) < 3 ? RED : GRAY]);
 const SLOT_ART = pad([' .---. ', ' |7=7| ', ' |---|o', ' |___|/', ' [###] ', ' [###] ']);
 const felt = (shade) => (i, t, L) => { // a gaming table: green felt on top, a padded rail round it, wood below
   const f = HIT.face;
@@ -68,7 +71,8 @@ ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6,
     for (const x of [8.4, 9.6, 10.8, 12, 13.2]) p.push(BX(x, 2.5, 0.03, 0.03, 1.1, 2.4, solid(YEL))); // the cage's bars
     for (const [x, y] of [[5, 6.5], [17, 6.5]]) { // blackjack: cards out on the felt, the dealer behind
       p.push({ casino: 'blackjack', cx: x, cy: y + 0.9, ...BX(x, y, 1.3, 0.6, 0, 0.8, felt((i, L) => {
-        if (HIT.v > 0.25 && Math.abs(fract(HIT.u * 2.2) - 0.5) < 0.18) { BG[i] = C(WHITE, 8); return set(i, ':', C(RED, 10)), true; } // the cards dealt round the rail
+        const card = BJ_CARDS.find(([cu, cv]) => Math.abs(HIT.u - cu) < 0.06 && Math.abs(HIT.v - cv) < 0.085); // the hands dealt: a pair at each seat, the dealer's
+        if (card) { BG[i] = C(WHITE, 9); return set(i, Math.abs(HIT.u - card[0]) < 0.025 && Math.abs(HIT.v - card[1]) < 0.035 ? card[2] : ' ', C(card[3], 12)), true; }
         return false; })) });
       p.push(standing(x, y - 0.9, WHITE));
       for (const ox of [-0.8, 0.8]) if (chance(0.6)) p.push(standing(x + ox, y + 0.95, shirt()));

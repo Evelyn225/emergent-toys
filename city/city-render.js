@@ -7,6 +7,18 @@ const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
 const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448 };
 const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
+// a sign's letters: big enough on screen (judged once for the whole sign, from tFar, the depth of its far end) and each
+// letter is drawn large in blocks; smaller, one character per letter in the middle of its span. lq: how far across in
+// letters (letter k is [k, k+1)); hz: 0 at the top of the lettering's band to 1 at the bottom. null: not on a letter
+const signIsBig = (letterW, bandH, tFar) => letterW * projX / tFar >= 2.2 && bandH * projY / tFar >= 2.8;
+function signGlyph(word, lq, hz, t, letterW, bandH, tFar) {
+  const k = Math.floor(lq);
+  if (k < 0 || k >= word.length || hz < 0 || hz >= 1) return null;
+  if (signIsBig(letterW, bandH, tFar)) return GLYPH5[word[k]] !== undefined && glyphOn(word[k], Math.floor(fract(lq) * 4), Math.floor(hz * 5)) ? '#' : ' ';
+  const cellU = t / projX / letterW, cellV = t / projY / bandH;
+  return Math.abs(hz - 0.5) < Math.max(cellV, 1e-4) / 2 && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
+}
+const farDepth = (vx, vy, half) => Math.max(0.05, dx * vx + dy * vy + half); // (a box sign's far end, near enough)
 // is a shop sign close enough for its letters to be drawn big? Decided for the whole sign at once (from its far end,
 // where the letters are smallest), so it never shows some letters big and the rest small. p = this letter's index.
 function signBig(u, uStep, d, side, mx, my, wc, p, len) {

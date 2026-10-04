@@ -849,8 +849,9 @@ test('talking to people indoors: walk up to someone in a cafe or a station and t
     const cafeLine = msgText;
     px = k[0]; py = k[1] + 1; a = -Math.PI / 2; const counter = promptText();
     leaveRoom(); enterRoom('station', { st: 0, word: stations[0].name, t0: T - 12, ret: [px, py, a] }, [11, 4.8, 0]);
-    const p2 = room.props.find(o => arts.includes(o.art)); px = p2.x + 0.8; py = p2.y; a = Math.PI;
-    const sprompt = promptText(); interact();
+    let sprompt = ''; // (someone the train isn't standing beside: boarding it rightly comes first)
+    for (const p2 of room.props.filter(o => arts.includes(o.art))) { px = p2.x + 0.8; py = p2.y; a = Math.PI; sprompt = promptText(); if (sprompt === 'E: talk') break; }
+    interact();
     return { prompt, cafeLine, counter, sprompt, stationLine: msgText };
   });
   assert.strictEqual(r.prompt, 'E: talk');

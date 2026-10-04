@@ -91,6 +91,17 @@ for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k += 2) { // a ben
   if (gardenLakeEdge(gx, gy) > -0.2 || inPen(gx, gy, 0.2) || gardenBuilt(gx, gy, 0.2)) continue;
   const [x, y] = gx2w(gx, gy); benches.push({ x, y, fx: -nx, fy: -ny });
 }
+// what kind each tree is: leafy round ones, pines, birches, poplars, and blossom (mostly in Chinatown, the Shotengai and
+// the Gardens). Weights per kind for where it stands
+const TREE_MIX = { street: { oak: 6, birch: 3, blossom: 1 }, waterfront: { pine: 1, poplar: 1 }, park: { oak: 9, pine: 4, birch: 4, poplar: 2, blossom: 1 },
+  eastern: { oak: 3, blossom: 4, pine: 2, birch: 1 }, gardens: { oak: 4, pine: 3, birch: 3, poplar: 2, blossom: 3 } };
+for (const t of trees) {
+  const bx = Math.floor(t.x / 8), by = Math.floor(t.y / 8), d = districtOf(bx, by), r = hash(Math.floor(t.x * 13), Math.floor(t.y * 13), 811);
+  const mix = inGardens(t.x, t.y) ? TREE_MIX.gardens : blockKind(bx, by) === 'waterfront' ? TREE_MIX.waterfront : t.s === 0.75 ? TREE_MIX.street : d === 'chinatown' || d === 'shotengai' ? TREE_MIX.eastern : TREE_MIX.park;
+  const tot = Object.values(mix).reduce((a, b) => a + b, 0);
+  let w = r * tot; t.kind = Object.keys(mix).find(k => (w -= mix[k]) < 0) || 'oak';
+  t.seed = hash(Math.floor(t.x * 7), Math.floor(t.y * 7), 812);
+}
 const treesB = bucketed(trees), benchesB = bucketed(benches);
 
 // boats out on the sea, each on a route: a racetrack loop (out along one lane, a U-turn, back along the lane beside

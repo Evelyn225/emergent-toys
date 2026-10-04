@@ -906,7 +906,7 @@ const betStep = (bet, dir) => CASINO_BETS[clamp(CASINO_BETS.indexOf(bet) + dir, 
 // blackjack: get closer to 21 than the dealer without going over. Picture cards are 10, an ace 1 or 11. The dealer
 // draws to 17. A win pays 2 to 1 (your stake and as much again), a blackjack (21 in two cards) 3 to 2, a tie gives
 // your stake back. Double: twice the stake, one more card, then you stand.
-const CARD_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], CARD_SUITS = 'SHDC';
+const CARD_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], CARD_SUITS = '♠♥♦♣'; // spades, hearts, diamonds, clubs
 const cardVal = c => Math.min(10, c % 13 + 1);
 function bjTotal(hand) { let t = 0, aces = 0; for (const c of hand) { const v = cardVal(c); t += v; if (v === 1) aces++; } if (aces && t + 10 <= 21) t += 10; return t; }
 function cardText(text, x, y, c, down) { // a card, three cells by four rows: rank and suit, or the back
@@ -1041,6 +1041,15 @@ GAMES.roulette = (rnd = Math.random) => {
 // Lucky: a losing pull sometimes spins again
 const SLOT_SYMS = [['7', 1, 120, RED], ['BAR', 2, 40, WHITE], ['$', 3, 20, GREEN], ['BELL', 4, 12, YEL], ['CHERRY', 6, 6, MAG], ['PLUM', 7, 4, BLUE]];
 const SLOT_GLYPH = { '7': '7', BAR: '=', $: '$', BELL: 'A', CHERRY: 'o', PLUM: '@' };
+// each symbol as a little picture, 5 x 5 blocks: # in the symbol's colour, g a green stem or leaf, . nothing
+const SLOT_PIX = {
+  '7': ['#####', '...#.', '..#..', '.#...', '.#...'],
+  BAR: ['#####', '.....', '#####', '.....', '#####'],
+  $: ['.###.', '#.#..', '.###.', '..#.#', '.###.'],
+  BELL: ['..#..', '.###.', '.###.', '#####', '..#..'],
+  CHERRY: ['...g.', '..g.g', '.g..g', '##.##', '##.##'],
+  PLUM: ['..g..', '.###.', '#####', '#####', '.###.'],
+};
 const SLOT_WEIGHT = SLOT_SYMS.reduce((s, x) => s + x[1], 0);
 function slotPull(rnd) { const r = []; for (let k = 0; k < 3; k++) { let w = rnd() * SLOT_WEIGHT, i = 0; while ((w -= SLOT_SYMS[i][1]) > 0) i++; r.push(i); } return r; }
 function slotPays(r) { // times the stake
@@ -1074,21 +1083,23 @@ GAMES.slots = (rnd = Math.random) => {
     }
     return ev;
   };
-  g.draw = (put, text) => {
-    for (let x = 2; x < 23; x++) { put(x, 1, '=', C(YEL, 12)); put(x, 9, '=', C(YEL, 12)); }
-    for (let k = 0; k < 3; k++) { // three reels, the one above and below showing too
-      const x = 4 + k * 6;
-      for (let d = -1; d <= 1; d++) {
-        const s = SLOT_SYMS[((state === 'spin' ? shown[k] : reels[k]) + d + SLOT_SYMS.length) % SLOT_SYMS.length], y = 5 + d * 2;
-        for (let dx = 0; dx < 4; dx++) put(x + dx, y, ' ', 0, C(WHITE, d ? 3 : 14));
-        const label = s[0] === 'CHERRY' ? 'CHRY' : s[0].length < 3 ? ` ${s[0]}${s[0]}${s[0]}` : s[0]; // (the symbol, as big as the window lets it be)
-        text(x, y, label.padStart(Math.ceil((8 + label.length) / 2)).padEnd(8), C(s[3], d ? 7 : 15));
-      }
+  g.draw = (put, text, chars) => {
+    for (let x = 1; x < W - 1; x++) { put(x, 1, '=', C(YEL, 12)); put(x, 9, '=', C(YEL, 12)); }
+    const sym = (k, d) => SLOT_SYMS[((state === 'spin' ? shown[k] : reels[k]) + d + SLOT_SYMS.length) % SLOT_SYMS.length];
+    const pix = (s, row, col, dim) => { const c = SLOT_PIX[s[0]][row][col]; return c === '#' ? C(s[3], dim ? 5 : 13) : c === 'g' ? C(GREEN, dim ? 4 : 11) : null; };
+    for (let k = 0; k < 3; k++) { // three reels: the symbol in the window as a picture, a glimpse of the ones above and below
+      const x = 3 + k * 7, s = sym(k, 0), up = sym(k, -1), dn = sym(k, 1);
+      for (let y = 2; y <= 8; y++) for (let dx = 0; dx < 5; dx++) put(x + dx, y, ' ', 0, C(WHITE, y === 2 || y === 8 ? 4 : 13));
+      for (let row = 0; row < 5; row++) for (let col = 0; col < 5; col++) { const c = pix(s, row, col, false); if (c !== null) put(x + col, 3 + row, ' ', 0, c); }
+      for (let col = 0; col < 5; col++) { const a = pix(up, 4, col, true), b = pix(dn, 0, col, true); if (a !== null) put(x + col, 2, ' ', 0, a); if (b !== null) put(x + col, 8, ' ', 0, b); }
     }
-    text(1, 5, '>', C(RED, 15)); text(46, 5, '<', C(RED, 15));
+    put(1, 5, '>', C(RED, 15)); put(W - 2, 5, '<', C(RED, 15));
     text(0, 10, msg, C(WHITE, 15));
-    text(0, 11, '777 x120  BAR x40  $$$ x20  BELL x12', C(GRAY, 9));
-    text(0, 12, 'CHERRIES x6  PLUMS x4  2 cherries x2', C(GRAY, 9));
+    const at = chars || ((c, y, str, col) => text(c / 2, y, str, col)); // the pay table, in the symbols' own colours
+    [[[0, 3, 'x120'], [1, 3, 'x40'], [2, 3, 'x20'], [3, 3, 'x12']], [[4, 3, 'x6'], [5, 3, 'x4'], [4, 2, 'x2']]].forEach((row, r) => {
+      let c = 0;
+      for (const [n, k, x] of row) { const s = SLOT_SYMS[n]; at(c, 11 + r, SLOT_GLYPH[s[0]].repeat(k), C(s[3], 15)); at(c + k + 1, 11 + r, x, C(GRAY, 10)); c += k + x.length + 4; }
+    });
     text(0, 13, `BET ${fmt$(g.bet)}   CASH ${fmt$(money)}`, C(YEL, 14));
     if (luck() > 0) text(0, 14, 'Your jade feels warm.', C(GREEN, 9));
   };

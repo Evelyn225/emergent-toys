@@ -731,6 +731,17 @@ for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k += 2) { // a ben
   if (gardenLakeEdge(gx, gy) > -0.2 || inPen(gx, gy, 0.2) || gardenBuilt(gx, gy, 0.2)) continue;
   const [x, y] = gx2w(gx, gy); benches.push({ x, y, fx: -nx, fy: -ny });
 }
+// what kind each tree is: leafy round ones, pines, birches, poplars, and blossom (mostly in Chinatown, the Shotengai and
+// the Gardens). Weights per kind for where it stands
+const TREE_MIX = { street: { oak: 6, birch: 3, blossom: 1 }, waterfront: { pine: 1, poplar: 1 }, park: { oak: 9, pine: 4, birch: 4, poplar: 2, blossom: 1 },
+  eastern: { oak: 3, blossom: 4, pine: 2, birch: 1 }, gardens: { oak: 4, pine: 3, birch: 3, poplar: 2, blossom: 3 } };
+for (const t of trees) {
+  const bx = Math.floor(t.x / 8), by = Math.floor(t.y / 8), d = districtOf(bx, by), r = hash(Math.floor(t.x * 13), Math.floor(t.y * 13), 811);
+  const mix = inGardens(t.x, t.y) ? TREE_MIX.gardens : blockKind(bx, by) === 'waterfront' ? TREE_MIX.waterfront : t.s === 0.75 ? TREE_MIX.street : d === 'chinatown' || d === 'shotengai' ? TREE_MIX.eastern : TREE_MIX.park;
+  const tot = Object.values(mix).reduce((a, b) => a + b, 0);
+  let w = r * tot; t.kind = Object.keys(mix).find(k => (w -= mix[k]) < 0) || 'oak';
+  t.seed = hash(Math.floor(t.x * 7), Math.floor(t.y * 7), 812);
+}
 const treesB = bucketed(trees), benchesB = bucketed(benches);
 
 // boats out on the sea, each on a route: a racetrack loop (out along one lane, a U-turn, back along the lane beside
@@ -1364,11 +1375,21 @@ for (let n = 0; n < 1100; n++) spawnPerson();
 // a dog walker's dog is out with them while they're walking it, in daylight: on its lead a step behind and to one side,
 // stopping to sniff now and then
 const DOG_COLS = [BRICK, WARM, GRAY, WHITE, ORANGE, YEL];
-const walkingDog = p => p.role === 'dogwalker' && !p.hidden && p.act === 'wander' && tod >= 7 && tod < 20;
+// (with them whenever they're out in the daytime, whatever they're up to: it used to vanish whenever they stopped
+// wandering. And it trots after them: where it should be eases along, so it doesn't jump sides at every corner)
+const walkingDog = p => p.role === 'dogwalker' && !p.hidden && tod >= 7 && tod < 20;
 function dogOf(p) {
   const mx = p.last[0], my = p.last[1], side = (p.ph * 7 | 0) % 2 ? 1 : -1, sniff = Math.sin(T * 0.7 + p.ph) > 0.7;
   const back = 0.09 + (sniff ? 0.04 : 0) + Math.sin(T * 1.9 + p.ph) * 0.01, off = 0.035 * side + Math.sin(T * 1.3 + p.ph) * 0.012;
-  return { x: mod(p.x - mx * back - my * off, N), y: mod(p.y - my * back + mx * off, N), mx, my, sniff, col: DOG_COLS[(p.ph * 13 | 0) % DOG_COLS.length], small: (p.ph * 5 | 0) % 3 === 0 };
+  const tx = mod(p.x - mx * back - my * off, N), ty = mod(p.y - my * back + mx * off, N);
+  let d = p.dog;
+  if (!d || Math.hypot(rel(tx - d.x), rel(ty - d.y)) > 0.6) d = p.dog = { x: tx, y: ty, mx, my, t: T }; // (first sight of it, or the walker jumped: right there)
+  const k = 1 - Math.exp(-Math.max(0, Math.min(0.25, T - d.t)) * 5); d.t = T;
+  const ox = d.x, oy = d.y;
+  d.x = mod(d.x + rel(tx - d.x) * k, N); d.y = mod(d.y + rel(ty - d.y) * k, N);
+  const vx = rel(d.x - ox), vy = rel(d.y - oy), v = Math.hypot(vx, vy);
+  if (v > 1e-4) { d.mx += (vx / v - d.mx) * Math.min(1, k * 2); d.my += (vy / v - d.my) * Math.min(1, k * 2); } // faces the way it's going
+  return { x: d.x, y: d.y, mx: d.mx, my: d.my, sniff, col: DOG_COLS[(p.ph * 13 | 0) % DOG_COLS.length], small: (p.ph * 5 | 0) % 3 === 0 };
 }
 const nearWalkedDog = () => mode === 'walk' && people.find(p => walkingDog(p) && (() => { const d = dogOf(p); return Math.hypot(rel(d.x - px), rel(d.y - py)) < 0.15; })());
 
@@ -3034,7 +3055,7 @@ const betStep = (bet, dir) => CASINO_BETS[clamp(CASINO_BETS.indexOf(bet) + dir, 
 // blackjack: get closer to 21 than the dealer without going over. Picture cards are 10, an ace 1 or 11. The dealer
 // draws to 17. A win pays 2 to 1 (your stake and as much again), a blackjack (21 in two cards) 3 to 2, a tie gives
 // your stake back. Double: twice the stake, one more card, then you stand.
-const CARD_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], CARD_SUITS = 'SHDC';
+const CARD_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], CARD_SUITS = '♠♥♦♣'; // spades, hearts, diamonds, clubs
 const cardVal = c => Math.min(10, c % 13 + 1);
 function bjTotal(hand) { let t = 0, aces = 0; for (const c of hand) { const v = cardVal(c); t += v; if (v === 1) aces++; } if (aces && t + 10 <= 21) t += 10; return t; }
 function cardText(text, x, y, c, down) { // a card, three cells by four rows: rank and suit, or the back
@@ -3169,6 +3190,15 @@ GAMES.roulette = (rnd = Math.random) => {
 // Lucky: a losing pull sometimes spins again
 const SLOT_SYMS = [['7', 1, 120, RED], ['BAR', 2, 40, WHITE], ['$', 3, 20, GREEN], ['BELL', 4, 12, YEL], ['CHERRY', 6, 6, MAG], ['PLUM', 7, 4, BLUE]];
 const SLOT_GLYPH = { '7': '7', BAR: '=', $: '$', BELL: 'A', CHERRY: 'o', PLUM: '@' };
+// each symbol as a little picture, 5 x 5 blocks: # in the symbol's colour, g a green stem or leaf, . nothing
+const SLOT_PIX = {
+  '7': ['#####', '...#.', '..#..', '.#...', '.#...'],
+  BAR: ['#####', '.....', '#####', '.....', '#####'],
+  $: ['.###.', '#.#..', '.###.', '..#.#', '.###.'],
+  BELL: ['..#..', '.###.', '.###.', '#####', '..#..'],
+  CHERRY: ['...g.', '..g.g', '.g..g', '##.##', '##.##'],
+  PLUM: ['..g..', '.###.', '#####', '#####', '.###.'],
+};
 const SLOT_WEIGHT = SLOT_SYMS.reduce((s, x) => s + x[1], 0);
 function slotPull(rnd) { const r = []; for (let k = 0; k < 3; k++) { let w = rnd() * SLOT_WEIGHT, i = 0; while ((w -= SLOT_SYMS[i][1]) > 0) i++; r.push(i); } return r; }
 function slotPays(r) { // times the stake
@@ -3202,21 +3232,23 @@ GAMES.slots = (rnd = Math.random) => {
     }
     return ev;
   };
-  g.draw = (put, text) => {
-    for (let x = 2; x < 23; x++) { put(x, 1, '=', C(YEL, 12)); put(x, 9, '=', C(YEL, 12)); }
-    for (let k = 0; k < 3; k++) { // three reels, the one above and below showing too
-      const x = 4 + k * 6;
-      for (let d = -1; d <= 1; d++) {
-        const s = SLOT_SYMS[((state === 'spin' ? shown[k] : reels[k]) + d + SLOT_SYMS.length) % SLOT_SYMS.length], y = 5 + d * 2;
-        for (let dx = 0; dx < 4; dx++) put(x + dx, y, ' ', 0, C(WHITE, d ? 3 : 14));
-        const label = s[0] === 'CHERRY' ? 'CHRY' : s[0].length < 3 ? ` ${s[0]}${s[0]}${s[0]}` : s[0]; // (the symbol, as big as the window lets it be)
-        text(x, y, label.padStart(Math.ceil((8 + label.length) / 2)).padEnd(8), C(s[3], d ? 7 : 15));
-      }
+  g.draw = (put, text, chars) => {
+    for (let x = 1; x < W - 1; x++) { put(x, 1, '=', C(YEL, 12)); put(x, 9, '=', C(YEL, 12)); }
+    const sym = (k, d) => SLOT_SYMS[((state === 'spin' ? shown[k] : reels[k]) + d + SLOT_SYMS.length) % SLOT_SYMS.length];
+    const pix = (s, row, col, dim) => { const c = SLOT_PIX[s[0]][row][col]; return c === '#' ? C(s[3], dim ? 5 : 13) : c === 'g' ? C(GREEN, dim ? 4 : 11) : null; };
+    for (let k = 0; k < 3; k++) { // three reels: the symbol in the window as a picture, a glimpse of the ones above and below
+      const x = 3 + k * 7, s = sym(k, 0), up = sym(k, -1), dn = sym(k, 1);
+      for (let y = 2; y <= 8; y++) for (let dx = 0; dx < 5; dx++) put(x + dx, y, ' ', 0, C(WHITE, y === 2 || y === 8 ? 4 : 13));
+      for (let row = 0; row < 5; row++) for (let col = 0; col < 5; col++) { const c = pix(s, row, col, false); if (c !== null) put(x + col, 3 + row, ' ', 0, c); }
+      for (let col = 0; col < 5; col++) { const a = pix(up, 4, col, true), b = pix(dn, 0, col, true); if (a !== null) put(x + col, 2, ' ', 0, a); if (b !== null) put(x + col, 8, ' ', 0, b); }
     }
-    text(1, 5, '>', C(RED, 15)); text(46, 5, '<', C(RED, 15));
+    put(1, 5, '>', C(RED, 15)); put(W - 2, 5, '<', C(RED, 15));
     text(0, 10, msg, C(WHITE, 15));
-    text(0, 11, '777 x120  BAR x40  $$$ x20  BELL x12', C(GRAY, 9));
-    text(0, 12, 'CHERRIES x6  PLUMS x4  2 cherries x2', C(GRAY, 9));
+    const at = chars || ((c, y, str, col) => text(c / 2, y, str, col)); // the pay table, in the symbols' own colours
+    [[[0, 3, 'x120'], [1, 3, 'x40'], [2, 3, 'x20'], [3, 3, 'x12']], [[4, 3, 'x6'], [5, 3, 'x4'], [4, 2, 'x2']]].forEach((row, r) => {
+      let c = 0;
+      for (const [n, k, x] of row) { const s = SLOT_SYMS[n]; at(c, 11 + r, SLOT_GLYPH[s[0]].repeat(k), C(s[3], 15)); at(c + k + 1, 11 + r, x, C(GRAY, 10)); c += k + x.length + 4; }
+    });
     text(0, 13, `BET ${fmt$(g.bet)}   CASH ${fmt$(money)}`, C(YEL, 14));
     if (luck() > 0) text(0, 14, 'Your jade feels warm.', C(GREEN, 9));
   };
@@ -3781,8 +3813,24 @@ function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE)
   if (Math.abs(z - z0) > bandH / 2) return false;
   const q = (u - u0) / cwid + text.length / 2, p = Math.floor(q);
   if (p < 0 || p >= text.length) return false;
+  if (wallTextBig(u, uStep, d, u0, cwid, bandH, text.length)) { // close enough: every letter drawn large in blocks
+    BG[i] = bgc; const ch = text[p];
+    return set(i, GLYPH5[ch] !== undefined && glyphOn(ch, Math.floor(fract(q) * 4), Math.floor((z0 + bandH / 2 - z) / bandH * 5)) ? '#' : ' ', col), true;
+  }
   const centered = (uStep >= cwid || oneCell((fract(q) - 0.5) * cwid, uStep)) && oneCell(z - z0, d / projY);
   set(i, centered ? text[p] : ' ', col); BG[i] = bgc;
+  return true;
+}
+
+// is a wall text big enough on screen for block letters? Judged from its smallest (furthest) letter, so the whole text
+// switches together. From the ray that hit this wall (WH): how a step along the wall grows with distance along it
+function wallTextBig(u, uStep, d, u0, cwid, bandH, len) {
+  if (cwid / uStep < 1.5) return false;
+  const D = WH.dn, s0 = WH.sl * D, sgn = Math.sign(u * WH.wc) || 1, r0 = D * D + s0 * s0;
+  for (const e of [-1, 1]) {
+    const s = s0 + sgn * (u0 + e * (len / 2 - 0.5) * cwid - u), r = (D * D + s * s) / r0;
+    if (cwid / (uStep * r) < 2.2 || bandH * projY / (d * Math.sqrt(r)) < 2.8) return false;
+  }
   return true;
 }
 
@@ -3903,6 +3951,18 @@ const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
 const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448 };
 const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
+// a sign's letters: big enough on screen (judged once for the whole sign, from tFar, the depth of its far end) and each
+// letter is drawn large in blocks; smaller, one character per letter in the middle of its span. lq: how far across in
+// letters (letter k is [k, k+1)); hz: 0 at the top of the lettering's band to 1 at the bottom. null: not on a letter
+const signIsBig = (letterW, bandH, tFar) => letterW * projX / tFar >= 2.2 && bandH * projY / tFar >= 2.8;
+function signGlyph(word, lq, hz, t, letterW, bandH, tFar) {
+  const k = Math.floor(lq);
+  if (k < 0 || k >= word.length || hz < 0 || hz >= 1) return null;
+  if (signIsBig(letterW, bandH, tFar)) return GLYPH5[word[k]] !== undefined && glyphOn(word[k], Math.floor(fract(lq) * 4), Math.floor(hz * 5)) ? '#' : ' ';
+  const cellU = t / projX / letterW, cellV = t / projY / bandH;
+  return Math.abs(hz - 0.5) < Math.max(cellV, 1e-4) / 2 && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
+}
+const farDepth = (vx, vy, half) => Math.max(0.05, dx * vx + dy * vy + half); // (a box sign's far end, near enough)
 // is a shop sign close enough for its letters to be drawn big? Decided for the whole sign at once (from its far end,
 // where the letters are smallest), so it never shows some letters big and the rest small. p = this letter's index.
 function signBig(u, uStep, d, side, mx, my, wc, p, len) {
@@ -4762,9 +4822,44 @@ let siren = null; // the emergency vehicle in sight, if any: floorCell washes it
 // the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
 function strobe() { const p = Math.floor(fract(T * 1.4) * 10); return p === 0 || p === 2 ? RED : p === 5 || p === 7 ? BLUE : -1; }
 
+// ---- trees: a solid canopy you can't see the sky through (shaded lighter on top, ragged at the edges), on a trunk.
+// Sizes for a tree of s = 1, in cells: [half width, height]
+const TREE_SIZE = { oak: [0.27, 0.62], blossom: [0.27, 0.6], pine: [0.21, 0.8], birch: [0.16, 0.68], poplar: [0.12, 0.82] };
+const TREE_BLOBS = { oak: [[0, 0.44, 0.17], [-0.13, 0.33, 0.13], [0.13, 0.34, 0.13], [0, 0.29, 0.13]], blossom: [[0, 0.42, 0.16], [-0.13, 0.33, 0.13], [0.13, 0.32, 0.12], [0, 0.27, 0.12]],
+  birch: [[0, 0.47, 0.13], [-0.04, 0.36, 0.1], [0.04, 0.56, 0.08]], poplar: [[0, 0.5, 0.11], [0, 0.34, 0.1], [0, 0.66, 0.08]] };
+function drawTree(t, vx, vy) {
+  const [hw, h] = TREE_SIZE[t.kind], s = t.s;
+  drawShape(vx, vy, 0, hw * s, h * s, (i, u, z, du, dz, L) => treeCell(i, u / s, z / s, L, t));
+}
+function treeCell(i, u, z, L, t) {
+  const k = t.kind, au = Math.abs(u), tint = 0.85 + t.seed * 0.3;
+  let e = -1, cz = 0.4; // how far inside the canopy (0 at its edge, 1 at the middle), and the middle's height
+  if (k === 'pine') { // tiers of boughs, each a triangle, narrowing up the tree
+    for (let j = 0; j < 4; j++) {
+      const z0 = 0.12 + j * 0.15, top = z0 + 0.24, w = 0.21 - j * 0.04;
+      if (z > z0 && z < top) { const half = (top - z) / 0.24 * w; if (au < half) e = Math.max(e, Math.min(1, (half - au) / 0.06, (z - z0) / 0.04)); }
+    }
+    cz = 0.45;
+  } else for (const [bu, bz, r] of TREE_BLOBS[k]) { const d = Math.hypot(u - bu, (z - bz) * 1.1) / r; if (d < 1) { e = Math.max(e, 1 - d); cz = bz; } }
+  const trunkTop = k === 'pine' ? 0.2 : k === 'poplar' ? 0.25 : 0.32, trunkW = k === 'oak' || k === 'blossom' ? 0.025 : 0.018;
+  if (e < 0) {
+    if (z < trunkTop && au < trunkW + (z < 0.03 ? 0.012 : 0)) { // the trunk (a birch's white, with black marks)
+      if (k === 'birch') { BG[i] = C(WHITE, 2 + L * 0.35); return set(i, hash(Math.floor(z * 60), 1, 813) > 0.75 ? '-' : ' ', C(GRAY, 3)), true; }
+      BG[i] = C(BRICK, 0.8 + L * 0.18); return set(i, au < trunkW * 0.4 ? '|' : ' ', C(BRICK, L * 0.6)), true;
+    }
+    return false;
+  }
+  const n = hash(Math.floor(u * 45 + t.seed * 99), Math.floor(z * 45), 814);
+  if (e < 0.14 && n > 0.55) return false; // ragged edges: a little sky between the outermost leaves
+  const lit = clamp(0.75 + (z - cz) * 1.6 - u * 0.6, 0.45, 1.25) * tint; // lighter up top and toward the sun
+  const base = k === 'blossom' ? MAG : GREEN, bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
+  BG[i] = C(base, Math.max(0.6, (0.9 + L * 0.22) * lit * bg));
+  const ch = k === 'pine' ? (n > 0.6 ? '^' : n > 0.3 ? 'A' : ' ') : n > 0.72 ? '@' : n > 0.45 ? '%' : n > 0.25 ? '&' : ' ';
+  return set(i, ch, k === 'blossom' ? C(n > 0.8 ? WHITE : MAG, L * 1.1 * lit) : C(k === 'birch' && n > 0.8 ? YEL : GREEN, L * (0.8 + n * 0.5) * lit * bg)), true;
+}
+
 function citySprites() {
-  forNear(treesB, t => drawArt(...R(t.x, t.y), 0, 0.45 * t.s, 0.6 * t.s, ART.tree,
-    (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : c === '@' ? L * 0.8 : L)));
+  forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
   clubSprites();
@@ -5048,9 +5143,8 @@ const SOLID_SHADE = {
     const q = (HIT.u * o.fs / o.hl + 1) / 2;
     if (w > 0.25) { // the sign
       BG[i] = C(o.awning, 3 + glow * 6);
-      const n = o.word.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * o.hl) * n;
-      const on = Math.abs(w - 0.295) < t / projY / 2 && k >= 0 && k < o.word.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2);
-      if (on) return set(i, o.word[k], C(WHITE, 15)), true;
+      const n = o.word.length + 2, ch = signGlyph(o.word, q * n - 1, (0.33 - w) / 0.07, t, 2 * o.hl / n, 0.07, farDepth(rel(o.x - px), rel(o.y - py), o.hl));
+      if (ch !== null && (ch !== ' ' || Math.abs(w - 0.295) < 0.035)) return set(i, ch, C(WHITE, 15)), true;
       return set(i, glow > 0.3 && Math.abs(w - 0.295) > 0.035 && fract(q * 14 - T * 2) < 0.3 ? '*' : ' ', C(YEL, 15)), true; // bulbs chasing round it
     }
     if (w > 0.11) { // the opening: what's on offer, in the dark behind the counter
@@ -5191,9 +5285,8 @@ function drawFootbridge() {
   drawBox(boxAt(gx, gy, 1, 0, hw + 0.012, 0.008, 0.3, 0.355), (i, t, L) => { // the sign, readable from both ends
     BG[i] = C(GRAY, 2 + night * 2);
     if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(GRAY, L)), true;
-    const n = FB_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.012) + 1) / 2 * n - 1, k = Math.floor(q), cellU = t / projX / (2 * hw) * n;
-    const on = k >= 0 && k < FB_SIGN.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) && Math.abs(HIT.w - 0.3275) <= t / projY / 2 + 1e-4;
-    return set(i, on ? FB_SIGN[k] : ' ', C(WHITE, Math.max(L * 1.2, night * 14))), true;
+    const n = FB_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.012) + 1) / 2 * n - 1;
+    return set(i, signGlyph(FB_SIGN, q, (0.35 - HIT.w) / 0.045, t, 2 * (hw + 0.012) / n, 0.045, farDepth(gx, gy, hw)) || ' ', C(WHITE, Math.max(L * 1.2, night * 14))), true;
   });
 }
 
@@ -5253,9 +5346,8 @@ function drawStationEntrance(s, vx, vy) {
   drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.006, 0.09, 0.125), (i, t, L) => {
     BG[i] = C(GREEN, 4 + night * 3);
     if (HIT.face !== 1 && HIT.face !== 2) return set(i, ' ', 0), true;
-    const q = (HIT.u / hw * (HIT.face === 1 ? 1 : -1) + 1) / 2 * (name.length + 2) - 1, k = Math.floor(q);
-    const cellU = t / projX / (2 * hw) * (name.length + 2); // how much of one letter a screen cell covers
-    return set(i, k >= 0 && k < name.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) ? name[k] : ' ', C(WHITE, 15)), true;
+    const n = name.length + 2, q = (HIT.u / hw * (HIT.face === 1 ? 1 : -1) + 1) / 2 * n - 1;
+    return set(i, signGlyph(name, q, (0.125 - HIT.w) / 0.035, t, 2 * hw / n, 0.035, farDepth(vx, vy, hl + hw)) || ' ', C(WHITE, 15)), true;
   });
   // and a tall lit blade on a post at two corners, SUBWAY down both faces and a green lamp on top: seen from down the
   // block either way
@@ -5268,7 +5360,12 @@ function subwayBlade(tx, ty, iron) {
     BG[i] = C(GREEN, 5 + night * 4);
     if (HIT.face !== 3 && HIT.face !== 4) return set(i, '|', C(GREEN, lit)), true; // its edges (3 / 4: the broad faces)
     // one letter per cell: in the middle row of its span and the middle column across the blade
-    const q = (Z1 - HIT.w) / (Z1 - Z0) * word.length, k = Math.floor(q), cellV = t / projY / ((Z1 - Z0) / word.length), cellU = t / projX / 0.044;
+    const q = (Z1 - HIT.w) / (Z1 - Z0) * word.length, k = Math.floor(q), lh = (Z1 - Z0) / word.length;
+    if (k >= 0 && k < word.length && signIsBig(0.044 * 0.8, lh * 0.8, farDepth(tx, ty, 0.03))) { // close: each letter in blocks, stacked down the blade
+      const gx = Math.floor((HIT.u / 0.044 + 0.5 - 0.1) / 0.8 * 3), gy = Math.floor((fract(q) - 0.1) / 0.8 * 5);
+      return set(i, glyphOn(word[k], gx, gy) ? '#' : ' ', C(WHITE, 15)), true;
+    }
+    const cellV = t / projY / lh, cellU = t / projX / 0.044;
     const mid = (cellV > 0.6 || Math.abs(fract(q) - 0.5) < cellV / 2) && (cellU > 0.6 || Math.abs(HIT.u) / 0.044 < cellU / 2);
     return set(i, k >= 0 && k < word.length && mid ? word[k] : ' ', C(WHITE, 15)), true;
   });
@@ -5503,9 +5600,9 @@ function fairSprites() {
     const glow = Math.max(night, overcast * 0.6);
     BG[i] = C(RED, 2 + glow * 4);
     if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(YEL, L)), true;
-    const n = FAIR_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.03) + 1) / 2 * n - 1, k = Math.floor(q), cellU = t / projX / (2 * hw) * n;
-    const on = k >= 0 && k < FAIR_SIGN.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) && Math.abs(HIT.w - 0.47) <= t / projY / 2 + 1e-4;
-    if (on) return set(i, FAIR_SIGN[k], C(YEL, 15)), true;
+    const n = FAIR_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.03) + 1) / 2 * n - 1;
+    const ch = signGlyph(FAIR_SIGN, q, (0.51 - HIT.w) / 0.08, t, 2 * (hw + 0.03) / n, 0.08, farDepth(gx, gy, hw));
+    if (ch !== null && (ch !== ' ' || Math.abs(HIT.w - 0.47) < 0.03)) return set(i, ch, C(YEL, 15)), true;
     return set(i, glow > 0.3 && Math.abs(HIT.w - 0.47) > 0.03 && fract(q * 0.5 - T * 2) < 0.25 ? '*' : ' ', C(WHITE, 15)), true; // (bulbs above and below the letters)
   });
 }
@@ -7204,9 +7301,8 @@ function gardenSprites() {
     if (ggy === 0) drawBox(boxAt(vx, vy, 1, 0, 0.66, 0.01, 0.24, 0.3), (i, t, L) => { // BOTANICAL GARDENS in iron letters over the north gate
       BG[i] = C(GREEN, 1 + L * 0.1);
       if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(GRAY, L)), true;
-      const word = 'BOTANICAL GARDENS', n = word.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / 0.66 + 1) / 2 * n - 1, kk = Math.floor(q), cellU = t / projX / 1.32 * n;
-      const on = kk >= 0 && kk < word.length && (cellU > 0.6 || Math.abs(fract(q) - 0.5) < cellU / 2) && Math.abs(HIT.w - 0.27) <= t / projY / 2 + 1e-4;
-      return set(i, on ? word[kk] : ' ', C(WHITE, Math.max(L * 1.2, night * 12))), true;
+      const word = 'BOTANICAL GARDENS', n = word.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / 0.66 + 1) / 2 * n - 1;
+      return set(i, signGlyph(word, q, (0.295 - HIT.w) / 0.05, t, 1.32 / n, 0.05, farDepth(vx, vy, 0.66)) || ' ', C(WHITE, Math.max(L * 1.2, night * 12))), true;
     });
   }
   // picnickers on the grass: a checked blanket, two people, a basket
@@ -7544,6 +7640,9 @@ function casinoCeil(i, wx, wy) { // chandeliers
   if (d < 0.32) { BG[i] = C(YEL, 3 + (d < 0.15 ? 4 : 0)); return set(i, hash(Math.floor(wx * 9), Math.floor(wy * 9), Math.floor(T * 4)) > 0.7 ? '*' : 'o', C(WHITE, 15)); }
   return set(i, d < 0.7 && hash(Math.floor(wx * 6), Math.floor(wy * 6), 1403) > 0.7 ? '.' : ' ', C(YEL, 6));
 }
+// cards lying on a blackjack table (u along it, v across: + toward the players): [u, v, pip, colour]
+const BJ_CARDS = [];
+for (const [u, v] of [[-0.85, 0.36], [0, 0.4], [0.85, 0.36], [-0.1, -0.3]]) for (const k of [0, 1]) BJ_CARDS.push([u + k * 0.09, v - k * 0.02, '♠♥♦♣'[(BJ_CARDS.length * 7) & 3], (BJ_CARDS.length * 7) & 3 && ((BJ_CARDS.length * 7) & 3) < 3 ? RED : GRAY]);
 const SLOT_ART = pad([' .---. ', ' |7=7| ', ' |---|o', ' |___|/', ' [###] ', ' [###] ']);
 const felt = (shade) => (i, t, L) => { // a gaming table: green felt on top, a padded rail round it, wood below
   const f = HIT.face;
@@ -7557,7 +7656,8 @@ ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6,
     for (const x of [8.4, 9.6, 10.8, 12, 13.2]) p.push(BX(x, 2.5, 0.03, 0.03, 1.1, 2.4, solid(YEL))); // the cage's bars
     for (const [x, y] of [[5, 6.5], [17, 6.5]]) { // blackjack: cards out on the felt, the dealer behind
       p.push({ casino: 'blackjack', cx: x, cy: y + 0.9, ...BX(x, y, 1.3, 0.6, 0, 0.8, felt((i, L) => {
-        if (HIT.v > 0.25 && Math.abs(fract(HIT.u * 2.2) - 0.5) < 0.18) { BG[i] = C(WHITE, 8); return set(i, ':', C(RED, 10)), true; } // the cards dealt round the rail
+        const card = BJ_CARDS.find(([cu, cv]) => Math.abs(HIT.u - cu) < 0.06 && Math.abs(HIT.v - cv) < 0.085); // the hands dealt: a pair at each seat, the dealer's
+        if (card) { BG[i] = C(WHITE, 9); return set(i, Math.abs(HIT.u - card[0]) < 0.025 && Math.abs(HIT.v - card[1]) < 0.035 ? card[2] : ' ', C(card[3], 12)), true; }
         return false; })) });
       p.push(standing(x, y - 0.9, WHITE));
       for (const ox of [-0.8, 0.8]) if (chance(0.6)) p.push(standing(x + ox, y + 0.95, shirt()));
@@ -7944,7 +8044,7 @@ SOLID_SHADE.marina = o => (i, t, L) => {
   if (w > 0.27) { BG[i] = C(BLUE, 1.5 + L * 0.3); return set(i, '=', C(WHITE, L * 0.5)), true; } // the eaves
   if (f === 4 && w > 0.2) { // MARINA over the door
     BG[i] = C(BLUE, 2 + glow * 5);
-    return set(i, signChar('MARINA', (1 - u / o.hl) / 2, w - 0.235, t, o.hl), C(WHITE, 15)), true;
+    return set(i, signGlyph('MARINA', (1 - u / o.hl) / 2 * 8 - 1, (0.265 - w) / 0.06, t, 2 * o.hl / 8, 0.06, farDepth(rel(o.x - px), rel(o.y - py), o.hl)) || ' ', C(WHITE, 15)), true;
   }
   if (f === 4 && Math.abs(u) < 0.07 && w < 0.19) { BG[i] = C(BLUE, 1 + L * 0.1); return set(i, Math.abs(u) > 0.06 ? '|' : w > 0.18 ? '-' : ' ', C(WHITE, L)), true; } // the door
   if ((f === 3 || f === 4) && Math.abs(Math.abs(u) - 0.3) < 0.08 && Math.abs(w - 0.13) < 0.045) { // windows

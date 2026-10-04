@@ -144,7 +144,7 @@ SOLID_SHADE.marina = o => (i, t, L) => {
   if (w > 0.27) { BG[i] = C(BLUE, 1.5 + L * 0.3); return set(i, '=', C(WHITE, L * 0.5)), true; } // the eaves
   if (f === 4 && w > 0.2) { // MARINA over the door
     BG[i] = C(BLUE, 2 + glow * 5);
-    return set(i, signChar('MARINA', (1 - u / o.hl) / 2, w - 0.235, t, o.hl), C(WHITE, 15)), true;
+    return set(i, signGlyph('MARINA', (1 - u / o.hl) / 2 * 8 - 1, (0.265 - w) / 0.06, t, 2 * o.hl / 8, 0.06, farDepth(rel(o.x - px), rel(o.y - py), o.hl)) || ' ', C(WHITE, 15)), true;
   }
   if (f === 4 && Math.abs(u) < 0.07 && w < 0.19) { BG[i] = C(BLUE, 1 + L * 0.1); return set(i, Math.abs(u) > 0.06 ? '|' : w > 0.18 ? '-' : ' ', C(WHITE, L)), true; } // the door
   if ((f === 3 || f === 4) && Math.abs(Math.abs(u) - 0.3) < 0.08 && Math.abs(w - 0.13) < 0.045) { // windows

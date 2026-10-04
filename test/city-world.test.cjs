@@ -358,3 +358,17 @@ test('chatting indoors: every room people sit or stand about in has its own line
   assert.ok(r.repeats < 3, `${r.repeats} repeats`);
   assert.ok(j('ROOM_TALK.jail').includes(r.jail), 'no "shouldn\'t you be in bed" in a cell');
 });
+
+test('a walked dog stays with its walker whatever they are up to, and trots round corners instead of jumping sides', () => {
+  const r = j(`(() => {
+    tod = 10; const p = people.find(q => q.role === 'dogwalker'); p.hidden = false; p.act = 'shop'; p.dog = null; p.last = [1, 0];
+    const out = walkingDog(p), d0 = dogOf(p), a = [d0.x, d0.y];
+    p.last = [-1, 0]; T += 1 / 60; const d1 = dogOf(p), jump = Math.hypot(rel(d1.x - a[0]), rel(d1.y - a[1]));
+    for (let k = 0; k < 120; k++) { T += 1 / 60; dogOf(p); }
+    const d2 = dogOf(p), behind = rel(d2.x - p.x) > 0; // now walking west: the dog's caught up behind (east of) them
+    return { out, jump, behind };
+  })()`);
+  assert.ok(r.out, 'out with them while they shop');
+  assert.ok(r.jump < 0.03, `jumped ${r.jump}`);
+  assert.ok(r.behind);
+});
