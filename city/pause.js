@@ -18,6 +18,7 @@ function buildPause() {
       <p class="sub">ASCII City</p>
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="newgame">Start over</button>
+      <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
@@ -63,6 +64,7 @@ function buildPause() {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'resume') closePause(true);
+    if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'newgame') { if (b.dataset.sure) newGame(); else { b.dataset.sure = 1; b.textContent = 'Start over: lose your money, things, home and car? Click again'; } }
     if (b.dataset.toggle) settings[b.dataset.toggle] = !settings[b.dataset.toggle];
     if (b.dataset.detail) settings.detail = b.dataset.detail;

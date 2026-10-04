@@ -85,17 +85,18 @@ const DENSE = {
     return [n > 0.72 ? 'o' : dFill(b), C(n > 0.72 ? ORANGE : YEL, 7 + b * 8)];
   }),
 };
+const sparkBurn = () => fx.spark > 0 ? clamp(1 - fx.spark / 25, 0, 1) : 0; // how far down a lit sparkler has burnt, 0..1
 // in place of the big-lettered item (false: not one of the examples). The hand is drawn as usual afterwards
 function drawHeldDense(it, cx, hy, hsz, grip) {
   if (!DENSE_ON || !DENSE[it.id] || it.id === 'umbrella' && rain > 0.2 && mode !== 'room') return false; // (open in the rain: the canopy)
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72); // a little over the world's character size
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, [art, col] = DENSE[it.id](it, usesLeft(it)), artW = Math.max(...art.map(l => l.length)), top = grip + 0.6 * s - art.length * s;
-  if (!(it.id === 'yoyo' && fx.yoyo > 0)) { // (a yo-yo on the go is drawn by drawYoyo)
+  if (it.id !== 'yoyo') { // (a yo-yo is drawn by drawYoyo, hanging from your fingers)
     g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
     artText(art, cx - artW * w / 2, top, s, col); g.restore();
   }
-  if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - s * 0.4, s * 2);
+  if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top + (sparkBurn() * 9) * s, s * 2); // (at the burning point, working its way down)
   g.font = FS + 'px monospace';
   return true;
 }

@@ -58,7 +58,7 @@ function stepFair(dt) {
   } else {
     const ps = f.ps0 + TAU * (T - f.t0) / CAROUSEL.rev;
     px = CAROUSEL.x + 0.38 * Math.cos(ps); py = CAROUSEL.y + 0.38 * Math.sin(ps); fairEye = 0.155 + 0.012 * Math.sin(T * 4);
-    look += turn; a = ps + Math.PI / 2 + look; // facing the way you're going, plus wherever you turn your head
+    a = ps + Math.PI; look = 0; // facing the middle the whole way round (the horses and the drum stay put; the world wheels past behind them)
   }
   if (T >= f.end) endFairRide();
 }
@@ -74,7 +74,7 @@ function endFairRide() {
 }
 function fairRidePrompt() {
   const left = Math.ceil(fairRide.end - T), look_ = TOUCH ? 'drag' : 'mouse';
-  if (fairRide.kind === 'carousel') return `Round and round: ${left}s   ${look_}: look about`;
+  if (fairRide.kind === 'carousel') return `Round and round: ${left}s`;
   return fairEye > WHEEL.hub + WHEEL.R * 0.8 ? `The top. The whole city. (${left}s)` : `Going round: ${left}s   ${look_}: look about`;
 }
 // what's round you on a ride: the car you're sitting in, or the pole and the horse's neck

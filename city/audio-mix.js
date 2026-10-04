@@ -50,6 +50,7 @@ function audioMix(s) {
     if (k === 'cranes') out.arcade = 0.75;
     if (k === 'conservatory') { out.waves = 0.3; out.city = 0.02; } // the waterfall
     if (k === 'aviary') out.city = 0.04;
+    if (s.room.burgled) { out.restaurant = out.bossa = out.coffee = out.karaoke = out.arcade = 0; out.city *= 0.6; } // broken into at night: nobody here, nothing on, just the street outside
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
     return out;
   }

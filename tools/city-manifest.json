@@ -43,6 +43,7 @@
     "city/audio.js",
     "city/menu.js",
     "city/pause.js",
+    "city/dev.js",
     "city/goods-ui.js",
     "city/held-dense.js",
     "city/held-dense-items.js",

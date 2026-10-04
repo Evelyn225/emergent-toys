@@ -74,7 +74,10 @@ function drawBoard3D() {
   const cy = 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
   const cz = 1.15;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
-  const pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS, ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
+  let pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS;
+  const fit = Math.min(1, (rows * 0.8 - hor) / ((0.5 / cz) * pY + 1e-6)); // (on a wide screen it'd sit half off the bottom: scaled down to sit in the lower part of the view)
+  if (fit > 0.2) { pX *= fit; pY *= fit; }
+  const ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
   const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
   // a point on the board (u along, v across, h up) to the screen
   const plot = (u, v, h, ch, col, bg) => {

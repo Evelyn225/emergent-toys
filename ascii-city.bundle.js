@@ -56,7 +56,7 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
 }
 // ---- game state
 let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
-let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0;
+let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0, lookT = 0;
 let dayNum = 4; // days since a Monday: you arrive on a Friday evening (events.js)
 let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0, storm = 0;
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
@@ -1832,6 +1832,7 @@ function audioMix(s) {
     if (k === 'cranes') out.arcade = 0.75;
     if (k === 'conservatory') { out.waves = 0.3; out.city = 0.02; } // the waterfall
     if (k === 'aviary') out.city = 0.04;
+    if (s.room.burgled) { out.restaurant = out.bossa = out.coffee = out.karaoke = out.arcade = 0; out.city *= 0.6; } // broken into at night: nobody here, nothing on, just the street outside
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
     return out;
   }
@@ -1977,7 +1978,20 @@ const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, sk
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
 // anything, the dragon's a bit more, and they add up
 const luck = () => (inv.some(it => it.id === 'jadebangle') ? 0.03 : 0) + (inv.some(it => it.id === 'jadedragon') ? 0.08 : 0) + (inv.some(it => it.id === 'plushcat') ? 0.02 : 0); // (and the lucky cat, a little)
-const YOYO_DUR = 2.4; // how long a yo-yo trick takes (fx.yoyoTrick says which: see drawYoyo)
+// the yo-yo, out on its string: Q lets it drop (and Q again reels it in); while it's out the camera holds still and
+// the mouse (or a drag) swings it. A pendulum: len 0..1 of the string paid out, ang its swing from straight down
+// (round past the top is around the world), and when it hangs low enough it touches down and rolls along the
+// pavement (walk the dog). fx.yoyo is 1 while any of it is out of your hand
+const yoyo = { out: false, len: 0, ang: 0, angV: 0, spin: 0 };
+function stepYoyo(dt) {
+  yoyo.len = clamp(yoyo.len + (yoyo.out ? 4 : -3) * dt, 0, 1); // drops fast, climbs back a touch slower
+  yoyo.angV += -9 * Math.sin(yoyo.ang) * yoyo.len * dt; yoyo.angV *= 1 - Math.min(1, 0.9 * dt); yoyo.ang += yoyo.angV * dt;
+  yoyo.ang = mod(yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
+  yoyo.spin += dt * (20 + Math.abs(yoyo.angV) * 6);
+  if (!yoyo.out && yoyo.len === 0) { yoyo.ang = yoyo.angV = 0; }
+  fx.yoyo = yoyo.len > 0 || yoyo.out ? 1 : 0;
+}
+const yoyoSwing = dx => { yoyo.angV = clamp(yoyo.angV + dx * 0.012, -14, 14); }; // a flick of the wrist
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
@@ -2076,9 +2090,9 @@ function useHeld(near) {
     case 'jadedragon': return [pick(['You rub the dragon\'s head for luck.', 'The little jade dragon stares back, very sure of itself.', 'You give the dragon a pat. Good fortune, apparently, follows.']), null];
     case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head. You feel a tiny bit luckier.', 'The lucky cat beckons good fortune your way. A little bit of it, anyway.']), null];
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
-    case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.']), null];
+    case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), null];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
-    case 'yoyo': fx.yoyoTrick = Math.random() * 4 | 0; fx.yoyo = YOYO_DUR; return [['Walk the dog.', 'Around the world.', 'Rock the baby.', 'It sleeps at the bottom, then snaps back up.'][fx.yoyoTrick], 'whirr'];
+    case 'yoyo': yoyo.out = !yoyo.out; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Swing it with the mouse: let it touch down to walk the dog, swing hard to go around the world.' : 'You reel it back in.', 'whirr'];
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something
         near.person.talk = 4;
@@ -2122,7 +2136,8 @@ function pickUpDropped(d) {
 function stepGoods(dt) {
   if (fx.skating && mode !== 'walk') fx.skating = false;
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
-  fx.yoyo = Math.max(0, fx.yoyo - dt); fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt);
+  stepYoyo(dt); if (!heldItem() || heldItem().id !== 'yoyo') yoyo.out = false; // (put it away and it comes back up)
+  fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt);
   cigTip = Math.max(0, cigTip - dt * 0.8);
   if (fx.vape > 0) { // pulling on the vape: the longer, the bigger the cloud
     const it = heldItem();
@@ -4003,7 +4018,7 @@ const sk0 = seed => seed * 1e4 | 0;
 const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE, GRAY];
 const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
-const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448 };
+const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448, '$': 15518 };
 const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
 // a sign's letters: big enough on screen (judged once for the whole sign, from tFar, the depth of its far end) and each
 // letter is drawn large in blocks; smaller, one character per letter in the middle of its span. lq: how far across in
@@ -5568,23 +5583,39 @@ function elSprites() {
 // ===== the Sunset Pier: the Ferris wheel, the carousel, and the arch over the way in
 // the wheel is a billboard turned to its real angle: sq = how face-on it is (its east-west axis across the screen),
 // so from the side it narrows to an ellipse and then a line. Cars are real-sized whatever the angle.
-function wheelCell(i, u, z, du, dz, L, sq) {
+const WHEEL_GAP = 0.12; // half the gap between its two rims
+// riding the carousel: the mirrored drum in the middle, the striped canopy overhead, the other horses round you on
+// their poles (going round with you, so they hold still), as real things rather than the picture you see from outside
+function carouselInside(cx, cy) {
+  const rot = TAU * T / CAROUSEL.rev, lit = night > 0.25 || overcast > 0.6, r = CAROUSEL.r;
+  drawBox(boxAt(cx, cy, Math.cos(rot), Math.sin(rot), 0.065, 0.065, 0.04, 0.33), (i, t, L) => { // the drum
+    BG[i] = C(CYAN, 1 + (lit ? 3 : 1)); return set(i, fract(HIT.w * 30 + T) < 0.2 ? '*' : ':', C(WHITE, Math.max(L, lit ? 12 : 6))), true;
+  });
+  drawBox(boxAt(cx, cy, Math.cos(rot), Math.sin(rot), r, r, 0.33, 0.36), (i, t, L) => { // the canopy, from underneath: stripes out from the middle
+    const ang = Math.atan2(HIT.v, HIT.u), d = Math.hypot(HIT.u, HIT.v);
+    if (d > r) return false;
+    BG[i] = C(Math.floor(ang / (TAU / 16)) & 1 ? RED : WHITE, 2.5 + L * 0.25);
+    return set(i, d > r - 0.04 ? (lit && fract(ang * 6 + T) < 0.4 ? '*' : 'v') : ' ', C(YEL, lit ? 15 : L)), true;
+  });
+  const me_ = Math.atan2(rel(py - CAROUSEL.y), rel(px - CAROUSEL.x));
+  for (let j = 0; j < 8; j++) {
+    const ps = me_ + (j + 0.5) * TAU / 8; // (yours is the gap behind you)
+    const hx = cx + 0.42 * Math.cos(ps), hy = cy + 0.42 * Math.sin(ps), hz = 0.14 + 0.04 * Math.sin(ps * 2 + T * 4), col = [WHITE, YEL, BRICK, WHITE, MAG, YEL, BRICK, CYAN][j];
+    drawBox(boxAt(hx, hy, 1, 0, 0.005, 0.005, 0.04, 0.33), (i, t, L) => (set(i, '|', C(YEL, Math.max(L, 9))), true)); // its brass pole
+    const tx = -Math.sin(ps), ty = Math.cos(ps); // the way it's going
+    drawBox(boxAt(hx, hy, tx, ty, 0.06, 0.018, hz - 0.02, hz + 0.02), solidHorse(col)); // the body
+    drawBox(boxAt(hx + tx * 0.06, hy + ty * 0.06, tx, ty, 0.015, 0.012, hz + 0.01, hz + 0.06), solidHorse(col)); // the neck and head
+    for (const e of [-1, 1]) drawBox(boxAt(hx + tx * 0.04 * e, hy + ty * 0.04 * e, tx, ty, 0.006, 0.006, hz - 0.07, hz - 0.02), solidHorse(col)); // legs
+  }
+}
+const solidHorse = col => (i, t, L) => { BG[i] = C(col, (1.4 + L * 0.35) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '~' : ' ', C(YEL, L)), true; };
+function wheelCell(i, u, z, du, dz, L, sq, side = 1) {
   const R = WHEEL.R, hub = WHEEL.hub, as = Math.max(Math.abs(sq), 0.05), U = u / (sq < 0 ? -as : as), Zc = z - hub;
   const tolU = du / as / 2, tol = Math.max(tolU, dz / 2), lit = night > 0.25 || overcast > 0.6;
-  for (let k = 0; k < WHEEL.n; k++) { // the cars, hanging under their pivots on the rim
-    if (fairRide && fairRide.kind === 'wheel' && fairRide.k === k) continue; // (you're in this one)
-    const ph = wheelAngle(k, T), gu = R * Math.cos(ph) * (sq < 0 ? -as : as), gz = hub + R * Math.sin(ph), top = gz - 0.06, bot = gz - 0.24;
-    if (Math.abs(u - gu) < 0.1 && z < top && z > bot) {
-      const col = [RED, YEL, CYAN, MAG, GREEN, ORANGE][k % 6], r = (top - z) / (top - bot);
-      if (r < 0.15) return set(i, '_', C(col, L * 1.1)), true;
-      if (r < 0.55) { BG[i] = C(col, 1.5 + L * 0.2); return set(i, Math.abs(u - gu) > 0.08 ? '|' : ':', lit ? C(YEL, 13) : C(CYAN, L)), true; }
-      BG[i] = C(col, 2 + L * 0.3); return set(i, r > 0.9 ? '=' : ' ', C(col, L)), true;
-    }
-    if (onLine(u - gu, du, 0, 0) && z <= gz && z >= top) return set(i, '|', C(GRAY, L)), true;
-  }
+  if (side < 0) L *= 0.65; // (the far rim, in the shadow of the near one)
   const rr = Math.hypot(U, Zc), ang = Math.atan2(Zc, U);
   if (rr < 0.13) return set(i, '@', C(WHITE, L * 1.2)), true; // the hub
-  if (z < 0.05 && Math.abs(u) < 1.1 * as + 0.15) return set(i, '=', C(BRICK, L)), true; // the platform
+  if (side > 0 && z < 0.05 && Math.abs(u) < 1.1 * as + 0.15) return set(i, '=', C(BRICK, L)), true; // the platform
   for (const side of [-1, 1]) { // the A-frame legs, hub to deck
     const lu = side * 0.95 * (hub - z) / hub;
     if (z < hub && Math.abs(U - lu) < Math.max(tolU, dz * 0.95 / hub / 2) * 1.2) return set(i, side * Math.sign(sq || 1) < 0 ? '/' : '\\', C(GRAY, L * 1.15)), true;
@@ -5639,12 +5670,29 @@ function carouselCell(i, u, z, du, dz, L, s) {
 const FAIR_SIGN = 'SUNSET PIER';
 function fairSprites() {
   const [wx, wy] = R(WHEEL.x, WHEEL.y);
-  if (Math.hypot(wx, wy) < vis + 4) {
-    const sq = across(1, 0, wx, wy), hw = (WHEEL.R + 0.15) * Math.max(Math.abs(sq), 0.06) + 0.12;
-    drawShape(wx, wy, 0, hw, WHEEL.hub + WHEEL.R + 0.1, (i, u, z, du, dz, L) => wheelCell(i, u, z, du, dz, L, sq));
+  if (Math.hypot(wx, wy) < vis + 4) { // two rims a few metres apart (the far one dimmer), the axle between, the cars hanging in 3D
+    for (const side of [1, -1]) {
+      const vy = wy + side * WHEEL_GAP, sq = across(1, 0, wx, vy), hw = (WHEEL.R + 0.15) * Math.max(Math.abs(sq), 0.06) + 0.12;
+      drawShape(wx, vy, 0, hw, WHEEL.hub + WHEEL.R + 0.1, (i, u, z, du, dz, L) => wheelCell(i, u, z, du, dz, L, sq, side));
+    }
+    drawBox(boxAt(wx, wy, 0, 1, WHEEL_GAP + 0.03, 0.05, WHEEL.hub - 0.05, WHEEL.hub + 0.05), (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.3); return set(i, '=', C(WHITE, L)), true; });
+    const lit = night > 0.25 || overcast > 0.6;
+    for (let k = 0; k < WHEEL.n; k++) {
+      if (fairRide && fairRide.kind === 'wheel' && fairRide.k === k) continue; // (you're in this one)
+      const ph = wheelAngle(k, T), gx = wx + WHEEL.R * Math.cos(ph), gz = WHEEL.hub + WHEEL.R * Math.sin(ph), col = [RED, YEL, CYAN, MAG, GREEN, ORANGE][k % 6];
+      drawBox(boxAt(gx, wy, 1, 0, 0.004, 0.004, gz - 0.06, gz), STEEL.pole); // its hanger
+      drawBox(boxAt(gx, wy, 1, 0, 0.1, WHEEL_GAP - 0.03, gz - 0.24, gz - 0.06), (i, t, L) => { // the gondola: a roof, windows round the middle, a solid floor
+        const w = (gz - 0.06 - HIT.w) / 0.18, f = HIT.face;
+        BG[i] = C(col, (1.5 + L * 0.35) * shadeFace(f));
+        if (f === 5 || w < 0.15) return set(i, '_', C(col, L)), true;
+        if (w < 0.6 && f !== 6) { BG[i] = lit ? C(WARM, 3 + night * 5) : C(CYAN, 1 + L * 0.15); return set(i, Math.abs(fract((f <= 2 ? HIT.v : HIT.u) * 12) - 0.5) < 0.1 ? '|' : ' ', C(col, L)), true; }
+        return set(i, w > 0.9 ? '=' : ' ', C(col, L)), true;
+      });
+    }
   }
   const [cx, cy] = R(CAROUSEL.x, CAROUSEL.y);
-  if (Math.hypot(cx, cy) < vis) drawShape(cx, cy, 0, CAROUSEL.r + 0.04, 0.52, carouselCell);
+  if (fairRide && fairRide.kind === 'carousel') carouselInside(cx, cy); // on it: built round you, not a picture
+  else if (Math.hypot(cx, cy) < vis) drawShape(cx, cy, 0, CAROUSEL.r + 0.04, 0.52, carouselCell);
   // the arch over the way in, its name in bulbs
   const [gx, gy] = R(FAIR.cx, FAIR.y0 + 0.2), hw = 1.3;
   if (Math.hypot(gx, gy) > vis) return;
@@ -5704,6 +5752,7 @@ function jailProps(r) {
     p.push(...bunk(cx - 1.1, 1.55), ...toilet(cx + 1.9, 1.4, -1)); // ours: bunk along the back wall
     p.push(...bunk(cx - 1.1, JAIL_D - 2.55), ...toilet(cx + 1.9, JAIL_D - 2.4, 1)); // theirs, the mirror of it
   }
+  if (r.cabbie) p.push({ ...sitting(9.9, 1.75, YEL, 0.58), cabbie: true }); // your cab driver, on the bunk, arms folded, not looking at you
   // who's across the way: one at the bars, one asleep on his bunk, one pacing
   p.push(inmate(4.6, 9.6), inmate(10.2, JAIL_D - 2.55, true));
   p.push({ ...inmate(18, 10.6), tick: s => { s.x = 18 + 1.6 * Math.sin(T * 0.35); } });
@@ -8126,7 +8175,7 @@ function marinaSprites() {
   const [vx, vy] = R(MARINA.x + 0.7, MARINA.office.y - 0.2); // the board at the foot of the jetty
   if (Math.hypot(vx, vy) < 8) drawArt(vx, vy, 0, 0.5, 0.42, MARINA_BOARD, (c, row, L) => row === 1 ? C(WHITE, Math.max(L, 11)) : row > 5 ? C(GRAY, L) : /[$0-9]/.test(c) ? C(YEL, Math.max(L, 9)) : C(WHITE, Math.max(L, 7)));
 }
-const MARINA_BOARD = pad(['.---------------.', '| BOATS FOR HIRE |', '| speed     $' + BOAT_KINDS.speedboat.rent + ' |', '| sail      $' + BOAT_KINDS.sailboat.rent + ' |', '| cruiser   $' + BOAT_KINDS.cruiser.rent + ' |',
+const MARINA_BOARD = pad(['.---------------.', '| BOATS FOR HIRE |', '| SPEED     $' + BOAT_KINDS.speedboat.rent + ' |', '| SAIL      $' + BOAT_KINDS.sailboat.rent + ' |', '| CRUISER   $' + BOAT_KINDS.cruiser.rent + ' |',
   "'---------------'", '       |||', '       |||']);
 // the marina office: white clapboard, a blue roof, MARINA over the door on the side facing the road, windows looking
 // down the jetty
@@ -8179,8 +8228,12 @@ function drawArt(rx_, ry_, z, w, h, art, colFn) {
       if (ch === ' ') continue;
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
-      if (stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1])) &&
-          (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
+      const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));
+      if (word && cellW >= 3 && cellH >= 3.5 && GLYPH5[ch] !== undefined) { // big enough: the letter drawn large in blocks (every letter of the art at once)
+        const fx = (c + 0.5 - left) / cellW - ax, fy = (r + 0.5 - top) / cellH - ay;
+        set(i, glyphOn(ch, Math.floor(fx * 4), Math.floor(fy * 5)) ? '#' : ' ', colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0; continue;
+      }
+      if (word && (Math.floor(left + (ax + 0.5) * cellW) !== c || Math.floor(top + (ay + 0.5) * cellH) !== r)) {
         set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue;
       }
       set(i, ch, colFn(ch, ay, L)); ZB[i] = depth; FL[i] = 0;
@@ -8444,6 +8497,7 @@ function promptText() {
   const cp = crimePrompt();
   if (cp) return cp;
   if (mode === 'room') {
+    if (room.kind === 'jail' && nearCabbie()) return 'E: talk to your cab driver   (he does not want to talk to you)';
     if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go${room.tried ? '' : '   E: try to break out (one chance)'}` : 'E: the guard lets you out';
     if (room.kind === 'train') return room.dest == null
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
@@ -8680,7 +8734,7 @@ function leaveCar() {
     else { const all = money; pay(all); say(`Fare's ${fmt$(fare)}. You've only got ${fmt$(all)}. The driver takes it, muttering.`, 4); }
     c.rider = c.dest = c.arrived = c.rush = false; plan(c);
   }
-  me = null; mode = 'walk';
+  me = null; mode = 'walk'; look = 0;
 }
 // taxi destinations: always a point in the middle of a street that exists
 const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
@@ -8767,6 +8821,7 @@ function interact() {
       return say('Round and round and up and up. The lamp room.', 3);
     }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? enterRoom('lighthouse', room.below, [4, 5.6, -Math.PI / 2]) : say('The hatch down is in the corner.', 2);
+    if (room.kind === 'jail' && nearCabbie()) return talkToCabbie();
     if (room.kind === 'jail') {
       if (T >= room.until) return say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom();
       if (room.tried) return say(`Locked in. ${Math.ceil(room.until - T)}s to go.`);
@@ -8837,7 +8892,7 @@ function interact() {
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
     }
     else { // a stolen car: if anyone saw, the police hear about it
-      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx);
+      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); look = 0;
       if (c.owned) { c.parked = false; say(`You get into your ${ITEMS[c.model].name}.`, 2); } // yours, bought and paid for
       else if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
       else {
@@ -9095,7 +9150,7 @@ function stepFair(dt) {
   } else {
     const ps = f.ps0 + TAU * (T - f.t0) / CAROUSEL.rev;
     px = CAROUSEL.x + 0.38 * Math.cos(ps); py = CAROUSEL.y + 0.38 * Math.sin(ps); fairEye = 0.155 + 0.012 * Math.sin(T * 4);
-    look += turn; a = ps + Math.PI / 2 + look; // facing the way you're going, plus wherever you turn your head
+    a = ps + Math.PI; look = 0; // facing the middle the whole way round (the horses and the drum stay put; the world wheels past behind them)
   }
   if (T >= f.end) endFairRide();
 }
@@ -9111,7 +9166,7 @@ function endFairRide() {
 }
 function fairRidePrompt() {
   const left = Math.ceil(fairRide.end - T), look_ = TOUCH ? 'drag' : 'mouse';
-  if (fairRide.kind === 'carousel') return `Round and round: ${left}s   ${look_}: look about`;
+  if (fairRide.kind === 'carousel') return `Round and round: ${left}s`;
   return fairEye > WHEEL.hub + WHEEL.R * 0.8 ? `The top. The whole city. (${left}s)` : `Going round: ${left}s   ${look_}: look about`;
 }
 // what's round you on a ride: the car you're sitting in, or the pole and the horse's neck
@@ -9584,6 +9639,7 @@ function buildPause() {
       <p class="sub">ASCII City</p>
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="newgame">Start over</button>
+      <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
@@ -9629,6 +9685,7 @@ function buildPause() {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'resume') closePause(true);
+    if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'newgame') { if (b.dataset.sure) newGame(); else { b.dataset.sure = 1; b.textContent = 'Start over: lose your money, things, home and car? Click again'; } }
     if (b.dataset.toggle) settings[b.dataset.toggle] = !settings[b.dataset.toggle];
     if (b.dataset.detail) settings.detail = b.dataset.detail;
@@ -9659,6 +9716,160 @@ const togglePause = () => paused ? closePause(false) : openPause();
 // (not while a cabinet or a shift has the screen: Esc there walks away from it)
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !paused && !sleep && !game) openPause(); });
 applySettings();
+// ===== dev tools: F2 (or Dev tools in the pause menu). Teleport anywhere, spawn things, set your money, the day, the
+// time and the weather, without remembering any names: a search box over tabs of buttons. Everything takes effect
+// at once and the menu stays open, so you can do several things before closing it (Esc, F2 or the close button).
+let devEl = null, devTab = 'places', devFilter = '';
+const DEV_CSS = `
+  #dev .panel { width: min(680px, calc(100vw - 24px)); padding: 20px 22px; }
+  #dev .tabs { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 10px; }
+  #dev .tab { color: rgba(255,255,255,0.4); } #dev .tab.on { color: #fff; } #dev .tab.on::before { content: '['; } #dev .tab.on::after { content: ']'; }
+  #dev input.search { width: 100%; box-sizing: border-box; font: inherit; color: #fff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18);
+    padding: 6px 10px; margin: 0 0 10px; outline: none; }
+  #dev input.search:focus { border-color: rgba(255,255,255,0.5); }
+  #dev .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 12px; }
+  #dev .grid .item { padding-left: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #dev .note { color: rgba(255,255,255,0.35); margin: 2px 0 6px; }
+  #dev .grp { grid-column: 1 / -1; color: rgba(255,255,255,0.3); margin-top: 8px; }
+  #dev .bar { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 4px 0 8px; padding-left: 14px; }
+  #dev .bar .item { width: auto; padding-left: 0; }
+  #dev .bar input { width: 9em; font: inherit; color: #fff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); padding: 2px 6px; }`;
+const devOpen = () => !!devEl && devEl.style.display === 'flex';
+
+// put you on your feet, out of whatever you're in (a car, a room, a ride, a boat, the el), ready to be moved
+function devFree() {
+  if (game) game = null;
+  if (me) leaveCar();
+  if (mode === 'room') { room = null; }
+  if (mode === 'fair' && fairRide) { fairRide = null; fairEye = 0.17; }
+  if (mode === 'sea' && sea) { sea.v = 0; if (sea.hired) { sea.hired = false; const s = SLOTS[sea.slot]; Object.assign(sea, { x: s.x, y: s.y, hx: s.hx, hy: s.hy }); } sea = null; }
+  if (mode === 'el') ride = null;
+  plat = null; body.seat = null; mode = 'walk'; pitch = 0; look = 0;
+}
+const devAt = (x, y, ang) => { devFree(); px = mod(x, N); py = mod(y, N); a = ang; };
+// a street spot in a district: the middle of the street beside one of its plain blocks
+function districtSpot(d) {
+  for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++)
+    if (districtOf(bx, by) === d && !blockKind(bx, by) && hseg(bx, by)) return [bx * 8 + 4, by * 8 + 1.6, -Math.PI / 2];
+  return null;
+}
+// every place you can jump to: [group, label, go]
+function devPlaces() {
+  const out = [];
+  const land = [['Casino', () => gotoShop('CASINO')], ['Stock Exchange', () => gotoShop('EXCHANGE')], ['The Velvet Rope', () => gotoShop('VELVET')],
+    ['Marina', () => devAt(MARINA.x, MARINA.y0 + 0.6, Math.PI / 2)], ['Sunset Pier', () => devAt(FAIR.cx, FAIR.y0 - 0.5, Math.PI / 2)],
+    ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
+    ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],
+    ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.4, Math.PI / 2); }],
+    ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
+  for (const [l, go] of land) out.push(['Landmarks', l, go]);
+  const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
+  const nearestLm = {}; // (there are several of each: the nearest one)
+  for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
+    const lm = landmarkOf.get(bi(bx, by)); if (!lm) continue;
+    const d = Math.hypot(rel(bx * 8 + 5 - px), rel(by * 8 + 5 - py));
+    if (!nearestLm[lm] || d < nearestLm[lm][0]) nearestLm[lm] = [d, bx, by];
+  }
+  for (const lm in nearestLm) { const [, bx, by] = nearestLm[lm]; out.push(['Landmarks', LM[lm] || lm, () => devAt(bx * 8 + 5, (by + 1) * 8 + 0.6, -Math.PI / 2)]); }
+  for (const [kind, label] of [['police', 'Police station'], ['fire', 'Fire station'], ['amb', 'Hospital']]) { // (one of each: the nearest)
+    const s = SERVICES.filter(b => b.kind === kind).sort((p, q) => Math.hypot(rel(p.x - px), rel(p.y - py)) - Math.hypot(rel(q.x - px), rel(q.y - py)))[0];
+    if (s) out.push(['Landmarks', label, () => devAt(s.x, s.y + 0.15, -Math.PI / 2)]);
+  }
+  for (const d in DISTRICT_TITLE) { const sp = districtSpot(d); if (sp) out.push(['Districts', DISTRICT_TITLE[d].replace(/^the /, 'The '), () => devAt(...sp)]); }
+  stations.forEach(s => out.push(['Subway stations', s.name, () => devAt(s.x - 0.25, s.y, 0)]));
+  EL_STATIONS.forEach(s => out.push(['El stations', s.name, () => devAt(s.x, EL_Y + 0.12, Math.PI / 2)]));
+  owned.homes.forEach((h, k) => out.push(['Your homes', `${ITEMS[h.kind].name} ${k + 1}`, () => { const [x, y] = homeKerb(h.cell % N, Math.floor(h.cell / N)); devAt(x, y, 0); }]));
+  const words = new Map(); // every kind of shop, by its sign: you land outside the nearest one
+  for (let k = 0; k < N * N; k++) { const sh = SHOP[k]; if (sh && sh.word && sh.kind !== SHOP_APTS) words.set(sh.word, (words.get(sh.word) || new Set()).add(sh)); }
+  for (const [w, set] of [...words].sort((p, q) => p[0] < q[0] ? -1 : 1)) out.push(['Shops (nearest)', `${w}${set.size > 1 ? ` (${set.size})` : ''}`, () => { devFree(); gotoShop(w); }]);
+  return out;
+}
+function devItems() {
+  const out = [], KIND = { food: 'Food', drink: 'Drinks', smoke: 'Smokes', gear: 'Gear', toy: 'Toys' };
+  for (const id in ITEMS) { const it = ITEMS[id]; if (KIND[it.kind]) out.push([KIND[it.kind], it.name, () => devGive(id)]); }
+  const order = Object.values(KIND);
+  return out.sort((p, q) => order.indexOf(p[0]) - order.indexOf(q[0]) || (p[1].toLowerCase() < q[1].toLowerCase() ? -1 : 1));
+}
+function devGive(id) {
+  if (inv.length >= INV_SIZE) return say(`Your hands are full (${INV_SIZE}). Drop something first, or use Other: empty your pockets.`, 3);
+  inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1; say(`Spawned ${aOrSome(ITEMS[id].name)}.`, 2);
+}
+const devCash = n => { money = Math.max(0, Math.round((money + n) * 100) / 100); say(`Money: ${fmt$(money)}`, 2); };
+
+function devBody() {
+  const q = devFilter.toLowerCase(), btn = (k, label, extra = '') => `<button class="item" data-dev="${k}" ${extra}>${label}</button>`;
+  if (devTab === 'places' || devTab === 'items') {
+    const list = devTab === 'places' ? devPlaces() : devItems();
+    devEl.acts = [];
+    let html = '', grp = null;
+    for (const [g, label, go] of list) {
+      if (q && !label.toLowerCase().includes(q) && !g.toLowerCase().includes(q)) continue;
+      if (g !== grp) { html += `<div class="grp">${g}</div>`; grp = g; }
+      html += btn(devEl.acts.length, label, `title="${label}"`); devEl.acts.push(go);
+    }
+    return `${devTab === 'items' ? `<p class="note">carrying ${inv.length}/${INV_SIZE}: click to add one to your hands</p>` : '<p class="note">click to go there (you\'re put on your feet first)</p>'}<div class="grid">${html || '<p class="note">nothing matches</p>'}</div>`;
+  }
+  devEl.acts = [];
+  const act = (label, fn) => { devEl.acts.push(fn); return btn(devEl.acts.length - 1, label); };
+  if (devTab === 'money') return `<p class="note">you have ${fmt$(money)} and ${tickets} tickets</p>
+    <div class="bar">${[100, 1000, 10000, 100000].map(n => act(`+${fmt$(n)}`, () => devCash(n))).join('')}${act('Broke ($0)', () => devCash(-money))}</div>
+    <div class="bar">set money to <input type="number" min="0" step="1" data-set="money" value="${Math.round(money)}"></div>
+    <div class="bar">${[100, 1000].map(n => act(`+${n} tickets`, () => { tickets += n; say(`${tickets} tickets.`, 2); })).join('')}</div>`;
+  if (devTab === 'time') {
+    const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
+    return `<p class="note">${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}, ${weather}</p>
+      <div class="grp">time of day</div><div class="bar">${[['Dawn', 6], ['Morning', 9], ['Noon', 12], ['Afternoon', 15], ['Dusk', 19], ['Night', 22], ['Midnight', 0], ['3am', 3]].map(([l, h]) => act(l, () => { tod = h; })).join('')}</div>
+      <div class="bar">hour <input type="number" min="0" max="23.99" step="0.25" data-set="tod" value="${tod.toFixed(2)}"></div>
+      <div class="grp">day of the week</div><div class="bar">${WEEKDAYS.map((d, k) => act(d, () => { dayNum += mod(k - mod(dayNum, 7), 7); })).join('')}${act('Next day', () => { dayNum++; })}</div>
+      <div class="grp">weather</div><div class="bar">${['clear', 'rain', 'storm', 'fog'].map(w => act(w, () => { weather = w; wTimer = 600; })).join('')}</div>`;
+  }
+  return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
+    <div class="grp">you</div><div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { inv.length = 0; held = -1; say('Pockets emptied.', 2); })}</div>
+    <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
+}
+function renderDev(keepFocus) {
+  const tabs = [['places', 'Places'], ['items', 'Items'], ['money', 'Money'], ['time', 'Time & weather'], ['other', 'Other']];
+  devEl.querySelector('.panel').innerHTML = `<h1>Dev tools</h1><p class="sub">F2 or Esc to close &middot; type to search</p>
+    <div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${devTab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}<span style="flex:1"></span><button class="tab" data-close>close</button></div>
+    ${devTab === 'places' || devTab === 'items' ? `<input class="search" type="search" placeholder="search ${devTab}..." value="${devFilter.replace(/"/g, '&quot;')}" autocomplete="off">` : ''}
+    <div class="body">${devBody()}</div>`;
+  const s = devEl.querySelector('input.search');
+  if (s && keepFocus !== false) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+}
+function openDev() {
+  if (!devEl) {
+    devEl = menuEl('dev', 1000, '<div class="panel" role="dialog" aria-label="Dev tools"></div>');
+    const st = document.createElement('style'); st.textContent = DEV_CSS; document.head.appendChild(st);
+    devEl.addEventListener('click', e => {
+      if (e.target === devEl) return closeDev(); // (the dark outside)
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.close !== undefined) return closeDev();
+      if (b.dataset.tab) { devTab = b.dataset.tab; devFilter = ''; return renderDev(); }
+      const fn = devEl.acts[+b.dataset.dev]; if (!fn) return;
+      fn();
+      if (devTab === 'places') closeDev(); else renderDev(false); // (a jump closes it, so you can see where you are)
+    });
+    devEl.addEventListener('input', e => {
+      if (e.target.classList.contains('search')) { devFilter = e.target.value; devEl.querySelector('.body').innerHTML = devBody(); return; }
+      const k = e.target.dataset.set, v = +e.target.value;
+      if (k === 'money' && v >= 0) money = Math.round(v * 100) / 100;
+      if (k === 'tod' && v >= 0 && v < 24) tod = v;
+    });
+    devEl.addEventListener('keydown', e => {
+      if (e.code === 'Escape' || e.code === 'F2') { e.preventDefault(); return closeDev(); }
+      if (e.code === 'Enter' && e.target.classList.contains('search')) { // Enter: the first match
+        const b = devEl.querySelector('[data-dev]'); if (b) b.click();
+      }
+      e.stopPropagation(); // (typing here never reaches the game)
+    });
+  }
+  if (pauseEl && pauseEl.style.display === 'flex') closePause(false);
+  paused = true; for (const k in K) K[k] = 0;
+  if (document.pointerLockElement) document.exitPointerLock();
+  devEl.style.display = 'flex'; renderDev();
+}
+function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = false; lockMouse(); }
+const devKey = e => { if (e.code !== 'F2' || e.repeat) return false; e.preventDefault(); devOpen() ? closeDev() : openDev(); return true; };
 // ===== goods on screen: the shop menu, the inventory, the hotbar, and what's in your hand (or mouth, or underfoot)
 // ---- in your hand: ASCII art at the bottom right, bobbing as you walk. No backgrounds: every character has a thin
 // dark outline so it reads over anything, and the fingers hide the bottom of whatever you're holding. Things change
@@ -9862,7 +10073,7 @@ function drawHeldBig() {
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const lift = it.id === 'yoyo' && fx.yoyo > 0 ? Math.min(1, (YOYO_DUR - fx.yoyo) / 0.25, fx.yoyo / 0.25) : 0; // (your hand comes up in front of you for a yo-yo trick)
+  const lift = it.id === 'yoyo' ? Math.min(1, 0.55 + yoyo.len * 3) : 0; // (holding a yo-yo your hand's up, so it hangs below; higher still to work it)
   const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (drawHeldDense(it, cx, hy, hsz, grip)); // (the dense-art trial: the item drawn finer, the same hand)
@@ -9871,14 +10082,14 @@ function drawHeldBig() {
     const [art, col] = heldArt(it);
     g.font = isz + 'px monospace';
     const w = g.measureText('M').width, artW = Math.max(...art.map(l => l.length)), top = grip + 0.5 * isz - art.length * isz;
-    if (!(it.id === 'yoyo' && fx.yoyo > 0)) {
+    if (it.id !== 'yoyo') {
       g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
       artText(art, cx - artW * w / 2, top, isz, col); g.restore();
     }
     if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
   }
   drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
-  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(cx, grip);
+  if (it.id === 'yoyo') drawYoyo(cx - hsz * 0.2, hy + HAND_ART.length * hsz); // (in your hand or out on its string, it hangs from under your fist)
   g.font = FS + 'px monospace';
 }
 // the umbrella open over you, seen from underneath: panels of fabric between ribs fanning out from the hub (just off
@@ -9960,33 +10171,24 @@ function drawVapeCloud() {
     g.fillStyle = PAL[C(f > 0.5 ? YEL : WHITE, 6 + f * 8)]; g.fillText(f > 0.7 ? '@' : f > 0.4 ? '%' : '~', x, y);
   }
 }
-// a yo-yo trick, fx.yoyo counting down from YOYO_DUR, at the world's own character size: 0 walk the dog (down to
-// the pavement, rolling off and back), 1 around the world (a big loop out in front), 2 rock the baby (the string
-// pulled into a cradle, the yo-yo swinging through it), 3 the sleeper (spinning at the bottom, then snapped back
-// up). Every one drops fast and comes back faster; the yo-yo spins the whole time and smears when it's moving quick
-function yoyoAt(t, trick, x, y, L) {
-  const W = cv.width, H = cv.height, mid = clamp((t - 0.18) / 0.67, 0, 1);
-  if (trick === 0) L = Math.max(L, H - y - H * 0.06); // walking the dog: all the way down to the pavement
-  const d = t < 0.18 ? L * (t / 0.18) ** 2 : t > 0.85 ? L * (1 - (t - 0.85) / 0.15) ** 2 : L; // down, out, back up
-  if (t < 0.18 || t > 0.85 || trick === 3) return { x: x + (trick === 3 && t >= 0.18 && t <= 0.85 ? Math.sin(t * 9) * L * 0.03 : 0), y: y + d };
-  if (trick === 1) { const th = mid * Math.PI * 2; return { x: x + Math.sin(th) * L * 0.62, y: y + Math.cos(th) * L }; }
-  if (trick === 0) return { x: x - Math.sin(mid * Math.PI) * W * 0.3, y: y + L - Math.sin(mid * Math.PI) * H * 0.05 }; // rolls away along the pavement (a little further off, so a little higher) and back
-  const apex = { x: x - W * 0.13, y: y - L * 0.3 }, sw = Math.sin(mid * Math.PI * 4) * 0.55 * Math.sin(mid * Math.PI); // the cradle, rocking
-  return { x: apex.x + Math.sin(sw) * L * 0.55, y: apex.y + Math.cos(sw) * L * 0.55, apex };
+// the yo-yo out on its string (see yoyo in goods.js), at the world's own character size: hanging from your hand,
+// swinging as you swing it, rolling along the pavement when it reaches it; spinning the whole time, smeared when quick
+function yoyoPos(x, y, ang, len) {
+  const L = cv.height * 0.36 * len, ground = cv.height * 0.95;
+  let px_ = x + Math.sin(ang) * L, py_ = y + Math.cos(ang) * L;
+  const rolling = py_ > ground;
+  if (rolling) { px_ = x + Math.sin(ang) * L * 1.15; py_ = ground; } // on the ground: it runs on along it (walk the dog)
+  return { x: px_, y: py_, rolling };
 }
 function drawYoyo(x, y) {
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72);
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, L = cv.height * 0.3, trick = fx.yoyoTrick || 0, t = clamp(1 - fx.yoyo / YOYO_DUR, 0, 1);
-  const p = yoyoAt(t, trick, x, y, L), str = PAL[C(WHITE, 11)];
-  if (p.apex) { // rock the baby: the string from your hand round a triangle, the yo-yo hanging from its top corner
-    const b1 = { x: p.apex.x - L * 0.22, y: p.apex.y + L * 0.62 }, b2 = { x: p.apex.x + L * 0.22, y: p.apex.y + L * 0.62 };
-    charLine(x, y, b2.x, b2.y, w, s, str); charLine(b2.x, b2.y, b1.x, b1.y, w, s, str); charLine(b1.x, b1.y, p.apex.x, p.apex.y, w, s, str);
-    charLine(p.apex.x, p.apex.y, p.x, p.y, w, s, str);
-  } else charLine(x, y, p.x, p.y, w, s, str);
-  const q = yoyoAt(clamp(t - 0.025, 0, 1), trick, x, y, L), fast = Math.hypot(p.x - q.x, p.y - q.y) > s * 0.8;
-  if (fast) for (const k of [1, 2]) { const r = yoyoAt(clamp(t - 0.02 * k, 0, 1), trick, x, y, L); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
-  const spin = T * (trick === 0 && t > 0.18 && t < 0.85 ? 40 : 25); // (faster rolling along the ground)
+  const hang = 5 * s / (cv.height * 0.36); // (enough string to hang it clear of your hand)
+  const idle = !yoyo.out && yoyo.len < hang, len = Math.max(yoyo.len, hang), ang = idle ? Math.sin(T * 1.3) * 0.07 : yoyo.ang; // (just held: dangling on a short string, swaying a little)
+  const w = g.measureText('M').width, p = yoyoPos(x, y, ang, len), str = PAL[C(WHITE, 11)];
+  charLine(x, y, p.x, p.y, w, s, str);
+  if (Math.abs(yoyo.angV) > 3) for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * 0.02 * k, len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
+  const spin = idle ? 0 : yoyo.spin * (p.rolling ? 1.6 : 1); // (still, in your hand)
   const [art, col] = sculpt(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
     const r = Math.hypot(cx, cy * 1.1) * 2.5 / 3.2;
     if (r > 2.5) return null;
@@ -10259,17 +10461,18 @@ const DENSE = {
     return [n > 0.72 ? 'o' : dFill(b), C(n > 0.72 ? ORANGE : YEL, 7 + b * 8)];
   }),
 };
+const sparkBurn = () => fx.spark > 0 ? clamp(1 - fx.spark / 25, 0, 1) : 0; // how far down a lit sparkler has burnt, 0..1
 // in place of the big-lettered item (false: not one of the examples). The hand is drawn as usual afterwards
 function drawHeldDense(it, cx, hy, hsz, grip) {
   if (!DENSE_ON || !DENSE[it.id] || it.id === 'umbrella' && rain > 0.2 && mode !== 'room') return false; // (open in the rain: the canopy)
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72); // a little over the world's character size
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, [art, col] = DENSE[it.id](it, usesLeft(it)), artW = Math.max(...art.map(l => l.length)), top = grip + 0.6 * s - art.length * s;
-  if (!(it.id === 'yoyo' && fx.yoyo > 0)) { // (a yo-yo on the go is drawn by drawYoyo)
+  if (it.id !== 'yoyo') { // (a yo-yo is drawn by drawYoyo, hanging from your fingers)
     g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
     artText(art, cx - artW * w / 2, top, s, col); g.restore();
   }
-  if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - s * 0.4, s * 2);
+  if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top + (sparkBurn() * 9) * s, s * 2); // (at the burning point, working its way down)
   g.font = FS + 'px monospace';
   return true;
 }
@@ -10752,12 +10955,12 @@ Object.assign(DENSE, {
     const stripe = Math.floor((y + 8) * 0.6) & 1;
     return dLit(0.55 + 0.4 * dCyl(x, 2.2), stripe ? RED : YEL, 7);
   }),
-  yoyo: () => sculpt(18, 15, (x, y) => { // the yo-yo hanging from your finger on its string
-    if (y < -1 && Math.abs(x) < 0.15) return ['|', C(WHITE, 11)];
-    const d = dEll(x, y, 0, 2.6, 3.6, 3.6);
+  yoyo: () => sculpt(18, 15, (x, y) => { // the yo-yo in your hand, its string looped round your finger below
+    if (y > 2.5 && Math.abs(x) < 0.15) return ['|', C(WHITE, 11)];
+    const d = dEll(x, y, 0, -2.4, 3.6, 3.6);
     if (d > 1) return null;
     if (d < 0.25) return ['@', C(WHITE, 15)];
-    return [Math.abs(d - 0.6) < 0.06 ? 'o' : dFill(dBall(x, y, 0, 2.6, 3.6)), dCol(RED, dBall(x, y, 0, 2.6, 3.6), 7)];
+    return [Math.abs(d - 0.6) < 0.06 ? 'o' : dFill(dBall(x, y, 0, -2.4, 3.6)), dCol(RED, dBall(x, y, 0, -2.4, 3.6), 7)];
   }),
   vape: () => sculpt(12, 17, (x, y) => { // a mango vape pen; the tip glows when you draw on it
     if (y < -7 && Math.abs(x) < 0.9) return fx.vape > 0 ? ['@', C(ORANGE, 10 + fx.vape * 1.7)] : ['o', C(GRAY, 10)];
@@ -10893,7 +11096,8 @@ Object.assign(DENSE, {
     if (dmin < thick) return [dmin < thick * 0.3 && Math.floor(along * 4) & 1 ? '=' : dFill(0.5 + 0.45 * (1 - dmin / thick) - (y > 1 ? 0.1 : 0)), dCol(GREEN, 0.5 + 0.45 * (1 - dmin / thick), 7)];
     return null;
   }),
-  sparklers: () => sculpt(10, 15, (x, y) => (Math.abs(x) < 0.2 ? [y < -4 ? '#' : '|', y < -4 ? C(GRAY, 7) : C(GRAY, 12)] : null)), // the wire; drawSparks puts the fizz on top
+  // the wire, its top two thirds coated silver; lit, it burns down from the tip, leaving grey ash (#) above the fizz
+  sparklers: () => { const front = sparkBurn() * 9 - 7; return sculpt(10, 15, (x, y) => Math.abs(x) >= 0.2 ? null : y < front ? ['#', C(GRAY, 6)] : y < 2 ? ['=', C(WHITE, 13)] : ['|', C(GRAY, 12)]); },
   umbrella: () => sculpt(16, 19, (x, y) => { // furled, a strap round it, the hooked handle
     if (y > 5 && Math.abs(x) < 0.2) return ['|', C(BRICK, 12)];
     if (y > 8 && dEll(x, y, 1, 8.4, 1.2, 1) < 1 && dEll(x, y, 1, 8.4, 0.6, 0.4) > 1 && y > 8.4) return ['J', C(BRICK, 12)];
@@ -11196,7 +11400,8 @@ function drawGame() {
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
   const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
   const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
-  const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
+  const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
+  const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over && game.kind !== 'crime' && game.kind !== 'show') { // the results card
     const r = g.reward(), res = g.result, lines = game.kind === 'table'
@@ -11306,6 +11511,25 @@ function bustedChoice(how) {
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T }, [11, 3.2, Math.PI / 2]); // facing the bars
   say('The cell door slams. Everything you were carrying is in an evidence bag.', 5);
 }
+
+// the cab you paid to step on it gets pulled over, and the officer runs your face too: you're both arrested, and you
+// share a cell. He has some things to say about that
+function jailWithCabbie() {
+  const c = me, ret = [c.x, c.y];
+  hidePanel(bustedEl); endTaxiShift(); outOfCar(); c.v = 0; c.stopT = T + 25;
+  const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - ret[0]), rel(b.y - ret[1]))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
+  goToJail();
+  enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T, cabbie: true }, [11, 3.2, Math.PI / 2]);
+  say('The cruiser boxes the cab in. The officer runs the driver\'s licence, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.', 7);
+}
+const CABBIE_LINES = ['Twenty bucks to step on it, you said. TWENTY BUCKS.', 'Nineteen years I\'ve driven this city. Clean record. Then you get in.', 'Don\'t talk to me.', 'You were WANTED? And you didn\'t think to mention that?', 'My wife\'s gonna kill me. Then she\'s gonna come for you.',
+  'When we get out of here, you\'re walking. Everywhere. Forever.', 'I want you to know the meter was still running.', '...', 'Don\'t sit on my bunk.', 'You owe me a cab. And a lawyer.'];
+let cabbieLast = -1;
+function talkToCabbie() {
+  let k = Math.random() * CABBIE_LINES.length | 0; if (k === cabbieLast) k = (k + 1) % CABBIE_LINES.length; cabbieLast = k;
+  return say(`Your cab driver: "${CABBIE_LINES[k]}"`, 4);
+}
+const nearCabbie = () => { const w = roomPerson(); return w && w.cabbie ? w : null; };
 
 // ---- the crime minigames: they take the screen like the arcade, then hand back success, failure or 'abort'
 function startCrime(id, done) { startGame(id, 'crime'); game.onDone = done; }
@@ -11505,7 +11729,10 @@ function drawBoard3D() {
   const cy = 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
   const cz = 1.15;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
-  const pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS, ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
+  let pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS;
+  const fit = Math.min(1, (rows * 0.8 - hor) / ((0.5 / cz) * pY + 1e-6)); // (on a wide screen it'd sit half off the bottom: scaled down to sit in the lower part of the view)
+  if (fit > 0.2) { pX *= fit; pY *= fit; }
+  const ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
   const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
   // a point on the board (u along, v across, h up) to the screen
   const plot = (u, v, h, ch, col, bg) => {
@@ -11571,6 +11798,8 @@ function relock(e) {
   lockMouse();
 }
 onkeydown = e => {
+  if (devKey(e)) return; // the dev tools (F2)
+  if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
   if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
@@ -11614,7 +11843,9 @@ const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 function turnBy(mx, my) {
   if (paused || game) return;
   const s = settings.sensitivity;
-  if (mode === 'taxi' || mode === 'fair' && fairRide.kind === 'carousel') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea') a += mx * 0.003 * s;
+  if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s); // the yo-yo's out: the mouse swings it, the view holds still
+  if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
+  else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
 onmousemove = e => { if (document.pointerLockElement) turnBy(e.movementX, e.movementY); };
@@ -11678,14 +11909,14 @@ function loop(t) {
   if (sleep) stepSleep(dt);
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
-    a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
+    if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyoSwing(((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 600 * dt); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.8 : 1); // sprint 29 km/h, cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
     if (body.seat && (f || s)) standUp(); // walking gets you up
     if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
-  } else if (mode === 'drive') drive(dt);
+  } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
   else if (mode === 'sea') stepSea(dt);
@@ -11710,6 +11941,7 @@ function loop(t) {
   else if (law === 'lost') say('You lost them.', 3);
   else if (law === 'pullover') say('"PULL OVER!" booms from the cruiser on your tail.', 3);
   else if (law === 'pit') { say('The cruiser clips your back corner and you spin out.', 3); if (actx) playClip('crash', 0.6); }
+  else if (law === 'cab' && wanted.stars > 0) jailWithCabbie(); // and you were wanted already: you both go down
   else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
     const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
     say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);
@@ -11732,9 +11964,10 @@ function loop(t) {
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { // a drink or two and the world sways; more and you're seeing double
-    camYaw = a; const wob = Math.min(1.3, fx.booze);
+    camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : 0; // (and at the wheel, wherever you're looking)
+    a += lk;
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
-    a += sa; pitch += sp_; render(dt); a -= sa; pitch -= sp_;
+    a += sa; pitch += sp_; render(dt); a -= sa + lk; pitch -= sp_;
     if (wob > 0.08) drunkVision(wob);
   }
   audioTick(dt);
@@ -11747,7 +11980,7 @@ function drunkVision(wob) {
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way
 function chaseCam(dt) {
-  const target = mode === 'taxi' ? a : Math.atan2(me.hy, me.hx);
+  const target = mode === 'taxi' ? a : Math.atan2(me.hy, me.hx) + look;
   camYaw += (mod(target - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 5);
   const bx = Math.cos(camYaw), by = Math.sin(camYaw);
   let back = 1.1;

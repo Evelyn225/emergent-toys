@@ -42,6 +42,7 @@ function jailProps(r) {
     p.push(...bunk(cx - 1.1, 1.55), ...toilet(cx + 1.9, 1.4, -1)); // ours: bunk along the back wall
     p.push(...bunk(cx - 1.1, JAIL_D - 2.55), ...toilet(cx + 1.9, JAIL_D - 2.4, 1)); // theirs, the mirror of it
   }
+  if (r.cabbie) p.push({ ...sitting(9.9, 1.75, YEL, 0.58), cabbie: true }); // your cab driver, on the bunk, arms folded, not looking at you
   // who's across the way: one at the bars, one asleep on his bunk, one pacing
   p.push(inmate(4.6, 9.6), inmate(10.2, JAIL_D - 2.55, true));
   p.push({ ...inmate(18, 10.6), tick: s => { s.x = 18 + 1.6 * Math.sin(T * 0.35); } });

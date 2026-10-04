@@ -201,7 +201,7 @@ function drawHeldBig() {
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const lift = it.id === 'yoyo' && fx.yoyo > 0 ? Math.min(1, (YOYO_DUR - fx.yoyo) / 0.25, fx.yoyo / 0.25) : 0; // (your hand comes up in front of you for a yo-yo trick)
+  const lift = it.id === 'yoyo' ? Math.min(1, 0.55 + yoyo.len * 3) : 0; // (holding a yo-yo your hand's up, so it hangs below; higher still to work it)
   const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (drawHeldDense(it, cx, hy, hsz, grip)); // (the dense-art trial: the item drawn finer, the same hand)
@@ -210,14 +210,14 @@ function drawHeldBig() {
     const [art, col] = heldArt(it);
     g.font = isz + 'px monospace';
     const w = g.measureText('M').width, artW = Math.max(...art.map(l => l.length)), top = grip + 0.5 * isz - art.length * isz;
-    if (!(it.id === 'yoyo' && fx.yoyo > 0)) {
+    if (it.id !== 'yoyo') {
       g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
       artText(art, cx - artW * w / 2, top, isz, col); g.restore();
     }
     if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
   }
   drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
-  if (it.id === 'yoyo' && fx.yoyo > 0) drawYoyo(cx, grip);
+  if (it.id === 'yoyo') drawYoyo(cx - hsz * 0.2, hy + HAND_ART.length * hsz); // (in your hand or out on its string, it hangs from under your fist)
   g.font = FS + 'px monospace';
 }
 // the umbrella open over you, seen from underneath: panels of fabric between ribs fanning out from the hub (just off
@@ -299,33 +299,24 @@ function drawVapeCloud() {
     g.fillStyle = PAL[C(f > 0.5 ? YEL : WHITE, 6 + f * 8)]; g.fillText(f > 0.7 ? '@' : f > 0.4 ? '%' : '~', x, y);
   }
 }
-// a yo-yo trick, fx.yoyo counting down from YOYO_DUR, at the world's own character size: 0 walk the dog (down to
-// the pavement, rolling off and back), 1 around the world (a big loop out in front), 2 rock the baby (the string
-// pulled into a cradle, the yo-yo swinging through it), 3 the sleeper (spinning at the bottom, then snapped back
-// up). Every one drops fast and comes back faster; the yo-yo spins the whole time and smears when it's moving quick
-function yoyoAt(t, trick, x, y, L) {
-  const W = cv.width, H = cv.height, mid = clamp((t - 0.18) / 0.67, 0, 1);
-  if (trick === 0) L = Math.max(L, H - y - H * 0.06); // walking the dog: all the way down to the pavement
-  const d = t < 0.18 ? L * (t / 0.18) ** 2 : t > 0.85 ? L * (1 - (t - 0.85) / 0.15) ** 2 : L; // down, out, back up
-  if (t < 0.18 || t > 0.85 || trick === 3) return { x: x + (trick === 3 && t >= 0.18 && t <= 0.85 ? Math.sin(t * 9) * L * 0.03 : 0), y: y + d };
-  if (trick === 1) { const th = mid * Math.PI * 2; return { x: x + Math.sin(th) * L * 0.62, y: y + Math.cos(th) * L }; }
-  if (trick === 0) return { x: x - Math.sin(mid * Math.PI) * W * 0.3, y: y + L - Math.sin(mid * Math.PI) * H * 0.05 }; // rolls away along the pavement (a little further off, so a little higher) and back
-  const apex = { x: x - W * 0.13, y: y - L * 0.3 }, sw = Math.sin(mid * Math.PI * 4) * 0.55 * Math.sin(mid * Math.PI); // the cradle, rocking
-  return { x: apex.x + Math.sin(sw) * L * 0.55, y: apex.y + Math.cos(sw) * L * 0.55, apex };
+// the yo-yo out on its string (see yoyo in goods.js), at the world's own character size: hanging from your hand,
+// swinging as you swing it, rolling along the pavement when it reaches it; spinning the whole time, smeared when quick
+function yoyoPos(x, y, ang, len) {
+  const L = cv.height * 0.36 * len, ground = cv.height * 0.95;
+  let px_ = x + Math.sin(ang) * L, py_ = y + Math.cos(ang) * L;
+  const rolling = py_ > ground;
+  if (rolling) { px_ = x + Math.sin(ang) * L * 1.15; py_ = ground; } // on the ground: it runs on along it (walk the dog)
+  return { x: px_, y: py_, rolling };
 }
 function drawYoyo(x, y) {
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72);
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, L = cv.height * 0.3, trick = fx.yoyoTrick || 0, t = clamp(1 - fx.yoyo / YOYO_DUR, 0, 1);
-  const p = yoyoAt(t, trick, x, y, L), str = PAL[C(WHITE, 11)];
-  if (p.apex) { // rock the baby: the string from your hand round a triangle, the yo-yo hanging from its top corner
-    const b1 = { x: p.apex.x - L * 0.22, y: p.apex.y + L * 0.62 }, b2 = { x: p.apex.x + L * 0.22, y: p.apex.y + L * 0.62 };
-    charLine(x, y, b2.x, b2.y, w, s, str); charLine(b2.x, b2.y, b1.x, b1.y, w, s, str); charLine(b1.x, b1.y, p.apex.x, p.apex.y, w, s, str);
-    charLine(p.apex.x, p.apex.y, p.x, p.y, w, s, str);
-  } else charLine(x, y, p.x, p.y, w, s, str);
-  const q = yoyoAt(clamp(t - 0.025, 0, 1), trick, x, y, L), fast = Math.hypot(p.x - q.x, p.y - q.y) > s * 0.8;
-  if (fast) for (const k of [1, 2]) { const r = yoyoAt(clamp(t - 0.02 * k, 0, 1), trick, x, y, L); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
-  const spin = T * (trick === 0 && t > 0.18 && t < 0.85 ? 40 : 25); // (faster rolling along the ground)
+  const hang = 5 * s / (cv.height * 0.36); // (enough string to hang it clear of your hand)
+  const idle = !yoyo.out && yoyo.len < hang, len = Math.max(yoyo.len, hang), ang = idle ? Math.sin(T * 1.3) * 0.07 : yoyo.ang; // (just held: dangling on a short string, swaying a little)
+  const w = g.measureText('M').width, p = yoyoPos(x, y, ang, len), str = PAL[C(WHITE, 11)];
+  charLine(x, y, p.x, p.y, w, s, str);
+  if (Math.abs(yoyo.angV) > 3) for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * 0.02 * k, len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
+  const spin = idle ? 0 : yoyo.spin * (p.rolling ? 1.6 : 1); // (still, in your hand)
   const [art, col] = sculpt(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
     const r = Math.hypot(cx, cy * 1.1) * 2.5 / 3.2;
     if (r > 2.5) return null;

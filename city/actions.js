@@ -43,7 +43,7 @@ function leaveCar() {
     else { const all = money; pay(all); say(`Fare's ${fmt$(fare)}. You've only got ${fmt$(all)}. The driver takes it, muttering.`, 4); }
     c.rider = c.dest = c.arrived = c.rush = false; plan(c);
   }
-  me = null; mode = 'walk';
+  me = null; mode = 'walk'; look = 0;
 }
 // taxi destinations: always a point in the middle of a street that exists
 const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
@@ -130,6 +130,7 @@ function interact() {
       return say('Round and round and up and up. The lamp room.', 3);
     }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? enterRoom('lighthouse', room.below, [4, 5.6, -Math.PI / 2]) : say('The hatch down is in the corner.', 2);
+    if (room.kind === 'jail' && nearCabbie()) return talkToCabbie();
     if (room.kind === 'jail') {
       if (T >= room.until) return say('The guard unlocks the door. "Stay out of trouble."', 3), leaveRoom();
       if (room.tried) return say(`Locked in. ${Math.ceil(room.until - T)}s to go.`);
@@ -200,7 +201,7 @@ function interact() {
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
     }
     else { // a stolen car: if anyone saw, the police hear about it
-      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx);
+      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); look = 0;
       if (c.owned) { c.parked = false; say(`You get into your ${ITEMS[c.model].name}.`, 2); } // yours, bought and paid for
       else if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
       else {

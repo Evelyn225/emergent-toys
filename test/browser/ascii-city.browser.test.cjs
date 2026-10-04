@@ -884,3 +884,33 @@ test('breaking into the casino: shut from 2am, so the lock can be picked before 
   assert.deepStrictEqual([r.shut3, r.open22, r.noTables], [true, true, true]);
   assert.match(r.prompt, /crack the vault/);
 }));
+
+test('arrested along with your cab driver: a cell together, and he is not happy about it', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    me = cars.find(c => c.kind === 'taxi'); me.rider = true; me.fare = 0; mode = 'taxi'; setDest(5); me.rush = true;
+    addWanted('steal', px, py, false);
+    jailWithCabbie();
+    const cab = room.props.find(s => s.cabbie);
+    px = cab.x; py = cab.y + 0.9; a = -Math.PI / 2;
+    const prompt = promptText(); interact();
+    return { kind: room.kind, me, cab: !!cab, prompt, said: msgText, stars: wanted.stars };
+  });
+  assert.deepStrictEqual([r.kind, r.me, r.cab, r.stars], ['jail', null, true, 0]);
+  assert.match(r.prompt, /talk to your cab driver/);
+  assert.match(r.said, /^Your cab driver: "/);
+}));
+
+test('dev tools (F2): search and jump to a place, spawn an item, give money, set the day, time and weather', () => withPage(async page => {
+  await page.keyboard.press('F2');
+  assert.ok(await page.evaluate(() => devOpen() && paused));
+  await page.keyboard.type('marina'); await page.keyboard.press('Enter'); // the first match
+  assert.deepStrictEqual(await page.evaluate(() => [devOpen(), paused, inMarina(px, py)]), [false, false, true]);
+  await page.keyboard.press('F2');
+  await page.click('#dev [data-tab="items"]'); await page.keyboard.type('soccer'); await page.click('#dev [data-dev="0"]');
+  await page.click('#dev [data-tab="money"]'); await page.click('#dev [data-dev="1"]'); // +$1,000
+  await page.click('#dev [data-tab="time"]');
+  for (const label of ['Noon', 'Sun', 'fog']) await page.evaluate(l => [...document.querySelectorAll('#dev [data-dev]')].find(x => x.textContent === l).click(), label); // (the menu redraws after each)
+  await page.keyboard.press('Escape');
+  const r = await page.evaluate(() => [inv.map(i => i.id), money, Math.floor(tod), weekday(), weather, devOpen()]); // (the clock's running again)
+  assert.deepStrictEqual(r, [['ball'], 1100, 12, 'Sun', 'fog', false]);
+}));

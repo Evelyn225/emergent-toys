@@ -5,6 +5,8 @@ function relock(e) {
   lockMouse();
 }
 onkeydown = e => {
+  if (devKey(e)) return; // the dev tools (F2)
+  if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
   if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
@@ -48,7 +50,9 @@ const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 function turnBy(mx, my) {
   if (paused || game) return;
   const s = settings.sensitivity;
-  if (mode === 'taxi' || mode === 'fair' && fairRide.kind === 'carousel') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea') a += mx * 0.003 * s;
+  if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s); // the yo-yo's out: the mouse swings it, the view holds still
+  if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
+  else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
 onmousemove = e => { if (document.pointerLockElement) turnBy(e.movementX, e.movementY); };
@@ -112,14 +116,14 @@ function loop(t) {
   if (sleep) stepSleep(dt);
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
-    a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
+    if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyoSwing(((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 600 * dt); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.8 : 1); // sprint 29 km/h, cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
     if (body.seat && (f || s)) standUp(); // walking gets you up
     if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
-  } else if (mode === 'drive') drive(dt);
+  } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
   else if (mode === 'sea') stepSea(dt);
@@ -144,6 +148,7 @@ function loop(t) {
   else if (law === 'lost') say('You lost them.', 3);
   else if (law === 'pullover') say('"PULL OVER!" booms from the cruiser on your tail.', 3);
   else if (law === 'pit') { say('The cruiser clips your back corner and you spin out.', 3); if (actx) playClip('crash', 0.6); }
+  else if (law === 'cab' && wanted.stars > 0) jailWithCabbie(); // and you were wanted already: you both go down
   else if (law === 'cab') { // your cabbie, pulled over for it: he's cuffed, you're out on the sidewalk
     const c = me; leaveCar(); c.v = 0; c.stopT = T + 25;
     say(pick(['A cruiser lights up behind you. "License and registration." They cuff your driver.', '"Out of the cab, sir." Your driver gets arrested. You walk from here.']), 5);
@@ -166,9 +171,10 @@ function loop(t) {
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { // a drink or two and the world sways; more and you're seeing double
-    camYaw = a; const wob = Math.min(1.3, fx.booze);
+    camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : 0; // (and at the wheel, wherever you're looking)
+    a += lk;
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
-    a += sa; pitch += sp_; render(dt); a -= sa; pitch -= sp_;
+    a += sa; pitch += sp_; render(dt); a -= sa + lk; pitch -= sp_;
     if (wob > 0.08) drunkVision(wob);
   }
   audioTick(dt);
@@ -181,7 +187,7 @@ function drunkVision(wob) {
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way
 function chaseCam(dt) {
-  const target = mode === 'taxi' ? a : Math.atan2(me.hy, me.hx);
+  const target = mode === 'taxi' ? a : Math.atan2(me.hy, me.hx) + look;
   camYaw += (mod(target - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 5);
   const bx = Math.cos(camYaw), by = Math.sin(camYaw);
   let back = 1.1;

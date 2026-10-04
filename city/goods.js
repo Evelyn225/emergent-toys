@@ -97,7 +97,20 @@ const fx = { pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, sk
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
 // anything, the dragon's a bit more, and they add up
 const luck = () => (inv.some(it => it.id === 'jadebangle') ? 0.03 : 0) + (inv.some(it => it.id === 'jadedragon') ? 0.08 : 0) + (inv.some(it => it.id === 'plushcat') ? 0.02 : 0); // (and the lucky cat, a little)
-const YOYO_DUR = 2.4; // how long a yo-yo trick takes (fx.yoyoTrick says which: see drawYoyo)
+// the yo-yo, out on its string: Q lets it drop (and Q again reels it in); while it's out the camera holds still and
+// the mouse (or a drag) swings it. A pendulum: len 0..1 of the string paid out, ang its swing from straight down
+// (round past the top is around the world), and when it hangs low enough it touches down and rolls along the
+// pavement (walk the dog). fx.yoyo is 1 while any of it is out of your hand
+const yoyo = { out: false, len: 0, ang: 0, angV: 0, spin: 0 };
+function stepYoyo(dt) {
+  yoyo.len = clamp(yoyo.len + (yoyo.out ? 4 : -3) * dt, 0, 1); // drops fast, climbs back a touch slower
+  yoyo.angV += -9 * Math.sin(yoyo.ang) * yoyo.len * dt; yoyo.angV *= 1 - Math.min(1, 0.9 * dt); yoyo.ang += yoyo.angV * dt;
+  yoyo.ang = mod(yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
+  yoyo.spin += dt * (20 + Math.abs(yoyo.angV) * 6);
+  if (!yoyo.out && yoyo.len === 0) { yoyo.ang = yoyo.angV = 0; }
+  fx.yoyo = yoyo.len > 0 || yoyo.out ? 1 : 0;
+}
+const yoyoSwing = dx => { yoyo.angV = clamp(yoyo.angV + dx * 0.012, -14, 14); }; // a flick of the wrist
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
@@ -196,9 +209,9 @@ function useHeld(near) {
     case 'jadedragon': return [pick(['You rub the dragon\'s head for luck.', 'The little jade dragon stares back, very sure of itself.', 'You give the dragon a pat. Good fortune, apparently, follows.']), null];
     case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head. You feel a tiny bit luckier.', 'The lucky cat beckons good fortune your way. A little bit of it, anyway.']), null];
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
-    case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.']), null];
+    case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), null];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
-    case 'yoyo': fx.yoyoTrick = Math.random() * 4 | 0; fx.yoyo = YOYO_DUR; return [['Walk the dog.', 'Around the world.', 'Rock the baby.', 'It sleeps at the bottom, then snaps back up.'][fx.yoyoTrick], 'whirr'];
+    case 'yoyo': yoyo.out = !yoyo.out; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Swing it with the mouse: let it touch down to walk the dog, swing hard to go around the world.' : 'You reel it back in.', 'whirr'];
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something
         near.person.talk = 4;
@@ -242,7 +255,8 @@ function pickUpDropped(d) {
 function stepGoods(dt) {
   if (fx.skating && mode !== 'walk') fx.skating = false;
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
-  fx.yoyo = Math.max(0, fx.yoyo - dt); fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt);
+  stepYoyo(dt); if (!heldItem() || heldItem().id !== 'yoyo') yoyo.out = false; // (put it away and it comes back up)
+  fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt);
   cigTip = Math.max(0, cigTip - dt * 0.8);
   if (fx.vape > 0) { // pulling on the vape: the longer, the bigger the cloud
     const it = heldItem();

@@ -477,12 +477,12 @@ Object.assign(DENSE, {
     const stripe = Math.floor((y + 8) * 0.6) & 1;
     return dLit(0.55 + 0.4 * dCyl(x, 2.2), stripe ? RED : YEL, 7);
   }),
-  yoyo: () => sculpt(18, 15, (x, y) => { // the yo-yo hanging from your finger on its string
-    if (y < -1 && Math.abs(x) < 0.15) return ['|', C(WHITE, 11)];
-    const d = dEll(x, y, 0, 2.6, 3.6, 3.6);
+  yoyo: () => sculpt(18, 15, (x, y) => { // the yo-yo in your hand, its string looped round your finger below
+    if (y > 2.5 && Math.abs(x) < 0.15) return ['|', C(WHITE, 11)];
+    const d = dEll(x, y, 0, -2.4, 3.6, 3.6);
     if (d > 1) return null;
     if (d < 0.25) return ['@', C(WHITE, 15)];
-    return [Math.abs(d - 0.6) < 0.06 ? 'o' : dFill(dBall(x, y, 0, 2.6, 3.6)), dCol(RED, dBall(x, y, 0, 2.6, 3.6), 7)];
+    return [Math.abs(d - 0.6) < 0.06 ? 'o' : dFill(dBall(x, y, 0, -2.4, 3.6)), dCol(RED, dBall(x, y, 0, -2.4, 3.6), 7)];
   }),
   vape: () => sculpt(12, 17, (x, y) => { // a mango vape pen; the tip glows when you draw on it
     if (y < -7 && Math.abs(x) < 0.9) return fx.vape > 0 ? ['@', C(ORANGE, 10 + fx.vape * 1.7)] : ['o', C(GRAY, 10)];
@@ -618,7 +618,8 @@ Object.assign(DENSE, {
     if (dmin < thick) return [dmin < thick * 0.3 && Math.floor(along * 4) & 1 ? '=' : dFill(0.5 + 0.45 * (1 - dmin / thick) - (y > 1 ? 0.1 : 0)), dCol(GREEN, 0.5 + 0.45 * (1 - dmin / thick), 7)];
     return null;
   }),
-  sparklers: () => sculpt(10, 15, (x, y) => (Math.abs(x) < 0.2 ? [y < -4 ? '#' : '|', y < -4 ? C(GRAY, 7) : C(GRAY, 12)] : null)), // the wire; drawSparks puts the fizz on top
+  // the wire, its top two thirds coated silver; lit, it burns down from the tip, leaving grey ash (#) above the fizz
+  sparklers: () => { const front = sparkBurn() * 9 - 7; return sculpt(10, 15, (x, y) => Math.abs(x) >= 0.2 ? null : y < front ? ['#', C(GRAY, 6)] : y < 2 ? ['=', C(WHITE, 13)] : ['|', C(GRAY, 12)]); },
   umbrella: () => sculpt(16, 19, (x, y) => { // furled, a strap round it, the hooked handle
     if (y > 5 && Math.abs(x) < 0.2) return ['|', C(BRICK, 12)];
     if (y > 8 && dEll(x, y, 1, 8.4, 1.2, 1) < 1 && dEll(x, y, 1, 8.4, 0.6, 0.4) > 1 && y > 8.4) return ['J', C(BRICK, 12)];
