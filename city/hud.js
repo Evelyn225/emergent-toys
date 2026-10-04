@@ -108,6 +108,7 @@ function promptText() {
   if (mode === 'roof') { const dr = droppedHere(); return dr ? `E: pick up the ${ITEMS[dr.id].name}` : room && room.kind === 'cathedral' ? 'The bell tower, 80m up.   E: back down the stairs' : 'E: take the stairs down'; }
   if (mode === 'fair') return fairRidePrompt();
   if (mode === 'boat') return gardensPrompt();
+  if (mode === 'sea') return marinaPrompt();
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
     if (elHere()) return 'E: board the train';
@@ -122,7 +123,7 @@ function promptText() {
   if (heldItem() && heldItem().id === 'spraypaint' && sprayTarget()) return 'Q: spray a tag (if the police see, it\'s vandalism)';
   const vm = nearMachine();
   if (vm) return `E: ${VENDING[vm.kind].title.toLowerCase()}`;
-  const gp = gardensPrompt();
+  const gp = gardensPrompt() || marinaPrompt();
   if (gp) return gp;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   if (nearWalkedDog()) return 'E: pet the dog';
@@ -224,7 +225,7 @@ let hudBottom = 0; // where the text block top left ends (px), for the map and t
 function hud() {
   drawHeldBig();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : '';
+  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtAt(px, py)]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
     : settings.help ? 'WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | H hail taxi | hold T: time | Y: weather | M: map | N: sound | Esc: pause' : 'Esc: pause';
@@ -252,7 +253,7 @@ function hud() {
   const prompt = wrapText(keyless(promptText()), left), pb = (mode === 'drive' || mode === 'taxi' ? rows - 5 : rows - 2) * FS - (TOUCH && hotbarUp() ? FS * 2 + 12 : 0);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
-                                   [msg, Math.max(FS * 4, hudBottom + FS * 1.5), '#fff', cv.width / 2]]) {
+                                   [msg, Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8), '#fff', cv.width / 2]]) {
     ls.forEach((s, k) => {
       const w = g.measureText(s).width, yy = y0 + k * (FS + 4);
       g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(cx - w / 2 - 6, yy - 3, w + 12, FS + 6);

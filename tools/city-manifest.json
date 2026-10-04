@@ -14,7 +14,8 @@
     "city/minigames.js",
     "city/stocks.js",
     "city/crime.js",
-    "city/property.js"
+    "city/property.js",
+    "city/boats.js"
   ],
   "dom": [
     "city/screen.js",
@@ -31,6 +32,7 @@
     "city/casino.js",
     "city/exchange.js",
     "city/stripclub.js",
+    "city/marina.js",
     "city/render.js",
     "city/hud.js",
     "city/actions.js",

@@ -3,22 +3,31 @@
 // L picks the lock of a shop that's shut for the night. The rules are in crime.js, the minigames in minigames.js.
 
 // ---- the stars, top middle: red and blue while they can see you, grey while you're hiding (and how long to go)
+// On a phone: smaller, down the left under the text block, clear of the buttons and the map, and shrunk to fit
+let wantedBottom = 0; // where it ends (px), so the message line goes under it
 function wantedHud() {
+  wantedBottom = 0;
   const pend = reports.length && !wanted.stars;
   if (!wanted.stars && !pend) return;
-  const s = Math.max(16, Math.round(cv.height / 34)), y = 44;
+  const stars = [1, 2, 3].map(k => k <= wanted.stars ? '*' : '.').join(' ');
+  const line = pend ? "someone's calling the police..." : `WANTED  ${stars}`, phone = TOUCH || cv.width < 700;
+  const room_ = phone ? cv.width * (showMap && mode !== 'room' && cv.width < cv.height ? 0.5 : 0.9) : cv.width;
+  let s = phone ? clamp(Math.round(cv.height / 48), 11, 18) : Math.max(16, Math.round(cv.height / 34));
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, stars = [1, 2, 3].map(k => k <= wanted.stars ? '*' : '.').join(' ');
-  const line = pend ? "someone's calling the police..." : `WANTED  ${stars}`, x = cv.width / 2 - line.length * w / 2;
+  const fit = room_ / ((line.length + 2) * g.measureText('M').width);
+  if (fit < 1) { s = Math.max(8, Math.floor(s * fit)); g.font = s + 'px monospace'; }
+  const w = g.measureText('M').width, y = phone ? Math.max(52, hudBottom + 6) : 44, x = phone ? w + 6 : cv.width / 2 - line.length * w / 2;
   const flash = fract(T * 3) < 0.5, hue = wanted.seen ? (flash ? RED : BLUE) : flash ? WHITE : GRAY;
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - w, y - s * 0.15, (line.length + 2) * w, s * 1.3);
   artText([line], x, y, s, (c, r, k) => pend ? C(GRAY, 12) : c === '.' ? C(GRAY, 7) : C(hue, 15)); // flashing: you can't miss it
+  wantedBottom = y + s * 1.2;
   if (!pend && !wanted.seen) {
-    const left = Math.max(0, ESCAPE_T[wanted.stars] - wanted.hideT), sub = `out of sight: losing them in ${Math.ceil(left)}s`;
-    g.font = FS + 'px monospace';
-    const sw = g.measureText(sub).width;
-    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(cv.width / 2 - sw / 2 - 6, y + s + 4, sw + 12, FS + 6);
-    g.fillStyle = PAL[C(GRAY, 13)]; g.fillText(sub, cv.width / 2 - sw / 2, y + s + 7);
+    const left = Math.max(0, ESCAPE_T[wanted.stars] - wanted.hideT), sub = `out of sight: losing them in ${Math.ceil(left)}s`, fs = phone ? Math.min(FS, Math.max(9, s - 2)) : FS;
+    g.font = fs + 'px monospace';
+    const sw = g.measureText(sub).width, sx = phone ? x - w + 6 : cv.width / 2 - sw / 2;
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(sx - 6, y + s + 4, sw + 12, fs + 6);
+    g.fillStyle = PAL[C(GRAY, 13)]; g.fillText(sub, sx, y + s + 7);
+    wantedBottom = y + s + fs + 12;
   }
   g.font = FS + 'px monospace';
 }
@@ -170,7 +179,7 @@ function crimeKey(code) {
     const p = pickTarget();
     if (p) return pickpocket(p);
   }
-  if (code === 'KeyL') { const sh = lockTarget(); if (sh) return pickLock(sh); }
+  if (code === 'KeyL') { if (stealBoat()) return; const sh = lockTarget(); if (sh) return pickLock(sh); }
 }
 // what G / L would do here, for the prompt line
 function crimePrompt() {

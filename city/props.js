@@ -228,7 +228,10 @@ for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k++) if (k % 2 ===
 }
 { const [x, y] = gx2w(GARDEN_SHED.gx, GARDEN_SHED.gy); solidBox(x, y, true, 0.35, 0.25, 0, 0.3, 'shed', 2); }
 // dockside cranes on the industrial piers
-for (const [x0, y0, x1, y1] of PIERS) if (x1 - x0 > 2 && x0 !== FAIR.x0 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
+for (const [x0, y0, x1, y1] of PIERS.filter(p => !p.marina)) if (x1 - x0 > 2 && x0 !== FAIR.x0 && hash(x0, y0, 55) < 0.7) cranes.push({ x: (x0 + x1) / 2, y: y0 + 4, H: 5 + hash(x0, 1, 55) * 2, slew: hash(x0, 2, 55) * 6.28 });
+// the marina office: a clapboard hut at the foot of the jetty, its sign facing the road; bollards down the fingers
+solidBox(MARINA.office.x, MARINA.office.y, true, 0.55, 0.3, 0, 0.3, 'marina', 0);
+for (const fy of MARINA.fingers) for (const s of [-1, 1]) for (const ox of [-3.1, -1.2, 1.2, 3.1]) solidBox(MARINA.x + ox, fy + s * 0.12, true, 0.025, 0.025, 0, 0.04, 'bollard', 0);
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
 function solidAt(x, y, pad) {

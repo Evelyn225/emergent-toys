@@ -40,7 +40,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^a private dance/, 'VIP dance'], [/^tip the dancer/, 'Tip'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^a private dance/, 'VIP dance'], [/^tip the dancer/, 'Tip'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^rent the/, 'Rent'], [/^buy the/, 'Buy'], [/^take the/, 'Take out'], [/^tie up/, 'Tie up'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
@@ -75,13 +75,14 @@ function touchActions() {
     return out;
   }
   if (mode === 'drive') return [['Camera', 'KeyV', 'pop'], ['Get out', 'KeyE', 'main']];
+  if (mode === 'sea') return [['Camera', 'KeyV', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
     if (/\bJ: /.test(p)) out.push(['Drive taxi', 'KeyJ', 'pop']);
     if (/\bH: /.test(p)) out.push(['Hail taxi', 'KeyH', 'pop']);
     if (/\bG: pick/.test(p)) out.push(['Pick pocket', 'KeyG', 'pop']);
     if (/\bG: take/.test(p)) out.push(['Grab', 'KeyG', 'pop']);
-    if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
+    if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
     if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);

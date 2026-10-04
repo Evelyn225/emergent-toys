@@ -9,7 +9,7 @@ function drawArt(rx_, ry_, z, w, h, art, colFn) {
   const c0 = Math.max(0, Math.floor(left)), c1 = Math.min(cols, Math.ceil(right));
   const r0 = Math.max(0, Math.floor(top)), r1 = Math.min(rows, Math.ceil(bot));
   const L = (1 - depth / vis) * 15 * amb, AR = art.length, AC = art[0].length;
-  const cellW = (right - left) / AC, cellH = (bot - top) / AR, stretched = cellW > 1.5 || cellH > 1.5;
+  const cellW = (right - left) / AC, cellH = (bot - top) / AR, stretched = cellW > 1 || cellH > 1;
   for (let r = r0; r < r1; r++) {
     const ay = Math.min(AR - 1, Math.max(0, (r + 0.5 - top) / (bot - top) * AR | 0)), line = art[ay];
     for (let c = c0; c < c1; c++) {
@@ -106,7 +106,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
-      : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : chaseOn ? 0.28 : 0.12;
+      : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows + shake() | 0;

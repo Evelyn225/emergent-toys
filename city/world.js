@@ -211,8 +211,16 @@ const fairBlocked = (x, y, pad = 0) => Math.hypot(rel(x - CAROUSEL.x), rel(y - C
   Math.abs(rel(x - WHEEL.x)) < 0.35 + pad && Math.abs(rel(y - WHEEL.y)) < 0.35 + pad;
 // piers: walkable decks out over the water [x0, y0, x1, y1]; wider docks along the industrial shore
 const PIERS = [[FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1]];
+// the marina, on the industrial shore west of the island: a jetty straight out from the promenade, two long finger
+// piers across it and a T at the end. Boats lie in the slips along the fingers (boats.js says whose they are), and
+// the marina office stands on the promenade at the foot of the jetty
+const MARINA_BX = 13, MARINA = { x: MARINA_BX * 8 + 4, y0: SHORE_S * 8 + 3, fingers: [SHORE_S * 8 + 7, SHORE_S * 8 + 10], end: SHORE_S * 8 + 12.6, reach: 3.3 };
+MARINA.office = { x: MARINA.x - 2.2, y: SHORE_S * 8 + 3.55 };
+for (const p of [[MARINA.x - 0.2, MARINA.y0, MARINA.x + 0.2, MARINA.end], [MARINA.x - 1, MARINA.end - 0.3, MARINA.x + 1, MARINA.end],
+  ...MARINA.fingers.map(fy => [MARINA.x - MARINA.reach, fy - 0.15, MARINA.x + MARINA.reach, fy + 0.15])]) PIERS.push(Object.assign(p, { marina: true }));
+const inMarina = (x, y) => Math.abs(rel(x - MARINA.x)) < MARINA.reach + 1.2 && rel(y - MARINA.y0) > -1.2 && rel(y - MARINA.end) < 0.8;
 for (let bx = 0; bx < NB; bx++) {
-  if (BRIDGE_X.includes(bx) || bx === ISLE_BX) continue;
+  if (BRIDGE_X.includes(bx) || bx === ISLE_BX || bx === MARINA_BX) continue;
   const dock = districtOf(bx, SHORE_S - 1) === 'industrial';
   if (dock && hash(bx, 4, 43) < 0.5) PIERS.push([bx * 8 + 3.6, SHORE_S * 8 + 3, bx * 8 + 6.4, SHORE_S * 8 + 11]);
   else if (hash(bx, 5, 43) < 0.35 && bx !== FAIR_BX) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);

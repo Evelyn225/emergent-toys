@@ -39,6 +39,9 @@ test('every mode renders without errors', async () => {
       garage: "enterRoom('garage', { word: 'TIRES', neon: RED, ret: [px, py, a] }, [10.5, 8, -2.4])",
       tea: "enterRoom('tea', { word: 'MAHJONG', neon: RED, ret: [px, py, a] }, [6, 7.5, -Math.PI / 2])",
       station: "enterRoom('station', { st: 0, word: stations[0].name, t0: T - 12, ret: [px, py, a] }, [11, 4.8, 0])",
+      sea: "leaveRoom(); mode = 'walk'; boardBoat(fleet.find(b => b.kind === 'sailboat')); sea.v = 0.5; third = true",
+      helm: 'third = false; tod = 22',
+      marina: "third = true; sea.v = 0; mode = 'walk'; sea = null; px = MARINA.x; py = MARINA.y0 + 1; a = Math.PI / 2; tod = 12",
     };
     for (const [name, js] of Object.entries(scenes)) {
       await page.evaluate(js);
@@ -809,4 +812,28 @@ test('the Velvet Rope\'s private dancer is six characters in every frame (the jo
     return [counts, LAP_LINES.some(l => /six characters/.test(l)), prompt, panelOpen()];
   });
   assert.deepStrictEqual(r, [[6, 6, 6, 6, 6, 6, 6, 6], true, 'E: cigarette machine', true]);
+}));
+
+test('the marina: buy a boat, take her out (chase camera and at the helm), tie up somewhere else; she is still there after a reload', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    tod = 12; money = 9000; mode = 'walk';
+    const b = fleet.find(o => o.deal === 'sale' && o.kind === 'cruiser'), s = SLOTS[b.slot], fy = MARINA.fingers[Math.floor(b.slot / 4)];
+    px = s.x; py = fy; a = Math.atan2(s.y - fy, 0);
+    const prompt = promptText(); interact(); const bought = [b.deal, money];
+    interact(); return { prompt, bought, mode, name: b.name };
+  });
+  assert.match(r.prompt, /E: buy the cabin cruiser/);
+  assert.deepStrictEqual([r.bought, r.mode], [['mine', 3000], 'sea']);
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(800); await page.keyboard.up('KeyW');
+  await page.keyboard.press('KeyV'); await page.waitForTimeout(300); // at the helm
+  await page.keyboard.press('KeyV'); await page.waitForTimeout(200);
+  const moved = await page.evaluate(() => { const at = [sea.x, sea.y]; sea.v = 0; sea.x = MARINA.x + 0.9; sea.y = MARINA.fingers[1] + 0.38; sea.hx = 1; sea.hy = 0; a = 0;
+    const p = promptText(); interact(); return { at, p, mode, x: fleet.find(o => o.deal === 'mine').x }; });
+  assert.match(moved.p, /E: tie up/);
+  assert.strictEqual(moved.mode, 'walk');
+  await page.evaluate(() => saveGame());
+  await page.reload(); await page.waitForTimeout(400);
+  const kept = await page.evaluate(() => fleet.filter(o => o.deal === 'mine').map(o => [o.kind, o.name, Math.round(o.x * 10) / 10]));
+  assert.deepStrictEqual(kept, [['cruiser', r.name, Math.round(moved.x * 10) / 10]]);
+  await page.evaluate(() => localStorage.removeItem('ascii-city-save'));
 }));
