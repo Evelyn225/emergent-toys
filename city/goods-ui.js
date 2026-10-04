@@ -291,7 +291,7 @@ function drawVapeCloud() {
   }
   if (!cloudPuffs.length) return;
   g.font = FS + 'px monospace';
-  cloudPuffs = cloudPuffs.filter(p => (p[4] -= dt * 0.3) > 0);
+  cloudPuffs = cloudPuffs.filter(p => (p[4] -= dt * 0.75) > 0); // (gone in a couple of seconds: then it's the cloud out in the world you see)
   for (const p of cloudPuffs) {
     p[0] += p[2] * dt; p[1] += p[3] * dt; p[2] *= 1 - dt * 0.8; p[3] = p[3] * (1 - dt * 0.8) - FS * dt * 0.6; // slowing, drifting up
     const x = Math.round(p[0] / cw) * cw, y = Math.round(p[1] / FS) * FS, f = Math.min(1, p[4]);
