@@ -238,7 +238,7 @@ const GLYPHS = { BOOKS: '|][|', RECORDS: '()O', VIDEO: '[]', LIQUOR: 'il!', BAR:
   'TEA HOUSE': 'oc]', TIRES: 'O0o', 'AUTO REPAIR': 'T7/', SPORTS: 'oO@', SKATE: '=_o', TOYS: 'o*@&', THRIFT: '|]&', TOBACCO: 'i=', MANGA: '|][|', DRUGSTORE: '+=o', GACHA: 'oO@' };
 const LINES = ['Welcome to {}!', 'Looking for anything special?', 'Cash only, sorry.', 'Nice weather, huh?', 'Take your time.'];
 // opening hours [open, close) in game hours; close < open wraps past midnight; [0, 24] never closes
-const HOURS = { CASINO: [10, 6], BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
+const HOURS = { CASINO: [10, 6], EXCHANGE: [8, 19], BAR: [16, 3], KARAOKE: [19, 4], ARCADE: [11, 2], CINEMA: [12, 1], '24/7': [0, 24], HOTEL: [0, 24], MOTEL: [0, 24],
   CAFE: [6, 18], COFFEE: [6, 18], DONUTS: [5, 15], BAKERY: [6, 16], DINER: [6, 23], PIZZA: [11, 2], KEBAB: [11, 4], DELI: [7, 22],
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
@@ -593,6 +593,13 @@ const CASINO = { bx: 15, by: 15 };
 {
   const sh = CASINO.sh = { kind: SHOP_NEON, word: 'CASINO', neon: YEL, glyphs: '7$o*', hours: hoursOf('CASINO'), casino: true };
   for (let y = 2; y <= 5; y++) for (let x = 2; x <= 7; x++) { const i = idx(CASINO.bx * 8 + x, CASINO.by * 8 + y); map[i] = 2.6; STY[i] = 20; SHOP[i] = sh; SEED[i] = 0.5; }
+}
+
+// ---- the stock exchange: next door to the casino, facing the plaza too (exchange.js)
+const EXCHANGE = { bx: 16, by: 15 };
+{
+  const sh = EXCHANGE.sh = { kind: SHOP_LIT, word: 'EXCHANGE', neon: GREEN, glyphs: '$%#', hours: hoursOf('EXCHANGE'), exchange: true };
+  for (let y = 2; y <= 5; y++) for (let x = 2; x <= 7; x++) { const i = idx(EXCHANGE.bx * 8 + x, EXCHANGE.by * 8 + y); map[i] = 3.2; STY[i] = 21; SHOP[i] = sh; SEED[i] = 0.5; }
 }
 
 // the glass houses go up in the Gardens
@@ -3118,6 +3125,133 @@ GAMES.slots = (rnd = Math.random) => {
   g.reward = () => 0;
   return g;
 };
+// ===== the stock market: a handful of the city's companies, their prices moving through the trading day (9:30 to 4,
+// Monday to Friday), a jump overnight, and now and then a piece of news that sends one up or down hard. Buy and sell
+// at the exchange downtown (exchange.js has the building and the trading floor); your shares are kept in the save.
+// Prices move in game time, so they keep going while you're off doing other things (and race if you fast-forward).
+const STOCKS = [
+  { sym: 'DUMP', name: 'Golden Dumpling Co', price: 24, vol: 0.011, good: ['opens 40 new stalls', 'wins best dumpling award'], bad: ['hit by flour shortage', 'health inspector visit'] },
+  { sym: 'CABS', name: 'City Cabs', price: 41, vol: 0.009, good: ['record fares this month', 'new fleet of taxis'], bad: ['drivers go on strike', 'fares cut to beat rivals'] },
+  { sym: 'ELRL', name: 'Elevated Rail', price: 18, vol: 0.008, good: ['gets city funding for repairs', 'ridership at all-time high'], bad: ['el shut for repairs again', 'mayor blames the el for traffic'] },
+  { sym: 'PIER', name: 'Sunset Pier Fun', price: 12, vol: 0.018, good: ['new rollercoaster announced', 'heatwave packs the pier'], bad: ['ferris wheel stuck for hours', 'storms close the pier'] },
+  { sym: 'JADE', name: 'Chinatown Jade', price: 55, vol: 0.01, good: ['tourists snap up lucky charms', 'rare jade found'], bad: ['fake jade scandal', 'tourist season slow'] },
+  { sym: 'LUCK', name: 'Lucky Star Casino', price: 73, vol: 0.016, good: ['high roller loses big', 'licence renewed'], bad: ['someone hits the jackpot twice', 'gambling inquiry opened'] },
+  { sym: 'BYTE', name: 'ByteWave Tech', price: 110, vol: 0.024, good: ['launches a new phone', 'buys a rival'], bad: ['data leak!', 'CEO quits suddenly'] },
+];
+for (const s of STOCKS) { // a past to chart from the start: a random walk that ends at today's price
+  let v = 1; const walk = [];
+  for (let k = 0; k < 48; k++) { walk.push(v); v *= 1 + (Math.random() + Math.random() + Math.random() - 1.5) * 1.4 * s.vol; }
+  s.hist = walk.map(w => Math.round(s.price * w / walk[47] * 100) / 100); s.open = s.hist[30]; s.mom = 0;
+}
+const shares = {}; // sym -> { n, cost (what you paid for them all) }
+const MARKET = { tick: 0, news: [], lastMin: null }; // tick count; recent headlines, newest first
+const TRADE_FEE = 1; // the broker's cut, a trade
+const marketOpen = (t = tod, d = dayNum) => mod(d, 7) < 5 && t >= 9.5 && t < 16;
+const stockBy = sym => STOCKS.find(s => s.sym === sym);
+const holdingsValue = () => STOCKS.reduce((v, s) => v + (shares[s.sym] ? shares[s.sym].n * s.price : 0), 0);
+const pctChange = s => (s.price - s.open) / s.open * 100;
+// one tick of the market (every 5 game minutes while it's open): a random walk with a little momentum, a slow pull
+// back toward where it's been, and the odd big news story
+function marketTick(rnd = Math.random, gap = false) {
+  MARKET.tick++;
+  for (const s of STOCKS) {
+    const norm = (rnd() + rnd() + rnd() - 1.5) * 1.4; // roughly normal
+    const avg = s.hist.reduce((a, b) => a + b, 0) / s.hist.length;
+    let r = norm * s.vol * (gap ? 2.5 : 1) + s.mom * 0.3 + (avg - s.price) / avg * 0.01;
+    if (!gap && rnd() < 0.006) { // news
+      const up = rnd() < 0.5, line = `${s.name} ${pick_(up ? s.good : s.bad, rnd)}`;
+      r += (up ? 1 : -1) * (0.07 + rnd() * 0.12);
+      MARKET.news.unshift({ sym: s.sym, line, up, tick: MARKET.tick });
+      MARKET.news.length = Math.min(MARKET.news.length, 6);
+    }
+    s.mom = s.mom * 0.6 + r * 0.4;
+    s.price = Math.max(1, Math.round(s.price * (1 + r) * 100) / 100);
+    s.hist.push(s.price); if (s.hist.length > 48) s.hist.shift();
+  }
+}
+const pick_ = (arr, rnd) => arr[rnd() * arr.length | 0];
+// every frame: tick for each 5 game minutes that's gone by while open; at the morning bell, the overnight jump and a
+// fresh day's opening prices
+function stepMarket() {
+  const now = dayNum * 1440 + tod * 60;
+  if (MARKET.lastMin === null || now < MARKET.lastMin || now - MARKET.lastMin > 1440 * 3) MARKET.lastMin = now; // (first run, or a load)
+  while (now - MARKET.lastMin >= 5) {
+    MARKET.lastMin += 5;
+    const d = Math.floor(MARKET.lastMin / 1440), t = (MARKET.lastMin - d * 1440) / 60;
+    if (mod(d, 7) < 5 && Math.abs(t - 9.5) < 0.04) { marketTick(Math.random, true); for (const s of STOCKS) s.open = s.price; } // the opening bell
+    else if (marketOpen(t, d)) marketTick();
+  }
+}
+// buying and selling: [ok, what happened]
+function buyShares(sym, n) {
+  const s = stockBy(sym), cost = Math.round((s.price * n + TRADE_FEE) * 100) / 100;
+  if (!marketOpen()) return [false, "The market's closed. It opens at 9:30, Monday to Friday."];
+  if (money < cost) return [false, `That's ${fmt$(cost)} with the fee. You have ${fmt$(money)}.`];
+  pay(cost);
+  const h = shares[sym] || (shares[sym] = { n: 0, cost: 0 });
+  h.n += n; h.cost = Math.round((h.cost + s.price * n) * 100) / 100;
+  return [true, `Bought ${n} ${sym} at ${fmt$(s.price)}.`];
+}
+function sellShares(sym, n) {
+  const s = stockBy(sym), h = shares[sym];
+  if (!marketOpen()) return [false, "The market's closed. It opens at 9:30, Monday to Friday."];
+  if (!h || h.n < 1) return [false, `You don't own any ${sym}.`];
+  n = Math.min(n, h.n);
+  const avg = h.cost / h.n, got = Math.round((s.price * n - TRADE_FEE) * 100) / 100, gain = (s.price - avg) * n;
+  earn(Math.max(0, got));
+  h.cost = Math.round((h.cost - avg * n) * 100) / 100; h.n -= n;
+  if (!h.n) delete shares[sym];
+  return [true, `Sold ${n} ${sym} at ${fmt$(s.price)}: ${gain >= 0 ? 'up' : 'down'} ${fmt$(Math.abs(gain))}.`];
+}
+const tickerLine = () => STOCKS.map(s => `${s.sym} ${s.price.toFixed(2)} ${pctChange(s) >= 0 ? '+' : ''}${pctChange(s).toFixed(1)}%`).join('   ');
+
+// the trading screen: UP/DOWN pick a company, RIGHT buy, LEFT sell, SPACE the lot size; its price chart below
+const TRADE_LOTS = [1, 10, 100];
+GAMES.market = () => {
+  const W = 32, H = 19, g = { id: 'market', title: 'CITY STOCK EXCHANGE', W, H, score: 0, over: false };
+  let cur = 0, lot = 0, msg = marketOpen() ? 'RIGHT buy, LEFT sell.' : "Market's closed: you can look, not trade.";
+  g.inRound = () => false; g.cursor = () => cur; g.lot = () => TRADE_LOTS[lot]; // (for the tests)
+  g.step = (dt, k) => {
+    const ev = [];
+    if (k.upP) cur = (cur + STOCKS.length - 1) % STOCKS.length; if (k.downP) cur = (cur + 1) % STOCKS.length;
+    if (k.actP) lot = (lot + 1) % TRADE_LOTS.length;
+    if (k.rightP || k.leftP) { const [ok, m] = (k.rightP ? buyShares : sellShares)(STOCKS[cur].sym, TRADE_LOTS[lot]); msg = m; ev.push(ok ? 'eat' : 'wrong'); }
+    return ev;
+  };
+  g.draw = (put, text, chars) => {
+    const at = chars || ((c, y, str, col) => text(c / 2, y, str, col)); // (c in characters)
+    at(0, 0, 'SYM   COMPANY             PRICE   TODAY   YOU OWN', C(GRAY, 10));
+    STOCKS.forEach((s, k) => {
+      const on = k === cur, ch = pctChange(s), h = shares[s.sym];
+      at(0, 1 + k, `${on ? '>' : ' '}${s.sym}  ${s.name.padEnd(18)}${s.price.toFixed(2).padStart(7)}`, C(on ? YEL : WHITE, on ? 15 : 11));
+      at(34, 1 + k, `${ch >= 0 ? '^+' : 'v'}${ch.toFixed(1)}%`.padEnd(8), C(ch >= 0 ? GREEN : RED, 14));
+      if (h) at(44, 1 + k, String(h.n).padStart(6), C(CYAN, 14));
+    });
+    // the chart: the last 48 ticks, scaled to fit, drawn as a line of / \ _ (green above the day's open, red below)
+    const s = STOCKS[cur], hi = Math.max(...s.hist), lo = Math.min(...s.hist), span = Math.max(hi - lo, s.price * 0.01), top = 9, rowsH = 6;
+    const rowOf = v => top + Math.round((hi - v) / span * (rowsH - 1));
+    at(0, top, hi.toFixed(2), C(GRAY, 9)); at(0, top + rowsH - 1, lo.toFixed(2), C(GRAY, 9)); at(0, top + 2, s.sym, C(YEL, 13));
+    const grid = Array.from({ length: rowsH }, () => Array(48).fill(null));
+    s.hist.forEach((v, k) => {
+      const r = rowOf(v), prev = k ? rowOf(s.hist[k - 1]) : r, col = v >= s.open ? GREEN : RED;
+      grid[r - top][k] = [r < prev ? '/' : r > prev ? '\\' : '_', col];
+      for (let rr = Math.min(r, prev) + 1; rr < Math.max(r, prev); rr++) grid[rr - top][k] = ['|', col];
+    });
+    grid.forEach((row, y) => { let k = 0; while (k < 48) { // runs of one colour, as one label each
+      if (!row[k]) { k++; continue; }
+      const col = row[k][1]; let str = '', k0 = k;
+      while (k < 48 && (!row[k] || row[k][1] === col)) { str += row[k] ? row[k][0] : ' '; k++; }
+      at(10 + k0, top + y, str.trimEnd(), C(col, 14));
+    } });
+    const h = shares[s.sym], val = holdingsValue();
+    at(0, 16, msg.slice(0, 62), C(WHITE, 15));
+    at(0, 17, `LOT ${TRADE_LOTS[lot]}   CASH ${fmt$(money)}   SHARES ${fmt$(val)}${h ? `   ${s.sym}: ${h.n} @ ${fmt$(h.cost / h.n)}` : ''}`.slice(0, 64), C(YEL, 13));
+    at(0, 18, (MARKET.news.length ? `NEWS: ${MARKET.news[0].line}` : marketOpen() ? 'MARKET OPEN' : 'MARKET CLOSED   opens 9:30 Mon-Fri').slice(0, 64), C(MARKET.news.length ? (MARKET.news[0].up ? GREEN : RED) : marketOpen() ? GREEN : RED, 12));
+  };
+  g.status = () => `UP/DOWN pick   RIGHT buy   LEFT sell   SPACE lot (${TRADE_LOTS[lot]})   E leave`;
+  g.reward = () => 0;
+  return g;
+};
 // ---- crime and the police. Pure (no DOM), so the node tests can run it; crime-ui.js draws it and asks what you do
 // when they catch you.
 //
@@ -3524,6 +3658,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
   const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
   if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
+  if (sty === 21) return exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 18 || sty === 19) return glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty);
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
@@ -3807,9 +3942,9 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
   if (sty === 5) { // tower wrapped in giant video screens, with a scrolling news ticker
     if (z < 0.5 || z > h - 0.3) { BG[i] = bgAt(GRAY, day * 2 * fog); return set(i, '=', C(GRAY, L)); }
     if (z > 1.1 && z < 1.5) { // ticker: one cell per letter, scrolling left
-      const q = (u + T * 1.2) / 0.3, p = mod(Math.floor(q), TICKER.length);
+      const TK = TICKER + liveTicker(), q = (u + T * 1.2) / 0.3, p = mod(Math.floor(q), TK.length); // (the news, and the market)
       BG[i] = C(GRAY, 1);
-      return set(i, (uStep >= 0.3 || oneCell((fract(q) - 0.5) * 0.3, uStep)) && oneCell(z - 1.3, d / projY) ? TICKER[p] : ' ', C(YEL, 15));
+      return set(i, (uStep >= 0.3 || oneCell((fract(q) - 0.5) * 0.3, uStep)) && oneCell(z - 1.3, d / projY) ? TK[p] : ' ', C(YEL, 15));
     }
     const k = (Math.floor(T / 7) + (side ? 1 : 0)) & 3, v = noise(u * 0.5 + T * 0.4, z * 0.7 - T * 0.25, 111 + k);
     BG[i] = C(NEON[(k + (v * 3 | 0)) & 3], 3 + v * 9); // screens glow regardless of daylight
@@ -4202,7 +4337,7 @@ const TAG_WORDS = ['ACE', 'ZAP', 'YO', 'KAT', 'REX', 'OK', 'WOW', 'RAD', 'BAM', 
 const designCount = TAG_ART.length + TAG_WORDS.length;
 
 // a mural on this face? deterministic per face, so it's always there
-const paintable = k => { const sh = SHOP[k]; return sh && !sh.base && !sh.aqua && !sh.glass && !sh.casino && !(STY[k] >= 3 && STY[k] <= 6) && !(STY[k] >= 11 && STY[k] <= 13); };
+const paintable = k => { const sh = SHOP[k]; return sh && !sh.base && !sh.aqua && !sh.glass && !sh.casino && !sh.exchange && !(STY[k] >= 3 && STY[k] <= 6) && !(STY[k] >= 11 && STY[k] <= 13); };
 function muralSeed(k, mx, my, face) {
   if (!paintable(k)) return -1;
   const fx_ = face === 'E' ? 1 : face === 'W' ? -1 : 0, fy = face === 'S' ? 1 : face === 'N' ? -1 : 0;
@@ -7144,6 +7279,89 @@ const casinoSpot = () => { // the table or machine you're at, if any
   for (const s of room.props) if (s.casino) { const d = Math.hypot(px - s.cx, py - s.cy); if (d < bd) { bd = d; best = s.casino; } }
   return best;
 };
+// ===== the stock exchange: downtown, next door to the casino, facing the plaza. Grey stone and big columns, EXCHANGE
+// on the frieze, a running ticker of prices across the front. Inside, the trading floor: a big board of prices on the
+// back wall, tickers running round the walls, traders milling about, and a broker at the desk who takes your orders
+// (the trading screen: GAMES.market in stocks.js).
+let tickerCache = '', tickerT = -9;
+const liveTicker = () => { if (T - tickerT > 1) { tickerT = T; tickerCache = tickerLine() + '   *   '; } return tickerCache; }; // (rebuilt once a second)
+function exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const L = fog * amb * (side ? 10 : 15), glow = Math.max(night, overcast * 0.5), sgn = Math.sign(u * wc) || 1;
+  const c = EXCHANGE, y0 = c.by * 8 + 2, a0 = side ? c.bx * 8 + 2 : y0, along = wc - a0, len = side ? 6 : 4;
+  const front = side && Math.abs(rel((my + (rel(py - my) < 0 ? 0 : 1)) - y0)) < 0.01;
+  BG[i] = bgAt(GRAY, day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d);
+  if (front && z > 1.3 && z < 1.45) { // the price ticker, running across the front
+    const tk = liveTicker(), q = (u + T * 0.9) / 0.06, p = mod(Math.floor(q), tk.length), ch = tk[p];
+    BG[i] = C(GRAY, 0.6);
+    const col = /[+]/.test(tk.slice(Math.max(0, p - 7), p + 1)) ? GREEN : /-/.test(tk.slice(Math.max(0, p - 7), p + 1)) ? RED : YEL;
+    return set(i, (uStep >= 0.06 || oneCell((fract(q) - 0.5) * 0.06, uStep)) && oneCell(z - 1.375, d / projY) ? ch : ' ', C(col, 15));
+  }
+  if (front && z > 0.88 && z < 1.25) { // the pediment: a stone triangle, EXCHANGE on its frieze
+    const peak = 1.25 - Math.abs(along - len / 2) / (len / 2) * 0.3;
+    if (z > peak) return set(i, ' ', 0);
+    if (z > peak - 0.03) return set(i, '/', C(WHITE, L));
+    if (Math.abs(z - 0.95) < 0.04 && wallText(i, u, uStep, z, d, 'STOCK EXCHANGE', sgn * (a0 + len / 2), 0.95, 0.07, 0.06, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
+    return set(i, fract(z * 30) < 0.15 ? '-' : ' ', C(WHITE, L * 0.8));
+  }
+  if (z < 0.88) { // the colonnade: fat fluted columns, steps at the foot, bronze doors in the middle
+    if (z < 0.08) return set(i, '=', C(WHITE, L));
+    if (z > 0.8) return set(i, '=', C(WHITE, L * 1.1));
+    const fc = fract(along * 1.2);
+    if (Math.abs(fc - 0.5) < 0.16) return set(i, Math.abs(fc - 0.5) < 0.05 ? '|' : ':', C(WHITE, L * (1 - Math.abs(fc - 0.5) * 2)));
+    if (front && Math.abs(along - len / 2) < 0.3 && z < 0.5) { BG[i] = C(BRICK, 1.5 + glow * 2); return set(i, Math.abs(along - len / 2) < 0.02 ? '|' : '#', C(ORANGE, L * 0.8)); }
+    BG[i] = C(GRAY, 0.5 + glow * 1.5); return set(i, ' ', 0); // shadow behind the columns
+  }
+  // the upper floors: stone in courses, tall windows, lit late (somebody's always trading)
+  const fu = fract(along * 2), fz = fract(z * 3);
+  if (fu > 0.3 && fu < 0.7 && fz > 0.2 && fz < 0.85) return hash(Math.floor(along * 2), Math.floor(z * 3), 1501) > 0.5 - glow * 0.3 ? set(i, '#', C(YEL, Math.max(L, glow * 13))) : set(i, ':', C(day > 0.5 ? CYAN : GRAY, L * 0.4));
+  return set(i, fract(z * 9) < 0.12 ? '_' : ' ', C(WHITE, L * 0.6));
+}
+// ---- inside: the trading floor
+const EXCH_W = 20, EXCH_H = 14;
+function exchangeWall(i, su, uStep, z, d, mx, my, L) {
+  const u = Math.abs(su);
+  if (z > 2.55 && z < 2.75) { // a ticker running all the way round the room
+    const tk = liveTicker(), q = (u * (my === 0 || my === EXCH_H - 1 ? 1 : -1) + T * 1.4) / 0.25, p = mod(Math.floor(q), tk.length);
+    BG[i] = C(GRAY, 0.5);
+    return set(i, (uStep >= 0.25 || oneCell((fract(q) - 0.5) * 0.25, uStep)) && oneCell(z - 2.65, d / projY) ? tk[p] : ' ', C(YEL, 14)), true;
+  }
+  if (my === 0 && z > 1.1 && z < 2.45 && u > 2 && u < EXCH_W - 2) { // the big board: a row a company, price and change
+    BG[i] = C(GRAY, 0.4);
+    const k = Math.floor((2.45 - z) / (1.35 / STOCKS.length)), s = STOCKS[k], zr = 2.45 - (k + 0.5) * 1.35 / STOCKS.length;
+    if (!s) return set(i, ' ', 0), true;
+    const ch = pctChange(s), up = ch >= 0, row = `${s.sym}  ${s.price.toFixed(2).padStart(7)}  ${up ? '+' : ''}${ch.toFixed(1)}%  ${up ? '^' : 'v'}`;
+    if (wallText(i, su, uStep, z, d, row, EXCH_W / 2 * Math.sign(su), zr, 0.32, 1.35 / STOCKS.length * 0.8, C(up ? GREEN : RED, 15), C(GRAY, 0.4))) return true;
+    return set(i, ' ', 0), true;
+  }
+  if (z < 1) { BG[i] = C(BRICK, 1 + L * 0.1); return set(i, fract(u * 1.5) < 0.05 ? '|' : ' ', C(BRICK, L * 0.7)), true; } // wood panelling
+  BG[i] = C(WHITE, 1.5 + L * 0.1); // marble, veined
+  return set(i, noise(u * 2, z * 3, 1502) > 0.7 ? '~' : ' ', C(GRAY, L * 0.5)), true;
+}
+ROOM_DEFS.exchange = { grid: boxRoom(EXCH_W, EXCH_H), light: 0.9, height: 3.2, floor: 'marble', ceil: 'strip', wall: exchangeWall, keeper: [10, 4.4],
+  props: r => {
+    const p = [...counterBox(10, 5, 1.8, 1.05), standing(10, 4.4, BLUE)];
+    for (const [x, y] of [[4, 8], [16, 8], [6, 11], [14, 11]]) { // trading desks: screens glowing green and red
+      p.push(BX(x, y, 0.9, 0.4, 0, 0.75, solid(BRICK, { top: '=' })));
+      p.push({ ...SP(x, y, 1.2, 0.35, ['[^^][vv]'], (c, row, L) => C(c === '^' ? GREEN : c === 'v' ? RED : GRAY, 14), 0.75), tick: s => { s.art = [fract(T * 0.7 + x) < 0.5 ? '[^v][v^]' : '[^^][vv]']; } });
+    }
+    for (let k = 0; k < 8; k++) { // traders, pacing about, phones to their ears
+      const x0 = 3 + (k * 2.1) % 14, y0 = 7 + (k % 3) * 2, sp = 0.2 + (k % 3) * 0.1;
+      p.push({ ...standing(x0, y0, [WHITE, BLUE, GRAY][k % 3]), tick: s => { s.x = x0 + Math.sin(T * sp + k) * 1.5; s.y = y0 + Math.cos(T * sp * 0.7 + k) * 0.6; } });
+    }
+    return p;
+  } };
+ROOM_FOR.EXCHANGE = 'exchange';
+const atBroker = () => mode === 'room' && room.kind === 'exchange' && nearKeeper();
+// news on the wire: tell you if it's about something you own, or if you're on the floor
+let newsSeen = 0;
+function stepExchange() {
+  stepMarket();
+  const n = MARKET.news[0];
+  if (n && n.tick !== newsSeen) {
+    newsSeen = n.tick;
+    if (shares[n.sym] || mode === 'room' && room.kind === 'exchange') say(`NEWS: ${n.line}. ${n.sym} ${n.up ? 'jumps' : 'drops'} to ${fmt$(stockBy(n.sym).price)}.`, 5);
+  }
+}
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
 function drawArt(rx_, ry_, z, w, h, art, colFn) {
@@ -7449,6 +7667,7 @@ function promptText() {
     if (room.kind === 'laundry') { const lp = laundryPrompt(); if (lp) return lp; }
     if (nearTouchPool()) return 'E: touch the touch pool';
     if (room.kind === 'cathedral') { const cp = cathedralPrompt(); if (cp) return cp; }
+    if (atBroker()) return `"Buying or selling?"   E: trade (${marketOpen() ? 'market open' : 'market closed'})`;
     const cs = casinoSpot();
     if (cs) return `E: play ${CASINO_NAMES[cs]} ($5 to $100 a go)`;
     if (aviaryKeeper()) return T - seedT < 12 ? 'The birds are all over you.' : `"Seed for the birds? Hold it out flat."   E: a cup of seed (${fmt$(1)})`;
@@ -7750,6 +7969,7 @@ function interact() {
     if (room.kind === 'laundry' && useLaundry()) return;
     if (nearTouchPool()) return say(pick(TOUCH_LINES), 3);
     if (room.kind === 'cathedral' && useCathedral()) return;
+    if (atBroker()) return startGame('market', 'market');
     const cs = casinoSpot(); // a seat at a table, or a slot machine
     if (cs) return startGame(cs, 'casino');
     if (aviaryKeeper()) { if (T - seedT < 12) return say('You\'ve still got seed. Hold still.', 2); if (!pay(1)) return say('"A dollar a cup."'); seedT = T; return say('You hold out a cup of seed. A dozen birds land on your arms at once.', 4); }
@@ -9078,7 +9298,7 @@ function panelKey(e) {
 }
 
 // ---- using things: the sounds that go with them
-const HEADLINES = () => [`${pick(stations).name} station closed for repairs`, 'Mayor vows to fix the el (again)', 'Bridge tolls to rise',
+const HEADLINES = () => [...MARKET.news.slice(0, 2).map(n => n.line), `${pick(stations).name} station closed for repairs`, 'Mayor vows to fix the el (again)', 'Bridge tolls to rise',
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
@@ -10035,6 +10255,7 @@ function gameKey(e) {
     return true;
   }
   if (e.code === 'Escape' || e.code === 'KeyE') { // walk away: a shift pays for what you did, a game its tickets; a crime you just don't do
+    if (game.kind === 'market') { game = null; return true; }
     if (game.kind === 'casino') { if (game.g.inRound()) say('You get up mid-hand. Your bet stays on the table.', 3); game = null; return true; }
     if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
     finishGame(true); game = null; return true;
@@ -10048,7 +10269,7 @@ function finishGame(quit) {
   if (game.paid) return;
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
-  if (game.kind === 'casino') return; // (its money changes hands round by round)
+  if (game.kind === 'casino' || game.kind === 'market') return; // (its money changes hands round by round, or trade by trade)
   const r = g.reward();
   if (game.kind === 'table') { // the mahjong table: the pot if you won, your stake back if nobody did
     const res = g.result;
@@ -10124,12 +10345,13 @@ function drawGame() {
       const i = (y0 + y * bh + r) * cols + x0 + x * bw + c;
       set(i, ch, col); if (bg !== undefined && bg !== NONE) BG[i] = bg;
     }
-  }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col)); // a label, at normal size
+  }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col), // a label, at normal size
+     (c, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + c, s_, col)); // one placed by character (a column in a table): c counts characters from the left
   // the status under the screen, in two lines if it's wider than the cabinet
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : '   E / ESC clock off';
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets}   ${fmt$(money)}${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
   putText(Math.min(ar - 1, y0 + gh + 2 + sts.length), x0 + ((gw - foot.length) >> 1), foot, C(GRAY, 9));
   if (g.over && game.kind !== 'crime') { // the results card
@@ -10464,6 +10686,7 @@ const SAVE_KEY = 'ascii-city-save';
 function saveGame() {
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tags, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
+    shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })) };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
@@ -10476,6 +10699,8 @@ function loadGame() {
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   items(d.inv, inv); items(d.stored, stored); items(d.closet, closet);
   held = clamp(d.held ?? -1, -1, inv.length - 1);
+  for (const sym in d.shares || {}) if (stockBy(sym)) shares[sym] = d.shares[sym];
+  if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }
   owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
 }
@@ -10621,6 +10846,7 @@ function loop(t) {
   stepSteam(dt);
   stepPigeons(dt);
   stepJadeIncense(dt);
+  stepExchange();
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();
@@ -10737,7 +10963,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
@@ -10753,6 +10979,7 @@ function touchActions() {
   if (panelOpen() || prizeEl && prizeEl.style.display === 'flex') return [['Close', 'KeyE', 'main']];
   if (game) {
     if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : game.kind === 'table' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(MJ_BUYIN)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
+    if (game.kind === 'market') return [['Leave', 'KeyE', 'pop'], ['Up', 'ArrowUp', 'pop'], ['Down', 'ArrowDown', 'pop'], ['Sell', 'ArrowLeft', 'pop'], ['Buy', 'ArrowRight', 'pop'], [`Lot ${game.g.lot()}`, 'Space', 'main']];
     if (game.kind === 'casino') { // the casino: what the buttons do depends on where the hand's at
       const st = game.g.state(), id = game.g.id;
       if (id === 'blackjack' && st === 'play') return [['Leave', 'KeyE', 'pop'], ['Double', 'ArrowDown', 'pop'], ['Hit', 'ArrowUp', 'pop'], ['Stand', 'Space', 'main']];

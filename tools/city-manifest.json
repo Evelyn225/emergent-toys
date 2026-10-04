@@ -12,6 +12,7 @@
     "city/audio-mix.js",
     "city/goods.js",
     "city/minigames.js",
+    "city/stocks.js",
     "city/crime.js",
     "city/property.js"
   ],
@@ -28,6 +29,7 @@
     "city/gardens.js",
     "city/jade.js",
     "city/casino.js",
+    "city/exchange.js",
     "city/render.js",
     "city/hud.js",
     "city/actions.js",

@@ -310,3 +310,28 @@ test('jade: the shop sells a bangle and a dragon; carrying them adds a little lu
     return e(`(() => { let pockets = 0; for (let t = 0; t < 120 && !g.over; t += 1 / 60) for (const v of g.step(1 / 60, { act: true, left: Math.sin(t) > 0, right: Math.sin(t) < 0 })) if (v === 'eat' || v === 'score') pockets++; return pockets; })()`); };
   assert.ok(run(true) > run(false), 'luck helps');
 });
+
+test('the stock market: prices wander but stay positive, only trade while it is open, buy and sell with a $1 fee', () => {
+  const { ev, j } = fresh();
+  ev('for (let k = 0; k < 2000; k++) marketTick()');
+  assert.ok(j('STOCKS.every(s => s.price >= 1 && s.price < 100000 && s.hist.length === 48)'), 'sane prices');
+  ev('dayNum = 5; tod = 12'); // a Saturday
+  assert.deepStrictEqual(j("buyShares('DUMP', 1)")[0], false, 'closed at the weekend');
+  ev('dayNum = 1; tod = 8'); assert.strictEqual(j("buyShares('DUMP', 1)")[0], false, 'closed before 9:30');
+  ev("dayNum = 1; tod = 11; money = 1000; stockBy('DUMP').price = 20");
+  assert.strictEqual(j("buyShares('DUMP', 10)")[0], true);
+  assert.strictEqual(ev('money'), 1000 - 201, 'ten at $20, plus the fee');
+  assert.strictEqual(j('shares.DUMP.n'), 10);
+  ev("stockBy('DUMP').price = 25");
+  assert.match(j("sellShares('DUMP', 4)")[1], /up \$20\.00/);
+  assert.strictEqual(ev('money'), 799 + 99, 'four at $25, less the fee');
+  assert.strictEqual(j('shares.DUMP.n'), 6);
+  assert.strictEqual(j("sellShares('DUMP', 100)")[0], true, 'selling more than you have sells what you have');
+  assert.strictEqual(ev('shares.DUMP === undefined'), true, 'none left');
+  assert.strictEqual(j("buyShares('BYTE', 1000)")[0], false, "can't buy what you can't afford");
+  // the clock: ticks while open, nothing overnight, a jump at the bell
+  ev('dayNum = 1; tod = 10; MARKET.lastMin = null; stepMarket(); var t0 = MARKET.tick; tod = 11; stepMarket()');
+  assert.strictEqual(ev('MARKET.tick - t0'), 12, 'an hour open: twelve ticks');
+  ev('tod = 20; stepMarket(); var t1 = MARKET.tick; tod = 23; stepMarket()');
+  assert.strictEqual(ev('MARKET.tick - t1'), 0, 'nothing at night');
+});

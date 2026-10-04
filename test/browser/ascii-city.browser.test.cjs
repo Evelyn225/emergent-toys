@@ -759,3 +759,21 @@ test('dog walkers: out with their dogs in the morning, at lunch and before dinne
   });
   assert.deepStrictEqual(pet, [true, true, true]);
 }));
+
+test('the stock exchange: trade with the broker while the market is open; your shares are still yours after a reload', () => withPage(async page => {
+  await page.evaluate(() => { dayNum = 1; tod = 11; money = 500; enterRoom('exchange', { word: 'EXCHANGE', neon: GREEN, ret: [px, py, a], line: '' }, [10, 5.6, -Math.PI / 2]); });
+  assert.match(await page.evaluate(() => promptText()), /trade \(market open\)/);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game && game.g.id), 'market');
+  await page.keyboard.press('Space'); // lot of 10
+  await page.waitForTimeout(100);
+  await page.keyboard.press('ArrowRight'); // buy 10 DUMP
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => [shares.DUMP && shares.DUMP.n, money < 500]);
+  assert.deepStrictEqual(after, [10, true]);
+  await page.keyboard.press('KeyE');
+  await page.evaluate(() => saveGame());
+  await page.reload(); await page.waitForTimeout(400);
+  assert.strictEqual(await page.evaluate(() => shares.DUMP && shares.DUMP.n), 10, 'kept in the save');
+  await page.evaluate(() => newGame && localStorage.removeItem('ascii-city-save'));
+}));
