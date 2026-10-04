@@ -502,6 +502,17 @@ test('the Botanical Gardens at night: the dev jump lands you outside the locked 
   assert.ok(await page.evaluate(([x, y]) => py < y - 0.1, at), 'walked away');
 }));
 
+test('the duck pond on the pier: $1 at the booth, hook a duck, its tickets count', () => withPage(async page => {
+  await page.evaluate(() => { tod = 15; money = 10; const b = BOOTHS.find(o => o.word === 'DUCK POND'); devAt(b.at[0], b.at[1], Math.PI); });
+  assert.strictEqual(await page.evaluate(() => promptText()), 'E: play DUCK POND ($1.00 a go)');
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, money]), ['ducks', 9]);
+  const want = await page.evaluate(() => { const g = game.g; for (let k = 0; k < 2000 && !g.under(); k++) g.step(1 / 60, {}); return g.under().worth; });
+  await page.keyboard.press('Space');
+  await page.waitForFunction(() => game.g.score > 0, null, { timeout: 10000 });
+  assert.strictEqual(await page.evaluate(() => game.g.score), want);
+}));
+
 test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
   await page.evaluate(() => { tod = 23; enterRoom('stripclub', { ...CLUB.sh, ret: [px, py, a], line: '' }, [9, 12.4, -Math.PI / 2]); });
   const r = await page.evaluate(() => {

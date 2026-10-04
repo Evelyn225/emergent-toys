@@ -278,6 +278,36 @@ test('pachinko shows how each ball did (a +N in a pocket, an x where it drains, 
   assert.ok(dragon > 0.93 && dragon < 1.12, `with the jade dragon, about even: ${dragon.toFixed(2)} a ball`);
 });
 
+test('duck pond: dip the hook on a duck and up it comes with its tickets on the bottom; a miss costs nothing; three ducks a go', () => {
+  const { ev, j } = fresh();
+  ev('var g = GAMES.ducks()');
+  const worths = j('g.ducks.map(d => d.worth)');
+  assert.strictEqual(worths.length, 12);
+  assert.ok(worths.every(v => [1, 2, 3, 5, 10, 25, 50].includes(v)), JSON.stringify(worths));
+  // dip where nothing is: a splash, and you still have three hooks
+  ev('(() => { for (let k = 0; k < 600 && g.under(); k++) g.step(1 / 60, {}); })()');
+  const missed = play(ev, 0.5, '(t) => ({ actP: t < 0.02 })');
+  assert.ok(missed.includes('miss'), missed.join());
+  // three ducks: wait for one under the hook, dip, see its number, again
+  let total = 0;
+  for (let n = 0; n < 3; n++) {
+    ev('(() => { for (let k = 0; k < 2000 && !g.under(); k++) g.step(1 / 60, {}); })()');
+    const want = ev('g.under().worth');
+    const evs = play(ev, 4, '(t) => ({ actP: t < 0.02 })');
+    assert.ok(evs.includes('eat'), 'hooked one');
+    total += want;
+    assert.strictEqual(ev('g.score'), total, 'its tickets are the number on the bottom');
+  }
+  assert.strictEqual(ev('g.over'), true, 'three ducks and you are done');
+  assert.strictEqual(ev('g.ducks.length'), 9);
+  assert.strictEqual(ev('g.reward()'), total);
+  // over many ponds: about four tickets a duck, now and then a gold one
+  let golds = 0, sum = 0, n = 0;
+  for (let s = 1; s <= 40; s++) { const { ev: e } = require('./helpers/load-city.cjs').loadCity(s); const ds = JSON.parse(e('JSON.stringify(GAMES.ducks().ducks)')); golds += ds.some(d => d.gold); for (const d of ds) if (!d.gold) { sum += d.worth; n++; } }
+  assert.ok(sum / n > 3 && sum / n < 5.5, `a plain duck averages ${(sum / n).toFixed(2)} tickets`);
+  assert.ok(golds > 8 && golds < 32, `a gold duck in ${golds} ponds of 40`);
+});
+
 test('crane: a drop either grabs something and brings it home as a prize, or comes up empty; one go', () => {
   let wins = 0;
   for (let s = 1; s <= 20; s++) {
