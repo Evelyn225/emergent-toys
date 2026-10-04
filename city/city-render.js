@@ -462,9 +462,10 @@ function floorCell(i, r, x, rx, ry) {
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
   if (!soft && wet > 0.05 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
+  LAMPL[i] = 0;
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;
-    if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (ch === ' ') ch = '.'; }
+    if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (ch === ' ') ch = '.'; LAMPL[i] = gl * 13; }
   }
   if (siren) { // an emergency vehicle's lights wash over the street round it
     const s = 1 - Math.hypot(rel(wx - siren.ex), rel(wy - siren.ey)) / 1.2;
@@ -604,8 +605,12 @@ function reflect() {
       const i = r * cols + x, f = FL[i];
       if (f < 2) continue;
       const s = 2 * b - r - 1 + (f === 3 ? Math.round(Math.sin(r * 1.7 + T * 3) * 0.6) : 0), j = s * cols + x; // water ripples
-      if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ') { CH[i] = CH[j]; COL[i] = (COL[j] & 0xf0) | ((COL[j] & 15) * 0.55 | 0); }
-      else if (f === 2) set(i, '~', C(BLUE, 3 + day * 3));
+      const lamp = f === 2 ? LAMPL[i] : 0; // a puddle under a streetlamp holds its light as well as the reflection
+      if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ') {
+        const lv = (COL[j] & 15) * 0.55;
+        CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : (COL[j] & 0xf0) | (lv | 0);
+      } else if (f === 2) set(i, '~', lamp ? C(WARM, Math.max(3 + day * 3, lamp)) : C(BLUE, 3 + day * 3));
+      if (lamp > 2) BG[i] = C(WARM, Math.max(BG[i] === NONE ? 0 : BG[i] & 15, lamp * 0.2)); // and a warm sheen under it
     }
   }
 }

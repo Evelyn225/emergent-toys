@@ -449,32 +449,41 @@ GAMES.lockpick = (rnd = Math.random) => {
 };
 
 // breaking out of jail: sneak from your cell (bottom left) to the door (top right) while a guard walks his rounds
-// with a flashlight. Crates block the beam. Step into the light, or bump into him, and he's got you. One cell per
-// arrow press (held, it repeats). 45 seconds before the shift changes and they count heads.
+// with a flashlight and a second one paces the middle of the block. Crates block the beams. Step into the light, or
+// bump into either of them, and they've got you. One cell per arrow press (held, it repeats). 40 seconds before the
+// shift changes and they count heads.
 GAMES.jailbreak = (rnd = Math.random) => {
-  const W = 30, H = 13, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true };
+  const W = 30, H = 13, LIMIT = 40, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true };
   const cell = (x, y) => y * W + x, solid = new Set();
   for (let x = 0; x < W; x++) solid.add(cell(x, 0)).add(cell(x, 10));
   for (let y = 0; y <= 10; y++) solid.add(cell(0, y)).add(cell(W - 1, y));
   const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 8], [11, 8]], [[17, 8]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
   for (const grp of CRATES) for (const [x, y] of grp) solid.add(cell(x, y));
-  const door = [W - 2, 1], you = [2, 9], ROUTE = [[3, 2], [26, 2], [26, 8], [3, 8]];
-  let gx = 3, gy = 2, leg = 1, wait = 0, fx_ = 1, fy_ = 0, t = 0, rep = 0;
+  const door = [W - 2, 1], you = [2, 9];
+  // the guards: the old hand walks the whole block, the new one paces up and down the middle, slower but never far
+  const guards = [
+    { route: [[3, 2], [26, 2], [26, 8], [3, 8]], x: 3, y: 2, leg: 1, wait: 0, fx: 1, fy: 0, speed: 3.6, pause: 1.1 },
+    { route: [[16, 1], [16, 9]], x: 16, y: 9, leg: 0, wait: 0, fx: 0, fy: -1, speed: 2.2, pause: 1.6 },
+  ];
+  let t = 0, rep = 0;
   const lit = new Set();
   const clear = (x0, y0, x1, y1) => { // nothing solid on the way from (x0, y0) to (x1, y1)
     for (let s = 1; s < 8; s++) { const x = Math.round(x0 + (x1 - x0) * s / 8), y = Math.round(y0 + (y1 - y0) * s / 8); if (solid.has(cell(x, y)) && !(x === x1 && y === y1)) return false; }
     return true;
   };
-  const shine = () => { // the cone: eight cells ahead, widening as it goes
+  const shine = () => { // each cone: eight cells ahead, widening as it goes
     lit.clear();
-    const ox = Math.round(gx), oy = Math.round(gy);
-    for (let d = 1; d <= 8; d++) for (let o = -((d + 1) >> 1); o <= (d + 1) >> 1; o++) {
-      const x = ox + fx_ * d - fy_ * o, y = oy + fy_ * d + fx_ * o;
-      if (x < 0 || y < 0 || x >= W || y > 10 || solid.has(cell(x, y)) || !clear(ox, oy, x, y)) continue;
-      lit.add(cell(x, y));
+    for (const gd of guards) {
+      const ox = Math.round(gd.x), oy = Math.round(gd.y);
+      for (let d = 1; d <= 8; d++) for (let o = -((d + 1) >> 1); o <= (d + 1) >> 1; o++) {
+        const x = ox + gd.fx * d - gd.fy * o, y = oy + gd.fy * d + gd.fx * o;
+        if (x < 0 || y < 0 || x >= W || y > 10 || solid.has(cell(x, y)) || !clear(ox, oy, x, y)) continue;
+        lit.add(cell(x, y));
+      }
     }
   };
   shine();
+  const near = (x, y) => guards.some(gd => Math.abs(gd.x - x) + Math.abs(gd.y - y) < 1.2);
   g.step = (dt, k) => {
     const ev = [];
     if (g.over) return ev;
@@ -487,17 +496,19 @@ GAMES.jailbreak = (rnd = Math.random) => {
       const nx = you[0] + dir[0], ny = you[1] + dir[1];
       if (!solid.has(cell(nx, ny))) { you[0] = nx; you[1] = ny; ev.push('hop'); } else ev.push('bump');
     }
-    // the guard: along his round, pausing at each corner to look about
-    if (wait > 0) { wait -= dt; if (wait < 0.5) { const n = ROUTE[leg]; fx_ = Math.sign(n[0] - gx); fy_ = Math.sign(n[1] - gy); } }
-    else {
-      const [tx, ty] = ROUTE[leg], d = Math.hypot(tx - gx, ty - gy), s = Math.min(d, 3.2 * dt);
-      fx_ = Math.sign(tx - gx); fy_ = Math.sign(ty - gy);
-      gx += fx_ * s; gy += fy_ * s;
-      if (d - s < 1e-6) { leg = (leg + 1) % ROUTE.length; wait = 1.1; }
+    // the guards: along their rounds, pausing at each corner to look about
+    for (const gd of guards) {
+      if (gd.wait > 0) { gd.wait -= dt; if (gd.wait < 0.5) { const n = gd.route[gd.leg]; gd.fx = Math.sign(n[0] - gd.x); gd.fy = Math.sign(n[1] - gd.y); } }
+      else {
+        const [tx, ty] = gd.route[gd.leg], d = Math.hypot(tx - gd.x, ty - gd.y), s = Math.min(d, gd.speed * dt);
+        gd.fx = Math.sign(tx - gd.x); gd.fy = Math.sign(ty - gd.y);
+        gd.x += gd.fx * s; gd.y += gd.fy * s;
+        if (d - s < 1e-6) { gd.leg = (gd.leg + 1) % gd.route.length; gd.wait = gd.pause; }
+      }
     }
     shine();
     if (you[0] === door[0] && you[1] === door[1]) { g.over = g.success = true; g.score = 1; ev.push('clear'); return ev; }
-    if (lit.has(cell(you[0], you[1])) || Math.abs(gx - you[0]) + Math.abs(gy - you[1]) < 1.2 || t > 45) { g.over = true; ev.push('die'); }
+    if (lit.has(cell(you[0], you[1])) || near(you[0], you[1]) || t > LIMIT) { g.over = true; ev.push('die'); }
     return ev;
   };
   g.draw = (put, text) => {
@@ -507,13 +518,13 @@ GAMES.jailbreak = (rnd = Math.random) => {
       else if (lit.has(i)) put(x, y, '.', C(YEL, 12), C(YEL, 3));
     }
     put(door[0], door[1], 'D', C(GREEN, 15), C(GREEN, 4));
-    put(Math.round(gx), Math.round(gy), 'G', C(BLUE, 15), C(BLUE, 4));
+    for (const gd of guards) put(Math.round(gd.x), Math.round(gd.y), 'G', C(BLUE, 15), C(BLUE, 4));
     put(you[0], you[1], '@', C(WHITE, 15), lit.has(cell(you[0], you[1])) ? C(RED, 6) : NONE);
-    text(0, 12, `${Math.max(0, 45 - t) | 0}s till the head count`, C(t > 35 ? RED : GRAY, 12));
+    text(0, 12, `${Math.max(0, LIMIT - t) | 0}s till the head count`, C(t > LIMIT - 10 ? RED : GRAY, 12));
   };
   g.status = () => 'ARROWS sneak to the door (D). Stay out of the light.';
   g.reward = () => 0;
-  g.state = () => ({ you, gx, gy, lit, door, solid, t });
+  g.state = () => ({ you, gx: guards[0].x, gy: guards[0].y, guards: guards.map(gd => [gd.x, gd.y]), lit, door, solid, t, limit: LIMIT });
   return g;
 };
 

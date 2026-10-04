@@ -272,6 +272,33 @@ test('construction hoarding, yard fences and shipping containers are solid boxes
   assert.strictEqual(ev('solids.some(s => ROAD[idx(Math.floor(s.x), Math.floor(s.y))])'), false, 'none of it out on the street');
 });
 
+test('a taxi tipped to step on it pulls out round a slow car when the other lane is clear; an ordinary one sits behind', () => {
+  const run = (rush, oncoming) => {
+    const { ev: e } = loadCity(4);
+    return JSON.parse(e(`JSON.stringify((() => {
+      const L = lights.find(l => l.vert && l.y === l.by - 0.25), c = cars.find(c => c.body === TAXI && !c.ev), slow = cars.find(o => o !== c && !o.ev && !o.patrol);
+      for (const o of cars) if (o !== c && o !== slow) { o.x = mod(L.bx + 40, N); o.ex = o.x; }
+      for (const p of people) { p.x = mod(L.bx + 40, N); }
+      px = L.bx + 40; mode = 'roof';
+      Object.assign(c, { x: L.bx + 1.4, y: mod(L.by - 5.8, N), hx: 0, hy: 1, v: 1, off: 0, rider: true, dest: [L.bx + 1.4, mod(L.by + 30, N)], rush: ${rush} });
+      Object.assign(slow, { x: L.bx + 1.4, y: mod(L.by - 4.6, N), hx: 0, hy: 1, v: 0.3, off: 0, cruise: 0.3, rider: false, dest: null });
+      plan(c); plan(slow);
+      if (${oncoming}) { const o = cars.find(o => o !== c && o !== slow && !o.ev && !o.patrol); Object.assign(o, { x: L.bx + 0.6, y: mod(L.by - 1.5, N), hx: 0, hy: -1, v: 0, cruise: 0.01, off: 0 }); plan(o); }
+      let t = 0, out = 0, crash = 0;
+      for (let k = 0; k < 40; k++) {
+        stepTraffic(0.05, t, true); t += 0.05; out = Math.min(out, c.off);
+        for (const o of cars) if (o !== c && Math.hypot(rel(c.ex - o.ex), rel(c.ey - o.ey)) < 0.3) crash++;
+      }
+      return { ahead: rel(c.y - slow.y) > 0, out, crash };
+    })())`));
+  };
+  const r = run(true, false);
+  assert.ok(r.ahead && r.out < -0.5 && !r.crash, JSON.stringify(r));
+  assert.strictEqual(run(false, false).ahead, false, 'an ordinary cab waits behind');
+  const o = run(true, true);
+  assert.ok(o.out > -0.3 && !o.crash, 'not with something coming the other way ' + JSON.stringify(o));
+});
+
 test('a taxi tipped to step on it runs the red light; an ordinary one stops at it', () => {
   const run = rush => {
     const { ev: e } = loadCity(4);

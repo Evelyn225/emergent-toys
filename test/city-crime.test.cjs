@@ -58,6 +58,21 @@ test('out of sight long enough, and they give up', () => {
   assert.strictEqual(ev('cars.some(c => c.pursuit)'), false, 'the cars stand down');
 });
 
+test('running from a cruiser: the officer who jumps out sprints you down, and if you outrun him the car drops another', () => {
+  const { ev } = scene();
+  ev("addWanted('crash', px, py, true); var cop = cars.find(c => c.pursuit); cop.x = px - 1; cop.y = py; cop.ex = cop.x; cop.ey = cop.y; cop.v = 0");
+  // you run off down the road at a sprint (0.8 cells a second); the car stays where it is
+  const run = secs => ev(`(() => { let r = ''; for (let t = 0; t < ${secs} && r !== 'busted'; t += 0.05) { T += 0.05; px = mod(px + 0.8 * 0.05, N); cop.x = px - 1; r = stepCrime(0.05) || r; } return r; })()`);
+  assert.strictEqual(run(6), 'busted', 'the sprinting officer catches you');
+  const { ev: e2 } = scene();
+  e2("addWanted('crash', px, py, true); var cop = cars.find(c => c.pursuit); cop.x = px - 1; cop.y = py; cop.ex = cop.x; cop.ey = cop.y");
+  e2('T += 0.05; stepCrime(0.05)');
+  assert.strictEqual(e2('cop.drops'), 1);
+  // the first officer gets left far behind (you're on a skateboard, say), the car keeps up and lets out another
+  e2('for (let t = 0; t < 9; t += 0.05) { T += 0.05; px = mod(px + 1.6 * 0.05, N); cop.x = px - 1; stepCrime(0.05); }');
+  assert.strictEqual(e2('cop.drops'), 2);
+});
+
 test('a cop on foot who reaches you: busted. The fine settles it; jail takes what you carry but not your money', () => {
   const { ev, step } = scene();
   ev("money = 500; buy('coffee'); buy('book'); addWanted('crash', px, py, true)");

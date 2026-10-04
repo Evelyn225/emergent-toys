@@ -86,7 +86,7 @@ function touchActions() {
     const it = heldItem();
     if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
-    out.push(['Jump', 'Space', 'jump']);
+    out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
   }
   if (e) out.push([e, 'KeyE', 'main']);
   return out;
@@ -101,6 +101,29 @@ const SHEET = [
 function bindHold(b, k, after) { // a button holds its key down for as long as it's touched
   b.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); b.classList.add('down'); keyDown(k); }, { passive: false });
   const up = e => { e.preventDefault(); b.classList.remove('down'); keyUp(k); if (after) after(); };
+  b.addEventListener('touchend', up, { passive: false }); b.addEventListener('touchcancel', up, { passive: false });
+}
+// the Jump button on a skateboard: a tap is an ollie, a swipe off it a trick (the way you swipe picks it, as a mouse
+// flick does), popped as you let go. Off the board it's an ordinary held key
+function bindFlick(b) {
+  let start = null;
+  b.addEventListener('touchstart', e => {
+    e.preventDefault(); e.stopPropagation(); b.classList.add('down');
+    const t = e.changedTouches[0];
+    if (skatingNow()) start = [t.clientX, t.clientY, t.identifier]; else keyDown('Space');
+  }, { passive: false });
+  b.addEventListener('touchmove', e => {
+    if (!start) return; e.preventDefault();
+    const t = [...e.changedTouches].find(q => q.identifier === start[2]); if (!t) return;
+    const k = flickTrick(t.clientX - start[0], t.clientY - start[1], 24);
+    say(`let go: ${trickName(k).toUpperCase()}`, 0.6);
+  }, { passive: false });
+  const up = e => {
+    e.preventDefault(); b.classList.remove('down');
+    if (!start) return keyUp('Space');
+    const t = [...e.changedTouches].find(q => q.identifier === start[2]) || e.changedTouches[0], s = start; start = null;
+    if (e.type === 'touchend' && skatingNow() && !paused) { msgT = 0; jump(flickTrick(t.clientX - s[0], t.clientY - s[1], 24)); }
+  };
   b.addEventListener('touchend', up, { passive: false }); b.addEventListener('touchcancel', up, { passive: false });
 }
 function buildTouch() {
@@ -132,7 +155,7 @@ function showTouch() {
   const acts = touchActions(), sig = acts.map(x => x.join(':')).join('|');
   if (sig === padSig || touchEl.querySelector('.pad button.down')) return;
   padSig = sig;
-  const btn = ([l, k, kind]) => { const b = document.createElement('button'); b.textContent = l; b.dataset.key = k; if (kind !== 'pop') b.className = kind; bindHold(b, k); return b; };
+  const btn = ([l, k, kind]) => { const b = document.createElement('button'); b.textContent = l; b.dataset.key = k; if (kind !== 'pop') b.className = kind; if (kind === 'jump') bindFlick(b); else bindHold(b, k); return b; };
   const pops = touchEl.querySelector('.pops'), row = touchEl.querySelector('.row');
   pops.replaceChildren(...acts.filter(x => x[2] === 'pop').map(btn));
   row.replaceChildren(...acts.filter(x => x[2] !== 'pop').map(btn));
