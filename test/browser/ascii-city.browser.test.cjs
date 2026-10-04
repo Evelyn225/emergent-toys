@@ -859,3 +859,15 @@ test('talking to people indoors: walk up to someone in a cafe or a station and t
   assert.strictEqual(r.sprompt, 'E: talk');
   assert.match(r.stationLine, /^".+"$/);
 }));
+
+test('the capsule hotel: in through the door and up the aisle without the front desk in the way; the desk still books a pod', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    tod = 22; mode = 'walk';
+    enterRoom('capsule', { word: 'CAPSULE', neon: CYAN, ret: [px, py, a], line: 'Welcome.' }, [3, 10.4, -Math.PI / 2]);
+    const blocked = []; for (let y = 10.6; y > 2; y -= 0.2) for (const x of [2.6, 3, 3.4]) if (!free(x, y)) blocked.push([x, +y.toFixed(1)]);
+    px = 5.2; py = 10.5; a = -Math.PI / 2;
+    return { blocked, desk: promptText() };
+  });
+  assert.deepStrictEqual(r.blocked, []);
+  assert.match(r.desk, /a pod for the night/);
+}));

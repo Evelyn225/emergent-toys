@@ -303,6 +303,7 @@ test('jade: the shop sells a bangle and a dragon; carrying them adds a little lu
   assert.strictEqual(ev('luck()'), 0);
   ev("inv.push({ id: 'jadebangle', uses: 0 })"); assert.strictEqual(ev('luck()'), 0.03);
   ev("inv.push({ id: 'jadedragon', uses: 0 })"); assert.ok(Math.abs(ev('luck()') - 0.11) < 1e-9);
+  ev("inv.push({ id: 'plushcat', uses: 0 })"); assert.ok(Math.abs(ev('luck()') - 0.13) < 1e-9, 'the lucky cat adds a little');
   // the same balls, the same seed: with luck, at least as many land in a pocket
   const run = lucky => { const { ev: e } = require('./helpers/load-city.cjs').loadCity(7);
     if (lucky) e("inv.push({ id: 'jadebangle', uses: 0 }, { id: 'jadedragon', uses: 0 })");

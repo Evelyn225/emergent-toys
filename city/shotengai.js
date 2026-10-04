@@ -166,8 +166,8 @@ const SHOTENGAI_ROOMS = {
       if (chance(0.6)) p.push(standing(3.4, 2.6, shirt())); if (chance(0.6)) p.push(SP(8, 5.5, 0.4, 1.15, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? MAG : BLUE, L)));
       return p;
     } },
-  capsule: { grid: boxRoom(7, 12), light: 0.9, floor: 'wood', ceil: 'strip', wall: capsuleWall, keeper: [3.5, 9.6],
-    props: r => [...counterBox(3.5, 10.2, 1.1), standing(3.5, 9.6, BLUE), SP(1.4, 10.6, 0.7, 1.3, ART.plant, plantCol)] },
+  capsule: { grid: boxRoom(7, 12), light: 0.9, floor: 'wood', ceil: 'strip', wall: capsuleWall, keeper: [5.2, 9.1], // (the desk off to one side: it used to stand right across the door)
+    props: r => [...counterBox(5.2, 9.7, 0.65), standing(5.2, 9.1, BLUE), SP(1.4, 10.6, 0.7, 1.3, ART.plant, plantCol)] },
 };
 Object.assign(ROOM_DEFS, SHOTENGAI_ROOMS);
 Object.assign(ROOM_FOR, { PACHINKO: 'pachinko', 'CRANE GAME': 'cranes', GACHA: 'cranes', CAPSULE: 'capsule', IZAKAYA: 'bar', KISSATEN: 'cafe', MANGA: 'books', DRUGSTORE: 'store',
