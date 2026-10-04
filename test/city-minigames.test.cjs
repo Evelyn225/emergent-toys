@@ -237,7 +237,7 @@ test('high striker: three swings, each scored by how high the puck went; the bel
   assert.strictEqual(ev('g.reward()'), 60);
 });
 
-test('pachinko: balls fired land in pockets now and then (any column can be reached), and cashing out is 8 balls a ticket', () => {
+test('pachinko: balls fired land in pockets now and then (any column can be reached), and cashing out is 8 balls a ticket of what you won', () => {
   const { ev } = fresh();
   ev('var g = GAMES.pachinko(); g.score = 10000');
   const events = play(ev, 120, '() => ({ act: 1 })');
@@ -249,26 +249,33 @@ test('pachinko: balls fired land in pockets now and then (any column can be reac
     left += e('var g = GAMES.pachinko(); g.score = 10000; (() => { for (let t = 0; t < 120; t += 1 / 60) g.step(1 / 60, { act: 1 }); return g.score; })()');
   }
   assert.ok(left < 80000, `the house wins over time (${left})`);
-  ev('g.score = 40');
-  assert.strictEqual(ev('g.reward()'), 5);
+  ev('var g = GAMES.pachinko()');
+  assert.strictEqual(ev('g.reward()'), 0, 'the tray you paid for is no tickets: walking straight out wins nothing');
+  ev('g.score = 80'); assert.strictEqual(ev('g.reward()'), 5, '40 balls up, 5 tickets');
+  ev('g.score = 12'); assert.strictEqual(ev('g.reward()'), 0, 'down is nothing (not less than nothing)');
 });
 
-test('pachinko shows how each ball did (a +N in a pocket, an x where it drains, the reels\' verdict) and a careful player comes out about even', () => {
+test('pachinko shows how each ball did (a +N in a pocket, an x where it drains, the reels\' verdict); the house keeps a cut, the jade dragon wins it back', () => {
   const { ev } = fresh();
   ev('var g = GAMES.pachinko(), seen = { win: 0, drain: 0, verdict: 0 }');
   ev('for (let t = 0; t < 40 && !g.over; t += 1 / 60) { g.step(1 / 60, { act: 1 }); for (const q of g.pops()) q.text === "x" ? seen.drain++ : seen.win++; if (g.verdict()) seen.verdict++; }');
   const seen = JSON.parse(ev('JSON.stringify(seen)'));
   assert.ok(seen.win && seen.drain && seen.verdict, JSON.stringify(seen));
-  // aiming at the middle, over a dozen trays: back roughly what you put in (not the old 85%)
-  let fired = 0, back = 0;
-  for (let s = 1; s <= 12; s++) {
-    const { ev: e } = require('./helpers/load-city.cjs').loadCity(s);
-    e('var g = GAMES.pachinko()');
-    const [f, end] = JSON.parse(e('JSON.stringify((() => { let n = 0; for (let t = 0; t < 400 && !g.over; t += 1 / 60) n += g.step(1 / 60, { act: 1 }).filter(x => x === "launch").length; for (let t = 0; t < 3; t += 1 / 60) g.step(1 / 60, {}); return [n, g.score]; })())'));
-    fired += f; back += end - 40 + f;
-  }
-  const ret = back / fired;
-  assert.ok(ret > 0.9 && ret < 1.05, `returns ${ret.toFixed(2)} a ball`);
+  // aiming at the middle, over two dozen trays: the house keeps a cut; carry the jade dragon and it's about even
+  const ret = jade => {
+    let fired = 0, back = 0;
+    for (let s = 1; s <= 24; s++) {
+      const { ev: e } = require('./helpers/load-city.cjs').loadCity(s);
+      if (jade) e(`inv.push({ id: '${jade}', uses: 0 })`);
+      e('var g = GAMES.pachinko()');
+      const [f, end] = JSON.parse(e('JSON.stringify((() => { let n = 0; for (let t = 0; t < 400 && !g.over; t += 1 / 60) n += g.step(1 / 60, { act: 1 }).filter(x => x === "launch").length; for (let t = 0; t < 3; t += 1 / 60) g.step(1 / 60, {}); return [n, g.score]; })())'));
+      fired += f; back += end - 40 + f;
+    }
+    return back / fired;
+  };
+  const plain = ret(''), dragon = ret('jadedragon');
+  assert.ok(plain > 0.78 && plain < 0.93, `the house keeps a cut: returns ${plain.toFixed(2)} a ball`);
+  assert.ok(dragon > 0.93 && dragon < 1.12, `with the jade dragon, about even: ${dragon.toFixed(2)} a ball`);
 });
 
 test('crane: a drop either grabs something and brings it home as a prize, or comes up empty; one go', () => {
@@ -332,8 +339,9 @@ test('jade: the shop sells a bangle and a dragon; carrying them adds a little lu
   ev("inv.push({ id: 'jadebangle', uses: 0 })"); assert.strictEqual(ev('luck()'), 0.03);
   ev("inv.push({ id: 'jadedragon', uses: 0 })"); assert.ok(Math.abs(ev('luck()') - 0.11) < 1e-9);
   ev("inv.push({ id: 'plushcat', uses: 0 })"); assert.ok(Math.abs(ev('luck()') - 0.13) < 1e-9, 'the lucky cat adds a little');
-  // the same balls, the same seed: with luck, at least as many land in a pocket
-  const run = lucky => { const { ev: e } = require('./helpers/load-city.cjs').loadCity(7);
+  // with luck, more land in a pocket (over a few players: luck's a nudge, not a sure thing)
+  const run = lucky => [3, 7, 11, 19].reduce((t, seed) => t + runOne(lucky, seed), 0);
+  const runOne = (lucky, seed) => { const { ev: e } = require('./helpers/load-city.cjs').loadCity(seed);
     if (lucky) e("inv.push({ id: 'jadebangle', uses: 0 }, { id: 'jadedragon', uses: 0 })");
     e('var g = GAMES.pachinko(); g.score = 400');
     return e(`(() => { let pockets = 0; for (let t = 0; t < 120 && !g.over; t += 1 / 60) for (const v of g.step(1 / 60, { act: true, left: Math.sin(t) > 0, right: Math.sin(t) < 0 })) if (v === 'eat' || v === 'score') pockets++; return pockets; })()`); };
