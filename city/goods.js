@@ -123,30 +123,27 @@ let goldenDuckDue = false, fortuneLuckT = -1; // (a fortune teller's promises: a
 const luck = () => (carrying('jadebangle') ? 0.03 : 0) + (carrying('jadedragon') ? 0.08 : 0) + (carrying('plushcat') ? 0.02 : 0) // (and the lucky cat, a little)
   + (carrying('redstring') ? 0.02 : 0) + (carrying('luckycoin') ? 0.03 : 0) // (the night market's charms)
   + (T < fortuneLuckT ? 0.06 : 0); // (and the fortune teller said so)
-// the yo-yo, out on its string: Q lets it drop (and Q again reels it in); while it's out the camera holds still and
-// the mouse (or a drag) swings it. A pendulum: len 0..1 of the string paid out, ang its swing from straight down
-// (round past the top is around the world), and when it hangs low enough it touches down and rolls along the
-// pavement (walk the dog). fx.yoyo is 1 while any of it is out of your hand
-const yoyo = { out: false, len: 0, ang: 0, angV: 0, spin: 0, hx: 0, hy: 0, vx: 0, vy: 0 };
-const YOYO_HAND = 0.006; // how much the hand's acceleration (px/s²) swings it (rad/s²)
+// The yo-yo is steered by a virtual cursor bounded to a circle around the hand. Cursor distance pays out string;
+// direction sets the target position, while the yo-yo carries momentum as it catches up.
+const yoyo = { out: false, len: 0, lenV: 0, ang: 0, angV: 0, spin: 0, aimX: 0, aimY: 0 };
 function stepYoyo(dt) {
-  yoyo.len = clamp(yoyo.len + (yoyo.out ? 4 : -3) * dt, 0, 1); // drops fast, climbs back a touch slower
-  if (dt > 0) { // the hand: its speed smoothed over a few frames (mouse events come in lumps), and the change in it
-    const k = Math.min(1, dt * 25), vx = yoyo.vx + (yoyo.hx / dt - yoyo.vx) * k, vy = yoyo.vy + (yoyo.hy / dt - yoyo.vy) * k;
-    const ax = clamp((vx - yoyo.vx) / dt, -2e4, 2e4), ay = clamp((vy - yoyo.vy) / dt, -2e4, 2e4);
-    yoyo.vx = vx; yoyo.vy = vy; yoyo.hx = yoyo.hy = 0;
-    if (yoyo.out) yoyo.angV = clamp(yoyo.angV - YOYO_HAND * (ax * Math.cos(yoyo.ang) - ay * Math.sin(yoyo.ang)) * dt, -14, 14);
-  }
-  yoyo.angV += -9 * Math.sin(yoyo.ang) * yoyo.len * dt; yoyo.angV *= 1 - Math.min(1, 0.9 * dt); yoyo.ang += yoyo.angV * dt;
+  const targetLen = yoyo.out ? Math.hypot(yoyo.aimX, yoyo.aimY) : 0;
+  const targetAng = Math.atan2(yoyo.aimX, yoyo.aimY), da = mod(targetAng - yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
+  yoyo.lenV += ((targetLen - yoyo.len) * 36 - yoyo.lenV * 8) * dt;
+  yoyo.len = clamp(yoyo.len + yoyo.lenV * dt, 0, 1);
+  if ((yoyo.len === 0 && yoyo.lenV < 0) || (yoyo.len === 1 && yoyo.lenV > 0)) yoyo.lenV = 0;
+  yoyo.angV += (da * 34 - yoyo.angV * 4) * dt;
+  yoyo.ang += yoyo.angV * dt;
   yoyo.ang = mod(yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
   yoyo.spin += dt * (20 + Math.abs(yoyo.angV) * 6);
-  if (!yoyo.out && yoyo.len === 0) { yoyo.ang = yoyo.angV = 0; }
+  if (!yoyo.out && yoyo.len < 0.01 && Math.abs(yoyo.lenV) < 0.08) { yoyo.len = yoyo.lenV = yoyo.ang = yoyo.angV = 0; yoyo.aimX = yoyo.aimY = 0; }
   fx.yoyo = yoyo.len > 0 || yoyo.out ? 1 : 0;
 }
-// your hand, as the mouse (or a drag) moves it: (dx, dy) screen pixels, y down. stepYoyo turns that into how fast the
-// hand's moving and how hard it's speeding up, and that's what swings it: like a ball on a string, a jerk one way
-// throws it the other, and going round in small circles in time with it winds it up and over the top
-const yoyoSwing = (dx, dy = 0) => { yoyo.hx += dx; yoyo.hy += dy; };
+// About 200 screen pixels reaches the end of the string. Clamp the virtual cursor to its hand-centered circle.
+const yoyoSwing = (dx, dy = 0) => {
+  const x = yoyo.aimX + dx / 200, y = yoyo.aimY + dy / 200, r = Math.hypot(x, y);
+  yoyo.aimX = r > 1 ? x / r : x; yoyo.aimY = r > 1 ? y / r : y;
+};
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
@@ -253,7 +250,7 @@ function useHeld(near) {
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), 'squeak'];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
-    case 'yoyo': yoyo.out = !yoyo.out; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Swing it with the mouse: let it touch down to walk the dog, or go round in little circles to send it around the world.' : 'You reel it back in.', 'whirr'];
+    case 'yoyo': yoyo.out = !yoyo.out; if (yoyo.out) yoyo.aimX = yoyo.aimY = 0; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Move the mouse to steer and reel it in or out.' : 'You reel it back in.', 'whirr'];
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something
         near.person.talk = 4;
