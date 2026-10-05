@@ -4848,7 +4848,8 @@ function signBig(u, uStep, d, side, mx, my, wc, p, len) {
     const col = off => { const X = qx + (side ? at + off : 0), Y = qy + (side ? 0 : at + off), dep = dx * X + dy * Y; return dep > 0.05 ? [(-dy * X + dx * Y) / dep * projX, dep] : null; };
     const a0 = col(0), a1 = col(0.1 * sgn);
     if (!a0 || !a1) continue;
-    small = Math.min(small, Math.abs(a1[0] - a0[0]) / 2.2, 0.08 * projY / Math.max(a0[1], a1[1]) / 2.8);
+    // Keep the block glyphs until they're close to their smallest readable size.
+    small = Math.min(small, Math.abs(a1[0] - a0[0]) / 1.6, 0.08 * projY / Math.max(a0[1], a1[1]) / 2);
   }
   return small >= 1 && small !== Infinity;
 }
@@ -5220,6 +5221,10 @@ function floorCell(i, r, x, rx, ry) {
       if (e < 0.45) { ch = hash(Math.floor(wx * 9), Math.floor(wy * 9), 34) > 0.45 ? '%' : 'o'; base = GRAY; k = 1.25; }
       else if (onPath) { ch = (r * 5 + x) % 3 ? ':' : '.'; base = WARM; k = 1; }
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.1; }
+    } else if (kind === 'gardens' && inGardens(wx, wy)) {
+      const gf = gardenFloor(i, r, x, wx, wy, L);
+      if (gf === true) return;
+      [ch, base, k] = gf; soft = true;
     } else if (onPier(wx, wy)) { // planks running out to sea
       soft = true; base = BRICK; k = 1.3;
       ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';
@@ -5244,10 +5249,6 @@ function floorCell(i, r, x, rx, ry) {
       ch = fract(lx * 3 + ly * 0.4) < 0.12 ? '=' : hash(Math.floor(wx * 12), Math.floor(wy * 12), 97) > 0.6 ? ':' : '.';
     } else if (kind === 'yard') { // cracked concrete, oil stains, painted bays
       ch = fract(lx * 1.5) < 0.04 ? '|' : hash(Math.floor(wx * 9), Math.floor(wy * 9), 98) > 0.92 ? '%' : (r + x) % 4 ? ' ' : '.'; k = 0.9;
-    } else if (kind === 'gardens' && inGardens(wx, wy)) {
-      const gf = gardenFloor(i, r, x, wx, wy, L);
-      if (gf === true) return;
-      [ch, base, k] = gf; soft = true;
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
@@ -5513,7 +5514,6 @@ function craneCell(i, u, z, du, dz, L, k, p) {
 
 const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites,
                deck: true, slabFace, slabEdge };
-
 // ===== graffiti: murals painted across some buildings' upper floors, each district in its own style (rust and anchors on
 // the docks, dragons in Chinatown, flowers in the Brownstones, a lone stencil downtown), quick tags low on the shutters, and the tags
 // you spray yourself with a can from the hardware store. Police don't like it: spraying is vandalism, and if a cop
@@ -6629,6 +6629,9 @@ const barShade = (i, t, L) => {
   if (Math.abs(fract(u * 4 + 0.5) - 0.5) < 0.09) return set(i, '|', C(WHITE, L * 1.3)), true;
   return false; // between the bars: see through
 };
+// the same bars, for anything thrown through them (pee.js): only the uprights, the sill and the band stop it
+const barGap = (u, w) => !(w < 0.06 || Math.abs(w - 2.3) < 0.035 || Math.abs(fract(u * 4 + 0.5) - 0.5) < 0.09);
+const bars = (x, y) => { const b = BX(x, y, 3, 0.03, 0, 3, barShade); b.box.gap = barGap; return b; };
 const inmate = (x, y, sit) => sit ? sitting(x, y, ORANGE, 0.42) : standing(x, y, ORANGE);
 const bunk = (x, y) => [BX(x, y, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // a blanket on a steel frame
   BX(x, y, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; })];
@@ -6654,7 +6657,7 @@ const toilet = (x, y, back = -1, mat = steel) => [
 function jailProps(r) {
   const p = [];
   for (const cx of [4, 11, 18]) { // the three cells on your side (yours is the middle) and the three across
-    p.push(BX(cx, JAIL_BARS_NEAR, 3, 0.03, 0, 3, barShade), BX(cx, JAIL_BARS_FAR, 3, 0.03, 0, 3, barShade));
+    p.push(bars(cx, JAIL_BARS_NEAR), bars(cx, JAIL_BARS_FAR));
     p.push(...bunk(cx - 1.1, 1.55), ...toilet(cx + 1.9, 1.4, -1)); // ours: bunk along the back wall
     p.push(...bunk(cx - 1.1, JAIL_D - 2.55), ...toilet(cx + 1.9, JAIL_D - 2.4, 1)); // theirs, the mirror of it
   }
@@ -6772,7 +6775,7 @@ ROOM_FOR.STORAGE = 'storage';
 // a room's bathroom (def.wc): its own little room off the floor, 'W' walls round it with a doorway, white tiles inside.
 // sign: the wall cell the WC sign goes on (mx, my) and where along it
 const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && y >= w.y0 && y < w.y1;
-const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
+const roomAt = (x, y) => (x = Math.floor(x), y = Math.floor(y), x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x]); // (callers pass cell centres, x + 0.5: floor them)
 // props
 const SP = (x, y, w, h, art, col, z = 0) => ({ x, y, w, h, art, col, z });
 const standing = (x, y, shirt) => SP(x, y, 0.55, 1.75, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? shirt : GRAY, L));
@@ -9063,13 +9066,26 @@ function museumTorchFx() {
     }
   }
 }
+// something solid and tall enough between g and you (a case, the sarcophagus, the desk) hides you: anything over your
+// shoulders standing, over waist height crouched. (Only for being seen: the beam on the floor still runs through.)
+function hiddenBehind(g) {
+  const top = body.crouch > 0.5 ? 0.8 : 1.4, n = Math.ceil(Math.hypot(px - g.x, py - g.y) / 0.1);
+  for (const p of room.props) {
+    const b = p.box; if (!b || p.exhibit || b.z1 < top) continue; // (not the glass: they see straight through that)
+    for (let k = 1; k < n; k++) {
+      const qx = g.x + (px - g.x) * k / n - b.x, qy = g.y + (py - g.y) * k / n - b.y;
+      if (Math.abs(qx * b.c + qy * b.s) < b.hl && Math.abs(-qx * b.s + qy * b.c) < b.hw) return true;
+    }
+  }
+  return false;
+}
 // a guard's spotted you once you've stood in a beam a moment (crouched, the beam has to be nearer to catch you)
 function stepMuseum(dt) {
   if (mode !== 'room' || room.kind !== 'museum' || !room.burgled || game) return;
   const len = body.crouch > 0.5 ? TORCH_LEN * 0.6 : TORCH_LEN;
-  const seen = room.props.some(g => g.guard && inBeam(g, px, py, len) > 0);
+  const seen = room.props.some(g => g.guard && inBeam(g, px, py, len) > 0 && !hiddenBehind(g));
   room.spot = clamp((room.spot || 0) + (seen ? dt * 1.6 : -dt), 0, 1);
-  if (seen && room.spot > 0.2 && !room.warned && !room.alarm) { room.warned = true; say('A torch beam swings across you. "...Hello?"', 2); }
+  if (seen && room.spot > 0.2 && !room.warned && !room.alarm) { room.warned = true; say('A torch beam swings across you. "...Hello?"', 2); if (actx) playClip('guard-hello', 0.55); }
   if (!seen && room.spot === 0) room.warned = false;
   if (room.spot >= 1 && !room.alarm) museumAlarm('"HEY! STOP RIGHT THERE!" The guard hits the alarm. Every cop in town is coming: RUN.');
   if (room.silent && T > room.silent && !room.alarm) museumAlarm('The silent alarm\'s done its job: sirens outside, getting closer. Get out, NOW.');
@@ -11361,7 +11377,7 @@ const devKey = e => { if (e.code !== 'F2' || e.repeat) return false; e.preventDe
 // zoom with the wheel, a pinch, or the + / - buttons; arrows or WASD pan too. Neighbourhood names always, the
 // landmarks and stations, and (zoomed in) every shop by its sign. Esc, M or the x closes it, back to the pause menu.
 let bigMapEl = null, bigMapCv = null, bigMapSheet = null;
-const BIGMAP = { cx: 0, cy: 0, z: 4, drag: null, pts: new Map(), pinch: null, keys: {} };
+const BIGMAP = { cx: 0, cy: 0, z: 4, drag: null, pts: new Map(), pinch: null, keys: {}, found: null, hits: [], hitK: 0 };
 const BIGMAP_Z = 48; // most px per cell: a shop front across the screen. The least: the whole city just fills the screen
 const bigMapMinZ = () => Math.max(bigMapCv.clientWidth, bigMapCv.clientHeight) / N;
 const BIGMAP_CSS = `
@@ -11371,6 +11387,8 @@ const BIGMAP_CSS = `
   #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); display: flex; gap: 6px; }
   #bigmap .bar button { min-width: 38px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
   #bigmap .bar button:hover { border-color: #fff; }
+  #bigmap .bar input { width: 200px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; font: inherit; outline: none; }
+  #bigmap .bar input:focus { border-color: #fff; }
   #bigmap .tip { position: absolute; z-index: 2; left: calc(12px + env(safe-area-inset-left)); bottom: 10px; color: rgba(255, 255, 255, 0.45); pointer-events: none; }`;
 
 // the city drawn once, a pixel a cell, then scaled up crisp
@@ -11406,7 +11424,7 @@ function bigMapDraw() {
   const cv_ = bigMapCv, dpr = devicePixelRatio || 1, W = cv_.clientWidth, H = cv_.clientHeight;
   if (cv_.width !== Math.round(W * dpr) || cv_.height !== Math.round(H * dpr)) { cv_.width = Math.round(W * dpr); cv_.height = Math.round(H * dpr); }
   BIGMAP.z = clamp(BIGMAP.z, bigMapMinZ(), BIGMAP_Z); // (the window may have changed)
-  const x = cv_.getContext('2d'), z = BIGMAP.z;
+  const x = cv_.getContext('2d'), z = BIGMAP.z, now = performance.now() / 1000; // (T is frozen under the pause menu)
   x.setTransform(dpr, 0, 0, dpr, 0, 0); x.imageSmoothingEnabled = false;
   x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
   // world (wx, wy) -> screen, taking the copy of the (wrapping) city nearest the middle of the view
@@ -11447,13 +11465,26 @@ function bigMapDraw() {
     x.beginPath(); x.moveTo(9, 0); x.lineTo(-6, -6); x.lineTo(-3, 0); x.lineTo(-6, 6); x.closePath(); x.stroke(); x.fill(); x.restore();
     taken.push([youX - 10, youY - 10, youX + 10, youY + 10]);
   }
-  for (const h of owned.homes) dot(h.cell % N + 0.5, Math.floor(h.cell / N) + 0.5, 'H', '#ff4');
+  for (const h of owned.homes) { // your homes: a pulsing ring and a tag, loud enough to spot from the whole-city view
+    const hx = h.cell % N + 0.5, hy = Math.floor(h.cell / N) + 0.5, X = sx(hx), Y = sy(hy);
+    if (!onScreen(X, Y)) continue;
+    x.strokeStyle = '#ff4'; x.lineWidth = 2;
+    for (const k of [0, 0.5]) { const f = fract(now * 0.6 + k); x.globalAlpha = 1 - f; x.beginPath(); x.arc(X, Y, 8 + f * 18, 0, Math.PI * 2); x.stroke(); }
+    x.globalAlpha = 1;
+    dot(hx, hy, 'HOME', '#ff4', 13);
+    taken.push([X - 26, Y - 14, X + 26, Y + 14]);
+  }
   for (const c of owned.cars) if (c !== me) dot(c.x, c.y, 'C', '#fff');
   for (const b of fleet) if (b.deal === 'mine' && b !== sea) dot(b.x, b.y, 'B', '#fff');
   const tt = taskTarget(); if (tt) dot(tt.x, tt.y, '?', '#4ff');
   const jt = jobTarget(); if (jt) dot(jt.x, jt.y, '!', '#ff0');
   if (me && me.dest) dot(me.dest[0], me.dest[1], 'X', '#f4f');
   for (const c of cars) if (c.pursuit) dot(c.x, c.y, 'P', fract(T * 3) < 0.5 ? '#f44' : '#48f', 10);
+  const f = BIGMAP.found;
+  if (f && now - f.t < 6 && onScreen(sx(f.x), sy(f.y))) {
+    x.strokeStyle = '#4ff'; x.lineWidth = 2; x.globalAlpha = 1 - (now - f.t) / 6;
+    x.beginPath(); x.arc(sx(f.x), sy(f.y), 14 + 6 * Math.sin(now * 6), 0, Math.PI * 2); x.stroke(); x.globalAlpha = 1;
+  }
   const big = clamp(z * 1.4, 12, 22), mid = clamp(z * 1.1, 10, 14), small = clamp(z * 0.55, 9, 13);
   for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'area') label(lx, ly, z < 7 ? t.toUpperCase() : t, col, big, true);
   for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'place' && z >= 6) label(lx, ly, t, col, mid, false);
@@ -11474,9 +11505,12 @@ function openBigMap() {
   if (!bigMapEl) {
     const st = document.createElement('style'); st.textContent = BIGMAP_CSS; document.head.appendChild(st);
     bigMapEl = menuEl('bigmap', 900, `<canvas></canvas>
-      <div class="bar"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">-</button><button data-map="me">you</button><button data-map="close" aria-label="Close map">x</button></div>
+      <div class="bar"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">-</button><button data-map="me">you</button><input type="search" list="bigmap-names" placeholder="find a place..." aria-label="Find a place"><datalist id="bigmap-names"></datalist><button data-map="close" aria-label="Close map">x</button></div>
       <div class="tip">${TOUCH ? 'drag to move, pinch to zoom' : 'drag to move, wheel to zoom, Esc to close'}</div>`);
     bigMapCv = bigMapEl.querySelector('canvas');
+    const q = bigMapEl.querySelector('input');
+    q.addEventListener('keydown', e => { if (e.code === 'Enter') bigMapFind(q.value, true); });
+    q.addEventListener('input', () => bigMapFind(q.value, false));
     bigMapEl.addEventListener('click', e => {
       const b = e.target.closest('[data-map]'); if (!b) return;
       const m = b.dataset.map;
@@ -11502,12 +11536,28 @@ function openBigMap() {
     bigMapCv.addEventListener('wheel', e => { e.preventDefault(); bigMapZoom(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
   }
   bigMapRender(); bigMapNames = bigMapLabels(); bigMapCentre();
+  const names = [...new Set(bigMapNames.map(n => n[2]))].sort((p, q) => p.localeCompare(q));
+  bigMapEl.querySelector('datalist').innerHTML = names.map(n => `<option value="${n.replace(/[&"<]/g, c => `&#${c.charCodeAt(0)};`)}">`).join('');
+  bigMapEl.querySelector('input').value = ''; BIGMAP.found = null; BIGMAP.hits = [];
   BIGMAP.z = clamp(Math.min(innerWidth, innerHeight) / 60, 4, 10); // a few blocks round you to start
   BIGMAP.keys = {}; BIGMAP.pts.clear();
   bigMapEl.style.display = 'block';
   paused = true;
   const tick = () => { if (!bigMapOpen()) return; bigMapStep(); bigMapDraw(); requestAnimationFrame(tick); };
   BIGMAP.last = performance.now(); requestAnimationFrame(tick);
+}
+// search: typing jumps to the nearest place whose name matches; Enter again steps on to the next nearest of them
+function bigMapFind(text, next) {
+  const t = text.trim().toLowerCase();
+  if (!t) { BIGMAP.found = null; BIGMAP.hits = []; return; }
+  if (!next || !BIGMAP.hits.length || BIGMAP.hitQ !== t) {
+    const hits = bigMapNames.filter(n => n[2].toLowerCase().includes(t)), d = n => Math.hypot(rel(n[0] - px), rel(n[1] - py));
+    const exact = hits.filter(n => n[2].toLowerCase() === t); // (picked from the list: only that name)
+    BIGMAP.hits = (exact.length ? exact : hits).sort((p, q) => d(p) - d(q)); BIGMAP.hitQ = t; BIGMAP.hitK = 0;
+  } else BIGMAP.hitK = (BIGMAP.hitK + 1) % BIGMAP.hits.length;
+  const h = BIGMAP.hits[BIGMAP.hitK]; if (!h) return;
+  BIGMAP.cx = mod(h[0], N); BIGMAP.cy = mod(h[1], N); BIGMAP.z = Math.max(BIGMAP.z, h[4] === 'shop' ? 16 : 8); // (close enough that its name's drawn)
+  BIGMAP.found = { x: h[0], y: h[1], t: performance.now() / 1000 };
 }
 function bigMapStep() { // held keys pan smoothly, a screen's width every second or so
   const now = performance.now(), dt = Math.min(0.05, (now - BIGMAP.last) / 1000), k = BIGMAP.keys, s = 700 * dt;
@@ -11520,6 +11570,7 @@ const bigMapOpen = () => !!bigMapEl && bigMapEl.style.display !== 'none';
 // keys while the map's up: it takes them all (the game's paused under it)
 function bigMapKey(e, down) {
   if (!bigMapOpen()) return false;
+  if (e.target && e.target.tagName === 'INPUT') { if (down && e.code === 'Escape') e.target.blur(); return true; } // typing in the search box: the keys are its own
   if (down && !e.repeat && (e.code === 'Escape' || e.code === 'KeyM')) { closeBigMap(); return true; }
   if (down && (e.key === '+' || e.key === '=')) bigMapZoom(1.25);
   if (down && (e.key === '-' || e.key === '_')) bigMapZoom(0.8);
@@ -13153,6 +13204,7 @@ function peeObjectHit(ox, oy, oz, x, y, z) {
   let best = null;
   const offer = box => {
     const hit = peeBoxHit(ox, oy, oz, x, y, z, box);
+    if (hit && box.gap && box.gap((hit.x - box.x) * box.c + (hit.y - box.y) * box.s, hit.z)) return; // through the gaps (cell bars)
     if (hit && (!best || hit.t < best.t)) best = hit;
   };
   if (mode === 'room') {
@@ -13388,7 +13440,9 @@ function drawPeeMarks() {
     if (q.at !== at) continue;
     const rx_ = room_ ? q.x - px : rel(q.x - px), ry_ = room_ ? q.y - py : rel(q.y - py), rz_ = q.z - eye;
     const centerDepth = dx * rx_ + dy * ry_;
-    const radius = Math.max(0.05, Math.sqrt(q.area / Math.PI)) * q.s * (0.35 + 0.65 * Math.sqrt(q.life));
+    // never smaller than about a character cell: out in the street a fresh splash is a few cm across, so from more than
+    // a couple of metres off it fell between the cells and vanished
+    const radius = Math.max(Math.max(0.05, Math.sqrt(q.area / Math.PI)) * q.s * (0.35 + 0.65 * Math.sqrt(q.life)), centerDepth * 0.7 / Math.min(projX, projY));
     const depthRadius = radius * Math.hypot(dx * q.ux + dy * q.uy, dx * q.vx + dy * q.vy);
     if (centerDepth + depthRadius <= 0.05 || centerDepth - depthRadius > vis || q.nx * -rx_ + q.ny * -ry_ + q.nz * -rz_ <= 0) continue;
     const points = [];
@@ -14127,7 +14181,7 @@ function drawBoard3D() {
   const cz = 1.15;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   let pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS;
-  const fit = Math.min(1, (rows * 0.8 - hor) / ((0.5 / cz) * pY + 1e-6)); // on a wide screen, scale it to sit in the lower part of the view
+  const fit = Math.min(1, (rows * 0.8 - (rows >> 1)) / ((0.5 / cz) * pY + 1e-6)); // on a wide screen, scale it to sit in the lower part of the view (sized off the level horizon: looking up mustn't shrink it)
   if (fit > 0.2) { pX *= fit; pY *= fit; }
   const ox = cols / 2, oy = hor; // anchored to the horizon: looking up carries it out of view
   const n = cols * rows; if (boardZ.length < n) boardZ = new Float32Array(n); boardZ.fill(1e9, 0, n);

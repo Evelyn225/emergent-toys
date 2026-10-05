@@ -190,7 +190,7 @@ function drawBoard3D() {
   const cz = 1.15;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   let pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS;
-  const fit = Math.min(1, (rows * 0.8 - hor) / ((0.5 / cz) * pY + 1e-6)); // on a wide screen, scale it to sit in the lower part of the view
+  const fit = Math.min(1, (rows * 0.8 - (rows >> 1)) / ((0.5 / cz) * pY + 1e-6)); // on a wide screen, scale it to sit in the lower part of the view (sized off the level horizon: looking up mustn't shrink it)
   if (fit > 0.2) { pX *= fit; pY *= fit; }
   const ox = cols / 2, oy = hor; // anchored to the horizon: looking up carries it out of view
   const n = cols * rows; if (boardZ.length < n) boardZ = new Float32Array(n); boardZ.fill(1e9, 0, n);

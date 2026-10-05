@@ -18,6 +18,9 @@ const barShade = (i, t, L) => {
   if (Math.abs(fract(u * 4 + 0.5) - 0.5) < 0.09) return set(i, '|', C(WHITE, L * 1.3)), true;
   return false; // between the bars: see through
 };
+// the same bars, for anything thrown through them (pee.js): only the uprights, the sill and the band stop it
+const barGap = (u, w) => !(w < 0.06 || Math.abs(w - 2.3) < 0.035 || Math.abs(fract(u * 4 + 0.5) - 0.5) < 0.09);
+const bars = (x, y) => { const b = BX(x, y, 3, 0.03, 0, 3, barShade); b.box.gap = barGap; return b; };
 const inmate = (x, y, sit) => sit ? sitting(x, y, ORANGE, 0.42) : standing(x, y, ORANGE);
 const bunk = (x, y) => [BX(x, y, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // a blanket on a steel frame
   BX(x, y, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; })];
@@ -43,7 +46,7 @@ const toilet = (x, y, back = -1, mat = steel) => [
 function jailProps(r) {
   const p = [];
   for (const cx of [4, 11, 18]) { // the three cells on your side (yours is the middle) and the three across
-    p.push(BX(cx, JAIL_BARS_NEAR, 3, 0.03, 0, 3, barShade), BX(cx, JAIL_BARS_FAR, 3, 0.03, 0, 3, barShade));
+    p.push(bars(cx, JAIL_BARS_NEAR), bars(cx, JAIL_BARS_FAR));
     p.push(...bunk(cx - 1.1, 1.55), ...toilet(cx + 1.9, 1.4, -1)); // ours: bunk along the back wall
     p.push(...bunk(cx - 1.1, JAIL_D - 2.55), ...toilet(cx + 1.9, JAIL_D - 2.4, 1)); // theirs, the mirror of it
   }

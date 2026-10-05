@@ -59,7 +59,7 @@ ROOM_FOR.STORAGE = 'storage';
 // a room's bathroom (def.wc): its own little room off the floor, 'W' walls round it with a doorway, white tiles inside.
 // sign: the wall cell the WC sign goes on (mx, my) and where along it
 const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && y >= w.y0 && y < w.y1;
-const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
+const roomAt = (x, y) => (x = Math.floor(x), y = Math.floor(y), x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x]); // (callers pass cell centres, x + 0.5: floor them)
 // props
 const SP = (x, y, w, h, art, col, z = 0) => ({ x, y, w, h, art, col, z });
 const standing = (x, y, shirt) => SP(x, y, 0.55, 1.75, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? shirt : GRAY, L));
