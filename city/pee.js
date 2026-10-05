@@ -8,6 +8,7 @@
 let pee = null; // { left: seconds of stream, t, at, loo: [x, y] or null, seen: when we last looked round, caught }
 const peeDrops = []; // { at, s, x, y, z, vx, vy, vz, t0 }: the stream, in flight, oldest first
 const puddles = []; // { at, s, x, y, z, area, life, seed }: area in square metres
+const peeMarks = []; // splats on vertical walls and static objects, stored in the surface plane
 let peeN = 0; // drops so far (for the ripples running down the stream)
 const PEE_DRY = 240; // seconds for a puddle to dry outside
 const PEE_RATE = 60, PEE_DROP = 0.0022; // drops a second, and the puddle each one makes (m²): a full bladder's ~1.3m²
@@ -28,6 +29,138 @@ function peeGround(x, y) {
   if (mode === 'room') { const h = ROOMW.cell(Math.floor(x), Math.floor(y)); return h ? { wall: h } : { z: stairRise(x, y) }; }
   const h = map[idx(Math.floor(x), Math.floor(y))] || 0;
   return h > (mode === 'roof' ? roofH + 1e-6 : 0) ? { wall: h } : { z: h }; // (off a roof's edge it falls to whatever's below)
+}
+
+// A drop moves only a few centimetres per frame, so test its short segment against the grid wall it entered.
+function peeWallHit(ox, oy, oz, x, y, z, height) {
+  if (!height || z >= height) return null;
+  const dx = x - ox, dy = y - oy, dz = z - oz, hits = [];
+  if (Math.floor(ox) !== Math.floor(x) && Math.abs(dx) > 1e-9) {
+    const edge = dx > 0 ? Math.floor(x) : Math.floor(ox), t = (edge - ox) / dx, hy = oy + dy * t;
+    const hz = oz + dz * t;
+    if (t >= 0 && t <= 1 && hz >= 0 && hz <= height && hy >= Math.floor(y) && hy <= Math.floor(y) + 1)
+      hits.push({ t, x: edge, y: hy, z: hz, nx: -Math.sign(dx), ny: 0, nz: 0, face: 'wall' });
+  }
+  if (Math.floor(oy) !== Math.floor(y) && Math.abs(dy) > 1e-9) {
+    const edge = dy > 0 ? Math.floor(y) : Math.floor(oy), t = (edge - oy) / dy, hx = ox + dx * t;
+    const hz = oz + dz * t;
+    if (t >= 0 && t <= 1 && hz >= 0 && hz <= height && hx >= Math.floor(x) && hx <= Math.floor(x) + 1)
+      hits.push({ t, x: hx, y: edge, z: hz, nx: 0, ny: -Math.sign(dy), nz: 0, face: 'wall' });
+  }
+  if (!hits.length && oz > height && z <= height && Math.abs(dz) > 1e-9) {
+    const t = (height - oz) / dz;
+    hits.push({ t, x: ox + dx * t, y: oy + dy * t, z: height, nx: 0, ny: 0, nz: 1, face: 'wall' });
+  }
+  return hits.sort((a, b) => a.t - b.t)[0] || null;
+}
+
+function peeBoxHit(ox, oy, oz, x, y, z, box) {
+  const local = (wx, wy) => {
+    const qx = wx - box.x, qy = wy - box.y;
+    return [qx * box.c + qy * box.s, -qx * box.s + qy * box.c];
+  };
+  const [u0, v0] = local(ox, oy), [u1, v1] = local(x, y), du = u1 - u0, dv = v1 - v0, dz = z - oz;
+  let enter = 0, leave = 1, face = 0;
+  for (const [origin, delta, lo, hi, lowFace, highFace] of [[u0, du, -box.hl, box.hl, 2, 1], [v0, dv, -box.hw, box.hw, 4, 3], [oz, dz, box.z0, box.z1, 6, 5]]) {
+    if (Math.abs(delta) < 1e-9) { if (origin < lo || origin > hi) return null; continue; }
+    let near = (lo - origin) / delta, far = (hi - origin) / delta, nearFace = lowFace;
+    if (near > far) { [near, far] = [far, near]; nearFace = highFace; }
+    if (near > enter) { enter = near; face = nearFace; }
+    leave = Math.min(leave, far);
+    if (enter > leave) return null;
+  }
+  if (!face || enter < 0 || enter > 1) return null;
+  const hx = ox + (x - ox) * enter, hy = oy + (y - oy) * enter, hz = oz + dz * enter;
+  let nx = 0, ny = 0, nz = 0, ux, uy, uz, vx, vy, vz;
+  if (face === 1 || face === 2) {
+    const sign = face === 1 ? 1 : -1; nx = box.c * sign; ny = box.s * sign;
+    [ux, uy, uz] = [-box.s, box.c, 0]; [vx, vy, vz] = [0, 0, 1];
+  } else if (face === 3 || face === 4) {
+    const sign = face === 3 ? 1 : -1; nx = -box.s * sign; ny = box.c * sign;
+    [ux, uy, uz] = [box.c, box.s, 0]; [vx, vy, vz] = [0, 0, 1];
+  } else {
+    nz = face === 5 ? 1 : -1;
+    [ux, uy, uz] = [box.c, box.s, 0]; [vx, vy, vz] = [-box.s, box.c, 0];
+  }
+  return { t: enter, x: hx, y: hy, z: hz, nx, ny, nz, ux, uy, uz, vx, vy, vz, face };
+}
+
+function peeObjectHit(ox, oy, oz, x, y, z) {
+  let best = null;
+  const offer = box => {
+    const hit = peeBoxHit(ox, oy, oz, x, y, z, box);
+    if (hit && (!best || hit.t < best.t)) best = hit;
+  };
+  if (mode === 'room') {
+    for (const p of room.props) {
+      if (p.tick) continue;
+      if (p.box) offer(p.box);
+      if (p.bench) {
+        const c = -p.fy, s = p.fx;
+        offer({ x: p.x, y: p.y, c, s, hl: 0.75, hw: 0.2, z0: 0.4, z1: 0.48 });
+        offer({ x: p.x - p.fx * 0.19, y: p.y - p.fy * 0.19, c, s, hl: 0.75, hw: 0.04, z0: 0.48, z1: 0.85 });
+      }
+      if (p.vm) offer({ x: p.x, y: p.y, c: p.vm.c, s: p.vm.s, hl: 0.45, hw: 0.35, z0: 0, z1: 1.9 });
+    }
+    return best;
+  }
+
+  const mx = (ox + x) / 2, my = (oy + y) / 2, bx = Math.floor(mx / 8), by = Math.floor(my / 8);
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    for (const o of solidsB[bi(bx + i, by + j)]) {
+      offer({ ...o, x: mx + rel(o.x - mx), y: my + rel(o.y - my) });
+    }
+    for (const b of benchesB[bi(bx + i, by + j)]) {
+      const c = -b.fy, s = b.fx, x0 = mx + rel(b.x - mx), y0 = my + rel(b.y - my);
+      offer({ x: x0, y: y0, c, s, hl: 0.075, hw: 0.02, z0: 0.04, z1: 0.048 });
+      offer({ x: x0 - b.fx * 0.019, y: y0 - b.fy * 0.019, c, s, hl: 0.075, hw: 0.004, z0: 0.048, z1: 0.085 });
+    }
+    for (const m of machinesB[bi(bx + i, by + j)]) {
+      offer({ x: mx + rel(m.x - mx), y: my + rel(m.y - my), c: m.c, s: m.s, hl: VM_HL, hw: VM_HW, z0: 0, z1: VM_H });
+    }
+  }
+  return best;
+}
+
+function peeMarkHit(hit, p) {
+  if (hit.face === 'wall') {
+    if (hit.nz) { [hit.ux, hit.uy, hit.uz] = [1, 0, 0]; [hit.vx, hit.vy, hit.vz] = [0, 1, 0]; }
+    else if (hit.nx) { [hit.ux, hit.uy, hit.uz] = [0, 1, 0]; [hit.vx, hit.vy, hit.vz] = [0, 0, 1]; }
+    else { [hit.ux, hit.uy, hit.uz] = [1, 0, 0]; [hit.vx, hit.vy, hit.vz] = [0, 0, 1]; }
+  }
+  const s = p.s, x = p.at === '' ? mod(hit.x, N) : hit.x, y = p.at === '' ? mod(hit.y, N) : hit.y;
+  let best = null, bd = Infinity;
+  for (const q of peeMarks) {
+    if (q.at !== p.at || q.s !== s || q.nx * hit.nx + q.ny * hit.ny + q.nz * hit.nz < 0.95) continue;
+    const dx = p.at === '' ? rel(x - q.x) : x - q.x, dy = p.at === '' ? rel(y - q.y) : y - q.y, dz = hit.z - q.z;
+    const u = dx * q.ux + dy * q.uy + dz * q.uz, v = dx * q.vx + dy * q.vy + dz * q.vz, d = Math.hypot(u, v) / s;
+    if (d < Math.sqrt(q.area / Math.PI) + 0.12 && d < bd) { best = q; bd = d; }
+  }
+  if (best) {
+    const dx = p.at === '' ? rel(x - best.x) : x - best.x, dy = p.at === '' ? rel(y - best.y) : y - best.y, dz = hit.z - best.z;
+    const u = dx * best.ux + dy * best.uy + dz * best.uz, v = dx * best.vx + dy * best.vy + dz * best.vz, w = PEE_DROP / (best.area + PEE_DROP);
+    const mx = (best.ux * u + best.vx * v) * w, my = (best.uy * u + best.vy * v) * w, mz = (best.uz * u + best.vz * v) * w;
+    best.x = best.at === '' ? mod(best.x + mx, N) : best.x + mx;
+    best.y = best.at === '' ? mod(best.y + my, N) : best.y + my;
+    best.z += mz;
+    best.area = Math.min(best.area + PEE_DROP, 0.5); best.life = 1;
+    return;
+  }
+  peeMarks.push({ at: p.at, s, x, y, z: hit.z, nx: hit.nx, ny: hit.ny, nz: hit.nz,
+    ux: hit.ux, uy: hit.uy, uz: hit.uz, vx: hit.vx, vy: hit.vy, vz: hit.vz,
+    area: PEE_DROP * 4, life: 1, seed: Math.random() * 100 });
+  const mark = peeMarks[peeMarks.length - 1], nudge = 0.002 * s;
+  mark.x += mark.nx * nudge; mark.y += mark.ny * nudge; mark.z += mark.nz * nudge;
+  while (peeMarks.length > 80) peeMarks.shift();
+}
+
+function peeSplash(hit, p) {
+  if (p.splash || Math.random() >= 0.35) return;
+  const speed = (0.3 + Math.random() * 0.5) * p.s;
+  peeDrops.push({ at: p.at, s: p.s, x: hit.x + hit.nx * 0.004 * p.s, y: hit.y + hit.ny * 0.004 * p.s,
+    z: hit.z + hit.nz * 0.004 * p.s, vx: (hit.nx * (0.8 + Math.random() * 0.6) + (Math.random() - 0.5) * 0.5) * p.s,
+    vy: (hit.ny * (0.8 + Math.random() * 0.6) + (Math.random() - 0.5) * 0.5) * p.s,
+    vz: (0.8 + Math.random() * 0.8) * p.s, t0: T, splash: true });
 }
 
 function startPee() {
@@ -64,6 +197,9 @@ function stepPee(dt) {
       if (bowls.some(l => Math.hypot(cx - l[0], cy - l[1]) < LOO_R)) { peeDrops.splice(k, 1); continue; } // in the bowl
     }
     const g = peeGround(p.x, p.y);
+    const wall = g.wall && p.z < g.wall ? peeWallHit(ox, oy, oz, p.x, p.y, p.z, g.wall) : null;
+    const object = peeObjectHit(ox, oy, oz, p.x, p.y, p.z), hit = wall && (!object || wall.t < object.t) ? wall : object;
+    if (hit) { if (!p.splash) { peeMarkHit(hit, p); peeSplash(hit, p); } peeDrops.splice(k, 1); continue; }
     if (g.wall && p.z < g.wall) { // splashes against a wall and runs down to its foot
       const g0 = peeGround(ox, oy);
       peeLand(p, ox, oy, g0.z ?? p.z); peeDrops.splice(k, 1);
@@ -73,6 +209,10 @@ function stepPee(dt) {
   for (let k = puddles.length - 1; k >= 0; k--) {
     const q = puddles[k];
     if ((q.life -= dt / PEE_DRY * (q.at === '' ? 1 + wet * 3 : 0.5)) <= 0) puddles.splice(k, 1);
+  }
+  for (let k = peeMarks.length - 1; k >= 0; k--) {
+    const q = peeMarks[k];
+    if ((q.life -= dt / PEE_DRY * (q.at === '' ? 1 + wet * 3 : 0.5)) <= 0) peeMarks.splice(k, 1);
   }
 }
 // who sees: the staff indoors (you're out), a cop outside (you're nicked), anyone else outside (they say so)
@@ -172,6 +312,42 @@ function drawPuddles() {
         set(i, e > 0.8 ? '.' : shine > 0.62 ? '~' : shine > 0.45 ? '-' : ' ', C(YEL, L * (e > 0.8 ? 0.8 : 1.2)));
         BG[i] = C(YEL, (1 + fresh * 1.6) * lit * (1 - e * 0.4)); FL[i] = 0;
       }
+    }
+  }
+}
+function drawPeeMarks() {
+  const at = placeKey();
+  if (at === null || !peeMarks.length) return;
+  const room_ = mode === 'room', lit = Math.max(0.45, amb);
+  for (const q of peeMarks) {
+    if (q.at !== at) continue;
+    const rx_ = room_ ? q.x - px : rel(q.x - px), ry_ = room_ ? q.y - py : rel(q.y - py), rz_ = q.z - eye;
+    const centerDepth = dx * rx_ + dy * ry_;
+    if (centerDepth <= 0.05 || centerDepth > vis || q.nx * -rx_ + q.ny * -ry_ + q.nz * -rz_ <= 0) continue;
+    const radius = Math.max(0.05, Math.sqrt(q.area / Math.PI)) * q.s * (0.35 + 0.65 * Math.sqrt(q.life));
+    const points = [];
+    for (const su of [-1, 1]) for (const sv of [-1, 1]) {
+      const X = rx_ + su * radius * q.ux + sv * radius * q.vx;
+      const Y = ry_ + su * radius * q.uy + sv * radius * q.vy;
+      const Z = rz_ + su * radius * q.uz + sv * radius * q.vz, depth = dx * X + dy * Y;
+      if (depth > 0.02) points.push([cols / 2 + (-dy * X + dx * Y) * projX / depth, hor - Z * projY / depth]);
+    }
+    if (!points.length) continue;
+    const c0 = Math.max(0, Math.floor(Math.min(...points.map(p => p[0])))), c1 = Math.min(cols, Math.ceil(Math.max(...points.map(p => p[0]))) + 1);
+    const r0 = Math.max(0, Math.floor(Math.min(...points.map(p => p[1])))), r1 = Math.min(rows, Math.ceil(Math.max(...points.map(p => p[1]))) + 1);
+    for (let c = c0; c < c1; c++) for (let r = r0; r < r1; r++) {
+      const i = r * cols + c, cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
+      const rz = (hor - r - 0.5) / projY, denom = q.nx * rx + q.ny * ry + q.nz * rz;
+      if (Math.abs(denom) < 1e-9) continue;
+      const depth = (q.nx * rx_ + q.ny * ry_ + q.nz * rz_) / denom;
+      if (depth <= 0 || depth > vis || ZB[i] < 0 || Math.abs(ZB[i] - depth) > Math.max(0.003, depth * 0.0001)) continue;
+      const ux = (rx * depth - rx_) * q.ux + (ry * depth - ry_) * q.uy + (rz * depth - rz_) * q.uz;
+      const vx = (rx * depth - rx_) * q.vx + (ry * depth - ry_) * q.vy + (rz * depth - rz_) * q.vz;
+      const ex = ux / radius, ey = vx / radius, edge = Math.hypot(ex, ey) + (noise(ex * 1.7 + q.seed, ey * 1.7, 998) - 0.5) * 0.3;
+      if (edge >= 1) continue;
+      const fresh = q.life, L = Math.max(0, 1 - depth / vis) * lit * (7 + fresh * 6), shine = noise(ex * 3 + T * 0.4, ey * 3 + q.seed, 999);
+      set(i, edge > 0.8 ? '.' : shine > 0.62 ? '~' : shine > 0.45 ? '-' : ' ', C(YEL, L * (edge > 0.8 ? 0.8 : 1.2)));
+      BG[i] = C(YEL, (1 + fresh * 1.6) * lit * (1 - edge * 0.4)); FL[i] = 0; FOGS[i] = 0;
     }
   }
 }

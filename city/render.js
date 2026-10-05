@@ -176,6 +176,7 @@ function render(dt) {
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
+  drawPeeMarks(); // stains on walls and solid static objects
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
@@ -217,4 +218,3 @@ function present() {
     x = end;
   }
 }
-
