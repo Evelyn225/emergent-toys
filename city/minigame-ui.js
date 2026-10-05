@@ -47,9 +47,9 @@ function finishGame(quit) {
     return;
   }
   if (game.kind === 'arcade' && g.prize) { // the crane dropped something in the chute
-    if (g.id === 'goldfish') { tickets += r; if (inv.length < INV_SIZE) { inv.push({ id: g.prize, uses: 0 }); held = inv.length - 1; } say(`${r} tickets, and the stallholder ties one fish up in a bag for you${inv.length >= INV_SIZE ? ' (but your hands are full: it goes back in the tub)' : ''}.`, 4); }
-    else if (inv.length < INV_SIZE) { inv.push({ id: g.prize, uses: ITEMS[g.prize].uses || 0 }); held = inv.length - 1; say(`It drops down the chute: ${aOrSome(ITEMS[g.prize].name)}! Yours.`, 4); }
-    else say(`It drops down the chute, but your hands are full. You leave ${aOrSome(ITEMS[g.prize].name)} for the next kid.`, 4);
+    if (g.id === 'goldfish') { tickets += r; const got = inv.length < INV_SIZE; if (got) carryItem({ id: g.prize, uses: 0 }); say(`${r} tickets, and the stallholder ties one fish up in a bag for you${got ? '' : ' (but your bag is full: it goes back in the tub)'}.`, 4); }
+    else if (inv.length < INV_SIZE) { carryItem({ id: g.prize, uses: ITEMS[g.prize].uses || 0 }); say(`It drops down the chute: ${aOrSome(ITEMS[g.prize].name)}! Yours.`, 4); }
+    else say(`It drops down the chute, but your bag is full. You leave ${aOrSome(ITEMS[g.prize].name)} for the next kid.`, 4);
   } else if (game.kind === 'arcade') { tickets += r; say(r ? `${r} tickets.` : g.id === 'crane' ? 'The claw comes up empty.' : 'No tickets this time.', 3); }
   else { if (r > 0) earn(r); say(quit ? `You clock off early. You earned ${fmt$(r)} (less for the hours you didn't work).` : `Shift's over. You earned ${fmt$(r)}.`, 4); }
 }

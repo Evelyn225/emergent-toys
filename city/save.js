@@ -10,7 +10,7 @@ function noteStreet() {
 function saveGame() {
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
-  const data = { v: 1, day: dayNum, tags, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
+  const data = { v: 1, day: dayNum, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, season: seasonShift, stolen: museumStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder } };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
@@ -19,10 +19,14 @@ function loadGame() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return; }
   if (!d || d.v !== 1) return;
-  const items = (list, into) => { into.length = 0; for (const it of list || []) if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses }); };
+  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses }); } };
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
-  items(d.inv, inv); items(d.stored, stored); items(d.closet, closet);
+  items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
+  quickSlots.fill(-1);
+  if (Array.isArray(d.quickSlots)) {
+    for (let s = 0; s < QUICK_SLOTS; s++) { const k = d.quickSlots[s]; if (Number.isInteger(k) && k >= 0 && k < inv.length && !quickSlots.includes(k)) quickSlots[s] = k; }
+  } else for (let s = 0; s < Math.min(QUICK_SLOTS, inv.length); s++) quickSlots[s] = s;
   held = clamp(d.held ?? -1, -1, inv.length - 1);
   for (const sym in d.shares || {}) if (stockBy(sym)) shares[sym] = d.shares[sym];
   if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }

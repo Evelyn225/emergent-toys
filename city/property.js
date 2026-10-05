@@ -37,8 +37,8 @@ function spawnOwnedCar(model, x, y, hx, hy, exact = false) {
 // kerb nearest where you're standing (the nearest of them, if you've bought more than one of a model)
 function giveCarKeys(model) { // into your hands, or if they're full, your storage unit
   const k = { id: 'key_' + model, uses: 0 };
-  if (inv.length < INV_SIZE) { inv.push(k); return 'Here are the keys (hold them, Q: it comes to you).'; }
-  stored.push(k); return 'Your hands are full: the keys are in your storage unit.';
+  if (inv.length < INV_SIZE) { carryItem(k, false); return 'Here are the keys (hold them, Q: it comes to you).'; }
+  stored.push(k); return 'Your bag is full: the keys are in your storage unit.';
 }
 function ensureCarKeys() { // (a save from before there were keys: you get a set for each car you own)
   for (const m of new Set(owned.cars.map(c => c.model))) if (![...inv, ...stored, ...closet].some(it => it.id === 'key_' + m)) giveCarKeys(m);

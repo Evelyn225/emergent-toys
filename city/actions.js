@@ -141,7 +141,7 @@ function interact() {
         const got = game && game.g.hasItems;
         if (!ok) { room.until += 30; return say(got ? '"Nice try. And put those back." Thirty more seconds for that.' : '"Nice try." Thirty more seconds for that.', 4); }
         room.until = T; leaveRoom();
-        if (got && seized.length) { inv.push(...seized.splice(0, INV_SIZE - inv.length)); held = inv.length ? 0 : -1; seized.length = 0; return say('You slip out past the front desk with your things stuffed in your jacket. Nobody saw a thing.', 4); }
+        if (got && seized.length) { for (const it of seized.splice(0, INV_SIZE - inv.length)) carryItem(it, false); held = inv.length ? 0 : -1; seized.length = 0; return say('You slip out past the front desk with your things stuffed in your jacket. Nobody saw a thing.', 4); }
         say('You slip out past the front desk. Nobody saw a thing.', 4);
       });
     }
@@ -316,4 +316,3 @@ function hail() {
   for (const c of cars) if (c.body === TAXI && !c.rider && !c.player) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }
-

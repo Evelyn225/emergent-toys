@@ -2115,8 +2115,8 @@ function claimPrize(id) {
   const p = PRIZES.find(q => q[0] === id);
   if (!p) return [false, 'Not a prize.'];
   if (tickets < p[1]) return [false, `That's ${p[1]} tickets. You have ${tickets}.`];
-  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
-  tickets -= p[1]; inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1;
+  if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
+  tickets -= p[1]; carryItem({ id, uses: ITEMS[id].uses || 0 });
   return [true, `You trade ${p[1]} tickets for ${aOrSome(ITEMS[id].name)}.`];
 }
 // what each kind of place sells: by shop word first, then by room kind
@@ -2148,12 +2148,37 @@ const stockFor = (kind, word) => STOCK_WORD[word] || STOCK_ROOM[kind] || [];
 // the street carts
 const VENDOR_STOCK = { 'COTTON CANDY': ['cottoncandy', 'lemonade'], 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 'ICE CREAM': ['icecream'], COFFEE: ['coffee', 'donut'], NOODLES: ['noodlebox', 'tea'] };
 
-// ---- what you carry: 8 slots, one held. Effects wear off with time.
-const INV_SIZE = 8;
+// ---- what you carry: a 24-item bag and 8 quick slots; one item in hand. Effects wear off with time.
+const INV_SIZE = 24, QUICK_SLOTS = 8;
 const inv = []; // { id, uses }
+const quickSlots = Array(QUICK_SLOTS).fill(-1); // inventory indexes; empty slots are -1
 let held = 0; // which slot is in your hand; -1 = nothing, hands empty
 // take slot k in hand, or (if it's already there) put it away and hold nothing
 const holdSlot = k => { held = held === k ? -1 : k; };
+function assignQuickSlot(k, slot) {
+  if (!inv[k] || slot < -1 || slot >= QUICK_SLOTS) return false;
+  for (let i = 0; i < QUICK_SLOTS; i++) if (quickSlots[i] === k) quickSlots[i] = -1;
+  if (slot >= 0) quickSlots[slot] = k;
+  return true;
+}
+function carryItem(it, select = true) {
+  if (inv.length >= INV_SIZE) return -1;
+  const k = inv.push(it) - 1, slot = quickSlots.indexOf(-1);
+  if (slot >= 0) quickSlots[slot] = k;
+  if (select) held = k;
+  return k;
+}
+function clearInventory() { inv.length = 0; quickSlots.fill(-1); held = -1; }
+function removeInventoryAt(k) {
+  inv.splice(k, 1);
+  for (let s = 0; s < QUICK_SLOTS; s++) quickSlots[s] = quickSlots[s] === k ? -1 : quickSlots[s] > k ? quickSlots[s] - 1 : quickSlots[s];
+  held = held < 0 ? -1 : held > k ? held - 1 : held === k ? clamp(k, 0, Math.max(0, inv.length - 1)) : held;
+}
+function holdQuickSlot(slot) { const k = quickSlots[slot]; if (k >= 0 && inv[k]) holdSlot(k); }
+function cycleQuickSlot(direction) {
+  const choices = [-1, ...quickSlots.filter(k => k >= 0 && inv[k])], at = choices.indexOf(held);
+  held = choices[mod((at < 0 ? 0 : at) + direction, choices.length)];
+}
 const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0 };
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
@@ -2192,9 +2217,9 @@ const heldItem = () => inv[held] || null;
 function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
   if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }
-  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
+  if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
-  inv.push({ id, uses: it.uses || 0 }); held = inv.length - 1;
+  carryItem({ id, uses: it.uses || 0 });
   return [true, `You buy ${aOrSome(it.name)}. (${fmt$(it.price)})`];
 }
 const cap = s => s[0].toUpperCase() + s.slice(1);
@@ -2225,15 +2250,15 @@ function sellSlot(k, rate) {
 }
 function retrieveSlot(k, list = stored, where = 'your unit') { // the unit's item k -> your hands
   if (!list[k]) return [false, 'Nothing there.'];
-  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
-  const it = list.splice(k, 1)[0]; inv.push(it);
+  if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
+  const it = list.splice(k, 1)[0]; carryItem(it, false);
   return [true, `You take the ${ITEMS[it.id].name} out of ${where}.`];
 }
 function removeHeld() {
   const it = inv[held];
   if (it && it.id === 'skateboard') fx.skating = false;
   if (it && it.id === 'boombox') fx.boombox = false;
-  inv.splice(held, 1); held = clamp(held, 0, Math.max(0, inv.length - 1));
+  removeInventoryAt(held);
 }
 // Q: use what's in your hand. Returns a line to show (and the sound to play, see goods-ui.js)
 const BOOK_LINES = ['"It was a dark and stormy night..." You read a chapter.', 'A detective novel. The butler, surely.', 'Poetry. You read one, then another.',
@@ -2335,7 +2360,7 @@ function useHeld(near) {
     case 'mysterybox': { // open it: something from the pile, nobody said what
       removeHeld();
       const id = pickWeighted(MYSTERY_BOX);
-      inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1;
+      carryItem({ id, uses: ITEMS[id].uses || 0 });
       return [id === 'jadedragon' || id === 'pocketwatch' ? `You tear it open. ${aOrSome(ITEMS[id].name).replace(/^./, c => c.toUpperCase())}?! No way.` : `You tear the box open: ${aOrSome(ITEMS[id].name)}.`, 'chime'];
     }
     case 'flowers':
@@ -2395,8 +2420,8 @@ function droppedNear(x, y, at, r, z = 0) {
   return best;
 }
 function pickUpDropped(d) {
-  if (inv.length >= INV_SIZE) return [false, 'Your hands are full.'];
-  dropped.splice(dropped.indexOf(d), 1); inv.push({ id: d.id, uses: d.uses }); held = inv.length - 1;
+  if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
+  dropped.splice(dropped.indexOf(d), 1); carryItem({ id: d.id, uses: d.uses });
   return [true, `You pick up the ${ITEMS[d.id].name}.`];
 }
 function stepGoods(dt) {
@@ -2446,7 +2471,7 @@ function stepBall(dt) {
 }
 function pickUpBall() {
   if (!ball || Math.hypot(rel(ball.x - px), rel(ball.y - py)) > 0.3 || inv.length >= INV_SIZE) return false;
-  ball = null; inv.push({ id: 'ball', uses: 0 }); held = inv.length - 1; return true;
+  ball = null; carryItem({ id: 'ball', uses: 0 }); return true;
 }
 // ---- minigames: the arcade cabinets (snake, breakout, street crosser) and the work shifts (waiting tables,
 // stocking shelves), plus what a taxi fare pays. Pure: each game is a small state machine on its own W x H grid,
@@ -4242,7 +4267,7 @@ const JAIL_T = 60;
 const seized = [];
 function goToJail() {
   seized.length = 0; seized.push(...inv);
-  inv.length = 0; held = -1; fx.skating = false; fx.boombox = false;
+  clearInventory(); fx.skating = false; fx.boombox = false;
   clearWanted();
 }
 // ===== owning things: a car from a CAR LOT, a home from a REALTY office. Pure (no DOM), so the node tests can buy
@@ -4284,8 +4309,8 @@ function spawnOwnedCar(model, x, y, hx, hy, exact = false) {
 // kerb nearest where you're standing (the nearest of them, if you've bought more than one of a model)
 function giveCarKeys(model) { // into your hands, or if they're full, your storage unit
   const k = { id: 'key_' + model, uses: 0 };
-  if (inv.length < INV_SIZE) { inv.push(k); return 'Here are the keys (hold them, Q: it comes to you).'; }
-  stored.push(k); return 'Your hands are full: the keys are in your storage unit.';
+  if (inv.length < INV_SIZE) { carryItem(k, false); return 'Here are the keys (hold them, Q: it comes to you).'; }
+  stored.push(k); return 'Your bag is full: the keys are in your storage unit.';
 }
 function ensureCarKeys() { // (a save from before there were keys: you get a set for each car you own)
   for (const m of new Set(owned.cars.map(c => c.model))) if (![...inv, ...stored, ...closet].some(it => it.id === 'key_' + m)) giveCarKeys(m);
@@ -8895,11 +8920,11 @@ function museumUse() {
   const c = sp.case;
   if (museumStolen[c.id]) return say(`An empty case. A card in it: "${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is away for... cleaning." The police tape says otherwise.`, 5), true;
   if (!room.burgled) return say(c.plaque, 6), true;
-  if (inv.length >= INV_SIZE) return say('Your hands are full.'), true;
+  if (inv.length >= INV_SIZE) return say('Your bag is full.'), true;
   startCrime('lockpick', ok => {
     if (ok === 'abort') return;
     if (!ok) return museumAlarm('The pick slips, the glass cracks, and every alarm in the building goes off. RUN.');
-    museumStolen[c.id] = true; inv.push({ id: c.id, uses: 0 }); held = inv.length - 1;
+    museumStolen[c.id] = true; carryItem({ id: c.id, uses: 0 });
     room.props = room.props.filter(p => p.exhibit !== c.id);
     if (!room.silent && !room.alarm) room.silent = T + 30;
     say(`The case clicks open. ${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is yours. A tiny red light starts blinking: you have half a minute.`, 5);
@@ -9947,7 +9972,7 @@ function interact() {
         const got = game && game.g.hasItems;
         if (!ok) { room.until += 30; return say(got ? '"Nice try. And put those back." Thirty more seconds for that.' : '"Nice try." Thirty more seconds for that.', 4); }
         room.until = T; leaveRoom();
-        if (got && seized.length) { inv.push(...seized.splice(0, INV_SIZE - inv.length)); held = inv.length ? 0 : -1; seized.length = 0; return say('You slip out past the front desk with your things stuffed in your jacket. Nobody saw a thing.', 4); }
+        if (got && seized.length) { for (const it of seized.splice(0, INV_SIZE - inv.length)) carryItem(it, false); held = inv.length ? 0 : -1; seized.length = 0; return say('You slip out past the front desk with your things stuffed in your jacket. Nobody saw a thing.', 4); }
         say('You slip out past the front desk. Nobody saw a thing.', 4);
       });
     }
@@ -10122,7 +10147,6 @@ function hail() {
   for (const c of cars) if (c.body === TAXI && !c.rider && !c.player) { const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } }
   if (best) { best.hail = true; say('TAXI!'); } else say('No taxi nearby.');
 }
-
 // ===== the taxi job: J at an idle taxi and you drive it yourself. Now and then someone on the sidewalk nearby flags
 // you down (marked on the map, and with a ! over their head); pull up beside them and stop to pick them up, drive
 // them where they're going (the dash says which way and how far, the map marks it), and stop there to let them out.
@@ -10890,8 +10914,8 @@ function buildPause() {
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
         <b>space</b><span>jump (on a board: ollie; with A / D / S: tricks)</span><b>right mouse</b><span>on a board: flick any direction (up: ollie; upper diagonals: hardflip / inward heelflip)</span><b>C</b><span>crouch (hold) / sit</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
-        <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
-        <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
+        <b>M</b><span>map</span><b>1-8</b><span>quick slots; again to put away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
+        <b>I</b><span>what you carry; assign items to quick slots</span><b>Q</b><span>use held item</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
         <b>P</b><span>pee</span>
         <b>Esc</b><span>pause</span>
@@ -11029,8 +11053,8 @@ function devItems() {
   return out.sort((p, q) => order.indexOf(p[0]) - order.indexOf(q[0]) || (p[1].toLowerCase() < q[1].toLowerCase() ? -1 : 1));
 }
 function devGive(id) {
-  if (inv.length >= INV_SIZE) return say(`Your hands are full (${INV_SIZE}). Drop something first, or use Other: empty your pockets.`, 3);
-  inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1; say(`Spawned ${aOrSome(ITEMS[id].name)}.`, 2);
+  if (inv.length >= INV_SIZE) return say(`Your bag is full (${INV_SIZE}). Drop something first, or use Other: empty your pockets.`, 3);
+  carryItem({ id, uses: ITEMS[id].uses || 0 }); say(`Spawned ${aOrSome(ITEMS[id].name)}.`, 2);
 }
 const devCash = n => { money = Math.max(0, Math.round((money + n) * 100) / 100); say(`Money: ${fmt$(money)}`, 2); };
 
@@ -11064,7 +11088,7 @@ function devBody() {
   }
   return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
     <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}${act('Bladder full', () => { needs.bladder = 100; })}</div>
-    <div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { inv.length = 0; held = -1; say('Pockets emptied.', 2); })}</div>
+    <div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { clearInventory(); say('Pockets emptied.', 2); })}</div>
     <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
 }
 function renderDev(keepFocus) {
@@ -11665,8 +11689,9 @@ function hotbar() {
   if (!hotbarUp()) return;
   const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0);
   let x = 6, y = cv.height - FS * 2 - 10;
-  inv.forEach((it, k) => {
-    const s = `${k + 1} ${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`, w = g.measureText(s).width + 12;
+  quickSlots.forEach((k, slot) => {
+    const it = inv[k]; if (!it) return;
+    const s = `${slot + 1} ${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`, w = g.measureText(s).width + 12;
     if (x > 6 && x + w > maxX) { x = 6; y -= FS + 12; }
     g.fillStyle = k === held ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
     g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
@@ -11677,7 +11702,7 @@ function hotbar() {
 }
 
 // ---- shop menu and inventory: small panels over a frozen game, keyboard or mouse
-let shopEl = null, invEl = null, shopCtx = null;
+let shopEl = null, invEl = null, shopCtx = null, invStyle = false;
 const panel = id => menuEl(id, 400, '<div class="panel"></div>');
 function showPanel(el, html) {
   el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
@@ -11719,9 +11744,14 @@ function startShift() {
 }
 function openInventory() {
   invEl = invEl || panel('inventory');
-  const rows_ = inv.length ? inv.map((it, k) => `<button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
-  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">1-${INV_SIZE} hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
+  if (!invStyle) { const style = document.createElement('style'); style.textContent = `#inventory .carry-row { display:flex; align-items:center; gap:10px; } #inventory .carry-row > .item { flex:1; width:auto; min-width:0; } #inventory .quick-slot { display:flex; align-items:center; gap:4px; white-space:nowrap; color:rgba(255,255,255,0.3); } #inventory .quick-slot select { width:4.5em; padding:2px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); background:#08080a; font:inherit; } #inventory .quick-slot option { color:#fff; background:#08080a; }`; document.head.appendChild(style); invStyle = true; }
+  const rows_ = inv.length ? inv.map((it, k) => {
+    const slot = quickSlots.indexOf(k), name = ITEMS[it.id].name;
+    return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
+  }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
+  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); } };
+  invEl.onchange = e => { const s = e.target.closest('[data-quick-item]'); if (s) { assignQuickSlot(+s.dataset.quickItem, +s.value); openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);
 // your storage unit: click a carried thing to put it in, a stored thing to take it out
@@ -11731,12 +11761,12 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
   storeCtx = [list, where, title, sub];
   storeEl = storeEl || panel('storage');
   const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
-  const carried = inv.length ? inv.map((it, k) => `<button class="item" data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
+  const carried = inv.length ? inv.map((it, k) => { const slot = quickSlots.indexOf(k); return `<button class="item" data-store="${k}"><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`; }).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
   const unit = list.length ? list.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
   showPanel(storeEl, `<h1>${title}</h1><p class="sub">${sub}</p>
     <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
     <h2>in ${where.replace('your ', 'the ')} ${list.length}/${STORE_SIZE}</h2>${unit}
-    <p class="hint">1-${INV_SIZE} store &middot; shift+1-9 take &middot; E / Esc close</p>`);
+    <p class="hint">1-8 store quick slot &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
     if (s) say(storeSlot(+s.dataset.store, list, where)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
@@ -11749,7 +11779,8 @@ function panelKey(e) {
   if (storeEl && storeEl.style.display === 'flex') {
     const n = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
-    else if (n) { say((e.shiftKey ? retrieveSlot(n[1] - 1, storeCtx[0], storeCtx[1]) : storeSlot(n[1] - 1, storeCtx[0], storeCtx[1]))[1], 2); openStorage(); }
+    else if (n && e.shiftKey) { say(retrieveSlot(n[1] - 1, storeCtx[0], storeCtx[1])[1], 2); openStorage(); }
+    else if (n && +n[1] <= QUICK_SLOTS) { const k = quickSlots[n[1] - 1]; say(storeSlot(k, storeCtx[0], storeCtx[1])[1], 2); openStorage(); }
     return true;
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
@@ -11757,7 +11788,7 @@ function panelKey(e) {
   if (shop && e.code === 'KeyJ' && shiftHere()) { startShift(); return true; }
   if (shop && n && e.shiftKey && SELL_RATE[shopCtx.title]) { shopSell(n[1] - 1); return true; }
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }
-  if (!shop && n && inv[n[1] - 1]) { holdSlot(n[1] - 1); openInventory(); return true; }
+  if (!shop && n) { holdQuickSlot(n[1] - 1); openInventory(); return true; }
   if (!shop && e.code === 'KeyQ') { closeInventory(); useHeldItem(); return true; }
   if (!shop && e.code === 'KeyX') { dropHere(); openInventory(); return true; }
   return true; // swallow everything else
@@ -13332,9 +13363,9 @@ function finishGame(quit) {
     return;
   }
   if (game.kind === 'arcade' && g.prize) { // the crane dropped something in the chute
-    if (g.id === 'goldfish') { tickets += r; if (inv.length < INV_SIZE) { inv.push({ id: g.prize, uses: 0 }); held = inv.length - 1; } say(`${r} tickets, and the stallholder ties one fish up in a bag for you${inv.length >= INV_SIZE ? ' (but your hands are full: it goes back in the tub)' : ''}.`, 4); }
-    else if (inv.length < INV_SIZE) { inv.push({ id: g.prize, uses: ITEMS[g.prize].uses || 0 }); held = inv.length - 1; say(`It drops down the chute: ${aOrSome(ITEMS[g.prize].name)}! Yours.`, 4); }
-    else say(`It drops down the chute, but your hands are full. You leave ${aOrSome(ITEMS[g.prize].name)} for the next kid.`, 4);
+    if (g.id === 'goldfish') { tickets += r; const got = inv.length < INV_SIZE; if (got) carryItem({ id: g.prize, uses: 0 }); say(`${r} tickets, and the stallholder ties one fish up in a bag for you${got ? '' : ' (but your bag is full: it goes back in the tub)'}.`, 4); }
+    else if (inv.length < INV_SIZE) { carryItem({ id: g.prize, uses: ITEMS[g.prize].uses || 0 }); say(`It drops down the chute: ${aOrSome(ITEMS[g.prize].name)}! Yours.`, 4); }
+    else say(`It drops down the chute, but your bag is full. You leave ${aOrSome(ITEMS[g.prize].name)} for the next kid.`, 4);
   } else if (game.kind === 'arcade') { tickets += r; say(r ? `${r} tickets.` : g.id === 'crane' ? 'The claw comes up empty.' : 'No tickets this time.', 3); }
   else { if (r > 0) earn(r); say(quit ? `You clock off early. You earned ${fmt$(r)} (less for the hours you didn't work).` : `Shift's over. You earned ${fmt$(r)}.`, 4); }
 }
@@ -13566,7 +13597,7 @@ function pickpocket(p) {
     p.talk = 0;
     if (ok === 'abort') return;
     if (ok) {
-      if (Math.random() < 0.25 && inv.length < INV_SIZE) { const id = pick(LIFTS); inv.push({ id, uses: ITEMS[id].uses || 0 }); return say(`You lift ${aOrSome(ITEMS[id].name)}. They walk on.`, 3); }
+      if (Math.random() < 0.25 && inv.length < INV_SIZE) { const id = pick(LIFTS); carryItem({ id, uses: ITEMS[id].uses || 0 }, false); return say(`You lift ${aOrSome(ITEMS[id].name)}. They walk on.`, 3); }
       const c = Math.round((2 + Math.random() * 20) * 4) / 4; earn(c); return say(`You lift ${fmt$(c)} from their pocket. They walk on.`, 3);
     }
     p.talk = 3; say(pick(['"HEY! THIEF!"', '"Get your hand out of my pocket!"', '"Somebody call the cops!"']), 3);
@@ -13579,8 +13610,8 @@ function shoplift() {
   startCrime('shoplift', ok => {
     if (ok === 'abort') return;
     if (ok) {
-      if (inv.length >= INV_SIZE) return say("You've nowhere to put it.");
-      const id = pick(stockFor(room.kind, room.word)); inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1;
+      if (inv.length >= INV_SIZE) return say("Your bag is full.");
+      const id = pick(stockFor(room.kind, room.word)); carryItem({ id, uses: ITEMS[id].uses || 0 });
       return say(`You slip ${aOrSome(ITEMS[id].name)} into your coat.`, 3);
     }
     room.caught = true; say('"HEY! Put that back! I\'m calling the police."', 4);
@@ -13644,8 +13675,8 @@ function grabStock() {
   const stock = stockFor(room.kind, room.word);
   if (!stock.length) return say('Nothing worth taking.');
   if (room.loot >= 4) return say("You've cleaned the place out.");
-  if (inv.length >= INV_SIZE) return say('Your hands are full.');
-  const id = pick(stock); inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1; room.loot++;
+  if (inv.length >= INV_SIZE) return say('Your bag is full.');
+  const id = pick(stock); carryItem({ id, uses: ITEMS[id].uses || 0 }); room.loot++;
   say(`You take ${aOrSome(ITEMS[id].name)}.`, 2);
 }
 // G and L
@@ -13903,7 +13934,7 @@ function noteStreet() {
 function saveGame() {
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
-  const data = { v: 1, day: dayNum, tags, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
+  const data = { v: 1, day: dayNum, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, season: seasonShift, stolen: museumStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder } };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
@@ -13912,10 +13943,14 @@ function loadGame() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return; }
   if (!d || d.v !== 1) return;
-  const items = (list, into) => { into.length = 0; for (const it of list || []) if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses }); };
+  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses }); } };
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
-  items(d.inv, inv); items(d.stored, stored); items(d.closet, closet);
+  items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
+  quickSlots.fill(-1);
+  if (Array.isArray(d.quickSlots)) {
+    for (let s = 0; s < QUICK_SLOTS; s++) { const k = d.quickSlots[s]; if (Number.isInteger(k) && k >= 0 && k < inv.length && !quickSlots.includes(k)) quickSlots[s] = k; }
+  } else for (let s = 0; s < Math.min(QUICK_SLOTS, inv.length); s++) quickSlots[s] = s;
   held = clamp(d.held ?? -1, -1, inv.length - 1);
   for (const sym in d.shares || {}) if (stockBy(sym)) shares[sym] = d.shares[sym];
   if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }
@@ -13966,7 +14001,7 @@ onkeydown = e => {
     if (e.code === 'KeyX') dropHere();
     if (e.code === 'KeyP') startPee();
     const slot = /^Digit([1-8])$/.exec(e.code);
-    if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) holdSlot(slot[1] - 1); // again: put it away
+    if (slot && !(mode === 'room' && room.kind === 'train')) holdQuickSlot(slot[1] - 1); // again: put it away
     if (e.code === 'Digit0' || e.code === 'Backquote') held = -1; // empty your hands
     if (e.code === 'KeyG' || e.code === 'KeyL') crimeKey(e.code); // pickpocket / shoplift / lockpick
     if (e.code === 'KeyB' && heldItem() && heldItem().id === 'boombox' && fx.boombox) { say(`Next tape: ${nextSong()}.`, 2); if (actx) sfxUse('click'); }
@@ -14181,7 +14216,7 @@ function gotoShop(word) {
 requestAnimationFrame(loop);
 
 // the mouse wheel cycles what's in your hand
-addEventListener('wheel', e => { if (!paused && inv.length) held = mod(held + 1 + Math.sign(e.deltaY), inv.length + 1) - 1; }, { passive: true }); // (round through empty hands too)
+addEventListener('wheel', e => { if (!paused && inv.length) cycleQuickSlot(Math.sign(e.deltaY)); }, { passive: true }); // quick slots, with empty hands between them
 // ===== touch: on a phone or tablet. A floating stick under the left thumb walks (or drives: push it to the rim to
 // run), dragging anywhere on the right looks round. Buttons are words, not keys, and only the ones that do something
 // right here show: the big one is whatever E would do (Talk, Enter, Get in...), smaller ones pop up beside it when

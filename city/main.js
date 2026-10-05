@@ -29,7 +29,7 @@ onkeydown = e => {
     if (e.code === 'KeyX') dropHere();
     if (e.code === 'KeyP') startPee();
     const slot = /^Digit([1-8])$/.exec(e.code);
-    if (slot && inv[slot[1] - 1] && !(mode === 'room' && room.kind === 'train')) holdSlot(slot[1] - 1); // again: put it away
+    if (slot && !(mode === 'room' && room.kind === 'train')) holdQuickSlot(slot[1] - 1); // again: put it away
     if (e.code === 'Digit0' || e.code === 'Backquote') held = -1; // empty your hands
     if (e.code === 'KeyG' || e.code === 'KeyL') crimeKey(e.code); // pickpocket / shoplift / lockpick
     if (e.code === 'KeyB' && heldItem() && heldItem().id === 'boombox' && fx.boombox) { say(`Next tape: ${nextSong()}.`, 2); if (actx) sfxUse('click'); }
@@ -244,4 +244,4 @@ function gotoShop(word) {
 requestAnimationFrame(loop);
 
 // the mouse wheel cycles what's in your hand
-addEventListener('wheel', e => { if (!paused && inv.length) held = mod(held + 1 + Math.sign(e.deltaY), inv.length + 1) - 1; }, { passive: true }); // (round through empty hands too)
+addEventListener('wheel', e => { if (!paused && inv.length) cycleQuickSlot(Math.sign(e.deltaY)); }, { passive: true }); // quick slots, with empty hands between them

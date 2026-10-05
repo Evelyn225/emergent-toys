@@ -230,11 +230,11 @@ function museumUse() {
   const c = sp.case;
   if (museumStolen[c.id]) return say(`An empty case. A card in it: "${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is away for... cleaning." The police tape says otherwise.`, 5), true;
   if (!room.burgled) return say(c.plaque, 6), true;
-  if (inv.length >= INV_SIZE) return say('Your hands are full.'), true;
+  if (inv.length >= INV_SIZE) return say('Your bag is full.'), true;
   startCrime('lockpick', ok => {
     if (ok === 'abort') return;
     if (!ok) return museumAlarm('The pick slips, the glass cracks, and every alarm in the building goes off. RUN.');
-    museumStolen[c.id] = true; inv.push({ id: c.id, uses: 0 }); held = inv.length - 1;
+    museumStolen[c.id] = true; carryItem({ id: c.id, uses: 0 });
     room.props = room.props.filter(p => p.exhibit !== c.id);
     if (!room.silent && !room.alarm) room.silent = T + 30;
     say(`The case clicks open. ${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is yours. A tiny red light starts blinking: you have half a minute.`, 5);

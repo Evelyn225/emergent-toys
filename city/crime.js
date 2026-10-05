@@ -190,6 +190,6 @@ const JAIL_T = 60;
 const seized = [];
 function goToJail() {
   seized.length = 0; seized.push(...inv);
-  inv.length = 0; held = -1; fx.skating = false; fx.boombox = false;
+  clearInventory(); fx.skating = false; fx.boombox = false;
   clearWanted();
 }

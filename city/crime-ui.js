@@ -110,7 +110,7 @@ function pickpocket(p) {
     p.talk = 0;
     if (ok === 'abort') return;
     if (ok) {
-      if (Math.random() < 0.25 && inv.length < INV_SIZE) { const id = pick(LIFTS); inv.push({ id, uses: ITEMS[id].uses || 0 }); return say(`You lift ${aOrSome(ITEMS[id].name)}. They walk on.`, 3); }
+      if (Math.random() < 0.25 && inv.length < INV_SIZE) { const id = pick(LIFTS); carryItem({ id, uses: ITEMS[id].uses || 0 }, false); return say(`You lift ${aOrSome(ITEMS[id].name)}. They walk on.`, 3); }
       const c = Math.round((2 + Math.random() * 20) * 4) / 4; earn(c); return say(`You lift ${fmt$(c)} from their pocket. They walk on.`, 3);
     }
     p.talk = 3; say(pick(['"HEY! THIEF!"', '"Get your hand out of my pocket!"', '"Somebody call the cops!"']), 3);
@@ -123,8 +123,8 @@ function shoplift() {
   startCrime('shoplift', ok => {
     if (ok === 'abort') return;
     if (ok) {
-      if (inv.length >= INV_SIZE) return say("You've nowhere to put it.");
-      const id = pick(stockFor(room.kind, room.word)); inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1;
+      if (inv.length >= INV_SIZE) return say("Your bag is full.");
+      const id = pick(stockFor(room.kind, room.word)); carryItem({ id, uses: ITEMS[id].uses || 0 });
       return say(`You slip ${aOrSome(ITEMS[id].name)} into your coat.`, 3);
     }
     room.caught = true; say('"HEY! Put that back! I\'m calling the police."', 4);
@@ -188,8 +188,8 @@ function grabStock() {
   const stock = stockFor(room.kind, room.word);
   if (!stock.length) return say('Nothing worth taking.');
   if (room.loot >= 4) return say("You've cleaned the place out.");
-  if (inv.length >= INV_SIZE) return say('Your hands are full.');
-  const id = pick(stock); inv.push({ id, uses: ITEMS[id].uses || 0 }); held = inv.length - 1; room.loot++;
+  if (inv.length >= INV_SIZE) return say('Your bag is full.');
+  const id = pick(stock); carryItem({ id, uses: ITEMS[id].uses || 0 }); room.loot++;
   say(`You take ${aOrSome(ITEMS[id].name)}.`, 2);
 }
 // G and L

@@ -381,8 +381,9 @@ function hotbar() {
   if (!hotbarUp()) return;
   const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0);
   let x = 6, y = cv.height - FS * 2 - 10;
-  inv.forEach((it, k) => {
-    const s = `${k + 1} ${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`, w = g.measureText(s).width + 12;
+  quickSlots.forEach((k, slot) => {
+    const it = inv[k]; if (!it) return;
+    const s = `${slot + 1} ${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`, w = g.measureText(s).width + 12;
     if (x > 6 && x + w > maxX) { x = 6; y -= FS + 12; }
     g.fillStyle = k === held ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
     g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
@@ -393,7 +394,7 @@ function hotbar() {
 }
 
 // ---- shop menu and inventory: small panels over a frozen game, keyboard or mouse
-let shopEl = null, invEl = null, shopCtx = null;
+let shopEl = null, invEl = null, shopCtx = null, invStyle = false;
 const panel = id => menuEl(id, 400, '<div class="panel"></div>');
 function showPanel(el, html) {
   el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
@@ -435,9 +436,14 @@ function startShift() {
 }
 function openInventory() {
   invEl = invEl || panel('inventory');
-  const rows_ = inv.length ? inv.map((it, k) => `<button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${k + 1}</span><span>${ITEMS[it.id].name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
-  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">1-${INV_SIZE} hold &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
+  if (!invStyle) { const style = document.createElement('style'); style.textContent = `#inventory .carry-row { display:flex; align-items:center; gap:10px; } #inventory .carry-row > .item { flex:1; width:auto; min-width:0; } #inventory .quick-slot { display:flex; align-items:center; gap:4px; white-space:nowrap; color:rgba(255,255,255,0.3); } #inventory .quick-slot select { width:4.5em; padding:2px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); background:#08080a; font:inherit; } #inventory .quick-slot option { color:#fff; background:#08080a; }`; document.head.appendChild(style); invStyle = true; }
+  const rows_ = inv.length ? inv.map((it, k) => {
+    const slot = quickSlots.indexOf(k), name = ITEMS[it.id].name;
+    return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
+  }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
+  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); } };
+  invEl.onchange = e => { const s = e.target.closest('[data-quick-item]'); if (s) { assignQuickSlot(+s.dataset.quickItem, +s.value); openInventory(); } };
 }
 const closeInventory = () => hidePanel(invEl);
 // your storage unit: click a carried thing to put it in, a stored thing to take it out
@@ -447,12 +453,12 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
   storeCtx = [list, where, title, sub];
   storeEl = storeEl || panel('storage');
   const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
-  const carried = inv.length ? inv.map((it, k) => `<button class="item" data-store="${k}"><span class="k">${k + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
+  const carried = inv.length ? inv.map((it, k) => { const slot = quickSlots.indexOf(k); return `<button class="item" data-store="${k}"><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`; }).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
   const unit = list.length ? list.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
   showPanel(storeEl, `<h1>${title}</h1><p class="sub">${sub}</p>
     <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
     <h2>in ${where.replace('your ', 'the ')} ${list.length}/${STORE_SIZE}</h2>${unit}
-    <p class="hint">1-${INV_SIZE} store &middot; shift+1-9 take &middot; E / Esc close</p>`);
+    <p class="hint">1-8 store quick slot &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
     if (s) say(storeSlot(+s.dataset.store, list, where)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
@@ -465,7 +471,8 @@ function panelKey(e) {
   if (storeEl && storeEl.style.display === 'flex') {
     const n = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
-    else if (n) { say((e.shiftKey ? retrieveSlot(n[1] - 1, storeCtx[0], storeCtx[1]) : storeSlot(n[1] - 1, storeCtx[0], storeCtx[1]))[1], 2); openStorage(); }
+    else if (n && e.shiftKey) { say(retrieveSlot(n[1] - 1, storeCtx[0], storeCtx[1])[1], 2); openStorage(); }
+    else if (n && +n[1] <= QUICK_SLOTS) { const k = quickSlots[n[1] - 1]; say(storeSlot(k, storeCtx[0], storeCtx[1])[1], 2); openStorage(); }
     return true;
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
@@ -473,7 +480,7 @@ function panelKey(e) {
   if (shop && e.code === 'KeyJ' && shiftHere()) { startShift(); return true; }
   if (shop && n && e.shiftKey && SELL_RATE[shopCtx.title]) { shopSell(n[1] - 1); return true; }
   if (shop && n && shopCtx.stock[n[1] - 1]) { shopBuy(shopCtx.stock[n[1] - 1]); return true; }
-  if (!shop && n && inv[n[1] - 1]) { holdSlot(n[1] - 1); openInventory(); return true; }
+  if (!shop && n) { holdQuickSlot(n[1] - 1); openInventory(); return true; }
   if (!shop && e.code === 'KeyQ') { closeInventory(); useHeldItem(); return true; }
   if (!shop && e.code === 'KeyX') { dropHere(); openInventory(); return true; }
   return true; // swallow everything else
