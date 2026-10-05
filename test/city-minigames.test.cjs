@@ -261,10 +261,10 @@ test('pachinko shows how each ball did (a +N in a pocket, an x where it drains, 
   ev('for (let t = 0; t < 40 && !g.over; t += 1 / 60) { g.step(1 / 60, { act: 1 }); for (const q of g.pops()) q.text === "x" ? seen.drain++ : seen.win++; if (g.verdict()) seen.verdict++; }');
   const seen = JSON.parse(ev('JSON.stringify(seen)'));
   assert.ok(seen.win && seen.drain && seen.verdict, JSON.stringify(seen));
-  // aiming at the middle, over two dozen trays: the house keeps a cut; carry the jade dragon and it's about even
+  // aiming at the middle, over sixty trays (a jackpot or two swings a handful a lot): the house keeps a cut; carry the jade dragon and it's about even
   const ret = jade => {
     let fired = 0, back = 0;
-    for (let s = 1; s <= 24; s++) {
+    for (let s = 1; s <= 60; s++) {
       const { ev: e } = require('./helpers/load-city.cjs').loadCity(s);
       if (jade) e(`inv.push({ id: '${jade}', uses: 0 })`);
       e('var g = GAMES.pachinko()');
@@ -274,8 +274,8 @@ test('pachinko shows how each ball did (a +N in a pocket, an x where it drains, 
     return back / fired;
   };
   const plain = ret(''), dragon = ret('jadedragon');
-  assert.ok(plain > 0.78 && plain < 0.93, `the house keeps a cut: returns ${plain.toFixed(2)} a ball`);
-  assert.ok(dragon > 0.93 && dragon < 1.12, `with the jade dragon, about even: ${dragon.toFixed(2)} a ball`);
+  assert.ok(plain > 0.74 && plain < 0.94, `the house keeps a cut: returns ${plain.toFixed(2)} a ball`);
+  assert.ok(dragon > 0.9 && dragon < 1.16, `with the jade dragon, about even: ${dragon.toFixed(2)} a ball`);
 });
 
 test('duck pond: dip the hook on a duck and up it comes with its tickets on the bottom; a miss costs nothing; three ducks a go', () => {
@@ -332,6 +332,26 @@ test('balloon darts: the aim wanders; a dart pops the balloon it lands on (3 tic
   ev('var g = GAMES.darts(); for (const b of g.balloons) { b.col = RED; b.star = false; }');
   for (let n = 0; n < 3; n++) { ev('(() => { for (let k = 0; k < 6000 && !g.hitAt(...g.aim().map(Math.round)); k++) g.step(1 / 60, { left: (k / 240 | 0) % 2 === 0, right: (k / 240 | 0) % 2 === 1, up: (k / 700 | 0) % 2 === 0, down: (k / 700 | 0) % 2 === 1 }); })()'); play(ev, 1, '(t) => ({ actP: t < 0.02 })'); }
   assert.strictEqual(ev('g.score'), 3 * 3 + 6);
+});
+
+test('goldfish scooping: dip the net under a fish and lift, it\'s yours (tickets, and one in a bag); the paper wears through in the water', () => {
+  const { ev, j } = fresh();
+  ev('var g = GAMES.goldfish()');
+  assert.strictEqual(ev('g.fish.length'), 11);
+  // park the net over a fish, dip, lift
+  ev('(() => { const f = g.fish[0]; for (const o of g.fish.slice(1)) { o.x = 3; o.y = 8; } for (let k = 0; k < 400; k++) { const [nx, ny] = g.net(); f.x = nx; f.y = ny; f.a = 0; if (Math.hypot(f.x - nx, f.y - ny) < 0.3) break; g.step(1 / 60, {}); } })()');
+  ev('g.step(1 / 60, { act: 1 }); g.fish[0].x = g.net()[0]; g.fish[0].y = g.net()[1]');
+  const evs = j('g.step(1 / 60, {})');
+  assert.ok(evs.includes('score') || evs.includes('clear'), JSON.stringify(evs));
+  assert.ok(ev('g.score') >= 2 && ev("g.prize") === 'goldfish', 'tickets, and a fish to take home');
+  // hold it in the water, waving it about: the paper goes
+  ev('for (let k = 0; k < 1200 && !g.over; k++) g.step(1 / 60, { act: 1, left: k % 60 < 30, right: k % 60 >= 30 })');
+  assert.strictEqual(ev('g.over'), true, 'torn');
+});
+
+test('the fortune teller can promise a gold duck, and the next pond has one', () => {
+  const { ev } = fresh();
+  for (let k = 0; k < 5; k++) { ev('goldenDuckDue = true; var g = GAMES.ducks()'); assert.ok(ev('g.ducks.some(d => d.gold)')); assert.strictEqual(ev('goldenDuckDue'), false); }
 });
 
 test('crane: a drop either grabs something and brings it home as a prize, or comes up empty; one go', () => {

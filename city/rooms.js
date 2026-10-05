@@ -742,6 +742,7 @@ function roomFloor(i, r, x, rx, ry) {
     case 'conservatory': return conservatoryFloor(i, f, wx, wy);
     case 'jade': return jadeFloor(i, f, wx, wy);
     case 'casino': return casinoFloor(i, f, wx, wy);
+    case 'museum': return museumFloor(i, f, wx, wy);
     case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':

@@ -43,7 +43,7 @@ function devPlaces() {
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
     ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],
     ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.6, Math.PI / 2); }],
-    ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
+    ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
   const nearestLm = {}; // (there are several of each: the nearest one)
@@ -103,7 +103,8 @@ function devBody() {
       <div class="grp">time of day</div><div class="bar">${[['Dawn', 6], ['Morning', 9], ['Noon', 12], ['Afternoon', 15], ['Dusk', 19], ['Night', 22], ['Midnight', 0], ['3am', 3]].map(([l, h]) => act(l, () => { tod = h; })).join('')}</div>
       <div class="bar">hour <input type="number" min="0" max="23.99" step="0.25" data-set="tod" value="${tod.toFixed(2)}"></div>
       <div class="grp">day of the week</div><div class="bar">${WEEKDAYS.map((d, k) => act(d, () => { dayNum += mod(k - mod(dayNum, 7), 7); })).join('')}${act('Next day', () => { dayNum++; })}</div>
-      <div class="grp">weather</div><div class="bar">${['clear', 'rain', 'storm', 'fog'].map(w => act(w, () => { weather = w; wTimer = 600; })).join('')}</div>`;
+      <div class="grp">weather</div><div class="bar">${['clear', 'rain', 'storm', 'fog', 'snow'].map(w => act(w, () => { weather = w; wTimer = 600; })).join('')}${act('snow on the ground', () => { snowCover = 1; })}${act('clear the snow', () => { snowCover = 0; })}</div>
+      <div class="grp">season (now ${season()})</div><div class="bar">${SEASONS.map((sn, k) => act(sn, () => { setSeason(k); })).join('')}${act('next season', () => { seasonShift++; })}</div>`;
   }
   return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
     <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}${act('Bladder full', () => { needs.bladder = 100; })}</div>

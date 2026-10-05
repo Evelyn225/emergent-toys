@@ -7,13 +7,13 @@ Things get crossed off (deleted) once they're in the game.
 The ones that would add the most for the least, roughly in order. Each builds on something already in the game.
 1. **The Relics** (below, in Bigger city-wide ideas): the watch and the globe become two of a set, and collecting
    them all opens the tower with no door. A reason to do everything else.
-2. **Goldfish scooping and a fortune teller at the night market**: the market has three stalls; a fourth and fifth
-   with a game and a teller whose hint comes true (the fortune cookie already wires a tip into the stock market).
-3. **Rooftop runs**: roof hopping is in; time trials across the rooftops, a courier job that only pays if you
+2. **Rooftop runs**: roof hopping is in; time trials across the rooftops, a courier job that only pays if you
    never touch the street.
-4. **A bike**: rent, park, steal; between walking and a car, and it fits down alleys.
-5. **The museum heist**: the big one. Locks, pickpocketing, wanted stars, owned cars and roofs all exist now.
-6. **Seasons and snow**: real snow (the globe already has some), a white New Year, a heatwave that packs the pier.
+3. **A bike**: rent, park, steal; between walking and a car, and it fits down alleys.
+4. **Museum extras**: the heist is in (pick the door, dodge the torch beams, crack a case, beat the silent alarm);
+   next: the plan on paper, a guard's keycard to pickpocket, the power box in the alley, a rotating special exhibit.
+5. **Seasons, more of them**: seasons and snow are in; next, what changes with them: snowmen, a summer heatwave
+   that packs the pier, the shops' stock by season, fewer people out in a blizzard.
 
 ## New districts
 
@@ -105,8 +105,7 @@ The levers the engine already has, so a new district can pull every one of them:
 
 ### The Night Market: what's left (three stalls are in, on a Chinatown street, 8pm to 2am)
 - More rows: grills with smoke rising off them, a stall-cooking shift (fold bao to order), haggling over prices.
-- Games: goldfish scooping (a paper net that tears), a fortune teller whose reading comes true, a mahjong table in
-  the street.
+- Games: a mahjong table in the street (goldfish scooping and the fortune teller are in).
 - A knock-off stall: designer watches and bags for cheap that pawn for nothing (or now and then, for a lot).
 
 ### Hilltop / the Heights (harder: the world is flat today)
@@ -145,29 +144,13 @@ The levers the engine already has, so a new district can pull every one of them:
 - Community garden: plant something, come back days later to pick it.
 - Jazz basement club.
 
-## The museum, and how the heist could work
-
-**The museum by day**: a grand building downtown (columns, a dome, banners for the current show). $10 in. Halls
-of exhibits drawn in ASCII: a dinosaur skeleton you walk under, Egyptian room with a sarcophagus, a gallery of
-paintings (generated art, so it's different every visit), a gem room with the city's famous diamond under glass.
-Guards on patrol routes, cameras on the walls, a gift shop.
-
-**The heist, step by step** (a few evenings' work, not one button):
-1. **Case the joint.** Visit by day. Each guard walks a fixed loop; watching tells you the timing. Cameras sweep a
-   cone; you can see it on the floor. The game remembers what you've seen and draws it on a floor plan in your bag.
-2. **Get the tools.** A lockpick (have one: the lock minigame), a crowbar from the hardware store, a disguise
-   (a guard uniform from a laundromat dryer, or a hard hat), and a getaway car (owned or stolen) parked nearby.
-3. **Get in after dark.** Pick the back door lock, or climb the fire escape to the roof skylight.
-4. **Inside: stealth.** It's dark; guards carry torches (a cone of light). Stay out of their cones and the cameras'.
-   If one sees you: a few seconds of "huh?" to get out of sight, then alarms and four stars.
-5. **The vault.** The diamond's case: a harder lock minigame on a timer, or cut the glass (hold still, a meter
-   that wobbles if a guard's near).
-6. **Get out and away.** Back the way you came, to the car, lose the police. Then fence the diamond at the pawn
-   shop (a big payout) or keep it at home in your closet as a trophy.
-- Smaller crimes on the way could be optional shortcuts: pickpocket a guard's keycard, cut the power at a box in
-  the alley (the cameras go dark for a minute).
-- The engine already has: rooms with props, people with paths, the lock and pickpocket minigames, wanted stars,
-  owned cars. New: guards that see in a cone, darkness with torch light, and the plan on paper.
+## The museum: what's left (it's in: downtown across from the plaza; the heist works)
+- **Case the joint**: the guards' loops drawn on a floor plan in your bag once you've watched them by day.
+- **Shortcuts**: pickpocket a guard's keycard (no lock to pick); cut the power at a box in the alley (the beams go
+  dark for a minute); the skylight from the roof.
+- **A disguise**: a guard's uniform from a laundromat dryer, and the guards nod you through.
+- **A special exhibit that changes each week**, and a museum shop restock to match.
+- **Fencing**: the pawn shop takes the Glyphport Star at 40%; a proper fence in the docks who pays more and asks less.
 
 ## Weird and special buildings
 - Pay phones: call a number scrawled on a wall, get a strange task.
@@ -197,8 +180,8 @@ Guards on patrol routes, cameras on the walls, a gift shop.
   only meant an hour, the street lamps flicker as you pass, a figure in a long coat is always a block behind.
 - **Collectibles**: fifty rubber ducks hidden round the city (on ledges, in fountains, on roofs), a tally in the
   bag, a prize for every ten.
-- **Seasons**: snow in winter (white roofs, slush, snowmen in the park), a summer heatwave, autumn leaves in the
-  brownstones; each changes what the shops sell and how many people are out.
+- **Seasons, further** (they're in: a week each, snow in winter, autumn leaves, spring blossom, frozen ponds, the
+  Equinox Orrery from the museum to turn them): snowmen, slush, a summer heatwave, what the shops sell, how many are out.
 
 ## New ideas since last time
 - **Rooftop runs**: time trials across the roofs with checkpoints, a pizza courier who only gets paid if the box

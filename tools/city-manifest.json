@@ -32,6 +32,7 @@
     "city/jade.js",
     "city/casino.js",
     "city/exchange.js",
+    "city/museum.js",
     "city/stripclub.js",
     "city/marina.js",
     "city/render.js",

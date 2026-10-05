@@ -159,6 +159,7 @@ function loop(t) {
   stepPigeons(dt);
   stepJadeIncense(dt);
   stepExchange();
+  stepMuseum(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();

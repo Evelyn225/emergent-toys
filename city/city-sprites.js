@@ -41,13 +41,20 @@ function treeCell(i, u, z, L, t) {
     }
     return false;
   }
-  const n = hash(Math.floor(u * 45 + t.seed * 99), Math.floor(z * 45), 814);
-  if (e < 0.14 && n > 0.55) return false; // ragged edges: a little sky between the outermost leaves
+  const n = hash(Math.floor(u * 45 + t.seed * 99), Math.floor(z * 45), 814), sn = seasonIdx(), bare = sn === 3 && k !== 'pine';
+  if (bare) { // winter: the leaves are gone, just branches (snow along the tops of them when there's snow about)
+    const br = Math.abs(fract((u * 9 + z * 5 + t.seed * 3) * (1 + (n > 0.5) * 0.5)) - 0.5) < 0.06 || Math.abs(u) < 0.02 && z < cz;
+    if (!br || e < 0.08) return false;
+    return set(i, snowCover > 0.2 && n > 0.6 ? '-' : u > 0 ? '/' : '\\', snowCover > 0.2 && n > 0.6 ? C(WHITE, 13) : C(BRICK, L * 0.8)), true;
+  }
+  if (e < (sn === 2 ? 0.2 : 0.14) && n > 0.55) return false; // ragged edges: a little sky between the outermost leaves (thinner in autumn)
   const lit = clamp(0.75 + (z - cz) * 1.6 - u * 0.6, 0.45, 1.25) * tint; // lighter up top and toward the sun
-  const base = k === 'blossom' ? MAG : GREEN, bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
+  const fall = sn === 2 && k !== 'pine' ? [ORANGE, RED, YEL, BRICK][Math.floor(hash(Math.floor(u * 12 + t.seed * 50), Math.floor(z * 12), 815) * 4)] : 0; // autumn colours
+  const base = fall || (k === 'blossom' || sn === 0 && k !== 'pine' && n > 0.82 ? MAG : GREEN), bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
+  if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, '^', C(WHITE, 15)), true; } // snow on the pine's boughs
   BG[i] = C(base, Math.max(0.6, (0.9 + L * 0.22) * lit * bg));
   const ch = k === 'pine' ? (n > 0.6 ? '^' : n > 0.3 ? 'A' : ' ') : n > 0.72 ? '@' : n > 0.45 ? '%' : n > 0.25 ? '&' : ' ';
-  return set(i, ch, k === 'blossom' ? C(n > 0.8 ? WHITE : MAG, L * 1.1 * lit) : C(k === 'birch' && n > 0.8 ? YEL : GREEN, L * (0.8 + n * 0.5) * lit * bg)), true;
+  return set(i, ch, fall ? C(fall, L * (0.9 + n * 0.5) * lit) : base === MAG ? C(n > 0.8 ? WHITE : MAG, L * 1.1 * lit) : C(k === 'birch' && n > 0.8 ? YEL : GREEN, L * (0.8 + n * 0.5) * lit * bg)), true;
 }
 
 function citySprites() {
@@ -358,7 +365,9 @@ const SOLID_SHADE = {
     let ch = ' ', c = WHITE;
     if (o.k === 0) { ch = back ? '([=])'[mod(Math.floor(u * 5), 5)] : 'oO'[col & 1]; c = back ? WARM : WHITE; } // steamer baskets at the back, buns at the front
     else if (o.k === 1) { ch = back ? (col & 1 ? 'Y' : '|') : (col % 3 ? 'o' : '@'); c = back ? RED : col % 3 ? RED : YEL; } // tassels, knots, coins
-    else { ch = back ? '[#]'[m] : col % 3 === 1 ? (Math.sin(T * 2 + col) > 0.85 ? '*' : 'o') : col % 5 === 0 ? '?' : ' '; c = back ? ORANGE : col % 5 === 0 ? YEL : CYAN; } // boxes, glass jars
+    else if (o.k === 2) { ch = back ? '[#]'[m] : col % 3 === 1 ? (Math.sin(T * 2 + col) > 0.85 ? '*' : 'o') : col % 5 === 0 ? '?' : ' '; c = back ? ORANGE : col % 5 === 0 ? YEL : CYAN; } // boxes, glass jars
+    else if (o.k === 3) { ch = back ? (col % 4 === 1 ? '(O)'[m] : ' ') : '#=='[m]; c = back ? (Math.sin(T * 1.5) > 0 ? CYAN : MAG) : col & 1 ? YEL : RED; } // a crystal ball at the back, tarot cards laid out
+    else { ch = back ? '(~)'[m] : (col + Math.floor(T * 2)) % 3 ? '~' : '>'; c = back ? CYAN : (col + Math.floor(T * 2)) % 3 ? BLUE : ORANGE; } // bags of fish hung up, the tub with fish darting in it
     return set(i, ch, C(c, Math.max(L, 11))), true;
   },
   stallroof: o => (i, t, L) => { // the canopy: stripes, a scalloped valance along the front with the sign on it

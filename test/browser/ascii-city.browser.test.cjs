@@ -527,9 +527,10 @@ test('balloon darts on the pier: $1 at the booth, a dart on a balloon pops it', 
 test('the night market: tarped by day, a stall to buy from at night; T and Y need the watch and the globe', () => withPage(async page => {
   await page.evaluate(() => { tod = 13; money = 500; inv.length = 0; const s = STALLS[2]; devAt(s.at[0], s.at[1], Math.PI / 2); });
   assert.match(await page.evaluate(() => promptText()), /under a tarp/);
-  await page.keyboard.down('KeyT'); await page.waitForTimeout(500); await page.keyboard.up('KeyT');
+  await page.keyboard.down('KeyT');
+  assert.match(await page.evaluate(() => msgText), /pocket watch/); // (read at once: something else may say something in a moment)
+  await page.waitForTimeout(500); await page.keyboard.up('KeyT');
   assert.ok(await page.evaluate(() => tod < 13.2), 'no watch, no hurrying');
-  assert.match(await page.evaluate(() => msgText), /pocket watch/);
   await page.keyboard.press('KeyY');
   assert.match(await page.evaluate(() => msgText), /night market/);
   await page.evaluate(() => { tod = 21; });
@@ -542,8 +543,58 @@ test('the night market: tarped by day, a stall to buy from at night; T and Y nee
   await page.keyboard.press('KeyY');
   assert.notStrictEqual(await page.evaluate(() => weather), w0, 'the globe changes the sky');
   await page.evaluate(() => { inv.push({ id: 'pocketwatch', uses: 0 }); tod = 12; });
-  await page.keyboard.down('KeyT'); await page.waitForTimeout(1500); await page.keyboard.up('KeyT');
-  assert.ok(await page.evaluate(() => tod > 12.5), 'the watch hurries the hours'); // (without it, 1.5s is 0.075h)
+  await page.keyboard.down('KeyT');
+  await page.waitForFunction(() => tod > 12.5, null, { timeout: 15000 }); // (game time: without the watch this would take 10s of play)
+  await page.keyboard.up('KeyT');
+  assert.ok(await page.evaluate(() => tod > 12.5), 'the watch hurries the hours');
+}));
+
+test('the museum by day: $10 in, plaques to read, the gift shop; by night a heist: a guard\'s torch catches you, or you crack a case and the silent alarm runs out', () => withPage(async page => {
+  const day = await page.evaluate(() => {
+    tod = 14; money = 100;
+    const sh = MUSEUM.sh; lookHit = { d: 0.2, mx: MUSEUM.bx * 8 + 4, my: MUSEUM.by * 8 + 2 }; px = MUSEUM.bx * 8 + 4.5; py = MUSEUM.by * 8 + 1.7; a = Math.PI / 2;
+    interact();
+    const inside = [mode, room.kind, money];
+    px = 12.5; py = 13.3; const dino = promptText();
+    px = CASES[1].x; py = CASES[1].y + 1; const orrery = promptText(); interact(); const plaque = msgText;
+    return [...inside, dino, orrery, plaque, stockFor('museum', 'MUSEUM')];
+  });
+  assert.deepStrictEqual(day.slice(0, 3), ['room', 'museum', 90]);
+  assert.strictEqual(day[3], 'E: read the plaque'); assert.strictEqual(day[4], 'E: read the plaque');
+  assert.match(day[5], /EQUINOX ORRERY/); assert.deepStrictEqual(day[6], ['postcard', 'dinotoy', 'replicastar']);
+  // by night: in the gem room, stood in a guard's beam: spotted, alarm, three stars
+  const caught = await page.evaluate(() => {
+    leaveRoom(); clearWanted(); tod = 23;
+    enterRoom('museum', { ...MUSEUM.sh, ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [12.5, 10.5, -Math.PI / 2]);
+    const g = room.props.find(q => q.guard && q.tick); g.tick(g); px = g.x + Math.cos(g.dir) * 1.5; py = g.y + Math.sin(g.dir) * 1.5;
+    const lit = inBeam(g, px, py) > 0;
+    for (const q of room.props) if (q.tick) q.tick = null; // (hold everyone still)
+    for (let k = 0; k < 90; k++) stepMuseum(1 / 60);
+    return [lit, room.alarm, wanted.stars];
+  });
+  assert.deepStrictEqual(caught, [true, true, 3]);
+  // again, out of sight: crack the orrery's case, take it, the silent alarm counts down
+  const heist = await page.evaluate(() => {
+    leaveRoom(); clearWanted(); museumStolen = {}; inv.length = 0;
+    enterRoom('museum', { ...MUSEUM.sh, ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [12.5, 10.5, -Math.PI / 2]);
+    for (const q of room.props) if (q.guard) { q.tick = null; q.x = 3.5; q.y = 15; q.dir = Math.PI; } // (both guards off in the far corner, facing away)
+    px = CASES[1].x; py = CASES[1].y + 1;
+    const prompt = promptText(); interact(); const g = game && game.g.id; game.onDone(true); game = null;
+    const got = [inv.some(it => it.id === 'orrery'), museumStolen.orrery, !!room.alarm];
+    T = room.silent + 1; stepMuseum(0.016);
+    return [prompt, g, ...got, room.alarm, wanted.stars];
+  });
+  assert.deepStrictEqual(heist, ['E: crack the case (Equinox Orrery)', 'lockpick', true, true, false, true, 3]);
+}));
+
+test('the night market\'s fortune teller and goldfish tub: five stalls, a reading for $5, a net for $2', () => withPage(async page => {
+  await page.evaluate(() => { tod = 22; money = 20; const s = STALLS[3]; devAt(s.at[0], s.at[1], Math.PI / 2); });
+  assert.match(await page.evaluate(() => promptText()), /fortune told/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [money, /She turns/.test(msgText)]), [15, true]);
+  await page.evaluate(() => { const s = STALLS[4]; devAt(s.at[0], s.at[1], Math.PI / 2); });
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, money]), ['goldfish', 13]);
 }));
 
 test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
