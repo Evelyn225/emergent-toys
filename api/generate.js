@@ -37,7 +37,7 @@ export default async function handler(req, res) {
 
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -52,7 +52,7 @@ OUTPUT FORMAT (strictly enforced):
 
 TECHNOLOGY STACK & LIBRARIES:
 - You have complete freedom to choose the optimal front-end stack for the requested theme!
-- Standard libraries may be imported via CDN script tags when relevant:
+- Standard libraries may be imported via CDN script tags placed in <head> or at the top of <script>:
   * Three.js for 3D graphics & shaders: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
   * p5.js for 2D generative math & sketches: https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js
   * Tone.js for web synth audio/soundscapes: https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js
@@ -60,6 +60,20 @@ TECHNOLOGY STACK & LIBRARIES:
   * GSAP for smooth animations: https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js
   * Google Fonts for custom typography: <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=...">
 - Pure Vanilla HTML5 Canvas2D, WebGL, Web Audio API, SVG, and CSS 3D transforms are also warmly encouraged.
+
+CRITICAL INITIALIZATION & SAFETY RULES (MUST FOLLOW STRICTLY TO PREVENT RUNTIME ERRORS):
+1. INITIALIZATION ORDER:
+   - Wrap script setup inside a window 'load' or 'DOMContentLoaded' listener: window.addEventListener('load', () => { init(); animate(); });
+   - Declare all global variables at top of script scope first (e.g. let renderer, scene, camera, player, groups;).
+   - Instantiate all core objects (renderer, scene, camera, player, main groups) BEFORE calling sub-generators or helper setup functions!
+   - Attach event listeners ('resize', 'click', 'keydown', UI button handlers) ONLY AT THE END of init() after all state objects exist.
+2. DEFENSIVE GUARD CLAUSES IN LISTENERS & ANIMATION LOOPS:
+   - EVERY event handler and animation frame function MUST check object existence before accessing properties:
+     function onWindowResize() { if (!renderer || !camera) return; ... }
+     function tryShoot() { if (!camera || !scene) return; ... }
+     function animate() { requestAnimationFrame(animate); if (!renderer || !scene || !camera) return; ... }
+3. CDN & LIBRARY READINESS:
+   - If using external CDN libraries like THREE or Tone, check that they exist before calling constructors (e.g., if (typeof THREE === 'undefined') return;).
 
 AESTHETICS & UX DESIGN:
 - Tailor color palettes, typography, layout, and lighting to match the mood of the user's prompt theme (e.g. cozy pastel, neon cyberpunk, retro CRT arcade, organic botanical, dark glassmorphism).
@@ -79,7 +93,7 @@ COMPLETENESS & INTERACTIVITY:
           content: prompt
         }
       ],
-      temperature: 1.0,
+      temperature: 0.9,
       max_tokens: 16384
     });
 
