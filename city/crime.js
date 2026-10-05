@@ -184,9 +184,12 @@ function payFine() {
   if (!pay(f)) return false;
   clearWanted(); return true;
 }
-// jail: everything you're carrying is taken (not your money), and you do your time
+// jail: everything you're carrying is taken (not your money) and locked in evidence, and you do your time. Break out
+// via the evidence locker and you get it back (see the jailbreak game); serve your time and it's gone
 const JAIL_T = 60;
+const seized = [];
 function goToJail() {
+  seized.length = 0; seized.push(...inv);
   inv.length = 0; held = -1; fx.skating = false; fx.boombox = false;
   clearWanted();
 }

@@ -66,7 +66,6 @@ const K = {}; // keys held, by KeyboardEvent.code
 const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
 let paused = false;
-let devKeys = false; // the dev tools' switch: T and Y work without the watch and the globe
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
 const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true };
@@ -119,7 +118,7 @@ const SEASON_WEATHER = { spring: ['clear', 'clear', 'rain', 'rain', 'fog'], summ
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
 function env(dt) {
-  const lapse = K.KeyT && timeKeys() ? 40 : 1; // 20s per game hour; hold T to fast-forward with the pocket watch on you (clouds race along too)
+  const lapse = hurrying() ? 40 : 1; // 20s per game hour; hold Q with the pocket watch in hand to fast-forward (clouds race along too)
   const t0 = tod;
   tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
   if (tod < t0 - 12) dayNum++; // midnight (a real wrap round, not a tiny step back)
@@ -2299,7 +2298,7 @@ function useHeld(near) {
       it.uses--; fx.spark = 25;
       if (it.uses <= 0) removeHeld();
       return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
-    case 'pocketwatch': return [pick(['The second hand runs fast. Hold T and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
+    case 'pocketwatch': return [pick(['The second hand runs fast. Keep holding Q and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
     case 'cityglobe': return shakeGlobe();
     case 'orrery': return turnOrrery();
     case 'postcard': return [pick(['A postcard of the T. rex. On the back: "Wish you were here. Actually don\'t, it\'s ten dollars."', 'A postcard of the museum dome under snow.']), null];
@@ -2371,8 +2370,8 @@ function turnOrrery() {
   orreryT = T; seasonShift++; wTimer = 0; // (and the sky catches up)
   return [`You turn the crank. ${ORRERY_LINE[season()]}`, 'whirr'];
 }
-// may you hurry the hours along (hold T) or change the sky (Y)? With the watch / the globe on you, or the dev switch
-const timeKeys = () => devKeys || carrying('pocketwatch'), skyKeys = () => devKeys || carrying('cityglobe');
+// the pocket watch in your hand and Q held down: the hours hurry along (the globe's a Q press too, see useHeld)
+const hurrying = () => !!K.KeyQ && !paused && !!heldItem() && heldItem().id === 'pocketwatch';
 // things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
 // Half-eaten stays half-eaten.
@@ -2893,23 +2892,32 @@ GAMES.lockpick = (rnd = Math.random) => {
   return g;
 };
 
-// breaking out of jail: sneak from your cell (bottom left) to the door (top right) while a guard walks his rounds
-// with a flashlight and a second one paces the middle of the block. Crates block the beams. Step into the light, or
-// bump into either of them, and they've got you. One cell per arrow press (held, it repeats). 40 seconds before the
-// shift changes and they count heads.
+// breaking out of jail: sneak from your cell (bottom left) to the door (top right) while two guards with flashlights
+// wander the block, never the same way twice: on at each crossing, mostly straight on, now and then stopping to
+// look about. The new one keeps to the middle. Crates block the beams. Step into the light, or bump into either of
+// them, and they've got you. Up top, the evidence locker: step on it on your way and you take back what they took off
+// you (only if you get out). One cell per arrow press (held, it repeats). 40 seconds before the shift changes.
 GAMES.jailbreak = (rnd = Math.random) => {
-  const W = 30, H = 13, LIMIT = 40, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true };
+  const W = 30, H = 13, LIMIT = 40, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true, hasItems: false };
   const cell = (x, y) => y * W + x, solid = new Set();
   for (let x = 0; x < W; x++) solid.add(cell(x, 0)).add(cell(x, 10));
   for (let y = 0; y <= 10; y++) solid.add(cell(0, y)).add(cell(W - 1, y));
   const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 7], [11, 7]], [[17, 7]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
   for (const grp of CRATES) for (const [x, y] of grp) solid.add(cell(x, y));
-  const door = [W - 2, 1], you = [2, 9];
-  // the guards: the old hand walks the whole block, the new one paces up and down the middle, slower but never far
+  const door = [W - 2, 1], you = [2, 9], stash = [15, 1];
+  // the guards: where each may walk (never your cell's corner: you'd be caught before you'd moved), how fast, how
+  // long they stop to look about
   const guards = [
-    { route: [[3, 2], [26, 2], [26, 8], [3, 8]], x: 3, y: 2, leg: 1, wait: 0, fx: 1, fy: 0, speed: 3.6, pause: 1.1 },
-    { route: [[16, 1], [16, 9]], x: 16, y: 9, leg: 0, wait: 0, fx: 0, fy: -1, speed: 2.2, pause: 1.6 },
+    { x: 26, y: 2, tx: 26, ty: 2, fx: -1, fy: 0, wait: 0.4, speed: 3.2, pause: [0.5, 1.2], x0: 1, x1: W - 2 },
+    { x: 16, y: 8, tx: 16, ty: 8, fx: 0, fy: -1, wait: 0.8, speed: 2.2, pause: [0.8, 1.8], x0: 10, x1: 21 },
   ];
+  const walkable = (gd, x, y) => x >= gd.x0 && x <= gd.x1 && !solid.has(cell(x, y)) && !(x <= 4 && y >= 7);
+  const turn = gd => { // at a crossing: mostly straight on, never straight back unless it's a dead end
+    const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => walkable(gd, gd.x + dx, gd.y + dy));
+    const fwd = opts.filter(([dx, dy]) => dx === gd.fx && dy === gd.fy), side = opts.filter(([dx, dy]) => !(dx === -gd.fx && dy === -gd.fy) && !(dx === gd.fx && dy === gd.fy));
+    const pool = fwd.length && rnd() < 0.7 ? fwd : side.length ? side : opts;
+    return pool.length ? pool[Math.floor(rnd() * pool.length) % pool.length] : [0, 0];
+  };
   let t = 0, rep = 0;
   const lit = new Set();
   const clear = (x0, y0, x1, y1) => { // nothing solid on the way from (x0, y0) to (x1, y1)
@@ -2941,17 +2949,21 @@ GAMES.jailbreak = (rnd = Math.random) => {
       const nx = you[0] + dir[0], ny = you[1] + dir[1];
       if (!solid.has(cell(nx, ny))) { you[0] = nx; you[1] = ny; ev.push('hop'); } else ev.push('bump');
     }
-    // the guards: along their rounds, pausing at each corner to look about
+    // the guards: cell to cell, choosing at each one; now and then a stop to look round
     for (const gd of guards) {
-      if (gd.wait > 0) { gd.wait -= dt; if (gd.wait < 0.5) { const n = gd.route[gd.leg]; gd.fx = Math.sign(n[0] - gd.x); gd.fy = Math.sign(n[1] - gd.y); } }
-      else {
-        const [tx, ty] = gd.route[gd.leg], d = Math.hypot(tx - gd.x, ty - gd.y), s = Math.min(d, gd.speed * dt);
-        gd.fx = Math.sign(tx - gd.x); gd.fy = Math.sign(ty - gd.y);
-        gd.x += gd.fx * s; gd.y += gd.fy * s;
-        if (d - s < 1e-6) { gd.leg = (gd.leg + 1) % gd.route.length; gd.wait = gd.pause; }
+      if (gd.wait > 0) { gd.wait -= dt; continue; }
+      const ex = gd.tx - gd.x, ey = gd.ty - gd.y, d = Math.abs(ex) + Math.abs(ey), s = Math.min(d, gd.speed * dt);
+      if (d > 1e-6) { gd.x += Math.sign(ex) * s; gd.y += Math.sign(ey) * s; continue; }
+      gd.x = gd.tx; gd.y = gd.ty;
+      if (rnd() < 0.12) { // stop, and swing the light round to a way it could go
+        const [dx, dy] = turn(gd); if (dx || dy) { gd.fx = dx; gd.fy = dy; }
+        gd.wait = gd.pause[0] + rnd() * (gd.pause[1] - gd.pause[0]); continue;
       }
+      const [dx, dy] = turn(gd);
+      if (dx || dy) { gd.fx = dx; gd.fy = dy; gd.tx = gd.x + dx; gd.ty = gd.y + dy; }
     }
     shine();
+    if (!g.hasItems && you[0] === stash[0] && you[1] === stash[1]) { g.hasItems = true; ev.push('eat'); }
     if (you[0] === door[0] && you[1] === door[1]) { g.over = g.success = true; g.score = 1; ev.push('clear'); return ev; }
     if (lit.has(cell(you[0], you[1])) || near(you[0], you[1]) || t > LIMIT) { g.over = true; ev.push('die'); }
     return ev;
@@ -2963,13 +2975,15 @@ GAMES.jailbreak = (rnd = Math.random) => {
       else if (lit.has(i)) put(x, y, '.', C(YEL, 12), C(YEL, 3));
     }
     put(door[0], door[1], 'D', C(GREEN, 15), C(GREEN, 4));
+    if (!g.hasItems) { put(stash[0], stash[1], '$', C(YEL, 15), C(YEL, 5)); text(stash[0] - 5, 0, ' YOUR ITEMS ', C(YEL, 15)); } // (the evidence locker, labelled in the wall over it)
+    else text(stash[0] - 4, 0, ' GOT EM ', C(GREEN, 14));
     for (const gd of guards) put(Math.round(gd.x), Math.round(gd.y), 'G', C(BLUE, 15), C(BLUE, 4));
     put(you[0], you[1], '@', C(WHITE, 15), lit.has(cell(you[0], you[1])) ? C(RED, 6) : NONE);
     text(0, 12, `${Math.max(0, LIMIT - t) | 0}s till the head count`, C(t > LIMIT - 10 ? RED : GRAY, 12));
   };
-  g.status = () => 'ARROWS sneak to the door (D). Stay out of the light.';
+  g.status = () => g.hasItems ? 'Got your things. Now the door (D).' : 'ARROWS sneak to the door (D). Stay out of the light. ($: your items, if you dare)';
   g.reward = () => 0;
-  g.state = () => ({ you, gx: guards[0].x, gy: guards[0].y, guards: guards.map(gd => [gd.x, gd.y]), lit, door, solid, t, limit: LIMIT });
+  g.state = () => ({ you, gx: guards[0].x, gy: guards[0].y, guards: guards.map(gd => [gd.x, gd.y]), lit, door, stash, solid, t, limit: LIMIT });
   return g;
 };
 
@@ -4204,9 +4218,12 @@ function payFine() {
   if (!pay(f)) return false;
   clearWanted(); return true;
 }
-// jail: everything you're carrying is taken (not your money), and you do your time
+// jail: everything you're carrying is taken (not your money) and locked in evidence, and you do your time. Break out
+// via the evidence locker and you get it back (see the jailbreak game); serve your time and it's gone
 const JAIL_T = 60;
+const seized = [];
 function goToJail() {
+  seized.length = 0; seized.push(...inv);
   inv.length = 0; held = -1; fx.skating = false; fx.boombox = false;
   clearWanted();
 }
@@ -9707,7 +9724,7 @@ function hud() {
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
-  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${K.KeyT && timeKeys() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
+  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
   const meters = needMeters();
@@ -9883,8 +9900,11 @@ function interact() {
       room.tried = true; // one shot at it
       return startCrime('jailbreak', ok => {
         if (ok === 'abort') return say('You lose your nerve. No second chances.', 3);
-        if (!ok) { room.until += 30; return say('"Nice try." Thirty more seconds for that.', 4); }
-        room.until = T; leaveRoom(); say('You slip out past the front desk. Nobody saw a thing.', 4);
+        const got = game && game.g.hasItems;
+        if (!ok) { room.until += 30; return say(got ? '"Nice try. And put those back." Thirty more seconds for that.' : '"Nice try." Thirty more seconds for that.', 4); }
+        room.until = T; leaveRoom();
+        if (got && seized.length) { inv.push(...seized.splice(0, INV_SIZE - inv.length)); held = inv.length ? 0 : -1; seized.length = 0; return say('You slip out past the front desk with your things stuffed in your jacket. Nobody saw a thing.', 4); }
+        say('You slip out past the front desk. Nobody saw a thing.', 4);
       });
     }
     if (room.kind === 'museum' && museumUse()) return;
@@ -10801,7 +10821,6 @@ function buildPause() {
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
         <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
-        <b>hold T</b><span>fast-forward (with the pocket watch)</span><b>Y</b><span>weather (with the snow globe)</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
         <b>P</b><span>pee</span>
         <b>Esc</b><span>pause</span>
@@ -10972,7 +10991,6 @@ function devBody() {
   }
   return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
     <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}${act('Bladder full', () => { needs.bladder = 100; })}</div>
-    <div class="grp">keys</div><div class="bar">${act(devKeys ? 'T / Y without the watch and globe: ON' : 'T / Y without the watch and globe: off', () => { devKeys = !devKeys; })}</div>
     <div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { inv.length = 0; held = -1; say('Pockets emptied.', 2); })}</div>
     <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
 }
@@ -11242,7 +11260,7 @@ const HAND = {
   lantern: () => [['    |', '  .-=-.', ' ( ||| )', ' ( ||| )', "  `-=-'", '    ~'], (c, r) => r === 0 ? C(GRAY, 10) : c === '=' || c === '~' ? C(YEL, 15) : c === '|' && r > 1 && r < 4 ? C(YEL, 14) : C(RED, 15)],
   firecrackers: it => [['   *', '   \\', ...Array.from({ length: Math.max(1, it.uses) * 2 }, (_, k) => k & 1 ? '  ==]' : ' [==  '), '   |'], (c, r) => c === '*' ? C(YEL, 15) : c === '\\' || c === '|' ? C(GRAY, 11) : C(RED, 14)],
   mysterybox: () => [['  _\\ /_', ' |  X  |', ' |  ?  |', ' |_____|'], (c, r) => c === '?' ? C(WHITE, 15) : c === 'X' || c === '\\' || c === '/' ? C(RED, 14) : C(BRICK, 13)],
-  pocketwatch: () => { const k = Math.floor(T * (K.KeyT && timeKeys() ? 12 : 1)) & 3; // the hands, round and round
+  pocketwatch: () => { const k = Math.floor(T * (hurrying() ? 12 : 1)) & 3; // the hands, round and round
     return [['    o', '  .-^-.', ' / 12  \\', `|9  ${'|/-\\'[k]}  3|`, ' \\  6  /', "  `---'"], (c, r) => r === 0 ? C(GRAY, 12) : r === 3 && '|/-\\'.includes(c) ? C(GRAY, 3) : /[0-9]/.test(c) ? C(BRICK, 9) : r === 1 || c === '/' || c === '\\' || c === '`' || c === "'" || c === '|' ? C(YEL, 13) : C(WARM, 14)]; },
   cityglobe: () => [['  .-----.', ' / * # * \\', '| #|#|#|# |', ' \\ ##### /', "  '-----'", ' [GLYPHPT]'], (c, r) => r === 5 ? (c === '[' || c === ']' ? C(BRICK, 13) : C(YEL, 12)) : c === '*' ? C(WHITE, 15) : c === '#' ? C(YEL, 13) : C(CYAN, 12)],
   // drinks: a paper cup steams less as it goes; glasses show their level
@@ -11888,8 +11906,8 @@ const dPieces = (x, n, x0, step) => { const k = Math.floor((x - x0) / step); ret
 
 Object.assign(DENSE, {
   // ---- the night market's, and the two that bend the world
-  pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold T
-    const fast = K.KeyT && timeKeys(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
+  pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold Q
+    const fast = hurrying(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
     if (dEll(x, y, 0, -6.2, 1.1, 0.8) < 1 && dEll(x, y, 0, -6.2, 1.1, 0.8) > 0.55) return ['o', C(GRAY, 12)]; // the ring for the chain
     if (Math.abs(x) < 0.7 && y > -5.6 && y < -4.4) return dLit(0.7, YEL, 8); // the crown
     const d = dEll(x, y, cx, cy, R, R);
@@ -13647,7 +13665,6 @@ onkeydown = e => {
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && (me || mode === 'sea')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
-  if (e.code === 'KeyY' && skyKeys()) { const [m] = shakeGlobe(); say(devKeys && !carrying('cityglobe') ? `Weather: ${weather}` : m); }
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
@@ -13941,11 +13958,11 @@ function touchActions() {
   if (e) out.push([e, 'KeyE', 'main']);
   return out;
 }
-// the More sheet: [label, key, when]. Held buttons (Fast-forward) work while held, the rest close the sheet
+// the More sheet: [label, key, when]. Held buttons (Crouch) work while held, the rest close the sheet
 const SHEET = [
   ['Crouch', 'KeyC', () => onFootMode() && !body.seat, true], ['Drop item', 'KeyX', () => onFootMode() && !!heldItem()],
   ['Empty hands', 'Digit0', () => onFootMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
-  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Fast-forward', 'KeyT', () => timeKeys(), true], ['Weather', 'KeyY', () => skyKeys()], ['Sound on/off', 'KeyN'],
+  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
 ];
 

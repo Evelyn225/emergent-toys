@@ -63,8 +63,8 @@ const dPieces = (x, n, x0, step) => { const k = Math.floor((x - x0) / step); ret
 
 Object.assign(DENSE, {
   // ---- the night market's, and the two that bend the world
-  pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold T
-    const fast = K.KeyT && timeKeys(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
+  pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold Q
+    const fast = hurrying(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
     if (dEll(x, y, 0, -6.2, 1.1, 0.8) < 1 && dEll(x, y, 0, -6.2, 1.1, 0.8) > 0.55) return ['o', C(GRAY, 12)]; // the ring for the chain
     if (Math.abs(x) < 0.7 && y > -5.6 && y < -4.4) return dLit(0.7, YEL, 8); // the crown
     const d = dEll(x, y, cx, cy, R, R);

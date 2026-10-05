@@ -39,7 +39,6 @@ onkeydown = e => {
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && (me || mode === 'sea')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
-  if (e.code === 'KeyY' && skyKeys()) { const [m] = shakeGlobe(); say(devKeys && !carrying('cityglobe') ? `Weather: ${weather}` : m); }
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }

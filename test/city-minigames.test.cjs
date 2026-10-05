@@ -171,35 +171,40 @@ test('the shelves you stock are what the shop sells', () => {
   assert.ok(ev("labels.includes('VINYL') && !labels.includes('CANS')"));
 });
 
-test('jailbreak: there is a way past the guards, and walking straight into the light gets you caught', () => {
+test('jailbreak: guards wander at random but never through a crate; there is usually a way past; the evidence locker gives your things back', () => {
   const { ev } = fresh();
+  ev(`var seeded = n => () => { n |= 0; n = n + 0x6D2B79F5 | 0; let t = Math.imul(n ^ n >>> 15, 1 | n); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }`);
   // the guards ignore you, so record their light at every tick, then search for a route to the door through it
-  const found = ev(`(() => {
-    const g = GAMES.jailbreak(), DT = 0.16, steps = Math.floor((g.state().limit - 1) / DT), lit = [], guard = [];
+  const solvable = ev(`(() => { let n = 0; for (let seed = 1; seed <= 10; seed++) {
+    const g = GAMES.jailbreak(seeded(seed)), DT = 0.16, steps = Math.floor((g.state().limit - 1) / DT), lit = [], guard = [];
     const s0 = g.state(), W = g.W, solid = s0.solid, door = s0.door;
     for (let k = 0; k <= steps; k++) { const s = g.state(); lit.push(new Set(s.lit)); guard.push(s.guards.map(q => q.slice())); s.you[0] = 1; s.you[1] = 9; g.step(DT, {}); }
-    let front = [[2, 9]], seen = new Set();
-    for (let k = 1; k <= steps; k++) {
-      const next = [];
+    let front = [[2, 9]], found = false;
+    for (let k = 1; k <= steps && !found; k++) {
+      const next = [], seen = new Set();
       for (const [x, y] of front) for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy, c = ny * W + nx;
         if (solid.has(c) || lit[k].has(c) || guard[k].some(([gx, gy]) => Math.abs(gx - nx) + Math.abs(gy - ny) < 1.2)) continue;
-        if (nx === door[0] && ny === door[1]) return k * DT;
-        const key = c + ',' + k; if (seen.has(key)) continue; seen.add(key); next.push([nx, ny]);
+        if (nx === door[0] && ny === door[1]) { found = true; break; }
+        if (seen.has(c)) continue; seen.add(c); next.push([nx, ny]);
       }
       front = next;
     }
-    return -1;
-  })()`);
-  assert.ok(found > 0, 'a route exists (' + found + 's)');
-  // the guards walk round the crates, never through them: every cell they stand on, all shift long, is open floor
-  const through = ev(`(() => { const g = GAMES.jailbreak(), s = g.state(), hits = [];
-    for (let k = 0; k < 800; k++) { for (const [x, y] of g.state().guards) for (const c of [[Math.floor(x), Math.floor(y)], [Math.ceil(x), Math.ceil(y)]]) if (s.solid.has(c[1] * g.W + c[0])) hits.push(c.join()); s.you[0] = 1; s.you[1] = 9; g.step(0.05, {}); }
-    return [...new Set(hits)].join(' '); })()`);
-  assert.strictEqual(through, '', 'guards inside a crate at ' + through);
+    if (found) n++;
+  } return n; })()`);
+  assert.ok(solvable >= 7, `a way out on most nights (${solvable}/10)`);
+  // wherever they wander, every cell they stand on, all shift long, is open floor, and they move about
+  const r = ev(`(() => { const out = []; for (let seed = 1; seed <= 5; seed++) { const g = GAMES.jailbreak(seeded(seed)), s = g.state(), hits = [], cells = new Set();
+    for (let k = 0; k < 800; k++) { for (const [x, y] of g.state().guards) { cells.add(Math.round(x) + ',' + Math.round(y)); for (const c of [[Math.floor(x), Math.floor(y)], [Math.ceil(x), Math.ceil(y)]]) if (s.solid.has(c[1] * g.W + c[0])) hits.push(c.join()); } s.you[0] = 1; s.you[1] = 9; g.step(0.05, {}); }
+    out.push([hits.length, cells.size]); } return JSON.stringify(out); })()`);
+  for (const [hits, cells] of JSON.parse(r)) { assert.strictEqual(hits, 0, 'guards inside a crate'); assert.ok(cells > 20, `guards get about (${cells} cells)`); }
+  assert.notStrictEqual(ev(`(() => { const a = GAMES.jailbreak(seeded(1)), b = GAMES.jailbreak(seeded(2)); for (let k = 0; k < 200; k++) { a.step(0.05, {}); b.step(0.05, {}); } return a.state().guards.join(); })()`),
+    ev(`(() => { const b = GAMES.jailbreak(seeded(2)); for (let k = 0; k < 200; k++) b.step(0.05, {}); return b.state().guards.join(); })()`), 'a different round each time');
+  // the locker: step on it and you have your things
+  assert.strictEqual(ev(`(() => { const g = GAMES.jailbreak(seeded(3)), s = g.state(); s.you[0] = s.stash[0]; s.you[1] = s.stash[1]; g.step(0.01, {}); return g.hasItems; })()`), true);
   ev('var g = GAMES.jailbreak()');
-  const r = ev(`(() => { for (let t = 0; t < 46 && !g.over; t += 0.05) g.step(0.05, { up: 1 }); return [g.over, g.success].join(); })()`);
-  assert.strictEqual(r, 'true,false', 'charging out gets you caught');
+  const run = ev(`(() => { for (let t = 0; t < 46 && !g.over; t += 0.05) g.step(0.05, { up: 1 }); return [g.over, g.success].join(); })()`);
+  assert.strictEqual(run, 'true,false', 'charging out gets you caught');
 });
 
 test('tapper: pour to the line and let go to slide a beer; hold too long and it spills', () => {

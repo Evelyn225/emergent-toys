@@ -137,8 +137,11 @@ function interact() {
       room.tried = true; // one shot at it
       return startCrime('jailbreak', ok => {
         if (ok === 'abort') return say('You lose your nerve. No second chances.', 3);
-        if (!ok) { room.until += 30; return say('"Nice try." Thirty more seconds for that.', 4); }
-        room.until = T; leaveRoom(); say('You slip out past the front desk. Nobody saw a thing.', 4);
+        const got = game && game.g.hasItems;
+        if (!ok) { room.until += 30; return say(got ? '"Nice try. And put those back." Thirty more seconds for that.' : '"Nice try." Thirty more seconds for that.', 4); }
+        room.until = T; leaveRoom();
+        if (got && seized.length) { inv.push(...seized.splice(0, INV_SIZE - inv.length)); held = inv.length ? 0 : -1; seized.length = 0; return say('You slip out past the front desk with your things stuffed in your jacket. Nobody saw a thing.', 4); }
+        say('You slip out past the front desk. Nobody saw a thing.', 4);
       });
     }
     if (room.kind === 'museum' && museumUse()) return;

@@ -108,7 +108,6 @@ function devBody() {
   }
   return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
     <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}${act('Bladder full', () => { needs.bladder = 100; })}</div>
-    <div class="grp">keys</div><div class="bar">${act(devKeys ? 'T / Y without the watch and globe: ON' : 'T / Y without the watch and globe: off', () => { devKeys = !devKeys; })}</div>
     <div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { inv.length = 0; held = -1; say('Pockets emptied.', 2); })}</div>
     <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
 }

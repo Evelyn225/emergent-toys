@@ -191,23 +191,22 @@ test('property: a car from the lot is parked on the street outside, yours, and s
   assert.strictEqual(ev("buy('car_sports')[1]"), "Sports car is $4000.00. You can't afford it.");
 });
 
-test('the pocket watch: the prize counters\' top prize, and only with it on you does T hurry the hours (or with the dev switch)', () => {
+test('the pocket watch: the prize counters\' top prize; in your hand, holding Q hurries the hours', () => {
   const { ev, j } = fresh();
   assert.deepStrictEqual(j("PRIZES.find(p => p[0] === 'pocketwatch')"), ['pocketwatch', 1500]);
-  const run = () => ev('(() => { tod = 12; K.KeyT = 1; env(1); K.KeyT = 0; return tod; })()');
+  const run = () => ev('(() => { tod = 12; K.KeyQ = 1; env(1); K.KeyQ = 0; return tod; })()');
   ev('inv.length = 0'); assert.ok(Math.abs(run() - 12.05) < 1e-6, 'no watch: time goes at its own pace');
   ev('tickets = 1500'); assert.strictEqual(j("claimPrize('pocketwatch')")[0], true);
   assert.strictEqual(ev('tickets'), 0);
-  assert.ok(Math.abs(run() - 14) < 1e-6, 'the watch: forty times as fast');
-  ev('inv.length = 0; devKeys = true'); assert.ok(Math.abs(run() - 14) < 1e-6, 'the dev switch too');
+  ev("held = inv.findIndex(it => it.id === 'pocketwatch')");
+  assert.ok(Math.abs(run() - 14) < 1e-6, 'the watch in hand: forty times as fast');
+  ev("inv.push({ id: 'yoyo', uses: 0 }); held = inv.length - 1"); assert.ok(Math.abs(run() - 12.05) < 1e-6, 'only while it is in your hand');
 });
 
-test('the Glyphport snow globe: shake it and the weather turns over (and holds); the snow has to settle first; Y needs it', () => {
+test('the Glyphport snow globe: Q shakes it and the weather turns over (and holds); the snow has to settle first', () => {
   const { ev, j } = fresh();
   ev("inv.length = 0; weather = 'clear'; T = 100");
-  assert.strictEqual(ev('skyKeys()'), false);
   ev("inv.push({ id: 'cityglobe', uses: 0 }); held = 0");
-  assert.strictEqual(ev('skyKeys()'), true);
   const [m] = j('useHeld({})');
   assert.match(m, /shake the globe/); assert.strictEqual(ev('weather'), 'rain'); assert.ok(ev('wTimer') >= 600, 'and it holds');
   assert.match(j('useHeld({})')[0], /settling/); assert.strictEqual(ev('weather'), 'rain');

@@ -235,6 +235,18 @@ test('busted: no fine money means a cell; a minute later the guard lets you out 
   assert.deepStrictEqual(await page.evaluate(() => [mode, Math.min(...SERVICES.filter(b => b.kind === 'police').map(b => Math.hypot(rel(b.x - px), rel(b.y - py)))) < 1.5]), ['walk', true], 'out, by the station');
 }));
 
+test('jailbreak: grab your things from the evidence locker on the way out and you leave with them', () => withPage(async page => {
+  await page.evaluate(() => { money = 20; buy('coffee'); const c = footCops[0]; px = c.x + 0.1; py = c.y; mode = 'walk'; addWanted('hit', px, py, true); c.chase = true; });
+  await page.waitForTimeout(400);
+  await page.keyboard.press('Digit2');
+  assert.deepStrictEqual(await page.evaluate(() => [room && room.kind, inv.length, seized.map(it => it.id)]), ['jail', 0, ['coffee']], 'taken off you and locked up');
+  await page.keyboard.press('KeyE');
+  // past the locker and out of the door (picking it up in the game itself: see the unit test)
+  await page.evaluate(() => { game.g.hasItems = true; game.g.success = true; finishGame(); });
+  assert.strictEqual(await page.evaluate(() => mode), 'walk', 'out');
+  assert.deepStrictEqual(await page.evaluate(() => [inv.map(it => it.id), /your things/.test(msgText)]), [['coffee'], true]);
+}));
+
 test('stealing a car drags the driver out onto the sidewalk; the car stays where you leave it', () => withPage(async page => {
   await page.evaluate(() => { const c = cars.find(c => c.body !== TAXI && !c.ev && !c.patrol && ROAD[idx(Math.floor(c.x), Math.floor(c.y))]); c.v = 0; px = c.x + c.hy * 0.3; py = c.y - c.hx * 0.3; });
   await page.keyboard.press('KeyE');
@@ -268,13 +280,12 @@ test('on a phone: the stick walks, a drag looks round, the buttons work the menu
     assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the bag');
     await page.tap('#touch .main:text-is("Close")');
     assert.strictEqual(await page.evaluate(() => panelOpen()), false, 'Close shuts it');
-    await page.evaluate(() => inv.push({ id: 'cityglobe', uses: 0 })); // (Weather's there with the snow globe on you)
-    await page.waitForTimeout(200);
     await page.tap('#touch [data-more]');
-    assert.ok(await page.isVisible('#touch .sheet button:text-is("Weather")'), 'the More sheet');
-    const w0 = await page.evaluate(() => weather);
-    await page.tap('#touch .sheet button:text-is("Weather")');
-    assert.notStrictEqual(await page.evaluate(() => weather), w0, 'Weather changes it');
+    assert.ok(await page.isVisible('#touch .sheet button:text-is("Sound on/off")'), 'the More sheet');
+    assert.ok(!(await page.isVisible('#touch .sheet button:text-is("Weather")')), 'no Weather or Fast-forward: those are Q on the globe and the watch');
+    const s0 = await page.evaluate(() => soundOn);
+    await page.tap('#touch .sheet button:text-is("Sound on/off")');
+    assert.notStrictEqual(await page.evaluate(() => soundOn), s0, 'the button works');
     assert.ok(!(await page.isVisible('#touch .sheet')), 'and the sheet goes away');
     await page.tap('#touch [data-key="Escape"]');
     assert.strictEqual(await page.evaluate(() => paused), true);
@@ -509,8 +520,8 @@ test('the crowd at the pier fair wanders about, and you can talk to them', () =>
     const moved = Math.hypot(f.x - x0, f.y - y0) > 0.1, clear = fairFolk.every(q => q.queue || !fairBlocked(q.x, q.y, 0.05));
     // stand just in front of one, facing them
     mode = 'walk'; px = f.x - 0.3; py = f.y; a = 0; fx.stink = 0;
-    const prompt = promptText(); interact();
-    return { moved, clear, prompt, said: msgText, stopped: f.talk > 0 };
+    const prompt = promptText(), who = nearPerson(); interact(); // (whoever's nearest in front: another of them may have wandered in)
+    return { moved, clear, prompt, said: msgText, stopped: !!who && who.fair && who.talk > 0 };
   });
   assert.ok(r.moved && r.clear, `off for a wander, never through the stalls (${JSON.stringify(r)})`);
   assert.match(r.prompt, /E: talk/);
@@ -639,28 +650,26 @@ test('balloon darts on the pier: $1 at the booth, a dart on a balloon pops it', 
   assert.ok(await page.evaluate(() => game.g.balloons.filter(b => b.popped).length === 1 && game.g.score >= 3));
 }));
 
-test('the night market: tarped by day, a stall to buy from at night; T and Y need the watch and the globe', () => withPage(async page => {
+test('the night market: tarped by day, a stall to buy from at night; Q on the globe turns the sky, Q held on the watch hurries time', () => withPage(async page => {
   await page.evaluate(() => { tod = 13; money = 500; inv.length = 0; const s = STALLS[2]; devAt(s.at[0], s.at[1], Math.PI / 2); });
   assert.match(await page.evaluate(() => promptText()), /under a tarp/);
-  const w = await page.evaluate(() => [weather, msgText]);
-  await page.keyboard.down('KeyT');
+  const w = await page.evaluate(() => weather);
+  await page.keyboard.down('KeyT'); await page.keyboard.press('KeyY');
   await page.waitForTimeout(500); await page.keyboard.up('KeyT');
-  assert.ok(await page.evaluate(() => tod < 13.2), 'no watch, no hurrying');
-  await page.keyboard.press('KeyY');
-  assert.deepStrictEqual(await page.evaluate(() => [weather, msgText]), w, 'no globe: the sky stays put, and nothing to say about it');
+  assert.ok(await page.evaluate(() => tod < 13.2) && await page.evaluate(() => weather) === w, 'T and Y do nothing now');
   await page.evaluate(() => { tod = 21; });
   assert.strictEqual(await page.evaluate(() => promptText()), 'E: CURIOS stall');
   await page.keyboard.press('KeyE');
   await page.keyboard.press('Digit4'); // the snow globe
   assert.deepStrictEqual(await page.evaluate(() => [inv.some(it => it.id === 'cityglobe'), money]), [true, 150]);
   await page.keyboard.press('Escape');
-  const w0 = await page.evaluate(() => weather);
-  await page.keyboard.press('KeyY');
+  const w0 = await page.evaluate(() => { held = inv.findIndex(it => it.id === 'cityglobe'); return weather; });
+  await page.keyboard.press('KeyQ');
   assert.notStrictEqual(await page.evaluate(() => weather), w0, 'the globe changes the sky');
-  await page.evaluate(() => { inv.push({ id: 'pocketwatch', uses: 0 }); tod = 12; });
-  await page.keyboard.down('KeyT');
+  await page.evaluate(() => { inv.push({ id: 'pocketwatch', uses: 0 }); held = inv.length - 1; tod = 12; });
+  await page.keyboard.down('KeyQ');
   await page.waitForFunction(() => tod > 12.5, null, { timeout: 15000 }); // (game time: without the watch this would take 10s of play)
-  await page.keyboard.up('KeyT');
+  await page.keyboard.up('KeyQ');
   assert.ok(await page.evaluate(() => tod > 12.5), 'the watch hurries the hours');
 }));
 
