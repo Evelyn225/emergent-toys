@@ -60,6 +60,19 @@ const dCan = (col, word, stripe, deco) => (it, f) => sculpt(26, 15, (x, y) => {
 });
 // n pieces in a row along a tray (sushi, dumplings, takoyaki): which piece (x, y) is in, and where in it
 const dPieces = (x, n, x0, step) => { const k = Math.floor((x - x0) / step); return k >= 0 && k < n ? [k, x - x0 - (k + 0.5) * step] : null; };
+const dCarKeys = () => sculpt(22, 16, (x, y) => {
+  const body = dEll(x, y, 0.8, -2.1, 2.25, 3.8);
+  if (body < 1) {
+    if (body > 0.82) return ['#', C(GRAY, 13)];
+    for (const [by, col] of [[-4.3, RED], [-2.7, CYAN], [-1.1, YEL]])
+      if (dEll(x, y, 0.8, by, 0.58, 0.48) < 1) return ['o', C(col, 15)];
+    return [':', C(GRAY, 6)];
+  }
+  if (Math.abs(x - 0.8) < 0.45 && y > 1.1 && y < 5.8) return ['|', C(GRAY, 13)]; // metal blade
+  if (y > 2.2 && y < 3.1 && x > 0.8 && x < 1.8 || y > 4.1 && y < 5 && x > 0.8 && x < 1.8) return ['=', C(GRAY, 12)]; // key teeth
+  if (y > 5.3 && y < 6.1 && Math.abs(x - 0.8) < 0.7) return ['=', C(GRAY, 12)];
+  return null;
+});
 
 Object.assign(DENSE, {
   // ---- the night market's, and the two that bend the world
@@ -756,6 +769,53 @@ Object.assign(DENSE, {
     if (dmin < thick) return [dmin < thick * 0.3 && Math.floor(along * 4) & 1 ? '=' : dFill(0.5 + 0.45 * (1 - dmin / thick) - (y > 1 ? 0.1 : 0)), dCol(GREEN, 0.5 + 0.45 * (1 - dmin / thick), 7)];
     return null;
   }),
+  goldfish: () => sculpt(24, 15, (x, y) => {
+    if (Math.abs(x) > 6 || Math.abs(y) > 4.5) return null;
+    if (Math.hypot(x, y + 0.3) > 5.7) return ['|', C(RED, 11)];
+    const swim = T * 0.65, dir = Math.cos(swim) < 0 ? -1 : 1;
+    const fx = Math.sin(swim) * 0.85, fy = Math.sin(T * 1.2) * 0.4, u = (x - fx) * dir, v = y - fy;
+    if (u > 2.45 && u < 2.9 && Math.abs(v) < 0.5) return [dir > 0 ? '>' : '<', C(ORANGE, 15)]; // pointed snout
+    if (u > 1.55 && u < 2.05 && Math.abs(v + 0.3) < 0.34) return ['o', C(GRAY, 1)]; // one eye, shown in profile
+    if (u > -3.9 && u < -2.05 && Math.abs(v) < (u + 3.9) * 0.88) return [Math.abs(v) < 0.3 ? '|' : v < 0 ? '\\' : '/', C(YEL, 14)]; // broad fan tail
+    if (u > -0.7 && u < 1.3 && v < -1.15 && v > -2.1 && Math.abs(u - 0.3) < (v + 2.1) * 1.25) return ['^', C(YEL, 13)]; // dorsal fin
+    if (u > -0.5 && u < 0.9 && v > 1.05 && v < 1.9 && Math.abs(u - 0.2) < (1.9 - v) * 1.2) return ['v', C(YEL, 13)]; // lower fin
+    const body = dEll(u, v, 0, 0, 2.55, 1.35);
+    if (body < 1) {
+      if (body > 0.78) return [v < 0 ? '_' : '-', C(YEL, 13)]; // clear oval outline
+      if (Math.abs(u + 0.65) < 0.18 && Math.abs(v) < 0.58) return ['(', C(YEL, 12)]; // gill
+      if (Math.abs(fract(u * 1.1 + (v < 0 ? 0.25 : 0.75)) - 0.5) < 0.08 && Math.abs(v) < 0.75) return [')', C(YEL, 12)]; // a few scales
+      return [v > 0.5 ? '~' : '=', C(v > 0.5 ? YEL : ORANGE, 12)];
+    }
+    const waterline = -0.4 + Math.sin(x * 0.9 + T * 0.6) * 0.18;
+    if (y > waterline) {
+      const ripple = y - waterline < 0.8;
+      const texture = hash(Math.floor(x * 3), Math.floor(y * 3), 979);
+      const bubble = texture > 0.985;
+      return [ripple ? '~' : bubble ? 'o' : texture > 0.68 ? ':' : '.', C(ripple || bubble ? CYAN : BLUE, ripple ? 11 : bubble ? 10 : 9)];
+    }
+    return null;
+  }),
+  postcard: () => sculpt(24, 12, (x, y) => {
+    if (Math.abs(x) > 7 || Math.abs(y) > 4.5) return null;
+    if (Math.abs(x) > 6.4 || Math.abs(y) > 4) return dLit(0.45, WHITE, 10);
+    const t = dText(x, y, -3.4, -1.5, 'T REX');
+    return t ? [t, C(BRICK, 13)] : y < 0 ? dLit(0.55, GREEN, 8) : dLit(0.5, CYAN, 8);
+  }),
+  dinotoy: () => sculpt(24, 14, (x, y) => {
+    if (dEll(x, y, 2.8, -3.2, 0.35, 0.35) < 1) return ['@', C(WHITE, 15)];
+    if (y < -2 && y > -5 && x > 0 && x < 6) return dLit(dBall(x, y, 3, -3.5, 3, 1.5), GREEN, 8);
+    if (y > -1.8 && y < 2 && x > -4 && x < 4) return dLit(dBall(x, y, 0, 0, 4, 2.2), GREEN, 8);
+    if (x < -3 && x > -7 && Math.abs(y) < 0.6) return ['<', C(GREEN, 12)];
+    if (Math.abs(x - 1.5) < 0.45 && y > 1.4 && y < 4 || Math.abs(x - 3.5) < 0.45 && y > 1.4 && y < 4) return ['|', C(GREEN, 11)];
+    return null;
+  }),
+  replicastar: () => sculpt(22, 15, (x, y) => {
+    const r = Math.hypot(x, y), a = Math.atan2(y, x), edge = 5.6 + 1.1 * Math.cos(a * 5);
+    return r <= edge && r >= edge - 1.3 ? dLit(0.55 + 0.35 * Math.cos(a * 5), CYAN, 8, 14) : null;
+  }),
+  key_car_hatch: dCarKeys,
+  key_car_sedan: dCarKeys,
+  key_car_sports: dCarKeys,
   // the wire, its top two thirds coated silver; lit, it burns down from the tip, leaving grey ash (#) above the fizz
   sparklers: () => { const front = sparkBurn() * 9 - 7; return sculpt(10, 15, (x, y) => Math.abs(x) >= 0.2 ? null : y < front ? ['#', C(GRAY, 6)] : y < 2 ? ['=', C(WHITE, 13)] : ['|', C(GRAY, 12)]); },
   umbrella: () => sculpt(16, 19, (x, y) => { // furled, a strap round it, the hooked handle

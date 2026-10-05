@@ -2,7 +2,7 @@
 // ---- in your hand: ASCII art at the bottom right, bobbing as you walk. No backgrounds: every character has a thin
 // dark outline so it reads over anything, and the fingers hide the bottom of whatever you're holding. Things change
 // as you use them: glasses empty, food gets bitten, a coffee stops steaming, the pack runs down.
-// HAND[id] = (it, f) => [lines, colour(ch, row, col)], f = how much is left (0..1)
+// DROPPED_ART[id] = (it, f) => [lines, colour(ch, row, col)]; small pictures for items on the ground
 const usesLeft = it => { const m = ITEMS[it.id].uses || 0; return m ? clamp(it.uses / m, 0, 1) : 1; };
 // a glass or bowl: interior spans [row, c0, c1] (top to bottom) filled from the bottom up to f, a surface on top
 function filled(lines, spans, f, body, surface = '~') {
@@ -29,7 +29,7 @@ const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars
 // car keys: a fob with its buttons, the ring, the key hanging off it
 const KEYS_ART = [['  .---.', ' | (o) |', ' | [=] |', "  '-.-'", '   (O)', '    |', '    |=', '    |=', '    V'],
   (c, r) => c === 'o' ? C(RED, 14) : c === '=' && r < 3 ? C(GRAY, 12) : r < 4 ? C(GRAY, 5 + (c === '|' || c === '.' || c === "'" || c === '-' ? 6 : 0)) : C(YEL, 13)];
-const HAND = {
+const DROPPED_ART = {
   // the night market's: street food, charms, curios, and the two that bend the world
   bao: (it, f) => [bitten(['   _.~~._', '  ( ~ ~  )', ' (        )', "  `------'"], f), (c, r) => r < 2 && c === '~' ? C(GRAY, 12) : C(WHITE, 14)],
   eggwaffle: (it, f) => [bitten([' .oOoOoOo.', ' oOoOoOoOo', ' oOoOoOoOo', " `oOoOoOo'"], f), (c, r) => c === 'O' ? C(YEL, 15) : C(ORANGE, 13)],
@@ -176,7 +176,7 @@ const HAND = {
   umbrella: () => [['     .', '    /|\\', '   / | \\', '  |  |  |', '  |==|==|', '  |  |  |', '   \\ | /', '    \\|/', '     |', '     |'],
     (c, r) => c === '=' ? C(WHITE, 14) : c === '|' && r > 7 ? C(GRAY, 12) : c === '.' ? C(GRAY, 14) : C(BLUE, 13)],
 };
-const heldArt = it => (HAND[it.id] || HAND.book)(it, usesLeft(it));
+const droppedArt = it => (DROPPED_ART[it.id] || DROPPED_ART.book)(it, usesLeft(it));
 let smokePuffs = []; // [x, y, life, drift] in screen px
 const putCell = (r, c, ch, col) => { if (r < 0 || r >= rows || c < 0 || c >= cols || ch === ' ') return; const i = r * cols + c; set(i, ch, col); FOGS[i] = FOGB[i] = 0; };
 function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r)))); }
@@ -230,18 +230,8 @@ function drawHeldBig() {
   const lift = it.id === 'yoyo' ? Math.min(1, 0.55 + yoyo.len * 3) : 0; // (holding a yo-yo your hand's up, so it hangs below; higher still to work it)
   const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
-  if (drawHeldDense(it, cx, hy, hsz, grip)); // (the dense-art trial: the item drawn finer, the same hand)
-  else if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
-  else {
-    const [art, col] = heldArt(it);
-    g.font = isz + 'px monospace';
-    const w = g.measureText('M').width, artW = Math.max(...art.map(l => l.length)), top = grip + 0.5 * isz - art.length * isz;
-    if (it.id !== 'yoyo') {
-      g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
-      artText(art, cx - artW * w / 2, top, isz, col); g.restore();
-    }
-    if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top - isz * 0.4, isz);
-  }
+  if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
+  else drawHeldDense(it, cx, hy, hsz, grip);
   drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
   if (it.id === 'yoyo') drawYoyo(cx - hsz * 0.2, hy + HAND_ART.length * hsz); // (in your hand or out on its string, it hangs from under your fist)
   g.font = FS + 'px monospace';
@@ -378,9 +368,9 @@ function dropHere() {
   say(`You put the ${dropHeldAt(x, y, at, mode === 'roof' ? roofH : 0)} down.`);
 }
 const droppedHere = () => { const at = placeKey(); return at === null ? null : droppedNear(px, py, at, mode === 'room' ? 1.1 : 0.2, mode === 'roof' ? roofH : 0); };
-// lying on the ground: its own in-hand picture, shrunk to life size (s = world units per character: cells or metres)
+// lying on the ground: the small item picture, shrunk to life size (s = world units per character: cells or metres)
 function drawDropped(d, vx, vy, s) {
-  const [lines, col] = heldArt(d), art = pad(lines.filter(l => l.length)), W = art[0].length;
+  const [lines, col] = droppedArt(d), art = pad(lines.filter(l => l.length)), W = art[0].length;
   drawArt(vx, vy, d.at ? 0 : d.z || 0, W * s * 0.5, art.length * s, art, (c, row, L) => { const k = col(c, row); return C(k >> 4, (k & 15) * clamp(L / 11, 0.3, 1)); });
 }
 
