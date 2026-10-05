@@ -80,6 +80,7 @@ function promptText() {
     if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', shelf: 'E: decorate shelf', fridge: 'E: open fridge', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
+    if (room.kind === 'grandhotel') { const m = grandHotelPrompt(); if (m) return m; }
     if (room.kind === 'museum' && !room.burgled) { const m = museumPrompt(); if (m) return m; }
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
@@ -218,7 +219,7 @@ function minimap() {
   g.font = FS + 'px monospace';
 }
 
-const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards',
+const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards', belle: 'Belle Époque Quarter',
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay', shotengai: 'the Shotengai' };
 // a line of HUD text broken to fit maxW px: at the wide gaps between its parts first, then between words
 function wrapText(s, maxW) {

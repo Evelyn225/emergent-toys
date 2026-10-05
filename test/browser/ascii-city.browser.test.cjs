@@ -364,9 +364,10 @@ test('the subway: C sits you on a bench (not on top of anybody), and you get off
   assert.deepStrictEqual(await page.evaluate(() => [room.kind, body.seat]), ['station', null], 'off at the platform, standing');
 }));
 
-test('the yo-yo: going round in circles with the mouse sends it around the world; holding still, it just hangs', () => withPage(async page => {
+test('the yo-yo follows a circular mouse target with momentum and settles at the held target', () => withPage(async page => {
   const loops = await page.evaluate(async () => {
     inv.push({ id: 'yoyo', uses: 0 }); held = inv.length - 1; useHeld();
+    yoyo.aimX = 0.6; yoyo.aimY = 0; // start on the circle, centered on the hand
     let n = 0, prev = yoyo.ang, t = 0;
     for (let f = 0; f < 360; f++) { // 6s of small circles, about one a second, fed in frame by frame
       const w = 2 * Math.PI * 1.2, R = 120;
@@ -377,8 +378,19 @@ test('the yo-yo: going round in circles with the mouse sends it around the world
     return n;
   });
   assert.ok(loops >= 2, `over the top ${loops} times`);
-  const still = await page.evaluate(() => { yoyo.ang = 0.3; yoyo.angV = 0; for (let f = 0; f < 600; f++) stepYoyo(1 / 60); return Math.abs(yoyo.ang); });
-  assert.ok(still < 0.1, 'left alone it settles');
+  const carried = await page.evaluate(() => {
+    const before = yoyo.ang, speed = yoyo.angV;
+    yoyo.aimX = Math.sin(before) * 0.8; yoyo.aimY = Math.cos(before) * 0.8;
+    stepYoyo(1 / 60);
+    return Math.abs(speed) > 0.1 && Math.abs(yoyo.ang - before) > 0.001;
+  });
+  assert.ok(carried, 'holding the target still retains the yo-yo momentum');
+  const still = await page.evaluate(() => {
+    yoyo.aimX = 0.3; yoyo.aimY = 0.7;
+    for (let f = 0; f < 600; f++) stepYoyo(1 / 60);
+    return [Math.abs(mod(yoyo.ang - Math.atan2(0.3, 0.7) + Math.PI, Math.PI * 2) - Math.PI), Math.abs(yoyo.len - Math.hypot(0.3, 0.7))];
+  });
+  assert.ok(still[0] < 0.01 && still[1] < 0.01, 'settles at the held mouse target');
 }));
 
 test('the board shows under you on a big desktop screen too; the wheels go quiet in the air', async () => {
@@ -930,7 +942,7 @@ test('the cell block: you stay in your cell, the bars are see-through and there 
 }));
 
 test('your home: things put in the closet are still there after a reload; a taxi takes you to your nearest home', () => withPage(async page => {
-  await page.evaluate(() => { money = 5000; buy('home_studio'); inv.push({ id: 'book', uses: 0 }, { id: 'umbrella', uses: 0 });
+  await page.evaluate(() => { money = 5000; buy('home_studio'); carryItem({ id: 'book', uses: 0 }); carryItem({ id: 'umbrella', uses: 0 });
     enterRoom('home', { word: 'HOME', ret: [px, py, a], cell: [0, 0] }, [ROOM_DEFS.home.grid[0].length / 2, 3, -Math.PI / 2]); [px, py] = room.def.spots.closet; py += 0.6; });
   assert.match(await page.evaluate(() => promptText()), /your closet/);
   await page.keyboard.press('KeyE');
@@ -1107,13 +1119,13 @@ test('shut-down shops say so; each district paints its own walls', () => withPag
   assert.deepStrictEqual(themes, [true, true]);
 }));
 
-test('every food and drink shows itself being used up (a level going down, steam going, or bites out of it), dense trial art included', () => withPage(async page => {
+test('every food and drink shows itself being used up (a level going down, steam going, or bites out of it), in both dropped and held art', () => withPage(async page => {
   const same = await page.evaluate(() => {
     const out = [];
     for (const id in ITEMS) {
       const I = ITEMS[id];
       if (!(I.kind === 'food' || I.kind === 'drink') || !(I.uses > 1)) continue;
-      for (const [name, art] of [['', HAND[id]], ['dense:', DENSE[id]]]) {
+      for (const [name, art] of [['dropped:', DROPPED_ART[id]], ['held:', DENSE[id]]]) {
         if (!art) continue;
         if (JSON.stringify(art({ id, uses: I.uses }, 1)[0]) === JSON.stringify(art({ id, uses: 1 }, 1 / I.uses)[0])) out.push(name + id);
       }

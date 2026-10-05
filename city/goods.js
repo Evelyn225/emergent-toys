@@ -69,6 +69,7 @@ const ITEMS = {
   postcard: { name: 'museum postcard', price: 2, kind: 'gear' }, dinotoy: { name: 'toy T. rex', price: 8, kind: 'gear' }, replicastar: { name: 'replica Glyphport Star', price: 15, kind: 'gear' }, // (the museum gift shop)
   orrery: { name: 'Equinox Orrery', price: 2500, kind: 'gear' }, // (the museum's: turn the crank and the season turns with it. Only a thief owns one)
   diamond: { name: 'the Glyphport Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
+  hotelmasterpiece: { name: 'stolen hotel painting', price: 9000, kind: 'gear' },
 };
 // the arcade's prize counter: what tickets buy
 let tickets = 0;

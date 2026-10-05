@@ -26,6 +26,7 @@ function bigMapLabels() {
   const out = [];
   for (const sd of DIST_SEEDS) { const [sx] = sd, d = seedName(sd), sy = d === 'industrial' ? (sd[1] > (SHORE_N + SHORE_S) / 2 ? SHORE_S - 0.4 : SHORE_N + 1.4) : sd[1]; out.push([sx * 8, sy * 8, (DISTRICT_TITLE[d] || d).replace(/^the /, 'The '), 'rgba(255,255,255,0.55)', 'area']); }
   const place = (x, y, t) => out.push([x, y, t, '#fd8', 'place']);
+  place(GRAND_HOTEL.bx * 8 + 5, GRAND_HOTEL.by * 8 + 5, 'Grand Hotel');
   place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
   place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'Big screens', radio: 'Radio tower' };

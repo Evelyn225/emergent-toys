@@ -110,12 +110,14 @@ test('crime minigames: stop the marker in the green to pick a pocket, set every 
   assert.strictEqual(ev('(() => { for (let t = 0; t < 60 && !g.over; t += 1 / 60) g.step(1 / 60, { up: 1 }); return g.success; })()'), false, 'shove it up and it slips');
 });
 
-test('ducking into a shop is no hiding place: a cop who reaches the door comes in after you', () => {
+test('a cop with your last seen entrance searches the room and arrests you in sight', () => {
   const { ev, step } = scene();
   ev("addWanted('hit', px, py, true)");
-  ev("mode = 'room'; room = { ret: [px, py, 0], def: {}, kind: 'store' }");
-  ev('footCops[0].x = px + 0.2; footCops[0].y = py; footCops[0].chase = true');
-  assert.strictEqual(step(1), 'busted');
+  ev("mode = 'room'; room = { ret: [px, py, 0], def: {}, kind: 'store', W: 5, H: 5, grid: ['#####', '#...#', '#...#', '#...#', '##D##'], props: [] }; px = 2.5; py = 2.8");
+  // The browser's wall adapter, restricted to this fixture's empty floor / solid walls.
+  ev("var ROOMW = { cell: (x, y) => room.grid[y]?.[x] === '.' ? 0 : 3 }");
+  assert.strictEqual(step(2), 'busted');
+  assert.ok(ev('roomCops.length') > 0, 'officers actually entered the room');
 });
 
 test('driving with a cruiser on your bumper: told to pull over, then spun out if you keep going', () => {

@@ -36,12 +36,69 @@ function signBig(u, uStep, d, side, mx, my, wc, p, len) {
   }
   return small >= 1 && small !== Infinity;
 }
+function belleFacade(i, u, z, h, d, side, fog, sk, L, glowL) {
+  const fz = fract(z * 2.5), bay = fract(u * 3.2), floor = Math.floor(z * 2.5);
+  BG[i] = bgAt(WHITE, day * 2.2 * (0.45 + 0.55 * fog) * (side ? 0.8 : 1), d);
+  if (z > h - 0.06) return set(i, '=', C(YEL, L * 0.8)); // carved stone cornice
+  if (h - z < 0.48) { // a steep mansard band at the top of each building
+    const slope = Math.abs(bay - 0.5) * 2;
+    if (slope > fz * 1.5 + 0.12) return set(i, slope > 0.9 ? '|' : slope > 0.6 ? '/' : '\\', C(GREEN, L * 0.85));
+    if (Math.abs(fz - 0.18) < 0.08 && bay > 0.28 && bay < 0.72) return set(i, '^', C(YEL, Math.max(L, glowL * 0.5)));
+    return set(i, (Math.floor(u * 2) + Math.floor(z * 12)) & 1 ? ':' : '.', C(GREEN, L * 0.7));
+  }
+  if (fz < 0.08) return set(i, '=', C(YEL, L * 0.6)); // moulded band between floors
+  const arch = fz > 0.66 && fz < 0.86 && Math.abs(bay - 0.5) < 0.23 - (fz - 0.66) * 1.05;
+  if (bay > 0.27 && bay < 0.73 && (fz > 0.16 && fz < 0.7 || arch)) {
+    if (arch && fz > 0.78) return set(i, '^', C(WHITE, L));
+    if (Math.abs(bay - 0.27) < 0.035 || Math.abs(bay - 0.73) < 0.035) return set(i, '|', C(YEL, L * 0.9));
+    if (fz < 0.2) return set(i, '-', C(GRAY, L)); // iron balcony rail
+    return hash(Math.floor(u * 3.2), floor, sk) > litT - 0.18 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, ':', C(CYAN, L * 0.45));
+  }
+  if (fz < 0.15) return set(i, fract(u * 6.4) < 0.08 ? '|' : '_', C(WHITE, L));
+  return set(i, '.', C(WHITE, L * 0.35));
+}
+function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const c = GRAND_HOTEL, L = fog * amb * (side ? 10 : 15), yFront = c.by * 8 + 8, xStart = c.bx * 8 + 2;
+  const line = my + (rel(py - my) < 0 ? 0 : 1), front = side && line === yFront, along = wc - xStart;
+  const glow = Math.max(night, overcast * 0.5);
+  BG[i] = bgAt(WHITE, day * 2.8 * (0.45 + 0.55 * fog) * (side ? 0.8 : 1), d);
+  if (h > 3.5 && z > 2.9) { // the lantern drum below the separate copper dome
+    if (z > h - 0.06) return set(i, '=', C(GREEN, L));
+    if (fract(u * 3) < 0.12) return set(i, '|', C(YEL, L));
+    if (fract(z * 4) < 0.12) return set(i, '=', C(YEL, L));
+    return set(i, z > 3.45 ? '#' : ' ', C(CYAN, L * 0.5));
+  }
+  if (front && z > 2.18 && z < 2.62) {
+    const peak = 2.62 - Math.abs(along - 3) * 0.15;
+    if (z > peak) return set(i, '.', C(WHITE, L * 0.4));
+    if (z > peak - 0.04) return set(i, '/', C(YEL, L));
+    if (wallText(i, u, uStep, z, d, 'GRAND HOTEL', Math.sign(u) * (xStart + 3), 2.37, 0.16, 0.2, C(YEL, 12), C(WHITE, 2))) return;
+    return set(i, '.', C(WHITE, L * 0.5));
+  }
+  if (front && z < 0.55) {
+    const du = along - 3, door = Math.abs(du) < 0.48;
+    if (z < 0.08) return set(i, '=', C(WHITE, L)); // broad stone steps
+    if (door && z < 0.48) { BG[i] = C(BRICK, 1 + glow * 2); return set(i, Math.abs(du) < 0.06 ? '|' : '#', C(YEL, Math.max(L, glow * 9))); }
+    if (fract(along * 0.42) < 0.08) return set(i, '|', C(WHITE, L * 1.2)); // entrance colonnade
+    return set(i, z > 0.46 ? '=' : '.', C(YEL, L * 0.75));
+  }
+  if (z > h - 0.06) return set(i, '=', C(YEL, L * 0.9));
+  const bay = fract(u * 3), fz = fract(z * 2.5), arch = fz > 0.64 && fz < 0.86 && Math.abs(bay - 0.5) < 0.2 - (fz - 0.64) * 0.9;
+  if (bay > 0.28 && bay < 0.72 && (fz > 0.18 && fz < 0.64 || arch)) {
+    if (arch && fz > 0.78) return set(i, '^', C(WHITE, L));
+    if (Math.abs(bay - 0.28) < 0.04 || Math.abs(bay - 0.72) < 0.04) return set(i, '|', C(YEL, L));
+    if (fz < 0.22) return set(i, '-', C(GRAY, L));
+    return hash(Math.floor(u * 3), Math.floor(z * 2.5), 2501) > litT - 0.16 ? set(i, '#', C(WARM, Math.max(L, glow * 7))) : set(i, ':', C(CYAN, L * 0.45));
+  }
+  return set(i, fract(z * 3) < 0.1 ? '=' : '.', C(WHITE, L * 0.4));
+}
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
   const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
   if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
   if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
+  if (sty === 25) return grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 21) return exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -49,7 +106,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   if (graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return; // a mural, or somebody's tag
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
-  BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
+  BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : (FACADE_BG[sty] ?? WHITE), day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
     if (z > 0.32) {
@@ -115,6 +172,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
   if (sh.aqua) return aquaUpper(i, u, uStep, z, d, L);
+  if (sty === 24) return belleFacade(i, u, z, h, d, side, fog, sk, L, glowL);
   const zz = z - 0.4, fl = Math.floor(zz * 3);
   let fz = fract(zz * 3);
   // the top floor: when the roof cuts it short its windows are squeezed to fit below the cornice, and a sliver too
@@ -369,7 +427,8 @@ function roofTop(i, wx, wy, h, d) {
     const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
     if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); return set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); }
   }
-  if (snowCover > 0.05 && noise(wx * 5, wy * 5, 45) < snowCover * 1.2) { BG[i] = C(WHITE, 2.4 + day * 6); return set(i, ' ', 0); } // snow on the roof
+  if (snowCover > 0.05 && noise(wx * 5, wy * 5, 45) < snowCover * 1.2) { BG[i] = C(WHITE, 2.4 + day * 6); return set(i, ' ', 0); }
+  if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); return set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
   set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
 }
 

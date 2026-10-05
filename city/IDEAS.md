@@ -87,6 +87,13 @@ These aim to change the skyline and the shape of the street walls, not just swap
 the current grid for the first version; distinctive rooflines and a few landmark buildings would do most of the work.
 
 ### Belle Époque / Art Nouveau quarter — strongest balanced choice
+
+First playable pass is in: the Belle ?poque district, arched pale-stone facades, copper roof details, and the
+Grand Hotel overlooking its square. The hotel has a $250 Royal Suite (check-in from 6pm) and an after-hours
+artwork caper (11pm?5am): torch patrols, walls for cover, a room-service cheese distraction, and a 40-second
+alarm. The stolen portrait is saved, carried, and sellable at pawn shops. F2 ? Places ? Grand Hotel jumps there.
+
+Further architectural and activity ideas:
 - Make the streets themselves the feature; skip another glass-roofed arcade, since the Shotengai already has one.
   Think turn-of-the-century boulevard buildings: pale limestone, warm brick, oxidized-copper details, arched entries,
   carved lintels, iron balconies with plant-like curves, and tall narrow window bays.

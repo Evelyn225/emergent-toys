@@ -186,7 +186,7 @@ function museumTorchFx() {
 }
 // a guard's spotted you once you've stood in a beam a moment (crouched, the beam has to be nearer to catch you)
 function stepMuseum(dt) {
-  if (mode !== 'room' || room.kind !== 'museum' || !room.burgled || game) return;
+  if (mode !== 'room' || (room.kind !== 'museum' && room.kind !== 'grandhotelheist') || !room.burgled || game) return;
   const len = body.crouch > 0.5 ? TORCH_LEN * 0.6 : TORCH_LEN;
   const seen = room.props.some(g => g.guard && inBeam(g, px, py, len) > 0);
   room.spot = clamp((room.spot || 0) + (seen ? dt * 1.6 : -dt), 0, 1);
@@ -197,6 +197,7 @@ function stepMuseum(dt) {
 }
 function museumAlarm(line) {
   room.alarm = true;
+  if (room.kind === 'grandhotelheist') hotelAlarm = null;
   addWanted('heist', room.ret[0], room.ret[1], true);
   if (actx) { const at = actx.currentTime; for (let k = 0; k < 30; k++) tone(at + k * 0.11, k & 1 ? 1800 : 2400, 0.09, 0.05, 'square'); }
   say(line, 5);

@@ -120,6 +120,7 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
+    if (grandHotelUse()) return;
     if (room.kind === 'home' || room.kind === 'loft') { // your place: sleep whenever you like, your closet, the telly
       const hs = homeSpot();
       const home = homeRecord(room);
@@ -317,13 +318,15 @@ function stepSleep(dt) {
     if (tod > 7) dayNum++; // slept through midnight
     tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
-    if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby }, [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
+    if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby, suite: !!sleep.lobby.suite }, sleep.lobby.suite ? [4.5, 5.3, -Math.PI / 2] : [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
   }
   if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say('7:00. You slept well, and the sky has cleared.', 4); }
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {
   body.seat = null;
+  if (room.kind === 'grandhotelheist') return enterRoom('grandhotel', room.lobby, [10.7, 2.65, Math.PI / 2]);
+  if (room.kind === 'hotelroom' && room.lobby.grandHotel) return enterRoom('grandhotel', room.lobby, [7, 6.5, -Math.PI / 2]);
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
   else { [px, py, a] = room.ret; a += Math.PI; }

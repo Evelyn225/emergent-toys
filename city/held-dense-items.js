@@ -75,6 +75,15 @@ const dCarKeys = () => sculpt(22, 16, (x, y) => {
 });
 
 Object.assign(DENSE, {
+  hotelmasterpiece: () => sculpt(22, 16, (x, y) => {
+    if (Math.abs(x) > 7.5 || Math.abs(y) > 5.2) return null;
+    if (Math.abs(x) > 6.6 || Math.abs(y) > 4.4) return dLit(0.6, YEL, 10, 15);
+    const halo = Math.hypot(x - 0.7, y + 1.2);
+    if (halo > 2.8 && halo < 3.2) return ['o', C(YEL, 14)];
+    if (Math.abs(x + 0.7) < 0.35 && Math.abs(y + 0.5) < 0.4) return ['o', C(WHITE, 15)];
+    if (Math.abs(x) < 2.2 && y > -2 && y < 3.2) return dLit(0.55, y < 0 ? WARM : BRICK, 8, 14);
+    return dLit(0.4 + 0.35 * noise(x * 0.5, y * 0.5, 230), y < -2.6 ? GREEN : CYAN, 7, 12);
+  }),
   // ---- the night market's, and the two that bend the world
   pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold Q
     const fast = hurrying(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;

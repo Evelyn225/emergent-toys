@@ -12,6 +12,7 @@ const DISTRICT_LINES = {
   industrial: ['Shift starts soon.', 'Smells like diesel round here.', 'Used to be a factory on every corner.'],
   waterfront: ['Love watching the boats.', 'You can walk right out to the end of the pier.', 'Smell that sea air.'],
   downtown: ['Everyone downtown is in such a hurry.', 'My office is up on the fortieth floor.'],
+  belle: ['The hotel lobby has a piano player after dinner.', 'Look up at those copper roofs when the sun catches them.', 'The old hotel ballroom is beautiful. Very strict about the guest list, though.'],
   brownstones: ['Quiet street, this.', 'My neighbour practises the trumpet. At 6am.'],
   midtown: ['Busy round here today.', 'Have you tried the diner on the corner?'],
 };

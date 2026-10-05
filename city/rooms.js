@@ -109,10 +109,11 @@ const inBox = (b, x, y, pad) => { const qx = x - b.x, qy = y - b.y; return Math.
 
 // ---- new interiors' walls
 function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city, its sky following the time of day
-  if (my !== 0 || Math.abs(u - room.W / 2) > 1.6 || z < 0.9 || z > 2.3) return false;
+  const width = room.suite ? 2.65 : 1.6;
+  if (my !== 0 || Math.abs(u - room.W / 2) > width || z < 0.9 || z > 2.3) return false;
   const du = u - room.W / 2;
-  if (Math.abs(du) > 1.45 || z < 0.97 || z > 2.23 || Math.abs(du) < 0.04) { set(i, Math.abs(du) > 1.45 ? '|' : '=', C(GRAY, L)); BG[i] = C(WARM, 2); return true; } // frame
-  viewOut(i, u, z, 14, 18); return true; // six floors up, across the avenue
+  if (Math.abs(du) > width - 0.15 || z < 0.97 || z > 2.23 || Math.abs(du) < 0.04) { set(i, Math.abs(du) > width - 0.15 ? '|' : '=', C(GRAY, L)); BG[i] = C(WARM, 2); return true; } // frame
+  viewOut(i, u, z, room.suite ? 22 : 14, 18); return true; // six floors up, across the avenue
 }
 function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a bay every 1.2m, numbered
   if (z > 2.45) { set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 6 ? ' ' : '.', C(GRAY, L * 0.4)); return true; }
@@ -425,7 +426,7 @@ const ROOM_DEFS = {
 const plantCol = (c, row, L) => C(row === 3 ? BRICK : GREEN, L);
 
 function makeRoom(kind, extra = {}) {
-  const def = ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
+  const def = kind === 'hotelroom' && extra.suite ? ROOM_DEFS.hotelSuite : ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
   return r;
@@ -765,6 +766,12 @@ function roomFloor(i, r, x, rx, ry) {
   if (room.def.wc && inWc(wx, wy)) { BG[i] = C(WHITE, 1 + L * 0.2); return set(i, fract(wx * 3) < 0.1 || fract(wy * 3) < 0.1 ? '+' : ' ', C(GRAY, L)); } // bathroom tiles
   switch (room.def.floor) {
     case 'wood': return set(i, fract(wy * 3) < 0.12 ? '=' : (r + x) & 1 ? '.' : ' ', C(BRICK, L * 1.3));
+    case 'royal': {
+      const border = Math.abs(wx - 4.5) > 3 || Math.abs(wy - 3.5) > 2;
+      const motif = Math.abs(fract(wx / 0.7) - 0.5) + Math.abs(fract(wy / 0.7) - 0.5) < 0.13;
+      BG[i] = C(BRICK, 1 + f);
+      return set(i, border ? '=' : motif ? '+' : ' ', C(YEL, L * (border ? 1.3 : 0.7)));
+    }
     case 'carpet': { const h = hash(Math.floor(wx * 3), Math.floor(wy * 3), 77); return set(i, h > 0.85 ? '*' : h > 0.7 ? '+' : h > 0.55 ? '.' : ' ', C(NEON[h * 40 & 3], L * 2.5)); }
     case 'train': return set(i, fract(wx * 4) < 0.2 ? '|' : ' ', C(GRAY, L));
     case 'rubber': return set(i, (r * 7 + x * 3) % 11 ? ' ' : '.', C(GRAY, L));

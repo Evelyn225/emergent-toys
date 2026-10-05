@@ -83,6 +83,7 @@ function citySprites() {
   bayBoats(); // (marina.js: real 3D boats)
   marinaSprites();
   forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8) && (!o.when || o.when())) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
+  drawGrandHotelDome();
   for (const v of vendors) {
     const t = v.type, frame = t.art[(T * 2 | 0) & 1];
     drawArt(...R(v.x, v.y), 0, t.w, 0.22, frame, (c, row, L) =>
@@ -97,6 +98,8 @@ function citySprites() {
     drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, (c, row, L) =>
       o.kind === 'antenna' ? (c === '*' ? C(RED, blink ? 15 : 3) : C(GRAY, L)) :
       o.kind === 'tank' ? C(c === '=' ? GRAY : BRICK, L) :
+      o.kind === 'belle-dormer' ? C(c === '|' ? GRAY : c === '^' || c === '/' ? GREEN : YEL, Math.max(L, night * 2)) :
+      o.kind === 'belle-turret' ? C(c === '|' ? WARM : c === '^' || c === '/' ? GREEN : YEL, Math.max(L, night * 2)) :
       row === 1 && c !== '|' ? C(o.neon, Math.max(L, night * 15)) : C(GRAY, L));
   });
   for (const k of cranes) {
@@ -173,6 +176,56 @@ function citySprites() {
     drawArt(vx, vy, 0.25, 0.12, 0.18, ['\\ /', ' V '], () => C(YEL, fract(T * 2) < 0.7 ? 15 : 9));
   }
   if (task && task.kind === 'dog') drawArt(...R(task.dog.x, task.dog.y), 0, 0.07, 0.05, DOG, (c, row, L) => C(BRICK, L * 1.2));
+}
+
+function drawGrandHotelDome() {
+  if (mode === 'room') return;
+  const x = GRAND_HOTEL.bx * 8 + 5, y = GRAND_HOTEL.by * 8 + 5, [vx, vy] = R(x, y);
+  if (Math.hypot(vx, vy) > vis + 3) return;
+  drawCopperDome(vx, vy, 3.68, 1.12, 1.2);
+  for (const off of [-2.4, 2.4]) {
+    const [tx, ty] = R(x + off, GRAND_HOTEL.by * 8 + 7.4);
+    drawCopperDome(tx, ty, 2.68, 0.54, 0.7);
+  }
+  // The entry canopy projects over the pavement; its columns leave the revolving door clear.
+  const [cx, cy] = R(x, GRAND_HOTEL.by * 8 + 7.9);
+  drawBox({ x: cx, y: cy, c: 1, s: 0, hl: 1.1, hw: 0.48, z0: 0.52, z1: 0.58 }, (i, t, L) => {
+    BG[i] = C(GREEN, 1 + L * 0.2); return set(i, HIT.face === 5 ? '/' : '=', C(YEL, L)), true;
+  });
+  for (const off of [-1, 1]) drawBox({ x: cx + off, y: cy + 0.3, c: 1, s: 0, hl: 0.025, hw: 0.025, z0: 0, z1: 0.52 },
+    (i, t, L) => (set(i, '|', C(YEL, L)), true));
+}
+function drawCopperDome(vx, vy, base, radius, height) {
+  const depth = dx * vx + dy * vy;
+  if (depth + radius < 0.05 || depth - radius > vis) return;
+  const center = cols / 2 + (-dy * vx + dx * vy) * projX / Math.max(depth, 0.05);
+  const span = radius * projX / Math.max(depth - radius, 0.05);
+  const c0 = Math.max(0, Math.floor(center - span)), c1 = Math.min(cols, Math.ceil(center + span));
+  const rr = radius * radius, hh = height * height;
+  const A0 = -vx, B0 = -vy, C0 = eye - base, q = (A0 * A0 + B0 * B0) / rr + C0 * C0 / hh - 1;
+  for (let c = c0; c < c1; c++) {
+    const screenX = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * screenX, ry = dy + dx * tf * screenX;
+    for (let r = 0; r < rows; r++) {
+      const i = r * cols + c, rz = (hor - r - 0.5) / projY;
+      const aa = (rx * rx + ry * ry) / rr + rz * rz / hh, bb = (A0 * rx + B0 * ry) / rr + C0 * rz / hh;
+      const disc = bb * bb - aa * q;
+      if (disc < 0) continue;
+      let t = (-bb - Math.sqrt(disc)) / aa;
+      if (t < 0.05 || t >= ZB[i] || t > vis) continue;
+      let z = C0 + rz * t;
+      if (z < 0) {
+        t = -C0 / rz;
+        if (t < 0.05 || t >= ZB[i] || t > vis || (A0 + rx * t) ** 2 + (B0 + ry * t) ** 2 > rr) continue;
+        z = 0;
+      }
+      const ax = A0 + rx * t, ay = B0 + ry * t, angle = Math.atan2(ay, ax);
+      const rib = Math.abs(fract(angle * 6 / Math.PI) - 0.5) < 0.055;
+      const L = (1 - t / vis) * amb * 12, shade = 0.55 + 0.45 * Math.max(0, (-ax + ay + z) / (radius + height));
+      BG[i] = C(GREEN, 1 + L * shade * 0.25);
+      set(i, z > height - 0.035 ? '*' : rib ? '|' : z < 0.05 ? '=' : ':', C(rib || z > height - 0.035 ? YEL : GREEN, L * shade));
+      ZB[i] = ZBG[i] = t; FL[i] = 0;
+    }
+  }
 }
 
 // a classic street lamp: a tall fluted pole, a swan neck curving out over the street, a lantern hanging from its end.

@@ -44,6 +44,7 @@ function devPlaces() {
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
     ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],
     ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.6, Math.PI / 2); }],
+    ['Grand Hotel', () => devAt(GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2)],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };

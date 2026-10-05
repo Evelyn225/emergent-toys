@@ -7,6 +7,7 @@ const PRODUCE = ['GROCERY','MARKET','FRUIT','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
   chinatown: ['DUMPLINGS','NOODLES','TEA HOUSE','HERBS','KARAOKE','BAKERY','DIM SUM','JADE','RAMEN','PHO','MAHJONG'],
+  belle: ['HOTEL','CAFE','TAILOR','ANTIQUES','FLORIST','BAKERY','DELICATESSEN','BOOKS','JEWELER','TEA HOUSE'],
   downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR','SPORTS','JUICE','BURGERS','REALTY','CARS'],
   industrial: ['AUTO REPAIR','STORAGE','TIRES','HARDWARE','DINER','BAR','WELDING','24/7','CHICKEN','TOBACCO','CARS'],
   brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP','SKATE','BAGELS','THRIFT','ICE CREAM','TOYS','REALTY'],
@@ -57,6 +58,7 @@ const pickBy = (seed, a) => a[(seed * 4813 | 0) % a.length];
 // are no dead ends.
 const SHORE_N = 0, SHORE_S = 25, BRIDGE_X = [9, 22];
 const EL_ROW = 13; // the elevated train runs above H(., EL_ROW), all the way round
+const GRAND_HOTEL = { bx: 6, by: 7, doorU: 6 * 8 + 5 };
 const relB = v => mod(v + NB / 2, NB) - NB / 2; // nearest copy, in blocks
 const bi = (bx, by) => (by & (NB - 1)) * NB + (bx & (NB - 1));
 const idx = (x, y) => (y & (N - 1)) * N + (x & (N - 1));
@@ -64,7 +66,7 @@ const idx = (x, y) => (y & (N - 1)) * N + (x & (N - 1));
 // districts: small neighbourhoods (~5 blocks across, a few minutes' walk) from a jittered grid of seeds, nearest seed
 // wins (wrapping east-west), with wobbly borders. Downtown sits round the middle of town, industry along the shores,
 // the rest a mix.
-const DISTRICTS = ['downtown', 'midtown', 'chinatown', 'industrial', 'brownstones', 'shotengai'];
+const DISTRICTS = ['downtown', 'midtown', 'chinatown', 'industrial', 'brownstones', 'shotengai', 'belle'];
 const DIST_SEEDS = [];
 for (let j = 0; j < 5; j++) for (let i = 0; i < 6; i++)
   DIST_SEEDS.push([(i + 0.2 + hash(i, j, 61) * 0.6) * NB / 6, SHORE_N + 1 + (j + 0.2 + hash(i, j, 62) * 0.6) * (SHORE_S - SHORE_N - 1) / 5, '']);
@@ -80,6 +82,8 @@ for (const seed of DIST_SEEDS) {
   while ((x -= weights[pool[k]]) > 0) k++;
   seed[2] = pool[k];
 }
+// one compact architecture district, replacing the inland yard seed near the north-west side of town
+DIST_SEEDS[7][2] = 'belle';
 // the Shotengai: the midtown neighbourhood nearest the south side of downtown becomes covered shopping streets
 {
   let best = null, bd = Infinity;
@@ -117,6 +121,9 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     : (h < 0.03 ? 'park' : h < 0.07 ? 'landmark' : h < 0.1 ? 'construction' : h < 0.14 ? 'plaza' : '');
 }
 for (const [x0, y0, x1, y1, k] of SUPER) for (let by = y0; by <= y1; by++) for (let bx = x0; bx <= x1; bx++) KIND[bi(bx, by)] = k;
+// A paved hotel square opens up the view of the dome from the south.
+KIND[bi(GRAND_HOTEL.bx, GRAND_HOTEL.by)] = '';
+KIND[bi(GRAND_HOTEL.bx, GRAND_HOTEL.by + 1)] = 'plaza';
 const blockKind = (bx, by) => KIND[bi(bx, by)];
 
 // street segments. H(bx, by): the street along the north side of block (bx, by), between intersections (bx, by) and
@@ -298,6 +305,7 @@ const BUILD = {
   industrial: { lots: h => h < 0.5 ? LOTS.whole : LOTS.halves, height: h => 1 + Math.round(h * 2) / 2, sty: s => s < 0.75 ? 8 : s < 0.9 ? 15 : 2 },
   brownstones: { lots: () => LOTS.rows, height: h => 1.3 + Math.round(h * 5) / 10, sty: s => s < 0.75 ? 9 : s < 0.9 ? 16 : 2 },
   shotengai: { lots: () => LOTS.rows, height: h => 1.6 + Math.round(h * 6) / 4, sty: () => 17 }, // narrow, 16-30m, every one with signs
+  belle: { lots: h => h < 0.25 ? LOTS.grid : LOTS.rows, height: h => 2.2 + Math.floor(h * 2.4), sty: () => 24 },
 };
 // the Shotengai's streets have a roof over them (city-render.js draws it, from underneath)
 const ARCADE_Z = 0.62; // 6m up
@@ -346,7 +354,7 @@ const SERVICES = [];
 {
   const cand = [];
   for (let by = SHORE_N + 2; by < SHORE_S - 1; by++) for (let bx = 0; bx < NB; bx++)
-    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW && SHOP[idx(bx * 8 + 3, by * 8 + 2)]) cand.push([hash(bx, by, 81), bx, by]);
+    if (!blockKind(bx, by) && !(bx === GRAND_HOTEL.bx && by === GRAND_HOTEL.by) && hseg(bx, by) && by !== EL_ROW && SHOP[idx(bx * 8 + 3, by * 8 + 2)]) cand.push([hash(bx, by, 81), bx, by]);
   cand.sort((p, q) => p[0] - q[0]);
   const gap = (b, bx, by) => Math.hypot(relB(b.bx - bx), b.by - by);
   for (const kind in BASE_KINDS) {
@@ -369,6 +377,16 @@ const SERVICES = [];
       SERVICES.push({ kind, bx, by, x: bx * 8 + 5, y: by * 8 + 1.74, // (parked between the street lamps, not on one)
         lane: by * 8 + 1.4, out: false });
     }
+  }
+}
+
+// The district's anchor: a full city block in pale stone, with a taller central lantern room for its copper dome.
+{
+  const sh = GRAND_HOTEL.sh = { kind: SHOP_LIT, word: 'GRAND HOTEL', neon: YEL, glyphs: '#', hours: [0, 24], grandHotel: true };
+  for (let y = 2; y <= 7; y++) for (let x = 2; x <= 7; x++) {
+    const tower = x >= 4 && x <= 5 && y >= 4 && y <= 5, upper = x >= 3 && x <= 6 && y >= 3 && y <= 6;
+    const i = idx(GRAND_HOTEL.bx * 8 + x, GRAND_HOTEL.by * 8 + y);
+    map[i] = tower ? 3.75 : upper ? 3.15 : 2.7; STY[i] = 25; SHOP[i] = sh; SEED[i] = 0.5;
   }
 }
 

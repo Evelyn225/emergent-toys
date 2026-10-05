@@ -298,6 +298,7 @@ const PRODUCE = ['GROCERY','MARKET','FRUIT','BODEGA'];
 // each district leans on its own shop names; the rest come from WORDS
 const DIST_WORDS = {
   chinatown: ['DUMPLINGS','NOODLES','TEA HOUSE','HERBS','KARAOKE','BAKERY','DIM SUM','JADE','RAMEN','PHO','MAHJONG'],
+  belle: ['HOTEL','CAFE','TAILOR','ANTIQUES','FLORIST','BAKERY','DELICATESSEN','BOOKS','JEWELER','TEA HOUSE'],
   downtown: ['BANK','CAFE','HOTEL','COFFEE','SUSHI','GYM','PHARMACY','PHONES','DELI','BAR','SPORTS','JUICE','BURGERS','REALTY','CARS'],
   industrial: ['AUTO REPAIR','STORAGE','TIRES','HARDWARE','DINER','BAR','WELDING','24/7','CHICKEN','TOBACCO','CARS'],
   brownstones: ['CAFE','BOOKS','FLORIST','BAKERY','LAUNDRY','BARBER','PIZZA','RECORDS','DELI','BAR','PET SHOP','SKATE','BAGELS','THRIFT','ICE CREAM','TOYS','REALTY'],
@@ -348,6 +349,7 @@ const pickBy = (seed, a) => a[(seed * 4813 | 0) % a.length];
 // are no dead ends.
 const SHORE_N = 0, SHORE_S = 25, BRIDGE_X = [9, 22];
 const EL_ROW = 13; // the elevated train runs above H(., EL_ROW), all the way round
+const GRAND_HOTEL = { bx: 6, by: 7, doorU: 6 * 8 + 5 };
 const relB = v => mod(v + NB / 2, NB) - NB / 2; // nearest copy, in blocks
 const bi = (bx, by) => (by & (NB - 1)) * NB + (bx & (NB - 1));
 const idx = (x, y) => (y & (N - 1)) * N + (x & (N - 1));
@@ -355,7 +357,7 @@ const idx = (x, y) => (y & (N - 1)) * N + (x & (N - 1));
 // districts: small neighbourhoods (~5 blocks across, a few minutes' walk) from a jittered grid of seeds, nearest seed
 // wins (wrapping east-west), with wobbly borders. Downtown sits round the middle of town, industry along the shores,
 // the rest a mix.
-const DISTRICTS = ['downtown', 'midtown', 'chinatown', 'industrial', 'brownstones', 'shotengai'];
+const DISTRICTS = ['downtown', 'midtown', 'chinatown', 'industrial', 'brownstones', 'shotengai', 'belle'];
 const DIST_SEEDS = [];
 for (let j = 0; j < 5; j++) for (let i = 0; i < 6; i++)
   DIST_SEEDS.push([(i + 0.2 + hash(i, j, 61) * 0.6) * NB / 6, SHORE_N + 1 + (j + 0.2 + hash(i, j, 62) * 0.6) * (SHORE_S - SHORE_N - 1) / 5, '']);
@@ -371,6 +373,8 @@ for (const seed of DIST_SEEDS) {
   while ((x -= weights[pool[k]]) > 0) k++;
   seed[2] = pool[k];
 }
+// one compact architecture district, replacing the inland yard seed near the north-west side of town
+DIST_SEEDS[7][2] = 'belle';
 // the Shotengai: the midtown neighbourhood nearest the south side of downtown becomes covered shopping streets
 {
   let best = null, bd = Infinity;
@@ -408,6 +412,9 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     : (h < 0.03 ? 'park' : h < 0.07 ? 'landmark' : h < 0.1 ? 'construction' : h < 0.14 ? 'plaza' : '');
 }
 for (const [x0, y0, x1, y1, k] of SUPER) for (let by = y0; by <= y1; by++) for (let bx = x0; bx <= x1; bx++) KIND[bi(bx, by)] = k;
+// A paved hotel square opens up the view of the dome from the south.
+KIND[bi(GRAND_HOTEL.bx, GRAND_HOTEL.by)] = '';
+KIND[bi(GRAND_HOTEL.bx, GRAND_HOTEL.by + 1)] = 'plaza';
 const blockKind = (bx, by) => KIND[bi(bx, by)];
 
 // street segments. H(bx, by): the street along the north side of block (bx, by), between intersections (bx, by) and
@@ -589,6 +596,7 @@ const BUILD = {
   industrial: { lots: h => h < 0.5 ? LOTS.whole : LOTS.halves, height: h => 1 + Math.round(h * 2) / 2, sty: s => s < 0.75 ? 8 : s < 0.9 ? 15 : 2 },
   brownstones: { lots: () => LOTS.rows, height: h => 1.3 + Math.round(h * 5) / 10, sty: s => s < 0.75 ? 9 : s < 0.9 ? 16 : 2 },
   shotengai: { lots: () => LOTS.rows, height: h => 1.6 + Math.round(h * 6) / 4, sty: () => 17 }, // narrow, 16-30m, every one with signs
+  belle: { lots: h => h < 0.25 ? LOTS.grid : LOTS.rows, height: h => 2.2 + Math.floor(h * 2.4), sty: () => 24 },
 };
 // the Shotengai's streets have a roof over them (city-render.js draws it, from underneath)
 const ARCADE_Z = 0.62; // 6m up
@@ -637,7 +645,7 @@ const SERVICES = [];
 {
   const cand = [];
   for (let by = SHORE_N + 2; by < SHORE_S - 1; by++) for (let bx = 0; bx < NB; bx++)
-    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW && SHOP[idx(bx * 8 + 3, by * 8 + 2)]) cand.push([hash(bx, by, 81), bx, by]);
+    if (!blockKind(bx, by) && !(bx === GRAND_HOTEL.bx && by === GRAND_HOTEL.by) && hseg(bx, by) && by !== EL_ROW && SHOP[idx(bx * 8 + 3, by * 8 + 2)]) cand.push([hash(bx, by, 81), bx, by]);
   cand.sort((p, q) => p[0] - q[0]);
   const gap = (b, bx, by) => Math.hypot(relB(b.bx - bx), b.by - by);
   for (const kind in BASE_KINDS) {
@@ -660,6 +668,16 @@ const SERVICES = [];
       SERVICES.push({ kind, bx, by, x: bx * 8 + 5, y: by * 8 + 1.74, // (parked between the street lamps, not on one)
         lane: by * 8 + 1.4, out: false });
     }
+  }
+}
+
+// The district's anchor: a full city block in pale stone, with a taller central lantern room for its copper dome.
+{
+  const sh = GRAND_HOTEL.sh = { kind: SHOP_LIT, word: 'GRAND HOTEL', neon: YEL, glyphs: '#', hours: [0, 24], grandHotel: true };
+  for (let y = 2; y <= 7; y++) for (let x = 2; x <= 7; x++) {
+    const tower = x >= 4 && x <= 5 && y >= 4 && y <= 5, upper = x >= 3 && x <= 6 && y >= 3 && y <= 6;
+    const i = idx(GRAND_HOTEL.bx * 8 + x, GRAND_HOTEL.by * 8 + y);
+    map[i] = tower ? 3.75 : upper ? 3.15 : 2.7; STY[i] = 25; SHOP[i] = sh; SEED[i] = 0.5;
   }
 }
 
@@ -1121,12 +1139,18 @@ const machineAt = (x, y, pad) => machinesB[bi(Math.floor(x / 8), Math.floor(y / 
 
 // rooftop clutter: one item on some lots, placed inside the lot so it sits on the roof
 const roofs = [];
+const BELLE_ROOF = [pad(['  /^^\\', ' /_||_\\', '|_|  |_|']), pad(['   ^', '  /|\\', ' /_|_\\', '|__|__|'])];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   if (blockKind(bx, by)) continue;
   const dist = districtOf(bx, by);
   for (let ly = 0; ly < 2; ly++) for (let lx = 0; lx < 2; lx++) {
     const lot = [bx * 2 + lx, by * 2 + ly], r = hash(...lot, 13);
     const x = bx * 8 + 2 + lx * 3 + 0.6 + hash(...lot, 14) * 1.8, y = by * 8 + 2 + ly * 3 + 0.6 + hash(...lot, 15) * 1.8, h = map[idx(x, y)];
+    if (bx === GRAND_HOTEL.bx && by === GRAND_HOTEL.by) continue;
+    if (dist === 'belle' && r < 0.34) {
+      const art = BELLE_ROOF[r < 0.18 ? 0 : 1], kind = r < 0.18 ? 'belle-dormer' : 'belle-turret';
+      roofs.push({ x, y, z: h, w: art[0].length * 0.08, h: kind === 'belle-dormer' ? 0.6 : 0.85, art, kind }); continue;
+    }
     if (dist === 'industrial' || dist === 'brownstones' && r > 0.3) continue;
     if (h >= 5 && r < 0.5) roofs.push({ x, y, z: h, w: 0.1, h: 1, art: ART.antenna, kind: 'antenna' });
     else if (r < 0.35) roofs.push({ x, y, z: h, w: 0.3, h: 0.4, art: ART.tank, kind: 'tank' });
@@ -1729,6 +1753,7 @@ const DISTRICT_LINES = {
   industrial: ['Shift starts soon.', 'Smells like diesel round here.', 'Used to be a factory on every corner.'],
   waterfront: ['Love watching the boats.', 'You can walk right out to the end of the pier.', 'Smell that sea air.'],
   downtown: ['Everyone downtown is in such a hurry.', 'My office is up on the fortieth floor.'],
+  belle: ['The hotel lobby has a piano player after dinner.', 'Look up at those copper roofs when the sun catches them.', 'The old hotel ballroom is beautiful. Very strict about the guest list, though.'],
   brownstones: ['Quiet street, this.', 'My neighbour practises the trumpet. At 6am.'],
   midtown: ['Busy round here today.', 'Have you tried the diner on the corner?'],
 };
@@ -1955,6 +1980,7 @@ const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(
 // how much traffic / crowd / night-time nature each district has
 const AUDIO_DISTRICT = {
   downtown: { city: 1, crowd: 0.8, night: 0.4 }, midtown: { city: 1, crowd: 0.8, night: 0.5 },
+  belle: { city: 0.8, crowd: 0.65, night: 0.5 },
   chinatown: { city: 0.85, crowd: 1, night: 0.5 }, industrial: { city: 0.7, crowd: 0.15, night: 0.7 },
   brownstones: { city: 0.5, crowd: 0.35, night: 1 }, waterfront: { city: 0.35, crowd: 0.5, night: 0.9 },
   sea: { city: 0.15, crowd: 0, night: 0.8 }, shotengai: { city: 0.55, crowd: 1, night: 0.4 },
@@ -1964,7 +1990,7 @@ const AUDIO_DISTRICT = {
 const ROOM_AUDIO = {
   bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
-  hotel: [0.2, 0.4, 0], casino: [0.7, 0, 0], stripclub: [0.55, 0.8, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
+  hotel: [0.2, 0.4, 0], grandhotel: [0.15, 0.35, 0], casino: [0.7, 0, 0], stripclub: [0.55, 0.8, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -1985,6 +2011,7 @@ function audioMix(s) {
     const cafe = CAFE_WORDS.has(s.room.word);
     out.restaurant = rest * (k === 'bar' || k === 'karaoke' ? s.barCrowd : 1);
     out.bossa = cafe ? 0.8 : bossa;
+    if (k === 'hotelroom' && s.room.suite) out.bossa = 0.2;
     out.coffee = cafe ? 0 : coffee;
     if (k === 'karaoke') out.karaoke = 0.9; // somebody's always singing Sweet Caroline
     if (k === 'arcade') out.arcade = 0.85;
@@ -2126,6 +2153,7 @@ const ITEMS = {
   postcard: { name: 'museum postcard', price: 2, kind: 'gear' }, dinotoy: { name: 'toy T. rex', price: 8, kind: 'gear' }, replicastar: { name: 'replica Glyphport Star', price: 15, kind: 'gear' }, // (the museum gift shop)
   orrery: { name: 'Equinox Orrery', price: 2500, kind: 'gear' }, // (the museum's: turn the crank and the season turns with it. Only a thief owns one)
   diamond: { name: 'the Glyphport Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
+  hotelmasterpiece: { name: 'stolen hotel painting', price: 9000, kind: 'gear' },
 };
 // the arcade's prize counter: what tickets buy
 let tickets = 0;
@@ -4170,7 +4198,7 @@ function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along 
   if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = mod(ny, N);
   c.ph += dt * 7;
 }
-const roomOpen = (x, y) => x >= 0 && y >= 0 && x < room.W && y < room.H && ROOMW.cell(x, y) === 0 && !(room.def.block && room.def.block(x, y)) &&
+const roomOpen = (x, y) => x >= 0 && y >= 0 && x < room.W && y < room.H && ROOMW.cell(Math.floor(x), Math.floor(y)) === 0 && !(room.def.block && room.def.block(x, y)) &&
   !room.props.some(p => p.box && !p.walk && p.box.z0 < 1.2 && inBox(p.box, x, y, 0.2) || p.bench && Math.hypot(x - p.x, y - p.y) < 0.5);
 function nearestRoomCell(x, y) {
   let best = null, bd = Infinity;
@@ -4848,9 +4876,66 @@ function signBig(u, uStep, d, side, mx, my, wc, p, len) {
     const col = off => { const X = qx + (side ? at + off : 0), Y = qy + (side ? 0 : at + off), dep = dx * X + dy * Y; return dep > 0.05 ? [(-dy * X + dx * Y) / dep * projX, dep] : null; };
     const a0 = col(0), a1 = col(0.1 * sgn);
     if (!a0 || !a1) continue;
-    small = Math.min(small, Math.abs(a1[0] - a0[0]) / 2.2, 0.08 * projY / Math.max(a0[1], a1[1]) / 2.8);
+    // Keep the block glyphs until they're close to their smallest readable size.
+    small = Math.min(small, Math.abs(a1[0] - a0[0]) / 1.6, 0.08 * projY / Math.max(a0[1], a1[1]) / 2);
   }
   return small >= 1 && small !== Infinity;
+}
+function belleFacade(i, u, z, h, d, side, fog, sk, L, glowL) {
+  const fz = fract(z * 2.5), bay = fract(u * 3.2), floor = Math.floor(z * 2.5);
+  BG[i] = bgAt(WHITE, day * 2.2 * (0.45 + 0.55 * fog) * (side ? 0.8 : 1), d);
+  if (z > h - 0.06) return set(i, '=', C(YEL, L * 0.8)); // carved stone cornice
+  if (h - z < 0.48) { // a steep mansard band at the top of each building
+    const slope = Math.abs(bay - 0.5) * 2;
+    if (slope > fz * 1.5 + 0.12) return set(i, slope > 0.9 ? '|' : slope > 0.6 ? '/' : '\\', C(GREEN, L * 0.85));
+    if (Math.abs(fz - 0.18) < 0.08 && bay > 0.28 && bay < 0.72) return set(i, '^', C(YEL, Math.max(L, glowL * 0.5)));
+    return set(i, (Math.floor(u * 2) + Math.floor(z * 12)) & 1 ? ':' : '.', C(GREEN, L * 0.7));
+  }
+  if (fz < 0.08) return set(i, '=', C(YEL, L * 0.6)); // moulded band between floors
+  const arch = fz > 0.66 && fz < 0.86 && Math.abs(bay - 0.5) < 0.23 - (fz - 0.66) * 1.05;
+  if (bay > 0.27 && bay < 0.73 && (fz > 0.16 && fz < 0.7 || arch)) {
+    if (arch && fz > 0.78) return set(i, '^', C(WHITE, L));
+    if (Math.abs(bay - 0.27) < 0.035 || Math.abs(bay - 0.73) < 0.035) return set(i, '|', C(YEL, L * 0.9));
+    if (fz < 0.2) return set(i, '-', C(GRAY, L)); // iron balcony rail
+    return hash(Math.floor(u * 3.2), floor, sk) > litT - 0.18 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, ':', C(CYAN, L * 0.45));
+  }
+  if (fz < 0.15) return set(i, fract(u * 6.4) < 0.08 ? '|' : '_', C(WHITE, L));
+  return set(i, '.', C(WHITE, L * 0.35));
+}
+function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const c = GRAND_HOTEL, L = fog * amb * (side ? 10 : 15), yFront = c.by * 8 + 8, xStart = c.bx * 8 + 2;
+  const line = my + (rel(py - my) < 0 ? 0 : 1), front = side && line === yFront, along = wc - xStart;
+  const glow = Math.max(night, overcast * 0.5);
+  BG[i] = bgAt(WHITE, day * 2.8 * (0.45 + 0.55 * fog) * (side ? 0.8 : 1), d);
+  if (h > 3.5 && z > 2.9) { // the lantern drum below the separate copper dome
+    if (z > h - 0.06) return set(i, '=', C(GREEN, L));
+    if (fract(u * 3) < 0.12) return set(i, '|', C(YEL, L));
+    if (fract(z * 4) < 0.12) return set(i, '=', C(YEL, L));
+    return set(i, z > 3.45 ? '#' : ' ', C(CYAN, L * 0.5));
+  }
+  if (front && z > 2.18 && z < 2.62) {
+    const peak = 2.62 - Math.abs(along - 3) * 0.15;
+    if (z > peak) return set(i, '.', C(WHITE, L * 0.4));
+    if (z > peak - 0.04) return set(i, '/', C(YEL, L));
+    if (wallText(i, u, uStep, z, d, 'GRAND HOTEL', Math.sign(u) * (xStart + 3), 2.37, 0.16, 0.2, C(YEL, 12), C(WHITE, 2))) return;
+    return set(i, '.', C(WHITE, L * 0.5));
+  }
+  if (front && z < 0.55) {
+    const du = along - 3, door = Math.abs(du) < 0.48;
+    if (z < 0.08) return set(i, '=', C(WHITE, L)); // broad stone steps
+    if (door && z < 0.48) { BG[i] = C(BRICK, 1 + glow * 2); return set(i, Math.abs(du) < 0.06 ? '|' : '#', C(YEL, Math.max(L, glow * 9))); }
+    if (fract(along * 0.42) < 0.08) return set(i, '|', C(WHITE, L * 1.2)); // entrance colonnade
+    return set(i, z > 0.46 ? '=' : '.', C(YEL, L * 0.75));
+  }
+  if (z > h - 0.06) return set(i, '=', C(YEL, L * 0.9));
+  const bay = fract(u * 3), fz = fract(z * 2.5), arch = fz > 0.64 && fz < 0.86 && Math.abs(bay - 0.5) < 0.2 - (fz - 0.64) * 0.9;
+  if (bay > 0.28 && bay < 0.72 && (fz > 0.18 && fz < 0.64 || arch)) {
+    if (arch && fz > 0.78) return set(i, '^', C(WHITE, L));
+    if (Math.abs(bay - 0.28) < 0.04 || Math.abs(bay - 0.72) < 0.04) return set(i, '|', C(YEL, L));
+    if (fz < 0.22) return set(i, '-', C(GRAY, L));
+    return hash(Math.floor(u * 3), Math.floor(z * 2.5), 2501) > litT - 0.16 ? set(i, '#', C(WARM, Math.max(L, glow * 7))) : set(i, ':', C(CYAN, L * 0.45));
+  }
+  return set(i, fract(z * 3) < 0.1 ? '=' : '.', C(WHITE, L * 0.4));
 }
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
@@ -4858,6 +4943,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
   if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
   if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
+  if (sty === 25) return grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 21) return exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -4865,7 +4951,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   if (graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return; // a mural, or somebody's tag
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
-  BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : FACADE_BG[sty], day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
+  BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : (FACADE_BG[sty] ?? WHITE), day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
     if (z > 0.32) {
@@ -4931,6 +5017,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
   if (sh.aqua) return aquaUpper(i, u, uStep, z, d, L);
+  if (sty === 24) return belleFacade(i, u, z, h, d, side, fog, sk, L, glowL);
   const zz = z - 0.4, fl = Math.floor(zz * 3);
   let fz = fract(zz * 3);
   // the top floor: when the roof cuts it short its windows are squeezed to fit below the cornice, and a sliver too
@@ -5185,7 +5272,8 @@ function roofTop(i, wx, wy, h, d) {
     const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
     if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); return set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); }
   }
-  if (snowCover > 0.05 && noise(wx * 5, wy * 5, 45) < snowCover * 1.2) { BG[i] = C(WHITE, 2.4 + day * 6); return set(i, ' ', 0); } // snow on the roof
+  if (snowCover > 0.05 && noise(wx * 5, wy * 5, 45) < snowCover * 1.2) { BG[i] = C(WHITE, 2.4 + day * 6); return set(i, ' ', 0); }
+  if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); return set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
   set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
 }
 
@@ -5220,6 +5308,10 @@ function floorCell(i, r, x, rx, ry) {
       if (e < 0.45) { ch = hash(Math.floor(wx * 9), Math.floor(wy * 9), 34) > 0.45 ? '%' : 'o'; base = GRAY; k = 1.25; }
       else if (onPath) { ch = (r * 5 + x) % 3 ? ':' : '.'; base = WARM; k = 1; }
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.1; }
+    } else if (kind === 'gardens' && inGardens(wx, wy)) {
+      const gf = gardenFloor(i, r, x, wx, wy, L);
+      if (gf === true) return;
+      [ch, base, k] = gf; soft = true;
     } else if (onPier(wx, wy)) { // planks running out to sea
       soft = true; base = BRICK; k = 1.3;
       ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';
@@ -5244,10 +5336,6 @@ function floorCell(i, r, x, rx, ry) {
       ch = fract(lx * 3 + ly * 0.4) < 0.12 ? '=' : hash(Math.floor(wx * 12), Math.floor(wy * 12), 97) > 0.6 ? ':' : '.';
     } else if (kind === 'yard') { // cracked concrete, oil stains, painted bays
       ch = fract(lx * 1.5) < 0.04 ? '|' : hash(Math.floor(wx * 9), Math.floor(wy * 9), 98) > 0.92 ? '%' : (r + x) % 4 ? ' ' : '.'; k = 0.9;
-    } else if (kind === 'gardens' && inGardens(wx, wy)) {
-      const gf = gardenFloor(i, r, x, wx, wy, L);
-      if (gf === true) return;
-      [ch, base, k] = gf; soft = true;
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
@@ -5513,7 +5601,6 @@ function craneCell(i, u, z, du, dz, L, k, p) {
 
 const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites,
                deck: true, slabFace, slabEdge };
-
 // ===== graffiti: murals painted across some buildings' upper floors, each district in its own style (rust and anchors on
 // the docks, dragons in Chinatown, flowers in the Brownstones, a lone stencil downtown), quick tags low on the shutters, and the tags
 // you spray yourself with a can from the hardware store. Police don't like it: spraying is vandalism, and if a cop
@@ -5788,6 +5875,7 @@ function citySprites() {
   bayBoats(); // (marina.js: real 3D boats)
   marinaSprites();
   forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8) && (!o.when || o.when())) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
+  drawGrandHotelDome();
   for (const v of vendors) {
     const t = v.type, frame = t.art[(T * 2 | 0) & 1];
     drawArt(...R(v.x, v.y), 0, t.w, 0.22, frame, (c, row, L) =>
@@ -5802,6 +5890,8 @@ function citySprites() {
     drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, (c, row, L) =>
       o.kind === 'antenna' ? (c === '*' ? C(RED, blink ? 15 : 3) : C(GRAY, L)) :
       o.kind === 'tank' ? C(c === '=' ? GRAY : BRICK, L) :
+      o.kind === 'belle-dormer' ? C(c === '|' ? GRAY : c === '^' || c === '/' ? GREEN : YEL, Math.max(L, night * 2)) :
+      o.kind === 'belle-turret' ? C(c === '|' ? WARM : c === '^' || c === '/' ? GREEN : YEL, Math.max(L, night * 2)) :
       row === 1 && c !== '|' ? C(o.neon, Math.max(L, night * 15)) : C(GRAY, L));
   });
   for (const k of cranes) {
@@ -5878,6 +5968,56 @@ function citySprites() {
     drawArt(vx, vy, 0.25, 0.12, 0.18, ['\\ /', ' V '], () => C(YEL, fract(T * 2) < 0.7 ? 15 : 9));
   }
   if (task && task.kind === 'dog') drawArt(...R(task.dog.x, task.dog.y), 0, 0.07, 0.05, DOG, (c, row, L) => C(BRICK, L * 1.2));
+}
+
+function drawGrandHotelDome() {
+  if (mode === 'room') return;
+  const x = GRAND_HOTEL.bx * 8 + 5, y = GRAND_HOTEL.by * 8 + 5, [vx, vy] = R(x, y);
+  if (Math.hypot(vx, vy) > vis + 3) return;
+  drawCopperDome(vx, vy, 3.68, 1.12, 1.2);
+  for (const off of [-2.4, 2.4]) {
+    const [tx, ty] = R(x + off, GRAND_HOTEL.by * 8 + 7.4);
+    drawCopperDome(tx, ty, 2.68, 0.54, 0.7);
+  }
+  // The entry canopy projects over the pavement; its columns leave the revolving door clear.
+  const [cx, cy] = R(x, GRAND_HOTEL.by * 8 + 7.9);
+  drawBox({ x: cx, y: cy, c: 1, s: 0, hl: 1.1, hw: 0.48, z0: 0.52, z1: 0.58 }, (i, t, L) => {
+    BG[i] = C(GREEN, 1 + L * 0.2); return set(i, HIT.face === 5 ? '/' : '=', C(YEL, L)), true;
+  });
+  for (const off of [-1, 1]) drawBox({ x: cx + off, y: cy + 0.3, c: 1, s: 0, hl: 0.025, hw: 0.025, z0: 0, z1: 0.52 },
+    (i, t, L) => (set(i, '|', C(YEL, L)), true));
+}
+function drawCopperDome(vx, vy, base, radius, height) {
+  const depth = dx * vx + dy * vy;
+  if (depth + radius < 0.05 || depth - radius > vis) return;
+  const center = cols / 2 + (-dy * vx + dx * vy) * projX / Math.max(depth, 0.05);
+  const span = radius * projX / Math.max(depth - radius, 0.05);
+  const c0 = Math.max(0, Math.floor(center - span)), c1 = Math.min(cols, Math.ceil(center + span));
+  const rr = radius * radius, hh = height * height;
+  const A0 = -vx, B0 = -vy, C0 = eye - base, q = (A0 * A0 + B0 * B0) / rr + C0 * C0 / hh - 1;
+  for (let c = c0; c < c1; c++) {
+    const screenX = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * screenX, ry = dy + dx * tf * screenX;
+    for (let r = 0; r < rows; r++) {
+      const i = r * cols + c, rz = (hor - r - 0.5) / projY;
+      const aa = (rx * rx + ry * ry) / rr + rz * rz / hh, bb = (A0 * rx + B0 * ry) / rr + C0 * rz / hh;
+      const disc = bb * bb - aa * q;
+      if (disc < 0) continue;
+      let t = (-bb - Math.sqrt(disc)) / aa;
+      if (t < 0.05 || t >= ZB[i] || t > vis) continue;
+      let z = C0 + rz * t;
+      if (z < 0) {
+        t = -C0 / rz;
+        if (t < 0.05 || t >= ZB[i] || t > vis || (A0 + rx * t) ** 2 + (B0 + ry * t) ** 2 > rr) continue;
+        z = 0;
+      }
+      const ax = A0 + rx * t, ay = B0 + ry * t, angle = Math.atan2(ay, ax);
+      const rib = Math.abs(fract(angle * 6 / Math.PI) - 0.5) < 0.055;
+      const L = (1 - t / vis) * amb * 12, shade = 0.55 + 0.45 * Math.max(0, (-ax + ay + z) / (radius + height));
+      BG[i] = C(GREEN, 1 + L * shade * 0.25);
+      set(i, z > height - 0.035 ? '*' : rib ? '|' : z < 0.05 ? '=' : ':', C(rib || z > height - 0.035 ? YEL : GREEN, L * shade));
+      ZB[i] = ZBG[i] = t; FL[i] = 0;
+    }
+  }
 }
 
 // a classic street lamp: a tall fluted pole, a swan neck curving out over the street, a lantern hanging from its end.
@@ -6822,10 +6962,11 @@ const inBox = (b, x, y, pad) => { const qx = x - b.x, qy = y - b.y; return Math.
 
 // ---- new interiors' walls
 function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city, its sky following the time of day
-  if (my !== 0 || Math.abs(u - room.W / 2) > 1.6 || z < 0.9 || z > 2.3) return false;
+  const width = room.suite ? 2.65 : 1.6;
+  if (my !== 0 || Math.abs(u - room.W / 2) > width || z < 0.9 || z > 2.3) return false;
   const du = u - room.W / 2;
-  if (Math.abs(du) > 1.45 || z < 0.97 || z > 2.23 || Math.abs(du) < 0.04) { set(i, Math.abs(du) > 1.45 ? '|' : '=', C(GRAY, L)); BG[i] = C(WARM, 2); return true; } // frame
-  viewOut(i, u, z, 14, 18); return true; // six floors up, across the avenue
+  if (Math.abs(du) > width - 0.15 || z < 0.97 || z > 2.23 || Math.abs(du) < 0.04) { set(i, Math.abs(du) > width - 0.15 ? '|' : '=', C(GRAY, L)); BG[i] = C(WARM, 2); return true; } // frame
+  viewOut(i, u, z, room.suite ? 22 : 14, 18); return true; // six floors up, across the avenue
 }
 function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a bay every 1.2m, numbered
   if (z > 2.45) { set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 6 ? ' ' : '.', C(GRAY, L * 0.4)); return true; }
@@ -7138,7 +7279,7 @@ const ROOM_DEFS = {
 const plantCol = (c, row, L) => C(row === 3 ? BRICK : GREEN, L);
 
 function makeRoom(kind, extra = {}) {
-  const def = ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
+  const def = kind === 'hotelroom' && extra.suite ? ROOM_DEFS.hotelSuite : ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
   return r;
@@ -7478,6 +7619,12 @@ function roomFloor(i, r, x, rx, ry) {
   if (room.def.wc && inWc(wx, wy)) { BG[i] = C(WHITE, 1 + L * 0.2); return set(i, fract(wx * 3) < 0.1 || fract(wy * 3) < 0.1 ? '+' : ' ', C(GRAY, L)); } // bathroom tiles
   switch (room.def.floor) {
     case 'wood': return set(i, fract(wy * 3) < 0.12 ? '=' : (r + x) & 1 ? '.' : ' ', C(BRICK, L * 1.3));
+    case 'royal': {
+      const border = Math.abs(wx - 4.5) > 3 || Math.abs(wy - 3.5) > 2;
+      const motif = Math.abs(fract(wx / 0.7) - 0.5) + Math.abs(fract(wy / 0.7) - 0.5) < 0.13;
+      BG[i] = C(BRICK, 1 + f);
+      return set(i, border ? '=' : motif ? '+' : ' ', C(YEL, L * (border ? 1.3 : 0.7)));
+    }
     case 'carpet': { const h = hash(Math.floor(wx * 3), Math.floor(wy * 3), 77); return set(i, h > 0.85 ? '*' : h > 0.7 ? '+' : h > 0.55 ? '.' : ' ', C(NEON[h * 40 & 3], L * 2.5)); }
     case 'train': return set(i, fract(wx * 4) < 0.2 ? '|' : ' ', C(GRAY, L));
     case 'rubber': return set(i, (r * 7 + x * 3) % 11 ? ' ' : '.', C(GRAY, L));
@@ -9065,7 +9212,7 @@ function museumTorchFx() {
 }
 // a guard's spotted you once you've stood in a beam a moment (crouched, the beam has to be nearer to catch you)
 function stepMuseum(dt) {
-  if (mode !== 'room' || room.kind !== 'museum' || !room.burgled || game) return;
+  if (mode !== 'room' || (room.kind !== 'museum' && room.kind !== 'grandhotelheist') || !room.burgled || game) return;
   const len = body.crouch > 0.5 ? TORCH_LEN * 0.6 : TORCH_LEN;
   const seen = room.props.some(g => g.guard && inBeam(g, px, py, len) > 0);
   room.spot = clamp((room.spot || 0) + (seen ? dt * 1.6 : -dt), 0, 1);
@@ -9076,6 +9223,7 @@ function stepMuseum(dt) {
 }
 function museumAlarm(line) {
   room.alarm = true;
+  if (room.kind === 'grandhotelheist') hotelAlarm = null;
   addWanted('heist', room.ret[0], room.ret[1], true);
   if (actx) { const at = actx.currentTime; for (let k = 0; k < 30; k++) tone(at + k * 0.11, k & 1 ? 1800 : 2400, 0.09, 0.05, 'square'); }
   say(line, 5);
@@ -9159,6 +9307,186 @@ ROOM_DEFS.museum = { grid: museumGrid(), light: 1, height: 4, floor: 'museum', c
     return p;
   } };
 ROOM_FOR.MUSEUM = 'museum';
+// ===== the Belle Epoque quarter's landmark hotel: a premium suite by night, a very bad idea after midnight.
+const HOTEL_SUITE_RATE = 250;
+const HOTEL_HEIST_DOOR = [10.7, 1.45];
+const HOTEL_PAINTING = [18.8, 2.6];
+const HOTEL_FRAME = [18.8, 1.3];
+let grandHotelStolen = false;
+let hotelAlarm = null;
+const HOTEL_TROLLEY = [12, 12.8];
+
+function hotelGalleryGrid() {
+  const walls = {};
+  for (const x of [9, 15]) for (let y = 3; y <= 12; y++) if (y < 7 || y > 9) walls[x + ',' + y] = '#';
+  return boxRoom(24, 17, walls);
+}
+
+ROOM_FOR['GRAND HOTEL'] = 'grandhotel';
+ROOM_DEFS.grandhotel = { grid: boxRoom(14, 9), light: 0.95, floor: 'marble', ceil: 'pendant', keeper: [6.5, 2.15],
+  wall: (i, u, uStep, z, d, mx, my, L) => {
+    if (z < 0.45) { BG[i] = C(BRICK, 2); return set(i, z < 0.12 ? '=' : '#', C(YEL, L * 0.65)), true; }
+    if (z > 2.5) return set(i, z > 2.8 ? 'o' : '=', C(YEL, L * 0.7)), true;
+    if (mx === 0 && z > 0.75 && z < 2.35 && fract(u * 0.45) < 0.32) return set(i, z > 2.15 ? '^' : '|', C(WHITE, L)), true;
+    if (my === 0 && z > 1 && z < 2.4 && fract(u * 0.36) > 0.27 && fract(u * 0.36) < 0.73) { BG[i] = C(BRICK, 1.4); return set(i, z > 1.2 ? ':' : '=', C(YEL, L * 0.7)), true; }
+    BG[i] = C(WHITE, 2);
+    return set(i, fract(u / 1.4) < 0.03 ? ':' : ' ', C(YEL, L * 0.45)), true;
+  },
+  props: r => [
+    ...counterBox(6.5, 2.75, 1.35, 1.05), standing(6.5, 2.15, YEL),
+    BX(3, 1.2, 0.42, 0.42, 0, 0.48, solid(BRICK, { top: '=' })),
+    SP(11.9, 1.3, 0.65, 1.5, ART.plant, plantCol),
+    SP(3, 1.15, 0.52, 0.72, pad(['+-----+', '|  o  |', '|     |', '+-----+']), (c, row) => C(c === 'o' ? YEL : WHITE, 12)),
+    SP(10.7, 1.4, 0.7, 1.65, pad(['  .------.', '  |STAFF |', '  | ONLY |', '  |______|']), (c, row) => C(c === '|' ? YEL : BRICK, 12)),
+    BX(3.4, 4.8, 1.1, 0.38, 0, 0.55, solid(BRICK, { top: '=' })),
+    BX(10.2, 4.8, 1.1, 0.38, 0, 0.55, solid(BRICK, { top: '=' })),
+    ...(tod >= 18 || tod < 2 ? [standing(9, 3.6, MAG), standing(4.5, 3.6, BLUE)] : []),
+  ] };
+
+ROOM_DEFS.hotelSuite = { grid: boxRoom(9, 7), light: 1, floor: 'royal', ceil: 'pendant', wall: hotelSuiteWall,
+  props: r => [
+    BX(2.25, 2.55, 1.15, 0.9, 0, 0.58, (i, t, L) => { const f = HIT.face; BG[i] = C(f === 5 ? WHITE : MAG, 2 + L * 0.25 * shadeFace(f)); return set(i, f === 5 ? '~' : '-', C(f === 5 ? WHITE : MAG, L * 0.6)), true; }, 0, 1),
+    ...[1.8, 2.7].map(x => BX(x, 1.8, 0.32, 0.23, 0.58, 0.68, solid(WHITE, { top: '~' }))),
+    BX(2.25, 1.32, 0.95, 0.07, 0, 1.35, solid(YEL, { panel: 0.42, trim: 1.27 })),
+    BX(4.05, 1.55, 0.42, 0.35, 0, 0.72, solid(BRICK, { top: '=' })),
+    BX(4.05, 1.55, 0.1, 0.1, 0.72, 1.02, (i, t, L) => { BG[i] = C(WARM, 7); return set(i, '#', C(YEL, 15)), true; }),
+    BX(6.4, 3.7, 0.8, 0.32, 0, 0.55, solid(BLUE, { top: '=' })),
+    BX(6.4, 3.4, 0.8, 0.08, 0.4, 1.1, solid(BLUE, { trim: 1.03 })),
+    ...[-1, 1].map(s => BX(6.4 + s * 0.75, 3.7, 0.08, 0.32, 0.4, 0.72, solid(YEL))),
+    ...tableBox(6.4, 4.7, 0.5, 0.35),
+    SP(6.8, 1.2, 0.6, 1.1, ART.plant, plantCol),
+  ] };
+
+ROOM_DEFS.grandhotelheist = { grid: hotelGalleryGrid(), light: 0.22, height: 3.8, floor: 'concrete', ceil: 'dark', fx: museumTorchFx,
+  wall: (i, u, uStep, z, d, mx, my, L) => {
+    if (z > 3.55) return set(i, '=', C(YEL, L)), true;
+    if (z < 0.65) { BG[i] = C(BRICK, 0.6); return set(i, z < 0.12 ? '=' : '#', C(GRAY, L * 0.5)), true; }
+    const bay = fract(u / 3.2), fz = fract(z / 2.6);
+    if (bay > 0.18 && bay < 0.82 && fz > 0.18 && fz < 0.82) { BG[i] = C(GRAY, 1); return set(i, ':', C(GRAY, L * 0.4)), true; }
+    return false;
+  },
+  props: r => {
+    const p = [
+      hotelPortrait(),
+      BX(12, 12.8, 0.7, 0.4, 0, 0.82, solid(YEL, { top: '=', panel: 0.5 })),
+      SP(12, 12.8, 0.55, 0.3, pad(['  o  ', ' /_\\ ', '(____)']), (c, row, L) => C(WHITE, Math.max(L, 6)), 0.82),
+      SP(7.3, 1.45, 1.4, 1.05, pad(['.------.', '| ~~   |', '|  <>  |', '`------`']), (c, row, L) => C(c === '.' || c === '-' || c === '|' ? YEL : CYAN, Math.max(L, 4)), 1.2),
+      SP(13.5, 1.45, 1.4, 1.05, pad(['.------.', '| .--. |', '| `--` |', '`------`']), (c, row, L) => C(c === '.' || c === '-' || c === '|' ? YEL : MAG, Math.max(L, 4)), 1.2),
+    ];
+    if (r.burgled) HOTEL_GUARD_PATHS.forEach((path, k) => p.push({ ...SP(path[0][0], path[0][1], 0.58, 1.8, ART.guard, (c, row, L) => C(row < 2 ? BLUE : row < 4 ? SKIN : c === '*' ? YEL : BLUE, Math.max(L, 5))), guard: true, dir: 0,
+      tick: s => {
+        const distracted = r.distractedUntil > T;
+        if (distracted) s.patrolDelay = (s.patrolDelay || 0) + Math.max(0, T - (s.lastTick ?? T));
+        s.lastTick = T;
+        [s.x, s.y, s.dir] = guardAt(path, T + k * 9 - (s.patrolDelay || 0));
+        if (distracted) s.dir = Math.atan2(HOTEL_TROLLEY[1] - s.y, HOTEL_TROLLEY[0] - s.x);
+      } }));
+    return p;
+  } };
+const HOTEL_GUARD_PATHS = [[[18.5, 3], [20, 8], [18.5, 12], [16.5, 8]], [[4, 4], [7.5, 4], [7.5, 11], [4, 11]]];
+
+function hotelHeistDoorNear() { return mode === 'room' && room.kind === 'grandhotel' && Math.hypot(px - HOTEL_HEIST_DOOR[0], py - HOTEL_HEIST_DOOR[1]) < 1.05; }
+function hotelHeistPaintingNear() { return mode === 'room' && room.kind === 'grandhotelheist' && Math.hypot(px - HOTEL_PAINTING[0], py - HOTEL_PAINTING[1]) < 1.35; }
+function grandHotelPrompt() {
+  if (room.kind === 'grandhotelheist') {
+    if (nearExit()) return 'E: back to the hotel lobby';
+    if (hotelTrolleyNear()) return room.trolleyUsed ? 'The complimentary cheese has been comprehensively investigated.' : 'E: ring the room-service bell (distract the guards)';
+    if (room.alarm) return 'ALARM! Get out of the hotel!';
+    if (room.silent) return `Silent alarm: ${Math.max(0, Math.ceil(room.silent - T))}s`;
+    if (hotelHeistPaintingNear()) return grandHotelStolen ? 'The empty frame. Someone left the little museum card in it.' : 'E: steal THE DUKE OF BRIE';
+    return 'Stay out of the guards\' torch beams (C: crouch)';
+  }
+  if (room.kind !== 'grandhotel') return '';
+  if (hotelHeistDoorNear()) {
+    if (grandHotelStolen) return 'The staff door is locked again.';
+    return tod >= 23 || tod < 5 ? 'E: slip into the after-hours gallery' : 'The staff door is locked until 11pm.';
+  }
+  if (nearKeeper()) return checkInOpen(tod) ? `E: book the Royal Suite (${fmt$(HOTEL_SUITE_RATE)} a night)` : '"Check-in is from 6pm."';
+  return '';
+}
+function bookGrandHotelSuite() {
+  if (!checkInOpen(tod)) return say('"The Royal Suite checks in from 6pm."', 3);
+  if (!pay(HOTEL_SUITE_RATE)) return say(`"The Royal Suite is ${fmt$(HOTEL_SUITE_RATE)} a night." You can't cover it.`, 4);
+  const lobby = { word: room.word, neon: room.neon, ret: room.ret, cell: room.cell, line: room.line, grandHotel: true, suite: true };
+  say('"The Royal Suite. Please enjoy the view. And please leave the chandeliers."', 4);
+  sleep = { t: 0, lobby };
+}
+function beginGrandHotelHeist() {
+  if (grandHotelStolen) return say('The staff door has a fresh lock. The hotel has noticed its missing masterpiece.', 4);
+  if (!(tod >= 23 || tod < 5)) return say('The night manager gives the staff door a pointed look. "That gallery is closed until 11."', 4);
+  const lobby = { word: room.word, neon: room.neon, ret: room.ret, cell: room.cell, line: room.line, grandHotel: true };
+  enterRoom('grandhotelheist', { word: 'PRIVATE GALLERY', ret: room.ret, lobby, burgled: true, spot: 0 }, [12, 14.6, -Math.PI / 2]);
+  if (hotelAlarm) room.silent = hotelAlarm.deadline;
+  say('You slip into the private gallery. Somewhere, a guard jingles a comically large ring of keys.', 5);
+}
+function stealHotelPainting() {
+  if (grandHotelStolen) return say('The painting is gone. The empty frame is still under guard.'), true;
+  if (inv.length >= INV_SIZE) return say('Your bag is full. That frame is not going to fit in a quick slot.'), true;
+  startCrime('lockpick', ok => {
+    if (ok === 'abort') return;
+    if (!ok) { armHotelAlarm(); return say('The frame squeals as it comes loose. A silent alarm starts counting down.', 4); }
+    grandHotelStolen = true; carryItem({ id: 'hotelmasterpiece', uses: 0 });
+    room.props = room.props.filter(p => p.hotelPainting !== true);
+    room.props.push(hotelPortrait());
+    armHotelAlarm(); saveGame();
+    say('The painting comes free. A tiny red light starts blinking. You have 40 seconds to leave before the hotel calls the police.', 6);
+  });
+  return true;
+}
+function grandHotelUse() {
+  if (room.kind === 'grandhotel' && hotelHeistDoorNear()) return beginGrandHotelHeist(), true;
+  if (room.kind === 'grandhotel' && nearKeeper()) return bookGrandHotelSuite(), true;
+  if (room.kind === 'grandhotelheist' && hotelTrolleyNear()) {
+    if (room.trolleyUsed) return say('Not a crumb left.'), true;
+    room.trolleyUsed = true; room.distractedUntil = T + 12;
+    say('DING! "Complimentary cheese?" Both guards stop their rounds and turn towards room service. "Who ordered the cheese?"', 5);
+    return true;
+  }
+  if (room.kind === 'grandhotelheist' && hotelHeistPaintingNear()) return stealHotelPainting();
+  return false;
+}
+
+function hotelTrolleyNear() { return Math.hypot(px - HOTEL_TROLLEY[0], py - HOTEL_TROLLEY[1]) < 1.35; }
+function armHotelAlarm() {
+  if (room.alarm || hotelAlarm) return;
+  hotelAlarm = { deadline: T + 40, ret: [...room.ret] };
+  room.silent = hotelAlarm.deadline;
+}
+function stepGrandHotel() {
+  if (!hotelAlarm || T < hotelAlarm.deadline) return;
+  const ret = hotelAlarm.ret;
+  hotelAlarm = null;
+  if (mode === 'room' && (room.kind === 'grandhotelheist' || room.kind === 'grandhotel')) room.alarm = true;
+  addWanted('heist', ret[0], ret[1], true);
+  say('The Grand Hotel alarm goes off. The police are heading for the gallery.', 5);
+}
+
+function hotelSuiteWall(i, u, uStep, z, d, mx, my, L) {
+  if (hotelRoomWall(i, u, uStep, z, d, mx, my, L)) return true;
+  BG[i] = C(z < 0.8 ? BRICK : WHITE, z < 0.8 ? 1.5 : 2.2);
+  if (z < 0.12 || Math.abs(z - 0.8) < 0.04 || z > 2.7) return set(i, '=', C(YEL, L)), true;
+  const panel = fract(u / 1.3);
+  let glyph = ' ';
+  if (z < 0.8 && panel < 0.04) glyph = '|';
+  else if (z >= 0.8 && panel < 0.03) glyph = ':';
+  set(i, glyph, C(YEL, L * 0.5));
+  return true;
+}
+
+function hotelPortrait() {
+  const stolen = grandHotelStolen;
+  const art = stolen ? ['.========.', '|        |', '|  GONE  |', '|        |', '\'========\''] :
+    ['.========.', '|~~.oo.~~|', '|~~(oo)~~|', '|^^/##\\^^|', '\'========\''];
+  const color = (c, row, L) => {
+    let hue = CYAN;
+    if (stolen || '.=|\''.includes(c)) hue = YEL;
+    else if (c === 'o') hue = WARM;
+    else if (c === '#') hue = BRICK;
+    else if (c === '^') hue = GREEN;
+    return C(hue, Math.max(L, 5));
+  };
+  return { ...SP(HOTEL_FRAME[0], HOTEL_FRAME[1], 1.75, 1.25, pad(art), color, 1.2), hotelPainting: !stolen };
+}
 // ===== the Velvet Rope: a strip club in midtown (world.js puts it up). Outside: a black front, XXX in pink neon
 // blinking, GIRLS GIRLS GIRLS and LIVE DANCERS, a neon martini, a velvet rope and a bouncer who won't let you in with
 // the police on your tail. $20 at the door, 8pm to 4am. Inside: purple and pink, a stage with three poles and a
@@ -9807,6 +10135,7 @@ function promptText() {
     if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', shelf: 'E: decorate shelf', fridge: 'E: open fridge', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
+    if (room.kind === 'grandhotel') { const m = grandHotelPrompt(); if (m) return m; }
     if (room.kind === 'museum' && !room.burgled) { const m = museumPrompt(); if (m) return m; }
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
@@ -9945,7 +10274,7 @@ function minimap() {
   g.font = FS + 'px monospace';
 }
 
-const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards',
+const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards', belle: 'Belle Époque Quarter',
                          brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay', shotengai: 'the Shotengai' };
 // a line of HUD text broken to fit maxW px: at the wide gaps between its parts first, then between words
 function wrapText(s, maxW) {
@@ -10140,6 +10469,7 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
+    if (grandHotelUse()) return;
     if (room.kind === 'home' || room.kind === 'loft') { // your place: sleep whenever you like, your closet, the telly
       const hs = homeSpot();
       const home = homeRecord(room);
@@ -10337,13 +10667,15 @@ function stepSleep(dt) {
     if (tod > 7) dayNum++; // slept through midnight
     tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
-    if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby }, [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
+    if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby, suite: !!sleep.lobby.suite }, sleep.lobby.suite ? [4.5, 5.3, -Math.PI / 2] : [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
   }
   if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say('7:00. You slept well, and the sky has cleared.', 4); }
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {
   body.seat = null;
+  if (room.kind === 'grandhotelheist') return enterRoom('grandhotel', room.lobby, [10.7, 2.65, Math.PI / 2]);
+  if (room.kind === 'hotelroom' && room.lobby.grandHotel) return enterRoom('grandhotel', room.lobby, [7, 6.5, -Math.PI / 2]);
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
   else { [px, py, a] = room.ret; a += Math.PI; }
@@ -11246,6 +11578,7 @@ function devPlaces() {
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
     ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],
     ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.6, Math.PI / 2); }],
+    ['Grand Hotel', () => devAt(GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2)],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
@@ -11385,6 +11718,7 @@ function bigMapLabels() {
   const out = [];
   for (const sd of DIST_SEEDS) { const [sx] = sd, d = seedName(sd), sy = d === 'industrial' ? (sd[1] > (SHORE_N + SHORE_S) / 2 ? SHORE_S - 0.4 : SHORE_N + 1.4) : sd[1]; out.push([sx * 8, sy * 8, (DISTRICT_TITLE[d] || d).replace(/^the /, 'The '), 'rgba(255,255,255,0.55)', 'area']); }
   const place = (x, y, t) => out.push([x, y, t, '#fd8', 'place']);
+  place(GRAND_HOTEL.bx * 8 + 5, GRAND_HOTEL.by * 8 + 5, 'Grand Hotel');
   place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
   place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'Big screens', radio: 'Radio tower' };
@@ -11575,6 +11909,7 @@ const DROPPED_ART = {
   replicastar: () => [['  ____', ' /\\  /\\', '/__\\/__\\', '\\  \\/  /', ' \\    /', '  \\  /', '   \\/'], (c, r) => C(CYAN, 9)],
   orrery: () => { const k = Math.floor(T * 0.5) & 3; return [['     .-o-.', `  o ( ${'-\\|/'[k]}*${'-/|\\'[k]} ) o`, "     `-o-'", '   ___|___', '  [=======]'], (c, r) => c === '*' ? C(YEL, 15) : c === 'o' ? C([CYAN, RED, GREEN, WHITE][r & 3], 14) : r > 2 ? C(BRICK, 12) : C(YEL, 12)]; },
   diamond: () => [['  ____', ' /\\  /\\', '/__\\/__\\', '\\  \\/  /', ' \\    /', '  \\  /', '   \\/'], (c, r) => C(fract(T * 2 + r * 0.2) < 0.15 ? WHITE : CYAN, 13 + (r & 1) * 2)],
+  hotelmasterpiece: () => [[' .------.', ' | /\  /|', ' |(o )  |', ' | /\\~ |', ' |______|'], (c, r) => c === '.' || c === '-' || c === '|' || c === '_' ? C(YEL, 13) : r === 2 ? C(BRICK, 14) : C(GREEN, 12)],
   fortunecookie: (it, f) => [['   .---.', "  /  .-'\\", ' (  (  ~~~', "  `--`"], (c, r) => c === '~' ? C(WHITE, 15) : C(YEL, 13)],
   tigerbalm: it => [['  ._____.', ' |  /\\  |', ' | (oo) |', " |TIGER |", " `-----'"], (c, r) => r === 0 ? C(GRAY, 12) : c === 'o' || c === '/' || c === '\\' || c === '(' || c === ')' ? C(ORANGE, 15) : /[A-Z]/.test(c) ? C(YEL, 14) : C(RED, 12)],
   lantern: () => [['    |', '  .-=-.', ' ( ||| )', ' ( ||| )', "  `-=-'", '    ~'], (c, r) => r === 0 ? C(GRAY, 10) : c === '=' || c === '~' ? C(YEL, 15) : c === '|' && r > 1 && r < 4 ? C(YEL, 14) : C(RED, 15)],
@@ -12242,6 +12577,15 @@ const dCarKeys = () => sculpt(22, 16, (x, y) => {
 });
 
 Object.assign(DENSE, {
+  hotelmasterpiece: () => sculpt(22, 16, (x, y) => {
+    if (Math.abs(x) > 7.5 || Math.abs(y) > 5.2) return null;
+    if (Math.abs(x) > 6.6 || Math.abs(y) > 4.4) return dLit(0.6, YEL, 10, 15);
+    const halo = Math.hypot(x - 0.7, y + 1.2);
+    if (halo > 2.8 && halo < 3.2) return ['o', C(YEL, 14)];
+    if (Math.abs(x + 0.7) < 0.35 && Math.abs(y + 0.5) < 0.4) return ['o', C(WHITE, 15)];
+    if (Math.abs(x) < 2.2 && y > -2 && y < 3.2) return dLit(0.55, y < 0 ? WARM : BRICK, 8, 14);
+    return dLit(0.4 + 0.35 * noise(x * 0.5, y * 0.5, 230), y < -2.6 ? GREEN : CYAN, 7, 12);
+  }),
   // ---- the night market's, and the two that bend the world
   pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold Q
     const fast = hurrying(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
@@ -13918,6 +14262,7 @@ function grabStock() {
 // G and L
 function crimeKey(code) {
   if (code === 'KeyG') {
+    if (mode === 'room' && room.kind === 'grandhotelheist') return hotelHeistPaintingNear() ? stealHotelPainting() : say('The framed masterpiece is on the far wall.');
     if (mode === 'room' && room.burgled) return grabStock();
     if (canShoplift()) return shoplift();
     const p = pickTarget();
@@ -13927,6 +14272,7 @@ function crimeKey(code) {
 }
 // what G / L would do here, for the prompt line
 function crimePrompt() {
+  if (mode === 'room' && room.kind === 'grandhotelheist') return grandHotelPrompt();
   if (mode === 'room' && room.burgled && room.kind === 'museum') return museumPrompt() + (nearExit() ? '   E: leave' : '');
   if (mode === 'room' && room.burgled) return (room.alarm ? 'ALARM! Get out!   ' : '') + 'G: take something' + (nearVault() ? '   E: crack the vault' : nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter, the vault or the door)
   const vm = nearMachine(), use = vm ? `E: ${VENDING[vm.kind].title.toLowerCase()}   ` : ''; // (a machine right here still works: say so)
@@ -14172,7 +14518,7 @@ function saveGame() {
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, season: seasonShift, stolen: museumStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder } };
+    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, season: seasonShift, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder } };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
 function loadGame() {
@@ -14199,6 +14545,7 @@ function loadGame() {
   ensureCarKeys();
   loadBoats(d.boats);
   if (Number.isFinite(d.season)) seasonShift = mod(d.season, 4);
+  grandHotelStolen = !!d.hotelStolen;
   if (d.stolen && typeof d.stolen === 'object') museumStolen = { diamond: !!d.stolen.diamond, orrery: !!d.stolen.orrery };
   if (d.needs) for (const k of ['food', 'drink', 'health', 'bladder']) if (isFinite(d.needs[k])) needs[k] = clamp(d.needs[k], k === 'health' ? 1 : 0, 100);
   const at = d.at;
@@ -14388,6 +14735,7 @@ function loop(t) {
   stepJadeIncense(dt);
   stepExchange();
   stepMuseum(dt);
+  stepGrandHotel();
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();

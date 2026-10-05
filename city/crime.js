@@ -69,7 +69,7 @@ function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along 
   if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = mod(ny, N);
   c.ph += dt * 7;
 }
-const roomOpen = (x, y) => x >= 0 && y >= 0 && x < room.W && y < room.H && ROOMW.cell(x, y) === 0 && !(room.def.block && room.def.block(x, y)) &&
+const roomOpen = (x, y) => x >= 0 && y >= 0 && x < room.W && y < room.H && ROOMW.cell(Math.floor(x), Math.floor(y)) === 0 && !(room.def.block && room.def.block(x, y)) &&
   !room.props.some(p => p.box && !p.walk && p.box.z0 < 1.2 && inBox(p.box, x, y, 0.2) || p.bench && Math.hypot(x - p.x, y - p.y) < 0.5);
 function nearestRoomCell(x, y) {
   let best = null, bd = Infinity;

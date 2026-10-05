@@ -396,12 +396,18 @@ const machineAt = (x, y, pad) => machinesB[bi(Math.floor(x / 8), Math.floor(y / 
 
 // rooftop clutter: one item on some lots, placed inside the lot so it sits on the roof
 const roofs = [];
+const BELLE_ROOF = [pad(['  /^^\\', ' /_||_\\', '|_|  |_|']), pad(['   ^', '  /|\\', ' /_|_\\', '|__|__|'])];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   if (blockKind(bx, by)) continue;
   const dist = districtOf(bx, by);
   for (let ly = 0; ly < 2; ly++) for (let lx = 0; lx < 2; lx++) {
     const lot = [bx * 2 + lx, by * 2 + ly], r = hash(...lot, 13);
     const x = bx * 8 + 2 + lx * 3 + 0.6 + hash(...lot, 14) * 1.8, y = by * 8 + 2 + ly * 3 + 0.6 + hash(...lot, 15) * 1.8, h = map[idx(x, y)];
+    if (bx === GRAND_HOTEL.bx && by === GRAND_HOTEL.by) continue;
+    if (dist === 'belle' && r < 0.34) {
+      const art = BELLE_ROOF[r < 0.18 ? 0 : 1], kind = r < 0.18 ? 'belle-dormer' : 'belle-turret';
+      roofs.push({ x, y, z: h, w: art[0].length * 0.08, h: kind === 'belle-dormer' ? 0.6 : 0.85, art, kind }); continue;
+    }
     if (dist === 'industrial' || dist === 'brownstones' && r > 0.3) continue;
     if (h >= 5 && r < 0.5) roofs.push({ x, y, z: h, w: 0.1, h: 1, art: ART.antenna, kind: 'antenna' });
     else if (r < 0.35) roofs.push({ x, y, z: h, w: 0.3, h: 0.4, art: ART.tank, kind: 'tank' });

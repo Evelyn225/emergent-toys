@@ -195,6 +195,7 @@ function grabStock() {
 // G and L
 function crimeKey(code) {
   if (code === 'KeyG') {
+    if (mode === 'room' && room.kind === 'grandhotelheist') return hotelHeistPaintingNear() ? stealHotelPainting() : say('The framed masterpiece is on the far wall.');
     if (mode === 'room' && room.burgled) return grabStock();
     if (canShoplift()) return shoplift();
     const p = pickTarget();
@@ -204,6 +205,7 @@ function crimeKey(code) {
 }
 // what G / L would do here, for the prompt line
 function crimePrompt() {
+  if (mode === 'room' && room.kind === 'grandhotelheist') return grandHotelPrompt();
   if (mode === 'room' && room.burgled && room.kind === 'museum') return museumPrompt() + (nearExit() ? '   E: leave' : '');
   if (mode === 'room' && room.burgled) return (room.alarm ? 'ALARM! Get out!   ' : '') + 'G: take something' + (nearVault() ? '   E: crack the vault' : nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter, the vault or the door)
   const vm = nearMachine(), use = vm ? `E: ${VENDING[vm.kind].title.toLowerCase()}   ` : ''; // (a machine right here still works: say so)
