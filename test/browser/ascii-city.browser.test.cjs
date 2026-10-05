@@ -205,6 +205,16 @@ test('vending machines sell from arm\'s reach, at an angle, even with a car at t
   await page.keyboard.press('KeyE');
   await page.keyboard.press('Digit1');
   assert.strictEqual(await page.evaluate(() => inv.length), 1);
+  // at night, a machine by a closed shop's door still says it's there (on a phone the E button comes from that line)
+  const night = await page.evaluate(() => {
+    closeShop(); tod = 23;
+    for (const m of machines) {
+      const fx = -m.s * m.fs, fy = m.c * m.fs; devAt(m.x + fx * 0.15, m.y + fy * 0.15, Math.atan2(-fy, -fx));
+      if (lockTarget()) return [promptText(), touchActions().some(b => b[1] === 'KeyE'), touchActions().some(b => b[1] === 'KeyL')];
+    }
+  });
+  assert.match(night[0], /^E: \w+ machine {3}.+: closed {3}L: pick the lock$/);
+  assert.deepStrictEqual(night.slice(1), [true, true]);
 }));
 
 test('busted: no fine money means a cell; a minute later the guard lets you out by the police station', () => withPage(async page => {
