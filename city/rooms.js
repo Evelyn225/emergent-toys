@@ -834,7 +834,9 @@ function roomSprites() {
       const x = shelf[0] + (k - ((home.decor.length - 1) / 2)) * 0.3;
       drawDropped({ ...it, displayZ: 1.07 }, x - px, shelf[1] - py, 0.065);
     }
-    if (home.pet === 'petcat') drawArt(pet[0] - px, pet[1] - py, 0, 0.34, 0.54, homeCatArt(), (c, row) => C(row === 1 && c === 'o' ? GREEN : row === 0 ? GRAY : BRICK, 13));
+    const pets = home.pets || (home.pet ? [home.pet] : []);
+    if (pets.includes('petcat')) drawArt(pet[0] - 0.35 - px, pet[1] - py, 0, 0.34, 0.54, homeCatArt(), (c, row) => C(row === 1 && c === 'o' ? GREEN : row === 0 ? GRAY : BRICK, 13));
+    if (pets.includes('petdog')) drawArt(pet[0] + 0.35 - px, pet[1] - py, 0, 0.4, 0.42, ART.dog, (c, row, L) => C(BRICK, L * 1.3));
   }
   if (room.kind === 'station') {
     const tx = trainX(room);

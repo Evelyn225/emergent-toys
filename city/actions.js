@@ -135,10 +135,12 @@ function interact() {
       }
       if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
       if (hs === 'pet') {
-        if (heldItem() && heldItem().id === 'petcat' && !home.pet) {
-          takeSlot(held); home.pet = 'petcat'; saveGame(); return say('The cat steps out of its carrier and settles in at home.', 3);
+        home.pets ||= home.pet ? [home.pet] : [];
+        if (heldItem() && ['petcat', 'petdog'].includes(heldItem().id) && !home.pets.includes(heldItem().id)) {
+          const pet = heldItem().id; takeSlot(held); home.pets.push(pet); saveGame();
+          return say(pet === 'petcat' ? 'The cat steps out of its carrier and settles in at home.' : 'The dog bounds out of its carrier and settles in at home.', 3);
         }
-        return say(home.pet ? 'You give your cat a little pat. It is happy to see you.' : 'Adopt a cat at the pet shop and bring it home.', 2);
+        return say(home.pets.length ? 'Your pets are happy to see you.' : 'Adopt a pet at the pet shop and bring it home.', 2);
       }
       if (hs === 'tv') { room.tv = !room.tv; return say(room.tv ? 'The telly flickers on.' : 'You switch the telly off.', 2); }
     }

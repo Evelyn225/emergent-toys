@@ -2090,6 +2090,7 @@ const ITEMS = {
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
   duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
   petcat: { name: 'pet cat carrier', price: 80, kind: 'pet' },
+  petdog: { name: 'pet dog carrier', price: 80, kind: 'pet' },
   spraypaint: { name: 'spray paint', price: 8, kind: 'toy', uses: 6 }, // (graffiti.js)
   // the Chinatown night market (nightmarket.js): street food, charms, curios
   // (each does something: heal = health back, a whole one; fill = hunger filled, a whole one, whatever the price; sugar = a rush like caffeine)
@@ -2141,7 +2142,7 @@ const STOCK_WORD = {
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft'],
-  'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], 'PET SHOP': ['petcat'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
+  'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], 'PET SHOP': ['petcat', 'petdog'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
@@ -2317,6 +2318,7 @@ function useHeld(near) {
     case 'jadedragon': return [pick(['You rub the dragon\'s head for luck.', 'The little jade dragon stares back, very sure of itself.', 'You give the dragon a pat. Good fortune, apparently, follows.']), null];
     case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head. You feel a tiny bit luckier.', 'The lucky cat beckons good fortune your way. A little bit of it, anyway.']), null];
     case 'petcat': return ['The cat mews from its carrier. It will be glad to have a home.', null];
+    case 'petdog': return ['The dog gives a little whine from its carrier. It will be glad to have a home.', null];
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), 'squeak'];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
@@ -7419,7 +7421,9 @@ function roomSprites() {
       const x = shelf[0] + (k - ((home.decor.length - 1) / 2)) * 0.3;
       drawDropped({ ...it, displayZ: 1.07 }, x - px, shelf[1] - py, 0.065);
     }
-    if (home.pet === 'petcat') drawArt(pet[0] - px, pet[1] - py, 0, 0.34, 0.54, homeCatArt(), (c, row) => C(row === 1 && c === 'o' ? GREEN : row === 0 ? GRAY : BRICK, 13));
+    const pets = home.pets || (home.pet ? [home.pet] : []);
+    if (pets.includes('petcat')) drawArt(pet[0] - 0.35 - px, pet[1] - py, 0, 0.34, 0.54, homeCatArt(), (c, row) => C(row === 1 && c === 'o' ? GREEN : row === 0 ? GRAY : BRICK, 13));
+    if (pets.includes('petdog')) drawArt(pet[0] + 0.35 - px, pet[1] - py, 0, 0.4, 0.42, ART.dog, (c, row, L) => C(BRICK, L * 1.3));
   }
   if (room.kind === 'station') {
     const tx = trainX(room);
@@ -9671,7 +9675,7 @@ function promptText() {
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
-    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', shelf: 'E: decorate shelf', fridge: 'E: open fridge', pet: homeRecord(room)?.pet ? 'E: pet your cat' : 'E: bring cat home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', shelf: 'E: decorate shelf', fridge: 'E: open fridge', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
     if (room.kind === 'museum' && !room.burgled) { const m = museumPrompt(); if (m) return m; }
@@ -10022,10 +10026,12 @@ function interact() {
       }
       if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
       if (hs === 'pet') {
-        if (heldItem() && heldItem().id === 'petcat' && !home.pet) {
-          takeSlot(held); home.pet = 'petcat'; saveGame(); return say('The cat steps out of its carrier and settles in at home.', 3);
+        home.pets ||= home.pet ? [home.pet] : [];
+        if (heldItem() && ['petcat', 'petdog'].includes(heldItem().id) && !home.pets.includes(heldItem().id)) {
+          const pet = heldItem().id; takeSlot(held); home.pets.push(pet); saveGame();
+          return say(pet === 'petcat' ? 'The cat steps out of its carrier and settles in at home.' : 'The dog bounds out of its carrier and settles in at home.', 3);
         }
-        return say(home.pet ? 'You give your cat a little pat. It is happy to see you.' : 'Adopt a cat at the pet shop and bring it home.', 2);
+        return say(home.pets.length ? 'Your pets are happy to see you.' : 'Adopt a pet at the pet shop and bring it home.', 2);
       }
       if (hs === 'tv') { room.tv = !room.tv; return say(room.tv ? 'The telly flickers on.' : 'You switch the telly off.', 2); }
     }
@@ -11542,6 +11548,7 @@ const DROPPED_ART = {
   spraypaint: (it, f) => [['   _', '  [o]', ' .---.', ' |   |', ' |ZAP|', ' |   |', " '---'"], (c, r) => r < 2 ? C(GRAY, 13) : c === 'Z' || c === 'A' || c === 'P' ? C(WHITE, 15) : C([MAG, CYAN, GREEN, ORANGE][it.uses & 3], 13)],
   plushcat: () => [['  /\_/\ ', ' ( o.o )/', '  > ^ <', ' (_____)'], (c, r) => c === 'o' ? C(GREEN, 15) : r === 1 && c === '/' && r ? C(RED, 14) : C(WHITE, 14)],
   petcat: () => [['   .----.', '  / .--. \\', ' | (o.o)|', ' |  /\\  |', " '------'"], (c, r) => c === 'o' ? C(GREEN, 15) : c === '.' || c === '/' || c === '\\' ? C(GRAY, 13) : C(BRICK, 12)],
+  petdog: () => [['   .----.', '  / .--. \\', ' | (o.o)|', ' |  /\\  |', " '------'"], (c, r) => c === 'o' ? C(BRICK, 15) : c === '.' || c === '/' || c === '\\' ? C(GRAY, 13) : C(BRICK, 12)],
   plushbear: () => [[' (\_/)', ' (o o)', '/(   )\\', ' (___)'], (c, r) => c === 'o' ? C(GRAY, 4) : C(BRICK, 13)],
   yakitori: (it, f) => [bitten(['  @@@@@@=', '  @@@@@@==', '  @@@@@@=', '        \\', '         \\'], f), (c, r) => c === '@' ? C(BRICK, 13) : C(WARM, 12)],
   takoyaki: (it, f) => [bitten(['  ~ ~ ~ ~', ' (@)(@)(@)', ' (@)(@)(@)', " '-------'"], f, 'top'), (c, r) => c === '~' ? C(WHITE, 13) : c === '@' ? C(BRICK, 13) : c === '(' || c === ')' ? C(ORANGE, 13) : C(WARM, 12)],
@@ -14030,7 +14037,8 @@ function loadGame() {
   if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }
   owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push({ ...h,
     decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY),
-    fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE), pet: h.pet === 'petcat' ? 'petcat' : null });
+    fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
+    pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
   ensureCarKeys();
   loadBoats(d.boats);
