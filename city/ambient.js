@@ -26,7 +26,7 @@ function manholeCell(wx, wy, L) {
   return [grid ? '#' : '+', C(GRAY, L * (grid ? 0.9 : 0.6)), C(GRAY, 1 + L * 0.06)];
 }
 // steam from the ones near you: puffs into the haze (smoke.js), rising fast, thinning as they go
-let steamT = 0;
+let steamT = 1.5; // wait for the opening scene to settle before emitting nearby manhole steam
 function stepSteam(dt) {
   if (mode !== 'walk' && mode !== 'drive' && mode !== 'taxi' || (steamT -= dt) > 0) return;
   steamT = 0.22;
