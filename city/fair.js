@@ -93,3 +93,26 @@ function fairFrame() {
   for (let r = 0; r < rows - 3; r++) { const i = r * cols + mid; FOGS[i] = FOGB[i] = 0; set(i, (r + Math.floor(T * 6)) % 4 ? '|' : '/', C(YEL, 14)); BG[i] = C(YEL, 3); }
   ['   ,/\\_/\\,', '  (  o    >', "  /`---.__/", " /  ~~~~ \\"].forEach((l, k) => putText(rows - 4 + k, mid - 6, l, C(WHITE, 13)));
 }
+
+// the fair's crowd wanders the boardwalk: pick a clear spot in a straight clear line, stroll over, stand a while
+// (looking at the rides), pick another. The wheel's queue stays put. Anyone you're talking to stops for it
+const FOLK_V = 0.12; // cells a second: an amble
+function folkSpot(f) {
+  for (let n = 0; n < 12; n++) {
+    const x = FAIR.x0 + 0.9 + Math.random() * (FAIR.x1 - FAIR.x0 - 1.8), y = FAIR.y0 + 0.8 + Math.random() * (WHEEL.y - FAIR.y0 - 1.6);
+    let ok = !fairBlocked(x, y, 0.15);
+    for (let t = 0.1; ok && t < 1; t += 0.1) ok = !fairBlocked(f.x + (x - f.x) * t, f.y + (y - f.y) * t, 0.08);
+    if (ok) return [x, y];
+  }
+  return [f.x, f.y];
+}
+function stepFairFolk(dt) {
+  if (Math.hypot(rel(FAIR.cx - px), rel((FAIR.y0 + FAIR.y1) / 2 - py)) > 40) return; // (nobody's watching)
+  for (const f of fairFolk) {
+    if (f.talk > 0) { f.talk -= dt; continue; }
+    if (f.queue) continue;
+    const ex = f.tx - f.x, ey = f.ty - f.y, d = Math.hypot(ex, ey);
+    if (d > 0.02) { const s = Math.min(d, FOLK_V * dt); f.x += ex / d * s; f.y += ey / d * s; f.ph += dt * 5; continue; }
+    if ((f.wait -= dt) <= 0) { [f.tx, f.ty] = folkSpot(f); f.wait = 3 + Math.random() * 9; }
+  }
+}

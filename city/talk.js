@@ -15,7 +15,11 @@ const DISTRICT_LINES = {
   brownstones: ['Quiet street, this.', 'My neighbour practises the trumpet. At 6am.'],
   midtown: ['Busy round here today.', 'Have you tried the diner on the corner?'],
 };
+const FAIR_LINES = ['Have you been up the wheel? You can see the whole city.', "The darts are rigged. I'm going again anyway.", "I've had three corn dogs. I regret nothing.",
+  'Hold my candy floss, I want a go on the duck pond.', 'The carousel horse I was on had a face like my uncle.', 'Every summer since I was six. Never won a thing.',
+  'Smell that? Sea air and fried dough.', "My kid's somewhere round here. Probably on the carousel. Again."];
 function talkLine(p) {
+  if (p.fair) return pick(FAIR_LINES);
   const h = tod, st = nearestOf(stations, p.x, p.y), lines = [...(DISTRICT_LINES[districtAt(p.x, p.y)] || [])];
   if (rain > 0.4) lines.push('This rain, huh.', 'Forgot my umbrella. Again.', 'Good weather for ducks.');
   if (fogAmt > 0.4) lines.push("Can't see a thing in this fog.", 'Fog rolled in off the water again.');
@@ -112,7 +116,7 @@ function talkTo(p) {
     if (fetchHave()) { takeSlot(inv.findIndex(it => it.id === task.want)); p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`, task.type.price + tip(3, 8)); }
     return say(`"${task.ask}"`, 4);
   }
-  if (!task && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
+  if (!task && !p.fair && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
   p.talk = Math.max(p.talk || 0, 3);
   if (fx.stink > 0 && Math.random() < 0.7) return say(pick(['They take a step back. "Oof. Stinky tofu?"', 'They wave a hand in front of their face. "Have you been at the night market?"', '"Whoa. Okay. Mints. Get some mints."']), 3);
   say(`"${talkLine(p)}"`, 4);

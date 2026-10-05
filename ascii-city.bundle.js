@@ -979,14 +979,15 @@ const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -
 for (let y = FAIR.y0 + 1; y < FAIR.y1 - 0.5; y += 1.5) for (const x of [FAIR.x0 + 0.06, FAIR.x1 - 0.06])
   extras.push({ x, y, z: 0, w: 0.05, h: 0.4, art: ['(*)', ' | ', ' | ', ' | ', ' | '], col: (c, row, L) => row ? C(GRAY, L) :
     C([YEL, RED, CYAN, MAG][(Math.floor(T * 2) + Math.round(y)) & 3], Math.max(L, night * 15)) });
+// the crowd at the fair: a few queueing for the wheel, the rest wandering the boardwalk (see stepFairFolk in fair.js).
+// You can talk to any of them (E), same as anyone on the street
 const fairFolk = [];
 for (let k = 0; k < 14; k++) { // somewhere on the boardwalk clear of everything, or in the wheel's queue
   const queue = k < 3, x = queue ? WHEEL_BOARD.x - 0.15 + k * 0.12 : FAIR.x0 + 0.9 + hash(k, 1, 57) * (FAIR.x1 - FAIR.x0 - 1.8);
   const y = queue ? WHEEL_BOARD.y - 0.12 - k * 0.1 : FAIR.y0 + 0.8 + hash(k, 2, 57) * (WHEEL.y - FAIR.y0 - 1.6);
   if (!queue && fairBlocked(x, y, 0.15)) continue;
-  const shirt = [RED, BLUE, GREEN, YEL, MAG, WHITE][k % 6], pants = [BLUE, GRAY, BRICK][k % 3];
-  fairFolk.push({ x, y });
-  extras.push({ x, y, z: 0, w: 0.06, h: 0.18, art: ART.walkB, col: (c, row, L) => C(row < 2 ? SKIN : row === 2 ? shirt : pants, L) });
+  fairFolk.push({ x, y, tx: x, ty: y, wait: hash(k, 3, 57) * 6, ph: 0, talk: 0, fair: true, queue, role: 'fair', path: [],
+                  shirt: [RED, BLUE, GREEN, YEL, MAG, WHITE][k % 6], pants: [BLUE, GRAY, BRICK][k % 3] });
 }
 // the aquarium's sign over its doors: a big neon fish, lit after dark
 extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, w: 0.3, h: 0.13, art: pad(['    _.--._', "><(( o  ))>", "    `--'"]),
@@ -1728,7 +1729,11 @@ const DISTRICT_LINES = {
   brownstones: ['Quiet street, this.', 'My neighbour practises the trumpet. At 6am.'],
   midtown: ['Busy round here today.', 'Have you tried the diner on the corner?'],
 };
+const FAIR_LINES = ['Have you been up the wheel? You can see the whole city.', "The darts are rigged. I'm going again anyway.", "I've had three corn dogs. I regret nothing.",
+  'Hold my candy floss, I want a go on the duck pond.', 'The carousel horse I was on had a face like my uncle.', 'Every summer since I was six. Never won a thing.',
+  'Smell that? Sea air and fried dough.', "My kid's somewhere round here. Probably on the carousel. Again."];
 function talkLine(p) {
+  if (p.fair) return pick(FAIR_LINES);
   const h = tod, st = nearestOf(stations, p.x, p.y), lines = [...(DISTRICT_LINES[districtAt(p.x, p.y)] || [])];
   if (rain > 0.4) lines.push('This rain, huh.', 'Forgot my umbrella. Again.', 'Good weather for ducks.');
   if (fogAmt > 0.4) lines.push("Can't see a thing in this fog.", 'Fog rolled in off the water again.');
@@ -1825,7 +1830,7 @@ function talkTo(p) {
     if (fetchHave()) { takeSlot(inv.findIndex(it => it.id === task.want)); p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`, task.type.price + tip(3, 8)); }
     return say(`"${task.ask}"`, 4);
   }
-  if (!task && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
+  if (!task && !p.fair && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
   p.talk = Math.max(p.talk || 0, 3);
   if (fx.stink > 0 && Math.random() < 0.7) return say(pick(['They take a step back. "Oof. Stinky tofu?"', 'They wave a hand in front of their face. "Have you been at the night market?"', '"Whoa. Okay. Mints. Get some mints."']), 3);
   say(`"${talkLine(p)}"`, 4);
@@ -2897,7 +2902,7 @@ GAMES.jailbreak = (rnd = Math.random) => {
   const cell = (x, y) => y * W + x, solid = new Set();
   for (let x = 0; x < W; x++) solid.add(cell(x, 0)).add(cell(x, 10));
   for (let y = 0; y <= 10; y++) solid.add(cell(0, y)).add(cell(W - 1, y));
-  const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 8], [11, 8]], [[17, 8]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
+  const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 7], [11, 7]], [[17, 7]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
   for (const grp of CRATES) for (const [x, y] of grp) solid.add(cell(x, y));
   const door = [W - 2, 1], you = [2, 9];
   // the guards: the old hand walks the whole block, the new one paces up and down the middle, slower but never far
@@ -5613,6 +5618,10 @@ function citySprites() {
   for (const b of SERVICES) if (!b.out) { // parked out front of its station, ready to go
     const [vx, vy] = R(b.x, b.y);
     if (Math.hypot(vx, vy) < vis) drawVehicle(b.parked || (b.parked = { kind: b.kind, body: EV_BODY[b.kind], ev: true, state: 'home', v: 0 }), vx, vy, -1, 0);
+  }
+  for (const m of fairFolk) { // the crowd at the fair (fair.js)
+    const [vx, vy] = R(m.x, m.y);
+    if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawArt(vx, vy, 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
   }
   for (const m of people) if (!m.hidden) {
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
@@ -9482,7 +9491,7 @@ const nearestCar = r => {
 const nearPerson = () => {
   if (mode !== 'walk') return null;
   let best = null, bd = 0.45;
-  for (const p of people) {
+  for (const p of [...people, ...fairFolk]) { // (and the crowd at the fair)
     if (p.hidden) continue;
     const ex = rel(p.x - px), ey = rel(p.y - py), d = Math.hypot(ex, ey);
     if (d < bd && (ex * Math.cos(a) + ey * Math.sin(a)) / d > 0.85) { bd = d; best = p; }
@@ -9695,7 +9704,7 @@ function hud() {
   const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
-    : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi |${timeKeys() ? ' hold T: time |' : ''}${skyKeys() ? ' Y: weather |' : ''} M: map | N: sound | Esc: pause` : 'Esc: pause';
+    : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${K.KeyT && timeKeys() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
@@ -10253,6 +10262,29 @@ function fairFrame() {
   const mid = cols >> 1;
   for (let r = 0; r < rows - 3; r++) { const i = r * cols + mid; FOGS[i] = FOGB[i] = 0; set(i, (r + Math.floor(T * 6)) % 4 ? '|' : '/', C(YEL, 14)); BG[i] = C(YEL, 3); }
   ['   ,/\\_/\\,', '  (  o    >', "  /`---.__/", " /  ~~~~ \\"].forEach((l, k) => putText(rows - 4 + k, mid - 6, l, C(WHITE, 13)));
+}
+
+// the fair's crowd wanders the boardwalk: pick a clear spot in a straight clear line, stroll over, stand a while
+// (looking at the rides), pick another. The wheel's queue stays put. Anyone you're talking to stops for it
+const FOLK_V = 0.12; // cells a second: an amble
+function folkSpot(f) {
+  for (let n = 0; n < 12; n++) {
+    const x = FAIR.x0 + 0.9 + Math.random() * (FAIR.x1 - FAIR.x0 - 1.8), y = FAIR.y0 + 0.8 + Math.random() * (WHEEL.y - FAIR.y0 - 1.6);
+    let ok = !fairBlocked(x, y, 0.15);
+    for (let t = 0.1; ok && t < 1; t += 0.1) ok = !fairBlocked(f.x + (x - f.x) * t, f.y + (y - f.y) * t, 0.08);
+    if (ok) return [x, y];
+  }
+  return [f.x, f.y];
+}
+function stepFairFolk(dt) {
+  if (Math.hypot(rel(FAIR.cx - px), rel((FAIR.y0 + FAIR.y1) / 2 - py)) > 40) return; // (nobody's watching)
+  for (const f of fairFolk) {
+    if (f.talk > 0) { f.talk -= dt; continue; }
+    if (f.queue) continue;
+    const ex = f.tx - f.x, ey = f.ty - f.y, d = Math.hypot(ex, ey);
+    if (d > 0.02) { const s = Math.min(d, FOLK_V * dt); f.x += ex / d * s; f.y += ey / d * s; f.ph += dt * 5; continue; }
+    if ((f.wait -= dt) <= 0) { [f.tx, f.ty] = folkSpot(f); f.wait = 3 + Math.random() * 9; }
+  }
 }
 // ===== the Chinatown night market (props.js puts up the stalls): what E does at a stall, and what it says. Open 8pm
 // to 2am. STREET FOOD, CHARMS (a little luck) and CURIOS (a mystery box, and the Glyphport snow globe, which changes
@@ -13615,8 +13647,7 @@ onkeydown = e => {
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && (me || mode === 'sea')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
-  if (e.code === 'KeyY') { if (skyKeys()) { const [m] = shakeGlobe(); say(devKeys && !carrying('cityglobe') ? `Weather: ${weather}` : m); } else say('The sky does what it likes. (Something at the Chinatown night market might change its mind.)', 3); }
-  if (e.code === 'KeyT' && !timeKeys()) say('Time waits for no one. (A certain pocket watch might disagree: try the prize counters.)', 3);
+  if (e.code === 'KeyY' && skyKeys()) { const [m] = shakeGlobe(); say(devKeys && !carrying('cityglobe') ? `Weather: ${weather}` : m); }
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
@@ -13708,7 +13739,7 @@ function loop(t) {
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyoSwing(((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 600 * dt); // (arrows swing it too)
-    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.8 : 1); // sprint 29 km/h, cars top out at 79
+    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.5 : 1); // sprint 29 km/h (43 on the board), cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
@@ -13732,6 +13763,7 @@ function loop(t) {
   stepPee(dt);
   stepSteam(dt);
   stepPigeons(dt);
+  stepFairFolk(dt);
   stepJadeIncense(dt);
   stepExchange();
   stepMuseum(dt);

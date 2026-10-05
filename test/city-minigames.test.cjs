@@ -192,6 +192,11 @@ test('jailbreak: there is a way past the guards, and walking straight into the l
     return -1;
   })()`);
   assert.ok(found > 0, 'a route exists (' + found + 's)');
+  // the guards walk round the crates, never through them: every cell they stand on, all shift long, is open floor
+  const through = ev(`(() => { const g = GAMES.jailbreak(), s = g.state(), hits = [];
+    for (let k = 0; k < 800; k++) { for (const [x, y] of g.state().guards) for (const c of [[Math.floor(x), Math.floor(y)], [Math.ceil(x), Math.ceil(y)]]) if (s.solid.has(c[1] * g.W + c[0])) hits.push(c.join()); s.you[0] = 1; s.you[1] = 9; g.step(0.05, {}); }
+    return [...new Set(hits)].join(' '); })()`);
+  assert.strictEqual(through, '', 'guards inside a crate at ' + through);
   ev('var g = GAMES.jailbreak()');
   const r = ev(`(() => { for (let t = 0; t < 46 && !g.over; t += 0.05) g.step(0.05, { up: 1 }); return [g.over, g.success].join(); })()`);
   assert.strictEqual(r, 'true,false', 'charging out gets you caught');

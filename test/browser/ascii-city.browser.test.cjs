@@ -209,7 +209,7 @@ test('vending machines sell from arm\'s reach, at an angle, even with a car at t
   const night = await page.evaluate(() => {
     closeShop(); tod = 23;
     for (const m of machines) {
-      const fx = -m.s * m.fs, fy = m.c * m.fs; devAt(m.x + fx * 0.15, m.y + fy * 0.15, Math.atan2(-fy, -fx));
+      const fx = -m.s * m.fs, fy = m.c * m.fs; devAt(m.x + fx * 0.15, m.y + fy * 0.15, Math.atan2(-fy, -fx)); render(); // (a frame, for what you're looking at)
       if (lockTarget()) return [promptText(), touchActions().some(b => b[1] === 'KeyE'), touchActions().some(b => b[1] === 'KeyL')];
     }
   });
@@ -501,6 +501,22 @@ test('a car comes with its keys: Q with them in hand brings it round to the kerb
   assert.match(inside, /No signal in here/);
 }));
 
+test('the crowd at the pier fair wanders about, and you can talk to them', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    const f = fairFolk.find(f => !f.queue), x0 = f.x, y0 = f.y;
+    px = FAIR.cx; py = FAIR.y0 + 0.5; // (on the pier, so they're stepped)
+    f.wait = 0; for (let i = 0; i < 600; i++) stepFairFolk(1 / 30);
+    const moved = Math.hypot(f.x - x0, f.y - y0) > 0.1, clear = fairFolk.every(q => q.queue || !fairBlocked(q.x, q.y, 0.05));
+    // stand just in front of one, facing them
+    mode = 'walk'; px = f.x - 0.3; py = f.y; a = 0; fx.stink = 0;
+    const prompt = promptText(); interact();
+    return { moved, clear, prompt, said: msgText, stopped: f.talk > 0 };
+  });
+  assert.ok(r.moved && r.clear, `off for a wander, never through the stalls (${JSON.stringify(r)})`);
+  assert.match(r.prompt, /E: talk/);
+  assert.ok(r.said.startsWith('"') && r.stopped, `they answer and stop to chat (${r.said})`);
+}));
+
 test('run dry and you pass out: the hospital, a bill, and the nurse patches you up; dev tools fill you up', () => withPage(async page => {
   await page.evaluate(() => { money = 500; needs.food = 0; needs.drink = 0; needs.health = 0.05; });
   await page.waitForTimeout(300);
@@ -626,12 +642,12 @@ test('balloon darts on the pier: $1 at the booth, a dart on a balloon pops it', 
 test('the night market: tarped by day, a stall to buy from at night; T and Y need the watch and the globe', () => withPage(async page => {
   await page.evaluate(() => { tod = 13; money = 500; inv.length = 0; const s = STALLS[2]; devAt(s.at[0], s.at[1], Math.PI / 2); });
   assert.match(await page.evaluate(() => promptText()), /under a tarp/);
+  const w = await page.evaluate(() => [weather, msgText]);
   await page.keyboard.down('KeyT');
-  assert.match(await page.evaluate(() => msgText), /pocket watch/); // (read at once: something else may say something in a moment)
   await page.waitForTimeout(500); await page.keyboard.up('KeyT');
   assert.ok(await page.evaluate(() => tod < 13.2), 'no watch, no hurrying');
   await page.keyboard.press('KeyY');
-  assert.match(await page.evaluate(() => msgText), /night market/);
+  assert.deepStrictEqual(await page.evaluate(() => [weather, msgText]), w, 'no globe: the sky stays put, and nothing to say about it');
   await page.evaluate(() => { tod = 21; });
   assert.strictEqual(await page.evaluate(() => promptText()), 'E: CURIOS stall');
   await page.keyboard.press('KeyE');
