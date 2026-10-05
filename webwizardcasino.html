@@ -172,6 +172,15 @@ Return one complete, self-contained HTML document with embedded styles and scrip
         let hasContent = false;
         let currentIframe = null;
         let consoleCommandInterval = null;
+        let displayedGenerationId = 0;
+
+        window.addEventListener('message', (event) => {
+            if (event.data?.type !== 'web-wizard-runtime-error'
+                || !currentIframe
+                || event.source !== currentIframe.contentWindow) return;
+            console.error('Generated site runtime error:', event.data.message);
+            showErrorToast('Runtime error: ' + (event.data.message || 'unknown script error'));
+        });
 
         function pauseCurrentSite() {
             if (!currentIframe) return;
@@ -316,11 +325,17 @@ Return one complete, self-contained HTML document with embedded styles and scrip
                 container.dataset.contextMenuDisabled = 'true';
             }
 
-            if (iframe && iframe.contentDocument) {
-                const doc = iframe.contentDocument;
-                doc.addEventListener('contextmenu', (event) => event.preventDefault());
-                if (doc.body) {
-                    doc.body.addEventListener('contextmenu', (event) => event.preventDefault());
+            if (iframe) {
+                try {
+                    const doc = iframe.contentDocument;
+                    if (doc) {
+                        doc.addEventListener('contextmenu', (event) => event.preventDefault());
+                        if (doc.body) {
+                            doc.body.addEventListener('contextmenu', (event) => event.preventDefault());
+                        }
+                    }
+                } catch (error) {
+                    // Sandboxed generated pages have an opaque origin.
                 }
             }
         }
@@ -396,6 +411,7 @@ Return one complete, self-contained HTML document with embedded styles and scrip
         }
 
         function setDisplayedGeneration(gen) {
+            const generationId = ++displayedGenerationId;
             displayedGeneration = gen;
             const container = document.getElementById('generatedContent');
             clearAndSandbox(container);
@@ -404,23 +420,14 @@ Return one complete, self-contained HTML document with embedded styles and scrip
             // Hide overlay first, then inject site
             loadingOverlay.classList.add('hidden');
             setTimeout(() => {
+                if (generationId !== displayedGenerationId) return;
                 updateSaveButton();
-                // Use an iframe so each generation gets its own isolated execution context.
+                // Keep generated scripts inside an opaque-origin iframe so they cannot
+                // navigate or rewrite the wizard itself.
                 const iframe = document.createElement('iframe');
                 iframe.style.cssText = 'width:100%;height:100%;border:none;background:#000;display:block;';
+                iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-pointer-lock');
                 container.appendChild(iframe);
-                
-                // Set up error listener inside iframe window to surface runtime errors to user
-                if (iframe.contentWindow) {
-                    iframe.contentWindow.onerror = function(msg, url, lineNo, columnNo, error) {
-                        console.error('Generated site runtime error:', msg, 'at line', lineNo);
-                        showErrorToast('Runtime error: ' + (msg || 'unknown script error'));
-                        return false;
-                    };
-                }
-
-                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                iframeDoc.open();
                 
                 // Fail-safe polyfill script injected to prevent readyState / window.onload race conditions
                 const polyfillScript = `<script>
@@ -435,19 +442,24 @@ Return one complete, self-contained HTML document with embedded styles and scrip
   };
 })();
 <\/script>`;
+
+                const errorReporter = `<script>
+window.addEventListener('error', function(event) {
+  parent.postMessage({ type: 'web-wizard-runtime-error', message: event.message }, '*');
+});
+<\/script>`;
                 
                 let codeToWrite = gen.code || '';
-                if (!codeToWrite.includes('<!DOCTYPE') && !codeToWrite.includes('<html')) {
-                    codeToWrite = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;}canvas{display:block;width:100%;height:100%;}</style>${polyfillScript}</head><body>${codeToWrite}</body></html>`;
-                } else if (codeToWrite.includes('<head>')) {
-                    codeToWrite = codeToWrite.replace('<head>', '<head>' + polyfillScript);
+                if (!/<(?:!doctype\s+html|html\b)/i.test(codeToWrite)) {
+                    codeToWrite = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;}canvas{display:block;width:100%;height:100%;}</style>${polyfillScript}${errorReporter}</head><body>${codeToWrite}</body></html>`;
+                } else if (/<head(?:\s[^>]*)?>/i.test(codeToWrite)) {
+                    codeToWrite = codeToWrite.replace(/<head(?:\s[^>]*)?>/i, match => match + polyfillScript + errorReporter);
                 } else {
-                    codeToWrite = polyfillScript + codeToWrite;
+                    codeToWrite = codeToWrite.replace(/<html(?:\s[^>]*)?>/i, match => match + '<head>' + polyfillScript + errorReporter + '</head>');
                 }
 
-                iframeDoc.write(codeToWrite);
-                iframeDoc.close();
                 currentIframe = iframe;
+                iframe.srcdoc = codeToWrite;
                 disableGeneratedContextMenu(container, iframe);
                 hasContent = true;
                 updateThemeScreenClose();
@@ -479,6 +491,8 @@ Return one complete, self-contained HTML document with embedded styles and scrip
 
         // Call AI API to generate a site for a theme
         async function generateWebsite() {
+            if (isGenerating) return;
+
             const loadingOverlay = document.getElementById('loadingOverlay');
             const regenerateButton = document.getElementById('regenerateButton');
             const generatedContent = document.getElementById('generatedContent');
