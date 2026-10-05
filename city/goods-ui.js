@@ -421,6 +421,7 @@ function openShop(title, stock, vendor = null) {
 function shopBuy(id) {
   const [ok, line] = buy(id);
   say(line, 3);
+  if (ok && /MACHINE/.test(shopCtx.title) && actx) sfxUse('vending');
   if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor, id)) say(`${line} That's the one they wanted.`, 4);
   openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor); // refresh (money changed)
 }
@@ -510,6 +511,7 @@ function sfxUse(s) {
   const at = actx.currentTime;
   if (s === 'bite') playClip('eat', 0.5);
   if (s === 'sip') playClip('drink', 0.6);
+  if (s === 'cancrush') playClip('cancrush', 0.42);
   if (s === 'light') playClip('cig-light', 0.45);
   if (s === 'drag') playClip(Math.random() < 0.5 ? 'cig-pull-1' : 'cig-pull-2', 0.5);
   if (s === 'kick') { tone(at, 110, 0.12, 0.2); burst(at, 0.05, [filt('bandpass', 900, 1)], 0.15); }
@@ -519,6 +521,12 @@ function sfxUse(s) {
   if (s === 'chime') sfxDoor();
   if (s === 'whirr') { burst(at, 0.5, [filt('bandpass', 700, 3)], 0.05); burst(at + 0.55, 0.4, [filt('bandpass', 900, 3)], 0.04); }
   if (s === 'squeak') playClip('squeak', 0.16);
+  if (s === 'meow') playClip('meow', 0.48);
+  if (s === 'bark') playClip('bark', 0.14);
+  if (s === 'tape') playClip('boombox-tape-insert', 0.38);
+  if (s === 'ollie') playClip('ollie', 0.5);
+  if (s === 'ollie-land') playClip('ollie-land', 0.35);
+  if (s === 'vending') playClip('vending-machine', 0.42);
   if (s === 'harmonica') playClip('harmonica', 0.6);
 }
 // the ball, out in the world

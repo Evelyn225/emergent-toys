@@ -215,16 +215,17 @@ Loops want to be seamless, 30s to a couple of minutes; one-shots short and dry. 
 the licence on each), Pixabay sound effects, the BBC sound effects archive (personal use).
 
 ### Music and ambience loops
-- **Cathedral**: organ music (something slow, Bach-ish), a choir, and a big empty-church room tone with echo.
-  Church bells for the hour, and for the top of the bell tower.
-- **Shotengai**: pachinko parlour roar (thousands of steel balls, jingles), shop greetings shouted from doorways,
+- **Cathedral**: a choir and a big empty-church room tone with echo. Church bells for the hour, and for the top of
+  the bell tower. (The organ and room-tone loop is in.)
+- **Shotengai**: shop greetings shouted from doorways,
   a crane game's tune, the hum under the roof, rain drumming on it.
-- **Fireworks**: real bursts and crackles (it synthesises a thud now), the crowd going "ooh".
+- **Fireworks**: crackles (the burst recording is in; crackles are still synthesised), the crowd going "ooh".
 - **Sunset Pier**: carnival / calliope music, a carousel band organ (the classic oom-pah waltz), the crowd at a fair,
   seagulls.
-- **Aquarium**: underwater ambience, tank bubblers and pump hum, a muffled crowd, maybe a soft ambient pad.
+- **Aquarium**: tank bubblers and pump hum, a muffled crowd, maybe a soft ambient pad. Aquarium music and a low-passed
+  waterfall loop for subtle tank water are in.
 - **Jail**: echoey cell block room tone, distant shouting, a radio, a buzzing fluorescent light.
-- **Botanical Gardens**: birdsong (the lawns by day), ducks quacking, the conservatory's waterfall and its
+- **Botanical Gardens**: ducks quacking, the conservatory's waterfall loop (only audible nearby) and its
   steamy drip, rain on the glass roof, a whole aviary of chatter, the closing bell, oars / pedals splashing.
 - **Laundromat**: washers churning, dryers tumbling, a fluorescent hum, late-night radio.
 - **Waterfront**: waves on the pier pilings, gulls, a foghorn, the ferry horn.
@@ -238,13 +239,13 @@ the licence on each), Pixabay sound effects, the BBC sound effects archive (pers
 - **Aquarium**: splashing hands in the touch pool, a shop door chime.
 - **Jail**: the cell door clanging shut, a key in a lock, keys jangling on the guard's belt.
 - **Laundromat**: coins in the slot, a washer starting, the end-of-cycle buzzer, the door clunking open.
-- **Street**: vending machine thunk and coins, a taxi horn, a car door, a dog barking, a shop door bell, footsteps
+- **Street**: a taxi horn, a car door, a shop door bell, footsteps
   on wood (the pier) and on metal (the el stairs).
 
 ### Item sounds
-- A soda can cracking open and fizzing, a beer pour, ice in a glass.
+- A beer pour, ice in a glass.
 - Crunchier bites for chips and apples, a slurp for noodles and pho.
 - A newspaper rustle and a book page turning.
 - An umbrella opening, rain on the umbrella.
 - A yo-yo whirr, sparklers crackling, the rubber duck squeak, the plush shark squeak, a snow globe shake.
-- A boombox tape clunking in and play pressed, the skateboard ollie snap.
+- A boombox tape clunk and skateboard ollie snap are in. The can opening sound is in.

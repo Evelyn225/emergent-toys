@@ -38,7 +38,7 @@ function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read 
   } else {
     body.vz = JUMP_V;
   }
-  if (actx) sfxUse(skatingNow() ? 'board' : 'kick');
+  if (actx) sfxUse(skatingNow() ? 'ollie' : 'kick');
 }
 // a seat within reach: a bench (indoors or out) or a cinema seat. {x, y, fx, fy}: where you sit and which way you face
 function nearSeat() {
@@ -92,7 +92,7 @@ function stepBody(dt) {
     if (s && Math.sign(da) === s) body.swirl = (body.swirl || 0) + Math.abs(da); // air strafing: turning into it
     if (body.z <= 0) { // landed
       const fell = body.peak, tricked = !!body.trick; body.z = body.vz = body.peak = 0;
-      if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('board'); }
+      if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('ollie-land'); }
       if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (K.Space || T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
         if (moved) body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.swirl || 0) * 0.15));
         body.swirl = 0; body.buf = -9; body.vz = JUMP_V;

@@ -2,8 +2,9 @@
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
-// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, arcade, rain) and synthesised ones (waves,
-// wind, rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
+// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, arcade, rain, birds, cathedral,
+// pachinko, waterfall, aquarium, soft aquarium water) and synthesised ones (waves, wind, rumble, tunnel, engine).
+// One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
 const AUDIO_DISTRICT = {
@@ -30,7 +31,9 @@ function seaDist(x, y) {
 }
 
 function audioMix(s) {
-  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, arcade: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, arcade: 0, rain: 0,
+    birds: 0, cathedral: 0, pachinko: 0, waterfall: 0, aquarium: 0, waterSoft: 0,
+    fluorescent: 0, watch: s.watch ? 1 : 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
   if (s.mode === 'room') {
     const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
@@ -43,10 +46,18 @@ function audioMix(s) {
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
+    if (k === 'cathedral') out.cathedral = 0.8;
+    if (k === 'pachinko') out.pachinko = 0.75;
+    if (k === 'laundry') out.fluorescent = 0.28;
+    if (k === 'jail') out.fluorescent = 0.55;
+    if (k === 'aviary') out.birds = 0.8;
+    if (k === 'conservatory') out.birds = 0.16;
+    if (k === 'conservatory') out.waterfall = s.waterfall || 0;
+    if (k === 'aquarium') { out.aquarium = 0.9; out.waterSoft = 0.7; }
     if (k === 'lighthouse' || k === 'lamproom') { out.waves = 0.55; out.wind = k === 'lamproom' ? 0.5 : 0.15; out.city = 0; } // the sea all round
     if (k === 'train') out.rumble = 0.9;
     if (k === 'cathedral') out.city = 0.015; // thick walls
-    if (k === 'pachinko') out.arcade = 1; // the roar of a thousand steel balls and jingles
+    if (k === 'pachinko') out.arcade = 0; // the pachinko recording replaces the generic arcade bed
     if (k === 'cranes') out.arcade = 0.75;
     if (k === 'conservatory') { out.waves = 0.3; out.city = 0.02; } // the waterfall
     if (k === 'aviary') out.city = 0.04;
@@ -66,7 +77,8 @@ function audioMix(s) {
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
   if (s.gardens) { out.city *= 0.35; out.crowd *= 0.4; out.night *= 0.5; out.waves = Math.max(out.waves, 0.15); } // the traffic's far off behind the trees; the lake lapping
-  if (s.district === 'shotengai') out.arcade = Math.max(out.arcade, 0.28 * far); // jingles spilling out of the parlours under the roof
+  if (s.gardens) out.birds = (0.25 + 0.75 * s.day) * (1 - 0.65 * s.rain); // songbirds in the gardens by day
+  if (s.district === 'shotengai') out.pachinko = Math.max(out.pachinko, 0.28 * far); // parlour roar spilling into the covered street
   if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the Sunset Pier: a crowd, and the booths' bleeps and jingles drifting over it
     out.crowd = Math.max(out.crowd, 0.7 * s.fairNear * (s.tod >= 9 || s.tod < 2 ? 1 : 0.2));

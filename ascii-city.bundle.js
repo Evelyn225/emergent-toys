@@ -1943,8 +1943,9 @@ const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
-// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, arcade, rain) and synthesised ones (waves,
-// wind, rumble, tunnel, engine). One-shots (footsteps, sirens, the till) are handled in audio.js.
+// Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, arcade, rain, birds, cathedral,
+// pachinko, waterfall, aquarium, soft aquarium water) and synthesised ones (waves, wind, rumble, tunnel, engine).
+// One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
 const AUDIO_DISTRICT = {
@@ -1971,7 +1972,9 @@ function seaDist(x, y) {
 }
 
 function audioMix(s) {
-  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, arcade: 0, rain: 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+  const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, arcade: 0, rain: 0,
+    birds: 0, cathedral: 0, pachinko: 0, waterfall: 0, aquarium: 0, waterSoft: 0,
+    fluorescent: 0, watch: s.watch ? 1 : 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
   if (s.mode === 'room') {
     const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
@@ -1984,10 +1987,18 @@ function audioMix(s) {
     out.city = 0.08 * (0.4 + 0.6 * s.day); // the street, through the walls
     out.rain = 0.6 * s.rain; // (low-passed: on the windows, through the walls)
     if (k === 'station') out.tunnel = 0.7;
+    if (k === 'cathedral') out.cathedral = 0.8;
+    if (k === 'pachinko') out.pachinko = 0.75;
+    if (k === 'laundry') out.fluorescent = 0.28;
+    if (k === 'jail') out.fluorescent = 0.55;
+    if (k === 'aviary') out.birds = 0.8;
+    if (k === 'conservatory') out.birds = 0.16;
+    if (k === 'conservatory') out.waterfall = s.waterfall || 0;
+    if (k === 'aquarium') { out.aquarium = 0.9; out.waterSoft = 0.7; }
     if (k === 'lighthouse' || k === 'lamproom') { out.waves = 0.55; out.wind = k === 'lamproom' ? 0.5 : 0.15; out.city = 0; } // the sea all round
     if (k === 'train') out.rumble = 0.9;
     if (k === 'cathedral') out.city = 0.015; // thick walls
-    if (k === 'pachinko') out.arcade = 1; // the roar of a thousand steel balls and jingles
+    if (k === 'pachinko') out.arcade = 0; // the pachinko recording replaces the generic arcade bed
     if (k === 'cranes') out.arcade = 0.75;
     if (k === 'conservatory') { out.waves = 0.3; out.city = 0.02; } // the waterfall
     if (k === 'aviary') out.city = 0.04;
@@ -2007,7 +2018,8 @@ function audioMix(s) {
   out.wind = clamp(height / 6, 0, 0.7) + (s.onBridge ? 0.45 : 0) + 0.25 * out.waves + 0.2 * s.fog + 0.45 * (s.storm || 0);
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
   if (s.gardens) { out.city *= 0.35; out.crowd *= 0.4; out.night *= 0.5; out.waves = Math.max(out.waves, 0.15); } // the traffic's far off behind the trees; the lake lapping
-  if (s.district === 'shotengai') out.arcade = Math.max(out.arcade, 0.28 * far); // jingles spilling out of the parlours under the roof
+  if (s.gardens) out.birds = (0.25 + 0.75 * s.day) * (1 - 0.65 * s.rain); // songbirds in the gardens by day
+  if (s.district === 'shotengai') out.pachinko = Math.max(out.pachinko, 0.28 * far); // parlour roar spilling into the covered street
   if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the Sunset Pier: a crowd, and the booths' bleeps and jingles drifting over it
     out.crowd = Math.max(out.crowd, 0.7 * s.fairNear * (s.tod >= 9 || s.tod < 2 ? 1 : 0.2));
@@ -2211,7 +2223,7 @@ const yoyoSwing = (dx, dy = 0) => {
   const x = yoyo.aimX + dx / 200, y = yoyo.aimY + dy / 200, r = Math.hypot(x, y);
   yoyo.aimX = r > 1 ? x / r : x; yoyo.aimY = r > 1 ? y / r : y;
 };
-const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
+const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade', 'aquarium'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes', aquarium: 'Aquarium music' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
 let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
@@ -2285,7 +2297,7 @@ function useHeld(near) {
     if (done) removeHeld();
     if (it.id === 'fortunecookie') return [`You crack it open. The fortune reads: "${fortune()}"`, 'bite'];
     return [(done ? `You finish the ${d.name}.` : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`) + feel,
-            d.kind === 'food' ? 'bite' : 'sip'];
+            it.id === 'soda' && it.uses === 2 ? 'cancrush' : d.kind === 'food' ? 'bite' : 'sip'];
   }
   if (d.kind === 'smoke') {
     if (fx.smoke > 0) { cigTip = 1; return ['You take a drag.', 'drag']; }
@@ -2306,7 +2318,7 @@ function useHeld(near) {
     case 'boombox': // a different tape each time you switch it on
       fx.boombox = !fx.boombox;
       if (fx.boombox) fx.song = pick(BOOMBOX_SONGS.filter(s => s !== fx.song));
-      return [fx.boombox ? `You hit play. ${SONG_NAMES[fx.song]}.` : 'You stop the tape.', 'click'];
+      return [fx.boombox ? `You hit play. ${SONG_NAMES[fx.song]}.` : 'You stop the tape.', fx.boombox ? 'tape' : 'click'];
     case 'ball':
       if (near.indoors) return ['Not in here.', null];
       kickBall(near.x, near.y, near.a); removeHeld(); return ['You punt the ball down the street.', 'kick'];
@@ -10029,9 +10041,14 @@ function interact() {
         home.pets ||= home.pet ? [home.pet] : [];
         if (heldItem() && ['petcat', 'petdog'].includes(heldItem().id) && !home.pets.includes(heldItem().id)) {
           const pet = heldItem().id; takeSlot(held); home.pets.push(pet); saveGame();
+          if (actx) sfxUse(pet === 'petcat' ? 'meow' : 'bark');
           return say(pet === 'petcat' ? 'The cat steps out of its carrier and settles in at home.' : 'The dog bounds out of its carrier and settles in at home.', 3);
         }
-        return say(home.pets.length ? 'Your pets are happy to see you.' : 'Adopt a pet at the pet shop and bring it home.', 2);
+        if (home.pets.length) {
+          if (actx) sfxUse(pick(home.pets) === 'petcat' ? 'meow' : 'bark');
+          return say('Your pets are happy to see you.', 2);
+        }
+        return say('Adopt a pet at the pet shop and bring it home.', 2);
       }
       if (hs === 'tv') { room.tv = !room.tv; return say(room.tv ? 'The telly flickers on.' : 'You switch the telly off.', 2); }
     }
@@ -10565,7 +10582,7 @@ function drawFireworks() {
 function fwBoom(s) {
   if (!actx) return;
   const dist = Math.hypot(rel(s.x - px), rel(s.y - py), s.h), at = actx.currentTime + dist / 34, loud = clamp(1.6 - dist / 120, 0.15, 1);
-  burst(at, 1.4, [filt('lowpass', 180 + Math.random() * 60, 0.7)], 0.5 * loud);
+  playClip('firework', 0.6 * loud, at);
   if (s.kind === 'crackle') for (let k = 0; k < 14; k++) burst(at + 1.2 + k * 0.07 + Math.random() * 0.05, 0.05, [filt('highpass', 2500, 1)], 0.08 * loud);
 }
 // ===== the laundromat: open all night. Put a load in one of the machines along the back wall, wait (the bench is
@@ -10611,10 +10628,13 @@ function stepLaundry() {
 // pauses where it is and picks up from there when it's needed again; after a minute it lets its stream go.
 const AUDIO_DIR = 'audio/ascii-city/';
 const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3', restaurant: 'restaurant.mp3', bossa: 'bossa.mp3', coffee: 'coffee.mp3',
-                    rain: 'rain.mp3', karaoke: 'karaoke.mp3', arcade: 'arcade.mp3' };
+                    rain: 'rain.mp3', karaoke: 'karaoke.mp3', arcade: 'arcade.mp3', birds: 'birds.mp3', cathedral: 'cathedral.mp3', pachinko: 'pachinko.mp3',
+                    waterfall: 'waterfall.mp3', aquarium: 'aquarium.mp3', waterSoft: 'waterfall-lowpass.mp3' };
 // overall level of each layer at full mix
 const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3, karaoke: 0.35, arcade: 0.35,
-                rain: 0.28, board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
+                rain: 0.28, birds: 0.35, cathedral: 0.5, pachinko: 0.45, waterfall: 0.4, aquarium: 0.3, waterSoft: 0.16,
+                fluorescent: 0.2, watch: 0.2,
+                board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
 const CAL = { board: 0.8, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
 const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
@@ -10634,7 +10654,7 @@ function audioStart() {
   applyVolumes();
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
-  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' ? musicBus : ambBus);
+  for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' || k === 'aquarium' ? musicBus : ambBus);
   beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, ambBus); // muffled through the walls indoors
   makeSynths();
   onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
@@ -10734,6 +10754,8 @@ function makeSynths() {
   // a car engine: a growl that rises with speed
   synth.engine = layer(); synth.engineOsc = actx.createOscillator(); synth.engineOsc.type = 'sawtooth'; synth.engineOsc.frequency.value = 45;
   synth.engineLP = filt('lowpass', 380); chain(synth.engineOsc, synth.engineLP, synth.engine); synth.engineOsc.start();
+  synth.fluorescent = layer(); loopClip('fluorescent-light-hum', synth.fluorescent);
+  synth.watch = layer(); loopClip('pocket-watch-ticking', synth.watch);
 }
 
 // ---- one-shots
@@ -10777,11 +10799,11 @@ function clipBuffer(name) {
   if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
   return CLIPS[name];
 }
-function playClip(name, gain) {
+function playClip(name, gain, when = actx.currentTime) {
   clipBuffer(name).then(buf => {
     if (!buf) return;
     const s = actx.createBufferSource(), g_ = actx.createGain();
-    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; shot(s, g_, sfxBus); s.start();
+    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; shot(s, g_, sfxBus); s.start(Math.max(actx.currentTime, when));
   });
 }
 let peeLoopVoice = null;
@@ -10842,7 +10864,7 @@ function sfxThunder(d, indoors) {
   g.gain.exponentialRampToValueAtTime(0.0005, at + 4 + d / 30);
   shot(s, lp, g, sfxBus); s.start(at, Math.random() * 1.5); s.stop(at + 5 + d / 30);
 }
-let heardBolt = null;
+let heardBolt = null, dripT = 0;
 
 // ---- per frame
 let stepAcc = 0, lastPos = null, clackT = 0;
@@ -10855,12 +10877,18 @@ function audioTick(dt) {
   const elNear = mode === 'room' ? 0 : clamp(1 - elDist / 7, 0, 1) *
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), barCrowd: room ? barCrowd() : 0,
+  const waterfall = mode === 'room' && room.kind === 'conservatory' ? clamp(1 - Math.hypot(px - CONS_POOL.x, py - 0.8) / 5, 0, 1) : 0;
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: inv.some(it => it.id === 'pocketwatch'), barCrowd: room ? barCrowd() : 0,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm' });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
+  synth.fluorescent.gain.setTargetAtTime(mix.fluorescent * LEVEL.fluorescent, now, GLIDE);
+  synth.watch.gain.setTargetAtTime(mix.watch * LEVEL.watch, now, GLIDE);
+  if (indoors && room.kind === 'conservatory') {
+    if ((dripT -= dt) <= 0) { dripT = 2.5 + Math.random() * 4; playClip('water-drip', 0.18); }
+  } else dripT = 0;
   if (me || sea) { // the engine note follows the car (or the boat: lower, burbling)
     const v = Math.abs((me || sea).v), m = me ? 1 : 0.7;
     synth.engineOsc.frequency.setTargetAtTime((38 + v * 32) * m, now, 0.08);
@@ -11807,6 +11835,7 @@ function openShop(title, stock, vendor = null) {
 function shopBuy(id) {
   const [ok, line] = buy(id);
   say(line, 3);
+  if (ok && /MACHINE/.test(shopCtx.title) && actx) sfxUse('vending');
   if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor, id)) say(`${line} That's the one they wanted.`, 4);
   openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor); // refresh (money changed)
 }
@@ -11896,6 +11925,7 @@ function sfxUse(s) {
   const at = actx.currentTime;
   if (s === 'bite') playClip('eat', 0.5);
   if (s === 'sip') playClip('drink', 0.6);
+  if (s === 'cancrush') playClip('cancrush', 0.42);
   if (s === 'light') playClip('cig-light', 0.45);
   if (s === 'drag') playClip(Math.random() < 0.5 ? 'cig-pull-1' : 'cig-pull-2', 0.5);
   if (s === 'kick') { tone(at, 110, 0.12, 0.2); burst(at, 0.05, [filt('bandpass', 900, 1)], 0.15); }
@@ -11905,6 +11935,12 @@ function sfxUse(s) {
   if (s === 'chime') sfxDoor();
   if (s === 'whirr') { burst(at, 0.5, [filt('bandpass', 700, 3)], 0.05); burst(at + 0.55, 0.4, [filt('bandpass', 900, 3)], 0.04); }
   if (s === 'squeak') playClip('squeak', 0.16);
+  if (s === 'meow') playClip('meow', 0.48);
+  if (s === 'bark') playClip('bark', 0.14);
+  if (s === 'tape') playClip('boombox-tape-insert', 0.38);
+  if (s === 'ollie') playClip('ollie', 0.5);
+  if (s === 'ollie-land') playClip('ollie-land', 0.35);
+  if (s === 'vending') playClip('vending-machine', 0.42);
   if (s === 'harmonica') playClip('harmonica', 0.6);
 }
 // the ball, out in the world
@@ -13820,7 +13856,7 @@ function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read 
   } else {
     body.vz = JUMP_V;
   }
-  if (actx) sfxUse(skatingNow() ? 'board' : 'kick');
+  if (actx) sfxUse(skatingNow() ? 'ollie' : 'kick');
 }
 // a seat within reach: a bench (indoors or out) or a cinema seat. {x, y, fx, fy}: where you sit and which way you face
 function nearSeat() {
@@ -13874,7 +13910,7 @@ function stepBody(dt) {
     if (s && Math.sign(da) === s) body.swirl = (body.swirl || 0) + Math.abs(da); // air strafing: turning into it
     if (body.z <= 0) { // landed
       const fell = body.peak, tricked = !!body.trick; body.z = body.vz = body.peak = 0;
-      if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('board'); }
+      if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('ollie-land'); }
       if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (K.Space || T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
         if (moved) body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.swirl || 0) * 0.15));
         body.swirl = 0; body.buf = -9; body.vz = JUMP_V;

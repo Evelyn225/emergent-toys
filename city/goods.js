@@ -171,7 +171,7 @@ const yoyoSwing = (dx, dy = 0) => {
   const x = yoyo.aimX + dx / 200, y = yoyo.aimY + dy / 200, r = Math.hypot(x, y);
   yoyo.aimX = r > 1 ? x / r : x; yoyo.aimY = r > 1 ? y / r : y;
 };
-const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
+const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade', 'aquarium'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes', aquarium: 'Aquarium music' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
 let cigTip = 0; // how hot the cigarette tip is (a drag heats it)
@@ -245,7 +245,7 @@ function useHeld(near) {
     if (done) removeHeld();
     if (it.id === 'fortunecookie') return [`You crack it open. The fortune reads: "${fortune()}"`, 'bite'];
     return [(done ? `You finish the ${d.name}.` : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`) + feel,
-            d.kind === 'food' ? 'bite' : 'sip'];
+            it.id === 'soda' && it.uses === 2 ? 'cancrush' : d.kind === 'food' ? 'bite' : 'sip'];
   }
   if (d.kind === 'smoke') {
     if (fx.smoke > 0) { cigTip = 1; return ['You take a drag.', 'drag']; }
@@ -266,7 +266,7 @@ function useHeld(near) {
     case 'boombox': // a different tape each time you switch it on
       fx.boombox = !fx.boombox;
       if (fx.boombox) fx.song = pick(BOOMBOX_SONGS.filter(s => s !== fx.song));
-      return [fx.boombox ? `You hit play. ${SONG_NAMES[fx.song]}.` : 'You stop the tape.', 'click'];
+      return [fx.boombox ? `You hit play. ${SONG_NAMES[fx.song]}.` : 'You stop the tape.', fx.boombox ? 'tape' : 'click'];
     case 'ball':
       if (near.indoors) return ['Not in here.', null];
       kickBall(near.x, near.y, near.a); removeHeld(); return ['You punt the ball down the street.', 'kick'];
