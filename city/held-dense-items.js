@@ -137,6 +137,27 @@ Object.assign(DENSE, {
     const a = Math.atan2(y, x), mark = d > 0.5 && d < 0.75 && Math.abs(fract(a / (Math.PI / 2) + 0.5) - 0.5) < 0.12;
     return mark ? ['%', C(BRICK, 9)] : dLit(dBall(x, y, 0, 0, 5) * 0.8, YEL, 8, 13);
   }),
+  orrery: () => sculpt(28, 16, (x, y) => { // brass rings round a glowing sun, planets on arms going round, a crank, a wooden base
+    if (y > 5 && y < 7.4 && Math.abs(x) < 5.4) return dLit(0.55 - (y - 5) * 0.1, BRICK, 7);
+    if (Math.abs(x) < 0.3 && y > 2.4 && y <= 5) return ['|', C(YEL, 12)];
+    if (y > 0.6 && y < 1.4 && x > 4.6 && x < 7) return ['-', C(YEL, 11)]; if (x > 6.6 && x < 7.4 && y > -0.4 && y < 1.4) return ['o', C(BRICK, 13)]; // the crank
+    const cy = -1.6, r = Math.hypot(x, (y - cy) * 1.6);
+    if (r < 0.9) return ['@', C(YEL, 15)]; // the sun
+    for (const [R, col, sp, ph] of [[2.2, CYAN, 1.3, 0], [3.5, RED, 0.8, 2], [4.8, GREEN, 0.5, 4]]) {
+      if (Math.abs(r - R) < 0.18) return ['.', C(YEL, 8)]; // the brass rings
+      const an = T * sp * (T - orreryT < 3 ? 6 : 1) + ph, pxx = Math.cos(an) * R, pyy = Math.sin(an) * R / 1.6 + cy;
+      if (Math.hypot(x - pxx, (y - pyy) * 1.6) < 0.6) return ['o', C(col, 15)];
+    }
+    return null;
+  }),
+  diamond: () => sculpt(24, 14, (x, y) => { // a big cut stone, facets catching the light, a glint running across
+    if (y < -3.6 || y > 5.6) return null;
+    const hw = y < -2 ? 3.4 + (y + 3.6) * 1.1 : 5.2 * (1 - (y + 2) / 7.6);
+    if (Math.abs(x) > hw) return null;
+    const facet = Math.abs(fract(x * 0.6 + (y < -2 ? 0 : y * 0.3)) - 0.5) < 0.08 || Math.abs(y + 2) < 0.3;
+    const glint = Math.abs(x - (fract(T * 0.5) * 14 - 7)) < 0.6;
+    return [facet ? (y < -2 ? '_' : x > 0 ? '/' : '\\\\') : glint ? '*' : dFill(0.5 + 0.3 * Math.sin(x + y)), C(glint ? WHITE : CYAN, facet ? 14 : 9 + (x < 0 ? 4 : 0))];
+  }),
   fortunecookie: () => sculpt(24, 11, (x, y) => { // folded in a crescent, the slip of paper poking out
     if (y > -0.6 && y < 0.3 && x > 2.4 && x < 7.4) { const t_ = dText(x, y, 4.9, -0.15, 'LUCK'); return t_ ? [t_, C(RED, 12)] : ['=', C(WHITE, 14)]; }
     const d = dEll(x, y, -0.6, 0.4, 5, 3.4), notch = dEll(x, y, 2.2, 1.2, 2.6, 2);

@@ -40,6 +40,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
   const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
   if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
+  if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 21) return exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -367,6 +368,7 @@ function roofTop(i, wx, wy, h, d) {
     const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
     if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); return set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); }
   }
+  if (snowCover > 0.05 && noise(wx * 5, wy * 5, 45) < snowCover * 1.2) { BG[i] = C(WHITE, 2.4 + day * 6); return set(i, ' ', 0); } // snow on the roof
   set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
 }
 
@@ -433,6 +435,10 @@ function floorCell(i, r, x, rx, ry) {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
       if (inPond(lx, ly, pbx, pby)) { // the pond: ripples, lily pads by the edge, the sky and trees in it
+        if (seasonIdx() === 3) { // frozen over: pale ice, cracks, snow drifted on it
+          const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03, dr = snowCover > 0.1 && noise(wx * 5, wy * 5, 96) < snowCover * 0.7;
+          BG[i] = C(dr ? WHITE : CYAN, dr ? 2.4 + day * 6 : 1.4 + day * 3.5); return set(i, cr ? '/' : dr ? ' ' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
+        }
         const n = noise(wx * 4 + T * 0.3, wy * 4 - T * 0.1, 92), lily = !inPond(lx, ly, pbx, pby, -0.18) && hash(Math.floor(wx * 9), Math.floor(wy * 9), 93) > 0.8;
         set(i, lily ? (hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? '*' : 'o') : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? MAG : GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
         BG[i] = C(BLUE, 1 + day * 2.5 + lampsOn * glow(wx, wy) * 2); FL[i] = lily ? 0 : 3;
@@ -461,7 +467,12 @@ function floorCell(i, r, x, rx, ry) {
   }
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
-  if (!soft && wet > 0.05 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
+  if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
+  if (snowCover > 0.03) { // snow lying: drifts deeper off the road, tyre tracks down the middle of it
+    const cover = snowCover * (road === 1 || road === 2 ? (Math.abs((road === 1 ? lx : ly) - 1) < 0.55 ? (fract((road === 1 ? lx : ly) * 3.3) < 0.5 ? 0.25 : 0.6) : 1.1) : road ? 0.7 : 1.15);
+    const n = noise(wx * 4, wy * 4, 43);
+    if (n < cover) { BG[i] = C(WHITE, Math.min(15, (2.4 + day * 6.5 + lampsOn * glow(wx, wy) * 4) * (shade ? 0.6 : 1) * (0.85 + n * 0.3))); set(i, n > cover - 0.08 ? '.' : hash(Math.floor(wx * 20), Math.floor(wy * 20), 44) > 0.93 ? "'" : ' ', C(GRAY, L * 0.7)); LAMPL[i] = 0; return; }
+  }
   LAMPL[i] = 0;
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;
@@ -625,6 +636,14 @@ function rainFx(dt) {
     if ((d[1] += d[2] * dt * 1.8) > 1) { d[1] -= 1; d[0] = Math.random(); }
     const i = (d[1] * rows | 0) * cols + (d[0] * cols | 0);
     set(i, k & 1 ? '|' : '!', C(k % 3 ? BLUE : WHITE, 5 + day * 5)); FOGS[i] = 0; // drops are right in front of you
+  }
+  // snow: flakes drifting down slowly, swaying, the near ones bigger
+  const ns = roofed ? 0 : drops.length * snow * (under ? 0.5 : 1) | 0;
+  for (let k = 0; k < ns; k++) {
+    const d = drops[drops.length - 1 - k];
+    if ((d[1] += d[2] * dt * 0.16) > 1) { d[1] -= 1; d[0] = Math.random(); }
+    const x = mod(d[0] + Math.sin(T * 0.8 + k) * 0.012 + a * 0.15, 1), i = (d[1] * rows | 0) * cols + (x * cols | 0);
+    set(i, d[2] > 1.15 ? '*' : '.', C(WHITE, 8 + day * 6)); FOGS[i] = 0;
   }
 }
 

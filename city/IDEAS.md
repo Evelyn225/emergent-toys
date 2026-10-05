@@ -3,6 +3,18 @@
 A wishlist of districts and buildings to look over. Nothing here is promised; pick what sounds fun.
 Things get crossed off (deleted) once they're in the game.
 
+## Next up: the picks
+The ones that would add the most for the least, roughly in order. Each builds on something already in the game.
+1. **The Relics** (below, in Bigger city-wide ideas): the watch and the globe become two of a set, and collecting
+   them all opens the tower with no door. A reason to do everything else.
+2. **Rooftop runs**: roof hopping is in; time trials across the rooftops, a courier job that only pays if you
+   never touch the street.
+3. **A bike**: rent, park, steal; between walking and a car, and it fits down alleys.
+4. **Museum extras**: the heist is in (pick the door, dodge the torch beams, crack a case, beat the silent alarm);
+   next: the plan on paper, a guard's keycard to pickpocket, the power box in the alley, a rotating special exhibit.
+5. **Seasons, more of them**: seasons and snow are in; next, what changes with them: snowmen, a summer heatwave
+   that packs the pier, the shops' stock by season, fewer people out in a blizzard.
+
 ## New districts
 
 ### Little Italy / the Market Streets
@@ -24,14 +36,15 @@ Things get crossed off (deleted) once they're in the game.
 
 ### The Strip / Neon Row
 - The rowdiest part of town: strip-mall casinos, pawn shops, 24hr everything.
-- Buildings: casino (slots, blackjack, maybe borrow from poker-palace), wedding chapel, bail bonds, all-night diner, a
-  motel with a flickering sign.
-- Hook: gambling loses money fast; bail bonds gets you out of jail early for a fee.
+- Buildings: (the casino's in, downtown) a poker room (borrow from poker-palace), wedding chapel, bail bonds,
+  all-night diner, a motel with a flickering sign.
+- Hook: bail bonds gets you out of jail early for a fee.
 
 ### Old Town / Cobblestones
 - Crooked lanes that break the grid, gas lamps, the oldest buildings in the city.
 - Buildings: antique shop (weird one-off items), clockmaker, haunted inn, a fortune teller.
-- Hook: the fortune teller hints at something that actually happens later that day.
+- Hook: the fortune teller hints at something that actually happens later that day (like the fortune cookie's
+  stock tip, but for anything: a gold duck in the pond, a storm, a shop's sale).
 
 ### Suburbs / the Edge of Town
 - Low houses, lawns, sprinklers, a cul-de-sac, a strip mall with a big parking lot.
@@ -51,7 +64,8 @@ Things get crossed off (deleted) once they're in the game.
 ### Underground / Abandoned Subway
 - A closed ghost station behind a broken grate.
 - Buildings: graffiti hall, a tunnel market, a speakeasy, an illegal fight ring.
-- Hook: pitch dark without a flashlight item; a good place to hide while wanted.
+- Hook: pitch dark without a light (the paper lantern from the night market would do); a good place to hide while
+  wanted.
 
 ### What makes a district feel like its own place
 The levers the engine already has, so a new district can pull every one of them:
@@ -89,11 +103,10 @@ The levers the engine already has, so a new district can pull every one of them:
 - Thing to do: feed pigeons that flock, a protest or parade some days, pay off your record.
 - Sound: fountains, pigeons, footsteps echoing on marble.
 
-### The Night Market (a district that comes alive after dark)
-- Quiet car parks and shuttered shops by day; at dusk stalls roll out, strings of bulbs go up, smoke rises off grills.
-- Dozens of food stalls with things you can't get elsewhere, games (balloon darts, goldfish scooping), a fortune teller.
-- Signature: it exists only at night, and it's packed. Thing to do: eat your way down the rows; a stall-cooking shift.
-- Sound: sizzling, hawkers calling, music from somewhere. Engine: time-of-day props, like the pier's lights.
+### The Night Market: what's left (three stalls are in, on a Chinatown street, 8pm to 2am)
+- More rows: grills with smoke rising off them, a stall-cooking shift (fold bao to order), haggling over prices.
+- Games: a mahjong table in the street (goldfish scooping and the fortune teller are in).
+- A knock-off stall: designer watches and bags for cheap that pawn for nothing (or now and then, for a lot).
 
 ### Hilltop / the Heights (harder: the world is flat today)
 - Rich houses up winding roads, a funicular railway up the hill, a lookout over the whole city at the top.
@@ -114,10 +127,10 @@ The levers the engine already has, so a new district can pull every one of them:
 - Rooftop bar: elevator up, skyline view.
 
 ### Chinatown
-- Herbalist with a wall of drawers: cures for drunk or tired.
+- Herbalist with a wall of drawers: cures for drunk or tired (herbal tea and tiger balm are a start).
 - Lantern festival: weekly, paper lanterns over the streets, a dragon parade in traffic.
 - Private karaoke box rooms.
-- Bakery: pork buns, egg tarts.
+- Bakery: egg tarts, pineapple buns (the night market has bao).
 
 ### Docks
 - A container yard you can climb.
@@ -131,32 +144,13 @@ The levers the engine already has, so a new district can pull every one of them:
 - Community garden: plant something, come back days later to pick it.
 - Jazz basement club.
 
-### Waterfront
-- Boat rental: putter round the bay.
-
-## The museum, and how the heist could work
-
-**The museum by day**: a grand building downtown (columns, a dome, banners for the current show). $10 in. Halls
-of exhibits drawn in ASCII: a dinosaur skeleton you walk under, Egyptian room with a sarcophagus, a gallery of
-paintings (generated art, so it's different every visit), a gem room with the city's famous diamond under glass.
-Guards on patrol routes, cameras on the walls, a gift shop.
-
-**The heist, step by step** (a few evenings' work, not one button):
-1. **Case the joint.** Visit by day. Each guard walks a fixed loop; watching tells you the timing. Cameras sweep a
-   cone; you can see it on the floor. The game remembers what you've seen and draws it on a floor plan in your bag.
-2. **Get the tools.** A lockpick (have one: the lock minigame), a crowbar from the hardware store, a disguise
-   (a guard uniform from a laundromat dryer, or a hard hat), and a getaway car (owned or stolen) parked nearby.
-3. **Get in after dark.** Pick the back door lock, or climb the fire escape to the roof skylight.
-4. **Inside: stealth.** It's dark; guards carry torches (a cone of light). Stay out of their cones and the cameras'.
-   If one sees you: a few seconds of "huh?" to get out of sight, then alarms and four stars.
-5. **The vault.** The diamond's case: a harder lock minigame on a timer, or cut the glass (hold still, a meter
-   that wobbles if a guard's near).
-6. **Get out and away.** Back the way you came, to the car, lose the police. Then fence the diamond at the pawn
-   shop (a big payout) or keep it at home in your closet as a trophy.
-- Smaller crimes on the way could be optional shortcuts: pickpocket a guard's keycard, cut the power at a box in
-  the alley (the cameras go dark for a minute).
-- The engine already has: rooms with props, people with paths, the lock and pickpocket minigames, wanted stars,
-  owned cars. New: guards that see in a cone, darkness with torch light, and the plan on paper.
+## The museum: what's left (it's in: downtown across from the plaza; the heist works)
+- **Case the joint**: the guards' loops drawn on a floor plan in your bag once you've watched them by day.
+- **Shortcuts**: pickpocket a guard's keycard (no lock to pick); cut the power at a box in the alley (the beams go
+  dark for a minute); the skylight from the roof.
+- **A disguise**: a guard's uniform from a laundromat dryer, and the guards nod you through.
+- **A special exhibit that changes each week**, and a museum shop restock to match.
+- **Fencing**: the pawn shop takes the Glyphport Star at 40%; a proper fence in the docks who pays more and asks less.
 
 ## Weird and special buildings
 - Pay phones: call a number scrawled on a wall, get a strange task.
@@ -177,8 +171,29 @@ Guards on patrol routes, cameras on the walls, a gift shop.
   carried down the street), Halloween with trick-or-treaters, snow at New Year. A page in the pause menu showing
   the week ahead.
 - The city changes over time: construction sites finish into new buildings as days pass.
+- **The Relics**: the cursed pocket watch and the Glyphport snow globe are two of a set of strange objects scattered
+  round the city, each bending one rule. Others: a compass that points at whatever you need most (the nearest
+  food when you're starving, a hospital when you're hurt, the gold duck); a mirror that shows a cop coming before
+  they see you; a key that opens any one door, once. Each turns up somewhere different (a prize counter, a market
+  stall, the bottom of the gardens' lake, the bank vault). Carry them all to the tower with no door and it opens.
+- **The watch's curse**: make it earn the word. Lean on it too long and odd things happen: a day slips by when you
+  only meant an hour, the street lamps flicker as you pass, a figure in a long coat is always a block behind.
+- **Collectibles**: fifty rubber ducks hidden round the city (on ledges, in fountains, on roofs), a tally in the
+  bag, a prize for every ten.
+- **Seasons, further** (they're in: a week each, snow in winter, autumn leaves, spring blossom, frozen ponds, the
+  Equinox Orrery from the museum to turn them): snowmen, slush, a summer heatwave, what the shops sell, how many are out.
 
 ## New ideas since last time
+- **Rooftop runs**: time trials across the roofs with checkpoints, a pizza courier who only gets paid if the box
+  never touches the street, a rooftop chase when the cops corner you up there.
+- **Needs extras**: cook at home (a fridge and a stove), food going cold if you carry it too long, a food truck
+  that turns up where people are hungriest, a vending machine you can shake (and get crushed by).
+- **More carnival**: a rollercoaster along the pier (the stock market already mentions one), goldfish scooping,
+  whack-a-mole, a big top prize shelf (a giant plush you can't carry without both hands).
+- **The stock market and crime**: insider trading (act on a fortune cookie tip once too often and the SEC calls),
+  a newspaper whose headlines move the market.
+- **People who remember you**: the stallholders, the bouncer, the nurse who's patched you up five times.
+- **Photo booth and photo mode**: freeze the frame, hide the HUD, save the ASCII as a text file or an image.
 - **Shotengai extras**: a sento bathhouse (soak: sobers you up, warms you through), a gacha machine wall
   (a random capsule toy for $1), a maid cafe, a rhythm game cabinet, the summer festival under the roof.
 - **Graffiti extras**: the council's clean-up crew scrubbing tags you've left; your tags slowly fading; other

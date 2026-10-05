@@ -395,6 +395,13 @@ const EXCHANGE = { bx: 16, by: 15 };
   for (let y = 2; y <= 5; y++) for (let x = 2; x <= 7; x++) { const i = idx(EXCHANGE.bx * 8 + x, EXCHANGE.by * 8 + y); map[i] = 3.2; STY[i] = 21; SHOP[i] = sh; SEED[i] = 0.5; }
 }
 
+// ---- the museum: downtown, across the street from the plaza, a copper dome over the middle of it (museum.js)
+const MUSEUM = { bx: 14, by: 16 };
+{
+  const sh = MUSEUM.sh = { kind: SHOP_LIT, word: 'MUSEUM', neon: WHITE, glyphs: '#', hours: [10, 18], fee: 10, museum: true };
+  for (let y = 2; y <= 7; y++) for (let x = 2; x <= 7; x++) { const i = idx(MUSEUM.bx * 8 + x, MUSEUM.by * 8 + y); map[i] = x >= 4 && x <= 5 && y >= 4 && y <= 5 ? 3.4 : 2.2; STY[i] = 23; SHOP[i] = sh; SEED[i] = 0.5; }
+}
+
 // ---- the Velvet Rope, a strip club in midtown (stripclub.js)
 const CLUB = { bx: 8, by: 2 };
 {

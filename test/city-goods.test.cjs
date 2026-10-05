@@ -214,9 +214,9 @@ test('the Glyphport snow globe: shake it and the weather turns over (and holds);
   ev('T += 10'); j('useHeld({})'); assert.strictEqual(ev('weather'), 'storm');
 });
 
-test('the night market: three stalls on a Chinatown street, open 8pm to 2am, selling street food, charms (luck) and curios; a mystery box opens into something', () => {
+test('the night market: five stalls on a Chinatown street, open 8pm to 2am: street food, charms (luck), curios, a fortune teller, goldfish; a mystery box opens into something', () => {
   const { ev, j } = fresh();
-  assert.deepStrictEqual(j('STALLS.map(s => s.word)'), ['STREET FOOD', 'CHARMS', 'CURIOS']);
+  assert.deepStrictEqual(j('STALLS.map(s => s.word)'), ['STREET FOOD', 'CHARMS', 'CURIOS', 'FORTUNES', 'GOLDFISH']);
   assert.strictEqual(j('districtOf(NIGHT_MARKET.bx, NIGHT_MARKET.by)'), 'chinatown');
   assert.deepStrictEqual(j('[nightMarketOpen(21), nightMarketOpen(1), nightMarketOpen(12), nightMarketOpen(19.5)]'), [true, true, false, false]);
   assert.deepStrictEqual(j("stockFor('', 'CURIOS')"), ['mysterybox', 'lantern', 'firecrackers', 'cityglobe']);
@@ -244,4 +244,20 @@ test('the night market\'s things all do something: bao heals, the waffle\'s a ru
   assert.match(j('useHeld({})')[0], /cop/); assert.deepStrictEqual(j('[wanted.seen, wanted.hideT >= 6, inv[0].uses]'), [false, true, 2]);
   ev("mode = 'walk'; inv.length = 0; px = 4.1; py = 4.1"); const dark = ev('glow(px, py)');
   ev("inv.push({ id: 'lantern', uses: 0 }); held = 0"); assert.ok(ev('glow(px, py)') > dark + 0.5, 'the lantern lights round you');
+});
+
+test('seasons: a week each, spring first; the weather follows the season (winter snows, never rains); snow settles and melts; the orrery turns the year on', () => {
+  const { ev, j } = fresh();
+  assert.deepStrictEqual(j('[0, 7, 14, 21, 28].map(d => (dayNum = d, seasonShift = 0, season()))'), ['spring', 'summer', 'autumn', 'winter', 'spring']);
+  ev('dayNum = 3; setSeason(3)'); assert.strictEqual(j('season()'), 'winter');
+  const picks = j('(() => { const s = new Set(); for (let k = 0; k < 400; k++) { wTimer = -1; env(0.01); s.add(weather); } return [...s].sort(); })()');
+  assert.ok(picks.includes('snow') && !picks.includes('rain') && !picks.includes('storm'), `winter: ${picks}`);
+  ev("weather = 'snow'; wTimer = 999; snow = 1; snowCover = 0; for (let k = 0; k < 600; k++) env(0.1)");
+  assert.ok(ev('snowCover') > 0.5, 'it settles');
+  ev("setSeason(0); weather = 'clear'; for (let k = 0; k < 1200; k++) env(0.1)");
+  assert.ok(ev('snowCover') < 0.1, 'and melts in the spring');
+  ev("setSeason(1); T = 100; inv.length = 0; inv.push({ id: 'orrery', uses: 0 }); held = 0");
+  assert.match(j('useHeld({})')[0], /crank/); assert.strictEqual(j('season()'), 'autumn');
+  assert.match(j('useHeld({})')[0], /settling/); assert.strictEqual(j('season()'), 'autumn');
+  ev('T += 20'); j('useHeld({})'); assert.strictEqual(j('season()'), 'winter');
 });

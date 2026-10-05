@@ -646,7 +646,7 @@ GAMES.ducks = (rnd = Math.random) => {
   const LEGS = [[3, 10, 29, 10], [29, 10, 29, 4], [29, 4, 3, 4], [3, 4, 3, 10]], LAP = 64, SPEED = 3.2;
   const at = s => { s = mod(s, LAP); for (const [x0, y0, x1, y1] of LEGS) { const len = Math.abs(x1 - x0) + Math.abs(y1 - y0); if (s <= len) { const f = s / len; return { x: x0 + (x1 - x0) * f, y: y0 + (y1 - y0) * f, dir: x1 > x0 ? 1 : x1 < x0 ? -1 : y1 < y0 ? 1 : -1, near: y0 === 10 && y1 === 10 }; } s -= len; } return at(0); };
   const tier = () => { let r = rnd(); for (const [v, p] of DUCK_TIERS) if ((r -= p) < 0) return v; return 1; };
-  const gold = rnd() < 0.5 ? rnd() * 12 | 0 : -1;
+  const gold = goldenDuckDue || rnd() < 0.5 ? rnd() * 12 | 0 : -1; goldenDuckDue = false; // (a fortune teller's promise comes good)
   const ducks = Array.from({ length: 12 }, (_, k) => ({ s: k * LAP / 12 + rnd() * 1.5, worth: k === gold ? (rnd() < 0.7 ? 25 : 50) : tier(), gold: k === gold, ph: rnd() * 6 }));
   let hooks = 3, hx = 16, dip = 0, dipOn = null, held = null, card = null, splash = null, t = 0;
   g.ducks = ducks; // (for the tests)
@@ -836,6 +836,86 @@ GAMES.darts = (rnd = Math.random) => {
   g.reward = () => g.score;
   return g;
 };
+// goldfish scooping: a round tub of fish, a paper net (a poi). Steer it, hold GO to dip it in, let go to lift. Whatever's over
+// the paper as it comes up is yours, two at most, but the paper wears through in the water (faster if you wave it
+// about) and every fish weighs on it: once it tears, that's your go. Each fish is worth tickets (the gold one most),
+// and you take one home in a bag.
+const FISH_KINDS = [['orange', ORANGE, 2, 0.6], ['calico', RED, 3, 0.25], ['black', GRAY, 5, 0.12], ['gold', YEL, 10, 0.03]]; // name, colour, tickets, how common
+GAMES.goldfish = (rnd = Math.random) => {
+  const W = 36, H = 16, g = { id: 'goldfish', title: 'GOLDFISH', W, H, score: 0, over: false, prize: null };
+  const CX = 17.5, CY = 9.2, RX = 15, RY = 5.6, inTub = (x, y, m = 0) => ((x - CX) / (RX - m)) ** 2 + ((y - CY) / (RY - m * 0.45)) ** 2 < 1;
+  const kindOf = () => { let r = rnd(); for (const k of FISH_KINDS) if ((r -= k[3]) < 0) return k; return FISH_KINDS[0]; };
+  const fish = Array.from({ length: 11 }, () => { const an = rnd() * 6.28, rr = rnd() * 0.8; return { x: CX + Math.cos(an) * RX * rr, y: CY + Math.sin(an) * RY * rr, a: rnd() * 6.28, k: kindOf(), ph: rnd() * 6 }; });
+  let nx = CX, ny = CY, down = false, paper = 1, t = 0, last = null, tear = 0, caught = [];
+  g.fish = fish; g.net = () => [nx, ny, down, paper]; // (for the tests)
+  const under = () => fish.filter(f => Math.hypot((f.x - nx) * 0.55, f.y - ny) < 1.1);
+  g.under = under;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (last && (last.t -= dt) <= 0) last = null;
+    if (tear > 0) { if ((tear -= dt) <= 0) { g.over = true; ev.push('end'); } return ev; }
+    for (const f of fish) { // they wander, turning now and then; with the net in the water close by, they dart off
+      const fear = down && Math.hypot((f.x - nx) * 0.55, f.y - ny) < 2.6;
+      if (fear) f.a = Math.atan2(f.y - ny, f.x - nx) + (rnd() - 0.5) * 0.6;
+      else if (rnd() < dt * 0.6) f.a += (rnd() - 0.5) * 2.4;
+      const sp = (fear ? 5 : 1.6) * (f.k[0] === 'gold' ? 1.4 : 1);
+      let x = f.x + Math.cos(f.a) * sp * dt, y = f.y + Math.sin(f.a) * sp * dt * 0.55;
+      if (!inTub(x, y, 1.2)) { f.a = Math.atan2(CY - f.y, CX - f.x) + (rnd() - 0.5); x = f.x; y = f.y; }
+      f.x = x; f.y = y;
+    }
+    const mv = (k.left ? -1 : 0) + (k.right ? 1 : 0), mvy = (k.up ? -1 : 0) + (k.down ? 1 : 0);
+    nx = clamp(nx + mv * dt * (down ? 6 : 10), CX - RX + 2, CX + RX - 2); ny = clamp(ny + mvy * dt * (down ? 3 : 5), CY - RY + 1.4, CY + RY - 1.4);
+    if (k.act && !down) { down = true; ev.push('launch'); }
+    if (down) paper -= dt * (0.09 + (mv || mvy ? 0.22 : 0));
+    if (!k.act && down) { // up it comes
+      down = false;
+      const got = under().slice(0, 2);
+      for (const f of got) { paper -= 0.14 + (f.k[0] === 'gold' ? 0.1 : 0); fish.splice(fish.indexOf(f), 1); caught.push(f.k); g.score += f.k[2]; }
+      if (got.length) { last = { text: got.map(f => `${f.k[0]} +${f.k[2]}`).join('  '), col: got.some(f => f.k[0] === 'gold') ? YEL : GREEN, t: 1.4 }; ev.push(got.some(f => f.k[0] === 'gold') ? 'clear' : 'score'); g.prize = 'goldfish'; }
+      else { last = { text: 'nothing but water', col: GRAY, t: 1 }; ev.push('miss'); }
+    }
+    if (paper <= 0 || !fish.length) { tear = 1.2; last = { text: fish.length ? 'RRRIP. The paper\'s gone.' : 'You caught every one!', col: fish.length ? RED : YEL, t: 1.2 }; ev.push('miss'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    awning(put, text, W, t, MAG);
+    text((W - 13) >> 1, 2, 'SCOOP A FISH, TAKE IT HOME', C(YEL, 15));
+    for (let y = 3; y < H - 1; y++) for (let x = 0; x < W; x++) { // the tub: a wide blue bowl, its rim, the water rippling
+      if (!inTub(x + 0.5, y + 0.5, -0.9)) continue;
+      if (!inTub(x + 0.5, y + 0.5)) { put(x, y, ' ', 0, C(BLUE, 5.5)); continue; }
+      const w = Math.sin(x * 0.9 + t * 1.3 + y * 1.7) + Math.sin(y * 1.1 - t * 0.8);
+      put(x, y, ' ', 0, C(BLUE, 2.4 + Math.max(0, w) * 0.5));
+      if (w > 1.5) text(x, y, '~', C(CYAN, 10));
+    }
+    for (const f of fish) { // a fish: a body and a tail flicking behind it
+      const X = Math.round(f.x), Y = Math.round(f.y), dir = Math.cos(f.a) >= 0 ? 1 : -1, col = f.k[1];
+      put(X, Y, ' ', 0, C(col, f.k[0] === 'gold' ? 15 : 12));
+      if (f.k[0] === 'calico') text(X, Y, ':', C(WHITE, 15));
+      put(X - dir, Y, ' ', 0, C(col, 8 + Math.sin(t * 9 + f.ph) * 2));
+      text(X, Y, dir > 0 ? 'o' : 'o', C(GRAY, 1));
+    }
+    // the net: a white paper circle on a little frame and handle; wet and grey where it's wearing through
+    const R = 1.1, wet = down ? 1 : 0;
+    for (let y = -1; y <= 1; y++) for (let x = -2; x <= 2; x++) {
+      const d = Math.hypot(x * 0.55, y);
+      if (d > R + 0.15) continue;
+      const X = Math.round(nx) + x, Y = Math.round(ny) + y;
+      if (d > R - 0.45) text(X, Y, 'o', C(MAG, 15)); // the frame
+      else put(X, Y, ' ', 0, C(paper > 0.35 ? WHITE : GRAY, (down ? 4 : 8) * (0.4 + paper * 0.6)));
+    }
+    for (let k = 1; k <= 3; k++) text(Math.round(nx) + 2 + k, Math.round(ny) + 1 + (k >> 1), '\\', C(MAG, 13)); // the handle
+    if (wet && paper < 0.4) text(Math.round(nx), Math.round(ny), 'x', C(GRAY, 6));
+    // the bowl of what you've caught, and how much paper's left
+    text(1, 15, `paper ${'#'.repeat(Math.max(0, Math.ceil(paper * 8)))}${'.'.repeat(8 - Math.max(0, Math.ceil(paper * 8)))}`, C(paper > 0.35 ? WHITE : RED, 13));
+    text(22, 15, `caught ${caught.length}: ${g.score} tickets`, C(YEL, 14));
+    if (last) text(Math.max(1, (W - Math.ceil(last.text.length / 2)) >> 1), 3, last.text, C(last.col, 15));
+  };
+  g.status = () => `CAUGHT ${caught.length}   ARROWS steer the net   HOLD SPACE dip it, LET GO to scoop   (the paper tears: go gentle)`;
+  g.reward = () => g.score;
+  return g;
+};
 const FAIR_GAMES = ['ringtoss', 'strength', 'ducks', 'darts'];
 
 // ---- the Shotengai's parlours
@@ -872,7 +952,7 @@ GAMES.pachinko = (rnd = Math.random) => {
         let p = POCKETS[b.x];
         if (!p && rnd() < luck() * 0.4) for (const o of [-1, 1]) if (POCKETS[b.x + o]) { p = POCKETS[b.x + o]; break; } // (lucky: it rolls in after all)
         if (p === 'small') { g.score += PAY.small; ev.push('eat'); }
-        if (p === 'start') { g.score += PAY.start; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.085 + luck() * 0.4 }; }
+        if (p === 'start') { g.score += PAY.start; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.09 + luck() * 0.4 }; }
         pops.push(p ? { x: b.x, text: `+${PAY[p]}`, col: p === 'start' ? YEL : GREEN, t: 0.9 } : { x: b.x, text: 'x', col: GRAY, t: 0.5 });
         b.dead = true;
       }

@@ -58,7 +58,7 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
 let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
 let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0, lookT = 0;
 let dayNum = 4; // days since a Monday: you arrive on a Friday evening (events.js)
-let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0, storm = 0;
+let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0, storm = 0, snow = 0, snowCover = 0; // snow: falling now (0..1); snowCover: lying on the ground
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
 let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
@@ -106,7 +106,15 @@ function flash() {
   const f = s < 0 ? 0 : s < 0.07 ? 1 : s < 0.13 ? 0.15 : s < 0.2 ? 0.75 : Math.exp(-(s - 0.2) * 7) * 0.6;
   return f * near;
 }
-const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'clear' }; // the Y key's cycle
+const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'snow', snow: 'clear' }; // the Y key's (the snow globe's) cycle
+// the seasons: a week of days each, spring first; seasonShift moves the whole year on (the orrery, the dev tools)
+const SEASONS = ['spring', 'summer', 'autumn', 'winter'], SEASON_DAYS = 7;
+let seasonShift = 0, weatherDue = 0; // weatherDue: when a promised change in the sky arrives (the fortune teller)
+const seasonIdx = () => mod(Math.floor(dayNum / SEASON_DAYS) + seasonShift, 4), season = () => SEASONS[seasonIdx()];
+const setSeason = k => { seasonShift = mod(seasonShift + k - seasonIdx(), 4); };
+// what the sky does, by season: winter snows (and never rains), summer's mostly fine with the odd storm, autumn's foggy
+const SEASON_WEATHER = { spring: ['clear', 'clear', 'rain', 'rain', 'fog'], summer: ['clear', 'clear', 'clear', 'storm', 'rain'],
+  autumn: ['clear', 'rain', 'fog', 'fog', 'storm'], winter: ['clear', 'snow', 'snow', 'fog', 'clear'] };
 
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
@@ -115,17 +123,21 @@ function env(dt) {
   const t0 = tod;
   tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
   if (tod < t0 - 12) dayNum++; // midnight (a real wrap round, not a tiny step back)
-  if ((wTimer -= dt) < 0) { weather = pick(['clear', 'clear', 'rain', 'fog', 'storm']); wTimer = 60 + Math.random() * 90; }
+  if ((wTimer -= dt) < 0) { weather = pick(SEASON_WEATHER[season()]); wTimer = 60 + Math.random() * 90; }
+  if (weatherDue && T > weatherDue) { weatherDue = 0; weather = pick(SEASON_WEATHER[season()].filter(w => w !== weather)); wTimer = 90 + Math.random() * 90; } // (it changes, as promised)
   rain += clamp((weather === 'rain' || weather === 'storm') - rain, -dt / 6, dt / 6);
   storm += clamp((weather === 'storm') - storm, -dt / 8, dt / 8);
   if (storm > 0.6 && Math.random() < dt / 6) bolt = { t: T, az: Math.random() * Math.PI * 2, d: 12 + Math.random() * 70, seed: Math.random() * 1e4 | 0 };
   fogAmt += clamp((weather === 'fog') - fogAmt, -dt / 6, dt / 6);
+  snow += clamp((weather === 'snow') - snow, -dt / 8, dt / 8);
+  const winter = season() === 'winter'; // (it settles while it falls; melts slowly in winter, quickly once it's spring)
+  snowCover = clamp(snowCover + (snow > 0.3 ? dt / 45 * snow : -dt / (winter ? 400 : 60) * (1 + rain * 3)), 0, 1);
   wet = clamp(wet + (rain > 0.3 ? dt / 10 : -dt / 60), 0, 1); // streets stay wet for a while after rain
   const sunEl = Math.sin((tod - 6) / 12 * Math.PI);
   day = clamp(sunEl * 2.5 + 0.25, 0, 1); night = 1 - day; dusk = clamp(1 - Math.abs(sunEl) * 4, 0, 1);
-  overcast = Math.max(rain, fogAmt);
+  overcast = Math.max(rain, fogAmt, snow * 0.8);
   amb = 0.35 + 0.65 * day * (1 - 0.35 * overcast) * (1 - 0.3 * storm) + flash() * 0.9;
-  vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain);
+  vis = MAXD * (1 - 0.72 * fogAmt - 0.25 * rain - 0.3 * snow);
   lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
   if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
@@ -676,6 +688,13 @@ const EXCHANGE = { bx: 16, by: 15 };
   for (let y = 2; y <= 5; y++) for (let x = 2; x <= 7; x++) { const i = idx(EXCHANGE.bx * 8 + x, EXCHANGE.by * 8 + y); map[i] = 3.2; STY[i] = 21; SHOP[i] = sh; SEED[i] = 0.5; }
 }
 
+// ---- the museum: downtown, across the street from the plaza, a copper dome over the middle of it (museum.js)
+const MUSEUM = { bx: 14, by: 16 };
+{
+  const sh = MUSEUM.sh = { kind: SHOP_LIT, word: 'MUSEUM', neon: WHITE, glyphs: '#', hours: [10, 18], fee: 10, museum: true };
+  for (let y = 2; y <= 7; y++) for (let x = 2; x <= 7; x++) { const i = idx(MUSEUM.bx * 8 + x, MUSEUM.by * 8 + y); map[i] = x >= 4 && x <= 5 && y >= 4 && y <= 5 ? 3.4 : 2.2; STY[i] = 23; SHOP[i] = sh; SEED[i] = 0.5; }
+}
+
 // ---- the Velvet Rope, a strip club in midtown (stripclub.js)
 const CLUB = { bx: 8, by: 2 };
 {
@@ -934,13 +953,13 @@ const NIGHT_MARKET = (() => {
 })();
 // each stall: a waist-high counter with the goods laid out on it, two poles, a striped canopy above with the sign on
 // its front, and (after dark) someone behind the counter to sell to you
-const STALLS = NIGHT_MARKET ? [['STREET FOOD', 3.0, RED], ['CHARMS', 5.0, MAG], ['CURIOS', 7.0, ORANGE]].map(([word, dx, canopy], k) => {
+const STALLS = NIGHT_MARKET ? [['STREET FOOD', 2.75, RED], ['CHARMS', 3.95, MAG], ['CURIOS', 5.15, ORANGE], ['FORTUNES', 6.35, BLUE], ['GOLDFISH', 7.55, CYAN]].map(([word, dx, canopy], k) => {
   const x = NIGHT_MARKET.bx * 8 + dx, y = NIGHT_MARKET.by * 8 + 1.78;
-  solidBox(x, y + 0.02, true, 0.78, 0.15, 0.21, 0.26, 'stallroof', k); Object.assign(solids[solids.length - 1], { word, canopy, fs: -1 });
-  for (const s of [-1, 1]) solidBox(x + s * 0.72, y - 0.08, true, 0.012, 0.012, 0, 0.21, 'stallpole', k);
-  solidBox(x, y, true, 0.7, 0.09, 0, 0.1, 'stall', k);
-  const shirt = [WHITE, RED, BLUE][k];
-  extras.push({ x: x + 0.15 - k * 0.12, y: y + 0.14, z: 0, w: 0.06, h: 0.18, art: ART.walkB, when: () => nightMarketOpen(tod), // the stallholder
+  solidBox(x, y + 0.02, true, 0.56, 0.15, 0.21, 0.26, 'stallroof', k); Object.assign(solids[solids.length - 1], { word, canopy, fs: -1 });
+  for (const s of [-1, 1]) solidBox(x + s * 0.5, y - 0.08, true, 0.012, 0.012, 0, 0.21, 'stallpole', k);
+  solidBox(x, y, true, 0.48, 0.09, 0, 0.1, 'stall', k);
+  const shirt = [WHITE, RED, BLUE, MAG, CYAN][k];
+  extras.push({ x: x + 0.1 - (k % 3) * 0.1, y: y + 0.14, z: 0, w: 0.06, h: 0.18, art: ART.walkB, when: () => nightMarketOpen(tod), // the stallholder
     col: (c, row, L) => C(row < 2 ? SKIN : row === 2 ? shirt : GRAY, Math.max(L, 6)) });
   return Object.assign(solids[solids.length - 1], { word, canopy, fs: -1, at: [x, y - 0.3] });
 }) : [];
@@ -2061,9 +2080,13 @@ const ITEMS = {
   lantern: { name: 'paper lantern', price: 10, kind: 'gear' }, // held after dark: light round you
   firecrackers: { name: 'firecrackers', price: 6, kind: 'toy', uses: 3 }, // a distraction: the cops look the other way
   mysterybox: { name: 'mystery box', price: 20, kind: 'toy', uses: 1 },
+  goldfish: { name: 'goldfish in a bag', price: 3, kind: 'gear' }, // (won at the night market's tub)
   // the two that bend the world: carry the watch and T hurries the hours along; shake the globe and the sky changes
   pocketwatch: { name: 'cursed pocket watch', price: 300, kind: 'gear' }, // (the prize counters' top prize, for tickets)
   cityglobe: { name: 'Glyphport snow globe', price: 350, kind: 'gear' },
+  postcard: { name: 'museum postcard', price: 2, kind: 'gear' }, dinotoy: { name: 'toy T. rex', price: 8, kind: 'gear' }, replicastar: { name: 'replica Glyphport Star', price: 15, kind: 'gear' }, // (the museum gift shop)
+  orrery: { name: 'Equinox Orrery', price: 2500, kind: 'gear' }, // (the museum's: turn the crank and the season turns with it. Only a thief owns one)
+  diamond: { name: 'the Glyphport Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
 };
 // the arcade's prize counter: what tickets buy
 let tickets = 0;
@@ -2079,6 +2102,7 @@ function claimPrize(id) {
 // what each kind of place sells: by shop word first, then by room kind
 const STOCK_WORD = {
   'FAIR FOOD': ['corndog', 'popcorn', 'cottoncandy', 'lemonade'],
+  MUSEUM: ['postcard', 'dinotoy', 'replicastar'], // (the gift shop)
   'STREET FOOD': ['bao', 'eggwaffle', 'stinkytofu', 'bubbletea'], CHARMS: ['redstring', 'luckycoin', 'fortunecookie', 'tigerbalm'], CURIOS: ['mysterybox', 'lantern', 'firecrackers', 'cityglobe'], // (the night market's stalls)
   YAKITORI: ['yakitori', 'beer', 'sake'], TAKOYAKI: ['takoyaki', 'melonsoda'], BENTO: ['bento', 'onigiri', 'tea'], IZAKAYA: ['beer', 'sake', 'yakitori'],
   KISSATEN: ['coffee', 'melonsoda', 'sandwich'], DRUGSTORE: ['water', 'energy', 'umbrella', 'candy'], MANGA: ['book'], CAPSULE: ['water', 'onigiri'],
@@ -2115,8 +2139,10 @@ const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, boo
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
 // anything, the dragon's a bit more, and they add up
 const carrying = id => inv.some(it => it.id === id);
+let goldenDuckDue = false, fortuneLuckT = -1; // (a fortune teller's promises: a gold duck in the next pond; luck at the games till then)
 const luck = () => (carrying('jadebangle') ? 0.03 : 0) + (carrying('jadedragon') ? 0.08 : 0) + (carrying('plushcat') ? 0.02 : 0) // (and the lucky cat, a little)
-  + (carrying('redstring') ? 0.02 : 0) + (carrying('luckycoin') ? 0.03 : 0); // (the night market's charms)
+  + (carrying('redstring') ? 0.02 : 0) + (carrying('luckycoin') ? 0.03 : 0) // (the night market's charms)
+  + (T < fortuneLuckT ? 0.06 : 0); // (and the fortune teller said so)
 // the yo-yo, out on its string: Q lets it drop (and Q again reels it in); while it's out the camera holds still and
 // the mouse (or a drag) swings it. A pendulum: len 0..1 of the string paid out, ang its swing from straight down
 // (round past the top is around the world), and when it hangs low enough it touches down and rolls along the
@@ -2252,6 +2278,11 @@ function useHeld(near) {
       return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
     case 'pocketwatch': return [pick(['The second hand runs fast. Hold T and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
     case 'cityglobe': return shakeGlobe();
+    case 'orrery': return turnOrrery();
+    case 'postcard': return [pick(['A postcard of the T. rex. On the back: "Wish you were here. Actually don\'t, it\'s ten dollars."', 'A postcard of the museum dome under snow.']), null];
+    case 'dinotoy': return ['RAWR. The little T. rex\'s arms flap uselessly.', 'squeak'];
+    case 'replicastar': return ['Glass, and not very good glass. Still sparkles, though.', null];
+    case 'diamond': return [pick(['The Glyphport Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
     case 'redstring': return [pick(['You tug the red string round your wrist. A little luck at the tables and the games, the stallholder said.', 'A thread of red. Keeps the bad stuff off, and tips the odds a hair your way at the games.']), null];
     case 'luckycoin': return [`You flip the lucky coin: ${Math.random() < 0.5 ? 'heads' : 'tails'}. (On you, it nudges the odds at the games.)`, 'click'];
     case 'tigerbalm':
@@ -2272,6 +2303,7 @@ function useHeld(near) {
       for (const p of people) if (!p.hidden && Math.hypot(rel(p.x - px), rel(p.y - py)) < 0.8) p.talk = 3;
       return [pick(['BANG BANG BANG! Everyone nearby jumps out of their skin.', 'A string of firecrackers goes off at your feet. Somewhere a car alarm joins in.']) + (it.uses > 0 ? ` (${it.uses} left)` : ''), 'kick'];
     }
+    case 'goldfish': return [pick(['You hold the bag up to the light. The goldfish looks at you, then at the city, unimpressed.', 'The goldfish does a lap of its bag. Then another.', 'You name the goldfish. It doesn\'t react, but you know.']), null];
     case 'mysterybox': { // open it: something from the pile, nobody said what
       removeHeld();
       const id = pickWeighted(MYSTERY_BOX);
@@ -2299,11 +2331,22 @@ const pickWeighted = list => { let r = Math.random() * list.reduce((t, [, w]) =>
 // give the snow a few seconds to settle before you try again
 const GLOBE_SETTLE = 8;
 let globeT = -99;
-const GLOBE_SKY = { clear: 'the stars come out over the tiny towers', rain: 'rain streaks down the glass', storm: 'lightning flickers in the glass', fog: 'fog fills the globe' };
+const GLOBE_SKY = { clear: 'the stars come out over the tiny towers', rain: 'rain streaks down the glass', storm: 'lightning flickers in the glass', fog: 'fog fills the globe', snow: 'the snow comes down and stays down' };
 function shakeGlobe() {
   if (T - globeT < GLOBE_SETTLE) return ['The snow\'s still settling.', null];
   globeT = T; weather = WEATHER_NEXT[weather]; wTimer = 600;
   return [`You shake the globe. Inside, ${GLOBE_SKY[weather]}. Outside, too.`, 'chime'];
+}
+// the Equinox Orrery: brass planets round a brass sun. Turn the crank and the year turns on a season; the city follows
+// (winter brings snow, spring melts it). The gears need a little while before they'll turn again
+const ORRERY_REST = 12;
+let orreryT = -99;
+const ORRERY_LINE = { spring: 'The sun swings low and climbs again. Green comes back to the trees.', summer: 'The little brass sun burns brighter. It\'s summer.',
+  autumn: 'The planets tick round. Leaves turn, all over the city at once.', winter: 'The gears grind round to the shortest day. The air goes cold. Winter.' };
+function turnOrrery() {
+  if (T - orreryT < ORRERY_REST) return ['The gears are still settling.', null];
+  orreryT = T; seasonShift++; wTimer = 0; // (and the sky catches up)
+  return [`You turn the crank. ${ORRERY_LINE[season()]}`, 'whirr'];
 }
 // may you hurry the hours along (hold T) or change the sky (Y)? With the watch / the globe on you, or the dev switch
 const timeKeys = () => devKeys || carrying('pocketwatch'), skyKeys = () => devKeys || carrying('cityglobe');
@@ -3025,7 +3068,7 @@ GAMES.ducks = (rnd = Math.random) => {
   const LEGS = [[3, 10, 29, 10], [29, 10, 29, 4], [29, 4, 3, 4], [3, 4, 3, 10]], LAP = 64, SPEED = 3.2;
   const at = s => { s = mod(s, LAP); for (const [x0, y0, x1, y1] of LEGS) { const len = Math.abs(x1 - x0) + Math.abs(y1 - y0); if (s <= len) { const f = s / len; return { x: x0 + (x1 - x0) * f, y: y0 + (y1 - y0) * f, dir: x1 > x0 ? 1 : x1 < x0 ? -1 : y1 < y0 ? 1 : -1, near: y0 === 10 && y1 === 10 }; } s -= len; } return at(0); };
   const tier = () => { let r = rnd(); for (const [v, p] of DUCK_TIERS) if ((r -= p) < 0) return v; return 1; };
-  const gold = rnd() < 0.5 ? rnd() * 12 | 0 : -1;
+  const gold = goldenDuckDue || rnd() < 0.5 ? rnd() * 12 | 0 : -1; goldenDuckDue = false; // (a fortune teller's promise comes good)
   const ducks = Array.from({ length: 12 }, (_, k) => ({ s: k * LAP / 12 + rnd() * 1.5, worth: k === gold ? (rnd() < 0.7 ? 25 : 50) : tier(), gold: k === gold, ph: rnd() * 6 }));
   let hooks = 3, hx = 16, dip = 0, dipOn = null, held = null, card = null, splash = null, t = 0;
   g.ducks = ducks; // (for the tests)
@@ -3215,6 +3258,86 @@ GAMES.darts = (rnd = Math.random) => {
   g.reward = () => g.score;
   return g;
 };
+// goldfish scooping: a round tub of fish, a paper net (a poi). Steer it, hold GO to dip it in, let go to lift. Whatever's over
+// the paper as it comes up is yours, two at most, but the paper wears through in the water (faster if you wave it
+// about) and every fish weighs on it: once it tears, that's your go. Each fish is worth tickets (the gold one most),
+// and you take one home in a bag.
+const FISH_KINDS = [['orange', ORANGE, 2, 0.6], ['calico', RED, 3, 0.25], ['black', GRAY, 5, 0.12], ['gold', YEL, 10, 0.03]]; // name, colour, tickets, how common
+GAMES.goldfish = (rnd = Math.random) => {
+  const W = 36, H = 16, g = { id: 'goldfish', title: 'GOLDFISH', W, H, score: 0, over: false, prize: null };
+  const CX = 17.5, CY = 9.2, RX = 15, RY = 5.6, inTub = (x, y, m = 0) => ((x - CX) / (RX - m)) ** 2 + ((y - CY) / (RY - m * 0.45)) ** 2 < 1;
+  const kindOf = () => { let r = rnd(); for (const k of FISH_KINDS) if ((r -= k[3]) < 0) return k; return FISH_KINDS[0]; };
+  const fish = Array.from({ length: 11 }, () => { const an = rnd() * 6.28, rr = rnd() * 0.8; return { x: CX + Math.cos(an) * RX * rr, y: CY + Math.sin(an) * RY * rr, a: rnd() * 6.28, k: kindOf(), ph: rnd() * 6 }; });
+  let nx = CX, ny = CY, down = false, paper = 1, t = 0, last = null, tear = 0, caught = [];
+  g.fish = fish; g.net = () => [nx, ny, down, paper]; // (for the tests)
+  const under = () => fish.filter(f => Math.hypot((f.x - nx) * 0.55, f.y - ny) < 1.1);
+  g.under = under;
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    if (last && (last.t -= dt) <= 0) last = null;
+    if (tear > 0) { if ((tear -= dt) <= 0) { g.over = true; ev.push('end'); } return ev; }
+    for (const f of fish) { // they wander, turning now and then; with the net in the water close by, they dart off
+      const fear = down && Math.hypot((f.x - nx) * 0.55, f.y - ny) < 2.6;
+      if (fear) f.a = Math.atan2(f.y - ny, f.x - nx) + (rnd() - 0.5) * 0.6;
+      else if (rnd() < dt * 0.6) f.a += (rnd() - 0.5) * 2.4;
+      const sp = (fear ? 5 : 1.6) * (f.k[0] === 'gold' ? 1.4 : 1);
+      let x = f.x + Math.cos(f.a) * sp * dt, y = f.y + Math.sin(f.a) * sp * dt * 0.55;
+      if (!inTub(x, y, 1.2)) { f.a = Math.atan2(CY - f.y, CX - f.x) + (rnd() - 0.5); x = f.x; y = f.y; }
+      f.x = x; f.y = y;
+    }
+    const mv = (k.left ? -1 : 0) + (k.right ? 1 : 0), mvy = (k.up ? -1 : 0) + (k.down ? 1 : 0);
+    nx = clamp(nx + mv * dt * (down ? 6 : 10), CX - RX + 2, CX + RX - 2); ny = clamp(ny + mvy * dt * (down ? 3 : 5), CY - RY + 1.4, CY + RY - 1.4);
+    if (k.act && !down) { down = true; ev.push('launch'); }
+    if (down) paper -= dt * (0.09 + (mv || mvy ? 0.22 : 0));
+    if (!k.act && down) { // up it comes
+      down = false;
+      const got = under().slice(0, 2);
+      for (const f of got) { paper -= 0.14 + (f.k[0] === 'gold' ? 0.1 : 0); fish.splice(fish.indexOf(f), 1); caught.push(f.k); g.score += f.k[2]; }
+      if (got.length) { last = { text: got.map(f => `${f.k[0]} +${f.k[2]}`).join('  '), col: got.some(f => f.k[0] === 'gold') ? YEL : GREEN, t: 1.4 }; ev.push(got.some(f => f.k[0] === 'gold') ? 'clear' : 'score'); g.prize = 'goldfish'; }
+      else { last = { text: 'nothing but water', col: GRAY, t: 1 }; ev.push('miss'); }
+    }
+    if (paper <= 0 || !fish.length) { tear = 1.2; last = { text: fish.length ? 'RRRIP. The paper\'s gone.' : 'You caught every one!', col: fish.length ? RED : YEL, t: 1.2 }; ev.push('miss'); }
+    return ev;
+  };
+  g.draw = (put, text) => {
+    awning(put, text, W, t, MAG);
+    text((W - 13) >> 1, 2, 'SCOOP A FISH, TAKE IT HOME', C(YEL, 15));
+    for (let y = 3; y < H - 1; y++) for (let x = 0; x < W; x++) { // the tub: a wide blue bowl, its rim, the water rippling
+      if (!inTub(x + 0.5, y + 0.5, -0.9)) continue;
+      if (!inTub(x + 0.5, y + 0.5)) { put(x, y, ' ', 0, C(BLUE, 5.5)); continue; }
+      const w = Math.sin(x * 0.9 + t * 1.3 + y * 1.7) + Math.sin(y * 1.1 - t * 0.8);
+      put(x, y, ' ', 0, C(BLUE, 2.4 + Math.max(0, w) * 0.5));
+      if (w > 1.5) text(x, y, '~', C(CYAN, 10));
+    }
+    for (const f of fish) { // a fish: a body and a tail flicking behind it
+      const X = Math.round(f.x), Y = Math.round(f.y), dir = Math.cos(f.a) >= 0 ? 1 : -1, col = f.k[1];
+      put(X, Y, ' ', 0, C(col, f.k[0] === 'gold' ? 15 : 12));
+      if (f.k[0] === 'calico') text(X, Y, ':', C(WHITE, 15));
+      put(X - dir, Y, ' ', 0, C(col, 8 + Math.sin(t * 9 + f.ph) * 2));
+      text(X, Y, dir > 0 ? 'o' : 'o', C(GRAY, 1));
+    }
+    // the net: a white paper circle on a little frame and handle; wet and grey where it's wearing through
+    const R = 1.1, wet = down ? 1 : 0;
+    for (let y = -1; y <= 1; y++) for (let x = -2; x <= 2; x++) {
+      const d = Math.hypot(x * 0.55, y);
+      if (d > R + 0.15) continue;
+      const X = Math.round(nx) + x, Y = Math.round(ny) + y;
+      if (d > R - 0.45) text(X, Y, 'o', C(MAG, 15)); // the frame
+      else put(X, Y, ' ', 0, C(paper > 0.35 ? WHITE : GRAY, (down ? 4 : 8) * (0.4 + paper * 0.6)));
+    }
+    for (let k = 1; k <= 3; k++) text(Math.round(nx) + 2 + k, Math.round(ny) + 1 + (k >> 1), '\\', C(MAG, 13)); // the handle
+    if (wet && paper < 0.4) text(Math.round(nx), Math.round(ny), 'x', C(GRAY, 6));
+    // the bowl of what you've caught, and how much paper's left
+    text(1, 15, `paper ${'#'.repeat(Math.max(0, Math.ceil(paper * 8)))}${'.'.repeat(8 - Math.max(0, Math.ceil(paper * 8)))}`, C(paper > 0.35 ? WHITE : RED, 13));
+    text(22, 15, `caught ${caught.length}: ${g.score} tickets`, C(YEL, 14));
+    if (last) text(Math.max(1, (W - Math.ceil(last.text.length / 2)) >> 1), 3, last.text, C(last.col, 15));
+  };
+  g.status = () => `CAUGHT ${caught.length}   ARROWS steer the net   HOLD SPACE dip it, LET GO to scoop   (the paper tears: go gentle)`;
+  g.reward = () => g.score;
+  return g;
+};
 const FAIR_GAMES = ['ringtoss', 'strength', 'ducks', 'darts'];
 
 // ---- the Shotengai's parlours
@@ -3251,7 +3374,7 @@ GAMES.pachinko = (rnd = Math.random) => {
         let p = POCKETS[b.x];
         if (!p && rnd() < luck() * 0.4) for (const o of [-1, 1]) if (POCKETS[b.x + o]) { p = POCKETS[b.x + o]; break; } // (lucky: it rolls in after all)
         if (p === 'small') { g.score += PAY.small; ev.push('eat'); }
-        if (p === 'start') { g.score += PAY.start; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.085 + luck() * 0.4 }; }
+        if (p === 'start') { g.score += PAY.start; ev.push('score'); if (!reel) reel = { t: 1.6, r: [0, 1, 2].map(() => 1 + (rnd() * 7 | 0)), hit: rnd() < 0.09 + luck() * 0.4 }; }
         pops.push(p ? { x: b.x, text: `+${PAY[p]}`, col: p === 'start' ? YEL : GREEN, t: 0.9 } : { x: b.x, text: 'x', col: GRAY, t: 0.5 });
         b.dead = true;
       }
@@ -3891,7 +4014,7 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  pickpocket: { stars: 1, name: 'pickpocketing' }, shoplift: { stars: 1, name: 'shoplifting' },
                  burglary: { stars: 2, name: 'breaking and entering' }, graffiti: { stars: 1, name: 'vandalism' },
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
-                 boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' } };
+                 boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -4474,6 +4597,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
   const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
   if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
+  if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 21) return exchangeFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -4801,6 +4925,7 @@ function roofTop(i, wx, wy, h, d) {
     const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
     if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); return set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); }
   }
+  if (snowCover > 0.05 && noise(wx * 5, wy * 5, 45) < snowCover * 1.2) { BG[i] = C(WHITE, 2.4 + day * 6); return set(i, ' ', 0); } // snow on the roof
   set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
 }
 
@@ -4867,6 +4992,10 @@ function floorCell(i, r, x, rx, ry) {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
       if (inPond(lx, ly, pbx, pby)) { // the pond: ripples, lily pads by the edge, the sky and trees in it
+        if (seasonIdx() === 3) { // frozen over: pale ice, cracks, snow drifted on it
+          const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03, dr = snowCover > 0.1 && noise(wx * 5, wy * 5, 96) < snowCover * 0.7;
+          BG[i] = C(dr ? WHITE : CYAN, dr ? 2.4 + day * 6 : 1.4 + day * 3.5); return set(i, cr ? '/' : dr ? ' ' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
+        }
         const n = noise(wx * 4 + T * 0.3, wy * 4 - T * 0.1, 92), lily = !inPond(lx, ly, pbx, pby, -0.18) && hash(Math.floor(wx * 9), Math.floor(wy * 9), 93) > 0.8;
         set(i, lily ? (hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? '*' : 'o') : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? MAG : GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
         BG[i] = C(BLUE, 1 + day * 2.5 + lampsOn * glow(wx, wy) * 2); FL[i] = lily ? 0 : 3;
@@ -4895,7 +5024,12 @@ function floorCell(i, r, x, rx, ry) {
   }
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
-  if (!soft && wet > 0.05 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
+  if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
+  if (snowCover > 0.03) { // snow lying: drifts deeper off the road, tyre tracks down the middle of it
+    const cover = snowCover * (road === 1 || road === 2 ? (Math.abs((road === 1 ? lx : ly) - 1) < 0.55 ? (fract((road === 1 ? lx : ly) * 3.3) < 0.5 ? 0.25 : 0.6) : 1.1) : road ? 0.7 : 1.15);
+    const n = noise(wx * 4, wy * 4, 43);
+    if (n < cover) { BG[i] = C(WHITE, Math.min(15, (2.4 + day * 6.5 + lampsOn * glow(wx, wy) * 4) * (shade ? 0.6 : 1) * (0.85 + n * 0.3))); set(i, n > cover - 0.08 ? '.' : hash(Math.floor(wx * 20), Math.floor(wy * 20), 44) > 0.93 ? "'" : ' ', C(GRAY, L * 0.7)); LAMPL[i] = 0; return; }
+  }
   LAMPL[i] = 0;
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;
@@ -5059,6 +5193,14 @@ function rainFx(dt) {
     if ((d[1] += d[2] * dt * 1.8) > 1) { d[1] -= 1; d[0] = Math.random(); }
     const i = (d[1] * rows | 0) * cols + (d[0] * cols | 0);
     set(i, k & 1 ? '|' : '!', C(k % 3 ? BLUE : WHITE, 5 + day * 5)); FOGS[i] = 0; // drops are right in front of you
+  }
+  // snow: flakes drifting down slowly, swaying, the near ones bigger
+  const ns = roofed ? 0 : drops.length * snow * (under ? 0.5 : 1) | 0;
+  for (let k = 0; k < ns; k++) {
+    const d = drops[drops.length - 1 - k];
+    if ((d[1] += d[2] * dt * 0.16) > 1) { d[1] -= 1; d[0] = Math.random(); }
+    const x = mod(d[0] + Math.sin(T * 0.8 + k) * 0.012 + a * 0.15, 1), i = (d[1] * rows | 0) * cols + (x * cols | 0);
+    set(i, d[2] > 1.15 ? '*' : '.', C(WHITE, 8 + day * 6)); FOGS[i] = 0;
   }
 }
 
@@ -5344,13 +5486,20 @@ function treeCell(i, u, z, L, t) {
     }
     return false;
   }
-  const n = hash(Math.floor(u * 45 + t.seed * 99), Math.floor(z * 45), 814);
-  if (e < 0.14 && n > 0.55) return false; // ragged edges: a little sky between the outermost leaves
+  const n = hash(Math.floor(u * 45 + t.seed * 99), Math.floor(z * 45), 814), sn = seasonIdx(), bare = sn === 3 && k !== 'pine';
+  if (bare) { // winter: the leaves are gone, just branches (snow along the tops of them when there's snow about)
+    const br = Math.abs(fract((u * 9 + z * 5 + t.seed * 3) * (1 + (n > 0.5) * 0.5)) - 0.5) < 0.06 || Math.abs(u) < 0.02 && z < cz;
+    if (!br || e < 0.08) return false;
+    return set(i, snowCover > 0.2 && n > 0.6 ? '-' : u > 0 ? '/' : '\\', snowCover > 0.2 && n > 0.6 ? C(WHITE, 13) : C(BRICK, L * 0.8)), true;
+  }
+  if (e < (sn === 2 ? 0.2 : 0.14) && n > 0.55) return false; // ragged edges: a little sky between the outermost leaves (thinner in autumn)
   const lit = clamp(0.75 + (z - cz) * 1.6 - u * 0.6, 0.45, 1.25) * tint; // lighter up top and toward the sun
-  const base = k === 'blossom' ? MAG : GREEN, bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
+  const fall = sn === 2 && k !== 'pine' ? [ORANGE, RED, YEL, BRICK][Math.floor(hash(Math.floor(u * 12 + t.seed * 50), Math.floor(z * 12), 815) * 4)] : 0; // autumn colours
+  const base = fall || (k === 'blossom' || sn === 0 && k !== 'pine' && n > 0.82 ? MAG : GREEN), bg = k === 'pine' || k === 'poplar' ? 0.75 : k === 'birch' ? 1.15 : 1;
+  if (k === 'pine' && snowCover > 0.2 && n > 0.62) { BG[i] = C(WHITE, 3 + L * 0.3); return set(i, '^', C(WHITE, 15)), true; } // snow on the pine's boughs
   BG[i] = C(base, Math.max(0.6, (0.9 + L * 0.22) * lit * bg));
   const ch = k === 'pine' ? (n > 0.6 ? '^' : n > 0.3 ? 'A' : ' ') : n > 0.72 ? '@' : n > 0.45 ? '%' : n > 0.25 ? '&' : ' ';
-  return set(i, ch, k === 'blossom' ? C(n > 0.8 ? WHITE : MAG, L * 1.1 * lit) : C(k === 'birch' && n > 0.8 ? YEL : GREEN, L * (0.8 + n * 0.5) * lit * bg)), true;
+  return set(i, ch, fall ? C(fall, L * (0.9 + n * 0.5) * lit) : base === MAG ? C(n > 0.8 ? WHITE : MAG, L * 1.1 * lit) : C(k === 'birch' && n > 0.8 ? YEL : GREEN, L * (0.8 + n * 0.5) * lit * bg)), true;
 }
 
 function citySprites() {
@@ -5661,7 +5810,9 @@ const SOLID_SHADE = {
     let ch = ' ', c = WHITE;
     if (o.k === 0) { ch = back ? '([=])'[mod(Math.floor(u * 5), 5)] : 'oO'[col & 1]; c = back ? WARM : WHITE; } // steamer baskets at the back, buns at the front
     else if (o.k === 1) { ch = back ? (col & 1 ? 'Y' : '|') : (col % 3 ? 'o' : '@'); c = back ? RED : col % 3 ? RED : YEL; } // tassels, knots, coins
-    else { ch = back ? '[#]'[m] : col % 3 === 1 ? (Math.sin(T * 2 + col) > 0.85 ? '*' : 'o') : col % 5 === 0 ? '?' : ' '; c = back ? ORANGE : col % 5 === 0 ? YEL : CYAN; } // boxes, glass jars
+    else if (o.k === 2) { ch = back ? '[#]'[m] : col % 3 === 1 ? (Math.sin(T * 2 + col) > 0.85 ? '*' : 'o') : col % 5 === 0 ? '?' : ' '; c = back ? ORANGE : col % 5 === 0 ? YEL : CYAN; } // boxes, glass jars
+    else if (o.k === 3) { ch = back ? (col % 4 === 1 ? '(O)'[m] : ' ') : '#=='[m]; c = back ? (Math.sin(T * 1.5) > 0 ? CYAN : MAG) : col & 1 ? YEL : RED; } // a crystal ball at the back, tarot cards laid out
+    else { ch = back ? '(~)'[m] : (col + Math.floor(T * 2)) % 3 ? '~' : '>'; c = back ? CYAN : (col + Math.floor(T * 2)) % 3 ? BLUE : ORANGE; } // bags of fish hung up, the tub with fish darting in it
     return set(i, ch, C(c, Math.max(L, 11))), true;
   },
   stallroof: o => (i, t, L) => { // the canopy: stripes, a scalloped valance along the front with the sign on it
@@ -7026,6 +7177,7 @@ function roomFloor(i, r, x, rx, ry) {
     case 'conservatory': return conservatoryFloor(i, f, wx, wy);
     case 'jade': return jadeFloor(i, f, wx, wy);
     case 'casino': return casinoFloor(i, f, wx, wy);
+    case 'museum': return museumFloor(i, f, wx, wy);
     case 'aviary': return aviaryFloor(i, f, wx, wy);
     case 'marble': BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1); return set(i, ' ', 0);
     case 'station':
@@ -8402,6 +8554,288 @@ function stepExchange() {
     if (shares[n.sym] || mode === 'room' && room.kind === 'exchange') say(`NEWS: ${n.line}. ${n.sym} ${n.up ? 'jumps' : 'drops'} to ${fmt$(stockBy(n.sym).price)}.`, 5);
   }
 }
+// ===== the Glyphport Museum: downtown, across the street from the plaza (world.js puts it up). A grand stone front:
+// steps, columns hung with banners, bronze doors, a copper dome. Open 10 to 6, $10 in.
+// Inside: the entrance hall with a T. rex skeleton and the gift shop desk; the Egyptian room to the west (a gold
+// sarcophagus, the walls covered in hieroglyphs); the picture gallery to the east (every painting generated, so no two
+// frames match); and through the arch at the back, the gem room: the Glyphport Star (a diamond the size of your fist)
+// and the Equinox Orrery (turn its crank and the year turns) under glass. Every exhibit has a plaque (E).
+// After dark it's a job: pick the door lock (L), keep out of the guards' torch beams (crouch and they see less far),
+// crack a case (the lock game). That sets off a silent alarm: half a minute, then every cop in town. What you take
+// is gone for good: the case stands empty, with a card.
+const MUSEUM_W = 26, MUSEUM_H = 18;
+let museumStolen = {}; // { diamond: true, orrery: true } once they're gone (kept in the save)
+ART.guard = pad(['  ___', ' [===]', ' (o o)', '  \\-/', ' /|*|\\', '/ |*| \\', '  |_|', '  / \\', ' /   \\']);
+const DINO = pad([
+  '                       ___',
+  '                     _/ o \\___',
+  '                    |  .--, ^^>',
+  '                    |  |  \\VVV/',
+  '       ,,,,,,,,,,,,_|  |',
+  '  ___,)))))))))))))   /',
+  ' <___  ))))))))))))  /',
+  '     \\_/ \\__/  \\_/ \\_/',
+  '      ||  ||    ||  ||',
+  '     _||_ ||   _||_ ||']);
+const ANUBIS = pad(['  /\\ /\\', '  \\ V /', '  (o o)', '   \\=/', '  /|#|\\', '   |#|', '   |#|', '  _|_|_']);
+
+// ---- outside
+function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const L = fog * amb * (side ? 10 : 15), glow = Math.max(night, overcast * 0.5), sgn = Math.sign(u * wc) || 1, c = MUSEUM;
+  const y0 = c.by * 8 + 2, a0 = side ? c.bx * 8 + 2 : y0, along = wc - a0, len = 6, sh = SHOP[idx(mx, my)];
+  const front = side && Math.abs(rel((my + (rel(py - my) < 0 ? 0 : 1)) - y0)) < 0.01;
+  BG[i] = bgAt(WHITE, day * 2.6 * (0.45 + 0.55 * fog) * (side ? 0.75 : 1), d);
+  if (h > 2.5) { // the dome: copper gone green, ribbed, a ring of little windows, a lantern on top
+    if (z < 2.2) return set(i, fract(z * 9) < 0.12 ? '_' : ' ', C(WHITE, L * 0.6));
+    const top = 2.2 + 1.2 * Math.sqrt(Math.max(0, 1 - ((fract((wc - (side ? c.bx * 8 + 4 : y0 + 2)) / 2 + 0.5) - 0.5) * 2) ** 2));
+    if (z > top) return set(i, ' ', 0);
+    BG[i] = C(GREEN, (1.6 + L * 0.2) * (side ? 0.9 : 0.7));
+    if (z > 2.45 && z < 2.6 && fract(wc * 3) < 0.4) { BG[i] = C(YEL, 1 + glow * 5); return set(i, ' ', 0); }
+    return set(i, fract(wc * 4) < 0.1 ? '|' : z > top - 0.06 ? '^' : ' ', C(CYAN, L * 0.7));
+  }
+  if (front && z > 1.32 && z < 1.75) { // the pediment
+    const peak = 1.75 - Math.abs(along - len / 2) / (len / 2) * 0.4;
+    if (z > peak) return set(i, ' ', 0);
+    if (z > peak - 0.03) return set(i, '/', C(WHITE, L));
+    return set(i, Math.abs(along - len / 2) < 0.3 && z < 1.55 && z > 1.38 ? 'o' : ' ', C(YEL, L * 0.8)); // a carved sunburst in the middle
+  }
+  if (front && z > 1.18 && z <= 1.32) { // the frieze
+    if (wallText(i, u, uStep, z, d, 'GLYPHPORT MUSEUM', sgn * (a0 + len / 2), 1.25, 0.07, 0.08, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
+    return set(i, fract(z * 30) < 0.15 ? '-' : ' ', C(WHITE, L * 0.8));
+  }
+  if (z < 1.18) { // the colonnade: steps, eight fluted columns, banners hung between them, the bronze doors
+    if (z < 0.08) return set(i, fract(z * 40) < 0.5 ? '=' : '-', C(WHITE, L));
+    if (z > 1.1) return set(i, '=', C(WHITE, L * 1.1));
+    const fc = fract(along * 1.25);
+    if (Math.abs(fc - 0.5) < 0.15) return set(i, Math.abs(fc - 0.5) < 0.05 ? '|' : ':', C(WHITE, L * (1 - Math.abs(fc - 0.5) * 2)));
+    if (front && Math.abs(along - len / 2) < 0.35 && z < 0.55) { BG[i] = C(BRICK, 1.5 + glow * 2); return set(i, Math.abs(along - len / 2) < 0.02 ? '|' : '#', C(ORANGE, L * 0.8)); } // the doors
+    const bk = Math.floor(along * 1.25);
+    if (front && z > 0.62 && z < 1.02 && bk !== 3 && Math.abs(fc) > 0.2 && fract(along * 1.25) > 0.22 && fract(along * 1.25) < 0.78) { // banners: what's on
+      const col = [RED, BLUE, MAG, GREEN, RED, BLUE, MAG, GREEN][bk & 7], word = ['T.REX', 'GEMS', 'ART', 'EGYPT'][bk & 3];
+      BG[i] = C(col, 2.5 + glow * 2);
+      const k = Math.floor((1.0 - z) / 0.08);
+      return set(i, word[k] && Math.abs(fract(along * 1.25) - 0.5) < 0.09 ? word[k] : ' ', C(WHITE, 14));
+    }
+    BG[i] = C(GRAY, 0.5 + glow * 1.5); return set(i, ' ', 0); // shadow behind the columns
+  }
+  // the upper storey: stone in courses, tall arched windows, dark at night (or lit, if someone's in there who shouldn't be)
+  const fu = fract(along * 1.5), fz = fract(z * 2);
+  if (fu > 0.3 && fu < 0.7 && fz > 0.25 && fz < 0.9) return set(i, fz > 0.8 ? '^' : ':', C(day > 0.5 ? CYAN : GRAY, L * 0.5));
+  void sh;
+  return set(i, fract(z * 9) < 0.12 ? '_' : ' ', C(WHITE, L * 0.6));
+}
+
+// ---- inside: the walls of each room
+const museumWing = (x, y) => y < 9 && x > 7 && x < 18 ? 'gems' : x < 7 ? 'egypt' : x > 18 ? 'gallery' : 'hall';
+function museumWall(i, su, uStep, z, d, mx, my, L) {
+  const u = Math.abs(su), wing = museumWing(px, py), lit = room.burgled ? 0.35 : 1;
+  if (z > 3.6) { BG[i] = C(WHITE, 1.2 * lit); return set(i, '=', C(GRAY, L * 0.5)), true; } // the cornice
+  if (wing === 'egypt') { // sandstone, carved all over: eyes, ankhs, birds, wavy water
+    BG[i] = C(WARM, (2 + L * 0.15) * lit);
+    const band = Math.floor(z * 2.5), fz = fract(z * 2.5);
+    if (z > 0.6 && z < 3.2 && fz > 0.3 && fz < 0.7) { // bands of carving with plain stone between: eyes, ankhs, birds, water, people
+      const gx = Math.floor(u * 2.2), g = ['<o>', 'Y', '~~', 'o/', '|o|', '^^', '8', 'w'][(gx * 5 + band * 3) & 7], k = Math.floor(fract(u * 2.2) * 4);
+      return set(i, g[k] || ' ', C(band & 1 ? BRICK : BLUE, L * (band & 1 ? 0.9 : 1.1))), true;
+    }
+    if (fz < 0.06 && z > 0.6 && z < 3.2) return set(i, '-', C(BRICK, L * 0.6)), true; // the lines ruled between the bands
+    return set(i, fract(z * 6) < 0.15 ? '=' : ' ', C(BRICK, L * 0.6)), true;
+  }
+  if (wing === 'gallery' && z > 0.9 && z < 2.6) { // a picture every three metres along the wall: gold frame, a painting nobody's seen before
+    const k = Math.floor(u / 3), fu = u - k * 3 - 0.4, w = 2.2;
+    if (fu > 0 && fu < w) {
+      const edge = fu < 0.08 || fu > w - 0.08 || z < 0.98 || z > 2.52;
+      if (edge) { BG[i] = C(YEL, 3 * lit); return set(i, fu < 0.08 || fu > w - 0.08 ? '|' : '=', C(ORANGE, L)), true; }
+      const seed = k * 13 + mx * 7 + my * 3, n = noise(fu * (1 + (seed & 3)), z * (2 + (seed >> 2 & 3)), seed), n2 = noise(fu * 3 + 9, z * 3, seed + 1);
+      const pal = [[BLUE, CYAN, WHITE], [RED, ORANGE, YEL], [GREEN, YEL, BRICK], [MAG, BLUE, CYAN], [BRICK, WARM, ORANGE]][seed % 5];
+      BG[i] = C(pal[Math.floor(n * 2.99)], (2 + n2 * 4) * lit);
+      return set(i, n2 > 0.7 ? '~' : n2 < 0.2 ? '.' : ' ', C(pal[2], L * 1.2)), true;
+    }
+    if (fu > w / 2 - 0.15 && fu < w / 2 + 0.15 && z < 0.98 && z > 0.9) return set(i, '_', C(WHITE, L)), true; // its little plaque
+  }
+  if (wing === 'gems') { BG[i] = C(RED, (1.2 + L * 0.1) * lit); return set(i, fract(u * 2 + z) < 0.08 ? '|' : ' ', C(MAG, L * 0.4)), true; } // red velvet
+  // the hall: marble, a dado rail, the museum's name over the arch to the gem room
+  if (my === 9 && z > 2.6 && z < 3.1 && wallText(i, su, uStep, z, d, 'THE GEM ROOM', 13 * Math.sign(su), 2.85, 0.28, 0.4, C(YEL, 13), C(GRAY, 1))) return true;
+  BG[i] = C(WHITE, (1.6 + L * 0.1) * lit);
+  return set(i, Math.abs(z - 1) < 0.04 ? '=' : noise(u * 2, z * 3, 1702) > 0.72 ? '~' : ' ', C(GRAY, L * 0.5)), true;
+}
+// the floors: marble chequers in the hall, parquet in the wings, carpet in the gem room. After dark it's black but for
+// the guards' torch beams on it
+function museumFloor(i, f, wx, wy) {
+  const wing = museumWing(wx, wy);
+  if (room.burgled) {
+    const beam = torchAt(wx, wy, 0);
+    if (beam > 0) { BG[i] = C(YEL, 1.5 + beam * 6); return set(i, '.', C(WARM, 6 + beam * 6)); }
+    BG[i] = C(GRAY, 0.25); return set(i, hash(Math.floor(wx * 3), Math.floor(wy * 3), 1703) > 0.9 ? '.' : ' ', C(GRAY, 2));
+  }
+  if (wing === 'hall') { BG[i] = (Math.floor(wx) + Math.floor(wy)) & 1 ? C(WHITE, 2 + f * 3) : C(GRAY, 1.2); return set(i, ' ', 0); }
+  if (wing === 'gems') { BG[i] = C(RED, 1 + f * 1.2); return set(i, hash(Math.floor(wx * 3), Math.floor(wy * 3), 1704) > 0.8 ? '+' : ' ', C(MAG, f * 6)); }
+  BG[i] = C(BRICK, 1 + f * 1.5); return set(i, fract(wx * 2 + Math.floor(wy * 2) * 0.5) < 0.1 ? '|' : '=', C(BRICK, f * 7)); // parquet
+}
+
+// ---- the guards: walking set loops; by night each carries a torch, and a beam on the floor shows what it sees
+const GUARD_PATHS = [[[3.5, 3], [3.5, 13], [21.5, 13], [21.5, 3], [21.5, 13], [3.5, 13]], // the wings and the hall
+  [[9.5, 6.8], [16.5, 6.8], [16.5, 2.2], [9.5, 2.2]]]; // round the cases in the gem room
+function guardAt(path, t) { // where along its loop at time t (it walks at a steady pace), and which way it's facing
+  const segs = path.map((p, k) => [p, path[(k + 1) % path.length]]), lens = segs.map(([p, q]) => Math.hypot(q[0] - p[0], q[1] - p[1])), tot = lens.reduce((a, b) => a + b, 0);
+  let s = mod(t * 0.9, tot);
+  for (let k = 0; k < segs.length; k++) { if (s <= lens[k]) { const [p, q] = segs[k], f = s / lens[k]; return [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, Math.atan2(q[1] - p[1], q[0] - p[0])]; } s -= lens[k]; }
+  return [path[0][0], path[0][1], 0];
+}
+const museumBlocked = (x, y) => roomAt(Math.floor(x), Math.floor(y)) === '#';
+function lineClear(x0, y0, x1, y1) { // nothing but air between: walls stop a torch beam
+  const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 0.25);
+  for (let k = 1; k < n; k++) if (museumBlocked(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n)) return false;
+  return true;
+}
+const TORCH_LEN = 4.6, TORCH_HALF = 0.42;
+function inBeam(g, x, y, len = TORCH_LEN) { // how brightly g's torch lights (x, y): 0 outside it
+  const dx_ = x - g.x, dy_ = y - g.y, d = Math.hypot(dx_, dy_);
+  if (d > len || d < 0.3) return 0;
+  const off = Math.abs(mod(Math.atan2(dy_, dx_) - g.dir + Math.PI, Math.PI * 2) - Math.PI);
+  if (off > TORCH_HALF || !lineClear(g.x, g.y, x, y)) return 0;
+  return (1 - d / len) * (1 - off / TORCH_HALF * 0.6);
+}
+// what the torches light at height z: the floor gets the whole wedge; a wall or an exhibit gets a pool round where the
+// beam (held at 1.2m, angled down) meets it, wider the further it's gone. You're in the way of it too: your shadow
+// falls behind you, the shape of you, bigger the nearer you are to the torch
+const TORCH_Z = 1.2;
+function torchAt(x, y, z) {
+  let best = 0;
+  for (const g of room.props) {
+    if (!g.guard) continue;
+    let b = inBeam(g, x, y);
+    if (!b) continue;
+    const D = Math.hypot(x - g.x, y - g.y);
+    if (z > 0.05) { // (a wall stays brighter further off than the floor does: the beam meets it square on)
+      b *= (1 - (D / TORCH_LEN) ** 3) / Math.max(0.05, 1 - D / TORCH_LEN);
+      const zc = TORCH_Z - D * 0.2, hh = D * 0.42 + 0.12, v = 1 - ((z - zc) / hh) ** 2; if (v <= 0) continue; b *= Math.sqrt(v); }
+    if (b > best && !torchShadow(g, x, y, z, D)) best = b;
+  }
+  return best;
+}
+function torchShadow(g, x, y, z, D) { // is your body between g's torch and (x, y, z)?
+  const vx = (x - g.x) / D, vy = (y - g.y) / D, ox = px - g.x, oy = py - g.y, s = ox * vx + oy * vy;
+  if (s < 0.25 || s > D - 0.15) return false;
+  const h = TORCH_Z + (z - TORCH_Z) * s / D, top = 1.78 - body.crouch * 0.7; // how high the ray is as it passes you
+  if (h < 0 || h > top) return false;
+  return Math.abs(ox * vy - oy * vx) < (h > top - 0.27 ? 0.11 : h > top - 0.55 ? 0.24 : 0.17); // head, shoulders, the rest
+}
+// after everything's drawn: each cell's own world point (from its depth), lit up where a beam lands on it, the colours
+// the dark was hiding coming back. The floor already did its own
+function museumTorchFx() {
+  if (!room.burgled) return;
+  for (let c = 0; c < cols; c++) {
+    const cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
+    for (let r = 0; r < rows; r++) {
+      const i = r * cols + c, t = ZB[i];
+      if (t < 0.05 || t > vis) continue;
+      const z = eye + t * (hor - r - 0.5) / projY;
+      if (z < 0.05 || z > 3.9) continue;
+      const b = torchAt(px + rx * t, py + ry * t, z);
+      if (!b) continue;
+      const bg = BG[i], hue = bg >> 4;
+      COL[i] = C(COL[i] >> 4, Math.max(COL[i] & 15, 5) + b * 10);
+      if (b < 0.1) continue; // the pool's soft edge: only the marks on the wall catch it
+      BG[i] = bg === NONE || hue === GRAY || hue === WHITE ? C(YEL, 1.5 + b * 7) : C(hue, (bg & 15) + 2 + b * 8); // plain stone goes torch-yellow
+    }
+  }
+}
+// a guard's spotted you once you've stood in a beam a moment (crouched, the beam has to be nearer to catch you)
+function stepMuseum(dt) {
+  if (mode !== 'room' || room.kind !== 'museum' || !room.burgled || game) return;
+  const len = body.crouch > 0.5 ? TORCH_LEN * 0.6 : TORCH_LEN;
+  const seen = room.props.some(g => g.guard && inBeam(g, px, py, len) > 0);
+  room.spot = clamp((room.spot || 0) + (seen ? dt * 1.6 : -dt), 0, 1);
+  if (seen && room.spot > 0.2 && !room.warned && !room.alarm) { room.warned = true; say('A torch beam swings across you. "...Hello?"', 2); }
+  if (!seen && room.spot === 0) room.warned = false;
+  if (room.spot >= 1 && !room.alarm) museumAlarm('"HEY! STOP RIGHT THERE!" The guard hits the alarm. Every cop in town is coming: RUN.');
+  if (room.silent && T > room.silent && !room.alarm) museumAlarm('The silent alarm\'s done its job: sirens outside, getting closer. Get out, NOW.');
+}
+function museumAlarm(line) {
+  room.alarm = true;
+  addWanted('heist', room.ret[0], room.ret[1], true);
+  if (actx) { const at = actx.currentTime; for (let k = 0; k < 30; k++) tone(at + k * 0.11, k & 1 ? 1800 : 2400, 0.09, 0.05, 'square'); }
+  say(line, 5);
+}
+
+// ---- what's on show: the plaques, and the two cases
+const CASES = [{ id: 'diamond', x: 10.5, y: 4.3, plaque: 'THE GLYPHPORT STAR. Forty carats, found inside a cod at the fish market in 1887. Insured for more than this building is worth.' },
+  { id: 'orrery', x: 15.5, y: 4.3, plaque: 'THE EQUINOX ORRERY. Brass and glass, maker unknown. The story goes that turning its crank turns the year. Please do not turn the crank.' }];
+const PLAQUES = [
+  [12.5, 13.2, 2.6, 'TYRANNOSAURUS GLYPHUS. Dug out of the cliffs under the lighthouse in 1911. Its arms were too short to hold this plaque, so we did.'],
+  [3.5, 6.6, 1.6, 'THE SARCOPHAGUS OF ANKH-ASCII, a scribe who wrote everything in fixed-width. Please do not knock. We mean it.'],
+  [5.5, 2.4, 1.3, 'ANUBIS, guardian of the dead and of the gift shop. He sees you.'],
+  [21.5, 8, 4, 'THE GALLERY. Every painting here was made by a machine, and no two are ever the same. Neither are the critics.'],
+];
+function museumSpot() {
+  if (mode !== 'room' || room.kind !== 'museum') return null;
+  for (const c of CASES) if (Math.hypot(px - c.x, py - c.y) < 1.4) return { case: c };
+  for (const [x, y, r, text] of PLAQUES) if (Math.hypot(px - x, py - y) < r) return { text };
+  return null;
+}
+function museumPrompt() {
+  const sp = museumSpot();
+  if (!sp) return room.burgled ? (room.alarm ? 'ALARM! Get out!' : room.silent ? `Silent alarm: ${Math.max(0, Math.ceil(room.silent - T))}s` : 'Keep out of the torch beams (C: crouch)') : '';
+  if (sp.case) { const gone = museumStolen[sp.case.id]; return gone ? 'An empty case' : room.burgled ? `E: crack the case (${ITEMS[sp.case.id].name})` : 'E: read the plaque'; }
+  return 'E: read the plaque';
+}
+function museumUse() {
+  const sp = museumSpot();
+  if (!sp) return false;
+  if (sp.text) return say(sp.text, 6), true;
+  const c = sp.case;
+  if (museumStolen[c.id]) return say(`An empty case. A card in it: "${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is away for... cleaning." The police tape says otherwise.`, 5), true;
+  if (!room.burgled) return say(c.plaque, 6), true;
+  if (inv.length >= INV_SIZE) return say('Your hands are full.'), true;
+  startCrime('lockpick', ok => {
+    if (ok === 'abort') return;
+    if (!ok) return museumAlarm('The pick slips, the glass cracks, and every alarm in the building goes off. RUN.');
+    museumStolen[c.id] = true; inv.push({ id: c.id, uses: 0 }); held = inv.length - 1;
+    room.props = room.props.filter(p => p.exhibit !== c.id);
+    if (!room.silent && !room.alarm) room.silent = T + 30;
+    say(`The case clicks open. ${c.id === 'diamond' ? 'The Glyphport Star' : 'The Equinox Orrery'} is yours. A tiny red light starts blinking: you have half a minute.`, 5);
+  });
+  return true;
+}
+
+// ---- the room
+const museumGrid = () => {
+  const extra = {};
+  for (let y = 1; y < MUSEUM_H - 1; y++) for (const x of [7, 18]) if (y < 11 || y > 14) extra[x + ',' + y] = '#'; // the wings' walls, an opening into each
+  for (let x = 8; x < 18; x++) if (x < 12 || x > 13) extra[x + ',9'] = '#'; // the gem room's wall, the arch in the middle
+  return boxRoom(MUSEUM_W, MUSEUM_H, extra);
+};
+ROOM_DEFS.museum = { grid: museumGrid(), light: 1, height: 4, floor: 'museum', ceil: 'strip', wall: museumWall, fx: museumTorchFx, keeper: [20.5, 15.4], spawn: [12.5, 16.2],
+  props: r => {
+    const p = [...counterBox(20.5, 15.9, 1.6), standing(20.5, 15.4, MAG)]; // the ticket desk and gift shop, by the door
+    const bone = (c, row, L) => C(c === 'o' ? RED : WHITE, Math.max(L, 6) * (r.burgled ? 0.4 : 1));
+    p.push(BX(12.5, 12, 3, 0.9, 0, 0.35, solid(GRAY, { top: '=' })), SP(12.5, 12, 5.6, 3.4, DINO, bone, 0.35)); // the T. rex, on its plinth
+    p.push(BX(3.5, 6, 1.1, 0.5, 0, 0.85, (i, t, L) => { // the sarcophagus: gold, a face on the lid, bands of glyphs down the sides
+      const f = HIT.face; BG[i] = C(YEL, (2.2 + L * 0.3) * shadeFace(f) * (r.burgled ? 0.4 : 1));
+      if (f === 5) return set(i, Math.abs(HIT.u + 0.6) < 0.25 && Math.abs(HIT.v) < 0.25 ? 'o' : fract(HIT.u * 4) < 0.15 ? '=' : ' ', C(BLUE, L)), true;
+      return set(i, fract(HIT.w * 8) < 0.2 ? '=' : '<o>+~'[Math.floor(Math.abs(HIT.u) * 8) % 5], C(BLUE, L)), true; }));
+    p.push(SP(5.5, 1.9, 1, 1.9, ANUBIS, (c, row, L) => C(c === 'o' ? YEL : row > 3 ? YEL : GRAY, Math.max(L, 6) * (r.burgled ? 0.4 : 1))));
+    for (const c of CASES) { // the gem room's cases: a pedestal, the glass, what's in it, velvet ropes round it
+      p.push(BX(c.x, c.y, 0.45, 0.45, 0, 0.9, solid(GRAY, { panel: 0.3, top: '=' })));
+      for (const [ox, oy] of [[-1.1, -1.1], [1.1, -1.1], [-1.1, 1.1], [1.1, 1.1]]) p.push(SP(c.x + ox, c.y + oy, 0.2, 0.95, [' o', ' |', ' |', '_|_'], (ch, row, L) => C(row ? YEL : RED, Math.max(L, 8))));
+      if (museumStolen[c.id]) { p.push(SP(c.x, c.y, 0.7, 0.3, ['[STOLEN]'], () => C(RED, 14), 0.95)); continue; }
+      p.push({ ...BX(c.x, c.y, 0.38, 0.38, 0.9, 1.5, (i, t, L) => { const f = HIT.face; if (f === 5 || Math.abs(fract(HIT.u * 2.6) - 0.5) > 0.46 || HIT.w > 1.47) return set(i, f === 5 ? ' ' : '|', C(CYAN, 12)), true; return false; }), exhibit: c.id }); // the glass
+      p.push({ ...SP(c.x, c.y, 0.5, 0.45, c.id === 'diamond' ? [' /\\', '<**>', ' \\/'] : [' .o.', 'o(@)o', " `o'"], (ch, row, L) => c.id === 'diamond' ? C(fract(T * 1.5 + row * 0.3) < 0.2 ? WHITE : CYAN, 15) : C(ch === '@' ? YEL : ch === 'o' ? [CYAN, RED, GREEN][row % 3] : YEL, 14), 1.0), exhibit: c.id });
+    }
+    if (r.burgled) { // after dark: two guards with torches, walking their rounds
+      GUARD_PATHS.forEach((path, k) => p.push({ ...SP(path[0][0], path[0][1], 0.55, 1.8, ART.guard, (c, row, L) => C(row < 2 ? BLUE : row < 4 ? SKIN : c === '*' ? YEL : BLUE, Math.max(L, 5))), guard: true, dir: 0,
+        tick: s => { [s.x, s.y, s.dir] = guardAt(path, T + k * 7); } }));
+      return p;
+    }
+    // by day: visitors wandering, a guard on each door of the gem room
+    for (let k = 0; k < 7; k++) {
+      const x0 = [3.5, 12, 21.5, 9, 16, 4, 21][k], y0 = [10, 15, 10, 6, 6, 4, 4][k], sp = 0.12 + (k % 3) * 0.05;
+      p.push({ ...standing(x0, y0, [RED, BLUE, GREEN, YEL, WHITE, ORANGE, CYAN][k]), tick: s => { s.x = x0 + Math.sin(T * sp + k) * 1.2; s.y = y0 + Math.cos(T * sp * 0.8 + k) * 0.6; } });
+    }
+    p.push({ ...SP(11.2, 10.2, 0.55, 1.8, ART.guard, (c, row, L) => C(row < 2 ? BLUE : row < 4 ? SKIN : BLUE, L)), guard: false });
+    return p;
+  } };
+ROOM_FOR.MUSEUM = 'museum';
 // ===== the Velvet Rope: a strip club in midtown (world.js puts it up). Outside: a black front, XXX in pink neon
 // blinking, GIRLS GIRLS GIRLS and LIVE DANCERS, a neon martini, a velvet rope and a bouncer who won't let you in with
 // the police on your tail. $20 at the door, 8pm to 4am. Inside: purple and pink, a stage with three poles and a
@@ -8926,6 +9360,7 @@ function render(dt) {
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
+  if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
@@ -9049,6 +9484,7 @@ function promptText() {
     if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
+    if (room.kind === 'museum' && !room.burgled) { const m = museumPrompt(); if (m) return m; }
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
     if (nearElevator()) return 'E: elevator to the roof';
@@ -9222,7 +9658,7 @@ function hud() {
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi |${timeKeys() ? ' hold T: time |' : ''}${skyKeys() ? ' Y: weather |' : ''} M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
-  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${weather}${K.KeyT && timeKeys() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
+  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${K.KeyT && timeKeys() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
   const meters = needMeters();
@@ -9402,6 +9838,7 @@ function interact() {
         room.until = T; leaveRoom(); say('You slip out past the front desk. Nobody saw a thing.', 4);
       });
     }
+    if (room.kind === 'museum' && museumUse()) return;
     if (room.burgled && nearVault()) return crackVault();
     if (room.burgled && nearKeeper()) return emptyTill();
     if (room.kind === 'laundry' && useLaundry()) return;
@@ -9511,7 +9948,7 @@ function interact() {
     if (home) return enterRoom(home.kind === 'home_loft' ? 'loft' : 'home', { word: 'HOME', ret: [px, py, a], cell: [lookHit.mx, lookHit.my] }, [ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid[0].length / 2, ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid.length - 1.6, -Math.PI / 2]), say('Home.', 1.5);
     if (sh.club && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
     if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
-    if (sh.fee) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : 'Mind the butterflies.'}"`, 3);
+    if (sh.fee) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : sh.museum ? 'Enjoy the collection. No flash photography.' : 'Mind the butterflies.'}"`, 3);
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
     const r = { ...sh, cell: [lookHit.mx, lookHit.my], ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
     enterRoom(kind, r, [0, 0, -Math.PI / 2]);
@@ -9784,13 +10221,30 @@ function marketSpot() {
   if (mode !== 'walk') return null;
   return STALLS.find(o => Math.hypot(rel(o.at[0] - px), rel(o.at[1] - py)) < 0.3) || null;
 }
+const GOLDFISH_FEE = 2, FORTUNE_FEE = 5;
 function marketPrompt(o) {
   if (!nightMarketOpen(tod)) return `${o.word}: under a tarp till 8pm`;
+  if (o.word === 'GOLDFISH') return `E: scoop goldfish (${fmt$(GOLDFISH_FEE)} a net)`;
+  if (o.word === 'FORTUNES') return `E: have your fortune told (${fmt$(FORTUNE_FEE)})`;
   return `E: ${o.word} stall`;
 }
 function useMarket(o) {
   if (!nightMarketOpen(tod)) return say(pick(['A tarp\'s roped down over it. The market sets up after dark.', 'Nothing yet. Come back after eight.']), 2);
+  if (o.word === 'GOLDFISH') return pay(GOLDFISH_FEE) ? startGame('goldfish', 'arcade') : say(`"${fmt$(GOLDFISH_FEE)} a net, love."`, 2);
+  if (o.word === 'FORTUNES') return pay(FORTUNE_FEE) ? say(tellFortune(), 7) : say(`"The spirits want ${fmt$(FORTUNE_FEE)}. So do I."`, 2);
   return openShop(o.word, stockFor('', o.word));
+}
+// the fortune teller: she turns a card, looks at you a long moment, and says one thing. It comes true
+function tellFortune() {
+  const opts = ['stock', 'duck', 'luck', 'sky'];
+  if (season() === 'winter' && weather !== 'snow') opts.push('snow');
+  switch (pick(opts)) {
+    case 'stock': return `She turns the Wheel of Fortune. "Money is moving. ${fortune().split(' Lucky')[0]}"`;
+    case 'duck': goldenDuckDue = true; return 'She turns the Star. "On the pier there is water, and in it, gold. Hook it before someone else does."';
+    case 'luck': fortuneLuckT = T + 300; return 'She turns the Sun. "Tonight, for a little while, the dice like you. Don\'t waste it." (Luck at the games, for a few minutes.)';
+    case 'snow': weather = 'snow'; wTimer = 600; return 'She turns the Hermit, and pulls her shawl tighter. "The cold is coming down. Tonight."';
+    default: { weatherDue = T + 20 + Math.random() * 25; return 'She turns the Tower. "The sky will change its mind before the hour is out." She doesn\'t say how.'; }
+  }
 }
 // ===== the calendar: which day of the week it is, and what's on. Days tick over at midnight (and when you sleep
 // through one). Starting simple: every Saturday night, fireworks over the bay off the Sunset Pier.
@@ -10381,7 +10835,7 @@ function devPlaces() {
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
     ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],
     ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.6, Math.PI / 2); }],
-    ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
+    ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
   const nearestLm = {}; // (there are several of each: the nearest one)
@@ -10441,7 +10895,8 @@ function devBody() {
       <div class="grp">time of day</div><div class="bar">${[['Dawn', 6], ['Morning', 9], ['Noon', 12], ['Afternoon', 15], ['Dusk', 19], ['Night', 22], ['Midnight', 0], ['3am', 3]].map(([l, h]) => act(l, () => { tod = h; })).join('')}</div>
       <div class="bar">hour <input type="number" min="0" max="23.99" step="0.25" data-set="tod" value="${tod.toFixed(2)}"></div>
       <div class="grp">day of the week</div><div class="bar">${WEEKDAYS.map((d, k) => act(d, () => { dayNum += mod(k - mod(dayNum, 7), 7); })).join('')}${act('Next day', () => { dayNum++; })}</div>
-      <div class="grp">weather</div><div class="bar">${['clear', 'rain', 'storm', 'fog'].map(w => act(w, () => { weather = w; wTimer = 600; })).join('')}</div>`;
+      <div class="grp">weather</div><div class="bar">${['clear', 'rain', 'storm', 'fog', 'snow'].map(w => act(w, () => { weather = w; wTimer = 600; })).join('')}${act('snow on the ground', () => { snowCover = 1; })}${act('clear the snow', () => { snowCover = 0; })}</div>
+      <div class="grp">season (now ${season()})</div><div class="bar">${SEASONS.map((sn, k) => act(sn, () => { setSeason(k); })).join('')}${act('next season', () => { seasonShift++; })}</div>`;
   }
   return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
     <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}${act('Bladder full', () => { needs.bladder = 100; })}</div>
@@ -10701,6 +11156,12 @@ const HAND = {
     (c, r) => r < 2 && c === '/' ? C(MAG, 13) : c === 'o' || c === 'O' ? C(BRICK, 10) : c === ':' || c === '~' ? C(WARM, 14) : C(WHITE, 11)],
   redstring: () => [['  .----.', ' (      )', '  `-oo-\'', '     \\\\'], (c, r) => c === 'o' ? C(YEL, 15) : C(RED, 13)],
   luckycoin: () => [['  .---.', ' / .-. \\', '| | # | |', ' \\ `-\' /', "  `---'"], (c, r) => c === '#' ? C(GRAY, 6) : C(YEL, 14)],
+  goldfish: () => { const k = Math.floor(T * 1.5) & 1; return [['   _/\_', '  (    )', ` ( ${k ? '><>' : '<><'}  )`, ' (  ~ ~ )', "  `----'"], (c, r) => c === '>' || c === '<' ? C(ORANGE, 15) : r === 0 ? C(RED, 13) : c === '~' ? C(CYAN, 12) : C(WHITE, 11)]; },
+  postcard: () => [[' .--------.', ' | /^\\ ~ |', ' |T-REX  #|', " '--------'"], (c, r) => c === '#' ? C(RED, 14) : r === 1 ? C(GREEN, 13) : r === 2 ? C(BRICK, 13) : C(WHITE, 13)],
+  dinotoy: () => [['      __', '     / o)', ' .-^^ /', '<__  |', '   ||\\\\'], (c, r) => c === 'o' ? C(WHITE, 15) : C(GREEN, 13)],
+  replicastar: () => [['  ____', ' /\\  /\\', '/__\\/__\\', '\\  \\/  /', ' \\    /', '  \\  /', '   \\/'], (c, r) => C(CYAN, 9)],
+  orrery: () => { const k = Math.floor(T * 0.5) & 3; return [['     .-o-.', `  o ( ${'-\\|/'[k]}*${'-/|\\'[k]} ) o`, "     `-o-'", '   ___|___', '  [=======]'], (c, r) => c === '*' ? C(YEL, 15) : c === 'o' ? C([CYAN, RED, GREEN, WHITE][r & 3], 14) : r > 2 ? C(BRICK, 12) : C(YEL, 12)]; },
+  diamond: () => [['  ____', ' /\\  /\\', '/__\\/__\\', '\\  \\/  /', ' \\    /', '  \\  /', '   \\/'], (c, r) => C(fract(T * 2 + r * 0.2) < 0.15 ? WHITE : CYAN, 13 + (r & 1) * 2)],
   fortunecookie: (it, f) => [['   .---.', "  /  .-'\\", ' (  (  ~~~', "  `--`"], (c, r) => c === '~' ? C(WHITE, 15) : C(YEL, 13)],
   tigerbalm: it => [['  ._____.', ' |  /\\  |', ' | (oo) |', " |TIGER |", " `-----'"], (c, r) => r === 0 ? C(GRAY, 12) : c === 'o' || c === '/' || c === '\\' || c === '(' || c === ')' ? C(ORANGE, 15) : /[A-Z]/.test(c) ? C(YEL, 14) : C(RED, 12)],
   lantern: () => [['    |', '  .-=-.', ' ( ||| )', ' ( ||| )', "  `-=-'", '    ~'], (c, r) => r === 0 ? C(GRAY, 10) : c === '=' || c === '~' ? C(YEL, 15) : c === '|' && r > 1 && r < 4 ? C(YEL, 14) : C(RED, 15)],
@@ -11424,6 +11885,27 @@ Object.assign(DENSE, {
     if (Math.abs(x) < 1.6 && Math.abs(y) < 1.6) return ['#', C(YEL, 9)];
     const a = Math.atan2(y, x), mark = d > 0.5 && d < 0.75 && Math.abs(fract(a / (Math.PI / 2) + 0.5) - 0.5) < 0.12;
     return mark ? ['%', C(BRICK, 9)] : dLit(dBall(x, y, 0, 0, 5) * 0.8, YEL, 8, 13);
+  }),
+  orrery: () => sculpt(28, 16, (x, y) => { // brass rings round a glowing sun, planets on arms going round, a crank, a wooden base
+    if (y > 5 && y < 7.4 && Math.abs(x) < 5.4) return dLit(0.55 - (y - 5) * 0.1, BRICK, 7);
+    if (Math.abs(x) < 0.3 && y > 2.4 && y <= 5) return ['|', C(YEL, 12)];
+    if (y > 0.6 && y < 1.4 && x > 4.6 && x < 7) return ['-', C(YEL, 11)]; if (x > 6.6 && x < 7.4 && y > -0.4 && y < 1.4) return ['o', C(BRICK, 13)]; // the crank
+    const cy = -1.6, r = Math.hypot(x, (y - cy) * 1.6);
+    if (r < 0.9) return ['@', C(YEL, 15)]; // the sun
+    for (const [R, col, sp, ph] of [[2.2, CYAN, 1.3, 0], [3.5, RED, 0.8, 2], [4.8, GREEN, 0.5, 4]]) {
+      if (Math.abs(r - R) < 0.18) return ['.', C(YEL, 8)]; // the brass rings
+      const an = T * sp * (T - orreryT < 3 ? 6 : 1) + ph, pxx = Math.cos(an) * R, pyy = Math.sin(an) * R / 1.6 + cy;
+      if (Math.hypot(x - pxx, (y - pyy) * 1.6) < 0.6) return ['o', C(col, 15)];
+    }
+    return null;
+  }),
+  diamond: () => sculpt(24, 14, (x, y) => { // a big cut stone, facets catching the light, a glint running across
+    if (y < -3.6 || y > 5.6) return null;
+    const hw = y < -2 ? 3.4 + (y + 3.6) * 1.1 : 5.2 * (1 - (y + 2) / 7.6);
+    if (Math.abs(x) > hw) return null;
+    const facet = Math.abs(fract(x * 0.6 + (y < -2 ? 0 : y * 0.3)) - 0.5) < 0.08 || Math.abs(y + 2) < 0.3;
+    const glint = Math.abs(x - (fract(T * 0.5) * 14 - 7)) < 0.6;
+    return [facet ? (y < -2 ? '_' : x > 0 ? '/' : '\\\\') : glint ? '*' : dFill(0.5 + 0.3 * Math.sin(x + y)), C(glint ? WHITE : CYAN, facet ? 14 : 9 + (x < 0 ? 4 : 0))];
   }),
   fortunecookie: () => sculpt(24, 11, (x, y) => { // folded in a crescent, the slip of paper poking out
     if (y > -0.6 && y < 0.3 && x > 2.4 && x < 7.4) { const t_ = dText(x, y, 4.9, -0.15, 'LUCK'); return t_ ? [t_, C(RED, 12)] : ['=', C(WHITE, 14)]; }
@@ -12459,7 +12941,8 @@ function finishGame(quit) {
     return;
   }
   if (game.kind === 'arcade' && g.prize) { // the crane dropped something in the chute
-    if (inv.length < INV_SIZE) { inv.push({ id: g.prize, uses: ITEMS[g.prize].uses || 0 }); held = inv.length - 1; say(`It drops down the chute: ${aOrSome(ITEMS[g.prize].name)}! Yours.`, 4); }
+    if (g.id === 'goldfish') { tickets += r; if (inv.length < INV_SIZE) { inv.push({ id: g.prize, uses: 0 }); held = inv.length - 1; } say(`${r} tickets, and the stallholder ties one fish up in a bag for you${inv.length >= INV_SIZE ? ' (but your hands are full: it goes back in the tub)' : ''}.`, 4); }
+    else if (inv.length < INV_SIZE) { inv.push({ id: g.prize, uses: ITEMS[g.prize].uses || 0 }); held = inv.length - 1; say(`It drops down the chute: ${aOrSome(ITEMS[g.prize].name)}! Yours.`, 4); }
     else say(`It drops down the chute, but your hands are full. You leave ${aOrSome(ITEMS[g.prize].name)} for the next kid.`, 4);
   } else if (game.kind === 'arcade') { tickets += r; say(r ? `${r} tickets.` : g.id === 'crane' ? 'The claw comes up empty.' : 'No tickets this time.', 3); }
   else { if (r > 0) earn(r); say(quit ? `You clock off early. You earned ${fmt$(r)} (less for the hours you didn't work).` : `Shift's over. You earned ${fmt$(r)}.`, 4); }
@@ -12786,11 +13269,13 @@ function crimeKey(code) {
 }
 // what G / L would do here, for the prompt line
 function crimePrompt() {
+  if (mode === 'room' && room.burgled && room.kind === 'museum') return museumPrompt() + (nearExit() ? '   E: leave' : '');
   if (mode === 'room' && room.burgled) return (room.alarm ? 'ALARM! Get out!   ' : '') + 'G: take something' + (nearVault() ? '   E: crack the vault' : nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter, the vault or the door)
-  if (pickTarget()) return 'G: pick their pocket';
+  const vm = nearMachine(), use = vm ? `E: ${VENDING[vm.kind].title.toLowerCase()}   ` : ''; // (a machine right here still works: say so)
+  if (pickTarget()) return use + 'G: pick their pocket';
   const sh = lockTarget();
-  if (sh && nightTime()) return (jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`;
-  return '';
+  if (!sh || !nightTime()) return '';
+  return use + ((jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`);
 }
 // ===== on your feet: Space jumps, C held crouches, C by a bench or a seat sits you down (C again, or walk, to get
 // up). On the skateboard Space pops an ollie, and what you're holding as you pop makes it a trick: A kickflip,
@@ -13001,7 +13486,7 @@ function saveGame() {
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tags, money, tickets, held, inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder } };
+    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, season: seasonShift, stolen: museumStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder } };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
 function loadGame() {
@@ -13018,6 +13503,8 @@ function loadGame() {
   owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
   loadBoats(d.boats);
+  if (Number.isFinite(d.season)) seasonShift = mod(d.season, 4);
+  if (d.stolen && typeof d.stolen === 'object') museumStolen = { diamond: !!d.stolen.diamond, orrery: !!d.stolen.orrery };
   if (d.needs) for (const k of ['food', 'drink', 'health', 'bladder']) if (isFinite(d.needs[k])) needs[k] = clamp(d.needs[k], k === 'health' ? 1 : 0, 100);
   const at = d.at;
   if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
@@ -13189,6 +13676,7 @@ function loop(t) {
   stepPigeons(dt);
   stepJadeIncense(dt);
   stepExchange();
+  stepMuseum(dt);
   stepTaxiJob(dt);
   const law = stepCrime(dt);
   if (law === 'busted') openBusted();

@@ -226,13 +226,13 @@ const NIGHT_MARKET = (() => {
 })();
 // each stall: a waist-high counter with the goods laid out on it, two poles, a striped canopy above with the sign on
 // its front, and (after dark) someone behind the counter to sell to you
-const STALLS = NIGHT_MARKET ? [['STREET FOOD', 3.0, RED], ['CHARMS', 5.0, MAG], ['CURIOS', 7.0, ORANGE]].map(([word, dx, canopy], k) => {
+const STALLS = NIGHT_MARKET ? [['STREET FOOD', 2.75, RED], ['CHARMS', 3.95, MAG], ['CURIOS', 5.15, ORANGE], ['FORTUNES', 6.35, BLUE], ['GOLDFISH', 7.55, CYAN]].map(([word, dx, canopy], k) => {
   const x = NIGHT_MARKET.bx * 8 + dx, y = NIGHT_MARKET.by * 8 + 1.78;
-  solidBox(x, y + 0.02, true, 0.78, 0.15, 0.21, 0.26, 'stallroof', k); Object.assign(solids[solids.length - 1], { word, canopy, fs: -1 });
-  for (const s of [-1, 1]) solidBox(x + s * 0.72, y - 0.08, true, 0.012, 0.012, 0, 0.21, 'stallpole', k);
-  solidBox(x, y, true, 0.7, 0.09, 0, 0.1, 'stall', k);
-  const shirt = [WHITE, RED, BLUE][k];
-  extras.push({ x: x + 0.15 - k * 0.12, y: y + 0.14, z: 0, w: 0.06, h: 0.18, art: ART.walkB, when: () => nightMarketOpen(tod), // the stallholder
+  solidBox(x, y + 0.02, true, 0.56, 0.15, 0.21, 0.26, 'stallroof', k); Object.assign(solids[solids.length - 1], { word, canopy, fs: -1 });
+  for (const s of [-1, 1]) solidBox(x + s * 0.5, y - 0.08, true, 0.012, 0.012, 0, 0.21, 'stallpole', k);
+  solidBox(x, y, true, 0.48, 0.09, 0, 0.1, 'stall', k);
+  const shirt = [WHITE, RED, BLUE, MAG, CYAN][k];
+  extras.push({ x: x + 0.1 - (k % 3) * 0.1, y: y + 0.14, z: 0, w: 0.06, h: 0.18, art: ART.walkB, when: () => nightMarketOpen(tod), // the stallholder
     col: (c, row, L) => C(row < 2 ? SKIN : row === 2 ? shirt : GRAY, Math.max(L, 6)) });
   return Object.assign(solids[solids.length - 1], { word, canopy, fs: -1, at: [x, y - 0.3] });
 }) : [];
