@@ -19,12 +19,22 @@ function strobe() { const p = Math.floor(fract(T * 1.4) * 10); return p === 0 ||
 const TREE_SIZE = { oak: [0.27, 0.62], blossom: [0.27, 0.6], pine: [0.21, 0.8], birch: [0.16, 0.68], poplar: [0.12, 0.82] };
 const TREE_BLOBS = { oak: [[0, 0.44, 0.17], [-0.13, 0.33, 0.13], [0.13, 0.34, 0.13], [0, 0.29, 0.13]], blossom: [[0, 0.42, 0.16], [-0.13, 0.33, 0.13], [0.13, 0.32, 0.12], [0, 0.27, 0.12]],
   birch: [[0, 0.47, 0.13], [-0.04, 0.36, 0.1], [0.04, 0.56, 0.08]], poplar: [[0, 0.5, 0.11], [0, 0.34, 0.1], [0, 0.66, 0.08]] };
+const TREE_WINTER_BRANCHES = {
+  oak: [[0, 0.2, -0.15, 0.42], [0, 0.2, 0.15, 0.42], [-0.15, 0.42, -0.24, 0.57], [0.15, 0.42, 0.24, 0.57]],
+  blossom: [[0, 0.2, -0.14, 0.4], [0, 0.2, 0.14, 0.4], [-0.14, 0.4, -0.23, 0.55], [0.14, 0.4, 0.23, 0.55]],
+  birch: [[0, 0.27, -0.09, 0.39], [0, 0.4, 0.09, 0.52], [0, 0.52, -0.07, 0.62]],
+  poplar: [[0, 0.28, -0.07, 0.37], [0, 0.4, 0.07, 0.49], [0, 0.52, -0.065, 0.61]]
+};
+function nearTreeBranch(u, z, x0, z0, x1, z1, width) {
+  const du = x1 - x0, dz = z1 - z0, t = clamp(((u - x0) * du + (z - z0) * dz) / (du * du + dz * dz), 0, 1);
+  return Math.hypot(u - x0 - du * t, z - z0 - dz * t) < width;
+}
 function drawTree(t, vx, vy) {
   const [hw, h] = TREE_SIZE[t.kind], s = t.s;
-  drawShape(vx, vy, 0, hw * s, h * s, (i, u, z, du, dz, L) => treeCell(i, u / s, z / s, L, t));
+  drawShape(vx, vy, 0, hw * s, h * s, (i, u, z, du, dz, L) => treeCell(i, u / s, z / s, du / s, dz / s, L, t));
 }
-function treeCell(i, u, z, L, t) {
-  const k = t.kind, au = Math.abs(u), tint = 0.85 + t.seed * 0.3;
+function treeCell(i, u, z, du, dz, L, t) {
+  const k = t.kind, au = Math.abs(u), tint = 0.85 + t.seed * 0.3, sn = seasonIdx(), bare = sn === 3 && k !== 'pine';
   let e = -1, cz = 0.4; // how far inside the canopy (0 at its edge, 1 at the middle), and the middle's height
   if (k === 'pine') { // tiers of boughs, each a triangle, narrowing up the tree
     for (let j = 0; j < 4; j++) {
@@ -34,6 +44,18 @@ function treeCell(i, u, z, L, t) {
     cz = 0.45;
   } else for (const [bu, bz, r] of TREE_BLOBS[k]) { const d = Math.hypot(u - bu, (z - bz) * 1.1) / r; if (d < 1) { e = Math.max(e, 1 - d); cz = bz; } }
   const trunkTop = k === 'pine' ? 0.2 : k === 'poplar' ? 0.25 : 0.32, trunkW = k === 'oak' || k === 'blossom' ? 0.025 : 0.018;
+  if (bare) { // winter branches follow a few continuous limbs instead of a noisy, leaf-shaped hatch
+    const width = Math.max(0.009, du * 0.55, dz * 0.55), height = TREE_SIZE[k][1];
+    let branch = false, slope = 0;
+    if (nearTreeBranch(u, z, 0, 0, 0, height * 0.96, width * 1.15)) { branch = true; slope = Infinity; }
+    for (const [x0, z0, x1, z1] of TREE_WINTER_BRANCHES[k]) if (nearTreeBranch(u, z, x0, z0, x1, z1, width)) {
+      branch = true; slope = (z1 - z0) / (x1 - x0 || 0.001);
+    }
+    if (!branch) return false;
+    const snow = snowCover > 0.2 && z > height * 0.55 && hash(Math.floor(u * 90 + t.seed * 99), Math.floor(z * 90), 816) > 0.68;
+    const ch = snow ? '-' : !isFinite(slope) ? '|' : Math.abs(slope) > 1.8 ? '|' : Math.abs(slope) < 0.28 ? '-' : slope > 0 ? '/' : '\\';
+    return set(i, ch, C(snow ? WHITE : BRICK, snow ? 12 : clamp(6 + L * 0.45, 6, 13))), true;
+  }
   if (e < 0) {
     if (z < trunkTop && au < trunkW + (z < 0.03 ? 0.012 : 0)) { // the trunk (a birch's white, with black marks)
       if (k === 'birch') { BG[i] = C(WHITE, 2 + L * 0.35); return set(i, hash(Math.floor(z * 60), 1, 813) > 0.75 ? '-' : ' ', C(GRAY, 3)), true; }
@@ -41,12 +63,7 @@ function treeCell(i, u, z, L, t) {
     }
     return false;
   }
-  const n = hash(Math.floor(u * 45 + t.seed * 99), Math.floor(z * 45), 814), sn = seasonIdx(), bare = sn === 3 && k !== 'pine';
-  if (bare) { // winter: the leaves are gone, just branches (snow along the tops of them when there's snow about)
-    const br = Math.abs(fract((u * 9 + z * 5 + t.seed * 3) * (1 + (n > 0.5) * 0.5)) - 0.5) < 0.06 || Math.abs(u) < 0.02 && z < cz;
-    if (!br || e < 0.08) return false;
-    return set(i, snowCover > 0.2 && n > 0.6 ? '-' : u > 0 ? '/' : '\\', snowCover > 0.2 && n > 0.6 ? C(WHITE, 13) : C(BRICK, L * 0.8)), true;
-  }
+  const n = hash(Math.floor(u * 45 + t.seed * 99), Math.floor(z * 45), 814);
   if (e < (sn === 2 ? 0.2 : 0.14) && n > 0.55) return false; // ragged edges: a little sky between the outermost leaves (thinner in autumn)
   const lit = clamp(0.75 + (z - cz) * 1.6 - u * 0.6, 0.45, 1.25) * tint; // lighter up top and toward the sun
   const fall = sn === 2 && k !== 'pine' ? [ORANGE, RED, YEL, BRICK][Math.floor(hash(Math.floor(u * 12 + t.seed * 50), Math.floor(z * 12), 815) * 4)] : 0; // autumn colours
