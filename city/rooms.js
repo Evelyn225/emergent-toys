@@ -583,9 +583,28 @@ function realtyWall(i, u, uStep, z, d, mx, my, L) {
   }
   BG[i] = C(WARM, 2 + L * 0.15); return set(i, fract(u * 2) < 0.04 ? '|' : ' ', C(WARM, L * 0.5)), true;
 }
+const HOME_SHELF_CAPACITY = 4;
+const homeLayout = r => ({ shelf: [r.W - 1.2, r.H - 3.2], fridge: [r.W - 1.15, r.H - 1.8], pet: [1.35, r.H - 2.6] });
+function homeRecord(r = room) {
+  if (!r || !r.cell || !['home', 'loft'].includes(r.kind)) return null;
+  return owned.homes.find(h => h.cell === idx(r.cell[0], r.cell[1])) || null;
+}
+const homeCatArt = () => (T * 1.4 | 0) % 7 === 0
+  ? [' /\\_/\\ ', ' ( -.- )', '  > ^ < ']
+  : [' /\\_/\\ ', ' ( o.o )', '  > ^ < '];
 function homeDef(w, h) {
   const big = w > 8, bed = [1.6, 1.6], closet = [w - 1.5, 1.2], sofa = [w / 2, h - 2.4], tv = [w / 2, 1.0];
-  return { grid: boxRoom(w, h), light: 0.75, floor: 'wood', ceil: 'pendant', wall: homeWall, spots: { bed, closet, tv },
+  const layout = { W: w, H: h }, { shelf, fridge, pet } = homeLayout(layout);
+  const fridgeShade = (i, t, L) => {
+    const f = HIT.face;
+    BG[i] = C(f === 3 || f === 4 ? WHITE : GRAY, (2 + L * 0.3) * shadeFace(f));
+    if (f === 5) return set(i, '_', C(GRAY, L)), true;
+    if ((f === 3 || f === 4) && HIT.w > 0.5 && HIT.w < 1.45 && Math.abs(HIT.u - 0.28) < 0.05) return set(i, '|', C(GRAY, L)), true;
+    if ((f === 3 || f === 4) && Math.abs(HIT.w - 0.85) < 0.04) return set(i, '=', C(GRAY, L)), true;
+    return set(i, ' ', 0), true;
+  };
+  return { grid: boxRoom(w, h), light: 0.75, floor: 'wood', ceil: 'pendant', wall: homeWall,
+    spots: { bed, closet, tv, shelf: [shelf[0] - 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet },
     props: r => [
       BX(bed[0], bed[1] + 0.2, 1.0, 0.8, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
       BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
@@ -595,6 +614,8 @@ function homeDef(w, h) {
         BG[i] = C(NEON[(T * 0.7 | 0) & 3], 3 + hash(Math.floor(HIT.u * 20), Math.floor(HIT.w * 20), T * 4 | 0) * 6); return set(i, ' ', 0), true;
       }),
       BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
+      BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' })), // a shelf for things you bring home
+      BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
       ...toilet(1.3, h - 1.6, 1, porcelain), // (an open-plan bathroom)
       BENCHP(sofa[0], sofa[1], 0, -1), ...(big ? [SP(w - 1.3, h - 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(sofa[0] - 2.4, sofa[1], 0, -1)] : []),
     ] };
@@ -806,6 +827,15 @@ function roomSprites() {
   }
   const at = placeKey();
   for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
+  const home = homeRecord(room);
+  if (home) {
+    const { shelf, pet } = homeLayout(room);
+    for (const [k, it] of (home.decor || []).entries()) {
+      const x = shelf[0] + (k - ((home.decor.length - 1) / 2)) * 0.3;
+      drawDropped({ ...it, displayZ: 1.07 }, x - px, shelf[1] - py, 0.065);
+    }
+    if (home.pet === 'petcat') drawArt(pet[0] - px, pet[1] - py, 0, 0.34, 0.54, homeCatArt(), (c, row) => C(row === 1 && c === 'o' ? GREEN : row === 0 ? GRAY : BRICK, 13));
+  }
   if (room.kind === 'station') {
     const tx = trainX(room);
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));

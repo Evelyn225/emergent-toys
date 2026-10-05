@@ -2089,6 +2089,7 @@ const ITEMS = {
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
   duck: { name: 'rubber duck', price: 3, kind: 'gear' }, jadebangle: { name: 'jade bangle', price: 15, kind: 'gear' }, jadedragon: { name: 'jade dragon', price: 45, kind: 'gear' }, sharkplush: { name: 'plush shark', price: 15, kind: 'gear' }, plushcat: { name: 'lucky cat plush', price: 12, kind: 'gear' }, plushbear: { name: 'plush bear', price: 12, kind: 'gear' }, snowglobe: { name: 'snow globe', price: 9, kind: 'gear' }, sparklers: { name: 'sparklers', price: 6, kind: 'toy', uses: 5 },
+  petcat: { name: 'pet cat carrier', price: 80, kind: 'pet' },
   spraypaint: { name: 'spray paint', price: 8, kind: 'toy', uses: 6 }, // (graffiti.js)
   // the Chinatown night market (nightmarket.js): street food, charms, curios
   // (each does something: heal = health back, a whole one; fill = hunger filled, a whole one, whatever the price; sugar = a rush like caffeine)
@@ -2140,7 +2141,7 @@ const STOCK_WORD = {
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft'],
-  'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
+  'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], 'PET SHOP': ['petcat'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
@@ -2226,15 +2227,18 @@ const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
 // your storage unit: one unit, the same at every STORAGE place in town
 const STORE_SIZE = 30, stored = [], closet = []; // (closet: the stash at home, same rules)
+const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
+const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
   held = k; removeHeld();
   held = was < 0 ? -1 : clamp(was > k ? was - 1 : was, 0, Math.max(0, inv.length - 1)); // (empty hands stay empty)
   return it;
 }
-function storeSlot(k, list = stored, where = 'your unit') { // carried slot k -> the unit (or the closet)
+function storeSlot(k, list = stored, where = 'your unit', accepts = null, capacity = STORE_SIZE) { // carried slot k -> the unit (or the closet)
   if (!inv[k]) return [false, 'Nothing there.'];
-  if (list.length >= STORE_SIZE) return [false, `${cap(where)} is full.`];
+  if (accepts && !accepts(inv[k])) return [false, where === 'the fridge' ? 'The fridge only keeps food and drinks.' : 'That does not belong on the shelf.'];
+  if (list.length >= capacity) return [false, `${cap(where)} is full.`];
   const it = takeSlot(k); list.push(it);
   return [true, `You put the ${ITEMS[it.id].name} in ${where}.`];
 }
@@ -2312,6 +2316,7 @@ function useHeld(near) {
     case 'jadebangle': return [pick(['You turn the bangle round your wrist. Cool and smooth. Lucky, they say.', 'The jade catches the light. You feel a tiny bit luckier.']), null];
     case 'jadedragon': return [pick(['You rub the dragon\'s head for luck.', 'The little jade dragon stares back, very sure of itself.', 'You give the dragon a pat. Good fortune, apparently, follows.']), null];
     case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head. You feel a tiny bit luckier.', 'The lucky cat beckons good fortune your way. A little bit of it, anyway.']), null];
+    case 'petcat': return ['The cat mews from its carrier. It will be glad to have a home.', null];
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), 'squeak'];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
@@ -4350,7 +4355,7 @@ function buyProperty(id, x, y) {
   const cell = freeHomeNear(x, y);
   if (cell < 0) return [false, '"Nothing on the market round here right now."'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
-  owned.homes.push({ cell, kind: id });
+  owned.homes.push({ cell, kind: id, decor: [], fridge: [], pet: null });
   return [true, `You buy ${aOrSome(it.name)} at ${SHOP[cell].word}. Your keys. (H on your map)`];
 }
 // ===== boats of your own: at the marina (world.js lays out its jetty) you can rent one by the trip, buy one outright
@@ -7163,9 +7168,28 @@ function realtyWall(i, u, uStep, z, d, mx, my, L) {
   }
   BG[i] = C(WARM, 2 + L * 0.15); return set(i, fract(u * 2) < 0.04 ? '|' : ' ', C(WARM, L * 0.5)), true;
 }
+const HOME_SHELF_CAPACITY = 4;
+const homeLayout = r => ({ shelf: [r.W - 1.2, r.H - 3.2], fridge: [r.W - 1.15, r.H - 1.8], pet: [1.35, r.H - 2.6] });
+function homeRecord(r = room) {
+  if (!r || !r.cell || !['home', 'loft'].includes(r.kind)) return null;
+  return owned.homes.find(h => h.cell === idx(r.cell[0], r.cell[1])) || null;
+}
+const homeCatArt = () => (T * 1.4 | 0) % 7 === 0
+  ? [' /\\_/\\ ', ' ( -.- )', '  > ^ < ']
+  : [' /\\_/\\ ', ' ( o.o )', '  > ^ < '];
 function homeDef(w, h) {
   const big = w > 8, bed = [1.6, 1.6], closet = [w - 1.5, 1.2], sofa = [w / 2, h - 2.4], tv = [w / 2, 1.0];
-  return { grid: boxRoom(w, h), light: 0.75, floor: 'wood', ceil: 'pendant', wall: homeWall, spots: { bed, closet, tv },
+  const layout = { W: w, H: h }, { shelf, fridge, pet } = homeLayout(layout);
+  const fridgeShade = (i, t, L) => {
+    const f = HIT.face;
+    BG[i] = C(f === 3 || f === 4 ? WHITE : GRAY, (2 + L * 0.3) * shadeFace(f));
+    if (f === 5) return set(i, '_', C(GRAY, L)), true;
+    if ((f === 3 || f === 4) && HIT.w > 0.5 && HIT.w < 1.45 && Math.abs(HIT.u - 0.28) < 0.05) return set(i, '|', C(GRAY, L)), true;
+    if ((f === 3 || f === 4) && Math.abs(HIT.w - 0.85) < 0.04) return set(i, '=', C(GRAY, L)), true;
+    return set(i, ' ', 0), true;
+  };
+  return { grid: boxRoom(w, h), light: 0.75, floor: 'wood', ceil: 'pendant', wall: homeWall,
+    spots: { bed, closet, tv, shelf: [shelf[0] - 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet },
     props: r => [
       BX(bed[0], bed[1] + 0.2, 1.0, 0.8, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
       BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
@@ -7175,6 +7199,8 @@ function homeDef(w, h) {
         BG[i] = C(NEON[(T * 0.7 | 0) & 3], 3 + hash(Math.floor(HIT.u * 20), Math.floor(HIT.w * 20), T * 4 | 0) * 6); return set(i, ' ', 0), true;
       }),
       BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
+      BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' })), // a shelf for things you bring home
+      BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
       ...toilet(1.3, h - 1.6, 1, porcelain), // (an open-plan bathroom)
       BENCHP(sofa[0], sofa[1], 0, -1), ...(big ? [SP(w - 1.3, h - 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(sofa[0] - 2.4, sofa[1], 0, -1)] : []),
     ] };
@@ -7386,6 +7412,15 @@ function roomSprites() {
   }
   const at = placeKey();
   for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
+  const home = homeRecord(room);
+  if (home) {
+    const { shelf, pet } = homeLayout(room);
+    for (const [k, it] of (home.decor || []).entries()) {
+      const x = shelf[0] + (k - ((home.decor.length - 1) / 2)) * 0.3;
+      drawDropped({ ...it, displayZ: 1.07 }, x - px, shelf[1] - py, 0.065);
+    }
+    if (home.pet === 'petcat') drawArt(pet[0] - px, pet[1] - py, 0, 0.34, 0.54, homeCatArt(), (c, row) => C(row === 1 && c === 'o' ? GREEN : row === 0 ? GRAY : BRICK, 13));
+  }
   if (room.kind === 'station') {
     const tx = trainX(room);
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
@@ -9636,7 +9671,7 @@ function promptText() {
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
-    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', shelf: 'E: decorate shelf', fridge: 'E: open fridge', pet: homeRecord(room)?.pet ? 'E: pet your cat' : 'E: bring cat home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
     if (room.kind === 'museum' && !room.burgled) { const m = museumPrompt(); if (m) return m; }
@@ -9974,8 +10009,24 @@ function interact() {
     if (room.kind === 'train') return;
     if (room.kind === 'home' || room.kind === 'loft') { // your place: sleep whenever you like, your closet, the telly
       const hs = homeSpot();
+      const home = homeRecord(room);
       if (hs === 'bed') { sleep = { t: 0, home: true }; return say('You crawl into your own bed.', 3); }
       if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', 'Kept at home, whichever home you go to');
+      if (hs === 'shelf') {
+        home.decor ||= [];
+        if (heldItem() && isHomeDecor(heldItem())) {
+          if (home.decor.length >= HOME_SHELF_CAPACITY) return say('The shelf is full. Take something down first.');
+          const it = takeSlot(held); home.decor.push(it); saveGame(); return say(`You put the ${ITEMS[it.id].name} on the shelf.`, 2);
+        }
+        return openStorage(home.decor, 'the shelf', 'Display shelf', 'Keepsakes you have brought home. Click one to take it down.', isHomeDecor, HOME_SHELF_CAPACITY);
+      }
+      if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
+      if (hs === 'pet') {
+        if (heldItem() && heldItem().id === 'petcat' && !home.pet) {
+          takeSlot(held); home.pet = 'petcat'; saveGame(); return say('The cat steps out of its carrier and settles in at home.', 3);
+        }
+        return say(home.pet ? 'You give your cat a little pat. It is happy to see you.' : 'Adopt a cat at the pet shop and bring it home.', 2);
+      }
       if (hs === 'tv') { room.tv = !room.tv; return say(room.tv ? 'The telly flickers on.' : 'You switch the telly off.', 2); }
     }
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
@@ -11490,6 +11541,7 @@ const DROPPED_ART = {
   snowglobe: () => [['  .-----.', ' / . * . \\', '|  ><>  * |', ' \\ * . . /', "  '-----'", ' [=======]'], (c, r) => r === 5 ? C(BRICK, 13) : c === '>' || c === '<' ? C(ORANGE, 15) : c === '*' || c === '.' ? C(WHITE, 15) : C(CYAN, 12)],
   spraypaint: (it, f) => [['   _', '  [o]', ' .---.', ' |   |', ' |ZAP|', ' |   |', " '---'"], (c, r) => r < 2 ? C(GRAY, 13) : c === 'Z' || c === 'A' || c === 'P' ? C(WHITE, 15) : C([MAG, CYAN, GREEN, ORANGE][it.uses & 3], 13)],
   plushcat: () => [['  /\_/\ ', ' ( o.o )/', '  > ^ <', ' (_____)'], (c, r) => c === 'o' ? C(GREEN, 15) : r === 1 && c === '/' && r ? C(RED, 14) : C(WHITE, 14)],
+  petcat: () => [['   .----.', '  / .--. \\', ' | (o.o)|', ' |  /\\  |', " '------'"], (c, r) => c === 'o' ? C(GREEN, 15) : c === '.' || c === '/' || c === '\\' ? C(GRAY, 13) : C(BRICK, 12)],
   plushbear: () => [[' (\_/)', ' (o o)', '/(   )\\', ' (___)'], (c, r) => c === 'o' ? C(GRAY, 4) : C(BRICK, 13)],
   yakitori: (it, f) => [bitten(['  @@@@@@=', '  @@@@@@==', '  @@@@@@=', '        \\', '         \\'], f), (c, r) => c === '@' ? C(BRICK, 13) : C(WARM, 12)],
   takoyaki: (it, f) => [bitten(['  ~ ~ ~ ~', ' (@)(@)(@)', ' (@)(@)(@)', " '-------'"], f, 'top'), (c, r) => c === '~' ? C(WHITE, 13) : c === '@' ? C(BRICK, 13) : c === '(' || c === ')' ? C(ORANGE, 13) : C(WARM, 12)],
@@ -11700,7 +11752,7 @@ const droppedHere = () => { const at = placeKey(); return at === null ? null : d
 // lying on the ground: the small item picture, shrunk to life size (s = world units per character: cells or metres)
 function drawDropped(d, vx, vy, s) {
   const [lines, col] = droppedArt(d), art = pad(lines.filter(l => l.length)), W = art[0].length;
-  drawArt(vx, vy, d.at ? 0 : d.z || 0, W * s * 0.5, art.length * s, art, (c, row, L) => { const k = col(c, row); return C(k >> 4, (k & 15) * clamp(L / 11, 0.3, 1)); });
+  drawArt(vx, vy, d.displayZ ?? (d.at ? 0 : d.z || 0), W * s * 0.5, art.length * s, art, (c, row, L) => { const k = col(c, row); return C(k >> 4, (k & 15) * clamp(L / 11, 0.3, 1)); });
 }
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
@@ -11777,20 +11829,21 @@ function openInventory() {
 const closeInventory = () => hidePanel(invEl);
 // your storage unit: click a carried thing to put it in, a stored thing to take it out
 let storeEl = null;
-let storeCtx = [stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town'];
-function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3]) {
-  storeCtx = [list, where, title, sub];
+let storeCtx = [stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town', null, STORE_SIZE];
+function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3], accepts = storeCtx[4], capacity = storeCtx[5]) {
+  storeCtx = [list, where, title, sub, accepts, capacity];
   storeEl = storeEl || panel('storage');
   const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
-  const carried = inv.length ? inv.map((it, k) => { const slot = quickSlots.indexOf(k); return `<button class="item" data-store="${k}"><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`; }).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
+  const eligible = inv.map((it, k) => ({ it, k })).filter(({ it }) => !accepts || accepts(it));
+  const carried = eligible.length ? eligible.map(({ it, k }) => { const slot = quickSlots.indexOf(k); return `<button class="item" data-store="${k}"><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`; }).join('') : `<p class="sub" style="padding-left:18px">${inv.length ? 'Nothing suitable to put here.' : 'Nothing in your hands.'}</p>`;
   const unit = list.length ? list.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
   showPanel(storeEl, `<h1>${title}</h1><p class="sub">${sub}</p>
     <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
-    <h2>in ${where.replace('your ', 'the ')} ${list.length}/${STORE_SIZE}</h2>${unit}
+    <h2>in ${where.replace('your ', 'the ')} ${list.length}/${capacity}</h2>${unit}
     <p class="hint">1-8 store quick slot &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
-    if (s) say(storeSlot(+s.dataset.store, list, where)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
+    if (s) say(storeSlot(+s.dataset.store, list, where, accepts, capacity)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
     openStorage();
   };
 }
@@ -11801,7 +11854,7 @@ function panelKey(e) {
     const n = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
     else if (n && e.shiftKey) { say(retrieveSlot(n[1] - 1, storeCtx[0], storeCtx[1])[1], 2); openStorage(); }
-    else if (n && +n[1] <= QUICK_SLOTS) { const k = quickSlots[n[1] - 1]; say(storeSlot(k, storeCtx[0], storeCtx[1])[1], 2); openStorage(); }
+    else if (n && +n[1] <= QUICK_SLOTS) { const k = quickSlots[n[1] - 1]; say(storeSlot(k, storeCtx[0], storeCtx[1], storeCtx[4], storeCtx[5])[1], 2); openStorage(); }
     return true;
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
@@ -13975,7 +14028,9 @@ function loadGame() {
   held = clamp(d.held ?? -1, -1, inv.length - 1);
   for (const sym in d.shares || {}) if (stockBy(sym)) shares[sym] = d.shares[sym];
   if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }
-  owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
+  owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push({ ...h,
+    decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY),
+    fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE), pet: h.pet === 'petcat' ? 'petcat' : null });
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
   ensureCarKeys();
   loadBoats(d.boats);

@@ -78,6 +78,6 @@ function buyProperty(id, x, y) {
   const cell = freeHomeNear(x, y);
   if (cell < 0) return [false, '"Nothing on the market round here right now."'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
-  owned.homes.push({ cell, kind: id });
+  owned.homes.push({ cell, kind: id, decor: [], fridge: [], pet: null });
   return [true, `You buy ${aOrSome(it.name)} at ${SHOP[cell].word}. Your keys. (H on your map)`];
 }

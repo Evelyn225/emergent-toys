@@ -122,8 +122,24 @@ function interact() {
     if (room.kind === 'train') return;
     if (room.kind === 'home' || room.kind === 'loft') { // your place: sleep whenever you like, your closet, the telly
       const hs = homeSpot();
+      const home = homeRecord(room);
       if (hs === 'bed') { sleep = { t: 0, home: true }; return say('You crawl into your own bed.', 3); }
       if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', 'Kept at home, whichever home you go to');
+      if (hs === 'shelf') {
+        home.decor ||= [];
+        if (heldItem() && isHomeDecor(heldItem())) {
+          if (home.decor.length >= HOME_SHELF_CAPACITY) return say('The shelf is full. Take something down first.');
+          const it = takeSlot(held); home.decor.push(it); saveGame(); return say(`You put the ${ITEMS[it.id].name} on the shelf.`, 2);
+        }
+        return openStorage(home.decor, 'the shelf', 'Display shelf', 'Keepsakes you have brought home. Click one to take it down.', isHomeDecor, HOME_SHELF_CAPACITY);
+      }
+      if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
+      if (hs === 'pet') {
+        if (heldItem() && heldItem().id === 'petcat' && !home.pet) {
+          takeSlot(held); home.pet = 'petcat'; saveGame(); return say('The cat steps out of its carrier and settles in at home.', 3);
+        }
+        return say(home.pet ? 'You give your cat a little pat. It is happy to see you.' : 'Adopt a cat at the pet shop and bring it home.', 2);
+      }
       if (hs === 'tv') { room.tv = !room.tv; return say(room.tv ? 'The telly flickers on.' : 'You switch the telly off.', 2); }
     }
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral

@@ -12,7 +12,7 @@ test('every shop and cart sells things that exist', () => {
   assert.deepStrictEqual(bad, []);
   assert.deepStrictEqual(j("stockFor('store', 'LIQUOR')"), ['beer', 'whiskey', 'cigarettes', 'chips']);
   assert.deepStrictEqual(j("stockFor('bar', 'BAR')"), ['beer', 'whiskey', 'cocktail'], 'a bar with no word list of its own');
-  assert.deepStrictEqual(j("stockFor('petshop', 'PET SHOP')"), [], 'not everywhere sells something');
+  assert.deepStrictEqual(j("stockFor('petshop', 'PET SHOP')"), ['petcat'], 'pet shop sells a cat carrier');
   assert.ok(j("VENDOR_STOCK['HOT DOGS'].includes('hotdog')"));
 });
 

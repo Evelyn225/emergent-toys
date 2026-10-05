@@ -161,6 +161,7 @@ const DROPPED_ART = {
   snowglobe: () => [['  .-----.', ' / . * . \\', '|  ><>  * |', ' \\ * . . /', "  '-----'", ' [=======]'], (c, r) => r === 5 ? C(BRICK, 13) : c === '>' || c === '<' ? C(ORANGE, 15) : c === '*' || c === '.' ? C(WHITE, 15) : C(CYAN, 12)],
   spraypaint: (it, f) => [['   _', '  [o]', ' .---.', ' |   |', ' |ZAP|', ' |   |', " '---'"], (c, r) => r < 2 ? C(GRAY, 13) : c === 'Z' || c === 'A' || c === 'P' ? C(WHITE, 15) : C([MAG, CYAN, GREEN, ORANGE][it.uses & 3], 13)],
   plushcat: () => [['  /\_/\ ', ' ( o.o )/', '  > ^ <', ' (_____)'], (c, r) => c === 'o' ? C(GREEN, 15) : r === 1 && c === '/' && r ? C(RED, 14) : C(WHITE, 14)],
+  petcat: () => [['   .----.', '  / .--. \\', ' | (o.o)|', ' |  /\\  |', " '------'"], (c, r) => c === 'o' ? C(GREEN, 15) : c === '.' || c === '/' || c === '\\' ? C(GRAY, 13) : C(BRICK, 12)],
   plushbear: () => [[' (\_/)', ' (o o)', '/(   )\\', ' (___)'], (c, r) => c === 'o' ? C(GRAY, 4) : C(BRICK, 13)],
   yakitori: (it, f) => [bitten(['  @@@@@@=', '  @@@@@@==', '  @@@@@@=', '        \\', '         \\'], f), (c, r) => c === '@' ? C(BRICK, 13) : C(WARM, 12)],
   takoyaki: (it, f) => [bitten(['  ~ ~ ~ ~', ' (@)(@)(@)', ' (@)(@)(@)', " '-------'"], f, 'top'), (c, r) => c === '~' ? C(WHITE, 13) : c === '@' ? C(BRICK, 13) : c === '(' || c === ')' ? C(ORANGE, 13) : C(WARM, 12)],
@@ -371,7 +372,7 @@ const droppedHere = () => { const at = placeKey(); return at === null ? null : d
 // lying on the ground: the small item picture, shrunk to life size (s = world units per character: cells or metres)
 function drawDropped(d, vx, vy, s) {
   const [lines, col] = droppedArt(d), art = pad(lines.filter(l => l.length)), W = art[0].length;
-  drawArt(vx, vy, d.at ? 0 : d.z || 0, W * s * 0.5, art.length * s, art, (c, row, L) => { const k = col(c, row); return C(k >> 4, (k & 15) * clamp(L / 11, 0.3, 1)); });
+  drawArt(vx, vy, d.displayZ ?? (d.at ? 0 : d.z || 0), W * s * 0.5, art.length * s, art, (c, row, L) => { const k = col(c, row); return C(k >> 4, (k & 15) * clamp(L / 11, 0.3, 1)); });
 }
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
@@ -448,20 +449,21 @@ function openInventory() {
 const closeInventory = () => hidePanel(invEl);
 // your storage unit: click a carried thing to put it in, a stored thing to take it out
 let storeEl = null;
-let storeCtx = [stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town'];
-function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3]) {
-  storeCtx = [list, where, title, sub];
+let storeCtx = [stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town', null, STORE_SIZE];
+function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3], accepts = storeCtx[4], capacity = storeCtx[5]) {
+  storeCtx = [list, where, title, sub, accepts, capacity];
   storeEl = storeEl || panel('storage');
   const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
-  const carried = inv.length ? inv.map((it, k) => { const slot = quickSlots.indexOf(k); return `<button class="item" data-store="${k}"><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`; }).join('') : '<p class="sub" style="padding-left:18px">Nothing in your hands.</p>';
+  const eligible = inv.map((it, k) => ({ it, k })).filter(({ it }) => !accepts || accepts(it));
+  const carried = eligible.length ? eligible.map(({ it, k }) => { const slot = quickSlots.indexOf(k); return `<button class="item" data-store="${k}"><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`; }).join('') : `<p class="sub" style="padding-left:18px">${inv.length ? 'Nothing suitable to put here.' : 'Nothing in your hands.'}</p>`;
   const unit = list.length ? list.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
   showPanel(storeEl, `<h1>${title}</h1><p class="sub">${sub}</p>
     <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
-    <h2>in ${where.replace('your ', 'the ')} ${list.length}/${STORE_SIZE}</h2>${unit}
+    <h2>in ${where.replace('your ', 'the ')} ${list.length}/${capacity}</h2>${unit}
     <p class="hint">1-8 store quick slot &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
-    if (s) say(storeSlot(+s.dataset.store, list, where)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
+    if (s) say(storeSlot(+s.dataset.store, list, where, accepts, capacity)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
     openStorage();
   };
 }
@@ -472,7 +474,7 @@ function panelKey(e) {
     const n = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
     else if (n && e.shiftKey) { say(retrieveSlot(n[1] - 1, storeCtx[0], storeCtx[1])[1], 2); openStorage(); }
-    else if (n && +n[1] <= QUICK_SLOTS) { const k = quickSlots[n[1] - 1]; say(storeSlot(k, storeCtx[0], storeCtx[1])[1], 2); openStorage(); }
+    else if (n && +n[1] <= QUICK_SLOTS) { const k = quickSlots[n[1] - 1]; say(storeSlot(k, storeCtx[0], storeCtx[1], storeCtx[4], storeCtx[5])[1], 2); openStorage(); }
     return true;
   }
   const shop = shopEl && shopEl.style.display === 'flex', n = /^Digit([1-9])$/.exec(e.code);
