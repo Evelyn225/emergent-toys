@@ -47,7 +47,8 @@ function summonCar(model) {
   const name = ITEMS[model].name, mine = owned.cars.filter(c => c.model === model && !c.player), dist = c => Math.hypot(rel(c.x - px), rel(c.y - py));
   if (!mine.length) return [`You press the fob. Nothing. Wherever your ${name} is, it isn't listening.`, 'click'];
   if (mode !== 'walk') return [mode === 'room' ? 'No signal in here. Try it out on the street.' : 'Not from up here. Try it down on the street.', null];
-  if (mine.some(c => dist(c) < 2)) return [`Your ${name}'s right here. Its lights blink at you.`, 'click'];
+  const here = mine.find(c => dist(c) < 2);
+  if (here) { here.fobBlinkAt = T; return [`Your ${name}'s right here. Its lights blink at you.`, 'click']; }
   const c = mine.reduce((b, c) => dist(c) < dist(b) ? c : b), l = laneNear(px, py);
   for (const s of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4]) { // along the kerb to a gap between parked cars
     c.x = mod(l.x + l.hx * s, N); c.y = mod(l.y + l.hy * s, N); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);

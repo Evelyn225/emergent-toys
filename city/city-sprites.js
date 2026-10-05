@@ -293,13 +293,15 @@ function drawAmbulance(m, vx, vy, hx, hy) {
 function drawVehicle(m, vx, vy, hx, hy) {
   if (m.kind === 'amb') return drawAmbulance(m, vx, vy, hx, hy);
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], lightsOn = night > 0.4 || overcast > 0.5;
+  const fobBlinking = m.owned && m.fobBlinkAt !== undefined && T - m.fobBlinkAt < 2.4;
+  const fobHeadlight = !fobBlinking || Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0;
   const braking = m.brake || m.v < 0.05, body = m.body;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
   drawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
     BG[i] = C(body, (1.5 + L * 0.45) * k);
     if (f === 5) return set(i, m.kind === 'amb' && Math.abs(u) < 0.05 && Math.abs(v) < 0.05 ? '+' : ' ', C(RED, 12)), true;
-    if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(WHITE, lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
+    if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(fobBlinking ? (fobHeadlight ? WHITE : BLACK) : WHITE, fobBlinking || lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
     if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking ? 15 : 8)), true;
     if (f === 6) return set(i, ' ', 0), true;
     const wheel = w < 0.035 && Math.min(Math.abs(u - hl * 0.62), Math.abs(u + hl * 0.62)) < 0.04;

@@ -20,8 +20,8 @@ const rel = v => mod(v + N / 2, N) - N / 2; // nearest copy in the repeating wor
 
 // ---- colors: palette index = base*16 + brightness(0..15); NONE = no background
 const BASES = [[200,200,230],[255,210,90],[230,50,50],[60,110,255],[240,240,240],[255,200,0],[60,200,90],
-               [230,170,130],[255,170,60],[40,230,255],[255,60,220],[170,80,55],[255,120,30]];
-const [GRAY, YEL, RED, BLUE, WHITE, TAXI, GREEN, SKIN, WARM, CYAN, MAG, BRICK, ORANGE] = BASES.keys();
+               [230,170,130],[255,170,60],[40,230,255],[255,60,220],[170,80,55],[255,120,30],[0,0,0]];
+const [GRAY, YEL, RED, BLUE, WHITE, TAXI, GREEN, SKIN, WARM, CYAN, MAG, BRICK, ORANGE, BLACK] = BASES.keys();
 const PAL = [], PALRGB = [];
 for (const [r, gg, b] of BASES) for (let i = 0; i < 16; i++) {
   const f = 0.1 + i / 15 * 0.9, c = [r * f | 0, gg * f | 0, b * f | 0];
@@ -4298,7 +4298,8 @@ function summonCar(model) {
   const name = ITEMS[model].name, mine = owned.cars.filter(c => c.model === model && !c.player), dist = c => Math.hypot(rel(c.x - px), rel(c.y - py));
   if (!mine.length) return [`You press the fob. Nothing. Wherever your ${name} is, it isn't listening.`, 'click'];
   if (mode !== 'walk') return [mode === 'room' ? 'No signal in here. Try it out on the street.' : 'Not from up here. Try it down on the street.', null];
-  if (mine.some(c => dist(c) < 2)) return [`Your ${name}'s right here. Its lights blink at you.`, 'click'];
+  const here = mine.find(c => dist(c) < 2);
+  if (here) { here.fobBlinkAt = T; return [`Your ${name}'s right here. Its lights blink at you.`, 'click']; }
   const c = mine.reduce((b, c) => dist(c) < dist(b) ? c : b), l = laneNear(px, py);
   for (const s of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4]) { // along the kerb to a gap between parked cars
     c.x = mod(l.x + l.hx * s, N); c.y = mod(l.y + l.hy * s, N); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);
@@ -5822,13 +5823,15 @@ function drawAmbulance(m, vx, vy, hx, hy) {
 function drawVehicle(m, vx, vy, hx, hy) {
   if (m.kind === 'amb') return drawAmbulance(m, vx, vy, hx, hy);
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], lightsOn = night > 0.4 || overcast > 0.5;
+  const fobBlinking = m.owned && m.fobBlinkAt !== undefined && T - m.fobBlinkAt < 2.4;
+  const fobHeadlight = !fobBlinking || Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0;
   const braking = m.brake || m.v < 0.05, body = m.body;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
   drawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
     BG[i] = C(body, (1.5 + L * 0.45) * k);
     if (f === 5) return set(i, m.kind === 'amb' && Math.abs(u) < 0.05 && Math.abs(v) < 0.05 ? '+' : ' ', C(RED, 12)), true;
-    if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(WHITE, lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
+    if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(fobBlinking ? (fobHeadlight ? WHITE : BLACK) : WHITE, fobBlinking || lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
     if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking ? 15 : 8)), true;
     if (f === 6) return set(i, ' ', 0), true;
     const wheel = w < 0.035 && Math.min(Math.abs(u - hl * 0.62), Math.abs(u + hl * 0.62)) < 0.04;
