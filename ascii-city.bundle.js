@@ -817,6 +817,11 @@ for (let k = 0; k < 280; k++) {
   if (gardenPathDist(gx, gy) < 0.55 || gardenLakeEdge(gx, gy) > -0.5 || inPen(gx, gy, 0.4) || inBed(gx, gy) >= 0 || gardenBuilt(gx, gy, 0.5) || GLASSHOUSES.some(g => Math.hypot(gx - g.door[0], gy - g.door[1]) < 1.6) || Math.hypot(gx - GARDEN_SHED.gx, gy - GARDEN_SHED.gy) < 1) continue;
   const [x, y] = gx2w(gx, gy); trees.push({ x, y, s: 0.8 + hash(k, 3, 801) * 0.6 });
 }
+// Keep street-tree trunks clear of the emergency vehicles parked outside their stations.
+for (let i = trees.length - 1; i >= 0; i--) {
+  const t = trees[i];
+  if (SERVICES.some(b => Math.abs(rel(t.x - b.x)) < 0.7 && Math.abs(rel(t.y - b.y)) < 0.35)) trees.splice(i, 1);
+}
 for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k += 2) { // a bench beside every other bend, facing the path
   const [ax, ay] = pl[k - 1], [bx, by] = pl[k], mx = (ax + bx) / 2, my = (ay + by) / 2, l = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / l, ny = (bx - ax) / l;
   const gx = mx + nx * 0.4, gy = my + ny * 0.4;
@@ -6697,8 +6702,9 @@ const laundryCart = (x, y) => {
   }), BX(x, y, 0.33, 0.23, 0.14, 0.78, (i, t, L) => { // the washing, piled up above the rim
     if (HIT.face === 6) return false;
     const k = hash(Math.floor((HIT.u + HIT.v) * 6), Math.floor(HIT.w * 9 + (HIT.u - HIT.v) * 3), Math.floor(seed));
-    if (HIT.w > 0.72 && hash(Math.floor(HIT.u * 9), Math.floor(HIT.v * 9), 7) > 0.6) return false; // a lumpy top
-    BG[i] = C(ITEM_COL[k * 8 | 0], (1.2 + L * 0.3) * shadeFace(HIT.face)); return set(i, k > 0.85 ? '~' : ' ', C(WHITE, L * 0.6)), true;
+    const lumpy = HIT.w > 0.72 && hash(Math.floor(HIT.u * 9), Math.floor(HIT.v * 9), 7) > 0.6;
+    BG[i] = C(ITEM_COL[k * 8 | 0], (lumpy ? 1.5 : 1.2) + L * 0.3 * shadeFace(HIT.face));
+    return set(i, lumpy ? (k > 0.55 ? '~' : '_') : k > 0.85 ? '~' : ' ', C(WHITE, L * 0.6)), true;
   }), ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.3, y + sy * 0.2, 0.03, 0.03, 0, 0.12, (i, t, L) => (set(i, 'o', C(GRAY, L)), true))))];
 };
 const tableBox = (x, y, hl = 0.6, hw = 0.4) => [BX(x, y, hl, hw, 0.72, 0.78, solid(BRICK, { top: '=' })), BX(x, y, 0.06, 0.06, 0, 0.72, solid(GRAY))];
@@ -13169,6 +13175,7 @@ function peeWitness() {
   if (mode === 'room') {
     const k = room.def.keeper, kind = room.kind;
     if (kind === 'jail') { if (!pee.caught) { pee.caught = true; say('The guard bangs on the bars. "Use the toilet, animal."', 3); } return; }
+    if (kind === 'aviary') return; // the keeper lets it go when you pee on the aviary floor
     if (inWc(px, py)) return; // in the bathroom: nobody's watching, and it's the right room at least
     if (!k || room.burgled || kind === 'home' || kind === 'loft' || kind === 'hotelroom') return; // (your own place, or nobody here: your own business)
     const there = loos().length ? ' The toilet\'s RIGHT THERE.' : '';

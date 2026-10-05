@@ -221,6 +221,7 @@ function peeWitness() {
   if (mode === 'room') {
     const k = room.def.keeper, kind = room.kind;
     if (kind === 'jail') { if (!pee.caught) { pee.caught = true; say('The guard bangs on the bars. "Use the toilet, animal."', 3); } return; }
+    if (kind === 'aviary') return; // the keeper lets it go when you pee on the aviary floor
     if (inWc(px, py)) return; // in the bathroom: nobody's watching, and it's the right room at least
     if (!k || room.burgled || kind === 'home' || kind === 'loft' || kind === 'hotelroom') return; // (your own place, or nobody here: your own business)
     const there = loos().length ? ' The toilet\'s RIGHT THERE.' : '';

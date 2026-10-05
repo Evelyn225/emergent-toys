@@ -92,6 +92,11 @@ for (let k = 0; k < 280; k++) {
   if (gardenPathDist(gx, gy) < 0.55 || gardenLakeEdge(gx, gy) > -0.5 || inPen(gx, gy, 0.4) || inBed(gx, gy) >= 0 || gardenBuilt(gx, gy, 0.5) || GLASSHOUSES.some(g => Math.hypot(gx - g.door[0], gy - g.door[1]) < 1.6) || Math.hypot(gx - GARDEN_SHED.gx, gy - GARDEN_SHED.gy) < 1) continue;
   const [x, y] = gx2w(gx, gy); trees.push({ x, y, s: 0.8 + hash(k, 3, 801) * 0.6 });
 }
+// Keep street-tree trunks clear of the emergency vehicles parked outside their stations.
+for (let i = trees.length - 1; i >= 0; i--) {
+  const t = trees[i];
+  if (SERVICES.some(b => Math.abs(rel(t.x - b.x)) < 0.7 && Math.abs(rel(t.y - b.y)) < 0.35)) trees.splice(i, 1);
+}
 for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k += 2) { // a bench beside every other bend, facing the path
   const [ax, ay] = pl[k - 1], [bx, by] = pl[k], mx = (ax + bx) / 2, my = (ay + by) / 2, l = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / l, ny = (bx - ax) / l;
   const gx = mx + nx * 0.4, gy = my + ny * 0.4;
