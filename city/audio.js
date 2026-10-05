@@ -169,12 +169,36 @@ function sfxTill() { // cha-ching: the drawer, then the bell
 function sfxCoin() { const at = actx.currentTime; tone(at, 3100, 0.15, 0.08); tone(at + 0.07, 4150, 0.18, 0.06); }
 // short recorded one-shots (eating, drinking): fetched and decoded once, played through the effects bus
 const CLIPS = {};
-function playClip(name, gain) {
+function clipBuffer(name) {
   if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
-  CLIPS[name].then(buf => {
+  return CLIPS[name];
+}
+function playClip(name, gain) {
+  clipBuffer(name).then(buf => {
     if (!buf) return;
     const s = actx.createBufferSource(), g_ = actx.createGain();
     s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; shot(s, g_, sfxBus); s.start();
+  });
+}
+let peeLoopVoice = null;
+function setPeeAudio(on) {
+  if (!actx) return;
+  if (!on) {
+    if (!peeLoopVoice) return;
+    const voice = peeLoopVoice; peeLoopVoice = null;
+    voice.gain.gain.setTargetAtTime(0, actx.currentTime, 0.06);
+    voice.source.stop(actx.currentTime + 0.3);
+    voice.source.onended = () => { voice.source.disconnect(); voice.gain.disconnect(); };
+    return;
+  }
+  if (peeLoopVoice) return;
+  clipBuffer('piss_seamless').then(buf => {
+    if (!buf || !pee || !actx || peeLoopVoice) return;
+    const source = actx.createBufferSource(), gain = actx.createGain();
+    source.buffer = buf; source.loop = true; gain.gain.value = 0;
+    source.connect(gain); gain.connect(sfxBus); source.start();
+    gain.gain.setTargetAtTime(0.24, actx.currentTime, 0.08);
+    peeLoopVoice = { source, gain };
   });
 }
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell

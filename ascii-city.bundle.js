@@ -2292,7 +2292,7 @@ function useHeld(near) {
     case 'jadedragon': return [pick(['You rub the dragon\'s head for luck.', 'The little jade dragon stares back, very sure of itself.', 'You give the dragon a pat. Good fortune, apparently, follows.']), null];
     case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head. You feel a tiny bit luckier.', 'The lucky cat beckons good fortune your way. A little bit of it, anyway.']), null];
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
-    case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), null];
+    case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), 'squeak'];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
     case 'yoyo': yoyo.out = !yoyo.out; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Swing it with the mouse: let it touch down to walk the dog, or go round in little circles to send it around the world.' : 'You reel it back in.', 'whirr'];
     case 'harmonica':
@@ -10663,12 +10663,36 @@ function sfxTill() { // cha-ching: the drawer, then the bell
 function sfxCoin() { const at = actx.currentTime; tone(at, 3100, 0.15, 0.08); tone(at + 0.07, 4150, 0.18, 0.06); }
 // short recorded one-shots (eating, drinking): fetched and decoded once, played through the effects bus
 const CLIPS = {};
-function playClip(name, gain) {
+function clipBuffer(name) {
   if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
-  CLIPS[name].then(buf => {
+  return CLIPS[name];
+}
+function playClip(name, gain) {
+  clipBuffer(name).then(buf => {
     if (!buf) return;
     const s = actx.createBufferSource(), g_ = actx.createGain();
     s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; shot(s, g_, sfxBus); s.start();
+  });
+}
+let peeLoopVoice = null;
+function setPeeAudio(on) {
+  if (!actx) return;
+  if (!on) {
+    if (!peeLoopVoice) return;
+    const voice = peeLoopVoice; peeLoopVoice = null;
+    voice.gain.gain.setTargetAtTime(0, actx.currentTime, 0.06);
+    voice.source.stop(actx.currentTime + 0.3);
+    voice.source.onended = () => { voice.source.disconnect(); voice.gain.disconnect(); };
+    return;
+  }
+  if (peeLoopVoice) return;
+  clipBuffer('piss_seamless').then(buf => {
+    if (!buf || !pee || !actx || peeLoopVoice) return;
+    const source = actx.createBufferSource(), gain = actx.createGain();
+    source.buffer = buf; source.loop = true; gain.gain.value = 0;
+    source.connect(gain); gain.connect(sfxBus); source.start();
+    gain.gain.setTargetAtTime(0.24, actx.currentTime, 0.08);
+    peeLoopVoice = { source, gain };
   });
 }
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
@@ -11766,8 +11790,7 @@ function sfxUse(s) {
   if (s === 'click') tone(at, 1800, 0.03, 0.08, 'square');
   if (s === 'chime') sfxDoor();
   if (s === 'whirr') { burst(at, 0.5, [filt('bandpass', 700, 3)], 0.05); burst(at + 0.55, 0.4, [filt('bandpass', 900, 3)], 0.04); }
-  if (s === 'squeak') { const o = actx.createOscillator(), gn = actx.createGain(); o.frequency.setValueAtTime(1300, at); o.frequency.exponentialRampToValueAtTime(2100, at + 0.12);
-    gn.gain.setValueAtTime(0, at); gn.gain.linearRampToValueAtTime(0.06, at + 0.02); gn.gain.exponentialRampToValueAtTime(0.0005, at + 0.2); shot(o, gn, sfxBus); o.start(at); o.stop(at + 0.25); }
+  if (s === 'squeak') playClip('squeak', 0.16);
   if (s === 'harmonica') playClip('harmonica', 0.6);
 }
 // the ball, out in the world
@@ -12748,24 +12771,25 @@ function peeGround(x, y) {
 }
 
 function startPee() {
-  if (pee) { pee = null; say('You stop.', 1.2); return; }
+  if (pee) { pee = null; setPeeAudio(false); say('You stop.', 1.2); return; }
   const at = placeKey();
   if (at === null || !onFootMode()) return say('Not here.');
   if (body.seat) return say('Stand up first.');
   pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, loo: looNear(), seen: 0, caught: false }; // (a short one even with nothing in you)
+  setPeeAudio(true);
   say(pee.loo ? 'You use the toilet.' : mode === 'room' && inWc(px, py) ? 'Not quite the toilet, but close enough.' : needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
 }
 
 function stepPee(dt) {
   if (pee) {
-    if (!onFootMode() || placeKey() !== pee.at || sleep || game) { pee = null; }
+    if (!onFootMode() || placeKey() !== pee.at || sleep || game) { pee = null; setPeeAudio(false); }
     else {
       pee.t += dt; pee.left -= dt;
       needs.bladder = Math.max(0, needs.bladder - dt * 100 / 12.5);
       const flow = Math.min(1, 0.35 + pee.t * 1.6) * Math.min(1, Math.max(0, pee.left) / 1.4); // starts up, dribbles out
       for (let n = Math.round(PEE_RATE * dt + Math.random() * 0.5); n > 0; n--) peeSpray(flow);
-      if ((pee.seen -= dt) <= 0) { pee.seen = 0.4; peeWitness(); }
-      if (pee && pee.left <= 0) { if (pee.loo) { flushT = T; say('You flush. Very civilised.', 2); } pee = null; }
+      if ((pee.seen -= dt) <= 0) { pee.seen = 0.4; peeWitness(); if (!pee) setPeeAudio(false); }
+      if (pee && pee.left <= 0) { if (pee.loo) { flushT = T; say('You flush. Very civilised.', 2); } pee = null; setPeeAudio(false); }
     }
   }
   // the stream in the air
@@ -13510,7 +13534,7 @@ function stepBody(dt) {
       body.swirl = 0;
       const dmg = fallHurt(fell);
       if (dmg > 0) {
-        if (actx) sfxUse('kick');
+        if (actx) playClip('ground-impact', 0.32);
         if (hurt(dmg)) passOut(`You fell ${Math.round(fell)} metres. Somebody called an ambulance. You're lucky to be alive.`);
         else say(fell > 15 ? 'You hit the ground hard. Something in your ankle goes crunch.' : 'Oof. You land hard.', 3);
       }

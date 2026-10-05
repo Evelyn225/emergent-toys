@@ -31,24 +31,25 @@ function peeGround(x, y) {
 }
 
 function startPee() {
-  if (pee) { pee = null; say('You stop.', 1.2); return; }
+  if (pee) { pee = null; setPeeAudio(false); say('You stop.', 1.2); return; }
   const at = placeKey();
   if (at === null || !onFootMode()) return say('Not here.');
   if (body.seat) return say('Stand up first.');
   pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, loo: looNear(), seen: 0, caught: false }; // (a short one even with nothing in you)
+  setPeeAudio(true);
   say(pee.loo ? 'You use the toilet.' : mode === 'room' && inWc(px, py) ? 'Not quite the toilet, but close enough.' : needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
 }
 
 function stepPee(dt) {
   if (pee) {
-    if (!onFootMode() || placeKey() !== pee.at || sleep || game) { pee = null; }
+    if (!onFootMode() || placeKey() !== pee.at || sleep || game) { pee = null; setPeeAudio(false); }
     else {
       pee.t += dt; pee.left -= dt;
       needs.bladder = Math.max(0, needs.bladder - dt * 100 / 12.5);
       const flow = Math.min(1, 0.35 + pee.t * 1.6) * Math.min(1, Math.max(0, pee.left) / 1.4); // starts up, dribbles out
       for (let n = Math.round(PEE_RATE * dt + Math.random() * 0.5); n > 0; n--) peeSpray(flow);
-      if ((pee.seen -= dt) <= 0) { pee.seen = 0.4; peeWitness(); }
-      if (pee && pee.left <= 0) { if (pee.loo) { flushT = T; say('You flush. Very civilised.', 2); } pee = null; }
+      if ((pee.seen -= dt) <= 0) { pee.seen = 0.4; peeWitness(); if (!pee) setPeeAudio(false); }
+      if (pee && pee.left <= 0) { if (pee.loo) { flushT = T; say('You flush. Very civilised.', 2); } pee = null; setPeeAudio(false); }
     }
   }
   // the stream in the air
