@@ -42,14 +42,14 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `CREATE: A short, interesting, visually creative idea for a p5.js sketch or generative site. Dont use audio based ideas.
+          content: `CREATE: A short, evocative idea for a generative web experience, 3D interactive world, audio-visual toy, physics simulation, or creative micro-site.
 FORMAT: A short, descriptive phrase or sentence.
-EXAMPLES: Sand physics simulation, Game of Life variant with hexagonal cells, Animated fractal tree that grows with mouse movement, Inverse kinematics tentacle following the cursor, Procedural city generator, Interactive cellular automata playground, Dynamic Voronoi diagram with moving points, Generative art inspired by Mondrian, Particle system with flocking behavior, Recursive subdivision maze generator.
-RULES: No explanations, just output the idea as a phrase or sentence.`
+EXAMPLES: Interactive 3D neon synth wave grid, Sand physics simulation, Fluid dynamics audio visualizer, Boids flocking simulation with user lighting control, Procedural cyberpunk city generator, Organic bioluminescent growth algorithm, Interactive kaleidoscope synth, Hexagonal cellular automata playground, Generative architecture toy with ambient soundscapes.
+RULES: No explanations, just output the idea as a single phrase or sentence.`
         },
         {
           role: "user",
-          content: "Give me a short idea for a p5 sketch or generative site."
+          content: "Give me a creative idea for an interactive web experience."
         }
       ],
       temperature: 0.95

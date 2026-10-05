@@ -68,7 +68,7 @@
         <div class="theme-modal">
             <div class="theme-eyebrow">▓ terminal</div>
             <div class="theme-title">The Web Wizard's Casino</div>
-            <div class="theme-desc">Enter a theme and the wizard will conjure a generative p5.js experience.</div>
+            <div class="theme-desc">Enter a theme and the wizard will conjure an interactive generative web experience.</div>
             <div class="theme-input-row">
                 <input id="themeInput" type="text" placeholder="Enter a theme..." class="theme-input">
                 <button id="randomThemeButton" class="theme-random-btn">random</button>
@@ -145,35 +145,16 @@
         // Create the prompt for the AI
         function createGenerationPrompt(theme) {
             return `
-    CREATE A CREATIVE SITE WITH A P5.JS SKETCH:
+    CREATE AN INTERACTIVE GENERATIVE WEB EXPERIENCE FOR THE THEME: "${theme}"
 
-    OUTPUT RULES:
-    - Output complete HTML with p5.js JavaScript code wrapped in <script> tags and <style> tags as needed
-    - MUST include setup() function that calls createCanvas()
-    - MUST include draw() function that calls background() at the start
-    - Must visually incorporate the theme "${theme}" in the sketch
-    - MUST literally include the theme word(s) ${theme} as text in the content somewhere
-    - Create something substantial: 500+ lines of creative code
-    - Have more than one element of interactivity, preferably mouse or keyboard based
-    - Use p5 drawing functions: rect(), ellipse(), line(), fill(), stroke(), etc
-    - Can use: noise(), sin(), cos(), random(), map(), etc for animation
-    - Can add interactivity: mousePressed(), keyPressed(), mouseX, mouseY, etc
-    - Create classes, variables, arrays as needed
-    - Can use images via: loadImage('https://picsum.photos/800/600')
-    - DO NOT use deprecated features (deviceOrientation, etc)
-    - Make it visually interesting and animated
-    - Vary your approach - don't always do the same thing
-    - No markdown code blocks, just raw HTML
-    - DO NOT include any external CSS or JS files
-
-    EXAMPLES OF GOOD APPROACHES:
-    - Generative art that evolves over time
-    - Animated patterns or fractals  
-    - Games or simulations
-    - Data visualizations
-    - Abstract animations
-    - Geometric explorations
-    - Creative uses of HTML elements + p5.js canvas depending on the theme
+    REQUIREMENTS:
+    - Build a complete, self-contained single-page web app / creative site.
+    - Incorporate the theme "${theme}" visually, conceptually, and prominently.
+    - Feel free to choose the best technology stack for this theme: Three.js 3D, Canvas 2D, WebGL shaders, p5.js, Tone.js / Web Audio API synth, Matter.js physics, GSAP, or rich interactive DOM elements with CSS animations.
+    - Design a custom themed UI HUD / parameter control panel (sliders, toggles, buttons) so the user can interactively alter the experience.
+    - Add ambient generative audio or sound effects with a user sound toggle (Mute/Unmute) if appropriate for the mood.
+    - Make it substantial (500+ lines of code) with rich interactive controls, mouse/keyboard reactivity, and 60fps animations.
+    - Output raw HTML with embedded <style> and <script> tags only. No markdown fences.
 
     BEGIN HTML OUTPUT:`;
         }

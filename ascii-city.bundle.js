@@ -4122,6 +4122,8 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
 const wanted = { stars: 0, lastX: 0, lastY: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
+const roomCops = []; // officers who got a reliable lead that you entered the current building
+let searchedRoom = null;
 
 // can you see (bx, by) from (ax, ay)? Nothing built in the way (cells taller than eye height block it)
 function lineOfSight(ax, ay, bx, by) {
@@ -4167,6 +4169,112 @@ function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along 
   if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = mod(nx, N);
   if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = mod(ny, N);
   c.ph += dt * 7;
+}
+const roomOpen = (x, y) => x >= 0 && y >= 0 && x < room.W && y < room.H && ROOMW.cell(x, y) === 0 && !(room.def.block && room.def.block(x, y)) &&
+  !room.props.some(p => p.box && !p.walk && p.box.z0 < 1.2 && inBox(p.box, x, y, 0.2) || p.bench && Math.hypot(x - p.x, y - p.y) < 0.5);
+function nearestRoomCell(x, y) {
+  let best = null, bd = Infinity;
+  for (let cy = 0; cy < room.H; cy++) for (let cx = 0; cx < room.W; cx++) if (roomOpen(cx + 0.5, cy + 0.5)) {
+    const d = Math.hypot(cx + 0.5 - x, cy + 0.5 - y);
+    if (d < bd) { best = [cx, cy]; bd = d; }
+  }
+  return best;
+}
+function roomPath(fromX, fromY, toX, toY) {
+  const start = nearestRoomCell(fromX, fromY), end = nearestRoomCell(toX, toY);
+  if (!start || !end) return [];
+  const key = (x, y) => y * room.W + x, first = key(...start), last = key(...end), prev = new Int32Array(room.W * room.H).fill(-1), queue = [first];
+  prev[first] = first;
+  for (let h = 0; h < queue.length && prev[last] < 0; h++) {
+    const id = queue[h], x = id % room.W, y = id / room.W | 0;
+    for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + ox, ny = y + oy, nk = key(nx, ny);
+      if (nx < 0 || ny < 0 || nx >= room.W || ny >= room.H || prev[nk] >= 0 || !roomOpen(nx + 0.5, ny + 0.5)) continue;
+      prev[nk] = id; queue.push(nk);
+    }
+  }
+  if (prev[last] < 0) return [];
+  const path = [];
+  for (let id = last; id !== first; id = prev[id]) path.push([id % room.W + 0.5, (id / room.W | 0) + 0.5]);
+  return path.reverse();
+}
+function roomDoorCell() {
+  let best = null, bd = Infinity;
+  for (let y = 0; y < room.H; y++) for (let x = 0; x < room.W; x++) if (room.grid[y][x] === 'D' || room.grid[y][x] === 'E') {
+    for (const [ox, oy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) if (roomOpen(x + ox + 0.5, y + oy + 0.5)) {
+      const d = Math.hypot(x + ox + 0.5 - px, y + oy + 0.5 - py);
+      if (d < bd) { bd = d; best = [x + ox + 0.5, y + oy + 0.5]; }
+    }
+  }
+  return best || nearestRoomCell(px, py) && nearestRoomCell(px, py).map(v => v + 0.5);
+}
+function roomPoliceSees(c) {
+  const tx = px, ty = py, targetZ = body.seat ? 0.95 : Math.max(0.42, 1.55 - (body.crouch || 0) * 1.12);
+  const vx = tx - c.x, vy = ty - c.y, n = Math.ceil(Math.hypot(vx, vy) * 8);
+  if (n > 80) return false;
+  for (let k = 1; k < n; k++) {
+    const t = k / n, x = c.x + vx * t, y = c.y + vy * t, z = 1.55 + (targetZ - 1.55) * t;
+    const cell = room.grid[Math.floor(y)]?.[Math.floor(x)];
+    if (ROOMW.cell(Math.floor(x), Math.floor(y)) > 0 && cell !== 'D' && cell !== 'E') return false;
+    for (const p of room.props) if (p.box) {
+      const b = p.box, qx = x - b.x, qy = y - b.y, along = qx * b.c + qy * b.s, across = -qx * b.s + qy * b.c;
+      if (Math.abs(along) < b.hl && Math.abs(across) < b.hw && z > b.z0 && z < b.z1) return false;
+    }
+  }
+  return true;
+}
+function roomSearchLead(dt) {
+  if (mode !== 'room') { roomCops.length = 0; searchedRoom = null; return false; }
+  if (!wanted.stars) { roomCops.length = 0; searchedRoom = null; return false; }
+  if (searchedRoom !== room) {
+    searchedRoom = room; roomCops.length = 0;
+    const ret = room.ret;
+    if (!ret) return false;
+    const policeSawDoor = copSees(ret[0], ret[1]);
+    const witnessSawDoor = people.some(p => !p.hidden && near(p.x, p.y, ret[0], ret[1]) < 4 && lineOfSight(p.x, p.y, ret[0], ret[1]));
+    const lastSeenAtDoor = near(wanted.lastX, wanted.lastY, ret[0], ret[1]) < 0.9;
+    if (wanted.seen || policeSawDoor || witnessSawDoor || lastSeenAtDoor) {
+      if (witnessSawDoor || policeSawDoor) { wanted.lastX = ret[0]; wanted.lastY = ret[1]; callUnits(); }
+      const door = roomDoorCell();
+      if (door) {
+        wanted.roomX = px; wanted.roomY = py;
+        for (let i = 0; i < Math.min(2, Math.max(1, wanted.stars)); i++)
+          roomCops.push({ x: door[0], y: door[1], targetX: wanted.roomX, targetY: wanted.roomY, path: [], pathT: 0, searchT: 0, searchI: 0, sees: false });
+      }
+    }
+  }
+  let anySees = false;
+  for (const c of roomCops) {
+    c.sees = Math.hypot(c.x - px, c.y - py) < 9 && roomPoliceSees(c);
+    if (c.sees) { anySees = true; wanted.roomX = px; wanted.roomY = py; c.targetX = px; c.targetY = py; c.searchI = 0; }
+    else if (Math.hypot(c.x - c.targetX, c.y - c.targetY) < 0.28) {
+      c.searchT += dt;
+      if (c.searchT > 0.8) {
+        c.searchT = 0;
+        const cells = [];
+        for (let y = 0; y < room.H; y++) for (let x = 0; x < room.W; x++) if (roomOpen(x + 0.5, y + 0.5) && Math.hypot(x + 0.5 - wanted.roomX, y + 0.5 - wanted.roomY) < 5)
+          cells.push([x + 0.5, y + 0.5]);
+        cells.sort((a, b) => Math.hypot(a[0] - c.x, a[1] - c.y) - Math.hypot(b[0] - c.x, b[1] - c.y));
+        if (cells.length) { const g = cells[c.searchI++ % cells.length]; c.targetX = g[0]; c.targetY = g[1]; }
+      }
+    }
+    if ((c.pathT -= dt) <= 0 || !c.path.length) { c.pathT = 0.55; c.path = roomPath(c.x, c.y, c.targetX, c.targetY); }
+    let [gx, gy] = c.path[0] || [c.targetX, c.targetY], vx = gx - c.x, vy = gy - c.y, d = Math.hypot(vx, vy), step = 1.05 * dt;
+    if (d < step + 0.04) { c.x = gx; c.y = gy; if (c.path.length) c.path.shift(); }
+    else if (d > 1e-5) {
+      const nx = c.x + vx / d * step, ny = c.y + vy / d * step;
+      if (roomOpen(nx, c.y)) c.x = nx;
+      if (roomOpen(c.x, ny)) c.y = ny;
+    }
+  }
+  return anySees;
+}
+function drawRoomPolice() {
+  for (const c of roomCops) {
+    drawArt(c.x - px, c.y - py, 0, 0.38, 1.5, (c.pathT > 0.2 && c.path.length ? ART.walkA : ART.keeper),
+      (ch, row, L) => C(row < 3 ? SKIN : BLUE, row < 3 ? L : Math.max(L, 10)));
+    if (c.sees && fract(T * 3) < 0.55) drawArt(c.x - px, c.y - py, 1.65, 0.1, 0.12, ['!'], () => C(RED, 15));
+  }
 }
 function backToBeat(c) { // the chase is off: pick up the beat from the nearest corner
   const ix = Math.round((c.x - 1) / 8), iy = Math.round((c.y - 1) / 8);
@@ -4218,6 +4326,7 @@ function callUnits() {
 }
 function clearWanted() {
   wanted.stars = 0; wanted.seen = false; wanted.hideT = 0; wanted.bustT = 0; wanted.busted = false;
+  roomCops.length = 0; searchedRoom = null;
   for (const c of cars) if (c.pursuit) { c.pursuit = false; c.dest = null; c.cruise = 1 + Math.random() * 0.5; c.dropped = false; c.drops = 0; }
   for (const c of footCops) if (c.chase) backToBeat(c);
   reports.length = 0;
@@ -4237,14 +4346,14 @@ function stepCrime(dt) {
   // a cab you've paid to step on it, seen by a cop: pulled over, and the driver's arrested
   if (mode === 'taxi' && me && me.rush && Math.abs(me.v) > 1.5 && copSees(me.x, me.y)) return 'cab';
   if (!wanted.stars) return;
+  const roomSeen = roomSearchLead(dt);
   const [wx, wy] = crimePos(), inside = mode === 'room';
   const sees = c => !inside && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
-  wanted.seen = cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
-  if (wanted.seen) { wanted.lastX = wx; wanted.lastY = wy; wanted.hideT = 0; wanted.tipT = 0; }
+  wanted.seen = inside ? roomSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
+  if (wanted.seen) { if (!inside) { wanted.lastX = wx; wanted.lastY = wy; } wanted.hideT = 0; wanted.tipT = 0; }
   else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
-  else if (wanted.hideT < ESCAPE_T[wanted.stars] * 0.75 && (wanted.tipT = (wanted.tipT || 0) - dt) <= 0) { // a tip on the radio: roughly where you are
-    const off = inside ? 0 : 3; // (ducked into a building: somebody saw which door)
-    wanted.tipT = 4; wanted.lastX = mod(wx + (Math.random() - 0.5) * off, N); wanted.lastY = mod(wy + (Math.random() - 0.5) * off, N);
+  else if (!inside && wanted.hideT < ESCAPE_T[wanted.stars] * 0.75 && (wanted.tipT = (wanted.tipT || 0) - dt) <= 0) { // a tip on the radio: roughly where you are
+    wanted.tipT = 4; wanted.lastX = mod(wx + (Math.random() - 0.5) * 3, N); wanted.lastY = mod(wy + (Math.random() - 0.5) * 3, N);
   }
   for (const c of cars) if (c.pursuit) c.dest = [wanted.lastX, wanted.lastY]; // steering for you, or where you were
   const onFoot = mode === 'walk';
@@ -4267,7 +4376,7 @@ function stepCrime(dt) {
   }
   // caught: a hand on your shoulder, or boxed in and stopped
   const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22)
-    || inside && footCops.some(c => c.chase && near(c.x, c.y, wx, wy) < 0.35); // inside: they come in through the door after you
+    || inside && roomCops.some(c => c.sees && Math.hypot(c.x - px, c.y - py) < 0.32);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
@@ -7447,6 +7556,7 @@ function roomSprites() {
     const tx = trainX(room);
     if (tx !== null) for (const k of [-1, 0, 1]) drawBox(boxAt(tx + k * 8.6 - px, ST_TRACK + 0.9 - py, 1, 0, 4.1, 1.4, 0.35, 3.3), trainShade(trainStopped(room), k));
   }
+  drawRoomPolice();
 }
 const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
