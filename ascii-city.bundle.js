@@ -14052,7 +14052,14 @@ function loop(t) {
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
     if (body.seat && (f || s)) standUp(); // walking gets you up
-    if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow() * (body.hop || 1), (cy * f + cx * (s + lurch)) * sp * footSlow() * (body.hop || 1)); // (hop: bunny hopping, see moves.js)
+    if (!body.seat) {
+      const scale = sp * footSlow() * (body.hop || 1), ix = (cx * f - cy * (s + lurch)) * scale, iy = (cy * f + cx * (s + lurch)) * scale;
+      const airborne = body.z > 0 || body.vz > 0;
+      if (ix || iy) { body.mx = ix / dt; body.my = iy / dt; }
+      else if (!airborne) body.mx = body.my = 0;
+      else { body.mx = (body.mx || 0) * Math.pow(0.995, dt * 60); body.my = (body.my || 0) * Math.pow(0.995, dt * 60); }
+      move(airborne ? body.mx * dt : ix, airborne ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
+    }
   } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
