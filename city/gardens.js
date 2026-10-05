@@ -287,7 +287,8 @@ function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
     const streak = fract((u + z) * 0.35) < 0.025 && hash(Math.floor((u + z) * 0.35), 7, 866) > 0.5;
     if (streak) return set(i, '/', C(WHITE, 8)), true;
     const [gsu, gsz] = glassSlopes(su, z), desert = px < 13;
-    for (const q of [1.5, 4, 7.5]) {
+    // Keep the plants behind the glass as a distant backdrop; several parallax layers made the trees jump as you looked around.
+    for (const q of [7.5]) {
       const lu = u + gsu * q, lz = z + gsz * q, slot = Math.floor(lu / 1.8), c = (slot + 0.3 + hash(slot, q, 867) * 0.4) * 1.8, fade = 1 - q / 14;
       if (lz < 0) { BG[i] = desert ? C(YEL, 3 + day * 2) : C(GREEN, 1.5); return set(i, desert ? (Math.floor(lu * 4) + Math.floor(q)) % 7 ? ' ' : '.' : ',', C(desert ? WARM : GREEN, 6 * fade)), true; } // the ground
       if (hash(slot, q, 868) < 0.35) continue;

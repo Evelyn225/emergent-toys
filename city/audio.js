@@ -256,7 +256,7 @@ function audioTick(dt) {
   const elNear = mode === 'room' ? 0 : clamp(1 - elDist / 7, 0, 1) *
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
-  const waterfall = mode === 'room' && room.kind === 'conservatory' ? clamp(1 - Math.hypot(px - CONS_POOL.x, py - 0.8) / 5, 0, 1) : 0;
+  const waterfall = mode === 'room' && room.kind === 'conservatory' ? clamp(1 - Math.hypot(px - CONS_POOL.x, py - 0.8) / 6.5, 0, 1) : 0;
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: inv.some(it => it.id === 'pocketwatch'), barCrowd: room ? barCrowd() : 0,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm' });
