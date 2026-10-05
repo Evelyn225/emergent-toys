@@ -340,6 +340,22 @@ test('on your feet: Space jumps, a trick on the board lands with its name, C sit
   assert.strictEqual(await page.evaluate(() => body.seat), null, 'up again');
 }));
 
+test('the board shows under you on a big desktop screen too; the wheels go quiet in the air', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    const errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.goto(PAGE); await page.waitForTimeout(300);
+    await page.evaluate(() => { mode = 'walk'; fx.skating = true; pitch = 0; });
+    await page.waitForTimeout(200);
+    const cells = await page.evaluate(() => { let n = 0; for (let i = 0; i < cols * rows; i++) if (boardZ[i] < 1e9) n++; return [cols * rows > 1 << 14, n]; });
+    assert.ok(cells[0] && cells[1] > 50, `more cells than the old buffer held, and the board drawn in them (${cells})`);
+    const rolling = await page.evaluate(() => { K.KeyW = 1; const ground = wheelsRolling(); body.vz = 3; body.z = 0.2; const air = wheelsRolling(); body.vz = body.z = 0; K.KeyW = 0; return [ground, air]; });
+    assert.deepStrictEqual(rolling, [true, false]);
+    assert.deepStrictEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
 test('skateboard tricks by flick: each way picks its trick, and on a phone a swipe off the Ollie button pops it', async () => {
   const browser = await chromium.launch();
   try {
@@ -462,6 +478,27 @@ test('a fetch favour: buy what they asked for and handing it over takes it out o
     return [before, has, task, inv.map(it => it.id), held, money > m0];
   });
   assert.deepStrictEqual(r, [false, true, null, ['yoyo'], 0, true], 'gone from your bag, still holding the yo-yo, and paid');
+}));
+
+test('a car comes with its keys: Q with them in hand brings it round to the kerb by you', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    money = 5000; inv.length = 0; held = -1;
+    const [ok, line] = buy('car_sedan');
+    const c = owned.cars[owned.cars.length - 1], k = inv.findIndex(it => it.id === 'key_car_sedan');
+    // off a few blocks: somewhere on foot on a street
+    let spot = null;
+    for (let i = 0; i < 400 && !spot; i++) { const x = mod(c.x + 24 + (i % 20) * 8 + 0.15, N), y = mod(c.y + 24 + Math.floor(i / 20) * 8 + 4.5, N); if (free(x, y)) spot = [x, y]; }
+    [px, py] = spot; held = k;
+    const far = Math.hypot(rel(c.x - px), rel(c.y - py));
+    useHeldItem();
+    const near = Math.hypot(rel(c.x - px), rel(c.y - py));
+    return { ok, keys: /keys/.test(line), k, far: far > 10, near: near < 2, parked: c.parked, line: msgText, sell: sellPrice(inv[k], 0.4) };
+  });
+  assert.deepStrictEqual(r, { ok: true, keys: true, k: 0, far: true, near: true, parked: true, line: r.line, sell: 0 }, JSON.stringify(r));
+  assert.match(r.line, /rolls up at the kerb/);
+  // indoors it can't hear you
+  const inside = await page.evaluate(() => { enterRoom('cinema', { word: 'CINEMA', ret: [px, py, a] }, [7, 10.5, -Math.PI / 2]); useHeldItem(); return msgText; });
+  assert.match(inside, /No signal in here/);
 }));
 
 test('run dry and you pass out: the hospital, a bill, and the nurse patches you up; dev tools fill you up', () => withPage(async page => {

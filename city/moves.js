@@ -13,6 +13,7 @@ const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
 const skatingNow = () => fx.skating && mode === 'walk';
+const wheelsRolling = () => fx.skating && !body.z && !body.vz && !!(K.KeyW || K.KeyS || K.KeyA || K.KeyD); // (the roar: on the ground, going somewhere)
 
 // a flick (screen pixels: x right, y down) to the trick it calls for: the nearest of the six directions
 const FLICK_DIRS = [['A', -1, 0], ['D', 1, 0], ['S', 0, 1], ['AS', -0.71, 0.71], ['DS', 0.71, 0.71], ['', 0, -1]];
@@ -165,7 +166,7 @@ const footSlow = () => body.crouch > 0.5 ? 0.45 : 1;
 // ---- the board under your feet, in camera space: x right, y down, z ahead (metres), drawn into the character grid
 // point by point with its own depth test. Grip tape on top, a coloured graphic underneath, trucks and wheels.
 const BOARD_L = 0.4, BOARD_W = 0.105, BOARD_T = 0.025;
-const boardZ = new Float32Array(1 << 14);
+let boardZ = new Float32Array(1 << 14); // (grows to fit the screen)
 function drawBoard3D() {
   const tr = body.trick, p = tr ? clamp(tr.t / tr.air, 0, 1) : 0, e = p * p * (3 - 2 * p); // eased through the air
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
@@ -178,7 +179,7 @@ function drawBoard3D() {
   const fit = Math.min(1, (rows * 0.8 - hor) / ((0.5 / cz) * pY + 1e-6)); // (on a wide screen it'd sit half off the bottom: scaled down to sit in the lower part of the view)
   if (fit > 0.2) { pX *= fit; pY *= fit; }
   const ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
-  const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
+  const n = cols * rows; if (boardZ.length < n) boardZ = new Float32Array(n); boardZ.fill(1e9, 0, n);
   // a point on the board (u along, v across, h up) to the screen
   const plot = (u, v, h, ch, col, bg) => {
     let y1 = v * cr - h * sr, h1 = v * sr + h * cr; // the flip, round the long axis
