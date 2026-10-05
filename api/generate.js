@@ -52,12 +52,15 @@ OUTPUT FORMAT (strictly enforced):
 TECHNOLOGY & LIBRARIES:
 - You have complete freedom to select the best front-end stack for the prompt theme!
 - Standard libraries can be imported via CDN script tags placed in <head>:
-  * Three.js for 3D graphics & WebGL: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
+  * Three.js Core: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
+  * Three.js PointerLockControls (REQUIRED if using THREE.PointerLockControls): https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js
+  * Three.js OrbitControls (REQUIRED if using THREE.OrbitControls): https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js
   * p5.js for 2D generative sketches: https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js
   * Tone.js for synth audio & music: https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js
   * Matter.js for 2D physics: https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js
   * GSAP for animation: https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js
   * Google Fonts for custom typography
+- CRITICAL THREE.JS CONTROLS RULE: The core three.min.js script does NOT include THREE.PointerLockControls or THREE.OrbitControls! If you reference THREE.PointerLockControls or THREE.OrbitControls, you MUST load their respective CDN addon script above in <head> AFTER three.min.js. Alternatively, write simple vanilla JS controls using mousemove, keydown, and camera.rotation/position.
 - Pure Vanilla HTML5 Canvas 2D, Web Audio API, SVG, and CSS 3D are also warmly encouraged.
 
 CREATIVE PRINCIPLES:
