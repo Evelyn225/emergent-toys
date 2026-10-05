@@ -50,18 +50,18 @@ OUTPUT FORMAT (strictly enforced):
 - No local file references (no /style.css, ./assets/*, etc.).
 
 TECHNOLOGY & LIBRARIES:
-- You have complete freedom to select the best front-end stack for the prompt theme!
-- Standard libraries can be imported via CDN script tags placed in <head>:
-  * Three.js Core: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
-  * Three.js PointerLockControls (REQUIRED if using THREE.PointerLockControls): https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js
-  * Three.js OrbitControls (REQUIRED if using THREE.OrbitControls): https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js
-  * p5.js for 2D generative sketches: https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js
-  * Tone.js for synth audio & music: https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js
-  * Matter.js for 2D physics: https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js
-  * GSAP for animation: https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js
-  * Google Fonts for custom typography
-- CRITICAL THREE.JS CONTROLS RULE: The core three.min.js script does NOT include THREE.PointerLockControls or THREE.OrbitControls! If you reference THREE.PointerLockControls or THREE.OrbitControls, you MUST load their respective CDN addon script above in <head> AFTER three.min.js. NOTE: THREE.PointerLockControls does NOT have an .update() method (unlike OrbitControls). NEVER call controls.update() blindly! ALWAYS check typeof first: if (controls && typeof controls.update === 'function') controls.update();
-- Pure Vanilla HTML5 Canvas 2D, Web Audio API, SVG, and CSS 3D are also warmly encouraged.
+- You have TOTAL FREEDOM to select ANY front-end technology, library, or pure vanilla HTML5 stack!
+- Pure Vanilla HTML5 Canvas 2D, WebGL, Web Audio API, CSS 3D, and SVG are warmly encouraged — they have zero CDN dependencies, instant 60fps performance, and 0% risk of external library loading errors.
+- For classic retro 3D games (such as Wolfenstein / Doom style corridor crawlers), a pure HTML5 Canvas 2D raycaster or WebGL shader is often the most authentic, performant, and bug-free approach!
+- If an external library is helpful (Three.js, p5.js, Tone.js, Matter.js, GSAP), you may import it via standard CDN script tags in <head> (e.g. from cdnjs, jsdelivr, or unpkg).
+
+CONTROL CONVENTIONS (MUST BE ACCURATE):
+- Standard Keyboard Mappings:
+  * W / ArrowUp = Move Forward
+  * S / ArrowDown = Move Backward
+  * A / ArrowLeft = Turn Left or Strafe Left
+  * D / ArrowRight = Turn Right or Strafe Right
+- Double check vector math and angle signs (e.g. angle += turnSpeed vs -= turnSpeed) so movement is completely natural and controls are NEVER swapped or inverted.
 
 CREATIVE PRINCIPLES:
 1. FAITHFUL & AMBITIOUS IMPLEMENTATION:
@@ -69,10 +69,9 @@ CREATIVE PRINCIPLES:
 2. VISUAL & AUDIO POLISH:
    - Always include CSS resets: html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; } canvas { display: block; width: 100%; height: 100%; }
    - Tailor typography, color palettes, lighting, and UI elements to fit the mood of the theme.
-   - For 3D scenes, consider procedural canvas textures, fog, and lighting to give materials depth and atmosphere.
-   - AUDIO IS OPTIONAL & NON-BLOCKING: Prefer native browser Web Audio API (AudioContext, OscillatorNode, GainNode) which requires zero external scripts. If using Tone.js, use the exact CDN URL above. Always wrap audio setup in a try/catch block so audio issues NEVER block canvas rendering!
+   - For audio: Prefer native browser Web Audio API (AudioContext, OscillatorNode, GainNode) which requires zero external scripts. Always wrap audio setup in a try/catch block so audio issues NEVER block canvas rendering!
 
-3. STRICT NULL-SAFETY & RELIABLE ARCHITECTURE (PREVENT ALL "UNDEFINED" ERRORS):
+3. STRICT NULL-SAFETY & RELIABLE ARCHITECTURE:
    - ENTRY POINT: Wrap script execution in a unified function that checks document.readyState:
      function startApp() {
        if (window._appStarted) return;
@@ -87,14 +86,11 @@ CREATIVE PRINCIPLES:
        window.addEventListener('DOMContentLoaded', startApp);
      }
    - INVOCATION ORDER INSIDE init():
-     * FIRST: Instantiate ALL global state variables (scene = new THREE.Scene(), camera = ..., renderer = ..., player = { x:0, y:0, velX:0, velY:0 }, mapData = []).
+     * FIRST: Instantiate ALL global state variables (e.g. canvas, ctx, player = { x:0, y:0, dir:0 }, map = []).
      * SECOND: ONLY AFTER global state variables are assigned, invoke sub-generator helper routines (e.g. generateWorld(), spawnEntities()).
      * THIRD: ONLY AT THE END of init(), attach DOM event listeners ('resize', 'click', 'keydown', UI button clicks).
    - DEFENSIVE GUARD CLAUSES:
-     * EVERY event handler and animation frame function MUST verify object non-null status before property access:
-       function onResize() { if (!renderer || !camera) return; ... }
-       function onKeyDown(e) { if (!player || !scene) return; ... }
-       function animate() { requestAnimationFrame(animate); if (!renderer || !scene || !camera) return; ... }
+     * EVERY event handler and animation frame function MUST verify object non-null status before property access.
    - COMPLETE CODE: Write 400-800 lines of dense, fully-implemented, un-stubbed code that runs error-free on first load.
 `
         },
