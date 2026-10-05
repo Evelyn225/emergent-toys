@@ -2,7 +2,8 @@
 // up). On the skateboard Space pops an ollie, and what you're holding as you pop makes it a trick: A kickflip,
 // D heelflip, S pop shuvit, A+S 360 flip, D+S varial heelflip. Or, without touching where you're going, flick for it:
 // hold the right mouse button and flick (left kickflip, right heelflip, back shuvit, back-left 360 flip, back-right
-// varial heelflip, nothing or forward an ollie) and let go to pop; on a phone, swipe off the Ollie button the same
+// varial heelflip, forward-left hardflip, forward-right inward heelflip, or straight forward ollie) and let go to pop;
+// on a phone, swipe off the Ollie button the same
 // way. The board under you is a little 3D model in front of the camera (like a held weapon), so it really flips and spins.
 // Bunny hopping: jump again the moment you land (hold Space, or press it just before you touch down) and each hop
 // carries you a bit faster; turn the way you're strafing while you're in the air (A + mouse left, D + mouse right)
@@ -10,13 +11,15 @@
 const HOP_GAIN = 0.06, HOP_STRAFE = 0.12, HOP_MAX = 1.9, HOP_BUF = 0.2; // speed x per hop, x more for a good strafe, cap, s early
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
-const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5] };
+const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
+  WA: ['hardflip', 1, 0.5], WD: ['inward heelflip', -1, -0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
 const skatingNow = () => fx.skating && mode === 'walk';
 const wheelsRolling = () => fx.skating && !body.z && !body.vz && !!(K.KeyW || K.KeyS || K.KeyA || K.KeyD); // (the roar: on the ground, going somewhere)
 
-// a flick (screen pixels: x right, y down) to the trick it calls for: the nearest of the six directions
-const FLICK_DIRS = [['A', -1, 0], ['D', 1, 0], ['S', 0, 1], ['AS', -0.71, 0.71], ['DS', 0.71, 0.71], ['', 0, -1]];
+// a flick (screen pixels: x right, y down) to the trick it calls for: the nearest of the eight directions
+const FLICK_DIRS = [['A', -1, 0], ['D', 1, 0], ['S', 0, 1], ['AS', -0.71, 0.71], ['DS', 0.71, 0.71],
+  ['WA', -0.71, -0.71], ['WD', 0.71, -0.71], ['', 0, -1]];
 function flickTrick(dx, dy, min = 20) {
   const d = Math.hypot(dx, dy);
   if (d < min) return '';
@@ -187,9 +190,9 @@ function drawBoard3D() {
   const cz = 1.15;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   let pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS;
-  const fit = Math.min(1, (rows * 0.8 - hor) / ((0.5 / cz) * pY + 1e-6)); // (on a wide screen it'd sit half off the bottom: scaled down to sit in the lower part of the view)
+  const oy = rows / 2, fit = Math.min(1, (rows * 0.8 - oy) / ((0.5 / cz) * pY + 1e-6)); // keep it at your feet as you look up or down
   if (fit > 0.2) { pX *= fit; pY *= fit; }
-  const ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
+  const ox = cols / 2;
   const n = cols * rows; if (boardZ.length < n) boardZ = new Float32Array(n); boardZ.fill(1e9, 0, n);
   // a point on the board (u along, v across, h up) to the screen
   const plot = (u, v, h, ch, col, bg) => {

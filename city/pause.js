@@ -31,9 +31,9 @@ function buildPause() {
       ${toggle('invertY', 'Invert Y')}
       <h2>controls</h2>
       <div class="keys">
-        <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock)</span>
+        <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock); on a skateboard, right-click and flick for tricks</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
-        <b>space</b><span>jump (on a board: ollie; with A / D / S: tricks)</span><b>right mouse</b><span>on a board: hold, flick a way, let go for a trick</span><b>C</b><span>crouch (hold) / sit</span>
+        <b>space</b><span>jump (on a board: ollie; with A / D / S: tricks)</span><b>right mouse</b><span>on a board: flick any direction (up: ollie; upper diagonals: hardflip / inward heelflip)</span><b>C</b><span>crouch (hold) / sit</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
         <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
