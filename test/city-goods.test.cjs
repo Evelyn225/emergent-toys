@@ -16,7 +16,7 @@ test('every shop and cart sells things that exist', () => {
   assert.ok(j("VENDOR_STOCK['HOT DOGS'].includes('hotdog')"));
 });
 
-test('buying: start with $100, pay the price, 8 things at most', () => {
+test('buying: start with $100, pay the price, and fill the bag', () => {
   const { ev, j } = fresh();
   assert.strictEqual(ev('money'), 100);
   assert.deepStrictEqual(j("buy('coffee')"), [true, 'You buy a coffee. ($3.00)']);
@@ -24,9 +24,11 @@ test('buying: start with $100, pay the price, 8 things at most', () => {
   assert.strictEqual(ev('inv.length'), 1);
   assert.strictEqual(j("buy('skateboard')")[0], true);
   assert.strictEqual(j("buy('skateboard')")[0], false, "can't afford a second");
-  for (let k = 0; k < 6; k++) ev("buy('water')");
-  assert.deepStrictEqual(j("buy('water')"), [false, 'Your hands are full.']);
-  assert.strictEqual(ev('inv.length'), 8);
+  ev('money = 1000'); // isolate the carry limit from affordability
+  const watersToFill = ev('INV_SIZE - inv.length');
+  for (let k = 0; k < watersToFill; k++) ev("buy('water')");
+  assert.strictEqual(ev('inv.length'), ev('INV_SIZE'));
+  assert.deepStrictEqual(j("buy('water')"), [false, 'Your bag is full.']);
 });
 
 test('food and drink: used up in bites and sips, with effects that wear off', () => {
@@ -102,8 +104,10 @@ test('storage: put things in your unit and take them out again; one unit, limite
   assert.strictEqual(ev("stored.find(i => i.id === 'beer').uses"), 2, 'a half-drunk beer stays half drunk');
   assert.deepStrictEqual(j('retrieveSlot(0)'), [true, 'You take the skateboard out of your unit.']);
   assert.deepStrictEqual(j('storeSlot(5)'), [false, 'Nothing there.']);
-  for (let k = 0; k < 7; k++) ev("buy('water')");
-  assert.deepStrictEqual(j('retrieveSlot(0)'), [false, 'Your hands are full.']);
+  ev('money = 1000'); // fill the bag without an unrelated cash limit
+  const watersToFill = ev('INV_SIZE - inv.length');
+  for (let k = 0; k < watersToFill; k++) ev("buy('water')");
+  assert.deepStrictEqual(j('retrieveSlot(0)'), [false, 'Your bag is full.']);
   assert.deepStrictEqual(j("stockFor('storage', 'STORAGE')"), [], 'storage sells nothing: it keeps your things');
 });
 
@@ -144,8 +148,10 @@ test('things you put down stay where they are, as they were, till you pick them 
   assert.deepStrictEqual(j("pickUpDropped(droppedNear(10.1, 20, '', 0.2))"), [true, 'You pick up the burger.']);
   assert.deepStrictEqual(j('inv'), [{ id: 'burger', uses: 2 }], 'still half eaten');
   assert.strictEqual(ev('dropped.length'), 1);
-  ev("for (let k = 0; k < 7; k++) buy('water')");
-  assert.deepStrictEqual(j("pickUpDropped(dropped[0])"), [false, 'Your hands are full.']);
+  ev('money = 1000');
+  const watersToFill = ev('INV_SIZE - inv.length');
+  ev(`for (let k = 0; k < ${watersToFill}; k++) buy('water')`);
+  assert.deepStrictEqual(j("pickUpDropped(dropped[0])"), [false, 'Your bag is full.']);
 });
 
 test('you can hold nothing: pick the same slot again, and nothing is in your hand', () => {
