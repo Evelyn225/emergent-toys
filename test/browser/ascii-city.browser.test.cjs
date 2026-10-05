@@ -368,7 +368,7 @@ test('skateboard tricks by flick: each way picks its trick, and on a phone a swi
   } finally { await browser.close(); }
 });
 
-test('roofs: step across onto the roof next door, walk off the edge and land hard, leap a street onto a lower roof', () => withPage(async page => {
+test('roofs: step across onto the roof next door, walk off the edge and land hard; a sprinting jump is only a jump', () => withPage(async page => {
   // a roof whose neighbour to the east is about level (but not the same); one whose east side drops to the street;
   // and one across a two-cell street from a roof 4-8m lower
   const spots = await page.evaluate(() => {
@@ -397,19 +397,71 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
   await page.waitForTimeout(2500);
   const r = await page.evaluate(() => [body.z, needs.health]);
   assert.ok(r[0] === 0 && r[1] < 100 && r[1] > 0, `down, hurt but standing (${r})`);
-  // a running leap from the edge clears the street and comes down on the lower roof across it
-  const [lx, ly, lh, far] = spots.leap;
+  // a sprinting jump off the edge is an ordinary jump: no flying across the street, you come down in it
+  const [lx, ly, lh] = spots.leap;
   await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = null; roofLot = roofCells(x, y); px = x + 0.85; py = y + 0.5; a = 0; refillNeeds(); }, [lx, ly, lh]);
   await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW'); await page.keyboard.press('Space');
-  await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
+  await page.waitForTimeout(250); await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
   await page.waitForTimeout(2500);
-  assert.deepStrictEqual(await page.evaluate(() => [mode, roofH, body.z]), ['roof', far, 0], 'landed on the roof across the street');
-  // no stairs on this one: the fire escape takes you down to the sidewalk beside it
+  const fell = await page.evaluate(x => [mode, body.z, px - x < 2.5], lx);
+  assert.deepStrictEqual(fell, ['walk', 0, true], 'down in the street, not across it');
+  // no stairs on the roof next door: the fire escape takes you down to the sidewalk beside it
+  await page.evaluate(([x, y, h, e]) => { mode = 'roof'; roofH = e; room = null; roofLot = roofCells(x, y); px = x + 1.5; py = y + 0.5; a = 0; refillNeeds(); body.z = body.vz = 0; }, spots.across);
   assert.match(await page.evaluate(() => promptText()), /E: fire escape down/);
   const up = await page.evaluate(() => [px, py]);
   await page.keyboard.press('KeyE');
   const down = await page.evaluate(([x, y]) => [mode, map[idx(Math.floor(px), Math.floor(py))], free(px, py), Math.hypot(rel(px - x), rel(py - y)) < 4], up);
   assert.deepStrictEqual(down, ['walk', 0, true, true], 'on the street beside the building, somewhere you can stand');
+}));
+
+test('bunny hopping: land and go straight back up and each hop is faster; stop and it is gone', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    refillNeeds();
+    // frame by frame: forward (px moving) with Space held, strafing into a turn or not
+    const go = (frames, { space = 1, strafe = 0 } = {}) => { K.KeyW = 1; K.Space = space; K.KeyD = strafe ? 1 : 0;
+      for (let i = 0; i < frames; i++) { T += 1 / 60; if (strafe) a += 0.02; px += 0.01; if (space && !body.z) jump(); stepBody(1 / 60); }
+      K.KeyW = K.Space = K.KeyD = 0; return body.hop; };
+    body.hop = 1; body.z = body.vz = 0;
+    const hopped = go(180), capped = go(1200);
+    go(60, { space: 0 }); const after = [body.z, body.hop];
+    body.hop = 1; const plain = go(180); body.z = body.vz = 0; body.hop = 1; const strafed = go(180, { strafe: 1 });
+    return { hopped, capped, after, plain, strafed };
+  });
+  assert.ok(r.hopped > 1.1, `faster for every hop (${r.hopped})`);
+  assert.strictEqual(r.capped, 1.9, 'up to a cap');
+  assert.deepStrictEqual(r.after, [0, 1], 'on the ground a moment and it bleeds away');
+  assert.ok(r.strafed > r.plain, `strafing into the turn builds it quicker (${r.plain} vs ${r.strafed})`);
+}));
+
+test('parked cars are solid on foot; you can still get in', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    let l = null; // a lane with room to walk up to it from the road side
+    for (let i = 0; i < 400 && !l; i++) { const q = laneNear(8 + (i % 20) * 8 + 4.5, 8 + Math.floor(i / 20) * 8 + 4.5);
+      if ([0, 0.3, -0.3].every(k => free(q.x + q.hy * k, q.y - q.hx * k)) && [0.3, -0.3].some(k => free(q.x + q.hy * 0.3 + q.hx * k, q.y - q.hx * 0.3 + q.hy * k))) l = q; }
+    spawnOwnedCar('sedan' in CAR_MODELS ? 'sedan' : Object.keys(CAR_MODELS)[0], l.x, l.y, l.hx, l.hy, true);
+    const c = cars.find(c => c.owned);
+    const into = free(c.ex, c.ey), sd = [1, -1].find(k => free(c.ex + c.hy * 0.3 * k, c.ey - c.hx * 0.3 * k)), side = !!sd; // (the road side of it)
+    px = c.ex + c.hy * 0.3 * sd; py = c.ey - c.hx * 0.3 * sd;
+    for (let i = 0; i < 60; i++) move(-c.hy * 0.02 * sd, c.hx * 0.02 * sd); // walk straight at it
+    const d = Math.hypot(rel(px - c.ex), rel(py - c.ey));
+    interact();
+    return [into, side, d > 0.1, mode];
+  });
+  assert.deepStrictEqual(r, [false, true, true, 'drive'], 'blocked by the car, beside it is fine, and E still gets you in');
+}));
+
+test('a fetch favour: buy what they asked for and handing it over takes it out of your bag', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    money = 100; inv.length = 0;
+    const p = people.find(p => !p.hidden), v = vendors[0];
+    task = { kind: 'fetch', who: p, type: v.type, want: VENDOR_STOCK[v.type.name][0], until: T + 240, ask: '' };
+    const before = fetchHave();
+    inv.push({ id: VENDOR_STOCK[v.type.name][0], uses: 1 }, { id: 'yoyo', uses: 0 }); held = 1;
+    const has = fetchHave(), m0 = money;
+    talkTo(p);
+    return [before, has, task, inv.map(it => it.id), held, money > m0];
+  });
+  assert.deepStrictEqual(r, [false, true, null, ['yoyo'], 0, true], 'gone from your bag, still holding the yo-yo, and paid');
 }));
 
 test('run dry and you pass out: the hospital, a bill, and the nurse patches you up; dev tools fill you up', () => withPage(async page => {

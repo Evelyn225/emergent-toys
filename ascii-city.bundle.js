@@ -1298,6 +1298,18 @@ function stepEmergency(dt) {
   }
 }
 
+// on foot, a car left at the kerb (yours, or one somebody abandoned) and the emergency vehicles waiting outside their
+// stations are solid: walk round them. (Traffic that's moving, or only stopped at the lights, you dodge yourself)
+function parkedCarAt(x, y, pad) {
+  const inCar = (cx, cy, hx, hy, kind) => {
+    const [hl, hw] = VEHICLES[kind] || VEHICLES.car, qx = rel(x - cx), qy = rel(y - cy);
+    return Math.abs(qx * hx + qy * hy) < hl + pad && Math.abs(-qx * hy + qy * hx) < hw + pad;
+  };
+  for (const c of cars) if (c.parked && !c.player && Math.abs(rel(c.ex - x)) < 0.6 && Math.abs(rel(c.ey - y)) < 0.6 && inCar(c.ex, c.ey, c.hx, c.hy, c.kind)) return true;
+  for (const b of SERVICES) if (!b.out && Math.abs(rel(b.x - x)) < 0.6 && Math.abs(rel(b.y - y)) < 0.6 && inCar(b.x, b.y, -1, 0, b.kind)) return true;
+  return false;
+}
+
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
 function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
@@ -1738,7 +1750,7 @@ const stationFor = p => stations.find(s => { const d = Math.hypot(rel(s.x - p.x)
 function startTask(p) {
   const r = Math.random(), v = nearestOf(vendors, p.x, p.y), st = stationFor(p);
   if (r < 0.2 && v && Math.hypot(rel(v.x - p.x), rel(v.y - p.y)) < 40) {
-    task = { kind: 'fetch', who: p, type: v.type, have: false, until: T + 240, ask: `Could you grab me ${v.type.item} from a cart? I'm starving.` };
+    task = { kind: 'fetch', who: p, type: v.type, want: VENDOR_STOCK[v.type.name][0], until: T + 240, ask: `Could you grab me ${v.type.item} from a cart? I'm starving.` };
   } else if (r < 0.4) {
     const d = nearestDoor(p.x + (Math.random() - 0.5) * 30, p.y + (Math.random() - 0.5) * 30, () => true, 2);
     if (!d) return false;
@@ -1755,18 +1767,20 @@ function startTask(p) {
   if (task.kind === 'escort') { p.talk = 0; p.follow = true; p.path.length = 0; } else p.talk = Infinity; // the others wait right here
   return true;
 }
+// the fetch favour: is what they asked for in your bag? (buy it and eat it, and you're back to the cart)
+const fetchHave = () => !!task && task.kind === 'fetch' && carrying(task.want);
 // where the task points you
 function taskTarget() {
   if (!task) return null;
   if (task.kind === 'escort') return task.to;
-  if (task.kind === 'fetch') return task.have ? task.who : nearestOf(vendors.filter(v => v.type === task.type), px, py);
+  if (task.kind === 'fetch') return fetchHave() ? task.who : nearestOf(vendors.filter(v => v.type === task.type), px, py);
   return task.dog.follow ? task.who : task.dog;
 }
 function taskText() {
   if (!task) return '';
   const t = taskTarget(), where = t ? directions(px, py, t.x, t.y) : '';
   if (task.kind === 'escort') return `show them to ${task.to.name}: ${where}`;
-  if (task.kind === 'fetch') return task.have ? `take the ${task.type.name.toLowerCase()} back: ${where}` : `buy ${task.type.item} from a cart: ${where}`;
+  if (task.kind === 'fetch') return fetchHave() ? `take the ${task.type.name.toLowerCase()} back: ${where}` : `buy ${task.type.item} from a cart: ${where}`;
   return task.dog.follow ? `take the dog back to its owner: ${where}` : `find the lost dog: ${where}`;
 }
 // back onto the sidewalk graph after a favour: in at the nearest door for a while, out to the corner later
@@ -1808,7 +1822,7 @@ function stepTask(dt) {
 // E on someone: answer a task, or chat
 function talkTo(p) {
   if (task && task.who === p) {
-    if (task.kind === 'fetch' && task.have) { p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`, task.type.price + tip(3, 8)); }
+    if (fetchHave()) { takeSlot(inv.findIndex(it => it.id === task.want)); p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`, task.type.price + tip(3, 8)); }
     return say(`"${task.ask}"`, 4);
   }
   if (!task && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
@@ -1816,8 +1830,8 @@ function talkTo(p) {
   if (fx.stink > 0 && Math.random() < 0.7) return say(pick(['They take a step back. "Oof. Stinky tofu?"', 'They wave a hand in front of their face. "Have you been at the night market?"', '"Whoa. Okay. Mints. Get some mints."']), 3);
   say(`"${talkLine(p)}"`, 4);
 }
-// E at a cart while you're fetching for someone
-const taskBuy = ven => { if (task && task.kind === 'fetch' && !task.have && ven.type === task.type) { task.have = true; return true; } return false; };
+// bought at a cart while you're fetching for someone: was that it?
+const taskBuy = (ven, id) => !!task && task.kind === 'fetch' && ven.type === task.type && id === task.want;
 // E on the lost dog
 const nearDog = () => task && task.kind === 'dog' && !task.dog.follow && Math.hypot(rel(task.dog.x - px), rel(task.dog.y - py)) < 0.5;
 
@@ -9542,7 +9556,7 @@ function promptText() {
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   if (nearWalkedDog()) return 'E: pet the dog';
   const who = nearPerson();
-  if (who) return task && task.who === who ? (task.kind === 'fetch' && task.have ? 'E: hand it over' : 'E: talk') : 'E: talk';
+  if (who) return task && task.who === who ? (fetchHave() ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
   const el = nearElStairs();
   if (el) return `E: up to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
@@ -11545,7 +11559,7 @@ function openShop(title, stock, vendor = null) {
 function shopBuy(id) {
   const [ok, line] = buy(id);
   say(line, 3);
-  if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor)) say(`${line} That's the one they wanted.`, 4);
+  if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor, id)) say(`${line} That's the one they wanted.`, 4);
   openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor); // refresh (money changed)
 }
 function shopSell(k) {
@@ -13283,6 +13297,10 @@ function crimePrompt() {
 // hold the right mouse button and flick (left kickflip, right heelflip, back shuvit, back-left 360 flip, back-right
 // varial heelflip, nothing or forward an ollie) and let go to pop; on a phone, swipe off the Ollie button the same
 // way. The board under you is a little 3D model in front of the camera (like a held weapon), so it really flips and spins.
+// Bunny hopping: jump again the moment you land (hold Space, or press it just before you touch down) and each hop
+// carries you a bit faster; turn the way you're strafing while you're in the air (A + mouse left, D + mouse right)
+// and it builds quicker. Stay on the ground and the speed's gone in a moment.
+const HOP_GAIN = 0.06, HOP_STRAFE = 0.12, HOP_MAX = 1.9, HOP_BUF = 0.2; // speed x per hop, x more for a good strafe, cap, s early
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5] };
@@ -13301,14 +13319,13 @@ function flickTrick(dx, dy, min = 20) {
 const trickName = key => (TRICKS[key] || ['ollie'])[0];
 
 function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read off A / D / S
-  if (body.z > 0 || body.vz > 0) return;
+  if (body.z > 0 || body.vz > 0) { body.buf = T; return; } // (in the air: it'll go off when you land, see stepBody)
   if (body.seat) return standUp();
   if (skatingNow()) {
     const key = trick ?? (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
     body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
   } else {
     body.vz = JUMP_V;
-    if (mode === 'roof' && !roofFixed() && (K.ShiftLeft || K.ShiftRight) && (K.KeyW || K.ArrowUp)) body.leap = [Math.cos(a) * LEAP_V, Math.sin(a) * LEAP_V]; // a running leap
   }
   if (actx) sfxUse(skatingNow() ? 'board' : 'kick');
 }
@@ -13340,16 +13357,27 @@ function sitDown() {
 function standUp() { // back where you sat down from (it was walkable)
   [px, py] = body.seat.from; body.seat = null;
 }
-// every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js)
+// every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
-  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.leap = null; return; }
+  const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
+  body.lastA = a; body.lx = px; body.ly = py;
+  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.hop = 1; return; }
   body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
   if (body.z > 0 || body.vz > 0) {
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
+    const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+    if (s && Math.sign(da) === s) body.swirl = (body.swirl || 0) + Math.abs(da); // air strafing: turning into it
     if (body.z <= 0) { // landed
-      const fell = body.peak; body.z = body.vz = body.peak = 0; body.leap = null;
+      const fell = body.peak, tricked = !!body.trick; body.z = body.vz = body.peak = 0;
       if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('board'); }
+      if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (K.Space || T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
+        if (moved) body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.swirl || 0) * 0.15));
+        body.swirl = 0; body.buf = -9; body.vz = JUMP_V;
+        if (actx) sfxUse('kick');
+        return;
+      }
+      body.swirl = 0;
       const dmg = fallHurt(fell);
       if (dmg > 0) {
         if (actx) sfxUse('kick');
@@ -13357,15 +13385,14 @@ function stepBody(dt) {
         else say(fell > 15 ? 'You hit the ground hard. Something in your ankle goes crunch.' : 'Oof. You land hard.', 3);
       }
     }
-  }
+  } else body.hop = Math.max(1, (body.hop || 1) - dt * 4); // on the ground: the speed bleeds off
 }
 
 // ---- roofs: no invisible walls. Step across onto the roof next door if it's about level (a storey up or down,
-// near enough), walk off any edge and fall (a long way down hurts), and a sprinting jump (shift + forward + space)
-// is a leap that'll clear a street onto a roof a bit lower than yours. A wall you're not above stops you, and you
+// near enough), walk off any edge and fall (a long way down hurts), and jump the gap to one close by (an ordinary jump:
+// a street's too far, unless you come at it hopping). A wall you're not above stops you, and you
 // slide down it. The stairs are only on the roof you came up; any other roof has a fire escape down to the street.
 const ROOF_STEP = 0.35; // cells: 3.5m
-const LEAP_V = 1.8; // cells a second forward in a running leap off a roof
 let roofLot = null; // the cells of the roof you came up onto (where the stairs down are)
 function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the same height
   const h = map[idx(mx, my)], out = new Set([idx(mx, my)]), todo = [[mx, my]];
@@ -13384,7 +13411,7 @@ function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose t
 const overRoof = (x, y) => { const h = map[idx(Math.floor(x), Math.floor(y))]; return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
-function stepRoof() { // onto another roof, off them altogether, or (in a leap from the street side) down onto one
+function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
   if (mode === 'walk' && overRoof(px, py)) { // came down on a roof
     const h = map[idx(Math.floor(px), Math.floor(py))];
     mode = 'roof'; roofH = h; shiftFeet(-h * 10); room = null; roofLot = new Set(); return;
@@ -13593,7 +13620,7 @@ const free = (x, y) => {
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
@@ -13654,8 +13681,7 @@ function loop(t) {
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
     if (body.seat && (f || s)) standUp(); // walking gets you up
-    if (body.leap) move(body.leap[0] * dt, body.leap[1] * dt); // mid-leap: no steering
-    else if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
+    if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow() * (body.hop || 1), (cy * f + cx * (s + lurch)) * sp * footSlow() * (body.hop || 1)); // (hop: bunny hopping, see moves.js)
   } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);

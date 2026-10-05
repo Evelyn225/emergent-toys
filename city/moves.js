@@ -4,6 +4,10 @@
 // hold the right mouse button and flick (left kickflip, right heelflip, back shuvit, back-left 360 flip, back-right
 // varial heelflip, nothing or forward an ollie) and let go to pop; on a phone, swipe off the Ollie button the same
 // way. The board under you is a little 3D model in front of the camera (like a held weapon), so it really flips and spins.
+// Bunny hopping: jump again the moment you land (hold Space, or press it just before you touch down) and each hop
+// carries you a bit faster; turn the way you're strafing while you're in the air (A + mouse left, D + mouse right)
+// and it builds quicker. Stay on the ground and the speed's gone in a moment.
+const HOP_GAIN = 0.06, HOP_STRAFE = 0.12, HOP_MAX = 1.9, HOP_BUF = 0.2; // speed x per hop, x more for a good strafe, cap, s early
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5] };
@@ -22,14 +26,13 @@ function flickTrick(dx, dy, min = 20) {
 const trickName = key => (TRICKS[key] || ['ollie'])[0];
 
 function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read off A / D / S
-  if (body.z > 0 || body.vz > 0) return;
+  if (body.z > 0 || body.vz > 0) { body.buf = T; return; } // (in the air: it'll go off when you land, see stepBody)
   if (body.seat) return standUp();
   if (skatingNow()) {
     const key = trick ?? (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
     body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
   } else {
     body.vz = JUMP_V;
-    if (mode === 'roof' && !roofFixed() && (K.ShiftLeft || K.ShiftRight) && (K.KeyW || K.ArrowUp)) body.leap = [Math.cos(a) * LEAP_V, Math.sin(a) * LEAP_V]; // a running leap
   }
   if (actx) sfxUse(skatingNow() ? 'board' : 'kick');
 }
@@ -61,16 +64,27 @@ function sitDown() {
 function standUp() { // back where you sat down from (it was walkable)
   [px, py] = body.seat.from; body.seat = null;
 }
-// every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js)
+// every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
-  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.leap = null; return; }
+  const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
+  body.lastA = a; body.lx = px; body.ly = py;
+  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.hop = 1; return; }
   body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
   if (body.z > 0 || body.vz > 0) {
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
+    const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+    if (s && Math.sign(da) === s) body.swirl = (body.swirl || 0) + Math.abs(da); // air strafing: turning into it
     if (body.z <= 0) { // landed
-      const fell = body.peak; body.z = body.vz = body.peak = 0; body.leap = null;
+      const fell = body.peak, tricked = !!body.trick; body.z = body.vz = body.peak = 0;
       if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('board'); }
+      if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (K.Space || T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
+        if (moved) body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.swirl || 0) * 0.15));
+        body.swirl = 0; body.buf = -9; body.vz = JUMP_V;
+        if (actx) sfxUse('kick');
+        return;
+      }
+      body.swirl = 0;
       const dmg = fallHurt(fell);
       if (dmg > 0) {
         if (actx) sfxUse('kick');
@@ -78,15 +92,14 @@ function stepBody(dt) {
         else say(fell > 15 ? 'You hit the ground hard. Something in your ankle goes crunch.' : 'Oof. You land hard.', 3);
       }
     }
-  }
+  } else body.hop = Math.max(1, (body.hop || 1) - dt * 4); // on the ground: the speed bleeds off
 }
 
 // ---- roofs: no invisible walls. Step across onto the roof next door if it's about level (a storey up or down,
-// near enough), walk off any edge and fall (a long way down hurts), and a sprinting jump (shift + forward + space)
-// is a leap that'll clear a street onto a roof a bit lower than yours. A wall you're not above stops you, and you
+// near enough), walk off any edge and fall (a long way down hurts), and jump the gap to one close by (an ordinary jump:
+// a street's too far, unless you come at it hopping). A wall you're not above stops you, and you
 // slide down it. The stairs are only on the roof you came up; any other roof has a fire escape down to the street.
 const ROOF_STEP = 0.35; // cells: 3.5m
-const LEAP_V = 1.8; // cells a second forward in a running leap off a roof
 let roofLot = null; // the cells of the roof you came up onto (where the stairs down are)
 function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the same height
   const h = map[idx(mx, my)], out = new Set([idx(mx, my)]), todo = [[mx, my]];
@@ -105,7 +118,7 @@ function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose t
 const overRoof = (x, y) => { const h = map[idx(Math.floor(x), Math.floor(y))]; return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
-function stepRoof() { // onto another roof, off them altogether, or (in a leap from the street side) down onto one
+function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
   if (mode === 'walk' && overRoof(px, py)) { // came down on a roof
     const h = map[idx(Math.floor(px), Math.floor(py))];
     mode = 'roof'; roofH = h; shiftFeet(-h * 10); room = null; roofLot = new Set(); return;

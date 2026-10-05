@@ -163,6 +163,18 @@ function stepEmergency(dt) {
   }
 }
 
+// on foot, a car left at the kerb (yours, or one somebody abandoned) and the emergency vehicles waiting outside their
+// stations are solid: walk round them. (Traffic that's moving, or only stopped at the lights, you dodge yourself)
+function parkedCarAt(x, y, pad) {
+  const inCar = (cx, cy, hx, hy, kind) => {
+    const [hl, hw] = VEHICLES[kind] || VEHICLES.car, qx = rel(x - cx), qy = rel(y - cy);
+    return Math.abs(qx * hx + qy * hy) < hl + pad && Math.abs(-qx * hy + qy * hx) < hw + pad;
+  };
+  for (const c of cars) if (c.parked && !c.player && Math.abs(rel(c.ex - x)) < 0.6 && Math.abs(rel(c.ey - y)) < 0.6 && inCar(c.ex, c.ey, c.hx, c.hy, c.kind)) return true;
+  for (const b of SERVICES) if (!b.out && Math.abs(rel(b.x - x)) < 0.6 && Math.abs(rel(b.y - y)) < 0.6 && inCar(b.x, b.y, -1, 0, b.kind)) return true;
+  return false;
+}
+
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
 function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
