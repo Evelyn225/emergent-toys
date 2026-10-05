@@ -13278,8 +13278,9 @@ function drawPeeMarks() {
     if (q.at !== at) continue;
     const rx_ = room_ ? q.x - px : rel(q.x - px), ry_ = room_ ? q.y - py : rel(q.y - py), rz_ = q.z - eye;
     const centerDepth = dx * rx_ + dy * ry_;
-    if (centerDepth <= 0.05 || centerDepth > vis || q.nx * -rx_ + q.ny * -ry_ + q.nz * -rz_ <= 0) continue;
     const radius = Math.max(0.05, Math.sqrt(q.area / Math.PI)) * q.s * (0.35 + 0.65 * Math.sqrt(q.life));
+    const depthRadius = radius * Math.hypot(dx * q.ux + dy * q.uy, dx * q.vx + dy * q.vy);
+    if (centerDepth + depthRadius <= 0.05 || centerDepth - depthRadius > vis || q.nx * -rx_ + q.ny * -ry_ + q.nz * -rz_ <= 0) continue;
     const points = [];
     for (const su of [-1, 1]) for (const sv of [-1, 1]) {
       const X = rx_ + su * radius * q.ux + sv * radius * q.vx;
@@ -13295,7 +13296,7 @@ function drawPeeMarks() {
       const rz = (hor - r - 0.5) / projY, denom = q.nx * rx + q.ny * ry + q.nz * rz;
       if (Math.abs(denom) < 1e-9) continue;
       const depth = (q.nx * rx_ + q.ny * ry_ + q.nz * rz_) / denom;
-      if (depth <= 0 || depth > vis || ZB[i] < 0 || Math.abs(ZB[i] - depth) > Math.max(0.003, depth * 0.0001)) continue;
+      if (depth <= 0 || depth > vis || ZB[i] < 0 || ZB[i] < depth * 0.98) continue;
       const ux = (rx * depth - rx_) * q.ux + (ry * depth - ry_) * q.uy + (rz * depth - rz_) * q.uz;
       const vx = (rx * depth - rx_) * q.vx + (ry * depth - ry_) * q.vy + (rz * depth - rz_) * q.vz;
       const ex = ux / radius, ey = vx / radius, edge = Math.hypot(ex, ey) + (noise(ex * 1.7 + q.seed, ey * 1.7, 998) - 0.5) * 0.3;
