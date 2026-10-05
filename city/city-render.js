@@ -31,7 +31,8 @@ function signBig(u, uStep, d, side, mx, my, wc, p, len) {
     const col = off => { const X = qx + (side ? at + off : 0), Y = qy + (side ? 0 : at + off), dep = dx * X + dy * Y; return dep > 0.05 ? [(-dy * X + dx * Y) / dep * projX, dep] : null; };
     const a0 = col(0), a1 = col(0.1 * sgn);
     if (!a0 || !a1) continue;
-    small = Math.min(small, Math.abs(a1[0] - a0[0]) / 2.2, 0.08 * projY / Math.max(a0[1], a1[1]) / 2.8);
+    // Keep the block glyphs until they're close to their smallest readable size.
+    small = Math.min(small, Math.abs(a1[0] - a0[0]) / 1.6, 0.08 * projY / Math.max(a0[1], a1[1]) / 2);
   }
   return small >= 1 && small !== Infinity;
 }
@@ -696,4 +697,3 @@ function craneCell(i, u, z, du, dz, L, k, p) {
 
 const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites,
                deck: true, slabFace, slabEdge };
-
