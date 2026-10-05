@@ -107,8 +107,7 @@ function museumWall(i, su, uStep, z, d, mx, my, L) {
 function museumFloor(i, f, wx, wy) {
   const wing = museumWing(wx, wy);
   if (room.burgled) {
-    let beam = 0;
-    for (const g of room.props) if (g.guard) { const b = inBeam(g, wx, wy); if (b > beam) beam = b; }
+    const beam = torchAt(wx, wy, 0);
     if (beam > 0) { BG[i] = C(YEL, 1.5 + beam * 6); return set(i, '.', C(WARM, 6 + beam * 6)); }
     BG[i] = C(GRAY, 0.25); return set(i, hash(Math.floor(wx * 3), Math.floor(wy * 3), 1703) > 0.9 ? '.' : ' ', C(GRAY, 2));
   }
@@ -139,6 +138,51 @@ function inBeam(g, x, y, len = TORCH_LEN) { // how brightly g's torch lights (x,
   const off = Math.abs(mod(Math.atan2(dy_, dx_) - g.dir + Math.PI, Math.PI * 2) - Math.PI);
   if (off > TORCH_HALF || !lineClear(g.x, g.y, x, y)) return 0;
   return (1 - d / len) * (1 - off / TORCH_HALF * 0.6);
+}
+// what the torches light at height z: the floor gets the whole wedge; a wall or an exhibit gets a pool round where the
+// beam (held at 1.2m, angled down) meets it, wider the further it's gone. You're in the way of it too: your shadow
+// falls behind you, the shape of you, bigger the nearer you are to the torch
+const TORCH_Z = 1.2;
+function torchAt(x, y, z) {
+  let best = 0;
+  for (const g of room.props) {
+    if (!g.guard) continue;
+    let b = inBeam(g, x, y);
+    if (!b) continue;
+    const D = Math.hypot(x - g.x, y - g.y);
+    if (z > 0.05) { // (a wall stays brighter further off than the floor does: the beam meets it square on)
+      b *= (1 - (D / TORCH_LEN) ** 3) / Math.max(0.05, 1 - D / TORCH_LEN);
+      const zc = TORCH_Z - D * 0.2, hh = D * 0.42 + 0.12, v = 1 - ((z - zc) / hh) ** 2; if (v <= 0) continue; b *= Math.sqrt(v); }
+    if (b > best && !torchShadow(g, x, y, z, D)) best = b;
+  }
+  return best;
+}
+function torchShadow(g, x, y, z, D) { // is your body between g's torch and (x, y, z)?
+  const vx = (x - g.x) / D, vy = (y - g.y) / D, ox = px - g.x, oy = py - g.y, s = ox * vx + oy * vy;
+  if (s < 0.25 || s > D - 0.15) return false;
+  const h = TORCH_Z + (z - TORCH_Z) * s / D, top = 1.78 - body.crouch * 0.7; // how high the ray is as it passes you
+  if (h < 0 || h > top) return false;
+  return Math.abs(ox * vy - oy * vx) < (h > top - 0.27 ? 0.11 : h > top - 0.55 ? 0.24 : 0.17); // head, shoulders, the rest
+}
+// after everything's drawn: each cell's own world point (from its depth), lit up where a beam lands on it, the colours
+// the dark was hiding coming back. The floor already did its own
+function museumTorchFx() {
+  if (!room.burgled) return;
+  for (let c = 0; c < cols; c++) {
+    const cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
+    for (let r = 0; r < rows; r++) {
+      const i = r * cols + c, t = ZB[i];
+      if (t < 0.05 || t > vis) continue;
+      const z = eye + t * (hor - r - 0.5) / projY;
+      if (z < 0.05 || z > 3.9) continue;
+      const b = torchAt(px + rx * t, py + ry * t, z);
+      if (!b) continue;
+      const bg = BG[i], hue = bg >> 4;
+      COL[i] = C(COL[i] >> 4, Math.max(COL[i] & 15, 5) + b * 10);
+      if (b < 0.1) continue; // the pool's soft edge: only the marks on the wall catch it
+      BG[i] = bg === NONE || hue === GRAY || hue === WHITE ? C(YEL, 1.5 + b * 7) : C(hue, (bg & 15) + 2 + b * 8); // plain stone goes torch-yellow
+    }
+  }
 }
 // a guard's spotted you once you've stood in a beam a moment (crouched, the beam has to be nearer to catch you)
 function stepMuseum(dt) {
@@ -205,7 +249,7 @@ const museumGrid = () => {
   for (let x = 8; x < 18; x++) if (x < 12 || x > 13) extra[x + ',9'] = '#'; // the gem room's wall, the arch in the middle
   return boxRoom(MUSEUM_W, MUSEUM_H, extra);
 };
-ROOM_DEFS.museum = { grid: museumGrid(), light: 1, height: 4, floor: 'museum', ceil: 'strip', wall: museumWall, keeper: [20.5, 15.4], spawn: [12.5, 16.2],
+ROOM_DEFS.museum = { grid: museumGrid(), light: 1, height: 4, floor: 'museum', ceil: 'strip', wall: museumWall, fx: museumTorchFx, keeper: [20.5, 15.4], spawn: [12.5, 16.2],
   props: r => {
     const p = [...counterBox(20.5, 15.9, 1.6), standing(20.5, 15.4, MAG)]; // the ticket desk and gift shop, by the door
     const bone = (c, row, L) => C(c === 'o' ? RED : WHITE, Math.max(L, 6) * (r.burgled ? 0.4 : 1));

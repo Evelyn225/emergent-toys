@@ -573,6 +573,17 @@ test('the museum by day: $10 in, plaques to read, the gift shop; by night a heis
     return [lit, room.alarm, wanted.stars];
   });
   assert.deepStrictEqual(caught, [true, true, 3]);
+  // the beam lights the wall it reaches, not one too far off, and you cast a shadow on it standing in the way
+  const walls = await page.evaluate(() => {
+    leaveRoom(); clearWanted();
+    enterRoom('museum', { ...MUSEUM.sh, ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [12.5, 16, -Math.PI / 2]);
+    const [g, g2] = room.props.filter(q => q.guard); g.tick = g2.tick = null; Object.assign(g, { x: 21.5, y: 12.5, dir: 0 }); Object.assign(g2, { x: 3.5, y: 2, dir: Math.PI });
+    const near = torchAt(25, 12.5, 0.6), high = torchAt(25, 12.5, 3.5);
+    g.x = 19.5; const far = torchAt(25, 12.5, 0.6); g.x = 21.5;
+    px = 23; py = 12.5; const shaded = torchAt(25, 12.5, 0.6), beside = torchAt(25, 13.4, 0.6);
+    return [near > 0.3, high, far, shaded, beside > 0];
+  });
+  assert.deepStrictEqual(walls, [true, 0, 0, 0, true]);
   // again, out of sight: crack the orrery's case, take it, the silent alarm counts down
   const heist = await page.evaluate(() => {
     leaveRoom(); clearWanted(); museumStolen = {}; inv.length = 0;
