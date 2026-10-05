@@ -179,6 +179,7 @@ const cabinet = (x, y, k, body) => BX(x, y, 0.35, 0.4, 0, 1.8, (i, t, L) => { //
 }, 0, 1);
 
 
+const homeLayout = r => ({ shelf: [r.W - 1.2, r.H - 3.2], fridge: [r.W - 1.15, r.H - 1.8], pet: [1.35, r.H - 2.6] });
 const ROOM_DEFS = {
   store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
     light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, posters: true, keeper: [5, 1.05],
@@ -584,7 +585,6 @@ function realtyWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(WARM, 2 + L * 0.15); return set(i, fract(u * 2) < 0.04 ? '|' : ' ', C(WARM, L * 0.5)), true;
 }
 const HOME_SHELF_CAPACITY = 4;
-const homeLayout = r => ({ shelf: [r.W - 1.2, r.H - 3.2], fridge: [r.W - 1.15, r.H - 1.8], pet: [1.35, r.H - 2.6] });
 function homeRecord(r = room) {
   if (!r || !r.cell || !['home', 'loft'].includes(r.kind)) return null;
   return owned.homes.find(h => h.cell === idx(r.cell[0], r.cell[1])) || null;
