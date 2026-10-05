@@ -145,19 +145,13 @@
         // Create the prompt for the AI
         function createGenerationPrompt(theme) {
             return `
-    CREATE AN INTERACTIVE GENERATIVE WEB EXPERIENCE FOR THE THEME: "${theme}"
+    CREATE A FULLY-REALIZED INTERACTIVE WEB EXPERIENCE FOR THE THEME: "${theme}"
 
-    REQUIREMENTS:
-    - Build a complete, self-contained single-page web app / creative site.
-    - Incorporate the theme "${theme}" visually, conceptually, and prominently.
-    - Feel free to choose the best technology stack for this theme: Three.js 3D, Canvas 2D, WebGL shaders, p5.js, Tone.js / Web Audio API synth, Matter.js physics, GSAP, or rich interactive DOM elements with CSS animations.
-    - CRITICAL CODE SAFETY & INITIALIZATION:
-      * Wrap script setup inside window.addEventListener('load', ...).
-      * Instantiate global variables (renderer, camera, scene, player, groups) inside init() BEFORE calling helper functions or attaching listeners.
-      * Add guard clauses in all event handlers and animation loops (e.g. if (!renderer || !camera) return;).
-    - Design a custom themed UI HUD / parameter control panel (sliders, toggles, buttons) so the user can interactively alter the experience.
-    - Add ambient generative audio or sound effects with a user sound toggle (Mute/Unmute) if appropriate for the mood.
-    - Make it substantial (500+ lines of code) with rich interactive controls, mouse/keyboard reactivity, and 60fps animations.
+    DIRECTIVES:
+    - Build a complete, self-contained single-page web app / creative site for "${theme}".
+    - Select the best tech stack for the concept (Three.js 3D, Canvas 2D, WebGL shaders, p5.js, Tone.js / Web Audio, Matter.js physics, GSAP, or interactive CSS/DOM).
+    - Provide a complete implementation with rich mechanics, interactive controls, theme-matched aesthetics, and audio feedback where appropriate.
+    - Ensure clean code architecture: wrap setup in a window 'load' listener, instantiate state objects before helper calls, and use defensive guard clauses in event listeners and render loops.
     - Output raw HTML with embedded <style> and <script> tags only. No markdown fences.
 
     BEGIN HTML OUTPUT:`;
