@@ -15,6 +15,7 @@ const DEV_CSS = `
   #dev .grp { grid-column: 1 / -1; color: rgba(255,255,255,0.3); margin-top: 8px; }
   #dev .bar { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 4px 0 8px; padding-left: 14px; }
   #dev .bar .item { width: auto; padding-left: 0; }
+  #dev .bar .item::before { left: -12px; }
   #dev .bar input { width: 9em; font: inherit; color: #fff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); padding: 2px 6px; }`;
 const devOpen = () => !!devEl && devEl.style.display === 'flex';
 

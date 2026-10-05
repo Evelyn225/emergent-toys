@@ -49,7 +49,7 @@ function flash() {
   const f = s < 0 ? 0 : s < 0.07 ? 1 : s < 0.13 ? 0.15 : s < 0.2 ? 0.75 : Math.exp(-(s - 0.2) * 7) * 0.6;
   return f * near;
 }
-const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'snow', snow: 'clear' }; // the Y key's (the snow globe's) cycle
+const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'snow', snow: 'clear' }; // the globe's cycle outside winter, when it always brings snow
 // the seasons: a week of days each, spring first; seasonShift moves the whole year on (the orrery, the dev tools)
 const SEASONS = ['spring', 'summer', 'autumn', 'winter'], SEASON_DAYS = 7;
 let seasonShift = 0, weatherDue = 0; // weatherDue: when a promised change in the sky arrives (the fortune teller)
@@ -85,4 +85,3 @@ function env(dt) {
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
   if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
 }
-

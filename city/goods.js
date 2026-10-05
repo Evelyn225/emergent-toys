@@ -322,7 +322,7 @@ let globeT = -99;
 const GLOBE_SKY = { clear: 'the stars come out over the tiny towers', rain: 'rain streaks down the glass', storm: 'lightning flickers in the glass', fog: 'fog fills the globe', snow: 'the snow comes down and stays down' };
 function shakeGlobe() {
   if (T - globeT < GLOBE_SETTLE) return ['The snow\'s still settling.', null];
-  globeT = T; weather = WEATHER_NEXT[weather]; wTimer = 600;
+  globeT = T; weather = season() === 'winter' ? 'snow' : WEATHER_NEXT[weather]; wTimer = 600;
   return [`You shake the globe. Inside, ${GLOBE_SKY[weather]}. Outside, too.`, 'chime'];
 }
 // the Equinox Orrery: brass planets round a brass sun. Turn the crank and the year turns on a season; the city follows

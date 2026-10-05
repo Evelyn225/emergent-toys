@@ -105,7 +105,7 @@ function flash() {
   const f = s < 0 ? 0 : s < 0.07 ? 1 : s < 0.13 ? 0.15 : s < 0.2 ? 0.75 : Math.exp(-(s - 0.2) * 7) * 0.6;
   return f * near;
 }
-const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'snow', snow: 'clear' }; // the Y key's (the snow globe's) cycle
+const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'snow', snow: 'clear' }; // the globe's cycle outside winter, when it always brings snow
 // the seasons: a week of days each, spring first; seasonShift moves the whole year on (the orrery, the dev tools)
 const SEASONS = ['spring', 'summer', 'autumn', 'winter'], SEASON_DAYS = 7;
 let seasonShift = 0, weatherDue = 0; // weatherDue: when a promised change in the sky arrives (the fortune teller)
@@ -141,7 +141,6 @@ function env(dt) {
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
   if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
 }
-
 // ===== hunger, thirst and health. Food fills `food`, drink fills `drink` (0-100); both run down as you play
 // (real time: neither fast-forward nor a night's sleep speeds them up), thirst a little faster. Run either dry and
 // your health starts to go, faster with both; at nothing you pass out and wake up in the hospital with a bill
@@ -2363,7 +2362,7 @@ let globeT = -99;
 const GLOBE_SKY = { clear: 'the stars come out over the tiny towers', rain: 'rain streaks down the glass', storm: 'lightning flickers in the glass', fog: 'fog fills the globe', snow: 'the snow comes down and stays down' };
 function shakeGlobe() {
   if (T - globeT < GLOBE_SETTLE) return ['The snow\'s still settling.', null];
-  globeT = T; weather = WEATHER_NEXT[weather]; wTimer = 600;
+  globeT = T; weather = season() === 'winter' ? 'snow' : WEATHER_NEXT[weather]; wTimer = 600;
   return [`You shake the globe. Inside, ${GLOBE_SKY[weather]}. Outside, too.`, 'chime'];
 }
 // the Equinox Orrery: brass planets round a brass sun. Turn the crank and the year turns on a season; the city follows
@@ -10971,6 +10970,7 @@ const DEV_CSS = `
   #dev .grp { grid-column: 1 / -1; color: rgba(255,255,255,0.3); margin-top: 8px; }
   #dev .bar { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 4px 0 8px; padding-left: 14px; }
   #dev .bar .item { width: auto; padding-left: 0; }
+  #dev .bar .item::before { left: -12px; }
   #dev .bar input { width: 9em; font: inherit; color: #fff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); padding: 2px 6px; }`;
 const devOpen = () => !!devEl && devEl.style.display === 'flex';
 
