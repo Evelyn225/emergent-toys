@@ -51,7 +51,7 @@ const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 function turnBy(mx, my) {
   if (paused || game) return;
   const s = settings.sensitivity;
-  if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s); // the yo-yo's out: the mouse swings it, the view holds still
+  if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
@@ -129,7 +129,7 @@ function loop(t) {
   if (sleep) stepSleep(dt);
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
-    if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyoSwing(((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 600 * dt); // (arrows swing it too)
+    if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.5 : 1); // sprint 29 km/h (43 on the board), cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);

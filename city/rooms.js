@@ -56,6 +56,9 @@ ROOM_FOR.HOSPITAL = 'hospital';
 ROOM_FOR.CARS = 'showroom'; ROOM_FOR.REALTY = 'realty';
 ROOM_FOR.STORAGE = 'storage';
 
+// a room's bathroom (def.wc): its own little room off the floor, 'W' walls round it with a doorway, white tiles inside.
+// sign: the wall cell the WC sign goes on (mx, my) and where along it
+const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && y >= w.y0 && y < w.y1;
 const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
 // props
 const SP = (x, y, w, h, art, col, z = 0) => ({ x, y, w, h, art, col, z });
@@ -180,16 +183,16 @@ const ROOM_DEFS = {
   store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
     light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, posters: true, keeper: [5, 1.05],
     props: r => [...counterBox(5, 1.7, 1.6), standing(5, 1.05, r.neon)] },
-  bar: { grid: boxRoom(12, 8), light: 0.6, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, neon: true, glyphs: 'il!Y', keeper: [6, 1.1],
+  bar: { grid: boxRoom(12, 8, { '1,4': 'W', '3,4': 'W', '3,5': 'W', '3,6': 'W' }), wc: { x0: 1, y0: 5, x1: 3, y1: 7, sign: [1, 4, 1.5] }, light: 0.6, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, neon: true, glyphs: 'il!Y', keeper: [6, 1.1],
     props: r => {
       const p = [...counterBox(6, 1.8, 4, 1.1), standing(6, 1.1, r.neon),
-                 SP(10.6, 5.5, 0.9, 1.5, ART.jukebox, (c, row, L) => C(NEON[(row + (T * 2 | 0)) & 3], 14)), ...stall(1.6, 6.4, 1)];
+                 SP(10.6, 5.5, 0.9, 1.5, ART.jukebox, (c, row, L) => C(NEON[(row + (T * 2 | 0)) & 3], 14)), ...toilet(1.6, 6.4, 1, porcelain)];
       for (let x = 3; x <= 9; x += 1.5) { p.push(SP(x, 2.65, 0.4, 0.75, ART.stool, wood)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.45, true)); }
       return p;
     } },
-  diner: { grid: boxRoom(12, 8), light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, 1.1], wall: dinerWall,
+  diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, 1.1], wall: dinerWall,
     props: r => {
-      const p = [...counterBox(6, 1.75, 2), standing(6, 1.1, WHITE), ...stall(1.6, 1.55, -1)];
+      const p = [...counterBox(6, 1.75, 2), standing(6, 1.1, WHITE), ...toilet(1.6, 1.4, -1, porcelain)];
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
         for (const s of [-0.95, 0.95]) { p.push(SP(x + s, y, 0.4, 0.75, ART.stool, wood)); if (chance(0.4)) p.push(sitting(x + s, y - 0.02, shirt())); }
@@ -306,7 +309,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [];
       for (const x of [3, 8, 13, 18]) for (const y of [1.3, 3.7]) {
-        p.push(BX(x, y, 1.8, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), BX(x, y < 2 ? y - 0.28 : y + 0.28, 1.8, 0.05, 0.45, 0.95, solid(BLUE, { panel: 0.9 })));
+        p.push({ ...BX(x, y, 1.8, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), seatRow: { x0: x - 1.55, x1: x + 1.55, y, fx: 0, fy: y < 2 ? 1 : -1 } }, BX(x, y < 2 ? y - 0.28 : y + 0.28, 1.8, 0.05, 0.45, 0.95, solid(BLUE, { panel: 0.9 })));
         if (chance(0.35)) p.push(sitting(x - 1 + Math.random() * 2, y + (y < 2 ? 0.03 : -0.03), shirt(), 0.3));
       }
       for (const x of [5.5, 10.5, 15.5]) p.push(SP(x, 2.5, 0.1, 3, ART.pole, (c, row, L) => C(WHITE, L)));
@@ -710,6 +713,20 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
   if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
+  if (D.wc && inWc(px, py)) { // in the bathroom: white tiles all round, a mirror over where the basin would be
+    const w = D.wc;
+    if (mx >= w.x0 - 1 && mx <= w.x1 && my >= w.y0 - 1 && my <= w.y1) {
+      BG[i] = C(WHITE, (0.9 + L * 0.12) * (side ? 0.8 : 1));
+      return set(i, fract(z / 0.3) < 0.12 ? '-' : fract(u / 0.3) < 0.1 ? '|' : ' ', C(WHITE, L * 0.8));
+    }
+  }
+  if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: a plain wall, the WC sign by the doorway
+    const [sx, sy, su] = D.wc.sign; // (u runs whichever way reads left to right, so it's negative from some sides)
+    if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
+    if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
+    if (z < 0.95) return set(i, '=', C(GRAY, L));
+    return set(i, '.', C(GRAY, L * 0.3));
+  }
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
   if (c === 'S' || D.shelves && my === 0 && z < 2) { // shelves: islands, and along the back wall
@@ -730,6 +747,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
   ZB[i] = d; FL[i] = 1;
+  if (room.def.wc && inWc(wx, wy)) { BG[i] = C(WHITE, 1 + L * 0.2); return set(i, fract(wx * 3) < 0.1 || fract(wy * 3) < 0.1 ? '+' : ' ', C(GRAY, L)); } // bathroom tiles
   switch (room.def.floor) {
     case 'wood': return set(i, fract(wy * 3) < 0.12 ? '=' : (r + x) & 1 ? '.' : ' ', C(BRICK, L * 1.3));
     case 'carpet': { const h = hash(Math.floor(wx * 3), Math.floor(wy * 3), 77); return set(i, h > 0.85 ? '*' : h > 0.7 ? '+' : h > 0.55 ? '.' : ' ', C(NEON[h * 40 & 3], L * 2.5)); }

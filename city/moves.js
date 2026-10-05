@@ -42,9 +42,11 @@ function nearSeat() {
   if (mode === 'room') {
     let best = null, bd = 1.1;
     for (const s of room.props) {
-      const r = s.seatRow, sx = r ? clamp(px, r.x0, r.x1) : s.x, sy = r ? r.y : s.y;
+      const r = s.seatRow, sy = r ? r.y : s.y;
       if (!s.bench && !r) continue;
-      const d = Math.hypot(sx - px, sy - py);
+      const sx = r ? freeOnRow(r) : s.x;
+      if (sx == null) continue; // (a full bench)
+      const d = Math.hypot((r ? clamp(px, r.x0, r.x1) : sx) - px, sy - py); // (how near the bench is: a step along it to a free spot doesn't count)
       if (d < bd) { bd = d; best = { x: sx, y: sy, fx: r ? r.fx : s.fx, fy: r ? r.fy : s.fy }; }
     }
     return best;
@@ -54,6 +56,15 @@ function nearSeat() {
   for (const b of benchesB[bi(Math.floor(px / 8), Math.floor(py / 8))]) { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); if (d < bd) { bd = d; best = b; } }
   if (!best && gardenLawn(px, py)) best = { x: px, y: py, fx: Math.cos(a), fy: Math.sin(a), grass: true }; // down on the grass, facing where you were
   return best;
+}
+// where along a row of seats (a bench on the subway, the cinema's) you'd sit: nearest you, but not in somebody's lap
+function freeOnRow(r) {
+  const took = room.props.filter(o => (o.art === ART.sitter || o.art === ART.sitterBack) && Math.abs(o.y - r.y) < 0.3 && o.x > r.x0 - 0.6 && o.x < r.x1 + 0.6).map(o => o.x);
+  const ok = x => x >= r.x0 - 1e-6 && x <= r.x1 + 1e-6 && took.every(t => Math.abs(t - x) >= 0.55 - 1e-6);
+  const want = clamp(px, r.x0, r.x1);
+  if (ok(want)) return want;
+  const opts = took.flatMap(t => [t - 0.55, t + 0.55]).filter(ok);
+  return opts.length ? opts.reduce((m, x) => Math.abs(x - want) < Math.abs(m - want) ? x : m) : null;
 }
 function sitDown() {
   const s = nearSeat();

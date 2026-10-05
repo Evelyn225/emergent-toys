@@ -127,16 +127,26 @@ const luck = () => (carrying('jadebangle') ? 0.03 : 0) + (carrying('jadedragon')
 // the mouse (or a drag) swings it. A pendulum: len 0..1 of the string paid out, ang its swing from straight down
 // (round past the top is around the world), and when it hangs low enough it touches down and rolls along the
 // pavement (walk the dog). fx.yoyo is 1 while any of it is out of your hand
-const yoyo = { out: false, len: 0, ang: 0, angV: 0, spin: 0 };
+const yoyo = { out: false, len: 0, ang: 0, angV: 0, spin: 0, hx: 0, hy: 0, vx: 0, vy: 0 };
+const YOYO_HAND = 0.006; // how much the hand's acceleration (px/s²) swings it (rad/s²)
 function stepYoyo(dt) {
   yoyo.len = clamp(yoyo.len + (yoyo.out ? 4 : -3) * dt, 0, 1); // drops fast, climbs back a touch slower
+  if (dt > 0) { // the hand: its speed smoothed over a few frames (mouse events come in lumps), and the change in it
+    const k = Math.min(1, dt * 25), vx = yoyo.vx + (yoyo.hx / dt - yoyo.vx) * k, vy = yoyo.vy + (yoyo.hy / dt - yoyo.vy) * k;
+    const ax = clamp((vx - yoyo.vx) / dt, -2e4, 2e4), ay = clamp((vy - yoyo.vy) / dt, -2e4, 2e4);
+    yoyo.vx = vx; yoyo.vy = vy; yoyo.hx = yoyo.hy = 0;
+    if (yoyo.out) yoyo.angV = clamp(yoyo.angV - YOYO_HAND * (ax * Math.cos(yoyo.ang) - ay * Math.sin(yoyo.ang)) * dt, -14, 14);
+  }
   yoyo.angV += -9 * Math.sin(yoyo.ang) * yoyo.len * dt; yoyo.angV *= 1 - Math.min(1, 0.9 * dt); yoyo.ang += yoyo.angV * dt;
   yoyo.ang = mod(yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
   yoyo.spin += dt * (20 + Math.abs(yoyo.angV) * 6);
   if (!yoyo.out && yoyo.len === 0) { yoyo.ang = yoyo.angV = 0; }
   fx.yoyo = yoyo.len > 0 || yoyo.out ? 1 : 0;
 }
-const yoyoSwing = dx => { yoyo.angV = clamp(yoyo.angV + dx * 0.012, -14, 14); }; // a flick of the wrist
+// your hand, as the mouse (or a drag) moves it: (dx, dy) screen pixels, y down. stepYoyo turns that into how fast the
+// hand's moving and how hard it's speeding up, and that's what swings it: like a ball on a string, a jerk one way
+// throws it the other, and going round in small circles in time with it winds it up and over the top
+const yoyoSwing = (dx, dy = 0) => { yoyo.hx += dx; yoyo.hy += dy; };
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
@@ -243,7 +253,7 @@ function useHeld(near) {
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), null];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
-    case 'yoyo': yoyo.out = !yoyo.out; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Swing it with the mouse: let it touch down to walk the dog, swing hard to go around the world.' : 'You reel it back in.', 'whirr'];
+    case 'yoyo': yoyo.out = !yoyo.out; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Swing it with the mouse: let it touch down to walk the dog, or go round in little circles to send it around the world.' : 'You reel it back in.', 'whirr'];
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something
         near.person.talk = 4;

@@ -351,6 +351,36 @@ test('on your feet: Space jumps, a trick on the board lands with its name, C sit
   assert.strictEqual(await page.evaluate(() => body.seat), null, 'up again');
 }));
 
+test('the subway: C sits you on a bench (not on top of anybody), and you get off the train on your feet', () => withPage(async page => {
+  await page.evaluate(() => { enterRoom('train', { st: 0, opts: [1, 2, 3, 4, 5], dest: null, track: 0 }, [2, 2.5, 0.25]); });
+  const r = await page.evaluate(() => {
+    room.props = room.props.filter(o => o.art !== ART.sitter); // an empty car, then one rider on the bench by the door
+    room.props.push(SP(3, 1.33, 0.55, 1.2, ART.sitter, () => 0, 0.3));
+    px = 3.1; py = 2.2; const ok = sitDown();
+    return [ok, !!body.seat, Math.abs(py - 1.3) < 0.01, Math.abs(px - 3) > 0.54, Math.abs(a - Math.PI / 2) < 0.01];
+  });
+  assert.deepStrictEqual(r, [true, true, true, true, true], 'next to the rider, facing across the car');
+  await page.evaluate(() => { arriveAt(2); });
+  assert.deepStrictEqual(await page.evaluate(() => [room.kind, body.seat]), ['station', null], 'off at the platform, standing');
+}));
+
+test('the yo-yo: going round in circles with the mouse sends it around the world; holding still, it just hangs', () => withPage(async page => {
+  const loops = await page.evaluate(async () => {
+    inv.push({ id: 'yoyo', uses: 0 }); held = inv.length - 1; useHeld();
+    let n = 0, prev = yoyo.ang, t = 0;
+    for (let f = 0; f < 360; f++) { // 6s of small circles, about one a second, fed in frame by frame
+      const w = 2 * Math.PI * 1.2, R = 120;
+      yoyoSwing(R * (Math.cos(w * (t + 1 / 60)) - Math.cos(w * t)), R * (Math.sin(w * (t + 1 / 60)) - Math.sin(w * t)));
+      stepYoyo(1 / 60); t += 1 / 60;
+      if (Math.abs(yoyo.ang - prev) > 3) n++; prev = yoyo.ang;
+    }
+    return n;
+  });
+  assert.ok(loops >= 2, `over the top ${loops} times`);
+  const still = await page.evaluate(() => { yoyo.ang = 0.3; yoyo.angV = 0; for (let f = 0; f < 600; f++) stepYoyo(1 / 60); return Math.abs(yoyo.ang); });
+  assert.ok(still < 0.1, 'left alone it settles');
+}));
+
 test('the board shows under you on a big desktop screen too; the wheels go quiet in the air', async () => {
   const browser = await chromium.launch();
   try {
@@ -576,6 +606,15 @@ test('toilets: in a bar it goes in the bowl and you flush; on a diner floor you 
   assert.deepStrictEqual(await page.evaluate(() => [!!(pee && pee.loo), msgText]), [true, 'You use the toilet.']);
   await page.waitForFunction(() => !pee, null, { timeout: 30000 }); // (game time: slower than the clock on a busy machine)
   assert.deepStrictEqual(await page.evaluate(() => [!!pee, puddles.filter(q => q.at === placeKey()).length, msgText]), [false, 0, 'You flush. Very civilised.']);
+  // walked in some way other than the front door (no greeting set): the barman still has a line, never "undefined"
+  assert.ok(await page.evaluate(() => { px = 6; py = 2.4; a = -Math.PI / 2; return typeof room.line === 'string' && !promptText().includes('undefined'); }));
+  // the bathroom's its own room, walls round it: miss the bowl in there and that's your business
+  assert.deepStrictEqual(await page.evaluate(() => [ROOMW.cell(3, 5) > 0, ROOMW.cell(2, 4), inWc(1.6, 6.4), inWc(6, 3)]), [true, 0, true, false], 'a wall, a doorway, the toilet inside, the bar outside');
+  await page.evaluate(() => { enterRoom('diner', { word: 'DINER', ret: [px, py, a] }, [2.5, 2.6, 0]); needs.bladder = 60; });
+  await page.keyboard.press('KeyP');
+  assert.deepStrictEqual(await page.evaluate(() => [!!pee, !!(pee && pee.loo), msgText]), [true, false, 'Not quite the toilet, but close enough.']);
+  await page.waitForFunction(() => !pee, null, { timeout: 30000 });
+  assert.deepStrictEqual(await page.evaluate(() => [mode, room.kind]), ['room', 'diner'], 'still in the diner');
   // the diner, out in the middle of the floor
   await page.evaluate(() => { enterRoom('diner', { word: 'DINER', ret: [px, py, a] }, [8.5, 5, Math.PI / 2]); needs.bladder = 50; });
   await page.keyboard.press('KeyP'); await page.waitForFunction(() => mode === 'walk', null, { timeout: 15000 }); // (game time: slower than the clock on a busy machine)
