@@ -1,6 +1,6 @@
 {
   "name": "bug-hotline",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Bug communication service",
   "main": "server.cjs",
   "scripts": {
