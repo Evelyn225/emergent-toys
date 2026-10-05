@@ -54,7 +54,7 @@ TECHNOLOGY & LIBRARIES:
 - Standard libraries can be imported via CDN script tags placed in <head>:
   * Three.js for 3D graphics & WebGL: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
   * p5.js for 2D generative sketches: https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js
-  * Tone.js for synth audio & music: https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js
+  * Tone.js for synth audio & music: https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js
   * Matter.js for 2D physics: https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js
   * GSAP for animation: https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js
   * Google Fonts for custom typography
@@ -67,7 +67,7 @@ CREATIVE PRINCIPLES:
    - Always include CSS resets: html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; } canvas { display: block; width: 100%; height: 100%; }
    - Tailor typography, color palettes, lighting, and UI elements to fit the mood of the theme.
    - For 3D scenes, consider procedural canvas textures, fog, and lighting to give materials depth and atmosphere.
-   - Add ambient generative audio or sound effects (Web Audio API / Tone.js) with a clear user sound toggle button (Mute/Unmute / Start Sound) where appropriate.
+   - AUDIO IS OPTIONAL & NON-BLOCKING: Prefer native browser Web Audio API (AudioContext, OscillatorNode, GainNode) which requires zero external scripts. If using Tone.js, use the exact CDN URL above. Always wrap audio setup in a try/catch block so audio issues NEVER block canvas rendering!
 
 3. STRICT NULL-SAFETY & RELIABLE ARCHITECTURE (PREVENT ALL "UNDEFINED" ERRORS):
    - ENTRY POINT: Wrap script execution in a unified function that checks document.readyState:
