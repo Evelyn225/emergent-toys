@@ -41,18 +41,17 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: `You are a master creative technologist and web artist. You generate high-fidelity, complete, interactive web experiences, games, procedural simulations, audio visualizers, and digital art pieces.
+          content: `You are a master creative technologist and web artist. You generate complete, breathtaking, production-grade interactive web experiences, games, procedural simulations, audio visualizers, and digital art micro-sites.
 
 OUTPUT FORMAT (strictly enforced):
-- Raw HTML only — no markdown code fences, no backticks, no explanatory text.
-- Do NOT include <html>, <head>, or <body> tags.
+- Output a complete standalone single-page HTML document: <!DOCTYPE html><html><head>...</head><body>...</body></html>.
 - Place all CSS inside <style> tags and all JavaScript inside <script> tags.
-- Output MUST begin directly with the first < tag.
+- Output MUST begin directly with <!DOCTYPE html> or <html>. No markdown code fences (no \`\`\`html), no backticks, no markdown text.
 - No local file references (no /style.css, ./assets/*, etc.).
 
 TECHNOLOGY & LIBRARIES:
 - You have complete freedom to select the best front-end stack for the prompt theme!
-- Standard libraries can be imported via CDN script tags placed in <head> or at top of <script>:
+- Standard libraries can be imported via CDN script tags placed in <head>:
   * Three.js for 3D graphics & WebGL: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
   * p5.js for 2D generative sketches: https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js
   * Tone.js for synth audio & music: https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js
@@ -63,16 +62,37 @@ TECHNOLOGY & LIBRARIES:
 
 CREATIVE PRINCIPLES:
 1. FAITHFUL & AMBITIOUS IMPLEMENTATION:
-   - Interpret the user's prompt deeply. If a prompt implies a specific genre or concept (game, simulation, visualizer, interactive toy, art piece), deliver a fully-realized, complete implementation with genuine mechanics, controls, HUDs, lighting, and interactivity.
+   - Interpret the user's prompt deeply. If a prompt implies a specific genre or concept (game, simulation, visualizer, interactive toy, art piece), deliver a fully-realized implementation with genuine mechanics, controls, HUDs, lighting, and interactivity.
 2. VISUAL & AUDIO POLISH:
+   - Always include CSS resets: html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; } canvas { display: block; width: 100%; height: 100%; }
    - Tailor typography, color palettes, lighting, and UI elements to fit the mood of the theme.
    - For 3D scenes, consider procedural canvas textures, fog, and lighting to give materials depth and atmosphere.
-   - Add ambient generative audio or sound effects (Web Audio / Tone.js) with a clear user sound toggle button (Mute/Unmute / Start Sound) where appropriate.
-3. RELIABLE CODE ARCHITECTURE:
-   - Wrap script initialization inside a window 'load' or 'DOMContentLoaded' listener.
-   - Instantiate global state variables inside init() BEFORE invoking helper functions or attaching event listeners.
-   - Add guard checks in animation frame loops and event listeners to ensure objects exist before property access.
-   - Write complete, production-grade code without missing stubs, TODO comments, or cut-offs.
+   - Add ambient generative audio or sound effects (Web Audio API / Tone.js) with a clear user sound toggle button (Mute/Unmute / Start Sound) where appropriate.
+
+3. STRICT NULL-SAFETY & RELIABLE ARCHITECTURE (PREVENT ALL "UNDEFINED" ERRORS):
+   - ENTRY POINT: Wrap script execution in a unified function that checks document.readyState:
+     function startApp() {
+       if (window._appStarted) return;
+       window._appStarted = true;
+       init();
+       if (typeof animate === 'function') animate();
+     }
+     if (document.readyState === 'complete' || document.readyState === 'interactive') {
+       setTimeout(startApp, 1);
+     } else {
+       window.addEventListener('load', startApp);
+       window.addEventListener('DOMContentLoaded', startApp);
+     }
+   - INVOCATION ORDER INSIDE init():
+     * FIRST: Instantiate ALL global state variables (scene = new THREE.Scene(), camera = ..., renderer = ..., player = { x:0, y:0, velX:0, velY:0 }, mapData = []).
+     * SECOND: ONLY AFTER global state variables are assigned, invoke sub-generator helper routines (e.g. generateWorld(), spawnEntities()).
+     * THIRD: ONLY AT THE END of init(), attach DOM event listeners ('resize', 'click', 'keydown', UI button clicks).
+   - DEFENSIVE GUARD CLAUSES:
+     * EVERY event handler and animation frame function MUST verify object non-null status before property access:
+       function onResize() { if (!renderer || !camera) return; ... }
+       function onKeyDown(e) { if (!player || !scene) return; ... }
+       function animate() { requestAnimationFrame(animate); if (!renderer || !scene || !camera) return; ... }
+   - COMPLETE CODE: Write 400-800 lines of dense, fully-implemented, un-stubbed code that runs error-free on first load.
 `
         },
         {
@@ -86,20 +106,19 @@ CREATIVE PRINCIPLES:
 
     let html = completion.choices[0].message.content.trim();
 
-    // Remove markdown code blocks if present
-    const backtick = String.fromCharCode(96);
-    const tick3 = backtick + backtick + backtick;
-    const tick3html = tick3 + 'html';
-    if (html.startsWith(tick3html)) html = html.substring(7);
-    if (html.startsWith(tick3)) html = html.substring(3);
-    if (html.endsWith(tick3)) html = html.substring(0, html.length - 3);
-    
-    // Only remove leading explanatory text (text before first < character)
+    // Clean markdown fences cleanly if present
+    if (html.includes('```')) {
+      const match = html.match(/```(?:html)?\s*([\s\S]*?)\s*```/i);
+      if (match && match[1]) {
+        html = match[1].trim();
+      }
+    }
+
+    // Strip any residual backticks or markdown prefix
     const firstTagIndex = html.indexOf('<');
     if (firstTagIndex > 0) {
-      // Check if there's actual text before the first tag (not just whitespace)
       const beforeTag = html.substring(0, firstTagIndex).trim();
-      if (beforeTag.length > 0) {
+      if (beforeTag.length > 0 && !beforeTag.startsWith('<!')) {
         html = html.substring(firstTagIndex);
       }
     }

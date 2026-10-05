@@ -1,16 +1,22 @@
-
-
 import { OpenAI } from 'openai';
 
 const fallbacks = [
-  "crayon paint tool", "Game of Life variant with hexagonal cells", "Animated fractal tree that grows with mouse movement",
-  "Inverse kinematics tentacle following the cursor", "Procedural city generator", "Interactive cellular automata playground",
-  "kaleidoscopic pattern generator", "Generative art inspired by Mondrian", "Particle system with flocking behavior",
-  "Recursive subdivision maze generator", "Boids flocking simulation with predators", "Big dog woof woof",
-  "Water ripple simulation", "Organic growth algorithm", "Procedural cave generation",
-  "fungal capitalism", "whispering calculus", "paper supernova",
-  "glitching coral", "breathing architecture", "crying silicon",
-  "molten grammar", "electric moss", "arctic circuitry", "neon folklore", "fractal tapestry"
+  "90s dental office aquarium screensaver",
+  "cursed tamagotchi that eats your mouse clicks",
+  "haunted vending machine in a 3D abandoned subway station",
+  "bureaucratic rubber stamp physics simulator",
+  "first person corridor crawler set inside a microwave oven",
+  "cassette tape rewinding synth visualizer",
+  "procedural mold growth on forgotten cheese",
+  "ant colony building a brutalist shopping mall",
+  "windows 95 defragmenter game with glitching blocks",
+  "arcade claw machine filled with gelatinous glowing cubes",
+  "dial-up modem handshake signal visualizer",
+  "overheated server rack ambient soundscape and heat monitor",
+  "medieval monk illuminator manuscript painter",
+  "retro bowling alley strike animation generator",
+  "subterranean fungus capitalism simulation",
+  "oscilloscope displaying angry cat facial expressions"
 ];
 
 export default async function handler(req, res) {
@@ -25,7 +31,6 @@ export default async function handler(req, res) {
     return;
   }
 
-
   try {
     if (!process.env.DOMROULETTE_KEY) {
       console.error('OpenAI API key is not set');
@@ -36,29 +41,45 @@ export default async function handler(req, res) {
       apiKey: process.env.DOMROULETTE_KEY
     });
 
-
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `CREATE: A short, evocative idea for a generative web experience, 3D interactive world, audio-visual toy, physics simulation, or creative micro-site.
-FORMAT: A short, descriptive phrase or sentence.
-EXAMPLES: Interactive 3D neon synth wave grid, Sand physics simulation, Fluid dynamics audio visualizer, Boids flocking simulation with user lighting control, Procedural cyberpunk city generator, Organic bioluminescent growth algorithm, Interactive kaleidoscope synth, Hexagonal cellular automata playground, Generative architecture toy with ambient soundscapes.
-RULES: No explanations, just output the idea as a single phrase or sentence.`
+          content: `You generate ultra-creative, weird, niche, nostalgic, absurd, or hyper-specific themes for web experiments, retro 3D games, audio toys, and interactive art pieces.
+
+STRICT BANNED WORDS (NEVER USE THESE):
+- dreamscape, digital cosmos, ethereal, luminescent, nexus, tapestry, quantum, sanctuary, symphony, realm, voyage, matrix, harmonic, canvas of infinity, digital playground.
+
+WHAT TO GENERATE INSTEAD:
+- Concrete, weird, retro, tactile, absurd, or niche ideas!
+- Mix odd combinations of real-world artifacts, retro tech, physics toys, bizarre simulations, and specific aesthetic genres.
+- EXAMPLES:
+  * 90s dental office aquarium screensaver
+  * Cursed tamagotchi that eats your mouse clicks
+  * Haunted vending machine in a 3D subway station
+  * Bureaucratic rubber stamp physics simulator
+  * 3D corridor crawler set inside a microwave oven
+  * Cassette tape rewinding sound synth
+  * Ant colony building a brutalist shopping mall
+  * Arcade claw machine filled with gelatinous glowing cubes
+  * Windows 95 defragmenter puzzle game
+  * Subterranean fungus capitalism simulation
+
+FORMAT: Return ONLY a single short phrase (3-8 words). No quotes, no markdown, no explanations.`
         },
         {
           role: "user",
-          content: "Give me a creative idea for an interactive web experience."
+          content: "Give me a weird, niche, highly specific idea for an interactive web toy or game."
         }
       ],
-      temperature: 0.95
+      temperature: 1.15
     });
 
-    let theme = completion.choices[0].message.content.trim();
+    let theme = completion.choices[0].message.content.trim().replace(/^["']|["']$/g, '');
 
     // Validate and clean
-    if (!theme || theme.length < 8) {
+    if (!theme || theme.length < 5) {
       theme = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
 
