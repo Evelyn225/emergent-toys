@@ -184,13 +184,26 @@ function museumTorchFx() {
     }
   }
 }
+// something solid and tall enough between g and you (a case, the sarcophagus, the desk) hides you: anything over your
+// shoulders standing, over waist height crouched. (Only for being seen: the beam on the floor still runs through.)
+function hiddenBehind(g) {
+  const top = body.crouch > 0.5 ? 0.8 : 1.4, n = Math.ceil(Math.hypot(px - g.x, py - g.y) / 0.1);
+  for (const p of room.props) {
+    const b = p.box; if (!b || p.exhibit || b.z1 < top) continue; // (not the glass: they see straight through that)
+    for (let k = 1; k < n; k++) {
+      const qx = g.x + (px - g.x) * k / n - b.x, qy = g.y + (py - g.y) * k / n - b.y;
+      if (Math.abs(qx * b.c + qy * b.s) < b.hl && Math.abs(-qx * b.s + qy * b.c) < b.hw) return true;
+    }
+  }
+  return false;
+}
 // a guard's spotted you once you've stood in a beam a moment (crouched, the beam has to be nearer to catch you)
 function stepMuseum(dt) {
   if (mode !== 'room' || (room.kind !== 'museum' && room.kind !== 'grandhotelheist') || !room.burgled || game) return;
   const len = body.crouch > 0.5 ? TORCH_LEN * 0.6 : TORCH_LEN;
-  const seen = room.props.some(g => g.guard && inBeam(g, px, py, len) > 0);
+  const seen = room.props.some(g => g.guard && inBeam(g, px, py, len) > 0 && !hiddenBehind(g));
   room.spot = clamp((room.spot || 0) + (seen ? dt * 1.6 : -dt), 0, 1);
-  if (seen && room.spot > 0.2 && !room.warned && !room.alarm) { room.warned = true; say('A torch beam swings across you. "...Hello?"', 2); }
+  if (seen && room.spot > 0.2 && !room.warned && !room.alarm) { room.warned = true; say('A torch beam swings across you. "...Hello?"', 2); if (actx) playClip('guard-hello', 0.55); }
   if (!seen && room.spot === 0) room.warned = false;
   if (room.spot >= 1 && !room.alarm) museumAlarm('"HEY! STOP RIGHT THERE!" The guard hits the alarm. Every cop in town is coming: RUN.');
   if (room.silent && T > room.silent && !room.alarm) museumAlarm('The silent alarm\'s done its job: sirens outside, getting closer. Get out, NOW.');

@@ -2,7 +2,7 @@
 // zoom with the wheel, a pinch, or the + / - buttons; arrows or WASD pan too. Neighbourhood names always, the
 // landmarks and stations, and (zoomed in) every shop by its sign. Esc, M or the x closes it, back to the pause menu.
 let bigMapEl = null, bigMapCv = null, bigMapSheet = null;
-const BIGMAP = { cx: 0, cy: 0, z: 4, drag: null, pts: new Map(), pinch: null, keys: {} };
+const BIGMAP = { cx: 0, cy: 0, z: 4, drag: null, pts: new Map(), pinch: null, keys: {}, found: null, hits: [], hitK: 0 };
 const BIGMAP_Z = 48; // most px per cell: a shop front across the screen. The least: the whole city just fills the screen
 const bigMapMinZ = () => Math.max(bigMapCv.clientWidth, bigMapCv.clientHeight) / N;
 const BIGMAP_CSS = `
@@ -12,6 +12,8 @@ const BIGMAP_CSS = `
   #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); display: flex; gap: 6px; }
   #bigmap .bar button { min-width: 38px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
   #bigmap .bar button:hover { border-color: #fff; }
+  #bigmap .bar input { width: 200px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; font: inherit; outline: none; }
+  #bigmap .bar input:focus { border-color: #fff; }
   #bigmap .tip { position: absolute; z-index: 2; left: calc(12px + env(safe-area-inset-left)); bottom: 10px; color: rgba(255, 255, 255, 0.45); pointer-events: none; }`;
 
 // the city drawn once, a pixel a cell, then scaled up crisp
@@ -48,7 +50,7 @@ function bigMapDraw() {
   const cv_ = bigMapCv, dpr = devicePixelRatio || 1, W = cv_.clientWidth, H = cv_.clientHeight;
   if (cv_.width !== Math.round(W * dpr) || cv_.height !== Math.round(H * dpr)) { cv_.width = Math.round(W * dpr); cv_.height = Math.round(H * dpr); }
   BIGMAP.z = clamp(BIGMAP.z, bigMapMinZ(), BIGMAP_Z); // (the window may have changed)
-  const x = cv_.getContext('2d'), z = BIGMAP.z;
+  const x = cv_.getContext('2d'), z = BIGMAP.z, now = performance.now() / 1000; // (T is frozen under the pause menu)
   x.setTransform(dpr, 0, 0, dpr, 0, 0); x.imageSmoothingEnabled = false;
   x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
   // world (wx, wy) -> screen, taking the copy of the (wrapping) city nearest the middle of the view
@@ -89,13 +91,26 @@ function bigMapDraw() {
     x.beginPath(); x.moveTo(9, 0); x.lineTo(-6, -6); x.lineTo(-3, 0); x.lineTo(-6, 6); x.closePath(); x.stroke(); x.fill(); x.restore();
     taken.push([youX - 10, youY - 10, youX + 10, youY + 10]);
   }
-  for (const h of owned.homes) dot(h.cell % N + 0.5, Math.floor(h.cell / N) + 0.5, 'H', '#ff4');
+  for (const h of owned.homes) { // your homes: a pulsing ring and a tag, loud enough to spot from the whole-city view
+    const hx = h.cell % N + 0.5, hy = Math.floor(h.cell / N) + 0.5, X = sx(hx), Y = sy(hy);
+    if (!onScreen(X, Y)) continue;
+    x.strokeStyle = '#ff4'; x.lineWidth = 2;
+    for (const k of [0, 0.5]) { const f = fract(now * 0.6 + k); x.globalAlpha = 1 - f; x.beginPath(); x.arc(X, Y, 8 + f * 18, 0, Math.PI * 2); x.stroke(); }
+    x.globalAlpha = 1;
+    dot(hx, hy, 'HOME', '#ff4', 13);
+    taken.push([X - 26, Y - 14, X + 26, Y + 14]);
+  }
   for (const c of owned.cars) if (c !== me) dot(c.x, c.y, 'C', '#fff');
   for (const b of fleet) if (b.deal === 'mine' && b !== sea) dot(b.x, b.y, 'B', '#fff');
   const tt = taskTarget(); if (tt) dot(tt.x, tt.y, '?', '#4ff');
   const jt = jobTarget(); if (jt) dot(jt.x, jt.y, '!', '#ff0');
   if (me && me.dest) dot(me.dest[0], me.dest[1], 'X', '#f4f');
   for (const c of cars) if (c.pursuit) dot(c.x, c.y, 'P', fract(T * 3) < 0.5 ? '#f44' : '#48f', 10);
+  const f = BIGMAP.found;
+  if (f && now - f.t < 6 && onScreen(sx(f.x), sy(f.y))) {
+    x.strokeStyle = '#4ff'; x.lineWidth = 2; x.globalAlpha = 1 - (now - f.t) / 6;
+    x.beginPath(); x.arc(sx(f.x), sy(f.y), 14 + 6 * Math.sin(now * 6), 0, Math.PI * 2); x.stroke(); x.globalAlpha = 1;
+  }
   const big = clamp(z * 1.4, 12, 22), mid = clamp(z * 1.1, 10, 14), small = clamp(z * 0.55, 9, 13);
   for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'area') label(lx, ly, z < 7 ? t.toUpperCase() : t, col, big, true);
   for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'place' && z >= 6) label(lx, ly, t, col, mid, false);
@@ -116,9 +131,12 @@ function openBigMap() {
   if (!bigMapEl) {
     const st = document.createElement('style'); st.textContent = BIGMAP_CSS; document.head.appendChild(st);
     bigMapEl = menuEl('bigmap', 900, `<canvas></canvas>
-      <div class="bar"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">-</button><button data-map="me">you</button><button data-map="close" aria-label="Close map">x</button></div>
+      <div class="bar"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">-</button><button data-map="me">you</button><input type="search" list="bigmap-names" placeholder="find a place..." aria-label="Find a place"><datalist id="bigmap-names"></datalist><button data-map="close" aria-label="Close map">x</button></div>
       <div class="tip">${TOUCH ? 'drag to move, pinch to zoom' : 'drag to move, wheel to zoom, Esc to close'}</div>`);
     bigMapCv = bigMapEl.querySelector('canvas');
+    const q = bigMapEl.querySelector('input');
+    q.addEventListener('keydown', e => { if (e.code === 'Enter') bigMapFind(q.value, true); });
+    q.addEventListener('input', () => bigMapFind(q.value, false));
     bigMapEl.addEventListener('click', e => {
       const b = e.target.closest('[data-map]'); if (!b) return;
       const m = b.dataset.map;
@@ -144,12 +162,28 @@ function openBigMap() {
     bigMapCv.addEventListener('wheel', e => { e.preventDefault(); bigMapZoom(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
   }
   bigMapRender(); bigMapNames = bigMapLabels(); bigMapCentre();
+  const names = [...new Set(bigMapNames.map(n => n[2]))].sort((p, q) => p.localeCompare(q));
+  bigMapEl.querySelector('datalist').innerHTML = names.map(n => `<option value="${n.replace(/[&"<]/g, c => `&#${c.charCodeAt(0)};`)}">`).join('');
+  bigMapEl.querySelector('input').value = ''; BIGMAP.found = null; BIGMAP.hits = [];
   BIGMAP.z = clamp(Math.min(innerWidth, innerHeight) / 60, 4, 10); // a few blocks round you to start
   BIGMAP.keys = {}; BIGMAP.pts.clear();
   bigMapEl.style.display = 'block';
   paused = true;
   const tick = () => { if (!bigMapOpen()) return; bigMapStep(); bigMapDraw(); requestAnimationFrame(tick); };
   BIGMAP.last = performance.now(); requestAnimationFrame(tick);
+}
+// search: typing jumps to the nearest place whose name matches; Enter again steps on to the next nearest of them
+function bigMapFind(text, next) {
+  const t = text.trim().toLowerCase();
+  if (!t) { BIGMAP.found = null; BIGMAP.hits = []; return; }
+  if (!next || !BIGMAP.hits.length || BIGMAP.hitQ !== t) {
+    const hits = bigMapNames.filter(n => n[2].toLowerCase().includes(t)), d = n => Math.hypot(rel(n[0] - px), rel(n[1] - py));
+    const exact = hits.filter(n => n[2].toLowerCase() === t); // (picked from the list: only that name)
+    BIGMAP.hits = (exact.length ? exact : hits).sort((p, q) => d(p) - d(q)); BIGMAP.hitQ = t; BIGMAP.hitK = 0;
+  } else BIGMAP.hitK = (BIGMAP.hitK + 1) % BIGMAP.hits.length;
+  const h = BIGMAP.hits[BIGMAP.hitK]; if (!h) return;
+  BIGMAP.cx = mod(h[0], N); BIGMAP.cy = mod(h[1], N); BIGMAP.z = Math.max(BIGMAP.z, h[4] === 'shop' ? 16 : 8); // (close enough that its name's drawn)
+  BIGMAP.found = { x: h[0], y: h[1], t: performance.now() / 1000 };
 }
 function bigMapStep() { // held keys pan smoothly, a screen's width every second or so
   const now = performance.now(), dt = Math.min(0.05, (now - BIGMAP.last) / 1000), k = BIGMAP.keys, s = 700 * dt;
@@ -162,6 +196,7 @@ const bigMapOpen = () => !!bigMapEl && bigMapEl.style.display !== 'none';
 // keys while the map's up: it takes them all (the game's paused under it)
 function bigMapKey(e, down) {
   if (!bigMapOpen()) return false;
+  if (e.target && e.target.tagName === 'INPUT') { if (down && e.code === 'Escape') e.target.blur(); return true; } // typing in the search box: the keys are its own
   if (down && !e.repeat && (e.code === 'Escape' || e.code === 'KeyM')) { closeBigMap(); return true; }
   if (down && (e.key === '+' || e.key === '=')) bigMapZoom(1.25);
   if (down && (e.key === '-' || e.key === '_')) bigMapZoom(0.8);

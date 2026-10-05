@@ -89,6 +89,7 @@ function peeObjectHit(ox, oy, oz, x, y, z) {
   let best = null;
   const offer = box => {
     const hit = peeBoxHit(ox, oy, oz, x, y, z, box);
+    if (hit && box.gap && box.gap((hit.x - box.x) * box.c + (hit.y - box.y) * box.s, hit.z)) return; // through the gaps (cell bars)
     if (hit && (!best || hit.t < best.t)) best = hit;
   };
   if (mode === 'room') {
@@ -324,7 +325,9 @@ function drawPeeMarks() {
     if (q.at !== at) continue;
     const rx_ = room_ ? q.x - px : rel(q.x - px), ry_ = room_ ? q.y - py : rel(q.y - py), rz_ = q.z - eye;
     const centerDepth = dx * rx_ + dy * ry_;
-    const radius = Math.max(0.05, Math.sqrt(q.area / Math.PI)) * q.s * (0.35 + 0.65 * Math.sqrt(q.life));
+    // never smaller than about a character cell: out in the street a fresh splash is a few cm across, so from more than
+    // a couple of metres off it fell between the cells and vanished
+    const radius = Math.max(Math.max(0.05, Math.sqrt(q.area / Math.PI)) * q.s * (0.35 + 0.65 * Math.sqrt(q.life)), centerDepth * 0.7 / Math.min(projX, projY));
     const depthRadius = radius * Math.hypot(dx * q.ux + dy * q.uy, dx * q.vx + dy * q.vy);
     if (centerDepth + depthRadius <= 0.05 || centerDepth - depthRadius > vis || q.nx * -rx_ + q.ny * -ry_ + q.nz * -rz_ <= 0) continue;
     const points = [];
