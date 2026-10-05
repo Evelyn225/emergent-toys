@@ -145,16 +145,13 @@
         // Create the prompt for the AI
         function createGenerationPrompt(theme) {
             return `
-    CREATE A FULLY-REALIZED INTERACTIVE WEB EXPERIENCE FOR THE THEME: "${theme}"
+Create a playful, memorable web experience inspired by this theme: "${theme}".
 
-    DIRECTIVES:
-    - Build a complete, self-contained single-page web app / creative site for "${theme}".
-    - Select the best tech stack for the concept (Three.js 3D, Canvas 2D, WebGL shaders, p5.js, Tone.js / Web Audio, Matter.js physics, GSAP, or interactive CSS/DOM).
-    - Provide a complete implementation with rich mechanics, interactive controls, theme-matched aesthetics, and audio feedback where appropriate.
-    - Ensure clean code architecture: wrap setup in a window 'load' listener, instantiate state objects before helper calls, and use defensive guard clauses in event listeners and render loops.
-    - Output raw HTML with embedded <style> and <script> tags only. No markdown fences.
+Choose the form that best fits the idea: it could be a tiny website, toy, game, simulation, generative artwork, interactive story, or something unexpected. Make the theme unmistakable through the visuals, writing, interactions, and details. Give it a distinctive visual identity and a satisfying thing to explore or do. Keep the scope focused enough to finish and polish; don't add complexity just to make the code longer.
 
-    BEGIN HTML OUTPUT:`;
+Use HTML, CSS, JavaScript, canvas, WebGL, audio, or a CDN library when it helps the idea. Make controls clear and responsive, and make sure the experience works on desktop and mobile. Audio should be optional and never required to use the experience.
+
+Return one complete, self-contained HTML document with embedded styles and scripts. Start with <!DOCTYPE html> and output no markdown or explanation.`;
         }
 
         // Shuffle message array for randomization
