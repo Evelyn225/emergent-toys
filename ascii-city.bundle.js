@@ -6449,7 +6449,7 @@ const toilet = (x, y, back = -1, mat = steel) => [
   BX(x, y + back * 0.02, 0.11, 0.13, 0, 0.3, mat), // the pedestal
   { ...BX(x, y + back * 0.04, 0.21, 0.26, 0.3, 0.42, (i, t, L) => { // the bowl: an oval rim, water in the middle
     const rim = mat === steel ? GRAY : WHITE;
-    if (HIT.face !== 5) { BG[i] = C(rim, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+    if (HIT.face !== 5) return false; // leave the box's square sides transparent; the pedestal forms the bowl's base
     const e = Math.hypot(HIT.u / 0.21, HIT.v / 0.26), swirl = T - flushT < 2.5;
     if (e > 1) return false;
     if (e > 0.68) { BG[i] = C(rim, 2.2 + L * 0.3); return set(i, 'o', C(mat === steel ? WHITE : GRAY, L)), true; }
@@ -7231,13 +7231,6 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
   if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
-  if (D.wc && inWc(px, py)) { // in the bathroom: white tiles all round, a mirror over where the basin would be
-    const w = D.wc;
-    if (mx >= w.x0 - 1 && mx <= w.x1 && my >= w.y0 - 1 && my <= w.y1) {
-      BG[i] = C(WHITE, (0.9 + L * 0.12) * (side ? 0.8 : 1));
-      return set(i, fract(z / 0.3) < 0.12 ? '-' : fract(u / 0.3) < 0.1 ? '|' : ' ', C(WHITE, L * 0.8));
-    }
-  }
   if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: a plain wall, the WC sign by the doorway
     const [sx, sy, su] = D.wc.sign; // (u runs whichever way reads left to right, so it's negative from some sides)
     if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
@@ -7338,7 +7331,6 @@ function roomSprites() {
 }
 const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
-
 // ===== the aquarium, across the shore road from the Sunset Pier (world.js gives it its lot). Inside: the open
 // ocean window across the back of the main hall, a walk-through tunnel with sharks and rays going over your head,
 // a dark gallery of jellyfish, a bright one of reef tanks and a kelp forest, seahorses by the door, a touch pool

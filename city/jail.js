@@ -33,7 +33,7 @@ const toilet = (x, y, back = -1, mat = steel) => [
   BX(x, y + back * 0.02, 0.11, 0.13, 0, 0.3, mat), // the pedestal
   { ...BX(x, y + back * 0.04, 0.21, 0.26, 0.3, 0.42, (i, t, L) => { // the bowl: an oval rim, water in the middle
     const rim = mat === steel ? GRAY : WHITE;
-    if (HIT.face !== 5) { BG[i] = C(rim, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
+    if (HIT.face !== 5) return false; // leave the box's square sides transparent; the pedestal forms the bowl's base
     const e = Math.hypot(HIT.u / 0.21, HIT.v / 0.26), swirl = T - flushT < 2.5;
     if (e > 1) return false;
     if (e > 0.68) { BG[i] = C(rim, 2.2 + L * 0.3); return set(i, 'o', C(mat === steel ? WHITE : GRAY, L)), true; }

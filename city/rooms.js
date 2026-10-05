@@ -713,13 +713,6 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
   if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
-  if (D.wc && inWc(px, py)) { // in the bathroom: white tiles all round, a mirror over where the basin would be
-    const w = D.wc;
-    if (mx >= w.x0 - 1 && mx <= w.x1 && my >= w.y0 - 1 && my <= w.y1) {
-      BG[i] = C(WHITE, (0.9 + L * 0.12) * (side ? 0.8 : 1));
-      return set(i, fract(z / 0.3) < 0.12 ? '-' : fract(u / 0.3) < 0.1 ? '|' : ' ', C(WHITE, L * 0.8));
-    }
-  }
   if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: a plain wall, the WC sign by the doorway
     const [sx, sy, su] = D.wc.sign; // (u runs whichever way reads left to right, so it's negative from some sides)
     if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
@@ -820,4 +813,3 @@ function roomSprites() {
 }
 const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3; },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
-
