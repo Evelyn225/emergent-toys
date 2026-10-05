@@ -26,6 +26,9 @@ function bitten(lines, f, from = 'right', edge = '') { // edge: what the bitten 
 }
 // (bitten with 0.45 + f * 0.55: something you'd drink or slurp, bitten anyway, but never quite to nothing)
 const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars.includes(c)) return col; return dflt; };
+// car keys: a fob with its buttons, the ring, the key hanging off it
+const KEYS_ART = [['  .---.', ' | (o) |', ' | [=] |', "  '-.-'", '   (O)', '    |', '    |=', '    |=', '    V'],
+  (c, r) => c === 'o' ? C(RED, 14) : c === '=' && r < 3 ? C(GRAY, 12) : r < 4 ? C(GRAY, 5 + (c === '|' || c === '.' || c === "'" || c === '-' ? 6 : 0)) : C(YEL, 13)];
 const HAND = {
   // the night market's: street food, charms, curios, and the two that bend the world
   bao: (it, f) => [bitten(['   _.~~._', '  ( ~ ~  )', ' (        )', "  `------'"], f), (c, r) => r < 2 && c === '~' ? C(GRAY, 12) : C(WHITE, 14)],
@@ -46,7 +49,7 @@ const HAND = {
   lantern: () => [['    |', '  .-=-.', ' ( ||| )', ' ( ||| )', "  `-=-'", '    ~'], (c, r) => r === 0 ? C(GRAY, 10) : c === '=' || c === '~' ? C(YEL, 15) : c === '|' && r > 1 && r < 4 ? C(YEL, 14) : C(RED, 15)],
   firecrackers: it => [['   *', '   \\', ...Array.from({ length: Math.max(1, it.uses) * 2 }, (_, k) => k & 1 ? '  ==]' : ' [==  '), '   |'], (c, r) => c === '*' ? C(YEL, 15) : c === '\\' || c === '|' ? C(GRAY, 11) : C(RED, 14)],
   mysterybox: () => [['  _\\ /_', ' |  X  |', ' |  ?  |', ' |_____|'], (c, r) => c === '?' ? C(WHITE, 15) : c === 'X' || c === '\\' || c === '/' ? C(RED, 14) : C(BRICK, 13)],
-  pocketwatch: () => { const k = Math.floor(T * (K.KeyT && timeKeys() ? 12 : 1)) & 3; // the hands, round and round
+  pocketwatch: () => { const k = Math.floor(T * (hurrying() ? 12 : 1)) & 3; // the hands, round and round
     return [['    o', '  .-^-.', ' / 12  \\', `|9  ${'|/-\\'[k]}  3|`, ' \\  6  /', "  `---'"], (c, r) => r === 0 ? C(GRAY, 12) : r === 3 && '|/-\\'.includes(c) ? C(GRAY, 3) : /[0-9]/.test(c) ? C(BRICK, 9) : r === 1 || c === '/' || c === '\\' || c === '`' || c === "'" || c === '|' ? C(YEL, 13) : C(WARM, 14)]; },
   cityglobe: () => [['  .-----.', ' / * # * \\', '| #|#|#|# |', ' \\ ##### /', "  '-----'", ' [GLYPHPT]'], (c, r) => r === 5 ? (c === '[' || c === ']' ? C(BRICK, 13) : C(YEL, 12)) : c === '*' ? C(WHITE, 15) : c === '#' ? C(YEL, 13) : C(CYAN, 12)],
   // drinks: a paper cup steams less as it goes; glasses show their level
@@ -169,6 +172,7 @@ const HAND = {
   jadedragon: () => [['   __/\\_', '  (@  ~~>', '  /|  \\', ' ~~\\__/~', ' [=====]'], (c, r) => c === '@' ? C(RED, 15) : r === 4 ? C(BRICK, 12) : C(GREEN, 13)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
+  key_car_hatch: () => KEYS_ART, key_car_sedan: () => KEYS_ART, key_car_sports: () => KEYS_ART,
   umbrella: () => [['     .', '    /|\\', '   / | \\', '  |  |  |', '  |==|==|', '  |  |  |', '   \\ | /', '    \\|/', '     |', '     |'],
     (c, r) => c === '=' ? C(WHITE, 14) : c === '|' && r > 7 ? C(GRAY, 12) : c === '.' ? C(GRAY, 14) : C(BLUE, 13)],
 };
@@ -424,7 +428,7 @@ function openShop(title, stock, vendor = null) {
 function shopBuy(id) {
   const [ok, line] = buy(id);
   say(line, 3);
-  if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor)) say(`${line} That's the one they wanted.`, 4);
+  if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor, id)) say(`${line} That's the one they wanted.`, 4);
   openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor); // refresh (money changed)
 }
 function shopSell(k) {

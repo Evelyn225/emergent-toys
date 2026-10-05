@@ -129,6 +129,10 @@ function citySprites() {
     const [vx, vy] = R(b.x, b.y);
     if (Math.hypot(vx, vy) < vis) drawVehicle(b.parked || (b.parked = { kind: b.kind, body: EV_BODY[b.kind], ev: true, state: 'home', v: 0 }), vx, vy, -1, 0);
   }
+  for (const m of fairFolk) { // the crowd at the fair (fair.js)
+    const [vx, vy] = R(m.x, m.y);
+    if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawArt(vx, vy, 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
+  }
   for (const m of people) if (!m.hidden) {
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
             (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));

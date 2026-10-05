@@ -39,8 +39,6 @@ onkeydown = e => {
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && (me || mode === 'sea')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
-  if (e.code === 'KeyY') { if (skyKeys()) { const [m] = shakeGlobe(); say(devKeys && !carrying('cityglobe') ? `Weather: ${weather}` : m); } else say('The sky does what it likes. (Something at the Chinatown night market might change its mind.)', 3); }
-  if (e.code === 'KeyT' && !timeKeys()) say('Time waits for no one. (A certain pocket watch might disagree: try the prize counters.)', 3);
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
@@ -76,7 +74,7 @@ const free = (x, y) => {
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
@@ -132,13 +130,12 @@ function loop(t) {
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyoSwing(((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 600 * dt); // (arrows swing it too)
-    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.8 : 1); // sprint 29 km/h, cars top out at 79
+    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.5 : 1); // sprint 29 km/h (43 on the board), cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
     if (body.seat && (f || s)) standUp(); // walking gets you up
-    if (body.leap) move(body.leap[0] * dt, body.leap[1] * dt); // mid-leap: no steering
-    else if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
+    if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow() * (body.hop || 1), (cy * f + cx * (s + lurch)) * sp * footSlow() * (body.hop || 1)); // (hop: bunny hopping, see moves.js)
   } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
@@ -157,6 +154,7 @@ function loop(t) {
   stepPee(dt);
   stepSteam(dt);
   stepPigeons(dt);
+  stepFairFolk(dt);
   stepJadeIncense(dt);
   stepExchange();
   stepMuseum(dt);

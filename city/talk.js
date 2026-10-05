@@ -15,7 +15,11 @@ const DISTRICT_LINES = {
   brownstones: ['Quiet street, this.', 'My neighbour practises the trumpet. At 6am.'],
   midtown: ['Busy round here today.', 'Have you tried the diner on the corner?'],
 };
+const FAIR_LINES = ['Have you been up the wheel? You can see the whole city.', "The darts are rigged. I'm going again anyway.", "I've had three corn dogs. I regret nothing.",
+  'Hold my candy floss, I want a go on the duck pond.', 'The carousel horse I was on had a face like my uncle.', 'Every summer since I was six. Never won a thing.',
+  'Smell that? Sea air and fried dough.', "My kid's somewhere round here. Probably on the carousel. Again."];
 function talkLine(p) {
+  if (p.fair) return pick(FAIR_LINES);
   const h = tod, st = nearestOf(stations, p.x, p.y), lines = [...(DISTRICT_LINES[districtAt(p.x, p.y)] || [])];
   if (rain > 0.4) lines.push('This rain, huh.', 'Forgot my umbrella. Again.', 'Good weather for ducks.');
   if (fogAmt > 0.4) lines.push("Can't see a thing in this fog.", 'Fog rolled in off the water again.');
@@ -37,7 +41,7 @@ const stationFor = p => stations.find(s => { const d = Math.hypot(rel(s.x - p.x)
 function startTask(p) {
   const r = Math.random(), v = nearestOf(vendors, p.x, p.y), st = stationFor(p);
   if (r < 0.2 && v && Math.hypot(rel(v.x - p.x), rel(v.y - p.y)) < 40) {
-    task = { kind: 'fetch', who: p, type: v.type, have: false, until: T + 240, ask: `Could you grab me ${v.type.item} from a cart? I'm starving.` };
+    task = { kind: 'fetch', who: p, type: v.type, want: VENDOR_STOCK[v.type.name][0], until: T + 240, ask: `Could you grab me ${v.type.item} from a cart? I'm starving.` };
   } else if (r < 0.4) {
     const d = nearestDoor(p.x + (Math.random() - 0.5) * 30, p.y + (Math.random() - 0.5) * 30, () => true, 2);
     if (!d) return false;
@@ -54,18 +58,20 @@ function startTask(p) {
   if (task.kind === 'escort') { p.talk = 0; p.follow = true; p.path.length = 0; } else p.talk = Infinity; // the others wait right here
   return true;
 }
+// the fetch favour: is what they asked for in your bag? (buy it and eat it, and you're back to the cart)
+const fetchHave = () => !!task && task.kind === 'fetch' && carrying(task.want);
 // where the task points you
 function taskTarget() {
   if (!task) return null;
   if (task.kind === 'escort') return task.to;
-  if (task.kind === 'fetch') return task.have ? task.who : nearestOf(vendors.filter(v => v.type === task.type), px, py);
+  if (task.kind === 'fetch') return fetchHave() ? task.who : nearestOf(vendors.filter(v => v.type === task.type), px, py);
   return task.dog.follow ? task.who : task.dog;
 }
 function taskText() {
   if (!task) return '';
   const t = taskTarget(), where = t ? directions(px, py, t.x, t.y) : '';
   if (task.kind === 'escort') return `show them to ${task.to.name}: ${where}`;
-  if (task.kind === 'fetch') return task.have ? `take the ${task.type.name.toLowerCase()} back: ${where}` : `buy ${task.type.item} from a cart: ${where}`;
+  if (task.kind === 'fetch') return fetchHave() ? `take the ${task.type.name.toLowerCase()} back: ${where}` : `buy ${task.type.item} from a cart: ${where}`;
   return task.dog.follow ? `take the dog back to its owner: ${where}` : `find the lost dog: ${where}`;
 }
 // back onto the sidewalk graph after a favour: in at the nearest door for a while, out to the corner later
@@ -107,16 +113,16 @@ function stepTask(dt) {
 // E on someone: answer a task, or chat
 function talkTo(p) {
   if (task && task.who === p) {
-    if (task.kind === 'fetch' && task.have) { p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`, task.type.price + tip(3, 8)); }
+    if (fetchHave()) { takeSlot(inv.findIndex(it => it.id === task.want)); p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`, task.type.price + tip(3, 8)); }
     return say(`"${task.ask}"`, 4);
   }
-  if (!task && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
+  if (!task && !p.fair && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
   p.talk = Math.max(p.talk || 0, 3);
   if (fx.stink > 0 && Math.random() < 0.7) return say(pick(['They take a step back. "Oof. Stinky tofu?"', 'They wave a hand in front of their face. "Have you been at the night market?"', '"Whoa. Okay. Mints. Get some mints."']), 3);
   say(`"${talkLine(p)}"`, 4);
 }
-// E at a cart while you're fetching for someone
-const taskBuy = ven => { if (task && task.kind === 'fetch' && !task.have && ven.type === task.type) { task.have = true; return true; } return false; };
+// bought at a cart while you're fetching for someone: was that it?
+const taskBuy = (ven, id) => !!task && task.kind === 'fetch' && ven.type === task.type && id === task.want;
 // E on the lost dog
 const nearDog = () => task && task.kind === 'dog' && !task.dog.follow && Math.hypot(rel(task.dog.x - px), rel(task.dog.y - py)) < 0.5;
 

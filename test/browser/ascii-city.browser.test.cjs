@@ -209,7 +209,7 @@ test('vending machines sell from arm\'s reach, at an angle, even with a car at t
   const night = await page.evaluate(() => {
     closeShop(); tod = 23;
     for (const m of machines) {
-      const fx = -m.s * m.fs, fy = m.c * m.fs; devAt(m.x + fx * 0.15, m.y + fy * 0.15, Math.atan2(-fy, -fx));
+      const fx = -m.s * m.fs, fy = m.c * m.fs; devAt(m.x + fx * 0.15, m.y + fy * 0.15, Math.atan2(-fy, -fx)); render(); // (a frame, for what you're looking at)
       if (lockTarget()) return [promptText(), touchActions().some(b => b[1] === 'KeyE'), touchActions().some(b => b[1] === 'KeyL')];
     }
   });
@@ -233,6 +233,18 @@ test('busted: no fine money means a cell; a minute later the guard lets you out 
   await page.evaluate(() => { room.until = T; });
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [mode, Math.min(...SERVICES.filter(b => b.kind === 'police').map(b => Math.hypot(rel(b.x - px), rel(b.y - py)))) < 1.5]), ['walk', true], 'out, by the station');
+}));
+
+test('jailbreak: grab your things from the evidence locker on the way out and you leave with them', () => withPage(async page => {
+  await page.evaluate(() => { money = 20; buy('coffee'); const c = footCops[0]; px = c.x + 0.1; py = c.y; mode = 'walk'; addWanted('hit', px, py, true); c.chase = true; });
+  await page.waitForTimeout(400);
+  await page.keyboard.press('Digit2');
+  assert.deepStrictEqual(await page.evaluate(() => [room && room.kind, inv.length, seized.map(it => it.id)]), ['jail', 0, ['coffee']], 'taken off you and locked up');
+  await page.keyboard.press('KeyE');
+  // past the locker and out of the door (picking it up in the game itself: see the unit test)
+  await page.evaluate(() => { game.g.hasItems = true; game.g.success = true; finishGame(); });
+  assert.strictEqual(await page.evaluate(() => mode), 'walk', 'out');
+  assert.deepStrictEqual(await page.evaluate(() => [inv.map(it => it.id), /your things/.test(msgText)]), [['coffee'], true]);
 }));
 
 test('stealing a car drags the driver out onto the sidewalk; the car stays where you leave it', () => withPage(async page => {
@@ -268,13 +280,12 @@ test('on a phone: the stick walks, a drag looks round, the buttons work the menu
     assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the bag');
     await page.tap('#touch .main:text-is("Close")');
     assert.strictEqual(await page.evaluate(() => panelOpen()), false, 'Close shuts it');
-    await page.evaluate(() => inv.push({ id: 'cityglobe', uses: 0 })); // (Weather's there with the snow globe on you)
-    await page.waitForTimeout(200);
     await page.tap('#touch [data-more]');
-    assert.ok(await page.isVisible('#touch .sheet button:text-is("Weather")'), 'the More sheet');
-    const w0 = await page.evaluate(() => weather);
-    await page.tap('#touch .sheet button:text-is("Weather")');
-    assert.notStrictEqual(await page.evaluate(() => weather), w0, 'Weather changes it');
+    assert.ok(await page.isVisible('#touch .sheet button:text-is("Sound on/off")'), 'the More sheet');
+    assert.ok(!(await page.isVisible('#touch .sheet button:text-is("Weather")')), 'no Weather or Fast-forward: those are Q on the globe and the watch');
+    const s0 = await page.evaluate(() => soundOn);
+    await page.tap('#touch .sheet button:text-is("Sound on/off")');
+    assert.notStrictEqual(await page.evaluate(() => soundOn), s0, 'the button works');
     assert.ok(!(await page.isVisible('#touch .sheet')), 'and the sheet goes away');
     await page.tap('#touch [data-key="Escape"]');
     assert.strictEqual(await page.evaluate(() => paused), true);
@@ -340,6 +351,22 @@ test('on your feet: Space jumps, a trick on the board lands with its name, C sit
   assert.strictEqual(await page.evaluate(() => body.seat), null, 'up again');
 }));
 
+test('the board shows under you on a big desktop screen too; the wheels go quiet in the air', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    const errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.goto(PAGE); await page.waitForTimeout(300);
+    await page.evaluate(() => { mode = 'walk'; fx.skating = true; pitch = 0; });
+    await page.waitForTimeout(200);
+    const cells = await page.evaluate(() => { let n = 0; for (let i = 0; i < cols * rows; i++) if (boardZ[i] < 1e9) n++; return [cols * rows > 1 << 14, n]; });
+    assert.ok(cells[0] && cells[1] > 50, `more cells than the old buffer held, and the board drawn in them (${cells})`);
+    const rolling = await page.evaluate(() => { K.KeyW = 1; const ground = wheelsRolling(); body.vz = 3; body.z = 0.2; const air = wheelsRolling(); body.vz = body.z = 0; K.KeyW = 0; return [ground, air]; });
+    assert.deepStrictEqual(rolling, [true, false]);
+    assert.deepStrictEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
 test('skateboard tricks by flick: each way picks its trick, and on a phone a swipe off the Ollie button pops it', async () => {
   const browser = await chromium.launch();
   try {
@@ -368,7 +395,7 @@ test('skateboard tricks by flick: each way picks its trick, and on a phone a swi
   } finally { await browser.close(); }
 });
 
-test('roofs: step across onto the roof next door, walk off the edge and land hard, leap a street onto a lower roof', () => withPage(async page => {
+test('roofs: step across onto the roof next door, walk off the edge and land hard; a sprinting jump is only a jump', () => withPage(async page => {
   // a roof whose neighbour to the east is about level (but not the same); one whose east side drops to the street;
   // and one across a two-cell street from a roof 4-8m lower
   const spots = await page.evaluate(() => {
@@ -397,19 +424,108 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
   await page.waitForTimeout(2500);
   const r = await page.evaluate(() => [body.z, needs.health]);
   assert.ok(r[0] === 0 && r[1] < 100 && r[1] > 0, `down, hurt but standing (${r})`);
-  // a running leap from the edge clears the street and comes down on the lower roof across it
-  const [lx, ly, lh, far] = spots.leap;
+  // a sprinting jump off the edge is an ordinary jump: no flying across the street, you come down in it
+  const [lx, ly, lh] = spots.leap;
   await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = null; roofLot = roofCells(x, y); px = x + 0.85; py = y + 0.5; a = 0; refillNeeds(); }, [lx, ly, lh]);
   await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW'); await page.keyboard.press('Space');
-  await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
+  await page.waitForTimeout(250); await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
   await page.waitForTimeout(2500);
-  assert.deepStrictEqual(await page.evaluate(() => [mode, roofH, body.z]), ['roof', far, 0], 'landed on the roof across the street');
-  // no stairs on this one: the fire escape takes you down to the sidewalk beside it
+  const fell = await page.evaluate(x => [mode, body.z, px - x < 2.5], lx);
+  assert.deepStrictEqual(fell, ['walk', 0, true], 'down in the street, not across it');
+  // no stairs on the roof next door: the fire escape takes you down to the sidewalk beside it
+  await page.evaluate(([x, y, h, e]) => { mode = 'roof'; roofH = e; room = null; roofLot = roofCells(x, y); px = x + 1.5; py = y + 0.5; a = 0; refillNeeds(); body.z = body.vz = 0; }, spots.across);
   assert.match(await page.evaluate(() => promptText()), /E: fire escape down/);
   const up = await page.evaluate(() => [px, py]);
   await page.keyboard.press('KeyE');
   const down = await page.evaluate(([x, y]) => [mode, map[idx(Math.floor(px), Math.floor(py))], free(px, py), Math.hypot(rel(px - x), rel(py - y)) < 4], up);
   assert.deepStrictEqual(down, ['walk', 0, true, true], 'on the street beside the building, somewhere you can stand');
+}));
+
+test('bunny hopping: land and go straight back up and each hop is faster; stop and it is gone', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    refillNeeds();
+    // frame by frame: forward (px moving) with Space held, strafing into a turn or not
+    const go = (frames, { space = 1, strafe = 0 } = {}) => { K.KeyW = 1; K.Space = space; K.KeyD = strafe ? 1 : 0;
+      for (let i = 0; i < frames; i++) { T += 1 / 60; if (strafe) a += 0.02; px += 0.01; if (space && !body.z) jump(); stepBody(1 / 60); }
+      K.KeyW = K.Space = K.KeyD = 0; return body.hop; };
+    body.hop = 1; body.z = body.vz = 0;
+    const hopped = go(180), capped = go(1200);
+    go(60, { space: 0 }); const after = [body.z, body.hop];
+    body.hop = 1; const plain = go(180); body.z = body.vz = 0; body.hop = 1; const strafed = go(180, { strafe: 1 });
+    return { hopped, capped, after, plain, strafed };
+  });
+  assert.ok(r.hopped > 1.1, `faster for every hop (${r.hopped})`);
+  assert.strictEqual(r.capped, 1.9, 'up to a cap');
+  assert.deepStrictEqual(r.after, [0, 1], 'on the ground a moment and it bleeds away');
+  assert.ok(r.strafed > r.plain, `strafing into the turn builds it quicker (${r.plain} vs ${r.strafed})`);
+}));
+
+test('parked cars are solid on foot; you can still get in', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    let l = null; // a lane with room to walk up to it from the road side
+    for (let i = 0; i < 400 && !l; i++) { const q = laneNear(8 + (i % 20) * 8 + 4.5, 8 + Math.floor(i / 20) * 8 + 4.5);
+      if ([0, 0.3, -0.3].every(k => free(q.x + q.hy * k, q.y - q.hx * k)) && [0.3, -0.3].some(k => free(q.x + q.hy * 0.3 + q.hx * k, q.y - q.hx * 0.3 + q.hy * k))) l = q; }
+    spawnOwnedCar('sedan' in CAR_MODELS ? 'sedan' : Object.keys(CAR_MODELS)[0], l.x, l.y, l.hx, l.hy, true);
+    const c = cars.find(c => c.owned);
+    const into = free(c.ex, c.ey), sd = [1, -1].find(k => free(c.ex + c.hy * 0.3 * k, c.ey - c.hx * 0.3 * k)), side = !!sd; // (the road side of it)
+    px = c.ex + c.hy * 0.3 * sd; py = c.ey - c.hx * 0.3 * sd;
+    for (let i = 0; i < 60; i++) move(-c.hy * 0.02 * sd, c.hx * 0.02 * sd); // walk straight at it
+    const d = Math.hypot(rel(px - c.ex), rel(py - c.ey));
+    interact();
+    return [into, side, d > 0.1, mode];
+  });
+  assert.deepStrictEqual(r, [false, true, true, 'drive'], 'blocked by the car, beside it is fine, and E still gets you in');
+}));
+
+test('a fetch favour: buy what they asked for and handing it over takes it out of your bag', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    money = 100; inv.length = 0;
+    const p = people.find(p => !p.hidden), v = vendors[0];
+    task = { kind: 'fetch', who: p, type: v.type, want: VENDOR_STOCK[v.type.name][0], until: T + 240, ask: '' };
+    const before = fetchHave();
+    inv.push({ id: VENDOR_STOCK[v.type.name][0], uses: 1 }, { id: 'yoyo', uses: 0 }); held = 1;
+    const has = fetchHave(), m0 = money;
+    talkTo(p);
+    return [before, has, task, inv.map(it => it.id), held, money > m0];
+  });
+  assert.deepStrictEqual(r, [false, true, null, ['yoyo'], 0, true], 'gone from your bag, still holding the yo-yo, and paid');
+}));
+
+test('a car comes with its keys: Q with them in hand brings it round to the kerb by you', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    money = 5000; inv.length = 0; held = -1;
+    const [ok, line] = buy('car_sedan');
+    const c = owned.cars[owned.cars.length - 1], k = inv.findIndex(it => it.id === 'key_car_sedan');
+    // off a few blocks: somewhere on foot on a street
+    let spot = null;
+    for (let i = 0; i < 400 && !spot; i++) { const x = mod(c.x + 24 + (i % 20) * 8 + 0.15, N), y = mod(c.y + 24 + Math.floor(i / 20) * 8 + 4.5, N); if (free(x, y)) spot = [x, y]; }
+    [px, py] = spot; held = k;
+    const far = Math.hypot(rel(c.x - px), rel(c.y - py));
+    useHeldItem();
+    const near = Math.hypot(rel(c.x - px), rel(c.y - py));
+    return { ok, keys: /keys/.test(line), k, far: far > 10, near: near < 2, parked: c.parked, line: msgText, sell: sellPrice(inv[k], 0.4) };
+  });
+  assert.deepStrictEqual(r, { ok: true, keys: true, k: 0, far: true, near: true, parked: true, line: r.line, sell: 0 }, JSON.stringify(r));
+  assert.match(r.line, /rolls up at the kerb/);
+  // indoors it can't hear you
+  const inside = await page.evaluate(() => { enterRoom('cinema', { word: 'CINEMA', ret: [px, py, a] }, [7, 10.5, -Math.PI / 2]); useHeldItem(); return msgText; });
+  assert.match(inside, /No signal in here/);
+}));
+
+test('the crowd at the pier fair wanders about, and you can talk to them', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    const f = fairFolk.find(f => !f.queue), x0 = f.x, y0 = f.y;
+    px = FAIR.cx; py = FAIR.y0 + 0.5; // (on the pier, so they're stepped)
+    f.wait = 0; for (let i = 0; i < 600; i++) stepFairFolk(1 / 30);
+    const moved = Math.hypot(f.x - x0, f.y - y0) > 0.1, clear = fairFolk.every(q => q.queue || !fairBlocked(q.x, q.y, 0.05));
+    // stand just in front of one, facing them
+    mode = 'walk'; px = f.x - 0.3; py = f.y; a = 0; fx.stink = 0;
+    const prompt = promptText(), who = nearPerson(); interact(); // (whoever's nearest in front: another of them may have wandered in)
+    return { moved, clear, prompt, said: msgText, stopped: !!who && who.fair && who.talk > 0 };
+  });
+  assert.ok(r.moved && r.clear, `off for a wander, never through the stalls (${JSON.stringify(r)})`);
+  assert.match(r.prompt, /E: talk/);
+  assert.ok(r.said.startsWith('"') && r.stopped, `they answer and stop to chat (${r.said})`);
 }));
 
 test('run dry and you pass out: the hospital, a bill, and the nurse patches you up; dev tools fill you up', () => withPage(async page => {
@@ -534,28 +650,26 @@ test('balloon darts on the pier: $1 at the booth, a dart on a balloon pops it', 
   assert.ok(await page.evaluate(() => game.g.balloons.filter(b => b.popped).length === 1 && game.g.score >= 3));
 }));
 
-test('the night market: tarped by day, a stall to buy from at night; T and Y need the watch and the globe', () => withPage(async page => {
+test('the night market: tarped by day, a stall to buy from at night; Q on the globe turns the sky, Q held on the watch hurries time', () => withPage(async page => {
   await page.evaluate(() => { tod = 13; money = 500; inv.length = 0; const s = STALLS[2]; devAt(s.at[0], s.at[1], Math.PI / 2); });
   assert.match(await page.evaluate(() => promptText()), /under a tarp/);
-  await page.keyboard.down('KeyT');
-  assert.match(await page.evaluate(() => msgText), /pocket watch/); // (read at once: something else may say something in a moment)
+  const w = await page.evaluate(() => weather);
+  await page.keyboard.down('KeyT'); await page.keyboard.press('KeyY');
   await page.waitForTimeout(500); await page.keyboard.up('KeyT');
-  assert.ok(await page.evaluate(() => tod < 13.2), 'no watch, no hurrying');
-  await page.keyboard.press('KeyY');
-  assert.match(await page.evaluate(() => msgText), /night market/);
+  assert.ok(await page.evaluate(() => tod < 13.2) && await page.evaluate(() => weather) === w, 'T and Y do nothing now');
   await page.evaluate(() => { tod = 21; });
   assert.strictEqual(await page.evaluate(() => promptText()), 'E: CURIOS stall');
   await page.keyboard.press('KeyE');
   await page.keyboard.press('Digit4'); // the snow globe
   assert.deepStrictEqual(await page.evaluate(() => [inv.some(it => it.id === 'cityglobe'), money]), [true, 150]);
   await page.keyboard.press('Escape');
-  const w0 = await page.evaluate(() => weather);
-  await page.keyboard.press('KeyY');
+  const w0 = await page.evaluate(() => { held = inv.findIndex(it => it.id === 'cityglobe'); return weather; });
+  await page.keyboard.press('KeyQ');
   assert.notStrictEqual(await page.evaluate(() => weather), w0, 'the globe changes the sky');
-  await page.evaluate(() => { inv.push({ id: 'pocketwatch', uses: 0 }); tod = 12; });
-  await page.keyboard.down('KeyT');
+  await page.evaluate(() => { inv.push({ id: 'pocketwatch', uses: 0 }); held = inv.length - 1; tod = 12; });
+  await page.keyboard.down('KeyQ');
   await page.waitForFunction(() => tod > 12.5, null, { timeout: 15000 }); // (game time: without the watch this would take 10s of play)
-  await page.keyboard.up('KeyT');
+  await page.keyboard.up('KeyQ');
   assert.ok(await page.evaluate(() => tod > 12.5), 'the watch hurries the hours');
 }));
 

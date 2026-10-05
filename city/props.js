@@ -252,14 +252,15 @@ const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -
 for (let y = FAIR.y0 + 1; y < FAIR.y1 - 0.5; y += 1.5) for (const x of [FAIR.x0 + 0.06, FAIR.x1 - 0.06])
   extras.push({ x, y, z: 0, w: 0.05, h: 0.4, art: ['(*)', ' | ', ' | ', ' | ', ' | '], col: (c, row, L) => row ? C(GRAY, L) :
     C([YEL, RED, CYAN, MAG][(Math.floor(T * 2) + Math.round(y)) & 3], Math.max(L, night * 15)) });
+// the crowd at the fair: a few queueing for the wheel, the rest wandering the boardwalk (see stepFairFolk in fair.js).
+// You can talk to any of them (E), same as anyone on the street
 const fairFolk = [];
 for (let k = 0; k < 14; k++) { // somewhere on the boardwalk clear of everything, or in the wheel's queue
   const queue = k < 3, x = queue ? WHEEL_BOARD.x - 0.15 + k * 0.12 : FAIR.x0 + 0.9 + hash(k, 1, 57) * (FAIR.x1 - FAIR.x0 - 1.8);
   const y = queue ? WHEEL_BOARD.y - 0.12 - k * 0.1 : FAIR.y0 + 0.8 + hash(k, 2, 57) * (WHEEL.y - FAIR.y0 - 1.6);
   if (!queue && fairBlocked(x, y, 0.15)) continue;
-  const shirt = [RED, BLUE, GREEN, YEL, MAG, WHITE][k % 6], pants = [BLUE, GRAY, BRICK][k % 3];
-  fairFolk.push({ x, y });
-  extras.push({ x, y, z: 0, w: 0.06, h: 0.18, art: ART.walkB, col: (c, row, L) => C(row < 2 ? SKIN : row === 2 ? shirt : pants, L) });
+  fairFolk.push({ x, y, tx: x, ty: y, wait: hash(k, 3, 57) * 6, ph: 0, talk: 0, fair: true, queue, role: 'fair', path: [],
+                  shirt: [RED, BLUE, GREEN, YEL, MAG, WHITE][k % 6], pants: [BLUE, GRAY, BRICK][k % 3] });
 }
 // the aquarium's sign over its doors: a big neon fish, lit after dark
 extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, w: 0.3, h: 0.13, art: pad(['    _.--._', "><(( o  ))>", "    `--'"]),

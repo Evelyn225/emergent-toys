@@ -448,23 +448,32 @@ GAMES.lockpick = (rnd = Math.random) => {
   return g;
 };
 
-// breaking out of jail: sneak from your cell (bottom left) to the door (top right) while a guard walks his rounds
-// with a flashlight and a second one paces the middle of the block. Crates block the beams. Step into the light, or
-// bump into either of them, and they've got you. One cell per arrow press (held, it repeats). 40 seconds before the
-// shift changes and they count heads.
+// breaking out of jail: sneak from your cell (bottom left) to the door (top right) while two guards with flashlights
+// wander the block, never the same way twice: on at each crossing, mostly straight on, now and then stopping to
+// look about. The new one keeps to the middle. Crates block the beams. Step into the light, or bump into either of
+// them, and they've got you. Up top, the evidence locker: step on it on your way and you take back what they took off
+// you (only if you get out). One cell per arrow press (held, it repeats). 40 seconds before the shift changes.
 GAMES.jailbreak = (rnd = Math.random) => {
-  const W = 30, H = 13, LIMIT = 40, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true };
+  const W = 30, H = 13, LIMIT = 40, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true, hasItems: false };
   const cell = (x, y) => y * W + x, solid = new Set();
   for (let x = 0; x < W; x++) solid.add(cell(x, 0)).add(cell(x, 10));
   for (let y = 0; y <= 10; y++) solid.add(cell(0, y)).add(cell(W - 1, y));
-  const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 8], [11, 8]], [[17, 8]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
+  const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 7], [11, 7]], [[17, 7]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
   for (const grp of CRATES) for (const [x, y] of grp) solid.add(cell(x, y));
-  const door = [W - 2, 1], you = [2, 9];
-  // the guards: the old hand walks the whole block, the new one paces up and down the middle, slower but never far
+  const door = [W - 2, 1], you = [2, 9], stash = [15, 1];
+  // the guards: where each may walk (never your cell's corner: you'd be caught before you'd moved), how fast, how
+  // long they stop to look about
   const guards = [
-    { route: [[3, 2], [26, 2], [26, 8], [3, 8]], x: 3, y: 2, leg: 1, wait: 0, fx: 1, fy: 0, speed: 3.6, pause: 1.1 },
-    { route: [[16, 1], [16, 9]], x: 16, y: 9, leg: 0, wait: 0, fx: 0, fy: -1, speed: 2.2, pause: 1.6 },
+    { x: 26, y: 2, tx: 26, ty: 2, fx: -1, fy: 0, wait: 0.4, speed: 3.2, pause: [0.5, 1.2], x0: 1, x1: W - 2 },
+    { x: 16, y: 8, tx: 16, ty: 8, fx: 0, fy: -1, wait: 0.8, speed: 2.2, pause: [0.8, 1.8], x0: 10, x1: 21 },
   ];
+  const walkable = (gd, x, y) => x >= gd.x0 && x <= gd.x1 && !solid.has(cell(x, y)) && !(x <= 4 && y >= 7);
+  const turn = gd => { // at a crossing: mostly straight on, never straight back unless it's a dead end
+    const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => walkable(gd, gd.x + dx, gd.y + dy));
+    const fwd = opts.filter(([dx, dy]) => dx === gd.fx && dy === gd.fy), side = opts.filter(([dx, dy]) => !(dx === -gd.fx && dy === -gd.fy) && !(dx === gd.fx && dy === gd.fy));
+    const pool = fwd.length && rnd() < 0.7 ? fwd : side.length ? side : opts;
+    return pool.length ? pool[Math.floor(rnd() * pool.length) % pool.length] : [0, 0];
+  };
   let t = 0, rep = 0;
   const lit = new Set();
   const clear = (x0, y0, x1, y1) => { // nothing solid on the way from (x0, y0) to (x1, y1)
@@ -496,17 +505,21 @@ GAMES.jailbreak = (rnd = Math.random) => {
       const nx = you[0] + dir[0], ny = you[1] + dir[1];
       if (!solid.has(cell(nx, ny))) { you[0] = nx; you[1] = ny; ev.push('hop'); } else ev.push('bump');
     }
-    // the guards: along their rounds, pausing at each corner to look about
+    // the guards: cell to cell, choosing at each one; now and then a stop to look round
     for (const gd of guards) {
-      if (gd.wait > 0) { gd.wait -= dt; if (gd.wait < 0.5) { const n = gd.route[gd.leg]; gd.fx = Math.sign(n[0] - gd.x); gd.fy = Math.sign(n[1] - gd.y); } }
-      else {
-        const [tx, ty] = gd.route[gd.leg], d = Math.hypot(tx - gd.x, ty - gd.y), s = Math.min(d, gd.speed * dt);
-        gd.fx = Math.sign(tx - gd.x); gd.fy = Math.sign(ty - gd.y);
-        gd.x += gd.fx * s; gd.y += gd.fy * s;
-        if (d - s < 1e-6) { gd.leg = (gd.leg + 1) % gd.route.length; gd.wait = gd.pause; }
+      if (gd.wait > 0) { gd.wait -= dt; continue; }
+      const ex = gd.tx - gd.x, ey = gd.ty - gd.y, d = Math.abs(ex) + Math.abs(ey), s = Math.min(d, gd.speed * dt);
+      if (d > 1e-6) { gd.x += Math.sign(ex) * s; gd.y += Math.sign(ey) * s; continue; }
+      gd.x = gd.tx; gd.y = gd.ty;
+      if (rnd() < 0.12) { // stop, and swing the light round to a way it could go
+        const [dx, dy] = turn(gd); if (dx || dy) { gd.fx = dx; gd.fy = dy; }
+        gd.wait = gd.pause[0] + rnd() * (gd.pause[1] - gd.pause[0]); continue;
       }
+      const [dx, dy] = turn(gd);
+      if (dx || dy) { gd.fx = dx; gd.fy = dy; gd.tx = gd.x + dx; gd.ty = gd.y + dy; }
     }
     shine();
+    if (!g.hasItems && you[0] === stash[0] && you[1] === stash[1]) { g.hasItems = true; ev.push('eat'); }
     if (you[0] === door[0] && you[1] === door[1]) { g.over = g.success = true; g.score = 1; ev.push('clear'); return ev; }
     if (lit.has(cell(you[0], you[1])) || near(you[0], you[1]) || t > LIMIT) { g.over = true; ev.push('die'); }
     return ev;
@@ -518,13 +531,15 @@ GAMES.jailbreak = (rnd = Math.random) => {
       else if (lit.has(i)) put(x, y, '.', C(YEL, 12), C(YEL, 3));
     }
     put(door[0], door[1], 'D', C(GREEN, 15), C(GREEN, 4));
+    if (!g.hasItems) { put(stash[0], stash[1], '$', C(YEL, 15), C(YEL, 5)); text(stash[0] - 5, 0, ' YOUR ITEMS ', C(YEL, 15)); } // (the evidence locker, labelled in the wall over it)
+    else text(stash[0] - 4, 0, ' GOT EM ', C(GREEN, 14));
     for (const gd of guards) put(Math.round(gd.x), Math.round(gd.y), 'G', C(BLUE, 15), C(BLUE, 4));
     put(you[0], you[1], '@', C(WHITE, 15), lit.has(cell(you[0], you[1])) ? C(RED, 6) : NONE);
     text(0, 12, `${Math.max(0, LIMIT - t) | 0}s till the head count`, C(t > LIMIT - 10 ? RED : GRAY, 12));
   };
-  g.status = () => 'ARROWS sneak to the door (D). Stay out of the light.';
+  g.status = () => g.hasItems ? 'Got your things. Now the door (D).' : 'ARROWS sneak to the door (D). Stay out of the light. ($: your items, if you dare)';
   g.reward = () => 0;
-  g.state = () => ({ you, gx: guards[0].x, gy: guards[0].y, guards: guards.map(gd => [gd.x, gd.y]), lit, door, solid, t, limit: LIMIT });
+  g.state = () => ({ you, gx: guards[0].x, gy: guards[0].y, guards: guards.map(gd => [gd.x, gd.y]), lit, door, stash, solid, t, limit: LIMIT });
   return g;
 };
 

@@ -92,11 +92,11 @@ function touchActions() {
   if (e) out.push([e, 'KeyE', 'main']);
   return out;
 }
-// the More sheet: [label, key, when]. Held buttons (Fast-forward) work while held, the rest close the sheet
+// the More sheet: [label, key, when]. Held buttons (Crouch) work while held, the rest close the sheet
 const SHEET = [
   ['Crouch', 'KeyC', () => onFootMode() && !body.seat, true], ['Drop item', 'KeyX', () => onFootMode() && !!heldItem()],
   ['Empty hands', 'Digit0', () => onFootMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
-  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Fast-forward', 'KeyT', () => timeKeys(), true], ['Weather', 'KeyY', () => skyKeys()], ['Sound on/off', 'KeyN'],
+  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
 ];
 

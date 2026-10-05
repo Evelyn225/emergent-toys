@@ -66,7 +66,6 @@ const K = {}; // keys held, by KeyboardEvent.code
 const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
 let paused = false;
-let devKeys = false; // the dev tools' switch: T and Y work without the watch and the globe
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
 const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true };
@@ -119,7 +118,7 @@ const SEASON_WEATHER = { spring: ['clear', 'clear', 'rain', 'rain', 'fog'], summ
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
 function env(dt) {
-  const lapse = K.KeyT && timeKeys() ? 40 : 1; // 20s per game hour; hold T to fast-forward with the pocket watch on you (clouds race along too)
+  const lapse = hurrying() ? 40 : 1; // 20s per game hour; hold Q with the pocket watch in hand to fast-forward (clouds race along too)
   const t0 = tod;
   tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
   if (tod < t0 - 12) dayNum++; // midnight (a real wrap round, not a tiny step back)
@@ -979,14 +978,15 @@ const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -
 for (let y = FAIR.y0 + 1; y < FAIR.y1 - 0.5; y += 1.5) for (const x of [FAIR.x0 + 0.06, FAIR.x1 - 0.06])
   extras.push({ x, y, z: 0, w: 0.05, h: 0.4, art: ['(*)', ' | ', ' | ', ' | ', ' | '], col: (c, row, L) => row ? C(GRAY, L) :
     C([YEL, RED, CYAN, MAG][(Math.floor(T * 2) + Math.round(y)) & 3], Math.max(L, night * 15)) });
+// the crowd at the fair: a few queueing for the wheel, the rest wandering the boardwalk (see stepFairFolk in fair.js).
+// You can talk to any of them (E), same as anyone on the street
 const fairFolk = [];
 for (let k = 0; k < 14; k++) { // somewhere on the boardwalk clear of everything, or in the wheel's queue
   const queue = k < 3, x = queue ? WHEEL_BOARD.x - 0.15 + k * 0.12 : FAIR.x0 + 0.9 + hash(k, 1, 57) * (FAIR.x1 - FAIR.x0 - 1.8);
   const y = queue ? WHEEL_BOARD.y - 0.12 - k * 0.1 : FAIR.y0 + 0.8 + hash(k, 2, 57) * (WHEEL.y - FAIR.y0 - 1.6);
   if (!queue && fairBlocked(x, y, 0.15)) continue;
-  const shirt = [RED, BLUE, GREEN, YEL, MAG, WHITE][k % 6], pants = [BLUE, GRAY, BRICK][k % 3];
-  fairFolk.push({ x, y });
-  extras.push({ x, y, z: 0, w: 0.06, h: 0.18, art: ART.walkB, col: (c, row, L) => C(row < 2 ? SKIN : row === 2 ? shirt : pants, L) });
+  fairFolk.push({ x, y, tx: x, ty: y, wait: hash(k, 3, 57) * 6, ph: 0, talk: 0, fair: true, queue, role: 'fair', path: [],
+                  shirt: [RED, BLUE, GREEN, YEL, MAG, WHITE][k % 6], pants: [BLUE, GRAY, BRICK][k % 3] });
 }
 // the aquarium's sign over its doors: a big neon fish, lit after dark
 extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, w: 0.3, h: 0.13, art: pad(['    _.--._', "><(( o  ))>", "    `--'"]),
@@ -1296,6 +1296,18 @@ function stepEmergency(dt) {
   if (!cars.some(c => c.ev && c.state === 'out') && cars.filter(c => c.ev).length < 3 && (evTimer -= dt) < 0) {
     spawnEmergency(); evTimer = 60 + Math.random() * 90;
   }
+}
+
+// on foot, a car left at the kerb (yours, or one somebody abandoned) and the emergency vehicles waiting outside their
+// stations are solid: walk round them. (Traffic that's moving, or only stopped at the lights, you dodge yourself)
+function parkedCarAt(x, y, pad) {
+  const inCar = (cx, cy, hx, hy, kind) => {
+    const [hl, hw] = VEHICLES[kind] || VEHICLES.car, qx = rel(x - cx), qy = rel(y - cy);
+    return Math.abs(qx * hx + qy * hy) < hl + pad && Math.abs(-qx * hy + qy * hx) < hw + pad;
+  };
+  for (const c of cars) if (c.parked && !c.player && Math.abs(rel(c.ex - x)) < 0.6 && Math.abs(rel(c.ey - y)) < 0.6 && inCar(c.ex, c.ey, c.hx, c.hy, c.kind)) return true;
+  for (const b of SERVICES) if (!b.out && Math.abs(rel(b.x - x)) < 0.6 && Math.abs(rel(b.y - y)) < 0.6 && inCar(b.x, b.y, -1, 0, b.kind)) return true;
+  return false;
 }
 
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
@@ -1716,7 +1728,11 @@ const DISTRICT_LINES = {
   brownstones: ['Quiet street, this.', 'My neighbour practises the trumpet. At 6am.'],
   midtown: ['Busy round here today.', 'Have you tried the diner on the corner?'],
 };
+const FAIR_LINES = ['Have you been up the wheel? You can see the whole city.', "The darts are rigged. I'm going again anyway.", "I've had three corn dogs. I regret nothing.",
+  'Hold my candy floss, I want a go on the duck pond.', 'The carousel horse I was on had a face like my uncle.', 'Every summer since I was six. Never won a thing.',
+  'Smell that? Sea air and fried dough.', "My kid's somewhere round here. Probably on the carousel. Again."];
 function talkLine(p) {
+  if (p.fair) return pick(FAIR_LINES);
   const h = tod, st = nearestOf(stations, p.x, p.y), lines = [...(DISTRICT_LINES[districtAt(p.x, p.y)] || [])];
   if (rain > 0.4) lines.push('This rain, huh.', 'Forgot my umbrella. Again.', 'Good weather for ducks.');
   if (fogAmt > 0.4) lines.push("Can't see a thing in this fog.", 'Fog rolled in off the water again.');
@@ -1738,7 +1754,7 @@ const stationFor = p => stations.find(s => { const d = Math.hypot(rel(s.x - p.x)
 function startTask(p) {
   const r = Math.random(), v = nearestOf(vendors, p.x, p.y), st = stationFor(p);
   if (r < 0.2 && v && Math.hypot(rel(v.x - p.x), rel(v.y - p.y)) < 40) {
-    task = { kind: 'fetch', who: p, type: v.type, have: false, until: T + 240, ask: `Could you grab me ${v.type.item} from a cart? I'm starving.` };
+    task = { kind: 'fetch', who: p, type: v.type, want: VENDOR_STOCK[v.type.name][0], until: T + 240, ask: `Could you grab me ${v.type.item} from a cart? I'm starving.` };
   } else if (r < 0.4) {
     const d = nearestDoor(p.x + (Math.random() - 0.5) * 30, p.y + (Math.random() - 0.5) * 30, () => true, 2);
     if (!d) return false;
@@ -1755,18 +1771,20 @@ function startTask(p) {
   if (task.kind === 'escort') { p.talk = 0; p.follow = true; p.path.length = 0; } else p.talk = Infinity; // the others wait right here
   return true;
 }
+// the fetch favour: is what they asked for in your bag? (buy it and eat it, and you're back to the cart)
+const fetchHave = () => !!task && task.kind === 'fetch' && carrying(task.want);
 // where the task points you
 function taskTarget() {
   if (!task) return null;
   if (task.kind === 'escort') return task.to;
-  if (task.kind === 'fetch') return task.have ? task.who : nearestOf(vendors.filter(v => v.type === task.type), px, py);
+  if (task.kind === 'fetch') return fetchHave() ? task.who : nearestOf(vendors.filter(v => v.type === task.type), px, py);
   return task.dog.follow ? task.who : task.dog;
 }
 function taskText() {
   if (!task) return '';
   const t = taskTarget(), where = t ? directions(px, py, t.x, t.y) : '';
   if (task.kind === 'escort') return `show them to ${task.to.name}: ${where}`;
-  if (task.kind === 'fetch') return task.have ? `take the ${task.type.name.toLowerCase()} back: ${where}` : `buy ${task.type.item} from a cart: ${where}`;
+  if (task.kind === 'fetch') return fetchHave() ? `take the ${task.type.name.toLowerCase()} back: ${where}` : `buy ${task.type.item} from a cart: ${where}`;
   return task.dog.follow ? `take the dog back to its owner: ${where}` : `find the lost dog: ${where}`;
 }
 // back onto the sidewalk graph after a favour: in at the nearest door for a while, out to the corner later
@@ -1808,16 +1826,16 @@ function stepTask(dt) {
 // E on someone: answer a task, or chat
 function talkTo(p) {
   if (task && task.who === p) {
-    if (task.kind === 'fetch' && task.have) { p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`, task.type.price + tip(3, 8)); }
+    if (fetchHave()) { takeSlot(inv.findIndex(it => it.id === task.want)); p.talk = 3; return endTask(`"Oh, ${task.type.name.toLowerCase()}! You're a lifesaver."`, task.type.price + tip(3, 8)); }
     return say(`"${task.ask}"`, 4);
   }
-  if (!task && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
+  if (!task && !p.fair && Math.random() < 0.3 && startTask(p)) return say(`"${task.ask}"`, 5);
   p.talk = Math.max(p.talk || 0, 3);
   if (fx.stink > 0 && Math.random() < 0.7) return say(pick(['They take a step back. "Oof. Stinky tofu?"', 'They wave a hand in front of their face. "Have you been at the night market?"', '"Whoa. Okay. Mints. Get some mints."']), 3);
   say(`"${talkLine(p)}"`, 4);
 }
-// E at a cart while you're fetching for someone
-const taskBuy = ven => { if (task && task.kind === 'fetch' && !task.have && ven.type === task.type) { task.have = true; return true; } return false; };
+// bought at a cart while you're fetching for someone: was that it?
+const taskBuy = (ven, id) => !!task && task.kind === 'fetch' && ven.type === task.type && id === task.want;
 // E on the lost dog
 const nearDog = () => task && task.kind === 'dog' && !task.dog.follow && Math.hypot(rel(task.dog.x - px), rel(task.dog.y - py)) < 0.5;
 
@@ -2064,6 +2082,9 @@ const ITEMS = {
   // property (property.js): not carried, owned
   car_hatch: { name: 'old hatchback', price: 450, kind: 'car' }, car_sedan: { name: 'sedan', price: 1500, kind: 'car' },
   car_sports: { name: 'sports car', price: 4000, kind: 'car' },
+  // a car's keys (you get them with it; Q calls it round to you, see property.js). Not for sale, not worth anything
+  key_car_hatch: { name: 'hatchback keys', price: 0, kind: 'keys', car: 'car_hatch' }, key_car_sedan: { name: 'sedan keys', price: 0, kind: 'keys', car: 'car_sedan' },
+  key_car_sports: { name: 'sports car keys', price: 0, kind: 'keys', car: 'car_sports' },
   home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 8000, kind: 'home' },
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
@@ -2238,6 +2259,7 @@ function useHeld(near) {
     if (pipe) return [`You pack the bowl and light the pipe.${it.uses > 0 ? ` (${it.uses} bowls left)` : ' The last of the tobacco.'}`, 'light'];
     return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
   }
+  if (d.kind === 'keys') return summonCar(d.car);
   switch (it.id) {
     case 'vape': // hold Q to pull, let go to blow it out (stepGoods)
       if (fx.vape > 0) return ['', null];
@@ -2276,7 +2298,7 @@ function useHeld(near) {
       it.uses--; fx.spark = 25;
       if (it.uses <= 0) removeHeld();
       return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
-    case 'pocketwatch': return [pick(['The second hand runs fast. Hold T and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
+    case 'pocketwatch': return [pick(['The second hand runs fast. Keep holding Q and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
     case 'cityglobe': return shakeGlobe();
     case 'orrery': return turnOrrery();
     case 'postcard': return [pick(['A postcard of the T. rex. On the back: "Wish you were here. Actually don\'t, it\'s ten dollars."', 'A postcard of the museum dome under snow.']), null];
@@ -2348,8 +2370,8 @@ function turnOrrery() {
   orreryT = T; seasonShift++; wTimer = 0; // (and the sky catches up)
   return [`You turn the crank. ${ORRERY_LINE[season()]}`, 'whirr'];
 }
-// may you hurry the hours along (hold T) or change the sky (Y)? With the watch / the globe on you, or the dev switch
-const timeKeys = () => devKeys || carrying('pocketwatch'), skyKeys = () => devKeys || carrying('cityglobe');
+// the pocket watch in your hand and Q held down: the hours hurry along (the globe's a Q press too, see useHeld)
+const hurrying = () => !!K.KeyQ && !paused && !!heldItem() && heldItem().id === 'pocketwatch';
 // things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
 // Half-eaten stays half-eaten.
@@ -2870,23 +2892,32 @@ GAMES.lockpick = (rnd = Math.random) => {
   return g;
 };
 
-// breaking out of jail: sneak from your cell (bottom left) to the door (top right) while a guard walks his rounds
-// with a flashlight and a second one paces the middle of the block. Crates block the beams. Step into the light, or
-// bump into either of them, and they've got you. One cell per arrow press (held, it repeats). 40 seconds before the
-// shift changes and they count heads.
+// breaking out of jail: sneak from your cell (bottom left) to the door (top right) while two guards with flashlights
+// wander the block, never the same way twice: on at each crossing, mostly straight on, now and then stopping to
+// look about. The new one keeps to the middle. Crates block the beams. Step into the light, or bump into either of
+// them, and they've got you. Up top, the evidence locker: step on it on your way and you take back what they took off
+// you (only if you get out). One cell per arrow press (held, it repeats). 40 seconds before the shift changes.
 GAMES.jailbreak = (rnd = Math.random) => {
-  const W = 30, H = 13, LIMIT = 40, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true };
+  const W = 30, H = 13, LIMIT = 40, g = { id: 'jailbreak', title: 'JAILBREAK', W, H, score: 0, over: false, success: false, crime: true, hasItems: false };
   const cell = (x, y) => y * W + x, solid = new Set();
   for (let x = 0; x < W; x++) solid.add(cell(x, 0)).add(cell(x, 10));
   for (let y = 0; y <= 10; y++) solid.add(cell(0, y)).add(cell(W - 1, y));
-  const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 8], [11, 8]], [[17, 8]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
+  const CRATES = [[[7, 4], [8, 4], [7, 5]], [[13, 6], [14, 6], [14, 5]], [[19, 3], [19, 4]], [[22, 7], [23, 7], [23, 6]], [[10, 7], [11, 7]], [[17, 7]], [[25, 4], [25, 5]], [[4, 5], [4, 6]]];
   for (const grp of CRATES) for (const [x, y] of grp) solid.add(cell(x, y));
-  const door = [W - 2, 1], you = [2, 9];
-  // the guards: the old hand walks the whole block, the new one paces up and down the middle, slower but never far
+  const door = [W - 2, 1], you = [2, 9], stash = [15, 1];
+  // the guards: where each may walk (never your cell's corner: you'd be caught before you'd moved), how fast, how
+  // long they stop to look about
   const guards = [
-    { route: [[3, 2], [26, 2], [26, 8], [3, 8]], x: 3, y: 2, leg: 1, wait: 0, fx: 1, fy: 0, speed: 3.6, pause: 1.1 },
-    { route: [[16, 1], [16, 9]], x: 16, y: 9, leg: 0, wait: 0, fx: 0, fy: -1, speed: 2.2, pause: 1.6 },
+    { x: 26, y: 2, tx: 26, ty: 2, fx: -1, fy: 0, wait: 0.4, speed: 3.2, pause: [0.5, 1.2], x0: 1, x1: W - 2 },
+    { x: 16, y: 8, tx: 16, ty: 8, fx: 0, fy: -1, wait: 0.8, speed: 2.2, pause: [0.8, 1.8], x0: 10, x1: 21 },
   ];
+  const walkable = (gd, x, y) => x >= gd.x0 && x <= gd.x1 && !solid.has(cell(x, y)) && !(x <= 4 && y >= 7);
+  const turn = gd => { // at a crossing: mostly straight on, never straight back unless it's a dead end
+    const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => walkable(gd, gd.x + dx, gd.y + dy));
+    const fwd = opts.filter(([dx, dy]) => dx === gd.fx && dy === gd.fy), side = opts.filter(([dx, dy]) => !(dx === -gd.fx && dy === -gd.fy) && !(dx === gd.fx && dy === gd.fy));
+    const pool = fwd.length && rnd() < 0.7 ? fwd : side.length ? side : opts;
+    return pool.length ? pool[Math.floor(rnd() * pool.length) % pool.length] : [0, 0];
+  };
   let t = 0, rep = 0;
   const lit = new Set();
   const clear = (x0, y0, x1, y1) => { // nothing solid on the way from (x0, y0) to (x1, y1)
@@ -2918,17 +2949,21 @@ GAMES.jailbreak = (rnd = Math.random) => {
       const nx = you[0] + dir[0], ny = you[1] + dir[1];
       if (!solid.has(cell(nx, ny))) { you[0] = nx; you[1] = ny; ev.push('hop'); } else ev.push('bump');
     }
-    // the guards: along their rounds, pausing at each corner to look about
+    // the guards: cell to cell, choosing at each one; now and then a stop to look round
     for (const gd of guards) {
-      if (gd.wait > 0) { gd.wait -= dt; if (gd.wait < 0.5) { const n = gd.route[gd.leg]; gd.fx = Math.sign(n[0] - gd.x); gd.fy = Math.sign(n[1] - gd.y); } }
-      else {
-        const [tx, ty] = gd.route[gd.leg], d = Math.hypot(tx - gd.x, ty - gd.y), s = Math.min(d, gd.speed * dt);
-        gd.fx = Math.sign(tx - gd.x); gd.fy = Math.sign(ty - gd.y);
-        gd.x += gd.fx * s; gd.y += gd.fy * s;
-        if (d - s < 1e-6) { gd.leg = (gd.leg + 1) % gd.route.length; gd.wait = gd.pause; }
+      if (gd.wait > 0) { gd.wait -= dt; continue; }
+      const ex = gd.tx - gd.x, ey = gd.ty - gd.y, d = Math.abs(ex) + Math.abs(ey), s = Math.min(d, gd.speed * dt);
+      if (d > 1e-6) { gd.x += Math.sign(ex) * s; gd.y += Math.sign(ey) * s; continue; }
+      gd.x = gd.tx; gd.y = gd.ty;
+      if (rnd() < 0.12) { // stop, and swing the light round to a way it could go
+        const [dx, dy] = turn(gd); if (dx || dy) { gd.fx = dx; gd.fy = dy; }
+        gd.wait = gd.pause[0] + rnd() * (gd.pause[1] - gd.pause[0]); continue;
       }
+      const [dx, dy] = turn(gd);
+      if (dx || dy) { gd.fx = dx; gd.fy = dy; gd.tx = gd.x + dx; gd.ty = gd.y + dy; }
     }
     shine();
+    if (!g.hasItems && you[0] === stash[0] && you[1] === stash[1]) { g.hasItems = true; ev.push('eat'); }
     if (you[0] === door[0] && you[1] === door[1]) { g.over = g.success = true; g.score = 1; ev.push('clear'); return ev; }
     if (lit.has(cell(you[0], you[1])) || near(you[0], you[1]) || t > LIMIT) { g.over = true; ev.push('die'); }
     return ev;
@@ -2940,13 +2975,15 @@ GAMES.jailbreak = (rnd = Math.random) => {
       else if (lit.has(i)) put(x, y, '.', C(YEL, 12), C(YEL, 3));
     }
     put(door[0], door[1], 'D', C(GREEN, 15), C(GREEN, 4));
+    if (!g.hasItems) { put(stash[0], stash[1], '$', C(YEL, 15), C(YEL, 5)); text(stash[0] - 5, 0, ' YOUR ITEMS ', C(YEL, 15)); } // (the evidence locker, labelled in the wall over it)
+    else text(stash[0] - 4, 0, ' GOT EM ', C(GREEN, 14));
     for (const gd of guards) put(Math.round(gd.x), Math.round(gd.y), 'G', C(BLUE, 15), C(BLUE, 4));
     put(you[0], you[1], '@', C(WHITE, 15), lit.has(cell(you[0], you[1])) ? C(RED, 6) : NONE);
     text(0, 12, `${Math.max(0, LIMIT - t) | 0}s till the head count`, C(t > LIMIT - 10 ? RED : GRAY, 12));
   };
-  g.status = () => 'ARROWS sneak to the door (D). Stay out of the light.';
+  g.status = () => g.hasItems ? 'Got your things. Now the door (D).' : 'ARROWS sneak to the door (D). Stay out of the light. ($: your items, if you dare)';
   g.reward = () => 0;
-  g.state = () => ({ you, gx: guards[0].x, gy: guards[0].y, guards: guards.map(gd => [gd.x, gd.y]), lit, door, solid, t, limit: LIMIT });
+  g.state = () => ({ you, gx: guards[0].x, gy: guards[0].y, guards: guards.map(gd => [gd.x, gd.y]), lit, door, stash, solid, t, limit: LIMIT });
   return g;
 };
 
@@ -4181,9 +4218,12 @@ function payFine() {
   if (!pay(f)) return false;
   clearWanted(); return true;
 }
-// jail: everything you're carrying is taken (not your money), and you do your time
+// jail: everything you're carrying is taken (not your money) and locked in evidence, and you do your time. Break out
+// via the evidence locker and you get it back (see the jailbreak game); serve your time and it's gone
 const JAIL_T = 60;
+const seized = [];
 function goToJail() {
+  seized.length = 0; seized.push(...inv);
   inv.length = 0; held = -1; fx.skating = false; fx.boombox = false;
   clearWanted();
 }
@@ -4222,6 +4262,28 @@ function spawnOwnedCar(model, x, y, hx, hy, exact = false) {
   owned.cars.push(c);
   return c;
 }
+// car keys: a set with every car you buy. Q with them in your hand and the car comes round to you, pulled in at the
+// kerb nearest where you're standing (the nearest of them, if you've bought more than one of a model)
+function giveCarKeys(model) { // into your hands, or if they're full, your storage unit
+  const k = { id: 'key_' + model, uses: 0 };
+  if (inv.length < INV_SIZE) { inv.push(k); return 'Here are the keys (hold them, Q: it comes to you).'; }
+  stored.push(k); return 'Your hands are full: the keys are in your storage unit.';
+}
+function ensureCarKeys() { // (a save from before there were keys: you get a set for each car you own)
+  for (const m of new Set(owned.cars.map(c => c.model))) if (![...inv, ...stored, ...closet].some(it => it.id === 'key_' + m)) giveCarKeys(m);
+}
+function summonCar(model) {
+  const name = ITEMS[model].name, mine = owned.cars.filter(c => c.model === model && !c.player), dist = c => Math.hypot(rel(c.x - px), rel(c.y - py));
+  if (!mine.length) return [`You press the fob. Nothing. Wherever your ${name} is, it isn't listening.`, 'click'];
+  if (mode !== 'walk') return [mode === 'room' ? 'No signal in here. Try it out on the street.' : 'Not from up here. Try it down on the street.', null];
+  if (mine.some(c => dist(c) < 2)) return [`Your ${name}'s right here. Its lights blink at you.`, 'click'];
+  const c = mine.reduce((b, c) => dist(c) < dist(b) ? c : b), l = laneNear(px, py);
+  for (const s of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4]) { // along the kerb to a gap between parked cars
+    c.x = mod(l.x + l.hx * s, N); c.y = mod(l.y + l.hy * s, N); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);
+    if (!cars.some(o => o !== c && Math.hypot(rel(o.ex - c.x), rel(o.ey - c.y)) < 0.5)) break;
+  }
+  return [`You press the fob. A minute later your ${name} rolls up at the kerb, lights blinking.`, 'click'];
+}
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
 function freeHomeNear(x, y) {
   let best = -1, bd = 30;
@@ -4239,7 +4301,7 @@ function buyProperty(id, x, y) {
   if (it.kind === 'car') {
     if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
     const l = laneNear(x, y); spawnOwnedCar(id, l.x, l.y, l.hx, l.hy);
-    return [true, `You buy ${aOrSome(it.name)}. It's parked out front (C on your map).`];
+    return [true, `You buy ${aOrSome(it.name)}. It's parked out front (C on your map). ${giveCarKeys(id)}`];
   }
   const cell = freeHomeNear(x, y);
   if (cell < 0) return [false, '"Nothing on the market round here right now."'];
@@ -5573,6 +5635,10 @@ function citySprites() {
   for (const b of SERVICES) if (!b.out) { // parked out front of its station, ready to go
     const [vx, vy] = R(b.x, b.y);
     if (Math.hypot(vx, vy) < vis) drawVehicle(b.parked || (b.parked = { kind: b.kind, body: EV_BODY[b.kind], ev: true, state: 'home', v: 0 }), vx, vy, -1, 0);
+  }
+  for (const m of fairFolk) { // the crowd at the fair (fair.js)
+    const [vx, vy] = R(m.x, m.y);
+    if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawArt(vx, vy, 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
   }
   for (const m of people) if (!m.hidden) {
     drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
@@ -9442,7 +9508,7 @@ const nearestCar = r => {
 const nearPerson = () => {
   if (mode !== 'walk') return null;
   let best = null, bd = 0.45;
-  for (const p of people) {
+  for (const p of [...people, ...fairFolk]) { // (and the crowd at the fair)
     if (p.hidden) continue;
     const ex = rel(p.x - px), ey = rel(p.y - py), d = Math.hypot(ex, ey);
     if (d < bd && (ex * Math.cos(a) + ey * Math.sin(a)) / d > 0.85) { bd = d; best = p; }
@@ -9542,7 +9608,7 @@ function promptText() {
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   if (nearWalkedDog()) return 'E: pet the dog';
   const who = nearPerson();
-  if (who) return task && task.who === who ? (task.kind === 'fetch' && task.have ? 'E: hand it over' : 'E: talk') : 'E: talk';
+  if (who) return task && task.who === who ? (fetchHave() ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
   const el = nearElStairs();
   if (el) return `E: up to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
@@ -9655,10 +9721,10 @@ function hud() {
   const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
-    : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi |${timeKeys() ? ' hold T: time |' : ''}${skyKeys() ? ' Y: weather |' : ''} M: map | N: sound | Esc: pause` : 'Esc: pause';
+    : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
-  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${K.KeyT && timeKeys() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
+  const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
   const meters = needMeters();
@@ -9834,8 +9900,11 @@ function interact() {
       room.tried = true; // one shot at it
       return startCrime('jailbreak', ok => {
         if (ok === 'abort') return say('You lose your nerve. No second chances.', 3);
-        if (!ok) { room.until += 30; return say('"Nice try." Thirty more seconds for that.', 4); }
-        room.until = T; leaveRoom(); say('You slip out past the front desk. Nobody saw a thing.', 4);
+        const got = game && game.g.hasItems;
+        if (!ok) { room.until += 30; return say(got ? '"Nice try. And put those back." Thirty more seconds for that.' : '"Nice try." Thirty more seconds for that.', 4); }
+        room.until = T; leaveRoom();
+        if (got && seized.length) { inv.push(...seized.splice(0, INV_SIZE - inv.length)); held = inv.length ? 0 : -1; seized.length = 0; return say('You slip out past the front desk with your things stuffed in your jacket. Nobody saw a thing.', 4); }
+        say('You slip out past the front desk. Nobody saw a thing.', 4);
       });
     }
     if (room.kind === 'museum' && museumUse()) return;
@@ -10213,6 +10282,29 @@ function fairFrame() {
   const mid = cols >> 1;
   for (let r = 0; r < rows - 3; r++) { const i = r * cols + mid; FOGS[i] = FOGB[i] = 0; set(i, (r + Math.floor(T * 6)) % 4 ? '|' : '/', C(YEL, 14)); BG[i] = C(YEL, 3); }
   ['   ,/\\_/\\,', '  (  o    >', "  /`---.__/", " /  ~~~~ \\"].forEach((l, k) => putText(rows - 4 + k, mid - 6, l, C(WHITE, 13)));
+}
+
+// the fair's crowd wanders the boardwalk: pick a clear spot in a straight clear line, stroll over, stand a while
+// (looking at the rides), pick another. The wheel's queue stays put. Anyone you're talking to stops for it
+const FOLK_V = 0.12; // cells a second: an amble
+function folkSpot(f) {
+  for (let n = 0; n < 12; n++) {
+    const x = FAIR.x0 + 0.9 + Math.random() * (FAIR.x1 - FAIR.x0 - 1.8), y = FAIR.y0 + 0.8 + Math.random() * (WHEEL.y - FAIR.y0 - 1.6);
+    let ok = !fairBlocked(x, y, 0.15);
+    for (let t = 0.1; ok && t < 1; t += 0.1) ok = !fairBlocked(f.x + (x - f.x) * t, f.y + (y - f.y) * t, 0.08);
+    if (ok) return [x, y];
+  }
+  return [f.x, f.y];
+}
+function stepFairFolk(dt) {
+  if (Math.hypot(rel(FAIR.cx - px), rel((FAIR.y0 + FAIR.y1) / 2 - py)) > 40) return; // (nobody's watching)
+  for (const f of fairFolk) {
+    if (f.talk > 0) { f.talk -= dt; continue; }
+    if (f.queue) continue;
+    const ex = f.tx - f.x, ey = f.ty - f.y, d = Math.hypot(ex, ey);
+    if (d > 0.02) { const s = Math.min(d, FOLK_V * dt); f.x += ex / d * s; f.y += ey / d * s; f.ph += dt * 5; continue; }
+    if ((f.wait -= dt) <= 0) { [f.tx, f.ty] = folkSpot(f); f.wait = 3 + Math.random() * 9; }
+  }
 }
 // ===== the Chinatown night market (props.js puts up the stalls): what E does at a stall, and what it says. Open 8pm
 // to 2am. STREET FOOD, CHARMS (a little luck) and CURIOS (a mystery box, and the Glyphport snow globe, which changes
@@ -10593,11 +10685,11 @@ function audioTick(dt) {
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), barCrowd: room ? barCrowd() : 0,
-    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: fx.skating && (K.KeyW || K.KeyS || K.KeyA || K.KeyD), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : 0,
+    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm' });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
-  for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, GLIDE);
+  for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
   if (me || sea) { // the engine note follows the car (or the boat: lower, burbling)
     const v = Math.abs((me || sea).v), m = me ? 1 : 0.7;
     synth.engineOsc.frequency.setTargetAtTime((38 + v * 32) * m, now, 0.08);
@@ -10729,7 +10821,6 @@ function buildPause() {
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
         <b>M</b><span>map</span><b>1-8</b><span>hold an item, again to put it away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry</span><b>Q</b><span>use held item</span>
-        <b>hold T</b><span>fast-forward (with the pocket watch)</span><b>Y</b><span>weather (with the snow globe)</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
         <b>P</b><span>pee</span>
         <b>Esc</b><span>pause</span>
@@ -10900,7 +10991,6 @@ function devBody() {
   }
   return `<div class="grp">police</div><div class="bar">${act('Clear wanted level', () => { clearWanted(); reports.length = 0; say('Wanted level cleared.', 2); })}${act('+1 wanted star', () => addWanted('steal', px, py, true))}</div>
     <div class="grp">you</div><p class="note">food ${needs.food | 0}, drink ${needs.drink | 0}, health ${needs.health | 0}</p><div class="bar">${act('Fill food, drink and health', () => { refillNeeds(); say('Fed, watered and fighting fit.', 2); })}${act('Hungry and thirsty (empty)', () => { needs.food = needs.drink = 0; })}${act('Health to 10', () => { needs.health = 10; })}${act('Bladder full', () => { needs.bladder = 100; })}</div>
-    <div class="grp">keys</div><div class="bar">${act(devKeys ? 'T / Y without the watch and globe: ON' : 'T / Y without the watch and globe: off', () => { devKeys = !devKeys; })}</div>
     <div class="bar">${act('Sober up / clear effects', () => { for (const k of ['caffeine', 'booze', 'smoke', 'vape', 'cloud', 'fresh', 'spark']) fx[k] = 0; say('Clear-headed.', 2); })}${act('Empty your pockets', () => { inv.length = 0; held = -1; say('Pockets emptied.', 2); })}</div>
     <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
 }
@@ -11147,6 +11237,9 @@ function bitten(lines, f, from = 'right', edge = '') { // edge: what the bitten 
 }
 // (bitten with 0.45 + f * 0.55: something you'd drink or slurp, bitten anyway, but never quite to nothing)
 const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars.includes(c)) return col; return dflt; };
+// car keys: a fob with its buttons, the ring, the key hanging off it
+const KEYS_ART = [['  .---.', ' | (o) |', ' | [=] |', "  '-.-'", '   (O)', '    |', '    |=', '    |=', '    V'],
+  (c, r) => c === 'o' ? C(RED, 14) : c === '=' && r < 3 ? C(GRAY, 12) : r < 4 ? C(GRAY, 5 + (c === '|' || c === '.' || c === "'" || c === '-' ? 6 : 0)) : C(YEL, 13)];
 const HAND = {
   // the night market's: street food, charms, curios, and the two that bend the world
   bao: (it, f) => [bitten(['   _.~~._', '  ( ~ ~  )', ' (        )', "  `------'"], f), (c, r) => r < 2 && c === '~' ? C(GRAY, 12) : C(WHITE, 14)],
@@ -11167,7 +11260,7 @@ const HAND = {
   lantern: () => [['    |', '  .-=-.', ' ( ||| )', ' ( ||| )', "  `-=-'", '    ~'], (c, r) => r === 0 ? C(GRAY, 10) : c === '=' || c === '~' ? C(YEL, 15) : c === '|' && r > 1 && r < 4 ? C(YEL, 14) : C(RED, 15)],
   firecrackers: it => [['   *', '   \\', ...Array.from({ length: Math.max(1, it.uses) * 2 }, (_, k) => k & 1 ? '  ==]' : ' [==  '), '   |'], (c, r) => c === '*' ? C(YEL, 15) : c === '\\' || c === '|' ? C(GRAY, 11) : C(RED, 14)],
   mysterybox: () => [['  _\\ /_', ' |  X  |', ' |  ?  |', ' |_____|'], (c, r) => c === '?' ? C(WHITE, 15) : c === 'X' || c === '\\' || c === '/' ? C(RED, 14) : C(BRICK, 13)],
-  pocketwatch: () => { const k = Math.floor(T * (K.KeyT && timeKeys() ? 12 : 1)) & 3; // the hands, round and round
+  pocketwatch: () => { const k = Math.floor(T * (hurrying() ? 12 : 1)) & 3; // the hands, round and round
     return [['    o', '  .-^-.', ' / 12  \\', `|9  ${'|/-\\'[k]}  3|`, ' \\  6  /', "  `---'"], (c, r) => r === 0 ? C(GRAY, 12) : r === 3 && '|/-\\'.includes(c) ? C(GRAY, 3) : /[0-9]/.test(c) ? C(BRICK, 9) : r === 1 || c === '/' || c === '\\' || c === '`' || c === "'" || c === '|' ? C(YEL, 13) : C(WARM, 14)]; },
   cityglobe: () => [['  .-----.', ' / * # * \\', '| #|#|#|# |', ' \\ ##### /', "  '-----'", ' [GLYPHPT]'], (c, r) => r === 5 ? (c === '[' || c === ']' ? C(BRICK, 13) : C(YEL, 12)) : c === '*' ? C(WHITE, 15) : c === '#' ? C(YEL, 13) : C(CYAN, 12)],
   // drinks: a paper cup steams less as it goes; glasses show their level
@@ -11290,6 +11383,7 @@ const HAND = {
   jadedragon: () => [['   __/\\_', '  (@  ~~>', '  /|  \\', ' ~~\\__/~', ' [=====]'], (c, r) => c === '@' ? C(RED, 15) : r === 4 ? C(BRICK, 12) : C(GREEN, 13)],
   duck: () => [['    __', '  <(o )___', '   ( ._> /', "    `---'"], (c, r) => c === '>' ? C(ORANGE, 15) : c === 'o' ? C(WHITE, 15) : C(YEL, 15)],
   sparklers: () => [['  |', '  |', '  |', '  |', '  |'], (c, r) => C(GRAY, 12)],
+  key_car_hatch: () => KEYS_ART, key_car_sedan: () => KEYS_ART, key_car_sports: () => KEYS_ART,
   umbrella: () => [['     .', '    /|\\', '   / | \\', '  |  |  |', '  |==|==|', '  |  |  |', '   \\ | /', '    \\|/', '     |', '     |'],
     (c, r) => c === '=' ? C(WHITE, 14) : c === '|' && r > 7 ? C(GRAY, 12) : c === '.' ? C(GRAY, 14) : C(BLUE, 13)],
 };
@@ -11545,7 +11639,7 @@ function openShop(title, stock, vendor = null) {
 function shopBuy(id) {
   const [ok, line] = buy(id);
   say(line, 3);
-  if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor)) say(`${line} That's the one they wanted.`, 4);
+  if (ok && shopCtx.vendor && taskBuy(shopCtx.vendor, id)) say(`${line} That's the one they wanted.`, 4);
   openShop(shopCtx.title, shopCtx.stock, shopCtx.vendor); // refresh (money changed)
 }
 function shopSell(k) {
@@ -11812,8 +11906,8 @@ const dPieces = (x, n, x0, step) => { const k = Math.floor((x - x0) / step); ret
 
 Object.assign(DENSE, {
   // ---- the night market's, and the two that bend the world
-  pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold T
-    const fast = K.KeyT && timeKeys(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
+  pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold Q
+    const fast = hurrying(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
     if (dEll(x, y, 0, -6.2, 1.1, 0.8) < 1 && dEll(x, y, 0, -6.2, 1.1, 0.8) > 0.55) return ['o', C(GRAY, 12)]; // the ring for the chain
     if (Math.abs(x) < 0.7 && y > -5.6 && y < -4.4) return dLit(0.7, YEL, 8); // the crown
     const d = dEll(x, y, cx, cy, R, R);
@@ -13283,11 +13377,16 @@ function crimePrompt() {
 // hold the right mouse button and flick (left kickflip, right heelflip, back shuvit, back-left 360 flip, back-right
 // varial heelflip, nothing or forward an ollie) and let go to pop; on a phone, swipe off the Ollie button the same
 // way. The board under you is a little 3D model in front of the camera (like a held weapon), so it really flips and spins.
+// Bunny hopping: jump again the moment you land (hold Space, or press it just before you touch down) and each hop
+// carries you a bit faster; turn the way you're strafing while you're in the air (A + mouse left, D + mouse right)
+// and it builds quicker. Stay on the ground and the speed's gone in a moment.
+const HOP_GAIN = 0.06, HOP_STRAFE = 0.12, HOP_MAX = 1.9, HOP_BUF = 0.2; // speed x per hop, x more for a good strafe, cap, s early
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
 const skatingNow = () => fx.skating && mode === 'walk';
+const wheelsRolling = () => fx.skating && !body.z && !body.vz && !!(K.KeyW || K.KeyS || K.KeyA || K.KeyD); // (the roar: on the ground, going somewhere)
 
 // a flick (screen pixels: x right, y down) to the trick it calls for: the nearest of the six directions
 const FLICK_DIRS = [['A', -1, 0], ['D', 1, 0], ['S', 0, 1], ['AS', -0.71, 0.71], ['DS', 0.71, 0.71], ['', 0, -1]];
@@ -13301,14 +13400,13 @@ function flickTrick(dx, dy, min = 20) {
 const trickName = key => (TRICKS[key] || ['ollie'])[0];
 
 function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read off A / D / S
-  if (body.z > 0 || body.vz > 0) return;
+  if (body.z > 0 || body.vz > 0) { body.buf = T; return; } // (in the air: it'll go off when you land, see stepBody)
   if (body.seat) return standUp();
   if (skatingNow()) {
     const key = trick ?? (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
     body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
   } else {
     body.vz = JUMP_V;
-    if (mode === 'roof' && !roofFixed() && (K.ShiftLeft || K.ShiftRight) && (K.KeyW || K.ArrowUp)) body.leap = [Math.cos(a) * LEAP_V, Math.sin(a) * LEAP_V]; // a running leap
   }
   if (actx) sfxUse(skatingNow() ? 'board' : 'kick');
 }
@@ -13340,16 +13438,27 @@ function sitDown() {
 function standUp() { // back where you sat down from (it was walkable)
   [px, py] = body.seat.from; body.seat = null;
 }
-// every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js)
+// every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
-  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.leap = null; return; }
+  const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
+  body.lastA = a; body.lx = px; body.ly = py;
+  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.hop = 1; return; }
   body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
   if (body.z > 0 || body.vz > 0) {
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
     if (body.trick) body.trick.t += dt;
+    const s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+    if (s && Math.sign(da) === s) body.swirl = (body.swirl || 0) + Math.abs(da); // air strafing: turning into it
     if (body.z <= 0) { // landed
-      const fell = body.peak; body.z = body.vz = body.peak = 0; body.leap = null;
+      const fell = body.peak, tricked = !!body.trick; body.z = body.vz = body.peak = 0;
       if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('board'); }
+      if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (K.Space || T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
+        if (moved) body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.swirl || 0) * 0.15));
+        body.swirl = 0; body.buf = -9; body.vz = JUMP_V;
+        if (actx) sfxUse('kick');
+        return;
+      }
+      body.swirl = 0;
       const dmg = fallHurt(fell);
       if (dmg > 0) {
         if (actx) sfxUse('kick');
@@ -13357,15 +13466,14 @@ function stepBody(dt) {
         else say(fell > 15 ? 'You hit the ground hard. Something in your ankle goes crunch.' : 'Oof. You land hard.', 3);
       }
     }
-  }
+  } else body.hop = Math.max(1, (body.hop || 1) - dt * 4); // on the ground: the speed bleeds off
 }
 
 // ---- roofs: no invisible walls. Step across onto the roof next door if it's about level (a storey up or down,
-// near enough), walk off any edge and fall (a long way down hurts), and a sprinting jump (shift + forward + space)
-// is a leap that'll clear a street onto a roof a bit lower than yours. A wall you're not above stops you, and you
+// near enough), walk off any edge and fall (a long way down hurts), and jump the gap to one close by (an ordinary jump:
+// a street's too far, unless you come at it hopping). A wall you're not above stops you, and you
 // slide down it. The stairs are only on the roof you came up; any other roof has a fire escape down to the street.
 const ROOF_STEP = 0.35; // cells: 3.5m
-const LEAP_V = 1.8; // cells a second forward in a running leap off a roof
 let roofLot = null; // the cells of the roof you came up onto (where the stairs down are)
 function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the same height
   const h = map[idx(mx, my)], out = new Set([idx(mx, my)]), todo = [[mx, my]];
@@ -13384,7 +13492,7 @@ function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose t
 const overRoof = (x, y) => { const h = map[idx(Math.floor(x), Math.floor(y))]; return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
-function stepRoof() { // onto another roof, off them altogether, or (in a leap from the street side) down onto one
+function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
   if (mode === 'walk' && overRoof(px, py)) { // came down on a roof
     const h = map[idx(Math.floor(px), Math.floor(py))];
     mode = 'roof'; roofH = h; shiftFeet(-h * 10); room = null; roofLot = new Set(); return;
@@ -13431,7 +13539,7 @@ const footSlow = () => body.crouch > 0.5 ? 0.45 : 1;
 // ---- the board under your feet, in camera space: x right, y down, z ahead (metres), drawn into the character grid
 // point by point with its own depth test. Grip tape on top, a coloured graphic underneath, trucks and wheels.
 const BOARD_L = 0.4, BOARD_W = 0.105, BOARD_T = 0.025;
-const boardZ = new Float32Array(1 << 14);
+let boardZ = new Float32Array(1 << 14); // (grows to fit the screen)
 function drawBoard3D() {
   const tr = body.trick, p = tr ? clamp(tr.t / tr.air, 0, 1) : 0, e = p * p * (3 - 2 * p); // eased through the air
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
@@ -13444,7 +13552,7 @@ function drawBoard3D() {
   const fit = Math.min(1, (rows * 0.8 - hor) / ((0.5 / cz) * pY + 1e-6)); // (on a wide screen it'd sit half off the bottom: scaled down to sit in the lower part of the view)
   if (fit > 0.2) { pX *= fit; pY *= fit; }
   const ox = cols / 2, oy = hor; // (from the horizon: look up and it drops away underfoot)
-  const n = cols * rows; if (boardZ.length < n) return; boardZ.fill(1e9, 0, n);
+  const n = cols * rows; if (boardZ.length < n) boardZ = new Float32Array(n); boardZ.fill(1e9, 0, n);
   // a point on the board (u along, v across, h up) to the screen
   const plot = (u, v, h, ch, col, bg) => {
     let y1 = v * cr - h * sr, h1 = v * sr + h * cr; // the flip, round the long axis
@@ -13502,6 +13610,7 @@ function loadGame() {
   if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }
   owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push(h);
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
+  ensureCarKeys();
   loadBoats(d.boats);
   if (Number.isFinite(d.season)) seasonShift = mod(d.season, 4);
   if (d.stolen && typeof d.stolen === 'object') museumStolen = { diamond: !!d.stolen.diamond, orrery: !!d.stolen.orrery };
@@ -13556,8 +13665,6 @@ onkeydown = e => {
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && (me || mode === 'sea')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
-  if (e.code === 'KeyY') { if (skyKeys()) { const [m] = shakeGlobe(); say(devKeys && !carrying('cityglobe') ? `Weather: ${weather}` : m); } else say('The sky does what it likes. (Something at the Chinatown night market might change its mind.)', 3); }
-  if (e.code === 'KeyT' && !timeKeys()) say('Time waits for no one. (A certain pocket watch might disagree: try the prize counters.)', 3);
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
@@ -13593,7 +13700,7 @@ const free = (x, y) => {
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
@@ -13649,13 +13756,12 @@ function loop(t) {
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyoSwing(((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 600 * dt); // (arrows swing it too)
-    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.8 : 1); // sprint 29 km/h, cars top out at 79
+    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.5 : 1); // sprint 29 km/h (43 on the board), cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
     if (body.seat && (f || s)) standUp(); // walking gets you up
-    if (body.leap) move(body.leap[0] * dt, body.leap[1] * dt); // mid-leap: no steering
-    else if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow(), (cy * f + cx * (s + lurch)) * sp * footSlow());
+    if (!body.seat) move((cx * f - cy * (s + lurch)) * sp * footSlow() * (body.hop || 1), (cy * f + cx * (s + lurch)) * sp * footSlow() * (body.hop || 1)); // (hop: bunny hopping, see moves.js)
   } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
@@ -13674,6 +13780,7 @@ function loop(t) {
   stepPee(dt);
   stepSteam(dt);
   stepPigeons(dt);
+  stepFairFolk(dt);
   stepJadeIncense(dt);
   stepExchange();
   stepMuseum(dt);
@@ -13851,11 +13958,11 @@ function touchActions() {
   if (e) out.push([e, 'KeyE', 'main']);
   return out;
 }
-// the More sheet: [label, key, when]. Held buttons (Fast-forward) work while held, the rest close the sheet
+// the More sheet: [label, key, when]. Held buttons (Crouch) work while held, the rest close the sheet
 const SHEET = [
   ['Crouch', 'KeyC', () => onFootMode() && !body.seat, true], ['Drop item', 'KeyX', () => onFootMode() && !!heldItem()],
   ['Empty hands', 'Digit0', () => onFootMode() && held >= 0], ['Shoplift', 'KeyG', () => onFootMode() && canShoplift()],
-  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Fast-forward', 'KeyT', () => timeKeys(), true], ['Weather', 'KeyY', () => skyKeys()], ['Sound on/off', 'KeyN'],
+  ['Hail taxi', 'KeyH', () => mode === 'walk'], ['Sound on/off', 'KeyN'],
   ['Pee', 'KeyP', () => onFootMode()],
 ];
 

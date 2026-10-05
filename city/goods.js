@@ -41,6 +41,9 @@ const ITEMS = {
   // property (property.js): not carried, owned
   car_hatch: { name: 'old hatchback', price: 450, kind: 'car' }, car_sedan: { name: 'sedan', price: 1500, kind: 'car' },
   car_sports: { name: 'sports car', price: 4000, kind: 'car' },
+  // a car's keys (you get them with it; Q calls it round to you, see property.js). Not for sale, not worth anything
+  key_car_hatch: { name: 'hatchback keys', price: 0, kind: 'keys', car: 'car_hatch' }, key_car_sedan: { name: 'sedan keys', price: 0, kind: 'keys', car: 'car_sedan' },
+  key_car_sports: { name: 'sports car keys', price: 0, kind: 'keys', car: 'car_sports' },
   home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 8000, kind: 'home' },
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
@@ -215,6 +218,7 @@ function useHeld(near) {
     if (pipe) return [`You pack the bowl and light the pipe.${it.uses > 0 ? ` (${it.uses} bowls left)` : ' The last of the tobacco.'}`, 'light'];
     return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
   }
+  if (d.kind === 'keys') return summonCar(d.car);
   switch (it.id) {
     case 'vape': // hold Q to pull, let go to blow it out (stepGoods)
       if (fx.vape > 0) return ['', null];
@@ -253,7 +257,7 @@ function useHeld(near) {
       it.uses--; fx.spark = 25;
       if (it.uses <= 0) removeHeld();
       return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
-    case 'pocketwatch': return [pick(['The second hand runs fast. Hold T and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
+    case 'pocketwatch': return [pick(['The second hand runs fast. Keep holding Q and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
     case 'cityglobe': return shakeGlobe();
     case 'orrery': return turnOrrery();
     case 'postcard': return [pick(['A postcard of the T. rex. On the back: "Wish you were here. Actually don\'t, it\'s ten dollars."', 'A postcard of the museum dome under snow.']), null];
@@ -325,8 +329,8 @@ function turnOrrery() {
   orreryT = T; seasonShift++; wTimer = 0; // (and the sky catches up)
   return [`You turn the crank. ${ORRERY_LINE[season()]}`, 'whirr'];
 }
-// may you hurry the hours along (hold T) or change the sky (Y)? With the watch / the globe on you, or the dev switch
-const timeKeys = () => devKeys || carrying('pocketwatch'), skyKeys = () => devKeys || carrying('cityglobe');
+// the pocket watch in your hand and Q held down: the hours hurry along (the globe's a Q press too, see useHeld)
+const hurrying = () => !!K.KeyQ && !paused && !!heldItem() && heldItem().id === 'pocketwatch';
 // things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
 // Half-eaten stays half-eaten.
