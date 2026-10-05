@@ -60,7 +60,7 @@ TECHNOLOGY & LIBRARIES:
   * Matter.js for 2D physics: https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js
   * GSAP for animation: https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js
   * Google Fonts for custom typography
-- CRITICAL THREE.JS CONTROLS RULE: The core three.min.js script does NOT include THREE.PointerLockControls or THREE.OrbitControls! If you reference THREE.PointerLockControls or THREE.OrbitControls, you MUST load their respective CDN addon script above in <head> AFTER three.min.js. Alternatively, write simple vanilla JS controls using mousemove, keydown, and camera.rotation/position.
+- CRITICAL THREE.JS CONTROLS RULE: The core three.min.js script does NOT include THREE.PointerLockControls or THREE.OrbitControls! If you reference THREE.PointerLockControls or THREE.OrbitControls, you MUST load their respective CDN addon script above in <head> AFTER three.min.js. NOTE: THREE.PointerLockControls does NOT have an .update() method (unlike OrbitControls). NEVER call controls.update() blindly! ALWAYS check typeof first: if (controls && typeof controls.update === 'function') controls.update();
 - Pure Vanilla HTML5 Canvas 2D, Web Audio API, SVG, and CSS 3D are also warmly encouraged.
 
 CREATIVE PRINCIPLES:
