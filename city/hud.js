@@ -105,8 +105,8 @@ function promptText() {
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hospital' && nearKeeper() && needs.health < 95) return `E: get patched up (${fmt$(NURSE_FEE)})`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
-    if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
-    if (nearKeeper()) return `"${room.line}"`;
+    if (nearKeeper() && stockFor(room.kind, room.word).length) return room.line ? `"${room.line}"   E: shop` : 'E: shop';
+    if (nearKeeper() && room.line) return `"${room.line}"`;
     if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
     return '';
   }

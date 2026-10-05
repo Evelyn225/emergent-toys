@@ -214,6 +214,11 @@ test('tapper: pour to the line and let go to slide a beer; hold too long and it 
   const served = ev(`(() => { let held = 0; for (let k = 0; k < 600 && !g.over; k++) { const s = g.state(); const pour = s.fill < 0.95;
     g.step(1 / 60, pour ? { act: 1 } : {}); } return g.score; })()`);
   assert.ok(served >= 3, 'served ' + served);
+  assert.ok(Math.abs(ev('g.state().tips') - served * 0.25) < 1e-9, 'a little tip for every proper pint');
+  // let go early: a short pour still slides and gets drunk, but no tip
+  ev('var g = GAMES.tapper(() => 0)');
+  const short = ev(`(() => { for (let k = 0; k < 600 && !g.over; k++) { const s = g.state(); g.step(1 / 60, s.fill < 0.5 ? { act: 1 } : {}); } return [g.score, g.state().tips]; })()`);
+  assert.ok(short[0] >= 3 && short[1] === 0, 'served ' + short[0] + ', tipped ' + short[1]);
   ev('var g = GAMES.tapper(() => 0)');
   assert.strictEqual(ev('(() => { for (let k = 0; k < 120; k++) g.step(1 / 60, { act: 1 }); return g.state().misses; })()'), 1, 'one spill');
 });

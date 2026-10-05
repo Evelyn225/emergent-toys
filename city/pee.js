@@ -3,8 +3,8 @@
 // bending it down either way. A yellow puddle spreads where it lands, then
 // dries up over a few minutes (quicker in the rain, slower indoors). How long you go is down to the bladder
 // (needs.js), which nothing shows and nothing ever makes you empty. P again cuts it off.
-// Stand by a toilet (bars, diners, home, the cell) and it goes in the bowl, and you flush. Anywhere else indoors the
-// staff throw you out; outside, a cop who sees it nicks you for public urination, and passers-by have a word.
+// Stand by a toilet (bars, diners, home, the cell) and it goes in the bowl, and you flush. Anywhere in a bar's or a
+// diner's bathroom is your own business; anywhere else indoors the staff throw you out; outside, a cop who sees it nicks you for public urination, and passers-by have a word.
 let pee = null; // { left: seconds of stream, t, at, loo: [x, y] or null, seen: when we last looked round, caught }
 const peeDrops = []; // { at, s, x, y, z, vx, vy, vz, t0 }: the stream, in flight, oldest first
 const puddles = []; // { at, s, x, y, z, area, life, seed }: area in square metres
@@ -36,7 +36,7 @@ function startPee() {
   if (at === null || !onFootMode()) return say('Not here.');
   if (body.seat) return say('Stand up first.');
   pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, loo: looNear(), seen: 0, caught: false }; // (a short one even with nothing in you)
-  say(pee.loo ? 'You use the toilet.' : needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
+  say(pee.loo ? 'You use the toilet.' : mode === 'room' && inWc(px, py) ? 'Not quite the toilet, but close enough.' : needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
 }
 
 function stepPee(dt) {
@@ -80,6 +80,7 @@ function peeWitness() {
   if (mode === 'room') {
     const k = room.def.keeper, kind = room.kind;
     if (kind === 'jail') { if (!pee.caught) { pee.caught = true; say('The guard bangs on the bars. "Use the toilet, animal."', 3); } return; }
+    if (inWc(px, py)) return; // in the bathroom: nobody's watching, and it's the right room at least
     if (!k || room.burgled || kind === 'home' || kind === 'loft' || kind === 'hotelroom') return; // (your own place, or nobody here: your own business)
     const there = loos().length ? ' The toilet\'s RIGHT THERE.' : '';
     pee = null; leaveRoom();

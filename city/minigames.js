@@ -224,11 +224,12 @@ GAMES.serve = (rnd = Math.random) => {
 // them. Hold SPACE to pour, let go when the mug's full (too soon and you keep pouring next time, too long and it
 // spills) and it slides down the bar. A customer who catches one is pushed back toward the door while they drink,
 // and may slide the empty back: be at that bar to catch it. A mug nobody catches, an empty you miss, a spill, or a
-// customer reaching your end: a mistake. Five and you're done; 75 seconds otherwise.
+// customer reaching your end: a mistake. Five and you're done; 75 seconds otherwise. Every proper pint served gets
+// you a little tip on top of the pay; let go early and a short pour still slides, and they drink it, but they don't tip
 GAMES.tapper = (rnd = Math.random) => {
   const W = 34, H = 12, LANES = [1, 4, 7, 10], g = { id: 'tapper', title: 'LAST ORDERS', W, H, score: 0, over: false, shift: true };
-  let lane = 0, cust = [], mugs = [], empties = [], misses = 0, t = 0, spawn = 1, fill = 0, pouring = false;
-  const FULL = [0.85, 1.15];
+  let lane = 0, cust = [], mugs = [], empties = [], misses = 0, t = 0, spawn = 1, fill = 0, pouring = false, tips = 0, pops = [];
+  const FULL = [0.85, 1.15], SHORT = 0.3; // a full pint; less than this and it's barely wet, so you keep pouring
   g.step = (dt, k) => {
     const ev = [];
     if (g.over) return ev;
@@ -241,6 +242,7 @@ GAMES.tapper = (rnd = Math.random) => {
     } else if (pouring) { // let go
       pouring = false;
       if (fill >= FULL[0] && fill <= FULL[1]) { mugs.push({ lane, x: 2 }); fill = 0; ev.push('slide'); }
+      else if (fill >= SHORT && fill < FULL[0]) { mugs.push({ lane, x: 2, short: true }); fill = 0; ev.push('slide'); } // (an underpour)
       else if (fill > FULL[1]) { fill = 0; misses++; ev.push('wrong'); }
     }
     if ((spawn -= dt) <= 0) { cust.push({ lane: rnd() * 4 | 0, x: W - 1, sp: 0.9 + rnd() * 0.6 + t * 0.015, drink: 0 }); spawn = Math.max(0.9, 2.6 - t * 0.022) * (0.7 + rnd() * 0.6); }
@@ -251,13 +253,19 @@ GAMES.tapper = (rnd = Math.random) => {
     for (const m of mugs) {
       m.x += 12 * dt;
       const c = cust.filter(o => o.lane === m.lane && o.drink <= 0 && o.x <= m.x + 0.5).sort((a_, b) => a_.x - b.x)[0];
-      if (c) { m.done = true; g.score++; ev.push('serve'); c.x += 7; c.drink = 1.6; if (c.x >= W - 1) c.gone = true; } // shoved back (out of the door, if far enough)
+      if (c) {
+        m.done = true; g.score++; ev.push('serve');
+        const tip = m.short ? 0 : Math.round((0.25 + rnd() * 0.5) * 20) / 20; // 25 to 75 cents for a proper pint
+        tips += tip; pops.push({ lane: m.lane, x: c.x, t: 1.2, txt: tip ? '+$' + tip.toFixed(2) : 'NO TIP' });
+        c.x += 7; c.drink = 1.6; if (c.x >= W - 1) c.gone = true; } // shoved back (out of the door, if far enough)
       else if (m.x >= W - 1) { m.done = true; misses++; ev.push('break'); }
     }
     for (const e of empties) {
       e.x -= 9 * dt;
       if (e.x <= 1.5) { e.done = true; if (e.lane === lane) { ev.push('place'); g.score += 0.5; } else { misses++; ev.push('break'); } }
     }
+    for (const q of pops) q.t -= dt;
+    pops = pops.filter(q => q.t > 0);
     mugs = mugs.filter(m => !m.done); empties = empties.filter(e => !e.done);
     for (const c of cust) if (c.x <= 2) { c.gone = true; misses++; ev.push('angry'); }
     cust = cust.filter(c => !c.gone);
@@ -274,12 +282,16 @@ GAMES.tapper = (rnd = Math.random) => {
     const y = LANES[lane], lvl = Math.min(3, Math.floor(fill * 3));
     if (fill > 0) put(2, y, fill > FULL[1] ? '%' : lvl >= 3 ? '@' : lvl >= 2 ? 'U' : lvl >= 1 ? 'u' : '_', fill > FULL[1] ? C(RED, 15) : fill >= FULL[0] ? C(WHITE, 15) : C(YEL, 13), C(YEL, 2 + lvl));
     for (const c of cust) put(Math.round(c.x), LANES[c.lane], c.drink > 0 ? 'Q' : 'o', C(YEL, 15), C(MAG, 3));
-    for (const m of mugs) put(Math.round(m.x), LANES[m.lane], 'U', C(YEL, 15), C(ORANGE, 3));
+    for (const m of mugs) put(Math.round(m.x), LANES[m.lane], m.short ? 'u' : 'U', C(YEL, m.short ? 11 : 15), C(ORANGE, 3)); // (a short one: no head on it)
+    for (const q of pops) for (let k = 0; k < q.txt.length; k++) { // the tip, floating up off the customer
+      const x = Math.round(q.x) - (q.txt.length >> 1) + k;
+      if (x > 1 && x < W) put(x, LANES[q.lane] - 1, q.txt[k], q.txt[0] === '+' ? C(GREEN, 15) : C(GRAY, 11));
+    }
     for (const e of empties) put(Math.round(e.x), LANES[e.lane], 'u', C(GRAY, 13), C(GRAY, 3));
   };
-  g.status = () => `SERVED ${Math.floor(g.score)}   MISTAKES ${misses}/5   ${Math.max(0, 75 - t) | 0}s   UP/DOWN bar, HOLD SPACE pour, let go to slide`;
-  g.reward = () => Math.max(0, Math.round((4 * Math.min(1, t / 75) + g.score * 1.3 - misses * 0.8) * 100) / 100);
-  g.state = () => ({ lane, fill, cust, mugs, empties, misses });
+  g.status = () => `SERVED ${Math.floor(g.score)}   TIPS $${tips.toFixed(2)}   MISTAKES ${misses}/5   ${Math.max(0, 75 - t) | 0}s   UP/DOWN bar, HOLD SPACE pour, let go to slide`;
+  g.reward = () => Math.max(0, Math.round((4 * Math.min(1, t / 75) + g.score * 1.3 - misses * 0.8) * 100) / 100) + Math.round(tips * 100) / 100; // (tips are yours whatever)
+  g.state = () => ({ lane, fill, cust, mugs, empties, misses, tips, pops });
   return g;
 };
 

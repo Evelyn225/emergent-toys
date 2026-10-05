@@ -112,8 +112,9 @@ function elGetOff() {
   say(`${s.name}`);
 }
 function enterRoom(kind, extra, spawn) {
-  fx.skating = false; // the board comes up under your arm at the door
+  fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
+  if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
 }
 function interact() {
@@ -182,7 +183,7 @@ function interact() {
       if (!pay(NURSE_FEE)) return say(`"Treatment's ${fmt$(NURSE_FEE)}, I'm afraid." You can't cover it.`, 3);
       needs.health = 100; return say('The nurse cleans you up, checks your eyes with a little light and sends you off with a lollipop. Good as new.', 4);
     }
-    if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
+    if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : room.line && say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
     return say('The way out is over by the door.', 2);
   }
@@ -299,6 +300,7 @@ function stepSleep(dt) {
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {
+  body.seat = null;
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
   else { [px, py, a] = room.ret; a += Math.PI; }

@@ -2168,16 +2168,26 @@ const luck = () => (carrying('jadebangle') ? 0.03 : 0) + (carrying('jadedragon')
 // the mouse (or a drag) swings it. A pendulum: len 0..1 of the string paid out, ang its swing from straight down
 // (round past the top is around the world), and when it hangs low enough it touches down and rolls along the
 // pavement (walk the dog). fx.yoyo is 1 while any of it is out of your hand
-const yoyo = { out: false, len: 0, ang: 0, angV: 0, spin: 0 };
+const yoyo = { out: false, len: 0, ang: 0, angV: 0, spin: 0, hx: 0, hy: 0, vx: 0, vy: 0 };
+const YOYO_HAND = 0.006; // how much the hand's acceleration (px/s²) swings it (rad/s²)
 function stepYoyo(dt) {
   yoyo.len = clamp(yoyo.len + (yoyo.out ? 4 : -3) * dt, 0, 1); // drops fast, climbs back a touch slower
+  if (dt > 0) { // the hand: its speed smoothed over a few frames (mouse events come in lumps), and the change in it
+    const k = Math.min(1, dt * 25), vx = yoyo.vx + (yoyo.hx / dt - yoyo.vx) * k, vy = yoyo.vy + (yoyo.hy / dt - yoyo.vy) * k;
+    const ax = clamp((vx - yoyo.vx) / dt, -2e4, 2e4), ay = clamp((vy - yoyo.vy) / dt, -2e4, 2e4);
+    yoyo.vx = vx; yoyo.vy = vy; yoyo.hx = yoyo.hy = 0;
+    if (yoyo.out) yoyo.angV = clamp(yoyo.angV - YOYO_HAND * (ax * Math.cos(yoyo.ang) - ay * Math.sin(yoyo.ang)) * dt, -14, 14);
+  }
   yoyo.angV += -9 * Math.sin(yoyo.ang) * yoyo.len * dt; yoyo.angV *= 1 - Math.min(1, 0.9 * dt); yoyo.ang += yoyo.angV * dt;
   yoyo.ang = mod(yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
   yoyo.spin += dt * (20 + Math.abs(yoyo.angV) * 6);
   if (!yoyo.out && yoyo.len === 0) { yoyo.ang = yoyo.angV = 0; }
   fx.yoyo = yoyo.len > 0 || yoyo.out ? 1 : 0;
 }
-const yoyoSwing = dx => { yoyo.angV = clamp(yoyo.angV + dx * 0.012, -14, 14); }; // a flick of the wrist
+// your hand, as the mouse (or a drag) moves it: (dx, dy) screen pixels, y down. stepYoyo turns that into how fast the
+// hand's moving and how hard it's speeding up, and that's what swings it: like a ball on a string, a jerk one way
+// throws it the other, and going round in small circles in time with it winds it up and over the top
+const yoyoSwing = (dx, dy = 0) => { yoyo.hx += dx; yoyo.hy += dy; };
 const BOOMBOX_SONGS = ['bossa', 'coffee', 'karaoke', 'arcade'], SONG_NAMES = { bossa: 'Bossa nova', coffee: 'Some cafe jazz', karaoke: 'Sweet Caroline', arcade: 'Arcade chiptunes' };
 // B with the boombox playing: on to the next tape, in order
 function nextSong() { fx.song = BOOMBOX_SONGS[(BOOMBOX_SONGS.indexOf(fx.song) + 1) % BOOMBOX_SONGS.length]; return SONG_NAMES[fx.song]; }
@@ -2284,7 +2294,7 @@ function useHeld(near) {
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), null];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
-    case 'yoyo': yoyo.out = !yoyo.out; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Swing it with the mouse: let it touch down to walk the dog, swing hard to go around the world.' : 'You reel it back in.', 'whirr'];
+    case 'yoyo': yoyo.out = !yoyo.out; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Swing it with the mouse: let it touch down to walk the dog, or go round in little circles to send it around the world.' : 'You reel it back in.', 'whirr'];
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something
         near.person.talk = 4;
@@ -2668,11 +2678,12 @@ GAMES.serve = (rnd = Math.random) => {
 // them. Hold SPACE to pour, let go when the mug's full (too soon and you keep pouring next time, too long and it
 // spills) and it slides down the bar. A customer who catches one is pushed back toward the door while they drink,
 // and may slide the empty back: be at that bar to catch it. A mug nobody catches, an empty you miss, a spill, or a
-// customer reaching your end: a mistake. Five and you're done; 75 seconds otherwise.
+// customer reaching your end: a mistake. Five and you're done; 75 seconds otherwise. Every proper pint served gets
+// you a little tip on top of the pay; let go early and a short pour still slides, and they drink it, but they don't tip
 GAMES.tapper = (rnd = Math.random) => {
   const W = 34, H = 12, LANES = [1, 4, 7, 10], g = { id: 'tapper', title: 'LAST ORDERS', W, H, score: 0, over: false, shift: true };
-  let lane = 0, cust = [], mugs = [], empties = [], misses = 0, t = 0, spawn = 1, fill = 0, pouring = false;
-  const FULL = [0.85, 1.15];
+  let lane = 0, cust = [], mugs = [], empties = [], misses = 0, t = 0, spawn = 1, fill = 0, pouring = false, tips = 0, pops = [];
+  const FULL = [0.85, 1.15], SHORT = 0.3; // a full pint; less than this and it's barely wet, so you keep pouring
   g.step = (dt, k) => {
     const ev = [];
     if (g.over) return ev;
@@ -2685,6 +2696,7 @@ GAMES.tapper = (rnd = Math.random) => {
     } else if (pouring) { // let go
       pouring = false;
       if (fill >= FULL[0] && fill <= FULL[1]) { mugs.push({ lane, x: 2 }); fill = 0; ev.push('slide'); }
+      else if (fill >= SHORT && fill < FULL[0]) { mugs.push({ lane, x: 2, short: true }); fill = 0; ev.push('slide'); } // (an underpour)
       else if (fill > FULL[1]) { fill = 0; misses++; ev.push('wrong'); }
     }
     if ((spawn -= dt) <= 0) { cust.push({ lane: rnd() * 4 | 0, x: W - 1, sp: 0.9 + rnd() * 0.6 + t * 0.015, drink: 0 }); spawn = Math.max(0.9, 2.6 - t * 0.022) * (0.7 + rnd() * 0.6); }
@@ -2695,13 +2707,19 @@ GAMES.tapper = (rnd = Math.random) => {
     for (const m of mugs) {
       m.x += 12 * dt;
       const c = cust.filter(o => o.lane === m.lane && o.drink <= 0 && o.x <= m.x + 0.5).sort((a_, b) => a_.x - b.x)[0];
-      if (c) { m.done = true; g.score++; ev.push('serve'); c.x += 7; c.drink = 1.6; if (c.x >= W - 1) c.gone = true; } // shoved back (out of the door, if far enough)
+      if (c) {
+        m.done = true; g.score++; ev.push('serve');
+        const tip = m.short ? 0 : Math.round((0.25 + rnd() * 0.5) * 20) / 20; // 25 to 75 cents for a proper pint
+        tips += tip; pops.push({ lane: m.lane, x: c.x, t: 1.2, txt: tip ? '+$' + tip.toFixed(2) : 'NO TIP' });
+        c.x += 7; c.drink = 1.6; if (c.x >= W - 1) c.gone = true; } // shoved back (out of the door, if far enough)
       else if (m.x >= W - 1) { m.done = true; misses++; ev.push('break'); }
     }
     for (const e of empties) {
       e.x -= 9 * dt;
       if (e.x <= 1.5) { e.done = true; if (e.lane === lane) { ev.push('place'); g.score += 0.5; } else { misses++; ev.push('break'); } }
     }
+    for (const q of pops) q.t -= dt;
+    pops = pops.filter(q => q.t > 0);
     mugs = mugs.filter(m => !m.done); empties = empties.filter(e => !e.done);
     for (const c of cust) if (c.x <= 2) { c.gone = true; misses++; ev.push('angry'); }
     cust = cust.filter(c => !c.gone);
@@ -2718,12 +2736,16 @@ GAMES.tapper = (rnd = Math.random) => {
     const y = LANES[lane], lvl = Math.min(3, Math.floor(fill * 3));
     if (fill > 0) put(2, y, fill > FULL[1] ? '%' : lvl >= 3 ? '@' : lvl >= 2 ? 'U' : lvl >= 1 ? 'u' : '_', fill > FULL[1] ? C(RED, 15) : fill >= FULL[0] ? C(WHITE, 15) : C(YEL, 13), C(YEL, 2 + lvl));
     for (const c of cust) put(Math.round(c.x), LANES[c.lane], c.drink > 0 ? 'Q' : 'o', C(YEL, 15), C(MAG, 3));
-    for (const m of mugs) put(Math.round(m.x), LANES[m.lane], 'U', C(YEL, 15), C(ORANGE, 3));
+    for (const m of mugs) put(Math.round(m.x), LANES[m.lane], m.short ? 'u' : 'U', C(YEL, m.short ? 11 : 15), C(ORANGE, 3)); // (a short one: no head on it)
+    for (const q of pops) for (let k = 0; k < q.txt.length; k++) { // the tip, floating up off the customer
+      const x = Math.round(q.x) - (q.txt.length >> 1) + k;
+      if (x > 1 && x < W) put(x, LANES[q.lane] - 1, q.txt[k], q.txt[0] === '+' ? C(GREEN, 15) : C(GRAY, 11));
+    }
     for (const e of empties) put(Math.round(e.x), LANES[e.lane], 'u', C(GRAY, 13), C(GRAY, 3));
   };
-  g.status = () => `SERVED ${Math.floor(g.score)}   MISTAKES ${misses}/5   ${Math.max(0, 75 - t) | 0}s   UP/DOWN bar, HOLD SPACE pour, let go to slide`;
-  g.reward = () => Math.max(0, Math.round((4 * Math.min(1, t / 75) + g.score * 1.3 - misses * 0.8) * 100) / 100);
-  g.state = () => ({ lane, fill, cust, mugs, empties, misses });
+  g.status = () => `SERVED ${Math.floor(g.score)}   TIPS $${tips.toFixed(2)}   MISTAKES ${misses}/5   ${Math.max(0, 75 - t) | 0}s   UP/DOWN bar, HOLD SPACE pour, let go to slide`;
+  g.reward = () => Math.max(0, Math.round((4 * Math.min(1, t / 75) + g.score * 1.3 - misses * 0.8) * 100) / 100) + Math.round(tips * 100) / 100; // (tips are yours whatever)
+  g.state = () => ({ lane, fill, cust, mugs, empties, misses, tips, pops });
   return g;
 };
 
@@ -6434,11 +6456,6 @@ const toilet = (x, y, back = -1, mat = steel) => [
     if (swirl) { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, '@*o~'[(Math.floor(Math.atan2(HIT.v, HIT.u) * 2 + T * 12) & 3)], C(CYAN, L * 1.3)), true; }
     BG[i] = C(BLUE, 1.4 + L * 0.15); return set(i, e < 0.3 && hash(Math.floor(T * 2), 1, 15) > 0.6 ? '~' : ' ', C(CYAN, L)), true;
   }), loo: [x, y + back * 0.04] }];
-// a toilet with a partition either side of it, for a bar or a diner (no door: this isn't that kind of place)
-const stall = (x, y, back) => {
-  const panel = solid(BRICK, { panel: 0.3, top: '=' });
-  return [...toilet(x, y, back, porcelain), BX(x - 0.55, y + back * 0.1, 0.55, 0.03, 0, 1.8, panel, 0, 1), BX(x + 0.55, y + back * 0.1, 0.55, 0.03, 0, 1.8, panel, 0, 1)];
-};
 function jailProps(r) {
   const p = [];
   for (const cx of [4, 11, 18]) { // the three cells on your side (yours is the middle) and the three across
@@ -6557,6 +6574,9 @@ ROOM_FOR.HOSPITAL = 'hospital';
 ROOM_FOR.CARS = 'showroom'; ROOM_FOR.REALTY = 'realty';
 ROOM_FOR.STORAGE = 'storage';
 
+// a room's bathroom (def.wc): its own little room off the floor, 'W' walls round it with a doorway, white tiles inside.
+// sign: the wall cell the WC sign goes on (mx, my) and where along it
+const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && y >= w.y0 && y < w.y1;
 const roomAt = (x, y) => x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x];
 // props
 const SP = (x, y, w, h, art, col, z = 0) => ({ x, y, w, h, art, col, z });
@@ -6681,16 +6701,16 @@ const ROOM_DEFS = {
   store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
     light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, posters: true, keeper: [5, 1.05],
     props: r => [...counterBox(5, 1.7, 1.6), standing(5, 1.05, r.neon)] },
-  bar: { grid: boxRoom(12, 8), light: 0.6, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, neon: true, glyphs: 'il!Y', keeper: [6, 1.1],
+  bar: { grid: boxRoom(12, 8, { '1,4': 'W', '3,4': 'W', '3,5': 'W', '3,6': 'W' }), wc: { x0: 1, y0: 5, x1: 3, y1: 7, sign: [1, 4, 1.5] }, light: 0.6, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, neon: true, glyphs: 'il!Y', keeper: [6, 1.1],
     props: r => {
       const p = [...counterBox(6, 1.8, 4, 1.1), standing(6, 1.1, r.neon),
-                 SP(10.6, 5.5, 0.9, 1.5, ART.jukebox, (c, row, L) => C(NEON[(row + (T * 2 | 0)) & 3], 14)), ...stall(1.6, 6.4, 1)];
+                 SP(10.6, 5.5, 0.9, 1.5, ART.jukebox, (c, row, L) => C(NEON[(row + (T * 2 | 0)) & 3], 14)), ...toilet(1.6, 6.4, 1, porcelain)];
       for (let x = 3; x <= 9; x += 1.5) { p.push(SP(x, 2.65, 0.4, 0.75, ART.stool, wood)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.45, true)); }
       return p;
     } },
-  diner: { grid: boxRoom(12, 8), light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, 1.1], wall: dinerWall,
+  diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, 1.1], wall: dinerWall,
     props: r => {
-      const p = [...counterBox(6, 1.75, 2), standing(6, 1.1, WHITE), ...stall(1.6, 1.55, -1)];
+      const p = [...counterBox(6, 1.75, 2), standing(6, 1.1, WHITE), ...toilet(1.6, 1.4, -1, porcelain)];
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
         for (const s of [-0.95, 0.95]) { p.push(SP(x + s, y, 0.4, 0.75, ART.stool, wood)); if (chance(0.4)) p.push(sitting(x + s, y - 0.02, shirt())); }
@@ -6807,7 +6827,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [];
       for (const x of [3, 8, 13, 18]) for (const y of [1.3, 3.7]) {
-        p.push(BX(x, y, 1.8, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), BX(x, y < 2 ? y - 0.28 : y + 0.28, 1.8, 0.05, 0.45, 0.95, solid(BLUE, { panel: 0.9 })));
+        p.push({ ...BX(x, y, 1.8, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), seatRow: { x0: x - 1.55, x1: x + 1.55, y, fx: 0, fy: y < 2 ? 1 : -1 } }, BX(x, y < 2 ? y - 0.28 : y + 0.28, 1.8, 0.05, 0.45, 0.95, solid(BLUE, { panel: 0.9 })));
         if (chance(0.35)) p.push(sitting(x - 1 + Math.random() * 2, y + (y < 2 ? 0.03 : -0.03), shirt(), 0.3));
       }
       for (const x of [5.5, 10.5, 15.5]) p.push(SP(x, 2.5, 0.1, 3, ART.pole, (c, row, L) => C(WHITE, L)));
@@ -7211,6 +7231,20 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
   if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
+  if (D.wc && inWc(px, py)) { // in the bathroom: white tiles all round, a mirror over where the basin would be
+    const w = D.wc;
+    if (mx >= w.x0 - 1 && mx <= w.x1 && my >= w.y0 - 1 && my <= w.y1) {
+      BG[i] = C(WHITE, (0.9 + L * 0.12) * (side ? 0.8 : 1));
+      return set(i, fract(z / 0.3) < 0.12 ? '-' : fract(u / 0.3) < 0.1 ? '|' : ' ', C(WHITE, L * 0.8));
+    }
+  }
+  if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: a plain wall, the WC sign by the doorway
+    const [sx, sy, su] = D.wc.sign; // (u runs whichever way reads left to right, so it's negative from some sides)
+    if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
+    if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
+    if (z < 0.95) return set(i, '=', C(GRAY, L));
+    return set(i, '.', C(GRAY, L * 0.3));
+  }
   if (D.sign && my === 0 && wallText(i, u, uStep, z, d, R.word, D.signAt ?? R.W / 2, 2.45, 0.4, 0.3, C(R.neon, 15))) return;
   if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
   if (c === 'S' || D.shelves && my === 0 && z < 2) { // shelves: islands, and along the back wall
@@ -7231,6 +7265,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
   ZB[i] = d; FL[i] = 1;
+  if (room.def.wc && inWc(wx, wy)) { BG[i] = C(WHITE, 1 + L * 0.2); return set(i, fract(wx * 3) < 0.1 || fract(wy * 3) < 0.1 ? '+' : ' ', C(GRAY, L)); } // bathroom tiles
   switch (room.def.floor) {
     case 'wood': return set(i, fract(wy * 3) < 0.12 ? '=' : (r + x) & 1 ? '.' : ' ', C(BRICK, L * 1.3));
     case 'carpet': { const h = hash(Math.floor(wx * 3), Math.floor(wy * 3), 77); return set(i, h > 0.85 ? '*' : h > 0.7 ? '+' : h > 0.55 ? '.' : ' ', C(NEON[h * 40 & 3], L * 2.5)); }
@@ -9575,8 +9610,8 @@ function promptText() {
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hospital' && nearKeeper() && needs.health < 95) return `E: get patched up (${fmt$(NURSE_FEE)})`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
-    if (nearKeeper() && stockFor(room.kind, room.word).length) return `"${room.line}"   E: shop`;
-    if (nearKeeper()) return `"${room.line}"`;
+    if (nearKeeper() && stockFor(room.kind, room.word).length) return room.line ? `"${room.line}"   E: shop` : 'E: shop';
+    if (nearKeeper() && room.line) return `"${room.line}"`;
     if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
     return '';
   }
@@ -9875,8 +9910,9 @@ function elGetOff() {
   say(`${s.name}`);
 }
 function enterRoom(kind, extra, spawn) {
-  fx.skating = false; // the board comes up under your arm at the door
+  fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
+  if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
 }
 function interact() {
@@ -9945,7 +9981,7 @@ function interact() {
       if (!pay(NURSE_FEE)) return say(`"Treatment's ${fmt$(NURSE_FEE)}, I'm afraid." You can't cover it.`, 3);
       needs.health = 100; return say('The nurse cleans you up, checks your eyes with a little light and sends you off with a lollipop. Good as new.', 4);
     }
-    if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : say(`"${room.line}"`); }
+    if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : room.line && say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
     return say('The way out is over by the door.', 2);
   }
@@ -10062,6 +10098,7 @@ function stepSleep(dt) {
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {
+  body.seat = null;
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
   else { [px, py, a] = room.ret; a += Math.PI; }
@@ -12683,8 +12720,8 @@ function hazeCell(i, dens, kind) {
 // bending it down either way. A yellow puddle spreads where it lands, then
 // dries up over a few minutes (quicker in the rain, slower indoors). How long you go is down to the bladder
 // (needs.js), which nothing shows and nothing ever makes you empty. P again cuts it off.
-// Stand by a toilet (bars, diners, home, the cell) and it goes in the bowl, and you flush. Anywhere else indoors the
-// staff throw you out; outside, a cop who sees it nicks you for public urination, and passers-by have a word.
+// Stand by a toilet (bars, diners, home, the cell) and it goes in the bowl, and you flush. Anywhere in a bar's or a
+// diner's bathroom is your own business; anywhere else indoors the staff throw you out; outside, a cop who sees it nicks you for public urination, and passers-by have a word.
 let pee = null; // { left: seconds of stream, t, at, loo: [x, y] or null, seen: when we last looked round, caught }
 const peeDrops = []; // { at, s, x, y, z, vx, vy, vz, t0 }: the stream, in flight, oldest first
 const puddles = []; // { at, s, x, y, z, area, life, seed }: area in square metres
@@ -12716,7 +12753,7 @@ function startPee() {
   if (at === null || !onFootMode()) return say('Not here.');
   if (body.seat) return say('Stand up first.');
   pee = { left: 1.5 + needs.bladder / 100 * 11, t: 0, at, loo: looNear(), seen: 0, caught: false }; // (a short one even with nothing in you)
-  say(pee.loo ? 'You use the toilet.' : needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
+  say(pee.loo ? 'You use the toilet.' : mode === 'room' && inWc(px, py) ? 'Not quite the toilet, but close enough.' : needs.bladder > 80 ? 'Ahh. That\'s better.' : needs.bladder < 15 ? 'You squeeze out what you can.' : 'You relieve yourself.', 2);
 }
 
 function stepPee(dt) {
@@ -12760,6 +12797,7 @@ function peeWitness() {
   if (mode === 'room') {
     const k = room.def.keeper, kind = room.kind;
     if (kind === 'jail') { if (!pee.caught) { pee.caught = true; say('The guard bangs on the bars. "Use the toilet, animal."', 3); } return; }
+    if (inWc(px, py)) return; // in the bathroom: nobody's watching, and it's the right room at least
     if (!k || room.burgled || kind === 'home' || kind === 'loft' || kind === 'hotelroom') return; // (your own place, or nobody here: your own business)
     const there = loos().length ? ' The toilet\'s RIGHT THERE.' : '';
     pee = null; leaveRoom();
@@ -13415,9 +13453,11 @@ function nearSeat() {
   if (mode === 'room') {
     let best = null, bd = 1.1;
     for (const s of room.props) {
-      const r = s.seatRow, sx = r ? clamp(px, r.x0, r.x1) : s.x, sy = r ? r.y : s.y;
+      const r = s.seatRow, sy = r ? r.y : s.y;
       if (!s.bench && !r) continue;
-      const d = Math.hypot(sx - px, sy - py);
+      const sx = r ? freeOnRow(r) : s.x;
+      if (sx == null) continue; // (a full bench)
+      const d = Math.hypot((r ? clamp(px, r.x0, r.x1) : sx) - px, sy - py); // (how near the bench is: a step along it to a free spot doesn't count)
       if (d < bd) { bd = d; best = { x: sx, y: sy, fx: r ? r.fx : s.fx, fy: r ? r.fy : s.fy }; }
     }
     return best;
@@ -13427,6 +13467,15 @@ function nearSeat() {
   for (const b of benchesB[bi(Math.floor(px / 8), Math.floor(py / 8))]) { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); if (d < bd) { bd = d; best = b; } }
   if (!best && gardenLawn(px, py)) best = { x: px, y: py, fx: Math.cos(a), fy: Math.sin(a), grass: true }; // down on the grass, facing where you were
   return best;
+}
+// where along a row of seats (a bench on the subway, the cinema's) you'd sit: nearest you, but not in somebody's lap
+function freeOnRow(r) {
+  const took = room.props.filter(o => (o.art === ART.sitter || o.art === ART.sitterBack) && Math.abs(o.y - r.y) < 0.3 && o.x > r.x0 - 0.6 && o.x < r.x1 + 0.6).map(o => o.x);
+  const ok = x => x >= r.x0 - 1e-6 && x <= r.x1 + 1e-6 && took.every(t => Math.abs(t - x) >= 0.55 - 1e-6);
+  const want = clamp(px, r.x0, r.x1);
+  if (ok(want)) return want;
+  const opts = took.flatMap(t => [t - 0.55, t + 0.55]).filter(ok);
+  return opts.length ? opts.reduce((m, x) => Math.abs(x - want) < Math.abs(m - want) ? x : m) : null;
 }
 function sitDown() {
   const s = nearSeat();
@@ -13677,7 +13726,7 @@ const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 function turnBy(mx, my) {
   if (paused || game) return;
   const s = settings.sensitivity;
-  if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s); // the yo-yo's out: the mouse swings it, the view holds still
+  if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
@@ -13755,7 +13804,7 @@ function loop(t) {
   if (sleep) stepSleep(dt);
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
-    if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyoSwing(((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 600 * dt); // (arrows swing it too)
+    if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.5 : 1); // sprint 29 km/h (43 on the board), cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
