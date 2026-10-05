@@ -29,10 +29,14 @@ The ones that would add the most for the least, roughly in order. Each builds on
 - Hook: a stagehand shift (pull ropes on cue, a rhythm game), and crowds pouring out at 10:30pm: prime pickpocket time.
 
 ### University Hill
-- Campus quad, ivy on brick, a clock tower that chimes the hour.
-- Buildings: library (quiet zone: you get shushed for running), lecture hall to sneak into, cheap noodle place, dorms,
-  observatory.
-- Hook: tutoring gigs as tasks; on clear nights the observatory telescope shows an ASCII moon and stars.
+- A walkable campus green with cross-cutting paths, benches, a notice board and brick halls around it; ivy and flyers
+  make the blocks read differently from the surrounding streets. A clocktower chimes the hour and helps orient you.
+- Buildings: a library (quiet zone: running gets you shushed), a lecture hall you can sneak into, a cheap canteen,
+  student housing and a small observatory.
+- Hooks: take short errands from the notice board, help a student prep for an exam, or sit in on a lecture. On clear
+  nights, the observatory telescope gives a close ASCII view of the moon and stars.
+- Sound and crowd rhythm: footsteps and low conversation on the green; students arrive between classes and thin out
+  late at night. Keep the first version to one signature interior (the library or observatory) and one activity.
 
 ### The Strip / Neon Row
 - The rowdiest part of town: strip-mall casinos, pawn shops, 24hr everything.
@@ -76,6 +80,43 @@ The levers the engine already has, so a new district can pull every one of them:
 - **Sound**: its own ambience bed and music (audio-mix.js).
 - **People**: what they say (talk.js DISTRICT_LINES), how they dress, how many are about and when.
 - **One signature building** with a real interior, and **one thing to do** there you can't do anywhere else.
+
+## Architecture-forward district concepts
+
+These aim to change the skyline and the shape of the street walls, not just swap facade colours. The roads can stay on
+the current grid for the first version; distinctive rooflines and a few landmark buildings would do most of the work.
+
+### Belle Époque / Art Nouveau quarter — strongest balanced choice
+- Make the streets themselves the feature; skip another glass-roofed arcade, since the Shotengai already has one.
+  Think turn-of-the-century boulevard buildings: pale limestone, warm brick, oxidized-copper details, arched entries,
+  carved lintels, iron balconies with plant-like curves, and tall narrow window bays.
+- Break the roofline in a recognizable rhythm: mansards with dormers on ordinary buildings; rounded corner bays and
+  small turrets at intersections; larger copper domes and sculpted roof crests on a few landmarks. Vary building
+  heights so the district doesn't become a uniform row of decorated boxes.
+- Street details: ornate cast-iron lamps, kiosk-sized flower and newspaper stands, cafe awnings, and a few tiled
+  entrance floors visible through open doors. Use a restrained palette so the silhouette and details carry the style.
+- Landmark: an old grand hotel on a prominent corner, with a domed roof, deep entrance canopy, mosaic lobby and
+  upstairs ballroom. It feels different from the existing arcade and gives the district a memorable destination.
+- Activity: help the hotel prepare for a recurring evening event: deliver invitations, find a missing item, then see
+  guests arrive under the lit canopy. Piano and ballroom crowd sounds can make the block change after dark.
+- Build it in layers: first the facade and repeatable roof forms, then the hotel exterior/interior, then its event.
+  Even before the activity exists, the new roofline should be visible from nearby blocks and rooftops.
+
+### Gothic Quarter / Cathedral Close — strongest dramatic skyline
+- Narrow stone fronts with steep pointed gables, lancet windows, flying buttresses and little spires; the cathedral's
+  twin towers mark the district from a distance. A cloister courtyard gives it an open space without another park.
+- Landmark: a cathedral interior with a rose window, candle rows and a bell tower you can climb. Small bookbinders,
+  a print shop and a quiet tea room fill the surrounding lanes.
+- Signature activity: light candles for a small request, then return later to see the votive wall fill up; bells and
+  the organ make the district sound different too.
+- Visual scope: keep the side streets mostly straight, but use stepped gables, arches and buttress props to interrupt
+  the flat roofline. The cathedral can use a bespoke silhouette.
+
+### Canals — most different street layout, highest engine cost
+- This is already sketched below. Its narrow gabled houses, arched bridges, roof terraces and reflected lamps would
+  make a very distinctive skyline, while the water streets and boat travel would need the most world changes.
+- A smaller first pass could put a canal and two bridges inside one superblock, with gabled facades and a waterside
+  market, before making an entire neighborhood use canals.
 
 ## More district concepts, with flavour first
 
