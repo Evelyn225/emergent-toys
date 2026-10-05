@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Glyphport",
+  "version": "1.0.0",
+  "identifier": "fun.evenet.glyphport",
+  "build": {
+    "frontendDist": "../desktop-dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Glyphport",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "center": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["../images/favicon.ico"],
+    "shortDescription": "Walk, drive and get into trouble in a harbour city drawn in text.",
+    "category": "Game",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

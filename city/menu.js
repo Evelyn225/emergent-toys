@@ -1,9 +1,7 @@
 // ===== the look shared by every menu (pause, shops, carrying, storage): W95 text on near-black, no boxes, a caret
 // for the row you're on, sliders drawn as an ASCII density ramp. Injected once, used through the .menu class.
-const MENU_FONT = 'https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/';
 const MENU_CSS = `
-  @font-face { font-family: 'W95'; src: url('w95font.woff2') format('woff2'), url('w95font.woff') format('woff'),
-    url('${MENU_FONT}w95font.woff2') format('woff2'); }
+  @font-face { font-family: 'W95'; src: url('w95font.woff2') format('woff2'), url('w95font.woff') format('woff'); }
   .menu { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.72);
           font: 16px/1.4 'W95', monospace; color: rgba(255, 255, 255, 0.6); }
   .menu .panel { width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box;

@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node server.cjs",
     "build": "node tools/build.cjs && node tools/build-city.cjs",
+    "build:desktop": "npm run build && node tools/prepare-desktop.cjs",
+    "desktop:build": "npm run build:desktop && cargo tauri build",
     "test": "node --test test/*.cjs",
     "test:browser": "node --test test/browser/*.browser.test.cjs",
     "test:all": "npm test && npm run test:browser"

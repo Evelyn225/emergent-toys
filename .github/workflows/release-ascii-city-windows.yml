@@ -1,0 +1,46 @@
+name: Glyphport Windows release
+
+on:
+  push:
+    tags:
+      - 'ascii-city-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: npm ci
+      - run: npm run build:desktop
+
+      - name: Install NSIS
+        run: choco install nsis --yes --no-progress
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version '^2.0' --locked
+
+      - name: Build installer
+        run: cargo tauri build
+
+      - name: Prepare stable download name
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'Tauri did not produce an NSIS installer' }
+          Copy-Item -LiteralPath $installer.FullName -Destination 'src-tauri/target/release/bundle/nsis/Glyphport-Setup.exe'
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$env:GITHUB_REF_NAME" "src-tauri/target/release/bundle/nsis/Glyphport-Setup.exe" --generate-notes

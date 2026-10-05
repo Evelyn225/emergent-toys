@@ -2,6 +2,9 @@
 // settings, which apply as you change them and are kept in localStorage.
 const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigger characters, fewer of them, faster
 let pauseEl = null;
+const GLYPHPORT_DESKTOP_APP = Boolean(window.__GLYPHPORT_DESKTOP__);
+const MOBILE_BROWSER = navigator.userAgentData?.mobile || /Android|iPhone|iPod|iPad|Mobile/i.test(navigator.userAgent) ||
+  (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
 function applySettings() {
   FOV = settings.fov * Math.PI / 180;
@@ -20,6 +23,7 @@ function buildPause() {
       <button class="item" data-act="map">Map of the city</button>
       <button class="item" data-act="newgame">Start over</button>
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
+      <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/Glyphport-Setup.exe" target="_blank" rel="noopener" style="display:${!GLYPHPORT_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
@@ -45,6 +49,7 @@ function buildPause() {
       <a class="item" href="index.html">Quit to Eve Net</a>
     </div>`);
   const RANGE = { fov: [50, 100], sensitivity: [0.25, 3] };
+  if (GLYPHPORT_DESKTOP_APP) el.querySelector('a[href="index.html"]').hidden = true;
   const show = () => {
     for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
@@ -82,7 +87,7 @@ function openPause() {
   pauseEl = pauseEl || buildPause();
   paused = true;
   for (const k in K) K[k] = 0; // nothing held down while we're away
-  pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = 'block'; // the way home: only while paused
+  pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
   if (document.pointerLockElement) document.exitPointerLock();
   if (actx) master.gain.setTargetAtTime(0, actx.currentTime, 0.15);
   pauseEl.querySelector('[data-act="resume"]').focus();

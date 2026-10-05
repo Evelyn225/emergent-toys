@@ -9,10 +9,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Glyphport">
   <link rel="apple-touch-icon" sizes="180x180" href="images/ascii-city-180.png">
-  <link rel="icon" type="image/png" sizes="32x32"
-    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16"
-    href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
   <link rel="manifest" href="ascii-city.webmanifest">
   <title>Glyphport</title>
   <style>
@@ -30,14 +28,14 @@
   onmouseout="this.style.transform='scale(1)'"
   onmousedown="this.style.transform='scale(0.95)'"
   onmouseup="this.style.transform='scale(1.2)'">
-  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+  <img src="images/go-home.png"
        alt="home" style="width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; display: block;">
 </a>
 <canvas id="c"></canvas>
 <script src="ascii-city.bundle.js"></script>
 <script>
   // installable as an app (Chrome's "Install app" / "Add to Home screen"), and it opens offline once it has been played
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('ascii-city-sw.js', { scope: 'ascii-city' }).catch(() => {});
+  if (!window.__GLYPHPORT_DESKTOP__ && 'serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('ascii-city-sw.js', { scope: 'ascii-city' }).catch(() => {});
 </script>
 </body>
 </html>

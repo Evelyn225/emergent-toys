@@ -21,6 +21,8 @@ CLAUDE.md
 # Build and distribution
 dist/
 build/
+desktop-dist/
+src-tauri/target/
 *.log
 
 # Temporary files

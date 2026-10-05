@@ -1,0 +1,12 @@
+[package]
+name = "glyphport"
+version = "1.0.0"
+description = "Glyphport ASCII City desktop game"
+authors = ["Eve Net"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2" }
