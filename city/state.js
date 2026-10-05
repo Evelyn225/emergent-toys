@@ -2,7 +2,7 @@
 let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
 let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0, lookT = 0;
 let dayNum = 4; // days since a Monday: you arrive on a Friday evening (events.js)
-let T = 0, tod = 20, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0, storm = 0, snow = 0, snowCover = 0; // snow: falling now (0..1); snowCover: lying on the ground
+let T = 0, tod = 9, weather = 'clear', wTimer = 90, rain = 0, fogAmt = 0, wet = 0, storm = 0, snow = 0, snowCover = 0; // snow: falling now (0..1); snowCover: lying on the ground
 let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
 let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)

@@ -287,16 +287,16 @@ function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
     const streak = fract((u + z) * 0.35) < 0.025 && hash(Math.floor((u + z) * 0.35), 7, 866) > 0.5;
     if (streak) return set(i, '/', C(WHITE, 8)), true;
     const [gsu, gsz] = glassSlopes(su, z), desert = px < 13;
-    // Keep the plants behind the glass as a distant backdrop; several parallax layers made the trees jump as you looked around.
-    for (const q of [7.5]) {
-      const lu = u + gsu * q, lz = z + gsz * q, slot = Math.floor(lu / 1.8), c = (slot + 0.3 + hash(slot, q, 867) * 0.4) * 1.8, fade = 1 - q / 14;
+    // The tropical house reads as a deeper, steadier backdrop; full sideways parallax made the tall palms skew as you moved.
+    for (const q of [1.5, 4, 7.5]) {
+      const lu = u + gsu * q * (desert ? 1 : 0.45), lz = z + gsz * q, slot = Math.floor(lu / 1.8), c = (slot + 0.3 + hash(slot, q, 867) * 0.4) * 1.8, fade = 1 - q / 14;
       if (lz < 0) { BG[i] = desert ? C(YEL, 3 + day * 2) : C(GREEN, 1.5); return set(i, desert ? (Math.floor(lu * 4) + Math.floor(q)) % 7 ? ' ' : '.' : ',', C(desert ? WARM : GREEN, 6 * fade)), true; } // the ground
       if (hash(slot, q, 868) < 0.35) continue;
       if (desert) { // a saguaro: a trunk, and an arm or two
         const tall = 1.6 + hash(slot, q, 869) * 2, dx_ = lu - c, arm = Math.abs(dx_) > 0.1 && Math.abs(dx_) < 0.45 && (Math.abs(lz - tall * 0.55) < 0.08 && Math.sign(dx_) === (slot & 1 ? 1 : -1) || Math.abs(Math.abs(dx_) - 0.4) < 0.07 && lz > tall * 0.55 && lz < tall * 0.8 && Math.sign(dx_) === (slot & 1 ? 1 : -1));
         if (Math.abs(dx_) < 0.13 && lz < tall || arm) { BG[i] = C(GREEN, 2 * fade); return set(i, Math.abs(dx_) < 0.04 ? ':' : '|', C(GREEN, 9 * fade)), true; }
       } else { // a palm: a leaning trunk, a crown of fronds
-        const tall = 3 + hash(slot, q, 869) * 3, lean = (lz / tall) * 0.4 * (slot & 1 ? 1 : -1);
+        const tall = 3 + hash(slot, q, 869) * 3, lean = (lz / tall) * 0.12 * (slot & 1 ? 1 : -1);
         if (Math.hypot((lu - c - lean) * 0.8, lz - tall) < 0.9 + 0.4 * noise(lu * 3, lz * 3, 870)) { BG[i] = C(GREEN, 2.5 * fade); return set(i, noise(lu * 9, lz * 9, 871) > 0.5 ? '%' : '"', C(GREEN, 10 * fade)), true; }
         if (Math.abs(lu - c - lean) < 0.1 && lz < tall) return set(i, '|', C(BRICK, 9 * fade)), true;
       }
