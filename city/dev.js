@@ -150,7 +150,7 @@ function openDev() {
   }
   if (pauseEl && pauseEl.style.display === 'flex') closePause(false);
   paused = true; for (const k in K) K[k] = 0;
-  if (document.pointerLockElement) document.exitPointerLock();
+  releaseMouse();
   devEl.style.display = 'flex'; renderDev();
 }
 function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = false; lockMouse(); }

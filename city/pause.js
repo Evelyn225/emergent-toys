@@ -88,7 +88,7 @@ function openPause() {
   paused = true;
   for (const k in K) K[k] = 0; // nothing held down while we're away
   pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
-  if (document.pointerLockElement) document.exitPointerLock();
+  releaseMouse();
   if (actx) master.gain.setTargetAtTime(0, actx.currentTime, 0.15);
   pauseEl.querySelector('[data-act="resume"]').focus();
 }

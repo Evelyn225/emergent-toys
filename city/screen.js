@@ -149,10 +149,31 @@ function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the 
 
 // a phone or tablet: no mouse to lock, touch controls instead (touch.js)
 const TOUCH = matchMedia('(pointer: coarse)').matches; // (primary pointer a finger: not a touchscreen laptop with a mouse)
+const NATIVE_MOUSE_APP = Boolean(window.__GLYPHPORT_DESKTOP__ && window.__TAURI__?.core?.invoke);
+let desktopMouseCaptured = false;
+let desktopMouseFallback = false;
 // on a touch screen the buttons say what they do, so "E: talk" reads "talk" and "1: Canal St" just "Canal St"
 const keyless = s => TOUCH ? s.replace(/(^|\s)[A-Z0-9](?: \(([^)]*)\))?: /g, (m, sp, note) => sp + (note ? note + ': ' : '')) : s;
 function lockMouse() { // take the mouse (refused or impossible: a click will do it, or there's no mouse at all)
-  if (TOUCH || !cv.requestPointerLock) return;
+  if (TOUCH) return;
+  if (NATIVE_MOUSE_APP) {
+    desktopMouseCaptured = true;
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: true }).then(ok => {
+      if (!ok) { desktopMouseCaptured = false; desktopMouseFallback = true; say('Using window-limited mouse-look because native capture was unavailable.', 4); }
+      else desktopMouseFallback = false;
+    }).catch(() => { desktopMouseCaptured = false; desktopMouseFallback = true; });
+    return;
+  }
+  if (!cv.requestPointerLock) return;
   const p = cv.requestPointerLock();
   if (p && p.catch) p.catch(() => {});
 }
+function releaseMouse() {
+  if (NATIVE_MOUSE_APP) {
+    desktopMouseCaptured = false;
+    desktopMouseFallback = false;
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: false }).catch(() => {});
+  }
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+const mouseCaptured = () => desktopMouseCaptured || Boolean(document.pointerLockElement);

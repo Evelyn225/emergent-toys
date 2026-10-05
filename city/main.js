@@ -1,7 +1,7 @@
 // closing a menu with E, I or J (a key press the browser lets us use) takes the mouse straight back; Esc leaves it
 // free, like any other page, and a click takes it back
 function relock(e) {
-  if (e.code === 'Escape' || paused || document.pointerLockElement) return;
+  if (e.code === 'Escape' || paused || mouseCaptured()) return;
   lockMouse();
 }
 onkeydown = e => {
@@ -59,13 +59,24 @@ function turnBy(mx, my) {
 // on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
 let flick = null;
 onmousemove = e => {
-  if (!document.pointerLockElement) return;
-  if (flick) { flick.x += e.movementX; flick.y += e.movementY; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
-  turnBy(e.movementX, e.movementY);
+  if (document.pointerLockElement || NATIVE_MOUSE_APP && desktopMouseFallback) moveMouseBy(e.movementX, e.movementY);
 };
-addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && document.pointerLockElement && !paused && !body.z) flick = { x: 0, y: 0 }; });
+function moveMouseBy(mx, my) {
+  if (paused) return;
+  if (flick) { flick.x += mx; flick.y += my; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
+  turnBy(mx, my);
+}
+if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
+  window.__TAURI__.event.listen('desktop-mouse-delta', e => {
+    if (desktopMouseCaptured && !paused) moveMouseBy(e.payload[0], e.payload[1]);
+  });
+  addEventListener('blur', () => {
+    if (desktopMouseCaptured && !paused) { releaseMouse(); openPause(); }
+  });
+}
+addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });
 addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });
-addEventListener('contextmenu', e => { if (document.pointerLockElement || skatingNow()) e.preventDefault(); });
+addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.preventDefault(); });
 
 const free = (x, y) => {
   if (mode === 'room') return !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&

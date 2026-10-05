@@ -4654,13 +4654,34 @@ function fogged(idx, s) { // palette color (or black for NONE) mixed s/8 of the 
 
 // a phone or tablet: no mouse to lock, touch controls instead (touch.js)
 const TOUCH = matchMedia('(pointer: coarse)').matches; // (primary pointer a finger: not a touchscreen laptop with a mouse)
+const NATIVE_MOUSE_APP = Boolean(window.__GLYPHPORT_DESKTOP__ && window.__TAURI__?.core?.invoke);
+let desktopMouseCaptured = false;
+let desktopMouseFallback = false;
 // on a touch screen the buttons say what they do, so "E: talk" reads "talk" and "1: Canal St" just "Canal St"
 const keyless = s => TOUCH ? s.replace(/(^|\s)[A-Z0-9](?: \(([^)]*)\))?: /g, (m, sp, note) => sp + (note ? note + ': ' : '')) : s;
 function lockMouse() { // take the mouse (refused or impossible: a click will do it, or there's no mouse at all)
-  if (TOUCH || !cv.requestPointerLock) return;
+  if (TOUCH) return;
+  if (NATIVE_MOUSE_APP) {
+    desktopMouseCaptured = true;
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: true }).then(ok => {
+      if (!ok) { desktopMouseCaptured = false; desktopMouseFallback = true; say('Using window-limited mouse-look because native capture was unavailable.', 4); }
+      else desktopMouseFallback = false;
+    }).catch(() => { desktopMouseCaptured = false; desktopMouseFallback = true; });
+    return;
+  }
+  if (!cv.requestPointerLock) return;
   const p = cv.requestPointerLock();
   if (p && p.catch) p.catch(() => {});
 }
+function releaseMouse() {
+  if (NATIVE_MOUSE_APP) {
+    desktopMouseCaptured = false;
+    desktopMouseFallback = false;
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: false }).catch(() => {});
+  }
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+const mouseCaptured = () => desktopMouseCaptured || Boolean(document.pointerLockElement);
 // ===== city world =====
 const sk0 = seed => seed * 1e4 | 0;
 // background tint per facade style (0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 shophouse,
@@ -10963,7 +10984,7 @@ function openPause() {
   paused = true;
   for (const k in K) K[k] = 0; // nothing held down while we're away
   pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
-  if (document.pointerLockElement) document.exitPointerLock();
+  releaseMouse();
   if (actx) master.gain.setTargetAtTime(0, actx.currentTime, 0.15);
   pauseEl.querySelector('[data-act="resume"]').focus();
 }
@@ -11129,7 +11150,7 @@ function openDev() {
   }
   if (pauseEl && pauseEl.style.display === 'flex') closePause(false);
   paused = true; for (const k in K) K[k] = 0;
-  if (document.pointerLockElement) document.exitPointerLock();
+  releaseMouse();
   devEl.style.display = 'flex'; renderDev();
 }
 function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = false; lockMouse(); }
@@ -11707,7 +11728,7 @@ const panel = id => menuEl(id, 400, '<div class="panel"></div>');
 function showPanel(el, html) {
   el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
   for (const k in K) K[k] = 0;
-  if (document.pointerLockElement) document.exitPointerLock();
+  releaseMouse();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
 const panelOpen = () => [shopEl, invEl, storeEl].some(el => el && el.style.display === 'flex');
@@ -13973,7 +13994,7 @@ addEventListener('pagehide', saveGame);
 // closing a menu with E, I or J (a key press the browser lets us use) takes the mouse straight back; Esc leaves it
 // free, like any other page, and a click takes it back
 function relock(e) {
-  if (e.code === 'Escape' || paused || document.pointerLockElement) return;
+  if (e.code === 'Escape' || paused || mouseCaptured()) return;
   lockMouse();
 }
 onkeydown = e => {
@@ -14031,13 +14052,24 @@ function turnBy(mx, my) {
 // on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
 let flick = null;
 onmousemove = e => {
-  if (!document.pointerLockElement) return;
-  if (flick) { flick.x += e.movementX; flick.y += e.movementY; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
-  turnBy(e.movementX, e.movementY);
+  if (document.pointerLockElement || NATIVE_MOUSE_APP && desktopMouseFallback) moveMouseBy(e.movementX, e.movementY);
 };
-addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && document.pointerLockElement && !paused && !body.z) flick = { x: 0, y: 0 }; });
+function moveMouseBy(mx, my) {
+  if (paused) return;
+  if (flick) { flick.x += mx; flick.y += my; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
+  turnBy(mx, my);
+}
+if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
+  window.__TAURI__.event.listen('desktop-mouse-delta', e => {
+    if (desktopMouseCaptured && !paused) moveMouseBy(e.payload[0], e.payload[1]);
+  });
+  addEventListener('blur', () => {
+    if (desktopMouseCaptured && !paused) { releaseMouse(); openPause(); }
+  });
+}
+addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });
 addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });
-addEventListener('contextmenu', e => { if (document.pointerLockElement || skatingNow()) e.preventDefault(); });
+addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.preventDefault(); });
 
 const free = (x, y) => {
   if (mode === 'room') return !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&

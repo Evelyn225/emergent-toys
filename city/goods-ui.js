@@ -399,7 +399,7 @@ const panel = id => menuEl(id, 400, '<div class="panel"></div>');
 function showPanel(el, html) {
   el.querySelector('.panel').innerHTML = html; el.style.display = 'flex'; paused = true;
   for (const k in K) K[k] = 0;
-  if (document.pointerLockElement) document.exitPointerLock();
+  releaseMouse();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
 const panelOpen = () => [shopEl, invEl, storeEl].some(el => el && el.style.display === 'flex');
