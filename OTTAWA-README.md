@@ -2,6 +2,8 @@
 
 The planner is served at **/ottawa** (and /ottawa/). Its file is `ottawa-trip.html`, and its separate API is **/api/ottawa-state**. The existing homepage, package scripts, dependencies, and other Vercel routes are retained. The saved-page `ottawa-trip_files` folder is no longer needed by the planner.
 
+The API has an explicit Vercel route to `/api/ottawa-state.js`. This repository's legacy `builds` setup exposes the function at its `.js` filename; the browser uses the extensionless route.
+
 ## Vercel setup
 
 Use the existing repository and Vercel project configuration. Keep the existing root directory, build settings, and output settings; do not change the output directory to `public` or replace `vercel.json` with the standalone package's configuration. The existing `builds` entries already include root HTML files and `api/*.js` functions. No new dependency or planner build step is required.
