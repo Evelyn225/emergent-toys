@@ -998,8 +998,6 @@ const extras = [], cranes = [], stacks = [], solids = [], radios = [], potties =
 const solidBox = (x, y, alongX, hl, hw, z0, z1, kind, k) => solids.push({ x, y, c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k });
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const X = bx * 8, Y = by * 8, lm = landmarkOf.get(bi(bx, by)), kind = blockKind(bx, by);
-  if (lm === 'cathedral') for (const x of [3.5, 6.5])
-    extras.push({ spire: true, x: X + x, y: Y + 3.5, z: 8, w: 0.9, h: 3, art: ART.spire, col: (c, row, L) => C(c === '+' ? YEL : GRAY, c === '+' ? Math.max(L, night * 15) : L) });
   if (lm === 'radio') radios.push({ x: X + 5, y: Y + 5 });
   if (kind === 'construction') {
     cranes.push({ x: X + 7, y: Y + 6.2, H: 7 + hash(bx, by, 98) * 2, slew: hash(bx, by, 99) * 6.28 });
@@ -1468,6 +1466,159 @@ function architectureCarClear(x, y, hx, hy, hl, hw) {
     }
   return true;
 }
+// Landmarks have authored silhouettes rather than taller versions of an ordinary city lot.
+// The cathedral's left tower always retains its 80m stair landing, beneath an open belfry.
+const CLOCK_PROFILES = [
+  { name: 'civic', stone: STONE, roof: GRAY, shaft: 7.3, half: .72, cap: 1.2, form: 'hip' },
+  { name: 'merchant', stone: BRICK, roof: GREEN, shaft: 6.2, half: .64, cap: 2.0, form: 'spire' },
+  { name: 'works', stone: GRAY, roof: GRAY, shaft: 8.1, half: .58, cap: .55, form: 'flat' },
+  { name: 'campanile', stone: WHITE, roof: BRICK, shaft: 7.8, half: .68, cap: 1.25, form: 'gable' },
+  { name: 'harbor', stone: STONE, roof: GREEN, shaft: 6.8, half: .8, cap: 1.7, form: 'spire' },
+];
+const CATHEDRAL_PROFILES = [
+  { name: 'twin spires', stone: GRAY, roof: GRAY, aisle: 2, ridge: 4.15, right: 8, spire: 3.2, cap: 'spire' },
+  { name: 'limestone minster', stone: STONE, roof: GREEN, aisle: 2.15, ridge: 3.8, right: 6.2, spire: 2.1, cap: 'hip' },
+  { name: 'brick basilica', stone: BRICK, roof: BRICK, aisle: 1.85, ridge: 3.6, right: 7.2, spire: 1.15, cap: 'hip' },
+  { name: 'high gothic', stone: WHITE, roof: GRAY, aisle: 2.2, ridge: 4.55, right: 8.9, spire: 3.7, cap: 'spire' },
+  { name: 'copper abbey', stone: STONE, roof: GREEN, aisle: 1.7, ridge: 3.9, right: 5.7, spire: 1.5, cap: 'hip' },
+];
+const LANDMARK_BUILDINGS = [], LANDMARK_SOLIDS = [], LANDMARK_BLOCKERS = [];
+function landmarkPlanes(hl, hw, z0, z1, form) {
+  const planes = [[1,0,0,hl],[-1,0,0,hl],[0,1,0,hw],[0,-1,0,hw],[0,0,1,z1],[0,0,-1,-z0]];
+  if (form === 'gable' || form === 'crossgable') {
+    const slope = (z1 - z0) / (form === 'gable' ? hl : hw);
+    if (form === 'gable') planes.push([slope,0,1,z1],[-slope,0,1,z1]);
+    else planes.push([0,slope,1,z1],[0,-slope,1,z1]);
+  } else if (form === 'hip' || form === 'spire') {
+    const sx = (z1 - z0) / hl, sy = (z1 - z0) / hw;
+    planes.push([sx,0,1,z1],[-sx,0,1,z1],[0,sy,1,z1],[0,-sy,1,z1]);
+    if (form === 'spire') for (const nx of [-1,1]) for (const ny of [-1,1]) {
+      planes.push([nx / hl,ny / hw,0,1.42]);
+      planes.push([nx * sx / Math.SQRT2,ny * sy / Math.SQRT2,1,z1]);
+    }
+  }
+  return planes;
+}
+function landmarkSolid(b, x, y, hl, hw, z0, z1, kind, form = null, walkRoof = false) {
+  const o = { x: b.x + x, y: b.y + y, c: 1, s: 0, hl, hw, z0, z1, kind, form, b, walkRoof };
+  if (form) o.planes = landmarkPlanes(hl, hw, z0, z1, form);
+  LANDMARK_SOLIDS.push(o); b.solids.push(o);
+  if (z0 < .2) LANDMARK_BLOCKERS.push(o);
+  return o;
+}
+function clockComposition(b) {
+  const p = b.profile, h = p.shaft, r = p.half;
+  // The map is the broad stone plinth; every narrower stage above it is a real solid.
+  for (let y = 4; y < 6; y++) for (let x = 4; x < 6; x++) map[idx(b.x + x, b.y + y)] = Math.fround(.38);
+  landmarkSolid(b, 5, 5, 1.06, 1.06, 0, .38, 'base', null, true);
+  landmarkSolid(b, 5, 5, r + .13, r + .13, .38, .75, 'course', null, true);
+  landmarkSolid(b, 5, 5, r, r, .75, h, 'shaft', null, true);
+  for (const z of [1.05, h * .52, h - .08]) landmarkSolid(b, 5, 5, r + .05, r + .05, z, z + .08, 'course', null, true);
+  // Corner piers, recessed shaft windows and a slightly overhanging clock chamber.
+  for (const sx of [-1,1]) for (const sy of [-1,1]) landmarkSolid(b, 5 + sx * (r - .025), 5 + sy * (r - .025), .045, .045, .75, h, 'pier', null, true);
+  landmarkSolid(b, 5, 5, r + .12, r + .12, h, h + 1.35, 'clock', null, true);
+  landmarkSolid(b, 5, 5, r + .2, r + .2, h + 1.35, h + 1.46, 'course', null, true);
+  if (p.form === 'flat') {
+    for (const sx of [-1,1]) for (const sy of [-1,1]) landmarkSolid(b, 5 + sx * r, 5 + sy * r, .095, .095, h + 1.46, h + 2.01, 'pier', null, true);
+  } else {
+    landmarkSolid(b, 5, 5, r + .2, r + .2, h + 1.46, h + 1.46 + p.cap, 'roof', p.form, true);
+    landmarkSolid(b, 5, 5, .016, .016, h + 1.46 + p.cap, h + 1.76 + p.cap, 'finial', null, true);
+  }
+}
+function cathedralComposition(b) {
+  const p = b.profile;
+  for (let y = 4; y < 8; y++) for (const x of [3,6]) map[idx(b.x + x,b.y + y)] = Math.fround(p.aisle);
+  map[idx(b.x + 6,b.y + 3)] = Math.fround(p.right);
+  // Tall central nave, lower side aisles and a proper ridge instead of a flat four-cell roof.
+  landmarkSolid(b, 5, 6, 1.07, 2.08, 3, p.ridge, 'roof', 'gable', true);
+  for (const sx of [-1,1]) landmarkSolid(b, 5 + sx * 1.5, 6, .55, 2.08, p.aisle, p.aisle + .5, 'roof', 'gable', true);
+  if (p.name === 'high gothic' || p.name === 'limestone minster')
+    landmarkSolid(b, 5, 6.6, 2.06, .53, p.aisle, p.name === 'high gothic' ? 3.5 : 3.2, 'roof', 'crossgable', true);
+  for (const z of [.28, p.aisle - .1]) {
+    landmarkSolid(b, 3, 6, .045, 2.06, z, z + .075, 'course');
+    landmarkSolid(b, 7, 6, .045, 2.06, z, z + .075, 'course');
+  }
+  // Inclined buttresses grow out of the aisle walls. They have a footprint, not a painted stripe.
+  for (const sx of [-1,1]) for (const y of [4.5,5.5,6.5,7.5]) {
+    const o = landmarkSolid(b, 5 + sx * 2.13, y, .23, .085, 0, p.aisle + .6, 'buttress', 'box');
+    o.planes.push([sx * 2.5,0,1,p.aisle + .05]);
+    landmarkSolid(b, 5 + sx * 2.14, y, .26, .115, 0, .22, 'base');
+  }
+  for (const sx of [-1,1]) landmarkSolid(b, 5 + sx * .3, 3.95, .055, .095, 0, .6, 'portal');
+  landmarkSolid(b, 5, 3.95, .37, .095, .6, .86, 'portal', 'gable');
+  for (const [x, height, cap] of [[3.5,8,p.spire],[6.5,p.right,p.spire * (p.name === 'limestone minster' ? .55 : 1)]]) {
+    // The solid tower stops at the stair landing. The bell and roof sit above an open gallery.
+    landmarkSolid(b, x, 3.5, .55, .55, height - .1, height, 'course');
+    for (const sx of [-1,1]) for (const sy of [-1,1]) landmarkSolid(b, x + sx * .43, 3.5 + sy * .43, .055, .055, height, height + .87, 'pier');
+    landmarkSolid(b, x, 3.5, .11, .11, height + .39, height + .63, 'bell', 'hip');
+    landmarkSolid(b, x, 3.5, .018, .018, height + .6, height + .89, 'finial');
+    landmarkSolid(b, x, 3.5, .57, .57, height + .87, height + .97, 'course');
+    landmarkSolid(b, x, 3.5, .59, .59, height + .97, height + .97 + cap, 'roof', p.cap);
+    landmarkSolid(b, x, 3.5, .018, .018, height + .97 + cap, height + 1.22 + cap, 'finial');
+    landmarkSolid(b, x, 3.5, .075, .012, height + 1.12 + cap, height + 1.14 + cap, 'finial');
+    // Low open balustrades at the landing, with clear views between the stone uprights.
+    for (const sy of [-1,1]) landmarkSolid(b, x, 3.5 + sy * .47, .45, .018, height, height + .11, 'balustrade');
+    for (const sx of [-1,1]) landmarkSolid(b, x + sx * .47, 3.5, .018, .45, height, height + .11, 'balustrade');
+  }
+  if (p.name === 'copper abbey') {
+    landmarkSolid(b, 5, 6.8, .38, .38, p.ridge - .2, p.ridge + .5, 'lantern', null, true);
+    landmarkSolid(b, 5, 6.8, .43, .43, p.ridge + .5, p.ridge + 1.15, 'roof', 'hip', true);
+  }
+}
+let clockNumber = 0, cathedralNumber = 0;
+for (const [block, kind] of landmarkOf) {
+  if (kind !== 'clock' && kind !== 'cathedral') continue;
+  const b = { block, kind, x: block % NB * 8, y: Math.floor(block / NB) * 8, solids: [],
+    profile: kind === 'clock' ? CLOCK_PROFILES[clockNumber++ % CLOCK_PROFILES.length] : CATHEDRAL_PROFILES[cathedralNumber++ % CATHEDRAL_PROFILES.length] };
+  LANDMARK_BUILDINGS.push(b);
+  if (kind === 'clock') clockComposition(b); else cathedralComposition(b);
+}
+const landmarkSolidsB = bucketed(LANDMARK_SOLIDS), landmarkBlockersB = bucketed(LANDMARK_BLOCKERS);
+const LANDMARK_BY_BLOCK = new Map(LANDMARK_BUILDINGS.map(b => [b.block,b]));
+const LANDMARK_ROOF_MASK = architectureCellMask(LANDMARK_SOLIDS.filter(o => o.walkRoof), 0);
+const LANDMARK_BLOCK_MASK = architectureCellMask(LANDMARK_BLOCKERS, .5);
+function landmarkSurfaceHeight(o, x, y) {
+  const u = rel(x - o.x), v = rel(y - o.y);
+  if (Math.abs(u) > o.hl || Math.abs(v) > o.hw) return 0;
+  let top = o.z1, bottom = o.z0;
+  if (o.planes) for (const [nx,ny,nz,limit] of o.planes) {
+    const d = limit - nx * u - ny * v;
+    if (!nz) { if (d < 0) return 0; }
+    else if (nz > 0) top = Math.min(top,d / nz); else bottom = Math.max(bottom,d / nz);
+  }
+  return top >= bottom ? top : 0;
+}
+function landmarkRoofHeight(x, y) {
+  if (!LANDMARK_ROOF_MASK[idx(Math.floor(x),Math.floor(y))]) return 0;
+  let height = 0;
+  for (const b of LANDMARK_BUILDINGS) {
+    if (Math.abs(rel(x - b.x - 5)) > 3 || Math.abs(rel(y - b.y - 5.5)) > 3) continue;
+    for (const o of b.solids) if (o.walkRoof) height = Math.max(height,landmarkSurfaceHeight(o,x,y));
+  }
+  return height;
+}
+function landmarkBlocked(x, y, pad = 0) {
+  if (!LANDMARK_BLOCK_MASK[idx(Math.floor(x),Math.floor(y))]) return false;
+  for (const o of landmarkBlockersB[bi(Math.floor(x / 8),Math.floor(y / 8))]) if (landmarkContains(o,x,y,pad)) return true;
+  return false;
+}
+function landmarkTowerBlocked(x, y, height) {
+  return landmarkSolidsB[bi(Math.floor(x / 8),Math.floor(y / 8))].some(o => o.kind === 'pier' && o.z0 === height && landmarkContains(o,x,y,.035));
+}
+const landmarkContains = (o,x,y,pad = 0) => Math.abs(rel(x - o.x)) < o.hl + pad && Math.abs(rel(y - o.y)) < o.hw + pad;
+function landmarkCarClear(x, y, hx, hy, hl, hw) {
+  const pad = hl + hw;
+  if (!LANDMARK_BLOCK_MASK[idx(Math.floor(x),Math.floor(y))]) return true;
+  // All additional ground members are axis aligned; test the vehicle and masonry separating axes.
+  for (const o of LANDMARK_BLOCKERS) {
+    const qx = rel(o.x - x), qy = rel(o.y - y);
+    if (Math.abs(qx) > o.hl + pad || Math.abs(qy) > o.hw + pad) continue;
+    if (Math.abs(qx) < o.hl + Math.abs(hx) * hl + Math.abs(hy) * hw && Math.abs(qy) < o.hw + Math.abs(hy) * hl + Math.abs(hx) * hw &&
+      Math.abs(qx * hx + qy * hy) < hl + Math.abs(hx) * o.hl + Math.abs(hy) * o.hw &&
+      Math.abs(-qx * hy + qy * hx) < hw + Math.abs(hy) * o.hl + Math.abs(hx) * o.hw) return false;
+  }
+  return true;
+}
 // ---- traffic lights, at intersections where three or four streets meet (corners and the bridges just flow).
 // 16s cycle: vertical green 0-6, yellow 6-7, all red 7-8, horizontal green 8-14, yellow, all red.
 // Intersections are addressed by their base cell (x, y multiples of 8).
@@ -1527,7 +1678,7 @@ function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
     const qx = mx + 0.5 - x, qy = my + 0.5 - y;
     if (Math.abs(qx) < ex + 0.5 && Math.abs(qy) < ey + 0.5 && Math.abs(qx * hx + qy * hy) < hl + diagonal && Math.abs(-qx * hy + qy * hx) < hw + diagonal) return false;
   }
-  return architectureCarClear(x, y, hx, hy, hl, hw);
+  return architectureCarClear(x, y, hx, hy, hl, hw) && landmarkCarClear(x, y, hx, hy, hl, hw);
 }
 // A short local route around buildings for a cruiser in close pursuit. The wider street network still handles
 // dispatch from far away; nearby cruisers can leave their lane, reverse and intercept rather than circling a block.
@@ -4712,7 +4863,7 @@ function roomSearchLead(dt) {
   }
   return anySees;
 }
-const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], belleRoofHeight(x, y), architectureRoofHeight(x, y));
+const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), homeBalconyHeight(x, y));
 function notePoliceRoofEntry(x, y, ret = null) {
   if (!wanted.stars || !(wanted.seen || roomCops.length || ret && near(wanted.lastX, wanted.lastY, ret[0], ret[1]) < 1)) return;
   roofLead = { x, y, ret, targetX: x, targetY: y, arriveAt: T + (roomCops.length ? 1.2 : 3), count: Math.min(2, Math.max(1, wanted.stars)), arrived: false };
@@ -5049,6 +5200,20 @@ function summonCar(model) {
 }
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
 const homeRoomKind = kind => kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
+function homeBalconyBounds(home) {
+  const b = home?.kind === 'home_belle' && SHOP[home.cell]?.belle;
+  if (!b) return null;
+  const y = (b.y0 + b.y1) / 2;
+  return { x0: b.x1, x1: b.x1 + .6, y0: y - .7, y1: y + .7, y, doorY: y + .2, z: Math.min(2,Math.max(.3,b.h - .4)) };
+}
+function homeBalconyHeight(x, y) {
+  let height = 0;
+  for (const home of owned.homes) {
+    const b = homeBalconyBounds(home);
+    if (b && x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) height = Math.max(height,b.z);
+  }
+  return height;
+}
 function restoreHomeCell(cell) {
   if (!Number.isInteger(cell) || cell < 0 || cell >= N * N) return -1;
   if (SHOP[cell] && map[cell]) return cell;
@@ -5467,6 +5632,7 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
   const base = [STONE, WHITE, GRAY, BRICK, STONE][b.material], grain = hash(Math.floor(wc * 7), Math.floor(z * 10), sk);
   const course = fract(z * 8), joint = fract(wc * 2 + (Math.floor(z * 8) & 1) * 0.5);
   BG[i] = C(base, 2 + L * (0.25 + grain * 0.12));
+  if (homeBalconyDoorFacade(i,z,side,mx,my,wc,L,SHOP[k])) return;
   if (b.ivy && z < Math.min(h - 0.25, 2.5)) {
     const vine = 0.24 + Math.sin(z * 3 + b.seed * 8) * 0.14 + z * 0.13;
     const stem = Math.min(Math.abs(along - vine), z > 0.4 ? Math.abs(along - vine - Math.sin(z * 4) * 0.25) : 9);
@@ -5798,46 +5964,8 @@ function serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL) {
 // wc = world coordinate along the wall; lu = position across the face from the block's middle, left-to-right on screen
 const TICKER = ADS.join('   *   ') + '   *   ';
 function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
-  const L = fog * amb * (side ? 10 : 15), lu = (mod(wc, 8) - 5) * (Math.abs(u - wc) < 1e-6 ? 1 : -1);
-  if (sty === 3) { // clock tower: stone, with a clock face showing the game time on every side
-    BG[i] = bgAt(GRAY, day * 5 * (0.5 + 0.5 * fog));
-    const dz = z - (h - 1.4), rr = Math.hypot(lu, dz);
-    if (rr < 0.75) {
-      if (rr > 0.66) return set(i, 'O', C(GRAY, L * 1.2));
-      const ang = Math.atan2(lu, dz); // clockwise from 12
-      const onHand = (A, len) => rr < len && Math.abs(mod(ang - A + Math.PI, 2 * Math.PI) - Math.PI) * Math.max(rr, 0.06) < 0.05;
-      BG[i] = C(WHITE, Math.max(8 * amb, night * 11)); // the face glows at night
-      if (onHand(mod(tod, 12) / 12 * 2 * Math.PI, 0.38) || onHand(fract(tod) * 2 * Math.PI, 0.6)) return set(i, '#', C(GRAY, 1));
-      return set(i, Math.abs(rr - 0.57) < 0.05 && fract(ang / (Math.PI / 6) + 0.1) < 0.2 ? '+' : ' ', C(GRAY, 3));
-    }
-    if (z > h - 0.25) return set(i, '^', C(GRAY, L));
-    return set(i, fract(z * 4) < 0.15 ? '=' : fract(u * 3 + (Math.floor(z * 4) & 1) * 0.5) < 0.1 ? '|' : ' ', C(GRAY, L));
-  }
-  if (sty === 4) { // cathedral: stone with tall pointed stained-glass windows
-    BG[i] = bgAt(GRAY, day * 5 * (0.5 + 0.5 * fog));
-    if (side && mod(my, 8) === 4 && h < 4 && rel(py - my) < 0) { // the west front, between the towers: the great doors, a rose window over them
-      const dx = mod(wc, 8) - 5, ad = Math.abs(dx), rz = z - 1.75, rr = Math.hypot(dx, rz), glow = Math.max(L * 0.6, night * fog * 13, 4);
-      if (rr < 0.5) {
-        if (rr > 0.45 || Math.abs(fract((Math.atan2(dx, rz) + Math.PI) / (Math.PI / 6)) - 0.5) > 0.45 && rr > 0.1) return set(i, '+', C(GRAY, L));
-        BG[i] = C(rr < 0.1 ? YEL : GLASS[Math.floor((Math.atan2(dx, rz) + Math.PI) / (Math.PI / 6)) + Math.floor(rr * 6) & 7], glow * 0.5);
-        return set(i, rr < 0.1 ? '*' : ' ', C(WHITE, glow));
-      }
-      const top = 0.62 - 0.25 * Math.min(1, ad / 0.18) ** 0.7;
-      if (ad < 0.2 && z < top + 0.04) {
-        if (ad > 0.18 || z > top) return set(i, '#', C(GRAY, L * 1.1));
-        BG[i] = C(BRICK, 1 + L * 0.15 + (cathOpen() ? night * 2 : 0));
-        return set(i, ad < 0.006 ? '|' : hash(Math.floor(dx * 60), Math.floor(z * 60), 506) > 0.93 ? 'o' : fract(dx * 25) < 0.15 ? '|' : ' ', C(ad < 0.006 ? GRAY : BRICK, L * 1.2));
-      }
-    }
-    const fu = fract(u * 1.5), wcen = Math.abs(fu - 0.5), top = (h > 4 ? h - 1.5 : 2.3) - wcen * 1.2;
-    if (wcen < 0.2 && z > 0.6 && z < top) {
-      if (wcen > 0.16) return set(i, '|', C(GRAY, L));
-      const glass = [MAG, BLUE, YEL, RED, CYAN][hash(Math.floor(u * 1.5), Math.floor(z * 6), 41) * 5 | 0];
-      return set(i, '#', C(glass, Math.max(L * 0.6, night * fog * 13)));
-    }
-    if (z > h - 0.08) return set(i, '^', C(GRAY, L));
-    return set(i, fract(z * 5) < 0.12 ? '-' : fract(u * 4 + (Math.floor(z * 5) & 1) * 0.5) < 0.1 ? '|' : '.', C(GRAY, L * 0.8));
-  }
+  if (composedLandmarkFacade(i,z,h,side,sty,fog,wc,mx,my)) return;
+  const L = fog * amb * (side ? 10 : 15);
   if (sty === 5) { // tower wrapped in giant video screens, with a scrolling news ticker
     if (z < 0.5 || z > h - 0.3) { BG[i] = bgAt(GRAY, day * 2 * fog); return set(i, '=', C(GRAY, L)); }
     if (z > 1.1 && z < 1.5) { // ticker: one cell per letter, scrolling left
@@ -6518,7 +6646,14 @@ function drawBelleBuildings() {
       if (SHOP[idx(tx, ty)] === b.sh) drawCopperDome(...R(tx, ty), b.h + 0.1, 0.52, 0.75);
     }
   });
-  forNear(belleDetailsB, o => drawBox({ ...o, x: rel(o.x - px), y: rel(o.y - py) }, (i, t, L) => belleDetailShade(o, i, t, L)));
+  forNear(belleDetailsB, o => {
+    // The inhabited balcony replaces any decorative bay or ironwork across its French doors.
+    if (owned.homes.some(home => {
+      const b = homeBalconyBounds(home);
+      return b && Math.abs(o.x - b.x0) < .25 && Math.abs(o.y - b.y) < .9 && o.z1 > b.z - .14 && o.z0 < b.z + .35;
+    })) return;
+    drawBox({ ...o, x: rel(o.x - px), y: rel(o.y - py) }, (i, t, L) => belleDetailShade(o, i, t, L));
+  });
 }
 // Fluted iron posts and paired opal globes, distinct from the other districts' swan-neck street lamps.
 function drawBelleLamp(vx, vy) {
@@ -6696,6 +6831,118 @@ function drawArchitecture() {
     drawBox({ ...o, x: vx, y: vy }, (i, t, L) => architectureDetailShade(o, i, t, L), o.planes ? rayBeveledBay : rayBox);
   });
 }
+function landmarkStone(i, x, z, base, L, faceLight = 1) {
+  const row = Math.floor(z * 6), joint = fract(x * 3 + (row & 1) * .5), grain = hash(Math.floor(x * 18),Math.floor(z * 24),702);
+  BG[i] = C(base,1.8 + L * faceLight * .3 + grain * .55);
+  set(i, fract(z * 6) < .045 ? '_' : joint < .025 ? '|' : grain > .99 ? '.' : ' ', C(base,L * .6));
+}
+function landmarkGlass(i, du, z, half, bottom, top, L, stained = true) {
+  const ad = Math.abs(du), peak = top - half * 1.4 * Math.min(1,ad / half) ** .7;
+  if (ad > half + .035 || z < bottom - .025 || z > peak + .035) return false;
+  if (ad > half || z < bottom || z > peak) {
+    set(i, ad > half ? '|' : '^', C(STONE,L * 1.1)); return true;
+  }
+  const pane = Math.floor((du + half) / half * 3), band = Math.floor((z - bottom) * 7), glass = stained ? GLASS[mod(pane + band,GLASS.length)] : CYAN;
+  BG[i] = C(glass,1.2 + day * 2 + night * 2);
+  const lead = Math.abs(du) < .012 || fract((du + half) / half * 3) < .055 || fract((z - bottom) * 7) < .045;
+  set(i, lead ? '+' : ' ', C(lead ? GRAY : glass,lead ? L * .65 : Math.max(3,L * .75)));
+  return true;
+}
+function cathedralExterior(i, z, h, side, wc, mx, my, L, b) {
+  const p = b.profile, local = rel(wc - (side ? b.x : b.y));
+  landmarkStone(i,wc,z,p.stone,L);
+  const tower = my - b.y === 3 && (mx - b.x === 3 || mx - b.x === 6);
+  if (tower) {
+    const center = side ? mx - b.x + .5 : 3.5, du = local - center;
+    if (Math.abs(du) > .39) return set(i, fract(z * 9) < .1 ? '=' : '|', C(STONE,L));
+    if (Math.abs(z - .38) < .03 || Math.abs(z - (h - 1.5)) < .04) return set(i,'=',C(STONE,L));
+    if (landmarkGlass(i,du,z,.13,.85,2.5,L)) return;
+    if (landmarkGlass(i,du - .18,z,.065,h - 1.35,h - .28,L,false) || landmarkGlass(i,du + .18,z,.065,h - 1.35,h - .28,L,false)) return;
+    return;
+  }
+  const front = side && my - b.y === 4 && rel(py - my) < 0;
+  if (front && Math.abs(local - 5) < .6) {
+    const du = local - 5, rr = Math.hypot(du,z - 1.8);
+    if (rr < .56) {
+      const angle = Math.atan2(du,z - 1.8), spoke = Math.abs(Math.sin(angle * 6)) < .1 && rr > .095;
+      if (rr > .49 || spoke) return set(i,'+',C(STONE,L * 1.15));
+      BG[i] = C(GLASS[mod(Math.floor((angle + Math.PI) * 6 / Math.PI) + Math.floor(rr * 7),8)],2 + day * 3);
+      return set(i,rr < .1 ? '*' : ' ',C(YEL,Math.max(4,L)));
+    }
+    const ad = Math.abs(du), top = .64 - Math.min(1,ad / .21) ** .7 * .23;
+    if (ad < .24 && z < top + .035) {
+      if (ad > .21 || z > top) return set(i,'#',C(STONE,L));
+      BG[i] = C(BRICK,1 + night * 2);
+      return set(i,ad < .008 ? '|' : fract(du * 40) < .12 ? '|' : ' ',C(YEL,L * .65));
+    }
+  }
+  // A complete lancet occupies each structural bay; margins at the corners stay stone.
+  const start = side ? 3 : 4, end = side ? 7 : 8;
+  if (local > start + .25 && local < end - .25) {
+    const center = Math.floor(local) + .5;
+    if (landmarkGlass(i,local - center,z,side ? .18 : .2,.52,Math.min(h - .22,2.7),L)) return;
+  }
+  if (Math.abs(z - .28) < .025 || z > h - .08) set(i,'=',C(STONE,L));
+}
+function composedLandmarkFacade(i, z, h, side, sty, fog, wc, mx, my) {
+  const b = LANDMARK_BY_BLOCK.get(bi(Math.floor(mx / 8),Math.floor(my / 8)));
+  if (!b || sty !== 3 && sty !== 4) return false;
+  const L = fog * amb * (side ? 11 : 15);
+  if (sty === 4) cathedralExterior(i,z,h,side,wc,mx,my,L,b);
+  else landmarkStone(i,wc,z,b.profile.stone,L);
+  return true;
+}
+function landmarkClockFace(i, z, o, L) {
+  // Each dial is read from outside: its clockwise direction must survive the opposite wall's orientation.
+  let du = HIT.face <= 2 ? HIT.v : HIT.u;
+  if (HIT.face === 1 || HIT.face === 4) du = -du;
+  const dz = z - (o.z0 + .68), radius = Math.min(o.hl,o.hw) * .73;
+  const rr = Math.hypot(du,dz);
+  if (rr > radius) return false;
+  if (rr > radius - .045) { set(i,'O',C(YEL,L * 1.1)); return true; }
+  const angle = Math.atan2(du,dz), hand = (direction,length) => rr < length && Math.abs(mod(angle - direction + Math.PI,Math.PI * 2) - Math.PI) * Math.max(rr,.06) < .023;
+  BG[i] = C(WHITE,Math.max(7 + day * 3,night * 11));
+  if (hand(mod(tod,12) / 12 * Math.PI * 2,radius * .52) || hand(fract(tod) * Math.PI * 2,radius * .82)) set(i,'#',C(GRAY,1));
+  else set(i,Math.abs(rr - radius * .83) < .025 && Math.abs(Math.sin(angle * 6)) < .22 ? '+' : ' ',C(GRAY,2));
+  return true;
+}
+function landmarkSolidShade(o, i, t, L) {
+  const { profile: p } = o.b, z = HIT.w, face = HIT.face, u = face <= 2 && !o.planes ? HIT.v : HIT.u;
+  const roof = o.kind === 'roof', inclined = o.planes && face >= 6;
+  const endWall = roof && (o.form === 'gable' && (face === 2 || face === 3) || o.form === 'crossgable' && (face === 0 || face === 1));
+  if (roof && !endWall) {
+    const base = p.roof, seam = fract((face < 8 ? HIT.v : HIT.u) * 9) < .055;
+    BG[i] = C(base,1.3 + L * (inclined ? .28 : .35));
+    set(i,seam ? '/' : fract(z * 14) < .045 ? '-' : ' ',C(base,L * .85));
+    paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L,.55);
+    return true;
+  }
+  landmarkStone(i,u + o.x,z,p.stone,L,shadeFace(o.planes ? 1 : face));
+  if (o.kind === 'clock' && face < 5 && landmarkClockFace(i,z,o,L)) return true;
+  if (o.kind === 'shaft' && face < 5) {
+    for (const bottom of [1.6,p.shaft * .57]) if (landmarkGlass(i,u,z,.11,bottom,bottom + .85,L,false)) return true;
+    if (Math.abs(u) > (face <= 2 ? o.hw : o.hl) - .11) set(i,'|',C(STONE,L));
+  } else if (o.kind === 'lantern' && face < 5) {
+    if (Math.abs(u) < .25 && z > o.z0 + .12 && z < o.z1 - .08) { BG[i] = C(CYAN,2 + day * 2); set(i,'|',C(YEL,L)); }
+  } else if (o.kind === 'bell' || o.kind === 'finial') { BG[i] = C(YEL,2 + L * .25); set(i,o.kind === 'bell' ? '#' : '|',C(YEL,L)); }
+  else if (o.kind === 'balustrade') {
+    if (z > o.z1 - .016 || Math.abs(fract(u * 24) - .5) < .16) set(i,z > o.z1 - .016 ? '=' : '|',C(STONE,L));
+    else return false;
+  } else if (o.kind === 'course' || o.kind === 'portal') set(i,o.kind === 'portal' && o.planes ? '^' : '=',C(STONE,L * 1.1));
+  else if (o.kind === 'pier') set(i,'|',C(STONE,L));
+  if ((!o.planes && face === 5) || o.planes && face === 4) paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L);
+  return true;
+}
+function drawLandmarks() {
+  forNear(landmarkSolidsB,o => {
+    const vx = rel(o.x - px), vy = rel(o.y - py);
+    if (Math.hypot(vx,vy) > vis + 4) return;
+    const far = dx * vx + dy * vy + Math.abs(dx) * o.hl + Math.abs(dy) * o.hw;
+    const edge = Math.abs(-dy * vx + dx * vy) - Math.abs(dy) * o.hl - Math.abs(dx) * o.hw;
+    if (far < .02 || edge > far * tf) return;
+    drawBox({ ...o,x: vx,y: vy },(i,t,L) => landmarkSolidShade(o,i,t,L),o.planes ? rayMansard : rayBox);
+  });
+}
 // ===== city sprites: everything drawn over the raycast scene, nearest-first order doesn't matter (drawArt depth-tests)
 // visit the props in the blocks within draw distance
 function forNear(b, fn) {
@@ -6787,6 +7034,8 @@ function citySprites() {
   drawRoofPolice();
   drawBelleBuildings();
   drawArchitecture();
+  drawLandmarks();
+  drawHomeBalconies();
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
@@ -8793,6 +9042,96 @@ const ROOMW = { cell: (x, y) => {
                   const c = roomAt(x, y); return c === '.' ? 0 : c === 'B' ? 1.1 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3;
                 },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
+// French doors connect the room's metre coordinates to a balcony in the actual city, on its east facade.
+// Outdoors uses roof mode: the normal world renderer, weather, actors, sound and falling physics all apply.
+const homeBalconyActive = () => mode === 'roof' && room?.kind === 'bellehome' && !!room.balconyWorld;
+function enterHomeBalcony() {
+  const home = homeRecord(), b = homeBalconyBounds(home);
+  if (!b) return false;
+  room.balconyWorld = b;
+  px = b.x0 + (px - 19) / 10; py = b.y + (py - 10) / 10;
+  mode = 'roof'; roofH = b.z; roofLot = new Set();
+  body.mx = (body.mx || 0) / 10; body.my = (body.my || 0) / 10;
+  notePoliceRoofEntry(px,py,room.ret);
+  return true;
+}
+const atHomeBalconyDoor = () => homeBalconyActive() && px < room.balconyWorld.x0 + .2 && Math.abs(py - room.balconyWorld.doorY) < .17;
+function leaveHomeBalcony() {
+  if (!homeBalconyActive()) return false;
+  const b = room.balconyWorld;
+  px = 18.7; py = clamp(10 + (py - b.y) * 10,11.3,13.7);
+  mode = 'room'; roofH = 0; roofLot = null;
+  body.mx = (body.mx || 0) * 10; body.my = (body.my || 0) * 10;
+  return true;
+}
+function stepHomeBalcony(moveX = 0) {
+  if (mode === 'room' && room.kind === 'bellehome' && homeRecord() && px >= 19.6 && py >= 3 && py < 17) enterHomeBalcony();
+  else if (moveX < 0 && atHomeBalconyDoor() && px < room.balconyWorld.x0 + .08) leaveHomeBalcony();
+}
+function homeBalconyFree(x, y) {
+  const b = room.balconyWorld;
+  if (x < b.x0 + .015) return false;
+  if (body.z < 1.1 && (x > b.x1 - .035 || y < b.y0 + .035 || y > b.y1 - .035)) return false;
+  const rx = 19 + (x - b.x0) * 10, ry = 10 + (y - b.y) * 10;
+  if (room.props.some(o => o.box && !o.walk && o.box.x >= 20 && o.box.z0 < 1.2 && inBox(o.box,rx,ry,.2))) return false;
+  return roofHeightAt(x,y) <= roofH + ROOF_STEP + body.z / 10;
+}
+function homeBalconyDoorFacade(i, z, side, mx, my, wc, L, sh) {
+  const home = homeAt(sh), b = homeBalconyBounds(home);
+  if (!b || side || mx + 1 !== b.x0 || rel(px - mx) < 0 || Math.abs(rel(wc - b.doorY)) > .17 || z < b.z || z > b.z + .29) return false;
+  const du = rel(wc - b.doorY), rz = z - b.z;
+  const centerPost = Math.abs(du) < .008;
+  const frame = Math.abs(du) > .145 || centerPost || rz < .012 || rz > .27 || Math.abs(rz - .11) < .008;
+  BG[i] = C(frame ? STONE : CYAN,frame ? 2 + L * .3 : 1.5 + day * 2);
+  let ch = ':';
+  if (frame) ch = centerPost ? '|' : '=';
+  set(i,ch,C(frame ? WHITE : WARM,L * .8));
+  return true;
+}
+const homeBalconyModels = new WeakMap();
+function drawHomeBalconies() {
+  for (const home of owned.homes) {
+    const b = homeBalconyBounds(home);
+    if (!b || Math.hypot(rel(b.x0 - px),rel(b.y - py)) > vis + 3) continue;
+    const vx = rel(b.x0 + .3 - px), vy = rel(b.y - py);
+    const far = dx * vx + dy * vy + Math.abs(dx) * .31 + Math.abs(dy) * .71;
+    const edge = Math.abs(-dy * vx + dx * vy) - Math.abs(dy) * .31 - Math.abs(dx) * .71;
+    if (far < .02 || edge > far * tf) continue;
+    let model = homeBalconyModels.get(home);
+    if (!model) {
+      model = makeRoom('bellehome',{ cell: [home.cell % N,Math.floor(home.cell / N)] }).props.filter(o => {
+        const p = o.box || o;
+        return p.x >= 20 && p.y >= 3 && p.y < 17;
+      });
+      homeBalconyModels.set(home,model);
+    }
+    const masonry = (i,t,L) => {
+      BG[i] = C(STONE,2 + L * .3); set(i,'=',C(WHITE,L));
+      if (HIT.face === 5) paintSettledSnow(i,b.x0 + .3 + HIT.u,b.y + HIT.v,L);
+      return true;
+    };
+    drawBox(boxAt(rel(b.x0 + .3 - px),rel(b.y - py),1,0,.3,.7,b.z - .025,b.z),masonry);
+    const rail = (i,t,L) => {
+      const along = HIT.face <= 2 ? HIT.v : HIT.u;
+      if (HIT.w > b.z + .095 || HIT.w < b.z + .012 || Math.abs(fract(along * 27) - .5) < .13) {
+        BG[i] = C(GRAY,1); set(i,HIT.w > b.z + .095 ? '=' : '|',C(GRAY,L)); return true;
+      }
+      return false;
+    };
+    drawBox(boxAt(rel(b.x1 - px),rel(b.y - py),1,0,.01,.7,b.z,b.z + .11),rail);
+    for (const y of [b.y0,b.y1]) drawBox(boxAt(rel(b.x0 + .3 - px),rel(y - py),1,0,.3,.01,b.z,b.z + .11),rail);
+    for (const o of model) {
+      const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
+      if (o.box) {
+        const q = o.box;
+        drawBox(boxAt(rel(x - px),rel(y - py),q.c,q.s,q.hl / 10,q.hw / 10,b.z + q.z0 / 10,b.z + q.z1 / 10),(i,t,L) => {
+          HIT.u *= 10; HIT.v *= 10; HIT.w = (HIT.w - b.z) * 10;
+          return o.shade(i,t * 10,L);
+        });
+      } else if (o.art) drawArt(rel(x - px),rel(y - py),b.z + (o.z || 0) / 10,o.w / 10,o.h / 10,typeof o.art === 'function' ? o.art() : o.art,o.col);
+    }
+  }
+}
 // ===== the aquarium, across the shore road from the Sunset Pier (world.js gives it its lot). Inside: the open
 // ocean window across the back of the main hall, a walk-through tunnel with sharks and rays going over your head,
 // a dark gallery of jellyfish, a bright one of reef tanks and a kelp forest, seahorses by the door, a touch pool
@@ -9073,7 +9412,7 @@ function aquaUpper(i, u, uStep, z, d, L) {
   BG[i] = C(BLUE, ((Math.floor(u * 16) + Math.floor(z * 32)) & 1 ? 1.5 : 2.5) + L * 0.1); // tiles, two blues
   return set(i, ' ', 0);
 }
-// ===== the cathedral (a landmark: world.js builds it, its spires are props), now with a way in. Through the great
+// ===== the cathedral (world.js and landmarks.js build its nave, towers and open belfries). Through the great
 // doors between the towers: a nave 38m long under a 16m vault, two rows of pillars down it, pews, tall stained-glass
 // windows down both sides throwing coloured light on the floor when the sun's up, a rose window over the altar,
 // organ pipes over the doors, candles to light, and the stairs up one of the towers to the bell.
@@ -9120,6 +9459,7 @@ function useCathedral() { // true if E did something
   }
   if (nearTowerStair()) { // up the tower: stand on its top, by the bell, 80m over the square
     mode = 'roof'; roofH = map[idx(Math.floor(room.tower[0]), Math.floor(room.tower[1]))]; px = room.tower[0]; py = room.tower[1]; a = -Math.PI / 2; pitch = -0.1;
+    roofLot = roofCells(Math.floor(px),Math.floor(py));
     notePoliceRoofEntry(px, py, room.ret);
     say('Three hundred and twelve steps. The bell hangs over you and the whole city spreads out below.', 5);
     return true;
@@ -11351,6 +11691,7 @@ function promptText() {
   if (mode === 'roof') {
     const dr = droppedHere(), drop = edgeDrop(), edge = drop ? `edge: ${drop}m drop` : '';
     if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
+    if (homeBalconyActive()) return atHomeBalconyDoor() ? 'E: back through the French doors' : 'Your balcony. The city below.';
     if (room && room.kind === 'cathedral') return 'The bell tower, 80m up.   E: back down the stairs';
     return [onRoofLot() ? 'E: take the stairs down' : 'E: fire escape down', edge].filter(Boolean).join('   ');
   }
@@ -11751,8 +12092,12 @@ function interact() {
     return say('The way out is over by the door.', 2);
   }
   if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
+  if (homeBalconyActive()) {
+    if (atHomeBalconyDoor()) { leaveHomeBalcony(); return say('Back through the French doors.',2); }
+    return say('The French doors are behind you. The city carries on below.',2);
+  }
+  if (mode === 'roof' && room && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; roofLot = null; roofH = 0; return say('Down and down and round and round.', 2); }
   if (mode === 'roof' && !onRoofLot()) return fireEscape() ? say('You clang down the fire escape and drop the last bit to the sidewalk.', 3) : say('No way down from here. Jump, or find another roof.', 3);
-  if (mode === 'roof' && room && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; return say('Down and down and round and round.', 2); }
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; roofLot = null; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'boat') return useGardens();
@@ -15698,11 +16043,12 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
-const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y));
+const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), homeBalconyHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
+  if (homeBalconyActive()) return homeBalconyFree(x,y);
   const h = roofHeightAt(x, y);
-  if (roofFixed()) return h === roofH;
+  if (roofFixed()) return h === roofH && !landmarkTowerBlocked(x,y,roofH);
   return h <= roofH + ROOF_STEP + body.z / 10;
 }
 const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
@@ -15717,7 +16063,7 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
   const h = roofHeightAt(px, py);
   if (h === roofH) return;
   if (h > 0) {
-    const followingSlope = (museumRoofHeight(px, py) > 0 || belleRoofHeight(px, py) > 0 || architectureRoofHeight(px, py) > 0) && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
+    const followingSlope = (museumRoofHeight(px, py) > 0 || belleRoofHeight(px, py) > 0 || architectureRoofHeight(px, py) > 0 || landmarkRoofHeight(px, py) > 0) && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
@@ -15944,7 +16290,7 @@ const free = (x, y) => {
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
-    !architectureBlocked(x, y, 0.03) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
+    !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : 0.05;
@@ -15954,6 +16300,7 @@ function move(fx, fy) {
   const stuck = !free(px, py); // (somewhere you shouldn't be, a teleport or a gate shutting on you: you can always walk out)
   if (stuck || free(px + fx + Math.sign(fx) * m, py)) px += fx;
   if (stuck || free(px, py + fy + Math.sign(fy) * m)) py += fy;
+  stepHomeBalcony(fx);
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
 // Short, bounded skid segments remain on the road for two minutes.
@@ -16137,7 +16484,7 @@ function chaseCam(dt) {
   let back = 0;
   for (let step = 0.04; step <= 1.1; step += 0.04) {
     const x = me.x - bx * step, y = me.y - by * step;
-    const blocked = [-0.07, 0.07].some(ox => [-0.07, 0.07].some(oy => map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy)));
+    const blocked = [-0.07, 0.07].some(ox => [-0.07, 0.07].some(oy => map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy) || landmarkBlocked(x + ox, y + oy)));
     if (blocked) break;
     back = step;
   }

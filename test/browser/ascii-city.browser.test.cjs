@@ -9,6 +9,98 @@ const { chromium, devices } = require('playwright');
 
 const PAGE = pathToFileURL(path.join(__dirname, '..', '..', 'ascii-city.html')).href;
 
+test('Belle French doors lead into the real city, with solid railings and both ways back inside', () => withPage(async page => {
+  await page.evaluate(() => {
+    paused = true; money = 20000; buy('home_belle'); clearWanted(); sleep = null;
+    const home = owned.homes[0];
+    enterRoom('bellehome',{cell:[home.cell % N,Math.floor(home.cell / N)],ret:[41,73,0]},[18.4,12,0]);
+    body.z = body.vz = body.mx = body.my = body.crouch = 0; body.seat = null;
+    paused = false;
+  });
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(() => homeBalconyActive());
+  await page.evaluate(() => { paused = true; }); await page.keyboard.up('KeyW');
+  const result = await page.evaluate(() => {
+    const b = room.balconyWorld, position = [px,py], height = roofH;
+    const momentum = Math.hypot(body.mx,body.my), before = [px,py];
+    const rails = !roofFree(b.x1,b.doorY) && !roofFree(b.x0+.3,b.y0) && !roofFree(b.x0+.3,b.y1);
+    for(let k=0;k<30;k++)move(.01,0);
+    const bounded = px < b.x1-.035;
+    let worldCalls = 0; const original = drawLandmarks;
+    drawLandmarks = () => { worldCalls++; original(); }; a = 0; render(0); drawLandmarks = original;
+    const cityEye = eye, floor = roofHeightAt(b.x0+.3,b.doorY);
+    const exteriorRoom = room;
+    px = b.x0+.11; py = b.doorY; a = Math.PI; const prompt = promptText(); interact();
+    const back = mode === 'room' && room === exteriorRoom && free(px,py) && homeRecord() === owned.homes[0];
+    px = 19.7; py = 12; body.mx = 6; body.my = -2; stepHomeBalcony();
+    const scaled = [body.mx,body.my];
+    px = b.x0+.09; py = b.doorY; move(-.025,0);
+    const walkedBack = mode === 'room' && free(px,py);
+    return {position,height,momentum,rails,bounded,worldCalls,cityEye,floor,prompt,back,walkedBack,scaled,roomMomentum:[body.mx,body.my],before};
+  });
+  assert.ok(result.momentum > 0 && result.momentum < 1,'walking speed changes to outdoor world units');
+  assert.ok(result.rails && result.bounded && result.back && result.walkedBack,JSON.stringify(result));
+  assert.equal(result.worldCalls,1,'the ordinary city scene renders outdoors');
+  assert.ok(Math.abs(result.cityEye-result.height-.17)<1e-6);
+  assert.equal(result.floor,result.height);
+  assert.match(result.prompt,/French doors/);
+  assert.deepEqual(result.scaled,[.6,-.2]);
+  assert.deepEqual(result.roomMomentum,[6,-2]);
+}));
+
+test('every redesigned cathedral retains its stair entry, open tower views and return to the forecourt', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; clearWanted(); tod = 12; weather = 'clear'; env(0);
+    body.z = body.vz = body.crouch = 0; body.seat = null;
+    return LANDMARK_BUILDINGS.filter(b=>b.kind==='cathedral').map(b=>{
+      mode = 'walk'; room = null; px = b.x+5; py = b.y+3.7; a = Math.PI/2;
+      const ret = [px,py]; interact();
+      const entered = mode === 'room' && room.kind === 'cathedral';
+      [px,py] = CATH_TOWER; interact();
+      const tower = [px,py], height = roofH, open = roofFree(px,py);
+      const visible = [];
+      for(const heading of [0,Math.PI/2,Math.PI,-Math.PI/2]){
+        a = heading; pitch = 0; render(0);
+        const i=(rows>>1)*cols+(cols>>1); visible.push(ZB[i]>.4);
+      }
+      move(.035,0); move(0,.025);
+      const moved = px > tower[0] && py > tower[1];
+      // A stale roof lot used to steal the cathedral's return interaction.
+      roofLot = new Set(); interact();
+      const down = mode === 'room' && room.kind === 'cathedral' && Math.hypot(px-CATH_TOWER[0],py-CATH_TOWER[1])<.01;
+      leaveRoom();
+      return {name:b.profile.name,entered,height,open,visible,moved,down,outside:mode==='walk' && Math.hypot(px-ret[0],py-ret[1])<.01};
+    });
+  });
+  assert.equal(result.length,5);
+  for(const r of result){assert.equal(r.height,8);assert.ok(r.entered && r.open && r.visible.every(Boolean) && r.moved && r.down && r.outside,JSON.stringify(r));}
+}));
+
+test('new clock dials render on the solid chambers and show the game time on all four faces', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; mode = 'roof'; room = null; clearWanted(); people.length = cars.length = 0;
+    body.z = body.vz = body.crouch = 0; body.seat = null; weather = 'clear';
+    const results = [];
+    for(const b of LANDMARK_BUILDINGS.filter(b=>b.kind==='clock')){
+      const o=b.solids.find(o=>o.kind==='clock'); roofH=o.z0+.68-.17; pitch=0;
+      for(const [nx,ny] of [[1,0],[0,1],[-1,0],[0,-1]]){
+        px=o.x+nx*(o.hl+.65); py=o.y+ny*(o.hw+.65); a=Math.atan2(-ny,-nx);
+        tod=12;env(0);render(0); const center=(rows>>1)*cols+(cols>>1), depth=ZB[center];
+        // Compare the complete dial region: noon and quarter past cannot have identical hands.
+        const cells=[];
+        for(let row=(rows>>1)-3;row<=(rows>>1)+3;row++)for(let col=(cols>>1)-3;col<=(cols>>1)+3;col++)cells.push(row*cols+col);
+        const before=cells.map(i=>CH[i]).join('');tod=12.25;env(0);render(0);
+        const handColumn=(cols>>1)+Math.round(Math.min(o.hl,o.hw)*.73*.55*projX/.65);
+        const clockwise=[-1,0,1].some(row=>CH[((rows>>1)+row)*cols+handColumn]==='#');
+        results.push({name:b.profile.name,depth,white:BG[center]>>4===WHITE,changes:before!==cells.map(i=>CH[i]).join(''),clockwise});
+      }
+    }
+    return results;
+  });
+  assert.equal(result.length,20);
+  assert.ok(result.every(r=>Math.abs(r.depth-.65)<.035 && r.white && r.changes && r.clockwise),JSON.stringify(result));
+}));
+
 test('brownstone bays project in front of their walls and their beveled faces retain fitted glass', () => withPage(async page => {
   const result = await page.evaluate(() => {
     paused = true; mode = 'roof'; room = null; me = null; clearWanted();
@@ -143,8 +235,9 @@ test('Belle residence survives reload, has an open balcony and district geometry
   const result = await page.evaluate(() => {
     paused = true; tod = 12; env(0); const home = owned.homes[0];
     enterRoom(homeRoomKind(home.kind), { cell: [home.cell % N, Math.floor(home.cell / N)], ret: [41, 73, 0] }, [22.8, 11.2, 0]); pitch = 0;
+    stepHomeBalcony();
     render(0);
-    const balcony = room.def.balcony, openAir = ROOMW.cell(room.W + 1, 10) === 0 && !free(room.W + 1, 10), homeFound = homeRecord(room) === home;
+    const balcony = room.def.balcony, openAir = homeBalconyActive() && roofH === homeBalconyHeight(px,py), homeFound = homeRecord(room) === home;
     const bits = belleDetails.filter(b => b.kind === 'slab' || b.kind === 'iron');
     const noMurals = BELLE_BUILDINGS.every(b => muralSeed(idx(b.x0 + 1, b.y0 + 1), b.x0 + 1, b.y0 + 1, 'N') < 0);
     mode = 'walk'; room = null;

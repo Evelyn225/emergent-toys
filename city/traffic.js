@@ -57,7 +57,7 @@ function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
     const qx = mx + 0.5 - x, qy = my + 0.5 - y;
     if (Math.abs(qx) < ex + 0.5 && Math.abs(qy) < ey + 0.5 && Math.abs(qx * hx + qy * hy) < hl + diagonal && Math.abs(-qx * hy + qy * hx) < hw + diagonal) return false;
   }
-  return architectureCarClear(x, y, hx, hy, hl, hw);
+  return architectureCarClear(x, y, hx, hy, hl, hw) && landmarkCarClear(x, y, hx, hy, hl, hw);
 }
 // A short local route around buildings for a cruiser in close pursuit. The wider street network still handles
 // dispatch from far away; nearby cruisers can leave their lane, reverse and intercept rather than circling a block.

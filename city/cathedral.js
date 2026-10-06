@@ -1,4 +1,4 @@
-// ===== the cathedral (a landmark: world.js builds it, its spires are props), now with a way in. Through the great
+// ===== the cathedral (world.js and landmarks.js build its nave, towers and open belfries). Through the great
 // doors between the towers: a nave 38m long under a 16m vault, two rows of pillars down it, pews, tall stained-glass
 // windows down both sides throwing coloured light on the floor when the sun's up, a rose window over the altar,
 // organ pipes over the doors, candles to light, and the stairs up one of the towers to the bell.
@@ -45,6 +45,7 @@ function useCathedral() { // true if E did something
   }
   if (nearTowerStair()) { // up the tower: stand on its top, by the bell, 80m over the square
     mode = 'roof'; roofH = map[idx(Math.floor(room.tower[0]), Math.floor(room.tower[1]))]; px = room.tower[0]; py = room.tower[1]; a = -Math.PI / 2; pitch = -0.1;
+    roofLot = roofCells(Math.floor(px),Math.floor(py));
     notePoliceRoofEntry(px, py, room.ret);
     say('Three hundred and twelve steps. The bell hangs over you and the whole city spreads out below.', 5);
     return true;

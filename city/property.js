@@ -58,6 +58,20 @@ function summonCar(model) {
 }
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
 const homeRoomKind = kind => kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
+function homeBalconyBounds(home) {
+  const b = home?.kind === 'home_belle' && SHOP[home.cell]?.belle;
+  if (!b) return null;
+  const y = (b.y0 + b.y1) / 2;
+  return { x0: b.x1, x1: b.x1 + .6, y0: y - .7, y1: y + .7, y, doorY: y + .2, z: Math.min(2,Math.max(.3,b.h - .4)) };
+}
+function homeBalconyHeight(x, y) {
+  let height = 0;
+  for (const home of owned.homes) {
+    const b = homeBalconyBounds(home);
+    if (b && x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) height = Math.max(height,b.z);
+  }
+  return height;
+}
 function restoreHomeCell(cell) {
   if (!Number.isInteger(cell) || cell < 0 || cell >= N * N) return -1;
   if (SHOP[cell] && map[cell]) return cell;

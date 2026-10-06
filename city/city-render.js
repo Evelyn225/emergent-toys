@@ -43,6 +43,7 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
   const base = [STONE, WHITE, GRAY, BRICK, STONE][b.material], grain = hash(Math.floor(wc * 7), Math.floor(z * 10), sk);
   const course = fract(z * 8), joint = fract(wc * 2 + (Math.floor(z * 8) & 1) * 0.5);
   BG[i] = C(base, 2 + L * (0.25 + grain * 0.12));
+  if (homeBalconyDoorFacade(i,z,side,mx,my,wc,L,SHOP[k])) return;
   if (b.ivy && z < Math.min(h - 0.25, 2.5)) {
     const vine = 0.24 + Math.sin(z * 3 + b.seed * 8) * 0.14 + z * 0.13;
     const stem = Math.min(Math.abs(along - vine), z > 0.4 ? Math.abs(along - vine - Math.sin(z * 4) * 0.25) : 9);
@@ -374,46 +375,8 @@ function serviceUpper(i, u, z, zz, fl, fz, h, d, sty, sk, L, glowL) {
 // wc = world coordinate along the wall; lu = position across the face from the block's middle, left-to-right on screen
 const TICKER = ADS.join('   *   ') + '   *   ';
 function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
-  const L = fog * amb * (side ? 10 : 15), lu = (mod(wc, 8) - 5) * (Math.abs(u - wc) < 1e-6 ? 1 : -1);
-  if (sty === 3) { // clock tower: stone, with a clock face showing the game time on every side
-    BG[i] = bgAt(GRAY, day * 5 * (0.5 + 0.5 * fog));
-    const dz = z - (h - 1.4), rr = Math.hypot(lu, dz);
-    if (rr < 0.75) {
-      if (rr > 0.66) return set(i, 'O', C(GRAY, L * 1.2));
-      const ang = Math.atan2(lu, dz); // clockwise from 12
-      const onHand = (A, len) => rr < len && Math.abs(mod(ang - A + Math.PI, 2 * Math.PI) - Math.PI) * Math.max(rr, 0.06) < 0.05;
-      BG[i] = C(WHITE, Math.max(8 * amb, night * 11)); // the face glows at night
-      if (onHand(mod(tod, 12) / 12 * 2 * Math.PI, 0.38) || onHand(fract(tod) * 2 * Math.PI, 0.6)) return set(i, '#', C(GRAY, 1));
-      return set(i, Math.abs(rr - 0.57) < 0.05 && fract(ang / (Math.PI / 6) + 0.1) < 0.2 ? '+' : ' ', C(GRAY, 3));
-    }
-    if (z > h - 0.25) return set(i, '^', C(GRAY, L));
-    return set(i, fract(z * 4) < 0.15 ? '=' : fract(u * 3 + (Math.floor(z * 4) & 1) * 0.5) < 0.1 ? '|' : ' ', C(GRAY, L));
-  }
-  if (sty === 4) { // cathedral: stone with tall pointed stained-glass windows
-    BG[i] = bgAt(GRAY, day * 5 * (0.5 + 0.5 * fog));
-    if (side && mod(my, 8) === 4 && h < 4 && rel(py - my) < 0) { // the west front, between the towers: the great doors, a rose window over them
-      const dx = mod(wc, 8) - 5, ad = Math.abs(dx), rz = z - 1.75, rr = Math.hypot(dx, rz), glow = Math.max(L * 0.6, night * fog * 13, 4);
-      if (rr < 0.5) {
-        if (rr > 0.45 || Math.abs(fract((Math.atan2(dx, rz) + Math.PI) / (Math.PI / 6)) - 0.5) > 0.45 && rr > 0.1) return set(i, '+', C(GRAY, L));
-        BG[i] = C(rr < 0.1 ? YEL : GLASS[Math.floor((Math.atan2(dx, rz) + Math.PI) / (Math.PI / 6)) + Math.floor(rr * 6) & 7], glow * 0.5);
-        return set(i, rr < 0.1 ? '*' : ' ', C(WHITE, glow));
-      }
-      const top = 0.62 - 0.25 * Math.min(1, ad / 0.18) ** 0.7;
-      if (ad < 0.2 && z < top + 0.04) {
-        if (ad > 0.18 || z > top) return set(i, '#', C(GRAY, L * 1.1));
-        BG[i] = C(BRICK, 1 + L * 0.15 + (cathOpen() ? night * 2 : 0));
-        return set(i, ad < 0.006 ? '|' : hash(Math.floor(dx * 60), Math.floor(z * 60), 506) > 0.93 ? 'o' : fract(dx * 25) < 0.15 ? '|' : ' ', C(ad < 0.006 ? GRAY : BRICK, L * 1.2));
-      }
-    }
-    const fu = fract(u * 1.5), wcen = Math.abs(fu - 0.5), top = (h > 4 ? h - 1.5 : 2.3) - wcen * 1.2;
-    if (wcen < 0.2 && z > 0.6 && z < top) {
-      if (wcen > 0.16) return set(i, '|', C(GRAY, L));
-      const glass = [MAG, BLUE, YEL, RED, CYAN][hash(Math.floor(u * 1.5), Math.floor(z * 6), 41) * 5 | 0];
-      return set(i, '#', C(glass, Math.max(L * 0.6, night * fog * 13)));
-    }
-    if (z > h - 0.08) return set(i, '^', C(GRAY, L));
-    return set(i, fract(z * 5) < 0.12 ? '-' : fract(u * 4 + (Math.floor(z * 5) & 1) * 0.5) < 0.1 ? '|' : '.', C(GRAY, L * 0.8));
-  }
+  if (composedLandmarkFacade(i,z,h,side,sty,fog,wc,mx,my)) return;
+  const L = fog * amb * (side ? 10 : 15);
   if (sty === 5) { // tower wrapped in giant video screens, with a scrolling news ticker
     if (z < 0.5 || z > h - 0.3) { BG[i] = bgAt(GRAY, day * 2 * fog); return set(i, '=', C(GRAY, L)); }
     if (z > 1.1 && z < 1.5) { // ticker: one cell per letter, scrolling left

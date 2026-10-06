@@ -89,7 +89,14 @@ function drawBelleBuildings() {
       if (SHOP[idx(tx, ty)] === b.sh) drawCopperDome(...R(tx, ty), b.h + 0.1, 0.52, 0.75);
     }
   });
-  forNear(belleDetailsB, o => drawBox({ ...o, x: rel(o.x - px), y: rel(o.y - py) }, (i, t, L) => belleDetailShade(o, i, t, L)));
+  forNear(belleDetailsB, o => {
+    // The inhabited balcony replaces any decorative bay or ironwork across its French doors.
+    if (owned.homes.some(home => {
+      const b = homeBalconyBounds(home);
+      return b && Math.abs(o.x - b.x0) < .25 && Math.abs(o.y - b.y) < .9 && o.z1 > b.z - .14 && o.z0 < b.z + .35;
+    })) return;
+    drawBox({ ...o, x: rel(o.x - px), y: rel(o.y - py) }, (i, t, L) => belleDetailShade(o, i, t, L));
+  });
 }
 // Fluted iron posts and paired opal globes, distinct from the other districts' swan-neck street lamps.
 function drawBelleLamp(vx, vy) {

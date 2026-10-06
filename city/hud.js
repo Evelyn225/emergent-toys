@@ -114,6 +114,7 @@ function promptText() {
   if (mode === 'roof') {
     const dr = droppedHere(), drop = edgeDrop(), edge = drop ? `edge: ${drop}m drop` : '';
     if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
+    if (homeBalconyActive()) return atHomeBalconyDoor() ? 'E: back through the French doors' : 'Your balcony. The city below.';
     if (room && room.kind === 'cathedral') return 'The bell tower, 80m up.   E: back down the stairs';
     return [onRoofLot() ? 'E: take the stairs down' : 'E: fire escape down', edge].filter(Boolean).join('   ');
   }

@@ -214,8 +214,12 @@ function interact() {
     return say('The way out is over by the door.', 2);
   }
   if (mode === 'roof' && droppedHere()) return say(pickUpDropped(droppedHere())[1]);
+  if (homeBalconyActive()) {
+    if (atHomeBalconyDoor()) { leaveHomeBalcony(); return say('Back through the French doors.',2); }
+    return say('The French doors are behind you. The city carries on below.',2);
+  }
+  if (mode === 'roof' && room && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; roofLot = null; roofH = 0; return say('Down and down and round and round.', 2); }
   if (mode === 'roof' && !onRoofLot()) return fireEscape() ? say('You clang down the fire escape and drop the last bit to the sidewalk.', 3) : say('No way down from here. Jump, or find another roof.', 3);
-  if (mode === 'roof' && room && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; return say('Down and down and round and round.', 2); }
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; roofLot = null; return; }
   if (mode === 'el') return elGetOff();
   if (mode === 'boat') return useGardens();
