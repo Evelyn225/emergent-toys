@@ -55,7 +55,7 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
 // A real 3D box: every screen cell its outline could cover casts its ray at it (rayBox), so it looks right from any
 // side. b: {x, y relative to you, c, s heading, hl, hw, z0, z1}. shade(i, t, L) paints the cell from HIT (which face,
 // where on it) and returns true if it drew. Backgrounds get the box's depth too, so fog treats it as solid.
-function drawBox(b, shade) {
+function drawBox(b, shade, intersect = rayBox) {
   let c0 = cols, c1 = -1, r0 = rows, r1 = -1, behind = 0, near = Infinity;
   for (const su of [-1, 1]) for (const sv of [-1, 1]) {
     const X = b.x + su * b.hl * b.c - sv * b.hw * b.s, Y = b.y + su * b.hl * b.s + sv * b.hw * b.c, depth = dx * X + dy * Y;
@@ -72,7 +72,7 @@ function drawBox(b, shade) {
   for (let c = c0; c < c1; c++) {
     const cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
     for (let r = r0; r < r1; r++) {
-      const i = r * cols + c, t = rayBox(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
+      const i = r * cols + c, t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
       if (t < 0 || t >= ZB[i] || t > vis) continue;
       if (shade(i, t, (1 - t / vis) * 15 * amb)) { ZB[i] = ZBG[i] = t; FL[i] = 0; }
     }

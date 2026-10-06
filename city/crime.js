@@ -158,7 +158,7 @@ function roomSearchLead(dt) {
       }
     }
     if ((c.pathT -= dt) <= 0 || !c.path.length) { c.pathT = 0.55; c.path = roomPath(c.x, c.y, c.targetX, c.targetY); }
-    let [gx, gy] = c.path[0] || [c.targetX, c.targetY], vx = gx - c.x, vy = gy - c.y, d = Math.hypot(vx, vy), step = 1.05 * dt;
+    let [gx, gy] = c.path[0] || [c.targetX, c.targetY], vx = gx - c.x, vy = gy - c.y, d = Math.hypot(vx, vy), step = (c.sees ? 1.9 : 1.4) * dt;
     if (d < step + 0.04) { c.x = gx; c.y = gy; if (c.path.length) c.path.shift(); }
     else if (d > 1e-5) {
       const nx = c.x + vx / d * step, ny = c.y + vy / d * step;

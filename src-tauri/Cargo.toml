@@ -9,7 +9,7 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2" }
+tauri = { version = "2", features = [] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

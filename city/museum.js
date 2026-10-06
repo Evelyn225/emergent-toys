@@ -24,6 +24,49 @@ const DINO = pad([
 const ANUBIS = pad(['  /\\ /\\', '  \\ V /', '  (o o)', '   \\=/', '  /|#|\\', '   |#|', '   |#|', '  _|_|_']);
 
 // ---- outside
+const MUSEUM_EAVE = 1.32, MUSEUM_RIDGE = 1.75;
+function museumRoofHeight(x, y) {
+  const gx = rel(x - (MUSEUM.bx * 8 + 5)), gy = rel(y - (MUSEUM.by * 8 + 5));
+  if (Math.abs(gx) > 3 || Math.abs(gy) > 3) return 0;
+  return MUSEUM_RIDGE - Math.abs(gx) * (MUSEUM_RIDGE - MUSEUM_EAVE) / 3;
+}
+// Clip the view ray against a triangular prism: two sloping planes, two gables and a bottom.
+function museumRoofRay(ox, oy, oz, rx, ry, rz, b) {
+  const slope = (MUSEUM_RIDGE - MUSEUM_EAVE) / b.hl;
+  let enter = 0, leave = Infinity;
+  for (const [nx, ny, nz, limit] of [
+    [1, 0, 0, b.x + b.hl], [-1, 0, 0, -b.x + b.hl],
+    [0, 1, 0, b.y + b.hw], [0, -1, 0, -b.y + b.hw],
+    [0, 0, -1, -b.z0],
+    [slope, 0, 1, b.z1 + slope * b.x], [-slope, 0, 1, b.z1 - slope * b.x]
+  ]) {
+    const distance = limit - nx * ox - ny * oy - nz * oz, velocity = nx * rx + ny * ry + nz * rz;
+    if (Math.abs(velocity) < 1e-9) { if (distance < 0) return -1; continue; }
+    const t = distance / velocity;
+    if (velocity < 0) enter = Math.max(enter, t); else leave = Math.min(leave, t);
+    if (enter > leave) return -1;
+  }
+  return enter > 0 ? enter : -1;
+}
+function drawMuseumRoof() {
+  const x = rel(MUSEUM.bx * 8 + 5 - px), y = rel(MUSEUM.by * 8 + 5 - py);
+  if (Math.hypot(x, y) > vis + 5) return;
+  drawBox(boxAt(x, y, 1, 0, 3, 3, MUSEUM_EAVE, MUSEUM_RIDGE), (i, t, L) => {
+    const screenX = 2 * (i % cols + 0.5) / cols - 1;
+    const u = (dx - dy * tf * screenX) * t - x, v = (dy + dx * tf * screenX) * t - y;
+    const z = eye + (hor - Math.floor(i / cols) - 0.5) / projY * t;
+    const gable = Math.abs(Math.abs(v) - 3) < 0.001;
+    if (gable) {
+      const rim = z > MUSEUM_RIDGE - Math.abs(u) * (MUSEUM_RIDGE - MUSEUM_EAVE) / 3 - 0.035;
+      BG[i] = C(WHITE, 2 + L * 0.18);
+      set(i, rim ? (u < 0 ? '/' : '\\') : Math.abs(u) < 0.3 && z < 1.55 && z > 1.38 ? 'o' : ' ', C(rim ? WHITE : YEL, L));
+    } else {
+      BG[i] = C(GRAY, 1.5 + L * (u < 0 ? 0.14 : 0.09));
+      set(i, fract(v * 5) < 0.12 ? '-' : fract(u * 8 + (Math.floor(v * 5) & 1) * 0.5) < 0.08 ? '|' : ' ', C(GRAY, L * 0.7));
+    }
+    return true;
+  }, museumRoofRay);
+}
 function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const L = fog * amb * (side ? 10 : 15), glow = Math.max(night, overcast * 0.5), sgn = Math.sign(u * wc) || 1, c = MUSEUM;
   const y0 = c.by * 8 + 2, a0 = side ? c.bx * 8 + 2 : y0, along = wc - a0, len = 6, sh = SHOP[idx(mx, my)];
@@ -36,12 +79,6 @@ function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     BG[i] = C(GREEN, (1.6 + L * 0.2) * (side ? 0.9 : 0.7));
     if (z > 2.45 && z < 2.6 && fract(wc * 3) < 0.4) { BG[i] = C(YEL, 1 + glow * 5); return set(i, ' ', 0); }
     return set(i, fract(wc * 4) < 0.1 ? '|' : z > top - 0.06 ? '^' : ' ', C(CYAN, L * 0.7));
-  }
-  if (front && z > 1.32 && z < 1.75) { // the pediment
-    const peak = 1.75 - Math.abs(along - len / 2) / (len / 2) * 0.4;
-    if (z > peak) return set(i, ' ', 0);
-    if (z > peak - 0.03) return set(i, '/', C(WHITE, L));
-    return set(i, Math.abs(along - len / 2) < 0.3 && z < 1.55 && z > 1.38 ? 'o' : ' ', C(YEL, L * 0.8)); // a carved sunburst in the middle
   }
   if (front && z > 1.18 && z <= 1.32) { // the frieze
     if (wallText(i, u, uStep, z, d, 'GLYPHPORT MUSEUM', sgn * (a0 + len / 2), 1.25, 0.07, 0.08, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
@@ -72,7 +109,10 @@ function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 // ---- inside: the walls of each room
 const museumWing = (x, y) => y < 9 && x > 7 && x < 18 ? 'gems' : x < 7 ? 'egypt' : x > 18 ? 'gallery' : 'hall';
 function museumWall(i, su, uStep, z, d, mx, my, L) {
-  const u = Math.abs(su), wing = museumWing(px, py), lit = room.burgled ? 0.35 : 1;
+  // Choose the wing on the visible side of this wall, rather than the player's current section.
+  const screenX = 2 * (i % cols + 0.5) / cols - 1;
+  const rx = dx - dy * tf * screenX, ry = dy + dx * tf * screenX;
+  const u = Math.abs(su), wing = museumWing(px + rx * (d - 0.01), py + ry * (d - 0.01)), lit = room.burgled ? 0.35 : 1;
   if (z > 3.6) { BG[i] = C(WHITE, 1.2 * lit); return set(i, '=', C(GRAY, L * 0.5)), true; } // the cornice
   if (wing === 'egypt') { // sandstone, carved all over: eyes, ankhs, birds, wavy water
     BG[i] = C(WARM, (2 + L * 0.15) * lit);

@@ -128,24 +128,29 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
+const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], museumRoofHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
-  const h = map[idx(Math.floor(x), Math.floor(y))];
+  const h = roofHeightAt(x, y);
   if (roofFixed()) return h === roofH;
   return h <= roofH + ROOF_STEP + body.z / 10;
 }
-const overRoof = (x, y) => { const h = map[idx(Math.floor(x), Math.floor(y))]; return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
+const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
   if (mode === 'walk' && overRoof(px, py)) { // came down on a roof
-    const h = map[idx(Math.floor(px), Math.floor(py))];
+    const h = roofHeightAt(px, py);
     mode = 'roof'; roofH = h; shiftFeet(-h * 10); room = null; roofLot = new Set(); return;
   }
   if (mode !== 'roof' || roofFixed()) return;
-  const h = map[idx(Math.floor(px), Math.floor(py))];
+  const h = roofHeightAt(px, py);
   if (h === roofH) return;
-  if (h > 0) { shiftFeet((roofH - h) * 10); roofH = h; return; }
+  if (h > 0) {
+    const followingSlope = museumRoofHeight(px, py) > 0 && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
+    if (!followingSlope) shiftFeet((roofH - h) * 10);
+    roofH = h; return;
+  }
   shiftFeet(roofH * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
 const onRoofLot = () => !roofLot || roofLot.has(idx(Math.floor(px), Math.floor(py)));
@@ -174,7 +179,7 @@ function fireEscape() {
 // standing at the edge facing a drop bigger than a step: how far it is (metres), or 0
 function edgeDrop() {
   if (mode !== 'roof' || roofFixed()) return 0;
-  const h = map[idx(Math.floor(px + Math.cos(a) * 0.45), Math.floor(py + Math.sin(a) * 0.45))];
+  const h = roofHeightAt(px + Math.cos(a) * 0.45, py + Math.sin(a) * 0.45);
   return h < roofH - ROOF_STEP ? Math.round((roofH - h) * 10) : 0;
 }
 // how far your eyes are off standing height (metres): up in a jump, down crouching or sitting, up a little on the board

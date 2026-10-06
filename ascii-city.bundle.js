@@ -708,7 +708,7 @@ const EXCHANGE = { bx: 16, by: 15 };
 const MUSEUM = { bx: 14, by: 16 };
 {
   const sh = MUSEUM.sh = { kind: SHOP_LIT, word: 'MUSEUM', neon: WHITE, glyphs: '#', hours: [10, 18], fee: 10, museum: true };
-  for (let y = 2; y <= 7; y++) for (let x = 2; x <= 7; x++) { const i = idx(MUSEUM.bx * 8 + x, MUSEUM.by * 8 + y); map[i] = x >= 4 && x <= 5 && y >= 4 && y <= 5 ? 3.4 : 2.2; STY[i] = 23; SHOP[i] = sh; SEED[i] = 0.5; }
+  for (let y = 2; y <= 7; y++) for (let x = 2; x <= 7; x++) { const i = idx(MUSEUM.bx * 8 + x, MUSEUM.by * 8 + y); map[i] = x >= 4 && x <= 5 && y >= 4 && y <= 5 ? 3.4 : 1.32; STY[i] = 23; SHOP[i] = sh; SEED[i] = 0.5; }
 }
 
 // ---- the Velvet Rope, a strip club in midtown (stripclub.js)
@@ -4291,7 +4291,7 @@ function roomSearchLead(dt) {
       }
     }
     if ((c.pathT -= dt) <= 0 || !c.path.length) { c.pathT = 0.55; c.path = roomPath(c.x, c.y, c.targetX, c.targetY); }
-    let [gx, gy] = c.path[0] || [c.targetX, c.targetY], vx = gx - c.x, vy = gy - c.y, d = Math.hypot(vx, vy), step = 1.05 * dt;
+    let [gx, gy] = c.path[0] || [c.targetX, c.targetY], vx = gx - c.x, vy = gy - c.y, d = Math.hypot(vx, vy), step = (c.sees ? 1.9 : 1.4) * dt;
     if (d < step + 0.04) { c.x = gx; c.y = gy; if (c.path.length) c.path.shift(); }
     else if (d > 1e-5) {
       const nx = c.x + vx / d * step, ny = c.y + vy / d * step;
@@ -5871,6 +5871,7 @@ function treeCell(i, u, z, du, dz, L, t) {
 }
 
 function citySprites() {
+  drawMuseumRoof();
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
@@ -9059,6 +9060,49 @@ const DINO = pad([
 const ANUBIS = pad(['  /\\ /\\', '  \\ V /', '  (o o)', '   \\=/', '  /|#|\\', '   |#|', '   |#|', '  _|_|_']);
 
 // ---- outside
+const MUSEUM_EAVE = 1.32, MUSEUM_RIDGE = 1.75;
+function museumRoofHeight(x, y) {
+  const gx = rel(x - (MUSEUM.bx * 8 + 5)), gy = rel(y - (MUSEUM.by * 8 + 5));
+  if (Math.abs(gx) > 3 || Math.abs(gy) > 3) return 0;
+  return MUSEUM_RIDGE - Math.abs(gx) * (MUSEUM_RIDGE - MUSEUM_EAVE) / 3;
+}
+// Clip the view ray against a triangular prism: two sloping planes, two gables and a bottom.
+function museumRoofRay(ox, oy, oz, rx, ry, rz, b) {
+  const slope = (MUSEUM_RIDGE - MUSEUM_EAVE) / b.hl;
+  let enter = 0, leave = Infinity;
+  for (const [nx, ny, nz, limit] of [
+    [1, 0, 0, b.x + b.hl], [-1, 0, 0, -b.x + b.hl],
+    [0, 1, 0, b.y + b.hw], [0, -1, 0, -b.y + b.hw],
+    [0, 0, -1, -b.z0],
+    [slope, 0, 1, b.z1 + slope * b.x], [-slope, 0, 1, b.z1 - slope * b.x]
+  ]) {
+    const distance = limit - nx * ox - ny * oy - nz * oz, velocity = nx * rx + ny * ry + nz * rz;
+    if (Math.abs(velocity) < 1e-9) { if (distance < 0) return -1; continue; }
+    const t = distance / velocity;
+    if (velocity < 0) enter = Math.max(enter, t); else leave = Math.min(leave, t);
+    if (enter > leave) return -1;
+  }
+  return enter > 0 ? enter : -1;
+}
+function drawMuseumRoof() {
+  const x = rel(MUSEUM.bx * 8 + 5 - px), y = rel(MUSEUM.by * 8 + 5 - py);
+  if (Math.hypot(x, y) > vis + 5) return;
+  drawBox(boxAt(x, y, 1, 0, 3, 3, MUSEUM_EAVE, MUSEUM_RIDGE), (i, t, L) => {
+    const screenX = 2 * (i % cols + 0.5) / cols - 1;
+    const u = (dx - dy * tf * screenX) * t - x, v = (dy + dx * tf * screenX) * t - y;
+    const z = eye + (hor - Math.floor(i / cols) - 0.5) / projY * t;
+    const gable = Math.abs(Math.abs(v) - 3) < 0.001;
+    if (gable) {
+      const rim = z > MUSEUM_RIDGE - Math.abs(u) * (MUSEUM_RIDGE - MUSEUM_EAVE) / 3 - 0.035;
+      BG[i] = C(WHITE, 2 + L * 0.18);
+      set(i, rim ? (u < 0 ? '/' : '\\') : Math.abs(u) < 0.3 && z < 1.55 && z > 1.38 ? 'o' : ' ', C(rim ? WHITE : YEL, L));
+    } else {
+      BG[i] = C(GRAY, 1.5 + L * (u < 0 ? 0.14 : 0.09));
+      set(i, fract(v * 5) < 0.12 ? '-' : fract(u * 8 + (Math.floor(v * 5) & 1) * 0.5) < 0.08 ? '|' : ' ', C(GRAY, L * 0.7));
+    }
+    return true;
+  }, museumRoofRay);
+}
 function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const L = fog * amb * (side ? 10 : 15), glow = Math.max(night, overcast * 0.5), sgn = Math.sign(u * wc) || 1, c = MUSEUM;
   const y0 = c.by * 8 + 2, a0 = side ? c.bx * 8 + 2 : y0, along = wc - a0, len = 6, sh = SHOP[idx(mx, my)];
@@ -9071,12 +9115,6 @@ function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     BG[i] = C(GREEN, (1.6 + L * 0.2) * (side ? 0.9 : 0.7));
     if (z > 2.45 && z < 2.6 && fract(wc * 3) < 0.4) { BG[i] = C(YEL, 1 + glow * 5); return set(i, ' ', 0); }
     return set(i, fract(wc * 4) < 0.1 ? '|' : z > top - 0.06 ? '^' : ' ', C(CYAN, L * 0.7));
-  }
-  if (front && z > 1.32 && z < 1.75) { // the pediment
-    const peak = 1.75 - Math.abs(along - len / 2) / (len / 2) * 0.4;
-    if (z > peak) return set(i, ' ', 0);
-    if (z > peak - 0.03) return set(i, '/', C(WHITE, L));
-    return set(i, Math.abs(along - len / 2) < 0.3 && z < 1.55 && z > 1.38 ? 'o' : ' ', C(YEL, L * 0.8)); // a carved sunburst in the middle
   }
   if (front && z > 1.18 && z <= 1.32) { // the frieze
     if (wallText(i, u, uStep, z, d, 'GLYPHPORT MUSEUM', sgn * (a0 + len / 2), 1.25, 0.07, 0.08, C(GRAY, 3), C(WHITE, Math.max(L * 0.4, 3)))) return;
@@ -9107,7 +9145,10 @@ function museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 // ---- inside: the walls of each room
 const museumWing = (x, y) => y < 9 && x > 7 && x < 18 ? 'gems' : x < 7 ? 'egypt' : x > 18 ? 'gallery' : 'hall';
 function museumWall(i, su, uStep, z, d, mx, my, L) {
-  const u = Math.abs(su), wing = museumWing(px, py), lit = room.burgled ? 0.35 : 1;
+  // Choose the wing on the visible side of this wall, rather than the player's current section.
+  const screenX = 2 * (i % cols + 0.5) / cols - 1;
+  const rx = dx - dy * tf * screenX, ry = dy + dx * tf * screenX;
+  const u = Math.abs(su), wing = museumWing(px + rx * (d - 0.01), py + ry * (d - 0.01)), lit = room.burgled ? 0.35 : 1;
   if (z > 3.6) { BG[i] = C(WHITE, 1.2 * lit); return set(i, '=', C(GRAY, L * 0.5)), true; } // the cornice
   if (wing === 'egypt') { // sandstone, carved all over: eyes, ankhs, birds, wavy water
     BG[i] = C(WARM, (2 + L * 0.15) * lit);
@@ -9912,7 +9953,7 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
 // A real 3D box: every screen cell its outline could cover casts its ray at it (rayBox), so it looks right from any
 // side. b: {x, y relative to you, c, s heading, hl, hw, z0, z1}. shade(i, t, L) paints the cell from HIT (which face,
 // where on it) and returns true if it drew. Backgrounds get the box's depth too, so fog treats it as solid.
-function drawBox(b, shade) {
+function drawBox(b, shade, intersect = rayBox) {
   let c0 = cols, c1 = -1, r0 = rows, r1 = -1, behind = 0, near = Infinity;
   for (const su of [-1, 1]) for (const sv of [-1, 1]) {
     const X = b.x + su * b.hl * b.c - sv * b.hw * b.s, Y = b.y + su * b.hl * b.s + sv * b.hw * b.c, depth = dx * X + dy * Y;
@@ -9929,7 +9970,7 @@ function drawBox(b, shade) {
   for (let c = c0; c < c1; c++) {
     const cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
     for (let r = r0; r < r1; r++) {
-      const i = r * cols + c, t = rayBox(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
+      const i = r * cols + c, t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
       if (t < 0 || t >= ZB[i] || t > vis) continue;
       if (shade(i, t, (1 - t / vis) * 15 * amb)) { ZB[i] = ZBG[i] = t; FL[i] = 0; }
     }
@@ -14523,24 +14564,29 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
+const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], museumRoofHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
-  const h = map[idx(Math.floor(x), Math.floor(y))];
+  const h = roofHeightAt(x, y);
   if (roofFixed()) return h === roofH;
   return h <= roofH + ROOF_STEP + body.z / 10;
 }
-const overRoof = (x, y) => { const h = map[idx(Math.floor(x), Math.floor(y))]; return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
+const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
   if (mode === 'walk' && overRoof(px, py)) { // came down on a roof
-    const h = map[idx(Math.floor(px), Math.floor(py))];
+    const h = roofHeightAt(px, py);
     mode = 'roof'; roofH = h; shiftFeet(-h * 10); room = null; roofLot = new Set(); return;
   }
   if (mode !== 'roof' || roofFixed()) return;
-  const h = map[idx(Math.floor(px), Math.floor(py))];
+  const h = roofHeightAt(px, py);
   if (h === roofH) return;
-  if (h > 0) { shiftFeet((roofH - h) * 10); roofH = h; return; }
+  if (h > 0) {
+    const followingSlope = museumRoofHeight(px, py) > 0 && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
+    if (!followingSlope) shiftFeet((roofH - h) * 10);
+    roofH = h; return;
+  }
   shiftFeet(roofH * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
 const onRoofLot = () => !roofLot || roofLot.has(idx(Math.floor(px), Math.floor(py)));
@@ -14569,7 +14615,7 @@ function fireEscape() {
 // standing at the edge facing a drop bigger than a step: how far it is (metres), or 0
 function edgeDrop() {
   if (mode !== 'roof' || roofFixed()) return 0;
-  const h = map[idx(Math.floor(px + Math.cos(a) * 0.45), Math.floor(py + Math.sin(a) * 0.45))];
+  const h = roofHeightAt(px + Math.cos(a) * 0.45, py + Math.sin(a) * 0.45);
   return h < roofH - ROOF_STEP ? Math.round((roofH - h) * 10) : 0;
 }
 // how far your eyes are off standing height (metres): up in a jump, down crouching or sitting, up a little on the board
