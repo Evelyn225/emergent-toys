@@ -18,9 +18,7 @@ const barShade = (i, t, L) => {
   if (Math.abs(fract(u * 4 + 0.5) - 0.5) < 0.09) return set(i, '|', C(WHITE, L * 1.3)), true;
   return false; // between the bars: see through
 };
-// the same bars, for anything thrown through them (pee.js): only the uprights, the sill and the band stop it
-const barGap = (u, w) => !(w < 0.06 || Math.abs(w - 2.3) < 0.035 || Math.abs(fract(u * 4 + 0.5) - 0.5) < 0.09);
-const bars = (x, y) => { const b = BX(x, y, 3, 0.03, 0, 3, barShade); b.box.gap = barGap; return b; };
+const bars = (x, y) => ({ ...BX(x, y, 3, 0.03, 0, 3, barShade), peeThrough: true });
 const inmate = (x, y, sit) => sit ? sitting(x, y, ORANGE, 0.42) : standing(x, y, ORANGE);
 const bunk = (x, y) => [BX(x, y, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // a blanket on a steel frame
   BX(x, y, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; })];

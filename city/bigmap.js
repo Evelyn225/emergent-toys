@@ -97,7 +97,8 @@ function bigMapDraw() {
     x.strokeStyle = '#ff4'; x.lineWidth = 2;
     for (const k of [0, 0.5]) { const f = fract(now * 0.6 + k); x.globalAlpha = 1 - f; x.beginPath(); x.arc(X, Y, 8 + f * 18, 0, Math.PI * 2); x.stroke(); }
     x.globalAlpha = 1;
-    dot(hx, hy, 'HOME', '#ff4', 13);
+    dot(hx, hy, 'HOME', '#ff4', 18);
+    x.strokeStyle = '#ff4'; x.strokeRect(X - 27, Y - 12, 54, 24);
     taken.push([X - 26, Y - 14, X + 26, Y + 14]);
   }
   for (const c of owned.cars) if (c !== me) dot(c.x, c.y, 'C', '#fff');

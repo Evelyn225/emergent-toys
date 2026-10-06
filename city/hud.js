@@ -161,6 +161,7 @@ function promptText() {
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (sh.kind === SHOP_SHUT) return `${sh.word}: closed down for good (FOR LEASE)`;
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
+    if (homeAt(sh)) return 'E: enter your apartment';
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
     return `E: enter ${sh.word}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
   }
@@ -202,7 +203,12 @@ function minimap() {
   for (const c of footCops) mark(c.x, c.y, 'p', c.chase ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : '#69f');
   for (const s of stations) mark(s.x, s.y, 'S', '#4f4');
   for (const c of owned.cars) if (c !== me) mark(c.x, c.y, 'C', '#fff');
-  for (const h of owned.homes) mark(h.cell % N + 0.5, Math.floor(h.cell / N) + 0.5, 'H', '#ff4');
+  for (const h of owned.homes) {
+    const hx = h.cell % N + 0.5, hy = Math.floor(h.cell / N) + 0.5, p = inMap(hx, hy);
+    if (!p) continue;
+    g.fillStyle = '#ff4'; g.fillRect(p[0] - cw_, p[1] - fs * 0.2, tw + 2 * cw_, fs * 1.4);
+    mark(hx, hy, 'H', '#ff4');
+  }
   for (const s of EL_STATIONS) mark(s.x, EL_Y + 1, 'E', '#f84');
   for (const v of vendors) mark(v.x, v.y, '$', '#fa3');
   mark(WHEEL.x, WHEEL.y, '*', fract(T) < 0.5 ? '#f6f' : '#ff6'); // the Ferris wheel

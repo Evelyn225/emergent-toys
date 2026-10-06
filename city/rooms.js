@@ -59,7 +59,10 @@ ROOM_FOR.STORAGE = 'storage';
 // a room's bathroom (def.wc): its own little room off the floor, 'W' walls round it with a doorway, white tiles inside.
 // sign: the wall cell the WC sign goes on (mx, my) and where along it
 const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && y >= w.y0 && y < w.y1;
-const roomAt = (x, y) => (x = Math.floor(x), y = Math.floor(y), x < 0 || y < 0 || x >= room.W || y >= room.H ? '#' : room.grid[y][x]); // (callers pass cell centres, x + 0.5: floor them)
+function roomAt(x, y) {
+  x = Math.floor(x); y = Math.floor(y);
+  return room?.grid[y]?.[x] ?? '#'; // Cell centres and out-of-bounds search rays are safe.
+}
 // props
 const SP = (x, y, w, h, art, col, z = 0) => ({ x, y, w, h, art, col, z });
 const standing = (x, y, shirt) => SP(x, y, 0.55, 1.75, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? shirt : GRAY, L));
@@ -589,7 +592,8 @@ function realtyWall(i, u, uStep, z, d, mx, my, L) {
 const HOME_SHELF_CAPACITY = 4;
 function homeRecord(r = room) {
   if (!r || !r.cell || !['home', 'loft'].includes(r.kind)) return null;
-  return owned.homes.find(h => h.cell === idx(r.cell[0], r.cell[1])) || null;
+  const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1]));
+  return owned.homes.find(h => h.cell === cell || SHOP[cell] && SHOP[h.cell] === SHOP[cell]) || null;
 }
 const homeCatArt = () => (T * 1.4 | 0) % 7 === 0
   ? [' /\\_/\\ ', ' ( -.- )', '  > ^ < ']

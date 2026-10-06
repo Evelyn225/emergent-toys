@@ -50,8 +50,8 @@ function flash() {
   return f * near;
 }
 const WEATHER_NEXT = { clear: 'rain', rain: 'storm', storm: 'fog', fog: 'snow', snow: 'clear' }; // the globe's cycle outside winter, when it always brings snow
-// the seasons: a week of days each, spring first; seasonShift moves the whole year on (the orrery, the dev tools)
-const SEASONS = ['spring', 'summer', 'autumn', 'winter'], SEASON_DAYS = 7;
+// the seasons: four weeks of days each, spring first; seasonShift moves the whole year on (the orrery, the dev tools)
+const SEASONS = ['spring', 'summer', 'autumn', 'winter'], SEASON_DAYS = 28;
 let seasonShift = 0, weatherDue = 0; // weatherDue: when a promised change in the sky arrives (the fortune teller)
 const seasonIdx = () => mod(Math.floor(dayNum / SEASON_DAYS) + seasonShift, 4), season = () => SEASONS[seasonIdx()];
 const setSeason = k => { seasonShift = mod(seasonShift + k - seasonIdx(), 4); };

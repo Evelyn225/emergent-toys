@@ -124,6 +124,7 @@ function interact() {
     if (room.kind === 'home' || room.kind === 'loft') { // your place: sleep whenever you like, your closet, the telly
       const hs = homeSpot();
       const home = homeRecord(room);
+      if (!home) return say('This apartment is not yours.', 2);
       if (hs === 'bed') { sleep = { t: 0, home: true }; return say('You crawl into your own bed.', 3); }
       if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', 'Kept at home, whichever home you go to');
       if (hs === 'shelf') {
@@ -235,7 +236,7 @@ function interact() {
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
     }
     else { // a stolen car: if anyone saw, the police hear about it
-      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); look = 0;
+      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
       if (c.owned) { c.parked = false; say(`You get into your ${ITEMS[c.model].name}.`, 2); } // yours, bought and paid for
       else if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
       else {
@@ -276,7 +277,7 @@ function interact() {
     if (sh.kind === SHOP_SHUT) return say(pick(['Closed down for good. A FOR LEASE sign on the shutter.', 'Shuttered for good. The FOR LEASE sign has a phone number nobody answers.', 'Gone out of business. Just the old sign left.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh);
-    if (home) return enterRoom(home.kind === 'home_loft' ? 'loft' : 'home', { word: 'HOME', ret: [px, py, a], cell: [lookHit.mx, lookHit.my] }, [ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid[0].length / 2, ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid.length - 1.6, -Math.PI / 2]), say('Home.', 1.5);
+    if (home) return enterRoom(home.kind === 'home_loft' ? 'loft' : 'home', { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, [ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid[0].length / 2, ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid.length - 1.6, -Math.PI / 2]), say('Home.', 1.5);
     if (sh.club && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
     if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
     if (sh.fee) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : sh.museum ? 'Enjoy the collection. No flash photography.' : 'Mind the butterflies.'}"`, 3);

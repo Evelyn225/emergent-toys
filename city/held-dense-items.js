@@ -836,3 +836,26 @@ Object.assign(DENSE, {
     return null;
   }),
 });
+
+// Pet carriers: a solid shell with the animal visible behind the door grille.
+function heldPetCarrier(it) {
+  const cat = it.id === 'petcat';
+  return sculpt(28, 17, (x, y) => {
+    if (y < -5.5) {
+      if (y > -7.5 && Math.abs(x) < 2.5 && (y < -6.7 || Math.abs(x) > 1.8)) return ['=', C(GRAY, 13)];
+      return null;
+    }
+    if (y > 7 || Math.abs(x) > 7 - Math.max(0, -y - 3) * 0.35) return null;
+    if (y < -4 || y > 5.7 || Math.abs(x) > 5.7) return dLit(0.55 - x * 0.03, BLUE);
+    const face = dEll(x, y, 0, 0, 2.8, 2.3);
+    if (Math.abs(Math.abs(x) - 1.1) < 0.4 && Math.abs(y + 0.3) < 0.4) return ['o', C(cat ? GREEN : BRICK, 15)];
+    if (Math.abs(x) < 0.4 && Math.abs(y - 0.8) < 0.4) return ['v', C(GRAY, 4)];
+    if (face < 1) return dLit(0.7 - x * 0.07, cat ? GRAY : BRICK);
+    if (cat && y < -1.2 && y > -3.6 && Math.abs(Math.abs(x) - 1.8) < (-y - 1) * 0.4) return ['^', C(GRAY, 12)];
+    if (!cat && dEll(Math.abs(x), y, 2.7, 0.1, 0.8, 2) < 1) return ['#', C(BRICK, 8)];
+    if (Math.abs(x / D_ASPECT % 4) < 0.6) return ['|', C(GRAY, 11)];
+    return [' ', C(GRAY, 2)];
+  });
+}
+DENSE.petcat = heldPetCarrier;
+DENSE.petdog = heldPetCarrier;

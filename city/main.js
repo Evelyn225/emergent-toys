@@ -99,14 +99,47 @@ function move(fx, fy) {
   if (stuck || free(px, py + fy + Math.sign(fy) * m)) py += fy;
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
+// Short, bounded skid segments remain on the road for two minutes.
+const tireMarks = [];
+function leaveTireMarks(c, hx, hy, oldX, oldY) {
+  const mx = rel(c.x - oldX), my = rel(c.y - oldY), length = Math.hypot(mx, my);
+  if (length < 0.008 || length > 0.2) return;
+  for (const side of [-1, 1]) tireMarks.push({
+    x: mod(oldX + mx / 2 - hx * 0.13 - hy * side * 0.085, N),
+    y: mod(oldY + my / 2 - hy * 0.13 + hx * side * 0.085, N),
+    c: mx / length, s: my / length, hl: length / 2 + 0.005, t: T
+  });
+  if (tireMarks.length > 256) tireMarks.splice(0, tireMarks.length - 256);
+}
+function drawTireMarks() {
+  while (tireMarks.length && T - tireMarks[0].t > 120) tireMarks.shift();
+  if (!['walk', 'drive', 'taxi'].includes(mode)) return;
+  for (const q of tireMarks) {
+    const x = rel(q.x - px), y = rel(q.y - py);
+    if (Math.hypot(x, y) > vis) continue;
+    drawBox(boxAt(x, y, q.c, q.s, q.hl, 0.008, 0.0002, 0.0005), (i, t, L) => {
+      set(i, '-', C(GRAY, L * 0.2)); BG[i] = C(GRAY, L * 0.08); return true;
+    });
+  }
+}
 function drive(dt) {
   const spun = me.spunT > T; // spun out by the police: no say in it till you've stopped turning
   const c = me, f = spun ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = spun ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
   if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (me.spunT - T) / 2.5; }
   if (f > 0) c.v += (c.v < 0 ? 2.5 : 1) * dt; else if (f < 0) c.v -= (c.v > 0 ? 2.5 : 0.8) * dt; else c.v *= 1 - 0.7 * dt;
   c.v = clamp(c.v, -0.5, K.ShiftLeft || K.ShiftRight ? c.boost || 3.2 : c.top || 2.2); // (a car you own goes as fast as its model)
-  a += s * dt * 1.8 * clamp(c.v / 0.5, -1, 1);
-  const hx = Math.cos(a), hy = Math.sin(a), nx = c.x + hx * c.v * dt, ny = c.y + hy * c.v * dt;
+  const handbrake = !!K.Space && !spun, fast = Math.abs(c.v) > 0.8;
+  if (handbrake) c.v *= Math.exp(-dt * (fast ? 0.65 : 5));
+  const oldA = a;
+  a += s * dt * (handbrake && fast ? 2.5 : 1.8) * clamp(c.v / 0.5, -1, 1);
+  c.travelA ??= oldA;
+  const slip = mod(a - c.travelA + Math.PI, Math.PI * 2) - Math.PI;
+  const grip = handbrake && fast ? 1.2 : 10;
+  c.travelA += slip * (1 - Math.exp(-grip * dt));
+  if (!fast) c.travelA = a;
+  const drifting = handbrake && fast && Math.abs(slip) > 0.12;
+  const oldX = c.x, oldY = c.y, hx = Math.cos(a), hy = Math.sin(a);
+  const nx = c.x + Math.cos(c.travelA) * c.v * dt, ny = c.y + Math.sin(c.travelA) * c.v * dt;
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
   const hitCar = cars.find(o => o !== c && Math.hypot(rel(o.x - fx), rel(o.y - fy)) < 0.3);
   const hitPerson = people.find(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15) || footCops.find(p => Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
@@ -116,9 +149,9 @@ function drive(dt) {
     if (hitPerson && sp > 0.4) { hitPerson.talk = 3; say(pick(['"Watch it!"', '"Are you CRAZY?"', '"Hey! You hit me!"']), 2); crime('hit', c.x, c.y); } // you hit someone
     if (sp > CRASH_V) { say('*CRUNCH*', 1); taxiCrash(); if (actx) playClip('crash', clamp(0.3 + (sp - CRASH_V) * 0.35, 0.3, 0.8)); if (hitCar && !hitCar.player) crime('crash', c.x, c.y); }
     else if (sp > 0.2 && actx) tone(actx.currentTime, 70, 0.12, 0.08 * sp); // a soft thud
-    c.v = 0;
-  } else { c.x = mod(nx, N); c.y = mod(ny, N); }
-  c.hx = hx; c.hy = hy; c.brake = f < 0; px = c.x; py = c.y;
+    c.v = 0; c.travelA = a;
+  } else { c.x = mod(nx, N); c.y = mod(ny, N); if (drifting) leaveTireMarks(c, hx, hy, oldX, oldY); }
+  c.hx = hx; c.hy = hy; c.brake = f < 0 || handbrake; px = c.x; py = c.y;
   const road = ROAD[idx(Math.floor(c.x), Math.floor(c.y))]; // into a junction on red, right in front of a cop
   if (road === 3 && c.lastRoad && c.lastRoad !== 3 && Math.abs(c.v) > 0.4) {
     const ix = Math.floor(c.x / 8) * 8, iy = Math.floor(c.y / 8) * 8;

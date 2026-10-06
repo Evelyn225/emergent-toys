@@ -89,12 +89,11 @@ function peeObjectHit(ox, oy, oz, x, y, z) {
   let best = null;
   const offer = box => {
     const hit = peeBoxHit(ox, oy, oz, x, y, z, box);
-    if (hit && box.gap && box.gap((hit.x - box.x) * box.c + (hit.y - box.y) * box.s, hit.z)) return; // through the gaps (cell bars)
     if (hit && (!best || hit.t < best.t)) best = hit;
   };
   if (mode === 'room') {
     for (const p of room.props) {
-      if (p.tick) continue;
+      if (p.tick || p.peeThrough) continue;
       if (p.box) offer(p.box);
       if (p.bench) {
         const c = -p.fy, s = p.fx;

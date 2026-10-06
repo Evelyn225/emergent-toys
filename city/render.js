@@ -174,6 +174,7 @@ function render(dt) {
   }
   if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
+  if (city) drawTireMarks();
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
   drawPeeMarks(); // stains on walls and solid static objects

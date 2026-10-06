@@ -5,10 +5,10 @@
 // varial heelflip, forward-left hardflip, forward-right inward heelflip, or straight forward ollie) and let go to pop;
 // on a phone, swipe off the Ollie button the same
 // way. The board under you is a little 3D model in front of the camera (like a held weapon), so it really flips and spins.
-// Bunny hopping: jump again the moment you land (hold Space, or press it just before you touch down) and each hop
+// Bunny hopping: jump again the moment you land (press Space just before or just after you touch down) and each hop
 // carries you a bit faster; turn the way you're strafing while you're in the air (A + mouse left, D + mouse right)
 // and it builds quicker. Stay on the ground and the speed's gone in a moment.
-const HOP_GAIN = 0.06, HOP_STRAFE = 0.12, HOP_MAX = 1.9, HOP_BUF = 0.2; // speed x per hop, x more for a good strafe, cap, s early
+const HOP_GAIN = 0.06, HOP_STRAFE = 0.12, HOP_MAX = 1.9, HOP_BUF = 0.14, HOP_GRACE = 0.1; // speed x per hop, x more for a good strafe, cap, s early
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
@@ -32,11 +32,14 @@ const trickName = key => (TRICKS[key] || ['ollie'])[0];
 function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read off A / D / S
   if (body.z > 0 || body.vz > 0) { body.buf = T; return; } // (in the air: it'll go off when you land, see stepBody)
   if (body.seat) return standUp();
+  body.buf = -9;
   if (skatingNow()) {
     const key = trick ?? (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
     body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
   } else {
-    body.vz = JUMP_V;
+    if (T - (body.landedAt ?? -9) <= HOP_GRACE && Math.hypot(body.mx || 0, body.my || 0) > 0.05)
+      body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.landingSwirl || 0) * 0.15));
+    body.landedAt = -9; body.vz = JUMP_V;
   }
   if (actx) sfxUse(skatingNow() ? 'ollie' : 'kick');
 }
@@ -83,7 +86,7 @@ function standUp() { // back where you sat down from (it was walkable)
 function stepBody(dt) {
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
   body.lastA = a; body.lx = px; body.ly = py;
-  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.hop = 1; return; }
+  if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.hop = 1; body.buf = body.landedAt = -9; return; }
   body.crouch += clamp((K.KeyC && !body.seat ? 1 : 0) - body.crouch, -dt * 6, dt * 6);
   if (body.z > 0 || body.vz > 0) {
     body.vz -= GRAV * dt; body.z += body.vz * dt; body.peak = Math.max(body.peak || 0, body.z);
@@ -93,13 +96,14 @@ function stepBody(dt) {
     if (body.z <= 0) { // landed
       const fell = body.peak, tricked = !!body.trick; body.z = body.vz = body.peak = 0;
       if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('ollie-land'); }
-      if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (K.Space || T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
+      if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
         if (moved) body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.swirl || 0) * 0.15));
         body.swirl = 0; body.buf = -9; body.vz = JUMP_V;
         if (actx) sfxUse('kick');
         return;
       }
-      body.swirl = 0;
+      body.landedAt = !tricked && fell < 1.5 ? T : -9;
+      body.landingSwirl = body.swirl || 0; body.swirl = 0;
       const dmg = fallHurt(fell);
       if (dmg > 0) {
         if (actx) playClip('ground-impact', 0.32);
@@ -107,7 +111,7 @@ function stepBody(dt) {
         else say(fell > 15 ? 'You hit the ground hard. Something in your ankle goes crunch.' : 'Oof. You land hard.', 3);
       }
     }
-  } else body.hop = Math.max(1, (body.hop || 1) - dt * 4); // on the ground: the speed bleeds off
+  } else if (T - (body.landedAt ?? -9) > HOP_GRACE) body.hop = Math.max(1, (body.hop || 1) - dt * 4); // on the ground: the speed bleeds off
 }
 
 // ---- roofs: no invisible walls. Step across onto the roof next door if it's about level (a storey up or down,
@@ -186,12 +190,10 @@ function drawBoard3D() {
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
-  const cy = 0.5 - body.z * 0.45 - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // the board lifts with you (and a bit more)
+  const cy = eye * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // Ground height uses the same camera projection as the street.
   const cz = 1.15;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
-  let pX = cols / 2 / Math.tan(FOV / 2), pY = pX * cw / FS;
-  const fit = Math.min(1, (rows * 0.8 - (rows >> 1)) / ((0.5 / cz) * pY + 1e-6)); // on a wide screen, scale it to sit in the lower part of the view (sized off the level horizon: looking up mustn't shrink it)
-  if (fit > 0.2) { pX *= fit; pY *= fit; }
+  const pX = projX, pY = projY;
   const ox = cols / 2, oy = hor; // anchored to the horizon: looking up carries it out of view
   const n = cols * rows; if (boardZ.length < n) boardZ = new Float32Array(n); boardZ.fill(1e9, 0, n);
   // a point on the board (u along, v across, h up) to the screen

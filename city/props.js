@@ -284,12 +284,16 @@ for (const s of [2.6, 3.4, 5.6, 7.2]) for (const off of [0.16, 1.84]) alongStree
   extras.push({ x, y, z: 0, w: 0.07, h: 0.06, art: pad(['   __o', ' _ \<,_', '(_)/ (_)']), col: (c, row, L) => row === 2 ? C(GRAY, L) : C(col, L) });
 });
 // the Gardens' railings (gaps for the gates), the pens' fences, lamp posts along the paths, the gardeners' shed
-for (const [gate, along, len] of [['h', 0.1, GARDEN.w], ['h', GARDEN.h - 0.1, GARDEN.w], ['v', 0.1, GARDEN.h], ['v', GARDEN.w - 0.1, GARDEN.h]])
-  for (let s = 0; s < len; s += 1) {
-    const mid = s + 0.5, gx = gate === 'h' ? mid : along, gy = gate === 'h' ? along : mid;
-    if (GARDEN_GATES.some(([x, y]) => Math.abs(gx - x) < 0.8 && Math.abs(gy - y) < 0.8)) continue;
-    const [x, y] = gx2w(gx, gy); solidBox(x, y, gate === 'h', 0.5, 0.01, 0, 0.2, 'railing', 0);
+for (const [gate, along, len] of [['h', 0, GARDEN.w], ['h', GARDEN.h, GARDEN.w], ['v', 0, GARDEN.h], ['v', GARDEN.w, GARDEN.h]]) {
+  const gateMid = gate === 'h' ? 11 : 7;
+  for (const [start, end] of [[0, gateMid - 0.62], [gateMid + 0.62, len]]) {
+    for (let s = start; s < end; s += 1) {
+      const length = Math.min(1, end - s), mid = s + length / 2;
+      const [x, y] = gx2w(gate === 'h' ? mid : along, gate === 'h' ? along : mid);
+      solidBox(x, y, gate === 'h', length / 2, 0.01, 0, 0.2, 'railing', 0);
+    }
   }
+}
 for (const p of GARDEN_PENS) for (const [ax, ay, bx, by] of [[p.gx0, p.gy0, p.gx1, p.gy0], [p.gx0, p.gy1, p.gx1, p.gy1], [p.gx0, p.gy0, p.gx0, p.gy1], [p.gx1, p.gy0, p.gx1, p.gy1]]) {
   const alongX = ay === by, len = alongX ? bx - ax : by - ay;
   for (let s = 0; s < len - 0.01; s += 1) { const l = Math.min(1, len - s), [x, y] = gx2w(alongX ? ax + s + l / 2 : ax, alongX ? ay : ay + s + l / 2); solidBox(x, y, alongX, l / 2, 0.01, 0, 0.12, 'railing', 1); }
