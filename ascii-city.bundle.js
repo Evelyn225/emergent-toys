@@ -54,6 +54,30 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
   HIT.face = face; HIT.u = lu + du * tmin; HIT.v = lv + dv * tmin; HIT.w = oz + rz * tmin;
   return tmin;
 }
+// Stable desktop releases share the repo with other toys; only accept our tagged Windows installers.
+function desktopVersion(version) {
+  if (typeof version !== 'string' || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) return null;
+  const parts = version.split('.').map(Number);
+  return parts.every(Number.isSafeInteger) ? parts : null;
+}
+function newerDesktopVersion(left, right) {
+  const a = desktopVersion(left), b = desktopVersion(right);
+  if (!a || !b) return false;
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return false;
+}
+function desktopReleaseUpdate(releases, installed) {
+  if (!Array.isArray(releases) || !desktopVersion(installed)) throw new Error('Invalid release data');
+  let update = null;
+  for (const release of releases) {
+    if (!release || release.draft || release.prerelease || typeof release.tag_name !== 'string' || !release.tag_name.startsWith('ascii-city-v')) continue;
+    const version = release.tag_name.slice('ascii-city-v'.length);
+    if (!newerDesktopVersion(version, update ? update.version : installed)) continue;
+    const url = `https://github.com/Evelyn225/emergent-toys/releases/download/ascii-city-v${version}/Glyphport-Setup.exe`;
+    if (Array.isArray(release.assets) && release.assets.some(asset => asset && asset.name === 'Glyphport-Setup.exe' && asset.browser_download_url === url)) update = { version, url };
+  }
+  return update;
+}
 // ---- game state
 let mode = 'walk'; // walk | drive | taxi | room (any interior) | roof
 let px = 0.3, py = 4, a = Math.PI / 2, pitch = 0, look = 0, lookT = 0;
@@ -5668,27 +5692,60 @@ const TOUCH = matchMedia('(pointer: coarse)').matches; // (primary pointer a fin
 const NATIVE_MOUSE_APP = Boolean(window.__GLYPHPORT_DESKTOP__ && window.__TAURI__?.core?.invoke);
 let desktopMouseCaptured = false;
 let desktopMouseFallback = false;
+let desktopMouseReady = Promise.resolve();
+let desktopMouseCommands = Promise.resolve();
+let desktopMouseRequest = 0;
+let desktopMouseWanted = false;
+function nativeMouseCapture(active) {
+  // Serialize commands as well as checking replies: a slow capture must finish before its release.
+  const command = desktopMouseCommands.catch(() => {}).then(() =>
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active, confined: document.hasFocus() }));
+  desktopMouseCommands = command;
+  return command;
+}
 // on a touch screen the buttons say what they do, so "E: talk" reads "talk" and "1: Canal St" just "Canal St"
 const keyless = s => TOUCH ? s.replace(/(^|\s)[A-Z0-9](?: \(([^)]*)\))?: /g, (m, sp, note) => sp + (note ? note + ': ' : '')) : s;
 function lockMouse() { // take the mouse (refused or impossible: a click will do it, or there's no mouse at all)
   if (TOUCH) return;
   if (NATIVE_MOUSE_APP) {
-    desktopMouseCaptured = true;
-    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: true, confined: true }).then(ok => {
-      if (!ok) { desktopMouseCaptured = false; desktopMouseFallback = true; say('Using window-limited mouse-look because native capture was unavailable.', 4); }
-      else desktopMouseFallback = false;
-    }).catch(() => { desktopMouseCaptured = false; desktopMouseFallback = true; });
+    const request = ++desktopMouseRequest;
+    desktopMouseWanted = true;
+    desktopMouseReady.then(() => {
+      if (request !== desktopMouseRequest) return false;
+      return nativeMouseCapture(true);
+    }).then(ok => {
+      if (request !== desktopMouseRequest) return;
+      desktopMouseCaptured = Boolean(ok);
+      desktopMouseFallback = false;
+      if (ok) cv.style.cursor = 'none';
+      else browserMouseCapture();
+    }).catch(() => { if (request === desktopMouseRequest) browserMouseCapture(); });
     return;
   }
-  if (!cv.requestPointerLock) return;
-  const p = cv.requestPointerLock();
-  if (p && p.catch) p.catch(() => {});
+  browserMouseCapture();
+}
+function browserMouseCapture() {
+  desktopMouseCaptured = false;
+  const limited = () => {
+    if (NATIVE_MOUSE_APP && desktopMouseWanted) {
+      desktopMouseFallback = true;
+      say('Mouse capture unavailable. Click the game to retry.', 4);
+    }
+  };
+  if (!cv.requestPointerLock) return limited();
+  try {
+    const p = cv.requestPointerLock();
+    if (p && p.catch) p.catch(limited);
+  } catch (error) { limited(); }
 }
 function releaseMouse() {
+  cv.style.cursor = '';
   if (NATIVE_MOUSE_APP) {
+    ++desktopMouseRequest;
+    desktopMouseWanted = false;
     desktopMouseCaptured = false;
     desktopMouseFallback = false;
-    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: false, confined: document.hasFocus() }).catch(() => {});
+    nativeMouseCapture(false).catch(() => {});
   }
   if (document.pointerLockElement) document.exitPointerLock();
 }
@@ -13453,6 +13510,8 @@ function buildPause() {
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
       <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/Glyphport-Setup.exe" target="_blank" rel="noopener" style="display:${!GLYPHPORT_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
       <button class="item" data-act="fullscreen" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
+      <button class="item" data-act="update" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Check for updates</button>
+      <p class="sub" data-update-status style="display:${GLYPHPORT_DESKTOP_APP ? 'block' : 'none'}"></p>
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
@@ -13483,6 +13542,7 @@ function buildPause() {
     const fullscreen = el.querySelector('[data-act="fullscreen"]');
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
     fullscreen.disabled = desktopFullscreenBusy;
+    if (GLYPHPORT_DESKTOP_APP) showDesktopUpdate(el);
     for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
       const k = s.dataset.show, v = settings[k];
@@ -13502,6 +13562,7 @@ function buildPause() {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'fullscreen') toggleDesktopFullscreen();
+    if (b.dataset.act === 'update') desktopUpdateAction();
     if (b.dataset.act === 'resume') closePause(true);
     if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'map') openBigMap();
@@ -13533,8 +13594,53 @@ function closePause(lock) {
 const togglePause = () => paused ? closePause(NATIVE_MOUSE_APP) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
 // (not while a cabinet or a shift has the screen: Esc there walks away from it)
-document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !paused && !sleep && !game) openPause(); });
+document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !desktopMouseCaptured && !paused && !sleep && !game) openPause(); });
 applySettings();
+// Check quietly at launch. Downloads are an explicit pause-menu action; the game also works offline.
+let desktopUpdate = null, desktopUpdateState = 'idle';
+function showDesktopUpdate(el) {
+  const button = el.querySelector('[data-act="update"]'), status = el.querySelector('[data-update-status]');
+  button.disabled = desktopUpdateState === 'checking';
+  button.textContent = 'Check for updates';
+  if (desktopUpdate) button.textContent = `Download Glyphport ${desktopUpdate.version}`;
+  else if (desktopUpdateState === 'checking') button.textContent = 'Checking for updates...';
+  const installed = window.__GLYPHPORT_VERSION__;
+  status.textContent = '';
+  if (desktopUpdateState === 'download-failed') status.textContent = 'Could not open the download. Try again.';
+  else if (desktopUpdate) status.textContent = `Version ${desktopUpdate.version} is available. Run the downloaded installer to update.`;
+  else if (desktopUpdateState === 'current') status.textContent = `Glyphport ${installed} is up to date.`;
+  else if (desktopUpdateState === 'unavailable') status.textContent = 'Could not check for updates. Try again when online.';
+}
+async function checkDesktopUpdates() {
+  if (!GLYPHPORT_DESKTOP_APP || desktopUpdateState === 'checking') return;
+  desktopUpdateState = 'checking';
+  if (pauseEl) pauseEl.show();
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch('https://api.github.com/repos/Evelyn225/emergent-toys/releases?per_page=100', {
+      headers: { Accept: 'application/vnd.github+json' }, signal: controller.signal
+    });
+    if (!response.ok) throw new Error('Release check failed');
+    desktopUpdate = desktopReleaseUpdate(await response.json(), window.__GLYPHPORT_VERSION__);
+    desktopUpdateState = desktopUpdate ? 'available' : 'current';
+    if (desktopUpdate) say(`Glyphport ${desktopUpdate.version} is available. Open the pause menu to download it.`, 8);
+  } catch (error) {
+    desktopUpdateState = 'unavailable';
+  } finally {
+    clearTimeout(timeout);
+    if (pauseEl) pauseEl.show();
+  }
+}
+async function desktopUpdateAction() {
+  if (!desktopUpdate) return checkDesktopUpdates();
+  try {
+    await window.__TAURI__.core.invoke('open_game_update', { version: desktopUpdate.version });
+  } catch (error) {
+    desktopUpdateState = 'download-failed';
+    if (pauseEl) pauseEl.show();
+  }
+}
+if (GLYPHPORT_DESKTOP_APP) Promise.resolve().then(checkDesktopUpdates);
 // ===== dev tools: F2 (or Dev tools in the pause menu). Teleport anywhere, spawn things, set your money, the day, the
 // time and the weather, without remembering any names: a search box over tabs of buttons. Everything takes effect
 // at once and the menu stays open, so you can do several things before closing it (Esc, F2 or the close button).
@@ -16714,11 +16820,12 @@ function moveMouseBy(mx, my) {
   turnBy(mx, my);
 }
 if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
-  window.__TAURI__.event.listen('desktop-mouse-delta', e => {
+  desktopMouseReady = window.__TAURI__.event.listen('desktop-mouse-delta', e => {
     if (desktopMouseCaptured && !paused) moveMouseBy(e.payload[0], e.payload[1]);
   });
+  desktopMouseReady.catch(() => {}); // lockMouse handles subscription failure and tries browser capture
   addEventListener('blur', () => {
-    if (desktopMouseCaptured && !paused) { releaseMouse(); openPause(); }
+    if (desktopMouseWanted && !paused) { releaseMouse(); openPause(); }
   });
 }
 addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });

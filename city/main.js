@@ -68,11 +68,12 @@ function moveMouseBy(mx, my) {
   turnBy(mx, my);
 }
 if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
-  window.__TAURI__.event.listen('desktop-mouse-delta', e => {
+  desktopMouseReady = window.__TAURI__.event.listen('desktop-mouse-delta', e => {
     if (desktopMouseCaptured && !paused) moveMouseBy(e.payload[0], e.payload[1]);
   });
+  desktopMouseReady.catch(() => {}); // lockMouse handles subscription failure and tries browser capture
   addEventListener('blur', () => {
-    if (desktopMouseCaptured && !paused) { releaseMouse(); openPause(); }
+    if (desktopMouseWanted && !paused) { releaseMouse(); openPause(); }
   });
 }
 addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });

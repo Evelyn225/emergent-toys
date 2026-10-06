@@ -152,27 +152,60 @@ const TOUCH = matchMedia('(pointer: coarse)').matches; // (primary pointer a fin
 const NATIVE_MOUSE_APP = Boolean(window.__GLYPHPORT_DESKTOP__ && window.__TAURI__?.core?.invoke);
 let desktopMouseCaptured = false;
 let desktopMouseFallback = false;
+let desktopMouseReady = Promise.resolve();
+let desktopMouseCommands = Promise.resolve();
+let desktopMouseRequest = 0;
+let desktopMouseWanted = false;
+function nativeMouseCapture(active) {
+  // Serialize commands as well as checking replies: a slow capture must finish before its release.
+  const command = desktopMouseCommands.catch(() => {}).then(() =>
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active, confined: document.hasFocus() }));
+  desktopMouseCommands = command;
+  return command;
+}
 // on a touch screen the buttons say what they do, so "E: talk" reads "talk" and "1: Canal St" just "Canal St"
 const keyless = s => TOUCH ? s.replace(/(^|\s)[A-Z0-9](?: \(([^)]*)\))?: /g, (m, sp, note) => sp + (note ? note + ': ' : '')) : s;
 function lockMouse() { // take the mouse (refused or impossible: a click will do it, or there's no mouse at all)
   if (TOUCH) return;
   if (NATIVE_MOUSE_APP) {
-    desktopMouseCaptured = true;
-    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: true, confined: true }).then(ok => {
-      if (!ok) { desktopMouseCaptured = false; desktopMouseFallback = true; say('Using window-limited mouse-look because native capture was unavailable.', 4); }
-      else desktopMouseFallback = false;
-    }).catch(() => { desktopMouseCaptured = false; desktopMouseFallback = true; });
+    const request = ++desktopMouseRequest;
+    desktopMouseWanted = true;
+    desktopMouseReady.then(() => {
+      if (request !== desktopMouseRequest) return false;
+      return nativeMouseCapture(true);
+    }).then(ok => {
+      if (request !== desktopMouseRequest) return;
+      desktopMouseCaptured = Boolean(ok);
+      desktopMouseFallback = false;
+      if (ok) cv.style.cursor = 'none';
+      else browserMouseCapture();
+    }).catch(() => { if (request === desktopMouseRequest) browserMouseCapture(); });
     return;
   }
-  if (!cv.requestPointerLock) return;
-  const p = cv.requestPointerLock();
-  if (p && p.catch) p.catch(() => {});
+  browserMouseCapture();
+}
+function browserMouseCapture() {
+  desktopMouseCaptured = false;
+  const limited = () => {
+    if (NATIVE_MOUSE_APP && desktopMouseWanted) {
+      desktopMouseFallback = true;
+      say('Mouse capture unavailable. Click the game to retry.', 4);
+    }
+  };
+  if (!cv.requestPointerLock) return limited();
+  try {
+    const p = cv.requestPointerLock();
+    if (p && p.catch) p.catch(limited);
+  } catch (error) { limited(); }
 }
 function releaseMouse() {
+  cv.style.cursor = '';
   if (NATIVE_MOUSE_APP) {
+    ++desktopMouseRequest;
+    desktopMouseWanted = false;
     desktopMouseCaptured = false;
     desktopMouseFallback = false;
-    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: false, confined: document.hasFocus() }).catch(() => {});
+    nativeMouseCapture(false).catch(() => {});
   }
   if (document.pointerLockElement) document.exitPointerLock();
 }

@@ -1,6 +1,7 @@
 {
   "pure": [
     "city/core.js",
+    "city/desktop-release.js",
     "city/state.js",
     "city/needs.js",
     "city/art.js",
@@ -55,6 +56,7 @@
     "city/audio.js",
     "city/menu.js",
     "city/pause.js",
+    "city/desktop-updates.js",
     "city/dev.js",
     "city/bigmap.js",
     "city/goods-ui.js",
