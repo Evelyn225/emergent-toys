@@ -71,23 +71,29 @@ pub fn start<R: tauri::Runtime>(app: tauri::AppHandle<R>, window: &WebviewWindow
     });
 }
 
-pub fn set_capture<R: tauri::Runtime>(window: &WebviewWindow<R>, active: bool) -> bool {
-    if !READY.load(Ordering::Acquire) {
+pub fn set_capture<R: tauri::Runtime>(
+    window: &WebviewWindow<R>,
+    active: bool,
+    confined: bool,
+) -> bool {
+    if active && !READY.load(Ordering::Acquire) {
+        return false;
+    }
+    // Menus use a visible cursor confined to the window; gameplay additionally reads raw input.
+    if window.set_cursor_grab(active || confined).is_err()
+        || window.set_cursor_visible(!active).is_err()
+    {
+        let _ = window.set_cursor_grab(false);
+        let _ = window.set_cursor_visible(true);
+        stop_capture();
         return false;
     }
     if active {
-        if window.set_cursor_grab(true).is_err() || window.set_cursor_visible(false).is_err() {
-            let _ = window.set_cursor_grab(false);
-            let _ = window.set_cursor_visible(true);
-            return false;
-        }
         DELTA_X.store(0, Ordering::Release);
         DELTA_Y.store(0, Ordering::Release);
         ACTIVE.store(true, Ordering::Release);
     } else {
         stop_capture();
-        let _ = window.set_cursor_grab(false);
-        let _ = window.set_cursor_visible(true);
     }
     true
 }

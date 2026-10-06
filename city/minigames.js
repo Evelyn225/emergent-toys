@@ -543,8 +543,8 @@ GAMES.jailbreak = (rnd = Math.random) => {
       else if (lit.has(i)) put(x, y, '.', C(YEL, 12), C(YEL, 3));
     }
     put(door[0], door[1], 'D', C(GREEN, 15), C(GREEN, 4));
-    if (!g.hasItems) { put(stash[0], stash[1], '$', C(YEL, 15), C(YEL, 5)); text(stash[0] - 5, 0, ' YOUR ITEMS ', C(YEL, 15)); } // (the evidence locker, labelled in the wall over it)
-    else text(stash[0] - 4, 0, ' GOT EM ', C(GREEN, 14));
+    if (!g.hasItems) { put(stash[0], stash[1], '$', C(YEL, 15), C(YEL, 5)); text(stash[0] + 0.5, 0, 'YOUR ITEMS', C(YEL, 15), 'center'); } // (the evidence locker, labelled in the wall over it)
+    else text(stash[0] + 0.5, 0, 'GOT EM', C(GREEN, 14), 'center');
     for (const gd of guards) put(Math.round(gd.x), Math.round(gd.y), 'G', C(BLUE, 15), C(BLUE, 4));
     put(you[0], you[1], '@', C(WHITE, 15), lit.has(cell(you[0], you[1])) ? C(RED, 6) : NONE);
     text(0, 12, `${Math.max(0, LIMIT - t) | 0}s till the head count`, C(t > LIMIT - 10 ? RED : GRAY, 12));

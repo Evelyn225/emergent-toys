@@ -1,10 +1,11 @@
-// closing a menu with E, I or J (a key press the browser lets us use) takes the mouse straight back; Esc leaves it
-// free, like any other page, and a click takes it back
+// Closing a menu recaptures the desktop mouse, including Esc. In a browser, Esc needs a click or another key.
 function relock(e) {
-  if (e.code === 'Escape' || paused || mouseCaptured()) return;
+  if ((e.code === 'Escape' && !NATIVE_MOUSE_APP) || paused || mouseCaptured()) return;
   lockMouse();
 }
 onkeydown = e => {
+  if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
+  if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
   if (bigMapKey(e, true)) return; // the big map (from the pause menu) has the keys while it's up

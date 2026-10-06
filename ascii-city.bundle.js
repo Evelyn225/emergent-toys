@@ -3070,8 +3070,8 @@ GAMES.jailbreak = (rnd = Math.random) => {
       else if (lit.has(i)) put(x, y, '.', C(YEL, 12), C(YEL, 3));
     }
     put(door[0], door[1], 'D', C(GREEN, 15), C(GREEN, 4));
-    if (!g.hasItems) { put(stash[0], stash[1], '$', C(YEL, 15), C(YEL, 5)); text(stash[0] - 5, 0, ' YOUR ITEMS ', C(YEL, 15)); } // (the evidence locker, labelled in the wall over it)
-    else text(stash[0] - 4, 0, ' GOT EM ', C(GREEN, 14));
+    if (!g.hasItems) { put(stash[0], stash[1], '$', C(YEL, 15), C(YEL, 5)); text(stash[0] + 0.5, 0, 'YOUR ITEMS', C(YEL, 15), 'center'); } // (the evidence locker, labelled in the wall over it)
+    else text(stash[0] + 0.5, 0, 'GOT EM', C(GREEN, 14), 'center');
     for (const gd of guards) put(Math.round(gd.x), Math.round(gd.y), 'G', C(BLUE, 15), C(BLUE, 4));
     put(you[0], you[1], '@', C(WHITE, 15), lit.has(cell(you[0], you[1])) ? C(RED, 6) : NONE);
     text(0, 12, `${Math.max(0, LIMIT - t) | 0}s till the head count`, C(t > LIMIT - 10 ? RED : GRAY, 12));
@@ -4824,7 +4824,7 @@ function lockMouse() { // take the mouse (refused or impossible: a click will do
   if (TOUCH) return;
   if (NATIVE_MOUSE_APP) {
     desktopMouseCaptured = true;
-    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: true }).then(ok => {
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: true, confined: true }).then(ok => {
       if (!ok) { desktopMouseCaptured = false; desktopMouseFallback = true; say('Using window-limited mouse-look because native capture was unavailable.', 4); }
       else desktopMouseFallback = false;
     }).catch(() => { desktopMouseCaptured = false; desktopMouseFallback = true; });
@@ -4838,7 +4838,7 @@ function releaseMouse() {
   if (NATIVE_MOUSE_APP) {
     desktopMouseCaptured = false;
     desktopMouseFallback = false;
-    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: false }).catch(() => {});
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: false, confined: document.hasFocus() }).catch(() => {});
   }
   if (document.pointerLockElement) document.exitPointerLock();
 }
@@ -11449,6 +11449,22 @@ function asciiBar(f) {
 const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigger characters, fewer of them, faster
 let pauseEl = null;
 const GLYPHPORT_DESKTOP_APP = Boolean(window.__GLYPHPORT_DESKTOP__);
+let desktopFullscreen = false, desktopFullscreenBusy = false;
+async function toggleDesktopFullscreen() {
+  if (!NATIVE_MOUSE_APP || desktopFullscreenBusy) return;
+  desktopFullscreenBusy = true;
+  try {
+    desktopFullscreen = await window.__TAURI__.core.invoke('toggle_game_fullscreen');
+    // Refresh confinement after the window's bounds change.
+    if (paused) releaseMouse();
+    else if (mouseCaptured()) lockMouse();
+  } catch (error) {
+    say('Could not change fullscreen. Please update the Windows app.', 4);
+  } finally {
+    desktopFullscreenBusy = false;
+    if (pauseEl) pauseEl.show();
+  }
+}
 const MOBILE_BROWSER = navigator.userAgentData?.mobile || /Android|iPhone|iPod|iPad|Mobile/i.test(navigator.userAgent) ||
   (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
@@ -11470,6 +11486,7 @@ function buildPause() {
       <button class="item" data-act="newgame">Start over</button>
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
       <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/Glyphport-Setup.exe" target="_blank" rel="noopener" style="display:${!GLYPHPORT_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
+      <button class="item" data-act="fullscreen" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
       <h2>sound</h2>
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
@@ -11497,6 +11514,9 @@ function buildPause() {
   const RANGE = { fov: [50, 100], sensitivity: [0.25, 3] };
   if (GLYPHPORT_DESKTOP_APP) el.querySelector('a[href="index.html"]').hidden = true;
   const show = () => {
+    const fullscreen = el.querySelector('[data-act="fullscreen"]');
+    fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
+    fullscreen.disabled = desktopFullscreenBusy;
     for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
       const k = s.dataset.show, v = settings[k];
@@ -11515,6 +11535,7 @@ function buildPause() {
   el.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.dataset.act === 'fullscreen') toggleDesktopFullscreen();
     if (b.dataset.act === 'resume') closePause(true);
     if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'map') openBigMap();
@@ -11543,7 +11564,7 @@ function closePause(lock) {
   paused = false; pauseEl.style.display = 'none'; homeEl.style.display = 'none';
   if (lock) lockMouse(); // resuming with the mouse: take it straight back
 }
-const togglePause = () => paused ? closePause(false) : openPause();
+const togglePause = () => paused ? closePause(NATIVE_MOUSE_APP) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
 // (not while a cabinet or a shift has the screen: Esc there walks away from it)
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !paused && !sleep && !game) openPause(); });
@@ -14066,7 +14087,7 @@ function drawGame() {
       const i = (y0 + y * bh + r) * cols + x0 + x * bw + c;
       set(i, ch, col); if (bg !== undefined && bg !== NONE) BG[i] = bg;
     }
-  }, (x, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + x * bw, s_, col), // a label, at normal size
+  }, (x, y, s_, col, align) => putText(y0 + y * bh + (bh >> 1), Math.round(x0 + x * bw - (align === 'center' ? s_.length / 2 : 0)), s_, col), // a label, at normal size
      (c, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + c, s_, col), // one placed by character (a column in a table): c counts characters from the left
      (x, y, w, h, fill, col) => { // lines of characters filling a w x h patch of cells, centred: fill(chars wide, chars high) gives them
        const W_ = w * bw, H_ = h * bh, lines = fill(W_, H_).slice(0, H_), top = y0 + y * bh + ((H_ - lines.length) >> 1);
@@ -14611,13 +14632,14 @@ function newGame() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* n
 loadGame();
 setInterval(saveGame, 10000);
 addEventListener('pagehide', saveGame);
-// closing a menu with E, I or J (a key press the browser lets us use) takes the mouse straight back; Esc leaves it
-// free, like any other page, and a click takes it back
+// Closing a menu recaptures the desktop mouse, including Esc. In a browser, Esc needs a click or another key.
 function relock(e) {
-  if (e.code === 'Escape' || paused || mouseCaptured()) return;
+  if ((e.code === 'Escape' && !NATIVE_MOUSE_APP) || paused || mouseCaptured()) return;
   lockMouse();
 }
 onkeydown = e => {
+  if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
+  if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
   if (bigMapKey(e, true)) return; // the big map (from the pause menu) has the keys while it's up

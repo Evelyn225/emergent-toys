@@ -158,7 +158,7 @@ function lockMouse() { // take the mouse (refused or impossible: a click will do
   if (TOUCH) return;
   if (NATIVE_MOUSE_APP) {
     desktopMouseCaptured = true;
-    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: true }).then(ok => {
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: true, confined: true }).then(ok => {
       if (!ok) { desktopMouseCaptured = false; desktopMouseFallback = true; say('Using window-limited mouse-look because native capture was unavailable.', 4); }
       else desktopMouseFallback = false;
     }).catch(() => { desktopMouseCaptured = false; desktopMouseFallback = true; });
@@ -172,7 +172,7 @@ function releaseMouse() {
   if (NATIVE_MOUSE_APP) {
     desktopMouseCaptured = false;
     desktopMouseFallback = false;
-    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: false }).catch(() => {});
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active: false, confined: document.hasFocus() }).catch(() => {});
   }
   if (document.pointerLockElement) document.exitPointerLock();
 }

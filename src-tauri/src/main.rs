@@ -7,22 +7,38 @@ mod desktop_mouse;
 use tauri::Manager;
 
 #[tauri::command]
-fn set_game_mouse_capture(window: tauri::WebviewWindow, active: bool) -> bool {
+fn set_game_mouse_capture(
+    window: tauri::WebviewWindow,
+    active: bool,
+    confined: Option<bool>,
+) -> bool {
     #[cfg(windows)]
     {
-        return desktop_mouse::set_capture(&window, active);
+        return desktop_mouse::set_capture(&window, active, confined.unwrap_or(false));
     }
 
     #[cfg(not(windows))]
     {
-        let _ = (window, active);
+        let _ = (window, active, confined);
         false
     }
 }
 
+#[tauri::command]
+fn toggle_game_fullscreen(window: tauri::WebviewWindow) -> Result<bool, String> {
+    let fullscreen = !window.is_fullscreen().map_err(|error| error.to_string())?;
+    window
+        .set_fullscreen(fullscreen)
+        .map_err(|error| error.to_string())?;
+    Ok(fullscreen)
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![set_game_mouse_capture])
+        .invoke_handler(tauri::generate_handler![
+            set_game_mouse_capture,
+            toggle_game_fullscreen
+        ])
         .setup(|app| {
             #[cfg(windows)]
             {
