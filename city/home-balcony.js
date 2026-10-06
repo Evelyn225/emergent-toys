@@ -63,7 +63,7 @@ function drawHomeBalconies() {
     }
     const masonry = (i,t,L) => {
       BG[i] = C(STONE,2 + L * .3); set(i,'=',C(WHITE,L));
-      if (HIT.face === 5) paintSettledSnow(i,b.x0 + .3 + HIT.u,b.y + HIT.v,L);
+      if (HIT.face === 5) paintSettledSnow(i,b.x0 + .3 + HIT.u,b.y + HIT.v,L,1,0,HIT.w);
       return true;
     };
     drawBox(boxAt(rel(b.x0 + .3 - px),rel(b.y - py),1,0,.3,.7,b.z - .025,b.z),masonry);

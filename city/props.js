@@ -16,6 +16,8 @@ function alongStreets(s, o, fn) {
 // lamps stand at the curb edge of the sidewalk (sidewalk is 0..0.3), two per block side, a curved arm
 // reaching REACH out over the street. {x, y, ax, ay}: ax/ay = the arm's direction
 const CURB = 0.25, REACH = 0.24, HEAD = CURB + REACH, LAMP_AT = [3.5, 6.5];
+const LAMP_TOP = 0.95, NECK = REACH / 2;
+const lampGlowCells = new Array(N * N);
 const lamps = [];
 for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x, y, ax, ay) => lamps.push({ x, y, ax, ay }));
 // the footbridge out to the lighthouse: a lamp every 30m, alternating sides, reaching over the deck
@@ -30,13 +32,10 @@ function lampAt(x, y, pad) {
 }
 // light pool on the ground, under the lamp heads of whichever streets exist here
 function glow(wx, wy) {
-  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), lx = wx - bx * 8, ly = wy - by * 8;
-  const ay = Math.min(Math.abs(ly - LAMP_AT[0]), Math.abs(ly - LAMP_AT[1])), ax = Math.min(Math.abs(lx - LAMP_AT[0]), Math.abs(lx - LAMP_AT[1]));
   let d = Infinity;
-  if (vseg(bx, by)) d = Math.min(d, Math.hypot(Math.min(Math.abs(lx - HEAD), Math.abs(lx - 2 + HEAD)), ay));
-  if (vseg(bx + 1, by)) d = Math.min(d, Math.hypot(8 + HEAD - lx, ay));
-  if (hseg(bx, by)) d = Math.min(d, Math.hypot(Math.min(Math.abs(ly - HEAD), Math.abs(ly - 2 + HEAD)), ax));
-  if (hseg(bx, by + 1)) d = Math.min(d, Math.hypot(8 + HEAD - ly, ax));
+  const heads=lampGlowCells[idx(Math.floor(wx), Math.floor(wy))];
+  if(heads)for (const l of heads)
+    d = Math.min(d, Math.hypot(rel(wx - l.gx), rel(wy - l.gy)));
   const own = typeof heldItem === 'function' && heldItem() && heldItem().id === 'lantern' && mode === 'walk' ? Math.max(0, 1 - Math.hypot(rel(wx - px), rel(wy - py)) / 0.45) * 0.85 : 0; // a paper lantern in your hand
   return Math.max(0, 1 - d / 0.55, own);
 }

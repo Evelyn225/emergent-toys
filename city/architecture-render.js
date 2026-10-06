@@ -138,7 +138,7 @@ function architectureDetailShade(o, i, t, L) {
   }
   const top = HIT.face === 5;
   set(i, top || o.kind === 'course' || o.kind === 'cornice' ? '=' : o.kind === 'pier' ? '|' : ' ', C(o.kind === 'step' ? GRAY : STONE, L * 0.9));
-  if (top) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * 0.7);
+  if (top) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * 0.7,1,0,HIT.w);
   return true;
 }
 function drawArchitecture() {
@@ -149,7 +149,7 @@ function drawArchitecture() {
       const seam = Math.abs(fract((HIT.face < 8 ? HIT.v : HIT.u) * 8) - 0.5) > 0.44;
       BG[i] = C(GRAY, (1.2 + L * 0.25) * (HIT.face === 4 ? 1.15 : 0.85));
       set(i, seam ? '/' : ' ', C(seam ? YEL : GRAY, L));
-      paintSettledSnow(i, c.x + HIT.u, c.y + HIT.v, L * 0.7, HIT.face === 4 ? 1 : 0.5);
+      paintSettledSnow(i, c.x + HIT.u, c.y + HIT.v, L * 0.7, HIT.face === 4 ? 1 : 0.5,0,HIT.w);
       return true;
     }, rayMansard);
   });

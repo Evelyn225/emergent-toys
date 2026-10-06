@@ -82,7 +82,7 @@ let plat = null, ride = null; // plat: {s: station, tr: which side}; ride: {tr, 
 const nearElStairs = () => {
   if (mode !== 'walk') return null;
   for (const s of EL_STATIONS) for (const tr of [0, 1])
-    if (Math.hypot(rel(s.x - px), rel(EL_Y + (tr ? 1.86 : 0.14) - py)) < 0.4) return { s, tr };
+    if (Math.hypot(rel(s.stairs[tr].x - px), rel(s.stairs[tr].y - py)) < 0.4) return { s, tr };
   return null;
 };
 function elUp({ s, tr }) {
@@ -90,7 +90,8 @@ function elUp({ s, tr }) {
   say(`${s.name} el, ${tr ? 'eastbound' : 'westbound'} platform`);
 }
 function elDown() {
-  mode = 'walk'; px = plat.s.x; py = EL_Y + (plat.tr ? 1.88 : 0.12); plat = null;
+  const stairs=plat.s.stairs[plat.tr];
+  mode = 'walk'; px = stairs.x; py = stairs.y-stairs.ay*.02; plat = null;
 }
 // the train standing at your platform, if there is one
 const elHere = () => plat && elTrains(T).find(t => t.tr === plat.tr && t.stopped && EL_STATIONS[t.station] === plat.s);

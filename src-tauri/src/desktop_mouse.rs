@@ -2,158 +2,177 @@ use std::{
     mem::{size_of, zeroed},
     sync::{
         atomic::{AtomicBool, AtomicI32, Ordering},
-        mpsc, OnceLock,
+        OnceLock,
     },
-    thread,
-    time::Duration,
 };
 use tauri::{Emitter, WebviewWindow};
 use windows_sys::Win32::{
     Devices::HumanInterfaceDevice::{HID_USAGE_GENERIC_MOUSE, HID_USAGE_PAGE_GENERIC},
     Foundation::{HWND, LPARAM, LRESULT, WPARAM},
-    System::LibraryLoader::GetModuleHandleW,
     UI::{
         Input::{
-            GetRawInputData, RegisterRawInputDevices, RAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER,
-            RIDEV_INPUTSINK, RID_INPUT, RIM_TYPEMOUSE,
+            GetRawInputData, RegisterRawInputDevices, MOUSE_MOVE_ABSOLUTE, RAWINPUT,
+            RAWINPUTDEVICE, RAWINPUTHEADER, RAWMOUSE, RIDEV_REMOVE, RID_INPUT, RIM_TYPEMOUSE,
         },
+        Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
         WindowsAndMessaging::{
-            CreateWindowExW, DefWindowProcW, DispatchMessageW, GetForegroundWindow, GetMessageW,
-            RegisterClassW, HWND_MESSAGE, WM_INPUT, WNDCLASSW,
+            GetForegroundWindow, KillTimer, SetTimer, WA_INACTIVE, WM_ACTIVATE, WM_INPUT,
+            WM_NCDESTROY, WM_TIMER,
         },
     },
 };
+
+const MOUSE_SUBCLASS: usize = 0x47594D53;
+const MOUSE_TIMER: usize = 0x47594D54;
+static GAME_WINDOW: OnceLock<WebviewWindow> = OnceLock::new();
+static REGISTERED: AtomicBool = AtomicBool::new(false);
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 static DELTA_X: AtomicI32 = AtomicI32::new(0);
 static DELTA_Y: AtomicI32 = AtomicI32::new(0);
-static INPUT_WINDOW: OnceLock<isize> = OnceLock::new();
-static GAME_WINDOW: OnceLock<isize> = OnceLock::new();
-unsafe fn register_mouse(hwnd: HWND) -> bool {
+
+unsafe fn register_mouse(hwnd: HWND, active: bool) -> bool {
     let device = RAWINPUTDEVICE {
-        usUsagePage: HID_USAGE_PAGE_GENERIC as u16,
-        usUsage: HID_USAGE_GENERIC_MOUSE as u16,
-        dwFlags: RIDEV_INPUTSINK,
-        hwndTarget: hwnd,
+        usUsagePage: HID_USAGE_PAGE_GENERIC,
+        usUsage: HID_USAGE_GENERIC_MOUSE,
+        // Default registration delivers input only to the foreground app. Removal requires a null target.
+        dwFlags: if active { 0 } else { RIDEV_REMOVE },
+        hwndTarget: if active { hwnd } else { std::ptr::null_mut() },
     };
     RegisterRawInputDevices(&device, 1, size_of::<RAWINPUTDEVICE>() as u32) != 0
 }
-pub fn start<R: tauri::Runtime>(app: tauri::AppHandle<R>, window: &WebviewWindow<R>) {
-    let Ok(hwnd) = window.hwnd() else { return };
-    let _ = GAME_WINDOW.set(hwnd.0 as isize);
-    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
-    // Own the input window and message pump on one thread. Subclassing the WebView host can fail on a different
-    // thread, and depends on how WebView2 creates and focuses its child windows.
-    thread::spawn(move || unsafe {
-        let class: Vec<u16> = "GlyphportMouseInput\0".encode_utf16().collect();
-        let instance = GetModuleHandleW(std::ptr::null());
-        let wc = WNDCLASSW {
-            lpfnWndProc: Some(input_window_proc),
-            hInstance: instance,
-            lpszClassName: class.as_ptr(),
-            ..zeroed()
-        };
-        if RegisterClassW(&wc) == 0 {
-            let _ = ready_tx.send(false);
-            return;
-        }
-        let input = CreateWindowExW(
-            0,
-            class.as_ptr(),
-            class.as_ptr(),
-            0,
-            0,
-            0,
-            0,
-            0,
-            HWND_MESSAGE,
-            std::ptr::null_mut(),
-            instance,
-            std::ptr::null(),
-        );
-        if input.is_null() || !register_mouse(input) {
-            let _ = ready_tx.send(false);
-            return;
-        }
-        let _ = INPUT_WINDOW.set(input as isize);
-        let _ = ready_tx.send(true);
-        let mut message = zeroed();
-        while GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) > 0 {
-            DispatchMessageW(&message);
-        }
-    });
-    if ready_rx.recv_timeout(Duration::from_secs(2)) != Ok(true) {
-        eprintln!("Glyphport native mouse input could not initialize");
-        return;
+
+pub async fn set_capture(window: WebviewWindow, active: bool, confined: bool) -> bool {
+    let (result_tx, mut result_rx) = tauri::async_runtime::channel(1);
+    let ui_window = window.clone();
+    // Window subclassing must happen on its owning UI thread, including when IPC arrives on a worker.
+    if window
+        .run_on_main_thread(move || {
+            let _ = result_tx.try_send(set_capture_on_main_thread(&ui_window, active, confined));
+        })
+        .is_err()
+    {
+        return false;
     }
-    thread::spawn(move || loop {
-        thread::sleep(Duration::from_millis(8));
-        let x = DELTA_X.swap(0, Ordering::AcqRel);
-        let y = DELTA_Y.swap(0, Ordering::AcqRel);
-        if ACTIVE.load(Ordering::Acquire) && (x != 0 || y != 0) {
-            let _ = app.emit("desktop-mouse-delta", (x, y));
-        }
-    });
+    result_rx.recv().await.unwrap_or(false)
 }
-pub fn set_capture<R: tauri::Runtime>(
-    window: &WebviewWindow<R>,
-    active: bool,
-    confined: bool,
-) -> bool {
-    if active {
-        let Some(&input) = INPUT_WINDOW.get() else {
+
+fn set_capture_on_main_thread(window: &WebviewWindow, active: bool, confined: bool) -> bool {
+    let Ok(hwnd) = window.hwnd() else {
+        return false;
+    };
+    let hwnd = hwnd.0 as HWND;
+    if GAME_WINDOW.get().is_none() {
+        if unsafe { SetWindowSubclass(hwnd, Some(input_window_proc), MOUSE_SUBCLASS, 0) } == 0 {
             return false;
-        };
-        // Reclaim registration on entering gameplay: other WebView/input components may register a mouse too.
-        if !unsafe { register_mouse(input as HWND) } {
+        }
+        let _ = GAME_WINDOW.set(window.clone());
+    }
+    stop_capture(hwnd);
+    if unsafe { GetForegroundWindow() } != hwnd {
+        return !active;
+    }
+    if active {
+        if !unsafe { register_mouse(hwnd, true) } {
+            return false;
+        }
+        REGISTERED.store(true, Ordering::Release);
+        // Coalesce high polling-rate mouse events on the existing UI message loop; no input worker or hidden window.
+        if unsafe { SetTimer(hwnd, MOUSE_TIMER, 8, None) } == 0 {
+            stop_capture(hwnd);
             return false;
         }
     }
     if window.set_cursor_grab(active || confined).is_err()
         || window.set_cursor_visible(!active).is_err()
     {
-        let _ = window.set_cursor_grab(false);
-        let _ = window.set_cursor_visible(true);
-        stop_capture();
+        stop_capture(hwnd);
         return false;
     }
-    DELTA_X.store(0, Ordering::Release);
-    DELTA_Y.store(0, Ordering::Release);
     ACTIVE.store(active, Ordering::Release);
+    #[cfg(debug_assertions)]
+    unsafe {
+        use windows_sys::Win32::UI::{Input::GetRegisteredRawInputDevices, WindowsAndMessaging::{GetGUIThreadInfo, GetWindowThreadProcessId, GUITHREADINFO}};
+        let mut info: GUITHREADINFO = zeroed();
+        info.cbSize = size_of::<GUITHREADINFO>() as u32;
+        GetGUIThreadInfo(0, &mut info);
+        let mut focus_pid = 0;
+        GetWindowThreadProcessId(info.hwndFocus, &mut focus_pid);
+        let mut devices: [RAWINPUTDEVICE;8] = zeroed();
+        let mut count = 8;
+        let read = GetRegisteredRawInputDevices(devices.as_mut_ptr(), &mut count, size_of::<RAWINPUTDEVICE>() as u32);
+        eprintln!("capture active={active} hwnd={hwnd:?} focus={:?} focus_pid={focus_pid} own_pid={} devices={read}", info.hwndFocus, std::process::id());
+        for device in devices.iter().take(read as usize) { eprintln!("raw usage={} flags={} target={:?}",device.usUsage,device.dwFlags,device.hwndTarget); }
+    }
     true
 }
-pub fn stop_capture() {
+
+// Called only on the window's UI thread. Pausing, switching apps and closing unregister the device entirely.
+fn stop_capture(hwnd: HWND) {
     ACTIVE.store(false, Ordering::Release);
     DELTA_X.store(0, Ordering::Release);
     DELTA_Y.store(0, Ordering::Release);
+    unsafe {
+        KillTimer(hwnd, MOUSE_TIMER);
+        if REGISTERED.swap(false, Ordering::AcqRel) {
+            register_mouse(hwnd, false);
+        }
+    }
+    if let Some(window) = GAME_WINDOW.get() {
+        let _ = window.set_cursor_grab(false);
+        let _ = window.set_cursor_visible(true);
+    }
 }
+
 unsafe extern "system" fn input_window_proc(
     hwnd: HWND,
     message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
+    _subclass: usize,
+    _data: usize,
 ) -> LRESULT {
-    // Message-only input needs INPUTSINK. Read it only while the captured game is the foreground window;
-    // another app's movement never enters the game, even before the asynchronous blur event arrives.
-    if message == WM_INPUT
-        && ACTIVE.load(Ordering::Acquire)
-        && GAME_WINDOW.get().copied() == Some(GetForegroundWindow() as isize)
-    {
-        let mut input: RAWINPUT = zeroed();
-        let mut bytes = size_of::<RAWINPUT>() as u32;
-        let read = GetRawInputData(
-            lparam as _,
-            RID_INPUT,
-            (&mut input as *mut RAWINPUT).cast(),
-            &mut bytes,
-            size_of::<RAWINPUTHEADER>() as u32,
-        );
-        if read != u32::MAX
-            && read >= size_of::<RAWINPUTHEADER>() as u32
-            && input.header.dwType == RIM_TYPEMOUSE
-        {
-            DELTA_X.fetch_add(input.data.mouse.lLastX, Ordering::Relaxed);
-            DELTA_Y.fetch_add(input.data.mouse.lLastY, Ordering::Relaxed);
+    if message == WM_ACTIVATE && wparam & 0xffff == WA_INACTIVE as usize {
+        stop_capture(hwnd);
+    } else if message == WM_NCDESTROY {
+        stop_capture(hwnd);
+        RemoveWindowSubclass(hwnd, Some(input_window_proc), MOUSE_SUBCLASS);
+    } else if ACTIVE.load(Ordering::Acquire) {
+        if GetForegroundWindow() != hwnd {
+            #[cfg(debug_assertions)]
+            eprintln!("lost foreground hwnd={hwnd:?} current={:?}", GetForegroundWindow());
+            stop_capture(hwnd);
+        } else if message == WM_INPUT {
+            #[cfg(debug_assertions)]
+            eprintln!("WM_INPUT");
+            let mut input: RAWINPUT = zeroed();
+            let mut bytes = size_of::<RAWINPUT>() as u32;
+            let read = GetRawInputData(
+                lparam as _,
+                RID_INPUT,
+                (&mut input as *mut RAWINPUT).cast(),
+                &mut bytes,
+                size_of::<RAWINPUTHEADER>() as u32,
+            );
+            if read != u32::MAX
+                && read >= (size_of::<RAWINPUTHEADER>() + size_of::<RAWMOUSE>()) as u32
+                && input.header.dwType == RIM_TYPEMOUSE
+                && input.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE == 0
+            {
+                DELTA_X.fetch_add(input.data.mouse.lLastX, Ordering::Relaxed);
+                DELTA_Y.fetch_add(input.data.mouse.lLastY, Ordering::Relaxed);
+            }
+        } else if message == WM_TIMER && wparam == MOUSE_TIMER {
+            let x = DELTA_X.swap(0, Ordering::AcqRel);
+            let y = DELTA_Y.swap(0, Ordering::AcqRel);
+            #[cfg(debug_assertions)]
+            eprintln!("timer {x},{y}");
+            if x != 0 || y != 0 {
+                if let Some(window) = GAME_WINDOW.get() {
+                    let _ = window.emit_to(window.label(), "desktop-mouse-delta", (x, y));
+                }
+            }
         }
     }
-    DefWindowProcW(hwnd, message, wparam, lparam)
+    // Continue WebView/window handling, including the required foreground WM_INPUT cleanup.
+    DefSubclassProc(hwnd, message, wparam, lparam)
 }

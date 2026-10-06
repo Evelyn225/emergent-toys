@@ -10,8 +10,8 @@ const hash = (a, b, c = 0) => {
 const fract = v => v - Math.floor(v), mod = (v, m) => ((v % m) + m) % m, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function noise(x, y, s) { // smooth value noise
   const xi = Math.floor(x), yi = Math.floor(y), u = x - xi, v = y - yi, su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
-  const h = (a, b) => hash(a, b, s);
-  return (h(xi, yi) * (1 - su) + h(xi + 1, yi) * su) * (1 - sv) + (h(xi, yi + 1) * (1 - su) + h(xi + 1, yi + 1) * su) * sv;
+  return (hash(xi, yi, s) * (1 - su) + hash(xi + 1, yi, s) * su) * (1 - sv)
+    + (hash(xi, yi + 1, s) * (1 - su) + hash(xi + 1, yi + 1, s) * su) * sv;
 }
 const pick = a => a[Math.random() * a.length | 0];
 const NB = 32, N = NB * 8; // the world is NB x NB blocks of 8x8 cells (2.56km), repeating forever

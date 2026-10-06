@@ -11,8 +11,8 @@ const hash = (a, b, c = 0) => {
 const fract = v => v - Math.floor(v), mod = (v, m) => ((v % m) + m) % m, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function noise(x, y, s) { // smooth value noise
   const xi = Math.floor(x), yi = Math.floor(y), u = x - xi, v = y - yi, su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
-  const h = (a, b) => hash(a, b, s);
-  return (h(xi, yi) * (1 - su) + h(xi + 1, yi) * su) * (1 - sv) + (h(xi, yi + 1) * (1 - su) + h(xi + 1, yi + 1) * su) * sv;
+  return (hash(xi, yi, s) * (1 - su) + hash(xi + 1, yi, s) * su) * (1 - sv)
+    + (hash(xi, yi + 1, s) * (1 - su) + hash(xi + 1, yi + 1, s) * su) * sv;
 }
 const pick = a => a[Math.random() * a.length | 0];
 const NB = 32, N = NB * 8; // the world is NB x NB blocks of 8x8 cells (2.56km), repeating forever
@@ -141,10 +141,28 @@ const SEASON_WEATHER = { spring: ['clear', 'clear', 'rain', 'rain', 'fog'], summ
 
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
+// Snow's texture is static. Cache the four lattice values, retaining the original interpolation and fine edges.
+// Fixed-size slots bound memory even when the player travels through many repeated copies of the city.
+const SNOW_FIELDS = [[0.8,43],[2.1,45],[7,44],[5,46]].map(([scale,seed]) => ({
+  scale, seed, x: new Int32Array(512), y: new Int32Array(512), valid: new Uint8Array(512), values: new Float64Array(512 * 4),
+}));
+function snowNoise(wx, wy, field) {
+  const f = SNOW_FIELDS[field], x = wx * f.scale, y = wy * f.scale, xi = Math.floor(x), yi = Math.floor(y);
+  const slot = (xi * 73 + yi * 151) & 511, at = slot * 4, values = f.values;
+  if (!f.valid[slot] || f.x[slot] !== xi || f.y[slot] !== yi) {
+    f.x[slot] = xi; f.y[slot] = yi; f.valid[slot] = 1;
+    values[at] = hash(xi, yi, f.seed); values[at + 1] = hash(xi + 1, yi, f.seed);
+    values[at + 2] = hash(xi, yi + 1, f.seed); values[at + 3] = hash(xi + 1, yi + 1, f.seed);
+  }
+  const u = x - xi, v = y - yi, su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
+  return (values[at] * (1 - su) + values[at + 1] * su) * (1 - sv)
+    + (values[at + 2] * (1 - su) + values[at + 3] * su) * sv;
+}
 // A continuous field shared by ground and roofs: broad drifts with a soft, granular fringe.
 function settledSnow(wx, wy, wear = 0) {
   if (snowCover <= 0) return 0;
-  const drift = noise(wx * 0.8, wy * 0.8, 43) * 0.7 + noise(wx * 2.1, wy * 2.1, 45) * 0.25 + noise(wx * 7, wy * 7, 44) * 0.05;
+  if (snowCover >= 0.9) return 1 - wear; // even the deepest drift is fully covered; its noise cannot change the result
+  const drift = snowNoise(wx, wy, 0) * 0.7 + snowNoise(wx, wy, 1) * 0.25 + snowNoise(wx, wy, 2) * 0.05;
   const edge = clamp((snowCover * 1.3 - drift + 0.16) / 0.32, 0, 1);
   return edge * edge * (3 - 2 * edge) * clamp(snowCover * 8, 0, 1) * (1 - wear);
 }
@@ -171,6 +189,20 @@ function env(dt) {
   lampsOn = clamp((night - 0.2) * 2 + fogAmt * 0.6 * day, 0, 1);
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
   if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
+}
+// Air input accelerates along the camera-relative wish direction without replacing existing momentum.
+const AIR_ACCEL = 8, AIR_WISH_CAP = 0.7;
+function airStrafe(forward, side, speed, dt, yaw = a) {
+  if (dt <= 0 || !Number.isFinite(speed)) return;
+  const input = Math.hypot(forward, side);
+  if (!input) return;
+  const cx = Math.cos(yaw), cy = Math.sin(yaw);
+  const wx = (cx * forward - cy * side) / input, wy = (cy * forward + cx * side) / input;
+  const wishSpeed = speed * input, vx = body.mx || 0, vy = body.my || 0;
+  const add = wishSpeed * AIR_WISH_CAP - (vx * wx + vy * wy);
+  if (add <= 0) return;
+  const acceleration = Math.min(add, AIR_ACCEL * wishSpeed * dt);
+  body.mx = vx + wx * acceleration; body.my = vy + wy * acceleration;
 }
 // ===== hunger, thirst and health. Food fills `food`, drink fills `drink` (0-100); both run down as you play
 // (real time: neither fast-forward nor a night's sleep speeds them up), thirst a little faster. Run either dry and
@@ -763,7 +795,7 @@ for (const gh of GLASSHOUSES) {
 
 // Belle Époque: preserve flat roofs with public access. Other buildings have recessed courts / clipped wings
 // and a real mansard above the masonry. A lot's material and vines are stable across all its faces.
-const BELLE_BUILDINGS = [], BELLE_FACE_START = [new Float32Array(N * N), new Float32Array(N * N)], BELLE_FACE_END = [new Float32Array(N * N), new Float32Array(N * N)];
+const BELLE_BUILDINGS = [];
 {
   const lots = new Map();
   for (let i = 0; i < map.length; i++) if (map[i] && STY[i] === 24) {
@@ -784,14 +816,6 @@ const BELLE_BUILDINGS = [], BELLE_FACE_START = [new Float32Array(N * N), new Flo
       if (corner || court) { map[i] = 0; SHOP[i] = null; STY[i] = 0; }
     }
     BELLE_BUILDINGS.push({ ...b, sh });
-  }
-  for (let i = 0; i < map.length; i++) if (map[i] && STY[i] === 24) for (let side = 0; side < 2; side++) {
-    const x = i % N, y = Math.floor(i / N), stepX = side ? 1 : 0, stepY = side ? 0 : 1;
-    let lo = side ? x : y, hi = lo + 1;
-    const same = (dx, dy) => { const k = idx(x + dx, y + dy); return SHOP[k] === SHOP[i] && map[k] === map[i]; };
-    for (let n = 1; n <= 8 && same(-stepX * n, -stepY * n); n++) lo--;
-    for (let n = 1; n <= 8 && same(stepX * n, stepY * n); n++) hi++;
-    BELLE_FACE_START[side][i] = lo; BELLE_FACE_END[side][i] = hi;
   }
 }
 function belleRoofHeight(x, y) {
@@ -831,6 +855,8 @@ function alongStreets(s, o, fn) {
 // lamps stand at the curb edge of the sidewalk (sidewalk is 0..0.3), two per block side, a curved arm
 // reaching REACH out over the street. {x, y, ax, ay}: ax/ay = the arm's direction
 const CURB = 0.25, REACH = 0.24, HEAD = CURB + REACH, LAMP_AT = [3.5, 6.5];
+const LAMP_TOP = 0.95, NECK = REACH / 2;
+const lampGlowCells = new Array(N * N);
 const lamps = [];
 for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x, y, ax, ay) => lamps.push({ x, y, ax, ay }));
 // the footbridge out to the lighthouse: a lamp every 30m, alternating sides, reaching over the deck
@@ -845,13 +871,10 @@ function lampAt(x, y, pad) {
 }
 // light pool on the ground, under the lamp heads of whichever streets exist here
 function glow(wx, wy) {
-  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), lx = wx - bx * 8, ly = wy - by * 8;
-  const ay = Math.min(Math.abs(ly - LAMP_AT[0]), Math.abs(ly - LAMP_AT[1])), ax = Math.min(Math.abs(lx - LAMP_AT[0]), Math.abs(lx - LAMP_AT[1]));
   let d = Infinity;
-  if (vseg(bx, by)) d = Math.min(d, Math.hypot(Math.min(Math.abs(lx - HEAD), Math.abs(lx - 2 + HEAD)), ay));
-  if (vseg(bx + 1, by)) d = Math.min(d, Math.hypot(8 + HEAD - lx, ay));
-  if (hseg(bx, by)) d = Math.min(d, Math.hypot(Math.min(Math.abs(ly - HEAD), Math.abs(ly - 2 + HEAD)), ax));
-  if (hseg(bx, by + 1)) d = Math.min(d, Math.hypot(8 + HEAD - ly, ax));
+  const heads=lampGlowCells[idx(Math.floor(wx), Math.floor(wy))];
+  if(heads)for (const l of heads)
+    d = Math.min(d, Math.hypot(rel(wx - l.gx), rel(wy - l.gy)));
   const own = typeof heldItem === 'function' && heldItem() && heldItem().id === 'lantern' && mode === 'walk' ? Math.max(0, 1 - Math.hypot(rel(wx - px), rel(wy - py)) / 0.45) * 0.85 : 0; // a paper lantern in your hand
   return Math.max(0, 1 - d / 0.55, own);
 }
@@ -2823,6 +2846,274 @@ function elTrain(tr, k, t) {
            next: (from + (tr ? 1 : EL_STATIONS.length - 1)) % EL_STATIONS.length };
 }
 const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(tr, k, t) })));
+// Belle Époque's projecting stone bays, iron balconies and sloping copper roofs are geometry, depth-tested
+// against the street scene. Their positions follow complete facade bays, with room at every corner.
+function mansardPlanes(hl, hw, z0, z1) {
+  const slope = (z1 - z0) / 0.65;
+  return [[1, 0, 0, hl], [-1, 0, 0, hl], [0, 1, 0, hw], [0, -1, 0, hw], [0, 0, 1, z1], [0, 0, -1, -z0],
+    [slope, 0, 1, z0 + slope * hl], [-slope, 0, 1, z0 + slope * hl], [0, slope, 1, z0 + slope * hw], [0, -slope, 1, z0 + slope * hw]];
+}
+const ROOF_PLANE_DATA = new WeakMap();
+function roofPlaneData(planes) {
+  let packed = ROOF_PLANE_DATA.get(planes);
+  if (!packed) { packed = Float64Array.from(planes.flat()); ROOF_PLANE_DATA.set(planes,packed); }
+  return packed;
+}
+const BELLE_FACES = Array.from({ length: 4 }, () => new Array(N * N));
+function belleSign(sh, f) {
+  const letterW = Math.min(0.05, (f.end - f.start - 0.32) / (sh.word.length + 2));
+  if (!f.low && letterW >= 0.025) return { center: (f.start + f.end) / 2, letterW, bandH: 0.06 * letterW / 0.05 };
+  return null;
+}
+function belleFaceAt(mx, my, dir) {
+  const k = idx(mx, my), cached = BELLE_FACES[dir][k];
+  if (cached) return cached;
+  // A removed neighbor can reveal a face absent from the initial geometry. Resolve it once against the current map.
+  const x = mod(mx, N), y = mod(my, N), sh = SHOP[k], height = map[k], [nx, ny] = ARCH_DIRECTIONS[dir];
+  const side = ny ? 1 : 0, low = map[idx(x + nx, y + ny)];
+  const same = step => {
+    const xx = x + side * step, yy = y + (1 - side) * step, at = idx(xx, yy);
+    return SHOP[at] === sh && map[at] === height && map[idx(xx + nx, yy + ny)] === low;
+  };
+  let start = side ? x : y, end = start + 1;
+  for (let n = 1; n < 9 && same(-n); n++) start--;
+  for (let n = 1; n < 9 && same(n); n++) end++;
+  const f = { dir, nx, ny, side, start, end, line: side ? y + (ny > 0) : x + (nx > 0), height, low };
+  f.sign = belleSign(sh, f);
+  BELLE_FACES[dir][k] = f;
+  return f;
+}
+const belleBuildingsB = bucketed(BELLE_BUILDINGS.map(b => {
+  const planes = mansardPlanes((b.x1 - b.x0) / 2, (b.y1 - b.y0) / 2, b.h, b.h + 0.45);
+  return { ...b, planes, planeData: roofPlaneData(planes) };
+})), belleDetails = [];
+for (const b of BELLE_BUILDINGS) {
+  const cells = [];
+  for (let y = b.y0; y < b.y1; y++) for (let x = b.x0; x < b.x1; x++) {
+    const k = idx(x, y);
+    if (SHOP[k] === b.sh) cells.push(k);
+  }
+  // Each direction needs its own exposed span: an uninterrupted row of masonry can still have a recessed street face.
+  b.faces = architectureFaces(b, cells, BELLE_FACES);
+  for (const f of b.faces) {
+    f.sign = belleSign(b.sh, f);
+    const spacing = (f.end - f.start) / Math.max(1, Math.floor((f.end - f.start) / 0.85));
+    const floors = Math.max(1, Math.floor((b.h - 0.55) / 0.42)), fh = (b.h - 0.55) / floors;
+    for (let bay = 0; bay < (f.end - f.start) / spacing - 0.01; bay++) {
+      const along = f.start + (bay + 0.5) * spacing;
+      const x = f.side ? along : f.line, y = f.side ? f.line : along;
+      const add = (depth, hl, hw, z0, z1, kind) => belleDetails.push({ x: x + f.nx * depth, y: y + f.ny * depth, c: f.side ? 1 : 0, s: f.side ? 0 : 1, hl, hw, z0, z1, kind, material: b.material, seed: b.seed });
+      if (b.balconies && bay % 2 === 0) for (let fl = 1; fl < floors; fl += 2) {
+        const z = 0.45 + fl * fh + fh * 0.2, half = Math.min(0.36, spacing * 0.4);
+        add(0.1, half, 0.12, z - 0.025, z, 'slab');
+        add(0.21, half, 0.008, z, z + 0.11, 'iron');
+        for (const sign of [-1, 1]) belleDetails.push({ x: x + f.nx * 0.1 + (f.side ? sign * half : 0), y: y + f.ny * 0.1 + (f.side ? 0 : sign * half), c: f.side ? 0 : 1, s: f.side ? 1 : 0, hl: 0.11, hw: 0.008, z0: z, z1: z + 0.11, kind: 'iron' });
+        add(0.075, half * 0.65, 0.05, z - 0.1, z - 0.025, 'bracket');
+      }
+      if (bay % 3 === 1 && fract(b.seed * 37) < 0.65) add(0.07, Math.min(0.27, spacing * 0.3), 0.12, 0.48, b.h - 0.14, 'bay');
+      add(0.025, spacing * 0.47, 0.045, b.h - 0.08, b.h + 0.035, 'cornice');
+    }
+  }
+}
+const belleDetailsB = bucketed(belleDetails);
+
+// Shared by the renderer and fixture clearance, with the crossbar fixed along the curb rather than facing the camera.
+function belleLampParts(x, y, ax, ay) {
+  const c = -ay, s = ax;
+  const part = (u, hl, hw, z0, z1, kind) => ({ x: x + c * u, y: y + s * u, c, s, hl, hw, z0, z1, kind });
+  const parts = [part(0, .035, .035, 0, .035, 'base'), part(0, .024, .024, .035, .07, 'base'),
+    part(0, .011, .011, .07, .58, 'pole'), part(0, .018, .018, .38, .4, 'cap'),
+    part(0, .018, .018, .475, .495, 'cap'), part(0, .009, .009, .58, .62, 'finial'),
+    part(0, .11, .008, .48, .495, 'arm')];
+  for (const side of [-1, 1]) {
+    parts.push(part(side * .075, .028, .007, .46, .48, 'arm'),
+      part(side * .105, .01, .01, .48, .507, 'pole'), part(side * .11, .022, .022, .497, .508, 'cap'),
+      part(side * .11, .045, .045, .505, .605, 'globe'));
+  }
+  return parts;
+}
+// Static clearance and shelter are resolved once after all building families have supplied their geometry.
+const STREET_GEOMETRY = [...ARCH_DETAILS, ...LANDMARK_SOLIDS, ...PAVILION_SOLIDS, ...belleDetails, ...solids];
+const streetGeometryCells = new Array(N * N);
+function geometryBounds(o) {
+  return [Math.abs(o.c) * o.hl + Math.abs(o.s) * o.hw, Math.abs(o.s) * o.hl + Math.abs(o.c) * o.hw];
+}
+for (const o of STREET_GEOMETRY) {
+  const [ex, ey] = geometryBounds(o);
+  for (let y = Math.floor(o.y - ey); y <= Math.floor(o.y + ey); y++) for (let x = Math.floor(o.x - ex); x <= Math.floor(o.x + ex); x++) {
+    const cell = idx(x, y); (streetGeometryCells[cell] || (streetGeometryCells[cell] = [])).push(o);
+  }
+}
+function streetBoxesOverlap(a_, b, pad = 0.012) {
+  if (a_.z0 >= b.z1 + pad || a_.z1 <= b.z0 - pad) return false;
+  const rx = rel(b.x - a_.x), ry = rel(b.y - a_.y);
+  for (const [cx, cy] of [[a_.c,a_.s],[-a_.s,a_.c],[b.c,b.s],[-b.s,b.c]]) {
+    const span = a_.hl * Math.abs(cx * a_.c + cy * a_.s) + a_.hw * Math.abs(-cx * a_.s + cy * a_.c)
+      + b.hl * Math.abs(cx * b.c + cy * b.s) + b.hw * Math.abs(-cx * b.s + cy * b.c);
+    if (Math.abs(rx * cx + ry * cy) >= span + pad) return false;
+  }
+  return true;
+}
+function streetGeometryCollision(box, walls = true) {
+  const [ex, ey] = geometryBounds(box), visited = new Set();
+  for (let y = Math.floor(box.y - ey - .02); y <= Math.floor(box.y + ey + .02); y++) for (let x = Math.floor(box.x - ex - .02); x <= Math.floor(box.x + ex + .02); x++) {
+    const cell = idx(x, y);
+    if (walls && map[cell] > box.z0 && streetBoxesOverlap(box,{x:x+.5,y:y+.5,c:1,s:0,hl:.5,hw:.5,z0:0,z1:map[cell]},0)) return {kind:'wall'};
+    for (const o of streetGeometryCells[cell] || []) {
+      if (visited.has(o)) continue;
+      visited.add(o);
+      if (o.ownerCell != null && map[o.ownerCell] !== o.ownerHeight) continue;
+      if (streetBoxesOverlap(box,o)) return o;
+    }
+  }
+  return null;
+}
+function streetFixtureBoxes(o, kind) {
+  const box = (hl,hw,z0,z1,x=o.x,y=o.y,c=1,s=0) => ({x,y,c,s,hl,hw,z0,z1});
+  if (kind === 'lamp') {
+    if (districtAt(o.x,o.y) === 'belle') return belleLampParts(o.x,o.y,o.ax,o.ay);
+    const top = o.top ?? LAMP_TOP;
+    return [box(.028,.028,0,.06),box(.012,.012,.06,top+.02),
+      box(REACH/2+.008,.012,top,top+NECK+.008,o.x+o.ax*REACH/2,o.y+o.ay*REACH/2,o.ax,o.ay),
+      box(.033,.033,top-.14,top,o.x+o.ax*REACH,o.y+o.ay*REACH)];
+  }
+  if (kind === 'signal') return [box(.025,.025,0,.4)];
+  if (kind === 'blade') return [box(.022,.006,0,.33,o.x,o.y,0,1)];
+  if (kind === 'el-stairs') return [box(.11,.11,0,EL_BOT-.02)];
+  if (kind === 'bench') return [box(.18,.07,.01,.13,o.x,o.y,-o.fy,o.fx)];
+  if (kind === 'tree') return [box(.03,.03,0,.6*(o.s || 1))];
+  return [box(VM_HL,VM_HW,0,VM_H,o.x,o.y,o.c,o.s)];
+}
+const streetFixtureClear = (o,kind) => streetFixtureBoxes(o,kind).every(b => !streetGeometryCollision(b,kind !== 'machine'));
+function fixtureStreetDirection(o) {
+  if (o.ax != null) return [o.ax,o.ay];
+  const x = mod(o.x,8), y = mod(o.y,8);
+  if (ROAD[idx(Math.floor(o.x),Math.floor(o.y))]) {
+    if (x < 2 && (y >= 2 || Math.abs(x-1) > Math.abs(y-1))) return [x<1?1:-1,0];
+    if (y < 2) return [0,y<1?1:-1];
+  }
+  return null;
+}
+const STREET_CLEARANCE = { checked: {}, moved: {}, removed: {}, conflicts: {} };
+function fixtureSpaceTaken(o,buckets) {
+  const bx=Math.floor(o.x/8),by=Math.floor(o.y/8);
+  for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)for(const p of buckets[bi(bx+x,by+y)])
+    if(p!==o&&Math.hypot(rel(o.x-p.x),rel(o.y-p.y))<.2)return true;
+  return false;
+}
+function fitStreetFixtures(items, buckets, kind) {
+  STREET_CLEARANCE.checked[kind] = items.length; STREET_CLEARANCE.moved[kind] = 0; STREET_CLEARANCE.removed[kind] = 0;
+  for (let k=items.length-1;k>=0;k--) {
+    const o=items[k];
+    if (kind==='lamp') o.top = arcadeAt(o.x,o.y) ? ARCADE_Z-NECK-.03 : LAMP_TOP;
+    if (streetFixtureClear(o,kind)) continue;
+    for (const b of streetFixtureBoxes(o,kind)) {
+      const hit=streetGeometryCollision(b,kind!=='machine');
+      if (hit) STREET_CLEARANCE.conflicts[hit.kind]=(STREET_CLEARANCE.conflicts[hit.kind]||0)+1;
+    }
+    const start=[o.x,o.y], direction=fixtureStreetDirection(o); let fitted=false;
+    const candidates=[];
+    if (direction) {
+      const [nx,ny]=direction;
+      let offsets=[.06,.12,.16,0];
+      if(kind==='blade')offsets=[.06,.12,.16,.24,.3,0];
+      if(kind==='machine')offsets=[0]; // wall-mounted machines slide along their facade
+      for (const inward of offsets) for (const along of [0,-.35,.35,-.7,.7,-1.05,1.05])
+        candidates.push([start[0]+nx*inward-ny*along,start[1]+ny*inward+nx*along]);
+    } else for (const radius of [.2,.4,.6]) for(let n=0;n<8;n++) candidates.push([start[0]+Math.cos(n*Math.PI/4)*radius,start[1]+Math.sin(n*Math.PI/4)*radius]);
+    for (const [x,y] of candidates) {
+      o.x=mod(x,N);o.y=mod(y,N);
+      if (isWater(o.x,o.y) || direction && !ROAD[idx(Math.floor(o.x),Math.floor(o.y))]) continue;
+      if(kind==='machine') {
+        const fx=-o.s*o.fs,fy=o.c*o.fs;
+        if(!map[idx(o.x-fx*.1,o.y-fy*.1)]||map[idx(o.x+fx*.3,o.y+fy*.3)]
+          ||stations.some(s=>Math.hypot(rel(s.x-o.x),rel(s.y-o.y))<.7))continue;
+      }
+      if (fixtureSpaceTaken(o,buckets)) continue;
+      if (streetFixtureClear(o,kind)) {fitted=true;break;}
+    }
+    if (fitted) STREET_CLEARANCE.moved[kind]++;
+    else {items.splice(k,1);STREET_CLEARANCE.removed[kind]++;}
+  }
+  for (const bucket of buckets) bucket.length=0;
+  for (const o of items) buckets[bi(Math.floor(o.x/8),Math.floor(o.y/8))].push(o);
+}
+fitStreetFixtures(lamps,lampsB,'lamp');
+fitStreetFixtures(lights,lightsB,'signal');
+fitStreetFixtures(benches,benchesB,'bench');
+fitStreetFixtures(trees,treesB,'tree');
+fitStreetFixtures(machines,machinesB,'machine');
+const subwayBlades=stations.flatMap(s=>{
+  s.blades=[-1,1].map(e=>({x:s.x+e*(SUBWAY_HOLE[0]+.02),y:s.y-e*(SUBWAY_HOLE[1]+.025),ax:0,ay:-1}));
+  return s.blades;
+});
+fitStreetFixtures(subwayBlades,bucketed(subwayBlades),'blade');
+const elStairs=EL_STATIONS.flatMap(s=>{
+  s.stairs=[0,1].map(tr=>({x:s.x,y:EL_Y+(tr?1.86:.14),ax:0,ay:tr?-1:1}));
+  return s.stairs;
+});
+fitStreetFixtures(elStairs,bucketed(elStairs),'el-stairs');
+// Ground-light queries visit only the heads whose pools can reach this cell, including relocated lamps.
+for (const l of lamps) {
+  const belle = districtAt(l.x,l.y)==='belle';
+  l.gx=mod(l.x+(belle?0:l.ax*REACH),N);l.gy=mod(l.y+(belle?0:l.ay*REACH),N);
+  for(let y=Math.floor(l.gy-.55);y<=Math.floor(l.gy+.55);y++)for(let x=Math.floor(l.gx-.55);x<=Math.floor(l.gx+.55);x++) {
+    const cell=idx(x,y);(lampGlowCells[cell]||(lampGlowCells[cell]=[])).push(l);
+  }
+}
+function geometrySurfaceHeight(o,x,y) {
+  const rx=rel(x-o.x),ry=rel(y-o.y),u=rx*o.c+ry*o.s,v=-rx*o.s+ry*o.c;
+  if(Math.abs(u)>o.hl||Math.abs(v)>o.hw)return 0;
+  let top=o.z1,bottom=o.z0;
+  if(o.planes)for(const [nx,ny,nz,limit] of o.planes) {
+    const d=limit-nx*u-ny*v;
+    if(!nz){if(d<0)return 0;}else if(nz>0)top=Math.min(top,d/nz);else bottom=Math.max(bottom,d/nz);
+  }
+  return top>=bottom?top:0;
+}
+const groundSnowCells = new Array(N * N);
+function groundSnowShelter(cell, overhead) {
+  const cx = cell % N + .5, cy = Math.floor(cell / N) + .5, rectangles = [], complex = [];
+  const sameOwner = (a,b) => a.o.ownerCell === b.o.ownerCell && a.o.ownerHeight === b.o.ownerHeight;
+  const contains = (a,b) => a.x0 <= b.x0 && a.y0 <= b.y0 && a.x1 >= b.x1 && a.y1 >= b.y1;
+  for (const o of overhead) {
+    if (o.z1 <= .02) continue;
+    if (o.planes || !(Math.abs(o.c) === 1 && o.s === 0 || Math.abs(o.s) === 1 && o.c === 0)) { complex.push(o); continue; }
+    const [ex,ey] = geometryBounds(o), x = .5 + rel(o.x-cx), y = .5 + rel(o.y-cy);
+    const r = { x0: Math.max(0,x-ex), x1: Math.min(1,x+ex), y0: Math.max(0,y-ey), y1: Math.min(1,y+ey), o };
+    if (r.x0 > r.x1 || r.y0 > r.y1 || rectangles.some(a => sameOwner(a,r) && contains(a,r))) continue;
+    for (let n=rectangles.length-1;n>=0;n--) if (sameOwner(r,rectangles[n]) && contains(r,rectangles[n])) rectangles.splice(n,1);
+    rectangles.push(r);
+  }
+  return { rectangles, complex };
+}
+function groundSnowExposed(x,y,cell,overhead) {
+  if (!overhead) return true;
+  const shelter = groundSnowCells[cell] || (groundSnowCells[cell] = groundSnowShelter(cell,overhead)), fx = fract(x), fy = fract(y);
+  for (const r of shelter.rectangles) {
+    if (r.o.ownerCell != null && map[r.o.ownerCell] !== r.o.ownerHeight) continue;
+    if (fx < r.x0-1e-10 || fx > r.x1+1e-10 || fy < r.y0-1e-10 || fy > r.y1+1e-10) continue;
+    // At exact geometry/cell boundaries keep the original world-coordinate rounding and inclusive edge rules.
+    if (Math.min(Math.abs(fx-r.x0),Math.abs(fx-r.x1),Math.abs(fy-r.y0),Math.abs(fy-r.y1)) < 1e-10)
+      return geometrySnowExposed(x,y,0,overhead);
+    return false;
+  }
+  return geometrySnowExposed(x,y,0,shelter.complex);
+}
+function geometrySnowExposed(x,y,z,overhead) {
+  if(!overhead)return true;
+  for (const o of overhead) {
+    if (o.z1<=z+.02 || o.ownerCell!=null&&map[o.ownerCell]!==o.ownerHeight) continue;
+    if (geometrySurfaceHeight(o,x,y)>z+.02) return false;
+  }
+  return true;
+}
+function snowExposed(x,y,z=0) {
+  if (underEl(y) && z<EL_BOT || arcadeAt(x,y) && z<ARCADE_Z) return false;
+  const cell = idx(Math.floor(x),Math.floor(y)), overhead = streetGeometryCells[cell];
+  if (z === 0) return groundSnowExposed(x,y,cell,overhead);
+  return geometrySnowExposed(x,y,z,overhead);
+}
 // ---- audio mix: how loud each layer of sound should be right now, 0..1, from the game state alone.
 // Pure, so the node tests can check it; city/audio.js plays it and glides every layer toward these targets,
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
@@ -6010,13 +6301,29 @@ function signBig(u, uStep, d, side, mx, my, wc, p, len) {
   return small >= 1 && small !== Infinity;
 }
 function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
-  const k = idx(mx, my), b = SHOP[k].belle, sk = sk0(b.seed), start = BELLE_FACE_START[side][k], end = BELLE_FACE_END[side][k];
-  const along = mod(wc, N) - start, width = end - start, bays = Math.max(1, Math.floor(width / 0.85)), spacing = width / bays;
+  const k = idx(mx, my), b = SHOP[k].belle, sk = sk0(b.seed);
+  let dir;
+  if (side) dir = rel(py - my) < 0 ? 0 : 1;
+  else dir = rel(px - mx) < 0 ? 2 : 3;
+  const f = belleFaceAt(mx, my, dir);
+  const start = f.start, end = f.end;
+  const wallAlong = mod(wc, N), along = wallAlong - start, width = end - start, bays = Math.max(1, Math.floor(width / 0.85)), spacing = width / bays;
   const bay = Math.floor(along / spacing), du = along - (bay + 0.5) * spacing, half = Math.min(0.23, spacing * 0.29);
   const base = [STONE, WHITE, GRAY, BRICK, STONE][b.material], grain = hash(Math.floor(wc * 7), Math.floor(z * 10), sk);
   const course = fract(z * 8), joint = fract(wc * 2 + (Math.floor(z * 8) & 1) * 0.5);
   BG[i] = C(base, 2 + L * (0.25 + grain * 0.12));
   if (homeBalconyDoorFacade(i,z,side,mx,my,wc,L,SHOP[k])) return;
+  if (f.sign) {
+    const { center, letterW, bandH } = f.sign, half = (SHOP[k].word.length / 2 + 1) * letterW;
+    if (Math.abs(wallAlong - center) < half && Math.abs(z - 0.36) < bandH / 2 + 0.007) {
+      BG[i] = C(GRAY, 1);
+      const gold = C(YEL, Math.max(L, night * 12));
+      if (Math.abs(wallAlong - center) > half - 0.006 || Math.abs(z - 0.36) > bandH / 2 + 0.002) return set(i, '=', gold);
+      const textCenter = (Math.sign(u * wc) || 1) * (wc + rel(center - wc));
+      if (wallText(i, u, uStep, z, d, SHOP[k].word, textCenter, 0.36, letterW, bandH, gold, C(GRAY, 1))) return;
+      return set(i, ' ', 0);
+    }
+  }
   if (b.ivy && z < Math.min(h - 0.25, 2.5)) {
     const vine = 0.24 + Math.sin(z * 3 + b.seed * 8) * 0.14 + z * 0.13;
     const stem = Math.min(Math.abs(along - vine), z > 0.4 ? Math.abs(along - vine - Math.sin(z * 4) * 0.25) : 9);
@@ -6028,7 +6335,6 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
   if (along < 0.13 || width - along < 0.13) return set(i, course < 0.12 ? '=' : '|', C(WHITE, L)); // dressed corner quoins; no half windows
   if (z < 0.4) {
     if (z > 0.32) {
-      if (wallText(i, u, uStep, z, d, SHOP[k].word, (Math.sign(u * wc) || 1) * (start + width / 2), 0.36, 0.05, 0.06, C(YEL, Math.max(L, night * 12)), C(GRAY, 1))) return;
       return set(i, ' ', 0);
     }
     const archTop = 0.31 - (du / (spacing * 0.36)) ** 2 * 0.065;
@@ -6381,22 +6687,22 @@ function roofTop(i, wx, wy, h, d) {
     const gh = GLASSHOUSES[1], u = rel(wx - GARDEN.x0 - gh.gx0), v = rel(wy - GARDEN.y0 - gh.gy0);
     const rail = fract(u * 2) < .035 || fract(v * 2) < .035;
     BG[i] = C(GREEN,1 + day * 1.5);
-    set(i,rail ? '+' : ' ',C(rail ? GRAY : GREEN,L * .7)); paintSettledSnow(i,wx,wy,L,.6); return;
+    set(i,rail ? '+' : ' ',C(rail ? GRAY : GREEN,L * .7)); paintSettledSnow(i,wx,wy,L,.6,0,h); return;
   }
   const edge = lx < 0.05 && map[idx(mx - 1, my)] !== h || lx > 0.95 && map[idx(mx + 1, my)] !== h ||
                ly < 0.05 && map[idx(mx, my - 1)] !== h || ly > 0.95 && map[idx(mx, my + 1)] !== h;
   BG[i] = bgAt(GRAY, day * 2.5);
-  if (edge) { set(i, '#', C(GRAY, L * 1.3)); paintSettledSnow(i, wx, wy, L, 0.35); return; }
+  if (edge) { set(i, '#', C(GRAY, L * 1.3)); paintSettledSnow(i, wx, wy, L, 0.35,0,h); return; }
   const sh = SHOP[idx(mx, my)];
   if (sh && sh.pad && STY[idx(mx, my)] === 13) { // the hospital's helipad: a yellow ring round a big H
     const ex = wx - sh.pad[0], ey = wy - sh.pad[1], rr = Math.hypot(ex, ey);
-    if (Math.abs(rr - 1.05) < 0.07) { set(i, '#', C(YEL, Math.max(L * 1.4, night * 12))); paintSettledSnow(i, wx, wy, L, 0.55); return; }
+    if (Math.abs(rr - 1.05) < 0.07) { set(i, '#', C(YEL, Math.max(L * 1.4, night * 12))); paintSettledSnow(i, wx, wy, L, 0.55,0,h); return; }
     const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
-    if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); paintSettledSnow(i, wx, wy, L, 0.55); return; }
+    if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); paintSettledSnow(i, wx, wy, L, 0.55,0,h); return; }
   }
   if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
   else set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
-  paintSettledSnow(i, wx, wy, L);
+  paintSettledSnow(i, wx, wy, L,1,0,h);
 }
 
 function snowRoadWear(e) {
@@ -6406,12 +6712,14 @@ function snowRoadWear(e) {
   return Math.min(0.85, lane * 0.35 + track * 0.5);
 }
 
-function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0) {
+function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0, surfaceZ = 0) {
+  if (snowCover <= 0 || !snowExposed(wx,wy,surfaceZ)) return;
   const amount = settledSnow(wx, wy, wear) * exposure;
   if (amount < 0.02) return;
-  const grain = noise(wx * 5, wy * 5, 46), old = BG[i] === NONE ? 0 : BG[i] & 15;
+  const grain = snowNoise(wx, wy, 3), old = BG[i] === NONE ? 0 : BG[i] & 15;
   const fleck = hash(Math.floor(wx * 32), Math.floor(wy * 32), 44);
-  const light = (2.4 + day * 6.5 + lampsOn * glow(wx, wy) * 4) * (0.85 + grain * 0.25);
+  const lampLight = lampsOn > 0 ? lampsOn * glow(wx, wy) * 4 : 0;
+  const light = (2.4 + day * 6.5 + lampLight) * (0.85 + grain * 0.25);
   let base = WHITE;
   if (amount < 0.15 && BG[i] !== NONE) base = BG[i] >> 4;
   else if (amount < 0.55) base = GRAY;
@@ -6436,8 +6744,7 @@ function floorCell(i, r, x, rx, ry) {
   if (road === 1) wear = snowRoadWear(lx);
   else if (road === 2) wear = snowRoadWear(ly);
   else if (road === 3) wear = Math.max(snowRoadWear(lx), snowRoadWear(ly));
-  const exposure = underEl(wy) ? 0.55 : 1;
-  paintSettledSnow(i, wx, wy, Math.max(0, 1 - d / vis * 1.5) * 6 * (0.6 + amb), exposure, wear);
+  paintSettledSnow(i, wx, wy, Math.max(0, 1 - d / vis * 1.5) * 6 * (0.6 + amb), 1, wear);
 }
 
 // how far down a subway entrance's stairs (wx, wy) is (0 at the top step, 1 at the bottom), or -1 if it isn't in one
@@ -7115,46 +7422,7 @@ function sprayTag() {
   const w = crime('graffiti', px, py);
   say((w === 'cop' ? '"HEY! You! Drop the can!"' : w === 'reported' ? 'Psssht. Somebody across the street gets their phone out.' : pick(['Psssht. Nice.', 'Psssht. Your mark on the city.', 'Psssht. Nobody saw. Probably.'])) + (empty ? ' The can rattles empty.' : ''), 3);
 }
-// Belle Époque's projecting stone bays, iron balconies and sloping copper roofs are geometry, depth-tested
-// against the street scene. Their positions follow complete facade bays, with room at every corner.
-function mansardPlanes(hl, hw, z0, z1) {
-  const slope = (z1 - z0) / 0.65;
-  return [[1, 0, 0, hl], [-1, 0, 0, hl], [0, 1, 0, hw], [0, -1, 0, hw], [0, 0, 1, z1], [0, 0, -1, -z0],
-    [slope, 0, 1, z0 + slope * hl], [-slope, 0, 1, z0 + slope * hl], [0, slope, 1, z0 + slope * hw], [0, -slope, 1, z0 + slope * hw]];
-}
-const belleBuildingsB = bucketed(BELLE_BUILDINGS.map(b => ({ ...b, planes: mansardPlanes((b.x1 - b.x0) / 2, (b.y1 - b.y0) / 2, b.h, b.h + 0.45) }))), belleDetails = [];
-for (const b of BELLE_BUILDINGS) {
-  const faces = new Map();
-  for (let y = b.y0; y < b.y1; y++) for (let x = b.x0; x < b.x1; x++) {
-    const k = idx(x, y);
-    if (SHOP[k] !== b.sh) continue;
-    for (const [nx, ny] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
-      if (map[idx(x + nx, y + ny)] >= b.h) continue;
-      const side = ny ? 1 : 0, start = BELLE_FACE_START[side][k], end = BELLE_FACE_END[side][k];
-      const line = ny ? y + (ny > 0 ? 1 : 0) : x + (nx > 0 ? 1 : 0), key = [nx, ny, line, start, end].join(',');
-      if (!faces.has(key)) faces.set(key, { nx, ny, side, start, end, line });
-    }
-  }
-  for (const f of faces.values()) {
-    const spacing = (f.end - f.start) / Math.max(1, Math.floor((f.end - f.start) / 0.85));
-    const floors = Math.max(1, Math.floor((b.h - 0.55) / 0.42)), fh = (b.h - 0.55) / floors;
-    for (let bay = 0; bay < (f.end - f.start) / spacing - 0.01; bay++) {
-      const along = f.start + (bay + 0.5) * spacing;
-      const x = f.side ? along : f.line, y = f.side ? f.line : along;
-      const add = (depth, hl, hw, z0, z1, kind) => belleDetails.push({ x: x + f.nx * depth, y: y + f.ny * depth, c: f.side ? 1 : 0, s: f.side ? 0 : 1, hl, hw, z0, z1, kind, material: b.material, seed: b.seed });
-      if (b.balconies && bay % 2 === 0) for (let fl = 1; fl < floors; fl += 2) {
-        const z = 0.45 + fl * fh + fh * 0.2, half = Math.min(0.36, spacing * 0.4);
-        add(0.1, half, 0.12, z - 0.025, z, 'slab');
-        add(0.21, half, 0.008, z, z + 0.11, 'iron');
-        for (const sign of [-1, 1]) belleDetails.push({ x: x + f.nx * 0.1 + (f.side ? sign * half : 0), y: y + f.ny * 0.1 + (f.side ? 0 : sign * half), c: f.side ? 0 : 1, s: f.side ? 1 : 0, hl: 0.11, hw: 0.008, z0: z, z1: z + 0.11, kind: 'iron' });
-        add(0.075, half * 0.65, 0.05, z - 0.1, z - 0.025, 'bracket');
-      }
-      if (bay % 3 === 1 && fract(b.seed * 37) < 0.65) add(0.07, Math.min(0.27, spacing * 0.3), 0.12, 0.48, b.h - 0.14, 'bay');
-      add(0.025, spacing * 0.47, 0.045, b.h - 0.08, b.h + 0.035, 'cornice');
-    }
-  }
-}
-const belleDetailsB = bucketed(belleDetails);
+// Belle stone bays, balconies and copper roofs use the shared geometry from belle-geometry.js.
 function belleDetailShade(o, i, t, L) {
   const base = [STONE, WHITE, GRAY, BRICK, STONE][o.material || 0], z = HIT.w;
   if (o.kind === 'iron') {
@@ -7177,12 +7445,13 @@ function belleDetailShade(o, i, t, L) {
 // Clip the ray against the ten planes of a mansard: four walls, floor, ridge and four inclined faces.
 function rayMansard(ox, oy, oz, rx, ry, rz, b) {
   let entry = 0, exit = Infinity, face = 5;
-  const x = ox - b.x, y = oy - b.y, planes = b.planes;
-  for (let j = 0; j < planes.length; j++) {
-    const [nx, ny, nz, lim] = planes[j], dist = lim - nx * x - ny * y - nz * oz, vel = nx * rx + ny * ry + nz * rz;
+  const x = ox - b.x, y = oy - b.y, planes = b.planeData || roofPlaneData(b.planes);
+  for (let j = 0; j < planes.length; j += 4) {
+    const nx = planes[j], ny = planes[j + 1], nz = planes[j + 2];
+    const dist = planes[j + 3] - nx * x - ny * y - nz * oz, vel = nx * rx + ny * ry + nz * rz;
     if (Math.abs(vel) < 1e-8) { if (dist < 0) return -1; continue; }
     const t = dist / vel;
-    if (vel < 0 && t > entry) { entry = t; face = j; } else if (vel > 0) exit = Math.min(exit, t);
+    if (vel < 0 && t > entry) { entry = t; face = j / 4; } else if (vel > 0) exit = Math.min(exit, t);
     if (entry > exit) return -1;
   }
   if (entry < 0.02 || exit < 0) return -1;
@@ -7193,17 +7462,17 @@ function drawBelleBuildings() {
   forNear(belleBuildingsB, b => {
     const [vx, vy] = R(b.x, b.y);
     if (b.access || Math.hypot(vx, vy) > vis + 8) return;
-    drawBox({ ...boxAt(vx, vy, 1, 0, (b.x1 - b.x0) / 2, (b.y1 - b.y0) / 2, b.h, b.h + 0.45), planes: b.planes }, (i, t, L) => {
+    drawBox({ ...boxAt(vx, vy, 1, 0, (b.x1 - b.x0) / 2, (b.y1 - b.y0) / 2, b.h, b.h + 0.45), planeData: b.planeData }, (i, t, L) => {
       if (SHOP[idx(Math.floor(b.x + HIT.u), Math.floor(b.y + HIT.v))] !== b.sh) return false;
       const seam = Math.abs(fract((HIT.face < 8 ? HIT.v : HIT.u) * 5) - 0.5) > 0.46;
       BG[i] = C(GREEN, 1 + L * (HIT.face === 4 ? 0.3 : 0.19));
       set(i, seam ? '/' : ' ', C(seam ? YEL : GREEN, L * 0.8));
-      paintSettledSnow(i, b.x + HIT.u, b.y + HIT.v, L * 0.6, HIT.face === 4 ? 1 : 0.55);
+      paintSettledSnow(i, b.x + HIT.u, b.y + HIT.v, L * 0.6, HIT.face === 4 ? 1 : 0.55,0,HIT.w);
       return true;
     }, rayMansard);
     if (fract(b.seed * 19) < 0.35) {
       const tx = b.x1 - 0.65, ty = b.y0 + 0.65;
-      if (SHOP[idx(tx, ty)] === b.sh) drawCopperDome(...R(tx, ty), b.h + 0.1, 0.52, 0.75);
+      if (SHOP[idx(tx, ty)] === b.sh) drawCopperDome(...R(tx, ty), b.h + 0.38, 0.46, 0.48, b.h + 0.08);
     }
   });
   forNear(belleDetailsB, o => {
@@ -7215,16 +7484,39 @@ function drawBelleBuildings() {
     drawBox({ ...o, x: rel(o.x - px), y: rel(o.y - py) }, (i, t, L) => belleDetailShade(o, i, t, L));
   });
 }
-// Fluted iron posts and paired opal globes, distinct from the other districts' swan-neck street lamps.
-function drawBelleLamp(vx, vy) {
-  drawShape(vx, vy, 0, 0.16, 0.64, (i, u, z, du, dz, L) => {
-    const stem = Math.abs(u) < Math.max(0.01, du * 0.45) && z < 0.58;
-    const foot = z < 0.055 && Math.abs(u) < 0.035, arm = Math.abs(z - 0.49) < Math.max(0.008, dz * 0.45) && Math.abs(u) < 0.12;
-    const globe = Math.hypot((Math.abs(u) - 0.11) / 0.045, (z - 0.55) / 0.055) < 1;
-    if (globe) { BG[i] = C(WHITE, 2 + lampsOn * 7); return set(i, 'o', C(WARM, Math.max(L, lampsOn * 15))), true; }
-    if (!stem && !foot && !arm) return false;
-    BG[i] = C(GRAY, 1); return set(i, foot ? '#' : arm ? '=' : '|', C(GRAY, L)), true;
-  });
+// Intersect the rounded opal glass itself, not its bounding box or a camera-facing disc.
+function rayBelleGlobe(ox, oy, oz, rx, ry, rz, b) {
+  const z = (b.z0 + b.z1) / 2, h = (b.z1 - b.z0) / 2;
+  const x = (ox - b.x) / b.hl, y = (oy - b.y) / b.hw, w = (oz - z) / h;
+  const ux = rx / b.hl, uy = ry / b.hw, uz = rz / h;
+  const aa = ux * ux + uy * uy + uz * uz, bb = x * ux + y * uy + w * uz;
+  const disc = bb * bb - aa * (x * x + y * y + w * w - 1);
+  if (disc < 0) return -1;
+  const t = (-bb - Math.sqrt(disc)) / aa;
+  if (t < 0.01) return -1;
+  const qx = ox + rx * t - b.x, qy = oy + ry * t - b.y;
+  HIT.u = qx * b.c + qy * b.s; HIT.v = -qx * b.s + qy * b.c; HIT.w = oz + rz * t; HIT.face = 0;
+  return t;
+}
+function belleLampShade(o, i, t, L) {
+  if (o.kind === 'globe') {
+    const normalZ = (HIT.w - (o.z0 + o.z1) / 2) / ((o.z1 - o.z0) / 2);
+    const light = 0.65 + 0.35 * Math.max(0, normalZ);
+    BG[i] = C(WHITE, 2 + L * 0.35 * light + lampsOn * 6);
+    return set(i, normalZ > 0.65 ? '.' : ':', C(WARM, Math.max(L * light, lampsOn * 15))), true;
+  }
+  const fluted = o.kind === 'pole' || o.kind === 'finial';
+  let ch = '=';
+  if (fluted) ch = '|';
+  else if (o.kind === 'base') ch = '#';
+  BG[i] = C(GRAY, (1 + L * 0.18) * shadeFace(HIT.face));
+  return set(i, HIT.face === 5 ? '.' : ch, C(fluted ? GRAY : YEL, L * 0.85)), true;
+}
+// Paired globes and ornamental ironwork remain solid and correctly foreshortened at every viewing distance.
+function drawBelleLamp(vx, vy, ax, ay) {
+  for (const o of belleLampParts(vx, vy, ax, ay)) {
+    drawBox(o, (i, t, L) => belleLampShade(o, i, t, L), o.kind === 'globe' ? rayBelleGlobe : rayBox);
+  }
 }
 // Entrances, windows and corner margins belong to each building's actual faces.
 const BROWNSTONE_MATERIALS = [BRICK, SKIN, BRICK, STONE, BRICK];
@@ -7366,7 +7658,7 @@ function architectureDetailShade(o, i, t, L) {
   }
   const top = HIT.face === 5;
   set(i, top || o.kind === 'course' || o.kind === 'cornice' ? '=' : o.kind === 'pier' ? '|' : ' ', C(o.kind === 'step' ? GRAY : STONE, L * 0.9));
-  if (top) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * 0.7);
+  if (top) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * 0.7,1,0,HIT.w);
   return true;
 }
 function drawArchitecture() {
@@ -7377,7 +7669,7 @@ function drawArchitecture() {
       const seam = Math.abs(fract((HIT.face < 8 ? HIT.v : HIT.u) * 8) - 0.5) > 0.44;
       BG[i] = C(GRAY, (1.2 + L * 0.25) * (HIT.face === 4 ? 1.15 : 0.85));
       set(i, seam ? '/' : ' ', C(seam ? YEL : GRAY, L));
-      paintSettledSnow(i, c.x + HIT.u, c.y + HIT.v, L * 0.7, HIT.face === 4 ? 1 : 0.5);
+      paintSettledSnow(i, c.x + HIT.u, c.y + HIT.v, L * 0.7, HIT.face === 4 ? 1 : 0.5,0,HIT.w);
       return true;
     }, rayMansard);
   });
@@ -7510,7 +7802,7 @@ function residentialDetailShade(o, i, t, L) {
   BG[i] = C(base, (1.8 + L * .33) * shadeFace(HIT.face));
   set(i, HIT.face === 5 || o.kind === 'residential-cornice' || o.kind === 'balcony-slab' ? '=' :
     o.kind === 'service-spine' && fract(z * 18) < .08 ? '_' : ' ', C(base, L * .88));
-  if (HIT.face === 5) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7);
+  if (HIT.face === 5) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7,1,0,HIT.w);
   return true;
 }
 function landmarkStone(i, x, z, base, L, faceLight = 1) {
@@ -7596,7 +7888,7 @@ function landmarkSolidShade(o, i, t, L) {
     const base = p.roof, seam = fract((face < 8 ? HIT.v : HIT.u) * 9) < .055;
     BG[i] = C(base,1.3 + L * (inclined ? .28 : .35));
     set(i,seam ? '/' : fract(z * 14) < .045 ? '-' : ' ',C(base,L * .85));
-    paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L,.55);
+    paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L,.55,0,HIT.w);
     return true;
   }
   landmarkStone(i,u + o.x,z,p.stone,L,shadeFace(o.planes ? 1 : face));
@@ -7612,7 +7904,7 @@ function landmarkSolidShade(o, i, t, L) {
     else return false;
   } else if (o.kind === 'course' || o.kind === 'portal') set(i,o.kind === 'portal' && o.planes ? '^' : '=',C(STONE,L * 1.1));
   else if (o.kind === 'pier') set(i,'|',C(STONE,L));
-  if ((!o.planes && face === 5) || o.planes && face === 4) paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L);
+  if ((!o.planes && face === 5) || o.planes && face === 4) paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L,1,0,HIT.w);
   return true;
 }
 function drawLandmarks() {
@@ -7710,7 +8002,7 @@ function pavilionGlassShade(o, i, t, L) {
     BG[i] = C(leaf ? GREEN : CYAN,leaf ? 1.2 + L * .16 : 1 + day * 2.2);
     set(i,leaf ? '%' : fract((u + v) * 9) < .035 ? '/' : ' ',C(leaf ? GREEN : WHITE,L * (leaf ? .75 : .35)));
   }
-  if (roof && o.planes[HIT.face][2] > 0) paintSettledSnow(i,o.x + u,o.y + v,L,.35);
+  if (roof && o.planes[HIT.face][2] > 0) paintSettledSnow(i,o.x + u,o.y + v,L,.35,0,HIT.w);
   return true;
 }
 function pavilionDetailShade(o, i, t, L) {
@@ -7754,7 +8046,7 @@ function pavilionDetailShade(o, i, t, L) {
     BG[i] = C(fract(HIT.u * 6) < .5 ? p.trim : STONE,2 + L * .25);
     set(i,top ? '/' : 'v',C(WHITE,L * .6));
   } else set(i,o.kind === 'ac' ? '#' : top || o.kind === 'eave' ? '=' : '|',C(o.kind === 'ac' ? GRAY : base,L));
-  if (top) paintSettledSnow(i,o.x + HIT.u * o.c - HIT.v * o.s,o.y + HIT.u * o.s + HIT.v * o.c,L,.65);
+  if (top) paintSettledSnow(i,o.x + HIT.u * o.c - HIT.v * o.s,o.y + HIT.u * o.s + HIT.v * o.c,L,.65,0,HIT.w);
   return true;
 }
 function drawPavilions() {
@@ -7800,9 +8092,23 @@ const TREE_WINTER_BRANCHES = Object.fromEntries(['oak', 'blossom', 'birch', 'pop
   }
   return [kind, limbs];
 }));
-function nearTreeBranch(u, z, x0, z0, x1, z1, width) {
-  const du = x1 - x0, dz = z1 - z0, t = clamp(((u - x0) * du + (z - z0) * dz) / (du * du + dz * dz), 0, 1);
-  return (u - x0 - du * t) ** 2 + (z - z0 - dz * t) ** 2 < width * width;
+const WINTER_BRANCH_PAD = 0.025, WINTER_BRANCH_ROWS = 16;
+const TREE_WINTER_ROWS = Object.fromEntries(Object.keys(TREE_WINTER_BRANCHES).map(kind => {
+  const height = TREE_SIZE[kind][1];
+  return [kind, Array.from({ length: WINTER_BRANCH_ROWS }, (_, row) => {
+    const z0 = row * height / WINTER_BRANCH_ROWS - WINTER_BRANCH_PAD, z1 = (row + 1) * height / WINTER_BRANCH_ROWS + WINTER_BRANCH_PAD;
+    return TREE_WINTER_BRANCHES[kind].map((b, id) => b[1] <= z1 && b[3] >= z0 ? id : -1).filter(id => id >= 0);
+  })];
+}));
+function winterTreeBranches(t) {
+  if (t.winterBranches) return t.winterBranches;
+  const warp = 0.92 + t.seed * 0.16;
+  t.winterBranches = TREE_WINTER_BRANCHES[t.kind].map(([ax,z0,bx,z1,thickness]) => {
+    const x0 = ax * warp, x1 = bx * warp, du = x1 - x0, dz = z1 - z0;
+    return { x0, z0, x1, z1, du, dz, length2: du * du + dz * dz, thickness,
+      minX: Math.min(x0,x1), maxX: Math.max(x0,x1), slope: dz / (du || 0.0001) };
+  });
+  return t.winterBranches;
 }
 function drawTree(t, vx, vy) {
   const [hw, h] = TREE_SIZE[t.kind], s = t.s;
@@ -7839,12 +8145,15 @@ function treeCell(i, u, z, du, dz, L, t) {
 }
 
 function winterTreeCell(i, u, z, du, dz, L, t) {
-  const height = TREE_SIZE[t.kind][1], pixel = Math.max(du * 0.42, dz * 0.4), warp = 0.92 + t.seed * 0.16;
+  const height = TREE_SIZE[t.kind][1], pixel = Math.max(du * 0.42, dz * 0.4), branches = winterTreeBranches(t);
+  const row = clamp(Math.floor(z / height * WINTER_BRANCH_ROWS), 0, WINTER_BRANCH_ROWS - 1);
+  const ids = pixel <= WINTER_BRANCH_PAD ? TREE_WINTER_ROWS[t.kind][row] : null;
   let slope = null;
-  for (const [ax, z0, bx, z1, thickness] of TREE_WINTER_BRANCHES[t.kind]) {
-    const x0 = ax * warp, x1 = bx * warp, width = Math.max(0.0045 * thickness, pixel);
-    if (z < z0 - width || z > z1 + width || u < Math.min(x0, x1) - width || u > Math.max(x0, x1) + width) continue;
-    if (nearTreeBranch(u, z, x0, z0, x1, z1, width)) { slope = (z1 - z0) / (x1 - x0 || 0.0001); break; }
+  for (let j = 0; j < (ids ? ids.length : branches.length); j++) {
+    const b = branches[ids ? ids[j] : j], width = Math.max(0.0045 * b.thickness, pixel);
+    if (z < b.z0 - width || z > b.z1 + width || u < b.minX - width || u > b.maxX + width) continue;
+    const along = clamp(((u - b.x0) * b.du + (z - b.z0) * b.dz) / b.length2, 0, 1);
+    if ((u - b.x0 - b.du * along) ** 2 + (z - b.z0 - b.dz * along) ** 2 < width * width) { slope = b.slope; break; }
   }
   if (slope === null) return false;
   const snow = snowCover > 0.2 && z > height * 0.55 && Math.abs(slope) < 1.8 && hash(Math.floor(u * 90 + t.seed * 99), Math.floor(z * 90), 816) > 0.68;
@@ -7901,13 +8210,13 @@ function citySprites() {
     const [vx, vy] = R(s.x, s.y);
     if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawShape(vx, vy, s.z, 1.6, s.H + 2.2, (i, u, z, du, dz, L) => stackCell(i, u, z, du, dz, L, s));
   }
-  forNear(lampsB, ({ x, y, ax, ay }) => {
+  forNear(lampsB, ({ x, y, ax, ay, top = LAMP_TOP }) => {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
     if (depth < 0.05 || depth > vis) return;
-    if (districtAt(x, y) === 'belle') return drawBelleLamp(vx, vy);
-    if (vx * vx + vy * vy < LAMP_3D * LAMP_3D) return drawLamp3D(vx, vy, ax, ay); // up close: a real one
+    if (districtAt(x, y) === 'belle') return drawBelleLamp(vx, vy, ax, ay);
+    if (vx * vx + vy * vy < LAMP_3D * LAMP_3D) return drawLamp3D(vx, vy, ax, ay, top); // up close: a real one
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
-    drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
+    drawShape(vx, vy, 0, REACH + 0.08, top + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s, top));
   });
   islandSprites();
   fairSprites();
@@ -7966,10 +8275,10 @@ function drawGrandHotelDome() {
   if (mode === 'room') return;
   const x = GRAND_HOTEL.bx * 8 + 5, y = GRAND_HOTEL.by * 8 + 5, [vx, vy] = R(x, y);
   if (Math.hypot(vx, vy) > vis + 3) return;
-  drawCopperDome(vx, vy, 3.68, 1.12, 1.2);
+  drawCopperDome(vx, vy, 3.75, 1.06, 1.02);
   for (const off of [-2.4, 2.4]) {
     const [tx, ty] = R(x + off, GRAND_HOTEL.by * 8 + 7.4);
-    drawCopperDome(tx, ty, 2.68, 0.54, 0.7);
+    drawCopperDome(tx, ty, 2.7, 0.48, 0.58);
   }
   // The entry canopy projects over the pavement; its columns leave the revolving door clear.
   const [cx, cy] = R(x, GRAND_HOTEL.by * 8 + 7.9);
@@ -7979,64 +8288,101 @@ function drawGrandHotelDome() {
   for (const off of [-1, 1]) drawBox({ x: cx + off, y: cy + 0.3, c: 1, s: 0, hl: 0.025, hw: 0.025, z0: 0, z1: 0.52 },
     (i, t, L) => (set(i, '|', C(YEL, L)), true));
 }
-function drawCopperDome(vx, vy, base, radius, height) {
-  const depth = dx * vx + dy * vy;
-  if (depth + radius < 0.05 || depth - radius > vis) return;
-  const center = cols / 2 + (-dy * vx + dx * vy) * projX / Math.max(depth, 0.05);
-  const span = radius * projX / Math.max(depth - radius, 0.05);
-  const c0 = Math.max(0, Math.floor(center - span)), c1 = Math.min(cols, Math.ceil(center + span));
-  const rr = radius * radius, hh = height * height;
-  const A0 = -vx, B0 = -vy, C0 = eye - base, q = (A0 * A0 + B0 * B0) / rr + C0 * C0 / hh - 1;
-  for (let c = c0; c < c1; c++) {
-    const screenX = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * screenX, ry = dy + dx * tf * screenX;
-    for (let r = 0; r < rows; r++) {
-      const i = r * cols + c, rz = (hor - r - 0.5) / projY;
-      const aa = (rx * rx + ry * ry) / rr + rz * rz / hh, bb = (A0 * rx + B0 * ry) / rr + C0 * rz / hh;
-      const disc = bb * bb - aa * q;
-      if (disc < 0) continue;
-      let t = (-bb - Math.sqrt(disc)) / aa;
-      if (t < 0.05 || t >= ZB[i] || t > vis) continue;
-      let z = C0 + rz * t;
-      if (z < 0) {
-        t = -C0 / rz;
-        if (t < 0.05 || t >= ZB[i] || t > vis || (A0 + rx * t) ** 2 + (B0 + ry * t) ** 2 > rr) continue;
-        z = 0;
-      }
-      const ax = A0 + rx * t, ay = B0 + ry * t, angle = Math.atan2(ay, ax);
-      const rib = Math.abs(fract(angle * 6 / Math.PI) - 0.5) < 0.055;
-      const L = (1 - t / vis) * amb * 12, shade = 0.55 + 0.45 * Math.max(0, (-ax + ay + z) / (radius + height));
-      BG[i] = C(GREEN, 1 + L * shade * 0.25);
-      set(i, z > height - 0.035 ? '*' : rib ? '|' : z < 0.05 ? '=' : ':', C(rib || z > height - 0.035 ? YEL : GREEN, L * shade));
-      ZB[i] = ZBG[i] = t; FL[i] = 0;
-    }
+function rayCopperCap(ox, oy, oz, rx, ry, rz, b) {
+  const x = ox - b.x, y = oy - b.y, z = oz - b.z0;
+  const aa = (rx * rx + ry * ry) * b.invRadius2 + rz * rz * b.invHeight2;
+  const bb = (x * rx + y * ry) * b.invRadius2 + z * rz * b.invHeight2;
+  const q = (x * x + y * y) * b.invRadius2 + z * z * b.invHeight2 - 1, disc = bb * bb - aa * q;
+  if (disc < 0) return -1;
+  let t = (-bb - Math.sqrt(disc)) / aa, face = 5;
+  if (t < .01) return -1;
+  if (z + rz * t < 0) {
+    if (Math.abs(rz) < 1e-12) return -1;
+    t = -z / rz; face = 6;
+    if (t < .01 || (x + rx * t) ** 2 + (y + ry * t) ** 2 > b.hl * b.hl) return -1;
   }
+  HIT.u = x + rx * t; HIT.v = y + ry * t; HIT.w = oz + rz * t; HIT.face = face;
+  return t;
+}
+function rayCopperDrum(ox, oy, oz, rx, ry, rz, b) {
+  const x = ox - b.x, y = oy - b.y, aa = rx * rx + ry * ry, bb = x * rx + y * ry;
+  const disc = bb * bb - aa * (x * x + y * y - b.hl * b.hl);
+  if (disc < 0) return -1;
+  let entry = -Infinity, exit = Infinity, face = 3;
+  if (aa > 1e-12) {
+    const root = Math.sqrt(disc); entry = (-bb - root) / aa; exit = (-bb + root) / aa;
+  } else if (x * x + y * y > b.hl * b.hl) return -1;
+  if (Math.abs(rz) < 1e-12) { if (oz < b.z0 || oz > b.z1) return -1; }
+  else {
+    const a0 = (b.z0 - oz) / rz, a1 = (b.z1 - oz) / rz, lower = Math.min(a0, a1);
+    if (lower > entry) { entry = lower; face = rz > 0 ? 6 : 5; }
+    exit = Math.min(exit, Math.max(a0, a1));
+  }
+  if (entry < .01 || entry > exit) return -1;
+  HIT.u = x + rx * entry; HIT.v = y + ry * entry; HIT.w = oz + rz * entry; HIT.face = face;
+  return entry;
+}
+// Low copper crowns on dressed drums, with quiet patina panels and narrow standing seams.
+// drawBox bounds the actual vertical silhouette, avoiding full-screen ray tests for roofs high above the camera.
+function drawCopperDome(vx, vy, base, radius, height, supportBase = base) {
+  const drum = height * .18, capHeight = height - drum;
+  const ring = (r, z0, z1, stone) => drawBox(boxAt(vx, vy, 1, 0, r, r, z0, z1), (i, t, L) => {
+    const angle = Math.atan2(HIT.v, HIT.u), flute = Math.abs(Math.sin(angle * 12)) < .13;
+    const color = stone ? STONE : GREEN;
+    let ch = ' ';
+    if (HIT.face >= 5) ch = '=';
+    else if (flute) ch = '|';
+    BG[i] = C(color, 1.5 + L * .28);
+    set(i, ch, C(stone ? STONE : YEL, L * .75));
+    return true;
+  }, rayCopperDrum);
+  // On a sloping mansard the pedestal extends down into the roof, keeping the crown supported at every edge.
+  ring(radius * 1.035, supportBase, base + .025, true);
+  ring(radius * .96, base + .025, base + drum, false);
+  ring(radius * 1.025, base + drum - .018, base + drum + .012, false);
+  const b = { ...boxAt(vx, vy, 1, 0, radius, radius, base + drum, base + height),
+    invRadius2: 1 / (radius * radius), invHeight2: 1 / (capHeight * capHeight) };
+  drawBox(b, (i, t, L) => {
+    if (HIT.face === 6) { BG[i] = C(GREEN, 1); set(i, ' ', 0); return true; }
+    const z = HIT.w - b.z0, nx = HIT.u * b.invRadius2, ny = HIT.v * b.invRadius2, nz = z * b.invHeight2;
+    const length = Math.hypot(nx, ny, nz), angle = Math.atan2(HIT.v, HIT.u);
+    const light = .55 + .45 * Math.max(0, (-nx * .55 + ny * .35 + nz * .76) / length);
+    const patina = .5 + .5 * Math.sin(angle * 3 + z / capHeight * 2);
+    const rib = Math.abs(fract(angle * 6 / Math.PI) - .5) < .016;
+    BG[i] = C(GREEN, 1.2 + L * light * (.25 + patina * .025));
+    set(i, rib ? '|' : ' ', C(GREEN, L * light * .6));
+    if (nz / length > .35) paintSettledSnow(i, vx + px + HIT.u, vy + py + HIT.v, L * .6, nz / length, 0, HIT.w);
+    return true;
+  }, rayCopperCap);
+  drawBox(boxAt(vx, vy, 1, 0, radius * .022, radius * .022, base + height - .008, base + height + .07), (i, t, L) => {
+    BG[i] = C(GRAY, 1); set(i, HIT.face === 5 ? '+' : '|', C(YEL, L * .85)); return true;
+  });
 }
 
 // a classic street lamp: a tall fluted pole, a swan neck curving out over the street, a lantern hanging from its end.
 // Drawn from measurements, so the curve stays one character thick at any distance; s squashes the neck sideways
 // when the arm points toward or away from you, so it turns smoothly as you walk round it.
-const LAMP_TOP = 0.95, NECK = REACH / 2; // pole height; the neck is a half circle of radius NECK
-function lampCell(i, u, z, du, dz, L, s) {
-  const lit = lampsOn > 0.3, steel = C(GRAY, L * 1.1), hx = 2 * NECK * s, lu = u - hx, lz = z - (LAMP_TOP - 0.09);
+function lampCell(i, u, z, du, dz, L, s, top = LAMP_TOP) {
+  const lit = lampsOn > 0.3, steel = C(GRAY, L * 1.1), hx = 2 * NECK * s, lu = u - hx, lz = z - (top - 0.09);
   // the lantern: a cap, a glass body glowing after dark, a finial underneath
-  if (Math.abs(lu) < Math.max(0.03, du * 0.75) && z < LAMP_TOP - 0.03 && z > LAMP_TOP - 0.14) {
-    if (z > LAMP_TOP - 0.055) return set(i, Math.abs(lu) < Math.max(0.015, du / 2) ? '^' : '_', steel), true;
-    if (z < LAMP_TOP - 0.125) return set(i, 'v', steel), true;
+  if (Math.abs(lu) < Math.max(0.03, du * 0.75) && z < top - 0.03 && z > top - 0.14) {
+    if (z > top - 0.055) return set(i, Math.abs(lu) < Math.max(0.015, du / 2) ? '^' : '_', steel), true;
+    if (z < top - 0.125) return set(i, 'v', steel), true;
     if (lit) BG[i] = C(WARM, 4 + lampsOn * 4);
     return set(i, lit ? '#' : ':', lit ? C(WARM, 15) : C(GRAY, L * 0.7)), true;
   }
-  if (z <= LAMP_TOP && z > LAMP_TOP - 0.03 && onLine(lu, du, 0, 0)) return set(i, '|', steel), true; // the drop
+  if (z <= top && z > top - 0.03 && onLine(lu, du, 0, 0)) return set(i, '|', steel), true; // the drop
   const halo = Math.hypot(lu / 0.075, lz / 0.065);
   if (lit && halo < 1) { BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, " ", 0), true; } // a soft glow round it
   // the pole: a flared base, a collar, a finial on top
-  if (z < LAMP_TOP + 0.02 && Math.abs(u) < Math.max(du / 2, z < 0.06 ? 0.03 : 0.012)) {
+  if (z < top + 0.02 && Math.abs(u) < Math.max(du / 2, z < 0.06 ? 0.03 : 0.012)) {
     if (z < 0.06) return set(i, z < 0.025 ? '#' : 'A', steel), true;
     return set(i, Math.abs(z - 0.42) < Math.max(0.012, dz / 2) ? '=' : '|', steel), true;
   }
   // the swan neck: the upper half of an ellipse from the pole top out to the lantern
   const w = NECK * Math.abs(s);
-  if (w > du * 0.3 && z > LAMP_TOP - dz) {
-    const ex = (u - NECK * s) / w, ez = (z - LAMP_TOP) / NECK, rho = Math.hypot(ex, ez), tol = Math.max(du / w, dz / NECK) / 2;
+  if (w > du * 0.3 && z > top - dz) {
+    const ex = (u - NECK * s) / w, ez = (z - top) / NECK, rho = Math.hypot(ex, ez), tol = Math.max(du / w, dz / NECK) / 2;
     if (Math.abs(rho - 1) < tol && ez > -tol) {
       const ang = Math.atan2(ez, ex), tu = -w * Math.sin(ang) / du, tz = NECK * Math.cos(ang) / dz; // tangent, in cells
       const sl = Math.abs(tz) / (Math.abs(tu) + 1e-9);
@@ -8052,17 +8398,17 @@ function lampCell(i, u, z, du, dz, L, s) {
 const LAMP_3D = 5, NECK_BITS = 7;
 const steelBox = ch => (i, t, L) => { BG[i] = C(GRAY, (0.9 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '.' : ch, C(GRAY, L * 1.15)), true; };
 const STEEL = { pole: steelBox('|'), base: steelBox('#'), arm: steelBox('='), cap: steelBox('_') };
-function drawLamp3D(vx, vy, ax, ay) {
+function drawLamp3D(vx, vy, ax, ay, top = LAMP_TOP) {
   const lit = lampsOn > 0.3, B = (u, z0, z1, hl, hw, shade) => drawBox(boxAt(vx + ax * u, vy + ay * u, ax, ay, hl, hw, z0, z1), shade);
   B(0, 0, 0.06, 0.026, 0.026, STEEL.base);
-  B(0, 0.06, LAMP_TOP, 0.01, 0.01, STEEL.pole);
+  B(0, 0.06, top, 0.01, 0.01, STEEL.pole);
   B(0, 0.41, 0.43, 0.016, 0.016, STEEL.cap);
   for (let k = 0; k < NECK_BITS; k++) { // the neck: up and over from the top of the pole to the lantern
     const t0 = Math.PI * (1 - k / NECK_BITS), t1 = Math.PI * (1 - (k + 1) / NECK_BITS);
-    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = LAMP_TOP + NECK * Math.sin(t0), z1 = LAMP_TOP + NECK * Math.sin(t1);
+    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = top + NECK * Math.sin(t0), z1 = top + NECK * Math.sin(t1);
     B((u0 + u1) / 2, Math.min(z0, z1) - 0.007, Math.max(z0, z1) + 0.007, Math.abs(u1 - u0) / 2 + 0.007, 0.008, STEEL.arm);
   }
-  const hu = 2 * NECK, top = LAMP_TOP;
+  const hu = 2 * NECK;
   B(hu, top - 0.03, top, 0.004, 0.004, STEEL.pole); // the drop
   B(hu, top - 0.055, top - 0.03, 0.032, 0.032, STEEL.cap);
   B(hu, top - 0.125, top - 0.055, 0.024, 0.024, (i, t, L) => { // the glass
@@ -8453,7 +8799,7 @@ function drawStationEntrance(s, vx, vy) {
   });
   // and a tall lit blade on a post at two corners, SUBWAY down both faces and a green lamp on top: seen from down the
   // block either way
-  for (const e of [-1, 1]) subwayBlade(vx + e * (hl + 0.02), vy - e * (hw + 0.025), iron);
+  for (const blade of s.blades) subwayBlade(vx + rel(blade.x-s.x),vy + rel(blade.y-s.y),iron);
 }
 function subwayBlade(tx, ty, iron) {
   const Z0 = 0.13, Z1 = 0.33, word = 'SUBWAY', lit = 9 + night * 6;
@@ -8601,8 +8947,8 @@ function drawElCar(vx, vy, cab) {
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
 function elSprites() {
   forNear(elPillarsB, p => drawArt(...R(p.x, p.y), 0, 0.09, EL_BOT, PILLAR, (c, row, L) => C(GRAY, L * 0.9)));
-  for (const s of EL_STATIONS) for (const y of [EL_Y + 0.14, EL_Y + 1.86])
-    drawArt(...R(s.x, y), 0, 0.22, EL_BOT - 0.02, EL_STAIRS, (c, row, L) => row === 0 ? C(GREEN, Math.max(L, 12)) : C(GRAY, L));
+  for (const s of EL_STATIONS) for (const stairs of s.stairs)
+    drawArt(...R(stairs.x, stairs.y), 0, 0.22, EL_BOT - 0.02, EL_STAIRS, (c, row, L) => row === 0 ? C(GREEN, Math.max(L, 12)) : C(GRAY, L));
   for (const t of elTrains(T)) {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
@@ -9931,7 +10277,7 @@ function drawHomeBalconies() {
     }
     const masonry = (i,t,L) => {
       BG[i] = C(STONE,2 + L * .3); set(i,'=',C(WHITE,L));
-      if (HIT.face === 5) paintSettledSnow(i,b.x0 + .3 + HIT.u,b.y + HIT.v,L);
+      if (HIT.face === 5) paintSettledSnow(i,b.x0 + .3 + HIT.u,b.y + HIT.v,L,1,0,HIT.w);
       return true;
     };
     drawBox(boxAt(rel(b.x0 + .3 - px),rel(b.y - py),1,0,.3,.7,b.z - .025,b.z),masonry);
@@ -10498,13 +10844,12 @@ function shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL
 
 // ---- the arcade roof over the streets, seen from underneath
 // It's glass: the steel shows (beams down the sides, a rib every 5m, a bar down the middle and across between the
-// ribs, lamps hanging from it) and between them you see the sky, and the buildings above the roofline
+// ribs) and between them you see the sky, and the buildings above the roofline
 function arcadeRoofPart(wx, wy) {
   const k = idx(Math.floor(wx), Math.floor(wy)), r = ROAD[k], ns = r === 1 || r === 3 && fract(wy / 8) >= 0.25;
   const across = (ns ? mod(wx, 8) : mod(wy, 8)) / 2, along = ns ? wy : wx;
   if (across < 0.02 || across > 0.98) return 'beam';
   if (fract(along * 2) < 0.035) return 'rib';
-  if (Math.hypot(fract(along) - 0.5, (Math.abs(across - 0.5) - 0.25) * 2) < 0.07) return 'lamp';
   if (Math.abs(across - 0.5) < 0.015 || Math.abs(fract(along * 2) - 0.5) < 0.025) return 'bar';
   return null; // glass
 }
@@ -10513,7 +10858,6 @@ function arcadeRoofCell(i, wx, wy) {
   const steel = 4 + day * 4 + lampsOn * 2;
   if (part === 'beam') { BG[i] = C(GRAY, steel); return set(i, '#', C(WHITE, 9)), true; }
   if (part === 'rib') { BG[i] = C(GRAY, steel * 0.8); return set(i, '=', C(WHITE, 10)), true; }
-  if (part === 'lamp') { BG[i] = C(WARM, 4 + night * 6); return set(i, 'o', C(WHITE, 15)), true; }
   if (part === 'bar') { BG[i] = C(GRAY, steel * 0.7); return set(i, '-', C(WHITE, 8)), true; }
   return false;
 }
@@ -12811,7 +13155,7 @@ let plat = null, ride = null; // plat: {s: station, tr: which side}; ride: {tr, 
 const nearElStairs = () => {
   if (mode !== 'walk') return null;
   for (const s of EL_STATIONS) for (const tr of [0, 1])
-    if (Math.hypot(rel(s.x - px), rel(EL_Y + (tr ? 1.86 : 0.14) - py)) < 0.4) return { s, tr };
+    if (Math.hypot(rel(s.stairs[tr].x - px), rel(s.stairs[tr].y - py)) < 0.4) return { s, tr };
   return null;
 };
 function elUp({ s, tr }) {
@@ -12819,7 +13163,8 @@ function elUp({ s, tr }) {
   say(`${s.name} el, ${tr ? 'eastbound' : 'westbound'} platform`);
 }
 function elDown() {
-  mode = 'walk'; px = plat.s.x; py = EL_Y + (plat.tr ? 1.88 : 0.12); plat = null;
+  const stairs=plat.s.stairs[plat.tr];
+  mode = 'walk'; px = stairs.x; py = stairs.y-stairs.ay*.02; plat = null;
 }
 // the train standing at your platform, if there is one
 const elHere = () => plat && elTrains(T).find(t => t.tr === plat.tr && t.stopped && EL_STATIONS[t.station] === plat.s);
@@ -16820,7 +17165,7 @@ function crimePrompt() {
 // Bunny hopping: jump again the moment you land (press Space just before or just after you touch down) and each hop
 // carries you a bit faster; turn the way you're strafing while you're in the air (A + mouse left, D + mouse right)
 // and it builds quicker. Stay on the ground and the speed's gone in a moment.
-const HOP_GAIN = 0.06, HOP_STRAFE = 0.12, HOP_MAX = 1.9, HOP_BUF = 0.14, HOP_GRACE = 0.1; // speed x per hop, x more for a good strafe, cap, s early
+const HOP_GAIN = 0.06, HOP_STRAFE = 0.12, HOP_MAX = 1.9, HOP_BUF = 0.2, HOP_GRACE = 0.16; // speed x per hop, x more for a good strafe, cap, s early
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
@@ -17298,15 +17643,8 @@ function loop(t) {
     if (!body.seat) {
       const scale = sp * footSlow() * (body.hop || 1), ix = (cx * f - cy * (s + lurch)) * scale, iy = (cy * f + cx * (s + lurch)) * scale;
       const airborne = body.z > 0 || body.vz > 0;
-      if (!airborne) { body.mx = ix / dt; body.my = iy / dt; }
-      else { // Source-style air strafe: input only adds speed along wishdir up to a small cap, so you curve by strafing + turning instead of snapping
-        body.mx = (body.mx || 0) * Math.pow(0.995, dt * 60); body.my = (body.my || 0) * Math.pow(0.995, dt * 60);
-        const ws = Math.hypot(ix, iy) / dt;
-        if (ws) {
-          const wx = ix / dt / ws, wy = iy / dt / ws, add = ws * 0.1 - (body.mx * wx + body.my * wy);
-          if (add > 0) { const acc = Math.min(add, 10 * ws * dt); body.mx += acc * wx; body.my += acc * wy; }
-        }
-      }
+      if (!airborne && dt > 0) { body.mx = ix / dt; body.my = iy / dt; }
+      else if (airborne && dt > 0) airStrafe(f, s + lurch, scale / dt, dt);
       move(airborne ? body.mx * dt : ix, airborne ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)

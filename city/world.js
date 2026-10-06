@@ -441,7 +441,7 @@ for (const gh of GLASSHOUSES) {
 
 // Belle Époque: preserve flat roofs with public access. Other buildings have recessed courts / clipped wings
 // and a real mansard above the masonry. A lot's material and vines are stable across all its faces.
-const BELLE_BUILDINGS = [], BELLE_FACE_START = [new Float32Array(N * N), new Float32Array(N * N)], BELLE_FACE_END = [new Float32Array(N * N), new Float32Array(N * N)];
+const BELLE_BUILDINGS = [];
 {
   const lots = new Map();
   for (let i = 0; i < map.length; i++) if (map[i] && STY[i] === 24) {
@@ -462,14 +462,6 @@ const BELLE_BUILDINGS = [], BELLE_FACE_START = [new Float32Array(N * N), new Flo
       if (corner || court) { map[i] = 0; SHOP[i] = null; STY[i] = 0; }
     }
     BELLE_BUILDINGS.push({ ...b, sh });
-  }
-  for (let i = 0; i < map.length; i++) if (map[i] && STY[i] === 24) for (let side = 0; side < 2; side++) {
-    const x = i % N, y = Math.floor(i / N), stepX = side ? 1 : 0, stepY = side ? 0 : 1;
-    let lo = side ? x : y, hi = lo + 1;
-    const same = (dx, dy) => { const k = idx(x + dx, y + dy); return SHOP[k] === SHOP[i] && map[k] === map[i]; };
-    for (let n = 1; n <= 8 && same(-stepX * n, -stepY * n); n++) lo--;
-    for (let n = 1; n <= 8 && same(stepX * n, stepY * n); n++) hi++;
-    BELLE_FACE_START[side][i] = lo; BELLE_FACE_END[side][i] = hi;
   }
 }
 function belleRoofHeight(x, y) {

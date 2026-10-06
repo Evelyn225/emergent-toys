@@ -32,9 +32,23 @@ const TREE_WINTER_BRANCHES = Object.fromEntries(['oak', 'blossom', 'birch', 'pop
   }
   return [kind, limbs];
 }));
-function nearTreeBranch(u, z, x0, z0, x1, z1, width) {
-  const du = x1 - x0, dz = z1 - z0, t = clamp(((u - x0) * du + (z - z0) * dz) / (du * du + dz * dz), 0, 1);
-  return (u - x0 - du * t) ** 2 + (z - z0 - dz * t) ** 2 < width * width;
+const WINTER_BRANCH_PAD = 0.025, WINTER_BRANCH_ROWS = 16;
+const TREE_WINTER_ROWS = Object.fromEntries(Object.keys(TREE_WINTER_BRANCHES).map(kind => {
+  const height = TREE_SIZE[kind][1];
+  return [kind, Array.from({ length: WINTER_BRANCH_ROWS }, (_, row) => {
+    const z0 = row * height / WINTER_BRANCH_ROWS - WINTER_BRANCH_PAD, z1 = (row + 1) * height / WINTER_BRANCH_ROWS + WINTER_BRANCH_PAD;
+    return TREE_WINTER_BRANCHES[kind].map((b, id) => b[1] <= z1 && b[3] >= z0 ? id : -1).filter(id => id >= 0);
+  })];
+}));
+function winterTreeBranches(t) {
+  if (t.winterBranches) return t.winterBranches;
+  const warp = 0.92 + t.seed * 0.16;
+  t.winterBranches = TREE_WINTER_BRANCHES[t.kind].map(([ax,z0,bx,z1,thickness]) => {
+    const x0 = ax * warp, x1 = bx * warp, du = x1 - x0, dz = z1 - z0;
+    return { x0, z0, x1, z1, du, dz, length2: du * du + dz * dz, thickness,
+      minX: Math.min(x0,x1), maxX: Math.max(x0,x1), slope: dz / (du || 0.0001) };
+  });
+  return t.winterBranches;
 }
 function drawTree(t, vx, vy) {
   const [hw, h] = TREE_SIZE[t.kind], s = t.s;
@@ -71,12 +85,15 @@ function treeCell(i, u, z, du, dz, L, t) {
 }
 
 function winterTreeCell(i, u, z, du, dz, L, t) {
-  const height = TREE_SIZE[t.kind][1], pixel = Math.max(du * 0.42, dz * 0.4), warp = 0.92 + t.seed * 0.16;
+  const height = TREE_SIZE[t.kind][1], pixel = Math.max(du * 0.42, dz * 0.4), branches = winterTreeBranches(t);
+  const row = clamp(Math.floor(z / height * WINTER_BRANCH_ROWS), 0, WINTER_BRANCH_ROWS - 1);
+  const ids = pixel <= WINTER_BRANCH_PAD ? TREE_WINTER_ROWS[t.kind][row] : null;
   let slope = null;
-  for (const [ax, z0, bx, z1, thickness] of TREE_WINTER_BRANCHES[t.kind]) {
-    const x0 = ax * warp, x1 = bx * warp, width = Math.max(0.0045 * thickness, pixel);
-    if (z < z0 - width || z > z1 + width || u < Math.min(x0, x1) - width || u > Math.max(x0, x1) + width) continue;
-    if (nearTreeBranch(u, z, x0, z0, x1, z1, width)) { slope = (z1 - z0) / (x1 - x0 || 0.0001); break; }
+  for (let j = 0; j < (ids ? ids.length : branches.length); j++) {
+    const b = branches[ids ? ids[j] : j], width = Math.max(0.0045 * b.thickness, pixel);
+    if (z < b.z0 - width || z > b.z1 + width || u < b.minX - width || u > b.maxX + width) continue;
+    const along = clamp(((u - b.x0) * b.du + (z - b.z0) * b.dz) / b.length2, 0, 1);
+    if ((u - b.x0 - b.du * along) ** 2 + (z - b.z0 - b.dz * along) ** 2 < width * width) { slope = b.slope; break; }
   }
   if (slope === null) return false;
   const snow = snowCover > 0.2 && z > height * 0.55 && Math.abs(slope) < 1.8 && hash(Math.floor(u * 90 + t.seed * 99), Math.floor(z * 90), 816) > 0.68;
@@ -133,13 +150,13 @@ function citySprites() {
     const [vx, vy] = R(s.x, s.y);
     if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawShape(vx, vy, s.z, 1.6, s.H + 2.2, (i, u, z, du, dz, L) => stackCell(i, u, z, du, dz, L, s));
   }
-  forNear(lampsB, ({ x, y, ax, ay }) => {
+  forNear(lampsB, ({ x, y, ax, ay, top = LAMP_TOP }) => {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
     if (depth < 0.05 || depth > vis) return;
-    if (districtAt(x, y) === 'belle') return drawBelleLamp(vx, vy);
-    if (vx * vx + vy * vy < LAMP_3D * LAMP_3D) return drawLamp3D(vx, vy, ax, ay); // up close: a real one
+    if (districtAt(x, y) === 'belle') return drawBelleLamp(vx, vy, ax, ay);
+    if (vx * vx + vy * vy < LAMP_3D * LAMP_3D) return drawLamp3D(vx, vy, ax, ay, top); // up close: a real one
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
-    drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
+    drawShape(vx, vy, 0, REACH + 0.08, top + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s, top));
   });
   islandSprites();
   fairSprites();
@@ -198,10 +215,10 @@ function drawGrandHotelDome() {
   if (mode === 'room') return;
   const x = GRAND_HOTEL.bx * 8 + 5, y = GRAND_HOTEL.by * 8 + 5, [vx, vy] = R(x, y);
   if (Math.hypot(vx, vy) > vis + 3) return;
-  drawCopperDome(vx, vy, 3.68, 1.12, 1.2);
+  drawCopperDome(vx, vy, 3.75, 1.06, 1.02);
   for (const off of [-2.4, 2.4]) {
     const [tx, ty] = R(x + off, GRAND_HOTEL.by * 8 + 7.4);
-    drawCopperDome(tx, ty, 2.68, 0.54, 0.7);
+    drawCopperDome(tx, ty, 2.7, 0.48, 0.58);
   }
   // The entry canopy projects over the pavement; its columns leave the revolving door clear.
   const [cx, cy] = R(x, GRAND_HOTEL.by * 8 + 7.9);
@@ -211,64 +228,101 @@ function drawGrandHotelDome() {
   for (const off of [-1, 1]) drawBox({ x: cx + off, y: cy + 0.3, c: 1, s: 0, hl: 0.025, hw: 0.025, z0: 0, z1: 0.52 },
     (i, t, L) => (set(i, '|', C(YEL, L)), true));
 }
-function drawCopperDome(vx, vy, base, radius, height) {
-  const depth = dx * vx + dy * vy;
-  if (depth + radius < 0.05 || depth - radius > vis) return;
-  const center = cols / 2 + (-dy * vx + dx * vy) * projX / Math.max(depth, 0.05);
-  const span = radius * projX / Math.max(depth - radius, 0.05);
-  const c0 = Math.max(0, Math.floor(center - span)), c1 = Math.min(cols, Math.ceil(center + span));
-  const rr = radius * radius, hh = height * height;
-  const A0 = -vx, B0 = -vy, C0 = eye - base, q = (A0 * A0 + B0 * B0) / rr + C0 * C0 / hh - 1;
-  for (let c = c0; c < c1; c++) {
-    const screenX = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * screenX, ry = dy + dx * tf * screenX;
-    for (let r = 0; r < rows; r++) {
-      const i = r * cols + c, rz = (hor - r - 0.5) / projY;
-      const aa = (rx * rx + ry * ry) / rr + rz * rz / hh, bb = (A0 * rx + B0 * ry) / rr + C0 * rz / hh;
-      const disc = bb * bb - aa * q;
-      if (disc < 0) continue;
-      let t = (-bb - Math.sqrt(disc)) / aa;
-      if (t < 0.05 || t >= ZB[i] || t > vis) continue;
-      let z = C0 + rz * t;
-      if (z < 0) {
-        t = -C0 / rz;
-        if (t < 0.05 || t >= ZB[i] || t > vis || (A0 + rx * t) ** 2 + (B0 + ry * t) ** 2 > rr) continue;
-        z = 0;
-      }
-      const ax = A0 + rx * t, ay = B0 + ry * t, angle = Math.atan2(ay, ax);
-      const rib = Math.abs(fract(angle * 6 / Math.PI) - 0.5) < 0.055;
-      const L = (1 - t / vis) * amb * 12, shade = 0.55 + 0.45 * Math.max(0, (-ax + ay + z) / (radius + height));
-      BG[i] = C(GREEN, 1 + L * shade * 0.25);
-      set(i, z > height - 0.035 ? '*' : rib ? '|' : z < 0.05 ? '=' : ':', C(rib || z > height - 0.035 ? YEL : GREEN, L * shade));
-      ZB[i] = ZBG[i] = t; FL[i] = 0;
-    }
+function rayCopperCap(ox, oy, oz, rx, ry, rz, b) {
+  const x = ox - b.x, y = oy - b.y, z = oz - b.z0;
+  const aa = (rx * rx + ry * ry) * b.invRadius2 + rz * rz * b.invHeight2;
+  const bb = (x * rx + y * ry) * b.invRadius2 + z * rz * b.invHeight2;
+  const q = (x * x + y * y) * b.invRadius2 + z * z * b.invHeight2 - 1, disc = bb * bb - aa * q;
+  if (disc < 0) return -1;
+  let t = (-bb - Math.sqrt(disc)) / aa, face = 5;
+  if (t < .01) return -1;
+  if (z + rz * t < 0) {
+    if (Math.abs(rz) < 1e-12) return -1;
+    t = -z / rz; face = 6;
+    if (t < .01 || (x + rx * t) ** 2 + (y + ry * t) ** 2 > b.hl * b.hl) return -1;
   }
+  HIT.u = x + rx * t; HIT.v = y + ry * t; HIT.w = oz + rz * t; HIT.face = face;
+  return t;
+}
+function rayCopperDrum(ox, oy, oz, rx, ry, rz, b) {
+  const x = ox - b.x, y = oy - b.y, aa = rx * rx + ry * ry, bb = x * rx + y * ry;
+  const disc = bb * bb - aa * (x * x + y * y - b.hl * b.hl);
+  if (disc < 0) return -1;
+  let entry = -Infinity, exit = Infinity, face = 3;
+  if (aa > 1e-12) {
+    const root = Math.sqrt(disc); entry = (-bb - root) / aa; exit = (-bb + root) / aa;
+  } else if (x * x + y * y > b.hl * b.hl) return -1;
+  if (Math.abs(rz) < 1e-12) { if (oz < b.z0 || oz > b.z1) return -1; }
+  else {
+    const a0 = (b.z0 - oz) / rz, a1 = (b.z1 - oz) / rz, lower = Math.min(a0, a1);
+    if (lower > entry) { entry = lower; face = rz > 0 ? 6 : 5; }
+    exit = Math.min(exit, Math.max(a0, a1));
+  }
+  if (entry < .01 || entry > exit) return -1;
+  HIT.u = x + rx * entry; HIT.v = y + ry * entry; HIT.w = oz + rz * entry; HIT.face = face;
+  return entry;
+}
+// Low copper crowns on dressed drums, with quiet patina panels and narrow standing seams.
+// drawBox bounds the actual vertical silhouette, avoiding full-screen ray tests for roofs high above the camera.
+function drawCopperDome(vx, vy, base, radius, height, supportBase = base) {
+  const drum = height * .18, capHeight = height - drum;
+  const ring = (r, z0, z1, stone) => drawBox(boxAt(vx, vy, 1, 0, r, r, z0, z1), (i, t, L) => {
+    const angle = Math.atan2(HIT.v, HIT.u), flute = Math.abs(Math.sin(angle * 12)) < .13;
+    const color = stone ? STONE : GREEN;
+    let ch = ' ';
+    if (HIT.face >= 5) ch = '=';
+    else if (flute) ch = '|';
+    BG[i] = C(color, 1.5 + L * .28);
+    set(i, ch, C(stone ? STONE : YEL, L * .75));
+    return true;
+  }, rayCopperDrum);
+  // On a sloping mansard the pedestal extends down into the roof, keeping the crown supported at every edge.
+  ring(radius * 1.035, supportBase, base + .025, true);
+  ring(radius * .96, base + .025, base + drum, false);
+  ring(radius * 1.025, base + drum - .018, base + drum + .012, false);
+  const b = { ...boxAt(vx, vy, 1, 0, radius, radius, base + drum, base + height),
+    invRadius2: 1 / (radius * radius), invHeight2: 1 / (capHeight * capHeight) };
+  drawBox(b, (i, t, L) => {
+    if (HIT.face === 6) { BG[i] = C(GREEN, 1); set(i, ' ', 0); return true; }
+    const z = HIT.w - b.z0, nx = HIT.u * b.invRadius2, ny = HIT.v * b.invRadius2, nz = z * b.invHeight2;
+    const length = Math.hypot(nx, ny, nz), angle = Math.atan2(HIT.v, HIT.u);
+    const light = .55 + .45 * Math.max(0, (-nx * .55 + ny * .35 + nz * .76) / length);
+    const patina = .5 + .5 * Math.sin(angle * 3 + z / capHeight * 2);
+    const rib = Math.abs(fract(angle * 6 / Math.PI) - .5) < .016;
+    BG[i] = C(GREEN, 1.2 + L * light * (.25 + patina * .025));
+    set(i, rib ? '|' : ' ', C(GREEN, L * light * .6));
+    if (nz / length > .35) paintSettledSnow(i, vx + px + HIT.u, vy + py + HIT.v, L * .6, nz / length, 0, HIT.w);
+    return true;
+  }, rayCopperCap);
+  drawBox(boxAt(vx, vy, 1, 0, radius * .022, radius * .022, base + height - .008, base + height + .07), (i, t, L) => {
+    BG[i] = C(GRAY, 1); set(i, HIT.face === 5 ? '+' : '|', C(YEL, L * .85)); return true;
+  });
 }
 
 // a classic street lamp: a tall fluted pole, a swan neck curving out over the street, a lantern hanging from its end.
 // Drawn from measurements, so the curve stays one character thick at any distance; s squashes the neck sideways
 // when the arm points toward or away from you, so it turns smoothly as you walk round it.
-const LAMP_TOP = 0.95, NECK = REACH / 2; // pole height; the neck is a half circle of radius NECK
-function lampCell(i, u, z, du, dz, L, s) {
-  const lit = lampsOn > 0.3, steel = C(GRAY, L * 1.1), hx = 2 * NECK * s, lu = u - hx, lz = z - (LAMP_TOP - 0.09);
+function lampCell(i, u, z, du, dz, L, s, top = LAMP_TOP) {
+  const lit = lampsOn > 0.3, steel = C(GRAY, L * 1.1), hx = 2 * NECK * s, lu = u - hx, lz = z - (top - 0.09);
   // the lantern: a cap, a glass body glowing after dark, a finial underneath
-  if (Math.abs(lu) < Math.max(0.03, du * 0.75) && z < LAMP_TOP - 0.03 && z > LAMP_TOP - 0.14) {
-    if (z > LAMP_TOP - 0.055) return set(i, Math.abs(lu) < Math.max(0.015, du / 2) ? '^' : '_', steel), true;
-    if (z < LAMP_TOP - 0.125) return set(i, 'v', steel), true;
+  if (Math.abs(lu) < Math.max(0.03, du * 0.75) && z < top - 0.03 && z > top - 0.14) {
+    if (z > top - 0.055) return set(i, Math.abs(lu) < Math.max(0.015, du / 2) ? '^' : '_', steel), true;
+    if (z < top - 0.125) return set(i, 'v', steel), true;
     if (lit) BG[i] = C(WARM, 4 + lampsOn * 4);
     return set(i, lit ? '#' : ':', lit ? C(WARM, 15) : C(GRAY, L * 0.7)), true;
   }
-  if (z <= LAMP_TOP && z > LAMP_TOP - 0.03 && onLine(lu, du, 0, 0)) return set(i, '|', steel), true; // the drop
+  if (z <= top && z > top - 0.03 && onLine(lu, du, 0, 0)) return set(i, '|', steel), true; // the drop
   const halo = Math.hypot(lu / 0.075, lz / 0.065);
   if (lit && halo < 1) { BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, " ", 0), true; } // a soft glow round it
   // the pole: a flared base, a collar, a finial on top
-  if (z < LAMP_TOP + 0.02 && Math.abs(u) < Math.max(du / 2, z < 0.06 ? 0.03 : 0.012)) {
+  if (z < top + 0.02 && Math.abs(u) < Math.max(du / 2, z < 0.06 ? 0.03 : 0.012)) {
     if (z < 0.06) return set(i, z < 0.025 ? '#' : 'A', steel), true;
     return set(i, Math.abs(z - 0.42) < Math.max(0.012, dz / 2) ? '=' : '|', steel), true;
   }
   // the swan neck: the upper half of an ellipse from the pole top out to the lantern
   const w = NECK * Math.abs(s);
-  if (w > du * 0.3 && z > LAMP_TOP - dz) {
-    const ex = (u - NECK * s) / w, ez = (z - LAMP_TOP) / NECK, rho = Math.hypot(ex, ez), tol = Math.max(du / w, dz / NECK) / 2;
+  if (w > du * 0.3 && z > top - dz) {
+    const ex = (u - NECK * s) / w, ez = (z - top) / NECK, rho = Math.hypot(ex, ez), tol = Math.max(du / w, dz / NECK) / 2;
     if (Math.abs(rho - 1) < tol && ez > -tol) {
       const ang = Math.atan2(ez, ex), tu = -w * Math.sin(ang) / du, tz = NECK * Math.cos(ang) / dz; // tangent, in cells
       const sl = Math.abs(tz) / (Math.abs(tu) + 1e-9);
@@ -284,17 +338,17 @@ function lampCell(i, u, z, du, dz, L, s) {
 const LAMP_3D = 5, NECK_BITS = 7;
 const steelBox = ch => (i, t, L) => { BG[i] = C(GRAY, (0.9 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '.' : ch, C(GRAY, L * 1.15)), true; };
 const STEEL = { pole: steelBox('|'), base: steelBox('#'), arm: steelBox('='), cap: steelBox('_') };
-function drawLamp3D(vx, vy, ax, ay) {
+function drawLamp3D(vx, vy, ax, ay, top = LAMP_TOP) {
   const lit = lampsOn > 0.3, B = (u, z0, z1, hl, hw, shade) => drawBox(boxAt(vx + ax * u, vy + ay * u, ax, ay, hl, hw, z0, z1), shade);
   B(0, 0, 0.06, 0.026, 0.026, STEEL.base);
-  B(0, 0.06, LAMP_TOP, 0.01, 0.01, STEEL.pole);
+  B(0, 0.06, top, 0.01, 0.01, STEEL.pole);
   B(0, 0.41, 0.43, 0.016, 0.016, STEEL.cap);
   for (let k = 0; k < NECK_BITS; k++) { // the neck: up and over from the top of the pole to the lantern
     const t0 = Math.PI * (1 - k / NECK_BITS), t1 = Math.PI * (1 - (k + 1) / NECK_BITS);
-    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = LAMP_TOP + NECK * Math.sin(t0), z1 = LAMP_TOP + NECK * Math.sin(t1);
+    const u0 = NECK + NECK * Math.cos(t0), u1 = NECK + NECK * Math.cos(t1), z0 = top + NECK * Math.sin(t0), z1 = top + NECK * Math.sin(t1);
     B((u0 + u1) / 2, Math.min(z0, z1) - 0.007, Math.max(z0, z1) + 0.007, Math.abs(u1 - u0) / 2 + 0.007, 0.008, STEEL.arm);
   }
-  const hu = 2 * NECK, top = LAMP_TOP;
+  const hu = 2 * NECK;
   B(hu, top - 0.03, top, 0.004, 0.004, STEEL.pole); // the drop
   B(hu, top - 0.055, top - 0.03, 0.032, 0.032, STEEL.cap);
   B(hu, top - 0.125, top - 0.055, 0.024, 0.024, (i, t, L) => { // the glass
@@ -685,7 +739,7 @@ function drawStationEntrance(s, vx, vy) {
   });
   // and a tall lit blade on a post at two corners, SUBWAY down both faces and a green lamp on top: seen from down the
   // block either way
-  for (const e of [-1, 1]) subwayBlade(vx + e * (hl + 0.02), vy - e * (hw + 0.025), iron);
+  for (const blade of s.blades) subwayBlade(vx + rel(blade.x-s.x),vy + rel(blade.y-s.y),iron);
 }
 function subwayBlade(tx, ty, iron) {
   const Z0 = 0.13, Z1 = 0.33, word = 'SUBWAY', lit = 9 + night * 6;
@@ -833,8 +887,8 @@ function drawElCar(vx, vy, cab) {
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
 function elSprites() {
   forNear(elPillarsB, p => drawArt(...R(p.x, p.y), 0, 0.09, EL_BOT, PILLAR, (c, row, L) => C(GRAY, L * 0.9)));
-  for (const s of EL_STATIONS) for (const y of [EL_Y + 0.14, EL_Y + 1.86])
-    drawArt(...R(s.x, y), 0, 0.22, EL_BOT - 0.02, EL_STAIRS, (c, row, L) => row === 0 ? C(GREEN, Math.max(L, 12)) : C(GRAY, L));
+  for (const s of EL_STATIONS) for (const stairs of s.stairs)
+    drawArt(...R(stairs.x, stairs.y), 0, 0.22, EL_BOT - 0.02, EL_STAIRS, (c, row, L) => row === 0 ? C(GREEN, Math.max(L, 12)) : C(GRAY, L));
   for (const t of elTrains(T)) {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {

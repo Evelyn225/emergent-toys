@@ -195,15 +195,8 @@ function loop(t) {
     if (!body.seat) {
       const scale = sp * footSlow() * (body.hop || 1), ix = (cx * f - cy * (s + lurch)) * scale, iy = (cy * f + cx * (s + lurch)) * scale;
       const airborne = body.z > 0 || body.vz > 0;
-      if (!airborne) { body.mx = ix / dt; body.my = iy / dt; }
-      else { // Source-style air strafe: input only adds speed along wishdir up to a small cap, so you curve by strafing + turning instead of snapping
-        body.mx = (body.mx || 0) * Math.pow(0.995, dt * 60); body.my = (body.my || 0) * Math.pow(0.995, dt * 60);
-        const ws = Math.hypot(ix, iy) / dt;
-        if (ws) {
-          const wx = ix / dt / ws, wy = iy / dt / ws, add = ws * 0.1 - (body.mx * wx + body.my * wy);
-          if (add > 0) { const acc = Math.min(add, 10 * ws * dt); body.mx += acc * wx; body.my += acc * wy; }
-        }
-      }
+      if (!airborne && dt > 0) { body.mx = ix / dt; body.my = iy / dt; }
+      else if (airborne && dt > 0) airStrafe(f, s + lurch, scale / dt, dt);
       move(airborne ? body.mx * dt : ix, airborne ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)

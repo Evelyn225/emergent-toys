@@ -61,10 +61,28 @@ const SEASON_WEATHER = { spring: ['clear', 'clear', 'rain', 'rain', 'fog'], summ
 
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
+// Snow's texture is static. Cache the four lattice values, retaining the original interpolation and fine edges.
+// Fixed-size slots bound memory even when the player travels through many repeated copies of the city.
+const SNOW_FIELDS = [[0.8,43],[2.1,45],[7,44],[5,46]].map(([scale,seed]) => ({
+  scale, seed, x: new Int32Array(512), y: new Int32Array(512), valid: new Uint8Array(512), values: new Float64Array(512 * 4),
+}));
+function snowNoise(wx, wy, field) {
+  const f = SNOW_FIELDS[field], x = wx * f.scale, y = wy * f.scale, xi = Math.floor(x), yi = Math.floor(y);
+  const slot = (xi * 73 + yi * 151) & 511, at = slot * 4, values = f.values;
+  if (!f.valid[slot] || f.x[slot] !== xi || f.y[slot] !== yi) {
+    f.x[slot] = xi; f.y[slot] = yi; f.valid[slot] = 1;
+    values[at] = hash(xi, yi, f.seed); values[at + 1] = hash(xi + 1, yi, f.seed);
+    values[at + 2] = hash(xi, yi + 1, f.seed); values[at + 3] = hash(xi + 1, yi + 1, f.seed);
+  }
+  const u = x - xi, v = y - yi, su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
+  return (values[at] * (1 - su) + values[at + 1] * su) * (1 - sv)
+    + (values[at + 2] * (1 - su) + values[at + 3] * su) * sv;
+}
 // A continuous field shared by ground and roofs: broad drifts with a soft, granular fringe.
 function settledSnow(wx, wy, wear = 0) {
   if (snowCover <= 0) return 0;
-  const drift = noise(wx * 0.8, wy * 0.8, 43) * 0.7 + noise(wx * 2.1, wy * 2.1, 45) * 0.25 + noise(wx * 7, wy * 7, 44) * 0.05;
+  if (snowCover >= 0.9) return 1 - wear; // even the deepest drift is fully covered; its noise cannot change the result
+  const drift = snowNoise(wx, wy, 0) * 0.7 + snowNoise(wx, wy, 1) * 0.25 + snowNoise(wx, wy, 2) * 0.05;
   const edge = clamp((snowCover * 1.3 - drift + 0.16) / 0.32, 0, 1);
   return edge * edge * (3 - 2 * edge) * clamp(snowCover * 8, 0, 1) * (1 - wear);
 }

@@ -83,7 +83,7 @@ function pavilionGlassShade(o, i, t, L) {
     BG[i] = C(leaf ? GREEN : CYAN,leaf ? 1.2 + L * .16 : 1 + day * 2.2);
     set(i,leaf ? '%' : fract((u + v) * 9) < .035 ? '/' : ' ',C(leaf ? GREEN : WHITE,L * (leaf ? .75 : .35)));
   }
-  if (roof && o.planes[HIT.face][2] > 0) paintSettledSnow(i,o.x + u,o.y + v,L,.35);
+  if (roof && o.planes[HIT.face][2] > 0) paintSettledSnow(i,o.x + u,o.y + v,L,.35,0,HIT.w);
   return true;
 }
 function pavilionDetailShade(o, i, t, L) {
@@ -127,7 +127,7 @@ function pavilionDetailShade(o, i, t, L) {
     BG[i] = C(fract(HIT.u * 6) < .5 ? p.trim : STONE,2 + L * .25);
     set(i,top ? '/' : 'v',C(WHITE,L * .6));
   } else set(i,o.kind === 'ac' ? '#' : top || o.kind === 'eave' ? '=' : '|',C(o.kind === 'ac' ? GRAY : base,L));
-  if (top) paintSettledSnow(i,o.x + HIT.u * o.c - HIT.v * o.s,o.y + HIT.u * o.s + HIT.v * o.c,L,.65);
+  if (top) paintSettledSnow(i,o.x + HIT.u * o.c - HIT.v * o.s,o.y + HIT.u * o.s + HIT.v * o.c,L,.65,0,HIT.w);
   return true;
 }
 function drawPavilions() {

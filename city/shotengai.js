@@ -52,13 +52,12 @@ function shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL
 
 // ---- the arcade roof over the streets, seen from underneath
 // It's glass: the steel shows (beams down the sides, a rib every 5m, a bar down the middle and across between the
-// ribs, lamps hanging from it) and between them you see the sky, and the buildings above the roofline
+// ribs) and between them you see the sky, and the buildings above the roofline
 function arcadeRoofPart(wx, wy) {
   const k = idx(Math.floor(wx), Math.floor(wy)), r = ROAD[k], ns = r === 1 || r === 3 && fract(wy / 8) >= 0.25;
   const across = (ns ? mod(wx, 8) : mod(wy, 8)) / 2, along = ns ? wy : wx;
   if (across < 0.02 || across > 0.98) return 'beam';
   if (fract(along * 2) < 0.035) return 'rib';
-  if (Math.hypot(fract(along) - 0.5, (Math.abs(across - 0.5) - 0.25) * 2) < 0.07) return 'lamp';
   if (Math.abs(across - 0.5) < 0.015 || Math.abs(fract(along * 2) - 0.5) < 0.025) return 'bar';
   return null; // glass
 }
@@ -67,7 +66,6 @@ function arcadeRoofCell(i, wx, wy) {
   const steel = 4 + day * 4 + lampsOn * 2;
   if (part === 'beam') { BG[i] = C(GRAY, steel); return set(i, '#', C(WHITE, 9)), true; }
   if (part === 'rib') { BG[i] = C(GRAY, steel * 0.8); return set(i, '=', C(WHITE, 10)), true; }
-  if (part === 'lamp') { BG[i] = C(WARM, 4 + night * 6); return set(i, 'o', C(WHITE, 15)), true; }
   if (part === 'bar') { BG[i] = C(GRAY, steel * 0.7); return set(i, '-', C(WHITE, 8)), true; }
   return false;
 }

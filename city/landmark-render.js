@@ -81,7 +81,7 @@ function landmarkSolidShade(o, i, t, L) {
     const base = p.roof, seam = fract((face < 8 ? HIT.v : HIT.u) * 9) < .055;
     BG[i] = C(base,1.3 + L * (inclined ? .28 : .35));
     set(i,seam ? '/' : fract(z * 14) < .045 ? '-' : ' ',C(base,L * .85));
-    paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L,.55);
+    paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L,.55,0,HIT.w);
     return true;
   }
   landmarkStone(i,u + o.x,z,p.stone,L,shadeFace(o.planes ? 1 : face));
@@ -97,7 +97,7 @@ function landmarkSolidShade(o, i, t, L) {
     else return false;
   } else if (o.kind === 'course' || o.kind === 'portal') set(i,o.kind === 'portal' && o.planes ? '^' : '=',C(STONE,L * 1.1));
   else if (o.kind === 'pier') set(i,'|',C(STONE,L));
-  if ((!o.planes && face === 5) || o.planes && face === 4) paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L);
+  if ((!o.planes && face === 5) || o.planes && face === 4) paintSettledSnow(i,o.x + HIT.u,o.y + HIT.v,L,1,0,HIT.w);
   return true;
 }
 function drawLandmarks() {

@@ -29,3 +29,29 @@ test('settled snow grows gradually, melts completely, and stays continuous acros
   assert.ok(result.worn < result.complete);
   assert.equal(result.melted, 0);
 });
+
+test('cached snow preserves the original texture through lattice collisions and distant world copies', () => {
+  const result = JSON.parse(ev(`JSON.stringify((() => {
+    const original=(x,y,cover,wear)=>{
+      const drift=noise(x*.8,y*.8,43)*.7+noise(x*2.1,y*2.1,45)*.25+noise(x*7,y*7,44)*.05;
+      const edge=clamp((cover*1.3-drift+.16)/.32,0,1);
+      return edge*edge*(3-2*edge)*clamp(cover*8,0,1)*(1-wear);
+    };
+    let errors=0;
+    for(let n=0;n<5000;n++) {
+      const x=(n*71%613)-130+.0137,y=(n*113%521)-90+.0271;
+      for(let f=0;f<4;f++) {
+        const {scale,seed}=SNOW_FIELDS[f],expected=noise(x*scale,y*scale,seed);
+        if(snowNoise(x,y,f)!==expected)errors++;
+        snowNoise(x+512/scale,y,f); // evict this slot with a different coordinate
+        if(snowNoise(x,y,f)!==expected)errors++;
+      }
+      for(const cover of [.02,.35,.7,.89,.9,1]) {
+        snowCover=cover;
+        if(settledSnow(x,y,.65)!==original(x,y,cover,.65))errors++;
+      }
+    }
+    snowCover=0;return {errors};
+  })())`));
+  assert.deepEqual(result,{errors:0});
+});

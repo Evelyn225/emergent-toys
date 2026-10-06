@@ -155,6 +155,129 @@ test('murals fade over the actual facade and leave its color and masonry intact 
   assert.ok(result.changed>15 && result.exposed>15,JSON.stringify(result));
 }));
 
+test('Belle shop signs retain complete scaled lettering on short recessed faces in every direction', () => withPage(async page => {
+  const result=await page.evaluate(()=>{
+    paused=true;mode='walk';tod=12;env(0);render(0);
+    const errors=[];let letters=0,blocks=0;
+    for(let dir=0;dir<4;dir++) {
+      const b=BELLE_BUILDINGS.find(b=>!b.access&&b.ivy&&b.faces.some(f=>f.dir===dir&&f.sign&&f.end-f.start<=2));
+      if(!b)throw Error('Missing short ivy-covered face '+dir);
+      const f=b.faces.find(f=>f.dir===dir&&f.sign&&f.end-f.start<=2),{center,letterW,bandH}=f.sign;
+      px=(f.side?center:f.line)+f.nx*.5;py=(f.side?f.line:center)+f.ny*.5;a=Math.atan2(-f.ny,-f.nx);pitch=.25;render(0);
+      const mx=Math.floor((f.side?center:f.line)-f.nx*.1),my=Math.floor((f.side?f.line:center)-f.ny*.1);
+      for(const copy of [-N,0,N])for(const sign of [-1,1])for(let p=0;p<b.sh.word.length;p++) {
+        const wc=center+copy+sign*(p+.5-b.sh.word.length/2)*letterW;
+        WH.dn=8;WH.sl=0;WH.wc=wc;
+        belleFacade(0,sign*wc,.004,.36,b.h,8,f.side,mx,my,wc,10,0);
+        if(CH[0]!==b.sh.word[p])errors.push([dir,sign,p,CH[0],b.sh.word[p]]);
+        letters++;
+        for(let row=0;row<5;row++)for(let col=0;col<4;col++) {
+          const at=center+copy+sign*(p+(col+.5)/4-b.sh.word.length/2)*letterW;
+          WH.dn=.3;WH.sl=0;WH.wc=at;
+          belleFacade(0,sign*at,.001,.36+bandH*(.5-(row+.5)/5),b.h,.3,f.side,mx,my,at,10,0);
+          const expected=glyphOn(b.sh.word[p],col,row)?'#':' ';
+          if(CH[0]!==expected)errors.push(['glyph',dir,sign,p,row,col,CH[0],expected]);
+          blocks++;
+        }
+      }
+    }
+    return{letters,blocks,errors};
+  });
+  assert.deepEqual(result.errors,[],JSON.stringify(result.errors.slice(0,5)));
+  assert.ok(result.letters>20&&result.blocks>400);
+}));
+
+test('packed mansard planes retain the original roof intersections and face selection',()=>withPage(async page=>{
+  const result=await page.evaluate(()=>{
+    paused=true;render(0);
+    const reference=(ox,oy,oz,rx,ry,rz,b)=>{
+      let entry=0,exit=Infinity,face=5;const x=ox-b.x,y=oy-b.y;
+      for(let j=0;j<b.planes.length;j++){
+        const [nx,ny,nz,limit]=b.planes[j],dist=limit-nx*x-ny*y-nz*oz,vel=nx*rx+ny*ry+nz*rz;
+        if(Math.abs(vel)<1e-8){if(dist<0)return{t:-1};continue;}
+        const t=dist/vel;
+        if(vel<0&&t>entry){entry=t;face=j;}else if(vel>0)exit=Math.min(exit,t);
+        if(entry>exit)return{t:-1};
+      }
+      if(entry<.02||exit<0)return{t:-1};
+      return{t:entry,u:x+rx*entry,v:y+ry*entry,w:oz+rz*entry,face};
+    };
+    let tested=0,errors=0;
+    const roofs = [...belleBuildingsB.flat().filter(b=>!b.access).slice(0,12),
+      ...LANDMARK_SOLIDS.filter(b=>b.planes).slice(0,3), ...PAVILION_SOLIDS.filter(b=>b.planes).slice(0,3)];
+    for(const b of roofs)for(let n=0;n<1000;n++){
+      const args=[b.x+hash(n,1)*20-10,b.y+hash(n,2)*20-10,hash(n,3)*(b.h+1),hash(n,4)*2-1,hash(n,5)*2-1,hash(n,6)*2-1,b];
+      const expected=reference(...args),t=rayMansard(...args);
+      if(t!==expected.t||t>=0&&(HIT.u!==expected.u||HIT.v!==expected.v||HIT.w!==expected.w||HIT.face!==expected.face))errors++;
+      tested++;
+    }
+    return{tested,errors};
+  });
+  assert.ok(result.tested>12000,'also exercises legacy landmark and pavilion plane arrays');
+  assert.equal(result.errors,0,JSON.stringify(result));
+}));
+
+test('copper crowns have curved depth, closed undersides, solid occlusion and snow on their upper surface', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; render(0);
+    const cap = { ...boxAt(2,0,1,0,.5,.5,.5,.9), invRadius2:4, invHeight2:6.25 };
+    const top = rayCopperCap(2,0,2,0,0,-1,cap), underside = rayCopperCap(2,0,0,0,0,1,cap);
+    const below = rayCopperCap(0,0,.4,1,0,0,cap);
+    const corner = rayCopperCap(0,.49,.85,1,0,0,cap), boxCorner = rayBox(0,.49,.85,1,0,0,cap);
+    const drum = boxAt(2,0,1,0,.5,.5,.3,.5);
+    const drumTop = rayCopperDrum(2,0,2,0,0,-1,drum), drumMiss = rayCopperDrum(2,.6,2,0,0,-1,drum);
+    dx = 1; dy = 0; eye = .8; hor = rows/2;
+    const exposed = snowExposed;
+    snowExposed = () => true;
+    try {
+      const picture = (cover, blocked = false) => {
+        snowCover = cover; ZB.fill(blocked ? .5 : Infinity); BG.fill(NONE); CH.fill(' ');
+        drawCopperDome(2,0,.5,.5,.6);
+        const depth = Array.from(ZB).filter((d,i)=>BG[i]!==NONE);
+        return { cells:depth.length, depthRange:depth.length ? Math.max(...depth)-Math.min(...depth) : 0,
+          snow:Array.from(BG).filter(c=>(c>>4)===WHITE).length };
+      };
+      const dry = picture(0), snowy = picture(1), blocked = picture(1,true);
+      // A crown well above a level camera should make no calls to its cap or drum rays.
+      let rays = 0;
+      const capRay = rayCopperCap, drumRay = rayCopperDrum;
+      rayCopperCap = (...args) => { rays++; return capRay(...args); };
+      rayCopperDrum = (...args) => { rays++; return drumRay(...args); };
+      try { drawCopperDome(.5,0,4,.2,.3); }
+      finally { rayCopperCap = capRay; rayCopperDrum = drumRay; }
+      return { top, underside, below, corner, boxCorner, drumTop, drumMiss, dry, snowy, blocked, rays };
+    } finally { snowExposed = exposed; }
+  });
+  assert.ok(Math.abs(result.top-1.1)<1e-12);
+  assert.equal(result.underside,.5); assert.equal(result.below,-1);
+  assert.ok(result.corner<0 && result.boxCorner>0);
+  assert.equal(result.drumTop,1.5); assert.equal(result.drumMiss,-1);
+  assert.ok(result.dry.cells>0 && result.dry.depthRange>.1);
+  assert.equal(result.dry.snow,0); assert.ok(result.snowy.snow>0);
+  assert.equal(result.blocked.cells,0); assert.equal(result.blocked.snow,0); assert.equal(result.rays,0);
+}));
+
+test('Belle lamps have rounded solid globes, foreshorten along the curb, and stay hidden behind nearer walls', () => withPage(async page => {
+  const result=await page.evaluate(()=>{
+    paused=true;render(0);dx=1;dy=0;eye=.34;hor=rows/2;lampsOn=1;
+    const picture=(ax,ay,occluded=false)=>{
+      ZB.fill(occluded?.2:Infinity);BG.fill(NONE);CH.fill(' ');
+      drawBelleLamp(.8,0,ax,ay);
+      const cells=[];for(let i=0;i<BG.length;i++)if((BG[i]>>4)===WHITE)cells.push(i);
+      const xs=cells.map(i=>i%cols),depths=cells.map(i=>ZB[i]);
+      return {count:cells.length,width:cells.length?Math.max(...xs)-Math.min(...xs)+1:0,depthRange:cells.length?Math.max(...depths)-Math.min(...depths):0};
+    };
+    const front=picture(1,0),end=picture(0,1),blocked=picture(1,0,true);
+    const globe=belleLampParts(1,0,1,0).find(o=>o.kind==='globe'),z=(globe.z0+globe.z1)/2;
+    return{front,end,blocked,center:rayBelleGlobe(0,globe.y,z,1,0,0,globe),corner:rayBelleGlobe(0,globe.y+.044,z+.049,1,0,0,globe),boxCorner:rayBox(0,globe.y+.044,z+.049,1,0,0,globe)};
+  });
+  assert.ok(result.front.count>0&&result.end.count>0,JSON.stringify(result));
+  assert.ok(result.front.width>result.end.width*2,JSON.stringify(result));
+  assert.ok(result.front.depthRange>.02,'each globe has a curved depth surface');
+  assert.equal(result.blocked.count,0);
+  assert.ok(result.center>0&&result.corner<0&&result.boxCorner>0,JSON.stringify(result));
+}));
+
 test('Belle French doors lead into the real city, with solid railings and both ways back inside', () => withPage(async page => {
   await page.evaluate(() => {
     paused = true; money = 20000; buy('home_belle'); clearWanted(); sleep = null;
@@ -966,7 +1089,7 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
   await page.waitForTimeout(2500);
   const r = await page.evaluate(() => [body.z, needs.health]);
   assert.ok(r[0] === 0 && r[1] < 100 && r[1] > 0, `down, hurt but standing (${r})`);
-  // a sprinting jump off the edge is an ordinary jump: no flying across the street, you come down in it
+  // A sprinting jump keeps its momentum, but falls into this two-cell street before reaching the opposite roof.
   const [lx, ly, lh] = spots.leap;
   await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = null; roofLot = roofCells(x, y); px = x + 0.85; py = y + 0.5; a = 0; refillNeeds(); body.z = body.vz = body.mx = body.my = 0; }, [lx, ly, lh]);
   await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW');
@@ -974,7 +1097,7 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
   await page.keyboard.press('Space');
   await page.waitForTimeout(250); await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
   await page.waitForTimeout(2500);
-  const fell = await page.evaluate(x => [mode, body.z, px - x < 2.5], lx);
+  const fell = await page.evaluate(x => [mode, body.z, rel(px-x)<3 && !!ROAD[idx(Math.floor(px),Math.floor(py))]], lx);
   assert.deepStrictEqual(fell, ['walk', 0, true], 'down in the street, not across it');
   // no stairs on the roof next door: the fire escape takes you down to the sidewalk beside it
   await page.evaluate(([x, y, h, e]) => { mode = 'roof'; roofH = e; room = null; roofLot = roofCells(x, y); px = x + 1.5; py = y + 0.5; a = 0; refillNeeds(); body.z = body.vz = 0; }, spots.across);
@@ -983,6 +1106,109 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
   await page.keyboard.press('KeyE');
   const down = await page.evaluate(([x, y]) => [mode, map[idx(Math.floor(px), Math.floor(py))], free(px, py), Math.hypot(rel(px - x), rel(py - y)) < 4], up);
   assert.deepStrictEqual(down, ['walk', 0, true, true], 'on the street beside the building, somewhere you can stand');
+}));
+
+test('camera-relative air strafing works through the real movement loop without erasing forward momentum',()=>withPage(async page=>{
+  const result=await page.evaluate(()=>{
+    paused=true;clearWanted();cars.length=0;people.length=0;footCops.length=0;refillNeeds();
+    for(let y=70;y<77;y++)for(let x=38;x<46;x++)map[idx(x,y)]=0;
+    const raf=window.requestAnimationFrame;window.requestAnimationFrame=()=>0;
+    const run=(yaw,forward,side)=>{
+      mode='walk';room=null;me=null;px=41;py=73;a=yaw;fx.skating=false;
+      Object.assign(body,{z:.05,vz:JUMP_V,mx:.8,my:0,hop:1,seat:null,ground:0,groundMode:'walk',trick:null,buf:-9});
+      K.KeyW=forward;K.KeyD=side;paused=false;
+      for(let n=0;n<15;n++)loop(t0+1000/60);
+      paused=true;K.KeyW=K.KeyD=false;
+      return {vx:body.mx,vy:body.my,x:rel(px-41),y:rel(py-73)};
+    };
+    try{return {side:run(0,false,true),look:run(Math.PI/2,true,false),idle:run(0,false,false)};}
+    finally{paused=true;window.requestAnimationFrame=raf;}
+  });
+  for(const r of [result.side,result.look])assert.ok(r.vx>.79&&r.vy>.34&&r.y>.06,JSON.stringify(result));
+  assert.ok(Math.abs(result.side.y-result.look.y)<.0001,'turning the camera rotates the forward wish direction');
+  assert.ok(Math.abs(result.idle.vx-.8)<.0001&&result.idle.vy===0,'release the keys and keep coasting');
+}));
+
+test('bunny hops accept slightly early and late presses while held Space still requires a fresh jump',()=>withPage(async page=>{
+  const result=await page.evaluate(()=>{
+    paused=true;mode='walk';px=41;py=73;refillNeeds();fx.skating=false;body.seat=null;
+    Object.assign(body,{z:.002,vz:-.5,peak:.6,mx:.5,my:0,hop:1,buf:T-.18,lx:px-.01,ly:py,trick:null,ground:0,groundMode:'walk'});
+    stepBody(.01);const early=body.vz===JUMP_V&&body.hop>1;
+    body.z=body.vz=0;body.hop=1;body.landedAt=T-.14;jump();const late=body.hop>1;
+    body.z=body.vz=0;body.hop=1;body.landedAt=T-.18;jump();const expired=body.hop===1;
+    body.z=.002;body.vz=-.5;body.buf=-9;body.peak=.6;K.Space=true;stepBody(.01);K.Space=false;
+    return {early,late,expired,held:body.vz===0};
+  });
+  assert.deepEqual(result,{early:true,late:true,expired:true,held:true});
+}));
+
+test('indexed winter branches preserve their silhouettes, crossings and snow from close up to distant views',()=>withPage(async page=>{
+  const result=await page.evaluate(()=>{
+    paused=true;render(0);snowCover=.7;
+    const reference=(u,z,du,dz,t)=>{
+      const height=TREE_SIZE[t.kind][1],pixel=Math.max(du*.42,dz*.4),warp=.92+t.seed*.16;
+      let slope=null;
+      for(const [ax,z0,bx,z1,thickness] of TREE_WINTER_BRANCHES[t.kind]) {
+        const x0=ax*warp,x1=bx*warp,width=Math.max(.0045*thickness,pixel);
+        if(z<z0-width||z>z1+width||u<Math.min(x0,x1)-width||u>Math.max(x0,x1)+width)continue;
+        const dx=x1-x0,dy=z1-z0,along=clamp(((u-x0)*dx+(z-z0)*dy)/(dx*dx+dy*dy),0,1);
+        if((u-x0-dx*along)**2+(z-z0-dy*along)**2<width*width){slope=dy/(dx||.0001);break;}
+      }
+      if(slope===null)return null;
+      const snowy=z>height*.55&&Math.abs(slope)<1.8&&hash(Math.floor(u*90+t.seed*99),Math.floor(z*90),816)>.68;
+      const ch=snowy?'-':Math.abs(slope)>1.8?'|':Math.abs(slope)<.28?'-':slope>0?'/':'\\';
+      const col=C(snowy?WHITE:t.kind==='birch'?WHITE:BRICK,snowy?12:clamp(6+10*.45,6,13));
+      return [ch,col];
+    };
+    let tested=0,errors=0;
+    for(const kind of Object.keys(TREE_WINTER_BRANCHES))for(const seed of [.05,.8])for(const du of [.003,.059,.12]) {
+      const t={kind,seed},[half,height]=TREE_SIZE[kind];
+      for(let row=0;row<=WINTER_BRANCH_ROWS;row++)for(const offset of [-1e-8,0,1e-8])for(let col=0;col<90;col++){
+        const u=-half-.03+(half*2+.06)*(col+.5)/90,z=row*height/WINTER_BRANCH_ROWS+offset;
+        const expected=reference(u,z,du,du*.6,t),drawn=winterTreeCell(0,u,z,du,du*.6,10,t);
+        if(drawn!==!!expected||expected&&(CH[0]!==expected[0]||COL[0]!==expected[1]))errors++;
+        tested++;
+      }
+    }
+    return {tested,errors};
+  });
+  assert.ok(result.tested>50000);
+  assert.equal(result.errors,0,JSON.stringify(result));
+}));
+
+test('snow rendering skips lamp-pool work by daylight but retains it at night',()=>withPage(async page=>{
+  const result=await page.evaluate(()=>{
+    paused=true;mode='walk';render(0);snowCover=1;const saved=glow;let calls=0;
+    glow=()=>{calls++;return .8;};
+    try {
+      lampsOn=0;paintSettledSnow(0,41,73,10);const daylight=calls;
+      lampsOn=1;paintSettledSnow(0,41,73,10);return{daylight,night:calls-daylight};
+    }finally{glow=saved;}
+  });
+  assert.equal(result.daylight,0);
+  assert.equal(result.night,1);
+}));
+
+test('covered streets stay free of snow and the Shotengai glass has no yellow roof lamps',()=>withPage(async page=>{
+  const result=await page.evaluate(()=>{
+    paused=true;tod=12;weather='clear';mode='walk';env(0);render(0);
+    const sample=(wx,wy)=>{
+      const row=hor+10,d=eye*projY/(row-hor+.5);
+      floorCell(0,row,0,(wx-px)/d,(wy-py)/d);
+      return [CH[0],BG[0],COL[0]];
+    };
+    const el=[41,EL_Y+1];snowCover=0;const bare=sample(...el);snowCover=1;const covered=sample(...el);
+    const road=Array.from(ROAD).findIndex((r,k)=>r===1&&districtAt(k%N,Math.floor(k/N))==='shotengai');
+    const bx=Math.floor((road%N)/8)*8,wy=Math.floor(road/N)+.54;
+    const roof=arcadeRoofPart(bx+.5,wy);
+    const lamp=lamps.find(l=>arcadeAt(l.x,l.y)),B=drawBox;let high=0;
+    try{drawBox=b=>{high=Math.max(high,b.z1);};drawLamp3D(2,0,lamp.ax,lamp.ay,lamp.top);}finally{drawBox=B;}
+    const balcony=ARCH_DETAILS.find(o=>o.kind==='balcony-slab'&&!snowExposed(o.x,o.y,o.z1));
+    return {bare,covered,roof,lampFits:high<ARCADE_Z,balconySheltered:!snowExposed(balcony.x,balcony.y,balcony.z1),deckExposed:snowExposed(...el,EL_TOP+.05)};
+  });
+  assert.deepEqual(result.covered,result.bare,'the elevated deck leaves its ground shading and characters untouched by snow');
+  assert.equal(result.roof,null,'former yellow lamp locations are clear glass');
+  assert.ok(result.lampFits&&result.balconySheltered&&result.deckExposed,JSON.stringify(result));
 }));
 
 test('bunny hopping: land and go straight back up and each hop is faster; stop and it is gone', () => withPage(async page => {

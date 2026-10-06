@@ -112,6 +112,6 @@ function residentialDetailShade(o, i, t, L) {
   BG[i] = C(base, (1.8 + L * .33) * shadeFace(HIT.face));
   set(i, HIT.face === 5 || o.kind === 'residential-cornice' || o.kind === 'balcony-slab' ? '=' :
     o.kind === 'service-spine' && fract(z * 18) < .08 ? '_' : ' ', C(base, L * .88));
-  if (HIT.face === 5) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7);
+  if (HIT.face === 5) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7,1,0,HIT.w);
   return true;
 }
