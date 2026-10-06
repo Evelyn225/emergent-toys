@@ -164,7 +164,8 @@ function drive(dt) {
 let t0 = performance.now();
 function loop(t) {
   if (paused) { t0 = t; requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
-  const dt = Math.min(0.05, (t - t0) / 1000); t0 = t; T += dt; msgT -= dt;
+  // The first RAF timestamp can precede the performance.now() baseline taken during startup.
+  const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t; T += dt; msgT -= dt;
   env(dt);
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { // a cabinet or a shift has the screen; the world carries on behind it

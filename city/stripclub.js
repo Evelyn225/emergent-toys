@@ -46,7 +46,7 @@ function clubSide(i, u, uStep, z, d, side, along, len, sgn, a0, L, glow, blink) 
   if (z < 0.06) { BG[i] = C(GRAY, 0.6); return set(i, '_', C(GRAY, Math.max(L * 0.5, 3))); } // the kick plate
   const mid = len / 2;
   if (!side) { // an end wall: the neon dancer
-    const art = DANCER_FRAMES[Math.floor(T * 1.6) % 4], x0 = mid - 0.45, col = Math.floor((along - x0) / 0.3), row = Math.floor((1.3 - z) / 0.2);
+    const art = DANCER_FRAMES[mod(Math.floor(T * 1.6), DANCER_FRAMES.length)], x0 = mid - 0.45, col = Math.floor((along - x0) / 0.3), row = Math.floor((1.3 - z) / 0.2);
     if (Math.abs(along - (mid + 0.6)) < Math.max(0.018, uStep * 0.5) && z > 0.42 && z < 1.4) { BG[i] = C(MAG, 1 + glow); return set(i, '|', C(WHITE, Math.max(L, 14 * glow))); } // the pole
     if (col >= 0 && col < 3 && row >= 0 && row < 4 && art[row][col] !== ' ') { // each character of her a bent neon tube, one cell thick
       const ch = art[row][col], lx = (along - x0) / 0.3 - col, lz = (1.3 - z) / 0.2 - row, w = Math.max(0.09, uStep / 0.3 * 0.6);
@@ -109,7 +109,7 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
       const x = 5.5 + k * 3.5, col = SEQUINS[k];
       p.push(BX(x, 2, 0.04, 0.04, 0.5, 3, solid(WHITE, { bright: 1.6 })));
       p.push({ ...SP(x, 2.05, 0.7, 1.7, DANCER_FRAMES[0], (c, row, L) => row === 0 && c === 'o' ? C(SKIN, 15) : C(col, 15), 0.5),
-        tick: s => { const f = Math.floor(T * 1.6 + k * 1.3) % 4; s.art = DANCER_FRAMES[f]; s.x = x + Math.sin(T * 1.2 + k) * 0.28; s.y = 2.05 + Math.cos(T * 1.2 + k) * 0.12; } }); // (swinging round the pole)
+        tick: s => { const f = mod(Math.floor(T * 1.6 + k * 1.3), DANCER_FRAMES.length); s.art = DANCER_FRAMES[f]; s.x = x + Math.sin(T * 1.2 + k) * 0.28; s.y = 2.05 + Math.cos(T * 1.2 + k) * 0.12; } }); // (swinging round the pole)
     }
     // little round cocktail tables, a candle on each, two velvet chairs apiece facing the stage; the punters in them, all eyes front
     const busy = 0.45 + 0.4 * barCrowd();

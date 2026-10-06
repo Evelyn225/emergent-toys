@@ -1259,6 +1259,41 @@ test('the stock exchange: trade with the broker while the market is open; your s
   await page.evaluate(() => newGame && localStorage.removeItem('ascii-city-save'));
 }));
 
+test('an animation timestamp before the clock baseline cannot run the simulation backwards', () => withPage(async page => {
+  const times = await page.evaluate(() => {
+    T = 0;
+    loop(t0 - 16); // the first RAF timestamp can precede performance.now() during startup
+    const earlier = T;
+    loop(t0 + 16);
+    const next = T;
+    loop(t0 + 1000);
+    paused = true;
+    return [earlier, next, T];
+  });
+  assert.strictEqual(times[0], 0, 'an earlier timestamp leaves game time unchanged');
+  assert.strictEqual(times[1], 0.016, 'the next frame advances normally');
+  assert.strictEqual(times[2], 0.066, 'long frames retain the 50ms cap');
+}));
+
+test('the Velvet Rope renders its neon and stage dancers even with negative animation time', () => withPage(async page => {
+  const valid = await page.evaluate(() => {
+    paused = true;
+    const props = ROOM_DEFS.stripclub.props({});
+    const dancers = props.filter(p => p.tick);
+    for (const time of [-0.016, -0.7, -3, 0, 0.7, 3]) {
+      T = time;
+      // A pixel on the end-wall dancer, away from the pole.
+      clubSide(0, 0, 0.01, 1.2, 1, false, 1.7, 4, 1, 0, 1, 1, true);
+      for (const dancer of dancers) {
+        dancer.tick(dancer);
+        if (!DANCER_FRAMES.includes(dancer.art)) return false;
+      }
+    }
+    return dancers.length === 3;
+  });
+  assert.ok(valid, 'each stage dancer always has a valid frame');
+}));
+
 test('the Velvet Rope: $20 at the door (not with the cops after you), tip the dancers, $40 for a private dance', () => withPage(async page => {
   const r = await page.evaluate(() => {
     tod = 22; money = 200; mode = 'walk';
