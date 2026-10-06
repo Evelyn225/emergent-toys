@@ -245,7 +245,7 @@ const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < 
 // the glass conservatory to the north-west, the aviary to the south-west, enclosures, winding gravel paths between.
 const GARDEN = { x0: 7 * 8 + 2, y0: 10 * 8 + 2, w: 22, h: 14 };
 const gardenLocal = (x, y) => [mod(x, N) - GARDEN.x0, mod(y, N) - GARDEN.y0];
-const inGardens = (x, y) => { const [gx, gy] = gardenLocal(x, y); return gx >= 0 && gy >= 0 && gx < GARDEN.w && gy < GARDEN.h; };
+const inGardens = (x, y) => { const gx = mod(x, N) - GARDEN.x0, gy = mod(y, N) - GARDEN.y0; return gx >= 0 && gy >= 0 && gx < GARDEN.w && gy < GARDEN.h; };
 const LAKE = { x: 15, y: 8.2, rx: 4.6, ry: 3.4 };
 function gardenLakeEdge(gx, gy) { // how far inside the lake's shore (gx, gy) is (cells, roughly); negative on land
   const ex = (gx - LAKE.x) / LAKE.rx, ey = (gy - LAKE.y) / LAKE.ry, ang = Math.atan2(ey, ex);
@@ -305,7 +305,7 @@ const BUILD = {
   industrial: { lots: h => h < 0.5 ? LOTS.whole : LOTS.halves, height: h => 1 + Math.round(h * 2) / 2, sty: s => s < 0.75 ? 8 : s < 0.9 ? 15 : 2 },
   brownstones: { lots: () => LOTS.rows, height: h => 1.3 + Math.round(h * 5) / 10, sty: s => s < 0.75 ? 9 : s < 0.9 ? 16 : 2 },
   shotengai: { lots: () => LOTS.rows, height: h => 1.6 + Math.round(h * 6) / 4, sty: () => 17 }, // narrow, 16-30m, every one with signs
-  belle: { lots: h => h < 0.25 ? LOTS.grid : LOTS.rows, height: h => 2.2 + Math.floor(h * 2.4), sty: () => 24 },
+  belle: { lots: h => h < 0.3 ? LOTS.whole : h < 0.65 ? LOTS.halves : LOTS.grid, height: h => 2.2 + Math.floor(h * 2.4), sty: () => 24 },
 };
 // the Shotengai's streets have a roof over them (city-render.js draws it, from underneath)
 const ARCADE_Z = 0.62; // 6m up
@@ -374,8 +374,11 @@ const SERVICES = [];
         map[idx(tx, ty)] = 2.1;
       }
       if (kind === 'amb') sh.pad = [lot.reduce((s, c) => s + c[0], 0) / lot.length + 0.5, lot.reduce((s, c) => s + c[1], 0) / lot.length + 0.5];
-      SERVICES.push({ kind, bx, by, x: bx * 8 + 5, y: by * 8 + 1.74, // (parked between the street lamps, not on one)
-        lane: by * 8 + 1.4, out: false });
+      const frontY = Math.min(...lot.map(c => c[1])), front = lot.filter(c => c[1] === frontY);
+      const doorX = (Math.min(...front.map(c => c[0])) + Math.max(...front.map(c => c[0])) + 1) / 2;
+      const parkingX = [0.9, -0.9, 1.4, -1.4].map(off => doorX + off).find(x => [3.5, 6.5].every(s => Math.abs(x - bx * 8 - s) >= 0.5));
+      SERVICES.push({ kind, bx, by, x: parkingX, y: frontY - 0.26,
+        door: [doorX, frontY - 0.12], lane: by * 8 + 1.4, out: false });
     }
   }
 }
@@ -434,6 +437,44 @@ for (const gh of GLASSHOUSES) {
     const i = idx(GARDEN.x0 + gx, GARDEN.y0 + gy), mid = gx > gh.gx0 && gx < gh.gx1 && gy > gh.gy0 && gy < gh.gy1;
     map[i] = mid || gh.gx1 - gh.gx0 === 2 && gx === gh.gx0 + 1 && gy === gh.gy0 + 1 ? gh.dome : gh.h; STY[i] = gh.sty; SHOP[i] = sh; SEED[i] = 0.5;
   }
+}
+
+// Belle Époque: preserve flat roofs with public access. Other buildings have recessed courts / clipped wings
+// and a real mansard above the masonry. A lot's material and vines are stable across all its faces.
+const BELLE_BUILDINGS = [], BELLE_FACE_START = [new Float32Array(N * N), new Float32Array(N * N)], BELLE_FACE_END = [new Float32Array(N * N), new Float32Array(N * N)];
+{
+  const lots = new Map();
+  for (let i = 0; i < map.length; i++) if (map[i] && STY[i] === 24) {
+    const sh = SHOP[i];
+    if (!lots.has(sh)) lots.set(sh, []);
+    lots.get(sh).push(i);
+  }
+  for (const [sh, cells] of lots) {
+    const x0 = Math.min(...cells.map(i => i % N)), x1 = Math.max(...cells.map(i => i % N)) + 1;
+    const y0 = Math.min(...cells.map(i => Math.floor(i / N))), y1 = Math.max(...cells.map(i => Math.floor(i / N))) + 1;
+    const seed = SEED[cells[0]], access = sh.kind === SHOP_APTS || sh.word === 'HOTEL' || sh.word === 'MOTEL';
+    const b = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, x0, x1, y0, y1, h: map[cells[0]], seed, access, material: Math.floor(seed * 5), ivy: fract(seed * 91) < 0.38, balconies: fract(seed * 77) < 0.62 };
+    sh.belle = b;
+    if (!access) for (const i of cells) {
+      const x = i % N, y = Math.floor(i / N);
+      const corner = x === x0 && y === y0 || x === x1 - 1 && y === y1 - 1;
+      const court = x1 - x0 >= 5 && x >= x0 + 2 && x < x1 - 2 && y < y0 + 2;
+      if (corner || court) { map[i] = 0; SHOP[i] = null; STY[i] = 0; }
+    }
+    BELLE_BUILDINGS.push({ ...b, sh });
+  }
+  for (let i = 0; i < map.length; i++) if (map[i] && STY[i] === 24) for (let side = 0; side < 2; side++) {
+    const x = i % N, y = Math.floor(i / N), stepX = side ? 1 : 0, stepY = side ? 0 : 1;
+    let lo = side ? x : y, hi = lo + 1;
+    const same = (dx, dy) => { const k = idx(x + dx, y + dy); return SHOP[k] === SHOP[i] && map[k] === map[i]; };
+    for (let n = 1; n <= 8 && same(-stepX * n, -stepY * n); n++) lo--;
+    for (let n = 1; n <= 8 && same(stepX * n, stepY * n); n++) hi++;
+    BELLE_FACE_START[side][i] = lo; BELLE_FACE_END[side][i] = hi;
+  }
+}
+function belleRoofHeight(x, y) {
+  const b = SHOP[idx(Math.floor(x), Math.floor(y))]?.belle;
+  return b && !b.access ? b.h + 0.45 * clamp(Math.min(x - b.x0, b.x1 - x, y - b.y0, b.y1 - y) / 0.65, 0, 1) : 0;
 }
 
 // ---- street names, for talk, directions and the HUD

@@ -57,11 +57,32 @@ function summonCar(model) {
   return [`You press the fob. A minute later your ${name} rolls up at the kerb, lights blinking.`, 'click'];
 }
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
-function freeHomeNear(x, y) {
-  let best = -1, bd = 30;
-  for (let dy = -24; dy <= 24; dy++) for (let dx = -24; dx <= 24; dx++) {
+const homeRoomKind = kind => kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
+function restoreHomeCell(cell) {
+  if (!Number.isInteger(cell) || cell < 0 || cell >= N * N) return -1;
+  if (SHOP[cell] && map[cell]) return cell;
+  const x = cell % N, y = Math.floor(cell / N);
+  if (districtAt(x, y) !== 'belle') return -1;
+  let best = -1, distance = Infinity;
+  for (let my = Math.floor(y / 8) * 8; my < Math.floor(y / 8) * 8 + 8; my++) for (let mx = Math.floor(x / 8) * 8; mx < Math.floor(x / 8) * 8 + 8; mx++) {
+    const k = idx(mx, my), d = Math.hypot(mx - x, my - y);
+    if (map[k] && STY[k] === 24 && SHOP[k] && !homeAt(SHOP[k]) && d < distance) { best = k; distance = d; }
+  }
+  return best;
+}
+function freeHomeNear(x, y, district = null) {
+  let best = -1, bd = district ? N : 30;
+  const range = district ? N / 2 : 24;
+  for (let dy = -range; dy < range + (district ? 0 : 1); dy++) for (let dx = -range; dx < range + (district ? 0 : 1); dx++) {
     const i = idx(mod(Math.floor(x) + dx, N), mod(Math.floor(y) + dy, N)), sh = SHOP[i];
-    if (!sh || sh.kind !== SHOP_APTS || !map[i] || homeAt(sh)) continue;
+    if (!sh || sh.kind !== SHOP_APTS || !map[i] || homeAt(sh) || district && districtAt(i % N, Math.floor(i / N)) !== district) continue;
+    if (district === 'belle') {
+      const b = sh.belle;
+      if (!b) continue;
+      let clear = true;
+      for (let row = b.y0; row < b.y1; row++) if (map[idx(b.x1, row)]) { clear = false; break; }
+      if (!clear) continue; // the residence's balcony needs a street-facing exterior wall
+    }
     const d = Math.hypot(dx, dy);
     if (d < bd) { bd = d; best = i; }
   }
@@ -75,7 +96,7 @@ function buyProperty(id, x, y) {
     const l = laneNear(x, y); spawnOwnedCar(id, l.x, l.y, l.hx, l.hy);
     return [true, `You buy ${aOrSome(it.name)}. It's parked out front (C on your map). ${giveCarKeys(id)}`];
   }
-  const cell = freeHomeNear(x, y);
+  const cell = freeHomeNear(x, y, id === 'home_belle' ? 'belle' : null);
   if (cell < 0) return [false, '"Nothing on the market round here right now."'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   owned.homes.push({ cell, kind: id, decor: [], fridge: [], pet: null });

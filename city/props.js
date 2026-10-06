@@ -87,6 +87,42 @@ const GARDEN_SHED = { gx: 21, gy: 12.9 };
 const inPen = (gx, gy, pad = 0) => GARDEN_PENS.find(p => gx > p.gx0 - pad && gx < p.gx1 + pad && gy > p.gy0 - pad && gy < p.gy1 + pad) || null;
 const inBed = (gx, gy) => GARDEN_BEDS.findIndex(([x, y, rx, ry]) => Math.hypot((gx - x) / rx, (gy - y) / ry) < 1);
 const gardenBuilt = (gx, gy, pad) => GLASSHOUSES.some(g => gx > g.gx0 - pad && gx < g.gx1 + 1 + pad && gy > g.gy0 - pad && gy < g.gy1 + 1 + pad);
+// Exclusive ground surfaces, indexed by metre-independent world cells. Keep exact boundaries: only the nearby
+// path segments / beds can be candidates, rather than scanning every feature for every rendered ground pixel.
+const GARDEN_SEGMENTS = GARDEN_PATHS.flatMap(pl => pl.slice(1).map(([bx, by], i) => {
+  const [ax, ay] = pl[i], vx = bx - ax, vy = by - ay;
+  return { ax, ay, bx, by, vx, vy, inv: 1 / (vx * vx + vy * vy) };
+}));
+const GARDEN_GROUND = Array.from({ length: GARDEN.w * GARDEN.h }, (_, i) => {
+  const x = i % GARDEN.w, y = Math.floor(i / GARDEN.w);
+  const overlaps = (x0, y0, x1, y1) => x + 1 >= x0 && y + 1 >= y0 && x <= x1 && y <= y1;
+  return {
+    lake: overlaps(LAKE.x - LAKE.rx * 1.2 - 0.2, LAKE.y - LAKE.ry * 1.2 - 0.2, LAKE.x + LAKE.rx * 1.2 + 0.2, LAKE.y + LAKE.ry * 1.2 + 0.2),
+    jetty: overlaps(JETTY.gx0, JETTY.gy - JETTY.hw, JETTY.gx1, JETTY.gy + JETTY.hw),
+    pens: GARDEN_PENS.filter(p => overlaps(p.gx0, p.gy0, p.gx1, p.gy1)),
+    paths: GARDEN_SEGMENTS.filter(s => overlaps(Math.min(s.ax, s.bx) - 0.25, Math.min(s.ay, s.by) - 0.25, Math.max(s.ax, s.bx) + 0.25, Math.max(s.ay, s.by) + 0.25)),
+    beds: GARDEN_BEDS.map((b, k) => ({ b, k })).filter(({ b: [bx, by, rx, ry] }) => overlaps(bx - rx, by - ry, bx + rx, by + ry)),
+  };
+});
+const GARDEN_SURFACE = { kind: 'lawn', edge: -Infinity, bed: -1 }; // reusable hit, like the renderer's HIT
+function gardenSurface(gx, gy) {
+  const out = GARDEN_SURFACE, cell = gx >= 0 && gy >= 0 && gx < GARDEN.w && gy < GARDEN.h ? GARDEN_GROUND[Math.floor(gy) * GARDEN.w + Math.floor(gx)] : null;
+  out.kind = 'lawn'; out.edge = -Infinity; out.bed = -1;
+  if (!cell) return out;
+  if (cell.jetty && onJetty(gx, gy)) { out.kind = 'jetty'; return out; }
+  if (cell.lake) {
+    out.edge = gardenLakeEdge(gx, gy);
+    if (out.edge > 0) { out.kind = 'lake'; return out; }
+    if (out.edge > -0.18) { out.kind = 'reeds'; return out; }
+  }
+  for (const p of cell.pens) if (gx > p.gx0 && gx < p.gx1 && gy > p.gy0 && gy < p.gy1) { out.kind = p.kind; return out; }
+  for (const s of cell.paths) {
+    const t = clamp(((gx - s.ax) * s.vx + (gy - s.ay) * s.vy) * s.inv, 0, 1), x = gx - s.ax - s.vx * t, y = gy - s.ay - s.vy * t;
+    if (x * x + y * y < 0.0625) { out.kind = 'gravel'; return out; }
+  }
+  for (const { b: [x, y, rx, ry], k } of cell.beds) if (((gx - x) / rx) ** 2 + ((gy - y) / ry) ** 2 < 1) { out.kind = 'bed'; out.bed = k; return out; }
+  return out;
+}
 for (let k = 0; k < 280; k++) {
   const gx = 0.6 + hash(k, 1, 801) * (GARDEN.w - 1.2), gy = 0.6 + hash(k, 2, 801) * (GARDEN.h - 1.2);
   if (gardenPathDist(gx, gy) < 0.55 || gardenLakeEdge(gx, gy) > -0.5 || inPen(gx, gy, 0.4) || inBed(gx, gy) >= 0 || gardenBuilt(gx, gy, 0.5) || GLASSHOUSES.some(g => Math.hypot(gx - g.door[0], gy - g.door[1]) < 1.6) || Math.hypot(gx - GARDEN_SHED.gx, gy - GARDEN_SHED.gy) < 1) continue;
@@ -325,8 +361,8 @@ function solidAt(x, y, pad) {
 const LANTERN_SPAN = 0.95, lanterns = [];
 for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
   const lanternDist = d => d === 'chinatown' || d === 'shotengai';
-  const side = o === 'h' ? lanternDist(districtOf(bx, by)) || lanternDist(districtOf(bx, by - 1))
-                         : lanternDist(districtOf(bx, by)) || lanternDist(districtOf(bx - 1, by));
+  const d0 = districtOf(bx, by), d1 = districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by);
+  const side = d0 !== 'belle' && d1 !== 'belle' && (lanternDist(d0) || lanternDist(d1));
   ax = Math.abs(ax); ay = Math.abs(ay);
   const walls = map[idx(x - ax * 1.2, y - ay * 1.2)] > 0 && map[idx(x + ax * 1.2, y + ay * 1.2)] > 0;
   if (side && walls) lanterns.push({ x, y, ax, ay });
@@ -400,7 +436,6 @@ const machineAt = (x, y, pad) => machinesB[bi(Math.floor(x / 8), Math.floor(y / 
 
 // rooftop clutter: one item on some lots, placed inside the lot so it sits on the roof
 const roofs = [];
-const BELLE_ROOF = [pad(['  /^^\\', ' /_||_\\', '|_|  |_|']), pad(['   ^', '  /|\\', ' /_|_\\', '|__|__|'])];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   if (blockKind(bx, by)) continue;
   const dist = districtOf(bx, by);
@@ -408,10 +443,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     const lot = [bx * 2 + lx, by * 2 + ly], r = hash(...lot, 13);
     const x = bx * 8 + 2 + lx * 3 + 0.6 + hash(...lot, 14) * 1.8, y = by * 8 + 2 + ly * 3 + 0.6 + hash(...lot, 15) * 1.8, h = map[idx(x, y)];
     if (bx === GRAND_HOTEL.bx && by === GRAND_HOTEL.by) continue;
-    if (dist === 'belle' && r < 0.34) {
-      const art = BELLE_ROOF[r < 0.18 ? 0 : 1], kind = r < 0.18 ? 'belle-dormer' : 'belle-turret';
-      roofs.push({ x, y, z: h, w: art[0].length * 0.08, h: kind === 'belle-dormer' ? 0.6 : 0.85, art, kind }); continue;
-    }
+    if (dist === 'belle') continue; // the district has geometric mansards, bays and turrets (belle.js)
     if (dist === 'industrial' || dist === 'brownstones' && r > 0.3) continue;
     if (h >= 5 && r < 0.5) roofs.push({ x, y, z: h, w: 0.1, h: 1, art: ART.antenna, kind: 'antenna' });
     else if (r < 0.35) roofs.push({ x, y, z: h, w: 0.3, h: 0.4, art: ART.tank, kind: 'tank' });

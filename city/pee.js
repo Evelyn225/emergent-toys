@@ -223,7 +223,7 @@ function peeWitness() {
     if (kind === 'jail') { if (!pee.caught) { pee.caught = true; say('The guard bangs on the bars. "Use the toilet, animal."', 3); } return; }
     if (kind === 'aviary') return; // the keeper lets it go when you pee on the aviary floor
     if (inWc(px, py)) return; // in the bathroom: nobody's watching, and it's the right room at least
-    if (!k || room.burgled || kind === 'home' || kind === 'loft' || kind === 'hotelroom') return; // (your own place, or nobody here: your own business)
+    if (!k || room.burgled || homeRecord(room) || kind === 'hotelroom') return; // (your own place, or nobody here: your own business)
     const there = loos().length ? ' The toilet\'s RIGHT THERE.' : '';
     pee = null; leaveRoom();
     return say(`"Hey! HEY! Not in here!"${there} You're thrown out onto the street.`, 4);
@@ -242,8 +242,12 @@ function peeSpray(flow) {
   const s = peeScale(), wob = Math.sin(T * 6) * 0.05 + Math.sin(T * 1.7) * 0.09;
   const look = Math.atan(pitch * rows / projY), el = clamp(look + 0.55, -1.3, 1.3) + Math.sin(T * 2.9) * 0.03;
   let ang = a + wob, sp = 1.5 + flow * 4.5, up = Math.sin(el) * sp;
-  const ground = eye - eyeLift() * s - (mode === 'room' ? 1.7 : 0.17); // (eye height less the 1.7m you stand)
-  const hip = Math.max(ground + 0.3 * s, eye - 0.8 * s); // (crouched, it's not coming out of the floor)
+  // Input can arrive before the first render after entering a room. Derive height from the feet, not the last camera.
+  let ground = architectureGroundHeight(px, py);
+  if (mode === 'room') ground = stairRise(px, py);
+  else if (mode === 'roof') ground = roofH;
+  else if (mode === 'elplat') ground = EL_TOP;
+  const hip = ground + Math.max(0.3, 0.9 + eyeLift()) * s; // (crouched, it's not coming out of the floor)
   const x = px + Math.cos(a) * 0.25 * s, y = py + Math.sin(a) * 0.25 * s;
   sp *= Math.cos(el);
   if (pee.loo) { // at a toilet you get some help: whatever lands it in the bowl (gravity still has the say on the way down)

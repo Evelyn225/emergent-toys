@@ -121,7 +121,7 @@ function interact() {
   if (mode === 'room') {
     if (room.kind === 'train') return;
     if (grandHotelUse()) return;
-    if (room.kind === 'home' || room.kind === 'loft') { // your place: sleep whenever you like, your closet, the telly
+    if (homeRecord(room)) { // your place: sleep whenever you like, your closet, the telly
       const hs = homeSpot();
       const home = homeRecord(room);
       if (!home) return say('This apartment is not yours.', 2);
@@ -187,6 +187,7 @@ function interact() {
     if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
       const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
       roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0; roofLot = roofCells(mx, my);
+      notePoliceRoofEntry(px, py, room.ret);
       return say(`Roof, ${roofH * 10}m up`);
     }
     if (canBoard()) {
@@ -277,7 +278,11 @@ function interact() {
     if (sh.kind === SHOP_SHUT) return say(pick(['Closed down for good. A FOR LEASE sign on the shutter.', 'Shuttered for good. The FOR LEASE sign has a phone number nobody answers.', 'Gone out of business. Just the old sign left.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
     const home = homeAt(sh);
-    if (home) return enterRoom(home.kind === 'home_loft' ? 'loft' : 'home', { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, [ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid[0].length / 2, ROOM_DEFS[home.kind === 'home_loft' ? 'loft' : 'home'].grid.length - 1.6, -Math.PI / 2]), say('Home.', 1.5);
+    if (home) {
+      const kind = homeRoomKind(home.kind), def = ROOM_DEFS[kind];
+      enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, def.entry);
+      return say('Home.', 1.5);
+    }
     if (sh.club && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
     if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
     if (sh.fee) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : sh.museum ? 'Enjoy the collection. No flash photography.' : 'Mind the butterflies.'}"`, 3);

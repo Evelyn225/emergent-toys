@@ -36,26 +36,46 @@ function signBig(u, uStep, d, side, mx, my, wc, p, len) {
   }
   return small >= 1 && small !== Infinity;
 }
-function belleFacade(i, u, z, h, d, side, fog, sk, L, glowL) {
-  const fz = fract(z * 2.5), bay = fract(u * 3.2), floor = Math.floor(z * 2.5);
-  BG[i] = bgAt(WHITE, day * 2.2 * (0.45 + 0.55 * fog) * (side ? 0.8 : 1), d);
-  if (z > h - 0.06) return set(i, '=', C(YEL, L * 0.8)); // carved stone cornice
-  if (h - z < 0.48) { // a steep mansard band at the top of each building
-    const slope = Math.abs(bay - 0.5) * 2;
-    if (slope > fz * 1.5 + 0.12) return set(i, slope > 0.9 ? '|' : slope > 0.6 ? '/' : '\\', C(GREEN, L * 0.85));
-    if (Math.abs(fz - 0.18) < 0.08 && bay > 0.28 && bay < 0.72) return set(i, '^', C(YEL, Math.max(L, glowL * 0.5)));
-    return set(i, (Math.floor(u * 2) + Math.floor(z * 12)) & 1 ? ':' : '.', C(GREEN, L * 0.7));
+function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
+  const k = idx(mx, my), b = SHOP[k].belle, sk = sk0(b.seed), start = BELLE_FACE_START[side][k], end = BELLE_FACE_END[side][k];
+  const along = mod(wc, N) - start, width = end - start, bays = Math.max(1, Math.floor(width / 0.85)), spacing = width / bays;
+  const bay = Math.floor(along / spacing), du = along - (bay + 0.5) * spacing, half = Math.min(0.23, spacing * 0.29);
+  const base = [STONE, WHITE, GRAY, BRICK, STONE][b.material], grain = hash(Math.floor(wc * 7), Math.floor(z * 10), sk);
+  const course = fract(z * 8), joint = fract(wc * 2 + (Math.floor(z * 8) & 1) * 0.5);
+  BG[i] = C(base, 2 + L * (0.25 + grain * 0.12));
+  if (b.ivy && z < Math.min(h - 0.25, 2.5)) {
+    const vine = 0.24 + Math.sin(z * 3 + b.seed * 8) * 0.14 + z * 0.13;
+    const stem = Math.min(Math.abs(along - vine), z > 0.4 ? Math.abs(along - vine - Math.sin(z * 4) * 0.25) : 9);
+    if (stem < 0.028 || stem < 0.13 && grain > 0.25) {
+      BG[i] = C(GREEN, 1 + L * 0.14); return set(i, stem < 0.028 ? '/' : grain > 0.65 ? '%' : '&', C(GREEN, L * (0.65 + grain * 0.6)));
+    }
   }
-  if (fz < 0.08) return set(i, '=', C(YEL, L * 0.6)); // moulded band between floors
-  const arch = fz > 0.66 && fz < 0.86 && Math.abs(bay - 0.5) < 0.23 - (fz - 0.66) * 1.05;
-  if (bay > 0.27 && bay < 0.73 && (fz > 0.16 && fz < 0.7 || arch)) {
-    if (arch && fz > 0.78) return set(i, '^', C(WHITE, L));
-    if (Math.abs(bay - 0.27) < 0.035 || Math.abs(bay - 0.73) < 0.035) return set(i, '|', C(YEL, L * 0.9));
-    if (fz < 0.2) return set(i, '-', C(GRAY, L)); // iron balcony rail
-    return hash(Math.floor(u * 3.2), floor, sk) > litT - 0.18 ? set(i, '#', C(WARM, Math.max(L, glowL))) : set(i, ':', C(CYAN, L * 0.45));
+  if (h - z < 0.12 || Math.abs(z - 0.43) < 0.035) return set(i, '=', C(WHITE, L * 1.1));
+  if (along < 0.13 || width - along < 0.13) return set(i, course < 0.12 ? '=' : '|', C(WHITE, L)); // dressed corner quoins; no half windows
+  if (z < 0.4) {
+    if (z > 0.32) {
+      if (wallText(i, u, uStep, z, d, SHOP[k].word, (Math.sign(u * wc) || 1) * (start + width / 2), 0.36, 0.05, 0.06, C(YEL, Math.max(L, night * 12)), C(GRAY, 1))) return;
+      return set(i, ' ', 0);
+    }
+    const archTop = 0.31 - (du / (spacing * 0.36)) ** 2 * 0.065;
+    if (Math.abs(du) < spacing * 0.35 && z > 0.045 && z < archTop) {
+      if (Math.abs(du) > spacing * 0.32 || z > archTop - 0.02) return set(i, z > archTop - 0.02 ? '^' : '|', C(WHITE, L));
+      BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : CYAN, 1 + night * 2);
+      return set(i, Math.abs(du) < 0.015 ? '|' : ':', C(WARM, Math.max(L * 0.65, glowL * 0.75)));
+    }
+  } else {
+    const floors = Math.max(1, Math.floor((h - 0.55) / 0.42)), fh = (h - 0.55) / floors, fl = Math.floor((z - 0.45) / fh), fz = fract((z - 0.45) / fh);
+    if (fz < 0.08) return set(i, '=', C(WHITE, L * 0.9));
+    const archTop = 0.86 - (du / half) ** 2 * 0.12;
+    if (fl < floors && Math.abs(du) < half + 0.035 && fz > 0.22 && fz < archTop + 0.045) {
+      if (Math.abs(du) > half || fz > archTop || fz < 0.26) return set(i, Math.abs(du) > half ? '|' : '=', C(WHITE, L));
+      const lit = hash(bay, fl, sk) > litT - 0.15;
+      BG[i] = C(lit ? WARM : CYAN, lit ? 2 + night * 4 : 1 + day * 1.5);
+      return set(i, Math.abs(du) < 0.018 ? '|' : fz > 0.68 && fz < 0.71 ? '-' : lit ? ' ' : ':', C(lit ? WARM : CYAN, Math.max(L * 0.7, lit ? glowL : 0)));
+    }
+    if (fz > 0.88 && Math.abs(du) < half + 0.08) return set(i, Math.abs(du) < 0.05 ? '*' : '~', C(YEL, L * 0.85)); // carved keystones and swags
   }
-  if (fz < 0.15) return set(i, fract(u * 6.4) < 0.08 ? '|' : '_', C(WHITE, L));
-  return set(i, '.', C(WHITE, L * 0.35));
+  return set(i, course < 0.055 ? '_' : joint < 0.045 ? '|' : grain > 0.95 ? '.' : ' ', C(base, L * 0.65));
 }
 function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const c = GRAND_HOTEL, L = fog * amb * (side ? 10 : 15), yFront = c.by * 8 + 8, xStart = c.bx * 8 + 2;
@@ -105,7 +125,9 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty === 18 || sty === 19) return glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty);
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   if (graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return; // a mural, or somebody's tag
+  if (architectureFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return;
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
+  if (sty === 24) return belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL);
   BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : (FACADE_BG[sty] ?? WHITE), day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
   if (z > h - 0.04) return set(i, '=', C(GRAY, L)); // cornice
   if (z < 0.4) { // ground floor shop
@@ -172,7 +194,6 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return on ? set(i, ':', C(WARM, Math.max(L * 0.8, glowL))) : set(i, '.', C(GRAY, L * 0.3));
   }
   if (sh.aqua) return aquaUpper(i, u, uStep, z, d, L);
-  if (sty === 24) return belleFacade(i, u, z, h, d, side, fog, sk, L, glowL);
   const zz = z - 0.4, fl = Math.floor(zz * 3);
   let fz = fract(zz * 3);
   // the top floor: when the roof cuts it short its windows are squeezed to fit below the cornice, and a sliver too
@@ -491,7 +512,11 @@ function floorBaseCell(i, r, x, rx, ry) {
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false;
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
-    if (onFootbridge(wx, wy)) { // the footbridge: boards across it, lamplight pooling under each lamp after dark
+    if (kind === 'gardens' && inGardens(wx, wy)) {
+      const gf = gardenFloor(i, r, x, wx, wy, L);
+      if (gf === true) return;
+      [ch, base, k] = gf; soft = true;
+    } else if (onFootbridge(wx, wy)) { // the footbridge: boards across it, lamplight pooling under each lamp after dark
       soft = true; base = BRICK; k = 1.3;
       const e = Math.abs(rel(wx - FOOTBRIDGE.x)) / FOOTBRIDGE.hw;
       ch = e > 0.88 ? '|' : fract(wy * 5) < 0.2 ? '=' : '-';
@@ -504,10 +529,6 @@ function floorBaseCell(i, r, x, rx, ry) {
       if (e < 0.45) { ch = hash(Math.floor(wx * 9), Math.floor(wy * 9), 34) > 0.45 ? '%' : 'o'; base = GRAY; k = 1.25; }
       else if (onPath) { ch = (r * 5 + x) % 3 ? ':' : '.'; base = WARM; k = 1; }
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.1; }
-    } else if (kind === 'gardens' && inGardens(wx, wy)) {
-      const gf = gardenFloor(i, r, x, wx, wy, L);
-      if (gf === true) return;
-      [ch, base, k] = gf; soft = true;
     } else if (onPier(wx, wy)) { // planks running out to sea
       soft = true; base = BRICK; k = 1.3;
       ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';

@@ -80,14 +80,14 @@ addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flic
 addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.preventDefault(); });
 
 const free = (x, y) => {
-  if (mode === 'room') return !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
+  if (mode === 'room') return x >= 0 && y >= 0 && x < room.W && y < room.H && !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
   if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
-    Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
+    !architectureBlocked(x, y, 0.03) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : 0.05;
@@ -123,6 +123,7 @@ function drawTireMarks() {
   }
 }
 function drive(dt) {
+  const oldA = a;
   const spun = me.spunT > T; // spun out by the police: no say in it till you've stopped turning
   const c = me, f = spun ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = spun ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
   if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (me.spunT - T) / 2.5; }
@@ -130,7 +131,6 @@ function drive(dt) {
   c.v = clamp(c.v, -0.5, K.ShiftLeft || K.ShiftRight ? c.boost || 3.2 : c.top || 2.2); // (a car you own goes as fast as its model)
   const handbrake = !!K.Space && !spun, fast = Math.abs(c.v) > 0.8;
   if (handbrake) c.v *= Math.exp(-dt * (fast ? 0.65 : 5));
-  const oldA = a;
   a += s * dt * (handbrake && fast ? 2.5 : 1.8) * clamp(c.v / 0.5, -1, 1);
   c.travelA ??= oldA;
   const slip = mod(a - c.travelA + Math.PI, Math.PI * 2) - Math.PI;
@@ -143,15 +143,22 @@ function drive(dt) {
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
   const hitCar = cars.find(o => o !== c && Math.hypot(rel(o.x - fx), rel(o.y - fy)) < 0.3);
   const hitPerson = people.find(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15) || footCops.find(p => Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
-  const hit = !free(fx, fy) || hitCar || hitPerson;
+  const samples = Math.max(1, Math.ceil(Math.abs(c.v * dt) / 0.04), Math.ceil(Math.abs(a - oldA) / 0.08));
+  let bodyHit = false;
+  for (let k = 1; k <= samples; k++) {
+    const f = k / samples, angle = oldA + (a - oldA) * f;
+    if (!carBodyClear(oldX + (nx - oldX) * f, oldY + (ny - oldY) * f, Math.cos(angle), Math.sin(angle))) { bodyHit = true; break; }
+  }
+  const hit = bodyHit || !free(fx, fy) || hitCar || hitPerson;
   if (hit) { // a real crash only above CRASH_V; anything slower is a bump
     const sp = Math.abs(c.v);
     if (hitPerson && sp > 0.4) { hitPerson.talk = 3; say(pick(['"Watch it!"', '"Are you CRAZY?"', '"Hey! You hit me!"']), 2); crime('hit', c.x, c.y); } // you hit someone
     if (sp > CRASH_V) { say('*CRUNCH*', 1); taxiCrash(); if (actx) playClip('crash', clamp(0.3 + (sp - CRASH_V) * 0.35, 0.3, 0.8)); if (hitCar && !hitCar.player) crime('crash', c.x, c.y); }
     else if (sp > 0.2 && actx) tone(actx.currentTime, 70, 0.12, 0.08 * sp); // a soft thud
+    if (bodyHit) a = oldA;
     c.v = 0; c.travelA = a;
   } else { c.x = mod(nx, N); c.y = mod(ny, N); if (drifting) leaveTireMarks(c, hx, hy, oldX, oldY); }
-  c.hx = hx; c.hy = hy; c.brake = f < 0 || handbrake; px = c.x; py = c.y;
+  c.hx = Math.cos(a); c.hy = Math.sin(a); c.ex = c.x; c.ey = c.y; c.brake = f < 0 || handbrake; px = c.x; py = c.y;
   const road = ROAD[idx(Math.floor(c.x), Math.floor(c.y))]; // into a junction on red, right in front of a cop
   if (road === 3 && c.lastRoad && c.lastRoad !== 3 && Math.abs(c.v) > 0.4) {
     const ix = Math.floor(c.x / 8) * 8, iy = Math.floor(c.y / 8) * 8;
@@ -184,9 +191,15 @@ function loop(t) {
     if (!body.seat) {
       const scale = sp * footSlow() * (body.hop || 1), ix = (cx * f - cy * (s + lurch)) * scale, iy = (cy * f + cx * (s + lurch)) * scale;
       const airborne = body.z > 0 || body.vz > 0;
-      if (ix || iy) { body.mx = ix / dt; body.my = iy / dt; }
-      else if (!airborne) body.mx = body.my = 0;
-      else { body.mx = (body.mx || 0) * Math.pow(0.995, dt * 60); body.my = (body.my || 0) * Math.pow(0.995, dt * 60); }
+      if (!airborne) { body.mx = ix / dt; body.my = iy / dt; }
+      else { // Source-style air strafe: input only adds speed along wishdir up to a small cap, so you curve by strafing + turning instead of snapping
+        body.mx = (body.mx || 0) * Math.pow(0.995, dt * 60); body.my = (body.my || 0) * Math.pow(0.995, dt * 60);
+        const ws = Math.hypot(ix, iy) / dt;
+        if (ws) {
+          const wx = ix / dt / ws, wy = iy / dt / ws, add = ws * 0.1 - (body.mx * wx + body.my * wy);
+          if (add > 0) { const acc = Math.min(add, 10 * ws * dt); body.mx += acc * wx; body.my += acc * wy; }
+        }
+      }
       move(airborne ? body.mx * dt : ix, airborne ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
@@ -264,8 +277,13 @@ function chaseCam(dt) {
   const target = mode === 'taxi' ? a : Math.atan2(me.hy, me.hx) + look;
   camYaw += (mod(target - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 5);
   const bx = Math.cos(camYaw), by = Math.sin(camYaw);
-  let back = 1.1;
-  while (back > 0.15 && !free(me.x - bx * back, me.y - by * back)) back -= 0.05;
+  let back = 0;
+  for (let step = 0.04; step <= 1.1; step += 0.04) {
+    const x = me.x - bx * step, y = me.y - by * step;
+    const blocked = [-0.07, 0.07].some(ox => [-0.07, 0.07].some(oy => map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy)));
+    if (blocked) break;
+    back = step;
+  }
   return [me.x - bx * back, me.y - by * back, camYaw];
 }
 // ?goto=ARCADE (any shop sign: HOSPITAL, PAWN, KARAOKE...) starts you on the sidewalk outside the nearest one, facing

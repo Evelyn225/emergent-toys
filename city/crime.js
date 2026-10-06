@@ -11,7 +11,7 @@
 const COP_SIGHT = 13, CIV_SIGHT = 8, DISPATCH_R = 45, REPORT_DELAY = 5;
 const ESCAPE_T = [0, 25, 40, 60];            // seconds out of sight to lose them, by stars
 const UNITS = [0, 2, 3, 5];                  // patrol cars after you, by stars
-const FINE = [0, 60, 150, 300];              // what they'll take instead of a cell
+const FINE = [0, 50, 150, 300];              // what they'll take instead of a cell
 const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 'hitting someone with a car' },
                  crash: { stars: 1, name: 'reckless driving' }, redlight: { stars: 1, name: 'running a red light' },
                  pickpocket: { stars: 1, name: 'pickpocketing' }, shoplift: { stars: 1, name: 'shoplifting' },
@@ -22,6 +22,8 @@ const wanted = { stars: 0, lastX: 0, lastY: 0, seen: false, hideT: 0, bustT: 0, 
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
 const roomCops = []; // officers who got a reliable lead that you entered the current building
+const roofCops = [];
+let roofLead = null;
 let searchedRoom = null;
 
 // can you see (bx, by) from (ax, ay)? Nothing built in the way (cells taller than eye height block it)
@@ -37,6 +39,8 @@ const crimePos = () => mode === 'room' && room && room.ret ? [room.ret[0], room.
 // ---- the police on foot: three on the beat round each police station, corner to corner along the sidewalks. A
 // corner is an intersection (ix, iy) and which of its four corners (qx, qy).
 const footCops = [];
+// Faster than a diagonal sprint, including coffee; airborne momentum and skate tricks remain the player's tools.
+const COP_FOOT_SPEED = 1.5, COP_ROOM_SPEED = 4.6;
 const cornerXY = c => [c.ix * 8 + (c.qx ? 1.88 : 0.12), c.iy * 8 + (c.qy ? 1.88 : 0.12)];
 function stepCorner(c, dir) { // the corner one step along the sidewalk in dir (0 E, 1 S, 2 W, 3 N), or null if there's no sidewalk
   let { ix, iy, qx, qy } = c;
@@ -63,7 +67,7 @@ function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn
   else { c.x = mod(c.x + dx / d * s, N); c.y = mod(c.y + dy / d * s, N); c.ph += dt * 4; }
 }
 function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls (just out of the car: a sprint)
-  const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = (c.burst > T ? 1.05 : 0.78) * dt;
+  const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = Math.min(d, (c.burst > T ? COP_FOOT_SPEED * 1.1 : COP_FOOT_SPEED) * dt);
   const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
   if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = mod(nx, N);
   if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = mod(ny, N);
@@ -97,15 +101,23 @@ function roomPath(fromX, fromY, toX, toY) {
   for (let id = last; id !== first; id = prev[id]) path.push([id % room.W + 0.5, (id / room.W | 0) + 0.5]);
   return path.reverse();
 }
+function roomWalkLine(x0, y0, x1, y1) {
+  const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 6);
+  for (let k = 1; k <= steps; k++) if (!roomOpen(x0 + (x1 - x0) * k / steps, y0 + (y1 - y0) * k / steps)) return false;
+  return true;
+}
 function roomDoorCell() {
+  if (!room.grid) return null;
   let best = null, bd = Infinity;
-  for (let y = 0; y < room.H; y++) for (let x = 0; x < room.W; x++) if (room.grid[y][x] === 'D' || room.grid[y][x] === 'E') {
+  const door = room.grid.some(row => row.includes('D')) ? 'D' : 'E';
+  for (let y = 0; y < room.H; y++) for (let x = 0; x < room.W; x++) if (room.grid[y][x] === door) {
     for (const [ox, oy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) if (roomOpen(x + ox + 0.5, y + oy + 0.5)) {
       const d = Math.hypot(x + ox + 0.5 - px, y + oy + 0.5 - py);
       if (d < bd) { bd = d; best = [x + ox + 0.5, y + oy + 0.5]; }
     }
   }
-  return best || nearestRoomCell(px, py) && nearestRoomCell(px, py).map(v => v + 0.5);
+  if (best) return best;
+  return nearestRoomCell(px, py)?.map(v => v + 0.5) || null;
 }
 function roomPoliceSees(c) {
   const tx = px, ty = py, targetZ = body.seat ? 0.95 : Math.max(0.42, 1.55 - (body.crouch || 0) * 1.12);
@@ -157,8 +169,12 @@ function roomSearchLead(dt) {
         if (cells.length) { const g = cells[c.searchI++ % cells.length]; c.targetX = g[0]; c.targetY = g[1]; }
       }
     }
-    if ((c.pathT -= dt) <= 0 || !c.path.length) { c.pathT = 0.55; c.path = roomPath(c.x, c.y, c.targetX, c.targetY); }
-    let [gx, gy] = c.path[0] || [c.targetX, c.targetY], vx = gx - c.x, vy = gy - c.y, d = Math.hypot(vx, vy), step = (c.sees ? 1.9 : 1.4) * dt;
+    if ((c.pathT -= dt) <= 0) {
+      c.pathT = c.sees ? 0.18 : 0.45;
+      c.direct = c.sees && roomWalkLine(c.x, c.y, c.targetX, c.targetY);
+      c.path = c.direct ? [] : roomPath(c.x, c.y, c.targetX, c.targetY);
+    }
+    let [gx, gy] = c.direct ? [c.targetX, c.targetY] : c.path[0] || [c.targetX, c.targetY], vx = gx - c.x, vy = gy - c.y, d = Math.hypot(vx, vy), step = (c.sees ? COP_ROOM_SPEED : 2.1) * dt;
     if (d < step + 0.04) { c.x = gx; c.y = gy; if (c.path.length) c.path.shift(); }
     else if (d > 1e-5) {
       const nx = c.x + vx / d * step, ny = c.y + vy / d * step;
@@ -167,6 +183,65 @@ function roomSearchLead(dt) {
     }
   }
   return anySees;
+}
+const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], belleRoofHeight(x, y), architectureRoofHeight(x, y));
+function notePoliceRoofEntry(x, y, ret = null) {
+  if (!wanted.stars || !(wanted.seen || roomCops.length || ret && near(wanted.lastX, wanted.lastY, ret[0], ret[1]) < 1)) return;
+  roofLead = { x, y, ret, targetX: x, targetY: y, arriveAt: T + (roomCops.length ? 1.2 : 3), count: Math.min(2, Math.max(1, wanted.stars)), arrived: false };
+}
+function roofPoliceSees(c) {
+  const vx = rel(px - c.x), vy = rel(py - c.y), d = Math.hypot(vx, vy);
+  if (d > COP_SIGHT) return false;
+  const z0 = policeRoofHeight(c.x, c.y) + 0.16, z1 = policeRoofHeight(px, py) + 0.15 + body.z / 10, n = Math.ceil(d * 8);
+  for (let k = 1; k < n; k++) {
+    const t = k / n;
+    if (policeRoofHeight(c.x + vx * t, c.y + vy * t) > z0 + (z1 - z0) * t) return false;
+  }
+  return true;
+}
+function policeRoofPath(x0, y0, x1, y1) {
+  const first = idx(Math.floor(x0), Math.floor(y0)), last = idx(Math.floor(x1), Math.floor(y1)), prev = new Map([[first, first]]), queue = [first];
+  for (let k = 0; k < queue.length && k < 1600 && !prev.has(last); k++) {
+    const cell = queue[k], x = cell % N, y = Math.floor(cell / N), height = policeRoofHeight(x + 0.5, y + 0.5);
+    for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const next = idx(x + ox, y + oy), nx = next % N + 0.5, ny = Math.floor(next / N) + 0.5, nh = policeRoofHeight(nx, ny);
+      if (prev.has(next) || !nh || Math.abs(nh - height) > 0.35 || near(nx, ny, x0, y0) > 24) continue;
+      prev.set(next, cell); queue.push(next);
+    }
+  }
+  if (!prev.has(last)) return [];
+  const path = [[x1, y1]];
+  for (let cell = last; cell !== first; cell = prev.get(cell)) path.push([cell % N + 0.5, Math.floor(cell / N) + 0.5]);
+  return path.reverse();
+}
+function roofSearchLead(dt) {
+  if (mode !== 'roof' || !wanted.stars) { roofCops.length = 0; roofLead = null; return false; }
+  if (!roofLead) return false;
+  if (!roofLead.arrived && T >= roofLead.arriveAt) {
+    roofLead.arrived = true;
+    for (let k = 0; k < roofLead.count; k++) roofCops.push({ x: roofLead.x, y: roofLead.y, targetX: roofLead.targetX, targetY: roofLead.targetY, path: [], pathT: 0, ph: k });
+  }
+  let seen = false;
+  for (const c of roofCops) {
+    c.sees = roofPoliceSees(c);
+    if (c.sees) { seen = true; c.targetX = px; c.targetY = py; }
+    if ((c.pathT -= dt) <= 0) { c.pathT = 0.25; c.path = policeRoofPath(c.x, c.y, c.targetX, c.targetY); }
+    const target = c.path[0];
+    if (!target) continue;
+    const vx = rel(target[0] - c.x), vy = rel(target[1] - c.y), d = Math.hypot(vx, vy), step = Math.min(d, (c.sees ? COP_FOOT_SPEED : 0.7) * dt);
+    if (d < 0.025) { c.path.shift(); continue; }
+    const nx = mod(c.x + vx / d * step, N), ny = mod(c.y + vy / d * step, N), height = policeRoofHeight(c.x, c.y), nh = policeRoofHeight(nx, ny);
+    if (nh > 0 && Math.abs(nh - height) <= 0.35) { c.x = nx; c.y = ny; c.ph += dt * 7; }
+    if (d <= step) c.path.shift();
+  }
+  return seen;
+}
+function drawRoofPolice() {
+  for (const c of roofCops) {
+    const z = policeRoofHeight(c.x, c.y);
+    drawArt(...R(c.x, c.y), z, 0.06, 0.18, (c.ph | 0) % 2 ? ART.walkA : ART.walkB, (ch, row, L) => C(row === 1 ? SKIN : BLUE, Math.max(L, 7)));
+    if (c.sees && fract(T * 3) < 0.5) drawArt(...R(c.x, c.y), z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
+  }
 }
 function drawRoomPolice() {
   for (const c of roomCops) {
@@ -220,15 +295,95 @@ function callUnits() {
       const p = randomLane(30, wanted.lastX, wanted.lastY);
       c = addCar({ ...p, kind: 'police', body: BLUE, patrol: true, extra: true });
     }
-    Object.assign(c, { pursuit: true, cruise: 2.5, dest: [wanted.lastX, wanted.lastY] }); // (faster than you drive, unless you floor it)
+    Object.assign(c, { pursuit: true, returning: false, state: 'out', home: false, born: T, waitingCrew: false, merging: null, cruise: 2.5, dest: [wanted.lastX, wanted.lastY] });
   }
 }
 function clearWanted() {
   wanted.stars = 0; wanted.seen = false; wanted.hideT = 0; wanted.bustT = 0; wanted.busted = false;
-  roomCops.length = 0; searchedRoom = null;
-  for (const c of cars) if (c.pursuit) { c.pursuit = false; c.dest = null; c.cruise = 1 + Math.random() * 0.5; c.dropped = false; c.drops = 0; }
-  for (const c of footCops) if (c.chase) backToBeat(c);
+  const units = cars.filter(c => c.pursuit);
+  const closestCar = (x, y) => units.reduce((best, c) => !best || near(c.x, c.y, x, y) < near(best.x, best.y, x, y) ? c : best, null);
+  const exit = searchedRoom?.ret || room?.ret;
+  for (const c of roomCops) {
+    c.returning = true; c.returnCar = closestCar(...(exit || crimePos())); c.exitWorld = exit;
+    c.returnDoor = mode === 'room' && room.grid ? roomDoorCell() : null; c.sees = false; c.pathT = 0;
+  }
+  for (const c of roofCops) {
+    c.returning = true; c.returnCar = closestCar(c.x, c.y); c.exitWorld = roofLead?.ret;
+    c.returnDoor = roofLead ? [roofLead.x, roofLead.y] : [c.x, c.y]; c.sees = false; c.pathT = 0;
+  }
+  searchedRoom = null; roofLead = null;
+  for (const c of units) {
+    c.pursuit = false; c.returning = true; c.waitingCrew = true; c.v = 0; c.cruise = 1.3; c.state = 'back'; c.arrived = false;
+    c.base ||= SERVICES.filter(b => b.kind === 'police').reduce((best, b) => !best || near(b.x, b.y, c.x, c.y) < near(best.x, best.y, c.x, c.y) ? b : best, null);
+    c.dest = c.base ? [c.base.x, c.base.lane] : null; c.dropped = false; c.drops = 0;
+    if (c.base) c.base.out = true;
+  }
+  for (const c of footCops) if (c.chase) {
+    if (c.car && cars.includes(c.car)) { c.chase = false; c.returnCar = c.car; c.returnPathT = 0; }
+    else backToBeat(c);
+  }
   reports.length = 0;
+}
+function policeExitToStreet(c) {
+  const car = c.returnCar;
+  if (!car) return;
+  const at = c.exitWorld || [car.x, car.y];
+  footCops.push({ x: at[0], y: at[1], car, returnCar: car, chase: false, extra: true, ph: 0, returnPathT: 0 });
+}
+function policeReturnLane(c) {
+  const lane = laneNear(c.x, c.y);
+  if (ROAD[idx(Math.floor(lane.x), Math.floor(lane.y))] && !map[idx(Math.floor(lane.x), Math.floor(lane.y))]) return lane;
+  let best = lane, distance = Infinity;
+  // A cruiser can have followed you into the Gardens, where the usual block lanes do not exist.
+  for (let y = -24; y <= 24; y++) for (let x = -24; x <= 24; x++) {
+    const cell = idx(Math.floor(c.x) + x, Math.floor(c.y) + y);
+    if (ROAD[cell] !== 1 && ROAD[cell] !== 2 || map[cell]) continue;
+    const candidate = laneNear(cell % N + 0.5, Math.floor(cell / N) + 0.5), d = near(c.x, c.y, candidate.x, candidate.y);
+    if (d < distance) { distance = d; best = candidate; }
+  }
+  return best;
+}
+function stepReturningPolice(dt) {
+  for (const [agents, indoors] of [[roomCops, true], [roofCops, false]]) for (let k = agents.length - 1; k >= 0; k--) {
+    const c = agents[k];
+    if (!c.returning) continue;
+    const inPlace = indoors ? mode === 'room' : mode === 'roof', door = c.returnDoor;
+    if (!inPlace || !door) { policeExitToStreet(c); agents.splice(k, 1); continue; }
+    if ((c.pathT -= dt) <= 0) { c.pathT = 0.5; c.path = indoors ? roomPath(c.x, c.y, ...door) : policeRoofPath(c.x, c.y, ...door); }
+    const goal = c.path[0] || door, vx = indoors ? goal[0] - c.x : rel(goal[0] - c.x), vy = indoors ? goal[1] - c.y : rel(goal[1] - c.y), d = Math.hypot(vx, vy), step = Math.min(d, (indoors ? 1.6 : 0.5) * dt);
+    if (d > 1e-5) {
+      const nx = mod(c.x + vx / d * step, N), ny = mod(c.y + vy / d * step, N);
+      const open = indoors ? roomOpen(nx, ny) : policeRoofHeight(nx, ny) > 0 && Math.abs(policeRoofHeight(nx, ny) - policeRoofHeight(c.x, c.y)) <= 0.35;
+      if (open) { c.x = nx; c.y = ny; }
+    }
+    if (d <= step) c.path.shift();
+    if (Math.hypot(c.x - door[0], c.y - door[1]) < (indoors ? 0.18 : 0.06)) { policeExitToStreet(c); agents.splice(k, 1); }
+  }
+  for (let k = footCops.length - 1; k >= 0; k--) {
+    const c = footCops[k], car = c.returnCar;
+    if (!car) continue;
+    if (!cars.includes(car)) { c.returnCar = null; backToBeat(c); continue; }
+    if (near(c.x, c.y, car.x, car.y) < 0.2) { footCops.splice(k, 1); continue; }
+    if ((c.returnPathT -= dt) <= 0) { c.returnPathT = 0.7; c.returnPath = pursuitRoute(c, car.x, car.y); }
+    const goal = c.returnPath?.[0] || [car.x, car.y], d = near(c.x, c.y, ...goal), vx = rel(goal[0] - c.x), vy = rel(goal[1] - c.y), step = Math.min(d, 0.5 * dt);
+    if (d > 1e-5) {
+      const nx = mod(c.x + vx / d * step, N), ny = mod(c.y + vy / d * step, N);
+      if (!map[idx(Math.floor(nx), Math.floor(ny))]) { c.x = nx; c.y = ny; c.ph += dt * 4; }
+    }
+    if (d <= step && c.returnPath?.length) c.returnPath.shift();
+  }
+  const [wx, wy] = crimePos();
+  for (const c of cars.slice()) if (c.returning && !c.pursuit) {
+    const crew = [...footCops, ...roomCops, ...roofCops].some(p => p.returnCar === c);
+    if (c.waitingCrew && !crew) {
+      c.waitingCrew = false; c.merging = policeReturnLane(c); c.pursuitDrive = false; c.routeT = 0;
+    }
+    if (!c.waitingCrew && (c.arrived || c.home || near(c.x, c.y, wx, wy) > SIM_R * 0.9)) {
+      c.returning = false;
+      if (c.base) c.base.out = false;
+      endCall(c);
+    }
+  }
 }
 // is a cop near enough a police unit to be sent to (x, y)?
 const policeNear = (x, y) => cars.some(c => c.patrol && near(c.x, c.y, x, y) < DISPATCH_R) || footCops.some(c => near(c.x, c.y, x, y) < DISPATCH_R);
@@ -241,14 +396,16 @@ function stepCrime(dt) {
     reports.splice(k, 1);
     if (policeNear(r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened
   }
-  for (const c of footCops) if (!c.chase) patrolStep(c, dt);
+  stepReturningPolice(dt);
+  for (const c of footCops) if (!c.chase && !c.returnCar) patrolStep(c, dt);
   // a cab you've paid to step on it, seen by a cop: pulled over, and the driver's arrested
   if (mode === 'taxi' && me && me.rush && Math.abs(me.v) > 1.5 && copSees(me.x, me.y)) return 'cab';
   if (!wanted.stars) return;
   const roomSeen = roomSearchLead(dt);
-  const [wx, wy] = crimePos(), inside = mode === 'room';
-  const sees = c => !inside && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
-  wanted.seen = inside ? roomSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
+  const roofSeen = roofSearchLead(dt);
+  const [wx, wy] = crimePos(), inside = mode === 'room', onRoof = mode === 'roof';
+  const sees = c => !inside && !onRoof && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
+  wanted.seen = inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
   if (wanted.seen) { if (!inside) { wanted.lastX = wx; wanted.lastY = wy; } wanted.hideT = 0; wanted.tipT = 0; }
   else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
   else if (!inside && wanted.hideT < ESCAPE_T[wanted.stars] * 0.75 && (wanted.tipT = (wanted.tipT || 0) - dt) <= 0) { // a tip on the radio: roughly where you are
@@ -257,13 +414,13 @@ function stepCrime(dt) {
   for (const c of cars) if (c.pursuit) c.dest = [wanted.lastX, wanted.lastY]; // steering for you, or where you were
   const onFoot = mode === 'walk';
   for (const c of footCops) { // officers within a few blocks join the chase on foot
-    if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < 20) c.chase = true;
+    if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < 20) { c.chase = true; c.returnCar = null; }
     if (c.chase) chaseStep(c, wanted.lastX, wanted.lastY, dt);
   }
   // pulls up, an officer jumps out and sprints for you; outrun him and the car comes round again for another go
   if (onFoot || inside) for (const c of cars) if (c.pursuit && (!c.dropped || T - c.dropT > 8 && (c.drops || 0) < 3) && near(c.x, c.y, wx, wy) < 1.4) {
     c.dropped = true; c.dropT = T; c.drops = (c.drops || 0) + 1;
-    footCops.push({ x: c.x, y: c.y, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true, burst: T + 5 });
+    footCops.push({ x: c.x, y: c.y, car: c, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true, burst: T + 5 });
   }
   // in a car with a cruiser on your bumper: told to pull over, and if you don't, a PIT manoeuvre spins you out
   let told = false;
@@ -275,7 +432,8 @@ function stepCrime(dt) {
   }
   // caught: a hand on your shoulder, or boxed in and stopped
   const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22)
-    || inside && roomCops.some(c => c.sees && Math.hypot(c.x - px, c.y - py) < 0.32);
+    || inside && roomCops.some(c => c.sees && Math.hypot(c.x - px, c.y - py) < 0.32)
+    || onRoof && body.z < 1 && roofCops.some(c => c.sees && near(c.x, c.y, px, py) < 0.22);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
@@ -283,8 +441,9 @@ function stepCrime(dt) {
 }
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
 function tidyPolice() {
-  for (let k = cars.length - 1; k >= 0; k--) { const c = cars[k]; if (c.extra && !c.pursuit && near(c.x, c.y, px, py) > 30) cars.splice(k, 1); }
-  for (let k = footCops.length - 1; k >= 0; k--) { const c = footCops[k]; if (c.extra && !c.chase && near(c.x, c.y, px, py) > 25) footCops.splice(k, 1); }
+  const [wx, wy] = crimePos();
+  for (let k = cars.length - 1; k >= 0; k--) { const c = cars[k]; if (c.extra && !c.pursuit && !c.returning && near(c.x, c.y, wx, wy) > 30) cars.splice(k, 1); }
+  for (let k = footCops.length - 1; k >= 0; k--) { const c = footCops[k]; if (c.extra && !c.chase && !c.returnCar && near(c.x, c.y, wx, wy) > 25) footCops.splice(k, 1); }
 }
 // what being caught costs. Paying it settles everything, and the car goes back
 const fineFor = stars => FINE[stars];

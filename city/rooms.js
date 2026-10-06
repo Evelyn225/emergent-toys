@@ -184,7 +184,7 @@ const cabinet = (x, y, k, body) => BX(x, y, 0.35, 0.4, 0, 1.8, (i, t, L) => { //
 }, 0, 1);
 
 
-const homeLayout = r => ({ shelf: [r.W - 1.2, r.H - 3.2], fridge: [r.W - 1.15, r.H - 1.8], pet: [1.35, r.H - 2.6] });
+const homeLayout = r => r.def.home;
 const ROOM_DEFS = {
   store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
     light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, posters: true, keeper: [5, 1.05],
@@ -413,8 +413,7 @@ const ROOM_DEFS = {
   realty: { grid: boxRoom(9, 7), light: 0.9, floor: 'carpet', ceil: 'pendant', sign: true, signAt: 2.6, wall: realtyWall, keeper: [4.5, 2.0],
     props: r => [BX(4.5, 1.4, 1.2, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), standing(4.5, 2.0, GREEN),
       SP(1.3, 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(7.2, 4.6, -1, 0)] },
-  // home: a bed, a closet, a sofa facing the telly, a window on the city. A studio, or a loft twice the size
-  home: homeDef(7, 6), loft: homeDef(11, 8),
+  home: homeDef(10, 9, 0), loft: homeDef(20, 16, 1), bellehome: homeDef(26, 20, 2),
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -432,6 +431,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind === 'hotelroom' && extra.suite ? ROOM_DEFS.hotelSuite : ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
+  if (def.home) r.exterior = homeExterior(r);
   return r;
 }
 
@@ -591,16 +591,58 @@ function realtyWall(i, u, uStep, z, d, mx, my, L) {
 }
 const HOME_SHELF_CAPACITY = 4;
 function homeRecord(r = room) {
-  if (!r || !r.cell || !['home', 'loft'].includes(r.kind)) return null;
+  if (!r || !r.cell || !['home', 'loft', 'bellehome'].includes(r.kind)) return null;
   const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1]));
   return owned.homes.find(h => h.cell === cell || SHOP[cell] && SHOP[h.cell] === SHOP[cell]) || null;
 }
 const homeCatArt = () => (T * 1.4 | 0) % 7 === 0
   ? [' /\\_/\\ ', ' ( -.- )', '  > ^ < ']
   : [' /\\_/\\ ', ' ( o.o )', '  > ^ < '];
-function homeDef(w, h) {
-  const big = w > 8, bed = [1.6, 1.6], closet = [w - 1.5, 1.2], sofa = [w / 2, h - 2.4], tv = [w / 2, 1.0];
-  const layout = { W: w, H: h }, { shelf, fridge, pet } = homeLayout(layout);
+function homePlan(w, h, tier) {
+  const extra = {}, inside = tier === 2 ? 19 : w - 1;
+  const wall = (x0, y0, x1, y1, c = '#') => {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) extra[x + ',' + y] = c;
+  };
+  const home = tier === 0
+    ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.3, 4.4], fridge: [8.45, 5.2], pet: [1.4, 7.2], dining: [5.5, 5.8] }
+    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.5 : 8.7], shelf: [10.8, 3.5], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
+  const wc = tier === 0 ? { x0: 7, y0: 1, x1: 9, y1: 4, sign: [6, 3, 3.5] }
+    : { x0: 15, y0: 1, x1: inside, y1: 5, sign: [14, 4, 4.5] };
+  wall(wc.x0 - 1, 1, wc.x0 - 1, wc.y1, 'W');
+  wall(wc.x0 - 1, wc.y1, wc.x1 - 1, wc.y1, 'W');
+  wall(wc.x0, wc.y1, tier ? wc.x0 + 1 : wc.x0, wc.y1, '.');
+  if (tier) { // bedroom and study/library, with wide doorways into the living room
+    const divideY = tier === 2 ? 8 : 7;
+    wall(9, 1, 9, divideY);
+    wall(1, divideY, inside - 1, divideY);
+    wall(5, divideY, 6, divideY, '.');
+    wall(12, divideY, 13, divideY, '.');
+  }
+  let balcony = null;
+  if (tier === 2) {
+    balcony = { x0: 20, x1: 25, y0: 3, y1: 17 };
+    wall(19, 1, 25, h - 2); // solid end wings round a recessed, open balcony
+    wall(20, 3, 24, 16, '.');
+    wall(25, 3, 25, 16, 'B');
+    wall(20, 2, 25, 2, 'B'); wall(20, 17, 25, 17, 'B');
+    wall(19, 11, 19, 13, '.'); // French doors, reachable from the salon
+  }
+  const entryX = tier === 2 ? 9 : w / 2;
+  wall(entryX - 1, h - 1, entryX, h - 1, 'D');
+  const windows = [{ face: 'west', center: 2.5, half: 1 }, { face: 'west', center: tier ? 5.4 : 6.3, half: tier ? 1 : 1.25 }];
+  if (tier) windows.push({ face: 'west', center: tier === 2 ? 12.7 : 11, half: 2.3 }, { face: 'north', center: 4.2, half: 2 }, { face: 'north', center: 11.8, half: 1.8 });
+  const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6]]
+    : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3]];
+  return { home, wc, balcony, windows, lamps, tier, grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
+}
+// Upholstered seating and separate dining chairs, with real legs and backs.
+function homeChair(x, y, fx, fy, col = BRICK) {
+  const seat = { ...BX(x, y, 0.3, 0.3, 0.42, 0.5, solid(col)), seat: true, x, y, fx, fy };
+  return [seat, BX(x - fx * 0.28, y - fy * 0.28, 0.31, 0.045, 0.48, 1.12, solid(col), fy, -fx),
+    ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.23, y + sy * 0.23, 0.035, 0.035, 0, 0.42, solid(BRICK))))];
+}
+function homeDef(w, h, tier) {
+  const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
   const fridgeShade = (i, t, L) => {
     const f = HIT.face;
     BG[i] = C(f === 3 || f === 4 ? WHITE : GRAY, (2 + L * 0.3) * shadeFace(f));
@@ -609,10 +651,11 @@ function homeDef(w, h) {
     if ((f === 3 || f === 4) && Math.abs(HIT.w - 0.85) < 0.04) return set(i, '=', C(GRAY, L)), true;
     return set(i, ' ', 0), true;
   };
-  return { grid: boxRoom(w, h), light: 0.75, floor: 'wood', ceil: 'pendant', wall: homeWall,
-    spots: { bed, closet, tv, shelf: [shelf[0] - 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet },
+  return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
+    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet },
     props: r => [
-      BX(bed[0], bed[1] + 0.2, 1.0, 0.8, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
+      BX(bed[0], bed[1] + 0.2, tier ? 1.25 : 1, 0.85, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? tier === 2 ? GREEN : BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
+      BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
       BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
       BX(tv[0], tv[1] - 0.3, 0.7, 0.12, 0.6, 1.3, (i, t, L) => { // the telly: static, or a show on
         if (HIT.face !== 4 && HIT.face !== 3) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
@@ -622,8 +665,27 @@ function homeDef(w, h) {
       BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
       BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' })), // a shelf for things you bring home
       BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
-      ...toilet(1.3, h - 1.6, 1, porcelain), // (an open-plan bathroom)
-      BENCHP(sofa[0], sofa[1], 0, -1), ...(big ? [SP(w - 1.3, h - 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(sofa[0] - 2.4, sofa[1], 0, -1)] : []),
+      ...toilet(plan.wc.x1 - 0.75, 1.9, 1, porcelain),
+      BX(plan.wc.x0 + 0.4, 1.45, 0.32, 0.35, 0, 0.85, solid(WHITE, { top: 'o' })), // basin
+      ...(tier ? [BX(plan.wc.x1 - 1.25, 4.25, 1, 0.38, 0, 0.6, solid(WHITE, { top: '~' }))] : []), // bath
+      { ...BX(sofa[0], sofa[1], tier ? 1.55 : 0.95, 0.45, 0.15, 0.5, solid(tier === 2 ? GREEN : BLUE, { panel: 0.7 })), seat: true, x: sofa[0], y: sofa[1], fx: 0, fy: -1 },
+      BX(sofa[0], sofa[1] + 0.4, tier ? 1.55 : 0.95, 0.1, 0.3, 1.0, solid(tier === 2 ? GREEN : BLUE)),
+      ...[-1, 1].map(s => BX(sofa[0] + s * (tier ? 1.5 : 0.92), sofa[1], 0.12, 0.45, 0.3, 0.75, solid(tier === 2 ? GREEN : BLUE))),
+      ...tableBox(dining[0], dining[1], tier ? 1.25 : 0.6, 0.5),
+      ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
+      ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
+      BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, solid(tier === 2 ? WHITE : BRICK, { panel: 0.6, top: '=' }), 0, 1),
+      ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), BX(10.9, 1.4, 0.7, 0.18, 0, 2.4, solid(BRICK, { panel: 0.3, top: '=' })),
+        ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), SP(1.6, 8.9, 0.6, 1.5, ART.plant, plantCol)] : []),
+      ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),
+        SP(23.6, 14.8, 0.8, 1.4, ART.plant, plantCol), BX(23.6, 14.8, 0.4, 0.3, 0, 0.45, solid(WHITE)), SP(21, 9, 0.6, 1.5, ART.plant, plantCol)] : []),
+      ...plan.lamps.flatMap(([x, y]) => {
+        const ceiling = tier ? 3.6 : 3;
+        const glow = (i, t, L) => { BG[i] = C(STONE, 8); return set(i, HIT.face === 5 ? '=' : 'o', C(WARM, 15)), true; };
+        return [BX(x, y, 0.012, 0.012, ceiling - 0.55, ceiling - 0.05, solid(tier === 2 ? YEL : GRAY)),
+          BX(x, y, tier === 2 ? 0.32 : 0.18, tier === 2 ? 0.32 : 0.18, ceiling - 0.65, ceiling - 0.55, glow),
+          ...(tier === 2 ? [-1, 1].map(s => BX(x + s * 0.28, y, 0.06, 0.06, ceiling - 0.8, ceiling - 0.52, glow)) : [])];
+      }),
     ] };
 }
 const POTTY_SCRAWL = ['FOR A GOOD', 'TIME CALL', '555-0142', '', 'DAVE WAS', 'HERE'];
@@ -637,14 +699,84 @@ function pottyWall(i, u, uStep, z, d, mx, my, L) {
   }
   return set(i, fract(u * 6) < 0.12 ? '|' : ' ', C(BLUE, L * 0.8)), true; // ribs
 }
-function homeWall(i, u, uStep, z, d, mx, my, L) {
-  if (mx === 0 && z > 1.0 && z < 2.1 && Math.abs(fract(u / 3) - 0.5) < 0.2) { // a window on the city: lit windows across the street at night
-    const fw = fract(u / 3);
-    if (Math.abs(fw - 0.5) > 0.19 || z < 1.04 || z > 2.06 || Math.abs(fw - 0.5) < 0.01) { BG[i] = C(WARM, 2); return set(i, Math.abs(fw - 0.5) > 0.19 ? '|' : '=', C(WHITE, L)), true; } // the frame
-    return viewOut(i, u, z, 12, 4), true; // across the street from the first floor
+function homeExterior(r) {
+  const [cx, cy] = r.cell || r.ret || [px, py], sh = SHOP[idx(Math.floor(cx), Math.floor(cy))];
+  let x0 = Math.floor(cx), x1 = x0 + 1, y0 = Math.floor(cy), y1 = y0 + 1;
+  if (sh) for (let y = Math.floor(cy) - 7; y <= Math.floor(cy) + 7; y++) for (let x = Math.floor(cx) - 7; x <= Math.floor(cx) + 7; x++) {
+    if (SHOP[idx(x, y)] !== sh) continue;
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x + 1); y0 = Math.min(y0, y); y1 = Math.max(y1, y + 1);
   }
-  BG[i] = C(WARM, 2 + L * 0.2); // wallpaper with a little pattern
-  return set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 3 ? ' ' : '.', C(BRICK, L * 0.5)), true;
+  const up = Math.min(Math.max(0.3, map[idx(Math.floor(cx), Math.floor(cy))] - 0.4), r.def.tier === 2 ? 2 : r.def.tier ? 1.2 : 0.5);
+  const open = { west: 0, east: 0, north: 0, south: 0 };
+  for (let y = y0; y < y1; y++) { open.west += map[idx(x0 - 1, y)] < up; open.east += map[idx(x1, y)] < up; }
+  for (let x = x0; x < x1; x++) { open.north += map[idx(x, y0 - 1)] < up; open.south += map[idx(x, y1)] < up; }
+  return { x0, x1, y0, y1, up, faces: { west: open.west >= open.east ? 'west' : 'east', north: open.north >= open.south ? 'north' : 'south' } };
+}
+// Carry each window ray into the actual neighbourhood. Geometry, horizon and parallax stay fixed as you move.
+function homeView(i, u, z, face) {
+  const e = room.exterior, outside = e.faces[face] || face, flip = outside === face ? 1 : -1;
+  const along = Math.abs(u), slope = WH.sl * flip, vz = (z - eye) / WH.dn;
+  face = outside;
+  const west = face === 'west', north = face === 'north', east = face === 'east';
+  const x = west ? e.x0 - 0.01 : east ? e.x1 + 0.01 : (e.x0 + e.x1) / 2 + (along - room.W / 2) * flip / 10;
+  const y = north ? e.y0 - 0.01 : face === 'south' ? e.y1 + 0.01 : (e.y0 + e.y1) / 2 + (along - room.H / 2) * flip / 10;
+  homeCityView(i, x, y, e.up + z / 10, west ? -1 : east ? 1 : slope, north ? -1 : face === 'south' ? 1 : slope, vz);
+}
+function homeOutdoorRay(i, rx, ry) {
+  if (rx === undefined) { const q = 2 * (i % cols + 0.5) / cols - 1; rx = dx - dy * tf * q; ry = dy + dx * tf * q; }
+  const vz = (hor - Math.floor(i / cols) - 0.5) / projY, b = room.def.balcony, e = room.exterior;
+  const at = px < b.x0 - 1 && rx > 0 ? (b.x0 - 1 - px) / rx : 0;
+  return homeCityView(i, e.x1 + (px + rx * at - b.x0 + 1) / 10, (e.y0 + e.y1) / 2 + (py + ry * at - room.H / 2) / 10, e.up + (eye + vz * at) / 10, rx, ry, vz);
+}
+function homeCityView(i, x, y, z, vx, vy, vz) {
+  let mx = Math.floor(x), my = Math.floor(y), t = 0, side = false;
+  const sx = vx < 0 ? -1 : 1, sy = vy < 0 ? -1 : 1, stepx = Math.abs(1 / vx), stepy = Math.abs(1 / vy);
+  let tx = (vx < 0 ? x - mx : mx + 1 - x) * stepx, ty = (vy < 0 ? y - my : my + 1 - y) * stepy;
+  const ground = vz < -1e-6 ? -z / vz : Infinity;
+  for (let k = 0; k < 80 && t < 32; k++) {
+    const next = Math.min(tx, ty), cell = idx(mx, my), height = map[cell], hz = z + vz * t;
+    const roof = height && vz < 0 ? (height - z) / vz : Infinity;
+    if (height && (hz > 0 && hz < height || roof >= t && roof < next)) {
+      const top = hz >= height, depth = top ? roof : t, wx = x + vx * depth, wy = y + vy * depth;
+      const stone = STY[cell] === 24 || STY[cell] === 25, base = stone ? STONE : FACADE_BG[STY[cell]] ?? BRICK;
+      const light = (0.25 + day * 0.75) * (side ? 0.8 : 1) * Math.max(0.35, 1 - depth / 40), along = side ? wx : wy;
+      const bay = fract(along * 2), floor = fract((z + vz * depth) * 2.5);
+      BG[i] = C(top && stone ? GREEN : base, 1 + light * 4);
+      if (!top && bay > 0.27 && bay < 0.73 && floor > 0.22 && floor < 0.8) {
+        const lit = hash(Math.floor(along * 2), Math.floor((z + vz * depth) * 2.5), sk0(SEED[cell])) > 0.4 + day * 0.5;
+        BG[i] = lit ? C(WARM, 3 + night * 4) : C(CYAN, 1 + day * 2);
+        return set(i, lit ? ' ' : ':', C(CYAN, light * 7));
+      }
+      return set(i, top ? fract(wx * 6 + wy * 4) < 0.08 ? '/' : ' ' : floor < 0.1 ? '=' : ' ', C(stone ? WHITE : base, light * 9));
+    }
+    if (ground < next) {
+      const wx = x + vx * ground, wy = y + vy * ground, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
+      BG[i] = C(road ? GRAY : GREEN, 1 + day * 2);
+      return set(i, road && Math.abs(fract(road === 1 ? wx : wy) - 0.5) < 0.04 ? '-' : ' ', C(YEL, day * 8));
+    }
+    if (tx < ty) { t = tx; tx += stepx; mx += sx; side = false; } else { t = ty; ty += stepy; my += sy; side = true; }
+  }
+  BG[i] = C(day > 0.25 ? BLUE : GRAY, day > 0.25 ? 2 + day * 4 : 0);
+  return set(i, day < 0.2 && hash(Math.floor(Math.atan2(vy, vx) * 100), Math.floor(vz * 100), 889) > 0.985 ? '.' : ' ', C(WHITE, 12));
+}
+function homeWall(i, u, uStep, z, d, mx, my, L) {
+  const def = room.def, face = mx === 0 ? 'west' : my === 0 ? 'north' : mx === room.W - 1 ? 'east' : null, along = Math.abs(u);
+  if (roomAt(mx, my) === 'B') { // the balcony's iron rail: open air between slim, curved balusters
+    if (z > 1.03 || z < 0.14 || Math.abs(fract(along * 4) - 0.5) < 0.06 || Math.abs(fract(along * 2) - 0.5) < 0.025 + Math.sin(z * Math.PI) * 0.09) {
+      BG[i] = C(GRAY, 1); return set(i, z > 1.03 ? '=' : '|', C(GRAY, L)), true;
+    }
+    homeOutdoorRay(i); return true;
+  }
+  for (const win of def.windows) if (face === win.face && Math.abs(along - win.center) < win.half && z > 0.85 && z < (def.tier ? 2.95 : 2.5)) {
+    const du = Math.abs(along - win.center), top = def.tier ? 2.95 : 2.5;
+    if (du > win.half - 0.09 || z < 0.95 || z > top - 0.1 || du < 0.035 || Math.abs(z - 2.12) < 0.035) {
+      BG[i] = C(def.tier === 2 ? WHITE : BRICK, 2 + L * 0.25); return set(i, du < 0.035 || du > win.half - 0.09 ? '|' : '=', C(WHITE, L)), true;
+    }
+    homeView(i, u, z, face); return true;
+  }
+  BG[i] = C(def.tier === 2 ? STONE : WHITE, 3 + L * 0.38);
+  if (z < 0.12 || z > (def.height || 3) - 0.16 || def.tier === 2 && Math.abs(z - 0.9) < 0.045) return set(i, '=', C(def.tier === 2 ? YEL : WHITE, L)), true;
+  return set(i, def.tier === 2 && z < 0.9 && Math.abs(fract(along / 0.8) - 0.5) > 0.46 ? '|' : ' ', C(BRICK, L * 0.6)), true;
 }
 function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (mx === room.W - 1 && z < 2.6) { // the vault door on the right-hand wall
@@ -743,6 +875,10 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: a plain wall, the WC sign by the doorway
     const [sx, sy, su] = D.wc.sign; // (u runs whichever way reads left to right, so it's negative from some sides)
     if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
+    if (D.home) {
+      BG[i] = C(WHITE, 3 + L * 0.3);
+      return set(i, inWc(px, py) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
+    }
     if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
     if (z < 0.95) return set(i, '=', C(GRAY, L));
     return set(i, '.', C(GRAY, L * 0.3));
@@ -767,8 +903,23 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
   ZB[i] = d; FL[i] = 1;
+  if (room.def.balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
   if (room.def.wc && inWc(wx, wy)) { BG[i] = C(WHITE, 1 + L * 0.2); return set(i, fract(wx * 3) < 0.1 || fract(wy * 3) < 0.1 ? '+' : ' ', C(GRAY, L)); } // bathroom tiles
   switch (room.def.floor) {
+    case 'home': {
+      const b = room.def.balcony, sofa = room.def.home.sofa;
+      if (b && wx >= b.x0 && wy >= b.y0 && wy < b.y1) {
+        BG[i] = C(WHITE, 2 + f * 2); return set(i, fract(wx * 2) < 0.04 || fract(wy * 2) < 0.04 ? '+' : ' ', C(GRAY, L));
+      }
+      if (room.def.tier && Math.abs(wx - sofa[0]) < 2.3 && wy > sofa[1] - 2.5 && wy < sofa[1] + 0.9) {
+        const border = Math.abs(wx - sofa[0]) > 2.1 || wy < sofa[1] - 2.3 || wy > sofa[1] + 0.7;
+        BG[i] = C(room.def.tier === 2 ? GREEN : BLUE, 1 + f * 2);
+        return set(i, border ? '=' : (Math.floor(wx * 5) + Math.floor(wy * 5)) % 7 ? ' ' : '+', C(WARM, L));
+      }
+      const herring = room.def.tier === 2, u = herring ? wx + wy : wx, v = herring ? wx - wy : wy;
+      BG[i] = C(BRICK, 1 + f * 2 + (Math.floor(v * 3) & 1));
+      return set(i, fract(v * 3) < 0.07 ? herring ? '/' : '=' : fract(u / 1.5 + (Math.floor(v * 3) & 1) * 0.5) < 0.025 ? '|' : ' ', C(WARM, L));
+    }
     case 'wood': return set(i, fract(wy * 3) < 0.12 ? '=' : (r + x) & 1 ? '.' : ' ', C(BRICK, L * 1.3));
     case 'royal': {
       const border = Math.abs(wx - 4.5) > 3 || Math.abs(wy - 3.5) > 2;
@@ -807,6 +958,14 @@ function roomCeil(i, r, x, rx, ry) {
   const d = ((room.def.height || 3) - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
   ZB[i] = d; FL[i] = 0;
   const st = room.def.ceil;
+  if (st === 'home') {
+    const b = room.def.balcony;
+    if (b && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx >= b.x0 - 1 && wy >= b.y0 && wy < b.y1)) return homeOutdoorRay(i, rx, ry);
+    const lamp = room.def.lamps.some(([lx, ly]) => (wx - lx) ** 2 + (wy - ly) ** 2 < 0.12);
+    const rose = room.def.lamps.some(([lx, ly]) => Math.abs((wx - lx) ** 2 + (wy - ly) ** 2 - 0.28) < 0.045);
+    BG[i] = C(WHITE, 5);
+    return set(i, lamp ? 'o' : rose && room.def.tier === 2 ? '+' : ' ', C(lamp ? WARM : YEL, lamp ? 15 : 9));
+  }
   if (st === 'pendant') { // warm hanging lamps on a 2m grid
     const on = Math.hypot(fract(wx / 2) - 0.5, fract(wy / 2) - 0.5) < 0.07;
     return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
@@ -856,5 +1015,8 @@ function roomSprites() {
   }
   drawRoomPolice();
 }
-const ROOMW = { cell: (x, y) => { const c = roomAt(x, y); return c === '.' ? 0 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3; },
+const ROOMW = { cell: (x, y) => {
+                  if (room.def.balcony && (x < 0 || y < 0 || x >= room.W || y >= room.H)) return 0;
+                  const c = roomAt(x, y); return c === '.' ? 0 : c === 'B' ? 1.1 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3;
+                },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };

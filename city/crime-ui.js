@@ -51,17 +51,21 @@ function bustedKey(e) { // nothing else while they've got you: not even Esc
   if (!e.repeat && e.code === 'Digit2') bustedChoice('jail');
   return true;
 }
-function outOfCar() { // they take you out of whatever you were driving
+function outOfCar(keepCar = false) { // paying a fine leaves the car parked where they stopped you
   if (!me) return;
   const c = me;
-  if (mode === 'drive') { c.player = false; c.v = 0; toLane(c); }
+  if (mode === 'drive') {
+    c.player = false; c.v = 0;
+    if (keepCar) { [px, py] = exitSpot(c); c.parked = true; c.off = 0; c.ex = c.x; c.ey = c.y; }
+    else toLane(c);
+  }
   else { c.rider = c.dest = c.arrived = c.rush = false; plan(c); }
   me = null; mode = 'walk';
 }
 function bustedChoice(how) {
   const f = fineFor(wanted.stars);
   if (how === 'fine' && !payFine()) return;
-  hidePanel(bustedEl); endTaxiShift(); outOfCar();
+  hidePanel(bustedEl); endTaxiShift(); outOfCar(how === 'fine');
   if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."`, 4);
   const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
   goToJail();

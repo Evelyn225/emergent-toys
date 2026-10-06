@@ -44,7 +44,8 @@ const ITEMS = {
   // a car's keys (you get them with it; Q calls it round to you, see property.js). Not for sale, not worth anything
   key_car_hatch: { name: 'hatchback keys', price: 0, kind: 'keys', car: 'car_hatch' }, key_car_sedan: { name: 'sedan keys', price: 0, kind: 'keys', car: 'car_sedan' },
   key_car_sports: { name: 'sports car keys', price: 0, kind: 'keys', car: 'car_sports' },
-  home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 8000, kind: 'home' },
+  home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 7000, kind: 'home' },
+  home_belle: { name: 'Belle Époque residence', price: 16000, kind: 'home' },
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
@@ -102,7 +103,7 @@ const STOCK_WORD = {
   BURGERS: ['burger', 'fries', 'milkshake', 'soda'], CHICKEN: ['chicken', 'fries', 'soda'], JUICE: ['smoothie', 'water', 'apple'],
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
-  CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft'],
+  CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft', 'home_belle'],
   'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], 'PET SHOP': ['petcat', 'petdog'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],

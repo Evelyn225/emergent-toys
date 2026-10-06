@@ -48,6 +48,82 @@ function plan(c) {
 }
 
 const BODIES = [RED, BLUE, WHITE, TAXI, TAXI, GREEN, GRAY];
+// The full rotated footprint, including the rear bumper. Separating axes keep even a sideways drift out of walls.
+function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
+  const ex = Math.abs(hx) * hl + Math.abs(hy) * hw, ey = Math.abs(hy) * hl + Math.abs(hx) * hw;
+  const diagonal = 0.5 * (Math.abs(hx) + Math.abs(hy));
+  for (let my = Math.floor(y - ey); my <= Math.floor(y + ey); my++) for (let mx = Math.floor(x - ex); mx <= Math.floor(x + ex); mx++) {
+    if (!map[idx(mx, my)]) continue;
+    const qx = mx + 0.5 - x, qy = my + 0.5 - y;
+    if (Math.abs(qx) < ex + 0.5 && Math.abs(qy) < ey + 0.5 && Math.abs(qx * hx + qy * hy) < hl + diagonal && Math.abs(-qx * hy + qy * hx) < hw + diagonal) return false;
+  }
+  return architectureCarClear(x, y, hx, hy, hl, hw);
+}
+// A short local route around buildings for a cruiser in close pursuit. The wider street network still handles
+// dispatch from far away; nearby cruisers can leave their lane, reverse and intercept rather than circling a block.
+function pursuitRoute(c, tx, ty) {
+  const first = idx(Math.floor(c.x), Math.floor(c.y)), last = idx(Math.floor(tx), Math.floor(ty)), prev = new Map([[first, first]]), queue = [first];
+  let best = first, bestDist = Infinity;
+  for (let k = 0; k < queue.length && k < 1800; k++) {
+    const cell = queue[k], x = cell % N, y = Math.floor(cell / N), dist = Math.hypot(rel(x + 0.5 - tx), rel(y + 0.5 - ty));
+    if (dist < bestDist) { bestDist = dist; best = cell; }
+    if (cell === last) break;
+    for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const next = idx(x + ox, y + oy), nx = next % N + 0.5, ny = Math.floor(next / N) + 0.5;
+      if (prev.has(next) || map[next] || Math.hypot(rel(nx - c.x), rel(ny - c.y)) > 24 || isWater(nx, ny)) continue;
+      prev.set(next, cell); queue.push(next);
+    }
+  }
+  const path = [];
+  for (let cell = best; cell !== first; cell = prev.get(cell)) path.push([cell % N + 0.5, Math.floor(cell / N) + 0.5]);
+  if (best === last && !map[last]) path.unshift([tx, ty]);
+  return path.reverse();
+}
+function steerCruiser(c, tx, ty, speed, dt) {
+  const vx = rel(tx - c.x), vy = rel(ty - c.y), distance = Math.hypot(vx, vy), oldAngle = Math.atan2(c.hy, c.hx);
+  const wantedAngle = Math.atan2(vy, vx), turn = mod(wantedAngle - oldAngle + Math.PI, TAU) - Math.PI;
+  const angle = oldAngle + clamp(turn, -6.5 * dt, 6.5 * dt), hx = Math.cos(angle), hy = Math.sin(angle);
+  const targetSpeed = Math.min(speed, Math.abs(turn) > 1.1 ? 0.85 : speed);
+  c.v += clamp(targetSpeed - c.v, -4 * dt, 2.4 * dt);
+  c.travelA ??= oldAngle;
+  const slip = mod(angle - c.travelA + Math.PI, TAU) - Math.PI;
+  c.travelA += slip * (1 - Math.exp(-dt * (Math.abs(turn) > 1.1 ? 2.2 : 12)));
+  const step = Math.min(distance, c.v * dt), nx = c.x + Math.cos(c.travelA) * step, ny = c.y + Math.sin(c.travelA) * step;
+  if (carBodyClear(nx, ny, hx, hy) && !isWater(nx, ny)) { c.x = mod(nx, N); c.y = mod(ny, N); c.hx = hx; c.hy = hy; }
+  else {
+    c.v = 0; c.travelA = angle; c.routeT = 0;
+    if (carBodyClear(c.x, c.y, hx, hy)) { c.hx = hx; c.hy = hy; }
+  }
+  c.brake = targetSpeed < c.v; c.off = 0; c.ex = c.x; c.ey = c.y;
+}
+function cruiserLineClear(c, tx, ty) {
+  if (!lineOfSight(c.x, c.y, tx, ty)) return false;
+  const vx = rel(tx - c.x), vy = rel(ty - c.y), distance = Math.hypot(vx, vy);
+  if (distance < 0.02) return true;
+  const hx = vx / distance, hy = vy / distance, steps = Math.ceil(distance / 0.15);
+  for (let k = 0; k <= steps; k++) {
+    const x = c.x + vx * k / steps, y = c.y + vy * k / steps;
+    if (!carBodyClear(x, y, hx, hy) || isWater(x, y)) return false;
+  }
+  return true;
+}
+function stepPursuitCar(c, dt) {
+  c.pursuitDrive = true;
+  let [tx, ty] = c.dest, distance = Math.hypot(rel(tx - c.x), rel(ty - c.y));
+  const driving = mode === 'drive' && me;
+  if (wanted.seen && driving) { const lead = Math.min(0.6, distance / 6); tx += me.hx * me.v * lead; ty += me.hy * me.v * lead; }
+  const direct = cruiserLineClear(c, tx, ty);
+  if (!direct && (c.routeT = (c.routeT || 0) - dt) <= 0) { c.routeT = 0.6; c.route = pursuitRoute(c, tx, ty); }
+  let goal = direct ? [tx, ty] : c.route?.[0];
+  if (!goal) { c.v = 0; return; }
+  if (!direct && Math.hypot(rel(goal[0] - c.x), rel(goal[1] - c.y)) < 0.06) { c.route.shift(); goal = c.route[0] || goal; }
+  const stopForOfficer = mode !== 'drive' && distance < 1.05;
+  steerCruiser(c, goal[0], goal[1], stopForOfficer ? 0 : 3.1, dt);
+  if (driving && Math.hypot(rel(me.x - c.x), rel(me.y - c.y)) < 0.44) {
+    me.v *= Math.exp(-dt * 7); c.v *= Math.exp(-dt * 3);
+    if (Math.abs(c.hx * me.hy - c.hy * me.hx) > 0.35 && Math.abs(me.v) > 0.7) me.spunT = T + 2;
+  }
+}
 let carId = 0;
 function addCar(props) {
   const c = { id: carId++, v: 0, brake: false, off: 0, cruise: 1 + Math.random() * 0.5, kind: 'car', ...props };
@@ -112,9 +188,8 @@ const SIM_R = 56, simulated = (x, y) => Math.abs(rel(x - px)) < SIM_R && Math.ab
 // base like any other car and parks out front again.
 // state: 'out' (on a call) -> 'scene' -> 'back'. ev marks the vehicle; code(c) = running lights and siren.
 const EV_BODY = { amb: WHITE, fire: RED, police: BLUE };
-const RETURN_CODE = false; // real crews drive back quietly; true runs lights and siren home too
-const code = c => c.state === 'out' || RETURN_CODE && c.state === 'back' || c.pursuit; // (a patrol car chasing you, too)
-const lightsOn_ = c => code(c) || c.state === 'scene'; // the light bar turning
+const code = c => !c.returning && c.state !== 'back' && (c.state === 'out' || !!c.pursuit);
+const lightsOn_ = c => !c.returning && c.state !== 'back' && (code(c) || c.state === 'scene');
 const BASE_R = 50; // a station further away than this (500m) doesn't send the call; one comes in from off-screen
 let evTimer = 45;
 const nearestBase = (kind, free) => SERVICES.filter(b => b.kind === kind && (!free || !b.out))
@@ -150,7 +225,7 @@ function endCall(c) { // parked at its station again (or just gone, if it came f
 }
 function stepEmergency(dt) {
   for (const c of cars.slice()) {
-    if (!c.ev) continue;
+    if (!c.ev || c.pursuit || c.returning || c.waitingCrew) continue; // crime.js owns the crew and return trip during a pursuit
     if (c.home) { endCall(c); continue; }
     const far = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (c.state === 'scene' && T > c.until) { c.state = 'back'; c.cruise = 1.3; c.dest = c.base ? [c.base.x, c.base.lane] : null; c.born = T; }
@@ -195,12 +270,28 @@ function stepTraffic(dt, t, everywhere = false) {
   }
   for (const c of cars) {
     if (!live(c)) continue; // driven by you, or too far away to matter
+    if (c.pursuit && c.dest && (c.pursuitDrive || Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < 18)) { stepPursuitCar(c, dt); continue; }
+    if (c.merging) {
+      const l = c.merging;
+      if (Math.hypot(rel(l.x - c.x), rel(l.y - c.y)) > 0.035) {
+        let goal = [l.x, l.y];
+        if (!cruiserLineClear(c, l.x, l.y)) {
+          if ((c.routeT = (c.routeT || 0) - dt) <= 0) { c.routeT = 0.6; c.route = pursuitRoute(c, l.x, l.y); }
+          goal = c.route?.[0];
+          if (goal && Math.hypot(rel(goal[0] - c.x), rel(goal[1] - c.y)) < 0.06) { c.route.shift(); goal = c.route[0]; }
+        }
+        if (goal) steerCruiser(c, goal[0], goal[1], 1.2, dt); else c.v = 0;
+        continue;
+      }
+      c.x = l.x; c.y = l.y; c.ex = c.x; c.ey = c.y; c.hx = l.hx; c.hy = l.hy; c.merging = null; c.travelA = null; plan(c);
+    }
     let room_ = Infinity;
     // both stopped, each waiting on the other: lower id goes
     const stuck = o => o.blk === c && c.blk === o && c.v < 0.05 && o.v < 0.05 && c.id < o.id;
     for (const o of c.near) if (o !== c && !stuck(o)) room_ = Math.min(room_, carGap(c, o));
     if (mode === 'walk') room_ = Math.min(room_, ahead(c, px, py, 0.2) - 0.4);
     for (const m of nearby(pplGrid, c.ex, c.ey, nearPeople)) if (!m.hidden) room_ = Math.min(room_, ahead(c, m.x, m.y, 0.12) - 0.35);
+    if (c.pursuit) room_ = Infinity; // dispatch and pursuit do not queue behind ordinary traffic or pedestrians
 
     const vert = c.hx === 0, along = vert ? c.y : c.x, dir = c.hx + c.hy;
     const line = mod(((dir > 0 ? c.B : c.B + 2) - along) * dir, N);
@@ -213,12 +304,12 @@ function stepTraffic(dt, t, everywhere = false) {
     }
     if (code(c)) { c.nodeX = nx; c.nodeY = ny; }
     // don't turn into a lane if a car is sitting right where we'd land
-    if (c.left < 0.6 && (c.nh[0] !== c.hx || c.nh[1] !== c.hy)) {
+    if (!c.pursuit && c.left < 0.6 && (c.nh[0] !== c.hx || c.nh[1] !== c.hy)) {
       const lx = c.x + c.hx * c.left + c.nh[0] * 0.3, ly = c.y + c.hy * c.left + c.nh[1] * 0.3;
       if (c.near.some(o => o !== c && Math.hypot(rel(o.ex - lx), rel(o.ey - ly)) < 0.45)) room_ = Math.min(room_, c.left - 0.05);
     }
     // left turn: yield to oncoming traffic that's moving and near
-    if (c.left < 2 && c.nh[0] === -c.hy && c.nh[1] === c.hx &&
+    if (!c.pursuit && c.left < 2 && c.nh[0] === -c.hy && c.nh[1] === c.hx &&
         cars.some(o => o.v > 0.1 && o.hx === -c.hx && o.hy === -c.hy && ahead(c, o.ex, o.ey, 1.2) < 2.5))
       room_ = Math.min(room_, c.left - 0.6);
     // a siren coming up behind in our lane: pull over to the right and stop until it's gone by
@@ -258,7 +349,7 @@ function stepTraffic(dt, t, everywhere = false) {
     const sway = c.rush ? 1.6 : 0.6; // (a rushing cab swings out and back smartly)
     c.off += clamp(offTarget - c.off, -sway * dt, sway * dt);
     if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c) && !c.rush) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
-    if (c.state === 'scene') room_ = 0;
+    if (c.state === 'scene' || c.waitingCrew) room_ = 0;
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
     if (c.rider && !c.dest || c.stopT > T) room_ = 0; // (a cab whose driver's been arrested sits there a while)

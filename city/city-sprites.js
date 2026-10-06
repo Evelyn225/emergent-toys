@@ -19,15 +19,22 @@ function strobe() { const p = Math.floor(fract(T * 1.4) * 10); return p === 0 ||
 const TREE_SIZE = { oak: [0.27, 0.62], blossom: [0.27, 0.6], pine: [0.21, 0.8], birch: [0.16, 0.68], poplar: [0.12, 0.82] };
 const TREE_BLOBS = { oak: [[0, 0.44, 0.17], [-0.13, 0.33, 0.13], [0.13, 0.34, 0.13], [0, 0.29, 0.13]], blossom: [[0, 0.42, 0.16], [-0.13, 0.33, 0.13], [0.13, 0.32, 0.12], [0, 0.27, 0.12]],
   birch: [[0, 0.47, 0.13], [-0.04, 0.36, 0.1], [0.04, 0.56, 0.08]], poplar: [[0, 0.5, 0.11], [0, 0.34, 0.1], [0, 0.66, 0.08]] };
-const TREE_WINTER_BRANCHES = {
-  oak: [[0, 0.2, -0.15, 0.42], [0, 0.2, 0.15, 0.42], [-0.15, 0.42, -0.24, 0.57], [0.15, 0.42, 0.24, 0.57]],
-  blossom: [[0, 0.2, -0.14, 0.4], [0, 0.2, 0.14, 0.4], [-0.14, 0.4, -0.23, 0.55], [0.14, 0.4, 0.23, 0.55]],
-  birch: [[0, 0.27, -0.09, 0.39], [0, 0.4, 0.09, 0.52], [0, 0.52, -0.07, 0.62]],
-  poplar: [[0, 0.28, -0.07, 0.37], [0, 0.4, 0.07, 0.49], [0, 0.52, -0.065, 0.61]]
-};
+const TREE_WINTER_BRANCHES = Object.fromEntries(['oak', 'blossom', 'birch', 'poplar'].map(kind => {
+  const [hw, h] = TREE_SIZE[kind], limbs = [[0, 0, 0.012, h * 0.95, 1.8]];
+  for (let j = 0; j < 7; j++) {
+    const sign = j & 1 ? 1 : -1, z = h * (0.28 + j * 0.078), reach = hw * (0.94 - j * 0.065);
+    const x = sign * reach, tip = Math.min(h * 0.94, z + h * 0.24), midx = x * 0.56, midz = z + (tip - z) * 0.4;
+    limbs.push([0.012 * z / h, z, midx, midz, 1], [midx, midz, x, tip, 0.65]);
+    limbs.push([midx, midz, midx + sign * reach * 0.12, Math.min(h * 0.98, tip + h * 0.09), 0.42]);
+    const forkX = midx + (x - midx) * 0.65, forkZ = midz + (tip - midz) * 0.65;
+    limbs.push([forkX, forkZ, x * 0.7, Math.min(h * 0.98, tip + h * 0.05), 0.3]);
+    limbs.push([forkX, forkZ, x * 1.04, Math.min(h * 0.98, tip + h * 0.025), 0.3]);
+  }
+  return [kind, limbs];
+}));
 function nearTreeBranch(u, z, x0, z0, x1, z1, width) {
   const du = x1 - x0, dz = z1 - z0, t = clamp(((u - x0) * du + (z - z0) * dz) / (du * du + dz * dz), 0, 1);
-  return Math.hypot(u - x0 - du * t, z - z0 - dz * t) < width;
+  return (u - x0 - du * t) ** 2 + (z - z0 - dz * t) ** 2 < width * width;
 }
 function drawTree(t, vx, vy) {
   const [hw, h] = TREE_SIZE[t.kind], s = t.s;
@@ -35,6 +42,7 @@ function drawTree(t, vx, vy) {
 }
 function treeCell(i, u, z, du, dz, L, t) {
   const k = t.kind, au = Math.abs(u), tint = 0.85 + t.seed * 0.3, sn = seasonIdx(), bare = sn === 3 && k !== 'pine';
+  if (bare) return winterTreeCell(i, u, z, du, dz, L, t);
   let e = -1, cz = 0.4; // how far inside the canopy (0 at its edge, 1 at the middle), and the middle's height
   if (k === 'pine') { // tiers of boughs, each a triangle, narrowing up the tree
     for (let j = 0; j < 4; j++) {
@@ -44,18 +52,6 @@ function treeCell(i, u, z, du, dz, L, t) {
     cz = 0.45;
   } else for (const [bu, bz, r] of TREE_BLOBS[k]) { const d = Math.hypot(u - bu, (z - bz) * 1.1) / r; if (d < 1) { e = Math.max(e, 1 - d); cz = bz; } }
   const trunkTop = k === 'pine' ? 0.2 : k === 'poplar' ? 0.25 : 0.32, trunkW = k === 'oak' || k === 'blossom' ? 0.025 : 0.018;
-  if (bare) { // winter branches follow a few continuous limbs instead of a noisy, leaf-shaped hatch
-    const width = Math.max(0.009, du * 0.55, dz * 0.55), height = TREE_SIZE[k][1];
-    let branch = false, slope = 0;
-    if (nearTreeBranch(u, z, 0, 0, 0, height * 0.96, width * 1.15)) { branch = true; slope = Infinity; }
-    for (const [x0, z0, x1, z1] of TREE_WINTER_BRANCHES[k]) if (nearTreeBranch(u, z, x0, z0, x1, z1, width)) {
-      branch = true; slope = (z1 - z0) / (x1 - x0 || 0.001);
-    }
-    if (!branch) return false;
-    const snow = snowCover > 0.2 && z > height * 0.55 && hash(Math.floor(u * 90 + t.seed * 99), Math.floor(z * 90), 816) > 0.68;
-    const ch = snow ? '-' : !isFinite(slope) ? '|' : Math.abs(slope) > 1.8 ? '|' : Math.abs(slope) < 0.28 ? '-' : slope > 0 ? '/' : '\\';
-    return set(i, ch, C(snow ? WHITE : BRICK, snow ? 12 : clamp(6 + L * 0.45, 6, 13))), true;
-  }
   if (e < 0) {
     if (z < trunkTop && au < trunkW + (z < 0.03 ? 0.012 : 0)) { // the trunk (a birch's white, with black marks)
       if (k === 'birch') { BG[i] = C(WHITE, 2 + L * 0.35); return set(i, hash(Math.floor(z * 60), 1, 813) > 0.75 ? '-' : ' ', C(GRAY, 3)), true; }
@@ -74,8 +70,25 @@ function treeCell(i, u, z, du, dz, L, t) {
   return set(i, ch, fall ? C(fall, L * (0.9 + n * 0.5) * lit) : base === MAG ? C(n > 0.8 ? WHITE : MAG, L * 1.1 * lit) : C(k === 'birch' && n > 0.8 ? YEL : GREEN, L * (0.8 + n * 0.5) * lit * bg)), true;
 }
 
+function winterTreeCell(i, u, z, du, dz, L, t) {
+  const height = TREE_SIZE[t.kind][1], pixel = Math.max(du * 0.42, dz * 0.4), warp = 0.92 + t.seed * 0.16;
+  let slope = null;
+  for (const [ax, z0, bx, z1, thickness] of TREE_WINTER_BRANCHES[t.kind]) {
+    const x0 = ax * warp, x1 = bx * warp, width = Math.max(0.0045 * thickness, pixel);
+    if (z < z0 - width || z > z1 + width || u < Math.min(x0, x1) - width || u > Math.max(x0, x1) + width) continue;
+    if (nearTreeBranch(u, z, x0, z0, x1, z1, width)) { slope = (z1 - z0) / (x1 - x0 || 0.0001); break; }
+  }
+  if (slope === null) return false;
+  const snow = snowCover > 0.2 && z > height * 0.55 && Math.abs(slope) < 1.8 && hash(Math.floor(u * 90 + t.seed * 99), Math.floor(z * 90), 816) > 0.68;
+  const ch = snow ? '-' : Math.abs(slope) > 1.8 ? '|' : Math.abs(slope) < 0.28 ? '-' : slope > 0 ? '/' : '\\';
+  return set(i, ch, C(snow ? WHITE : t.kind === 'birch' ? WHITE : BRICK, snow ? 12 : clamp(6 + L * 0.45, 6, 13))), true;
+}
+
 function citySprites() {
   drawMuseumRoof();
+  drawRoofPolice();
+  drawBelleBuildings();
+  drawArchitecture();
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
@@ -99,8 +112,6 @@ function citySprites() {
     drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, (c, row, L) =>
       o.kind === 'antenna' ? (c === '*' ? C(RED, blink ? 15 : 3) : C(GRAY, L)) :
       o.kind === 'tank' ? C(c === '=' ? GRAY : BRICK, L) :
-      o.kind === 'belle-dormer' ? C(c === '|' ? GRAY : c === '^' || c === '/' ? GREEN : YEL, Math.max(L, night * 2)) :
-      o.kind === 'belle-turret' ? C(c === '|' ? WARM : c === '^' || c === '/' ? GREEN : YEL, Math.max(L, night * 2)) :
       row === 1 && c !== '|' ? C(o.neon, Math.max(L, night * 15)) : C(GRAY, L));
   });
   for (const k of cranes) {
@@ -122,6 +133,7 @@ function citySprites() {
   forNear(lampsB, ({ x, y, ax, ay }) => {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
     if (depth < 0.05 || depth > vis) return;
+    if (districtAt(x, y) === 'belle') return drawBelleLamp(vx, vy);
     if (vx * vx + vy * vy < LAMP_3D * LAMP_3D) return drawLamp3D(vx, vy, ax, ay); // up close: a real one
     const s = across(ax, ay, vx, vy); // arm across our view: +1 reaching right
     drawShape(vx, vy, 0, REACH + 0.08, LAMP_TOP + NECK + 0.03, (i, u, z, du, dz, L) => lampCell(i, u, z, du, dz, L, s));
@@ -155,7 +167,7 @@ function citySprites() {
     if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawArt(vx, vy, 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
   }
   for (const m of people) if (!m.hidden) {
-    drawArt(...R(m.x, m.y), 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
+    drawArt(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
             (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), right = -dy * d.mx + dx * d.my > 0, s = d.small ? 0.7 : 1;
@@ -168,7 +180,7 @@ function citySprites() {
   for (const c of footCops) { // police on foot: navy cap, uniform, running when they're after you
     const [vx, vy] = R(c.x, c.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    drawArt(vx, vy, 0, 0.06, 0.18, (c.ph | 0) % 2 ? ART.walkA : ART.walkB, (ch, row, L) => C(row === 1 ? SKIN : BLUE, row === 0 ? L * 0.7 : row > 2 ? L * 0.6 : L));
+    drawArt(vx, vy, architectureGroundHeight(c.x, c.y), 0.06, 0.18, (c.ph | 0) % 2 ? ART.walkA : ART.walkB, (ch, row, L) => C(row === 1 ? SKIN : BLUE, row === 0 ? L * 0.7 : row > 2 ? L * 0.6 : L));
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
   for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.007); } // things you put down

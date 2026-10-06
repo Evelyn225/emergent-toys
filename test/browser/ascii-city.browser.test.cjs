@@ -9,6 +9,207 @@ const { chromium, devices } = require('playwright');
 
 const PAGE = pathToFileURL(path.join(__dirname, '..', '..', 'ascii-city.html')).href;
 
+test('brownstone bays project in front of their walls and their beveled faces retain fitted glass', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; mode = 'roof'; room = null; me = null; clearWanted();
+    body.z = body.vz = body.crouch = 0; body.seat = null; fx.skating = false;
+    tod = 12; dayNum = 4; weather = 'clear'; env(0);
+    const bay = ARCH_DETAILS.find(o => o.kind === 'bay'), z = 0.45 + bay.fh * 0.4;
+    px = mod(bay.x + bay.nx * 0.8, N); py = mod(bay.y + bay.ny * 0.8, N);
+    a = Math.atan2(-bay.ny, -bay.nx); pitch = 0; roofH = z - 0.17;
+    const draw = drawArchitecture;
+    drawArchitecture = () => {}; render(0);
+    const cell = (rows >> 1) * cols + (cols >> 1), wallDepth = ZB[cell];
+    drawArchitecture = draw; render(0);
+    const frontDepth = ZB[cell], faces = [];
+    for (const sign of [-1, 1]) {
+      const length = Math.hypot(bay.bevelD, bay.bevelW);
+      const nu = sign * bay.bevelD / length, nv = bay.outSign * bay.bevelW / length;
+      const u = sign * (bay.hl - bay.bevelW / 2), v = bay.outSign * (bay.hw - bay.bevelD / 2);
+      const nx = nu * bay.c - nv * bay.s, ny = nu * bay.s + nv * bay.c;
+      px = mod(bay.x + u * bay.c - v * bay.s + nx * 0.8, N);
+      py = mod(bay.y + u * bay.s + v * bay.c + ny * 0.8, N);
+      a = Math.atan2(-ny, -nx); render(0);
+      faces.push({ depth: ZB[cell], glass: [CYAN, WARM].includes(BG[cell] >> 4) });
+    }
+    return { projection: wallDepth - frontDepth, faces };
+  });
+  assert.ok(result.projection > 0.1, JSON.stringify(result));
+  assert.ok(result.faces.every(f => Math.abs(f.depth - 0.8) < 0.03 && f.glass), JSON.stringify(result));
+}));
+
+test('walk up a brownstone stoop, then jump off without changing air strafe momentum', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; mode = 'walk'; room = null; clearWanted(); sleep = null;
+    body.z = body.vz = body.crouch = 0; body.seat = null; fx.skating = false;
+    const landing = ARCH_STEPS.find(o => o.z1 === 0.12 && free(o.x + o.nx * 0.16, o.y + o.ny * 0.16));
+    px = landing.x + landing.nx * 0.16; py = landing.y + landing.ny * 0.16;
+    for (let k = 0; k < 40; k++) { move(-landing.nx * 0.005, -landing.ny * 0.005); stepBody(0.02); }
+    render(0);
+    const ground = architectureGroundHeight(px, py), raisedEye = eye;
+    body.mx = 0.25; body.my = -0.4; jump(); stepBody(0.04);
+    const height = ground * 10 + body.z;
+    px = landing.x + landing.nx * 0.3; py = landing.y + landing.ny * 0.3;
+    stepBody(0);
+    return { ground, raisedEye, height, airborneHeight: body.z, momentum: [body.mx, body.my], clear: free(px, py) };
+  });
+  assert.equal(result.ground, 0.12, JSON.stringify(result));
+  assert.ok(Math.abs(result.raisedEye - 0.29) < 1e-6);
+  assert.ok(Math.abs(result.height - result.airborneHeight) < 1e-6, 'jump height survives the change of ground level');
+  assert.deepEqual(result.momentum, [0.25, -0.4]);
+  assert.ok(result.clear);
+}));
+
+test('downtown apartment elevators still lead to usable flat rooftops', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; clearWanted();
+    const b = ARCH_BUILDINGS.find(b => b.region === 'downtown' && b.sh.kind === SHOP_APTS);
+    enterRoom('apts', { ...b.sh, cell: [b.x0, b.y0], ret: [b.x0 - 0.2, b.y0 - 0.2, 0] }, [4, 1.5, -Math.PI / 2]);
+    const prompt = promptText(); interact(); render(0);
+    return { prompt, mode, height: roofH, expected: b.h, clear: roofFree(px, py), stairs: roofLot.has(idx(Math.floor(px), Math.floor(py))) };
+  });
+  assert.match(result.prompt, /elevator to the roof/);
+  assert.equal(result.mode, 'roof');
+  assert.equal(result.height, result.expected);
+  assert.ok(result.clear && result.stairs, JSON.stringify(result));
+}));
+
+test('redesigned storefronts keep their opening hours, glazing and closed shutters', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; mode = 'walk'; room = null; me = null; clearWanted();
+    body.z = body.vz = body.crouch = 0; body.seat = null; fx.skating = false;
+    people.length = cars.length = 0; weather = 'clear';
+    return ['brownstones', 'downtown'].map(region => {
+      const b = ARCH_BUILDINGS.find(b => b.region === region && b.faces.some(f => f.front) &&
+        b.sh.kind !== SHOP_APTS && b.sh.kind !== SHOP_SHUT && openAt(b.sh, 12) && !openAt(b.sh, 3));
+      const f = b.faces.find(f => f.front), along = region === 'brownstones' ? f.start + f.spacing * 0.74 : (f.start + f.end) / 2;
+      px = (f.side ? along : f.line) + f.nx * 0.7; py = (f.side ? f.line : along) + f.ny * 0.7;
+      a = Math.atan2(-f.ny, -f.nx); pitch = 0;
+      const pixels = [12, 3].map(hour => {
+        tod = hour; env(0); render(0);
+        const cell = (rows >> 1) * cols + (cols >> 1);
+        return { char: CH[cell], palette: BG[cell] >> 4, depth: ZB[cell] };
+      });
+      return { region, pixels, glass: [CYAN, WARM], shutter: GRAY };
+    });
+  });
+  for (const r of result) {
+    assert.ok(r.glass.includes(r.pixels[0].palette), JSON.stringify(r));
+    assert.ok(['=', '-'].includes(r.pixels[1].char) && r.pixels[1].palette === r.shutter, JSON.stringify(r));
+    assert.ok(r.pixels.every(p => Math.abs(p.depth - 0.7) < 0.03), 'the storefront is in view');
+  }
+}));
+
+test('toilet aiming uses the interior height immediately after entering, before the first room frame', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; mode = 'walk'; room = null; body.z = body.vz = body.crouch = 0; body.seat = null; render(0);
+    const oldEye = eye;
+    enterRoom('bar', { word: 'BAR', ret: [px, py, a] }, [1.6, 5.3, Math.PI / 2]); needs.bladder = 30;
+    startPee(); T += 0.05; stepPee(0.05);
+    const aboveBowl = peeDrops.length > 0 && peeDrops.every(p => p.z > LOO_TOP);
+    for (let k = 0; k < 140; k++) { T += 0.05; stepPee(0.05); }
+    return { oldEye, aboveBowl, flushed: !pee, puddles: puddles.filter(p => p.at === placeKey()).length };
+  });
+  assert.equal(result.oldEye, 0.17);
+  assert.ok(result.aboveBowl && result.flushed, JSON.stringify(result));
+  assert.equal(result.puddles, 0);
+}));
+
+test('redesigned homes have reachable bathrooms, dining chairs and complete windows and lamps', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true;
+    return ['home', 'loft', 'bellehome'].map(kind => {
+      const def = ROOM_DEFS[kind]; enterRoom(kind, { ret: [41, 73, 0] }, def.entry);
+      const wc = def.wc, targets = [[wc.x0 + 0.5, wc.y1 - 0.5], def.spots.shelf, def.spots.fridge, def.home.dining];
+      if (def.balcony) targets.push([21.5, 11.5]);
+      return {
+        kind, area: room.W * room.H, reachable: targets.map(p => roomPath(...def.entry.slice(0, 2), ...p).length > 0),
+        chairs: room.props.filter(p => p.seat).length, benches: room.props.filter(p => p.bench).length,
+        lamps: def.lamps.every(([x, y]) => roomAt(x, y) === '.' && x > 1.3 && y > 1.3),
+        windows: def.windows.every(w => w.center - w.half > 1 && w.center + w.half < (w.face === 'west' ? room.H : room.W) - 1),
+      };
+    });
+  });
+  for (const r of result) {
+    assert.ok(r.reachable.every(Boolean), `${r.kind}: room and furniture access ${JSON.stringify(r)}`);
+    assert.ok(r.chairs >= 3 && r.benches === 0 && r.lamps && r.windows, `${r.kind}: planned furniture and apertures`);
+  }
+  assert.ok(result[1].area > result[0].area * 3 && result[2].area > result[1].area);
+}));
+
+test('Belle residence survives reload, has an open balcony and district geometry draws from both sides', () => withPage(async page => {
+  await page.evaluate(() => { paused = true; money = 20000; buy('home_belle'); saveGame(); });
+  await page.reload(); await page.waitForTimeout(300);
+  const result = await page.evaluate(() => {
+    paused = true; tod = 12; env(0); const home = owned.homes[0];
+    enterRoom(homeRoomKind(home.kind), { cell: [home.cell % N, Math.floor(home.cell / N)], ret: [41, 73, 0] }, [22.8, 11.2, 0]); pitch = 0;
+    render(0);
+    const balcony = room.def.balcony, openAir = ROOMW.cell(room.W + 1, 10) === 0 && !free(room.W + 1, 10), homeFound = homeRecord(room) === home;
+    const bits = belleDetails.filter(b => b.kind === 'slab' || b.kind === 'iron');
+    const noMurals = BELLE_BUILDINGS.every(b => muralSeed(idx(b.x0 + 1, b.y0 + 1), b.x0 + 1, b.y0 + 1, 'N') < 0);
+    mode = 'walk'; room = null;
+    for (const b of BELLE_BUILDINGS.slice(0, 6)) { px = b.x0 - 1; py = b.y0 - 1; a = 0.8; pitch = 0.3; render(0); a += Math.PI; render(0); }
+    return { homeFound, openAir, balcony: !!balcony, count: bits.length, noMurals, money };
+  });
+  assert.deepEqual(result, { homeFound: true, openAir: true, balcony: true, count: result.count, noMurals: true, money: 4000 });
+  assert.ok(result.count > 50, 'real slabs and railings across the district');
+}));
+
+test('paying a driving fine leaves your car parked beside you and keeps ownership', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; money = 3000; buy('car_sedan'); const car = owned.cars[0];
+    car.x = car.ex = 41; car.y = car.ey = 73; car.hx = 1; car.hy = 0; car.player = true; car.parked = false;
+    me = car; px = car.x; py = car.y; mode = 'drive'; wanted.stars = 1; wanted.busted = true;
+    openBusted(); bustedChoice('fine');
+    const same = cars.includes(car) && owned.cars[0] === car;
+    for (let k = 0; k < 100; k++) stepTraffic(0.05, T += 0.05, true);
+    return { same, parked: car.parked, player: car.player, mode, position: [car.x, car.y], nearby: Math.hypot(rel(px-car.x),rel(py-car.y)) < 0.6, money };
+  });
+  assert.deepEqual(result, { same: true, parked: true, player: false, mode: 'walk', position: [41, 73], nearby: true, money: 1450 });
+}));
+
+test('drift collision protects the rear bumper and chase camera stops before intervening walls', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; mode = 'drive'; people.length = 0; cars.length = 0;
+    for (let y = 70; y < 76; y++) for (let x = 38; x < 47; x++) map[idx(x,y)] = 0;
+    map[idx(42,72)] = 3;
+    const car = addCar({x:42.4,y:73.245,hx:0,hy:1,player:true,v:2}); me = car; a = Math.PI/2; px=car.x; py=car.y; car.travelA=-Math.PI/2;
+    K.Space = K.KeyD = true; drive(0.05); K.Space = K.KeyD = false;
+    const rear = carBodyClear(car.x,car.y,car.hx,car.hy) && car.v === 0 && car.y === 73.245;
+    car.x=42.25;car.y=73.27;car.hx=Math.cos(1);car.hy=Math.sin(1);camYaw=a=1;look=0;
+    const [x,y] = chaseCam(0.05);
+    return { rear, cameraClear: !map[idx(Math.floor(x),Math.floor(y))], near: Math.hypot(x-car.x,y-car.y) < 0.4, y };
+  });
+  assert.ok(result.rear && result.cameraClear && result.near && result.y > 73, JSON.stringify(result));
+}));
+
+test('the longer Saturday fireworks show continues through midnight and finishes at 2am', () => withPage(async page => {
+  const schedule = await page.evaluate(() => {
+    paused=true; weather='clear'; mode='walk'; dayNum=5;
+    const out=[]; for (const hour of [20.9,21,23.9]) { tod=hour; out.push(eventNow('fireworks')); }
+    dayNum=6; for (const hour of [0,1.8,2]) { tod=hour; out.push(eventNow('fireworks')); }
+    return out;
+  });
+  assert.deepEqual(schedule, [false,true,true,true,true,false]);
+}));
+
+test('officers keep chasing a circling player indoors and follow the apartment stairs onto the roof', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused=true; clearWanted(); mode='room'; room={kind:'fixture',W:10,H:10,grid:boxRoom(10,10),def:{},props:[],ret:[41,73,0]};
+    px=6;py=5;wanted.stars=1;wanted.seen=true;wanted.lastX=41;wanted.lastY=73;
+    let captured=false;
+    for (let k=0;k<500;k++) { T+=0.02; px=5+Math.cos(T*1.8)*1.4;py=5+Math.sin(T*1.8)*1.4; if(stepCrime(0.02)==='busted'){captured=true;break;} }
+    clearWanted(); roomCops.length=0; roofCops.length=0;
+    const cell=Array.from(map).findIndex((h,i)=>h>1&&SHOP[i]?.kind===SHOP_APTS);
+    enterRoom('apts',{cell:[cell%N,Math.floor(cell/N)],ret:[41,73,0]},[4,1.6,-Math.PI/2]);
+    wanted.stars=1;wanted.seen=true;wanted.lastX=41;wanted.lastY=73;
+    interact(); const entered=mode==='roof';
+    T+=3.2; stepCrime(0.05);
+    return {captured,entered,following:roofCops.length>0};
+  });
+  assert.deepEqual(result,{captured:true,entered:true,following:true});
+}));
+
 test('every mode renders without errors', async () => {
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   try {
@@ -444,7 +645,7 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
     let across = null, edge = null, leap = null;
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const h = map[idx(x, y)], e = map[idx(x + 1, y)];
-      if (!h || map[idx(x - 1, y)] !== h || map[idx(x, y - 1)] !== h || map[idx(x, y + 1)] !== h) continue;
+      if (!h || roofHeightAt(x + 0.5, y + 0.5) !== h || map[idx(x - 1, y)] !== h || map[idx(x, y - 1)] !== h || map[idx(x, y + 1)] !== h) continue;
       if (!across && e && e !== h && Math.abs(e - h) <= ROOF_STEP) across = [x, y, h, e];
       if (!edge && !e && h >= 1.4 && h <= 1.8 && ROAD[idx(x + 1, y)]) edge = [x, y, h];
       const far = map[idx(x + 3, y)];
@@ -468,8 +669,10 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
   assert.ok(r[0] === 0 && r[1] < 100 && r[1] > 0, `down, hurt but standing (${r})`);
   // a sprinting jump off the edge is an ordinary jump: no flying across the street, you come down in it
   const [lx, ly, lh] = spots.leap;
-  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = null; roofLot = roofCells(x, y); px = x + 0.85; py = y + 0.5; a = 0; refillNeeds(); }, [lx, ly, lh]);
-  await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW'); await page.keyboard.press('Space');
+  await page.evaluate(([x, y, h]) => { mode = 'roof'; roofH = h; room = null; roofLot = roofCells(x, y); px = x + 0.85; py = y + 0.5; a = 0; refillNeeds(); body.z = body.vz = body.mx = body.my = 0; }, [lx, ly, lh]);
+  await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW');
+  await page.waitForFunction(() => body.mx > 0.7 && !body.z); // establish the sprint before popping into the air
+  await page.keyboard.press('Space');
   await page.waitForTimeout(250); await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
   await page.waitForTimeout(2500);
   const fell = await page.evaluate(x => [mode, body.z, px - x < 2.5], lx);
@@ -886,7 +1089,7 @@ test('the laundromat: a load at the back wall, done in its time; clean clothes l
 
 test('the aquarium: admission at the door, fish in every kind of tank, a touch pool, a gift shop; fish in the windows outside', () => withPage(async page => {
   const glyphs = () => page.evaluate(() => CH.join(''));
-  await page.evaluate(() => { tod = 12; weather = 'clear'; px = AQUARIUM.doorU + 0.3; py = AQUARIUM.by * 8 + 9.2; a = -Math.PI / 2; pitch = 0; });
+  await page.evaluate(() => { tod = 12; weather = 'clear'; cars.length = 0; px = AQUARIUM.doorU + 0.3; py = AQUARIUM.by * 8 + 9.2; a = -Math.PI / 2; pitch = 0; }); // admission without a random car taking the interaction prompt
   await page.waitForTimeout(300);
   assert.match(await glyphs(), /><|<>|=o>|<o=/, 'fish in the windows');
   await page.evaluate(() => { px = AQUARIUM.doorU; py = AQUARIUM.by * 8 + 8.25; });
@@ -1139,7 +1342,9 @@ test('the Botanical Gardens: gates locked at night, a swan boat on the lake, duc
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [mode, money]), ['boat', 96]);
   const before = await page.evaluate(() => [px, py]);
-  await page.keyboard.down('KeyW'); await page.waitForTimeout(1200); await page.keyboard.up('KeyW');
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(([x, y]) => Math.hypot(px - x, py - y) > 0.05, before, { timeout: 10000 });
+  await page.keyboard.up('KeyW');
   const after = await page.evaluate(() => [px, py, gardenLake(px, py)]);
   assert.ok(Math.hypot(after[0] - before[0], after[1] - before[1]) > 0.05 && after[2], 'paddled out, still on the water');
   await page.evaluate(() => { boat.gx = LAKE.x + 1; boat.gy = LAKE.y; });

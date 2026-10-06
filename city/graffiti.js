@@ -22,6 +22,7 @@ const MURAL_ART = {
   checker: ['#.#.#.#', '.#.#.#.', '#.#.#.#'],
 };
 const MURAL_THEMES = {
+  belle: { chance: 0, tags: 0, words: [], art: [], styles: [], pals: [] },
   industrial: { chance: 0.08, tags: 0.3, words: ['DOCKS', 'RUST', 'HAUL', 'STEEL', 'PORT', 'GRIT'], art: ['anchor', 'ship', 'wild', 'wild'], styles: [4, 1, 3], pals: [[ORANGE, BRICK, YEL], [GRAY, ORANGE, CYAN], [RED, YEL, GRAY]] },
   chinatown: { chance: 0.02, tags: 0.08, words: ['LUCK', 'JADE', 'TEA', 'FORTUNE'], art: ['dragon', 'koi', 'lantern'], styles: [0, 2], pals: [[RED, YEL, ORANGE], [RED, GREEN, YEL]] },
   brownstones: { chance: 0.03, tags: 0.1, words: ['PEACE', 'HOME', 'BLOCK', 'LOVE'], art: ['flowers', 'sun', 'heart'], styles: [0, 3, 4], pals: [[GREEN, YEL, MAG], [BLUE, YEL, WHITE], [ORANGE, GREEN, CYAN]] },

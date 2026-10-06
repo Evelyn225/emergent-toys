@@ -49,7 +49,7 @@ function nearSeat() {
     let best = null, bd = 1.1;
     for (const s of room.props) {
       const r = s.seatRow, sy = r ? r.y : s.y;
-      if (!s.bench && !r) continue;
+      if (!s.bench && !s.seat && !r) continue;
       const sx = r ? freeOnRow(r) : s.x;
       if (sx == null) continue; // (a full bench)
       const d = Math.hypot((r ? clamp(px, r.x0, r.x1) : sx) - px, sy - py); // (how near the bench is: a step along it to a free spot doesn't count)
@@ -84,6 +84,9 @@ function standUp() { // back where you sat down from (it was walkable)
 }
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
+  const ground = mode === 'walk' ? architectureGroundHeight(px, py) : 0;
+  if (body.groundMode === mode && (body.z > 0 || body.vz > 0)) body.z += ((body.ground || 0) - ground) * 10;
+  body.ground = ground; body.groundMode = mode;
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
   body.lastA = a; body.lx = px; body.ly = py;
   if (!onFootMode() || sleep) { body.z = body.vz = body.peak = 0; body.trick = null; body.seat = null; body.hop = 1; body.buf = body.landedAt = -9; return; }
@@ -128,7 +131,7 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
-const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], museumRoofHeight(x, y));
+const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   const h = roofHeightAt(x, y);
@@ -141,13 +144,13 @@ function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
   if (mode === 'walk' && overRoof(px, py)) { // came down on a roof
     const h = roofHeightAt(px, py);
-    mode = 'roof'; roofH = h; shiftFeet(-h * 10); room = null; roofLot = new Set(); return;
+    mode = 'roof'; roofH = h; shiftFeet(-h * 10); notePoliceRoofEntry(px, py); room = null; roofLot = new Set(); return;
   }
   if (mode !== 'roof' || roofFixed()) return;
   const h = roofHeightAt(px, py);
   if (h === roofH) return;
   if (h > 0) {
-    const followingSlope = museumRoofHeight(px, py) > 0 && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
+    const followingSlope = (museumRoofHeight(px, py) > 0 || belleRoofHeight(px, py) > 0 || architectureRoofHeight(px, py) > 0) && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
@@ -196,7 +199,7 @@ function drawBoard3D() {
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
   const cy = eye * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // Ground height uses the same camera projection as the street.
-  const cz = 1.15;
+  const cz = 1.7;
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   const pX = projX, pY = projY;
   const ox = cols / 2, oy = hor; // anchored to the horizon: looking up carries it out of view

@@ -79,11 +79,11 @@ test('a cop on foot who reaches you: busted. The fine settles it; jail takes wha
   ev('footCops[0].x = px + 0.6; footCops[0].y = py; footCops[0].chase = true');
   assert.strictEqual(step(3), 'busted');
   assert.strictEqual(ev('payFine()'), true);
-  assert.strictEqual(ev('money'), 500 - 3 - 12 - 60);
+  assert.strictEqual(ev('money'), 500 - 3 - 12 - 50);
   assert.strictEqual(ev('wanted.stars'), 0);
   ev("addWanted('hit', px, py, true); goToJail()");
   assert.strictEqual(ev('inv.length'), 0, 'everything confiscated');
-  assert.strictEqual(ev('money'), 425, 'money kept');
+  assert.strictEqual(ev('money'), 435, 'money kept');
   assert.strictEqual(ev('wanted.stars'), 0);
 });
 

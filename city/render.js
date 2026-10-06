@@ -72,7 +72,10 @@ function drawBox(b, shade, intersect = rayBox) {
   for (let c = c0; c < c1; c++) {
     const cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
     for (let r = r0; r < r1; r++) {
-      const i = r * cols + c, t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
+      const i = r * cols + c;
+      // Even the nearest corner is behind this cell: skip the expensive shape intersection.
+      if (ZB[i] <= near) continue;
+      const t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
       if (t < 0 || t >= ZB[i] || t > vis) continue;
       if (shade(i, t, (1 - t / vis) * 15 * amb)) { ZB[i] = ZBG[i] = t; FL[i] = 0; }
     }
@@ -112,6 +115,7 @@ function render(dt) {
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
+  if (mode === 'walk') eye += architectureGroundHeight(px, py);
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows + shake() | 0;
   dx = Math.cos(a); dy = Math.sin(a);

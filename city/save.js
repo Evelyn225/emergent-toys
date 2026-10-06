@@ -31,10 +31,14 @@ function loadGame() {
   held = clamp(d.held ?? -1, -1, inv.length - 1);
   for (const sym in d.shares || {}) if (stockBy(sym)) shares[sym] = d.shares[sym];
   if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }
-  owned.homes.length = 0; for (const h of d.homes || []) if (SHOP[h.cell] && ITEMS[h.kind]) owned.homes.push({ ...h,
+  owned.homes.length = 0; for (const h of d.homes || []) {
+    const cell = restoreHomeCell(h.cell);
+    if (cell < 0 || ITEMS[h.kind]?.kind !== 'home') continue;
+    owned.homes.push({ ...h, cell,
     decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY),
     fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
     pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
+  }
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
   ensureCarKeys();
   loadBoats(d.boats);

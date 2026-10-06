@@ -3,8 +3,8 @@
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const weekday = () => WEEKDAYS[mod(dayNum, 7)];
 // what's on: [weekday, from hour, to hour, what, a line for the newspaper and the gossip]
-const EVENTS = [['Sat', 21, 24, 'fireworks', 'Fireworks over the bay, Saturday at 9']];
-const eventNow = kind => EVENTS.some(([d, h0, h1, k]) => k === kind && d === weekday() && tod >= h0 && tod < h1);
+const EVENTS = [['Sat', 21, 26, 'fireworks', 'Fireworks over the bay, Saturday 9pm to 2am']];
+const eventNow = kind => EVENTS.some(([d, h0, h1, k]) => k === kind && (d === weekday() && tod >= h0 && tod < h1 || h1 > 24 && d === WEEKDAYS[mod(dayNum - 1, 7)] && tod < h1 - 24));
 const eventToday = kind => EVENTS.find(([d, , , k]) => k === kind && d === weekday()) || null;
 let toldEvent = '';
 function stepEvents(dt) {
@@ -23,7 +23,7 @@ const fwBase = () => ({ x: FAIR.cx, y: FAIR.y1 + 18 }); // the barges
 function stepFireworks(dt) {
   for (let k = shells.length - 1; k >= 0; k--) if (T - shells[k].t0 > shells[k].rise + 3.5) shells.splice(k, 1);
   if (!eventNow('fireworks') || weather === 'storm' || mode === 'room') return;
-  const finale = tod > 23.6, rate = finale ? 6 : 1.4;
+  const finale = tod < 2 && tod > 1.6, rate = finale ? 6 : 1.4;
   if (Math.random() < dt * rate) {
     const b = fwBase(), kind = pick(['peony', 'peony', 'willow', 'ring', 'crackle']);
     shells.push({ x: b.x + (Math.random() - 0.5) * 30, y: b.y + (Math.random() - 0.5) * 8, h: 18 + Math.random() * 14, t0: T, rise: 1.6 + Math.random() * 0.8,

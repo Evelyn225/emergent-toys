@@ -45,6 +45,7 @@ function useCathedral() { // true if E did something
   }
   if (nearTowerStair()) { // up the tower: stand on its top, by the bell, 80m over the square
     mode = 'roof'; roofH = map[idx(Math.floor(room.tower[0]), Math.floor(room.tower[1]))]; px = room.tower[0]; py = room.tower[1]; a = -Math.PI / 2; pitch = -0.1;
+    notePoliceRoofEntry(px, py, room.ret);
     say('Three hundred and twelve steps. The bell hangs over you and the whole city spreads out below.', 5);
     return true;
   }

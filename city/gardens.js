@@ -30,24 +30,23 @@ function gardenFloor(i, r, x, wx, wy, L) { // true if it painted the cell itself
     BG[i] = red ? C(RED, 2 + L * 0.35) : C(WHITE, 2 + L * 0.3);
     return set(i, stripe ? '+' : red ? '#' : ':', red ? C(RED, L * 1.4) : C(WHITE, L * 1.2)), true;
   }
-  const [gx, gy] = gardenLocal(wx, wy), e = gardenLakeEdge(gx, gy);
-  if (onJetty(gx, gy)) return [Math.abs(gy - JETTY.gy) > JETTY.hw * 0.8 ? '|' : fract(gx * 6) < 0.2 ? '=' : '-', BRICK, 1.3];
-  if (e > 0) { // the lake: ripples, lily pads near the edge, the sky in it
+  const [gx, gy] = gardenLocal(wx, wy), surface = gardenSurface(gx, gy), e = surface.edge;
+  if (surface.kind === 'jetty') return [Math.abs(gy - JETTY.gy) > JETTY.hw * 0.8 ? '|' : fract(gx * 6) < 0.2 ? '=' : '-', BRICK, 1.3];
+  if (surface.kind === 'lake') { // the lake: ripples, lily pads near the edge, the sky in it
     const n = noise(wx * 3 + T * 0.2, wy * 3 - T * 0.1, 811), lily = e < 0.7 && hash(Math.floor(wx * 8), Math.floor(wy * 8), 812) > 0.88;
     set(i, lily ? 'o' : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
     BG[i] = C(BLUE, 1 + day * 2.5); FL[i] = 3;
     return true;
   }
-  if (e > -0.18) return [(r + x) % 3 ? '|' : ',', GREEN, 0.9]; // reeds round the edge
-  const pen = inPen(gx, gy);
-  if (pen) { // the bear's: rough grass and boulders; the tortoises': sand
-    if (pen.kind === 'tortoise') return [(r * 5 + x) % 4 ? '.' : ':', YEL, 0.9];
+  if (surface.kind === 'reeds') return [(r + x) % 3 ? '|' : ',', GREEN, 0.9];
+  if (surface.kind === 'bear' || surface.kind === 'tortoise') {
+    if (surface.kind === 'tortoise') return [(r * 5 + x) % 4 ? '.' : ':', YEL, 0.9];
     const h = noise(wx * 4, wy * 4, 813);
     return h > 0.62 ? ['%', GRAY, 1.2] : h > 0.55 ? [':', BRICK, 1] : [(r * 3 + x) % 5 ? '"' : ',', GREEN, 0.85];
   }
-  if (gardenPathDist(gx, gy) < 0.25) return [(r * 7 + x * 3) % 5 ? ':' : '.', WARM, 1.1]; // gravel
-  const bed = inBed(gx, gy);
-  if (bed >= 0) { // a flower bed: blooms in three colours, set out in rows
+  if (surface.kind === 'gravel') return [(r * 7 + x * 3) % 5 ? ':' : '.', WARM, 1.1];
+  const bed = surface.bed;
+  if (surface.kind === 'bed') { // a flower bed: blooms in three colours, set out in rows
     const pal = BED_PAL[(bed + mod(dayNum, 7)) % BED_PAL.length], h = hash(Math.floor(wx * 14), Math.floor(wy * 14), 814 + bed);
     if (h > 0.35) { set(i, h > 0.8 ? '@' : '*', C(pal[h * 3 | 0], L * 1.7)); BG[i] = C(BRICK, 1 + day); return true; }
     return [',', GREEN, 0.9];
