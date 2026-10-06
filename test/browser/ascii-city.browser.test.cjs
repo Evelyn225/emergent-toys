@@ -407,6 +407,62 @@ test('paying a driving fine leaves your car parked beside you and keeps ownershi
   assert.deepEqual(result, { same: true, parked: true, player: false, mode: 'walk', position: [41, 73], nearby: true, money: 1450 });
 }));
 
+test('police physically intercept a driven car and leave quietly after the fine', () => withPage(async page => {
+  const result=await page.evaluate(()=>{
+    paused=true;clearWanted();cars.length=0;people.length=0;footCops.length=0;evTimer=1000;
+    for(let y=68;y<84;y++)for(let x=34;x<64;x++){map[idx(x,y)]=0;SHOP[idx(x,y)]=null;}
+    const car=addCar({x:41,y:73,hx:1,hy:0,player:true,owned:true,parked:false,v:1});
+    const cop=addCar({x:42,y:73,hx:-1,hy:0,patrol:true,kind:'police',pursuit:true,v:2,travelA:Math.PI,dest:[41,73],cruise:COP_CAR_SPEED});
+    me=car;mode='drive';px=41;py=73;a=0;money=200;wanted.stars=1;wanted.seen=true;
+    let overlap=false,clear=true,stopped=false;
+    for(let k=0;k<160;k++){
+      T+=.05;drive(.05);stepTraffic(.05,T,true);stepCrime(.05);
+      overlap ||= !!carContact(cop,car);
+      clear &&= carBodyClear(car.x,car.y,car.hx,car.hy)&&carBodyClear(cop.x,cop.y,cop.hx,cop.hy);
+      stopped ||= wanted.busted;
+    }
+    const held=[cop.x,cop.y];
+    for(let k=0;k<40;k++){T+=.05;stepTraffic(.05,T,true);}
+    const settled=near(cop.x,cop.y,...held)<.01;
+    wanted.stars=1;wanted.busted=true;openBusted();bustedChoice('fine');
+    const parked=car.parked&&!car.player&&cars.includes(car)&&mode==='walk';
+    px=43;py=74;let quiet=true,departed=false;
+    for(let k=0;k<800&&cars.includes(cop);k++){
+      T+=.05;stepCrime(.05);stepTraffic(.05,T,true);
+      quiet &&= !code(cop)&&!lightsOn_(cop);overlap ||= !!carContact(cop,car);
+      departed ||= near(cop.x,cop.y,...held)>1;
+    }
+    render(.05);
+    return {overlap,clear,stopped,settled,parked,quiet,departed,money};
+  });
+  assert.deepEqual(result,{overlap:false,clear:true,stopped:true,settled:true,parked:true,quiet:true,departed:true,money:150});
+}));
+
+test('cruisers remember a northbound driver after losing sight at a street corner', () => withPage(async page => {
+  const result=await page.evaluate(()=>{
+    paused=true;clearWanted();cars.length=0;people.length=0;footCops.length=0;evTimer=1000;
+    const tiles=[];
+    for(let y=69;y<87;y++)for(let x=36;x<55;x++){
+      const cell=idx(x,y);tiles.push([cell,map[cell],SHOP[cell]]);
+      map[idx(x,y)]=(y>=72&&y<74||x>=46&&x<49)?0:3;SHOP[idx(x,y)]=null;
+    }
+    const car=addCar({x:47,y:73,hx:0,hy:1,player:true,v:1,travelA:Math.PI/2});
+    const cop=addCar({x:42,y:73,hx:1,hy:0,patrol:true,pursuit:true,kind:'police',dest:[47,73],cruise:COP_CAR_SPEED});
+    me=car;mode='drive';px=car.x;py=car.y;a=Math.PI/2;wanted.stars=1;wanted.seen=true;stepCrime(.05);
+    let blind=false,ahead=false,clear=true,remembered=false;
+    for(let k=0;k<150;k++){
+      car.v=1;T+=.05;drive(.05);stepTraffic(.05,T,true);stepCrime(.05);
+      if(!wanted.seen){blind=true;ahead ||= cop.dest[1]>wanted.lastY+.5;remembered ||= wanted.lastVY>.9;}
+      clear &&= carBodyClear(cop.x,cop.y,cop.hx,cop.hy)&&!carContact(cop,car);
+    }
+    const result={blind,ahead,remembered,clear,followed:cop.x>46&&cop.y>74,stars:wanted.stars};
+    for(const [cell,height,shop] of tiles){map[cell]=height;SHOP[cell]=shop;}
+    px=41;py=73;a=0;render(.05);
+    return result;
+  });
+  assert.deepEqual(result,{blind:true,ahead:true,remembered:true,clear:true,followed:true,stars:1});
+}));
+
 test('drift collision protects the rear bumper and chase camera stops before intervening walls', () => withPage(async page => {
   const result = await page.evaluate(() => {
     paused = true; mode = 'drive'; people.length = 0; cars.length = 0;
@@ -740,7 +796,11 @@ test('on a phone the buttons say what they do and only show when they apply', as
     const ctx = await browser.newContext({ ...devices['iPhone 13'] }), page = await ctx.newPage();
     await page.goto(PAGE); await page.waitForTimeout(300);
     const pad = () => page.waitForTimeout(250).then(() => page.$$eval('#touch .pad button', bs => bs.map(b => b.textContent)));
-    await page.evaluate(() => { me = cars.find(c => c.kind === 'taxi'); me.rider = true; me.fare = 0; mode = 'taxi'; });
+    await page.evaluate(() => {
+      // Keep the cab away from station drop-offs so it cannot arrive before the stop-button assertion.
+      me = cars.find(c => c.kind === 'taxi' && stations.every(s => near(c.x,c.y,s.x,s.y-mod(s.y,8)+1)>5));
+      me.rider = true; me.fare = 0; mode = 'taxi';
+    });
     assert.deepStrictEqual(await pad(), ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway', 'Camera', 'Get out']);
     await page.tap('#touch .pad button:text-is("Subway")');
     assert.ok(await page.evaluate(() => /station$/.test(me.destName)), 'a stop button picks the stop');
@@ -1148,7 +1208,7 @@ test('balloon darts on the pier: $1 at the booth, a dart on a balloon pops it', 
 }));
 
 test('the night market: tarped by day, a stall to buy from at night; Q on the globe turns the sky, Q held on the watch hurries time', () => withPage(async page => {
-  await page.evaluate(() => { tod = 13; money = 500; inv.length = 0; const s = STALLS[2]; devAt(s.at[0], s.at[1], Math.PI / 2); });
+  await page.evaluate(() => { tod = 13; money = 500; inv.length = 0; cars.length = 0; const s = STALLS[2]; devAt(s.at[0], s.at[1], Math.PI / 2); }); // random traffic must not take the stall's interaction prompt
   assert.match(await page.evaluate(() => promptText()), /under a tarp/);
   const w = await page.evaluate(() => weather);
   await page.keyboard.down('KeyT'); await page.keyboard.press('KeyY');

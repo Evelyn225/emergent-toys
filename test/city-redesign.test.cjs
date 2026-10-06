@@ -63,8 +63,8 @@ test('nearby pursuit cruisers reverse tightly rather than queuing behind traffic
     for (let y = 71; y < 76; y++) for (let x = 36; x < 49; x++) map[idx(x,y)] = 0;
     var cruiser = addCar({x:43, y:73, hx:1, hy:0, patrol:true, pursuit:true, kind:'police', dest:[41,73], cruise:2.5});
     addCar({x:43.3,y:73,hx:1,hy:0,parked:true});
-    for (let k = 0; k < 22; k++) stepTraffic(0.05, T += 0.05, true)`);
-  assert.ok(ev('cruiser.hx < -0.9'), 'turned around inside 1.1 seconds');
+    for (let k = 0; k < 30; k++) stepTraffic(0.05, T += 0.05, true)`);
+  assert.ok(ev('cruiser.hx < -0.9'), 'turns around in 1.5 seconds while clearing the parked car');
   assert.ok(ev('cruiser.x < 43'), 'moves back toward the target');
 });
 

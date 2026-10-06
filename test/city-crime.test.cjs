@@ -120,11 +120,11 @@ test('a cop with your last seen entrance searches the room and arrests you in si
   assert.ok(ev('roomCops.length') > 0, 'officers actually entered the room');
 });
 
-test('driving with a cruiser on your bumper: told to pull over, then spun out if you keep going', () => {
+test('a cruiser on your bumper tells you to pull over without a phantom PIT', () => {
   const { ev, step } = scene();
   ev("addWanted('steal', px, py, true); var mine = cars.find(c => !c.patrol && !c.ev); mine.player = true; me = mine; mode = 'drive'; me.v = 2; me.x = px; me.y = py");
   ev('var cop = cars.find(c => c.pursuit); cop.x = me.x + 0.8; cop.y = me.y; cop.ex = cop.x; cop.ey = cop.y');
   const evs = ev(`(() => { const r = []; for (let k = 0; k < 100; k++) { T += 0.05; me.v = 2; cop.x = me.x + 0.8; cop.ex = cop.x; const w = stepCrime(0.05); if (w === 'pullover' || w === 'pit') r.push(w); if (w === 'pit') break; } return r.join(); })()`);
-  assert.strictEqual(evs, 'pullover,pit');
-  assert.ok(ev('me.spunT > T'));
+  assert.strictEqual(evs, 'pullover');
+  assert.ok(!ev('me.spunT > T'), 'proximity alone cannot spin the car');
 });

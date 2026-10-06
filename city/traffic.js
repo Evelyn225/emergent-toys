@@ -48,6 +48,51 @@ function plan(c) {
 }
 
 const BODIES = [RED, BLUE, WHITE, TAXI, TAXI, GREEN, GRAY];
+// World units are 10m: 72km/h, 4.5m/s² acceleration and 9m/s² braking.
+const COP_CAR_SPEED = 2, COP_CAR_ACCEL = 0.45, COP_CAR_BRAKE = 0.9;
+const CAR_FOOTPRINTS = { car: [0.24, 0.11], amb: [0.25, 0.1], fire: [0.37, 0.1] };
+function carFootprint(c) {
+  return CAR_FOOTPRINTS[c.kind] || CAR_FOOTPRINTS.car;
+}
+// Minimum separating translation between two rotated bodies, with toroidal world coordinates.
+function carContact(c, o, x = c.ex, y = c.ey, hx = c.hx, hy = c.hy) {
+  const rx = rel(o.ex - x), ry = rel(o.ey - y);
+  if (Math.abs(rx) > 0.95 || Math.abs(ry) > 0.95) return null;
+  const [hl, hw] = carFootprint(c), [ol, ow] = carFootprint(o);
+  if (rx * rx + ry * ry > (hl + hw + ol + ow) ** 2) return null;
+  let depth = Infinity, nx = 0, ny = 0;
+  for (const [ax, ay] of [[hx, hy], [-hy, hx], [o.hx, o.hy], [-o.hy, o.hx]]) {
+    const span = hl * Math.abs(ax * hx + ay * hy) + hw * Math.abs(-ax * hy + ay * hx)
+      + ol * Math.abs(ax * o.hx + ay * o.hy) + ow * Math.abs(-ax * o.hy + ay * o.hx);
+    const along = rx * ax + ry * ay, overlap = span - Math.abs(along);
+    if (overlap <= 0) return null;
+    if (overlap < depth) { depth = overlap; const sign = along < 0 ? -1 : 1; nx = ax * sign; ny = ay * sign; }
+  }
+  return { depth, nx, ny };
+}
+function resolveCruiserContact(c, o, hit) {
+  const { nx, ny } = hit, depth = hit.depth + 0.0001;
+  const movingPlayer = o === me && mode === 'drive', share = movingPlayer ? depth / 2 : 0;
+  const ox = mod(o.x + nx * share, N), oy = mod(o.y + ny * share, N);
+  const canPush = share && carBodyClear(ox, oy, o.hx, o.hy, ...carFootprint(o)) && !isWater(ox, oy);
+  const back = canPush ? depth - share : depth, cx = mod(c.x - nx * back, N), cy = mod(c.y - ny * back, N);
+  if (!carBodyClear(cx, cy, c.hx, c.hy, ...carFootprint(c)) || isWater(cx, cy)) return false;
+  c.x = cx; c.y = cy;
+  if (canPush) { o.x = ox; o.y = oy; o.ex = ox; o.ey = oy; px = ox; py = oy; }
+  const ca = c.travelA ?? Math.atan2(c.hy, c.hx), oa = o.travelA ?? Math.atan2(o.hy, o.hx);
+  const closing = (Math.cos(ca) * c.v - Math.cos(oa) * o.v) * nx + (Math.sin(ca) * c.v - Math.sin(oa) * o.v) * ny;
+  if (closing > 0) {
+    // Impact requires actual body contact; following someone's bumper alone cannot spin them out.
+    const rear = rel(c.x - o.x) * o.hx + rel(c.y - o.y) * o.hy;
+    if (c.pursuit && movingPlayer && closing > 0.35 && Math.abs(o.v) > 0.7 && rear < -0.06 && Math.abs(nx * o.hy - ny * o.hx) > 0.5) {
+      o.spunT = T + 2.5; wanted.pitPending = true;
+    }
+    c.v *= 0.15;
+    if (movingPlayer) o.v *= 0.65;
+  }
+  c.ex = c.x; c.ey = c.y; c.routeT = 0;
+  return true;
+}
 // The full rotated footprint, including the rear bumper. Separating axes keep even a sideways drift out of walls.
 function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
   const ex = Math.abs(hx) * hl + Math.abs(hy) * hw, ey = Math.abs(hy) * hl + Math.abs(hx) * hw;
@@ -63,6 +108,8 @@ function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
 // dispatch from far away; nearby cruisers can leave their lane, reverse and intercept rather than circling a block.
 function pursuitRoute(c, tx, ty) {
   const first = idx(Math.floor(c.x), Math.floor(c.y)), last = idx(Math.floor(tx), Math.floor(ty)), prev = new Map([[first, first]]), queue = [first];
+  const blocked = new Set(cars.filter(o => o !== c && o !== me && o.parked && near(c.x, c.y, o.ex, o.ey) < 24).map(o => idx(Math.floor(o.ex), Math.floor(o.ey))));
+  if (me && me !== c && me.parked) blocked.add(idx(Math.floor(me.ex), Math.floor(me.ey)));
   let best = first, bestDist = Infinity;
   for (let k = 0; k < queue.length && k < 1800; k++) {
     const cell = queue[k], x = cell % N, y = Math.floor(cell / N), dist = Math.hypot(rel(x + 0.5 - tx), rel(y + 0.5 - ty));
@@ -70,7 +117,7 @@ function pursuitRoute(c, tx, ty) {
     if (cell === last) break;
     for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const next = idx(x + ox, y + oy), nx = next % N + 0.5, ny = Math.floor(next / N) + 0.5;
-      if (prev.has(next) || map[next] || Math.hypot(rel(nx - c.x), rel(ny - c.y)) > 24 || isWater(nx, ny)) continue;
+      if (prev.has(next) || map[next] || blocked.has(next) || Math.hypot(rel(nx - c.x), rel(ny - c.y)) > 24 || isWater(nx, ny)) continue;
       prev.set(next, cell); queue.push(next);
     }
   }
@@ -79,31 +126,49 @@ function pursuitRoute(c, tx, ty) {
   if (best === last && !map[last]) path.unshift([tx, ty]);
   return path.reverse();
 }
-function steerCruiser(c, tx, ty, speed, dt) {
+function steerCruiser(c, tx, ty, speed, dt, arrive = true) {
   const vx = rel(tx - c.x), vy = rel(ty - c.y), distance = Math.hypot(vx, vy), oldAngle = Math.atan2(c.hy, c.hx);
+  if (distance < 0.025 && arrive) { c.v = 0; c.brake = true; return; }
   const wantedAngle = Math.atan2(vy, vx), turn = mod(wantedAngle - oldAngle + Math.PI, TAU) - Math.PI;
-  const angle = oldAngle + clamp(turn, -6.5 * dt, 6.5 * dt), hx = Math.cos(angle), hy = Math.sin(angle);
-  const targetSpeed = Math.min(speed, Math.abs(turn) > 1.1 ? 0.85 : speed);
-  c.v += clamp(targetSpeed - c.v, -4 * dt, 2.4 * dt);
+  // Brake before reversing direction or arriving. Slow turns align the tyres instead of orbiting the goal.
+  const turnRate = c.v < 0.3 ? 3.2 : 1.8;
+  const angle = oldAngle + clamp(turn, -turnRate * dt, turnRate * dt);
+  let targetSpeed = Math.min(speed, COP_CAR_SPEED);
+  if (arrive) targetSpeed = Math.min(targetSpeed, Math.sqrt(2 * COP_CAR_BRAKE * Math.max(0, distance - 0.02)));
+  targetSpeed *= Math.max(0, Math.cos(turn));
+  c.brake = targetSpeed < c.v;
+  c.v += clamp(targetSpeed - c.v, -COP_CAR_BRAKE * dt, COP_CAR_ACCEL * dt);
   c.travelA ??= oldAngle;
   const slip = mod(angle - c.travelA + Math.PI, TAU) - Math.PI;
-  c.travelA += slip * (1 - Math.exp(-dt * (Math.abs(turn) > 1.1 ? 2.2 : 12)));
-  const step = Math.min(distance, c.v * dt), nx = c.x + Math.cos(c.travelA) * step, ny = c.y + Math.sin(c.travelA) * step;
-  if (carBodyClear(nx, ny, hx, hy) && !isWater(nx, ny)) { c.x = mod(nx, N); c.y = mod(ny, N); c.hx = hx; c.hy = hy; }
-  else {
-    c.v = 0; c.travelA = angle; c.routeT = 0;
-    if (carBodyClear(c.x, c.y, hx, hy)) { c.hx = hx; c.hy = hy; }
+  c.travelA += slip * (1 - Math.exp(-dt * 12));
+  if (c.v < 0.3) c.travelA = angle;
+  const step = Math.min(distance, c.v * dt), samples = Math.max(1, Math.ceil(step / 0.035), Math.ceil(Math.abs(angle - oldAngle) / 0.06));
+  const sx = Math.cos(c.travelA) * step / samples, sy = Math.sin(c.travelA) * step / samples;
+  for (let k = 1; k <= samples; k++) {
+    const ha = oldAngle + (angle - oldAngle) * k / samples, nhx = Math.cos(ha), nhy = Math.sin(ha), nx = mod(c.x + sx, N), ny = mod(c.y + sy, N);
+    if (!carBodyClear(nx, ny, nhx, nhy, ...carFootprint(c)) || isWater(nx, ny)) { c.v = 0; c.travelA = oldAngle; c.routeT = 0; break; }
+    const other = (c.near || cars).find(o => o !== c && carContact(c, o, nx, ny, nhx, nhy));
+    if (other) {
+      const hit = carContact(c, other, nx, ny, nhx, nhy);
+      const before = [c.x, c.y, c.hx, c.hy];
+      c.x = nx; c.y = ny; c.hx = nhx; c.hy = nhy;
+      if (!resolveCruiserContact(c, other, hit)) { [c.x, c.y, c.hx, c.hy] = before; c.v = 0; c.routeT = 0; }
+      break;
+    }
+    c.x = nx; c.y = ny; c.hx = nhx; c.hy = nhy;
   }
-  c.brake = targetSpeed < c.v; c.off = 0; c.ex = c.x; c.ey = c.y;
+  c.off = 0; c.ex = c.x; c.ey = c.y;
 }
 function cruiserLineClear(c, tx, ty) {
   if (!lineOfSight(c.x, c.y, tx, ty)) return false;
   const vx = rel(tx - c.x), vy = rel(ty - c.y), distance = Math.hypot(vx, vy);
   if (distance < 0.02) return true;
   const hx = vx / distance, hy = vy / distance, steps = Math.ceil(distance / 0.15);
+  const parked = cars.filter(o => o !== c && o.parked && near(c.x, c.y, o.ex, o.ey) < distance + 0.6);
   for (let k = 0; k <= steps; k++) {
     const x = c.x + vx * k / steps, y = c.y + vy * k / steps;
     if (!carBodyClear(x, y, hx, hy) || isWater(x, y)) return false;
+    if (parked.some(o => carContact(c, o, x, y, hx, hy))) return false;
   }
   return true;
 }
@@ -111,18 +176,15 @@ function stepPursuitCar(c, dt) {
   c.pursuitDrive = true;
   let [tx, ty] = c.dest, distance = Math.hypot(rel(tx - c.x), rel(ty - c.y));
   const driving = mode === 'drive' && me;
-  if (wanted.seen && driving) { const lead = Math.min(0.6, distance / 6); tx += me.hx * me.v * lead; ty += me.hy * me.v * lead; }
+  if (wanted.seen && driving) { const lead = Math.min(0.6, distance / 6), heading = me.travelA ?? Math.atan2(me.hy, me.hx); tx += Math.cos(heading) * me.v * lead; ty += Math.sin(heading) * me.v * lead; }
   const direct = cruiserLineClear(c, tx, ty);
   if (!direct && (c.routeT = (c.routeT || 0) - dt) <= 0) { c.routeT = 0.6; c.route = pursuitRoute(c, tx, ty); }
   let goal = direct ? [tx, ty] : c.route?.[0];
   if (!goal) { c.v = 0; return; }
-  if (!direct && Math.hypot(rel(goal[0] - c.x), rel(goal[1] - c.y)) < 0.06) { c.route.shift(); goal = c.route[0] || goal; }
+  if (!direct && c.route.length > 1 && Math.hypot(rel(goal[0] - c.x), rel(goal[1] - c.y)) < 0.18) { c.route.shift(); goal = c.route[0]; }
   const stopForOfficer = mode !== 'drive' && distance < 1.05;
-  steerCruiser(c, goal[0], goal[1], stopForOfficer ? 0 : 3.1, dt);
-  if (driving && Math.hypot(rel(me.x - c.x), rel(me.y - c.y)) < 0.44) {
-    me.v *= Math.exp(-dt * 7); c.v *= Math.exp(-dt * 3);
-    if (Math.abs(c.hx * me.hy - c.hy * me.hx) > 0.35 && Math.abs(me.v) > 0.7) me.spunT = T + 2;
-  }
+  const stoppedDriver = driving && wanted.seen && Math.abs(me.v) < 0.1 && near(c.x, c.y, me.x, me.y) < 0.52;
+  steerCruiser(c, goal[0], goal[1], stopForOfficer || stoppedDriver ? 0 : COP_CAR_SPEED, dt, direct || c.route.length <= 1);
 }
 let carId = 0;
 function addCar(props) {
@@ -270,17 +332,21 @@ function stepTraffic(dt, t, everywhere = false) {
   }
   for (const c of cars) {
     if (!live(c)) continue; // driven by you, or too far away to matter
+    if (c.waitingCrew) { c.v = 0; c.brake = true; c.ex = c.x; c.ey = c.y; continue; }
     if (c.pursuit && c.dest && (c.pursuitDrive || Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < 18)) { stepPursuitCar(c, dt); continue; }
     if (c.merging) {
       const l = c.merging;
-      if (Math.hypot(rel(l.x - c.x), rel(l.y - c.y)) > 0.035) {
+      const canMerge = near(l.x, l.y, c.x, c.y) < 0.08 && carBodyClear(l.x, l.y, l.hx, l.hy)
+        && !c.near.some(o => o !== c && carContact(c, o, l.x, l.y, l.hx, l.hy));
+      if (!canMerge) {
         let goal = [l.x, l.y];
-        if (!cruiserLineClear(c, l.x, l.y)) {
+        const direct = cruiserLineClear(c, l.x, l.y);
+        if (!direct) {
           if ((c.routeT = (c.routeT || 0) - dt) <= 0) { c.routeT = 0.6; c.route = pursuitRoute(c, l.x, l.y); }
           goal = c.route?.[0];
-          if (goal && Math.hypot(rel(goal[0] - c.x), rel(goal[1] - c.y)) < 0.06) { c.route.shift(); goal = c.route[0]; }
+          if (goal && c.route.length > 1 && Math.hypot(rel(goal[0] - c.x), rel(goal[1] - c.y)) < 0.18) { c.route.shift(); goal = c.route[0]; }
         }
-        if (goal) steerCruiser(c, goal[0], goal[1], 1.2, dt); else c.v = 0;
+        if (goal) steerCruiser(c, goal[0], goal[1], 1.2, dt, direct || c.route.length <= 1); else c.v = 0;
         continue;
       }
       c.x = l.x; c.y = l.y; c.ex = c.x; c.ey = c.y; c.hx = l.hx; c.hy = l.hy; c.merging = null; c.travelA = null; plan(c);
@@ -362,7 +428,7 @@ function stepTraffic(dt, t, everywhere = false) {
 
     const target = Math.min(Math.max(0, room_ * 2.5), c.cruise * (c.rush ? 1.8 : 1));
     c.brake = target < c.v;
-    c.v = Math.min(target, c.v + (code(c) || c.rush ? 1.4 : 0.8) * dt);
+    c.v = Math.min(target, c.v + (c.kind === 'police' ? COP_CAR_ACCEL : code(c) || c.rush ? 1.4 : 0.8) * dt);
     const d = c.v * dt, step = Math.min(d, c.left);
     if (vert) c.y = mod(c.y + dir * step, N); else c.x = mod(c.x + dir * step, N);
     c.left -= step;

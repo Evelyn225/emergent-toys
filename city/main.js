@@ -143,13 +143,15 @@ function drive(dt) {
   const oldX = c.x, oldY = c.y, hx = Math.cos(a), hy = Math.sin(a);
   const nx = c.x + Math.cos(c.travelA) * c.v * dt, ny = c.y + Math.sin(c.travelA) * c.v * dt;
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
-  const hitCar = cars.find(o => o !== c && Math.hypot(rel(o.x - fx), rel(o.y - fy)) < 0.3);
+  let hitCar = null;
   const hitPerson = people.find(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15) || footCops.find(p => Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
   const samples = Math.max(1, Math.ceil(Math.abs(c.v * dt) / 0.04), Math.ceil(Math.abs(a - oldA) / 0.08));
   let bodyHit = false;
   for (let k = 1; k <= samples; k++) {
     const f = k / samples, angle = oldA + (a - oldA) * f;
     if (!carBodyClear(oldX + (nx - oldX) * f, oldY + (ny - oldY) * f, Math.cos(angle), Math.sin(angle))) { bodyHit = true; break; }
+    hitCar = cars.find(o => o !== c && carContact(c, o, oldX + (nx - oldX) * f, oldY + (ny - oldY) * f, Math.cos(angle), Math.sin(angle)));
+    if (hitCar) break;
   }
   const hit = bodyHit || !free(fx, fy) || hitCar || hitPerson;
   if (hit) { // a real crash only above CRASH_V; anything slower is a bump
@@ -157,7 +159,7 @@ function drive(dt) {
     if (hitPerson && sp > 0.4) { hitPerson.talk = 3; say(pick(['"Watch it!"', '"Are you CRAZY?"', '"Hey! You hit me!"']), 2); crime('hit', c.x, c.y); } // you hit someone
     if (sp > CRASH_V) { say('*CRUNCH*', 1); taxiCrash(); if (actx) playClip('crash', clamp(0.3 + (sp - CRASH_V) * 0.35, 0.3, 0.8)); if (hitCar && !hitCar.player) crime('crash', c.x, c.y); }
     else if (sp > 0.2 && actx) tone(actx.currentTime, 70, 0.12, 0.08 * sp); // a soft thud
-    if (bodyHit) a = oldA;
+    if (bodyHit || hitCar) a = oldA;
     c.v = 0; c.travelA = a;
   } else { c.x = mod(nx, N); c.y = mod(ny, N); if (drifting) leaveTireMarks(c, hx, hy, oldX, oldY); }
   c.hx = Math.cos(a); c.hy = Math.sin(a); c.ex = c.x; c.ey = c.y; c.brake = f < 0 || handbrake; px = c.x; py = c.y;
