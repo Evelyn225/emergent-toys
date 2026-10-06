@@ -115,9 +115,13 @@ function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 }
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const ah = arcadeRoofHit(z,side,mx,my,wc); // the Shotengai canopy occludes the painted wall behind it
+  if (ah) return arcadeRoofCell(i,mod(ah[0],N),mod(ah[1],N));
+  baseFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
+  graffitiCell(i,u,uStep,z,h,d,side,mx,my,fog,wc);
+}
+function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
-  const ah = arcadeRoofHit(z, side, mx, my, wc); // under the Shotengai's roof: it hides the walls above it
-  if (ah) return arcadeRoofCell(i, mod(ah[0], N), mod(ah[1], N));
   if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 25) return grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -125,7 +129,6 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty === 20) return casinoFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 18 || sty === 19) return glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty);
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
-  if (graffitiCell(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return; // a mural, or somebody's tag
   if (architectureFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return;
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
   if (sty === 24) return belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL);

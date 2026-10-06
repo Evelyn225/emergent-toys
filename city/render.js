@@ -207,15 +207,24 @@ function present() {
   // text: one fillText per run of same-coloured characters on a row (gaps of spaces are allowed inside a run);
   // the font is monospace so a run lines up with the grid, and it's far fewer canvas calls than one per cell
   const blank = j => CH[j] === ' ' || FOGS[j] === 8; // fully fogged text is invisible
+  const singleWidth = ch => ch.length === 1 && ch.charCodeAt(0) < 128;
   for (let r = 0; r < rows; r++) for (let x = 0; x < cols;) {
     const i = r * cols + x;
     if (blank(i)) { x++; continue; }
+    // Unicode fallback fonts and combining sequences can have a different advance. Give each its own cell,
+    // preserving both the complete grapheme and the position of the ordinary text that follows it.
+    if (!singleWidth(CH[i])) {
+      g.fillStyle = FOGS[i] ? fogged(COL[i],FOGS[i]) : PAL[COL[i]];
+      g.fillText(CH[i],x * cw,r * FS,cw);
+      x++; continue;
+    }
     const key = COL[i] * 9 + FOGS[i];
     let s = CH[i], x1 = x + 1, end = x1;
     for (; x1 < cols; x1++) {
       const j = r * cols + x1;
       if (blank(j)) { s += ' '; continue; }
       if (COL[j] * 9 + FOGS[j] !== key) break;
+      if (!singleWidth(CH[j])) break;
       s += CH[j]; end = x1 + 1;
     }
     g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]];

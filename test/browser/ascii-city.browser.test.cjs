@@ -9,6 +9,56 @@ const { chromium, devices } = require('playwright');
 
 const PAGE = pathToFileURL(path.join(__dirname, '..', '..', 'ascii-city.html')).href;
 
+test('Unicode graffiti keeps combining marks together without shifting subsequent canvas cells', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true;
+    const glyphs = paintGlyphs(TAG_SYMBOLS[5]), calls = [], original = g.fillText;
+    CH.fill(' '); COL.fill(C(WHITE,12)); BG.fill(NONE); FOGS.fill(0); FOGB.fill(0);
+    [...glyphs,'X','X'].forEach((ch,i)=>CH[i]=ch);
+    g.fillText = function(...args){calls.push(args); return original.apply(this,args);};
+    present(); g.fillText = original;
+    const strokes = [...new Set(TAG_SYMBOLS.flatMap(paintGlyphs))].map(ch=>{
+      let count=0;
+      for(let y=0;y<48;y++)for(let x=0;x<32;x++)if(paintGlyphOn(ch,(x+.5)/32,(y+.5)/48))count++;
+      return {ch,count};
+    });
+    return {glyphs,calls,cw,strokes,blockEdges:paintGlyphOn('█',.001,.001)&&paintGlyphOn('█',.999,.999),halfBlocks:paintGlyphOn('▀',.5,.25)&&!paintGlyphOn('▀',.5,.75)&&paintGlyphOn('▄',.5,.75)&&!paintGlyphOn('▄',.5,.25)};
+  });
+  assert.equal(result.glyphs.length,3);
+  assert.deepEqual(result.calls.map(c=>c[0]),[...result.glyphs,'XX']);
+  for(let i=0;i<4;i++)assert.ok(Math.abs(result.calls[i][1]-i*result.cw)<1e-6);
+  assert.ok(result.calls.slice(0,3).every(c=>c[3]===result.cw),'Unicode glyphs fit the width of one cell');
+  assert.ok(result.strokes.every(s=>s.count>0),JSON.stringify(result.strokes));
+  assert.ok(result.blockEdges && result.halfBlocks,'solid and half-block art has no seams between its glyphs');
+}));
+
+test('murals fade over the actual facade and leave its color and masonry intact through transparent edges', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; tod = 12; weather = 'clear'; env(0); render(0);
+    let spot=null;
+    for(let y=0;y<N&&!spot;y++)for(let x=0;x<N&&!spot;x++){
+      const k=idx(x,y),seed=muralSeed(k,x,y,'N');
+      if(seed>=0&&map[k]>1.9&&muralPlan(seed,themeAt(x,y)).image?.blocks)spot={x,y,k,seed};
+    }
+    if(!spot)throw Error('No block-art mural');
+    const {x,y,k}=spot;px=x+.5;py=y-.8;
+    const testPixel=(lu,lz)=>{
+      const wc=x+lu,z=.45+lz*1.45,args=[0,-wc,.012,z,map[k],.8,true,x,y,1,wc];
+      baseFacade(...args); const wall=[CH[0],COL[0],BG[0]];
+      facade(...args); return wall.some((v,i)=>v!==[CH[0],COL[0],BG[0]][i]);
+    };
+    const edge=[];
+    for(let n=1;n<20;n++)edge.push(testPixel(.001,n/20),testPixel(.999,n/20));
+    let changed=0,exposed=0;
+    for(let row=3;row<18;row++)for(let col=3;col<18;col++){
+      if(testPixel(col/20,row/20))changed++;else exposed++;
+    }
+    return {edge,changed,exposed};
+  });
+  assert.ok(result.edge.every(v=>!v),'transparent edges use the underlying facade without recoloring it');
+  assert.ok(result.changed>15 && result.exposed>15,JSON.stringify(result));
+}));
+
 test('Belle French doors lead into the real city, with solid railings and both ways back inside', () => withPage(async page => {
   await page.evaluate(() => {
     paused = true; money = 20000; buy('home_belle'); clearWanted(); sleep = null;
