@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { OpenAI } = require('openai');
 const path = require('path');
+const { pathToFileURL } = require('url');
 require('dotenv').config({ path: 'openai.env' });
 
 const app = express();
@@ -16,10 +17,23 @@ const handlers = {};
 
 async function getHandler(moduleName) {
     if (!handlers[moduleName]) {
-        handlers[moduleName] = (await import(path.resolve(`./api/${moduleName}.js`))).default;
+        handlers[moduleName] = (await import(pathToFileURL(path.resolve(`./api/${moduleName}.js`)).href)).default;
     }
     return handlers[moduleName];
 }
+
+app.get(['/ottawa', '/ottawa/'], (req, res) => {
+  res.sendFile(path.resolve('ottawa-trip.html'));
+});
+
+app.all('/api/ottawa-state', async (req, res) => {
+  try {
+    const handler = await getHandler('ottawa-state');
+    await handler(req, res);
+  } catch {
+    res.status(500).json({ error: 'Failed to load Ottawa planner API' });
+  }
+});
 
 // Route for /api/random-words (with and without .js extension)
 app.all('/api/random-words', async (req, res) => {
