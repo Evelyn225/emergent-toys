@@ -94,6 +94,11 @@ test('Vercel routes select Ottawa before the generic HTML route and retain the h
     assert.equal(route.dest, '/ottawa-trip.html');
     assert.equal(await (await fetch(base + url)).text(), fs.readFileSync(path.join(root, 'ottawa-trip.html'), 'utf8'));
   }
+  for (const url of ['/api/ottawa-state', '/api/ottawa-state/']) {
+    const route = config.routes.find(route => new RegExp(route.src).test(url));
+    assert.equal(route.dest, '/api/ottawa-state.js', 'legacy Vercel builds expose the function with its .js extension');
+    assert.ok(config.builds.some(build => build.src === 'api/*.js' && build.use === '@vercel/node'));
+  }
   assert.equal(await (await fetch(base + '/')).text(), fs.readFileSync(path.join(root, 'index.html'), 'utf8'));
   assert.equal((await fetch(base + '/api/ottawa-state')).headers.get('content-type').split(';')[0], 'application/json');
 });
