@@ -83,3 +83,53 @@ test('beveled bay corners are genuinely cut away and their angled glass faces in
   assert.deepEqual(errors, []);
   assert.ok(ev("new Set(ARCH_DETAILS.filter(o=>o.kind==='bay').map(o=>[o.nx,o.ny].join(','))).size>=3"), 'the intersection covers rotated and reversed facades');
 });
+
+test('modern apartments and tenements have four fitted families and whole windows inside every exposed face', () => {
+  const { ev } = loadCity();
+  for (const sty of [16,7]) {
+    assert.equal(ev(`new Set(ARCH_BUILDINGS.filter(b=>b.sty===${sty}).map(b=>b.profile.name)).size`), 4);
+    assert.ok(ev(`ARCH_BUILDINGS.filter(b=>b.sty===${sty}).every(b=>b.faces.every(f=>{
+      const r=f.residential, width=f.end-f.start;
+      for(let unit=0;unit<r.units;unit++) {
+        const center=r.margin+(unit+.5)*r.spacing, half=r.spacing*.39+.025;
+        if(center-half<=0 || center+half>=width) return false;
+      }
+      return r.base+r.floors*r.fh < f.height-.09;
+    }))`), 'windows and their frames leave masonry at corners and below every roof tier');
+  }
+  assert.ok(ev(`ARCH_BUILDINGS.some(b=>b.region==='midtown'&&b.sty===2)`));
+  assert.ok(ev(`ARCH_BUILDINGS.filter(b=>b.profile&&!b.access&&b.x1-b.x0>=3&&b.y1-b.y0>=3&&b.h>1.3).every(b=>
+    new Set(b.tiers.map(t=>t.h)).size>1 && Math.max(...b.tiers.map(t=>t.h))===b.h)`));
+});
+
+test('apartment loggias and tenement escapes project from fitted faces without closing ground-level entrances', () => {
+  const { ev } = loadCity();
+  for (const kind of ['balcony-slab','balcony-rail','escape-platform','escape-stair','escape-flight-rail','escape-drop'])
+    assert.ok(ev(`ARCH_DETAILS.some(o=>o.kind==='${kind}')`), kind);
+  assert.ok(ev(`ARCH_DETAILS.filter(o=>o.profile).every(o=>o.z0>=.30 && !ARCH_BLOCKERS.includes(o))`));
+  assert.ok(ev(`ARCH_BUILDINGS.filter(b=>b.profile).every(b=>b.faces.filter(f=>f.front&&!f.low).every(f=>{
+    const center=(f.start+f.end)/2;
+    return !architectureBlocked((f.side?center:f.line)+f.nx*.09,(f.side?f.line:center)+f.ny*.09,.03);
+  }))`));
+  assert.ok(ev(`ARCH_DETAILS.filter(o=>o.kind==='balcony-slab'||o.kind==='escape-platform').every(o=>{
+    const ox=o.x+o.nx*.5,oy=o.y+o.ny*.5,z=(o.z0+o.z1)/2;
+    const t=rayBox(ox,oy,z,-o.nx,-o.ny,0,o);
+    return t>0 && t<.6;
+  })`), 'balconies and platforms are raycast solids, not facade marks');
+});
+
+test('alternating escape stairs are inclined solids at every facade orientation', () => {
+  const { ev } = loadCity();
+  const errors=JSON.parse(ev(`JSON.stringify((()=>{
+    const errors=[];
+    for(const o of ARCH_DETAILS.filter(o=>o.kind==='escape-stair'))for(const direction of [-1,1]) {
+      const u=o.hl*.55*direction, x=o.x+u*o.c, y=o.y+u*o.s, expected=o.mid+o.slope*u+.012;
+      const t=rayBeveledBay(x,y,o.z1+1,0,0,-1,o);
+      if(t<0 || Math.abs(HIT.w-expected)>1e-7 || HIT.face!==7) errors.push({kind:o.kind,t,expected,hit:HIT.w});
+    }
+    return errors.slice(0,5);
+  })())`));
+  assert.deepEqual(errors,[]);
+  assert.ok(ev(`new Set(ARCH_DETAILS.filter(o=>o.kind==='escape-stair').map(o=>Math.sign(o.slope))).size===2`));
+  assert.ok(ev(`new Set(ARCH_DETAILS.filter(o=>o.kind==='escape-stair').map(o=>o.c)).size===2`));
+});

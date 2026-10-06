@@ -57,11 +57,14 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
 // where on it) and returns true if it drew. Backgrounds get the box's depth too, so fog treats it as solid.
 function drawBox(b, shade, intersect = rayBox) {
   // A box crossing the camera's near plane otherwise tests every screen cell, even when entirely off to one side.
-  // Conservative horizontal bounds also cover sloped custom shapes contained by this box.
+  // Conservative bounds also cover sloped custom shapes contained by this box.
   const along = dx * b.c + dy * b.s, across = -dx * b.s + dy * b.c;
   const far = dx * b.x + dy * b.y + Math.abs(along) * b.hl + Math.abs(across) * b.hw;
   const edge = Math.abs(-dy * b.x + dx * b.y) - Math.abs(across) * b.hl - Math.abs(along) * b.hw;
   if (far < .02 || edge > far * tf) return;
+  const above = b.z0 > eye, below = b.z1 < eye;
+  const bottom = hor - (b.z0 - eye) * projY / far, top = hor - (b.z1 - eye) * projY / far;
+  if (above && bottom < -1 || below && top > rows + 1) return;
   let c0 = cols, c1 = -1, r0 = rows, r1 = -1, behind = 0, near = Infinity;
   for (const su of [-1, 1]) for (const sv of [-1, 1]) {
     const X = b.x + su * b.hl * b.c - sv * b.hw * b.s, Y = b.y + su * b.hl * b.s + sv * b.hw * b.c, depth = dx * X + dy * Y;
@@ -72,7 +75,12 @@ function drawBox(b, shade, intersect = rayBox) {
     r0 = Math.min(r0, hor - (b.z1 - eye) * projY / depth); r1 = Math.max(r1, hor - (b.z0 - eye) * projY / depth);
   }
   if (behind === 4 || near > vis) return;
-  if (behind) { c0 = 0; c1 = cols; r0 = 0; r1 = rows; } // straddling us: test the whole screen
+  if (behind) {
+    c0 = 0; c1 = cols;
+    // Balconies immediately beside the camera can cross the near plane while lying far above the view.
+    r0 = below ? Math.max(0, top - 1) : 0;
+    r1 = above ? Math.min(rows, bottom + 1) : rows;
+  }
   c0 = Math.max(0, Math.floor(c0)); c1 = Math.min(cols, Math.ceil(c1) + 1);
   r0 = Math.max(0, Math.floor(r0)); r1 = Math.min(rows, Math.ceil(r1) + 1);
   for (let c = c0; c < c1; c++) {

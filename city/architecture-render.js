@@ -6,7 +6,9 @@ function architectureFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const dir = side ? (rel(py - my) < 0 ? 0 : 1) : (rel(px - mx) < 0 ? 2 : 3), f = ARCH_FACES[dir][k];
   if (!f || f.height !== h) return false;
   const along = rel(wc - f.start), L = fog * amb * (side ? 11 : 15);
-  if (b.region === 'brownstones') brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
+  if (b.profile) residentialFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
+  else if (b.region === 'midtown') midtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
+  else if (b.region === 'brownstones') brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
   else downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
   return true;
 }
@@ -105,6 +107,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   return set(i, lit ? ' ' : b.sty === 1 && fract((along + z * 0.5) * 5) < 0.05 ? '/' : ':', C(lit ? WARM : CYAN, Math.max(L * 0.45, lit ? night * 12 : 0)));
 }
 function architectureDetailShade(o, i, t, L) {
+  if (o.profile) return residentialDetailShade(o, i, t, L);
   const z = HIT.w, base = o.region === 'brownstones' ? BROWNSTONE_MATERIALS[o.material] : [STONE, WHITE, STONE, WARM, GRAY][o.material];
   if (o.kind === 'rail') {
     const out = HIT.u * (o.c * o.nx + o.s * o.ny), top = 0.1 + 0.12 * clamp((0.18 - out - 0.075) / 0.145, 0, 1);
@@ -154,12 +157,14 @@ function drawArchitecture() {
     if (map[o.ownerCell] !== o.ownerHeight) return;
     // Massing stays in the height map; small trim is culled before it becomes an unreadable speck.
     const vx = rel(o.x - px), vy = rel(o.y - py), distance = Math.hypot(vx, vy);
-    if (distance > vis + 1 || distance > (o.kind === 'bay' || o.kind === 'cornice' ? 18 : 9)) return;
+    if (distance > vis + 1 || distance > (o.detailDistance || (o.kind === 'bay' || o.kind === 'cornice' ? 18 : 9))) return;
     // Reject boxes outside the view before projecting their corners or copying their shape data.
     const along = dx * o.c + dy * o.s, across = -dx * o.s + dy * o.c;
     const far = dx * vx + dy * vy + Math.abs(along) * o.hl + Math.abs(across) * o.hw;
     const edge = Math.abs(-dy * vx + dx * vy) - Math.abs(across) * o.hl - Math.abs(along) * o.hw;
     if (far < 0.02 || edge > far * tf) return;
+    if (o.z0 > eye && (o.z0 - eye) * projY > (hor + 1) * far ||
+      o.z1 < eye && (eye - o.z1) * projY > (rows + 1 - hor) * far) return;
     drawBox({ ...o, x: vx, y: vy }, (i, t, L) => architectureDetailShade(o, i, t, L), o.planes ? rayBeveledBay : rayBox);
   });
 }

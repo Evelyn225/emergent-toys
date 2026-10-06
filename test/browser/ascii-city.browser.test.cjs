@@ -25,6 +25,66 @@ test('boxes straddling the camera but outside its view skip per-cell rays, while
   assert.ok(result.rays>0 && result.painted>0,JSON.stringify(result));
 }));
 
+test('near-plane balconies outside the vertical view skip rays, and looking up or down reveals them', () => withPage(async page => {
+  const result=await page.evaluate(()=>{
+    paused=true;render(0);dx=1;dy=0;eye=.17;hor=rows/2;
+    let rays=0,painted=0;
+    const intersect=(...args)=>{rays++;return rayBox(...args);};
+    const shade=i=>{painted++;set(i,'#',C(WHITE,12));return true;};
+    const b=boxAt(.5,0,1,0,.6,.25,2,2.1);
+    ZB.fill(Infinity);drawBox(b,shade,intersect);const above=rays;
+    const belowBox=boxAt(.5,0,1,0,.6,.25,-2,-1.9);
+    drawBox(belowBox,shade,intersect);const below=rays;
+    hor=rows/2+3*projY;drawBox(b,shade,intersect);const lookingUp=painted;
+    hor=rows/2-3*projY;ZB.fill(Infinity);drawBox(belowBox,shade,intersect);
+    return{above,below,lookingUp,lookingDown:painted-lookingUp};
+  });
+  assert.equal(result.above,0);assert.equal(result.below,0);
+  assert.ok(result.lookingUp>0&&result.lookingDown>0,JSON.stringify(result));
+}));
+
+test('Midtown housing elevators retain their flat roof landings and real return stairs', () => withPage(async page => {
+  const result=await page.evaluate(()=>{
+    paused=true;clearWanted();
+    return [16,7,2,0].map(sty=>{
+      const b=ARCH_BUILDINGS.find(b=>b.region==='midtown'&&b.sty===sty&&b.sh.kind===SHOP_APTS);
+      if(!b)throw Error('Missing apartment '+sty);
+      enterRoom('apts',{...b.sh,cell:[mod(b.x0,N),mod(b.y0,N)],ret:[b.x0-.2,b.y0-.2,0]},[4,1.5,-Math.PI/2]);
+      interact();render(0);
+      const landing={sty,mode,height:roofH,expected:b.h,clear:roofFree(px,py),stairs:roofLot.has(idx(Math.floor(px),Math.floor(py)))};
+      interact();return{...landing,returned:mode==='room'&&room.kind==='apts'};
+    });
+  });
+  for(const r of result){assert.equal(r.mode,'roof');assert.equal(r.height,r.expected);assert.ok(r.clear&&r.stairs&&r.returned,JSON.stringify(r));}
+}));
+
+test('modern balcony rails and fire escapes have open gaps, fitted glazing, and snow on their exposed slabs', () => withPage(async page => {
+  const result=await page.evaluate(()=>{
+    paused=true;tod=12;weather='clear';env(0);render(0);
+    const glass=ARCH_DETAILS.find(o=>o.kind==='balcony-rail'&&o.profile.glass), iron=ARCH_DETAILS.find(o=>o.kind==='escape-rail');
+    const gaps=o=>{
+      let open=0,solid=0;
+      for(let n=0;n<40;n++){
+        HIT.u=-o.hl+o.hl*2*(n+.5)/40;HIT.v=o.hw;HIT.w=(o.z0+o.z1)/2;HIT.face=3;
+        if(residentialDetailShade(o,0,1,10))solid++;else open++;
+      }
+      return{open,solid};
+    };
+    const slab=ARCH_DETAILS.find(o=>o.kind==='balcony-slab'&&o.profile.trim!==WHITE);snowCover=0;HIT.u=HIT.v=0;HIT.w=slab.z1;HIT.face=5;
+    residentialDetailShade(slab,0,1,10);
+    const bare=COL[0]>>4===WHITE||BG[0]>>4===WHITE;
+    snowCover=1;residentialDetailShade(slab,0,1,10);
+    const snowy=COL[0]>>4===WHITE||BG[0]>>4===WHITE;
+    const spine=ARCH_DETAILS.find(o=>o.kind==='service-spine');HIT.u=0;HIT.w=.48+spine.fh*.5;HIT.face=3;
+    residentialDetailShade(spine,0,1,10);const glazing=[CYAN,WARM].includes(BG[0]>>4);
+    return{glass:gaps(glass),iron:gaps(iron),snow:!bare&&snowy,glazing};
+  });
+  assert.ok(result.glass.open>15&&result.glass.solid>0,JSON.stringify(result));
+  assert.ok(result.iron.open>15&&result.iron.solid>0,JSON.stringify(result));
+  assert.ok(result.snow);
+  assert.ok(result.glazing);
+}));
+
 test('merchant blade signs use block glyphs up close and single readable characters at distance', () => withPage(async page => {
   const result=await page.evaluate(()=>{
     paused=true;render(0);
@@ -257,10 +317,10 @@ test('redesigned storefronts keep their opening hours, glazing and closed shutte
     paused = true; mode = 'walk'; room = null; me = null; clearWanted();
     body.z = body.vz = body.crouch = 0; body.seat = null; fx.skating = false;
     people.length = cars.length = 0; weather = 'clear';
-    return ['brownstones', 'downtown'].map(region => {
+    return ['brownstones', 'downtown', 'midtown'].map(region => {
       const b = ARCH_BUILDINGS.find(b => b.region === region && b.faces.some(f => f.front) &&
         b.sh.kind !== SHOP_APTS && b.sh.kind !== SHOP_SHUT && openAt(b.sh, 12) && !openAt(b.sh, 3));
-      const f = b.faces.find(f => f.front), along = region === 'brownstones' ? f.start + f.spacing * 0.74 : (f.start + f.end) / 2;
+      const f = b.faces.find(f => f.front), along = region === 'brownstones' ? f.start + f.spacing * 0.74 : (f.start + f.end) / 2 + (region === 'midtown' ? .17 : 0);
       px = (f.side ? along : f.line) + f.nx * 0.7; py = (f.side ? f.line : along) + f.ny * 0.7;
       a = Math.atan2(-f.ny, -f.nx); pitch = 0;
       const pixels = [12, 3].map(hour => {

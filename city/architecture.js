@@ -1,4 +1,4 @@
-// Deliberate building compositions for the Brownstones and downtown. Ground footprints and shop identities stay
+// Deliberate building compositions for the city's housing and business districts. Ground footprints and shop identities stay
 // stable; stepped tower heights participate in the same map used by movement, roof routes and the raycaster.
 const ARCH_BUILDINGS = [], ARCH_FACES = Array.from({ length: 4 }, () => new Array(N * N));
 const ARCH_DETAILS = [], ARCH_BLOCKERS = [], ARCH_STEPS = [];
@@ -115,11 +115,12 @@ function downtownDetails(b) {
     [slope,0,1,c.z0+slope*c.hl],[-slope,0,1,c.z0+slope*c.hl],[0,slope,1,c.z0+slope*c.hw],[0,-slope,1,c.z0+slope*c.hw]];
 }
 {
-  const lots = new Map();
+  const lots = new Map(), pending = [];
   for (let k = 0; k < map.length; k++) {
     const sh = SHOP[k], sty = STY[k], district = districtAt(k % N, Math.floor(k / N));
     if (!sh || sh.base || !map[k]) continue;
-    if (!(district === 'brownstones' && sty === 9 || district === 'downtown' && [0, 1, 14].includes(sty))) continue;
+    if (!(sty === 7 || sty === 16 || district === 'midtown' && [0, 1, 2, 14].includes(sty) ||
+      district === 'brownstones' && sty === 9 || district === 'downtown' && [0, 1, 14].includes(sty))) continue;
     if (!lots.has(sh)) lots.set(sh, []);
     lots.get(sh).push(k);
   }
@@ -131,20 +132,31 @@ function downtownDetails(b) {
     const forms = sty === 14 ? ['stepped', 'shoulder', 'stepped'] : ['shoulder', 'paired', 'offset'];
     const b = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, x0, y0, x1, y1, h: map[cells[0]], region, seed, sty, access,
       material: Math.floor(fract(seed * 17) * 5), form: region === 'brownstones' ? 'terrace' : forms[Math.floor(fract(seed * 31) * forms.length)], sh };
+    if (sty === 7 || sty === 16) {
+      b.profile = RESIDENTIAL_PROFILES[sty === 16 ? 'modern' : 'tenement'][Math.floor(fract(seed * 29) * 4)];
+      b.form = b.profile.form;
+    }
     b.tiers = [architectureTier(x0, y0, x1, y1, b.h)];
-    if (region === 'downtown' && !access && x1 - x0 >= 3 && y1 - y0 >= 2) {
-      b.tiers = towerComposition(b);
+    const shaped = region === 'downtown' || (region === 'midtown' || b.profile) && b.h > 1.3;
+    if (shaped && !access && x1 - x0 >= 3 && y1 - y0 >= (region === 'downtown' ? 2 : 3)) {
+      b.tiers = b.profile ? residentialComposition(b) : towerComposition(b);
       for (const k of cells) {
         const x = refX + rel(k % N - refX), y = refY + rel(Math.floor(k / N) - refY);
         map[k] = Math.max(...b.tiers.filter(t => x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1).map(t => t.h));
       }
     }
+    ARCH_BUILDINGS.push(b);
+    pending.push([b, cells]);
+  }
+  // Finish every silhouette first: a later neighbor's setback can expose another complete facade.
+  for (const [b, cells] of pending) {
     b.faces = architectureFaces(b, cells);
-    if (region === 'brownstones') brownstoneDetails(b); else downtownDetails(b);
+    if (b.profile) residentialDetails(b);
+    else if (b.region === 'brownstones') brownstoneDetails(b);
+    else downtownDetails(b);
     // Keep metadata serializable: faces and roof data never contain their owning shop.
     const { sh: ignoredShop, ...metadata } = b;
-    sh.architecture = metadata;
-    ARCH_BUILDINGS.push(b);
+    b.sh.architecture = metadata;
   }
 }
 const architectureBuildingsB = bucketed(ARCH_BUILDINGS), architectureDetailsB = bucketed(ARCH_DETAILS);
@@ -175,7 +187,7 @@ function architectureContains(o, x, y, pad = 0) {
   const qx = rel(x - o.x), qy = rel(y - o.y);
   return Math.abs(qx * o.c + qy * o.s) < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad;
 }
-// Convex bay profile: a broad center window and two glazed, angled corners, in the box's own coordinates.
+// Clip convex profiles in the box's own coordinates: beveled bays and inclined fire-escape flights.
 function rayBeveledBay(ox, oy, oz, rx, ry, rz, b) {
   const qx = ox - b.x, qy = oy - b.y;
   const u = qx * b.c + qy * b.s, v = -qx * b.s + qy * b.c;

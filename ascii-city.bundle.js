@@ -1267,7 +1267,104 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   }
 }
 const roofsB = bucketed(roofs);
-// Deliberate building compositions for the Brownstones and downtown. Ground footprints and shop identities stay
+// Authored apartment and walk-up families. Balconies and escapes use the same exposed faces as the windows.
+const RESIDENTIAL_PROFILES = {
+  modern: [
+    { name: 'concrete loggias', wall: STONE, trim: WHITE, accent: GRAY, spacing: .82, rise: .40, form: 'terrace', glass: true },
+    { name: 'brick and glass', wall: BRICK, trim: STONE, accent: BRICK, spacing: .98, rise: .38, form: 'split', glass: false },
+    { name: 'corner terraces', wall: WHITE, trim: GRAY, accent: SKIN, spacing: 1.12, rise: .43, form: 'corner', glass: true },
+    { name: 'garden galleries', wall: GRAY, trim: WHITE, accent: SKIN, spacing: .88, rise: .42, form: 'wing', glass: false },
+  ],
+  tenement: [
+    { name: 'red brick walkup', wall: BRICK, trim: STONE, accent: BRICK, spacing: .82, rise: .35, form: 'rear-wing', brick: true },
+    { name: 'buff cornerhouse', wall: SKIN, trim: WHITE, accent: BRICK, spacing: 1.04, rise: .38, form: 'corner', brick: true },
+    { name: 'patched plaster', wall: STONE, trim: GRAY, accent: BRICK, spacing: .90, rise: .37, form: 'rear-wing', brick: false },
+    { name: 'stone lintel block', wall: GRAY, trim: STONE, accent: STONE, spacing: .78, rise: .34, form: 'wing', brick: true },
+  ]
+};
+function residentialComposition(b) {
+  const { x0, y0, x1, y1, h } = b, lower = Math.max(.8, h - b.profile.rise * (b.sty === 16 ? 2 : 1));
+  const tiers = [architectureTier(x0, y0, x1, y1, lower)];
+  if (b.form === 'terrace') tiers.push(architectureTier(x0, y0 + 1, x1, y1, h));
+  else if (b.form === 'split') {
+    tiers.push(architectureTier(x0 + 1, y0, x1 - 1, y1, h));
+    tiers.push(architectureTier(x0, y0 + 1, x1, y1, h - b.profile.rise));
+  } else if (b.form === 'corner') {
+    tiers.push(architectureTier(x0, y0, x1 - 1, y1, h));
+    tiers.push(architectureTier(x0, y0, x1, y1 - 1, h));
+  } else if (b.form === 'rear-wing') tiers.push(architectureTier(x0, y0, x1, y1 - 1, h));
+  else tiers.push(architectureTier(x0, y0, x1 - 1, y1, h));
+  return tiers;
+}
+function residentialFaceLayout(b, f) {
+  const width = f.end - f.start, margin = Math.min(.15, width * .16);
+  const units = Math.max(1, Math.round((width - margin * 2) / b.profile.spacing));
+  const floors = Math.max(1, Math.floor((f.height - .58) / b.profile.rise));
+  return { margin, units, spacing: (width - margin * 2) / units, floors, fh: (f.height - .58) / floors, base: .48,
+    core: b.sty === 16 && units > 1 ? (b.profile.form === 'split' ? Math.floor(units / 2) : Math.floor(fract(b.seed * 53) * units)) : -1 };
+}
+function residentialSideRail(b, f, along, depth, z, height, kind) {
+  const rail = architectureDetail(b, f, along, depth, .01, depth, z, z + height, kind, { profile: b.profile });
+  rail.c = f.side ? 0 : 1; rail.s = f.side ? 1 : 0; rail.hl = depth; rail.hw = .008;
+}
+function modernApartmentDetails(b, f) {
+  if (!f.front && f.end - f.start < 1.7) return;
+  const r = f.residential, p = b.profile;
+  for (let fl = 0; fl < r.floors; fl++) {
+    const z = r.base + fl * r.fh + r.fh * .1;
+    if (z < f.low + .06) continue;
+    // One or two broad loggias, broken by an actual service spine rather than dozens of tiny repeated boxes.
+    const groups = r.core < 0 ? [[0, r.units]] : [[0, r.core], [r.core + 1, r.units]];
+    for (const [first, end] of groups) {
+      if (first === end || p.form === 'corner' && !f.front && fl % 2) continue;
+      const half = (end - first) * r.spacing / 2 - .035, along = f.start + r.margin + (first + end) * r.spacing / 2;
+      const depth = p.form === 'terrace' ? .115 : .095, height = r.fh * .32;
+      const extra = { profile: p, spacing: r.spacing, detailDistance: 18 };
+      architectureDetail(b, f, along, depth, half + .02, depth + .01, z - .025, z, 'balcony-slab', extra);
+      architectureDetail(b, f, along, depth * 2, half, .008, z, z + height, 'balcony-rail', extra);
+      for (const sign of [-1, 1]) residentialSideRail(b, f, along + sign * half, depth, z, height, 'balcony-rail');
+      if ((fl + first) % 3 === 1) {
+        architectureDetail(b, f, along - half * .65, depth, .045, .038, z, z + .07, 'planter', { profile: p });
+        architectureDetail(b, f, along - half * .65, depth, .052, .044, z + .07, z + .15, 'leaves', { profile: p });
+      }
+    }
+  }
+  if (r.core >= 0) {
+    const along = f.start + r.margin + (r.core + .5) * r.spacing;
+    architectureDetail(b, f, along, .012, r.spacing * .38, .025, .44, f.height - .08, 'service-spine', { profile: p, fh: r.fh, floors: r.floors, detailDistance: 18 });
+  }
+}
+function tenementEscapeDetails(b, f) {
+  if (!f.front || f.low || f.end - f.start < 1.3) return;
+  const r = f.residential, half = Math.min(.27, r.spacing * .36);
+  const unit = Math.max(0, r.units - 2), along = f.start + r.margin + (unit + .5) * r.spacing;
+  const depth = .10, height = .105;
+  for (let fl = 0; fl < r.floors; fl++) {
+    const z = r.base + fl * r.fh + .015;
+    const extra = { profile: b.profile, detailDistance: 15 };
+    architectureDetail(b, f, along, depth, half + .035, depth + .025, z - .018, z, 'escape-platform', extra);
+    architectureDetail(b, f, along, depth * 2 + .02, half + .035, .007, z, z + height, 'escape-rail', extra);
+    for (const sign of [-1, 1]) residentialSideRail(b, f, along + sign * (half + .035), depth, z, height, 'escape-rail');
+    if (fl + 1 < r.floors) {
+      const slope = (fl % 2 ? -1 : 1) * r.fh / (half * 2), mid = z + r.fh / 2;
+      const flight = architectureDetail(b, f, along, depth, half, .038, z - .012, z + r.fh + .012, 'escape-stair', { ...extra, slope, mid });
+      flight.planes = [[1,0,0,half,1],[-1,0,0,half,2],[0,1,0,.038,3],[0,-1,0,.038,4],
+        [-slope,0,1,mid+.012,7],[slope,0,-1,-mid+.012,8]];
+      architectureDetail(b, f, along, depth * 2 + .02, half, .007, z, z + r.fh + height, 'escape-flight-rail', { ...extra, slope, mid, railHeight: height });
+    }
+  }
+  architectureDetail(b, f, along + half * .8, depth * 2 + .02, .025, .009, .30, r.base + .015, 'escape-drop', { profile: b.profile });
+}
+function residentialDetails(b) {
+  for (const f of b.faces) {
+    f.residential = residentialFaceLayout(b, f);
+    const center = (f.start + f.end) / 2, half = (f.end - f.start) / 2, extra = { profile: b.profile };
+    architectureDetail(b, f, center, .014, half, b.sty === 7 ? .055 : .03, f.height - .06, f.height + .025, 'residential-cornice', { ...extra, detailDistance: 18 });
+    if (f.front && !f.low) architectureDetail(b, f, center, .08, Math.min(.38, half - .12), .09, .305, .325, 'entrance-canopy', extra);
+    if (b.sty === 16) modernApartmentDetails(b, f); else tenementEscapeDetails(b, f);
+  }
+}
+// Deliberate building compositions for the city's housing and business districts. Ground footprints and shop identities stay
 // stable; stepped tower heights participate in the same map used by movement, roof routes and the raycaster.
 const ARCH_BUILDINGS = [], ARCH_FACES = Array.from({ length: 4 }, () => new Array(N * N));
 const ARCH_DETAILS = [], ARCH_BLOCKERS = [], ARCH_STEPS = [];
@@ -1384,11 +1481,12 @@ function downtownDetails(b) {
     [slope,0,1,c.z0+slope*c.hl],[-slope,0,1,c.z0+slope*c.hl],[0,slope,1,c.z0+slope*c.hw],[0,-slope,1,c.z0+slope*c.hw]];
 }
 {
-  const lots = new Map();
+  const lots = new Map(), pending = [];
   for (let k = 0; k < map.length; k++) {
     const sh = SHOP[k], sty = STY[k], district = districtAt(k % N, Math.floor(k / N));
     if (!sh || sh.base || !map[k]) continue;
-    if (!(district === 'brownstones' && sty === 9 || district === 'downtown' && [0, 1, 14].includes(sty))) continue;
+    if (!(sty === 7 || sty === 16 || district === 'midtown' && [0, 1, 2, 14].includes(sty) ||
+      district === 'brownstones' && sty === 9 || district === 'downtown' && [0, 1, 14].includes(sty))) continue;
     if (!lots.has(sh)) lots.set(sh, []);
     lots.get(sh).push(k);
   }
@@ -1400,20 +1498,31 @@ function downtownDetails(b) {
     const forms = sty === 14 ? ['stepped', 'shoulder', 'stepped'] : ['shoulder', 'paired', 'offset'];
     const b = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, x0, y0, x1, y1, h: map[cells[0]], region, seed, sty, access,
       material: Math.floor(fract(seed * 17) * 5), form: region === 'brownstones' ? 'terrace' : forms[Math.floor(fract(seed * 31) * forms.length)], sh };
+    if (sty === 7 || sty === 16) {
+      b.profile = RESIDENTIAL_PROFILES[sty === 16 ? 'modern' : 'tenement'][Math.floor(fract(seed * 29) * 4)];
+      b.form = b.profile.form;
+    }
     b.tiers = [architectureTier(x0, y0, x1, y1, b.h)];
-    if (region === 'downtown' && !access && x1 - x0 >= 3 && y1 - y0 >= 2) {
-      b.tiers = towerComposition(b);
+    const shaped = region === 'downtown' || (region === 'midtown' || b.profile) && b.h > 1.3;
+    if (shaped && !access && x1 - x0 >= 3 && y1 - y0 >= (region === 'downtown' ? 2 : 3)) {
+      b.tiers = b.profile ? residentialComposition(b) : towerComposition(b);
       for (const k of cells) {
         const x = refX + rel(k % N - refX), y = refY + rel(Math.floor(k / N) - refY);
         map[k] = Math.max(...b.tiers.filter(t => x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1).map(t => t.h));
       }
     }
+    ARCH_BUILDINGS.push(b);
+    pending.push([b, cells]);
+  }
+  // Finish every silhouette first: a later neighbor's setback can expose another complete facade.
+  for (const [b, cells] of pending) {
     b.faces = architectureFaces(b, cells);
-    if (region === 'brownstones') brownstoneDetails(b); else downtownDetails(b);
+    if (b.profile) residentialDetails(b);
+    else if (b.region === 'brownstones') brownstoneDetails(b);
+    else downtownDetails(b);
     // Keep metadata serializable: faces and roof data never contain their owning shop.
     const { sh: ignoredShop, ...metadata } = b;
-    sh.architecture = metadata;
-    ARCH_BUILDINGS.push(b);
+    b.sh.architecture = metadata;
   }
 }
 const architectureBuildingsB = bucketed(ARCH_BUILDINGS), architectureDetailsB = bucketed(ARCH_DETAILS);
@@ -1444,7 +1553,7 @@ function architectureContains(o, x, y, pad = 0) {
   const qx = rel(x - o.x), qy = rel(y - o.y);
   return Math.abs(qx * o.c + qy * o.s) < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad;
 }
-// Convex bay profile: a broad center window and two glazed, angled corners, in the box's own coordinates.
+// Clip convex profiles in the box's own coordinates: beveled bays and inclined fire-escape flights.
 function rayBeveledBay(ox, oy, oz, rx, ry, rz, b) {
   const qx = ox - b.x, qy = oy - b.y;
   const u = qx * b.c + qy * b.s, v = -qx * b.s + qy * b.c;
@@ -7013,7 +7122,9 @@ function architectureFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const dir = side ? (rel(py - my) < 0 ? 0 : 1) : (rel(px - mx) < 0 ? 2 : 3), f = ARCH_FACES[dir][k];
   if (!f || f.height !== h) return false;
   const along = rel(wc - f.start), L = fog * amb * (side ? 11 : 15);
-  if (b.region === 'brownstones') brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
+  if (b.profile) residentialFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
+  else if (b.region === 'midtown') midtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
+  else if (b.region === 'brownstones') brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
   else downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
   return true;
 }
@@ -7112,6 +7223,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   return set(i, lit ? ' ' : b.sty === 1 && fract((along + z * 0.5) * 5) < 0.05 ? '/' : ':', C(lit ? WARM : CYAN, Math.max(L * 0.45, lit ? night * 12 : 0)));
 }
 function architectureDetailShade(o, i, t, L) {
+  if (o.profile) return residentialDetailShade(o, i, t, L);
   const z = HIT.w, base = o.region === 'brownstones' ? BROWNSTONE_MATERIALS[o.material] : [STONE, WHITE, STONE, WARM, GRAY][o.material];
   if (o.kind === 'rail') {
     const out = HIT.u * (o.c * o.nx + o.s * o.ny), top = 0.1 + 0.12 * clamp((0.18 - out - 0.075) / 0.145, 0, 1);
@@ -7161,14 +7273,133 @@ function drawArchitecture() {
     if (map[o.ownerCell] !== o.ownerHeight) return;
     // Massing stays in the height map; small trim is culled before it becomes an unreadable speck.
     const vx = rel(o.x - px), vy = rel(o.y - py), distance = Math.hypot(vx, vy);
-    if (distance > vis + 1 || distance > (o.kind === 'bay' || o.kind === 'cornice' ? 18 : 9)) return;
+    if (distance > vis + 1 || distance > (o.detailDistance || (o.kind === 'bay' || o.kind === 'cornice' ? 18 : 9))) return;
     // Reject boxes outside the view before projecting their corners or copying their shape data.
     const along = dx * o.c + dy * o.s, across = -dx * o.s + dy * o.c;
     const far = dx * vx + dy * vy + Math.abs(along) * o.hl + Math.abs(across) * o.hw;
     const edge = Math.abs(-dy * vx + dx * vy) - Math.abs(across) * o.hl - Math.abs(along) * o.hw;
     if (far < 0.02 || edge > far * tf) return;
+    if (o.z0 > eye && (o.z0 - eye) * projY > (hor + 1) * far ||
+      o.z1 < eye && (eye - o.z1) * projY > (rows + 1 - hor) * far) return;
     drawBox({ ...o, x: vx, y: vy }, (i, t, L) => architectureDetailShade(o, i, t, L), o.planes ? rayBeveledBay : rayBox);
   });
+}
+// Windows have complete bays, corner margins and a fitted top floor; geometry carries the balconies and escapes.
+const MIDTOWN_MATERIALS = [STONE, GRAY, SKIN, WHITE, STONE];
+function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, trim) {
+  const width = f.end - f.start, center = width / 2, open = openAt(sh, tod);
+  if (f.front && z > .335 && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), .38,
+    Math.min(.067, (width - .3) / sh.word.length), .043, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return;
+  if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
+  if (z > .325 || z < .045) return set(i, z > .325 ? '=' : '_', C(trim, L * .75));
+  const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
+  if (f.front && sh.kind === SHOP_APTS) {
+    if (door < doorHalf && z < .30) {
+      BG[i] = C(WARM, 1 + night * 3);
+      return set(i, door < .009 || door > doorHalf - .015 ? '|' : Math.abs(z - .16) < .012 ? '-' : ':', C(WHITE, Math.max(L * .7, night * 12)));
+    }
+    if (z > .08 && z < .26 && door > doorHalf + .06 && door < width * .36) {
+      BG[i] = C(CYAN, 1 + night);
+      return set(i, '|', C(GRAY, L * .5));
+    }
+    return set(i, ' ', C(wall, L));
+  }
+  if (along > .14 && along < width - .14 && z < .31) {
+    if (architectureShutter(i, z, sh, L)) return;
+    const mullion = Math.abs(fract((along - .14) / .48) - .5) > .47;
+    BG[i] = C(sh.kind === SHOP_NEON ? sh.neon : CYAN, 1 + night * 2);
+    return set(i, mullion ? '|' : ':', C(mullion ? trim : WARM, Math.max(L * .65, night * 11)));
+  }
+  return set(i, ' ', C(wall, L));
+}
+function residentialFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
+  const p = b.profile, r = f.residential, width = f.end - f.start, modern = b.sty === 16;
+  const grain = hash(Math.floor(wc * 15), Math.floor(z * 24), sk0(b.seed));
+  const patch = !modern && !p.brick && hash(Math.floor(wc * 2.6), Math.floor(z * 4), sk0(b.seed)) > .88;
+  const wall = patch ? p.accent : p.wall;
+  BG[i] = C(wall, 2.1 + L * (modern ? .34 : .27) + grain * .6);
+  if (Math.min(along, width - along) < r.margin * .65)
+    return set(i, !modern && fract(z * 13) < .14 ? '=' : '|', C(p.trim, L * .75));
+  if (z < .44) return housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, p.trim);
+  if (z > f.height - .095 || z < r.base) return set(i, '=', C(p.trim, L * .8));
+  const unit = clamp(Math.floor((along - r.margin) / r.spacing), 0, r.units - 1);
+  const local = along - r.margin - (unit + .5) * r.spacing;
+  const fl = Math.floor((z - r.base) / r.fh), floor0 = r.base + fl * r.fh;
+  if (fl < 0 || fl >= r.floors) return set(i, ' ', C(wall, L));
+  if (modern) {
+    if (unit === r.core) {
+      BG[i] = C(p.accent, 1.8 + L * .25);
+      if (Math.abs(local) < .05 && z > floor0 + r.fh * .25 && z < floor0 + r.fh * .7)
+        return brownstoneWindow(i, local, z, .045, floor0 + r.fh * .25, floor0 + r.fh * .7, false, L, p.trim);
+      return set(i, fract(z * 18) < .08 ? '_' : ' ', C(p.accent, L * .7));
+    }
+    if (brownstoneWindow(i, local, z, r.spacing * .39, floor0 + r.fh * .13, floor0 + r.fh * .89,
+      hash(unit, fl, sk0(b.seed)) > litT - .06, L, p.trim)) return;
+    return set(i, Math.abs(local) > r.spacing * .46 ? '|' : ' ', C(p.trim, L * .7));
+  }
+  const gap = r.spacing * .46, window = local < 0 ? 0 : 1, du = local - (window ? 1 : -1) * gap / 2;
+  if (brownstoneWindow(i, du, z, Math.min(.12, gap * .30), floor0 + r.fh * .2, floor0 + r.fh * .83,
+    hash(unit * 2 + window, fl, sk0(b.seed)) > litT - .1, L, p.trim)) return;
+  if (Math.abs(z - floor0 - r.fh * .9) < .012 && Math.abs(local) < r.spacing * .4)
+    return set(i, '-', C(p.trim, L));
+  return set(i, p.brick || patch ? (fract(z * 26) < .07 ? '_' : fract(wc * 14 + (Math.floor(z * 26) & 1) * .5) < .06 ? '|' : ' ') : grain > .94 ? '.' : ' ', C(wall, L * .65));
+}
+function midtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
+  if (b.sty === 14) return downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L);
+  const brick = b.sty === 2, glass = b.sty === 1;
+  const base = brick ? [BRICK, SKIN, STONE, BRICK, GRAY][b.material] : MIDTOWN_MATERIALS[b.material];
+  const width = f.end - f.start, margin = .12, corner = Math.min(along, width - along);
+  BG[i] = C(base, 2 + L * .29);
+  if (corner < margin * .6 || z > f.height - .07) return set(i, z > f.height - .07 ? '=' : '|', C(base, L));
+  if (z < .44) return housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, base, STONE);
+  const bays = Math.max(1, Math.round((width - margin * 2) / (glass ? .68 : .74))), spacing = (width - margin * 2) / bays;
+  const bay = clamp(Math.floor((along - margin) / spacing), 0, bays - 1), du = along - margin - (bay + .5) * spacing;
+  const floors = Math.max(1, Math.floor((f.height - .58) / .36)), fh = (f.height - .58) / floors;
+  const fl = Math.floor((z - .48) / fh), floor0 = .48 + fl * fh;
+  if (fl >= 0 && fl < floors && brownstoneWindow(i, du, z, spacing * (glass ? .44 : .32), floor0 + fh * .18, floor0 + fh * .82,
+    hash(bay, fl, sk0(b.seed)) > litT + (glass ? .05 : -.06), L, glass ? GRAY : STONE)) return;
+  if (glass && Math.abs(du) > spacing * .44) return set(i, '|', C(GRAY, L));
+  if (Math.abs(z - floor0) < .016) return set(i, '-', C(STONE, L * .65));
+  return set(i, brick && fract(z * 24) < .075 ? '_' : !brick && Math.abs(du) > spacing * .44 ? '|' : ' ', C(base, L * .75));
+}
+function residentialDetailShade(o, i, t, L) {
+  const z = HIT.w, p = o.profile, rail = o.kind === 'balcony-rail' || o.kind === 'escape-rail' || o.kind === 'escape-flight-rail';
+  if (o.kind === 'escape-drop') {
+    if (Math.abs(HIT.u) < .016 && fract(z * 40) > .15) return false;
+    BG[i] = C(GRAY, 1); set(i, Math.abs(HIT.u) < .016 ? '-' : '|', C(GRAY, L * .85)); return true;
+  }
+  if (rail) {
+    const top = o.kind === 'escape-flight-rail' ? o.mid + o.slope * HIT.u + o.railHeight : o.z1;
+    const bottom = o.kind === 'escape-flight-rail' ? top - o.railHeight : o.z0;
+    if (z < bottom || z > top + .006) return false;
+    const bar = Math.abs(z - top) < .01 || Math.abs(z - bottom) < .008 || Math.abs(fract(HIT.u * (o.kind === 'balcony-rail' ? 5 : 16)) - .5) < .09;
+    if (bar) { BG[i] = C(GRAY, 1); set(i, Math.abs(z - top) < .01 ? '-' : '|', C(o.kind === 'balcony-rail' ? p.trim : GRAY, L * .8)); return true; }
+    if (o.kind !== 'balcony-rail' || !p.glass || Math.abs(fract(HIT.u * 7 + z * 3) - .5) > .045) return false;
+    set(i, ':', C(CYAN, L * .48)); return true;
+  }
+  if (o.kind === 'escape-stair') {
+    if (HIT.face >= 7 && fract((HIT.u + o.hl) * 55) < .28) return false;
+    BG[i] = C(GRAY, 1 + L * .16);
+    set(i, HIT.face >= 7 ? '=' : '|', C(GRAY, L * .8)); return true;
+  }
+  if (o.kind === 'leaves') {
+    if (Math.abs(HIT.u / o.hl) + Math.abs((z - (o.z0 + o.z1) / 2) / (o.z1 - o.z0)) > 1.15) return false;
+    BG[i] = C(GREEN, 1 + L * .16); set(i, '%', C(GREEN, L * .9)); return true;
+  }
+  if (o.kind === 'service-spine' && HIT.face < 5) {
+    const fl = Math.floor((z - .48) / o.fh), floor0 = .48 + fl * o.fh;
+    if (fl >= 0 && fl < o.floors && brownstoneWindow(i, HIT.u, z, Math.min(.12, o.hl * .55), floor0 + o.fh * .25, floor0 + o.fh * .76,
+      hash(fl, 7, sk0(o.seed)) > litT, L, p.trim)) return true;
+  }
+  let base = p.trim;
+  if (o.kind === 'planter') base = BRICK;
+  else if (o.kind === 'escape-platform') base = GRAY;
+  else if (o.kind === 'service-spine') base = p.accent;
+  BG[i] = C(base, (1.8 + L * .33) * shadeFace(HIT.face));
+  set(i, HIT.face === 5 || o.kind === 'residential-cornice' || o.kind === 'balcony-slab' ? '=' :
+    o.kind === 'service-spine' && fract(z * 18) < .08 ? '_' : ' ', C(base, L * .88));
+  if (HIT.face === 5) paintSettledSnow(i, o.x + HIT.u * o.c - HIT.v * o.s, o.y + HIT.u * o.s + HIT.v * o.c, L * .7);
+  return true;
 }
 function landmarkStone(i, x, z, base, L, faceLight = 1) {
   const row = Math.floor(z * 6), joint = fract(x * 3 + (row & 1) * .5), grain = hash(Math.floor(x * 18),Math.floor(z * 24),702);
@@ -11894,11 +12125,14 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
 // where on it) and returns true if it drew. Backgrounds get the box's depth too, so fog treats it as solid.
 function drawBox(b, shade, intersect = rayBox) {
   // A box crossing the camera's near plane otherwise tests every screen cell, even when entirely off to one side.
-  // Conservative horizontal bounds also cover sloped custom shapes contained by this box.
+  // Conservative bounds also cover sloped custom shapes contained by this box.
   const along = dx * b.c + dy * b.s, across = -dx * b.s + dy * b.c;
   const far = dx * b.x + dy * b.y + Math.abs(along) * b.hl + Math.abs(across) * b.hw;
   const edge = Math.abs(-dy * b.x + dx * b.y) - Math.abs(across) * b.hl - Math.abs(along) * b.hw;
   if (far < .02 || edge > far * tf) return;
+  const above = b.z0 > eye, below = b.z1 < eye;
+  const bottom = hor - (b.z0 - eye) * projY / far, top = hor - (b.z1 - eye) * projY / far;
+  if (above && bottom < -1 || below && top > rows + 1) return;
   let c0 = cols, c1 = -1, r0 = rows, r1 = -1, behind = 0, near = Infinity;
   for (const su of [-1, 1]) for (const sv of [-1, 1]) {
     const X = b.x + su * b.hl * b.c - sv * b.hw * b.s, Y = b.y + su * b.hl * b.s + sv * b.hw * b.c, depth = dx * X + dy * Y;
@@ -11909,7 +12143,12 @@ function drawBox(b, shade, intersect = rayBox) {
     r0 = Math.min(r0, hor - (b.z1 - eye) * projY / depth); r1 = Math.max(r1, hor - (b.z0 - eye) * projY / depth);
   }
   if (behind === 4 || near > vis) return;
-  if (behind) { c0 = 0; c1 = cols; r0 = 0; r1 = rows; } // straddling us: test the whole screen
+  if (behind) {
+    c0 = 0; c1 = cols;
+    // Balconies immediately beside the camera can cross the near plane while lying far above the view.
+    r0 = below ? Math.max(0, top - 1) : 0;
+    r1 = above ? Math.min(rows, bottom + 1) : rows;
+  }
   c0 = Math.max(0, Math.floor(c0)); c1 = Math.min(cols, Math.ceil(c1) + 1);
   r0 = Math.max(0, Math.floor(r0)); r1 = Math.min(rows, Math.ceil(r1) + 1);
   for (let c = c0; c < c1; c++) {
