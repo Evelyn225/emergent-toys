@@ -64,10 +64,14 @@ function glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty) {
     BG[i] = C(sty === 18 ? GREEN : CYAN, 1 + glow * 2); return set(i, ':', C(WHITE, L * 0.5));
   }
   if (onDoorFace && Math.abs(z - 0.32) < 0.035 && wallText(i, u, uStep, z, d, gh.word, sgn * dx, 0.32, 0.045, 0.05, C(sty === 18 ? GREEN : CYAN, Math.max(L * 1.2, glow * 15)), C(WHITE, 2))) return;
-  if (z > h - 0.03) return set(i, '^', C(WHITE, L)); // the crest along the ridge
-  if (sty === 19 && (fract(u * 4) < 0.05 || fract(z * 4) < 0.04)) return set(i, '|', C(GRAY, L * 1.1)); // the aviary's frame
-  if (sty === 18 && (fract(u * 8) < 0.07 || fract(z * 6) < 0.06)) { BG[i] = C(WHITE, 1 + L * 0.12); return set(i, fract(z * 6) < 0.06 ? '-' : '|', C(WHITE, L * 1.1)); } // glazing bars
-  if (sty === 19 && ((Math.floor(u * 40) + Math.floor(z * 40)) & 1) && d < 1.5) return set(i, 'x', C(GRAY, L * 0.5)); // the mesh, close up
+  if (z < 0.055) { BG[i] = C(STONE, 2 + L * 0.25); return set(i, '=', C(STONE, L)); }
+  if (z > h - 0.025) return set(i, '=', C(sty === 18 ? WHITE : GREEN, L)); // eave; the ridge is real roof geometry
+  const start = side ? GARDEN.x0 + gh.gx0 : GARDEN.y0 + gh.gy0, width = side ? gh.gx1 - gh.gx0 + 1 : gh.gy1 - gh.gy0 + 1;
+  const along = rel(wc - start), corner = Math.min(along, width - along), bays = width * (sty === 18 ? 3 : 2);
+  if (corner < 0.028 || fract(along / width * bays) < 0.045 || fract((z - 0.055) * 5) < 0.045) {
+    BG[i] = C(sty === 18 ? WHITE : GREEN, 1 + L * 0.16);
+    return set(i, fract((z - 0.055) * 5) < 0.045 ? '-' : '|', C(sty === 18 ? WHITE : GREEN, L));
+  }
   return glassDepth(i, u, z, h, gh, side, L, glow, sty === 19);
 }
 // what's inside a glasshouse, in depth: three rows of plants one behind the other (palms and ferns, or the aviary's

@@ -1271,7 +1271,7 @@ function towerComposition(b) {
   }
   return tiers;
 }
-function architectureFaces(b, cells) {
+function architectureFaces(b, cells, faceIndex = ARCH_FACES) {
   const faces = new Map();
   for (const k of cells) {
     const x = b.x0 + mod(k % N - b.x0, N), y = b.y0 + mod(Math.floor(k / N) - b.y0, N), height = map[k];
@@ -1292,7 +1292,7 @@ function architectureFaces(b, cells) {
         const floors = Math.max(2, Math.floor((height - 0.48) / 0.34));
         faces.set(key, { dir, nx, ny, side, start, end, line, height, low, units, spacing: (end - start) / units, floors, fh: (height - 0.48) / floors, front: false });
       }
-      ARCH_FACES[dir][k] = faces.get(key);
+      faceIndex[dir][k] = faces.get(key);
     }
   }
   const ground = [...faces.values()].filter(f => !f.low);
@@ -1619,6 +1619,112 @@ function landmarkCarClear(x, y, hx, hy, hl, hw) {
   }
   return true;
 }
+// Glasshouse silhouettes and merchant rows share the city's existing ground footprints and shop identities.
+// These are roof volumes and details above head height; nothing narrows a door or the covered streets.
+const PAVILION_SOLIDS = [], MERCHANT_BUILDINGS = [], MERCHANT_FACES = Array.from({ length: 4 }, () => new Array(N * N));
+const MERCHANT_BY_SHOP = new Map();
+const MERCHANT_PROFILES = {
+  chinatown: [
+    { name: 'jade gallery', wall: STONE, trim: GREEN, roof: GREEN, spacing: .65, rise: .32, balconies: true },
+    { name: 'brick merchant', wall: BRICK, trim: RED, roof: GRAY, spacing: .52, rise: .24, balconies: false },
+    { name: 'tea terrace', wall: SKIN, trim: GREEN, roof: GREEN, spacing: .8, rise: .4, balconies: true },
+    { name: 'painted guildhall', wall: STONE, trim: RED, roof: BRICK, spacing: .7, rise: .3, balconies: false },
+  ],
+  shotengai: [
+    { name: 'timber shop', wall: BRICK, trim: GRAY, roof: GRAY, spacing: .7, rise: .28, timber: true },
+    { name: 'tile arcade', wall: STONE, trim: BLUE, roof: GRAY, spacing: .55, rise: .18, timber: false },
+    { name: 'showa shop', wall: SKIN, trim: GREEN, roof: GREEN, spacing: .8, rise: .24, timber: false },
+    { name: 'lantern counter', wall: GRAY, trim: RED, roof: GRAY, spacing: .65, rise: .32, timber: true },
+  ],
+};
+function pavilionSolid(x, y, hl, hw, z0, z1, kind, extra = {}) {
+  const o = { x, y, hl, hw, z0, z1, c: 1, s: 0, kind, ...extra };
+  PAVILION_SOLIDS.push(o); return o;
+}
+for (const gh of GLASSHOUSES) {
+  const x0 = GARDEN.x0 + gh.gx0, y0 = GARDEN.y0 + gh.gy0;
+  const x1 = GARDEN.x0 + gh.gx1 + 1, y1 = GARDEN.y0 + gh.gy1 + 1;
+  const x = (x0 + x1) / 2, y = (y0 + y1) / 2, eave = gh.sty === 18 ? .72 : gh.h;
+  for (let gy = gh.gy0; gy <= gh.gy1; gy++) for (let gx = gh.gx0; gx <= gh.gx1; gx++) map[idx(GARDEN.x0 + gx,GARDEN.y0 + gy)] = eave;
+  gh.eave = eave;
+  if (gh.sty === 18) {
+    // A tall palm-house lantern flanked by two lower hipped wings; the central ridge runs toward the lake.
+    for (const sign of [-1,1]) {
+      const roof = pavilionSolid(x + sign * 1.65,y,.87,1.53,eave,1.15,'glazing',{ gh, walkRoof: true });
+      roof.planes = landmarkPlanes(roof.hl,roof.hw,roof.z0,roof.z1,'hip');
+    }
+    pavilionSolid(x,y,.84,1.5,eave,1.32,'clerestory',{ gh, walkRoof: true });
+    const roof = pavilionSolid(x,y,.89,1.55,1.32,2.02,'glazing',{ gh, walkRoof: true });
+    roof.planes = landmarkPlanes(roof.hl,roof.hw,roof.z0,roof.z1,'gable');
+    pavilionSolid(x,y,.025,1.58,2.02,2.1,'crest',{ gh });
+    for (const sign of [-1,1]) pavilionSolid(x + sign * .85,y,.018,1.54,eave,1.36,'iron',{ gh });
+  }
+  const doorX = GARDEN.x0 + gh.door[0], doorY = GARDEN.y0 + gh.door[1];
+  const hood = pavilionSolid(doorX,doorY,.35,.18,.35,.53,'glazing',{ gh });
+  hood.planes = landmarkPlanes(hood.hl,hood.hw,hood.z0,hood.z1,'gable');
+}
+{
+  const lots = new Map();
+  for (let k = 0; k < map.length; k++) {
+    const sh = SHOP[k], sty = STY[k];
+    if (!sh || !map[k] || sty !== 10 && sty !== 17) continue;
+    if (!lots.has(sh)) lots.set(sh,[]);
+    lots.get(sh).push(k);
+  }
+  for (const [sh,cells] of lots) {
+    const rx = cells[0] % N, ry = Math.floor(cells[0] / N), seed = SEED[cells[0]];
+    const xs = cells.map(k => rx + rel(k % N - rx)), ys = cells.map(k => ry + rel(Math.floor(k / N) - ry));
+    const x0 = Math.min(...xs), x1 = Math.max(...xs) + 1, y0 = Math.min(...ys), y1 = Math.max(...ys) + 1;
+    const region = STY[cells[0]] === 10 ? 'chinatown' : 'shotengai';
+    const p = MERCHANT_PROFILES[region][Math.floor(fract(seed * 37) * 4)];
+    const b = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, x0, x1, y0, y1, h: map[cells[0]], seed, region, profile: p, sh };
+    b.faces = architectureFaces(b,cells,MERCHANT_FACES);
+    for (const f of b.faces) {
+      f.units = Math.max(1,Math.floor((f.end - f.start - .16) / p.spacing));
+      f.spacing = (f.end - f.start - .16) / f.units;
+      f.floors = Math.max(2,Math.floor((f.height - .52) / .35));
+      f.fh = (f.height - .52) / f.floors;
+      const center = (f.start + f.end) / 2, half = (f.end - f.start) / 2;
+      const detail = (along,depth,hl,hw,z0,z1,kind,extra = {}) => pavilionSolid(
+        (f.side ? along : f.line) + f.nx * depth,(f.side ? f.line : along) + f.ny * depth,
+        hl,hw,z0,z1,kind,{ c: f.side ? 1 : 0,s: f.side ? 0 : 1,b,f,...extra });
+      detail(center,.035,half,.075,b.h - .065,b.h + .025,'eave');
+      if (!f.front) continue;
+      detail(center,.035,half - .1,.055,.33,.405,'shopboard');
+      const awning = detail(center,.12,half - .12,.19,.285,.325,'awning');
+      if (region === 'shotengai' && p.timber) awning.kind = 'eave';
+      // One blade sign per storefront, placed at its edge, instead of a neon sign repeated in every bay.
+      const signHeight = Math.min(.55,sh.word.length * .065 + .055);
+      detail(f.start + .23,.105,.027,.055,.52,Math.min(b.h - .16,.52 + signHeight),'blade');
+      if (region === 'chinatown' && p.balconies) {
+        const z = .52 + f.fh;
+        detail(center,.085,half - .16,.14,z,z + .028,'balcony');
+        detail(center,.215,half - .16,.009,z + .028,z + .14,'lattice');
+        for (const sign of [-1,1]) detail(center + sign * (half - .16),.085,.012,.14,z + .028,z + .14,'lattice');
+      } else if (region === 'shotengai') {
+        detail(center,.025,half - .12,.055,.52 + f.fh,.56 + f.fh,'windowhood');
+        detail(f.end - .28,.08,.13,.09,.62,.74,'ac');
+      }
+    }
+    const access = sh.kind === SHOP_APTS || sh.word === 'HOTEL' || sh.word === 'MOTEL';
+    if (!access) {
+      const roof = pavilionSolid(b.x,b.y,(x1 - x0) / 2 + .04,(y1 - y0) / 2 + .04,b.h,b.h + p.rise,'tiles',{ b,walkRoof: true });
+      roof.planes = landmarkPlanes(roof.hl,roof.hw,roof.z0,roof.z1,region === 'chinatown' ? 'hip' : 'gable');
+    }
+    MERCHANT_BUILDINGS.push(b); MERCHANT_BY_SHOP.set(sh,b);
+  }
+}
+const pavilionSolidsB = bucketed(PAVILION_SOLIDS);
+const PAVILION_ROOF_MASK = architectureCellMask(PAVILION_SOLIDS.filter(o => o.walkRoof),0);
+function pavilionRoofHeight(x, y) {
+  if (!PAVILION_ROOF_MASK[idx(Math.floor(x),Math.floor(y))]) return 0;
+  let height = 0;
+  for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++)
+    for (const o of pavilionSolidsB[bi(Math.floor(x / 8) + k,Math.floor(y / 8) + j)])
+      if (o.walkRoof) height = Math.max(height,landmarkSurfaceHeight(o,x,y));
+  return height;
+}
+for (const o of roofs) o.z = Math.max(o.z,pavilionRoofHeight(o.x,o.y));
 // ---- traffic lights, at intersections where three or four streets meet (corners and the bridges just flow).
 // 16s cycle: vertical green 0-6, yellow 6-7, all red 7-8, horizontal green 8-14, yellow, all red.
 // Intersections are addressed by their base cell (x, y multiples of 8).
@@ -4863,7 +4969,7 @@ function roomSearchLead(dt) {
   }
   return anySees;
 }
-const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), homeBalconyHeight(x, y));
+const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 function notePoliceRoofEntry(x, y, ret = null) {
   if (!wanted.stars || !(wanted.seen || roomCops.length || ret && near(wanted.lastX, wanted.lastY, ret[0], ret[1]) < 1)) return;
   roofLead = { x, y, ret, targetX: x, targetY: y, arriveAt: T + (roomCops.length ? 1.2 : 3), count: Math.min(2, Math.max(1, wanted.stars)), arrived: false };
@@ -5719,6 +5825,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty === 18 || sty === 19) return glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty);
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   if (architectureFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return;
+  if (merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return;
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
   if (sty === 24) return belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL);
   BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : (FACADE_BG[sty] ?? WHITE), day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
@@ -5992,6 +6099,12 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
 // the top of a building, seen from above (you're on a roof): gravel with a parapet where the roof ends
 function roofTop(i, wx, wy, h, d) {
   const L = Math.max(0, 1 - d / vis) * amb * 10, mx = Math.floor(wx), my = Math.floor(wy), lx = wx - mx, ly = wy - my;
+  if (STY[idx(mx,my)] === 19) { // simple flat mesh pavilion: widely spaced structural rails, quiet netting
+    const gh = GLASSHOUSES[1], u = rel(wx - GARDEN.x0 - gh.gx0), v = rel(wy - GARDEN.y0 - gh.gy0);
+    const rail = fract(u * 2) < .035 || fract(v * 2) < .035;
+    BG[i] = C(GREEN,1 + day * 1.5);
+    set(i,rail ? '+' : ' ',C(rail ? GRAY : GREEN,L * .7)); paintSettledSnow(i,wx,wy,L,.6); return;
+  }
   const edge = lx < 0.05 && map[idx(mx - 1, my)] !== h || lx > 0.95 && map[idx(mx + 1, my)] !== h ||
                ly < 0.05 && map[idx(mx, my - 1)] !== h || ly > 0.95 && map[idx(mx, my + 1)] !== h;
   BG[i] = bgAt(GRAY, day * 2.5);
@@ -7112,6 +7225,147 @@ function drawLandmarks() {
     drawBox({ ...o,x: vx,y: vy },(i,t,L) => landmarkSolidShade(o,i,t,L),o.planes ? rayMansard : rayBox);
   });
 }
+// Merchant facades use complete bays fitted to actual faces, with a single shop name and entrance per frontage.
+function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const k = idx(mx,my), sh = SHOP[k], b = MERCHANT_BY_SHOP.get(sh);
+  if (!b) return false;
+  const dir = side ? (rel(py - my) < 0 ? 0 : 1) : (rel(px - mx) < 0 ? 2 : 3), f = MERCHANT_FACES[dir][k];
+  if (!f || f.height !== h) return false;
+  const p = b.profile, width = f.end - f.start, along = rel(wc - f.start), local = along - width / 2;
+  const L = fog * amb * (side ? 11 : 15), japan = b.region === 'shotengai', open = openAt(sh,tod), sk = sk0(b.seed);
+  const grain = hash(Math.floor(wc * 18),Math.floor(z * 30),sk);
+  BG[i] = C(p.wall,2.2 + L * .28 + grain * .45);
+  if (Math.min(along,width - along) < .08 || h - z < .07) {
+    set(i,h - z < .07 ? '=' : '|',C(p.trim,L)); return true;
+  }
+  if (z < .43) {
+    if (z > .33 && f.front) {
+      const sg = Math.sign(u * wc) || 1;
+      set(i,' ',0);
+      wallText(i,u,uStep,z,d,sh.word,sg * (f.start + width / 2),.365,
+        Math.min(.095,(width - .35) / Math.max(1,sh.word.length)),.055,C(japan ? WHITE : YEL,Math.max(L,open ? night * 13 : 0)),C(p.trim,2));
+      return true;
+    }
+    if (architectureLeaseSign(i,u,uStep,z,d,wc,f,sh,L)) return true;
+    if (f.front && Math.abs(local) < width / 2 - .15 && z > .03 && z < .32) {
+      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
+      const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
+      if (Math.abs(door) < doorHalf) {
+        if (japan && z > .225) {
+          BG[i] = C(p.trim,2 + L * .22);
+          set(i,Math.abs(door) < .012 ? ' ' : Math.abs(z - .267) < .016 ? 'o' : ' ',C(WHITE,L));
+        } else {
+          BG[i] = C(WARM,1.5 + night * 3);
+          set(i,z > .295 ? '=' : ':',C(WARM,Math.max(L * .6,night * 11)));
+        }
+        return true;
+      }
+      const mullion = Math.abs(local - width * .12) < .014 || Math.abs(local + width * .35) < .014;
+      if (z < .075) { set(i,'_',C(p.trim,L)); return true; }
+      BG[i] = C(japan ? CYAN : GREEN,1 + day * .8 + night * 1.7);
+      const shelf = Math.abs(z - .14) < .007 || Math.abs(z - .23) < .007;
+      const glyphs = sh.glyphs || '#';
+      set(i,mullion ? '|' : shelf ? '-' : grain > .74 ? glyphs[Math.floor(grain * glyphs.length)] : ' ',
+        C(mullion || shelf ? p.trim : WARM,Math.max(L * .65,night * 10)));
+      return true;
+    }
+  } else {
+    const floor = Math.floor((z - .45) / f.fh), bottom = .45 + floor * f.fh, fz = (z - bottom) / f.fh;
+    const bay = clamp(Math.floor((along - .08) / f.spacing),0,f.units - 1), center = .08 + (bay + .5) * f.spacing;
+    const du = along - center, half = f.spacing * (japan && p.timber ? .34 : .25);
+    if (floor < f.floors) {
+      if (fz < .08 || japan && p.timber && Math.abs(du) > f.spacing * .46) {
+        set(i,fz < .08 ? '=' : '|',C(japan && p.timber ? BRICK : p.trim,L * .75)); return true;
+      }
+      if (brownstoneWindow(i,du,z,half,bottom + f.fh * .22,bottom + f.fh * .78,hash(bay,floor,sk) > litT - .08,L,p.trim)) {
+        if (!japan && Math.abs(du) < half && fz > .22 && fz < .78) {
+          const fret = Math.abs(fract((du + half) / (2 * half) * 3) - .5) < .07 && (fz < .36 || fz > .65);
+          if (fret) set(i,'+',C(p.trim,L));
+        }
+        return true;
+      }
+      if (!japan && Math.abs(du) > half + .03 && Math.abs(du) < half + .08 && fz > .22 && fz < .78) {
+        BG[i] = C(p.trim,1 + L * .2); set(i,fract(z * 40) < .2 ? '-' : ' ',C(p.trim,L)); return true;
+      }
+    }
+  }
+  const tile = japan && !p.timber, joint = fract(wc * (tile ? 10 : 12) + (Math.floor(z * 20) & 1) * .5);
+  set(i,fract(z * (tile ? 20 : 24)) < .055 ? '_' : joint < .025 ? '|' : grain > .985 ? '.' : ' ',C(p.wall,L * .65));
+  return true;
+}
+function pavilionGlassShade(o, i, t, L) {
+  const z = HIT.w, roof = !!o.planes, u = HIT.u, v = HIT.v;
+  const nx = roof ? o.planes[HIT.face][0] : HIT.face <= 2 ? 1 : 0;
+  const ny = roof ? o.planes[HIT.face][1] : HIT.face <= 2 ? 0 : 1;
+  const wall = roof ? !o.planes[HIT.face][2] : HIT.face < 5;
+  const along = Math.abs(nx) > Math.abs(ny) ? v : u;
+  const bar = Math.abs(fract((along + (Math.abs(nx) > Math.abs(ny) ? o.hw : o.hl)) * 3) - .5) < .035 ||
+    (wall ? fract(z * 5) < .055 : fract((Math.abs(nx) > Math.abs(ny) ? u : v) * 5) < .065);
+  if (bar) {
+    BG[i] = C(WHITE,2 + L * .22);
+    set(i,wall ? '|' : Math.abs(nx) > Math.abs(ny) ? '/' : '-',C(WHITE,L));
+  } else {
+    // Stable foliage beneath the glazing, sky reflection above it. World coordinates prevent sliding textures.
+    const leaf = noise((o.x + u) * 3,(o.y + v) * 3 + z * .6,879) > .56 && z < 1.7;
+    BG[i] = C(leaf ? GREEN : CYAN,leaf ? 1.2 + L * .16 : 1 + day * 2.2);
+    set(i,leaf ? '%' : fract((u + v) * 9) < .035 ? '/' : ' ',C(leaf ? GREEN : WHITE,L * (leaf ? .75 : .35)));
+  }
+  if (roof && o.planes[HIT.face][2] > 0) paintSettledSnow(i,o.x + u,o.y + v,L,.35);
+  return true;
+}
+function pavilionDetailShade(o, i, t, L) {
+  if (o.gh) {
+    if (o.kind === 'glazing' || o.kind === 'clerestory') return pavilionGlassShade(o,i,t,L);
+    BG[i] = C(GREEN,2 + L * .3); set(i,o.kind === 'crest' ? '^' : '|',C(WHITE,L)); return true;
+  }
+  const p = o.b.profile, z = HIT.w, face = HIT.face, top = o.planes ? o.planes[face][2] > 0 : face === 5;
+  const base = o.kind === 'tiles' ? p.roof : o.kind === 'balcony' ? STONE : p.trim;
+  if (o.kind === 'lattice') {
+    const along = HIT.u, band = (z - o.z0) / (o.z1 - o.z0);
+    const on = band > .87 || band < .1 || Math.abs(Math.sin(along * 40 + band * Math.PI * 2)) < .22;
+    if (!on) return false;
+    BG[i] = C(p.trim,1 + L * .17); set(i,band > .87 ? '=' : 'x',C(p.trim,L)); return true;
+  }
+  BG[i] = C(base,1.8 + L * (top ? .3 : .22));
+  if (o.kind === 'shopboard' && face <= 4) {
+    const along = face === 3 || face === 2 ? HIT.u : -HIT.u;
+    if (face <= 2) { set(i,'|',C(YEL,L)); return true; }
+    const word = o.b.sh.word, letterW = Math.min(.1,(o.hl * 2 - .12) / word.length), hz = (.39 - z) / .05;
+    const ch = signGlyph(word,along / letterW + word.length / 2,hz,t,letterW,.05,farDepth(...R(o.x,o.y),o.hl));
+    set(i,ch ?? ' ',C(o.b.region === 'chinatown' ? YEL : WHITE,Math.max(L,openAt(o.b.sh,tod) ? night * 13 : 0))); return true;
+  }
+  if (o.kind === 'blade') {
+    let across = face <= 2 ? HIT.v : HIT.u;
+    if (face === 2 || face === 4) across = -across;
+    const word = o.b.sh.word, letterW = .06;
+    const letterH = Math.min(.075,(o.z1 - o.z0 - .055) / word.length), q = (o.z1 - .0275 - z) / letterH;
+    const letter = Math.floor(q);
+    const edge = Math.abs(across) > (face <= 2 ? o.hw : o.hl) - .008;
+    let ch = ' ';
+    if (edge) ch = '|';
+    else if (face <= 2 && letter >= 0 && letter < word.length)
+      ch = signGlyph(word[letter],across / letterW + .5,fract(q),t,letterW,letterH,farDepth(...R(o.x,o.y),o.hw)) ?? ' ';
+    set(i,ch,C(edge ? YEL : WHITE,Math.max(L,openAt(o.b.sh,tod) ? night * 14 : 0))); return true;
+  }
+  if (o.kind === 'tiles') {
+    const end = o.planes && !o.planes[face][2];
+    set(i,end ? '|' : fract(HIT.v * 15) < .14 ? ')' : fract(z * 35) < .15 ? '=' : ' ',C(end ? BRICK : p.roof,L * .85));
+  } else if (o.kind === 'awning') {
+    BG[i] = C(fract(HIT.u * 6) < .5 ? p.trim : STONE,2 + L * .25);
+    set(i,top ? '/' : 'v',C(WHITE,L * .6));
+  } else set(i,o.kind === 'ac' ? '#' : top || o.kind === 'eave' ? '=' : '|',C(o.kind === 'ac' ? GRAY : base,L));
+  if (top) paintSettledSnow(i,o.x + HIT.u * o.c - HIT.v * o.s,o.y + HIT.u * o.s + HIT.v * o.c,L,.65);
+  return true;
+}
+function drawPavilions() {
+  forNear(pavilionSolidsB,o => {
+    const vx = rel(o.x - px), vy = rel(o.y - py), distance = Math.hypot(vx,vy);
+    if (distance > (o.gh || o.walkRoof ? vis + 3 : 12)) return;
+    let intersect = rayBox;
+    if (o.planes) intersect = rayMansard;
+    drawBox({ ...o,x: vx,y: vy },(i,t,L) => pavilionDetailShade(o,i,t,L),intersect);
+  });
+}
 // ===== city sprites: everything drawn over the raycast scene, nearest-first order doesn't matter (drawArt depth-tests)
 // visit the props in the blocks within draw distance
 function forNear(b, fn) {
@@ -7204,6 +7458,7 @@ function citySprites() {
   drawBelleBuildings();
   drawArchitecture();
   drawLandmarks();
+  drawPavilions();
   drawHomeBalconies();
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
@@ -10040,10 +10295,14 @@ function glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty) {
     BG[i] = C(sty === 18 ? GREEN : CYAN, 1 + glow * 2); return set(i, ':', C(WHITE, L * 0.5));
   }
   if (onDoorFace && Math.abs(z - 0.32) < 0.035 && wallText(i, u, uStep, z, d, gh.word, sgn * dx, 0.32, 0.045, 0.05, C(sty === 18 ? GREEN : CYAN, Math.max(L * 1.2, glow * 15)), C(WHITE, 2))) return;
-  if (z > h - 0.03) return set(i, '^', C(WHITE, L)); // the crest along the ridge
-  if (sty === 19 && (fract(u * 4) < 0.05 || fract(z * 4) < 0.04)) return set(i, '|', C(GRAY, L * 1.1)); // the aviary's frame
-  if (sty === 18 && (fract(u * 8) < 0.07 || fract(z * 6) < 0.06)) { BG[i] = C(WHITE, 1 + L * 0.12); return set(i, fract(z * 6) < 0.06 ? '-' : '|', C(WHITE, L * 1.1)); } // glazing bars
-  if (sty === 19 && ((Math.floor(u * 40) + Math.floor(z * 40)) & 1) && d < 1.5) return set(i, 'x', C(GRAY, L * 0.5)); // the mesh, close up
+  if (z < 0.055) { BG[i] = C(STONE, 2 + L * 0.25); return set(i, '=', C(STONE, L)); }
+  if (z > h - 0.025) return set(i, '=', C(sty === 18 ? WHITE : GREEN, L)); // eave; the ridge is real roof geometry
+  const start = side ? GARDEN.x0 + gh.gx0 : GARDEN.y0 + gh.gy0, width = side ? gh.gx1 - gh.gx0 + 1 : gh.gy1 - gh.gy0 + 1;
+  const along = rel(wc - start), corner = Math.min(along, width - along), bays = width * (sty === 18 ? 3 : 2);
+  if (corner < 0.028 || fract(along / width * bays) < 0.045 || fract((z - 0.055) * 5) < 0.045) {
+    BG[i] = C(sty === 18 ? WHITE : GREEN, 1 + L * 0.16);
+    return set(i, fract((z - 0.055) * 5) < 0.045 ? '-' : '|', C(sty === 18 ? WHITE : GREEN, L));
+  }
   return glassDepth(i, u, z, h, gh, side, L, glow, sty === 19);
 }
 // what's inside a glasshouse, in depth: three rows of plants one behind the other (palms and ferns, or the aviary's
@@ -11577,6 +11836,12 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
 // side. b: {x, y relative to you, c, s heading, hl, hw, z0, z1}. shade(i, t, L) paints the cell from HIT (which face,
 // where on it) and returns true if it drew. Backgrounds get the box's depth too, so fog treats it as solid.
 function drawBox(b, shade, intersect = rayBox) {
+  // A box crossing the camera's near plane otherwise tests every screen cell, even when entirely off to one side.
+  // Conservative horizontal bounds also cover sloped custom shapes contained by this box.
+  const along = dx * b.c + dy * b.s, across = -dx * b.s + dy * b.c;
+  const far = dx * b.x + dy * b.y + Math.abs(along) * b.hl + Math.abs(across) * b.hw;
+  const edge = Math.abs(-dy * b.x + dx * b.y) - Math.abs(across) * b.hl - Math.abs(along) * b.hw;
+  if (far < .02 || edge > far * tf) return;
   let c0 = cols, c1 = -1, r0 = rows, r1 = -1, behind = 0, near = Infinity;
   for (const su of [-1, 1]) for (const sv of [-1, 1]) {
     const X = b.x + su * b.hl * b.c - sv * b.hw * b.s, Y = b.y + su * b.hl * b.s + sv * b.hw * b.c, depth = dx * X + dy * Y;
@@ -16221,7 +16486,7 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
-const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), homeBalconyHeight(x, y));
+const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
@@ -16241,7 +16506,7 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
   const h = roofHeightAt(px, py);
   if (h === roofH) return;
   if (h > 0) {
-    const followingSlope = (museumRoofHeight(px, py) > 0 || belleRoofHeight(px, py) > 0 || architectureRoofHeight(px, py) > 0 || landmarkRoofHeight(px, py) > 0) && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
+    const followingSlope = (museumRoofHeight(px, py) > 0 || belleRoofHeight(px, py) > 0 || architectureRoofHeight(px, py) > 0 || landmarkRoofHeight(px, py) > 0 || pavilionRoofHeight(px, py) > 0) && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }

@@ -26,7 +26,7 @@ function towerComposition(b) {
   }
   return tiers;
 }
-function architectureFaces(b, cells) {
+function architectureFaces(b, cells, faceIndex = ARCH_FACES) {
   const faces = new Map();
   for (const k of cells) {
     const x = b.x0 + mod(k % N - b.x0, N), y = b.y0 + mod(Math.floor(k / N) - b.y0, N), height = map[k];
@@ -47,7 +47,7 @@ function architectureFaces(b, cells) {
         const floors = Math.max(2, Math.floor((height - 0.48) / 0.34));
         faces.set(key, { dir, nx, ny, side, start, end, line, height, low, units, spacing: (end - start) / units, floors, fh: (height - 0.48) / floors, front: false });
       }
-      ARCH_FACES[dir][k] = faces.get(key);
+      faceIndex[dir][k] = faces.get(key);
     }
   }
   const ground = [...faces.values()].filter(f => !f.low);

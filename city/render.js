@@ -56,6 +56,12 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
 // side. b: {x, y relative to you, c, s heading, hl, hw, z0, z1}. shade(i, t, L) paints the cell from HIT (which face,
 // where on it) and returns true if it drew. Backgrounds get the box's depth too, so fog treats it as solid.
 function drawBox(b, shade, intersect = rayBox) {
+  // A box crossing the camera's near plane otherwise tests every screen cell, even when entirely off to one side.
+  // Conservative horizontal bounds also cover sloped custom shapes contained by this box.
+  const along = dx * b.c + dy * b.s, across = -dx * b.s + dy * b.c;
+  const far = dx * b.x + dy * b.y + Math.abs(along) * b.hl + Math.abs(across) * b.hw;
+  const edge = Math.abs(-dy * b.x + dx * b.y) - Math.abs(across) * b.hl - Math.abs(along) * b.hw;
+  if (far < .02 || edge > far * tf) return;
   let c0 = cols, c1 = -1, r0 = rows, r1 = -1, behind = 0, near = Infinity;
   for (const su of [-1, 1]) for (const sv of [-1, 1]) {
     const X = b.x + su * b.hl * b.c - sv * b.hw * b.s, Y = b.y + su * b.hl * b.s + sv * b.hw * b.c, depth = dx * X + dy * Y;

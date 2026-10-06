@@ -90,6 +90,7 @@ function citySprites() {
   drawBelleBuildings();
   drawArchitecture();
   drawLandmarks();
+  drawPavilions();
   drawHomeBalconies();
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });

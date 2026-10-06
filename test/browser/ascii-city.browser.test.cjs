@@ -9,6 +9,42 @@ const { chromium, devices } = require('playwright');
 
 const PAGE = pathToFileURL(path.join(__dirname, '..', '..', 'ascii-city.html')).href;
 
+test('boxes straddling the camera but outside its view skip per-cell rays, while visible boxes still draw', () => withPage(async page => {
+  const result=await page.evaluate(()=>{
+    paused=true;render(0);dx=1;dy=0;
+    let rays=0,painted=0;
+    const intersect=(...args)=>{rays++;return rayBox(...args);};
+    const shade=i=>{painted++;set(i,'#',C(WHITE,12));return true;};
+    ZB.fill(Infinity);
+    drawBox(boxAt(0,5,1,0,1,.1,0,1),shade,intersect);
+    const rejected=rays;
+    drawBox(boxAt(2,0,1,0,.4,.3,0,.8),shade,intersect);
+    return {rejected,rays,painted};
+  });
+  assert.equal(result.rejected,0,'a near-plane box beyond the side of the view needs no intersections');
+  assert.ok(result.rays>0 && result.painted>0,JSON.stringify(result));
+}));
+
+test('merchant blade signs use block glyphs up close and single readable characters at distance', () => withPage(async page => {
+  const result=await page.evaluate(()=>{
+    paused=true;render(0);
+    const o=PAVILION_SOLIDS.find(o=>o.kind==='blade'&&o.b.sh.word==='JADE');
+    px=o.x-.3;py=o.y;dx=1;dy=0;
+    const letterH=Math.min(.075,(o.z1-o.z0-.055)/o.b.sh.word.length),near=[];
+    for(let row=0;row<5;row++)for(let col=0;col<4;col++){
+      HIT.face=1;HIT.v=((col+.5)/4-.5)*.06;HIT.u=o.hl;HIT.w=o.z1-.0275-(row+.5)/5*letterH;
+      pavilionDetailShade(o,0,.3,10);near.push(CH[0]);
+    }
+    px=o.x-10;HIT.face=1;HIT.v=0;HIT.u=o.hl;HIT.w=o.z1-.0275-letterH*.5;
+    pavilionDetailShade(o,0,10,10);
+    return {near,far:CH[0],height:o.z1-o.z0};
+  });
+  assert.ok(result.near.includes('#'),JSON.stringify(result));
+  assert.ok(!result.near.includes('J'),'close letters are scaled pixel glyphs');
+  assert.equal(result.far,'J');
+  assert.ok(result.height<=.55);
+}));
+
 test('Unicode graffiti keeps combining marks together without shifting subsequent canvas cells', () => withPage(async page => {
   const result = await page.evaluate(() => {
     paused = true;

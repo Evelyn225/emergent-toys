@@ -130,6 +130,7 @@ function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (sty === 18 || sty === 19) return glassFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc, sty);
   if (sty >= 3 && sty <= 6) return landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my);
   if (architectureFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return;
+  if (merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc)) return;
   const L = fog * amb * (side ? 10 : 15), glowL = night * fog * 14, open = openAt(sh, tod);
   if (sty === 24) return belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL);
   BG[i] = bgAt(sty === 1 && day < 0.6 ? GRAY : (FACADE_BG[sty] ?? WHITE), day * 3 * (0.45 + 0.55 * fog) * (side ? 0.7 : 1), d); // (a glass tower's blue was the night sky's exact navy: it vanished)
@@ -403,6 +404,12 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
 // the top of a building, seen from above (you're on a roof): gravel with a parapet where the roof ends
 function roofTop(i, wx, wy, h, d) {
   const L = Math.max(0, 1 - d / vis) * amb * 10, mx = Math.floor(wx), my = Math.floor(wy), lx = wx - mx, ly = wy - my;
+  if (STY[idx(mx,my)] === 19) { // simple flat mesh pavilion: widely spaced structural rails, quiet netting
+    const gh = GLASSHOUSES[1], u = rel(wx - GARDEN.x0 - gh.gx0), v = rel(wy - GARDEN.y0 - gh.gy0);
+    const rail = fract(u * 2) < .035 || fract(v * 2) < .035;
+    BG[i] = C(GREEN,1 + day * 1.5);
+    set(i,rail ? '+' : ' ',C(rail ? GRAY : GREEN,L * .7)); paintSettledSnow(i,wx,wy,L,.6); return;
+  }
   const edge = lx < 0.05 && map[idx(mx - 1, my)] !== h || lx > 0.95 && map[idx(mx + 1, my)] !== h ||
                ly < 0.05 && map[idx(mx, my - 1)] !== h || ly > 0.95 && map[idx(mx, my + 1)] !== h;
   BG[i] = bgAt(GRAY, day * 2.5);
