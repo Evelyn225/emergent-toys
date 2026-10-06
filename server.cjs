@@ -9,7 +9,7 @@ require('dotenv').config({ path: 'openai.env' });
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' })); // web wizard edits post the full generated page
 app.use(express.static('.')); // Serve static files from current directory
 
 // Dynamically load and cache ESM handlers

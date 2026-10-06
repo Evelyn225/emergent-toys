@@ -33,6 +33,7 @@
         <span id="barTitle">web wizard's casino</span>
         <div id="barActions">
             <button id="saveButton" class="bar-btn" style="display:none;">★ save</button>
+            <button id="editButton" class="bar-btn" style="display:none;">✎ edit</button>
             <button id="favoritesButton" class="bar-btn">saved</button>
             <button id="regenerateButton">generate</button>
         </div>
@@ -54,6 +55,14 @@
         <div id="favoritesList">
             <div id="favoritesEmpty">No saved sites yet.<br>Generate a site and click ★ save.</div>
         </div>
+    </div>
+
+    <div id="editPanel">
+        <div id="editHeader">edit this site</div>
+        <form id="editForm">
+            <textarea id="editInput" class="theme-input" placeholder="make the background purple, add a score counter..."></textarea>
+            <button type="submit" class="theme-generate-btn">apply changes</button>
+        </form>
     </div>
 
     <div id="themeScreen" class="theme-screen">
@@ -490,8 +499,10 @@ window.addEventListener('error', function(event) {
 
 
         // Call AI API to generate a site for a theme
-        async function generateWebsite() {
+        // editRequest: when set, revise currentGeneration instead of making a new site
+        async function generateWebsite(editRequest = null) {
             if (isGenerating) return;
+            const editSource = editRequest ? currentGeneration : null;
 
             const loadingOverlay = document.getElementById('loadingOverlay');
             const regenerateButton = document.getElementById('regenerateButton');
@@ -500,7 +511,7 @@ window.addEventListener('error', function(event) {
             const themeScreen = document.getElementById('themeScreen');
             const topBar = document.getElementById('topBar');
             // Require a theme - no silent random fallback
-            if (!themeInput.value.trim()) {
+            if (!editRequest && !themeInput.value.trim()) {
                 themeInput.classList.remove('input-error');
                 void themeInput.offsetWidth; // force reflow to restart animation
                 themeInput.classList.add('input-error');
@@ -515,6 +526,8 @@ window.addEventListener('error', function(event) {
             topBar.style.display = 'flex';
             document.getElementById('saveButton').style.display = 'none';
             document.getElementById('favoritesButton').style.display = 'none';
+            document.getElementById('editButton').style.display = 'none';
+            closeEditPanel();
             setRegenerateButtonText('generating...');
             regenerateButton.disabled = true;
             // ...existing code...
@@ -538,9 +551,9 @@ window.addEventListener('error', function(event) {
                 }, 100);
             }, 800);
             document.getElementById('consoleOutput').innerHTML = '';
-            let themeValue = themeInput.value.trim();
+            let themeValue = editSource ? editSource.theme : themeInput.value.trim();
             const themeStatus = document.getElementById('themeStatus');
-            themeStatus.textContent = themeValue;
+            themeStatus.textContent = editSource ? `${themeValue} → ${editRequest}` : themeValue;
             themeStatus.style.display = 'block';
             startConsoleCommands();
             if (window.p5Instance) {
@@ -556,7 +569,9 @@ window.addEventListener('error', function(event) {
                 const response = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ theme: themeValue, prompt })
+                    body: JSON.stringify(editSource
+                        ? { theme: themeValue, editRequest, currentHtml: editSource.code }
+                        : { theme: themeValue, prompt })
                 });
                 if (!response.ok) throw new Error('Failed to generate site');
                 addConsoleCommand('Connection established', 'status');
@@ -590,6 +605,13 @@ window.addEventListener('error', function(event) {
                 document.getElementById('favoritesButton').style.display = '';
                 // Return to theme screen after showing the error briefly
                 setTimeout(() => {
+                    if (editSource) {
+                        // Edit failed: put the unedited site back
+                        updateSaveButton();
+                        setDisplayedGeneration(editSource);
+                        showErrorToast('edit failed');
+                        return;
+                    }
                     loadingOverlay.classList.add('hidden');
                     themeScreen.style.display = 'flex';
                     resumeCurrentSite();
@@ -629,6 +651,7 @@ window.addEventListener('error', function(event) {
             if (!btn) return;
             const hasSite = !!currentGeneration.code;
             btn.style.display = hasSite ? 'flex' : 'none';
+            document.getElementById('editButton').style.display = hasSite ? 'flex' : 'none';
             if (hasSite) {
                 const saved = isCurrentSaved();
                 btn.textContent = saved ? '✓ saved' : '★ save';
@@ -718,6 +741,20 @@ window.addEventListener('error', function(event) {
         }
         // ─────────────────────────────────────────────────────────
 
+        function toggleEditPanel() {
+            const panel = document.getElementById('editPanel');
+            if (panel.classList.contains('open')) return closeEditPanel();
+            closeFavoritesPanel();
+            panel.classList.add('open');
+            document.getElementById('editButton').classList.add('panel-open');
+            document.getElementById('editInput').focus();
+        }
+
+        function closeEditPanel() {
+            document.getElementById('editPanel').classList.remove('open');
+            document.getElementById('editButton').classList.remove('panel-open');
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             const regenerateButton = document.getElementById('regenerateButton');
@@ -752,12 +789,30 @@ window.addEventListener('error', function(event) {
                 }
             });
             document.getElementById('saveButton').addEventListener('click', toggleSaveCurrent);
-            document.getElementById('favoritesButton').addEventListener('click', toggleFavoritesPanel);
+            document.getElementById('favoritesButton').addEventListener('click', () => { closeEditPanel(); toggleFavoritesPanel(); });
+            document.getElementById('editButton').addEventListener('click', toggleEditPanel);
+            const editInput = document.getElementById('editInput');
+            editInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('editForm').requestSubmit(); }
+                if (e.key === 'Escape') closeEditPanel();
+            });
+            document.getElementById('editForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const request = editInput.value.trim();
+                if (!request || !currentGeneration.code) return editInput.focus();
+                editInput.value = '';
+                generateWebsite(request);
+            });
             document.addEventListener('click', (e) => {
                 const panel = document.getElementById('favoritesPanel');
                 const btn = document.getElementById('favoritesButton');
                 if (panel.classList.contains('open') && !panel.contains(e.target) && !btn.contains(e.target)) {
                     closeFavoritesPanel();
+                }
+                const editPanel = document.getElementById('editPanel');
+                if (editPanel.classList.contains('open') && !editPanel.contains(e.target)
+                    && !document.getElementById('editButton').contains(e.target)) {
+                    closeEditPanel();
                 }
             });
             renderFavorites();

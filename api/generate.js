@@ -28,6 +28,16 @@ function isCompleteHtml(html) {
     && /<\/html\s*>\s*$/i.test(html);
 }
 
+function createEditPrompt(currentHtml, editRequest) {
+  return `Here is an existing interactive web page:
+
+${currentHtml}
+
+Revise it according to this request: "${editRequest}"
+
+Keep everything the request does not ask to change. Return the full updated HTML document, starting with <!DOCTYPE html>, with no markdown or explanation.`;
+}
+
 async function generateHtml(openai, prompt, retry = false) {
   const completion = await openai.chat.completions.create({
     model: WIZARD_MODEL,
@@ -62,7 +72,8 @@ export default async function handler(req, res) {
   }
 
   const body = req.method === 'POST' ? req.body || {} : {};
-  const { theme, prompt } = body;
+  const { theme, editRequest, currentHtml } = body;
+  const prompt = editRequest && currentHtml ? createEditPrompt(currentHtml, editRequest) : body.prompt;
 
   if (!theme || !prompt) {
     return res.status(400).json({ error: "Missing 'theme' or 'prompt'." });

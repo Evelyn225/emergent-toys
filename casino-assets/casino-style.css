@@ -315,7 +315,8 @@ body {
   border-color: rgba(255,255,255,0.14);
 }
 
-#favoritesButton.panel-open {
+#favoritesButton.panel-open,
+#editButton.panel-open {
   background: rgba(255,255,255,0.05);
   border-color: rgba(255,255,255,0.25);
   color: rgba(255,255,255,0.9);
@@ -336,7 +337,8 @@ body {
 
 /* ── Favorites panel ──────────────────── */
 
-#favoritesPanel {
+#favoritesPanel,
+#editPanel {
   position: fixed;
   top: 50px;
   right: 14px;
@@ -356,13 +358,15 @@ body {
   transition: transform 0.15s cubic-bezier(0.4,0,0.2,1), opacity 0.15s ease;
 }
 
-#favoritesPanel.open {
+#favoritesPanel.open,
+#editPanel.open {
   transform: translateY(0) scale(1);
   opacity: 1;
   pointer-events: auto;
 }
 
-#favoritesHeader {
+#favoritesHeader,
+#editHeader {
   padding: 9px 14px;
   font-size: 9px;
   letter-spacing: 0.22em;
@@ -372,7 +376,8 @@ body {
   flex-shrink: 0;
 }
 
-#favoritesHeader::before {
+#favoritesHeader::before,
+#editHeader::before {
   content: '▓ ';
   color: rgba(255,255,255,0.1);
 }
@@ -698,4 +703,24 @@ body {
   /* Input row stacks on very small screens */
   .theme-input-row { flex-direction: column; }
   .theme-random-btn { width: 100%; justify-content: center; }
+}
+
+/* ── Edit panel ───────────────────────── */
+#editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 14px;
+}
+
+#editInput {
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.4;
+}
+
+#editForm .theme-generate-btn {
+  margin-top: 0;
+  padding: 10px 0;
+  font-size: 11px;
 }
