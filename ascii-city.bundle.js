@@ -117,6 +117,13 @@ const SEASON_WEATHER = { spring: ['clear', 'clear', 'rain', 'rain', 'fog'], summ
 
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
+// A continuous field shared by ground and roofs: broad drifts with a soft, granular fringe.
+function settledSnow(wx, wy, wear = 0) {
+  if (snowCover <= 0) return 0;
+  const drift = noise(wx * 0.8, wy * 0.8, 43) * 0.7 + noise(wx * 2.1, wy * 2.1, 45) * 0.25 + noise(wx * 7, wy * 7, 44) * 0.05;
+  const edge = clamp((snowCover * 1.3 - drift + 0.16) / 0.32, 0, 1);
+  return edge * edge * (3 - 2 * edge) * clamp(snowCover * 8, 0, 1) * (1 - wear);
+}
 function env(dt) {
   const lapse = hurrying() ? 40 : 1; // 20s per game hour; hold Q with the pocket watch in hand to fast-forward (clouds race along too)
   const t0 = tod;
@@ -5268,17 +5275,58 @@ function roofTop(i, wx, wy, h, d) {
   const edge = lx < 0.05 && map[idx(mx - 1, my)] !== h || lx > 0.95 && map[idx(mx + 1, my)] !== h ||
                ly < 0.05 && map[idx(mx, my - 1)] !== h || ly > 0.95 && map[idx(mx, my + 1)] !== h;
   BG[i] = bgAt(GRAY, day * 2.5);
-  if (edge) return set(i, '#', C(GRAY, L * 1.3));
+  if (edge) { set(i, '#', C(GRAY, L * 1.3)); paintSettledSnow(i, wx, wy, L, 0.35); return; }
   const sh = SHOP[idx(mx, my)];
   if (sh && sh.pad && STY[idx(mx, my)] === 13) { // the hospital's helipad: a yellow ring round a big H
     const ex = wx - sh.pad[0], ey = wy - sh.pad[1], rr = Math.hypot(ex, ey);
-    if (Math.abs(rr - 1.05) < 0.07) return set(i, '#', C(YEL, Math.max(L * 1.4, night * 12)));
+    if (Math.abs(rr - 1.05) < 0.07) { set(i, '#', C(YEL, Math.max(L * 1.4, night * 12))); paintSettledSnow(i, wx, wy, L, 0.55); return; }
     const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
-    if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); return set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); }
+    if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); paintSettledSnow(i, wx, wy, L, 0.55); return; }
   }
-  if (snowCover > 0.05 && noise(wx * 5, wy * 5, 45) < snowCover * 1.2) { BG[i] = C(WHITE, 2.4 + day * 6); return set(i, ' ', 0); }
-  if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); return set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
-  set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
+  if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
+  else set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
+  paintSettledSnow(i, wx, wy, L);
+}
+
+function snowRoadWear(e) {
+  const lane = Math.exp(-Math.pow((e - 0.65) / 0.34, 4)) + Math.exp(-Math.pow((e - 1.35) / 0.34, 4));
+  const distance = Math.min(Math.abs(e - 0.5), Math.abs(e - 0.8), Math.abs(e - 1.2), Math.abs(e - 1.5));
+  const track = Math.exp(-Math.pow(distance / 0.06, 2));
+  return Math.min(0.85, lane * 0.35 + track * 0.5);
+}
+
+function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0) {
+  const amount = settledSnow(wx, wy, wear) * exposure;
+  if (amount < 0.02) return;
+  const grain = noise(wx * 5, wy * 5, 46), old = BG[i] === NONE ? 0 : BG[i] & 15;
+  const fleck = hash(Math.floor(wx * 32), Math.floor(wy * 32), 44);
+  const light = (2.4 + day * 6.5 + lampsOn * glow(wx, wy) * 4) * (0.85 + grain * 0.25);
+  let base = WHITE;
+  if (amount < 0.15 && BG[i] !== NONE) base = BG[i] >> 4;
+  else if (amount < 0.55) base = GRAY;
+  BG[i] = C(base, old + (light - old) * amount + fleck); // world-anchored dither softens palette banding
+  if (FL[i] === 2) FL[i] = 1; // settled snow is matte, even when it covers a puddle
+  LAMPL[i] = 0;
+  if (amount < 0.4) { COL[i] = C(GRAY, L * (1 - amount * 0.6)); return; }
+  let ch = ' ', col = C(GRAY, L * 0.65);
+  if (amount < 0.7 && fleck > 0.5) ch = '.';
+  else if (grain < 0.25 && fleck > 0.65) ch = ',';
+  else if (fleck > 0.985) { ch = '.'; col = C(WHITE, light + 3); }
+  set(i, ch, col);
+}
+
+function floorCell(i, r, x, rx, ry) {
+  floorBaseCell(i, r, x, rx, ry);
+  if (snowCover <= 0 || FL[i] === 3) return; // open water remains open water
+  const d = ZB[i], wx = px + rx * d, wy = py + ry * d, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
+  if (road === 2 && subwayHole(wx, wy, Math.floor(wx / 8), Math.floor(wy / 8)) >= 0) return;
+  const lx = mod(wx, 8), ly = mod(wy, 8);
+  let wear = 0;
+  if (road === 1) wear = snowRoadWear(lx);
+  else if (road === 2) wear = snowRoadWear(ly);
+  else if (road === 3) wear = Math.max(snowRoadWear(lx), snowRoadWear(ly));
+  const exposure = underEl(wy) ? 0.55 : 1;
+  paintSettledSnow(i, wx, wy, Math.max(0, 1 - d / vis * 1.5) * 6 * (0.6 + amb), exposure, wear);
 }
 
 // how far down a subway entrance's stairs (wx, wy) is (0 at the top step, 1 at the bottom), or -1 if it isn't in one
@@ -5289,7 +5337,7 @@ function subwayHole(wx, wy, bx, by) {
   return Math.abs(u) < SUBWAY_HOLE[0] && Math.abs(v) < SUBWAY_HOLE[1] ? (u + SUBWAY_HOLE[0]) / (2 * SUBWAY_HOLE[0]) : -1;
 }
 let stHole = -1;
-function floorCell(i, r, x, rx, ry) {
+function floorBaseCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
@@ -5345,8 +5393,8 @@ function floorCell(i, r, x, rx, ry) {
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
       if (inPond(lx, ly, pbx, pby)) { // the pond: ripples, lily pads by the edge, the sky and trees in it
         if (seasonIdx() === 3) { // frozen over: pale ice, cracks, snow drifted on it
-          const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03, dr = snowCover > 0.1 && noise(wx * 5, wy * 5, 96) < snowCover * 0.7;
-          BG[i] = C(dr ? WHITE : CYAN, dr ? 2.4 + day * 6 : 1.4 + day * 3.5); return set(i, cr ? '/' : dr ? ' ' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
+          const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03;
+          BG[i] = C(CYAN, 1.4 + day * 3.5); return set(i, cr ? '/' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
         }
         const n = noise(wx * 4 + T * 0.3, wy * 4 - T * 0.1, 92), lily = !inPond(lx, ly, pbx, pby, -0.18) && hash(Math.floor(wx * 9), Math.floor(wy * 9), 93) > 0.8;
         set(i, lily ? (hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? '*' : 'o') : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? MAG : GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
@@ -5377,11 +5425,6 @@ function floorCell(i, r, x, rx, ry) {
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
-  if (snowCover > 0.03) { // snow lying: drifts deeper off the road, tyre tracks down the middle of it
-    const cover = snowCover * (road === 1 || road === 2 ? (Math.abs((road === 1 ? lx : ly) - 1) < 0.55 ? (fract((road === 1 ? lx : ly) * 3.3) < 0.5 ? 0.25 : 0.6) : 1.1) : road ? 0.7 : 1.15);
-    const n = noise(wx * 4, wy * 4, 43);
-    if (n < cover) { BG[i] = C(WHITE, Math.min(15, (2.4 + day * 6.5 + lampsOn * glow(wx, wy) * 4) * (shade ? 0.6 : 1) * (0.85 + n * 0.3))); set(i, n > cover - 0.08 ? '.' : hash(Math.floor(wx * 20), Math.floor(wy * 20), 44) > 0.93 ? "'" : ' ', C(GRAY, L * 0.7)); LAMPL[i] = 0; return; }
-  }
   LAMPL[i] = 0;
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;
@@ -8657,7 +8700,14 @@ const CONS_GRID = Array.from({ length: CONS_H }, (_, y) => Array.from({ length: 
   return '.';
 }).join(''));
 const CONS_POOL = { x: 6.5, y: 3.4, rx: 2.6, ry: 1.5 };
-const inConsPool = (x, y) => Math.hypot((x - CONS_POOL.x) / CONS_POOL.rx, (y - CONS_POOL.y) / CONS_POOL.ry) < 1;
+const CONS_FALL = { x: CONS_POOL.x, y: 1, half: 0.85 };
+function consWaterEdge(x, y) {
+  const pond = (1 - Math.hypot((x - CONS_POOL.x) / CONS_POOL.rx, (y - CONS_POOL.y) / CONS_POOL.ry)) * CONS_POOL.ry;
+  const width = CONS_FALL.half + clamp((y - CONS_FALL.y) / (CONS_POOL.y - CONS_FALL.y), 0, 1) * 0.45;
+  const stream = Math.min(width - Math.abs(x - CONS_FALL.x), y - CONS_FALL.y, CONS_POOL.y - y);
+  return Math.max(pond, stream);
+}
+const inConsPool = (x, y) => consWaterEdge(x, y) > 0;
 const PLANT_ART = {
   palm: pad(['  __ _ __', ' /  \\|/  \\', '/  .-+-.  \\', '    /|\\', '     |', '     |', '     |', '     |', '    /|\\']),
   fern: pad(['\\ | /', ' \\|/ ', '--+--', ' /|\\ ']),
@@ -8668,39 +8718,25 @@ const PLANT_ART = {
   butterfly: ['}{'], lizard: ['~=<'],
 };
 function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
-  const u = Math.abs(su), c = roomAt(mx, my), jungle = mx < 13 || mx === 13 && false;
-  if (c === 'G') { // the glass door wall: frame, panes, the other house through it, its name over the door
-    const word = px < 13 ? 'DESERT HOUSE' : 'TROPICAL HOUSE', u0 = u < 7.5 ? 4 : 11;
-    if (Math.abs(z - 3.3) < 0.2 && wallText(i, su, uStep, z, d, word, u0 * Math.sign(su), 3.3, 0.18, 0.3, C(WHITE, 14), C(px < 13 ? BRICK : GREEN, 3))) return true;
+  const u = Math.abs(su), c = roomAt(mx, my);
+  if (c === 'G') { // fixed botanical displays: their subjects stay the same from either side of the divider
+    const desert = my > 8, word = desert ? 'DESERT PLANTS' : 'PALMS & FERNS', u0 = desert ? 11.8 : 4;
+    if (Math.abs(z - 3.3) < 0.2 && wallText(i, su, uStep, z, d, word, u0 * Math.sign(su), 3.3, 0.18, 0.3, C(WHITE, 14), C(desert ? BRICK : GREEN, 3))) return true;
     if (fract(u / 1.2) < 0.05 || fract(z / 1.5) < 0.03 || z > 3.92) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
-    // through the glass, the other house, in depth: rows of cacti on sand, or of palms in the green
-    const streak = fract((u + z) * 0.35) < 0.025 && hash(Math.floor((u + z) * 0.35), 7, 866) > 0.5;
-    if (streak) return set(i, '/', C(WHITE, 8)), true;
-    const [gsu, gsz] = glassSlopes(su, z), desert = px < 13;
-    // The tropical house reads as a deeper, steadier backdrop; full sideways parallax made the tall palms skew as you moved.
-    for (const q of [1.5, 4, 7.5]) {
-      const lu = u + gsu * q * (desert ? 1 : 0.45), lz = z + gsz * q, slot = Math.floor(lu / 1.8), c = (slot + 0.3 + hash(slot, q, 867) * 0.4) * 1.8, fade = 1 - q / 14;
-      if (lz < 0) { BG[i] = desert ? C(YEL, 3 + day * 2) : C(GREEN, 1.5); return set(i, desert ? (Math.floor(lu * 4) + Math.floor(q)) % 7 ? ' ' : '.' : ',', C(desert ? WARM : GREEN, 6 * fade)), true; } // the ground
-      if (hash(slot, q, 868) < 0.35) continue;
-      if (desert) { // a saguaro: a trunk, and an arm or two
-        const tall = 1.6 + hash(slot, q, 869) * 2, dx_ = lu - c, arm = Math.abs(dx_) > 0.1 && Math.abs(dx_) < 0.45 && (Math.abs(lz - tall * 0.55) < 0.08 && Math.sign(dx_) === (slot & 1 ? 1 : -1) || Math.abs(Math.abs(dx_) - 0.4) < 0.07 && lz > tall * 0.55 && lz < tall * 0.8 && Math.sign(dx_) === (slot & 1 ? 1 : -1));
-        if (Math.abs(dx_) < 0.13 && lz < tall || arm) { BG[i] = C(GREEN, 2 * fade); return set(i, Math.abs(dx_) < 0.04 ? ':' : '|', C(GREEN, 9 * fade)), true; }
-      } else { // a palm: a leaning trunk, a crown of fronds
-        const tall = 3 + hash(slot, q, 869) * 3, lean = (lz / tall) * 0.12 * (slot & 1 ? 1 : -1);
-        if (Math.hypot((lu - c - lean) * 0.8, lz - tall) < 0.9 + 0.4 * noise(lu * 3, lz * 3, 870)) { BG[i] = C(GREEN, 2.5 * fade); return set(i, noise(lu * 9, lz * 9, 871) > 0.5 ? '%' : '"', C(GREEN, 10 * fade)), true; }
-        if (Math.abs(lu - c - lean) < 0.1 && lz < tall) return set(i, '|', C(BRICK, 9 * fade)), true;
-      }
-    }
-    BG[i] = desert ? C(CYAN, 2 + day * 3) : C(GREEN, 1.2);
-    return set(i, ' ', 0), true;
+    return conservatoryScreen(i, u, z, desert);
+  }
+  const left = mx < 13 || mx === 0;
+  if (my === 0 && left && Math.abs(u - CONS_FALL.x) < CONS_FALL.half + 0.25) {
+    const edge = Math.abs(u - CONS_FALL.x), n = fract(z * 3 + T * 2.5 + Math.sin(u * 7) * 0.3);
+    if (edge > CONS_FALL.half) { BG[i] = C(GRAY, 1 + L * 0.15); return set(i, '%', C(GRAY, L)), true; }
+    BG[i] = C(CYAN, 2 + n * 3);
+    let ch = ' ';
+    if (z < 0.3) ch = n < 0.5 ? '*' : '~';
+    else if (n < 0.3) ch = '|';
+    else if (n < 0.5) ch = ':';
+    return set(i, ch, C(WHITE, 15)), true;
   }
   if (z < 0.8) { BG[i] = C(BRICK, 1 + L * 0.12); return set(i, fract(z / 0.2) < 0.15 ? '_' : fract(u * 2 + (Math.floor(z * 5) & 1) * 0.5) < 0.08 ? '|' : ' ', C(BRICK, L)), true; } // the brick plinth
-  const left = mx < 13 || mx === 0;
-  if (my === 0 && left && Math.abs(u - CONS_POOL.x) < 1.1) { // the waterfall, pouring down the rocks into the pool
-    if (Math.abs(u - CONS_POOL.x) > 0.85) return set(i, '%', C(GRAY, L)), true;
-    const n = fract(z * 3 + T * 2.5 + Math.sin(u * 7) * 0.3);
-    BG[i] = C(CYAN, 2 + n * 3); return set(i, n < 0.3 ? '|' : n < 0.5 ? ':' : ' ', C(WHITE, 15)), true;
-  }
   // glass all round: white bars, sky beyond, leaves pressed against it on the tropical side
   if (fract(u / 1.2) < 0.04 || fract(z / 1.5) < 0.03) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
   const leaf = left && noise(u * 1.5, z * 1.2, 841) > 0.5 - 0.35 * (1 - z / 9);
@@ -8711,12 +8747,57 @@ function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
   BG[i] = leaf ? C(GREEN, 1 + L * 0.1) : day > 0.3 ? C(CYAN, 2 + day * 4) : dusk > 0.3 ? C(ORANGE, 3) : C(BLUE, 1);
   return set(i, leaf ? (noise(u * 6, z * 6, 842) > 0.5 ? '%' : '"') : ' ', C(GREEN, L * 1.3)), true;
 }
+// Sample the panorama in wall coordinates, with painted depth rather than camera-dependent parallax.
+function conservatoryScreen(i, u, z, desert) {
+  const ground = 0.25 + noise(u * 0.7, 0, 867) * 0.22;
+  if (z < ground) {
+    BG[i] = C(desert ? YEL : GREEN, desert ? 4 : 2);
+    return set(i, desert ? '~' : '"', C(desert ? WARM : GREEN, desert ? 9 : 7)), true;
+  }
+  for (let layer = 0; layer < 3; layer++) {
+    const spacing = 2.6, shift = layer * 0.85, slot = Math.floor((u + shift) / spacing);
+    const centre = (slot + 0.5) * spacing - shift, tall = 1.8 + hash(slot, layer, 869) * 0.95;
+    const offset = u - centre, light = 11 - layer * 2;
+    if (desert) {
+      const armSide = slot & 1 ? 1 : -1, arm = offset * armSide;
+      const onArm = (arm > 0 && arm < 0.45 && Math.abs(z - tall * 0.55) < 0.09) ||
+        (Math.abs(arm - 0.45) < 0.09 && z > tall * 0.55 && z < tall * 0.8);
+      if ((Math.abs(offset) < 0.12 && z < tall) || onArm) { BG[i] = C(GREEN, 2); return set(i, '|', C(GREEN, light)), true; }
+    } else {
+      const lean = 0.1 * z / tall * (slot & 1 ? 1 : -1), stem = offset - lean;
+      const spread = 0.85 + hash(slot, layer, 870) * 0.25, reach = Math.abs(stem) / spread;
+      const frond = tall + Math.sin(reach * Math.PI) * 0.2 - reach * 0.55;
+      if (reach < 1 && (Math.abs(z - frond) < 0.1 || Math.abs(z - frond - 0.25 * (1 - reach)) < 0.07)) {
+        BG[i] = C(GREEN, 2 + (2 - layer));
+        return set(i, stem < 0 ? '/' : '\\', C(GREEN, light + 1)), true;
+      }
+      if (Math.abs(stem) < 0.05 && z < tall) return set(i, '|', C(BRICK, light)), true;
+    }
+  }
+  if (!desert && z < 0.85 + noise(u * 1.8, 0, 871) * 0.3) {
+    BG[i] = C(GREEN, 2);
+    return set(i, fract(u * 5 + z * 4) < 0.5 ? '/' : '\\', C(GREEN, 7)), true;
+  }
+  BG[i] = C(desert ? CYAN : GREEN, desert ? 3 : 1);
+  return set(i, ' ', 0), true;
+}
 function conservatoryFloor(i, f, wx, wy) {
   if (wx > 13) { // sand, rippled by the wind that never blows in here
     BG[i] = C(YEL, 1 + f * 1.5);
     return set(i, fract(wy * 3 + Math.sin(wx * 2) * 0.3) < 0.2 ? '~' : hash(Math.floor(wx * 6), Math.floor(wy * 6), 843) > 0.92 ? '.' : ' ', C(WARM, 4 + f * 6));
   }
-  if (inConsPool(wx, wy)) { const n = noise(wx * 3 + T * 0.5, wy * 3, 844); BG[i] = C(BLUE, 1 + f * 2); FL[i] = 3; return set(i, n > 0.6 ? '~' : n > 0.45 ? '-' : ' ', C(CYAN, 6 + f * 6)); }
+  const waterEdge = consWaterEdge(wx, wy);
+  if (waterEdge > 0) {
+    const n = noise(wx * 3 + T * 0.5, wy * 3, 844), splash = wy < 1.65 && Math.abs(wx - CONS_FALL.x) < CONS_FALL.half;
+    const ripple = fract(Math.hypot((wx - CONS_FALL.x) * 0.8, wy - CONS_FALL.y) * 3 - T * 1.5) < 0.15;
+    BG[i] = C(splash ? CYAN : BLUE, splash ? 3 + n * 2 : 1 + f * 2); FL[i] = 3;
+    let ch = ' ';
+    if (splash) ch = n > 0.5 ? '*' : '~';
+    else if (ripple) ch = '~';
+    else if (n > 0.45) ch = '-';
+    return set(i, ch, C(splash ? WHITE : CYAN, splash ? 13 : 6 + f * 6));
+  }
+  if (waterEdge > -0.18) { BG[i] = C(GRAY, 1 + f); return set(i, noise(wx * 5, wy * 5, 849) > 0.5 ? 'o' : '%', C(GRAY, 4 + f * 5)); }
   if (Math.abs(wx - 6.5) < 0.6 && wy > 5) { BG[i] = C(BRICK, 1 + f); return set(i, fract(wy * 2) < 0.15 ? '=' : '|', C(WARM, 5 + f * 6)); } // a boardwalk up from the door
   BG[i] = C(GREEN, f * 1.2); // moss and soil, steaming
   const mist = noise(wx * 0.8 + T * 0.1, wy * 0.8, 845) > 0.62;

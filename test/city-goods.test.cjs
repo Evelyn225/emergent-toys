@@ -253,9 +253,11 @@ test('the night market\'s things all do something: bao heals, the waffle\'s a ru
   ev("inv.push({ id: 'lantern', uses: 0 }); held = 0"); assert.ok(ev('glow(px, py)') > dark + 0.5, 'the lantern lights round you');
 });
 
-test('seasons: a week each, spring first; the weather follows the season (winter snows, never rains); snow settles and melts; the orrery turns the year on', () => {
+test('seasons: 28 days each, spring first; winter snows, snow settles and melts, and the orrery turns the year on', () => {
   const { ev, j } = fresh();
-  assert.deepStrictEqual(j('[0, 7, 14, 21, 28].map(d => (dayNum = d, seasonShift = 0, season()))'), ['spring', 'summer', 'autumn', 'winter', 'spring']);
+  assert.strictEqual(ev('SEASON_DAYS'), 28);
+  assert.deepStrictEqual(j('[0, 27, 28, 55, 56, 83, 84, 111, 112].map(d => (dayNum = d, seasonShift = 0, season()))'),
+    ['spring', 'spring', 'summer', 'summer', 'autumn', 'autumn', 'winter', 'winter', 'spring']);
   ev('dayNum = 3; setSeason(3)'); assert.strictEqual(j('season()'), 'winter');
   const picks = j('(() => { const s = new Set(); for (let k = 0; k < 400; k++) { wTimer = -1; env(0.01); s.add(weather); } return [...s].sort(); })()');
   assert.ok(picks.includes('snow') && !picks.includes('rain') && !picks.includes('storm'), `winter: ${picks}`);

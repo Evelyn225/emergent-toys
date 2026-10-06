@@ -419,17 +419,58 @@ function roofTop(i, wx, wy, h, d) {
   const edge = lx < 0.05 && map[idx(mx - 1, my)] !== h || lx > 0.95 && map[idx(mx + 1, my)] !== h ||
                ly < 0.05 && map[idx(mx, my - 1)] !== h || ly > 0.95 && map[idx(mx, my + 1)] !== h;
   BG[i] = bgAt(GRAY, day * 2.5);
-  if (edge) return set(i, '#', C(GRAY, L * 1.3));
+  if (edge) { set(i, '#', C(GRAY, L * 1.3)); paintSettledSnow(i, wx, wy, L, 0.35); return; }
   const sh = SHOP[idx(mx, my)];
   if (sh && sh.pad && STY[idx(mx, my)] === 13) { // the hospital's helipad: a yellow ring round a big H
     const ex = wx - sh.pad[0], ey = wy - sh.pad[1], rr = Math.hypot(ex, ey);
-    if (Math.abs(rr - 1.05) < 0.07) return set(i, '#', C(YEL, Math.max(L * 1.4, night * 12)));
+    if (Math.abs(rr - 1.05) < 0.07) { set(i, '#', C(YEL, Math.max(L * 1.4, night * 12))); paintSettledSnow(i, wx, wy, L, 0.55); return; }
     const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
-    if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); return set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); }
+    if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); paintSettledSnow(i, wx, wy, L, 0.55); return; }
   }
-  if (snowCover > 0.05 && noise(wx * 5, wy * 5, 45) < snowCover * 1.2) { BG[i] = C(WHITE, 2.4 + day * 6); return set(i, ' ', 0); }
-  if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); return set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
-  set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
+  if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
+  else set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
+  paintSettledSnow(i, wx, wy, L);
+}
+
+function snowRoadWear(e) {
+  const lane = Math.exp(-Math.pow((e - 0.65) / 0.34, 4)) + Math.exp(-Math.pow((e - 1.35) / 0.34, 4));
+  const distance = Math.min(Math.abs(e - 0.5), Math.abs(e - 0.8), Math.abs(e - 1.2), Math.abs(e - 1.5));
+  const track = Math.exp(-Math.pow(distance / 0.06, 2));
+  return Math.min(0.85, lane * 0.35 + track * 0.5);
+}
+
+function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0) {
+  const amount = settledSnow(wx, wy, wear) * exposure;
+  if (amount < 0.02) return;
+  const grain = noise(wx * 5, wy * 5, 46), old = BG[i] === NONE ? 0 : BG[i] & 15;
+  const fleck = hash(Math.floor(wx * 32), Math.floor(wy * 32), 44);
+  const light = (2.4 + day * 6.5 + lampsOn * glow(wx, wy) * 4) * (0.85 + grain * 0.25);
+  let base = WHITE;
+  if (amount < 0.15 && BG[i] !== NONE) base = BG[i] >> 4;
+  else if (amount < 0.55) base = GRAY;
+  BG[i] = C(base, old + (light - old) * amount + fleck); // world-anchored dither softens palette banding
+  if (FL[i] === 2) FL[i] = 1; // settled snow is matte, even when it covers a puddle
+  LAMPL[i] = 0;
+  if (amount < 0.4) { COL[i] = C(GRAY, L * (1 - amount * 0.6)); return; }
+  let ch = ' ', col = C(GRAY, L * 0.65);
+  if (amount < 0.7 && fleck > 0.5) ch = '.';
+  else if (grain < 0.25 && fleck > 0.65) ch = ',';
+  else if (fleck > 0.985) { ch = '.'; col = C(WHITE, light + 3); }
+  set(i, ch, col);
+}
+
+function floorCell(i, r, x, rx, ry) {
+  floorBaseCell(i, r, x, rx, ry);
+  if (snowCover <= 0 || FL[i] === 3) return; // open water remains open water
+  const d = ZB[i], wx = px + rx * d, wy = py + ry * d, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
+  if (road === 2 && subwayHole(wx, wy, Math.floor(wx / 8), Math.floor(wy / 8)) >= 0) return;
+  const lx = mod(wx, 8), ly = mod(wy, 8);
+  let wear = 0;
+  if (road === 1) wear = snowRoadWear(lx);
+  else if (road === 2) wear = snowRoadWear(ly);
+  else if (road === 3) wear = Math.max(snowRoadWear(lx), snowRoadWear(ly));
+  const exposure = underEl(wy) ? 0.55 : 1;
+  paintSettledSnow(i, wx, wy, Math.max(0, 1 - d / vis * 1.5) * 6 * (0.6 + amb), exposure, wear);
 }
 
 // how far down a subway entrance's stairs (wx, wy) is (0 at the top step, 1 at the bottom), or -1 if it isn't in one
@@ -440,7 +481,7 @@ function subwayHole(wx, wy, bx, by) {
   return Math.abs(u) < SUBWAY_HOLE[0] && Math.abs(v) < SUBWAY_HOLE[1] ? (u + SUBWAY_HOLE[0]) / (2 * SUBWAY_HOLE[0]) : -1;
 }
 let stHole = -1;
-function floorCell(i, r, x, rx, ry) {
+function floorBaseCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
@@ -496,8 +537,8 @@ function floorCell(i, r, x, rx, ry) {
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
       if (inPond(lx, ly, pbx, pby)) { // the pond: ripples, lily pads by the edge, the sky and trees in it
         if (seasonIdx() === 3) { // frozen over: pale ice, cracks, snow drifted on it
-          const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03, dr = snowCover > 0.1 && noise(wx * 5, wy * 5, 96) < snowCover * 0.7;
-          BG[i] = C(dr ? WHITE : CYAN, dr ? 2.4 + day * 6 : 1.4 + day * 3.5); return set(i, cr ? '/' : dr ? ' ' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
+          const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03;
+          BG[i] = C(CYAN, 1.4 + day * 3.5); return set(i, cr ? '/' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
         }
         const n = noise(wx * 4 + T * 0.3, wy * 4 - T * 0.1, 92), lily = !inPond(lx, ly, pbx, pby, -0.18) && hash(Math.floor(wx * 9), Math.floor(wy * 9), 93) > 0.8;
         set(i, lily ? (hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? '*' : 'o') : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? MAG : GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
@@ -528,11 +569,6 @@ function floorCell(i, r, x, rx, ry) {
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
-  if (snowCover > 0.03) { // snow lying: drifts deeper off the road, tyre tracks down the middle of it
-    const cover = snowCover * (road === 1 || road === 2 ? (Math.abs((road === 1 ? lx : ly) - 1) < 0.55 ? (fract((road === 1 ? lx : ly) * 3.3) < 0.5 ? 0.25 : 0.6) : 1.1) : road ? 0.7 : 1.15);
-    const n = noise(wx * 4, wy * 4, 43);
-    if (n < cover) { BG[i] = C(WHITE, Math.min(15, (2.4 + day * 6.5 + lampsOn * glow(wx, wy) * 4) * (shade ? 0.6 : 1) * (0.85 + n * 0.3))); set(i, n > cover - 0.08 ? '.' : hash(Math.floor(wx * 20), Math.floor(wy * 20), 44) > 0.93 ? "'" : ' ', C(GRAY, L * 0.7)); LAMPL[i] = 0; return; }
-  }
   LAMPL[i] = 0;
   if (lampsOn > 0) {
     const gl = glow(wx, wy) * lampsOn;

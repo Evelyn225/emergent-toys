@@ -61,6 +61,13 @@ const SEASON_WEATHER = { spring: ['clear', 'clear', 'rain', 'rain', 'fog'], summ
 
 const CLOUD_H = 60; // cloud layer height (600m)
 let cloudT = 0;
+// A continuous field shared by ground and roofs: broad drifts with a soft, granular fringe.
+function settledSnow(wx, wy, wear = 0) {
+  if (snowCover <= 0) return 0;
+  const drift = noise(wx * 0.8, wy * 0.8, 43) * 0.7 + noise(wx * 2.1, wy * 2.1, 45) * 0.25 + noise(wx * 7, wy * 7, 44) * 0.05;
+  const edge = clamp((snowCover * 1.3 - drift + 0.16) / 0.32, 0, 1);
+  return edge * edge * (3 - 2 * edge) * clamp(snowCover * 8, 0, 1) * (1 - wear);
+}
 function env(dt) {
   const lapse = hurrying() ? 40 : 1; // 20s per game hour; hold Q with the pocket watch in hand to fast-forward (clouds race along too)
   const t0 = tod;

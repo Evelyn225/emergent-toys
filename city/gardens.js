@@ -267,7 +267,14 @@ const CONS_GRID = Array.from({ length: CONS_H }, (_, y) => Array.from({ length: 
   return '.';
 }).join(''));
 const CONS_POOL = { x: 6.5, y: 3.4, rx: 2.6, ry: 1.5 };
-const inConsPool = (x, y) => Math.hypot((x - CONS_POOL.x) / CONS_POOL.rx, (y - CONS_POOL.y) / CONS_POOL.ry) < 1;
+const CONS_FALL = { x: CONS_POOL.x, y: 1, half: 0.85 };
+function consWaterEdge(x, y) {
+  const pond = (1 - Math.hypot((x - CONS_POOL.x) / CONS_POOL.rx, (y - CONS_POOL.y) / CONS_POOL.ry)) * CONS_POOL.ry;
+  const width = CONS_FALL.half + clamp((y - CONS_FALL.y) / (CONS_POOL.y - CONS_FALL.y), 0, 1) * 0.45;
+  const stream = Math.min(width - Math.abs(x - CONS_FALL.x), y - CONS_FALL.y, CONS_POOL.y - y);
+  return Math.max(pond, stream);
+}
+const inConsPool = (x, y) => consWaterEdge(x, y) > 0;
 const PLANT_ART = {
   palm: pad(['  __ _ __', ' /  \\|/  \\', '/  .-+-.  \\', '    /|\\', '     |', '     |', '     |', '     |', '    /|\\']),
   fern: pad(['\\ | /', ' \\|/ ', '--+--', ' /|\\ ']),
@@ -278,39 +285,25 @@ const PLANT_ART = {
   butterfly: ['}{'], lizard: ['~=<'],
 };
 function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
-  const u = Math.abs(su), c = roomAt(mx, my), jungle = mx < 13 || mx === 13 && false;
-  if (c === 'G') { // the glass door wall: frame, panes, the other house through it, its name over the door
-    const word = px < 13 ? 'DESERT HOUSE' : 'TROPICAL HOUSE', u0 = u < 7.5 ? 4 : 11;
-    if (Math.abs(z - 3.3) < 0.2 && wallText(i, su, uStep, z, d, word, u0 * Math.sign(su), 3.3, 0.18, 0.3, C(WHITE, 14), C(px < 13 ? BRICK : GREEN, 3))) return true;
+  const u = Math.abs(su), c = roomAt(mx, my);
+  if (c === 'G') { // fixed botanical displays: their subjects stay the same from either side of the divider
+    const desert = my > 8, word = desert ? 'DESERT PLANTS' : 'PALMS & FERNS', u0 = desert ? 11.8 : 4;
+    if (Math.abs(z - 3.3) < 0.2 && wallText(i, su, uStep, z, d, word, u0 * Math.sign(su), 3.3, 0.18, 0.3, C(WHITE, 14), C(desert ? BRICK : GREEN, 3))) return true;
     if (fract(u / 1.2) < 0.05 || fract(z / 1.5) < 0.03 || z > 3.92) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
-    // through the glass, the other house, in depth: rows of cacti on sand, or of palms in the green
-    const streak = fract((u + z) * 0.35) < 0.025 && hash(Math.floor((u + z) * 0.35), 7, 866) > 0.5;
-    if (streak) return set(i, '/', C(WHITE, 8)), true;
-    const [gsu, gsz] = glassSlopes(su, z), desert = px < 13;
-    // The tropical house reads as a deeper, steadier backdrop; full sideways parallax made the tall palms skew as you moved.
-    for (const q of [1.5, 4, 7.5]) {
-      const lu = u + gsu * q * (desert ? 1 : 0.45), lz = z + gsz * q, slot = Math.floor(lu / 1.8), c = (slot + 0.3 + hash(slot, q, 867) * 0.4) * 1.8, fade = 1 - q / 14;
-      if (lz < 0) { BG[i] = desert ? C(YEL, 3 + day * 2) : C(GREEN, 1.5); return set(i, desert ? (Math.floor(lu * 4) + Math.floor(q)) % 7 ? ' ' : '.' : ',', C(desert ? WARM : GREEN, 6 * fade)), true; } // the ground
-      if (hash(slot, q, 868) < 0.35) continue;
-      if (desert) { // a saguaro: a trunk, and an arm or two
-        const tall = 1.6 + hash(slot, q, 869) * 2, dx_ = lu - c, arm = Math.abs(dx_) > 0.1 && Math.abs(dx_) < 0.45 && (Math.abs(lz - tall * 0.55) < 0.08 && Math.sign(dx_) === (slot & 1 ? 1 : -1) || Math.abs(Math.abs(dx_) - 0.4) < 0.07 && lz > tall * 0.55 && lz < tall * 0.8 && Math.sign(dx_) === (slot & 1 ? 1 : -1));
-        if (Math.abs(dx_) < 0.13 && lz < tall || arm) { BG[i] = C(GREEN, 2 * fade); return set(i, Math.abs(dx_) < 0.04 ? ':' : '|', C(GREEN, 9 * fade)), true; }
-      } else { // a palm: a leaning trunk, a crown of fronds
-        const tall = 3 + hash(slot, q, 869) * 3, lean = (lz / tall) * 0.12 * (slot & 1 ? 1 : -1);
-        if (Math.hypot((lu - c - lean) * 0.8, lz - tall) < 0.9 + 0.4 * noise(lu * 3, lz * 3, 870)) { BG[i] = C(GREEN, 2.5 * fade); return set(i, noise(lu * 9, lz * 9, 871) > 0.5 ? '%' : '"', C(GREEN, 10 * fade)), true; }
-        if (Math.abs(lu - c - lean) < 0.1 && lz < tall) return set(i, '|', C(BRICK, 9 * fade)), true;
-      }
-    }
-    BG[i] = desert ? C(CYAN, 2 + day * 3) : C(GREEN, 1.2);
-    return set(i, ' ', 0), true;
+    return conservatoryScreen(i, u, z, desert);
+  }
+  const left = mx < 13 || mx === 0;
+  if (my === 0 && left && Math.abs(u - CONS_FALL.x) < CONS_FALL.half + 0.25) {
+    const edge = Math.abs(u - CONS_FALL.x), n = fract(z * 3 + T * 2.5 + Math.sin(u * 7) * 0.3);
+    if (edge > CONS_FALL.half) { BG[i] = C(GRAY, 1 + L * 0.15); return set(i, '%', C(GRAY, L)), true; }
+    BG[i] = C(CYAN, 2 + n * 3);
+    let ch = ' ';
+    if (z < 0.3) ch = n < 0.5 ? '*' : '~';
+    else if (n < 0.3) ch = '|';
+    else if (n < 0.5) ch = ':';
+    return set(i, ch, C(WHITE, 15)), true;
   }
   if (z < 0.8) { BG[i] = C(BRICK, 1 + L * 0.12); return set(i, fract(z / 0.2) < 0.15 ? '_' : fract(u * 2 + (Math.floor(z * 5) & 1) * 0.5) < 0.08 ? '|' : ' ', C(BRICK, L)), true; } // the brick plinth
-  const left = mx < 13 || mx === 0;
-  if (my === 0 && left && Math.abs(u - CONS_POOL.x) < 1.1) { // the waterfall, pouring down the rocks into the pool
-    if (Math.abs(u - CONS_POOL.x) > 0.85) return set(i, '%', C(GRAY, L)), true;
-    const n = fract(z * 3 + T * 2.5 + Math.sin(u * 7) * 0.3);
-    BG[i] = C(CYAN, 2 + n * 3); return set(i, n < 0.3 ? '|' : n < 0.5 ? ':' : ' ', C(WHITE, 15)), true;
-  }
   // glass all round: white bars, sky beyond, leaves pressed against it on the tropical side
   if (fract(u / 1.2) < 0.04 || fract(z / 1.5) < 0.03) { BG[i] = C(WHITE, 2 + L * 0.15); return set(i, fract(z / 1.5) < 0.03 ? '-' : '|', C(WHITE, L * 1.2)), true; }
   const leaf = left && noise(u * 1.5, z * 1.2, 841) > 0.5 - 0.35 * (1 - z / 9);
@@ -321,12 +314,57 @@ function conservatoryWall(i, su, uStep, z, d, mx, my, L) {
   BG[i] = leaf ? C(GREEN, 1 + L * 0.1) : day > 0.3 ? C(CYAN, 2 + day * 4) : dusk > 0.3 ? C(ORANGE, 3) : C(BLUE, 1);
   return set(i, leaf ? (noise(u * 6, z * 6, 842) > 0.5 ? '%' : '"') : ' ', C(GREEN, L * 1.3)), true;
 }
+// Sample the panorama in wall coordinates, with painted depth rather than camera-dependent parallax.
+function conservatoryScreen(i, u, z, desert) {
+  const ground = 0.25 + noise(u * 0.7, 0, 867) * 0.22;
+  if (z < ground) {
+    BG[i] = C(desert ? YEL : GREEN, desert ? 4 : 2);
+    return set(i, desert ? '~' : '"', C(desert ? WARM : GREEN, desert ? 9 : 7)), true;
+  }
+  for (let layer = 0; layer < 3; layer++) {
+    const spacing = 2.6, shift = layer * 0.85, slot = Math.floor((u + shift) / spacing);
+    const centre = (slot + 0.5) * spacing - shift, tall = 1.8 + hash(slot, layer, 869) * 0.95;
+    const offset = u - centre, light = 11 - layer * 2;
+    if (desert) {
+      const armSide = slot & 1 ? 1 : -1, arm = offset * armSide;
+      const onArm = (arm > 0 && arm < 0.45 && Math.abs(z - tall * 0.55) < 0.09) ||
+        (Math.abs(arm - 0.45) < 0.09 && z > tall * 0.55 && z < tall * 0.8);
+      if ((Math.abs(offset) < 0.12 && z < tall) || onArm) { BG[i] = C(GREEN, 2); return set(i, '|', C(GREEN, light)), true; }
+    } else {
+      const lean = 0.1 * z / tall * (slot & 1 ? 1 : -1), stem = offset - lean;
+      const spread = 0.85 + hash(slot, layer, 870) * 0.25, reach = Math.abs(stem) / spread;
+      const frond = tall + Math.sin(reach * Math.PI) * 0.2 - reach * 0.55;
+      if (reach < 1 && (Math.abs(z - frond) < 0.1 || Math.abs(z - frond - 0.25 * (1 - reach)) < 0.07)) {
+        BG[i] = C(GREEN, 2 + (2 - layer));
+        return set(i, stem < 0 ? '/' : '\\', C(GREEN, light + 1)), true;
+      }
+      if (Math.abs(stem) < 0.05 && z < tall) return set(i, '|', C(BRICK, light)), true;
+    }
+  }
+  if (!desert && z < 0.85 + noise(u * 1.8, 0, 871) * 0.3) {
+    BG[i] = C(GREEN, 2);
+    return set(i, fract(u * 5 + z * 4) < 0.5 ? '/' : '\\', C(GREEN, 7)), true;
+  }
+  BG[i] = C(desert ? CYAN : GREEN, desert ? 3 : 1);
+  return set(i, ' ', 0), true;
+}
 function conservatoryFloor(i, f, wx, wy) {
   if (wx > 13) { // sand, rippled by the wind that never blows in here
     BG[i] = C(YEL, 1 + f * 1.5);
     return set(i, fract(wy * 3 + Math.sin(wx * 2) * 0.3) < 0.2 ? '~' : hash(Math.floor(wx * 6), Math.floor(wy * 6), 843) > 0.92 ? '.' : ' ', C(WARM, 4 + f * 6));
   }
-  if (inConsPool(wx, wy)) { const n = noise(wx * 3 + T * 0.5, wy * 3, 844); BG[i] = C(BLUE, 1 + f * 2); FL[i] = 3; return set(i, n > 0.6 ? '~' : n > 0.45 ? '-' : ' ', C(CYAN, 6 + f * 6)); }
+  const waterEdge = consWaterEdge(wx, wy);
+  if (waterEdge > 0) {
+    const n = noise(wx * 3 + T * 0.5, wy * 3, 844), splash = wy < 1.65 && Math.abs(wx - CONS_FALL.x) < CONS_FALL.half;
+    const ripple = fract(Math.hypot((wx - CONS_FALL.x) * 0.8, wy - CONS_FALL.y) * 3 - T * 1.5) < 0.15;
+    BG[i] = C(splash ? CYAN : BLUE, splash ? 3 + n * 2 : 1 + f * 2); FL[i] = 3;
+    let ch = ' ';
+    if (splash) ch = n > 0.5 ? '*' : '~';
+    else if (ripple) ch = '~';
+    else if (n > 0.45) ch = '-';
+    return set(i, ch, C(splash ? WHITE : CYAN, splash ? 13 : 6 + f * 6));
+  }
+  if (waterEdge > -0.18) { BG[i] = C(GRAY, 1 + f); return set(i, noise(wx * 5, wy * 5, 849) > 0.5 ? 'o' : '%', C(GRAY, 4 + f * 5)); }
   if (Math.abs(wx - 6.5) < 0.6 && wy > 5) { BG[i] = C(BRICK, 1 + f); return set(i, fract(wy * 2) < 0.15 ? '=' : '|', C(WARM, 5 + f * 6)); } // a boardwalk up from the door
   BG[i] = C(GREEN, f * 1.2); // moss and soil, steaming
   const mist = noise(wx * 0.8 + T * 0.1, wy * 0.8, 845) > 0.62;

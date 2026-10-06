@@ -399,7 +399,7 @@ test('the board shows under you on a big desktop screen too; the wheels go quiet
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto(PAGE); await page.waitForTimeout(300);
-    await page.evaluate(() => { mode = 'walk'; fx.skating = true; pitch = 0; });
+    await page.evaluate(() => { mode = 'walk'; fx.skating = true; pitch = -1; }); // look down at the board under your feet
     await page.waitForTimeout(200);
     const cells = await page.evaluate(() => { let n = 0; for (let i = 0; i < cols * rows; i++) if (boardZ[i] < 1e9) n++; return [cols * rows > 1 << 14, n]; });
     assert.ok(cells[0] && cells[1] > 50, `more cells than the old buffer held, and the board drawn in them (${cells})`);
@@ -486,9 +486,13 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
 test('bunny hopping: land and go straight back up and each hop is faster; stop and it is gone', () => withPage(async page => {
   const r = await page.evaluate(() => {
     refillNeeds();
-    // frame by frame: forward (px moving) with Space held, strafing into a turn or not
+    // Frame by frame: keep moving and press jump just before landing, with or without air strafing.
     const go = (frames, { space = 1, strafe = 0 } = {}) => { K.KeyW = 1; K.Space = space; K.KeyD = strafe ? 1 : 0;
-      for (let i = 0; i < frames; i++) { T += 1 / 60; if (strafe) a += 0.02; px += 0.01; if (space && !body.z) jump(); stepBody(1 / 60); }
+      for (let i = 0; i < frames; i++) {
+        T += 1 / 60; if (strafe) a += 0.02; px += 0.01;
+        if (space && (!body.z || body.vz < 0 && body.z < 0.2)) jump();
+        stepBody(1 / 60);
+      }
       K.KeyW = K.Space = K.KeyD = 0; return body.hop; };
     body.hop = 1; body.z = body.vz = 0;
     const hopped = go(180), capped = go(1200);
@@ -774,7 +778,10 @@ test('the museum by day: $10 in, plaques to read, the gift shop; by night a heis
 }));
 
 test('the night market\'s fortune teller and goldfish tub: five stalls, a reading for $5, a net for $2', () => withPage(async page => {
-  await page.evaluate(() => { tod = 22; money = 20; const s = STALLS[3]; devAt(s.at[0], s.at[1], Math.PI / 2); });
+  await page.evaluate(() => {
+    tod = 22; money = 20; cars.length = 0; // passing traffic must not replace the stall interaction
+    const s = STALLS[3]; devAt(s.at[0], s.at[1], Math.PI / 2);
+  });
   assert.match(await page.evaluate(() => promptText()), /fortune told/);
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [money, /She turns/.test(msgText)]), [15, true]);
@@ -869,10 +876,12 @@ test('the laundromat: a load at the back wall, done in its time; clean clothes l
   assert.deepStrictEqual(await page.evaluate(() => [!!wash, money]), [true, 97]);
   await page.keyboard.press('KeyE');
   assert.match(await page.evaluate(() => msgText), /Still spinning/);
-  await page.evaluate(() => { T = wash.done + 0.1; wanted.stars = 2; wanted.seen = false; });
-  await page.waitForTimeout(100);
-  await page.keyboard.press('KeyE');
-  assert.deepStrictEqual(await page.evaluate(() => [wash, wanted.stars, fx.fresh > 0]), [null, 0, true]);
+  const cleaned = await page.evaluate(() => {
+    T = wash.done + 0.1; wanted.stars = 2; wanted.seen = false;
+    interact(); // collect while unseen, before an unrelated frame can start a police search
+    return [wash, wanted.stars, fx.fresh > 0];
+  });
+  assert.deepStrictEqual(cleaned, [null, 0, true]);
 }));
 
 test('the aquarium: admission at the door, fish in every kind of tank, a touch pool, a gift shop; fish in the windows outside', () => withPage(async page => {
@@ -943,7 +952,8 @@ test('the cell block: you stay in your cell, the bars are see-through and there 
 
 test('your home: things put in the closet are still there after a reload; a taxi takes you to your nearest home', () => withPage(async page => {
   await page.evaluate(() => { money = 5000; buy('home_studio'); carryItem({ id: 'book', uses: 0 }); carryItem({ id: 'umbrella', uses: 0 });
-    enterRoom('home', { word: 'HOME', ret: [px, py, a], cell: [0, 0] }, [ROOM_DEFS.home.grid[0].length / 2, 3, -Math.PI / 2]); [px, py] = room.def.spots.closet; py += 0.6; });
+    const cell = owned.homes[0].cell;
+    enterRoom('home', { word: 'HOME', ret: [px, py, a], cell: [cell % N, Math.floor(cell / N)] }, [ROOM_DEFS.home.grid[0].length / 2, 3, -Math.PI / 2]); [px, py] = room.def.spots.closet; py += 0.6; });
   assert.match(await page.evaluate(() => promptText()), /your closet/);
   await page.keyboard.press('KeyE');
   assert.strictEqual(await page.evaluate(() => panelOpen()), true, 'the closet opens');
@@ -1036,6 +1046,78 @@ test('mahjong at the tea house: the buy-in goes in the pot, walking away loses i
   await page.keyboard.press('ArrowUp'); // MAHJONG!
   await page.waitForTimeout(150);
   assert.deepStrictEqual(await page.evaluate(() => [game.g.result.winner, money]), [0, 110], 'won the pot: $20');
+}));
+
+test('snow covers garden beds and roof rims without covering open water or reflecting as a puddle', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; mode = 'walk'; tod = 12; env(0); render(0);
+    const sample = (wx, wy) => {
+      const row = hor + 10, d = eye * projY / (row - hor + 0.5);
+      floorCell(0, row, 0, (wx - px) / d, (wy - py) / d);
+      return [BG[0] >> 4, FL[0]];
+    };
+    const bed = GARDEN_BEDS[0], bx = GARDEN.x0 + bed[0], by = GARDEN.y0 + bed[1];
+    snowCover = 0; const bare = sample(bx, by);
+    snowCover = 1; const snowy = sample(bx, by);
+    const water = sample(GARDEN.x0 + LAKE.x, GARDEN.y0 + LAKE.y);
+    const at = Array.from(map).findIndex((h, i) => h > 2 && STY[i] === 0);
+    const mx = at % N, my = Math.floor(at / N);
+    roofTop(0, mx + 0.5, my + 0.5, map[at], 1);
+    const roof = BG[0] >> 4;
+    roofTop(0, mx + 0.01, my + 0.5, map[at], 1);
+    const rim = CH[0];
+    BG[0] = C(BLUE, 2); FL[0] = 2;
+    paintSettledSnow(0, bx, by, 6);
+    return { bare, snowy, water, roof, rim, matte: FL[0] };
+  });
+  assert.notStrictEqual(result.bare[0], result.snowy[0], 'the flower bed receives snow');
+  assert.strictEqual(result.snowy[0], 4, 'full snow cover is white');
+  assert.strictEqual(result.water[1], 3, 'open water keeps its water surface');
+  assert.strictEqual(result.roof, 4, 'the roof receives snow too');
+  assert.strictEqual(result.rim, '#', 'snow preserves the parapet outline');
+  assert.strictEqual(result.matte, 1, 'snow-covered puddles stop reflecting');
+}));
+
+test('the conservatory waterfall runs to the floor and joins the pond through continuous blocked water', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true;
+    enterRoom('conservatory', { word: 'CONSERVATORY', ret: [px, py, a] }, [6.5, 7, -Math.PI / 2]);
+    let connected = true;
+    for (let y = CONS_FALL.y + 0.01; y <= CONS_POOL.y; y += 0.05) {
+      for (const x of [CONS_FALL.x - 0.4, CONS_FALL.x, CONS_FALL.x + 0.4]) {
+        FL[0] = 0;
+        conservatoryFloor(0, 1, x, y);
+        connected &&= inConsPool(x, y) && room.def.block(x, y) && FL[0] === 3;
+      }
+    }
+    conservatoryWall(0, CONS_FALL.x, 0.01, 0.1, 5, 6, 0, 10);
+    return { connected, foot: BG[0] >> 4, cyan: CYAN, boardwalk: free(6.5, 6) };
+  });
+  assert.ok(result.connected, 'no strip of dry floor separates the waterfall from the pond');
+  assert.strictEqual(result.foot, result.cyan, 'the waterfall continues through the brick plinth');
+  assert.ok(result.boardwalk, 'the approach remains walkable');
+}));
+
+test('conservatory displays keep the same artwork from both sides and at oblique viewing angles', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true;
+    enterRoom('conservatory', { word: 'CONSERVATORY', ret: [px, py, a] }, [10, 4, 0]);
+    const sample = (viewerX, slope, sign, y) => {
+      px = viewerX; WH.sl = slope; WH.dn = Math.abs(px - 13); eye = 1.7;
+      const pixels = [];
+      for (let u = y; u < y + 0.8; u += 0.1) for (let z = 0.2; z < 3; z += 0.1) {
+        WH.wc = u; BG[0] = NONE;
+        conservatoryWall(0, u * sign, 0.01, z, 4, 13, Math.floor(y), 8);
+        pixels.push([CH[0], COL[0], BG[0]]);
+      }
+      return JSON.stringify(pixels);
+    };
+    return [4.1, 11.1].map(y => {
+      const front = sample(10, 0, 1, y);
+      return front === sample(17, -3, -1, y) && front === sample(12.5, 6, 1, y);
+    });
+  });
+  assert.deepStrictEqual(result, [true, true], 'both botanical panels stay attached to the wall');
 }));
 
 test('the Botanical Gardens: gates locked at night, a swan boat on the lake, ducks to feed, the conservatory and the aviary, a gardener\'s shift, a seat on the grass', () => withPage(async page => {
