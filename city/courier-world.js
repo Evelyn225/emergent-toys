@@ -36,13 +36,15 @@ const courierSouthDeck=courierMapHeight(179.5,106.5)+.06;
 courierStairs(179.37,102.55,179.63,103.8,COURIER_DEPOT.h,courierSouthDeck,'y');
 courierSurface(179.39,103.8,179.61,106.2,courierSouthDeck,courierSouthDeck,'y');
 const courierLaundryDeck=courierMapHeight(186.5,107.35)+.06;
-courierStairs(182.65,107.22,183.8,107.48,courierMapHeight(183.5,107.35),courierLaundryDeck);
-courierSurface(183.8,107.24,186.2,107.46,courierLaundryDeck);
+// The old maintenance crossing follows the rear service terrace. A direct jump across the lane cuts this dogleg.
+courierStairs(183.37,108.25,183.63,108.85,courierMapHeight(183.5,108.2),courierLaundryDeck,'y');
+courierSurface(183.37,108.85,183.63,109.5,courierLaundryDeck,courierLaundryDeck,'y','landing');
+courierSurface(183.8,109.39,186.2,109.61,courierLaundryDeck);
 const courierNorthDeck=courierMapHeight(191.4,103.5)+.06;
 courierStairs(191.27,106.2,191.53,107.2,courierNorthDeck,courierMapHeight(191.4,106.5),'y');
 courierSurface(191.29,103.8,191.51,106.2,courierNorthDeck,courierNorthDeck,'y');
 // The last bridge ends in a small landing on the lower roof; step or jump down from its open end.
-courierSurface(191.8,102.24,194.25,102.46,courierNorthDeck);
+courierSurface(191.8,101.14,194.25,101.36,courierNorthDeck);
 // Rise before each taller party wall instead of cutting a ramp through its cornice.
 const courierTownhouseDeck=courierMapHeight(190.5,107)+.06;
 courierStairs(188.45,106.72,189.85,106.98,courierMapHeight(189.5,107),courierTownhouseDeck);
@@ -52,17 +54,17 @@ courierStairs(194.45,102.27,195.85,102.53,courierMapHeight(195.5,102.4),courierG
 courierSurface(195.85,102.27,196.2,102.53,courierGardenApproach,courierGardenApproach,'x','landing');
 // No descending ramp at x=198: the garden is a straightforward drop from the adjoining roof.
 // Two small gaps are optional sprint-jump shortcuts; the walkable service bridges remain available.
-courierStairs(183.05,108.4,183.95,108.65,1.5,courierLaundryDeck);
-courierSurface(183.95,108.4,184.75,108.65,courierLaundryDeck,courierLaundryDeck,'x','shortcut');
-courierSurface(185.1,108.4,186.4,108.65,courierLaundryDeck,courierLaundryDeck,'x','shortcut');
-courierSurface(191.8,101.15,192.95,101.4,courierNorthDeck,courierNorthDeck,'x','shortcut');
-courierSurface(193.3,101.15,194.5,101.4,courierMapHeight(194.5,101.4)+.06,courierMapHeight(194.5,101.4)+.06,'x','shortcut');
+courierStairs(183.05,106.4,183.85,106.65,1.5,courierLaundryDeck);
+courierSurface(183.85,106.4,184.75,106.65,courierLaundryDeck,courierLaundryDeck,'x','shortcut');
+courierSurface(185.1,106.4,186.4,106.65,courierLaundryDeck,courierLaundryDeck,'x','shortcut');
+courierSurface(191.8,102.24,192.95,102.46,courierNorthDeck,courierNorthDeck,'x','shortcut');
+courierSurface(193.3,102.24,194.5,102.46,courierMapHeight(194.5,102.35)+.06,courierMapHeight(194.5,102.35)+.06,'x','shortcut');
 // These roofs already have indoor access: depot stairs and apartment elevators. Recovery uses those entrances;
 // reserve ladders for future routes on buildings without roof access, away from balconies and cornices.
 const COURIER_GARDEN = { x:199,y:102.1,z:courierMapHeight(199,102.1), name:'Mara' };
 const COURIER_ROUTES = [{id:'garden',title:'The Green Roof',parcel:'gardening supplies',pay:80,bonus:40,
-  quick:70,bonusUntil:150,recipient:COURIER_GARDEN,
-  directions:'South over the print-shop bridge, east past the laundry and water tank, then north to the florist row.'}];
+  quick:42,bonusUntil:90,recipient:COURIER_GARDEN,
+  directions:'South over the print-shop bridge. Yellow arrows follow the safe service crossings; cyan arrows mark the faster jumps. Then north to the florist row.'}];
 // A former press-room skylight makes the depot's roof step up on its quiet north side.
 const courierHut=courierSurface(178.3,101.2,180.3,101.8,1.65,1.65,'x','hut');
 courierHut.z0=COURIER_DEPOT.h;

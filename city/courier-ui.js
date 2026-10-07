@@ -169,10 +169,13 @@ for(const x of [198.3,198.5])courierBox('trellis-post',x,101.4,.007,.007,1.4,1.6
 for(const z of [1.5,1.58,1.66])courierBox('trellis',198.4,101.4,.11,.004,z,z+.005,BRICK,false);
 const oldPrintSign=courierBox('print-sign',177.98,101.5,.35,.008,.65,.82,GREEN,false);
 oldPrintSign.c=0;oldPrintSign.s=1;
-const COURIER_SIGNS=[[179.5,102.35,'v'],[179.5,106.35,'>'],[182.35,107.35,'>'],[186.35,107.35,'>'],
+const COURIER_SIGNS=[[179.5,102.35,'v'],[179.5,106.35,'>'],[182.5,107.4,'v'],[183.5,108.1,'v'],
+  [183.55,109.5,'>'],[186.5,109.35,'^'],[186.5,107.35,'>'],
   [188.2,106.85,'>'],[190.7,107.4,'>'],[191.4,107.4,'^'],[191.4,103.4,'^'],
-  [191.4,102.35,'>'],[194.32,102.4,'>'],[197.65,102.4,'>']].map(([x,y,arrow])=>
-    ({x,y,arrow,z:Math.max(courierMapHeight(x,y),courierRoofHeight(x,y))+.002}));
+  [191.4,101.25,'>'],[194.35,101.55,'v'],[194.32,102.4,'>'],[197.65,102.4,'>'],
+  [182.8,106.52,'>',true],[184.52,106.52,'>',true],[191.6,102.35,'>',true],[192.73,102.35,'>',true]]
+  .map(([x,y,arrow,shortcut=false])=>
+    ({x,y,arrow,shortcut,z:Math.max(courierMapHeight(x,y),courierRoofHeight(x,y))+.002}));
 const courierSceneryB=bucketed(COURIER_SCENERY),courierSignsB=bucketed(COURIER_SIGNS),courierSurfacesB=bucketed(COURIER_SURFACES);
 function courierRoofBlocked(x,y,z,pad=.025) {
   for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const o of courierSceneryB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)])
@@ -239,7 +242,7 @@ function drawCourier() {
       const u=HIT.u/.13,v=HIT.v/.09;
       const across=arrow==='>'?v:u,forward=arrow==='^'?-v:arrow==='>'?u:v;
       if(!(Math.abs(across)<.09&&forward<.45 || forward>.15&&Math.abs(across)<(.95-forward)*.65))return false;
-      return set(i,'#',C(YEL,L*1.2)),true;
+      return set(i,'#',C(o.shortcut?CYAN:YEL,L*1.2)),true;
     });
   });
   drawArt(...R(COURIER_GARDEN.x,COURIER_GARDEN.y),COURIER_GARDEN.z,.055,.175,ART.keeper,(ch,row,L)=>C(row<3?SKIN:GREEN,L));

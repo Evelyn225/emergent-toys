@@ -151,18 +151,6 @@
         const RANDOM_WORDS_ENDPOINT = '/api/random-words.js';
         const GENERATE_ENDPOINT = '/api/generate.js';
 
-        // Create the prompt for the AI
-        function createGenerationPrompt(theme) {
-            return `
-Create a playful, memorable web experience inspired by this theme: "${theme}".
-
-Choose the form that best fits the idea: it could be a tiny website, toy, game, simulation, generative artwork, interactive story, or something unexpected. Make the theme unmistakable through the visuals, writing, interactions, and details. Give it a distinctive visual identity and a satisfying thing to explore or do. Keep the scope focused enough to finish and polish; don't add complexity just to make the code longer.
-
-Use HTML, CSS, JavaScript, canvas, WebGL, audio, or a CDN library when it helps the idea. Make controls clear and responsive, and make sure the experience works on desktop and mobile. Audio should be optional and never required to use the experience.
-
-Return one complete, self-contained HTML document with embedded styles and scripts. Start with <!DOCTYPE html> and output no markdown or explanation.`;
-        }
-
         // Shuffle message array for randomization
         function shuffleArray(array) {
             const shuffled = [...array];
@@ -182,13 +170,22 @@ Return one complete, self-contained HTML document with embedded styles and scrip
         let currentIframe = null;
         let consoleCommandInterval = null;
         let displayedGenerationId = 0;
+        let previewStartedAt = 0;
+        let previewCanAutoRepair = true;
 
         window.addEventListener('message', (event) => {
             if (event.data?.type !== 'web-wizard-runtime-error'
                 || !currentIframe
                 || event.source !== currentIframe.contentWindow) return;
-            console.error('Generated site runtime error:', event.data.message);
-            showErrorToast('Runtime error: ' + (event.data.message || 'unknown script error'));
+            const message = String(event.data.message || 'unknown script error').slice(0, 4000);
+            console.error('Generated site runtime error:', message);
+            if (previewCanAutoRepair && Date.now() - previewStartedAt <= 2000 && !isGenerating) {
+                previewCanAutoRepair = false;
+                showErrorToast('Site error found. Trying an automatic repair...');
+                void generateWebsite(`Fix this startup error without changing the experience: ${message}`, true);
+            } else {
+                showErrorToast('Runtime error: ' + message);
+            }
         });
 
         function pauseCurrentSite() {
@@ -229,9 +226,59 @@ Return one complete, self-contained HTML document with embedded styles and scrip
         function setProgressBar(percent) {
             const progressBar = document.querySelector('.progress-bar');
             if (progressBar) {
-                progressBar.style.width = percent + '%';
+                progressBar.style.width = Math.max(0, Math.min(100, percent)) + '%';
                 progressBar.style.animation = 'none'; // Stop the animation
             }
+        }
+
+        async function readGenerationStream(response, onProgress, onRetry) {
+            if (!response.body) throw new Error('Streaming is unavailable in this browser.');
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let html = '';
+            let completed = false;
+
+            const handleFrame = (frame) => {
+                const data = frame.split(/\r?\n/)
+                    .filter(line => line.startsWith('data:'))
+                    .map(line => line.slice(5).trimStart())
+                    .join('\n');
+                if (!data) return;
+
+                const event = JSON.parse(data);
+                if (event.type === 'chunk') {
+                    html += event.text || '';
+                    onProgress(html.length);
+                } else if (event.type === 'retry') {
+                    html = '';
+                    onProgress(0);
+                    onRetry?.();
+                } else if (event.type === 'error') {
+                    throw new Error(event.message || 'Generation failed.');
+                } else if (event.type === 'done') {
+                    if (typeof event.html === 'string') html = event.html;
+                    completed = true;
+                }
+            };
+
+            while (true) {
+                const { value, done } = await reader.read();
+                buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+                let boundary;
+                while ((boundary = buffer.search(/\r?\n\r?\n/)) !== -1) {
+                    const frame = buffer.slice(0, boundary);
+                    const delimiter = buffer.slice(boundary).match(/^\r?\n\r?\n/)[0];
+                    buffer = buffer.slice(boundary + delimiter.length);
+                    handleFrame(frame);
+                }
+                if (done) break;
+            }
+
+            if (buffer.trim()) handleFrame(buffer);
+            if (!completed || !html) throw new Error('The generation stream ended before the site was complete.');
+            return html;
         }
 
         // Random console messages for loading (loaded from /casino-assets/console-commands.json)
@@ -419,7 +466,7 @@ Return one complete, self-contained HTML document with embedded styles and scrip
             return data.theme;
         }
 
-        function setDisplayedGeneration(gen) {
+        function setDisplayedGeneration(gen, allowAutoRepair = true) {
             const generationId = ++displayedGenerationId;
             displayedGeneration = gen;
             const container = document.getElementById('generatedContent');
@@ -453,9 +500,23 @@ Return one complete, self-contained HTML document with embedded styles and scrip
 <\/script>`;
 
                 const errorReporter = `<script>
-window.addEventListener('error', function(event) {
-  parent.postMessage({ type: 'web-wizard-runtime-error', message: event.message }, '*');
+function reportWizardError(message) {
+  parent.postMessage({ type: 'web-wizard-runtime-error', message: String(message).slice(0, 4000) }, '*');
+}
+window.onerror = function(message, source, line, column, error) {
+  reportWizardError((error && error.stack) || (message + ' (' + source + ':' + line + ':' + column + ')'));
+  return false;
+};
+window.addEventListener('unhandledrejection', function(event) {
+  var reason = event.reason;
+  reportWizardError((reason && (reason.stack || reason.message)) || String(reason));
 });
+window.addEventListener('error', function(event) {
+  if (event.target && event.target !== window) {
+    var resource = event.target.src || event.target.href || event.target.tagName || 'resource';
+    reportWizardError('Failed to load ' + resource);
+  }
+}, true);
 <\/script>`;
                 
                 let codeToWrite = gen.code || '';
@@ -468,6 +529,8 @@ window.addEventListener('error', function(event) {
                 }
 
                 currentIframe = iframe;
+                previewStartedAt = Date.now();
+                previewCanAutoRepair = allowAutoRepair;
                 iframe.srcdoc = codeToWrite;
                 disableGeneratedContextMenu(container, iframe);
                 hasContent = true;
@@ -500,7 +563,7 @@ window.addEventListener('error', function(event) {
 
         // Call AI API to generate a site for a theme
         // editRequest: when set, revise currentGeneration instead of making a new site
-        async function generateWebsite(editRequest = null) {
+        async function generateWebsite(editRequest = null, autoRepairPass = false) {
             if (isGenerating) return;
             const editSource = editRequest ? currentGeneration : null;
 
@@ -534,23 +597,10 @@ window.addEventListener('error', function(event) {
             generatedContent.innerHTML = '';
             isGenerating = true;
             wasLoadingWhenGenerated = true;
-            setProgressBar(0);
-            // Animated progress bar with easing for more natural pacing
-            let progress = 0;
-            let t = 0;
-            let progressInterval = null;
-            let progressTimeoutId = setTimeout(() => {
-                progressInterval = setInterval(() => {
-                    if (progress < 85) {
-                        t += 0.009;
-                        let eased = 85 * (1 - Math.pow(1 - t, 3));
-                        if (eased > 85) eased = 85;
-                        progress = eased;
-                        setProgressBar(progress);
-                    }
-                }, 100);
-            }, 800);
+            setProgressBar(2);
             document.getElementById('consoleOutput').innerHTML = '';
+            const currentMessage = document.getElementById('currentMessage');
+            currentMessage.textContent = 'Connecting to the wizard...';
             let themeValue = editSource ? editSource.theme : themeInput.value.trim();
             const themeStatus = document.getElementById('themeStatus');
             themeStatus.textContent = editSource ? `${themeValue} → ${editRequest}` : themeValue;
@@ -563,27 +613,33 @@ window.addEventListener('error', function(event) {
             previousGeneration = null;
             backgroundGeneration = null;
             try {
-                // Use themeValue for all theme logic
-                const prompt = createGenerationPrompt(themeValue);
-                // Always send both theme and prompt to backend
                 const response = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(editSource
                         ? { theme: themeValue, editRequest, currentHtml: editSource.code }
-                        : { theme: themeValue, prompt })
+                        : { theme: themeValue })
                 });
-                if (!response.ok) throw new Error('Failed to generate site');
+                if (!response.ok) {
+                    let message = 'Failed to generate site';
+                    try { message = (await response.json()).error || message; } catch {}
+                    throw new Error(message);
+                }
                 addConsoleCommand('Connection established', 'status');
-                const data = await response.json();
+                const html = await readGenerationStream(response, (charactersReceived) => {
+                    const progress = Math.min(94, 4 + 90 * (1 - Math.exp(-charactersReceived / 18000)));
+                    setProgressBar(progress);
+                    currentMessage.textContent = `${charactersReceived.toLocaleString()} characters received`;
+                }, () => {
+                    addConsoleCommand('First pass incomplete; trying a compact version', 'info');
+                    currentMessage.textContent = 'The first pass was incomplete. Retrying...';
+                });
                 currentGeneration = {
                     theme: themeValue,
-                    code: data.html || data.code
+                    code: html
                 };
-                // Complete progress and UI state immediately
-                progress = 100;
                 setProgressBar(100);
-                clearInterval(progressInterval);
+                currentMessage.textContent = 'Site ready';
                 document.getElementById('themeStatus').style.display = 'none';
                 setRegenerateButtonText('generate');
                 regenerateButton.disabled = false;
@@ -591,10 +647,8 @@ window.addEventListener('error', function(event) {
                 document.getElementById('favoritesButton').style.display = '';
                 updateSaveButton();
                 // Single canonical injection
-                setDisplayedGeneration(currentGeneration);
+                setDisplayedGeneration(currentGeneration, !autoRepairPass);
             } catch (error) {
-                clearTimeout(progressTimeoutId);
-                clearInterval(progressInterval);
                 stopConsoleCommands();
                 setProgressBar(0);
                 addConsoleCommand('Error: ' + (error.message || 'connection failed'), 'error');
@@ -608,7 +662,7 @@ window.addEventListener('error', function(event) {
                     if (editSource) {
                         // Edit failed: put the unedited site back
                         updateSaveButton();
-                        setDisplayedGeneration(editSource);
+                        setDisplayedGeneration(editSource, !autoRepairPass);
                         showErrorToast('edit failed');
                         return;
                     }

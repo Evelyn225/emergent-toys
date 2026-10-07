@@ -18,7 +18,8 @@ The ones that would add the most for the least, roughly in order. Each builds on
 
 - The first route is in: **Rooftop Couriers**, a converted Midtown print shop, sends gardening supplies through
   laundry and water-tank roofs to Mara's garden. It pays $80 plus up to $40 for speed. Level bridges and stairs offer a
-  walking route; two sprint jumps offer shortcuts. Existing stairs and apartment elevators allow re-entry after
+  walking route; two cyan-marked sprint jumps bypass service detours (about eight seconds saved together).
+  Full speed bonus lasts 42 seconds and tapers to zero at 90. Existing stairs and apartment elevators allow re-entry after
   a surviving fall. Hospital
   recovery or arrest fails the parcel. The active delivery, its timer and career records are saved.
 - Next: a construction rush with scaffolding, narrow crossings, elevation changes and an optional air-strafe

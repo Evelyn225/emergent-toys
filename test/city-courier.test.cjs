@@ -7,9 +7,9 @@ test('courier contracts keep base pay, taper only the optional bonus, and pay on
   const {ev}=loadCity();
   const r=JSON.parse(ev(`JSON.stringify((()=>{
     const route=COURIER_ROUTES[0],before=money;
-    const bonuses=[0,70,110,150,10000].map(t=>courierBonus(route,t));
+    const bonuses=[0,42,66,90,10000].map(t=>courierBonus(route,t));
     const invalid=startCourier('missing'),started=startCourier(),duplicate=startCourier();
-    stepCourier(110);stepCourier(-10);
+    stepCourier(66);stepCourier(-10);
     const early=finishCourier();
     mode='roof';px=route.recipient.x;py=route.recipient.y;roofH=route.recipient.z;
     const completed=finishCourier(),again=finishCourier();
@@ -17,9 +17,9 @@ test('courier contracts keep base pay, taper only the optional bonus, and pay on
   })())`));
   assert.deepEqual(r.bonuses,[40,40,20,0,0]);
   assert.equal(r.invalid,false);assert.equal(r.started,true);assert.equal(r.duplicate,false);
-  assert.equal(r.early,null);assert.equal(r.completed.pay,100);assert.equal(r.completed.seconds,110);
+  assert.equal(r.early,null);assert.equal(r.completed.pay,100);assert.equal(r.completed.seconds,66);
   assert.equal(r.again,null);assert.equal(r.paid,100);
-  assert.deepEqual(r.records,{trips:1,earned:100,best:110,failed:0});
+  assert.deepEqual(r.records,{trips:1,earned:100,best:66,failed:0});
 });
 
 test('courier saves preserve elapsed time and validate routes, times and records',()=>{
@@ -44,8 +44,8 @@ test('courier decks and treads share their geometry with shelter and retain genu
     const surfaces=COURIER_SURFACES.map(o=>({kind:o.kind,x:o.x,y:o.y,height:courierSurfaceTop(o,o.x,o.y),
       collision:courierRoofHeight(o.x,o.y),geometry:geometrySurfaceHeight(o,o.x,o.y),
       topExposed:snowExposed(o.x,o.y,o.z1),groundExposed:snowExposed(o.x,o.y)}));
-    return {surfaces,gaps:[[184.9,108.52],[193.1,101.27]].map(([x,y])=>courierRoofHeight(x,y)),
-      wrapped:courierRoofHeight(179.5+N,105-N),base:courierRoofHeight(179.5,105),police:policeRoofHeight(184.5,107.4)};
+    return {surfaces,gaps:[[184.9,106.52],[193.1,102.35]].map(([x,y])=>courierRoofHeight(x,y)),
+      wrapped:courierRoofHeight(179.5+N,105-N),base:courierRoofHeight(179.5,105),police:policeRoofHeight(184.5,109.5)};
   })())`));
   for(const o of r.surfaces){
     assert.ok(Math.abs(o.height-o.geometry)<1e-8,JSON.stringify(o));

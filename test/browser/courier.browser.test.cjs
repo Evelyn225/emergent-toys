@@ -4,6 +4,7 @@ const assert=require('node:assert/strict');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
 const {chromium}=require('playwright');
+const {timeCourierRuns}=require('./helpers/courier-runs.cjs');
 async function withCity(fn) {
   const browser=await chromium.launch();
   try {
@@ -23,9 +24,9 @@ test('enter the depot, take a parcel, walk every safe crossing, and deliver once
     px=10.3;py=4.9;interact();const accepted=courierJob?.id;
     px=4;py=1.5;interact();const stairs={mode,x:px,y:py};
     needs.health=100;
-    const points=[[179.5,106.5],[182.4,107.35],[183.5,107.35],[186.5,107.35],[188.2,106.85],
+    const points=[[179.5,106.5],[182.5,107.4],[183.5,108.1],[183.5,109.5],[186.5,109.5],[186.5,107.35],[188.2,106.85],
       [189.4,106.85],[190.3,106.85],[190.8,107.4],[191.4,107.4],[191.4,106.85],[191.4,102.35],
-      [194.35,102.4],[195.4,102.4],[196.4,102.4],[197.5,102.4],[198.5,102.4],[199,102.1]];
+      [191.4,101.25],[194.35,101.25],[194.35,102.4],[195.4,102.4],[196.4,102.4],[197.5,102.4],[198.5,102.4],[199,102.1]];
     const legs=[];
     for(const [x,y] of points) {
       let n=0;while(near(px,py,x,y)>.01&&n++<800) {
@@ -37,20 +38,20 @@ test('enter the depot, take a parcel, walk every safe crossing, and deliver once
       legs.push({reached:near(px,py,x,y)<.011,mode,health:needs.health});
       if(mode!=='roof'||n>=800)break;
     }
-    render();hud();const prompt=promptText(),before=money;
+    render();hud();const prompt=promptText(),before=money,expected=80+courierBonus(courierRoute(),courierJob.took);
     interact();const paid=money-before;interact();
-    return {entered,accepted,stairs,legs,prompt,paid,twice:money-before,active:courierJob,
+    return {entered,accepted,stairs,legs,prompt,paid,expected,twice:money-before,active:courierJob,
       saved:JSON.parse(localStorage.getItem(SAVE_KEY)).courier,map:bigMapLabels().some(p=>p[2]===COURIER_COMPANY)};
   });
   assert.equal(r.entered,'courier');assert.equal(r.accepted,'garden');assert.equal(r.stairs.mode,'roof');
-  assert.equal(r.stairs.x,179.5);assert.equal(r.stairs.y,102.5);assert.equal(r.legs.length,17,JSON.stringify(r.legs));
+  assert.equal(r.stairs.x,179.5);assert.equal(r.stairs.y,102.5);assert.equal(r.legs.length,21,JSON.stringify(r.legs));
   for(const leg of r.legs)assert.deepEqual(leg,{reached:true,mode:'roof',health:100});
-  assert.match(r.prompt,/deliver/);assert.equal(r.paid,120);assert.equal(r.twice,120);assert.equal(r.active,null);
+  assert.match(r.prompt,/deliver/);assert.equal(r.paid,r.expected);assert.equal(r.twice,r.expected);assert.equal(r.active,null);
   assert.equal(r.saved.records.trips,1);assert.equal(r.saved.job,null);assert.equal(r.map,true);
 }));
 
 test('both optional courier gaps are reachable with an ordinary sprint jump',()=>withCity(async page=>{
-  const r=await page.evaluate(()=>[[184.68,108.52,185.5],[192.88,101.27,193.65]].map(([x,y,end])=>{
+  const r=await page.evaluate(()=>[[184.68,106.52,185.5],[192.88,102.35,193.65]].map(([x,y,end])=>{
     mode='roof';room=null;px=x;py=y;a=0;roofH=roofHeightAt(px,py);roofLot=new Set();needs.health=100;
     body.z=body.vz=body.peak=0;body.hop=1;body.groundMode=null;body.mx=.8;body.my=0;jump();
     let n=0,minHeight=Infinity;
@@ -59,6 +60,20 @@ test('both optional courier gaps are reachable with an ordinary sprint jump',()=
     return {reached:px>=end,mode,z:body.z,health:needs.health,minHeight};
   }));
   for(const jump of r){assert.equal(jump.reached,true,JSON.stringify(r));assert.equal(jump.mode,'roof',JSON.stringify(r));assert.equal(jump.z,0);assert.ok(jump.health>90);assert.ok(jump.minHeight>1.3);}
+}));
+
+test('each courier shortcut saves real sprint time; a clean run with both earns the full bonus',()=>withCity(async page=>{
+  const runs=await page.evaluate(timeCourierRuns);
+  for(const run of runs) {
+    assert.ok(run.legs.every(leg=>leg.reached),JSON.stringify(run));
+    assert.equal(run.recipient,true,JSON.stringify(run));assert.equal(run.health,100);
+  }
+  const [safe,first,second,both]=runs;
+  assert.ok(safe.seconds-first.seconds>3,JSON.stringify(runs));
+  assert.ok(safe.seconds-second.seconds>3,JSON.stringify(runs));
+  assert.ok(safe.seconds-both.seconds>7,JSON.stringify(runs));
+  assert.ok(both.seconds<both.fullUntil,JSON.stringify(runs));assert.equal(both.bonus,40);
+  assert.ok(safe.seconds>safe.fullUntil,JSON.stringify(runs));assert.ok(safe.bonus<40);
 }));
 
 test('courier stairs, bridges and their supports clear existing walls and facade details',()=>withCity(async page=>{
