@@ -36,6 +36,7 @@ function audioStart() {
   for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' || k === 'aquarium' ? musicBus : ambBus);
   beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, ambBus); // muffled through the walls indoors
   makeSynths();
+  clipBuffer('police-siren.wav').then(buf => { policeSirenBuffer = buf; });
   onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
 }
 // the volume settings: master scales everything, music / ambience / effects their own bus (squared: feels linear)
@@ -172,10 +173,11 @@ function sfxTill() { // cha-ching: the drawer, then the bell
   tone(at + 0.08, 2093, 0.7, 0.12); tone(at + 0.08, 2637, 0.7, 0.1); tone(at + 0.11, 3136, 0.5, 0.06);
 }
 function sfxCoin() { const at = actx.currentTime; tone(at, 3100, 0.15, 0.08); tone(at + 0.07, 4150, 0.18, 0.06); }
-// short recorded one-shots (eating, drinking): fetched and decoded once, played through the effects bus
+// Short recordings: fetched and decoded once. Bare names default to MP3; explicit filenames support lossless loops.
 const CLIPS = {};
 function clipBuffer(name) {
-  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
+  const file = name.includes('.') ? name : name + '.mp3';
+  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + file).then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
   return CLIPS[name];
 }
 function playClip(name, gain, when = actx.currentTime) {
@@ -208,25 +210,36 @@ function setPeeAudio(on) {
 }
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
 
-// ---- sirens: one voice per emergency vehicle in earshot, with its own pattern, Doppler and panning
+// ---- sirens: one voice per emergency vehicle in earshot, with Doppler and panning
 const SIREN = { amb: { type: 'square', f: t => 700 + 520 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 3.2)) },
-                police: { type: 'sawtooth', f: t => 720 + 650 * fract(t * 2.8) },
                 fire: { type: 'square', f: t => 480 + 420 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 4.5)) } };
+let policeSirenBuffer = null; // decoded once; WAV keeps the exact seamless loop boundaries
 const sirens = new Map(); // car -> voice
 const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
   for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
-    const o = actx.createOscillator(), lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
-    o.type = SIREN[c.kind].type; g.gain.value = 0; shot(o, lp, g, p, sfxBus); o.start();
-    sirens.set(c, { o, lp, g, p, t0: Math.random() * 5 });
+    const recorded = c.kind === 'police';
+    if (recorded && !policeSirenBuffer) continue; // try next frame after the shared clip finishes loading
+    const o = recorded ? actx.createBufferSource() : actx.createOscillator();
+    const lp = filt('lowpass', 2600), g = actx.createGain(), p = actx.createStereoPanner();
+    if (recorded) { o.buffer = policeSirenBuffer; o.loop = true; }
+    else o.type = SIREN[c.kind].type;
+    g.gain.value = 0; shot(o, lp, g, p, sfxBus);
+    if (recorded) o.start(now, Math.random() * policeSirenBuffer.duration);
+    else o.start();
+    sirens.set(c, { o, lp, g, p, recorded, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
     const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
     if (!cars.includes(c) || !code(c) || wanted.busted || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
-    v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * 34 / (34 - vr), now, 0.02);
-    v.g.gain.setTargetAtTime(0.16 * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1), now, 0.1);
+    const doppler = clamp(34 / (34 - vr), 0.5, 2);
+    if (v.recorded) v.o.playbackRate.setTargetAtTime(doppler, now, 0.02);
+    else v.o.frequency.setTargetAtTime(SIREN[c.kind].f(T + v.t0) * doppler, now, 0.02);
+    // Recorded audio is normalized to -20 LUFS; oscillators have much higher RMS at gain 1.
+    const level = v.recorded ? 0.8 : 0.16;
+    v.g.gain.setTargetAtTime(level * clamp(1 - d / SIREN_R, 0, 1) ** 2 / (1 + (d / 6) ** 1.2) * (indoors ? 0.12 : 1), now, 0.1);
     v.lp.frequency.setTargetAtTime(indoors ? 700 : 2600 / (1 + d / 30), now, 0.2);
     v.p.pan.setTargetAtTime(clamp((rx * right[0] + ry * right[1]) / d, -1, 1) * 0.8, now, 0.1);
   }

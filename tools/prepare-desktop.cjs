@@ -25,6 +25,6 @@ for (const file of ['ascii-city-180.png', 'ascii-city-192.png', 'ascii-city-512.
   copy(path.join('images', file));
 }
 for (const file of fs.readdirSync(path.join(root, 'audio', 'ascii-city'))) {
-  if (file.endsWith('.mp3')) copy(path.join('audio', 'ascii-city', file));
+  if (/\.(mp3|wav)$/.test(file)) copy(path.join('audio', 'ascii-city', file));
 }
 console.log('staged Glyphport desktop assets in desktop-dist');
