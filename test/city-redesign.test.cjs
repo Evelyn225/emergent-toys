@@ -44,8 +44,8 @@ test('the luxury home is sold in Belle Époque and older clipped home cells are 
 
 test('emergency parking stays by its own entrance and leaves hospital exits clear', () => {
   const { ev } = loadCity();
-  assert.ok(ev('SERVICES.every(b => near(b.x, b.y, ...b.door) < 1.5)'), 'parked by the actual lot');
-  assert.ok(ev("SERVICES.filter(b => b.kind === 'amb').every(b => Math.abs(rel(b.x - b.door[0])) >= 0.8)"));
+  assert.ok(ev("SERVICES.every(b => Number.isFinite(b.x) && near(b.x, b.y, ...b.door) < (b.kind === 'amb' ? 2.3 : 1.5))"), 'parked by the actual lot');
+  assert.ok(ev("SERVICES.filter(b => b.kind === 'amb').every(b => Math.abs(rel(b.x - b.door[0])) >= 1)"));
   assert.ok(ev('SERVICES.every(b => !lamps.some(l => Math.abs(rel(l.x - b.x)) < 0.45 && Math.abs(rel(l.y - b.y)) < 0.2))'));
 });
 

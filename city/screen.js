@@ -159,7 +159,7 @@ let desktopMouseWanted = false;
 function nativeMouseCapture(active) {
   // Serialize commands as well as checking replies: a slow capture must finish before its release.
   const command = desktopMouseCommands.catch(() => {}).then(() =>
-    window.__TAURI__.core.invoke('set_game_mouse_capture', { active, confined: document.hasFocus() }));
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active }));
   desktopMouseCommands = command;
   return command;
 }

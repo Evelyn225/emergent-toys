@@ -1302,6 +1302,65 @@ test('the crowd at the pier fair wanders about, and you can talk to them', () =>
   assert.ok(r.said.startsWith('"') && r.stopped, `they answer and stop to chat (${r.said})`);
 }));
 
+test('hospital exits have a clear walking corridor after visits, recovery and old saves', () => withPage(async page => {
+  const results = await page.evaluate(() => {
+    paused=true; clearWanted(); body.z=body.vz=0; body.seat=null;
+    return SERVICES.filter(b=>b.kind==='amb').map(b=>{
+      const checks=[];
+      for (const recovery of [false,true]) {
+        mode='walk';room=null;[px,py]=b.door;
+        if(recovery)passOut('Exit check');
+        else enterRoom('hospital',{word:'HOSPITAL',ret:[b.x,b.y+.15,-Math.PI/2]},[10.5,3.3,Math.PI]);
+        leaveRoom();
+        const exit=near(px,py,...b.door)<1e-6 && a===-Math.PI/2;
+        let clear=true;
+        for(let y=0;y<=.8;y+=.025)for(const x of [-.25,0,.25]) if(!free(px+x,py-y))clear=false;
+        const y0=py; for(let n=0;n<12;n++)move(0,-.05);
+        checks.push({exit,clear,moved:y0-py});
+      }
+      return checks;
+    });
+  });
+  for(const checks of results)for(const r of checks){assert.ok(r.exit&&r.clear,JSON.stringify(r));assert.ok(r.moved>.59);}
+}));
+
+test('subway stair landing has full ceiling headroom and an unclipped exit sign', () => withPage(async page => {
+  const result=await page.evaluate(()=>{
+    paused=true;body.z=body.vz=0;
+    enterRoom('station',{st:0,word:stations[0].name,t0:T-12,ret:[px,py,a]},[11.5,1.4,-Math.PI/2]);
+    py=2.3;pitch=.8;
+    render(0);
+    const ceiling=room.def.height,headroom=ceiling-STATION_STAIRS.rise;
+    let letters=0,signCenter=0,signHeight=0,minZ=Infinity,maxZ=-Infinity;
+    const characters=new Set();
+    const drawText=wallText;
+    wallText=(...args)=>{
+      const painted=drawText(...args);
+      if(args[5]==='EXIT'&&painted){
+        letters++;signCenter=args[7];signHeight=args[9];
+        if(CH[args[0]]!==' '){
+          minZ=Math.min(minZ,args[3]);maxZ=Math.max(maxZ,args[3]);
+          characters.add(Math.floor((args[1]-args[6])/args[8]+2));
+        }
+      }
+      return painted;
+    };
+    try{render(0);}finally{wallText=drawText;}
+    const top=signCenter+signHeight/2;
+    roomWall(0,11.5,.02,signCenter-signHeight/2-.08,ceiling,1,1,11,0,1,11.5);
+    const doorwayClear=BG[0]!==NONE && CH[0]===' ';
+    py=1.4;
+    move(0,-.6);
+    return{headroom,clearance:ceiling-top,letters,signCenter,signHeight,minZ,maxZ,doorwayClear,characters:[...characters].sort(),exited:mode==='walk'&&room===null};
+  });
+  assert.ok(result.headroom>=3-1e-9 && result.clearance>0 && result.clearance<.1,JSON.stringify(result));
+  assert.ok(result.letters>0,'EXIT lettering reaches the renderer at the upper landing');
+  assert.deepStrictEqual(result.characters,[0,1,2,3],'all four EXIT letters render');
+  assert.ok(result.minZ<result.signCenter-result.signHeight*.4 && result.maxZ>result.signCenter+result.signHeight*.4,'both edges of the sign render');
+  assert.ok(result.doorwayClear,'the raised doorway stays open immediately below the sign');
+  assert.ok(result.exited,'walking through the upper landing still returns to the street');
+}));
+
 test('run dry and you pass out: the hospital, a bill, and the nurse patches you up; dev tools fill you up', () => withPage(async page => {
   await page.evaluate(() => { money = 500; needs.food = 0; needs.drink = 0; needs.health = 0.05; });
   await page.waitForTimeout(300);

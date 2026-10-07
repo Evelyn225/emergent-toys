@@ -4,19 +4,15 @@
 mod desktop_mouse;
 
 #[tauri::command]
-async fn set_game_mouse_capture(
-    window: tauri::WebviewWindow,
-    active: bool,
-    confined: Option<bool>,
-) -> bool {
+async fn set_game_mouse_capture(window: tauri::WebviewWindow, active: bool) -> bool {
     #[cfg(windows)]
     {
-        desktop_mouse::set_capture(window, active, confined.unwrap_or(false)).await
+        desktop_mouse::set_capture(window, active).await
     }
 
     #[cfg(not(windows))]
     {
-        let _ = (window, active, confined);
+        let _ = (window, active);
         false
     }
 }
@@ -72,12 +68,18 @@ async fn open_game_update(window: tauri::WebviewWindow, version: String) -> Resu
     }
 }
 
+#[tauri::command]
+fn quit_game(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             set_game_mouse_capture,
             toggle_game_fullscreen,
-            open_game_update
+            open_game_update,
+            quit_game
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Glyphport");

@@ -730,7 +730,9 @@ const SERVICES = [];
       if (kind === 'amb') sh.pad = [lot.reduce((s, c) => s + c[0], 0) / lot.length + 0.5, lot.reduce((s, c) => s + c[1], 0) / lot.length + 0.5];
       const frontY = Math.min(...lot.map(c => c[1])), front = lot.filter(c => c[1] === frontY);
       const doorX = (Math.min(...front.map(c => c[0])) + Math.max(...front.map(c => c[0])) + 1) / 2;
-      const parkingX = [0.9, -0.9, 1.4, -1.4].map(off => doorX + off).find(x => [3.5, 6.5].every(s => Math.abs(x - bx * 8 - s) >= 0.5));
+      // Keep a broad path straight out of hospital doors, including the recovery exit. Other services stay nearby.
+      const offsets = kind === 'amb' ? [2.1, -2.1, 1, -1] : [0.9, -0.9, 1.4, -1.4];
+      const parkingX = offsets.map(off => doorX + off).find(x => [3.5, 6.5].every(s => Math.abs(x - bx * 8 - s) >= 0.5));
       SERVICES.push({ kind, bx, by, x: parkingX, y: frontY - 0.26,
         door: [doorX, frontY - 0.12], lane: by * 8 + 1.4, out: false });
     }
@@ -2846,7 +2848,7 @@ function elTrain(tr, k, t) {
            next: (from + (tr ? 1 : EL_STATIONS.length - 1)) % EL_STATIONS.length };
 }
 const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(tr, k, t) })));
-// Belle Époque's projecting stone bays, iron balconies and sloping copper roofs are geometry, depth-tested
+// Belle Époque's stone cornices, iron balconies and sloping copper roofs are geometry, depth-tested
 // against the street scene. Their positions follow complete facade bays, with room at every corner.
 function mansardPlanes(hl, hw, z0, z1) {
   const slope = (z1 - z0) / 0.65;
@@ -2902,7 +2904,7 @@ for (const b of BELLE_BUILDINGS) {
     for (let bay = 0; bay < (f.end - f.start) / spacing - 0.01; bay++) {
       const along = f.start + (bay + 0.5) * spacing;
       const x = f.side ? along : f.line, y = f.side ? f.line : along;
-      const add = (depth, hl, hw, z0, z1, kind) => belleDetails.push({ x: x + f.nx * depth, y: y + f.ny * depth, c: f.side ? 1 : 0, s: f.side ? 0 : 1, hl, hw, z0, z1, kind, material: b.material, seed: b.seed });
+      const add = (depth, hl, hw, z0, z1, kind) => belleDetails.push({ x: x + f.nx * depth, y: y + f.ny * depth, c: f.side ? 1 : 0, s: f.side ? 0 : 1, hl, hw, z0, z1, kind, material: b.material });
       if (b.balconies && bay % 2 === 0) for (let fl = 1; fl < floors; fl += 2) {
         const z = 0.45 + fl * fh + fh * 0.2, half = Math.min(0.36, spacing * 0.4);
         add(0.1, half, 0.12, z - 0.025, z, 'slab');
@@ -2910,7 +2912,6 @@ for (const b of BELLE_BUILDINGS) {
         for (const sign of [-1, 1]) belleDetails.push({ x: x + f.nx * 0.1 + (f.side ? sign * half : 0), y: y + f.ny * 0.1 + (f.side ? 0 : sign * half), c: f.side ? 0 : 1, s: f.side ? 1 : 0, hl: 0.11, hw: 0.008, z0: z, z1: z + 0.11, kind: 'iron' });
         add(0.075, half * 0.65, 0.05, z - 0.1, z - 0.025, 'bracket');
       }
-      if (bay % 3 === 1 && fract(b.seed * 37) < 0.65) add(0.07, Math.min(0.27, spacing * 0.3), 0.12, 0.48, b.h - 0.14, 'bay');
       add(0.025, spacing * 0.47, 0.045, b.h - 0.08, b.h + 0.035, 'cornice');
     }
   }
@@ -6211,7 +6212,7 @@ let desktopMouseWanted = false;
 function nativeMouseCapture(active) {
   // Serialize commands as well as checking replies: a slow capture must finish before its release.
   const command = desktopMouseCommands.catch(() => {}).then(() =>
-    window.__TAURI__.core.invoke('set_game_mouse_capture', { active, confined: document.hasFocus() }));
+    window.__TAURI__.core.invoke('set_game_mouse_capture', { active }));
   desktopMouseCommands = command;
   return command;
 }
@@ -7422,7 +7423,7 @@ function sprayTag() {
   const w = crime('graffiti', px, py);
   say((w === 'cop' ? '"HEY! You! Drop the can!"' : w === 'reported' ? 'Psssht. Somebody across the street gets their phone out.' : pick(['Psssht. Nice.', 'Psssht. Your mark on the city.', 'Psssht. Nobody saw. Probably.'])) + (empty ? ' The can rattles empty.' : ''), 3);
 }
-// Belle stone bays, balconies and copper roofs use the shared geometry from belle-geometry.js.
+// Belle stone cornices, balconies and copper roofs use the shared geometry from belle-geometry.js.
 function belleDetailShade(o, i, t, L) {
   const base = [STONE, WHITE, GRAY, BRICK, STONE][o.material || 0], z = HIT.w;
   if (o.kind === 'iron') {
@@ -7432,14 +7433,6 @@ function belleDetailShade(o, i, t, L) {
     return false;
   }
   BG[i] = C(base, (1 + L * 0.32) * shadeFace(HIT.face));
-  if (o.kind === 'bay' && HIT.face < 5) {
-    const fl = fract((z - 0.45) / 0.42), along = HIT.face <= 2 ? HIT.v : HIT.u, half = HIT.face <= 2 ? o.hw : o.hl;
-    if (Math.abs(along) < half - 0.045 && fl > 0.24 && fl < 0.83) {
-      const lit = hash(Math.floor(z / 0.42), 1, sk0(o.seed)) > litT - 0.2;
-      BG[i] = C(lit ? WARM : CYAN, lit ? 2 + night * 4 : 1 + day);
-      return set(i, Math.abs(along) < 0.012 ? '|' : ':', C(WHITE, Math.max(L * 0.6, lit ? night * 12 : 0))), true;
-    }
-  }
   return set(i, HIT.face === 5 || o.kind === 'cornice' || o.kind === 'slab' ? '=' : '|', C(WHITE, L * 0.85)), true;
 }
 // Clip the ray against the ten planes of a mansard: four walls, floor, ridge and four inclined faces.
@@ -7476,7 +7469,7 @@ function drawBelleBuildings() {
     }
   });
   forNear(belleDetailsB, o => {
-    // The inhabited balcony replaces any decorative bay or ironwork across its French doors.
+    // The inhabited balcony replaces decorative ironwork across its French doors.
     if (owned.homes.some(home => {
       const b = homeBalconyBounds(home);
       return b && Math.abs(o.x - b.x0) < .25 && Math.abs(o.y - b.y) < .9 && o.z1 > b.z - .14 && o.z0 < b.z + .35;
@@ -9203,10 +9196,12 @@ function boxRoom(w, h, extra = {}, door = true) { // walls all round, double doo
   }
   return rows_;
 }
-// A subway station, 4.5m high. The platform (x 9..36, y 7..11) has the track (y 12..13) running on into a tunnel at
+// A subway station, with 3m of headroom above the upper stair landing. The platform (x 9..36, y 7..11) has the track (y 12..13) running on into a tunnel at
 // either end and pillars down the middle. Behind its back wall (row 6) a 3m-wide stairwell (x 10..12) climbs away
 // from the platform, set into the rock, up to the street (the 'D' at the top, row 0).
-const STATION_W = 46, STATION_H = 4.5, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6 };
+const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6 };
+const STATION_H = STATION_STAIRS.rise + 3;
+const STATION_EXIT_H = 0.3, STATION_EXIT_Z = STATION_H - STATION_EXIT_H / 2 - 0.06;
 const ST_TRACK = 12; // the first track row; the platform edge is just before it
 const STATION_GRID = Array.from({ length: 15 }, (_, y) => Array.from({ length: STATION_W }, (_, x) => {
   const well = x >= 10 && x <= 12;
@@ -10052,7 +10047,8 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   BG[i] = NONE;
   if (c === 'D' && R.kind !== 'cathedral') { // the way out: glass doors, or stairs up from the subway
     if (R.kind === 'station') {
-      if (z > 1.6 + STATION_STAIRS.rise) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, 1.8 + STATION_STAIRS.rise, 0.25, 0.3, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
+      // The doorway reaches the sign's lower edge; keep the complete sign 6cm below the ceiling.
+      if (z > STATION_EXIT_Z - STATION_EXIT_H / 2 - 0.04) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, STATION_EXIT_Z, 0.25, STATION_EXIT_H, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
       set(i, ' ', 0); BG[i] = C(day > 0.3 ? WHITE : WARM, 3 + day * 7); return; // daylight (or streetlight) from the top
     }
     if (z > 2.3) return set(i, '=', C(GRAY, L));
@@ -13378,7 +13374,7 @@ function passOut(why) {
   const s = SERVICES.filter(b => b.kind === 'amb').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity])[0];
   const bill = hospitalised();
   clearWanted(); // (they lost you in the ambulance)
-  enterRoom('hospital', { word: 'HOSPITAL', ret: [s.x, s.y + 0.15, -Math.PI / 2] }, [10.5, 3.3, Math.PI]);
+  enterRoom('hospital', { word: 'HOSPITAL', ret: [...s.door, Math.PI / 2] }, [10.5, 3.3, Math.PI]);
   wakeT = 3; fade = 1;
   say(`You come to in a hospital bed. "${why}" A nurse hands you the bill: ${fmt$(bill)}.`, 8);
 }
@@ -13413,6 +13409,13 @@ function leaveRoom() {
   if (room.kind === 'hotelroom' && room.lobby.grandHotel) return enterRoom('grandhotel', room.lobby, [7, 6.5, -Math.PI / 2]);
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
+  else if (room.kind === 'hospital') {
+    // Use the front door for visits and recovery, including saved rooms with the old ambulance return point.
+    const [rx, ry] = room.ret;
+    const hospital = SERVICES.filter(b => b.kind === 'amb').reduce((best, b) =>
+      near(...b.door, rx, ry) < near(...best.door, rx, ry) ? b : best);
+    [px, py] = hospital.door; a = -Math.PI / 2;
+  }
   else { [px, py, a] = room.ret; a += Math.PI; }
   room = null; mode = 'walk';
 }
@@ -14169,6 +14172,20 @@ const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigge
 let pauseEl = null;
 const GLYPHPORT_DESKTOP_APP = Boolean(window.__GLYPHPORT_DESKTOP__);
 let desktopFullscreen = false, desktopFullscreenBusy = false;
+let desktopQuitting = false;
+async function quitDesktopGame() {
+  if (!NATIVE_MOUSE_APP || desktopQuitting) return;
+  desktopQuitting = true;
+  saveGame();
+  releaseMouse();
+  try {
+    await desktopMouseCommands.catch(() => {});
+    await window.__TAURI__.core.invoke('quit_game');
+  } catch (error) {
+    desktopQuitting = false;
+    say('Could not quit the app. You can close its window.', 4);
+  }
+}
 async function toggleDesktopFullscreen() {
   if (!NATIVE_MOUSE_APP || desktopFullscreenBusy) return;
   desktopFullscreenBusy = true;
@@ -14230,10 +14247,9 @@ function buildPause() {
         <b>Esc</b><span>pause</span>
       </div>
       <h2></h2>
-      <a class="item" href="index.html">Quit to Eve Net</a>
+      ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
     </div>`);
   const RANGE = { fov: [50, 100], sensitivity: [0.25, 3] };
-  if (GLYPHPORT_DESKTOP_APP) el.querySelector('a[href="index.html"]').hidden = true;
   const show = () => {
     const fullscreen = el.querySelector('[data-act="fullscreen"]');
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
@@ -14259,6 +14275,7 @@ function buildPause() {
     if (!b) return;
     if (b.dataset.act === 'fullscreen') toggleDesktopFullscreen();
     if (b.dataset.act === 'update') desktopUpdateAction();
+    if (b.dataset.act === 'quit') quitDesktopGame();
     if (b.dataset.act === 'resume') closePause(true);
     if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'map') openBigMap();
@@ -17357,7 +17374,7 @@ function drawBoard3D() {
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
   const cy = eye * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // Ground height uses the same camera projection as the street.
-  const cz = 1.7;
+  const cz = 2.0; // Slightly ahead of the feet, visible with a shallower downward glance.
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   const pX = projX, pY = projY;
   const ox = cols / 2, oy = hor; // anchored to the horizon: looking up carries it out of view
@@ -17516,13 +17533,17 @@ function moveMouseBy(mx, my) {
   turnBy(mx, my);
 }
 if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
-  desktopMouseReady = window.__TAURI__.event.listen('desktop-mouse-delta', e => {
-    if (desktopMouseCaptured && !paused) moveMouseBy(e.payload[0], e.payload[1]);
-  });
+  const lostCapture = () => {
+    if (desktopMouseWanted && !paused) openPause();
+  };
+  desktopMouseReady = Promise.all([
+    window.__TAURI__.event.listen('desktop-mouse-delta', e => {
+      if (desktopMouseCaptured && !paused) moveMouseBy(e.payload[0], e.payload[1]);
+    }),
+    window.__TAURI__.event.listen('desktop-mouse-released', lostCapture)
+  ]);
   desktopMouseReady.catch(() => {}); // lockMouse handles subscription failure and tries browser capture
-  addEventListener('blur', () => {
-    if (desktopMouseWanted && !paused) { releaseMouse(); openPause(); }
-  });
+  addEventListener('blur', lostCapture);
 }
 addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });
 addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });

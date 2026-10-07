@@ -200,7 +200,7 @@ function drawBoard3D() {
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
   const cy = eye * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // Ground height uses the same camera projection as the street.
-  const cz = 1.7;
+  const cz = 2.0; // Slightly ahead of the feet, visible with a shallower downward glance.
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   const pX = projX, pY = projY;
   const ox = cols / 2, oy = hor; // anchored to the horizon: looking up carries it out of view

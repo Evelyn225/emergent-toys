@@ -376,7 +376,9 @@ const SERVICES = [];
       if (kind === 'amb') sh.pad = [lot.reduce((s, c) => s + c[0], 0) / lot.length + 0.5, lot.reduce((s, c) => s + c[1], 0) / lot.length + 0.5];
       const frontY = Math.min(...lot.map(c => c[1])), front = lot.filter(c => c[1] === frontY);
       const doorX = (Math.min(...front.map(c => c[0])) + Math.max(...front.map(c => c[0])) + 1) / 2;
-      const parkingX = [0.9, -0.9, 1.4, -1.4].map(off => doorX + off).find(x => [3.5, 6.5].every(s => Math.abs(x - bx * 8 - s) >= 0.5));
+      // Keep a broad path straight out of hospital doors, including the recovery exit. Other services stay nearby.
+      const offsets = kind === 'amb' ? [2.1, -2.1, 1, -1] : [0.9, -0.9, 1.4, -1.4];
+      const parkingX = offsets.map(off => doorX + off).find(x => [3.5, 6.5].every(s => Math.abs(x - bx * 8 - s) >= 0.5));
       SERVICES.push({ kind, bx, by, x: parkingX, y: frontY - 0.26,
         door: [doorX, frontY - 0.12], lane: by * 8 + 1.4, out: false });
     }

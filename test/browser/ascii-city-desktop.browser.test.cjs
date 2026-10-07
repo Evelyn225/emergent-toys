@@ -22,7 +22,11 @@ async function withDesktop(fn, { offline = false, version = '1.0.4' } = {}) {
         if (command === 'set_game_mouse_capture' && args.active && window.deferCapture) return new Promise(resolve => { window.resolveCapture = resolve; });
         return command === 'set_game_mouse_capture' ? !window.failCapture : true;
       } },
-      event: { listen: async (event, callback) => { window.nativeMouse = callback; return () => {}; } }
+      event: { listen: async (event, callback) => {
+        if (event === 'desktop-mouse-delta') window.nativeMouse = callback;
+        if (event === 'desktop-mouse-released') window.nativeMouseReleased = callback;
+        return () => {};
+      } }
     };
   });
   await page.route('https://api.github.com/repos/Evelyn225/emergent-toys/releases?per_page=100', route => offline ? route.abort() : route.fulfill({
@@ -50,10 +54,30 @@ test('Escape resumes native capture and raw mouse motion turns the player; pausi
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => paused && !desktopMouseCaptured && window.nativeCalls.at(-1)?.active === false);
   assert.equal(await page.evaluate(() => cv.style.cursor), '');
+  assert.equal(await page.evaluate(() => 'confined' in window.nativeCalls.at(-1)), false, 'pausing never requests continued window confinement');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => desktopMouseCaptured);
+  await page.evaluate(() => window.nativeMouseReleased());
+  await page.waitForFunction(() => paused && !desktopMouseCaptured && window.nativeCalls.at(-1)?.active === false);
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => desktopMouseCaptured);
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-  await page.waitForFunction(() => paused && !desktopMouseCaptured && window.nativeCalls.at(-1)?.active === false);
+  await page.waitForFunction(() => paused && !desktopMouseCaptured);
+}));
+
+test('desktop Quit game saves before closing the native app and releases capture first', () => withDesktop(async page => {
+  await page.evaluate(() => { money=4321; openPause(); });
+  assert.equal(await page.locator('[data-act="quit"]').textContent(), 'Quit game');
+  assert.equal(await page.locator('#pause a[href="index.html"]').count(), 0);
+  await page.click('[data-act="quit"]');
+  await page.waitForFunction(() => window.nativeCalls.some(c=>c.command==='quit_game'));
+  const result = await page.evaluate(() => ({
+    money:JSON.parse(localStorage.getItem(SAVE_KEY)).money,
+    calls:window.nativeCalls.slice(-2),captured:desktopMouseCaptured
+  }));
+  assert.equal(result.money,4321);
+  assert.deepEqual(result.calls,[{command:'set_game_mouse_capture',active:false},{command:'quit_game'}]);
+  assert.equal(result.captured,false);
 }));
 test('a pending native capture cannot recapture the mouse after a rapid Escape pause', () => withDesktop(async page => {
   await page.evaluate(() => { openPause(); window.deferCapture = true; });

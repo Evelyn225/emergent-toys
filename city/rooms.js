@@ -11,10 +11,12 @@ function boxRoom(w, h, extra = {}, door = true) { // walls all round, double doo
   }
   return rows_;
 }
-// A subway station, 4.5m high. The platform (x 9..36, y 7..11) has the track (y 12..13) running on into a tunnel at
+// A subway station, with 3m of headroom above the upper stair landing. The platform (x 9..36, y 7..11) has the track (y 12..13) running on into a tunnel at
 // either end and pillars down the middle. Behind its back wall (row 6) a 3m-wide stairwell (x 10..12) climbs away
 // from the platform, set into the rock, up to the street (the 'D' at the top, row 0).
-const STATION_W = 46, STATION_H = 4.5, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6 };
+const STATION_W = 46, STATION_STAIRS = { x0: 10, x1: 13, y0: 1, y1: 7, rise: 2.6 };
+const STATION_H = STATION_STAIRS.rise + 3;
+const STATION_EXIT_H = 0.3, STATION_EXIT_Z = STATION_H - STATION_EXIT_H / 2 - 0.06;
 const ST_TRACK = 12; // the first track row; the platform edge is just before it
 const STATION_GRID = Array.from({ length: 15 }, (_, y) => Array.from({ length: STATION_W }, (_, x) => {
   const well = x >= 10 && x <= 12;
@@ -860,7 +862,8 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   BG[i] = NONE;
   if (c === 'D' && R.kind !== 'cathedral') { // the way out: glass doors, or stairs up from the subway
     if (R.kind === 'station') {
-      if (z > 1.6 + STATION_STAIRS.rise) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, 1.8 + STATION_STAIRS.rise, 0.25, 0.3, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
+      // The doorway reaches the sign's lower edge; keep the complete sign 6cm below the ceiling.
+      if (z > STATION_EXIT_Z - STATION_EXIT_H / 2 - 0.04) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, STATION_EXIT_Z, 0.25, STATION_EXIT_H, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
       set(i, ' ', 0); BG[i] = C(day > 0.3 ? WHITE : WARM, 3 + day * 7); return; // daylight (or streetlight) from the top
     }
     if (z > 2.3) return set(i, '=', C(GRAY, L));

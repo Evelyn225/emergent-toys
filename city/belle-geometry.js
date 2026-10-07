@@ -1,4 +1,4 @@
-// Belle Époque's projecting stone bays, iron balconies and sloping copper roofs are geometry, depth-tested
+// Belle Époque's stone cornices, iron balconies and sloping copper roofs are geometry, depth-tested
 // against the street scene. Their positions follow complete facade bays, with room at every corner.
 function mansardPlanes(hl, hw, z0, z1) {
   const slope = (z1 - z0) / 0.65;
@@ -54,7 +54,7 @@ for (const b of BELLE_BUILDINGS) {
     for (let bay = 0; bay < (f.end - f.start) / spacing - 0.01; bay++) {
       const along = f.start + (bay + 0.5) * spacing;
       const x = f.side ? along : f.line, y = f.side ? f.line : along;
-      const add = (depth, hl, hw, z0, z1, kind) => belleDetails.push({ x: x + f.nx * depth, y: y + f.ny * depth, c: f.side ? 1 : 0, s: f.side ? 0 : 1, hl, hw, z0, z1, kind, material: b.material, seed: b.seed });
+      const add = (depth, hl, hw, z0, z1, kind) => belleDetails.push({ x: x + f.nx * depth, y: y + f.ny * depth, c: f.side ? 1 : 0, s: f.side ? 0 : 1, hl, hw, z0, z1, kind, material: b.material });
       if (b.balconies && bay % 2 === 0) for (let fl = 1; fl < floors; fl += 2) {
         const z = 0.45 + fl * fh + fh * 0.2, half = Math.min(0.36, spacing * 0.4);
         add(0.1, half, 0.12, z - 0.025, z, 'slab');
@@ -62,7 +62,6 @@ for (const b of BELLE_BUILDINGS) {
         for (const sign of [-1, 1]) belleDetails.push({ x: x + f.nx * 0.1 + (f.side ? sign * half : 0), y: y + f.ny * 0.1 + (f.side ? 0 : sign * half), c: f.side ? 0 : 1, s: f.side ? 1 : 0, hl: 0.11, hw: 0.008, z0: z, z1: z + 0.11, kind: 'iron' });
         add(0.075, half * 0.65, 0.05, z - 0.1, z - 0.025, 'bracket');
       }
-      if (bay % 3 === 1 && fract(b.seed * 37) < 0.65) add(0.07, Math.min(0.27, spacing * 0.3), 0.12, 0.48, b.h - 0.14, 'bay');
       add(0.025, spacing * 0.47, 0.045, b.h - 0.08, b.h + 0.035, 'cornice');
     }
   }

@@ -4,6 +4,20 @@ const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigge
 let pauseEl = null;
 const GLYPHPORT_DESKTOP_APP = Boolean(window.__GLYPHPORT_DESKTOP__);
 let desktopFullscreen = false, desktopFullscreenBusy = false;
+let desktopQuitting = false;
+async function quitDesktopGame() {
+  if (!NATIVE_MOUSE_APP || desktopQuitting) return;
+  desktopQuitting = true;
+  saveGame();
+  releaseMouse();
+  try {
+    await desktopMouseCommands.catch(() => {});
+    await window.__TAURI__.core.invoke('quit_game');
+  } catch (error) {
+    desktopQuitting = false;
+    say('Could not quit the app. You can close its window.', 4);
+  }
+}
 async function toggleDesktopFullscreen() {
   if (!NATIVE_MOUSE_APP || desktopFullscreenBusy) return;
   desktopFullscreenBusy = true;
@@ -65,10 +79,9 @@ function buildPause() {
         <b>Esc</b><span>pause</span>
       </div>
       <h2></h2>
-      <a class="item" href="index.html">Quit to Eve Net</a>
+      ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
     </div>`);
   const RANGE = { fov: [50, 100], sensitivity: [0.25, 3] };
-  if (GLYPHPORT_DESKTOP_APP) el.querySelector('a[href="index.html"]').hidden = true;
   const show = () => {
     const fullscreen = el.querySelector('[data-act="fullscreen"]');
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
@@ -94,6 +107,7 @@ function buildPause() {
     if (!b) return;
     if (b.dataset.act === 'fullscreen') toggleDesktopFullscreen();
     if (b.dataset.act === 'update') desktopUpdateAction();
+    if (b.dataset.act === 'quit') quitDesktopGame();
     if (b.dataset.act === 'resume') closePause(true);
     if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'map') openBigMap();

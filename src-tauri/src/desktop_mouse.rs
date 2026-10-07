@@ -12,7 +12,8 @@ use windows_sys::Win32::{
     UI::{
         Input::{
             GetRawInputData, RegisterRawInputDevices, MOUSE_MOVE_ABSOLUTE, RAWINPUT,
-            RAWINPUTDEVICE, RAWINPUTHEADER, RAWMOUSE, RIDEV_REMOVE, RID_INPUT, RIM_TYPEMOUSE,
+            RAWINPUTDEVICE, RAWINPUTHEADER, RAWMOUSE, RIDEV_INPUTSINK, RIDEV_REMOVE, RID_INPUT,
+            RIM_TYPEMOUSE,
         },
         Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
         WindowsAndMessaging::{
@@ -34,20 +35,25 @@ unsafe fn register_mouse(hwnd: HWND, active: bool) -> bool {
     let device = RAWINPUTDEVICE {
         usUsagePage: HID_USAGE_PAGE_GENERIC,
         usUsage: HID_USAGE_GENERIC_MOUSE,
-        // Default registration delivers input only to the foreground app. Removal requires a null target.
-        dwFlags: if active { 0 } else { RIDEV_REMOVE },
+        // WebView2's focused child belongs to its browser process. Route input to our host, but register
+        // only during captured gameplay and check its foreground HWND before reading any movement.
+        dwFlags: if active {
+            RIDEV_INPUTSINK
+        } else {
+            RIDEV_REMOVE
+        },
         hwndTarget: if active { hwnd } else { std::ptr::null_mut() },
     };
     RegisterRawInputDevices(&device, 1, size_of::<RAWINPUTDEVICE>() as u32) != 0
 }
 
-pub async fn set_capture(window: WebviewWindow, active: bool, confined: bool) -> bool {
+pub async fn set_capture(window: WebviewWindow, active: bool) -> bool {
     let (result_tx, mut result_rx) = tauri::async_runtime::channel(1);
     let ui_window = window.clone();
     // Window subclassing must happen on its owning UI thread, including when IPC arrives on a worker.
     if window
         .run_on_main_thread(move || {
-            let _ = result_tx.try_send(set_capture_on_main_thread(&ui_window, active, confined));
+            let _ = result_tx.try_send(set_capture_on_main_thread(&ui_window, active));
         })
         .is_err()
     {
@@ -56,7 +62,7 @@ pub async fn set_capture(window: WebviewWindow, active: bool, confined: bool) ->
     result_rx.recv().await.unwrap_or(false)
 }
 
-fn set_capture_on_main_thread(window: &WebviewWindow, active: bool, confined: bool) -> bool {
+fn set_capture_on_main_thread(window: &WebviewWindow, active: bool) -> bool {
     let Ok(hwnd) = window.hwnd() else {
         return false;
     };
@@ -82,27 +88,11 @@ fn set_capture_on_main_thread(window: &WebviewWindow, active: bool, confined: bo
             return false;
         }
     }
-    if window.set_cursor_grab(active || confined).is_err()
-        || window.set_cursor_visible(!active).is_err()
-    {
+    if window.set_cursor_grab(active).is_err() || window.set_cursor_visible(!active).is_err() {
         stop_capture(hwnd);
         return false;
     }
     ACTIVE.store(active, Ordering::Release);
-    #[cfg(debug_assertions)]
-    unsafe {
-        use windows_sys::Win32::UI::{Input::GetRegisteredRawInputDevices, WindowsAndMessaging::{GetGUIThreadInfo, GetWindowThreadProcessId, GUITHREADINFO}};
-        let mut info: GUITHREADINFO = zeroed();
-        info.cbSize = size_of::<GUITHREADINFO>() as u32;
-        GetGUIThreadInfo(0, &mut info);
-        let mut focus_pid = 0;
-        GetWindowThreadProcessId(info.hwndFocus, &mut focus_pid);
-        let mut devices: [RAWINPUTDEVICE;8] = zeroed();
-        let mut count = 8;
-        let read = GetRegisteredRawInputDevices(devices.as_mut_ptr(), &mut count, size_of::<RAWINPUTDEVICE>() as u32);
-        eprintln!("capture active={active} hwnd={hwnd:?} focus={:?} focus_pid={focus_pid} own_pid={} devices={read}", info.hwndFocus, std::process::id());
-        for device in devices.iter().take(read as usize) { eprintln!("raw usage={} flags={} target={:?}",device.usUsage,device.dwFlags,device.hwndTarget); }
-    }
     true
 }
 
@@ -123,6 +113,16 @@ fn stop_capture(hwnd: HWND) {
     }
 }
 
+fn release_for_focus_loss(hwnd: HWND) {
+    let captured = ACTIVE.load(Ordering::Acquire);
+    stop_capture(hwnd);
+    if captured {
+        if let Some(window) = GAME_WINDOW.get() {
+            let _ = window.emit_to(window.label(), "desktop-mouse-released", ());
+        }
+    }
+}
+
 unsafe extern "system" fn input_window_proc(
     hwnd: HWND,
     message: u32,
@@ -132,18 +132,14 @@ unsafe extern "system" fn input_window_proc(
     _data: usize,
 ) -> LRESULT {
     if message == WM_ACTIVATE && wparam & 0xffff == WA_INACTIVE as usize {
-        stop_capture(hwnd);
+        release_for_focus_loss(hwnd);
     } else if message == WM_NCDESTROY {
         stop_capture(hwnd);
         RemoveWindowSubclass(hwnd, Some(input_window_proc), MOUSE_SUBCLASS);
     } else if ACTIVE.load(Ordering::Acquire) {
         if GetForegroundWindow() != hwnd {
-            #[cfg(debug_assertions)]
-            eprintln!("lost foreground hwnd={hwnd:?} current={:?}", GetForegroundWindow());
-            stop_capture(hwnd);
+            release_for_focus_loss(hwnd);
         } else if message == WM_INPUT {
-            #[cfg(debug_assertions)]
-            eprintln!("WM_INPUT");
             let mut input: RAWINPUT = zeroed();
             let mut bytes = size_of::<RAWINPUT>() as u32;
             let read = GetRawInputData(
@@ -164,8 +160,6 @@ unsafe extern "system" fn input_window_proc(
         } else if message == WM_TIMER && wparam == MOUSE_TIMER {
             let x = DELTA_X.swap(0, Ordering::AcqRel);
             let y = DELTA_Y.swap(0, Ordering::AcqRel);
-            #[cfg(debug_assertions)]
-            eprintln!("timer {x},{y}");
             if x != 0 || y != 0 {
                 if let Some(window) = GAME_WINDOW.get() {
                     let _ = window.emit_to(window.label(), "desktop-mouse-delta", (x, y));

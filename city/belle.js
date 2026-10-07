@@ -1,4 +1,4 @@
-// Belle stone bays, balconies and copper roofs use the shared geometry from belle-geometry.js.
+// Belle stone cornices, balconies and copper roofs use the shared geometry from belle-geometry.js.
 function belleDetailShade(o, i, t, L) {
   const base = [STONE, WHITE, GRAY, BRICK, STONE][o.material || 0], z = HIT.w;
   if (o.kind === 'iron') {
@@ -8,14 +8,6 @@ function belleDetailShade(o, i, t, L) {
     return false;
   }
   BG[i] = C(base, (1 + L * 0.32) * shadeFace(HIT.face));
-  if (o.kind === 'bay' && HIT.face < 5) {
-    const fl = fract((z - 0.45) / 0.42), along = HIT.face <= 2 ? HIT.v : HIT.u, half = HIT.face <= 2 ? o.hw : o.hl;
-    if (Math.abs(along) < half - 0.045 && fl > 0.24 && fl < 0.83) {
-      const lit = hash(Math.floor(z / 0.42), 1, sk0(o.seed)) > litT - 0.2;
-      BG[i] = C(lit ? WARM : CYAN, lit ? 2 + night * 4 : 1 + day);
-      return set(i, Math.abs(along) < 0.012 ? '|' : ':', C(WHITE, Math.max(L * 0.6, lit ? night * 12 : 0))), true;
-    }
-  }
   return set(i, HIT.face === 5 || o.kind === 'cornice' || o.kind === 'slab' ? '=' : '|', C(WHITE, L * 0.85)), true;
 }
 // Clip the ray against the ten planes of a mansard: four walls, floor, ridge and four inclined faces.
@@ -52,7 +44,7 @@ function drawBelleBuildings() {
     }
   });
   forNear(belleDetailsB, o => {
-    // The inhabited balcony replaces any decorative bay or ironwork across its French doors.
+    // The inhabited balcony replaces decorative ironwork across its French doors.
     if (owned.homes.some(home => {
       const b = homeBalconyBounds(home);
       return b && Math.abs(o.x - b.x0) < .25 && Math.abs(o.y - b.y) < .9 && o.z1 > b.z - .14 && o.z0 < b.z + .35;

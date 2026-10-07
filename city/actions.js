@@ -305,7 +305,7 @@ function passOut(why) {
   const s = SERVICES.filter(b => b.kind === 'amb').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity])[0];
   const bill = hospitalised();
   clearWanted(); // (they lost you in the ambulance)
-  enterRoom('hospital', { word: 'HOSPITAL', ret: [s.x, s.y + 0.15, -Math.PI / 2] }, [10.5, 3.3, Math.PI]);
+  enterRoom('hospital', { word: 'HOSPITAL', ret: [...s.door, Math.PI / 2] }, [10.5, 3.3, Math.PI]);
   wakeT = 3; fade = 1;
   say(`You come to in a hospital bed. "${why}" A nurse hands you the bill: ${fmt$(bill)}.`, 8);
 }
@@ -340,6 +340,13 @@ function leaveRoom() {
   if (room.kind === 'hotelroom' && room.lobby.grandHotel) return enterRoom('grandhotel', room.lobby, [7, 6.5, -Math.PI / 2]);
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
+  else if (room.kind === 'hospital') {
+    // Use the front door for visits and recovery, including saved rooms with the old ambulance return point.
+    const [rx, ry] = room.ret;
+    const hospital = SERVICES.filter(b => b.kind === 'amb').reduce((best, b) =>
+      near(...b.door, rx, ry) < near(...best.door, rx, ry) ? b : best);
+    [px, py] = hospital.door; a = -Math.PI / 2;
+  }
   else { [px, py, a] = room.ret; a += Math.PI; }
   room = null; mode = 'walk';
 }
