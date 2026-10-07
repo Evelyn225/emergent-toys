@@ -84,16 +84,16 @@ function jobLine() {
 }
 // the arrow at the top of the screen, in characters: a shaft and a two-stroke head drawn at whatever angle the fare
 // (or their stop) is from where the car's pointing, how far, and what to do there. Close enough: a blinking [ STOP ].
-function jobArrow() {
-  const t = jobTarget();
-  if (!t || !me) return;
-  const ex = rel(t.x - me.x), ey = rel(t.y - me.y), d = Math.hypot(ex, ey);
+function jobArrow(t=jobTarget(),courier=null) {
+  if (!t || !courier&&!me) return;
+  const ex = rel(t.x - (courier?px:me.x)), ey = rel(t.y - (courier?py:me.y)), d = Math.hypot(ex, ey),radius=courier?courier.radius:DROP_R;
   const ang = mod(Math.atan2(ey, ex) - (chaseOn ? camYaw : a) + Math.PI, Math.PI * 2) - Math.PI; // 0 = dead ahead, + = right
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.95), x = cv.width / 2, y = 70 + s * 3.2; // below the message line
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, col = PAL[C(YEL, 15)];
-  if (d < DROP_R) {
-    if (fract(T * 2) < 0.7) artText(['[ STOP ]'], x - 4 * w, y - s / 2, s, () => C(YEL, 15));
+  if (d < radius) {
+    const stop=`[ ${courier?courier.stop:'STOP'} ]`;
+    if (fract(T * 2) < 0.7) artText([stop], x - stop.length*w/2, y - s / 2, s, () => C(YEL, 15));
   } else {
     const L = s * 2.6, ux = Math.sin(ang), uy = -Math.cos(ang), tip = [x + ux * L, y + uy * L];
     charLine(x - ux * L, y - uy * L, tip[0], tip[1], w, s, col); // the shaft
@@ -102,7 +102,7 @@ function jobArrow() {
       charLine(tip[0], tip[1], tip[0] + Math.sin(h) * L * 0.5, tip[1] - Math.cos(h) * L * 0.5, w, s, col);
     }
   }
-  const label = d < DROP_R ? (job.ride ? 'let them out' : 'pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d) * 10}m`;
+  const label = courier?`${courier.label}  ${Math.round(d*10)}m`:d < DROP_R ? (job.ride ? 'let them out' : 'pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d) * 10}m`;
   g.font = FS + 'px monospace';
   const lw = g.measureText(label).width;
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - lw / 2 - 6, y + s * 3.1, lw + 12, FS + 6);

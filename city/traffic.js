@@ -54,6 +54,12 @@ const CAR_FOOTPRINTS = { car: [0.24, 0.11], amb: [0.25, 0.1], fire: [0.37, 0.1] 
 function carFootprint(c) {
   return CAR_FOOTPRINTS[c.kind] || CAR_FOOTPRINTS.car;
 }
+// A person's small footprint against the actual rotated vehicle, rather than a broad bumper circle.
+function carPersonOverlap(c,p,x=c.x,y=c.y,hx=c.hx,hy=c.hy) {
+  const rx=rel(p.x-x),ry=rel(p.y-y),[hl,hw]=carFootprint(c);
+  const along=Math.max(0,Math.abs(rx*hx+ry*hy)-hl),across=Math.max(0,Math.abs(-rx*hy+ry*hx)-hw);
+  return Math.max(0,.035-Math.hypot(along,across));
+}
 // Minimum separating translation between two rotated bodies, with toroidal world coordinates.
 function carContact(c, o, x = c.ex, y = c.ey, hx = c.hx, hy = c.hy) {
   const rx = rel(o.ex - x), ry = rel(o.ey - y);

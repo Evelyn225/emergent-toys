@@ -7,7 +7,7 @@ Things get crossed off (deleted) once they're in the game.
 The ones that would add the most for the least, roughly in order. Each builds on something already in the game.
 1. **The Relics** (below, in Bigger city-wide ideas): the watch and the globe become two of a set, and collecting
    them all opens the tower with no door. A reason to do everything else.
-2. **Rooftop courier jobs**: a dedicated Midtown depot and handcrafted delivery routes (details below).
+2. **More rooftop courier routes**: the depot and introductory garden delivery are in; construction and night routes next (below).
 3. **A bike**: rent, park, steal; between walking and a car, and it fits down alleys.
 4. **Museum extras**: the heist is in (pick the door, dodge the torch beams, crack a case, beat the silent alarm);
    next: the plan on paper, a guard's keycard to pickpocket, the power box in the alley, a rotating special exhibit.
@@ -16,17 +16,17 @@ The ones that would add the most for the least, roughly in order. Each builds on
 
 ## Rooftop courier jobs
 
-- Start at a new Midtown courier depot: a converted print shop with a loading alley, parcel counter, dispatcher,
-  recognizable sign, stepped roof and stair access to a rooftop training course.
-- Author three substantial routes rather than selecting random rooftops: a first shift through tenements with
-  laundry, water tanks and a resident tending plants; a construction rush with scaffolding, narrow crossings,
-  elevation changes and an optional air-strafe shortcut; a night delivery past neon signs to a waiting recipient.
+- The first route is in: **Rooftop Couriers**, a converted Midtown print shop, sends gardening supplies through
+  laundry and water-tank roofs to Mara's garden. It pays $80 plus up to $40 for speed. Bridges and ramps offer a
+  walking route; two sprint jumps offer shortcuts. Three ladders allow re-entry after surviving a fall. Hospital
+  recovery or arrest fails the parcel. The active delivery, its timer and career records are saved.
+- Next: a construction rush with scaffolding, narrow crossings, elevation changes and an optional air-strafe
+  shortcut; a night delivery past neon signs to a waiting recipient. Author these rather than choosing random rooftops.
 - Give each route named recipients, distinct packages, small rooftop scenes and believable reasons for its connections.
   Basic deliveries are untimed; offer speed bonuses and unlock harder contracts as the player learns the routes.
 - Streets are often too wide for ordinary jumps. Deliberately place service bridges, ramps, scaffolding and intermediate
   platforms, and playtest every crossing with the existing movement. Avoid requiring bunny hops for the introductory route.
-- Build the depot and one polished route first, then expand. Keep scenery static and spatially indexed, and track only
-  the active delivery so the activity stays inexpensive to run.
+- Keep new scenery static and spatially indexed, and track only the active delivery so the activity stays inexpensive to run.
 
 ## New districts
 

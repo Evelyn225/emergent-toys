@@ -30,6 +30,7 @@ function bigMapLabels() {
   const place = (x, y, t) => out.push([x, y, t, '#fd8', 'place']);
   place(GRAND_HOTEL.bx * 8 + 5, GRAND_HOTEL.by * 8 + 5, 'Grand Hotel');
   place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
+  place(...COURIER_DEPOT.roof,COURIER_COMPANY);
   place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'Big screens', radio: 'Radio tower' };
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { const lm = landmarkOf.get(bi(bx, by)); if (lm) place(bx * 8 + 5, by * 8 + 5, LM[lm] || lm); }
@@ -82,6 +83,11 @@ function bigMapDraw() {
     x.fillStyle = 'rgba(0,0,0,0.6)'; x.fillRect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
     x.fillStyle = col; x.fillText(t, X, Y + 1);
   };
+  const delivery=courierRoute();
+  if(delivery) {
+    dot(delivery.recipient.x,delivery.recipient.y,'!', '#6f9',18);
+    label(delivery.recipient.x,delivery.recipient.y-.8,'ROOF GARDEN','#6f9',14,true);
+  }
   // you, and what's yours, go on first so nothing hides them
   const ang = me ? Math.atan2(me.hy, me.hx) : a;
   const youX = sx(px), youY = sy(py);

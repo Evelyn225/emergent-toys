@@ -7,6 +7,7 @@
     "city/needs.js",
     "city/art.js",
     "city/world.js",
+    "city/courier-world.js",
     "city/props.js",
     "city/residential.js",
     "city/architecture.js",
@@ -23,6 +24,7 @@
     "city/minigames.js",
     "city/stocks.js",
     "city/crime.js",
+    "city/courier.js",
     "city/property.js",
     "city/boats.js"
   ],
@@ -38,6 +40,7 @@
     "city/city-sprites.js",
     "city/jail.js",
     "city/rooms.js",
+    "city/courier-ui.js",
     "city/home-balcony.js",
     "city/aquarium.js",
     "city/cathedral.js",

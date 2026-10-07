@@ -856,6 +856,75 @@ function streetName(wx, wy) { // '' when not on a street
   const h = hseg(bx, by) || hseg(bx - 1, by), v = vseg(bx, by) || vseg(bx, by - 1);
   return h && v ? ST_NAMES[by] + ' & ' + ave : h ? ST_NAMES[by] : ave;
 }
+// One authored neighbourhood route. Heights are world units (10m), shared by drawing and traversal.
+const COURIER_DEPOT = { x0: 178, y0: 101, x1: 181, y1: 104, h: 1.4, roof: [179.5,102.5], door: [177.72,102.5] };
+const COURIER_COMPANY = 'Rooftop Couriers';
+{
+  const sh = COURIER_DEPOT.sh = { kind: SHOP_LIT, word: 'COURIER', neon: GREEN, glyphs: '>[]', hours: [0,24], courier: true };
+  for (let y=101;y<104;y++) for (let x=178;x<181;x++) {
+    const k=idx(x,y);map[k]=COURIER_DEPOT.h;STY[k]=8;SEED[k]=.37;SHOP[k]=sh;
+  }
+}
+const COURIER_SURFACES = [], COURIER_LADDERS = [], COURIER_SCENERY = [];
+function courierSurface(x0,y0,x1,y1,h0,h1=h0,axis='x',kind='bridge') {
+  const o={x:(x0+x1)/2,y:(y0+y1)/2,hl:(x1-x0)/2,hw:(y1-y0)/2,c:1,s:0,
+    z0:Math.min(h0,h1)-.035,z1:Math.max(h0,h1),h0,h1,axis,kind};
+  COURIER_SURFACES.push(o);return o;
+}
+function courierLadder(id,bottom,top,rail) {
+  COURIER_LADDERS.push({id,bottom,top,x:rail[0],y:rail[1],yaw:rail[2]});
+}
+const courierMapHeight = (x,y) => map[idx(Math.floor(x),Math.floor(y))];
+// The lower depot roof leads over the lane to a laundry terrace, then across a service catwalk.
+courierSurface(179.35,103.8,179.65,106.2,COURIER_DEPOT.h,courierMapHeight(179.5,106.5),'y');
+courierSurface(183.8,107.2,186.2,107.5,courierMapHeight(183.5,107.35),courierMapHeight(186.5,107.35));
+// A second crossing turns back toward the row with the florist and its roof garden.
+courierSurface(191.25,103.8,191.55,106.2,courierMapHeight(191.4,103.5),courierMapHeight(191.4,106.5),'y');
+courierSurface(191.8,102.2,194.2,102.5,courierMapHeight(191.5,102.35),courierMapHeight(194.5,102.35));
+// Raised maintenance platforms form the easier path over the taller middle townhouse.
+courierSurface(189.55,106.55,190.15,107.15,courierMapHeight(189.5,107),courierMapHeight(190.5,107));
+courierSurface(195.65,102.15,196.15,102.65,courierMapHeight(195.5,102.4),courierMapHeight(196.5,102.4));
+courierSurface(197.75,102.15,198.25,102.65,courierMapHeight(197.5,102.4),courierMapHeight(198.5,102.4));
+// Two small gaps are optional sprint-jump shortcuts; the walkable service bridges remain available.
+courierSurface(183.6,108.4,184.75,108.65,1.5,1.6,'x','shortcut');
+courierSurface(185.1,108.4,186.4,108.65,1.6,1.6,'x','shortcut');
+courierSurface(192,101.15,192.95,101.4,1.7,1.7,'x','shortcut');
+courierSurface(193.3,101.15,194.5,101.4,1.4,1.4,'x','shortcut');
+courierLadder('depot',[177.75,103.45,0],[178.35,103.45,COURIER_DEPOT.h],[177.97,103.45,0]);
+courierLadder('laundry',[183.4,105.75,0],[183.4,106.35,courierMapHeight(183.4,106.35)],[183.4,105.97,Math.PI/2]);
+courierLadder('garden',[198.5,104.25,0],[198.5,103.65,courierMapHeight(198.5,103.65)],[198.5,104.03,-Math.PI/2]);
+const COURIER_GARDEN = { x:199,y:102.1,z:courierMapHeight(199,102.1), name:'Mara' };
+const COURIER_ROUTES = [{id:'garden',title:'The Green Roof',parcel:'gardening supplies',pay:80,bonus:40,
+  quick:70,bonusUntil:150,recipient:COURIER_GARDEN,
+  directions:'South over the print-shop bridge, east past the laundry and water tank, then north to the florist row.'}];
+// A former press-room skylight makes the depot's roof step up on its quiet north side.
+const courierHut=courierSurface(178.3,101.2,180.3,101.8,1.65,1.65,'x','hut');
+courierHut.z0=COURIER_DEPOT.h;
+function courierSurfacePlanes(o) {
+  const sx=o.axis==='x'?(o.h1-o.h0)/(2*o.hl):0,sy=o.axis==='y'?(o.h1-o.h0)/(2*o.hw):0,mid=(o.h0+o.h1)/2;
+  return [[1,0,0,o.hl,1],[-1,0,0,o.hl,2],[0,1,0,o.hw,3],[0,-1,0,o.hw,4],[-sx,-sy,1,mid,5],
+    ...(o.kind==='hut'?[[0,0,-1,-o.z0,6]]:[[sx,sy,-1,-mid+(o.thickness??.035),6]])];
+}
+for(const o of COURIER_SURFACES)o.planes=courierSurfacePlanes(o);
+const courierSurfaceCells = new Array(N*N);
+for (const o of COURIER_SURFACES) {
+  for(let y=Math.floor(o.y-o.hw);y<=Math.floor(o.y+o.hw);y++)for(let x=Math.floor(o.x-o.hl);x<=Math.floor(o.x+o.hl);x++) {
+    const k=idx(x,y);(courierSurfaceCells[k] || (courierSurfaceCells[k]=[])).push(o);
+  }
+}
+function courierContains(o,x,y,pad=0) {
+  return Math.abs(rel(x-o.x))<=o.hl+pad+1e-10 && Math.abs(rel(y-o.y))<=o.hw+pad+1e-10;
+}
+function courierSurfaceTop(o,x,y) {
+  const u=o.axis==='y'?(rel(y-o.y)+o.hw)/(2*o.hw):(rel(x-o.x)+o.hl)/(2*o.hl);
+  return o.h0+(o.h1-o.h0)*clamp(u,0,1);
+}
+function courierRoofHeight(x,y) {
+  let h=0;
+  for(const o of courierSurfaceCells[idx(Math.floor(x),Math.floor(y))] || [])
+    if(courierContains(o,x,y))h=Math.max(h,courierSurfaceTop(o,x,y));
+  return h;
+}
 // static props are bucketed by block, so a frame only visits the ones within draw distance (see forNear)
 function bucketed(items) {
   const b = Array.from({ length: NB * NB }, () => []);
@@ -1955,6 +2024,12 @@ const COP_CAR_SPEED = 2, COP_CAR_ACCEL = 0.45, COP_CAR_BRAKE = 0.9;
 const CAR_FOOTPRINTS = { car: [0.24, 0.11], amb: [0.25, 0.1], fire: [0.37, 0.1] };
 function carFootprint(c) {
   return CAR_FOOTPRINTS[c.kind] || CAR_FOOTPRINTS.car;
+}
+// A person's small footprint against the actual rotated vehicle, rather than a broad bumper circle.
+function carPersonOverlap(c,p,x=c.x,y=c.y,hx=c.hx,hy=c.hy) {
+  const rx=rel(p.x-x),ry=rel(p.y-y),[hl,hw]=carFootprint(c);
+  const along=Math.max(0,Math.abs(rx*hx+ry*hy)-hl),across=Math.max(0,Math.abs(-rx*hy+ry*hx)-hw);
+  return Math.max(0,.035-Math.hypot(along,across));
 }
 // Minimum separating translation between two rotated bodies, with toroidal world coordinates.
 function carContact(c, o, x = c.ex, y = c.ey, hx = c.hx, hy = c.hy) {
@@ -3076,7 +3151,7 @@ function belleLampParts(x, y, ax, ay) {
   return parts;
 }
 // Static clearance and shelter are resolved once after all building families have supplied their geometry.
-const STREET_GEOMETRY = [...ARCH_DETAILS, ...LANDMARK_SOLIDS, ...PAVILION_SOLIDS, ...belleDetails, ...solids];
+const STREET_GEOMETRY = [...ARCH_DETAILS, ...LANDMARK_SOLIDS, ...PAVILION_SOLIDS, ...belleDetails, ...solids, ...COURIER_SURFACES];
 const streetGeometryCells = new Array(N * N);
 function geometryBounds(o) {
   return [Math.abs(o.c) * o.hl + Math.abs(o.s) * o.hw, Math.abs(o.s) * o.hl + Math.abs(o.c) * o.hw];
@@ -5615,7 +5690,7 @@ function roomSearchLead(dt) {
   }
   return anySees;
 }
-const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
+const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], courierRoofHeight(x,y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 function notePoliceRoofEntry(x, y, ret = null) {
   if (!wanted.stars || !(wanted.seen || roomCops.length || ret && near(wanted.lastX, wanted.lastY, ret[0], ret[1]) < 1)) return;
   roofLead = { x, y, ret, targetX: x, targetY: y, arriveAt: T + (roomCops.length ? 1.2 : 3), count: Math.min(2, Math.max(1, wanted.stars)), arrived: false };
@@ -5937,6 +6012,55 @@ function goToJail() {
   seized.length = 0; seized.push(...inv);
   clearInventory(); fx.skating = false; fx.boombox = false;
   clearWanted();
+}
+let courierJob = null;
+let courierRecords = { trips:0, earned:0, best:null, failed:0 };
+let climbing = null;
+function courierBonus(route,seconds) {
+  return Math.round(route.bonus*clamp((route.bonusUntil-seconds)/(route.bonusUntil-route.quick),0,1));
+}
+function startCourier(id='garden') {
+  if(courierJob)return false;
+  const route=COURIER_ROUTES.find(r=>r.id===id);
+  if(!route)return false;
+  courierJob={id:route.id,took:0};return true;
+}
+function stepCourier(dt) { if(courierJob)courierJob.took+=Math.max(0,dt); }
+function loadCourier(data) {
+  courierJob=null;courierRecords={trips:0,earned:0,best:null,failed:0};
+  const job=data?.job,records=data?.records;
+  if(job && COURIER_ROUTES.some(r=>r.id===job.id) && Number.isFinite(job.took) && job.took>=0)
+    courierJob={id:job.id,took:job.took};
+  if(!records)return;
+  for(const key of ['trips','earned','failed'])if(Number.isFinite(records[key])&&records[key]>=0)
+    courierRecords[key]=Math.floor(records[key]);
+  if(Number.isFinite(records.best)&&records.best>=0)courierRecords.best=records.best;
+}
+function failCourier() {
+  if(!courierJob)return false;
+  courierJob=null;courierRecords.failed++;return true;
+}
+function courierRoute() { return courierJob && COURIER_ROUTES.find(r=>r.id===courierJob.id); }
+function courierAtRecipient() {
+  const r=courierRoute();
+  return !!r && mode==='roof' && Math.abs(roofH-r.recipient.z)<.12 && near(px,py,r.recipient.x,r.recipient.y)<.3 && body.z<.5;
+}
+function finishCourier() {
+  const route=courierRoute();
+  if(!route || !courierAtRecipient())return null;
+  const seconds=courierJob.took,bonus=courierBonus(route,seconds),pay=route.pay+bonus;
+  earn(pay);courierRecords.trips++;courierRecords.earned+=pay;
+  courierRecords.best=courierRecords.best==null?seconds:Math.min(courierRecords.best,seconds);
+  courierJob=null;return {pay,bonus,seconds};
+}
+function courierLadderNear() {
+  if(!['walk','roof'].includes(mode) || body.z>.5)return null;
+  const z=mode==='roof'?roofH:0;
+  for(const ladder of COURIER_LADDERS)for(const end of ['bottom','top']) {
+    const p=ladder[end];
+    if(Math.abs(z-p[2])<.12 && near(px,py,p[0],p[1])<.35)return {ladder,end};
+  }
+  return null;
 }
 // ===== owning things: a car from a CAR LOT, a home from a REALTY office. Pure (no DOM), so the node tests can buy
 // them; save.js keeps them (and your money and things) in localStorage between visits.
@@ -6557,6 +6681,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 }
 function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
+  if(sh?.courier)return courierFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 25) return grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -8316,6 +8441,7 @@ function winterTreeCell(i, u, z, du, dz, L, t) {
 }
 
 function citySprites() {
+  drawCourier();
   drawMuseumRoof();
   drawRoofPolice();
   drawBelleBuildings();
@@ -10369,6 +10495,219 @@ const ROOMW = { cell: (x, y) => {
                   const c = roomAt(x, y); return c === '.' ? 0 : c === 'B' ? 1.1 : c === 'S' ? 2.2 : c === 'L' ? 2.6 : c === 'G' ? 4 : room.def.height || 3;
                 },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
+ROOM_FOR.COURIER='courier';
+const COURIER_DISPATCH_LINES=['ROOFTOP COURIERS','PARCEL DISPATCH','GREEN ROOF $80','SPEED BONUS $40'];
+function courierWall(i,u,uStep,z,d,mx,my,L) {
+  if(my===0&&Math.abs(u-10.3)<2.4&&z>1.85&&z<2.85) {
+    BG[i]=C(GREEN,2);
+    for(const [row,text] of COURIER_DISPATCH_LINES.entries())
+      if(wallText(i,u,uStep,z,d,text,10.3,2.65-row*.2,.17,.16,C(STONE,L),C(GREEN,2)))return true;
+    return set(i,' ',0),true;
+  }
+  BG[i]=C(BRICK,1+L*.12);
+  return set(i,fract(u*4+(Math.floor(z*8)&1)*.5)<.12?'|':'_',C(BRICK,L*.7)),true;
+}
+function courierFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
+  const L=fog*amb*(side?11:15),center=side?179.5:102.5,along=rel(wc-center);
+  const readableCenter=(Math.sign(u*wc)||1)*center;
+  BG[i]=C(BRICK,2+L*.2);
+  if(z>h-.06||Math.abs(z-.48)<.022)return set(i,'=',C(STONE,L));
+  if(z>.33&&z<.43) {
+    BG[i]=C(GREEN,2);
+    return wallText(i,u,uStep,z,d,'ROOFTOP COURIERS',readableCenter,.38,.09,.065,C(STONE,Math.max(L,night*12)),C(GREEN,2))||set(i,' ',0);
+  }
+  if(z<.33&&Math.abs(along)<.21) {
+    BG[i]=C(GREEN,1+L*.16);return set(i,Math.abs(along)<.01?'|':fract(z*15)<.1?'=':':',C(STONE,L)),true;
+  }
+  const bay=along+.5-Math.floor(along+.5);
+  if(z>.7&&z<1.2&&bay>.18&&bay<.82) {
+    if(z<.73||z>1.17||bay<.21||bay>.79)return set(i,z<.73||z>1.17?'=':'|',C(STONE,L));
+    BG[i]=C(CYAN,2+day);return set(i,Math.abs(bay-.5)<.012?'|':Math.abs(z-.95)<.012?'-':':',C(CYAN,L));
+  }
+  const mortar=fract(z*24)<.12||fract(wc*8+(Math.floor(z*24)&1)*.5)<.055;
+  return set(i,mortar?'_':hash(Math.floor(wc*20),Math.floor(z*30),8)>.96?'.':' ',C(mortar?STONE:BRICK,L*.65));
+}
+ROOM_DEFS.courier={grid:boxRoom(14,10,{'3,0':'E','4,0':'E'}),light:.9,floor:'wood',ceil:'strip',wall:courierWall,
+  ex:4,keeper:[10.3,3.1],spawn:[7,8.3],props:()=>{
+    const props=[standing(10.3,3.1,GREEN),BX(10.3,4,2.1,.35,0,1,solid(BRICK))];
+    for(const x of [1.7,2.5,3.3])for(const z of [0,.55])props.push(BX(x,6.2,.32,.35,z,z+.5,solid(BRICK,{top:'='})));
+    props.push(BX(10,4,.3,.2,1,1.4,solid(STONE,{top:'='})),BX(11.2,4,.25,.18,1,1.3,solid(BRICK)));
+    return props;
+  }};
+function courierPrompt() {
+  if(mode==='ladder')return 'W/S: climb up/down | E or Space: let go';
+  if(courierAtRecipient())return `E: deliver the gardening supplies to ${COURIER_GARDEN.name}`;
+  const ladder=courierLadderNear();
+  if(ladder)return `E: grab the ladder (${ladder.end==='bottom'?'up to the roof':'down to the street'})`;
+  if(mode==='room'&&room.kind==='courier'&&nearKeeper())
+    return courierJob?'E: ask the dispatcher about your delivery':`E: take a rooftop delivery ($80 + up to $40 speed bonus)`;
+  return '';
+}
+function courierUse() {
+  if(mode==='ladder'){leaveCourierLadder();return true;}
+  if(courierAtRecipient()) {
+    const result=finishCourier();saveGame();
+    say(`"Perfect! The tomatoes were getting impatient." ${COURIER_GARDEN.name} takes the supplies. Delivery: ${fmt$(result.pay)}${result.bonus?` (${fmt$(result.bonus)} speed bonus)`:''}.`,6);
+    return true;
+  }
+  const nearby=courierLadderNear();
+  if(nearby){grabCourierLadder(nearby);return true;}
+  if(mode==='room'&&room.kind==='courier'&&nearKeeper()) {
+    if(courierJob)say(`"${courierRoute().directions} The parcel's safe in your courier bag."`,6);
+    else {
+      startCourier();saveGame();
+      say(`"Gardening supplies for ${COURIER_GARDEN.name}. Eighty dollars, plus a speed bonus. Stairs are on your left." The parcel goes in your courier bag, leaving your hands free.`,8);
+    }
+    return true;
+  }
+  if(mode==='roof'&&near(px,py,COURIER_GARDEN.x,COURIER_GARDEN.y)<.3&&Math.abs(roofH-COURIER_GARDEN.z)<.1) {
+    say('"The roof gets the best sun. Want a tomato?"',4);return true;
+  }
+  return false;
+}
+function grabCourierLadder({ladder,end}) {
+  const p=ladder[end];climbing={ladder,z:p[2]};
+  mode='ladder';room=null;roofLot=null;body.z=body.vz=body.peak=0;body.seat=null;body.mx=body.my=0;
+  px=ladder.x-Math.cos(ladder.yaw)*.08;py=ladder.y-Math.sin(ladder.yaw)*.08;a=ladder.yaw;pitch=0;
+  say('W/S to climb. E or Space to let go.',3);
+}
+function finishCourierClimb(end) {
+  const {ladder}=climbing,p=ladder[end];climbing=null;
+  [px,py]=p;body.z=body.vz=body.peak=0;body.mx=body.my=0;body.groundMode=null;
+  room=null;roofH=p[2];roofLot=new Set();mode=end==='top'?'roof':'walk';
+  if(mode==='roof')notePoliceRoofEntry(px,py,[ladder.bottom[0],ladder.bottom[1],ladder.yaw]);
+}
+function stepCourierLadder(dt) {
+  if(!climbing)return;
+  const direction=(K.KeyW||K.ArrowUp?1:0)-(K.KeyS||K.ArrowDown?1:0);
+  const {ladder}=climbing;
+  climbing.z=clamp(climbing.z+direction*dt*.27,ladder.bottom[2],ladder.top[2]);
+  if(direction>0&&climbing.z>=ladder.top[2])finishCourierClimb('top');
+  else if(direction<0&&climbing.z<=ladder.bottom[2])finishCourierClimb('bottom');
+}
+function leaveCourierLadder() {
+  if(!climbing)return;
+  const {ladder,z}=climbing;
+  if(z>=ladder.top[2]-.08)return finishCourierClimb('top');
+  if(z<=ladder.bottom[2]+.08)return finishCourierClimb('bottom');
+  climbing=null;room=null;mode='walk';roofH=0;roofLot=null;
+  body.z=z*10;body.vz=0;body.peak=body.z;body.groundMode=null;
+  body.mx=-Math.cos(ladder.yaw)*.18;body.my=-Math.sin(ladder.yaw)*.18;
+}
+function courierText() {
+  const r=courierRoute();if(!r)return '';
+  return `COURIER: gardening supplies → ${r.recipient.name}'s roof garden | base $80 | speed bonus ${fmt$(courierBonus(r,courierJob.took))}`;
+}
+const COURIER_BAG_ART=['\\', ' \\', ' .\\----.', '/==[ ]==\\', '|  >[]  |', '| SEEDS |', '|_______|', ' \\_____/'];
+function drawCourierBag() {
+  if(!courierJob||!onFootMode()&&mode!=='ladder')return;
+  const size=clamp(Math.round(cv.height/65),8,15),sway=climbing?Math.sin(T*5)*2:Math.sin(T*7)*Math.min(3,Math.hypot(body.mx||0,body.my||0)*4);
+  g.font=size+'px monospace';
+  artText(COURIER_BAG_ART,-2+sway,cv.height-size*7.3,size,ch=>C(ch==='['||ch===']'?STONE:GREEN,13));
+  g.font=FS+'px monospace';
+}
+function courierBox(kind,x,y,hl,hw,z0,z1,col=GRAY,block=true) {
+  const o={kind,x,y,hl,hw,z0,z1,c:1,s:0,col,block};COURIER_SCENERY.push(o);return o;
+}
+for(const o of COURIER_SURFACES)if(o.kind==='bridge') {
+  const vertical=o.axis==='y',length=vertical?o.hw:o.hl;
+  for(const side of [-1,1]) {
+    const x=o.x+(vertical?side*(o.hl+.012):0),y=o.y+(vertical?0:side*(o.hw+.012));
+    const rail=courierBox('rail',x,y,vertical?.006:o.hl,vertical?o.hw:.006,o.z0+.1,o.z1+.115,GRAY);
+    // Rails follow the deck's slope; their narrow profile leaves the view open.
+    rail.h0=o.h0+.11;rail.h1=o.h1+.11;rail.axis=o.axis;rail.thickness=.008;
+    rail.z0=Math.min(rail.h0,rail.h1)-rail.thickness;rail.planes=courierSurfacePlanes(rail);
+    for(const position of [-length,0,length]) {
+      const sx=x+(vertical?0:position),sy=y+(vertical?position:0),z=courierSurfaceTop(o,sx,sy);
+      courierBox('post',sx,sy,.009,.009,z,z+.11,GREEN);
+    }
+  }
+}
+// Machinery, washing and a potting terrace give the roofs distinct purposes.
+const tankZ=courierMapHeight(182.7,107.8);
+const courierTank=courierBox('tank',182.7,107.8,.2,.2,tankZ+.06,tankZ+.36,BRICK);
+courierTank.planes=Array.from({length:8},(_,k)=>[Math.cos(k*Math.PI/4),Math.sin(k*Math.PI/4),0,.19,k+1]);
+courierTank.planes.push([0,0,1,courierTank.z1,5],[0,0,-1,-courierTank.z0,6]);
+const tankCap=courierBox('tank-cap',182.7,107.8,.22,.22,tankZ+.36,tankZ+.45,GRAY);
+tankCap.planes=Array.from({length:8},(_,k)=>[Math.cos(k*Math.PI/4),Math.sin(k*Math.PI/4),.22/.09,(tankZ+.45)*.22/.09,k+7]);
+tankCap.planes.push([0,0,-1,-tankCap.z0,6]);
+for(const x of [182.56,182.84])for(const y of [107.66,107.94])courierBox('tank-leg',x,y,.015,.015,tankZ,tankZ+.08,GRAY);
+for(const x of [181,182])courierBox('laundry-pole',x,106.8,.012,.012,1.5,1.73,GRAY);
+for(const x of [181.22,181.5,181.78])courierBox('laundry',x,106.8,.08,.008,1.57,1.72,[WHITE,BLUE,RED][Math.round((x-181.22)/.28)],false);
+courierBox('clothesline',181.5,106.8,.5,.003,1.725,1.73,GRAY,false);
+for(const [x,y] of [[198.4,101.4],[199.5,101.5],[199.65,102.7],[198.5,103.35]]) {
+  const z=courierMapHeight(x,y);courierBox('planter',x,y,.15,.12,z,z+.055,BRICK);
+  courierBox('plant',x,y,.12,.1,z+.055,z+.19,GREEN,false);
+}
+courierBox('potting-table',198.65,102.7,.24,.12,COURIER_GARDEN.z+.08,COURIER_GARDEN.z+.088,BRICK);
+for(const dx of [-.2,.2])for(const dy of [-.08,.08])courierBox('table-leg',198.65+dx,102.7+dy,.009,.009,COURIER_GARDEN.z,COURIER_GARDEN.z+.08,BRICK);
+courierBox('soil-sack',198.3,102.7,.075,.065,COURIER_GARDEN.z,COURIER_GARDEN.z+.09,STONE);
+for(const x of [198.3,198.5])courierBox('trellis-post',x,101.4,.007,.007,1.4,1.67,BRICK);
+for(const z of [1.5,1.58,1.66])courierBox('trellis',198.4,101.4,.11,.004,z,z+.005,BRICK,false);
+const oldPrintSign=courierBox('print-sign',177.98,101.5,.35,.008,.65,.82,GREEN,false);
+oldPrintSign.c=0;oldPrintSign.s=1;
+const COURIER_SIGNS=[{x:179.5,y:103.4,z:1.402,arrow:'v'},
+  {x:183.35,y:107.35,z:1.502,arrow:'>'},{x:190.8,y:106.6,z:1.602,arrow:'^'},
+  {x:191.4,y:102.65,z:1.702,arrow:'>'}];
+const courierSceneryB=bucketed(COURIER_SCENERY),courierSignsB=bucketed(COURIER_SIGNS),courierSurfacesB=bucketed(COURIER_SURFACES);
+function courierRoofBlocked(x,y,z,pad=.025) {
+  for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const o of courierSceneryB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)])
+    if(o.block&&z<o.z1-.015&&z+.16>o.z0&&courierContains(o,x,y,pad))return true;
+  return false;
+}
+function drawCourier() {
+  if(mode==='room')return;
+  forNear(courierSurfacesB,o=>{
+    const [x,y]=R(o.x,o.y);
+    drawBox({...o,x,y},(i,t,L)=>{
+      BG[i]=C(o.kind==='shortcut'?BRICK:GRAY,2+L*.25);set(i,HIT.face===5?'=':'-',C(GRAY,L));
+      if(HIT.face===5)paintSettledSnow(i,o.x+HIT.u,o.y+HIT.v,L*.7,1,0,HIT.w);
+      return true;
+    },rayBeveledBay);
+  });
+  forNear(courierSceneryB,o=>{
+    const [x,y]=R(o.x,o.y);drawBox({...o,x,y},(i,t,L)=>{
+      if(o.kind==='plant') {
+        const leaf=hash(Math.floor((o.x+HIT.u)*65),Math.floor(HIT.w*65),Math.floor((o.y+HIT.v)*65));
+        if(leaf<.4)return false;
+        const col=leaf>.96?RED:GREEN;
+        BG[i]=C(col,2+L*.25);return set(i,leaf>.96?'o':leaf>.7?'%':'&',C(col,L)),true;
+      }
+      if(o.kind==='print-sign') {
+        BG[i]=C(GREEN,2);
+        for(const [row,text] of ['PRINT','& POST'].entries()) {
+          const q=HIT.u/.09+text.length/2,k=Math.floor(q);
+          if(k>=0&&k<text.length&&oneCell((fract(q)-.5)*.09,t/projX)&&oneCell(HIT.w-(.785-row*.08),t/projY))return set(i,text[k],C(STONE,L)),true;
+        }
+        return set(i,' ',0),true;
+      }
+      BG[i]=C(o.col,1.5+L*.35);
+      const ch=o.kind==='tank'?(fract(HIT.w*20)<.15?'=':'|'):o.kind==='laundry'?'~':HIT.face===5?'_':'|';
+      return set(i,ch,C(o.col,L)),true;
+    },o.planes?rayBeveledBay:rayBox);
+  });
+  for(const ladder of COURIER_LADDERS) {
+    const [x,y]=R(ladder.x,ladder.y);if(Math.hypot(x,y)>vis)continue;
+    const c=-Math.sin(ladder.yaw),s=Math.cos(ladder.yaw),z0=ladder.bottom[2],z1=ladder.top[2]+.12;
+    for(const side of [-1,1])drawBox({x:x+c*.055*side,y:y+s*.055*side,c,s,hl:.007,hw:.012,z0,z1},solid(GREEN));
+    drawBox({x,y,c,s,hl:.055,hw:.008,z0,z1},(i,t,L)=>{
+      if(fract((HIT.w-z0)*32)>.16)return false;
+      BG[i]=C(GRAY,3+L*.3);return set(i,'=',C(STONE,L)),true;
+    });
+  }
+  // Paint on the deck, with fixed orientation rather than camera-facing floating labels.
+  forNear(courierSignsB,o=>{
+    const [x,y]=R(o.x,o.y),{arrow}=o;
+    drawBox({x,y,c:1,s:0,hl:.13,hw:.09,z0:o.z,z1:o.z+.002},(i,t,L)=>{
+      if(HIT.face!==5)return false;
+      const u=HIT.u/.13,v=HIT.v/.09;
+      const across=arrow==='>'?v:u,forward=arrow==='^'?-v:arrow==='>'?u:v;
+      if(!(Math.abs(across)<.09&&forward<.45 || forward>.15&&Math.abs(across)<(.95-forward)*.65))return false;
+      return set(i,'#',C(YEL,L*1.2)),true;
+    });
+  });
+  drawArt(...R(COURIER_GARDEN.x,COURIER_GARDEN.y),COURIER_GARDEN.z,.055,.175,ART.keeper,(ch,row,L)=>C(row<3?SKIN:GREEN,L));
+}
 // French doors connect the room's metre coordinates to a balcony in the actual city, on its east facade.
 // Outdoors uses roof mode: the normal world renderer, weather, actors, sound and falling physics all apply.
 const homeBalconyActive = () => mode === 'roof' && room?.kind === 'bellehome' && !!room.balconyWorld;
@@ -12883,6 +13222,7 @@ function render(dt) {
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
+  else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
     if (mode === 'walk') eye += architectureGroundHeight(px, py);
@@ -13078,6 +13418,7 @@ const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px
 const homeSpot = () => { const s = room.def.spots; if (!s) return null; for (const k in s) if (Math.hypot(px - s[k][0], py - s[k][1]) < 1.3) return k; return null; };
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
+  const deliveryPrompt=courierPrompt();if(deliveryPrompt)return deliveryPrompt;
   const cp = crimePrompt();
   if (cp) return cp;
   if (mode === 'room') {
@@ -13094,7 +13435,7 @@ function promptText() {
     if (room.kind === 'museum' && !room.burgled) { const m = museumPrompt(); if (m) return m; }
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
-    if (nearElevator()) return 'E: elevator to the roof';
+    if (nearElevator()) return room.kind==='courier'?'E: stairs to the courier roof':'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
     if (room.kind === 'arcade') {
       const cab = nearCabinet();
@@ -13225,6 +13566,8 @@ function minimap() {
   mark(WHEEL.x, WHEEL.y, '*', fract(T) < 0.5 ? '#f6f' : '#ff6'); // the Ferris wheel
   const tt = taskTarget(); if (tt) mark(tt.x, tt.y, '?', '#4ff');
   const jt = jobTarget(); if (jt && fract(T * 2) < 0.7) mark(jt.x, jt.y, '!', '#ff0');
+  mark(...COURIER_DEPOT.door,'C','#6c9');
+  const courier=courierRoute();if(courier)mark(courier.recipient.x,courier.recipient.y,'!','#6f9');
   if (me && me.dest) mark(me.dest[0], me.dest[1], 'X', '#f4f');
   const ang = me ? Math.atan2(me.hy, me.hx) : a; // you, and which way you're facing
   mark(px, py, '@' + ['>', 'v', '<', '^'][mod(Math.round(ang / (Math.PI / 2)), 4)], '#ff5');
@@ -13265,6 +13608,7 @@ function needMeters() {
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
   drawHeldBig();
+  drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
@@ -13274,11 +13618,12 @@ function hud() {
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
-  const task_ = task ? wrapText('TASK: ' + taskText(), maxW) : [];
+  const task_ = [...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
   const meters = needMeters();
   hudBottom = (lines.length + task_.length + 1) * FS + 14;
   wantedHud();
   if (job && mode === 'drive') jobArrow();
+  if(courierRoute()&&mode!=='room')jobArrow(courierRoute().recipient,{label:"ROOF GARDEN",radius:.3,stop:courierAtRecipient()?'DELIVER':'CLIMB UP'});
   minimap();
   hotbar();
   g.font = FS + 'px monospace';
@@ -13431,6 +13776,7 @@ function enterRoom(kind, extra, spawn) {
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
 }
 function interact() {
+  if(courierUse())return;
   if (mode === 'room') {
     if (room.kind === 'train') return;
     if (grandHotelUse()) return;
@@ -13613,6 +13959,8 @@ function interact() {
 // out cold (hunger, thirst, a bad fall): you come to in a bed at the nearest hospital, and they've billed you
 let wakeT = 0;
 function passOut(why) {
+  if(failCourier()){why+=' Your courier delivery failed.';saveGame();}
+  climbing=null;
   if (me) outOfCar(); else if (mode === 'sea') { sea.v = 0; sea = null; }
   body.seat = null; body.z = body.vz = 0; fx.skating = false; if (game) game = null;
   const s = SERVICES.filter(b => b.kind === 'amb').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity])[0];
@@ -13761,16 +14109,16 @@ function jobLine() {
 }
 // the arrow at the top of the screen, in characters: a shaft and a two-stroke head drawn at whatever angle the fare
 // (or their stop) is from where the car's pointing, how far, and what to do there. Close enough: a blinking [ STOP ].
-function jobArrow() {
-  const t = jobTarget();
-  if (!t || !me) return;
-  const ex = rel(t.x - me.x), ey = rel(t.y - me.y), d = Math.hypot(ex, ey);
+function jobArrow(t=jobTarget(),courier=null) {
+  if (!t || !courier&&!me) return;
+  const ex = rel(t.x - (courier?px:me.x)), ey = rel(t.y - (courier?py:me.y)), d = Math.hypot(ex, ey),radius=courier?courier.radius:DROP_R;
   const ang = mod(Math.atan2(ey, ex) - (chaseOn ? camYaw : a) + Math.PI, Math.PI * 2) - Math.PI; // 0 = dead ahead, + = right
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.95), x = cv.width / 2, y = 70 + s * 3.2; // below the message line
   g.font = s + 'px monospace';
   const w = g.measureText('M').width, col = PAL[C(YEL, 15)];
-  if (d < DROP_R) {
-    if (fract(T * 2) < 0.7) artText(['[ STOP ]'], x - 4 * w, y - s / 2, s, () => C(YEL, 15));
+  if (d < radius) {
+    const stop=`[ ${courier?courier.stop:'STOP'} ]`;
+    if (fract(T * 2) < 0.7) artText([stop], x - stop.length*w/2, y - s / 2, s, () => C(YEL, 15));
   } else {
     const L = s * 2.6, ux = Math.sin(ang), uy = -Math.cos(ang), tip = [x + ux * L, y + uy * L];
     charLine(x - ux * L, y - uy * L, tip[0], tip[1], w, s, col); // the shaft
@@ -13779,7 +14127,7 @@ function jobArrow() {
       charLine(tip[0], tip[1], tip[0] + Math.sin(h) * L * 0.5, tip[1] - Math.cos(h) * L * 0.5, w, s, col);
     }
   }
-  const label = d < DROP_R ? (job.ride ? 'let them out' : 'pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d) * 10}m`;
+  const label = courier?`${courier.label}  ${Math.round(d*10)}m`:d < DROP_R ? (job.ride ? 'let them out' : 'pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d) * 10}m`;
   g.font = FS + 'px monospace';
   const lw = g.measureText(label).width;
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(x - lw / 2 - 6, y + s * 3.1, lw + 12, FS + 6);
@@ -14761,6 +15109,7 @@ function freecamHud() {
 
 // put you on your feet, out of whatever you're in (a car, a room, a ride, a boat, the el), ready to be moved
 function devFree() {
+  climbing=null;
   freecam = null;
   if (game) game = null;
   if (me) leaveCar();
@@ -14787,6 +15136,7 @@ function devPlaces() {
     ['Botanical Gardens', () => { const [gx, gy] = GARDEN_GATES[0]; devAt(GARDEN.x0 + gx, GARDEN.y0 + gy - 0.6, Math.PI / 2); }],
     ['Grand Hotel', () => devAt(GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2)],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
+  land.push([COURIER_COMPANY,()=>devAt(...COURIER_DEPOT.door,0)]);
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
   const nearestLm = {}; // (there are several of each: the nearest one)
@@ -14933,6 +15283,7 @@ function bigMapLabels() {
   const place = (x, y, t) => out.push([x, y, t, '#fd8', 'place']);
   place(GRAND_HOTEL.bx * 8 + 5, GRAND_HOTEL.by * 8 + 5, 'Grand Hotel');
   place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
+  place(...COURIER_DEPOT.roof,COURIER_COMPANY);
   place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'Big screens', radio: 'Radio tower' };
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { const lm = landmarkOf.get(bi(bx, by)); if (lm) place(bx * 8 + 5, by * 8 + 5, LM[lm] || lm); }
@@ -14985,6 +15336,11 @@ function bigMapDraw() {
     x.fillStyle = 'rgba(0,0,0,0.6)'; x.fillRect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
     x.fillStyle = col; x.fillText(t, X, Y + 1);
   };
+  const delivery=courierRoute();
+  if(delivery) {
+    dot(delivery.recipient.x,delivery.recipient.y,'!', '#6f9',18);
+    label(delivery.recipient.x,delivery.recipient.y-.8,'ROOF GARDEN','#6f9',14,true);
+  }
   // you, and what's yours, go on first so nothing hides them
   const ang = me ? Math.atan2(me.hy, me.hx) : a;
   const youX = sx(px), youY = sy(py);
@@ -17384,10 +17740,14 @@ function wantedHud() {
 let bustedEl = null, finePaid = 0;
 function openBusted() {
   if (bustedEl && bustedEl.style.display === 'flex') return;
+  const deliveryFailed=failCourier();
+  if(climbing)finishCourierClimb('bottom');
+  if(deliveryFailed){say('Delivery failed: you were arrested.',5);saveGame();}
   if (actx) tickSirens(mode === 'room'); // the sirens cut out (they'd hang on one note while this is up)
   bustedEl = bustedEl || panel('busted');
   const f = fineFor(wanted.stars), can = money >= f;
   showPanel(bustedEl, `<h1>Busted</h1><p class="sub">${wanted.crime || 'trouble'} &middot; ${'*'.repeat(wanted.stars)}</p>
+    ${deliveryFailed?'<p>Your courier delivery failed. The parcel has been confiscated.</p>':''}
     <button class="item" data-fine ${can ? '' : 'disabled'}><span class="k">1</span><span>Pay the fine</span><span class="lead"></span><span class="v">${fmt$(f)}</span></button>
     <button class="item" data-jail><span class="k">2</span><span>Go to jail</span><span class="lead"></span><span class="v">${JAIL_T}s, lose what you carry</span></button>
     <p class="hint">${can ? '' : "You can't cover the fine. "}1 / 2 choose</p>`);
@@ -17424,12 +17784,14 @@ function bustedChoice(how) {
 // the cab you paid to step on it gets pulled over, and the officer runs your face too: you're both arrested, and you
 // share a cell. He has some things to say about that
 function jailWithCabbie() {
+  const deliveryFailed=failCourier();climbing=null;
   const c = me, ret = [c.x, c.y];
   hidePanel(bustedEl); endTaxiShift(); outOfCar(); c.v = 0; c.stopT = T + 25;
   const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - ret[0]), rel(b.y - ret[1]))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
   goToJail();
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T, cabbie: true }, [11, 3.2, Math.PI / 2]);
-  say('The cruiser boxes the cab in. The officer runs the driver\'s licence, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.', 7);
+  saveGame();
+  say('The cruiser boxes the cab in. The officer runs the driver\'s licence, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.'+(deliveryFailed?' Your courier delivery failed.':''), 7);
 }
 const CABBIE_LINES = ['Twenty bucks to step on it, you said. TWENTY BUCKS.', 'Nineteen years I\'ve driven this city. Clean record. Then you get in.', 'Don\'t talk to me.', 'You were WANTED? And you didn\'t think to mention that?', 'My wife\'s gonna kill me. Then she\'s gonna come for you.',
   'When we get out of here, you\'re walking. Everywhere. Forever.', 'I want you to know the meter was still running.', '...', 'Don\'t sit on my bunk.', 'You owe me a cab. And a lawyer.'];
@@ -17702,10 +18064,11 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
-const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
+const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
+  if(courierRoofBlocked(x,y,roofH+body.z/10))return false;
   const h = roofHeightAt(x, y);
   if (roofFixed()) return h === roofH && !landmarkTowerBlocked(x,y,roofH);
   return h <= roofH + ROOF_STEP + body.z / 10;
@@ -17722,7 +18085,7 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
   const h = roofHeightAt(px, py);
   if (h === roofH) return;
   if (h > 0) {
-    const followingSlope = (museumRoofHeight(px, py) > 0 || belleRoofHeight(px, py) > 0 || architectureRoofHeight(px, py) > 0 || landmarkRoofHeight(px, py) > 0 || pavilionRoofHeight(px, py) > 0) && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
+    const followingSlope = (courierRoofHeight(px,py)>0 || museumRoofHeight(px, py) > 0 || belleRoofHeight(px, py) > 0 || architectureRoofHeight(px, py) > 0 || landmarkRoofHeight(px, py) > 0 || pavilionRoofHeight(px, py) > 0) && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
@@ -17817,6 +18180,7 @@ function saveGame() {
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
+    courier: { job: courierJob, records: courierRecords },
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder } };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
@@ -17847,6 +18211,7 @@ function loadGame() {
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
   ensureCarKeys();
   loadBoats(d.boats);
+  loadCourier(d.courier);
   if (Number.isFinite(d.season)) seasonShift = mod(d.season + Math.floor(dayNum / (d.seasonDays > 0 ? d.seasonDays : 7)) - Math.floor(dayNum / SEASON_DAYS), 4);
   grandHotelStolen = {};
   if (d.hotelStolen === true) grandHotelStolen.hotelmasterpiece = true; // Older saves only had the Duke.
@@ -17894,6 +18259,7 @@ onkeydown = e => {
   audioStart(); // sound can only start from a key press or click
   if (e.code === 'KeyN') toggleSound();
   if (e.code === 'KeyE' && !sleep) interact();
+  if(e.code==='Space'&&mode==='ladder'){leaveCourierLadder();return;}
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
@@ -18030,7 +18396,7 @@ function drive(dt) {
   const nx = c.x + Math.cos(c.travelA) * c.v * dt, ny = c.y + Math.sin(c.travelA) * c.v * dt;
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
   let hitCar = null;
-  const hitPerson = people.find(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15) || footCops.find(p => Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
+  let hitPerson = people.find(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
   const samples = Math.max(1, Math.ceil(Math.abs(c.v * dt) / 0.04), Math.ceil(Math.abs(a - oldA) / 0.08));
   let bodyHit = false;
   for (let k = 1; k <= samples; k++) {
@@ -18038,6 +18404,12 @@ function drive(dt) {
     if (!carBodyClear(oldX + (nx - oldX) * f, oldY + (ny - oldY) * f, Math.cos(angle), Math.sin(angle))) { bodyHit = true; break; }
     hitCar = cars.find(o => o !== c && carContact(c, o, oldX + (nx - oldX) * f, oldY + (ny - oldY) * f, Math.cos(angle), Math.sin(angle)));
     if (hitCar) break;
+    const officer=footCops.find(p=>{
+      const overlap=carPersonOverlap(c,p,oldX+(nx-oldX)*f,oldY+(ny-oldY)*f,Math.cos(angle),Math.sin(angle));
+      // An officer may walk into a stopped car. Let it move away or slide clear of that existing overlap.
+      return overlap>0 && overlap>carPersonOverlap(c,p,oldX,oldY,Math.cos(oldA),Math.sin(oldA))+1e-9;
+    });
+    if(officer){hitPerson=officer;break;}
   }
   const hit = bodyHit || !free(fx, fy) || hitCar || hitPerson;
   if (hit) { // a real crash only above CRASH_V; anything slower is a bump
@@ -18066,6 +18438,7 @@ function loop(t) {
   if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   T += dt; msgT -= dt;
   env(dt);
+  stepCourier(dt);
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { // a cabinet or a shift has the screen; the world carries on behind it
     stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); audioTick(dt);
@@ -18087,7 +18460,8 @@ function loop(t) {
       else if (airborne && dt > 0) airStrafe(f, s + lurch, scale / dt, dt);
       move(airborne ? body.mx * dt : ix, airborne ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
-  } else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
+  } else if(mode==='ladder')stepCourierLadder(dt);
+  else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
   else if (mode === 'sea') stepSea(dt);

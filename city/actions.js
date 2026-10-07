@@ -120,6 +120,7 @@ function enterRoom(kind, extra, spawn) {
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
 }
 function interact() {
+  if(courierUse())return;
   if (mode === 'room') {
     if (room.kind === 'train') return;
     if (grandHotelUse()) return;
@@ -302,6 +303,8 @@ function interact() {
 // out cold (hunger, thirst, a bad fall): you come to in a bed at the nearest hospital, and they've billed you
 let wakeT = 0;
 function passOut(why) {
+  if(failCourier()){why+=' Your courier delivery failed.';saveGame();}
+  climbing=null;
   if (me) outOfCar(); else if (mode === 'sea') { sea.v = 0; sea = null; }
   body.seat = null; body.z = body.vz = 0; fx.skating = false; if (game) game = null;
   const s = SERVICES.filter(b => b.kind === 'amb').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity])[0];

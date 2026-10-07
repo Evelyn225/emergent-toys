@@ -137,6 +137,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 }
 function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
+  if(sh?.courier)return courierFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 25) return grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);

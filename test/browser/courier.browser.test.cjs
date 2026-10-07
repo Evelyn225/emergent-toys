@@ -1,0 +1,103 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const {pathToFileURL}=require('node:url');
+const {chromium}=require('playwright');
+async function withCity(fn) {
+  const browser=await chromium.launch();
+  try {
+    const page=await browser.newPage(),errors=[];
+    page.on('pageerror',e=>errors.push(e.message));
+    await page.goto(pathToFileURL(path.join(__dirname,'../../ascii-city.html')).href);
+    await page.waitForFunction(()=>typeof courierUse==='function'&&Number.isFinite(eye));
+    await page.evaluate(()=>{paused=true;clearWanted();cars.length=people.length=footCops.length=0;actx=null;});
+    await fn(page);assert.deepEqual(errors,[]);
+  } finally {await browser.close();}
+}
+
+test('enter the depot, take a parcel, walk every safe crossing, and deliver once',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>{
+    mode='walk';room=null;[px,py]=COURIER_DEPOT.door;a=0;pitch=0;render();interact();
+    const entered=room?.kind;
+    px=10.3;py=4.9;interact();const accepted=courierJob?.id;
+    px=4;py=1.5;interact();const stairs={mode,x:px,y:py};
+    needs.health=100;
+    const points=[[179.5,106.5],[183.5,107.35],[186.5,107.35],[189.4,106.85],[190.3,106.85],
+      [191.4,106.85],[191.4,102.35],[195.4,102.4],[196.4,102.4],[197.5,102.4],[198.5,102.4],[199,102.1]];
+    const legs=[];
+    for(const [x,y] of points) {
+      let n=0;while(near(px,py,x,y)>.01&&n++<800) {
+        a=Math.atan2(y-py,x-px);const step=Math.min(.01,near(px,py,x,y));
+        body.mx=Math.cos(a)*.5;body.my=Math.sin(a)*.5;
+        move(Math.cos(a)*step,Math.sin(a)*step);stepBody(.02);stepRoof();stepCourier(.02);T+=.02;
+        if(mode!=='roof')break;
+      }
+      legs.push({reached:near(px,py,x,y)<.011,mode,health:needs.health});
+      if(mode!=='roof'||n>=800)break;
+    }
+    render();hud();const prompt=promptText(),before=money;
+    interact();const paid=money-before;interact();
+    return {entered,accepted,stairs,legs,prompt,paid,twice:money-before,active:courierJob,
+      saved:JSON.parse(localStorage.getItem(SAVE_KEY)).courier,map:bigMapLabels().some(p=>p[2]===COURIER_COMPANY)};
+  });
+  assert.equal(r.entered,'courier');assert.equal(r.accepted,'garden');assert.equal(r.stairs.mode,'roof');
+  assert.equal(r.stairs.x,179.5);assert.equal(r.stairs.y,102.5);assert.equal(r.legs.length,12);
+  for(const leg of r.legs)assert.deepEqual(leg,{reached:true,mode:'roof',health:100});
+  assert.match(r.prompt,/deliver/);assert.equal(r.paid,120);assert.equal(r.twice,120);assert.equal(r.active,null);
+  assert.equal(r.saved.records.trips,1);assert.equal(r.saved.job,null);assert.equal(r.map,true);
+}));
+
+test('both optional courier gaps are reachable with an ordinary sprint jump',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>[[184.68,108.52,185.5],[192.88,101.27,193.65]].map(([x,y,end])=>{
+    mode='roof';room=null;px=x;py=y;a=0;roofH=roofHeightAt(px,py);roofLot=new Set();needs.health=100;
+    body.z=body.vz=body.peak=0;body.hop=1;body.groundMode=null;body.mx=.8;body.my=0;jump();
+    let n=0,minHeight=Infinity;
+    while(px<end&&n++<200){T+=.01;move(.008,0);stepBody(.01);stepRoof();minHeight=Math.min(minHeight,mode==='roof'?roofH+body.z/10:body.z/10);}
+    for(let k=0;k<150;k++){T+=.01;stepBody(.01);stepRoof();}
+    return {reached:px>=end,mode,z:body.z,health:needs.health,minHeight};
+  }));
+  for(const jump of r){assert.equal(jump.reached,true,JSON.stringify(r));assert.equal(jump.mode,'roof',JSON.stringify(r));assert.equal(jump.z,0);assert.ok(jump.health>90);assert.ok(jump.minHeight>1.3);}
+}));
+
+test('all three ladders climb both ways, preserve a parcel after a surviving fall, and allow letting go',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>{
+    startCourier();const ladders=[];
+    for(const ladder of COURIER_LADDERS) {
+      mode='walk';room=null;[px,py]=ladder.bottom;body.z=body.vz=body.peak=0;
+      const available=!!courierLadderNear();interact();const grabbed=mode;
+      K.KeyW=true;for(let n=0;n<150&&climbing;n++){stepCourierLadder(.05);stepBody(.05);}K.KeyW=false;
+      const up={mode,x:px,y:py,h:roofH,free:roofFree(px,py)};
+      interact();K.KeyS=true;for(let n=0;n<150&&climbing;n++)stepCourierLadder(.05);K.KeyS=false;
+      ladders.push({available,grabbed,up,down:mode,active:!!courierJob});
+    }
+    const l=COURIER_LADDERS[2];grabCourierLadder({ladder:l,end:'bottom'});K.KeyW=true;stepCourierLadder(1);K.KeyW=false;
+    leaveCourierLadder();const released={mode,z:body.z};needs.health=100;
+    for(let n=0;n<200;n++)stepBody(.01);
+    const survived={active:!!courierJob,health:needs.health,z:body.z};
+    return {ladders,released,survived};
+  });
+  assert.equal(r.ladders.length,3);
+  for(const l of r.ladders){assert.ok(l.available);assert.equal(l.grabbed,'ladder');assert.equal(l.up.mode,'roof');assert.equal(l.up.free,true);assert.equal(l.down,'walk');assert.equal(l.active,true);}
+  assert.equal(r.released.mode,'walk');assert.ok(r.released.z>0);assert.equal(r.survived.active,true);assert.ok(r.survived.health>0);assert.equal(r.survived.z,0);
+}));
+
+test('courier timer survives reload; hospital and arrests fail it even if the fine is paid',()=>withCity(async page=>{
+  await page.evaluate(()=>{startCourier();stepCourier(111);saveGame();});
+  await page.reload();await page.waitForFunction(()=>typeof failCourier==='function'&&Number.isFinite(eye));
+  const r=await page.evaluate(()=>{
+    paused=true;const restored={...courierJob};passOut('A bad fall.');
+    const hospital={active:courierJob,kind:room.kind,saved:JSON.parse(localStorage.getItem(SAVE_KEY)).courier.job};
+    wakeT=0;startCourier();mode='walk';room=null;wanted.stars=1;money=500;openBusted();
+    const confiscated=bustedEl.textContent.includes('parcel has been confiscated');bustedChoice('fine');
+    const fine={active:courierJob,failed:courierRecords.failed,stars:wanted.stars};
+    startCourier();grabCourierLadder({ladder:COURIER_LADDERS[0],end:'bottom'});stepCourierLadder(1);
+    wanted.stars=1;openBusted();const caughtOnLadder={mode,climbing,active:courierJob};bustedChoice('jail');
+    const jail={active:courierJob,kind:room.kind,failed:courierRecords.failed};
+    return {restored,hospital,confiscated,fine,caughtOnLadder,jail};
+  });
+  assert.equal(r.restored.id,'garden');assert.ok(r.restored.took>=111);
+  assert.deepEqual(r.hospital,{active:null,kind:'hospital',saved:null});assert.equal(r.confiscated,true);
+  assert.deepEqual(r.fine,{active:null,failed:2,stars:0});assert.deepEqual(r.caughtOnLadder,{mode:'walk',climbing:null,active:null});
+  assert.deepEqual(r.jail,{active:null,kind:'jail',failed:3});
+}));

@@ -36,10 +36,14 @@ function wantedHud() {
 let bustedEl = null, finePaid = 0;
 function openBusted() {
   if (bustedEl && bustedEl.style.display === 'flex') return;
+  const deliveryFailed=failCourier();
+  if(climbing)finishCourierClimb('bottom');
+  if(deliveryFailed){say('Delivery failed: you were arrested.',5);saveGame();}
   if (actx) tickSirens(mode === 'room'); // the sirens cut out (they'd hang on one note while this is up)
   bustedEl = bustedEl || panel('busted');
   const f = fineFor(wanted.stars), can = money >= f;
   showPanel(bustedEl, `<h1>Busted</h1><p class="sub">${wanted.crime || 'trouble'} &middot; ${'*'.repeat(wanted.stars)}</p>
+    ${deliveryFailed?'<p>Your courier delivery failed. The parcel has been confiscated.</p>':''}
     <button class="item" data-fine ${can ? '' : 'disabled'}><span class="k">1</span><span>Pay the fine</span><span class="lead"></span><span class="v">${fmt$(f)}</span></button>
     <button class="item" data-jail><span class="k">2</span><span>Go to jail</span><span class="lead"></span><span class="v">${JAIL_T}s, lose what you carry</span></button>
     <p class="hint">${can ? '' : "You can't cover the fine. "}1 / 2 choose</p>`);
@@ -76,12 +80,14 @@ function bustedChoice(how) {
 // the cab you paid to step on it gets pulled over, and the officer runs your face too: you're both arrested, and you
 // share a cell. He has some things to say about that
 function jailWithCabbie() {
+  const deliveryFailed=failCourier();climbing=null;
   const c = me, ret = [c.x, c.y];
   hidePanel(bustedEl); endTaxiShift(); outOfCar(); c.v = 0; c.stopT = T + 25;
   const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - ret[0]), rel(b.y - ret[1]))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
   goToJail();
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T, cabbie: true }, [11, 3.2, Math.PI / 2]);
-  say('The cruiser boxes the cab in. The officer runs the driver\'s licence, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.', 7);
+  saveGame();
+  say('The cruiser boxes the cab in. The officer runs the driver\'s licence, then takes one look at you in the back. "Well, well." You both ride to the station in the same back seat. He doesn\'t say a word the whole way.'+(deliveryFailed?' Your courier delivery failed.':''), 7);
 }
 const CABBIE_LINES = ['Twenty bucks to step on it, you said. TWENTY BUCKS.', 'Nineteen years I\'ve driven this city. Clean record. Then you get in.', 'Don\'t talk to me.', 'You were WANTED? And you didn\'t think to mention that?', 'My wife\'s gonna kill me. Then she\'s gonna come for you.',
   'When we get out of here, you\'re walking. Everywhere. Forever.', 'I want you to know the meter was still running.', '...', 'Don\'t sit on my bunk.', 'You owe me a cab. And a lawyer.'];

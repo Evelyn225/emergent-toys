@@ -102,6 +102,7 @@ function winterTreeCell(i, u, z, du, dz, L, t) {
 }
 
 function citySprites() {
+  drawCourier();
   drawMuseumRoof();
   drawRoofPolice();
   drawBelleBuildings();

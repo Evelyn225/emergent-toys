@@ -1,5 +1,5 @@
 // Static clearance and shelter are resolved once after all building families have supplied their geometry.
-const STREET_GEOMETRY = [...ARCH_DETAILS, ...LANDMARK_SOLIDS, ...PAVILION_SOLIDS, ...belleDetails, ...solids];
+const STREET_GEOMETRY = [...ARCH_DETAILS, ...LANDMARK_SOLIDS, ...PAVILION_SOLIDS, ...belleDetails, ...solids, ...COURIER_SURFACES];
 const streetGeometryCells = new Array(N * N);
 function geometryBounds(o) {
   return [Math.abs(o.c) * o.hl + Math.abs(o.s) * o.hw, Math.abs(o.s) * o.hl + Math.abs(o.c) * o.hw];
