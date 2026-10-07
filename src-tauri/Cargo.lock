@@ -1111,7 +1111,7 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
 name = "glyphport"
-version = "1.0.11"
+version = "1.0.12"
 dependencies = [
  "tauri",
  "tauri-build",

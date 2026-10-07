@@ -1,6 +1,6 @@
 [package]
 name = "glyphport"
-version = "1.0.11"
+version = "1.0.12"
 description = "Glyphport ASCII City desktop game"
 authors = ["Eve Net"]
 edition = "2021"
