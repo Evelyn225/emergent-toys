@@ -27,11 +27,8 @@ jobs:
       - name: Install NSIS
         run: choco install nsis --yes --no-progress
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version '^2.0' --locked
-
       - name: Build installer
-        run: cargo tauri build
+        run: npm exec --yes --package @tauri-apps/cli@2.12.1 -- tauri build --ci -- --locked
 
       - name: Prepare stable download name
         shell: pwsh
