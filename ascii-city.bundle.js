@@ -168,20 +168,24 @@ function settledSnow(wx, wy, wear = 0) {
   return edge * edge * (3 - 2 * edge) * clamp(snowCover * 8, 0, 1) * (1 - wear);
 }
 function env(dt) {
-  const lapse = hurrying() ? 40 : 1; // 20s per game hour; hold Q with the pocket watch in hand to fast-forward (clouds race along too)
+  const elapsed = dt * (hurrying() ? 40 : 1); // the watch advances the hours, clouds and environmental processes together
   const t0 = tod;
-  tod = mod(tod + dt * 0.05 * lapse, 24); cloudT += dt * lapse;
+  tod = mod(tod + elapsed * 0.05, 24); cloudT += elapsed;
   if (tod < t0 - 12) dayNum++; // midnight (a real wrap round, not a tiny step back)
-  if ((wTimer -= dt) < 0) { weather = pick(SEASON_WEATHER[season()]); wTimer = 60 + Math.random() * 90; }
-  if (weatherDue && T > weatherDue) { weatherDue = 0; weather = pick(SEASON_WEATHER[season()].filter(w => w !== weather)); wTimer = 90 + Math.random() * 90; } // (it changes, as promised)
-  rain += clamp((weather === 'rain' || weather === 'storm') - rain, -dt / 6, dt / 6);
-  storm += clamp((weather === 'storm') - storm, -dt / 8, dt / 8);
+  if ((wTimer -= elapsed) < 0) { weather = pick(SEASON_WEATHER[season()]); wTimer = 60 + Math.random() * 90; }
+  if (weatherDue) {
+    weatherDue -= elapsed - dt; // forecast deadlines use T: consume the watch's extra elapsed time from their remaining wait
+    if (T > weatherDue) { weatherDue = 0; weather = pick(SEASON_WEATHER[season()].filter(w => w !== weather)); wTimer = 90 + Math.random() * 90; }
+  }
+  rain += clamp((weather === 'rain' || weather === 'storm') - rain, -elapsed / 6, elapsed / 6);
+  storm += clamp((weather === 'storm') - storm, -elapsed / 8, elapsed / 8);
+  // Lightning and its thunder stay paced in real time, keeping simultaneous sound voices and particles bounded.
   if (storm > 0.6 && Math.random() < dt / 6) bolt = { t: T, az: Math.random() * Math.PI * 2, d: 12 + Math.random() * 70, seed: Math.random() * 1e4 | 0 };
-  fogAmt += clamp((weather === 'fog') - fogAmt, -dt / 6, dt / 6);
-  snow += clamp((weather === 'snow') - snow, -dt / 8, dt / 8);
+  fogAmt += clamp((weather === 'fog') - fogAmt, -elapsed / 6, elapsed / 6);
+  snow += clamp((weather === 'snow') - snow, -elapsed / 8, elapsed / 8);
   const winter = season() === 'winter'; // (it settles while it falls; melts slowly in winter, quickly once it's spring)
-  snowCover = clamp(snowCover + (snow > 0.3 ? dt / 45 * snow : -dt / (winter ? 400 : 60) * (1 + rain * 3)), 0, 1);
-  wet = clamp(wet + (rain > 0.3 ? dt / 10 : -dt / 60), 0, 1); // streets stay wet for a while after rain
+  snowCover = clamp(snowCover + (snow > 0.3 ? elapsed / 45 * snow : -elapsed / (winter ? 400 : 60) * (1 + rain * 3)), 0, 1);
+  wet = clamp(wet + (rain > 0.3 ? elapsed / 10 : -elapsed / 60), 0, 1); // streets stay wet for a while after rain
   const sunEl = Math.sin((tod - 6) / 12 * Math.PI);
   day = clamp(sunEl * 2.5 + 0.25, 0, 1); night = 1 - day; dusk = clamp(1 - Math.abs(sunEl) * 4, 0, 1);
   overcast = Math.max(rain, fogAmt, snow * 0.8);
@@ -3529,7 +3533,7 @@ function useHeld(near) {
       it.uses--; fx.spark = 25;
       if (it.uses <= 0) removeHeld();
       return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
-    case 'pocketwatch': return [pick(['The second hand runs fast. Keep holding Q and the whole city hurries to keep up.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
+    case 'pocketwatch': return [pick(['The second hand runs fast. Hold Q to hurry the hours and the weather.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
     case 'cityglobe': return shakeGlobe();
     case 'orrery': return turnOrrery();
     case 'postcard': return [pick(['A postcard of the T. rex. On the back: "Wish you were here. Actually don\'t, it\'s ten dollars."', 'A postcard of the museum dome under snow.']), null];

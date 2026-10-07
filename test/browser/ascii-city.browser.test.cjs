@@ -1515,6 +1515,24 @@ test('the night market: tarped by day, a stall to buy from at night; Q on the gl
   assert.ok(await page.evaluate(() => tod > 12.5), 'the watch hurries the hours');
 }));
 
+test('holding the pocket watch melts snow and dries the ground through the real game loop', () => withPage(async page => {
+  await page.evaluate(() => {
+    inv.length=0;inv.push({id:'pocketwatch',uses:0});held=0;
+    setSeason(0);weather='clear';wTimer=1e9;weatherDue=0;
+    rain=storm=snow=fogAmt=0;snowCover=wet=.9;
+  });
+  await page.keyboard.down('KeyQ');
+  await page.waitForFunction(() => snowCover < .6 && wet < .6, null, {timeout:5000});
+  await page.keyboard.up('KeyQ');
+  const before=await page.evaluate(()=>({snow:snowCover,wet,T}));
+  await page.waitForTimeout(350);
+  const after=await page.evaluate(()=>({snow:snowCover,wet,T}));
+  const elapsed=after.T-before.T;
+  assert.ok(elapsed>.1);
+  assert.ok(before.snow-after.snow<elapsed/30, 'releasing Q restores slow melting');
+  assert.ok(before.wet-after.wet<elapsed/30, 'releasing Q restores slow drying');
+}));
+
 test('the museum by day: $10 in, plaques to read, the gift shop; by night a heist: a guard\'s torch catches you, or you crack a case and the silent alarm runs out', () => withPage(async page => {
   const day = await page.evaluate(() => {
     tod = 14; money = 100;
