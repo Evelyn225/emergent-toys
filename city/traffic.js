@@ -128,19 +128,20 @@ function pursuitRoute(c, tx, ty) {
 }
 function steerCruiser(c, tx, ty, speed, dt, arrive = true) {
   const vx = rel(tx - c.x), vy = rel(ty - c.y), distance = Math.hypot(vx, vy), oldAngle = Math.atan2(c.hy, c.hx);
+  const traction = roadTraction(c.x, c.y), braking = COP_CAR_BRAKE * (0.55 + traction * 0.45);
   if (distance < 0.025 && arrive) { c.v = 0; c.brake = true; return; }
   const wantedAngle = Math.atan2(vy, vx), turn = mod(wantedAngle - oldAngle + Math.PI, TAU) - Math.PI;
   // Brake before reversing direction or arriving. Slow turns align the tyres instead of orbiting the goal.
   const turnRate = c.v < 0.3 ? 3.2 : 1.8;
   const angle = oldAngle + clamp(turn, -turnRate * dt, turnRate * dt);
   let targetSpeed = Math.min(speed, COP_CAR_SPEED);
-  if (arrive) targetSpeed = Math.min(targetSpeed, Math.sqrt(2 * COP_CAR_BRAKE * Math.max(0, distance - 0.02)));
+  if (arrive) targetSpeed = Math.min(targetSpeed, Math.sqrt(2 * braking * Math.max(0, distance - 0.02)));
   targetSpeed *= Math.max(0, Math.cos(turn));
   c.brake = targetSpeed < c.v;
-  c.v += clamp(targetSpeed - c.v, -COP_CAR_BRAKE * dt, COP_CAR_ACCEL * dt);
+  c.v += clamp(targetSpeed - c.v, -braking * dt, COP_CAR_ACCEL * (0.75 + traction * 0.25) * dt);
   c.travelA ??= oldAngle;
   const slip = mod(angle - c.travelA + Math.PI, TAU) - Math.PI;
-  c.travelA += slip * (1 - Math.exp(-dt * 12));
+  c.travelA += slip * (1 - Math.exp(-dt * 12 * traction));
   if (c.v < 0.3) c.travelA = angle;
   const step = Math.min(distance, c.v * dt), samples = Math.max(1, Math.ceil(step / 0.035), Math.ceil(Math.abs(angle - oldAngle) / 0.06));
   const sx = Math.cos(c.travelA) * step / samples, sy = Math.sin(c.travelA) * step / samples;
@@ -198,7 +199,44 @@ function toLane(c) {
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
   else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
-  c.ex = c.x; c.ey = c.y; plan(c);
+  c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; plan(c);
+}
+
+// Routing keeps cardinal headings; the body and passenger camera follow the actual steering.
+function carYaw(c) {
+  return c.kind === 'taxi' && !c.player && !c.parked && c.laneYaw != null ? c.laneYaw : Math.atan2(c.hy, c.hx);
+}
+function taxiLaneTarget(c, line) {
+  const along = o => rel(o.ex - c.x) * c.hx + rel(o.ey - c.y) * c.hy;
+  if (c.pass && (c.pass.hx !== c.hx || c.pass.hy !== c.hy || !cars.includes(c.pass.car) || along(c.pass.car) < -3.2)) c.pass = null;
+  if (!c.pass && c.left > 2 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) {
+    let obstacle = null, distance = 3.2;
+    for (const o of c.near) {
+      if (o === c || !(o.parked || c.rush && o.hx === c.hx && o.hy === c.hy && o.v < c.cruise * 1.6)) continue;
+      const al = along(o), across = Math.abs(rel(o.ex - c.x) * c.hy - rel(o.ey - c.y) * c.hx);
+      const mergeRoom = o.parked ? 0.6 : 3.2;
+      if (across < 0.24 && al > 0.5 && al < distance && line > al + mergeRoom && c.left > al + mergeRoom) { obstacle = o; distance = al; }
+    }
+    if (obstacle) {
+      const offset = c.rush && !obstacle.parked ? -0.8 : -0.38;
+      const ox = c.x + c.hy * offset, oy = c.y - c.hx * offset;
+      const occupied = cars.some(o => {
+        if (o === c || o === obstacle) return false;
+        const rx = rel(o.ex - ox), ry = rel(o.ey - oy), al = rx * c.hx + ry * c.hy;
+        const closing = c.cruise * (c.rush ? 1.8 : 1) - (o.hx * c.hx + o.hy * c.hy) * o.v;
+        return Math.abs(rx * c.hy - ry * c.hx) < 0.3 && al > -1 && al < Math.max(6, closing * 4);
+      });
+      if (!occupied) c.pass = { car: obstacle, offset, hx: c.hx, hy: c.hy };
+    }
+  }
+  if (!c.pass) return 0;
+  // Ease out over 22m, hold beside the obstacle, and merge only after the rear bumper clears it.
+  const al = along(c.pass.car);
+  let u = 1;
+  if (al > 1) u = (3.2 - al) / 2.2;
+  else if (al < -1) u = (al + 3.2) / 2.2;
+  u = clamp(u, 0, 1);
+  return c.pass.offset * u * u * (3 - 2 * u);
 }
 // a random lane position on an existing street segment: anywhere, or (near) in the blocks within `near` cells of (x, y)
 function randomLane(near = 0, x = 0, y = 0) {
@@ -322,7 +360,7 @@ function stepTraffic(dt, t, everywhere = false) {
   // (which runs off-centre) the band is wider: it waits for the car in front to get properly out of the way, and
   // cars coming up behind it see it even though it isn't square in their lane
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
-  const band = (c, o) => code(c) || code(o) ? 0.3 : 0.12;
+  const band = (c, o) => code(c) || code(o) ? 0.3 : c.kind === 'taxi' && (c.pass || c.off < -0.01) ? 0.26 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
   const evs = cars.filter(code), live = c => !c.player && !c.parked && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
   for (const c of cars) {
@@ -387,8 +425,9 @@ function stepTraffic(dt, t, everywhere = false) {
     const kerbTaken = c.off < 0.1 && c.near.some(o => o !== c && o.off > 0.1 && o.hx === c.hx && o.hy === c.hy &&
       Math.abs(rel(o.x - c.x) * c.hx + rel(o.y - c.y) * c.hy) < 0.55 && Math.abs(rel(o.x - c.x) * c.hy - rel(o.y - c.y) * c.hx) < 0.3);
     const pull = !code(c) && c.state !== 'scene' && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && !kerbTaken && evs.some(behind);
+    const taxi = c.kind === 'taxi';
     // a parked car sitting in our lane (you leave yours wherever you get out): swing out round it, then back in
-    const passing = !code(c) && c.near.some(o => {
+    const passing = !taxi && !code(c) && c.near.some(o => {
       if (o === c || !o.parked) return false;
       const rx = rel(o.ex - c.x), ry = rel(o.ey - c.y), al = rx * c.hx + ry * c.hy;
       return Math.abs(rx * c.hy - ry * c.hx) < 0.24 && al > -0.6 && al < 1.6;
@@ -396,7 +435,7 @@ function stepTraffic(dt, t, everywhere = false) {
     // a cab you've paid to step on it: out into the oncoming lane round anything slower in front, if nothing's coming
     // and there's no junction to get through first; back in once past
     let overtake = false;
-    if (c.rush && !code(c) && c.left > 1 && line > 1.2 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) {
+    if (!taxi && c.rush && !code(c) && c.left > 1 && line > 1.2 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) {
       const slow = c.near.some(o => {
         if (o === c || o.hx !== c.hx || o.hy !== c.hy || o.off < -0.3) return false;
         const rx = rel(o.ex - c.x), ry = rel(o.ey - c.y), al = rx * c.hx + ry * c.hy;
@@ -411,10 +450,24 @@ function stepTraffic(dt, t, everywhere = false) {
       });
       overtake = slow && !coming;
     }
-    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : overtake ? -0.8 : passing ? -0.34 : 0; // at the scene: pulled in to the kerb
+    if (taxi && pull) c.pass = null;
+    let offTarget = 0;
+    if (code(c)) offTarget = -0.2;
+    else if (pull || c.state === 'scene') offTarget = 0.32; // at the scene: pulled in to the kerb
+    else if (taxi) offTarget = taxiLaneTarget(c, line);
+    else if (overtake) offTarget = -0.8;
+    else if (passing) offTarget = -0.34;
+    const oldX = c.ex, oldY = c.ey;
     const sway = c.rush ? 1.6 : 0.6; // (a rushing cab swings out and back smartly)
-    c.off += clamp(offTarget - c.off, -sway * dt, sway * dt);
-    if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c) && !c.rush) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
+    if (taxi) {
+      const lateralSpeed = Math.min(0.4, c.v * 0.3 + 0.08), error = offTarget - c.off;
+      const desired = clamp(error * 3, -lateralSpeed, lateralSpeed);
+      c.offV = (c.offV || 0) + clamp(desired - (c.offV || 0), -0.6 * dt, 0.6 * dt);
+      const shift = c.offV * dt;
+      if (shift * error >= 0 && Math.abs(shift) >= Math.abs(error)) { c.off = offTarget; c.offV = 0; }
+      else c.off += shift;
+    } else c.off += clamp(offTarget - c.off, -sway * dt, sway * dt);
+    if (pull || !taxi && Math.abs(c.off - offTarget) > 0.02 && !code(c) && !c.rush) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
     if (c.state === 'scene' || c.waitingCrew) room_ = 0;
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
@@ -435,6 +488,12 @@ function stepTraffic(dt, t, everywhere = false) {
     if (c.rider) c.fare += step;
     if (c.left <= 0) { [c.hx, c.hy] = c.nh; plan(c); }
     c.ex = mod(c.x + c.hy * c.off, N); c.ey = mod(c.y - c.hx * c.off, N);
+    if (taxi) {
+      const vx = rel(c.ex - oldX), vy = rel(c.ey - oldY);
+      const yaw = Math.hypot(vx, vy) > 1e-5 ? Math.atan2(vy, vx) : Math.atan2(c.hy, c.hx);
+      c.laneYaw ??= Math.atan2(c.hy, c.hx);
+      c.laneYaw += (mod(yaw - c.laneYaw + Math.PI, 2 * Math.PI) - Math.PI) * (1 - Math.exp(-12 * dt));
+    }
   }
 }
 

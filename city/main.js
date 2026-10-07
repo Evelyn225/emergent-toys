@@ -146,18 +146,21 @@ function drive(dt) {
   const oldA = a;
   const spun = me.spunT > T; // spun out by the police: no say in it till you've stopped turning
   const c = me, f = spun ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = spun ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  const traction = roadTraction(c.x, c.y), braking = 0.55 + traction * 0.45, acceleration = 0.75 + traction * 0.25;
   if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (me.spunT - T) / 2.5; }
-  if (f > 0) c.v += (c.v < 0 ? 2.5 : 1) * dt; else if (f < 0) c.v -= (c.v > 0 ? 2.5 : 0.8) * dt; else c.v *= 1 - 0.7 * dt;
+  if (f > 0) c.v += (c.v < 0 ? 2.5 * braking : acceleration) * dt;
+  else if (f < 0) c.v -= (c.v > 0 ? 2.5 * braking : 0.8 * acceleration) * dt;
+  else c.v *= 1 - 0.7 * dt;
   c.v = clamp(c.v, -0.5, K.ShiftLeft || K.ShiftRight ? c.boost || 3.2 : c.top || 2.2); // (a car you own goes as fast as its model)
   const handbrake = !!K.Space && !spun, fast = Math.abs(c.v) > 0.8;
-  if (handbrake) c.v *= Math.exp(-dt * (fast ? 0.65 : 5));
+  if (handbrake) c.v *= Math.exp(-dt * (fast ? 0.65 : 5) * braking);
   a += s * dt * (handbrake && fast ? 2.5 : 1.8) * clamp(c.v / 0.5, -1, 1);
   c.travelA ??= oldA;
   const slip = mod(a - c.travelA + Math.PI, Math.PI * 2) - Math.PI;
-  const grip = handbrake && fast ? 1.2 : 10;
+  const grip = (handbrake && fast ? 1.2 : 10) * traction;
   c.travelA += slip * (1 - Math.exp(-grip * dt));
   if (!fast) c.travelA = a;
-  const drifting = handbrake && fast && Math.abs(slip) > 0.12;
+  const drifting = fast && (handbrake && Math.abs(slip) > 0.12 || traction < 0.99 && Math.abs(slip) > 0.2);
   const oldX = c.x, oldY = c.y, hx = Math.cos(a), hy = Math.sin(a);
   const nx = c.x + Math.cos(c.travelA) * c.v * dt, ny = c.y + Math.sin(c.travelA) * c.v * dt;
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
@@ -260,9 +263,7 @@ function loop(t) {
   else if (need) say(need, 4);
   stepWake(dt);
   if (mode === 'taxi') {
-    px = me.x; py = me.y;
-    const target = Math.atan2(me.hy, me.hx) + look; // camera eases round corners
-    a += (mod(target - a + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 4);
+    stepTaxiCamera(dt);
     if (me.arrived && me.v < 0.02) leaveCar();
   }
   if (mode === 'room' && room.kind === 'train' && room.dest != null) { // the ride: speed up, cruise, slow down, arrive
@@ -291,17 +292,23 @@ function drunkVision(wob) {
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way
 function chaseCam(dt) {
-  const target = mode === 'taxi' ? a : Math.atan2(me.hy, me.hx) + look;
-  camYaw += (mod(target - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 5);
+  const taxi = mode === 'taxi', target = carYaw(me) + look;
+  camYaw += (mod(target - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * (1 - Math.exp(-5 * dt));
+  const cx = taxi ? me.ex : me.x, cy = taxi ? me.ey : me.y;
   const bx = Math.cos(camYaw), by = Math.sin(camYaw);
   let back = 0;
   for (let step = 0.04; step <= 1.1; step += 0.04) {
-    const x = me.x - bx * step, y = me.y - by * step;
+    const x = cx - bx * step, y = cy - by * step;
     const blocked = [-0.07, 0.07].some(ox => [-0.07, 0.07].some(oy => map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy) || landmarkBlocked(x + ox, y + oy)));
     if (blocked) break;
     back = step;
   }
-  return [me.x - bx * back, me.y - by * back, camYaw];
+  return [cx - bx * back, cy - by * back, camYaw];
+}
+function stepTaxiCamera(dt) {
+  px = me.ex; py = me.ey;
+  const target = carYaw(me) + look;
+  a += (mod(target - a + Math.PI, 2 * Math.PI) - Math.PI) * (1 - Math.exp(-8 * dt));
 }
 // ?goto=ARCADE (any shop sign: HOSPITAL, PAWN, KARAOKE...) starts you on the sidewalk outside the nearest one, facing
 // its door: for finding things, and for trying them out

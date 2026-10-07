@@ -71,6 +71,8 @@ const ITEMS = {
   orrery: { name: 'Equinox Orrery', price: 2500, kind: 'gear' }, // (the museum's: turn the crank and the season turns with it. Only a thief owns one)
   diamond: { name: 'the Glyphport Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
   hotelmasterpiece: { name: 'stolen hotel painting', price: 9000, kind: 'gear' },
+  hotelharbour: { name: 'Harbour at First Light', price: 6000, kind: 'gear' },
+  hotelstilllife: { name: 'Midnight Supper', price: 4500, kind: 'gear' },
 };
 // the arcade's prize counter: what tickets buy
 let tickets = 0;
@@ -305,6 +307,9 @@ function useHeld(near) {
     case 'dinotoy': return ['RAWR. The little T. rex\'s arms flap uselessly.', 'squeak'];
     case 'replicastar': return ['Glass, and not very good glass. Still sparkles, though.', null];
     case 'diamond': return [pick(['The Glyphport Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
+    case 'hotelmasterpiece': return ['You study The Duke of Brie. He looks far too pleased with himself for someone being smuggled out of a hotel.', null];
+    case 'hotelharbour': return ['You tilt Harbour at First Light towards the light. The little boats seem to float above the brushstrokes.', null];
+    case 'hotelstilllife': return ['You admire Midnight Supper: wine, pears, and a dinner nobody is ever going to finish. Best keep the frame intact.', null];
     case 'redstring': return [pick(['You tug the red string round your wrist. A little luck at the tables and the games, the stallholder said.', 'A thread of red. Keeps the bad stuff off, and tips the odds a hair your way at the games.']), null];
     case 'luckycoin': return [`You flip the lucky coin: ${Math.random() < 0.5 ? 'heads' : 'tails'}. (On you, it nudges the odds at the games.)`, 'click'];
     case 'tigerbalm':

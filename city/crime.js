@@ -22,6 +22,8 @@ const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: 
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
 const roomCops = []; // officers who got a reliable lead that you entered the current building
+const ROOM_ENTRY_DELAY = 2.5; // Officers need time to get through the entrance, even when they saw you go in.
+let roomLead = null;
 const roofCops = [];
 let roofLead = null;
 let searchedRoom = null;
@@ -135,10 +137,10 @@ function roomPoliceSees(c) {
   return true;
 }
 function roomSearchLead(dt) {
-  if (mode !== 'room') { roomCops.length = 0; searchedRoom = null; return false; }
-  if (!wanted.stars) { roomCops.length = 0; searchedRoom = null; return false; }
+  if (mode !== 'room') { roomCops.length = 0; searchedRoom = null; roomLead = null; return false; }
+  if (!wanted.stars) { roomCops.length = 0; searchedRoom = null; roomLead = null; return false; }
   if (searchedRoom !== room) {
-    searchedRoom = room; roomCops.length = 0;
+    searchedRoom = room; roomCops.length = 0; roomLead = null;
     const ret = room.ret;
     if (!ret) return false;
     const policeSawDoor = copSees(ret[0], ret[1]);
@@ -149,10 +151,14 @@ function roomSearchLead(dt) {
       const door = roomDoorCell();
       if (door) {
         wanted.roomX = px; wanted.roomY = py;
-        for (let i = 0; i < Math.min(2, Math.max(1, wanted.stars)); i++)
-          roomCops.push({ x: door[0], y: door[1], targetX: wanted.roomX, targetY: wanted.roomY, path: [], pathT: 0, searchT: 0, searchI: 0, sees: false });
+        roomLead = { door, arriveAt: T + ROOM_ENTRY_DELAY, count: Math.min(2, Math.max(1, wanted.stars)) };
       }
     }
+  }
+  if (roomLead && T >= roomLead.arriveAt) {
+    for (let i = 0; i < roomLead.count; i++)
+      roomCops.push({ x: roomLead.door[0], y: roomLead.door[1], targetX: wanted.roomX, targetY: wanted.roomY, path: [], pathT: 0, searchT: 0, searchI: 0, sees: false });
+    roomLead = null;
   }
   let anySees = false;
   for (const c of roomCops) {
@@ -351,7 +357,7 @@ function clearWanted() {
     c.returning = true; c.returnCar = closestCar(c.x, c.y); c.exitWorld = roofLead?.ret;
     c.returnDoor = roofLead ? [roofLead.x, roofLead.y] : [c.x, c.y]; c.sees = false; c.pathT = 0;
   }
-  searchedRoom = null; roofLead = null;
+  searchedRoom = null; roomLead = null; roofLead = null;
   for (const c of units) {
     c.pursuit = false; c.returning = true; c.waitingCrew = true; c.v = 0; c.cruise = 1.3; c.state = 'back'; c.arrived = false;
     c.merging = null; c.route = null; c.routeT = 0; c.travelA = null; c.pursuitDrive = false;

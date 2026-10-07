@@ -195,6 +195,13 @@ function env(dt) {
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
   if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
 }
+// Moderate loss of tyre grip follows lingering wetness and accumulated, exposed snow.
+function roadTraction(x, y) {
+  const water = clamp(Math.max(wet, rain * 0.65), 0, 1);
+  const cover = snowCover > 0 && snowExposed(mod(x, N), mod(y, N)) ? clamp(snowCover, 0, 1) : 0;
+  return Math.max(0.55, (1 - water * 0.2) * (1 - cover * 0.4));
+}
+
 // Air input accelerates along the camera-relative wish direction without replacing existing momentum.
 const AIR_ACCEL = 8, AIR_WISH_CAP = 0.7;
 function airStrafe(forward, side, speed, dt, yaw = a) {
@@ -2023,19 +2030,20 @@ function pursuitRoute(c, tx, ty) {
 }
 function steerCruiser(c, tx, ty, speed, dt, arrive = true) {
   const vx = rel(tx - c.x), vy = rel(ty - c.y), distance = Math.hypot(vx, vy), oldAngle = Math.atan2(c.hy, c.hx);
+  const traction = roadTraction(c.x, c.y), braking = COP_CAR_BRAKE * (0.55 + traction * 0.45);
   if (distance < 0.025 && arrive) { c.v = 0; c.brake = true; return; }
   const wantedAngle = Math.atan2(vy, vx), turn = mod(wantedAngle - oldAngle + Math.PI, TAU) - Math.PI;
   // Brake before reversing direction or arriving. Slow turns align the tyres instead of orbiting the goal.
   const turnRate = c.v < 0.3 ? 3.2 : 1.8;
   const angle = oldAngle + clamp(turn, -turnRate * dt, turnRate * dt);
   let targetSpeed = Math.min(speed, COP_CAR_SPEED);
-  if (arrive) targetSpeed = Math.min(targetSpeed, Math.sqrt(2 * COP_CAR_BRAKE * Math.max(0, distance - 0.02)));
+  if (arrive) targetSpeed = Math.min(targetSpeed, Math.sqrt(2 * braking * Math.max(0, distance - 0.02)));
   targetSpeed *= Math.max(0, Math.cos(turn));
   c.brake = targetSpeed < c.v;
-  c.v += clamp(targetSpeed - c.v, -COP_CAR_BRAKE * dt, COP_CAR_ACCEL * dt);
+  c.v += clamp(targetSpeed - c.v, -braking * dt, COP_CAR_ACCEL * (0.75 + traction * 0.25) * dt);
   c.travelA ??= oldAngle;
   const slip = mod(angle - c.travelA + Math.PI, TAU) - Math.PI;
-  c.travelA += slip * (1 - Math.exp(-dt * 12));
+  c.travelA += slip * (1 - Math.exp(-dt * 12 * traction));
   if (c.v < 0.3) c.travelA = angle;
   const step = Math.min(distance, c.v * dt), samples = Math.max(1, Math.ceil(step / 0.035), Math.ceil(Math.abs(angle - oldAngle) / 0.06));
   const sx = Math.cos(c.travelA) * step / samples, sy = Math.sin(c.travelA) * step / samples;
@@ -2093,7 +2101,44 @@ function toLane(c) {
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
   else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
-  c.ex = c.x; c.ey = c.y; plan(c);
+  c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; plan(c);
+}
+
+// Routing keeps cardinal headings; the body and passenger camera follow the actual steering.
+function carYaw(c) {
+  return c.kind === 'taxi' && !c.player && !c.parked && c.laneYaw != null ? c.laneYaw : Math.atan2(c.hy, c.hx);
+}
+function taxiLaneTarget(c, line) {
+  const along = o => rel(o.ex - c.x) * c.hx + rel(o.ey - c.y) * c.hy;
+  if (c.pass && (c.pass.hx !== c.hx || c.pass.hy !== c.hy || !cars.includes(c.pass.car) || along(c.pass.car) < -3.2)) c.pass = null;
+  if (!c.pass && c.left > 2 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) {
+    let obstacle = null, distance = 3.2;
+    for (const o of c.near) {
+      if (o === c || !(o.parked || c.rush && o.hx === c.hx && o.hy === c.hy && o.v < c.cruise * 1.6)) continue;
+      const al = along(o), across = Math.abs(rel(o.ex - c.x) * c.hy - rel(o.ey - c.y) * c.hx);
+      const mergeRoom = o.parked ? 0.6 : 3.2;
+      if (across < 0.24 && al > 0.5 && al < distance && line > al + mergeRoom && c.left > al + mergeRoom) { obstacle = o; distance = al; }
+    }
+    if (obstacle) {
+      const offset = c.rush && !obstacle.parked ? -0.8 : -0.38;
+      const ox = c.x + c.hy * offset, oy = c.y - c.hx * offset;
+      const occupied = cars.some(o => {
+        if (o === c || o === obstacle) return false;
+        const rx = rel(o.ex - ox), ry = rel(o.ey - oy), al = rx * c.hx + ry * c.hy;
+        const closing = c.cruise * (c.rush ? 1.8 : 1) - (o.hx * c.hx + o.hy * c.hy) * o.v;
+        return Math.abs(rx * c.hy - ry * c.hx) < 0.3 && al > -1 && al < Math.max(6, closing * 4);
+      });
+      if (!occupied) c.pass = { car: obstacle, offset, hx: c.hx, hy: c.hy };
+    }
+  }
+  if (!c.pass) return 0;
+  // Ease out over 22m, hold beside the obstacle, and merge only after the rear bumper clears it.
+  const al = along(c.pass.car);
+  let u = 1;
+  if (al > 1) u = (3.2 - al) / 2.2;
+  else if (al < -1) u = (al + 3.2) / 2.2;
+  u = clamp(u, 0, 1);
+  return c.pass.offset * u * u * (3 - 2 * u);
 }
 // a random lane position on an existing street segment: anywhere, or (near) in the blocks within `near` cells of (x, y)
 function randomLane(near = 0, x = 0, y = 0) {
@@ -2217,7 +2262,7 @@ function stepTraffic(dt, t, everywhere = false) {
   // (which runs off-centre) the band is wider: it waits for the car in front to get properly out of the way, and
   // cars coming up behind it see it even though it isn't square in their lane
   const cross = (c, o) => Math.abs(c.hx * o.hy - c.hy * o.hx);
-  const band = (c, o) => code(c) || code(o) ? 0.3 : 0.12;
+  const band = (c, o) => code(c) || code(o) ? 0.3 : c.kind === 'taxi' && (c.pass || c.off < -0.01) ? 0.26 : 0.12;
   const carGap = (c, o) => ahead(c, o.ex, o.ey, band(c, o) + 0.25 * cross(c, o)) - (0.55 - 0.13 * cross(c, o));
   const evs = cars.filter(code), live = c => !c.player && !c.parked && (everywhere || c.ev || c.pursuit || simulated(c.x, c.y));
   for (const c of cars) {
@@ -2282,8 +2327,9 @@ function stepTraffic(dt, t, everywhere = false) {
     const kerbTaken = c.off < 0.1 && c.near.some(o => o !== c && o.off > 0.1 && o.hx === c.hx && o.hy === c.hy &&
       Math.abs(rel(o.x - c.x) * c.hx + rel(o.y - c.y) * c.hy) < 0.55 && Math.abs(rel(o.x - c.x) * c.hy - rel(o.y - c.y) * c.hx) < 0.3);
     const pull = !code(c) && c.state !== 'scene' && c.left > 1 && line > 1 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3 && !kerbTaken && evs.some(behind);
+    const taxi = c.kind === 'taxi';
     // a parked car sitting in our lane (you leave yours wherever you get out): swing out round it, then back in
-    const passing = !code(c) && c.near.some(o => {
+    const passing = !taxi && !code(c) && c.near.some(o => {
       if (o === c || !o.parked) return false;
       const rx = rel(o.ex - c.x), ry = rel(o.ey - c.y), al = rx * c.hx + ry * c.hy;
       return Math.abs(rx * c.hy - ry * c.hx) < 0.24 && al > -0.6 && al < 1.6;
@@ -2291,7 +2337,7 @@ function stepTraffic(dt, t, everywhere = false) {
     // a cab you've paid to step on it: out into the oncoming lane round anything slower in front, if nothing's coming
     // and there's no junction to get through first; back in once past
     let overtake = false;
-    if (c.rush && !code(c) && c.left > 1 && line > 1.2 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) {
+    if (!taxi && c.rush && !code(c) && c.left > 1 && line > 1.2 && ROAD[idx(Math.floor(c.x), Math.floor(c.y))] !== 3) {
       const slow = c.near.some(o => {
         if (o === c || o.hx !== c.hx || o.hy !== c.hy || o.off < -0.3) return false;
         const rx = rel(o.ex - c.x), ry = rel(o.ey - c.y), al = rx * c.hx + ry * c.hy;
@@ -2306,10 +2352,24 @@ function stepTraffic(dt, t, everywhere = false) {
       });
       overtake = slow && !coming;
     }
-    const offTarget = code(c) ? -0.2 : pull || c.state === 'scene' ? 0.32 : overtake ? -0.8 : passing ? -0.34 : 0; // at the scene: pulled in to the kerb
+    if (taxi && pull) c.pass = null;
+    let offTarget = 0;
+    if (code(c)) offTarget = -0.2;
+    else if (pull || c.state === 'scene') offTarget = 0.32; // at the scene: pulled in to the kerb
+    else if (taxi) offTarget = taxiLaneTarget(c, line);
+    else if (overtake) offTarget = -0.8;
+    else if (passing) offTarget = -0.34;
+    const oldX = c.ex, oldY = c.ey;
     const sway = c.rush ? 1.6 : 0.6; // (a rushing cab swings out and back smartly)
-    c.off += clamp(offTarget - c.off, -sway * dt, sway * dt);
-    if (pull || Math.abs(c.off - offTarget) > 0.02 && !code(c) && !c.rush) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
+    if (taxi) {
+      const lateralSpeed = Math.min(0.4, c.v * 0.3 + 0.08), error = offTarget - c.off;
+      const desired = clamp(error * 3, -lateralSpeed, lateralSpeed);
+      c.offV = (c.offV || 0) + clamp(desired - (c.offV || 0), -0.6 * dt, 0.6 * dt);
+      const shift = c.offV * dt;
+      if (shift * error >= 0 && Math.abs(shift) >= Math.abs(error)) { c.off = offTarget; c.offV = 0; }
+      else c.off += shift;
+    } else c.off += clamp(offTarget - c.off, -sway * dt, sway * dt);
+    if (pull || !taxi && Math.abs(c.off - offTarget) > 0.02 && !code(c) && !c.rush) room_ = Math.min(room_, pull ? 0 : 0.2); // stopped, or easing back out
     if (c.state === 'scene' || c.waitingCrew) room_ = 0;
     // taxi business: pull up for a hail, wait for a destination, stop on arrival
     if (c.hail) { const d = Math.hypot(rel(px - c.x), rel(py - c.y)); if (d < 1) room_ = 0; if (d > 6) c.hail = false; }
@@ -2330,6 +2390,12 @@ function stepTraffic(dt, t, everywhere = false) {
     if (c.rider) c.fare += step;
     if (c.left <= 0) { [c.hx, c.hy] = c.nh; plan(c); }
     c.ex = mod(c.x + c.hy * c.off, N); c.ey = mod(c.y - c.hx * c.off, N);
+    if (taxi) {
+      const vx = rel(c.ex - oldX), vy = rel(c.ey - oldY);
+      const yaw = Math.hypot(vx, vy) > 1e-5 ? Math.atan2(vy, vx) : Math.atan2(c.hy, c.hx);
+      c.laneYaw ??= Math.atan2(c.hy, c.hx);
+      c.laneYaw += (mod(yaw - c.laneYaw + Math.PI, 2 * Math.PI) - Math.PI) * (1 - Math.exp(-12 * dt));
+    }
   }
 }
 
@@ -3379,6 +3445,8 @@ const ITEMS = {
   orrery: { name: 'Equinox Orrery', price: 2500, kind: 'gear' }, // (the museum's: turn the crank and the season turns with it. Only a thief owns one)
   diamond: { name: 'the Glyphport Star', price: 6000, kind: 'gear' }, // (the museum's diamond: fence it at the pawn shop)
   hotelmasterpiece: { name: 'stolen hotel painting', price: 9000, kind: 'gear' },
+  hotelharbour: { name: 'Harbour at First Light', price: 6000, kind: 'gear' },
+  hotelstilllife: { name: 'Midnight Supper', price: 4500, kind: 'gear' },
 };
 // the arcade's prize counter: what tickets buy
 let tickets = 0;
@@ -3613,6 +3681,9 @@ function useHeld(near) {
     case 'dinotoy': return ['RAWR. The little T. rex\'s arms flap uselessly.', 'squeak'];
     case 'replicastar': return ['Glass, and not very good glass. Still sparkles, though.', null];
     case 'diamond': return [pick(['The Glyphport Star throws little rainbows all over your hands.', 'Forty carats. The pawn shop would ask very few questions, for a price.', 'You hold it up to the light. Somewhere, an insurance company weeps.']), null];
+    case 'hotelmasterpiece': return ['You study The Duke of Brie. He looks far too pleased with himself for someone being smuggled out of a hotel.', null];
+    case 'hotelharbour': return ['You tilt Harbour at First Light towards the light. The little boats seem to float above the brushstrokes.', null];
+    case 'hotelstilllife': return ['You admire Midnight Supper: wine, pears, and a dinner nobody is ever going to finish. Best keep the frame intact.', null];
     case 'redstring': return [pick(['You tug the red string round your wrist. A little luck at the tables and the games, the stallholder said.', 'A thread of red. Keeps the bad stuff off, and tips the odds a hair your way at the games.']), null];
     case 'luckycoin': return [`You flip the lucky coin: ${Math.random() < 0.5 ? 'heads' : 'tails'}. (On you, it nudges the odds at the games.)`, 'click'];
     case 'tigerbalm':
@@ -5376,6 +5447,8 @@ const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: 
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
 const roomCops = []; // officers who got a reliable lead that you entered the current building
+const ROOM_ENTRY_DELAY = 2.5; // Officers need time to get through the entrance, even when they saw you go in.
+let roomLead = null;
 const roofCops = [];
 let roofLead = null;
 let searchedRoom = null;
@@ -5489,10 +5562,10 @@ function roomPoliceSees(c) {
   return true;
 }
 function roomSearchLead(dt) {
-  if (mode !== 'room') { roomCops.length = 0; searchedRoom = null; return false; }
-  if (!wanted.stars) { roomCops.length = 0; searchedRoom = null; return false; }
+  if (mode !== 'room') { roomCops.length = 0; searchedRoom = null; roomLead = null; return false; }
+  if (!wanted.stars) { roomCops.length = 0; searchedRoom = null; roomLead = null; return false; }
   if (searchedRoom !== room) {
-    searchedRoom = room; roomCops.length = 0;
+    searchedRoom = room; roomCops.length = 0; roomLead = null;
     const ret = room.ret;
     if (!ret) return false;
     const policeSawDoor = copSees(ret[0], ret[1]);
@@ -5503,10 +5576,14 @@ function roomSearchLead(dt) {
       const door = roomDoorCell();
       if (door) {
         wanted.roomX = px; wanted.roomY = py;
-        for (let i = 0; i < Math.min(2, Math.max(1, wanted.stars)); i++)
-          roomCops.push({ x: door[0], y: door[1], targetX: wanted.roomX, targetY: wanted.roomY, path: [], pathT: 0, searchT: 0, searchI: 0, sees: false });
+        roomLead = { door, arriveAt: T + ROOM_ENTRY_DELAY, count: Math.min(2, Math.max(1, wanted.stars)) };
       }
     }
+  }
+  if (roomLead && T >= roomLead.arriveAt) {
+    for (let i = 0; i < roomLead.count; i++)
+      roomCops.push({ x: roomLead.door[0], y: roomLead.door[1], targetX: wanted.roomX, targetY: wanted.roomY, path: [], pathT: 0, searchT: 0, searchI: 0, sees: false });
+    roomLead = null;
   }
   let anySees = false;
   for (const c of roomCops) {
@@ -5705,7 +5782,7 @@ function clearWanted() {
     c.returning = true; c.returnCar = closestCar(c.x, c.y); c.exitWorld = roofLead?.ret;
     c.returnDoor = roofLead ? [roofLead.x, roofLead.y] : [c.x, c.y]; c.sees = false; c.pathT = 0;
   }
-  searchedRoom = null; roofLead = null;
+  searchedRoom = null; roomLead = null; roofLead = null;
   for (const c of units) {
     c.pursuit = false; c.returning = true; c.waitingCrew = true; c.v = 0; c.cruise = 1.3; c.state = 'back'; c.arrived = false;
     c.merging = null; c.route = null; c.routeT = 0; c.travelA = null; c.pursuitDrive = false;
@@ -8310,7 +8387,8 @@ function citySprites() {
   siren = null;
   for (const m of cars) {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
-    const [vx, vy] = R(m.ex, m.ey), hx = m.hx, hy = m.hy;
+    const [vx, vy] = R(m.ex, m.ey), steering = m.kind === 'taxi' && !m.player && !m.parked && m.laneYaw != null;
+    const hx = steering ? Math.cos(m.laneYaw) : m.hx, hy = steering ? Math.sin(m.laneYaw) : m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
     if ((m.ev || m.patrol) && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
     drawVehicle(m, vx, vy, hx, hy);
@@ -12078,9 +12156,61 @@ ROOM_FOR.MUSEUM = 'museum';
 // ===== the Belle Epoque quarter's landmark hotel: a premium suite by night, a very bad idea after midnight.
 const HOTEL_SUITE_RATE = 250;
 const HOTEL_HEIST_DOOR = [10.7, 1.45];
-const HOTEL_PAINTING = [18.8, 2.6];
-const HOTEL_FRAME = [18.8, 1.3];
-let grandHotelStolen = false;
+const HOTEL_PAINTINGS = [
+  { id: 'hotelmasterpiece', title: 'THE DUKE OF BRIE', x: 18.8, w: 1.9, h: 1.65, art: [
+    'ggggg..............ggggg',
+    'gggg....yyyyyyyy....gggg',
+    'ggg....yyrrrrrryy....ggg',
+    'gg....yyrrssssrryy....gg',
+    'g.....yrrssssssrry.....g',
+    '......yrss@ss@ssry......',
+    '......yrssssssssry......',
+    '.......rssssssssr.......',
+    '........ss====ss........',
+    '......rrrrssrrrrrr......',
+    '....rrrrrryyrrrrrrrr....',
+    '...rrrrrrrrrrrrrrrrrr...',
+    '..rrrrrrrryyrrrrrrrrrr..',
+    '.rrrrrrryyyyyyrrrrrrrrr.',
+    'rrrrrrrrrrrrrrrrrrrrrrrr',
+  ] },
+  { id: 'hotelharbour', title: 'HARBOUR AT FIRST LIGHT', x: 7.3, w: 2.5, h: 1.55, art: [
+    '..............................',
+    '....................ooo.......',
+    '...................ooooo......',
+    '....................ooo.......',
+    '......ww......................',
+    '.....www............ww........',
+    '....wwww...........www........',
+    '...wwwww..........wwww........',
+    '..wwwwww.........wwwww........',
+    '~~~~~~|~~~~~~~~~~~~|~~~~~~~~~~~',
+    '~~rrrrrrrr~~~~~~rrrrrrrrr~~~~~~',
+    '~~~rrrrrr~~~~~~~~rrrrrrr~~~~~~~',
+    'cccccc~cccccc~cccccccccc~cccccc',
+    'ccc~cccccc~ccccccccc~cccccc~ccc',
+    'c~cccccccccccc~ccccccccccccc~cc',
+  ] },
+  { id: 'hotelstilllife', title: 'MIDNIGHT SUPPER', x: 13.1, w: 1.9, h: 1.6, art: [
+    '........................',
+    '.....rr.................',
+    '.....rr............w....',
+    '....rrrr..........www...',
+    '....rrrr.....g.....w....',
+    '....rrrr....ggg....w....',
+    '....rrrr...ggggg...|....',
+    '....rrrr...ggggg...|....',
+    'yyyyyyyyyyyyyyyyyyyyyyyy',
+    'yyoooooyygggyywwwwwwwyyy',
+    'yoooooooyggggywwwwwwwyyy',
+    'yyoooooyygggyyywwwwwyyyy',
+    'yyyyyyyyyyyyyyyyyyyyyyyy',
+    'rrrrrrrrrrrrrrrrrrrrrrrr',
+    'rrrrrrrrrrrrrrrrrrrrrrrr',
+  ] },
+].map(p => ({ ...p, y: 1.045, z: 1.05, art: pad(p.art) }));
+const HOTEL_PAINTING = [HOTEL_PAINTINGS[0].x, 2.6];
+let grandHotelStolen = {};
 let hotelAlarm = null;
 const HOTEL_TROLLEY = [12, 12.8];
 
@@ -12135,11 +12265,9 @@ ROOM_DEFS.grandhotelheist = { grid: hotelGalleryGrid(), light: 0.22, height: 3.8
   },
   props: r => {
     const p = [
-      hotelPortrait(),
+      ...HOTEL_PAINTINGS.map(hotelPortrait),
       BX(12, 12.8, 0.7, 0.4, 0, 0.82, solid(YEL, { top: '=', panel: 0.5 })),
       SP(12, 12.8, 0.55, 0.3, pad(['  o  ', ' /_\\ ', '(____)']), (c, row, L) => C(WHITE, Math.max(L, 6)), 0.82),
-      SP(7.3, 1.45, 1.4, 1.05, pad(['.------.', '| ~~   |', '|  <>  |', '`------`']), (c, row, L) => C(c === '.' || c === '-' || c === '|' ? YEL : CYAN, Math.max(L, 4)), 1.2),
-      SP(13.5, 1.45, 1.4, 1.05, pad(['.------.', '| .--. |', '| `--` |', '`------`']), (c, row, L) => C(c === '.' || c === '-' || c === '|' ? YEL : MAG, Math.max(L, 4)), 1.2),
     ];
     if (r.burgled) HOTEL_GUARD_PATHS.forEach((path, k) => p.push({ ...SP(path[0][0], path[0][1], 0.58, 1.8, ART.guard, (c, row, L) => C(row < 2 ? BLUE : row < 4 ? SKIN : c === '*' ? YEL : BLUE, Math.max(L, 5))), guard: true, dir: 0,
       tick: s => {
@@ -12154,19 +12282,24 @@ ROOM_DEFS.grandhotelheist = { grid: hotelGalleryGrid(), light: 0.22, height: 3.8
 const HOTEL_GUARD_PATHS = [[[18.5, 3], [20, 8], [18.5, 12], [16.5, 8]], [[4, 4], [7.5, 4], [7.5, 11], [4, 11]]];
 
 function hotelHeistDoorNear() { return mode === 'room' && room.kind === 'grandhotel' && Math.hypot(px - HOTEL_HEIST_DOOR[0], py - HOTEL_HEIST_DOOR[1]) < 1.05; }
-function hotelHeistPaintingNear() { return mode === 'room' && room.kind === 'grandhotelheist' && Math.hypot(px - HOTEL_PAINTING[0], py - HOTEL_PAINTING[1]) < 1.35; }
+function hotelHeistPaintingNear() {
+  if (mode !== 'room' || room.kind !== 'grandhotelheist') return null;
+  return HOTEL_PAINTINGS.find(p => Math.abs(px - p.x) < p.w / 2 + .2 && py > p.y && py < p.y + 2.2) || null;
+}
+const hotelGalleryEmpty = () => HOTEL_PAINTINGS.every(p => grandHotelStolen[p.id]);
 function grandHotelPrompt() {
   if (room.kind === 'grandhotelheist') {
     if (nearExit()) return 'E: back to the hotel lobby';
     if (hotelTrolleyNear()) return room.trolleyUsed ? 'The complimentary cheese has been comprehensively investigated.' : 'E: ring the room-service bell (distract the guards)';
     if (room.alarm) return 'ALARM! Get out of the hotel!';
     if (room.silent) return `Silent alarm: ${Math.max(0, Math.ceil(room.silent - T))}s`;
-    if (hotelHeistPaintingNear()) return grandHotelStolen ? 'The empty frame. Someone left the little museum card in it.' : 'E: steal THE DUKE OF BRIE';
+    const painting = hotelHeistPaintingNear();
+    if (painting) return grandHotelStolen[painting.id] ? `The empty frame: ${painting.title}.` : `E: steal ${painting.title}`;
     return 'Stay out of the guards\' torch beams (C: crouch)';
   }
   if (room.kind !== 'grandhotel') return '';
   if (hotelHeistDoorNear()) {
-    if (grandHotelStolen) return 'The staff door is locked again.';
+    if (hotelGalleryEmpty()) return 'The staff door is locked again.';
     return tod >= 23 || tod < 5 ? 'E: slip into the after-hours gallery' : 'The staff door is locked until 11pm.';
   }
   if (nearKeeper()) return checkInOpen(tod) ? `E: book the Royal Suite (${fmt$(HOTEL_SUITE_RATE)} a night)` : '"Check-in is from 6pm."';
@@ -12180,24 +12313,25 @@ function bookGrandHotelSuite() {
   sleep = { t: 0, lobby };
 }
 function beginGrandHotelHeist() {
-  if (grandHotelStolen) return say('The staff door has a fresh lock. The hotel has noticed its missing masterpiece.', 4);
+  if (hotelGalleryEmpty()) return say('The staff door has a fresh lock. The hotel has noticed its missing paintings.', 4);
   if (!(tod >= 23 || tod < 5)) return say('The night manager gives the staff door a pointed look. "That gallery is closed until 11."', 4);
   const lobby = { word: room.word, neon: room.neon, ret: room.ret, cell: room.cell, line: room.line, grandHotel: true };
   enterRoom('grandhotelheist', { word: 'PRIVATE GALLERY', ret: room.ret, lobby, burgled: true, spot: 0 }, [12, 14.6, -Math.PI / 2]);
   if (hotelAlarm) room.silent = hotelAlarm.deadline;
   say('You slip into the private gallery. Somewhere, a guard jingles a comically large ring of keys.', 5);
 }
-function stealHotelPainting() {
-  if (grandHotelStolen) return say('The painting is gone. The empty frame is still under guard.'), true;
+function stealHotelPainting(painting) {
+  if (grandHotelStolen[painting.id]) return say('The painting is gone. The empty frame is still under guard.'), true;
   if (inv.length >= INV_SIZE) return say('Your bag is full. That frame is not going to fit in a quick slot.'), true;
+  const gallery = room;
   startCrime('lockpick', ok => {
-    if (ok === 'abort') return;
+    if (ok === 'abort' || room !== gallery || mode !== 'room') return;
     if (!ok) { armHotelAlarm(); return say('The frame squeals as it comes loose. A silent alarm starts counting down.', 4); }
-    grandHotelStolen = true; carryItem({ id: 'hotelmasterpiece', uses: 0 });
-    room.props = room.props.filter(p => p.hotelPainting !== true);
-    room.props.push(hotelPortrait());
+    grandHotelStolen[painting.id] = true; carryItem({ id: painting.id, uses: 0 });
+    room.props = room.props.filter(p => p.hotelPainting !== painting.id);
+    room.props.push(hotelPortrait(painting));
     armHotelAlarm(); saveGame();
-    say('The painting comes free. A tiny red light starts blinking. You have 40 seconds to leave before the hotel calls the police.', 6);
+    say(`${painting.title} comes free. ${room.alarm ? 'The alarm is already ringing: get out!' : `Leave the hotel within ${Math.max(0, Math.ceil(room.silent - T))} seconds to beat the silent alarm.`}`, 6);
   });
   return true;
 }
@@ -12210,7 +12344,8 @@ function grandHotelUse() {
     say('DING! "Complimentary cheese?" Both guards stop their rounds and turn towards room service. "Who ordered the cheese?"', 5);
     return true;
   }
-  if (room.kind === 'grandhotelheist' && hotelHeistPaintingNear()) return stealHotelPainting();
+  const painting = hotelHeistPaintingNear();
+  if (painting) return stealHotelPainting(painting);
   return false;
 }
 
@@ -12221,10 +12356,15 @@ function armHotelAlarm() {
   room.silent = hotelAlarm.deadline;
 }
 function stepGrandHotel() {
-  if (!hotelAlarm || T < hotelAlarm.deadline) return;
+  if (!hotelAlarm) return;
+  const lobby = room?.kind === 'hotelroom' ? room.lobby : room;
+  const inside = mode === 'room' && (room.kind === 'grandhotel' || room.kind === 'grandhotelheist' || lobby?.grandHotel) &&
+    lobby?.ret?.[0] === hotelAlarm.ret[0] && lobby?.ret?.[1] === hotelAlarm.ret[1];
+  if (!inside) { hotelAlarm = null; return; }
+  if (T < hotelAlarm.deadline) return;
   const ret = hotelAlarm.ret;
   hotelAlarm = null;
-  if (mode === 'room' && (room.kind === 'grandhotelheist' || room.kind === 'grandhotel')) room.alarm = true;
+  room.alarm = true;
   addWanted('heist', ret[0], ret[1], true);
   say('The Grand Hotel alarm goes off. The police are heading for the gallery.', 5);
 }
@@ -12241,19 +12381,30 @@ function hotelSuiteWall(i, u, uStep, z, d, mx, my, L) {
   return true;
 }
 
-function hotelPortrait() {
-  const stolen = grandHotelStolen;
-  const art = stolen ? ['.========.', '|        |', '|  GONE  |', '|        |', '\'========\''] :
-    ['.========.', '|~~.oo.~~|', '|~~(oo)~~|', '|^^/##\\^^|', '\'========\''];
-  const color = (c, row, L) => {
-    let hue = CYAN;
-    if (stolen || '.=|\''.includes(c)) hue = YEL;
-    else if (c === 'o') hue = WARM;
-    else if (c === '#') hue = BRICK;
-    else if (c === '^') hue = GREEN;
-    return C(hue, Math.max(L, 5));
-  };
-  return { ...SP(HOTEL_FRAME[0], HOTEL_FRAME[1], 1.75, 1.25, pad(art), color, 1.2), hotelPainting: !stolen };
+const HOTEL_PAINT_COLORS = { '.': BLUE, g: GREEN, y: YEL, r: BRICK, s: SKIN, '@': GRAY, '=': WHITE,
+  o: ORANGE, w: WHITE, '|': BRICK, '~': CYAN, c: BLUE };
+function hotelPaintingPixel(p, u, v) {
+  const row = clamp(Math.floor(v * p.art.length), 0, p.art.length - 1);
+  const col = clamp(Math.floor(u * p.art[0].length), 0, p.art[0].length - 1);
+  const code = p.art[row][col];
+  return [code === '.' ? ' ' : code === '@' ? 'o' : '=|~'.includes(code) ? code : ':', HOTEL_PAINT_COLORS[code] ?? BLUE];
+}
+function hotelPortrait(p) {
+  const stolen = !!grandHotelStolen[p.id], border = .085, hl = p.w / 2;
+  const frame = BX(p.x, p.y, hl, .035, p.z, p.z + p.h, (i, t, L) => {
+    if (HIT.face !== 3 || Math.abs(HIT.u) > hl - border || HIT.w < p.z + border || HIT.w > p.z + p.h - border) {
+      BG[i] = C(YEL, 1 + L * .25 * shadeFace(HIT.face));
+      return set(i, HIT.face === 5 || Math.abs(HIT.u) < hl - border ? '=' : '|', C(YEL, Math.max(4, L))), true;
+    }
+    if (stolen) {
+      BG[i] = C(GRAY, .8);
+      return set(i, Math.abs(HIT.u) < .03 && HIT.w > p.z + p.h * .75 ? 'o' : ' ', C(YEL, Math.max(3, L))), true;
+    }
+    const [ch, hue] = hotelPaintingPixel(p, (HIT.u + hl - border) / (p.w - border * 2), (p.z + p.h - border - HIT.w) / (p.h - border * 2));
+    BG[i] = C(hue, .8 + L * .2);
+    return set(i, ch, C(hue, Math.max(4, L))), true;
+  });
+  return { ...frame, hotelPainting: p.id, stolen };
 }
 // ===== the Velvet Rope: a strip club in midtown (world.js puts it up). Outside: a black front, XXX in pink neon
 // blinking, GIRLS GIRLS GIRLS and LIVE DANCERS, a neon martini, a velvet rope and a bouncer who won't let you in with
@@ -13183,8 +13334,9 @@ function ejectDriver(c) {
 // where you step out: right beside the car, whichever side (or end) has room; the kerb only if nowhere near does
 function exitSpot(c) {
   const lx = c.hy, ly = -c.hx; // (the car's left)
+  const cx = c.rider ? c.ex : c.x, cy = c.rider ? c.ey : c.y;
   for (const d of [0.22, 0.32, 0.45]) for (const [ox, oy] of [[lx, ly], [-lx, -ly], [-c.hx * 1.3, -c.hy * 1.3], [c.hx * 1.3, c.hy * 1.3]]) {
-    const x = mod(c.x + ox * d, N), y = mod(c.y + oy * d, N);
+    const x = mod(cx + ox * d, N), y = mod(cy + oy * d, N);
     if (free(x, y) && !cars.some(o => o !== c && Math.hypot(rel(o.ex - x), rel(o.ey - y)) < 0.2)) return [x, y];
   }
   return curbOf(c);
@@ -13400,6 +13552,7 @@ function interact() {
     if (c.body === TAXI) {
       if (money < 3) { me = null; return say(`"Cash first, pal." You can't cover the flag fall.`); }
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
+      a = camYaw = carYaw(c);
     }
     else { // a stolen car: if anyone saw, the police hear about it
       mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
@@ -13411,7 +13564,7 @@ function interact() {
         say(w === 'cop' ? 'A cop saw that.' : 'You drag the driver out. They run off shouting...', 3);
       }
     }
-    px = c.x; py = c.y;
+    px = c.ex; py = c.ey;
     return;
   }
   if (pickUpBall()) return say('You pick up the ball.');
@@ -13496,6 +13649,7 @@ function stepSleep(dt) {
 }
 function leaveRoom() {
   body.seat = null;
+  if (hotelAlarm) stepGrandHotel(); // A late exit still triggers the alarm while you're inside.
   if (room.kind === 'grandhotelheist') return enterRoom('grandhotel', room.lobby, [10.7, 2.65, Math.PI / 2]);
   if (room.kind === 'hotelroom' && room.lobby.grandHotel) return enterRoom('grandhotel', room.lobby, [7, 6.5, -Math.PI / 2]);
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
@@ -13509,6 +13663,7 @@ function leaveRoom() {
   }
   else { [px, py, a] = room.ret; a += Math.PI; }
   room = null; mode = 'walk';
+  hotelAlarm = null; // Leaving the building before the deadline cancels its untriggered alarm.
 }
 function arriveAt(n) { // off the train onto the destination platform; the train pulls out a few seconds later
   enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, ST_TRACK - 2.4, -Math.PI / 2]); // back from the edge, facing the stairs
@@ -15002,6 +15157,8 @@ const DROPPED_ART = {
   orrery: () => { const k = Math.floor(T * 0.5) & 3; return [['     .-o-.', `  o ( ${'-\\|/'[k]}*${'-/|\\'[k]} ) o`, "     `-o-'", '   ___|___', '  [=======]'], (c, r) => c === '*' ? C(YEL, 15) : c === 'o' ? C([CYAN, RED, GREEN, WHITE][r & 3], 14) : r > 2 ? C(BRICK, 12) : C(YEL, 12)]; },
   diamond: () => [['  ____', ' /\\  /\\', '/__\\/__\\', '\\  \\/  /', ' \\    /', '  \\  /', '   \\/'], (c, r) => C(fract(T * 2 + r * 0.2) < 0.15 ? WHITE : CYAN, 13 + (r & 1) * 2)],
   hotelmasterpiece: () => [[' .------.', ' | /\  /|', ' |(o )  |', ' | /\\~ |', ' |______|'], (c, r) => c === '.' || c === '-' || c === '|' || c === '_' ? C(YEL, 13) : r === 2 ? C(BRICK, 14) : C(GREEN, 12)],
+  hotelharbour: () => [[' .------.', ' | /| o |', ' |/_|___|', ' |~~~~~~|', ' |______|'], (c, r) => '.-|_'.includes(c) ? C(YEL, 13) : c === 'o' ? C(ORANGE, 14) : C(CYAN, 12)],
+  hotelstilllife: () => [[' .------.', ' | i  Y |', ' |[#] | |', ' | o () |', ' |______|'], (c, r) => '.-|_'.includes(c) ? C(YEL, 13) : c === 'o' || c === '(' || c === ')' ? C(GREEN, 12) : C(BRICK, 13)],
   fortunecookie: (it, f) => [['   .---.', "  /  .-'\\", ' (  (  ~~~', "  `--`"], (c, r) => c === '~' ? C(WHITE, 15) : C(YEL, 13)],
   tigerbalm: it => [['  ._____.', ' |  /\\  |', ' | (oo) |', " |TIGER |", " `-----'"], (c, r) => r === 0 ? C(GRAY, 12) : c === 'o' || c === '/' || c === '\\' || c === '(' || c === ')' ? C(ORANGE, 15) : /[A-Z]/.test(c) ? C(YEL, 14) : C(RED, 12)],
   lantern: () => [['    |', '  .-=-.', ' ( ||| )', ' ( ||| )', "  `-=-'", '    ~'], (c, r) => r === 0 ? C(GRAY, 10) : c === '=' || c === '~' ? C(YEL, 15) : c === '|' && r > 1 && r < 4 ? C(YEL, 14) : C(RED, 15)],
@@ -15668,16 +15825,19 @@ const dCarKeys = () => sculpt(22, 16, (x, y) => {
   return null;
 });
 
+function heldHotelPainting(it) {
+  const p = HOTEL_PAINTINGS.find(p => p.id === it.id);
+  return sculpt(32, 20, (x, y) => {
+    if (Math.abs(x) > 8 || Math.abs(y) > 6) return null;
+    if (Math.abs(x) > 7.1 || Math.abs(y) > 5.1) return dLit(.65, YEL, 10, 15);
+    const [ch, hue] = hotelPaintingPixel(p, (x + 7.1) / 14.2, (y + 5.1) / 10.2);
+    return [ch === ' ' ? '.' : ch, C(hue, hue === GRAY ? 3 : 12)];
+  });
+}
 Object.assign(DENSE, {
-  hotelmasterpiece: () => sculpt(22, 16, (x, y) => {
-    if (Math.abs(x) > 7.5 || Math.abs(y) > 5.2) return null;
-    if (Math.abs(x) > 6.6 || Math.abs(y) > 4.4) return dLit(0.6, YEL, 10, 15);
-    const halo = Math.hypot(x - 0.7, y + 1.2);
-    if (halo > 2.8 && halo < 3.2) return ['o', C(YEL, 14)];
-    if (Math.abs(x + 0.7) < 0.35 && Math.abs(y + 0.5) < 0.4) return ['o', C(WHITE, 15)];
-    if (Math.abs(x) < 2.2 && y > -2 && y < 3.2) return dLit(0.55, y < 0 ? WARM : BRICK, 8, 14);
-    return dLit(0.4 + 0.35 * noise(x * 0.5, y * 0.5, 230), y < -2.6 ? GREEN : CYAN, 7, 12);
-  }),
+  hotelmasterpiece: heldHotelPainting,
+  hotelharbour: heldHotelPainting,
+  hotelstilllife: heldHotelPainting,
   // ---- the night market's, and the two that bend the world
   pocketwatch: () => sculpt(26, 16, (x, y) => { // brass, a cracked glass, the hands racing round while you hold Q
     const fast = hurrying(), ang = T * (fast ? 9 : 0.12), cx = 0, cy = 1, R = 5.4;
@@ -17387,7 +17547,10 @@ function grabStock() {
 // G and L
 function crimeKey(code) {
   if (code === 'KeyG') {
-    if (mode === 'room' && room.kind === 'grandhotelheist') return hotelHeistPaintingNear() ? stealHotelPainting() : say('The framed masterpiece is on the far wall.');
+    if (mode === 'room' && room.kind === 'grandhotelheist') {
+      const painting = hotelHeistPaintingNear();
+      return painting ? stealHotelPainting(painting) : say('The paintings are mounted along the far wall.');
+    }
     if (mode === 'room' && room.burgled) return grabStock();
     if (canShoplift()) return shoplift();
     const p = pickTarget();
@@ -17685,7 +17848,10 @@ function loadGame() {
   ensureCarKeys();
   loadBoats(d.boats);
   if (Number.isFinite(d.season)) seasonShift = mod(d.season + Math.floor(dayNum / (d.seasonDays > 0 ? d.seasonDays : 7)) - Math.floor(dayNum / SEASON_DAYS), 4);
-  grandHotelStolen = !!d.hotelStolen;
+  grandHotelStolen = {};
+  if (d.hotelStolen === true) grandHotelStolen.hotelmasterpiece = true; // Older saves only had the Duke.
+  else if (d.hotelStolen && typeof d.hotelStolen === 'object')
+    for (const p of HOTEL_PAINTINGS) if (d.hotelStolen[p.id] === true) grandHotelStolen[p.id] = true;
   if (d.stolen && typeof d.stolen === 'object') museumStolen = { diamond: !!d.stolen.diamond, orrery: !!d.stolen.orrery };
   if (d.needs) for (const k of ['food', 'drink', 'health', 'bladder']) if (isFinite(d.needs[k])) needs[k] = clamp(d.needs[k], k === 'health' ? 1 : 0, 100);
   const at = d.at;
@@ -17845,18 +18011,21 @@ function drive(dt) {
   const oldA = a;
   const spun = me.spunT > T; // spun out by the police: no say in it till you've stopped turning
   const c = me, f = spun ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = spun ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  const traction = roadTraction(c.x, c.y), braking = 0.55 + traction * 0.45, acceleration = 0.75 + traction * 0.25;
   if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (me.spunT - T) / 2.5; }
-  if (f > 0) c.v += (c.v < 0 ? 2.5 : 1) * dt; else if (f < 0) c.v -= (c.v > 0 ? 2.5 : 0.8) * dt; else c.v *= 1 - 0.7 * dt;
+  if (f > 0) c.v += (c.v < 0 ? 2.5 * braking : acceleration) * dt;
+  else if (f < 0) c.v -= (c.v > 0 ? 2.5 * braking : 0.8 * acceleration) * dt;
+  else c.v *= 1 - 0.7 * dt;
   c.v = clamp(c.v, -0.5, K.ShiftLeft || K.ShiftRight ? c.boost || 3.2 : c.top || 2.2); // (a car you own goes as fast as its model)
   const handbrake = !!K.Space && !spun, fast = Math.abs(c.v) > 0.8;
-  if (handbrake) c.v *= Math.exp(-dt * (fast ? 0.65 : 5));
+  if (handbrake) c.v *= Math.exp(-dt * (fast ? 0.65 : 5) * braking);
   a += s * dt * (handbrake && fast ? 2.5 : 1.8) * clamp(c.v / 0.5, -1, 1);
   c.travelA ??= oldA;
   const slip = mod(a - c.travelA + Math.PI, Math.PI * 2) - Math.PI;
-  const grip = handbrake && fast ? 1.2 : 10;
+  const grip = (handbrake && fast ? 1.2 : 10) * traction;
   c.travelA += slip * (1 - Math.exp(-grip * dt));
   if (!fast) c.travelA = a;
-  const drifting = handbrake && fast && Math.abs(slip) > 0.12;
+  const drifting = fast && (handbrake && Math.abs(slip) > 0.12 || traction < 0.99 && Math.abs(slip) > 0.2);
   const oldX = c.x, oldY = c.y, hx = Math.cos(a), hy = Math.sin(a);
   const nx = c.x + Math.cos(c.travelA) * c.v * dt, ny = c.y + Math.sin(c.travelA) * c.v * dt;
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
@@ -17959,9 +18128,7 @@ function loop(t) {
   else if (need) say(need, 4);
   stepWake(dt);
   if (mode === 'taxi') {
-    px = me.x; py = me.y;
-    const target = Math.atan2(me.hy, me.hx) + look; // camera eases round corners
-    a += (mod(target - a + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 4);
+    stepTaxiCamera(dt);
     if (me.arrived && me.v < 0.02) leaveCar();
   }
   if (mode === 'room' && room.kind === 'train' && room.dest != null) { // the ride: speed up, cruise, slow down, arrive
@@ -17990,17 +18157,23 @@ function drunkVision(wob) {
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way
 function chaseCam(dt) {
-  const target = mode === 'taxi' ? a : Math.atan2(me.hy, me.hx) + look;
-  camYaw += (mod(target - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 5);
+  const taxi = mode === 'taxi', target = carYaw(me) + look;
+  camYaw += (mod(target - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * (1 - Math.exp(-5 * dt));
+  const cx = taxi ? me.ex : me.x, cy = taxi ? me.ey : me.y;
   const bx = Math.cos(camYaw), by = Math.sin(camYaw);
   let back = 0;
   for (let step = 0.04; step <= 1.1; step += 0.04) {
-    const x = me.x - bx * step, y = me.y - by * step;
+    const x = cx - bx * step, y = cy - by * step;
     const blocked = [-0.07, 0.07].some(ox => [-0.07, 0.07].some(oy => map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy) || landmarkBlocked(x + ox, y + oy)));
     if (blocked) break;
     back = step;
   }
-  return [me.x - bx * back, me.y - by * back, camYaw];
+  return [cx - bx * back, cy - by * back, camYaw];
+}
+function stepTaxiCamera(dt) {
+  px = me.ex; py = me.ey;
+  const target = carYaw(me) + look;
+  a += (mod(target - a + Math.PI, 2 * Math.PI) - Math.PI) * (1 - Math.exp(-8 * dt));
 }
 // ?goto=ARCADE (any shop sign: HOSPITAL, PAWN, KARAOKE...) starts you on the sidewalk outside the nearest one, facing
 // its door: for finding things, and for trying them out

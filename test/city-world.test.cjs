@@ -287,7 +287,7 @@ test('a taxi tipped to step on it pulls out round a slow car when the other lane
       plan(c); plan(slow);
       if (${oncoming}) { const o = cars.find(o => o !== c && o !== slow && !o.ev && !o.patrol); Object.assign(o, { x: L.bx + 0.6, y: mod(L.by - 1.5, N), hx: 0, hy: -1, v: 0, cruise: 0.01, off: 0 }); plan(o); }
       let t = 0, out = 0, crash = 0;
-      for (let k = 0; k < 40; k++) {
+      for (let k = 0; k < 100; k++) { // a gradual lane change and pass, rather than a sideways lunge
         stepTraffic(0.05, t, true); t += 0.05; out = Math.min(out, c.off);
         for (const o of cars) if (o !== c && Math.hypot(rel(c.ex - o.ex), rel(c.ey - o.ey)) < 0.3) crash++;
       }

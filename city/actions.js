@@ -23,8 +23,9 @@ function ejectDriver(c) {
 // where you step out: right beside the car, whichever side (or end) has room; the kerb only if nowhere near does
 function exitSpot(c) {
   const lx = c.hy, ly = -c.hx; // (the car's left)
+  const cx = c.rider ? c.ex : c.x, cy = c.rider ? c.ey : c.y;
   for (const d of [0.22, 0.32, 0.45]) for (const [ox, oy] of [[lx, ly], [-lx, -ly], [-c.hx * 1.3, -c.hy * 1.3], [c.hx * 1.3, c.hy * 1.3]]) {
-    const x = mod(c.x + ox * d, N), y = mod(c.y + oy * d, N);
+    const x = mod(cx + ox * d, N), y = mod(cy + oy * d, N);
     if (free(x, y) && !cars.some(o => o !== c && Math.hypot(rel(o.ex - x), rel(o.ey - y)) < 0.2)) return [x, y];
   }
   return curbOf(c);
@@ -240,6 +241,7 @@ function interact() {
     if (c.body === TAXI) {
       if (money < 3) { me = null; return say(`"Cash first, pal." You can't cover the flag fall.`); }
       mode = 'taxi'; c.rider = true; c.hail = false; c.fare = 0; c.dest = null; look = 0;
+      a = camYaw = carYaw(c);
     }
     else { // a stolen car: if anyone saw, the police hear about it
       mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
@@ -251,7 +253,7 @@ function interact() {
         say(w === 'cop' ? 'A cop saw that.' : 'You drag the driver out. They run off shouting...', 3);
       }
     }
-    px = c.x; py = c.y;
+    px = c.ex; py = c.ey;
     return;
   }
   if (pickUpBall()) return say('You pick up the ball.');
@@ -336,6 +338,7 @@ function stepSleep(dt) {
 }
 function leaveRoom() {
   body.seat = null;
+  if (hotelAlarm) stepGrandHotel(); // A late exit still triggers the alarm while you're inside.
   if (room.kind === 'grandhotelheist') return enterRoom('grandhotel', room.lobby, [10.7, 2.65, Math.PI / 2]);
   if (room.kind === 'hotelroom' && room.lobby.grandHotel) return enterRoom('grandhotel', room.lobby, [7, 6.5, -Math.PI / 2]);
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
@@ -349,6 +352,7 @@ function leaveRoom() {
   }
   else { [px, py, a] = room.ret; a += Math.PI; }
   room = null; mode = 'walk';
+  hotelAlarm = null; // Leaving the building before the deadline cancels its untriggered alarm.
 }
 function arriveAt(n) { // off the train onto the destination platform; the train pulls out a few seconds later
   enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, ST_TRACK - 2.4, -Math.PI / 2]); // back from the edge, facing the stairs

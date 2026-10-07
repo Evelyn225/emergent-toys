@@ -7,13 +7,26 @@ Things get crossed off (deleted) once they're in the game.
 The ones that would add the most for the least, roughly in order. Each builds on something already in the game.
 1. **The Relics** (below, in Bigger city-wide ideas): the watch and the globe become two of a set, and collecting
    them all opens the tower with no door. A reason to do everything else.
-2. **Rooftop runs**: roof hopping is in; time trials across the rooftops, a courier job that only pays if you
-   never touch the street.
+2. **Rooftop courier jobs**: a dedicated Midtown depot and handcrafted delivery routes (details below).
 3. **A bike**: rent, park, steal; between walking and a car, and it fits down alleys.
 4. **Museum extras**: the heist is in (pick the door, dodge the torch beams, crack a case, beat the silent alarm);
    next: the plan on paper, a guard's keycard to pickpocket, the power box in the alley, a rotating special exhibit.
 5. **Seasons, more of them**: seasons and snow are in; next, what changes with them: snowmen, a summer heatwave
    that packs the pier, the shops' stock by season, fewer people out in a blizzard.
+
+## Rooftop courier jobs
+
+- Start at a new Midtown courier depot: a converted print shop with a loading alley, parcel counter, dispatcher,
+  recognizable sign, stepped roof and stair access to a rooftop training course.
+- Author three substantial routes rather than selecting random rooftops: a first shift through tenements with
+  laundry, water tanks and a resident tending plants; a construction rush with scaffolding, narrow crossings,
+  elevation changes and an optional air-strafe shortcut; a night delivery past neon signs to a waiting recipient.
+- Give each route named recipients, distinct packages, small rooftop scenes and believable reasons for its connections.
+  Basic deliveries are untimed; offer speed bonuses and unlock harder contracts as the player learns the routes.
+- Streets are often too wide for ordinary jumps. Deliberately place service bridges, ramps, scaffolding and intermediate
+  platforms, and playtest every crossing with the existing movement. Avoid requiring bunny hops for the introductory route.
+- Build the depot and one polished route first, then expand. Keep scenery static and spatially indexed, and track only
+  the active delivery so the activity stays inexpensive to run.
 
 ## New districts
 
@@ -232,8 +245,8 @@ Further architectural and activity ideas:
   Equinox Orrery from the museum to turn them): snowmen, slush, a summer heatwave, what the shops sell, how many are out.
 
 ## New ideas since last time
-- **Rooftop runs**: time trials across the roofs with checkpoints, a pizza courier who only gets paid if the box
-  never touches the street, a rooftop chase when the cops corner you up there.
+- **Rooftop runs**: optional time trials, a pizza contract that requires staying off the street, and a rooftop chase;
+  build on the authored courier routes above.
 - **Needs extras**: cook at home (a fridge and a stove), food going cold if you carry it too long, a food truck
   that turns up where people are hungriest, a vending machine you can shake (and get crushed by).
 - **More carnival**: a rollercoaster along the pier (the stock market already mentions one), goldfish scooping,

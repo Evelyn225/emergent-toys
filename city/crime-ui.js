@@ -199,7 +199,10 @@ function grabStock() {
 // G and L
 function crimeKey(code) {
   if (code === 'KeyG') {
-    if (mode === 'room' && room.kind === 'grandhotelheist') return hotelHeistPaintingNear() ? stealHotelPainting() : say('The framed masterpiece is on the far wall.');
+    if (mode === 'room' && room.kind === 'grandhotelheist') {
+      const painting = hotelHeistPaintingNear();
+      return painting ? stealHotelPainting(painting) : say('The paintings are mounted along the far wall.');
+    }
     if (mode === 'room' && room.burgled) return grabStock();
     if (canShoplift()) return shoplift();
     const p = pickTarget();

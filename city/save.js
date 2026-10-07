@@ -43,7 +43,10 @@ function loadGame() {
   ensureCarKeys();
   loadBoats(d.boats);
   if (Number.isFinite(d.season)) seasonShift = mod(d.season + Math.floor(dayNum / (d.seasonDays > 0 ? d.seasonDays : 7)) - Math.floor(dayNum / SEASON_DAYS), 4);
-  grandHotelStolen = !!d.hotelStolen;
+  grandHotelStolen = {};
+  if (d.hotelStolen === true) grandHotelStolen.hotelmasterpiece = true; // Older saves only had the Duke.
+  else if (d.hotelStolen && typeof d.hotelStolen === 'object')
+    for (const p of HOTEL_PAINTINGS) if (d.hotelStolen[p.id] === true) grandHotelStolen[p.id] = true;
   if (d.stolen && typeof d.stolen === 'object') museumStolen = { diamond: !!d.stolen.diamond, orrery: !!d.stolen.orrery };
   if (d.needs) for (const k of ['food', 'drink', 'health', 'bladder']) if (isFinite(d.needs[k])) needs[k] = clamp(d.needs[k], k === 'health' ? 1 : 0, 100);
   const at = d.at;

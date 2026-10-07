@@ -116,8 +116,21 @@ test('a cop with your last seen entrance searches the room and arrests you in si
   ev("mode = 'room'; room = { ret: [px, py, 0], def: {}, kind: 'store', W: 5, H: 5, grid: ['#####', '#...#', '#...#', '#...#', '##D##'], props: [] }; px = 2.5; py = 2.8");
   // The browser's wall adapter, restricted to this fixture's empty floor / solid walls.
   ev("var ROOMW = { cell: (x, y) => room.grid[y]?.[x] === '.' ? 0 : 3 }");
-  assert.strictEqual(step(2), 'busted');
+  assert.notStrictEqual(step(1), 'busted', 'officers cannot grab you on the first frame inside');
+  assert.equal(ev('roomCops.length'), 0, 'officers are still coming through the entrance');
+  assert.strictEqual(step(3), 'busted');
   assert.ok(ev('roomCops.length') > 0, 'officers actually entered the room');
+});
+
+test('settling a pursuit cancels officers who have not entered the room yet', () => {
+  const { ev, step } = scene();
+  ev("addWanted('hit', px, py, true); mode='room'; room={ret:[px,py,0],def:{},kind:'store',W:5,H:5,grid:['#####','#...#','#...#','#...#','##D##'],props:[]};px=2.5;py=2.8;var ROOMW={cell:(x,y)=>room.grid[y]?.[x]==='.'?0:3}");
+  step(.1);
+  assert.ok(ev('roomLead'));
+  ev('clearWanted()');
+  step(4);
+  assert.equal(ev('roomCops.length'), 0);
+  assert.equal(ev('roomLead'), null);
 });
 
 test('a cruiser on your bumper tells you to pull over without a phantom PIT', () => {

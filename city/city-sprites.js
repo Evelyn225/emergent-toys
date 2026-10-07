@@ -173,7 +173,8 @@ function citySprites() {
   siren = null;
   for (const m of cars) {
     if ((m.player || m.rider) && !chaseOn) continue; // first person: you're inside it
-    const [vx, vy] = R(m.ex, m.ey), hx = m.hx, hy = m.hy;
+    const [vx, vy] = R(m.ex, m.ey), steering = m.kind === 'taxi' && !m.player && !m.parked && m.laneYaw != null;
+    const hx = steering ? Math.cos(m.laneYaw) : m.hx, hy = steering ? Math.sin(m.laneYaw) : m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
     if ((m.ev || m.patrol) && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
     drawVehicle(m, vx, vy, hx, hy);

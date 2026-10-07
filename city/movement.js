@@ -1,3 +1,10 @@
+// Moderate loss of tyre grip follows lingering wetness and accumulated, exposed snow.
+function roadTraction(x, y) {
+  const water = clamp(Math.max(wet, rain * 0.65), 0, 1);
+  const cover = snowCover > 0 && snowExposed(mod(x, N), mod(y, N)) ? clamp(snowCover, 0, 1) : 0;
+  return Math.max(0.55, (1 - water * 0.2) * (1 - cover * 0.4));
+}
+
 // Air input accelerates along the camera-relative wish direction without replacing existing momentum.
 const AIR_ACCEL = 8, AIR_WISH_CAP = 0.7;
 function airStrafe(forward, side, speed, dt, yaw = a) {

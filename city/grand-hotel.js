@@ -1,9 +1,61 @@
 // ===== the Belle Epoque quarter's landmark hotel: a premium suite by night, a very bad idea after midnight.
 const HOTEL_SUITE_RATE = 250;
 const HOTEL_HEIST_DOOR = [10.7, 1.45];
-const HOTEL_PAINTING = [18.8, 2.6];
-const HOTEL_FRAME = [18.8, 1.3];
-let grandHotelStolen = false;
+const HOTEL_PAINTINGS = [
+  { id: 'hotelmasterpiece', title: 'THE DUKE OF BRIE', x: 18.8, w: 1.9, h: 1.65, art: [
+    'ggggg..............ggggg',
+    'gggg....yyyyyyyy....gggg',
+    'ggg....yyrrrrrryy....ggg',
+    'gg....yyrrssssrryy....gg',
+    'g.....yrrssssssrry.....g',
+    '......yrss@ss@ssry......',
+    '......yrssssssssry......',
+    '.......rssssssssr.......',
+    '........ss====ss........',
+    '......rrrrssrrrrrr......',
+    '....rrrrrryyrrrrrrrr....',
+    '...rrrrrrrrrrrrrrrrrr...',
+    '..rrrrrrrryyrrrrrrrrrr..',
+    '.rrrrrrryyyyyyrrrrrrrrr.',
+    'rrrrrrrrrrrrrrrrrrrrrrrr',
+  ] },
+  { id: 'hotelharbour', title: 'HARBOUR AT FIRST LIGHT', x: 7.3, w: 2.5, h: 1.55, art: [
+    '..............................',
+    '....................ooo.......',
+    '...................ooooo......',
+    '....................ooo.......',
+    '......ww......................',
+    '.....www............ww........',
+    '....wwww...........www........',
+    '...wwwww..........wwww........',
+    '..wwwwww.........wwwww........',
+    '~~~~~~|~~~~~~~~~~~~|~~~~~~~~~~~',
+    '~~rrrrrrrr~~~~~~rrrrrrrrr~~~~~~',
+    '~~~rrrrrr~~~~~~~~rrrrrrr~~~~~~~',
+    'cccccc~cccccc~cccccccccc~cccccc',
+    'ccc~cccccc~ccccccccc~cccccc~ccc',
+    'c~cccccccccccc~ccccccccccccc~cc',
+  ] },
+  { id: 'hotelstilllife', title: 'MIDNIGHT SUPPER', x: 13.1, w: 1.9, h: 1.6, art: [
+    '........................',
+    '.....rr.................',
+    '.....rr............w....',
+    '....rrrr..........www...',
+    '....rrrr.....g.....w....',
+    '....rrrr....ggg....w....',
+    '....rrrr...ggggg...|....',
+    '....rrrr...ggggg...|....',
+    'yyyyyyyyyyyyyyyyyyyyyyyy',
+    'yyoooooyygggyywwwwwwwyyy',
+    'yoooooooyggggywwwwwwwyyy',
+    'yyoooooyygggyyywwwwwyyyy',
+    'yyyyyyyyyyyyyyyyyyyyyyyy',
+    'rrrrrrrrrrrrrrrrrrrrrrrr',
+    'rrrrrrrrrrrrrrrrrrrrrrrr',
+  ] },
+].map(p => ({ ...p, y: 1.045, z: 1.05, art: pad(p.art) }));
+const HOTEL_PAINTING = [HOTEL_PAINTINGS[0].x, 2.6];
+let grandHotelStolen = {};
 let hotelAlarm = null;
 const HOTEL_TROLLEY = [12, 12.8];
 
@@ -58,11 +110,9 @@ ROOM_DEFS.grandhotelheist = { grid: hotelGalleryGrid(), light: 0.22, height: 3.8
   },
   props: r => {
     const p = [
-      hotelPortrait(),
+      ...HOTEL_PAINTINGS.map(hotelPortrait),
       BX(12, 12.8, 0.7, 0.4, 0, 0.82, solid(YEL, { top: '=', panel: 0.5 })),
       SP(12, 12.8, 0.55, 0.3, pad(['  o  ', ' /_\\ ', '(____)']), (c, row, L) => C(WHITE, Math.max(L, 6)), 0.82),
-      SP(7.3, 1.45, 1.4, 1.05, pad(['.------.', '| ~~   |', '|  <>  |', '`------`']), (c, row, L) => C(c === '.' || c === '-' || c === '|' ? YEL : CYAN, Math.max(L, 4)), 1.2),
-      SP(13.5, 1.45, 1.4, 1.05, pad(['.------.', '| .--. |', '| `--` |', '`------`']), (c, row, L) => C(c === '.' || c === '-' || c === '|' ? YEL : MAG, Math.max(L, 4)), 1.2),
     ];
     if (r.burgled) HOTEL_GUARD_PATHS.forEach((path, k) => p.push({ ...SP(path[0][0], path[0][1], 0.58, 1.8, ART.guard, (c, row, L) => C(row < 2 ? BLUE : row < 4 ? SKIN : c === '*' ? YEL : BLUE, Math.max(L, 5))), guard: true, dir: 0,
       tick: s => {
@@ -77,19 +127,24 @@ ROOM_DEFS.grandhotelheist = { grid: hotelGalleryGrid(), light: 0.22, height: 3.8
 const HOTEL_GUARD_PATHS = [[[18.5, 3], [20, 8], [18.5, 12], [16.5, 8]], [[4, 4], [7.5, 4], [7.5, 11], [4, 11]]];
 
 function hotelHeistDoorNear() { return mode === 'room' && room.kind === 'grandhotel' && Math.hypot(px - HOTEL_HEIST_DOOR[0], py - HOTEL_HEIST_DOOR[1]) < 1.05; }
-function hotelHeistPaintingNear() { return mode === 'room' && room.kind === 'grandhotelheist' && Math.hypot(px - HOTEL_PAINTING[0], py - HOTEL_PAINTING[1]) < 1.35; }
+function hotelHeistPaintingNear() {
+  if (mode !== 'room' || room.kind !== 'grandhotelheist') return null;
+  return HOTEL_PAINTINGS.find(p => Math.abs(px - p.x) < p.w / 2 + .2 && py > p.y && py < p.y + 2.2) || null;
+}
+const hotelGalleryEmpty = () => HOTEL_PAINTINGS.every(p => grandHotelStolen[p.id]);
 function grandHotelPrompt() {
   if (room.kind === 'grandhotelheist') {
     if (nearExit()) return 'E: back to the hotel lobby';
     if (hotelTrolleyNear()) return room.trolleyUsed ? 'The complimentary cheese has been comprehensively investigated.' : 'E: ring the room-service bell (distract the guards)';
     if (room.alarm) return 'ALARM! Get out of the hotel!';
     if (room.silent) return `Silent alarm: ${Math.max(0, Math.ceil(room.silent - T))}s`;
-    if (hotelHeistPaintingNear()) return grandHotelStolen ? 'The empty frame. Someone left the little museum card in it.' : 'E: steal THE DUKE OF BRIE';
+    const painting = hotelHeistPaintingNear();
+    if (painting) return grandHotelStolen[painting.id] ? `The empty frame: ${painting.title}.` : `E: steal ${painting.title}`;
     return 'Stay out of the guards\' torch beams (C: crouch)';
   }
   if (room.kind !== 'grandhotel') return '';
   if (hotelHeistDoorNear()) {
-    if (grandHotelStolen) return 'The staff door is locked again.';
+    if (hotelGalleryEmpty()) return 'The staff door is locked again.';
     return tod >= 23 || tod < 5 ? 'E: slip into the after-hours gallery' : 'The staff door is locked until 11pm.';
   }
   if (nearKeeper()) return checkInOpen(tod) ? `E: book the Royal Suite (${fmt$(HOTEL_SUITE_RATE)} a night)` : '"Check-in is from 6pm."';
@@ -103,24 +158,25 @@ function bookGrandHotelSuite() {
   sleep = { t: 0, lobby };
 }
 function beginGrandHotelHeist() {
-  if (grandHotelStolen) return say('The staff door has a fresh lock. The hotel has noticed its missing masterpiece.', 4);
+  if (hotelGalleryEmpty()) return say('The staff door has a fresh lock. The hotel has noticed its missing paintings.', 4);
   if (!(tod >= 23 || tod < 5)) return say('The night manager gives the staff door a pointed look. "That gallery is closed until 11."', 4);
   const lobby = { word: room.word, neon: room.neon, ret: room.ret, cell: room.cell, line: room.line, grandHotel: true };
   enterRoom('grandhotelheist', { word: 'PRIVATE GALLERY', ret: room.ret, lobby, burgled: true, spot: 0 }, [12, 14.6, -Math.PI / 2]);
   if (hotelAlarm) room.silent = hotelAlarm.deadline;
   say('You slip into the private gallery. Somewhere, a guard jingles a comically large ring of keys.', 5);
 }
-function stealHotelPainting() {
-  if (grandHotelStolen) return say('The painting is gone. The empty frame is still under guard.'), true;
+function stealHotelPainting(painting) {
+  if (grandHotelStolen[painting.id]) return say('The painting is gone. The empty frame is still under guard.'), true;
   if (inv.length >= INV_SIZE) return say('Your bag is full. That frame is not going to fit in a quick slot.'), true;
+  const gallery = room;
   startCrime('lockpick', ok => {
-    if (ok === 'abort') return;
+    if (ok === 'abort' || room !== gallery || mode !== 'room') return;
     if (!ok) { armHotelAlarm(); return say('The frame squeals as it comes loose. A silent alarm starts counting down.', 4); }
-    grandHotelStolen = true; carryItem({ id: 'hotelmasterpiece', uses: 0 });
-    room.props = room.props.filter(p => p.hotelPainting !== true);
-    room.props.push(hotelPortrait());
+    grandHotelStolen[painting.id] = true; carryItem({ id: painting.id, uses: 0 });
+    room.props = room.props.filter(p => p.hotelPainting !== painting.id);
+    room.props.push(hotelPortrait(painting));
     armHotelAlarm(); saveGame();
-    say('The painting comes free. A tiny red light starts blinking. You have 40 seconds to leave before the hotel calls the police.', 6);
+    say(`${painting.title} comes free. ${room.alarm ? 'The alarm is already ringing: get out!' : `Leave the hotel within ${Math.max(0, Math.ceil(room.silent - T))} seconds to beat the silent alarm.`}`, 6);
   });
   return true;
 }
@@ -133,7 +189,8 @@ function grandHotelUse() {
     say('DING! "Complimentary cheese?" Both guards stop their rounds and turn towards room service. "Who ordered the cheese?"', 5);
     return true;
   }
-  if (room.kind === 'grandhotelheist' && hotelHeistPaintingNear()) return stealHotelPainting();
+  const painting = hotelHeistPaintingNear();
+  if (painting) return stealHotelPainting(painting);
   return false;
 }
 
@@ -144,10 +201,15 @@ function armHotelAlarm() {
   room.silent = hotelAlarm.deadline;
 }
 function stepGrandHotel() {
-  if (!hotelAlarm || T < hotelAlarm.deadline) return;
+  if (!hotelAlarm) return;
+  const lobby = room?.kind === 'hotelroom' ? room.lobby : room;
+  const inside = mode === 'room' && (room.kind === 'grandhotel' || room.kind === 'grandhotelheist' || lobby?.grandHotel) &&
+    lobby?.ret?.[0] === hotelAlarm.ret[0] && lobby?.ret?.[1] === hotelAlarm.ret[1];
+  if (!inside) { hotelAlarm = null; return; }
+  if (T < hotelAlarm.deadline) return;
   const ret = hotelAlarm.ret;
   hotelAlarm = null;
-  if (mode === 'room' && (room.kind === 'grandhotelheist' || room.kind === 'grandhotel')) room.alarm = true;
+  room.alarm = true;
   addWanted('heist', ret[0], ret[1], true);
   say('The Grand Hotel alarm goes off. The police are heading for the gallery.', 5);
 }
@@ -164,17 +226,28 @@ function hotelSuiteWall(i, u, uStep, z, d, mx, my, L) {
   return true;
 }
 
-function hotelPortrait() {
-  const stolen = grandHotelStolen;
-  const art = stolen ? ['.========.', '|        |', '|  GONE  |', '|        |', '\'========\''] :
-    ['.========.', '|~~.oo.~~|', '|~~(oo)~~|', '|^^/##\\^^|', '\'========\''];
-  const color = (c, row, L) => {
-    let hue = CYAN;
-    if (stolen || '.=|\''.includes(c)) hue = YEL;
-    else if (c === 'o') hue = WARM;
-    else if (c === '#') hue = BRICK;
-    else if (c === '^') hue = GREEN;
-    return C(hue, Math.max(L, 5));
-  };
-  return { ...SP(HOTEL_FRAME[0], HOTEL_FRAME[1], 1.75, 1.25, pad(art), color, 1.2), hotelPainting: !stolen };
+const HOTEL_PAINT_COLORS = { '.': BLUE, g: GREEN, y: YEL, r: BRICK, s: SKIN, '@': GRAY, '=': WHITE,
+  o: ORANGE, w: WHITE, '|': BRICK, '~': CYAN, c: BLUE };
+function hotelPaintingPixel(p, u, v) {
+  const row = clamp(Math.floor(v * p.art.length), 0, p.art.length - 1);
+  const col = clamp(Math.floor(u * p.art[0].length), 0, p.art[0].length - 1);
+  const code = p.art[row][col];
+  return [code === '.' ? ' ' : code === '@' ? 'o' : '=|~'.includes(code) ? code : ':', HOTEL_PAINT_COLORS[code] ?? BLUE];
+}
+function hotelPortrait(p) {
+  const stolen = !!grandHotelStolen[p.id], border = .085, hl = p.w / 2;
+  const frame = BX(p.x, p.y, hl, .035, p.z, p.z + p.h, (i, t, L) => {
+    if (HIT.face !== 3 || Math.abs(HIT.u) > hl - border || HIT.w < p.z + border || HIT.w > p.z + p.h - border) {
+      BG[i] = C(YEL, 1 + L * .25 * shadeFace(HIT.face));
+      return set(i, HIT.face === 5 || Math.abs(HIT.u) < hl - border ? '=' : '|', C(YEL, Math.max(4, L))), true;
+    }
+    if (stolen) {
+      BG[i] = C(GRAY, .8);
+      return set(i, Math.abs(HIT.u) < .03 && HIT.w > p.z + p.h * .75 ? 'o' : ' ', C(YEL, Math.max(3, L))), true;
+    }
+    const [ch, hue] = hotelPaintingPixel(p, (HIT.u + hl - border) / (p.w - border * 2), (p.z + p.h - border - HIT.w) / (p.h - border * 2));
+    BG[i] = C(hue, .8 + L * .2);
+    return set(i, ch, C(hue, Math.max(4, L))), true;
+  });
+  return { ...frame, hotelPainting: p.id, stolen };
 }
