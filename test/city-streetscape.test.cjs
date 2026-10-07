@@ -43,8 +43,12 @@ test('snow distinguishes sheltered ground and lower balconies from their exposed
 test('cached ground shelters agree with full geometry at rotated shapes, edges and removed owners',()=>{
   const result=JSON.parse(ev(`JSON.stringify((()=>{
     let tested=0,errors=0;
+    const roofs=belleBuildingsB.flat().flatMap(b=>b.roofParts);
     const check=(x,y)=>{
-      const sheltered=underEl(y)||arcadeAt(x,y),overhead=streetGeometryCells[idx(Math.floor(x),Math.floor(y))];
+      const cell=idx(Math.floor(x),Math.floor(y)),cx=cell%N+.5,cy=Math.floor(cell/N)+.5;
+      // New roof canopies cover empty cells; compare their full rendered rectangles with the cached cell lookup.
+      const canopy=!map[cell]&&roofs.some(r=>Math.abs(rel(cx-r.x))<r.hl&&Math.abs(rel(cy-r.y))<r.hw);
+      const sheltered=underEl(y)||arcadeAt(x,y)||canopy,overhead=streetGeometryCells[cell];
       const expected=!sheltered&&geometrySnowExposed(x,y,0,overhead);
       if(snowExposed(x,y)!==expected)errors++;
       tested++;

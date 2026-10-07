@@ -803,6 +803,7 @@ for (const gh of GLASSHOUSES) {
 // Belle Époque: preserve flat roofs with public access. Other buildings have recessed courts / clipped wings
 // and a real mansard above the masonry. A lot's material and vines are stable across all its faces.
 const BELLE_BUILDINGS = [];
+const BELLE_ROOF_CELLS = new Array(N * N);
 {
   const lots = new Map();
   for (let i = 0; i < map.length; i++) if (map[i] && STY[i] === 24) {
@@ -826,7 +827,7 @@ const BELLE_BUILDINGS = [];
   }
 }
 function belleRoofHeight(x, y) {
-  const b = SHOP[idx(Math.floor(x), Math.floor(y))]?.belle;
+  const b = BELLE_ROOF_CELLS[idx(Math.floor(x), Math.floor(y))];
   if (!b || b.access) return 0;
   let inset = 0;
   for (const r of b.roofRects)
@@ -2872,10 +2873,35 @@ function roofPlaneData(planes) {
   if (!packed) { packed = Float64Array.from(planes.flat()); ROOF_PLANE_DATA.set(planes,packed); }
   return packed;
 }
+function belleRoofInfill() {
+  const infill = new Uint8Array(N * N);
+  const blocks = new Set(BELLE_BUILDINGS.map(b => idx((b.x0 >> 3) * 8 + 2, (b.y0 >> 3) * 8 + 2)));
+  for (const start of blocks) {
+    const bx = start % N, by = Math.floor(start / N), open = new Uint8Array(36), queue = [];
+    const visit = (x, y) => {
+      if (x < 0 || x >= 6 || y < 0 || y >= 6) return;
+      const cell = y * 6 + x;
+      if (open[cell] || map[idx(bx + x, by + y)]) return;
+      open[cell] = 1; queue.push(cell);
+    };
+    // Street-connected recesses stay open. Only gaps enclosed by the block receive roof infill.
+    for (let n = 0; n < 6; n++) { visit(n, 0); visit(n, 5); visit(0, n); visit(5, n); }
+    for (let n = 0; n < queue.length; n++) {
+      const x = queue[n] % 6, y = Math.floor(queue[n] / 6);
+      visit(x - 1, y); visit(x + 1, y); visit(x, y - 1); visit(x, y + 1);
+    }
+    for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++) {
+      const cell = idx(bx + x, by + y);
+      if (!map[cell] && !open[y * 6 + x]) infill[cell] = 1;
+    }
+  }
+  return infill;
+}
+const BELLE_ROOF_INFILL = belleRoofInfill();
 function belleRoofFootprint(b) {
   const width = b.x1 - b.x0, height = b.y1 - b.y0, cells = new Uint8Array(width * height);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
-    cells[y * width + x] = SHOP[idx(b.x0 + x, b.y0 + y)] === b.sh ? 1 : 0;
+    cells[y * width + x] = SHOP[idx(b.x0 + x, b.y0 + y)] === b.sh || BELLE_ROOF_INFILL[idx(b.x0 + x, b.y0 + y)] ? 1 : 0;
   return { width, height, cells };
 }
 function belleRoofRects(b) {
@@ -2930,6 +2956,8 @@ function belleFaceAt(mx, my, dir) {
 const belleBuildingsB = bucketed(BELLE_BUILDINGS.map(b => {
   const rects = b.access ? [] : belleRoofRects(b);
   b.sh.belle.roofRects = rects;
+  for (const r of rects) for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++)
+    BELLE_ROOF_CELLS[idx(x, y)] = b.sh.belle;
   const roofParts = rects.map(rect => {
     const hl = (rect.x1 - rect.x0) / 2, hw = (rect.y1 - rect.y0) / 2;
     const planes = mansardPlanes(hl, hw, b.h, b.h + 0.45);
@@ -3160,6 +3188,8 @@ function geometrySnowExposed(x,y,z,overhead) {
 function snowExposed(x,y,z=0) {
   if (underEl(y) && z<EL_BOT || arcadeAt(x,y) && z<ARCADE_Z) return false;
   const cell = idx(Math.floor(x),Math.floor(y)), overhead = streetGeometryCells[cell];
+  const canopy = BELLE_ROOF_INFILL[cell] && BELLE_ROOF_CELLS[cell];
+  if (canopy && z < canopy.h - .02) return false;
   if (z === 0) return groundSnowExposed(x,y,cell,overhead);
   return geometrySnowExposed(x,y,z,overhead);
 }
@@ -14243,6 +14273,23 @@ function asciiBar(f) {
 }
 // Capture the rendered game, including the HUD, without DOM menus or OS dialogs.
 let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
+let screenshotFolderBusy = false;
+async function openScreenshotFolder() {
+  if (!GLYPHPORT_DESKTOP_APP || screenshotFolderBusy) return;
+  screenshotFolderBusy = true;
+  const button = pauseEl?.querySelector('[data-act="screenshot-folder"]');
+  if (button) button.disabled = true;
+  try {
+    if (!paused) openPause();
+    await desktopMouseCommands.catch(() => {});
+    await window.__TAURI__.core.invoke('open_screenshot_folder');
+  } catch (error) {
+    showScreenshotNotice(`Could not open the screenshot folder. ${error.message || error}`);
+  } finally {
+    screenshotFolderBusy = false;
+    if (button) button.disabled = false;
+  }
+}
 function showScreenshotNotice(text) {
   if (!screenshotNotice) {
     screenshotNotice = document.createElement('div');
@@ -14346,7 +14393,10 @@ function buildPause() {
       <button class="item" data-act="map">Map of the city</button>
       <button class="item" data-act="newgame">Start over</button>
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
-      <button class="item" data-act="screenshot">Take screenshot <span class="k" style="margin-left:auto">F12</span></button>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="item" data-act="screenshot" style="width:auto;flex:1">Take screenshot <span class="k" style="margin-left:auto">F12</span></button>
+        <button class="item" data-act="screenshot-folder" style="width:auto;display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Open screenshot folder</button>
+      </div>
       <p class="sub">${GLYPHPORT_DESKTOP_APP ? 'Saved as PNGs in Screenshots beside the game executable.' : 'Screenshots download as PNGs.'}</p>
       <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/Glyphport-Setup.exe" target="_blank" rel="noopener" style="display:${!GLYPHPORT_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
       <button class="item" data-act="fullscreen" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
@@ -14403,6 +14453,7 @@ function buildPause() {
     if (!b) return;
     if (b.dataset.act === 'fullscreen') toggleDesktopFullscreen();
     if (b.dataset.act === 'screenshot') takeScreenshot();
+    if (b.dataset.act === 'screenshot-folder') openScreenshotFolder();
     if (b.dataset.act === 'update') desktopUpdateAction();
     if (b.dataset.act === 'quit') quitDesktopGame();
     if (b.dataset.act === 'resume') closePause(true);

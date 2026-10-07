@@ -5,12 +5,16 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub fn save(png: &[u8]) -> Result<String, String> {
+pub fn directory() -> Result<PathBuf, String> {
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
-    let directory = executable
+    Ok(executable
         .parent()
         .ok_or("Could not locate the game folder")?
-        .join("Screenshots");
+        .join("Screenshots"))
+}
+
+pub fn save(png: &[u8]) -> Result<String, String> {
+    let directory = directory()?;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?

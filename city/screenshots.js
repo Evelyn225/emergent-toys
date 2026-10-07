@@ -1,5 +1,22 @@
 // Capture the rendered game, including the HUD, without DOM menus or OS dialogs.
 let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
+let screenshotFolderBusy = false;
+async function openScreenshotFolder() {
+  if (!GLYPHPORT_DESKTOP_APP || screenshotFolderBusy) return;
+  screenshotFolderBusy = true;
+  const button = pauseEl?.querySelector('[data-act="screenshot-folder"]');
+  if (button) button.disabled = true;
+  try {
+    if (!paused) openPause();
+    await desktopMouseCommands.catch(() => {});
+    await window.__TAURI__.core.invoke('open_screenshot_folder');
+  } catch (error) {
+    showScreenshotNotice(`Could not open the screenshot folder. ${error.message || error}`);
+  } finally {
+    screenshotFolderBusy = false;
+    if (button) button.disabled = false;
+  }
+}
 function showScreenshotNotice(text) {
   if (!screenshotNotice) {
     screenshotNotice = document.createElement('div');

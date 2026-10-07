@@ -3,6 +3,32 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadCity } = require('./helpers/load-city.cjs');
 
+test('Belle roofs bridge enclosed middle gaps while retaining street recesses and sheltering the ground below', () => {
+  for (const seed of [1, 17, 91]) {
+    const { ev } = loadCity(seed);
+    const result = JSON.parse(ev(`JSON.stringify((() => {
+      let covered=0, open=0; const errors=[];
+      for (const b of BELLE_BUILDINGS) {
+        for (let y=b.y0;y<b.y1;y++) for (let x=b.x0;x<b.x1;x++) {
+          const k=idx(x,y), h=belleRoofHeight(x+.5,y+.5);
+          if (b.access) { if(h!==0 || map[k]!==b.h)errors.push('public roof changed'); continue; }
+          if (SHOP[k]===b.sh || map[k]) continue;
+          if (BELLE_ROOF_INFILL[k]) {
+            covered++;
+            if(h<=b.h || !BELLE_ROOF_CELLS[k] || snowExposed(x+.5,y+.5,0))errors.push('uncovered middle gap');
+          } else {
+            open++;
+            if(h!==0)errors.push('street recess filled');
+          }
+        }
+      }
+      return {covered,open,errors};
+    })())`));
+    assert.ok(result.covered > 20 && result.open > 20, JSON.stringify(result));
+    assert.deepEqual(result.errors, [], `seed ${seed}: ${JSON.stringify(result)}`);
+  }
+});
+
 test('Belle signs and trim fit continuous exposed faces around cut corners and recessed courts', () => {
   for (const seed of [1, 17, 91]) {
     const { ev } = loadCity(seed);

@@ -24,6 +24,7 @@ async function withDesktop(fn, { offline = false, version = '1.0.4' } = {}) {
           if (window.deferScreenshot) return new Promise(resolve => { window.resolveScreenshot = resolve; });
           return 'C:\\Games\\Glyphport\\Screenshots\\Glyphport-test.png';
         }
+        if (command === 'open_screenshot_folder' && window.failOpenFolder) throw new Error('Windows could not open the folder.');
         if (command === 'set_game_mouse_capture' && args.active && window.deferCapture) return new Promise(resolve => { window.resolveCapture = resolve; });
         return command === 'set_game_mouse_capture' ? !window.failCapture : true;
       } },
@@ -95,6 +96,9 @@ test('browser screenshot downloads a real PNG with F12 and the pause menu button
     const page = await context.newPage();
     await page.goto(PAGE);
     await page.waitForFunction(() => typeof takeScreenshot === 'function');
+    await page.evaluate(() => openPause());
+    assert.equal(await page.locator('[data-act="screenshot-folder"]').isVisible(), false);
+    await page.evaluate(() => closePause(false));
     for (const trigger of [() => page.keyboard.press('F12'), async () => {
       await page.evaluate(() => openPause());
       await page.click('[data-act="screenshot"]');
@@ -112,6 +116,22 @@ test('browser screenshot downloads a real PNG with F12 and the pause menu button
     }
   } finally { await context.close(); }
 });
+
+test('desktop folder button sits beside screenshot and opens the fixed native folder while remaining paused', () => withDesktop(async page => {
+  await page.evaluate(() => openPause());
+  const screenshot = await page.locator('[data-act="screenshot"]').boundingBox();
+  const folder = await page.locator('[data-act="screenshot-folder"]').boundingBox();
+  assert.ok(folder.x > screenshot.x + screenshot.width - 1);
+  assert.ok(Math.abs(folder.y - screenshot.y) < 3, 'the buttons share a row');
+  await page.click('[data-act="screenshot-folder"]');
+  await page.waitForFunction(() => !screenshotFolderBusy && window.nativeCalls.some(call => call.command === 'open_screenshot_folder'));
+  assert.deepEqual(await page.evaluate(() => window.nativeCalls.find(call => call.command === 'open_screenshot_folder')), { command: 'open_screenshot_folder' });
+  assert.equal(await page.evaluate(() => paused && !desktopMouseCaptured), true);
+  await page.evaluate(() => window.failOpenFolder = true);
+  await page.click('[data-act="screenshot-folder"]');
+  await page.waitForFunction(() => !screenshotFolderBusy && screenshotNotice?.textContent.includes('Could not open'));
+  assert.equal(await page.locator('[data-act="screenshot-folder"]').isEnabled(), true, 'an opener failure allows retry');
+}));
 
 test('Escape resumes native capture and raw mouse motion turns the player; pausing and blur release it', () => withDesktop(async page => {
   await page.evaluate(() => openPause());

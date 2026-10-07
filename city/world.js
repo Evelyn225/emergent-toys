@@ -444,6 +444,7 @@ for (const gh of GLASSHOUSES) {
 // Belle Époque: preserve flat roofs with public access. Other buildings have recessed courts / clipped wings
 // and a real mansard above the masonry. A lot's material and vines are stable across all its faces.
 const BELLE_BUILDINGS = [];
+const BELLE_ROOF_CELLS = new Array(N * N);
 {
   const lots = new Map();
   for (let i = 0; i < map.length; i++) if (map[i] && STY[i] === 24) {
@@ -467,7 +468,7 @@ const BELLE_BUILDINGS = [];
   }
 }
 function belleRoofHeight(x, y) {
-  const b = SHOP[idx(Math.floor(x), Math.floor(y))]?.belle;
+  const b = BELLE_ROOF_CELLS[idx(Math.floor(x), Math.floor(y))];
   if (!b || b.access) return 0;
   let inset = 0;
   for (const r of b.roofRects)

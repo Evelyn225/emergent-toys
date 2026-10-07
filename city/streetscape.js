@@ -177,6 +177,8 @@ function geometrySnowExposed(x,y,z,overhead) {
 function snowExposed(x,y,z=0) {
   if (underEl(y) && z<EL_BOT || arcadeAt(x,y) && z<ARCADE_Z) return false;
   const cell = idx(Math.floor(x),Math.floor(y)), overhead = streetGeometryCells[cell];
+  const canopy = BELLE_ROOF_INFILL[cell] && BELLE_ROOF_CELLS[cell];
+  if (canopy && z < canopy.h - .02) return false;
   if (z === 0) return groundSnowExposed(x,y,cell,overhead);
   return geometrySnowExposed(x,y,z,overhead);
 }

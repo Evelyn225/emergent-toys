@@ -53,7 +53,10 @@ function buildPause() {
       <button class="item" data-act="map">Map of the city</button>
       <button class="item" data-act="newgame">Start over</button>
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
-      <button class="item" data-act="screenshot">Take screenshot <span class="k" style="margin-left:auto">F12</span></button>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="item" data-act="screenshot" style="width:auto;flex:1">Take screenshot <span class="k" style="margin-left:auto">F12</span></button>
+        <button class="item" data-act="screenshot-folder" style="width:auto;display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Open screenshot folder</button>
+      </div>
       <p class="sub">${GLYPHPORT_DESKTOP_APP ? 'Saved as PNGs in Screenshots beside the game executable.' : 'Screenshots download as PNGs.'}</p>
       <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/Glyphport-Setup.exe" target="_blank" rel="noopener" style="display:${!GLYPHPORT_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
       <button class="item" data-act="fullscreen" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
@@ -110,6 +113,7 @@ function buildPause() {
     if (!b) return;
     if (b.dataset.act === 'fullscreen') toggleDesktopFullscreen();
     if (b.dataset.act === 'screenshot') takeScreenshot();
+    if (b.dataset.act === 'screenshot-folder') openScreenshotFolder();
     if (b.dataset.act === 'update') desktopUpdateAction();
     if (b.dataset.act === 'quit') quitDesktopGame();
     if (b.dataset.act === 'resume') closePause(true);
