@@ -53,6 +53,7 @@ const TAXI_STOPS = ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway'];
 const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use' };
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
 function touchActions() {
+  if (freecam) return [['Up', 'KeyE', 'main'], ['Down', 'KeyQ', 'pop']];
   if (sleep || bustedEl && bustedEl.style.display === 'flex') return []; // (busted: tap a row)
   if (panelOpen() || prizeEl && prizeEl.style.display === 'flex') return [['Close', 'KeyE', 'main']];
   if (game) {

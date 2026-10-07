@@ -90,6 +90,7 @@ const K = {}; // keys held, by KeyboardEvent.code
 const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
 let paused = false;
+let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
 const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true };
@@ -12648,10 +12649,13 @@ function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
-  eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
-  if (mode === 'walk') eye += architectureGroundHeight(px, py);
+  if (freecam) eye = freecam.z;
+  else {
+    eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
+    if (mode === 'walk') eye += architectureGroundHeight(px, py);
+  }
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
-  hor = (rows >> 1) + pitch * rows + shake() | 0;
+  hor = (rows >> 1) + pitch * rows + (freecam ? 0 : shake()) | 0;
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
   for (let x = 0; x < cols; x++) {
@@ -12720,14 +12724,19 @@ function render(dt) {
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
-  if (mode === 'drive' || mode === 'taxi') dash();
-  if (mode === 'el') elFrame();
-  if (mode === 'fair') fairFrame();
-  if (mode === 'boat') boatFrame();
-  drawHeld(dt); // what's in your hand (or mouth, or under your feet)
+  if (!freecam) {
+    if (mode === 'drive' || mode === 'taxi') dash();
+    if (mode === 'el') elFrame();
+    if (mode === 'fair') fairFrame();
+    if (mode === 'boat') boatFrame();
+    drawHeld(dt); // what's in your hand (or mouth, or under your feet)
+  }
   present();
-  if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
-  hud();
+  if (freecam) freecamHud();
+  else {
+    if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
+    hud();
+  }
 }
 // paint the character grid (CH / COL / BG, with fog) onto the canvas: the world's frame, or a minigame's
 function present() {
@@ -14320,7 +14329,7 @@ function closePause(lock) {
 const togglePause = () => paused ? closePause(NATIVE_MOUSE_APP) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
 // (not while a cabinet or a shift has the screen: Esc there walks away from it)
-document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !desktopMouseCaptured && !paused && !sleep && !game) openPause(); });
+document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !desktopMouseCaptured && !paused && (freecam || !sleep && !game)) openPause(); });
 applySettings();
 // Check quietly at launch. Downloads are an explicit pause-menu action; the game also works offline.
 let desktopUpdate = null, desktopUpdateState = 'idle';
@@ -14388,8 +14397,59 @@ const DEV_CSS = `
   #dev .bar input { width: 9em; font: inherit; color: #fff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); padding: 2px 6px; }`;
 const devOpen = () => !!devEl && devEl.style.display === 'flex';
 
+function toggleFreecam() {
+  if (freecam) { freecam = null; return; }
+  let x = px, y = py, yaw = a;
+  if (mode === 'sea') [x, y, yaw] = seaCam(0, chaseOn);
+  else if (chaseOn && me) [x, y, yaw] = chaseCam(0);
+  let z = mode === 'room' ? 1.7 : 0.17;
+  if (Number.isFinite(eye)) z = eye;
+  freecam = { x, y, yaw, pitch, z };
+}
+
+function stepFreecam(dt) {
+  const cam = freecam;
+  cam.yaw += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
+  cam.pitch = clamp(cam.pitch + ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt, -1.2, 1.6);
+  const forward = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
+  const side = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+  const up = (K.KeyE || K.Space ? 1 : 0) - (K.KeyQ || K.KeyC ? 1 : 0);
+  // Pitch is a screen-horizon offset in this renderer, rather than an angle.
+  const projection = cols * cw / (2 * Math.tan(FOV / 2) * FS);
+  const slope = cam.pitch * rows / projection, horizontal = 1 / Math.hypot(1, slope);
+  const cx = Math.cos(cam.yaw), cy = Math.sin(cam.yaw);
+  const vx = cx * forward * horizontal - cy * side;
+  const vy = cy * forward * horizontal + cx * side;
+  const vz = slope * horizontal * forward + up;
+  const length = Math.max(1, Math.hypot(vx, vy, vz));
+  const speed = (K.ShiftLeft || K.ShiftRight ? 30 : 6) * (mode === 'room' ? 1 : 0.1) * dt / length;
+  cam.x += vx * speed; cam.y += vy * speed; cam.z += vz * speed;
+  if (mode !== 'room') { cam.x = mod(cam.x, N); cam.y = mod(cam.y, N); }
+}
+
+function renderFreecam() {
+  const saved = [px, py, a, pitch, chaseOn, eye, dx, dy, hor, lookHit];
+  try {
+    px = freecam.x; py = freecam.y; a = freecam.yaw; pitch = freecam.pitch; chaseOn = true;
+    render(0);
+  } finally { [px, py, a, pitch, chaseOn, eye, dx, dy, hor, lookHit] = saved; }
+}
+
+function freecamHud() {
+  const scale = mode === 'room' ? 1 : 10;
+  const height = (freecam.z * scale).toFixed(1);
+  g.save(); g.font = FS + 'px monospace'; g.fillStyle = 'rgba(0,0,0,0.8)';
+  g.fillRect(0, 0, cv.width, FS * 3 + 16);
+  g.fillStyle = '#fff';
+  g.fillText(`FREECAM  ${height}m high  ·  world frozen`, 10, 6);
+  g.fillText('WASD move · E/Q up/down · Shift faster · mouse/arrows look', 10, FS + 8);
+  g.fillText('F2: toggle off in Camera · Esc: pause', 10, FS * 2 + 10);
+  g.restore();
+}
+
 // put you on your feet, out of whatever you're in (a car, a room, a ride, a boat, the el), ready to be moved
 function devFree() {
+  freecam = null;
   if (game) game = null;
   if (me) leaveCar();
   if (mode === 'room') { room = null; }
@@ -14463,7 +14523,10 @@ function devBody() {
     return `${devTab === 'items' ? `<p class="note">carrying ${inv.length}/${INV_SIZE}: click to add one to your hands</p>` : '<p class="note">click to go there (you\'re put on your feet first)</p>'}<div class="grid">${html || '<p class="note">nothing matches</p>'}</div>`;
   }
   devEl.acts = [];
-  const act = (label, fn) => { devEl.acts.push(fn); return btn(devEl.acts.length - 1, label); };
+  const act = (label, fn, extra = '') => { devEl.acts.push(fn); return btn(devEl.acts.length - 1, label, extra); };
+  if (devTab === 'camera') return `<div class="bar">${act('Freecam: ' + (freecam ? 'on' : 'off'), () => { toggleFreecam(); closeDev(); }, `role="switch" aria-checked="${!!freecam}"`)}</div>
+    <p class="note">Fly through walls with the world frozen. Toggle off to return to your player.</p>
+    <p class="note">WASD move &middot; mouse/arrows look &middot; E/Q up/down &middot; Shift faster</p>`;
   if (devTab === 'money') return `<p class="note">you have ${fmt$(money)} and ${tickets} tickets</p>
     <div class="bar">${[100, 1000, 10000, 100000].map(n => act(`+${fmt$(n)}`, () => devCash(n))).join('')}${act('Broke ($0)', () => devCash(-money))}</div>
     <div class="bar">set money to <input type="number" min="0" step="1" data-set="money" value="${Math.round(money)}"></div>
@@ -14483,7 +14546,7 @@ function devBody() {
     <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
 }
 function renderDev(keepFocus) {
-  const tabs = [['places', 'Places'], ['items', 'Items'], ['money', 'Money'], ['time', 'Time & weather'], ['other', 'Other']];
+  const tabs = [['places', 'Places'], ['items', 'Items'], ['money', 'Money'], ['time', 'Time & weather'], ['camera', 'Camera'], ['other', 'Other']];
   devEl.querySelector('.panel').innerHTML = `<h1>Dev tools</h1><p class="sub">F2 or Esc to close &middot; type to search</p>
     <div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${devTab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}<span style="flex:1"></span><button class="tab" data-close>close</button></div>
     ${devTab === 'places' || devTab === 'items' ? `<input class="search" type="search" placeholder="search ${devTab}..." value="${devFilter.replace(/"/g, '&quot;')}" autocomplete="off">` : ''}
@@ -14502,6 +14565,7 @@ function openDev() {
       if (b.dataset.tab) { devTab = b.dataset.tab; devFilter = ''; return renderDev(); }
       const fn = devEl.acts[+b.dataset.dev]; if (!fn) return;
       fn();
+      if (!devOpen()) return;
       if (devTab === 'places') closeDev(); else renderDev(false); // (a jump closes it, so you can see where you are)
     });
     devEl.addEventListener('input', e => {
@@ -17486,6 +17550,14 @@ onkeydown = e => {
   if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
+  if (freecam) {
+    if (e.code === 'Escape' && !e.repeat) { togglePause(); return; }
+    if (e.code === 'KeyE' && paused && pauseEl?.style.display === 'flex' && !e.repeat) { closePause(true); return; }
+    if (paused) return;
+    e.preventDefault(); K[e.code] = 1;
+    if (!e.repeat) { audioStart(); if (e.code === 'KeyN') toggleSound(); }
+    return;
+  }
   if (bigMapKey(e, true)) return; // the big map (from the pause menu) has the keys while it's up
   if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
@@ -17528,8 +17600,14 @@ cv.onclick = () => { audioStart(); if (!paused) lockMouse(); };
 const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 // turn your head by (mx, my) mouse pixels' worth (the mouse, or a drag on a touch screen)
 function turnBy(mx, my) {
-  if (paused || game) return;
+  if (paused) return;
   const s = settings.sensitivity;
+  if (freecam) {
+    freecam.yaw += mx * 0.003 * s;
+    freecam.pitch = clamp(freecam.pitch - my * 0.002 * s * (settings.invertY ? -1 : 1), -1.2, 1.6);
+    return;
+  }
+  if (game) return;
   if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
@@ -17542,7 +17620,7 @@ onmousemove = e => {
 };
 function moveMouseBy(mx, my) {
   if (paused) return;
-  if (flick) { flick.x += mx; flick.y += my; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
+  if (flick && !freecam) { flick.x += mx; flick.y += my; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
   turnBy(mx, my);
 }
 if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
@@ -17558,8 +17636,8 @@ if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
   desktopMouseReady.catch(() => {}); // lockMouse handles subscription failure and tries browser capture
   addEventListener('blur', lostCapture);
 }
-addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });
-addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });
+addEventListener('mousedown', e => { if (!freecam && e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });
+addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });
 addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.preventDefault(); });
 
 const free = (x, y) => {
@@ -17658,7 +17736,9 @@ let t0 = performance.now();
 function loop(t) {
   if (paused) { t0 = t; requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
-  const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t; T += dt; msgT -= dt;
+  const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
+  if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
+  T += dt; msgT -= dt;
   env(dt);
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { // a cabinet or a shift has the screen; the world carries on behind it
@@ -17844,6 +17924,7 @@ const TAXI_STOPS = ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway'];
 const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use' };
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
 function touchActions() {
+  if (freecam) return [['Up', 'KeyE', 'main'], ['Down', 'KeyQ', 'pop']];
   if (sleep || bustedEl && bustedEl.style.display === 'flex') return []; // (busted: tap a row)
   if (panelOpen() || prizeEl && prizeEl.style.display === 'flex') return [['Close', 'KeyE', 'main']];
   if (game) {

@@ -116,3 +116,25 @@ test('an installed current desktop version does not offer an older download', ()
   assert.match(await page.locator('[data-update-status]').textContent(), /1.0.3 is up to date/);
   assert.equal(await page.locator('[data-act="update"]').textContent(), 'Check for updates');
 }, { version: '1.0.2' }));
+
+test('desktop freecam uses native mouse look and releases capture on Escape', () => withDesktop(async page => {
+  await page.keyboard.press('F2');
+  await page.click('#dev [data-tab="camera"]');
+  await page.getByRole('switch', { name: 'Freecam: off' }).click();
+  await page.waitForFunction(() => !!freecam && desktopMouseCaptured && !paused);
+  const result = await page.evaluate(() => {
+    const before = [px, py, a, pitch], camera = { ...freecam };
+    window.nativeMouse({ payload: [120, -140] });
+    return { before, after: [px, py, a, pitch], yaw: freecam.yaw - camera.yaw, pitch: freecam.pitch - camera.pitch };
+  });
+  assert.deepEqual(result.before, result.after);
+  assert.ok(result.yaw > .3 && result.pitch > .2);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => paused && !desktopMouseCaptured);
+  assert.ok(await page.evaluate(() => !!freecam));
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !paused && desktopMouseCaptured);
+  await page.keyboard.press('F2');
+  await page.getByRole('switch', { name: 'Freecam: on' }).click();
+  await page.waitForFunction(() => !freecam && !paused && desktopMouseCaptured);
+}));

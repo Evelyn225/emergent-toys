@@ -128,10 +128,13 @@ function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
-  eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
-  if (mode === 'walk') eye += architectureGroundHeight(px, py);
+  if (freecam) eye = freecam.z;
+  else {
+    eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
+    if (mode === 'walk') eye += architectureGroundHeight(px, py);
+  }
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
-  hor = (rows >> 1) + pitch * rows + shake() | 0;
+  hor = (rows >> 1) + pitch * rows + (freecam ? 0 : shake()) | 0;
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
   for (let x = 0; x < cols; x++) {
@@ -200,14 +203,19 @@ function render(dt) {
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
-  if (mode === 'drive' || mode === 'taxi') dash();
-  if (mode === 'el') elFrame();
-  if (mode === 'fair') fairFrame();
-  if (mode === 'boat') boatFrame();
-  drawHeld(dt); // what's in your hand (or mouth, or under your feet)
+  if (!freecam) {
+    if (mode === 'drive' || mode === 'taxi') dash();
+    if (mode === 'el') elFrame();
+    if (mode === 'fair') fairFrame();
+    if (mode === 'boat') boatFrame();
+    drawHeld(dt); // what's in your hand (or mouth, or under your feet)
+  }
   present();
-  if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
-  hud();
+  if (freecam) freecamHud();
+  else {
+    if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
+    hud();
+  }
 }
 // paint the character grid (CH / COL / BG, with fog) onto the canvas: the world's frame, or a minigame's
 function present() {

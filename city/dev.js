@@ -19,8 +19,59 @@ const DEV_CSS = `
   #dev .bar input { width: 9em; font: inherit; color: #fff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); padding: 2px 6px; }`;
 const devOpen = () => !!devEl && devEl.style.display === 'flex';
 
+function toggleFreecam() {
+  if (freecam) { freecam = null; return; }
+  let x = px, y = py, yaw = a;
+  if (mode === 'sea') [x, y, yaw] = seaCam(0, chaseOn);
+  else if (chaseOn && me) [x, y, yaw] = chaseCam(0);
+  let z = mode === 'room' ? 1.7 : 0.17;
+  if (Number.isFinite(eye)) z = eye;
+  freecam = { x, y, yaw, pitch, z };
+}
+
+function stepFreecam(dt) {
+  const cam = freecam;
+  cam.yaw += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
+  cam.pitch = clamp(cam.pitch + ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt, -1.2, 1.6);
+  const forward = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
+  const side = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+  const up = (K.KeyE || K.Space ? 1 : 0) - (K.KeyQ || K.KeyC ? 1 : 0);
+  // Pitch is a screen-horizon offset in this renderer, rather than an angle.
+  const projection = cols * cw / (2 * Math.tan(FOV / 2) * FS);
+  const slope = cam.pitch * rows / projection, horizontal = 1 / Math.hypot(1, slope);
+  const cx = Math.cos(cam.yaw), cy = Math.sin(cam.yaw);
+  const vx = cx * forward * horizontal - cy * side;
+  const vy = cy * forward * horizontal + cx * side;
+  const vz = slope * horizontal * forward + up;
+  const length = Math.max(1, Math.hypot(vx, vy, vz));
+  const speed = (K.ShiftLeft || K.ShiftRight ? 30 : 6) * (mode === 'room' ? 1 : 0.1) * dt / length;
+  cam.x += vx * speed; cam.y += vy * speed; cam.z += vz * speed;
+  if (mode !== 'room') { cam.x = mod(cam.x, N); cam.y = mod(cam.y, N); }
+}
+
+function renderFreecam() {
+  const saved = [px, py, a, pitch, chaseOn, eye, dx, dy, hor, lookHit];
+  try {
+    px = freecam.x; py = freecam.y; a = freecam.yaw; pitch = freecam.pitch; chaseOn = true;
+    render(0);
+  } finally { [px, py, a, pitch, chaseOn, eye, dx, dy, hor, lookHit] = saved; }
+}
+
+function freecamHud() {
+  const scale = mode === 'room' ? 1 : 10;
+  const height = (freecam.z * scale).toFixed(1);
+  g.save(); g.font = FS + 'px monospace'; g.fillStyle = 'rgba(0,0,0,0.8)';
+  g.fillRect(0, 0, cv.width, FS * 3 + 16);
+  g.fillStyle = '#fff';
+  g.fillText(`FREECAM  ${height}m high  ·  world frozen`, 10, 6);
+  g.fillText('WASD move · E/Q up/down · Shift faster · mouse/arrows look', 10, FS + 8);
+  g.fillText('F2: toggle off in Camera · Esc: pause', 10, FS * 2 + 10);
+  g.restore();
+}
+
 // put you on your feet, out of whatever you're in (a car, a room, a ride, a boat, the el), ready to be moved
 function devFree() {
+  freecam = null;
   if (game) game = null;
   if (me) leaveCar();
   if (mode === 'room') { room = null; }
@@ -94,7 +145,10 @@ function devBody() {
     return `${devTab === 'items' ? `<p class="note">carrying ${inv.length}/${INV_SIZE}: click to add one to your hands</p>` : '<p class="note">click to go there (you\'re put on your feet first)</p>'}<div class="grid">${html || '<p class="note">nothing matches</p>'}</div>`;
   }
   devEl.acts = [];
-  const act = (label, fn) => { devEl.acts.push(fn); return btn(devEl.acts.length - 1, label); };
+  const act = (label, fn, extra = '') => { devEl.acts.push(fn); return btn(devEl.acts.length - 1, label, extra); };
+  if (devTab === 'camera') return `<div class="bar">${act('Freecam: ' + (freecam ? 'on' : 'off'), () => { toggleFreecam(); closeDev(); }, `role="switch" aria-checked="${!!freecam}"`)}</div>
+    <p class="note">Fly through walls with the world frozen. Toggle off to return to your player.</p>
+    <p class="note">WASD move &middot; mouse/arrows look &middot; E/Q up/down &middot; Shift faster</p>`;
   if (devTab === 'money') return `<p class="note">you have ${fmt$(money)} and ${tickets} tickets</p>
     <div class="bar">${[100, 1000, 10000, 100000].map(n => act(`+${fmt$(n)}`, () => devCash(n))).join('')}${act('Broke ($0)', () => devCash(-money))}</div>
     <div class="bar">set money to <input type="number" min="0" step="1" data-set="money" value="${Math.round(money)}"></div>
@@ -114,7 +168,7 @@ function devBody() {
     <div class="grp">spawn a car of yours (beside you)</div><div class="bar">${Object.keys(CAR_MODELS).map(m => act(ITEMS[m].name, () => { devFree(); const l = laneNear(px, py); spawnOwnedCar(m, l.x, l.y, l.hx, l.hy); say(`Your ${ITEMS[m].name} is parked beside you.`, 2); })).join('')}</div>`;
 }
 function renderDev(keepFocus) {
-  const tabs = [['places', 'Places'], ['items', 'Items'], ['money', 'Money'], ['time', 'Time & weather'], ['other', 'Other']];
+  const tabs = [['places', 'Places'], ['items', 'Items'], ['money', 'Money'], ['time', 'Time & weather'], ['camera', 'Camera'], ['other', 'Other']];
   devEl.querySelector('.panel').innerHTML = `<h1>Dev tools</h1><p class="sub">F2 or Esc to close &middot; type to search</p>
     <div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${devTab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}<span style="flex:1"></span><button class="tab" data-close>close</button></div>
     ${devTab === 'places' || devTab === 'items' ? `<input class="search" type="search" placeholder="search ${devTab}..." value="${devFilter.replace(/"/g, '&quot;')}" autocomplete="off">` : ''}
@@ -133,6 +187,7 @@ function openDev() {
       if (b.dataset.tab) { devTab = b.dataset.tab; devFilter = ''; return renderDev(); }
       const fn = devEl.acts[+b.dataset.dev]; if (!fn) return;
       fn();
+      if (!devOpen()) return;
       if (devTab === 'places') closeDev(); else renderDev(false); // (a jump closes it, so you can see where you are)
     });
     devEl.addEventListener('input', e => {

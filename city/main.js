@@ -8,6 +8,14 @@ onkeydown = e => {
   if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
+  if (freecam) {
+    if (e.code === 'Escape' && !e.repeat) { togglePause(); return; }
+    if (e.code === 'KeyE' && paused && pauseEl?.style.display === 'flex' && !e.repeat) { closePause(true); return; }
+    if (paused) return;
+    e.preventDefault(); K[e.code] = 1;
+    if (!e.repeat) { audioStart(); if (e.code === 'KeyN') toggleSound(); }
+    return;
+  }
   if (bigMapKey(e, true)) return; // the big map (from the pause menu) has the keys while it's up
   if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
@@ -50,8 +58,14 @@ cv.onclick = () => { audioStart(); if (!paused) lockMouse(); };
 const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
 // turn your head by (mx, my) mouse pixels' worth (the mouse, or a drag on a touch screen)
 function turnBy(mx, my) {
-  if (paused || game) return;
+  if (paused) return;
   const s = settings.sensitivity;
+  if (freecam) {
+    freecam.yaw += mx * 0.003 * s;
+    freecam.pitch = clamp(freecam.pitch - my * 0.002 * s * (settings.invertY ? -1 : 1), -1.2, 1.6);
+    return;
+  }
+  if (game) return;
   if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
@@ -64,7 +78,7 @@ onmousemove = e => {
 };
 function moveMouseBy(mx, my) {
   if (paused) return;
-  if (flick) { flick.x += mx; flick.y += my; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
+  if (flick && !freecam) { flick.x += mx; flick.y += my; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
   turnBy(mx, my);
 }
 if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
@@ -80,8 +94,8 @@ if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
   desktopMouseReady.catch(() => {}); // lockMouse handles subscription failure and tries browser capture
   addEventListener('blur', lostCapture);
 }
-addEventListener('mousedown', e => { if (e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });
-addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });
+addEventListener('mousedown', e => { if (!freecam && e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });
+addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });
 addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.preventDefault(); });
 
 const free = (x, y) => {
@@ -180,7 +194,9 @@ let t0 = performance.now();
 function loop(t) {
   if (paused) { t0 = t; requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
-  const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t; T += dt; msgT -= dt;
+  const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
+  if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
+  T += dt; msgT -= dt;
   env(dt);
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { // a cabinet or a shift has the screen; the world carries on behind it
