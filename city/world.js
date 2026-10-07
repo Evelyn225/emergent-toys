@@ -468,7 +468,11 @@ const BELLE_BUILDINGS = [];
 }
 function belleRoofHeight(x, y) {
   const b = SHOP[idx(Math.floor(x), Math.floor(y))]?.belle;
-  return b && !b.access ? b.h + 0.45 * clamp(Math.min(x - b.x0, b.x1 - x, y - b.y0, b.y1 - y) / 0.65, 0, 1) : 0;
+  if (!b || b.access) return 0;
+  let inset = 0;
+  for (const r of b.roofRects)
+    inset = Math.max(inset, Math.min(x - r.x0, r.x1 - x, y - r.y0, r.y1 - y));
+  return b.h + 0.45 * clamp(inset / 0.65, 0, 1);
 }
 
 // ---- street names, for talk, directions and the HUD

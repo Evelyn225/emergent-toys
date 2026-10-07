@@ -203,7 +203,7 @@ test('packed mansard planes retain the original roof intersections and face sele
       return{t:entry,u:x+rx*entry,v:y+ry*entry,w:oz+rz*entry,face};
     };
     let tested=0,errors=0;
-    const roofs = [...belleBuildingsB.flat().filter(b=>!b.access).slice(0,12),
+    const roofs = [...belleBuildingsB.flat().flatMap(b=>b.roofParts).slice(0,12),
       ...LANDMARK_SOLIDS.filter(b=>b.planes).slice(0,3), ...PAVILION_SOLIDS.filter(b=>b.planes).slice(0,3)];
     for(const b of roofs)for(let n=0;n<1000;n++){
       const args=[b.x+hash(n,1)*20-10,b.y+hash(n,2)*20-10,hash(n,3)*(b.h+1),hash(n,4)*2-1,hash(n,5)*2-1,hash(n,6)*2-1,b];
@@ -215,6 +215,57 @@ test('packed mansard planes retain the original roof intersections and face sele
   });
   assert.ok(result.tested>12000,'also exercises legacy landmark and pavilion plane arrays');
   assert.equal(result.errors,0,JSON.stringify(result));
+}));
+
+test('Belle roofs slope into courtyards and cut corners without holes or extra internal valleys', () => withPage(async page => {
+  const result = await page.evaluate(() => {
+    paused = true; render(0);
+    const errors = []; let faces = 0, rays = 0, gaps = 0;
+    const roofs = belleBuildingsB.flat().filter(b => !b.access);
+    for (const b of roofs) {
+      const footprint = belleRoofFootprint(b), { width, height, cells } = footprint;
+      const hitRoof = (ox, oy, oz, rx, ry, rz) => {
+        let t = Infinity, face = -1, z = 0;
+        for (const part of b.roofParts) {
+          const hit = rayMansard(ox, oy, oz, rx, ry, rz, part);
+          if (hit >= 0 && hit < t) { t = hit; face = HIT.face; z = HIT.w; }
+        }
+        return { t, face, z };
+      };
+      for (let cy = 0; cy < height; cy++) for (let cx = 0; cx < width; cx++) {
+        const wx = b.x0 + cx + .5, wy = b.y0 + cy + .5;
+        if (!cells[cy * width + cx]) {
+          gaps++;
+          if (hitRoof(wx, wy, b.h + 1, 0, 0, -1).t !== Infinity) errors.push('roof fills courtyard');
+          continue;
+        }
+        for (const [nx, ny] of ARCH_DIRECTIONS) {
+          const xx = cx + nx, yy = cy + ny;
+          if (xx < 0 || xx >= width || yy < 0 || yy >= height || cells[yy * width + xx]) continue;
+          const x = wx + nx * .5, y = wy + ny * .5;
+          const hit = hitRoof(x + nx * .25, y + ny * .25, b.h + .1, -nx, -ny, 0);
+          faces++;
+          if (Math.abs(hit.t - (.25 + .1 * .65 / .45)) > 1e-7 || hit.face !== (nx > 0 ? 6 : nx < 0 ? 7 : ny > 0 ? 8 : 9)) errors.push('missing sloped inner roof face');
+        }
+        // The roof rises from its actual boundary. Distance to empty cells is an independent height reference.
+        for (const fx of [.1, .5, .9]) for (const fy of [.1, .5, .9]) {
+          const x = b.x0 + cx + fx, y = b.y0 + cy + fy;
+          let inset = Infinity;
+          for (let yy = -1; yy <= height; yy++) for (let xx = -1; xx <= width; xx++) {
+            if (xx >= 0 && xx < width && yy >= 0 && yy < height && cells[yy * width + xx]) continue;
+            const left = b.x0 + xx, top = b.y0 + yy;
+            inset = Math.min(inset, Math.max(left - x, x - left - 1, top - y, y - top - 1, 0));
+          }
+          const expected = b.h + .45 * Math.min(1, inset / .65), hit = hitRoof(x, y, b.h + 1, 0, 0, -1);
+          rays++;
+          if (Math.abs(hit.z - expected) > 1e-7 || Math.abs(belleRoofHeight(x, y) - expected) > 1e-7) errors.push('roof height mismatch');
+        }
+      }
+    }
+    return { faces, rays, gaps, errors };
+  });
+  assert.ok(result.faces > 100 && result.gaps > 50 && result.rays > 1000, JSON.stringify(result));
+  assert.deepEqual(result.errors, [], JSON.stringify(result.errors.slice(0, 10)));
 }));
 
 test('copper crowns have curved depth, closed undersides, solid occlusion and snow on their upper surface', () => withPage(async page => {

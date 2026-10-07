@@ -30,12 +30,18 @@ function drawBelleBuildings() {
   forNear(belleBuildingsB, b => {
     const [vx, vy] = R(b.x, b.y);
     if (b.access || Math.hypot(vx, vy) > vis + 8) return;
-    drawBox({ ...boxAt(vx, vy, 1, 0, (b.x1 - b.x0) / 2, (b.y1 - b.y0) / 2, b.h, b.h + 0.45), planeData: b.planeData }, (i, t, L) => {
-      if (SHOP[idx(Math.floor(b.x + HIT.u), Math.floor(b.y + HIT.v))] !== b.sh) return false;
-      const seam = Math.abs(fract((HIT.face < 8 ? HIT.v : HIT.u) * 5) - 0.5) > 0.46;
-      BG[i] = C(GREEN, 1 + L * (HIT.face === 4 ? 0.3 : 0.19));
-      set(i, seam ? '/' : ' ', C(seam ? YEL : GREEN, L * 0.8));
-      paintSettledSnow(i, b.x + HIT.u, b.y + HIT.v, L * 0.6, HIT.face === 4 ? 1 : 0.55,0,HIT.w);
+    for (const part of b.roofParts) drawBox({ ...boxAt(vx + part.x - b.x, vy + part.y - b.y, 1, 0, part.hl, part.hw, b.h, b.h + 0.45), planeData: part.planeData }, (i, t, L) => {
+      const across = HIT.face < 8 ? part.y + HIT.v : part.x + HIT.u;
+      const seam = Math.abs(fract(across * 5) - 0.5) > 0.46;
+      const insetX = part.hl - Math.abs(HIT.u), insetY = part.hw - Math.abs(HIT.v);
+      const hip = HIT.face >= 6 && Math.abs(insetX - insetY) < .02;
+      const ridge = HIT.face >= 6 && Math.min(insetX, insetY) > .63;
+      let mark = seam || hip ? '/' : ' ';
+      if (ridge) mark = '=';
+      BG[i] = C(GREEN, 1 + L * BELLE_ROOF_LIGHT[HIT.face]);
+      set(i, mark, C(seam || hip || ridge ? YEL : GREEN, L * (hip || ridge ? 1 : .8)));
+      if (HIT.face === 4 || HIT.face >= 6)
+        paintSettledSnow(i, part.x + HIT.u, part.y + HIT.v, L * 0.6, HIT.face === 4 ? 1 : 0.55,0,HIT.w);
       return true;
     }, rayMansard);
     if (fract(b.seed * 19) < 0.35) {

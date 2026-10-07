@@ -6,10 +6,43 @@ function mansardPlanes(hl, hw, z0, z1) {
     [slope, 0, 1, z0 + slope * hl], [-slope, 0, 1, z0 + slope * hl], [0, slope, 1, z0 + slope * hw], [0, -slope, 1, z0 + slope * hw]];
 }
 const ROOF_PLANE_DATA = new WeakMap();
+// Match each inclined face to its compass-facing light, so folds remain visible in the copper.
+const BELLE_ROOF_LIGHT = [.13, .29, .22, .09, .32, .09, .13, .29, .22, .09];
 function roofPlaneData(planes) {
   let packed = ROOF_PLANE_DATA.get(planes);
   if (!packed) { packed = Float64Array.from(planes.flat()); ROOF_PLANE_DATA.set(planes,packed); }
   return packed;
+}
+function belleRoofFootprint(b) {
+  const width = b.x1 - b.x0, height = b.y1 - b.y0, cells = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+    cells[y * width + x] = SHOP[idx(b.x0 + x, b.y0 + y)] === b.sh ? 1 : 0;
+  return { width, height, cells };
+}
+function belleRoofRects(b) {
+  const { width, height, cells } = belleRoofFootprint(b), rects = [];
+  // Maximal overlapping rectangles give a continuous hipped roof, including slopes into its courtyards.
+  // Overlap hides internal edges; a partition into small boxes would leave extra valleys across the roof.
+  const filled = (y, x0, x1) => {
+    if (y < 0 || y >= height) return false;
+    for (let x = x0; x < x1; x++) if (!cells[y * width + x]) return false;
+    return true;
+  };
+  for (let y0 = 0; y0 < height; y0++) {
+    const columns = new Uint8Array(width).fill(1);
+    for (let y1 = y0 + 1; y1 <= height; y1++) {
+      for (let x = 0; x < width; x++) columns[x] &= cells[(y1 - 1) * width + x];
+      for (let x0 = 0; x0 < width;) {
+        if (!columns[x0]) { x0++; continue; }
+        let x1 = x0 + 1;
+        while (x1 < width && columns[x1]) x1++;
+        if (!filled(y0 - 1, x0, x1) && !filled(y1, x0, x1))
+          rects.push({ x0: b.x0 + x0, x1: b.x0 + x1, y0: b.y0 + y0, y1: b.y0 + y1 });
+        x0 = x1;
+      }
+    }
+  }
+  return rects;
 }
 const BELLE_FACES = Array.from({ length: 4 }, () => new Array(N * N));
 function belleSign(sh, f) {
@@ -36,8 +69,14 @@ function belleFaceAt(mx, my, dir) {
   return f;
 }
 const belleBuildingsB = bucketed(BELLE_BUILDINGS.map(b => {
-  const planes = mansardPlanes((b.x1 - b.x0) / 2, (b.y1 - b.y0) / 2, b.h, b.h + 0.45);
-  return { ...b, planes, planeData: roofPlaneData(planes) };
+  const rects = b.access ? [] : belleRoofRects(b);
+  b.sh.belle.roofRects = rects;
+  const roofParts = rects.map(rect => {
+    const hl = (rect.x1 - rect.x0) / 2, hw = (rect.y1 - rect.y0) / 2;
+    const planes = mansardPlanes(hl, hw, b.h, b.h + 0.45);
+    return { ...rect, x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2, hl, hw, h: b.h, planes, planeData: roofPlaneData(planes) };
+  });
+  return { ...b, roofParts };
 })), belleDetails = [];
 for (const b of BELLE_BUILDINGS) {
   const cells = [];
