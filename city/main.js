@@ -103,7 +103,7 @@ const free = (x, y) => {
   if (mode === 'room') return x >= 0 && y >= 0 && x < room.W && y < room.H && !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
-  if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
+  if (mode === 'elplat') return roofFree(x,y,EL_TOP);
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
@@ -216,6 +216,7 @@ function loop(t) {
   }
   if (sleep) stepSleep(dt);
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
+  const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.5 : 1); // sprint 29 km/h (43 on the board), cars top out at 79
@@ -239,7 +240,7 @@ function loop(t) {
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
   }
-  stepBody(dt); stepRoof();
+  stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   stepTask(dt);
   stepLaundry();

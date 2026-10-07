@@ -87,12 +87,14 @@ const nearElStairs = () => {
   return null;
 };
 function elUp({ s, tr }) {
+  body.z=body.vz=body.peak=0;roofH=EL_TOP;
   mode = 'elplat'; plat = { s, tr }; px = s.x; py = EL_PLAT[tr]; a = tr ? 0 : Math.PI; pitch = 0; // facing the way the trains go
   say(`${s.name} el, ${tr ? 'eastbound' : 'westbound'} platform`);
 }
 function elDown() {
   const stairs=plat.s.stairs[plat.tr];
   mode = 'walk'; px = stairs.x; py = stairs.y-stairs.ay*.02; plat = null;
+  body.z=body.vz=body.peak=0;roofH=0;
 }
 // the train standing at your platform, if there is one
 const elHere = () => plat && elTrains(T).find(t => t.tr === plat.tr && t.stopped && EL_STATIONS[t.station] === plat.s);
@@ -111,6 +113,7 @@ function elGetOff() {
   const s = EL_STATIONS[t.station];
   mode = 'elplat'; plat = { s, tr: ride.tr }; ride = null; py = EL_PLAT[plat.tr];
   px = clamp(px, s.x0, s.x1);
+  body.z=body.vz=body.peak=0;roofH=EL_TOP;
   say(`${s.name}`);
 }
 function enterRoom(kind, extra, spawn) {
@@ -222,6 +225,7 @@ function interact() {
     return say('The French doors are behind you. The city carries on below.',2);
   }
   if (mode === 'roof' && room && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; roofLot = null; roofH = 0; return say('Down and down and round and round.', 2); }
+  if(mode==='roof'&&roofH===EL_TOP&&underEl(py))return say('Find a station platform to board a train or take the stairs down.',3);
   if (mode === 'roof' && !onRoofLot()) return fireEscape() ? say('You clang down the fire escape and drop the last bit to the sidewalk.', 3) : say('No way down from here. Jump, or find another roof.', 3);
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; roofLot = null; return; }
   if (mode === 'el') return elGetOff();

@@ -856,7 +856,6 @@ function towerCell(i, u, z, du, dz, L, hw) {
 // one el car as a real box running east-west: steel sides with a red stripe, a band of windows (lit warm after dark),
 // a pair of doors each side, a driver's cab with headlights at the leading and trailing ends (cab: +1 / -1 = which
 // end, 0 = none), an air-conditioning hump on the roof and a dark underframe
-const EL_HL = EL_CAR_LEN / 2 - 0.03, EL_HW = 0.14, EL_H = 0.32;
 function drawElCar(vx, vy, cab) {
   const z0 = EL_TOP + 0.02, lit = Math.max(night, overcast * 0.6);
   drawBox(boxAt(vx, vy, 1, 0, EL_HL, EL_HW, z0, z0 + EL_H), (i, t, L) => {

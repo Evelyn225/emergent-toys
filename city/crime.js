@@ -190,7 +190,7 @@ function roomSearchLead(dt) {
   }
   return anySees;
 }
-const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], courierRoofHeight(x,y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
+const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], elDeckHeight(x,y), courierRoofHeight(x,y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 function notePoliceRoofEntry(x, y, ret = null) {
   if (!wanted.stars || !(wanted.seen || roomCops.length || ret && near(wanted.lastX, wanted.lastY, ret[0], ret[1]) < 1)) return;
   roofLead = { x, y, ret, targetX: x, targetY: y, arriveAt: T + (roomCops.length ? 1.2 : 3), count: Math.min(2, Math.max(1, wanted.stars)), arrived: false };

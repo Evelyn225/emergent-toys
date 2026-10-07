@@ -131,32 +131,58 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
-const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
+const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], elDeckHeight(x,y), courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
-function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
+function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
-  if(courierRoofBlocked(x,y,roofH+body.z/10))return false;
+  if(courierRoofBlocked(x,y,base+body.z/10))return false;
   const h = roofHeightAt(x, y);
   if (roofFixed()) return h === roofH && !landmarkTowerBlocked(x,y,roofH);
-  return h <= roofH + ROOF_STEP + body.z / 10;
+  return h <= base + ROOF_STEP + body.z / 10;
 }
 const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
+  if(mode==='elplat') {
+    const p=elPlatformAt(px,py);
+    if(p&&p.s===plat.s&&p.tr===plat.tr)return;
+    mode='roof';roofH=EL_TOP;roofLot=new Set();plat=null;room=null;
+  }
   if (mode === 'walk' && overRoof(px, py)) { // came down on a roof
     const h = roofHeightAt(px, py);
     mode = 'roof'; roofH = h; shiftFeet(-h * 10); notePoliceRoofEntry(px, py); room = null; roofLot = new Set(); return;
   }
   if (mode !== 'roof' || roofFixed()) return;
   const h = roofHeightAt(px, py);
-  if (h === roofH) return;
+  if (h === roofH) {
+    if(h===EL_TOP&&!body.z&&underEl(py)) {
+      const p=elPlatformAt(px,py);
+      if(p){mode='elplat';plat=p;room=null;roofLot=null;}
+    }
+    return;
+  }
   if (h > 0) {
     const followingSlope = (courierRoofHeight(px,py)>0 || museumRoofHeight(px, py) > 0 || belleRoofHeight(px, py) > 0 || architectureRoofHeight(px, py) > 0 || landmarkRoofHeight(px, py) > 0 || pavilionRoofHeight(px, py) > 0) && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
   shiftFeet(roofH * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
+}
+function outdoorFeet() {
+  let base;
+  if(mode==='roof')base=roofH;
+  else if(mode==='elplat')base=EL_TOP;
+  else base=architectureGroundHeight(px,py);
+  return [px,py,base+body.z/10];
+}
+function stepElImpact(from,t0,t1) {
+  if(!from||!onFootMode()||mode==='room')return;
+  const height=.17-body.crouch*CROUCH_H/10;
+  if(!elTrainImpact(from,outdoorFeet(),t0,t1,height))return;
+  if(actx)playClip('ground-impact',.6);
+  plat=ride=null;
+  passOut('You were hit by an elevated train. Somebody called an ambulance.');
 }
 const onRoofLot = () => !roofLot || roofLot.has(idx(Math.floor(px), Math.floor(py)));
 // any other roof: the fire escape, down the side of the building to the nearest bit of sidewalk

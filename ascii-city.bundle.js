@@ -3012,6 +3012,14 @@ const EL_PLAT = [EL_Y0 + 0.08, EL_Y1 - 0.08]; // where you stand on each platfor
 const underEl = y => Math.abs(rel(y - (EL_Y + 1))) < EL_HALF; // under (or on) the deck
 const EL_STATIONS = [2, 10, 18, 26].map(bx => ({ x: bx * 8 + 5, x0: bx * 8 + 2.6, x1: bx * 8 + 7.4, name: AVE_NAMES[bx] }));
 const elStationAt = x => EL_STATIONS.find(s => mod(x - s.x0, N) < s.x1 - s.x0);
+const elDeckHeight = (x,y) => underEl(y) ? EL_TOP : 0;
+function elPlatformAt(x,y) {
+  if(!underEl(y))return null;
+  const s=elStationAt(x);
+  if(!s)return null;
+  for(const tr of [0,1])if(Math.abs(rel(y-EL_PLAT[tr]))<.14)return {s,tr};
+  return null;
+}
 // pillars at both curbs, clear of the cross streets
 const elPillars = [];
 for (let bx = 0; bx < NB; bx++) for (const s of [2.6, 4.6, 6.6]) for (const y of [EL_Y0 + 0.05, EL_Y1 - 0.05]) elPillars.push({ x: bx * 8 + s, y });
@@ -3020,6 +3028,7 @@ const elPillarsB = bucketed(elPillars);
 // trains: each runs the loop stopping at every station. A hop is HOP_T seconds of travel (eased in and out),
 // then DWELL seconds with the doors open. Two trains per track, half a loop apart.
 const HOP = N / EL_STATIONS.length, HOP_T = 26, DWELL = 10, EL_CYCLE = (HOP_T + DWELL) * EL_STATIONS.length, EL_CARS = 3, EL_CAR_LEN = 1.9;
+const EL_HL = EL_CAR_LEN / 2 - 0.03, EL_HW = 0.14, EL_H = 0.32;
 const smooth = v => v * v * (3 - 2 * v);
 // where train k on track tr (0 west, 1 east) is at time t: {x of its middle, dir, stopped, station index it's at or leaving}
 function elTrain(tr, k, t) {
@@ -3031,6 +3040,36 @@ function elTrain(tr, k, t) {
            next: (from + (tr ? 1 : EL_STATIONS.length - 1)) % EL_STATIONS.length };
 }
 const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(tr, k, t) })));
+// Sweep the player's body against each moving car, including crossings between frames and across the world seam.
+function elTrainImpact(from,to,t0,t1,height=.17) {
+  const bottom=EL_TOP+.02,top=bottom+EL_H,radius=.025;
+  if(Math.max(from[2],to[2])+height<bottom || Math.min(from[2],to[2])>top)return null;
+  for(const tr of [0,1]) {
+    const y0=rel(from[1]-EL_TRACK[tr]),y1=y0+rel(to[1]-from[1]);
+    if(Math.min(y0,y1)>EL_HW+radius||Math.max(y0,y1)<-EL_HW-radius)continue;
+    for(const k of [0,1]) {
+      const before=elTrain(tr,k,t0),after=elTrain(tr,k,t1);
+      if(before.stopped&&after.stopped)continue;
+      for(let j=0;j<EL_CARS;j++) {
+        const carX=before.x-before.dir*(j-1)*EL_CAR_LEN;
+        const start=[rel(from[0]-carX),rel(from[1]-EL_TRACK[tr]),from[2]];
+        const delta=[rel(to[0]-from[0])-rel(after.x-before.x),rel(to[1]-from[1]),to[2]-from[2]];
+        const bounds=[[-EL_HL-radius,EL_HL+radius],[-EL_HW-radius,EL_HW+radius],[bottom-height,top]];
+        let enter=0,leave=1;
+        for(let axis=0;axis<3;axis++) {
+          const [lo,hi]=bounds[axis],speed=delta[axis],position=start[axis];
+          if(Math.abs(speed)<1e-10) { if(position<lo||position>hi){leave=-1;break;} }
+          else {
+            const a=(lo-position)/speed,b=(hi-position)/speed;
+            enter=Math.max(enter,Math.min(a,b));leave=Math.min(leave,Math.max(a,b));
+          }
+        }
+        if(enter<=leave)return {tr,k};
+      }
+    }
+  }
+  return null;
+}
 // Belle Époque's stone cornices, iron balconies and sloping copper roofs are geometry, depth-tested
 // against the street scene. Their positions follow complete facade bays, with room at every corner.
 function mansardPlanes(hl, hw, z0, z1) {
@@ -5722,7 +5761,7 @@ function roomSearchLead(dt) {
   }
   return anySees;
 }
-const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], courierRoofHeight(x,y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
+const policeRoofHeight = (x, y) => typeof roofHeightAt === 'function' ? roofHeightAt(x, y) : Math.max(map[idx(Math.floor(x), Math.floor(y))], elDeckHeight(x,y), courierRoofHeight(x,y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 function notePoliceRoofEntry(x, y, ret = null) {
   if (!wanted.stars || !(wanted.seen || roomCops.length || ret && near(wanted.lastX, wanted.lastY, ret[0], ret[1]) < 1)) return;
   roofLead = { x, y, ret, targetX: x, targetY: y, arriveAt: T + (roomCops.length ? 1.2 : 3), count: Math.min(2, Math.max(1, wanted.stars)), arrived: false };
@@ -9227,7 +9266,6 @@ function towerCell(i, u, z, du, dz, L, hw) {
 // one el car as a real box running east-west: steel sides with a red stripe, a band of windows (lit warm after dark),
 // a pair of doors each side, a driver's cab with headlights at the leading and trailing ends (cab: +1 / -1 = which
 // end, 0 = none), an air-conditioning hump on the roof and a dark underframe
-const EL_HL = EL_CAR_LEN / 2 - 0.03, EL_HW = 0.14, EL_H = 0.32;
 function drawElCar(vx, vy, cab) {
   const z0 = EL_TOP + 0.02, lit = Math.max(night, overcast * 0.6);
   drawBox(boxAt(vx, vy, 1, 0, EL_HL, EL_HW, z0, z0 + EL_H), (i, t, L) => {
@@ -13536,6 +13574,7 @@ function promptText() {
     if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
     if (homeBalconyActive()) return atHomeBalconyDoor() ? 'E: back through the French doors' : 'Your balcony. The city below.';
     if (room && room.kind === 'cathedral') return 'The bell tower, 80m up.   E: back down the stairs';
+    if(roofH===EL_TOP&&underEl(py))return 'Elevated tracks: watch for trains. Stairs down at the stations.';
     return [onRoofLot() ? 'E: take the stairs down' : 'E: fire escape down', edge].filter(Boolean).join('   ');
   }
   if (mode === 'fair') return fairRidePrompt();
@@ -13812,12 +13851,14 @@ const nearElStairs = () => {
   return null;
 };
 function elUp({ s, tr }) {
+  body.z=body.vz=body.peak=0;roofH=EL_TOP;
   mode = 'elplat'; plat = { s, tr }; px = s.x; py = EL_PLAT[tr]; a = tr ? 0 : Math.PI; pitch = 0; // facing the way the trains go
   say(`${s.name} el, ${tr ? 'eastbound' : 'westbound'} platform`);
 }
 function elDown() {
   const stairs=plat.s.stairs[plat.tr];
   mode = 'walk'; px = stairs.x; py = stairs.y-stairs.ay*.02; plat = null;
+  body.z=body.vz=body.peak=0;roofH=0;
 }
 // the train standing at your platform, if there is one
 const elHere = () => plat && elTrains(T).find(t => t.tr === plat.tr && t.stopped && EL_STATIONS[t.station] === plat.s);
@@ -13836,6 +13877,7 @@ function elGetOff() {
   const s = EL_STATIONS[t.station];
   mode = 'elplat'; plat = { s, tr: ride.tr }; ride = null; py = EL_PLAT[plat.tr];
   px = clamp(px, s.x0, s.x1);
+  body.z=body.vz=body.peak=0;roofH=EL_TOP;
   say(`${s.name}`);
 }
 function enterRoom(kind, extra, spawn) {
@@ -13947,6 +13989,7 @@ function interact() {
     return say('The French doors are behind you. The city carries on below.',2);
   }
   if (mode === 'roof' && room && room.kind === 'cathedral') { mode = 'room'; [px, py] = CATH_TOWER; a = -Math.PI / 2; roofLot = null; roofH = 0; return say('Down and down and round and round.', 2); }
+  if(mode==='roof'&&roofH===EL_TOP&&underEl(py))return say('Find a station platform to board a train or take the stairs down.',3);
   if (mode === 'roof' && !onRoofLot()) return fireEscape() ? say('You clang down the fire escape and drop the last bit to the sidewalk.', 3) : say('No way down from here. Jump, or find another roof.', 3);
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; roofLot = null; return; }
   if (mode === 'el') return elGetOff();
@@ -18133,32 +18176,58 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
-const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
+const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], elDeckHeight(x,y), courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
-function roofFree(x, y) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
+function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
-  if(courierRoofBlocked(x,y,roofH+body.z/10))return false;
+  if(courierRoofBlocked(x,y,base+body.z/10))return false;
   const h = roofHeightAt(x, y);
   if (roofFixed()) return h === roofH && !landmarkTowerBlocked(x,y,roofH);
-  return h <= roofH + ROOF_STEP + body.z / 10;
+  return h <= base + ROOF_STEP + body.z / 10;
 }
 const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
+  if(mode==='elplat') {
+    const p=elPlatformAt(px,py);
+    if(p&&p.s===plat.s&&p.tr===plat.tr)return;
+    mode='roof';roofH=EL_TOP;roofLot=new Set();plat=null;room=null;
+  }
   if (mode === 'walk' && overRoof(px, py)) { // came down on a roof
     const h = roofHeightAt(px, py);
     mode = 'roof'; roofH = h; shiftFeet(-h * 10); notePoliceRoofEntry(px, py); room = null; roofLot = new Set(); return;
   }
   if (mode !== 'roof' || roofFixed()) return;
   const h = roofHeightAt(px, py);
-  if (h === roofH) return;
+  if (h === roofH) {
+    if(h===EL_TOP&&!body.z&&underEl(py)) {
+      const p=elPlatformAt(px,py);
+      if(p){mode='elplat';plat=p;room=null;roofLot=null;}
+    }
+    return;
+  }
   if (h > 0) {
     const followingSlope = (courierRoofHeight(px,py)>0 || museumRoofHeight(px, py) > 0 || belleRoofHeight(px, py) > 0 || architectureRoofHeight(px, py) > 0 || landmarkRoofHeight(px, py) > 0 || pavilionRoofHeight(px, py) > 0) && !body.z && Math.abs(roofH - h) <= ROOF_STEP;
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
   shiftFeet(roofH * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
+}
+function outdoorFeet() {
+  let base;
+  if(mode==='roof')base=roofH;
+  else if(mode==='elplat')base=EL_TOP;
+  else base=architectureGroundHeight(px,py);
+  return [px,py,base+body.z/10];
+}
+function stepElImpact(from,t0,t1) {
+  if(!from||!onFootMode()||mode==='room')return;
+  const height=.17-body.crouch*CROUCH_H/10;
+  if(!elTrainImpact(from,outdoorFeet(),t0,t1,height))return;
+  if(actx)playClip('ground-impact',.6);
+  plat=ride=null;
+  passOut('You were hit by an elevated train. Somebody called an ambulance.');
 }
 const onRoofLot = () => !roofLot || roofLot.has(idx(Math.floor(px), Math.floor(py)));
 // any other roof: the fire escape, down the side of the building to the nearest bit of sidewalk
@@ -18402,7 +18471,7 @@ const free = (x, y) => {
   if (mode === 'room') return x >= 0 && y >= 0 && x < room.W && y < room.H && !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
-  if (mode === 'elplat') return mod(x - plat.s.x0, N) < plat.s.x1 - plat.s.x0 && Math.abs(y - EL_PLAT[plat.tr]) < 0.14; // on the platform
+  if (mode === 'elplat') return roofFree(x,y,EL_TOP);
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
@@ -18515,6 +18584,7 @@ function loop(t) {
   }
   if (sleep) stepSleep(dt);
   pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
+  const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.5 : 1); // sprint 29 km/h (43 on the board), cars top out at 79
@@ -18538,7 +18608,7 @@ function loop(t) {
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
   }
-  stepBody(dt); stepRoof();
+  stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   stepTask(dt);
   stepLaundry();
