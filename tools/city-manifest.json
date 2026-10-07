@@ -60,6 +60,7 @@
     "city/laundry.js",
     "city/audio.js",
     "city/menu.js",
+    "city/screenshots.js",
     "city/pause.js",
     "city/desktop-updates.js",
     "city/dev.js",

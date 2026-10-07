@@ -19,6 +19,11 @@ async function withDesktop(fn, { offline = false, version = '1.0.4' } = {}) {
     window.__TAURI__ = {
       core: { invoke: async (command, args) => {
         window.nativeCalls.push({ command, ...args });
+        if (command === 'save_screenshot') {
+          if (window.failScreenshot) throw new Error('The Screenshots folder is not writable.');
+          if (window.deferScreenshot) return new Promise(resolve => { window.resolveScreenshot = resolve; });
+          return 'C:\\Games\\Glyphport\\Screenshots\\Glyphport-test.png';
+        }
         if (command === 'set_game_mouse_capture' && args.active && window.deferCapture) return new Promise(resolve => { window.resolveCapture = resolve; });
         return command === 'set_game_mouse_capture' ? !window.failCapture : true;
       } },
@@ -39,6 +44,75 @@ async function withDesktop(fn, { offline = false, version = '1.0.4' } = {}) {
     assert.deepEqual(errors, [], 'the desktop flow has no runtime errors');
   } finally { await context.close(); }
 }
+test('F12 saves a PNG through native IPC in freecam without releasing capture or downloading', () => withDesktop(async page => {
+  const downloads = [];
+  page.on('download', download => downloads.push(download));
+  await page.evaluate(async () => { toggleFreecam(); await lockMouse(); window.deferScreenshot = true; });
+  await page.waitForFunction(() => desktopMouseCaptured);
+  await page.keyboard.down('F12');
+  await page.waitForFunction(() => typeof window.resolveScreenshot === 'function');
+  await page.keyboard.down('F12'); // key repeat cannot save another copy
+  await page.keyboard.up('F12');
+  await page.evaluate(() => takeScreenshot()); // concurrent capture is ignored too
+  const image = await page.evaluate(async () => {
+    const calls = window.nativeCalls.filter(call => call.command === 'save_screenshot');
+    const bytes = new Uint8Array(calls[0].png);
+    const image = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    return { count: calls.length, signature: Array.from(bytes.slice(0, 8)), width: image.width, height: image.height,
+      canvas: [cv.width, cv.height], captured: desktopMouseCaptured, paused, freecam: !!freecam };
+  });
+  assert.equal(image.count, 1);
+  assert.deepEqual(image.signature, [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.deepEqual([image.width, image.height], image.canvas);
+  assert.equal(image.captured, true);
+  assert.equal(image.paused, false);
+  assert.equal(image.freecam, true);
+  await page.evaluate(() => window.resolveScreenshot('C:\\Games\\Glyphport\\Screenshots\\photo.png'));
+  await page.waitForFunction(() => !screenshotBusy);
+  assert.match(await page.locator('[role="status"]').textContent(), /Screenshots\\photo\.png/);
+  assert.equal(downloads.length, 0);
+}));
+
+test('pause button and focused dev tools capture screenshots; save errors stay in the game and can be retried', () => withDesktop(async page => {
+  await page.evaluate(() => { openPause(); window.failScreenshot = true; });
+  await page.click('[data-act="screenshot"]');
+  await page.waitForFunction(() => !screenshotBusy && screenshotNotice?.textContent.includes('not writable'));
+  assert.equal(await page.evaluate(() => paused), true);
+  await page.evaluate(() => window.failScreenshot = false);
+  await page.click('[data-act="screenshot"]');
+  await page.waitForFunction(() => !screenshotBusy && screenshotNotice?.textContent.includes('Screenshot saved:'));
+  await page.keyboard.press('F2');
+  await page.locator('#dev .search').focus();
+  const before = await page.evaluate(() => window.nativeCalls.filter(call => call.command === 'save_screenshot').length);
+  await page.keyboard.press('F12');
+  await page.waitForFunction(count => !screenshotBusy && window.nativeCalls.filter(call => call.command === 'save_screenshot').length === count + 1, before);
+  assert.equal(await page.evaluate(() => devOpen()), true);
+}));
+
+test('browser screenshot downloads a real PNG with F12 and the pause menu button', async () => {
+  const context = await browser.newContext({ viewport: { width: 960, height: 640 } });
+  try {
+    const page = await context.newPage();
+    await page.goto(PAGE);
+    await page.waitForFunction(() => typeof takeScreenshot === 'function');
+    for (const trigger of [() => page.keyboard.press('F12'), async () => {
+      await page.evaluate(() => openPause());
+      await page.click('[data-act="screenshot"]');
+    }]) {
+      const downloadPromise = page.waitForEvent('download');
+      await trigger();
+      const download = await downloadPromise;
+      assert.match(download.suggestedFilename(), /^Glyphport-.*\.png$/);
+      assert.equal(await download.failure(), null);
+      const bytes = require('node:fs').readFileSync(await download.path());
+      assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+      assert.equal(bytes.readUInt32BE(16), 960);
+      assert.equal(bytes.readUInt32BE(20), 640);
+      await page.waitForFunction(() => !screenshotBusy);
+    }
+  } finally { await context.close(); }
+});
+
 test('Escape resumes native capture and raw mouse motion turns the player; pausing and blur release it', () => withDesktop(async page => {
   await page.evaluate(() => openPause());
   await page.keyboard.press('Escape');

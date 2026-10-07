@@ -14192,6 +14192,56 @@ function asciiBar(f) {
                                               : '<span style="color:rgba(255,255,255,0.14)">░</span>';
   return s;
 }
+// Capture the rendered game, including the HUD, without DOM menus or OS dialogs.
+let screenshotBusy = false, screenshotNotice = null, screenshotNoticeTimer = null;
+function showScreenshotNotice(text) {
+  if (!screenshotNotice) {
+    screenshotNotice = document.createElement('div');
+    screenshotNotice.setAttribute('role', 'status');
+    screenshotNotice.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:1000;max-width:calc(100vw - 48px);padding:10px 14px;background:#101018;color:#fff;border:1px solid #777;font:13px monospace;overflow-wrap:anywhere;pointer-events:none';
+    document.body.appendChild(screenshotNotice);
+  }
+  screenshotNotice.textContent = text;
+  screenshotNotice.hidden = false;
+  clearTimeout(screenshotNoticeTimer);
+  screenshotNoticeTimer = setTimeout(() => screenshotNotice.hidden = true, 6000);
+}
+async function takeScreenshot() {
+  if (screenshotBusy) return;
+  screenshotBusy = true;
+  try {
+    const blob = await new Promise((resolve, reject) => {
+      cv.toBlob(value => {
+        if (value) resolve(value);
+        else reject(new Error('Could not capture the game view.'));
+      }, 'image/png');
+    });
+    if (GLYPHPORT_DESKTOP_APP) {
+      if (!window.__TAURI__?.core?.invoke) throw new Error('Please update the desktop app to save screenshots.');
+      const png = Array.from(new Uint8Array(await blob.arrayBuffer()));
+      const path = await window.__TAURI__.core.invoke('save_screenshot', { png });
+      showScreenshotNotice(`Screenshot saved: ${path}`);
+    } else {
+      const url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url;
+      link.download = `Glyphport-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+      document.body.appendChild(link);
+      link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      showScreenshotNotice('Screenshot downloaded.');
+    }
+  } catch (error) {
+    showScreenshotNotice(`Screenshot could not be saved. ${error.message || error}`);
+  } finally {
+    screenshotBusy = false;
+  }
+}
+// Capture phase also works while a dev-tool text field owns keyboard input.
+document.addEventListener('keydown', e => {
+  if (e.code !== 'F12') return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (!e.repeat) takeScreenshot();
+}, true);
 // ===== pause menu: Esc (or the mouse lock being released). Freezes the game, fades the sound, and holds the
 // settings, which apply as you change them and are kept in localStorage.
 const DETAIL = { high: 10, medium: 12, low: 15 }; // character size in px: bigger characters, fewer of them, faster
@@ -14247,6 +14297,8 @@ function buildPause() {
       <button class="item" data-act="map">Map of the city</button>
       <button class="item" data-act="newgame">Start over</button>
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
+      <button class="item" data-act="screenshot">Take screenshot <span class="k" style="margin-left:auto">F12</span></button>
+      <p class="sub">${GLYPHPORT_DESKTOP_APP ? 'Saved as PNGs in Screenshots beside the game executable.' : 'Screenshots download as PNGs.'}</p>
       <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/Glyphport-Setup.exe" target="_blank" rel="noopener" style="display:${!GLYPHPORT_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
       <button class="item" data-act="fullscreen" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
       <button class="item" data-act="update" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Check for updates</button>
@@ -14271,6 +14323,7 @@ function buildPause() {
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
         <b>P</b><span>pee</span>
         <b>Esc</b><span>pause</span>
+        <b>F12</b><span>take screenshot</span>
       </div>
       <h2></h2>
       ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
@@ -14300,6 +14353,7 @@ function buildPause() {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'fullscreen') toggleDesktopFullscreen();
+    if (b.dataset.act === 'screenshot') takeScreenshot();
     if (b.dataset.act === 'update') desktopUpdateAction();
     if (b.dataset.act === 'quit') quitDesktopGame();
     if (b.dataset.act === 'resume') closePause(true);

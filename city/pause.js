@@ -53,6 +53,8 @@ function buildPause() {
       <button class="item" data-act="map">Map of the city</button>
       <button class="item" data-act="newgame">Start over</button>
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
+      <button class="item" data-act="screenshot">Take screenshot <span class="k" style="margin-left:auto">F12</span></button>
+      <p class="sub">${GLYPHPORT_DESKTOP_APP ? 'Saved as PNGs in Screenshots beside the game executable.' : 'Screenshots download as PNGs.'}</p>
       <a class="item" data-desktop-download href="https://github.com/Evelyn225/emergent-toys/releases/latest/download/Glyphport-Setup.exe" target="_blank" rel="noopener" style="display:${!GLYPHPORT_DESKTOP_APP && !MOBILE_BROWSER ? 'flex' : 'none'}">Download Windows app <span class="k" style="margin-left:auto">desktop</span></a>
       <button class="item" data-act="fullscreen" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Fullscreen <span class="k" style="margin-left:auto">F11</span></button>
       <button class="item" data-act="update" style="display:${GLYPHPORT_DESKTOP_APP ? 'flex' : 'none'}">Check for updates</button>
@@ -77,6 +79,7 @@ function buildPause() {
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
         <b>P</b><span>pee</span>
         <b>Esc</b><span>pause</span>
+        <b>F12</b><span>take screenshot</span>
       </div>
       <h2></h2>
       ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
@@ -106,6 +109,7 @@ function buildPause() {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'fullscreen') toggleDesktopFullscreen();
+    if (b.dataset.act === 'screenshot') takeScreenshot();
     if (b.dataset.act === 'update') desktopUpdateAction();
     if (b.dataset.act === 'quit') quitDesktopGame();
     if (b.dataset.act === 'resume') closePause(true);

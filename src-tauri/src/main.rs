@@ -2,6 +2,14 @@
 
 #[cfg(windows)]
 mod desktop_mouse;
+mod screenshots;
+
+#[tauri::command]
+async fn save_screenshot(png: Vec<u8>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || screenshots::save(&png))
+        .await
+        .map_err(|error| error.to_string())?
+}
 
 #[tauri::command]
 async fn set_game_mouse_capture(window: tauri::WebviewWindow, active: bool) -> bool {
@@ -79,6 +87,7 @@ fn main() {
             set_game_mouse_capture,
             toggle_game_fullscreen,
             open_game_update,
+            save_screenshot,
             quit_game
         ])
         .run(tauri::generate_context!())
