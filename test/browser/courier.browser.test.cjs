@@ -23,8 +23,9 @@ test('enter the depot, take a parcel, walk every safe crossing, and deliver once
     px=10.3;py=4.9;interact();const accepted=courierJob?.id;
     px=4;py=1.5;interact();const stairs={mode,x:px,y:py};
     needs.health=100;
-    const points=[[179.5,106.5],[183.5,107.35],[186.5,107.35],[189.4,106.85],[190.3,106.85],
-      [191.4,106.85],[191.4,102.35],[195.4,102.4],[196.4,102.4],[197.5,102.4],[198.5,102.4],[199,102.1]];
+    const points=[[179.5,106.5],[182.4,107.35],[183.5,107.35],[186.5,107.35],[188.2,106.85],
+      [189.4,106.85],[190.3,106.85],[190.8,107.4],[191.4,107.4],[191.4,106.85],[191.4,102.35],
+      [194.35,102.4],[195.4,102.4],[196.4,102.4],[197.5,102.4],[198.5,102.4],[199,102.1]];
     const legs=[];
     for(const [x,y] of points) {
       let n=0;while(near(px,py,x,y)>.01&&n++<800) {
@@ -42,7 +43,7 @@ test('enter the depot, take a parcel, walk every safe crossing, and deliver once
       saved:JSON.parse(localStorage.getItem(SAVE_KEY)).courier,map:bigMapLabels().some(p=>p[2]===COURIER_COMPANY)};
   });
   assert.equal(r.entered,'courier');assert.equal(r.accepted,'garden');assert.equal(r.stairs.mode,'roof');
-  assert.equal(r.stairs.x,179.5);assert.equal(r.stairs.y,102.5);assert.equal(r.legs.length,12);
+  assert.equal(r.stairs.x,179.5);assert.equal(r.stairs.y,102.5);assert.equal(r.legs.length,17,JSON.stringify(r.legs));
   for(const leg of r.legs)assert.deepEqual(leg,{reached:true,mode:'roof',health:100});
   assert.match(r.prompt,/deliver/);assert.equal(r.paid,120);assert.equal(r.twice,120);assert.equal(r.active,null);
   assert.equal(r.saved.records.trips,1);assert.equal(r.saved.job,null);assert.equal(r.map,true);
@@ -58,6 +59,40 @@ test('both optional courier gaps are reachable with an ordinary sprint jump',()=
     return {reached:px>=end,mode,z:body.z,health:needs.health,minHeight};
   }));
   for(const jump of r){assert.equal(jump.reached,true,JSON.stringify(r));assert.equal(jump.mode,'roof',JSON.stringify(r));assert.equal(jump.z,0);assert.ok(jump.health>90);assert.ok(jump.minHeight>1.3);}
+}));
+
+test('courier stairs, bridges and their supports clear existing walls and facade details',()=>withCity(async page=>{
+  const conflicts=await page.evaluate(()=>{
+    const conflicts=[],fixtures=[...ARCH_DETAILS,...LANDMARK_SOLIDS,...PAVILION_SOLIDS,...belleDetails,...solids];
+    function verticalInterval(o,x,y) {
+      const rx=rel(x-o.x),ry=rel(y-o.y),u=rx*o.c+ry*o.s,v=-rx*o.s+ry*o.c;
+      if(Math.abs(u)>o.hl+1e-9||Math.abs(v)>o.hw+1e-9)return null;
+      let bottom=o.z0,top=o.z1;
+      for(const [nx,ny,nz,limit] of o.planes||[]) {
+        const distance=limit-nx*u-ny*v;
+        if(!nz){if(distance< -1e-9)return null;}
+        else if(nz>0)top=Math.min(top,distance/nz);
+        else bottom=Math.max(bottom,distance/nz);
+      }
+      return top>=bottom?[bottom,top]:null;
+    }
+    const structure=[...COURIER_SURFACES,...COURIER_SCENERY.filter(o=>['post','rail','beam','bearing','stringer'].includes(o.kind))];
+    for(const deck of structure) {
+      const nearby=fixtures.filter(o=>streetBoxesOverlap(deck,o,0)&&!(o.ownerCell!=null&&map[o.ownerCell]!==o.ownerHeight));
+      const samplesX=Math.max(2,Math.ceil(deck.hl*2/.025)),samplesY=Math.max(2,Math.ceil(deck.hw*2/.025));
+      for(let ix=0;ix<=samplesX;ix++)for(let iy=0;iy<=samplesY;iy++) {
+        const x=deck.x-deck.hl+deck.hl*2*ix/samplesX,y=deck.y-deck.hw+deck.hw*2*iy/samplesY;
+        const d=verticalInterval(deck,x,y);if(!d||d[1]-d[0]<1e-6)continue;
+        if(courierMapHeight(x,y)>d[0]+1e-6)conflicts.push({kind:'wall',deck:deck.kind,x,y});
+        for(const o of nearby) {
+          const f=verticalInterval(o,x,y);
+          if(f&&Math.min(d[1],f[1])>Math.max(d[0],f[0])+1e-6)conflicts.push({kind:o.kind,deck:deck.kind,x,y});
+        }
+      }
+    }
+    return conflicts;
+  });
+  assert.deepEqual(conflicts,[]);
 }));
 
 test('all three ladders climb both ways, preserve a parcel after a surviving fall, and allow letting go',()=>withCity(async page=>{

@@ -7,31 +7,56 @@ const COURIER_COMPANY = 'Rooftop Couriers';
     const k=idx(x,y);map[k]=COURIER_DEPOT.h;STY[k]=8;SEED[k]=.37;SHOP[k]=sh;
   }
 }
-const COURIER_SURFACES = [], COURIER_LADDERS = [], COURIER_SCENERY = [];
+const COURIER_SURFACES = [], COURIER_STAIRS = [], COURIER_LADDERS = [], COURIER_SCENERY = [];
 function courierSurface(x0,y0,x1,y1,h0,h1=h0,axis='x',kind='bridge') {
   const o={x:(x0+x1)/2,y:(y0+y1)/2,hl:(x1-x0)/2,hw:(y1-y0)/2,c:1,s:0,
-    z0:Math.min(h0,h1)-.035,z1:Math.max(h0,h1),h0,h1,axis,kind};
+    z0:Math.min(h0,h1)-.012,z1:Math.max(h0,h1),h0,h1,axis,kind,thickness:.012};
   COURIER_SURFACES.push(o);return o;
 }
 function courierLadder(id,bottom,top,rail) {
   COURIER_LADDERS.push({id,bottom,top,x:rail[0],y:rail[1],yaw:rail[2]});
 }
 const courierMapHeight = (x,y) => map[idx(Math.floor(x),Math.floor(y))];
-// The lower depot roof leads over the lane to a laundry terrace, then across a service catwalk.
-courierSurface(179.35,103.8,179.65,106.2,COURIER_DEPOT.h,courierMapHeight(179.5,106.5),'y');
-courierSurface(183.8,107.2,186.2,107.5,courierMapHeight(183.5,107.35),courierMapHeight(186.5,107.35));
-// A second crossing turns back toward the row with the florist and its roof garden.
-courierSurface(191.25,103.8,191.55,106.2,courierMapHeight(191.4,103.5),courierMapHeight(191.4,106.5),'y');
-courierSurface(191.8,102.2,194.2,102.5,courierMapHeight(191.5,102.35),courierMapHeight(194.5,102.35));
-// Raised maintenance platforms form the easier path over the taller middle townhouse.
-courierSurface(189.55,106.55,190.15,107.15,courierMapHeight(189.5,107),courierMapHeight(190.5,107));
-courierSurface(195.65,102.15,196.15,102.65,courierMapHeight(195.5,102.4),courierMapHeight(196.5,102.4));
-courierSurface(197.75,102.15,198.25,102.65,courierMapHeight(197.5,102.4),courierMapHeight(198.5,102.4));
+function courierStairs(x0,y0,x1,y1,h0,h1,axis='x') {
+  const count=Math.ceil(Math.abs(h1-h0)/.022),flight={x:(x0+x1)/2,y:(y0+y1)/2,
+    hl:(x1-x0)/2,hw:(y1-y0)/2,h0,h1,axis,kind:'stairs'};
+  COURIER_STAIRS.push(flight);
+  for(let i=0;i<count;i++) {
+    const lo=i/count,hi=(i+1)/count;
+    const h=h0+(h1-h0)*(h1>h0?hi:lo);
+    const step=courierSurface(axis==='x'?x0+(x1-x0)*lo:x0,axis==='y'?y0+(y1-y0)*lo:y0,
+      axis==='x'?x0+(x1-x0)*hi:x1,axis==='y'?y0+(y1-y0)*hi:y1,h,h,axis,'step');
+    // Closed risers meet the preceding tread, so there are no floating strips between steps.
+    step.z0=Math.max(Math.min(h0,h1),h-Math.abs(h1-h0)/count-.012);step.thickness=h-step.z0;
+  }
+  return flight;
+}
+// Level decks clear the existing cornices, with their approach stairs entirely on the lower roof.
+const courierSouthDeck=courierMapHeight(179.5,106.5)+.06;
+courierStairs(179.37,102.55,179.63,103.8,COURIER_DEPOT.h,courierSouthDeck,'y');
+courierSurface(179.39,103.8,179.61,106.2,courierSouthDeck,courierSouthDeck,'y');
+const courierLaundryDeck=courierMapHeight(186.5,107.35)+.06;
+courierStairs(182.65,107.22,183.8,107.48,courierMapHeight(183.5,107.35),courierLaundryDeck);
+courierSurface(183.8,107.24,186.2,107.46,courierLaundryDeck);
+const courierNorthDeck=courierMapHeight(191.4,103.5)+.06;
+courierStairs(191.27,106.2,191.53,107.2,courierNorthDeck,courierMapHeight(191.4,106.5),'y');
+courierSurface(191.29,103.8,191.51,106.2,courierNorthDeck,courierNorthDeck,'y');
+// The last bridge ends in a small landing on the lower roof; step or jump down from its open end.
+courierSurface(191.8,102.24,194.25,102.46,courierNorthDeck);
+// Rise before each taller party wall instead of cutting a ramp through its cornice.
+const courierTownhouseDeck=courierMapHeight(190.5,107)+.06;
+courierStairs(188.45,106.72,189.85,106.98,courierMapHeight(189.5,107),courierTownhouseDeck);
+courierSurface(189.85,106.72,190.2,106.98,courierTownhouseDeck,courierTownhouseDeck,'x','landing');
+const courierGardenApproach=courierMapHeight(196.5,102.4)+.06;
+courierStairs(194.45,102.27,195.85,102.53,courierMapHeight(195.5,102.4),courierGardenApproach);
+courierSurface(195.85,102.27,196.2,102.53,courierGardenApproach,courierGardenApproach,'x','landing');
+// No descending ramp at x=198: the garden is a straightforward drop from the adjoining roof.
 // Two small gaps are optional sprint-jump shortcuts; the walkable service bridges remain available.
-courierSurface(183.6,108.4,184.75,108.65,1.5,1.6,'x','shortcut');
-courierSurface(185.1,108.4,186.4,108.65,1.6,1.6,'x','shortcut');
-courierSurface(192,101.15,192.95,101.4,1.7,1.7,'x','shortcut');
-courierSurface(193.3,101.15,194.5,101.4,1.4,1.4,'x','shortcut');
+courierStairs(183.05,108.4,183.95,108.65,1.5,courierLaundryDeck);
+courierSurface(183.95,108.4,184.75,108.65,courierLaundryDeck,courierLaundryDeck,'x','shortcut');
+courierSurface(185.1,108.4,186.4,108.65,courierLaundryDeck,courierLaundryDeck,'x','shortcut');
+courierSurface(191.8,101.15,192.95,101.4,courierNorthDeck,courierNorthDeck,'x','shortcut');
+courierSurface(193.3,101.15,194.5,101.4,courierMapHeight(194.5,101.4)+.06,courierMapHeight(194.5,101.4)+.06,'x','shortcut');
 courierLadder('depot',[177.75,103.45,0],[178.35,103.45,COURIER_DEPOT.h],[177.97,103.45,0]);
 courierLadder('laundry',[183.4,105.75,0],[183.4,106.35,courierMapHeight(183.4,106.35)],[183.4,105.97,Math.PI/2]);
 courierLadder('garden',[198.5,104.25,0],[198.5,103.65,courierMapHeight(198.5,103.65)],[198.5,104.03,-Math.PI/2]);

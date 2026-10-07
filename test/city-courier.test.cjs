@@ -38,21 +38,32 @@ test('courier saves preserve elapsed time and validate routes, times and records
   assert.equal(r.failed,true);assert.equal(r.twice,false);assert.equal(r.count,1);
 });
 
-test('courier decks share their exact slopes with shelter and have genuine jump gaps',()=>{
+test('courier decks and treads share their geometry with shelter and retain genuine jump gaps',()=>{
   const {ev}=loadCity();
   const r=JSON.parse(ev(`JSON.stringify((()=>{
     const surfaces=COURIER_SURFACES.map(o=>({kind:o.kind,x:o.x,y:o.y,height:courierSurfaceTop(o,o.x,o.y),
       collision:courierRoofHeight(o.x,o.y),geometry:geometrySurfaceHeight(o,o.x,o.y),
       topExposed:snowExposed(o.x,o.y,o.z1),groundExposed:snowExposed(o.x,o.y)}));
     return {surfaces,gaps:[[184.9,108.52],[193.1,101.27]].map(([x,y])=>courierRoofHeight(x,y)),
-      wrapped:courierRoofHeight(179.5+N,105-N),base:courierRoofHeight(179.5,105),police:policeRoofHeight(184.5,107.5)};
+      wrapped:courierRoofHeight(179.5+N,105-N),base:courierRoofHeight(179.5,105),police:policeRoofHeight(184.5,107.4)};
   })())`));
   for(const o of r.surfaces){
     assert.ok(Math.abs(o.height-o.geometry)<1e-8,JSON.stringify(o));
     assert.ok(o.collision>=o.height-1e-8);
     assert.equal(o.groundExposed,false,JSON.stringify(o));
   }
-  assert.ok(r.surfaces.filter(o=>o.topExposed).length>=8,'most decks are exposed; ramps beneath a taller roof cornice remain sheltered');
+  assert.ok(r.surfaces.filter(o=>o.topExposed).length>=8,'decks and treads are exposed to snow');
   assert.deepEqual(r.gaps,[0,0]);assert.equal(r.wrapped,r.base);
   assert.ok(r.police>1.4,'police roof navigation includes the narrow crossing at the edge of a cell');
+});
+
+test('courier bridges are level, steps have small risers, and the garden drop has no ramp',()=>{
+  const {ev}=loadCity();
+  assert.equal(ev('COURIER_SURFACES.filter(o=>o.kind==="bridge").length'),4);
+  assert.equal(ev('COURIER_SURFACES.every(o=>o.h0===o.h1)'),true);
+  assert.equal(ev('COURIER_SURFACES.some(o=>courierContains(o,198,102.4))'),false);
+  const flights=JSON.parse(ev('JSON.stringify(COURIER_STAIRS.map(o=>({rise:Math.abs(o.h1-o.h0),length:2*(o.axis==="y"?o.hw:o.hl)})))'));
+  for(const flight of flights)assert.ok(flight.length/flight.rise>3,'the rise fits a plausible stair flight');
+  const steps=JSON.parse(ev('JSON.stringify(COURIER_SURFACES.filter(o=>o.kind==="step").map(o=>o.z1-o.z0))'));
+  for(const height of steps)assert.ok(height<=.034+1e-9,'each tread covers a small riser and its thickness');
 });

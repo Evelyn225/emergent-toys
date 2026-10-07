@@ -112,17 +112,37 @@ function drawCourierBag() {
 function courierBox(kind,x,y,hl,hw,z0,z1,col=GRAY,block=true) {
   const o={kind,x,y,hl,hw,z0,z1,c:1,s:0,col,block};COURIER_SCENERY.push(o);return o;
 }
-for(const o of COURIER_SURFACES)if(o.kind==='bridge') {
+for(const o of [...COURIER_SURFACES.filter(o=>o.kind==='bridge'),...COURIER_STAIRS]) {
   const vertical=o.axis==='y',length=vertical?o.hw:o.hl;
   for(const side of [-1,1]) {
-    const x=o.x+(vertical?side*(o.hl+.012):0),y=o.y+(vertical?0:side*(o.hw+.012));
-    const rail=courierBox('rail',x,y,vertical?.006:o.hl,vertical?o.hw:.006,o.z0+.1,o.z1+.115,GRAY);
-    // Rails follow the deck's slope; their narrow profile leaves the view open.
-    rail.h0=o.h0+.11;rail.h1=o.h1+.11;rail.axis=o.axis;rail.thickness=.008;
-    rail.z0=Math.min(rail.h0,rail.h1)-rail.thickness;rail.planes=courierSurfacePlanes(rail);
-    for(const position of [-length,0,length]) {
+    const x=o.x+(vertical?side*(o.hl+.006):0),y=o.y+(vertical?0:side*(o.hw+.006));
+    const rail=courierBox('rail',x,y,vertical?.003:o.hl,vertical?o.hw:.003,0,0,GRAY);
+    rail.h0=o.h0+.105;rail.h1=o.h1+.105;rail.axis=o.axis;rail.thickness=.006;
+    rail.z0=Math.min(rail.h0,rail.h1)-rail.thickness;rail.z1=Math.max(rail.h0,rail.h1);rail.planes=courierSurfacePlanes(rail);
+    const count=Math.ceil(length*2/.65);
+    for(let k=0;k<=count;k++) {
+      const position=-length+length*2*k/count;
       const sx=x+(vertical?0:position),sy=y+(vertical?position:0),z=courierSurfaceTop(o,sx,sy);
-      courierBox('post',sx,sy,.009,.009,z,z+.11,GREEN);
+      courierBox('post',sx,sy,.004,.004,z,z+.105,GRAY);
+    }
+    if(o.kind==='stairs') {
+      const beam=courierBox('stringer',x,y,vertical?.007:o.hl,vertical?o.hw:.007,Math.min(o.h0,o.h1),Math.max(o.h0,o.h1),GRAY,false);
+      beam.h0=o.h0;beam.h1=o.h1;beam.axis=o.axis;beam.thickness=.025;
+      beam.planes=[...courierSurfacePlanes(beam),[0,0,-1,-beam.z0,6]];
+    }
+  }
+  if(o.kind==='bridge') {
+    // Short bearing pads sit behind the cornice; nothing extends into the facade or the lane below.
+    for(const end of [-1,1]) {
+      const x=o.x+(vertical?0:end*(o.hl-.07)),y=o.y+(vertical?end*(o.hw-.07):0);
+      const base=courierMapHeight(x,y);
+      if(base)for(const side of [-1,1])
+        courierBox('bearing',x+(vertical?side*.075:0),y+(vertical?0:side*.075),.022,.022,base,o.z0,GRAY,false);
+    }
+    for(const side of [-1,1]) {
+      // Under-deck beams stop short of both walls, leaving their decorative cornices intact.
+      courierBox('beam',o.x+(vertical?side*.085:0),o.y+(vertical?0:side*.085),
+        vertical?.008:o.hl-.32,vertical?o.hw-.32:.008,o.z0-.025,o.z0,GRAY,false);
     }
   }
 }
@@ -149,9 +169,10 @@ for(const x of [198.3,198.5])courierBox('trellis-post',x,101.4,.007,.007,1.4,1.6
 for(const z of [1.5,1.58,1.66])courierBox('trellis',198.4,101.4,.11,.004,z,z+.005,BRICK,false);
 const oldPrintSign=courierBox('print-sign',177.98,101.5,.35,.008,.65,.82,GREEN,false);
 oldPrintSign.c=0;oldPrintSign.s=1;
-const COURIER_SIGNS=[{x:179.5,y:103.4,z:1.402,arrow:'v'},
-  {x:183.35,y:107.35,z:1.502,arrow:'>'},{x:190.8,y:106.6,z:1.602,arrow:'^'},
-  {x:191.4,y:102.65,z:1.702,arrow:'>'}];
+const COURIER_SIGNS=[[179.5,102.35,'v'],[179.5,106.35,'>'],[182.35,107.35,'>'],[186.35,107.35,'>'],
+  [188.2,106.85,'>'],[190.7,107.4,'>'],[191.4,107.4,'^'],[191.4,103.4,'^'],
+  [191.4,102.35,'>'],[194.32,102.4,'>'],[197.65,102.4,'>']].map(([x,y,arrow])=>
+    ({x,y,arrow,z:Math.max(courierMapHeight(x,y),courierRoofHeight(x,y))+.002}));
 const courierSceneryB=bucketed(COURIER_SCENERY),courierSignsB=bucketed(COURIER_SIGNS),courierSurfacesB=bucketed(COURIER_SURFACES);
 function courierRoofBlocked(x,y,z,pad=.025) {
   for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const o of courierSceneryB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)])
@@ -163,7 +184,19 @@ function drawCourier() {
   forNear(courierSurfacesB,o=>{
     const [x,y]=R(o.x,o.y);
     drawBox({...o,x,y},(i,t,L)=>{
-      BG[i]=C(o.kind==='shortcut'?BRICK:GRAY,2+L*.25);set(i,HIT.face===5?'=':'-',C(GRAY,L));
+      const top=HIT.face===5,along=o.axis==='y'?HIT.v:HIT.u,across=o.axis==='y'?HIT.u:HIT.v;
+      const half=o.axis==='y'?o.hl:o.hw;
+      const edge=top&&Math.abs(across)>half-.012;
+      const seam=top&&fract((along+(o.axis==='y'?o.y:o.x))*12)<.09;
+      const grain=hash(Math.floor((o.x+HIT.u)*45),Math.floor((o.y+HIT.v)*45),9);
+      const col=top&&!edge&&o.kind!=='hut'?BRICK:GRAY;
+      BG[i]=C(col,1.5+L*(top?.32:.18));
+      let ch=' ';
+      if(edge)ch='|';
+      else if(seam)ch='=';
+      else if(grain>.88)ch='.';
+      else if(grain<.08&&top)ch='-';
+      set(i,ch,C(seam?STONE:col,L*(seam?.65:.85)));
       if(HIT.face===5)paintSettledSnow(i,o.x+HIT.u,o.y+HIT.v,L*.7,1,0,HIT.w);
       return true;
     },rayBeveledBay);
