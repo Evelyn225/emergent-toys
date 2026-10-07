@@ -792,10 +792,9 @@ function drawRadioTower(vx, vy) {
 // glowing after dark. Real 3D, so it stays put across the street as you walk round it.
 const sagZ = t => 0.5 - 0.06 * (1 - t * t); // t: -1..1 across the street
 function drawLanternString(vx, vy, ax, ay) {
-  // the cord is thinner than a character cell past a few metres, so it grows to stay one cell thick (a grey dashed
-  // line) instead of breaking up into the odd cell the rays happen to hit
-  const d = Math.hypot(vx, vy), th = Math.max(0.004, 0.55 * d / projY), tw = Math.max(0.004, 0.55 * d / projX), far = th > 0.01;
-  const segs = 8, cord = (i, t, L) => { if (!far) BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, L * 0.7)), true; };
+  // Grow the cord to one character cell at a distance, keeping the same dark material as it widens.
+  const d = Math.hypot(vx, vy), th = Math.max(0.004, 0.55 * d / projY), tw = Math.max(0.004, 0.55 * d / projX);
+  const segs = 8, cord = i => { BG[i] = C(GRAY, 1); return set(i, '-', C(GRAY, 2)), true; };
   for (let k = 0; k < segs; k++) {
     const t0 = -1 + 2 * k / segs, t1 = t0 + 2 / segs, tm = (t0 + t1) / 2, z = (sagZ(t0) + sagZ(t1)) / 2;
     drawBox(boxAt(vx + ax * tm * LANTERN_SPAN, vy + ay * tm * LANTERN_SPAN, ax, ay, LANTERN_SPAN / segs + 0.003, tw, z - th, z + th), cord);
