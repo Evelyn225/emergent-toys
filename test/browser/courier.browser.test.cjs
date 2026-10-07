@@ -95,8 +95,36 @@ test('courier stairs, bridges and their supports clear existing walls and facade
   assert.deepEqual(conflicts,[]);
 }));
 
-test('all three ladders climb both ways, preserve a parcel after a surviving fall, and allow letting go',()=>withCity(async page=>{
+test('the first route uses existing building entrances for recovery without redundant ladders',()=>withCity(async page=>{
   const r=await page.evaluate(()=>{
+    startCourier();needs.health=100;
+    const ladders=COURIER_LADDERS.length,recovery=[];
+    // A surviving fall keeps the parcel, and each building can get you back to the route.
+    mode='walk';room=null;px=177.72;py=102.5;body.z=2.7;body.vz=0;body.peak=body.z;
+    for(let n=0;n<200;n++)stepBody(.01);
+    const survived={active:!!courierJob,health:needs.health,z:body.z};
+    for(const [x,y,yaw,kind] of [[177.72,102.5,0,'courier'],[183.8,105.7,Math.PI/2,'apts'],[199.4,104.28,-Math.PI/2,'apts']]) {
+      mode='walk';room=null;px=x;py=y;a=yaw;pitch=0;body.z=body.vz=body.peak=0;render();interact();
+      const entered=room?.kind;
+      if(entered!==kind){recovery.push({entered});continue;}
+      px=room.def.ex;py=1.7;interact();
+      const up={mode,free:roofFree(px,py),active:!!courierJob};
+      interact();const down={mode,kind:room?.kind};
+      recovery.push({entered,up,down});
+    }
+    return {ladders,recovery,survived};
+  });
+  assert.equal(r.ladders,0);assert.equal(r.recovery.length,3);
+  assert.deepEqual(r.survived,{active:true,health:100,z:0});
+  for(const [i,entry] of r.recovery.entries()) {
+    const kind=i===0?'courier':'apts';
+    assert.deepEqual(entry,{entered:kind,up:{mode:'roof',free:true,active:true},down:{mode:'room',kind}});
+  }
+}));
+
+test('the ladder mechanic remains usable for future roofs without indoor access',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>{
+    courierLadder('test-only',[177.75,103.45,0],[178.35,103.45,COURIER_DEPOT.h],[177.97,103.45,0]);
     startCourier();const ladders=[];
     for(const ladder of COURIER_LADDERS) {
       mode='walk';room=null;[px,py]=ladder.bottom;body.z=body.vz=body.peak=0;
@@ -106,13 +134,13 @@ test('all three ladders climb both ways, preserve a parcel after a surviving fal
       interact();K.KeyS=true;for(let n=0;n<150&&climbing;n++)stepCourierLadder(.05);K.KeyS=false;
       ladders.push({available,grabbed,up,down:mode,active:!!courierJob});
     }
-    const l=COURIER_LADDERS[2];grabCourierLadder({ladder:l,end:'bottom'});K.KeyW=true;stepCourierLadder(1);K.KeyW=false;
+    const l=COURIER_LADDERS[0];grabCourierLadder({ladder:l,end:'bottom'});K.KeyW=true;stepCourierLadder(1);K.KeyW=false;
     leaveCourierLadder();const released={mode,z:body.z};needs.health=100;
     for(let n=0;n<200;n++)stepBody(.01);
     const survived={active:!!courierJob,health:needs.health,z:body.z};
     return {ladders,released,survived};
   });
-  assert.equal(r.ladders.length,3);
+  assert.equal(r.ladders.length,1);
   for(const l of r.ladders){assert.ok(l.available);assert.equal(l.grabbed,'ladder');assert.equal(l.up.mode,'roof');assert.equal(l.up.free,true);assert.equal(l.down,'walk');assert.equal(l.active,true);}
   assert.equal(r.released.mode,'walk');assert.ok(r.released.z>0);assert.equal(r.survived.active,true);assert.ok(r.survived.health>0);assert.equal(r.survived.z,0);
 }));
@@ -126,6 +154,7 @@ test('courier timer survives reload; hospital and arrests fail it even if the fi
     wakeT=0;startCourier();mode='walk';room=null;wanted.stars=1;money=500;openBusted();
     const confiscated=bustedEl.textContent.includes('parcel has been confiscated');bustedChoice('fine');
     const fine={active:courierJob,failed:courierRecords.failed,stars:wanted.stars};
+    courierLadder('test-only',[177.75,103.45,0],[178.35,103.45,COURIER_DEPOT.h],[177.97,103.45,0]);
     startCourier();grabCourierLadder({ladder:COURIER_LADDERS[0],end:'bottom'});stepCourierLadder(1);
     wanted.stars=1;openBusted();const caughtOnLadder={mode,climbing,active:courierJob};bustedChoice('jail');
     const jail={active:courierJob,kind:room.kind,failed:courierRecords.failed};

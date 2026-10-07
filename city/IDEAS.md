@@ -17,8 +17,9 @@ The ones that would add the most for the least, roughly in order. Each builds on
 ## Rooftop courier jobs
 
 - The first route is in: **Rooftop Couriers**, a converted Midtown print shop, sends gardening supplies through
-  laundry and water-tank roofs to Mara's garden. It pays $80 plus up to $40 for speed. Bridges and ramps offer a
-  walking route; two sprint jumps offer shortcuts. Three ladders allow re-entry after surviving a fall. Hospital
+  laundry and water-tank roofs to Mara's garden. It pays $80 plus up to $40 for speed. Level bridges and stairs offer a
+  walking route; two sprint jumps offer shortcuts. Existing stairs and apartment elevators allow re-entry after
+  a surviving fall. Hospital
   recovery or arrest fails the parcel. The active delivery, its timer and career records are saved.
 - Next: a construction rush with scaffolding, narrow crossings, elevation changes and an optional air-strafe
   shortcut; a night delivery past neon signs to a waiting recipient. Author these rather than choosing random rooftops.

@@ -915,9 +915,8 @@ courierSurface(183.95,108.4,184.75,108.65,courierLaundryDeck,courierLaundryDeck,
 courierSurface(185.1,108.4,186.4,108.65,courierLaundryDeck,courierLaundryDeck,'x','shortcut');
 courierSurface(191.8,101.15,192.95,101.4,courierNorthDeck,courierNorthDeck,'x','shortcut');
 courierSurface(193.3,101.15,194.5,101.4,courierMapHeight(194.5,101.4)+.06,courierMapHeight(194.5,101.4)+.06,'x','shortcut');
-courierLadder('depot',[177.75,103.45,0],[178.35,103.45,COURIER_DEPOT.h],[177.97,103.45,0]);
-courierLadder('laundry',[183.4,105.75,0],[183.4,106.35,courierMapHeight(183.4,106.35)],[183.4,105.97,Math.PI/2]);
-courierLadder('garden',[198.5,104.25,0],[198.5,103.65,courierMapHeight(198.5,103.65)],[198.5,104.03,-Math.PI/2]);
+// These roofs already have indoor access: depot stairs and apartment elevators. Recovery uses those entrances;
+// reserve ladders for future routes on buildings without roof access, away from balconies and cornices.
 const COURIER_GARDEN = { x:199,y:102.1,z:courierMapHeight(199,102.1), name:'Mara' };
 const COURIER_ROUTES = [{id:'garden',title:'The Green Roof',parcel:'gardening supplies',pay:80,bonus:40,
   quick:70,bonusUntil:150,recipient:COURIER_GARDEN,
@@ -10578,7 +10577,7 @@ function courierUse() {
   const nearby=courierLadderNear();
   if(nearby){grabCourierLadder(nearby);return true;}
   if(mode==='room'&&room.kind==='courier'&&nearKeeper()) {
-    if(courierJob)say(`"${courierRoute().directions} The parcel's safe in your courier bag."`,6);
+    if(courierJob)say(`"${courierRoute().directions} If you fall, use the apartment elevators to get back up. The parcel's safe in your courier bag."`,8);
     else {
       startCourier();saveGame();
       say(`"Gardening supplies for ${COURIER_GARDEN.name}. Eighty dollars, plus a speed bonus. Stairs are on your left." The parcel goes in your courier bag, leaving your hands free.`,8);

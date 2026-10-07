@@ -56,7 +56,7 @@ function courierUse() {
   const nearby=courierLadderNear();
   if(nearby){grabCourierLadder(nearby);return true;}
   if(mode==='room'&&room.kind==='courier'&&nearKeeper()) {
-    if(courierJob)say(`"${courierRoute().directions} The parcel's safe in your courier bag."`,6);
+    if(courierJob)say(`"${courierRoute().directions} If you fall, use the apartment elevators to get back up. The parcel's safe in your courier bag."`,8);
     else {
       startCourier();saveGame();
       say(`"Gardening supplies for ${COURIER_GARDEN.name}. Eighty dollars, plus a speed bonus. Stairs are on your left." The parcel goes in your courier bag, leaving your hands free.`,8);
