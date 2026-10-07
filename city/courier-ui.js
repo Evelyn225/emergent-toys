@@ -113,6 +113,7 @@ function courierBox(kind,x,y,hl,hw,z0,z1,col=GRAY,block=true) {
   const o={kind,x,y,hl,hw,z0,z1,c:1,s:0,col,block};COURIER_SCENERY.push(o);return o;
 }
 for(const o of [...COURIER_SURFACES.filter(o=>o.kind==='bridge'),...COURIER_STAIRS]) {
+  if(o.railing===false)continue;
   const vertical=o.axis==='y',length=vertical?o.hw:o.hl;
   for(const side of [-1,1]) {
     const x=o.x+(vertical?side*(o.hl+.006):0),y=o.y+(vertical?0:side*(o.hw+.006));

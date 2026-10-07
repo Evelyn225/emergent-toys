@@ -67,3 +67,20 @@ test('courier bridges are level, steps have small risers, and the garden drop ha
   const steps=JSON.parse(ev('JSON.stringify(COURIER_SURFACES.filter(o=>o.kind==="step").map(o=>o.z1-o.z0))'));
   for(const height of steps)assert.ok(height<=.034+1e-9,'each tread covers a small riser and its thickness');
 });
+
+test('courier corner decks meet continuously and the garden shortcut shares its stair landing',()=>{
+  const {ev}=loadCity();
+  assert.equal(ev(`Array.from({length:44},(_,i)=>courierRoofHeight(183.4+i*.01,109.5))
+    .every(h=>Math.abs(h-courierLaundryDeck)<1e-9)`),true,'the laundry elbow has no break in its deck');
+  const join=JSON.parse(ev(`JSON.stringify((()=>{
+    const bridge=COURIER_SURFACES.find(o=>o.kind==='shortcut'&&o.x>193);
+    const stairs=COURIER_STAIRS.find(o=>o.axis==='x'&&o.x>194);
+    return {bridgeEnd:bridge.x+bridge.hl,stairStart:stairs.x-stairs.hl,
+      bridgeHeight:bridge.h1,stairHeight:stairs.h0,bridgeY:bridge.y,stairY:stairs.y,
+      bridgeWidth:bridge.hw,stairWidth:stairs.hw};
+  })())`));
+  assert.ok(Math.abs(join.bridgeEnd-join.stairStart)<1e-9);
+  assert.equal(join.bridgeHeight,join.stairHeight);
+  assert.ok(Math.abs(join.bridgeY-join.stairY)<1e-9);
+  assert.ok(Math.abs(join.bridgeWidth-join.stairWidth)<1e-9,'both railings line up at the join');
+});
