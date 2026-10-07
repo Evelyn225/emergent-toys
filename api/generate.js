@@ -144,6 +144,8 @@ async function generateHtml(openai, prompt, res, retry = false) {
     stream: true
   });
 
+  sendEvent(res, { type: 'stream-ready', retry });
+
   let content = '';
   let finishReason = null;
   for await (const chunk of stream) {
@@ -211,7 +213,6 @@ export default async function handler(req, res) {
 
   try {
     const openai = new OpenAI({ apiKey: process.env.DOMROULETTE_KEY });
-    sendEvent(res, { type: 'start' });
     let result = await generateHtml(openai, prompt, res);
 
     if (result.finishReason === 'length' || !isCompleteHtml(result.html)) {

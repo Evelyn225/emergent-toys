@@ -132,21 +132,6 @@
             }, 400);
         }
         document.addEventListener('DOMContentLoaded', animateProgressLabel);
-        let consoleCommands = [];
-        let consoleCommandsLoaded = false;
-        (async () => {
-            try {
-                const response = await fetch('/casino-assets/console-commands.json');
-                if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to load console-commands.json`);
-                const data = await response.json();
-                consoleCommands = Array.isArray(data.commands) ? data.commands : [];
-                consoleCommandsLoaded = true;
-                console.log('✓ Console commands loaded successfully');
-            } catch (error) {
-                console.error('✗ Error loading console-commands.json:', error);
-            }
-        })();
-
         // API endpoints - uses Vercel serverless functions
         const RANDOM_WORDS_ENDPOINT = '/api/random-words.js';
         const GENERATE_ENDPOINT = '/api/generate.js';
@@ -168,7 +153,6 @@
         let isGenerating = false;
         let hasContent = false;
         let currentIframe = null;
-        let consoleCommandInterval = null;
         let displayedGenerationId = 0;
         let previewStartedAt = 0;
         let previewCanAutoRepair = true;
@@ -231,7 +215,7 @@
             }
         }
 
-        async function readGenerationStream(response, onProgress, onRetry) {
+        async function readGenerationStream(response, onProgress, onRetry, onStreamReady, onFirstChunk, onDone) {
             if (!response.body) throw new Error('Streaming is unavailable in this browser.');
 
             const reader = response.body.getReader();
@@ -249,8 +233,11 @@
 
                 const event = JSON.parse(data);
                 if (event.type === 'chunk') {
+                    if (!html) onFirstChunk?.();
                     html += event.text || '';
                     onProgress(html.length);
+                } else if (event.type === 'stream-ready') {
+                    onStreamReady?.(event.retry === true);
                 } else if (event.type === 'retry') {
                     html = '';
                     onProgress(0);
@@ -260,6 +247,7 @@
                 } else if (event.type === 'done') {
                     if (typeof event.html === 'string') html = event.html;
                     completed = true;
+                    onDone?.();
                 }
             };
 
@@ -280,8 +268,6 @@
             if (!completed || !html) throw new Error('The generation stream ended before the site was complete.');
             return html;
         }
-
-        // Random console messages for loading (loaded from /casino-assets/console-commands.json)
 
         let currentTypingInterval = null; // Track active typing animation
 
@@ -308,44 +294,6 @@
                 }, speed);
                 
                 currentTypingInterval = interval;
-            });
-        }
-
-        function typeConsoleCommand(text, type = 'normal', speed = 30) {
-            return new Promise((resolve) => {
-                const consoleOutput = document.getElementById('consoleOutput');
-                if (!consoleOutput) {
-                    resolve();
-                    return;
-                }
-                
-                const line = document.createElement('div');
-                line.className = 'console-line';
-                if (type !== 'normal') line.classList.add(type);
-                
-                consoleOutput.appendChild(line);
-                
-                let i = 0;
-                const interval = setInterval(() => {
-                    if (i < text.length) {
-                        line.textContent += text[i];
-                        i++;
-                    } else {
-                        clearInterval(interval);
-                        
-                        // Remove old lines if too many (keep last 5 lines)
-                        const lines = consoleOutput.querySelectorAll('.console-line');
-                        if (lines.length > 5) {
-                            lines[0].classList.add('fading');
-                            setTimeout(() => {
-                                if (lines[0].parentNode) {
-                                    lines[0].remove();
-                                }
-                            }, 600);
-                        }
-                        resolve();
-                    }
-                }, speed);
             });
         }
 
@@ -397,31 +345,9 @@
         }
 
         function startConsoleCommands() {
-            stopConsoleCommands(); // Ensure no previous interval is running
-            // Clear console output before starting new commands
             const consoleOutput = document.getElementById('consoleOutput');
-            if (consoleOutput) {
-                consoleOutput.innerHTML = '';
-            }
-            let lastCommand = null;
-            // Add initial commands with typing animation
-            (async () => {
-                await typeConsoleCommand('System initialized', 'status', 30);
-                await new Promise(r => setTimeout(r, 500));
-                await typeConsoleCommand('Connecting to AI engine...', 'normal', 30);
-                // Continue with random commands (no fake "Connection established" here)
-                consoleCommandInterval = setInterval(async () => {
-                    if (!consoleCommandsLoaded || consoleCommands.length === 0) return;
-                    let randomCommand;
-                    let attempts = 0;
-                    do {
-                        randomCommand = consoleCommands[Math.floor(Math.random() * consoleCommands.length)];
-                        attempts++;
-                    } while (randomCommand === lastCommand && attempts < 10);
-                    lastCommand = randomCommand;
-                    await typeConsoleCommand(randomCommand, 'normal', 25);
-                }, 4000);
-            })();
+            if (consoleOutput) consoleOutput.innerHTML = '';
+            addConsoleCommand('Preparing generation request...', 'status');
         }
 
         function showErrorToast(message) {
@@ -431,29 +357,6 @@
             toast.textContent = message;
             toast.classList.add('visible');
             toast._hideTimer = setTimeout(() => toast.classList.remove('visible'), 4000);
-        }
-
-        function stopConsoleCommands() {
-            if (consoleCommandInterval) {
-                clearInterval(consoleCommandInterval);
-                consoleCommandInterval = null;
-            }
-        }
-
-        // Generic loading messages
-        function getLoadingMessages() {
-            return [
-                "Generating creative code...",
-                "Summoning digital muses...",
-                "Drawing pixels from the void...",
-                "Brewing up generative magic...",
-                "Composing a new experience...",
-                "Building your site...",
-                "Unleashing creative chaos...",
-                "Rendering the impossible...",
-                "Inventing new patterns...",
-                "Almost ready..."
-            ];
         }
 
         // Get random theme from AI
@@ -600,7 +503,7 @@ window.addEventListener('error', function(event) {
             setProgressBar(2);
             document.getElementById('consoleOutput').innerHTML = '';
             const currentMessage = document.getElementById('currentMessage');
-            currentMessage.textContent = 'Connecting to the wizard...';
+            currentMessage.textContent = 'Connecting to AI engine...';
             let themeValue = editSource ? editSource.theme : themeInput.value.trim();
             const themeStatus = document.getElementById('themeStatus');
             themeStatus.textContent = editSource ? `${themeValue} → ${editRequest}` : themeValue;
@@ -613,6 +516,7 @@ window.addEventListener('error', function(event) {
             previousGeneration = null;
             backgroundGeneration = null;
             try {
+                addConsoleCommand(editSource ? 'Sending repair request and current HTML...' : 'Sending theme to generator...');
                 const response = await fetch(GENERATE_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -625,7 +529,6 @@ window.addEventListener('error', function(event) {
                     try { message = (await response.json()).error || message; } catch {}
                     throw new Error(message);
                 }
-                addConsoleCommand('Connection established', 'status');
                 const html = await readGenerationStream(response, (charactersReceived) => {
                     const progress = Math.min(94, 4 + 90 * (1 - Math.exp(-charactersReceived / 18000)));
                     setProgressBar(progress);
@@ -633,6 +536,15 @@ window.addEventListener('error', function(event) {
                 }, () => {
                     addConsoleCommand('First pass incomplete; trying a compact version', 'info');
                     currentMessage.textContent = 'The first pass was incomplete. Retrying...';
+                }, (retry) => {
+                    addConsoleCommand(retry ? 'Retry stream connected' : 'AI stream connected', 'status');
+                    currentMessage.textContent = retry
+                        ? 'Retry connected. Waiting for HTML...'
+                        : 'Connected. Waiting for generated HTML...';
+                }, () => {
+                    addConsoleCommand('Receiving generated HTML...');
+                }, () => {
+                    addConsoleCommand('Complete HTML received and verified', 'status');
                 });
                 currentGeneration = {
                     theme: themeValue,
@@ -649,7 +561,6 @@ window.addEventListener('error', function(event) {
                 // Single canonical injection
                 setDisplayedGeneration(currentGeneration, !autoRepairPass);
             } catch (error) {
-                stopConsoleCommands();
                 setProgressBar(0);
                 addConsoleCommand('Error: ' + (error.message || 'connection failed'), 'error');
                 document.getElementById('themeStatus').style.display = 'none';
