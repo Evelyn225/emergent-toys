@@ -343,7 +343,10 @@
           ],3));
           surface([[left,leftY,-27],[right,rightY,-27],[right,6,-27],[left,6,-27]]);
           if (middle < 3 || middle > 21) {
-            surface([[left,6,-57],[right,6,-57],[right,rightY,-57],[left,leftY,-57]]);
+            for (const z of [-56.85,-57.15]) {
+              surface([[left,6,z],[right,6,z],[right,rightY,z],[left,leftY,z]]);
+            }
+            barrier([left,-57],[right,-57],[6,6],[leftY,rightY],.15);
             continue;
           }
           // The wall opening shares the vault's curve across its entire width.
@@ -357,6 +360,13 @@
           if (middle < 4.6 || middle > 19.4) {
             barrier([left,-57],[right,-57],[deckUnderside,deckUnderside],[leftY,rightY],.15);
           }
+        }
+        // Close the exposed jambs and outer edges across the facade's thickness.
+        for (const x of [3,4.6,19.4,21]) {
+          const roofY = reservoirArch.find(point => Math.abs(point.x-x)<.000001).y;
+          const outer = x === 3 || x === 21;
+          const bottom = outer ? roofY : deckUnderside, top = outer ? 15 : roofY;
+          surface([[x,bottom,-56.85],[x,top,-56.85],[x,top,-57.15],[x,bottom,-57.15]]);
         }
         for (const x of [1.5,22.5]) box(x,1.5,-57,3,9,.3,concrete,true);
         for (const z of [-31,-38,-46,-53]) {
@@ -500,6 +510,8 @@
         slab(19,-60,2.4,2.4,8.5,pale);
         slab(11.4,-60,12.8,2.4,8.5,pale);
         slab(12,-56.7,14,4.2,8.5,pale);
+        // Carry the threshold to both jambs without overlapping the balcony slab.
+        for (const x of [4.8,19.2]) slab(x,-57,.4,.3,8.5,pale);
         rail([5.1,8.5,-61.1],[17.9,8.5,-61.1]);
         rail([5.1,8.5,-54.7],[18.9,8.5,-54.7]);
         rail([5.1,8.5,-61.1],[5.1,8.5,-54.7]);
