@@ -47,3 +47,14 @@ docs/
 .playwright-mcp/
 grid_test.html
 .superpowers/
+
+# Net Sanctuary Project (kept locally)
+/net-sanctuary-project.html
+/daemon-core.html
+/nsp.css
+/sanctuary-content.json
+/archive links/
+/audio/server-hum.wav
+/audio/chromaticindex.wav
+/audio/harmonic-*.wav
+/images/crystalline.png
