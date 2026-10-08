@@ -58,3 +58,11 @@ grid_test.html
 /audio/chromaticindex.wav
 /audio/harmonic-*.wav
 /images/crystalline.png
+
+# Mineria (kept locally)
+/terraria.html
+/terraria-v2.js
+/terraria-audio.js
+/grid_test2.html
+/audio/mineria/
+/images/mineria/

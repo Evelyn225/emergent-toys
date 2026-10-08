@@ -10,3 +10,11 @@ audio/server-hum.wav
 audio/chromaticindex.wav
 audio/harmonic-*.wav
 images/crystalline.png
+
+# Mineria (local copies only)
+terraria.html
+terraria-v2.js
+terraria-audio.js
+grid_test2.html
+audio/mineria/
+images/mineria/
