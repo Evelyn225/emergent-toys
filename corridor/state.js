@@ -2,8 +2,16 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(.065, .078, .073);
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, .06, 110);
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-renderer.setSize(innerWidth, innerHeight);
+// Each canvas pixel covers a whole number of screen pixels (at most 1.5 canvas pixels per CSS pixel).
+// A canvas stretched by any fraction duplicates rows and columns of the dither, which show as seams.
+function fitCanvas() {
+  const ratio = devicePixelRatio || 1, cover = Math.ceil(ratio/1.5);
+  const width = Math.floor(innerWidth*ratio/cover), height = Math.floor(innerHeight*ratio/cover);
+  renderer.setPixelRatio(1); renderer.setSize(width,height,false);
+  renderer.domElement.style.width = width*cover/ratio+'px'; renderer.domElement.style.height = height*cover/ratio+'px';
+  camera.aspect = width/height; camera.updateProjectionMatrix();
+}
+fitCanvas();
 document.body.prepend(renderer.domElement);
 const clock = new THREE.Clock();
 const time = { value: 0 }, powered = { value: 0 }, carLamp = { value: new THREE.Vector3(-33,-18,-50) };
@@ -33,6 +41,7 @@ const carry = document.getElementById('carry'), endScreen = document.getElementB
 // Pressing the button is remembered: a later visit finds the intake fallen in and the power gone.
 const collapseKey = 'corridor-crawler-collapsed';
 // ?test=1&spawn=button starts in the chamber; it ignores the memory so the ending can be replayed.
+// ?test=1&spawn=surface starts on the stair's top landing, as if the ending were remembered.
 const spawn = new URLSearchParams(location.search).has('test') ? new URLSearchParams(location.search).get('spawn') : null;
-const collapsed = spawn !== 'button' && (() => { try { return localStorage.getItem(collapseKey) === '1'; } catch { return false; } })();
+const collapsed = restarting || spawn === 'surface' || spawn !== 'button' && (() => { try { return localStorage.getItem(collapseKey) === '1'; } catch { return false; } })();
 let detonated = false, fuse = 0, booms = 0, ended = false, powerCut = collapsed, frontS = null, shake = 0, roar = null, redButton;

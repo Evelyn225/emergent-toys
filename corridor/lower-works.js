@@ -250,7 +250,7 @@ function lowerWorks() {
   surface([[cx1,bottom+4,cz0],[cx0,bottom+4,cz0],[cx0,bottom+4,cz1],[cx1,bottom+4,cz1]],steel,false,true);
   box(-66,bottom+3.97,-50,1.2,.06,.4,lit);
   box(cx0+.03,bottom+2.1,-50,.06,2.6,3.4,steel);
-  const board = mesh(new THREE.PlaneGeometry(3.2,2.4),new THREE.MeshBasicMaterial({ map: mapTexture }));
+  const board = mesh(new THREE.PlaneGeometry(3.2,2.4),new THREE.MeshBasicMaterial({ map: mapTexture, toneMapped: false }));
   board.position.set(cx0+.09,bottom+2.1,-50); board.rotation.y = Math.PI/2;
   box(-69.6,bottom+.45,-50,.8,.9,2.6,steel,true);
   box(-69.6,bottom+.915,-50,.84,.03,2.64,pale);
@@ -310,7 +310,7 @@ function keyhole() {
   ctx.fillStyle = '#19211d'; ctx.beginPath(); ctx.arc(64,74,22,0,Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.moveTo(53,86); ctx.lineTo(75,86); ctx.lineTo(84,140); ctx.lineTo(44,140); ctx.closePath(); ctx.fill();
   box(-17.6,hub+1.25,-58.95,.28,.4,.1,steel);
-  const plate = mesh(new THREE.PlaneGeometry(.2,.3),new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas) }));
+  const plate = mesh(new THREE.PlaneGeometry(.2,.3),new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), toneMapped: false }));
   plate.position.set(-17.6,hub+1.25,-58.87);
   lockLamp = box(-17.6,hub+1.6,-58.96,.08,.08,.08,steel); lockLamp.userData.dynamic = true;
   interactables.push({ position: new THREE.Vector3(-17.6,hub+1.25,-58.87),available: () => !southUnlocked,

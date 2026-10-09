@@ -8,6 +8,10 @@ function updatePlace() {
       : player.x < -61.3 ? 'control' : player.x < -35.05 ? 'sump' : player.x < -30.95 ? 'shaft'
       : player.z > storePlan.z0 ? 'store' : 'lowerWorks';
   }
+  // The way out, behind the intake door.
+  if (collapsed && player.z > 7.1) {
+    zone = player.z < receptionEnd ? 'reception' : player.z < bunkerFront && Math.abs(player.x) < 1.25 ? 'stairs' : 'outside';
+  }
   const level = Math.round(player.y*10)/10;
   altitude.firstChild.textContent = 'LEVEL ' + (level < 0 ? '-' : '+') + Math.abs(level).toFixed(1).padStart(4,'0') + ' M';
   if (audio && (audioZone !== zone || audioPump !== pumpOn)) {
@@ -31,7 +35,7 @@ function updateInteraction() {
   if (time.value > messageUntil) prompt.textContent = playing && active ? active.text() : '';
 }
 function updateCamera() {
-  camera.position.set(player.x,player.y+eyeHeight,player.z);
+  camera.position.set(player.x,player.y+eyeHeight+stepEase,player.z);
   camera.rotation.set(pitch,yaw,0,'YXZ');
   if (shake > .002) {
     const t = time.value, amount = shake*.045;
@@ -115,15 +119,18 @@ function update(dt) {
   else water.position.y = waterTarget;
   pumpWheel.rotation.z += ((pumpOn ? -Math.PI*1.2 : 0)-pumpWheel.rotation.z)*Math.min(1,dt*3);
   descentGate.rotation.y += ((descentReleased ? Math.PI/2 : 0)-descentGate.rotation.y)*Math.min(1,dt*3);
+  stepEase *= Math.exp(-11*dt);
   updateLift(dt);
   updateDoors(dt);
   updateBlast(dt);
   updateCollapse(dt);
   updateCamera();
+  updateWayOut();
+  updateSurface(dt);
   updatePlace();
   updateInteraction();
   const liftTravelling = liftPos !== liftTarget && liftGates.every(gate => gate.open === 0);
   updateSound(Math.abs(waterTarget-water.position.y),liftTravelling ? Math.abs(liftTarget-liftPos)*liftTravel : null,liftHeight());
 }
 updateCamera(); updatePlace(); enter.disabled = false; enterLabel.textContent = 'ENTER THE SUBSTRUCTURE';
-window.addEventListener('resize',() => { camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+window.addEventListener('resize',fitCanvas);

@@ -1,6 +1,6 @@
 # Substructure: avoiding geometry and interaction bugs
 
-Reference for changes to `corridor.html`, based on the reservoir, ascent, bell deck, and pump fixes.
+Reference for changes to `corridor.html`, based on the reservoir, ascent, bell deck, and pump fixes, and the way out to the surface.
 
 ## Build connected geometry from shared measurements
 
@@ -18,6 +18,10 @@ Reference for changes to `corridor.html`, based on the reservoir, ascent, bell d
 - **Match collision shape to the visible shape.** A box around a round boulder stops walkers at an empty corner. Use a round footprint (a near-zero segment with thickness) for round things.
 - **Close rooms at every playable elevation.** Upper walls and platforms do not enclose a drained basin. Build the lower end walls explicitly, leaving only intended passages open. Review the room both full and drained.
 - **Attach props to actual surfaces.** Mount the bell frame and pump on their decks. Derive column and suspension lengths from the roof height at their attachment position. Put important controls in a visible bay connected to the route, with enough clearance to walk past.
+- **Keep a cut opening inside the walls it is cut from.** The bunker hatch was first a 1.3 m circle in a 2.4 m wide stair: at mid-height it was wider than the walls, so the inner face's outline crossed itself and triangulated into garbage. Check the opening's widest point against the face it is cut from, and probe the face beside it at several heights.
+- **Build a stair flight as one mesh of risers and treads.** Leave out its side faces where it meets the walls (they would be coplanar), sink nosings and rib ends into the walls, and give the treads constant tile coordinates so floor joints do not fall across them. Derive the walking height from the same numbers (`stairFloor`) and test every tread against it.
+- **Let daylight come from the opening.** Lamps ignore occlusion, so a lamp standing just inside a wall lights that wall's face from the wrong side. Put a lamp that stands for light through an opening in the opening itself; the shader's facing test then lights only what faces it.
+- **On the surface the ground is a function.** Collision uses `heightAt` directly; the rendered grid only approximates it, finest where people walk. Anything with its own floor (the bunker) is cut out of the ground, by discarding fragments in its footprint and by excluding it from `groundHeight`, so there is one surface underfoot.
 
 ## Make interactions follow actual state
 

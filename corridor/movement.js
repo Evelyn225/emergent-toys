@@ -10,13 +10,16 @@ function floorHeight(x,z,currentY) {
   ray.far = stepHeight+.42;
   hits.length = 0;
   ray.intersectObjects(floors,false,hits);
-  if (!hits.length) return null;
-  const y = hits[0].point.y;
+  let y = hits.length ? hits[0].point.y : -Infinity, hit = hits.length ? hits[0].object : null;
+  // On the surface the ground is a height function rather than a mesh.
+  const ground = groundHeight(x,z);
+  if (ground !== null && ground <= rayOrigin.y && ground > y) { y = ground; hit = terrainFloor; }
   if (y < currentY-.3 || y > currentY+stepHeight+.005) return null;
-  floorHit = hits[0].object;
+  floorHit = hit;
   return y;
 }
 function blocked(x,z,y) {
+  if (outsideBlocked(x,z,y)) return true;
   for (const wall of barriers) {
     if (wall.enabled && !wall.enabled()) continue;
     if (wall.box) {
@@ -40,6 +43,7 @@ function blocked(x,z,y) {
   ray.intersectObjects(overheadSurfaces,false,ceilingHits);
   return ceilingHits.length > 0;
 }
+let stepEase = 0;
 function tryMove(x,z) {
   const y = floorHeight(x,z,player.y);
   if (y === null || blocked(x,z,y)) return false;
@@ -47,6 +51,8 @@ function tryMove(x,z) {
   // The flooded hallway west of the basin shares the reservoir's level.
   const inReservoir = x >= -9 && x <= 24 && z < -27 && z > -57;
   if (inReservoir && y < -1.7+water.position.y+.05 && y < player.y-.001) return false;
+  // A step up or down eases the eye through it rather than snapping it; slopes are left alone.
+  if (Math.abs(y-player.y) > .05) stepEase = Math.max(-.45,Math.min(.45,stepEase-(y-player.y)));
   player.set(x,y,z); ground = floorHit;
   return true;
 }

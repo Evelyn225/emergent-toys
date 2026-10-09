@@ -26,18 +26,21 @@ async function start() {
     try { await renderer.domElement.requestPointerLock(); }
     catch { notice.textContent = 'Mouse capture unavailable. Drag the scene to look around.'; }
   }
-  playing = true;
-  veil.hidden = true;
-  reticle.hidden = false;
-  document.body.classList.add('playing');
-  clock.getDelta();
+  resumeWalking();
   if (audio && soundOn) {
     await audio.ctx.resume();
     audio.master.gain.setTargetAtTime(masterLevel(),audio.ctx.currentTime,.15);
   }
 }
+function resumeWalking() {
+  playing = true;
+  veil.hidden = true;
+  reticle.hidden = false;
+  document.body.classList.add('playing');
+  clock.getDelta();
+}
 enter.addEventListener('click',start);
-renderer.domElement.addEventListener('click',() => { if (!playing) start(); });
+renderer.domElement.addEventListener('click',() => { if (!playing || (!coarse && !document.pointerLockElement)) start(); });
 document.addEventListener('pointerlockchange',() => { if (!document.pointerLockElement && playing && !coarse) pause(); });
 document.addEventListener('mousemove',event => { if (playing && document.pointerLockElement) look(event.movementX,event.movementY); });
 document.addEventListener('keydown',event => {

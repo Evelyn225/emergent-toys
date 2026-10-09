@@ -46,6 +46,29 @@ const shellGeom = new THREE.BufferGeometry();
 shellGeom.setAttribute('position',new THREE.Float32BufferAttribute(shellVertices,3));
 shellGeom.setAttribute('tile',new THREE.Float32BufferAttribute(shellTiles,3));
 shellGeom.setIndex(shellIndices); shellGeom.computeVertexNormals(); ceilings.push(mesh(shellGeom));
-box(0,1.7,7.05,4.1,3.4,.2,concrete,true);
-label('INTAKE',0,1.7,6.93,Math.PI,2.2);
+// The intake's end wall is the reception's front wall, with a steel door in it. The door stays shut
+// until the ending; a later visit finds it standing open into the reception.
+for (const x of [-3.5,3.5]) box(x,2.4,7.05,5.6,4.8,.2,concrete,true);
+box(0,3.52,7.05,1.4,2.56,.2,concrete,true);
+// A frame lines the opening and stands proud of both faces. The door hangs on its west jamb and
+// closes against the reception side, so the intake sees it set back in the reveal.
+for (const x of [-.67,.67]) box(x,1.1,7.05,.14,2.2,.26,steel,true);
+box(0,2.24,7.05,1.48,.08,.26,steel);
+floor(0,7.075,1.2,.15);
+const doorHinge = new THREE.Group();
+doorHinge.position.set(-.6,0,7.12); scene.add(doorHinge);
+for (const [x,y,z,w,h,d] of [[.6,1.1,0,1.2,2.18,.06],[.6,1.62,-.04,.9,.82,.02],[.6,.56,-.04,.9,.82,.02],
+  [.6,1.62,.04,.9,.82,.02],[.6,.56,.04,.9,.82,.02],[1.04,1.02,-.07,.05,.05,.08],[.94,1.02,-.11,.24,.035,.035]]) {
+  const part = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),steel);
+  part.position.set(x,y,z); doorHinge.add(part);
+}
+if (collapsed) {
+  doorHinge.rotation.y = -1.75;
+  const reach = new THREE.Vector3(1.2,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),-1.75);
+  barrier([-.6,7.12],[-.6+reach.x,7.12+reach.z],[0,0],[2.2,2.2],.05);
+} else {
+  barriers.push({ box: new THREE.Box3(new THREE.Vector3(-.6,0,7.05),new THREE.Vector3(.6,2.2,7.18)) });
+  interactables.push({ position: new THREE.Vector3(.38,1.02,7.01),text: () => 'E / TRY THE DOOR',
+    use() { message('IT WILL NOT OPEN'); press(this.position,.6); } });
+}
 label('RESERVOIR →',10,1.65,-24,Math.PI/2,1.4);

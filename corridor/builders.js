@@ -81,7 +81,7 @@ function label(text,x,y,z,rotation = 0,width = 1.5) {
   ctx.font = 'bold 54px ISOCPEUR, monospace';
   ctx.font = 'bold ' + Math.min(54,Math.floor(54*472/ctx.measureText(text).width)) + 'px ISOCPEUR, monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text,256,82);
-  const obj = mesh(new THREE.PlaneGeometry(width,width*160/512),new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), side: THREE.DoubleSide }));
+  const obj = mesh(new THREE.PlaneGeometry(width,width*160/512),new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), side: THREE.DoubleSide, toneMapped: false }));
   obj.position.set(x,y,z); obj.rotation.y = rotation; return obj;
 }
 function changeLabel(obj,text) {

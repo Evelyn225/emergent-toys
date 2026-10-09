@@ -854,8 +854,21 @@ test('the key door opens onto a lined service run that turns to rock and ends in
   assert.deepEqual(result.leaks,[],'no holes in the rock shell');
 });
 
-test('the red button sets off a sequence that pausing cannot skip, and the front ends the experience in black', async t => {
+test('the red button sequence pauses, then restarts through a loading screen at the remembered refresh spawn', { timeout: 60000 }, async t => {
   const page = await open(t);
+  let releaseRestart;
+  const holdRestart = new Promise(resolve => { releaseRestart = resolve; });
+  t.after(releaseRestart);
+  await page.route('**/corridor.html?*', async route => {
+    if (new URL(route.request().url()).searchParams.has('restart')) await holdRestart;
+    await route.continue();
+  });
+  await page.addInitScript(() => {
+    window.restartMilestones = [];
+    new MutationObserver(records => {
+      for (const record of records) if (record.target.id === 'restart-progress') restartMilestones.push(record.target.value);
+    }).observe(document,{ subtree: true,attributes: true,attributeFilter: ['value'] });
+  });
   await page.click('#sound');
   await page.click('#enter');
   await page.waitForFunction(() => corridorTest.getState().playing);
@@ -885,21 +898,40 @@ test('the red button sets off a sequence that pausing cannot skip, and the front
       const st = corridorTest.getState();
       if (st.frontS !== null) samples.push(st.frontS);
     }
-    return { samples,end: corridorTest.getState() };
+    const end = corridorTest.getState();
+    corridorTest.pause();
+    document.dispatchEvent(new KeyboardEvent('keydown',{ code: 'KeyE' }));
+    const after = run(2);
+    return { samples,end,after,loading: {
+      visible: !document.getElementById('end').hidden,label: document.getElementById('restart-label').textContent,
+      progress: document.getElementById('restart-progress').value,credits: !!document.getElementById('credits'),
+      remembered: localStorage.getItem('corridor-crawler-collapsed'),
+    } };
   });
   assert.ok(timeline.samples.length>60,'the front travels for a while before it arrives');
   assert.ok(timeline.samples.every((s,i) => !i || s>timeline.samples[i-1]),'the front only advances');
   assert.ok(timeline.end.fuse>16 && timeline.end.fuse<19,'the front reaches the pedestal about eighteen seconds after the press: ' + timeline.end.fuse);
   assert.ok(timeline.end.ended && timeline.end.ending && !timeline.end.playing && !timeline.end.veil,'black, with no pause card');
-  assert.ok(timeline.end.roaring && timeline.end.music,'the roar played, and the ending music starts on the black');
-  assert.equal(await page.evaluate(() => document.elementFromPoint(640,400).id),'end');
-  const credits = await page.evaluate(() => { const el = document.getElementById('credits'); return { text: el.textContent,name: getComputedStyle(el).animationName,delay: getComputedStyle(el).animationDelay }; });
-  assert.deepEqual(credits,{ text: 'SUBSTRUCTURE',name: 'credits',delay: '4s' },'the name scrolls on the black');
-  assert.equal(await page.evaluate(() => localStorage.getItem('corridor-crawler-collapsed')),'1','the ending is remembered');
-  await page.evaluate(() => corridorTest.pause());
-  await page.keyboard.press('e');
-  const after = await page.evaluate(() => run(2));
+  assert.ok(timeline.end.roaring && !timeline.end.music,'the roar played, then the old runtime is silenced');
+  assert.deepEqual(timeline.loading,{ visible: true,label: 'RESTARTING GAME',progress: 0,credits: false,remembered: '1' });
+  const after = timeline.after;
   assert.ok(!after.veil && after.ending && after.fuse === timeline.end.fuse,'nothing resumes after the end');
+  const navigation = page.waitForNavigation();
+  releaseRestart(); await navigation;
+  await page.waitForFunction(() => window.corridorTest && corridorTest.getState().playing && !corridorTest.getState().ending);
+  const restarted = await state();
+  assert.ok(restarted.collapsed && restarted.powerCut && !restarted.ended && !restarted.veil,'the remembered game resumes automatically');
+  assert.deepEqual([restarted.x,restarted.y,restarted.z],[0,0,3]);
+  assert.equal(new URL(page.url()).searchParams.has('restart'),false,'the one-shot restart marker is cleared');
+  assert.deepEqual(await page.evaluate(() => restartMilestones),[20,45,75,85,100],'progress follows completed loading stages');
+  await page.click('canvas');
+  await page.waitForFunction(() => !!document.pointerLockElement);
+  await page.keyboard.down('w'); await page.waitForTimeout(200); await page.keyboard.up('w');
+  assert.ok((await state()).z < restarted.z-.1,'mouse capture and movement work after the automatic restart');
+  await page.reload(); await page.waitForFunction(() => !!window.corridorTest);
+  const refreshed = await state();
+  assert.deepEqual([refreshed.x,refreshed.y,refreshed.z],[restarted.x,restarted.y,restarted.z],'restart and refresh use the same spawn');
+  assert.ok(refreshed.collapsed && !refreshed.playing,'ordinary refresh retains its usual entry card');
 });
 
 test('the blast front fills the tunnel in view of the pedestal before it arrives', async t => {
@@ -996,8 +1028,8 @@ test('sound: recorded steps follow the floor, reverb follows the zone, and water
   await page.click('#enter');
   await page.waitForFunction(() => corridorTest.getState().playing);
   await installFollow(page);
-  await page.waitForFunction(() => corridorTest.getState().samples.length === 19,null,{ timeout: 20000 });
-  assert.deepEqual(await page.evaluate(() => corridorTest.getState().samples),['button','concrete','ending','explosion1','explosion2','hatch',
+  await page.waitForFunction(() => corridorTest.getState().samples.length === 22,null,{ timeout: 20000 });
+  assert.deepEqual(await page.evaluate(() => corridorTest.getState().samples),['birds','button','concrete','ending','explosion1','explosion2','grass','hatch','hum',
     'key','liftLoop','liftStart','liftStop','lock','metal','rubble','shutter','stone','ventilation','water','wheel','wind']);
   const places = await page.evaluate(() => {
     const game = corridorTest, S = game.service, at = (x,y,z) => {
@@ -1085,4 +1117,268 @@ test('the pause card sets look speed, inverted look, and volume, and remembers t
   await page.reload();
   await page.waitForFunction(() => !!window.corridorTest);
   assert.deepEqual(await page.evaluate(() => ({ ...corridorTest.settings })),{ lookSpeed: 3,invertLook: false,volume: .8 },'stored values are clamped');
+});
+
+// A visit after the ending: the remembered collapse opens the way out.
+async function openCollapsed(t) {
+  const page = await open(t);
+  await page.evaluate(() => localStorage.setItem('corridor-crawler-collapsed','1'));
+  await page.reload();
+  await page.waitForFunction(() => !!window.corridorTest);
+  return page;
+}
+
+test('before the ending the intake ends at a shut door, with no sign, that will not open', async t => {
+  const page = await open(t);
+  await page.click('#enter');
+  await page.waitForFunction(() => corridorTest.getState().playing);
+  const result = await page.evaluate(() => {
+    const game = corridorTest;
+    game.setPosition(0,0,5.5); game.move(0,3);
+    const stopped = game.getState().z;
+    game.lookAt(.38,1.02,7.01); game.update(1/60);
+    const first = game.renderedHitObjects([0,1.7,5],[0,0,1],3)[0];
+    return { stopped,prompt: document.getElementById('prompt').textContent,behind: game.floorHeight(0,10,0),
+      door: first.object.material.map ? 'a sign' : first.point.z,outdoors: game.wayOut.outdoors() };
+  });
+  assert.ok(result.stopped < 6.9,'the door stops the walk at ' + result.stopped);
+  assert.ok(typeof result.door === 'number' && result.door > 7.05 && result.door < 7.16,'the door fills the opening, no sign: ' + result.door);
+  assert.equal(result.prompt,'E / TRY THE DOOR');
+  assert.equal(result.behind,null,'nothing is built behind it');
+  assert.equal(result.outdoors,false);
+  await page.keyboard.press('e');
+  assert.equal(await page.locator('#prompt').textContent(),'IT WILL NOT OPEN');
+});
+
+test('after the ending the door stands open, and sprinting up the stair to the surface takes 25 to 30 seconds', async t => {
+  const page = await openCollapsed(t);
+  await page.click('#sound');
+  await page.click('#enter');
+  await page.waitForFunction(() => corridorTest.getState().playing);
+  await page.waitForFunction(() => ['birds','hum'].every(name => corridorTest.getState().samples.includes(name)),null,{ timeout: 20000 });
+  const climb = await page.evaluate(() => {
+    const game = corridorTest, W = game.wayOut, marks = {};
+    game.setPosition(0,0,5); game.setLook(Math.PI,0); game.update(1/60);
+    marks.underground = { outdoors: W.outdoors(),far: W.far() };
+    game.keys.add('KeyW'); game.keys.add('ShiftLeft');
+    let t = 0, eye = game.getState().eyeY;
+    marks.eyeJump = 0;
+    while (t < 80 && game.player.z < W.bunkerFront+5) {
+      game.update(1/60); t += 1/60;
+      const eyeY = game.getState().eyeY;
+      if (game.player.z > W.stairBase && game.player.z < W.hatchZ-2) marks.eyeJump = Math.max(marks.eyeJump,Math.abs(eyeY-eye));
+      eye = eyeY;
+      const { zone,room } = game.getState();
+      if (marks.reception === undefined && zone === 'reception') marks.reception = t;
+      if (marks.stairs === undefined && zone === 'stairs') marks.stairs = t;
+      if (marks.stairStart === undefined && game.player.z >= W.stairBase) marks.stairStart = t;
+      if (marks.top === undefined && game.player.y >= W.surfaceY-.001) marks.top = t;
+      if (zone === 'stairs') marks.stairRoom = room;
+    }
+    game.keys.clear();
+    for (let i = 0; i < 90; i++) game.update(1/60);
+    const state = game.getState();
+    return { ...marks,end: t,state,outdoors: W.outdoors(),far: W.far(),surfaceY: W.surfaceY,ground: W.ground(state.x,state.z) };
+  });
+  assert.deepEqual(climb.underground,{ outdoors: false,far: 110 },'nothing of the surface is drawn from the intake');
+  assert.ok(climb.reception > 0 && climb.stairs > climb.reception,'through the door, the reception, and onto the stair');
+  assert.equal(climb.stairRoom,'stairs','the stair has its own reverb');
+  assert.ok(climb.eyeJump < .08,'the eye eases up each riser rather than snapping 0.17 m: ' + climb.eyeJump);
+  const seconds = climb.top-climb.stairStart;
+  assert.ok(seconds >= 25 && seconds <= 30,'a sprint up the stair takes ' + seconds.toFixed(1) + ' s');
+  assert.equal(climb.state.zone,'outside');
+  assert.ok(Math.abs(climb.state.y-climb.ground) < 1e-9 && Math.abs(climb.state.y-climb.surfaceY) < .3,'out through the hatch onto the ground: ' + climb.state.y);
+  assert.ok(climb.outdoors && climb.far === 9000,'the surface is drawn, out to the mountains');
+  assert.equal(climb.state.stepSurface,'grass');
+  assert.equal(climb.state.lastStep,'grass','steps outside are in grass');
+  assert.equal(climb.state.room,'outside');
+  assert.ok(climb.state.beds.includes('birds'),'birdsong outside: ' + climb.state.beds);
+});
+
+test('the way out joins cleanly: one floor at each threshold, every tread at its height, headroom and walls up the stair', async t => {
+  const page = await openCollapsed(t);
+  const result = await page.evaluate(() => {
+    const game = corridorTest, W = game.wayOut, G = W.surfaceY;
+    const layers = [[0,0,7.075],[0,0,22.95],[0,0,24],[0,G,W.hatchZ-.3],[0,G,W.hatchZ+.3]].map(p => game.floorLayersAt(...p).length);
+    const treads = [], headroom = [], walls = [];
+    for (let z = W.stairBase+.05; z < W.hatchZ-.05; z += .1) {
+      if (Math.abs((z-W.stairBase)%.3) < .03) continue;
+      const y = W.stairFloor(z);
+      for (const x of [-.9,0,.9]) {
+        const found = game.floorHeight(x,z,y);
+        if (found === null || Math.abs(found-y) > 1e-4) treads.push([x,z,y,found]);
+        // Short of the hatch wall, which a walker cannot stand within a body's width of.
+        if (z < W.hatchZ-.3 && game.blocked(x,z,y)) headroom.push([x,z,y]);
+      }
+    }
+    for (let z = W.stairBase+3; z < W.hatchZ; z += 9.7) {
+      const y = W.stairFloor(z);
+      for (const side of [-1,1]) for (const h of [.3,1.2,2.2]) {
+        const hit = game.renderedHits([0,y+h,z],[side,0,0],1.6)[0];
+        if (!hit || Math.abs(Math.abs(hit.point[0])-1.2) > .1) walls.push([side,z,h,hit && hit.point]);
+      }
+      const up = game.renderedHits([0,y+.1,z],[0,1,0],4)[0];
+      if (!up || up.point[1]-y < 2.6) walls.push(['ceiling',z,up && up.point]);
+    }
+    const opening = game.renderedHits([0,G+1,W.hatchZ-.4],[0,0,1],1.2).length;
+    // Nothing of the bunker's outside cuts across the stair under the ceiling where its roof breaks the ground.
+    const underRoof = [-1,0,1].map(x => game.renderedHits([x,W.stairFloor(W.bunkerBack-.5)+2.3,W.bunkerBack-.5],[0,0,1],1).length);
+    // The round opening stays inside the stair's walls at every height, so the wall face beside
+    // it is whole all the way up.
+    const beside = [-1.18,1.18].flatMap(x => [.3,.9,1.5].map(h => game.renderedHits([x,G+h,W.hatchZ-.4],[0,0,1],1)[0]?.point[2]));
+    return { layers,treads,headroom,walls,opening,underRoof,beside,hatchZ: W.hatchZ,G,
+      ground: W.ground(0,W.bunkerFront+2),inside: W.ground(0,W.hatchZ-1) };
+  });
+  assert.deepEqual(result.layers,[1,1,1,1,1],'one floor at the door, the stair mouth, the bottom landing, and either side of the hatch wall');
+  assert.deepEqual(result.treads,[],'every tread and landing at its height');
+  assert.deepEqual(result.headroom,[],'nothing overhead blocks the climb');
+  assert.deepEqual(result.walls,[],'walls close both sides and the ceiling clears the treads');
+  assert.equal(result.opening,0,'the hatch opening is clear');
+  assert.deepEqual(result.underRoof,[0,0,0],'no face crosses the stair below the bunker roof');
+  assert.ok(result.beside.every(z => Math.abs(z-result.hatchZ) < .01),'the hatch wall stands either side of it: ' + result.beside);
+  assert.ok(Math.abs(result.ground-result.G) < 1e-9 && result.inside === null,'level ground outside the hatch; the bunker floor inside it');
+});
+
+test('the way out flickers: working lamps stutter and drop out, dead ones stay dark', async t => {
+  const page = await openCollapsed(t);
+  const seen = await page.evaluate(() => {
+    const game = corridorTest, levels = [];
+    game.setPosition(0,0,12);
+    for (let i = 0; i < 1200; i++) { game.update(1/60); levels.push(game.wayOut.lamps().map(lamp => lamp.level)); }
+    return game.wayOut.lamps().map((lamp,k) => ({ mode: lamp.mode,on: levels.filter(l => l[k] > 0).length/levels.length }));
+  });
+  assert.ok(seen.filter(l => l.mode === 'dead').every(l => l.on === 0),'dead lamps stay dark');
+  const flickering = seen.filter(l => l.on > 0 && l.on < 1);
+  assert.ok(flickering.length >= 8,'many lamps flicker within twenty seconds: ' + flickering.length);
+  assert.ok(seen.filter(l => l.mode === 'steady').every(l => l.on > .7),'steady lamps are mostly on: ' + JSON.stringify(seen));
+  assert.ok(seen.filter(l => l.mode === 'dying').every(l => l.on < .5),'dying lamps are mostly off: ' + JSON.stringify(seen));
+});
+
+test('the surface: the ground carries a walker over the meadow, and trees and the forest edge stop them', async t => {
+  const page = await openCollapsed(t);
+  const result = await page.evaluate(() => {
+    const game = corridorTest, W = game.wayOut, G = W.surfaceY;
+    game.setPosition(0,G,W.bunkerFront+1);
+    game.move(0,30);
+    const meadow = game.getState(), onGround = Math.abs(meadow.y-W.ground(meadow.x,meadow.z)) < 1e-9;
+    game.move(-200,-60); const west = game.getState();
+    // South, beside the bunker rather than back down its hatch.
+    game.setPosition(10,W.ground(10,meadow.z),meadow.z); game.move(0,-150); const south = game.getState();
+    // Behind the bunker, over the buried stair, the ground is open: the stair's own walls stay below it.
+    const z = W.bunkerBack-3; game.setPosition(-5,W.ground(-5,z),z); game.move(10,0); const behind = game.getState();
+    return { meadow,onGround,west,south,behind,centre: W.meadow };
+  });
+  assert.ok(result.meadow.z > 170 && result.onGround,'thirty metres across the meadow, on the ground: ' + JSON.stringify(result.meadow));
+  assert.ok(result.behind.x > 4.9,'nothing invisible stops a walk across behind the bunker: ' + result.behind.x);
+  for (const end of [result.west,result.south]) {
+    const d = Math.hypot(end.x-result.centre.x,end.z-result.centre.z);
+    assert.ok(d < 135,'stopped at the trees or the forest edge, ' + d.toFixed(1) + ' m from the meadow centre: ' + JSON.stringify([end.x,end.z]));
+  }
+});
+
+test('the surface title fades in after exiting the bunker and stays fixed in the sky toward the city', async t => {
+  const page = await openCollapsed(t);
+  const result = await page.evaluate(() => {
+    const game = corridorTest, W = game.wayOut;
+    game.setPosition(0,W.surfaceY,W.hatchZ-1.5); game.setPlaying(true); game.update(1);
+    const inside = W.title();
+    game.setPosition(0,W.ground(0,W.bunkerFront+2),W.bunkerFront+2); game.update(.5);
+    const starting = W.title();
+    game.pause(); game.update(10); const paused = W.title();
+    game.setPlaying(true); game.update(2.5); const full = W.title();
+    const origin = [game.player.x,game.player.y+1.65,game.player.z], direction = full.position.map((v,i) => v-origin[i]);
+    const titleHit = game.renderedHitObjects(origin,direction,400).some(hit => hit.object.name === 'sky-title');
+    game.move(5,0); game.setLook(Math.PI); game.update(.5); const turned = W.title();
+    return { inside,starting,paused,full,turned,titleHit,meadow: W.meadow,city: W.cityAt,surfaceY: W.surfaceY };
+  });
+  assert.ok(!result.inside.reached && result.inside.opacity === 0,'no title while still in the bunker');
+  assert.ok(result.starting.reached && result.starting.opacity > 0 && result.starting.opacity < 1,'a gradual fade when outside');
+  assert.equal(result.paused.opacity,result.starting.opacity,'pausing holds the fade');
+  assert.equal(result.full.opacity,1);
+  assert.deepEqual(result.turned.position,result.full.position,'walking and turning do not move the title');
+  assert.ok(result.titleHit && result.full.size[0] >= 100,'the large title is actual world geometry');
+  const [x,y,z] = result.full.position, M = result.meadow, C = result.city;
+  assert.ok(y > result.surfaceY+60,'above the skyline');
+  assert.ok(Math.abs((x-M.x)*(C.z-M.z)-(z-M.z)*(C.x-M.x)) < .00001,'in the direction of the city');
+  assert.equal(await page.locator('#credits').count(),0,'no screen-space credits');
+});
+
+test('the cityward walking boundary follows the baked grass edge even down in the valley', async t => {
+  const page = await openCollapsed(t);
+  const result = await page.evaluate(() => {
+    const game = corridorTest, W = game.wayOut, edge = W.grassBounds.z1;
+    const centreX = W.meadow.x+(edge-W.meadow.z)*W.valley.x/W.valley.z;
+    const walks = [-20,0,20].map(offset => {
+      const x = centreX+offset, z = edge-3, y = W.ground(x,z);
+      game.setPosition(x,y,z); game.move(0,20);
+      const stopped = game.getState();
+      game.move(7,7); const diagonal = game.getState();
+      return { y,stopped,diagonal,inside: game.blocked(x,edge-.8,W.ground(x,edge-.8)),
+        beyond: game.blocked(x,edge+.5,W.ground(x,edge+.5)) };
+    });
+    const lowerZ = edge+100, lowerX = W.meadow.x+(lowerZ-W.meadow.z)*W.valley.x/W.valley.z;
+    const lowerY = W.ground(lowerX,lowerZ);
+    return { edge,walks,surfaceY: W.surfaceY,lowerY,lowerBlocked: game.blocked(lowerX,lowerZ,lowerY) };
+  });
+  assert.ok(result.lowerY < result.surfaceY-12 && result.lowerBlocked,'the lower valley beyond the boundary stays blocked');
+  for (const walk of result.walks) {
+    assert.ok(!walk.inside && walk.beyond,'walkable just inside the grass, blocked beyond it');
+    assert.ok(walk.stopped.z < result.edge-.24 && walk.stopped.z > result.edge-.4,'stops at the grass edge');
+    assert.ok(walk.diagonal.z < result.edge-.24,'diagonal motion cannot cross the edge');
+    assert.ok(walk.diagonal.x > walk.stopped.x+6.9,'can still walk along the boundary');
+  }
+});
+
+test('flower stems and leaves stay rooted while the rendered blooms sway in the meadow wind', async t => {
+  const page = await openCollapsed(t);
+  await page.click('#enter'); await page.waitForFunction(() => corridorTest.getState().playing);
+  await page.evaluate(() => { window.requestAnimationFrame = () => 0; });
+  await page.waitForTimeout(100);
+  const result = await page.evaluate(() => {
+    const game = corridorTest, parts = game.wayOut.flowers(), heads = parts.find(p => p.name === 'flower-heads');
+    const stems = parts.find(p => p.name === 'flower-stems'), leaves = parts.find(p => p.name === 'flower-leaves');
+    const counts = parts.map(p => p.count), pose = heads.geometry.attributes.flowerPose, phase = heads.geometry.attributes.flowerPhase;
+    let chosen = 0, score = -Infinity;
+    for (let i = 0; i < heads.count; i++) {
+      const colours = heads.instanceColor.array;
+      if (colours[i*3] < colours[i*3+1]*3) continue;
+      const value = pose.getW(i)-.002*Math.hypot(pose.getX(i)-4,pose.getZ(i)-182);
+      if (value > score) { score = value; chosen = i; }
+    }
+    const root = [pose.getX(chosen),pose.getY(chosen),pose.getZ(chosen)], height = pose.getW(chosen);
+    // Isolate one actual plant so its GPU-rendered motion can be measured without swaying grass.
+    for (const child of heads.parent.children) child.visible = parts.includes(child) || child.isLight;
+    for (const part of parts) {
+      const matrix = part.matrix.clone(); part.getMatrixAt(chosen,matrix); part.setMatrixAt(0,matrix);
+      part.count = 1; part.instanceMatrix.needsUpdate = true;
+    }
+    heads.instanceColor.array.set(heads.instanceColor.array.slice(chosen*3,chosen*3+3),0); heads.instanceColor.needsUpdate = true;
+    pose.array.set([...root,height],0); phase.array[0] = phase.getX(chosen); pose.needsUpdate = phase.needsUpdate = true;
+    game.setPosition(root[0]-.85,game.wayOut.ground(root[0]-.85,root[2]),root[2]);
+    game.lookAt(root[0],root[1]+height*.5,root[2]);
+    const screen = document.querySelector('canvas'), pixels = document.createElement('canvas');
+    pixels.width = screen.width; pixels.height = screen.height;
+    const context = pixels.getContext('2d'), frames = [];
+    for (const dt of [0,1.2,1.2,1.2]) {
+      game.update(dt); game.render(); context.drawImage(screen,0,0);
+      const data = context.getImageData(0,0,pixels.width,pixels.height).data, red = [], green = [];
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i+1], b = data[i+2], point = [i/4%pixels.width,Math.floor(i/4/pixels.width)];
+        if (r > 70 && r > g*1.6 && r > b*1.5) red.push(point);
+        if (g > 45 && g > r*1.1 && g > b*1.5) green.push(point);
+      }
+      const bottom = green.reduce((max,p) => Math.max(max,p[1]),0), roots = green.filter(p => p[1] >= bottom-1);
+      frames.push({ headPixels: red.length,greenPixels: green.length,
+        headX: red.reduce((sum,p) => sum+p[0],0)/red.length,
+        rootX: roots.reduce((sum,p) => sum+p[0],0)/roots.length,rootY: bottom });
+    }
+    return { counts,leafVertices: leaves.geometry.attributes.position.count,
+      stemSegments: stems.geometry.parameters.heightSegments,frames };
+  });
+  assert.deepEqual(result.counts,[9000,9000,9000],'each bloom has a stem and leaves');
+  assert.ok(result.leafVertices >= 15 && result.stemSegments > 1,'folded leaves and a segmented stem that can curve');
+  assert.ok(result.frames.every(f => f.headPixels > 50 && f.greenPixels > 50),'blooms and brighter greenery actually render');
+  const range = name => Math.max(...result.frames.map(f => f[name]))-Math.min(...result.frames.map(f => f[name]));
+  assert.ok(range('headX') > 4,'the rendered blooms sway: ' + JSON.stringify(result.frames));
+  assert.ok(range('rootX') < 1.5 && range('rootY') < 1.5,'the roots stay planted: ' + JSON.stringify(result.frames));
 });

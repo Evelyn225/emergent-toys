@@ -84,7 +84,32 @@ const intakeLamps = intakeBays.flatMap(i => [-1,1].map(side => [intakeWall(i,sid
 const liningLamps = [5,13,21], cableLamps = [34,43,52,64,76], tripodAngles = [0,118,242].map(a => a*Math.PI/180);
 const cableLamp = s => { const w = wallPoint(rockRing(s),2.45,.15); return pathPoint(s,w.u-.05,w.v-.62); };
 const tripodAt = a => [roomS+Math.cos(a)*5.5,Math.sin(a)*5.5];
-// Every lamp the shader can sum: the intake's, then the service branch's, which share its power.
+// The way out, open only after the ending: a ruined reception behind the intake door, then one
+// straight stair to a bunker at the surface. Each flight is sixteen risers ending on a landing.
+// The stair ceiling runs parallel to the average pitch, from the first riser to the hatch.
+const receptionEnd = 22.85, stairBase = 24.65, flights = 20, risers = 16, rise = .17, going = .3, landingDepth = 1.5;
+const flightRun = (risers-1)*going+landingDepth, flightRise = risers*rise, surfaceY = flights*flightRise;
+// The bunker's front wall: its inner face ends the last landing, its outer face meets the meadow.
+const hatchZ = stairBase+flights*flightRun+.75, bunkerFront = hatchZ+.6, hatchRadius = 1.15, hatchCentre = surfaceY+.9;
+const stairCeiling = z => 3.3+Math.max(0,z-stairBase)*flightRise/flightRun;
+// The walking height of the stair at z: risers, treads, and landings.
+function stairFloor(z) {
+  if (z < stairBase) return 0;
+  const k = Math.min(flights-1,Math.floor((z-stairBase)/flightRun)), local = z-stairBase-k*flightRun;
+  return k*flightRise+Math.min(risers,Math.floor(local/going)+1)*rise;
+}
+// Fluorescent fittings in the reception's ceiling grid, one hanging from a single chain, then a
+// bulkhead lamp on each landing's rib. The power is failing, so most of them flicker. The blast
+// came up the stair, so the highest lamps are dead and daylight stands in for them at the top.
+const landingMid = k => stairBase+k*flightRun+(risers-1)*going+landingDepth/2;
+const wayOutLamps = collapsed ? [
+  { at: [-3,4.17,11.4],mode: 'steady' },{ at: [3,4.17,11.4],mode: 'stutter' },
+  { at: [-3,3.05,17.4],mode: 'stutter',hanging: true },{ at: [.6,4.17,21],mode: 'dying' },
+  ...Array.from({ length: flights-1 },(_,k) => ({ at: [0,stairCeiling(landingMid(k))-.36,landingMid(k)],stair: true,
+    mode: k >= 16 || k === 9 ? 'dead' : k === 5 || k === 13 || k === 15 ? 'dying' : k%3 === 1 ? 'stutter' : 'steady' })),
+] : [];
+// Every lamp the shader can sum: the intake's, then the service branch's, which share its power,
+// then the way out's and the daylight that falls down the last flights.
 const lampSources = [
   ...intakeLamps.map(([position,strength,reach]) => ({ position,strength,reach,service: false })),
   ...[
@@ -92,6 +117,14 @@ const lampSources = [
     ...cableLamps.map(s => [cableLamp(s),.5,8]),
     ...tripodAngles.map(a => { const [s,u] = tripodAt(a); return [pathPoint(s,u,2.25),.6,7]; }),
   ].map(([position,strength,reach]) => ({ position,strength,reach,service: true })),
+  ...wayOutLamps.map(lamp => {
+    const [x,y,z] = lamp.at;
+    return lamp.source = { position: new THREE.Vector3(x,y-.3,z),strength: 0,reach: lamp.stair ? 7.5 : 8.5,service: false };
+  }),
+  // Daylight stands in the hatch opening, so it lights what faces the opening and not the wall
+  // around it; a fainter fill carries it down the last flight.
+  ...(collapsed ? [[0,hatchCentre,bunkerFront+.3,.75,12],[0,stairCeiling(hatchZ-7)-.8,hatchZ-7,.25,9]].map(([x,y,z,strength,reach]) =>
+    ({ position: new THREE.Vector3(x,y,z),strength,reach,service: false })) : []),
 ];
 const tunnelLamps = { value: lampSources.map(() => new THREE.Vector4()) }, tunnelReach = { value: lampSources.map(() => 0) };
 const lampCount = { value: 0 }, flash = { value: 0 }, tunnelPower = { value: 1 }, blastLight = { value: new THREE.Vector4(0,0,0,0) };

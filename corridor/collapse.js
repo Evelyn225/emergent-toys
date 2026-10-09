@@ -52,6 +52,8 @@ function updateCollapse(dt) {
   flickerLamp.material = on ? lit : steel;
   updateDust(dt);
   shake *= Math.exp(-dt*2.5);
+  // Under the open sky no grit falls, and the settling is too far below to feel.
+  if (zone === 'outside') return;
   if ((dustIn -= dt) <= 0) { shed(2); dustIn = .4; }
   if ((settleIn -= dt) <= 0) {
     // The fall shifts: a groan from the rubble, a tremor, and grit from the vault.

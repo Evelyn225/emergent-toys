@@ -11,7 +11,7 @@ const dustCount = 400, dustPositions = new Float32Array(dustCount*3).fill(-1000)
 const dustSpeed = new Float32Array(dustCount), dustFloor = new Float32Array(dustCount).fill(1000);
 const dustGeometry = new THREE.BufferGeometry();
 dustGeometry.setAttribute('position',new THREE.BufferAttribute(dustPositions,3));
-const dust = new THREE.Points(dustGeometry,new THREE.PointsMaterial({ color: 0xbfc5bb,size: 2,sizeAttenuation: false }));
+const dust = new THREE.Points(dustGeometry,new THREE.PointsMaterial({ color: 0xbfc5bb,size: 2,sizeAttenuation: false,toneMapped: false }));
 dust.frustumCulled = false; scene.add(dust);
 let dustNext = 0;
 function shed(count) {
@@ -70,4 +70,8 @@ function endExperience() {
   document.body.classList.remove('playing');
   endSound();
   if (document.pointerLockElement) document.exitPointerLock();
+  const next = new URL(location.href);
+  next.searchParams.delete('spawn');
+  next.searchParams.set('restart','1');
+  setTimeout(() => location.replace(next.href),0);
 }

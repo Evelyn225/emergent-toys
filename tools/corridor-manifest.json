@@ -10,6 +10,8 @@
     "corridor/lower-works.js",
     "corridor/service-tunnel.js",
     "corridor/collapse.js",
+    "corridor/way-out.js",
+    "corridor/surface.js",
     "corridor/map.js",
     "corridor/assemble.js",
     "corridor/blast.js",

@@ -1,7 +1,7 @@
 // Opt-in gameplay inspection; normal visits do not expose these hooks.
 if (new URLSearchParams(location.search).has('test')) window.corridorTest = {
   player,tunnelFrames,move,blocked,floorHeight,update,keys,pause,rampJoins,look,settings,
-  setPosition(x,y,z) { player.set(x,y,z); updateCamera(); updatePlace(); },
+  setPosition(x,y,z) { player.set(x,y,z); stepEase = 0; updateCamera(); updatePlace(); },
   setLook(y,p = 0) { yaw = y; pitch = p; updateCamera(); updateInteraction(); },
   lookAt(x,y,z) {
     const dx = x-player.x, dy = y-player.y-eyeHeight, dz = z-player.z;
@@ -22,7 +22,7 @@ if (new URLSearchParams(location.search).has('test')) window.corridorTest = {
     }));
   },
   getState() { return {
-    x:player.x,y:player.y,z:player.z,yaw,pitch,playing,zone,pumpOn,descentReleased,
+    x:player.x,y:player.y,z:player.z,eyeY: camera.position.y,yaw,pitch,playing,zone,pumpOn,descentReleased,
     waterY: -1.7+water.position.y, pumpRotation: pumpRotor.rotation.z, descentCapY: descentCap.position.y, descentCapLit: descentCap.material === lit,
     gateAngle: descentGate.rotation.y,
     liftPos,liftTarget,liftY: liftHeight(),liftGates: liftGates.map(gate => gate.open),
@@ -51,11 +51,22 @@ if (new URLSearchParams(location.search).has('test')) window.corridorTest = {
   },
   render() { updateCamera(); renderer.render(scene,camera); },
   service: { roomS,mouthS,liningEnd,bendEnd,point: (s,u,v) => pathPoint(s,u,v).toArray(),fireId: fire.id },
+  wayOut: { receptionEnd,stairBase,flights,flightRun,flightRise,hatchZ,bunkerFront,bunkerBack,surfaceY,meadow,stairFloor,stairCeiling,
+    ground: groundHeight,outdoors: () => outdoors.visible,far: () => camera.far,lamps: () => wayOutLamps.map(lamp => ({ mode: lamp.mode,level: lamp.level })),
+    grassBounds,cityAt,valley,
+    flowers: () => outdoors.children.filter(part => part.name.startsWith('flower-')),
+    title: () => skyTitle ? { position: skyTitle.position.toArray(),opacity: skyTitle.material.opacity,
+      reached: titleReached,size: [skyTitle.geometry.parameters.width,skyTitle.geometry.parameters.height] } : null },
   unlockSouth() { southUnlocked = southShutter.released = true; drawMap(); },
   mapPixel(x,z) { const [px,py] = toMap(x,z); return mapContext.getImageData(Math.round(px),Math.round(py),1,1).data[0]; },
 };
 // Play-testing: ?test=1&spawn=button opens the key door and stands in the chamber beyond the pedestal,
 // facing the red button and the tunnel behind it.
+// ?test=1&spawn=surface stands on the stair's top landing, facing out through the hatch.
+if (window.corridorTest && spawn === 'surface') {
+  corridorTest.setPosition(0,surfaceY,hatchZ-1.5);
+  corridorTest.lookAt(0,surfaceY+1.65,hatchZ+20);
+}
 if (window.corridorTest && spawn === 'button') {
   corridorTest.unlockSouth(); southShutter.open = 1; updateDoors(0);
   corridorTest.setPosition(...pathPoint(roomS+1.3,0,0).toArray());

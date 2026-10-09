@@ -5,14 +5,15 @@
 // silence, so a missing file never breaks what it decorates.
 const soundDir = 'audio/corridor/';
 const soundFiles = {
-  concrete: 'steps-concrete.mp3', metal: 'steps-metal.mp3', stone: 'steps-stone.mp3', water: 'water.mp3', wheel: 'wheel.mp3',
+  concrete: 'steps-concrete.mp3', metal: 'steps-metal.mp3', stone: 'steps-stone.mp3', grass: 'steps-grass.mp3', water: 'water.mp3', wheel: 'wheel.mp3',
   button: 'button.mp3', key: 'key.mp3', lock: 'lock.mp3', shutter: 'shutter.mp3', hatch: 'hatch.mp3',
   liftStart: 'lift-start.mp3', liftLoop: 'lift-loop.mp3', liftStop: 'lift-stop.mp3',
   explosion1: 'explosion-1.mp3', explosion2: 'explosion-2.mp3',
   ventilation: 'ventilation.mp3', wind: 'cave-wind.mp3', rubble: 'rubble.mp3', ending: 'ending.mp3',
+  birds: 'birds.mp3', hum: 'fluorescent-hum.mp3',
 };
 // Levels that bring each recording to a common loudness before the master.
-const soundLevel = { button: 2, key: 2.5, lock: 1.8, shutter: 1.3, hatch: 1.2, wheel: 2.2, lift: .6, water: 10, ventilation: 3.5, wind: 3, rubble: 2 };
+const soundLevel = { button: 2, key: 2.5, lock: 1.8, shutter: 1.3, hatch: 1.2, wheel: 2.2, lift: .6, water: 10, ventilation: 3.5, wind: 3, rubble: 2, birds: 2.2, hum: .9 };
 // Each steps file holds single steps in fixed half-second slots, level-matched.
 const stepSlot = .5;
 // The lift's stop recording reaches its clunk this long after it starts; it starts this long before docking.
@@ -21,10 +22,13 @@ const liftStopLead = 1.3;
 const zoneReverb = {
   bend: [1.4,.3], reservoir: [3.8,.45], ascent: [3,.4], overlook: [3.8,.45], lowerWorks: [1.6,.3], store: [.45,.15],
   shaft: [2.6,.4], sump: [3.2,.45], control: [.6,.18], service: [1.3,.3], cave: [4.5,.5],
+  reception: [1.5,.3], stairs: [3.4,.42], outside: [.3,.04],
 };
 // The facility's ventilation is everywhere there is power; the cave has moving air instead.
 const zoneVentilation = { service: .45, cave: .12, reservoir: .7, overlook: .7, ascent: .7 };
-const zoneWind = { service: .25, cave: 1 };
+const zoneWind = { service: .25, cave: 1, stairs: .2, outside: .5 };
+// Birdsong outside, and the faintest of it down the stair.
+const zoneBirds = { stairs: .05, outside: 1 };
 const listenerForward = new THREE.Vector3(), soundAt = new THREE.Vector3();
 let lastStep = -1;
 function createAudio() {
@@ -189,26 +193,15 @@ function updateRoar(gap,from) {
   roar.gain.gain.setTargetAtTime(.04+.9*near**3,now,.08);
   roar.subGain.gain.setTargetAtTime(.35*near*near,now,.08);
 }
-// The black screen: every game sound stops dead, then the music fades in on its own output and,
-// over its last stretch, slowly away again, so the song never stops short. The music's shape is
-// one gain; the Sound button and the volume setting act on another after it.
+// Silence the old runtime before the black restart screen loads the remembered game.
 function endSound() {
   if (!audio) return;
   const ctx = audio.ctx, now = ctx.currentTime;
   audio.master.gain.cancelScheduledValues(now);
   audio.master.gain.setValueAtTime(0,now);
-  const sample = audio.samples.ending;
-  if (!sample || !soundOn) { ctx.suspend(); return; }
-  const source = ctx.createBufferSource(), shape = ctx.createGain(), volume = ctx.createGain();
-  const start = now+1.2, end = start+sample.duration, fade = Math.min(16,sample.duration/3);
-  shape.gain.setValueAtTime(0,start); shape.gain.linearRampToValueAtTime(.5,start+4.8);
-  shape.gain.setValueAtTime(.5,end-fade); shape.gain.setTargetAtTime(0,end-fade,fade/4);
-  volume.gain.value = settings.volume;
-  source.buffer = sample; source.connect(shape).connect(volume).connect(ctx.destination); source.start(start);
-  source.onended = () => ctx.suspend();
-  audio.music = shape; audio.musicVolume = volume;
+  ctx.suspend();
 }
-// The floor underfoot decides the step: decks and treads ring as metal, the cave is stone.
+// The floor underfoot decides the step: decks and treads ring as metal, the cave is stone, the surface is grass.
 function stepSurface() {
   if (!ground) return 'concrete';
   return ground.userData.surface ?? (ground.material === steel ? 'metal' : ground.material === rock ? 'stone' : 'concrete');
@@ -250,6 +243,24 @@ function setBed(name,level) {
 function updateBeds() {
   setBed('ventilation',powerCut ? 0 : zoneVentilation[zone] ?? 1);
   setBed('wind',zoneWind[zone] ?? 0);
+  if (collapsed) setBed('birds',zoneBirds[zone] ?? 0);
+}
+// The tubes' hum comes from the nearest working lamp in the reception and up the stair, and cuts
+// out with it when it flickers.
+function updateHum(lamp,distance) {
+  const sample = audio.samples.hum;
+  if (!sample) return;
+  const ctx = audio.ctx;
+  if (!audio.hum) {
+    const gain = ctx.createGain(); gain.gain.value = 0;
+    loopSource(sample).connect(gain);
+    audio.hum = { gain,panner: route(gain,soundAt.set(0,0,0),1.5),lamp: null,level: 0 };
+  }
+  if (lamp && lamp !== audio.hum.lamp) place(audio.hum.panner,lamp.source.position);
+  audio.hum.lamp = lamp;
+  const level = lamp && distance < 12 ? lamp.level*soundLevel.hum : 0;
+  if (level !== audio.hum.level) audio.hum.gain.gain.setTargetAtTime(level,ctx.currentTime,.015);
+  audio.hum.level = level;
 }
 // The lift: a start as the car leaves, a running loop, and a stop whose clunk lands as it docks.
 // All of it rides with the car. Without the recordings, a synthesised motor turns at the sheave.
@@ -326,4 +337,5 @@ function updateSound(waterRemaining,liftRemaining,carY) {
   }
   // Beds wait for their recordings: the first frames after Sound is enabled may come before them.
   if (!audio.bedsReady && audio.samples.ventilation && audio.samples.wind) { audio.bedsReady = true; updateBeds(); }
+  if (collapsed && audio.bedsReady && audio.samples.birds && !audio.beds.birds) updateBeds();
 }
