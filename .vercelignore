@@ -18,3 +18,6 @@ terraria-audio.js
 grid_test2.html
 audio/mineria/
 images/mineria/
+
+# Substructure source recordings (the game loads the prepared files in audio/corridor/)
+audio/corridor crawler/
