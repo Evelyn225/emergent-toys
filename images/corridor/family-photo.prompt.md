@@ -1,0 +1,7 @@
+# Substructure family photograph
+
+Generated with the built-in imagegen tool. The people are fictional. The PNG is the original generated photograph; the game adds its paper, curl, pin, lighting, and monochrome dither as real geometry and a shader.
+
+## Generation prompt
+
+Use case: photorealistic-natural. Asset type: a monochrome family photograph texture pinned beside a plan board in an abandoned industrial control room in the game Substructure. Generate one realistic faded black-and-white family snapshot, landscape 3:2 composition, seen perfectly straight-on, filling the image edge to edge without a frame, border, surrounding wall, pushpin, mockup or perspective distortion. Three fictional people, two parents and a child around seven years old, sitting close together at an ordinary picnic table in a backyard on a quiet summer afternoon, circa late 1970s. Candid, imperfect, affectionate family camera photograph, not posed advertising. Keep faces clear enough to recognize at thumbnail size; simple light foliage background. Natural anatomically correct hands and faces. Authentic silver-gelatin film grain, softly faded midtones, slightly washed pale corners, a few subtle hairline scratches, mild age wear; restrained, believable aging that does not obscure faces. Absolutely grayscale, no sepia, no color. No text, no logos, no watermark. This will be mapped onto a small curved paper mesh; generate only the photograph content.

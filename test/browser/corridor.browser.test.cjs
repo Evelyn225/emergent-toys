@@ -23,11 +23,11 @@ before(async () => {
   }
   browser = await chromium.launch();
   // Serve the page, its bundle, and its sounds from the repo, as the site does.
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.mp3': 'audio/mpeg', '.ttf': 'font/ttf' };
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.mp3': 'audio/mpeg', '.ttf': 'font/ttf', '.png': 'image/png' };
   server = http.createServer((req,res) => {
     const rel = decodeURIComponent(new URL(req.url,'http://localhost').pathname).slice(1);
     const file = path.join(root,rel), type = types[path.extname(rel)];
-    if (type && (rel === 'corridor.html' || rel === 'corridor.bundle.js' || rel === 'ISOCPEUR.ttf' || rel.startsWith('audio/corridor/')) && fs.existsSync(file)) {
+    if (type && (rel === 'corridor.html' || rel === 'corridor.bundle.js' || rel === 'ISOCPEUR.ttf' || rel.startsWith('audio/corridor/') || rel.startsWith('images/corridor/')) && fs.existsSync(file)) {
       res.writeHead(200,{ 'content-type': type });
       res.end(fs.readFileSync(file));
     } else res.writeHead(204).end();
@@ -1381,4 +1381,80 @@ test('flower stems and leaves stay rooted while the rendered blooms sway in the 
   const range = name => Math.max(...result.frames.map(f => f[name]))-Math.min(...result.frames.map(f => f[name]));
   assert.ok(range('headX') > 4,'the rendered blooms sway: ' + JSON.stringify(result.frames));
   assert.ok(range('rootX') < 1.5 && range('rootY') < 1.5,'the roots stay planted: ' + JSON.stringify(result.frames));
+});
+
+test('the approved personal belongings sit on their supports and leave the controls usable', async t => {
+  const page = await open(t);
+  await page.waitForFunction(() => corridorTest.remnants().find(p => p.name === 'control-family-photo')
+    .getObjectByName('photo-print').material.uniforms.photoMap.value.image?.complete);
+  const result = await page.evaluate(() => {
+    const game = corridorTest, props = game.remnants(), mug = props.find(p => p.name === 'control-coffee-mug');
+    const photo = props.find(p => p.name === 'control-family-photo'), gloves = props.find(p => p.name === 'pump-work-gloves');
+    const root = mug.position.toArray(), coffee = game.renderedHitObjects([root[0],root[1]+.2,root[2]],[0,-1,0],.4)[0];
+    const counter = game.renderedHitObjects([-69.7,root[1]+.2,-50.3],[0,-1,0],.5)[0];
+    const print = photo.getObjectByName('photo-print'), image = print.material.uniforms.photoMap.value.image;
+    const photoHit = game.renderedHitObjects([photo.position.x+.1,photo.position.y,photo.position.z],[-1,0,0],.2)[0];
+    let railIntersections = 0, vertices = 0;
+    gloves.updateMatrixWorld(true);
+    gloves.traverse(part => {
+      if (!part.isMesh) return;
+      const p = part.geometry.attributes.position, point = game.player.clone(); vertices += p.count;
+      for (let i = 0; i < p.count; i++) {
+        point.fromBufferAttribute(p,i).applyMatrix4(part.matrixWorld);
+        if (Math.abs(point.y-.9) < .029 && Math.abs(point.z+36.6) < .029) railIntersections++;
+      }
+    });
+    game.setPosition(15.3,0,-36.95); game.lookAt(15.3,1.15,-37.52); game.setPlaying(true); game.update(0);
+    const pumpPrompt = document.getElementById('prompt').textContent;
+    game.setPosition(-68.3,-21,-49.5); game.lookAt(-69.45,-20,-49.5); game.update(0);
+    const shutterPrompt = document.getElementById('prompt').textContent;
+    return { names: props.map(p => p.name).sort(),root,counterY: counter.point.y,coffeeY: coffee.point.y,
+      coffeeName: coffee.object.name,image: { complete: image.complete,width: image.naturalWidth,height: image.naturalHeight },
+      photoName: photoHit.object.name,railIntersections,vertices,pumpPrompt,shutterPrompt };
+  });
+  assert.deepEqual(result.names,['control-coffee-mug','control-family-photo','control-work-jacket','pump-work-gloves']);
+  assert.ok(Math.abs(result.root[1]-result.counterY) < .00001,'the cup rests directly on the counter');
+  assert.equal(result.coffeeName,'mug-coffee-residue','the cup is open, with residue visible through the rim');
+  assert.ok(result.coffeeY-result.root[1] < .03,'the coffee sits down inside the hollow cup');
+  assert.ok(result.image.complete && result.image.width >= 1024 && result.image.height >= 768,'the real photograph loads');
+  assert.equal(result.photoName,'photo-print','the photograph sits in front of its paper and the wall');
+  assert.ok(result.vertices > 1000 && result.railIntersections === 0,'detailed glove shells stay outside the rail: ' + result.railIntersections);
+  assert.equal(result.pumpPrompt,'E / DRAIN THE RESERVOIR');
+  assert.equal(result.shutterPrompt,'E / RELEASE THE NORTH SHUTTER');
+});
+
+test('both jacket sleeves share continuous fabric with the torso at their armholes', async t => {
+  const page = await open(t);
+  const result = await page.evaluate(() => {
+    const jacket = corridorTest.remnants().find(p => p.name === 'control-work-jacket');
+    const geometry = jacket.getObjectByName('jacket-cloth').geometry, p = geometry.attributes.position;
+    const parent = Array.from({ length: p.count },(_,i) => i), coincident = new Map();
+    function root(i) {
+      while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; }
+      return i;
+    }
+    function join(a,b) { parent[root(a)] = root(b); }
+    for (let i = 0; i < p.count; i++) {
+      const key = [p.getX(i),p.getY(i),p.getZ(i)].map(v => Math.round(v*1e6)).join(',');
+      if (coincident.has(key)) join(i,coincident.get(key));
+      else coincident.set(key,i);
+    }
+    const count = geometry.index ? geometry.index.count : p.count;
+    for (let i = 0; i < count; i += 3) {
+      const triangle = [0,1,2].map(j => geometry.index ? geometry.index.getX(i+j) : i+j);
+      join(triangle[0],triangle[1]); join(triangle[1],triangle[2]);
+    }
+    function nearest(x,y,z) {
+      let index = 0, distance = Infinity;
+      for (let i = 0; i < p.count; i++) {
+        const d = (p.getX(i)-x)**2+(p.getY(i)-y)**2+(p.getZ(i)-z)**2;
+        if (d < distance) { distance = d; index = i; }
+      }
+      return { component: root(index),distance: Math.sqrt(distance) };
+    }
+    return { torso: nearest(-.14,-.15,.084),left: nearest(-.30,-.50,.13),right: nearest(.33,-.45,.13) };
+  });
+  for (const sample of Object.values(result)) assert.ok(sample.distance < .035,'probe lands on the intended fabric');
+  assert.equal(result.left.component,result.torso.component,'the left sleeve is sewn into the body');
+  assert.equal(result.right.component,result.torso.component,'the right sleeve is sewn into the body');
 });

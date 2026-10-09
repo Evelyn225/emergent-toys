@@ -8,6 +8,7 @@ if (new URLSearchParams(location.search).has('test')) window.corridorTest = {
     this.setLook(Math.atan2(-dx,-dz),Math.atan2(dy,Math.hypot(dx,dz)));
   },
   setPlaying(value) { playing = value; },
+  remnants: () => remnantProps,
   floorLayersAt(x,y,z) {
     rayOrigin.set(x,y+.4,z); ray.set(rayOrigin,down); ray.far = .8;
     hits.length = 0; ray.intersectObjects(floors,false,hits);

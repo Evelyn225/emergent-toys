@@ -5,6 +5,7 @@
     "corridor/paths.js",
     "corridor/materials.js",
     "corridor/builders.js",
+    "corridor/remnants.js",
     "corridor/intake.js",
     "corridor/reservoir.js",
     "corridor/lower-works.js",

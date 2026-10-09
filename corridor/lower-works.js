@@ -254,6 +254,9 @@ function lowerWorks() {
   board.position.set(cx0+.09,bottom+2.1,-50); board.rotation.y = Math.PI/2;
   box(-69.6,bottom+.45,-50,.8,.9,2.6,steel,true);
   box(-69.6,bottom+.915,-50,.84,.03,2.64,pale);
+  coffeeMug(-69.43,bottom+.93,-50.12);
+  familyPhotograph(cx0+.012,bottom+2.15,-52.08);
+  workJacket(-63.2,bottom+2.15,cz1-.012);
   const base = mesh(new THREE.CylinderGeometry(.09,.09,.05,20),steel); base.position.set(-69.45,bottom+.955,-49.5);
   buttonCap = mesh(new THREE.CylinderGeometry(.065,.065,.04,20),lit);
   buttonCap.position.set(-69.45,bottom+1,-49.5); buttonCap.userData.dynamic = true;

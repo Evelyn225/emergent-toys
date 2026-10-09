@@ -28,3 +28,11 @@ test('every sound the game fetches exists under audio/', () => {
   assert.ok(dir[1].startsWith('audio/'));
   for (const file of files) assert.ok(fs.existsSync(path.join(ROOT, dir[1], file)), dir[1] + file + ' is missing');
 });
+
+test('the generated family photograph is packaged under the deployed images directory', () => {
+  const source = fs.readFileSync(path.join(ROOT,'corridor/remnants.js'),'utf8');
+  const asset = source.match(/const familyPhotoPath = '([^']+)'/);
+  assert.ok(asset && asset[1].startsWith('images/corridor/'),'photo must use the deployed images directory');
+  const png = fs.readFileSync(path.join(ROOT,asset[1]));
+  assert.deepStrictEqual([...png.subarray(0,8)],[137,80,78,71,13,10,26,10],'the actual generated PNG must be included');
+});
