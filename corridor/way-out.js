@@ -281,14 +281,12 @@ function wayOut() {
     floors.push(mesh(geom));
     // Steel nosings on every riser, sunk into the walls at their ends.
     for (let i = 0; i < risers; i++) box(0,y0+(i+1)*rise-.0085,zs+i*going+.019,2.44,.025,.05,steel);
-    // Each landing but the last has a rib: pilasters and a beam under the sloping ceiling, and a
-    // stencilled number on the west wall.
+    // Each landing but the last has a rib: pilasters and a beam under the sloping ceiling.
     if (k < flights-1) {
       const z = landingMid(k), yc = stairCeiling(z), y = (k+1)*flightRise;
       for (const side of [-1,1]) box(side*1.16,(y-.05+yc+.1)/2,z,.2,yc+.15-y,.3);
       const rib = box(0,yc-.13*Math.cos(angle),z+.13*Math.sin(angle),2.6,.3,.3);
       rib.rotation.x = -angle;
-      label(String(k+1).padStart(2,'0'),-1.195,y+1.55,z-.55,Math.PI/2,.34);
     }
   }
   // Handrails on both walls follow the nosings up each flight and run level across its landing.
