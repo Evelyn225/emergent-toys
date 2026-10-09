@@ -37,6 +37,8 @@ const glsl = {
     uniform float powered;
     uniform float rough;
     uniform float flash;
+    uniform float surfaceKind;
+    uniform float basinWaterline;
     uniform int lampCount;
     uniform vec3 paint;
     uniform vec3 carLamp;
@@ -48,15 +50,46 @@ const glsl = {
     varying vec3 vTile;
     // The fragment's normal, facing the viewer, worked out once rather than once per lamp. The lamp
     // falloff is branchless: an early return costs more than it saves when neighbours disagree.
-    vec3 n;
+    vec3 n, viewDirection;
+    float gloss, glossPower;
+    float finishHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+    float finishNoise(vec2 p) {
+      vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
+      return mix(mix(finishHash(i),finishHash(i+vec2(1.,0.)),f.x),
+        mix(finishHash(i+vec2(0.,1.)),finishHash(i+vec2(1.,1.)),f.x),f.y);
+    }
+    vec2 finishPlane(vec3 p) {
+      vec3 a = abs(n);
+      if (a.y > a.x && a.y > a.z) return p.xz;
+      if (a.x > a.z) return p.zy;
+      return p.xy;
+    }
+    float dampness(vec3 p) {
+      // Moisture stays on the basin's drained surfaces; the sump holds a separate, fixed level.
+      float basin = step(0.,p.x)*step(p.x,24.)*step(-57.2,p.z)*step(p.z,-26.8);
+      float hall = step(-9.,p.x)*step(p.x,0.)*step(-52.,p.z)*step(p.z,-48.);
+      float sump = step(-61.3,p.x)*step(p.x,-39.3)*step(-60.2,p.z)*step(p.z,-39.8);
+      float damp = 1.-smoothstep(-1.85,-1.58,p.y);
+      float submerged = 1.-smoothstep(basinWaterline-.05,basinWaterline+.08,p.y);
+      float residual = damp*(.45+.35*finishNoise(p.xz*2.1));
+      return clamp(max((basin+hall)*max(submerged,residual),sump*(1.-smoothstep(-22.3,-22.,p.y))),0.,1.);
+    }
     float lamp(vec3 pos, float radius) {
       vec3 delta = pos - vWorld;
       float d = length(delta);
-      return max(dot(n, delta), 0.0) / max(d, 1e-4) * max(0.0, 1.0 - d / radius);
+      vec3 direction = delta/max(d,1e-4);
+      float diffuse = max(dot(n,direction),0.);
+      float sheen = gloss*pow(max(dot(n,normalize(direction+viewDirection)),0.),glossPower);
+      return (diffuse+sheen)*max(0.,1.-d/radius);
     }
     void main() {
       n = normalize(vNormal);
       if (!gl_FrontFacing) n = -n;
+      viewDirection = normalize(cameraPosition-vWorld);
+      float wet = surfaceKind > .5 ? dampness(vWorld) : 0.;
+      gloss = surfaceKind > 1.5 ? .16 : 0.;
+      gloss += wet*.26;
+      glossPower = mix(42.,68.,wet);
       float light = .14 + .17 * max(dot(n, normalize(vec3(.3, 1., .2))), 0.0);
       light += .9 * lamp(vec3(12., 9., -41.), 24.);
       light += .55 * powered * lamp(vec3(3., 3., -43.), 16.);
@@ -81,7 +114,26 @@ const glsl = {
         vec2 tile = abs(fract((vTile.z > .5 ? vTile.xy : vWorld.xz) / 1.5) - .5);
         joints = step(.488, max(tile.x, tile.y)) * .055;
       }
-      float lum = light * tone + (grain - .5) * .065 - joints + emission;
+      float lum = light * tone;
+      // Compress strong reflected light before adding surface detail. Otherwise overlapping lamps
+      // clip pale decks to solid white and erase their grain, joints, and brushed-metal finish.
+      float highlight = max(0.,lum-.6);
+      lum = min(lum,.6)+.3*highlight/(highlight+.3);
+      lum += (grain - .5) * .065 - joints;
+      vec2 face = finishPlane(vWorld);
+      if (surfaceKind > .5 && surfaceKind < 1.5) {
+        // One continuous world field avoids a material seam where a curved vault changes direction.
+        vec2 concretePoint = vWorld.xz+vWorld.y*vec2(.61,.37);
+        float mottling = finishNoise(concretePoint*.65)*.7+finishNoise(concretePoint*2.7)*.3;
+        float pores = smoothstep(.80,.96,finishHash(floor(concretePoint*95.)));
+        lum *= .91+.18*mottling;
+        lum -= pores*.035;
+      } else if (surfaceKind > 1.5) {
+        float brushing = finishNoise(face*vec2(210.,2.5));
+        float scratches = smoothstep(.87,.99,finishNoise(face*vec2(87.,.85)));
+        lum += (brushing-.5)*.055+scratches*.045;
+      }
+      lum = lum*(1.-wet*.20)+emission;
       if (water > .5) {
         float ripple = sin(vWorld.x * 3. + time * .7 + sin(vWorld.z)) * sin(vWorld.z * 2. - time * .6);
         lum = .12 + .1 * ripple + .19 * pow(max(0.0, sin(vWorld.z * .7 + vWorld.x * .2 + time * .3)), 10.);

@@ -1458,3 +1458,117 @@ test('both jacket sleeves share continuous fabric with the torso at their armhol
   assert.equal(result.left.component,result.torso.component,'the left sleeve is sewn into the body');
   assert.equal(result.right.component,result.torso.component,'the right sleeve is sewn into the body');
 });
+
+test('concrete and metal have visible, distinct finishes', async t => {
+  const page = await open(t);
+  const result = await page.evaluate(() => {
+    const game = corridorTest, finishes = game.finishes;
+    const screen = document.querySelector('canvas'), canvas = document.createElement('canvas');
+    canvas.width = screen.width; canvas.height = screen.height;
+    const context = canvas.getContext('2d');
+    function capture() {
+      game.render(); context.drawImage(screen,0,0);
+      return context.getImageData(0,0,canvas.width,canvas.height).data;
+    }
+    function compare(before,after) {
+      let darker = 0, lighter = 0;
+      for (let i = 0; i < before.length; i += 4) {
+        if (after[i]+20 < before[i]) darker++;
+        if (after[i] > before[i]+20) lighter++;
+      }
+      return { darker,lighter,changed: darker+lighter };
+    }
+    const profiles = {};
+    for (const [name,position,target] of [
+      ['concrete',[-17,-1.5,-49],[-24,-.3,-45]],
+      ['steel',[14.5,0,-36.95],[15.3,.8,-38]],
+    ]) {
+      game.setPosition(...position); game.lookAt(...target);
+      const profile = finishes.materials[name].uniforms.surfaceKind, kind = profile.value;
+      profile.value = 0; const plain = capture();
+      profile.value = kind; profiles[name] = compare(plain,capture());
+    }
+    return { profiles };
+  });
+  for (const [name,diff] of Object.entries(result.profiles)) assert.ok(diff.changed > 100,name+' finish is visible in the actual frame');
+});
+
+test('bright bridge decks retain their metal detail under the player while lamp fixtures stay luminous', async t => {
+  const page = await open(t);
+  const result = await page.evaluate(() => {
+    const game = corridorTest, screen = document.querySelector('canvas'), canvas = document.createElement('canvas');
+    canvas.width = screen.width; canvas.height = screen.height;
+    const context = canvas.getContext('2d');
+    function capture(size = 200) {
+      game.render(); context.drawImage(screen,0,0);
+      return context.getImageData((canvas.width-size)/2,(canvas.height-size)/2,size,size).data;
+    }
+    function darkFraction(pixels) {
+      let dark = 0;
+      for (let i = 0; i < pixels.length; i += 4) if (pixels[i] < 100) dark++;
+      return dark/(pixels.length/4);
+    }
+    const kind = game.finishes.materials.pale.uniforms.surfaceKind;
+    const decks = [[12,0,-35],[12,0,-42],[12,0,-50],[12,8.5,-55.6]].map(position => {
+      game.setPosition(...position); game.lookAt(...position);
+      const detailed = capture(), dark = darkFraction(detailed), savedKind = kind.value;
+      kind.value = 0; const plain = capture(); kind.value = savedKind;
+      let finishPixels = 0;
+      for (let i = 0; i < detailed.length; i += 4) if (Math.abs(detailed[i]-plain[i]) > 20) finishPixels++;
+      return { position,dark,finishPixels };
+    });
+    const frame = game.tunnelFrames[35];
+    game.setPosition(frame.center.x,0,frame.center.z);
+    game.lookAt(frame.center.x+frame.right.x*frame.halfWidth,1.4,frame.center.z+frame.right.z*frame.halfWidth);
+    return { decks,lampDark: darkFraction(capture(8)) };
+  });
+  for (const deck of result.decks) {
+    assert.ok(deck.dark > .08 && deck.dark < .45,'a bright deck has visible shading instead of solid white: '+JSON.stringify(deck));
+    assert.ok(deck.finishPixels > 100,'the metal finish remains visible directly beneath the player: '+JSON.stringify(deck));
+  }
+  assert.ok(result.lampDark < .1,'emissive lamp fixtures retain their glow: '+JSON.stringify(result));
+});
+
+test('damp material shading follows the drained water level and remains visible on exposed basin surfaces', async t => {
+  const page = await open(t);
+  await page.evaluate(() => {
+    corridorTest.setPlaying(true); corridorTest.setPosition(15.3,0,-36.95);
+    corridorTest.lookAt(15.3,1.15,-37.52); corridorTest.update(0);
+  });
+  await page.keyboard.press('e');
+  const result = await page.evaluate(() => {
+    const game = corridorTest; game.update(10);
+    const actualLevel = game.getState().waterY, uniform = game.finishes.basinWaterline;
+    const trackedLevel = uniform.value;
+    game.setPosition(22,-3,-42); game.lookAt(24,-2.5,-42);
+    const screen = document.querySelector('canvas'), canvas = document.createElement('canvas');
+    canvas.width = screen.width; canvas.height = screen.height;
+    const context = canvas.getContext('2d');
+    function capture() {
+      game.render(); context.drawImage(screen,0,0);
+      return context.getImageData(0,0,canvas.width,canvas.height).data;
+    }
+    const drained = capture(); uniform.value = -1.7; const saturated = capture(); uniform.value = trackedLevel;
+    let changed = 0;
+    for (let i = 0; i < drained.length; i += 4) if (Math.abs(drained[i]-saturated[i]) > 20) changed++;
+    return { actualLevel,trackedLevel,changed };
+  });
+  assert.ok(result.actualLevel < -3,'the basin has actually drained');
+  assert.equal(result.trackedLevel,result.actualLevel,'the wet finish uses the water\'s real level');
+  assert.ok(result.changed > 100,'wetness produces a visible material response: '+JSON.stringify(result));
+});
+
+test('reservoir end walls meet the floor', async t => {
+  const page = await open(t);
+  const result = await page.evaluate(() => {
+    const game = corridorTest;
+    return [6,9.79,14.21,18].map(x => ({
+      floorY: game.renderedHits([x,.1,-57.16],[0,-1,0],.2)[0]?.point[1],
+      wallZ: game.renderedHits([x,.0001,-58],[0,0,1],1)[0]?.point[2],
+    }));
+  });
+  for (const joint of result) {
+    assert.ok(Math.abs(joint.floorY) < .00001,'the floor is directly under the wall');
+    assert.ok(Math.abs(joint.wallZ+57.15) < .00001,'wall geometry reaches to within one tenth of a millimetre of the floor');
+  }
+});

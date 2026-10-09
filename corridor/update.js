@@ -117,6 +117,7 @@ function update(dt) {
   const waterMoving = Math.abs(waterTarget-water.position.y) > .01;
   if (waterMoving) pumpRotor.rotation.z -= dt*5;
   else water.position.y = waterTarget;
+  basinWaterline.value = -1.7+water.position.y;
   pumpWheel.rotation.z += ((pumpOn ? -Math.PI*1.2 : 0)-pumpWheel.rotation.z)*Math.min(1,dt*3);
   descentGate.rotation.y += ((descentReleased ? Math.PI/2 : 0)-descentGate.rotation.y)*Math.min(1,dt*3);
   stepEase *= Math.exp(-11*dt);

@@ -15,6 +15,7 @@ fitCanvas();
 document.body.prepend(renderer.domElement);
 const clock = new THREE.Clock();
 const time = { value: 0 }, powered = { value: 0 }, carLamp = { value: new THREE.Vector3(-33,-18,-50) };
+const basinWaterline = { value: -1.7 };
 const floors = [], ceilings = [], barriers = [], interactables = [];
 const veil = document.getElementById('veil'), enter = document.getElementById('enter');
 const enterLabel = document.getElementById('enter-label'), prompt = document.getElementById('prompt');

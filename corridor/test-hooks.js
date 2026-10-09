@@ -9,6 +9,8 @@ if (new URLSearchParams(location.search).has('test')) window.corridorTest = {
   },
   setPlaying(value) { playing = value; },
   remnants: () => remnantProps,
+  finishes: { basinWaterline,
+    materials: { concrete,steel,pale } },
   floorLayersAt(x,y,z) {
     rayOrigin.set(x,y+.4,z); ray.set(rayOrigin,down); ray.far = .8;
     hits.length = 0; ray.intersectObjects(floors,false,hits);
