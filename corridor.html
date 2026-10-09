@@ -19,12 +19,16 @@
     #hud { position: fixed; top: 25px; left: 26px; pointer-events: none; z-index: 10; }
     #altitude { font-size: 11px; font-weight: 500; text-align: left; letter-spacing: .12em; }
     #altitude span { display: block; margin-top: 7px; font-size: 9px; font-weight: 400; opacity: .5; }
+    #altitude #carry { opacity: .9; }
+    #altitude span[hidden] { display: none; }
     #hud > div { background: #141818c9; padding: 10px 12px; border-left: 2px solid #e5e9df60; }
     #reticle { position: fixed; left: 50%; top: 50%; width: 3px; height: 3px; background: #e5e9df80; pointer-events: none; z-index: 10; }
     #prompt { position: fixed; top: calc(50% + 28px); left: 50%; transform: translateX(-50%); padding: 9px 13px; background: #141818dd; font-size: 10px; white-space: nowrap; z-index: 10; pointer-events: none; }
     #prompt:empty { display: none; }
     #veil { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: #0c111160; backdrop-filter: blur(2px); }
     #veil[hidden] { display: none; }
+    #end { position: fixed; inset: 0; z-index: 999; background: #000; }
+    #end[hidden] { display: none; }
     #card { width: min(430px, calc(100vw - 40px)); padding: 32px; background: #151a18ed; border: 1px solid #e5e9df50; box-shadow: 0 20px 80px #0007; }
     #card .eyebrow { font-size: 9px; letter-spacing: .2em; opacity: .6; }
     h1 { font-size: 32px; line-height: 1.14; font-weight: 300; letter-spacing: -.055em; margin: 16px 0 20px; }
@@ -50,8 +54,8 @@
     <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width:22px;height:22px;object-fit:contain;image-rendering:pixelated;display:block">
   </a>
   <button id="sound" aria-pressed="false">SOUND OFF</button>
-  <div id="hud"><div id="altitude">LEVEL +00.0 M<span>WASD MOVE / ESC PAUSE</span></div></div>
-  <div id="reticle" hidden></div><div id="prompt"></div>
+  <div id="hud"><div id="altitude">LEVEL +00.0 M<span>WASD MOVE / ESC PAUSE</span><span id="carry" hidden>CARRYING KEY</span></div></div>
+  <div id="reticle" hidden></div><div id="prompt"></div><div id="end" hidden></div>
   <div id="veil"><div id="card">
     <div class="eyebrow">A WALK THROUGH THE SUBSTRUCTURE</div>
     <h1>Corridor<br>Crawler</h1>
@@ -71,15 +75,8 @@
       gl_Position = projectionMatrix * viewMatrix * world;
     }
   </script>
-  <script id="surface-fragment" type="x-shader/x-fragment">
+  <script id="dither" type="x-shader/x-fragment">
     precision highp float;
-    uniform float tone;
-    uniform float emission;
-    uniform float time;
-    uniform float water;
-    uniform float powered;
-    varying vec3 vWorld;
-    varying vec3 vNormal;
     float bayer(vec2 p) {
       vec2 q = mod(floor(p), 4.0);
       float low = 2.0 * mod(q.x, 2.0) + mod(q.y, 2.0);
@@ -89,6 +86,24 @@
       if (high == 3.0) high = 1.0; else if (high == 1.0) high = 3.0;
       return (4.0 * low + high + .5) / 16.0;
     }
+    const vec3 shadow = vec3(.065, .078, .073);
+  </script>
+  <script id="surface-fragment" type="x-shader/x-fragment">
+    uniform float tone;
+    uniform float emission;
+    uniform float time;
+    uniform float water;
+    uniform float powered;
+    uniform float rough;
+    uniform float flash;
+    uniform float tunnelPower;
+    uniform vec3 paint;
+    uniform vec3 carLamp;
+    uniform vec4 blastLight;
+    uniform vec4 tunnelLamps[TUNNEL_LAMPS];
+    uniform float tunnelReach[TUNNEL_LAMPS];
+    varying vec3 vWorld;
+    varying vec3 vNormal;
     float lamp(vec3 pos, float radius) {
       vec3 delta = pos - vWorld;
       vec3 n = normalize(vNormal);
@@ -105,11 +120,19 @@
       light += .9 * lamp(vec3(12., 9., -41.), 24.);
       light += .55 * powered * lamp(vec3(3., 3., -43.), 16.);
       light += .9 * lamp(vec3(12., 13., -70.), 25.);
-      light += .9 * lamp(vec3(-20., 3., -50.), 17.);
+      light += .9 * lamp(vec3(-20., 4.5, -50.), 17.);
+      light += .3 * lamp(vec3(-30.5, 1.2, -50.), 9.);
+      light += .4 * lamp(vec3(-36.5, -18.3, -50.), 10.);
+      light += .9 * lamp(vec3(-51., -15., -50.), 22.);
+      light += .35 * lamp(carLamp, 7.);
+      light += .5 * lamp(vec3(-66., -17.6, -50.), 9.);
+      light += .6 * lamp(vec3(-20., 1., -37.7), 8.);
+      for (int i = 0; i < TUNNEL_LAMPS; i++) light += tunnelLamps[i].w * tunnelPower * lamp(tunnelLamps[i].xyz, tunnelReach[i]);
+      light += blastLight.w * lamp(blastLight.xyz, 30.);
       light += .45 * lamp(cameraPosition + vec3(0., .2, 0.), 8.);
-      float grain = fract(sin(dot(floor(vWorld * 22.), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+      float grain = fract(sin(dot(floor(vWorld * (rough > .5 ? 9. : 22.)), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
       float joints = 0.0;
-      if (abs(n.y) > .85) {
+      if (rough < .5 && abs(n.y) > .85) {
         vec2 tile = abs(fract(vWorld.xz / 1.5) - .5);
         joints = step(.488, max(tile.x, tile.y)) * .055;
       }
@@ -118,9 +141,48 @@
         float ripple = sin(vWorld.x * 3. + time * .7 + sin(vWorld.z)) * sin(vWorld.z * 2. - time * .6);
         lum = .12 + .1 * ripple + .19 * pow(max(0.0, sin(vWorld.z * .7 + vWorld.x * .2 + time * .3)), 10.);
       }
-      lum = mix(lum, .055, smoothstep(14., 64., distance(cameraPosition, vWorld)));
+      lum = mix(lum, .055, smoothstep(14., 64., distance(cameraPosition, vWorld))) + flash;
       float ink = step(bayer(gl_FragCoord.xy), clamp(lum, .015, .97));
-      gl_FragColor = vec4(mix(vec3(.065, .078, .073), vec3(.87, .90, .84), ink), 1.);
+      gl_FragColor = vec4(mix(shadow, paint, ink), 1.);
+    }
+  </script>
+  <script id="blast-noise" type="x-shader/x-fragment">
+    float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+    float noise(vec3 p) {
+      vec3 i = floor(p), f = fract(p);
+      f = f * f * (3. - 2. * f);
+      return mix(mix(mix(hash(i), hash(i + vec3(1., 0., 0.)), f.x), mix(hash(i + vec3(0., 1., 0.)), hash(i + vec3(1., 1., 0.)), f.x), f.y),
+        mix(mix(hash(i + vec3(0., 0., 1.)), hash(i + vec3(1., 0., 1.)), f.x), mix(hash(i + vec3(0., 1., 1.)), hash(i + vec3(1., 1., 1.)), f.x), f.y), f.z);
+    }
+  </script>
+  <script id="blast-vertex" type="x-shader/x-vertex">
+    uniform float time;
+    varying vec3 vWorld;
+    varying vec3 vNormal;
+    void main() {
+      // Billow the surface so the front has a rolling, lumpy edge where it is not hidden by rock.
+      vec3 p = position * 1.3 + vec3(time * .9, -time * 1.4, time * .6);
+      vec3 billowed = position + normal * (noise(p) * .5 + noise(p * 2.2) * .25 - .3);
+      vec4 world = modelMatrix * vec4(billowed, 1.0);
+      vWorld = world.xyz;
+      vNormal = normalize(mat3(modelMatrix) * normal);
+      gl_Position = projectionMatrix * viewMatrix * world;
+    }
+  </script>
+  <script id="blast-fragment" type="x-shader/x-fragment">
+    uniform float time;
+    varying vec3 vWorld;
+    varying vec3 vNormal;
+    void main() {
+      // White heat at the core of the front, breaking into dark rolling smoke toward its edges.
+      vec3 view = normalize(cameraPosition - vWorld), n = normalize(vNormal);
+      float facing = abs(dot(n, view));
+      vec3 p = vWorld * .38 + vec3(time * .7, -time * 1.5, time * .9);
+      float churn = noise(p) * .6 + noise(p * 2.6 + vec3(0., time * 2., 0.)) * .4;
+      float smoke = smoothstep(.5, .8, noise(p * .55 + vec3(5., time * .4, 0.)));
+      float lum = .2 + .9 * facing + (churn - .5) * 1.6 - .9 * smoke;
+      float ink = step(bayer(gl_FragCoord.xy), clamp(lum, .015, .97));
+      gl_FragColor = vec4(mix(shadow, vec3(.87, .90, .84), ink), 1.);
     }
   </script>
   <script type="module">
@@ -142,7 +204,7 @@
       renderer.setSize(innerWidth, innerHeight);
       document.body.prepend(renderer.domElement);
       const clock = new THREE.Clock();
-      const time = { value: 0 }, powered = { value: 0 };
+      const time = { value: 0 }, powered = { value: 0 }, carLamp = { value: new THREE.Vector3(-33,-18,-50) };
       const floors = [], ceilings = [], barriers = [], interactables = [];
       const veil = document.getElementById('veil'), enter = document.getElementById('enter');
       const enterLabel = document.getElementById('enter-label'), prompt = document.getElementById('prompt');
@@ -154,19 +216,118 @@
       let yaw = 0, pitch = 0, playing = false, walked = 0, zone = '', active = null;
       let pumpOn = false, bellRung = false, messageUntil = 0, touchLook = null;
       let audio = null, soundOn = false;
-      let audioZone = null, audioPump = null;
+      let audioZone = null, audioPump = null, audioLift = null;
       let pumpRotor, pumpWheel, pumpIndicator, bellPivot, bellTime = -100, descentGate, ascentSign, returnSign;
       const rampJoins = [];
-      function material(tone = 1, emission = 0, water = 0) {
+      // The lift car runs between the hub landing and the sump landing. It starts below.
+      const hubFloor = -1.5, liftLevels = [hubFloor,-21], liftTravel = 10, sheaveY = 7.8, sheaveRadius = 1.125;
+      let liftPos = 1, liftTarget = 1, liftCar, liftCounterweight, liftSheave, carCable, weightCable;
+      const liftGates = [], liftRails = [], liftControl = new THREE.Vector3();
+      // Rooms behind the bulkhead and the north shutter; the plan board draws from these too.
+      const storePlan = { x0: -24, x1: -16, z0: -40.7, z1: -34.7 }, controlPlan = { x0: -71.3, x1: -61.3, z0: -54, z1: -46 };
+      let northShutter, southShutter, hatch, bulkheadSign, buttonCap, keyGroup, lockLamp;
+      let hatchTime = null, hatchOpen = false, keyTaken = false, hasKey = false, southUnlocked = false;
+      const carry = document.getElementById('carry'), endScreen = document.getElementById('end');
+      let detonated = false, fuse = 0, booms = 0, ended = false, powerCut = false, frontS = null, shake = 0, roar = null, redButton;
+      // The service tunnel behind the south shutter: one centreline, one floor profile, and one
+      // rock cross-section that the shell, floor, collision, cable, and lamps all sample.
+      const lerp = (a,b,t) => a+(b-a)*t, sstep = (a,b,x) => { const t = Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+      const smax = (a,b,k) => { const h = Math.max(k-Math.abs(a-b),0)/k; return Math.max(a,b)+h*h*k/4; };
+      const serviceStraight = 34, serviceBend = 14, liningEnd = 28, bendEnd = serviceStraight+serviceBend*Math.PI/2;
+      const roomRadius = 10, roomS = bendEnd+36, mouthS = roomS-roomRadius, roomFloor = -6, rockSegments = 32;
+      function pathAt(s) {
+        if (s <= serviceStraight) return { x: -20, z: -59.3-s, tx: 0, tz: -1 };
+        if (s <= bendEnd) {
+          const a = (s-serviceStraight)/serviceBend;
+          return { x: -20-serviceBend+serviceBend*Math.cos(a), z: -59.3-serviceStraight-serviceBend*Math.sin(a), tx: -Math.sin(a), tz: -Math.cos(a) };
+        }
+        return { x: -20-serviceBend-(s-bendEnd), z: -59.3-serviceStraight-serviceBend, tx: -1, tz: 0 };
+      }
+      // Flat at the door, then an eased descent that levels out into the cave floor.
+      const pathFloor = s => hubFloor+(roomFloor-hubFloor)*sstep(3,mouthS,s);
+      // A point at lateral offset u (positive is the walker's right) and height v above the floor.
+      function pathPoint(s,u,v) {
+        const { x,z,tx,tz } = pathAt(s);
+        return new THREE.Vector3(x-tz*u,pathFloor(s)+v,z+tx*u);
+      }
+      function hash3(x,y,z) { const h = Math.sin(x*127.1+y*311.7+z*74.7)*43758.5453; return h-Math.floor(h); }
+      function noise3(x,y,z) {
+        const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+        const u = sstep(0,1,x-xi), v = sstep(0,1,y-yi), w = sstep(0,1,z-zi), h = (a,b,c) => hash3(xi+a,yi+b,zi+c);
+        return lerp(lerp(lerp(h(0,0,0),h(1,0,0),u),lerp(h(0,1,0),h(1,1,0),u),v),
+          lerp(lerp(h(0,0,1),h(1,0,1),u),lerp(h(0,1,1),h(1,1,1),u),v),w)*2-1;
+      }
+      const rockNoise = (x,y,z) => .5*noise3(x*.45,y*.45,z*.45)+.3*noise3(x*1.1+7,y*1.1,z*1.1)+.2*noise3(x*2.6-3,y*2.6,z*2.6);
+      function rockShape(s) {
+        // Hewn where the lining ends, natural by the end of the bend, then a domed chamber.
+        const wild = sstep(liningEnd+2,bendEnd,s), d = (s-roomS)/roomRadius, dome = Math.sqrt(Math.max(0,1-d*d));
+        let hw = lerp(2,2.7,wild)+wild*(.35*Math.sin(s*.29)+.2*Math.sin(s*.71+1));
+        let h = lerp(3.4,4.1,wild)+wild*(.4*Math.sin(s*.23+2)+.25*Math.sin(s*.61));
+        if (s >= roomS) { hw = roomRadius*dome; h = 8.5*dome; }
+        else { hw = smax(hw,roomRadius*dome,2.5); h = smax(h,8.5*dome,2.5); }
+        const amp = (lerp(.15,.6,wild)+.45*sstep(mouthS-4,roomS,s))*Math.min(1,hw/2);
+        // Broad lobes make the chamber irregular in plan and section, not just rough.
+        const lobe = (.35*wild+1.6*sstep(mouthS,roomS-3,s))*Math.min(1,hw/4);
+        return { hw,h,n: lerp(5,2,wild),amp,lobe };
+      }
+      function rockRing(s) {
+        const { x,z,tx,tz } = pathAt(s), y = pathFloor(s), { hw,h,n,amp,lobe } = rockShape(s), ring = [];
+        for (let j = 0; j <= rockSegments; j++) {
+          const theta = Math.PI*(1-j/rockSegments), c = Math.cos(theta), base = j === 0 || j === rockSegments;
+          let u = base ? (j ? hw : -hw) : Math.sign(c)*Math.abs(c)**(2/n)*hw, v = base ? 0 : Math.abs(Math.sin(theta))**(2/n)*h;
+          const px = x-tz*u, py = y+v, pz = z+tx*u, bump = amp*rockNoise(px,py,pz)+lobe*noise3(px*.17+11,py*.17,pz*.17);
+          if (base) u += Math.sign(u)*bump;
+          else {
+            const dv = v-.3*h, length = Math.hypot(u,dv) || 1;
+            u += u/length*bump; v = Math.max(.1,v+dv/length*bump);
+          }
+          ring.push({ x: x-tz*u,y: y+v,z: z+tx*u,u,v });
+        }
+        return ring;
+      }
+      // Where the right-hand wall of a ring passes a height, pulled in from the rock by an inset.
+      function wallPoint(ring,height,inset) {
+        for (let j = rockSegments; j > rockSegments/2; j--) {
+          const a = ring[j], b = ring[j-1];
+          if (b.v >= height) return { u: lerp(a.u,b.u,(height-a.v)/(b.v-a.v))-inset,v: height };
+        }
+        return { u: ring[rockSegments/2].u-inset,v: height };
+      }
+      // Every lamp in the branch: caged lamps in the lining, work lights on the cable, tripods in the cave.
+      // Tripods stand clear of the sightline from the pedestal back down the tunnel.
+      const liningLamps = [5,13,21], cableLamps = [34,43,52,64,76], tripodAngles = [0,118,242].map(a => a*Math.PI/180);
+      const cableLamp = s => { const w = wallPoint(rockRing(s),2.45,.15); return pathPoint(s,w.u-.05,w.v-.62); };
+      const tripodAt = a => [roomS+Math.cos(a)*5.5,Math.sin(a)*5.5];
+      const serviceLamps = [
+        ...liningLamps.map(s => [pathPoint(s,0,2.75),.5,9]),
+        ...cableLamps.map(s => [cableLamp(s),.5,8]),
+        ...tripodAngles.map(a => { const [s,u] = tripodAt(a); return [pathPoint(s,u,2.25),.6,7]; }),
+      ];
+      const tunnelLamps = { value: serviceLamps.map(([p,strength]) => new THREE.Vector4(p.x,p.y,p.z,strength)) };
+      const tunnelReach = { value: serviceLamps.map(lamp => lamp[2]) };
+      const flash = { value: 0 }, tunnelPower = { value: 1 }, blastLight = { value: new THREE.Vector4() };
+      const dither = document.getElementById('dither').textContent;
+      function material(tone = 1, emission = 0, water = 0, rough = 0, paint = [.87,.90,.84]) {
         return new THREE.ShaderMaterial({
-          uniforms: { tone: { value: tone }, emission: { value: emission }, water: { value: water }, time, powered },
+          uniforms: { tone: { value: tone }, emission: { value: emission }, water: { value: water }, rough: { value: rough },
+            paint: { value: new THREE.Vector3(...paint) }, time, powered, carLamp, flash, tunnelPower, tunnelLamps, tunnelReach, blastLight },
+          defines: { TUNNEL_LAMPS: serviceLamps.length },
           vertexShader: document.getElementById('surface-vertex').textContent,
-          fragmentShader: document.getElementById('surface-fragment').textContent,
+          fragmentShader: dither + document.getElementById('surface-fragment').textContent,
           side: THREE.DoubleSide,
         });
       }
       const concrete = material(1), steel = material(.6), pale = material(1.25);
-      const lit = material(1, .85), waterMaterial = material(1, 0, 1);
+      const lit = material(1, .85), waterMaterial = material(1, 0, 1), rock = material(.75, 0, 0, 1);
+      // The button is the only colour in the game.
+      const red = material(1.1, .3, 0, 0, [.82,.12,.1]);
+      const blastNoise = document.getElementById('blast-noise').textContent;
+      const blastMaterial = new THREE.ShaderMaterial({
+        uniforms: { time },
+        vertexShader: blastNoise + document.getElementById('blast-vertex').textContent,
+        fragmentShader: dither + blastNoise + document.getElementById('blast-fragment').textContent,
+        side: THREE.DoubleSide,
+      });
       function mesh(geometry, mat = concrete) {
         const obj = new THREE.Mesh(geometry, mat); scene.add(obj); return obj;
       }
@@ -567,41 +728,540 @@
       }
       tower();
       function lowerWorks() {
-        slab(-6.5,-50,13,4,-3,pale);
-        for (const z of [-47.85,-52.15]) box(-6.5,-1.5,z,13,3,.3,concrete,true);
-        surface([[0,0,-48],[-13,0,-48],[-13,0,-52],[0,0,-52]],steel,false,true);
-        slab(-20,-50,14,18,-3);
-        box(-27.15,.5,-50,.3,7,18,concrete,true);
-        for (const z of [-40.85,-59.15]) box(-20,.5,z,14,7,.3,concrete,true);
-        for (const z of [-44.5,-55.5]) box(-13,.5,z,.3,7,7,concrete,true);
-        box(-13,2,-50,.3,4,4,concrete,true);
-        surface([[-13,4,-41],[-27,4,-41],[-27,4,-59],[-13,4,-59]],steel,false,true);
-        box(-20,3.9,-50,4.2,.2,6.2,steel);
-        box(-20,3.79,-50,4,.02,6,lit);
+        const hub = hubFloor, bottom = liftLevels[1], pit = bottom-1.5, head = 9;
+        // The entry hallway keeps a flat approach at each doorway and ramps up to the hub
+        // between them. Its ceiling runs parallel to the floor, from wall face to wall face,
+        // so it never doubles the doorway soffits at either end.
+        const rampStart = -2, rampEnd = -9, hallEnd = -12.85;
+        slab(-1,-50,2,4,-3,pale);
+        surface([[rampStart,-3,-48],[rampEnd,hub,-48],[rampEnd,hub,-52],[rampStart,-3,-52]],pale,true);
+        slab(-11,-50,4,4,hub,pale,hub+3.22);
+        for (const z of [-47.85,-52.15]) box((-.3+hallEnd)/2,-.9,z,-.3-hallEnd,4.8,.3,concrete,true);
+        const hallCeiling = [[-.3,0],[rampStart,0],[rampEnd,hub+3],[hallEnd,hub+3]];
+        for (let i = 0; i < hallCeiling.length-1; i++) {
+          const [x0,y0] = hallCeiling[i], [x1,y1] = hallCeiling[i+1];
+          surface([[x0,y0,-48],[x1,y1,-48],[x1,y1,-52],[x0,y0,-52]],steel,false,true);
+        }
+        // Reservoir water fills the hallway through the doorway and laps up the ramp.
+        water.add(surface([[.15,-1.7,-48],[rampEnd,-1.7,-48],[rampEnd,-1.7,-52],[.15,-1.7,-52]],waterMaterial));
+
+        // The hub: doorways east and west, sealed shutters north and south for later branches.
+        slab(-20,-50,14,18,hub);
+        for (const x of [-13,-27.15]) {
+          for (const z of [-44.5,-55.5]) box(x,hub+3.5,z,.3,7,7,concrete,true);
+          box(x,hub+5,-50,.3,4,4,concrete,true);
+        }
+        // Roller shutters rise into their lintels when released.
+        function shutter(x,z,face,text) {
+          const start = scene.children.length;
+          box(x,hub+1.5,z,3,3,.08,steel);
+          for (let i = 0; i < 10; i++) box(x,hub+.2+i*.3,z+face*.06,2.9,.06,.04,pale);
+          const group = new THREE.Group();
+          for (const obj of scene.children.slice(start)) group.add(obj);
+          scene.add(group);
+          const door = { group,open: 0,released: false,sign: label(text,x,hub+4,z+face*.18,face < 0 ? Math.PI : 0,1.3) };
+          barriers.push({ box: new THREE.Box3(new THREE.Vector3(x-1.5,hub,z-.08),new THREE.Vector3(x+1.5,hub+3,z+.08)),
+            enabled: () => door.open < 1 });
+          return door;
+        }
+        for (const z of [-40.85,-59.15]) {
+          for (const x of [-24.25,-15.75]) box(x,hub+3.5,z,5.5,7,.3,concrete,true);
+          box(-20,hub+5,z,3,4,.3,concrete,true);
+        }
+        northShutter = shutter(-20,-40.85,-1,'SEALED');
+        southShutter = shutter(-20,-59.15,1,'LOCKED');
+        storeRoom(); keyhole();
+        surface([[-13.15,hub+7,-41],[-27,hub+7,-41],[-27,hub+7,-59],[-13.15,hub+7,-59]],steel,false,true);
+        box(-20,hub+6.9,-50,4.2,.2,6.2,steel);
+        box(-20,hub+6.79,-50,4,.02,6,lit);
         for (const x of [-24.5,-15.5]) for (const z of [-44,-56]) {
-          box(x,.5,z,.5,7,.5,steel,true);
-          box(x,-2.9,z,.9,.2,.9,steel);
+          box(x,hub+3.5,z,.5,7,.5,steel,true);
+          box(x,hub+.1,z,.9,.2,.9,steel);
         }
         // Fixed treatment vessels are bolted to the floor and piped into the wall.
         for (const z of [-44.5,-55.5]) {
           const tank = mesh(new THREE.CylinderGeometry(1.3,1.3,3,20),steel);
-          tank.position.set(-23,-1.5,z);
+          tank.position.set(-23,hub+1.5,z);
           const footing = mesh(new THREE.CylinderGeometry(1.4,1.4,.16,20),pale);
-          footing.position.set(-23,-2.92,z);
+          footing.position.set(-23,hub+.08,z);
           barriers.push({ box: new THREE.Box3(
-            new THREE.Vector3(-24.4,-3,z-1.4),new THREE.Vector3(-21.6,0,z+1.4),
+            new THREE.Vector3(-24.4,hub,z-1.4),new THREE.Vector3(-21.6,hub+3,z+1.4),
           ) });
-          beam([-23,0,z],[-27,0,z],.16);
+          beam([-23,hub+3,z],[-27,hub+3,z],.16);
         }
-        label('LOWER WORKS',-26.97,-.8,-50,Math.PI/2,2.8);
+        label('LOWER WORKS',-26.97,hub+4.1,-50,Math.PI/2,2.8);
+
+        // Vestibule between the hub and the top landing.
+        slab(-29,-50,4,4,hub,pale);
+        for (const z of [-47.85,-52.15]) box(-28.975,hub+1.5,z,3.35,3,.3,concrete,true);
+        surface([[-27.3,hub+3,-48],[-30.65,hub+3,-48],[-30.65,hub+3,-52],[-27.3,hub+3,-52]],steel,false,true);
+        box(-29.4,hub+2.97,-50,.9,.06,.3,lit);
+
+        // The shaft is 4.1 x 4.5 m inside: the car leaves 5 cm at the landing walls and
+        // the south wall, and the north side holds the counterweight. Each landing slab
+        // stops exactly at the car's edge, with a 5 cm sill over the gap.
+        box(-33,(pit+head)/2,-47.35,4.7,head-pit,.3,concrete,true);
+        box(-33,(pit+head)/2,-52.15,4.7,head-pit,.3,concrete,true);
+        for (const [x,level] of [[-30.8,hub],[-35.2,bottom]]) {
+          box(x,(pit+level-.22)/2,-49.75,.3,level-.22-pit,4.5,concrete,true);
+          box(x,level+1.39,-47.75,.3,3.22,.5,concrete,true);
+          box(x,(level+3+head)/2,-49.75,.3,head-level-3,4.5,concrete,true);
+        }
+        surface([[-30.65,pit,-47.5],[-35.35,pit,-47.5],[-35.35,pit,-52],[-30.65,pit,-52]],steel);
+        surface([[-30.95,head,-47.5],[-35.05,head,-47.5],[-35.05,head,-52],[-30.95,head,-52]],concrete,false,true);
+        for (const x of [-32.25,-33.75]) beam([x,pit,-47.6],[x,sheaveY,-47.6],.08);
+        beam([-30.95,sheaveY,-48.875],[-35.05,sheaveY,-48.875],.14);
+        liftSheave = new THREE.Group();
+        liftSheave.position.set(-33,sheaveY,-48.875); scene.add(liftSheave);
+        const sheave = new THREE.Mesh(new THREE.TorusGeometry(sheaveRadius,.07,8,48),pale);
+        sheave.rotation.y = Math.PI/2; liftSheave.add(sheave);
+        for (let i = 0; i < 4; i++) {
+          const spoke = new THREE.Mesh(new THREE.BoxGeometry(.06,sheaveRadius*2,.06),steel);
+          spoke.rotation.x = i*Math.PI/4; liftSheave.add(spoke);
+        }
+        liftCounterweight = box(-33,0,-47.75,1.2,1.6,.26,steel);
+        carCable = beam([-33,0,-50],[-33,1,-50],.04);
+        weightCable = beam([-33,0,-47.75],[-33,1,-47.75],.04);
+        for (const obj of [liftCounterweight,carCable,weightCable]) obj.userData.dynamic = true;
+
+        // Bar gates lift into the lintel. Each is open only while the car is docked at it.
+        for (const [x,level] of [[-30.8,hub],[-35.2,bottom]]) {
+          const start = scene.children.length;
+          for (const y of [.08,1.12]) box(x,level+y,-50,.04,.06,3.96,steel);
+          for (let i = 0; i < 16; i++) box(x,level+.6,-48.12-i*.25,.03,1.1,.03,steel);
+          const group = new THREE.Group();
+          for (const obj of scene.children.slice(start)) group.add(obj);
+          scene.add(group);
+          const gate = { group,x,level,open: level === liftLevels[liftPos] ? 1 : 0 };
+          barriers.push({ a:[x,-48],b:[x,-52],bottom:[level,level],top:[level+1.2,level+1.2],thickness:.03,enabled: () => gate.open < 1 });
+          liftGates.push(gate);
+        }
+
+        // The car: deck, side rails, a crosshead for the cable, a lamp, and its control.
+        liftCar = new THREE.Group();
+        liftCar.position.set(-33,bottom,-50); scene.add(liftCar);
+        const carStart = scene.children.length;
+        slab(-33,-50,4,3.9,bottom,pale);
+        for (const z of [-48.7,-51.3]) beam([-31.1,bottom-.32,z],[-34.9,bottom-.32,z],.2);
+        for (const z of [-48.15,-51.85]) {
+          beam([-31.1,bottom+.9,z],[-34.9,bottom+.9,z],.065);
+          beam([-31.1,bottom+.4,z],[-34.9,bottom+.4,z],.045);
+          for (const x of [-31.1,-34.9]) beam([x,bottom,z],[x,bottom+.94,z],.065);
+          beam([-33,bottom,z],[-33,bottom+3.2,z],.08);
+          const rail = { a:[-31.1,z],b:[-34.9,z],bottom:[bottom,bottom],top:[bottom+1,bottom+1],thickness:.033 };
+          barriers.push(rail); liftRails.push(rail);
+        }
+        beam([-33,bottom+3.2,-48.11],[-33,bottom+3.2,-51.89],.2);
+        box(-33,bottom+3.08,-50,.3,.04,3.4,lit);
+        box(-32.4,bottom+1.1,-48.24,.32,.42,.1,steel);
+        box(-32.4,bottom+1.18,-48.3,.1,.1,.03,lit);
+        for (const obj of scene.children.slice(carStart)) liftCar.attach(obj);
+        interactables.push({ position: liftControl, available: () => liftPos === liftTarget,
+          text: () => liftPos === 0 ? 'E / LOWER THE LIFT' : 'E / RAISE THE LIFT',
+          use() { liftTarget = 1-liftPos; chime(196,.6); } });
+        // Call buttons beside each landing bring the car to that level.
+        for (const [level,x] of [[0,-30.35],[1,-35.65]]) {
+          const y = liftLevels[level];
+          box(x,y+1.15,-48.05,.24,.34,.1,steel);
+          box(x,y+1.18,-48.115,.08,.08,.03,lit);
+          label('CALL',x,y+1.5,-48.03,Math.PI,.42);
+          interactables.push({ position: new THREE.Vector3(x,y+1.18,-48.13),
+            available: () => liftPos === liftTarget && liftPos !== level,
+            text: () => 'E / CALL THE LIFT',
+            use() { liftTarget = level; message('THE LIFT IS ON ITS WAY'); chime(196,.6); } });
+        }
+
+        // Bottom landing passage into the sump.
+        slab(-37.15,-50,4.3,4,bottom,pale);
+        for (const z of [-47.85,-52.15]) box(-37.175,bottom+1.5,z,3.65,3,.3,concrete,true);
+        surface([[-35.35,bottom+3,-48],[-39,bottom+3,-48],[-39,bottom+3,-52],[-35.35,bottom+3,-52]],steel,false,true);
+        box(-37.2,bottom+2.97,-50,.9,.06,.3,lit);
+
+        // The sump holds what the pump drained: a causeway over still water to a sealed bulkhead.
+        const sumpFloor = -25, sumpWater = -22.2, sumpRoof = -12;
+        const hallY = (sumpFloor+sumpRoof)/2, hallH = sumpRoof-sumpFloor;
+        for (const z of [-44,-56]) box(-39.15,hallY,z,.3,hallH,8,concrete,true);
+        box(-39.15,(bottom+3+sumpRoof)/2,-50,.3,sumpRoof-bottom-3,4,concrete,true);
+        box(-39.15,(sumpFloor+bottom-.22)/2,-50,.3,bottom-.22-sumpFloor,4,concrete,true);
+        for (const z of [-39.85,-60.15]) box(-50.15,hallY,z,22.3,hallH,.3,concrete,true);
+        surface([[-39.3,sumpFloor,-40],[-61,sumpFloor,-40],[-61,sumpFloor,-60],[-39.3,sumpFloor,-60]],steel);
+        surface([[-39.3,sumpWater,-40],[-61,sumpWater,-40],[-61,sumpWater,-60],[-39.3,sumpWater,-60]],waterMaterial);
+        surface([[-39.3,sumpRoof,-40],[-61,sumpRoof,-40],[-61,sumpRoof,-60],[-39.3,sumpRoof,-60]],concrete,false,true);
+        slab(-50.15,-50,21.7,4,bottom,concrete,bottom-sumpFloor);
+        for (const z of [-48.12,-51.88]) rail([-39.45,bottom,z],[-60.85,bottom,z]);
+        for (const x of [-44,-50,-56]) {
+          for (const z of [-44,-56]) box(x,hallY,z,.7,hallH,.7,concrete);
+          box(x,sumpRoof-.225,-50,.5,.45,20,concrete);
+        }
+        for (const z of [-44,-56]) box(-50.15,sumpRoof-.3,z,21.7,.6,.5,concrete);
+        for (const x of [-46,-55]) {
+          box(x,-15.2,-50,1.6,.12,.5,lit);
+          for (const dx of [-.6,.6]) suspension(x+dx,-50,-15.14,sumpRoof);
+        }
+        // The bulkhead: one sampled circle shapes the wall opening, its reveal, the trim, and
+        // the hatch. A flat threshold cuts each circle at causeway level.
+        const hatchCentre = bottom+1, hatchRadius = 1.3, doorRadius = 1.42;
+        function circleAbove(r,segments = 64) {
+          const a = Math.asin((hatchCentre-bottom)/r), points = [];
+          for (let i = 0; i <= segments; i++) {
+            const angle = Math.PI+a-i/segments*(Math.PI+2*a);
+            points.push([-50+r*Math.cos(angle),hatchCentre+r*Math.sin(angle)]);
+          }
+          return points;
+        }
+        function wallFace(outline,x) {
+          const indices = THREE.ShapeUtils.triangulateShape(outline.map(([z,y]) => new THREE.Vector2(z,y)),[]);
+          const geom = new THREE.BufferGeometry();
+          geom.setAttribute('position',new THREE.Float32BufferAttribute(outline.flatMap(([z,y]) => [x,y,z]),3));
+          geom.setIndex(indices.flat()); geom.computeVertexNormals();
+          return mesh(geom);
+        }
+        const opening = circleAbove(hatchRadius);
+        const panel = [[-51.5,bottom],...opening,[-48.5,bottom],[-48.5,sumpRoof],[-51.5,sumpRoof]];
+        for (const x of [-61,-61.3]) wallFace(panel,x);
+        for (let i = 0; i < opening.length-1; i++) {
+          const [z0,y0] = opening[i], [z1,y1] = opening[i+1];
+          surface([[-61,y0,z0],[-61,y1,z1],[-61.3,y1,z1],[-61.3,y0,z0]]);
+        }
+        for (const z of [-44.25,-55.75]) box(-61.15,hallY,z,.3,hallH,8.5,concrete,true);
+        slab(-61.15,-50,.3,3,bottom,concrete,bottom-sumpFloor);
+        // Jamb collision uses the opening's width at ankle height, its narrowest walkable point.
+        const jamb = Math.sqrt(hatchRadius**2-(hatchCentre-bottom-.08)**2);
+        for (const [z0,z1] of [[-51.5,-50-jamb],[-50+jamb,-48.5]]) {
+          barriers.push({ box: new THREE.Box3(new THREE.Vector3(-61.3,bottom,z0),new THREE.Vector3(-61,sumpRoof,z1)) });
+        }
+        const trimRadius = 1.37, trimStart = Math.asin((hatchCentre-bottom)/trimRadius);
+        const trim = mesh(new THREE.TorusGeometry(trimRadius,.06,8,64,Math.PI+2*trimStart),steel);
+        trim.rotation.set(0,Math.PI/2,-trimStart); trim.position.set(-60.97,hatchCentre,-50);
+        bulkheadSign = label('SEALED',-60.97,hatchCentre+hatchRadius+.75,-50,Math.PI/2,1.3);
+
+        // The hatch sits against the control room face, larger than the opening, and swings
+        // into the room on a hinge at its north edge. The wheel faces the causeway.
+        const hinge = [-61.36,-50+doorRadius];
+        const pivot = new THREE.Group();
+        pivot.position.set(hinge[0],hatchCentre,hinge[1]); scene.add(pivot);
+        const doorShape = new THREE.Shape(circleAbove(doorRadius).map(([z,y]) => new THREE.Vector2(z+50,y-hatchCentre)));
+        const door = new THREE.Mesh(new THREE.ExtrudeGeometry(doorShape,{ depth: .12,bevelEnabled: false }),steel);
+        door.rotation.y = -Math.PI/2; door.position.set(-61.3-hinge[0],0,-50-hinge[1]); pivot.add(door);
+        const knuckle = new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.8,12),steel); pivot.add(knuckle);
+        box(-61.33,hatchCentre,hinge[1],.06,.9,.14,steel);
+        const wheel = new THREE.Group();
+        wheel.position.set(-61.22-hinge[0],0,-50-hinge[1]); pivot.add(wheel);
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(.42,.04,8,32),pale); rim.rotation.y = Math.PI/2; wheel.add(rim);
+        // Half-spokes run from a small hub ring to the rim, so no spoke faces overlap at the centre.
+        const boss = new THREE.Mesh(new THREE.TorusGeometry(.07,.025,8,20),pale); boss.rotation.y = Math.PI/2; wheel.add(boss);
+        for (let i = 0; i < 6; i++) {
+          const angle = i*Math.PI/3, spoke = new THREE.Mesh(new THREE.BoxGeometry(.04,.33,.04),pale);
+          spoke.rotation.x = angle; spoke.position.set(0,.255*Math.cos(angle),.255*Math.sin(angle)); wheel.add(spoke);
+        }
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(.045,.05,.05),steel); shaft.position.x = -.0575; wheel.add(shaft);
+        const reach = doorRadius*2;
+        const doorBarrier = { a: hinge,b: [hinge[0],hinge[1]-reach],bottom: [bottom,bottom],top: [bottom+2.42,bottom+2.42],thickness: .07 };
+        barriers.push(doorBarrier);
+        hatch = { pivot,wheel,barrier: doorBarrier,hinge,reach };
+        interactables.push({ position: new THREE.Vector3(-61.22,hatchCentre,-50),available: () => hatchTime === null,
+          text: () => 'E / TURN THE WHEEL',
+          use() { hatchTime = time.value; message('THE WHEEL TURNS'); chime(98,.8); } });
+
+        // Control room: the plan board and the north shutter release.
+        const { x0: cx0,x1: cx1,z0: cz0,z1: cz1 } = controlPlan;
+        slab((cx0+cx1)/2,(cz0+cz1)/2,cx1-cx0,cz1-cz0,bottom);
+        for (const z of [cz1+.15,cz0-.15]) box((cx0+cx1)/2-.15,bottom+2,z,cx1-cx0+.3,4,.3,concrete,true);
+        box(cx0-.15,bottom+2,(cz0+cz1)/2,.3,4,cz1-cz0,concrete,true);
+        surface([[cx1,bottom+4,cz0],[cx0,bottom+4,cz0],[cx0,bottom+4,cz1],[cx1,bottom+4,cz1]],steel,false,true);
+        box(-66,bottom+3.97,-50,1.2,.06,.4,lit);
+        box(cx0+.03,bottom+2.1,-50,.06,2.6,3.4,steel);
+        const board = mesh(new THREE.PlaneGeometry(3.2,2.4),new THREE.MeshBasicMaterial({ map: mapTexture }));
+        board.position.set(cx0+.09,bottom+2.1,-50); board.rotation.y = Math.PI/2;
+        box(-69.6,bottom+.45,-50,.8,.9,2.6,steel,true);
+        box(-69.6,bottom+.915,-50,.84,.03,2.64,pale);
+        const base = mesh(new THREE.CylinderGeometry(.09,.09,.05,20),steel); base.position.set(-69.45,bottom+.955,-49.5);
+        buttonCap = mesh(new THREE.CylinderGeometry(.065,.065,.04,20),lit);
+        buttonCap.position.set(-69.45,bottom+1,-49.5); buttonCap.userData.dynamic = true;
+        label('NORTH SHUTTER',-69.17,bottom+.6,-49.5,Math.PI/2,.7);
+        interactables.push({ position: new THREE.Vector3(-69.45,bottom+1,-49.5),available: () => !northShutter.released,
+          text: () => 'E / RELEASE THE NORTH SHUTTER',
+          use() {
+            northShutter.released = true; buttonCap.material = steel;
+            changeLabel(northShutter.sign,'STORE'); drawMap();
+            message('THE NORTH SHUTTER ROLLS UP'); chime(130,1.2);
+          } });
+      }
+      function storeRoom() {
+        // Behind the north shutter: racks, crates, and the key on a lit hook.
+        const hub = hubFloor, { x0,x1,z0,z1 } = storePlan, midX = (x0+x1)/2, midZ = (z0+z1)/2;
+        slab(midX,midZ,x1-x0,z1-z0,hub);
+        slab(-20,-40.85,3,.3,hub);
+        box(midX,hub+1.5,z1+.15,x1-x0+.6,3,.3,concrete,true);
+        for (const x of [x0-.15,x1+.15]) box(x,hub+1.5,midZ,.3,3,z1-z0,concrete,true);
+        surface([[x1,hub+3,z0],[x0,hub+3,z0],[x0,hub+3,z1],[x1,hub+3,z1]],steel,false,true);
+        box(midX,hub+2.97,midZ,1,.06,.3,lit);
+        for (const x of [x0+.35,x1-.35]) {
+          for (const y of [.35,1.05,1.75]) box(x,hub+y,midZ,.6,.05,4.6,steel);
+          for (const dx of [-.27,.27]) for (const dz of [-2.27,2.27]) box(x+dx,hub+1,midZ+dz,.05,2,.05,steel);
+          barriers.push({ box: new THREE.Box3(new THREE.Vector3(x-.3,hub,midZ-2.3),new THREE.Vector3(x+.3,hub+2,midZ+2.3)) });
+        }
+        for (const [x,y,z,size,mat] of [[x0+.35,.375,-36.5,.4,pale],[x0+.35,.375,-38.7,.45,steel],[x0+.35,1.075,-37.6,.3,steel],
+          [x1-.35,1.075,-36.8,.35,pale],[x1-.35,.375,-39,.5,steel],[x1-.35,1.775,-38.2,.25,pale]]) {
+          box(x,hub+y+size/2,z,size,size,size,mat);
+        }
+        box(-22.4,hub+.3,-35.4,.6,.6,.6,steel,true);
+        box(-22.4,hub+.8,-35.4,.4,.4,.4,pale);
+        box(-20,hub+1.3,z1-.03,.42,.5,.06,steel);
+        box(-20,hub+1.62,z1-.06,.16,.05,.12,lit);
+        beam([-20,hub+1.42,z1-.06],[-20,hub+1.42,z1-.13],.025);
+        keyGroup = new THREE.Group();
+        keyGroup.position.set(-20,hub+1.36,z1-.11); scene.add(keyGroup);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(.045,.012,8,20),pale); keyGroup.add(ring);
+        for (const [x,y,w,h,d] of [[0,-.12,.02,.15,.02],[.022,-.17,.045,.018,.016],[.015,-.135,.03,.018,.016]]) {
+          const part = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),pale); part.position.set(x,y,0); keyGroup.add(part);
+        }
+        interactables.push({ position: new THREE.Vector3(-20,hub+1.25,z1-.11),available: () => !keyTaken && northShutter.open === 1,
+          text: () => 'E / TAKE THE KEY',
+          use() {
+            keyTaken = hasKey = true; keyGroup.visible = false; carry.hidden = false; drawMap();
+            message('YOU TAKE THE KEY'); chime(660,.4);
+          } });
+      }
+      function keyhole() {
+        // A lock plate beside the south shutter. The key turns it and the shutter rolls up.
+        const hub = hubFloor, canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 192;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#cdd4c8'; ctx.fillRect(0,0,128,192);
+        ctx.fillStyle = '#19211d'; ctx.beginPath(); ctx.arc(64,74,22,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(53,86); ctx.lineTo(75,86); ctx.lineTo(84,140); ctx.lineTo(44,140); ctx.closePath(); ctx.fill();
+        box(-17.6,hub+1.25,-58.95,.28,.4,.1,steel);
+        const plate = mesh(new THREE.PlaneGeometry(.2,.3),new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas) }));
+        plate.position.set(-17.6,hub+1.25,-58.87);
+        lockLamp = box(-17.6,hub+1.6,-58.96,.08,.08,.08,steel); lockLamp.userData.dynamic = true;
+        interactables.push({ position: new THREE.Vector3(-17.6,hub+1.25,-58.87),available: () => !southUnlocked,
+          text: () => hasKey ? 'E / UNLOCK' : 'LOCKED / NEEDS A KEY',
+          use() {
+            if (!hasKey) { message('IT NEEDS A KEY'); return; }
+            hasKey = false; southUnlocked = southShutter.released = true; carry.hidden = true; lockLamp.material = lit;
+            changeLabel(southShutter.sign,'SERVICE'); drawMap();
+            message('THE LOCK TURNS'); chime(330,.5);
+          } });
+      }
+      // Quads between two matching polylines, as one mesh.
+      function strip(a,b,mat = concrete,walkable = false,overhead = false) {
+        const vertices = [], indices = [], k = a.length;
+        for (const p of [...a,...b]) vertices.push(p.x,p.y,p.z);
+        for (let i = 0; i < k-1; i++) indices.push(i,i+1,k+i+1,i,k+i+1,k+i);
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+        geom.setIndex(indices); geom.computeVertexNormals();
+        const obj = mesh(geom,mat);
+        if (walkable) floors.push(obj);
+        if (overhead) ceilings.push(obj);
+        return obj;
+      }
+      function serviceTunnel() {
+        // The lined service run: tiled to the twenty-metre mark, bare concrete to the end of the lining.
+        const line = (u,v,from = 0,to = liningEnd) => Array.from({ length: to-from+1 },(_,i) => pathPoint(from+i,u,v));
+        slab(-20,-59.15,3,.3,hubFloor);
+        strip(line(-1.5,0,0,20),line(1.5,0,0,20),pale,true);
+        strip(line(-1.5,0,20),line(1.5,0,20),concrete,true);
+        for (const u of [-1.5,1.5]) {
+          strip(line(u,0),line(u,3));
+          barrier([-20+u,-59.3],[-20+u,-59.3-liningEnd],[pathFloor(0)-1,pathFloor(liningEnd)-1],[pathFloor(0)+4,pathFloor(liningEnd)+4]);
+        }
+        strip(line(-1.5,3),line(1.5,3),steel,false,true);
+        const slope = s => Math.atan((pathFloor(s+.01)-pathFloor(s-.01))/.02);
+        for (const s of liningLamps) {
+          const fixture = box(...pathPoint(s,0,2.97).toArray(),.3,.06,.9,lit), housing = box(...pathPoint(s,0,2.94).toArray(),.42,.03,1.02,steel);
+          fixture.rotation.x = housing.rotation.x = slope(s);
+        }
+        for (const [s,text] of [[10,'S 10'],[20,'S 20']]) label(text,...pathPoint(s,-1.48,1.75).toArray(),Math.PI/2,.55);
+        label('END OF LINING',...pathPoint(liningEnd-1.2,-1.48,1.75).toArray(),Math.PI/2,1.3);
+        // Ceiling pipes run on past the lining and stop, capped, in the rock.
+        for (const [u,r] of [[-.55,.07],[-.85,.05]]) {
+          // Each pipe drops out of the ceiling just inside the doorway, clear of the shutter.
+          const points = [pathPoint(.3,u,3.1),...Array.from({ length: 31 },(_,i) => pathPoint(1+i,u,2.78)),pathPoint(30.8,u,2.78)];
+          mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),124,r,8),steel);
+          const cap = mesh(new THREE.CylinderGeometry(r+.03,r+.03,.06,10),steel);
+          cap.position.copy(points[points.length-1]); cap.rotation.x = Math.PI/2+slope(30.8);
+        }
+        for (let s = 2; s < liningEnd; s += 4) beam(pathPoint(s,-.7,2.68).toArray(),pathPoint(s,-.7,3).toArray(),.05);
+        // A cable tray on the right wall carries the power cable out of the lining.
+        strip(line(1.2,2.35),line(1.5,2.35),steel);
+        strip(line(1.2,2.35),line(1.2,2.47),steel);
+        for (let s = 1.5; s < liningEnd; s += 3) beam(pathPoint(s,1.22,2.34).toArray(),pathPoint(s,1.5,2.1).toArray(),.04);
+
+        // Beyond the lining, one rock shell that widens into the domed chamber and closes behind it.
+        const samples = [];
+        for (let s = liningEnd; s < roomS; s += .5) samples.push(s);
+        for (let i = 0; i <= 24; i++) samples.push(roomS+roomRadius*Math.sin(i/24*Math.PI/2));
+        const rings = samples.map(rockRing), shell = [], at = p => new THREE.Vector3(p.x,p.y,p.z);
+        for (let i = 0; i < rings.length-1; i++) {
+          const r0 = rings[i], r1 = rings[i+1];
+          for (let j = 0; j < rockSegments; j++) {
+            for (const p of [r0[j],r0[j+1],r1[j+1],r0[j],r1[j+1],r1[j]]) shell.push(p.x,p.y,p.z);
+          }
+        }
+        const shellGeom = new THREE.BufferGeometry();
+        shellGeom.setAttribute('position',new THREE.Float32BufferAttribute(shell,3));
+        shellGeom.computeVertexNormals(); ceilings.push(mesh(shellGeom,rock));
+        strip(rings.map(r => at(r[0])),rings.map(r => at(r[rockSegments])),rock,true);
+        // Collision follows the innermost rock below head height on each side.
+        const innermost = (ring,from,to) => ring.slice(from,to+1).filter(p => p.v < 1.95).reduce((a,b) => Math.abs(b.u) < Math.abs(a.u) ? b : a);
+        for (let i = 0; i < rings.length-1; i++) {
+          const y0 = pathFloor(samples[i]), y1 = pathFloor(samples[i+1]);
+          for (const [from,to] of [[0,rockSegments/2],[rockSegments/2,rockSegments]]) {
+            const a = innermost(rings[i],from,to), b = innermost(rings[i+1],from,to);
+            barrier([a.x,a.z],[b.x,b.z],[y0-1,y1-1],[y0+4,y1+4]);
+          }
+        }
+        // The lining's end face closes the step from the concrete box out to the rock.
+        const face = [...rings[0].map(p => new THREE.Vector2(p.u,p.v)),
+          new THREE.Vector2(1.5,0),new THREE.Vector2(1.5,3),new THREE.Vector2(-1.5,3),new THREE.Vector2(-1.5,0)];
+        const faceVertices = [];
+        for (const triangle of THREE.ShapeUtils.triangulateShape(face,[])) {
+          for (const k of triangle) faceVertices.push(...pathPoint(liningEnd,face[k].x,face[k].y).toArray());
+        }
+        const faceGeom = new THREE.BufferGeometry();
+        faceGeom.setAttribute('position',new THREE.Float32BufferAttribute(faceVertices,3));
+        faceGeom.computeVertexNormals(); mesh(faceGeom);
+        for (const p of [rings[0][0],rings[0][rockSegments]]) {
+          const q = pathPoint(liningEnd,Math.sign(p.u)*1.5,0);
+          barrier([q.x,q.z],[p.x,p.z],[q.y-1,q.y-1],[q.y+4,q.y+4]);
+        }
+
+        // The power cable leaves the tray, hangs from hooks along the outer wall, and runs to the pedestal.
+        const cable = line(1.32,2.42,0,liningEnd-1), hookSpacing = 3;
+        samples.forEach((s,i) => {
+          if (s > mouthS) return;
+          const along = (s-liningEnd)%hookSpacing, w = wallPoint(rings[i],2.45-.22*Math.sin(Math.PI*along/hookSpacing),.15);
+          cable.push(pathPoint(s,w.u,w.v));
+          if (along === 0 && s > liningEnd) box(...pathPoint(s,wallPoint(rings[i],2.45,.05).u,2.45).toArray(),.08,.06,.08,steel);
+        });
+        const drop = samples.filter(s => s <= mouthS).pop(), dropRing = rings[samples.indexOf(drop)];
+        for (const v of [2,1.5,1,.5]) { const w = wallPoint(dropRing,v,.15); cable.push(pathPoint(drop,w.u,w.v)); }
+        cable.push(pathPoint(drop+.15,dropRing[rockSegments].u-.2,.03),pathPoint(roomS-.47,.12,.03));
+        mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cable),cable.length*3,.025,5),steel);
+        for (const s of cableLamps) {
+          const lamp = cableLamp(s), top = pathPoint(s,wallPoint(rockRing(s),2.45,.15).u,2.45);
+          beam(top.toArray(),[lamp.x,lamp.y+.1,lamp.z],.015);
+          box(lamp.x,lamp.y+.12,lamp.z,.2,.05,.2,steel);
+          box(lamp.x,lamp.y,lamp.z,.14,.18,.14,lit);
+        }
+
+        // Fallen rock along the natural tunnel and the chamber walls, and stalactites in the dome.
+        for (const [s,u,r] of [[47,-1.6,.35],[60,-1.9,.45],[67,2,.35],[71,-2.1,.5],[roomS+6.5,-2.5,.9],[roomS+4.5,5.4,1.1],
+          [roomS+1.5,-7,.8],[roomS-2.5,7.1,.7],[roomS-5,-5.4,1],[roomS-1,7.6,.5]]) {
+          const geom = new THREE.IcosahedronGeometry(r,1), position = geom.attributes.position, p = new THREE.Vector3();
+          for (let i = 0; i < position.count; i++) {
+            p.fromBufferAttribute(position,i);
+            p.multiplyScalar(1+.3*rockNoise(p.x*3/r+s,p.y*3/r,p.z*3/r)); p.y *= .7;
+            position.setXYZ(i,p.x,p.y,p.z);
+          }
+          geom.computeVertexNormals();
+          const centre = pathPoint(s,u,r*.3), stone = mesh(geom,rock);
+          stone.position.copy(centre); stone.rotation.y = s;
+          barriers.push({ box: new THREE.Box3(new THREE.Vector3(centre.x-r*.9,centre.y-r,centre.z-r*.9),new THREE.Vector3(centre.x+r*.9,centre.y+r*.7,centre.z+r*.9)) });
+        }
+        for (let k = 0; k < 18; k++) {
+          const s = roomS-6+13*hash3(k,1,0), i = samples.findIndex(sample => sample >= s), j = 9+Math.floor(14*hash3(k,2,0));
+          const tip = rings[i][j], length = .6+1.4*hash3(k,3,0);
+          if (tip.v < 5) continue;
+          const spike = mesh(new THREE.ConeGeometry(.18+.25*hash3(k,4,0),length+.2,6),rock);
+          spike.position.set(tip.x,tip.y-length/2+.1,tip.z); spike.rotation.x = Math.PI;
+        }
+
+        // The chamber: three work lights on tripods aimed at a pedestal with the only red thing in the place.
+        const centre = pathPoint(roomS,0,0);
+        for (const a of tripodAngles) {
+          const [s,u] = tripodAt(a), foot = pathPoint(s,u,0), head = pathPoint(s,u,2.25), hub = pathPoint(s,u,1.3);
+          for (let k = 0; k < 3; k++) {
+            const leg = k*Math.PI*2/3+a;
+            beam([foot.x+Math.cos(leg)*.5,foot.y,foot.z+Math.sin(leg)*.5],hub.toArray(),.04);
+          }
+          beam(hub.toArray(),[head.x,head.y-.12,head.z],.05);
+          const facing = Math.atan2(centre.x-head.x,centre.z-head.z);
+          const body = box(head.x,head.y,head.z,.42,.3,.22,steel), lens = box(head.x,head.y,head.z,.34,.22,.02,lit);
+          body.rotation.y = lens.rotation.y = facing;
+          lens.position.x += Math.sin(facing)*.12; lens.position.z += Math.cos(facing)*.12;
+          barriers.push({ box: new THREE.Box3(new THREE.Vector3(foot.x-.55,foot.y,foot.z-.55),new THREE.Vector3(foot.x+.55,foot.y+2.4,foot.z+.55)) });
+        }
+        box(centre.x,centre.y+.06,centre.z,.9,.12,.9,steel);
+        box(centre.x,centre.y+.57,centre.z,.5,.9,.5);
+        box(centre.x,centre.y+1.05,centre.z,.64,.06,.64,pale);
+        const housing = mesh(new THREE.CylinderGeometry(.14,.14,.04,24),steel);
+        housing.position.set(centre.x,centre.y+1.1,centre.z);
+        redButton = mesh(new THREE.CylinderGeometry(.09,.09,.07,24),red);
+        redButton.position.set(centre.x,centre.y+1.155,centre.z); redButton.userData.dynamic = true;
+        barriers.push({ box: new THREE.Box3(new THREE.Vector3(centre.x-.45,centre.y,centre.z-.45),new THREE.Vector3(centre.x+.45,centre.y+1.2,centre.z+.45)) });
+        interactables.push({ position: new THREE.Vector3(centre.x,centre.y+1.19,centre.z),available: () => !detonated,
+          text: () => 'E / PRESS',
+          use() { detonated = true; redButton.position.y -= .035; clunk(); } });
+      }
+      // The control room's plan board is drawn from the same coordinates as the geometry.
+      const mapCanvas = document.createElement('canvas'); mapCanvas.width = 1024; mapCanvas.height = 768;
+      const mapContext = mapCanvas.getContext('2d'), mapTexture = new THREE.CanvasTexture(mapCanvas);
+      const toMap = (x,z) => [512+(x+23.5)*6.6,404-(z+37.5)*6.6];
+      function drawMap() {
+        const ctx = mapContext, ink = '#cdd4c8', room = '#26302a', ground = '#141a17';
+        ctx.fillStyle = ground; ctx.fillRect(0,0,1024,768);
+        ctx.lineWidth = 2; ctx.strokeStyle = ink;
+        function area(points) {
+          ctx.beginPath();
+          points.forEach(([x,z],i) => { const [px,py] = toMap(x,z); if (i) ctx.lineTo(px,py); else ctx.moveTo(px,py); });
+          ctx.closePath(); ctx.fillStyle = room; ctx.fill(); ctx.stroke();
+        }
+        const rect = (x0,z0,x1,z1) => area([[x0,z0],[x1,z0],[x1,z1],[x0,z1]]);
+        function gap(x0,z0,x1,z1) {
+          const [ax,ay] = toMap(x0,z1), [bx,by] = toMap(x1,z0);
+          ctx.fillStyle = room; ctx.fillRect(ax-2,ay-2,bx-ax+4,by-ay+4);
+        }
+        function bar(x0,x1,z,filled) {
+          const [ax,ay] = toMap(x0,z), [bx] = toMap(x1,z);
+          ctx.fillStyle = filled ? ink : ground; ctx.fillRect(ax,ay-4,bx-ax,8);
+          if (!filled) ctx.strokeRect(ax,ay-4,bx-ax,8);
+        }
+        function text(value,x,z,size = 15) {
+          const [px,py] = toMap(x,z);
+          ctx.font = 'bold ' + size + 'px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillStyle = ink; ctx.fillText(value,px,py);
+        }
+        area([...tunnelFrames.map(f => [f.left.x,f.left.z]),...tunnelFrames.map(f => [f.edge.x,f.edge.z]).reverse()]);
+        rect(0,-57,24,-27); rect(3,-82,21,-57); rect(-13,-52,0,-48); rect(-27,-59,-13,-41);
+        rect(-31,-52,-27,-48); rect(-35,-52,-31,-47.5); rect(-39,-52,-35,-48); rect(-61,-60,-39,-40);
+        rect(-61,-52,-39,-48); rect(controlPlan.x0,controlPlan.z0,controlPlan.x1,controlPlan.z1);
+        if (northShutter.released) rect(storePlan.x0,storePlan.z0,storePlan.x1,storePlan.z1);
+        // The service run is on the plan until it leaves the sheet; the rock beyond it never was.
+        if (southUnlocked) rect(-21.5,-59.3-serviceStraight,-18.5,-59);
+        for (const x of [0,-13,-27,-31,-35,-39]) gap(x,-52,x,-48);
+        gap(10,-27,14,-27); gap(4.6,-57,19.4,-57); gap(-61,-50.83,-61,-49.17);
+        if (northShutter.released) gap(-21.5,-41,-18.5,-41); else bar(-21.5,-18.5,-41,true);
+        if (southUnlocked) gap(-21.5,-59.3,-18.5,-59); else bar(-21.5,-18.5,-59,true);
+        for (const [a,b] of [[[-35,-52],[-31,-47.5]],[[-35,-47.5],[-31,-52]]]) {
+          const [ax,ay] = toMap(...a), [bx,by] = toMap(...b);
+          ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+        }
+        text('INTAKE',-3.5,-2); text('RESERVOIR',12,-42); text('ASCENT',12,-70); text('HUB',-20,-50);
+        text('LIFT',-33,-44.5,13); text('SUMP',-50,-44); text('CONTROL',-66.3,-47.4,13);
+        text(northShutter.released ? 'STORE' : 'SEALED',-20,northShutter.released ? -36.2 : -43,13);
+        if (southUnlocked) text('SERVICE',-11.5,-76,13); else text('LOCKED',-20,-62,13);
+        if (northShutter.released && !keyTaken) {
+          const [px,py] = toMap(-20,-38.6);
+          ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(px,py,6,0,Math.PI*2); ctx.fill(); ctx.fillRect(px+4,py-1.5,14,3);
+        }
+        const [hx,hy] = toMap(-68.6,-50);
+        ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(hx,hy,6,0,Math.PI*2); ctx.fill();
+        text('YOU ARE HERE',-66.3,-56,13);
+        ctx.textAlign = 'left'; ctx.font = 'bold 20px monospace'; ctx.fillText('SUBSTRUCTURE PLAN',36,42);
+        ctx.font = '13px monospace'; ctx.fillText('LOWER WORKS CONTROL',36,66);
+        mapTexture.needsUpdate = true;
       }
       lowerWorks();
+      serviceTunnel();
+      drawMap();
       scene.updateMatrixWorld(true);
       // Render the static architecture in four batches. Keep the original floor
       // meshes and their world matrices for precise raycasting after batching.
       function batchArchitecture() {
         const point = new THREE.Vector3(), normal = new THREE.Vector3(), normalMatrix = new THREE.Matrix3();
-        for (const mat of [concrete,steel,pale,lit]) {
+        for (const mat of [concrete,steel,pale,lit,rock]) {
           const objects = scene.children.filter(obj => obj.isMesh && obj.material === mat && !obj.userData.dynamic);
           let vertexCount = 0, indexCount = 0;
           for (const obj of objects) {
@@ -630,6 +1290,82 @@
         }
       }
       batchArchitecture();
+      // The button's consequence. Nothing says what it does: a beat of quiet, two distant
+      // detonations, then a blast front that runs the length of the tunnel. The sequence has its own
+      // clock that only runs while playing, so pausing can never skip ahead.
+      const fuseBooms = [3,7], frontStart = 10;
+      const fire = new THREE.Mesh(new THREE.CapsuleGeometry(1,8,8,24),blastMaterial);
+      fire.visible = false; scene.add(fire);
+      const yAxis = new THREE.Vector3(0,1,0), frontDirection = new THREE.Vector3(), frontSegment = new THREE.Line3();
+      const eye = new THREE.Vector3(), nearest = new THREE.Vector3();
+      const frontAt = t => 7*t+.55*t*t, frontRadius = s => 5+6*sstep(mouthS-2,mouthS+6,s);
+      const dustCount = 400, dustPositions = new Float32Array(dustCount*3).fill(-1000);
+      const dustSpeed = new Float32Array(dustCount), dustFloor = new Float32Array(dustCount).fill(1000);
+      const dustGeometry = new THREE.BufferGeometry();
+      dustGeometry.setAttribute('position',new THREE.BufferAttribute(dustPositions,3));
+      const dust = new THREE.Points(dustGeometry,new THREE.PointsMaterial({ color: 0xbfc5bb,size: 2,sizeAttenuation: false }));
+      dust.frustumCulled = false; scene.add(dust);
+      let dustNext = 0;
+      function shed(count) {
+        for (let n = 0; n < count; n++) {
+          const i = dustNext; dustNext = (dustNext+1)%dustCount;
+          dustPositions.set([player.x+(Math.random()-.5)*9,player.y+2.2+Math.random()*2.5,player.z+(Math.random()-.5)*9],i*3);
+          dustSpeed[i] = .2+Math.random()*.5; dustFloor[i] = player.y;
+        }
+      }
+      function updateDust(dt) {
+        for (let i = 0; i < dustCount; i++) {
+          if (dustPositions[i*3+1] < dustFloor[i]) continue;
+          dustSpeed[i] += dt*1.1; dustPositions[i*3+1] -= dustSpeed[i]*dt;
+        }
+        dustGeometry.attributes.position.needsUpdate = true;
+      }
+      function lightsAt(f) {
+        // The press browns the lamps out twice. Each rumble sets them flickering; the second leaves them dim.
+        if (f < .5) return f > .12 && f < .3 ? .15 : f > .42 ? .35 : 1;
+        let level = f >= fuseBooms[1] ? .55 : 1;
+        for (const b of fuseBooms) if (f >= b && f < b+.7 && Math.sin((f-b)*60) > 0) level *= .3;
+        return level;
+      }
+      function rumble(i) {
+        shake = Math.max(shake,[.35,.6][i]); shed([90,160][i]); boom([.45,.75][i]);
+        if (i === 1) { powerCut = true; audioZone = null; }
+      }
+      function updateBlast(dt) {
+        if (!detonated || ended || !playing) return;
+        fuse += dt;
+        tunnelPower.value = lightsAt(fuse);
+        while (booms < fuseBooms.length && fuse >= fuseBooms[booms]) rumble(booms++);
+        updateDust(dt);
+        shake *= Math.exp(-dt*2.5);
+        if (fuse < frontStart) return;
+        frontS = frontAt(fuse-frontStart);
+        const r = frontRadius(frontS), { tx,tz } = pathAt(frontS), centre = pathPoint(frontS,0,2);
+        frontDirection.set(tx,0,tz);
+        fire.visible = true; fire.scale.setScalar(r);
+        fire.quaternion.setFromUnitVectors(yAxis,frontDirection);
+        fire.position.copy(centre).addScaledVector(frontDirection,-4*r);
+        frontSegment.start.copy(centre).addScaledVector(frontDirection,-8*r); frontSegment.end.copy(centre);
+        eye.set(player.x,player.y+eyeHeight,player.z);
+        const gap = frontSegment.closestPointToPoint(eye,true,nearest).distanceTo(eye)-r;
+        blastLight.value.set(centre.x+tx*(r+1.5),centre.y,centre.z+tz*(r+1.5),.3+.9*sstep(0,1.2,fuse-frontStart));
+        // Only the last few metres wash the whole view out.
+        flash.value = .75*(1-sstep(0,7,gap))**2;
+        shake = Math.max(shake,.9*(1-sstep(0,60,gap)));
+        updateRoar(gap);
+        if (gap <= 0) endExperience();
+      }
+      function endExperience() {
+        ended = true; playing = false; resetInput();
+        endScreen.hidden = false; reticle.hidden = true; prompt.textContent = '';
+        document.body.classList.remove('playing');
+        if (audio) {
+          audio.master.gain.cancelScheduledValues(audio.ctx.currentTime);
+          audio.master.gain.setValueAtTime(0,audio.ctx.currentTime);
+          audio.ctx.suspend();
+        }
+        if (document.pointerLockElement) document.exitPointerLock();
+      }
       // Floors are raycast directly. Walls use footprints, including sloped rails.
       const down = new THREE.Vector3(0,-1,0), up = new THREE.Vector3(0,1,0);
       const ray = new THREE.Raycaster(), rayOrigin = new THREE.Vector3(), hits = [], ceilingHits = [];
@@ -673,7 +1409,8 @@
         const y = floorHeight(x,z,player.y);
         if (y === null || blocked(x,z,y)) return false;
         // Stop a descent at the waterline, but always allow a walker to climb out.
-        const inReservoir = x >= 0 && x <= 24 && z < -27 && z > -57;
+        // The flooded hallway west of the basin shares the reservoir's level.
+        const inReservoir = x >= -9 && x <= 24 && z < -27 && z > -57;
         if (inReservoir && y < -1.7+water.position.y+.05 && y < player.y-.001) return false;
         player.set(x,y,z);
         return true;
@@ -697,6 +1434,7 @@
         touchLook = null;
       }
       function pause() {
+        if (ended) return;
         playing = false;
         resetInput();
         veil.hidden = false;
@@ -708,6 +1446,7 @@
         if (audio) audio.master.gain.setTargetAtTime(0,audio.ctx.currentTime,.15);
       }
       async function start() {
+        if (ended) return;
         notice.textContent = '';
         if (!coarse) {
           try { await renderer.domElement.requestPointerLock(); }
@@ -782,6 +1521,45 @@
           osc.connect(gain); gain.connect(audio.master); gain.connect(audio.delay); osc.start(); osc.stop(now+duration);
         }
       }
+      function clunk() {
+        if (!audio || !soundOn) return;
+        const now = audio.ctx.currentTime, osc = audio.ctx.createOscillator(), gain = audio.ctx.createGain();
+        osc.frequency.setValueAtTime(140,now); osc.frequency.exponentialRampToValueAtTime(60,now+.18);
+        gain.gain.setValueAtTime(.35,now); gain.gain.exponentialRampToValueAtTime(.001,now+.25);
+        osc.connect(gain); gain.connect(audio.master); gain.connect(audio.delay); osc.start(now); osc.stop(now+.25);
+        footstep();
+      }
+      // A far detonation: a falling sub-tone under a muffled burst, carried down the echo.
+      function boom(level) {
+        if (!audio || !soundOn) return;
+        const ctx = audio.ctx, now = ctx.currentTime, osc = ctx.createOscillator(), body = ctx.createGain();
+        osc.frequency.setValueAtTime(52,now); osc.frequency.exponentialRampToValueAtTime(22,now+2.8);
+        body.gain.setValueAtTime(.0001,now); body.gain.exponentialRampToValueAtTime(level,now+.06); body.gain.exponentialRampToValueAtTime(.001,now+3);
+        osc.connect(body); body.connect(audio.master); body.connect(audio.delay); osc.start(now); osc.stop(now+3);
+        const source = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), burst = ctx.createGain();
+        source.buffer = audio.buffer; source.loop = true; filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(150+500*level,now); filter.frequency.exponentialRampToValueAtTime(70,now+2.5);
+        burst.gain.setValueAtTime(.0001,now); burst.gain.exponentialRampToValueAtTime(1.6*level,now+.1); burst.gain.exponentialRampToValueAtTime(.001,now+2.6);
+        source.connect(filter).connect(burst); burst.connect(audio.master); burst.connect(audio.delay); source.start(now,0,2.6);
+      }
+      // The approaching front: far off a low muffled rumble that opens into a roaring rush as it closes.
+      function updateRoar(gap) {
+        if (!audio) return;
+        const ctx = audio.ctx, now = ctx.currentTime;
+        if (!roar) {
+          const source = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
+          const sub = ctx.createOscillator(), subGain = ctx.createGain();
+          source.buffer = audio.buffer; source.loop = true; filter.type = 'lowpass'; filter.frequency.value = 120;
+          gain.gain.value = 0; sub.frequency.value = 31; subGain.gain.value = 0;
+          source.connect(filter).connect(gain); gain.connect(audio.master); gain.connect(audio.delay);
+          sub.connect(subGain).connect(audio.master); source.start(); sub.start();
+          roar = { filter,gain,subGain };
+        }
+        const near = 1-Math.min(1,gap/110);
+        roar.filter.frequency.setTargetAtTime(120*Math.pow(25,near*near),now,.08);
+        roar.gain.gain.setTargetAtTime(.04+.9*near**3,now,.08);
+        roar.subGain.gain.setTargetAtTime(.35*near*near,now,.08);
+      }
       function footstep() {
         if (!audio || !soundOn) return;
         const now = audio.ctx.currentTime, source = audio.ctx.createBufferSource(), gain = audio.ctx.createGain(), filter = audio.ctx.createBiquadFilter();
@@ -794,20 +1572,28 @@
         if (player.z < -56.8) zone = 'ascent';
         else if (player.z < -27) zone = 'reservoir';
         if (player.y > 8) zone = 'overlook';
-        if (player.x < 0 && player.y < -2) zone = 'lowerWorks';
-        altitude.firstChild.textContent = 'LEVEL +' + player.y.toFixed(1).padStart(4,'0') + ' M';
-        if (audio && (audioZone !== zone || audioPump !== pumpOn)) {
+        if (player.x < 0) {
+          zone = player.z < -59.3 && player.y > -10 ? (player.z > -59.3-liningEnd ? 'service' : 'cave')
+            : player.x < -61.3 ? 'control' : player.x < -35.05 ? 'sump' : player.x < -30.95 ? 'shaft' : 'lowerWorks';
+        }
+        const level = Math.round(player.y*10)/10;
+        altitude.firstChild.textContent = 'LEVEL ' + (level < 0 ? '-' : '+') + Math.abs(level).toFixed(1).padStart(4,'0') + ' M';
+        const liftMoving = liftPos !== liftTarget;
+        if (audio && (audioZone !== zone || audioPump !== pumpOn || audioLift !== liftMoving)) {
           audioZone = zone;
           audioPump = pumpOn;
-          audio.noiseGain.gain.setTargetAtTime(zone === 'reservoir' ? .15 : .04,audio.ctx.currentTime,.4);
-          audio.humGain.gain.setTargetAtTime(pumpOn ? .28 : .1,audio.ctx.currentTime,.4);
-          audio.delay.delayTime.setTargetAtTime(zone === 'bend' ? .14 : .42,audio.ctx.currentTime,.3);
+          audioLift = liftMoving;
+          audio.noiseGain.gain.setTargetAtTime({ reservoir: .15, sump: .1, cave: .08 }[zone] ?? .04,audio.ctx.currentTime,.4);
+          // The facility's hum dies with its power.
+          audio.humGain.gain.setTargetAtTime(powerCut ? 0 : pumpOn ? .28 : liftMoving ? .22 : .1,audio.ctx.currentTime,.4);
+          audio.delay.delayTime.setTargetAtTime({ bend: .14, shaft: .55, sump: .6, control: .2, service: .3, cave: .5 }[zone] ?? .42,audio.ctx.currentTime,.3);
         }
       }
       const viewDirection = new THREE.Vector3(), targetDirection = new THREE.Vector3();
       function updateInteraction() {
         active = null; camera.getWorldDirection(viewDirection);
         for (const item of interactables) {
+          if (item.available && !item.available()) continue;
           targetDirection.copy(item.position).sub(camera.position);
           if (targetDirection.length() < 2.4 && targetDirection.normalize().dot(viewDirection) > .65) { active = item; break; }
         }
@@ -816,7 +1602,58 @@
       function updateCamera() {
         camera.position.set(player.x,player.y+eyeHeight,player.z);
         camera.rotation.set(pitch,yaw,0,'YXZ');
+        if (shake > .002) {
+          const t = time.value, amount = shake*.045;
+          camera.position.x += Math.sin(t*37.3)*amount; camera.position.y += Math.sin(t*43.1+1.3)*amount; camera.position.z += Math.sin(t*31.7+2.1)*amount;
+          camera.rotation.z = Math.sin(t*27.9)*shake*.01;
+        }
         camera.updateMatrixWorld();
+      }
+      const ease = t => t*t*(3-2*t);
+      function liftHeight() { return liftLevels[0]+(liftLevels[1]-liftLevels[0])*ease(liftPos); }
+      function updateLift(dt) {
+        const docked = liftPos === liftTarget;
+        for (const gate of liftGates) {
+          // Like a door sensor, a closing gate reopens for anyone standing in it.
+          const inDoorway = Math.abs(player.x-gate.x) < radius+.08 && Math.abs(player.y-gate.level) < .5;
+          const opening = (docked && liftLevels[liftPos] === gate.level) || (gate.open > 0 && inDoorway);
+          gate.open = Math.max(0,Math.min(1,gate.open+(opening ? dt : -dt)/.9));
+          gate.group.position.y = 3*ease(gate.open);
+        }
+        const fromY = liftHeight();
+        // The car departs only once both gates are shut, and stops exactly at its landing.
+        if (!docked && liftGates.every(gate => gate.open === 0)) {
+          const step = dt/liftTravel;
+          if (Math.abs(liftTarget-liftPos) <= step) { liftPos = liftTarget; chime(165,1.6); }
+          else liftPos += Math.sign(liftTarget-liftPos)*step;
+        }
+        const y = liftHeight();
+        const onCar = player.x < -31 && player.x > -35 && player.z < -48 && player.z > -52 && Math.abs(player.y-fromY) < .01;
+        if (onCar && y !== fromY) player.y = y;
+        liftCar.position.y = y; liftCar.updateMatrixWorld(true);
+        for (const rail of liftRails) { rail.bottom.fill(y); rail.top.fill(y+1); }
+        liftControl.set(-32.4,y+1.18,-48.3);
+        carLamp.value.set(-33,y+2.9,-50);
+        const weightY = -22-y;
+        liftCounterweight.position.y = weightY;
+        carCable.position.y = (y+3.3+sheaveY)/2; carCable.scale.y = sheaveY-y-3.3;
+        weightCable.position.y = (weightY+.8+sheaveY)/2; weightCable.scale.y = sheaveY-weightY-.8;
+        liftSheave.rotation.x = (y-liftLevels[0])/sheaveRadius;
+      }
+      function updateDoors(dt) {
+        for (const door of [northShutter,southShutter]) {
+          if (door.released) door.open = Math.min(1,door.open+dt/2.4);
+          // Rise past the soffit so the raised plate never shares the lintel's underside.
+          door.group.position.y = 3.1*ease(door.open);
+        }
+        if (hatchTime === null) return;
+        // The wheel spins two turns, then the hatch swings into the control room.
+        const age = time.value-hatchTime, spin = Math.min(1,age/1.4), swing = Math.min(1,Math.max(0,(age-1.4)/1.6));
+        const angle = ease(swing)*Math.PI/2;
+        hatch.wheel.rotation.x = ease(spin)*Math.PI*4;
+        hatch.pivot.rotation.y = angle;
+        hatch.barrier.b = [hatch.hinge[0]-Math.sin(angle)*hatch.reach,hatch.hinge[1]-Math.cos(angle)*hatch.reach];
+        if (swing === 1 && !hatchOpen) { hatchOpen = true; changeLabel(bulkheadSign,'CONTROL'); chime(82,1.4); }
       }
       function update(dt) {
         time.value += dt;
@@ -846,6 +1683,9 @@
         descentGate.rotation.y += ((bellRung ? Math.PI/2 : 0)-descentGate.rotation.y)*Math.min(1,dt*3);
         const bellAge = time.value-bellTime;
         bellPivot.rotation.z = Math.sin(bellAge*10)*.5*Math.max(0,1-bellAge/5);
+        updateLift(dt);
+        updateDoors(dt);
+        updateBlast(dt);
         updateCamera();
         updatePlace();
         updateInteraction();
@@ -857,6 +1697,10 @@
         player,tunnelFrames,move,blocked,floorHeight,update,keys,pause,rampJoins,
         setPosition(x,y,z) { player.set(x,y,z); updateCamera(); updatePlace(); },
         setLook(y,p = 0) { yaw = y; pitch = p; updateCamera(); updateInteraction(); },
+        lookAt(x,y,z) {
+          const dx = x-player.x, dy = y-player.y-eyeHeight, dz = z-player.z;
+          this.setLook(Math.atan2(-dx,-dz),Math.atan2(dy,Math.hypot(dx,dz)));
+        },
         setPlaying(value) { playing = value; },
         floorLayersAt(x,y,z) {
           rayOrigin.set(x,y+.4,z); ray.set(rayOrigin,down); ray.far = .8;
@@ -875,11 +1719,24 @@
           x:player.x,y:player.y,z:player.z,yaw,pitch,playing,zone,pumpOn,bellRung,
           waterY: -1.7+water.position.y, pumpRotation: pumpRotor.rotation.z, bellAngle: bellPivot.rotation.z,
           gateAngle: descentGate.rotation.y,
+          liftPos,liftTarget,liftY: liftHeight(),liftGates: liftGates.map(gate => gate.open),
+          altitude: altitude.firstChild.textContent,
+          hatchAngle: hatch.pivot.rotation.y,wheelAngle: hatch.wheel.rotation.x,hatchOpen,
+          northOpen: northShutter.open,southOpen: southShutter.open,keyTaken,hasKey,southUnlocked,carrying: !carry.hidden,
+          detonated,fuse,frontS,ended,ending: !endScreen.hidden,veil: !veil.hidden,tunnelPower: tunnelPower.value,flash: flash.value,
+          buttonPaint: red.uniforms.paint.value.toArray(),buttonMaterial: redButton.material === red,
           meshes:scene.children.length,floors:floors.length,
         }; },
         render() { updateCamera(); renderer.render(scene,camera); },
+        service: { roomS,mouthS,liningEnd,bendEnd,point: (s,u,v) => pathPoint(s,u,v).toArray(),fireId: fire.id },
+        unlockSouth() { southUnlocked = southShutter.released = true; drawMap(); },
+        mapPixel(x,z) { const [px,py] = toMap(x,z); return mapContext.getImageData(Math.round(px),Math.round(py),1,1).data[0]; },
       };
-      function animate() { requestAnimationFrame(animate); update(Math.min(clock.getDelta(),.04)); renderer.render(scene,camera); }
+      function animate() {
+        if (ended) return;
+        requestAnimationFrame(animate); update(Math.min(clock.getDelta(),.04));
+        if (!ended) renderer.render(scene,camera);
+      }
       animate();
     }
   </script>
