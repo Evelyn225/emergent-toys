@@ -1,0 +1,20 @@
+function material(tone = 1, emission = 0, water = 0, rough = 0, paint = [.87,.90,.84]) {
+  return new THREE.ShaderMaterial({
+    uniforms: { tone: { value: tone }, emission: { value: emission }, water: { value: water }, rough: { value: rough },
+      paint: { value: new THREE.Vector3(...paint) }, time, powered, carLamp, flash, lampCount, tunnelLamps, tunnelReach, blastLight },
+    defines: { TUNNEL_LAMPS: lampSources.length },
+    vertexShader: glsl.surfaceVertex,
+    fragmentShader: glsl.dither+glsl.surfaceFragment,
+    side: THREE.DoubleSide,
+  });
+}
+const concrete = material(1), steel = material(.6), pale = material(1.25);
+const lit = material(1, .85), waterMaterial = material(1, 0, 1), rock = material(.75, 0, 0, 1);
+// The button is the only colour in the game.
+const red = material(1.1, .3, 0, 0, [.82,.12,.1]);
+const blastMaterial = new THREE.ShaderMaterial({
+  uniforms: { time },
+  vertexShader: glsl.blastNoise+glsl.blastVertex,
+  fragmentShader: glsl.dither+glsl.blastNoise+glsl.blastFragment,
+  side: THREE.DoubleSide,
+});

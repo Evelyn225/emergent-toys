@@ -1,0 +1,32 @@
+# Substructure: avoiding geometry and interaction bugs
+
+Reference for changes to `corridor.html`, based on the reservoir, ascent, bell deck, and pump fixes.
+
+## Build connected geometry from shared measurements
+
+- **Share the curve, not just its equation.** Generate one sampled profile and reuse its vertices for the roof, opening, wall faces, ribs, and collision. Independently approximating the same ellipse can leave seams. Include exact junctions at pier and doorway boundaries.
+- **Keep the whole opening curved.** Filling the corner gaps around a rectangular lintel still leaves a straight section across the crown. Shape the entire opening to the roof profile. Use enough segments for a smooth silhouette and smooth normals for continuous lighting; normals alone cannot fix a polygonal outline.
+- **Account for wall thickness.** Match both wall faces, close exposed jamb and outer edge faces, and continue the roof through the opening to the back face. Two parallel faces alone leave an open shell. Keep adjoining wall panels on the same face planes to avoid unintended recesses. Check the opening from each side and at oblique angles.
+- **Give each exposed floor patch one surface.** Adjoining slabs should meet at their edges. Walls below a slab must stop at its underside, not its walking height. The bell deck's remaining overlap came from a wall top, even after the walkable slabs were corrected. Avoid hiding overlaps with tiny height offsets.
+- **Define ramp endpoints from landing edges.** Match position and elevation at both ends. Leave a flat approach before an adjacent doorway; the reservoir descent now ends two metres before the lower-works entrance. Carry doorway thresholds all the way to the jambs at floor height; a narrower deck can expose a low wall-top ledge beside the opening. Stop bridges at the platform edges, and keep railing posts inside the deck boundary.
+- **Span ceilings from wall face to wall face.** A passage ceiling that runs into a wall's thickness lands on that doorway's soffit at the same height and z-fights. The lower works hallway did this at both ends. Stop the ceiling at the inner face of each wall it meets.
+- **Moving platforms meet landings like ramps do.** The lift car's edge sits exactly on each landing slab's edge at dock height. Shaft walls stand 5 cm off the car instead, so no car face is ever coplanar with a wall. Carry the walker explicitly with the car rather than relying on the step allowance, and gate each landing so a missing car can't be walked into. A rider must never be carried into a wall's collision radius: overlapping a barrier freezes the walker, because every move from inside it is rejected. The car carries its own end barriers while travelling, and the gate's sensor covers the car's end so it can't depart with someone standing there.
+- **Retract moving parts past the surfaces they hide behind.** A shutter raised exactly its own height parks its bottom face on the lintel soffit. Overshoot a little so the hidden part sits fully inside.
+- **Tile along the passage, not the world.** Joints drawn from world x/z run straight across a curved passage. Give curved floors and vaults their own (along, across) coordinates and let the shader prefer them; merged batches must carry them through or they fall back to the grid.
+- **Close every open end that faces a doorway.** A channel or tray that starts in a door opening shows its hollow end to everyone walking in. Start it clear of the opening and cap it.
+- **Sweep irregular spaces from one ring function.** The cave is a single shell swept along the service centreline. Floor edges are the shell's base vertices, collision follows the innermost rock below head height on each ring, and cable hooks and lamps are placed on those same rings. Noise is a function of world position, so nothing is sampled twice differently. Where a different section meets it (the concrete lining), close the step with one face triangulated between the two outlines.
+- **Match collision shape to the visible shape.** A box around a round boulder stops walkers at an empty corner. Use a round footprint (a near-zero segment with thickness) for round things.
+- **Close rooms at every playable elevation.** Upper walls and platforms do not enclose a drained basin. Build the lower end walls explicitly, leaving only intended passages open. Review the room both full and drained.
+- **Attach props to actual surfaces.** Mount the bell frame and pump on their decks. Derive column and suspension lengths from the roof height at their attachment position. Put important controls in a visible bay connected to the route, with enough clearance to walk past.
+
+## Make interactions follow actual state
+
+- Separate a selected mode from ongoing motion. The pump's drain/fill selection remains active after the water settles; it must not keep the lower wheel spinning. Animate while the water is moving, then stop. Snap the water to its target within a small tolerance (currently 0.01 m), since exponential interpolation otherwise never finishes exactly.
+- Give interactions physical results: the pump changes water level; the bell opens the descent independently. Sound and text supplement those changes. Orient return-facing signs for readable text from the reverse direction.
+
+## Check the result before calling it fixed
+
+1. Walk the route forward and back, including every landing and doorway. Exercise interactions with real E input; check completion, reversal, and repeat use.
+2. Inspect close and wide browser views from both sides of each join. Look up at the crown, down at floor seams, and sideways along rails. Collision passing does not prove the visible geometry is correct.
+3. Probe **rendered meshes**, including walls and props, rather than only the walkable-floor list. Check for coplanar surfaces, missing walls, and clear doorway approaches. For arches, test just above and below the roof edge across the full width, including the crown. Account for water when probing the basin floor.
+4. Run `node --test test/browser/corridor.browser.test.cjs`. Keep regression checks tied to the reported defect, alongside visual inspection. Syntax checks alone cannot catch these issues.

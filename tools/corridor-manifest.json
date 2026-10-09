@@ -1,0 +1,24 @@
+{
+  "sources": [
+    "corridor/shaders.js",
+    "corridor/state.js",
+    "corridor/paths.js",
+    "corridor/materials.js",
+    "corridor/builders.js",
+    "corridor/intake.js",
+    "corridor/reservoir.js",
+    "corridor/lower-works.js",
+    "corridor/service-tunnel.js",
+    "corridor/collapse.js",
+    "corridor/map.js",
+    "corridor/assemble.js",
+    "corridor/blast.js",
+    "corridor/movement.js",
+    "corridor/settings.js",
+    "corridor/input.js",
+    "corridor/audio.js",
+    "corridor/update.js",
+    "corridor/test-hooks.js",
+    "corridor/main.js"
+  ]
+}

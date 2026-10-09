@@ -14,7 +14,7 @@ const PROJECTS = [
   { name: 'voronoi',            emoji: '🔬', file: 'evenet.fun/vornoi.html' },
   { name: 'morse code',         emoji: '📡', file: 'evenet.fun/morse.html' },
   { name: 'ascii render',       emoji: '💻', file: 'evenet.fun/ascii-render.html' },
-  { name: 'corridor crawler',   emoji: '🚪', file: 'evenet.fun/corridor.html' },
+  { name: 'substructure',       emoji: '🚪', file: 'evenet.fun/corridor.html' },
   { name: 'patch synth',        emoji: '🎛️',  file: 'evenet.fun/synth.html' },
   { name: 'turtle',             emoji: '🐢', file: 'evenet.fun/turtle.html' },
   { name: 'poker palace',       emoji: '🃏', file: 'evenet.fun/poker-palace.html' },
