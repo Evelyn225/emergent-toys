@@ -121,7 +121,6 @@ document.getElementById('sound').addEventListener('click',async () => {
   try {
     if (!audio) audio = createAudio(); soundOn = !soundOn; await audio.ctx.resume();
     if (!ended) audio.master.gain.setTargetAtTime(soundOn && playing ? masterLevel() : 0,audio.ctx.currentTime,.1);
-    if (audio.musicVolume) audio.musicVolume.gain.setTargetAtTime(soundOn ? settings.volume : 0,audio.ctx.currentTime,.1);
     document.getElementById('sound').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
     document.getElementById('sound').setAttribute('aria-pressed',String(soundOn));
   } catch { document.getElementById('sound').textContent = 'SOUND UNAVAILABLE'; }
@@ -200,6 +199,24 @@ function endSound() {
   audio.master.gain.cancelScheduledValues(now);
   audio.master.gain.setValueAtTime(0,now);
   ctx.suspend();
+}
+// The ending recording returns as the last two flights open toward daylight. Play it once through
+// the master so sound, volume, and pausing apply to it just like the rest of the walk.
+function updateEscapeMusic() {
+  if (!collapsed || !playing || !soundOn || audio.music || !audio.samples.ending) return;
+  const nearTop = zone === 'stairs' && player.z >= hatchZ-2*flightRun && player.y >= surfaceY-2*flightRise;
+  if (!nearTop && zone !== 'outside') return;
+  const ctx = audio.ctx, now = ctx.currentTime, source = ctx.createBufferSource(), gain = ctx.createGain();
+  source.buffer = audio.samples.ending;
+  const duration = source.buffer.duration, fadeIn = Math.min(12,duration/3), fadeOut = Math.min(16,duration/3);
+  gain.gain.setValueAtTime(0,now);
+  gain.gain.linearRampToValueAtTime(1,now+fadeIn);
+  gain.gain.setValueAtTime(1,now+duration-fadeOut);
+  gain.gain.linearRampToValueAtTime(0,now+duration);
+  source.connect(gain).connect(audio.master);
+  audio.music = { source,gain };
+  source.onended = () => { source.disconnect(); gain.disconnect(); };
+  source.start(now);
 }
 // The floor underfoot decides the step: decks and treads ring as metal, the cave is stone, the surface is grass.
 function stepSurface() {
@@ -310,6 +327,7 @@ function updateLiftSound(remaining,carY) {
 // with its car, and the collapse's rubble shifts where it lies.
 function updateSound(waterRemaining,liftRemaining,carY) {
   if (!audio || ended) return;
+  updateEscapeMusic();
   const ctx = audio.ctx, now = ctx.currentTime, listener = ctx.listener, p = camera.position;
   camera.getWorldDirection(listenerForward);
   if (listener.positionX) {

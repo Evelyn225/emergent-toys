@@ -1155,7 +1155,7 @@ test('after the ending the door stands open, and sprinting up the stair to the s
   await page.click('#sound');
   await page.click('#enter');
   await page.waitForFunction(() => corridorTest.getState().playing);
-  await page.waitForFunction(() => ['birds','hum'].every(name => corridorTest.getState().samples.includes(name)),null,{ timeout: 20000 });
+  await page.waitForFunction(() => ['birds','hum','ending'].every(name => corridorTest.getState().samples.includes(name)),null,{ timeout: 20000 });
   const climb = await page.evaluate(() => {
     const game = corridorTest, W = game.wayOut, marks = {};
     game.setPosition(0,0,5); game.setLook(Math.PI,0); game.update(1/60);
@@ -1169,6 +1169,7 @@ test('after the ending the door stands open, and sprinting up the stair to the s
       if (game.player.z > W.stairBase && game.player.z < W.hatchZ-2) marks.eyeJump = Math.max(marks.eyeJump,Math.abs(eyeY-eye));
       eye = eyeY;
       const { zone,room } = game.getState();
+      if (marks.musicZ === undefined && game.getState().music) marks.musicZ = game.player.z;
       if (marks.reception === undefined && zone === 'reception') marks.reception = t;
       if (marks.stairs === undefined && zone === 'stairs') marks.stairs = t;
       if (marks.stairStart === undefined && game.player.z >= W.stairBase) marks.stairStart = t;
@@ -1178,7 +1179,7 @@ test('after the ending the door stands open, and sprinting up the stair to the s
     game.keys.clear();
     for (let i = 0; i < 90; i++) game.update(1/60);
     const state = game.getState();
-    return { ...marks,end: t,state,outdoors: W.outdoors(),far: W.far(),surfaceY: W.surfaceY,ground: W.ground(state.x,state.z) };
+    return { ...marks,end: t,state,outdoors: W.outdoors(),far: W.far(),surfaceY: W.surfaceY,ground: W.ground(state.x,state.z),musicStart: W.hatchZ-2*W.flightRun };
   });
   assert.deepEqual(climb.underground,{ outdoors: false,far: 110 },'nothing of the surface is drawn from the intake');
   assert.ok(climb.reception > 0 && climb.stairs > climb.reception,'through the door, the reception, and onto the stair');
@@ -1193,6 +1194,8 @@ test('after the ending the door stands open, and sprinting up the stair to the s
   assert.equal(climb.state.lastStep,'grass','steps outside are in grass');
   assert.equal(climb.state.room,'outside');
   assert.ok(climb.state.beds.includes('birds'),'birdsong outside: ' + climb.state.beds);
+  assert.ok(climb.musicZ >= climb.musicStart && climb.musicZ < climb.musicStart+.1,'music starts in the final two flights: '+JSON.stringify(climb));
+  assert.ok(climb.state.music,'the soundtrack continues outside');
 });
 
 test('the way out joins cleanly: one floor at each threshold, every tread at its height, headroom and walls up the stair', async t => {

@@ -30,6 +30,5 @@ volumeInput.addEventListener('input',() => {
   if (!audio) return;
   const now = audio.ctx.currentTime;
   if (!ended) audio.master.gain.setTargetAtTime(soundOn && playing ? masterLevel() : 0,now,.05);
-  if (audio.musicVolume) audio.musicVolume.gain.setTargetAtTime(soundOn ? settings.volume : 0,now,.05);
 });
 showSettings();
