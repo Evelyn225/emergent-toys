@@ -642,7 +642,8 @@ function coffeeMug(x,y,z) {
 
 function familyPhotograph(x,y,z) {
   const photo = new THREE.Group(); photo.name = 'control-family-photo'; photo.position.set(x,y,z);
-  photo.rotation.set(0,Math.PI/2,-.055);
+  // Sized up a touch in its own plane; the depth off the wall stays as built.
+  photo.rotation.set(0,Math.PI/2,-.055); photo.scale.set(1.2,1.2,1);
   const width = .265, height = .19;
   function paperDepth(u,v) {
     return .003*((u/width)**2)+.013*Math.max(0,u/width+.5)**5*Math.max(0,.5-v/height)**3;
@@ -2574,13 +2575,22 @@ function buildSurface() {
   const flowerPoses = new Float32Array(flowerCount*4), flowerPhases = new Float32Array(flowerCount);
   const placed = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0,1,0), scale = new THREE.Vector3();
   let flowers = 0;
-  for (let k = 0; k < flowerCount*4 && flowers < flowerCount; k++) {
-    const patch = Math.floor(hash3(k,1,71)*60), a = hash3(patch,2,71)*Math.PI*2, r = Math.sqrt(hash3(patch,3,71))*95;
-    const spreadOut = 3+hash3(patch,4,71)*7, x = meadow.x+Math.cos(a)*r+(hash3(k,5,71)-.5)*2*spreadOut, z = meadow.z+Math.sin(a)*r+(hash3(k,6,71)-.5)*2*spreadOut;
+  // A low-frequency noise map sets where flowers grow thick and where the grass runs bare, and each
+  // species claims the ground where its own noise field is strongest, so drifts blend at their edges.
+  for (let k = 0; k < flowerCount*14 && flowers < flowerCount; k++) {
+    const a = hash3(k,1,71)*Math.PI*2, r = Math.sqrt(hash3(k,2,71))*100;
+    const x = meadow.x+Math.cos(a)*r, z = meadow.z+Math.sin(a)*r;
+    const bloom = fbm(x*.045+31,z*.045-17,3)+.25*noise3(x*.21,7,z*.21);
+    if (hash3(k,3,71) > .03+.97*sstep(.02,.38,bloom)) continue;
     if (openGround(x,z) < .6 || Math.hypot(x,z-bunkerFront) < 6 || inBunker(x,z)) continue;
+    let patch = 0, best = -Infinity;
+    for (let i = 0; i < palette.length; i++) {
+      const claim = noise3(x*.038+i*17.3,i*5.1,z*.038-i*9.7)+(hash3(k,4+i*.1,71)-.5)*.35;
+      if (claim > best) { best = claim; patch = i; }
+    }
     const y = heightAt(x,z), tall = .2+hash3(k,7,71)*.3;
     heads.setMatrixAt(flowers,placed.compose(new THREE.Vector3(x,y+tall,z),q.setFromAxisAngle(up,hash3(k,8,71)*6),scale.set(1,1,1)));
-    heads.setColorAt(flowers,srgb(...palette[patch%palette.length]).multiplyScalar(.85+hash3(k,9,71)*.3));
+    heads.setColorAt(flowers,srgb(...palette[patch]).multiplyScalar(.85+hash3(k,9,71)*.3));
     // Sink the root slightly into the terrain and meet the centre of the bloom.
     stems.setMatrixAt(flowers,placed.compose(new THREE.Vector3(x,y-.025,z),q,scale.set(1,tall+.025,1)));
     leaves.setMatrixAt(flowers,placed);
