@@ -204,7 +204,9 @@
       white-space: nowrap;
     }
 
-    @media (max-width: 640px) {
+    /* Phones, and any screen too short for the centred layout (a phone on
+       its side): let the page scroll instead of clipping it. */
+    @media (max-width: 640px), (max-height: 500px) {
       /* Let the page scroll: the link list is taller than a phone viewport
          once the type is legible, and fixed centering would clip it. */
       body {
@@ -230,8 +232,6 @@
          without changing the line box. */
       .link-item { padding: 10px 1px; }
       .link-sep { margin: 0 5px; }
-      /* Scrolls away with the page instead of floating over the links */
-      #corner { position: absolute; top: 4px; right: 6px; gap: 4px; }
       #corner > * { padding: 8px 10px; }
       /* Newest stuff first on phones, where the bottom row is a long scroll away */
       .link-list { display: flex; flex-direction: column; }
@@ -305,8 +305,10 @@
     [data-theme="light"] #theme-toggle  { color: rgba(0,0,0,0.72); }
     [data-theme="light"] #theme-toggle:hover { color: rgba(0,0,0,0.85); }
     /* ─── Corner bar: font link + theme toggle ─── */
+    /* Pinned to the top of the page, not the screen: where the page scrolls
+       (phones) it scrolls away instead of floating over the links. */
     #corner {
-      position: fixed;
+      position: absolute;
       top: 12px;
       right: 14px;
       z-index: 10001;
