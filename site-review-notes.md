@@ -20,9 +20,10 @@ Running list of what needs updating across the toys. Check things off as they la
 - [x] ball like: draw / drop ball / erase tool bar
 - [x] erosion: water / rock / sand / delete tool bar, new terrain button, rebuilds on real resizes
 - [x] physarum: on touch, tap food to remove it, tap elsewhere to add, reset button
-- [ ] patch synth: 572px wide layout on a 390px phone, module bay covers the rack
+- [x] patch synth: every control was mouse-only (knobs, cables, keys, moving modules), and on phones the page overflowed and couldn't scroll. now pointer events throughout, the rack scrolls sideways in its own strip, the module bay scrolls away, touch gestures for unplugging/moving cables, knob double-tap reset
 
 ## smaller per-toy stuff
+- [x] patch synth visuals: jacks along the bottom of each module, colour stripe per module family, real font (Satoshi was never loaded), empty rack space styled as a bay, rack centred, rack no longer cut off at 980-1250px widths, hint wraps
 - [ ] ascii render: re-renders every 150ms even when paused, "animate" rotates the char ramp (scrambles brightness), mushy letter-heavy ramp. webcam mode would be nice (reuse mosh mirror camera code)
 - [x] vornoi was misspelled in the URL and index (now voronoi, old URL redirects)
 - [ ] voronoi: can't get wave colors back after randomize, adding points is double-click only
