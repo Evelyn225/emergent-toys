@@ -174,10 +174,11 @@
     .new-fire {
       position: absolute;
       left: 50%;
-      top: 100%;
+      top: calc(100% - 16px);   /* flames climb up behind the link text */
       transform: translateX(-50%);
-      width: 44px;          /* 22 x 16 fire cells at 2px each */
-      height: 32px;
+      z-index: -1;
+      width: 60px;          /* 30 x 24 fire cells at 2px each */
+      height: 48px;
       image-rendering: pixelated;
       pointer-events: none;
     }
@@ -219,7 +220,7 @@
       #corner { position: absolute; top: 4px; right: 6px; gap: 4px; }
       #corner > * { padding: 8px 10px; }
       .new-row { margin-top: 18px; line-height: 3.6; }
-      .new-fire { top: calc(100% - 10px); }
+      .new-fire { top: calc(100% - 26px); }
     }
 
     /* full-viewport cursor surface - sits below all content */
@@ -600,7 +601,7 @@
     'X..XX.X....XX.XX',
     'X...X.XXXX.X...X',
   ];
-  const FIRE_W = 22, FIRE_H = 16;                 // matches .new-fire at 2px per cell
+  const FIRE_W = 30, FIRE_H = 24;                 // matches .new-fire at 2px per cell
   const TEXT_X = (FIRE_W - NEW_GLYPHS[0].length) >> 1;
   const TEXT_Y = FIRE_H - NEW_GLYPHS.length - 1;
   const FIRE_STEP_MS = 45;                        // ~22 fps, close to the original's pace
