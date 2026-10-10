@@ -16,18 +16,20 @@ Running list of what needs updating across the toys. Check things off as they la
 - [ ] no rate limiting (would need a store like Vercel KV / Upstash)
 
 ## needs touch controls (desktop-only right now)
-- [ ] sand playground: touch can only add sand (walls, wind, erase, vortex, plants, pause are keyboard/right-click). no resize handler. instructions say scroll = density but it changes brightness
-- [ ] ball like: touch can draw but can't drop balls or erase
-- [ ] erosion: touch is water only, no rock/sand/delete, no terrain reset, no resize
-- [ ] physarum: can't remove food on touch, reset is R only
+- [x] sand playground: tool bar (sand, plants, wind, walls, erase, vortex, pause) for touch and mouse, resizes keep the sand, the floor sits above the tool bar, and the colour button works on phones (taps on it used to be swallowed). the scroll note was wrong: that slider is brightness and density together
+- [x] ball like: draw / drop ball / erase tool bar
+- [x] erosion: water / rock / sand / delete tool bar, new terrain button, rebuilds on real resizes
+- [x] physarum: on touch, tap food to remove it, tap elsewhere to add, reset button
 - [ ] patch synth: 572px wide layout on a 390px phone, module bay covers the rack
 
 ## smaller per-toy stuff
 - [ ] ascii render: re-renders every 150ms even when paused, "animate" rotates the char ramp (scrambles brightness), mushy letter-heavy ramp. webcam mode would be nice (reuse mosh mirror camera code)
 - [x] vornoi was misspelled in the URL and index (now voronoi, old URL redirects)
 - [ ] voronoi: can't get wave colors back after randomize, adding points is double-click only
-- [ ] magnetic pendulum: x/y scaled separately so portrait phones squish it, always exactly 3 magnets
-- [ ] dla crystal: any resize (incl. phone address bar) wipes it, keeps burning CPU after hitting the edge, tap-to-reset is the only interaction
+- [x] magnetic pendulum: one scale for both axes, no more squish
+- [ ] magnetic pendulum: always exactly 3 magnets
+- [x] dla crystal: resizes keep the crystal, stops once fully grown
+- [ ] dla crystal: tap-to-reset is the only interaction
 - [ ] morse: any key (incl. cmd/ctrl combos) fires a tone. ideas: text-to-morse playback, adjustable speed
 - [ ] poker palace: on phones the bankroll/stats panel sits above the table
 

@@ -69,6 +69,45 @@
       line-height: 18px;
       cursor: pointer;
     }
+
+    /* Tools for mouse and touch alike; the keyboard shortcuts still work */
+    #tools {
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1001;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+      width: max-content;
+      max-width: calc(100vw - 20px);
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(12, 12, 12, 0.92);
+      font-family: 'Minecraft', 'Courier New', monospace;
+    }
+    #tools button {
+      font: inherit;
+      font-size: 14px;
+      padding: 7px 10px;
+      border: 1px solid #333;
+      border-radius: 4px;
+      background: #1f1f1f;
+      color: #ddd;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #tools .sand-tool[aria-pressed="true"] {
+      background: #ffd700;
+      border-color: #ffd700;
+      color: #111;
+    }
+    #tools .sep { width: 1px; background: #333; align-self: stretch; }
+    @media (pointer: coarse) {
+      #tools button { padding: 9px 11px; }
+    }
   </style>
 </head>
 
@@ -88,6 +127,16 @@
     <input type="color" id="sandColorPicker" value="#ffd700">
     <button id="togglePickerBtn">Select<br>Color</button>
 
+  </div>
+  <div id="tools">
+    <button class="sand-tool" data-tool="sand" aria-pressed="true">sand</button>
+    <button class="sand-tool" data-tool="plants" aria-pressed="false">plants</button>
+    <button class="sand-tool" data-tool="wind" aria-pressed="false">wind</button>
+    <button class="sand-tool" data-tool="walls" aria-pressed="false">walls</button>
+    <button class="sand-tool" data-tool="erase" aria-pressed="false">erase</button>
+    <button class="sand-tool" data-tool="vortex" aria-pressed="false">vortex</button>
+    <span class="sep"></span>
+    <button id="pauseBtn">pause</button>
   </div>
   <script type="importmap">
     {
@@ -149,9 +198,12 @@
       PLANT_COLOR: { r: 34, g: 139, b: 34 }
     };
 
+    const TOUCH = matchMedia('(pointer: coarse)').matches;
     const UI = {
       FADE_DURATION: 1000,
-      INSTRUCTIONS: "Click to add sand\n" +
+      INSTRUCTIONS: TOUCH ? "Touch to pour sand\n" +
+        "Pick a tool from the bar below\n" +
+        "The slider on the right sets density" : "Click to add sand\n" +
         "Shift + click for wind\n" +
         "Right click to draw walls\n" +
         "Ctrl + click to erase walls and particles\n" +
@@ -181,6 +233,15 @@
       let isDrawingWalls = false;
       let isErasing = false;
       let hasInteracted = false;
+
+      // Tool bar state. The keyboard shortcuts override the chosen tool.
+      let tool = 'sand';
+      let pointerVortex = false;   // vortex held by the pointer rather than the E key
+      let pressOnCanvas = false;   // drags only count if the press started on the canvas
+      let canvasEl;
+      function plantMode() {
+        return tool === 'plants' || p.keyIsDown(76) || p.keyIsDown(108); // 'L' or 'l'
+      }
 
       // Position tracking
       let windOrigin = { x: 0, y: 0 };
@@ -257,6 +318,7 @@
       function setupCanvas() {
         const canvas = p.createCanvas(p.windowWidth, p.windowHeight);
         canvas.position(0, 0);
+        canvasEl = canvas.elt;
         p.background(0);
         p.textSize(25);
         p.textAlign(p.CENTER, p.CENTER);
@@ -264,9 +326,17 @@
       }
 
       // Initialize simulation grids
+      // The floor sits just above the tool bar, so sand never piles up
+      // out of sight behind it.
+      function gridRows() {
+        const bar = document.getElementById('tools');
+        const reserved = bar ? Math.max(0, p.height - bar.getBoundingClientRect().top + 6) : 0;
+        return Math.floor((p.height - reserved) / SIMULATION.CELL_SIZE);
+      }
+
       function setupGrid() {
         cols = Math.floor(p.width / SIMULATION.CELL_SIZE);
-        rows = Math.floor(p.height / SIMULATION.CELL_SIZE);
+        rows = gridRows();
         grid = createGrid(cols, rows);
         velocityGrid = createVelocityGrid(cols, rows);
       }
@@ -281,7 +351,10 @@
       }
 
       // Handle touch events for mobile
-      p.touchStarted = () => {
+      // Touches that start on the tool bar or colour picker are left alone
+      // (returning true keeps the browser default), so their buttons get the tap.
+      p.touchStarted = (e) => {
+        if (e && e.target !== canvasEl) return true;
         // Check if touching slider
         if (isOverSlider(p.mouseX, p.mouseY)) {
           isDraggingSlider = true;
@@ -289,11 +362,12 @@
           return false; // Prevent default
         }
         // Otherwise handle like mouse press
-        p.mousePressed();
+        p.mousePressed(e);
         return false; // Prevent default
       };
 
-      p.touchMoved = () => {
+      p.touchMoved = (e) => {
+        if (e && e.target !== canvasEl) return true;
         if (isDraggingSlider) {
           updateBrightnessFromSlider(p.mouseY);
           return false; // Prevent default
@@ -303,8 +377,9 @@
         return false; // Prevent default
       };
 
-      p.touchEnded = () => {
+      p.touchEnded = (e) => {
         p.mouseReleased();
+        if (e && e.target !== canvasEl) return true;
         return false; // Prevent default
       };
 
@@ -363,9 +438,42 @@
         }
       }
 
+      // Tool bar wiring
+      document.querySelectorAll('.sand-tool').forEach(btn => btn.addEventListener('click', () => {
+        tool = btn.dataset.tool;
+        document.querySelectorAll('.sand-tool').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+      }));
+      document.getElementById('pauseBtn').addEventListener('click', () => togglePause());
+
+      // Keep the sand when the screen changes size (rotating a phone,
+      // resizing the window): copy it into a grid of the new size,
+      // anchored to the floor.
+      p.windowResized = () => {
+        p.resizeCanvas(p.windowWidth, p.windowHeight);
+        const newCols = Math.floor(p.width / SIMULATION.CELL_SIZE);
+        const newRows = gridRows();
+        if (newCols === cols && newRows === rows) return;
+        const newGrid = createGrid(newCols, newRows);
+        const newVelocity = createVelocityGrid(newCols, newRows);
+        const shift = newRows - rows;
+        for (let i = 0; i < Math.min(cols, newCols); i++) {
+          for (let j = 0; j < rows; j++) {
+            const nj = j + shift;
+            if (nj < 0 || nj >= newRows) continue;
+            newGrid[i][nj] = grid[i][j];
+            newVelocity[i][nj] = velocityGrid[i][j];
+          }
+        }
+        grid = newGrid;
+        velocityGrid = newVelocity;
+        cols = newCols;
+        rows = newRows;
+      };
+
       // Toggle pause state
       function togglePause() {
         isPaused = !isPaused;
+        document.getElementById('pauseBtn').textContent = isPaused ? 'play' : 'pause';
         if (isPaused) {
           messageAlpha = 255;
           fadeStartTime = 0;
@@ -375,7 +483,9 @@
       }
 
       // Handle initial mouse press events
-      p.mousePressed = () => {
+      p.mousePressed = (e) => {
+        // Presses on the tool bar, colour picker or home link aren't for the canvas
+        if (e && e.target && e.target !== canvasEl) return;
         // Disable drawing if over color picker
         if (isOverColorPicker()) return;
         // Check if clicking on slider first
@@ -392,14 +502,23 @@
           fadeStartTime = p.millis();
         }
 
+        pressOnCanvas = true;
         if (p.mouseButton === p.RIGHT) {
           startDrawingWalls();
         } else if (p.keyIsDown(p.CONTROL)) {
           startErasing();
         } else if (p.keyIsDown(p.SHIFT)) {
           startWind();
+        } else if (tool === 'walls') {
+          startDrawingWalls();
+        } else if (tool === 'erase') {
+          startErasing();
+        } else if (tool === 'wind') {
+          startWind();
+        } else if (tool === 'vortex') {
+          pointerVortex = true;   // draw() starts it and keeps it under the pointer
         } else {
-          startAddingSand();
+          startAddingSand();      // sand, or plants when plantMode() says so
         }
       };
 
@@ -435,7 +554,7 @@
         addSandPosition.y = p.mouseY;
         lastSandPosition.x = p.mouseX;
         lastSandPosition.y = p.mouseY;
-        if (p.keyIsDown(76) || p.keyIsDown(108)) { // 'L' or 'l' key codes
+        if (plantMode()) {
           addLifeSand(p.mouseX, p.mouseY);
         } else {
           addSand(p.mouseX, p.mouseY);
@@ -451,7 +570,7 @@
           return;
         }
 
-        if (isPaused) return;
+        if (isPaused || !pressOnCanvas) return;
 
         if (p.mouseButton === p.RIGHT) {
           updateWallDrawing();
@@ -459,6 +578,14 @@
           updateErasing();
         } else if (p.keyIsDown(p.SHIFT)) {
           updateWind();
+        } else if (tool === 'walls') {
+          updateWallDrawing();
+        } else if (tool === 'erase') {
+          updateErasing();
+        } else if (tool === 'wind') {
+          updateWind();
+        } else if (tool === 'vortex') {
+          // the vortex follows the pointer in draw()
         } else {
           updateSandPosition();
         }
@@ -512,7 +639,7 @@
           const x = lastSandPosition.x + dx * t;
           const y = lastSandPosition.y + dy * t;
 
-          if (p.keyIsDown(76) || p.keyIsDown(108)) { // 'L' or 'l' key codes
+          if (plantMode()) {
             addLifeSand(x, y);
           } else {
             addSand(x, y);
@@ -527,6 +654,11 @@
 
       // Handle mouse button release
       p.mouseReleased = () => {
+        pressOnCanvas = false;
+        if (pointerVortex) {
+          pointerVortex = false;
+          endVortex();
+        }
         isDraggingSlider = false;
         isWindActive = false;
         isAddingSand = false;
@@ -539,7 +671,7 @@
         p.background(0);
 
         // Check for vortex key hold
-        if ((p.keyIsDown(69) || p.keyIsDown(101)) && !isPaused) { // 69 is 'E', 101 is 'e'
+        if ((p.keyIsDown(69) || p.keyIsDown(101) || pointerVortex) && !isPaused) { // 69 is 'E', 101 is 'e'
           startVortex();
           // Update vortex position to follow mouse
           vortexPosition.x = p.mouseX;
@@ -590,7 +722,7 @@
         if (isAddingSand && !p.keyIsDown(p.SHIFT)) {
           const currentTime = p.millis();
           if (currentTime - lastSandEmission > SIMULATION.SAND_EMISSION_RATE) {
-            if (p.keyIsDown(76) || p.keyIsDown(108)) { // 'L' or 'l' key codes
+            if (plantMode()) {
               addLifeSand(addSandPosition.x, addSandPosition.y);
             } else {
               addSand(addSandPosition.x, addSandPosition.y);
@@ -1309,8 +1441,9 @@
 
           p.push();  // Save current drawing settings
           p.textFont('Minecraft');
-          p.textSize(25);  // Set text size here
-          p.textLeading(40);  // Add more vertical space between lines
+          const size = Math.min(25, p.width / 24);  // shrink to fit narrow screens
+          p.textSize(size);
+          p.textLeading(size * 1.6);  // Add more vertical space between lines
           p.fill(255, 255, 255, messageAlpha);
           p.text(UI.INSTRUCTIONS, p.width / 2, p.height / 2);
           p.pop();  // Restore previous drawing settings
