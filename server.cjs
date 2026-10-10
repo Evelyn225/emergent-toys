@@ -1,7 +1,6 @@
 
 const express = require('express');
 const cors = require('cors');
-const { OpenAI } = require('openai');
 const path = require('path');
 const { pathToFileURL } = require('url');
 require('dotenv').config({ path: 'openai.env' });
@@ -10,7 +9,6 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' })); // web wizard edits post the full generated page
-app.use(express.static('.')); // Serve static files from current directory
 
 // Dynamically load and cache ESM handlers
 const handlers = {};
@@ -112,85 +110,20 @@ app.all('/api/unsplash.js', async (req, res) => {
   }
 });
 
-let openai = null;
-function getOpenAI() {
-    if (!openai) openai = new OpenAI({ apiKey: process.env.CRITTERS_OPENAI_API_KEY });
-    return openai;
-}
-
-app.post('/api/bug-chat', async (req, res) => {
-    try {
-        const { bugType, message, conversationHistory } = req.body;
-        
-        const messages = [
-            {
-                role: "system",
-                content: `You are a ${bugType}. Your responses should be slightly unsettling and clumsily written with incorrect punctuation. Keep responses brief (2-3 sentences) try to impersonate a bug with very basic knowledge. Occasionally mention things only bugs would know about. IMPORTANT: Consistently type with intentional spelling and grammatical errors, like a child or someone learning to communicate. For example: "i see u in th w ind... the lefs tell me scrts. . u r special human..." Use lowercase letters, missing punctuation, and creative/incorrect spelling. This adds to your otherworldly nature.`
-            }
-        ];
-
-        if (conversationHistory && Array.isArray(conversationHistory)) {
-            conversationHistory.forEach(msg => {
-                messages.push({
-                    role: msg.role,
-                    content: msg.content
-                });
-            });
-        }
-
-        messages.push({
-            role: "user",
-            content: message
-        });
-
-        const completion = await getOpenAI().chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: messages
-        });
-
-        res.json({ message: completion.choices[0].message.content });
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'Failed to generate response' });
-    }
+// Route for /api/bug-chat (with and without .js extension)
+app.all(['/api/bug-chat', '/api/bug-chat.js'], async (req, res) => {
+  try {
+    const handler = await getHandler('bug-chat');
+    await handler(req, res);
+  } catch (error) {
+    console.error('Error loading bug-chat handler:', error);
+    res.status(500).json({ error: 'Failed to load handler' });
+  }
 });
 
-app.post('/api/bug-chat.js', async (req, res) => {
-    try {
-        const { bugType, message, conversationHistory } = req.body;
-
-        const messages = [
-            {
-                role: "system",
-                content: `You are a ${bugType}. Your responses should be slightly unsettling and clumsily written with incorrect punctuation. Keep responses brief (2-3 sentences) try to impersonate a bug with very basic knowledge. Occasionally mention things only bugs would know about. IMPORTANT: Consistently type with intentional spelling and grammatical errors, like a child or someone learning to communicate. For example: "i see u in th w ind... the lefs tell me scrts. . u r special human..." Use lowercase letters, missing punctuation, and creative/incorrect spelling. This adds to your otherworldly nature.`
-            }
-        ];
-
-        if (conversationHistory && Array.isArray(conversationHistory)) {
-            conversationHistory.forEach(msg => {
-                messages.push({
-                    role: msg.role,
-                    content: msg.content
-                });
-            });
-        }
-
-        messages.push({
-            role: "user",
-            content: message
-        });
-
-        const completion = await getOpenAI().chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: messages
-        });
-
-        res.json({ message: completion.choices[0].message.content });
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'Failed to generate response' });
-    }
-});
+// Static files go last so /api/*.js hits the handlers above instead of
+// being served as source.
+app.use(express.static('.'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

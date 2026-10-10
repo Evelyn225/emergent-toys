@@ -116,11 +116,6 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://evenet.fun/birds.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
     <loc>https://evenet.fun/philosophers-stone.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -131,13 +126,18 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://evenet.fun/word-sigil.html</loc>
+    <loc>https://evenet.fun/physarum.html</loc>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://evenet.fun/audio-sampler.html</loc>
+    <loc>https://evenet.fun/magnetic-pendulum.html</loc>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://evenet.fun/dla-crystal.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>
 </urlset>
