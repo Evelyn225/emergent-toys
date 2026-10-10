@@ -369,7 +369,7 @@
       font-size: 9px;
       line-height: 9px;
       white-space: pre;
-      letter-spacing: 1px;
+      letter-spacing: 0;   /* the cell maths assumes plain glyph width */
       color: var(--amber);
       text-shadow: 0 0 5px rgba(255, 176, 0, 0.45);
       padding: 5px;
@@ -416,6 +416,57 @@
       animation: pulse-arrow 2s ease-in-out infinite;
     }
 
+    /* ── secondary buttons, character set, notes ── */
+    .s-btn {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: transparent;
+      color: var(--amber);
+      border: 1px solid var(--amber-border);
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .s-btn:hover { background: var(--amber-glow); border-color: var(--amber); color: var(--amber-bright); }
+    .s-note { margin-top: 8px; font-size: 9px; letter-spacing: 0.06em; color: var(--amber-dim); }
+    .ramp-row { display: flex; gap: 6px; margin-bottom: 14px; }
+    .ramp-btn {
+      flex: 1;
+      padding: 7px 0;
+      background: transparent;
+      color: var(--amber-mid);
+      border: 1px solid var(--amber-border);
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+    }
+    .ramp-btn[aria-pressed="true"] {
+      color: var(--amber-bright);
+      border-color: var(--amber);
+      background: rgba(255,176,0,0.08);
+      text-shadow: 0 0 6px var(--amber);
+    }
+    .contrast-header { margin-bottom: 8px; }
+    .s-label-inline { margin-bottom: 0; }
+
+    /* dragging a file over the page */
+    body.dropping #output-wrapper { box-shadow: inset 0 0 0 2px var(--amber), inset 0 0 40px rgba(255,176,0,0.15); }
+
+    /* ── phones: picture on top, controls underneath ── */
+    @media (max-width: 700px) {
+      body { overflow-y: auto; height: auto; display: flex; flex-direction: column; }
+      #output-wrapper { position: relative; left: 0; order: -1; height: 62vh; flex-shrink: 0; }
+      #sidebar { position: relative; width: 100%; height: auto; border-right: none; border-top: 1px solid var(--amber-border); }
+      .sidebar-body { overflow: visible; }
+      .es-art { font-size: 8px; line-height: 11px; }
+    }
+
     @keyframes pulse-arrow {
       0%, 100% { opacity: 0.4; transform: translateX(0); }
       50%       { opacity: 1;   transform: translateX(-5px); }
@@ -457,14 +508,16 @@
           <span class="file-prompt">load_image</span>
           <span id="file-name-display">no file selected</span>
         </label>
+        <button type="button" class="s-btn" id="cameraButton">use camera</button>
+        <div class="s-note">or drop / paste an image anywhere</div>
       </div>
 
       <!-- Density -->
       <div class="s-section">
         <div class="s-label">
           <div class="density-header">
-            <span>Character Density</span>
-            <span class="density-val" id="density-display">4</span>
+            <span>Detail (columns)</span>
+            <span class="density-val" id="density-display">100</span>
           </div>
         </div>
         <div class="density-bar-wrap">
@@ -473,20 +526,42 @@
         <input type="range" id="densitySlider" min="1" max="8" value="4">
       </div>
 
+      <!-- Look -->
+      <div class="s-section">
+        <div class="s-label">Characters</div>
+        <div class="ramp-row" role="group" aria-label="Character set">
+          <button type="button" class="ramp-btn" data-ramp="classic" aria-pressed="true" title=" .:-=+*#%@">classic</button>
+          <button type="button" class="ramp-btn" data-ramp="detailed" aria-pressed="false" title="70 steps, letters and symbols">detailed</button>
+          <button type="button" class="ramp-btn" data-ramp="blocks" aria-pressed="false" title="░▒▓█">blocks</button>
+        </div>
+        <div class="density-header contrast-header">
+          <span class="s-label s-label-inline">Contrast</span>
+          <span class="density-val" id="contrast-display">1.0x</span>
+        </div>
+        <input type="range" id="contrastSlider" min="50" max="250" value="100">
+      </div>
+
       <!-- Toggles -->
       <div class="s-section">
-        <div class="s-label">Animations</div>
+        <div class="s-label">Options</div>
         <div class="toggle-row">
-          <span class="t-label">Background</span>
+          <span class="t-label">Invert</span>
           <label class="pill-toggle">
-            <input type="checkbox" id="animateToggle" checked>
+            <input type="checkbox" id="invertToggle">
             <div class="pill-track"></div>
           </label>
         </div>
         <div class="toggle-row">
-          <span class="t-label">Image cycle</span>
+          <span class="t-label">Shimmer</span>
           <label class="pill-toggle">
-            <input type="checkbox" id="pauseToggle" checked>
+            <input type="checkbox" id="shimmerToggle" checked>
+            <div class="pill-track"></div>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span class="t-label">Background rain</span>
+          <label class="pill-toggle">
+            <input type="checkbox" id="animateToggle" checked>
             <div class="pill-track"></div>
           </label>
         </div>
@@ -495,6 +570,7 @@
       <!-- Copy -->
       <div class="s-section">
         <button id="copyButton">copy ascii art</button>
+        <button type="button" class="s-btn" id="saveButton">save as .txt</button>
       </div>
 
     </div>
@@ -514,46 +590,39 @@
 @   to get started   @
 #@                  @#
 ##@@@@@@@@@@@@@@@@@@##</pre>
-      <span class="es-hint">← drop a file in the panel</span>
+      <span class="es-hint">load, drop or paste an image · or use the camera</span>
       <span class="es-arrow">◄◄◄</span>
     </div>
   </div>
 
   <script>
     // ── Background animation (amber phosphor rain) ──────────────────────────
-    window.bgAnimationEnabled = true;
-    window.imagePaused = false;
-
-    let bgSketch = function(p) {
+    // Thousands of glyphs a frame, so it runs at 20fps and stops entirely
+    // (noLoop) when switched off instead of redrawing a still frame forever.
+    const bgSketch = function(p) {
       const chars = ['@','#','W','8','B','M','R','P','D','Q','K','X','N','H','G','O','Z','U','A','S','E','5','2','Y','C','L','F','T','J','I','3','1','/','|','\\','-','+','~',';',':',',','.',' '];
       let columns = [];
-      let charSize = 14;
+      const charSize = 14;
 
       p.setup = function() {
         const canvas = p.createCanvas(p.windowWidth, p.windowHeight);
         canvas.parent('ascii-bg-canvas');
+        p.frameRate(20);
         p.textFont('Courier New');
         p.textSize(charSize);
         p.textAlign(p.LEFT, p.TOP);
         buildColumns();
+        if (!document.getElementById('animateToggle').checked) p.noLoop();
       };
 
       function buildColumns() {
         columns = [];
         const numCols = Math.ceil(p.width / charSize);
         for (let i = 0; i < numCols; i++) {
-          const col = {
-            y: p.random(-p.height, 0),
-            speed: 0.3 + p.random() * 0.4,
-            chars: [],
-            updateRate: 2 + p.random() * 3
-          };
+          const col = { y: p.random(-p.height, 0), speed: 0.9 + p.random() * 1.2, chars: [], updateRate: 1 + p.random() * 1.5 };
           const numChars = Math.ceil(p.height / charSize) + 5;
           for (let j = 0; j < numChars; j++) {
-            col.chars.push({
-              char: chars[p.floor(p.random() * chars.length)],
-              brightness: p.random(0.2, 0.7)
-            });
+            col.chars.push({ char: chars[p.floor(p.random() * chars.length)], brightness: p.random(0.2, 0.7) });
           }
           columns.push(col);
         }
@@ -561,49 +630,22 @@
 
       p.draw = function() {
         p.background(6, 4, 1, 255);
-
-        if (!window.bgAnimationEnabled) {
-          for (let i = 0; i < columns.length; i++) {
-            const col = columns[i];
-            let yPos = col.y;
-            for (let j = 0; j < col.chars.length; j++) {
-              if (yPos > -charSize && yPos < p.height) {
-                const alpha = p.map(col.chars[j].brightness, 0.2, 0.7, 18, 50);
-                p.fill(255, 176, 0, alpha);
-                p.text(col.chars[j].char, i * charSize, yPos);
-              }
-              yPos += charSize;
-            }
-          }
-          return;
-        }
-
         for (let i = 0; i < columns.length; i++) {
           const col = columns[i];
           col.y += col.speed;
-
           if (col.y > p.height) {
             col.y = -charSize * 5;
-            for (let j = 0; j < col.chars.length; j++) {
-              col.chars[j].char = chars[p.floor(p.random() * chars.length)];
-              col.chars[j].brightness = p.random(0.2, 0.7);
-            }
+            for (const c of col.chars) { c.char = chars[p.floor(p.random() * chars.length)]; c.brightness = p.random(0.2, 0.7); }
           }
-
-          if (p.frameCount % Math.floor(col.updateRate) === 0) {
+          if (p.frameCount % Math.ceil(col.updateRate) === 0) {
             col.chars.shift();
-            col.chars.push({
-              char: chars[p.floor(p.random() * chars.length)],
-              brightness: p.random(0.2, 0.7)
-            });
+            col.chars.push({ char: chars[p.floor(p.random() * chars.length)], brightness: p.random(0.2, 0.7) });
           }
-
           let yPos = col.y;
-          for (let j = 0; j < col.chars.length; j++) {
+          for (const c of col.chars) {
             if (yPos > -charSize && yPos < p.height) {
-              const alpha = p.map(col.chars[j].brightness, 0.2, 0.7, 18, 50);
-              p.fill(255, 176, 0, alpha);
-              p.text(col.chars[j].char, i * charSize, yPos);
+              p.fill(255, 176, 0, p.map(c.brightness, 0.2, 0.7, 18, 50));
+              p.text(c.char, i * charSize, yPos);
             }
             yPos += charSize;
           }
@@ -613,172 +655,275 @@
       p.windowResized = function() {
         p.resizeCanvas(p.windowWidth, p.windowHeight);
         buildColumns();
+        p.redraw();
       };
     };
+    const bg = new p5(bgSketch);
 
-    // ── Image processing sketch ──────────────────────────────────────────────
-    let sketch = function(p) {
-      let img;
-      let asciiDiv;
-      let statusDiv;
-      let density = 4;
-      let animationFrame;
-      const asciiChars = ['@','#','W','8','B','M','R','P','D','Q','K','X','N','H','G','O','Z','U','A','S','E','5','2','Y','C','L','F','T','J','I','3','1','/','|','\\','-','+','~',';',':',',','.',' '];
+    // ── ASCII renderer ───────────────────────────────────────────────────────
+    // Plain canvas, no p5: the source is scaled down to one pixel per
+    // character cell, each cell's brightness picks a glyph, and the text is
+    // only rebuilt when something changes (a new image, a setting, a camera
+    // frame, or a shimmer tick).
+    const $ = id => document.getElementById(id);
+    const art = $('ascii-container');
+    const status = msg => { $('status-text').textContent = msg; };
 
-      p.setup = function() {
-        p.noCanvas();
-        asciiDiv  = p.select('#ascii-container');
-        statusDiv = p.select('#status-text');
-
-        const densitySlider = p.select('#densitySlider');
-        densitySlider.elt.min   = '1';
-        densitySlider.elt.max   = '8';
-        densitySlider.elt.value = '4';
-        densitySlider.input(() => {
-          density = parseInt(densitySlider.value());
-          updateDensityUI(density);
-          if (img) processImage();
-        });
-
-        const fileInput = p.select('#imageInput');
-        fileInput.elt.addEventListener('change', function(e) {
-          const file = e.target.files[0];
-          if (file) {
-            document.getElementById('file-name-display').textContent = file.name;
-            statusDiv.html('loading...');
-            const reader = new FileReader();
-            reader.onload = function(e) {
-              p.loadImage(e.target.result,
-                function(loadedImg) {
-                  img = loadedImg;
-                  statusDiv.html('rendering');
-                  processImage();
-                },
-                function(err) {
-                  statusDiv.html('error: ' + err);
-                }
-              );
-            };
-            reader.readAsDataURL(file);
-          }
-        });
-      };
-
-      function processImage() {
-        if (!img) return;
-        try {
-          let w, h;
-          const outputEl = document.getElementById('output-wrapper');
-          const availW = outputEl.clientWidth;
-          const availH = outputEl.clientHeight;
-          const maxWidth  = Math.min(400, availW  / (density * 0.75));
-          const maxHeight = Math.min(300, availH  * 0.85);
-
-          if (img.width / img.height > maxWidth / maxHeight) {
-            w = maxWidth;
-            h = p.floor((w * img.height) / img.width);
-          } else {
-            h = maxHeight;
-            w = p.floor((h * img.width) / img.height);
-          }
-
-          const buffer = p.createGraphics(w, h);
-          buffer.background(0);
-          buffer.image(img, 0, 0, w, h);
-          buffer.loadPixels();
-
-          if (!buffer.pixels || buffer.pixels.length === 0) {
-            statusDiv.html('error: no pixels');
-            return;
-          }
-
-          let asciiImage = '';
-          for (let y = 0; y < h; y += density) {
-            for (let x = 0; x < w; x += density) {
-              let avgBrightness = 0;
-              let samplesCount = 0;
-              for (let dy = 0; dy < density && y + dy < h; dy++) {
-                for (let dx = 0; dx < density && x + dx < w; dx++) {
-                  const idx = ((y + dy) * w + (x + dx)) * 4;
-                  if (idx + 2 < buffer.pixels.length) {
-                    avgBrightness += (buffer.pixels[idx] || 0) * 0.299
-                                   + (buffer.pixels[idx+1] || 0) * 0.587
-                                   + (buffer.pixels[idx+2] || 0) * 0.114;
-                    samplesCount++;
-                  }
-                }
-              }
-              if (samplesCount > 0) avgBrightness /= samplesCount;
-              const charIndex = Math.min(
-                Math.max(Math.floor(p.map(avgBrightness, 0, 255, 0, asciiChars.length - 1)), 0),
-                asciiChars.length - 1
-              );
-              asciiImage += asciiChars[charIndex];
-            }
-            asciiImage += '\n';
-          }
-
-          asciiDiv.html(asciiImage);
-          asciiDiv.addClass('visible');
-          statusDiv.html('running');
-
-          if (animationFrame) clearTimeout(animationFrame);
-          animationFrame = setTimeout(() => {
-            if (!window.imagePaused) {
-              asciiChars.unshift(asciiChars.pop());
-              processImage();
-            } else {
-              animationFrame = setTimeout(() => { processImage(); }, 150);
-            }
-          }, 150);
-
-          buffer.remove();
-        } catch (err) {
-          console.error(err);
-          statusDiv.html('error: ' + err.message);
-        }
-      }
+    // Ramps run from empty to full: bright pixels get dense glyphs, which
+    // light up more of the amber on the dark background.
+    const RAMPS = {
+      classic:  ' .:-=+*#%@',
+      detailed: " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+      blocks:   ' ░▒▓█'
     };
+    const COLUMNS = [40, 60, 80, 100, 130, 160, 200, 240];   // detail 1..8
 
-    // ── Density bar UI helper ────────────────────────────────────────────────
-    function updateDensityUI(val) {
-      document.getElementById('density-display').textContent = val;
-      const filled = Math.round((val / 8) * 16);
-      document.getElementById('density-bar-fill').textContent = '█'.repeat(filled);
-      document.getElementById('density-bar-empty').textContent = '░'.repeat(16 - filled);
+    const settings = { detail: 4, ramp: 'classic', contrast: 1, invert: false, shimmer: true };
+    let source = null;          // { kind: 'image', bitmap, name } or { kind: 'camera', video, stream }
+    let grid = null;            // { cols, rows, idx: Uint8Array } from the last sample
+    let cameraTimer = 0, shimmerTimer = 0;
+
+    const sampler = document.createElement('canvas');
+    const sctx = sampler.getContext('2d', { willReadFrequently: true });
+
+    // Glyph shape: Courier New is about 0.6em wide; measure it to be exact.
+    // Lines are set at 1em, so a cell is 1 / ratio times taller than wide.
+    function charWidthRatio() {
+      const probe = document.createElement('span');
+      probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font:100px "Courier New",monospace;letter-spacing:0';
+      probe.textContent = 'M'.repeat(20);
+      document.body.appendChild(probe);
+      const w = probe.getBoundingClientRect().width / 20 / 100;
+      probe.remove();
+      return w || 0.6;
+    }
+    let CHAR_W = 0.6;
+    document.fonts.ready.then(() => { CHAR_W = charWidthRatio(); resample(); });
+
+    function sourceSize() {
+      if (!source) return null;
+      if (source.kind === 'camera') return { w: source.video.videoWidth, h: source.video.videoHeight };
+      return { w: source.bitmap.width, h: source.bitmap.height };
     }
 
-    // ── Boot ─────────────────────────────────────────────────────────────────
-    new p5(bgSketch);
-    new p5(sketch);
-
-    // Animation toggles
-    document.getElementById('animateToggle').addEventListener('change', e => {
-      window.bgAnimationEnabled = e.target.checked;
-    });
-
-    document.getElementById('pauseToggle').addEventListener('change', e => {
-      window.imagePaused = !e.target.checked;
-    });
-
-    // Copy
-    document.getElementById('copyButton').addEventListener('click', () => {
-      const btn = document.getElementById('copyButton');
-      const text = document.getElementById('ascii-container').innerText;
-      if (text) {
-        navigator.clipboard.writeText(text).then(() => {
-          btn.textContent = '✓ copied';
-          setTimeout(() => { btn.textContent = 'copy ascii art'; }, 2000);
-        }).catch(() => {});
+    // Scale the source down to cols x rows in a few halving steps, so a big
+    // photo is averaged rather than point-sampled into noise.
+    function drawScaled(src, sw, sh, cols, rows, mirror) {
+      let cur = src, cw = sw, ch = sh;
+      while (cw / 2 > cols * 2 && ch / 2 > rows * 2) {
+        const step = document.createElement('canvas');
+        step.width = Math.round(cw / 2); step.height = Math.round(ch / 2);
+        const c = step.getContext('2d');
+        c.imageSmoothingQuality = 'high';
+        c.drawImage(cur, 0, 0, step.width, step.height);
+        cur = step; cw = step.width; ch = step.height;
       }
+      sampler.width = cols; sampler.height = rows;
+      sctx.imageSmoothingQuality = 'high';
+      sctx.save();
+      if (mirror) { sctx.translate(cols, 0); sctx.scale(-1, 1); }
+      sctx.drawImage(cur, 0, 0, cols, rows);
+      sctx.restore();
+    }
+
+    function resample() {
+      const size = sourceSize();
+      if (!size || !size.w) return;
+      const ramp = RAMPS[settings.ramp];
+      const cols = COLUMNS[settings.detail - 1];
+      const rows = Math.max(1, Math.round(cols * (size.h / size.w) * CHAR_W));
+      const isCam = source.kind === 'camera';
+      if (isCam) {
+        sampler.width = cols; sampler.height = rows;
+        sctx.save(); sctx.translate(cols, 0); sctx.scale(-1, 1);   // selfie view
+        sctx.drawImage(source.video, 0, 0, cols, rows);
+        sctx.restore();
+      } else {
+        drawScaled(source.bitmap, size.w, size.h, cols, rows, false);
+      }
+      const px = sctx.getImageData(0, 0, cols, rows).data;
+
+      // Luminance, with transparent areas falling to the dark background
+      const lum = new Float32Array(cols * rows);
+      const hist = new Uint32Array(256);
+      for (let i = 0; i < lum.length; i++) {
+        const o = i * 4;
+        const l = (0.2126 * px[o] + 0.7152 * px[o + 1] + 0.0722 * px[o + 2]) * (px[o + 3] / 255);
+        lum[i] = l;
+        hist[l | 0]++;
+      }
+      // Auto-levels: stretch the 2nd..98th percentile to the full ramp
+      const pct = q => { let n = 0, t = lum.length * q; for (let v = 0; v < 256; v++) { n += hist[v]; if (n >= t) return v; } return 255; };
+      const lo = pct(0.02), hi = Math.max(lo + 1, pct(0.98));
+      const top = ramp.length - 1;
+      const idx = new Uint8Array(lum.length);
+      for (let i = 0; i < lum.length; i++) {
+        let v = (lum[i] - lo) / (hi - lo);
+        v = (v - 0.5) * settings.contrast + 0.5;
+        v = v < 0 ? 0 : v > 1 ? 1 : v;
+        if (settings.invert) v = 1 - v;
+        idx[i] = Math.round(v * top);
+      }
+      grid = { cols, rows, idx };
+      fitText();
+      paint(false);
+    }
+
+    // Size the text so the whole picture fits the output area.
+    function fitText() {
+      if (!grid) return;
+      const box = $('output-wrapper');
+      const pad = 24;
+      const fs = Math.max(2, Math.min(
+        (box.clientWidth - pad) / (grid.cols * CHAR_W),
+        (box.clientHeight - pad) / grid.rows
+      ));
+      art.style.fontSize = fs + 'px';
+      art.style.lineHeight = fs + 'px';
+    }
+
+    // Build the text. Shimmer nudges a few cells to the neighbouring glyph,
+    // which on these ramps is nearly the same density, so the picture holds.
+    function paint(shimmer) {
+      if (!grid) return;
+      const ramp = RAMPS[settings.ramp];
+      const top = ramp.length - 1;
+      const { cols, rows, idx } = grid;
+      const odds = settings.ramp === 'detailed' ? 0.12 : 0.04;
+      let out = '';
+      for (let y = 0; y < rows; y++) {
+        let line = '';
+        for (let x = 0; x < cols; x++) {
+          let k = idx[y * cols + x];
+          if (shimmer && k > 0 && Math.random() < odds) k = Math.min(top, Math.max(1, k + (Math.random() < 0.5 ? -1 : 1)));
+          line += ramp[k];
+        }
+        out += line + '\n';
+      }
+      art.textContent = out;
+      art.classList.add('visible');
+    }
+
+    function syncShimmer() {
+      clearInterval(shimmerTimer);
+      // the camera is already alive; shimmer is for still images
+      if (settings.shimmer && source && source.kind === 'image' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        shimmerTimer = setInterval(() => paint(true), 120);
+      }
+    }
+
+    // ── Sources ──
+    async function loadImageFile(file) {
+      if (!file || !file.type.startsWith('image/')) { status('not an image'); return; }
+      status('loading...');
+      try {
+        const bitmap = await createImageBitmap(file);
+        stopCamera();
+        source = { kind: 'image', bitmap, name: file.name || 'pasted image' };
+        $('file-name-display').textContent = source.name;
+        resample();
+        syncShimmer();
+        status(`${grid.cols} x ${grid.rows} chars`);
+      } catch (err) {
+        status('could not read that image');
+      }
+    }
+
+    async function startCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { status('no camera support here'); return; }
+      status('asking for the camera...');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+        const video = document.createElement('video');
+        video.muted = true; video.playsInline = true; video.srcObject = stream;
+        await video.play();
+        source = { kind: 'camera', video, stream };
+        $('file-name-display').textContent = 'camera';
+        $('cameraButton').textContent = 'stop camera';
+        syncShimmer();
+        const frame = () => { if (source && source.kind === 'camera') { resample(); status(`live · ${grid.cols} x ${grid.rows} chars`); } };
+        cameraTimer = setInterval(frame, 1000 / 15);
+        frame();
+      } catch (err) {
+        status(err && err.name === 'NotAllowedError' ? 'camera permission denied' : 'no camera found');
+      }
+    }
+
+    function stopCamera() {
+      clearInterval(cameraTimer);
+      if (source && source.kind === 'camera') {
+        source.stream.getTracks().forEach(t => t.stop());
+        source = null;
+        $('cameraButton').textContent = 'use camera';
+        $('file-name-display').textContent = 'no file selected';
+        status('camera stopped');
+      }
+    }
+
+    $('imageInput').addEventListener('change', e => loadImageFile(e.target.files[0]));
+    $('cameraButton').addEventListener('click', () => (source && source.kind === 'camera') ? stopCamera() : startCamera());
+
+    // Drop or paste an image anywhere on the page
+    window.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dropping'); });
+    window.addEventListener('dragleave', e => { if (e.target === document.documentElement || !e.relatedTarget) document.body.classList.remove('dropping'); });
+    window.addEventListener('drop', e => {
+      e.preventDefault();
+      document.body.classList.remove('dropping');
+      const file = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('image/'));
+      if (file) loadImageFile(file);
+    });
+    window.addEventListener('paste', e => {
+      const file = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith('image/'));
+      if (file) loadImageFile(file);
     });
 
-    // Init density bar
-    updateDensityUI(4);
+    // ── Controls ──
+    function updateDetailUI() {
+      const v = settings.detail;
+      $('density-display').textContent = COLUMNS[v - 1];
+      const filled = Math.round((v / 8) * 16);
+      $('density-bar-fill').textContent = '█'.repeat(filled);
+      $('density-bar-empty').textContent = '░'.repeat(16 - filled);
+    }
+    $('densitySlider').addEventListener('input', e => {
+      settings.detail = +e.target.value;
+      updateDetailUI();
+      resample();
+      if (grid) status(`${grid.cols} x ${grid.rows} chars`);
+    });
+    $('contrastSlider').addEventListener('input', e => {
+      settings.contrast = +e.target.value / 100;
+      $('contrast-display').textContent = settings.contrast.toFixed(1) + 'x';
+      resample();
+    });
+    document.querySelectorAll('.ramp-btn').forEach(btn => btn.addEventListener('click', () => {
+      settings.ramp = btn.dataset.ramp;
+      document.querySelectorAll('.ramp-btn').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+      resample();
+    }));
+    $('invertToggle').addEventListener('change', e => { settings.invert = e.target.checked; resample(); });
+    $('shimmerToggle').addEventListener('change', e => { settings.shimmer = e.target.checked; syncShimmer(); if (!settings.shimmer) paint(false); });
+    $('animateToggle').addEventListener('change', e => { e.target.checked ? bg.loop() : bg.noLoop(); });
 
-    // Force checkboxes checked
-    document.getElementById('animateToggle').checked = true;
-    document.getElementById('pauseToggle').checked  = true;
+    $('copyButton').addEventListener('click', () => {
+      const btn = $('copyButton');
+      if (!grid) return;
+      navigator.clipboard.writeText(art.textContent).then(() => {
+        btn.textContent = '✓ copied';
+        setTimeout(() => { btn.textContent = 'copy ascii art'; }, 2000);
+      }).catch(() => status('copy blocked by the browser'));
+    });
+    $('saveButton').addEventListener('click', () => {
+      if (!grid) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([art.textContent], { type: 'text/plain' }));
+      a.download = ((source && source.name) || 'ascii').replace(/\.[^.]+$/, '') + '.txt';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+
+    window.addEventListener('resize', fitText);
+    updateDetailUI();
   </script>
 <script defer src="/_vercel/insights/script.js"></script>
 </body>
