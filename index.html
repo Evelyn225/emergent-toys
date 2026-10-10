@@ -87,20 +87,36 @@
       color: rgba(255,255,255,0.9);
       letter-spacing: 6px;
       margin-bottom: 10px;
-      text-shadow: 0 0 16px rgba(255,255,255,0.5), 0 0 40px rgba(255,255,255,0.2);
     }
 
-    /* Toned-down take on the PlantHUD demo's VHS look: the #title-vhs-* svg
-       filters add rough edges, tracking tears, an RGB split and a little bloom.
-       The scanlines are a mask, applied after the filter, so they stay thin
-       and only touch the glyphs instead of striping the page. */
-    .main-title {
-      filter: url(#title-vhs-dark);
+    /* Toned-down take on the PlantHUD demo's VHS look. Two layers, so the
+       scanlines only ever touch the letters:
+       - .title-scan masks every other pixel row of the letters and cursor.
+         Its box hugs the text, and nothing that glows sits inside it.
+       - .main-title then runs the #title-vhs-* svg filter (rough edges,
+         tracking tears, RGB split) and adds the glow with drop-shadows. The
+         glow is blurred from the striped letters, so it comes out smooth and
+         is never clipped by the mask. */
+    .title-scan {
+      display: inline-block;
       -webkit-mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.72) 1px 2px);
               mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.72) 1px 2px);
+    }
+    .main-title {
+      filter: url(#title-vhs-dark)
+              drop-shadow(0 0 8px rgba(255,255,255,0.45))
+              drop-shadow(0 0 20px rgba(255,255,255,0.15));
       animation: title-jitter 4.3s steps(1) infinite;
     }
-    [data-theme="light"] .main-title { filter: url(#title-vhs-light); }
+    [data-theme="light"] .title-scan {
+      -webkit-mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.84) 1px 2px);
+              mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.84) 1px 2px);
+    }
+    [data-theme="light"] .main-title {
+      filter: url(#title-vhs-light)
+              drop-shadow(0 0 8px rgba(0,0,0,0.14))
+              drop-shadow(0 0 20px rgba(0,0,0,0.05));
+    }
     @keyframes title-jitter {
       0%, 100% { transform: translateX(0); }
       37%  { transform: translateX(1px); }
@@ -122,7 +138,6 @@
       top: -4px;
       margin-left: 2px;
       animation: cursor-blink 1s steps(1) infinite;
-      box-shadow: 0 0 12px rgba(255,255,255,0.5), 0 0 30px rgba(255,255,255,0.18);
     }
 
     .main-tagline {
@@ -277,14 +292,16 @@
       background: #f5f5f0;
       color: rgba(0,0,0,0.85);
     }
-    [data-theme="light"] .main-title    { color: rgba(0,0,0,0.85); text-shadow: 0 0 16px rgba(0,0,0,0.18), 0 0 40px rgba(0,0,0,0.07); }
-    [data-theme="light"] .title-cursor  { background: rgba(0,0,0,0.75); box-shadow: 0 0 12px rgba(0,0,0,0.18), 0 0 30px rgba(0,0,0,0.07); }
-    [data-theme="light"] .main-tagline  { color: rgba(0,0,0,0.58); }
-    [data-theme="light"] .link-item     { color: rgba(0,0,0,0.5); }
+    /* PlantHUD's strokes are thinner than W95's, so light mode runs a notch
+       darker than it used to for the same weight on the page. */
+    [data-theme="light"] .main-title    { color: rgba(0,0,0,0.95); }
+    [data-theme="light"] .title-cursor  { background: rgba(0,0,0,0.85); }
+    [data-theme="light"] .main-tagline  { color: rgba(0,0,0,0.7); }
+    [data-theme="light"] .link-item     { color: rgba(0,0,0,0.66); }
     [data-theme="light"] .link-item:hover,
     [data-theme="light"] .link-item:focus-visible { color: rgba(0,0,0,1); }
-    [data-theme="light"] .link-sep      { color: rgba(0,0,0,0.1); }
-    [data-theme="light"] #theme-toggle  { color: rgba(0,0,0,0.62); }
+    [data-theme="light"] .link-sep      { color: rgba(0,0,0,0.18); }
+    [data-theme="light"] #theme-toggle  { color: rgba(0,0,0,0.72); }
     [data-theme="light"] #theme-toggle:hover { color: rgba(0,0,0,0.85); }
     /* ─── Corner bar: font link + theme toggle ─── */
     #corner {
@@ -304,7 +321,7 @@
     }
     #font-link:hover,
     #font-link:focus-visible { color: rgba(255,255,255,1); }
-    [data-theme="light"] #font-link { color: rgba(0,0,0,0.62); }
+    [data-theme="light"] #font-link { color: rgba(0,0,0,0.72); }
     [data-theme="light"] #font-link:hover,
     [data-theme="light"] #font-link:focus-visible { color: rgba(0,0,0,1); }
 
@@ -387,7 +404,7 @@
   </div>
   <div id="cursor-layer" aria-hidden="true"></div>
   <main class="main-inner" id="main-content">
-    <div class="main-title"><span id="main-title-text">Eve Net</span><span class="title-cursor"></span></div>
+    <div class="main-title"><span class="title-scan"><span id="main-title-text">Eve Net</span><span class="title-cursor"></span></span></div>
     <div class="main-tagline">generative art / interactive experiments</div>
     <div class="link-list" role="navigation" aria-label="Project navigation">
       <a href="Sands"               class="link-item">sand playground</a><span class="link-sep">/</span>
