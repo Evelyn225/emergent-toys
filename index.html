@@ -89,45 +89,40 @@
       margin-bottom: 10px;
     }
 
-    /* Toned-down take on the PlantHUD demo's VHS look, without its tracking
-       tears. Two layers, so the scanlines only ever touch the letters:
-       - .title-scan masks every other pixel row of the letters and cursor.
-         Its box hugs the text, and nothing that glows sits inside it.
-       - .main-title then runs the #title-vhs-* svg filter (rough edges,
-         RGB split) and adds the glow with drop-shadows. The
-         glow is blurred from the striped letters, so it comes out smooth and
-         is never clipped by the mask. */
-    .title-scan {
+    /* The PlantHUD demo's VHS look (planthud.html), minus its jitter.
+       Same stacking as the demo:
+       - .title-fx runs the #title-vhs-* svg filter (grain, tracking tears,
+         RGB split, a little smear) and then the scanline mask. The mask comes
+         after the filter, so tears slice the letters but the scanlines stay
+         straight. Its padding gives the tears room inside the mask; the
+         negative margin keeps the layout where it was.
+       - .main-title adds the glow with drop-shadows, outside the mask, so
+         the glow stays smooth and is never clipped. */
+    .main-title {
+      /* hug the text, so the filter only works on the title, not 780px of air */
+      width: fit-content;
+      margin-left: auto;
+      margin-right: auto;
+      filter: drop-shadow(0 0 8px rgba(255,255,255,0.45))
+              drop-shadow(0 0 20px rgba(255,255,255,0.15));
+    }
+    .title-fx {
       display: inline-block;
+      padding: 8px 12px;
+      margin: -8px -12px;
+      filter: url(#title-vhs-dark);
       -webkit-mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.72) 1px 2px);
               mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.72) 1px 2px);
     }
-    .main-title {
-      filter: url(#title-vhs-dark)
-              drop-shadow(0 0 8px rgba(255,255,255,0.45))
-              drop-shadow(0 0 20px rgba(255,255,255,0.15));
-      animation: title-jitter 4.3s steps(1) infinite;
+    [data-theme="light"] .main-title {
+      filter: drop-shadow(0 0 8px rgba(0,0,0,0.14))
+              drop-shadow(0 0 20px rgba(0,0,0,0.05));
     }
-    [data-theme="light"] .title-scan {
+    [data-theme="light"] .title-fx {
+      filter: url(#title-vhs-light);
       -webkit-mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.84) 1px 2px);
               mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.84) 1px 2px);
     }
-    [data-theme="light"] .main-title {
-      filter: url(#title-vhs-light)
-              drop-shadow(0 0 8px rgba(0,0,0,0.14))
-              drop-shadow(0 0 20px rgba(0,0,0,0.05));
-    }
-    @keyframes title-jitter {
-      0%, 100% { transform: translateX(0); }
-      37%  { transform: translateX(1px); }
-      38%  { transform: translateX(0); }
-      81%  { transform: translateX(-1px); }
-      82%  { transform: translateX(0); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .main-title { animation: none; }
-    }
-
     .title-cursor {
       display: inline-block;
       width: 20px;
@@ -343,24 +338,32 @@
 </head>
 
 <body>
-  <!-- VHS filters for the title, adapted from planthud.html at lower strength.
+  <!-- VHS filters for the title, copied from planthud.html. The warp
+       (grain, tears, channel split) matches the demo; the smear and bloom
+       are lighter, since .main-title adds its own glow.
        Dark mode merges the split channels with screen (light text on black);
        light mode uses multiply so dark text gets red/cyan fringes instead. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <filter id="title-vhs-dark" x="-10%" y="-100%" width="120%" height="300%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="noise"/>
-      <!-- green pinned to 0.5 = no vertical shift, so the scanlines stay straight -->
-      <feColorMatrix in="noise" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="grain"/>
-      <feDisplacementMap in="SourceGraphic" in2="grain" scale="0.8" xChannelSelector="R" yChannelSelector="G" result="rough"/>
-      <feColorMatrix in="rough" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
-      <feOffset class="tv-split" data-sign="-1" dx="-0.8" dy="0" result="r"/>
-      <feColorMatrix in="rough" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
-      <feColorMatrix in="rough" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
-      <feOffset class="tv-split" data-sign="1" dx="0.8" dy="0" result="b"/>
+      <!-- warp, same values as planthud.html: fine grain roughens every edge,
+           then wide x-only bands make the tracking tears; the script re-rolls
+           the tear noise and scales every 70ms like the demo -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="grain"/>
+      <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+      <feTurbulence class="tv-tear-noise" type="fractalNoise" baseFrequency="0.002 0.18" numOctaves="2" seed="1" result="bands"/>
+      <feColorMatrix in="bands" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="tear"/>
+      <feDisplacementMap class="tv-tear" data-base="3" in="rough" in2="tear" scale="3" xChannelSelector="R" yChannelSelector="G" result="dR"/>
+      <feDisplacementMap class="tv-tear" data-base="2" in="rough" in2="tear" scale="2" xChannelSelector="R" yChannelSelector="G" result="dG"/>
+      <feDisplacementMap class="tv-tear" data-base="4" in="rough" in2="tear" scale="4" xChannelSelector="R" yChannelSelector="G" result="dB"/>
+      <feColorMatrix in="dR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+      <feOffset class="tv-split" data-sign="-1" dx="-1.5" dy="0" result="r"/>
+      <feColorMatrix in="dG" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
+      <feColorMatrix in="dB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
+      <feOffset class="tv-split" data-sign="1" dx="1.5" dy="0" result="b"/>
       <feBlend in="r" in2="g" mode="screen" result="rg"/>
       <feBlend in="rg" in2="b" mode="screen" result="rgb"/>
-      <feGaussianBlur in="rgb" stdDeviation="2 0.3" result="smearBlur"/>
-      <feOffset in="smearBlur" dx="2" result="smearShift"/>
+      <feGaussianBlur in="rgb" stdDeviation="2.5 0.3" result="smearBlur"/>
+      <feOffset in="smearBlur" dx="3" result="smearShift"/>
       <feComponentTransfer in="smearShift" result="smear">
         <feFuncR type="linear" slope=".3"/><feFuncG type="linear" slope=".33"/><feFuncB type="linear" slope=".42"/>
       </feComponentTransfer>
@@ -372,21 +375,27 @@
       <feBlend in="rgb" in2="haze" mode="screen"/>
     </filter>
     <filter id="title-vhs-light" x="-10%" y="-100%" width="120%" height="300%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="noise"/>
-      <!-- green pinned to 0.5 = no vertical shift, so the scanlines stay straight -->
-      <feColorMatrix in="noise" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="grain"/>
-      <feDisplacementMap in="SourceGraphic" in2="grain" scale="0.8" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+      <!-- warp, same values as planthud.html: fine grain roughens every edge,
+           then wide x-only bands make the tracking tears; the script re-rolls
+           the tear noise and scales every 70ms like the demo -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="grain"/>
+      <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+      <feTurbulence class="tv-tear-noise" type="fractalNoise" baseFrequency="0.002 0.18" numOctaves="2" seed="1" result="bands"/>
+      <feColorMatrix in="bands" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="tear"/>
+      <feDisplacementMap class="tv-tear" data-base="3" in="rough" in2="tear" scale="3" xChannelSelector="R" yChannelSelector="G" result="dR"/>
+      <feDisplacementMap class="tv-tear" data-base="2" in="rough" in2="tear" scale="2" xChannelSelector="R" yChannelSelector="G" result="dG"/>
+      <feDisplacementMap class="tv-tear" data-base="4" in="rough" in2="tear" scale="4" xChannelSelector="R" yChannelSelector="G" result="dB"/>
       <!-- each layer keeps one channel and whites out the others -->
-      <feColorMatrix in="rough" type="matrix" values="1 0 0 0 0  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/>
-      <feOffset class="tv-split" data-sign="-1" dx="-0.8" dy="0" result="r"/>
-      <feColorMatrix in="rough" type="matrix" values="0 0 0 0 1  0 1 0 0 0  0 0 0 0 1  0 0 0 1 0" result="g"/>
-      <feColorMatrix in="rough" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 1 0 0  0 0 0 1 0"/>
-      <feOffset class="tv-split" data-sign="1" dx="0.8" dy="0" result="b"/>
+      <feColorMatrix in="dR" type="matrix" values="1 0 0 0 0  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/>
+      <feOffset class="tv-split" data-sign="-1" dx="-1.5" dy="0" result="r"/>
+      <feColorMatrix in="dG" type="matrix" values="0 0 0 0 1  0 1 0 0 0  0 0 0 0 1  0 0 0 1 0" result="g"/>
+      <feColorMatrix in="dB" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 1 0 0  0 0 0 1 0"/>
+      <feOffset class="tv-split" data-sign="1" dx="1.5" dy="0" result="b"/>
       <feBlend in="r" in2="g" mode="multiply" result="rg"/>
       <feBlend in="rg" in2="b" mode="multiply" result="rgb"/>
       <!-- a faint trailing smear, tucked under the text -->
-      <feGaussianBlur in="rgb" stdDeviation="2 0.3" result="smearBlur"/>
-      <feOffset in="smearBlur" dx="2" result="smearShift"/>
+      <feGaussianBlur in="rgb" stdDeviation="2.5 0.3" result="smearBlur"/>
+      <feOffset in="smearBlur" dx="3" result="smearShift"/>
       <feComponentTransfer in="smearShift" result="smear">
         <feFuncA type="linear" slope=".25"/>
       </feComponentTransfer>
@@ -400,7 +409,7 @@
   </div>
   <div id="cursor-layer" aria-hidden="true"></div>
   <main class="main-inner" id="main-content">
-    <div class="main-title"><span class="title-scan"><span id="main-title-text">Eve Net</span><span class="title-cursor"></span></span></div>
+    <div class="main-title"><span class="title-fx"><span id="main-title-text">Eve Net</span><span class="title-cursor"></span></span></div>
     <div class="main-tagline">generative art / interactive experiments</div>
     <div class="link-list" role="navigation" aria-label="Project navigation">
       <div class="main-row">
@@ -474,15 +483,22 @@
   }
   setTimeout(typeTitle, 220);             // let the content fade land first
 
-  // ── Title colour wobble ───────────────────────────────────────
-  // Nudge the RGB split a little, like the PlantHUD demo but slower and
-  // smaller. (No tracking tears: they read as stray lines through the title.)
+  // ── Title tape ────────────────────────────────────────────────
+  // Same as the PlantHUD demo: every 70ms re-roll the tear noise, rescale the
+  // tears and wobble the channel split. (The demo's jitter is left out.)
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const splits = document.querySelectorAll('.tv-split');
+    const tearNoise = document.querySelectorAll('.tv-tear-noise');
+    const tears     = document.querySelectorAll('.tv-tear');
+    const splits    = document.querySelectorAll('.tv-split');
     setInterval(() => {
-      const split = 0.6 + Math.random() * 0.5;
-      splits.forEach(o => o.setAttribute('dx', (o.dataset.sign * split).toFixed(2)));
-    }, 110);
+      const seed = Math.floor(Math.random() * 1000);
+      const freq = `0.002 ${(0.15 + Math.random() * 0.1).toFixed(3)}`;
+      tearNoise.forEach(n => { n.setAttribute('seed', seed); n.setAttribute('baseFrequency', freq); });
+      const k = 0.8 + Math.random() * 0.5;
+      tears.forEach(t => t.setAttribute('scale', (t.dataset.base * k).toFixed(1)));
+      const split = 1 + Math.random() * 0.8;
+      splits.forEach(o => o.setAttribute('dx', (o.dataset.sign * split).toFixed(1)));
+    }, 70);
   }
 
   // ── Cursor particles ──────────────────────────────────────────
