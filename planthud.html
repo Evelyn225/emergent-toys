@@ -19,7 +19,8 @@
 html, body { margin: 0; background: var(--bg); color: var(--ink); }
 body {
   font-family: 'PlantHUD', monospace;
-  font-size: 32px;
+  /* the font is pixel-exact at multiples of 20px */
+  font-size: 20px;
   line-height: 1.25;
   -webkit-font-smoothing: none;
   font-smooth: never;
@@ -28,7 +29,9 @@ body {
 }
 .screen {
   position: relative;
-  max-width: 900px;
+  /* scale with the screen like the recording: 20px text on a 900px screen */
+  font-size: max(10px, 2.2222cqw);
+  line-height: 1.55;
   margin: 0 auto;
   aspect-ratio: 4 / 5;
   overflow: hidden;
@@ -39,9 +42,10 @@ body {
 /* tearing, rgb split, smear and bloom all come from the #vhs svg filter */
 .screen, .crt { filter: url(#vhs); }
 .nofx .screen, .nofx .crt { filter: none; }
+.nofx .tube::after { display: none; }
 .screen > * { text-shadow: 0 0 2px rgba(220, 230, 255, .6); }
 /* scanlines sit outside the filter so they stay thin and sharp */
-.tube { position: relative; max-width: 900px; margin: 0 auto; }
+.tube { position: relative; max-width: 900px; margin: 0 auto; container-type: inline-size; }
 .tube::after {
   content: '';
   position: absolute; inset: 0;
@@ -57,44 +61,46 @@ body {
   77% { transform: translateX(2px); }
   78% { transform: translateX(0); }
 }
-.hud { position: absolute; left: 4%; top: 3%; white-space: pre; }
+.hud {
+  position: absolute; left: 4.4%; top: 2.2%;
+  display: grid; grid-template-columns: 12.2cqw auto;
+}
+.hud .rec { grid-column: 1 / -1; }
 .rec { color: #ff2a3a; text-shadow: 0 0 6px #ff2a3a; }
 .blink { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: .25; } }
 .panel {
-  position: absolute; left: 0; top: 40%;
+  position: absolute; left: 0; top: 38.8%;
+  display: grid; grid-template-columns: auto auto; column-gap: 1.6em;
   background: var(--panel);
   border: 2px solid #8fa0ff;
-  padding: 4px 10px;
-  white-space: pre;
-  font-size: 26px;
+  padding: .3em .7em;
+  line-height: 1.42;
 }
 .panel .off { color: #9aa3e0; }
-.foot { position: absolute; left: 4%; bottom: 3%; white-space: pre; }
-.foot small { font-size: 22px; }
+.foot { position: absolute; left: 4.4%; bottom: 3%; line-height: 1.4; }
+.foot small { display: block; font-size: .8em; }
 .ruler {
   position: absolute; right: 3%; top: 3%; bottom: 3%;
-  border-left: 2px solid #5f8; font-size: 18px;
+  border-left: 2px solid #5f8; font-size: .6em;
   display: flex; flex-direction: column; justify-content: space-between;
-  padding-left: 14px;
+  padding-left: 1.2em;
 }
 .tester { max-width: 900px; margin: 28px auto 0; }
-.tester label { display: block; font-size: 20px; color: #8890c0; margin-bottom: 6px; }
+.row label { display: flex; align-items: center; gap: 8px; margin: 0; }
+.tester > label { display: block; font-size: 20px; color: #8890c0; margin-bottom: 6px; }
 .tester textarea {
   width: 100%; min-height: 3.4em; resize: vertical;
   background: #000; color: var(--ink);
   border: 2px solid var(--dim);
-  font: inherit; padding: 8px 10px;
+  font: inherit; font-size: 40px; padding: 8px 10px;
 }
-.row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 20px; color: #8890c0; }
+.row { display: flex; gap: 12px 40px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 20px; color: #8890c0; }
 .out { margin-top: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.charset { margin-top: 28px; white-space: pre-wrap; word-break: break-all; font-size: 28px; }
+.charset { margin-top: 28px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 40px; }
 a { color: #8fa0ff; }
 @media (max-width: 600px) {
-  body { font-size: 20px; }
-  .panel { font-size: 15px; }
-  .foot small { font-size: 14px; }
-  .ruler { font-size: 11px; }
+  .tester textarea, .charset { font-size: 20px; }
 }
 </style>
 </head>
@@ -103,24 +109,24 @@ a { color: #8fa0ff; }
   <filter id="vhs" x="-4%" y="-4%" width="108%" height="108%" color-interpolation-filters="sRGB">
     <!-- fine noise roughens every edge -->
     <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="grain"/>
-    <feDisplacementMap in="SourceGraphic" in2="grain" scale="2.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
     <!-- wide horizontal bands, x-only displacement: tracking tears -->
     <feTurbulence id="tearNoise" type="fractalNoise" baseFrequency="0.002 0.18" numOctaves="2" seed="1" result="bands"/>
     <feColorMatrix in="bands" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="tear"/>
-    <feDisplacementMap id="tearR" in="rough" in2="tear" scale="5" xChannelSelector="R" yChannelSelector="G" result="dR"/>
-    <feDisplacementMap id="tearG" in="rough" in2="tear" scale="3" xChannelSelector="R" yChannelSelector="G" result="dG"/>
-    <feDisplacementMap id="tearB" in="rough" in2="tear" scale="7" xChannelSelector="R" yChannelSelector="G" result="dB"/>
+    <feDisplacementMap id="tearR" in="rough" in2="tear" scale="3" xChannelSelector="R" yChannelSelector="G" result="dR"/>
+    <feDisplacementMap id="tearG" in="rough" in2="tear" scale="2" xChannelSelector="R" yChannelSelector="G" result="dG"/>
+    <feDisplacementMap id="tearB" in="rough" in2="tear" scale="4" xChannelSelector="R" yChannelSelector="G" result="dB"/>
     <!-- split channels and pull them apart -->
     <feColorMatrix in="dR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
-    <feOffset id="offR" dx="-3" dy="0" result="r"/>
+    <feOffset id="offR" dx="-1.5" dy="0" result="r"/>
     <feColorMatrix in="dG" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
     <feColorMatrix in="dB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
-    <feOffset id="offB" dx="3" dy="0" result="b"/>
+    <feOffset id="offB" dx="1.5" dy="0" result="b"/>
     <feBlend in="r" in2="g" mode="screen" result="rg"/>
     <feBlend in="rg" in2="b" mode="screen" result="rgb"/>
     <!-- smear trailing to the right, then a soft bloom -->
-    <feGaussianBlur in="rgb" stdDeviation="3.5 0.3" result="smearBlur"/>
-    <feOffset in="smearBlur" dx="4" result="smearShift"/>
+    <feGaussianBlur in="rgb" stdDeviation="2.5 0.3" result="smearBlur"/>
+    <feOffset in="smearBlur" dx="3" result="smearShift"/>
     <feComponentTransfer in="smearShift" result="smear">
       <feFuncR type="linear" slope=".5"/><feFuncG type="linear" slope=".55"/><feFuncB type="linear" slope=".7"/>
     </feComponentTransfer>
@@ -133,22 +139,25 @@ a { color: #8fa0ff; }
   </filter>
 </svg>
 <div class="tube"><div class="screen">
-  <div class="hud jitter"><span class="rec"><span class="blink">●</span>REC</span>
-TC   <span id="tc">00:00:01:25</span>
-FRM  <span id="frm">005329</span>
-RES  1080x1350
-GRID 160x200
-FPS  23.8</div>
-  <div class="panel">B02  46,92
-B04  97,102
-B03 109,95
-B01  52,91
-<span class="off">B--   0,0
-B--   0,0
-B--   0,0
-B--   0,0</span></div>
-  <div class="foot jitter">SIMULATION PLANT
-<small>SEC-01-A07</small></div>
+  <div class="hud jitter">
+    <span class="rec"><span class="blink">●</span>REC</span>
+    <span>TC</span><span id="tc">00:00:01:25</span>
+    <span>FRM</span><span id="frm">005329</span>
+    <span>RES</span><span>1080x1350</span>
+    <span>GRID</span><span>160x200</span>
+    <span>FPS</span><span>23.8</span>
+  </div>
+  <div class="panel">
+    <span>B02</span><span>46,92</span>
+    <span>B04</span><span>97,102</span>
+    <span>B03</span><span>109,95</span>
+    <span>B01</span><span>52,91</span>
+    <span class="off">B--</span><span class="off">0,0</span>
+    <span class="off">B--</span><span class="off">0,0</span>
+    <span class="off">B--</span><span class="off">0,0</span>
+    <span class="off">B--</span><span class="off">0,0</span>
+  </div>
+  <div class="foot jitter">SIMULATION PLANT<small>SEC-01-A07</small></div>
   <div class="ruler"><span>120</span><span>100</span><span>080</span><span>060</span><span>040</span><span>020</span><span>000</span></div>
 </div></div>
 
@@ -157,7 +166,7 @@ B--   0,0</span></div>
   <textarea id="txt">THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG</textarea>
   <div class="row">
     <label><input type="checkbox" id="fx" checked> crt effect</label>
-    <label>size <input type="range" id="sz" min="12" max="96" value="40"></label>
+    <label>size <input type="range" id="sz" min="20" max="120" step="20" value="40"> <span id="szv">40px</span></label>
     <a href="PlantHUD.ttf" download>download .ttf</a>
   </div>
   <div class="out crt" id="out"></div>
@@ -174,6 +183,7 @@ function sync() {
   out.textContent = txt.value;
   document.body.classList.toggle('nofx', !fx.checked);
   out.style.fontSize = sz.value + 'px';
+  document.getElementById('szv').textContent = sz.value + 'px';
 }
 [txt, fx, sz].forEach(el => el.addEventListener('input', sync));
 sync();
@@ -198,8 +208,8 @@ function tick() {
   tearNoise.setAttribute('seed', Math.floor(Math.random() * 1000));
   tearNoise.setAttribute('baseFrequency', `0.002 ${0.15 + Math.random() * 0.1}`);
   const k = 0.8 + Math.random() * 0.5;
-  [5, 3, 7].forEach((base, i) => tears[i].setAttribute('scale', (base * k).toFixed(1)));
-  const split = 1.5 + Math.random() * 1.5;
+  [3, 2, 4].forEach((base, i) => tears[i].setAttribute('scale', (base * k).toFixed(1)));
+  const split = 1 + Math.random() * 0.8;
   offR.setAttribute('dx', (-split).toFixed(1));
   offB.setAttribute('dx', split.toFixed(1));
 }
