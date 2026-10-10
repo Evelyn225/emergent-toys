@@ -28,7 +28,9 @@
     @import url('https://fonts.googleapis.com/css2?family=Audiowide&family=IBM+Plex+Mono:wght@400;600&display=swap');
 
     :root {
-      --hp: 20px;
+      /* the HP unit shrinks to fit the window where the fixed size wouldn't
+         (rack = 70 HP + 24px frame, beside the module bay's padding-left) */
+      --hp: min(20px, calc((100vw - 290px) / 70));
       --rack-hp: 70;
       --row-height: 260px;
       --kbd-height: 110px;
@@ -152,6 +154,11 @@
       width: calc(var(--rack-hp) * var(--hp));
       overflow: hidden;
       flex-wrap: nowrap;
+      /* empty slots: a recessed bay with faint 1HP lines, not a black void */
+      background:
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.028) 0 1px, transparent 1px var(--hp)),
+        linear-gradient(180deg, #0b0c0e, #15171b 50%, #0b0c0e);
+      box-shadow: inset 0 8px 14px rgba(0,0,0,0.65), inset 0 -8px 14px rgba(0,0,0,0.65);
     }
 
     /*  Module panel (faceplate)  */
@@ -173,9 +180,9 @@
     .panel:first-child { border-left: none; }
 
     .panel-title {
-      font-family: 'Satoshi', monospace;
+      font-family: 'IBM Plex Mono', monospace;
       font-size: var(--panel-title-size);
-      font-weight: normal;
+      font-weight: 600;
       color: rgba(20,10,0,0.85);
       text-transform: uppercase;
       letter-spacing: 0.12em;
@@ -226,7 +233,7 @@
       height: clamp(6px, calc(var(--knob-small-size) * 0.34), 9px);
     }
     .knob-label {
-      font-family: 'Satoshi', monospace;
+      font-family: 'IBM Plex Mono', monospace;
       font-size: var(--knob-label-size);
       color: rgba(20,10,0,0.75);
       text-transform: uppercase;
@@ -328,7 +335,7 @@
         0 0 0 3px rgba(0,0,0,0.3);
     }
     .jack-label {
-      font-family: 'Satoshi', monospace;
+      font-family: 'IBM Plex Mono', monospace;
       font-size: var(--jack-label-size);
       color: rgba(20,10,0,0.65);
       text-transform: uppercase;
@@ -345,6 +352,32 @@
       background: linear-gradient(90deg, transparent, rgba(0,0,0,0.25), transparent);
       margin: 2px 0;
     }
+
+    /*  Jacks sit along the bottom of every module, like a real rack, so the
+        connections line up across a row instead of floating mid-panel  */
+    .panel > .panel-divider:has(+ .jack-row) { margin-top: auto; }
+
+    /*  Category stripe under each module name (set from the module type in
+        initCloseButtons): sources, filter, control, effects, in/out  */
+    .panel-title::after {
+      content: '';
+      display: block;
+      width: 60%;
+      max-width: 36px;
+      height: 2px;
+      margin: 3px auto 0;
+      border-radius: 1px;
+      background: var(--cat, transparent);
+      box-shadow: 0 0 5px var(--cat-glow, transparent);
+    }
+    .panel[data-cat="source"]  { --cat: #e3962e; --cat-glow: rgba(227,150,46,0.55); }
+    .panel[data-cat="filter"]  { --cat: #23a9bd; --cat-glow: rgba(35,169,189,0.55); }
+    .panel[data-cat="control"] { --cat: #4fa94f; --cat-glow: rgba(79,169,79,0.55); }
+    .panel[data-cat="effect"]  { --cat: #8f5fd8; --cat-glow: rgba(143,95,216,0.55); }
+    .panel[data-cat="io"]      { --cat: #d34b47; --cat-glow: rgba(211,75,71,0.55); }
+
+    /*  KBD / FREE are words, not wave glyphs: let their buttons fit them  */
+    #mod-keyboard .wave-btn { width: auto; min-width: var(--wave-btn-width); padding: 0 5px; }
 
     /*  VU meter  */
     #vu-canvas {
@@ -381,14 +414,18 @@
       bottom: 16px;
       left: 50%;
       transform: translateX(-50%);
-      font-family: 'Satoshi', monospace;
+      font-family: 'IBM Plex Mono', monospace;
       font-size: 11px;
       color: rgba(240,235,220,0.5);
       pointer-events: none;
       z-index: 600;
       letter-spacing: 0.08em;
       text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-      white-space: nowrap;
+      /* wrap rather than run off both edges on mid-size windows */
+      width: max-content;
+      max-width: calc(100vw - 40px);
+      text-align: center;
+      line-height: 1.5;
     }
 
     /*  Piano keyboard (inside rack panel)  */
@@ -418,7 +455,7 @@
       padding-bottom: 6px;
     }
     .white-key span {
-      font-family: 'Satoshi', monospace;
+      font-family: 'IBM Plex Mono', monospace;
       font-size: 8px;
       color: rgba(0,0,0,0.4);
       pointer-events: none;
@@ -428,7 +465,7 @@
       bottom: 4px;
       left: 50%;
       transform: translateX(-50%);
-      font-family: 'Satoshi', monospace;
+      font-family: 'IBM Plex Mono', monospace;
       font-size: 6px;
       color: rgba(255,255,255,0.45);
       pointer-events: none;
@@ -680,7 +717,7 @@
 
     /*  Active cable color bands  */
     .panel-row-label {
-      font-family: 'Satoshi', monospace;
+      font-family: 'IBM Plex Mono', monospace;
       font-size: 9px;
       color: rgba(240,235,220,0.45);
       letter-spacing: 0.15em;
@@ -693,24 +730,24 @@
     }
 
     @media (max-width: 1660px) {
-      :root { --hp: 18px; }
+      :root { --hp: min(18px, calc((100vw - 290px) / 70)); }
     }
 
     @media (max-width: 1460px) {
-      :root { --hp: 16px; }
+      :root { --hp: min(16px, calc((100vw - 270px) / 70)); }
       body { padding-left: 220px; }
       #control-menu { width: 194px; }
     }
 
     @media (max-width: 1240px) {
-      :root { --hp: 14px; }
+      :root { --hp: min(14px, calc((100vw - 248px) / 70)); }
       body { padding-left: 198px; }
       #control-menu { width: 172px; padding: 11px; gap: 10px; }
       #add-module-drawer { gap: 7px; }
     }
 
     @media (max-width: 1060px) {
-      :root { --hp: 12px; }
+      :root { --hp: min(12px, calc((100vw - 228px) / 70)); }
       body { padding-left: 178px; }
       #control-menu { width: 152px; padding: 10px; gap: 9px; }
       #add-module-status { display: none; }
@@ -816,9 +853,14 @@
       .panel-title {
         touch-action: none;
         align-self: stretch;
-        padding: 6px 16px 4px;
+        padding: 6px 0 4px;
         margin-top: -6px;
       }
+    }
+
+    @media (min-width: 981px) {
+      body { display: flex; flex-direction: column; }
+      .rack-scroll { margin-block: auto; }
     }
 
     /*  Phones: the rack keeps a usable size and scrolls sideways in its
@@ -857,6 +899,8 @@
         padding-bottom: 6px;
       }
       .rack { margin: 18px 10px 14px; max-width: none; }
+      /* 5HP is 45px here: tighter names so six letters fit */
+      .panel-title { font-size: 9px; letter-spacing: 0.04em; }
       /* in the page, under the rack, rather than floating over it */
       #patch-hint {
         display: block;
@@ -3593,6 +3637,20 @@ function removeModule(panelEl) {
   refreshScrews();
 }
 
+// Module family for the colour stripe under each name, from the panel id
+// (mod-vco1, mod-chorus2, ...): the instance number is dropped.
+const MODULE_CATEGORY = {
+  vco: 'source', lfo: 'source', noise: 'source',
+  vcf: 'filter',
+  vca: 'control', adsr: 'control', sh: 'control', mixer: 'control',
+  chorus: 'effect', reverb: 'effect', delay: 'effect', ringmod: 'effect', comp: 'effect',
+  scope: 'io', output: 'io', keyboard: 'io'
+};
+function moduleCategory(panel) {
+  const type = panel.id.replace(/^mod-/, '').replace(/\d+$/, '');
+  return MODULE_CATEGORY[type] || '';
+}
+
 function initCloseButtons(root) {
   root = root || document;
   // Add close button to any panel that doesn't already have one
@@ -3600,6 +3658,7 @@ function initCloseButtons(root) {
     ? [root]
     : Array.from(root.querySelectorAll('.panel'));
   panels.forEach(panel => {
+    panel.dataset.cat = moduleCategory(panel);
     // A click listener of its own makes the name a tap target in its own
     // right (touch targeting only counts click/mouse listeners); without one,
     // a touch on it snaps to the close button or a jack next to it. The drag
