@@ -27,10 +27,7 @@ async function start() {
     catch { notice.textContent = 'Mouse capture unavailable. Drag the scene to look around.'; }
   }
   resumeWalking();
-  if (audio && soundOn) {
-    await audio.ctx.resume();
-    audio.master.gain.setTargetAtTime(masterLevel(),audio.ctx.currentTime,.15);
-  }
+  await wakeSound();
 }
 function resumeWalking() {
   playing = true;
@@ -44,10 +41,12 @@ renderer.domElement.addEventListener('click',() => { if (!playing || (!coarse &&
 document.addEventListener('pointerlockchange',() => { if (!document.pointerLockElement && playing && !coarse) pause(); });
 document.addEventListener('mousemove',event => { if (playing && document.pointerLockElement) look(event.movementX,event.movementY); });
 document.addEventListener('keydown',event => {
-  if (!['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','KeyE','Escape'].includes(event.code)) return;
+  if (!['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','KeyE','Space','Escape'].includes(event.code)) return;
   if (playing) event.preventDefault();
   if (event.code === 'Escape') { pause(); return; }
   if (!playing) return;
+  if (soundOn && (!audio || audio.ctx.state === 'suspended')) wakeSound();
+  if (event.code === 'Space' && !event.repeat) jump();
   keys.add(event.code); if (event.code === 'KeyE' && !event.repeat) interact();
 });
 document.addEventListener('keyup',event => keys.delete(event.code));
@@ -66,6 +65,7 @@ for (const button of document.querySelectorAll('[data-key]')) {
   for (const name of ['pointerup','pointercancel','lostpointercapture']) button.addEventListener(name,() => keys.delete(button.dataset.key));
 }
 document.getElementById('touch-use').addEventListener('click',interact); document.getElementById('touch-pause').addEventListener('click',pause);
-if (coarse) document.querySelector('.controls').innerHTML = '<dt>ARROWS</dt><dd>Walk in any direction</dd><dt>DRAG</dt><dd>Look around</dd><dt>E / Ⅱ</dt><dd>Interact / pause</dd>';
+document.getElementById('touch-jump').addEventListener('pointerdown',event => { event.preventDefault(); jump(); });
+if (coarse) document.querySelector('.controls').innerHTML = '<dt>ARROWS</dt><dd>Walk in any direction</dd><dt>DRAG</dt><dd>Look around</dd><dt>↑</dt><dd>Jump</dd><dt>E / Ⅱ</dt><dd>Interact / pause</dd>';
 function message(text) { prompt.textContent = text; messageUntil = time.value+3; }
 function interact() { if (playing && active) active.use(); }

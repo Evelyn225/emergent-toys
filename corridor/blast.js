@@ -73,5 +73,5 @@ function endExperience() {
   const next = new URL(location.href);
   next.searchParams.delete('spawn');
   next.searchParams.set('restart','1');
-  setTimeout(() => location.replace(next.href),0);
+  setTimeout(() => location.replace(next.href),2000);
 }

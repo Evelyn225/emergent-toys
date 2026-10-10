@@ -35,7 +35,7 @@ function updateInteraction() {
   if (time.value > messageUntil) prompt.textContent = playing && active ? active.text() : '';
 }
 function updateCamera() {
-  camera.position.set(player.x,player.y+eyeHeight+stepEase,player.z);
+  camera.position.set(player.x,player.y+eyeHeight+stepEase+jumpOffset,player.z);
   camera.rotation.set(pitch,yaw,0,'YXZ');
   if (shake > .002) {
     const t = time.value, amount = shake*.045;
@@ -106,7 +106,7 @@ function update(dt) {
       const oldX = player.x, oldZ = player.z;
       move(dx,dz);
       walked += Math.hypot(player.x-oldX,player.z-oldZ);
-      if (walked > 1.65) {
+      if (walked > 1.65 && jumpOffset === 0) {
         walked %= 1.65;
         footstep();
       }
@@ -125,6 +125,7 @@ function update(dt) {
   updateDoors(dt);
   updateBlast(dt);
   updateCollapse(dt);
+  updateJump(dt);
   updateCamera();
   updateWayOut();
   updateSurface(dt);

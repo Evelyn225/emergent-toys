@@ -66,6 +66,7 @@
     #pad button:first-child { grid-column: 2; }
     #pad button:nth-child(2) { grid-column: 1; }
     @media (pointer: coarse) { body.playing #mobile { display: flex; } }
+    @media (max-width: 350px) { #mobile button { width: 44px; height: 44px; } #pad { grid-template-columns: repeat(3, 44px); } }
     @media (max-width: 550px) { #hud { top: 18px; left: 18px; } #sound { top: 14px; right: 48px; } }
   </style>
 </head>
@@ -73,7 +74,7 @@
   <a href="/" aria-label="Home" style="position:fixed;top:10px;right:10px;z-index:1000;line-height:0;text-decoration:none;transition:transform .2s cubic-bezier(.68,-.55,.265,1.55)" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" onmousedown="this.style.transform='scale(.95)'" onmouseup="this.style.transform='scale(1.2)'">
     <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png" alt="home" style="width:22px;height:22px;object-fit:contain;image-rendering:pixelated;display:block">
   </a>
-  <button id="sound" aria-pressed="false">SOUND OFF</button>
+  <button id="sound" aria-pressed="true">SOUND ON</button>
   <div id="hud"><div id="altitude">LEVEL +00.0 M<span>WASD MOVE / ESC PAUSE</span><span id="carry" hidden>CARRYING KEY</span></div></div>
   <div id="reticle" hidden></div><div id="prompt"></div>
   <div id="end" hidden><div id="restart" role="status"><span id="restart-label">RESTARTING GAME</span><progress id="restart-progress" max="100" value="0" aria-label="Restarting game"></progress></div></div>
@@ -84,7 +85,7 @@
   <div id="veil"><div id="card">
     <h1>Substructure</h1>
     <button id="enter" disabled><span id="enter-label">LOADING</span><span aria-hidden="true">↗</span></button>
-    <dl class="controls"><dt>W A S D</dt><dd>Walk in any direction</dd><dt>MOUSE</dt><dd>Look around</dd><dt>SHIFT / E</dt><dd>Walk faster / interact</dd><dt>ESC</dt><dd>Pause and release cursor</dd></dl>
+    <dl class="controls"><dt>W A S D</dt><dd>Walk in any direction</dd><dt>MOUSE</dt><dd>Look around</dd><dt>SPACE</dt><dd>Jump</dd><dt>SHIFT / E</dt><dd>Walk faster / interact</dd><dt>ESC</dt><dd>Pause and release cursor</dd></dl>
     <div class="settings">
       <label for="look-speed">LOOK SPEED</label><span class="setting"><input id="look-speed" type="range" min="0.25" max="3" step="0.05"><output id="look-speed-value" for="look-speed"></output></span>
       <label for="invert-look">INVERT Y</label><span class="setting"><input id="invert-look" type="checkbox"></span>
@@ -93,7 +94,7 @@
     <p id="notice" role="status"></p>
     <button id="forget" hidden>FORGET AND START AGAIN</button>
   </div></div>
-  <div id="mobile"><div id="pad"><button data-key="KeyW" aria-label="Forward">↑</button><button data-key="KeyA" aria-label="Left">←</button><button data-key="KeyS" aria-label="Back">↓</button><button data-key="KeyD" aria-label="Right">→</button></div><button id="touch-use" aria-label="Interact">E</button><button id="touch-pause" aria-label="Pause">Ⅱ</button></div>
+  <div id="mobile"><div id="pad"><button data-key="KeyW" aria-label="Forward">↑</button><button data-key="KeyA" aria-label="Left">←</button><button data-key="KeyS" aria-label="Back">↓</button><button data-key="KeyD" aria-label="Right">→</button></div><button id="touch-jump" aria-label="Jump">↑</button><button id="touch-use" aria-label="Interact">E</button><button id="touch-pause" aria-label="Pause">Ⅱ</button></div>
   <script type="module" src="corridor.bundle.js"></script>
   <script defer src="/_vercel/insights/script.js"></script>
 </body>

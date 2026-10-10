@@ -117,13 +117,23 @@ function loopSource(sample) {
   source.start(0,source.loopStart);
   return source;
 }
-document.getElementById('sound').addEventListener('click',async () => {
+async function wakeSound() {
+  if (!soundOn || ended) return;
   try {
-    if (!audio) audio = createAudio(); soundOn = !soundOn; await audio.ctx.resume();
-    if (!ended) audio.master.gain.setTargetAtTime(soundOn && playing ? masterLevel() : 0,audio.ctx.currentTime,.1);
-    document.getElementById('sound').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
-    document.getElementById('sound').setAttribute('aria-pressed',String(soundOn));
+    if (!audio) audio = createAudio();
+    await audio.ctx.resume();
+    audio.master.gain.setTargetAtTime(soundOn && playing && !ended ? masterLevel() : 0,audio.ctx.currentTime,.1);
   } catch { document.getElementById('sound').textContent = 'SOUND UNAVAILABLE'; }
+}
+document.getElementById('sound').addEventListener('click',async () => {
+  soundOn = !soundOn;
+  document.getElementById('sound').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
+  document.getElementById('sound').setAttribute('aria-pressed',String(soundOn));
+  if (soundOn) await wakeSound();
+  else if (audio) audio.master.gain.setTargetAtTime(0,audio.ctx.currentTime,.1);
+});
+document.addEventListener('pointerdown',() => {
+  if (playing && soundOn && (!audio || audio.ctx.state === 'suspended')) wakeSound();
 });
 function chime(frequency,duration,position = null) {
   if (!audio || !soundOn) return;

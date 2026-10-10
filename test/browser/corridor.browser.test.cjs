@@ -160,9 +160,50 @@ test('walking speed is independent of update frequency and diagonal input is nor
   for (const distance of distances) assert.ok(Math.abs(distance-2.8)<.001,JSON.stringify(distances));
 });
 
+test('sound is enabled by default, starts on entry, and can be muted before entering', async t => {
+  const page = await open(t);
+  assert.equal(await page.locator('#sound').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.evaluate(() => corridorTest.getState().audio),null,'audio waits for a player gesture');
+  await page.click('#enter');
+  await page.waitForFunction(() => corridorTest.getState().audio === 'running');
+  await page.reload(); await page.waitForFunction(() => !!window.corridorTest);
+  await page.click('#sound');
+  assert.equal(await page.locator('#sound').getAttribute('aria-pressed'),'false');
+  await page.click('#enter');
+  assert.equal(await page.evaluate(() => corridorTest.getState().audio),null,'entry respects Sound Off');
+  await page.keyboard.press('Escape');
+  await page.click('#sound');
+  await page.waitForFunction(() => corridorTest.getState().audio === 'running');
+});
+
+test('Space gives a small hop without crossing rails, repeats, or movement while paused', async t => {
+  const page = await open(t);
+  await page.click('#enter');
+  await page.evaluate(() => { corridorTest.setPosition(12,0,-42); });
+  await page.keyboard.down('Space');
+  const result = await page.evaluate(() => {
+    const game = corridorTest;
+    game.update(.1); const rising = game.getState();
+    document.dispatchEvent(new KeyboardEvent('keydown',{ code:'Space',repeat:true }));
+    game.update(.1); const peak = game.getState();
+    game.move(20,0); const rail = game.getState();
+    game.pause(); game.update(.2); const paused = game.getState();
+    game.setPlaying(true); game.update(.3); const landed = game.getState();
+    game.update(.2); const held = game.getState();
+    return { rising,peak,rail,paused,landed,held };
+  });
+  await page.keyboard.up('Space');
+  assert.ok(result.rising.jumpOffset > .1 && result.peak.jumpOffset <= .25,'a modest visible hop');
+  assert.ok(result.peak.eyeY > 1.8,'the camera rises with the hop');
+  assert.equal(result.peak.y,0,'the hop keeps the existing grounded route');
+  assert.ok(result.rail.x < 13.1,'hopping cannot cross the bridge railing');
+  assert.equal(result.paused.jumpOffset,result.rail.jumpOffset,'pause freezes the hop');
+  assert.equal(result.landed.jumpOffset,0,'the hop lands');
+  assert.equal(result.held.jumpOffset,0,'holding Space does not bounce again');
+});
+
 test('pump and overlook button respond to real E input; optional audio initializes', async t => {
   const page = await open(t);
-  await page.click('#sound');
   assert.equal(await page.locator('#sound').getAttribute('aria-pressed'),'true');
   await page.click('#enter');
   await page.waitForFunction(() => corridorTest.getState().playing);
@@ -378,11 +419,13 @@ test('overlook deck has no coplanar wall tops and descent ends on a clear landin
 });
 
 test('touch controls work on a narrow screen and release input when paused', async t => {
-  const page = await open(t,{ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await open(t,{ viewport: { width: 320, height: 844 }, isMobile: true, hasTouch: true });
   await page.tap('#enter');
   await page.waitForFunction(() => corridorTest.getState().playing);
   assert.equal(await page.locator('#mobile').isVisible(),true);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
+  await page.tap('#touch-jump');
+  await page.waitForFunction(() => corridorTest.getState().jumpOffset > .05);
   const result = await page.evaluate(() => {
     const game = corridorTest, button = document.querySelector('[data-key=KeyW]');
     button.dispatchEvent(new PointerEvent('pointerdown',{ pointerId: 1, bubbles: true }));
@@ -857,10 +900,11 @@ test('the key door opens onto a lined service run that turns to rock and ends in
 test('the red button sequence pauses, then restarts through a loading screen at the remembered refresh spawn', { timeout: 60000 }, async t => {
   const page = await open(t);
   let releaseRestart;
+  let restartRequested = false;
   const holdRestart = new Promise(resolve => { releaseRestart = resolve; });
   t.after(releaseRestart);
   await page.route('**/corridor.html?*', async route => {
-    if (new URL(route.request().url()).searchParams.has('restart')) await holdRestart;
+    if (new URL(route.request().url()).searchParams.has('restart')) { restartRequested = true; await holdRestart; }
     await route.continue();
   });
   await page.addInitScript(() => {
@@ -869,7 +913,6 @@ test('the red button sequence pauses, then restarts through a loading screen at 
       for (const record of records) if (record.target.id === 'restart-progress') restartMilestones.push(record.target.value);
     }).observe(document,{ subtree: true,attributes: true,attributeFilter: ['value'] });
   });
-  await page.click('#sound');
   await page.click('#enter');
   await page.waitForFunction(() => corridorTest.getState().playing);
   await installFollow(page);
@@ -916,6 +959,9 @@ test('the red button sequence pauses, then restarts through a loading screen at 
   assert.deepEqual(timeline.loading,{ visible: true,label: 'RESTARTING GAME',progress: 0,credits: false,remembered: '1' });
   const after = timeline.after;
   assert.ok(!after.veil && after.ending && after.fuse === timeline.end.fuse,'nothing resumes after the end');
+  await page.waitForTimeout(1000);
+  assert.equal(restartRequested,false,'restart navigation waits while the black screen holds');
+  assert.ok((await state()).ended,'the black screen holds for more than a second before reloading');
   const navigation = page.waitForNavigation();
   releaseRestart(); await navigation;
   await page.waitForFunction(() => window.corridorTest && corridorTest.getState().playing && !corridorTest.getState().ending);
@@ -926,6 +972,7 @@ test('the red button sequence pauses, then restarts through a loading screen at 
   assert.deepEqual(await page.evaluate(() => restartMilestones),[20,45,75,85,100],'progress follows completed loading stages');
   await page.click('canvas');
   await page.waitForFunction(() => !!document.pointerLockElement);
+  await page.waitForFunction(() => corridorTest.getState().audio === 'running');
   await page.keyboard.down('w'); await page.waitForTimeout(200); await page.keyboard.up('w');
   assert.ok((await state()).z < restarted.z-.1,'mouse capture and movement work after the automatic restart');
   await page.reload(); await page.waitForFunction(() => !!window.corridorTest);
@@ -1024,7 +1071,6 @@ test('the service cable tray starts inside the doorway with a closed end', async
 
 test('sound: recorded steps follow the floor, reverb follows the zone, and water and the lift motor run with them', async t => {
   const page = await open(t);
-  await page.click('#sound');
   await page.click('#enter');
   await page.waitForFunction(() => corridorTest.getState().playing);
   await installFollow(page);
@@ -1152,7 +1198,6 @@ test('before the ending the intake ends at a shut door, with no sign, that will 
 
 test('after the ending the door stands open, and sprinting up the stair to the surface takes 25 to 30 seconds', async t => {
   const page = await openCollapsed(t);
-  await page.click('#sound');
   await page.click('#enter');
   await page.waitForFunction(() => corridorTest.getState().playing);
   await page.waitForFunction(() => ['birds','hum','ending'].every(name => corridorTest.getState().samples.includes(name)),null,{ timeout: 20000 });

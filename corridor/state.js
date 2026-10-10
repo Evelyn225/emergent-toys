@@ -26,7 +26,7 @@ const eyeHeight = 1.65, radius = .24, stepHeight = .26;
 const player = new THREE.Vector3(0, 0, 3);
 let yaw = 0, pitch = 0, playing = false, walked = 0, zone = '', active = null;
 let pumpOn = false, descentReleased = false, messageUntil = 0, touchLook = null;
-let audio = null, soundOn = false;
+let audio = null, soundOn = true;
 let audioZone = null, audioPump = null;
 let pumpRotor, pumpWheel, pumpIndicator, descentCap, descentGate, ascentSign, returnSign;
 const rampJoins = [];

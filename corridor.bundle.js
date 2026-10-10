@@ -234,7 +234,7 @@ const eyeHeight = 1.65, radius = .24, stepHeight = .26;
 const player = new THREE.Vector3(0, 0, 3);
 let yaw = 0, pitch = 0, playing = false, walked = 0, zone = '', active = null;
 let pumpOn = false, descentReleased = false, messageUntil = 0, touchLook = null;
-let audio = null, soundOn = false;
+let audio = null, soundOn = true;
 let audioZone = null, audioPump = null;
 let pumpRotor, pumpWheel, pumpIndicator, descentCap, descentGate, ascentSign, returnSign;
 const rampJoins = [];
@@ -3054,7 +3054,7 @@ function endExperience() {
   const next = new URL(location.href);
   next.searchParams.delete('spawn');
   next.searchParams.set('restart','1');
-  setTimeout(() => location.replace(next.href),0);
+  setTimeout(() => location.replace(next.href),2000);
 }
 // Floors are raycast directly. Walls use footprints, including sloped rails.
 const down = new THREE.Vector3(0,-1,0), up = new THREE.Vector3(0,1,0);
@@ -3102,6 +3102,24 @@ function blocked(x,z,y) {
   return ceilingHits.length > 0;
 }
 let stepEase = 0;
+// A small hop changes the eye height while the feet keep following the existing route and rails.
+let jumpOffset = 0, jumpVelocity = 0;
+function jump() {
+  if (!playing || ended || jumpOffset > 0 || jumpVelocity > 0) return;
+  jumpVelocity = 2.4;
+}
+function updateJump(dt) {
+  if (!playing || dt <= 0 || jumpOffset === 0 && jumpVelocity === 0) return;
+  jumpOffset += jumpVelocity*dt-6*dt*dt;
+  jumpVelocity -= 12*dt;
+  rayOrigin.set(player.x,player.y+.05,player.z); ray.set(rayOrigin,up); ray.far = eyeHeight+stepEase+Math.max(0,jumpOffset)+.08;
+  ceilingHits.length = 0; ray.intersectObjects(overheadSurfaces,false,ceilingHits);
+  if (ceilingHits.length) {
+    const clearance = Math.max(0,ceilingHits[0].distance+.05-eyeHeight-stepEase-.08);
+    if (jumpOffset > clearance) { jumpOffset = clearance; jumpVelocity = Math.min(0,jumpVelocity); }
+  }
+  if (jumpOffset <= 0) { jumpOffset = 0; jumpVelocity = 0; footstep(); }
+}
 function tryMove(x,z) {
   const y = floorHeight(x,z,player.y);
   if (y === null || blocked(x,z,y)) return false;
@@ -3187,10 +3205,7 @@ async function start() {
     catch { notice.textContent = 'Mouse capture unavailable. Drag the scene to look around.'; }
   }
   resumeWalking();
-  if (audio && soundOn) {
-    await audio.ctx.resume();
-    audio.master.gain.setTargetAtTime(masterLevel(),audio.ctx.currentTime,.15);
-  }
+  await wakeSound();
 }
 function resumeWalking() {
   playing = true;
@@ -3204,10 +3219,12 @@ renderer.domElement.addEventListener('click',() => { if (!playing || (!coarse &&
 document.addEventListener('pointerlockchange',() => { if (!document.pointerLockElement && playing && !coarse) pause(); });
 document.addEventListener('mousemove',event => { if (playing && document.pointerLockElement) look(event.movementX,event.movementY); });
 document.addEventListener('keydown',event => {
-  if (!['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','KeyE','Escape'].includes(event.code)) return;
+  if (!['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','KeyE','Space','Escape'].includes(event.code)) return;
   if (playing) event.preventDefault();
   if (event.code === 'Escape') { pause(); return; }
   if (!playing) return;
+  if (soundOn && (!audio || audio.ctx.state === 'suspended')) wakeSound();
+  if (event.code === 'Space' && !event.repeat) jump();
   keys.add(event.code); if (event.code === 'KeyE' && !event.repeat) interact();
 });
 document.addEventListener('keyup',event => keys.delete(event.code));
@@ -3226,7 +3243,8 @@ for (const button of document.querySelectorAll('[data-key]')) {
   for (const name of ['pointerup','pointercancel','lostpointercapture']) button.addEventListener(name,() => keys.delete(button.dataset.key));
 }
 document.getElementById('touch-use').addEventListener('click',interact); document.getElementById('touch-pause').addEventListener('click',pause);
-if (coarse) document.querySelector('.controls').innerHTML = '<dt>ARROWS</dt><dd>Walk in any direction</dd><dt>DRAG</dt><dd>Look around</dd><dt>E / Ⅱ</dt><dd>Interact / pause</dd>';
+document.getElementById('touch-jump').addEventListener('pointerdown',event => { event.preventDefault(); jump(); });
+if (coarse) document.querySelector('.controls').innerHTML = '<dt>ARROWS</dt><dd>Walk in any direction</dd><dt>DRAG</dt><dd>Look around</dd><dt>↑</dt><dd>Jump</dd><dt>E / Ⅱ</dt><dd>Interact / pause</dd>';
 function message(text) { prompt.textContent = text; messageUntil = time.value+3; }
 function interact() { if (playing && active) active.use(); }
 // Sound. Footsteps, machinery, doors, keys, detonations, ambience, and the ending music are
@@ -3348,13 +3366,23 @@ function loopSource(sample) {
   source.start(0,source.loopStart);
   return source;
 }
-document.getElementById('sound').addEventListener('click',async () => {
+async function wakeSound() {
+  if (!soundOn || ended) return;
   try {
-    if (!audio) audio = createAudio(); soundOn = !soundOn; await audio.ctx.resume();
-    if (!ended) audio.master.gain.setTargetAtTime(soundOn && playing ? masterLevel() : 0,audio.ctx.currentTime,.1);
-    document.getElementById('sound').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
-    document.getElementById('sound').setAttribute('aria-pressed',String(soundOn));
+    if (!audio) audio = createAudio();
+    await audio.ctx.resume();
+    audio.master.gain.setTargetAtTime(soundOn && playing && !ended ? masterLevel() : 0,audio.ctx.currentTime,.1);
   } catch { document.getElementById('sound').textContent = 'SOUND UNAVAILABLE'; }
+}
+document.getElementById('sound').addEventListener('click',async () => {
+  soundOn = !soundOn;
+  document.getElementById('sound').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
+  document.getElementById('sound').setAttribute('aria-pressed',String(soundOn));
+  if (soundOn) await wakeSound();
+  else if (audio) audio.master.gain.setTargetAtTime(0,audio.ctx.currentTime,.1);
+});
+document.addEventListener('pointerdown',() => {
+  if (playing && soundOn && (!audio || audio.ctx.state === 'suspended')) wakeSound();
 });
 function chime(frequency,duration,position = null) {
   if (!audio || !soundOn) return;
@@ -3625,7 +3653,7 @@ function updateInteraction() {
   if (time.value > messageUntil) prompt.textContent = playing && active ? active.text() : '';
 }
 function updateCamera() {
-  camera.position.set(player.x,player.y+eyeHeight+stepEase,player.z);
+  camera.position.set(player.x,player.y+eyeHeight+stepEase+jumpOffset,player.z);
   camera.rotation.set(pitch,yaw,0,'YXZ');
   if (shake > .002) {
     const t = time.value, amount = shake*.045;
@@ -3696,7 +3724,7 @@ function update(dt) {
       const oldX = player.x, oldZ = player.z;
       move(dx,dz);
       walked += Math.hypot(player.x-oldX,player.z-oldZ);
-      if (walked > 1.65) {
+      if (walked > 1.65 && jumpOffset === 0) {
         walked %= 1.65;
         footstep();
       }
@@ -3715,6 +3743,7 @@ function update(dt) {
   updateDoors(dt);
   updateBlast(dt);
   updateCollapse(dt);
+  updateJump(dt);
   updateCamera();
   updateWayOut();
   updateSurface(dt);
@@ -3728,7 +3757,7 @@ window.addEventListener('resize',fitCanvas);
 // Opt-in gameplay inspection; normal visits do not expose these hooks.
 if (new URLSearchParams(location.search).has('test')) window.corridorTest = {
   player,tunnelFrames,move,blocked,floorHeight,update,keys,pause,rampJoins,look,settings,
-  setPosition(x,y,z) { player.set(x,y,z); stepEase = 0; updateCamera(); updatePlace(); },
+  setPosition(x,y,z) { player.set(x,y,z); stepEase = jumpOffset = jumpVelocity = 0; updateCamera(); updatePlace(); },
   setLook(y,p = 0) { yaw = y; pitch = p; updateCamera(); updateInteraction(); },
   lookAt(x,y,z) {
     const dx = x-player.x, dy = y-player.y-eyeHeight, dz = z-player.z;
@@ -3752,7 +3781,7 @@ if (new URLSearchParams(location.search).has('test')) window.corridorTest = {
     }));
   },
   getState() { return {
-    x:player.x,y:player.y,z:player.z,eyeY: camera.position.y,yaw,pitch,playing,zone,pumpOn,descentReleased,
+    x:player.x,y:player.y,z:player.z,eyeY: camera.position.y,jumpOffset,yaw,pitch,playing,zone,pumpOn,descentReleased,
     waterY: -1.7+water.position.y, pumpRotation: pumpRotor.rotation.z, descentCapY: descentCap.position.y, descentCapLit: descentCap.material === lit,
     gateAngle: descentGate.rotation.y,
     liftPos,liftTarget,liftY: liftHeight(),liftGates: liftGates.map(gate => gate.open),

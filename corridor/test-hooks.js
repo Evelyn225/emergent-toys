@@ -1,7 +1,7 @@
 // Opt-in gameplay inspection; normal visits do not expose these hooks.
 if (new URLSearchParams(location.search).has('test')) window.corridorTest = {
   player,tunnelFrames,move,blocked,floorHeight,update,keys,pause,rampJoins,look,settings,
-  setPosition(x,y,z) { player.set(x,y,z); stepEase = 0; updateCamera(); updatePlace(); },
+  setPosition(x,y,z) { player.set(x,y,z); stepEase = jumpOffset = jumpVelocity = 0; updateCamera(); updatePlace(); },
   setLook(y,p = 0) { yaw = y; pitch = p; updateCamera(); updateInteraction(); },
   lookAt(x,y,z) {
     const dx = x-player.x, dy = y-player.y-eyeHeight, dz = z-player.z;
@@ -25,7 +25,7 @@ if (new URLSearchParams(location.search).has('test')) window.corridorTest = {
     }));
   },
   getState() { return {
-    x:player.x,y:player.y,z:player.z,eyeY: camera.position.y,yaw,pitch,playing,zone,pumpOn,descentReleased,
+    x:player.x,y:player.y,z:player.z,eyeY: camera.position.y,jumpOffset,yaw,pitch,playing,zone,pumpOn,descentReleased,
     waterY: -1.7+water.position.y, pumpRotation: pumpRotor.rotation.z, descentCapY: descentCap.position.y, descentCapLit: descentCap.material === lit,
     gateAngle: descentGate.rotation.y,
     liftPos,liftTarget,liftY: liftHeight(),liftGates: liftGates.map(gate => gate.open),

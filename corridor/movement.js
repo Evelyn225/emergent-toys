@@ -44,6 +44,24 @@ function blocked(x,z,y) {
   return ceilingHits.length > 0;
 }
 let stepEase = 0;
+// A small hop changes the eye height while the feet keep following the existing route and rails.
+let jumpOffset = 0, jumpVelocity = 0;
+function jump() {
+  if (!playing || ended || jumpOffset > 0 || jumpVelocity > 0) return;
+  jumpVelocity = 2.4;
+}
+function updateJump(dt) {
+  if (!playing || dt <= 0 || jumpOffset === 0 && jumpVelocity === 0) return;
+  jumpOffset += jumpVelocity*dt-6*dt*dt;
+  jumpVelocity -= 12*dt;
+  rayOrigin.set(player.x,player.y+.05,player.z); ray.set(rayOrigin,up); ray.far = eyeHeight+stepEase+Math.max(0,jumpOffset)+.08;
+  ceilingHits.length = 0; ray.intersectObjects(overheadSurfaces,false,ceilingHits);
+  if (ceilingHits.length) {
+    const clearance = Math.max(0,ceilingHits[0].distance+.05-eyeHeight-stepEase-.08);
+    if (jumpOffset > clearance) { jumpOffset = clearance; jumpVelocity = Math.min(0,jumpVelocity); }
+  }
+  if (jumpOffset <= 0) { jumpOffset = 0; jumpVelocity = 0; footstep(); }
+}
 function tryMove(x,z) {
   const y = floorHeight(x,z,player.y);
   if (y === null || blocked(x,z,y)) return false;
