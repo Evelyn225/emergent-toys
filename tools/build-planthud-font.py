@@ -1827,25 +1827,69 @@ def ink(rows):
 
 
 def draw(rows, shift):
-    """Merge each row's runs of lit pixels into rectangles."""
+    """Trace the lit pixels as merged outlines, one contour per shape edge.
+
+    Each pixel used to be part of its own row rectangle, so a glyph was a
+    stack of rectangles that only touched. Some renderers (notably Apple's)
+    leave hairline seams where separate contours meet, which shows up as
+    faint lines through the letters. Tracing the outline of the union
+    instead leaves no internal edges at all.
+
+    Edges run clockwise around ink (ink on the right), so holes come out
+    counter-clockwise, as TrueType expects.
+    """
+    lit = {(c, r) for r, line in enumerate(rows) for c, v in enumerate(line) if v == "#"}
+
+    def pt(c, r):
+        # grid corner (column c, row line r) to font units; row 0 is the top
+        return ((shift + c) * PX, (CAP - r) * PX)
+
+    # Boundary edges between a lit pixel and an unlit neighbour, as pairs of
+    # grid corners (column, row line), directed with the ink on the right.
+    edges = {}
+    for c, r in lit:
+        if (c - 1, r) not in lit:
+            edges.setdefault((c, r + 1), []).append((c, r))          # left side, up
+        if (c, r - 1) not in lit:
+            edges.setdefault((c, r), []).append((c + 1, r))          # top, rightwards
+        if (c + 1, r) not in lit:
+            edges.setdefault((c + 1, r), []).append((c + 1, r + 1))  # right side, down
+        if (c, r + 1) not in lit:
+            edges.setdefault((c + 1, r + 1), []).append((c, r + 1))  # bottom, leftwards
+
+    def turn_order(prev, cur, nxt):
+        # Where two shapes touch only at a corner, prefer turning right so
+        # each contour stays around its own shape: right, straight, left.
+        dx1, dy1 = cur[0] - prev[0], cur[1] - prev[1]
+        dx2, dy2 = nxt[0] - cur[0], nxt[1] - cur[1]
+        cross = dx1 * dy2 - dy1 * dx2   # grid y grows downward here
+        return 0 if cross > 0 else 1 if cross == 0 else 2
+
     pen = TTGlyphPen(None)
-    for r, line in enumerate(rows):
-        top = (CAP - r) * PX
-        bot = top - PX
-        c = 0
-        while c < W:
-            if line[c] == "#":
-                s = c
-                while c < W and line[c] == "#":
-                    c += 1
-                x0, x1 = (shift + s) * PX, (shift + c) * PX
-                pen.moveTo((x0, bot))
-                pen.lineTo((x0, top))
-                pen.lineTo((x1, top))
-                pen.lineTo((x1, bot))
-                pen.closePath()
-            else:
-                c += 1
+    while edges:
+        start = min(edges)
+        loop = [start]
+        cur = start
+        prev = None
+        while True:
+            outs = edges[cur]
+            if prev is not None and len(outs) > 1:
+                outs.sort(key=lambda n: turn_order(prev, cur, n))
+            nxt = outs.pop(0)
+            if not outs:
+                del edges[cur]
+            prev, cur = cur, nxt
+            if cur == start:
+                break
+            loop.append(cur)
+        # drop corners in the middle of straight runs
+        pts = [p for i, p in enumerate(loop)
+               if (loop[i - 1][0] - p[0]) * (loop[(i + 1) % len(loop)][1] - p[1])
+               != (loop[i - 1][1] - p[1]) * (loop[(i + 1) % len(loop)][0] - p[0])]
+        pen.moveTo(pt(*pts[0]))
+        for p in pts[1:]:
+            pen.lineTo(pt(*p))
+        pen.closePath()
     return pen.glyph()
 
 
