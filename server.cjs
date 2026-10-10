@@ -20,6 +20,9 @@ async function getHandler(moduleName) {
     return handlers[moduleName];
 }
 
+// Voronoi used to be misspelled; keep old links working.
+app.get(['/vornoi', '/vornoi.html'], (req, res) => res.redirect(301, '/voronoi.html'));
+
 app.get(['/ottawa', '/ottawa/'], (req, res) => {
   res.sendFile(path.resolve('ottawa-trip.html'));
 });
