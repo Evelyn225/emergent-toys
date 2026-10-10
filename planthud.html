@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlantHUD</title>
+<style>
+@font-face {
+  font-family: 'PlantHUD';
+  src: url('PlantHUD.woff2') format('woff2'), url('PlantHUD.woff') format('woff'), url('PlantHUD.ttf') format('truetype');
+}
+:root {
+  --bg: #000;
+  --ink: #f2f4ff;
+  --panel: #0a1a8c;
+  --dim: #2a2f55;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body {
+  font-family: 'PlantHUD', monospace;
+  font-size: 32px;
+  line-height: 1.25;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  min-height: 100vh;
+  padding: 24px 16px 40px;
+}
+.screen {
+  position: relative;
+  max-width: 900px;
+  margin: 0 auto;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, #333a 1px, transparent 1.5px) 0 0 / 48px 48px,
+    #000;
+}
+.crt .t, .crt {
+  /* red/cyan fringing plus a horizontal smear */
+  text-shadow:
+    -2px 0 rgba(255, 40, 120, .75),
+    2px 0 rgba(40, 255, 220, .7),
+    0 0 3px rgba(200, 210, 255, .55);
+  filter: blur(.35px) contrast(1.15);
+}
+.screen::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+}
+.jitter { animation: jit 3.2s steps(1) infinite; }
+@keyframes jit {
+  0%, 100% { transform: translateX(0); }
+  41% { transform: translateX(1px); }
+  42% { transform: translateX(-2px); }
+  43% { transform: translateX(0); }
+  77% { transform: translateX(2px); }
+  78% { transform: translateX(0); }
+}
+.hud { position: absolute; left: 4%; top: 3%; white-space: pre; }
+.rec { color: #ff2a3a; text-shadow: 0 0 6px #ff2a3a; }
+.blink { animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.panel {
+  position: absolute; left: 0; top: 40%;
+  background: var(--panel);
+  border: 2px solid #8fa0ff;
+  padding: 4px 10px;
+  white-space: pre;
+  font-size: 26px;
+}
+.panel .off { color: #9aa3e0; }
+.foot { position: absolute; left: 4%; bottom: 3%; white-space: pre; }
+.foot small { font-size: 22px; }
+.ruler {
+  position: absolute; right: 3%; top: 3%; bottom: 3%;
+  border-left: 2px solid #5f8; font-size: 18px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding-left: 14px;
+}
+.tester { max-width: 900px; margin: 28px auto 0; }
+.tester label { display: block; font-size: 20px; color: #8890c0; margin-bottom: 6px; }
+.tester textarea {
+  width: 100%; min-height: 3.4em; resize: vertical;
+  background: #000; color: var(--ink);
+  border: 2px solid var(--dim);
+  font: inherit; padding: 8px 10px;
+}
+.row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 20px; color: #8890c0; }
+.out { margin-top: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.charset { margin-top: 28px; white-space: pre-wrap; word-break: break-all; font-size: 28px; }
+a { color: #8fa0ff; }
+@media (max-width: 600px) {
+  body { font-size: 20px; }
+  .panel { font-size: 15px; }
+  .foot small { font-size: 14px; }
+  .ruler { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="hud crt jitter"><span class="rec"><span class="blink">●</span>REC</span>
+TC   <span id="tc">00:00:01:25</span>
+FRM  <span id="frm">005329</span>
+RES  1080x1350
+GRID 160x200
+FPS  23.8</div>
+  <div class="panel crt">B02  46,92
+B04  97,102
+B03 109,95
+B01  52,91
+<span class="off">B--   0,0
+B--   0,0
+B--   0,0
+B--   0,0</span></div>
+  <div class="foot crt jitter">SIMULATION PLANT
+<small>SEC-01-A07</small></div>
+  <div class="ruler crt"><span>120</span><span>100</span><span>080</span><span>060</span><span>040</span><span>020</span><span>000</span></div>
+</div>
+
+<div class="tester">
+  <label for="txt">type something</label>
+  <textarea id="txt">IT DOESN'T KNOW IT'S A TREE.</textarea>
+  <div class="row">
+    <label><input type="checkbox" id="fx" checked> crt effect</label>
+    <label>size <input type="range" id="sz" min="12" max="96" value="40"></label>
+    <a href="PlantHUD.ttf" download>download .ttf</a>
+  </div>
+  <div class="out crt" id="out"></div>
+  <div class="charset">ABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyz
+0123456789 ●°
+!"#$%&amp;'()*+,-./:;&lt;=&gt;?@[\]^_`{|}~</div>
+</div>
+
+<script>
+const txt = document.getElementById('txt'), out = document.getElementById('out');
+const fx = document.getElementById('fx'), sz = document.getElementById('sz');
+function sync() {
+  out.textContent = txt.value;
+  out.classList.toggle('crt', fx.checked);
+  out.style.fontSize = sz.value + 'px';
+}
+[txt, fx, sz].forEach(el => el.addEventListener('input', sync));
+sync();
+
+// running timecode at 24fps, starting from the frame in the recording
+let frame = 5329;
+const pad = (n, w = 2) => String(n).padStart(w, '0');
+setInterval(() => {
+  frame++;
+  const f = frame % 24, s = Math.floor(frame / 24);
+  document.getElementById('tc').textContent =
+    `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}:${pad(f)}`;
+  document.getElementById('frm').textContent = pad(frame, 6);
+}, 1000 / 24);
+</script>
+</body>
+</html>
