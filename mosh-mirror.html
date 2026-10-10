@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mosh mirror</title>
+<meta name="description" content="A webcam datamosh mirror running on a tiny homemade video codec. Drop keyframes, bloom P-frames, bend motion vectors and irradiate the bitstream.">
+<style>
+@font-face {
+  font-family: 'W95';
+  src: url('w95font.woff2') format('woff2'), url('w95font.woff') format('woff');
+  font-weight: normal;
+}
+@font-face {
+  font-family: 'W95';
+  src: url('w95font-bold.woff2') format('woff2'), url('w95font-bold.woff') format('woff');
+  font-weight: bold;
+}
+:root {
+  --bg: #000;
+  --fg: rgba(255,255,255,.86);
+  --dim: rgba(255,255,255,.42);
+  --faint: rgba(255,255,255,.12);
+  --hot: #ff2e63;
+  --cold: #33d6ff;
+  --bloom: #c86bff;
+  --panel-w: 280px;
+  --strip-h: 54px;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--fg);
+  font: 12px/1.4 'W95', monospace;
+}
+button, select, input { font: inherit; color: inherit; }
+kbd {
+  font: inherit; font-size: 10px; color: var(--dim);
+  border: 1px solid var(--faint); padding: 0 3px; margin-left: 4px;
+}
+
+/* ─── stage ─── */
+#stage {
+  position: fixed; left: 0; top: 0;
+  right: var(--panel-w); bottom: var(--strip-h);
+}
+body.nopanel #stage { right: 0; }
+#screen { position: absolute; }
+#screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#view { image-rendering: pixelated; }
+body.smooth #view { image-rendering: auto; }
+#overlay { pointer-events: none; }
+#flag {
+  position: absolute; left: 10px; top: 8px;
+  font-weight: bold; letter-spacing: 2px; font-size: 11px;
+  text-shadow: 0 0 6px #000, 0 0 2px #000;
+  pointer-events: none;
+}
+#flag .state { color: var(--fg); }
+#flag .state.mosh { color: var(--hot); }
+#flag .state.bloom { color: var(--bloom); }
+#flag .event { color: var(--hot); margin-left: 12px; opacity: 0; transition: opacity .4s; }
+#flag .event.on { opacity: 1; transition: none; }
+
+/* ─── panel ─── */
+#panel {
+  position: fixed; top: 0; right: 0; bottom: var(--strip-h);
+  width: var(--panel-w); overflow-y: auto;
+  border-left: 1px solid var(--faint);
+  background: #050505;
+  padding: 10px 12px 16px;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+body.nopanel #panel { display: none; }
+#panel header {
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: bold; letter-spacing: 3px; margin-bottom: 4px;
+}
+#panel header a { color: var(--dim); text-decoration: none; font-weight: normal; letter-spacing: 0; }
+#panel header a:hover { color: var(--fg); }
+.tag { color: var(--dim); font-size: 10px; margin-bottom: 10px; }
+section { border-top: 1px solid var(--faint); padding: 8px 0 6px; }
+h2 {
+  margin: 0 0 6px; font-size: 10px; font-weight: normal;
+  letter-spacing: 3px; text-transform: uppercase; color: var(--dim);
+}
+.btn {
+  background: transparent; border: 1px solid var(--faint);
+  padding: 5px 7px; cursor: pointer; text-align: left;
+  user-select: none; -webkit-user-select: none; touch-action: none;
+}
+.btn:hover { border-color: var(--dim); }
+.btn.on { border-color: var(--hot); color: var(--hot); }
+.btn.on kbd { color: var(--hot); border-color: var(--hot); }
+#bloomBtn.on { border-color: var(--bloom); color: var(--bloom); }
+.big { width: 100%; padding: 8px; font-weight: bold; letter-spacing: 2px; margin-bottom: 6px; }
+.row { display: flex; gap: 6px; margin-bottom: 6px; }
+.row .btn { flex: 1; }
+.stamps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 4px 0 2px; }
+.stamps .btn { text-align: center; padding: 5px 2px; }
+.lbl { color: var(--dim); font-size: 10px; margin-top: 4px; }
+
+.slider { margin: 5px 0 7px; }
+.slider .top { display: flex; justify-content: space-between; color: var(--dim); font-size: 11px; }
+.slider .top span:first-child { cursor: pointer; }
+.slider .top span:first-child:hover { color: var(--fg); }
+.slider .top .v { color: var(--fg); }
+input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 14px; background: transparent; margin: 2px 0 0;
+}
+input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--faint); }
+input[type=range]::-moz-range-track { height: 2px; background: var(--faint); }
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 8px; height: 14px; margin-top: -6px;
+  background: var(--fg); border: 0; border-radius: 0;
+}
+input[type=range]::-moz-range-thumb { width: 8px; height: 14px; background: var(--fg); border: 0; border-radius: 0; }
+input[type=range]:focus { outline: none; }
+input[type=range]:focus-visible::-webkit-slider-thumb { background: var(--cold); }
+
+.check { display: flex; align-items: center; gap: 6px; margin: 4px 0; cursor: pointer; color: var(--fg); }
+.check input { accent-color: #fff; margin: 0; }
+select {
+  width: 100%; background: #050505; border: 1px solid var(--faint);
+  padding: 4px; margin: 2px 0 6px;
+}
+.help { color: var(--dim); font-size: 10px; line-height: 1.6; }
+.help b { color: var(--fg); font-weight: normal; }
+
+/* ─── bitstream strip ─── */
+#strip {
+  position: fixed; left: 0; right: 0; bottom: 0; height: var(--strip-h);
+  border-top: 1px solid var(--faint);
+  display: flex; align-items: stretch; background: #030303;
+}
+#hist { flex: 1; min-width: 0; height: 100%; display: block; }
+#stats {
+  width: var(--panel-w); flex: none; padding: 6px 12px;
+  border-left: 1px solid var(--faint);
+  font-size: 10px; color: var(--dim); white-space: pre; line-height: 1.45;
+  overflow: hidden;
+}
+#stats b { color: var(--fg); font-weight: normal; }
+
+/* ─── start screen ─── */
+#start {
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  background: #000; text-align: center; padding: 16px;
+}
+#start.gone { display: none; }
+#start h1 {
+  font-size: 30px; letter-spacing: 8px; margin: 0 0 6px;
+  text-shadow: 3px 0 var(--hot), -3px 0 var(--cold);
+}
+#start p { color: var(--dim); max-width: 440px; margin: 0 auto 22px; line-height: 1.6; }
+#start .row { justify-content: center; flex-wrap: wrap; }
+#start .btn { padding: 9px 16px; flex: none; text-align: center; }
+#start .err { color: var(--hot); min-height: 1.4em; margin-top: 14px; }
+#start .home { display: inline-block; margin-top: 18px; color: var(--dim); text-decoration: none; font-size: 11px; }
+#start .home:hover { color: var(--fg); }
+
+#panelToggle {
+  display: none; position: fixed; right: 10px; top: 8px; z-index: 5;
+  background: #000; padding: 5px 9px;
+}
+#drop {
+  position: fixed; inset: 0; z-index: 20; display: none;
+  align-items: center; justify-content: center;
+  border: 2px dashed var(--hot); background: rgba(0,0,0,.6);
+  color: var(--hot); letter-spacing: 3px; pointer-events: none;
+}
+#drop.on { display: flex; }
+
+@media (max-width: 720px) {
+  :root { --strip-h: 46px; }
+  #stage { right: 0; }
+  #panel {
+    width: auto; left: 0; top: auto; max-height: 55vh;
+    border-left: 0; border-top: 1px solid var(--faint);
+    display: none;
+  }
+  body.mobilepanel #panel { display: block; }
+  body.nopanel #panel { display: none; }
+  #panelToggle { display: block; }
+  #stats { width: 150px; }
+  #stats .wide { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="screen">
+    <canvas id="view"></canvas>
+    <canvas id="overlay"></canvas>
+    <div id="flag"><span class="state">LIVE</span><span class="event"></span></div>
+  </div>
+</div>
+
+<button id="panelToggle" class="btn">controls</button>
+
+<aside id="panel">
+  <header><span>MOSH MIRROR</span><a href="/" title="back to eve net">eve net</a></header>
+  <div class="tag">homemade codec, broken on purpose</div>
+
+  <section>
+    <h2>mosh</h2>
+    <button id="moshBtn" class="btn big">MOSH <kbd>space</kbd></button>
+    <div class="row">
+      <button id="bloomBtn" class="btn">bloom <kbd>hold B</kbd></button>
+      <button id="keyBtn" class="btn">clean key <kbd>K</kbd></button>
+    </div>
+    <div id="leakSlot"></div>
+    <label class="check"><input type="checkbox" id="dropIntra" checked> drop intra blocks while moshing</label>
+    <div class="lbl">stamp a foreign I-frame</div>
+    <div class="stamps">
+      <button class="btn" data-stamp="echo">echo <kbd>1</kbd></button>
+      <button class="btn" data-stamp="bars">bars <kbd>2</kbd></button>
+      <button class="btn" data-stamp="image">image <kbd>3</kbd></button>
+    </div>
+  </section>
+
+  <section>
+    <h2>decoder</h2>
+    <div id="decSlot"></div>
+  </section>
+
+  <section>
+    <h2>encoder</h2>
+    <div id="encSlot"></div>
+    <div class="lbl">resolution</div>
+    <select id="res">
+      <option value="256">256 wide (crunchy)</option>
+      <option value="384" selected>384 wide</option>
+      <option value="512">512 wide</option>
+      <option value="640">640 wide (slow)</option>
+    </select>
+  </section>
+
+  <section>
+    <h2>view</h2>
+    <label class="check"><input type="checkbox" id="overlayChk"> show macroblocks + vectors <kbd>V</kbd></label>
+    <label class="check"><input type="checkbox" id="mirrorChk" checked> mirror <kbd>M</kbd></label>
+    <label class="check"><input type="checkbox" id="smoothChk"> smooth upscaling</label>
+    <div class="row" style="margin-top:6px">
+      <button id="recBtn" class="btn">record <kbd>R</kbd></button>
+      <button id="snapBtn" class="btn">snapshot <kbd>P</kbd></button>
+    </div>
+    <div class="lbl">source</div>
+    <div class="row">
+      <button class="btn" data-src="camera">camera</button>
+      <button class="btn" data-src="demo">demo</button>
+      <button class="btn" data-src="video">video file</button>
+    </div>
+  </section>
+
+  <section class="help">
+    <h2>how it works</h2>
+    Every frame is coded as 16&times;16 blocks: <b>skip</b>, <b>inter</b> (a motion vector plus a DCT residual) or <b>intra</b> (raw DCT).
+    Keyframes are all intra. MOSH throws keyframes and intra blocks away, so your motion keeps dragging stale pixels around.
+    Stamps put a different picture in the decoder that the encoder doesn't know about.
+    Radiation flips bits in the stream, and each row is a slice, so a hit garbles the rest of its row.
+    <br><br>
+    drop an image anywhere to stamp it &middot; <b>H</b> hides this panel &middot; double-click a slider name to reset it
+  </section>
+</aside>
+
+<footer id="strip">
+  <canvas id="hist"></canvas>
+  <div id="stats"></div>
+</footer>
+
+<div id="start">
+  <div>
+    <h1>MOSH MIRROR</h1>
+    <p>A tiny video codec written from scratch: motion search, DCT, bitstream and all. Your webcam goes in, a decoder you can break comes out.</p>
+    <div class="row">
+      <button class="btn" data-src="camera">use camera</button>
+      <button class="btn" data-src="demo">demo scene</button>
+      <button class="btn" data-src="video">video file</button>
+    </div>
+    <div class="err" id="startErr"></div>
+    <a class="home" href="/">&larr; eve net</a>
+  </div>
+</div>
+
+<div id="drop">DROP TO STAMP</div>
+<input type="file" id="imgFile" accept="image/*" hidden>
+<input type="file" id="vidFile" accept="video/*" hidden>
+
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════════════════════════════════
+   settings
+   ══════════════════════════════════════════════════════════════════════ */
+const S = {
+  leak: 0.2,        // fraction of the residual the decoder applies while moshing
+  dropIntra: true,
+  vecGain: 1,
+  twist: 0,         // degrees
+  radiation: 0,     // slider 0..100, mapped to a bit error rate
+  qp: 8,
+  gop: 60,
+  range: 16,
+  intraEager: 1,
+  width: 384,
+  overlay: false,
+  mirror: true,
+  smooth: false,
+};
+const FPS = 30;
+const MAX_MV = 96;
+
+/* ══════════════════════════════════════════════════════════════════════
+   frame geometry and planes (YCbCr 4:2:0)
+   ══════════════════════════════════════════════════════════════════════ */
+let W = 0, H = 0, CW = 0, CH = 0, MBW = 0, MBH = 0, NMB = 0;
+
+function makePlanes() {
+  return {
+    Y: new Uint8ClampedArray(W * H),
+    U: new Uint8ClampedArray(CW * CH),
+    V: new Uint8ClampedArray(CW * CH),
+  };
+}
+function fillGray(p) { p.Y.fill(16); p.U.fill(128); p.V.fill(128); }
+function copyPlanes(src, dst) { dst.Y.set(src.Y); dst.U.set(src.U); dst.V.set(src.V); }
+
+function rgbaToYuv(d, p) {
+  const { Y, U, V } = p;
+  for (let i = 0, n = W * H; i < n; i++) {
+    const o = i * 4;
+    Y[i] = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2];
+  }
+  for (let cy = 0; cy < CH; cy++) {
+    for (let cx = 0; cx < CW; cx++) {
+      const o0 = ((cy * 2) * W + cx * 2) * 4, o1 = o0 + W * 4;
+      const r = (d[o0] + d[o0 + 4] + d[o1] + d[o1 + 4]) * 0.25;
+      const g = (d[o0 + 1] + d[o0 + 5] + d[o1 + 1] + d[o1 + 5]) * 0.25;
+      const b = (d[o0 + 2] + d[o0 + 6] + d[o1 + 2] + d[o1 + 6]) * 0.25;
+      const ci = cy * CW + cx;
+      U[ci] = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+      V[ci] = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+    }
+  }
+}
+
+function yuvToRgba(p, d) {
+  const { Y, U, V } = p;
+  for (let y = 0; y < H; y++) {
+    const crow = (y >> 1) * CW;
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x, ci = crow + (x >> 1), o = i * 4;
+      const yy = Y[i], u = U[ci] - 128, v = V[ci] - 128;
+      d[o] = yy + 1.402 * v;
+      d[o + 1] = yy - 0.344136 * u - 0.714136 * v;
+      d[o + 2] = yy + 1.772 * u;
+      d[o + 3] = 255;
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   8x8 DCT, quantisation, zigzag
+   ══════════════════════════════════════════════════════════════════════ */
+const DCTM = new Float32Array(64);
+for (let u = 0; u < 8; u++) {
+  for (let x = 0; x < 8; x++) {
+    DCTM[u * 8 + x] = (u === 0 ? Math.SQRT1_2 : 1) * 0.5 * Math.cos((2 * x + 1) * u * Math.PI / 16);
+  }
+}
+const dctTmp = new Float32Array(64);
+
+function fdct(src, dst) {
+  for (let u = 0; u < 8; u++) {
+    for (let x = 0; x < 8; x++) {
+      let s = 0;
+      for (let k = 0; k < 8; k++) s += DCTM[u * 8 + k] * src[k * 8 + x];
+      dctTmp[u * 8 + x] = s;
+    }
+  }
+  for (let u = 0; u < 8; u++) {
+    for (let v = 0; v < 8; v++) {
+      let s = 0;
+      for (let k = 0; k < 8; k++) s += dctTmp[u * 8 + k] * DCTM[v * 8 + k];
+      dst[u * 8 + v] = s;
+    }
+  }
+}
+
+function idct(src, dst) {
+  for (let x = 0; x < 8; x++) {
+    for (let v = 0; v < 8; v++) {
+      let s = 0;
+      for (let u = 0; u < 8; u++) s += DCTM[u * 8 + x] * src[u * 8 + v];
+      dctTmp[x * 8 + v] = s;
+    }
+  }
+  for (let x = 0; x < 8; x++) {
+    for (let y = 0; y < 8; y++) {
+      let s = 0;
+      for (let v = 0; v < 8; v++) s += dctTmp[x * 8 + v] * DCTM[v * 8 + y];
+      dst[x * 8 + y] = s;
+    }
+  }
+}
+
+const ZZ = [
+   0, 1, 8,16, 9, 2, 3,10,17,24,32,25,18,11, 4, 5,
+  12,19,26,33,40,48,41,34,27,20,13, 6, 7,14,21,28,
+  35,42,49,56,57,50,43,36,29,22,15,23,30,37,44,51,
+  58,59,52,45,38,31,39,46,53,60,61,54,47,55,62,63,
+];
+// the JPEG luminance table; qp 8 lands near JPEG quality 50
+const JPEG_Q = [
+  16,11,10,16, 24, 40, 51, 61,  12,12,14,19, 26, 58, 60, 55,
+  14,13,16,24, 40, 57, 69, 56,  14,17,22,29, 51, 87, 80, 62,
+  18,22,37,56, 68,109,103, 77,  24,35,55,64, 81,104,113, 92,
+  49,64,78,87,103,121,120,101,  72,92,95,98,112,100,103, 99,
+];
+let INTRA_STEP = new Float32Array(64), INTER_STEP = new Float32Array(64), stepQp = -1;
+function stepsFor(qp) {
+  if (qp === stepQp) return;
+  stepQp = qp;
+  for (let i = 0; i < 64; i++) {
+    INTRA_STEP[i] = Math.max(1, JPEG_Q[i] * qp / 8);
+    const r = i >> 3, c = i & 7;
+    INTER_STEP[i] = Math.max(1, qp * 2 * (1 + (r + c) / 12));
+  }
+}
+
+function quantize(coef, step, deadzone, levels) {
+  let nz = 0;
+  for (let i = 0; i < 64; i++) {
+    const v = coef[i] / step[i];
+    let l = Math.floor((v < 0 ? -v : v) + deadzone);
+    if (l > 2047) l = 2047;
+    levels[i] = v < 0 ? -l : l;
+    if (l) nz = 1;
+  }
+  return nz;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   bitstream: MSB-first bits with exp-golomb codes, like H.264's ue/se
+   ══════════════════════════════════════════════════════════════════════ */
+class BitWriter {
+  constructor() { this.buf = new Uint8Array(512); this.pos = 0; }
+  bit(b) {
+    const i = this.pos >> 3;
+    while (i >= this.buf.length) {
+      const nb = new Uint8Array(this.buf.length * 2);
+      nb.set(this.buf); this.buf = nb;
+    }
+    if (b) this.buf[i] |= 0x80 >> (this.pos & 7);
+    this.pos++;
+  }
+  bits(v, n) { for (let i = n - 1; i >= 0; i--) this.bit((v >>> i) & 1); }
+  ue(v) {
+    v += 1;
+    const n = 32 - Math.clz32(v);
+    this.pos += n - 1;  // leading zeros: the buffer starts out zeroed
+    this.bits(v, n);
+  }
+  se(v) { this.ue(v <= 0 ? -2 * v : 2 * v - 1); }
+  bytes() { return this.buf.slice(0, (this.pos + 7) >> 3); }
+}
+
+class BitReader {
+  constructor(bytes) { this.b = bytes; this.pos = 0; this.len = bytes.length * 8; this.err = false; }
+  bit() {
+    if (this.pos >= this.len) { this.err = true; return 0; }
+    const v = (this.b[this.pos >> 3] >> (7 - (this.pos & 7))) & 1;
+    this.pos++;
+    return v;
+  }
+  bits(n) { let v = 0; for (let i = 0; i < n; i++) v = (v << 1) | this.bit(); return v; }
+  ue() {
+    let z = 0;
+    while (this.bit() === 0) {
+      if (++z > 20 || this.err) { this.err = true; return 0; }
+    }
+    return ((1 << z) | this.bits(z)) - 1;
+  }
+  se() { const k = this.ue(); return k & 1 ? (k + 1) >> 1 : -(k >> 1); }
+}
+
+function writeBlock(bw, levels) {
+  let n = 0;
+  for (let i = 0; i < 64; i++) if (levels[ZZ[i]]) n++;
+  bw.ue(n);
+  let last = -1;
+  for (let i = 0; i < 64; i++) {
+    const l = levels[ZZ[i]];
+    if (l) { bw.ue(i - last - 1); bw.se(l); last = i; }
+  }
+}
+
+function readBlock(br, coef, step) {
+  coef.fill(0);
+  let n = br.ue();
+  if (n > 64) n = 64;
+  let pos = -1;
+  for (let k = 0; k < n; k++) {
+    const run = br.ue();
+    let l = br.se();
+    pos += run + 1;
+    if (pos > 63 || br.err) break;
+    if (l > 2047) l = 2047; else if (l < -2047) l = -2047;
+    const z = ZZ[pos];
+    coef[z] = l * step[z];
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   motion compensated prediction, shared by encoder and decoder
+   ══════════════════════════════════════════════════════════════════════ */
+const predY = new Float32Array(256), predU = new Float32Array(64), predV = new Float32Array(64);
+
+function sampleBlock(plane, pw, ph, fx, fy, n, out) {
+  const ix = Math.floor(fx), iy = Math.floor(fy);
+  const ax = fx - ix, ay = fy - iy;
+  if (ax === 0 && ay === 0) {
+    if (ix >= 0 && iy >= 0 && ix + n <= pw && iy + n <= ph) {
+      for (let r = 0; r < n; r++) {
+        const row = (iy + r) * pw + ix;
+        for (let c = 0; c < n; c++) out[r * n + c] = plane[row + c];
+      }
+    } else {
+      for (let r = 0; r < n; r++) {
+        let y = iy + r; y = y < 0 ? 0 : y >= ph ? ph - 1 : y;
+        for (let c = 0; c < n; c++) {
+          let x = ix + c; x = x < 0 ? 0 : x >= pw ? pw - 1 : x;
+          out[r * n + c] = plane[y * pw + x];
+        }
+      }
+    }
+    return;
+  }
+  const w00 = (1 - ax) * (1 - ay), w10 = ax * (1 - ay), w01 = (1 - ax) * ay, w11 = ax * ay;
+  for (let r = 0; r < n; r++) {
+    let y0 = iy + r, y1 = y0 + 1;
+    y0 = y0 < 0 ? 0 : y0 >= ph ? ph - 1 : y0;
+    y1 = y1 < 0 ? 0 : y1 >= ph ? ph - 1 : y1;
+    for (let c = 0; c < n; c++) {
+      let x0 = ix + c, x1 = x0 + 1;
+      x0 = x0 < 0 ? 0 : x0 >= pw ? pw - 1 : x0;
+      x1 = x1 < 0 ? 0 : x1 >= pw ? pw - 1 : x1;
+      out[r * n + c] =
+        plane[y0 * pw + x0] * w00 + plane[y0 * pw + x1] * w10 +
+        plane[y1 * pw + x0] * w01 + plane[y1 * pw + x1] * w11;
+    }
+  }
+}
+
+function predict(ref, mbx, mby, mvx, mvy) {
+  sampleBlock(ref.Y, W, H, mbx * 16 + mvx, mby * 16 + mvy, 16, predY);
+  sampleBlock(ref.U, CW, CH, mbx * 8 + mvx / 2, mby * 8 + mvy / 2, 8, predU);
+  sampleBlock(ref.V, CW, CH, mbx * 8 + mvx / 2, mby * 8 + mvy / 2, 8, predV);
+}
+
+// block b of a macroblock: 0-3 luma quadrants, 4 = Cb, 5 = Cr
+function blockPlane(p, b) { return b < 4 ? p.Y : b === 4 ? p.U : p.V; }
+function blockOrigin(mbx, mby, b) {
+  if (b < 4) return [mbx * 16 + (b & 1) * 8, mby * 16 + (b >> 1) * 8, W];
+  return [mbx * 8, mby * 8, CW];
+}
+function predOf(b) { return b < 4 ? predY : b === 4 ? predU : predV; }
+function predOffset(b) { return b < 4 ? [(b & 1) * 8, (b >> 1) * 8, 16] : [0, 0, 8]; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   encoder
+   ══════════════════════════════════════════════════════════════════════ */
+const blk = new Float32Array(64), coefBuf = new Float32Array(64);
+const mbLevels = Array.from({ length: 6 }, () => new Int16Array(64));
+let prevMvX = new Int16Array(0), prevMvY = new Int16Array(0);
+let rowMvX = new Int16Array(0), rowMvY = new Int16Array(0);
+
+function sad(a, b, x0, y0, dx, dy, limit) {
+  let s = 0, ia = y0 * W + x0, ib = (y0 + dy) * W + x0 + dx;
+  for (let r = 0; r < 16; r++) {
+    for (let c = 0; c < 16; c++) { const d = a[ia + c] - b[ib + c]; s += d < 0 ? -d : d; }
+    if (s >= limit) return s;
+    ia += W; ib += W;
+  }
+  return s;
+}
+
+function activity(Y, x0, y0) {
+  let m = 0;
+  for (let r = 0; r < 16; r++) for (let c = 0; c < 16; c++) m += Y[(y0 + r) * W + x0 + c];
+  m /= 256;
+  let a = 0;
+  for (let r = 0; r < 16; r++) for (let c = 0; c < 16; c++) { const d = Y[(y0 + r) * W + x0 + c] - m; a += d < 0 ? -d : d; }
+  return a;
+}
+
+const LAMBDA = 3;
+let searchX = 0, searchY = 0;
+function motionSearch(cur, ref, x0, y0, cands, pmx, pmy) {
+  const R = S.range;
+  const minx = Math.max(-R, -x0), maxx = Math.min(R, W - 16 - x0);
+  const miny = Math.max(-R, -y0), maxy = Math.min(R, H - 16 - y0);
+  const cost = (dx, dy, lim) =>
+    sad(cur, ref, x0, y0, dx, dy, lim) + LAMBDA * (Math.abs(dx - pmx) + Math.abs(dy - pmy));
+  let bx = 0, by = 0, best = cost(0, 0, Infinity);
+  for (let i = 0; i < cands.length; i += 2) {
+    const cx = Math.max(minx, Math.min(maxx, cands[i]));
+    const cy = Math.max(miny, Math.min(maxy, cands[i + 1]));
+    if (cx === bx && cy === by) continue;
+    const s = cost(cx, cy, best);
+    if (s < best) { best = s; bx = cx; by = cy; }
+  }
+  for (let step = R >= 8 ? 4 : R >= 4 ? 2 : 1; step >= 1; step >>= 1) {
+    for (let it = 0; it < 12; it++) {
+      let nbx = bx, nby = by;
+      for (let d = 0; d < 4; d++) {
+        const nx = bx + (d === 0 ? step : d === 1 ? -step : 0);
+        const ny = by + (d === 2 ? step : d === 3 ? -step : 0);
+        if (nx < minx || nx > maxx || ny < miny || ny > maxy) continue;
+        const s = cost(nx, ny, best);
+        if (s < best) { best = s; nbx = nx; nby = ny; }
+      }
+      if (nbx === bx && nby === by) break;
+      bx = nbx; by = nby;
+    }
+  }
+  searchX = bx; searchY = by;
+  return sad(cur, ref, x0, y0, bx, by, Infinity);
+}
+
+function loadIntraBlock(src, mbx, mby, b, out) {
+  const [x, y, pw] = blockOrigin(mbx, mby, b);
+  const plane = blockPlane(src, b);
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) out[r * 8 + c] = plane[(y + r) * pw + x + c] - 128;
+}
+
+function writeIntraMB(bw, src, mbx, mby) {
+  for (let b = 0; b < 6; b++) {
+    loadIntraBlock(src, mbx, mby, b, blk);
+    fdct(blk, coefBuf);
+    quantize(coefBuf, INTRA_STEP, 0.5, mbLevels[b]);
+    writeBlock(bw, mbLevels[b]);
+  }
+}
+
+// Returns { type, slices: Uint8Array[] }. ref may be null for I-frames.
+function encodeFrame(src, ref, type) {
+  stepsFor(S.qp);
+  const slices = [];
+  const skipThr = 256 * (0.8 + S.qp * 0.12);
+  for (let mby = 0; mby < MBH; mby++) {
+    const bw = new BitWriter();
+    let pmx = 0, pmy = 0;
+    for (let mbx = 0; mbx < MBW; mbx++) {
+      const i = mby * MBW + mbx;
+      if (type === 'I') { writeIntraMB(bw, src, mbx, mby); prevMvX[i] = prevMvY[i] = 0; continue; }
+
+      const x0 = mbx * 16, y0 = mby * 16;
+      let mode = 1, mx = 0, my = 0;
+      const sad0 = sad(src.Y, ref.Y, x0, y0, 0, 0, Infinity);
+      if (sad0 < skipThr) {
+        mode = 0;
+      } else {
+        const up = mby > 0 ? i - MBW : -1;
+        const cands = [pmx, pmy, prevMvX[i], prevMvY[i]];
+        if (up >= 0) cands.push(rowMvX[mbx], rowMvY[mbx]);
+        const best = motionSearch(src.Y, ref.Y, x0, y0, cands, pmx, pmy);
+        mx = searchX; my = searchY;
+        if (S.intraEager > 0 && best * S.intraEager > activity(src.Y, x0, y0) + 1024) mode = 2;
+      }
+
+      let cbp = 0;
+      if (mode === 1) {
+        predict(ref, mbx, mby, mx, my);
+        for (let b = 0; b < 6; b++) {
+          const [x, y, pw] = blockOrigin(mbx, mby, b);
+          const plane = blockPlane(src, b), pred = predOf(b);
+          const [ox, oy, ps] = predOffset(b);
+          for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+            blk[r * 8 + c] = plane[(y + r) * pw + x + c] - pred[(oy + r) * ps + ox + c];
+          }
+          fdct(blk, coefBuf);
+          if (quantize(coefBuf, INTER_STEP, 0.3, mbLevels[b])) cbp |= 1 << b;
+        }
+        if (cbp === 0 && mx === 0 && my === 0) mode = 0;
+      }
+
+      bw.ue(mode);
+      if (mode === 1) {
+        bw.se(mx - pmx); bw.se(my - pmy); bw.ue(cbp);
+        for (let b = 0; b < 6; b++) if (cbp & (1 << b)) writeBlock(bw, mbLevels[b]);
+        pmx = mx; pmy = my;
+      } else {
+        pmx = pmy = 0;
+        if (mode === 2) writeIntraMB(bw, src, mbx, mby);
+      }
+      prevMvX[i] = rowMvX[mbx] = mode === 1 ? mx : 0;
+      prevMvY[i] = rowMvY[mbx] = mode === 1 ? my : 0;
+    }
+    slices.push(bw.bytes());
+  }
+  return { type, qp: S.qp, slices };
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   decoder
+   ══════════════════════════════════════════════════════════════════════ */
+const MODE_SKIP = 0, MODE_INTER = 1, MODE_INTRA = 2, MODE_DROPPED = 3;
+const CLEAN = { resGain: 1, vecGain: 1, cos: 1, sin: 0, dropIntra: false };
+const blockCoefs = Array.from({ length: 6 }, () => new Float32Array(64));
+const blockPix = Array.from({ length: 6 }, () => new Float32Array(64));
+let info = null;  // what the display decoder parsed last, for the overlay
+
+function decodeFrame(fr, ref, out, o, inf) {
+  stepsFor(fr.qp);
+  for (let mby = 0; mby < MBH; mby++) {
+    const br = new BitReader(fr.slices[mby] || new Uint8Array(0));
+    let pmx = 0, pmy = 0;
+    for (let mbx = 0; mbx < MBW; mbx++) {
+      let mode, mx = 0, my = 0, cbp = 0;
+      if (fr.type === 'I') mode = MODE_INTRA;
+      else mode = br.ue() % 3;
+      if (mode === MODE_INTER) {
+        mx = Math.max(-MAX_MV, Math.min(MAX_MV, pmx + br.se()));
+        my = Math.max(-MAX_MV, Math.min(MAX_MV, pmy + br.se()));
+        cbp = br.ue() & 63;
+        pmx = mx; pmy = my;
+      } else {
+        pmx = pmy = 0;
+        if (mode === MODE_INTRA) cbp = 63;
+      }
+      // coefficients are always parsed, even for blocks we throw away,
+      // or the rest of the slice would desync
+      const step = mode === MODE_INTRA ? INTRA_STEP : INTER_STEP;
+      for (let b = 0; b < 6; b++) {
+        if (cbp & (1 << b)) { readBlock(br, blockCoefs[b], step); idct(blockCoefs[b], blockPix[b]); }
+      }
+
+      if (mode === MODE_INTRA && o.dropIntra) mode = MODE_DROPPED;
+
+      // bent vectors: scale and rotate what the stream said
+      let fx = mx, fy = my;
+      if (mode === MODE_INTER && (o.vecGain !== 1 || o.sin !== 0)) {
+        fx = o.vecGain * (o.cos * mx - o.sin * my);
+        fy = o.vecGain * (o.sin * mx + o.cos * my);
+        if (Math.abs(fx) < 1e-3) fx = 0;
+        if (Math.abs(fy) < 1e-3) fy = 0;
+      }
+      if (inf) {
+        const i = mby * MBW + mbx;
+        inf.mode[i] = mode; inf.mx[i] = fx; inf.my[i] = fy;
+      }
+
+      if (mode === MODE_INTRA) {
+        for (let b = 0; b < 6; b++) {
+          const [x, y, pw] = blockOrigin(mbx, mby, b);
+          const plane = blockPlane(out, b), px = blockPix[b];
+          for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) plane[(y + r) * pw + x + c] = px[r * 8 + c] + 128;
+        }
+        continue;
+      }
+      predict(ref, mbx, mby, fx, fy);
+      const g = o.resGain;
+      for (let b = 0; b < 6; b++) {
+        const [x, y, pw] = blockOrigin(mbx, mby, b);
+        const plane = blockPlane(out, b), pred = predOf(b);
+        const [ox, oy, ps] = predOffset(b);
+        const coded = mode === MODE_INTER && (cbp & (1 << b)) && g !== 0;
+        const px = blockPix[b];
+        for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+          const p = pred[(oy + r) * ps + ox + c];
+          plane[(y + r) * pw + x + c] = coded ? p + g * px[r * 8 + c] : p;
+        }
+      }
+    }
+  }
+}
+
+/* bit errors: flip each bit of each slice with probability p */
+function irradiate(fr, p) {
+  if (p <= 0) return { fr, flips: 0 };
+  let flips = 0;
+  const lp = Math.log(1 - p);
+  const slices = fr.slices.map(s => {
+    const c = s.slice(), nb = c.length * 8;
+    let pos = -1;
+    for (;;) {
+      pos += 1 + Math.floor(Math.log(1 - Math.random()) / lp);
+      if (pos >= nb) break;
+      c[pos >> 3] ^= 0x80 >> (pos & 7);
+      flips++;
+    }
+    return c;
+  });
+  return { fr: { ...fr, slices }, flips };
+}
+function radiationRate() { return S.radiation <= 0 ? 0 : Math.pow(10, -6 + 4 * S.radiation / 100); }
+
+function frameBytes(fr) { let n = 0; for (const s of fr.slices) n += s.length; return n; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   pipeline state
+   ══════════════════════════════════════════════════════════════════════ */
+let src, enc, encNext, dec, decNext;
+let frameNo = 0, forceKey = false, resyncKey = false;
+let moshing = false, bloomHeld = false, lastP = null;
+let echoRing = [], echoTick = 0;
+const history = [];
+const HIST_MAX = 600;
+let lastStats = { ms: 0, modes: [0, 0, 0, 0], flips: 0 };
+
+const view = document.getElementById('view');
+const vctx = view.getContext('2d');
+const grab = document.createElement('canvas');
+const gctx = grab.getContext('2d', { willReadFrequently: true });
+let img = null;
+
+function setup(width, aspect) {
+  W = width;
+  H = Math.max(64, Math.round(width / aspect / 16) * 16);
+  CW = W / 2; CH = H / 2;
+  MBW = W / 16; MBH = H / 16; NMB = MBW * MBH;
+  src = makePlanes(); enc = makePlanes(); encNext = makePlanes();
+  dec = makePlanes(); decNext = makePlanes();
+  fillGray(enc); fillGray(dec);
+  prevMvX = new Int16Array(NMB); prevMvY = new Int16Array(NMB);
+  rowMvX = new Int16Array(MBW); rowMvY = new Int16Array(MBW);
+  info = { mode: new Uint8Array(NMB), mx: new Float32Array(NMB), my: new Float32Array(NMB) };
+  view.width = grab.width = W; view.height = grab.height = H;
+  img = vctx.createImageData(W, H);
+  frameNo = 0; forceKey = true; lastP = null; echoRing = []; history.length = 0;
+  setMosh(false);
+  layout();
+}
+
+function decoderOpts() {
+  const a = S.twist * Math.PI / 180;
+  return {
+    resGain: moshing ? S.leak : 1,
+    vecGain: S.vecGain, cos: Math.cos(a), sin: Math.sin(a),
+    dropIntra: moshing && S.dropIntra,
+  };
+}
+
+function swapEnc() { const t = enc; enc = encNext; encNext = t; }
+function swapDec() { const t = dec; dec = decNext; decNext = t; }
+
+function step() {
+  const t0 = performance.now();
+  if (!grabSource()) return;
+
+  // keep a short trail of past source frames for the echo stamp
+  if (++echoTick % 6 === 0) {
+    const e = echoRing.length >= 10 ? echoRing.shift() : makePlanes();
+    copyPlanes(src, e); echoRing.push(e);
+  }
+
+  const type = forceKey || frameNo % S.gop === 0 ? 'I' : 'P';
+  const resync = resyncKey;
+  forceKey = resyncKey = false;
+
+  const fr = encodeFrame(src, enc, type);
+  decodeFrame(fr, enc, encNext, CLEAN, null);  // the encoder's own idea of what the decoder holds
+  swapEnc();
+
+  const { fr: tx, flips } = irradiate(fr, radiationRate());
+  let fate;
+  if (bloomHeld && lastP) {
+    decodeFrame(lastP, dec, decNext, decoderOpts(), info); swapDec();
+    fate = 'bloom';
+  } else if (type === 'I' && moshing && !resync) {
+    fate = 'dropped';
+    flash('I-FRAME DROPPED');
+  } else {
+    if (resync) setMosh(false);
+    decodeFrame(tx, dec, decNext, decoderOpts(), info); swapDec();
+    fate = 'shown';
+  }
+  if (type === 'P') lastP = tx;
+
+  render();
+  const modes = [0, 0, 0, 0];
+  for (let i = 0; i < NMB; i++) modes[info.mode[i]]++;
+  lastStats = { ms: performance.now() - t0, modes, flips };
+  history.push({ bytes: frameBytes(fr), type, fate, flips });
+  if (history.length > HIST_MAX) history.shift();
+  frameNo++;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   stamps: encode a foreign picture as an I-frame and shove it into the
+   decoder only. The encoder never finds out.
+   ══════════════════════════════════════════════════════════════════════ */
+const stampCanvas = document.createElement('canvas');
+const sctx = stampCanvas.getContext('2d', { willReadFrequently: true });
+let stampImage = null;
+
+function stampPlanes(kind) {
+  const p = makePlanes();
+  if (kind === 'echo') {
+    if (!echoRing.length) return null;
+    copyPlanes(echoRing[0], p);
+    return p;
+  }
+  stampCanvas.width = W; stampCanvas.height = H;
+  if (kind === 'bars') drawBars(sctx, W, H);
+  else if (kind === 'image') {
+    if (!stampImage) return null;
+    drawCover(sctx, stampImage, stampImage.naturalWidth || stampImage.width, stampImage.naturalHeight || stampImage.height, W, H, false);
+  }
+  rgbaToYuv(sctx.getImageData(0, 0, W, H).data, p);
+  return p;
+}
+
+function stamp(kind) {
+  if (!src) return;
+  if (kind === 'image' && !stampImage) { document.getElementById('imgFile').click(); return; }
+  const p = stampPlanes(kind);
+  if (!p) return;
+  const fr = encodeFrame(p, null, 'I');
+  decodeFrame(fr, dec, decNext, CLEAN, null); swapDec();
+  setMosh(true);
+  flash('STAMP: ' + kind.toUpperCase());
+  render();
+}
+
+function drawBars(c, w, h) {
+  const top = ['#c0c0c0', '#c0c000', '#00c0c0', '#00c000', '#c000c0', '#c00000', '#0000c0'];
+  const mid = ['#0000c0', '#131313', '#c000c0', '#131313', '#00c0c0', '#131313', '#c0c0c0'];
+  const bw = w / 7, h1 = Math.round(h * 0.67), h2 = Math.round(h * 0.75);
+  top.forEach((col, i) => { c.fillStyle = col; c.fillRect(Math.floor(i * bw), 0, Math.ceil(bw), h1); });
+  mid.forEach((col, i) => { c.fillStyle = col; c.fillRect(Math.floor(i * bw), h1, Math.ceil(bw), h2 - h1); });
+  const bot = [['#00214c', 1.25], ['#ffffff', 1.25], ['#32006a', 1.25], ['#131313', 1.25], ['#090909', 0.67], ['#131313', 0.67], ['#1d1d1d', 0.66]];
+  let x = 0;
+  for (const [col, wd] of bot) { c.fillStyle = col; c.fillRect(Math.floor(x), h2, Math.ceil(wd * bw), h - h2); x += wd * bw; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   sources: camera, video file, procedural demo
+   ══════════════════════════════════════════════════════════════════════ */
+let source = null;        // 'camera' | 'video' | 'demo'
+let videoEl = null, stream = null;
+const demo = document.createElement('canvas');
+demo.width = 640; demo.height = 480;
+const dctx = demo.getContext('2d');
+
+function drawCover(c, el, sw, sh, w, h, mirror) {
+  const s = Math.max(w / sw, h / sh);
+  const dw = sw * s, dh = sh * s;
+  c.save();
+  if (mirror) { c.translate(w, 0); c.scale(-1, 1); }
+  c.drawImage(el, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  c.restore();
+}
+
+function sourceAspect() {
+  if (source === 'demo') return 4 / 3;
+  if (videoEl && videoEl.videoWidth) return videoEl.videoWidth / videoEl.videoHeight;
+  return 4 / 3;
+}
+
+function grabSource() {
+  if (source === 'demo') {
+    drawDemo(performance.now());
+    drawCover(gctx, demo, 640, 480, W, H, false);
+  } else {
+    if (!videoEl || videoEl.readyState < 2 || !videoEl.videoWidth) return false;
+    drawCover(gctx, videoEl, videoEl.videoWidth, videoEl.videoHeight, W, H, S.mirror && source === 'camera');
+  }
+  rgbaToYuv(gctx.getImageData(0, 0, W, H).data, src);
+  return true;
+}
+
+function drawDemo(t) {
+  const c = dctx, w = 640, h = 480;
+  const g = c.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, '#1b0633'); g.addColorStop(1, '#03263d');
+  c.fillStyle = g; c.fillRect(0, 0, w, h);
+
+  // drifting checker floor for texture
+  const ox = (t * 0.05) % 80, oy = (t * 0.025) % 80;
+  for (let gy = -2; gy < h / 40 + 2; gy++) {
+    for (let gx = -2; gx < w / 40 + 2; gx++) {
+      if ((gx + gy) & 1) continue;
+      c.fillStyle = (gx * 7 + gy * 3) % 5 === 0 ? 'rgba(255,190,80,.35)' : 'rgba(255,255,255,.08)';
+      c.fillRect(gx * 40 + ox, gy * 40 + oy, 40, 40);
+    }
+  }
+  // orbiting blobs
+  for (let i = 0; i < 6; i++) {
+    const a = t * 0.0005 * (1 + i * 0.37) + i * 1.7;
+    const x = w / 2 + Math.cos(a) * (90 + i * 30), y = h / 2 + Math.sin(a * 1.3) * (60 + i * 22);
+    const r = 34 + 14 * Math.sin(t * 0.001 + i);
+    const rg = c.createRadialGradient(x, y, 0, x, y, r);
+    const hue = (i * 61 + t * 0.02) % 360;
+    rg.addColorStop(0, `hsla(${hue},95%,70%,1)`);
+    rg.addColorStop(0.7, `hsla(${hue},95%,50%,.9)`);
+    rg.addColorStop(1, `hsla(${hue},95%,40%,0)`);
+    c.fillStyle = rg; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+  }
+  // wobbling word
+  c.save();
+  c.translate(w / 2 + Math.sin(t * 0.0004) * 120, h / 2 + Math.cos(t * 0.00053) * 60);
+  c.rotate(Math.sin(t * 0.0007) * 0.5);
+  const sc = 1 + 0.25 * Math.sin(t * 0.0011);
+  c.scale(sc, sc);
+  c.font = 'bold 110px W95, monospace';
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillStyle = '#ff2e63'; c.fillText('MOSH', 5, 0);
+  c.fillStyle = '#33d6ff'; c.fillText('MOSH', -5, 0);
+  c.fillStyle = '#fff'; c.fillText('MOSH', 0, 0);
+  c.restore();
+  // sweeping bar
+  const bx = ((t * 0.18) % (w + 200)) - 100;
+  c.fillStyle = 'rgba(255,255,255,.75)';
+  c.fillRect(bx, 0, 14, h);
+}
+
+function stopStream() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  if (videoEl) { videoEl.pause(); if (videoEl.src) URL.revokeObjectURL(videoEl.src); videoEl.removeAttribute('src'); videoEl.srcObject = null; }
+}
+
+function waitForVideo(v) {
+  return new Promise((res, rej) => {
+    if (v.readyState >= 2 && v.videoWidth) return res();
+    const ok = () => { cleanup(); res(); };
+    const bad = () => { cleanup(); rej(new Error('video failed to load')); };
+    const cleanup = () => { v.removeEventListener('loadeddata', ok); v.removeEventListener('error', bad); };
+    v.addEventListener('loadeddata', ok); v.addEventListener('error', bad);
+  });
+}
+
+async function useSource(kind, file) {
+  const err = document.getElementById('startErr');
+  err.textContent = '';
+  if (!videoEl) {
+    videoEl = document.createElement('video');
+    videoEl.muted = true; videoEl.playsInline = true; videoEl.loop = true;
+  }
+  try {
+    if (kind === 'camera') {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no camera API here (needs https)');
+      const s = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false });
+      stopStream();
+      stream = s;
+      videoEl.srcObject = s;
+      await videoEl.play();
+      await waitForVideo(videoEl);
+    } else if (kind === 'video') {
+      stopStream();
+      videoEl.src = URL.createObjectURL(file);
+      await waitForVideo(videoEl);
+      await videoEl.play();
+    } else {
+      stopStream();
+    }
+  } catch (e) {
+    err.textContent = kind === 'camera' ? 'camera unavailable: ' + (e.message || e.name) + '. try the demo scene.' : String(e.message || e);
+    if (source) flash('SOURCE FAILED');
+    return;
+  }
+  source = kind;
+  S.mirror = kind === 'camera';
+  document.getElementById('mirrorChk').checked = S.mirror;
+  document.getElementById('start').classList.add('gone');
+  setup(S.width, sourceAspect());
+  running = true;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   rendering, overlay, history strip
+   ══════════════════════════════════════════════════════════════════════ */
+const screenEl = document.getElementById('screen');
+const overlay = document.getElementById('overlay');
+const octx = overlay.getContext('2d');
+const hist = document.getElementById('hist');
+const hctx = hist.getContext('2d');
+const statsEl = document.getElementById('stats');
+
+function render() {
+  yuvToRgba(dec, img.data);
+  vctx.putImageData(img, 0, 0);
+  if (recorder) {
+    rctx.imageSmoothingEnabled = S.smooth;
+    rctx.drawImage(view, 0, 0, recCanvas.width, recCanvas.height);
+  }
+  drawOverlay();
+}
+
+function layout() {
+  const stage = document.getElementById('stage').getBoundingClientRect();
+  if (!W) return;
+  const s = Math.min(stage.width / W, stage.height / H);
+  const w = Math.floor(W * s), h = Math.floor(H * s);
+  screenEl.style.width = w + 'px'; screenEl.style.height = h + 'px';
+  screenEl.style.left = Math.floor((stage.width - w) / 2) + 'px';
+  screenEl.style.top = Math.floor((stage.height - h) / 2) + 'px';
+  const dpr = window.devicePixelRatio || 1;
+  overlay.width = w * dpr; overlay.height = h * dpr;
+  const hr = hist.getBoundingClientRect();
+  hist.width = Math.max(1, hr.width * dpr); hist.height = Math.max(1, hr.height * dpr);
+  drawOverlay();
+}
+
+function drawOverlay() {
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  if (!S.overlay || !info) return;
+  const sx = overlay.width / W, sy = overlay.height / H;
+  const bw = 16 * sx, bh = 16 * sy;
+  octx.lineWidth = Math.max(1, sx * 0.6);
+  for (let mby = 0; mby < MBH; mby++) {
+    for (let mbx = 0; mbx < MBW; mbx++) {
+      const i = mby * MBW + mbx, m = info.mode[i];
+      const x = mbx * bw, y = mby * bh;
+      if (m === MODE_INTRA) { octx.fillStyle = 'rgba(255,46,99,.28)'; octx.fillRect(x, y, bw, bh); }
+      else if (m === MODE_DROPPED) {
+        octx.strokeStyle = 'rgba(255,46,99,.8)';
+        octx.beginPath(); octx.moveTo(x + 2, y + 2); octx.lineTo(x + bw - 2, y + bh - 2);
+        octx.moveTo(x + bw - 2, y + 2); octx.lineTo(x + 2, y + bh - 2); octx.stroke();
+      } else if (m === MODE_INTER) {
+        octx.strokeStyle = 'rgba(51,214,255,.18)'; octx.strokeRect(x + .5, y + .5, bw - 1, bh - 1);
+        const mx = info.mx[i], my = info.my[i];
+        if (mx || my) {
+          const cx = x + bw / 2, cy = y + bh / 2;
+          const len = Math.hypot(mx, my);
+          octx.strokeStyle = `hsla(${190 - Math.min(len, 24) * 7},100%,65%,.95)`;
+          octx.beginPath(); octx.moveTo(cx, cy); octx.lineTo(cx - mx * sx, cy - my * sy); octx.stroke();
+          octx.fillStyle = octx.strokeStyle;
+          octx.fillRect(cx - 1.5 * sx * .5, cy - 1.5 * sy * .5, 1.5 * sx, 1.5 * sy);
+        }
+      }
+    }
+  }
+  octx.strokeStyle = 'rgba(255,255,255,.06)';
+  octx.lineWidth = 1;
+  octx.beginPath();
+  for (let mbx = 1; mbx < MBW; mbx++) { octx.moveTo(mbx * bw, 0); octx.lineTo(mbx * bw, overlay.height); }
+  for (let mby = 1; mby < MBH; mby++) { octx.moveTo(0, mby * bh); octx.lineTo(overlay.width, mby * bh); }
+  octx.stroke();
+}
+
+function drawHistory() {
+  const w = hist.width, h = hist.height;
+  hctx.clearRect(0, 0, w, h);
+  const dpr = window.devicePixelRatio || 1;
+  const bar = 3 * dpr, gap = 1 * dpr;
+  const n = Math.min(history.length, Math.floor(w / (bar + gap)));
+  if (!n) return;
+  let max = 1;
+  for (let k = history.length - n; k < history.length; k++) max = Math.max(max, history[k].bytes);
+  const pad = 6 * dpr, ih = h - pad * 2;
+  for (let k = 0; k < n; k++) {
+    const e = history[history.length - n + k];
+    const x = w - (n - k) * (bar + gap);
+    const bh = Math.max(1, Math.sqrt(e.bytes / max) * ih);
+    const y = h - pad - bh;
+    if (e.fate === 'dropped') {
+      hctx.strokeStyle = '#ff2e63'; hctx.lineWidth = dpr;
+      hctx.strokeRect(x + .5, y + .5, bar - 1, bh - 1);
+    } else {
+      hctx.fillStyle = e.fate === 'bloom' ? '#c86bff' : e.type === 'I' ? '#ffffff' : 'rgba(51,214,255,.55)';
+      hctx.fillRect(x, y, bar, bh);
+    }
+    if (e.flips) { hctx.fillStyle = '#ffd23f'; hctx.fillRect(x, pad - 3 * dpr, bar, 2 * dpr); }
+  }
+}
+
+function drawStats() {
+  if (!history.length) { statsEl.textContent = ''; return; }
+  let bytes = 0, k = 0;
+  for (let i = history.length - 1; i >= 0 && k < FPS; i--, k++) bytes += history[i].bytes;
+  const kbps = bytes * 8 / 1000 * (FPS / Math.max(1, k));
+  const last = history[history.length - 1];
+  const m = lastStats.modes;
+  const p = radiationRate();
+  statsEl.innerHTML =
+    `<b>#${frameNo}</b> ${last.type} ${last.fate}  <b>${(last.bytes / 1024).toFixed(1)}</b>kB\n` +
+    `<b>${kbps.toFixed(0)}</b> kbps  ${W}x${H}  ${lastStats.ms.toFixed(1)}ms\n` +
+    `<span class="wide">skip ${m[0]} inter ${m[1]} intra ${m[2]} drop ${m[3]}\n</span>` +
+    `<span class="wide">${p ? 'ber 1/' + Math.round(1 / p) + '  flips ' + lastStats.flips : 'ber 0'}</span>`;
+}
+
+let flashTimer = 0;
+const eventEl = document.querySelector('#flag .event');
+function flash(text) {
+  eventEl.textContent = text;
+  eventEl.classList.add('on');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => eventEl.classList.remove('on'), 500);
+}
+function updateFlag() {
+  const st = document.querySelector('#flag .state');
+  st.className = 'state' + (bloomHeld ? ' bloom' : moshing ? ' mosh' : '');
+  st.textContent = bloomHeld ? 'BLOOM' : moshing ? 'MOSHING' : 'LIVE';
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   recording and snapshots
+   ══════════════════════════════════════════════════════════════════════ */
+let recorder = null, recChunks = [];
+const recCanvas = document.createElement('canvas');
+const rctx = recCanvas.getContext('2d');
+
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function stamp8601() { return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19); }
+
+function toggleRecord() {
+  const btn = document.getElementById('recBtn');
+  if (recorder) { recorder.stop(); return; }
+  if (!window.MediaRecorder || !recCanvas.captureStream) { flash('NO RECORDER HERE'); return; }
+  const scale = Math.max(1, Math.round(1280 / W));
+  recCanvas.width = W * scale; recCanvas.height = H * scale;
+  const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+  const mime = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+  recChunks = [];
+  recorder = new MediaRecorder(recCanvas.captureStream(FPS), mime ? { mimeType: mime, videoBitsPerSecond: 12e6 } : undefined);
+  recorder.ondataavailable = e => { if (e.data.size) recChunks.push(e.data); };
+  recorder.onstop = () => {
+    const type = recorder.mimeType || 'video/webm';
+    download(new Blob(recChunks, { type }), `mosh-${stamp8601()}.${type.includes('mp4') ? 'mp4' : 'webm'}`);
+    recorder = null;
+    btn.classList.remove('on'); btn.firstChild.textContent = 'record ';
+  };
+  recorder.start(500);
+  btn.classList.add('on'); btn.firstChild.textContent = 'stop ';
+}
+
+function snapshot() {
+  if (!W) return;
+  const c = document.createElement('canvas');
+  const scale = Math.max(1, Math.round(1600 / W));
+  c.width = W * scale; c.height = H * scale;
+  const x = c.getContext('2d');
+  x.imageSmoothingEnabled = S.smooth;
+  x.drawImage(view, 0, 0, c.width, c.height);
+  c.toBlob(b => b && download(b, `mosh-${stamp8601()}.png`), 'image/png');
+  flash('SNAPSHOT');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   controls
+   ══════════════════════════════════════════════════════════════════════ */
+function slider(slot, key, label, min, max, stepv, fmt) {
+  const def = S[key];
+  const wrap = document.createElement('div');
+  wrap.className = 'slider';
+  wrap.innerHTML = `<div class="top"><span title="double-click to reset">${label}</span><span class="v"></span></div>
+    <input type="range" min="${min}" max="${max}" step="${stepv}" value="${def}">`;
+  const input = wrap.querySelector('input'), v = wrap.querySelector('.v');
+  const show = () => { v.textContent = fmt(S[key]); };
+  input.addEventListener('input', () => { S[key] = +input.value; show(); });
+  wrap.querySelector('span').addEventListener('dblclick', () => { S[key] = def; input.value = def; show(); });
+  show();
+  document.getElementById(slot).appendChild(wrap);
+}
+
+slider('leakSlot', 'leak', 'residual leak', 0, 1, 0.01, v => v.toFixed(2));
+slider('decSlot', 'vecGain', 'vector gain', -2, 3, 0.05, v => v.toFixed(2) + 'x');
+slider('decSlot', 'twist', 'vector twist', -180, 180, 1, v => v + '°');
+slider('decSlot', 'radiation', 'radiation', 0, 100, 1, () => { const p = radiationRate(); return p ? '1 bit in ' + Math.round(1 / p).toLocaleString() : 'off'; });
+slider('encSlot', 'qp', 'quantizer', 1, 31, 1, v => 'qp ' + v);
+slider('encSlot', 'gop', 'keyframe every', 5, 240, 1, v => v + ' frames');
+slider('encSlot', 'range', 'search range', 1, 32, 1, v => '±' + v + 'px');
+slider('encSlot', 'intraEager', 'intra eagerness', 0, 3, 0.05, v => v ? v.toFixed(2) : 'never');
+
+function setMosh(on) {
+  moshing = on;
+  document.getElementById('moshBtn').classList.toggle('on', on);
+  updateFlag();
+}
+function setBloom(on) {
+  if (bloomHeld === on) return;
+  bloomHeld = on;
+  document.getElementById('bloomBtn').classList.toggle('on', on);
+  updateFlag();
+}
+function setOverlay(on) {
+  S.overlay = on;
+  document.getElementById('overlayChk').checked = on;
+  drawOverlay();
+}
+function setMirror(on) {
+  S.mirror = on;
+  document.getElementById('mirrorChk').checked = on;
+}
+
+document.getElementById('moshBtn').addEventListener('click', () => setMosh(!moshing));
+document.getElementById('keyBtn').addEventListener('click', () => { forceKey = resyncKey = true; flash('CLEAN KEYFRAME'); });
+const bloomBtn = document.getElementById('bloomBtn');
+bloomBtn.addEventListener('pointerdown', e => { bloomBtn.setPointerCapture(e.pointerId); setBloom(true); });
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) bloomBtn.addEventListener(ev, () => setBloom(false));
+document.getElementById('dropIntra').addEventListener('change', e => { S.dropIntra = e.target.checked; });
+document.querySelectorAll('[data-stamp]').forEach(b => b.addEventListener('click', () => stamp(b.dataset.stamp)));
+document.getElementById('overlayChk').addEventListener('change', e => setOverlay(e.target.checked));
+document.getElementById('mirrorChk').addEventListener('change', e => setMirror(e.target.checked));
+document.getElementById('smoothChk').addEventListener('change', e => {
+  S.smooth = e.target.checked;
+  document.body.classList.toggle('smooth', S.smooth);
+});
+document.getElementById('recBtn').addEventListener('click', toggleRecord);
+document.getElementById('snapBtn').addEventListener('click', snapshot);
+document.getElementById('res').addEventListener('change', e => {
+  S.width = +e.target.value;
+  if (source) setup(S.width, sourceAspect());
+});
+document.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.src === 'video') document.getElementById('vidFile').click();
+  else useSource(b.dataset.src);
+}));
+document.getElementById('vidFile').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) useSource('video', f);
+  e.target.value = '';
+});
+
+function loadStampImage(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const im = new Image();
+  im.onload = () => { stampImage = im; stamp('image'); };
+  im.src = URL.createObjectURL(file);
+}
+document.getElementById('imgFile').addEventListener('change', e => { loadStampImage(e.target.files[0]); e.target.value = ''; });
+
+const dropEl = document.getElementById('drop');
+let dragDepth = 0;
+window.addEventListener('dragenter', e => { if (src) { e.preventDefault(); dragDepth++; dropEl.classList.add('on'); } });
+window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; dropEl.classList.remove('on'); } });
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; dropEl.classList.remove('on');
+  if (!src) return;
+  const f = [...(e.dataTransfer.files || [])].find(f => f.type.startsWith('image/'));
+  if (f) loadStampImage(f);
+});
+window.addEventListener('paste', e => {
+  if (!src) return;
+  const it = [...(e.clipboardData.items || [])].find(i => i.type.startsWith('image/'));
+  if (it) loadStampImage(it.getAsFile());
+});
+
+document.getElementById('panelToggle').addEventListener('click', () => {
+  document.body.classList.remove('nopanel');
+  document.body.classList.toggle('mobilepanel');
+});
+
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!src) return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') { e.preventDefault(); if (!e.repeat) setMosh(!moshing); }
+  else if (k === 'b') { e.preventDefault(); setBloom(true); }
+  else if (k === 'k') { forceKey = resyncKey = true; flash('CLEAN KEYFRAME'); }
+  else if (k === '1') stamp('echo');
+  else if (k === '2') stamp('bars');
+  else if (k === '3') stamp('image');
+  else if (k === 'v') setOverlay(!S.overlay);
+  else if (k === 'm') setMirror(!S.mirror);
+  else if (k === 'r') { if (!e.repeat) toggleRecord(); }
+  else if (k === 'p') snapshot();
+  else if (k === 'h') { document.body.classList.toggle('nopanel'); layout(); }
+});
+window.addEventListener('keyup', e => { if (e.key.toLowerCase() === 'b') setBloom(false); });
+window.addEventListener('blur', () => setBloom(false));
+window.addEventListener('resize', layout);
+
+/* ══════════════════════════════════════════════════════════════════════
+   main loop
+   ══════════════════════════════════════════════════════════════════════ */
+let running = false, lastT = 0;
+function tick(t) {
+  requestAnimationFrame(tick);
+  if (!running || document.hidden) return;
+  if (t - lastT < 1000 / FPS - 3) return;
+  lastT = t;
+  step();
+  drawHistory();
+  drawStats();
+}
+requestAnimationFrame(tick);
+
+// exposed for tests and the console
+window.moshMirror = { S, encodeFrame, decodeFrame, setup, step, stamp, get dec() { return dec; }, get enc() { return enc; }, get src() { return src; }, useSource, setMosh, setBloom, get history() { return history; } };
+</script>
+</body>
+</html>
