@@ -189,25 +189,17 @@ setInterval(() => {
   document.getElementById('frm').textContent = pad(frame, 6);
 }, 1000 / 24);
 
-// keep the tape moving: re-roll the tear noise, wobble the channel split,
-// and every few seconds throw a hard tracking glitch
+// keep the tape moving: re-roll the tear noise and wobble the channel split
 const $ = id => document.getElementById(id);
 const tearNoise = $('tearNoise'), tears = [$('tearR'), $('tearG'), $('tearB')];
 const offR = $('offR'), offB = $('offB');
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let burstUntil = 0, nextBurst = performance.now() + 2000;
 function tick() {
-  const now = performance.now();
-  if (now > nextBurst) {
-    burstUntil = now + 80 + Math.random() * 220;
-    nextBurst = now + 1500 + Math.random() * 4000;
-  }
-  const burst = now < burstUntil;
   tearNoise.setAttribute('seed', Math.floor(Math.random() * 1000));
-  tearNoise.setAttribute('baseFrequency', `0.002 ${burst ? 0.03 + Math.random() * 0.05 : 0.15 + Math.random() * 0.1}`);
-  const k = burst ? 6 + Math.random() * 5 : 0.8 + Math.random() * 0.5;
+  tearNoise.setAttribute('baseFrequency', `0.002 ${0.15 + Math.random() * 0.1}`);
+  const k = 0.8 + Math.random() * 0.5;
   [5, 3, 7].forEach((base, i) => tears[i].setAttribute('scale', (base * k).toFixed(1)));
-  const split = (burst ? 5 : 1.5) + Math.random() * 1.5;
+  const split = 1.5 + Math.random() * 1.5;
   offR.setAttribute('dx', (-split).toFixed(1));
   offB.setAttribute('dx', split.toFixed(1));
 }
