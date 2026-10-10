@@ -123,9 +123,9 @@ a { color: #8fa0ff; }
     <feComponentTransfer in="smearShift" result="smear">
       <feFuncR type="linear" slope=".5"/><feFuncG type="linear" slope=".55"/><feFuncB type="linear" slope=".7"/>
     </feComponentTransfer>
-    <feGaussianBlur in="rgb" stdDeviation="7 3" result="bloomBlur"/>
+    <feGaussianBlur in="rgb" stdDeviation="5 2" result="bloomBlur"/>
     <feComponentTransfer in="bloomBlur" result="bloom">
-      <feFuncR type="linear" slope=".45"/><feFuncG type="linear" slope=".5"/><feFuncB type="linear" slope=".75"/>
+      <feFuncR type="linear" slope=".22"/><feFuncG type="linear" slope=".25"/><feFuncB type="linear" slope=".38"/>
     </feComponentTransfer>
     <feBlend in="smear" in2="bloom" mode="screen" result="haze"/>
     <feBlend in="rgb" in2="haze" mode="screen"/>
