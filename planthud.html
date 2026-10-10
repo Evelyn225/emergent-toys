@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlantHUD</title>
+<style>
+@font-face {
+  font-family: 'PlantHUD';
+  src: url('PlantHUD.woff2') format('woff2'), url('PlantHUD.woff') format('woff'), url('PlantHUD.ttf') format('truetype');
+}
+:root {
+  --bg: #000;
+  --ink: #f2f4ff;
+  --panel: #05106a;
+  --dim: #2a2f55;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body {
+  font-family: 'PlantHUD', monospace;
+  font-size: 32px;
+  line-height: 1.25;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  min-height: 100vh;
+  padding: 24px 16px 40px;
+}
+.screen {
+  position: relative;
+  max-width: 900px;
+  margin: 0 auto;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, #333a 1px, transparent 1.5px) 0 0 / 48px 48px,
+    #000;
+}
+/* tearing, rgb split, smear and bloom all come from the #vhs svg filter */
+.screen, .crt { filter: url(#vhs); }
+.nofx .screen, .nofx .crt { filter: none; }
+.screen > * { text-shadow: 0 0 2px rgba(220, 230, 255, .6); }
+/* scanlines sit outside the filter so they stay thin and sharp */
+.tube { position: relative; max-width: 900px; margin: 0 auto; }
+.tube::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.3) 0 1px, transparent 1px 2px);
+}
+.jitter { animation: jit 3.2s steps(1) infinite; }
+@keyframes jit {
+  0%, 100% { transform: translateX(0); }
+  41% { transform: translateX(1px); }
+  42% { transform: translateX(-2px); }
+  43% { transform: translateX(0); }
+  77% { transform: translateX(2px); }
+  78% { transform: translateX(0); }
+}
+.hud { position: absolute; left: 4%; top: 3%; white-space: pre; }
+.rec { color: #ff2a3a; text-shadow: 0 0 6px #ff2a3a; }
+.blink { animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.panel {
+  position: absolute; left: 0; top: 40%;
+  background: var(--panel);
+  border: 2px solid #8fa0ff;
+  padding: 4px 10px;
+  white-space: pre;
+  font-size: 26px;
+}
+.panel .off { color: #9aa3e0; }
+.foot { position: absolute; left: 4%; bottom: 3%; white-space: pre; }
+.foot small { font-size: 22px; }
+.ruler {
+  position: absolute; right: 3%; top: 3%; bottom: 3%;
+  border-left: 2px solid #5f8; font-size: 18px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding-left: 14px;
+}
+.tester { max-width: 900px; margin: 28px auto 0; }
+.tester label { display: block; font-size: 20px; color: #8890c0; margin-bottom: 6px; }
+.tester textarea {
+  width: 100%; min-height: 3.4em; resize: vertical;
+  background: #000; color: var(--ink);
+  border: 2px solid var(--dim);
+  font: inherit; padding: 8px 10px;
+}
+.row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 20px; color: #8890c0; }
+.out { margin-top: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.charset { margin-top: 28px; white-space: pre-wrap; word-break: break-all; font-size: 28px; }
+a { color: #8fa0ff; }
+@media (max-width: 600px) {
+  body { font-size: 20px; }
+  .panel { font-size: 15px; }
+  .foot small { font-size: 14px; }
+  .ruler { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="vhs" x="-4%" y="-4%" width="108%" height="108%" color-interpolation-filters="sRGB">
+    <!-- fine noise roughens every edge -->
+    <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="grain"/>
+    <feDisplacementMap in="SourceGraphic" in2="grain" scale="2.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <!-- wide horizontal bands, x-only displacement: tracking tears -->
+    <feTurbulence id="tearNoise" type="fractalNoise" baseFrequency="0.002 0.18" numOctaves="2" seed="1" result="bands"/>
+    <feColorMatrix in="bands" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="tear"/>
+    <feDisplacementMap id="tearR" in="rough" in2="tear" scale="5" xChannelSelector="R" yChannelSelector="G" result="dR"/>
+    <feDisplacementMap id="tearG" in="rough" in2="tear" scale="3" xChannelSelector="R" yChannelSelector="G" result="dG"/>
+    <feDisplacementMap id="tearB" in="rough" in2="tear" scale="7" xChannelSelector="R" yChannelSelector="G" result="dB"/>
+    <!-- split channels and pull them apart -->
+    <feColorMatrix in="dR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+    <feOffset id="offR" dx="-3" dy="0" result="r"/>
+    <feColorMatrix in="dG" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
+    <feColorMatrix in="dB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
+    <feOffset id="offB" dx="3" dy="0" result="b"/>
+    <feBlend in="r" in2="g" mode="screen" result="rg"/>
+    <feBlend in="rg" in2="b" mode="screen" result="rgb"/>
+    <!-- smear trailing to the right, then a soft bloom -->
+    <feGaussianBlur in="rgb" stdDeviation="3.5 0.3" result="smearBlur"/>
+    <feOffset in="smearBlur" dx="4" result="smearShift"/>
+    <feComponentTransfer in="smearShift" result="smear">
+      <feFuncR type="linear" slope=".5"/><feFuncG type="linear" slope=".55"/><feFuncB type="linear" slope=".7"/>
+    </feComponentTransfer>
+    <feGaussianBlur in="rgb" stdDeviation="5 2" result="bloomBlur"/>
+    <feComponentTransfer in="bloomBlur" result="bloom">
+      <feFuncR type="linear" slope=".22"/><feFuncG type="linear" slope=".25"/><feFuncB type="linear" slope=".38"/>
+    </feComponentTransfer>
+    <feBlend in="smear" in2="bloom" mode="screen" result="haze"/>
+    <feBlend in="rgb" in2="haze" mode="screen"/>
+  </filter>
+</svg>
+<div class="tube"><div class="screen">
+  <div class="hud jitter"><span class="rec"><span class="blink">●</span>REC</span>
+TC   <span id="tc">00:00:01:25</span>
+FRM  <span id="frm">005329</span>
+RES  1080x1350
+GRID 160x200
+FPS  23.8</div>
+  <div class="panel">B02  46,92
+B04  97,102
+B03 109,95
+B01  52,91
+<span class="off">B--   0,0
+B--   0,0
+B--   0,0
+B--   0,0</span></div>
+  <div class="foot jitter">SIMULATION PLANT
+<small>SEC-01-A07</small></div>
+  <div class="ruler"><span>120</span><span>100</span><span>080</span><span>060</span><span>040</span><span>020</span><span>000</span></div>
+</div></div>
+
+<div class="tester">
+  <label for="txt">type something</label>
+  <textarea id="txt">THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG</textarea>
+  <div class="row">
+    <label><input type="checkbox" id="fx" checked> crt effect</label>
+    <label>size <input type="range" id="sz" min="12" max="96" value="40"></label>
+    <a href="PlantHUD.ttf" download>download .ttf</a>
+  </div>
+  <div class="out crt" id="out"></div>
+  <div class="charset crt">ABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyz
+0123456789 ●°
+!"#$%&amp;'()*+,-./:;&lt;=&gt;?@[\]^_`{|}~</div>
+</div>
+
+<script>
+const txt = document.getElementById('txt'), out = document.getElementById('out');
+const fx = document.getElementById('fx'), sz = document.getElementById('sz');
+function sync() {
+  out.textContent = txt.value;
+  document.body.classList.toggle('nofx', !fx.checked);
+  out.style.fontSize = sz.value + 'px';
+}
+[txt, fx, sz].forEach(el => el.addEventListener('input', sync));
+sync();
+
+// running timecode at 24fps, starting from the frame in the recording
+let frame = 5329;
+const pad = (n, w = 2) => String(n).padStart(w, '0');
+setInterval(() => {
+  frame++;
+  const f = frame % 24, s = Math.floor(frame / 24);
+  document.getElementById('tc').textContent =
+    `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}:${pad(f)}`;
+  document.getElementById('frm').textContent = pad(frame, 6);
+}, 1000 / 24);
+
+// keep the tape moving: re-roll the tear noise, wobble the channel split,
+// and every few seconds throw a hard tracking glitch
+const $ = id => document.getElementById(id);
+const tearNoise = $('tearNoise'), tears = [$('tearR'), $('tearG'), $('tearB')];
+const offR = $('offR'), offB = $('offB');
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let burstUntil = 0, nextBurst = performance.now() + 2000;
+function tick() {
+  const now = performance.now();
+  if (now > nextBurst) {
+    burstUntil = now + 80 + Math.random() * 220;
+    nextBurst = now + 1500 + Math.random() * 4000;
+  }
+  const burst = now < burstUntil;
+  tearNoise.setAttribute('seed', Math.floor(Math.random() * 1000));
+  tearNoise.setAttribute('baseFrequency', `0.002 ${burst ? 0.03 + Math.random() * 0.05 : 0.15 + Math.random() * 0.1}`);
+  const k = burst ? 6 + Math.random() * 5 : 0.8 + Math.random() * 0.5;
+  [5, 3, 7].forEach((base, i) => tears[i].setAttribute('scale', (base * k).toFixed(1)));
+  const split = (burst ? 5 : 1.5) + Math.random() * 1.5;
+  offR.setAttribute('dx', (-split).toFixed(1));
+  offB.setAttribute('dx', split.toFixed(1));
+}
+if (!still) setInterval(tick, 70);
+</script>
+</body>
+</html>
