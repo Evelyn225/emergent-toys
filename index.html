@@ -234,7 +234,9 @@
       /* Scrolls away with the page instead of floating over the links */
       #corner { position: absolute; top: 4px; right: 6px; gap: 4px; }
       #corner > * { padding: 8px 10px; }
-      .new-row { margin-top: 18px; line-height: 3.6; }
+      /* Newest stuff first on phones, where the bottom row is a long scroll away */
+      .link-list { display: flex; flex-direction: column; }
+      .new-row { order: -1; margin: 0 0 26px; line-height: 3.6; }
       .new-fire { top: calc(100% - 26px); }
     }
 
@@ -407,6 +409,7 @@
     <div class="main-title"><span class="title-scan"><span id="main-title-text">Eve Net</span><span class="title-cursor"></span></span></div>
     <div class="main-tagline">generative art / interactive experiments</div>
     <div class="link-list" role="navigation" aria-label="Project navigation">
+      <div class="main-row">
       <a href="Sands"               class="link-item">sand playground</a><span class="link-sep">/</span>
       <a href="critters"            class="link-item">bug hotline</a><span class="link-sep">/</span>
       <a href="fireworks"           class="link-item">fireworks</a><span class="link-sep">/</span>
@@ -427,7 +430,9 @@
       <a href="magnetic-pendulum"   class="link-item">magnetic pendulum</a><span class="link-sep">/</span>
       <a href="dla-crystal"         class="link-item">dla crystal</a><span class="link-sep">/</span>
       <a href="sleep-os"            class="link-item">sleepOS</a>
-      <!-- Newest and best. Anything with is-new gets a burning tag; keep them in this last row. -->
+      </div>
+      <!-- Newest and best. Anything with is-new gets a burning tag; keep them in this row.
+           It sits last on desktop and moves to the top on phones. -->
       <div class="new-row">
         <a href="corridor"          class="link-item is-new">substructure</a><span class="link-sep">/</span>
         <a href="ascii-city"        class="link-item is-new">glyphport</a><span class="link-sep">/</span>
