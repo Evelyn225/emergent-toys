@@ -39,10 +39,11 @@ body {
     radial-gradient(circle, #333a 1px, transparent 1.5px) 0 0 / 48px 48px,
     #000;
 }
-/* tearing, rgb split, smear and bloom all come from the #vhs svg filter */
-.screen, .crt { filter: url(#vhs); }
+/* tearing, rgb split, smear and bloom all come from the #vhs svg filter;
+   the script gives each element its own copy scaled to its font size */
+.screen, .crt { filter: var(--fx, url(#vhs)); }
 .nofx .screen, .nofx .crt { filter: none; }
-.nofx .tube::after { display: none; }
+.nofx .tube::after, .nofx .scan::after { display: none; }
 .screen > * { text-shadow: 0 0 2px rgba(220, 230, 255, .6); }
 /* scanlines sit outside the filter so they stay thin and sharp */
 .tube { position: relative; max-width: 900px; margin: 0 auto; container-type: inline-size; }
@@ -51,6 +52,28 @@ body {
   position: absolute; inset: 0;
   pointer-events: none;
   background: repeating-linear-gradient(0deg, rgba(0,0,0,.3) 0 1px, transparent 1px 2px);
+}
+/* scanlines for the sample text: one font pixel apart (1/20em), never under 2px */
+.scan { position: relative; --pitch: max(2px, .05em); }
+.scan::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom,
+    rgba(0,0,0,.3) 0 calc(var(--pitch) / 2), transparent calc(var(--pitch) / 2) var(--pitch));
+}
+#plant { position: absolute; inset: 0; width: 100%; height: 100%; }
+.log {
+  position: absolute; right: 13%; bottom: 3%;
+  text-align: right; font-size: .6em; line-height: 1.45; color: #bcd0ff;
+}
+.ruler .mark {
+  position: absolute; left: 0; transform: translate(-100%, -50%);
+  color: #86ff5c; font-style: normal; white-space: nowrap;
+}
+.ruler .mark::after {
+  content: ''; display: inline-block; width: .9em; height: 2px;
+  margin-left: .35em; vertical-align: middle; background: currentColor;
 }
 .jitter { animation: jit 3.2s steps(1) infinite; }
 @keyframes jit {
@@ -71,13 +94,14 @@ body {
 @keyframes blink { 50% { opacity: .25; } }
 .panel {
   position: absolute; left: 0; top: 38.8%;
-  display: grid; grid-template-columns: auto auto; column-gap: 1.6em;
+  display: grid; grid-template-columns: auto minmax(3.8em, auto); column-gap: 1.6em;
   background: var(--panel);
   border: 2px solid #8fa0ff;
   padding: .3em .7em;
   line-height: 1.42;
 }
 .panel .off { color: #9aa3e0; }
+@container (max-width: 520px) { .panel { font-size: .75em; } }
 .foot { position: absolute; left: 4.4%; bottom: 3%; line-height: 1.4; }
 .foot small { display: block; font-size: .8em; }
 .ruler {
@@ -105,32 +129,32 @@ a { color: #8fa0ff; }
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<svg id="fxdefs" width="0" height="0" style="position:absolute" aria-hidden="true">
   <filter id="vhs" x="-4%" y="-4%" width="108%" height="108%" color-interpolation-filters="sRGB">
     <!-- fine noise roughens every edge -->
-    <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="grain"/>
-    <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feTurbulence data-role="grain" type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="grain"/>
+    <feDisplacementMap data-role="rough" in="SourceGraphic" in2="grain" scale="1.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
     <!-- wide horizontal bands, x-only displacement: tracking tears -->
-    <feTurbulence id="tearNoise" type="fractalNoise" baseFrequency="0.002 0.18" numOctaves="2" seed="1" result="bands"/>
+    <feTurbulence data-role="tear" type="fractalNoise" baseFrequency="0.002 0.18" numOctaves="2" seed="1" result="bands"/>
     <feColorMatrix in="bands" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="tear"/>
-    <feDisplacementMap id="tearR" in="rough" in2="tear" scale="3" xChannelSelector="R" yChannelSelector="G" result="dR"/>
-    <feDisplacementMap id="tearG" in="rough" in2="tear" scale="2" xChannelSelector="R" yChannelSelector="G" result="dG"/>
-    <feDisplacementMap id="tearB" in="rough" in2="tear" scale="4" xChannelSelector="R" yChannelSelector="G" result="dB"/>
+    <feDisplacementMap data-role="tearR" in="rough" in2="tear" scale="3" xChannelSelector="R" yChannelSelector="G" result="dR"/>
+    <feDisplacementMap data-role="tearG" in="rough" in2="tear" scale="2" xChannelSelector="R" yChannelSelector="G" result="dG"/>
+    <feDisplacementMap data-role="tearB" in="rough" in2="tear" scale="4" xChannelSelector="R" yChannelSelector="G" result="dB"/>
     <!-- split channels and pull them apart -->
     <feColorMatrix in="dR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
-    <feOffset id="offR" dx="-1.5" dy="0" result="r"/>
+    <feOffset data-role="offR" dx="-1.5" dy="0" result="r"/>
     <feColorMatrix in="dG" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
     <feColorMatrix in="dB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
-    <feOffset id="offB" dx="1.5" dy="0" result="b"/>
+    <feOffset data-role="offB" dx="1.5" dy="0" result="b"/>
     <feBlend in="r" in2="g" mode="screen" result="rg"/>
     <feBlend in="rg" in2="b" mode="screen" result="rgb"/>
     <!-- smear trailing to the right, then a soft bloom -->
-    <feGaussianBlur in="rgb" stdDeviation="2.5 0.3" result="smearBlur"/>
-    <feOffset in="smearBlur" dx="3" result="smearShift"/>
+    <feGaussianBlur data-role="smearBlur" in="rgb" stdDeviation="2.5 0.3" result="smearBlur"/>
+    <feOffset data-role="smearShift" in="smearBlur" dx="3" result="smearShift"/>
     <feComponentTransfer in="smearShift" result="smear">
       <feFuncR type="linear" slope=".5"/><feFuncG type="linear" slope=".55"/><feFuncB type="linear" slope=".7"/>
     </feComponentTransfer>
-    <feGaussianBlur in="rgb" stdDeviation="5 2" result="bloomBlur"/>
+    <feGaussianBlur data-role="bloomBlur" in="rgb" stdDeviation="5 2" result="bloomBlur"/>
     <feComponentTransfer in="bloomBlur" result="bloom">
       <feFuncR type="linear" slope=".22"/><feFuncG type="linear" slope=".25"/><feFuncB type="linear" slope=".38"/>
     </feComponentTransfer>
@@ -147,18 +171,11 @@ a { color: #8fa0ff; }
     <span>GRID</span><span>160x200</span>
     <span>FPS</span><span>23.8</span>
   </div>
-  <div class="panel">
-    <span>B02</span><span>46,92</span>
-    <span>B04</span><span>97,102</span>
-    <span>B03</span><span>109,95</span>
-    <span>B01</span><span>52,91</span>
-    <span class="off">B--</span><span class="off">0,0</span>
-    <span class="off">B--</span><span class="off">0,0</span>
-    <span class="off">B--</span><span class="off">0,0</span>
-    <span class="off">B--</span><span class="off">0,0</span>
-  </div>
+  <canvas id="plant" aria-hidden="true"></canvas>
+  <div class="panel" id="panel"></div>
+  <div class="log" id="log"></div>
   <div class="foot jitter">SIMULATION PLANT<small>SEC-01-A07</small></div>
-  <div class="ruler"><span>120</span><span>100</span><span>080</span><span>060</span><span>040</span><span>020</span><span>000</span></div>
+  <div class="ruler"><span>120</span><span>100</span><span>080</span><span>060</span><span>040</span><span>020</span><span>000</span><i class="mark" id="mark">000</i></div>
 </div></div>
 
 <div class="tester">
@@ -169,18 +186,18 @@ a { color: #8fa0ff; }
     <label>size <input type="range" id="sz" min="20" max="120" step="20" value="40"> <span id="szv">40px</span></label>
     <a href="PlantHUD.ttf" download>download .ttf</a>
   </div>
-  <div class="out crt" id="out"></div>
-  <div class="charset crt">ABCDEFGHIJKLMNOPQRSTUVWXYZ
+  <div class="out scan" id="out"><div class="crt" id="outText"></div></div>
+  <div class="charset scan"><div class="crt">ABCDEFGHIJKLMNOPQRSTUVWXYZ
 abcdefghijklmnopqrstuvwxyz
 0123456789 ●°
-!"#$%&amp;'()*+,-./:;&lt;=&gt;?@[\]^_`{|}~</div>
+!"#$%&amp;'()*+,-./:;&lt;=&gt;?@[\]^_`{|}~</div></div>
 </div>
 
 <script>
 const txt = document.getElementById('txt'), out = document.getElementById('out');
 const fx = document.getElementById('fx'), sz = document.getElementById('sz');
 function sync() {
-  out.textContent = txt.value;
+  document.getElementById('outText').textContent = txt.value;
   document.body.classList.toggle('nofx', !fx.checked);
   out.style.fontSize = sz.value + 'px';
   document.getElementById('szv').textContent = sz.value + 'px';
@@ -188,32 +205,331 @@ function sync() {
 [txt, fx, sz].forEach(el => el.addEventListener('input', sync));
 sync();
 
-// running timecode at 24fps, starting from the frame in the recording
-let frame = 5329;
-const pad = (n, w = 2) => String(n).padStart(w, '0');
-setInterval(() => {
-  frame++;
-  const f = frame % 24, s = Math.floor(frame / 24);
-  document.getElementById('tc').textContent =
-    `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}:${pad(f)}`;
-  document.getElementById('frm').textContent = pad(frame, 6);
-}, 1000 / 24);
-
-// keep the tape moving: re-roll the tear noise and wobble the channel split
-const $ = id => document.getElementById(id);
-const tearNoise = $('tearNoise'), tears = [$('tearR'), $('tearG'), $('tearB')];
-const offR = $('offR'), offB = $('offB');
+// keep the tape moving: re-roll the tear noise and wobble the channel split.
+// The filter is tuned for 28px text; every filtered element gets its own copy
+// with all distances scaled by its font size, so the effect keeps its
+// proportions at any size.
+const TUNED_PX = 28;
+const defs = document.getElementById('fxdefs'), baseFilter = document.getElementById('vhs');
+const targets = [document.querySelector('.screen'), ...document.querySelectorAll('.crt')];
+const fxs = targets.map((el, i) => {
+  const filter = i ? baseFilter.cloneNode(true) : baseFilter;
+  if (i) { filter.id = 'vhs-' + i; defs.appendChild(filter); }
+  el.style.setProperty('--fx', `url(#${filter.id})`);
+  const role = r => filter.querySelector(`[data-role="${r}"]`);
+  return { el, tear: role('tear'), tears: ['tearR', 'tearG', 'tearB'].map(role),
+    offR: role('offR'), offB: role('offB'), grain: role('grain'), rough: role('rough'),
+    smearBlur: role('smearBlur'), smearShift: role('smearShift'), bloomBlur: role('bloomBlur') };
+});
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const n = v => v.toFixed(3);
 function tick() {
-  tearNoise.setAttribute('seed', Math.floor(Math.random() * 1000));
-  tearNoise.setAttribute('baseFrequency', `0.002 ${0.15 + Math.random() * 0.1}`);
-  const k = 0.8 + Math.random() * 0.5;
-  [3, 2, 4].forEach((base, i) => tears[i].setAttribute('scale', (base * k).toFixed(1)));
+  const seed = Math.floor(Math.random() * 1000);
+  const band = 0.15 + Math.random() * 0.1;
+  const jolt = 0.8 + Math.random() * 0.5;
   const split = 1 + Math.random() * 0.8;
-  offR.setAttribute('dx', (-split).toFixed(1));
-  offB.setAttribute('dx', split.toFixed(1));
+  for (const f of fxs) {
+    const k = parseFloat(getComputedStyle(f.el).fontSize) / TUNED_PX;
+    f.grain.setAttribute('baseFrequency', `${n(0.8 / k)} ${n(0.6 / k)}`);
+    f.rough.setAttribute('scale', n(1.5 * k));
+    f.tear.setAttribute('seed', seed);
+    f.tear.setAttribute('baseFrequency', `0.002 ${n(band / k)}`);
+    [3, 2, 4].forEach((base, i) => f.tears[i].setAttribute('scale', n(base * jolt * k)));
+    f.offR.setAttribute('dx', n(-split * k));
+    f.offB.setAttribute('dx', n(split * k));
+    f.smearBlur.setAttribute('stdDeviation', `${n(2.5 * k)} ${n(0.3 * k)}`);
+    f.smearShift.setAttribute('dx', n(3 * k));
+    f.bloomBlur.setAttribute('stdDeviation', `${n(5 * k)} ${n(2 * k)}`);
+  }
 }
+tick();
 if (!still) setInterval(tick, 70);
+else { sz.addEventListener('input', tick); addEventListener('resize', tick); }
+
+// ---- specimen: a plant grown fresh every run, watched by a tracker that
+// only sees moving tips. It never learns they're one plant.
+const pad = (v, w = 2) => String(v).padStart(w, '0');
+const screenEl = document.querySelector('.screen');
+const cv = document.getElementById('plant'), ctx = cv.getContext('2d');
+const panelEl = document.getElementById('panel'), logEl = document.getElementById('log');
+const markEl = document.getElementById('mark');
+const GW = 160, ROOT_X = 80, ROOT_Y = 192;   // grid is 160x200, like the HUD says
+const MAX_DEPTH = 3, MAX_TIPS = 8, DT = 1 / 24;
+
+const panelRows = Array.from({ length: MAX_TIPS }, () => {
+  const label = document.createElement('span'), value = document.createElement('span');
+  panelEl.append(label, value);
+  return [label, value];
+});
+
+function mulberry32(a) {
+  return () => {
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+let run = 6, rnd, branches, forks, nextId, events = [], t = 0, phase, phaseAt, idleSince, frame = 5329;
+
+function addLog(text) {
+  events.push(`${t.toFixed(1).padStart(4, '0')} ${text}`);
+  events = events.slice(-5);
+  logEl.innerHTML = events.map((e, i) =>
+    `<div style="opacity:${(0.35 + 0.65 * (i + 1) / events.length).toFixed(2)}">${e}</div>`).join('');
+}
+
+function sprout(x, y, heading, pref, depth, target, parent) {
+  const b = { pts: [[x, y]], x, y, heading, pref, depth, target, len: 0, acc: 0,
+    growing: true, children: [], parent, id: null, acq: 0, born: t };
+  branches.push(b);
+  return b;
+}
+const leaves = () => branches.filter(b => !b.children.length);
+
+function startRun() {
+  run++;
+  rnd = mulberry32(run * 7919);
+  branches = []; forks = []; nextId = 1; t = 0; phase = 'grow'; idleSince = null;
+  const lean = (rnd() - 0.5) * 0.12;
+  sprout(ROOT_X, ROOT_Y, lean, lean, 0, 34 + rnd() * 8, null);
+  addLog(`RUN ${pad(run, 4)}`);
+}
+
+function grow(b, dt) {
+  const speed = 11 * (1 - b.depth * 0.14);
+  b.pref *= 1 - 0.25 * dt;                        // bends back toward the light
+  b.heading += ((b.pref - b.heading) * 1.4 + (rnd() * 2 - 1) * 1.7) * dt;
+  if (b.x < 50) b.heading += 1.6 * dt;            // keep clear of the panel and ruler
+  if (b.x > 136) b.heading -= 1.6 * dt;
+  const d = speed * dt;
+  b.x += Math.sin(b.heading) * d;
+  b.y -= Math.cos(b.heading) * d;
+  b.len += d; b.acc += d;
+  if (b.acc >= 1.5) { b.pts.push([b.x, b.y]); b.acc = 0; }
+  if (b.len < b.target && b.y > 46) return;
+
+  b.growing = false;
+  const canSplit = b.depth < MAX_DEPTH && leaves().length < MAX_TIPS && b.y > 62 &&
+    (b.depth < 2 || rnd() < 0.75);
+  if (!canSplit) { if (b.id) addLog(`T${pad(b.id)} IDL`); return; }
+  const spread = 0.4 + rnd() * 0.26, skew = (rnd() - 0.5) * 0.25;
+  const kids = [-1, 1].map(side => {
+    const h = b.heading + side * spread + skew;
+    return sprout(b.x, b.y, b.heading + (h - b.heading) * 0.8, h, b.depth + 1,
+      b.target * (0.66 + rnd() * 0.2), b);
+  });
+  b.children = kids;
+  forks.push({ x: b.x, y: b.y, kids, t });
+  if (b.id) {                                     // one side keeps the ID, the other is "new"
+    const keep = kids[rnd() < 0.5 ? 0 : 1];
+    keep.id = b.id; keep.acq = b.acq;
+    addLog(`T${pad(b.id)} SPLIT`);
+  }
+}
+
+function step() {
+  t += DT; frame++;
+  if (phase === 'grow') {
+    for (const b of branches.slice()) if (b.growing) grow(b, DT);
+    for (const b of leaves()) {
+      if (b.id == null && t - b.born > 0.35) { b.id = nextId++; b.acq = t; addLog(`T${pad(b.id)} NEW`); }
+    }
+    if (leaves().every(b => !b.growing)) {
+      idleSince ??= t;
+      if (t - idleSince > 4) { phase = 'lost'; phaseAt = t; addLog('SIGNAL LOST'); }
+    }
+  } else if (t - phaseAt > 1.8) startRun();
+}
+
+// gentle sway, stronger higher up
+function sw(x, y) {
+  const h = Math.max(0, (ROOT_Y - y) / 110);
+  return [x + (Math.sin(t * 0.8 + y * 0.045) * 0.7 + Math.sin(t * 0.31 + 1.3) * 0.9) * h * h, y];
+}
+
+let W = 0, H = 0, K = 1, S = 1;
+function fit() {
+  const r = screenEl.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  W = r.width; H = r.height; K = W / GW; S = W / 900;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+
+const heading = (dx, dy) => Math.atan2(dx, -dy);
+const deg = r => Math.round(r * 180 / Math.PI);
+const signed = v => (v < 0 ? '-' : '+') + pad(Math.abs(v));
+
+function tipsTop() {
+  let top = ROOT_Y;
+  for (const b of leaves()) top = Math.min(top, b.y);
+  return top;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  if (!branches) return;
+  const fs = Math.max(9, Math.round(17 * S));
+  ctx.font = `${fs}px PlantHUD, monospace`;
+  ctx.textBaseline = 'top';
+  const fadeOut = phase === 'lost' ? Math.max(0, 1 - (t - phaseAt - 0.5) / 0.9) : 1;
+  ctx.globalAlpha = Math.min(1, t / 0.4) * fadeOut;
+  const P = (x, y) => { const [a, b] = sw(x, y); return [a * K, b * K]; };
+  const seg = (pts, dash = []) => {
+    ctx.setLineDash(dash); ctx.beginPath();
+    pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.stroke(); ctx.setLineDash([]);
+  };
+
+  // ground
+  ctx.strokeStyle = 'rgba(170,185,255,.55)'; ctx.lineWidth = 1.5 * S;
+  seg([[66 * K, ROOT_Y * K], [94 * K, ROOT_Y * K]]);
+  for (let x = 68; x <= 92; x += 4) seg([[x * K, ROOT_Y * K], [x * K, (ROOT_Y + 1.2) * K]]);
+
+  // scan line sweeping up past the tips
+  const top = tipsTop(), scanY = ROOT_Y - (ROOT_Y - (top - 8)) * ((t % 3.2) / 3.2);
+  ctx.strokeStyle = 'rgba(125,255,106,.32)'; ctx.lineWidth = 1.2 * S;
+  seg([[38 * K, scanY * K], [140 * K, scanY * K]]);
+
+  // the plant
+  ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#f1e6ff';
+  for (const b of branches) {
+    ctx.lineWidth = Math.max(1, (2.8 - b.depth * 0.55) * S);
+    seg([...b.pts, [b.x, b.y]].map(p => P(...p)));
+  }
+  ctx.lineCap = ctx.lineJoin = 'miter';
+
+  // fork angles
+  ctx.lineWidth = 1.2 * S;
+  for (const f of forks) {
+    const age = t - f.t;
+    if (age < 0.5 || (age < 0.8 && Math.floor(age * 20) % 2)) continue;
+    const [cx, cy] = P(f.x, f.y);
+    const hs = f.kids.map(c => {
+      const q = c.pts[Math.min(2, c.pts.length - 1)], [qx, qy] = c.pts.length > 1 ? P(...q) : P(c.x, c.y);
+      return heading(qx - cx, qy - cy);
+    }).sort((a, b) => a - b);
+    ctx.strokeStyle = '#5fd8ff';
+    ctx.beginPath(); ctx.arc(cx, cy, 3.6 * K, hs[0] - Math.PI / 2, hs[1] - Math.PI / 2); ctx.stroke();
+    const label = `${deg(hs[1] - hs[0])}°`, w = ctx.measureText(label).width;
+    ctx.fillStyle = '#9fe6ff';
+    ctx.fillText(label, f.x < ROOT_X ? cx - 4.5 * K - w : cx + 4.5 * K, cy - fs * 0.2);
+  }
+
+  // centre of mass, plumb line and lean
+  let n = 0, mx = 0, my = 0;
+  for (const b of branches) for (const p of [...b.pts, [b.x, b.y]]) { const q = sw(...p); mx += q[0]; my += q[1]; n++; }
+  if (t > 1.2 && n > 12) {
+    mx /= n; my /= n;
+    const [cx, cy] = [mx * K, my * K], r = 1.5 * K;
+    ctx.strokeStyle = '#86ff5c'; ctx.lineWidth = 1.2 * S;
+    seg([[cx, cy + r], [cx, ROOT_Y * K]], [3 * S, 3 * S]);
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    seg([[cx - 2.6 * K, cy], [cx + 2.6 * K, cy]]); seg([[cx, cy - 2.6 * K], [cx, cy + 2.6 * K]]);
+    const lean = Math.atan2(mx - ROOT_X, ROOT_Y - my) * 180 / Math.PI;
+    ctx.fillStyle = '#a8ff8c';
+    ctx.fillText(`COM`, cx + 3.2 * K, cy - fs);
+    ctx.fillText(`LEAN ${lean < 0 ? '-' : '+'}${Math.abs(lean).toFixed(1)}°`, cx + 3.2 * K, cy + 1);
+  }
+
+  // trackers
+  ctx.globalAlpha = Math.min(1, t / 0.4);
+  if (phase === 'lost' && (t - phaseAt > 0.7 || Math.floor((t - phaseAt) * 10) % 2)) return;
+  const padX = 0.35 * fs, lh = fs * 1.1, gap = 0.8 * K;
+  const tags = [];
+  for (const b of leaves()) {
+    if (b.id == null) continue;
+    const age = t - b.acq;
+    if (age < 0.3 && Math.floor(age * 20) % 2) continue;
+    const [x, y] = P(b.x, b.y);
+    const r = 3.2 * K * (age < 0.3 ? 1 + 1.4 * (1 - age / 0.3) : 1), L = 1.3 * K;
+    ctx.strokeStyle = Math.abs(b.y - scanY) < 2.5 ? '#8dff6a' : '#ffffff';
+    ctx.lineWidth = 1.6 * S;
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+      seg([[x + sx * r, y + sy * (r - L)], [x + sx * r, y + sy * r], [x + sx * (r - L), y + sy * r]]);
+    }
+    seg([[x - 0.9 * K, y], [x + 0.9 * K, y]]); seg([[x, y - 0.9 * K], [x, y + 0.9 * K]]);
+
+    const [gx, gy] = sw(b.x, b.y);
+    const lines = [`T${pad(b.id)} ${b.growing ? 'h' + signed(deg(b.heading)) : 'IDL'}`,
+      `x${pad(Math.round(gx), 3)} y${pad(Math.round(gy), 3)}`].slice(0, W < 520 ? 1 : 2);
+    const w = Math.max(...lines.map(l => ctx.measureText(l).width)) + padX * 2;
+    // tags sit outboard of the tip, but stay off the panel and the ruler
+    let side = b.x < ROOT_X ? -1 : 1;
+    const at = sd => sd > 0 ? x + r + gap : x - r - gap - w;
+    if (side < 0 && at(-1) < 46 * K) side = 1;
+    if (side > 0 && at(1) + w > 142 * K) side = -1;
+    const x0 = at(side);
+    tags.push({ x, y, r, side, lines, w, h: lh * lines.length + padX, x0, y0: y - r, ay: y - r });
+  }
+  // push overlapping tags down until none collide
+  tags.sort((a, b) => a.y0 - b.y0);
+  const placed = [];
+  for (const tag of tags) {
+    for (let moved = true; moved;) {
+      moved = false;
+      for (const o of placed) {
+        if (tag.x0 < o.x0 + o.w && o.x0 < tag.x0 + tag.w && tag.y0 < o.y0 + o.h + 2 && o.y0 < tag.y0 + tag.h) {
+          tag.y0 = o.y0 + o.h + 2; moved = true;
+        }
+      }
+    }
+    placed.push(tag);
+  }
+  for (const tag of placed) {
+    const { x, y, r, side, lines, w, h, x0, y0 } = tag;
+    if (y0 - tag.ay > 2) {                         // leader back to a displaced tag
+      ctx.strokeStyle = 'rgba(120,150,255,.8)'; ctx.lineWidth = 1 * S;
+      seg([[x + side * r, y], [side > 0 ? x0 : x0 + w, y0 + lh * 0.5]]);
+    }
+    ctx.fillStyle = 'rgba(12,26,170,.82)';
+    ctx.fillRect(x0, y0, w, h);
+    ctx.fillStyle = 'rgba(40,80,255,.9)';
+    ctx.fillRect(x0, y0, w, lh + padX * 0.5);
+    lines.forEach((l, i) => {
+      ctx.fillStyle = i ? '#cfe0ff' : '#ffffff';
+      ctx.fillText(l, x0 + padX, y0 + padX * 0.5 + i * lh);
+    });
+  }
+}
+
+function hud() {
+  const s = Math.floor(t), f = Math.floor((t % 1) * 24);
+  document.getElementById('tc').textContent = `00:${pad(Math.floor(s / 60))}:${pad(s % 60)}:${pad(f)}`;
+  document.getElementById('frm').textContent = pad(frame, 6);
+  const tracked = phase === 'grow' ? leaves().filter(b => b.id != null).sort((a, b) => a.id - b.id) : [];
+  panelRows.forEach(([label, value], i) => {
+    const b = tracked[i], on = !!b;
+    const [gx, gy] = on ? sw(b.x, b.y) : [0, 0];
+    label.textContent = on ? `T${pad(b.id)}` : 'T--';
+    value.textContent = `${Math.round(gx)},${Math.round(gy)}`;
+    label.className = value.className = on ? '' : 'off';
+  });
+  const height = Math.max(0, Math.round((ROOT_Y - tipsTop()) * 120 / 188));
+  markEl.textContent = pad(height, 3);
+  markEl.style.top = `${(1 - height / 120) * 100}%`;
+}
+
+startRun();
+new ResizeObserver(fit).observe(screenEl);
+document.fonts.load('20px PlantHUD').then(draw);
+if (still) {
+  // no motion: grow one specimen to completion and hold it
+  while (leaves().some(b => b.growing)) step();
+  hud(); draw();
+} else {
+  let last = performance.now(), acc = 0;
+  requestAnimationFrame(function loop(now) {
+    acc += Math.min(0.5, (now - last) / 1000); last = now;
+    let steps = 0;
+    while (acc >= DT && steps < 12) { step(); acc -= DT; steps++; }
+    if (steps) { draw(); hud(); }
+    requestAnimationFrame(loop);
+  });
+}
 </script>
 </body>
 </html>
