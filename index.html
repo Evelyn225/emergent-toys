@@ -103,10 +103,13 @@
               mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.72) 1px 2px);
     }
     .main-title {
+      /* hug the text, so the filter only works on the title, not 780px of air */
+      width: fit-content;
+      margin-left: auto;
+      margin-right: auto;
       filter: url(#title-vhs-dark)
               drop-shadow(0 0 8px rgba(255,255,255,0.45))
               drop-shadow(0 0 20px rgba(255,255,255,0.15));
-      animation: title-jitter 4.3s steps(1) infinite;
     }
     [data-theme="light"] .title-scan {
       -webkit-mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.84) 1px 2px);
@@ -117,17 +120,6 @@
               drop-shadow(0 0 8px rgba(0,0,0,0.14))
               drop-shadow(0 0 20px rgba(0,0,0,0.05));
     }
-    @keyframes title-jitter {
-      0%, 100% { transform: translateX(0); }
-      37%  { transform: translateX(1px); }
-      38%  { transform: translateX(0); }
-      81%  { transform: translateX(-1px); }
-      82%  { transform: translateX(0); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .main-title { animation: none; }
-    }
-
     .title-cursor {
       display: inline-block;
       width: 20px;
@@ -348,10 +340,17 @@
        light mode uses multiply so dark text gets red/cyan fringes instead. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <filter id="title-vhs-dark" x="-10%" y="-100%" width="120%" height="300%" color-interpolation-filters="sRGB">
+      <!-- slow sideways warp: low-frequency noise bends the rows of the letters
+           like stretched tape; the script rolls it up and down -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.006 0.07" numOctaves="2" seed="7" result="warpNoise"/>
+      <feOffset class="tv-warp-roll" in="warpNoise" dx="0" dy="0" result="warpRoll"/>
+      <feColorMatrix in="warpRoll" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="warpMap"/>
+      <feDisplacementMap class="tv-warp" in="SourceGraphic" in2="warpMap" scale="5" xChannelSelector="R" yChannelSelector="G" result="warped"/>
+      <!-- fine grain roughens the edges; green pinned to 0.5 in both maps =
+           no vertical shift, so the scanlines stay straight -->
       <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="noise"/>
-      <!-- green pinned to 0.5 = no vertical shift, so the scanlines stay straight -->
       <feColorMatrix in="noise" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="grain"/>
-      <feDisplacementMap in="SourceGraphic" in2="grain" scale="0.8" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+      <feDisplacementMap in="warped" in2="grain" scale="1.4" xChannelSelector="R" yChannelSelector="G" result="rough"/>
       <feColorMatrix in="rough" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
       <feOffset class="tv-split" data-sign="-1" dx="-0.8" dy="0" result="r"/>
       <feColorMatrix in="rough" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
@@ -372,10 +371,17 @@
       <feBlend in="rgb" in2="haze" mode="screen"/>
     </filter>
     <filter id="title-vhs-light" x="-10%" y="-100%" width="120%" height="300%" color-interpolation-filters="sRGB">
+      <!-- slow sideways warp: low-frequency noise bends the rows of the letters
+           like stretched tape; the script rolls it up and down -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.006 0.07" numOctaves="2" seed="7" result="warpNoise"/>
+      <feOffset class="tv-warp-roll" in="warpNoise" dx="0" dy="0" result="warpRoll"/>
+      <feColorMatrix in="warpRoll" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="warpMap"/>
+      <feDisplacementMap class="tv-warp" in="SourceGraphic" in2="warpMap" scale="5" xChannelSelector="R" yChannelSelector="G" result="warped"/>
+      <!-- fine grain roughens the edges; green pinned to 0.5 in both maps =
+           no vertical shift, so the scanlines stay straight -->
       <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="noise"/>
-      <!-- green pinned to 0.5 = no vertical shift, so the scanlines stay straight -->
       <feColorMatrix in="noise" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="grain"/>
-      <feDisplacementMap in="SourceGraphic" in2="grain" scale="0.8" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+      <feDisplacementMap in="warped" in2="grain" scale="1.4" xChannelSelector="R" yChannelSelector="G" result="rough"/>
       <!-- each layer keeps one channel and whites out the others -->
       <feColorMatrix in="rough" type="matrix" values="1 0 0 0 0  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/>
       <feOffset class="tv-split" data-sign="-1" dx="-0.8" dy="0" result="r"/>
@@ -474,11 +480,28 @@
   }
   setTimeout(typeTitle, 220);             // let the content fade land first
 
-  // ── Title colour wobble ───────────────────────────────────────
-  // Nudge the RGB split a little, like the PlantHUD demo but slower and
-  // smaller. (No tracking tears: they read as stray lines through the title.)
+  // ── Title warp and colour wobble ──────────────────────────────
+  // The warp rolls slowly up and down through the letters and breathes in
+  // strength; both are smooth sine drifts, so nothing snaps or jitters.
+  // The RGB split gets a small random nudge, like the PlantHUD demo but
+  // slower. (No tracking tears: they read as stray lines through the title.)
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const rolls  = document.querySelectorAll('.tv-warp-roll');
+    const warps  = document.querySelectorAll('.tv-warp');
     const splits = document.querySelectorAll('.tv-split');
+    let lastWarp = -Infinity;
+    (function warp(now) {
+      // ~25 updates a second is plenty for a slow drift, and each one
+      // re-runs the filter, which is the expensive part on phones
+      if (now - lastWarp >= 40) {
+        lastWarp = now;
+        const roll  = (22 * Math.sin(now / 2300)).toFixed(1);
+        const scale = (5 + 2 * Math.sin(now / 3100)).toFixed(2);
+        rolls.forEach(o => o.setAttribute('dy', roll));
+        warps.forEach(d => d.setAttribute('scale', scale));
+      }
+      requestAnimationFrame(warp);
+    })(0);
     setInterval(() => {
       const split = 0.6 + Math.random() * 0.5;
       splits.forEach(o => o.setAttribute('dx', (o.dataset.sign * split).toFixed(2)));
