@@ -793,7 +793,7 @@ function openTerminal(startDir, initialCommand) {
       'You can also type executables directly:',
       '  notepad.exe, terminal.exe, calc.exe, regedit.exe, sysmon.exe',
       '  welcome.readme, void.tmp, daemon.core, ?????.exe',
-      '  or any project name (try: fireworks, vornoi, ...)',
+      '  or any project name (try: fireworks, voronoi, ...)',
       '  Programs are found in the current directory first, then along PATH.',
     ];
   }

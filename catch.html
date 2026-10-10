@@ -5,13 +5,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="apple-touch-icon" sizes="180x180"
-        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+        href="/images/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32"
-        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+        href="/images/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16"
-        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
-    <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+        href="/images/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
     <title>Play catch with your dad!</title>
+    <meta name="description" content="Play catch with a very long tentacle. Throw the ball and it throws it back.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Eve Net">
+    <meta property="og:title" content="Tentacle Catch">
+    <meta property="og:description" content="Play catch with a very long tentacle. Throw the ball and it throws it back.">
+    <meta property="og:url" content="https://evenet.fun/catch">
+    <meta property="og:image" content="https://evenet.fun/images/previews/catch.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Tentacle Catch">
+    <meta name="twitter:description" content="Play catch with a very long tentacle. Throw the ball and it throws it back.">
+    <meta name="twitter:image" content="https://evenet.fun/images/previews/catch.jpg">
     <style>
         @font-face {
             font-family: "F25 Bank Printer";
@@ -63,7 +76,7 @@
   onmouseout="this.style.transform='scale(1)'"
   onmousedown="this.style.transform='scale(0.95)'"
   onmouseup="this.style.transform='scale(1.2)'">
-  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+  <img src="/images/go-home.png"
        alt="home" style="width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; display: block;">
 </a>
     <div id="vol-slider" style="position:fixed;bottom:16px;left:16px;z-index:200;cursor:pointer;user-select:none;font-family:'F25 Bank Printer',monospace;color:rgba(255,255,255,0.5);letter-spacing:2px;line-height:1.6;">
@@ -280,7 +293,7 @@
             ensureAudioGraph();
             for (let i = 1; i <= 5; i++) {
                 try {
-                    let resp = await fetch(`https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/audio/ballhit${i}.wav`);
+                    let resp = await fetch(`/audio/ballhit${i}.wav`);
                     let arrayBuffer = await resp.arrayBuffer();
                     let decoded = await audioCtx.decodeAudioData(arrayBuffer);
                     audioBuffers.push(decoded);

@@ -5,13 +5,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="apple-touch-icon" sizes="180x180"
-        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+        href="/images/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32"
-        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+        href="/images/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16"
-        href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
-    <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+        href="/images/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
     <title>Bug Hotline - Live Bug Communication Service</title>
+    <meta name="description" content="Call up a ladybug, moth or praying mantis on a glitchy green-screen hotline and chat with it. It remembers what you said.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Eve Net">
+    <meta property="og:title" content="Bug Hotline">
+    <meta property="og:description" content="Call up a ladybug, moth or praying mantis on a glitchy green-screen hotline and chat with it. It remembers what you said.">
+    <meta property="og:url" content="https://evenet.fun/critters">
+    <meta property="og:image" content="https://evenet.fun/images/previews/critters.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Bug Hotline">
+    <meta name="twitter:description" content="Call up a ladybug, moth or praying mantis on a glitchy green-screen hotline and chat with it. It remembers what you said.">
+    <meta name="twitter:image" content="https://evenet.fun/images/previews/critters.jpg">
     <style>
         :root {
             --neon-green: #0f0;
@@ -28,7 +41,7 @@
             background-image:
                 linear-gradient(rgba(0, 255, 0, 0.03) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(0, 255, 0, 0.03) 1px, transparent 1px),
-                url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/tree_bg.jpg');
+                url('/images/tree_bg.jpg');
             background-size: 30px 30px, 30px 30px, cover;
             background-position: center;
             background-attachment: fixed;
@@ -160,7 +173,7 @@
             bottom: -50px;
             width: 60px;
             height: 44px;
-            background: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/bughotline.png') center / contain no-repeat;
+            background: url('/images/bughotline.png') center / contain no-repeat;
             opacity: 0.9;
             pointer-events: none;
             z-index: 1;
@@ -691,36 +704,94 @@
             filter: blur(0.5px);
         }
 
+        .redial-btn {
+            margin-top: 12px;
+            width: 100%;
+            padding: 8px 10px;
+            font-size: 11px;
+            letter-spacing: 2px;
+        }
+
+        .redial-btn:disabled,
+        .input-container button:disabled {
+            opacity: 0.4;
+            cursor: wait;
+        }
+
+        /* Touch screens keep :hover after a tap, which left buttons lit up */
+        @media (hover: none) {
+            button:hover {
+                background: rgba(0, 30, 0, 0.5);
+                color: var(--neon-green);
+                box-shadow: 0 0 10px rgba(0, 255, 0, 0.1);
+            }
+        }
+
+        input[type="text"]:disabled {
+            opacity: 0.6;
+        }
+
+        .no-signal {
+            display: none;
+            text-align: center;
+            font-size: 12px;
+            letter-spacing: 2px;
+            line-height: 1.8;
+            opacity: 0.7;
+            animation: blink 2s infinite;
+        }
+
+        .bug-display.no-feed .bug-image {
+            display: none;
+        }
+
+        .bug-display.no-feed .no-signal {
+            display: block;
+        }
+
+        .feed-meta {
+            font-size: 10px;
+            opacity: 0.5;
+            font-family: monospace;
+            display: flex;
+            justify-content: space-between;
+            color: var(--neon-green);
+        }
+
+        /* Phones: everything has to fit in one screen so the chat and the
+           input are always visible. The bug feed shrinks to a thumbnail
+           beside the status panel. */
         @media (max-width: 800px) {
             body {
-                padding: 12px 8px;
-                min-height: 100dvh;
-                overflow-y: auto;
-                overflow-x: hidden;
-                align-items: flex-start;
+                padding: 8px;
+                height: 100dvh;
+                min-height: 0;
+                overflow: hidden;
+                align-items: stretch;
             }
 
             .chat-container {
                 grid-template-columns: 1fr;
-                gap: 12px;
+                grid-template-rows: auto auto minmax(0, 1fr);
+                gap: 10px;
                 padding: 12px;
-                height: auto;
-                max-height: none;
-                overflow: visible;
+                height: calc(100dvh - 16px);
+                max-height: calc(100dvh - 16px);
             }
 
             .header {
-                padding-bottom: 10px;
-                margin-bottom: 2px;
+                padding-bottom: 8px;
+                margin-bottom: 0;
+                padding-right: 28px;
             }
 
             .header-title h1 {
-                font-size: clamp(24px, 8vw, 30px);
+                font-size: clamp(22px, 7vw, 30px);
                 letter-spacing: 2px;
             }
 
             .header-title p {
-                font-size: 10px;
+                font-size: 9px;
                 letter-spacing: 1px;
             }
 
@@ -730,37 +801,63 @@
             }
 
             .left-panel {
-                gap: 12px;
+                flex-direction: row;
+                align-items: stretch;
+                gap: 10px;
                 border-right: none;
                 border-bottom: 1px dashed rgba(0, 255, 0, 0.3);
                 padding-right: 0;
-                padding-bottom: 12px;
+                padding-bottom: 10px;
             }
 
-            .left-panel::after {
+            .left-panel::after,
+            .feed-meta,
+            .network-status {
                 display: none;
             }
 
             .status-module {
+                flex: 1;
+                min-width: 0;
                 padding: 10px;
             }
 
+            .status-bar {
+                gap: 8px;
+            }
+
             .connection-row {
-                font-size: 11px;
+                font-size: 10px;
             }
 
             #bugName {
                 font-size: 12px;
             }
 
-            .network-status {
-                font-size: 9px;
-                margin-top: 10px;
-                padding-top: 8px;
+            .redial-btn {
+                margin-top: 8px;
+                padding: 6px 8px;
+                font-size: 10px;
+                letter-spacing: 1px;
             }
 
             .bug-display {
-                height: 170px;
+                width: 38%;
+                max-width: 170px;
+                height: auto;
+                min-height: 110px;
+                flex-shrink: 0;
+            }
+
+            .bug-display::after {
+                font-size: 8px;
+                top: 6px;
+                left: 6px;
+            }
+
+            .no-signal {
+                font-size: 9px;
+                letter-spacing: 1px;
             }
 
             .right-panel {
@@ -768,8 +865,6 @@
             }
 
             .chat-box {
-                height: 220px;
-                min-height: 220px;
                 padding: 12px;
             }
 
@@ -810,12 +905,14 @@
                 font-size: 12px;
             }
 
+            /* 16px keeps iOS from zooming the page when the input is focused */
             input[type="text"] {
-                font-size: 14px;
+                font-size: 16px;
                 padding: 10px 10px 10px 26px;
+                min-width: 0;
             }
 
-            button {
+            .input-container button {
                 padding: 0 14px;
                 font-size: 12px;
                 letter-spacing: 1px;
@@ -834,24 +931,8 @@
         }
 
         @media (max-width: 420px) {
-            .header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 6px;
-            }
-
             .header-system-info {
-                align-self: flex-end;
-                font-size: 9px;
-            }
-
-            .bug-display {
-                height: 150px;
-            }
-
-            .chat-box {
-                height: 190px;
-                min-height: 190px;
+                display: none;
             }
         }
 
@@ -872,7 +953,7 @@
   onmouseout="this.style.transform='scale(1)'"
   onmousedown="this.style.transform='scale(0.95)'"
   onmouseup="this.style.transform='scale(1.2)'">
-  <img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/go-home.png"
+  <img src="/images/go-home.png"
        alt="home" style="width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; display: block;">
 </a>
     <div id="dark-tint" aria-hidden="true"></div>
@@ -900,15 +981,16 @@
                         <span id="bugName"></span>
                     </div>
                 </div>
+                <button class="redial-btn" id="redialButton" onclick="redial()">REDIAL</button>
                 <div class="network-status" id="networkStatus"></div>
             </div>
 
-            <div class="bug-display">
-                <img id="bugImage" class="bug-image" src="" alt="Live Bug Feed">
+            <div class="bug-display" id="bugDisplay">
+                <img id="bugImage" class="bug-image" alt="Live Bug Feed">
+                <div class="no-signal">NO VISUAL<br>// SIGNAL ONLY</div>
             </div>
 
-            <div
-                style="font-size: 10px; opacity: 0.5; font-family: monospace; display: flex; justify-content: space-between; color: var(--neon-green);">
+            <div class="feed-meta">
                 <span>LATENCY: 24ms</span>
                 <span>ENC: AES-256</span>
             </div>
@@ -917,18 +999,19 @@
         <div class="right-panel">
             <div class="chat-box" id="chatBox"></div>
             <div class="input-container">
-                <input type="text" id="userInput" placeholder="ENTER TRANSMISSION DATA..." autocomplete="off">
-                <button onclick="sendMessage()">TRANSMIT</button>
+                <input type="text" id="userInput" placeholder="ENTER TRANSMISSION DATA..." autocomplete="off" maxlength="400">
+                <button id="sendButton" onclick="sendMessage()">TRANSMIT</button>
             </div>
         </div>
     </div>
 
     <script>
+        // Names must match the allowlist in api/bug-chat.js.
         const bugs = [
             { name: "Ladybug", searchTerm: "ladybug insect" },
             { name: "Butterfly", searchTerm: "butterfly insect" },
             { name: "Dragonfly", searchTerm: "dragonfly insect" },
-            { name: "Ant", searchTerm: "ant insect" },
+            { name: "Ant", searchTerm: "ant insect macro" },
             { name: "Bee", searchTerm: "bee insect" },
             { name: "Praying Mantis", searchTerm: "praying mantis insect" },
             { name: "Firefly", searchTerm: "firefly insect" },
@@ -937,22 +1020,41 @@
             { name: "Grasshopper", searchTerm: "grasshopper insect" },
             { name: "Moth", searchTerm: "moth insect" },
             { name: "Beetle", searchTerm: "beetle insect" },
-            { name: "Spider", searchTerm: "spider insect" },
+            { name: "Spider", searchTerm: "spider arachnid macro" },
             { name: "Cicada", searchTerm: "cicada insect" },
-            { name: "Centipede", searchTerm: "centipede insect" }
+            { name: "Centipede", searchTerm: "centipede" }
         ];
+
+        const MAX_HISTORY = 16;
+        const CONNECTION_LOST = "sorry... connection bad... try again...";
 
         let currentBug = null;
         const bugMemory = new Map();
-        let isTyping = false;
+        let busy = false;
+
+        const chatBox = document.getElementById('chatBox');
+        const userInput = document.getElementById('userInput');
+        const sendButton = document.getElementById('sendButton');
+        const redialButton = document.getElementById('redialButton');
+        const bugDisplay = document.getElementById('bugDisplay');
+        const bugImage = document.getElementById('bugImage');
+
+        bugImage.addEventListener('error', () => bugDisplay.classList.add('no-feed'));
+        bugImage.addEventListener('load', () => bugDisplay.classList.remove('no-feed'));
+
+        // Locks the line while a bug is answering so replies can't interleave.
+        function setBusy(value) {
+            busy = value;
+            userInput.disabled = value;
+            sendButton.disabled = value;
+            redialButton.disabled = value;
+            if (!value && window.matchMedia('(pointer: fine)').matches) userInput.focus();
+        }
 
         async function getRandomBugImage(searchTerm) {
             try {
                 const resp = await fetch(`/api/unsplash.js?query=${encodeURIComponent(searchTerm)}`);
-                if (!resp.ok) {
-                    // no image available or server error
-                    return null;
-                }
+                if (!resp.ok) return null;
                 const data = await resp.json();
                 return data && data.url ? data.url : null;
             } catch (error) {
@@ -961,10 +1063,9 @@
             }
         }
 
-        async function getRandomBug() {
-            const bug = bugs[Math.floor(Math.random() * bugs.length)];
-            const imageUrl = await getRandomBugImage(bug.searchTerm);
-            return { ...bug, image: imageUrl };
+        function pickBug() {
+            const choices = currentBug ? bugs.filter(b => b.name !== currentBug.name) : bugs;
+            return choices[Math.floor(Math.random() * choices.length)];
         }
 
         function updateSignalStrength() {
@@ -985,35 +1086,28 @@
         }
 
         function showTypingIndicator() {
-            if (isTyping) return;
-            isTyping = true;
+            removeTypingIndicator();
             const typingDiv = document.createElement('div');
             typingDiv.className = 'message bug-message typing-indicator';
             typingDiv.innerHTML = '<span>.</span><span>.</span><span>.</span>';
-            document.getElementById('chatBox').appendChild(typingDiv);
+            chatBox.appendChild(typingDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
         }
 
         function removeTypingIndicator() {
-            const typingIndicator = document.querySelector('.typing-indicator');
-            if (typingIndicator) {
-                typingIndicator.remove();
-            }
-            isTyping = false;
+            const typingIndicator = chatBox.querySelector('.typing-indicator');
+            if (typingIndicator) typingIndicator.remove();
         }
 
         function addScanningEffect() {
-            const bugImage = document.getElementById('bugImage');
             bugImage.classList.add('scanning');
-            setTimeout(() => {
-                bugImage.classList.remove('scanning');
-            }, 1000);
+            setTimeout(() => bugImage.classList.remove('scanning'), 1000);
         }
 
         function showRawBugMessage(message) {
-            const rawMessage = message.split('').map(char =>
+            return message.split('').map(char =>
                 String.fromCharCode(char.charCodeAt(0) + 1)
             ).join('');
-            return rawMessage;
         }
 
         async function typeRawMessage(element, rawText, translatedElement, originalText, speed = 30) {
@@ -1021,50 +1115,35 @@
             element.textContent = rawPrefix;
 
             for (let i = 0; i < rawText.length; i++) {
-                // Type raw character
                 element.textContent = rawPrefix + rawText.substring(0, i + 1);
-
-                // Show translated character
                 translatedElement.textContent = originalText.substring(0, i + 1);
-
-                // Wait a short time
+                chatBox.scrollTop = chatBox.scrollHeight;
                 await new Promise(resolve => setTimeout(resolve, speed));
             }
 
-            // Add closing bracket
             element.textContent = rawPrefix + rawText + ']';
         }
 
         async function addMessage(text, sender) {
-            const chatBox = document.getElementById('chatBox');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}-message`;
 
             if (sender === 'bug') {
-                // Create container for translation process
                 const translationContainer = document.createElement('div');
                 translationContainer.className = 'translation-process';
 
-                // Create raw message element
                 const rawMessage = document.createElement('div');
                 rawMessage.className = 'raw-message';
 
-                // Create translated message element
                 const translatedMessage = document.createElement('div');
                 translatedMessage.className = 'translated-message';
 
                 translationContainer.appendChild(rawMessage);
                 translationContainer.appendChild(translatedMessage);
-
-                // Add to chat
                 messageDiv.appendChild(translationContainer);
                 chatBox.appendChild(messageDiv);
 
-                // Type out raw message and show translation in real-time
-                const rawText = showRawBugMessage(text);
-                await typeRawMessage(rawMessage, rawText, translatedMessage, text);
-
-                // Keep raw message displayed (do not remove it)
+                await typeRawMessage(rawMessage, showRawBugMessage(text), translatedMessage, text);
             } else {
                 messageDiv.textContent = text;
                 chatBox.appendChild(messageDiv);
@@ -1073,151 +1152,99 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        async function displayBug() {
-            currentBug = await getRandomBug();
-            const bugImage = document.getElementById('bugImage');
-            if (currentBug.image) {
-                bugImage.src = currentBug.image;
+        async function callBug(payload) {
+            const response = await fetch('/api/bug-chat.js', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bugType: currentBug.name, ...payload })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.message) {
+                throw new Error(data.error || `HTTP error! status: ${response.status}`);
             }
+            return data.message;
+        }
+
+        async function displayBug() {
+            setBusy(true);
+            currentBug = pickBug();
             document.getElementById('bugName').textContent = `CONNECTED TO: ${currentBug.name.toUpperCase()}`;
-
-            // Clear chat box for new bug
-            const chatBox = document.getElementById('chatBox');
             chatBox.innerHTML = '';
+            bugDisplay.classList.remove('no-feed');
+            bugImage.removeAttribute('src');
 
-            addScanningEffect();
             updateSignalStrength();
             updateNetworkStatus();
 
-            // Initialize bug memory for this bug
-            if (!bugMemory.has(currentBug.name)) {
-                bugMemory.set(currentBug.name, []);
-            }
+            // Photo and greeting load in parallel; whichever is slower doesn't hold up the other.
+            const bug = currentBug;
+            getRandomBugImage(bug.searchTerm).then(url => {
+                if (bug !== currentBug) return;
+                if (url) {
+                    bugImage.src = url;
+                    addScanningEffect();
+                } else {
+                    bugDisplay.classList.add('no-feed');
+                }
+            });
 
-            // Generate AI introduction message
+            if (!bugMemory.has(bug.name)) bugMemory.set(bug.name, []);
+            const memory = bugMemory.get(bug.name);
+
             showTypingIndicator();
             try {
-                console.log('Sending request to: /api/bug-chat.js for intro');
-                const response = await fetch('/api/bug-chat.js', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        bugType: currentBug.name,
-                        message: "Introduce yourself to the human. Keep it very brief and clumsily written.",
-                        conversationHistory: []
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                console.log('Intro Response:', data);
-
-                let introMessage;
-                if (data.message) {
-                    introMessage = data.message;
-                } else {
-                    introMessage = "hello human. i am " + currentBug.name.toLowerCase() + "... wht do u want to know ..";
-                }
-
+                // A bug you've already talked to picks the old conversation back up.
+                const intro = await callBug(memory.length
+                    ? { message: '*the human called back*', conversationHistory: memory.slice(-MAX_HISTORY) }
+                    : { intro: true });
                 removeTypingIndicator();
-                await addMessage(introMessage, 'bug');
-
-                bugMemory.get(currentBug.name).push({
-                    role: "assistant",
-                    content: introMessage
-                });
-
-                console.log('Intro message added and stored');
+                await addMessage(intro, 'bug');
+                memory.push({ role: 'assistant', content: intro });
             } catch (error) {
-                removeTypingIndicator();
                 console.error('Error in displayBug:', error);
-                const errorMsg = "sorry... connection bad... try again...";
-                await addMessage(errorMsg, 'bug');
-                bugMemory.get(currentBug.name).push({
-                    role: "assistant",
-                    content: errorMsg
-                });
+                removeTypingIndicator();
+                await addMessage(CONNECTION_LOST, 'bug');
             }
+            setBusy(false);
+        }
+
+        function redial() {
+            if (busy) return;
+            displayBug();
         }
 
         async function sendMessage() {
-            const input = document.getElementById('userInput');
-            const message = input.value.trim();
-
+            if (busy || !currentBug) return;
+            const message = userInput.value.trim();
             if (!message) return;
 
-            addMessage(message, 'user');
-            input.value = '';
-
+            setBusy(true);
+            userInput.value = '';
+            await addMessage(message, 'user');
             showTypingIndicator();
             updateSignalStrength();
 
+            const memory = bugMemory.get(currentBug.name);
             try {
-                console.log('Sending message to: /api/bug-chat.js');
-
-                let conversationHistory = [];
-                if (bugMemory.has(currentBug.name)) {
-                    conversationHistory = bugMemory.get(currentBug.name);
-                }
-
-                const response = await fetch('/api/bug-chat.js', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        bugType: currentBug.name,
-                        message: message,
-                        conversationHistory: conversationHistory
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                console.log('Response:', data);
-                if (data.message) {
-                    removeTypingIndicator();
-                    addMessage(data.message, 'bug');
-                    if (!bugMemory.has(currentBug.name)) {
-                        bugMemory.set(currentBug.name, []);
-                    }
-                    bugMemory.get(currentBug.name).push({
-                        role: "user",
-                        content: message
-                    });
-                    bugMemory.get(currentBug.name).push({
-                        role: "assistant",
-                        content: data.message
-                    });
-                } else {
-                    removeTypingIndicator();
-                    addMessage("sorry... connection bad... try again...", 'bug');
-                    console.error('API error:', data.error || data.details);
-                }
-            } catch (error) {
+                const reply = await callBug({ message, conversationHistory: memory.slice(-MAX_HISTORY) });
+                memory.push({ role: 'user', content: message });
+                memory.push({ role: 'assistant', content: reply });
                 removeTypingIndicator();
+                await addMessage(reply, 'bug');
+            } catch (error) {
                 console.error('Detailed error:', error);
-                addMessage("sorry... connection bad... try again...", 'bug');
+                removeTypingIndicator();
+                await addMessage(CONNECTION_LOST, 'bug');
             }
+            setBusy(false);
         }
 
         displayBug();
         setInterval(updateSignalStrength, 3000);
         setInterval(updateNetworkStatus, 5000);
 
-        // Allow sending message with Enter key
-        document.getElementById('userInput').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                sendMessage();
-            }
+        userInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.isComposing) sendMessage();
         });
     </script>
     <script>

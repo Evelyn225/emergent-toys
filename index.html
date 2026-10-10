@@ -19,44 +19,43 @@
   <meta name="twitter:image" content="https://evenet.fun/images/cover.png">
 
   <link rel="apple-touch-icon" sizes="180x180"
-      href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/apple-touch-icon.png">
+      href="/images/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32"
-      href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-32x32.png">
+      href="/images/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16"
-      href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/favicon-16x16.png">
-  <link rel="manifest" href="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/site.webmanifest">
+      href="/images/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
   <title>Eve Net</title>
   <script>
     /* Set the theme before first paint so the light default never flashes dark. */
     document.documentElement.dataset.theme =
       localStorage.getItem('evenet-theme') === 'dark' ? 'dark' : 'light';
   </script>
+  <link rel="preload" href="PlantHUD.woff2" as="font" type="font/woff2" crossorigin>
   <style id="fonts">
+/* PlantHUD is a bitmap font drawn on a 2000 UPM grid: it is only pixel-exact at
+   multiples of 20px, so every size on this page sticks to 20 or 40. */
 @font-face {
-  font-family: 'W95';
-  src: url('w95font.woff2') format('woff2'),
-       url('w95font.woff')  format('woff');
+  font-family: 'PlantHUD';
+  src: url('PlantHUD.woff2') format('woff2'),
+       url('PlantHUD.woff')  format('woff');
   font-weight: normal;
   font-style: normal;
-}
-@font-face {
-  font-family: 'W95';
-  src: url('w95font-bold.woff2') format('woff2'),
-       url('w95font-bold.woff')  format('woff');
-  font-weight: bold;
-  font-style: normal;
+  font-display: block;
 }
 </style>
 
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/BATON.CUR'), auto !important; }
-    a:hover, a:hover * { cursor: url('https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/BATONRED.cur'), auto !important; }
+    * { margin: 0; padding: 0; box-sizing: border-box; cursor: url('/images/BATON.CUR'), auto !important; }
+    a:hover, a:hover * { cursor: url('/images/BATONRED.cur'), auto !important; }
 
     body {
       margin: 0;
       overflow: hidden;
       background: #000;
-      font-family: 'W95', monospace;
+      font-family: 'PlantHUD', monospace;
+      font-synthesis: none;
+      -webkit-font-smoothing: none;
       color: rgba(255,255,255,0.85);
     }
     @keyframes cursor-blink {
@@ -83,19 +82,40 @@
     }
 
     .main-title {
-      font-family: 'W95', monospace;
-      font-weight: bold;
-      font-size: 32px;
+      font-family: 'PlantHUD', monospace;
+      font-size: 40px;
       color: rgba(255,255,255,0.9);
       letter-spacing: 6px;
       margin-bottom: 10px;
       text-shadow: 0 0 16px rgba(255,255,255,0.5), 0 0 40px rgba(255,255,255,0.2);
     }
 
+    /* Toned-down take on the PlantHUD demo's VHS look: the #title-vhs-* svg
+       filters add rough edges, tracking tears, an RGB split and a little bloom.
+       The scanlines are a mask, applied after the filter, so they stay thin
+       and only touch the glyphs instead of striping the page. */
+    .main-title {
+      filter: url(#title-vhs-dark);
+      -webkit-mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.72) 1px 2px);
+              mask-image: repeating-linear-gradient(0deg, #000 0 1px, rgba(0,0,0,0.72) 1px 2px);
+      animation: title-jitter 4.3s steps(1) infinite;
+    }
+    [data-theme="light"] .main-title { filter: url(#title-vhs-light); }
+    @keyframes title-jitter {
+      0%, 100% { transform: translateX(0); }
+      37%  { transform: translateX(1px); }
+      38%  { transform: translateX(0); }
+      81%  { transform: translateX(-1px); }
+      82%  { transform: translateX(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .main-title { animation: none; }
+    }
+
     .title-cursor {
       display: inline-block;
-      width: 18px;
-      height: 25px;
+      width: 20px;
+      height: 32px;
       background: rgba(255,255,255,0.85);
       vertical-align: middle;
       position: relative;
@@ -106,18 +126,18 @@
     }
 
     .main-tagline {
-      font-family: 'W95', monospace;
-      font-size: 10px;
+      font-family: 'PlantHUD', monospace;
+      font-size: 20px;
       color: rgba(255,255,255,0.35);
-      letter-spacing: 3px;
+      letter-spacing: 2px;
       text-transform: uppercase;
       margin-bottom: 40px;
     }
 
     /* ─── Inline link list ─── */
     .link-list {
-      font-family: 'W95', monospace;
-      font-size: 12px;
+      font-family: 'PlantHUD', monospace;
+      font-size: 20px;
       line-height: 2.2;
       color: rgba(255,255,255,0.12);
     }
@@ -144,6 +164,32 @@
       user-select: none;
     }
 
+    /* ─── Newest stuff: its own row at the bottom so each link has room for
+       the burning tag hanging under it ─── */
+    .new-row {
+      margin-top: 8px;
+      line-height: 3.6;
+    }
+    .link-item.is-new { position: relative; }
+    .new-fire {
+      position: absolute;
+      left: 50%;
+      top: calc(100% - 16px);   /* flames climb up behind the link text */
+      transform: translateX(-50%);
+      z-index: -1;
+      width: 60px;          /* 30 x 24 fire cells at 2px each */
+      height: 48px;
+      image-rendering: pixelated;
+      pointer-events: none;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
     @media (max-width: 640px) {
       /* Let the page scroll: the link list is taller than a phone viewport
          once the type is legible, and fixed centering would clip it. */
@@ -154,7 +200,7 @@
         min-height: 100vh;
         min-height: 100svh;
         display: flex;
-        padding: 48px 16px;
+        padding: 72px 16px 48px;
       }
       .main-inner {
         position: static;
@@ -163,15 +209,18 @@
         width: 100%;
         max-width: 440px;
       }
-      .main-title { font-size: 36px; letter-spacing: 5px; margin-bottom: 14px; }
-      .title-cursor { width: 22px; height: 31px; top: -5px; }
-      .main-tagline { font-size: 13px; letter-spacing: 2px; margin-bottom: 34px; }
-      .link-list { font-size: 18px; line-height: 2.6; }
+      .main-title { letter-spacing: 4px; margin-bottom: 14px; }
+      .main-tagline { letter-spacing: 1px; margin-bottom: 34px; }
+      .link-list { line-height: 2.6; }
       /* Vertical padding on an inline anchor grows the hit area
          without changing the line box. */
       .link-item { padding: 10px 1px; }
       .link-sep { margin: 0 5px; }
-      #theme-toggle { font-size: 13px; top: 8px; right: 8px; padding: 8px 10px; }
+      /* Scrolls away with the page instead of floating over the links */
+      #corner { position: absolute; top: 4px; right: 6px; gap: 4px; }
+      #corner > * { padding: 8px 10px; }
+      .new-row { margin-top: 18px; line-height: 3.6; }
+      .new-fire { top: calc(100% - 26px); }
     }
 
     /* full-viewport cursor surface - sits below all content */
@@ -184,7 +233,7 @@
     /* cursor particles */
     .cursor-particle {
       position: fixed;
-      font-family: 'W95', monospace;
+      font-family: 'PlantHUD', monospace;
       pointer-events: none;
       z-index: 10000;
       user-select: none;
@@ -237,18 +286,34 @@
     [data-theme="light"] .link-sep      { color: rgba(0,0,0,0.1); }
     [data-theme="light"] #theme-toggle  { color: rgba(0,0,0,0.62); }
     [data-theme="light"] #theme-toggle:hover { color: rgba(0,0,0,0.85); }
-    /* ─── Theme toggle button ─── */
-    #theme-toggle {
+    /* ─── Corner bar: font link + theme toggle ─── */
+    #corner {
       position: fixed;
       top: 12px;
       right: 14px;
       z-index: 10001;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    #font-link {
+      font-size: 20px;
+      color: rgba(255,255,255,0.55);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    #font-link:hover,
+    #font-link:focus-visible { color: rgba(255,255,255,1); }
+    [data-theme="light"] #font-link { color: rgba(0,0,0,0.62); }
+    [data-theme="light"] #font-link:hover,
+    [data-theme="light"] #font-link:focus-visible { color: rgba(0,0,0,1); }
+
+    #theme-toggle {
       background: none;
       border: none;
       color: rgba(255,255,255,0.35);
-      font-family: 'W95', monospace;
-      font-size: 10px;
-      letter-spacing: 2px;
+      font-family: 'PlantHUD', monospace;
+      font-size: 20px;
       padding: 4px 0;
       cursor: pointer;
       transition: color 0.15s;
@@ -259,8 +324,67 @@
 </head>
 
 <body>
-  <!--<img src="https://raw.githubusercontent.com/Evelyn225/emergent-toys/main/images/cover_4x.png" alt="" style="display:none">-->
-  <button id="theme-toggle" aria-label="Toggle colour theme">[ dark ]</button>
+  <!-- VHS filters for the title, adapted from planthud.html at lower strength.
+       Dark mode merges the split channels with screen (light text on black);
+       light mode uses multiply so dark text gets red/cyan fringes instead. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="title-vhs-dark" x="-10%" y="-100%" width="120%" height="300%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="grain"/>
+      <feDisplacementMap in="SourceGraphic" in2="grain" scale="0.8" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+      <feTurbulence class="tv-tear-noise" type="fractalNoise" baseFrequency="0.002 0.18" numOctaves="2" seed="1" result="bands"/>
+      <feColorMatrix in="bands" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="tear"/>
+      <feDisplacementMap class="tv-tear" data-base="1.2" in="rough" in2="tear" scale="1.2" xChannelSelector="R" yChannelSelector="G" result="dR"/>
+      <feDisplacementMap class="tv-tear" data-base="0.8" in="rough" in2="tear" scale="0.8" xChannelSelector="R" yChannelSelector="G" result="dG"/>
+      <feDisplacementMap class="tv-tear" data-base="1.6" in="rough" in2="tear" scale="1.6" xChannelSelector="R" yChannelSelector="G" result="dB"/>
+      <feColorMatrix in="dR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+      <feOffset class="tv-split" data-sign="-1" dx="-0.8" dy="0" result="r"/>
+      <feColorMatrix in="dG" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
+      <feColorMatrix in="dB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
+      <feOffset class="tv-split" data-sign="1" dx="0.8" dy="0" result="b"/>
+      <feBlend in="r" in2="g" mode="screen" result="rg"/>
+      <feBlend in="rg" in2="b" mode="screen" result="rgb"/>
+      <feGaussianBlur in="rgb" stdDeviation="2 0.3" result="smearBlur"/>
+      <feOffset in="smearBlur" dx="2" result="smearShift"/>
+      <feComponentTransfer in="smearShift" result="smear">
+        <feFuncR type="linear" slope=".3"/><feFuncG type="linear" slope=".33"/><feFuncB type="linear" slope=".42"/>
+      </feComponentTransfer>
+      <feGaussianBlur in="rgb" stdDeviation="5 2" result="bloomBlur"/>
+      <feComponentTransfer in="bloomBlur" result="bloom">
+        <feFuncR type="linear" slope=".12"/><feFuncG type="linear" slope=".13"/><feFuncB type="linear" slope=".2"/>
+      </feComponentTransfer>
+      <feBlend in="smear" in2="bloom" mode="screen" result="haze"/>
+      <feBlend in="rgb" in2="haze" mode="screen"/>
+    </filter>
+    <filter id="title-vhs-light" x="-10%" y="-100%" width="120%" height="300%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="grain"/>
+      <feDisplacementMap in="SourceGraphic" in2="grain" scale="0.8" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+      <feTurbulence class="tv-tear-noise" type="fractalNoise" baseFrequency="0.002 0.18" numOctaves="2" seed="1" result="bands"/>
+      <feColorMatrix in="bands" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="tear"/>
+      <feDisplacementMap class="tv-tear" data-base="1.2" in="rough" in2="tear" scale="1.2" xChannelSelector="R" yChannelSelector="G" result="dR"/>
+      <feDisplacementMap class="tv-tear" data-base="0.8" in="rough" in2="tear" scale="0.8" xChannelSelector="R" yChannelSelector="G" result="dG"/>
+      <feDisplacementMap class="tv-tear" data-base="1.6" in="rough" in2="tear" scale="1.6" xChannelSelector="R" yChannelSelector="G" result="dB"/>
+      <!-- each layer keeps one channel and whites out the others -->
+      <feColorMatrix in="dR" type="matrix" values="1 0 0 0 0  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/>
+      <feOffset class="tv-split" data-sign="-1" dx="-0.8" dy="0" result="r"/>
+      <feColorMatrix in="dG" type="matrix" values="0 0 0 0 1  0 1 0 0 0  0 0 0 0 1  0 0 0 1 0" result="g"/>
+      <feColorMatrix in="dB" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 1 0 0  0 0 0 1 0"/>
+      <feOffset class="tv-split" data-sign="1" dx="0.8" dy="0" result="b"/>
+      <feBlend in="r" in2="g" mode="multiply" result="rg"/>
+      <feBlend in="rg" in2="b" mode="multiply" result="rgb"/>
+      <!-- a faint trailing smear, tucked under the text -->
+      <feGaussianBlur in="rgb" stdDeviation="2 0.3" result="smearBlur"/>
+      <feOffset in="smearBlur" dx="2" result="smearShift"/>
+      <feComponentTransfer in="smearShift" result="smear">
+        <feFuncA type="linear" slope=".25"/>
+      </feComponentTransfer>
+      <feMerge><feMergeNode in="smear"/><feMergeNode in="rgb"/></feMerge>
+    </filter>
+  </svg>
+  <!--<img src="/images/cover_4x.png" alt="" style="display:none">-->
+  <div id="corner">
+    <a id="font-link" href="planthud">Download my font!</a>
+    <button id="theme-toggle" aria-label="Toggle colour theme">[ dark ]</button>
+  </div>
   <div id="cursor-layer" aria-hidden="true"></div>
   <main class="main-inner" id="main-content">
     <div class="main-title"><span id="main-title-text">Eve Net</span><span class="title-cursor"></span></div>
@@ -274,10 +398,9 @@
       <a href="erosion"             class="link-item">erosion toy</a><span class="link-sep">/</span>
       <a href="catch"               class="link-item">tentacle catch</a><span class="link-sep">/</span>
       <a href="philosophers-stone"  class="link-item">reaction diffusion</a><span class="link-sep">/</span>
-      <a href="vornoi"              class="link-item">vornoi</a><span class="link-sep">/</span>
+      <a href="voronoi"             class="link-item">voronoi</a><span class="link-sep">/</span>
       <a href="morse"               class="link-item">morse code</a><span class="link-sep">/</span>
       <a href="ascii-render"        class="link-item">ascii rendering</a><span class="link-sep">/</span>
-      <a href="corridor"            class="link-item">substructure</a><span class="link-sep">/</span>
       <a href="synth"               class="link-item">patch synth</a><span class="link-sep">/</span>
       <a href="paperbots"           class="link-item">paperbots</a><span class="link-sep">/</span>
       <a href="ball-like"           class="link-item">ball like</a><span class="link-sep">/</span>
@@ -286,9 +409,13 @@
       <a href="physarum"            class="link-item">physarum</a><span class="link-sep">/</span>
       <a href="magnetic-pendulum"   class="link-item">magnetic pendulum</a><span class="link-sep">/</span>
       <a href="dla-crystal"         class="link-item">dla crystal</a><span class="link-sep">/</span>
-      <a href="mosh-mirror"         class="link-item">mosh mirror</a><span class="link-sep">/</span>
-      <a href="ascii-city"          class="link-item">glyphport</a><span class="link-sep">/</span>
-	  <a href="sleep-os"            class="link-item">sleepOS</a>
+      <a href="sleep-os"            class="link-item">sleepOS</a>
+      <!-- Newest and best. Anything with is-new gets a burning tag; keep them in this last row. -->
+      <div class="new-row">
+        <a href="corridor"          class="link-item is-new">substructure</a><span class="link-sep">/</span>
+        <a href="ascii-city"        class="link-item is-new">glyphport</a><span class="link-sep">/</span>
+        <a href="mosh-mirror"       class="link-item is-new">mosh mirror</a>
+      </div>
     </div>
   </main>
 
@@ -330,6 +457,24 @@
     }
   }
   setTimeout(typeTitle, 220);             // let the content fade land first
+
+  // ── Title tape wobble ─────────────────────────────────────────
+  // Re-roll the tear noise and nudge the channel split, like the PlantHUD
+  // demo but slower and smaller.
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const tearNoise = document.querySelectorAll('.tv-tear-noise');
+    const tears     = document.querySelectorAll('.tv-tear');
+    const splits    = document.querySelectorAll('.tv-split');
+    setInterval(() => {
+      const seed = Math.floor(Math.random() * 1000);
+      const freq = `0.002 ${(0.15 + Math.random() * 0.1).toFixed(3)}`;
+      tearNoise.forEach(n => { n.setAttribute('seed', seed); n.setAttribute('baseFrequency', freq); });
+      const k = 0.8 + Math.random() * 0.5;
+      tears.forEach(t => t.setAttribute('scale', (t.dataset.base * k).toFixed(2)));
+      const split = 0.6 + Math.random() * 0.5;
+      splits.forEach(o => o.setAttribute('dx', (o.dataset.sign * split).toFixed(2)));
+    }, 110);
+  }
 
   // ── Cursor particles ──────────────────────────────────────────
   const activeParticles = [];
@@ -432,6 +577,119 @@
 
   window.cat = runCat;   // cat() | cat('left') | cat('right')
   console.log('%c  /\_/\  type cat() to summon one', 'color:#8a8; font-family:monospace');
+
+  // ── Burning "new" tags ────────────────────────────────────────
+  // The PSX Doom fire: each cell copies the heat of the cell below it, cooled
+  // a little and nudged sideways at random. Here the letters of NEW are the
+  // heat source, so the flames rise off the word itself.
+  const FIRE_PALETTE = [
+    0x07,0x07,0x07, 0x1F,0x07,0x07, 0x2F,0x0F,0x07, 0x47,0x0F,0x07, 0x57,0x17,0x07,
+    0x67,0x1F,0x07, 0x77,0x1F,0x07, 0x8F,0x27,0x07, 0x9F,0x2F,0x07, 0xAF,0x3F,0x07,
+    0xBF,0x47,0x07, 0xC7,0x47,0x07, 0xDF,0x4F,0x07, 0xDF,0x57,0x07, 0xDF,0x57,0x07,
+    0xD7,0x5F,0x07, 0xD7,0x5F,0x07, 0xD7,0x67,0x0F, 0xCF,0x6F,0x0F, 0xCF,0x77,0x0F,
+    0xCF,0x7F,0x0F, 0xCF,0x87,0x17, 0xC7,0x87,0x17, 0xC7,0x8F,0x17, 0xC7,0x97,0x1F,
+    0xBF,0x9F,0x1F, 0xBF,0x9F,0x1F, 0xBF,0xA7,0x27, 0xBF,0xA7,0x27, 0xBF,0xAF,0x2F,
+    0xB7,0xAF,0x2F, 0xB7,0xB7,0x2F, 0xB7,0xB7,0x37, 0xCF,0xCF,0x6F, 0xDF,0xDF,0x9F,
+    0xEF,0xEF,0xC7, 0xFF,0xFF,0xFF,
+  ];
+  const FIRE_MAX = 36;
+  const NEW_GLYPHS = [
+    // N        E       W
+    'X...X.XXXX.X...X',
+    'XX..X.X....X...X',
+    'X.X.X.XXX..X.X.X',
+    'X..XX.X....XX.XX',
+    'X...X.XXXX.X...X',
+  ];
+  const FIRE_W = 30, FIRE_H = 24;                 // matches .new-fire at 2px per cell
+  const TEXT_X = (FIRE_W - NEW_GLYPHS[0].length) >> 1;
+  const TEXT_Y = FIRE_H - NEW_GLYPHS.length - 1;
+  const FIRE_STEP_MS = 45;                        // ~22 fps, close to the original's pace
+
+  // Which cells are letters, and which hug a letter (they get a dark outline).
+  const letterCells = new Uint8Array(FIRE_W * FIRE_H);
+  NEW_GLYPHS.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] === 'X') letterCells[(TEXT_Y + y) * FIRE_W + TEXT_X + x] = 1;
+    }
+  });
+  const outlineCells = new Uint8Array(FIRE_W * FIRE_H);
+  for (let y = 0; y < FIRE_H; y++) {
+    for (let x = 0; x < FIRE_W; x++) {
+      if (letterCells[y * FIRE_W + x]) continue;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < FIRE_W && ny >= 0 && ny < FIRE_H && letterCells[ny * FIRE_W + nx]) {
+          outlineCells[y * FIRE_W + x] = 1;
+        }
+      }
+    }
+  }
+
+  function makeFire(link) {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'new-fire';
+    canvas.width = FIRE_W;
+    canvas.height = FIRE_H;
+    canvas.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span');
+    label.className = 'sr-only';
+    label.textContent = ' (new)';
+    link.append(label, canvas);
+    const ctx = canvas.getContext('2d');
+    return { ctx, heat: new Uint8Array(FIRE_W * FIRE_H), img: ctx.createImageData(FIRE_W, FIRE_H) };
+  }
+
+  function stepFire(fire) {
+    const heat = fire.heat;
+    for (let i = 0; i < heat.length; i++) {
+      if (letterCells[i]) heat[i] = FIRE_MAX - (Math.random() * 6 | 0);
+    }
+    for (let x = 0; x < FIRE_W; x++) {
+      for (let y = 1; y < FIRE_H; y++) {
+        const h = heat[y * FIRE_W + x];
+        const r = Math.random() * 4 | 0;
+        // Cools fast enough that the flames die out inside the canvas.
+        const cooled = h === 0 ? 0 : Math.max(0, h - (Math.random() * 6 | 0));
+        const dx = Math.min(FIRE_W - 1, Math.max(0, x - r + 1));
+        heat[(y - 1) * FIRE_W + dx] = cooled;
+      }
+    }
+  }
+
+  function drawFire(fire) {
+    const px = fire.img.data, heat = fire.heat;
+    for (let i = 0; i < heat.length; i++) {
+      const o = i * 4;
+      if (letterCells[i]) {
+        px[o] = 0xFF; px[o + 1] = 0xF4; px[o + 2] = 0xB8; px[o + 3] = 255;
+      } else if (outlineCells[i]) {
+        px[o] = 0x2A; px[o + 1] = 0x08; px[o + 2] = 0x02; px[o + 3] = 235;
+      } else {
+        const h = heat[i], p = h * 3;
+        px[o] = FIRE_PALETTE[p]; px[o + 1] = FIRE_PALETTE[p + 1]; px[o + 2] = FIRE_PALETTE[p + 2];
+        px[o + 3] = Math.min(255, h * 22);           // cool tips fade out instead of smoking
+      }
+    }
+    fire.ctx.putImageData(fire.img, 0, 0);
+  }
+
+  const fires = Array.from(document.querySelectorAll('.link-item.is-new'), makeFire);
+  if (fires.length) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // One still frame of a fire that has had time to catch.
+      fires.forEach(f => { for (let i = 0; i < 40; i++) stepFire(f); drawFire(f); });
+    } else {
+      let lastFire = 0;
+      (function burn(now) {
+        if (now - lastFire >= FIRE_STEP_MS) {
+          lastFire = now;
+          fires.forEach(f => { stepFire(f); drawFire(f); });
+        }
+        requestAnimationFrame(burn);
+      })(0);
+    }
+  }
 
   // ── Keyboard nav ──────────────────────────────────────────────
   const linkNav = document.querySelector('.link-list');
