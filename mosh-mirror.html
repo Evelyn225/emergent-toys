@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>mosh mirror</title>
 <meta name="description" content="A webcam datamosh mirror running on a tiny homemade video codec. Drop keyframes, bloom P-frames, bend motion vectors and irradiate the bitstream.">
 <style>
@@ -30,6 +30,8 @@
 * { box-sizing: border-box; }
 html, body {
   margin: 0; height: 100%; overflow: hidden;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
   background: var(--bg); color: var(--fg);
   font: 12px/1.4 'W95', monospace;
 }
@@ -173,19 +175,98 @@ select {
 }
 #drop.on { display: flex; }
 
+/* ─── touch layout (phones): set by JS as body.touch ─── */
+#touchbar, #toast { display: none; }
+body.touch {
+  --strip-h: 40px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --bar-h: 104px;
+  --bar-w: 0px;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+body.touch #panelToggle { display: none; }
+body.touch #stage {
+  top: var(--safe-t); left: var(--safe-l);
+  right: calc(var(--bar-w) + var(--safe-r));
+  bottom: calc(var(--strip-h) + var(--bar-h) + var(--safe-b));
+}
+body.touch #strip { height: calc(var(--strip-h) + var(--safe-b)); padding-bottom: var(--safe-b); }
+body.touch #stats { width: 150px; padding: 4px 8px; }
+body.touch #stats .wide { display: none; }
+body.touch kbd, body.touch .desk-only { display: none; }
+body:not(.touch) .touch-only { display: none; }
+
+body.touch #touchbar {
+  display: grid; position: fixed; z-index: 4;
+  left: var(--safe-l); right: var(--safe-r);
+  bottom: calc(var(--strip-h) + var(--safe-b)); height: var(--bar-h);
+  grid-template-columns: repeat(6, 1fr); grid-auto-rows: 1fr;
+  gap: 4px; padding: 4px; background: #050505;
+  border-top: 1px solid var(--faint);
+}
+#touchbar .btn {
+  text-align: center; padding: 0 2px; font-size: 11px; letter-spacing: 1px;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: manipulation; min-height: 0;
+}
+#touchbar .bloom-btn { touch-action: none; }
+#touchbar .wide2 { grid-column: span 2; }
+#touchbar [data-act=mosh] { font-weight: bold; }
+#touchbar .btn:active { background: rgba(255,255,255,.08); }
+body.nocam [data-act=flip] { opacity: .3; pointer-events: none; }
+
+/* sliders live in a sheet that slides over the picture */
+body.touch #panel {
+  display: none; z-index: 6; width: auto;
+  top: auto; left: var(--safe-l); right: var(--safe-r);
+  bottom: calc(var(--strip-h) + var(--bar-h) + var(--safe-b));
+  max-height: 58vh; max-height: 58dvh;
+  border-left: 0; border-top: 1px solid var(--faint);
+  background: rgba(5,5,5,.94);
+  padding-bottom: 20px;
+}
+body.touch.sheet #panel { display: block; }
+body.touch.sheet [data-act=sheet] { border-color: var(--fg); }
+body.touch input[type=range] { height: 30px; }
+body.touch input[type=range]::-webkit-slider-thumb { width: 16px; height: 26px; margin-top: -12px; }
+body.touch input[type=range]::-moz-range-thumb { width: 16px; height: 26px; }
+body.touch .check { padding: 5px 0; }
+body.touch .check input { width: 18px; height: 18px; }
+body.touch select { padding: 8px; }
+
+/* landscape phone: controls become a column on the right */
+body.touch.land { --bar-h: 0px; --bar-w: 164px; }
+body.touch.land #touchbar {
+  top: var(--safe-t); bottom: calc(var(--strip-h) + var(--safe-b));
+  left: auto; width: var(--bar-w); height: auto;
+  grid-template-columns: 1fr 1fr;
+  border-top: 0; border-left: 1px solid var(--faint);
+}
+body.touch.land #touchbar .wide2 { grid-column: auto; }
+body.touch.land #panel {
+  top: var(--safe-t); bottom: calc(var(--strip-h) + var(--safe-b));
+  left: auto; right: calc(var(--bar-w) + var(--safe-r)); width: 280px;
+  max-height: none; border-top: 0; border-left: 1px solid var(--faint);
+}
+
+#toast {
+  position: fixed; left: 50%; top: calc(16px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+  z-index: 30; background: #000; border: 1px solid var(--hot);
+  padding: 8px 10px; gap: 10px; align-items: center; max-width: calc(100vw - 32px);
+}
+#toast.on { display: flex; }
+#toast .btn { border-color: var(--hot); color: var(--hot); padding: 6px 12px; }
+
+/* desktop browsers narrower than the panel still get the old toggle */
 @media (max-width: 720px) {
-  :root { --strip-h: 46px; }
-  #stage { right: 0; }
-  #panel {
-    width: auto; left: 0; top: auto; max-height: 55vh;
-    border-left: 0; border-top: 1px solid var(--faint);
-    display: none;
-  }
-  body.mobilepanel #panel { display: block; }
-  body.nopanel #panel { display: none; }
-  #panelToggle { display: block; }
-  #stats { width: 150px; }
-  #stats .wide { display: none; }
+  body:not(.touch) #stage { right: 0; }
+  body:not(.touch) #panel { width: auto; left: 0; top: auto; max-height: 55vh; display: none; }
+  body:not(.touch).mobilepanel #panel { display: block; }
+  body:not(.touch) #panelToggle { display: block; }
 }
 </style>
 </head>
@@ -201,21 +282,39 @@ select {
 
 <button id="panelToggle" class="btn">controls</button>
 
+<nav id="touchbar">
+  <button class="btn" data-act="mosh">MOSH</button>
+  <button class="btn bloom-btn">BLOOM</button>
+  <button class="btn" data-act="key">KEY</button>
+  <button class="btn" data-stamp="echo">ECHO</button>
+  <button class="btn" data-stamp="bars">BARS</button>
+  <button class="btn" data-stamp="image">IMAGE</button>
+  <button class="btn" data-act="flip">FLIP CAM</button>
+  <button class="btn" data-act="rec">REC</button>
+  <button class="btn" data-act="snap">SNAP</button>
+  <button class="btn" data-act="vec">VECTORS</button>
+  <button class="btn wide2" data-act="sheet">SLIDERS</button>
+</nav>
+
+<div id="toast"><span id="toastMsg"></span><button class="btn" id="toastBtn">save</button></div>
+
 <aside id="panel">
   <header><span>MOSH MIRROR</span><a href="/" title="back to eve net">eve net</a></header>
   <div class="tag">homemade codec, broken on purpose</div>
 
   <section>
     <h2>mosh</h2>
-    <button id="moshBtn" class="btn big">MOSH <kbd>space</kbd></button>
-    <div class="row">
-      <button id="bloomBtn" class="btn">bloom <kbd>hold B</kbd></button>
-      <button id="keyBtn" class="btn">clean key <kbd>K</kbd></button>
+    <div class="desk-only">
+      <button id="moshBtn" class="btn big" data-act="mosh">MOSH <kbd>space</kbd></button>
+      <div class="row">
+        <button id="bloomBtn" class="btn bloom-btn">bloom <kbd>hold B</kbd></button>
+        <button id="keyBtn" class="btn" data-act="key">clean key <kbd>K</kbd></button>
+      </div>
     </div>
     <div id="leakSlot"></div>
     <label class="check"><input type="checkbox" id="dropIntra" checked> drop intra blocks while moshing</label>
-    <div class="lbl">stamp a foreign I-frame</div>
-    <div class="stamps">
+    <div class="lbl desk-only">stamp a foreign I-frame</div>
+    <div class="stamps desk-only">
       <button class="btn" data-stamp="echo">echo <kbd>1</kbd></button>
       <button class="btn" data-stamp="bars">bars <kbd>2</kbd></button>
       <button class="btn" data-stamp="image">image <kbd>3</kbd></button>
@@ -232,21 +331,22 @@ select {
     <div id="encSlot"></div>
     <div class="lbl">resolution</div>
     <select id="res">
-      <option value="256">256 wide (crunchy)</option>
-      <option value="384" selected>384 wide</option>
-      <option value="512">512 wide</option>
-      <option value="640">640 wide (slow)</option>
+      <option value="256">256px (crunchy)</option>
+      <option value="320">320px</option>
+      <option value="384">384px</option>
+      <option value="512">512px</option>
+      <option value="640">640px (slow)</option>
     </select>
   </section>
 
   <section>
     <h2>view</h2>
-    <label class="check"><input type="checkbox" id="overlayChk"> show macroblocks + vectors <kbd>V</kbd></label>
+    <label class="check desk-only"><input type="checkbox" id="overlayChk"> show macroblocks + vectors <kbd>V</kbd></label>
     <label class="check"><input type="checkbox" id="mirrorChk" checked> mirror <kbd>M</kbd></label>
     <label class="check"><input type="checkbox" id="smoothChk"> smooth upscaling</label>
-    <div class="row" style="margin-top:6px">
-      <button id="recBtn" class="btn">record <kbd>R</kbd></button>
-      <button id="snapBtn" class="btn">snapshot <kbd>P</kbd></button>
+    <div class="row desk-only" style="margin-top:6px">
+      <button id="recBtn" class="btn" data-act="rec">record <kbd>R</kbd></button>
+      <button id="snapBtn" class="btn" data-act="snap">snapshot <kbd>P</kbd></button>
     </div>
     <div class="lbl">source</div>
     <div class="row">
@@ -254,6 +354,7 @@ select {
       <button class="btn" data-src="demo">demo</button>
       <button class="btn" data-src="video">video file</button>
     </div>
+    <button class="btn desk-only" data-act="flip" style="width:100%">flip camera <kbd>F</kbd></button>
   </section>
 
   <section class="help">
@@ -263,7 +364,8 @@ select {
     Stamps put a different picture in the decoder that the encoder doesn't know about.
     Radiation flips bits in the stream, and each row is a slice, so a hit garbles the rest of its row.
     <br><br>
-    drop an image anywhere to stamp it &middot; <b>H</b> hides this panel &middot; double-click a slider name to reset it
+    <span class="desk-only">drop an image anywhere to stamp it &middot; <b>H</b> hides this panel &middot; </span>double-click a slider name to reset it.
+    <span class="touch-only">Tap the picture to toggle MOSH. Hold BLOOM.</span>
   </section>
 </aside>
 
@@ -275,7 +377,7 @@ select {
 <div id="start">
   <div>
     <h1>MOSH MIRROR</h1>
-    <p>A tiny video codec written from scratch: motion search, DCT, bitstream and all. Your webcam goes in, a decoder you can break comes out.</p>
+    <p>A tiny video codec written from scratch: motion search, DCT, bitstream and all. Your camera goes in, a decoder you can break comes out.</p>
     <div class="row">
       <button class="btn" data-src="camera">use camera</button>
       <button class="btn" data-src="demo">demo scene</button>
@@ -306,7 +408,7 @@ const S = {
   gop: 60,
   range: 16,
   intraEager: 1,
-  width: 384,
+  size: 384,        // long edge of the coded frame in pixels
   overlay: false,
   mirror: true,
   smooth: false,
@@ -806,7 +908,7 @@ function frameBytes(fr) { let n = 0; for (const s of fr.slices) n += s.length; r
    pipeline state
    ══════════════════════════════════════════════════════════════════════ */
 let src, enc, encNext, dec, decNext;
-let frameNo = 0, forceKey = false, resyncKey = false;
+let frameNo = 0, forceKey = false, resyncKey = false, inSync = false;
 let moshing = false, bloomHeld = false, lastP = null;
 let echoRing = [], echoTick = 0;
 const history = [];
@@ -819,9 +921,13 @@ const grab = document.createElement('canvas');
 const gctx = grab.getContext('2d', { willReadFrequently: true });
 let img = null;
 
-function setup(width, aspect) {
-  W = width;
-  H = Math.max(64, Math.round(width / aspect / 16) * 16);
+const round16 = v => Math.max(64, Math.round(v / 16) * 16);
+let setupAspect = 4 / 3;
+function setup(size, aspect) {
+  setupAspect = aspect;
+  // size is the long edge, so a portrait phone camera costs the same as landscape
+  if (aspect >= 1) { W = round16(size); H = round16(size / aspect); }
+  else { H = round16(size); W = round16(size * aspect); }
   CW = W / 2; CH = H / 2;
   MBW = W / 16; MBH = H / 16; NMB = MBW * MBH;
   src = makePlanes(); enc = makePlanes(); encNext = makePlanes();
@@ -833,8 +939,25 @@ function setup(width, aspect) {
   view.width = grab.width = W; view.height = grab.height = H;
   img = vctx.createImageData(W, H);
   frameNo = 0; forceKey = true; lastP = null; echoRing = []; history.length = 0;
+  inSync = false; slowFrames = 0; msAvg = 0;
   setMosh(false);
   layout();
+}
+
+// If the device can't keep up, drop to the next smaller size once things settle.
+let slowFrames = 0, msAvg = 0;
+const SIZES = [256, 320, 384, 512, 640];
+function adaptSpeed(ms) {
+  msAvg = msAvg ? msAvg * 0.9 + ms * 0.1 : ms;
+  if (frameNo < 30) return;
+  slowFrames = msAvg > 45 ? slowFrames + 1 : 0;
+  const i = SIZES.indexOf(S.size);
+  if (slowFrames > 45 && i > 0) {
+    S.size = SIZES[i - 1];
+    document.getElementById('res').value = S.size;
+    setup(S.size, setupAspect);
+    flash('LOWER RES FOR SPEED');
+  }
 }
 
 function decoderOpts() {
@@ -864,21 +987,30 @@ function step() {
   forceKey = resyncKey = false;
 
   const fr = encodeFrame(src, enc, type);
-  decodeFrame(fr, enc, encNext, CLEAN, null);  // the encoder's own idea of what the decoder holds
+  const { fr: tx, flips } = irradiate(fr, radiationRate());
+  if (resync) setMosh(false);
+  const opts = decoderOpts();
+  const clean = !bloomHeld && !moshing && flips === 0 && opts.vecGain === 1 && opts.sin === 0;
+
+  // the encoder's own idea of what the decoder holds
+  decodeFrame(fr, enc, encNext, CLEAN, clean ? info : null);
   swapEnc();
 
-  const { fr: tx, flips } = irradiate(fr, radiationRate());
   let fate;
   if (bloomHeld && lastP) {
-    decodeFrame(lastP, dec, decNext, decoderOpts(), info); swapDec();
-    fate = 'bloom';
-  } else if (type === 'I' && moshing && !resync) {
+    decodeFrame(lastP, dec, decNext, opts, info); swapDec();
+    fate = 'bloom'; inSync = false;
+  } else if (type === 'I' && moshing) {
     fate = 'dropped';
     flash('I-FRAME DROPPED');
+  } else if (clean && (inSync || type === 'I')) {
+    // nothing is broken, so the display decoder would compute exactly what
+    // the encoder just did: copy it instead of decoding twice (matters on phones)
+    copyPlanes(enc, dec);
+    fate = 'shown'; inSync = true;
   } else {
-    if (resync) setMosh(false);
-    decodeFrame(tx, dec, decNext, decoderOpts(), info); swapDec();
-    fate = 'shown';
+    decodeFrame(tx, dec, decNext, opts, info); swapDec();
+    fate = 'shown'; inSync = false;
   }
   if (type === 'P') lastP = tx;
 
@@ -886,6 +1018,7 @@ function step() {
   const modes = [0, 0, 0, 0];
   for (let i = 0; i < NMB; i++) modes[info.mode[i]]++;
   lastStats = { ms: performance.now() - t0, modes, flips };
+  adaptSpeed(lastStats.ms);
   history.push({ bytes: frameBytes(fr), type, fate, flips });
   if (history.length > HIST_MAX) history.shift();
   frameNo++;
@@ -923,6 +1056,7 @@ function stamp(kind) {
   if (!p) return;
   const fr = encodeFrame(p, null, 'I');
   decodeFrame(fr, dec, decNext, CLEAN, null); swapDec();
+  inSync = false;
   setMosh(true);
   flash('STAMP: ' + kind.toUpperCase());
   render();
@@ -969,6 +1103,8 @@ function grabSource() {
     drawCover(gctx, demo, 640, 480, W, H, false);
   } else {
     if (!videoEl || videoEl.readyState < 2 || !videoEl.videoWidth) return false;
+    // phones swap the camera's width and height when they rotate
+    if (Math.abs(sourceAspect() / setupAspect - 1) > 0.03) setup(S.size, sourceAspect());
     drawCover(gctx, videoEl, videoEl.videoWidth, videoEl.videoHeight, W, H, S.mirror && source === 'camera');
   }
   rgbaToYuv(gctx.getImageData(0, 0, W, H).data, src);
@@ -1022,55 +1158,149 @@ function drawDemo(t) {
 
 function stopStream() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  if (videoEl) { videoEl.pause(); if (videoEl.src) URL.revokeObjectURL(videoEl.src); videoEl.removeAttribute('src'); videoEl.srcObject = null; }
+  if (videoEl) {
+    videoEl.pause();
+    if (videoEl.src && videoEl.src.startsWith('blob:')) URL.revokeObjectURL(videoEl.src);
+    videoEl.removeAttribute('src'); videoEl.srcObject = null;
+  }
 }
 
 function waitForVideo(v) {
   return new Promise((res, rej) => {
     if (v.readyState >= 2 && v.videoWidth) return res();
-    const ok = () => { cleanup(); res(); };
+    const ok = () => { if (v.videoWidth) { cleanup(); res(); } };
     const bad = () => { cleanup(); rej(new Error('video failed to load')); };
-    const cleanup = () => { v.removeEventListener('loadeddata', ok); v.removeEventListener('error', bad); };
-    v.addEventListener('loadeddata', ok); v.addEventListener('error', bad);
+    const timer = setTimeout(() => { cleanup(); rej(new Error('video never started')); }, 10000);
+    const cleanup = () => {
+      clearTimeout(timer);
+      for (const e of ['loadeddata', 'loadedmetadata', 'resize', 'playing']) v.removeEventListener(e, ok);
+      v.removeEventListener('error', bad);
+    };
+    for (const e of ['loadeddata', 'loadedmetadata', 'resize', 'playing']) v.addEventListener(e, ok);
+    v.addEventListener('error', bad);
   });
 }
 
-async function useSource(kind, file) {
-  const err = document.getElementById('startErr');
-  err.textContent = '';
-  if (!videoEl) {
-    videoEl = document.createElement('video');
-    videoEl.muted = true; videoEl.playsInline = true; videoEl.loop = true;
+function ensureVideoEl() {
+  if (videoEl) return;
+  videoEl = document.createElement('video');
+  videoEl.muted = true; videoEl.loop = true; videoEl.playsInline = true;
+  videoEl.setAttribute('playsinline', ''); videoEl.setAttribute('muted', ''); videoEl.setAttribute('autoplay', '');
+  // iOS only keeps decoding frames for videos that live in the document
+  videoEl.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1';
+  document.body.appendChild(videoEl);
+}
+
+function cameraError(e) {
+  const n = e && e.name;
+  if (n === 'NotAllowedError' || n === 'SecurityError') return 'camera permission was denied. allow it in your browser settings for this site and try again.';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'no camera found.';
+  if (n === 'NotReadableError' || n === 'AbortError') return 'the camera is busy in another app. close it and try again.';
+  return 'camera unavailable: ' + ((e && (e.message || e.name)) || 'unknown error') + '.';
+}
+
+let facing = 'user', cameraCount = 0;
+async function openCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw Object.assign(new Error(window.isSecureContext ? 'no camera API in this browser' : 'the camera needs https'), { name: 'NoApi' });
   }
+  // release the old camera first: most phones can't open two at once
+  stopStream();
+  const want = { facingMode: { ideal: facing }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } };
+  let s;
   try {
-    if (kind === 'camera') {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no camera API here (needs https)');
-      const s = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false });
-      stopStream();
-      stream = s;
-      videoEl.srcObject = s;
-      await videoEl.play();
-      await waitForVideo(videoEl);
-    } else if (kind === 'video') {
+    s = await navigator.mediaDevices.getUserMedia({ video: want, audio: false });
+  } catch (e) {
+    if (e.name !== 'OverconstrainedError') throw e;
+    s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  }
+  stream = s;
+  const track = s.getVideoTracks()[0];
+  const st = track && track.getSettings ? track.getSettings() : {};
+  if (st.facingMode) facing = st.facingMode === 'environment' ? 'environment' : 'user';
+  if (track) track.addEventListener('ended', () => { if (stream === s) cameraLost(); });
+  videoEl.srcObject = s;
+  await videoEl.play().catch(() => {});
+  await waitForVideo(videoEl);
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    cameraCount = devs.filter(d => d.kind === 'videoinput').length;
+  } catch (e) { cameraCount = 1; }
+}
+
+function cameraLost() {
+  if (source !== 'camera' || document.hidden) return;
+  running = false;
+  showStart('the camera stopped. tap "use camera" to start it again.');
+}
+
+function showStart(msg) {
+  document.getElementById('startErr').textContent = msg || '';
+  document.getElementById('start').classList.remove('gone');
+}
+
+async function useSource(kind, file) {
+  document.getElementById('startErr').textContent = '';
+  ensureVideoEl();
+  try {
+    if (kind === 'camera') await openCamera();
+    else if (kind === 'video') {
       stopStream();
       videoEl.src = URL.createObjectURL(file);
+      videoEl.load();
+      await videoEl.play().catch(() => {});
       await waitForVideo(videoEl);
-      await videoEl.play();
     } else {
       stopStream();
     }
   } catch (e) {
-    err.textContent = kind === 'camera' ? 'camera unavailable: ' + (e.message || e.name) + '. try the demo scene.' : String(e.message || e);
-    if (source) flash('SOURCE FAILED');
+    const msg = kind === 'camera' ? cameraError(e) + ' the demo scene works without one.' : String(e.message || e);
+    // the old video or camera was already released, so only the demo survives a failed switch
+    if (running && source === 'demo') flash(kind === 'camera' ? 'CAMERA FAILED' : 'VIDEO FAILED');
+    else { running = false; showStart(msg); }
     return;
   }
   source = kind;
-  S.mirror = kind === 'camera';
-  document.getElementById('mirrorChk').checked = S.mirror;
+  document.body.classList.toggle('nocam', kind !== 'camera' || cameraCount < 2);
+  setMirror(kind === 'camera' && facing === 'user');
   document.getElementById('start').classList.add('gone');
-  setup(S.width, sourceAspect());
+  setup(S.size, sourceAspect());
   running = true;
 }
+
+async function flipCamera() {
+  if (source !== 'camera') return;
+  const trackId = () => {
+    const t = stream && stream.getVideoTracks()[0];
+    return t && t.getSettings ? t.getSettings().deviceId : null;
+  };
+  const before = trackId(), prevFacing = facing;
+  facing = facing === 'user' ? 'environment' : 'user';
+  running = false;
+  try {
+    await openCamera();
+    // facingMode is only a hint: a lone camera comes back unchanged
+    if (before && trackId() === before) { facing = prevFacing; flash('NO OTHER CAMERA'); }
+  } catch (e) {
+    facing = facing === 'user' ? 'environment' : 'user';
+    try { await openCamera(); } catch (e2) { showStart(cameraError(e2)); return; }
+    flash('NO OTHER CAMERA');
+  }
+  setMirror(facing === 'user');
+  setup(S.size, sourceAspect());
+  running = true;
+}
+
+// phones suspend the camera and video in the background
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !source || source === 'demo') return;
+  if (source === 'camera' && (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended'))) {
+    try { await openCamera(); setup(S.size, sourceAspect()); running = true; }
+    catch (e) { running = false; showStart(cameraError(e)); }
+  } else if (videoEl && videoEl.paused) {
+    videoEl.play().catch(() => {});
+  }
+});
 
 /* ══════════════════════════════════════════════════════════════════════
    rendering, overlay, history strip
@@ -1086,8 +1316,10 @@ function render() {
   yuvToRgba(dec, img.data);
   vctx.putImageData(img, 0, 0);
   if (recorder) {
+    const rw = recCanvas.width, rh = recCanvas.height, k = Math.min(rw / W, rh / H);
+    rctx.fillStyle = '#000'; rctx.fillRect(0, 0, rw, rh);
     rctx.imageSmoothingEnabled = S.smooth;
-    rctx.drawImage(view, 0, 0, recCanvas.width, recCanvas.height);
+    rctx.drawImage(view, (rw - W * k) / 2, (rh - H * k) / 2, W * k, H * k);
   }
   drawOverlay();
 }
@@ -1210,15 +1442,50 @@ function download(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+// Phones save through the share sheet ("save to photos"). Sharing needs a
+// fresh tap, so if the browser refuses, offer a button that is one.
+function saveBlob(blob, name) {
+  const file = new File([blob], name, { type: blob.type });
+  const canShare = document.body.classList.contains('touch') && navigator.canShare && navigator.canShare({ files: [file] });
+  if (!canShare) { download(blob, name); return; }
+  navigator.share({ files: [file] }).catch(e => {
+    if (e.name === 'AbortError') return;
+    showToast('ready: ' + name.split('.').pop(), () => {
+      navigator.share({ files: [file] }).catch(e2 => { if (e2.name !== 'AbortError') download(blob, name); });
+    });
+  });
+}
+
+const toast = document.getElementById('toast');
+let toastAction = null, toastTimer = 0;
+function showToast(msg, action) {
+  document.getElementById('toastMsg').textContent = msg;
+  toastAction = action;
+  toast.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('on'), 15000);
+}
+document.getElementById('toastBtn').addEventListener('click', () => {
+  toast.classList.remove('on');
+  if (toastAction) toastAction();
+});
+
+function setRecLabel(on) {
+  document.querySelectorAll('[data-act=rec]').forEach(b => {
+    b.classList.toggle('on', on);
+    if (b.id === 'recBtn') b.firstChild.textContent = on ? 'stop ' : 'record ';
+    else b.textContent = on ? 'STOP' : 'REC';
+  });
 }
 function stamp8601() { return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19); }
 
 function toggleRecord() {
-  const btn = document.getElementById('recBtn');
   if (recorder) { recorder.stop(); return; }
   if (!window.MediaRecorder || !recCanvas.captureStream) { flash('NO RECORDER HERE'); return; }
-  const scale = Math.max(1, Math.round(1280 / W));
+  const scale = Math.max(1, Math.round(1280 / Math.max(W, H)));
   recCanvas.width = W * scale; recCanvas.height = H * scale;
   const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
   const mime = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
@@ -1227,23 +1494,23 @@ function toggleRecord() {
   recorder.ondataavailable = e => { if (e.data.size) recChunks.push(e.data); };
   recorder.onstop = () => {
     const type = recorder.mimeType || 'video/webm';
-    download(new Blob(recChunks, { type }), `mosh-${stamp8601()}.${type.includes('mp4') ? 'mp4' : 'webm'}`);
+    saveBlob(new Blob(recChunks, { type }), `mosh-${stamp8601()}.${type.includes('mp4') ? 'mp4' : 'webm'}`);
     recorder = null;
-    btn.classList.remove('on'); btn.firstChild.textContent = 'record ';
+    setRecLabel(false);
   };
   recorder.start(500);
-  btn.classList.add('on'); btn.firstChild.textContent = 'stop ';
+  setRecLabel(true);
 }
 
 function snapshot() {
   if (!W) return;
   const c = document.createElement('canvas');
-  const scale = Math.max(1, Math.round(1600 / W));
+  const scale = Math.max(1, Math.round(1600 / Math.max(W, H)));
   c.width = W * scale; c.height = H * scale;
   const x = c.getContext('2d');
   x.imageSmoothingEnabled = S.smooth;
   x.drawImage(view, 0, 0, c.width, c.height);
-  c.toBlob(b => b && download(b, `mosh-${stamp8601()}.png`), 'image/png');
+  c.toBlob(b => b && saveBlob(b, `mosh-${stamp8601()}.png`), 'image/png');
   flash('SNAPSHOT');
 }
 
@@ -1273,47 +1540,86 @@ slider('encSlot', 'gop', 'keyframe every', 5, 240, 1, v => v + ' frames');
 slider('encSlot', 'range', 'search range', 1, 32, 1, v => '±' + v + 'px');
 slider('encSlot', 'intraEager', 'intra eagerness', 0, 3, 0.05, v => v ? v.toFixed(2) : 'never');
 
+const $all = sel => document.querySelectorAll(sel);
 function setMosh(on) {
   moshing = on;
-  document.getElementById('moshBtn').classList.toggle('on', on);
+  $all('[data-act=mosh]').forEach(b => b.classList.toggle('on', on));
   updateFlag();
 }
 function setBloom(on) {
   if (bloomHeld === on) return;
   bloomHeld = on;
-  document.getElementById('bloomBtn').classList.toggle('on', on);
+  $all('.bloom-btn').forEach(b => b.classList.toggle('on', on));
   updateFlag();
 }
 function setOverlay(on) {
   S.overlay = on;
   document.getElementById('overlayChk').checked = on;
+  $all('[data-act=vec]').forEach(b => b.classList.toggle('on', on));
   drawOverlay();
 }
 function setMirror(on) {
   S.mirror = on;
   document.getElementById('mirrorChk').checked = on;
 }
+function cleanKey() { forceKey = resyncKey = true; flash('CLEAN KEYFRAME'); }
+function toggleSheet(on) {
+  document.body.classList.toggle('sheet', on === undefined ? !document.body.classList.contains('sheet') : on);
+}
 
-document.getElementById('moshBtn').addEventListener('click', () => setMosh(!moshing));
-document.getElementById('keyBtn').addEventListener('click', () => { forceKey = resyncKey = true; flash('CLEAN KEYFRAME'); });
-const bloomBtn = document.getElementById('bloomBtn');
-bloomBtn.addEventListener('pointerdown', e => { bloomBtn.setPointerCapture(e.pointerId); setBloom(true); });
-for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) bloomBtn.addEventListener(ev, () => setBloom(false));
+const ACTIONS = {
+  mosh: () => setMosh(!moshing),
+  key: cleanKey,
+  flip: flipCamera,
+  rec: toggleRecord,
+  snap: snapshot,
+  vec: () => setOverlay(!S.overlay),
+  sheet: () => toggleSheet(),
+};
+$all('[data-act]').forEach(b => b.addEventListener('click', () => { if (src) ACTIONS[b.dataset.act](); }));
+
+$all('.bloom-btn').forEach(btn => {
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+    setBloom(true);
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(ev, () => setBloom(false));
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+});
+
+// tap the picture to toggle mosh (or to close the slider sheet)
+const stageEl = document.getElementById('stage');
+let tapStart = null;
+stageEl.addEventListener('pointerdown', e => { tapStart = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+stageEl.addEventListener('pointerup', e => {
+  if (!tapStart || !src) return;
+  const moved = Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y);
+  const quick = performance.now() - tapStart.t < 450;
+  tapStart = null;
+  if (moved > 12 || !quick) return;
+  if (document.body.classList.contains('sheet')) toggleSheet(false);
+  else setMosh(!moshing);
+});
+
 document.getElementById('dropIntra').addEventListener('change', e => { S.dropIntra = e.target.checked; });
-document.querySelectorAll('[data-stamp]').forEach(b => b.addEventListener('click', () => stamp(b.dataset.stamp)));
+$all('[data-stamp]').forEach(b => b.addEventListener('click', () => {
+  // on phones the image button always opens the picker: there's no drag and drop
+  if (b.dataset.stamp === 'image' && document.body.classList.contains('touch')) {
+    if (src) document.getElementById('imgFile').click();
+  } else stamp(b.dataset.stamp);
+}));
 document.getElementById('overlayChk').addEventListener('change', e => setOverlay(e.target.checked));
 document.getElementById('mirrorChk').addEventListener('change', e => setMirror(e.target.checked));
 document.getElementById('smoothChk').addEventListener('change', e => {
   S.smooth = e.target.checked;
   document.body.classList.toggle('smooth', S.smooth);
 });
-document.getElementById('recBtn').addEventListener('click', toggleRecord);
-document.getElementById('snapBtn').addEventListener('click', snapshot);
 document.getElementById('res').addEventListener('change', e => {
-  S.width = +e.target.value;
-  if (source) setup(S.width, sourceAspect());
+  S.size = +e.target.value;
+  if (source) setup(S.size, sourceAspect());
 });
-document.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => {
+$all('[data-src]').forEach(b => b.addEventListener('click', () => {
   if (b.dataset.src === 'video') document.getElementById('vidFile').click();
   else useSource(b.dataset.src);
 }));
@@ -1359,7 +1665,8 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === ' ') { e.preventDefault(); if (!e.repeat) setMosh(!moshing); }
   else if (k === 'b') { e.preventDefault(); setBloom(true); }
-  else if (k === 'k') { forceKey = resyncKey = true; flash('CLEAN KEYFRAME'); }
+  else if (k === 'k') cleanKey();
+  else if (k === 'f') flipCamera();
   else if (k === '1') stamp('echo');
   else if (k === '2') stamp('bars');
   else if (k === '3') stamp('image');
@@ -1371,7 +1678,21 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { if (e.key.toLowerCase() === 'b') setBloom(false); });
 window.addEventListener('blur', () => setBloom(false));
-window.addEventListener('resize', layout);
+
+// phones (and very narrow windows) get the touch bar instead of the side panel
+const touchMQ = matchMedia('(pointer: coarse) and (max-width: 900px), (pointer: coarse) and (max-height: 540px), (max-width: 560px)');
+function applyMode() {
+  const touch = touchMQ.matches;
+  document.body.classList.toggle('touch', touch);
+  document.body.classList.toggle('land', touch && innerWidth > innerHeight);
+  layout();
+}
+touchMQ.addEventListener ? touchMQ.addEventListener('change', applyMode) : touchMQ.addListener(applyMode);
+window.addEventListener('resize', applyMode);
+window.addEventListener('orientationchange', () => setTimeout(applyMode, 250));
+applyMode();
+if (touchMQ.matches) { S.size = 320; }
+document.getElementById('res').value = S.size;
 
 /* ══════════════════════════════════════════════════════════════════════
    main loop
