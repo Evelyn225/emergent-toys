@@ -39,10 +39,11 @@ body {
     radial-gradient(circle, #333a 1px, transparent 1.5px) 0 0 / 48px 48px,
     #000;
 }
-/* tearing, rgb split, smear and bloom all come from the #vhs svg filter */
-.screen, .crt { filter: url(#vhs); }
+/* tearing, rgb split, smear and bloom all come from the #vhs svg filter;
+   the script gives each element its own copy scaled to its font size */
+.screen, .crt { filter: var(--fx, url(#vhs)); }
 .nofx .screen, .nofx .crt { filter: none; }
-.nofx .tube::after { display: none; }
+.nofx .tube::after, .nofx .scan::after { display: none; }
 .screen > * { text-shadow: 0 0 2px rgba(220, 230, 255, .6); }
 /* scanlines sit outside the filter so they stay thin and sharp */
 .tube { position: relative; max-width: 900px; margin: 0 auto; container-type: inline-size; }
@@ -51,6 +52,15 @@ body {
   position: absolute; inset: 0;
   pointer-events: none;
   background: repeating-linear-gradient(0deg, rgba(0,0,0,.3) 0 1px, transparent 1px 2px);
+}
+/* scanlines for the sample text: one font pixel apart (1/20em), never under 2px */
+.scan { position: relative; --pitch: max(2px, .05em); }
+.scan::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom,
+    rgba(0,0,0,.3) 0 calc(var(--pitch) / 2), transparent calc(var(--pitch) / 2) var(--pitch));
 }
 .jitter { animation: jit 3.2s steps(1) infinite; }
 @keyframes jit {
@@ -105,32 +115,32 @@ a { color: #8fa0ff; }
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<svg id="fxdefs" width="0" height="0" style="position:absolute" aria-hidden="true">
   <filter id="vhs" x="-4%" y="-4%" width="108%" height="108%" color-interpolation-filters="sRGB">
     <!-- fine noise roughens every edge -->
-    <feTurbulence type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="grain"/>
-    <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feTurbulence data-role="grain" type="fractalNoise" baseFrequency="0.8 0.6" numOctaves="1" seed="3" result="grain"/>
+    <feDisplacementMap data-role="rough" in="SourceGraphic" in2="grain" scale="1.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
     <!-- wide horizontal bands, x-only displacement: tracking tears -->
-    <feTurbulence id="tearNoise" type="fractalNoise" baseFrequency="0.002 0.18" numOctaves="2" seed="1" result="bands"/>
+    <feTurbulence data-role="tear" type="fractalNoise" baseFrequency="0.002 0.18" numOctaves="2" seed="1" result="bands"/>
     <feColorMatrix in="bands" type="matrix" values="1 0 0 0 0  0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 1" result="tear"/>
-    <feDisplacementMap id="tearR" in="rough" in2="tear" scale="3" xChannelSelector="R" yChannelSelector="G" result="dR"/>
-    <feDisplacementMap id="tearG" in="rough" in2="tear" scale="2" xChannelSelector="R" yChannelSelector="G" result="dG"/>
-    <feDisplacementMap id="tearB" in="rough" in2="tear" scale="4" xChannelSelector="R" yChannelSelector="G" result="dB"/>
+    <feDisplacementMap data-role="tearR" in="rough" in2="tear" scale="3" xChannelSelector="R" yChannelSelector="G" result="dR"/>
+    <feDisplacementMap data-role="tearG" in="rough" in2="tear" scale="2" xChannelSelector="R" yChannelSelector="G" result="dG"/>
+    <feDisplacementMap data-role="tearB" in="rough" in2="tear" scale="4" xChannelSelector="R" yChannelSelector="G" result="dB"/>
     <!-- split channels and pull them apart -->
     <feColorMatrix in="dR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
-    <feOffset id="offR" dx="-1.5" dy="0" result="r"/>
+    <feOffset data-role="offR" dx="-1.5" dy="0" result="r"/>
     <feColorMatrix in="dG" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
     <feColorMatrix in="dB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
-    <feOffset id="offB" dx="1.5" dy="0" result="b"/>
+    <feOffset data-role="offB" dx="1.5" dy="0" result="b"/>
     <feBlend in="r" in2="g" mode="screen" result="rg"/>
     <feBlend in="rg" in2="b" mode="screen" result="rgb"/>
     <!-- smear trailing to the right, then a soft bloom -->
-    <feGaussianBlur in="rgb" stdDeviation="2.5 0.3" result="smearBlur"/>
-    <feOffset in="smearBlur" dx="3" result="smearShift"/>
+    <feGaussianBlur data-role="smearBlur" in="rgb" stdDeviation="2.5 0.3" result="smearBlur"/>
+    <feOffset data-role="smearShift" in="smearBlur" dx="3" result="smearShift"/>
     <feComponentTransfer in="smearShift" result="smear">
       <feFuncR type="linear" slope=".5"/><feFuncG type="linear" slope=".55"/><feFuncB type="linear" slope=".7"/>
     </feComponentTransfer>
-    <feGaussianBlur in="rgb" stdDeviation="5 2" result="bloomBlur"/>
+    <feGaussianBlur data-role="bloomBlur" in="rgb" stdDeviation="5 2" result="bloomBlur"/>
     <feComponentTransfer in="bloomBlur" result="bloom">
       <feFuncR type="linear" slope=".22"/><feFuncG type="linear" slope=".25"/><feFuncB type="linear" slope=".38"/>
     </feComponentTransfer>
@@ -169,18 +179,18 @@ a { color: #8fa0ff; }
     <label>size <input type="range" id="sz" min="20" max="120" step="20" value="40"> <span id="szv">40px</span></label>
     <a href="PlantHUD.ttf" download>download .ttf</a>
   </div>
-  <div class="out crt" id="out"></div>
-  <div class="charset crt">ABCDEFGHIJKLMNOPQRSTUVWXYZ
+  <div class="out scan" id="out"><div class="crt" id="outText"></div></div>
+  <div class="charset scan"><div class="crt">ABCDEFGHIJKLMNOPQRSTUVWXYZ
 abcdefghijklmnopqrstuvwxyz
 0123456789 ●°
-!"#$%&amp;'()*+,-./:;&lt;=&gt;?@[\]^_`{|}~</div>
+!"#$%&amp;'()*+,-./:;&lt;=&gt;?@[\]^_`{|}~</div></div>
 </div>
 
 <script>
 const txt = document.getElementById('txt'), out = document.getElementById('out');
 const fx = document.getElementById('fx'), sz = document.getElementById('sz');
 function sync() {
-  out.textContent = txt.value;
+  document.getElementById('outText').textContent = txt.value;
   document.body.classList.toggle('nofx', !fx.checked);
   out.style.fontSize = sz.value + 'px';
   document.getElementById('szv').textContent = sz.value + 'px';
@@ -199,21 +209,46 @@ setInterval(() => {
   document.getElementById('frm').textContent = pad(frame, 6);
 }, 1000 / 24);
 
-// keep the tape moving: re-roll the tear noise and wobble the channel split
-const $ = id => document.getElementById(id);
-const tearNoise = $('tearNoise'), tears = [$('tearR'), $('tearG'), $('tearB')];
-const offR = $('offR'), offB = $('offB');
+// keep the tape moving: re-roll the tear noise and wobble the channel split.
+// The filter is tuned for 28px text; every filtered element gets its own copy
+// with all distances scaled by its font size, so the effect keeps its
+// proportions at any size.
+const TUNED_PX = 28;
+const defs = document.getElementById('fxdefs'), baseFilter = document.getElementById('vhs');
+const targets = [document.querySelector('.screen'), ...document.querySelectorAll('.crt')];
+const fxs = targets.map((el, i) => {
+  const filter = i ? baseFilter.cloneNode(true) : baseFilter;
+  if (i) { filter.id = 'vhs-' + i; defs.appendChild(filter); }
+  el.style.setProperty('--fx', `url(#${filter.id})`);
+  const role = r => filter.querySelector(`[data-role="${r}"]`);
+  return { el, tear: role('tear'), tears: ['tearR', 'tearG', 'tearB'].map(role),
+    offR: role('offR'), offB: role('offB'), grain: role('grain'), rough: role('rough'),
+    smearBlur: role('smearBlur'), smearShift: role('smearShift'), bloomBlur: role('bloomBlur') };
+});
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const n = v => v.toFixed(3);
 function tick() {
-  tearNoise.setAttribute('seed', Math.floor(Math.random() * 1000));
-  tearNoise.setAttribute('baseFrequency', `0.002 ${0.15 + Math.random() * 0.1}`);
-  const k = 0.8 + Math.random() * 0.5;
-  [3, 2, 4].forEach((base, i) => tears[i].setAttribute('scale', (base * k).toFixed(1)));
+  const seed = Math.floor(Math.random() * 1000);
+  const band = 0.15 + Math.random() * 0.1;
+  const jolt = 0.8 + Math.random() * 0.5;
   const split = 1 + Math.random() * 0.8;
-  offR.setAttribute('dx', (-split).toFixed(1));
-  offB.setAttribute('dx', split.toFixed(1));
+  for (const f of fxs) {
+    const k = parseFloat(getComputedStyle(f.el).fontSize) / TUNED_PX;
+    f.grain.setAttribute('baseFrequency', `${n(0.8 / k)} ${n(0.6 / k)}`);
+    f.rough.setAttribute('scale', n(1.5 * k));
+    f.tear.setAttribute('seed', seed);
+    f.tear.setAttribute('baseFrequency', `0.002 ${n(band / k)}`);
+    [3, 2, 4].forEach((base, i) => f.tears[i].setAttribute('scale', n(base * jolt * k)));
+    f.offR.setAttribute('dx', n(-split * k));
+    f.offB.setAttribute('dx', n(split * k));
+    f.smearBlur.setAttribute('stdDeviation', `${n(2.5 * k)} ${n(0.3 * k)}`);
+    f.smearShift.setAttribute('dx', n(3 * k));
+    f.bloomBlur.setAttribute('stdDeviation', `${n(5 * k)} ${n(2 * k)}`);
+  }
 }
+tick();
 if (!still) setInterval(tick, 70);
+else { sz.addEventListener('input', tick); addEventListener('resize', tick); }
 </script>
 </body>
 </html>
