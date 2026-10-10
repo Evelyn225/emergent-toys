@@ -39,10 +39,11 @@
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #000; overflow: hidden; }
+    /* dvh follows the phone's address bar, so the canvas matches innerHeight */
     canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges;
-             width: 100vw; height: 100vh; }
+             width: 100vw; height: 100vh; height: 100dvh; }
     #glow {
-      position: fixed; inset: 0; width: 100vw; height: 100vh;
+      position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh;
       image-rendering: pixelated; image-rendering: crisp-edges;
       filter: blur(5px); opacity: 0.75;
       mix-blend-mode: screen; pointer-events: none; z-index: 2;
@@ -117,6 +118,10 @@ const ctx       = canvas.getContext('2d');
 const glowCv    = document.getElementById('glow');
 const glowCtx   = glowCv.getContext('2d');
 const statsEl   = document.getElementById('stats');
+const ui        = document.getElementById('ui');
+const TOUCH     = matchMedia('(pointer: coarse)').matches;
+const HINT      = TOUCH ? 'tap to reset' : '[R] reset  ·  [click] reset';
+const DONE_HINT = TOUCH ? 'fully grown  ·  tap to grow another' : 'fully grown  ·  [R] or [click] to grow another';
 
 const N_WALKERS     = 800;  // simultaneous random walkers
 const STEPS_PER_RAF = 40;   // sim steps per animation frame
@@ -150,6 +155,7 @@ let maxR, maxR2, spawnR, killR2;
 let count;    // total particles stuck so far
 let lastCount, lastMs, stepBudget;
 let rafId;
+let done;     // the crystal has reached the far screen edges
 
 // ── Colour ───────────────────────────────────────────────────────────
 // Hue cycles slowly with count so the growth history is visible as
@@ -257,9 +263,7 @@ function step() {
 }
 
 // ── Init / reset ─────────────────────────────────────────────────────
-function init() {
-  cancelAnimationFrame(rafId);
-
+function allocate() {
   W  = canvas.width  = glowCv.width  = Math.ceil(window.innerWidth  / SCALE);
   H  = canvas.height = glowCv.height = Math.ceil(window.innerHeight / SCALE);
   cx = W >> 1;
@@ -270,6 +274,13 @@ function init() {
   pixels  = imgData.data;
   u32     = new Uint32Array(pixels.buffer);
   u32.fill(0xFF000000); // all pixels → black opaque
+}
+
+function init() {
+  cancelAnimationFrame(rafId);
+  allocate();
+  done = false;
+  ui.textContent = HINT;
 
   maxR = 0; maxR2 = 0;
   spawnR = 5;
@@ -285,6 +296,36 @@ function init() {
   rafId = requestAnimationFrame(frame);
 }
 
+// A resize (rotating a phone, or its address bar sliding in and out) keeps
+// the crystal: it is copied into the new canvas, re-centred, and growth
+// carries on from where it was.
+function resize() {
+  const oldW = W, oldH = H, oldGrid = grid, oldU32 = u32;
+  const oldCx = cx, oldCy = cy;
+  if (Math.ceil(window.innerWidth / SCALE) === oldW && Math.ceil(window.innerHeight / SCALE) === oldH) return;
+  allocate();
+  const dx = cx - oldCx, dy = cy - oldCy;
+  for (let y = 0; y < oldH; y++) {
+    const ny = y + dy;
+    if (ny < 0 || ny >= H) continue;
+    for (let x = 0; x < oldW; x++) {
+      const nx = x + dx;
+      if (nx < 0 || nx >= W || !oldGrid[y * oldW + x]) continue;
+      grid[ny * W + nx] = 1;
+      u32[ny * W + nx]  = oldU32[y * oldW + x];
+    }
+  }
+  for (let i = 0; i < N_WALKERS; i++) spawnWalker(i);
+  ctx.putImageData(imgData, 0, 0);
+  glowCtx.drawImage(canvas, 0, 0);
+  // A bigger screen may have room to keep growing.
+  if (done && maxR < Math.max(cx, cy) - 2) {
+    done = false;
+    ui.textContent = HINT;
+    rafId = requestAnimationFrame(frame);
+  }
+}
+
 // ── Render loop ──────────────────────────────────────────────────────
 function frame() {
   const t = Math.min(1, maxR / 110);
@@ -294,6 +335,18 @@ function frame() {
   for (let s = 0; s < stepsThisFrame; s++) step();
   ctx.putImageData(imgData, 0, 0);
   glowCtx.drawImage(canvas, 0, 0);
+
+  // Once it reaches the far edges there is nowhere left to grow, so stop
+  // instead of spinning walkers forever.
+  if (maxR >= Math.max(cx, cy) - 2) {
+    done = true;
+    statsEl.textContent =
+      `PARTICLES  ${count.toLocaleString()}\n` +
+      `RADIUS     ${maxR.toFixed(0)}px\n` +
+      `RATE       done`;
+    ui.textContent = DONE_HINT;
+    return;
+  }
 
   // Update stats at ~4 Hz so DOM writes don't eat into frame budget
   const now = performance.now();
@@ -321,7 +374,7 @@ canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   init();
 }, { passive: false });
-window.addEventListener('resize', init);
+window.addEventListener('resize', resize);
 
 init();
 </script>

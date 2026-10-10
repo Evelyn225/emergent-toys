@@ -36,8 +36,12 @@
       transform: translateX(-50%);
       z-index: 102;
       display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
       gap: 8px;
       align-items: center;
+      width: max-content;
+      max-width: calc(100vw - 24px);
       background: rgba(0,0,0,0.75);
       border: 1px solid rgba(255,255,255,0.12);
       border-radius: 8px;
@@ -60,6 +64,18 @@
     }
     button:hover  { background: rgba(255,255,255,0.16); }
     button:active { transform: scale(0.95); }
+    .tool[aria-pressed="true"] {
+      background: rgba(0,238,255,0.18);
+      border-color: #00eeff;
+      color: #00eeff;
+    }
+    .group { display: flex; gap: 8px; }
+    .divider { width: 1px; align-self: stretch; background: rgba(255,255,255,0.15); }
+    @media (max-width: 520px) {
+      /* two rows on phones: tools on top, clearing below */
+      .divider { display: none; }
+      button { padding: 9px 12px; font-size: 13px; }
+    }
 
     #hint {
       position: fixed;
@@ -94,9 +110,17 @@
   <div id="hint">left drag: draw &nbsp;·&nbsp; right click: drop ball &nbsp;·&nbsp; ctrl+drag: erase</div>
 
   <div id="controls">
-    <button onclick="clearBalls()">clear balls</button>
-    <button onclick="clearLines()">clear lines</button>
-    <button onclick="clearAll()">clear all</button>
+    <div class="group" role="group" aria-label="Tool">
+      <button class="tool" data-tool="draw" aria-pressed="true">draw</button>
+      <button class="tool" data-tool="ball" aria-pressed="false">drop ball</button>
+      <button class="tool" data-tool="erase" aria-pressed="false">erase</button>
+    </div>
+    <span class="divider"></span>
+    <div class="group">
+      <button onclick="clearBalls()">clear balls</button>
+      <button onclick="clearLines()">clear lines</button>
+      <button onclick="clearAll()">clear all</button>
+    </div>
   </div>
 
   <script src="balllike.js"></script>
