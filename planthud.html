@@ -39,6 +39,7 @@ body {
 /* tearing, rgb split, smear and bloom all come from the #vhs svg filter */
 .screen, .crt { filter: url(#vhs); }
 .nofx .screen, .nofx .crt { filter: none; }
+.nofx .tube::after { display: none; }
 .screen > * { text-shadow: 0 0 2px rgba(220, 230, 255, .6); }
 /* scanlines sit outside the filter so they stay thin and sharp */
 .tube { position: relative; max-width: 900px; margin: 0 auto; }
@@ -79,14 +80,15 @@ body {
   padding-left: 14px;
 }
 .tester { max-width: 900px; margin: 28px auto 0; }
-.tester label { display: block; font-size: 20px; color: #8890c0; margin-bottom: 6px; }
+.row label { display: flex; align-items: center; gap: 8px; margin: 0; }
+.tester > label { display: block; font-size: 20px; color: #8890c0; margin-bottom: 6px; }
 .tester textarea {
   width: 100%; min-height: 3.4em; resize: vertical;
   background: #000; color: var(--ink);
   border: 2px solid var(--dim);
   font: inherit; padding: 8px 10px;
 }
-.row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 20px; color: #8890c0; }
+.row { display: flex; gap: 12px 40px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 20px; color: #8890c0; }
 .out { margin-top: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .charset { margin-top: 28px; white-space: pre-wrap; word-break: break-all; font-size: 28px; }
 a { color: #8fa0ff; }
@@ -157,7 +159,7 @@ B--   0,0</span></div>
   <textarea id="txt">THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG</textarea>
   <div class="row">
     <label><input type="checkbox" id="fx" checked> crt effect</label>
-    <label>size <input type="range" id="sz" min="12" max="96" value="40"></label>
+    <label>size <input type="range" id="sz" min="12" max="96" value="40"> <span id="szv">40px</span></label>
     <a href="PlantHUD.ttf" download>download .ttf</a>
   </div>
   <div class="out crt" id="out"></div>
@@ -174,6 +176,7 @@ function sync() {
   out.textContent = txt.value;
   document.body.classList.toggle('nofx', !fx.checked);
   out.style.fontSize = sz.value + 'px';
+  document.getElementById('szv').textContent = sz.value + 'px';
 }
 [txt, fx, sz].forEach(el => el.addEventListener('input', sync));
 sync();
