@@ -805,6 +805,71 @@
       .jack-label, .knob-label { font-size: 8px; }
       #patch-hint { display: none; }
     }
+
+    /*  Touch: controls own their drags, so the page doesn't scroll
+        out from under a knob, a cable or a key. Modules are moved with a
+        long press, so the rest of a panel still scrolls the page. */
+    .knob, .jack, .key, #keyboard { touch-action: none; }
+    @media (pointer: coarse) {
+      /* the module name becomes a drag handle across the top of the panel;
+         the close button still sits on top of its right end */
+      .panel-title {
+        touch-action: none;
+        align-self: stretch;
+        padding: 6px 16px 4px;
+        margin-top: -6px;
+      }
+    }
+
+    /*  Phones: the rack keeps a usable size and scrolls sideways in its
+        own strip; the page scrolls vertically; the module bay sits on
+        top and scrolls away instead of covering the rack.  */
+    .rack-scroll { width: 100%; }
+    @media (max-width: 620px) {
+      :root {
+        --hp: 9px;
+        --row-height: 210px;
+        --kbd-height: 90px;
+        --kbd-black-height: 54px;
+      }
+      body {
+        height: auto;
+        min-height: 100vh;
+        overflow-y: auto;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      #control-menu {
+        position: relative;
+        order: -1;
+        top: auto;
+        left: auto;
+        right: auto;
+        width: auto;
+        max-height: none;
+        margin: 10px 46px 0 10px;
+      }
+      #add-module-drawer { max-height: 30vh; grid-template-columns: 1fr 1fr; }
+      .rack-scroll {
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        padding-bottom: 6px;
+      }
+      .rack { margin: 18px 10px 14px; max-width: none; }
+      /* in the page, under the rack, rather than floating over it */
+      #patch-hint {
+        display: block;
+        position: static;
+        order: 1;
+        transform: none;
+        margin: 0 14px 24px;
+        white-space: normal;
+        text-align: center;
+        font-size: 10px;
+        line-height: 1.5;
+      }
+    }
   </style>
 </head>
 <body>
@@ -826,6 +891,7 @@
 
 <div id="patch-hint">drag from output jack &rarr; input jack to patch &nbsp;|&nbsp; shift+click cable to move nearest end &nbsp;|&nbsp; right-click cable to remove &nbsp;|&nbsp; KBD: keys play notes &nbsp;|&nbsp; FREE: raw signal &nbsp;|&nbsp; MIDI Controllers Supported</div>
 
+<div class="rack-scroll">
 <div class="rack" id="rack">
 
   <!-- """ ROW 1 """ -->
@@ -1407,6 +1473,7 @@
   <div class="rail"><div class="rail-screws" id="rail-screws-bot-2"></div></div>
 
 </div><!-- /.rack -->
+</div><!-- /.rack-scroll -->
 
 <aside id="control-menu" aria-label="Patch controls">
   <div class="control-menu-head">
@@ -1910,7 +1977,8 @@ function initKnobs(root) {
     const angle = knobValueToAngle(val, min, max, scale);
     setKnobAngle(knobEl, angle);
 
-    knobEl.addEventListener('mousedown', (e) => {
+    knobEl.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
       initAudio();
       activeKnob = knobEl;
@@ -1921,10 +1989,22 @@ function initKnobs(root) {
       const def = parseFloat(knobEl.dataset.default);
       applyKnobValue(knobEl, def);
     });
+    // Touch screens don't send dblclick reliably: two quick taps reset too.
+    let lastTap = 0;
+    knobEl.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'mouse') return;
+      if (Math.abs(e.clientY - knobStartY) > 4) { lastTap = 0; return; }
+      if (e.timeStamp - lastTap < 350) {
+        applyKnobValue(knobEl, parseFloat(knobEl.dataset.default));
+        lastTap = 0;
+      } else {
+        lastTap = e.timeStamp;
+      }
+    });
   });
 }
 
-document.addEventListener('mousemove', (e) => {
+document.addEventListener('pointermove', (e) => {
   if (!activeKnob) return;
   const delta = (knobStartY - e.clientY) * 0.005;
   const min = parseFloat(activeKnob.dataset.min);
@@ -1936,7 +2016,8 @@ document.addEventListener('mousemove', (e) => {
   applyKnobValue(activeKnob, newVal);
 });
 
-document.addEventListener('mouseup', () => { activeKnob = null; });
+document.addEventListener('pointerup', () => { activeKnob = null; });
+document.addEventListener('pointercancel', () => { activeKnob = null; });
 
 // Wave selectors
 function initWaveSelectors(root) {
@@ -2096,7 +2177,8 @@ function jackCenter(el) {
 function initJacks(root) {
   root = root || document;
   root.querySelectorAll('.jack').forEach(jackEl => {
-    jackEl.addEventListener('mousedown', (e) => {
+    jackEl.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
       initAudio();
@@ -2104,7 +2186,21 @@ function initJacks(root) {
       const jack = jackEl.dataset.jack;
       const type = jackEl.dataset.type;
       const pt = jackCenter(jackEl);
+      // Touch has no right click or shift: dragging a patched input picks
+      // its cable up instead, to drop on another input or anywhere to unplug.
+      if (e.pointerType !== 'mouse' && type === 'input') {
+        const idx = patches.findIndex(p => p.inMod === mod && p.inJack === jack);
+        if (idx !== -1) {
+          const p = patches[idx];
+          removePatch(idx);
+          dragging = { fromMod: p.outMod, fromJack: p.outJack, fromType: 'output', fromEl: p.outEl, color: p.color };
+          mousePos = { x: pt.x, y: pt.y };
+          canvas.classList.add('dragging');
+          return;
+        }
+      }
       dragging = { fromMod: mod, fromJack: jack, fromType: type, fromEl: jackEl, fromPt: pt };
+      mousePos = { x: pt.x, y: pt.y };
       canvas.classList.add('dragging');
     });
     jackEl.addEventListener('mouseenter', () => jackEl.classList.add('hover'));
@@ -2112,12 +2208,18 @@ function initJacks(root) {
   });
 }
 
-document.addEventListener('mousemove', (e) => {
+document.addEventListener('pointermove', (e) => {
   const c = canvas.getBoundingClientRect();
   mousePos = { x: e.clientX - c.left, y: e.clientY - c.top };
 });
 
-document.addEventListener('mouseup', (e) => {
+document.addEventListener('pointercancel', () => {
+  if (!dragging) return;
+  canvas.classList.remove('dragging');
+  dragging = null;
+});
+
+document.addEventListener('pointerup', (e) => {
   if (!dragging) return;
   canvas.classList.remove('dragging');
 
@@ -2257,10 +2359,11 @@ document.addEventListener('contextmenu', (e) => {
   removePatch(hit.idx);
 }, true);
 
-// Shift + mousedown on a cable segment   move whichever end is nearest to click.
+// Shift + click-drag on a cable segment   move whichever end is nearest to click.
 // Capture phase so it intercepts before the jack mousedown handlers.
-document.addEventListener('mousedown', (e) => {
-  if (e.button !== 0 || !e.shiftKey) return;
+// Pointer events, so it still runs before the module drag (also pointerdown).
+document.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'mouse' || e.button !== 0 || !e.shiftKey) return;
   const hit = findPatchNearCable(e.clientX, e.clientY);
   if (!hit) return;
   e.preventDefault();
@@ -2656,7 +2759,8 @@ document.addEventListener('keyup', (e) => {
     releaseMidi(midi);
   }
 });
-document.addEventListener('mouseup', stopMouseKeyDrag);
+document.addEventListener('pointerup', stopMouseKeyDrag);
+document.addEventListener('pointercancel', stopMouseKeyDrag);
 window.addEventListener('blur', resetKeyboardInputState);
 
 // """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -2775,18 +2879,21 @@ function buildKeyboard() {
     const sp = document.createElement('span');
     sp.textContent = MIDI_TO_KEYLABEL[midi] || '';
     el.appendChild(sp);
-    el.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
+      // touch pointers are captured by the first key; let go so sliding a
+      // finger reaches the neighbouring keys
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
       initAudio();
       startMouseKeyDrag(parseInt(el.dataset.midi, 10));
     });
-    el.addEventListener('mouseenter', (e) => {
+    el.addEventListener('pointerenter', (e) => {
       if (!(e.buttons & 1)) return;
       playMouseDraggedKey(parseInt(el.dataset.midi, 10));
     });
-    el.addEventListener('mouseup', (e) => {
-      if (e.button !== 0) return;
+    el.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       stopMouseKeyDrag();
     });
     kb.appendChild(el);
@@ -2807,18 +2914,21 @@ function buildKeyboard() {
     const bsp = document.createElement('span');
     bsp.textContent = MIDI_TO_KEYLABEL[midi] || '';
     el.appendChild(bsp);
-    el.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
+      // touch pointers are captured by the first key; let go so sliding a
+      // finger reaches the neighbouring keys
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
       initAudio();
       startMouseKeyDrag(parseInt(el.dataset.midi, 10));
     });
-    el.addEventListener('mouseenter', (e) => {
+    el.addEventListener('pointerenter', (e) => {
       if (!(e.buttons & 1)) return;
       playMouseDraggedKey(parseInt(el.dataset.midi, 10));
     });
-    el.addEventListener('mouseup', (e) => {
-      if (e.button !== 0) return;
+    el.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       stopMouseKeyDrag();
     });
     kb.appendChild(el);
@@ -3490,6 +3600,15 @@ function initCloseButtons(root) {
     ? [root]
     : Array.from(root.querySelectorAll('.panel'));
   panels.forEach(panel => {
+    // A click listener of its own makes the name a tap target in its own
+    // right (touch targeting only counts click/mouse listeners); without one,
+    // a touch on it snaps to the close button or a jack next to it. The drag
+    // itself starts in the document pointerdown handler.
+    const title = panel.querySelector('.panel-title');
+    if (title && !title.dataset.handle) {
+      title.dataset.handle = '1';
+      title.addEventListener('click', () => {});
+    }
     if (panel.dataset.fixed) return; // output, keyboard: no close button
     if (!panel.querySelector('.panel-close')) {
       const btn = document.createElement('span');
@@ -3592,26 +3711,17 @@ document.addEventListener('mouseup', () => {
   menuSpawnIntent = null;
 }, true);
 
-document.addEventListener('mousedown', (e) => {
-  if (e.button !== 0) return;
-  // Don't intercept jack midpoint re-drag (handled elsewhere)
-  const panel = e.target.closest('.panel');
-  if (!panel) return;
-  if (!canStartPanelDrag(e.target)) return;
-  // Check not a placeholder
-  if (panel.classList.contains('panel-placeholder')) return;
-
-  e.preventDefault();
+function startPanelDrag(panel, clientX, clientY) {
   const rect = panel.getBoundingClientRect();
-  const offsetX = e.clientX - rect.left;
-  const offsetY = e.clientY - rect.top;
+  const offsetX = clientX - rect.left;
+  const offsetY = clientY - rect.top;
 
   // Create ghost (clone)
   const ghost = panel.cloneNode(true);
   ghost.classList.add('dragging-ghost');
   ghost.style.width = rect.width + 'px';
-  ghost.style.left = e.clientX - offsetX + 'px';
-  ghost.style.top = e.clientY - offsetY + 'px';
+  ghost.style.left = clientX - offsetX + 'px';
+  ghost.style.top = clientY - offsetY + 'px';
   document.body.appendChild(ghost);
 
   // Create placeholder
@@ -3623,9 +3733,67 @@ document.addEventListener('mousedown', (e) => {
 
   const draggedHP = parseInt(panel.dataset.hp) || 5;
   panelDrag = { panel, ghost, placeholder, offsetX, offsetY, draggedHP };
+}
+
+// Touch: dragging a module's name moves it straight away. A long press on
+// the rest of its surface works too, so a quick swipe still scrolls the
+// page. (On narrow modules most of the surface is next to a jack or knob,
+// which touch targeting snaps to, so the name is the dependable handle.)
+const LONG_PRESS_MS = 350;
+let pendingPanelPress = null;
+function cancelPendingPanelPress() {
+  if (!pendingPanelPress) return;
+  clearTimeout(pendingPanelPress.timer);
+  pendingPanelPress = null;
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  // Don't intercept jack midpoint re-drag (handled elsewhere)
+  const panel = e.target.closest('.panel');
+  if (!panel) return;
+  if (!canStartPanelDrag(e.target)) return;
+  // Check not a placeholder
+  if (panel.classList.contains('panel-placeholder')) return;
+
+  if (e.pointerType === 'mouse' || e.target.closest('.panel-title')) {
+    e.preventDefault();
+    startPanelDrag(panel, e.clientX, e.clientY);
+    return;
+  }
+  cancelPendingPanelPress();
+  const press = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY };
+  press.timer = setTimeout(() => {
+    if (pendingPanelPress !== press || !panel.isConnected) return;
+    pendingPanelPress = null;
+    if (navigator.vibrate) navigator.vibrate(12);
+    startPanelDrag(panel, press.x, press.y);
+  }, LONG_PRESS_MS);
+  pendingPanelPress = press;
 }, true);
 
-document.addEventListener('mousemove', (e) => {
+document.addEventListener('pointermove', (e) => {
+  const press = pendingPanelPress;
+  if (!press || e.pointerId !== press.pointerId) return;
+  // a finger that travels before the long press lands is scrolling
+  if (Math.hypot(e.clientX - press.x0, e.clientY - press.y0) > 8) {
+    cancelPendingPanelPress();
+    return;
+  }
+  press.x = e.clientX;
+  press.y = e.clientY;
+}, true);
+document.addEventListener('pointerup', cancelPendingPanelPress, true);
+document.addEventListener('pointercancel', cancelPendingPanelPress, true);
+
+// Once a touch has picked a module up, stop the page scrolling under it.
+// (The panel surface allows panning, so the browser would otherwise take
+// over the moving finger and cancel the drag.)
+document.addEventListener('touchmove', (e) => {
+  if (panelDrag) e.preventDefault();
+}, { passive: false });
+
+document.addEventListener('pointermove', (e) => {
   if (!panelDrag) return;
   const { ghost, placeholder, offsetX, offsetY, draggedHP } = panelDrag;
   ghost.style.left = e.clientX - offsetX + 'px';
@@ -3667,7 +3835,7 @@ document.addEventListener('mousemove', (e) => {
   }
 });
 
-document.addEventListener('mouseup', (e) => {
+function endPanelDrag() {
   if (!panelDrag) return;
   const { panel, ghost, placeholder, newModule, type, def, key } = panelDrag;
   panelDrag = null;
@@ -3684,7 +3852,9 @@ document.addEventListener('mouseup', (e) => {
     rollbackModuleInstance(type);
     setAddMenuStatus('Module placement canceled.', true);
   }
-}, true);
+}
+document.addEventListener('pointerup', endPanelDrag, true);
+document.addEventListener('pointercancel', endPanelDrag, true);
 
 // """""""""""""""""""""""""""""""""""""""""""""""""""
 // INIT
@@ -3709,8 +3879,18 @@ window.addEventListener('resize', () => {
   refreshScrews();
 });
 
-// Init audio on first interaction
-document.addEventListener('click', () => { initAudio(); initMidiInput(); }, { once: false });
+// Init audio on first interaction. iOS can leave a context made during a
+// touch-down suspended, so nudge it awake on the release too.
+function wakeAudio() {
+  initAudio();
+  if (ctx && ctx.state === 'suspended') ctx.resume();
+}
+document.addEventListener('click', () => { wakeAudio(); initMidiInput(); }, { once: false });
+document.addEventListener('pointerup', wakeAudio);
+if (matchMedia('(pointer: coarse)').matches) {
+  document.getElementById('patch-hint').textContent =
+    'drag between jacks to patch \u00b7 drag a patched input to move or unplug it \u00b7 drag a module by its name \u00b7 double-tap a knob to reset';
+}
 document.addEventListener('keydown', () => { initAudio(); initMidiInput(); }, { once: false });
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
