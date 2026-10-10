@@ -49,6 +49,7 @@
       top: 0; left: 0;
       width: 100vw;
       height: 100vh;
+      height: 100dvh;   /* the visible height on phones, not the tallest one */
     }
     #stats {
       position: fixed;
@@ -75,6 +76,24 @@
       line-height: 2;
       pointer-events: none;
       user-select: none;
+    }
+    #reset-btn {
+      display: none;      /* touch screens only; desktop has [R] */
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      z-index: 100;
+      background: rgba(20, 8, 40, 0.7);
+      border: 1px solid rgba(170, 100, 255, 0.5);
+      color: rgba(200, 150, 255, 0.9);
+      font-family: 'W95', monospace;
+      font-weight: bold;
+      font-size: 12px;
+      padding: 10px 14px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    @media (pointer: coarse) {
+      #reset-btn { display: block; }
     }
     #fatal {
       position: fixed;
@@ -104,6 +123,7 @@
   [RIGHT CLICK] REMOVE FOOD<br>
   [R] RESET
 </div>
+<button id="reset-btn" type="button">[ RESET ]</button>
 
 <div id="fatal">
   NO GPU BACKEND AVAILABLE<br>
@@ -1725,9 +1745,10 @@ function loop() {
 }
 
 function toSim(e) {
+  const r = canvas.getBoundingClientRect();
   return {
-    x: (e.clientX / window.innerWidth)  * simW,
-    y: (e.clientY / window.innerHeight) * simH,
+    x: ((e.clientX - r.left) / r.width)  * simW,
+    y: ((e.clientY - r.top)  / r.height) * simH,
   };
 }
 
@@ -1769,14 +1790,40 @@ canvas.addEventListener('mousedown', (e) => {
   updateStats();
 });
 
-window.addEventListener('keydown', (e) => {
+// Touch has no right click, so a tap toggles: on a food source it removes
+// it, anywhere else it places one.
+const TOUCH_REMOVE_DIST = 24;   // sim cells, about a fingertip
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();             // no synthetic mousedown after the tap
   if (!backend || !running) return;
-  if (e.key === 'r' || e.key === 'R') {
-    food.scatter(simW, simH);
-    backend.reset();
-    updateStats();
+  for (const t of e.changedTouches) {
+    const p = toSim(t);
+    const removed = food.removeNear(p.x, p.y, TOUCH_REMOVE_DIST);
+    if (removed >= 0) {
+      backend.removeFood(removed);
+    } else {
+      const slot = food.add(p.x, p.y);
+      if (slot >= 0) backend.addFood(slot);
+    }
   }
+  updateStats();
+}, { passive: false });
+
+function resetSim() {
+  if (!backend || !running) return;
+  food.scatter(simW, simH);
+  backend.reset();
+  updateStats();
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') resetSim();
 });
+document.getElementById('reset-btn').addEventListener('click', resetSim);
+
+if (matchMedia('(pointer: coarse)').matches) {
+  document.getElementById('ui').innerHTML = '[TAP] PLACE FOOD<br>[TAP FOOD] REMOVE IT';
+}
 
 window.addEventListener('resize', () => {
   if (!backend) return;
