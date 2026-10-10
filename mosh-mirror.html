@@ -285,7 +285,7 @@ body.touch.land #panel {
 <nav id="touchbar">
   <button class="btn" data-act="mosh">MOSH</button>
   <button class="btn bloom-btn">BLOOM</button>
-  <button class="btn" data-act="key">KEY</button>
+  <button class="btn" data-act="key">REKEY</button>
   <button class="btn" data-stamp="echo">ECHO</button>
   <button class="btn" data-stamp="bars">BARS</button>
   <button class="btn" data-stamp="image">IMAGE</button>
@@ -308,7 +308,7 @@ body.touch.land #panel {
       <button id="moshBtn" class="btn big" data-act="mosh">MOSH <kbd>space</kbd></button>
       <div class="row">
         <button id="bloomBtn" class="btn bloom-btn">bloom <kbd>hold B</kbd></button>
-        <button id="keyBtn" class="btn" data-act="key">clean key <kbd>K</kbd></button>
+        <button id="keyBtn" class="btn" data-act="key">rekey <kbd>K</kbd></button>
       </div>
     </div>
     <div id="leakSlot"></div>
@@ -361,6 +361,7 @@ body.touch.land #panel {
     <h2>how it works</h2>
     Every frame is coded as 16&times;16 blocks: <b>skip</b>, <b>inter</b> (a motion vector plus a DCT residual) or <b>intra</b> (raw DCT).
     Keyframes are all intra. MOSH throws keyframes and intra blocks away, so your motion keeps dragging stale pixels around.
+    REKEY lets one keyframe through, so the live picture becomes the new thing being smeared. Flip the camera mid-mosh to drag one camera's picture with the other's motion.
     Stamps put a different picture in the decoder that the encoder doesn't know about.
     Radiation flips bits in the stream, and each row is a slice, so a hit garbles the rest of its row.
     <br><br>
@@ -923,6 +924,19 @@ let img = null;
 
 const round16 = v => Math.max(64, Math.round(v / 16) * 16);
 let setupAspect = 4 / 3;
+let oldW = 0, oldH = 0;
+function resamplePlanes(from, fw, fh, to) {
+  const one = (a, aw, ah, b, bw, bh) => {
+    for (let y = 0; y < bh; y++) {
+      const sy = Math.min(ah - 1, Math.floor((y + 0.5) * ah / bh)) * aw;
+      for (let x = 0; x < bw; x++) b[y * bw + x] = a[sy + Math.min(aw - 1, Math.floor((x + 0.5) * aw / bw))];
+    }
+  };
+  one(from.Y, fw, fh, to.Y, W, H);
+  one(from.U, fw / 2, fh / 2, to.U, CW, CH);
+  one(from.V, fw / 2, fh / 2, to.V, CW, CH);
+}
+
 function setup(size, aspect) {
   setupAspect = aspect;
   // size is the long edge, so a portrait phone camera costs the same as landscape
@@ -930,9 +944,15 @@ function setup(size, aspect) {
   else { H = round16(size); W = round16(size * aspect); }
   CW = W / 2; CH = H / 2;
   MBW = W / 16; MBH = H / 16; NMB = MBW * MBH;
+  const old = dec ? { p: dec, w: oldW, h: oldH } : null;
   src = makePlanes(); enc = makePlanes(); encNext = makePlanes();
   dec = makePlanes(); decNext = makePlanes();
   fillGray(enc); fillGray(dec);
+  // Carry the decoder's picture across camera flips, rotations and size
+  // changes. The encoder restarts with a keyframe, and if we're moshing that
+  // keyframe gets dropped: the new camera's motion drags the old picture.
+  if (old) resamplePlanes(old.p, old.w, old.h, dec);
+  oldW = W; oldH = H;
   prevMvX = new Int16Array(NMB); prevMvY = new Int16Array(NMB);
   rowMvX = new Int16Array(MBW); rowMvY = new Int16Array(MBW);
   info = { mode: new Uint8Array(NMB), mx: new Float32Array(NMB), my: new Float32Array(NMB) };
@@ -940,7 +960,6 @@ function setup(size, aspect) {
   img = vctx.createImageData(W, H);
   frameNo = 0; forceKey = true; lastP = null; echoRing = []; history.length = 0;
   inSync = false; slowFrames = 0; msAvg = 0;
-  setMosh(false);
   layout();
 }
 
@@ -988,7 +1007,6 @@ function step() {
 
   const fr = encodeFrame(src, enc, type);
   const { fr: tx, flips } = irradiate(fr, radiationRate());
-  if (resync) setMosh(false);
   const opts = decoderOpts();
   const clean = !bloomHeld && !moshing && flips === 0 && opts.vecGain === 1 && opts.sin === 0;
 
@@ -1000,7 +1018,7 @@ function step() {
   if (bloomHeld && lastP) {
     decodeFrame(lastP, dec, decNext, opts, info); swapDec();
     fate = 'bloom'; inSync = false;
-  } else if (type === 'I' && moshing) {
+  } else if (type === 'I' && moshing && !resync) {
     fate = 'dropped';
     flash('I-FRAME DROPPED');
   } else if (clean && (inSync || type === 'I')) {
@@ -1542,6 +1560,8 @@ slider('encSlot', 'intraEager', 'intra eagerness', 0, 3, 0.05, v => v ? v.toFixe
 
 const $all = sel => document.querySelectorAll(sel);
 function setMosh(on) {
+  // leaving mosh snaps straight back to live instead of waiting for the next keyframe
+  if (moshing && !on) forceKey = resyncKey = true;
   moshing = on;
   $all('[data-act=mosh]').forEach(b => b.classList.toggle('on', on));
   updateFlag();
@@ -1562,7 +1582,9 @@ function setMirror(on) {
   S.mirror = on;
   document.getElementById('mirrorChk').checked = on;
 }
-function cleanKey() { forceKey = resyncKey = true; flash('CLEAN KEYFRAME'); }
+// KEY lets one keyframe through, even mid-mosh: the live picture becomes
+// the new thing being smeared
+function cleanKey() { forceKey = resyncKey = true; flash('KEYFRAME'); }
 function toggleSheet(on) {
   document.body.classList.toggle('sheet', on === undefined ? !document.body.classList.contains('sheet') : on);
 }
