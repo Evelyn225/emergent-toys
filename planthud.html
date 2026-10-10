@@ -40,12 +40,13 @@ body {
 .screen, .crt { filter: url(#vhs); }
 .nofx .screen, .nofx .crt { filter: none; }
 .screen > * { text-shadow: 0 0 2px rgba(220, 230, 255, .6); }
-.screen::after {
+/* scanlines sit outside the filter so they stay thin and sharp */
+.tube { position: relative; max-width: 900px; margin: 0 auto; }
+.tube::after {
   content: '';
   position: absolute; inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 1px, transparent 1px 3px);
-  mix-blend-mode: multiply;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.3) 0 1px, transparent 1px 2px);
 }
 .jitter { animation: jit 3.2s steps(1) infinite; }
 @keyframes jit {
@@ -131,7 +132,7 @@ a { color: #8fa0ff; }
     <feBlend in="rgb" in2="haze" mode="screen"/>
   </filter>
 </svg>
-<div class="screen">
+<div class="tube"><div class="screen">
   <div class="hud jitter"><span class="rec"><span class="blink">●</span>REC</span>
 TC   <span id="tc">00:00:01:25</span>
 FRM  <span id="frm">005329</span>
@@ -149,7 +150,7 @@ B--   0,0</span></div>
   <div class="foot jitter">SIMULATION PLANT
 <small>SEC-01-A07</small></div>
   <div class="ruler"><span>120</span><span>100</span><span>080</span><span>060</span><span>040</span><span>020</span><span>000</span></div>
-</div>
+</div></div>
 
 <div class="tester">
   <label for="txt">type something</label>
