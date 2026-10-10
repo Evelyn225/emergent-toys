@@ -54,6 +54,7 @@ onmessage = function(e) {
           cellStart, cellEnd } = e.data;
   const m0x=mx[0],m0y=mx[1], m1x=mx[2],m1y=mx[3], m2x=mx[4],m2y=mx[5];
   const halfW=canvasW*0.5, halfH=canvasH*0.5;
+  const half=Math.min(halfW, halfH);   // one scale for both axes, so nothing squishes
   const BATCH = 1000;
   let buf = new Int32Array(BATCH * 2);
   let bc=0, bStart=cellStart;
@@ -63,8 +64,8 @@ onmessage = function(e) {
     const row = (i - col) / cols;
     const px  = col*pixelSize + pixelSize*0.5;
     const py  = row*pixelSize + pixelSize*0.5;
-    const sx  =  (px - halfW) / halfW * simScale;
-    const sy  = -((py - halfH) / halfH) * simScale;
+    const sx  =  (px - halfW) / half * simScale;
+    const sy  = -((py - halfH) / half) * simScale;
 
     let x=sx, y=sy, vx=0, vy=0, dx, dy, r2, mag=-1, st=maxSteps;
     sim: for (let s = 0; s < maxSteps; s++) {
@@ -140,17 +141,22 @@ const MAGNETS = [
   { x:  0.866,  y: -0.500 }
 ];
 
+// The simulation spans ±SIM_SCALE across the shorter side of the screen and
+// uses the same scale on both axes, so a tall phone shows more of the plane
+// instead of squashing it.
+function halfSpan() { return Math.min(width, height) / 2; }
+
 function pixelToSim(px, py) {
   return {
-    sx:  (px - width  / 2) / (width  / 2) * SIM_SCALE,
-    sy: -((py - height / 2) / (height / 2)) * SIM_SCALE
+    sx:  (px - width  / 2) / halfSpan() * SIM_SCALE,
+    sy: -((py - height / 2) / halfSpan()) * SIM_SCALE
   };
 }
 
 function simToPixel(sx, sy) {
   return {
-    px:  sx / SIM_SCALE * (width  / 2) + width  / 2,
-    py: -sy / SIM_SCALE * (height / 2) + height / 2
+    px:  sx / SIM_SCALE * halfSpan() + width  / 2,
+    py: -sy / SIM_SCALE * halfSpan() + height / 2
   };
 }
 
