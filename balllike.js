@@ -31,26 +31,35 @@ const TRAIL_LEN     = 90;
 const ERASE_RADIUS  = 18;
 
 // --- Input ---
+// One current tool, picked from the toolbar, drives both mouse and touch.
+// On desktop the old shortcuts still work whatever the tool:
+// right click drops a ball, ctrl+drag erases.
 
-window.addEventListener('contextmenu', e => e.preventDefault());
+let tool = 'draw';
+const toolButtons = document.querySelectorAll('.tool');
+toolButtons.forEach(btn => btn.addEventListener('click', () => {
+  tool = btn.dataset.tool;
+  toolButtons.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+}));
 
-canvas.addEventListener('mousedown', e => {
-  if (e.button === 0 && e.ctrlKey) {
+if (matchMedia('(pointer: coarse)').matches) {
+  document.getElementById('hint').textContent = 'pick a tool below, then touch the screen';
+}
+
+function beginStroke(pos, useTool) {
+  if (useTool === 'ball') {
+    spawnBall(pos.x, pos.y);
+  } else if (useTool === 'erase') {
     erasing = true;
-    eraseAt(getPos(e));
-    return;
-  }
-  if (e.button === 0) {
+    eraseAt(pos);
+  } else {
     drawing = true;
-    currentLine = [getPos(e)];
-  } else if (e.button === 2) {
-    spawnBall(getPos(e).x, getPos(e).y);
+    currentLine = [pos];
   }
-});
+}
 
-canvas.addEventListener('mousemove', e => {
-  const pos = getPos(e);
-  if (erasing && e.ctrlKey) {
+function continueStroke(pos) {
+  if (erasing) {
     eraseAt(pos);
     return;
   }
@@ -61,48 +70,49 @@ canvas.addEventListener('mousemove', e => {
     currentLine.push(pos);
     render();
   }
+}
+
+function endStroke() {
+  erasing = false;
+  if (drawing && currentLine.length > 1) lines.push([...currentLine]);
+  drawing = false;
+  currentLine = [];
+  render();
+}
+
+window.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 2) { spawnBall(getPos(e).x, getPos(e).y); return; }
+  if (e.button !== 0) return;
+  beginStroke(getPos(e), e.ctrlKey ? 'erase' : tool);
 });
 
+canvas.addEventListener('mousemove', e => continueStroke(getPos(e)));
+
 canvas.addEventListener('mouseup', e => {
-  if (erasing) { erasing = false; return; }
-  if (e.button === 0 && drawing) {
-    drawing = false;
-    if (currentLine.length > 1) lines.push([...currentLine]);
-    currentLine = [];
-    render();
-  }
+  if (e.button === 0) endStroke();
 });
 
 // Release erasing if ctrl is let go mid-drag
 window.addEventListener('keyup', e => {
-  if (e.key === 'Control') erasing = false;
+  if (e.key === 'Control' && tool !== 'erase') erasing = false;
 });
 
 // Touch
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
-  drawing = true;
-  currentLine = [getTouchPos(e)];
+  beginStroke(getTouchPos(e), tool);
 }, { passive: false });
 
 canvas.addEventListener('touchmove', e => {
   e.preventDefault();
-  if (!drawing) return;
-  const pos = getTouchPos(e);
-  const last = currentLine[currentLine.length - 1];
-  const dx = pos.x - last.x, dy = pos.y - last.y;
-  if (dx * dx + dy * dy > 9) {
-    currentLine.push(pos);
-    render();
-  }
+  continueStroke(getTouchPos(e));
 }, { passive: false });
 
 canvas.addEventListener('touchend', e => {
   e.preventDefault();
-  if (drawing && currentLine.length > 1) lines.push([...currentLine]);
-  drawing = false;
-  currentLine = [];
-  render();
+  endStroke();
 }, { passive: false });
 
 function getPos(e) {
