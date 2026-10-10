@@ -152,8 +152,12 @@
       color: rgba(255,255,255,0.12);
     }
 
+    /* Link and separator colours are solid, not translucent, so the fire
+       behind the new links can't show through the letters. Each one is the
+       old rgba value pre-blended over the page background, so it looks
+       the same everywhere else. */
     .link-item {
-      color: rgba(255,255,255,0.55);
+      color: #8c8c8c;            /* was rgba(255,255,255,0.55) on #000 */
       text-decoration: none;
       -webkit-tap-highlight-color: transparent;
       transition: color 0.1s;
@@ -169,7 +173,7 @@
     }
 
     .link-sep {
-      color: rgba(255,255,255,0.12);
+      color: #1f1f1f;            /* was rgba(255,255,255,0.12) on #000 */
       margin: 0 5px;
       user-select: none;
     }
@@ -294,10 +298,10 @@
     [data-theme="light"] .main-title    { color: rgba(0,0,0,0.95); }
     [data-theme="light"] .title-cursor  { background: rgba(0,0,0,0.85); }
     [data-theme="light"] .main-tagline  { color: rgba(0,0,0,0.7); }
-    [data-theme="light"] .link-item     { color: rgba(0,0,0,0.66); }
+    [data-theme="light"] .link-item     { color: #535352; }  /* was rgba(0,0,0,0.66) on #f5f5f0 */
     [data-theme="light"] .link-item:hover,
     [data-theme="light"] .link-item:focus-visible { color: rgba(0,0,0,1); }
-    [data-theme="light"] .link-sep      { color: rgba(0,0,0,0.18); }
+    [data-theme="light"] .link-sep      { color: #c9c9c5; }  /* was rgba(0,0,0,0.18) on #f5f5f0 */
     [data-theme="light"] #theme-toggle  { color: rgba(0,0,0,0.72); }
     [data-theme="light"] #theme-toggle:hover { color: rgba(0,0,0,0.85); }
     /* ─── Corner bar: font link + theme toggle ─── */
