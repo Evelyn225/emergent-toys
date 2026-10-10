@@ -82,7 +82,55 @@
         .ctrl-action {
             color: rgba(180, 160, 100, 0.6);
         }
+
+        #toolbar {
+            position: fixed;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 102;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 6px;
+            width: max-content;
+            max-width: calc(100vw - 24px);
+            padding: 8px 10px;
+            background: rgba(20, 16, 12, 0.82);
+            border: 1px solid rgba(212, 182, 96, 0.35);
+            font-family: 'Pixelta', monospace;
+        }
+        #toolbar button {
+            font: inherit;
+            font-size: 16px;
+            padding: 6px 12px;
+            background: rgba(60, 48, 30, 0.6);
+            color: rgba(220, 195, 110, 0.9);
+            border: 1px solid rgba(212, 182, 96, 0.3);
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #toolbar .tool[aria-pressed="true"] {
+            background: rgba(212, 182, 96, 0.85);
+            color: #1e1912;
+            border-color: #d4b660;
+        }
+        #toolbar .sep { width: 1px; background: rgba(212, 182, 96, 0.3); align-self: stretch; }
+        @media (pointer: coarse) {
+            /* the key/mouse legend means nothing on a touch screen */
+            #controls-overlay { display: none; }
+            #toolbar button { padding: 9px 14px; }
+        }
     </style>
+
+    <div id="toolbar">
+        <button class="tool" data-tool="water" aria-pressed="true">water</button>
+        <button class="tool" data-tool="rock" aria-pressed="false">rock</button>
+        <button class="tool" data-tool="sand" aria-pressed="false">sand</button>
+        <button class="tool" data-tool="delete" aria-pressed="false">delete</button>
+        <span class="sep"></span>
+        <button id="new-terrain">new terrain</button>
+    </div>
 
     <div id="controls-overlay">
         <span id="controls-title">Controls</span>
@@ -123,6 +171,10 @@
         let grid;
         let noiseMap = [];
         let particles = [];
+        let tool = 'water';
+        let wasPainting = false;
+        let canvasEl;
+        const BRUSH_RADIUS = { water: 3, rock: 1, sand: 2, delete: 1 };
 
         // Helper to deposit or transfer sediment from a cell at (x, y)
         function handleSediment(x, y, sedimentLeft) {
@@ -163,9 +215,16 @@
             return placed;
         }
         function setup() {
-            createCanvas(windowWidth, windowHeight);
+            canvasEl = createCanvas(windowWidth, windowHeight).elt;
             pixelDensity(1);
             frameRate(30);
+            generateWorld();
+        }
+
+        // Builds a fresh landscape sized to the canvas. Used at start, by the
+        // "new terrain" button, and after the screen size changes.
+        function generateWorld() {
+            particles = [];
             cols = floor(width / CELL_SIZE);
             rows = floor(height / CELL_SIZE);
             grid = [];
@@ -305,6 +364,27 @@
             settleWorld();
         }
         // Runs gravity simulation until all dirt is settled, no rendering
+        document.querySelectorAll('.tool').forEach(btn => btn.addEventListener('click', () => {
+            tool = btn.dataset.tool;
+            document.querySelectorAll('.tool').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+        }));
+        document.getElementById('new-terrain').addEventListener('click', () => generateWorld());
+
+        // Rebuild for a real change in screen size (rotating a phone, resizing
+        // the window). Small height changes, like a phone's address bar, are
+        // ignored so the landscape you've carved isn't thrown away.
+        let resizeTimer;
+        function windowResized() {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                const widthChanged = windowWidth !== width;
+                const heightChanged = Math.abs(windowHeight - height) > height * 0.15;
+                if (!widthChanged && !heightChanged) return;
+                resizeCanvas(windowWidth, windowHeight);
+                generateWorld();
+            }, 250);
+        }
+
         function settleWorld() {
             let moved = true;
             while (moved) {
@@ -393,27 +473,31 @@
                 let rect = homeBtn.getBoundingClientRect();
                 mouseOverHome = mouseX >= rect.left && mouseX <= rect.right && mouseY >= rect.top && mouseY <= rect.bottom;
             }
-            if (mouseIsPressed && (mouseButton === LEFT || mouseButton === RIGHT) && !mouseOverOverlay && !mouseOverHome) {
+            // Only paint when the press is on the canvas itself, not on the
+            // tool bar or a link that sits over it.
+            let overCanvas = document.elementFromPoint(mouseX, mouseY) === canvasEl;
+            let painting = mouseIsPressed && (mouseButton === LEFT || mouseButton === RIGHT) && !mouseOverOverlay && !mouseOverHome && overCanvas;
+            if (painting) {
+                // A new press starts where it lands, so a fresh touch doesn't
+                // streak in from wherever the last one ended.
+                let from = wasPainting ? { x: pmouseX, y: pmouseY } : { x: mouseX, y: mouseY };
                 let prev = {
-                    x: constrain(floor(pmouseX / CELL_SIZE), 0, cols - 1),
-                    y: constrain(floor(pmouseY / CELL_SIZE), 0, rows - 1)
+                    x: constrain(floor(from.x / CELL_SIZE), 0, cols - 1),
+                    y: constrain(floor(from.y / CELL_SIZE), 0, rows - 1)
                 };
                 let curr = {
                     x: constrain(floor(mouseX / CELL_SIZE), 0, cols - 1),
                     y: constrain(floor(mouseY / CELL_SIZE), 0, rows - 1)
                 };
                 let steps = max(abs(curr.x - prev.x), abs(curr.y - prev.y), 1);
+                // The desktop shortcuts win; otherwise the tool bar decides.
                 let isCtrl = keyIsDown(CONTROL) || keyIsDown(17);
-                let radius;
-                if (isCtrl && mouseButton === LEFT) {
-                    radius = 1; // delete brush = rock brush size (small)
-                } else if (isCtrl && mouseButton === RIGHT) {
-                    radius = 2; // sand brush (medium)
-                } else if (mouseButton === RIGHT) {
-                    radius = 1; // rock brush (small)
-                } else {
-                    radius = 3; // water brush (large)
-                }
+                let brush;
+                if (isCtrl && mouseButton === LEFT) brush = 'delete';
+                else if (isCtrl && mouseButton === RIGHT) brush = 'sand';
+                else if (mouseButton === RIGHT) brush = 'rock';
+                else brush = tool;
+                let radius = BRUSH_RADIUS[brush];
                 for (let i = 0; i <= steps; i++) {
                     let ix = floor(lerp(prev.x, curr.x, i / steps));
                     let iy = floor(lerp(prev.y, curr.y, i / steps));
@@ -423,8 +507,8 @@
                             let ny = iy + dy;
                             if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
                                 if ((dx * dx + dy * dy) <= radius * radius) {
-                                    if (isCtrl && mouseButton === LEFT) {
-                                        // Ctrl+Left click: delete (set to air)
+                                    if (brush === 'delete') {
+                                        // Delete (set to air)
                                         if (grid[nx][ny].type !== TYPE_AIR) {
                                             grid[nx][ny] = { type: TYPE_AIR };
                                             // Delete particle effect (dust puff)
@@ -462,8 +546,8 @@
 
                                             }
                                         }
-                                    } else if (isCtrl && mouseButton === RIGHT) {
-                                        // Ctrl+Right click: draw sand (soil)
+                                    } else if (brush === 'sand') {
+                                        // Draw sand (soil)
                                         if (grid[nx][ny].type === TYPE_AIR) {
                                             grid[nx][ny] = { type: TYPE_SOIL };
                                             // Sand particle effect
@@ -481,8 +565,8 @@
                                                 }
                                             }
                                         }
-                                    } else if (mouseButton === RIGHT) {
-                                        // Draw rock (right click)
+                                    } else if (brush === 'rock') {
+                                        // Draw rock
                                         grid[nx][ny] = { type: TYPE_ROCK };
                                         // Rock chip particle effect
                                         for (let p = 0; p < 1; p++) {
@@ -496,7 +580,7 @@
                                             });
                                         }
                                     } else {
-                                        // Draw water (left click)
+                                        // Draw water
                                         if (grid[nx][ny].type === TYPE_AIR) {
                                             grid[nx][ny] = { type: TYPE_WATER, sediment: 0, lifetime: 0 };
                                             // Splash particle effect
@@ -518,6 +602,7 @@
                     }
                 }
             }
+            wasPainting = painting;
             // Main update loop
             updateSimulation();
 
