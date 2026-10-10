@@ -77,7 +77,8 @@ function coffeeMug(x,y,z) {
 
 function familyPhotograph(x,y,z) {
   const photo = new THREE.Group(); photo.name = 'control-family-photo'; photo.position.set(x,y,z);
-  photo.rotation.set(0,Math.PI/2,-.055);
+  // Sized up a touch in its own plane; the depth off the wall stays as built.
+  photo.rotation.set(0,Math.PI/2,-.055); photo.scale.set(1.15,1.15,1);
   const width = .265, height = .19;
   function paperDepth(u,v) {
     return .003*((u/width)**2)+.013*Math.max(0,u/width+.5)**5*Math.max(0,.5-v/height)**3;
