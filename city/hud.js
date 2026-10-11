@@ -274,7 +274,7 @@ function hud() {
   hudBottom = (lines.length + task_.length + 1) * FS + 14;
   wantedHud();
   if (job && mode === 'drive') jobArrow();
-  if(courierRoute()&&mode!=='room')jobArrow(courierRoute().recipient,{label:"ROOF GARDEN",radius:.3,stop:courierAtRecipient()?'DELIVER':'CLIMB UP'});
+  if(courierRoute()&&mode!=='room')jobArrow(courierRoute().recipient,{label:courierRoute().label,radius:.3,stop:courierAtRecipient()?'DELIVER':'CLIMB UP'});
   minimap();
   hotbar();
   g.font = FS + 'px monospace';
