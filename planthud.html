@@ -229,11 +229,53 @@ const fxs = targets.map((el, i) => {
   const filter = i ? baseFilter.cloneNode(true) : baseFilter;
   if (i) { filter.id = 'vhs-' + i; defs.appendChild(filter); }
   el.style.setProperty('--fx', `url(#${filter.id})`);
-  const role = r => filter.querySelector(`[data-role="${r}"]`);
-  return { el, tear: role('tear'), tears: ['tearR', 'tearG', 'tearB'].map(role),
-    offR: role('offR'), offB: role('offB'), grain: role('grain'), rough: role('rough'),
-    smearBlur: role('smearBlur'), smearShift: role('smearShift'), bloomBlur: role('bloomBlur') };
+  return { el, id: filter.id };
 });
+// Whole-pixel SVG filters. Where a feOffset or feDisplacementMap shift lands
+// between pixels, Chrome rounds it to the nearest pixel and Firefox drops the
+// fraction. The VHS look lives in 1-3px shifts, so Firefox lost most of it:
+// all of the edge grain (every shift under a pixel) and much of the tearing
+// and RGB split. Every shift is made whole before either browser sees it:
+// offsets are rounded, and each displacement reads its map through a step
+// function whose steps sit a quarter pixel past a whole number of pixels,
+// which rounding and truncation both resolve to the same pixel - the one
+// Chrome was already drawing.
+const SVGNS = 'http://www.w3.org/2000/svg';
+const SNAP_STEPS = 64;
+const roundAway = v => Math.sign(v) * Math.round(Math.abs(v));
+function snapTable(scale) {
+  const out = [];
+  for (let k = 0; k < SNAP_STEPS; k++) {
+    const n = roundAway(scale * ((k + 0.5) / SNAP_STEPS - 0.5));
+    const v = scale ? 0.5 + (n + 0.25 * Math.sign(n)) / scale : 0.5;
+    out.push(Math.min(1, Math.max(0, v)).toFixed(4));
+  }
+  return out.join(' ');
+}
+function pixelSnapFilter(filter) {
+  filter.querySelectorAll('feOffset').forEach(o => ['dx', 'dy'].forEach(a => {
+    o.setAttribute(a, roundAway(parseFloat(o.getAttribute(a)) || 0));
+  }));
+  filter.querySelectorAll('feDisplacementMap').forEach((map, i) => {
+    let steps = map.previousElementSibling;
+    if (!steps || !steps.hasAttribute('data-snap')) {
+      steps = document.createElementNS(SVGNS, 'feComponentTransfer');
+      steps.setAttribute('data-snap', '');
+      steps.setAttribute('in', map.getAttribute('in2'));
+      steps.setAttribute('result', 'snap' + i);
+      ['feFuncR', 'feFuncG', 'feFuncB'].forEach(t => {
+        const fn = document.createElementNS(SVGNS, t);
+        fn.setAttribute('type', 'discrete');
+        steps.appendChild(fn);
+      });
+      map.before(steps);
+      map.setAttribute('in2', 'snap' + i);
+    }
+    const table = snapTable(parseFloat(map.getAttribute('scale')) || 0);
+    steps.querySelectorAll('feFuncR, feFuncG, feFuncB').forEach(fn => fn.setAttribute('tableValues', table));
+  });
+}
+
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const n = v => v.toFixed(3);
 function tick() {
@@ -241,8 +283,18 @@ function tick() {
   const band = 0.15 + Math.random() * 0.1;
   const jolt = 0.8 + Math.random() * 0.5;
   const split = 1 + Math.random() * 0.8;
-  for (const f of fxs) {
-    const k = parseFloat(getComputedStyle(f.el).fontSize) / TUNED_PX;
+  // Each tick swaps in a fresh copy of the filter rather than editing the
+  // live one: Firefox renders an SVG filter from the attributes it had when
+  // first used and ignores later changes, so the tape froze there. A new
+  // element is read from scratch everywhere.
+  for (const fx of fxs) {
+    const live = document.getElementById(fx.id);
+    const copy = live.cloneNode(true);
+    const role = r => copy.querySelector(`[data-role="${r}"]`);
+    const f = { tear: role('tear'), tears: ['tearR', 'tearG', 'tearB'].map(role),
+      offR: role('offR'), offB: role('offB'), grain: role('grain'), rough: role('rough'),
+      smearBlur: role('smearBlur'), smearShift: role('smearShift'), bloomBlur: role('bloomBlur') };
+    const k = parseFloat(getComputedStyle(fx.el).fontSize) / TUNED_PX;
     f.grain.setAttribute('baseFrequency', `${n(0.8 / k)} ${n(0.6 / k)}`);
     f.rough.setAttribute('scale', n(1.5 * k));
     f.tear.setAttribute('seed', seed);
@@ -253,6 +305,8 @@ function tick() {
     f.smearBlur.setAttribute('stdDeviation', `${n(2.5 * k)} ${n(0.3 * k)}`);
     f.smearShift.setAttribute('dx', n(3 * k));
     f.bloomBlur.setAttribute('stdDeviation', `${n(5 * k)} ${n(2 * k)}`);
+    pixelSnapFilter(copy);
+    live.replaceWith(copy);
   }
 }
 tick();
