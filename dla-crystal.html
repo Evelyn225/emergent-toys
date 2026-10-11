@@ -11,18 +11,18 @@
     href="/images/favicon-16x16.png">
   <link rel="manifest" href="/site.webmanifest">
   <title>DLA Crystal</title>
-  <meta name="description" content="Diffusion-limited aggregation: random walkers stick on contact and grow a branching crystal from a single seed.">
+  <meta name="description" content="Diffusion-limited aggregation: random walkers stick on contact and grow a branching crystal. Plant seeds, draw shapes for it to frost over, and change how sticky it is.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Eve Net">
   <meta property="og:title" content="DLA Crystal">
-  <meta property="og:description" content="Diffusion-limited aggregation: random walkers stick on contact and grow a branching crystal from a single seed.">
+  <meta property="og:description" content="Diffusion-limited aggregation: random walkers stick on contact and grow a branching crystal. Plant seeds, draw shapes for it to frost over, and change how sticky it is.">
   <meta property="og:url" content="https://evenet.fun/dla-crystal">
   <meta property="og:image" content="https://evenet.fun/images/previews/dla-crystal.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DLA Crystal">
-  <meta name="twitter:description" content="Diffusion-limited aggregation: random walkers stick on contact and grow a branching crystal from a single seed.">
+  <meta name="twitter:description" content="Diffusion-limited aggregation: random walkers stick on contact and grow a branching crystal. Plant seeds, draw shapes for it to frost over, and change how sticky it is.">
   <meta name="twitter:image" content="https://evenet.fun/images/previews/dla-crystal.jpg">
   <style>
     @font-face {
@@ -61,16 +61,51 @@
       user-select: none;
       white-space: pre;
     }
+    canvas#c { touch-action: none; cursor: crosshair; }
     #ui {
       position: fixed;
-      bottom: 12px; left: 12px;
+      bottom: 12px; left: 12px; right: 12px;
       font-family: 'W95', monospace;
       font-size: 11px;
-      color: rgba(140, 210, 255, 0.25);
+      color: rgba(140, 210, 255, 0.4);
       z-index: 100;
       line-height: 2;
       pointer-events: none;
       user-select: none;
+    }
+    #bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      pointer-events: auto;
+      width: max-content;
+      max-width: 100%;
+    }
+    #bar button {
+      font: inherit;
+      color: rgba(140, 210, 255, 0.75);
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(140, 210, 255, 0.3);
+      padding: 3px 9px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #stickLabel {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 6px;
+      background: rgba(0, 0, 0, 0.6);
+      color: rgba(140, 210, 255, 0.75);
+    }
+    #stickSlider { width: 90px; accent-color: #8cd2ff; }
+    #stickValue { min-width: 4ch; }
+    @media (hover: hover) {
+      #bar button:hover { color: #bfe6ff; border-color: rgba(140, 210, 255, 0.7); }
+    }
+    @media (pointer: coarse) {
+      #bar button { padding: 7px 12px; }
     }
   </style>
 </head>
@@ -92,24 +127,44 @@
 <canvas id="c"></canvas>
 <canvas id="glow"></canvas>
 
-<div id="ui">[R] reset  ·  [click] reset</div>
+<div id="ui">
+  <div id="hint"></div>
+  <div id="bar">
+    <button id="resetBtn" title="one seed in the middle [R]">reset</button>
+    <button id="clearBtn" title="empty screen, plant your own [C]">clear</button>
+    <button id="pauseBtn" title="[space]">pause</button>
+    <label id="stickLabel" title="how likely a walker sticks on contact; lower grows denser, fuzzier crystals">
+      stick <input id="stickSlider" type="range" min="5" max="100" value="100"> <span id="stickValue">100%</span>
+    </label>
+  </div>
+</div>
 
 <script>
 // ── DLA Crystal ──────────────────────────────────────────────────────
 // Diffusion-Limited Aggregation: particles random-walk until they touch
 // the growing crystal, then stick forever.
 //
+// Two ways of feeding walkers to the crystal:
+//
+//   radial  The classic picture: one seed in the middle, walkers released
+//           on a circle just outside it. Fast, because everything is
+//           measured from one centre.
+//   field   As soon as you plant a seed or draw, crystals can be anywhere,
+//           so walkers are released at random spots far from all of them.
+//           A coarse distance field over 8x8 blocks says how far each block
+//           is from the nearest crystal, which gives every walker a safe
+//           free-flight jump the same way the bounding circle does in
+//           radial mode.
+//
 // Speed tricks:
-//   · 600 simultaneous walkers so the crystal never waits for one particle
-//   · 40 sim steps per animation frame
+//   · 800 simultaneous walkers so the crystal never waits for one particle
+//   · up to 40 sim steps per animation frame
 //   · Uint8Array grid for O(1) 8-connected neighbour lookup
 //   · Uint32Array view of the pixel buffer: 1 write per pixel vs 4
-//   · Spawn radius tracks the crystal edge; kill radius is kept tight
-//     so walkers that wander off are quickly recycled
-//   · Free-flight jump: a walker at distance d outside the crystal bounding
-//     circle (radius maxR) can jump up to d-maxR-1 px in any direction
-//     without hitting any crystal pixel - collapses the long approach walk
-//     from O(d²) to O(1) and keeps throughput high as the crystal grows
+//   · Radial: spawn radius tracks the crystal edge; kill radius is kept
+//     tight so walkers that wander off are quickly recycled
+//   · Free-flight jumps: a walker known to be d px clear of every crystal
+//     pixel leaps up to d-1 px in one go, collapsing the long approach walk
 //   · Squared-distance fast-path avoids sqrt for walkers near the surface
 //   · xorshift32 PRNG replaces Math.random() in the hot loop
 
@@ -118,16 +173,27 @@ const ctx       = canvas.getContext('2d');
 const glowCv    = document.getElementById('glow');
 const glowCtx   = glowCv.getContext('2d');
 const statsEl   = document.getElementById('stats');
-const ui        = document.getElementById('ui');
+const hintEl    = document.getElementById('hint');
+const pauseBtn  = document.getElementById('pauseBtn');
+const stickSlider = document.getElementById('stickSlider');
+const stickValue  = document.getElementById('stickValue');
 const TOUCH     = matchMedia('(pointer: coarse)').matches;
-const HINT      = TOUCH ? 'tap to reset' : '[R] reset  ·  [click] reset';
-const DONE_HINT = TOUCH ? 'fully grown  ·  tap to grow another' : 'fully grown  ·  [R] or [click] to grow another';
+const PLANT     = TOUCH ? 'tap to plant a seed  ·  drag to draw' : 'click to plant a seed  ·  drag to draw';
+const HINTS = {
+  growing: PLANT,
+  empty:   (TOUCH ? 'tap' : 'click') + ' to plant a seed  ·  drag to draw something for it to grow on',
+  done:    'fully grown  ·  ' + (TOUCH ? 'tap' : 'click') + ' to plant more, or reset',
+  paused:  'paused  ·  ' + PLANT,
+};
 
 const N_WALKERS     = 800;  // simultaneous random walkers
 const STEPS_PER_RAF = 40;   // sim steps per animation frame
 const SPAWN_GAP     = 4;    // px beyond maxR where new walkers spawn
 const KILL_MARGIN   = 30;   // px beyond spawnR where stray walkers die
 const SCALE         = 2;    // sim pixels per screen pixel (chunky low-res look)
+const BS            = 3;    // field mode: blocks are 2^BS = 8 sim px square
+const B             = 1 << BS;
+const FAR           = 255;  // block distance meaning "no crystal anywhere"
 
 // xorshift32 PRNG - ~3x faster than Math.random() in tight loops
 let _r = 0xDEADBEEF ^ (Date.now() & 0xFFFFFF);
@@ -150,12 +216,20 @@ let imgData;
 let pixels;   // Uint8ClampedArray from ImageData (shared buffer)
 let u32;      // Uint32Array view of the same buffer (faster per-pixel writes)
 
+let BW, BH;   // field: size of the block grid
+let bdist;    // field: Uint8Array, Chebyshev distance in blocks to the nearest crystal block
+let bqueue;   // field: Int32Array BFS queue
+
 let wx, wy;   // Int32Arrays — walker x/y positions
 let maxR, maxR2, spawnR, killR2;
 let count;    // total particles stuck so far
 let lastCount, lastMs, stepBudget;
-let rafId;
-let done;     // the crystal has reached the far screen edges
+let rafId = 0;
+let done;     // nowhere left to grow
+let paused = false;
+let mode;     // 'radial' | 'field'
+let stickP = 1;   // chance of sticking on contact
+let frameNo = 0;
 
 // ── Colour ───────────────────────────────────────────────────────────
 // Hue cycles slowly with count so the growth history is visible as
@@ -180,14 +254,56 @@ function hsl2u32(h, s, l) {
      ((r + m) * 255 | 0));
 }
 
+// ── Field: distance from every block to the nearest crystal block ─────
+// Distances only ever shrink as the crystal grows, so each newly occupied
+// block just spreads its own distances outward until they stop improving.
+function spreadFrom(b0) {
+  let head = 0, tail = 0;
+  bdist[b0] = 0;
+  bqueue[tail++] = b0;
+  while (head < tail) {
+    const b = bqueue[head++];
+    const bx = b % BW, by = (b - bx) / BW;
+    const nd = bdist[b] + 1;
+    for (let oy = -1; oy <= 1; oy++) {
+      const ny = by + oy;
+      if (ny < 0 || ny >= BH) continue;
+      for (let ox = -1; ox <= 1; ox++) {
+        const nx = bx + ox;
+        if (nx < 0 || nx >= BW) continue;
+        const n = ny * BW + nx;
+        if (bdist[n] > nd) { bdist[n] = nd; bqueue[tail++] = n; }
+      }
+    }
+  }
+}
+
+function rebuildField() {
+  BW = (W + B - 1) >> BS;
+  BH = (H + B - 1) >> BS;
+  bdist  = new Uint8Array(BW * BH).fill(FAR);
+  bqueue = new Int32Array(BW * BH);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (!grid[y * W + x]) continue;
+      const b = (y >> BS) * BW + (x >> BS);
+      if (bdist[b] !== 0) spreadFrom(b);
+    }
+  }
+}
+
 // ── Crystal helpers ──────────────────────────────────────────────────
 function stick(x, y) {
-  grid[y * W + x] = 1;
+  const idx = y * W + x;
+  if (grid[idx]) return;
+  grid[idx] = 1;
   const hue       = (195 + count * 0.006 + rnd() * 40 - 20) % 360;
   const sat       = 80 + (rnd() * 20 | 0);
   const lightness = 35 + (rnd() * 50 | 0);
-  u32[y * W + x]  = hsl2u32(hue, sat, lightness);
+  u32[idx]  = hsl2u32(hue, sat, lightness);
   count++;
+  const b = (y >> BS) * BW + (x >> BS);
+  if (bdist[b] !== 0) spreadFrom(b);
   const dx = x - cx, dy = y - cy;
   const d2 = dx * dx + dy * dy;
   if (d2 > maxR2) {
@@ -199,6 +315,17 @@ function stick(x, y) {
 }
 
 function spawnWalker(i) {
+  if (mode === 'field') {
+    // Somewhere well clear of every crystal: at least 2 blocks away
+    let x = 1, y = 1;
+    for (let tries = 0; tries < 24; tries++) {
+      x = 1 + (rnd() * (W - 2) | 0);
+      y = 1 + (rnd() * (H - 2) | 0);
+      if (bdist[(y >> BS) * BW + (x >> BS)] >= 3 && !grid[y * W + x]) break;
+    }
+    wx[i] = x; wy[i] = y;
+    return;
+  }
   const r  = Math.max(5, spawnR);
   const di = rndDir();
   wx[i] = Math.max(1, Math.min(W - 2, (cx + r * DIRCOS[di]) | 0));
@@ -209,7 +336,16 @@ function spawnWalker(i) {
 const DX = new Int8Array([1, -1, 0, 0]);
 const DY = new Int8Array([0, 0, 1, -1]);
 
-function step() {
+// A walker next to the crystal sticks, or with low stickiness sometimes
+// slides off and keeps walking (which is what makes the crystal denser).
+function touching(base) {
+  return grid[base - 1]     | grid[base + 1]     |
+         grid[base - W]     | grid[base + W]      |
+         grid[base - W - 1] | grid[base - W + 1]  |
+         grid[base + W - 1] | grid[base + W + 1];
+}
+
+function stepRadial() {
   for (let i = 0; i < N_WALKERS; i++) {
     const x   = wx[i], y = wy[i];
     const ddx = x - cx, ddy = y - cy;
@@ -248,15 +384,44 @@ function step() {
 
     // Touching crystal (8-connected) → stick
     const base = ny * W + nx;
-    if (grid[base - 1]     | grid[base + 1]     |
-        grid[base - W]     | grid[base + W]      |
-        grid[base - W - 1] | grid[base - W + 1]  |
-        grid[base + W - 1] | grid[base + W + 1]) {
+    if (!grid[base] && touching(base) && (stickP >= 1 || rnd() < stickP)) {
       stick(nx, ny);
       spawnWalker(i);
       continue;
     }
 
+    wx[i] = nx;
+    wy[i] = ny;
+  }
+}
+
+function stepField() {
+  for (let i = 0; i < N_WALKERS; i++) {
+    const x = wx[i], y = wy[i];
+
+    // Free-flight jump: every crystal pixel is at least (d-1)*B px away
+    // (Chebyshev, so Euclidean too), so a jump shorter than that is safe.
+    const d = bdist[(y >> BS) * BW + (x >> BS)];
+    if (d >= 2) {
+      const reach = (d - 1) * B - 1;
+      const di = rndDir();
+      wx[i] = Math.max(1, Math.min(W - 2, (x + reach * DIRCOS[di]) | 0));
+      wy[i] = Math.max(1, Math.min(H - 2, (y + reach * DIRSIN[di]) | 0));
+      continue;
+    }
+
+    const k  = rnd4();
+    const nx = x + DX[k];
+    const ny = y + DY[k];
+    if (nx < 1 || nx >= W - 1 || ny < 1 || ny >= H - 1) continue;   // bump the edge
+
+    const base = ny * W + nx;
+    if (grid[base]) continue;   // drawn over: step elsewhere next time
+    if (touching(base) && (stickP >= 1 || rnd() < stickP)) {
+      stick(nx, ny);
+      spawnWalker(i);
+      continue;
+    }
     wx[i] = nx;
     wy[i] = ny;
   }
@@ -276,11 +441,13 @@ function allocate() {
   u32.fill(0xFF000000); // all pixels → black opaque
 }
 
-function init() {
+function start(withSeed) {
   cancelAnimationFrame(rafId);
+  rafId = 0;
   allocate();
+  rebuildField();
   done = false;
-  ui.textContent = HINT;
+  mode = withSeed ? 'radial' : 'field';
 
   maxR = 0; maxR2 = 0;
   spawnR = 5;
@@ -290,9 +457,29 @@ function init() {
   wx = new Int32Array(N_WALKERS);
   wy = new Int32Array(N_WALKERS);
 
-  stick(cx, cy); // single seed at centre
+  if (withSeed) stick(cx, cy); // single seed at centre
   for (let i = 0; i < N_WALKERS; i++) spawnWalker(i);
 
+  render();
+  showStats();
+  wake();
+}
+
+const reset = () => start(true);
+const clear = () => start(false);
+
+function setHint() {
+  hintEl.textContent = count === 0 ? HINTS.empty
+                     : paused      ? HINTS.paused
+                     : done        ? HINTS.done
+                     :               HINTS.growing;
+}
+
+// Run the loop if there is anything for it to do
+function wake() {
+  setHint();
+  if (rafId || paused || done || count === 0) return;
+  lastMs = performance.now(); lastCount = count;
   rafId = requestAnimationFrame(frame);
 }
 
@@ -315,36 +502,56 @@ function resize() {
       u32[ny * W + nx]  = oldU32[y * oldW + x];
     }
   }
+  rebuildField();
   for (let i = 0; i < N_WALKERS; i++) spawnWalker(i);
-  ctx.putImageData(imgData, 0, 0);
-  glowCtx.drawImage(canvas, 0, 0);
+  render();
   // A bigger screen may have room to keep growing.
-  if (done && maxR < Math.max(cx, cy) - 2) {
-    done = false;
-    ui.textContent = HINT;
-    rafId = requestAnimationFrame(frame);
-  }
+  if (done) { done = false; wake(); }
 }
 
 // ── Render loop ──────────────────────────────────────────────────────
+function render() {
+  ctx.putImageData(imgData, 0, 0);
+  glowCtx.clearRect(0, 0, W, H);
+  glowCtx.drawImage(canvas, 0, 0);
+}
+
+function showStats(rate) {
+  statsEl.textContent =
+    `PARTICLES  ${count.toLocaleString()}\n` +
+    (mode === 'radial' ? `RADIUS     ${maxR.toFixed(0)}px\n` : '') +
+    `RATE       ${rate === undefined ? '-' : rate}`;
+}
+
+// Field mode is finished once no block is left that is 2 or more blocks
+// from a crystal: walkers would have nowhere to come from.
+function fieldFull() {
+  for (let b = 0; b < bdist.length; b++) if (bdist[b] >= 2) return false;
+  return true;
+}
+
 function frame() {
-  const t = Math.min(1, maxR / 110);
-  stepBudget += Math.max(0.35, t * t * STEPS_PER_RAF);
+  rafId = 0;
+  frameNo++;
+  if (mode === 'radial') {
+    const t = Math.min(1, maxR / 110);
+    stepBudget += Math.max(0.35, t * t * STEPS_PER_RAF);
+  } else {
+    stepBudget += STEPS_PER_RAF;
+  }
   const stepsThisFrame = stepBudget | 0;
   stepBudget -= stepsThisFrame;
+  const step = mode === 'radial' ? stepRadial : stepField;
   for (let s = 0; s < stepsThisFrame; s++) step();
-  ctx.putImageData(imgData, 0, 0);
-  glowCtx.drawImage(canvas, 0, 0);
+  render();
 
-  // Once it reaches the far edges there is nowhere left to grow, so stop
+  // Once it fills its space there is nowhere left to grow, so stop
   // instead of spinning walkers forever.
-  if (maxR >= Math.max(cx, cy) - 2) {
+  if ((mode === 'radial' && maxR >= Math.max(cx, cy) - 2) ||
+      (mode === 'field' && frameNo % 30 === 0 && fieldFull())) {
     done = true;
-    statsEl.textContent =
-      `PARTICLES  ${count.toLocaleString()}\n` +
-      `RADIUS     ${maxR.toFixed(0)}px\n` +
-      `RATE       done`;
-    ui.textContent = DONE_HINT;
+    showStats('done');
+    setHint();
     return;
   }
 
@@ -352,10 +559,7 @@ function frame() {
   const now = performance.now();
   if (now - lastMs >= 250) {
     const pps = ((count - lastCount) / (now - lastMs) * 1000) | 0;
-    statsEl.textContent =
-      `PARTICLES  ${count.toLocaleString()}\n` +
-      `RADIUS     ${maxR.toFixed(0)}px\n` +
-      `RATE       ${pps.toLocaleString()} p/s`;
+    showStats(pps.toLocaleString() + ' p/s');
     lastCount = count;
     lastMs    = now;
   }
@@ -363,20 +567,94 @@ function frame() {
   rafId = requestAnimationFrame(frame);
 }
 
-// ── Input ─────────────────────────────────────────────────────────────
+// ── Planting and drawing ─────────────────────────────────────────────
+// Anything planted or drawn means crystals can be anywhere, so growth
+// switches to field mode for the rest of this crystal.
+function toField() {
+  if (mode === 'field') return;
+  mode = 'field';
+  for (let i = 0; i < N_WALKERS; i++) spawnWalker(i);
+}
+
+function plant(x, y) {
+  if (x < 1 || x >= W - 1 || y < 1 || y >= H - 1) return;
+  stick(x, y);
+}
+
+// Bresenham between two sim points, so a fast drag draws an unbroken line
+function plantLine(x0, y0, x1, y1) {
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (;;) {
+    plant(x0, y0);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
+
+const toSim = (e) => [
+  Math.floor(e.clientX / window.innerWidth  * W),
+  Math.floor(e.clientY / window.innerHeight * H),
+];
+
+let pen = null;
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (pen) return;
+  canvas.setPointerCapture(e.pointerId);
+  toField();
+  const [x, y] = toSim(e);
+  pen = { id: e.pointerId, x, y };
+  plant(x, y);
+  done = false;
+  render();
+  wake();
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!pen || e.pointerId !== pen.id) return;
+  const [x, y] = toSim(e);
+  if (x === pen.x && y === pen.y) return;
+  plantLine(pen.x, pen.y, x, y);
+  pen.x = x; pen.y = y;
+  render();
+});
+const lift = (e) => { if (pen && e.pointerId === pen.id) pen = null; };
+canvas.addEventListener('pointerup', lift);
+canvas.addEventListener('pointercancel', lift);
+
+// ── Controls ─────────────────────────────────────────────────────────
+function togglePause() {
+  paused = !paused;
+  pauseBtn.textContent = paused ? 'play' : 'pause';
+  if (paused) { cancelAnimationFrame(rafId); rafId = 0; }
+  wake();
+}
+
+function setStick(v) {
+  stickP = v / 100;
+  stickValue.textContent = v + '%';
+}
+
+document.getElementById('resetBtn').addEventListener('click', reset);
+document.getElementById('clearBtn').addEventListener('click', clear);
+pauseBtn.addEventListener('click', togglePause);
+stickSlider.addEventListener('input', () => setStick(+stickSlider.value));
+// buttons shouldn't keep focus, or space/enter would press them again
+document.querySelectorAll('#bar button').forEach(b => b.addEventListener('click', () => b.blur()));
+
 document.addEventListener('keydown', e => {
-  if (e.key === 'r' || e.key === 'R') init();
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'r' || e.key === 'R') reset();
+  else if (e.key === 'c' || e.key === 'C') clear();
+  else if (e.key === ' ') { e.preventDefault(); togglePause(); }
 });
-document.addEventListener('click', e => {
-  if (!e.target.closest('a')) init();
-});
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  init();
-}, { passive: false });
 window.addEventListener('resize', resize);
 
-init();
+setStick(+stickSlider.value);
+reset();
 </script>
 </body>
 </html>
