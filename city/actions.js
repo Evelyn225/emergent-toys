@@ -190,9 +190,9 @@ function interact() {
     if (cs) return startGame(cs, 'casino');
     if (aviaryKeeper()) { if (T - seedT < 12) return say('You\'ve still got seed. Hold still.', 2); if (!pay(1)) return say('"A dollar a cup."'); seedT = T; return say('You hold out a cup of seed. A dozen birds land on your arms at once.', 4); }
     if (useShotengai()) return;
-    if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
-      const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
-      roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0; roofLot = roofCells(mx, my);
+    if (nearElevator()) { // up to the roof, standing in the middle of the building you walked into (not the next one's)
+      const [mx, my] = room.cell, [cx, cy] = buildingMiddle(mx, my);
+      roofH = map[idx(cx, cy)]; mode = 'roof'; px = cx + 0.5; py = cy + 0.5; pitch = 0; roofLot = roofCells(cx, cy);
       notePoliceRoofEntry(px, py, room.ret);
       return say(`Roof, ${roofH * 10}m up`);
     }

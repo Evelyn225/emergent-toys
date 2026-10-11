@@ -7,7 +7,7 @@ Things get crossed off (deleted) once they're in the game.
 The ones that would add the most for the least, roughly in order. Each builds on something already in the game.
 1. **The Relics** (below, in Bigger city-wide ideas): the watch and the globe become two of a set, and collecting
    them all opens the tower with no door. A reason to do everything else.
-2. **More rooftop courier routes**: the depot and introductory garden delivery are in; construction and night routes next (below).
+2. **More rooftop courier routes**: the garden delivery and the construction rush are in; the night run is next (below).
 3. **A bike**: rent, park, steal; between walking and a car, and it fits down alleys.
 4. **Museum extras**: the heist is in (pick the door, dodge the torch beams, crack a case, beat the silent alarm);
    next: the plan on paper, a guard's keycard to pickpocket, the power box in the alley, a rotating special exhibit.
@@ -20,10 +20,19 @@ The ones that would add the most for the least, roughly in order. Each builds on
   laundry and water-tank roofs to Mara's garden. It pays $80 plus up to $40 for speed. Level bridges and stairs offer a
   walking route; two cyan-marked sprint jumps bypass service detours (about eight seconds saved together).
   Full speed bonus lasts 42 seconds and tapers to zero at 90. Existing stairs and apartment elevators allow re-entry after
-  a surviving fall. Hospital
+  a surviving fall, but touching the street forfeits the speed bonus. Hospital
   recovery or arrest fails the parcel. The active delivery, its timer and career records are saved.
-- Next: a construction rush with scaffolding, narrow crossings, elevation changes and an optional air-strafe
-  shortcut; a night delivery past neon signs to a waiting recipient. Author these rather than choosing random rooftops.
+- The construction rush is in: **Topping Out** sends stamped drawings to Teo at a site office beside a steel frame,
+  over crane-hung platforms, a scaffold, a ladder and a narrow walkway; the hoist bay is an optional air-strafe jump.
+  It unlocks after one garden delivery, from the dispatch board.
+- The night run is in: **Last Set** (8pm-4am, after the site rush) takes Nico's repaired guitar down the brownstone
+  backs beside the neon strip, over the side street on the catwalk of the arched LATE NITE sign, and across a footbridge
+  to the catwalk behind the ARCADE's rooftop sign; Nico paces the bar roof next door and plays once it arrives. Neon
+  lights the roofs round the signs. The optional shortcut is a bunny-hop leap across the side street off a condenser
+  (about 1.65x hop speed, easy to build on the straight walkway); a miss is an 18m fall.
+- Every building in a recipient's block is a shop, so no elevator rides up to a delivery roof, and the street voids the
+  speed bonus (a street run to a mid-route elevator beat every roof run). Any new route must keep both.
+- Next: harder contracts on the existing routes (a fragile parcel, a rival courier, weather), or a fourth route.
 - Give each route named recipients, distinct packages, small rooftop scenes and believable reasons for its connections.
   Basic deliveries are untimed; offer speed bonuses and unlock harder contracts as the player learns the routes.
 - Streets are often too wide for ordinary jumps. Deliberately place service bridges, ramps, scaffolding and intermediate

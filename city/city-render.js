@@ -408,18 +408,19 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
     BG[i] = C(NEON[(k + (v * 3 | 0)) & 3], 3 + v * 9); // screens glow regardless of daylight
     return set(i, v > 0.7 ? '*' : ' ', C(WHITE, 15));
   }
-  // 6: construction: a steel skeleton with open floors
-  BG[i] = NONE;
+  // 6: construction: a steel skeleton with open floors, the unlit interior in shadow behind the frame
+  BG[i] = bgAt(GRAY, (0.6 + day * 1.4) * fog);
   const fl = fract(z * 3), fu = fract(u * 2);
   if (fl < 0.1) return set(i, '=', C(ORANGE, L));
   if (fu < 0.08) return set(i, '|', C(ORANGE, L));
   if (Math.abs(fract(u * 2 + z * 3) - 0.5) < 0.05 && (Math.floor(z * 3) & 1)) return set(i, '/', C(ORANGE, L * 0.7));
-  set(i, ' ', 0);
+  set(i, fl < 0.16 ? '_' : fract(u * 2 + 0.5) < 0.05 ? '|' : ' ', C(GRAY, L * 0.35)); // the slab soffit and the next row of columns, deeper in
 }
 
 // the top of a building, seen from above (you're on a roof): gravel with a parapet where the roof ends
 function roofTop(i, wx, wy, h, d) {
-  const L = Math.max(0, 1 - d / vis) * amb * 10, mx = Math.floor(wx), my = Math.floor(wy), lx = wx - mx, ly = wy - my;
+  const spill = courierNeonSpill(wx, wy); // (the night route's signs, glowing on the roofs round them)
+  const L = Math.max(Math.max(0, 1 - d / vis) * amb * 10, spill ? spill[0] * 11 : 0), mx = Math.floor(wx), my = Math.floor(wy), lx = wx - mx, ly = wy - my;
   if (STY[idx(mx,my)] === 19) { // simple flat mesh pavilion: widely spaced structural rails, quiet netting
     const gh = GLASSHOUSES[1], u = rel(wx - GARDEN.x0 - gh.gx0), v = rel(wy - GARDEN.y0 - gh.gy0);
     const rail = fract(u * 2) < .035 || fract(v * 2) < .035;
@@ -437,8 +438,12 @@ function roofTop(i, wx, wy, h, d) {
     const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
     if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); paintSettledSnow(i, wx, wy, L, 0.55,0,h); return; }
   }
-  if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
+  if (STY[idx(mx, my)] === 6) { // a frame's top deck: ribbed steel decking, rebar laid out for the next pour
+    const bar = fract(wx * 5) < 0.06 || fract(wy * 5) < 0.06;
+    BG[i] = bgAt(GRAY, 1 + day * 2); set(i, bar ? '+' : fract(wy * 14) < 0.2 ? '=' : ' ', C(bar ? BRICK : GRAY, L * (bar ? 0.8 : 0.5)));
+  } else if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
   else set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
+  if (spill) BG[i] = C(spill[1], 1 + spill[0] * 2);
   paintSettledSnow(i, wx, wy, L,1,0,h);
 }
 

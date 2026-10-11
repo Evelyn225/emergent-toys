@@ -20,6 +20,7 @@ onkeydown = e => {
   if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
+  if (!e.repeat && courierBoardKey(e)) return relock(e); // the courier dispatch board
   if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
   if (e.code === 'Escape' && !e.repeat) return togglePause();
   if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
@@ -208,7 +209,8 @@ function loop(t) {
   if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   T += dt; msgT -= dt;
   env(dt);
-  stepCourier(dt);
+  if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
+  stepCourierEncore();
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { // a cabinet or a shift has the screen; the world carries on behind it
     stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); audioTick(dt);

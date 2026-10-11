@@ -842,6 +842,15 @@ function belleRoofHeight(x, y) {
   return b.h + 0.45 * clamp(inset / 0.65, 0, 1);
 }
 
+function buildingMiddle(mx, my) { // the cell of (mx, my)'s building nearest its middle
+  const sh = SHOP[idx(mx, my)], lot = [[mx, my]], seen = new Set([idx(mx, my)]);
+  for (let n = 0; n < lot.length && lot.length < 80; n++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const x = lot[n][0] + dx, y = lot[n][1] + dy, k = idx(x, y);
+    if (!seen.has(k) && SHOP[k] === sh) { seen.add(k); lot.push([x, y]); }
+  }
+  const cx = lot.reduce((s, c) => s + c[0], 0) / lot.length, cy = lot.reduce((s, c) => s + c[1], 0) / lot.length;
+  return lot.reduce((b, c) => Math.hypot(c[0] - cx, c[1] - cy) < Math.hypot(b[0] - cx, b[1] - cy) - 1e-9 ? c : b);
+}
 // ---- street names, for talk, directions and the HUD
 const ord = n => n + ((n % 100 / 10 | 0) === 1 ? 'TH' : [, 'ST', 'ND', 'RD'][n % 10] || 'TH');
 const ST_NAMES = ['', 'BAYSIDE DR', 'KING ST', 'CANAL ST', 'MERCER ST', '5TH ST', 'GRAND ST', 'MOTT ST', 'HOUSTON ST', '9TH ST',
@@ -865,14 +874,22 @@ const COURIER_COMPANY = 'Rooftop Couriers';
     const k=idx(x,y);map[k]=COURIER_DEPOT.h;STY[k]=8;SEED[k]=.37;SHOP[k]=sh;
   }
 }
+// A recipient's whole block is shops. Roofs within a block connect, so any apartment elevator there would be a ride
+// straight to the delivery; the parcel has to come over the route. Converted before props and architecture run.
+for (const [x,y,word,kind] of [[198,101,'GROCERY',SHOP_PRODUCE],[196,101,'CAFE'],[194,101,'BARBER'],[194,99,'PET SHOP'],
+  [186,114,'HARDWARE'],[188,114,'LAUNDRY'],[188,117,'PIZZA'],[190,117,'THRIFT'],
+  [180,122,'BAR',SHOP_NEON],[182,122,'TATTOO',SHOP_NEON],[182,125,'NOODLES']]) {
+  const k=idx(x,y);
+  Object.assign(SHOP[k],{kind:kind??SHOP_LIT,word,neon:NEON[(SEED[k]*1000|0)%4],glyphs:GLYPHS[word]||'o#=@',hours:hoursOf(word)});
+}
 const COURIER_SURFACES = [], COURIER_STAIRS = [], COURIER_LADDERS = [], COURIER_SCENERY = [];
 function courierSurface(x0,y0,x1,y1,h0,h1=h0,axis='x',kind='bridge') {
   const o={x:(x0+x1)/2,y:(y0+y1)/2,hl:(x1-x0)/2,hw:(y1-y0)/2,c:1,s:0,
     z0:Math.min(h0,h1)-.012,z1:Math.max(h0,h1),h0,h1,axis,kind,thickness:.012};
   COURIER_SURFACES.push(o);return o;
 }
-function courierLadder(id,bottom,top,rail) {
-  COURIER_LADDERS.push({id,bottom,top,x:rail[0],y:rail[1],yaw:rail[2]});
+function courierLadder(route,bottom,top,rail) {
+  COURIER_LADDERS.push({route,bottom,top,x:rail[0],y:rail[1],yaw:rail[2]});
 }
 const courierMapHeight = (x,y) => map[idx(Math.floor(x),Math.floor(y))];
 function courierStairs(x0,y0,x1,y1,h0,h1,axis='x') {
@@ -926,16 +943,99 @@ courierSurface(193.3,102.27,194.5,102.53,courierGardenLanding,courierGardenLandi
 // These roofs already have indoor access: depot stairs and apartment elevators. Recovery uses those entrances;
 // reserve ladders for future routes on buildings without roof access, away from balconies and cornices.
 const COURIER_GARDEN = { x:199,y:102.1,z:courierMapHeight(199,102.1), name:'Mara' };
+
+// ---- Topping Out: a steel frame replaces the brownstone south of the staging roof. Converting the lot here, before
+// props and architecture run, means no stoop, bay or cornice is ever generated for it.
+const COURIER_SITE = { x0:182, y0:114, x1:185, y1:117, h:2 };
+for (let y=COURIER_SITE.y0;y<COURIER_SITE.y1;y++) for (let x=COURIER_SITE.x0;x<COURIER_SITE.x1;x++) {
+  const k=idx(x,y);map[k]=COURIER_SITE.h;STY[k]=6;SHOP[k]=null;
+}
+// Lot 10 rises to the staging roof over its party-wall cornice, like the townhouse steps on the first route.
+const courierStagingDeck=courierMapHeight(182.5,110.5)+.06;
+courierStairs(180.95,110.38,181.85,110.62,courierMapHeight(181,110.5),courierStagingDeck);
+courierSurface(181.85,110.38,182.2,110.62,courierStagingDeck,courierStagingDeck,'x','landing');
+// Two work platforms hang from the crane's lifting frame, level with the staging roof. Each gap is a walking jump.
+const courierHang=courierMapHeight(182.5,111.5);
+const COURIER_PLATFORMS=[courierSurface(182.33,112.32,182.77,112.86,courierHang,courierHang,'y','platform'),
+  courierSurface(182.33,113.1,182.77,113.52,courierHang,courierHang,'y','platform')];
+// Bracket scaffold on the frame's street face: nothing stands on the sidewalk. It runs on past the frame's corner
+// above the neighbouring cornice, so the apartments' roof next door is a way back on after a fall.
+const courierScaffold=courierSurface(181.75,113.74,185,113.98,courierHang,courierHang,'x','scaffold');
+// Its end board laps onto that roof over the cornice, so there's no sliver of open air at the step.
+courierSurface(181.75,113.98,181.99,114.08,courierHang,courierHang,'x','scaffold');
+// The hoist bay juts out over the street, railed so you can only leave it heading east: the office roof is
+// south of that line, so the jump has to curve in the air.
+const courierHoistBay=courierSurface(184.55,113.52,185.45,113.74,courierHang,courierHang,'x','bay');
+courierLadder('site',[183.55,113.86,courierHang],[183.55,114.12,COURIER_SITE.h],[183.55,113.985,Math.PI/2]);
+// The crew's crossing to the site office: a narrow walkway at deck level, a landing, then stairs down the roof.
+const courierOfficeRoof=courierMapHeight(186.5,115.5);
+const courierPlank=courierSurface(185,116.39,186.18,116.51,COURIER_SITE.h,COURIER_SITE.h,'x','plank');
+const courierOfficeLanding=courierSurface(186.18,116.27,186.48,116.57,COURIER_SITE.h,COURIER_SITE.h,'y','landing');
+courierStairs(186.18,114.7,186.48,116.27,courierOfficeRoof,COURIER_SITE.h,'y');
+const COURIER_FOREMAN = { x:186.85,y:114.75,z:courierOfficeRoof,name:'Teo' };
+
+// ---- Last Set, the night run: down the brownstone backs above the neon strip (the avenue at x=176-177) to the bar at
+// its south end, where Nico waits on the roof for his guitar.
+const courierBacks=courierMapHeight(178.5,110.5);
+// The side street's sign gantry: a truss from roof to roof, its arched LATE NITE sign hung beneath, and the sign
+// crew's catwalk on top. The truss clears both cornices; the catwalk runs on over No.851's roof as a raised walkway.
+const courierArchDeck=courierMapHeight(178.5,114.5)+.152;
+const COURIER_ARCH={x:178.5,y0:111.85,y1:114.15,z0:courierArchDeck-.112,z1:courierArchDeck-.012};
+courierStairs(178.39,110.7,178.61,COURIER_ARCH.y0,courierBacks,courierArchDeck,'y');
+const courierArchWalk=courierSurface(178.39,COURIER_ARCH.y0,178.61,115.9,courierArchDeck,courierArchDeck,'y','catwalk');
+// Rise before No.425's taller party wall, then a landing over its cornice.
+const courierBackDeck=courierMapHeight(178.5,118)+.06;
+courierStairs(178.39,115.9,178.61,116.9,courierArchDeck,courierBackDeck,'y');
+courierSurface(178.39,116.9,178.61,117.2,courierBackDeck,courierBackDeck,'y','landing');
+// The ARCADE's rooftop sign faces up the side street. Its electricians cross from No.425 on a footbridge that passes
+// the sign's west end, then work from the catwalk behind its letters; stairs at the far end come down to the roof.
+const COURIER_ARCADE_SIGN={x0:178.6,x1:179.95,y:122.33,z0:courierBackDeck,z1:courierBackDeck+.38};
+courierSurface(178.19,119.8,178.41,122.4,courierBackDeck,courierBackDeck,'y');
+const courierSignWalk=courierSurface(178.19,122.4,179.95,122.62,courierBackDeck,courierBackDeck,'x','catwalk');
+const courierArcadeRoof=courierMapHeight(179.5,123.5);
+courierStairs(179.62,122.62,179.84,123.8,courierBackDeck,courierArcadeRoof,'y');
+const COURIER_NICO = { x:180.75,y:123.3,z:courierMapHeight(180.5,123.5),name:'Nico' };
+// No.299's condenser stands at its south edge, a step up from the roof. Hop down the walkway to build speed, and
+// off its top you can clear the side street onto the bar roof, five metres down.
+const courierCondenser=courierSurface(180.25,119.45,180.85,119.92,courierMapHeight(180.5,118.5)+.15,courierMapHeight(180.5,118.5)+.15,'x','condenser');
+courierCondenser.z0=courierMapHeight(180.5,118.5);
+// After dark the signs light the roofs round them: [x, y, reach, colour]. The bar roof has its own string of bulbs.
+const COURIER_NEON=[[178.5,111.95,.75,MAG],[178.5,114.05,.75,MAG],[179.3,122.15,1.1,CYAN],[181,123,.85,WARM]];
+function courierNeonSpill(x,y) {
+  if(night<.25)return null;
+  let best=0,col=0;
+  for(const [sx,sy,reach,c] of COURIER_NEON) {
+    const f=1-Math.hypot(rel(x-sx),rel(y-sy))/reach;
+    if(f>best){best=f;col=c;}
+  }
+  return best>0?[best*best*night,col]:null;
+}
+
 const COURIER_ROUTES = [{id:'garden',title:'The Green Roof',parcel:'gardening supplies',pay:80,bonus:40,
-  quick:42,bonusUntil:90,recipient:COURIER_GARDEN,
-  directions:'South over the print-shop bridge. Yellow arrows follow the safe service crossings; cyan arrows mark the faster jumps. Then north to the florist row.'}];
+  quick:42,bonusUntil:90,recipient:COURIER_GARDEN,label:'ROOF GARDEN',
+  offer:`Gardening supplies for ${COURIER_GARDEN.name}. Eighty dollars, plus a speed bonus. Stairs are on your left.`,
+  thanks:`"Perfect! The tomatoes were getting impatient." ${COURIER_GARDEN.name} takes the supplies.`,
+  chat:'"The roof gets the best sun. Want a tomato?"',
+  directions:'South over the print-shop bridge. Yellow arrows follow the safe service crossings; cyan arrows mark the faster jumps. Then north to the florist row.'},
+ {id:'site',title:'Topping Out',parcel:'stamped drawings',pay:100,bonus:50,
+  quick:28,bonusUntil:60,recipient:COURIER_FOREMAN,label:'SITE OFFICE',unlock:'garden',
+  offer:`Stamped drawings for ${COURIER_FOREMAN.name}, the foreman on the Pell Street job. The pour can't start without them. A hundred, and fifty more if you're quick.`,
+  thanks:`"Stamped and signed. Pour's back on!" ${COURIER_FOREMAN.name} pops the tube open on the cabin step.`,
+  chat:'"Six floors of steel and every one of them late."',
+  directions:'South over the bridge, up the steps to the staging roof, then jump the crane platforms to the scaffold. Ladder up, cross the deck and the walkway to the site office. Cyan arrows: off the end of the hoist bay, let go of forward and strafe right onto the office roof.'},
+ {id:'night',title:'Last Set',parcel:'repaired guitar',pay:120,bonus:60,
+  quick:30,bonusUntil:60,recipient:COURIER_NICO,label:'BAR ROOF',unlock:'site',hours:[20,4],
+  offer:`Nico's guitar, back from the repair shop. He plays the bar on the strip at midnight and he's waiting on its roof. A hundred and twenty, sixty more if he gets to tune up.`,
+  thanks:`"Oh, you beauty." ${COURIER_NICO.name} has the case open before you've let go of it, and starts to play.`,
+  chat:'"Midnight set. Plenty of time now."',
+  directions:"South over the bridge, then down the backs of the brownstones beside the strip. Cross the side street on the LATE NITE sign's catwalk, follow the walkway up, and take the footbridge to the ARCADE sign. Nico's on the bar roof next door. Cyan arrows: bunny-hop the walkway up to speed, then leap the side street off No.299's condenser onto the bar roof. Miss and it's a long way down."}];
 // A former press-room skylight makes the depot's roof step up on its quiet north side.
 const courierHut=courierSurface(178.3,101.2,180.3,101.8,1.65,1.65,'x','hut');
 courierHut.z0=COURIER_DEPOT.h;
 function courierSurfacePlanes(o) {
   const sx=o.axis==='x'?(o.h1-o.h0)/(2*o.hl):0,sy=o.axis==='y'?(o.h1-o.h0)/(2*o.hw):0,mid=(o.h0+o.h1)/2;
   return [[1,0,0,o.hl,1],[-1,0,0,o.hl,2],[0,1,0,o.hw,3],[0,-1,0,o.hw,4],[-sx,-sy,1,mid,5],
-    ...(o.kind==='hut'?[[0,0,-1,-o.z0,6]]:[[sx,sy,-1,-mid+(o.thickness??.035),6]])];
+    ...(o.kind==='hut'||o.kind==='condenser'?[[0,0,-1,-o.z0,6]]:[[sx,sy,-1,-mid+(o.thickness??.035),6]])];
 }
 for(const o of COURIER_SURFACES)o.planes=courierSurfacePlanes(o);
 const courierSurfaceCells = new Array(N*N);
@@ -3493,6 +3593,7 @@ function audioMix(s) {
     out.crowd = Math.max(out.crowd, 0.7 * s.fairNear * (s.tod >= 9 || s.tod < 2 ? 1 : 0.2));
     out.arcade = 0.4 * s.fairNear * far;
   }
+  if (s.serenade) out.bossa = Math.max(out.bossa, 0.8 * s.serenade); // Nico on the bar roof, after his guitar came back
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
   out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
@@ -6085,27 +6186,44 @@ function goToJail() {
   clearWanted();
 }
 let courierJob = null;
-let courierRecords = { trips:0, earned:0, best:null, failed:0 };
+// best: fastest delivery per route id. A completed route unlocks any route that names it.
+let courierRecords = { trips:0, earned:0, best:{}, failed:0 };
 let climbing = null;
 function courierBonus(route,seconds) {
   return Math.round(route.bonus*clamp((route.bonusUntil-seconds)/(route.bonusUntil-route.quick),0,1));
 }
+const courierUnlocked = route => !route.unlock || courierRecords.best[route.unlock] != null;
+// hours: [from, until) in game hours, wrapping past midnight. A parcel already taken can be finished any time.
+const courierInHours = route => !route.hours || (tod>=route.hours[0] || tod<route.hours[1]);
 function startCourier(id='garden') {
   if(courierJob)return false;
   const route=COURIER_ROUTES.find(r=>r.id===id);
-  if(!route)return false;
+  if(!route||!courierUnlocked(route)||!courierInHours(route))return false;
   courierJob={id:route.id,took:0};return true;
 }
-function stepCourier(dt) { if(courierJob)courierJob.took+=Math.max(0,dt); }
+// The speed bonus is for staying up top: reaching the street (a fall, or a walk round to an elevator) forfeits it.
+// The parcel still pays, so the apartment elevators remain a way back after a fall. True the moment it's lost.
+function stepCourier(dt) {
+  if(!courierJob)return false;
+  courierJob.took+=Math.max(0,dt);
+  if(courierJob.street||mode!=='walk'||body.z>0)return false;
+  return courierJob.street=true;
+}
+const courierJobBonus = () => courierJob.street?0:courierBonus(courierRoute(),courierJob.took);
 function loadCourier(data) {
-  courierJob=null;courierRecords={trips:0,earned:0,best:null,failed:0};
+  courierJob=null;courierRecords={trips:0,earned:0,best:{},failed:0};
   const job=data?.job,records=data?.records;
-  if(job && COURIER_ROUTES.some(r=>r.id===job.id) && Number.isFinite(job.took) && job.took>=0)
+  if(job && COURIER_ROUTES.some(r=>r.id===job.id) && Number.isFinite(job.took) && job.took>=0) {
     courierJob={id:job.id,took:job.took};
+    if(job.street===true)courierJob.street=true;
+  }
   if(!records)return;
   for(const key of ['trips','earned','failed'])if(Number.isFinite(records[key])&&records[key]>=0)
     courierRecords[key]=Math.floor(records[key]);
-  if(Number.isFinite(records.best)&&records.best>=0)courierRecords.best=records.best;
+  // Saves from before the second route kept one best time, which could only be the garden's.
+  const best=Number.isFinite(records.best)?{garden:records.best}:records.best;
+  for(const route of COURIER_ROUTES)if(Number.isFinite(best?.[route.id])&&best[route.id]>=0)
+    courierRecords.best[route.id]=best[route.id];
 }
 function failCourier() {
   if(!courierJob)return false;
@@ -6119,10 +6237,11 @@ function courierAtRecipient() {
 function finishCourier() {
   const route=courierRoute();
   if(!route || !courierAtRecipient())return null;
-  const seconds=courierJob.took,bonus=courierBonus(route,seconds),pay=route.pay+bonus;
+  const seconds=courierJob.took,street=!!courierJob.street,bonus=courierJobBonus(),pay=route.pay+bonus,best=courierRecords.best;
   earn(pay);courierRecords.trips++;courierRecords.earned+=pay;
-  courierRecords.best=courierRecords.best==null?seconds:Math.min(courierRecords.best,seconds);
-  courierJob=null;return {pay,bonus,seconds};
+  // Best times (and so unlocks) are for unbroken rooftop runs only.
+  if(!street)best[route.id]=best[route.id]==null?seconds:Math.min(best[route.id],seconds);
+  courierJob=null;return {route,pay,bonus,seconds,street};
 }
 function courierLadderNear() {
   if(!['walk','roof'].includes(mode) || body.z>.5)return null;
@@ -6209,9 +6328,10 @@ function homeBalconyHeight(x, y) {
 }
 function restoreHomeCell(cell) {
   if (!Number.isInteger(cell) || cell < 0 || cell >= N * N) return -1;
-  if (SHOP[cell] && map[cell]) return cell;
   const x = cell % N, y = Math.floor(cell / N);
-  if (districtAt(x, y) !== 'belle') return -1;
+  if (SHOP[cell] && map[cell] && (SHOP[cell].kind === SHOP_APTS || districtAt(x, y) === 'belle')) return cell;
+  // A building since redeveloped (the courier routes turned some apartment blocks into a building site and shops): the nearest free flat.
+  if (districtAt(x, y) !== 'belle') return freeHomeNear(x + 0.5, y + 0.5);
   let best = -1, distance = Infinity;
   for (let my = Math.floor(y / 8) * 8; my < Math.floor(y / 8) * 8 + 8; my++) for (let mx = Math.floor(x / 8) * 8; mx < Math.floor(x / 8) * 8 + 8; mx++) {
     const k = idx(mx, my), d = Math.hypot(mx - x, my - y);
@@ -7023,18 +7143,19 @@ function landmarkFacade(i, u, uStep, z, h, d, side, sty, fog, wc, mx, my) {
     BG[i] = C(NEON[(k + (v * 3 | 0)) & 3], 3 + v * 9); // screens glow regardless of daylight
     return set(i, v > 0.7 ? '*' : ' ', C(WHITE, 15));
   }
-  // 6: construction: a steel skeleton with open floors
-  BG[i] = NONE;
+  // 6: construction: a steel skeleton with open floors, the unlit interior in shadow behind the frame
+  BG[i] = bgAt(GRAY, (0.6 + day * 1.4) * fog);
   const fl = fract(z * 3), fu = fract(u * 2);
   if (fl < 0.1) return set(i, '=', C(ORANGE, L));
   if (fu < 0.08) return set(i, '|', C(ORANGE, L));
   if (Math.abs(fract(u * 2 + z * 3) - 0.5) < 0.05 && (Math.floor(z * 3) & 1)) return set(i, '/', C(ORANGE, L * 0.7));
-  set(i, ' ', 0);
+  set(i, fl < 0.16 ? '_' : fract(u * 2 + 0.5) < 0.05 ? '|' : ' ', C(GRAY, L * 0.35)); // the slab soffit and the next row of columns, deeper in
 }
 
 // the top of a building, seen from above (you're on a roof): gravel with a parapet where the roof ends
 function roofTop(i, wx, wy, h, d) {
-  const L = Math.max(0, 1 - d / vis) * amb * 10, mx = Math.floor(wx), my = Math.floor(wy), lx = wx - mx, ly = wy - my;
+  const spill = courierNeonSpill(wx, wy); // (the night route's signs, glowing on the roofs round them)
+  const L = Math.max(Math.max(0, 1 - d / vis) * amb * 10, spill ? spill[0] * 11 : 0), mx = Math.floor(wx), my = Math.floor(wy), lx = wx - mx, ly = wy - my;
   if (STY[idx(mx,my)] === 19) { // simple flat mesh pavilion: widely spaced structural rails, quiet netting
     const gh = GLASSHOUSES[1], u = rel(wx - GARDEN.x0 - gh.gx0), v = rel(wy - GARDEN.y0 - gh.gy0);
     const rail = fract(u * 2) < .035 || fract(v * 2) < .035;
@@ -7052,8 +7173,12 @@ function roofTop(i, wx, wy, h, d) {
     const H = Math.abs(ey) < 0.55 && (Math.abs(Math.abs(ex) - 0.38) < 0.08 || Math.abs(ex) < 0.38 && Math.abs(ey) < 0.07);
     if (rr < 1.12) { BG[i] = C(GREEN, 1 + day * 1.5); set(i, H ? '#' : ' ', C(WHITE, Math.max(L * 1.5, 8))); paintSettledSnow(i, wx, wy, L, 0.55,0,h); return; }
   }
-  if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
+  if (STY[idx(mx, my)] === 6) { // a frame's top deck: ribbed steel decking, rebar laid out for the next pour
+    const bar = fract(wx * 5) < 0.06 || fract(wy * 5) < 0.06;
+    BG[i] = bgAt(GRAY, 1 + day * 2); set(i, bar ? '+' : fract(wy * 14) < 0.2 ? '=' : ' ', C(bar ? BRICK : GRAY, L * (bar ? 0.8 : 0.5)));
+  } else if (STY[idx(mx, my)] === 24) { BG[i] = C(GREEN, 1.5 + day * 2); set(i, hash(mx, my, 883) > 0.7 ? '^' : ':', C(hash(mx, my, 884) > 0.45 ? GREEN : BRICK, L * 0.6)); }
   else set(i, hash(Math.floor(wx * 25), Math.floor(wy * 25), 61) > 0.7 ? ':' : '.', C(GRAY, L * 0.6));
+  if (spill) BG[i] = C(spill[1], 1 + spill[0] * 2);
   paintSettledSnow(i, wx, wy, L,1,0,h);
 }
 
@@ -10566,12 +10691,12 @@ const ROOMW = { cell: (x, y) => {
                 },
                 wall: roomWall, floor: roomFloor, sky: roomCeil, sprites: roomSprites };
 ROOM_FOR.COURIER='courier';
-const COURIER_DISPATCH_LINES=['ROOFTOP COURIERS','PARCEL DISPATCH','GREEN ROOF $80','SPEED BONUS $40'];
+const COURIER_DISPATCH_LINES=['ROOFTOP COURIERS','PARCEL DISPATCH','GREEN ROOF $80','SITE RUSH $100','NIGHT RUN $120'];
 function courierWall(i,u,uStep,z,d,mx,my,L) {
   if(my===0&&Math.abs(u-10.3)<2.4&&z>1.85&&z<2.85) {
     BG[i]=C(GREEN,2);
     for(const [row,text] of COURIER_DISPATCH_LINES.entries())
-      if(wallText(i,u,uStep,z,d,text,10.3,2.65-row*.2,.17,.16,C(STONE,L),C(GREEN,2)))return true;
+      if(wallText(i,u,uStep,z,d,text,10.3,(row<2?2.72:2.66)-row*.18,.15,.16,C(STONE,L),C(GREEN,2)))return true; // (the name, a gap, the routes)
     return set(i,' ',0),true;
   }
   BG[i]=C(BRICK,1+L*.12);
@@ -10604,36 +10729,74 @@ ROOM_DEFS.courier={grid:boxRoom(14,10,{'3,0':'E','4,0':'E'}),light:.9,floor:'woo
     props.push(BX(10,4,.3,.2,1,1.4,solid(STONE,{top:'='})),BX(11.2,4,.25,.18,1,1.3,solid(BRICK)));
     return props;
   }};
+const courierRecipientNear=()=>mode==='roof'&&COURIER_ROUTES.find(r=>near(px,py,r.recipient.x,r.recipient.y)<.3&&Math.abs(roofH-r.recipient.z)<.1);
+// Nico plays on after his guitar comes back, for the rest of that night.
+let courierEncore=false;
+function stepCourierEncore() { if(courierEncore&&tod>=4&&tod<20)courierEncore=false; }
+// How loud his playing is where you stand: carried across the roofs, gone indoors.
+const courierSerenade=()=>courierEncore&&mode!=='room'?clamp(1-near(px,py,COURIER_NICO.x,COURIER_NICO.y)/3,0,1)**1.5:0;
 function courierPrompt() {
   if(mode==='ladder')return 'W/S: climb up/down | E or Space: let go';
-  if(courierAtRecipient())return `E: deliver the gardening supplies to ${COURIER_GARDEN.name}`;
+  if(courierAtRecipient()){const r=courierRoute();return `E: deliver the ${r.parcel} to ${r.recipient.name}`;}
   const ladder=courierLadderNear();
-  if(ladder)return `E: grab the ladder (${ladder.end==='bottom'?'up to the roof':'down to the street'})`;
-  if(mode==='room'&&room.kind==='courier'&&nearKeeper())
-    return courierJob?'E: ask the dispatcher about your delivery':`E: take a rooftop delivery ($80 + up to $40 speed bonus)`;
+  if(ladder)return `E: grab the ladder (${ladder.end==='bottom'?ladder.bottom[2]?'climb up':'up to the roof':ladder.bottom[2]?'climb down':'down to the street'})`;
+  if(mode==='room'&&room.kind==='courier'&&nearKeeper()) {
+    if(courierJob)return 'E: ask the dispatcher about your delivery';
+    const open=COURIER_ROUTES.filter(courierUnlocked);
+    return open.length>1?'E: read the dispatch board':`E: take a rooftop delivery ($${open[0].pay} + up to $${open[0].bonus} speed bonus)`;
+  }
   return '';
 }
 function courierUse() {
   if(mode==='ladder'){leaveCourierLadder();return true;}
   if(courierAtRecipient()) {
     const result=finishCourier();saveGame();
-    say(`"Perfect! The tomatoes were getting impatient." ${COURIER_GARDEN.name} takes the supplies. Delivery: ${fmt$(result.pay)}${result.bonus?` (${fmt$(result.bonus)} speed bonus)`:''}.`,6);
+    if(result.route.id==='night')courierEncore=true;
+    say(`${result.route.thanks} Delivery: ${fmt$(result.pay)}${result.bonus?` (${fmt$(result.bonus)} speed bonus)`:result.street?' (no speed bonus: you came by the street)':''}.`,6);
     return true;
   }
   const nearby=courierLadderNear();
   if(nearby){grabCourierLadder(nearby);return true;}
   if(mode==='room'&&room.kind==='courier'&&nearKeeper()) {
-    if(courierJob)say(`"${courierRoute().directions} If you fall, use the apartment elevators to get back up. The parcel's safe in your courier bag."`,8);
+    if(courierJob)say(`"${courierRoute().directions} If you fall, use the apartment elevators to get back up. The parcel's safe in your courier bag, but the speed bonus is only for couriers who stay on the roofs."`,8);
     else {
-      startCourier();saveGame();
-      say(`"Gardening supplies for ${COURIER_GARDEN.name}. Eighty dollars, plus a speed bonus. Stairs are on your left." The parcel goes in your courier bag, leaving your hands free.`,8);
+      const open=COURIER_ROUTES.filter(courierUnlocked);
+      if(open.length>1)openCourierBoard();else takeCourier(open[0]);
     }
     return true;
   }
-  if(mode==='roof'&&near(px,py,COURIER_GARDEN.x,COURIER_GARDEN.y)<.3&&Math.abs(roofH-COURIER_GARDEN.z)<.1) {
-    say('"The roof gets the best sun. Want a tomato?"',4);return true;
-  }
+  const chat=courierRecipientNear();
+  if(chat){say(chat.id==='night'&&courierEncore?"Nico nods along to his own playing and doesn't stop.":chat.chat,4);return true;}
   return false;
+}
+function takeCourier(route) {
+  if(!startCourier(route.id))return;
+  saveGame();
+  say(`"${route.offer}" The parcel goes in your courier bag, leaving your hands free.`,8);
+}
+// The dispatch board appears once a second route is open: every route, its pay and your best time.
+let courierBoardEl=null;
+function openCourierBoard() {
+  courierBoardEl=courierBoardEl||panel('courier-board');
+  const rows_=COURIER_ROUTES.map((r,k)=>{
+    const unlocked=courierUnlocked(r),open=unlocked&&courierInHours(r),best=courierRecords.best[r.id],after=COURIER_ROUTES.find(o=>o.id===r.unlock);
+    const value=!unlocked?`after ${after.title}`:!open?`after ${r.hours[0]-12}pm`:`$${r.pay} + $${r.bonus}${best!=null?` &middot; best ${best.toFixed(1)}s`:''}`;
+    return `<button class="item" data-route="${r.id}" ${open?'':'disabled'}><span class="k">${k+1}</span><span>${r.title}: ${r.parcel} for ${r.recipient.name}</span><span class="lead"></span><span class="v">${value}</span></button>`;
+  }).join('');
+  showPanel(courierBoardEl,`<h1>Dispatch board</h1><p class="sub">${COURIER_COMPANY} &middot; ${courierRecords.trips} delivered</p>${rows_}<p class="hint">1-${COURIER_ROUTES.length} take a parcel &middot; E / Esc close</p>`);
+  courierBoardEl.onclick=e=>{const b=e.target.closest('[data-route]');if(b)chooseCourier(b.dataset.route);};
+}
+function chooseCourier(id) {
+  const route=COURIER_ROUTES.find(r=>r.id===id);
+  if(!route||!courierUnlocked(route)||!courierInHours(route))return;
+  hidePanel(courierBoardEl);takeCourier(route);
+}
+function courierBoardKey(e) {
+  if(!courierBoardEl||courierBoardEl.style.display!=='flex')return false;
+  const n=/^Digit([1-9])$/.exec(e.code);
+  if(e.code==='Escape'||e.code==='KeyE')hidePanel(courierBoardEl);
+  else if(n&&COURIER_ROUTES[n[1]-1])chooseCourier(COURIER_ROUTES[n[1]-1].id);
+  return true;
 }
 function grabCourierLadder({ladder,end}) {
   const p=ladder[end];climbing={ladder,z:p[2]};
@@ -10641,11 +10804,12 @@ function grabCourierLadder({ladder,end}) {
   px=ladder.x-Math.cos(ladder.yaw)*.08;py=ladder.y-Math.sin(ladder.yaw)*.08;a=ladder.yaw;pitch=0;
   say('W/S to climb. E or Space to let go.',3);
 }
+// Either end may be on a roof: the site's ladder runs from its scaffold up to the deck.
 function finishCourierClimb(end) {
   const {ladder}=climbing,p=ladder[end];climbing=null;
   [px,py]=p;body.z=body.vz=body.peak=0;body.mx=body.my=0;body.groundMode=null;
-  room=null;roofH=p[2];roofLot=new Set();mode=end==='top'?'roof':'walk';
-  if(mode==='roof')notePoliceRoofEntry(px,py,[ladder.bottom[0],ladder.bottom[1],ladder.yaw]);
+  room=null;roofH=p[2];roofLot=new Set();mode=p[2]?'roof':'walk';
+  if(end==='top'&&!ladder.bottom[2])notePoliceRoofEntry(px,py,[ladder.bottom[0],ladder.bottom[1],ladder.yaw]);
 }
 function stepCourierLadder(dt) {
   if(!climbing)return;
@@ -10666,14 +10830,21 @@ function leaveCourierLadder() {
 }
 function courierText() {
   const r=courierRoute();if(!r)return '';
-  return `COURIER: gardening supplies → ${r.recipient.name}'s roof garden | base $80 | speed bonus ${fmt$(courierBonus(r,courierJob.took))}`;
+  return `COURIER: ${r.parcel} → ${r.recipient.name}'s ${r.label.toLowerCase()} | base $${r.pay} | speed bonus ${courierJob.street?'lost':fmt$(courierJobBonus())}`;
 }
-const COURIER_BAG_ART=['\\', ' \\', ' .\\----.', '/==[ ]==\\', '|  >[]  |', '| SEEDS |', '|_______|', ' \\_____/'];
+// The bag shows what's in it: seed packets, a drawings tube, or a guitar's head sticking out of the flap.
+const COURIER_BAG_NECK={site:[1,3],night:[1,3]};
+const COURIER_BAG_ART={
+  night:[' o=o', ' o|o', '  |-----.', '/=|=====\\', '|  >[]  |', '|FRAGILE|', '|_______|', ' \\_____/'],
+  garden:['\\', ' \\', ' .\\----.', '/==[ ]==\\', '|  >[]  |', '| SEEDS |', '|_______|', ' \\_____/'],
+  site:['  _', ' |=|', ' |=|----.', '/=|=|===\\', '|  >[]  |', '| PLANS |', '|_______|', ' \\_____/']};
 function drawCourierBag() {
   if(!courierJob||!onFootMode()&&mode!=='ladder')return;
   const size=clamp(Math.round(cv.height/65),8,15),sway=climbing?Math.sin(T*5)*2:Math.sin(T*7)*Math.min(3,Math.hypot(body.mx||0,body.my||0)*4);
+  const neck=COURIER_BAG_NECK[courierJob.id];
   g.font=size+'px monospace';
-  artText(COURIER_BAG_ART,-2+sway,cv.height-size*7.3,size,ch=>C(ch==='['||ch===']'?STONE:GREEN,13));
+  artText(COURIER_BAG_ART[courierJob.id],-2+sway,cv.height-size*7.3,size,(ch,row,k)=>
+    neck&&row<4&&k>=neck[0]&&k<=neck[1]?C(STONE,13):C(ch==='['||ch===']'?STONE:GREEN,13));
   g.font=FS+'px monospace';
 }
 function courierBox(kind,x,y,hl,hw,z0,z1,col=GRAY,block=true) {
@@ -10737,29 +10908,259 @@ for(const x of [198.3,198.5])courierBox('trellis-post',x,101.4,.007,.007,1.4,1.6
 for(const z of [1.5,1.58,1.66])courierBox('trellis',198.4,101.4,.11,.004,z,z+.005,BRICK,false);
 const oldPrintSign=courierBox('print-sign',177.98,101.5,.35,.008,.65,.82,GREEN,false);
 oldPrintSign.c=0;oldPrintSign.s=1;
-const COURIER_SIGNS=[[179.5,102.35,'v'],[179.5,106.35,'>'],[182.5,107.4,'v'],[183.5,108.1,'v'],
-  [183.55,109.5,'>'],[186.5,109.35,'^'],[186.5,107.35,'>'],
-  [188.2,106.85,'>'],[190.7,107.4,'>'],[191.4,107.4,'^'],[191.4,103.4,'^'],
-  [191.4,101.25,'>'],[194.35,101.55,'v'],[194.32,102.4,'>'],[197.65,102.4,'>'],
-  [182.8,106.52,'>',true],[184.52,106.52,'>',true],[191.6,102.35,'>',true],[192.73,102.35,'>',true]]
-  .map(([x,y,arrow,shortcut=false])=>
-    ({x,y,arrow,shortcut,z:Math.max(courierMapHeight(x,y),courierRoofHeight(x,y))+.002}));
+
+// ---- Topping Out. Rods are tubes and cables: always one character thick, whatever the distance. Lattices are
+// trusses: one box whose struts are tested on both the near and far faces, so you see through the steelwork.
+const COURIER_RODS=[],COURIER_LATTICE=[],COURIER_BULBS=[];
+function courierRod(kind,a,b,col=GRAY,r=.004) {
+  const o={kind,x:(a[0]+b[0])/2,y:(a[1]+b[1])/2,a,b,col,r};COURIER_RODS.push(o);return o;
+}
+function courierLattice(kind,x,y,alongY,hl,hw,z0,z1,panel,col=YEL) {
+  const o={kind,x,y,c:alongY?0:1,s:alongY?1:0,hl,hw,z0,z1,panel,col};COURIER_LATTICE.push(o);return o;
+}
+// A level guardrail along one edge: top rail, knee rail and posts, like the service bridges.
+function courierRailRun(x0,y0,x1,y1,z,col=GRAY) {
+  const vertical=x0===x1,length=vertical?y1-y0:x1-x0,x=(x0+x1)/2,y=(y0+y1)/2;
+  courierBox('rail',x,y,vertical?.003:length/2,vertical?length/2:.003,z+.099,z+.105,col);
+  courierBox('knee',x,y,vertical?.002:length/2,vertical?length/2:.002,z+.05,z+.054,col,false);
+  const count=Math.max(1,Math.ceil(length/.32));
+  for(let k=0;k<=count;k++)courierBox('post',vertical?x:x0+length*k/count,vertical?y0+length*k/count:y,.004,.004,z,z+.105,col);
+}
+{
+  const site=COURIER_SITE.h,hang=courierHang,staging=courierMapHeight(183,111),office=courierOfficeRoof;
+  // The staging roof: the crew rents a neighbour's roof for materials.
+  courierBox('pallet',183.35,110.95,.13,.1,staging,staging+.015,BRICK);
+  courierBox('bags',183.35,110.95,.12,.09,staging+.015,staging+.075,STONE);
+  courierBox('rebar',183.2,111.6,.32,.025,staging,staging+.025,BRICK);
+  // Work platforms: open at both ends, railed along their sides.
+  for(const p of COURIER_PLATFORMS)for(const side of [-1,1])
+    courierRailRun(p.x+side*(p.hl+.006),p.y-p.hw,p.x+side*(p.hl+.006),p.y+p.hw,hang);
+  // The scaffold's street rail stops where the hoist bay opens off it; the bay is railed all round but its end.
+  courierRailRun(181.75,113.734,184.55,113.734,hang);
+  courierRailRun(185.006,113.74,185.006,113.98,hang);
+  courierRailRun(184.55,113.514,185.45,113.514,hang);
+  courierRailRun(184.544,113.52,184.544,113.74,hang);
+  courierRailRun(185,113.746,185.45,113.746,hang);
+  // Brackets bolt the scaffold to the frame. None reach the neighbour's bays and cornice west of x=182.
+  for(const x of [182.1,182.75,183.3,184.1,184.8]) {
+    courierRod('bracket',[x,113.745,hang-.012],[x,113.995,hang-.012]);
+    courierRod('bracket',[x,113.75,hang-.012],[x,113.995,hang-.24]);
+  }
+  courierRod('bracket',[185.42,113.53,hang-.012],[184.96,113.995,hang-.3]);
+  courierRod('bracket',[184.6,113.53,hang-.012],[184.6,113.995,hang-.26]);
+  // Edge protection round the deck, open only at the ladder head and the walkway.
+  for(const [x0,y0,x1,y1] of [[182.02,114.02,183.43,114.02],[183.67,114.02,184.98,114.02],[184.98,114.02,184.98,116.384],
+    [184.98,116.516,184.98,116.98],[182.02,116.98,184.98,116.98],[182.02,114.02,182.02,116.98]])
+    courierRailRun(x0,y0,x1,y1,site,YEL);
+  // The walkway's rails meet the deck's at its gap; the landing closes round the plank and the stair head.
+  courierRailRun(184.98,116.384,186.18,116.384,site);
+  courierRailRun(184.98,116.516,186.18,116.516,site);
+  courierRailRun(186.18,116.576,186.486,116.576,site);
+  courierRailRun(186.486,116.27,186.486,116.576,site);
+  courierRailRun(186.174,116.27,186.174,116.384,site);
+  courierRailRun(186.174,116.516,186.174,116.576,site);
+  courierLattice('truss',185.59,116.45,false,.59,.06,site-.08,site-.012,.1,GRAY);
+  for(const x of [186.2,186.46])for(const y of [116.29,116.55])courierRod('leg',[x,y,site-.012],[x,y,office]);
+  courierRod('brace',[186.2,116.29,site-.012],[186.2,116.55,office]);courierRod('brace',[186.46,116.55,site-.012],[186.46,116.29,office]);
+  // Materials on the deck, clear of the walk from the ladder to the walkway.
+  courierBox('formwork',183.15,116.55,.22,.16,site,site+.06,BRICK);
+  courierBox('rebar',182.75,114.5,.025,.3,site,site+.025,BRICK);
+  courierBox('skip',183.9,116.6,.08,.08,site,site+.1,GRAY);
+  // The tower crane: a climbing mast on the deck, its jib parked over the street with the platforms on the hook.
+  const mx=182.55,my=115.95,top=3.14,jib=3.2;
+  courierBox('footing',mx,my,.12,.12,site,site+.03,STONE);
+  courierLattice('mast',mx,my,false,.07,.07,site+.03,top,.14);
+  courierBox('turntable',mx,my,.095,.095,top,jib,YEL);
+  courierLattice('truss',mx,113.94,true,1.94,.05,jib,jib+.1,.12);
+  courierLattice('truss',mx,116.635,true,.615,.055,jib,jib+.08,.12);
+  courierBox('counterweight',mx,117.02,.07,.17,jib-.14,jib,GRAY,false);
+  courierBox('cab',mx+.13,115.8,.06,.06,jib-.13,jib-.005,YEL,false);
+  const apex=[mx,my,jib+.42];
+  for(const x of [mx-.07,mx+.07])for(const y of [my-.07,my+.07])courierRod('head',[x,y,jib+.1],apex,YEL);
+  for(const x of [mx-.04,mx+.04])courierRod('pendant',apex,[x,113.3,jib+.1],GRAY,.002);
+  courierRod('pendant',apex,[mx,117.2,jib+.08],GRAY,.002);
+  COURIER_SITE.beacons=[[mx,my,apex[2]],[mx,112.03,jib+.1]];
+  // Trolley, hoist ropes, hook block, slings, lifting frame, and the hangers down to each platform's corners.
+  const hookY=112.92,frame=site+.03;
+  courierBox('trolley',mx,hookY,.055,.05,jib-.03,jib,YEL,false);
+  for(const x of [mx-.015,mx+.015])courierRod('rope',[x,hookY,site+.37],[x,hookY,jib-.03],GRAY,.002);
+  courierBox('hook',mx,hookY,.025,.025,site+.3,site+.37,YEL,false);
+  for(const x of [182.33,182.77])for(const y of [112.32,113.52])courierRod('sling',[mx,hookY,site+.3],[x,y,frame+.03],GRAY,.002);
+  for(const x of [182.33,182.77])courierRod('frame',[x,112.32,frame],[x,113.52,frame],YEL,.008);
+  for(const p of COURIER_PLATFORMS)for(const y of [p.y-p.hw,p.y+p.hw]) {
+    courierRod('frame',[182.33,y,frame],[182.77,y,frame],YEL,.008);
+    for(const x of [182.33,182.77])courierRod('hanger',[x,y,hang],[x,y,frame],GRAY,.002);
+  }
+  // The site office: a cabin craned onto the roof next door, and the foreman waiting at its step.
+  courierBox('cabin',187.2,114.33,.55,.175,office,office+.27,WHITE);
+}
+// ---- Last Set. The gantry's truss carries the catwalk; the arched LATE NITE sign hangs beneath it over the street.
+{
+  const A=COURIER_ARCH,deck=courierArchDeck,back=courierBackDeck,S=COURIER_ARCADE_SIGN;
+  courierLattice('truss',A.x,(A.y0+A.y1)/2,true,(A.y1-A.y0)/2,.07,A.z0,A.z1-.002,.12,GRAY);
+  // Bearings behind each cornice: tall on No.385's lower roof, pads on No.851's.
+  for(const x of [A.x-.05,A.x+.05]) {
+    courierBox('bearing',x,A.y0+.06,.015,.04,courierBacks,A.z0,GRAY,false);
+    courierBox('bearing',x,A.y1-.06,.015,.04,courierMapHeight(A.x,A.y1),A.z0,GRAY,false);
+  }
+  courierBox('arch-sign',A.x,(A.y0+A.y1)/2,.012,.8,1,A.z0,MAG,false);
+  // The walkway on over No.851's roof stands on legs; it and its stairs are railed both sides.
+  for(const y of [114.7,115.3,115.88])for(const x of [178.41,178.59])courierRod('leg',[x,y,deck-.012],[x,y,courierMapHeight(x,y)]);
+  for(const x of [178.384,178.616])courierRailRun(x,A.y0,x,115.9,deck);
+  for(const x of [178.384,178.616])courierRailRun(x,116.9,x,117.2,back);
+  // The ARCADE sign stands on the frame that carries its catwalk, the letters facing up the side street.
+  courierBox('arcade-sign',(S.x0+S.x1)/2,S.y+.045,(S.x1-S.x0)/2,.025,S.z0,S.z1,MAG);
+  courierLattice('truss',179.07,122.485,false,.88,.115,courierArcadeRoof,back-.012,.12,GRAY);
+  courierRailRun(178.41,122.394,178.6,122.394,back);
+  courierRailRun(178.184,122.4,178.184,122.62,back);courierRailRun(179.956,122.4,179.956,122.62,back);
+  courierRailRun(178.19,122.626,179.62,122.626,back);courierRailRun(179.84,122.626,179.95,122.626,back);
+  // Nico's corner of the bar roof: the crate he sits on to play, under a sagging string of bulbs between two poles.
+  courierBox('crate',180.98,123.42,.05,.05,COURIER_NICO.z,COURIER_NICO.z+.045,BRICK);
+  const bar=COURIER_NICO.z,poles=[[180.2,122.25],[181.8,122.25],[181.8,123.85]];
+  for(const [x,y] of poles)courierBox('pole',x,y,.006,.006,bar,bar+.24,GRAY);
+  for(let k=0;k+1<poles.length;k++) {
+    const [ax,ay]=poles[k],[bx,by]=poles[k+1],n=Math.round(Math.hypot(bx-ax,by-ay)/.1);
+    for(let j=0;j<n;j++) {
+      const f=j/n,g=(j+1)/n,sag=q=>bar+.235-.06*Math.sin(Math.PI*q);
+      courierRod('wire',[ax+(bx-ax)*f,ay+(by-ay)*f,sag(f)],[ax+(bx-ax)*g,ay+(by-ay)*g,sag(g)],GRAY,.0015);
+      if(j)COURIER_BULBS.push({x:ax+(bx-ax)*f,y:ay+(by-ay)*f,z:sag(f)-.012});
+    }
+  }
+}
+const COURIER_SIGNS=[
+  ['garden',179.5,102.35,'v'],['garden',179.5,106.35,'>'],['garden',182.5,107.4,'v'],['garden',183.5,108.1,'v'],
+  ['garden',183.55,109.5,'>'],['garden',186.5,109.35,'^'],['garden',186.5,107.35,'>'],
+  ['garden',188.2,106.85,'>'],['garden',190.7,107.4,'>'],['garden',191.4,107.4,'^'],['garden',191.4,103.4,'^'],
+  ['garden',191.4,101.25,'>'],['garden',194.35,101.55,'v'],['garden',194.32,102.4,'>'],['garden',197.65,102.4,'>'],
+  ['garden',182.8,106.52,'>',true],['garden',184.52,106.52,'>',true],['garden',191.6,102.35,'>',true],['garden',192.73,102.35,'>',true],
+  ['site',179.5,102.35,'v'],['site',179.5,106.35,'v'],['site',179.5,108.35,'v'],['site',180.6,110.5,'>'],
+  ['site',182.45,111.1,'v'],['site',182.55,112.6,'v'],['site',182.55,113.3,'v'],['site',183.1,113.86,'>'],
+  ['site',184.1,115.1,'v'],['site',184.6,116.45,'>'],['site',186.33,116.42,'^'],
+  ['site',183.95,113.86,'>',true],['site',185.15,113.63,'>',true],
+  ['night',179.5,102.35,'v'],['night',179.5,106.35,'v'],['night',178.5,108.5,'v'],['night',178.5,110.45,'v'],
+  ['night',178.5,113,'v'],['night',178.5,115.5,'v'],['night',178.4,118.3,'v'],['night',178.3,121,'v'],
+  ['night',178.9,122.51,'>'],['night',180.2,123.35,'>'],['night',179.35,118.7,'>',true],['night',180.55,119.72,'v',true]]
+  .map(([route,x,y,arrow,shortcut=false])=>
+    ({route,x,y,arrow,shortcut,z:Math.max(courierMapHeight(x,y),courierRoofHeight(x,y))+.002}));
 const courierSceneryB=bucketed(COURIER_SCENERY),courierSignsB=bucketed(COURIER_SIGNS),courierSurfacesB=bucketed(COURIER_SURFACES);
+const courierRodsB=bucketed(COURIER_RODS),courierLatticeB=bucketed(COURIER_LATTICE),courierBulbsB=bucketed(COURIER_BULBS);
 function courierRoofBlocked(x,y,z,pad=.025) {
   for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)for(const o of courierSceneryB[bi(Math.floor(x/8)+i,Math.floor(y/8)+j)])
     if(o.block&&z<o.z1-.015&&z+.16>o.z0&&courierContains(o,x,y,pad))return true;
   return false;
 }
+// The glyph a short world direction makes on screen at camera-relative (x, y, z): lines drawn along themselves.
+function courierGlyph(x,y,z,ux,uy,uz) {
+  const d0=dx*x+dy*y,d1=dx*(x+ux*.01)+dy*(y+uy*.01);
+  if(d0<.02||d1<.02)return Math.abs(uz)>Math.hypot(ux,uy)?'|':'-';
+  const sx=((-dy*(x+ux*.01)+dx*(y+uy*.01))/d1-(-dy*x+dx*y)/d0)*projX*cw;
+  const sy=((z-eye)/d0-(z+uz*.01-eye)/d1)*projY*FS;
+  const ax=Math.abs(sx),ay=Math.abs(sy);
+  if(ay>ax*2.4)return '|';
+  if(ax>ay*2.4)return '-';
+  return (sx>0)===(sy<0)?'/':'\\';
+}
+// Ray against a rod (a capsule along a-b): the nearest approach must fall within the rod or within half a screen cell.
+function rayRod(ox,oy,oz,rx,ry,rz,b) {
+  const ex=b.bx-b.ax,ey=b.by-b.ay,ez=b.bz-b.az,wx=ox-b.ax,wy=oy-b.ay,wz=oz-b.az;
+  const A=rx*rx+ry*ry+rz*rz,B=rx*ex+ry*ey+rz*ez,Cc=ex*ex+ey*ey+ez*ez,D=rx*wx+ry*wy+rz*wz,E=ex*wx+ey*wy+ez*wz;
+  const den=A*Cc-B*B;
+  let s=den>1e-12?clamp((A*E-B*D)/den,0,1):0;
+  let t=(B*s-D)/A;
+  if(den>1e-12){s=clamp((t*B+E)/Cc,0,1);t=(B*s-D)/A;}
+  if(t<.01)return -1;
+  const qx=wx+rx*t-ex*s,qy=wy+ry*t-ey*s,qz=wz+rz*t-ez*s;
+  const flat=Math.hypot(ex,ey)/Math.sqrt(Cc),reach=Math.max(b.r,t*(.5/projX+flat*(.5/projY-.5/projX)));
+  if(qx*qx+qy*qy+qz*qz>reach*reach)return -1;
+  HIT.face=0;HIT.u=b.ax+ex*s;HIT.v=b.ay+ey*s;HIT.w=b.az+ez*s;
+  return t;
+}
+// A truss's struts in its face coordinates: s across the face, w up it (mast), or along/up (jib).
+function latticeStrut(b,face,u,v,w,su,sw) {
+  const P=b.panel;
+  if(b.kind==='mast') {
+    if(face>4)return null;
+    const s=face<3?v:u,half=face<3?b.hw:b.hl,q=(w-b.z0)/P,n=Math.floor(q),p=q-n;
+    if(Math.abs(s)>half-su)return 'chord';
+    if(p*P<sw||(1-p)*P<sw)return 'rung';
+    const target=-half+2*half*(n&1?1-p:p);
+    return Math.abs(s-target)<su*1.6?(n&1?'down':'up'):null;
+  }
+  const q=(u+b.hl)/P,n=Math.floor(q),p=q-n;
+  if(face<3)return Math.abs(v)>b.hw-su||w<b.z0+sw||w>b.z1-sw?'chord':null;
+  if(face>4) {
+    if(Math.abs(v)>b.hw-su)return 'chord';
+    if(face===5)return null;
+    if(p*P<su||(1-p)*P<su)return 'rung';
+    return Math.abs(v-(-b.hw+2*b.hw*(n&1?1-p:p)))<su*1.6?(n&1?'down':'up'):null;
+  }
+  if(w<b.z0+sw||w>b.z1-sw)return 'chord';
+  if(p*P<su||(1-p)*P<su)return 'rung';
+  return Math.abs(w-(b.z0+(b.z1-b.z0)*(n&1?1-p:p)))<sw*1.6?(n&1?'down':'up'):null;
+}
+// Ray against a truss: the near face's steel, or failing that the far face's, seen through the gaps.
+function rayLattice(ox,oy,oz,rx,ry,rz,b) {
+  const qx=ox-b.x,qy=oy-b.y,lu=qx*b.c+qy*b.s,lv=-qx*b.s+qy*b.c,du=rx*b.c+ry*b.s,dv=-rx*b.s+ry*b.c;
+  let t0=-Infinity,t1=Infinity,f0=0,f1=0;
+  const slab=(o,d,lo,hi,fLo,fHi)=>{
+    if(Math.abs(d)<1e-12)return o>=lo&&o<=hi;
+    let a=(lo-o)/d,c=(hi-o)/d,fa=fLo,fc=fHi;
+    if(a>c){const tt=a;a=c;c=tt;fa=fHi;fc=fLo;}
+    if(a>t0){t0=a;f0=fa;}
+    if(c<t1){t1=c;f1=fc;}
+    return t0<=t1;
+  };
+  if(!slab(lu,du,-b.hl,b.hl,2,1)||!slab(lv,dv,-b.hw,b.hw,4,3)||!slab(oz,rz,b.z0,b.z1,6,5))return -1;
+  for(let k=0;k<2;k++) {
+    const t=k?t1:t0,face=k?f1:f0;
+    if(t<.01)continue;
+    const u=lu+du*t,v=lv+dv*t,w=oz+rz*t,part=latticeStrut(b,face,u,v,w,Math.max(.006,t*.5/projX),Math.max(.006,t*.5/projY));
+    if(part){HIT.face=face;HIT.u=u;HIT.v=v;HIT.w=w;HIT.part=part;return t;}
+  }
+  return -1;
+}
+// The direction a truss member runs, in world terms, for its glyph.
+function latticeDirection(b,part,face) {
+  const ux=b.c,uy=b.s,vx=-b.s,vy=b.c;
+  if(b.kind==='mast') {
+    if(part==='chord')return [0,0,1];
+    const [sx,sy]=face<3?[vx,vy]:[ux,uy],k=part==='up'?1:part==='down'?-1:0;
+    return k?[sx*k*2*b.hw,sy*k*2*b.hw,b.panel]:[sx,sy,0];
+  }
+  if(part==='rung')return face>4?[vx,vy,0]:[0,0,1];
+  if(part==='chord')return [ux,uy,0];
+  const k=part==='up'?1:-1;
+  return face>4?[ux*b.panel+vx*k*2*b.hw,uy*b.panel+vy*k*2*b.hw,0]:[ux*b.panel,uy*b.panel,k*(b.z1-b.z0)];
+}
+// Light where neon spills on the night route: never darker than the scene, brighter near the signs.
+function courierLit(L,x,y) { const spill=courierNeonSpill(x,y);return spill?Math.max(L,spill[0]*13):L; }
+const COURIER_SURFACE_COLOUR={platform:GRAY,catwalk:GRAY,scaffold:ORANGE,bay:ORANGE,plank:ORANGE};
 function drawCourier() {
   if(mode==='room')return;
   forNear(courierSurfacesB,o=>{
-    const [x,y]=R(o.x,o.y);
+    const [x,y]=R(o.x,o.y),boards=COURIER_SURFACE_COLOUR[o.kind]??null;
     drawBox({...o,x,y},(i,t,L)=>{
+      L=courierLit(L,o.x+HIT.u,o.y+HIT.v);
       const top=HIT.face===5,along=o.axis==='y'?HIT.v:HIT.u,across=o.axis==='y'?HIT.u:HIT.v;
       const half=o.axis==='y'?o.hl:o.hw;
       const edge=top&&Math.abs(across)>half-.012;
-      const seam=top&&fract((along+(o.axis==='y'?o.y:o.x))*12)<.09;
       const grain=hash(Math.floor((o.x+HIT.u)*45),Math.floor((o.y+HIT.v)*45),9);
+      if(o.kind==='condenser') {
+        // Two fans under round grilles on top; cooling fins down the sides.
+        BG[i]=C(GRAY,1.5+L*.25);
+        if(!top)return set(i,fract((o.axis==='y'?HIT.v:HIT.u)*45)<.3?'|':' ',C(GRAY,L*.7)),true;
+        const r=Math.min(Math.hypot(HIT.u+o.hl/2,HIT.v),Math.hypot(HIT.u-o.hl/2,HIT.v));
+        return set(i,r<.03?'o':r<.13?(fract(r*40)<.4?'@':' '):'=',C(GRAY,L*.85)),true;
+      }
+      if(boards!==null) {
+        // Steel grating on the platforms; scaffold boards laid along the run elsewhere.
+        const grate=o.kind==='platform'||o.kind==='catwalk',seam=top&&(grate?fract((along+(o.axis==='y'?o.y:o.x))*30)<.25||fract(across*30)<.25:fract(across*8/half)<.12);
+        BG[i]=C(boards,1.2+L*(top?.28:.16));
+        set(i,edge?'|':seam?(grate?'#':'='):grain>.9?'.':' ',C(top?boards:GRAY,L*(seam?.75:.85)));
+        if(top)paintSettledSnow(i,o.x+HIT.u,o.y+HIT.v,L*.7,1,0,HIT.w);
+        return true;
+      }
+      const seam=top&&fract((along+(o.axis==='y'?o.y:o.x))*12)<.09;
       const col=top&&!edge&&o.kind!=='hut'?BRICK:GRAY;
       BG[i]=C(col,1.5+L*(top?.32:.18));
       let ch=' ';
@@ -10774,6 +11175,7 @@ function drawCourier() {
   });
   forNear(courierSceneryB,o=>{
     const [x,y]=R(o.x,o.y);drawBox({...o,x,y},(i,t,L)=>{
+      L=courierLit(L,o.x+HIT.u,o.y+HIT.v);
       if(o.kind==='plant') {
         const leaf=hash(Math.floor((o.x+HIT.u)*65),Math.floor(HIT.w*65),Math.floor((o.y+HIT.v)*65));
         if(leaf<.4)return false;
@@ -10788,11 +11190,41 @@ function drawCourier() {
         }
         return set(i,' ',0),true;
       }
+      if(o.kind==='cabin')return courierCabin(i,t,L,o);
+      if(o.kind==='arch-sign')return courierArchSign(i,t,L,o,x,y);
+      if(o.kind==='arcade-sign')return courierArcadeSign(i,t,L,o);
+      if(o.kind==='cab'&&(HIT.face===1||HIT.face===4)&&HIT.w>o.z0+.04) {
+        BG[i]=C(CYAN,2+day);return set(i,':',C(CYAN,Math.max(L,night*12))),true;
+      }
       BG[i]=C(o.col,1.5+L*.35);
-      const ch=o.kind==='tank'?(fract(HIT.w*20)<.15?'=':'|'):o.kind==='laundry'?'~':HIT.face===5?'_':'|';
+      const ch=o.kind==='tank'?(fract(HIT.w*20)<.15?'=':'|'):o.kind==='laundry'?'~':o.kind==='counterweight'||o.kind==='bags'?'#':HIT.face===5?'_':'|';
       return set(i,ch,C(o.col,L)),true;
     },o.planes?rayBeveledBay:rayBox);
   });
+  forNear(courierLatticeB,o=>{
+    const [x,y]=R(o.x,o.y),b={...o,x,y};
+    drawBox(b,(i,t,L)=>{
+      const [ux,uy,uz]=latticeDirection(o,HIT.part,HIT.face);
+      set(i,courierGlyph(x+HIT.u*o.c-HIT.v*o.s,y+HIT.u*o.s+HIT.v*o.c,HIT.w,ux,uy,uz),C(o.col,courierLit(L,o.x,o.y)));
+      return true;
+    },rayLattice);
+  });
+  forNear(courierRodsB,o=>{
+    const [x,y]=R(o.x,o.y),ax=x+o.a[0]-o.x,ay=y+o.a[1]-o.y,bx=x+o.b[0]-o.x,by=y+o.b[1]-o.y;
+    const rod={x,y,c:1,s:0,hl:Math.abs(bx-ax)/2+.01,hw:Math.abs(by-ay)/2+.01,
+      z0:Math.min(o.a[2],o.b[2])-.01,z1:Math.max(o.a[2],o.b[2])+.01,ax,ay,az:o.a[2],bx,by,bz:o.b[2],r:o.r};
+    drawBox(rod,(i,t,L)=>set(i,courierGlyph(HIT.u,HIT.v,HIT.w,bx-ax,by-ay,o.b[2]-o.a[2]),C(o.col,courierLit(L,o.x,o.y)*.9)),rayRod);
+  });
+  // The bar roof's string of bulbs, warm at night and dead by day.
+  forNear(courierBulbsB,o=>{
+    // A point, one character wherever you see it from, like the rods.
+    const [x,y]=R(o.x,o.y),bulb={x,y,c:1,s:0,hl:.01,hw:.01,z0:o.z-.01,z1:o.z+.01,ax:x,ay:y,az:o.z,bx:x,by:y,bz:o.z-.002,r:.004};
+    drawBox(bulb,i=>(set(i,night>.25?'o':'.',C(night>.25?YEL:GRAY,night>.25?15:6)),true),rayRod);
+  });
+  // Aircraft warning lights on the crane head and jib tip.
+  if((night>.3||overcast>.5)&&fract(T*.7)<.5)for(const [bx,by,bz] of COURIER_SITE.beacons) {
+    const [x,y]=R(bx,by);drawBox({x,y,c:1,s:0,hl:.012,hw:.012,z0:bz,z1:bz+.024},i=>(set(i,'*',C(RED,15)),true));
+  }
   for(const ladder of COURIER_LADDERS) {
     const [x,y]=R(ladder.x,ladder.y);if(Math.hypot(x,y)>vis)continue;
     const c=-Math.sin(ladder.yaw),s=Math.cos(ladder.yaw),z0=ladder.bottom[2],z1=ladder.top[2]+.12;
@@ -10802,18 +11234,77 @@ function drawCourier() {
       BG[i]=C(GRAY,3+L*.3);return set(i,'=',C(STONE,L)),true;
     });
   }
-  // Paint on the deck, with fixed orientation rather than camera-facing floating labels.
+  // Paint on the deck, with fixed orientation rather than camera-facing floating labels. Only the parcel's route shows.
   forNear(courierSignsB,o=>{
+    if(o.route!==courierJob?.id)return;
     const [x,y]=R(o.x,o.y),{arrow}=o;
     drawBox({x,y,c:1,s:0,hl:.13,hw:.09,z0:o.z,z1:o.z+.002},(i,t,L)=>{
       if(HIT.face!==5)return false;
       const u=HIT.u/.13,v=HIT.v/.09;
       const across=arrow==='>'?v:u,forward=arrow==='^'?-v:arrow==='>'?u:v;
       if(!(Math.abs(across)<.09&&forward<.45 || forward>.15&&Math.abs(across)<(.95-forward)*.65))return false;
-      return set(i,'#',C(o.shortcut?CYAN:YEL,L*1.2)),true;
+      return set(i,'#',C(o.shortcut?CYAN:YEL,Math.max(L*1.2,night*7))),true; // (reflective paint: it catches any light)
     });
   });
   drawArt(...R(COURIER_GARDEN.x,COURIER_GARDEN.y),COURIER_GARDEN.z,.055,.175,ART.keeper,(ch,row,L)=>C(row<3?SKIN:GREEN,L));
+  drawArt(...R(COURIER_FOREMAN.x,COURIER_FOREMAN.y),COURIER_FOREMAN.z,.055,.175,ART.keeper,(ch,row,L)=>C(row<1?YEL:row<3?SKIN:row<6?ORANGE:BLUE,L));
+  // Nico paces until his guitar turns up, then sits on his crate and plays.
+  const nico=courierEncore?[180.98,123.42,COURIER_NICO.z+.045]:[COURIER_NICO.x+Math.sin(T*.9)*.08,COURIER_NICO.y,COURIER_NICO.z];
+  drawArt(...R(nico[0],nico[1]),nico[2],.055,courierEncore?.13:.175,ART.keeper,(ch,row,L)=>C(row<3?SKIN:row<6?MAG:BLACK,Math.max(L,night*7)));
+}
+// Big neon letters in the city's 3x5 font, centred on a sign face: s across the face (left to right as you read it),
+// w up it. Returns the letter's index where a lit stroke is, else -1.
+function courierNeonLetter(text,s,w,pixel,top) {
+  const col=Math.floor(s/pixel+(text.length*4-1)/2),row=Math.floor((top-w)/pixel),k=Math.floor(col/4);
+  return col>=0&&k<text.length&&glyphOn(text[k],col-k*4,row)?k:-1;
+}
+// LATE NITE: an arched panel under the gantry, lettered on both faces, its arch and top edged in tube.
+function courierArchSign(i,t,L,o,x,y) {
+  const v=HIT.v,base=o.z0+.14*(1-(v/o.hw)**2),lit=night>.25,glow=Math.max(L,night*15);
+  if(HIT.w<base-.002)return false;
+  if(HIT.face!==1&&HIT.face!==2) return BG[i]=C(GRAY,1+L*.15),set(i,'|',C(GRAY,L*.7)),true;
+  BG[i]=C(lit?BLACK:BRICK,1+L*.15);
+  // The tube follows the arch: at least a screen cell thick, drawn along its own slope.
+  if(HIT.w<base+Math.max(.018,t/projY)) {
+    const slope=-.28*v/o.hw**2;
+    return set(i,courierGlyph(x+HIT.u,y+v,HIT.w,0,1,slope),C(lit?CYAN:GRAY,lit?glow:L*.6)),true;
+  }
+  if(HIT.w>o.z1-.018)return set(i,'=',C(lit?CYAN:GRAY,lit?glow:L*.6)),true;
+  const k=courierNeonLetter('LATE NITE',HIT.face===1?-v:v,HIT.w,.041,o.z1-.045);
+  if(k<0)return set(i,' ',0),true;
+  // One tube on the blink, as there always is.
+  const dead=k===6&&fract(T*.37)<.12;
+  return set(i,'#',C(lit&&!dead?MAG:GRAY,lit&&!dead?glow:L*.6)),true;
+}
+// ARCADE: the storefront's chasing rainbow on the roof, bulbs round the edge; the back is plain steel.
+function courierArcadeSign(i,t,L,o) {
+  const lit=night>.25,glow=Math.max(L,night*15),chase=Math.floor(T*6);
+  if(HIT.face!==4) {
+    BG[i]=C(GRAY,1+L*.2);
+    return set(i,HIT.face===3&&fract(HIT.u*6)<.08?'|':HIT.face===5?'_':' ',C(GRAY,L*.7)),true;
+  }
+  BG[i]=C(lit?BLACK:BLUE,1+L*.15);
+  const edge=Math.abs(HIT.u)>o.hl-.03||HIT.w<o.z0+.03||HIT.w>o.z1-.03;
+  if(edge) {
+    const bulb=Math.floor((HIT.u+HIT.w)*30);
+    return set(i,bulb&1?'*':'.',C(lit&&(bulb+chase)&1?YEL:GRAY,lit?glow:L*.6)),true;
+  }
+  const k=courierNeonLetter('ARCADE',-HIT.u,HIT.w,.052,o.z1-.06);
+  if(k<0)return set(i,' ',0),true;
+  return set(i,'#',lit?C(NEON[(k+chase)&3],glow):C(GRAY,L*.6)),true;
+}
+// The site office: white panels with a door and a window facing the stairs, and the contractor's name.
+function courierCabin(i,t,L,o) {
+  const south=HIT.face===3,u=HIT.u,w=HIT.w-o.z0;
+  BG[i]=C(WHITE,1+L*.3);
+  if(HIT.face===5)return set(i,fract(u*20)<.15?'=':' ',C(GRAY,L*.7)),true;
+  if(south&&Math.abs(u+.35)<.06&&w<.2)return BG[i]=C(BLUE,1+L*.3),set(i,Math.abs(u+.35)>.05||w>.19?'|':Math.abs(u+.31)<.008&&Math.abs(w-.1)<.008?'o':' ',C(GRAY,L)),true;
+  if(south&&Math.abs(u-.05)<.15&&w>.1&&w<.2)return BG[i]=C(CYAN,2+day),set(i,Math.abs(u-.05)>.14||w<.105||w>.195?'=':':',C(CYAN,Math.max(L,night*10))),true;
+  if(south&&u>.25&&u<.5&&Math.abs(w-.17)<.03) {
+    const text='SITE',q=(u-.375)/.06+text.length/2,k=Math.floor(q);
+    if(k>=0&&k<text.length&&oneCell((fract(q)-.5)*.06,t/projX))return set(i,text[k],C(BLUE,Math.max(L,6))),true;
+  }
+  return set(i,fract(u*12)<.08||w<.012||w>.255?'|':' ',C(GRAY,L*.6)),true;
 }
 // French doors connect the room's metre coordinates to a balcony in the actual city, on its east facade.
 // Outdoors uses roof mode: the normal world renderer, weather, actors, sound and falling physics all apply.
@@ -13731,7 +14222,7 @@ function hud() {
   hudBottom = (lines.length + task_.length + 1) * FS + 14;
   wantedHud();
   if (job && mode === 'drive') jobArrow();
-  if(courierRoute()&&mode!=='room')jobArrow(courierRoute().recipient,{label:"ROOF GARDEN",radius:.3,stop:courierAtRecipient()?'DELIVER':'CLIMB UP'});
+  if(courierRoute()&&mode!=='room')jobArrow(courierRoute().recipient,{label:courierRoute().label,radius:.3,stop:courierAtRecipient()?'DELIVER':'CLIMB UP'});
   minimap();
   hotbar();
   g.font = FS + 'px monospace';
@@ -13954,9 +14445,9 @@ function interact() {
     if (cs) return startGame(cs, 'casino');
     if (aviaryKeeper()) { if (T - seedT < 12) return say('You\'ve still got seed. Hold still.', 2); if (!pay(1)) return say('"A dollar a cup."'); seedT = T; return say('You hold out a cup of seed. A dozen birds land on your arms at once.', 4); }
     if (useShotengai()) return;
-    if (nearElevator()) { // up to the roof, standing in the middle of the lot you walked into
-      const [mx, my] = room.cell, ox = (mod(mx, 8) - 2) % 3, oy = (mod(my, 8) - 2) % 3;
-      roofH = map[idx(mx, my)]; mode = 'roof'; px = mx - ox + 1.5; py = my - oy + 1.5; pitch = 0; roofLot = roofCells(mx, my);
+    if (nearElevator()) { // up to the roof, standing in the middle of the building you walked into (not the next one's)
+      const [mx, my] = room.cell, [cx, cy] = buildingMiddle(mx, my);
+      roofH = map[idx(cx, cy)]; mode = 'roof'; px = cx + 0.5; py = cy + 0.5; pitch = 0; roofLot = roofCells(cx, cy);
       notePoliceRoofEntry(px, py, room.ret);
       return say(`Roof, ${roofH * 10}m up`);
     }
@@ -14786,7 +15277,7 @@ function audioTick(dt) {
   const waterfall = mode === 'room' && room.kind === 'conservatory' ? clamp(1 - Math.hypot(px - CONS_POOL.x, py - 0.8) / 6.5, 0, 1) : 0;
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : 0,
-    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm' });
+    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
@@ -18180,12 +18671,14 @@ const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], 
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
-  if(courierRoofBlocked(x,y,base+body.z/10))return false;
-  const h = roofHeightAt(x, y);
+  const h = roofHeightAt(x, y), feet = base + body.z / 10;
+  if(courierRoofBlocked(x,y,feet)||h>feet&&courierRoofBlocked(x,y,h))return false; // (nor step up through a railing)
   if (roofFixed()) return h === roofH && !landmarkTowerBlocked(x,y,roofH);
   return h <= base + ROOF_STEP + body.z / 10;
 }
-const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
+// in the air, above a building. Falling, it counts if you were above the top a frame ago (frames are at most 0.05s):
+// moving over the edge then dropping past the top in the same frame must land you on it, not inside the building.
+const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z + Math.max(0, -body.vz) * 0.05; };
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
@@ -18388,6 +18881,7 @@ onkeydown = e => {
   if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
+  if (!e.repeat && courierBoardKey(e)) return relock(e); // the courier dispatch board
   if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
   if (e.code === 'Escape' && !e.repeat) return togglePause();
   if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
@@ -18576,7 +19070,8 @@ function loop(t) {
   if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   T += dt; msgT -= dt;
   env(dt);
-  stepCourier(dt);
+  if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
+  stepCourierEncore();
   if (!game && FS !== DETAIL[settings.detail]) { FS = DETAIL[settings.detail]; resize(); } // a game shrank the text to fit
   if (game) { // a cabinet or a shift has the screen; the world carries on behind it
     stepTraffic(dt, T); stepGame(dt); if (game) drawGame(); audioTick(dt);

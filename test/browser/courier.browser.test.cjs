@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
 const {chromium}=require('playwright');
-const {timeCourierRuns}=require('./helpers/courier-runs.cjs');
+const {timeCourierRuns,timeSiteRuns,timeNightRuns}=require('./helpers/courier-runs.cjs');
 async function withCity(fn) {
   const browser=await chromium.launch();
   try {
@@ -91,7 +91,7 @@ test('courier stairs, bridges and their supports clear existing walls and facade
       }
       return top>=bottom?[bottom,top]:null;
     }
-    const structure=[...COURIER_SURFACES,...COURIER_SCENERY.filter(o=>['post','rail','beam','bearing','stringer'].includes(o.kind))];
+    const structure=[...COURIER_SURFACES,...COURIER_LATTICE,...COURIER_SCENERY.filter(o=>['post','rail','knee','beam','bearing','stringer','footing','turntable','cab','counterweight','trolley','hook','formwork','skip','rebar','pallet','bags','cabin','arch-sign','arcade-sign','crate','pole'].includes(o.kind))];
     for(const deck of structure) {
       const nearby=fixtures.filter(o=>streetBoxesOverlap(deck,o,0)&&!(o.ownerCell!=null&&map[o.ownerCell]!==o.ownerHeight));
       const samplesX=Math.max(2,Math.ceil(deck.hl*2/.025)),samplesY=Math.max(2,Math.ceil(deck.hw*2/.025));
@@ -105,6 +105,15 @@ test('courier stairs, bridges and their supports clear existing walls and facade
         }
       }
     }
+    // Tubes, cables and brackets: sampled along their length against walls and facade details.
+    for(const rod of COURIER_RODS) {
+      const n=Math.ceil(Math.hypot(rod.b[0]-rod.a[0],rod.b[1]-rod.a[1],rod.b[2]-rod.a[2])/.01);
+      for(let k=0;k<=n;k++) {
+        const x=rod.a[0]+(rod.b[0]-rod.a[0])*k/n,y=rod.a[1]+(rod.b[1]-rod.a[1])*k/n,z=rod.a[2]+(rod.b[2]-rod.a[2])*k/n;
+        if(courierMapHeight(x,y)>z+1e-6)conflicts.push({kind:'wall',deck:rod.kind,x,y});
+        for(const o of fixtures){const f=streetBoxesOverlap({...rod,hl:.01,hw:.01,c:1,s:0},o,0)&&verticalInterval(o,x,y);if(f&&z>f[0]+1e-6&&z<f[1]-1e-6)conflicts.push({kind:o.kind,deck:rod.kind,x,y});}
+      }
+    }
     return conflicts;
   });
   assert.deepEqual(conflicts,[]);
@@ -113,12 +122,12 @@ test('courier stairs, bridges and their supports clear existing walls and facade
 test('the first route uses existing building entrances for recovery without redundant ladders',()=>withCity(async page=>{
   const r=await page.evaluate(()=>{
     startCourier();needs.health=100;
-    const ladders=COURIER_LADDERS.length,recovery=[];
-    // A surviving fall keeps the parcel, and each building can get you back to the route.
+    const ladders=COURIER_LADDERS.filter(l=>l.route==='garden').length,recovery=[];
+    // A surviving fall keeps the parcel, but not the speed bonus, and the depot and apartments get you back up.
     mode='walk';room=null;px=177.72;py=102.5;body.z=2.7;body.vz=0;body.peak=body.z;
-    for(let n=0;n<200;n++)stepBody(.01);
-    const survived={active:!!courierJob,health:needs.health,z:body.z};
-    for(const [x,y,yaw,kind] of [[177.72,102.5,0,'courier'],[183.8,105.7,Math.PI/2,'apts'],[199.4,104.28,-Math.PI/2,'apts']]) {
+    for(let n=0;n<200;n++){stepBody(.01);stepCourier(.01);}
+    const survived={active:!!courierJob,health:needs.health,z:body.z,street:courierJob.street,hud:courierText().includes('speed bonus lost')};
+    for(const [x,y,yaw,kind] of [[177.72,102.5,0,'courier'],[183.8,105.7,Math.PI/2,'apts']]) {
       mode='walk';room=null;px=x;py=y;a=yaw;pitch=0;body.z=body.vz=body.peak=0;render();interact();
       const entered=room?.kind;
       if(entered!==kind){recovery.push({entered});continue;}
@@ -127,14 +136,57 @@ test('the first route uses existing building entrances for recovery without redu
       interact();const down={mode,kind:room?.kind};
       recovery.push({entered,up,down});
     }
-    return {ladders,recovery,survived};
+    // Mara's building is her grocery now: no elevator up to the garden.
+    mode='walk';room=null;px=199.4;py=104.28;a=-Math.PI/2;pitch=0;render();interact();
+    const garden={entered:room?.kind,word:room?.word,elevator:!!room?.def.ex};
+    return {ladders,recovery,survived,garden};
   });
-  assert.equal(r.ladders,0);assert.equal(r.recovery.length,3);
-  assert.deepEqual(r.survived,{active:true,health:100,z:0});
+  assert.equal(r.ladders,0);assert.equal(r.recovery.length,2);
+  assert.deepEqual(r.survived,{active:true,health:100,z:0,street:true,hud:true});
   for(const [i,entry] of r.recovery.entries()) {
     const kind=i===0?'courier':'apts';
     assert.deepEqual(entry,{entered:kind,up:{mode:'roof',free:true,active:true},down:{mode:'room',kind}});
   }
+  assert.deepEqual(r.garden,{entered:'store',word:'GROCERY',elevator:false});
+}));
+
+test('a street run to a mid-route elevator still delivers, for base pay only',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>{
+    const draw=render;window.requestAnimationFrame=()=>0;render=()=>{};hud=()=>{};
+    for(const key of Object.keys(K))K[key]=false;K.KeyW=K.ShiftLeft=true;
+    courierRecords.best.garden=50;startCourier();needs.health=needs.food=needs.drink=100;
+    body.z=body.vz=body.peak=body.crouch=0;body.hop=1;body.buf=body.landedAt=-9;body.seat=null;body.groundMode=null;
+    mode='walk';room=null;[px,py]=COURIER_DEPOT.door;paused=false;
+    const legs=[],go=(x,y)=>{let n=0;while(near(px,py,x,y)>.018&&n++<3000){a=Math.atan2(y-py,x-px);loop(t0+10);}legs.push(near(px,py,x,y)<=.018);};
+    // Round to No.793, across the last bridge from the garden: the quickest elevator left on the route.
+    for(const [x,y] of [[177.2,102.5],[177.4,104.7],[188.3,104.7],[188.6,104.2]])go(x,y);
+    a=-Math.PI/2;pitch=0;render=draw;render();interact();render=()=>{};
+    const lobby=room?.word;go(room.def.ex,1.7);interact();
+    for(const [x,y] of [[189.6,102.3],[190.6,102.3],[191.4,101.25],[194.35,101.25],[194.35,102.4],[195.4,102.4],
+      [196.4,102.4],[197.5,102.4],[198.5,102.4],[199,102.1]])go(x,y);
+    K.KeyW=false;paused=true;
+    const seconds=courierJob.took,before=money;interact();
+    return {legs,lobby,seconds,paid:money-before,best:courierRecords.best.garden,health:needs.health};
+  });
+  assert.ok(r.legs.every(Boolean),JSON.stringify(r));assert.equal(r.lobby,'No.793');assert.equal(r.health,100);
+  assert.ok(r.seconds<40,'faster than any roof run: the rule, not the time, keeps it honest');
+  assert.equal(r.paid,80);assert.equal(r.best,50);
+}));
+
+test('elevators ride up their own building, and the site deck cannot be stepped onto through its rails',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>{
+    // No.756's east cell used to send riders to the 3-cell grid's middle: the steel frame's deck, past the ladder.
+    const flats=SHOP[idx(181,115)];
+    enterRoom('apts',{...flats,cell:[181,115],ret:[181.5,113.2,Math.PI/2]},[0,0,-Math.PI/2]);
+    px=room.def.ex;py=1.7;interact();
+    const ride={mode,building:SHOP[idx(Math.floor(px),Math.floor(py))]===flats,height:roofH,own:map[idx(181,115)]};
+    // The roof south of the frame is a walkable 3m below the deck; the edge protection stops you at the top.
+    mode='roof';room=null;roofH=map[idx(183,117)];roofLot=new Set();px=183.5;py=117.45;body.z=body.vz=0;
+    for(let n=0;n<200;n++){a=-Math.PI/2;move(0,-.005);stepBody(.01);stepRoof();}
+    return {ride,deck:{y:py,height:roofH,below:map[idx(183,117)]}};
+  });
+  assert.deepEqual(r.ride,{mode:'roof',building:true,height:r.ride.own,own:r.ride.own});
+  assert.ok(r.deck.y>116.95,JSON.stringify(r.deck));assert.equal(r.deck.height,r.deck.below);
 }));
 
 test('the ladder mechanic remains usable for future roofs without indoor access',()=>withCity(async page=>{
@@ -142,21 +194,21 @@ test('the ladder mechanic remains usable for future roofs without indoor access'
     courierLadder('test-only',[177.75,103.45,0],[178.35,103.45,COURIER_DEPOT.h],[177.97,103.45,0]);
     startCourier();const ladders=[];
     for(const ladder of COURIER_LADDERS) {
-      mode='walk';room=null;[px,py]=ladder.bottom;body.z=body.vz=body.peak=0;
+      mode=ladder.bottom[2]?'roof':'walk';roofH=ladder.bottom[2];roofLot=new Set();room=null;[px,py]=ladder.bottom;body.z=body.vz=body.peak=0;
       const available=!!courierLadderNear();interact();const grabbed=mode;
       K.KeyW=true;for(let n=0;n<150&&climbing;n++){stepCourierLadder(.05);stepBody(.05);}K.KeyW=false;
       const up={mode,x:px,y:py,h:roofH,free:roofFree(px,py)};
       interact();K.KeyS=true;for(let n=0;n<150&&climbing;n++)stepCourierLadder(.05);K.KeyS=false;
-      ladders.push({available,grabbed,up,down:mode,active:!!courierJob});
+      ladders.push({available,grabbed,up,down:mode,expectedDown:ladder.bottom[2]?'roof':'walk',active:!!courierJob});
     }
-    const l=COURIER_LADDERS[0];grabCourierLadder({ladder:l,end:'bottom'});K.KeyW=true;stepCourierLadder(1);K.KeyW=false;
+    const l=COURIER_LADDERS.find(l=>l.route==='test-only');grabCourierLadder({ladder:l,end:'bottom'});K.KeyW=true;stepCourierLadder(1);K.KeyW=false;
     leaveCourierLadder();const released={mode,z:body.z};needs.health=100;
     for(let n=0;n<200;n++)stepBody(.01);
     const survived={active:!!courierJob,health:needs.health,z:body.z};
     return {ladders,released,survived};
   });
-  assert.equal(r.ladders.length,1);
-  for(const l of r.ladders){assert.ok(l.available);assert.equal(l.grabbed,'ladder');assert.equal(l.up.mode,'roof');assert.equal(l.up.free,true);assert.equal(l.down,'walk');assert.equal(l.active,true);}
+  assert.equal(r.ladders.length,2,'the site ladder and the test ladder');
+  for(const l of r.ladders){assert.ok(l.available,JSON.stringify(r.ladders));assert.equal(l.grabbed,'ladder');assert.equal(l.up.mode,'roof');assert.equal(l.up.free,true);assert.equal(l.down,l.expectedDown);assert.equal(l.active,true);}
   assert.equal(r.released.mode,'walk');assert.ok(r.released.z>0);assert.equal(r.survived.active,true);assert.ok(r.survived.health>0);assert.equal(r.survived.z,0);
 }));
 
@@ -170,7 +222,7 @@ test('courier timer survives reload; hospital and arrests fail it even if the fi
     const confiscated=bustedEl.textContent.includes('parcel has been confiscated');bustedChoice('fine');
     const fine={active:courierJob,failed:courierRecords.failed,stars:wanted.stars};
     courierLadder('test-only',[177.75,103.45,0],[178.35,103.45,COURIER_DEPOT.h],[177.97,103.45,0]);
-    startCourier();grabCourierLadder({ladder:COURIER_LADDERS[0],end:'bottom'});stepCourierLadder(1);
+    startCourier();grabCourierLadder({ladder:COURIER_LADDERS.find(l=>l.route==='test-only'),end:'bottom'});stepCourierLadder(1);
     wanted.stars=1;openBusted();const caughtOnLadder={mode,climbing,active:courierJob};bustedChoice('jail');
     const jail={active:courierJob,kind:room.kind,failed:courierRecords.failed};
     return {restored,hospital,confiscated,fine,caughtOnLadder,jail};
@@ -179,4 +231,144 @@ test('courier timer survives reload; hospital and arrests fail it even if the fi
   assert.deepEqual(r.hospital,{active:null,kind:'hospital',saved:null});assert.equal(r.confiscated,true);
   assert.deepEqual(r.fine,{active:null,failed:2,stars:0});assert.deepEqual(r.caughtOnLadder,{mode:'walk',climbing:null,active:null});
   assert.deepEqual(r.jail,{active:null,kind:'jail',failed:3});
+}));
+
+test('a garden delivery opens the dispatch board, which hands out the site rush',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>{
+    mode='walk';room=null;[px,py]=COURIER_DEPOT.door;a=0;pitch=0;render();interact();
+    px=10.3;py=4.9;
+    loadCourier();const firstPrompt=promptText();chooseCourier('site');const locked=courierJob;
+    courierRecords.best.garden=41;render();hud();const prompt=promptText();interact();
+    const board={open:courierBoardEl.style.display,text:courierBoardEl.textContent,job:courierJob};
+    courierBoardKey({code:'Digit2'});
+    return {firstPrompt,locked,prompt,board,job:courierJob,closed:courierBoardEl.style.display,paused,
+      saved:JSON.parse(localStorage.getItem(SAVE_KEY)).courier.job};
+  });
+  assert.match(r.firstPrompt,/take a rooftop delivery \(\$80/);assert.equal(r.locked,null,'the rush stays locked on a fresh save');
+  assert.match(r.prompt,/dispatch board/);assert.equal(r.board.open,'flex');assert.equal(r.board.job,null);
+  assert.match(r.board.text,/Topping Out: stamped drawings for Teo/);assert.match(r.board.text,/best 41\.0s/);
+  assert.deepEqual(r.job,{id:'site',took:0});assert.equal(r.closed,'none');assert.equal(r.paused,false);
+  assert.deepEqual(r.saved,{id:'site',took:0});
+}));
+
+test('every site crossing works with real movement; the strafe off the hoist bay saves time and earns the full bonus',()=>withCity(async page=>{
+  const runs=await page.evaluate(timeSiteRuns);
+  for(const run of runs) {
+    assert.ok(run.legs.every(leg=>leg.reached),JSON.stringify(run));
+    assert.equal(run.recipient,true,JSON.stringify(run));assert.equal(run.health,100);
+  }
+  const [safe,shortcut]=runs;
+  assert.ok(safe.seconds-shortcut.seconds>3,JSON.stringify(runs));
+  assert.ok(shortcut.seconds<shortcut.fullUntil,JSON.stringify(runs));assert.equal(shortcut.bonus,50);
+  assert.ok(safe.seconds>safe.fullUntil,JSON.stringify(runs));assert.ok(safe.bonus<50);
+  const garden=(await page.evaluate(timeCourierRuns))[0].seconds;
+  assert.ok(safe.seconds<garden-10,'the rush is the shorter route');
+}));
+
+test('off the hoist bay a straight jump falls into the street; strafing right lands on the office roof',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>{
+    window.requestAnimationFrame=()=>0;render=()=>{};hud=()=>{};
+    const bay=courierHoistBay,x0=bay.x+bay.hl-.02,out=[];
+    for(const y of [bay.y-bay.hw+.03,bay.y,bay.y+bay.hw-.03])for(const strafe of [false,true]) {
+      for(const key of Object.keys(K))K[key]=false;
+      mode='roof';room=null;roofH=courierHang;roofLot=new Set();needs.health=100;
+      body.z=body.vz=body.peak=body.crouch=0;body.hop=1;body.buf=body.landedAt=-9;body.seat=null;body.groundMode=null;
+      px=x0-.3;py=y;a=0;K.KeyW=K.ShiftLeft=true;paused=false;
+      let n=0;while(px<x0&&n++<300)loop(t0+10);
+      jump();if(strafe){K.KeyW=false;K.KeyD=true;}
+      while(n++<800){loop(t0+10);if(mode==='walk'&&body.z<14||!(body.z>0||body.vz>0))break;}
+      paused=true;
+      out.push({strafe,mode,height:roofH,y:py});
+    }
+    return {out,office:courierOfficeRoof};
+  });
+  for(const t of r.out) {
+    if(t.strafe){assert.equal(t.mode,'roof',JSON.stringify(r));assert.equal(t.height,r.office);assert.ok(t.y>113.95,'with room to spare');}
+    else assert.equal(t.mode,'walk',JSON.stringify(r));
+  }
+}));
+
+test('the site has no indoor access: its ladder works both ways and the next-door roof leads back onto the scaffold',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>{
+    startCourier();courierJob=null;courierRecords.best.garden=40;startCourier('site');
+    const site=SHOP[idx(183,115)];
+    // Back on the route from the apartments next door, whose elevator a fallen courier can use.
+    mode='roof';room=null;roofH=map[idx(181,115)];roofLot=new Set();px=180.9;py=115.5;a=0;body.z=body.vz=0;
+    const legs=[];
+    for(const [x,y] of [[181.9,114.06],[182.1,113.88],[183.55,113.86]]) {
+      for(let n=0;n<400&&near(px,py,x,y)>.01;n++){a=Math.atan2(y-py,x-px);move(Math.cos(a)*.005,Math.sin(a)*.005);stepBody(.01);stepRoof();}
+      legs.push({reached:near(px,py,x,y)<=.011,mode,height:+roofH.toFixed(3)});
+    }
+    const ladder=COURIER_LADDERS.find(l=>l.route==='site');
+    interact();K.KeyW=true;for(let n=0;n<300&&climbing;n++)stepCourierLadder(.05);K.KeyW=false;
+    const up={mode,height:roofH,free:roofFree(px,py)};
+    interact();K.KeyS=true;for(let n=0;n<300&&climbing;n++)stepCourierLadder(.05);K.KeyS=false;
+    const down={mode,height:roofH};
+    return {site,legs,up,down,hang:courierHang,deck:COURIER_SITE.h,active:courierJob?.id};
+  });
+  assert.equal(r.site,null);
+  for(const leg of r.legs)assert.equal(leg.reached,true,JSON.stringify(r.legs));
+  assert.deepEqual(r.legs.at(-1),{reached:true,mode:'roof',height:+r.hang.toFixed(3)});
+  assert.deepEqual(r.up,{mode:'roof',height:r.deck,free:true});assert.deepEqual(r.down,{mode:'roof',height:r.hang});
+  assert.equal(r.active,'site');
+}));
+
+test('every night crossing works with real movement; leaping the side street saves time and earns the full bonus',()=>withCity(async page=>{
+  const runs=await page.evaluate(timeNightRuns);
+  for(const run of runs) {
+    assert.ok(run.legs.every(leg=>leg.reached),JSON.stringify(run));
+    assert.equal(run.recipient,true,JSON.stringify(run));assert.equal(run.street,false);
+  }
+  const [safe,leap]=runs;
+  assert.equal(safe.health,100);assert.ok(leap.health>80,'the drop onto the bar roof only stings');
+  assert.ok(safe.seconds-leap.seconds>5,JSON.stringify(runs));
+  assert.ok(leap.seconds<leap.fullUntil);assert.equal(leap.bonus,60);
+  assert.ok(safe.seconds>safe.fullUntil);assert.ok(safe.bonus<60);
+}));
+
+test('off the condenser, too slow drops into the side street outside the bar; fast enough lands on its roof, never inside it',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>{
+    window.requestAnimationFrame=()=>0;render=()=>{};hud=()=>{};
+    const out=[];
+    for(const x of [180.35,180.55,180.75])for(const hop of [1.3,1.5,1.6,1.65,1.7,1.75,1.85]) {
+      for(const k of Object.keys(K))K[k]=false;
+      mode='roof';room=null;roofH=map[idx(Math.floor(x),118)];roofLot=new Set();needs.health=100;
+      body.z=body.vz=body.peak=body.crouch=0;body.buf=body.landedAt=-9;body.seat=null;body.groundMode=null;
+      px=x;py=118.3;a=Math.PI/2;K.KeyW=K.ShiftLeft=true;paused=false;
+      let n=0;while(py<119.9&&n++<400){body.hop=hop;loop(t0+10);}
+      jump();
+      while(n++<900){body.hop=Math.max(body.hop,hop);loop(t0+10);if(!(body.z>0||body.vz>0))break;}
+      paused=true;
+      out.push({x,hop,mode,y:py,height:roofH});
+    }
+    return {out,bar:COURIER_NICO.z};
+  });
+  for(const t of r.out) {
+    if(t.mode==='roof')assert.equal(t.height,r.bar,JSON.stringify(t));
+    else assert.ok(t.y<122,'fell outside the wall, not into the building: '+JSON.stringify(t));
+    if(t.hop>=1.75)assert.equal(t.mode,'roof',JSON.stringify(t));
+    if(t.hop<=1.5)assert.equal(t.mode,'walk',JSON.stringify(t));
+  }
+}));
+
+test('the board holds the night run until 8pm; Nico plays after his delivery, heard across the roofs but not indoors, until morning',()=>withCity(async page=>{
+  const r=await page.evaluate(()=>{
+    courierRecords.best.garden=40;courierRecords.best.site=29;(0,eval)('tod=13');
+    mode='walk';room=null;[px,py]=COURIER_DEPOT.door;a=0;pitch=0;render();interact();px=10.3;py=4.9;interact();
+    const day={text:courierBoardEl.textContent};courierBoardKey({code:'Digit3'});day.job=courierJob;day.open=courierBoardEl.style.display;
+    courierBoardKey({code:'Escape'});(0,eval)('tod=22');interact();courierBoardKey({code:'Digit3'});
+    const job={...courierJob},bag=COURIER_BAG_ART.night.join('');
+    const route=courierRoute();mode='roof';room=null;body.z=0;[px,py,roofH]=[route.recipient.x,route.recipient.y,route.recipient.z];
+    const before=courierSerenade();interact();
+    const close=courierSerenade();
+    px+=2;const across=courierSerenade();px+=2;const far=courierSerenade();
+    mode='room';room={kind:'bar'};const indoors=courierSerenade();mode='roof';room=null;
+    (0,eval)('tod=3');stepCourierEncore();const late=courierEncore;(0,eval)('tod=5');stepCourierEncore();
+    return {day,job,bag,before,close,across,far,indoors,late,morning:courierEncore};
+  });
+  assert.match(r.day.text,/Last Set: repaired guitar for Nico/);assert.match(r.day.text,/after 8pm/);
+  assert.equal(r.day.job,null,'not offered by day');assert.equal(r.day.open,'flex');
+  assert.deepEqual(r.job,{id:'night',took:0});assert.match(r.bag,/FRAGILE/);
+  assert.equal(r.before,0);assert.ok(r.close>.9);assert.ok(r.across>0&&r.across<r.close);assert.equal(r.far,0);
+  assert.equal(r.indoors,0);assert.equal(r.late,true);assert.equal(r.morning,false);
 }));

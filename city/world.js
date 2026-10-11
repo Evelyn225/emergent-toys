@@ -476,6 +476,15 @@ function belleRoofHeight(x, y) {
   return b.h + 0.45 * clamp(inset / 0.65, 0, 1);
 }
 
+function buildingMiddle(mx, my) { // the cell of (mx, my)'s building nearest its middle
+  const sh = SHOP[idx(mx, my)], lot = [[mx, my]], seen = new Set([idx(mx, my)]);
+  for (let n = 0; n < lot.length && lot.length < 80; n++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const x = lot[n][0] + dx, y = lot[n][1] + dy, k = idx(x, y);
+    if (!seen.has(k) && SHOP[k] === sh) { seen.add(k); lot.push([x, y]); }
+  }
+  const cx = lot.reduce((s, c) => s + c[0], 0) / lot.length, cy = lot.reduce((s, c) => s + c[1], 0) / lot.length;
+  return lot.reduce((b, c) => Math.hypot(c[0] - cx, c[1] - cy) < Math.hypot(b[0] - cx, b[1] - cy) - 1e-9 ? c : b);
+}
 // ---- street names, for talk, directions and the HUD
 const ord = n => n + ((n % 100 / 10 | 0) === 1 ? 'TH' : [, 'ST', 'ND', 'RD'][n % 10] || 'TH');
 const ST_NAMES = ['', 'BAYSIDE DR', 'KING ST', 'CANAL ST', 'MERCER ST', '5TH ST', 'GRAND ST', 'MOTT ST', 'HOUSTON ST', '9TH ST',

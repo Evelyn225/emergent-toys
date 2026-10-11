@@ -74,9 +74,10 @@ function homeBalconyHeight(x, y) {
 }
 function restoreHomeCell(cell) {
   if (!Number.isInteger(cell) || cell < 0 || cell >= N * N) return -1;
-  if (SHOP[cell] && map[cell]) return cell;
   const x = cell % N, y = Math.floor(cell / N);
-  if (districtAt(x, y) !== 'belle') return -1;
+  if (SHOP[cell] && map[cell] && (SHOP[cell].kind === SHOP_APTS || districtAt(x, y) === 'belle')) return cell;
+  // A building since redeveloped (the courier routes turned some apartment blocks into a building site and shops): the nearest free flat.
+  if (districtAt(x, y) !== 'belle') return freeHomeNear(x + 0.5, y + 0.5);
   let best = -1, distance = Infinity;
   for (let my = Math.floor(y / 8) * 8; my < Math.floor(y / 8) * 8 + 8; my++) for (let mx = Math.floor(x / 8) * 8; mx < Math.floor(x / 8) * 8 + 8; mx++) {
     const k = idx(mx, my), d = Math.hypot(mx - x, my - y);

@@ -135,12 +135,14 @@ const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], 
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
-  if(courierRoofBlocked(x,y,base+body.z/10))return false;
-  const h = roofHeightAt(x, y);
+  const h = roofHeightAt(x, y), feet = base + body.z / 10;
+  if(courierRoofBlocked(x,y,feet)||h>feet&&courierRoofBlocked(x,y,h))return false; // (nor step up through a railing)
   if (roofFixed()) return h === roofH && !landmarkTowerBlocked(x,y,roofH);
   return h <= base + ROOF_STEP + body.z / 10;
 }
-const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z; }; // in the air, above a building
+// in the air, above a building. Falling, it counts if you were above the top a frame ago (frames are at most 0.05s):
+// moving over the edge then dropping past the top in the same frame must land you on it, not inside the building.
+const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z + Math.max(0, -body.vz) * 0.05; };
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
