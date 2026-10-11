@@ -10738,8 +10738,8 @@ const courierSerenade=()=>courierEncore&&mode!=='room'?clamp(1-near(px,py,COURIE
 function courierPrompt() {
   if(mode==='ladder')return 'W/S: climb up/down | E or Space: let go';
   if(courierAtRecipient()){const r=courierRoute();return `E: deliver the ${r.parcel} to ${r.recipient.name}`;}
-  const ladder=courierLadderNear();
-  if(ladder)return `E: grab the ladder (${ladder.end==='bottom'?ladder.bottom[2]?'climb up':'up to the roof':ladder.bottom[2]?'climb down':'down to the street'})`;
+  const grab=courierLadderNear();
+  if(grab){const {ladder,end}=grab;return `E: grab the ladder (${end==='bottom'?ladder.bottom[2]?'climb up':'up to the roof':ladder.bottom[2]?'climb down':'down to the street'})`;}
   if(mode==='room'&&room.kind==='courier'&&nearKeeper()) {
     if(courierJob)return 'E: ask the dispatcher about your delivery';
     const open=COURIER_ROUTES.filter(courierUnlocked);
@@ -10784,7 +10784,8 @@ function openCourierBoard() {
     return `<button class="item" data-route="${r.id}" ${open?'':'disabled'}><span class="k">${k+1}</span><span>${r.title}: ${r.parcel} for ${r.recipient.name}</span><span class="lead"></span><span class="v">${value}</span></button>`;
   }).join('');
   showPanel(courierBoardEl,`<h1>Dispatch board</h1><p class="sub">${COURIER_COMPANY} &middot; ${courierRecords.trips} delivered</p>${rows_}<p class="hint">1-${COURIER_ROUTES.length} take a parcel &middot; E / Esc close</p>`);
-  courierBoardEl.onclick=e=>{const b=e.target.closest('[data-route]');if(b)chooseCourier(b.dataset.route);};
+  // Picking with the mouse closes the board: take the mouse back, as the number keys do.
+  courierBoardEl.onclick=e=>{const b=e.target.closest('[data-route]');if(b){chooseCourier(b.dataset.route);relock(e);}};
 }
 function chooseCourier(id) {
   const route=COURIER_ROUTES.find(r=>r.id===id);
