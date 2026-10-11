@@ -195,11 +195,11 @@ test('the ladder mechanic remains usable for future roofs without indoor access'
     startCourier();const ladders=[];
     for(const ladder of COURIER_LADDERS) {
       mode=ladder.bottom[2]?'roof':'walk';roofH=ladder.bottom[2];roofLot=new Set();room=null;[px,py]=ladder.bottom;body.z=body.vz=body.peak=0;
-      const available=!!courierLadderNear();interact();const grabbed=mode;
+      const available=!!courierLadderNear(),prompt=courierPrompt();interact();const grabbed=mode;
       K.KeyW=true;for(let n=0;n<150&&climbing;n++){stepCourierLadder(.05);stepBody(.05);}K.KeyW=false;
       const up={mode,x:px,y:py,h:roofH,free:roofFree(px,py)};
       interact();K.KeyS=true;for(let n=0;n<150&&climbing;n++)stepCourierLadder(.05);K.KeyS=false;
-      ladders.push({available,grabbed,up,down:mode,expectedDown:ladder.bottom[2]?'roof':'walk',active:!!courierJob});
+      ladders.push({available,prompt,grabbed,up,down:mode,expectedDown:ladder.bottom[2]?'roof':'walk',active:!!courierJob});
     }
     const l=COURIER_LADDERS.find(l=>l.route==='test-only');grabCourierLadder({ladder:l,end:'bottom'});K.KeyW=true;stepCourierLadder(1);K.KeyW=false;
     leaveCourierLadder();const released={mode,z:body.z};needs.health=100;
@@ -208,7 +208,7 @@ test('the ladder mechanic remains usable for future roofs without indoor access'
     return {ladders,released,survived};
   });
   assert.equal(r.ladders.length,2,'the site ladder and the test ladder');
-  for(const l of r.ladders){assert.ok(l.available,JSON.stringify(r.ladders));assert.equal(l.grabbed,'ladder');assert.equal(l.up.mode,'roof');assert.equal(l.up.free,true);assert.equal(l.down,l.expectedDown);assert.equal(l.active,true);}
+  for(const l of r.ladders){assert.ok(l.available,JSON.stringify(r.ladders));assert.match(l.prompt,l.expectedDown==='roof'?/grab the ladder \(climb up\)/:/grab the ladder \(up to the roof\)/);assert.equal(l.grabbed,'ladder');assert.equal(l.up.mode,'roof');assert.equal(l.up.free,true);assert.equal(l.down,l.expectedDown);assert.equal(l.active,true);}
   assert.equal(r.released.mode,'walk');assert.ok(r.released.z>0);assert.equal(r.survived.active,true);assert.ok(r.survived.health>0);assert.equal(r.survived.z,0);
 }));
 
@@ -241,14 +241,20 @@ test('a garden delivery opens the dispatch board, which hands out the site rush'
     courierRecords.best.garden=41;render();hud();const prompt=promptText();interact();
     const board={open:courierBoardEl.style.display,text:courierBoardEl.textContent,job:courierJob};
     courierBoardKey({code:'Digit2'});
-    return {firstPrompt,locked,prompt,board,job:courierJob,closed:courierBoardEl.style.display,paused,
+    const result={firstPrompt,locked,prompt,board,job:courierJob,closed:courierBoardEl.style.display,paused,
       saved:JSON.parse(localStorage.getItem(SAVE_KEY)).courier.job};
+    // Taking it with a click closes the board too, and must take the mouse back.
+    courierJob=null;let relocked=0;lockMouse=()=>relocked++;interact();
+    courierBoardEl.querySelector('[data-route="site"]').click();
+    result.click={job:courierJob?.id,closed:courierBoardEl.style.display,relocked};
+    return result;
   });
   assert.match(r.firstPrompt,/take a rooftop delivery \(\$80/);assert.equal(r.locked,null,'the rush stays locked on a fresh save');
   assert.match(r.prompt,/dispatch board/);assert.equal(r.board.open,'flex');assert.equal(r.board.job,null);
   assert.match(r.board.text,/Topping Out: stamped drawings for Teo/);assert.match(r.board.text,/best 41\.0s/);
   assert.deepEqual(r.job,{id:'site',took:0});assert.equal(r.closed,'none');assert.equal(r.paused,false);
   assert.deepEqual(r.saved,{id:'site',took:0});
+  assert.deepEqual(r.click,{job:'site',closed:'none',relocked:1});
 }));
 
 test('every site crossing works with real movement; the strafe off the hoist bay saves time and earns the full bonus',()=>withCity(async page=>{
