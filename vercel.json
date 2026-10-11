@@ -21,6 +21,7 @@
     { "src": "site.webmanifest", "use": "@vercel/static" },
     { "src": "*.webmanifest", "use": "@vercel/static" },
     { "src": "robots.txt", "use": "@vercel/static" },
+    { "src": "PlantHUD-OFL.txt", "use": "@vercel/static" },
     { "src": "sitemap.xml", "use": "@vercel/static" }
   ],
   "routes": [

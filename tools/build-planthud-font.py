@@ -10,6 +10,7 @@ terminals and bar-end serifs like the reference overlay.
     python3 tools/build-planthud-font.py
 
 Writes PlantHUD.ttf, PlantHUD.woff2 and PlantHUD.woff to the repo root.
+The font is licensed under the SIL Open Font License 1.1 (PlantHUD-OFL.txt).
 """
 import os
 from fontTools.fontBuilder import FontBuilder
@@ -20,6 +21,10 @@ W = 8             # glyph width in pixels
 ADV = 10          # advance width of .notdef in pixels
 GAP = 3           # pixels between glyphs
 SPACE = 7         # advance width of the space in pixels
+VERSION = 1.1
+COPYRIGHT = "Copyright 2026 The PlantHUD Project Authors (https://evenet.fun/planthud)"
+LICENSE = ("This Font Software is licensed under the SIL Open Font License, Version 1.1. "
+           "This license is available with a FAQ at: https://openfontlicense.org")
 # Fixed advances (pixels): tabular digits, narrow cells for small punctuation.
 FIXED = dict({d: 11 for d in "0123456789"}, **{p: 8 for p in ".,:;"})
 CAP = 16          # cap height in pixels
@@ -1928,11 +1933,25 @@ def build(out_dir):
     fb.setupHorizontalMetrics(metrics)
     asc, desc = (CAP + 1) * PX, DESC * PX
     fb.setupHorizontalHeader(ascent=asc, descent=-desc)
-    fb.setupNameTable({"familyName": "PlantHUD", "styleName": "Regular",
-                       "version": "Version 1.000"})
+    fb.setupNameTable({
+        "copyright": COPYRIGHT,
+        "familyName": "PlantHUD",
+        "styleName": "Regular",
+        "uniqueFontIdentifier": f"{VERSION:.3f};NONE;PlantHUD-Regular",
+        "fullName": "PlantHUD Regular",
+        "version": f"Version {VERSION:.3f}",
+        "psName": "PlantHUD-Regular",
+        "manufacturer": "Eve Net",
+        "description": "A tall, condensed bitmap font for CRT-style HUD overlays.",
+        "vendorURL": "https://evenet.fun",
+        "licenseDescription": LICENSE,
+        "licenseInfoURL": "https://openfontlicense.org",
+    })
+    fb.font["head"].fontRevision = VERSION
     fb.setupOS2(sTypoAscender=asc, sTypoDescender=-desc, sTypoLineGap=0,
                 usWinAscent=asc, usWinDescent=desc,
-                sxHeight=10 * PX, sCapHeight=CAP * PX)
+                sxHeight=10 * PX, sCapHeight=CAP * PX,
+                fsType=0, achVendID="NONE")   # fsType 0: installable, as the OFL allows
     fb.setupPost()
     fb.font["post"].underlinePosition = -3 * PX
 
