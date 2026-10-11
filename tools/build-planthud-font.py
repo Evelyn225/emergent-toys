@@ -22,7 +22,7 @@ ADV = 10          # advance width of .notdef in pixels
 GAP = 3           # pixels between glyphs
 SPACE = 7         # advance width of the space in pixels
 VERSION = 1.1
-COPYRIGHT = "Copyright 2026 The PlantHUD Project Authors (https://evenet.fun/planthud)"
+COPYRIGHT = "Copyright 2026 Eve (https://evenet.fun/planthud)"
 LICENSE = ("This Font Software is licensed under the SIL Open Font License, Version 1.1. "
            "This license is available with a FAQ at: https://openfontlicense.org")
 # Fixed advances (pixels): tabular digits, narrow cells for small punctuation.
@@ -1941,7 +1941,8 @@ def build(out_dir):
         "fullName": "PlantHUD Regular",
         "version": f"Version {VERSION:.3f}",
         "psName": "PlantHUD-Regular",
-        "manufacturer": "Eve Net",
+        "manufacturer": "Eve",
+        "designer": "Eve",
         "description": "A tall, condensed bitmap font for CRT-style HUD overlays.",
         "vendorURL": "https://evenet.fun",
         "licenseDescription": LICENSE,
