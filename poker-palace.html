@@ -1105,9 +1105,31 @@
       line-height: 1.45;
     }
 
+    .table-controls {
+      position: relative;
+      z-index: 1;
+    }
+
+    .table-controls:empty {
+      display: none;
+    }
+
+    .table-controls .action-stack {
+      margin-bottom: 0;
+    }
+
+    .table-controls #bailoutButton {
+      margin-top: 10px;
+    }
+
     @media (max-width: 1180px) {
       .hud-grid {
         grid-template-columns: 1fr;
+      }
+
+      /* One column: the table comes first; its controls sit under the hand */
+      .hud-grid > .table-shell {
+        order: -1;
       }
 
       .bottom-grid {
@@ -1171,10 +1193,31 @@
         grid-template-columns: 1fr;
       }
 
-      .dealer-strip,
-      .hand-header {
+      .dealer-strip {
         flex-direction: column;
         align-items: stretch;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .hand-area {
+        margin-bottom: 12px;
+      }
+
+      .hand-header {
+        margin-bottom: 8px;
+      }
+
+      .showdown-bar {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        padding: 10px;
+        margin: 6px 0 14px;
+      }
+
+      .pot-box {
+        min-width: 72px;
+        padding: 8px;
       }
     }
 
@@ -1211,11 +1254,31 @@
       }
 
       .bet-presets {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-bottom: 10px;
       }
 
       .store-item {
         padding: 10px;
+      }
+
+      .table-shell {
+        padding: 6px;
+      }
+
+      .table-stage {
+        padding: 12px;
+      }
+
+      .marquee {
+        padding-top: 0;
+        margin-bottom: 10px;
+      }
+
+      .dealer-note,
+      .phase-copy {
+        font-size: 0.92rem;
+        line-height: 1.35;
       }
     }
   </style>
@@ -1244,7 +1307,7 @@
       <section class="panel">
         <div class="panel-inner">
           <h2 class="panel-title">Bankroll</h2>
-          <div class="cash-badge">
+          <div id="cashBox" class="cash-badge">
             <span class="cash-label">Current Money</span>
             <strong id="cashBadge" class="cash-value">$200</strong>
           </div>
@@ -1260,7 +1323,7 @@
               </div>
             </div>
 
-          <div class="bet-controls">
+          <div id="betControls" class="bet-controls">
             <div id="betDisplay" class="bet-display">$10 table ante</div>
 
             <div id="betAdjust" class="bet-adjust" hidden>
@@ -1340,6 +1403,10 @@
             </div>
             <div id="playerCards" class="cards" aria-live="polite"></div>
           </section>
+
+          <!-- One column: the money, bet and deal/draw controls move here, under
+               the player's hand, so cards and buttons share a screen -->
+          <div id="tableControls" class="table-controls"></div>
         </div>
       </section>
 
@@ -2405,6 +2472,28 @@
         equipItem(itemId);
       }
     });
+
+    // In the one-column layout the bankroll panel stacks below the table, which
+    // put the deal/draw button a screen away from the cards it acts on. There,
+    // the money, bet controls and bailout move into the table under the hand,
+    // and go back to the bankroll panel when the window widens again.
+    const movableControls = ["cashBox", "betControls", "bailoutButton"].map((id) => {
+      const node = document.getElementById(id);
+      return { node, parent: node.parentNode, next: node.nextElementSibling };
+    });
+    const oneColumn = window.matchMedia("(max-width: 1180px)");
+    function placeControls() {
+      const slot = document.getElementById("tableControls");
+      movableControls.forEach(({ node, parent, next }) => {
+        if (oneColumn.matches) {
+          slot.appendChild(node);
+        } else {
+          parent.insertBefore(node, next);
+        }
+      });
+    }
+    oneColumn.addEventListener("change", placeControls);
+    placeControls();
 
     runtime.bet = TABLE_ANTE;
     renderAll();
