@@ -28,7 +28,7 @@ Running list of what needs updating across the toys. Check things off as they la
 - [x] vornoi was misspelled in the URL and index (now voronoi, old URL redirects)
 - [x] voronoi: wave colors button after randomizing, tap/click adds a cell (was double-click only), hold or right-click removes one, new cells keep the random palette instead of reshuffling it, resizes keep the cells on screen, pause button says play/pause
 - [x] magnetic pendulum: one scale for both axes, no more squish
-- [ ] magnetic pendulum: always exactly 3 magnets
+- [x] magnetic pendulum: 2 to 8 magnets. tap/click empty space to add one, hold (touch) or right-click to remove, a -/+ counter lays them out evenly. pointer events instead of p5 touch shims
 - [x] dla crystal: resizes keep the crystal, stops once fully grown
 - [ ] dla crystal: tap-to-reset is the only interaction
 - [x] morse: only plain typing keys key the tone (cmd/ctrl/alt combos, modifiers, tab, arrows, F-keys don't), a second key no longer ends the first one's press, switching apps mid-press no longer leaves the tone stuck, right-click doesn't key, press timing comes from the events (the first press could read as a dash). added text-to-morse playback, slow/normal/fast speed, punctuation, long messages stay on screen

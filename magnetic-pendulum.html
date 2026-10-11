@@ -11,25 +11,58 @@
     href="/images/favicon-16x16.png">
   <link rel="manifest" href="/site.webmanifest">
   <title>Magnetic Pendulum</title>
-  <meta name="description" content="The fractal map of where a pendulum over three magnets comes to rest. Drag the magnets and watch it redraw.">
+  <meta name="description" content="The fractal map of where a pendulum over a few magnets comes to rest. Drag, add and remove magnets and watch it redraw.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Eve Net">
   <meta property="og:title" content="Magnetic Pendulum">
-  <meta property="og:description" content="The fractal map of where a pendulum over three magnets comes to rest. Drag the magnets and watch it redraw.">
+  <meta property="og:description" content="The fractal map of where a pendulum over a few magnets comes to rest. Drag, add and remove magnets and watch it redraw.">
   <meta property="og:url" content="https://evenet.fun/magnetic-pendulum">
   <meta property="og:image" content="https://evenet.fun/images/previews/magnetic-pendulum.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Magnetic Pendulum">
-  <meta name="twitter:description" content="The fractal map of where a pendulum over three magnets comes to rest. Drag the magnets and watch it redraw.">
+  <meta name="twitter:description" content="The fractal map of where a pendulum over a few magnets comes to rest. Drag, add and remove magnets and watch it redraw.">
   <meta name="twitter:image" content="https://evenet.fun/images/previews/magnetic-pendulum.jpg">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { margin: 0; overflow: hidden; background: #000; }
-    canvas { display: block; }
+    canvas { display: block; touch-action: none; }
     @font-face { font-family: 'w95'; src: url('w95font.woff') format('woff'); }
+    #magnet-count {
+      position: fixed;
+      left: 10px;
+      bottom: 10px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 4px;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 4px;
+      font-family: 'w95', monospace;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+      user-select: none;
+    }
+    #magnet-count span { padding: 0 8px; }
+    #magnet-count button {
+      font: inherit;
+      width: 30px;
+      height: 28px;
+      background: rgba(255, 255, 255, 0.06);
+      color: inherit;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 3px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #magnet-count button:disabled { opacity: 0.3; cursor: default; }
+    @media (hover: hover) {
+      #magnet-count button:not(:disabled):hover { background: rgba(255, 255, 255, 0.16); }
+    }
   </style>
 </head>
 <body>
@@ -46,13 +79,19 @@
        alt="home" style="width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; display: block;">
 </a>
 
+<div id="magnet-count" title="sets the number of magnets and lays them out evenly">
+  <button id="fewer" aria-label="fewer magnets">&minus;</button>
+  <span id="count-label">3 magnets</span>
+  <button id="more" aria-label="more magnets">+</button>
+</div>
+
 <!-- Worker source: not executed by the browser, grabbed as text to create a Blob URL -->
 <script id="worker-src" type="javascript/worker">
 onmessage = function(e) {
   const { cols, rows, canvasW, canvasH, pixelSize, simScale,
           mx, hOffSq, kR, fri, dt, dtH, dt6, maxSteps, sspSq, srSq,
           cellStart, cellEnd } = e.data;
-  const m0x=mx[0],m0y=mx[1], m1x=mx[2],m1y=mx[3], m2x=mx[4],m2y=mx[5];
+  const n = mx.length >> 1;   // magnets, as x0,y0,x1,y1,...
   const halfW=canvasW*0.5, halfH=canvasH*0.5;
   const half=Math.min(halfW, halfH);   // one scale for both axes, so nothing squishes
   const BATCH = 1000;
@@ -70,23 +109,23 @@ onmessage = function(e) {
     let x=sx, y=sy, vx=0, vy=0, dx, dy, r2, mag=-1, st=maxSteps;
     sim: for (let s = 0; s < maxSteps; s++) {
       // k1 - force at current state
-      dx=m0x-x; dy=m0y-y; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2);
-      let ax0=dx/r2-kR*x-fri*vx, ay0=dy/r2-kR*y-fri*vy;
-      dx=m1x-x; dy=m1y-y; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2); ax0+=dx/r2; ay0+=dy/r2;
-      dx=m2x-x; dy=m2y-y; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2); ax0+=dx/r2; ay0+=dy/r2;
+      let ax0=-kR*x-fri*vx, ay0=-kR*y-fri*vy;
+      for (let k = 0; k < n; k++) {
+        dx=mx[2*k]-x; dy=mx[2*k+1]-y; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2); ax0+=dx/r2; ay0+=dy/r2;
+      }
       // k2 - force at midpoint (RK2 midpoint method - half the sqrt calls of RK4)
       const x2=x+dtH*vx, y2=y+dtH*vy, vx2=vx+dtH*ax0, vy2=vy+dtH*ay0;
-      dx=m0x-x2; dy=m0y-y2; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2);
-      let ax2=dx/r2-kR*x2-fri*vx2, ay2=dy/r2-kR*y2-fri*vy2;
-      dx=m1x-x2; dy=m1y-y2; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2); ax2+=dx/r2; ay2+=dy/r2;
-      dx=m2x-x2; dy=m2y-y2; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2); ax2+=dx/r2; ay2+=dy/r2;
+      let ax2=-kR*x2-fri*vx2, ay2=-kR*y2-fri*vy2;
+      for (let k = 0; k < n; k++) {
+        dx=mx[2*k]-x2; dy=mx[2*k+1]-y2; r2=dx*dx+dy*dy+hOffSq; r2=r2*Math.sqrt(r2); ax2+=dx/r2; ay2+=dy/r2;
+      }
       // advance full step using midpoint slope
       x+=dt*vx2; y+=dt*vy2; vx+=dt*ax2; vy+=dt*ay2;
       // settle check (squared, no sqrt)
       if (vx*vx+vy*vy < sspSq) {
-        dx=x-m0x; dy=y-m0y; if(dx*dx+dy*dy<srSq){mag=0;st=s+1;break sim;}
-        dx=x-m1x; dy=y-m1y; if(dx*dx+dy*dy<srSq){mag=1;st=s+1;break sim;}
-        dx=x-m2x; dy=y-m2y; if(dx*dx+dy*dy<srSq){mag=2;st=s+1;break sim;}
+        for (let k = 0; k < n; k++) {
+          dx=x-mx[2*k]; dy=y-mx[2*k+1]; if(dx*dx+dy*dy<srSq){mag=k;st=s+1;break sim;}
+        }
       }
     }
 
@@ -114,6 +153,7 @@ let currentCols, currentRows, currentPixelSize;
 let pendingRestart = false;
 let workersDone = 0, workersTotal = 0, workersDoneCallback = null;
 let hintAlpha = 100;
+let currentHues = [];   // magnet colours as of the running render
 const NUM_WORKERS = navigator.hardwareConcurrency || 4;
 
 const PIXEL_SIZE       = 6;
@@ -127,7 +167,11 @@ const MAX_STEPS        = 2000;
 const SETTLE_RADIUS    = 0.35;
 const SETTLE_SPEED     = 0.02;
 const GRAB_PX          = 56;   // large enough for fat fingers
-const MAGNET_HUES      = [0, 190, 50];
+// first three are the original red / cyan / yellow; the rest are picked to
+// stay apart from them and each other
+const MAGNET_HUES      = [0, 190, 50, 280, 120, 320, 220, 90];
+const MIN_MAGNETS      = 2;
+const MAX_MAGNETS      = MAGNET_HUES.length;
 const H_OFFSET_SQ      = H_OFFSET * H_OFFSET;
 const SETTLE_SPEED_SQ  = SETTLE_SPEED * SETTLE_SPEED;
 const SETTLE_RADIUS_SQ = SETTLE_RADIUS * SETTLE_RADIUS;
@@ -135,11 +179,32 @@ const DT_HALF          = DT * 0.5;
 const DT_SIXTH         = DT / 6.0;
 const LOG_MAX          = Math.log(MAX_STEPS + 1);
 
-const MAGNETS = [
-  { x:  0.000,  y:  1.000 },
-  { x: -0.866,  y: -0.500 },
-  { x:  0.866,  y: -0.500 }
-];
+// Each magnet keeps its own colour, so removing one doesn't repaint the rest
+const MAGNETS = [];
+
+// n magnets evenly round a circle, the first at the top. The circle grows
+// with the count: packed tighter, the basins outside the ring shrink below
+// a pixel and the picture turns to noise.
+function arrangeMagnets(n) {
+  MAGNETS.length = 0;
+  const r = 1 + (n - 3) * 0.12;
+  for (let k = 0; k < n; k++) {
+    const a = Math.PI / 2 + k * 2 * Math.PI / n;
+    MAGNETS.push({ x: r * Math.cos(a), y: r * Math.sin(a), hue: MAGNET_HUES[k] });
+  }
+  updateCountUI();
+}
+
+function freeHue() {
+  return MAGNET_HUES.find(h => !MAGNETS.some(m => m.hue === h));
+}
+
+function updateCountUI() {
+  const n = MAGNETS.length;
+  document.getElementById('count-label').textContent = n + ' magnets';
+  document.getElementById('fewer').disabled = n <= MIN_MAGNETS;
+  document.getElementById('more').disabled = n >= MAX_MAGNETS;
+}
 
 // The simulation spans ±SIM_SCALE across the shorter side of the screen and
 // uses the same scale on both axes, so a tall phone shows more of the plane
@@ -173,6 +238,7 @@ function startWorkersAt(ps, callback) {
   workersDoneCallback = callback || null;
   if (!fractalgfx) return;
   currentPixelSize = ps;
+  currentHues = MAGNETS.map(m => m.hue);
   currentCols = Math.ceil(width  / ps);
   currentRows = Math.ceil(height / ps);
   const totalCells = currentCols * currentRows;
@@ -181,7 +247,7 @@ function startWorkersAt(ps, callback) {
     cols: currentCols, rows: currentRows,
     canvasW: width,    canvasH: height,
     pixelSize: ps, simScale: SIM_SCALE,
-    mx: [MAGNETS[0].x, MAGNETS[0].y, MAGNETS[1].x, MAGNETS[1].y, MAGNETS[2].x, MAGNETS[2].y],
+    mx: MAGNETS.flatMap(m => [m.x, m.y]),
     hOffSq: H_OFFSET_SQ, kR: K_RESTORE, fri: FRICTION,
     dt: DT, dtH: DT_HALF, dt6: DT_SIXTH, maxSteps: MAX_STEPS,
     sspSq: SETTLE_SPEED_SQ, srSq: SETTLE_RADIUS_SQ
@@ -222,7 +288,7 @@ function handleWorkerMessage(e) {
     const row = (i - col) / currentCols;
     const mag = data[j*2], st = data[j*2+1];
     if (mag >= 0) {
-      fractalgfx.fill(MAGNET_HUES[mag], 85, map(Math.log(st+1), 0, LOG_MAX, 100, 15));
+      fractalgfx.fill(currentHues[mag], 85, map(Math.log(st+1), 0, LOG_MAX, 100, 15));
     } else {
       fractalgfx.fill(0, 0, 5);
     }
@@ -240,41 +306,88 @@ function scheduleWorker() {
 function drawMagnets() {
   noStroke();
   const pulse = sin(frameCount * 0.06) * 3;
-  for (let m = 0; m < 3; m++) {
+  for (let m = 0; m < MAGNETS.length; m++) {
     const { px, py } = simToPixel(MAGNETS[m].x, MAGNETS[m].y);
     const grabbed = m === dragIdx;
-    fill(MAGNET_HUES[m], 70, 100, grabbed ? 33 : 18);
+    fill(MAGNETS[m].hue, 70, 100, grabbed ? 33 : 18);
     circle(px, py, (grabbed ? 56 : 38) + (grabbed ? 0 : pulse));
-    fill(MAGNET_HUES[m], 50, 100, grabbed ? 95 : 72);
+    fill(MAGNETS[m].hue, 50, 100, grabbed ? 95 : 72);
     circle(px, py, grabbed ? 22 : 15);
   }
 }
 
-function mousePressed() {
-  for (let m = 0; m < 3; m++) {
+function magnetAt(x, y) {
+  let best = -1, bestD = GRAB_PX;
+  for (let m = 0; m < MAGNETS.length; m++) {
     const { px, py } = simToPixel(MAGNETS[m].x, MAGNETS[m].y);
-    if (dist(mouseX, mouseY, px, py) < GRAB_PX) {
-      dragIdx = m;
-      hintAlpha = 0;
-      return false;
-    }
+    const d = Math.hypot(x - px, y - py);
+    if (d < bestD) { best = m; bestD = d; }
   }
+  return best;
 }
 
-function mouseDragged() {
-  if (dragIdx < 0) return;
-  const { sx, sy } = pixelToSim(mouseX, mouseY);
-  MAGNETS[dragIdx].x = sx;
-  MAGNETS[dragIdx].y = sy;
+function addMagnet(x, y) {
+  if (MAGNETS.length >= MAX_MAGNETS) return;
+  const { sx, sy } = pixelToSim(x, y);
+  MAGNETS.push({ x: sx, y: sy, hue: freeHue() });
+  updateCountUI();
   scheduleWorker();
-  return false;
 }
 
-function mouseReleased() { dragIdx = -1; return false; }
+function removeMagnet(m) {
+  if (m < 0 || MAGNETS.length <= MIN_MAGNETS) return;
+  MAGNETS.splice(m, 1);
+  updateCountUI();
+  scheduleWorker();
+}
 
-function touchStarted(e) { if (e && e.target && e.target.closest('a')) return true; mousePressed(); return false; }
-function touchMoved(e)   { if (e && e.target && e.target.closest('a')) return true; mouseDragged(); return false; }
-function touchEnded()    { mouseReleased(); return false; }
+// Mouse and touch alike: drag a magnet to move it, tap empty space to add
+// one, hold a magnet still (touch) or right-click it to remove it.
+let press = null;
+function setupPointer(el) {
+  const DRAG_START = 6;
+  const HOLD_MS = 500;
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.addEventListener('pointerdown', (e) => {
+    if (press) return;   // one finger at a time
+    hintAlpha = 0;
+    if (e.pointerType === 'mouse' && e.button === 2) { removeMagnet(magnetAt(e.clientX, e.clientY)); return; }
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    el.setPointerCapture(e.pointerId);
+    const m = magnetAt(e.clientX, e.clientY);
+    press = { id: e.pointerId, x: e.clientX, y: e.clientY, magnet: m, moved: false, done: false };
+    dragIdx = m;
+    if (m >= 0 && e.pointerType !== 'mouse') {
+      const p = press;
+      p.timer = setTimeout(() => {
+        if (press !== p || p.moved) return;
+        p.done = true;
+        dragIdx = -1;
+        removeMagnet(p.magnet);
+      }, HOLD_MS);
+    }
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!press || e.pointerId !== press.id || press.done) return;
+    if (!press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_START) return;
+    press.moved = true;
+    clearTimeout(press.timer);
+    if (press.magnet < 0) return;
+    const { sx, sy } = pixelToSim(e.clientX, e.clientY);
+    MAGNETS[press.magnet].x = sx;
+    MAGNETS[press.magnet].y = sy;
+    scheduleWorker();
+  });
+  const release = (e, tap) => {
+    if (!press || e.pointerId !== press.id) return;
+    clearTimeout(press.timer);
+    if (tap && !press.moved && !press.done && press.magnet < 0) addMagnet(press.x, press.y);
+    press = null;
+    dragIdx = -1;
+  };
+  el.addEventListener('pointerup', (e) => release(e, true));
+  el.addEventListener('pointercancel', (e) => release(e, false));
+}
 
 function makeFractalGfx() {
   if (fractalgfx) fractalgfx.remove();
@@ -286,7 +399,15 @@ function makeFractalGfx() {
 }
 
 function setup() {
-  createCanvas(windowWidth, windowHeight);
+  const cnv = createCanvas(windowWidth, windowHeight);
+  setupPointer(cnv.elt);
+  arrangeMagnets(3);
+  document.getElementById('fewer').addEventListener('click', () => {
+    if (MAGNETS.length > MIN_MAGNETS) { arrangeMagnets(MAGNETS.length - 1); scheduleWorker(); }
+  });
+  document.getElementById('more').addEventListener('click', () => {
+    if (MAGNETS.length < MAX_MAGNETS) { arrangeMagnets(MAGNETS.length + 1); scheduleWorker(); }
+  });
   colorMode(HSB, 360, 100, 100, 100);
   pixelDensity(1);
   noStroke();
@@ -306,7 +427,9 @@ function draw() {
     textFont('w95');
     textSize(13);
     fill(0, 0, 100, hintAlpha);
-    text('drag a magnet', width / 2, height - 18);
+    text(matchMedia('(pointer: coarse)').matches
+      ? 'drag a magnet · tap to add · hold to remove'
+      : 'drag a magnet · click to add one · right-click to remove', width / 2, height - 52);
     hintAlpha = max(0, hintAlpha - 0.25);
   }
 }
