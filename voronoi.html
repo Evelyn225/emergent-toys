@@ -8,18 +8,18 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
     <link rel="manifest" href="/site.webmanifest">
     <title>Interactive Voronoi Diagram</title>
-    <meta name="description" content="A drifting Voronoi diagram. Drag the cells around, add new ones and shuffle the colors.">
+    <meta name="description" content="A drifting Voronoi diagram. Drag the cells around, tap to add new ones, hold to remove them and shuffle the colors.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Eve Net">
     <meta property="og:title" content="Voronoi">
-    <meta property="og:description" content="A drifting Voronoi diagram. Drag the cells around, add new ones and shuffle the colors.">
+    <meta property="og:description" content="A drifting Voronoi diagram. Drag the cells around, tap to add new ones, hold to remove them and shuffle the colors.">
     <meta property="og:url" content="https://evenet.fun/voronoi">
     <meta property="og:image" content="https://evenet.fun/images/previews/voronoi.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Voronoi">
-    <meta name="twitter:description" content="A drifting Voronoi diagram. Drag the cells around, add new ones and shuffle the colors.">
+    <meta name="twitter:description" content="A drifting Voronoi diagram. Drag the cells around, tap to add new ones, hold to remove them and shuffle the colors.">
     <meta name="twitter:image" content="https://evenet.fun/images/previews/voronoi.jpg">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.0/p5.min.js"></script>
     <script src="https://unpkg.com/d3-delaunay@6"></script>
@@ -33,6 +33,7 @@
         }
         canvas {
             display: block;
+            touch-action: none;
         }
         #controls {
             position: fixed;
@@ -60,14 +61,31 @@
             transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
             text-align: left;
         }
-        button:hover {
-            background: rgba(20, 250, 170, 0.1);
-            border-color: rgba(20, 250, 170, 0.4);
-            color: rgba(20, 250, 170, 0.95);
+        @media (hover: hover) {
+            button:hover {
+                background: rgba(20, 250, 170, 0.1);
+                border-color: rgba(20, 250, 170, 0.4);
+                color: rgba(20, 250, 170, 0.95);
+            }
         }
         button:active {
             transform: scale(0.96);
             background: rgba(20, 250, 170, 0.16);
+        }
+        button[hidden] { display: none; }
+        #hint {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            line-height: 1.5;
+            letter-spacing: 0.04em;
+            color: rgba(255, 255, 255, 0.45);
+            margin-top: 3px;
+            max-width: 160px;
+        }
+        @media (max-width: 640px) {
+            #controls { left: 8px; top: 8px; padding: 7px; gap: 4px; }
+            button { padding: 6px 9px; font-size: 10px; letter-spacing: 0.04em; }
+            #hint { font-size: 9px; max-width: 130px; }
         }
     </style>
 </head>
@@ -85,8 +103,10 @@
 </a>
     <div id="controls">
         <button onclick="randomizePoints()">Randomize Points</button>
-        <button onclick="toggleAnimation()">Toggle Animation</button>
+        <button id="animButton" onclick="toggleAnimation()">Pause</button>
         <button onclick="randomizeColors()">Randomize Colors</button>
+        <button id="waveButton" onclick="waveColors()" hidden>Wave Colors</button>
+        <div id="hint">click to add a cell<br>drag to move one<br>right-click to remove</div>
     </div>
     <script>
         let points = [];
@@ -97,6 +117,10 @@
         let time = 0;
         let activeIndex = -1;
         let randomCellColors = null;
+        let randomBaseHue = 0;
+        let press = null;           // the pointer currently held on the canvas
+        const MAX_POINTS = 100;
+        const MIN_POINTS = 3;
 
         // Wave parameters
         const waveParams = {
@@ -107,8 +131,13 @@
         };
 
         function setup() {
-            createCanvas(windowWidth, windowHeight);
+            const cnv = createCanvas(windowWidth, windowHeight);
             colorMode(HSB, 360, 100, 100, 1);
+            setupPointer(cnv.elt);
+            if (matchMedia('(pointer: coarse)').matches) {
+                document.getElementById('hint').innerHTML =
+                    'tap to add a cell<br>drag to move one<br>hold to remove';
+            }
             
             for (let i = 0; i < numPoints; i++) {
                 const padding = 50;
@@ -130,12 +159,12 @@
             }
         }
 
-        function findActiveCell() {
+        function findActiveCell(x = mouseX, y = mouseY) {
             let minDist = Infinity;
             let closestIndex = -1;
             
             for (let i = 0; i < points.length; i++) {
-                const d = dist(mouseX, mouseY, points[i][0], points[i][1]);
+                const d = dist(x, y, points[i][0], points[i][1]);
                 if (d < minDist) {
                     minDist = d;
                     closestIndex = i;
@@ -164,17 +193,27 @@
             };
         }
 
+        function randomCellColor() {
+            return {
+                hue: (randomBaseHue + random(-8, 8) + 360) % 360,
+                saturation: 70 + random(-8, 8),
+                brightness: 80 + random(-8, 8)
+            };
+        }
+
         function randomizeColors() {
             randomCellColors = [];
             // Pick a new base hue for all cells
-            const baseHue = random(0, 360);
+            randomBaseHue = random(0, 360);
             for (let i = 0; i < points.length; i++) {
-                randomCellColors.push({
-                    hue: (baseHue + random(-8, 8)) % 360,
-                    saturation: 70 + random(-8, 8),
-                    brightness: 80 + random(-8, 8)
-                });
+                randomCellColors.push(randomCellColor());
             }
+            document.getElementById('waveButton').hidden = false;
+        }
+
+        function waveColors() {
+            randomCellColors = null;
+            document.getElementById('waveButton').hidden = true;
         }
 
         function draw() {
@@ -183,7 +222,7 @@
             try {
                 if (!voronoi) return;
 
-                activeIndex = findActiveCell();
+                activeIndex = press ? press.index : findActiveCell();
 
                 // Update point positions with wave motion
                 if (isAnimating) {
@@ -250,33 +289,98 @@
                 ];
             }
             updateVoronoi();
-            if (randomCellColors) randomizeColors();
         }
 
         function toggleAnimation() {
             isAnimating = !isAnimating;
+            document.getElementById('animButton').textContent = isAnimating ? 'Pause' : 'Play';
         }
 
-        function mouseDragged() {
-            if (activeIndex >= 0) {
-                points[activeIndex] = [mouseX, mouseY];
-                updateVoronoi();
-            }
-            return false;
-        }
-
-        function windowResized() {
-            resizeCanvas(windowWidth, windowHeight);
+        function addPoint(x, y) {
+            if (points.length >= MAX_POINTS) return;
+            points.push([x, y]);
+            if (randomCellColors) randomCellColors.push(randomCellColor());
             updateVoronoi();
         }
 
-        function doubleClicked() {
-            if (points.length < 100) {
-                points.push([mouseX, mouseY]);
-                updateVoronoi();
-                if (randomCellColors) randomizeColors();
+        function removePoint(index) {
+            if (index < 0 || points.length <= MIN_POINTS) return;
+            points.splice(index, 1);
+            if (randomCellColors) randomCellColors.splice(index, 1);
+            updateVoronoi();
+        }
+
+        // Mouse and touch alike: a tap or click adds a cell, a drag moves the
+        // nearest one, holding still (or a right-click) removes it.
+        function setupPointer(el) {
+            const DRAG_START = 6;   // px a press moves before it counts as a drag
+            const HOLD_MS = 500;
+
+            el.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            el.addEventListener('pointerdown', (e) => {
+                if (press) return;  // ignore a second finger
+                if (e.pointerType === 'mouse' && e.button === 2) {
+                    removePoint(findActiveCell(e.clientX, e.clientY));
+                    return;
+                }
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                el.setPointerCapture(e.pointerId);
+                press = {
+                    id: e.pointerId,
+                    x: e.clientX,
+                    y: e.clientY,
+                    index: findActiveCell(e.clientX, e.clientY),
+                    dragging: false,
+                    done: false
+                };
+                // Holding still removes a cell on touch screens; a mouse has right-click
+                if (e.pointerType === 'mouse') return;
+                const p = press;
+                p.timer = setTimeout(() => {
+                    if (press !== p || p.dragging) return;
+                    p.done = true;
+                    removePoint(p.index);
+                    p.index = -1;
+                }, HOLD_MS);
+            });
+
+            el.addEventListener('pointermove', (e) => {
+                if (!press || e.pointerId !== press.id || press.done) return;
+                if (!press.dragging &&
+                    Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_START) return;
+                press.dragging = true;
+                clearTimeout(press.timer);
+                if (press.index >= 0) {
+                    points[press.index] = [
+                        constrain(e.clientX, 0, width),
+                        constrain(e.clientY, 0, height)
+                    ];
+                    updateVoronoi();
+                }
+            });
+
+            const release = (e, add) => {
+                if (!press || e.pointerId !== press.id) return;
+                clearTimeout(press.timer);
+                if (add && !press.dragging && !press.done) addPoint(press.x, press.y);
+                press = null;
+            };
+            el.addEventListener('pointerup', (e) => release(e, true));
+            el.addEventListener('pointercancel', (e) => release(e, false));
+        }
+
+        // Rotating a phone or resizing the window keeps the cells where they
+        // were relative to the screen instead of stranding them off the edge.
+        function windowResized() {
+            const sx = windowWidth / width;
+            const sy = windowHeight / height;
+            resizeCanvas(windowWidth, windowHeight);
+            for (const pt of points) {
+                pt[0] *= sx;
+                pt[1] *= sy;
             }
-            return false;
+            updateVoronoi();
         }
     </script>
 <script defer src="/_vercel/insights/script.js"></script>

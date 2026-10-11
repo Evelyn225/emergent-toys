@@ -26,7 +26,7 @@ Running list of what needs updating across the toys. Check things off as they la
 - [x] patch synth visuals: jacks along the bottom of each module, colour stripe per module family, real font (Satoshi was never loaded), empty rack space styled as a bay, rack centred, rack no longer cut off at 980-1250px widths, hint wraps
 - [x] ascii render: renders only on change (was every 150ms, even paused), bright maps to dense (was inverted), aspect-corrected (was stretched ~1.4x), proper ramps (classic / detailed / blocks), contrast + auto-levels, invert, shimmer instead of the ramp rotation, webcam mode, paste and drop anywhere, save .txt, phone layout, background rain at 20fps and truly off when off
 - [x] vornoi was misspelled in the URL and index (now voronoi, old URL redirects)
-- [ ] voronoi: can't get wave colors back after randomize, adding points is double-click only
+- [x] voronoi: wave colors button after randomizing, tap/click adds a cell (was double-click only), hold or right-click removes one, new cells keep the random palette instead of reshuffling it, resizes keep the cells on screen, pause button says play/pause
 - [x] magnetic pendulum: one scale for both axes, no more squish
 - [ ] magnetic pendulum: always exactly 3 magnets
 - [x] dla crystal: resizes keep the crystal, stops once fully grown
