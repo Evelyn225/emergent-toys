@@ -26,8 +26,8 @@ const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
 // This is NOT heap, and SYSMON never calls it heap. Per-worker heap is not
 // exposed to JS, and the one API that could attribute it
 // (performance.measureUserAgentSpecificMemory) needs cross-origin isolation,
-// whose COEP would break every image sleepOS loads from
-// raw.githubusercontent.com. This figure is real data about the process and
+// whose COEP would break the videos and music sleepOS streams from its R2
+// bucket on another origin. This figure is real data about the process and
 // responsive to allocation, which is the honest thing available.
 var SCRIPT_FRAME_BYTES = 64;
 
