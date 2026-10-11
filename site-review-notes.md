@@ -30,7 +30,7 @@ Running list of what needs updating across the toys. Check things off as they la
 - [x] magnetic pendulum: one scale for both axes, no more squish
 - [x] magnetic pendulum: 2 to 8 magnets. tap/click empty space to add one, hold (touch) or right-click to remove, a -/+ counter lays them out evenly. pointer events instead of p5 touch shims
 - [x] dla crystal: resizes keep the crystal, stops once fully grown
-- [ ] dla crystal: tap-to-reset is the only interaction
+- [x] dla crystal: tap/click plants a seed, drag draws seed lines for it to frost over, clear for an empty screen, reset for the classic centre seed, pause, stickiness slider (lower = denser). planted crystals grow in a field mode with a block distance field for free-flight jumps; the default centre-seed growth is unchanged
 - [x] morse: only plain typing keys key the tone (cmd/ctrl/alt combos, modifiers, tab, arrows, F-keys don't), a second key no longer ends the first one's press, switching apps mid-press no longer leaves the tone stuck, right-click doesn't key, press timing comes from the events (the first press could read as a dash). added text-to-morse playback, slow/normal/fast speed, punctuation, long messages stay on screen
 - [x] poker palace: in the one-column layout (phones, tablets) the table comes first and the money, bet controls and deal/draw button move under the player's hand, so cards and buttons share a screen (they go back to the bankroll panel when the window widens). table spacing tightened on phones, bet chips in 3 columns
 
