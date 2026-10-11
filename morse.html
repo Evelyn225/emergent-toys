@@ -577,6 +577,7 @@
       span.className = 'char';
       span.textContent = letter;
       elDecodedText.appendChild(span);
+      showNewest();
     }
     clearSymbolArea();
   }
@@ -590,8 +591,15 @@
       span.className = 'char';
       span.textContent = '\u00a0'; // non-breaking space
       elDecodedText.appendChild(span);
+      showNewest();
     }
     clearSymbolArea();
+  }
+
+  // Keep the newest line in view once a long message outgrows the output area
+  const elOutput = document.getElementById('output-area');
+  function showNewest() {
+    elOutput.scrollTop = elOutput.scrollHeight;
   }
 
   function clearSymbolArea() {
