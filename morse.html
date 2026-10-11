@@ -11,18 +11,18 @@
     href="/images/favicon-16x16.png">
   <link rel="manifest" href="/site.webmanifest">
   <title>Morse</title>
-  <meta name="description" content="Tap or hold any key to send Morse code and watch it decode into letters as you go, with a beep and a cheat sheet.">
+  <meta name="description" content="Tap or hold a key to send Morse code and watch it decode as you go, or type a message and hear it played back. Adjustable speed and a cheat sheet.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Eve Net">
   <meta property="og:title" content="Morse Code">
-  <meta property="og:description" content="Tap or hold any key to send Morse code and watch it decode into letters as you go, with a beep and a cheat sheet.">
+  <meta property="og:description" content="Tap or hold a key to send Morse code and watch it decode as you go, or type a message and hear it played back. Adjustable speed and a cheat sheet.">
   <meta property="og:url" content="https://evenet.fun/morse">
   <meta property="og:image" content="https://evenet.fun/images/previews/morse.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Morse Code">
-  <meta name="twitter:description" content="Tap or hold any key to send Morse code and watch it decode into letters as you go, with a beep and a cheat sheet.">
+  <meta name="twitter:description" content="Tap or hold a key to send Morse code and watch it decode as you go, or type a message and hear it played back. Adjustable speed and a cheat sheet.">
   <meta name="twitter:image" content="https://evenet.fun/images/previews/morse.jpg">
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
@@ -82,8 +82,12 @@
       flex-wrap: wrap;
       justify-content: center;
       max-width: 90vw;
+      max-height: 40vh;
+      overflow-y: auto;
+      scrollbar-width: none;
       text-align: center;
     }
+    #output-area::-webkit-scrollbar { display: none; }
 
     #cursor {
       color: #f0b429;
@@ -176,6 +180,71 @@
       50%,100% { opacity: 0; }
     }
 
+    /* ── Speed + playback bar ── */
+    #bar {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 300;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: max-content;
+      max-width: calc(100vw - 20px);
+      cursor: default;
+    }
+    .seg {
+      display: flex;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .bar-btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 7px 11px;
+      background: rgba(255,255,255,0.03);
+      color: rgba(255,255,255,0.5);
+      border: none;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .seg .bar-btn + .bar-btn { border-left: 1px solid rgba(255,255,255,0.1); }
+    .bar-btn[aria-pressed="true"] {
+      background: rgba(240,180,41,0.16);
+      color: #f0b429;
+    }
+    #play-btn, #play-go {
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 4px;
+    }
+    @media (hover: hover) {
+      .bar-btn:hover { color: #f0b429; }
+    }
+    #play-form {
+      display: none;
+      gap: 6px;
+    }
+    #play-form.open { display: flex; }
+    #play-input {
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      width: min(260px, calc(100vw - 110px));
+      padding: 6px 9px;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      border: 1px solid rgba(240,180,41,0.4);
+      border-radius: 4px;
+      outline: none;
+      user-select: text;
+    }
+    #play-input::placeholder { color: rgba(255,255,255,0.3); }
+
     /* ── Reference panel ── */
     #ref-toggle {
       position: fixed;
@@ -266,6 +335,7 @@
     }
     .ref-grid-alpha { grid-template-columns: repeat(4, 1fr); }
     .ref-grid-digit { grid-template-columns: repeat(2, 1fr); }
+    .ref-grid-punct { grid-template-columns: repeat(3, 1fr); }
 
     .ref-entry {
       display: flex;
@@ -341,6 +411,8 @@
     <div class="ref-grid ref-grid-alpha" id="ref-grid-alpha"></div>
     <div class="ref-section-label">digits</div>
     <div class="ref-grid ref-grid-digit" id="ref-grid-digit"></div>
+    <div class="ref-section-label">punctuation</div>
+    <div class="ref-grid ref-grid-punct" id="ref-grid-punct"></div>
   </div>
 </div>
 
@@ -348,7 +420,7 @@
   <div id="glow"></div>
 
   <div id="instructions">
-    <div>hold any key or click to transmit</div>
+    <div class="hint-keys">hold any letter, number or space, or click, to transmit</div>
     <div><span class="key-hint">short</span> press = dot ⁃ <span class="key-hint">long</span> press = dash</div>
     <div>pause to commit letter ⁃ <span class="key-hint">backspace</span> to delete ⁃ <span class="key-hint">esc</span> to clear</div>
   </div>
@@ -367,11 +439,27 @@
   </div>
 </div>
 
+<div id="bar">
+  <div class="seg" role="group" aria-label="speed">
+    <button class="bar-btn speed-btn" data-speed="slow" aria-pressed="false">slow</button>
+    <button class="bar-btn speed-btn" data-speed="normal" aria-pressed="true">normal</button>
+    <button class="bar-btn speed-btn" data-speed="fast" aria-pressed="false">fast</button>
+  </div>
+  <button class="bar-btn" id="play-btn">play text</button>
+  <form id="play-form" autocomplete="off">
+    <input id="play-input" maxlength="80" placeholder="type a message" enterkeyhint="send">
+    <button class="bar-btn" id="play-go" type="submit">play</button>
+  </form>
+</div>
+
 <script>
-  const DOT_THRESHOLD    = 200;
-  const LETTER_GAP       = 450;
-  const WORD_GAP         = 1200;
-  const PROGRESS_FULL_MS = 1200;
+  // Timings for "normal"; the speed setting scales all of them, so the dot /
+  // dash tick stays at the same place on the progress bar.
+  const BASE = { dot: 200, letter: 450, word: 1200, progress: 1200, unit: 90 };
+  const SPEEDS = { slow: 1.5, normal: 1, fast: 0.65 };
+  let speed = 'normal';
+  try { if (SPEEDS[localStorage.getItem('morse-speed')]) speed = localStorage.getItem('morse-speed'); } catch (e) {}
+  const T = (k) => BASE[k] * SPEEDS[speed];
 
   const MORSE = {
     '.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F',
@@ -380,7 +468,11 @@
     '...':'S','-':'T','..-':'U','...-':'V','.--':'W','-..-':'X',
     '-.--':'Y','--..':'Z',
     '-----':'0','.----':'1','..---':'2','...--':'3','....-':'4',
-    '.....':'5','-....':'6','--...':'7','---..':'8','----.':'9'
+    '.....':'5','-....':'6','--...':'7','---..':'8','----.':'9',
+    '.-.-.-':'.','--..--':',','..--..':'?','.----.':"'",'-.-.--':'!',
+    '-..-.':'/','-.--.':'(','-.--.-':')','.-...':'&','---...':':',
+    '-.-.-.':';','-...-':'=','.-.-.':'+','-....-':'-','..--.-':'_',
+    '.-..-.':'"','.--.-.':'@'
   };
 
   // DOM refs
@@ -401,6 +493,10 @@
   let progressRaf    = null;
   let progressStart  = 0;
   let instructionsGone = false;
+  let pressSource    = null;   // 'key' | 'mouse' | 'touch'
+  let heldCode       = null;   // the key that started a keyboard press
+  let playToken      = 0;      // bumped to cancel a playback in progress
+  let playing        = false;
 
   // Audio
   let audioCtx = null;
@@ -443,7 +539,7 @@
     cancelAnimationFrame(progressRaf);
     progressStart = performance.now();
     function tick(now) {
-      const pct = Math.min((now - progressStart) / PROGRESS_FULL_MS, 1);
+      const pct = Math.min((now - progressStart) / T('progress'), 1);
       elProgressBar.style.width = (pct * 100) + '%';
       if (pct < 1) progressRaf = requestAnimationFrame(tick);
     }
@@ -528,53 +624,83 @@
   }
 
   // Shared press logic
-  function pressBegin() {
-    if (keyHeld) return;
+  function hideInstructions() {
     if (!instructionsGone) {
       instructionsGone = true;
       elInstructions.classList.add('hidden');
     }
+  }
+
+  // Times come from the input events themselves: the first press creates the
+  // audio context, which can hold up the handler long enough to turn a dot
+  // into a dash if the clock were read inside it.
+  function pressBegin(source, t = performance.now()) {
+    if (keyHeld) return;
+    stopPlayback();
+    hideInstructions();
     clearAllTimers();
     keyHeld = true;
-    pressStart = Date.now();
+    pressSource = source;
+    pressStart = t;
     startTone();
     elGlow.style.opacity = '1';
     startProgressBar();
   }
 
-  function pressEnd() {
+  function pressEnd(source, t = performance.now()) {
     if (!keyHeld) return;
+    if (source && source !== pressSource) return;
     keyHeld = false;
+    pressSource = null;
+    heldCode = null;
     stopTone();
     elGlow.style.opacity = '0';
     stopProgressBar();
 
-    const duration = Date.now() - pressStart;
-    addSymbol(duration < DOT_THRESHOLD ? '.' : '-');
+    const duration = t - pressStart;
+    addSymbol(duration < T('dot') ? '.' : '-');
 
-    letterTimer = setTimeout(commitLetter, LETTER_GAP);
-    wordTimer   = setTimeout(addSpace, WORD_GAP);
+    letterTimer = setTimeout(commitLetter, T('letter'));
+    wordTimer   = setTimeout(addSpace, T('word'));
   }
 
   // Key handlers
+  // Only plain typing keys key the tone: shortcuts (cmd/ctrl/alt combos),
+  // modifiers, tab, arrows and function keys are left to the browser.
+  function isKeyingKey(e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return false;
+    return e.key.length === 1 || e.key === 'Enter';
+  }
+
   document.addEventListener('keydown', (e) => {
+    if (e.target.closest('input')) return;   // typing a message to play
     if (e.key === 'Backspace') {
       e.preventDefault();
+      stopPlayback();
       doBackspace();
       return;
     }
     if (e.key === 'Escape') {
+      stopPlayback();
       doEscape();
       return;
     }
-    if (e.repeat) return;
-    pressBegin();
+    if (e.repeat || !isKeyingKey(e)) return;
+    // a button reached with tab still works with space / enter
+    if (e.target.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
+    e.preventDefault();   // no space/enter clicks on a focused button
+    if (keyHeld) return;
+    heldCode = e.code;
+    pressBegin('key', e.timeStamp);
   });
 
   document.addEventListener('keyup', (e) => {
-    if (e.key === 'Backspace' || e.key === 'Escape') return;
-    pressEnd();
+    if (pressSource === 'key' && e.code === heldCode) pressEnd('key', e.timeStamp);
   });
+
+  // Switching tabs or apps mid-press (cmd+tab) never sends the keyup
+  window.addEventListener('blur', () => pressEnd());
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pressEnd(); });
 
   // ── Reference panel ──
   const elRefToggle = document.getElementById('ref-toggle');
@@ -595,7 +721,7 @@
   function buildEntry(char) {
     const code = CHAR_TO_MORSE[char];
     return `<div class="ref-entry">
-      <div class="ref-letter">${char}</div>
+      <div class="ref-letter">${escapeHtml(char)}</div>
       <div class="ref-symbols">${symbolsHtml(code)}</div>
     </div>`;
   }
@@ -606,39 +732,148 @@
   document.getElementById('ref-grid-digit').innerHTML =
     '0123456789'.split('').map(buildEntry).join('');
 
+  document.getElementById('ref-grid-punct').innerHTML =
+    '.,?\'!/()&:;=+-_"@'.split('').map(buildEntry).join('');
+
+  function escapeHtml(c) {
+    return c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  }
+
   elRefToggle.addEventListener('click', () => {
     const open = elRefPanel.classList.toggle('open');
     elRefToggle.classList.toggle('active', open);
+    elRefToggle.blur();
   });
 
-  // Mouse handlers (ignore clicks on the home button, toggle, and ref panel)
-  document.addEventListener('mousedown', (e) => {
-    if (e.target.closest('a') || e.target.closest('#ref-toggle') || e.target.closest('#ref-panel')) return;
+  // ── Speed ──
+  const speedBtns = document.querySelectorAll('.speed-btn');
+  function showSpeed() {
+    speedBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.speed === speed)));
+  }
+  speedBtns.forEach(b => b.addEventListener('click', () => {
+    speed = b.dataset.speed;
+    try { localStorage.setItem('morse-speed', speed); } catch (e) {}
+    showSpeed();
+    b.blur();
+  }));
+  showSpeed();
+
+  // ── Text to morse playback ──
+  const elPlayBtn   = document.getElementById('play-btn');
+  const elPlayForm  = document.getElementById('play-form');
+  const elPlayInput = document.getElementById('play-input');
+
+  elPlayBtn.addEventListener('click', () => {
+    if (playing) { stopPlayback(); return; }
+    elPlayBtn.hidden = true;
+    elPlayForm.classList.add('open');
+    elPlayInput.focus();
+    elPlayInput.select();   // typing replaces the last message, enter replays it
+  });
+
+  function closePlayForm() {
+    elPlayForm.classList.remove('open');
+    elPlayBtn.hidden = false;
+    elPlayInput.blur();
+  }
+
+  elPlayInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closePlayForm(); }
+  });
+
+  elPlayForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    pressBegin();
+    const text = elPlayInput.value;
+    closePlayForm();
+    if (text.trim()) playText(text);
+  });
+
+  const wait = (ms, token) => new Promise((res, rej) =>
+    setTimeout(() => (token === playToken ? res() : rej('stopped')), ms));
+
+  function stopPlayback() {
+    if (!playing) return;
+    playToken++;
+    playing = false;
+    stopTone();
+    elGlow.style.opacity = '0';
+    elPlayBtn.textContent = 'play text';
+    clearSymbolArea();
+  }
+
+  async function playText(text) {
+    stopPlayback();
+    hideInstructions();
+    commitLetter();          // finish anything half-keyed first
+    const token = ++playToken;
+    playing = true;
+    elPlayBtn.textContent = 'stop';
+    // start the message on a fresh word
+    if (decoded && decoded[decoded.length - 1] !== ' ') addSpace();
+    try {
+      for (const raw of text.toUpperCase()) {
+        if (/\s/.test(raw)) {
+          addSpace();
+          await wait(T('unit') * 4, token);   // 3 units already passed after the letter
+          continue;
+        }
+        const code = CHAR_TO_MORSE[raw];
+        if (!code) continue;               // nothing to send for this character
+        for (const sym of code) {
+          addSymbol(sym);
+          startTone();
+          elGlow.style.opacity = '1';
+          await wait(T('unit') * (sym === '.' ? 1 : 3), token);
+          stopTone();
+          elGlow.style.opacity = '0';
+          await wait(T('unit'), token);
+        }
+        commitLetter();
+        await wait(T('unit') * 2, token);
+      }
+    } catch (e) {
+      return;  // stopped by a keypress, Esc or the stop button
+    }
+    playing = false;
+    elPlayBtn.textContent = 'play text';
+  }
+
+  // Mouse handlers (ignore clicks on the home button, toggle, and ref panel)
+  const isUi = (t) => t.closest('a, #ref-toggle, #ref-panel, #bar');
+
+  document.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || isUi(e.target)) return;
+    e.preventDefault();
+    if (elPlayForm.classList.contains('open')) closePlayForm();
+    pressBegin('mouse', e.timeStamp);
   });
 
   // Listen on window so releasing outside the page still registers
   window.addEventListener('mouseup', (e) => {
-    pressEnd();
+    pressEnd('mouse', e.timeStamp);
   });
 
   // Touch handlers - passive:false so we can preventDefault (suppresses context menu + mouse synthesis)
   document.addEventListener('touchstart', (e) => {
-    if (e.target.closest('a') || e.target.closest('#ref-toggle') || e.target.closest('#ref-panel')) return;
+    if (isUi(e.target)) return;
     e.preventDefault();
-    pressBegin();
+    if (elPlayForm.classList.contains('open')) closePlayForm();
+    pressBegin('touch', e.timeStamp);
   }, { passive: false });
 
   document.addEventListener('touchend', (e) => {
-    if (e.target.closest('a') || e.target.closest('#ref-toggle') || e.target.closest('#ref-panel')) return;
+    if (isUi(e.target)) return;
     e.preventDefault();
-    pressEnd();
+    pressEnd('touch', e.timeStamp);
   }, { passive: false });
 
   document.addEventListener('touchcancel', () => {
-    pressEnd();
+    pressEnd('touch');
   });
+
+  if (matchMedia('(pointer: coarse)').matches) {
+    document.querySelector('.hint-keys').textContent = 'touch and hold anywhere to transmit';
+  }
 
   // Block context menu so long-press doesn't interrupt the hold
   document.addEventListener('contextmenu', (e) => {
