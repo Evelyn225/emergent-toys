@@ -6243,6 +6243,14 @@ function finishCourier() {
   if(!street)best[route.id]=best[route.id]==null?seconds:Math.min(best[route.id],seconds);
   courierJob=null;return {route,pay,bonus,seconds,street};
 }
+// Where the HUD arrow points: the recipient while you're up on the roofs, and from anywhere else (the street, a car)
+// back to the depot door, whose stairs are the way up again.
+function courierGuide() {
+  const r=courierRoute();
+  if(mode==='roof')return [r.recipient,{label:r.label,radius:.3,stop:courierAtRecipient()?'DELIVER':'CLIMB UP'}];
+  const [x,y]=COURIER_DEPOT.door;
+  return [{x,y},{label:COURIER_COMPANY.toUpperCase(),radius:.3,stop:'GO IN'}];
+}
 function courierLadderNear() {
   if(!['walk','roof'].includes(mode) || body.z>.5)return null;
   const z=mode==='roof'?roofH:0;
@@ -14223,7 +14231,7 @@ function hud() {
   hudBottom = (lines.length + task_.length + 1) * FS + 14;
   wantedHud();
   if (job && mode === 'drive') jobArrow();
-  if(courierRoute()&&mode!=='room')jobArrow(courierRoute().recipient,{label:courierRoute().label,radius:.3,stop:courierAtRecipient()?'DELIVER':'CLIMB UP'});
+  else if(courierRoute()&&mode!=='room')jobArrow(...courierGuide());
   minimap();
   hotbar();
   g.font = FS + 'px monospace';
@@ -14711,8 +14719,9 @@ function jobLine() {
   const way = Math.abs(ang) < 0.4 ? 'ahead' : Math.abs(ang) > 2.7 ? 'behind you' : (Math.abs(ang) < 1.2 ? 'ahead, ' : Math.abs(ang) > 1.9 ? 'behind, ' : '') + (ang > 0 ? 'right' : 'left');
   return `${t.what}: ${d < DROP_R * 10 ? 'right here, stop' : `${Math.round(d / 10) * 10}m ${way}`}`;
 }
-// the arrow at the top of the screen, in characters: a shaft and a two-stroke head drawn at whatever angle the fare
-// (or their stop) is from where the car's pointing, how far, and what to do there. Close enough: a blinking [ STOP ].
+// the arrow at the top of the screen: one solid outlined arrow turned to whatever angle the fare (or their stop) is
+// from where you're facing, how far, and what to do there. Close enough: a blinking [ STOP ].
+const JOB_ARROW = [[0,-1],[.62,-.18],[.24,-.18],[.24,.9],[-.24,.9],[-.24,-.18],[-.62,-.18]]; // pointing up, tip at -1
 function jobArrow(t=jobTarget(),courier=null) {
   if (!t || !courier&&!me) return;
   const ex = rel(t.x - (courier?px:me.x)), ey = rel(t.y - (courier?py:me.y)), d = Math.hypot(ex, ey),radius=courier?courier.radius:DROP_R;
@@ -14724,12 +14733,11 @@ function jobArrow(t=jobTarget(),courier=null) {
     const stop=`[ ${courier?courier.stop:'STOP'} ]`;
     if (fract(T * 2) < 0.7) artText([stop], x - stop.length*w/2, y - s / 2, s, () => C(YEL, 15));
   } else {
-    const L = s * 2.6, ux = Math.sin(ang), uy = -Math.cos(ang), tip = [x + ux * L, y + uy * L];
-    charLine(x - ux * L, y - uy * L, tip[0], tip[1], w, s, col); // the shaft
-    for (const side of [-1, 1]) { // the head: two strokes back from the tip
-      const h = ang + Math.PI + side * 0.55;
-      charLine(tip[0], tip[1], tip[0] + Math.sin(h) * L * 0.5, tip[1] - Math.cos(h) * L * 0.5, w, s, col);
-    }
+    const L = s * 2.2, c = Math.cos(ang), sn = Math.sin(ang);
+    g.beginPath();
+    for (const [ax, ay] of JOB_ARROW) g.lineTo(x + (ax * c - ay * sn) * L, y + (ax * sn + ay * c) * L);
+    g.closePath(); g.lineJoin = 'miter'; g.lineWidth = Math.max(3, s * 0.22); g.strokeStyle = 'rgba(0,0,0,0.8)';
+    g.stroke(); g.fillStyle = col; g.fill();
   }
   const label = courier?`${courier.label}  ${Math.round(d*10)}m`:d < DROP_R ? (job.ride ? 'let them out' : 'pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d) * 10}m`;
   g.font = FS + 'px monospace';
