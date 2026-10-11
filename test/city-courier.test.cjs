@@ -122,6 +122,20 @@ test('reaching the street forfeits the speed bonus and the best time, but the pa
   assert.deepEqual(r.best,{garden:44.5},'a street run is no record');assert.equal(r.trips,2);
 });
 
+test('the HUD arrow points at the recipient on the roofs and back to the depot door from the street',()=>{
+  const {ev}=loadCity();
+  const r=JSON.parse(ev(`JSON.stringify((()=>{
+    loadCourier();startCourier('garden');const route=courierRoute();
+    mode='roof';body.z=0;[px,py,roofH]=[179.5,102.5,COURIER_DEPOT.h];const roof=courierGuide();
+    mode='walk';[px,py]=[185,110];const street=courierGuide();
+    mode='drive';const driving=courierGuide();
+    return {roof:[roof[0]===route.recipient,roof[1].stop],street,driving,door:COURIER_DEPOT.door};
+  })())`));
+  assert.deepEqual(r.roof,[true,'CLIMB UP']);
+  assert.deepEqual(r.street,[{x:r.door[0],y:r.door[1]},{label:'ROOFTOP COURIERS',radius:.3,stop:'GO IN'}]);
+  assert.deepEqual(r.driving,r.street);
+});
+
 test("no building in a recipient's block has roof access, and every elevator rides up its own building",()=>{
   const {ev}=loadCity();
   const r=JSON.parse(ev(`JSON.stringify((()=>{

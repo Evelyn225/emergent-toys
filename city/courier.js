@@ -56,6 +56,14 @@ function finishCourier() {
   if(!street)best[route.id]=best[route.id]==null?seconds:Math.min(best[route.id],seconds);
   courierJob=null;return {route,pay,bonus,seconds,street};
 }
+// Where the HUD arrow points: the recipient while you're up on the roofs, and from anywhere else (the street, a car)
+// back to the depot door, whose stairs are the way up again.
+function courierGuide() {
+  const r=courierRoute();
+  if(mode==='roof')return [r.recipient,{label:r.label,radius:.3,stop:courierAtRecipient()?'DELIVER':'CLIMB UP'}];
+  const [x,y]=COURIER_DEPOT.door;
+  return [{x,y},{label:COURIER_COMPANY.toUpperCase(),radius:.3,stop:'GO IN'}];
+}
 function courierLadderNear() {
   if(!['walk','roof'].includes(mode) || body.z>.5)return null;
   const z=mode==='roof'?roofH:0;
