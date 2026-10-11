@@ -32,7 +32,7 @@ Running list of what needs updating across the toys. Check things off as they la
 - [x] dla crystal: resizes keep the crystal, stops once fully grown
 - [ ] dla crystal: tap-to-reset is the only interaction
 - [x] morse: only plain typing keys key the tone (cmd/ctrl/alt combos, modifiers, tab, arrows, F-keys don't), a second key no longer ends the first one's press, switching apps mid-press no longer leaves the tone stuck, right-click doesn't key, press timing comes from the events (the first press could read as a dash). added text-to-morse playback, slow/normal/fast speed, punctuation, long messages stay on screen
-- [ ] poker palace: on phones the bankroll/stats panel sits above the table
+- [x] poker palace: in the one-column layout (phones, tablets) the table comes first and the money, bet controls and deal/draw button move under the player's hand, so cards and buttons share a screen (they go back to the bankroll panel when the window widens). table spacing tightened on phones, bet chips in 3 columns
 
 ## site-wide
 - [x] sitemap listed 3 pages that don't exist (birds, word-sigil, audio-sampler) and was missing physarum, magnetic pendulum, dla crystal
