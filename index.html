@@ -492,21 +492,76 @@
   }
   setTimeout(typeTitle, 220);             // let the content fade land first
 
+  // ── Title filters: whole pixels ───────────────────────────────
+  // Whole-pixel SVG filters. Where a feOffset or feDisplacementMap shift lands
+  // between pixels, Chrome rounds it to the nearest pixel and Firefox drops the
+  // fraction. The VHS look lives in 1-3px shifts, so Firefox lost most of it:
+  // all of the edge grain (every shift under a pixel) and much of the tearing
+  // and RGB split. Every shift is made whole before either browser sees it:
+  // offsets are rounded, and each displacement reads its map through a step
+  // function whose steps sit a quarter pixel past a whole number of pixels,
+  // which rounding and truncation both resolve to the same pixel - the one
+  // Chrome was already drawing.
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const SNAP_STEPS = 64;
+  const roundAway = v => Math.sign(v) * Math.round(Math.abs(v));
+  function snapTable(scale) {
+    const out = [];
+    for (let k = 0; k < SNAP_STEPS; k++) {
+      const n = roundAway(scale * ((k + 0.5) / SNAP_STEPS - 0.5));
+      const v = scale ? 0.5 + (n + 0.25 * Math.sign(n)) / scale : 0.5;
+      out.push(Math.min(1, Math.max(0, v)).toFixed(4));
+    }
+    return out.join(' ');
+  }
+  function pixelSnapFilter(filter) {
+    filter.querySelectorAll('feOffset').forEach(o => ['dx', 'dy'].forEach(a => {
+      o.setAttribute(a, roundAway(parseFloat(o.getAttribute(a)) || 0));
+    }));
+    filter.querySelectorAll('feDisplacementMap').forEach((map, i) => {
+      let steps = map.previousElementSibling;
+      if (!steps || !steps.hasAttribute('data-snap')) {
+        steps = document.createElementNS(SVGNS, 'feComponentTransfer');
+        steps.setAttribute('data-snap', '');
+        steps.setAttribute('in', map.getAttribute('in2'));
+        steps.setAttribute('result', 'snap' + i);
+        ['feFuncR', 'feFuncG', 'feFuncB'].forEach(t => {
+          const fn = document.createElementNS(SVGNS, t);
+          fn.setAttribute('type', 'discrete');
+          steps.appendChild(fn);
+        });
+        map.before(steps);
+        map.setAttribute('in2', 'snap' + i);
+      }
+      const table = snapTable(parseFloat(map.getAttribute('scale')) || 0);
+      steps.querySelectorAll('feFuncR, feFuncG, feFuncB').forEach(fn => fn.setAttribute('tableValues', table));
+    });
+  }
+  ['title-vhs-dark', 'title-vhs-light'].forEach(id => pixelSnapFilter(document.getElementById(id)));
+
   // ── Title tape ────────────────────────────────────────────────
   // Same as the PlantHUD demo: every 70ms re-roll the tear noise, rescale the
   // tears and wobble the channel split. (The demo's jitter is left out.)
+  //
+  // Each tick swaps in a fresh copy of the filter rather than editing the
+  // live one: Firefox renders an SVG filter from the attributes it had when
+  // first used and ignores later changes, which froze the title on its first,
+  // mildest frame there. A new element is read from scratch everywhere.
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const tearNoise = document.querySelectorAll('.tv-tear-noise');
-    const tears     = document.querySelectorAll('.tv-tear');
-    const splits    = document.querySelectorAll('.tv-split');
     setInterval(() => {
-      const seed = Math.floor(Math.random() * 1000);
-      const freq = `0.002 ${(0.15 + Math.random() * 0.1).toFixed(3)}`;
-      tearNoise.forEach(n => { n.setAttribute('seed', seed); n.setAttribute('baseFrequency', freq); });
-      const k = 0.8 + Math.random() * 0.5;
-      tears.forEach(t => t.setAttribute('scale', (t.dataset.base * k).toFixed(1)));
+      const seed  = Math.floor(Math.random() * 1000);
+      const freq  = `0.002 ${(0.15 + Math.random() * 0.1).toFixed(3)}`;
+      const k     = 0.8 + Math.random() * 0.5;
       const split = 1 + Math.random() * 0.8;
-      splits.forEach(o => o.setAttribute('dx', (o.dataset.sign * split).toFixed(1)));
+      ['title-vhs-dark', 'title-vhs-light'].forEach(id => {
+        const live = document.getElementById(id);
+        const f = live.cloneNode(true);
+        f.querySelectorAll('.tv-tear-noise').forEach(n => { n.setAttribute('seed', seed); n.setAttribute('baseFrequency', freq); });
+        f.querySelectorAll('.tv-tear').forEach(t => t.setAttribute('scale', (t.dataset.base * k).toFixed(1)));
+        f.querySelectorAll('.tv-split').forEach(o => o.setAttribute('dx', (o.dataset.sign * split).toFixed(1)));
+        pixelSnapFilter(f);
+        live.replaceWith(f);
+      });
     }, 70);
   }
 
