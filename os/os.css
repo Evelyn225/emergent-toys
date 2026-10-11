@@ -1,15 +1,15 @@
 @font-face {
   font-family: 'W95font';
-  src: url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff2') format('woff2'),
-       url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff') format('woff');
+  src: url('/w95font.woff2') format('woff2'),
+       url('/w95font.woff') format('woff');
   font-style: normal;
   font-weight: 400;
   font-display: swap;
 }
 @font-face {
   font-family: 'W95font';
-  src: url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff2') format('woff2'),
-       url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff') format('woff');
+  src: url('/w95font-bold.woff2') format('woff2'),
+       url('/w95font-bold.woff') format('woff');
   font-style: normal;
   font-weight: 700;
   font-display: swap;

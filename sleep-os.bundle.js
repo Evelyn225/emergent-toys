@@ -3584,19 +3584,19 @@ const SEEDED_HOME_MEDIA = [
 ];
 const LEGACY_BUILTIN_WALLPAPER_IDS = new Set(['default', 'magicant', 'hills', 'battle', 'summers', 'saturn', 'cave']);
 const SEEDED_WALLPAPERS = [
-  { path: DEFAULT_WALLPAPER_PATH, label: 'Default', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/default.jpg', mime: 'image/jpeg' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\CITY.JPG', label: 'City', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/city.jpg', mime: 'image/jpeg' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\CRAFT.PNG', label: 'Craft', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/craft.png', mime: 'image/png' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\DARK.JPG', label: 'Dark', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/dark.jpg', mime: 'image/jpeg' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\FOREST.PNG', label: 'Forest', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/forest.png', mime: 'image/png' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\HILLS.JPG', label: 'Hills', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/hills.jpg', mime: 'image/jpeg' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\OCEAN.GIF', label: 'Ocean', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/ocean.gif', mime: 'image/gif' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\POWERLINES.JPG', label: 'Powerlines', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/powerlines.jpg', mime: 'image/jpeg' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\REBIRTH.GIF', label: 'Rebirth', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/rebirth.gif', mime: 'image/gif' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\SPACE.PNG', label: 'Space', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/space.png', mime: 'image/png' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\STATIC.GIF', label: 'Static', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/static.gif', mime: 'image/gif' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\WATCHING.GIF', label: 'Watching', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/watching.gif', mime: 'image/gif' },
-  { path: SYSTEM_WALLPAPER_DIR + '\\WAVES.GIF', label: 'Waves', assetUrl: 'https://raw.githubusercontent.com/evelyn225/emergent-toys/main/images/wallpapers/waves.gif', mime: 'image/gif' },
+  { path: DEFAULT_WALLPAPER_PATH, label: 'Default', assetUrl: '/images/wallpapers/default.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\CITY.JPG', label: 'City', assetUrl: '/images/wallpapers/city.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\CRAFT.PNG', label: 'Craft', assetUrl: '/images/wallpapers/craft.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\DARK.JPG', label: 'Dark', assetUrl: '/images/wallpapers/dark.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\FOREST.PNG', label: 'Forest', assetUrl: '/images/wallpapers/forest.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\HILLS.JPG', label: 'Hills', assetUrl: '/images/wallpapers/hills.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\OCEAN.GIF', label: 'Ocean', assetUrl: '/images/wallpapers/ocean.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\POWERLINES.JPG', label: 'Powerlines', assetUrl: '/images/wallpapers/powerlines.jpg', mime: 'image/jpeg' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\REBIRTH.GIF', label: 'Rebirth', assetUrl: '/images/wallpapers/rebirth.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\SPACE.PNG', label: 'Space', assetUrl: '/images/wallpapers/space.png', mime: 'image/png' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\STATIC.GIF', label: 'Static', assetUrl: '/images/wallpapers/static.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\WATCHING.GIF', label: 'Watching', assetUrl: '/images/wallpapers/watching.gif', mime: 'image/gif' },
+  { path: SYSTEM_WALLPAPER_DIR + '\\WAVES.GIF', label: 'Waves', assetUrl: '/images/wallpapers/waves.gif', mime: 'image/gif' },
 ];
 const SEEDED_WALLPAPER_MAP = new Map(SEEDED_WALLPAPERS.map(item => [item.path, item]));
 const registryData = {
@@ -8602,8 +8602,8 @@ const SCRIPT_LABEL_RE = /^:([A-Za-z_][\w.-]*)$/;
 // This is NOT heap, and SYSMON never calls it heap. Per-worker heap is not
 // exposed to JS, and the one API that could attribute it
 // (performance.measureUserAgentSpecificMemory) needs cross-origin isolation,
-// whose COEP would break every image sleepOS loads from
-// raw.githubusercontent.com. This figure is real data about the process and
+// whose COEP would break the videos and music sleepOS streams from its R2
+// bucket on another origin. This figure is real data about the process and
 // responsive to allocation, which is the honest thing available.
 var SCRIPT_FRAME_BYTES = 64;
 
@@ -16897,8 +16897,8 @@ function openBrowser(initialUrl) {
       // resolves because a srcdoc document inherits its parent's base URL.
       return `<a class="lnk" href="#" data-nav-url="${escAttr(fav.url)}" data-nav-title="${safeTitle}" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>${iconMarkup(fav.homeIcon)}${safeTitle}</a>`;
     }).join('');
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff') format('woff');font-style:normal;font-weight:400;font-display:swap;}
-@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff') format('woff');font-style:normal;font-weight:700;font-display:swap;}
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@font-face{font-family:'W95font';src:url('/w95font.woff2') format('woff2'),url('/w95font.woff') format('woff');font-style:normal;font-weight:400;font-display:swap;}
+@font-face{font-family:'W95font';src:url('/w95font-bold.woff2') format('woff2'),url('/w95font-bold.woff') format('woff');font-style:normal;font-weight:700;font-display:swap;}
 :root{--sleep-font:'W95font',sans-serif;}
       body{margin:0;background:#c0c0c0;font-family: var(--sleep-font);font-size:12px;}
       h1{background:#000080;color:#fff;margin:0;padding:6px 12px;font-size:13px;}

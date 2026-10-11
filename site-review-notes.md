@@ -38,7 +38,7 @@ Running list of what needs updating across the toys. Check things off as they la
 - [x] sitemap listed 3 pages that don't exist (birds, word-sigil, audio-sampler) and was missing physarum, magnetic pendulum, dla crystal
 - [x] favicons, home button, backgrounds, manifest and catch sounds loaded from raw.githubusercontent.com instead of the site
 - [x] `site.webmanifest` icon pointed at a nonexistent `public/images/` path and had no name
-- [ ] sleepOS still pulls its fonts and wallpapers from raw.githubusercontent.com (`os/os.css`, `os/registry.js`, `apps/browser.js`). left alone for now since wallpaper URLs get persisted into users' saved filesystems and the bundle needs a rebuild
+- [x] sleepOS fonts and wallpapers load from the site instead of raw.githubusercontent.com (`os/os.css`, `os/registry.js`, `apps/browser.js`, bundles rebuilt). the saved wallpaper setting is a path and the seeded wallpaper records are rebuilt every boot, so nothing stale sticks around; any old raw URL a user copied elsewhere still resolves since the files are still in the repo
 - [x] only index / sleepOS / mosh mirror had a meta description, only index and sleepOS had Open Graph tags, so most toy links unfurled blank. every toy now has a description, OG/Twitter tags and a real 1200x630 screenshot in `images/previews/`
 - [x] sleepOS preview pointed at `images/sleep-os-preview.png`, which doesn't exist
 - [ ] tablecloth, wave collapse and the best emoji are in the sitemap but not linked from the index. lissajous was in the same spot and got pulled from the sitemap

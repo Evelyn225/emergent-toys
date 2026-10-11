@@ -106,8 +106,8 @@ function openBrowser(initialUrl) {
       // resolves because a srcdoc document inherits its parent's base URL.
       return `<a class="lnk" href="#" data-nav-url="${escAttr(fav.url)}" data-nav-title="${safeTitle}" onclick='window.parent.postMessage({type:"browser-nav",url:${safeUrl}},"*");return false;'>${iconMarkup(fav.homeIcon)}${safeTitle}</a>`;
     }).join('');
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font.woff') format('woff');font-style:normal;font-weight:400;font-display:swap;}
-@font-face{font-family:'W95font';src:url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff2') format('woff2'),url('https://raw.githubusercontent.com/evelyn225/emergent-toys/main/w95font-bold.woff') format('woff');font-style:normal;font-weight:700;font-display:swap;}
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@font-face{font-family:'W95font';src:url('/w95font.woff2') format('woff2'),url('/w95font.woff') format('woff');font-style:normal;font-weight:400;font-display:swap;}
+@font-face{font-family:'W95font';src:url('/w95font-bold.woff2') format('woff2'),url('/w95font-bold.woff') format('woff');font-style:normal;font-weight:700;font-display:swap;}
 :root{--sleep-font:'W95font',sans-serif;}
       body{margin:0;background:#c0c0c0;font-family: var(--sleep-font);font-size:12px;}
       h1{background:#000080;color:#fff;margin:0;padding:6px 12px;font-size:13px;}

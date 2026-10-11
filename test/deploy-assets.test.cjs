@@ -126,8 +126,8 @@ test('every non-source file under os/ is deployed', () => {
 });
 
 // The same failure from the other end: a url() in the stylesheet pointing at a
-// file that is not there at all. Resolved relative to os/os.css, which is where
-// the browser resolves it from.
+// file that is not there at all. Resolved against os/os.css the way the browser
+// does it, so a root-relative url (/w95font.woff2) lands at the site root.
 test('every url() in os/os.css points at a file that exists and is deployed', () => {
   const css = fs.readFileSync(path.join(ROOT, 'os/os.css'), 'utf8');
   const refs = [...css.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)]
@@ -137,7 +137,7 @@ test('every url() in os/os.css points at a file that exists and is deployed', ()
     .filter(u => !/^(data:|https?:|\/\/|#)/.test(u));
   assert.ok(refs.length > 0, 'expected at least one local url() in os/os.css');
   for (const ref of refs) {
-    const rel = 'os/' + ref.replace(/^\.\//, '').split('?')[0].split('#')[0];
+    const rel = decodeURIComponent(new URL(ref, 'https://site.invalid/os/os.css').pathname.slice(1));
     assert.ok(fs.existsSync(path.join(ROOT, rel)), `os/os.css references ${ref}, which does not exist`);
     assert.ok(isDeployed(rel), `os/os.css references ${ref} (${rel}), which matches no vercel.json build src`);
   }
