@@ -23,6 +23,8 @@
   src: url('PlantHUD.woff2') format('woff2'), url('PlantHUD.woff') format('woff'), url('PlantHUD.ttf') format('truetype');
 }
 :root {
+  /* the 4:5 screen is as wide as fits both the column and the window height */
+  --screen-w: min(900px, calc((100vh - 48px) * .8));
   --bg: #000;
   --ink: #f2f4ff;
   --panel: #05106a;
@@ -59,7 +61,7 @@ body {
 .nofx .tube::after, .nofx .scan::after { display: none; }
 .screen > * { text-shadow: 0 0 2px rgba(220, 230, 255, .6); }
 /* scanlines sit outside the filter so they stay thin and sharp */
-.tube { position: relative; max-width: 900px; margin: 0 auto; container-type: inline-size; }
+.tube { position: relative; width: min(100%, var(--screen-w)); margin: 0 auto; container-type: inline-size; }
 .tube::after {
   content: '';
   position: absolute; inset: 0;
@@ -114,7 +116,7 @@ body {
   line-height: 1.42;
 }
 .panel .off { color: #9aa3e0; }
-@container (max-width: 520px) { .panel { font-size: .75em; } }
+@container (max-width: 420px) { .panel { font-size: .75em; } }
 .foot { position: absolute; left: 4.4%; bottom: 3%; line-height: 1.4; }
 .foot small { display: block; font-size: .8em; }
 .ruler {
@@ -123,7 +125,7 @@ body {
   display: flex; flex-direction: column; justify-content: space-between;
   padding-left: 1.2em;
 }
-.tester { max-width: 900px; margin: 28px auto 0; }
+.tester { max-width: max(var(--screen-w), 640px); margin: 28px auto 0; }
 .row label { display: flex; align-items: center; gap: 8px; margin: 0; }
 .tester > label { display: block; font-size: 20px; color: #8890c0; margin-bottom: 6px; }
 .tester textarea {
@@ -196,7 +198,7 @@ a { color: #8fa0ff; }
   <textarea id="txt">THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG</textarea>
   <div class="row">
     <label><input type="checkbox" id="fx" checked> crt effect</label>
-    <label>size <input type="range" id="sz" min="20" max="120" step="20" value="40"> <span id="szv">40px</span></label>
+    <label>size <input type="range" id="sz" min="10" max="120" step="10" value="40"> <span id="szv">40px</span></label>
     <a href="PlantHUD.ttf" download>download .ttf</a>
   </div>
   <div class="out scan" id="out"><div class="crt" id="outText"></div></div>
@@ -522,7 +524,7 @@ function draw() {
 
     const [gx, gy] = sw(b.x, b.y);
     const lines = [`T${pad(b.id)} ${b.growing ? 'h' + signed(deg(b.heading)) : 'IDL'}`,
-      `x${pad(Math.round(gx), 3)} y${pad(Math.round(gy), 3)}`].slice(0, W < 520 ? 1 : 2);
+      `x${pad(Math.round(gx), 3)} y${pad(Math.round(gy), 3)}`].slice(0, W < 420 ? 1 : 2);
     const w = Math.max(...lines.map(l => ctx.measureText(l).width)) + padX * 2;
     // tags sit outboard of the tip, but stay off the panel and the ruler
     let side = b.x < ROOT_X ? -1 : 1;
