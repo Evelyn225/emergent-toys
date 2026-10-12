@@ -82,9 +82,23 @@ function jobLine() {
   const way = Math.abs(ang) < 0.4 ? 'ahead' : Math.abs(ang) > 2.7 ? 'behind you' : (Math.abs(ang) < 1.2 ? 'ahead, ' : Math.abs(ang) > 1.9 ? 'behind, ' : '') + (ang > 0 ? 'right' : 'left');
   return `${t.what}: ${d < DROP_R * 10 ? 'right here, stop' : `${Math.round(d / 10) * 10}m ${way}`}`;
 }
-// the arrow at the top of the screen: one solid outlined arrow turned to whatever angle the fare (or their stop) is
-// from where you're facing, how far, and what to do there. Close enough: a blinking [ STOP ].
-const JOB_ARROW = [[0,-1],[.62,-.18],[.24,-.18],[.24,.9],[-.24,.9],[-.24,-.18],[-.62,-.18]]; // pointing up, tip at -1
+// The arrow: ascii art pointing up, typed once into its own canvas at the size it's shown, then drawn turned to any
+// angle. Each '#' is a solid block of background colour, as the screen paints them, with a black edge round the shape.
+const ARROW_ART = ['    #    ', '   ###   ', '  #####  ', ' ####### ', '#########', '   ###   ', '   ###   ', '   ###   ', '   ###   '];
+let arrowCanvas = null;
+function arrowImage(size) {
+  if (arrowCanvas?.size === size) return arrowCanvas;
+  const c = document.createElement('canvas'), x = c.getContext('2d'), edge = Math.max(2, Math.round(size * 0.18));
+  x.font = size + 'px monospace';
+  const w = Math.round(x.measureText('M').width), cells = [];
+  ARROW_ART.forEach((l, r) => { for (let k = 0; k < l.length; k++) if (l[k] !== ' ') cells.push([edge + k * w, edge + r * size]); });
+  c.width = ARROW_ART[0].length * w + edge * 2; c.height = ARROW_ART.length * size + edge * 2;
+  x.fillStyle = 'rgba(0,0,0,0.85)'; for (const [cx, cy] of cells) x.fillRect(cx - edge, cy - edge, w + edge * 2, size + edge * 2);
+  x.fillStyle = PAL[C(YEL, 15)]; for (const [cx, cy] of cells) x.fillRect(cx, cy, w, size);
+  return arrowCanvas = Object.assign(c, { size });
+}
+// the arrow at the top of the screen: the block arrow turned to whatever angle the fare (or their stop) is from where
+// you're facing, how far, and what to do there. Close enough: a blinking [ STOP ].
 function jobArrow(t=jobTarget(),courier=null) {
   if (!t || !courier&&!me) return;
   const ex = rel(t.x - (courier?px:me.x)), ey = rel(t.y - (courier?py:me.y)), d = Math.hypot(ex, ey),radius=courier?courier.radius:DROP_R;
@@ -96,11 +110,8 @@ function jobArrow(t=jobTarget(),courier=null) {
     const stop=`[ ${courier?courier.stop:'STOP'} ]`;
     if (fract(T * 2) < 0.7) artText([stop], x - stop.length*w/2, y - s / 2, s, () => C(YEL, 15));
   } else {
-    const L = s * 2.2, c = Math.cos(ang), sn = Math.sin(ang);
-    g.beginPath();
-    for (const [ax, ay] of JOB_ARROW) g.lineTo(x + (ax * c - ay * sn) * L, y + (ax * sn + ay * c) * L);
-    g.closePath(); g.lineJoin = 'miter'; g.lineWidth = Math.max(3, s * 0.22); g.strokeStyle = 'rgba(0,0,0,0.8)';
-    g.stroke(); g.fillStyle = col; g.fill();
+    const img = arrowImage(Math.round(s * 0.58));
+    g.save(); g.translate(x, y); g.rotate(ang); g.drawImage(img, -img.width / 2, -img.height / 2); g.restore();
   }
   const label = courier?`${courier.label}  ${Math.round(d*10)}m`:d < DROP_R ? (job.ride ? 'let them out' : 'pick them up') : `${job.ride ? 'DROP OFF' : 'PICK UP'}  ${Math.round(d) * 10}m`;
   g.font = FS + 'px monospace';
