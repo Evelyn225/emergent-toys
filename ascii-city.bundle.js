@@ -7752,13 +7752,6 @@ function slabEdge(i, u, z, d, side) {
   if (z > EL_TOP - 0.025 || z < EL_BOT + 0.02) return set(i, '=', C(GRAY, L));
   set(i, Math.abs(fract(u * 3 + (z - EL_BOT) * 12) - 0.5) < 0.12 ? 'X' : fract(u * 6) < 0.15 ? 'o' : ' ', C(GRAY, L * 0.8));
 }
-// standing under the el while a train goes over: the whole street shudders (a row up or down, now and then)
-function shake() {
-  if (mode === 'room' || mode === 'roof' || !underEl(py) || mode === 'el' || mode === 'elplat') return 0;
-  if (!elTrains(T).some(t => !t.stopped && Math.abs(rel(t.x - px)) < 3.5)) return 0;
-  return Math.random() < 0.6 ? 0 : Math.random() < 0.5 ? -1 : 1;
-}
-
 function skyCell(i, r, x, rx, ry) {
   ZB[i] = Infinity; FL[i] = 0;
   const up = (hor - r - 0.5) / projY, az = Math.atan2(ry, rx); // up = tan(elevation)
@@ -14488,7 +14481,7 @@ function render(dt) {
     if (mode === 'walk') eye += architectureGroundHeight(px, py);
   }
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
-  hor = (rows >> 1) + pitch * rows + (freecam ? 0 : shake()) | 0;
+  hor = (rows >> 1) + pitch * rows | 0;
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
   for (let x = 0; x < cols; x++) {
