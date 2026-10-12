@@ -304,7 +304,7 @@ const ROOM_DEFS = {
     } },
   petshop: { grid: boxRoom(10, 8), light: 0.8, floor: 'tile', ceil: 'strip', sign: true, wall: petWall, keeper: [5, 1.05],
     props: r => [...counterBox(5, 1.7, 1.6), standing(5, 1.05, r.neon),
-                 ...petCage(2.2, 4, KITTEN_LOOK, () => (T * 1.1 | 0) % 6 === 0 ? 'f1' : 'f0', 0.5), ...petCage(7.8, 4, dogLook(WARM), () => 'f' + (5 + ((T * 4) & 1)), 0.5),
+                 ...petCage(2.2, 4, KITTEN_LOOK, () => fract(T / 6 + 0.4) < 0.04 ? 'f1' : 'f0', 0.5), ...petCage(7.8, 4, dogLook(WARM), () => 'f' + (5 + ((T * 4) & 1)), 0.5),
                  figProp(4.2, 5.3, dogLook(BRICK), { h: 1.22 / 2, pose: () => 'f' + (5 + ((T * 2) & 1)), face: [0, 0], chat: false, light: 6 })] }, // a kitten, a puppy, and the shop dog
   florist: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, glyphs: '*@&%', wall: floristWall, keeper: [5, 1.05],
     props: r => {
@@ -1018,7 +1018,7 @@ function roomSprites() {
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
     const watch = (x, y) => Math.hypot(x - px, y - py) < 2.5 ? [0, 0] : [1, 0.4];
-    if (pets.includes('petcat')) { const x = pet[0] - 0.35, y = pet[1]; drawAnimal(x - px, y - py, 0, 0.75, ...watch(x, y), CAT_LOOK, (T * 1.4 | 0) % 7 === 0 ? 1 : 0, { light: 6 }); }
+    if (pets.includes('petcat')) { const x = pet[0] - 0.35, y = pet[1]; drawAnimal(x - px, y - py, 0, 0.75, ...watch(x, y), CAT_LOOK, fract(T / 5) < 0.05 ? 1 : 0, { light: 6 }); }
     if (pets.includes('petdog')) { const x = pet[0] + 0.35, y = pet[1]; drawAnimal(x - px, y - py, 0, 1.22, ...watch(x, y), dogLook(BRICK), 5 + ((T * (Math.hypot(x - px, y - py) < 2.5 ? 6 : 1.5)) & 1), { light: 6 }); }
   }
   if (room.kind === 'station') {

@@ -397,7 +397,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
 // solid colour), so they read as clearly at any size. They borrow the people's colour roles: BODY is a top, HEAD is
 // skin (so the one-pixel eye melts into the head far off, as ours do), BEAK a hat, LEG a shoe, WING trousers, MARK a
 // pack, PALE a shirt's inner. Body frame as for people: x their right, y ahead, z up, in sprite pixels.
-const AR = { BODY: FR.TOP, HEAD: FR.SKIN, BEAK: FR.HAT, LEG: FR.SHOE, WING: FR.BOT, MARK: FR.PACK, PALE: FR.INNER, EYE: FR.EYE, PUPIL: FR.HAIR, TONGUE: FR.TIE };
+const AR = { BODY: FR.TOP, HEAD: FR.SKIN, BEAK: FR.HAT, LEG: FR.SHOE, WING: FR.BOT, MARK: FR.PACK, PALE: FR.INNER, EYE: FR.SHADES, PUPIL: FR.HAIR, TONGUE: FR.MIC }; // (eyes and tongue on roles that don't melt into their neighbours far off, as people's one-pixel details do)
 // Close-up animals are built small and scaled up to fill the sprite (more pixels, more detail); drawn at h / scale.
 const ANIMAL_SCALE = { cat: () => 2.5, dog: f => f >= 5 ? 2 : 1.4 };
 const scaleBody = ({ parts, decals }, k) => k === 1 ? { parts, decals } : {
@@ -413,7 +413,7 @@ function animalLook(kind, col) {
   const B = new Uint8Array(FIG_ROLES), Lv = new Float32Array(FIG_ROLES), put = (r, [b, l], k = 1) => { B[r] = b; Lv[r] = l * k; };
   put(FR.TOP, c.body); put(FR.TOP_D, c.body, 0.68); put(FR.SKIN, c.head); put(FR.SKIN_D, c.head, 0.7); put(FR.HAT, c.beak); put(FR.HAT_D, c.beak, 0.75);
   put(FR.SHOE, c.leg); put(FR.BOT, c.wing); put(FR.BOT_D, c.wing, 0.68); put(FR.PACK, c.mark); put(FR.PACK_D, c.mark, 0.65); put(FR.INNER, c.pale); put(FR.EYE, c.eye || [GRAY, 0]);
-  put(FR.HAIR, c.pupil || [GRAY, 0]); put(FR.TIE, c.tongue || [MAG, 11]);
+  put(FR.HAIR, c.pupil || [GRAY, 0]); put(FR.MIC, c.tongue || [MAG, 11]); put(FR.SHADES, c.eye || [GRAY, 0]);
   const scale = f => ANIMAL_SCALE[kind]?.(f) ?? 1;
   return { shape: 'animal:' + kind, base: B, lvl: Lv, scale, build: key => { const f = +key.slice(1) || 0; return scaleBody(ANIMAL_BODIES[kind](f), scale(f)); } };
 }
@@ -483,7 +483,7 @@ const ANIMAL_BODIES = {
     ];
     for (const sg of [1, -1]) {
       parts.push(figEll(fAdd(hc, [sg * 0.55, 1.85, -0.6]), AN_I, [0.75, 0.55, 0.6], () => R.PALE)); // the muzzle's cheeks
-      parts.push(figEll(fAdd(hc, [sg * 1.0, 1.95, 0.4]), AN_I, [0.72, 0.3, 0.62], h => f === 1 ? R.HEAD : Math.abs(h.l[0]) < 0.32 ? R.PUPIL : R.EYE)); // an eye
+      parts.push(figEll(fAdd(hc, [sg * 1.05, 1.95, 0.4]), AN_I, [0.95, 0.32, 0.75], h => f === 1 ? R.BODY : Math.abs(h.l[0]) < 0.16 && Math.abs(h.l[2]) < 0.8 ? R.PUPIL : R.EYE)); // an eye: green, a slit pupil
       parts.push(figEll(fAdd(hc, [sg * 1.6, 0.1, 2.05]), [[Math.cos(0.35), 0, sg * Math.sin(0.35)], [0, 1, 0], [-sg * Math.sin(0.35), 0, Math.cos(0.35)]], [0.75, 0.32, 1.25],
         h => h.l[1] > 0.4 && Math.abs(h.l[0]) < 0.6 && h.l[2] < 0.6 ? R.BEAK : R.BODY)); // an ear, pink inside
       parts.push(figCap([sg * 1.1, 1.7, 4.2], [sg * 1.1, 2, 0.55], 0.7, () => R.PALE), figEll([sg * 1.1, 2.4, 0.4], AN_I, [0.75, 0.9, 0.45], () => R.PALE)); // a front leg, its paw
