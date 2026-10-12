@@ -60,7 +60,9 @@ Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arr
 - [x] **Street dogs** (walkers' dogs) and the **lost dog** task: built like the Gardens animals (`ANIMAL_BODIES.dog`,
       `drawDog` in `figures.js`), trotting, sniffing nose down, tail wagging, in their coat colour with a red collar.
       The lead is a sagging cord of rods.
-- [x] **The ball**: a sphere (`dot`).
+- [x] **The ball**: a football (`raySphere`, black pentagons and white hexagons that roll with it).
+- [x] **Pets at home**: the cat (an orange tabby sitting up, tail round its paws, green eyes, a slow blink) and the
+      dog (sitting up, wagging), built like the rest; they turn to watch you when you're close.
 
 ## Not doing: street trees (they read fine as flat sprites)
 
@@ -71,5 +73,5 @@ Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arr
 ## Interiors (separate pass)
 
 Rooms (`rooms.js`, `grand-hotel.js`, `shotengai.js`, `home-balcony.js`) still use `SP(...)` art sprites from `ART`:
-stools, plants, jukebox, barber chair and pole, treadmill, weight rack, speakers, cages, the home cat and dog.
+stools, plants, jukebox, barber chair and pole, treadmill, weight rack, speakers, cages, the pet shop's dog.
 These are a different scale (metres, not cells) and you're always close, so they'd need their own batch.

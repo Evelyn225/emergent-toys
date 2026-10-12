@@ -597,9 +597,6 @@ function homeRecord(r = room) {
   const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1]));
   return owned.homes.find(h => h.cell === cell || SHOP[cell] && SHOP[h.cell] === SHOP[cell]) || null;
 }
-const homeCatArt = () => (T * 1.4 | 0) % 7 === 0
-  ? [' /\\_/\\ ', ' ( -.- )', '  > ^ < ']
-  : [' /\\_/\\ ', ' ( o.o )', '  > ^ < '];
 function homePlan(w, h, tier) {
   const extra = {}, inside = tier === 2 ? 19 : w - 1;
   const wall = (x0, y0, x1, y1, c = '#') => {
@@ -1010,8 +1007,10 @@ function roomSprites() {
       drawDropped({ ...it, displayZ: 1.07 }, x - px, shelf[1] - py, 0.065);
     }
     const pets = home.pets || (home.pet ? [home.pet] : []);
-    if (pets.includes('petcat')) drawArt(pet[0] - 0.35 - px, pet[1] - py, 0, 0.34, 0.54, homeCatArt(), (c, row) => C(row === 1 && c === 'o' ? GREEN : row === 0 ? GRAY : BRICK, 13));
-    if (pets.includes('petdog')) drawArt(pet[0] + 0.35 - px, pet[1] - py, 0, 0.4, 0.42, ART.dog, (c, row, L) => C(BRICK, L * 1.3));
+    // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
+    const watch = (x, y) => Math.hypot(x - px, y - py) < 2.5 ? [0, 0] : [1, 0.4];
+    if (pets.includes('petcat')) { const x = pet[0] - 0.35, y = pet[1]; drawFigure(x - px, y - py, 0, 0.77, ...watch(x, y), CAT_LOOK, (T * 1.4 | 0) % 7 === 0 ? 'f1' : 'f0', { light: 6 }); }
+    if (pets.includes('petdog')) { const x = pet[0] + 0.35, y = pet[1]; drawFigure(x - px, y - py, 0, 1.22, ...watch(x, y), dogLook(BRICK), 'f' + (5 + ((T * (Math.hypot(x - px, y - py) < 2.5 ? 6 : 1.5)) & 1)), { light: 6 }); }
   }
   if (room.kind === 'station') {
     const tx = trainX(room);
