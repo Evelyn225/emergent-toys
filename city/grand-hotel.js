@@ -78,7 +78,7 @@ ROOM_DEFS.grandhotel = { grid: boxRoom(14, 9), light: 0.95, floor: 'marble', cei
   props: r => [
     ...counterBox(6.5, 2.75, 1.35, 1.05), standing(6.5, 2.15, YEL),
     BX(3, 1.2, 0.42, 0.42, 0, 0.48, solid(BRICK, { top: '=' })),
-    SP(11.9, 1.3, 0.65, 1.5, ART.plant, plantCol),
+    POT_PLANT(11.9, 1.3, 1.5),
     SP(3, 1.15, 0.52, 0.72, pad(['+-----+', '|  o  |', '|     |', '+-----+']), (c, row) => C(c === 'o' ? YEL : WHITE, 12)),
     SP(10.7, 1.4, 0.7, 1.65, pad(['  .------.', '  |STAFF |', '  | ONLY |', '  |______|']), (c, row) => C(c === '|' ? YEL : BRICK, 12)),
     BX(3.4, 4.8, 1.1, 0.38, 0, 0.55, solid(BRICK, { top: '=' })),
@@ -97,7 +97,7 @@ ROOM_DEFS.hotelSuite = { grid: boxRoom(9, 7), light: 1, floor: 'royal', ceil: 'p
     BX(6.4, 3.4, 0.8, 0.08, 0.4, 1.1, solid(BLUE, { trim: 1.03 })),
     ...[-1, 1].map(s => BX(6.4 + s * 0.75, 3.7, 0.08, 0.32, 0.4, 0.72, solid(YEL))),
     ...tableBox(6.4, 4.7, 0.5, 0.35),
-    SP(6.8, 1.2, 0.6, 1.1, ART.plant, plantCol),
+    POT_PLANT(6.8, 1.2, 1.1),
   ] };
 
 ROOM_DEFS.grandhotelheist = { grid: hotelGalleryGrid(), light: 0.22, height: 3.8, floor: 'concrete', ceil: 'dark', fx: museumTorchFx,
@@ -112,7 +112,7 @@ ROOM_DEFS.grandhotelheist = { grid: hotelGalleryGrid(), light: 0.22, height: 3.8
     const p = [
       ...HOTEL_PAINTINGS.map(hotelPortrait),
       BX(12, 12.8, 0.7, 0.4, 0, 0.82, solid(YEL, { top: '=', panel: 0.5 })),
-      SP(12, 12.8, 0.55, 0.3, pad(['  o  ', ' /_\\ ', '(____)']), (c, row, L) => C(WHITE, Math.max(L, 6)), 0.82),
+      ROOM_MODEL(12, 12.8, (vx, vy) => { drum(vx, vy, 0.09, 0.82, 0.84, CHROME); dot(vx, vy, 0.845, 0.065, CHROME); rod(vx, vy, 0.9, vx, vy, 0.93, 0.008, GRAY, 1.2); }), // the service bell
     ];
     if (r.burgled) HOTEL_GUARD_PATHS.forEach((path, k) => p.push({ ...figProp(path[0][0], path[0][1], figGuardLook(k + 3), { h: 1.8, chat: false, light: 5 }), guard: true, dir: 0,
       tick: s => {

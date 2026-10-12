@@ -136,7 +136,7 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
         if (chance(busy)) p.push(sitting(cx, cy - 0.04, shirt(), 0.42, true));
       }
     }
-    for (const y of [5.2, 6.8]) { p.push(SP(3.05, y, 0.4, 0.75, ART.stool, wood)); if (chance(busy)) p.push({ ...sitting(3.05, y, shirt(), 0.6), face: [-1, 0] }); } // stools at the bar, facing it
+    for (const y of [5.2, 6.8]) { p.push(STOOL(3.05, y, MAG)); if (chance(busy)) p.push({ ...sitting(3.05, y, shirt(), 0.6), face: [-1, 0] }); } // stools at the bar, facing it
     p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
     p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
     p.push(standing(13.4, 10.2, GRAY)); // the host by the curtain

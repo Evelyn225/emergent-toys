@@ -72,8 +72,10 @@ Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arr
       they matter most visually, but a canopy that reads well in 3D (cluster of spheres via `dot`, trunk `rod`) is
       a perf question. Worth a test on one street before committing.
 
-## Interiors (separate pass)
+## Interiors - mostly done
 
-Rooms (`rooms.js`, `grand-hotel.js`, `shotengai.js`, `home-balcony.js`) still use `SP(...)` art sprites from `ART`:
-stools, plants, jukebox, barber chair and pole, treadmill, weight rack, speakers. (The pet shop's cages and dog are done.)
-These are a different scale (metres, not cells) and you're always close, so they'd need their own batch.
+- [x] Room furniture is a `ROOM_MODEL` prop that draws itself (rooms.js): potted plants, bar stools, the jukebox,
+      treadmills, dumbbell racks, the barber's pole and chairs, karaoke speakers, florist bouquets, the train's grab
+      poles, the lighthouse's coil of rope, the Grand Hotel's service bell.
+- [ ] Still ASCII: the Gardens greenhouses (aviary trees, birds, cacti, the lizard, butterflies), the Grand Hotel's
+      two little signs, the club's candle flames and VIP sign.
