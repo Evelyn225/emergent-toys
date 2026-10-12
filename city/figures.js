@@ -397,7 +397,14 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
 // solid colour), so they read as clearly at any size. They borrow the people's colour roles: BODY is a top, HEAD is
 // skin (so the one-pixel eye melts into the head far off, as ours do), BEAK a hat, LEG a shoe, WING trousers, MARK a
 // pack, PALE a shirt's inner. Body frame as for people: x their right, y ahead, z up, in sprite pixels.
-const AR = { BODY: FR.TOP, HEAD: FR.SKIN, BEAK: FR.HAT, LEG: FR.SHOE, WING: FR.BOT, MARK: FR.PACK, PALE: FR.INNER };
+const AR = { BODY: FR.TOP, HEAD: FR.SKIN, BEAK: FR.HAT, LEG: FR.SHOE, WING: FR.BOT, MARK: FR.PACK, PALE: FR.INNER, EYE: FR.EYE, PUPIL: FR.HAIR, TONGUE: FR.TIE };
+// Close-up animals are built small and scaled up to fill the sprite (more pixels, more detail); drawn at h / scale.
+const ANIMAL_SCALE = { cat: () => 2.5, dog: f => f >= 5 ? 2 : 1.4 };
+const scaleBody = ({ parts, decals }, k) => k === 1 ? { parts, decals } : {
+  parts: parts.map(P => P.k === 2 ? { ...P, a: fMul(P.a, k), b: fMul(P.b, k), r: P.r * k } : P.k === 0 ? { ...P, c: fMul(P.c, k), r: fMul(P.r, k) } : { ...P, c: fMul(P.c, k), h: fMul(P.h, k) }),
+  decals: decals.map(d => ({ ...d, p: fMul(d.p, k) })) };
+// an animal drawn by drawFigure; h: how big, as for one built at scale 1
+const drawAnimal = (rx, ry, z0, h, fx, fy, look, frame = 0, opts) => drawFigure(rx, ry, z0, h / look.scale(frame), fx, fy, look, 'f' + frame, opts);
 const AN_I = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
 // col: { body, head, beak, leg, wing, mark, pale, eye }, each [palette base, brightness]. key for drawFigure: 'f' + frame
 function animalLook(kind, col) {
@@ -406,7 +413,9 @@ function animalLook(kind, col) {
   const B = new Uint8Array(FIG_ROLES), Lv = new Float32Array(FIG_ROLES), put = (r, [b, l], k = 1) => { B[r] = b; Lv[r] = l * k; };
   put(FR.TOP, c.body); put(FR.TOP_D, c.body, 0.68); put(FR.SKIN, c.head); put(FR.SKIN_D, c.head, 0.7); put(FR.HAT, c.beak); put(FR.HAT_D, c.beak, 0.75);
   put(FR.SHOE, c.leg); put(FR.BOT, c.wing); put(FR.BOT_D, c.wing, 0.68); put(FR.PACK, c.mark); put(FR.PACK_D, c.mark, 0.65); put(FR.INNER, c.pale); put(FR.EYE, c.eye || [GRAY, 0]);
-  return { shape: 'animal:' + kind, base: B, lvl: Lv, build: key => ANIMAL_BODIES[kind](+key.slice(1) || 0) };
+  put(FR.HAIR, c.pupil || [GRAY, 0]); put(FR.TIE, c.tongue || [MAG, 11]);
+  const scale = f => ANIMAL_SCALE[kind]?.(f) ?? 1;
+  return { shape: 'animal:' + kind, base: B, lvl: Lv, scale, build: key => { const f = +key.slice(1) || 0; return scaleBody(ANIMAL_BODIES[kind](f), scale(f)); } };
 }
 // both eyes, a pixel each, on the sides of a head part (its centre c, radius r across), a little forward and up
 const animalEyes = (c, r, part, fwd = 0.45, up = 0.35) => [1, -1].map(sg => ({ p: [c[0] + sg * r * 0.92, c[1] + r * fwd, c[2] + r * up], n: [sg, 0.3, 0], role: FR.EYE, part }));
@@ -463,15 +472,25 @@ const ANIMAL_BODIES = {
     parts.push(figCap(sniff ? [0, 4.6, 5.7] : [0, 4.2, 7.6], sniff ? [0, 4.8, 5.4] : [0, 4.3, 7.4], 1.3, () => R.MARK, false)); // the collar
     return { parts, decals: dogEyes(hc, 1) };
   },
-  cat: f => { // sitting up, tail curled round its front paws, a tabby's stripes; frame 1: a slow blink
-    const R = AR, tabby = h => fract(h.l[2] * 2.2 + Math.abs(h.l[0]) * 0.8) < 0.3 ? R.MARK : R.BODY, hc = [0, 1.4, 8.6];
-    const parts = [figEll([0, -1, 2.7], AN_I, [3.1, 3, 2.6], tabby), figEll([0, 0.9, 4.9], AN_I, [2.5, 2.1, 3], h => h.l[1] > 0.8 && Math.abs(h.l[0]) < 0.45 && h.l[2] < 0.5 ? R.PALE : tabby(h)),
-      figEll(hc, AN_I, [2.5, 2, 2.1], tabby), figEll([0, 3.1, 7.8], AN_I, [1, 0.6, 0.65], () => R.PALE),
-      figEll([0, 3.6, 8.2], AN_I, [0.4, 0.25, 0.25], () => R.BEAK)];
-    for (const sg of [1, -1]) parts.push(figCap([sg * 1.1, 1.8, 4], [sg * 1.1, 2.1, 0.5], 0.65, () => R.PALE),
-      figEll([sg * 1.5, 1.1, 10.5], [[1, 0, 0], [0, 1, 0], [sg * 0.35, 0, 1]], [0.65, 0.35, 1.1], () => R.BODY)); // front legs, ears
-    parts.push(figCap([-1.8, -3, 0.9], [-2.8, 0.2, 0.6], 0.55, tabby), figCap([-2.8, 0.2, 0.6], [-1.2, 2.6, 0.6], 0.55, tabby)); // the tail, round its paws
-    return { parts, decals: f === 1 ? [] : animalEyes(hc, 2.3, 2, 0.5, 0.25) };
+  cat: f => { // sitting up, tail curled round its front paws: a tabby with a white bib, muzzle and paws, green eyes
+    // with slit pupils (frame 1: a slow blink), pink noses and ear insides
+    const R = AR, hc = [0, 1.5, 8.7];
+    const stripe = h => fract(h.l[2] * 2.4 + Math.abs(h.l[0]) * 0.9) < 0.28 ? R.MARK : R.BODY;
+    const parts = [
+      figEll([0, -1, 2.8], AN_I, [3.4, 3.1, 2.8], stripe), // haunches
+      figEll([0, 0.9, 5], AN_I, [2.7, 2.1, 3.1], h => h.l[1] > 0.7 && Math.abs(h.l[0]) < 0.5 && h.l[2] < 0.55 ? R.PALE : stripe(h)), // chest, its bib
+      figEll(hc, AN_I, [2.75, 2.2, 2.3], h => h.l[2] > 0.45 && Math.abs(h.l[0]) < 0.5 && fract(h.l[0] * 4 + 0.5) < 0.35 ? R.MARK : R.BODY), // head, an M on the brow
+    ];
+    for (const sg of [1, -1]) {
+      parts.push(figEll(fAdd(hc, [sg * 0.55, 1.85, -0.6]), AN_I, [0.75, 0.55, 0.6], () => R.PALE)); // the muzzle's cheeks
+      parts.push(figEll(fAdd(hc, [sg * 1.0, 1.95, 0.4]), AN_I, [0.72, 0.3, 0.62], h => f === 1 ? R.HEAD : Math.abs(h.l[0]) < 0.32 ? R.PUPIL : R.EYE)); // an eye
+      parts.push(figEll(fAdd(hc, [sg * 1.6, 0.1, 2.05]), [[Math.cos(0.35), 0, sg * Math.sin(0.35)], [0, 1, 0], [-sg * Math.sin(0.35), 0, Math.cos(0.35)]], [0.75, 0.32, 1.25],
+        h => h.l[1] > 0.4 && Math.abs(h.l[0]) < 0.6 && h.l[2] < 0.6 ? R.BEAK : R.BODY)); // an ear, pink inside
+      parts.push(figCap([sg * 1.1, 1.7, 4.2], [sg * 1.1, 2, 0.55], 0.7, () => R.PALE), figEll([sg * 1.1, 2.4, 0.4], AN_I, [0.75, 0.9, 0.45], () => R.PALE)); // a front leg, its paw
+    }
+    parts.push(figEll(fAdd(hc, [0, 2.3, -0.15]), AN_I, [0.4, 0.25, 0.28], () => R.BEAK), figEll(fAdd(hc, [0, 1.85, -1.1]), AN_I, [0.6, 0.45, 0.35], () => R.PALE)); // the nose, the chin
+    parts.push(figCap([-1.9, -3, 0.9], [-2.9, 0.3, 0.6], 0.6, stripe), figCap([-2.9, 0.3, 0.6], [-1.3, 2.9, 0.55], 0.55, h => h.s > 0.75 ? R.MARK : stripe(h))); // the tail round its paws
+    return { parts, decals: [] };
   },
   peacock: f => { // strutting, its train fanned out behind: green with eyes in rings of cyan (frame: a stride of four)
     const R = AR, w = f / 4 * Math.PI * 2, hc = [0, 3.3, 13.3];
@@ -492,20 +511,24 @@ const ANIMAL_BODIES = {
 // a dog's look in its coat colour (one per colour, made the first time it's seen): darker ears, a paler muzzle, a red
 // collar, a black nose
 const DOG_LOOKS = new Map();
-const dogLook = col => DOG_LOOKS.get(col) || DOG_LOOKS.set(col, animalLook('dog', { body: [col, 9], wing: [col, 6], pale: [col, 12], leg: [col, 8], mark: [RED, 10], beak: [GRAY, 1] })).get(col);
+const dogLook = col => DOG_LOOKS.get(col) || DOG_LOOKS.set(col, animalLook('dog', { body: [col, 9], wing: [col, 6], pale: [col, 12], leg: [col, 8], mark: [RED, 10], beak: [GRAY, 1], pupil: [GRAY, 0], tongue: [MAG, 11] })).get(col);
 // a dog (vx, vy) from you, facing (fx, fy); s: how big (1 a mid-sized dog); frame: see ANIMAL_BODIES.dog
-const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0) => drawFigure(vx, vy, 0, 0.13 * s, fx, fy, dogLook(col), 'f' + frame);
+const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0) => drawAnimal(vx, vy, 0, 0.13 * s, fx, fy, dogLook(col), frame);
 // a dog's eyes: on the front of its head, either side above the muzzle (clear of the ears)
 const dogEyes = (hc, part) => [1, -1].map(sg => ({ p: fAdd(hc, [sg * 1, 1.55, 0.55]), n: [sg * 0.4, 1, 0.2], role: FR.EYE, part }));
-// a dog sitting up: haunches down, front legs straight, head up, tail sweeping the floor to one side (wag: -1 / 1)
+// a dog sitting up: haunches down, front legs straight, head up, tongue out, tail sweeping the floor (wag: -1 / 1)
 function dogSitting(wag) {
-  const R = AR, hc = [0, 2.6, 11.2];
-  const parts = [figEll([0, -1.8, 3], AN_I, [2.2, 2.6, 2.4], () => R.BODY), figEll([0, 0.6, 6.4], [[1, 0, 0], [0, Math.cos(0.5), Math.sin(0.5)], [0, -Math.sin(0.5), Math.cos(0.5)]], [2.1, 2.2, 3.4], () => R.BODY),
+  const R = AR, hc = [0, 2.6, 11.2], tilt = [[1, 0, 0], [0, Math.cos(0.5), Math.sin(0.5)], [0, -Math.sin(0.5), Math.cos(0.5)]];
+  const parts = [figEll([0, -1.8, 3], AN_I, [2.3, 2.6, 2.4], () => R.BODY), figEll([0, 0.6, 6.4], tilt, [2.1, 2.2, 3.4], h => h.l[1] > 0.6 && Math.abs(h.l[0]) < 0.45 ? R.PALE : R.BODY),
     figEll(hc, AN_I, [1.8, 2.1, 1.8], () => R.HEAD), figCap([0, 1.6, 8.6], [0, 2.2, 10.2], 1.2, () => R.BODY)];
-  for (const sg of [1, -1]) parts.push(figCap([sg * 1.2, 1.8, 5.2], [sg * 1.2, 2.3, 0.6], 0.75, () => R.LEG, false), figEll([sg * 2.1, -1.4, 1.5], AN_I, [1, 2.6, 1.4], () => R.BODY),
-    figEll(fAdd(hc, [sg * 1.5, -0.4, 0.2]), AN_I, [0.55, 0.9, 1.4], () => R.WING));
-  parts.push(figCap(fAdd(hc, [0, 1.6, -0.4]), fAdd(hc, [0, 3, -0.85]), 0.9, () => R.PALE), figEll(fAdd(hc, [0, 3.85, -0.6]), AN_I, [0.5, 0.3, 0.38], () => R.BEAK));
-  parts.push(figCap([0, -4, 1.2], [wag * 2.2, -5.8, 0.7], 0.5, () => R.BODY), figCap([0, 2.1, 9.4], [0, 2.3, 9.2], 1.05, () => R.MARK, false));
-  return { parts, decals: dogEyes(hc, 2) };
+  for (const sg of [1, -1]) parts.push(figCap([sg * 1.2, 1.8, 5.2], [sg * 1.2, 2.3, 0.6], 0.75, () => R.LEG, false), figEll([sg * 1.2, 2.8, 0.45], AN_I, [0.75, 0.9, 0.45], () => R.LEG, false), // front legs, paws
+    figEll([sg * 2.1, -1.4, 1.5], AN_I, [1, 2.6, 1.4], () => R.BODY), // the hind legs folded under
+    figEll(fAdd(hc, [sg * 1.55, -0.3, -0.1]), [[1, 0, 0], [0, 1, 0], [sg * 0.25, 0, 1]], [0.55, 0.9, 1.5], () => R.WING), // the ears, hanging
+    figEll(fAdd(hc, [sg * 1.0, 1.7, 0.5]), AN_I, [0.3, 0.22, 0.34], h => h.l[1] > 0.5 && h.l[0] * sg > 0.1 && h.l[2] > 0.2 ? R.PALE : R.PUPIL)); // the eyes, a glint in each
+  parts.push(figCap(fAdd(hc, [0, 1.6, -0.4]), fAdd(hc, [0, 3, -0.85]), 0.95, () => R.PALE), figEll(fAdd(hc, [0, 3.85, -0.6]), AN_I, [0.55, 0.3, 0.4], () => R.BEAK)); // muzzle, nose
+  parts.push(figEll(fAdd(hc, [0, 3.1, -1.75]), [[1, 0, 0], [0, Math.cos(0.4), -Math.sin(0.4)], [0, Math.sin(0.4), Math.cos(0.4)]], [0.45, 0.3, 0.75], () => R.TONGUE, false)); // the tongue, out
+  parts.push(figCap([0, -4, 1.2], [wag * 2.2, -5.8, 0.7], 0.5, () => R.BODY), figCap([0, 2.1, 9.4], [0, 2.3, 9.2], 1.05, () => R.MARK, false)); // tail, collar
+  return { parts, decals: [] };
 }
-const CAT_LOOK = animalLook('cat', { body: [ORANGE, 9], mark: [ORANGE, 5], pale: [WHITE, 13], beak: [MAG, 10], eye: [GREEN, 13] });
+const CAT_LOOK = animalLook('cat', { body: [ORANGE, 10], mark: [ORANGE, 6], pale: [WHITE, 14], beak: [MAG, 11], eye: [GREEN, 13], pupil: [GRAY, 0] });
+const KITTEN_LOOK = animalLook('cat', { body: [GRAY, 9], mark: [GRAY, 5], pale: [WHITE, 14], beak: [MAG, 11], eye: [CYAN, 12], pupil: [GRAY, 0] });

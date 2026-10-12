@@ -62,7 +62,9 @@ Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arr
       The lead is a sagging cord of rods.
 - [x] **The ball**: a football (`raySphere`, black pentagons and white hexagons that roll with it).
 - [x] **Pets at home**: the cat (an orange tabby sitting up, tail round its paws, green eyes, a slow blink) and the
-      dog (sitting up, wagging), built like the rest; they turn to watch you when you're close.
+      dog (sitting up, wagging, tongue out), built like the rest; they turn to watch you when you're close. Close-up
+      animals are built small and scaled up to fill the sprite (`ANIMAL_SCALE`), so they get more pixels.
+- [x] **Pet shop**: wire cages on stands with a kitten and a puppy inside, and the shop dog sitting on the floor.
 
 ## Not doing: street trees (they read fine as flat sprites)
 
@@ -73,5 +75,5 @@ Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arr
 ## Interiors (separate pass)
 
 Rooms (`rooms.js`, `grand-hotel.js`, `shotengai.js`, `home-balcony.js`) still use `SP(...)` art sprites from `ART`:
-stools, plants, jukebox, barber chair and pole, treadmill, weight rack, speakers, cages, the pet shop's dog.
+stools, plants, jukebox, barber chair and pole, treadmill, weight rack, speakers. (The pet shop's cages and dog are done.)
 These are a different scale (metres, not cells) and you're always close, so they'd need their own batch.

@@ -80,6 +80,15 @@ const barCrowd = () => { const h = mod(tod - 16, 24); return h < 12 ? 0.15 + 0.8
 // the long side runs along (cos, sin). Benches are their own kind ({ bench }), drawn by drawBench.
 const BX = (x, y, hl, hw, z0, z1, shade, ca = 1, sa = 0) => ({ box: { x, y, c: ca, s: sa, hl, hw, z0, z1 }, shade });
 const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
+// a pet shop's cage on its stand: wire bars all round you can see through, a tray at the bottom, a little one inside
+// (look, pose: its figure and pose key; h: its height, as built at scale 1)
+const CAGE_BARS = (i, t, L) => {
+  const f = HIT.face, edge = f >= 5 || fract((f <= 2 ? HIT.v : HIT.u) * 22) < 0.18 || HIT.w > 1.17 || HIT.w < 0.76;
+  if (!edge) return false;
+  BG[i] = C(GRAY, (2.5 + L * 0.35) * shadeFace(f)); return set(i, f >= 5 ? '#' : HIT.w < 0.76 ? '=' : '|', C(WHITE, L * 0.8)), true;
+};
+const petCage = (x, y, look, pose, h) => [BX(x, y, 0.42, 0.32, 0, 0.7, solid(BRICK, { top: '=', trim: 0.68 })), BX(x, y, 0.38, 0.28, 0.7, 1.2, CAGE_BARS),
+  figProp(x, y, look, { z: 0.72, h: h / look.scale(+pose().slice(1)), pose, face: [0, 0], chat: false, light: 8 })];
 // a solid shade: base colour, panel lines every `panel` metres on the sides, a trim at the top, `top` char on top
 const solid = (base, { panel = 0, top = ' ', trim = 0, bright = 1 } = {}) => (i, t, L) => {
   const f = HIT.face;
@@ -295,8 +304,8 @@ const ROOM_DEFS = {
     } },
   petshop: { grid: boxRoom(10, 8), light: 0.8, floor: 'tile', ceil: 'strip', sign: true, wall: petWall, keeper: [5, 1.05],
     props: r => [...counterBox(5, 1.7, 1.6), standing(5, 1.05, r.neon),
-                 SP(2.2, 4, 0.8, 0.8, ART.cage, (c, row, L) => C(c === 'o' ? YEL : GRAY, L)), SP(7.8, 4, 0.8, 0.8, ART.cage, (c, row, L) => C(c === 'o' ? YEL : GRAY, L)),
-                 SP(4.2, 5.3, 0.6, 0.6, ART.dog, (c, row, L) => C(BRICK, L * 1.3))] },
+                 ...petCage(2.2, 4, KITTEN_LOOK, () => (T * 1.1 | 0) % 6 === 0 ? 'f1' : 'f0', 0.5), ...petCage(7.8, 4, dogLook(WARM), () => 'f' + (5 + ((T * 4) & 1)), 0.5),
+                 figProp(4.2, 5.3, dogLook(BRICK), { h: 1.22 / 2, pose: () => 'f' + (5 + ((T * 2) & 1)), face: [0, 0], chat: false, light: 6 })] }, // a kitten, a puppy, and the shop dog
   florist: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, glyphs: '*@&%', wall: floristWall, keeper: [5, 1.05],
     props: r => {
       const p = [...counterBox(5, 1.7, 1.6), standing(5, 1.05, r.neon)];
@@ -1009,8 +1018,8 @@ function roomSprites() {
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
     const watch = (x, y) => Math.hypot(x - px, y - py) < 2.5 ? [0, 0] : [1, 0.4];
-    if (pets.includes('petcat')) { const x = pet[0] - 0.35, y = pet[1]; drawFigure(x - px, y - py, 0, 0.77, ...watch(x, y), CAT_LOOK, (T * 1.4 | 0) % 7 === 0 ? 'f1' : 'f0', { light: 6 }); }
-    if (pets.includes('petdog')) { const x = pet[0] + 0.35, y = pet[1]; drawFigure(x - px, y - py, 0, 1.22, ...watch(x, y), dogLook(BRICK), 'f' + (5 + ((T * (Math.hypot(x - px, y - py) < 2.5 ? 6 : 1.5)) & 1)), { light: 6 }); }
+    if (pets.includes('petcat')) { const x = pet[0] - 0.35, y = pet[1]; drawAnimal(x - px, y - py, 0, 0.75, ...watch(x, y), CAT_LOOK, (T * 1.4 | 0) % 7 === 0 ? 1 : 0, { light: 6 }); }
+    if (pets.includes('petdog')) { const x = pet[0] + 0.35, y = pet[1]; drawAnimal(x - px, y - py, 0, 1.22, ...watch(x, y), dogLook(BRICK), 5 + ((T * (Math.hypot(x - px, y - py) < 2.5 ? 6 : 1.5)) & 1), { light: 6 }); }
   }
   if (room.kind === 'station') {
     const tx = trainX(room);
