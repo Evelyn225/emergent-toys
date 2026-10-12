@@ -194,9 +194,14 @@ const BOUQUET = (x, y, bloom) => ROOM_MODEL(x, y, (vx, vy) => {
 });
 // a grab pole, floor to ceiling
 const GRAB_POLE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => rod(vx, vy, 0, vx, vy, 2.5, 0.02, WHITE, 1.1));
-// a coil of rope on the floor: rings of it stacked, getting smaller
-const ROPE_COIL = (x, y) => ROOM_MODEL(x, y, (vx, vy) => [[0.3, 0, 0.08], [0.26, 0.08, 0.16], [0.21, 0.16, 0.22]].forEach(([r, z0, z1]) =>
-  drum(vx, vy, r, z0, z1, (i, t, L) => { BG[i] = C(WARM, (1.4 + L * 0.3) * drumLit(r)); return set(i, HIT.face === 5 ? '@' : fract(HIT.w * 25) < 0.5 ? '~' : '-', C(BRICK, L * 0.8)), true; })));
+// a coil of rope on the floor: the rope spiralling up in turns, each a little tighter, hollow in the middle, its end
+// trailing off across the floor
+const ROPE = k => (i, t, L) => { const tone = (k & 1 ? 1 : 0.7) * (Math.floor(k / 14) & 1 ? 1 : 0.85); BG[i] = C(WARM, (2.2 + L * 0.4) * tone); return set(i, k & 1 ? '/' : ' ', C(BRICK, L * 0.7)), true; }; // (k: which bit of rope: the twist, and a shade a turn)
+const ROPE_COIL = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  const r0 = 0.035, turns = 3.5, seg = 14, n = Math.round(turns * seg), at = k => { const a = k / seg * Math.PI * 2, r = 0.27 - k / n * 0.09; return [vx + Math.cos(a) * r, vy + Math.sin(a) * r, r0 + k / n * turns * 0.055]; };
+  for (let k = 0; k < n; k++) { const [ax, ay, az] = at(k), [bx, by, bz] = at(k + 1); drawRod(ax, ay, az, bx, by, bz, r0, ROPE(k)); }
+  const [ex, ey] = at(0); for (const [k, [ax, ay, bx, by]] of [[0, 0, 0.06, 0.14], [1, 0.06, 0.14, 0.12, 0.28], [2, 0.12, 0.28, 0.07, 0.37], [3, 0.07, 0.37, 0.02, 0.45]].entries()) drawRod(ex + ax, ey + ay, r0, ex + bx, ey + by, r0, r0, ROPE(k + 1)); // the loose end
+});
 // a pet shop's cage on its stand: wire bars all round you can see through, a tray at the bottom, a little one inside
 // (look, pose: its figure and pose key; h: its height, as built at scale 1)
 const CAGE_BARS = (i, t, L) => {
