@@ -91,7 +91,8 @@ function drawBox(b, shade, intersect = rayBox) {
       if (ZB[i] <= near) continue;
       const t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
       if (t < 0 || t >= ZB[i] || t > vis) continue;
-      if (shade(i, t, (1 - t / vis) * 15 * amb)) { ZB[i] = ZBG[i] = t; FL[i] = 0; }
+      const bg = BG[i];
+      if (shade(i, t, (1 - t / vis) * 15 * amb)) { ZB[i] = t; FL[i] = 0; if (BG[i] !== bg) ZBG[i] = t; } // (as drawShape: only a background it paints is its own, for the fog)
     }
   }
 }

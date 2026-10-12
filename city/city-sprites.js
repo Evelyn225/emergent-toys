@@ -151,18 +151,17 @@ function citySprites() {
   for (const k of cranes) {
     const [vx, vy] = R(k.x, k.y);
     if (Math.abs(vx) > vis + 5 || Math.abs(vy) > vis + 5) continue;
-    // the jib slews slowly; p = how much of it faces sideways to us (+ = reaching right on screen)
-    const th = k.slew + T * 0.03, p = across(Math.cos(th), Math.sin(th), vx, vy);
+    const th = k.slew + T * 0.03; // the jib slews slowly
     // where the hook hangs: under the trolley, always clear of whatever's built below it
     const f = 0.45 + 0.35 * Math.sin(T * 0.08 + k.slew), tx = k.x + Math.cos(th) * JIB * f, ty = k.y + Math.sin(th) * JIB * f;
     let below = 0;
     for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) below = Math.max(below, map[idx(Math.floor(tx) + i, Math.floor(ty) + j)]);
     k.tro = f; k.hz = Math.min(k.H - 0.6, below + 0.5 + 0.8 * (0.5 + 0.5 * Math.sin(T * 0.05 + k.slew * 3)));
-    drawShape(vx, vy, 0, 5, k.H + 0.8, (i, u, z, du, dz, L) => craneCell(i, u, z, du, dz, L, k, p));
+    drawCrane(k, vx, vy, th);
   }
   for (const s of stacks) {
     const [vx, vy] = R(s.x, s.y);
-    if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawShape(vx, vy, s.z, 1.6, s.H + 2.2, (i, u, z, du, dz, L) => stackCell(i, u, z, du, dz, L, s));
+    if (Math.abs(vx) < vis && Math.abs(vy) < vis) { drawStack(s, vx, vy); drawShape(vx, vy, s.z + s.H, 1.6, 2.2, (i, u, z, du, dz, L) => smokeCell(i, u, z, L, s)); }
   }
   forNear(lampsB, ({ x, y, ax, ay, top = LAMP_TOP }) => {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
@@ -778,6 +777,44 @@ function drawFishSign(o, vx, vy) {
   });
 }
 
+// ---- a tower crane, like the one on the courier route: a latticed mast (rayLattice, courier-ui.js), a truss jib and
+// counter-jib slewing round on top, a cab, counterweights, the apex with its ties out to both, and the trolley's
+// cable, hook and a slung load of beams. th: which way the jib points now. (k.tro, k.hz: set in citySprites)
+function craneTruss(b, col, solid) { // solid: too far off for its lattice to read, a beam (as the old crane drew it)
+  if (solid) return drawBox(b, (i, t, L) => { BG[i] = C(col, (0.9 + L * 0.2) * shadeFace(HIT.face)); return set(i, b.kind === 'mast' ? '|' : '=', C(col, L)), true; });
+  drawBox(b, (i, t, L) => {
+    const [ux, uy, uz] = latticeDirection(b, HIT.part, HIT.face);
+    return set(i, courierGlyph(b.x + HIT.u * b.c - HIT.v * b.s, b.y + HIT.u * b.s + HIT.v * b.c, HIT.w, ux, uy, uz), C(col, L)), true;
+  }, rayLattice);
+}
+function drawCrane(k, vx, vy, th) {
+  const H = k.H, c = Math.cos(th), s = Math.sin(th), top = H + JH, apex = H + 0.75, at = u => [vx + c * u, vy + s * u], d = Math.hypot(vx, vy);
+  const farMast = 2 * MW * projX / d < 2, farJib = JH * projY / d < 3;
+  const steel = (i, t, L) => { BG[i] = C(YEL, (1.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; };
+  craneTruss({ x: vx, y: vy, c: 1, s: 0, hl: MW, hw: MW, z0: 0, z1: H, panel: PANEL, kind: 'mast' }, YEL, farMast);
+  { const [x, y] = at(JIB / 2); craneTruss({ x, y, c, s, hl: JIB / 2, hw: MW * 0.8, z0: H, z1: top, panel: JH * 1.4, kind: 'truss' }, YEL, farJib); }
+  { const [x, y] = at(-CJIB / 2); craneTruss({ x, y, c, s, hl: CJIB / 2, hw: MW, z0: H, z1: top, panel: JH * 1.4, kind: 'truss' }, YEL, farJib); }
+  drawBox(boxAt(vx, vy, c, s, MW + 0.02, MW + 0.02, H - 0.05, H), steel); // the slewing ring
+  { const [x, y] = at(-CJIB * 0.8); drawBox(boxAt(x, y, c, s, 0.2, MW * 1.1, H - 0.3, H), (i, t, L) => { // the counterweights
+    BG[i] = C(GRAY, (1 + L * 0.25) * shadeFace(HIT.face)); return set(i, fract((HIT.u + 0.2) * 15) < 0.15 ? '|' : '#', C(GRAY, L * 0.7)), true; }); }
+  { const [x, y] = at(MW + 0.09); drawBox(boxAt(x, y, c, s, 0.08, 0.07, H - 0.22, H - 0.02), (i, t, L) => { // the operator's cab
+    if (HIT.w > H - 0.13 && HIT.face !== 5 && HIT.face !== 6) { BG[i] = C(CYAN, 1.5 + night * 4); return set(i, ':', C(CYAN, Math.max(L, night * 12))), true; }
+    return steel(i, t, L); }); }
+  for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) rod(vx + sx * MW, vy + sy * MW, top, vx, vy, apex, 0.008, YEL); // the apex
+  for (const u of [JIB * 0.7, -CJIB]) { const [x, y] = at(u); rod(vx, vy, apex, x, y, top, 0.003, GRAY, 0.8); } // its ties
+  const [tx, ty] = at(JIB * k.tro), hz = k.hz;
+  drawBox(boxAt(tx, ty, c, s, 0.05, MW * 0.9, H - 0.05, H), steel); // the trolley
+  rod(tx, ty, H - 0.05, tx, ty, hz, 0.003, GRAY, 0.8);
+  drawBox(boxAt(tx, ty, c, s, 0.02, 0.02, hz - 0.08, hz), (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, 'J', C(YEL, L)), true; }); // the hook block
+  for (const e of [-1, 1]) { const [ax, ay] = [tx - s * e * 0.04, ty + c * e * 0.04]; rod(tx, ty, hz - 0.08, ax, ay, hz - 0.14, 0.002, GRAY, 0.7); } // the slings
+  drawBox(boxAt(tx, ty, c, s, 0.3, 0.05, hz - 0.22, hz - 0.14), (i, t, L) => { // the load: a bundle of steel beams
+    BG[i] = C(ORANGE, (1.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 1 || HIT.face === 2 ? 'I' : '=', C(BRICK, L * 0.8)), true; });
+  if (night > 0.3 || overcast > 0.5) { // red warning lights on the apex and the jib tip
+    const on = fract(T * 0.7) < 0.5, red = (i, t, L) => { if (on) BG[i] = C(RED, 8); return set(i, '*', C(RED, on ? 15 : 4)), true; }, rr = Math.max(0.03, 0.6 * Math.hypot(vx, vy) / projX);
+    dot(vx, vy, apex + 0.02, rr, red); { const [x, y] = at(JIB); dot(x, y, top + 0.02, rr, red); }
+  }
+}
+
 // ---- vehicles as real boxes (see drawBox): a body, a cabin with glass, and whatever goes on the roof.
 // Sizes in cells (1 = 10m): [half length, half width, body top, cabin top, cabin half length, cabin offset along]
 const VEHICLES = {
@@ -987,34 +1024,35 @@ const SOLID_SHADE = {
 };
 
 // ---- lighthouse island
-// the lighthouse, drawn as a billboard (it's round, so it looks the same from every side): a tapering tower in red
-// and white bands with a door and slit windows, a railed gallery, the glazed lantern room with the lamp, a red dome.
-// flare = how squarely a beam is pointing at you (the lamp blazes)
-function lighthouseCell(i, u, z, du, dz, L, flare) {
-  const au = Math.abs(u), lit = beamLit();
-  if (z < 2.2) {
-    const R = 0.24 - z * 0.035;
-    if (au > Math.max(R, du / 2)) return false;
-    const n = au / R, shade = 1 - 0.55 * n * n;
-    if (z < 0.22 && au < 0.055) { BG[i] = C(GRAY, 1); return set(i, z > 0.19 ? '=' : '#', C(BRICK, L * 0.6)), true; } // the door
-    if (au < Math.max(0.022, du / 2) && [0.75, 1.25, 1.75].some(w => Math.abs(z - w) < 0.06)) { BG[i] = C(GRAY, 1); return set(i, '#', C(WARM, Math.max(L * 0.3, lit * 9))), true; }
-    BG[i] = C(Math.floor(z / 0.44) & 1 ? RED : WHITE, (1.5 + L * 0.5) * shade);
-    return set(i, n > 0.85 ? '|' : ' ', C(GRAY, L * 0.5)), true;
+// the lighthouse: a tapering tower of drums in red and white bands with a door and slit windows, a railed gallery,
+// the glazed lantern room with the lamp, a red dome and its vent. flare = how squarely a beam points at you (the lamp
+// blazes)
+const LH_BAND = 0.44, LH_TOWER = 2.2;
+function drawLighthouse(lx, ly, flare) {
+  const d = Math.hypot(lx, ly), minR = 0.55 * d / projX, lit = beamLit(), vxn = -lx / (d || 1), vyn = -ly / (d || 1);
+  for (let k = 0; k < LH_TOWER / LH_BAND; k++) {
+    const z0 = k * LH_BAND, z1 = Math.min(LH_TOWER, z0 + LH_BAND), r = Math.max(minR, 0.24 - (z0 + z1) / 2 * 0.035);
+    drawBox(boxAt(lx, ly, 1, 0, r, r, z0, z1), (i, t, L) => {
+      const ang = Math.atan2(HIT.v, HIT.u), light = 0.5 + 0.5 * Math.max(0, (-HIT.u * 0.55 + HIT.v * 0.35) / r), w = HIT.w;
+      if (w < 0.22 && Math.abs(ang + Math.PI / 2) < 0.22) { BG[i] = C(GRAY, 1); return set(i, w > 0.19 ? '=' : '#', C(BRICK, L * 0.6)), true; } // the door (facing -y)
+      if ([0.75, 1.25, 1.75].some(z => Math.abs(w - z) < 0.06) && Math.abs(Math.abs(ang) - Math.PI / 2) < 0.12) { BG[i] = C(GRAY, 1); return set(i, '#', C(WARM, Math.max(L * 0.3, lit * 9))), true; } // slit windows
+      BG[i] = k & 1 ? C(RED, (2 + L * 0.5) * light) : C(WHITE, (5 + L * 0.6) * light);
+      return set(i, ' ', 0), true;
+    }, rayCopperDrum);
   }
-  if (z < 2.27) { if (au > 0.3) return false; BG[i] = C(GRAY, 2 + L * 0.2); return set(i, '=', C(WHITE, L)), true; } // the gallery
-  if (z < 2.34 && au > 0.15) { // its railing
-    if (au > 0.3) return false;
-    return fract(u * 25) < 0.35 || z > 2.32 ? (set(i, z > 2.32 ? '-' : '|', C(WHITE, L * 0.9)), true) : false;
-  }
-  if (z < 2.62) { // the lantern room
-    if (au > Math.max(0.15, du / 2)) return false;
-    if (lit && au < 0.075 && Math.abs(z - LH_H) < 0.07) { BG[i] = C(YEL, 8 + flare * 7); return set(i, '@', C(WHITE, 15)), true; }
-    BG[i] = C(CYAN, 1 + lit * 3); return set(i, fract(u * 14) < 0.2 ? '|' : ' ', C(GRAY, L * 0.8)), true;
-  }
-  const domeR = 0.17 * Math.sqrt(Math.max(0, 1 - ((z - 2.62) / 0.17) ** 2));
-  if (z < 2.79 && au < Math.max(domeR, du / 2)) { BG[i] = C(RED, 2 + L * 0.35); return set(i, ' ', 0), true; }
-  if (z < 2.88 && au < Math.max(0.01, du / 2)) return set(i, '|', C(GRAY, L)), true; // the vent and lightning rod
-  return false;
+  drawBox(boxAt(lx, ly, 1, 0, 0.3, 0.3, LH_TOWER, 2.27), (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.3); return set(i, HIT.face === 5 ? ' ' : '=', C(WHITE, L)), true; }, rayCopperDrum); // the gallery
+  drawBox(boxAt(lx, ly, 1, 0, 0.29, 0.29, 2.27, 2.34), (i, t, L) => { // its railing: posts and a top rail, the lantern room showing between
+    if (HIT.w > 2.32 || HIT.face === 5) return set(i, '-', C(WHITE, L * 0.9)), true;
+    return fract(Math.atan2(HIT.v, HIT.u) * 8 / Math.PI) < 0.3 ? (set(i, '|', C(WHITE, L * 0.9)), true) : false;
+  }, rayCopperDrum);
+  drawBox(boxAt(lx, ly, 1, 0, Math.max(minR, 0.15), Math.max(minR, 0.15), 2.27, 2.62), (i, t, L) => { // the lantern room
+    const across = HIT.u * -vyn + HIT.v * vxn; // (from the axis, as you see it)
+    if (lit && Math.abs(across) < 0.075 && Math.abs(HIT.w - LH_H) < 0.07) { BG[i] = C(YEL, 8 + flare * 7); return set(i, '@', C(WHITE, 15)), true; }
+    if (HIT.face === 5) { BG[i] = C(RED, 2); return set(i, ' ', 0), true; }
+    BG[i] = C(CYAN, 1 + lit * 3); return set(i, fract(Math.atan2(HIT.v, HIT.u) * 7 / Math.PI) < 0.15 ? '|' : ' ', C(GRAY, L * 0.8)), true;
+  }, rayCopperDrum);
+  drawBox(boxAt(lx, ly, 1, 0, Math.max(minR, 0.17), Math.max(minR, 0.17), 2.62, 2.79), (i, t, L) => { BG[i] = C(RED, 2 + L * 0.35); return set(i, ' ', 0), true; }, rayCone); // the dome
+  rod(lx, ly, 2.78, lx, ly, 2.88, 0.008); // the vent and lightning rod
 }
 // the beams: from the lamp out across the bay, a thin shaft of pale light drawn in characters that follow its slope
 // on screen (- / \ |), brightest by the lamp and fading out over the water, stronger in rain and fog. Each sample
@@ -1055,7 +1093,7 @@ function islandSprites() {
   if (D > vis + BEAM_LEN) return;
   drawFootbridge();
   const flare = drawBeams(lx, ly);
-  drawShape(lx, ly, 0, 0.32, 2.9, (i, u, z, du, dz, L) => lighthouseCell(i, u, z, du, dz, L, flare));
+  drawLighthouse(lx, ly, flare);
   if (flare > 0.05) { // the lamp, blazing straight at you
     const depth = dx * lx + dy * ly;
     if (depth > 0.3) {
@@ -1224,15 +1262,24 @@ function drawLanternString(vx, vy, ax, ay) {
   }
 }
 
-// a factory smokestack: banded brick, red and white at the top, smoke curling off downwind
-function stackCell(i, u, z, du, dz, L, s) {
-  const H = s.H, w = 0.16 - z / H * 0.05;
-  if (z < H && Math.abs(u) < Math.max(w, du / 2)) {
-    BG[i] = bgAt(BRICK, day * 2);
-    if (z > H - 0.5) return set(i, '=', C(fract(z * 4) < 0.5 ? RED : WHITE, L)), true;
-    return set(i, fract(z * 6) < 0.15 ? '=' : '#', C(BRICK, L * 0.9)), true;
+// a factory smokestack: a tapering brick drum in bands, red and white at the top, a dark mouth; a cell wide at least
+const STACK_BANDS = 10;
+function drawStack(s, vx, vy) {
+  const H = s.H, minR = 0.55 * Math.hypot(vx, vy) / projX;
+  for (let k = 0; k < STACK_BANDS; k++) {
+    const z0 = k * H / STACK_BANDS, z1 = (k + 1) * H / STACK_BANDS, r = Math.max(minR, 0.16 - (z0 + z1) / 2 / H * 0.05), top = k === STACK_BANDS - 1;
+    drawBox(boxAt(vx, vy, 1, 0, r, r, s.z + z0, s.z + z1), (i, t, L) => {
+      if (HIT.face === 5) { BG[i] = C(GRAY, 0.5); return set(i, ' ', 0), true; } // the mouth
+      const w = HIT.w - s.z, light = 0.55 + 0.45 * Math.max(0, (-HIT.u * 0.55 + HIT.v * 0.35) / r), striped = w > H - 0.5;
+      BG[i] = striped ? C(fract(w * 4) < 0.5 ? RED : WHITE, (1.6 + L * 0.35) * light) : C(BRICK, (1.2 + L * 0.3) * light);
+      return set(i, striped ? ' ' : fract(w * 6) < 0.15 ? '=' : ' ', C(BRICK, L * 0.7)), true;
+    }, rayCopperDrum);
+    if (top) dot(vx, vy, s.z + H + 0.005, r * 0.9, (i, t, L) => { BG[i] = C(GRAY, 0.6); return set(i, ' ', 0), true; }); // (soot round the lip)
   }
-  const sz = z - H, cu = u - sz * 0.6 - Math.sin(T * 0.3 + s.x) * 0.1 * sz; // drifts downwind as it rises
+}
+// its smoke: curling off downwind as it rises (z from the stack's top)
+function smokeCell(i, u, sz, L, s) {
+  const cu = u - sz * 0.6 - Math.sin(T * 0.3 + s.x) * 0.1 * sz; // drifts downwind as it rises
   if (sz > 0 && sz < 2 && Math.abs(cu) < 0.15 + sz * 0.25) {
     const n = noise(cu * 4 + T * 0.2, sz * 3 - T * 0.6, 57 + s.x);
     if (n > 0.45 + sz * 0.15) { BG[i] = C(GRAY, (2 + n * 6) * (0.4 + 0.6 * amb) * (1 - sz / 2.2)); return set(i, ' ', 0), true; }
@@ -1246,8 +1293,7 @@ function bridgeSprites() {
   for (const t of towers) {
     const [vx, vy] = R(t.x, t.y);
     if (Math.abs(vx) > vis + 2 || Math.abs(vy) > vis + 2) continue;
-    const hw = 0.95 * Math.abs(across(1, 0, vx, vy)) + 0.12;
-    drawShape(vx, vy, 0, hw + 0.15, TOWER_H + 0.5, (i, u, z, du, dz, L) => towerCell(i, u, z, du, dz, L, hw));
+    drawBridgeTower(vx, vy);
   }
   forNear(bridgeB, b => {
     const [vx, vy] = R(b.x, b.y);
@@ -1257,13 +1303,22 @@ function bridgeSprites() {
     if (night > 0.4) dot(vx, vy, b.z, Math.max(0.035, 0.6 * Math.hypot(vx, vy) / Math.min(projX, projY)), (i, t, L) => { BG[i] = C(WARM, 6); return set(i, '*', C(WARM, 15)), true; }); // its necklace of lights (kept wider than the cable, which is a character wide far off, so they show)
   });
 }
-function towerCell(i, u, z, du, dz, L, hw) {
-  const leg = Math.abs(Math.abs(u) - hw) < Math.max(0.1, du / 2);
-  if (z > TOWER_H + 0.35 && Math.abs(Math.abs(u) - hw) < du && night > 0.3) return set(i, '*', C(RED, fract(T * 0.7) < 0.5 ? 15 : 4)), true;
-  if (leg && z < TOWER_H + 0.4) { BG[i] = bgAt(GRAY, day * 3); return set(i, fract(z * 3) < 0.1 ? '=' : '|', C(GRAY, L * 1.1)), true; }
-  if (Math.abs(u) < hw && [1.2, 4, TOWER_H].some(b => Math.abs(z - b) < Math.max(0.12, dz / 2)))
-    return set(i, Math.abs(z - TOWER_H) < 0.12 ? '#' : '=', C(GRAY, L)), true;
-  return false;
+// a bridge tower: two steel legs either side of the deck, banded where the sections join, three crossbeams, and a red
+// beacon blinking on each leg after dark
+const TOWER_LEG = 0.95;
+function drawBridgeTower(vx, vy) {
+  const lw = Math.max(0.1, 0.55 * Math.hypot(vx, vy) / projX), top = TOWER_H + 0.4;
+  const steel = (i, t, L) => {
+    BG[i] = C(GRAY, (1.3 + L * 0.3) * shadeFace(HIT.face));
+    return set(i, HIT.face >= 5 ? '#' : fract(HIT.w * 3) < 0.1 ? '=' : '|', C(GRAY, L * 1.1)), true;
+  };
+  for (const e of [-1, 1]) drawBox(boxAt(vx + e * TOWER_LEG, vy, 1, 0, lw, lw * 1.2, 0, top), steel);
+  for (const z of [1.2, 4, TOWER_H]) drawBox(boxAt(vx, vy, 1, 0, TOWER_LEG, lw * 0.9, z - 0.12, z + 0.12), (i, t, L) => {
+    BG[i] = C(GRAY, (1.2 + L * 0.3) * shadeFace(HIT.face)); return set(i, z === TOWER_H ? '#' : '=', C(GRAY, L)), true;
+  });
+  if (night > 0.3) for (const e of [-1, 1]) dot(vx + e * TOWER_LEG, vy, top + 0.06, Math.max(0.05, lw * 0.8), (i, t, L) => {
+    const on = fract(T * 0.7) < 0.5; if (on) BG[i] = C(RED, 8); return set(i, '*', C(RED, on ? 15 : 4)), true;
+  });
 }
 
 // one el car as a real box running east-west: steel sides with a red stripe, a band of windows (lit warm after dark),

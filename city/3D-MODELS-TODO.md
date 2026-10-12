@@ -40,15 +40,15 @@ Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arr
       `ANIMAL_BODIES` in `figures.js`, drawn with `drawFigure`), solid colour, facing the way they move. The same
       builder could take the aviary birds and the street pigeons later.
 
-## Batch 4: big skyline pieces (drawShape silhouettes, these look flat when you walk around them)
+## Batch 4: big skyline pieces (drawShape silhouettes, these look flat when you walk around them) - done
 
-- [ ] **Bridge towers** `city-sprites.js:1110`: currently fake-foreshortened by `across()`. Two legs as boxes,
+- [x] **Bridge towers** `city-sprites.js:1110`: currently fake-foreshortened by `across()`. Two legs as boxes,
       cross beams, red beacon `dot` on top.
-- [ ] **Smokestacks** `city-sprites.js:160`: a tapering drum (`rayCopperDrum` or a stack of drums) with bands,
+- [x] **Smokestacks** `city-sprites.js:160`: a tapering drum (`rayCopperDrum` or a stack of drums) with bands,
       smoke can stay a billboard.
-- [ ] **Dockside cranes** `city-sprites.js:156`: lattice mast like `drawRadioTower`, jib as a box that slews for
+- [x] **Dockside cranes** `city-sprites.js:156`: lattice mast like `drawRadioTower`, jib as a box that slews for
       real instead of the `across()` hack, hook on a rod.
-- [ ] **Lighthouse** `city-sprites.js:918`: drum tower in stripes, lantern room, the beam stays as is.
+- [x] **Lighthouse** `city-sprites.js:918`: drum tower in stripes, lantern room, the beam stays as is.
 
 ## Batch 5: the fair rides (biggest, do last)
 
