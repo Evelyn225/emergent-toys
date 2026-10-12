@@ -128,7 +128,7 @@ function drawDealBoard(b, vx, vy, bob) { // bob: the boat's, so the board rides 
     const f = HIT.face, edge = Math.min(hl - Math.abs(HIT.u), z1 - HIT.w, HIT.w - z0) < 0.006;
     BG[i] = C(edge ? (sale ? RED : BLUE) : WHITE, (edge ? 3 : 2) + L * 0.3);
     if (f !== 3 && f !== 4 || edge) return set(i, ' ', 0), true;
-    const ch = signLine(word, faceQ(HIT.u, hl) * n - 1, (z1 - 0.008 - HIT.w) / 0.029, i, z1 - 0.0225, tc, t, 2 * hl / n, 0.029, far);
+    const ch = signLine(word, faceQ(HIT.u, hl) * n - 1, (z1 - 0.008 - HIT.w) / 0.029, i, z1 - 0.0225, tc, t, 2 * hl / n, 0.029, far, ...faceDir(b.hx, b.hy));
     return set(i, ch ?? ' ', C(sale ? RED : BLUE, 15)), true;
   });
 }
@@ -146,9 +146,10 @@ function drawMarinaBoard(vx, vy) {
     const lq = faceQ(HIT.u, hl) * n - 1;
     let top = z1 - 0.015;
     for (const [text, h] of MARINA_ROWS) { // each row in its band, the title a little taller
-      if (HIT.w <= top && HIT.w > top - h) {
-        const ch = signLine(text, lq, (top - HIT.w) / h, i, top - h / 2, tc, t, 2 * hl / n, h, far), k = Math.floor(lq);
-        return set(i, ch ?? ' ', C(/[$0-9]/.test(text[k] || '') ? YEL : WHITE, Math.max(L, 11))), true;
+      const big = signIsBig(2 * hl / n, h, far); // (block letters fill their band; small ones go in the cell they project into)
+      if (big ? HIT.w <= top && HIT.w > top - h : true) {
+        const ch = signLine(text, lq, (top - HIT.w) / h, i, top - h / 2, tc, t, 2 * hl / n, h, far, ...faceDir(1, 0));
+        if (ch && (big || ch !== ' ')) return set(i, ch, C(/[$0-9]/.test(ch) ? YEL : WHITE, Math.max(L, 11))), true;
       }
       top -= h + 0.012;
     }

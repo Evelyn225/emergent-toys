@@ -9614,17 +9614,27 @@ function drawBike(o, vx, vy) {
   bar(seat[0], seat[1], seat[0] - 0.003, 0.084);
 }
 
-// a line of a flat sign's text, kept on one screen row right across the sign. (signGlyph's own row test goes by each
-// column's depth, so text seen at an angle stair-steps.) zc: the line's middle height; tc: the sign's middle depth.
-function signLine(word, lq, hz, i, zc, tc, t, letterW, bandH, far) {
+// a line of a flat sign's text, small (block letters, when they fit, are signGlyph's). Each letter shows in exactly
+// one cell: the column its middle projects into, so none doubles across two cells and none is skipped while there's
+// room for it, on the row the line's middle projects into at the sign's middle, so the line stays straight on screen
+// even seen at an angle. zc: the line's middle height; tc: the sign's middle depth (see midDepth); (ex, ey): the way the
+// text runs, a unit vector. hz only matters for blocks.
+function signLine(word, lq, hz, i, zc, tc, t, letterW, bandH, far, ex, ey) {
   if (signIsBig(letterW, bandH, far)) return signGlyph(word, lq, hz, t, letterW, bandH, far);
   const k = Math.floor(lq);
-  if (k < 0 || k >= word.length || hz < 0 || hz >= 1) return null;
+  if (k < -1 || k > word.length) return null;
   if (Math.floor(i / cols) !== Math.floor(hor - (zc - eye) * projY / tc)) return ' ';
-  const cellU = t / projX / letterW;
-  return cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2 ? word[k] : ' ';
+  const c = i % cols, cx = 2 * (c + 0.5) / cols - 1, X = (dx - dy * tf * cx) * t, Y = (dy + dx * tf * cx) * t; // where this cell's ray met the sign
+  let best = ' ', bd = Infinity;
+  for (let j = Math.max(0, k - 1); j <= Math.min(word.length - 1, k + 1); j++) { // this letter or a neighbour, whichever's middle lands here
+    const off = (j + 0.5 - lq) * letterW, PX = X + ex * off, PY = Y + ey * off, dep = dx * PX + dy * PY;
+    if (dep > 0.05 && Math.floor(cols / 2 + (-dy * PX + dx * PY) * projX / dep) === c && Math.abs(off) < bd) { bd = Math.abs(off); best = word[j]; }
+  }
+  return best;
 }
 const midDepth = (vx, vy) => Math.max(0.05, dx * vx + dy * vy);
+// the way a broad face's text runs (see faceQ), for a box along (c, s)
+const faceDir = (c, s) => HIT.face === 3 ? [c, s] : [-c, -s];
 // which way a broad face (3: +v, 4: -v) reads: 0 at its left edge, 1 at its right, as you look at it
 const faceQ = (u, hl) => HIT.face === 3 ? (u + hl) / (2 * hl) : (hl - u) / (2 * hl);
 
@@ -9644,7 +9654,7 @@ function drawBanner(o, vx, vy) {
     BG[i] = C(o.col, (edge ? 3.5 : 2.2) + L * 0.3 + glow * (edge ? 3 : 1));
     if (f !== 1 && f !== 2 || edge) return set(i, ' ', 0), true;
     const q = f === 1 ? (hw - v) / (2 * hw) : (v + hw) / (2 * hw);
-    return set(i, signLine(word, q * n - 2, (band0 + bandH - w) / bandH, i, band0 + bandH / 2, tc, t, 2 * hw / n, bandH, far) ?? ' ', C(WHITE, Math.max(L, 10))), true;
+    return set(i, signLine(word, q * n - 2, (band0 + bandH - w) / bandH, i, band0 + bandH / 2, tc, t, 2 * hw / n, bandH, far, ...(f === 1 ? [s, -c] : [-s, c])) ?? ' ', C(WHITE, Math.max(L, 10))), true;
   });
 }
 
@@ -14448,7 +14458,7 @@ function drawDealBoard(b, vx, vy, bob) { // bob: the boat's, so the board rides 
     const f = HIT.face, edge = Math.min(hl - Math.abs(HIT.u), z1 - HIT.w, HIT.w - z0) < 0.006;
     BG[i] = C(edge ? (sale ? RED : BLUE) : WHITE, (edge ? 3 : 2) + L * 0.3);
     if (f !== 3 && f !== 4 || edge) return set(i, ' ', 0), true;
-    const ch = signLine(word, faceQ(HIT.u, hl) * n - 1, (z1 - 0.008 - HIT.w) / 0.029, i, z1 - 0.0225, tc, t, 2 * hl / n, 0.029, far);
+    const ch = signLine(word, faceQ(HIT.u, hl) * n - 1, (z1 - 0.008 - HIT.w) / 0.029, i, z1 - 0.0225, tc, t, 2 * hl / n, 0.029, far, ...faceDir(b.hx, b.hy));
     return set(i, ch ?? ' ', C(sale ? RED : BLUE, 15)), true;
   });
 }
@@ -14466,9 +14476,10 @@ function drawMarinaBoard(vx, vy) {
     const lq = faceQ(HIT.u, hl) * n - 1;
     let top = z1 - 0.015;
     for (const [text, h] of MARINA_ROWS) { // each row in its band, the title a little taller
-      if (HIT.w <= top && HIT.w > top - h) {
-        const ch = signLine(text, lq, (top - HIT.w) / h, i, top - h / 2, tc, t, 2 * hl / n, h, far), k = Math.floor(lq);
-        return set(i, ch ?? ' ', C(/[$0-9]/.test(text[k] || '') ? YEL : WHITE, Math.max(L, 11))), true;
+      const big = signIsBig(2 * hl / n, h, far); // (block letters fill their band; small ones go in the cell they project into)
+      if (big ? HIT.w <= top && HIT.w > top - h : true) {
+        const ch = signLine(text, lq, (top - HIT.w) / h, i, top - h / 2, tc, t, 2 * hl / n, h, far, ...faceDir(1, 0));
+        if (ch && (big || ch !== ' ')) return set(i, ch, C(/[$0-9]/.test(ch) ? YEL : WHITE, Math.max(L, 11))), true;
       }
       top -= h + 0.012;
     }
