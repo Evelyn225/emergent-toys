@@ -159,7 +159,7 @@ function pickLock(sh) {
     const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
     enterRoom(kind, { ...sh, cell, ret, line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]);
     px = room.W / 2; py = room.H - 1.6;
-    room.props = room.props.filter(p => p.art !== ART.keeper && p.art !== ART.sitter && p.art !== ART.sitterBack); // nobody here
+    room.props = room.props.filter(p => !p.fig || p.guard !== undefined); // nobody here (but the night guards)
     if (Math.random() < 0.35) { reports.push({ t: T + 12, x: ret[0], y: ret[1], kind: 'burglary' }); say('The lock gives. A little red light blinks by the door...', 4); }
     else say('The lock gives. Inside, it\'s dark and quiet.', 3);
   });

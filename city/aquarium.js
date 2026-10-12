@@ -217,7 +217,7 @@ ROOM_DEFS.aquarium = { grid: AQUA_GRID, light: 0.55, floor: 'aqua', ceil: 'aqua'
     }
     const spots = [[3, 2.6], [7.2, 2.4], [12, 2.5], [17, 2.7], [21, 2.4], [2.5, 6.4], [6.8, 7.3], [11.3, 6], [12.6, 9.5], [16.6, 6.2], [21, 8.6], [17.2, 9.6], [3.1, 12.4], [8, 10.8]];
     for (const [x, y] of spots) if (chance(0.5)) p.push(chance(0.3) // visitors, some of them kids
-      ? SP(x, y, 0.4, 1.15, ART.keeper, ((s) => (c, row, L) => C(row < 3 ? SKIN : row < 6 ? s : GRAY, L))(shirt()))
+      ? figProp(x, y, figAnyone(shirt(), { kid: true, bot: 'shorts' }), { h: 1.2 })
       : standing(x, y, shirt()));
     // the touch pool: a low rock basin, starfish and crabs and urchins in the shallows
     p.push(BX(TOUCH_POOL.x, TOUCH_POOL.y, TOUCH_POOL.hl, TOUCH_POOL.hw, 0, 0.75, (i, t, L) => {
@@ -227,7 +227,7 @@ ROOM_DEFS.aquarium = { grid: AQUA_GRID, light: 0.55, floor: 'aqua', ceil: 'aqua'
       const k = hash(Math.floor(HIT.u * 5), Math.floor(HIT.v * 5), 38);
       return set(i, k > 0.85 ? '*' : k > 0.78 ? 'w' : k > 0.73 ? '#' : k > 0.6 ? '~' : ' ', C(k > 0.85 ? ORANGE : k > 0.78 ? RED : k > 0.73 ? MAG : WHITE, 13)), true;
     }));
-    if (chance(0.7)) p.push(SP(TOUCH_POOL.x + 0.4, TOUCH_POOL.y + 0.9, 0.4, 1.15, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? YEL : BLUE, L))); // a kid, hands in the water
+    if (chance(0.7)) p.push(figProp(TOUCH_POOL.x + 0.4, TOUCH_POOL.y + 0.9, figAnyone(YEL, { kid: true, bot: 'shorts' }), { h: 1.2, pose: 'reach', face: [-0.4, -0.9] })); // a kid, hands in the water
     // the gift shop: a counter, the keeper, a stand of plush sharks
     p.push(...counterBox(20.5, 13.95, 1.1), standing(20.5, 13.3, CYAN));
     p.push(BX(22.4, 13.2, 0.3, 0.3, 0, 1.6, (i, t, L) => {

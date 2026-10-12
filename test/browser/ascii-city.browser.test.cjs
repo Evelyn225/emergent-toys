@@ -1028,8 +1028,8 @@ test('on your feet: Space jumps, a trick on the board lands with its name, C sit
 test('the subway: C sits you on a bench (not on top of anybody), and you get off the train on your feet', () => withPage(async page => {
   await page.evaluate(() => { enterRoom('train', { st: 0, opts: [1, 2, 3, 4, 5], dest: null, track: 0 }, [2, 2.5, 0.25]); });
   const r = await page.evaluate(() => {
-    room.props = room.props.filter(o => o.art !== ART.sitter); // an empty car, then one rider on the bench by the door
-    room.props.push(SP(3, 1.33, 0.55, 1.2, ART.sitter, () => 0, 0.3));
+    room.props = room.props.filter(o => !(o.fig && o.pose === 'sit')); // an empty car, then one rider on the bench by the door
+    room.props.push(sitting(3, 1.33, GRAY, 0.45));
     px = 3.1; py = 2.2; const ok = sitDown();
     return [ok, !!body.seat, Math.abs(py - 1.3) < 0.01, Math.abs(px - 3) > 0.54, Math.abs(a - Math.PI / 2) < 0.01];
   });
@@ -1649,7 +1649,7 @@ test('the night market\'s fortune teller and goldfish tub: five stalls, a readin
 test('the Velvet Rope: cocktail tables and chairs, punters in them, and you can talk to one', () => withPage(async page => {
   await page.evaluate(() => { tod = 23; enterRoom('stripclub', { ...CLUB.sh, ret: [px, py, a], line: '' }, [9, 12.4, -Math.PI / 2]); });
   const r = await page.evaluate(() => {
-    const seated = room.props.filter(s => s.art === ART.sitterBack), tables = room.props.filter(s => s.box && s.box.z0 > 0.6 && s.box.z1 < 0.8);
+    const seated = room.props.filter(s => s.fig && s.pose === 'sit' && s.face?.[1] === -1), tables = room.props.filter(s => s.box && s.box.z0 > 0.6 && s.box.z1 < 0.8);
     const p = seated[0]; px = p.x; py = p.y + 0.9; a = -Math.PI / 2; // behind them, facing the stage
     return [seated.length, tables.length, promptText()];
   });
@@ -2219,14 +2219,15 @@ test('the Velvet Rope renders its neon and stage dancers even with negative anim
   const valid = await page.evaluate(() => {
     paused = true;
     const props = ROOM_DEFS.stripclub.props({});
-    const dancers = props.filter(p => p.tick);
+    const dancers = props.filter(p => p.fig && p.tick);
     for (const time of [-0.016, -0.7, -3, 0, 0.7, 3]) {
       T = time;
       // A pixel on the end-wall dancer, away from the pole.
       clubSide(0, 0, 0.01, 1.2, 1, false, 1.7, 4, 1, 0, 1, 1, true);
       for (const dancer of dancers) {
         dancer.tick(dancer);
-        if (!DANCER_FRAMES.includes(dancer.art)) return false;
+        const key = dancer.pose(dancer);
+        if (!/^dance\d$/.test(key) || !figPose(key) || !figSprite(dancer.fig, 0, key).some(k => k)) return false;
       }
     }
     return dancers.length === 3;
@@ -2295,15 +2296,15 @@ test('talking to people indoors: walk up to someone in a cafe or a station and t
   const r = await page.evaluate(() => {
     tod = 14; mode = 'walk';
     enterRoom('cafe', { word: 'CAFE', neon: MAG, ret: [px, py, a], line: 'What can I get you?' }, [5, 6.3, -Math.PI / 2]);
-    const arts = [ART.keeper, ART.sitter, ART.sitterBack], k = room.def.keeper;
-    const s = room.props.find(o => arts.includes(o.art) && Math.hypot(o.x - k[0], o.y - k[1]) > 2);
+    const k = room.def.keeper;
+    const s = room.props.find(o => isRoomPerson(o) && Math.hypot(o.x - k[0], o.y - k[1]) > 2);
     px = s.x; py = s.y + 0.9; a = -Math.PI / 2;
     const prompt = promptText(); interact();
     const cafeLine = msgText;
     px = k[0]; py = k[1] + 1; a = -Math.PI / 2; const counter = promptText();
     leaveRoom(); enterRoom('station', { st: 0, word: stations[0].name, t0: T - 12, ret: [px, py, a] }, [11, 4.8, 0]);
     let sprompt = ''; // (someone the train isn't standing beside: boarding it rightly comes first)
-    for (const p2 of room.props.filter(o => arts.includes(o.art))) { px = p2.x + 0.8; py = p2.y; a = Math.PI; sprompt = promptText(); if (sprompt === 'E: talk') break; }
+    for (const p2 of room.props.filter(isRoomPerson)) { px = p2.x + 0.8; py = p2.y; a = Math.PI; sprompt = promptText(); if (sprompt === 'E: talk') break; }
     interact();
     return { prompt, cafeLine, counter, sprompt, stationLine: msgText };
   });

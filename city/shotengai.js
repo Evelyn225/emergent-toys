@@ -162,7 +162,7 @@ const SHOTENGAI_ROOMS = {
       const p = [];
       for (let x = 2; x <= 12; x += 0.85) p.push({ ...pachinkoMachine(x, 1.5, Math.round(x * 3), 1), busy: chance(0.55) });
       for (let x = 2.4; x <= 10.4; x += 0.85) { p.push({ ...pachinkoMachine(x, 4.9, Math.round(x * 5), -1), busy: chance(0.5) }, { ...pachinkoMachine(x, 5.45, Math.round(x * 7), 1), busy: chance(0.5) }); }
-      for (const s of p.slice()) if (s.busy) p.push(sitting(s.cx, s.cy + s.fy * 0.6, shirt(), 0.45, s.fy > 0));
+      for (const s of p.slice()) if (s.busy) p.push({ ...sitting(s.cx, s.cy + s.fy * 0.6, shirt(), 0.45), face: [0, -s.fy] });
       p.push(...counterBox(12.3, 9.2, 0.9), standing(12.3, 8.6, RED));
       return p;
     } },
@@ -170,7 +170,7 @@ const SHOTENGAI_ROOMS = {
     props: r => {
       const p = [];
       for (const [x, y] of [[2, 1.5], [3.4, 1.5], [4.8, 1.5], [6.2, 1.5], [7.6, 1.5], [9, 1.5], [3, 4.4], [4.4, 4.4], [6.6, 4.4], [8, 4.4]]) p.push(crane(x, y, Math.round(x * 3 + y)));
-      if (chance(0.6)) p.push(standing(3.4, 2.6, shirt())); if (chance(0.6)) p.push(SP(8, 5.5, 0.4, 1.15, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? MAG : BLUE, L)));
+      if (chance(0.6)) p.push(standing(3.4, 2.6, shirt())); if (chance(0.6)) p.push(figProp(8, 5.5, figAnyone(MAG, { kid: true, bot: 'shorts' }), { h: 1.2 }));
       return p;
     } },
   capsule: { grid: boxRoom(7, 12), light: 0.9, floor: 'wood', ceil: 'strip', wall: capsuleWall, keeper: [5.2, 9.1], // (the desk off to one side: it used to stand right across the door)

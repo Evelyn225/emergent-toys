@@ -72,11 +72,11 @@ function clubSide(i, u, uStep, z, d, side, along, len, sgn, a0, L, glow, blink) 
   return set(i, cross || ' ', C(MAG, Math.max(L * 0.35, glow * 3.5)));
 }
 // the bouncer and the velvet rope on the sidewalk outside
-const BOUNCER_ART = pad(['  ___ ', ' [=_=]', ' /###\\', '|#####|', ' |###|', ' || ||', ' ## ##']);
+const BOUNCER = figBouncerLook(), CLUB_DANCERS = [MAG, CYAN, YEL].map((col, k) => figDancerLook(k + 11, col)); // (SEQUINS' first three)
 function clubSprites() {
   const dx_ = CLUB.bx * 8 + 2 + 3, dy_ = CLUB.by * 8 + 2 - 0.1, [vx, vy] = R(dx_, dy_);
   if (Math.hypot(vx, vy) > vis) return;
-  drawArt(vx + 0.06, vy, 0, 0.07, 0.19, BOUNCER_ART, (c, row, L) => row === 1 ? (c === '=' ? C(GRAY, 3) : C(SKIN, Math.max(L, 6))) : row < 4 ? C(GRAY, Math.max(L * 0.5, 3)) : C(GRAY, Math.max(L * 0.3, 2)));
+  drawFigure(vx + 0.06, vy, 0, 0.19, 0, -1, BOUNCER, 'fold', { light: 6 }); // arms folded, facing the street
   for (const s of [-0.13, -0.03]) drawArt(vx + s, vy, 0, 0.012, 0.07, ['o', '|', '|', '|', '='], () => C(YEL, 12)); // brass posts
   drawArt(vx - 0.08, vy, 0.045, 0.09, 0.015, ['~~~~~~'], () => C(RED, 14)); // the rope
 }
@@ -108,8 +108,9 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
     for (let k = 0; k < 3; k++) { // three poles, a dancer on each
       const x = 5.5 + k * 3.5, col = SEQUINS[k];
       p.push(BX(x, 2, 0.04, 0.04, 0.5, 3, solid(WHITE, { bright: 1.6 })));
-      p.push({ ...SP(x, 2.05, 0.7, 1.7, DANCER_FRAMES[0], (c, row, L) => row === 0 && c === 'o' ? C(SKIN, 15) : C(col, 15), 0.5),
-        tick: s => { const f = mod(Math.floor(T * 1.6 + k * 1.3), DANCER_FRAMES.length); s.art = DANCER_FRAMES[f]; s.x = x + Math.sin(T * 1.2 + k) * 0.28; s.y = 2.05 + Math.cos(T * 1.2 + k) * 0.12; } }); // (swinging round the pole)
+      p.push(figProp(x, 2.05, CLUB_DANCERS[k], { z: 0.5, h: 1.72, chat: false, light: 12,
+        pose: () => 'dance' + mod(Math.floor(T * 1.6 + k * 1.3), FIG_DANCE.length), // (a new move every beat or so)
+        tick: s => { s.x = x + Math.sin(T * 1.2 + k) * 0.28; s.y = 2.05 + Math.cos(T * 1.2 + k) * 0.12; } })); // (swinging round the pole, facing the way she's going)
     }
     // little round cocktail tables, a candle on each, two velvet chairs apiece facing the stage; the punters in them, all eyes front
     const busy = 0.45 + 0.4 * barCrowd();
@@ -122,7 +123,7 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
         if (chance(busy)) p.push(sitting(cx, cy - 0.04, shirt(), 0.42, true));
       }
     }
-    for (const y of [5.2, 6.8]) { p.push(SP(3.05, y, 0.4, 0.75, ART.stool, wood)); if (chance(busy)) p.push(sitting(3.05, y, shirt(), 0.45, true)); } // stools at the bar
+    for (const y of [5.2, 6.8]) { p.push(SP(3.05, y, 0.4, 0.75, ART.stool, wood)); if (chance(busy)) p.push({ ...sitting(3.05, y, shirt(), 0.6), face: [-1, 0] }); } // stools at the bar, facing it
     p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
     p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
     p.push(standing(13.4, 10.2, GRAY)); // the host by the curtain

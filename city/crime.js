@@ -245,14 +245,14 @@ function roofSearchLead(dt) {
 function drawRoofPolice() {
   for (const c of roofCops) {
     const z = policeRoofHeight(c.x, c.y);
-    drawArt(...R(c.x, c.y), z, 0.06, 0.18, (c.ph | 0) % 2 ? ART.walkA : ART.walkB, (ch, row, L) => C(row === 1 ? SKIN : BLUE, Math.max(L, 7)));
+    figMotion(c); drawFigure(...R(c.x, c.y), z, 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, 'run'), { light: 7 });
     if (c.sees && fract(T * 3) < 0.5) drawArt(...R(c.x, c.y), z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
 }
 function drawRoomPolice() {
   for (const c of roomCops) {
-    drawArt(c.x - px, c.y - py, 0, 0.38, 1.5, (c.pathT > 0.2 && c.path.length ? ART.walkA : ART.keeper),
-      (ch, row, L) => C(row < 3 ? SKIN : BLUE, row < 3 ? L : Math.max(L, 10)));
+    figMotion(c);
+    drawFigure(c.x - px, c.y - py, 0, 1.8, c._fx || 0, c._fy || 0, copLook(c), c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9 });
     if (c.sees && fract(T * 3) < 0.55) drawArt(c.x - px, c.y - py, 1.65, 0.1, 0.12, ['!'], () => C(RED, 15));
   }
 }

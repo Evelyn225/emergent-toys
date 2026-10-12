@@ -1,0 +1,89 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const {loadCity}=require('./helpers/load-city.cjs');
+
+// counts of each role in a sprite, by name
+const COUNT=`(spr=>{const n={};for(const k of spr)if(k){const name=Object.keys(FR).find(r=>FR[r]===k);n[name]=(n[name]||0)+1;}return n;})`;
+
+test('a face has two eyes a pixel each, and from behind there is none: hair over the head and back pockets instead',()=>{
+  const {ev}=loadCity();
+  const r=JSON.parse(ev(`JSON.stringify((()=>{
+    const count=${COUNT},out=[];
+    for(const hair of Object.keys(figHair))for(const bot of ['pants','shorts','skirt']) {
+      const look=figLook({hair,top:'tee',bot});
+      out.push({hair,bot,front:count(figSprite(look,0,'stand')),back:count(figSprite(look,8,'stand')),side:count(figSprite(look,4,'stand'))});
+    }
+    return out;
+  })())`));
+  for(const v of r) {
+    assert.equal(v.front.EYE,2,JSON.stringify(v));
+    assert.equal(v.side.EYE,1,JSON.stringify(v));
+    assert.equal(v.back.EYE,undefined,JSON.stringify(v));
+    if(v.hair!=='bald')assert.ok(v.back.HAIR>(v.front.HAIR||0),JSON.stringify(v));
+    assert.equal(v.back.POCKET,v.bot==='skirt'?undefined:2,JSON.stringify(v));
+    assert.equal(v.front.POCKET,undefined,JSON.stringify(v));
+  }
+});
+
+test('police and guards read as uniforms: cap badge and chest badge on the front, not the back; the cop carries a holster',()=>{
+  const {ev}=loadCity();
+  const r=JSON.parse(ev(`JSON.stringify((()=>{
+    const count=${COUNT};
+    return {cop:[0,8].map(v=>count(figSprite(figCopLook(1),v,'stand'))),guard:[0,8].map(v=>count(figSprite(figGuardLook(1),v,'stand'))),
+            civ:count(figSprite(figStreetLook(5,BLUE,BLUE,1),0,'stand'))};
+  })())`));
+  for(const who of ['cop','guard']) {
+    const [front,back]=r[who];
+    assert.equal(front.CAPBADGE,1,who);assert.equal(front.BADGE,1,who);assert.ok(front.HAT>10,who);
+    assert.equal(back.CAPBADGE,undefined,who);assert.equal(back.BADGE,undefined,who);
+  }
+  assert.ok(r.cop[1].BELT>r.cop[0].BELT,'the holster shows from behind');
+  assert.equal(r.civ.BADGE,undefined);assert.equal(r.civ.CAPBADGE,undefined);
+});
+
+test("which side of someone you see agrees with the pickpocket rule: their back exactly when you're behind them",()=>{
+  const {ev}=loadCity();
+  const r=JSON.parse(ev(`JSON.stringify((()=>{
+    const bad=[];
+    for(let k=0;k<64;k++)for(let j=0;j<64;j++) {
+      const fa=k/64*Math.PI*2,ca=j/64*Math.PI*2+0.013,fx=Math.cos(fa),fy=Math.sin(fa),rx=Math.cos(ca),ry=Math.sin(ca); // (rx, ry): them from you
+      const behind=fx*-rx+fy*-ry<0,v=figView(rx,ry,fx,fy),backView=v>FIG_VIEWS/4&&v<FIG_VIEWS*3/4;
+      if(Math.abs(fx*-rx+fy*-ry)>0.2&&behind!==backView)bad.push([k,j,v]);
+    }
+    return {bad,still:figView(0.3,0.1,0,0),front:figView(0,0.3,0,-1),back:figView(0,0.3,0,1)};
+  })())`));
+  assert.deepEqual(r.bad,[]);
+  assert.equal(r.still,0,'someone without a heading faces you');
+  assert.equal(r.front,0);assert.equal(r.back,8);
+});
+
+test('detail pixels drop out once a pixel is smaller than a cell, and a mostly empty cell stays see-through',()=>{
+  const {ev}=loadCity();
+  const r=JSON.parse(ev(`JSON.stringify((()=>{
+    const spr=figSprite(figLook({}),0,'stand'),eye=spr.indexOf(FR.EYE),c=eye%FIG_W,row=Math.floor(eye/FIG_W),pz=FIG_H-row-0.5;
+    return {near:figSample(spr,c+0.5,pz,0.9,0.9),mid:figSample(spr,c+0.5,pz,1.2,1.2),air:figSample(spr,0.5,FIG_H-0.5,3,3),
+            body:figSample(spr,FIG_W/2,10,3,3)};
+  })())`));
+  assert.equal(r.near,ev('FR.EYE'));assert.equal(r.mid,ev('FR.SKIN'));
+  assert.equal(r.air,0);assert.notEqual(r.body,0);
+});
+
+test('every pose builds on a sprite the body fits inside, standing feet on the floor',()=>{
+  const {ev}=loadCity();
+  const r=JSON.parse(ev(`JSON.stringify((()=>{
+    const look=figDancerLook(1,MAG),out={};
+    for(const key of ['stand','fold','ease','wave','sing','reach','grass','sit7','sitfold9','walk0','walk3','run5','dance0','dance1','dance2','dance3']) {
+      const rows=[],cols=[];
+      for(const v of [0,4,8,12]){const s=figSprite(look,v,key);s.forEach((k,i)=>{if(k){rows.push(Math.floor(i/FIG_W));cols.push(i%FIG_W);}});}
+      out[key]={top:Math.min(...rows),bottom:Math.max(...rows),left:Math.min(...cols),right:Math.max(...cols)};
+    }
+    return out;
+  })())`));
+  for(const [key,b] of Object.entries(r)) {
+    assert.ok(b.top>0,`${key} clipped at the top: ${JSON.stringify(b)}`);
+    if(key!=='dance1')assert.equal(b.bottom,ev('FIG_H')-1,`${key} stands on the floor`);
+    assert.ok(b.left>0&&b.right<ev('FIG_W')-1,`${key} clipped at a side: ${JSON.stringify(b)}`);
+  }
+  assert.ok(r.dance1.bottom<ev('FIG_H')-2,'the spin is off the floor');
+});

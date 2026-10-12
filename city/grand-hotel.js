@@ -114,7 +114,7 @@ ROOM_DEFS.grandhotelheist = { grid: hotelGalleryGrid(), light: 0.22, height: 3.8
       BX(12, 12.8, 0.7, 0.4, 0, 0.82, solid(YEL, { top: '=', panel: 0.5 })),
       SP(12, 12.8, 0.55, 0.3, pad(['  o  ', ' /_\\ ', '(____)']), (c, row, L) => C(WHITE, Math.max(L, 6)), 0.82),
     ];
-    if (r.burgled) HOTEL_GUARD_PATHS.forEach((path, k) => p.push({ ...SP(path[0][0], path[0][1], 0.58, 1.8, ART.guard, (c, row, L) => C(row < 2 ? BLUE : row < 4 ? SKIN : c === '*' ? YEL : BLUE, Math.max(L, 5))), guard: true, dir: 0,
+    if (r.burgled) HOTEL_GUARD_PATHS.forEach((path, k) => p.push({ ...figProp(path[0][0], path[0][1], figGuardLook(k + 3), { h: 1.8, chat: false, light: 5 }), guard: true, dir: 0,
       tick: s => {
         const distracted = r.distractedUntil > T;
         if (distracted) s.patrolDelay = (s.patrolDelay || 0) + Math.max(0, T - (s.lastTick ?? T));

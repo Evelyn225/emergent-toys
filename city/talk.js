@@ -184,13 +184,12 @@ function roomTalkLine(kind, h = tod) {
   return (lastRoomLine = line);
 }
 // who you'd be talking to: someone sitting or standing within reach, roughly in front, nearer than the counter
-const PEOPLE_ART = () => [ART.keeper, ART.sitter, ART.sitterBack];
 function roomPerson() {
   if (mode !== 'room' || !room || !room.props) return null;
-  const arts = PEOPLE_ART(), k = room.def.keeper, keeperD = k ? Math.hypot(px - k[0], py - k[1]) : Infinity;
+  const k = room.def.keeper, keeperD = k ? Math.hypot(px - k[0], py - k[1]) : Infinity;
   let best = null, bd = 1.4;
   for (const s of room.props) {
-    if (!arts.includes(s.art) || k && Math.hypot(s.x - k[0], s.y - k[1]) < 0.6) continue; // (not the one behind the counter)
+    if (!isRoomPerson(s) || k && Math.hypot(s.x - k[0], s.y - k[1]) < 0.6) continue; // (not the one behind the counter)
     const ex = s.x - px, ey = s.y - py, d = Math.hypot(ex, ey), facing = (Math.cos(a) * ex + Math.sin(a) * ey) / (d || 1);
     const score = d - facing * 0.4;
     if (d < 1.4 && facing > -0.2 && score < bd) { bd = score; best = s; }

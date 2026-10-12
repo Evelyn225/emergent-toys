@@ -444,6 +444,11 @@ function latticeDirection(b,part,face) {
 // Light where neon spills on the night route: never darker than the scene, brighter near the signs.
 function courierLit(L,x,y) { const spill=courierNeonSpill(x,y);return spill?Math.max(L,spill[0]*13):L; }
 const COURIER_SURFACE_COLOUR={platform:GRAY,catwalk:GRAY,scaffold:ORANGE,bay:ORANGE,plank:ORANGE};
+// the recipients: the gardener in her greens, the foreman in his hard hat and hi-vis, Nico in black with his beanie
+const COURIER_FOLK={
+  garden:figLook({hair:'bun',top:'long',bot:'pants',col:{hair:[BRICK,5],skin:[SKIN,12],top:[GREEN,8],bot:[BRICK,5],shoe:[BRICK,4]}}),
+  foreman:figWorkerLook(7),
+  nico:figLook({hair:'long',hat:'beanie',top:'jacket',bot:'pants',col:{hair:[GRAY,2],skin:[BRICK,8],top:[MAG,8],inner:[GRAY,3],bot:[GRAY,2],hat:[GRAY,4],hatD:[GRAY,2]}})};
 function drawCourier() {
   if(mode==='room')return;
   forNear(courierSurfacesB,o=>{
@@ -555,11 +560,11 @@ function drawCourier() {
       return set(i,'#',C(o.shortcut?CYAN:YEL,Math.max(L*1.2,night*7))),true; // (reflective paint: it catches any light)
     });
   });
-  drawArt(...R(COURIER_GARDEN.x,COURIER_GARDEN.y),COURIER_GARDEN.z,.055,.175,ART.keeper,(ch,row,L)=>C(row<3?SKIN:GREEN,L));
-  drawArt(...R(COURIER_FOREMAN.x,COURIER_FOREMAN.y),COURIER_FOREMAN.z,.055,.175,ART.keeper,(ch,row,L)=>C(row<1?YEL:row<3?SKIN:row<6?ORANGE:BLUE,L));
+  drawFigure(...R(COURIER_GARDEN.x,COURIER_GARDEN.y),COURIER_GARDEN.z,.175,0,0,COURIER_FOLK.garden);
+  drawFigure(...R(COURIER_FOREMAN.x,COURIER_FOREMAN.y),COURIER_FOREMAN.z,.175,0,0,COURIER_FOLK.foreman);
   // Nico paces until his guitar turns up, then sits on his crate and plays.
-  const nico=courierEncore?[180.98,123.42,COURIER_NICO.z+.045]:[COURIER_NICO.x+Math.sin(T*.9)*.08,COURIER_NICO.y,COURIER_NICO.z];
-  drawArt(...R(nico[0],nico[1]),nico[2],.055,courierEncore?.13:.175,ART.keeper,(ch,row,L)=>C(row<3?SKIN:row<6?MAG:BLACK,Math.max(L,night*7)));
+  const pace=Math.cos(T*.9),nico=courierEncore?[180.98,123.42]:[COURIER_NICO.x+Math.sin(T*.9)*.08,COURIER_NICO.y];
+  drawFigure(...R(...nico),COURIER_NICO.z,.175,courierEncore?0:Math.sign(pace),0,COURIER_FOLK.nico,courierEncore?'sit7':Math.abs(pace)>.15?'walk'+(Math.floor(T*7)&7):'stand',{light:night*7});
 }
 // Big neon letters in the city's 3x5 font, centred on a sign face: s across the face (left to right as you read it),
 // w up it. Returns the letter's index where a lit stroke is, else -1.

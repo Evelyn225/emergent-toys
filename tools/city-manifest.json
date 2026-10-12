@@ -6,6 +6,7 @@
     "city/movement.js",
     "city/needs.js",
     "city/art.js",
+    "city/figures.js",
     "city/world.js",
     "city/courier-world.js",
     "city/props.js",
