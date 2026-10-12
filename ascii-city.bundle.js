@@ -1740,15 +1740,13 @@ for (let k = 0; k < 14; k++) { // somewhere on the boardwalk clear of everything
                   shirt: [RED, BLUE, GREEN, YEL, MAG, WHITE][k % 6], pants: [BLUE, GRAY, BRICK][k % 3] });
 }
 // the aquarium's sign over its doors: a big neon fish, lit after dark
-extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, w: 0.3, h: 0.13, art: pad(['    _.--._', "><(( o  ))>", "    `--'"]),
-  col: (c, row, L) => C(c === 'o' ? WHITE : c === '>' || c === '<' ? ORANGE : CYAN, Math.max(L, night * 15 * (fract(T * 0.4) < 0.96 ? 1 : 0.4))) });
+extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, fishSign: true });
 // the Shotengai: banners hanging from the arcade roof across the street, bicycles parked along the shopfronts
 const BANNER_WORDS = ['SALE', 'WELCOME', 'OPEN', 'FESTIVAL', 'LUCKY', 'NEW', 'RAMEN', 'KARAOKE', 'SMILE'];
 for (const s of [3.5, 6.5]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
   if (districtOf(bx, by) !== 'shotengai' && districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by) !== 'shotengai') return;
   const w = BANNER_WORDS[hash(bx * 7 + s, by, 701) * BANNER_WORDS.length | 0], col = NEON[hash(bx, by * 3 + s, 702) * 4 | 0];
-  extras.push({ x, y, z: 0.42, w: 0.045 * (w.length + 4), h: 0.1, art: pad(['.' + '-'.repeat(w.length + 4) + '.', '|  ' + w + '  |', "'" + '-'.repeat(w.length + 4) + "'", ' |' + ' '.repeat(w.length + 2) + '| ']),
-    col: (c, row, L) => row === 1 && /[A-Z]/.test(c) ? C(WHITE, Math.max(L, 10)) : row === 3 ? C(GRAY, L) : C(col, Math.max(L, night * 12)) });
+  extras.push({ x, y, z: 0.42, banner: w, col, c: o === 'h' ? 1 : 0, s: o === 'h' ? 0 : 1 }); // hung across the street, facing along it
 });
 for (const s of [2.6, 3.4, 5.6, 7.2]) for (const off of [0.16, 1.84]) alongStreets(s, off, (x, y, ax, ay, bx, by, o) => {
   if (districtOf(bx, by) !== 'shotengai' || hash(bx * 13 + s * 7, by * 5 + off, 703) > 0.35 || !map[idx(x - ax * 0.25, y - ay * 0.25)] && !map[idx(x + ax * 0.25, y + ay * 0.25)]) return;
@@ -9039,6 +9037,8 @@ function citySprites() {
     else if (o.fairPost) drawFairPost(o, ...R(o.x, o.y));
     else if (o.lantern) drawMarketLantern(o, ...R(o.x, o.y));
     else if (o.bike != null) drawBike(o, ...R(o.x, o.y));
+    else if (o.banner) drawBanner(o, ...R(o.x, o.y));
+    else if (o.fishSign) drawFishSign(o, ...R(o.x, o.y));
     else if (o.person != null) drawFigure(...R(o.x, o.y), o.z, 0.175, 0, 0, o.look ||= figStreetLook(hash(o.x, o.y, 9081) * 1e9 | 0, o.person, GRAY), 'stand', { light: 6 });
     else drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col);
   });
@@ -9612,6 +9612,65 @@ function drawBike(o, vx, vy) {
   const [sx, sy] = at(seat[0] - 0.003);
   drawBox(boxAt(sx, sy, c, s, 0.014, 0.006, 0.084, 0.092), (i, t, L) => { BG[i] = C(GRAY, 0.6); return set(i, HIT.face === 5 ? '=' : '_', C(GRAY, L * 0.5)), true; });
   bar(seat[0], seat[1], seat[0] - 0.003, 0.084);
+}
+
+// a line of a flat sign's text, kept on one screen row right across the sign. (signGlyph's own row test goes by each
+// column's depth, so text seen at an angle stair-steps.) zc: the line's middle height; tc: the sign's middle depth.
+function signLine(word, lq, hz, i, zc, tc, t, letterW, bandH, far) {
+  if (signIsBig(letterW, bandH, far)) return signGlyph(word, lq, hz, t, letterW, bandH, far);
+  const k = Math.floor(lq);
+  if (k < 0 || k >= word.length || hz < 0 || hz >= 1) return null;
+  if (Math.floor(i / cols) !== Math.floor(hor - (zc - eye) * projY / tc)) return ' ';
+  const cellU = t / projX / letterW;
+  return cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2 ? word[k] : ' ';
+}
+const midDepth = (vx, vy) => Math.max(0.05, dx * vx + dy * vy);
+// which way a broad face (3: +v, 4: -v) reads: 0 at its left edge, 1 at its right, as you look at it
+const faceQ = (u, hl) => HIT.face === 3 ? (u + hl) / (2 * hl) : (hl - u) / (2 * hl);
+
+// a cloth banner hung across the Shotengai from the arcade roof: a rail along its top on two cords, the word on both
+// sides, a border in a brighter weave and a fringe along the bottom. o.c, o.s: the way the street runs (it faces that way).
+function drawBanner(o, vx, vy) {
+  const d = Math.hypot(vx, vy);
+  if (d > vis) return;
+  const word = o.banner, n = word.length + 4, hw = 0.0225 * n, z0 = o.z + 0.012, z1 = o.z + 0.1, c = o.c, s = o.s, glow = Math.max(night, overcast * 0.6);
+  const at = v => [vx - s * v, vy + c * v], far = farDepth(vx, vy, hw), tc = midDepth(vx, vy), band0 = z0 + 0.025, bandH = 0.05;
+  { const [ax, ay] = at(-hw - 0.01), [bx, by] = at(hw + 0.01); rod(ax, ay, z1 + 0.004, bx, by, z1 + 0.004, 0.004); } // the rail
+  for (const e of [-1, 1]) { const [x, y] = at(e * hw * 0.85); rod(x, y, z1 + 0.004, x, y, ARCADE_Z, 0.0015, GRAY, 0.6); }
+  drawBox(boxAt(vx, vy, c, s, 0.003, hw, z0, z1), (i, t, L) => {
+    const f = HIT.face, v = HIT.v, w = HIT.w;
+    if (w < z0 + 0.01 && fract((v + hw) * 45) > 0.5) return false; // the fringe
+    const edge = Math.min(hw - Math.abs(v), z1 - w, w - z0 - 0.01) < 0.01;
+    BG[i] = C(o.col, (edge ? 3.5 : 2.2) + L * 0.3 + glow * (edge ? 3 : 1));
+    if (f !== 1 && f !== 2 || edge) return set(i, ' ', 0), true;
+    const q = f === 1 ? (hw - v) / (2 * hw) : (v + hw) / (2 * hw);
+    return set(i, signLine(word, q * n - 2, (band0 + bandH - w) / bandH, i, band0 + bandH / 2, tc, t, 2 * hw / n, bandH, far) ?? ' ', C(WHITE, Math.max(L, 10))), true;
+  });
+}
+
+// the aquarium's sign: a neon fish in glass tube mounted off the wall over the doors, drawn as tube outlines on the
+// sign's plane (a body, a forked tail, a gill, its eye), cyan with an orange tail and a white eye. Flickers after dark.
+const FISH_W = 0.15, FISH_H = 0.13;
+const segDist = (x, z, ax, az, bx, bz) => { const ex = bx - ax, ez = bz - az, k = clamp(((x - ax) * ex + (z - az) * ez) / (ex * ex + ez * ez), 0, 1); return Math.hypot(x - ax - ex * k, z - az - ez * k); };
+function fishTube(x, z, th) { // which tube (x, z) is on, if any: x along the fish (+ toward the snout), z up from its middle
+  if (Math.hypot(x - 0.065, z - 0.012) < Math.max(0.01, th * 1.2)) return WHITE; // the eye
+  const e = Math.hypot((x - 0.02) / 0.095, z / 0.05);
+  if (Math.abs(e - 1) * 0.05 < th && x > -0.07) return CYAN; // the body
+  if (x > 0.015 && x < 0.04 && Math.abs(Math.hypot((x + 0.01) / 0.045, z / 0.04) - 1) * 0.04 < th) return CYAN; // the gill
+  if (segDist(x, z, -0.068, 0, -0.14, 0.045) < th || segDist(x, z, -0.068, 0, -0.14, -0.045) < th || segDist(x, z, -0.14, 0.045, -0.12, 0) < th && x < -0.12 || segDist(x, z, -0.14, -0.045, -0.12, 0) < th) return ORANGE; // the tail
+  return -1;
+}
+function drawFishSign(o, vx, vy) {
+  if (Math.hypot(vx, vy) > vis) return;
+  const on = night * (fract(T * 0.4) < 0.96 ? 1 : 0.4), zm = o.z + FISH_H / 2;
+  for (const e of [-1, 1]) rod(vx + e * FISH_W * 0.5, vy - 0.03, zm, vx + e * FISH_W * 0.5, vy, zm, 0.002, GRAY, 0.6); // the stand-offs
+  drawBox(boxAt(vx, vy, 1, 0, FISH_W, 0.004, o.z, o.z + FISH_H), (i, t, L) => {
+    if (HIT.face !== 3 && HIT.face !== 4) return false;
+    const th = Math.max(0.005, 0.55 * t / projY), col = fishTube((faceQ(HIT.u, FISH_W) * 2 - 1) * FISH_W, HIT.w - zm, th);
+    if (col < 0) return false;
+    BG[i] = C(col, 2 + L * 0.25 + on * 7);
+    return set(i, ' ', 0), true;
+  });
 }
 
 // ---- vehicles as real boxes (see drawBox): a body, a cabin with glass, and whatever goes on the roof.
@@ -14366,7 +14425,7 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
   if (lit > 0.3) { // navigation lights: red to port, green to starboard
     for (const [s, col] of [[-1, RED], [1, GREEN]]) {
       const lx = vx + hx * hl * 0.45 - hy * hw * s, ly = vy + hy * hl * 0.45 + hx * hw * s;
-      drawArt(lx, ly, fb + z + 0.005, 0.02, 0.02, ['o'], () => C(col, 15));
+      dot(lx, ly, fb + z + 0.012, 0.01, i => { BG[i] = C(col, 8); return set(i, 'o', C(col, 15)), true; });
     }
   }
 }
@@ -14380,7 +14439,42 @@ function bayBoats() {
     drawBoat3D(b, vx, vy, hx / n, hy / n, 0.6);
   }
 }
-const SALE_SIGN = pad(['.--------.', '|FOR SALE|', "'--------'"]), RENT_SIGN = pad(['.--------.', '| RENTAL |', "'--------'"]);
+// a little board propped on a boat's deck, along her side so you read it from the jetty either way: FOR SALE or RENTAL
+function drawDealBoard(b, vx, vy, bob) { // bob: the boat's, so the board rides with her deck
+  const k = BOAT_KINDS[b.kind], z = bob + k.fb, sale = b.deal === 'sale', word = sale ? 'FOR SALE' : 'RENTAL';
+  const hl = 0.07, z0 = z + 0.04, z1 = z + 0.085, n = word.length + 2, far = farDepth(vx, vy, hl), tc = midDepth(vx, vy);
+  rod(vx, vy, z, vx, vy, z0, 0.003, GRAY, 0.7); // the stick it's propped on
+  drawBox(boxAt(vx, vy, b.hx, b.hy, hl, 0.003, z0, z1), (i, t, L) => {
+    const f = HIT.face, edge = Math.min(hl - Math.abs(HIT.u), z1 - HIT.w, HIT.w - z0) < 0.006;
+    BG[i] = C(edge ? (sale ? RED : BLUE) : WHITE, (edge ? 3 : 2) + L * 0.3);
+    if (f !== 3 && f !== 4 || edge) return set(i, ' ', 0), true;
+    const ch = signLine(word, faceQ(HIT.u, hl) * n - 1, (z1 - 0.008 - HIT.w) / 0.029, i, z1 - 0.0225, tc, t, 2 * hl / n, 0.029, far);
+    return set(i, ch ?? ' ', C(sale ? RED : BLUE, 15)), true;
+  });
+}
+// the board at the foot of the jetty: the day's rates on a blue panel, on two posts, readable from either side
+const MARINA_ROWS = [['BOATS FOR HIRE', 0.04], ...[['SPEED', 'speedboat'], ['SAIL', 'sailboat'], ['CRUISER', 'cruiser']]
+  .map(([name, kind]) => [name.padEnd(9) + ('$' + BOAT_KINDS[kind].rent).padStart(5), 0.03])];
+const BOARD = { hl: 0.25, z0: 0.2, z1: 0.42 };
+function drawMarinaBoard(vx, vy) {
+  const { hl, z0, z1 } = BOARD, n = 16, far = farDepth(vx, vy, hl), tc = midDepth(vx, vy), glow = Math.max(night, overcast * 0.6);
+  for (const e of [-1, 1]) rod(vx + e * hl * 0.7, vy, 0, vx + e * hl * 0.7, vy, z1 - 0.01, 0.007, BRICK, 0.8);
+  drawBox(boxAt(vx, vy, 1, 0, hl, 0.006, z0, z1), (i, t, L) => {
+    const f = HIT.face, edge = Math.min(hl - Math.abs(HIT.u), z1 - HIT.w, HIT.w - z0) < 0.01;
+    BG[i] = edge ? C(WHITE, 2 + L * 0.3) : C(BLUE, 1.6 + L * 0.3 + glow);
+    if (f !== 3 && f !== 4 || edge) return set(i, ' ', 0), true;
+    const lq = faceQ(HIT.u, hl) * n - 1;
+    let top = z1 - 0.015;
+    for (const [text, h] of MARINA_ROWS) { // each row in its band, the title a little taller
+      if (HIT.w <= top && HIT.w > top - h) {
+        const ch = signLine(text, lq, (top - HIT.w) / h, i, top - h / 2, tc, t, 2 * hl / n, h, far), k = Math.floor(lq);
+        return set(i, ch ?? ' ', C(/[$0-9]/.test(text[k] || '') ? YEL : WHITE, Math.max(L, 11))), true;
+      }
+      top -= h + 0.012;
+    }
+    return set(i, ' ', 0), true;
+  });
+}
 function marinaSprites() {
   for (const b of fleet) {
     const [vx, vy] = R(b.x, b.y);
@@ -14388,14 +14482,12 @@ function marinaSprites() {
     drawBoat3D(b, vx, vy, b.hx, b.hy, b === sea ? clamp(Math.abs(b.v) / 0.8, 0, 1) : 0);
     if (b !== sea && (b.deal === 'sale' || b.deal === 'rent') && Math.hypot(vx, vy) < 6) { // a little board propped up on the deck
       const k = BOAT_KINDS[b.kind];
-      drawArt(vx - b.hx * k.hl * 0.5, vy - b.hy * k.hl * 0.5, k.fb + 0.04, 0.14, 0.045, b.deal === 'sale' ? SALE_SIGN : RENT_SIGN, (c, row, L) => row === 1 && /[A-Z]/.test(c) ? C(b.deal === 'sale' ? RED : BLUE, Math.max(L, 10)) : C(WHITE, Math.max(L, 8)));
+      drawDealBoard(b, vx - b.hx * k.hl * 0.5, vy - b.hy * k.hl * 0.5, boatBob(vx + px, vy + py));
     }
   }
   const [vx, vy] = R(MARINA.x + 0.7, MARINA.office.y - 0.2); // the board at the foot of the jetty
-  if (Math.hypot(vx, vy) < 8) drawArt(vx, vy, 0, 0.5, 0.42, MARINA_BOARD, (c, row, L) => row === 1 ? C(WHITE, Math.max(L, 11)) : row > 5 ? C(GRAY, L) : /[$0-9]/.test(c) ? C(YEL, Math.max(L, 9)) : C(WHITE, Math.max(L, 7)));
+  if (Math.hypot(vx, vy) < 8) drawMarinaBoard(vx, vy);
 }
-const MARINA_BOARD = pad(['.---------------.', '| BOATS FOR HIRE |', '| SPEED     $' + BOAT_KINDS.speedboat.rent + ' |', '| SAIL      $' + BOAT_KINDS.sailboat.rent + ' |', '| CRUISER   $' + BOAT_KINDS.cruiser.rent + ' |',
-  "'---------------'", '       |||', '       |||']);
 // the marina office: white clapboard, a blue roof, MARINA over the door on the side facing the road, windows looking
 // down the jetty
 SOLID_SHADE.marina = o => (i, t, L) => {

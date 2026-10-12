@@ -20,15 +20,15 @@ Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arr
 - [x] **Bridge hangers and cable lights** `city-sprites.js:1114`: hangers are `|` billboards and the cable is a row
       of `.` / `*` points. Hangers become `rod`s, cable lights become `dot`s (or the whole cable a chain of rods).
 
-## Batch 2: signs (all have the same shape: a panel with `signGlyph` text, like `drawBoard` / the cart name)
+## Batch 2: signs (all have the same shape: a panel with `signGlyph` text, like `drawBoard` / the cart name) - done
 
-- [ ] **Shotengai banners** `props.js:310`: hanging cloth across the street. Thin box facing along the street,
+- [x] **Shotengai banners** `props.js:310`: hanging cloth across the street. Thin box facing along the street,
       word via `signGlyph`, two short hanging cords.
-- [ ] **Aquarium neon fish sign** `props.js:303`: the `><(( o ))>` over the doors. A flat panel on the facade
+- [x] **Aquarium neon fish sign** `props.js:303`: the `><(( o ))>` over the doors. A flat panel on the facade
       with the fish as neon tube cells, flicker kept.
-- [ ] **Marina board** `marina.js:134` and the **FOR SALE / RENTAL** boards on boats `marina.js:130`: an easel or
+- [x] **Marina board** `marina.js:134` and the **FOR SALE / RENTAL** boards on boats `marina.js:130`: an easel or
       post-mounted panel. Price list text needs a few rows of `signGlyph`.
-- [ ] **Boat navigation lights** `marina.js:108`: red/green `o` billboards, should just be `dot`s.
+- [x] **Boat navigation lights** `marina.js:108`: red/green `o` billboards, should just be `dot`s.
 
 ## Batch 3: Gardens
 

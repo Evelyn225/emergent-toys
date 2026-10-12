@@ -298,15 +298,13 @@ for (let k = 0; k < 14; k++) { // somewhere on the boardwalk clear of everything
                   shirt: [RED, BLUE, GREEN, YEL, MAG, WHITE][k % 6], pants: [BLUE, GRAY, BRICK][k % 3] });
 }
 // the aquarium's sign over its doors: a big neon fish, lit after dark
-extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, w: 0.3, h: 0.13, art: pad(['    _.--._', "><(( o  ))>", "    `--'"]),
-  col: (c, row, L) => C(c === 'o' ? WHITE : c === '>' || c === '<' ? ORANGE : CYAN, Math.max(L, night * 15 * (fract(T * 0.4) < 0.96 ? 1 : 0.4))) });
+extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, fishSign: true });
 // the Shotengai: banners hanging from the arcade roof across the street, bicycles parked along the shopfronts
 const BANNER_WORDS = ['SALE', 'WELCOME', 'OPEN', 'FESTIVAL', 'LUCKY', 'NEW', 'RAMEN', 'KARAOKE', 'SMILE'];
 for (const s of [3.5, 6.5]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
   if (districtOf(bx, by) !== 'shotengai' && districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by) !== 'shotengai') return;
   const w = BANNER_WORDS[hash(bx * 7 + s, by, 701) * BANNER_WORDS.length | 0], col = NEON[hash(bx, by * 3 + s, 702) * 4 | 0];
-  extras.push({ x, y, z: 0.42, w: 0.045 * (w.length + 4), h: 0.1, art: pad(['.' + '-'.repeat(w.length + 4) + '.', '|  ' + w + '  |', "'" + '-'.repeat(w.length + 4) + "'", ' |' + ' '.repeat(w.length + 2) + '| ']),
-    col: (c, row, L) => row === 1 && /[A-Z]/.test(c) ? C(WHITE, Math.max(L, 10)) : row === 3 ? C(GRAY, L) : C(col, Math.max(L, night * 12)) });
+  extras.push({ x, y, z: 0.42, banner: w, col, c: o === 'h' ? 1 : 0, s: o === 'h' ? 0 : 1 }); // hung across the street, facing along it
 });
 for (const s of [2.6, 3.4, 5.6, 7.2]) for (const off of [0.16, 1.84]) alongStreets(s, off, (x, y, ax, ay, bx, by, o) => {
   if (districtOf(bx, by) !== 'shotengai' || hash(bx * 13 + s * 7, by * 5 + off, 703) > 0.35 || !map[idx(x - ax * 0.25, y - ay * 0.25)] && !map[idx(x + ax * 0.25, y + ay * 0.25)]) return;
