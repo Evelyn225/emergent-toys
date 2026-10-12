@@ -17652,12 +17652,51 @@ function sfxUse(s) {
   if (s === 'vending') playClip('vending-machine', 0.42);
   if (s === 'harmonica') playClip('harmonica', 0.6);
 }
-// the ball, out in the world
+// the ball, out in the world: a football, black pentagons and white hexagons (a truncated icosahedron: each point of
+// the surface belongs to whichever face's plane a ray from the middle meets first), seams between, rolling as it goes.
+// Far off, too small for any of that, just a white ball.
+const BALL_R = 0.017, PHI = (1 + Math.sqrt(5)) / 2;
+const ballDirs = vs => vs.map(v => { const n = Math.hypot(...v); return v.map(c => c / n); });
+const BALL_PENT = ballDirs([[0, 1, PHI], [0, 1, -PHI], [0, -1, PHI], [0, -1, -PHI], [1, PHI, 0], [1, -PHI, 0], [-1, PHI, 0], [-1, -PHI, 0], [PHI, 0, 1], [PHI, 0, -1], [-PHI, 0, 1], [-PHI, 0, -1]]);
+const BALL_HEX = ballDirs([...[-1, 1].flatMap(a => [-1, 1].flatMap(b => [-1, 1].map(c => [a, b, c]))),
+  ...[-1, 1].flatMap(a => [-1, 1].flatMap(b => [[0, a / PHI, b * PHI], [a / PHI, b * PHI, 0], [a * PHI, 0, b / PHI]]))]);
+const BALL_FACE = [2.327, 2.267]; // how far each pentagon's and hexagon's plane is from the middle (unit edges)
+function raySphere(ox, oy, oz, rx, ry, rz, b) { // b: a box round the sphere; its middle and half width
+  const zc = (b.z0 + b.z1) / 2, x = ox - b.x, y = oy - b.y, z = oz - zc, A = rx * rx + ry * ry + rz * rz, B = x * rx + y * ry + z * rz, Cc = x * x + y * y + z * z - b.hl * b.hl;
+  const h = B * B - A * Cc;
+  if (h < 0) return -1;
+  const t = (-B - Math.sqrt(h)) / A;
+  if (t < 0.01) return -1;
+  HIT.u = (x + rx * t) / b.hl; HIT.v = (y + ry * t) / b.hl; HIT.w = (z + rz * t) / b.hl; HIT.face = 0; // (the unit normal)
+  return t;
+}
+function ballSpin(dt_x, dt_y) { // roll the ball's pattern by however far it's gone since last drawn
+  const R = ball.rot ||= [1, 0, 0, 0, 1, 0, 0, 0, 1], d = Math.hypot(dt_x, dt_y);
+  if (d < 1e-6 || d > 0.5) return R;
+  const ax = -dt_y / d, ay = dt_x / d, a = d / BALL_R, c = Math.cos(a), s = Math.sin(a), k = 1 - c; // about (ax, ay, 0)
+  const M = [c + ax * ax * k, ax * ay * k, ay * s, ax * ay * k, c + ay * ay * k, -ax * s, -ay * s, ax * s, c];
+  const out = [];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) out.push(M[i * 3] * R[j] + M[i * 3 + 1] * R[3 + j] + M[i * 3 + 2] * R[6 + j]);
+  return ball.rot = out;
+}
 function drawBall() {
   if (!ball) return;
-  const [vx, vy] = R(ball.x, ball.y);
-  const r = 0.017; // (a football: about 34cm across)
-  dot(vx, vy, ball.z + r, r, (i, t, L) => { BG[i] = C(WHITE, 6 + L * 0.5); return set(i, r * 2 * projX / t > 1.5 ? ' ' : 'o', C(GRAY, L)), true; });
+  const [vx, vy] = R(ball.x, ball.y), d = Math.hypot(vx, vy), zc = ball.z + BALL_R;
+  const Rm = ballSpin(rel(ball.x - (ball.lx ?? ball.x)), rel(ball.y - (ball.ly ?? ball.y)));
+  ball.lx = ball.x; ball.ly = ball.y;
+  if (BALL_R * 2 * projX / d < 3) return dot(vx, vy, zc, BALL_R, (i, t, L) => { BG[i] = C(WHITE, 6 + L * 0.5); return set(i, 'o', C(GRAY, L)), true; });
+  drawBox(boxAt(vx, vy, 1, 0, BALL_R, BALL_R, zc - BALL_R, zc + BALL_R), (i, t, L) => {
+    const nx = HIT.u, ny = HIT.v, nz = HIT.w, light = 0.6 + 0.4 * Math.max(0, -nx * 0.4 + ny * 0.3 + nz * 0.75);
+    const bx = Rm[0] * nx + Rm[3] * ny + Rm[6] * nz, by = Rm[1] * nx + Rm[4] * ny + Rm[7] * nz, bz = Rm[2] * nx + Rm[5] * ny + Rm[8] * nz; // (into the ball's own frame)
+    let best = -1, next = -1, pent = false;
+    for (const [dirs, k] of [[BALL_PENT, 0], [BALL_HEX, 1]]) for (const q of dirs) {
+      const sc = (q[0] * bx + q[1] * by + q[2] * bz) / BALL_FACE[k];
+      if (sc > best) { next = best; best = sc; pent = !k; } else if (sc > next) next = sc;
+    }
+    const seam = !pent && best - next < 0.006 * Math.max(1, 3 * t / (BALL_R * projX)); // (the stitching, between white panels)
+    BG[i] = pent ? C(GRAY, 0.2 + light * 0.5) : seam ? C(GRAY, 5 * light) : C(WHITE, Math.max(7, 9 + L * 0.4) * light + 2);
+    return set(i, ' ', 0), true;
+  }, raySphere);
 }
 // ===== held items, drawn at a little over the world's own character size
 // with twice the detail: each picture is sculpted cell by cell from a shape, shaded through a ramp of characters
