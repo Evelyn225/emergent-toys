@@ -7,7 +7,6 @@ function forNear(b, fn) {
 const R = (x, y) => [rel(x - px), rel(y - py)];
 // how much a world direction (ax, ay) lies across our view of a point at (vx, vy): +1 = pointing right on screen
 const across = (ax, ay, vx, vy) => { const n = Math.hypot(vx, vy) || 1; return (ax * -vy + ay * vx) / n; };
-const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']), DOG_R = mirror(DOG);
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
 // the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
 function strobe() { const p = Math.floor(fract(T * 1.4) * 10); return p === 0 || p === 2 ? RED : p === 5 || p === 7 ? BLUE : -1; }
@@ -199,9 +198,10 @@ function citySprites() {
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
     drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
-      const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), right = -dy * d.mx + dx * d.my > 0, s = d.small ? 0.7 : 1;
-      drawArt(vx, vy, 0, 0.07 * s, 0.05 * s, right ? DOG_R : DOG, (c, row, L) => c === 'o' ? C(GRAY, 3) : C(d.col, L * 1.2));
-      for (let k = 1; k < 5; k++) { const t = k / 5; drawArt(hx + (vx - hx) * t, hy + (vy - hy) * t, 0.085 - 0.05 * t - Math.sin(t * Math.PI) * 0.012, 0.006, 0.006, ['.'], () => C(RED, 10)); }
+      const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), s = d.small ? 0.7 : 1;
+      drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3);
+      const lz = t => 0.085 - (0.085 - 0.04 * s) * t - Math.sin(t * Math.PI) * 0.012, cx = vx + d.mx * 0.03 * s, cy = vy + d.my * 0.03 * s; // the lead, sagging a little
+      for (let k = 0; k < 5; k++) { const t0 = k / 5, t1 = (k + 1) / 5; rod(hx + (cx - hx) * t0, hy + (cy - hy) * t0, lz(t0), hx + (cx - hx) * t1, hy + (cy - hy) * t1, lz(t1), 0.0015, RED, 1.1); }
     }
     if (m.hailing) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.06, ['!'], () => C(YEL, fract(T * 3) < 0.6 ? 15 : 8)); // waving you down
   }
@@ -217,7 +217,12 @@ function citySprites() {
     const [vx, vy] = R(job.ride.dest[0], job.ride.dest[1]);
     drawArt(vx, vy, 0.25, 0.12, 0.18, ['\\ /', ' V '], () => C(YEL, fract(T * 2) < 0.7 ? 15 : 9));
   }
-  if (task && task.kind === 'dog') drawArt(...R(task.dog.x, task.dog.y), 0, 0.07, 0.05, DOG, (c, row, L) => C(BRICK, L * 1.2));
+  if (task && task.kind === 'dog') { // the lost dog: nosing about, or trotting after you
+    const g = task.dog, mx = rel(g.x - (g._lx ?? g.x)), my = rel(g.y - (g._ly ?? g.y)), v = Math.hypot(mx, my);
+    if (v > 1e-4) { g._fx = mx / v; g._fy = my / v; }
+    g._lx = g.x; g._ly = g.y;
+    drawDog(...R(g.x, g.y), g._fx ?? 1, g._fy ?? 0, BRICK, 1, g.follow && v > 1e-4 ? Math.floor(T * 8) & 3 : 4);
+  }
 }
 
 function drawGrandHotelDome() {

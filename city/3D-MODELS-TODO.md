@@ -55,9 +55,16 @@ Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arr
 - [x] **Ferris wheel** `city-sprites.js:1265`: rim and spokes as rods, gondolas as boxes. Most work on the list.
 - [x] **Carousel** `city-sprites.js:1284`: `rayCopperDrum` base, `rayCone` roof, rod poles, horses can stay sprites.
 
-## Later / maybe: street trees
+## Batch 6: dogs and the ball - done
 
-- [ ] **Trees** `city-sprites.js:51` (`drawTree` / `treeCell`, plus winter branches). Every street has them, so
+- [x] **Street dogs** (walkers' dogs) and the **lost dog** task: built like the Gardens animals (`ANIMAL_BODIES.dog`,
+      `drawDog` in `figures.js`), trotting, sniffing nose down, tail wagging, in their coat colour with a red collar.
+      The lead is a sagging cord of rods.
+- [x] **The ball**: a sphere (`dot`).
+
+## Not doing: street trees (they read fine as flat sprites)
+
+- **Trees** `city-sprites.js:51` (`drawTree` / `treeCell`, plus winter branches). Every street has them, so
       they matter most visually, but a canopy that reads well in 3D (cluster of spheres via `dot`, trunk `rod`) is
       a perf question. Worth a test on one street before committing.
 

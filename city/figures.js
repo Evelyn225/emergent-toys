@@ -448,6 +448,20 @@ const ANIMAL_BODIES = {
       figEll([sg * 4.4, -7.4, 2.5], AN_I, [2, 3, 2.5], () => R.BODY));
     return { parts, decals: animalEyes(hc, 3.4, 1, 0.55, 0.25) };
   },
+  dog: f => { // on all fours, frames 0-3 a trotting stride, 4 nose down sniffing; a wagging tail, floppy ears, a collar
+    const R = AR, sniff = f === 4, w = f / 4 * Math.PI * 2, hc = sniff ? [0, 6.2, 4.6] : [0, 5.2, 8.6], wag = (f & 1 ? 1 : -1) * 1.2;
+    const parts = [figEll([0, 0, 6], AN_I, [2.2, 4.6, 2.2], () => R.BODY), figEll(hc, AN_I, [1.8, 2.1, 1.8], () => R.HEAD)];
+    for (const [sx, sy, ph] of [[1, 3.2, 0], [-1, 3.2, Math.PI], [1, -3.2, Math.PI], [-1, -3.2, 0]]) { // legs: diagonal pairs together
+      const sw = sniff ? 0 : Math.sin(w + ph) * 1.3;
+      parts.push(figCap([sx * 1.3, sy, 5.2], [sx * 1.3, sy + sw, 0.6], 0.75, () => R.LEG, false));
+    }
+    parts.push(figCap(sniff ? [0, 3.4, 6.2] : [0, 3.6, 7], sniff ? [0, 5.4, 5.2] : [0, 4.8, 8], 1.2, () => R.BODY)); // the neck
+    parts.push(figCap(fAdd(hc, [0, 1.6, -0.4]), fAdd(hc, [0, 3.2, -0.9]), 0.9, h => h.s > 0.85 ? R.BEAK : R.PALE)); // the muzzle, its nose
+    for (const sg of [1, -1]) parts.push(figEll(fAdd(hc, [sg * 1.5, -0.4, 0.2]), AN_I, [0.55, 0.9, 1.4], () => R.WING)); // the ears
+    parts.push(figCap([wag * 0.4, -4.3, 7], [wag, -6.3, 9.4], 0.5, () => R.BODY)); // the tail
+    parts.push(figCap(sniff ? [0, 4.6, 5.7] : [0, 4.2, 7.6], sniff ? [0, 4.8, 5.4] : [0, 4.3, 7.4], 1.3, () => R.MARK, false)); // the collar
+    return { parts, decals: animalEyes(hc, 1.8, 1, 0.5, 0.3) };
+  },
   peacock: f => { // strutting, its train fanned out behind: green with eyes in rings of cyan (frame: a stride of four)
     const R = AR, w = f / 4 * Math.PI * 2, hc = [0, 3.3, 13.3];
     const parts = [figEll([0, 0, 7], AN_I, [2.2, 3.5, 2.6], () => R.BODY), figCap([0, 2.2, 8.4], [0, 3, 12.5], 1, () => R.BODY), figEll(hc, AN_I, [1, 1.25, 1], () => R.BODY),
@@ -463,3 +477,10 @@ const ANIMAL_BODIES = {
     return { parts, decals: animalEyes(hc, 1, 2) };
   },
 };
+
+// a dog's look in its coat colour (one per colour, made the first time it's seen): darker ears, a paler muzzle, a red
+// collar, a black nose
+const DOG_LOOKS = new Map();
+const dogLook = col => DOG_LOOKS.get(col) || DOG_LOOKS.set(col, animalLook('dog', { body: [col, 9], wing: [col, 6], pale: [col, 12], leg: [col, 8], mark: [RED, 10], beak: [GRAY, 1] })).get(col);
+// a dog (vx, vy) from you, facing (fx, fy); s: how big (1 a mid-sized dog); frame: see ANIMAL_BODIES.dog
+const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0) => drawFigure(vx, vy, 0, 0.13 * s, fx, fy, dogLook(col), 'f' + frame);

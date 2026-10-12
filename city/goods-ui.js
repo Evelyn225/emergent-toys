@@ -536,5 +536,6 @@ function sfxUse(s) {
 function drawBall() {
   if (!ball) return;
   const [vx, vy] = R(ball.x, ball.y);
-  drawArt(vx, vy, ball.z, 0.035, 0.035, ['O'], (c, row, L) => C(WHITE, Math.max(L, 6)));
+  const r = 0.017; // (a football: about 34cm across)
+  dot(vx, vy, ball.z + r, r, (i, t, L) => { BG[i] = C(WHITE, 6 + L * 0.5); return set(i, r * 2 * projX / t > 1.5 ? ' ' : 'o', C(GRAY, L)), true; });
 }
