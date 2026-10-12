@@ -129,6 +129,9 @@ function citySprites() {
   forNear(extrasB, o => {
     if (o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8 || o.when && !o.when()) return; // (not the spire you're standing under)
     if (o.parkLamp) drawParkLamp(...R(o.x, o.y));
+    else if (o.fairPost) drawFairPost(o, ...R(o.x, o.y));
+    else if (o.lantern) drawMarketLantern(o, ...R(o.x, o.y));
+    else if (o.bike != null) drawBike(o, ...R(o.x, o.y));
     else if (o.person != null) drawFigure(...R(o.x, o.y), o.z, 0.175, 0, 0, o.look ||= figStreetLook(hash(o.x, o.y, 9081) * 1e9 | 0, o.person, GRAY), 'stand', { light: 6 });
     else drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col);
   });
@@ -638,6 +641,72 @@ function drawParkLamp(vx, vy) {
   });
 }
 
+// a bulb post along the pier's edge: a post on a little foot, and a bulb on top cycling through the colours
+const FAIR_BULBS = [YEL, RED, CYAN, MAG];
+function drawFairPost(o, vx, vy) {
+  const d = Math.hypot(vx, vy), top = 0.36, col = FAIR_BULBS[(Math.floor(T * 2) + Math.round(o.y)) & 3];
+  if (d > vis) return;
+  if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, 0, 0.025), STEEL.base);
+  rod(vx, vy, 0, vx, vy, top, 0.006);
+  dot(vx, vy, top + 0.016, 0.016, (i, t, L) => {
+    BG[i] = C(col, 2 + night * 9 + L * 0.15);
+    return set(i, night > 0.3 ? ' ' : 'o', C(WHITE, Math.max(L, 6))), true;
+  });
+}
+
+// a paper lantern on the night market's string: hung off a hook, a cap and a foot, glowing after dark. The string runs
+// halfway to the next lantern each way, so the row of them makes one string down the street.
+function drawMarketLantern(o, vx, vy) {
+  const d = Math.hypot(vx, vy), z0 = o.z, z1 = o.z + 0.055, top = o.z + 0.07, lit = Math.max(night, overcast * 0.6);
+  if (d > vis) return;
+  rod(vx - 0.225, vy, top, vx + 0.225, vy, top, 0.002, GRAY, 0.7);
+  rod(vx, vy, top, vx, vy, z1, 0.0015, GRAY, 0.7);
+  const lw = Math.max(0.016, 0.55 * d / projX); // a cell wide at least, far off
+  drawBox(boxAt(vx, vy, 1, 0, lw, lw, z0, z1), (i, t, L) => {
+    const cap = HIT.w > z1 - 0.008 || HIT.w < z0 + 0.008;
+    BG[i] = cap ? C(GRAY, 2) : C(RED, 3 + lit * 9 + L * 0.2);
+    return set(i, cap ? '=' : lit > 0.3 ? '@' : ' ', C(YEL, 15)), true;
+  });
+}
+
+// a bicycle parked along a shopfront (o.c, o.s: the way it points): two spoked wheels, a diamond frame, a saddle and
+// handlebars. Far off, just the wheels and the line of the frame.
+const BIKE = { r: 0.032, hub: 0.055 };
+// a tube that always fills its cells (rod() only backs one once it's wider than a character): thin parts stay solid
+function tube(ax, ay, az, bx, by, bz, r, col, bg, k = 1) {
+  drawRod(ax, ay, az, bx, by, bz, r, (i, t, L) => {
+    BG[i] = C(col, bg + L * 0.2);
+    return set(i, courierGlyph(HIT.u, HIT.v, HIT.w, bx - ax, by - ay, bz - az), C(WHITE, L * k)), true;
+  });
+}
+function drawBike(o, vx, vy) {
+  const d = Math.hypot(vx, vy), c = o.c, s = o.s, col = o.bike, r = BIKE.r;
+  if (d > vis) return;
+  const at = (u, w = 0) => [vx + c * u - s * w, vy + s * u + c * w];
+  const bar = (u0, z0, u1, z1, rr = 0.004, w0 = 0, w1 = 0) => { const [ax, ay] = at(u0, w0), [bx, by] = at(u1, w1); tube(ax, ay, z0, bx, by, z1, rr, col, 1.6, 0.5); };
+  for (const hu of [-BIKE.hub, BIKE.hub]) { // the wheels: a tyre round in pieces, spokes up close
+    const segs = d < 7 ? 10 : 5;
+    for (let k = 0; k < segs; k++) {
+      const a0 = k / segs * Math.PI * 2, a1 = (k + 1) / segs * Math.PI * 2;
+      const [ax, ay] = at(hu + Math.cos(a0) * r), [bx, by] = at(hu + Math.cos(a1) * r);
+      tube(ax, ay, r + Math.sin(a0) * r, bx, by, r + Math.sin(a1) * r, 0.005, GRAY, 0.5, 0.6);
+    }
+    if (d < 4) for (const a of [0.4, 1.97]) {
+      const [ax, ay] = at(hu - Math.cos(a) * r), [bx, by] = at(hu + Math.cos(a) * r);
+      rod(ax, ay, r - Math.sin(a) * r, bx, by, r + Math.sin(a) * r, 0.001, GRAY, 0.6);
+    }
+  }
+  // the frame: chainstays, seat stays, seat tube, down tube, top tube, the fork, the stem and bars
+  const bb = [-0.008, 0.03], seat = [-0.025, 0.078], head = [0.035, 0.08];
+  bar(-BIKE.hub, r, ...bb); bar(-BIKE.hub, r, ...seat); bar(...bb, ...seat); bar(...bb, ...head); bar(...seat, ...head);
+  bar(...head, BIKE.hub, r);
+  bar(...head, head[0] - 0.006, 0.096);
+  { const [ax, ay] = at(head[0] - 0.006, -0.022), [bx, by] = at(head[0] - 0.006, 0.022); tube(ax, ay, 0.096, bx, by, 0.096, 0.004, GRAY, 0.9, 0.7); } // the handlebars, across
+  const [sx, sy] = at(seat[0] - 0.003);
+  drawBox(boxAt(sx, sy, c, s, 0.014, 0.006, 0.084, 0.092), (i, t, L) => { BG[i] = C(GRAY, 0.6); return set(i, HIT.face === 5 ? '=' : '_', C(GRAY, L * 0.5)), true; });
+  bar(seat[0], seat[1], seat[0] - 0.003, 0.084);
+}
+
 // ---- vehicles as real boxes (see drawBox): a body, a cabin with glass, and whatever goes on the roof.
 // Sizes in cells (1 = 10m): [half length, half width, body top, cabin top, cabin half length, cabin offset along]
 const VEHICLES = {
@@ -1111,8 +1180,10 @@ function bridgeSprites() {
   }
   forNear(bridgeB, b => {
     const [vx, vy] = R(b.x, b.y);
-    if (b.kind === 'hanger') return drawArt(vx, vy, b.z, 0.02, b.h, ['|'], (c, row, L) => C(GRAY, L * 0.7));
-    drawArt(vx, vy, b.z - 0.03, 0.06, 0.06, [night > 0.4 ? '*' : '.'], (c, row, L) => night > 0.4 ? C(WARM, 13) : C(GRAY, L * 1.2));
+    if (Math.abs(vx) > vis + 1 || Math.abs(vy) > vis + 1) return;
+    if (b.kind === 'hanger') return rod(vx, vy, b.z, vx, vy, b.z + b.h, 0.008, GRAY, 0.7);
+    if (b.z2 != null) rod(vx, vy, b.z, vx, vy + 0.5, b.z2, 0.025, GRAY, 0.9); // the main cable, on to the next point
+    if (night > 0.4) dot(vx, vy, b.z, Math.max(0.035, 0.6 * Math.hypot(vx, vy) / Math.min(projX, projY)), (i, t, L) => { BG[i] = C(WARM, 6); return set(i, '*', C(WARM, 15)), true; }); // its necklace of lights (kept wider than the cable, which is a character wide far off, so they show)
   });
 }
 function towerCell(i, u, z, du, dz, L, hw) {

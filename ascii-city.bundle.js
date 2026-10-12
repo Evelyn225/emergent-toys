@@ -1716,8 +1716,7 @@ const STALLS = NIGHT_MARKET ? [['STREET FOOD', 2.75, RED], ['CHARMS', 3.95, MAG]
   return Object.assign(solids[solids.length - 1], { word, canopy, fs: -1, at: [x, y - 0.3] });
 }) : [];
 if (NIGHT_MARKET) for (let x = NIGHT_MARKET.bx * 8 + 2.4; x < NIGHT_MARKET.bx * 8 + 7.8; x += 0.45) // the lanterns, on a string along the street
-  extras.push({ x, y: NIGHT_MARKET.by * 8 + 1.45, z: 0.3, w: 0.045, h: 0.07, art: ['-|-', '(@)', ' v '], lantern: true,
-    col: (c, row, L) => row === 0 ? C(GRAY, L * 0.7) : C(c === '@' ? YEL : RED, Math.max(L, (night > 0.3 ? 1 : 0.4) * (c === '@' ? 15 : 12))) });
+  extras.push({ x, y: NIGHT_MARKET.by * 8 + 1.45, z: 0.3, lantern: true });
 // the Sunset Pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
 // boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
 // side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
@@ -1729,8 +1728,7 @@ const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -
   return Object.assign(o, { word, side, fs: side < 0 ? -1 : 1, at: [x - side * 0.42, y], awning: [RED, BLUE, MAG, GREEN, YEL, CYAN][k], ...what });
 });
 for (let y = FAIR.y0 + 1; y < FAIR.y1 - 0.5; y += 1.5) for (const x of [FAIR.x0 + 0.06, FAIR.x1 - 0.06])
-  extras.push({ x, y, z: 0, w: 0.05, h: 0.4, art: ['(*)', ' | ', ' | ', ' | ', ' | '], col: (c, row, L) => row ? C(GRAY, L) :
-    C([YEL, RED, CYAN, MAG][(Math.floor(T * 2) + Math.round(y)) & 3], Math.max(L, night * 15)) });
+  extras.push({ x, y, z: 0, fairPost: true });
 // the crowd at the fair: a few queueing for the wheel, the rest wandering the boardwalk (see stepFairFolk in fair.js).
 // You can talk to any of them (E), same as anyone on the street
 const fairFolk = [];
@@ -1755,7 +1753,7 @@ for (const s of [3.5, 6.5]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
 for (const s of [2.6, 3.4, 5.6, 7.2]) for (const off of [0.16, 1.84]) alongStreets(s, off, (x, y, ax, ay, bx, by, o) => {
   if (districtOf(bx, by) !== 'shotengai' || hash(bx * 13 + s * 7, by * 5 + off, 703) > 0.35 || !map[idx(x - ax * 0.25, y - ay * 0.25)] && !map[idx(x + ax * 0.25, y + ay * 0.25)]) return;
   const col = [RED, BLUE, GREEN, WHITE, YEL][hash(bx, by + s, 704) * 5 | 0];
-  extras.push({ x, y, z: 0, w: 0.07, h: 0.06, art: pad(['   __o', ' _ \<,_', '(_)/ (_)']), col: (c, row, L) => row === 2 ? C(GRAY, L) : C(col, L) });
+  extras.push({ x, y, z: 0, bike: col, c: ax ? 0 : 1, s: ax ? 1 : 0 }); // parked along the shopfront
 });
 // the Gardens' railings (gaps for the gates), the pens' fences, lamp posts along the paths, the gardeners' shed
 for (const [gate, along, len] of [['h', 0, GARDEN.w], ['h', GARDEN.h, GARDEN.w], ['v', 0, GARDEN.h], ['v', GARDEN.w, GARDEN.h]]) {
@@ -1819,7 +1817,7 @@ const cableZ = t => { // cable height along the bridge, t = 0..1
 };
 for (const bx of BRIDGE_X) for (const e of DECK_EDGE) for (let s = 0; s < BRIDGE_LEN; s += 0.5) {
   const t = s / BRIDGE_LEN, z = cableZ(t), x = bx * 8 + e, y = mod(BRIDGE_Y0 + s, N);
-  bridgeBits.push({ x, y, z, kind: 'cable' });
+  bridgeBits.push({ x, y, z, kind: 'cable', z2: s + 0.5 < BRIDGE_LEN ? cableZ((s + 0.5) / BRIDGE_LEN) : null }); // z2: the next point's height
   if ((s * 2 | 0) % 4 === 0 && z > 0.5) bridgeBits.push({ x, y, z: 0.05, h: z - 0.05, kind: 'hanger' });
 }
 const bridgeB = bucketed(bridgeBits);
@@ -9038,6 +9036,9 @@ function citySprites() {
   forNear(extrasB, o => {
     if (o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8 || o.when && !o.when()) return; // (not the spire you're standing under)
     if (o.parkLamp) drawParkLamp(...R(o.x, o.y));
+    else if (o.fairPost) drawFairPost(o, ...R(o.x, o.y));
+    else if (o.lantern) drawMarketLantern(o, ...R(o.x, o.y));
+    else if (o.bike != null) drawBike(o, ...R(o.x, o.y));
     else if (o.person != null) drawFigure(...R(o.x, o.y), o.z, 0.175, 0, 0, o.look ||= figStreetLook(hash(o.x, o.y, 9081) * 1e9 | 0, o.person, GRAY), 'stand', { light: 6 });
     else drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col);
   });
@@ -9547,6 +9548,72 @@ function drawParkLamp(vx, vy) {
   });
 }
 
+// a bulb post along the pier's edge: a post on a little foot, and a bulb on top cycling through the colours
+const FAIR_BULBS = [YEL, RED, CYAN, MAG];
+function drawFairPost(o, vx, vy) {
+  const d = Math.hypot(vx, vy), top = 0.36, col = FAIR_BULBS[(Math.floor(T * 2) + Math.round(o.y)) & 3];
+  if (d > vis) return;
+  if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, 0, 0.025), STEEL.base);
+  rod(vx, vy, 0, vx, vy, top, 0.006);
+  dot(vx, vy, top + 0.016, 0.016, (i, t, L) => {
+    BG[i] = C(col, 2 + night * 9 + L * 0.15);
+    return set(i, night > 0.3 ? ' ' : 'o', C(WHITE, Math.max(L, 6))), true;
+  });
+}
+
+// a paper lantern on the night market's string: hung off a hook, a cap and a foot, glowing after dark. The string runs
+// halfway to the next lantern each way, so the row of them makes one string down the street.
+function drawMarketLantern(o, vx, vy) {
+  const d = Math.hypot(vx, vy), z0 = o.z, z1 = o.z + 0.055, top = o.z + 0.07, lit = Math.max(night, overcast * 0.6);
+  if (d > vis) return;
+  rod(vx - 0.225, vy, top, vx + 0.225, vy, top, 0.002, GRAY, 0.7);
+  rod(vx, vy, top, vx, vy, z1, 0.0015, GRAY, 0.7);
+  const lw = Math.max(0.016, 0.55 * d / projX); // a cell wide at least, far off
+  drawBox(boxAt(vx, vy, 1, 0, lw, lw, z0, z1), (i, t, L) => {
+    const cap = HIT.w > z1 - 0.008 || HIT.w < z0 + 0.008;
+    BG[i] = cap ? C(GRAY, 2) : C(RED, 3 + lit * 9 + L * 0.2);
+    return set(i, cap ? '=' : lit > 0.3 ? '@' : ' ', C(YEL, 15)), true;
+  });
+}
+
+// a bicycle parked along a shopfront (o.c, o.s: the way it points): two spoked wheels, a diamond frame, a saddle and
+// handlebars. Far off, just the wheels and the line of the frame.
+const BIKE = { r: 0.032, hub: 0.055 };
+// a tube that always fills its cells (rod() only backs one once it's wider than a character): thin parts stay solid
+function tube(ax, ay, az, bx, by, bz, r, col, bg, k = 1) {
+  drawRod(ax, ay, az, bx, by, bz, r, (i, t, L) => {
+    BG[i] = C(col, bg + L * 0.2);
+    return set(i, courierGlyph(HIT.u, HIT.v, HIT.w, bx - ax, by - ay, bz - az), C(WHITE, L * k)), true;
+  });
+}
+function drawBike(o, vx, vy) {
+  const d = Math.hypot(vx, vy), c = o.c, s = o.s, col = o.bike, r = BIKE.r;
+  if (d > vis) return;
+  const at = (u, w = 0) => [vx + c * u - s * w, vy + s * u + c * w];
+  const bar = (u0, z0, u1, z1, rr = 0.004, w0 = 0, w1 = 0) => { const [ax, ay] = at(u0, w0), [bx, by] = at(u1, w1); tube(ax, ay, z0, bx, by, z1, rr, col, 1.6, 0.5); };
+  for (const hu of [-BIKE.hub, BIKE.hub]) { // the wheels: a tyre round in pieces, spokes up close
+    const segs = d < 7 ? 10 : 5;
+    for (let k = 0; k < segs; k++) {
+      const a0 = k / segs * Math.PI * 2, a1 = (k + 1) / segs * Math.PI * 2;
+      const [ax, ay] = at(hu + Math.cos(a0) * r), [bx, by] = at(hu + Math.cos(a1) * r);
+      tube(ax, ay, r + Math.sin(a0) * r, bx, by, r + Math.sin(a1) * r, 0.005, GRAY, 0.5, 0.6);
+    }
+    if (d < 4) for (const a of [0.4, 1.97]) {
+      const [ax, ay] = at(hu - Math.cos(a) * r), [bx, by] = at(hu + Math.cos(a) * r);
+      rod(ax, ay, r - Math.sin(a) * r, bx, by, r + Math.sin(a) * r, 0.001, GRAY, 0.6);
+    }
+  }
+  // the frame: chainstays, seat stays, seat tube, down tube, top tube, the fork, the stem and bars
+  const bb = [-0.008, 0.03], seat = [-0.025, 0.078], head = [0.035, 0.08];
+  bar(-BIKE.hub, r, ...bb); bar(-BIKE.hub, r, ...seat); bar(...bb, ...seat); bar(...bb, ...head); bar(...seat, ...head);
+  bar(...head, BIKE.hub, r);
+  bar(...head, head[0] - 0.006, 0.096);
+  { const [ax, ay] = at(head[0] - 0.006, -0.022), [bx, by] = at(head[0] - 0.006, 0.022); tube(ax, ay, 0.096, bx, by, 0.096, 0.004, GRAY, 0.9, 0.7); } // the handlebars, across
+  const [sx, sy] = at(seat[0] - 0.003);
+  drawBox(boxAt(sx, sy, c, s, 0.014, 0.006, 0.084, 0.092), (i, t, L) => { BG[i] = C(GRAY, 0.6); return set(i, HIT.face === 5 ? '=' : '_', C(GRAY, L * 0.5)), true; });
+  bar(seat[0], seat[1], seat[0] - 0.003, 0.084);
+}
+
 // ---- vehicles as real boxes (see drawBox): a body, a cabin with glass, and whatever goes on the roof.
 // Sizes in cells (1 = 10m): [half length, half width, body top, cabin top, cabin half length, cabin offset along]
 const VEHICLES = {
@@ -10020,8 +10087,10 @@ function bridgeSprites() {
   }
   forNear(bridgeB, b => {
     const [vx, vy] = R(b.x, b.y);
-    if (b.kind === 'hanger') return drawArt(vx, vy, b.z, 0.02, b.h, ['|'], (c, row, L) => C(GRAY, L * 0.7));
-    drawArt(vx, vy, b.z - 0.03, 0.06, 0.06, [night > 0.4 ? '*' : '.'], (c, row, L) => night > 0.4 ? C(WARM, 13) : C(GRAY, L * 1.2));
+    if (Math.abs(vx) > vis + 1 || Math.abs(vy) > vis + 1) return;
+    if (b.kind === 'hanger') return rod(vx, vy, b.z, vx, vy, b.z + b.h, 0.008, GRAY, 0.7);
+    if (b.z2 != null) rod(vx, vy, b.z, vx, vy + 0.5, b.z2, 0.025, GRAY, 0.9); // the main cable, on to the next point
+    if (night > 0.4) dot(vx, vy, b.z, Math.max(0.035, 0.6 * Math.hypot(vx, vy) / Math.min(projX, projY)), (i, t, L) => { BG[i] = C(WARM, 6); return set(i, '*', C(WARM, 15)), true; }); // its necklace of lights (kept wider than the cable, which is a character wide far off, so they show)
   });
 }
 function towerCell(i, u, z, du, dz, L, hw) {
@@ -14076,8 +14145,21 @@ function clubSprites() {
   const dx_ = CLUB.bx * 8 + 2 + 3, dy_ = CLUB.by * 8 + 2 - 0.1, [vx, vy] = R(dx_, dy_);
   if (Math.hypot(vx, vy) > vis) return;
   drawFigure(vx + 0.06, vy, 0, 0.19, 0, -1, BOUNCER, 'fold', { light: 6 }); // arms folded, facing the street
-  for (const s of [-0.13, -0.03]) drawArt(vx + s, vy, 0, 0.012, 0.07, ['o', '|', '|', '|', '='], () => C(YEL, 12)); // brass posts
-  drawArt(vx - 0.08, vy, 0.045, 0.09, 0.015, ['~~~~~~'], () => C(RED, 14)); // the rope
+  drawVelvetRope(vx - 0.13, vy, vx - 0.03, vy);
+}
+// brass posts with a red rope sagging between them, hooked on just under their knobs
+const BRASS = (i, t, L) => { BG[i] = C(YEL, 3 + L * 0.3); return set(i, '|', C(YEL, 12)), true; };
+function drawVelvetRope(ax, ay, bx, by) {
+  const top = 0.065;
+  for (const [x, y] of [[ax, ay], [bx, by]]) {
+    drawBox(boxAt(x, y, 1, 0, 0.01, 0.01, 0, 0.006), BRASS); // the foot
+    drawRod(x, y, 0.006, x, y, top, 0.004, BRASS);
+    dot(x, y, top + 0.006, 0.007, (i, t, L) => { BG[i] = C(YEL, 5 + L * 0.3); return set(i, 'o', C(WHITE, 12)), true; });
+  }
+  const segs = 5, z = k => top - 0.008 - 0.018 * Math.sin(Math.PI * k / segs), lerp = (p, q, k) => p + (q - p) * k / segs;
+  for (let k = 0; k < segs; k++)
+    drawRod(lerp(ax, bx, k), lerp(ay, by, k), z(k), lerp(ax, bx, k + 1), lerp(ay, by, k + 1), z(k + 1), 0.004,
+      (i, t, L) => { BG[i] = C(RED, 3 + L * 0.3); return set(i, '~', C(RED, 14)), true; });
 }
 // ---- inside
 const CLUB_W = 18, CLUB_H = 14;

@@ -274,8 +274,7 @@ const STALLS = NIGHT_MARKET ? [['STREET FOOD', 2.75, RED], ['CHARMS', 3.95, MAG]
   return Object.assign(solids[solids.length - 1], { word, canopy, fs: -1, at: [x, y - 0.3] });
 }) : [];
 if (NIGHT_MARKET) for (let x = NIGHT_MARKET.bx * 8 + 2.4; x < NIGHT_MARKET.bx * 8 + 7.8; x += 0.45) // the lanterns, on a string along the street
-  extras.push({ x, y: NIGHT_MARKET.by * 8 + 1.45, z: 0.3, w: 0.045, h: 0.07, art: ['-|-', '(@)', ' v '], lantern: true,
-    col: (c, row, L) => row === 0 ? C(GRAY, L * 0.7) : C(c === '@' ? YEL : RED, Math.max(L, (night > 0.3 ? 1 : 0.4) * (c === '@' ? 15 : 12))) });
+  extras.push({ x, y: NIGHT_MARKET.by * 8 + 1.45, z: 0.3, lantern: true });
 // the Sunset Pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
 // boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
 // side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
@@ -287,8 +286,7 @@ const BOOTHS = [['RING TOSS', -1, 2.3, { game: 'ringtoss' }], ['HIGH STRIKER', -
   return Object.assign(o, { word, side, fs: side < 0 ? -1 : 1, at: [x - side * 0.42, y], awning: [RED, BLUE, MAG, GREEN, YEL, CYAN][k], ...what });
 });
 for (let y = FAIR.y0 + 1; y < FAIR.y1 - 0.5; y += 1.5) for (const x of [FAIR.x0 + 0.06, FAIR.x1 - 0.06])
-  extras.push({ x, y, z: 0, w: 0.05, h: 0.4, art: ['(*)', ' | ', ' | ', ' | ', ' | '], col: (c, row, L) => row ? C(GRAY, L) :
-    C([YEL, RED, CYAN, MAG][(Math.floor(T * 2) + Math.round(y)) & 3], Math.max(L, night * 15)) });
+  extras.push({ x, y, z: 0, fairPost: true });
 // the crowd at the fair: a few queueing for the wheel, the rest wandering the boardwalk (see stepFairFolk in fair.js).
 // You can talk to any of them (E), same as anyone on the street
 const fairFolk = [];
@@ -313,7 +311,7 @@ for (const s of [3.5, 6.5]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
 for (const s of [2.6, 3.4, 5.6, 7.2]) for (const off of [0.16, 1.84]) alongStreets(s, off, (x, y, ax, ay, bx, by, o) => {
   if (districtOf(bx, by) !== 'shotengai' || hash(bx * 13 + s * 7, by * 5 + off, 703) > 0.35 || !map[idx(x - ax * 0.25, y - ay * 0.25)] && !map[idx(x + ax * 0.25, y + ay * 0.25)]) return;
   const col = [RED, BLUE, GREEN, WHITE, YEL][hash(bx, by + s, 704) * 5 | 0];
-  extras.push({ x, y, z: 0, w: 0.07, h: 0.06, art: pad(['   __o', ' _ \<,_', '(_)/ (_)']), col: (c, row, L) => row === 2 ? C(GRAY, L) : C(col, L) });
+  extras.push({ x, y, z: 0, bike: col, c: ax ? 0 : 1, s: ax ? 1 : 0 }); // parked along the shopfront
 });
 // the Gardens' railings (gaps for the gates), the pens' fences, lamp posts along the paths, the gardeners' shed
 for (const [gate, along, len] of [['h', 0, GARDEN.w], ['h', GARDEN.h, GARDEN.w], ['v', 0, GARDEN.h], ['v', GARDEN.w, GARDEN.h]]) {
@@ -377,7 +375,7 @@ const cableZ = t => { // cable height along the bridge, t = 0..1
 };
 for (const bx of BRIDGE_X) for (const e of DECK_EDGE) for (let s = 0; s < BRIDGE_LEN; s += 0.5) {
   const t = s / BRIDGE_LEN, z = cableZ(t), x = bx * 8 + e, y = mod(BRIDGE_Y0 + s, N);
-  bridgeBits.push({ x, y, z, kind: 'cable' });
+  bridgeBits.push({ x, y, z, kind: 'cable', z2: s + 0.5 < BRIDGE_LEN ? cableZ((s + 0.5) / BRIDGE_LEN) : null }); // z2: the next point's height
   if ((s * 2 | 0) % 4 === 0 && z > 0.5) bridgeBits.push({ x, y, z: 0.05, h: z - 0.05, kind: 'hanger' });
 }
 const bridgeB = bucketed(bridgeBits);

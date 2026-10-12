@@ -7,17 +7,17 @@ camera-facing `drawArt` / `drawShape` billboard and build the thing out of `draw
 Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arrow), the street lamp's far LOD
 (`lampCell` past `LAMP_3D` is already the near-3D / far-billboard split), steam puffs, birds, butterflies, fish.
 
-## Batch 1: street furniture (small, same scale as #83)
+## Batch 1: street furniture (small, same scale as #83) - done
 
-- [ ] **Fair bulb posts** `props.js:289`: the `(*)` posts along the pier edges. Basically `drawParkLamp` with a
+- [x] **Fair bulb posts** `props.js:289`: the `(*)` posts along the pier edges. Basically `drawParkLamp` with a
       colour-cycling bulb. Easiest one on the list.
-- [ ] **Night market lanterns** `props.js:276`: `-|-` / `(@)` art on a string. Reuse the chinatown
+- [x] **Night market lanterns** `props.js:276`: `-|-` / `(@)` art on a string. Reuse the chinatown
       `drawLanternString` paper lanterns (already 3D) or a `dot` on a short rod.
-- [ ] **Velvet rope + brass posts** at the club `stripclub.js:80`: two rods with a `dot` cap, a sagging rope
+- [x] **Velvet rope + brass posts** at the club `stripclub.js:80`: two rods with a `dot` cap, a sagging rope
       between them (same sag idea as `drawLanternString`).
-- [ ] **Parked bicycles** in the Shotengai `props.js:316`: two wheels (`drawRod` discs like `CART_WHEEL`), a frame
+- [x] **Parked bicycles** in the Shotengai `props.js:316`: two wheels (`drawRod` discs like `CART_WHEEL`), a frame
       of rods, a seat box.
-- [ ] **Bridge hangers and cable lights** `city-sprites.js:1114`: hangers are `|` billboards and the cable is a row
+- [x] **Bridge hangers and cable lights** `city-sprites.js:1114`: hangers are `|` billboards and the cable is a row
       of `.` / `*` points. Hangers become `rod`s, cable lights become `dot`s (or the whole cable a chain of rods).
 
 ## Batch 2: signs (all have the same shape: a panel with `signGlyph` text, like `drawBoard` / the cart name)
