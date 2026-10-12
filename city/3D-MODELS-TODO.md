@@ -30,15 +30,15 @@ Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arr
       post-mounted panel. Price list text needs a few rows of `signGlyph`.
 - [x] **Boat navigation lights** `marina.js:108`: red/green `o` billboards, should just be `dot`s.
 
-## Batch 3: Gardens
+## Batch 3: Gardens - done
 
-- [ ] **Picnic blankets** `gardens.js:192`: currently a `########` sprite standing up. Should be a flat box on the
+- [x] **Picnic blankets** `gardens.js:192`: currently a `########` sprite standing up. Should be a flat box on the
       grass (checker on the top face), the basket `gardens.js:200` a small box with a handle rod.
-- [ ] **Swan boats** `gardens.js:164`: parked and paddled. A hull box plus a neck rod and a head `dot`; the paddler
+- [x] **Swan boats** `gardens.js:164`: parked and paddled. A hull box plus a neck rod and a head `dot`; the paddler
       already sits in it as a figure.
-- [ ] **Animals** (flamingos, ducks, tortoises, bear, peacock) `gardens.js:155-163`: lower priority, the ASCII art
-      is part of the charm. Flamingo (rod legs, body box, neck rod) and tortoise (`rayCopperDrum`-ish shell) are the
-      cheap wins if you want any.
+- [x] **Animals** (flamingos, ducks, tortoises, bear, peacock): built like the people (`animalLook` /
+      `ANIMAL_BODIES` in `figures.js`, drawn with `drawFigure`), solid colour, facing the way they move. The same
+      builder could take the aviary birds and the street pigeons later.
 
 ## Batch 4: big skyline pieces (drawShape silhouettes, these look flat when you walk around them)
 

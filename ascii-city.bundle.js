@@ -621,7 +621,7 @@ function figSprite(look, view, key) {
   if (s) { figCache.delete(id); figCache.set(id, s); return s; } // (most recently used last)
   const bid = look.shape + '|' + key;
   let body = figCache.get(bid);
-  if (!body) figCache.set(bid, body = figBody(look, key));
+  if (!body) figCache.set(bid, body = look.build ? look.build(key) : figBody(look, key)); // (an animal brings its own)
   figCache.set(id, s = figRaster(body, view));
   if (figCache.size > 8000) for (const old of [...figCache.keys()].slice(0, 1000)) figCache.delete(old); // the least recently used go
   return s;
@@ -747,6 +747,77 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     return set(i, ' ', 0), true;
   });
 }
+
+// ---- animals: built and drawn just like people (parts, cast from the side you see into a cached sprite, painted as
+// solid colour), so they read as clearly at any size. They borrow the people's colour roles: BODY is a top, HEAD is
+// skin (so the one-pixel eye melts into the head far off, as ours do), BEAK a hat, LEG a shoe, WING trousers, MARK a
+// pack, PALE a shirt's inner. Body frame as for people: x their right, y ahead, z up, in sprite pixels.
+const AR = { BODY: FR.TOP, HEAD: FR.SKIN, BEAK: FR.HAT, LEG: FR.SHOE, WING: FR.BOT, MARK: FR.PACK, PALE: FR.INNER };
+const AN_I = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+// col: { body, head, beak, leg, wing, mark, pale }, each [palette base, brightness]. key for drawFigure: 'f' + frame
+function animalLook(kind, col) {
+  const c = { body: [GRAY, 8], beak: [ORANGE, 12], leg: [GRAY, 4], mark: [GRAY, 6], pale: [WHITE, 13], ...col };
+  c.head ||= c.body; c.wing ||= c.body;
+  const B = new Uint8Array(FIG_ROLES), Lv = new Float32Array(FIG_ROLES), put = (r, [b, l], k = 1) => { B[r] = b; Lv[r] = l * k; };
+  put(FR.TOP, c.body); put(FR.TOP_D, c.body, 0.68); put(FR.SKIN, c.head); put(FR.SKIN_D, c.head, 0.7); put(FR.HAT, c.beak); put(FR.HAT_D, c.beak, 0.75);
+  put(FR.SHOE, c.leg); put(FR.BOT, c.wing); put(FR.BOT_D, c.wing, 0.68); put(FR.PACK, c.mark); put(FR.PACK_D, c.mark, 0.65); put(FR.INNER, c.pale); put(FR.EYE, [GRAY, 0]);
+  return { shape: 'animal:' + kind, base: B, lvl: Lv, build: key => ANIMAL_BODIES[kind](+key.slice(1) || 0) };
+}
+// both eyes, a pixel each, on the sides of a head part (its centre c, radius r across), a little forward and up
+const animalEyes = (c, r, part, fwd = 0.45, up = 0.35) => [1, -1].map(sg => ({ p: [c[0] + sg * r * 0.92, c[1] + r * fwd, c[2] + r * up], n: [sg, 0.3, 0], role: FR.EYE, part }));
+const ANIMAL_BODIES = {
+  flamingo: f => { // on one leg; frame 1: head down, feeding
+    const R = AR, parts = [figEll([0, 0, 19], AN_I, [2.6, 4.2, 2.6], () => R.BODY), figEll([0, -4.2, 19.6], AN_I, [1.6, 2, 1.1], () => R.WING)];
+    parts.push(figCap([0.9, 0, 17], [0.9, 0.3, 0.6], 0.45, () => R.LEG, false), figCap([-0.9, 0, 17], [-0.9, 1.8, 12.5], 0.45, () => R.LEG, false),
+               figCap([-0.9, 1.8, 12.5], [-0.9, -0.6, 14.2], 0.4, () => R.LEG, false), figBox([0.9, 0.9, 0.3], AN_I, [0.6, 1.2, 0.3], () => R.LEG, false));
+    const neck = f ? [[0, 3.4, 20.5], [0, 6, 18], [0, 7.4, 12], [0, 7.8, 5.5]] : [[0, 3.4, 20.5], [0, 4.8, 24], [0, 3.6, 27.5], [0, 4.4, 30.2]];
+    for (let k = 1; k < neck.length; k++) parts.push(figCap(neck[k - 1], neck[k], 0.75, () => R.BODY));
+    const hc = f ? [0, 7.9, 4.4] : [0, 4.8, 31.2], head = parts.length;
+    parts.push(figEll(hc, AN_I, [1.3, 1.6, 1.3], () => R.HEAD));
+    parts.push(f ? figCap([0, 8.6, 3.6], [0, 8.9, 1.2], 0.5, h => h.s > 0.55 ? R.BEAK : R.PALE) : figCap([0, 6, 31.1], [0, 7.7, 29.5], 0.55, h => h.s > 0.55 ? R.BEAK : R.PALE));
+    return { parts, decals: animalEyes(hc, 1.3, head) };
+  },
+  duck: () => { // a mallard drake on the water: brown chest, grey wings, a white collar, a green head, a yellow bill
+    const R = AR, hc = [0, 4, 7];
+    const parts = [figEll([0, 0, 3], AN_I, [3, 5, 2.4], () => R.BODY), figEll([0, -0.6, 4.2], AN_I, [3.1, 3.8, 1.6], () => R.WING),
+      figEll([0, -4.8, 4], AN_I, [1.4, 1.6, 1], () => R.WING), figCap([0, 3.3, 4.4], [0, 3.8, 6], 1.15, () => R.PALE),
+      figEll(hc, AN_I, [1.7, 2, 1.8], () => R.HEAD), figBox([0, 6.2, 6.5], AN_I, [0.8, 1.1, 0.35], () => R.BEAK)];
+    return { parts, decals: animalEyes(hc, 1.7, 4) };
+  },
+  tortoise: f => { // a domed shell in plates, a pale rim, stumpy legs (frame: which pair is stepping)
+    const R = AR, step = f ? 0.7 : -0.7, hc = [0, 6, 2.6];
+    const parts = [figEll([0, 0, 1.2], AN_I, [4, 5, 3.6], h => h.l[2] < 0.05 ? R.PALE
+      : (Math.floor((Math.atan2(h.l[1], h.l[0]) / Math.PI + 1) * 3) + Math.floor(h.l[2] * 2.5)) & 1 ? R.MARK : R.BODY)];
+    for (const [sx, sy, k] of [[1, 1, 0], [-1, 1, 1], [1, -1, 1], [-1, -1, 0]]) {
+      const y = sy * 3 + (k ? step : -step);
+      parts.push(figCap([sx * 2.9, y, 1.6], [sx * 3.2, y, 0.5], 0.85, () => R.HEAD));
+    }
+    parts.push(figCap([0, 3.8, 1.8], [0, 5.2, 2.4], 0.85, () => R.HEAD), figEll(hc, AN_I, [1.15, 1.5, 1.05], () => R.HEAD));
+    return { parts, decals: animalEyes(hc, 1.15, parts.length - 1) };
+  },
+  bear: () => { // asleep on its front, chin on its paws
+    const R = AR, hc = [0, 8.5, 4];
+    const parts = [figEll([0, -1, 5], AN_I, [6, 9, 5], () => R.BODY), figEll(hc, AN_I, [3.5, 3.5, 3.2], () => R.HEAD),
+      figEll([0, 11.6, 3.2], AN_I, [1.7, 1.9, 1.4], h => h.l[1] > 0.75 && h.l[2] > -0.2 ? R.BEAK : R.PALE)];
+    for (const sg of [1, -1]) parts.push(figEll([sg * 2.4, 7.6, 7.2], AN_I, [1.1, 0.7, 1.1], () => R.HEAD), figCap([sg * 3.2, 5, 1.1], [sg * 3.2, 10.6, 1.1], 1.3, () => R.BODY),
+      figEll([sg * 4.4, -7.4, 2.5], AN_I, [2, 3, 2.5], () => R.BODY));
+    return { parts, decals: animalEyes(hc, 3.4, 1, 0.55, 0.25) };
+  },
+  peacock: f => { // strutting, its train fanned out behind: green with eyes in rings of cyan (frame: a stride of four)
+    const R = AR, w = f / 4 * Math.PI * 2, hc = [0, 3.3, 13.3];
+    const parts = [figEll([0, 0, 7], AN_I, [2.2, 3.5, 2.6], () => R.BODY), figCap([0, 2.2, 8.4], [0, 3, 12.5], 1, () => R.BODY), figEll(hc, AN_I, [1, 1.25, 1], () => R.BODY),
+      figBox([0, 4.6, 13.2], AN_I, [0.3, 0.55, 0.25], () => R.BEAK)];
+    for (const [sg, ph] of [[1, 0], [-1, Math.PI]]) { const sw = Math.sin(w + ph) * 0.9; parts.push(figCap([sg * 0.9, 0, 5], [sg * 0.9, sw, 0.3], 0.4, () => R.LEG, false)); }
+    for (const dxc of [-0.7, 0, 0.7]) parts.push(figCap([dxc * 0.5, 3.2, 14.1], [dxc, 3, 15.6], 0.22, () => R.MARK, false));
+    const fan = [0, -3.6, 5], ax = [[1, 0, 0], [0, Math.cos(0.3), -Math.sin(0.3)], [0, Math.sin(0.3), Math.cos(0.3)]];
+    parts.push(figEll(fan, ax, [12, 0.6, 15], h => {
+      if (h.l[2] < -0.05) return 0; // (the half above its tail)
+      const rr = Math.hypot(h.l[0], h.l[2]), ang = Math.atan2(h.l[0], h.l[2]), ring = fract(rr * 3.4), spoke = fract(ang * 8 / Math.PI);
+      return ring > 0.3 && ring < 0.7 && spoke > 0.25 && spoke < 0.75 ? (ring > 0.42 && ring < 0.58 ? R.PALE : R.MARK) : R.WING;
+    }, false));
+    return { parts, decals: animalEyes(hc, 1, 2) };
+  },
+};
 // ---- shops
 const WORDS = ['HOTEL','BAR','PIZZA','24/7','CAFE','RAMEN','PAWN','DELI','LIQUOR','BOOKS','ARCADE','NOODLES',
   'LAUNDRY','BARBER','PHARMACY','TATTOO','SUSHI','TACOS','FLORIST','RECORDS','GYM','DINER','BANK','VIDEO',
@@ -12975,14 +13046,6 @@ SOLID_SHADE.shed = () => (i, t, L) => {
 };
 
 // ---- animals, ducks and boats
-const ANIMAL_ART = {
-  flamingo: pad(['  _', ' (o>', '  )', ' //', ' |', '/|']),
-  duck: pad(['  _', '<(o)__', ' (___/']),
-  tortoise: pad(['  ____', ' /####\\_', '/_/  \\_\\o']),
-  bear: pad(['   _    _', '  ( `--` )___', ' (  -  -     )', '  `----^-----`']),
-  peacock: pad([' \\|||/', '-(*@*)-', '  /o>', '  ||']),
-  swan: pad(['   __', '  (o >', '   \\\\', ' __||____', '(________)']),
-};
 const gw = (gx, gy) => [GARDEN.x0 + gx, GARDEN.y0 + gy];
 const lakeSpot = (lo, hi, seed) => { // somewhere on the lake lo..hi cells in from the shore
   for (let k = 0; k < 400; k++) { const gx = LAKE.x + (hash(seed, k, 831) - 0.5) * LAKE.rx * 2, gy = LAKE.y + (hash(seed, k, 832) - 0.5) * LAKE.ry * 2, e = gardenLakeEdge(gx, gy); if (e > lo && e < hi && !onJetty(gx, gy)) return [gx, gy]; }
@@ -12991,40 +13054,53 @@ const lakeSpot = (lo, hi, seed) => { // somewhere on the lake lo..hi cells in fr
 const flamingos = Array.from({ length: 5 }, (_, k) => { const [gx, gy] = lakeSpot(0.05, 0.45, 40 + k * 3); return { gx, gy, k }; }).filter(f => f.gy > LAKE.y - 0.5);
 const ducks = Array.from({ length: 9 }, (_, k) => ({ k, gx: LAKE.x, gy: LAKE.y, ph: k * 0.7, r: 0.8 + (k % 3) * 0.8 }));
 const tortoises = [0, 1, 2].map(k => ({ k, ph: k * 2.1 }));
-const BOATS_PARKED = [[10.3, JETTY.gy - 0.36], [10.9, JETTY.gy - 0.36], [10.6, JETTY.gy + 0.36]];
+const BOATS_PARKED = [[11.3, JETTY.gy - 0.3], [11.6, JETTY.gy - 0.3], [11.45, JETTY.gy + 0.3]]; // (out at the end of the jetty, where it's deep enough)
 let duckFeed = null, boat = null; // { gx, gy, t0 } while the ducks have something to swim over for; your swan boat
 function stepGardens(dt) {
   for (const d of ducks) { // round the lake in little loops, or (fed) over to where the crumbs are landing
     const hx = LAKE.x + Math.cos(T * 0.05 + d.ph) * LAKE.rx * 0.45 + Math.cos(T * 0.3 + d.k) * 0.3 * d.r, hy = LAKE.y + Math.sin(T * 0.05 + d.ph) * LAKE.ry * 0.45 + Math.sin(T * 0.27 + d.k) * 0.3 * d.r;
     const fed = duckFeed && T - duckFeed.t0 < 18, tx = fed ? duckFeed.gx + Math.cos(d.k * 2.3) * 0.25 : hx, ty = fed ? duckFeed.gy + Math.sin(d.k * 2.3) * 0.25 : hy;
     const nx = d.gx + (tx - d.gx) * Math.min(1, dt * (fed ? 0.6 : 0.3)), ny = d.gy + (ty - d.gy) * Math.min(1, dt * (fed ? 0.6 : 0.3));
-    if (gardenLakeEdge(nx, ny) > 0.08) { d.dir = nx > d.gx ? 1 : -1; d.gx = nx; d.gy = ny; }
+    if (gardenLakeEdge(nx, ny) > 0.08) {
+      const mx = nx - d.gx, my = ny - d.gy, mn = Math.hypot(mx, my);
+      if (mn > 1e-4) { d.hx = mx / mn; d.hy = my / mn; } // which way it's swimming
+      d.dir = nx > d.gx ? 1 : -1; d.gx = nx; d.gy = ny;
+    }
   }
   // the bell at closing time
   const inside = inGardens(px, py) && mode === 'walk';
   if (inside && !gardensOpen(tod) && !stepGardens.rang) { stepGardens.rang = true; say('A bell rings: the Gardens are closing. You can still let yourself out.', 4); }
   if (gardensOpen(tod)) stepGardens.rang = false;
 }
-const GARDEN_FOLK = []; // the paddlers and picnickers' looks, made the first time they're drawn
+const GARDEN_FOLK = [], GARDEN_ANIMALS = {}; // the paddlers and picnickers' looks, made the first time they're drawn
 function gardenSprites() {
   const [cx, cy] = gw(GARDEN.w / 2, GARDEN.h / 2);
   if (Math.hypot(rel(cx - px), rel(cy - py)) > vis + 14) return;
-  const art = (gx, gy, z, w, h, a, col) => { const [x, y] = gw(gx, gy); drawArt(rel(x - px), rel(y - py), z, w, h, a, col); };
-  for (const f of flamingos) art(f.gx, f.gy, 0, 0.04, 0.13, Math.sin(T * 0.4 + f.k * 2) > 0.85 ? ANIMAL_ART.flamingo.map(l => l.replace('o>', 'o_')) : ANIMAL_ART.flamingo, (c, row, L) => row === 1 && c === '>' ? C(ORANGE, L) : C(MAG, Math.max(L, 6)));
-  for (const d of ducks) art(d.gx, d.gy, 0, 0.035, 0.035, d.dir < 0 ? ANIMAL_ART.duck : ANIMAL_ART.duck.map(l => [...l].reverse().join('').replace(/</g, '>').replace(/\(/g, '#').replace(/\)/g, '(').replace(/#/g, ')').replace(/\//g, '\\')),
-    (c, row, L) => row < 2 && c !== '<' && c !== '>' ? C(GREEN, L) : c === '<' || c === '>' ? C(YEL, L) : C(BRICK, L));
+  const V = (gx, gy) => { const [x, y] = gw(gx, gy); return [rel(x - px), rel(y - py)]; };
+  const art = (gx, gy, z, w, h, a, col) => drawArt(...V(gx, gy), z, w, h, a, col);
+  const A = GARDEN_ANIMALS.looks ||= { // (made on first sight: palette and figures are all loaded by then)
+    flamingo: animalLook('flamingo', { body: [MAG, 11], wing: [MAG, 7], leg: [MAG, 8], beak: [GRAY, 1], pale: [WHITE, 12] }),
+    duck: animalLook('duck', { body: [BRICK, 7], wing: [GRAY, 8], head: [GREEN, 8], beak: [YEL, 12], pale: [WHITE, 14] }),
+    tortoise: animalLook('tortoise', { body: [BRICK, 8], mark: [BRICK, 5], head: [GREEN, 6], pale: [YEL, 7] }),
+    bear: animalLook('bear', { body: [BRICK, 5], head: [BRICK, 6], pale: [BRICK, 9], beak: [GRAY, 1] }),
+    peacock: animalLook('peacock', { body: [BLUE, 9], wing: [GREEN, 7], mark: [CYAN, 12], pale: [BLUE, 4], beak: [GRAY, 10], leg: [GRAY, 8] }),
+  };
+  const animal = (gx, gy, z, h, fx, fy, look, frame = 0) => drawFigure(...V(gx, gy), z, h, fx, fy, look, 'f' + frame, { light: 4 });
+  for (const f of flamingos) { const th = f.k * 2.4; animal(f.gx, f.gy, 0, 0.104, Math.cos(th), Math.sin(th), A.flamingo, Math.sin(T * 0.4 + f.k * 2) > 0.85 ? 1 : 0); }
+  for (const d of ducks) animal(d.gx, d.gy, 0, 0.12, d.hx ?? (d.dir || 1), d.hy ?? 0, A.duck);
   const tp = GARDEN_PENS.find(p => p.kind === 'tortoise'), bp = GARDEN_PENS.find(p => p.kind === 'bear');
-  for (const t of tortoises) art(tp.gx0 + 0.5 + (tp.gx1 - tp.gx0 - 1) * (0.5 + 0.45 * Math.sin(T * 0.015 + t.ph)), tp.gy0 + 0.6 + (tp.gy1 - tp.gy0 - 1.2) * (0.5 + 0.45 * Math.cos(T * 0.011 + t.ph * 1.7)), 0, 0.05, 0.035, ANIMAL_ART.tortoise, (c, row, L) => c === '#' ? C(BRICK, L) : C(GREEN, L));
-  art((bp.gx0 + bp.gx1) / 2, (bp.gy0 + bp.gy1) / 2, 0, 0.22, 0.13, ANIMAL_ART.bear, (c, row, L) => C(BRICK, Math.max(L, 4)));
-  art((bp.gx0 + bp.gx1) / 2 + 0.1, (bp.gy0 + bp.gy1) / 2, 0.14 + fract(T * 0.3) * 0.08, 0.025, 0.025, ['z'], () => C(WHITE, 12 * (1 - fract(T * 0.3)))); // zzz
+  const tortoiseAt = (t, tt) => [tp.gx0 + 0.5 + (tp.gx1 - tp.gx0 - 1) * (0.5 + 0.45 * Math.sin(tt * 0.015 + t.ph)), tp.gy0 + 0.6 + (tp.gy1 - tp.gy0 - 1.2) * (0.5 + 0.45 * Math.cos(tt * 0.011 + t.ph * 1.7))];
+  for (const t of tortoises) { const [gx, gy] = tortoiseAt(t, T), [nx, ny] = tortoiseAt(t, T + 2); animal(gx, gy, 0, 0.1, nx - gx, ny - gy, A.tortoise, Math.floor(T * 1.5 + t.k) & 1); }
+  animal((bp.gx0 + bp.gx1) / 2, (bp.gy0 + bp.gy1) / 2, 0, 0.29, 1, 0, A.bear);
+  art((bp.gx0 + bp.gx1) / 2 + 0.16, (bp.gy0 + bp.gy1) / 2, 0.14 + fract(T * 0.3) * 0.08, 0.025, 0.025, ['z'], () => C(WHITE, 12 * (1 - fract(T * 0.3)))); // zzz
   const pk = T * 0.02, pgx = 12 + Math.cos(pk) * 1.4, pgy = 6.2 + Math.sin(pk * 2) * 0.5; // the peacock, strutting about the middle lawn
-  art(pgx, pgy, 0, 0.05, 0.1, ANIMAL_ART.peacock, (c, row, L) => row === 0 || c === '-' ? C(GREEN, L) : c === '*' || c === '@' ? C(CYAN, Math.max(L, 8)) : row === 1 ? C(BLUE, L) : C(BLUE, L));
-  for (const [bx, by] of BOATS_PARKED) art(bx, by, 0, 0.1, 0.11, ANIMAL_ART.swan, (c, row, L) => c === '>' ? C(ORANGE, L) : C(WHITE, Math.max(L, 5)));
+  animal(pgx, pgy, 0, 0.13, -Math.sin(pk) * 1.4, Math.cos(pk * 2), A.peacock, Math.floor(T * 4) & 3);
+  for (const [bx, by] of BOATS_PARKED) drawSwanBoat(...V(bx, by), 1, 0); // moored along the jetty, pointing out over the lake
   for (let k = 0; k < (gardensOpen(tod) ? 2 : 0); k++) { // two boats out on the lake, being paddled round (by day)
     const th = T * 0.03 + k * 3, bgx = LAKE.x + Math.cos(th) * LAKE.rx * 0.55, bgy = LAKE.y + Math.sin(th) * LAKE.ry * 0.55;
-    art(bgx, bgy, 0, 0.1, 0.11, ANIMAL_ART.swan, (c, row, L) => c === '>' ? C(ORANGE, L) : C(WHITE, Math.max(L, 5)));
-    const [bx, by] = gw(bgx, bgy); // the paddler, sat low in the swan (it hides their legs), facing the way it's going
-    drawFigure(rel(bx - px), rel(by - py), 0.01, 0.17, -Math.sin(th) * LAKE.rx, Math.cos(th) * LAKE.ry, GARDEN_FOLK[k] ||= figAnyone([RED, BLUE][k]), 'sit6');
+    const [bx, by] = V(bgx, bgy), hx = -Math.sin(th) * LAKE.rx, hy = Math.cos(th) * LAKE.ry, hn = Math.hypot(hx, hy);
+    drawSwanBoat(bx, by, hx / hn, hy / hn);
+    drawFigure(bx, by, 0.01, 0.17, hx, hy, GARDEN_FOLK[k] ||= figAnyone([RED, BLUE][k]), 'sit6'); // the paddler, sat low in the swan (it hides their legs), facing the way it's going
   }
   // the gates: iron, open by day, shut at night, and the name over the main one
   for (const [ggx, ggy, o] of GARDEN_GATES) {
@@ -13047,7 +13123,7 @@ function gardenSprites() {
   // picnickers on the grass: a checked blanket, two people, a basket
   for (const [pgx2, pgy2, k] of [[16.5, 12.4, 1], [6.2, 8.6, 2], [18.6, 9.8, 3]]) {
     if (!gardensOpen(tod) || day < 0.3) continue;
-    art(pgx2, pgy2, 0, 0.08, 0.012, ['########'], (c, row, L) => C((Math.floor(T * 0) + k) & 1 ? RED : WHITE, L));
+    drawPicnicBlanket(...V(pgx2, pgy2), k & 1 ? RED : BLUE);
     for (const [s, shirt] of [[-1, [YEL, BLUE, GREEN][k - 1]], [1, [MAG, RED, WHITE][k - 1]]]) { // facing each other across the blanket
       const [fx_, fy_] = gw(pgx2 + s * 0.045, pgy2 + s * 0.01);
       drawFigure(rel(fx_ - px), rel(fy_ - py), 0, 0.17, -s, 0, GARDEN_FOLK[k * 2 + (s > 0)] ||= figAnyone(shirt), 'grass');
@@ -13055,11 +13131,66 @@ function gardenSprites() {
   }
   if (body.seat && body.seat.grass) { // the picnic basket, on the blanket's far left corner
     const s = body.seat, al = PICNIC_AHEAD + PICNIC_LONG * 0.55, ac = -PICNIC_HALF * 0.55, bx = s.x + s.fx * al - s.fy * ac, by = s.y + s.fy * al + s.fx * ac;
-    drawArt(rel(bx - px), rel(by - py), 0, 0.045, 0.04, PICNIC_BASKET, (c, row, L) => c === '#' ? C(RED, Math.max(L, 6)) : C(WARM, Math.max(L, 6)));
+    drawPicnicBasket(rel(bx - px), rel(by - py), s.fx, s.fy);
   }
   if (boat) return;
 }
-const PICNIC_BASKET = pad(['  .--.  ', ' /    \\ ', '|######|', '|%%%%%%|', '|%%%%%%|', "'------'"]);
+// a picnickers' blanket: a checked cloth lying flat on the grass (like yours, see gardenFloor), a fringe at the ends
+function drawPicnicBlanket(vx, vy, col) {
+  if (Math.hypot(vx, vy) > vis) return;
+  const hl = 0.1, hw = 0.065;
+  drawBox(boxAt(vx, vy, 1, 0, hl, hw, 0.001, 0.004), (i, t, L) => {
+    const u = HIT.u + hl, v = HIT.v + hw;
+    if (hl - Math.abs(HIT.u) < 0.006) return set(i, fract(u * 150) < 0.5 ? '|' : '\'', C(WHITE, L * 1.2)), true;
+    const dark = (Math.floor(u / 0.025) + Math.floor(v / 0.025)) & 1;
+    BG[i] = dark ? C(col, 2 + L * 0.35) : C(WHITE, 2 + L * 0.3);
+    return set(i, dark ? '#' : ':', dark ? C(col, L * 1.4) : C(WHITE, L * 1.2)), true;
+  });
+}
+// the picnic basket on your blanket: woven sides, a checked cloth tucked under the lid, a handle arching over the top.
+// (fx, fy): the way you face, so it lies square to the blanket
+function drawPicnicBasket(vx, vy, fx, fy) {
+  const hl = 0.022, hw = 0.015, top = 0.022;
+  drawBox(boxAt(vx, vy, fx, fy, hl, hw, 0, top), (i, t, L) => {
+    if (HIT.face === 5) { BG[i] = C(WARM, 2 + L * 0.3); return set(i, '=', C(BRICK, L)), true; } // the lid
+    const cloth = HIT.w > top - 0.006;
+    BG[i] = cloth ? C((Math.floor(HIT.u * 120) + Math.floor(HIT.v * 120)) & 1 ? RED : WHITE, 2.5 + L * 0.3) : C(WARM, (1.6 + L * 0.3) * shadeFace(HIT.face));
+    return set(i, cloth ? ' ' : fract(HIT.w * 160) < 0.5 ? '%' : '#', C(BRICK, L * 0.9)), true;
+  });
+  const seg = 6, ax = -fy, ay = fx; // the handle: across the basket, up and over
+  for (let k = 0; k < seg; k++) {
+    const a0 = Math.PI * k / seg, a1 = Math.PI * (k + 1) / seg, r = hw * 0.9;
+    rod(vx + ax * Math.cos(a0) * r, vy + ay * Math.cos(a0) * r, top + Math.sin(a0) * 0.018, vx + ax * Math.cos(a1) * r, vy + ay * Math.cos(a1) * r, top + Math.sin(a1) * 0.018, 0.0015, BRICK, 0.9);
+  }
+}
+// a swan pedalo, heading (hx, hy): a white hull, wings raised along its sides, a long neck curving up from the bow to
+// the head with its orange beak, and a tail flicked up at the stern
+const SWAN_WHITE = (i, t, L) => { BG[i] = C(WHITE, (6 + L * 0.45) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '~' : ' ', C(GRAY, L * 0.6)), true; };
+function drawSwanBoat(vx, vy, hx, hy) {
+  const d = Math.hypot(vx, vy);
+  if (d > vis) return;
+  const at = (u, v = 0) => [vx + hx * u - hy * v, vy + hy * u + hx * v];
+  drawBox(boxAt(vx, vy, hx, hy, 0.06, 0.035, 0, 0.03), (i, t, L) => {
+    if (HIT.face === 5) { BG[i] = C(GRAY, 1.2 + L * 0.2); return set(i, ' ', 0), true; } // the seat well
+    if (HIT.w < 0.008) { BG[i] = C(BLUE, 1.5 + L * 0.2); return set(i, '~', C(CYAN, L * 0.7)), true; } // the waterline
+    return SWAN_WHITE(i, t, L);
+  });
+  for (const e of [-1, 1]) { // the wings, raised up each side and sweeping back
+    const [x, y] = at(-0.012, e * 0.036);
+    drawBox(boxAt(x, y, hx, hy, 0.042, 0.005, 0.025, 0.06), (i, t, L) => {
+      if (HIT.w > 0.03 + 0.03 * (0.5 - HIT.u / 0.084) * 2 && HIT.u > -0.02) return false; // (lower toward the front)
+      BG[i] = C(WHITE, (6.5 + L * 0.45) * shadeFace(HIT.face)); return set(i, fract(HIT.u * 60) < 0.3 ? ')' : ' ', C(GRAY, L * 0.6)), true;
+    });
+  }
+  const neck = [[0.05, 0.028], [0.062, 0.06], [0.066, 0.088], [0.058, 0.108], [0.064, 0.12]];
+  for (let k = 1; k < neck.length; k++) {
+    const [ax, ay] = at(neck[k - 1][0]), [bx, by] = at(neck[k][0]);
+    tube(ax, ay, neck[k - 1][1], bx, by, neck[k][1], 0.008 - k * 0.0008, WHITE, 6, 0.6);
+  }
+  { const [x, y] = at(0.07); dot(x, y, 0.122, 0.011, (i, t, L) => { BG[i] = C(WHITE, 6.5 + L * 0.45); return set(i, d < 3 ? ' ' : 'o', C(GRAY, L)), true; }); } // the head
+  { const [ax, ay] = at(0.078), [bx, by] = at(0.096); tube(ax, ay, 0.12, bx, by, 0.116, 0.004, ORANGE, 3, 0.8); } // the beak
+  { const [ax, ay] = at(-0.058), [bx, by] = at(-0.074); tube(ax, ay, 0.026, bx, by, 0.05, 0.007, WHITE, 6, 0.6); } // the tail
+}
 
 // ---- out on the lake in a swan boat (mode 'boat')
 const nearJettyFoot = () => mode === 'walk' && (() => { const [gx, gy] = gardenLocal(px, py); return inGardens(px, py) && Math.abs(gx - JETTY.gx0 - 0.25) < 0.45 && Math.abs(gy - JETTY.gy) < 0.45; })();
