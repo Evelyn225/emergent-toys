@@ -183,7 +183,7 @@ function gardenSprites() {
       BG[i] = C(GREEN, 1 + L * 0.1);
       if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(GRAY, L)), true;
       const word = 'BOTANICAL GARDENS', n = word.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / 0.66 + 1) / 2 * n - 1;
-      return set(i, signGlyph(word, q, (0.295 - HIT.w) / 0.05, t, 1.32 / n, 0.05, farDepth(vx, vy, 0.66)) || ' ', C(WHITE, Math.max(L * 1.2, night * 12))), true;
+      return set(i, signLine(word, q, (0.295 - HIT.w) / 0.05, i, 0.27, midDepth(vx, vy), t, 1.32 / n, 0.05, farDepth(vx, vy, 0.66), ...faceDir(1, 0)) || ' ', C(WHITE, Math.max(L * 1.2, night * 12))), true;
     });
   }
   // picnickers on the grass: a checked blanket, two people, a basket

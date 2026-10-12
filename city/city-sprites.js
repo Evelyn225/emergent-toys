@@ -500,7 +500,7 @@ function drawBoard(o, vx, vy) {
       return set(i, glow > 0.3 && fract(q * 20 - T * 2) < 0.3 ? '*' : ' ', C(WHITE, 15)), true;
     }
     BG[i] = C(GRAY, 1.3 + L * 0.2 + glow * 0.8);
-    const ch = signGlyph(o.word, q * n - 1, (band0 + bandH - w) / bandH, t, 2 * hw / n, bandH, far);
+    const ch = signLine(o.word, q * n - 1, (band0 + bandH - w) / bandH, i, band0 + bandH / 2, midDepth(vx, vy), t, 2 * hw / n, bandH, far, s, -c);
     return set(i, ch ?? ' ', C(o.neon, Math.max(L, glow * 15))), true;
   });
   drawBox(boxAt(vx + c * 0.03, vy + s * 0.03, c, s, 0.022, hw, z0 - 0.012, z0 - 0.005), (i, t, L) => { // the catwalk
@@ -570,7 +570,7 @@ function drawElStairs(st) {
   drawBox(boxAt(sx, sy, c, s, 0.07, 0.008, EL_TOP + 0.1, EL_TOP + 0.16), (i, t, L) => {
     BG[i] = C(GREEN, 4 + Math.max(night, overcast * 0.6) * 5);
     if (HIT.face !== 3 && HIT.face !== 4) return set(i, ' ', 0), true;
-    const q = ((HIT.face === 3 ? HIT.u : -HIT.u) + 0.07) / 0.14, ch = signGlyph('EL', q * 4 - 1, (EL_TOP + 0.15 - HIT.w) / 0.04, t, 0.035, 0.04, far);
+    const q = ((HIT.face === 3 ? HIT.u : -HIT.u) + 0.07) / 0.14, ch = signLine('EL', q * 4 - 1, (EL_TOP + 0.15 - HIT.w) / 0.04, i, EL_TOP + 0.13, midDepth(sx, sy), t, 0.035, 0.04, far, ...faceDir(c, s));
     return set(i, ch ?? ' ', C(WHITE, 15)), true;
   });
 }
@@ -594,7 +594,7 @@ function drawCart(v) {
     if (front && t.tall && w > 0.1 && w < 0.15 && Math.abs(u) < hl * 0.8) return false; // the hatch
     if (front && w > top - 0.035 && w < top - 0.005) { // the name, lit after dark
       BG[i] = C(t.color, 3 + glow * 6);
-      const ch = signGlyph(t.name, q * n - 1, (top - 0.005 - w) / 0.03, tt, 2 * hl / n, 0.03, far);
+      const ch = signLine(t.name, q * n - 1, (top - 0.005 - w) / 0.03, i, top - 0.02, midDepth(vx, vy), tt, 2 * hl / n, 0.03, far, fs * c, fs * s);
       return set(i, ch ?? ' ', C(WHITE, 15)), true;
     }
     BG[i] = C(t.color, (1.6 + L * 0.32) * shadeFace(f));
@@ -901,7 +901,7 @@ const SOLID_SHADE = {
     const q = (HIT.u * o.fs / o.hl + 1) / 2;
     if (w > 0.25) { // the sign
       BG[i] = C(o.awning, 3 + glow * 6);
-      const n = o.word.length + 2, ch = signGlyph(o.word, q * n - 1, (0.33 - w) / 0.07, t, 2 * o.hl / n, 0.07, farDepth(rel(o.x - px), rel(o.y - py), o.hl));
+      const n = o.word.length + 2, ch = signLine(o.word, q * n - 1, (0.33 - w) / 0.07, i, 0.295, midDepth(rel(o.x - px), rel(o.y - py)), t, 2 * o.hl / n, 0.07, farDepth(rel(o.x - px), rel(o.y - py), o.hl), o.fs * o.c, o.fs * o.s);
       if (ch !== null && (ch !== ' ' || Math.abs(w - 0.295) < 0.035)) return set(i, ch, C(WHITE, 15)), true;
       return set(i, glow > 0.3 && Math.abs(w - 0.295) > 0.035 && fract(q * 14 - T * 2) < 0.3 ? '*' : ' ', C(YEL, 15)), true; // bulbs chasing round it
     }
@@ -937,7 +937,7 @@ const SOLID_SHADE = {
     if (!front) { BG[i] = stripe((1.4 + L * 0.3) * shadeFace(f)); return set(i, ' ', 0), true; }
     if (w < 0.215 && fract(q * 24) > 0.5) return false; // the scallops: you see past them
     BG[i] = C(o.canopy, 3.4 + night * 3);
-    const n = o.word.length + 2, ch = signGlyph(o.word, q * n - 1, (0.255 - w) / 0.045, t, 2 * o.hl / n, 0.045, farDepth(rel(o.x - px), rel(o.y - py), o.hl));
+    const n = o.word.length + 2, ch = signLine(o.word, q * n - 1, (0.255 - w) / 0.045, i, 0.2325, midDepth(rel(o.x - px), rel(o.y - py)), t, 2 * o.hl / n, 0.045, farDepth(rel(o.x - px), rel(o.y - py), o.hl), o.fs * o.c, o.fs * o.s);
     return ch !== null && ch !== ' ' ? (set(i, ch, C(YEL, 15)), true) : (set(i, ' ', 0), true);
   },
   stallpole: () => (i, t, L) => { BG[i] = C(GRAY, 1.5); return set(i, '|', C(GRAY, Math.max(L, 8))), true; },
@@ -1087,7 +1087,7 @@ function drawFootbridge() {
     BG[i] = C(GRAY, 2 + night * 2);
     if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(GRAY, L)), true;
     const n = FB_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.012) + 1) / 2 * n - 1;
-    return set(i, signGlyph(FB_SIGN, q, (0.35 - HIT.w) / 0.045, t, 2 * (hw + 0.012) / n, 0.045, farDepth(gx, gy, hw)) || ' ', C(WHITE, Math.max(L * 1.2, night * 14))), true;
+    return set(i, signLine(FB_SIGN, q, (0.35 - HIT.w) / 0.045, i, 0.3275, midDepth(gx, gy), t, 2 * (hw + 0.012) / n, 0.045, farDepth(gx, gy, hw), ...faceDir(1, 0)) || ' ', C(WHITE, Math.max(L * 1.2, night * 14))), true;
   });
 }
 
@@ -1146,9 +1146,9 @@ function drawStationEntrance(s, vx, vy) {
   const name = s.name; // the sign: one letter per cell across its face, so it never smears
   drawBox(boxAt(vx + hl, vy, 0, 1, hw, 0.006, 0.09, 0.125), (i, t, L) => {
     BG[i] = C(GREEN, 4 + night * 3);
-    if (HIT.face !== 1 && HIT.face !== 2) return set(i, ' ', 0), true;
-    const n = name.length + 2, q = (HIT.u / hw * (HIT.face === 1 ? 1 : -1) + 1) / 2 * n - 1;
-    return set(i, signGlyph(name, q, (0.125 - HIT.w) / 0.035, t, 2 * hw / n, 0.035, farDepth(vx, vy, hl + hw)) || ' ', C(WHITE, 15)), true;
+    if (HIT.face !== 3 && HIT.face !== 4) return set(i, ' ', 0), true; // (3 / 4: its broad faces, across the stairwell)
+    const n = name.length + 2, q = faceQ(HIT.u, hw) * n - 1;
+    return set(i, signLine(name, q, (0.125 - HIT.w) / 0.035, i, 0.1075, midDepth(vx + hl, vy), t, 2 * hw / n, 0.035, farDepth(vx, vy, hl + hw), ...faceDir(0, 1)) || ' ', C(WHITE, 15)), true;
   });
   // and a tall lit blade on a post at two corners, SUBWAY down both faces and a green lamp on top: seen from down the
   // block either way
@@ -1434,7 +1434,7 @@ function fairSprites() {
     BG[i] = C(RED, 2 + glow * 4);
     if (HIT.face !== 3 && HIT.face !== 4) return set(i, '=', C(YEL, L)), true;
     const n = FAIR_SIGN.length + 2, q = ((HIT.face === 3 ? HIT.u : -HIT.u) / (hw + 0.03) + 1) / 2 * n - 1;
-    const ch = signGlyph(FAIR_SIGN, q, (0.51 - HIT.w) / 0.08, t, 2 * (hw + 0.03) / n, 0.08, farDepth(gx, gy, hw));
+    const ch = signLine(FAIR_SIGN, q, (0.51 - HIT.w) / 0.08, i, 0.47, midDepth(gx, gy), t, 2 * (hw + 0.03) / n, 0.08, farDepth(gx, gy, hw), ...faceDir(1, 0));
     if (ch !== null && (ch !== ' ' || Math.abs(HIT.w - 0.47) < 0.03)) return set(i, ch, C(YEL, 15)), true;
     return set(i, glow > 0.3 && Math.abs(HIT.w - 0.47) > 0.03 && fract(q * 0.5 - T * 2) < 0.25 ? '*' : ' ', C(WHITE, 15)), true; // (bulbs above and below the letters)
   });
