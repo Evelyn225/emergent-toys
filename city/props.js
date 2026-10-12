@@ -333,7 +333,7 @@ for (const p of GARDEN_PENS) for (const [ax, ay, bx, by] of [[p.gx0, p.gy0, p.gx
 for (const pl of GARDEN_PATHS) for (let k = 1; k < pl.length; k++) if (k % 2 === 0) {
   const [gx, gy] = pl[k]; if (gardenLakeEdge(gx + 0.3, gy + 0.3) > -0.1) continue;
   const [x, y] = gx2w(gx + 0.28, gy + 0.28);
-  extras.push({ x, y, z: 0, w: 0.04, h: 0.36, art: [' (O) ', '  |  ', '  |  ', '  |  ', '  |  ', ' _|_ '], col: (c, row, L) => c === 'O' ? C(YEL, Math.max(L, lampsOn * 15)) : C(GRAY, L) });
+  extras.push({ x, y, z: 0, parkLamp: true });
 }
 { const [x, y] = gx2w(GARDEN_SHED.gx, GARDEN_SHED.gy); solidBox(x, y, true, 0.35, 0.25, 0, 0.3, 'shed', 2); }
 // dockside cranes on the industrial piers
@@ -384,23 +384,15 @@ const bridgeB = bucketed(bridgeBits);
 const towers = BRIDGE_X.flatMap(bx => TOWERS.map(y => ({ x: bx * 8 + 1, y: mod(y, N) })));
 
 // street food: a rare cart at the curb, a few kinds. Two art frames each so the steam/umbrella shimmer.
+// each cart's look (drawCart in city-sprites.js): w its length, roof an umbrella / awning / candy floss, trim the
+// second colour of its stripes, tall a kiosk with a serving window, hot if steam comes off it
 const VENDOR_TYPES = [
-  { name: 'HOT DOGS', item: 'a hot dog', price: 3, color: RED, w: 0.32, art: [
-    ['  ~  ~', ' .-~~~~-.', '/HOT DOGS\\', "'---||---'", ' [=====]|', ' |o o o||', " '-O---O'"],
-    [' ~  ~', ' .-~~~~-.', '/HOT DOGS\\', "'---||---'", ' [=====]|', ' |o o o||', " '-O---O'"]] },
-  { name: 'TACOS', item: 'two tacos', price: 5, color: ORANGE, w: 0.5, art: [
-    ['   ~   ~', ' ___________', '|  TACOS  |\\', '|[##] [##]| |', '|_________|_|', ' (O)     (O)'],
-    ['  ~   ~', ' ___________', '|  TACOS  |\\', '|[##] [##]| |', '|_________|_|', ' (O)     (O)']] },
-  { name: 'ICE CREAM', item: 'a double scoop', price: 4, color: MAG, w: 0.3, art: [
-    ['  .-~~-.', ' / ICE  \\', "'---||---'", ' |*@*@*|', ' |_____|', '  O   O'],
-    ['  .-~~-.', ' /CREAM \\', "'---||---'", ' |@*@*@|', ' |_____|', '  O   O']] },
-  { name: 'COFFEE', item: 'a coffee', price: 2, color: BRICK, w: 0.26, art: [
-    ['   ~', '  ______', ' |COFFEE|', ' |[] ~~ |', ' |______|', '  O    O'],
-    ['    ~', '  ______', ' |COFFEE|', ' |[] ~~ |', ' |______|', '  O    O']] },
-  { name: 'NOODLES', item: 'a bowl of noodles', price: 6, color: YEL, w: 0.4, art: [
-    ['  ~  ~  ~', ' /\\/\\/\\/\\/\\', '| NOODLES  |', '|~~  ##  ~~|', '|__________|'],
-    ['   ~  ~  ~', ' /\\/\\/\\/\\/\\', '| NOODLES  |', '|~~  ##  ~~|', '|__________|']] },
-].map(v => ({ ...v, art: v.art.map(pad) }));
+  { name: 'HOT DOGS', item: 'a hot dog', price: 3, color: RED, w: 0.32, roof: 'umbrella', trim: YEL, hot: true },
+  { name: 'TACOS', item: 'two tacos', price: 5, color: ORANGE, w: 0.5, roof: 'awning', trim: WHITE, tall: true, hot: true },
+  { name: 'ICE CREAM', item: 'a double scoop', price: 4, color: MAG, w: 0.3, roof: 'umbrella', trim: WHITE },
+  { name: 'COFFEE', item: 'a coffee', price: 2, color: BRICK, w: 0.26, roof: 'awning', trim: WHITE, hot: true },
+  { name: 'NOODLES', item: 'a bowl of noodles', price: 6, color: YEL, w: 0.4, roof: 'awning', trim: RED, hot: true },
+];
 const vendors = [];
 // on a sidewalk between the lamps, clear of the subway entrances; o/x offset = toward the building behind the cart
 alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
@@ -408,8 +400,7 @@ alongStreets(4.4, 1.78, (x, y, ax, ay, bx, by, o) => {
     vendors.push({ x, y, ox: o === 'v' ? 0.12 : 0, oy: o === 'h' ? 0.12 : 0, type: VENDOR_TYPES[vendors.length % VENDOR_TYPES.length], shirt: pick([RED, BLUE, GREEN, WHITE]) });
 });
 // and a cotton candy cart at the foot of the Sunset Pier
-const CANDY_CART = { name: 'COTTON CANDY', item: 'a cotton candy', price: 3, color: MAG, w: 0.3, art: [
-  ['  @@@@  ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O'], ['  @@@@@ ', ' @@@@@@ ', "'COTTON'", ' |CANDY|', ' |_____|', '  O   O']].map(pad) };
+const CANDY_CART = { name: 'COTTON CANDY', item: 'a cotton candy', price: 3, color: MAG, w: 0.3, roof: 'floss', trim: WHITE };
 vendors.push({ x: FAIR.cx + 1.1, y: FAIR.y0 + 0.9, ox: 0.12, oy: 0, type: CANDY_CART, shirt: WHITE });
 
 // vending machines: on the sidewalk against a building, at the edge of a frontage (beside a shopfront, not across it),
@@ -441,11 +432,12 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     if (bx === GRAND_HOTEL.bx && by === GRAND_HOTEL.by) continue;
     if (dist === 'belle') continue; // the district has geometric mansards, bays and turrets (belle.js)
     if (dist === 'industrial' || dist === 'brownstones' && r > 0.3) continue;
-    if (h >= 5 && r < 0.5) roofs.push({ x, y, z: h, w: 0.1, h: 1, art: ART.antenna, kind: 'antenna' });
-    else if (r < 0.35) roofs.push({ x, y, z: h, w: 0.3, h: 0.4, art: ART.tank, kind: 'tank' });
-    else if (r < 0.55) {
-      const art = billboard(ADS[hash(...lot, 16) * ADS.length | 0]);
-      roofs.push({ x, y, z: h, w: art[0].length * 0.06, h: 0.35, art, kind: 'board', neon: NEON[hash(...lot, 17) * 4 | 0] });
+    if (h >= 5 && r < 0.5) roofs.push({ x, y, z: h, kind: 'antenna', turn: hash(...lot, 18) * Math.PI });
+    else if (r < 0.35) roofs.push({ x, y, z: h, kind: 'tank', turn: hash(...lot, 18) * Math.PI });
+    else if (r < 0.55) { // a billboard facing out of the block, over one of the two streets its lot is on
+      const alongX = hash(...lot, 18) < 0.5;
+      roofs.push({ x, y, z: h, kind: 'board', word: ADS[hash(...lot, 16) * ADS.length | 0], neon: NEON[hash(...lot, 17) * 4 | 0],
+                   c: alongX ? (lx ? 1 : -1) : 0, s: alongX ? 0 : (ly ? 1 : -1) });
     }
   }
 }

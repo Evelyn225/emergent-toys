@@ -7,8 +7,6 @@ function forNear(b, fn) {
 const R = (x, y) => [rel(x - px), rel(y - py)];
 // how much a world direction (ax, ay) lies across our view of a point at (vx, vy): +1 = pointing right on screen
 const across = (ax, ay, vx, vy) => { const n = Math.hypot(vx, vy) || 1; return (ax * -vy + ay * vx) / n; };
-const PILLAR = pad(['[=]', '|#|', '|#|', '|#|', '|#|', '|#|', '|#|', '/#\\']);
-const EL_STAIRS = pad(['[ EL ]', '    _|', '   _| ', '  _|  ', ' _|   ', '_|    ']);
 const DOG = pad(['  __', '(o_ \\_', ' /\\ /\\']), DOG_R = mirror(DOG);
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
 // the light bar's strobe: a double flash of red, a double flash of blue, dark in between. RED, BLUE or -1 (dark)
@@ -130,25 +128,20 @@ function citySprites() {
   marinaSprites();
   forNear(extrasB, o => {
     if (o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8 || o.when && !o.when()) return; // (not the spire you're standing under)
-    if (o.person != null) drawFigure(...R(o.x, o.y), o.z, 0.175, 0, 0, o.look ||= figStreetLook(hash(o.x, o.y, 9081) * 1e9 | 0, o.person, GRAY), 'stand', { light: 6 });
+    if (o.parkLamp) drawParkLamp(...R(o.x, o.y));
+    else if (o.person != null) drawFigure(...R(o.x, o.y), o.z, 0.175, 0, 0, o.look ||= figStreetLook(hash(o.x, o.y, 9081) * 1e9 | 0, o.person, GRAY), 'stand', { light: 6 });
     else drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col);
   });
   drawGrandHotelDome();
   for (const v of vendors) {
-    const t = v.type, frame = t.art[(T * 2 | 0) & 1];
-    drawArt(...R(v.x, v.y), 0, t.w, 0.22, frame, (c, row, L) =>
-      c === '~' ? C(WHITE, L * 0.6) : row < 3 && /[A-Z]/.test(c) ? C(WHITE, Math.max(L, night * 15)) :
-      row < 3 ? C(t.color, Math.max(L, night * 12)) : c === 'O' ? C(GRAY, L * 0.5) : C(t.color, L));
+    drawCart(v);
     drawFigure(...R(v.x + v.ox, v.y + v.oy), 0, 0.175, 0, 0, v.look ||= figStreetLook(hash(v.x, v.y, 9080) * 1e9 | 0, v.shirt, GRAY)); // (minding the cart: facing you)
   }
   for (const r of radios) { const [vx, vy] = R(r.x, r.y); if (Math.hypot(vx, vy) < vis + 2) drawRadioTower(vx, vy); }
   for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis) drawStationEntrance(s, vx, vy); }
   forNear(roofsB, o => {
-    const blink = fract(T * 0.8 + o.x) < 0.5;
-    drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, (c, row, L) =>
-      o.kind === 'antenna' ? (c === '*' ? C(RED, blink ? 15 : 3) : C(GRAY, L)) :
-      o.kind === 'tank' ? C(c === '=' ? GRAY : BRICK, L) :
-      row === 1 && c !== '|' ? C(o.neon, Math.max(L, night * 15)) : C(GRAY, L));
+    const [vx, vy] = R(o.x, o.y);
+    if (Math.hypot(vx, vy) < vis + 1) (o.kind === 'tank' ? drawTank : o.kind === 'antenna' ? drawAntenna : drawBoard)(o, vx, vy);
   });
   for (const k of cranes) {
     const [vx, vy] = R(k.x, k.y);
@@ -179,11 +172,7 @@ function citySprites() {
   forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
-  const LC = { G: GREEN, Y: YEL, R: RED };
-  forNear(lightsB, s => {
-    const col = C(LC[light(s.bx, s.by, s.vert, T)], 15);
-    drawArt(...R(s.x, s.y), 0, 0.05, 0.4, ART.signal, (c, row, L) => c === 'O' ? col : C(GRAY, L));
-  });
+  forNear(lightsB, drawSignal);
   bridgeSprites();
   elSprites();
   siren = null;
@@ -376,6 +365,274 @@ function drawLamp3D(vx, vy, ax, ay, top = LAMP_TOP) {
   B(hu, top - 0.14, top - 0.125, 0.008, 0.008, STEEL.pole);
   if (lit) drawShape(vx + ax * hu, vy + ay * hu, top - 0.16, 0.075, 0.13, (i, u, z, du, dz) => { // the soft glow round the lantern
     const halo = Math.hypot(u / 0.075, (z - 0.065) / 0.065);
+    if (halo >= 1) return false;
+    BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, ' ', 0), true;
+  });
+}
+
+// ---- signals and roof clutter as real 3D parts. Poles, masts, legs and wires are rods (rayRod, courier-ui.js): round
+// up close and never thinner than a character far off, so they hold the skyline at any distance. a, b camera-relative.
+function drawRod(ax, ay, az, bx, by, bz, r, shade) {
+  const m = r + 0.01;
+  drawBox({ x: (ax + bx) / 2, y: (ay + by) / 2, c: 1, s: 0, hl: Math.abs(bx - ax) / 2 + m, hw: Math.abs(by - ay) / 2 + m,
+            z0: Math.min(az, bz) - m, z1: Math.max(az, bz) + m, ax, ay, az, bx, by, bz, r }, shade, rayRod);
+}
+// a steel rod drawn along itself ('|' up a pole, '/' on a brace); solid-backed once it's wider than a character
+function rod(ax, ay, az, bx, by, bz, r, col = GRAY, k = 1) {
+  drawRod(ax, ay, az, bx, by, bz, r, (i, t, L) => {
+    if (r * 2 * projX / t > 1.5) BG[i] = C(col, 0.8 + L * 0.25 * k);
+    return set(i, courierGlyph(HIT.u, HIT.v, HIT.w, bx - ax, by - ay, bz - az), C(col, L * k)), true;
+  });
+}
+// a point: a little sphere up close, one character far off (bz nudged so rayRod has an axis to measure along)
+const dot = (x, y, z, r, shade) => drawRod(x, y, z, x, y, z - 0.002, r, shade);
+
+// a traffic signal: a pole and a head of three lamps facing both ways along its street, each under its visor.
+// You see the lamps only from along the street (from the cross street the visors hide them, as they're meant to).
+const SIG = { hl: 0.012, hw: 0.017, z0: 0.29, z1: 0.376 }, SIG_LAMPS = [['R', 0.36, RED], ['Y', 0.333, YEL], ['G', 0.306, GREEN]];
+const SIG_HOUSING = (i, t, L) => { BG[i] = C(GRAY, (0.6 + L * 0.12) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '_' : ' ', C(GRAY, L * 0.5)), true; };
+function drawSignal(s) {
+  const [vx, vy] = R(s.x, s.y), d = Math.hypot(vx, vy);
+  if (d > vis + 1) return;
+  const c = s.vert ? 0 : 1, sn = s.vert ? 1 : 0, on = light(s.bx, s.by, s.vert, T), near = d < 6;
+  rod(vx, vy, 0, vx, vy, SIG.z0, 0.009);
+  if (near) drawBox(boxAt(vx, vy, 1, 0, 0.02, 0.02, 0, 0.025), STEEL.base);
+  drawBox(boxAt(vx, vy, c, sn, SIG.hl, SIG.hw, SIG.z0, SIG.z1), SIG_HOUSING);
+  const k = -(vx * c + vy * sn) / (d || 1); // +1: we're off the head's +u end
+  for (const e of [-1, 1]) {
+    if (e * k < 0.3) continue;
+    const ux = vx + c * e * SIG.hl, uy = vy + sn * e * SIG.hl;
+    // the lit lamp first: far off all three share a character, and it should be the one you see
+    for (const [st, z, col] of [...SIG_LAMPS].sort(a => a[0] === on ? -1 : 1)) {
+      const lit = st === on;
+      dot(ux, uy, z, 0.0095, (i, t, L) => { // up close a lens of solid colour, far off its one character
+        BG[i] = C(col, lit ? 11 : 2.2);
+        return set(i, 0.019 * projX / t > 2 ? ' ' : lit ? 'O' : 'o', C(col, lit ? 15 : 4)), true;
+      });
+      if (near) drawBox(boxAt(ux + c * e * 0.007, uy + sn * e * 0.007, c, sn, 0.007, 0.012, z + 0.0095, z + 0.012), SIG_HOUSING);
+    }
+  }
+}
+
+// a wooden water tank on a steel stand: braced legs, a platform, the barrel with its iron hoops, a conical roof
+const TANK = { r: 0.11, leg: 0.13, top: 0.3, roof: 0.07 };
+function drawTank(o, vx, vy) {
+  const z = o.z, near = vx * vx + vy * vy < 100, ca = Math.cos(o.turn), sa = Math.sin(o.turn), q = 0.075, base = z + TANK.leg + 0.01;
+  const legs = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([a, b]) => [vx + (a * ca - b * sa) * q, vy + (a * sa + b * ca) * q]);
+  legs.forEach(([x, y], k) => {
+    rod(x, y, z, x, y, base, 0.006);
+    if (near) { const [x2, y2] = legs[(k + 1) & 3]; rod(x, y, z + 0.01, x2, y2, base - 0.015, 0.003, GRAY, 0.7); } // cross bracing
+  });
+  drawBox(boxAt(vx, vy, ca, sa, q + 0.025, q + 0.025, base - 0.01, base), (i, t, L) => {
+    BG[i] = C(GRAY, (0.9 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '#' : '=', C(GRAY, L * 0.6)), true;
+  });
+  drawBox(boxAt(vx, vy, 1, 0, TANK.r, TANK.r, base, z + TANK.top), (i, t, L) => { // the barrel: staves and hoops
+    const ang = Math.atan2(HIT.v, HIT.u), light = 0.55 + 0.45 * Math.max(0, (-HIT.u * 0.55 + HIT.v * 0.35) / TANK.r);
+    const P = (z + TANK.top - base) / 4, hoop = Math.abs(fract((HIT.w - base) / P) - 0.5) * P < Math.max(0.003, 0.5 * t / projY); // (a row thick at least)
+    BG[i] = C(BRICK, 1 + L * 0.28 * light);
+    return set(i, HIT.face >= 5 ? ' ' : hoop ? '=' : fract(ang * 8 / Math.PI) < 0.14 ? '|' : ' ', C(hoop ? GRAY : WARM, L * light * (hoop ? 1.1 : 0.75))), true;
+  }, rayCopperDrum);
+  const roof = boxAt(vx, vy, 1, 0, TANK.r * 1.1, TANK.r * 1.1, z + TANK.top, z + TANK.top + TANK.roof);
+  drawBox(roof, (i, t, L) => { // the roof: rings of shingles, lit from the sun's side, snow on top
+    if (HIT.face === 6) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
+    const rho = Math.hypot(HIT.u, HIT.v) || 1, kk = roof.hl / TANK.roof, n = Math.hypot(1, kk);
+    const light = 0.5 + 0.5 * Math.max(0, (-HIT.u / rho * 0.55 + HIT.v / rho * 0.35 + kk * 0.76) / n);
+    BG[i] = C(GRAY, 0.8 + L * 0.2 * light);
+    set(i, fract((HIT.w - roof.z0) / TANK.roof * 5) < 0.25 ? '-' : ' ', C(GRAY, L * light));
+    paintSettledSnow(i, vx + px + HIT.u, vy + py + HIT.v, L * 0.6, kk / n, 0, HIT.w);
+    return true;
+  }, rayCone);
+  rod(vx, vy, roof.z1 - 0.01, vx, vy, roof.z1 + 0.025, 0.003); // the finial
+}
+// a cone: base radius b.hl at b.z0 narrowing to a point at b.z1. Hits on the sloping side (face 5) or the base (6).
+function rayCone(ox, oy, oz, rx, ry, rz, b) {
+  const x = ox - b.x, y = oy - b.y, k = b.hl / (b.z1 - b.z0), k2 = k * k, Z = b.z1 - oz;
+  const qa = rx * rx + ry * ry - k2 * rz * rz, qb = x * rx + y * ry + k2 * Z * rz, qc = x * x + y * y - k2 * Z * Z;
+  let best = Infinity, face = 5;
+  const side = t => { const w = oz + rz * t; if (t > 0.01 && t < best && w >= b.z0 && w <= b.z1) best = t; };
+  if (Math.abs(qa) > 1e-12) { const disc = qb * qb - qa * qc; if (disc >= 0) { const r = Math.sqrt(disc); side((-qb - r) / qa); side((-qb + r) / qa); } }
+  else if (Math.abs(qb) > 1e-12) side(-qc / (2 * qb));
+  if (Math.abs(rz) > 1e-12) {
+    const t = (b.z0 - oz) / rz;
+    if (t > 0.01 && t < best && (x + rx * t) ** 2 + (y + ry * t) ** 2 <= b.hl * b.hl) { best = t; face = 6; }
+  }
+  if (best === Infinity) return -1;
+  HIT.u = x + rx * best; HIT.v = y + ry * best; HIT.w = oz + rz * best; HIT.face = face;
+  return best;
+}
+
+// a radio mast: a steel pole with crossed arms, guyed down to the roof, a red beacon blinking on top
+function drawAntenna(o, vx, vy) {
+  const z = o.z, H = 1, ca = Math.cos(o.turn), sa = Math.sin(o.turn);
+  rod(vx, vy, z, vx, vy, z + H, 0.006);
+  for (const [h, w] of [[0.55, 0.08], [0.8, 0.06]]) for (const [c, s] of [[ca, sa], [-sa, ca]])
+    rod(vx - c * w, vy - s * w, z + h, vx + c * w, vy + s * w, z + h, 0.003);
+  for (let k = 0; k < 3; k++) { const th = o.turn + k * 2.094; rod(vx, vy, z + 0.6, vx + Math.cos(th) * 0.22, vy + Math.sin(th) * 0.22, z, 0.0015, GRAY, 0.45); }
+  const blink = fract(T * 0.8 + o.x) < 0.5;
+  dot(vx, vy, z + H + 0.012, 0.008, (i, t, L) => { if (blink) BG[i] = C(RED, 8); return set(i, '*', C(RED, blink ? 15 : 3)), true; });
+}
+
+// a rooftop billboard: the ad on a panel facing the street (o.c, o.s), neon round its edge after dark, a catwalk
+// along the front, and the steel frame behind holding it up
+function drawBoard(o, vx, vy) {
+  const n = o.word.length + 2, hw = n * 0.025, z0 = o.z + 0.14, z1 = z0 + 0.17, c = o.c, s = o.s, glow = Math.max(night, overcast * 0.6);
+  const band0 = z0 + 0.04, bandH = 0.09, far = farDepth(vx, vy, hw);
+  for (const f of [-0.75, 0, 0.75]) { // uprights behind the panel, each with a kicker brace back to the roof
+    const lx = vx - c * 0.014 - s * f * hw, ly = vy - s * 0.014 + c * f * hw;
+    rod(lx, ly, o.z, lx, ly, z1 - 0.01, 0.005);
+    rod(lx - c * 0.1, ly - s * 0.1, o.z, lx, ly, z0 + 0.06, 0.003, GRAY, 0.7);
+  }
+  drawBox(boxAt(vx, vy, c, s, 0.008, hw, z0, z1), (i, t, L) => {
+    const f = HIT.face, v = HIT.v, w = HIT.w;
+    if (f !== 1) { // the back and edges: the steel frame
+      const gv = fract(v * 12) < 0.12, gw = fract((w - z0) * 12) < 0.15;
+      BG[i] = C(GRAY, (0.8 + L * 0.2) * shadeFace(f));
+      return set(i, f === 2 ? (gv && gw ? '+' : gv ? '|' : gw ? '-' : ' ') : ' ', C(GRAY, L * 0.6)), true;
+    }
+    const q = (hw - v) / (2 * hw), edge = Math.min(hw - Math.abs(v), w - z0, z1 - w);
+    if (edge < 0.012) { // the neon tube round the edge, a chase of light running round it after dark
+      BG[i] = C(o.neon, glow > 0.3 ? 6 + glow * 4 : 1.5 + L * 0.15);
+      return set(i, glow > 0.3 && fract(q * 20 - T * 2) < 0.3 ? '*' : ' ', C(WHITE, 15)), true;
+    }
+    BG[i] = C(GRAY, 1.3 + L * 0.2 + glow * 0.8);
+    const ch = signGlyph(o.word, q * n - 1, (band0 + bandH - w) / bandH, t, 2 * hw / n, bandH, far);
+    return set(i, ch ?? ' ', C(o.neon, Math.max(L, glow * 15))), true;
+  });
+  drawBox(boxAt(vx + c * 0.03, vy + s * 0.03, c, s, 0.022, hw, z0 - 0.012, z0 - 0.005), (i, t, L) => { // the catwalk
+    BG[i] = C(GRAY, (0.7 + L * 0.15) * shadeFace(HIT.face)); return set(i, HIT.face >= 5 ? '#' : '_', C(GRAY, L * 0.5)), true;
+  });
+}
+
+// ---- the el: latticed steel columns under the deck, and a switchback stair tower up to each platform.
+// A column: a concrete footing, a shaft with flanges up its edges and zigzag bracing between, a flared cap under the
+// deck. Far off it's a rod, keeping one character wide wherever it stands.
+const EL_COL = 0.022, EL_PANEL = 0.07;
+function drawElPillar(p) {
+  const [vx, vy] = R(p.x, p.y), d = Math.hypot(vx, vy);
+  if (d > vis + 1) return;
+  if (d > 9) return rod(vx, vy, 0, vx, vy, EL_BOT, EL_COL, GRAY, 0.9);
+  drawBox(boxAt(vx, vy, 1, 0, 0.04, 0.04, 0, 0.025), (i, t, L) => {
+    BG[i] = C(STONE, (1.2 + L * 0.25) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? ' ' : '_', C(STONE, L * 0.6)), true;
+  });
+  drawBox(boxAt(vx, vy, 1, 0, EL_COL, EL_COL, 0.025, EL_BOT - 0.035), (i, t, L) => {
+    const f = HIT.face, side = f < 3 ? HIT.v : HIT.u, q = (HIT.w - 0.025) / EL_PANEL, n = Math.floor(q), k = q - n;
+    const tol = Math.max(0.003, 0.5 * t / projX);
+    BG[i] = C(GRAY, (0.7 + L * 0.18) * shadeFace(f));
+    if (f >= 5) return set(i, ' ', 0), true;
+    if (Math.abs(side) > EL_COL - tol * 1.2) return set(i, '|', C(GRAY, L)), true; // the flanges
+    if (k * EL_PANEL < Math.max(0.003, 0.5 * t / projY)) return set(i, '-', C(GRAY, L * 0.85)), true; // a batten each panel
+    const sg = n & 1 ? -1 : 1, target = sg * EL_COL * (2 * k - 1);
+    if (Math.abs(side - target) > tol * 1.6) return set(i, ' ', 0), true;
+    const run = 2 * EL_COL * sg; // the brace's direction, so its glyph leans the way it does on screen
+    return set(i, courierGlyph(vx + HIT.u, vy + HIT.v, HIT.w, f < 3 ? 0 : run, f < 3 ? run : 0, EL_PANEL), C(GRAY, L * 0.85)), true;
+  });
+  drawBox(boxAt(vx, vy, 1, 0, 0.05, 0.034, EL_BOT - 0.035, EL_BOT), (i, t, L) => {
+    BG[i] = C(GRAY, (0.8 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face < 5 ? '=' : ' ', C(GRAY, L * 0.7)), true;
+  });
+}
+// The stair tower: flights switching back between two lanes, a landing at each turn, a post at each corner, a deck on
+// top with a short bridge across to the platform, and the green EL sign up there facing the street. st.ax/ay point
+// toward the street (and the deck); u runs along the street. Flights are inclined slabs (rayBeveledBay's planes).
+const EL_FLIGHTS = 6, EL_TOWER = 0.11, EL_RUN = 0.075;
+const elStairShade = (i, t, L) => {
+  if (HIT.face >= 7) { // the treads: open steel, the street showing between them
+    if (fract((HIT.u + EL_RUN) * 60) < 0.3) return false;
+    BG[i] = C(GRAY, 1.3 + L * 0.25); return set(i, '=', C(WHITE, L * 0.7)), true;
+  }
+  BG[i] = C(GRAY, (1.1 + L * 0.25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; // the stringers
+};
+function drawElStairs(st) {
+  const [vx, vy] = R(st.x, st.y), d = Math.hypot(vx, vy);
+  if (d > vis + 1) return;
+  const fx = st.ax, fy = st.ay, c = fy, s = -fx, W = EL_TOWER, h = EL_TOP / EL_FLIGHTS;
+  const at = (u, v) => [vx + c * u + fx * v, vy + s * u + fy * v]; // (the boxes' v axis is fx, fy: +v faces the street)
+  for (const su of [-1, 1]) for (const sv of [-1, 1]) { const [x, y] = at(su * (W - 0.008), sv * (W - 0.008)); rod(x, y, 0, x, y, EL_TOP + 0.1, 0.006); }
+  for (let k = 0; k < EL_FLIGHTS; k++) {
+    const dir = k & 1 ? -1 : 1, lane = (k & 1 ? 1 : -1) * 0.05, mid = (k + 0.5) * h, slope = dir * h / (2 * EL_RUN), [x, y] = at(0, lane);
+    if (d > 10) { const [ax, ay] = at(-dir * EL_RUN, lane), [bx, by] = at(dir * EL_RUN, lane); rod(ax, ay, k * h, bx, by, (k + 1) * h, 0.012); continue; }
+    drawBox({ x, y, c, s, hl: EL_RUN, hw: 0.035, z0: k * h - 0.012, z1: (k + 1) * h + 0.012,
+      planes: [[1, 0, 0, EL_RUN, 1], [-1, 0, 0, EL_RUN, 2], [0, 1, 0, 0.035, 3], [0, -1, 0, 0.035, 4], [-slope, 0, 1, mid + 0.012, 7], [slope, 0, -1, -mid + 0.012, 8]] },
+      elStairShade, rayBeveledBay);
+    const [lx, ly] = at(dir * (EL_RUN + 0.017), 0); // the landing at its top, across both lanes
+    drawBox(boxAt(lx, ly, c, s, 0.017, W - 0.01, (k + 1) * h - 0.012, (k + 1) * h), STEEL.cap);
+  }
+  // the top: the tower's deck, the bridge over to the platform's edge with a rail each side, the sign
+  const gap = Math.max(0.02, (fy > 0 ? EL_Y0 - st.y : fy < 0 ? st.y - EL_Y1 : 0.15) - W), [bx, by] = at(0, W + gap / 2);
+  drawBox(boxAt(vx, vy, c, s, W, W, EL_TOP - 0.012, EL_TOP), STEEL.cap);
+  drawBox(boxAt(bx, by, c, s, 0.06, gap / 2 + 0.005, EL_TOP - 0.015, EL_TOP), STEEL.cap);
+  for (const su of [-1, 1]) { const [ax, ay] = at(su * 0.06, W), [ex, ey] = at(su * 0.06, W + gap); rod(ax, ay, EL_TOP + 0.1, ex, ey, EL_TOP + 0.1, 0.004); }
+  const [sx, sy] = at(0, W - 0.01), far = farDepth(sx, sy, 0.07);
+  drawBox(boxAt(sx, sy, c, s, 0.07, 0.008, EL_TOP + 0.1, EL_TOP + 0.16), (i, t, L) => {
+    BG[i] = C(GREEN, 4 + Math.max(night, overcast * 0.6) * 5);
+    if (HIT.face !== 3 && HIT.face !== 4) return set(i, ' ', 0), true;
+    const q = ((HIT.face === 3 ? HIT.u : -HIT.u) + 0.07) / 0.14, ch = signGlyph('EL', q * 4 - 1, (EL_TOP + 0.15 - HIT.w) / 0.04, t, 0.035, 0.04, far);
+    return set(i, ch ?? ' ', C(WHITE, 15)), true;
+  });
+}
+
+// ---- street carts (vendors, props.js): a body on two wheels with a push handle, its name on the front, and an
+// umbrella, an awning or a cloud of candy floss on top. Kiosks (tall) have a serving hatch you see the vendor through.
+const CART_WHEEL = (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; };
+function drawCart(v) {
+  const t = v.type, [vx, vy] = R(v.x, v.y);
+  if (Math.hypot(vx, vy) > vis) return;
+  const c = v.oy ? 1 : 0, s = v.oy ? 0 : 1, fs = Math.sign(s * v.ox - c * v.oy) || 1; // along the street; fs: which side (v) faces it
+  const hl = t.w * 0.38, hw = 0.045, top = t.tall ? 0.17 : 0.1, glow = Math.max(night, overcast * 0.6), n = t.name.length + 2;
+  const at = (u, w) => [vx + c * u - s * w, vy + s * u + c * w], far = farDepth(vx, vy, hl);
+  for (const su of [-1, 1]) { const [ax, ay] = at(su * hl * 0.6, -hw - 0.006), [bx, by] = at(su * hl * 0.6, hw + 0.006); drawRod(ax, ay, 0.022, bx, by, 0.022, 0.02, CART_WHEEL); }
+  { const [ax, ay] = at(-hl, 0), [bx, by] = at(-hl - 0.05, 0); rod(ax, ay, 0.08, bx, by, 0.095, 0.004); } // the push handle
+  drawBox(boxAt(vx, vy, c, s, hl, hw, 0.035, top), (i, tt, L) => {
+    const f = HIT.face, u = HIT.u, w = HIT.w;
+    if (f === 5) { BG[i] = C(GRAY, 1.6 + L * 0.3); return set(i, t.hot ? '#' : '=', C(GRAY, L * 0.7)), true; } // a griddle, or lids
+    if (f === 6) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
+    const front = (f === 3 || f === 4) && Math.sign(HIT.v) === fs, q = (u * fs + hl) / (2 * hl);
+    if (front && t.tall && w > 0.1 && w < 0.15 && Math.abs(u) < hl * 0.8) return false; // the hatch
+    if (front && w > top - 0.035 && w < top - 0.005) { // the name, lit after dark
+      BG[i] = C(t.color, 3 + glow * 6);
+      const ch = signGlyph(t.name, q * n - 1, (top - 0.005 - w) / 0.03, tt, 2 * hl / n, 0.03, far);
+      return set(i, ch ?? ' ', C(WHITE, 15)), true;
+    }
+    BG[i] = C(t.color, (1.6 + L * 0.32) * shadeFace(f));
+    if (Math.abs(w - 0.05) < Math.max(0.004, 0.5 * tt / projY)) { BG[i] = C(t.trim, 3 + L * 0.3); return set(i, ' ', 0), true; } // a stripe round it
+    return set(i, w < 0.042 ? '_' : ' ', C(GRAY, L * 0.5)), true;
+  });
+  if (t.roof === 'umbrella') {
+    rod(vx, vy, top, vx, vy, 0.23, 0.004);
+    drawBox(boxAt(vx, vy, 1, 0, 0.15, 0.15, 0.2, 0.245), (i, tt, L) => { // panels in two colours
+      const seg = Math.floor(mod(Math.atan2(HIT.v, HIT.u), Math.PI * 2) / (Math.PI / 4)) & 1;
+      BG[i] = C(seg ? t.trim : t.color, HIT.face === 6 ? 1.4 + glow : 2.4 + L * 0.35); return set(i, ' ', 0), true;
+    }, rayCone);
+  } else if (t.roof === 'awning') {
+    for (const su of [-1, 1]) { const [x, y] = at(su * hl * 0.95, -fs * hw * 0.85); rod(x, y, top, x, y, 0.215, 0.004); }
+    const stripe = (L, k) => C(fract(HIT.u * 14) < 0.5 ? t.color : t.trim, (2.2 + L * 0.3) * k);
+    const [ax, ay] = at(0, fs * 0.015), [ex, ey] = at(0, fs * (hw + 0.045));
+    drawBox(boxAt(ax, ay, c, s, hl + 0.015, hw + 0.03, 0.2, 0.215), (i, tt, L) => { BG[i] = stripe(L, shadeFace(HIT.face)); return set(i, ' ', 0), true; });
+    drawBox(boxAt(ex, ey, c, s, hl + 0.015, 0.003, 0.18, 0.2), (i, tt, L) => { // the scalloped valance along the front
+      if (HIT.w < 0.19 && fract((HIT.u + hl) * 30) > 0.5) return false;
+      BG[i] = stripe(L, 1); return set(i, ' ', 0), true;
+    });
+  } else if (t.roof === 'floss') {
+    for (const [u, z, r] of [[0, 0.145, 0.035], [-0.04, 0.135, 0.027], [0.04, 0.133, 0.025]]) {
+      const [x, y] = at(u, 0);
+      dot(x, y, z, r, (i, tt, L) => { BG[i] = C(MAG, 3 + L * 0.35); return set(i, '@', C(WHITE, L * 0.5 + 3)), true; });
+    }
+  }
+  if (t.hot) { const [x, y] = at(-hl * 0.4, fs * 0.02); drawArt(x, y, top + 0.004, 0.04, 0.018, [(T * 2 | 0) & 1 ? ' ~ ~' : '~ ~ '], (ch, row, L) => C(WHITE, L * 0.6)); } // steam off the front of the griddle
+}
+
+// a garden lamp: a post on a little plinth, a cap, and a glass globe that glows after dark
+function drawParkLamp(vx, vy) {
+  const d = Math.hypot(vx, vy), top = 0.3, lit = lampsOn > 0.3;
+  if (d > vis) return;
+  if (d < 6) drawBox(boxAt(vx, vy, 1, 0, 0.016, 0.016, 0, 0.03), STEEL.base);
+  rod(vx, vy, 0, vx, vy, top, 0.006);
+  dot(vx, vy, top + 0.024, 0.022, (i, t, L) => {
+    BG[i] = lit ? C(WARM, 6 + lampsOn * 6) : C(WHITE, 1.5 + L * 0.2);
+    return set(i, lit ? ' ' : 'o', C(GRAY, L * 0.7)), true;
+  });
+  drawBox(boxAt(vx, vy, 1, 0, 0.014, 0.014, top + 0.046, top + 0.056), STEEL.cap);
+  if (lit) drawShape(vx, vy, top - 0.04, 0.07, 0.13, (i, u, z) => {
+    const halo = Math.hypot(u / 0.07, (z - 0.065) / 0.065);
     if (halo >= 1) return false;
     BG[i] = C(WARM, 1 + lampsOn * 2 * (1 - halo)); return set(i, ' ', 0), true;
   });
@@ -900,9 +1157,8 @@ function drawElCar(vx, vy, cab) {
 }
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
 function elSprites() {
-  forNear(elPillarsB, p => drawArt(...R(p.x, p.y), 0, 0.09, EL_BOT, PILLAR, (c, row, L) => C(GRAY, L * 0.9)));
-  for (const s of EL_STATIONS) for (const stairs of s.stairs)
-    drawArt(...R(stairs.x, stairs.y), 0, 0.22, EL_BOT - 0.02, EL_STAIRS, (c, row, L) => row === 0 ? C(GREEN, Math.max(L, 12)) : C(GRAY, L));
+  forNear(elPillarsB, drawElPillar);
+  for (const s of EL_STATIONS) for (const stairs of s.stairs) drawElStairs(stairs);
   for (const t of elTrains(T)) {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
