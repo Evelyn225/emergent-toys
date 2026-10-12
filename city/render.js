@@ -135,7 +135,7 @@ function render(dt) {
     if (mode === 'walk') eye += architectureGroundHeight(px, py);
   }
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
-  hor = (rows >> 1) + pitch * rows + (freecam ? 0 : shake()) | 0;
+  hor = (rows >> 1) + pitch * rows | 0;
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
   for (let x = 0; x < cols; x++) {
