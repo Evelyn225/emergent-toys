@@ -50,10 +50,10 @@ Left out on purpose: UI markers (`!` over cops and hailers, the `\ /` target arr
       real instead of the `across()` hack, hook on a rod.
 - [x] **Lighthouse** `city-sprites.js:918`: drum tower in stripes, lantern room, the beam stays as is.
 
-## Batch 5: the fair rides (biggest, do last)
+## Batch 5: the fair rides (biggest, do last) - done
 
-- [ ] **Ferris wheel** `city-sprites.js:1265`: rim and spokes as rods, gondolas as boxes. Most work on the list.
-- [ ] **Carousel** `city-sprites.js:1284`: `rayCopperDrum` base, `rayCone` roof, rod poles, horses can stay sprites.
+- [x] **Ferris wheel** `city-sprites.js:1265`: rim and spokes as rods, gondolas as boxes. Most work on the list.
+- [x] **Carousel** `city-sprites.js:1284`: `rayCopperDrum` base, `rayCone` roof, rod poles, horses can stay sprites.
 
 ## Later / maybe: street trees
 
