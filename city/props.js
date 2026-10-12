@@ -270,8 +270,7 @@ const STALLS = NIGHT_MARKET ? [['STREET FOOD', 2.75, RED], ['CHARMS', 3.95, MAG]
   for (const s of [-1, 1]) solidBox(x + s * 0.5, y - 0.08, true, 0.012, 0.012, 0, 0.21, 'stallpole', k);
   solidBox(x, y, true, 0.48, 0.09, 0, 0.1, 'stall', k);
   const shirt = [WHITE, RED, BLUE, MAG, CYAN][k];
-  extras.push({ x: x + 0.1 - (k % 3) * 0.1, y: y + 0.14, z: 0, w: 0.06, h: 0.18, art: ART.walkB, when: () => nightMarketOpen(tod), // the stallholder
-    col: (c, row, L) => C(row < 2 ? SKIN : row === 2 ? shirt : GRAY, Math.max(L, 6)) });
+  extras.push({ x: x + 0.1 - (k % 3) * 0.1, y: y + 0.14, z: 0, person: shirt, when: () => nightMarketOpen(tod) }); // the stallholder (drawn as a figure)
   return Object.assign(solids[solids.length - 1], { word, canopy, fs: -1, at: [x, y - 0.3] });
 }) : [];
 if (NIGHT_MARKET) for (let x = NIGHT_MARKET.bx * 8 + 2.4; x < NIGHT_MARKET.bx * 8 + 7.8; x += 0.45) // the lanterns, on a string along the street

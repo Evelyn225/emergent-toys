@@ -74,20 +74,20 @@ ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6,
         const card = BJ_CARDS.find(([cu, cv]) => Math.abs(HIT.u - cu) < 0.06 && Math.abs(HIT.v - cv) < 0.085); // the hands dealt: a pair at each seat, the dealer's
         if (card) { BG[i] = C(WHITE, 9); return set(i, Math.abs(HIT.u - card[0]) < 0.025 && Math.abs(HIT.v - card[1]) < 0.035 ? card[2] : ' ', C(card[3], 12)), true; }
         return false; })) });
-      p.push(standing(x, y - 0.9, WHITE));
-      for (const ox of [-0.8, 0.8]) if (chance(0.6)) p.push(standing(x + ox, y + 0.95, shirt()));
+      p.push({ ...standing(x, y - 0.9, WHITE), face: [0, 1] }); // the dealer, and the players across the felt from her
+      for (const ox of [-0.8, 0.8]) if (chance(0.6)) p.push({ ...standing(x + ox, y + 0.95, shirt()), face: [0, -1] });
     }
     p.push({ casino: 'roulette', cx: 11, cy: 10.4, ...BX(11, 9.3, 1.8, 0.7, 0, 0.8, felt((i, L) => { // the roulette table: the wheel at one end, spinning, the layout of numbers
       const wx = HIT.u + 1.2, d = Math.hypot(wx, HIT.v);
       if (d < 0.55) { const an = Math.atan2(HIT.v, wx) + T * 2; BG[i] = d < 0.15 ? C(YEL, 6) : (Math.floor(an / (Math.PI * 2) * 37 + 37) & 1) ? C(RED, 5) : C(GRAY, 1.5); return set(i, d < 0.15 ? '+' : ' ', C(YEL, 15)), true; }
       if (HIT.u > -0.4) { BG[i] = (Math.floor((HIT.u + 0.4) * 5) + Math.floor((HIT.v + 0.7) * 3)) & 1 ? C(RED, 3) : C(GRAY, 1.5); return set(i, Math.abs(fract((HIT.u + 0.4) * 5) - 0.5) < 0.1 ? '|' : ' ', C(WHITE, 8)), true; }
       return false; })) });
-    p.push(standing(11, 8.3, WHITE));
-    for (const ox of [-1.2, 0, 1.2]) if (chance(0.5)) p.push(standing(11 + ox, 10.35, shirt()));
+    p.push({ ...standing(11, 8.3, WHITE), face: [0, 1] });
+    for (const ox of [-1.2, 0, 1.2]) if (chance(0.5)) p.push({ ...standing(11 + ox, 10.35, shirt()), face: [0, -1] });
     for (const x of [1.3, CASINO_W - 1.3]) for (let y = 4.5; y < CASINO_H - 2; y += 1.6) { // slot machines down both walls, lights going
       const ph = x * 3 + y;
       p.push({ casino: 'slots', cx: x + (x < 5 ? 0.9 : -0.9), cy: y, ...SP(x, y, 0.75, 1.7, SLOT_ART, (c, row, L) => c === '7' ? C(RED, 15) : c === '=' && row === 1 ? C(YEL, 15) : c === 'o' ? C(RED, 14) : row === 0 ? C(NEON[(Math.floor(T * 5 + ph)) & 3], 15) : C(GRAY, Math.max(L, 8))) });
-      if (chance(0.3)) p.push(sitting(x + (x < 5 ? 0.7 : -0.7), y, shirt(), 0.45, x > 5));
+      if (chance(0.3)) p.push({ ...sitting(x + (x < 5 ? 0.7 : -0.7), y, shirt(), 0.45), face: [x < 5 ? -1 : 1, 0] }); // (at the machine)
     }
     return p;
   } };

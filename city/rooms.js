@@ -67,9 +67,9 @@ function roomAt(x, y) {
 }
 // props
 const SP = (x, y, w, h, art, col, z = 0) => ({ x, y, w, h, art, col, z });
-const standing = (x, y, shirt) => SP(x, y, 0.55, 1.75, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? shirt : GRAY, L));
-const sitting = (x, y, shirt, z = 0.45, back = false) =>
-  SP(x, y, 0.55, 1.2, back ? ART.sitterBack : ART.sitter, (c, row, L) => C(row < 3 ? (back && row ? BRICK : SKIN) : shirt, L), z);
+// people (figures.js): standing about looking at you, or sitting (back: facing -y, the bar or the stage or the screen)
+const standing = (x, y, shirt) => figProp(x, y, figAnyone(shirt));
+const sitting = (x, y, shirt, z = 0.45, back = false) => figProp(x, y, figAnyone(shirt), { pose: 'sit', seatZ: z, face: back ? [0, -1] : null });
 const wood = (c, row, L) => C(c === '$' ? GREEN : BRICK, L);
 const shirt = () => pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL, CYAN]);
 const chance = p => Math.random() < p;
@@ -195,7 +195,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [...counterBox(6, 1.8, 4, 1.1), standing(6, 1.1, r.neon),
                  SP(10.6, 5.5, 0.9, 1.5, ART.jukebox, (c, row, L) => C(NEON[(row + (T * 2 | 0)) & 3], 14)), ...toilet(1.6, 6.4, 1, porcelain)];
-      for (let x = 3; x <= 9; x += 1.5) { p.push(SP(x, 2.65, 0.4, 0.75, ART.stool, wood)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.45, true)); }
+      for (let x = 3; x <= 9; x += 1.5) { p.push(SP(x, 2.65, 0.4, 0.75, ART.stool, wood)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
       return p;
     } },
   diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, 1.1], wall: dinerWall,
@@ -203,7 +203,7 @@ const ROOM_DEFS = {
       const p = [...counterBox(6, 1.75, 2), standing(6, 1.1, WHITE), ...toilet(1.6, 1.4, -1, porcelain)];
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
-        for (const s of [-0.95, 0.95]) { p.push(SP(x + s, y, 0.4, 0.75, ART.stool, wood)); if (chance(0.4)) p.push(sitting(x + s, y - 0.02, shirt())); }
+        for (const s of [-0.95, 0.95]) { p.push(SP(x + s, y, 0.4, 0.75, ART.stool, wood)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] }); } // (on a stool, at the table)
       }
       return p;
     } },
@@ -229,7 +229,7 @@ const ROOM_DEFS = {
       const p = [];
       for (const y of [5, 6.5, 8, 9.5]) for (const cx of [4.2, 9.8]) { // two blocks of seats, an aisle up the middle from the door
         p.push({ ...BX(cx, y, 1.75, 0.25, 0, 0.45, solid(RED, { top: "=", bright: 2 })), seatRow: { x0: cx - 1.5, x1: cx + 1.5, y, fx: 0, fy: -1 } }, BX(cx, y + 0.3, 1.75, 0.06, 0.45, 1.0, solid(RED, { panel: 0.6, bright: 2 })));
-        if (chance(0.7)) p.push(sitting(cx - 1.4 + Math.random() * 2.8, y + 0.05, shirt(), 0.35, true));
+        if (chance(0.7)) p.push(sitting(cx - 1.4 + Math.random() * 2.8, y + 0.05, shirt(), 0.45, true));
       }
       return p;
     } },
@@ -245,7 +245,7 @@ const ROOM_DEFS = {
       for (const x of [2.5, 5, 7.5, 9.5]) {
         p.push(SP(x, 2.6, 0.9, 1.3, ART.treadmill, (c, row, L) => C(GRAY, L * 1.2)));
         if (chance(0.7)) { const k = Math.random() * 2, s = shirt(); // running in place
-          p.push(SP(x, 2.55, 0.5, 1.75, () => (T * 7 + k | 0) % 2 ? ART.walkA : ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? s : GRAY, L), 0.2)); }
+          p.push(figProp(x, 2.55, figAnyone(s, { top: pick(['tee', 'tank']), bot: 'shorts' }), { z: 0.2, face: [0, -1], chat: false, pose: () => 'run' + (Math.floor(T * 9 + k * 4) & 7) })); }
       }
       return p;
     } },
@@ -267,8 +267,8 @@ const ROOM_DEFS = {
       const p = [...counterBox(6, 2.6, 2, 1.1), standing(6, 1.9, CYAN), standing(4.7, 1.6, WHITE)]; // the nurse, a doctor behind
       for (const [x, y] of [[3, 5.6], [8.4, 5.6], [3, 7.2], [8.4, 7.2]]) { // the waiting room seats, facing the desk
         p.push(BENCHP(x, y, 0, -1));
-        if (chance(0.55)) p.push(sitting(x - 0.4, y + 0.02, shirt()));
-        if (chance(0.4)) p.push(sitting(x + 0.45, y + 0.02, shirt()));
+        if (chance(0.55)) p.push(sitting(x - 0.4, y + 0.02, shirt(), 0.45, true));
+        if (chance(0.4)) p.push(sitting(x + 0.45, y + 0.02, shirt(), 0.45, true));
       }
       for (const y of [2.2, 4.4]) { // the bays: a bed with white sheets and a pillow, a curtain either side
         p.push(BX(11.6, y, 0.95, 0.42, 0.45, 0.62, (i, t, L) => { const f = HIT.face; BG[i] = C(WHITE, (2 + L * 0.3) * shadeFace(f));
@@ -288,7 +288,7 @@ const ROOM_DEFS = {
   karaoke: { grid: boxRoom(12, 9), light: 0.45, floor: 'carpet', ceil: 'disco', wall: karaokeWall,
     props: r => {
       const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })),
-                 SP(6, 2.25, 0.6, 1.75, ART.singer, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? r.neon : GRAY, 14), 0.3),
+                 figProp(6, 2.25, figAnyone(r.neon, { mic: true, top: pick(['dress', 'tee', 'jacket']) }), { z: 0.3, face: [0, 1], pose: 'sing', chat: false, light: 14 }), // giving it everything, to the room
                  SP(3.5, 2.3, 0.6, 0.9, ART.speaker, (c, row, L) => C(GRAY, L * 2)), SP(8.5, 2.3, 0.6, 0.9, ART.speaker, (c, row, L) => C(GRAY, L * 2))];
       for (let k = 0; k < 6; k++) if (chance(barCrowd())) p.push(sitting(2.5 + Math.random() * 7, 4.5 + Math.random() * 2.5, shirt(), 0.35, true));
       return p;
@@ -318,7 +318,7 @@ const ROOM_DEFS = {
       const p = [];
       for (const x of [3, 8, 13, 18]) for (const y of [1.3, 3.7]) {
         p.push({ ...BX(x, y, 1.8, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), seatRow: { x0: x - 1.55, x1: x + 1.55, y, fx: 0, fy: y < 2 ? 1 : -1 } }, BX(x, y < 2 ? y - 0.28 : y + 0.28, 1.8, 0.05, 0.45, 0.95, solid(BLUE, { panel: 0.9 })));
-        if (chance(0.35)) p.push(sitting(x - 1 + Math.random() * 2, y + (y < 2 ? 0.03 : -0.03), shirt(), 0.3));
+        if (chance(0.35)) p.push({ ...sitting(x - 1 + Math.random() * 2, y + (y < 2 ? 0.03 : -0.03), shirt(), 0.45), face: [0, y < 2 ? 1 : -1] });
       }
       for (const x of [5.5, 10.5, 15.5]) p.push(SP(x, 2.5, 0.1, 3, ART.pole, (c, row, L) => C(WHITE, L)));
       return p;
@@ -334,8 +334,8 @@ const ROOM_DEFS = {
         })];
       for (const [x, y] of [[2.2, 4.4], [5, 3.4], [7.8, 4.4], [2.2, 6.4], [7.8, 6.4]]) { // a clear way in down the middle
         p.push(...tableBox(x, y, 0.4, 0.4));
-        if (chance(0.55)) p.push(sitting(x + 0.6, y + 0.02, shirt()));
-        if (chance(0.3)) p.push(sitting(x - 0.6, y + 0.02, shirt()));
+        if (chance(0.55)) p.push({ ...sitting(x + 0.6, y + 0.02, shirt()), face: [-1, 0] }); // (facing their table)
+        if (chance(0.3)) p.push({ ...sitting(x - 0.6, y + 0.02, shirt()), face: [1, 0] });
       }
       return p;
     } },
@@ -347,7 +347,7 @@ const ROOM_DEFS = {
   noodle: { grid: boxRoom(12, 7), light: 0.75, floor: 'tile', ceil: 'lantern', sign: true, wall: noodleWall, keeper: [6, 1.0],
     props: r => {
       const p = [BX(6, 2.0, 4.6, 0.3, 0, 1.0, solid(BRICK, { panel: 0.75, trim: 0.95, top: '=' })), standing(6, 1.0, WHITE), standing(3.5, 1.0, WHITE)];
-      for (let x = 2; x <= 10; x += 1.35) { p.push(SP(x, 2.65, 0.4, 0.75, ART.stool, wood)); if (chance(0.5)) p.push(sitting(x, 2.7, shirt(), 0.45, true)); }
+      for (let x = 2; x <= 10; x += 1.35) { p.push(SP(x, 2.65, 0.4, 0.75, ART.stool, wood)); if (chance(0.5)) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
       return p;
     } },
   garage: { grid: boxRoom(14, 10), light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: garageWall, keeper: [6.5, 6.4],
@@ -366,7 +366,7 @@ const ROOM_DEFS = {
           const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
           return set(i, f === 5 && Math.abs(Math.abs(HIT.u) - 0.32) < 0.06 || f === 5 && Math.abs(Math.abs(HIT.v) - 0.32) < 0.06 ? '#' : ' ', C(WHITE, 13)), true;
         }) }, BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK)));
-        for (const [ox, oy] of [[-0.75, 0], [0.75, 0], [0, 0.75], [0, -0.75]]) if (chance(0.6)) p.push(sitting(x + ox, y + oy, shirt(), 0.45, oy < 0));
+        for (const [ox, oy] of [[-0.75, 0], [0.75, 0], [0, 0.75], [0, -0.75]]) if (chance(0.6)) p.push({ ...sitting(x + ox, y + oy, shirt(), 0.45), face: [-ox / 0.75, -oy / 0.75] }); // (round the table)
       }
       return p;
     } },
@@ -997,6 +997,7 @@ function roomSprites() {
     if (s.box) { drawBox({ ...s.box, x: s.box.x - px, y: s.box.y - py }, s.shade); continue; }
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
     if (s.vm) { drawVending(s.vm, s.x - px, s.y - py, 10); continue; } // a vending machine, life size
+    if (s.fig) { drawFigProp(s, s.x - px, s.y - py); continue; } // somebody
     drawArt(s.x - px, s.y - py, s.z, s.w, s.h, typeof s.art === 'function' ? s.art() : s.art, s.col);
   }
   const at = placeKey();

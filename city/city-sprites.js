@@ -101,6 +101,17 @@ function winterTreeCell(i, u, z, du, dz, L, t) {
   return set(i, ch, C(snow ? WHITE : t.kind === 'birch' ? WHITE : BRICK, snow ? 12 : clamp(6 + L * 0.45, 6, 13))), true;
 }
 
+// a person's look, kept until the season changes their clothes; their pose from their walk phase (still: standing)
+function streetLook(m) {
+  const si = seasonIdx();
+  if (m.look?.si !== si) { m.look = figStreetLook(m.seed ??= Math.random() * 1e9 | 0, m.shirt, m.pants || GRAY, si); m.look.si = si; }
+  return m.look;
+}
+const copLook = c => c.look ||= figCopLook(c.seed ??= Math.random() * 1e9 | 0);
+function walkPose(m, gait = 'walk') {
+  if (m.ph !== m._ph) { m._ph = m.ph; m._phT = T; }
+  return T - (m._phT ?? -1) < 0.3 || m.chase ? gait + (Math.floor(m.ph * 2) & 7) : 'stand'; // (still walking if they stepped a moment ago: a pause doesn't stop them)
+}
 function citySprites() {
   drawCourier();
   drawMuseumRoof();
@@ -117,14 +128,18 @@ function citySprites() {
   drawPigeons();
   bayBoats(); // (marina.js: real 3D boats)
   marinaSprites();
-  forNear(extrasB, o => { if (!(o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8) && (!o.when || o.when())) drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col); }); // (not the spire you're standing under)
+  forNear(extrasB, o => {
+    if (o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8 || o.when && !o.when()) return; // (not the spire you're standing under)
+    if (o.person != null) drawFigure(...R(o.x, o.y), o.z, 0.175, 0, 0, o.look ||= figStreetLook(hash(o.x, o.y, 9081) * 1e9 | 0, o.person, GRAY), 'stand', { light: 6 });
+    else drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col);
+  });
   drawGrandHotelDome();
   for (const v of vendors) {
     const t = v.type, frame = t.art[(T * 2 | 0) & 1];
     drawArt(...R(v.x, v.y), 0, t.w, 0.22, frame, (c, row, L) =>
       c === '~' ? C(WHITE, L * 0.6) : row < 3 && /[A-Z]/.test(c) ? C(WHITE, Math.max(L, night * 15)) :
       row < 3 ? C(t.color, Math.max(L, night * 12)) : c === 'O' ? C(GRAY, L * 0.5) : C(t.color, L));
-    drawArt(...R(v.x + v.ox, v.y + v.oy), 0, 0.06, 0.18, ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? v.shirt : GRAY, L));
+    drawFigure(...R(v.x + v.ox, v.y + v.oy), 0, 0.175, 0, 0, v.look ||= figStreetLook(hash(v.x, v.y, 9080) * 1e9 | 0, v.shirt, GRAY)); // (minding the cart: facing you)
   }
   for (const r of radios) { const [vx, vy] = R(r.x, r.y); if (Math.hypot(vx, vy) < vis + 2) drawRadioTower(vx, vy); }
   for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis) drawStationEntrance(s, vx, vy); }
@@ -186,11 +201,10 @@ function citySprites() {
   }
   for (const m of fairFolk) { // the crowd at the fair (fair.js)
     const [vx, vy] = R(m.x, m.y);
-    if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawArt(vx, vy, 0, 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB, (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
+    if (Math.abs(vx) < vis && Math.abs(vy) < vis) { figMotion(m); drawFigure(vx, vy, 0, 0.175, m._fx || 0, m._fy || 0, streetLook(m), walkPose(m)); }
   }
-  for (const m of people) if (!m.hidden) {
-    drawArt(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.06, 0.18, (m.ph | 0) % 2 ? ART.walkA : ART.walkB,
-            (c, row, L) => C(row < 2 ? SKIN : row === 2 ? m.shirt : m.pants, L));
+  for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
+    drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), right = -dy * d.mx + dx * d.my > 0, s = d.small ? 0.7 : 1;
       drawArt(vx, vy, 0, 0.07 * s, 0.05 * s, right ? DOG_R : DOG, (c, row, L) => c === 'o' ? C(GRAY, 3) : C(d.col, L * 1.2));
@@ -202,7 +216,7 @@ function citySprites() {
   for (const c of footCops) { // police on foot: navy cap, uniform, running when they're after you
     const [vx, vy] = R(c.x, c.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    drawArt(vx, vy, architectureGroundHeight(c.x, c.y), 0.06, 0.18, (c.ph | 0) % 2 ? ART.walkA : ART.walkB, (ch, row, L) => C(row === 1 ? SKIN : BLUE, row === 0 ? L * 0.7 : row > 2 ? L * 0.6 : L));
+    figMotion(c); drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
   for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.007); } // things you put down

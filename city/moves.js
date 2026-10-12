@@ -65,7 +65,7 @@ function nearSeat() {
 }
 // where along a row of seats (a bench on the subway, the cinema's) you'd sit: nearest you, but not in somebody's lap
 function freeOnRow(r) {
-  const took = room.props.filter(o => (o.art === ART.sitter || o.art === ART.sitterBack) && Math.abs(o.y - r.y) < 0.3 && o.x > r.x0 - 0.6 && o.x < r.x1 + 0.6).map(o => o.x);
+  const took = room.props.filter(o => o.fig && o.pose === 'sit' && Math.abs(o.y - r.y) < 0.3 && o.x > r.x0 - 0.6 && o.x < r.x1 + 0.6).map(o => o.x);
   const ok = x => x >= r.x0 - 1e-6 && x <= r.x1 + 1e-6 && took.every(t => Math.abs(t - x) >= 0.55 - 1e-6);
   const want = clamp(px, r.x0, r.x1);
   if (ok(want)) return want;

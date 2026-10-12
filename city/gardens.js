@@ -147,6 +147,7 @@ function stepGardens(dt) {
   if (inside && !gardensOpen(tod) && !stepGardens.rang) { stepGardens.rang = true; say('A bell rings: the Gardens are closing. You can still let yourself out.', 4); }
   if (gardensOpen(tod)) stepGardens.rang = false;
 }
+const GARDEN_FOLK = []; // the paddlers and picnickers' looks, made the first time they're drawn
 function gardenSprites() {
   const [cx, cy] = gw(GARDEN.w / 2, GARDEN.h / 2);
   if (Math.hypot(rel(cx - px), rel(cy - py)) > vis + 14) return;
@@ -164,7 +165,8 @@ function gardenSprites() {
   for (let k = 0; k < (gardensOpen(tod) ? 2 : 0); k++) { // two boats out on the lake, being paddled round (by day)
     const th = T * 0.03 + k * 3, bgx = LAKE.x + Math.cos(th) * LAKE.rx * 0.55, bgy = LAKE.y + Math.sin(th) * LAKE.ry * 0.55;
     art(bgx, bgy, 0, 0.1, 0.11, ANIMAL_ART.swan, (c, row, L) => c === '>' ? C(ORANGE, L) : C(WHITE, Math.max(L, 5)));
-    art(bgx, bgy, 0.06, 0.03, 0.06, ART.walkB.slice(0, 3), (c, row, L) => C(row < 2 ? SKIN : [RED, BLUE][k], L));
+    const [bx, by] = gw(bgx, bgy); // the paddler, sat low in the swan (it hides their legs), facing the way it's going
+    drawFigure(rel(bx - px), rel(by - py), 0.01, 0.17, -Math.sin(th) * LAKE.rx, Math.cos(th) * LAKE.ry, GARDEN_FOLK[k] ||= figAnyone([RED, BLUE][k]), 'sit6');
   }
   // the gates: iron, open by day, shut at night, and the name over the main one
   for (const [ggx, ggy, o] of GARDEN_GATES) {
@@ -188,8 +190,10 @@ function gardenSprites() {
   for (const [pgx2, pgy2, k] of [[16.5, 12.4, 1], [6.2, 8.6, 2], [18.6, 9.8, 3]]) {
     if (!gardensOpen(tod) || day < 0.3) continue;
     art(pgx2, pgy2, 0, 0.08, 0.012, ['########'], (c, row, L) => C((Math.floor(T * 0) + k) & 1 ? RED : WHITE, L));
-    art(pgx2 - 0.04, pgy2 - 0.01, 0, 0.05, 0.1, ART.sitter, (c, row, L) => C(row < 3 ? SKIN : [YEL, BLUE, GREEN][k - 1], L));
-    art(pgx2 + 0.05, pgy2 + 0.01, 0, 0.05, 0.1, ART.sitter, (c, row, L) => C(row < 3 ? SKIN : [MAG, RED, WHITE][k - 1], L));
+    for (const [s, shirt] of [[-1, [YEL, BLUE, GREEN][k - 1]], [1, [MAG, RED, WHITE][k - 1]]]) { // facing each other across the blanket
+      const [fx_, fy_] = gw(pgx2 + s * 0.045, pgy2 + s * 0.01);
+      drawFigure(rel(fx_ - px), rel(fy_ - py), 0, 0.17, -s, 0, GARDEN_FOLK[k * 2 + (s > 0)] ||= figAnyone(shirt), 'grass');
+    }
   }
   if (body.seat && body.seat.grass) { // the picnic basket, on the blanket's far left corner
     const s = body.seat, al = PICNIC_AHEAD + PICNIC_LONG * 0.55, ac = -PICNIC_HALF * 0.55, bx = s.x + s.fx * al - s.fy * ac, by = s.y + s.fy * al + s.fx * ac;
@@ -404,7 +408,7 @@ function aviaryProps(r) {
       } });
   }
   p.push(...counterBox(11.5, 10, 0.8, 0.9), standing(11.5, 9.4, GREEN)); // the keeper with the seed
-  if (chance(0.6)) p.push(standing(5.5, 6.5, shirt())); if (chance(0.5)) p.push(SP(8.5, 9, 0.4, 1.15, ART.keeper, (c, row, L) => C(row < 3 ? SKIN : row < 6 ? YEL : BLUE, L)));
+  if (chance(0.6)) p.push(standing(5.5, 6.5, shirt())); if (chance(0.5)) p.push(figProp(8.5, 9, figAnyone(YEL, { kid: true, bot: 'shorts' }), { h: 1.2 }));
   return p;
 }
 function aviaryFloor(i, f, wx, wy) {

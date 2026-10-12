@@ -9,7 +9,6 @@
 // is gone for good: the case stands empty, with a card.
 const MUSEUM_W = 26, MUSEUM_H = 18;
 let museumStolen = {}; // { diamond: true, orrery: true } once they're gone (kept in the save)
-ART.guard = pad(['  ___', ' [===]', ' (o o)', '  \\-/', ' /|*|\\', '/ |*| \\', '  |_|', '  / \\', ' /   \\']);
 const DINO = pad([
   '                       ___',
   '                     _/ o \\___',
@@ -321,7 +320,7 @@ ROOM_DEFS.museum = { grid: museumGrid(), light: 1, height: 4, floor: 'museum', c
       p.push({ ...SP(c.x, c.y, 0.5, 0.45, c.id === 'diamond' ? [' /\\', '<**>', ' \\/'] : [' .o.', 'o(@)o', " `o'"], (ch, row, L) => c.id === 'diamond' ? C(fract(T * 1.5 + row * 0.3) < 0.2 ? WHITE : CYAN, 15) : C(ch === '@' ? YEL : ch === 'o' ? [CYAN, RED, GREEN][row % 3] : YEL, 14), 1.0), exhibit: c.id });
     }
     if (r.burgled) { // after dark: two guards with torches, walking their rounds
-      GUARD_PATHS.forEach((path, k) => p.push({ ...SP(path[0][0], path[0][1], 0.55, 1.8, ART.guard, (c, row, L) => C(row < 2 ? BLUE : row < 4 ? SKIN : c === '*' ? YEL : BLUE, Math.max(L, 5))), guard: true, dir: 0,
+      GUARD_PATHS.forEach((path, k) => p.push({ ...figProp(path[0][0], path[0][1], figGuardLook(k), { h: 1.8, chat: false, light: 5 }), guard: true, dir: 0,
         tick: s => { [s.x, s.y, s.dir] = guardAt(path, T + k * 7); } }));
       return p;
     }
@@ -330,7 +329,7 @@ ROOM_DEFS.museum = { grid: museumGrid(), light: 1, height: 4, floor: 'museum', c
       const x0 = [3.5, 12, 21.5, 9, 16, 4, 21][k], y0 = [10, 15, 10, 6, 6, 4, 4][k], sp = 0.12 + (k % 3) * 0.05;
       p.push({ ...standing(x0, y0, [RED, BLUE, GREEN, YEL, WHITE, ORANGE, CYAN][k]), tick: s => { s.x = x0 + Math.sin(T * sp + k) * 1.2; s.y = y0 + Math.cos(T * sp * 0.8 + k) * 0.6; } });
     }
-    p.push({ ...SP(11.2, 10.2, 0.55, 1.8, ART.guard, (c, row, L) => C(row < 2 ? BLUE : row < 4 ? SKIN : BLUE, L)), guard: false });
+    p.push({ ...figProp(11.2, 10.2, figGuardLook(7), { h: 1.8, chat: false, pose: 'ease' }), guard: false });
     return p;
   } };
 ROOM_FOR.MUSEUM = 'museum';
