@@ -661,11 +661,12 @@ function drawFairPost(o, vx, vy) {
 }
 
 // a paper lantern on the night market's string: hung off a hook, a cap and a foot, glowing after dark. The string runs
-// halfway to the next lantern each way, so the row of them makes one string down the street.
+// halfway to the next lantern each way, so the row of them makes one string down the street, tied off to a post at each end.
 function drawMarketLantern(o, vx, vy) {
   const d = Math.hypot(vx, vy), z0 = o.z, z1 = o.z + 0.055, top = o.z + 0.07, lit = Math.max(night, overcast * 0.6);
   if (d > vis) return;
-  rod(vx - 0.225, vy, top, vx + 0.225, vy, top, 0.002, GRAY, 0.7);
+  rod(vx - (o.first ? 0 : 0.225), vy, top, vx + (o.last ? 0 : 0.225), vy, top, 0.002, GRAY, 0.7); // (to halfway to the next lantern each way)
+  for (const [end, e] of [[o.first, -1], [o.last, 1]]) if (end) { const x = vx + e * 0.225; rod(vx, vy, top, x, vy, top, 0.002, GRAY, 0.7); rod(x, vy, 0, x, vy, top + 0.01, 0.006, GRAY); } // a post at each end of the string
   rod(vx, vy, top, vx, vy, z1, 0.0015, GRAY, 0.7);
   const lw = Math.max(0.016, 0.55 * d / projX); // a cell wide at least, far off
   drawBox(boxAt(vx, vy, 1, 0, lw, lw, z0, z1), (i, t, L) => {
@@ -802,7 +803,7 @@ function drawCrane(k, vx, vy, th) {
   drawBox(boxAt(vx, vy, c, s, MW + 0.02, MW + 0.02, H - 0.05, H), steel); // the slewing ring
   { const [x, y] = at(-CJIB * 0.8); drawBox(boxAt(x, y, c, s, 0.2, MW * 1.1, H - 0.3, H), (i, t, L) => { // the counterweights
     BG[i] = C(GRAY, (1 + L * 0.25) * shadeFace(HIT.face)); return set(i, fract((HIT.u + 0.2) * 15) < 0.15 ? '|' : '#', C(GRAY, L * 0.7)), true; }); }
-  { const [x, y] = at(MW + 0.09); drawBox(boxAt(x, y, c, s, 0.08, 0.07, H - 0.22, H - 0.02), (i, t, L) => { // the operator's cab
+  { const [x, y] = at(MW + 0.09); drawBox(boxAt(x, y, c, s, 0.08, 0.07, H - 0.22, H), (i, t, L) => { // the operator's cab, hung under the jib
     if (HIT.w > H - 0.13 && HIT.face !== 5 && HIT.face !== 6) { BG[i] = C(CYAN, 1.5 + night * 4); return set(i, ':', C(CYAN, Math.max(L, night * 12))), true; }
     return steel(i, t, L); }); }
   for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) rod(vx + sx * MW, vy + sy * MW, top, vx, vy, apex, 0.008, YEL); // the apex
@@ -1029,22 +1030,20 @@ const SOLID_SHADE = {
 };
 
 // ---- lighthouse island
-// the lighthouse: a tapering tower of drums in red and white bands with a door and slit windows, a railed gallery,
+// the lighthouse: a tapering tower (one frustum) in red and white bands with a door and slit windows, a railed gallery,
 // the glazed lantern room with the lamp, a red dome and its vent. flare = how squarely a beam points at you (the lamp
 // blazes)
 const LH_BAND = 0.44, LH_TOWER = 2.2;
 function drawLighthouse(lx, ly, flare) {
   const d = Math.hypot(lx, ly), minR = 0.55 * d / projX, lit = beamLit(), vxn = -lx / (d || 1), vyn = -ly / (d || 1);
-  for (let k = 0; k < LH_TOWER / LH_BAND; k++) {
-    const z0 = k * LH_BAND, z1 = Math.min(LH_TOWER, z0 + LH_BAND), r = Math.max(minR, 0.24 - (z0 + z1) / 2 * 0.035);
-    drawBox(boxAt(lx, ly, 1, 0, r, r, z0, z1), (i, t, L) => {
-      const ang = Math.atan2(HIT.v, HIT.u), light = 0.5 + 0.5 * Math.max(0, (-HIT.u * 0.55 + HIT.v * 0.35) / r), w = HIT.w;
-      if (w < 0.22 && Math.abs(ang + Math.PI / 2) < 0.22) { BG[i] = C(GRAY, 1); return set(i, w > 0.19 ? '=' : '#', C(BRICK, L * 0.6)), true; } // the door (facing -y)
-      if ([0.75, 1.25, 1.75].some(z => Math.abs(w - z) < 0.06) && Math.abs(Math.abs(ang) - Math.PI / 2) < 0.12) { BG[i] = C(GRAY, 1); return set(i, '#', C(WARM, Math.max(L * 0.3, lit * 9))), true; } // slit windows
-      BG[i] = k & 1 ? C(RED, (2 + L * 0.5) * light) : C(WHITE, (5 + L * 0.6) * light);
-      return set(i, ' ', 0), true;
-    }, rayCopperDrum);
-  }
+  drawBox({ x: lx, y: ly, c: 1, s: 0, hl: Math.max(minR, 0.24), hw: Math.max(minR, 0.24), r1: Math.max(minR, 0.24 - LH_TOWER * 0.035), z0: 0, z1: LH_TOWER }, (i, t, L) => {
+    const ang = Math.atan2(HIT.v, HIT.u), light = frustumLit(), w = HIT.w;
+    if (HIT.face !== 3) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; }
+    if (w < 0.22 && Math.abs(ang + Math.PI / 2) < 0.22) { BG[i] = C(GRAY, 1); return set(i, w > 0.19 ? '=' : '#', C(BRICK, L * 0.6)), true; } // the door (facing -y)
+    if ([0.75, 1.25, 1.75].some(z => Math.abs(w - z) < 0.06) && Math.abs(Math.abs(ang) - Math.PI / 2) < 0.12) { BG[i] = C(GRAY, 1); return set(i, '#', C(WARM, Math.max(L * 0.3, lit * 9))), true; } // slit windows
+    BG[i] = Math.floor(w / LH_BAND) & 1 ? C(RED, (2 + L * 0.5) * light) : C(WHITE, (5 + L * 0.6) * light); // the bands, painted on
+    return set(i, ' ', 0), true;
+  }, rayFrustum);
   drawBox(boxAt(lx, ly, 1, 0, 0.3, 0.3, LH_TOWER, 2.27), (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.3); return set(i, HIT.face === 5 ? ' ' : '=', C(WHITE, L)), true; }, rayCopperDrum); // the gallery
   drawBox(boxAt(lx, ly, 1, 0, 0.29, 0.29, 2.27, 2.34), (i, t, L) => { // its railing: posts and a top rail, the lantern room showing between
     if (HIT.w > 2.32 || HIT.face === 5) return set(i, '-', C(WHITE, L * 0.9)), true;
@@ -1267,20 +1266,34 @@ function drawLanternString(vx, vy, ax, ay) {
   }
 }
 
-// a factory smokestack: a tapering brick drum in bands, red and white at the top, a dark mouth; a cell wide at least
-const STACK_BANDS = 10;
+// a tapering round tower (b.hl at the foot, b.r1 at the top, z0..z1): one true frustum, so a taper has no ledges.
+// Hits its side (face 3), its top (5) or its foot (6); HIT.u, v, w the point, local.
+function rayFrustum(ox, oy, oz, rx, ry, rz, b) {
+  const x = ox - b.x, y = oy - b.y, k = (b.hl - b.r1) / (b.z1 - b.z0), A = b.hl - k * (oz - b.z0), B = k * rz;
+  const qa = rx * rx + ry * ry - B * B, qb = x * rx + y * ry + A * B, qc = x * x + y * y - A * A;
+  let best = Infinity, face = 3;
+  const side = t => { const w = oz + rz * t; if (t > 0.01 && t < best && w >= b.z0 && w <= b.z1 && A - B * t > 0) best = t; };
+  if (Math.abs(qa) > 1e-12) { const d = qb * qb - qa * qc; if (d >= 0) { const r = Math.sqrt(d); side((-qb - r) / qa); side((-qb + r) / qa); } }
+  else if (Math.abs(qb) > 1e-12) side(-qc / (2 * qb));
+  if (Math.abs(rz) > 1e-12) for (const [z, r, f] of [[b.z1, b.r1, 5], [b.z0, b.hl, 6]]) {
+    const t = (z - oz) / rz;
+    if (t > 0.01 && t < best && (x + rx * t) ** 2 + (y + ry * t) ** 2 <= r * r) { best = t; face = f; }
+  }
+  if (best === Infinity) return -1;
+  HIT.u = x + rx * best; HIT.v = y + ry * best; HIT.w = oz + rz * best; HIT.face = face;
+  return best;
+}
+const frustumLit = () => 0.55 + 0.45 * Math.max(0, (-HIT.u * 0.55 + HIT.v * 0.35) / (Math.hypot(HIT.u, HIT.v) || 1)); // (lit from over your left shoulder)
+// a factory smokestack: one tapering brick tower with rings round it, red and white bands at the top, a dark mouth;
+// a cell wide at least, far off
 function drawStack(s, vx, vy) {
   const H = s.H, minR = 0.55 * Math.hypot(vx, vy) / projX;
-  for (let k = 0; k < STACK_BANDS; k++) {
-    const z0 = k * H / STACK_BANDS, z1 = (k + 1) * H / STACK_BANDS, r = Math.max(minR, 0.16 - (z0 + z1) / 2 / H * 0.05), top = k === STACK_BANDS - 1;
-    drawBox(boxAt(vx, vy, 1, 0, r, r, s.z + z0, s.z + z1), (i, t, L) => {
-      if (HIT.face === 5) { BG[i] = C(GRAY, 0.5); return set(i, ' ', 0), true; } // the mouth
-      const w = HIT.w - s.z, light = 0.55 + 0.45 * Math.max(0, (-HIT.u * 0.55 + HIT.v * 0.35) / r), striped = w > H - 0.5;
-      BG[i] = striped ? C(fract(w * 4) < 0.5 ? RED : WHITE, (1.6 + L * 0.35) * light) : C(BRICK, (1.2 + L * 0.3) * light);
-      return set(i, striped ? ' ' : fract(w * 6) < 0.15 ? '=' : ' ', C(BRICK, L * 0.7)), true;
-    }, rayCopperDrum);
-    if (top) dot(vx, vy, s.z + H + 0.005, r * 0.9, (i, t, L) => { BG[i] = C(GRAY, 0.6); return set(i, ' ', 0), true; }); // (soot round the lip)
-  }
+  drawBox({ x: vx, y: vy, c: 1, s: 0, hl: Math.max(minR, 0.16), hw: Math.max(minR, 0.16), r1: Math.max(minR, 0.11), z0: s.z, z1: s.z + H }, (i, t, L) => {
+    if (HIT.face === 5) { BG[i] = C(GRAY, 0.5); return set(i, ' ', 0), true; } // the mouth
+    const w = HIT.w - s.z, light = frustumLit(), striped = w > H - 0.5;
+    BG[i] = striped ? C(fract(w * 4) < 0.5 ? RED : WHITE, (1.6 + L * 0.35) * light) : C(BRICK, (1.2 + L * 0.3) * light);
+    return set(i, striped ? ' ' : fract(w * 6) < 0.15 ? '=' : ' ', C(BRICK, L * 0.7)), true;
+  }, rayFrustum);
 }
 // its smoke: curling off downwind as it rises (z from the stack's top)
 function smokeCell(i, u, sz, L, s) {
@@ -1398,7 +1411,7 @@ function carouselInside(cx, cy) {
 const HORSE_COLS = [WHITE, YEL, BRICK, WHITE, MAG, YEL, BRICK, CYAN];
 function drawCarouselHorse(cx, cy, ps, j) {
   const hx = cx + 0.42 * Math.cos(ps), hy = cy + 0.42 * Math.sin(ps), hz = 0.14 + 0.04 * Math.sin(ps * 2 + T * 4), col = HORSE_COLS[j];
-  rod(hx, hy, 0.04, hx, hy, 0.33, 0.005, YEL, 1.2); // its brass pole
+  rod(hx, hy, 0.04, hx, hy, 0.34, 0.005, YEL, 1.2); // its brass pole, turntable to canopy
   const tx = -Math.sin(ps), ty = Math.cos(ps); // the way it's going
   drawBox(boxAt(hx, hy, tx, ty, 0.06, 0.018, hz - 0.02, hz + 0.02), solidHorse(col)); // the body
   drawBox(boxAt(hx + tx * 0.06, hy + ty * 0.06, tx, ty, 0.015, 0.012, hz + 0.01, hz + 0.06), solidHorse(col)); // the neck and head
@@ -1413,7 +1426,7 @@ function drawCarousel(cx, cy) {
     if (HIT.face === 5) { BG[i] = C(BRICK, 2 + L * 0.3); return set(i, fract(turnAng() * 16 / TAU) < 0.1 ? '|' : '=', C(BRICK, L * 0.8)), true; }
     BG[i] = C(YEL, 2.5 + L * 0.3); return set(i, '=', C(BRICK, L)), true;
   }, rayCopperDrum);
-  drawBox(boxAt(cx, cy, 1, 0, 0.1, 0.1, 0.04, 0.33), (i, t, L) => { // the drum: mirrors and lights
+  drawBox(boxAt(cx, cy, 1, 0, 0.1, 0.1, 0.04, 0.34), (i, t, L) => { // the drum: mirrors and lights, up to the canopy
     const a = turnAng(), panel = fract(a * 8 / TAU);
     BG[i] = panel < 0.08 ? C(YEL, 4) : C(CYAN, 1 + (lit ? 3 : 1));
     return set(i, panel < 0.08 ? '|' : fract(HIT.w * 30 + T) < 0.2 ? '*' : ':', C(WHITE, Math.max(L, lit ? 12 : 6))), true;

@@ -274,7 +274,7 @@ const STALLS = NIGHT_MARKET ? [['STREET FOOD', 2.75, RED], ['CHARMS', 3.95, MAG]
   return Object.assign(solids[solids.length - 1], { word, canopy, fs: -1, at: [x, y - 0.3] });
 }) : [];
 if (NIGHT_MARKET) for (let x = NIGHT_MARKET.bx * 8 + 2.4; x < NIGHT_MARKET.bx * 8 + 7.8; x += 0.45) // the lanterns, on a string along the street
-  extras.push({ x, y: NIGHT_MARKET.by * 8 + 1.45, z: 0.3, lantern: true });
+  extras.push({ x, y: NIGHT_MARKET.by * 8 + 1.45, z: 0.3, lantern: true, first: x === NIGHT_MARKET.bx * 8 + 2.4, last: x + 0.45 >= NIGHT_MARKET.bx * 8 + 7.8 });
 // the Sunset Pier: booths down both sides (two games, a prize stall, a food stall), facing in across the
 // boardwalk; strings of bulbs on posts along the edges; people milling about and queueing for the wheel.
 // side -1: the west edge, facing east. at = where you stand to be served (in front of the counter)
@@ -303,7 +303,8 @@ extras.push({ x: AQUARIUM.doorU, y: AQUARIUM.by * 8 + 8.03, z: 0.41, fishSign: t
 const BANNER_WORDS = ['SALE', 'WELCOME', 'OPEN', 'FESTIVAL', 'LUCKY', 'NEW', 'RAMEN', 'KARAOKE', 'SMILE'];
 for (const s of [3.5, 6.5]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
   if (districtOf(bx, by) !== 'shotengai' && districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by) !== 'shotengai') return;
-  const w = BANNER_WORDS[hash(bx * 7 + s, by, 701) * BANNER_WORDS.length | 0], col = NEON[hash(bx, by * 3 + s, 702) * 4 | 0];
+  const w = BANNER_WORDS[hash(bx * 7 + s, by, 701) * BANNER_WORDS.length | 0], col = NEON[hash(bx, by * 3 + s, 702) * 4 | 0], hw = 0.0225 * (w.length + 4) * 0.85;
+  if ([-1, 1].some(e => !arcadeAt(x + (o === 'h' ? 0 : e * hw), y + (o === 'h' ? e * hw : 0)))) return; // (its cords hang from the arcade roof: none, no banner)
   extras.push({ x, y, z: 0.42, banner: w, col, c: o === 'h' ? 1 : 0, s: o === 'h' ? 0 : 1 }); // hung across the street, facing along it
 });
 for (const s of [2.6, 3.4, 5.6, 7.2]) for (const off of [0.16, 1.84]) alongStreets(s, off, (x, y, ax, ay, bx, by, o) => {

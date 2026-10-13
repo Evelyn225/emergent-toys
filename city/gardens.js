@@ -210,7 +210,7 @@ function gardenSprites() {
 function drawPicnicBlanket(vx, vy, col) {
   if (Math.hypot(vx, vy) > vis) return;
   const hl = 0.1, hw = 0.065;
-  drawBox(boxAt(vx, vy, 1, 0, hl, hw, 0.001, 0.004), (i, t, L) => {
+  drawBox(boxAt(vx, vy, 1, 0, hl, hw, 0, 0.004), (i, t, L) => {
     const u = HIT.u + hl, v = HIT.v + hw;
     if (hl - Math.abs(HIT.u) < 0.006) return set(i, fract(u * 150) < 0.5 ? '|' : '\'', C(WHITE, L * 1.2)), true;
     const dark = (Math.floor(u / 0.025) + Math.floor(v / 0.025)) & 1;
