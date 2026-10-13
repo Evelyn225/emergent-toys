@@ -15277,8 +15277,9 @@ function glPresent() {
 // the picture as you see it: the WebGL frame under the game's canvas, flattened into one canvas
 function frameCanvas() {
   if (!GLP) return cv;
-  const c = document.createElement('canvas'), x = c.getContext('2d');
-  c.width = cv.width; c.height = cv.height; x.drawImage(GLP.glc, 0, 0); x.drawImage(cv, 0, 0);
+  const c = GLP.flat ||= document.createElement('canvas'), x = c.getContext('2d'); // (one, reused: double vision wants it every frame)
+  if (c.width !== cv.width || c.height !== cv.height) { c.width = cv.width; c.height = cv.height; }
+  x.drawImage(GLP.glc, 0, 0); x.drawImage(cv, 0, 0); // (the GL frame is opaque, so it covers whatever was there)
   return c;
 }
 // the same, in canvas calls: backgrounds run-length, then text a run of one colour at a time
