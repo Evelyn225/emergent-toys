@@ -104,7 +104,7 @@ function pavilionDetailShade(o, i, t, L) {
     const along = face === 3 || face === 2 ? HIT.u : -HIT.u;
     if (face <= 2) { set(i,'|',C(YEL,L)); return true; }
     const word = o.b.sh.word, letterW = Math.min(.1,(o.hl * 2 - .12) / word.length), hz = (.39 - z) / .05;
-    const ch = signGlyph(word,along / letterW + word.length / 2,hz,t,letterW,.05,farDepth(...R(o.x,o.y),o.hl));
+    const ch = signLine(word,along / letterW + word.length / 2,hz,i,.365,midDepth(...R(o.x,o.y)),t,letterW,.05,farDepth(...R(o.x,o.y),o.hl),...faceDir(o.c,o.s));
     set(i,ch ?? ' ',C(o.b.region === 'chinatown' ? YEL : WHITE,Math.max(L,openAt(o.b.sh,tod) ? night * 13 : 0))); return true;
   }
   if (o.kind === 'blade') {

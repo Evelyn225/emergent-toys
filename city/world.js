@@ -220,7 +220,8 @@ const WHEEL_BOARD = { x: WHEEL.x, y: WHEEL.y - 0.55 }; // where you queue: the p
 const wheelAngle = (k, t) => TAU * (t / WHEEL.rev + k / WHEEL.n) - Math.PI / 2;
 // the carousel's drum and the wheel's legs are in the way; the booths are solids (props.js)
 const fairBlocked = (x, y, pad = 0) => Math.hypot(rel(x - CAROUSEL.x), rel(y - CAROUSEL.y)) < CAROUSEL.r + pad ||
-  Math.abs(rel(x - WHEEL.x)) < 0.35 + pad && Math.abs(rel(y - WHEEL.y)) < 0.35 + pad;
+  Math.abs(rel(x - WHEEL.x)) < 0.35 + pad && Math.abs(rel(y - WHEEL.y)) < 0.35 + pad ||
+  [-1, 1].some(sx => [-1, 1].some(sy => Math.hypot(rel(x - WHEEL.x - sx * 0.95), rel(y - WHEEL.y - sy * 0.42)) < 0.06 + pad)); // (the wheel's A-frame feet, round)
 // piers: walkable decks out over the water [x0, y0, x1, y1]; wider docks along the industrial shore
 const PIERS = [[FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1]];
 // the marina, on the industrial shore west of the island: a jetty straight out from the promenade, two long finger

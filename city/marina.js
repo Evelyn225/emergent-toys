@@ -105,7 +105,7 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
   if (lit > 0.3) { // navigation lights: red to port, green to starboard
     for (const [s, col] of [[-1, RED], [1, GREEN]]) {
       const lx = vx + hx * hl * 0.45 - hy * hw * s, ly = vy + hy * hl * 0.45 + hx * hw * s;
-      drawArt(lx, ly, fb + z + 0.005, 0.02, 0.02, ['o'], () => C(col, 15));
+      dot(lx, ly, fb + z + 0.012, 0.01, i => { BG[i] = C(col, 8); return set(i, 'o', C(col, 15)), true; });
     }
   }
 }
@@ -119,7 +119,43 @@ function bayBoats() {
     drawBoat3D(b, vx, vy, hx / n, hy / n, 0.6);
   }
 }
-const SALE_SIGN = pad(['.--------.', '|FOR SALE|', "'--------'"]), RENT_SIGN = pad(['.--------.', '| RENTAL |', "'--------'"]);
+// a little board propped on a boat's deck, along her side so you read it from the jetty either way: FOR SALE or RENTAL
+function drawDealBoard(b, vx, vy, bob) { // bob: the boat's, so the board rides with her deck
+  const k = BOAT_KINDS[b.kind], z = bob + k.fb, sale = b.deal === 'sale', word = sale ? 'FOR SALE' : 'RENTAL';
+  const hl = 0.07, z0 = z + 0.04, z1 = z + 0.085, n = word.length + 2, far = farDepth(vx, vy, hl), tc = midDepth(vx, vy);
+  rod(vx, vy, z, vx, vy, z0, 0.003, GRAY, 0.7); // the stick it's propped on
+  drawBox(boxAt(vx, vy, b.hx, b.hy, hl, 0.003, z0, z1), (i, t, L) => {
+    const f = HIT.face, edge = Math.min(hl - Math.abs(HIT.u), z1 - HIT.w, HIT.w - z0) < 0.006;
+    BG[i] = C(edge ? (sale ? RED : BLUE) : WHITE, (edge ? 3 : 2) + L * 0.3);
+    if (f !== 3 && f !== 4 || edge) return set(i, ' ', 0), true;
+    const ch = signLine(word, faceQ(HIT.u, hl) * n - 1, (z1 - 0.008 - HIT.w) / 0.029, i, z1 - 0.0225, tc, t, 2 * hl / n, 0.029, far, ...faceDir(b.hx, b.hy));
+    return set(i, ch ?? ' ', C(sale ? RED : BLUE, 15)), true;
+  });
+}
+// the board at the foot of the jetty: the day's rates on a blue panel, on two posts, readable from either side
+const MARINA_ROWS = [['BOATS FOR HIRE', 0.04], ...[['SPEED', 'speedboat'], ['SAIL', 'sailboat'], ['CRUISER', 'cruiser']]
+  .map(([name, kind]) => [name.padEnd(9) + ('$' + BOAT_KINDS[kind].rent).padStart(5), 0.03])];
+const BOARD = { hl: 0.25, z0: 0.2, z1: 0.42 };
+function drawMarinaBoard(vx, vy) {
+  const { hl, z0, z1 } = BOARD, n = 16, far = farDepth(vx, vy, hl), tc = midDepth(vx, vy), glow = Math.max(night, overcast * 0.6);
+  for (const e of [-1, 1]) rod(vx + e * hl * 0.7, vy, 0, vx + e * hl * 0.7, vy, z1 - 0.01, 0.007, BRICK, 0.8);
+  drawBox(boxAt(vx, vy, 1, 0, hl, 0.006, z0, z1), (i, t, L) => {
+    const f = HIT.face, edge = Math.min(hl - Math.abs(HIT.u), z1 - HIT.w, HIT.w - z0) < 0.01;
+    BG[i] = edge ? C(WHITE, 2 + L * 0.3) : C(BLUE, 1.6 + L * 0.3 + glow);
+    if (f !== 3 && f !== 4 || edge) return set(i, ' ', 0), true;
+    const lq = faceQ(HIT.u, hl) * n - 1;
+    let top = z1 - 0.015;
+    for (const [text, h] of MARINA_ROWS) { // each row in its band, the title a little taller
+      const big = signIsBig(2 * hl / n, h, far); // (block letters fill their band; small ones go in the cell they project into)
+      if (big ? HIT.w <= top && HIT.w > top - h : true) {
+        const ch = signLine(text, lq, (top - HIT.w) / h, i, top - h / 2, tc, t, 2 * hl / n, h, far, ...faceDir(1, 0));
+        if (ch && (big || ch !== ' ')) return set(i, ch, C(/[$0-9]/.test(ch) ? YEL : WHITE, Math.max(L, 11))), true;
+      }
+      top -= h + 0.012;
+    }
+    return set(i, ' ', 0), true;
+  });
+}
 function marinaSprites() {
   for (const b of fleet) {
     const [vx, vy] = R(b.x, b.y);
@@ -127,14 +163,12 @@ function marinaSprites() {
     drawBoat3D(b, vx, vy, b.hx, b.hy, b === sea ? clamp(Math.abs(b.v) / 0.8, 0, 1) : 0);
     if (b !== sea && (b.deal === 'sale' || b.deal === 'rent') && Math.hypot(vx, vy) < 6) { // a little board propped up on the deck
       const k = BOAT_KINDS[b.kind];
-      drawArt(vx - b.hx * k.hl * 0.5, vy - b.hy * k.hl * 0.5, k.fb + 0.04, 0.14, 0.045, b.deal === 'sale' ? SALE_SIGN : RENT_SIGN, (c, row, L) => row === 1 && /[A-Z]/.test(c) ? C(b.deal === 'sale' ? RED : BLUE, Math.max(L, 10)) : C(WHITE, Math.max(L, 8)));
+      drawDealBoard(b, vx - b.hx * k.hl * 0.5, vy - b.hy * k.hl * 0.5, boatBob(vx + px, vy + py));
     }
   }
   const [vx, vy] = R(MARINA.x + 0.7, MARINA.office.y - 0.2); // the board at the foot of the jetty
-  if (Math.hypot(vx, vy) < 8) drawArt(vx, vy, 0, 0.5, 0.42, MARINA_BOARD, (c, row, L) => row === 1 ? C(WHITE, Math.max(L, 11)) : row > 5 ? C(GRAY, L) : /[$0-9]/.test(c) ? C(YEL, Math.max(L, 9)) : C(WHITE, Math.max(L, 7)));
+  if (Math.hypot(vx, vy) < 8) drawMarinaBoard(vx, vy);
 }
-const MARINA_BOARD = pad(['.---------------.', '| BOATS FOR HIRE |', '| SPEED     $' + BOAT_KINDS.speedboat.rent + ' |', '| SAIL      $' + BOAT_KINDS.sailboat.rent + ' |', '| CRUISER   $' + BOAT_KINDS.cruiser.rent + ' |',
-  "'---------------'", '       |||', '       |||']);
 // the marina office: white clapboard, a blue roof, MARINA over the door on the side facing the road, windows looking
 // down the jetty
 SOLID_SHADE.marina = o => (i, t, L) => {
@@ -144,7 +178,7 @@ SOLID_SHADE.marina = o => (i, t, L) => {
   if (w > 0.27) { BG[i] = C(BLUE, 1.5 + L * 0.3); return set(i, '=', C(WHITE, L * 0.5)), true; } // the eaves
   if (f === 4 && w > 0.2) { // MARINA over the door
     BG[i] = C(BLUE, 2 + glow * 5);
-    return set(i, signGlyph('MARINA', (1 - u / o.hl) / 2 * 8 - 1, (0.265 - w) / 0.06, t, 2 * o.hl / 8, 0.06, farDepth(rel(o.x - px), rel(o.y - py), o.hl)) || ' ', C(WHITE, 15)), true;
+    return set(i, signLine('MARINA', (1 - u / o.hl) / 2 * 8 - 1, (0.265 - w) / 0.06, i, 0.235, midDepth(rel(o.x - px), rel(o.y - py)), t, 2 * o.hl / 8, 0.06, farDepth(rel(o.x - px), rel(o.y - py), o.hl), -o.c, -o.s) || ' ', C(WHITE, 15)), true;
   }
   if (f === 4 && Math.abs(u) < 0.07 && w < 0.19) { BG[i] = C(BLUE, 1 + L * 0.1); return set(i, Math.abs(u) > 0.06 ? '|' : w > 0.18 ? '-' : ' ', C(WHITE, L)), true; } // the door
   if ((f === 3 || f === 4) && Math.abs(Math.abs(u) - 0.3) < 0.08 && Math.abs(w - 0.13) < 0.045) { // windows

@@ -752,52 +752,10 @@ function rainFx(dt) {
   }
 }
 
-// tower crane, drawn from world measurements so the truss stays one character thick at any distance.
-// u = across the billboard (0 = mast), z = height, du/dz = one cell's size there, p = jib facing (see citySprites)
+// tower crane measures (see drawCrane): the mast's half width, the jib's depth, the jib and counter-jib's reach
 const MW = 0.12, PANEL = 0.24, JH = 0.18, JIB = 4.5, CJIB = 1.4;
 // within half a cell of a line through the cell? `slope` = how far the line moves in u per unit of z
 const onLine = (off, du, dz, slope) => Math.abs(off) < Math.max(du, dz * Math.abs(slope)) / 2;
-function craneCell(i, u, z, du, dz, L, k, p) {
-  const H = k.H, jx = JIB * p, cx = -CJIB * p, top = H + JH, apex = H + 0.75, steel = C(YEL, L), dark = C(GRAY, L * 0.8);
-  const blink = (night > 0.3 || overcast > 0.5) && fract(T * 0.7) < 0.5;
-  // red warning lights on the apex and the jib tip
-  if (blink && (onLine(u, du, 0, 0) && onLine(z - apex, dz, 0, 0) || onLine(u - jx, du, 0, 0) && onLine(z - top, dz, 0, 0)))
-    return set(i, '*', C(RED, 15)), true;
-  const between = (v, a, b) => v >= Math.min(a, b) && v <= Math.max(a, b);
-  if (z < H && Math.abs(u) <= MW + du / 2) { // mast: lattice with X bracing
-    if (2 * MW < du * 1.5) return set(i, '|', steel), true; // far away: one line
-    if (onLine(Math.abs(u) - MW, du, 0, 0)) return set(i, '|', steel), true;
-    const b = fract(z / PANEL);
-    if (onLine((b > 0.5 ? b - 1 : b) * PANEL, dz, 0, 0)) return set(i, '-', steel), true;
-    if (onLine(u - (-MW + b * 2 * MW), du, dz, 2 * MW / PANEL)) return set(i, '/', steel), true;
-    if (onLine(u - (MW - b * 2 * MW), du, dz, 2 * MW / PANEL)) return set(i, '\\', steel), true;
-    return false;
-  }
-  if (z >= top && z <= apex && Math.abs(u) <= MW) { // apex frame above the jib
-    const w = MW * (apex - z) / (apex - top);
-    if (onLine(Math.abs(u) - w, du, dz, MW / (apex - top))) return set(i, u < 0 ? '/' : '\\', steel), true;
-  }
-  for (const end of [jx * 0.7, cx]) // pendant ties from the apex down to the jib and counter-jib
-    if (Math.abs(end) > du && z >= top && z <= apex && onLine(u - end * (apex - z) / (apex - top), du, dz, end / (apex - top)))
-      return set(i, end > 0 ? '\\' : '/', dark), true;
-  if (z >= H - 0.02 && z <= top + 0.02 && (between(u, 0, jx) || between(u, 0, cx))) { // jib and counter-jib trusses
-    if (JH < dz * 3) return set(i, '=', steel), true; // too few rows for a truss to read: a solid beam
-    if (onLine(z - top, dz, 0, 0)) return set(i, '_', steel), true;
-    if (onLine(z - H, dz, 0, 0)) return set(i, '=', steel), true;
-    const pw = JH * 1.4 * Math.abs(p) + 1e-6, a = fract(Math.abs(u) / pw), tri = 1 - Math.abs(2 * a - 1), b = (z - H) / JH;
-    if (onLine((b - tri) * JH, dz, du, 2 * JH / pw)) return set(i, (a < 0.5) === (u > 0) ? '/' : '\\', steel), true;
-    return false;
-  }
-  if (z < H && z > H - 0.3 && between(u, cx * 0.75, cx) && Math.abs(cx) > du) return set(i, '#', C(GRAY, L * 0.7)), true; // counterweights
-  if (z < H && z > H - 0.22 && between(u * Math.sign(p || 1), MW, MW + 0.16)) // operator's cab
-    return set(i, z > H - 0.12 ? ':' : '#', z > H - 0.12 ? C(CYAN, Math.max(L, night * 12)) : steel), true;
-  // trolley, cable, hook and a slung load of beams, drifting along the jib
-  const tro = jx * k.tro, hz = k.hz; // set each frame in citySprites, clear of the buildings below
-  if (Math.abs(jx) > du && z < H && z > hz && onLine(u - tro, du, 0, 0)) return set(i, '|', dark), true;
-  if (z <= hz && z > hz - 0.08 && onLine(u - tro, du, 0, 0)) return set(i, 'J', dark), true;
-  if (z <= hz - 0.08 && z > hz - 0.22 && Math.abs(u - tro) < 0.3) return set(i, '=', C(ORANGE, L)), true;
-  return false;
-}
 
 const CITY = { cell: (x, y) => map[idx(x, y)], wall: facade, floor: floorCell, sky: skyCell, roof: roofTop, sprites: citySprites,
                deck: true, slabFace, slabEdge };

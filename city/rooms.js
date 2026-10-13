@@ -80,6 +80,178 @@ const barCrowd = () => { const h = mod(tod - 16, 24); return h < 12 ? 0.15 + 0.8
 // the long side runs along (cos, sin). Benches are their own kind ({ bench }), drawn by drawBench.
 const BX = (x, y, hl, hw, z0, z1, shade, ca = 1, sa = 0) => ({ box: { x, y, c: ca, s: sa, hl, hw, z0, z1 }, shade });
 const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
+// ---- room furniture in 3D (metres). Each is a prop { x, y, draw(vx, vy) } drawn from where you are.
+// foot: [half length, half width, height] of what blocks you, as furniture boxes do (none: you walk over or through it)
+const ROOM_MODEL = (x, y, draw, foot) => ({ x, y, draw, ...(foot && { box: { x, y, c: 1, s: 0, hl: foot[0], hw: foot[1], z0: 0, z1: foot[2] } }) });
+const drum = (vx, vy, r, z0, z1, shade) => drawBox(boxAt(vx, vy, 1, 0, r, r, z0, z1), shade, rayCopperDrum);
+const drumLit = r => 0.55 + 0.45 * Math.max(0, (-HIT.u * 0.55 + HIT.v * 0.35) / r); // (lit from over your left shoulder, as everything is)
+const CHROME = (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.5); return set(i, ' ', 0), true; };
+// a potted plant: a terracotta pot with a rim, and a bush of leaves round a stem (h: how tall, seed: its shape)
+const POT_PLANT = (x, y, h = 1.3, seed = x * 7 + y, solid = true) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx, vy, 0.16, 0, 0.3, (i, t, L) => { if (HIT.face === 5) { BG[i] = C(BRICK, 0.8); return set(i, '.', C(BRICK, L * 0.5)), true; } BG[i] = C(ORANGE, (1.6 + L * 0.3) * drumLit(0.16)); return set(i, ' ', 0), true; });
+  drum(vx, vy, 0.185, 0.27, 0.33, (i, t, L) => { if (HIT.face === 5) return false; BG[i] = C(ORANGE, (2.1 + L * 0.35) * drumLit(0.185)); return set(i, '=', C(BRICK, L * 0.7)), true; });
+  rod(vx, vy, 0.3, vx, vy, h * 0.7, 0.012, BRICK, 0.8);
+  for (let k = 0; k < 7; k++) {
+    const a = hash(seed, k, 4401) * Math.PI * 2, rr = 0.13 + hash(seed, k, 4403) * 0.07, r = Math.min(rr * 0.8, 0.05 + hash(seed, k, 4402) * 0.1), z = 0.5 + (h - 0.65) * (k + 0.5) / 7, tone = 0.75 + hash(seed, k, 4404) * 0.5; // (each clump touching the stem, the bush within 0.3m of it)
+    dot(vx + Math.cos(a) * r, vy + Math.sin(a) * r, z, rr, (i, t, L) => { BG[i] = C(GREEN, (1.4 + L * 0.3) * tone); return set(i, k & 1 ? '%' : '&', C(GREEN, L * 0.55 * tone)), true; });
+  }
+}, solid && [0.19, 0.19, h]);
+// a bar stool: a padded seat on a chrome post, a ring for your feet, a round base. seatZ: the top of the cushion
+const STOOL = (x, y, col = RED, seatZ = 0.62) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx, vy, 0.2, 0, 0.03, CHROME);
+  rod(vx, vy, 0.03, vx, vy, seatZ - 0.07, 0.022, GRAY, 1.2);
+  for (let k = 0; k < 10; k++) { const a0 = k / 10 * Math.PI * 2, a1 = (k + 1) / 10 * Math.PI * 2; rod(vx + Math.cos(a0) * 0.15, vy + Math.sin(a0) * 0.15, 0.26, vx + Math.cos(a1) * 0.15, vy + Math.sin(a1) * 0.15, 0.26, 0.01, GRAY, 1.2); }
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; rod(vx, vy, 0.3, vx + Math.cos(a) * 0.15, vy + Math.sin(a) * 0.15, 0.26, 0.008, GRAY, 1.2); } // the struts holding the ring
+  drum(vx, vy, 0.19, seatZ - 0.08, seatZ, (i, t, L) => { BG[i] = C(col, (HIT.face === 5 ? 2.4 : 1.8) + L * 0.3 * drumLit(0.19)); return set(i, HIT.face === 5 ? ' ' : '=', C(col, L * 0.6)), true; });
+}, [0.2, 0.2, seatZ]);
+// the jukebox, facing (fx, fy): a rounded top in slices, neon tubes up its front cycling colour, the record turning in
+// its lit window, a speaker grille below, wood sides with a chrome edge
+const JUKEBOX = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
+  const hw = 0.45, hl = 0.25, top = 1.15, ax = -fy, ay = fx;
+  const front = (i, t, L, w, v) => {
+    const neon = k => C(NEON[(k + Math.floor(T * 2)) & 3], 13);
+    if (w > 0.72) { const d = Math.hypot(v, w - 0.95); BG[i] = C(CYAN, 2 + 2 * (d < 0.15)); return set(i, d < 0.15 ? (Math.abs(fract(Math.atan2(w - 0.95, v) / Math.PI + T) - 0.5) < 0.1 ? '-' : '@') : ':', C(WHITE, 13)), true; } // the record, turning
+    if (Math.abs(Math.abs(v) - 0.3) < 0.04) { BG[i] = neon(v > 0 ? 1 : 3); return set(i, '|', C(WHITE, 15)), true; } // the neon tubes
+    if (w > 0.4) { BG[i] = C(GRAY, 1.5); return set(i, fract(v * 12) < 0.4 ? 'o' : ' ', C(YEL, 12)), true; } // the buttons
+    BG[i] = C(BRICK, 1.2 + L * 0.2); return set(i, '#', C(GRAY, L * 0.7)), true; // the grille
+  };
+  drawBox(boxAt(vx, vy, fx, fy, hl, hw, 0, top), (i, t, L) => {
+    if (HIT.face === 1) return front(i, t, L, HIT.w, HIT.v);
+    if (Math.abs(Math.abs(HIT.v) - hw) < 0.03 || HIT.face >= 5) { BG[i] = C(GRAY, 3 + L * 0.3); return set(i, ' ', 0), true; }
+    BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, '|', C(BRICK, L * 0.6)), true;
+  });
+  const ARCH = 24; // the arched top, in enough slices that its outline reads as a curve
+  for (let k = 0; k < ARCH; k++) {
+    const vm = -hw + (k + 0.5) * 2 * hw / ARCH, zt = top + Math.sqrt(Math.max(0, hw * hw - vm * vm)) * 0.7;
+    drawBox(boxAt(vx + ax * vm, vy + ay * vm, fx, fy, hl, hw / ARCH, top, zt), (i, t, L) => {
+      if (HIT.face === 1) { BG[i] = C(NEON[(Math.floor(k / 3) + Math.floor(T * 3)) & 3], 9 + L * 0.2); return set(i, '*', C(WHITE, 15)), true; }
+      BG[i] = C(BRICK, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true;
+    });
+  }
+}, [Math.abs(fx) * 0.25 + Math.abs(fy) * 0.45, Math.abs(fx) * 0.45 + Math.abs(fy) * 0.25, 1.45]);
+// a treadmill, the runner facing (0, -1): the deck and its moving belt, uprights up to the console, handrails
+const TREADMILL = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 0, 1, 0.8, 0.36, 0, 0.18), (i, t, L) => {
+    if (HIT.face === 5) { const belt = Math.abs(HIT.v) < 0.27; BG[i] = C(GRAY, belt ? 0.8 : 2.5); return set(i, belt && fract((HIT.u + T * 2.5) * 5) < 0.12 ? '-' : ' ', C(GRAY, L * 0.6)), true; }
+    BG[i] = C(GRAY, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, '_', C(GRAY, L * 0.5)), true;
+  });
+  for (const e of [-1, 1]) {
+    rod(vx + e * 0.32, vy - 0.65, 0.15, vx + e * 0.3, vy - 0.82, 1.15, 0.02, GRAY, 1.2);
+    rod(vx + e * 0.3, vy - 0.78, 1.0, vx + e * 0.32, vy - 0.35, 0.95, 0.015, GRAY, 1.2);
+  }
+  drawBox(boxAt(vx, vy - 0.85, 0, 1, 0.08, 0.36, 1.05, 1.28), (i, t, L) => {
+    if (HIT.face === 1) { BG[i] = C(CYAN, 2.5); return set(i, fract(HIT.v * 10 + T) < 0.3 ? '#' : ':', C(WHITE, 12)), true; }
+    BG[i] = C(GRAY, (1.5 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true;
+  });
+}, [0.36, 0.9, 1.28]);
+// a dumbbell rack against the wall: a frame of two shelves, a row of dumbbells on each, the heavy ones at the end
+const WEIGHT_RACK = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  for (const e of [-1, 1]) rod(vx + e * 0.88, vy, 0, vx + e * 0.88, vy, 0.95, 0.025, GRAY, 1.1);
+  for (const z of [0.35, 0.75]) for (const d of [-0.12, 0.12]) rod(vx - 0.88, vy + d, z, vx + 0.88, vy + d, z, 0.015, GRAY, 1.1);
+  for (const z of [0.35, 0.75]) for (let k = 0; k < 7; k++) {
+    const x0 = vx - 0.72 + k * 0.24, r = 0.045 + k * 0.006 + (z > 0.5 ? 0 : 0.012), col = k & 1 ? GRAY : BRICK;
+    rod(x0, vy - 0.12, z + r, x0, vy + 0.12, z + r, 0.012, GRAY, 1.2);
+    for (const e of [-1, 1]) drawRod(x0, vy + e * 0.07, z + r, x0, vy + e * 0.11, z + r, r, (i, t, L) => { BG[i] = C(col, 1.2 + L * 0.3); return set(i, 'O', C(GRAY, L * 0.5)), true; });
+  }
+}, [0.9, 0.2, 0.95]);
+// a barber's pole: a glass drum with red, white and blue spiralling up it, chrome caps, a bracket to the wall
+const BARBER_POLE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // (on the west wall, x = 1)
+  drum(vx, vy, 0.08, 0.5, 1.45, (i, t, L) => {
+    const k = mod(Math.floor((Math.atan2(HIT.v, HIT.u) / (Math.PI * 2) + HIT.w * 3 - T * 0.8) * 3), 3);
+    BG[i] = C([RED, WHITE, BLUE][k], (k === 1 ? 6 : 3) * drumLit(0.08) + L * 0.2); return set(i, ' ', 0), true;
+  });
+  for (const z of [0.44, 1.51]) drum(vx, vy, 0.1, z - 0.06, z, CHROME);
+  dot(vx, vy, 1.56, 0.07, CHROME);
+  rod(vx, vy, 1.0, vx - (x - 1), vy, 1.0, 0.015, GRAY, 1.2); // its bracket, back to the wall
+}, [0.12, 0.12, 1.6]);
+// a barber's chair, facing (0, -1): chrome base and column, a red padded seat and back, a headrest, arms, a footrest
+const BARBER_CHAIR = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  const red = (i, t, L) => { BG[i] = C(RED, (2 + L * 0.35) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? ' ' : fract(HIT.w * 14) < 0.15 ? '-' : ' ', C(RED, L * 0.5)), true; };
+  drum(vx, vy, 0.25, 0, 0.05, CHROME);
+  drum(vx, vy, 0.07, 0.05, 0.3, CHROME);
+  drawBox(boxAt(vx, vy, 1, 0, 0.26, 0.25, 0.3, 0.45), red);
+  drawBox(boxAt(vx, vy + 0.27, 1, 0, 0.26, 0.06, 0.4, 1.05), red);
+  drawBox(boxAt(vx, vy + 0.28, 1, 0, 0.12, 0.06, 1.1, 1.25), red);
+  rod(vx, vy + 0.28, 1.05, vx, vy + 0.28, 1.1, 0.015, GRAY, 1.2);
+  for (const e of [-1, 1]) { drawBox(boxAt(vx + e * 0.3, vy - 0.02, 1, 0, 0.04, 0.24, 0.58, 0.63), CHROME); rod(vx + e * 0.3, vy - 0.18, 0.45, vx + e * 0.3, vy - 0.18, 0.58, 0.012, GRAY, 1.2); }
+  drawBox(boxAt(vx, vy - 0.42, 1, 0, 0.18, 0.06, 0.13, 0.17), CHROME);
+  for (const e of [-1, 1]) rod(vx + e * 0.12, vy - 0.42, 0.15, vx + e * 0.12, vy - 0.2, 0.32, 0.012, GRAY, 1.2);
+}, [0.34, 0.3, 1.25]);
+// a PA speaker on the floor, facing (0, 1): a black cabinet, the woofer and tweeter on its front in rings
+const SPEAKER = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, 0.28, 0.2, 0, 0.9), (i, t, L) => {
+    BG[i] = C(GRAY, (0.8 + L * 0.15) * shadeFace(HIT.face));
+    if (HIT.face !== 3) return set(i, ' ', 0), true;
+    for (const [w, r] of [[0.3, 0.17], [0.7, 0.07]]) { const d = Math.hypot(HIT.u, HIT.w - w); if (d < r) { BG[i] = C(GRAY, d > r * 0.8 ? 2.5 : d < r * 0.25 ? 2 : 0.4); return set(i, d > r * 0.8 ? 'o' : ' ', C(GRAY, L)), true; } }
+    return set(i, ' ', 0), true;
+  });
+}, [0.28, 0.2, 0.9]);
+// a bouquet in a glass vase: stems fanning up, a flower head on each in the bloom's colour
+const BOUQUET = (x, y, bloom) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx, vy, 0.09, 0, 0.32, (i, t, L) => { BG[i] = C(CYAN, (1.6 + L * 0.3) * drumLit(0.09)); return set(i, HIT.face === 5 ? '~' : ':', C(WHITE, L * 0.6)), true; });
+  for (let k = 0; k < 7; k++) {
+    const a = k / 7 * Math.PI * 2 + x, r = 0.05 + (k % 3) * 0.035, z = 0.48 + (k % 3) * 0.06, tx = vx + Math.cos(a) * r, ty = vy + Math.sin(a) * r;
+    rod(vx, vy, 0.28, tx, ty, z, 0.004, GREEN, 0.9);
+    dot(tx, ty, z + 0.02, 0.035, (i, t, L) => { BG[i] = C(k === 3 ? YEL : bloom, 3 + L * 0.4); return set(i, '*', C(WHITE, L * 0.6)), true; });
+  }
+});
+// a grab pole, floor to ceiling
+const GRAB_POLE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => rod(vx, vy, 0, vx, vy, room.def.height || 3, 0.02, WHITE, 1.1), [0.03, 0.03, 3]); // (floor to ceiling)
+// a coil of rope lying flat on the floor, a sailor's coil: one rope spiralling in from its outer end, each turn lying
+// against the last, its loose end trailing off into the room. One surface from one distance function (the spiral and
+// the tail together), traced per cell, so the turns never overlap and it's lit and twisted continuously along its length.
+const COIL = { r: 0.026, R0: 0.3, turns: 4.3 }, COIL_B = 2 * COIL.r; // (b: how far in each turn steps: one rope's width)
+const COIL_TAIL = [[COIL.R0, 0], [COIL.R0 + 0.1, 0.18], [COIL.R0 + 0.04, 0.34], [COIL.R0 + 0.1, 0.46]];
+function coilDist(x, y, z) { // distance to the rope's surface, and where along it: [d, along, round]
+  const rho = Math.hypot(x, y), th = mod(Math.atan2(y, x), Math.PI * 2) / (Math.PI * 2), zc = z - COIL.r;
+  let best = Infinity, along = 0, round = 0;
+  const k0 = Math.round((COIL.R0 - rho) / COIL_B - th);
+  for (let k = k0 - 1; k <= k0 + 1; k++) {
+    const sp = clamp(th + k, 0, COIL.turns), rs = COIL.R0 - COIL_B * sp, a = sp * Math.PI * 2;
+    const d = Math.hypot(x - rs * Math.cos(a), y - rs * Math.sin(a), zc) - COIL.r;
+    if (d < best) { best = d; along = sp * Math.PI * 2 * (COIL.R0 - COIL_B * sp / 2); round = Math.atan2(zc, rho - rs); }
+  }
+  for (let k = 1; k < COIL_TAIL.length; k++) { // the loose end
+    const [ax, ay] = COIL_TAIL[k - 1], [bx, by] = COIL_TAIL[k], ex = bx - ax, ey = by - ay, q = clamp(((x - ax) * ex + (y - ay) * ey) / (ex * ex + ey * ey), 0, 1);
+    const cx = ax + ex * q, cy = ay + ey * q, d = Math.hypot(x - cx, y - cy, zc) - COIL.r;
+    if (d < best) { best = d; along = -(k - 1 + q) * 0.2; round = Math.atan2(zc, (x - cx) * -ey + (y - cy) * ex); }
+  }
+  return [best, along, round];
+}
+function rayCoil(ox, oy, oz, rx, ry, rz, b) { // sphere-traced through its bounding box; HIT.u, v, w: the point, local
+  const qx = ox - b.x, qy = oy - b.y, n = Math.hypot(rx, ry, rz);
+  let t0 = 0.01, t1 = Infinity;
+  for (const [o, d, lo, hi] of [[qx, rx, -b.hl, b.hl], [qy, ry, -b.hw, b.hw], [oz, rz, b.z0, b.z1]]) {
+    if (Math.abs(d) < 1e-12) { if (o < lo || o > hi) return -1; continue; }
+    const a = (lo - o) / d, c = (hi - o) / d; t0 = Math.max(t0, Math.min(a, c)); t1 = Math.min(t1, Math.max(a, c));
+  }
+  if (t0 > t1) return -1;
+  for (let t = t0, k = 0; k < 64 && t <= t1; k++) {
+    const x = qx + rx * t, y = qy + ry * t, z = oz + rz * t, [d] = coilDist(x, y, z);
+    if (d < Math.max(0.0008, 0.35 * t / projX)) { HIT.u = x; HIT.v = y; HIT.w = z; HIT.face = 0; return t; } // (half a cell thick at least, far off)
+    t += Math.max(d, 0.0005) / n;
+  }
+  return -1;
+}
+const ROPE_COIL = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox({ x: vx + 0.03, y: vy + 0.08, c: 1, s: 0, hl: COIL.R0 + COIL.r + 0.12, hw: COIL.R0 + COIL.r + 0.26, z0: 0, z1: 2 * COIL.r + 0.002 }, (i, t, L) => {
+    const lx = HIT.u + 0.03, ly = HIT.v + 0.08, z = HIT.w, e = 0.002, [, along, round] = coilDist(lx, ly, z);
+    const gx = coilDist(lx + e, ly, z)[0] - coilDist(lx - e, ly, z)[0], gy = coilDist(lx, ly + e, z)[0] - coilDist(lx, ly - e, z)[0], gz = coilDist(lx, ly, z + e)[0] - coilDist(lx, ly, z - e)[0];
+    const gn = Math.hypot(gx, gy, gz) || 1, light = 0.18 + 0.82 * Math.max(0, (-gx * 0.35 + gy * 0.25 + gz * 0.9) / gn / 1.0); // (the tops of the turns catch the light, the grooves between them don't)
+    const ridge = Math.max(0, Math.sin(round)), strand = fract(along / (COIL.r * 3) + round / Math.PI) < 0.3; // each turn a ridge, dark down its sides; the twist, faint
+    BG[i] = C(WARM, (0.6 + 4 * ridge * ridge) * (0.7 + 0.3 * light) * (strand ? 0.88 : 1) + L * 0.08);
+    return set(i, ' ', 0), true;
+  }, rayCoil);
+});
+// a pet shop's cage on its stand: wire bars all round you can see through, a tray at the bottom, a little one inside
+// (look, pose: its figure and pose key; h: its height, as built at scale 1)
+const CAGE_BARS = (i, t, L) => {
+  const f = HIT.face, edge = f >= 5 || fract((f <= 2 ? HIT.v : HIT.u) * 22) < 0.18 || HIT.w > 1.17 || HIT.w < 0.76;
+  if (!edge) return false;
+  BG[i] = C(GRAY, (2.5 + L * 0.35) * shadeFace(f)); return set(i, f >= 5 ? '#' : HIT.w < 0.76 ? '=' : '|', C(WHITE, L * 0.8)), true;
+};
+const petCage = (x, y, look, pose, h) => [BX(x, y, 0.42, 0.32, 0, 0.7, solid(BRICK, { top: '=', trim: 0.68 })), BX(x, y, 0.38, 0.28, 0.7, 1.2, CAGE_BARS),
+  figProp(x, y, look, { z: 0.72, h: h / look.scale(+pose().slice(1)), pose, face: [0, 0], chat: false, light: 8 })];
 // a solid shade: base colour, panel lines every `panel` metres on the sides, a trim at the top, `top` char on top
 const solid = (base, { panel = 0, top = ' ', trim = 0, bright = 1 } = {}) => (i, t, L) => {
   const f = HIT.face;
@@ -194,8 +366,8 @@ const ROOM_DEFS = {
   bar: { grid: boxRoom(12, 8, { '1,4': 'W', '3,4': 'W', '3,5': 'W', '3,6': 'W' }), wc: { x0: 1, y0: 5, x1: 3, y1: 7, sign: [1, 4, 1.5] }, light: 0.6, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, neon: true, glyphs: 'il!Y', keeper: [6, 1.1],
     props: r => {
       const p = [...counterBox(6, 1.8, 4, 1.1), standing(6, 1.1, r.neon),
-                 SP(10.6, 5.5, 0.9, 1.5, ART.jukebox, (c, row, L) => C(NEON[(row + (T * 2 | 0)) & 3], 14)), ...toilet(1.6, 6.4, 1, porcelain)];
-      for (let x = 3; x <= 9; x += 1.5) { p.push(SP(x, 2.65, 0.4, 0.75, ART.stool, wood)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
+                 JUKEBOX(10.55, 5.5, -1, 0), ...toilet(1.6, 6.4, 1, porcelain)];
+      for (let x = 3; x <= 9; x += 1.5) { p.push(STOOL(x, 2.65, RED)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
       return p;
     } },
   diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, 1.1], wall: dinerWall,
@@ -203,7 +375,7 @@ const ROOM_DEFS = {
       const p = [...counterBox(6, 1.75, 2), standing(6, 1.1, WHITE), ...toilet(1.6, 1.4, -1, porcelain)];
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
-        for (const s of [-0.95, 0.95]) { p.push(SP(x + s, y, 0.4, 0.75, ART.stool, wood)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] }); } // (on a stool, at the table)
+        for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] }); } // (on a stool, at the table)
       }
       return p;
     } },
@@ -235,15 +407,15 @@ const ROOM_DEFS = {
     } },
   hotel: { grid: boxRoom(12, 8, { '5,0': 'E', '6,0': 'E' }), light: 0.9, floor: 'wood', ceil: 'pendant', sign: true, signAt: 2.6, wall: hotelWall,
     keeper: [3.2, 2.0], ex: 6,
-    props: r => [BX(3.2, 2.6, 1.3, 0.35, 0, 1.1, solid(BRICK, { panel: 0.5, trim: 1.04, top: '=' })), standing(3.2, 2.0, r.neon), SP(1.4, 1.4, 0.7, 1.3, ART.plant, plantCol),
-                 SP(10.6, 1.4, 0.7, 1.3, ART.plant, plantCol), SP(10.6, 6, 0.7, 1.3, ART.plant, plantCol), standing(8, 4, shirt())] },
+    props: r => [BX(3.2, 2.6, 1.3, 0.35, 0, 1.1, solid(BRICK, { panel: 0.5, trim: 1.04, top: '=' })), standing(3.2, 2.0, r.neon), POT_PLANT(1.4, 1.4),
+                 POT_PLANT(10.6, 1.4), POT_PLANT(10.6, 6, 1.4), standing(8, 4, shirt())] },
   apts: { grid: boxRoom(8, 7, { '3,0': 'E', '4,0': 'E' }), light: 0.7, floor: 'tile', ceil: 'pendant', wall: aptsWall, ex: 4,
-    props: r => [SP(6.6, 5.4, 0.7, 1.3, ART.plant, plantCol), ...(chance(0.6) ? [standing(2.2, 4.4, shirt())] : [])] },
+    props: r => [POT_PLANT(6.6, 5.4), ...(chance(0.6) ? [standing(2.2, 4.4, shirt())] : [])] },
   gym: { grid: boxRoom(12, 9), light: 1, floor: 'rubber', ceil: 'strip', sign: true, wall: gymWall,
     props: r => {
-      const p = [SP(3, 6.5, 1.8, 1, ART.rack, (c, row, L) => C(c === 'O' ? GRAY : BRICK, L * 1.3)), SP(9, 6.5, 1.8, 1, ART.rack, (c, row, L) => C(c === 'O' ? GRAY : BRICK, L * 1.3))];
+      const p = [WEIGHT_RACK(3, 7.6), WEIGHT_RACK(9, 7.6)];
       for (const x of [2.5, 5, 7.5, 9.5]) {
-        p.push(SP(x, 2.6, 0.9, 1.3, ART.treadmill, (c, row, L) => C(GRAY, L * 1.2)));
+        p.push(TREADMILL(x, 2.75));
         if (chance(0.7)) { const k = Math.random() * 2, s = shirt(); // running in place
           p.push(figProp(x, 2.55, figAnyone(s, { top: pick(['tee', 'tank']), bot: 'shorts' }), { z: 0.2, face: [0, -1], chat: false, pose: () => 'run' + (Math.floor(T * 9 + k * 4) & 7) })); }
       }
@@ -252,9 +424,9 @@ const ROOM_DEFS = {
   barber: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', sign: true, wall: barberWall, keeper: [3.6, 1.9],
     props: r => {
       const p = [standing(3.6, 1.9, WHITE),
-                 SP(1.2, 5.5, 0.25, 1.6, ART.barberPole, (c, row, L) => c === '/' ? C([RED, WHITE, BLUE][(row + (T * 3 | 0)) % 3], 14) : C(GRAY, L))];
+                 BARBER_POLE(1.3, 5.5)];
       for (const x of [2.5, 5, 7.5]) {
-        p.push(SP(x, 1.8, 0.7, 1.2, ART.barberChair, (c, row, L) => C(row < 3 ? RED : GRAY, L)));
+        p.push(BARBER_CHAIR(x, 1.8));
         if (chance(0.6)) p.push(sitting(x, 1.85, shirt(), 0.45, true));
       }
       return p;
@@ -289,20 +461,20 @@ const ROOM_DEFS = {
     props: r => {
       const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })),
                  figProp(6, 2.25, figAnyone(r.neon, { mic: true, top: pick(['dress', 'tee', 'jacket']) }), { z: 0.3, face: [0, 1], pose: 'sing', chat: false, light: 14 }), // giving it everything, to the room
-                 SP(3.5, 2.3, 0.6, 0.9, ART.speaker, (c, row, L) => C(GRAY, L * 2)), SP(8.5, 2.3, 0.6, 0.9, ART.speaker, (c, row, L) => C(GRAY, L * 2))];
+                 SPEAKER(3.5, 2.3), SPEAKER(8.5, 2.3)];
       for (let k = 0; k < 6; k++) if (chance(barCrowd())) p.push(sitting(2.5 + Math.random() * 7, 4.5 + Math.random() * 2.5, shirt(), 0.35, true));
       return p;
     } },
   petshop: { grid: boxRoom(10, 8), light: 0.8, floor: 'tile', ceil: 'strip', sign: true, wall: petWall, keeper: [5, 1.05],
     props: r => [...counterBox(5, 1.7, 1.6), standing(5, 1.05, r.neon),
-                 SP(2.2, 4, 0.8, 0.8, ART.cage, (c, row, L) => C(c === 'o' ? YEL : GRAY, L)), SP(7.8, 4, 0.8, 0.8, ART.cage, (c, row, L) => C(c === 'o' ? YEL : GRAY, L)),
-                 SP(4.2, 5.3, 0.6, 0.6, ART.dog, (c, row, L) => C(BRICK, L * 1.3))] },
+                 ...petCage(2.2, 4, KITTEN_LOOK, () => fract(T / 6 + 0.4) < 0.04 ? 'f1' : 'f0', 0.5), ...petCage(7.8, 4, dogLook(WARM), () => 'f' + (5 + ((T * 4) & 1)), 0.5),
+                 figProp(4.2, 5.3, dogLook(BRICK), { h: 1.22 / 2, pose: () => 'f' + (5 + ((T * 2) & 1)), face: [0, 0], chat: false, light: 6 })] }, // a kitten, a puppy, and the shop dog
   florist: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, glyphs: '*@&%', wall: floristWall, keeper: [5, 1.05],
     props: r => {
       const p = [...counterBox(5, 1.7, 1.6), standing(5, 1.05, r.neon)];
       for (let k = 0; k < 7; k++) {
         const x = 1.5 + Math.random() * 7, y = 2.8 + Math.random() * 2.6, bloom = ITEM_COL[k & 7];
-        p.push(chance(0.5) ? SP(x, y, 0.7, 1.3, ART.plant, plantCol) : SP(x, y, 0.6, 0.8, ART.bouquet, (c, row, L) => C(row === 0 ? bloom : row === 1 ? GREEN : BRICK, L * 1.3)));
+        p.push(chance(0.5) ? POT_PLANT(x, y, 0.9 + Math.random() * 0.6, x * 7 + y, false) : BOUQUET(x, y, bloom)); // (scattered at random: they don't block, so they can't wall off the counter)
       }
       return p;
     } },
@@ -320,7 +492,7 @@ const ROOM_DEFS = {
         p.push({ ...BX(x, y, 1.8, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), seatRow: { x0: x - 1.55, x1: x + 1.55, y, fx: 0, fy: y < 2 ? 1 : -1 } }, BX(x, y < 2 ? y - 0.28 : y + 0.28, 1.8, 0.05, 0.45, 0.95, solid(BLUE, { panel: 0.9 })));
         if (chance(0.35)) p.push({ ...sitting(x - 1 + Math.random() * 2, y + (y < 2 ? 0.03 : -0.03), shirt(), 0.45), face: [0, y < 2 ? 1 : -1] });
       }
-      for (const x of [5.5, 10.5, 15.5]) p.push(SP(x, 2.5, 0.1, 3, ART.pole, (c, row, L) => C(WHITE, L)));
+      for (const x of [5.5, 10.5, 15.5]) p.push(GRAB_POLE(x, 2.5));
       return p;
     } },
   cafe: { grid: boxRoom(10, 8), light: 0.9, floor: 'wood', ceil: 'pendant', sign: false, wall: cafeWall, keeper: [5, 1.05],
@@ -347,7 +519,7 @@ const ROOM_DEFS = {
   noodle: { grid: boxRoom(12, 7), light: 0.75, floor: 'tile', ceil: 'lantern', sign: true, wall: noodleWall, keeper: [6, 1.0],
     props: r => {
       const p = [BX(6, 2.0, 4.6, 0.3, 0, 1.0, solid(BRICK, { panel: 0.75, trim: 0.95, top: '=' })), standing(6, 1.0, WHITE), standing(3.5, 1.0, WHITE)];
-      for (let x = 2; x <= 10; x += 1.35) { p.push(SP(x, 2.65, 0.4, 0.75, ART.stool, wood)); if (chance(0.5)) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
+      for (let x = 2; x <= 10; x += 1.35) { p.push(STOOL(x, 2.65, BRICK)); if (chance(0.5)) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
       return p;
     } },
   garage: { grid: boxRoom(14, 10), light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: garageWall, keeper: [6.5, 6.4],
@@ -390,7 +562,7 @@ const ROOM_DEFS = {
         const th = k / 12 * Math.PI * 2, c = Math.cos(th), s_ = Math.sin(th);
         return BX(4 + c * 0.55, 3.6 + s_ * 0.55, 0.45, 0.16, k * 0.2, k * 0.2 + 0.06, solid(GRAY, { top: '=' }), c, s_);
       }),
-      SP(1.4, 1.4, 0.6, 0.5, ['  ___ ', ' (@@@)', '(@@@@@)'], (c, row, L) => C(WARM, L)), // a coil of rope
+      ROPE_COIL(1.4, 1.4), // a coil of rope
     ] },
   // the lamp room: glass all round, the sea and the sky outside, the great lens turning in the middle
   // inside a portapotty on a building site: blue plastic, a vent of daylight, a steel bowl, somebody's number
@@ -414,7 +586,7 @@ const ROOM_DEFS = {
   // an estate agent's: listings in the window, a desk
   realty: { grid: boxRoom(9, 7), light: 0.9, floor: 'carpet', ceil: 'pendant', sign: true, signAt: 2.6, wall: realtyWall, keeper: [4.5, 2.0],
     props: r => [BX(4.5, 1.4, 1.2, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), standing(4.5, 2.0, GREEN),
-      SP(1.3, 1.3, 0.6, 1.2, ART.plant, plantCol), BENCHP(7.2, 4.6, -1, 0)] },
+      POT_PLANT(1.3, 1.3, 1.2), BENCHP(7.2, 4.6, -1, 0)] },
   home: homeDef(10, 9, 0), loft: homeDef(20, 16, 1), bellehome: homeDef(26, 20, 2),
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
@@ -597,9 +769,6 @@ function homeRecord(r = room) {
   const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1]));
   return owned.homes.find(h => h.cell === cell || SHOP[cell] && SHOP[h.cell] === SHOP[cell]) || null;
 }
-const homeCatArt = () => (T * 1.4 | 0) % 7 === 0
-  ? [' /\\_/\\ ', ' ( -.- )', '  > ^ < ']
-  : [' /\\_/\\ ', ' ( o.o )', '  > ^ < '];
 function homePlan(w, h, tier) {
   const extra = {}, inside = tier === 2 ? 19 : w - 1;
   const wall = (x0, y0, x1, y1, c = '#') => {
@@ -678,9 +847,9 @@ function homeDef(w, h, tier) {
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
       BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, solid(tier === 2 ? WHITE : BRICK, { panel: 0.6, top: '=' }), 0, 1),
       ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), BX(10.9, 1.4, 0.7, 0.18, 0, 2.4, solid(BRICK, { panel: 0.3, top: '=' })),
-        ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), SP(1.6, 8.9, 0.6, 1.5, ART.plant, plantCol)] : []),
+        ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), POT_PLANT(1.6, 8.9, 1.5)] : []),
       ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),
-        SP(23.6, 14.8, 0.8, 1.4, ART.plant, plantCol), BX(23.6, 14.8, 0.4, 0.3, 0, 0.45, solid(WHITE)), SP(21, 9, 0.6, 1.5, ART.plant, plantCol)] : []),
+        POT_PLANT(23.6, 14.8, 1.6), POT_PLANT(21, 9, 1.5)] : []),
       ...plan.lamps.flatMap(([x, y]) => {
         const ceiling = tier ? 3.6 : 3;
         const glow = (i, t, L) => { BG[i] = C(STONE, 8); return set(i, HIT.face === 5 ? '=' : 'o', C(WARM, 15)), true; };
@@ -994,6 +1163,7 @@ function roomCeil(i, r, x, rx, ry) {
 function roomSprites() {
   for (const s of room.props) {
     if (s.tick) s.tick(s); // (someone walking about)
+    if (s.draw) { s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
     if (s.box) { drawBox({ ...s.box, x: s.box.x - px, y: s.box.y - py }, s.shade); continue; }
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
     if (s.vm) { drawVending(s.vm, s.x - px, s.y - py, 10); continue; } // a vending machine, life size
@@ -1010,8 +1180,10 @@ function roomSprites() {
       drawDropped({ ...it, displayZ: 1.07 }, x - px, shelf[1] - py, 0.065);
     }
     const pets = home.pets || (home.pet ? [home.pet] : []);
-    if (pets.includes('petcat')) drawArt(pet[0] - 0.35 - px, pet[1] - py, 0, 0.34, 0.54, homeCatArt(), (c, row) => C(row === 1 && c === 'o' ? GREEN : row === 0 ? GRAY : BRICK, 13));
-    if (pets.includes('petdog')) drawArt(pet[0] + 0.35 - px, pet[1] - py, 0, 0.4, 0.42, ART.dog, (c, row, L) => C(BRICK, L * 1.3));
+    // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
+    const watch = (x, y) => Math.hypot(x - px, y - py) < 2.5 ? [0, 0] : [1, 0.4];
+    if (pets.includes('petcat')) { const x = pet[0] - 0.12, y = pet[1]; drawAnimal(x - px, y - py, 0, 0.75, ...watch(x, y), CAT_LOOK, fract(T / 5) < 0.05 ? 1 : 0, { light: 6 }); }
+    if (pets.includes('petdog')) { const x = pet[0] + 0.5, y = pet[1]; drawAnimal(x - px, y - py, 0, 1.22, ...watch(x, y), dogLook(BRICK), 5 + ((T * (Math.hypot(x - px, y - py) < 2.5 ? 6 : 1.5)) & 1), { light: 6 }); }
   }
   if (room.kind === 'station') {
     const tx = trainX(room);

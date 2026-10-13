@@ -77,8 +77,21 @@ function clubSprites() {
   const dx_ = CLUB.bx * 8 + 2 + 3, dy_ = CLUB.by * 8 + 2 - 0.1, [vx, vy] = R(dx_, dy_);
   if (Math.hypot(vx, vy) > vis) return;
   drawFigure(vx + 0.06, vy, 0, 0.19, 0, -1, BOUNCER, 'fold', { light: 6 }); // arms folded, facing the street
-  for (const s of [-0.13, -0.03]) drawArt(vx + s, vy, 0, 0.012, 0.07, ['o', '|', '|', '|', '='], () => C(YEL, 12)); // brass posts
-  drawArt(vx - 0.08, vy, 0.045, 0.09, 0.015, ['~~~~~~'], () => C(RED, 14)); // the rope
+  drawVelvetRope(vx - 0.13, vy, vx - 0.03, vy);
+}
+// brass posts with a red rope sagging between them, hooked on just under their knobs
+const BRASS = (i, t, L) => { BG[i] = C(YEL, 3 + L * 0.3); return set(i, '|', C(YEL, 12)), true; };
+function drawVelvetRope(ax, ay, bx, by) {
+  const top = 0.065;
+  for (const [x, y] of [[ax, ay], [bx, by]]) {
+    drawBox(boxAt(x, y, 1, 0, 0.01, 0.01, 0, 0.006), BRASS); // the foot
+    drawRod(x, y, 0.006, x, y, top, 0.004, BRASS);
+    dot(x, y, top + 0.006, 0.007, (i, t, L) => { BG[i] = C(YEL, 5 + L * 0.3); return set(i, 'o', C(WHITE, 12)), true; });
+  }
+  const segs = 5, z = k => top - 0.008 - 0.018 * Math.sin(Math.PI * k / segs), lerp = (p, q, k) => p + (q - p) * k / segs;
+  for (let k = 0; k < segs; k++)
+    drawRod(lerp(ax, bx, k), lerp(ay, by, k), z(k), lerp(ax, bx, k + 1), lerp(ay, by, k + 1), z(k + 1), 0.004,
+      (i, t, L) => { BG[i] = C(RED, 3 + L * 0.3); return set(i, '~', C(RED, 14)), true; });
 }
 // ---- inside
 const CLUB_W = 18, CLUB_H = 14;
@@ -123,7 +136,7 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
         if (chance(busy)) p.push(sitting(cx, cy - 0.04, shirt(), 0.42, true));
       }
     }
-    for (const y of [5.2, 6.8]) { p.push(SP(3.05, y, 0.4, 0.75, ART.stool, wood)); if (chance(busy)) p.push({ ...sitting(3.05, y, shirt(), 0.6), face: [-1, 0] }); } // stools at the bar, facing it
+    for (const y of [5.2, 6.8]) { p.push(STOOL(3.05, y, MAG)); if (chance(busy)) p.push({ ...sitting(3.05, y, shirt(), 0.6), face: [-1, 0] }); } // stools at the bar, facing it
     p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
     p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
     p.push(standing(13.4, 10.2, GRAY)); // the host by the curtain
