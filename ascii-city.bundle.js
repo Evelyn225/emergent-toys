@@ -10828,13 +10828,51 @@ const BOUQUET = (x, y, bloom) => ROOM_MODEL(x, y, (vx, vy) => {
 });
 // a grab pole, floor to ceiling
 const GRAB_POLE = (x, y) => ROOM_MODEL(x, y, (vx, vy) => rod(vx, vy, 0, vx, vy, 2.5, 0.02, WHITE, 1.1));
-// a coil of rope on the floor: the rope spiralling up in turns, each a little tighter, hollow in the middle, its end
-// trailing off across the floor
-const ROPE = k => (i, t, L) => { const tone = (k & 1 ? 1 : 0.7) * (Math.floor(k / 14) & 1 ? 1 : 0.85); BG[i] = C(WARM, (2.2 + L * 0.4) * tone); return set(i, k & 1 ? '/' : ' ', C(BRICK, L * 0.7)), true; }; // (k: which bit of rope: the twist, and a shade a turn)
+// a coil of rope lying flat on the floor, a sailor's coil: one rope spiralling in from its outer end, each turn lying
+// against the last, its loose end trailing off into the room. One surface from one distance function (the spiral and
+// the tail together), traced per cell, so the turns never overlap and it's lit and twisted continuously along its length.
+const COIL = { r: 0.026, R0: 0.3, turns: 4.3 }, COIL_B = 2 * COIL.r; // (b: how far in each turn steps: one rope's width)
+const COIL_TAIL = [[COIL.R0, 0], [COIL.R0 + 0.1, 0.18], [COIL.R0 + 0.04, 0.34], [COIL.R0 + 0.1, 0.46]];
+function coilDist(x, y, z) { // distance to the rope's surface, and where along it: [d, along, round]
+  const rho = Math.hypot(x, y), th = mod(Math.atan2(y, x), Math.PI * 2) / (Math.PI * 2), zc = z - COIL.r;
+  let best = Infinity, along = 0, round = 0;
+  const k0 = Math.round((COIL.R0 - rho) / COIL_B - th);
+  for (let k = k0 - 1; k <= k0 + 1; k++) {
+    const sp = clamp(th + k, 0, COIL.turns), rs = COIL.R0 - COIL_B * sp, a = sp * Math.PI * 2;
+    const d = Math.hypot(x - rs * Math.cos(a), y - rs * Math.sin(a), zc) - COIL.r;
+    if (d < best) { best = d; along = sp * Math.PI * 2 * (COIL.R0 - COIL_B * sp / 2); round = Math.atan2(zc, rho - rs); }
+  }
+  for (let k = 1; k < COIL_TAIL.length; k++) { // the loose end
+    const [ax, ay] = COIL_TAIL[k - 1], [bx, by] = COIL_TAIL[k], ex = bx - ax, ey = by - ay, q = clamp(((x - ax) * ex + (y - ay) * ey) / (ex * ex + ey * ey), 0, 1);
+    const cx = ax + ex * q, cy = ay + ey * q, d = Math.hypot(x - cx, y - cy, zc) - COIL.r;
+    if (d < best) { best = d; along = -(k - 1 + q) * 0.2; round = Math.atan2(zc, (x - cx) * -ey + (y - cy) * ex); }
+  }
+  return [best, along, round];
+}
+function rayCoil(ox, oy, oz, rx, ry, rz, b) { // sphere-traced through its bounding box; HIT.u, v, w: the point, local
+  const qx = ox - b.x, qy = oy - b.y, n = Math.hypot(rx, ry, rz);
+  let t0 = 0.01, t1 = Infinity;
+  for (const [o, d, lo, hi] of [[qx, rx, -b.hl, b.hl], [qy, ry, -b.hw, b.hw], [oz, rz, b.z0, b.z1]]) {
+    if (Math.abs(d) < 1e-12) { if (o < lo || o > hi) return -1; continue; }
+    const a = (lo - o) / d, c = (hi - o) / d; t0 = Math.max(t0, Math.min(a, c)); t1 = Math.min(t1, Math.max(a, c));
+  }
+  if (t0 > t1) return -1;
+  for (let t = t0, k = 0; k < 64 && t <= t1; k++) {
+    const x = qx + rx * t, y = qy + ry * t, z = oz + rz * t, [d] = coilDist(x, y, z);
+    if (d < Math.max(0.0008, 0.35 * t / projX)) { HIT.u = x; HIT.v = y; HIT.w = z; HIT.face = 0; return t; } // (half a cell thick at least, far off)
+    t += Math.max(d, 0.0005) / n;
+  }
+  return -1;
+}
 const ROPE_COIL = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  const r0 = 0.035, turns = 3.5, seg = 14, n = Math.round(turns * seg), at = k => { const a = k / seg * Math.PI * 2, r = 0.27 - k / n * 0.09; return [vx + Math.cos(a) * r, vy + Math.sin(a) * r, r0 + k / n * turns * 0.055]; };
-  for (let k = 0; k < n; k++) { const [ax, ay, az] = at(k), [bx, by, bz] = at(k + 1); drawRod(ax, ay, az, bx, by, bz, r0, ROPE(k)); }
-  const [ex, ey] = at(0); for (const [k, [ax, ay, bx, by]] of [[0, 0, 0.06, 0.14], [1, 0.06, 0.14, 0.12, 0.28], [2, 0.12, 0.28, 0.07, 0.37], [3, 0.07, 0.37, 0.02, 0.45]].entries()) drawRod(ex + ax, ey + ay, r0, ex + bx, ey + by, r0, r0, ROPE(k + 1)); // the loose end
+  drawBox({ x: vx + 0.03, y: vy + 0.08, c: 1, s: 0, hl: COIL.R0 + COIL.r + 0.12, hw: COIL.R0 + COIL.r + 0.26, z0: 0, z1: 2 * COIL.r + 0.002 }, (i, t, L) => {
+    const lx = HIT.u + 0.03, ly = HIT.v + 0.08, z = HIT.w, e = 0.002, [, along, round] = coilDist(lx, ly, z);
+    const gx = coilDist(lx + e, ly, z)[0] - coilDist(lx - e, ly, z)[0], gy = coilDist(lx, ly + e, z)[0] - coilDist(lx, ly - e, z)[0], gz = coilDist(lx, ly, z + e)[0] - coilDist(lx, ly, z - e)[0];
+    const gn = Math.hypot(gx, gy, gz) || 1, light = 0.18 + 0.82 * Math.max(0, (-gx * 0.35 + gy * 0.25 + gz * 0.9) / gn / 1.0); // (the tops of the turns catch the light, the grooves between them don't)
+    const ridge = Math.max(0, Math.sin(round)), strand = fract(along / (COIL.r * 3) + round / Math.PI) < 0.3; // each turn a ridge, dark down its sides; the twist, faint
+    BG[i] = C(WARM, (0.6 + 4 * ridge * ridge) * (0.7 + 0.3 * light) * (strand ? 0.88 : 1) + L * 0.08);
+    return set(i, ' ', 0), true;
+  }, rayCoil);
 });
 // a pet shop's cage on its stand: wire bars all round you can see through, a tray at the bottom, a little one inside
 // (look, pose: its figure and pose key; h: its height, as built at scale 1)
