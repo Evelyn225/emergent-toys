@@ -300,7 +300,7 @@ function loop(t) {
 // double vision: a ghost of the frame laid over itself, drifting apart and back, stronger the more you've had
 function drunkVision(wob) {
   const k = Math.min(1, wob), ox = Math.sin(T * 0.7) * 18 * k + 4 * k, oy = Math.cos(T * 0.53) * 6 * k;
-  g.save(); g.globalAlpha = 0.18 + 0.22 * k; g.drawImage(cv, ox, oy); g.restore();
+  g.save(); g.globalAlpha = 0.18 + 0.22 * k; g.drawImage(frameCanvas(), ox, oy); g.restore(); // (the whole picture, frame and all)
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way
 function chaseCam(dt) {

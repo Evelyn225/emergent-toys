@@ -5,6 +5,9 @@ function forNear(b, fn) {
   for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) for (const it of b[bi(cx + i, cy + j)]) fn(it);
 }
 const R = (x, y) => [rel(x - px), rel(y - py)];
+// could anything within r of (vx, vy) (camera-relative) be on screen? Behind you, past the draw distance or off to
+// the side of the view, no: a model checks this before building itself, so it costs nothing when it can't be seen
+const inView = (vx, vy, r) => { const d = dx * vx + dy * vy; return d > -r && d < vis + r && Math.abs(-dy * vx + dx * vy) - r <= (Math.max(d, 0) + r) * tf; };
 // how much a world direction (ax, ay) lies across our view of a point at (vx, vy): +1 = pointing right on screen
 const across = (ax, ay, vx, vy) => { const n = Math.hypot(vx, vy) || 1; return (ax * -vy + ay * vx) / n; };
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
@@ -126,6 +129,7 @@ function citySprites() {
   bayBoats(); // (marina.js: real 3D boats)
   marinaSprites();
   forNear(extrasB, o => {
+    if (!inView(rel(o.x - px), rel(o.y - py), 0.6)) return;
     if (o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8 || o.when && !o.when()) return; // (not the spire you're standing under)
     if (o.parkLamp) drawParkLamp(...R(o.x, o.y));
     else if (o.fairPost) drawFairPost(o, ...R(o.x, o.y));
@@ -138,14 +142,15 @@ function citySprites() {
   });
   drawGrandHotelDome();
   for (const v of vendors) {
+    if (!inView(rel(v.x - px), rel(v.y - py), 0.5)) continue;
     drawCart(v);
     drawFigure(...R(v.x + v.ox, v.y + v.oy), 0, 0.175, 0, 0, v.look ||= figStreetLook(hash(v.x, v.y, 9080) * 1e9 | 0, v.shirt, GRAY)); // (minding the cart: facing you)
   }
-  for (const r of radios) { const [vx, vy] = R(r.x, r.y); if (Math.hypot(vx, vy) < vis + 2) drawRadioTower(vx, vy); }
-  for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis) drawStationEntrance(s, vx, vy); }
+  for (const r of radios) { const [vx, vy] = R(r.x, r.y); if (inView(vx, vy, 1.2)) drawRadioTower(vx, vy); }
+  for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis && inView(vx, vy, 1)) drawStationEntrance(s, vx, vy); }
   forNear(roofsB, o => {
     const [vx, vy] = R(o.x, o.y);
-    if (Math.hypot(vx, vy) < vis + 1) (o.kind === 'tank' ? drawTank : o.kind === 'antenna' ? drawAntenna : drawBoard)(o, vx, vy);
+    if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, 0.6)) (o.kind === 'tank' ? drawTank : o.kind === 'antenna' ? drawAntenna : drawBoard)(o, vx, vy);
   });
   for (const k of cranes) {
     const [vx, vy] = R(k.x, k.y);
@@ -156,11 +161,11 @@ function citySprites() {
     let below = 0;
     for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) below = Math.max(below, map[idx(Math.floor(tx) + i, Math.floor(ty) + j)]);
     k.tro = f; k.hz = Math.min(k.H - 0.6, below + 0.5 + 0.8 * (0.5 + 0.5 * Math.sin(T * 0.05 + k.slew * 3)));
-    drawCrane(k, vx, vy, th);
+    if (inView(vx, vy, JIB + 0.6)) drawCrane(k, vx, vy, th); // (the hook's height is kept up either way)
   }
   for (const s of stacks) {
     const [vx, vy] = R(s.x, s.y);
-    if (Math.abs(vx) < vis && Math.abs(vy) < vis) { drawStack(s, vx, vy); drawShape(vx, vy, s.z + s.H, 1.6, 2.2, (i, u, z, du, dz, L) => smokeCell(i, u, z, L, s)); }
+    if (Math.abs(vx) < vis && Math.abs(vy) < vis && inView(vx, vy, 1.6)) { drawStack(s, vx, vy); drawShape(vx, vy, s.z + s.H, 1.6, 2.2, (i, u, z, du, dz, L) => smokeCell(i, u, z, L, s)); }
   }
   forNear(lampsB, ({ x, y, ax, ay, top = LAMP_TOP }) => {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
@@ -172,10 +177,10 @@ function citySprites() {
   });
   islandSprites();
   fairSprites();
-  forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
+  forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
-  forNear(lightsB, drawSignal);
+  forNear(lightsB, s => { if (inView(rel(s.x - px), rel(s.y - py), 0.3)) drawSignal(s); });
   bridgeSprites();
   elSprites();
   siren = null;
@@ -185,7 +190,7 @@ function citySprites() {
     const hx = steering ? Math.cos(m.laneYaw) : m.hx, hy = steering ? Math.sin(m.laneYaw) : m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
     if ((m.ev || m.patrol) && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
-    drawVehicle(m, vx, vy, hx, hy);
+    if (inView(vx, vy, 0.6)) drawVehicle(m, vx, vy, hx, hy); // (its siren lights the street even when it's out of sight)
   }
   for (const b of SERVICES) if (!b.out) { // parked out front of its station, ready to go
     const [vx, vy] = R(b.x, b.y);
@@ -1097,7 +1102,7 @@ function islandSprites() {
   if (D > vis + BEAM_LEN) return;
   drawFootbridge();
   const flare = drawBeams(lx, ly);
-  drawLighthouse(lx, ly, flare);
+  if (inView(lx, ly, 0.35)) drawLighthouse(lx, ly, flare); // (its beams sweep on regardless)
   if (flare > 0.05) { // the lamp, blazing straight at you
     const depth = dx * lx + dy * ly;
     if (depth > 0.3) {
@@ -1310,12 +1315,12 @@ function smokeCell(i, u, sz, L, s) {
 function bridgeSprites() {
   for (const t of towers) {
     const [vx, vy] = R(t.x, t.y);
-    if (Math.abs(vx) > vis + 2 || Math.abs(vy) > vis + 2) continue;
+    if (Math.abs(vx) > vis + 2 || Math.abs(vy) > vis + 2 || !inView(vx, vy, 1.3)) continue;
     drawBridgeTower(vx, vy);
   }
   forNear(bridgeB, b => {
     const [vx, vy] = R(b.x, b.y);
-    if (Math.abs(vx) > vis + 1 || Math.abs(vy) > vis + 1) return;
+    if (Math.abs(vx) > vis + 1 || Math.abs(vy) > vis + 1 || !inView(vx, vy, 0.6)) return;
     if (b.kind === 'hanger') return rod(vx, vy, b.z, vx, vy, b.z + b.h, 0.008, GRAY, 0.7);
     if (b.z2 != null) rod(vx, vy, b.z, vx, vy + 0.5, b.z2, 0.025, GRAY, 0.9); // the main cable, on to the next point
     if (night > 0.4) dot(vx, vy, b.z, Math.max(0.035, 0.6 * Math.hypot(vx, vy) / Math.min(projX, projY)), (i, t, L) => { BG[i] = C(WARM, 6); return set(i, '*', C(WARM, 15)), true; }); // its necklace of lights (kept wider than the cable, which is a character wide far off, so they show)
@@ -1372,8 +1377,8 @@ function drawElCar(vx, vy, cab) {
 }
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
 function elSprites() {
-  forNear(elPillarsB, drawElPillar);
-  for (const s of EL_STATIONS) for (const stairs of s.stairs) drawElStairs(stairs);
+  forNear(elPillarsB, p => { if (inView(rel(p.x - px), rel(p.y - py), 0.1)) drawElPillar(p); });
+  for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.x - px), rel(stairs.y - py), 0.5)) drawElStairs(stairs);
   for (const t of elTrains(T)) {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
@@ -1520,10 +1525,10 @@ function drawWheel(wx, wy) {
 const FAIR_SIGN = 'SUNSET PIER';
 function fairSprites() {
   const [wx, wy] = R(WHEEL.x, WHEEL.y);
-  if (Math.hypot(wx, wy) < vis + 4) drawWheel(wx, wy);
+  if (Math.hypot(wx, wy) < vis + 4 && inView(wx, wy, WHEEL.R + 0.3)) drawWheel(wx, wy);
   const [cx, cy] = R(CAROUSEL.x, CAROUSEL.y);
   if (fairRide && fairRide.kind === 'carousel') carouselInside(cx, cy); // on it: built round you, not a picture
-  else if (Math.hypot(cx, cy) < vis) drawCarousel(cx, cy);
+  else if (Math.hypot(cx, cy) < vis && inView(cx, cy, CAROUSEL.r + 0.1)) drawCarousel(cx, cy);
   // the arch over the way in, its name in bulbs
   const [gx, gy] = R(FAIR.cx, FAIR.y0 + 0.2), hw = 1.3;
   if (Math.hypot(gx, gy) > vis) return;

@@ -9010,6 +9010,9 @@ function forNear(b, fn) {
   for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) for (const it of b[bi(cx + i, cy + j)]) fn(it);
 }
 const R = (x, y) => [rel(x - px), rel(y - py)];
+// could anything within r of (vx, vy) (camera-relative) be on screen? Behind you, past the draw distance or off to
+// the side of the view, no: a model checks this before building itself, so it costs nothing when it can't be seen
+const inView = (vx, vy, r) => { const d = dx * vx + dy * vy; return d > -r && d < vis + r && Math.abs(-dy * vx + dx * vy) - r <= (Math.max(d, 0) + r) * tf; };
 // how much a world direction (ax, ay) lies across our view of a point at (vx, vy): +1 = pointing right on screen
 const across = (ax, ay, vx, vy) => { const n = Math.hypot(vx, vy) || 1; return (ax * -vy + ay * vx) / n; };
 let siren = null; // the emergency vehicle in sight, if any: floorCell washes its lights over the street
@@ -9131,6 +9134,7 @@ function citySprites() {
   bayBoats(); // (marina.js: real 3D boats)
   marinaSprites();
   forNear(extrasB, o => {
+    if (!inView(rel(o.x - px), rel(o.y - py), 0.6)) return;
     if (o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8 || o.when && !o.when()) return; // (not the spire you're standing under)
     if (o.parkLamp) drawParkLamp(...R(o.x, o.y));
     else if (o.fairPost) drawFairPost(o, ...R(o.x, o.y));
@@ -9143,14 +9147,15 @@ function citySprites() {
   });
   drawGrandHotelDome();
   for (const v of vendors) {
+    if (!inView(rel(v.x - px), rel(v.y - py), 0.5)) continue;
     drawCart(v);
     drawFigure(...R(v.x + v.ox, v.y + v.oy), 0, 0.175, 0, 0, v.look ||= figStreetLook(hash(v.x, v.y, 9080) * 1e9 | 0, v.shirt, GRAY)); // (minding the cart: facing you)
   }
-  for (const r of radios) { const [vx, vy] = R(r.x, r.y); if (Math.hypot(vx, vy) < vis + 2) drawRadioTower(vx, vy); }
-  for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis) drawStationEntrance(s, vx, vy); }
+  for (const r of radios) { const [vx, vy] = R(r.x, r.y); if (inView(vx, vy, 1.2)) drawRadioTower(vx, vy); }
+  for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis && inView(vx, vy, 1)) drawStationEntrance(s, vx, vy); }
   forNear(roofsB, o => {
     const [vx, vy] = R(o.x, o.y);
-    if (Math.hypot(vx, vy) < vis + 1) (o.kind === 'tank' ? drawTank : o.kind === 'antenna' ? drawAntenna : drawBoard)(o, vx, vy);
+    if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, 0.6)) (o.kind === 'tank' ? drawTank : o.kind === 'antenna' ? drawAntenna : drawBoard)(o, vx, vy);
   });
   for (const k of cranes) {
     const [vx, vy] = R(k.x, k.y);
@@ -9161,11 +9166,11 @@ function citySprites() {
     let below = 0;
     for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) below = Math.max(below, map[idx(Math.floor(tx) + i, Math.floor(ty) + j)]);
     k.tro = f; k.hz = Math.min(k.H - 0.6, below + 0.5 + 0.8 * (0.5 + 0.5 * Math.sin(T * 0.05 + k.slew * 3)));
-    drawCrane(k, vx, vy, th);
+    if (inView(vx, vy, JIB + 0.6)) drawCrane(k, vx, vy, th); // (the hook's height is kept up either way)
   }
   for (const s of stacks) {
     const [vx, vy] = R(s.x, s.y);
-    if (Math.abs(vx) < vis && Math.abs(vy) < vis) { drawStack(s, vx, vy); drawShape(vx, vy, s.z + s.H, 1.6, 2.2, (i, u, z, du, dz, L) => smokeCell(i, u, z, L, s)); }
+    if (Math.abs(vx) < vis && Math.abs(vy) < vis && inView(vx, vy, 1.6)) { drawStack(s, vx, vy); drawShape(vx, vy, s.z + s.H, 1.6, 2.2, (i, u, z, du, dz, L) => smokeCell(i, u, z, L, s)); }
   }
   forNear(lampsB, ({ x, y, ax, ay, top = LAMP_TOP }) => {
     const [vx, vy] = R(x, y), depth = dx * vx + dy * vy;
@@ -9177,10 +9182,10 @@ function citySprites() {
   });
   islandSprites();
   fairSprites();
-  forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
+  forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
-  forNear(lightsB, drawSignal);
+  forNear(lightsB, s => { if (inView(rel(s.x - px), rel(s.y - py), 0.3)) drawSignal(s); });
   bridgeSprites();
   elSprites();
   siren = null;
@@ -9190,7 +9195,7 @@ function citySprites() {
     const hx = steering ? Math.cos(m.laneYaw) : m.hx, hy = steering ? Math.sin(m.laneYaw) : m.hy;
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
     if ((m.ev || m.patrol) && lightsOn_(m) && Math.hypot(vx, vy) < vis) siren = m;
-    drawVehicle(m, vx, vy, hx, hy);
+    if (inView(vx, vy, 0.6)) drawVehicle(m, vx, vy, hx, hy); // (its siren lights the street even when it's out of sight)
   }
   for (const b of SERVICES) if (!b.out) { // parked out front of its station, ready to go
     const [vx, vy] = R(b.x, b.y);
@@ -10102,7 +10107,7 @@ function islandSprites() {
   if (D > vis + BEAM_LEN) return;
   drawFootbridge();
   const flare = drawBeams(lx, ly);
-  drawLighthouse(lx, ly, flare);
+  if (inView(lx, ly, 0.35)) drawLighthouse(lx, ly, flare); // (its beams sweep on regardless)
   if (flare > 0.05) { // the lamp, blazing straight at you
     const depth = dx * lx + dy * ly;
     if (depth > 0.3) {
@@ -10315,12 +10320,12 @@ function smokeCell(i, u, sz, L, s) {
 function bridgeSprites() {
   for (const t of towers) {
     const [vx, vy] = R(t.x, t.y);
-    if (Math.abs(vx) > vis + 2 || Math.abs(vy) > vis + 2) continue;
+    if (Math.abs(vx) > vis + 2 || Math.abs(vy) > vis + 2 || !inView(vx, vy, 1.3)) continue;
     drawBridgeTower(vx, vy);
   }
   forNear(bridgeB, b => {
     const [vx, vy] = R(b.x, b.y);
-    if (Math.abs(vx) > vis + 1 || Math.abs(vy) > vis + 1) return;
+    if (Math.abs(vx) > vis + 1 || Math.abs(vy) > vis + 1 || !inView(vx, vy, 0.6)) return;
     if (b.kind === 'hanger') return rod(vx, vy, b.z, vx, vy, b.z + b.h, 0.008, GRAY, 0.7);
     if (b.z2 != null) rod(vx, vy, b.z, vx, vy + 0.5, b.z2, 0.025, GRAY, 0.9); // the main cable, on to the next point
     if (night > 0.4) dot(vx, vy, b.z, Math.max(0.035, 0.6 * Math.hypot(vx, vy) / Math.min(projX, projY)), (i, t, L) => { BG[i] = C(WARM, 6); return set(i, '*', C(WARM, 15)), true; }); // its necklace of lights (kept wider than the cable, which is a character wide far off, so they show)
@@ -10377,8 +10382,8 @@ function drawElCar(vx, vy, cab) {
 }
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
 function elSprites() {
-  forNear(elPillarsB, drawElPillar);
-  for (const s of EL_STATIONS) for (const stairs of s.stairs) drawElStairs(stairs);
+  forNear(elPillarsB, p => { if (inView(rel(p.x - px), rel(p.y - py), 0.1)) drawElPillar(p); });
+  for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.x - px), rel(stairs.y - py), 0.5)) drawElStairs(stairs);
   for (const t of elTrains(T)) {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
@@ -10525,10 +10530,10 @@ function drawWheel(wx, wy) {
 const FAIR_SIGN = 'SUNSET PIER';
 function fairSprites() {
   const [wx, wy] = R(WHEEL.x, WHEEL.y);
-  if (Math.hypot(wx, wy) < vis + 4) drawWheel(wx, wy);
+  if (Math.hypot(wx, wy) < vis + 4 && inView(wx, wy, WHEEL.R + 0.3)) drawWheel(wx, wy);
   const [cx, cy] = R(CAROUSEL.x, CAROUSEL.y);
   if (fairRide && fairRide.kind === 'carousel') carouselInside(cx, cy); // on it: built round you, not a picture
-  else if (Math.hypot(cx, cy) < vis) drawCarousel(cx, cy);
+  else if (Math.hypot(cx, cy) < vis && inView(cx, cy, CAROUSEL.r + 0.1)) drawCarousel(cx, cy);
   // the arch over the way in, its name in bulbs
   const [gx, gy] = R(FAIR.cx, FAIR.y0 + 0.2), hw = 1.3;
   if (Math.hypot(gx, gy) > vis) return;
@@ -11812,7 +11817,7 @@ function roomCeil(i, r, x, rx, ry) {
 function roomSprites() {
   for (const s of room.props) {
     if (s.tick) s.tick(s); // (someone walking about)
-    if (s.draw) { s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
+    if (s.draw) { if (inView(s.x - px, s.y - py, 1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
     if (s.box) { drawBox({ ...s.box, x: s.box.x - px, y: s.box.y - py }, s.shade); continue; }
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
     if (s.vm) { drawVending(s.vm, s.x - px, s.y - py, 10); continue; } // a vending machine, life size
@@ -14921,7 +14926,7 @@ function drawMarinaBoard(vx, vy) {
 function marinaSprites() {
   for (const b of fleet) {
     const [vx, vy] = R(b.x, b.y);
-    if (Math.hypot(vx, vy) > vis + 1) continue;
+    if (Math.hypot(vx, vy) > vis + 1 || !inView(vx, vy, 1)) continue;
     drawBoat3D(b, vx, vy, b.hx, b.hy, b === sea ? clamp(Math.abs(b.v) / 0.8, 0, 1) : 0);
     if (b !== sea && (b.deal === 'sale' || b.deal === 'rent') && Math.hypot(vx, vy) < 6) { // a little board propped up on the deck
       const k = BOAT_KINDS[b.kind];
@@ -15182,8 +15187,102 @@ function render(dt) {
     hud();
   }
 }
-// paint the character grid (CH / COL / BG, with fog) onto the canvas: the world's frame, or a minigame's
+// paint the character grid (CH / COL / BG, with fog): the world's frame, or a minigame's. With WebGL the whole grid goes
+// in one shader pass (glPresent) onto a canvas of its own, just under the game's canvas, which is then left clear for
+// the HUD and whatever else draws over the frame; without it, the canvas calls of present2D. (Whatever needs the
+// picture as you see it, both layers together, takes frameCanvas().)
 function present() {
+  if (!glPresent()) present2D();
+}
+// One pass of a fragment shader over the WebGL canvas: per cell, its character (from an atlas of the ASCII
+// glyphs drawn in the game's own font), its text and background colours (palette indices) and their fog. The rare
+// non-ASCII character is drawn on the game's canvas over it with fillText, as present2D would. Gives up (returns false)
+// for good if WebGL isn't there or the context is lost, and the canvas calls take over.)
+let GLP = null, GLP_OFF = false, GLP_SOFT = false; // (GLP_SOFT: allow a software GL, which is slower than the 2D path; tests only)
+const GLP_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
+const GLP_FS = `precision highp float;
+uniform sampler2D cells, pal, atlas; uniform vec2 grid, cell, atlasSize; uniform float slotW, canvasH; uniform vec3 fog;
+vec3 palette(float k) { return k > 254.5 ? vec3(0.0) : texture2D(pal, vec2((k + 0.5) / 256.0, 0.5)).rgb; }
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, canvasH - gl_FragCoord.y), c = floor(p / cell);
+  if (c.x >= grid.x || c.y >= grid.y) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  vec4 d = floor(texture2D(cells, (c + 0.5) / grid) * 255.0 + 0.5);
+  float fs = floor(d.a / 16.0), fb = d.a - fs * 16.0;
+  vec3 col = mix(palette(d.b), fog, fb / 8.0);
+  if (d.r < 254.5 && fs < 7.5) {
+    vec2 l = p - c * cell;
+    float a = texture2D(atlas, vec2((d.r * slotW + l.x) / atlasSize.x, l.y / atlasSize.y)).a;
+    col = mix(col, mix(palette(d.g), fog, fs / 8.0), a);
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+function glPresentInit() {
+  const glc = document.createElement('canvas'), gl = glc.getContext('webgl', { alpha: false, antialias: false, depth: false, premultipliedAlpha: false, preserveDrawingBuffer: true, failIfMajorPerformanceCaveat: !GLP_SOFT }); // (kept: screenshots and double vision read it later)
+  if (!gl) return null;
+  // a GPU only: shading every pixel on the CPU (SwiftShader, llvmpipe) halves the frame rate the 2D canvas gets
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info'), who = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+  if (!GLP_SOFT && /swiftshader|llvmpipe|softpipe|software|basic render/i.test(who)) return null;
+  const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null; };
+  const vs = sh(gl.VERTEX_SHADER, GLP_VS), fs = sh(gl.FRAGMENT_SHADER, GLP_FS);
+  if (!vs || !fs) return null;
+  const prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW); // one triangle over the screen
+  const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const tex = unit => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    return t; };
+  const U = n => gl.getUniformLocation(prog, n), st = { glc, gl, prog, U, cells: tex(0), pal: tex(1), atlas: tex(2), key: '' };
+  gl.uniform1i(U('cells'), 0); gl.uniform1i(U('pal'), 1); gl.uniform1i(U('atlas'), 2);
+  const P = new Uint8Array(256 * 4); PALRGB.forEach((c, k) => P.set([c[0], c[1], c[2], 255], k * 4));
+  gl.activeTexture(gl.TEXTURE1); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, P);
+  glc.addEventListener('webglcontextlost', () => { GLP_OFF = true; GLP = null; glc.remove(); });
+  glc.style.zIndex = '0'; glc.style.pointerEvents = 'none'; cv.before(glc); // (under the game's canvas, which keeps the input)
+  return st;
+}
+// (re)build what depends on the screen's size: the glyph atlas, the cell texture, the canvas
+function glPresentSize(st) {
+  const { gl, U } = st, slotW = Math.ceil(cw) + 1, at = document.createElement('canvas'), x = at.getContext('2d');
+  at.width = 96 * slotW; at.height = FS;
+  x.font = FS + 'px monospace'; x.textBaseline = 'top'; x.fillStyle = '#fff';
+  for (let k = 1; k < 95; k++) x.fillText(String.fromCharCode(32 + k), k * slotW, 0); // ('!'..'~'; 0 is the space)
+  gl.activeTexture(gl.TEXTURE2); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, at);
+  st.data = new Uint8Array(cols * rows * 4);
+  gl.activeTexture(gl.TEXTURE0); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, st.data);
+  st.glc.width = cv.width; st.glc.height = cv.height; gl.viewport(0, 0, cv.width, cv.height);
+  gl.uniform2f(U('grid'), cols, rows); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('atlasSize'), at.width, at.height);
+  gl.uniform1f(U('slotW'), slotW); gl.uniform1f(U('canvasH'), cv.height);
+  st.key = [cols, rows, cw, FS, cv.width, cv.height].join();
+}
+function glPresent() {
+  if (GLP_OFF) return false;
+  if (!GLP) { try { GLP = glPresentInit(); } catch (e) { GLP = null; } if (!GLP) { GLP_OFF = true; return false; } }
+  const st = GLP, { gl, U } = st;
+  if (st.key !== [cols, rows, cw, FS, cv.width, cv.height].join()) glPresentSize(st);
+  const D = st.data, odd = []; // (cells whose character isn't plain ASCII: drawn over the top after)
+  for (let i = 0, n = cols * rows; i < n; i++) {
+    const ch = CH[i], code = typeof ch === 'string' && ch.length === 1 ? ch.charCodeAt(0) : 0, j = i * 4;
+    D[j] = code > 32 && code < 127 && FOGS[i] < 8 ? code - 32 : 255;
+    if (D[j] === 255 && ch && ch !== ' ' && FOGS[i] < 8 && !(code > 32 && code < 127)) odd.push(i);
+    D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
+  }
+  gl.activeTexture(gl.TEXTURE0); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RGBA, gl.UNSIGNED_BYTE, D);
+  gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  g.clearRect(0, 0, cv.width, cv.height); // (the game's canvas, clear over the frame for what's drawn on top)
+  for (const i of odd) { g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]]; g.fillText(CH[i], (i % cols) * cw, Math.floor(i / cols) * FS, cw); }
+  return true;
+}
+// the picture as you see it: the WebGL frame under the game's canvas, flattened into one canvas
+function frameCanvas() {
+  if (!GLP) return cv;
+  const c = document.createElement('canvas'), x = c.getContext('2d');
+  c.width = cv.width; c.height = cv.height; x.drawImage(GLP.glc, 0, 0); x.drawImage(cv, 0, 0);
+  return c;
+}
+// the same, in canvas calls: backgrounds run-length, then text a run of one colour at a time
+function present2D() {
   g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
   for (let r = 0; r < rows; r++) for (let x0 = 0; x0 < cols;) { // backgrounds, run-length
     const j = r * cols + x0, b = BG[j], s = FOGB[j]; let x1 = x0 + 1;
@@ -16696,7 +16795,7 @@ async function takeScreenshot() {
   screenshotBusy = true;
   try {
     const blob = await new Promise((resolve, reject) => {
-      cv.toBlob(value => {
+      frameCanvas().toBlob(value => { // (the frame and everything drawn over it)
         if (value) resolve(value);
         else reject(new Error('Could not capture the game view.'));
       }, 'image/png');
@@ -20485,7 +20584,7 @@ function loop(t) {
 // double vision: a ghost of the frame laid over itself, drifting apart and back, stronger the more you've had
 function drunkVision(wob) {
   const k = Math.min(1, wob), ox = Math.sin(T * 0.7) * 18 * k + 4 * k, oy = Math.cos(T * 0.53) * 6 * k;
-  g.save(); g.globalAlpha = 0.18 + 0.22 * k; g.drawImage(cv, ox, oy); g.restore();
+  g.save(); g.globalAlpha = 0.18 + 0.22 * k; g.drawImage(frameCanvas(), ox, oy); g.restore(); // (the whole picture, frame and all)
 }
 // third person: behind and above the car, easing round corners; pulled in if a wall is in the way
 function chaseCam(dt) {

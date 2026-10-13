@@ -34,7 +34,7 @@ async function takeScreenshot() {
   screenshotBusy = true;
   try {
     const blob = await new Promise((resolve, reject) => {
-      cv.toBlob(value => {
+      frameCanvas().toBlob(value => { // (the frame and everything drawn over it)
         if (value) resolve(value);
         else reject(new Error('Could not capture the game view.'));
       }, 'image/png');

@@ -159,7 +159,7 @@ function drawMarinaBoard(vx, vy) {
 function marinaSprites() {
   for (const b of fleet) {
     const [vx, vy] = R(b.x, b.y);
-    if (Math.hypot(vx, vy) > vis + 1) continue;
+    if (Math.hypot(vx, vy) > vis + 1 || !inView(vx, vy, 1)) continue;
     drawBoat3D(b, vx, vy, b.hx, b.hy, b === sea ? clamp(Math.abs(b.v) / 0.8, 0, 1) : 0);
     if (b !== sea && (b.deal === 'sale' || b.deal === 'rent') && Math.hypot(vx, vy) < 6) { // a little board propped up on the deck
       const k = BOAT_KINDS[b.kind];
