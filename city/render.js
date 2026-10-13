@@ -219,8 +219,103 @@ function render(dt) {
     hud();
   }
 }
-// paint the character grid (CH / COL / BG, with fog) onto the canvas: the world's frame, or a minigame's
+// paint the character grid (CH / COL / BG, with fog): the world's frame, or a minigame's. With WebGL the whole grid goes
+// in one shader pass (glPresent) onto a canvas of its own, just under the game's canvas, which is then left clear for
+// the HUD and whatever else draws over the frame; without it, the canvas calls of present2D. (Whatever needs the
+// picture as you see it, both layers together, takes frameCanvas().)
 function present() {
+  if (!glPresent()) present2D();
+}
+// One pass of a fragment shader over the WebGL canvas: per cell, its character (from an atlas of the ASCII
+// glyphs drawn in the game's own font), its text and background colours (palette indices) and their fog. The rare
+// non-ASCII character is drawn on the game's canvas over it with fillText, as present2D would. Gives up (returns false)
+// for good if WebGL isn't there or the context is lost, and the canvas calls take over.)
+let GLP = null, GLP_OFF = false, GLP_SOFT = false; // (GLP_SOFT: allow a software GL, which is slower than the 2D path; tests only)
+const GLP_VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
+const GLP_FS = `precision highp float;
+uniform sampler2D cells, pal, atlas; uniform vec2 grid, cell, atlasSize; uniform float slotW, canvasH; uniform vec3 fog;
+vec3 palette(float k) { return k > 254.5 ? vec3(0.0) : texture2D(pal, vec2((k + 0.5) / 256.0, 0.5)).rgb; }
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, canvasH - gl_FragCoord.y), c = floor(p / cell);
+  if (c.x >= grid.x || c.y >= grid.y) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  vec4 d = floor(texture2D(cells, (c + 0.5) / grid) * 255.0 + 0.5);
+  float fs = floor(d.a / 16.0), fb = d.a - fs * 16.0;
+  vec3 col = mix(palette(d.b), fog, fb / 8.0);
+  if (d.r < 254.5 && fs < 7.5) {
+    vec2 l = p - c * cell;
+    float a = texture2D(atlas, vec2((d.r * slotW + l.x) / atlasSize.x, l.y / atlasSize.y)).a;
+    col = mix(col, mix(palette(d.g), fog, fs / 8.0), a);
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+function glPresentInit() {
+  const glc = document.createElement('canvas'), gl = glc.getContext('webgl', { alpha: false, antialias: false, depth: false, premultipliedAlpha: false, preserveDrawingBuffer: true, failIfMajorPerformanceCaveat: !GLP_SOFT }); // (kept: screenshots and double vision read it later)
+  if (!gl) return null;
+  // a GPU only: shading every pixel on the CPU (SwiftShader, llvmpipe) halves the frame rate the 2D canvas gets
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info'), who = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+  if (!GLP_SOFT && /swiftshader|llvmpipe|softpipe|software|basic render/i.test(who)) return null;
+  const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null; };
+  const vs = sh(gl.VERTEX_SHADER, GLP_VS), fs = sh(gl.FRAGMENT_SHADER, GLP_FS);
+  if (!vs || !fs) return null;
+  const prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW); // one triangle over the screen
+  const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const tex = unit => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    return t; };
+  const U = n => gl.getUniformLocation(prog, n), st = { glc, gl, prog, U, cells: tex(0), pal: tex(1), atlas: tex(2), key: '' };
+  gl.uniform1i(U('cells'), 0); gl.uniform1i(U('pal'), 1); gl.uniform1i(U('atlas'), 2);
+  const P = new Uint8Array(256 * 4); PALRGB.forEach((c, k) => P.set([c[0], c[1], c[2], 255], k * 4));
+  gl.activeTexture(gl.TEXTURE1); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, P);
+  glc.addEventListener('webglcontextlost', () => { GLP_OFF = true; GLP = null; glc.remove(); });
+  glc.style.zIndex = '0'; glc.style.pointerEvents = 'none'; cv.before(glc); // (under the game's canvas, which keeps the input)
+  return st;
+}
+// (re)build what depends on the screen's size: the glyph atlas, the cell texture, the canvas
+function glPresentSize(st) {
+  const { gl, U } = st, slotW = Math.ceil(cw) + 1, at = document.createElement('canvas'), x = at.getContext('2d');
+  at.width = 96 * slotW; at.height = FS;
+  x.font = FS + 'px monospace'; x.textBaseline = 'top'; x.fillStyle = '#fff';
+  for (let k = 1; k < 95; k++) x.fillText(String.fromCharCode(32 + k), k * slotW, 0); // ('!'..'~'; 0 is the space)
+  gl.activeTexture(gl.TEXTURE2); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, at);
+  st.data = new Uint8Array(cols * rows * 4);
+  gl.activeTexture(gl.TEXTURE0); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, st.data);
+  st.glc.width = cv.width; st.glc.height = cv.height; gl.viewport(0, 0, cv.width, cv.height);
+  gl.uniform2f(U('grid'), cols, rows); gl.uniform2f(U('cell'), cw, FS); gl.uniform2f(U('atlasSize'), at.width, at.height);
+  gl.uniform1f(U('slotW'), slotW); gl.uniform1f(U('canvasH'), cv.height);
+  st.key = [cols, rows, cw, FS, cv.width, cv.height].join();
+}
+function glPresent() {
+  if (GLP_OFF) return false;
+  if (!GLP) { try { GLP = glPresentInit(); } catch (e) { GLP = null; } if (!GLP) { GLP_OFF = true; return false; } }
+  const st = GLP, { gl, U } = st;
+  if (st.key !== [cols, rows, cw, FS, cv.width, cv.height].join()) glPresentSize(st);
+  const D = st.data, odd = []; // (cells whose character isn't plain ASCII: drawn over the top after)
+  for (let i = 0, n = cols * rows; i < n; i++) {
+    const ch = CH[i], code = typeof ch === 'string' && ch.length === 1 ? ch.charCodeAt(0) : 0, j = i * 4;
+    D[j] = code > 32 && code < 127 && FOGS[i] < 8 ? code - 32 : 255;
+    if (D[j] === 255 && ch && ch !== ' ' && FOGS[i] < 8 && !(code > 32 && code < 127)) odd.push(i);
+    D[j + 1] = COL[i]; D[j + 2] = BG[i]; D[j + 3] = FOGS[i] * 16 + FOGB[i];
+  }
+  gl.activeTexture(gl.TEXTURE0); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RGBA, gl.UNSIGNED_BYTE, D);
+  gl.uniform3f(U('fog'), fogRGB[0] / 255, fogRGB[1] / 255, fogRGB[2] / 255);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  g.clearRect(0, 0, cv.width, cv.height); // (the game's canvas, clear over the frame for what's drawn on top)
+  for (const i of odd) { g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]]; g.fillText(CH[i], (i % cols) * cw, Math.floor(i / cols) * FS, cw); }
+  return true;
+}
+// the picture as you see it: the WebGL frame under the game's canvas, flattened into one canvas
+function frameCanvas() {
+  if (!GLP) return cv;
+  const c = GLP.flat ||= document.createElement('canvas'), x = c.getContext('2d'); // (one, reused: double vision wants it every frame)
+  if (c.width !== cv.width || c.height !== cv.height) { c.width = cv.width; c.height = cv.height; }
+  x.drawImage(GLP.glc, 0, 0); x.drawImage(cv, 0, 0); // (the GL frame is opaque, so it covers whatever was there)
+  return c;
+}
+// the same, in canvas calls: backgrounds run-length, then text a run of one colour at a time
+function present2D() {
   g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
   for (let r = 0; r < rows; r++) for (let x0 = 0; x0 < cols;) { // backgrounds, run-length
     const j = r * cols + x0, b = BG[j], s = FOGB[j]; let x1 = x0 + 1;

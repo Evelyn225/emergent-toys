@@ -128,6 +128,33 @@ test('Unicode graffiti keeps combining marks together without shifting subsequen
   assert.ok(result.blockEdges && result.halfBlocks,'solid and half-block art has no seams between its glyphs');
 }));
 
+test('the WebGL grid paints the same picture as the 2D canvas, and only odd characters go through fillText', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    paused = true; GLP_SOFT = true; GLP_OFF = false; GLP = null; // (headless GL is software: allowed here only)
+    const n = cols * rows, word = 'GLYPHPORT ~#@%& 0123', calls = [], original = g.fillText;
+    for (let i = 0; i < n; i++) {
+      CH[i] = i % 7 ? word[i % word.length] : ' '; COL[i] = C(1 + i % 13, 4 + i % 9);
+      BG[i] = i % 5 ? C(1 + (i >> 3) % 13, 2 + i % 6) : NONE; FOGS[i] = i % 11 === 0 ? 3 : 0; FOGB[i] = i % 17 === 0 ? 4 : 0;
+    }
+    CH[cols + 3] = 'é'; CH[cols + 4] = '█';
+    const grab = c => c.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    present2D(); const flat = grab(cv).slice();
+    g.fillText = function (...args) { calls.push(args[0]); return original.apply(this, args); };
+    present(); g.fillText = original;
+    const gl = !!GLP, mine = grab(frameCanvas());
+    let off = 0, far = 0;
+    for (let i = 0; i < flat.length; i += 4) {
+      const d = Math.abs(flat[i] - mine[i]) + Math.abs(flat[i + 1] - mine[i + 1]) + Math.abs(flat[i + 2] - mine[i + 2]);
+      if (d > 24) off++; if (d > 200) far++;
+    }
+    GLP_SOFT = false; GLP_OFF = true; if (GLP) GLP.glc.remove(); GLP = null;
+    return { gl, calls, off: off / (flat.length / 4), far: far / (flat.length / 4) };
+  });
+  assert.ok(r.gl, 'the WebGL path ran');
+  assert.deepStrictEqual(r.calls, ['é', '█'], 'plain ASCII comes from the glyph atlas');
+  assert.ok(r.off < 0.3 && r.far < 0.01, `the same picture, give or take glyph antialiasing (${JSON.stringify(r)})`);
+}));
+
 test('murals fade over the actual facade and leave its color and masonry intact through transparent edges', () => withPage(async page => {
   const result = await page.evaluate(() => {
     paused = true; tod = 12; weather = 'clear'; env(0); render(0);
@@ -718,7 +745,7 @@ test('every mode renders without errors', async () => {
       await page.waitForTimeout(250);
       // some text actually reached the canvas
       const lit = await page.evaluate(() => {
-        const d = g.getImageData(0, 0, cv.width, cv.height).data;
+        const d = frameCanvas().getContext('2d').getImageData(0, 0, cv.width, cv.height).data; // (both layers: the frame and the HUD)
         let n = 0; for (let i = 0; i < d.length; i += 4 * 97) if (d[i] + d[i + 1] + d[i + 2] > 60) n++;
         return n;
       });
@@ -804,7 +831,7 @@ test('shops: E at the counter opens the menu, number keys buy; E only leaves at 
     await page.waitForTimeout(200);
     assert.deepStrictEqual(await page.evaluate(() => handDrawn && handDrawn.id), 'coffee', 'the cup is in your hand');
     assert.ok(await page.evaluate(() => { // and something hand-coloured really is on screen down there (any shade of skin)
-      const skin = [9, 10, 11, 12, 13, 14].map(l => PALRGB[C(SKIN, l)]), d = g.getImageData(cv.width * 0.5, cv.height * 0.6, cv.width * 0.45, cv.height * 0.4).data; let n = 0;
+      const skin = [9, 10, 11, 12, 13, 14].map(l => PALRGB[C(SKIN, l)]), d = frameCanvas().getContext('2d').getImageData(cv.width * 0.5, cv.height * 0.6, cv.width * 0.45, cv.height * 0.4).data; let n = 0;
       for (let i = 0; i < d.length; i += 4) if (skin.some(([sr, sg, sb]) => Math.abs(d[i] - sr) < 6 && Math.abs(d[i + 1] - sg) < 6 && Math.abs(d[i + 2] - sb) < 6)) n++;
       return n; }) > 50, 'the hand drawn on the canvas');
     assert.deepStrictEqual(errors, []);
