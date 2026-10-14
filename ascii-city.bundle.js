@@ -18165,6 +18165,15 @@ function tickSirens(indoors) {
   }
 }
 
+// the game's frozen (a shop, the inventory, the map, the dev tools, a hidden tab: anything that stops the frame loop,
+// not only the pause menu, which mutes everything): the sirens fall silent rather than hold whatever note they were on.
+// tickSirens brings them back with the first frame after
+function hushSirens() {
+  if (!actx) return;
+  for (const v of sirens.values()) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) hushSirens(); });
+
 // ---- thunder: a crack (if it's close) rolling into a long low rumble, arriving d/34 seconds after the flash
 function sfxThunder(d, indoors) {
   const at = actx.currentTime + d / 34, near = clamp(1.2 - d / 70, 0.15, 1), s = actx.createBufferSource();
@@ -22043,7 +22052,7 @@ function drive(dt) {
 
 let t0 = performance.now();
 function loop(t) {
-  if (paused) { t0 = t; requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
+  if (paused) { t0 = t; hushSirens(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
   if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
