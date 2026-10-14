@@ -162,6 +162,8 @@ function blockedOn(y0, y1) { // x intervals [a, b] that the band y0..y1 of sea i
   const ir = ISLE.r * 1.35 + 0.6; // past the widest the coast goes, and its surf
   if (y1 > ISLE.y - ir && y0 < ISLE.y + ir) out.push([ISLE.x - ir, ISLE.x + ir]);
   for (const [x0, py0, x1, py1] of PIERS) if (y1 > py0 - 0.4 && y0 < py1 + 0.4) out.push([x0 - 0.4, x1 + 0.4]);
+  if (y1 > AIRPORT.y0 - 1.2 && y0 < AIRPORT.y1 + 1.2) out.push([AIRPORT.x0 - 1.2, AIRPORT.x1 + 1.2]); // the airport, and the rocks round it
+  if (y1 > CAUSEWAY.y0 && y0 < CAUSEWAY.y1) out.push([CAUSEWAY.x - CAUSEWAY.hw - 0.5, CAUSEWAY.x + CAUSEWAY.hw + 0.5]);
   return out;
 }
 function freeSpan(x, y0, y1) { // the open stretch [a, b] of that band (b > a, may run past N) that x is in, or null

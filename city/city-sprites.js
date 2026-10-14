@@ -117,6 +117,8 @@ function citySprites() {
   drawMuseumRoof();
   drawRoofPolice();
   drawChopper(); // (5 stars: chopper.js)
+  drawAirport(); // (airport-render.js)
+  drawAircraft(); // (aircraft-render.js)
   drawBelleBuildings();
   drawArchitecture();
   drawLandmarks();

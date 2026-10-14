@@ -251,7 +251,7 @@ test('boats keep to open water: every point of every route clears the bridges, f
       for (const dx_ of [-hl, 0, hl]) { // the hull's ends too
         const x = p.x + dx_, y = p.y;
         const why = !seaAt(x, y) ? 'land' : onPier(x, y) ? 'pier' : BRIDGE_X.some(bx => mod(x - bx * 8, N) < 2) ? 'bridge'
-          : Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw + 0.1 && y < FOOTBRIDGE.y1 ? 'footbridge' : isleEdge(x, y) > -0.3 ? 'island' : '';
+          : Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw + 0.1 && y < FOOTBRIDGE.y1 ? 'footbridge' : isleEdge(x, y) > -0.3 ? 'island' : airportEdge(x, y) > -0.5 ? 'airport' : '';
         if (why) { hits.push(k + ' ' + b.kind + ' ' + why); return hits; }
       }
     }

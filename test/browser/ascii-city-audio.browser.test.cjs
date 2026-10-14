@@ -32,7 +32,9 @@ test('recorded police sirens share a gapless buffer, spatialize, and stop when r
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/ascii-city.html`);
     await page.evaluate(() => {
+      // (paused, so only these hand-driven ticks move the sirens; a frozen frame would hush them, checked below)
       paused = true; clearWanted(); audioStart();
+      window.realHush = hushSirens; hushSirens = () => {};
       for (const c of cars) { c.returning = true; c.pursuit = false; }
       const officers = cars.filter(c => c.kind === 'police').slice(0, 2);
       officers.forEach((c, i) => {
@@ -86,6 +88,12 @@ test('recorded police sirens share a gapless buffer, spatialize, and stop when r
     });
     assert.equal(looping.copies, 3);
     assert.ok(looping.error < 1e-6, JSON.stringify(looping));
+
+    // A frozen frame (a shop, the inventory, the map) silences them rather than leaving them holding a note
+    await page.evaluate(() => { hushSirens = realHush; });
+    await page.waitForTimeout(400);
+    assert.ok(await page.evaluate(() => [...sirens.values()].every(v => v.g.gain.value < 0.01)), 'paused: the sirens fall silent');
+    await page.evaluate(() => { hushSirens = () => {}; tickSirens(false); });
 
     await page.evaluate(() => {
       for (const c of sirenTestCars) c.v = -2;
