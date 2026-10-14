@@ -277,6 +277,15 @@ Further architectural and activity ideas:
   tour or a lantern festival, a koi pond in the conservatory, feeding time at the bear pen, the boats racing.
 - **Home extras**: decorate your place with what you carry (put the lucky cat on the shelf), a fridge for food,
   a pet that waits for you.
+- **Car radio**: a few stations to flick through at the wheel (a key, or a button on a phone), made the same way
+  the rest of the game's music is (WebAudio, nothing to download): a lounge station, a punk one, a talk station.
+  Each has a DJ whose lines and the station's ads scroll across the dash as text, and they talk about the city:
+  the weather, the fireworks on Saturday, the heist you just pulled ("police are looking for a suspect seen..."),
+  the stock that crashed. Taxis have a station on already; your own car remembers the last one; a stolen car is
+  tuned to whatever its owner liked. Off when you get out, muffled through the windows when someone else's is on.
+- **More GTA-style things** (from a look at what's missing): side jobs in a stolen ambulance, fire engine or
+  police car; street fights using the boxing moves; a chain of missions from two or three contacts who call you;
+  weapons (a bat, a pistol); street races with checkpoints; one-off stunt jumps; gang turf in a district or two.
 
 ## Sounds to find
 
