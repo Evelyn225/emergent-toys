@@ -91,8 +91,9 @@ function resolveCruiserContact(c, o, hit) {
     // Impact requires actual body contact; following someone's bumper alone cannot spin them out.
     const rear = rel(c.x - o.x) * o.hx + rel(c.y - o.y) * o.hy;
     if (c.pursuit && movingPlayer && closing > 0.35 && Math.abs(o.v) > 0.7 && rear < -0.06 && Math.abs(nx * o.hy - ny * o.hx) > 0.5) {
-      o.spunT = T + 2.5; wanted.pitPending = true;
+      o.spunT = T + 2.5; wanted.pitPending = true; damageCar(o, 8);
     }
+    if (closing > 0.5) { damageCar(o, (closing - 0.5) * 16); damageCar(c, (closing - 0.5) * 10); } // (a proper knock: both of them)
     c.v *= 0.15;
     if (movingPlayer) o.v *= 0.65;
   }
@@ -359,7 +360,12 @@ function parkedCarAt(x, y, pad) {
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
 function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
-  for (const c of cars) if (c.parked && !c.owned && Math.hypot(rel(c.x - px), rel(c.y - py)) > 45) { c.parked = c.mine = false; c.v = 0; toLane(c); } // left behind: back into the traffic
+  for (let k = cars.length - 1; k >= 0; k--) { // left behind: back into the traffic, mended; a wreck's towed away
+    const c = cars[k], d = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if (c.owned || c.player || !c.parked) continue;
+    if ((c.wrecked || c.fireT != null) && d > 30) cars.splice(k, 1);
+    else if (d > 45 && c.fireT == null) { c.parked = c.mine = false; c.v = 0; repairCar(c); toLane(c); }
+  }
   stepEmergency(dt);
   fillGrid(carGrid, cars, 'ex', 'ey'); fillGrid(pplGrid, people, 'x', 'y');
   // a car crossing our path sideways is long (0.45), one in line with us is narrow (0.2). Around an emergency vehicle

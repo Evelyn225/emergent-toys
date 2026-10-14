@@ -9,7 +9,7 @@ function wantedHud() {
   wantedBottom = 0;
   const pend = reports.length && !wanted.stars;
   if (!wanted.stars && !pend) return;
-  const stars = [1, 2, 3].map(k => k <= wanted.stars ? '*' : '.').join(' ');
+  const stars = [1, 2, 3, 4, 5].map(k => k <= wanted.stars ? '*' : '.').join(' ');
   const line = pend ? "someone's calling the police..." : `WANTED  ${stars}`, phone = TOUCH || cv.width < 700;
   const room_ = phone ? cv.width * (showMap && mode !== 'room' && cv.width < cv.height ? 0.5 : 0.9) : cv.width;
   let s = phone ? clamp(Math.round(cv.height / 48), 11, 18) : Math.max(16, Math.round(cv.height / 34));

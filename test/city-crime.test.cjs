@@ -141,3 +141,118 @@ test('a cruiser on your bumper tells you to pull over without a phantom PIT', ()
   assert.strictEqual(evs, 'pullover');
   assert.ok(!ev('me.spunT > T'), 'proximity alone cannot spin the car');
 });
+
+// ---- more heat: 5 stars, roadblocks, the helicopter, the spray shop; and car damage
+// at the wheel heading east along a long straight street, a cruiser-free city round you
+function driving() {
+  const s = scene();
+  s.ev(`(() => {
+    let spot = null;
+    for (let y = 1; y < N && !spot; y += 8) for (let x = 2; x < N && !spot; x += 8) {
+      let ok = true; for (let d = 0; d < 22; d++) if (ROAD[idx(x + d, y)] !== 2 && ROAD[idx(x + d, y)] !== 3) { ok = false; break; }
+      if (ok && ROAD[idx(x, y)] === 2) spot = [x + 0.5, y + 0.4];
+    }
+    var c = addCar({ x: spot[0], y: spot[1], hx: 1, hy: 0, body: GREEN }); me = c; c.player = true; c.travelA = 0; mode = 'drive'; a = 0; px = c.x; py = c.y;
+    far();
+  })()`);
+  return s;
+}
+
+test('wanted goes up to five stars, with more units at each; ramming a cruiser or running down an officer adds to it', () => {
+  const { ev } = scene();
+  ev("footCops[0].x = px + 3; footCops[0].y = py; footCops[0].chase = false");
+  ev("crime('bankjob')"); assert.strictEqual(ev('wanted.stars'), 3);
+  ev("crime('ram')"); assert.strictEqual(ev('wanted.stars'), 4, 'ramming a police car: one more');
+  assert.strictEqual(ev('wanted.crime'), 'ramming a police car');
+  ev("crime('hitcop')"); assert.strictEqual(ev('wanted.stars'), 5, 'and as many as there are');
+  ev("crime('hitcop')"); assert.strictEqual(ev('wanted.stars'), 5);
+  assert.strictEqual(ev('cars.filter(c => c.pursuit).length'), 7, 'seven units at five stars');
+  assert.deepStrictEqual([ev('ESCAPE_T[5]'), ev('fineFor(5)')], [100, 1000]);
+});
+
+test('roadblocks: at four stars, three cruisers across the street ahead of you, with officers who stay put while you drive; packed up once the heat is off', () => {
+  const { ev, step } = driving();
+  ev("addWanted('bankjob', px, py, true)");
+  step(0.5);
+  assert.strictEqual(ev('roadblocks.length'), 0, 'not at three stars');
+  ev("addWanted('ram', px, py, true)");
+  step(0.1);
+  assert.strictEqual(ev('roadblocks.length'), 1, 'four: one goes up');
+  const b = JSON.parse(ev('JSON.stringify((({ x, y, cars, cops }) => ({ ahead: rel(x - px), across: rel(y - py), cars: cars.map(c => [+rel(c.y - py).toFixed(2), c.parked, c.patrol, Math.abs(c.hx * me.hx + c.hy * me.hy)]), cops: cops.length }))(roadblocks[0]))'));
+  assert.ok(b.ahead >= 10 && b.ahead <= 20, `a block or two ahead (${b.ahead})`);
+  assert.strictEqual(b.cars.length, 3);
+  assert.ok(b.cars.every(([, parked, patrol, along]) => parked && patrol && along < 0.01), 'parked cruisers, lying across the street');
+  const gaps = b.cars.map(c => c[0]).sort((p, q) => p - q);
+  assert.ok(gaps[1] - gaps[0] - 2 * 0.24 > 0.22, 'a gap a car can just get through');
+  assert.strictEqual(b.cops, 2);
+  step(3);
+  assert.ok(ev('roadblocks[0].cops.every(c => !c.chase)'), 'the officers hold the line while you are at the wheel');
+  assert.strictEqual(ev('roadblocks.length'), 1, 'one at a time');
+  ev('clearWanted(); px = mod(px - 40, N); me.x = px');
+  step(0.1);
+  assert.strictEqual(ev('roadblocks.length'), 0, 'heat off, and out of sight: gone');
+  assert.ok(!ev('cars.some(c => c.roadblock)') && !ev('footCops.some(c => c.post)'));
+});
+
+test('the helicopter: at five stars it comes out, its light finds you in the open, a roof over your head hides you, and it flies off when the heat is off', () => {
+  const { ev, step } = scene();
+  ev("addWanted('bankjob', px, py, true); addWanted('hitcop', px, py, true)");
+  ev('for (const c of cars) if (c.pursuit) { c.x = mod(px + 100, N); c.ex = c.x; } footCops.forEach(c => { c.x = mod(px + 120, N); c.chase = false; })'); // (only the helicopter's looking)
+  step(0.05);
+  assert.ok(ev('!!heli'), 'up it goes');
+  assert.ok(ev('near(heli.x, heli.y, px, py)') > 20, 'from somewhere off over the rooftops');
+  step(30);
+  assert.ok(ev('near(heli.sx, heli.sy, px, py) < SPOT_R'), 'its light on you');
+  assert.strictEqual(ev('wanted.seen'), true);
+  assert.strictEqual(ev('wanted.hideT'), 0);
+  ev("mode = 'room'; room = { ret: [px, py, 0], def: {}, kind: 'store' }");
+  step(1);
+  assert.strictEqual(ev('wanted.seen'), false, 'indoors, it can not see you');
+  ev("mode = 'walk'; room = null; clearWanted()");
+  step(40);
+  assert.ok(ev('!heli'), 'heat off: it flies away');
+});
+
+test('the spray shop: at an AUTO REPAIR door, a respray clears the stars and the damage, in a new colour; not with a cop watching, not if you are broke', () => {
+  const { ev } = driving();
+  ev("var d = doors.find(o => o.sh.word === 'AUTO REPAIR'); me.x = d.x - d.nx * 6; me.y = d.y - d.ny * 6; px = me.x; py = me.y; far()");
+  assert.strictEqual(ev('sprayShopAt(me.x, me.y) === d'), true);
+  assert.strictEqual(ev('sprayShopAt(mod(me.x + 3, N), me.y)'), null);
+  ev("money = 500; me.body = RED; damageCar(me, 60); addWanted('bankjob', px, py, false)");
+  ev('footCops[0].x = px + 2; footCops[0].y = py');
+  assert.strictEqual(ev('sprayRefusal(me)'), 'seen', 'a cop right there: no');
+  ev('far()');
+  assert.strictEqual(ev('sprayRefusal(me)'), '');
+  assert.strictEqual(ev('applyRespray(me)'), true, 'the stars were there to lose');
+  assert.deepStrictEqual([ev('wanted.stars'), ev('me.dmg'), ev('me.body !== RED')], [0, 0, true]);
+  ev('money = 20');
+  assert.strictEqual(ev('sprayRefusal(me)'), 'money');
+});
+
+test('car damage: crashes add up, a smoking car is down on power, past the top it burns and then goes up; the traffic gets out of a burning car', () => {
+  const { ev } = driving();
+  assert.strictEqual(ev('crashDamage(0.9)'), 0 + ev('(0.9 - 0.6) * 22'));
+  assert.strictEqual(ev('crashDamage(0.5)'), 0, 'a bump does nothing');
+  ev('damageCar(me, 30)'); assert.strictEqual(ev('carPower(me)'), 1, 'dented, runs fine');
+  ev('damageCar(me, 30)'); assert.strictEqual(ev('carPower(me)'), 0.9, 'smoking');
+  ev('damageCar(me, 20)'); assert.strictEqual(ev('carPower(me)'), 0.7, 'black smoke');
+  assert.strictEqual(ev('burning(me)'), false);
+  ev('damageCar(me, 40)'); assert.deepStrictEqual([ev('me.dmg'), ev('burning(me)')], [100, true], 'on fire');
+  assert.strictEqual(ev('me.parked || false'), false, 'yours keeps going (for now)');
+  const gone = ev('(() => { let n = []; for (let t = 0; t < BURN_T + 0.2; t += 0.1) n = n.concat(stepCarFires(0.1)); return n.includes(me) && me.wrecked; })()');
+  assert.strictEqual(gone, true, 'and up it goes');
+  ev('damageCar(me, 10)'); assert.strictEqual(ev('me.dmg'), 100, 'a wreck takes no more');
+  ev('repairCar(me)'); assert.deepStrictEqual([ev('me.dmg'), ev('me.wrecked'), ev('burning(me)')], [0, false, false]);
+  // a car in the traffic, on fire: it stops, and its driver bails out (and it's out of the chase if it was in it)
+  ev('var o = cars.find(c => !c.player && !c.parked && !c.patrol); o.pursuit = true; damageCar(o, 100)');
+  assert.deepStrictEqual([ev('o.parked'), ev('o.v'), ev('o.bail'), ev('o.pursuit')], [true, 0, true, false]);
+});
+
+test('wrecks in the traffic are towed once you are well away; a car left smoking goes back into the traffic mended', () => {
+  const { ev } = driving();
+  ev('var w = cars.find(c => !c.player && !c.patrol); damageCar(w, 100); w.wrecked = true');
+  ev('var s = cars.find(c => !c.player && !c.patrol && c !== w); s.parked = true; s.dmg = 60');
+  ev('w.x = mod(px + 35, N); s.x = mod(px + 50, N); stepTraffic(0.05, T)');
+  assert.strictEqual(ev('cars.includes(w)'), false, 'towed');
+  assert.deepStrictEqual([ev('cars.includes(s)'), ev('s.parked'), ev('s.dmg')], [true, false, 0], 'back on the road, mended');
+});

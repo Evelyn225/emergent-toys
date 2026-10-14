@@ -116,6 +116,7 @@ function citySprites() {
   drawCourier();
   drawMuseumRoof();
   drawRoofPolice();
+  drawChopper(); // (5 stars: chopper.js)
   drawBelleBuildings();
   drawArchitecture();
   drawLandmarks();
@@ -883,7 +884,7 @@ function drawAmbulance(m, vx, vy, hx, hy) {
   });
   const lb = mo + mhl - 0.02; // the light bar, and a lamp on each back corner
   drawBox(boxAt(vx + hx * lb, vy + hy * lb, hx, hy, 0.018, hw * 0.85, MH, MH + 0.016), (i, t, L) => {
-    const side = HIT.v > 0 ? RED : BLUE, on = lightsOn_(m) && strobe() === side;
+    const side = HIT.v > 0 ? RED : BLUE, on = !m.wrecked && lightsOn_(m) && strobe() === side;
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
   for (const s of [-1, 1]) drawBox(boxAt(vx + hx * (mo - mhl + 0.012) - hy * s * hw * 0.8, vy + hy * (mo - mhl + 0.012) + hx * s * hw * 0.8, hx, hy, 0.01, 0.012, MH, MH + 0.012), (i, t, L) => {
@@ -891,16 +892,35 @@ function drawAmbulance(m, vx, vy, hx, hy) {
     BG[i] = C(RED, on ? 15 : 4); return set(i, on ? '*' : ' ', C(WHITE, 15)), true;
   });
 }
+// a car on fire (damage.js): flames out of the bonnet, licking up the windscreen, higher as it goes on
+function drawCarFire(m, vx, vy, hx, hy) {
+  if (!burning(m)) return;
+  const [hl, hw, top] = VEHICLES[m.kind], fx_ = vx + hx * hl * 0.55, fy_ = vy + hy * hl * 0.55, tall = 0.07 + 0.12 * Math.min(1, m.fireT / BURN_T);
+  const flame = (i, t, L) => { // ragged: tongues of yellow and orange with the street showing between them
+    const hot = hash(i, Math.floor(T * 14), m.id);
+    if (hot < 0.3) return false;
+    BG[i] = C(hot > 0.75 ? YEL : hot > 0.5 ? ORANGE : RED, 7 + hot * 8); return set(i, hot > 0.65 ? '^' : hot > 0.45 ? '(' : ')', C(hot > 0.85 ? WHITE : YEL, 15)), true;
+  };
+  for (let k = 0; k < 4; k++) { // four tongues across the bonnet, each leaping and dropping on its own
+    const s_ = (k - 1.5) * hw * 0.5, fl = 0.45 + 0.55 * Math.abs(Math.sin(T * (9 + k * 2.3) + k * 1.7)), sway = 0.025 * Math.sin(T * 6 + k * 2);
+    drawRod(fx_ - hy * s_, fy_ + hx * s_, top, fx_ - hy * s_ + hx * sway, fy_ + hx * s_ + hy * sway, top + tall * fl, 0.016, flame);
+  }
+}
 function drawVehicle(m, vx, vy, hx, hy) {
+  drawCarFire(m, vx, vy, hx, hy);
   if (m.kind === 'amb') return drawAmbulance(m, vx, vy, hx, hy);
-  const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], lightsOn = night > 0.4 || overcast > 0.5;
+  const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], wreck = !!m.wrecked, lightsOn = !wreck && (night > 0.4 || overcast > 0.5);
+  // damage (damage.js): dents and scrapes over the body, more of them the worse it is; a wreck is burnt black
+  const dmg = m.dmg || 0, dented = (u, w) => dmg >= DMG_DENTS && hash(Math.floor(u * 22), Math.floor(w * 40), m.id) < (dmg - 15) / 160;
   const fobBlinking = m.owned && m.fobBlinkAt !== undefined && T - m.fobBlinkAt < 2.4;
   const fobHeadlight = !fobBlinking || Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0;
-  const braking = m.brake || m.v < 0.05, body = m.body;
+  const braking = !wreck && (m.brake || m.v < 0.05), body = wreck ? GRAY : m.body, burnt = wreck ? 0.35 : 1;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
   drawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
-    BG[i] = C(body, (1.5 + L * 0.45) * k);
+    BG[i] = C(body, (1.5 + L * 0.45) * k * burnt);
+    if (wreck) return set(i, hash(Math.floor(u * 30), Math.floor(w * 50), m.id) < 0.3 ? '%' : f === 5 ? '.' : ' ', C(GRAY, 2 + L * 0.2)), true; // (scorched)
+    if (f > 2 && f < 5 && w > 0.025 && dented(u, w)) { BG[i] = C(body, (0.8 + L * 0.3) * k); return set(i, hash(i, m.id, 3) < 0.5 ? '%' : '~', C(GRAY, 4 + L * 0.3)), true; }
     if (f === 5) return set(i, m.kind === 'amb' && Math.abs(u) < 0.05 && Math.abs(v) < 0.05 ? '+' : ' ', C(RED, 12)), true;
     if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(fobBlinking ? (fobHeadlight ? WHITE : BLACK) : WHITE, fobBlinking || lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
     if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking ? 15 : 8)), true;
@@ -921,15 +941,18 @@ function drawVehicle(m, vx, vy, hx, hy) {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
     if (f === 5 || f === 6) { BG[i] = C(body, (1.5 + L * 0.45) * shadeFace(f)); return set(i, ' ', 0), true; }
     const edge = f <= 2 ? Math.abs(v) > hw * 0.8 : Math.abs(u - cof) > chl * 0.85;
-    if (edge || w > cab - 0.008) { BG[i] = C(body, (1.5 + L * 0.45) * 0.8); return set(i, '|', C(body, L * 0.5)), true; }
-    BG[i] = C(CYAN, 1 + L * 0.12); return set(i, ' ', 0), true;
+    if (edge || w > cab - 0.008) { BG[i] = C(body, (1.5 + L * 0.45) * 0.8 * burnt); return set(i, '|', C(body, L * 0.5)), true; }
+    if (wreck) { BG[i] = C(GRAY, 0.6); return set(i, hash(i, m.id, 5) < 0.2 ? '\\' : ' ', C(GRAY, 3)), true; } // (the windows gone)
+    BG[i] = C(CYAN, 1 + L * 0.12);
+    if (dmg >= DMG_SMOKE && hash(Math.floor(u * 40 + v * 13), Math.floor(w * 60), m.id + 9) < 0.18) return set(i, hash(i, 7, m.id) < 0.5 ? '/' : '*', C(WHITE, 9 + L * 0.2)), true; // cracked
+    return set(i, ' ', 0), true;
   });
   const roof = cab || top; // what sits on the roof
   if (m.kind === 'taxi') drawBox(boxAt(vx, vy, hx, hy, 0.03, 0.05, roof, roof + 0.02), (i, t, L) => {
     BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
   });
   if (m.ev || m.patrol) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
-    const side = HIT.v > 0 ? RED : BLUE, on = lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
+    const side = HIT.v > 0 ? RED : BLUE, on = !wreck && lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
   if (m.kind === 'fire') drawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {

@@ -2719,8 +2719,9 @@ function resolveCruiserContact(c, o, hit) {
     // Impact requires actual body contact; following someone's bumper alone cannot spin them out.
     const rear = rel(c.x - o.x) * o.hx + rel(c.y - o.y) * o.hy;
     if (c.pursuit && movingPlayer && closing > 0.35 && Math.abs(o.v) > 0.7 && rear < -0.06 && Math.abs(nx * o.hy - ny * o.hx) > 0.5) {
-      o.spunT = T + 2.5; wanted.pitPending = true;
+      o.spunT = T + 2.5; wanted.pitPending = true; damageCar(o, 8);
     }
+    if (closing > 0.5) { damageCar(o, (closing - 0.5) * 16); damageCar(c, (closing - 0.5) * 10); } // (a proper knock: both of them)
     c.v *= 0.15;
     if (movingPlayer) o.v *= 0.65;
   }
@@ -2987,7 +2988,12 @@ function parkedCarAt(x, y, pad) {
 // ponytail: pairwise deadlocks are broken by id; a 3+ car loop in one intersection could still lock (rare at this density)
 function stepTraffic(dt, t, everywhere = false) {
   stepPeople(dt, t, everywhere);
-  for (const c of cars) if (c.parked && !c.owned && Math.hypot(rel(c.x - px), rel(c.y - py)) > 45) { c.parked = c.mine = false; c.v = 0; toLane(c); } // left behind: back into the traffic
+  for (let k = cars.length - 1; k >= 0; k--) { // left behind: back into the traffic, mended; a wreck's towed away
+    const c = cars[k], d = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if (c.owned || c.player || !c.parked) continue;
+    if ((c.wrecked || c.fireT != null) && d > 30) cars.splice(k, 1);
+    else if (d > 45 && c.fireT == null) { c.parked = c.mine = false; c.v = 0; repairCar(c); toLane(c); }
+  }
   stepEmergency(dt);
   fillGrid(carGrid, cars, 'ex', 'ey'); fillGrid(pplGrid, people, 'x', 'y');
   // a car crossing our path sideways is long (0.45), one in line with us is narrow (0.2). Around an emergency vehicle
@@ -3149,6 +3155,30 @@ function selfTest(steps = 9000) {
   console.log(`selftest: crash-frames=${crashes} turns=${turns} longest stop=${worst.toFixed(1)}s`);
   return { crashes, turns, worst };
 }
+// ===== car damage (any car: yours, a stolen one, the traffic, a cruiser). Every crash harder than a bump takes
+// something out of a car, both of them when it's two: at a quarter it's dented and scraped, at half the windscreen
+// cracks and the engine smokes, at three quarters it's black smoke and down on power, and at the top it catches fire.
+// Get out: a few seconds later it goes up, and what's left is a burnt-out shell that goes nowhere. The city tows the
+// traffic's wrecks once you're well away; yours waits for the garage (the key fob, property.js). A respray at an
+// AUTO REPAIR (crime.js) puts any car right. On screen: city-sprites.js (dents, cracks, flames, the shell) and
+// damage-fx.js (smoke, the bang, the dashboard).
+const DMG_DENTS = 25, DMG_SMOKE = 50, DMG_BAD = 75, DMG_FIRE = 100, BURN_T = 6, TOW_FEE = 200;
+const crashDamage = speed => Math.max(0, (speed - 0.6) * 22); // 1 (36 km/h): 9; flat out (79): 35; boosting: 57
+function damageCar(c, n) {
+  if (!c || c.wrecked || !(n > 0)) return;
+  c.dmg = Math.min(DMG_FIRE, (c.dmg || 0) + n);
+  if (c.dmg >= DMG_FIRE && c.fireT == null) c.fireT = 0; // alight
+  if (c.fireT != null && !c.player && !c.parked) { c.parked = true; c.v = 0; c.ex = c.x; c.ey = c.y; c.pursuit = false; c.bail = true; } // (whoever's driving it stops and gets out)
+}
+const carPower = c => !c || !c.dmg ? 1 : c.dmg >= DMG_BAD ? 0.7 : c.dmg >= DMG_SMOKE ? 0.9 : 1; // the share of its top speed it can still make
+const burning = c => c.fireT != null && !c.wrecked;
+// every frame: fires burn down to the bang; returns the cars that have just gone up
+function stepCarFires(dt) {
+  const out = [];
+  for (const c of cars) if (burning(c) && (c.fireT += dt) >= BURN_T) { c.wrecked = true; c.v = 0; c.boomT = T; out.push(c); }
+  return out;
+}
+function repairCar(c) { c.dmg = 0; c.fireT = null; c.wrecked = false; c.boomT = undefined; }
 // ---- doors: every shop, lobby and front door, as a point on the sidewalk outside it.
 // {x, y: on the walking line (0.12 / 1.88 into a street), nx, ny: one step inside, sh: the shop, use: what it's for}
 const NIGHTLIFE = new Set(['BAR', 'KARAOKE', 'MAHJONG', 'ARCADE', 'LIQUOR']);
@@ -6435,21 +6465,24 @@ GAMES.market = () => {
 //
 // A crime only counts if somebody sees it. A cop who sees it (in their line of sight, within COP_SIGHT) puts you
 // straight on the wanted list; a passer-by who sees it calls it in a few seconds later, and then only if there's a
-// police unit within DISPATCH_R to send. Wanted is 1-3 stars: more stars, more units after you. They chase where
+// police unit within DISPATCH_R to send. Wanted is 1-5 stars: more stars, more units after you; at 4 they set up
+// roadblocks across the street ahead of you, at 5 the helicopter comes out with its searchlight. They chase where
 // they last saw you; stay out of every cop's sight for ESCAPE_T seconds and they give up. Caught: a fine, or jail.
 //
 // Police: patrol cars cruising in the traffic (cars with patrol: true; in pursuit they run lights and siren and steer
 // for you), and officers on foot walking beats round the police stations (footCops), who chase you on foot.
 const COP_SIGHT = 13, CIV_SIGHT = 8, DISPATCH_R = 45, REPORT_DELAY = 5;
-const ESCAPE_T = [0, 25, 40, 60];            // seconds out of sight to lose them, by stars
-const UNITS = [0, 2, 3, 5];                  // patrol cars after you, by stars
-const FINE = [0, 50, 150, 300];              // what they'll take instead of a cell
+const MAX_STARS = 5;
+const ESCAPE_T = [0, 25, 40, 60, 80, 100];   // seconds out of sight to lose them, by stars
+const UNITS = [0, 2, 3, 5, 6, 7];            // patrol cars after you, by stars
+const FINE = [0, 50, 150, 300, 600, 1000];   // what they'll take instead of a cell
 const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 'hitting someone with a car' },
                  crash: { stars: 1, name: 'reckless driving' }, redlight: { stars: 1, name: 'running a red light' },
                  pickpocket: { stars: 1, name: 'pickpocketing' }, shoplift: { stars: 1, name: 'shoplifting' },
                  burglary: { stars: 2, name: 'breaking and entering' }, graffiti: { stars: 1, name: 'vandalism' },
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
-                 boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' } };
+                 boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' },
+                 ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -6719,7 +6752,7 @@ function redLightCrime(x, y) {
   return cop;
 }
 function addWanted(kind, x, y, seen) {
-  wanted.stars = Math.min(3, Math.max(wanted.stars, 0) + CRIMES[kind].stars);
+  wanted.stars = Math.min(MAX_STARS, Math.max(wanted.stars, 0) + CRIMES[kind].stars);
   wanted.crime = CRIMES[kind].name; wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
   wanted.lastVX = 0; wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
   if (seen) observeSuspect(x, y);
@@ -6871,6 +6904,117 @@ function stepReturningPolice(dt) {
   }
 }
 // is a cop near enough a police unit to be sent to (x, y)?
+// ---- roadblocks, from 4 stars, while you're at the wheel: three cruisers parked nose to tail across the street a
+// block or two ahead of you, lights going, with an officer out of two of them. The gaps between them are a car's width
+// and a little: thread one, ram one, or turn off before you get there. One at a time: the next goes up once you're
+// past the last one or well away from it, and they're packed up (out of your sight) once the heat's off.
+const roadblocks = []; // { x, y, cars, cops, t, stale }
+const ROADBLOCK_STARS = 4, ROADBLOCK_AHEAD = [10, 20], ROADBLOCK_SPACING = 0.74, ROADBLOCK_EVERY = 10;
+let roadblockT = -Infinity;
+function placeRoadblock() {
+  if (!me || mode !== 'drive') return null;
+  const head = me.travelA ?? Math.atan2(me.hy, me.hx), vert = Math.abs(Math.sin(head)) > Math.abs(Math.cos(head));
+  const dir = Math.sign(vert ? Math.sin(head) : Math.cos(head)) || 1, street = vert ? 1 : 2;
+  const mid = Math.floor((vert ? me.x : me.y) / 8) * 8 + 1; // the middle of the street you're on
+  if (Math.abs(rel((vert ? me.x : me.y) - mid)) > 1.1) return null; // (not on a street)
+  for (let d = 2; d <= ROADBLOCK_AHEAD[1]; d++) { // the street ahead, as far as it goes
+    const along = (vert ? me.y : me.x) + dir * d, x = vert ? mid : mod(along, N), y = vert ? mod(along, N) : mid, r = ROAD[idx(Math.floor(x), Math.floor(y))];
+    if (r !== street && r !== 3) return null; // it ends (or bends) before then
+    if (d < ROADBLOCK_AHEAD[0] || r !== street || mod(along, 8) < 3.5 || mod(along, 8) > 6.5) continue; // mid-block, far enough off
+    const spots = [-1, 0, 1].map(k => vert ? [mod(x + k * ROADBLOCK_SPACING, N), y] : [x, mod(y + k * ROADBLOCK_SPACING, N)]);
+    const hx = vert ? 1 : 0, hy = vert ? 0 : 1; // (lying across the street)
+    if (!spots.every(([sx, sy]) => carBodyClear(sx, sy, hx, hy) && !cars.some(o => near(o.x, o.y, sx, sy) < 0.5))) continue;
+    const block = { x, y, cars: [], cops: [], t: T, stale: false };
+    spots.forEach(([sx, sy], k) => {
+      const c = { id: carId++, v: 0, brake: true, off: 0, cruise: 0, kind: 'police', body: BLUE, patrol: true, extra: true, parked: true, roadblock: true,
+        state: 'scene', x: sx, y: sy, ex: sx, ey: sy, hx: k === 1 ? -hx : hx, hy: k === 1 ? -hy : hy };
+      cars.push(c); block.cars.push(c);
+      if (k !== 1) { // an officer behind each end car, on your side of it
+        const cop = { x: vert ? sx : mod(sx - dir * 0.35, N), y: vert ? mod(sy - dir * 0.35, N) : sy, car: c, corner: null, dir: 0, goal: null, chase: false, ph: 0, extra: true, post: true };
+        footCops.push(cop); block.cops.push(cop);
+      }
+    });
+    roadblocks.push(block); roadblockT = T;
+    return block;
+  }
+  return null;
+}
+function removeRoadblock(b) {
+  for (const c of b.cars) { const k = cars.indexOf(c); if (k >= 0 && c !== me) cars.splice(k, 1); }
+  for (const c of b.cops) { const k = footCops.indexOf(c); if (k >= 0) footCops.splice(k, 1); }
+  roadblocks.splice(roadblocks.indexOf(b), 1);
+}
+function stepRoadblocks() {
+  const [wx, wy] = crimePos(), hot = wanted.stars >= ROADBLOCK_STARS;
+  for (const b of [...roadblocks]) {
+    const d = near(b.x, b.y, wx, wy);
+    if (!hot || d > 35) b.stale = true;
+    if (me && mode === 'drive') { // gone past it
+      const head = me.travelA ?? Math.atan2(me.hy, me.hx);
+      if (rel(b.x - me.x) * Math.cos(head) + rel(b.y - me.y) * Math.sin(head) < -6) b.stale = true;
+    }
+    if (b.stale && d > 25 && !b.cars.includes(me)) removeRoadblock(b);
+  }
+  if (hot && mode === 'drive' && !roadblocks.some(b => !b.stale) && T - roadblockT > ROADBLOCK_EVERY) placeRoadblock();
+}
+
+// ---- the helicopter, at 5 stars: it flies out to where you were last seen and sweeps its searchlight over the
+// streets round there. Caught in the light, you're seen: from up there the buildings don't hide you, only a roof over
+// your head does (indoors, under the el's deck, under the Shotengai's glass). The light swings slower than the
+// helicopter flies, so a fast car can get out from under it. Once the heat's off it flies away.
+const HELI_STARS = 5, HELI_Z = 4, HELI_SPEED = 2.6, SPOT_SPEED = 1.9, SPOT_R = 0.7, SPOT_REACH = 4, HELI_GONE = 45;
+let heli = null; // { x, y, z, h (heading), sx, sy (where the light's on the ground), leaving }
+const underCover = (x, y) => mode === 'room' || (mode === 'walk' || mode === 'drive' || mode === 'taxi') && (arcadeAt(x, y) || underEl(y));
+function stepHeli(dt) {
+  const hot = wanted.stars >= HELI_STARS, [wx, wy] = crimePos();
+  if (!heli) {
+    if (!hot) return false;
+    const k = Math.random() * TAU; // in from somewhere off over the rooftops
+    heli = { x: mod(wanted.lastX + Math.cos(k) * 30, N), y: mod(wanted.lastY + Math.sin(k) * 30, N), z: HELI_Z, h: k + Math.PI, sx: 0, sy: 0, leaving: false, sweep: Math.random() * TAU };
+    heli.sx = heli.x; heli.sy = heli.y;
+  }
+  if (!hot) heli.leaving = true;
+  const lit = !heli.leaving && near(heli.sx, heli.sy, wx, wy) < SPOT_R && !underCover(wx, wy);
+  // the helicopter: over you while it has you, over the search otherwise; away over the rooftops once it's called off
+  let tx = heli.leaving ? heli.x + Math.cos(heli.h) * 50 : lit ? wx : wanted.searchX, ty = heli.leaving ? heli.y + Math.sin(heli.h) * 50 : lit ? wy : wanted.searchY;
+  const vx = rel(tx - heli.x), vy = rel(ty - heli.y), d = Math.hypot(vx, vy);
+  if (d > 0.3) {
+    const want = Math.atan2(vy, vx), turn = mod(want - heli.h + Math.PI, TAU) - Math.PI;
+    heli.h += clamp(turn, -1.2 * dt, 1.2 * dt);
+    const sp = Math.min(HELI_SPEED, d * 0.8) * Math.max(0.3, Math.cos(turn));
+    heli.x = mod(heli.x + Math.cos(heli.h) * sp * dt, N); heli.y = mod(heli.y + Math.sin(heli.h) * sp * dt, N);
+  }
+  // the light: on you, or sweeping round the search
+  heli.sweep += dt * 0.9;
+  const lx = lit ? wx : wanted.searchX + Math.cos(heli.sweep) * 1.6, ly = lit ? wy : wanted.searchY + Math.sin(heli.sweep * 1.3) * 1.6;
+  let sx = rel(lx - heli.sx), sy = rel(ly - heli.sy), sd = Math.hypot(sx, sy);
+  if (sd > 0.001) { const step = Math.min(sd, SPOT_SPEED * dt); heli.sx = mod(heli.sx + sx / sd * step, N); heli.sy = mod(heli.sy + sy / sd * step, N); }
+  sx = rel(heli.sx - heli.x); sy = rel(heli.sy - heli.y); sd = Math.hypot(sx, sy);
+  if (sd > SPOT_REACH) { heli.sx = mod(heli.x + sx / sd * SPOT_REACH, N); heli.sy = mod(heli.y + sy / sd * SPOT_REACH, N); } // (as far as the beam can lean)
+  if (heli.leaving && near(heli.x, heli.y, wx, wy) > HELI_GONE) heli = null;
+  return lit;
+}
+
+// ---- the spray shop: any AUTO REPAIR will respray a car you pull up at its door in and knock the dents out (put a
+// fire out, too) in ten minutes, for SPRAY_FEE. A new colour, and nobody's looking for this car any more: the stars
+// go. Not with a cop watching, though: they won't open the shutter.
+const SPRAY_FEE = 100, SPRAY_COLS = [RED, BLUE, GREEN, WHITE, YEL, ORANGE, MAG, CYAN, GRAY, BRICK];
+function sprayShopAt(x, y) {
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++)
+    for (const d of doorsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) if (d.sh.word === 'AUTO REPAIR' && near(d.x, d.y, x, y) < 0.9) return d;
+  return null;
+}
+// why not ('wreck', 'seen', 'money'), or '' to go ahead
+const sprayRefusal = c => c.wrecked ? 'wreck' : wanted.stars && copSees(c.x, c.y) ? 'seen' : money < SPRAY_FEE ? 'money' : '';
+function applyRespray(c) {
+  const was = c.body;
+  c.body = pick(SPRAY_COLS.filter(k => k !== was));
+  repairCar(c);
+  const lost = wanted.stars > 0;
+  if (lost) clearWanted();
+  return lost;
+}
+
 const policeNear = (x, y) => cars.some(c => c.patrol && near(c.x, c.y, x, y) < DISPATCH_R) || footCops.some(c => near(c.x, c.y, x, y) < DISPATCH_R);
 
 // ---- every frame
@@ -6882,7 +7026,9 @@ function stepCrime(dt) {
     if (policeNear(r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened
   }
   stepReturningPolice(dt);
-  for (const c of footCops) if (!c.chase && !c.returnCar) patrolStep(c, dt);
+  stepRoadblocks();
+  const heliSees = stepHeli(dt);
+  for (const c of footCops) if (!c.chase && !c.returnCar && !c.post) patrolStep(c, dt);
   // a cab you've paid to step on it, seen by a cop: pulled over, and the driver's arrested
   if (mode === 'taxi' && me && me.rush && Math.abs(me.v) > 1.5 && copSees(me.x, me.y)) return 'cab';
   if (!wanted.stars) return;
@@ -6890,7 +7036,7 @@ function stepCrime(dt) {
   const roofSeen = roofSearchLead(dt);
   const [wx, wy] = crimePos(), inside = mode === 'room', onRoof = mode === 'roof';
   const sees = c => !inside && !onRoof && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
-  wanted.seen = inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
+  wanted.seen = (inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees)) || heliSees;
   if (wanted.seen) { if (!inside) observeSuspect(wx, wy); wanted.hideT = 0; wanted.searchX = wanted.lastX; wanted.searchY = wanted.lastY; }
   else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
   else if ((wanted.searchT -= dt) <= 0) {
@@ -6899,7 +7045,7 @@ function stepCrime(dt) {
   for (const c of cars) if (c.pursuit) c.dest = [wanted.searchX, wanted.searchY];
   const onFoot = mode === 'walk';
   for (const c of footCops) { // officers within a few blocks join the chase on foot
-    if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < 20) { c.chase = true; c.returnCar = null; }
+    if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < (c.post ? 3 : 20) && (!c.post || mode !== 'drive')) { c.chase = true; c.returnCar = null; } // (at a roadblock: only for you on foot, close by)
     if (c.chase) chaseStep(c, wanted.searchX, wanted.searchY, dt);
   }
   // pulls up, an officer jumps out and sprints for you; outrun him and the car comes round again for another go
@@ -7069,14 +7215,19 @@ function summonCar(model) {
   const name = ITEMS[model].name, mine = owned.cars.filter(c => c.model === model && !c.player), dist = c => Math.hypot(rel(c.x - px), rel(c.y - py));
   if (!mine.length) return [`You press the fob. Nothing. Wherever your ${name} is, it isn't listening.`, 'click'];
   if (mode !== 'walk') return [mode === 'room' ? 'No signal in here. Try it out on the street.' : 'Not from up here. Try it down on the street.', null];
-  const here = mine.find(c => dist(c) < 2);
+  const here = mine.find(c => dist(c) < 2 && !c.wrecked && c.fireT == null); // (a wreck, even right here, goes to the garage)
   if (here) { here.fobBlinkAt = T; return [`Your ${name}'s right here. Its lights blink at you.`, 'click']; }
   const c = mine.reduce((b, c) => dist(c) < dist(b) ? c : b), l = laneNear(px, py);
+  let towed = '';
+  if (c.wrecked || c.fireT != null) { // a burnt-out shell: the garage tows it in and puts it right, for a price
+    if (!pay(TOW_FEE)) return [`Your ${name}'s a wreck. The garage wants ${fmt$(TOW_FEE)} to tow it in and fix it, and you're short.`, 'click'];
+    repairCar(c); towed = ` The garage towed what was left of it and put it right (${fmt$(TOW_FEE)}).`;
+  }
   for (const s of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4]) { // along the kerb to a gap between parked cars
     c.x = mod(l.x + l.hx * s, N); c.y = mod(l.y + l.hy * s, N); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);
     if (!cars.some(o => o !== c && Math.hypot(rel(o.ex - c.x), rel(o.ey - c.y)) < 0.5)) break;
   }
-  return [`You press the fob. A minute later your ${name} rolls up at the kerb, lights blinking.`, 'click'];
+  return [`You press the fob. A minute later your ${name} rolls up at the kerb, lights blinking.${towed}`, 'click'];
 }
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
 const homeRoomKind = kind => kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
@@ -9370,6 +9521,7 @@ function citySprites() {
   drawCourier();
   drawMuseumRoof();
   drawRoofPolice();
+  drawChopper(); // (5 stars: chopper.js)
   drawBelleBuildings();
   drawArchitecture();
   drawLandmarks();
@@ -10137,7 +10289,7 @@ function drawAmbulance(m, vx, vy, hx, hy) {
   });
   const lb = mo + mhl - 0.02; // the light bar, and a lamp on each back corner
   drawBox(boxAt(vx + hx * lb, vy + hy * lb, hx, hy, 0.018, hw * 0.85, MH, MH + 0.016), (i, t, L) => {
-    const side = HIT.v > 0 ? RED : BLUE, on = lightsOn_(m) && strobe() === side;
+    const side = HIT.v > 0 ? RED : BLUE, on = !m.wrecked && lightsOn_(m) && strobe() === side;
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
   for (const s of [-1, 1]) drawBox(boxAt(vx + hx * (mo - mhl + 0.012) - hy * s * hw * 0.8, vy + hy * (mo - mhl + 0.012) + hx * s * hw * 0.8, hx, hy, 0.01, 0.012, MH, MH + 0.012), (i, t, L) => {
@@ -10145,16 +10297,35 @@ function drawAmbulance(m, vx, vy, hx, hy) {
     BG[i] = C(RED, on ? 15 : 4); return set(i, on ? '*' : ' ', C(WHITE, 15)), true;
   });
 }
+// a car on fire (damage.js): flames out of the bonnet, licking up the windscreen, higher as it goes on
+function drawCarFire(m, vx, vy, hx, hy) {
+  if (!burning(m)) return;
+  const [hl, hw, top] = VEHICLES[m.kind], fx_ = vx + hx * hl * 0.55, fy_ = vy + hy * hl * 0.55, tall = 0.07 + 0.12 * Math.min(1, m.fireT / BURN_T);
+  const flame = (i, t, L) => { // ragged: tongues of yellow and orange with the street showing between them
+    const hot = hash(i, Math.floor(T * 14), m.id);
+    if (hot < 0.3) return false;
+    BG[i] = C(hot > 0.75 ? YEL : hot > 0.5 ? ORANGE : RED, 7 + hot * 8); return set(i, hot > 0.65 ? '^' : hot > 0.45 ? '(' : ')', C(hot > 0.85 ? WHITE : YEL, 15)), true;
+  };
+  for (let k = 0; k < 4; k++) { // four tongues across the bonnet, each leaping and dropping on its own
+    const s_ = (k - 1.5) * hw * 0.5, fl = 0.45 + 0.55 * Math.abs(Math.sin(T * (9 + k * 2.3) + k * 1.7)), sway = 0.025 * Math.sin(T * 6 + k * 2);
+    drawRod(fx_ - hy * s_, fy_ + hx * s_, top, fx_ - hy * s_ + hx * sway, fy_ + hx * s_ + hy * sway, top + tall * fl, 0.016, flame);
+  }
+}
 function drawVehicle(m, vx, vy, hx, hy) {
+  drawCarFire(m, vx, vy, hx, hy);
   if (m.kind === 'amb') return drawAmbulance(m, vx, vy, hx, hy);
-  const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], lightsOn = night > 0.4 || overcast > 0.5;
+  const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], wreck = !!m.wrecked, lightsOn = !wreck && (night > 0.4 || overcast > 0.5);
+  // damage (damage.js): dents and scrapes over the body, more of them the worse it is; a wreck is burnt black
+  const dmg = m.dmg || 0, dented = (u, w) => dmg >= DMG_DENTS && hash(Math.floor(u * 22), Math.floor(w * 40), m.id) < (dmg - 15) / 160;
   const fobBlinking = m.owned && m.fobBlinkAt !== undefined && T - m.fobBlinkAt < 2.4;
   const fobHeadlight = !fobBlinking || Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0;
-  const braking = m.brake || m.v < 0.05, body = m.body;
+  const braking = !wreck && (m.brake || m.v < 0.05), body = wreck ? GRAY : m.body, burnt = wreck ? 0.35 : 1;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
   drawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
-    BG[i] = C(body, (1.5 + L * 0.45) * k);
+    BG[i] = C(body, (1.5 + L * 0.45) * k * burnt);
+    if (wreck) return set(i, hash(Math.floor(u * 30), Math.floor(w * 50), m.id) < 0.3 ? '%' : f === 5 ? '.' : ' ', C(GRAY, 2 + L * 0.2)), true; // (scorched)
+    if (f > 2 && f < 5 && w > 0.025 && dented(u, w)) { BG[i] = C(body, (0.8 + L * 0.3) * k); return set(i, hash(i, m.id, 3) < 0.5 ? '%' : '~', C(GRAY, 4 + L * 0.3)), true; }
     if (f === 5) return set(i, m.kind === 'amb' && Math.abs(u) < 0.05 && Math.abs(v) < 0.05 ? '+' : ' ', C(RED, 12)), true;
     if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(fobBlinking ? (fobHeadlight ? WHITE : BLACK) : WHITE, fobBlinking || lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
     if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking ? 15 : 8)), true;
@@ -10175,15 +10346,18 @@ function drawVehicle(m, vx, vy, hx, hy) {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
     if (f === 5 || f === 6) { BG[i] = C(body, (1.5 + L * 0.45) * shadeFace(f)); return set(i, ' ', 0), true; }
     const edge = f <= 2 ? Math.abs(v) > hw * 0.8 : Math.abs(u - cof) > chl * 0.85;
-    if (edge || w > cab - 0.008) { BG[i] = C(body, (1.5 + L * 0.45) * 0.8); return set(i, '|', C(body, L * 0.5)), true; }
-    BG[i] = C(CYAN, 1 + L * 0.12); return set(i, ' ', 0), true;
+    if (edge || w > cab - 0.008) { BG[i] = C(body, (1.5 + L * 0.45) * 0.8 * burnt); return set(i, '|', C(body, L * 0.5)), true; }
+    if (wreck) { BG[i] = C(GRAY, 0.6); return set(i, hash(i, m.id, 5) < 0.2 ? '\\' : ' ', C(GRAY, 3)), true; } // (the windows gone)
+    BG[i] = C(CYAN, 1 + L * 0.12);
+    if (dmg >= DMG_SMOKE && hash(Math.floor(u * 40 + v * 13), Math.floor(w * 60), m.id + 9) < 0.18) return set(i, hash(i, 7, m.id) < 0.5 ? '/' : '*', C(WHITE, 9 + L * 0.2)), true; // cracked
+    return set(i, ' ', 0), true;
   });
   const roof = cab || top; // what sits on the roof
   if (m.kind === 'taxi') drawBox(boxAt(vx, vy, hx, hy, 0.03, 0.05, roof, roof + 0.02), (i, t, L) => {
     BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
   });
   if (m.ev || m.patrol) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
-    const side = HIT.v > 0 ? RED : BLUE, on = lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
+    const side = HIT.v > 0 ? RED : BLUE, on = !wreck && lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
   if (m.kind === 'fire') drawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
@@ -15590,6 +15764,7 @@ function dash() {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h   ${jobLine()}`, C(WHITE, 13));
   } else if (mode === 'drive') {
     putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
+    damageDash();
   } else {
     putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
     putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway' + (owned.homes.length ? '   6: home' : ''), C(WHITE, 12));
@@ -15648,6 +15823,7 @@ function promptText() {
   const deliveryPrompt=courierPrompt();if(deliveryPrompt)return deliveryPrompt;
   const cp = crimePrompt();
   if (cp) return cp;
+  { const sp = sprayPrompt(); if (sp) return sp; } // (at the wheel, at a garage's door)
   if (mode === 'room') {
     if (room.kind === 'jail' && nearCabbie()) return 'E: talk to your cab driver   (he does not want to talk to you)';
     if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go${room.tried ? '' : '   E: try to break out (one chance)'}` : 'E: the guard lets you out';
@@ -16120,6 +16296,7 @@ function interact() {
   if (mode === 'sea') return useMarina();
   if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
   if (mode === 'elplat') return elBoard() || elDown();
+  if (mode === 'drive' && sprayPrompt()) return startRespray(); // pulled up at a garage's door (or told why not)
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
   const dr = droppedHere();
@@ -16219,6 +16396,7 @@ function bookRoom() {
 }
 function stepSleep(dt) {
   if (sleep.workout) return stepWorkout(dt); // (an hour at the gym: gym.js)
+  if (sleep.spray) return stepSpray(dt); // (a respray: damage-fx.js)
   sleep.t += dt;
   fade = sleep.t < 1.5 ? sleep.t / 1.5 : sleep.t < 3 ? 1 : clamp(1 - (sleep.t - 3) / 2, 0, 1);
   if (sleep.t >= 1.5 && !sleep.done) {
@@ -16622,6 +16800,131 @@ function finishBout(g, quit) {
   }
   say({ towel: 'You throw in the towel. No purse.', KO: `${g.name} puts you down for the count. No purse.`, TKO: 'The ref waves it off. No purse.',
         decision: `The judges give it to ${g.name}. No purse.` }[res.how] || 'No purse.', 5);
+}
+// ===== the police helicopter on screen (crime.js flies it, at 5 stars): a navy body with a white band and a glass
+// nose, a tail boom and fin, skids, the rotor a blur of a disc with its two blades going round, a red light blinking
+// under the tail; and its searchlight, a beam slanting down to a pool of light on the street (or the roof it's on).
+// The rotor thuds, louder the nearer it is.
+function drawChopper() {
+  if (!heli) return;
+  const vx = rel(heli.x - px), vy = rel(heli.y - py), z = heli.z, hx = Math.cos(heli.h), hy = Math.sin(heli.h), sx = -hy, sy = hx;
+  if (Math.hypot(vx, vy) > vis + 4) return;
+  const lx = rel(heli.sx - px), ly = rel(heli.sy - py), ground = map[idx(Math.floor(heli.sx), Math.floor(heli.sy))] || 0;
+  const strength = 0.35 + 0.65 * Math.max(night, overcast * 0.6); // (much plainer by night)
+  // the pool of light: brightest in the middle, fading to its edge
+  drawBox(boxAt(lx, ly, 1, 0, SPOT_R, SPOT_R, ground + 0.0003, ground + 0.0008), (i, t, L) => {
+    const r = Math.hypot(HIT.u, HIT.v) / SPOT_R, k = (1 - r * r) * strength;
+    BG[i] = C(WHITE, 3 + k * 9); set(i, k > 0.55 ? ' ' : '.', C(YEL, 6 + k * 8)); FOGS[i] = 0; return true;
+  }, rayCopperDrum);
+  // the beam: specks of light down the line from the helicopter's belly to the pool, in front of whatever's behind
+  const bx = vx + hx * 0.12, by = vy + hy * 0.12, bz = z - 0.1;
+  for (let k = 1; k < 48; k++) {
+    const f = k / 48, x = bx + (lx - bx) * f, y = by + (ly - by) * f, wz = bz + (ground - bz) * f, depth = dx * x + dy * y;
+    if (depth < 0.2 || depth > vis) continue;
+    const c = Math.floor(cols / 2 + (-dy * x + dx * y) * projX / depth), r = Math.floor(hor - (wz - eye) * projY / depth);
+    if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+    const i = r * cols + c;
+    if (depth >= ZB[i] || hash(c, r, Math.floor(T * 12)) > 0.75) continue;
+    set(i, ':', C(WHITE, 5 + strength * 9)); FOGS[i] = 0;
+  }
+  // the machine itself
+  const navy = (i, t, L) => {
+    const band = Math.abs(HIT.w - (z - 0.015)) < 0.012; // a white band down each side
+    BG[i] = band ? C(WHITE, 4 + L * 0.4) : C(BLUE, (1 + L * 0.25) * shadeFace(HIT.face));
+    return set(i, band && HIT.face > 2 && HIT.face < 5 ? '=' : ' ', C(GRAY, 3)), true;
+  };
+  const glass = (i, t, L) => { BG[i] = C(CYAN, 1.5 + L * 0.2); return set(i, ' ', 0), true; };
+  drawBox(boxAt(vx, vy, hx, hy, 0.19, 0.075, z - 0.08, z + 0.05), navy); // the cabin
+  dot(vx + hx * 0.18, vy + hy * 0.18, z - 0.02, 0.07, glass); // the glass nose
+  rod(vx - hx * 0.17, vy - hy * 0.17, z, vx - hx * 0.7, vy - hy * 0.7, z + 0.04, 0.022, BLUE, 1); // the tail boom
+  drawBox(boxAt(vx - hx * 0.7, vy - hy * 0.7, hx, hy, 0.05, 0.008, z, z + 0.14), navy); // the fin
+  for (const e of [-1, 1]) { // skids on two struts each
+    rod(vx + sx * e * 0.08 + hx * 0.2, vy + sy * e * 0.08 + hy * 0.2, z - 0.15, vx + sx * e * 0.08 - hx * 0.18, vy + sy * e * 0.08 - hy * 0.18, z - 0.15, 0.008, GRAY, 1.1);
+    for (const f of [-0.1, 0.1]) rod(vx + sx * e * 0.05 + hx * f, vy + sy * e * 0.05 + hy * f, z - 0.08, vx + sx * e * 0.08 + hx * f, vy + sy * e * 0.08 + hy * f, z - 0.15, 0.006, GRAY, 1.1);
+  }
+  rod(vx, vy, z + 0.05, vx, vy, z + 0.1, 0.012, GRAY, 1); // the mast
+  drawBox(boxAt(vx, vy, 1, 0, 0.55, 0.55, z + 0.1, z + 0.106), (i, t, L) => { // the rotor: two blades round and round, a blur between
+    const ang = Math.atan2(HIT.v, HIT.u), blade = Math.abs(fract(ang / Math.PI - T * 4.3) - 0.5) > 0.46;
+    if (!blade && hash(i, Math.floor(T * 30), 7) > 0.22) return false; // (see-through)
+    return set(i, blade ? '=' : '-', C(GRAY, L * (blade ? 0.8 : 0.4))), true;
+  }, rayCopperDrum);
+  if (fract(T * 1.2) < 0.25) dot(vx - hx * 0.6, vy - hy * 0.6, z - 0.01, 0.025, (i, t, L) => { BG[i] = C(RED, 12); return set(i, '*', C(WHITE, 15)), true; }); // the beacon
+}
+// the rotor's thud-thud-thud: one low pulse every tenth of a second or so, louder close by, panned to its side
+let chopperBeat = 0;
+function stepChopperSound(dt) {
+  if (!heli || !actx || paused || (chopperBeat -= dt) > 0) return;
+  chopperBeat = 0.105;
+  const vx = rel(heli.x - px), vy = rel(heli.y - py), d = Math.hypot(vx, vy, heli.z), loud = clamp(1 - d / 40, 0, 1);
+  if (loud <= 0) return;
+  const pan = clamp((-dy * vx + dx * vy) / Math.max(1, d), -1, 1), at = actx.currentTime;
+  tone(at, 48 + Math.random() * 6, 0.08, 0.05 * loud * loud, 'sawtooth', pan);
+  tone(at, 95, 0.03, 0.025 * loud, 'square', pan);
+}
+// ===== car damage you can see and feel (the rules are in damage.js): smoke out of the bonnet, grey and then black;
+// the bang when a burning car goes up (it hurts whoever's in it or near it, and throws you clear); the driver of a
+// burning car in the traffic getting out and away; the dashboard's warning lights; and the respray at an AUTO REPAIR.
+let carSmokeT = 0;
+function stepCarDamage(dt) {
+  for (const c of stepCarFires(dt)) carBang(c);
+  for (const c of cars) if (c.bail && !c.ejected) { c.ejected = true; ejectDriver(c); } // (the driver, out and running)
+  if (me && burning(me) && !me.warnedFire) { me.warnedFire = true; say('Flames out of the bonnet. Get out, now!', 4); }
+  if (me && !burning(me)) me.warnedFire = false;
+  if ((carSmokeT -= dt) > 0) return;
+  carSmokeT = 0.1;
+  for (const c of cars) { // smoke from the ones that are smoking, near enough to see
+    const smoking = c.dmg >= DMG_SMOKE || c.wrecked && T - (c.boomT || 0) < 30;
+    if (!smoking || Math.hypot(rel(c.x - px), rel(c.y - py)) > 14) continue;
+    const [hl, , top] = VEHICLES[c.kind], ax = Math.cos(carYaw(c)), ay = Math.sin(carYaw(c)), at = c.wrecked ? 0 : hl * 0.6, black = c.dmg >= DMG_BAD || c.wrecked || burning(c);
+    haze.push({ at: '', kind: black ? 'soot' : 'engine', s: 0.1, x: c.x + ax * at + (Math.random() - 0.5) * 0.04, y: c.y + ay * at + (Math.random() - 0.5) * 0.04, z: top,
+      r: 0.045, rMax: black ? 0.22 : 0.2, vx: 0, vy: 0, vz: black ? 0.16 : 0.12, life: 1, fade: black ? 1 / 3 : 1 / 3, seed: Math.random() * 100 });
+  }
+  while (haze.length > 140) haze.shift();
+}
+// up it goes: a ball of black smoke, a boom, and anyone in it or beside it hurt
+function carBang(c) {
+  for (let k = 0; k < 10; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.3, y: c.y + (Math.random() - 0.5) * 0.3, z: 0.05 + Math.random() * 0.1,
+    r: 0.1, rMax: 0.35, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, vz: 0.3, life: 1, fade: 1 / 5, seed: Math.random() * 100 });
+  const d = Math.hypot(rel(c.x - px), rel(c.y - py));
+  if (actx && d < 30) { playClip('crash', clamp(1 - d / 30, 0.2, 1)); tone(actx.currentTime, 40, 0.9, 0.12 * clamp(1 - d / 30, 0, 1), 'sawtooth'); }
+  if (c === me && mode === 'drive') { leaveCar(); hurt(35); return say('It goes up with you half out of the door. You hit the tarmac, singed.', 5); }
+  if (onFootMode() && mode === 'walk' && d < 0.6) { hurt(25 * (1 - d / 0.6)); say('The blast knocks you flat.', 3); }
+  if (c.owned) say(`Your ${ITEMS[c.model].name} is a burnt-out shell. The garage will tow it and fix it up (the key fob, ${fmt$(TOW_FEE)}).`, 6);
+}
+// at the wheel: the warning lights, and in the driver's seat the fire coming up over the bonnet
+function damageDash() {
+  const c = me;
+  if (!c || !c.dmg) return;
+  const fire = burning(c), bad = c.dmg >= DMG_BAD, blink = fract(T * 2) < 0.5;
+  const label = fire ? 'FIRE! GET OUT' : c.dmg >= DMG_SMOKE ? 'ENGINE' : 'DAMAGE';
+  if (c.dmg >= DMG_DENTS) putText(rows - 2, cols - label.length - 3, label, C(fire || bad ? RED : YEL, fire || bad ? (blink ? 15 : 7) : 13));
+  if (fire && !chaseOn) for (let x = 0; x < cols; x++) { // flames over the hood, flickering
+    const h = Math.floor((0.5 + 0.5 * Math.sin(x * 0.7 + T * 11)) * (1 + Math.sin(x * 0.23 - T * 3)) * 2), mid = Math.abs(x - cols / 2) < cols * 0.3;
+    if (!mid) continue;
+    for (let r = rows - 5; r > rows - 5 - h; r--) { const i = r * cols + x; set(i, r === rows - 5 ? 'W' : '^', C(r === rows - 5 ? ORANGE : YEL, 15)); BG[i] = C(ORANGE, 6 + h); FOGS[i] = FOGB[i] = 0; }
+  }
+}
+// ---- the respray
+function sprayPrompt() {
+  if (mode !== 'drive' || !me || Math.abs(me.v) > 0.3 || !sprayShopAt(me.x, me.y)) return '';
+  const why = sprayRefusal(me);
+  return why === 'seen' ? '"Not with the cops watching!" The shutter stays down.' : why === 'wreck' ? '' : `AUTO REPAIR   E: respray and fix it up (${fmt$(SPRAY_FEE)})`;
+}
+function startRespray() {
+  const why = sprayRefusal(me);
+  if (why === 'seen') return say('"Not with the cops watching!" The shutter stays down.', 3);
+  if (why === 'money') return say(`"A respray's ${fmt$(SPRAY_FEE)}." You can't cover it.`, 3);
+  if (why) return;
+  pay(SPRAY_FEE); me.v = 0;
+  sleep = { t: 0, spray: true };
+  say('The shutter rolls up and you drive in.', 2);
+}
+function stepSpray(dt) { // (stepSleep hands it over: ten minutes in a fade)
+  sleep.t += dt;
+  fade = sleep.t < 1 ? sleep.t : sleep.t < 2 ? 1 : clamp(1 - (sleep.t - 2) / 1.2, 0, 1);
+  if (sleep.t >= 1 && !sleep.done) { sleep.done = true; sleep.lost = applyRespray(me); if ((tod += 1 / 6) >= 24) { tod -= 24; dayNum++; } }
+  if (sleep.t > 2 && !sleep.said) { sleep.said = true; say(`Ten minutes later the shutter rolls up: new paint, the dents knocked out.${sleep.lost ? ' Nobody\'s looking for this car now.' : ''}`, 5); }
+  if (sleep.t > 3.2) { sleep = null; fade = 0; }
 }
 // ===== the calendar: which day of the week it is, and what's on. Days tick over at midnight (and when you sleep
 // through one). Starting simple: every Saturday night, fireworks over the bay off the Sunset Pier.
@@ -19353,7 +19656,7 @@ DENSE.petdog = heldPetCarrier;
 // cigarette sends up the odd wisp, and the vape's cloud is a lot more (mango-coloured). Outside they drift off on the
 // wind and are gone in a few seconds; indoors they hang about for half a minute, so a room you keep smoking in gets
 // hazy. Walk into a cloud and it fogs your view. (The close-up wisps on the screen, goods-ui.js, are as they were.)
-const haze = []; // { at: placeKey, kind: 'smoke' | 'vape', x, y, z, r, vx, vy, s (world units a metre), life 1..0, fade, seed }
+const haze = []; // { at: placeKey, kind: 'smoke' | 'vape' | 'steam' | 'engine' | 'soot', x, y, z, r, vx, vy, s (world units a metre), life 1..0, fade, seed }
 let hazeLastTip = 0, hazeDue = 0, hazeWisp = 0;
 const HAZE_WIND = [0.035, 0.012]; // outside, in cells a second (a light breeze)
 // breathe out (amount 0..3: a wisp, a drag, a big vape cloud) in front of you
@@ -19392,7 +19695,7 @@ function drawHaze() {
     if (p.at !== at) continue;
     const rx_ = room_ ? p.x - px : rel(p.x - px), ry_ = room_ ? p.y - py : rel(p.y - py), depth = dx * rx_ + dy * ry_;
     const near = Math.hypot(rx_, ry_, p.z - eye) / p.r;
-    if (near < 1 && p.life * (1 - near) > inside) { inside = p.life * (1 - near); insideKind = p.kind; }
+    if (near < 1 && p.life * (1 - near) > inside && p.kind !== 'engine' && p.kind !== 'soot') { inside = p.life * (1 - near); insideKind = p.kind; } // (a car's smoke drifts past you, it doesn't swallow the view)
     if (depth < 0.05 * p.s * 10 || depth > vis) continue;
     const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc, rw = p.r * sc, cy = hor - (p.z - eye) * projY / depth, rh = p.r * projY / depth * 0.75;
     const c0 = Math.max(0, Math.floor(cx - rw)), c1 = Math.min(cols, Math.ceil(cx + rw)), r0 = Math.max(0, Math.floor(cy - rh)), r1 = Math.min(rows, Math.ceil(cy + rh));
@@ -19412,6 +19715,9 @@ function drawHaze() {
   }
 }
 function hazeCell(i, dens, kind) {
+  if (kind === 'soot') { // a burning car's: thick and black
+    set(i, dens > 0.6 ? '%' : dens > 0.4 ? '~' : ':', C(GRAY, 2 + dens * 3)); if (dens > 0.45) BG[i] = C(GRAY, 0.3 + dens * 0.8); FOGS[i] = 0; return;
+  }
   const vape = kind === 'vape', lit = Math.max(vape ? 0.7 : 0.35, amb) * (kind === 'steam' ? 1.25 : 1); // (steam: whiter; a vape cloud's thick and pale, even at night)
   set(i, dens > 0.7 ? '%' : dens > 0.5 ? '~' : dens > 0.33 ? ':' : '.', C(vape ? (dens > 0.55 ? YEL : WARM) : dens > 0.55 ? WHITE : GRAY, (5 + dens * 9) * lit));
   if (dens > (vape ? 0.5 : 0.7)) BG[i] = vape ? C(WARM, (1.2 + dens * 2.2) * lit) : C(GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
@@ -20097,7 +20403,7 @@ function wantedHud() {
   wantedBottom = 0;
   const pend = reports.length && !wanted.stars;
   if (!wanted.stars && !pend) return;
-  const stars = [1, 2, 3].map(k => k <= wanted.stars ? '*' : '.').join(' ');
+  const stars = [1, 2, 3, 4, 5].map(k => k <= wanted.stars ? '*' : '.').join(' ');
   const line = pend ? "someone's calling the police..." : `WANTED  ${stars}`, phone = TOUCH || cv.width < 700;
   const room_ = phone ? cv.width * (showMap && mode !== 'room' && cv.width < cv.height ? 0.5 : 0.9) : cv.width;
   let s = phone ? clamp(Math.round(cv.height / 48), 11, 18) : Math.max(16, Math.round(cv.height / 34));
@@ -20593,7 +20899,7 @@ function saveGame() {
   const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank };
+    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
 function loadGame() {
@@ -20620,7 +20926,11 @@ function loadGame() {
     fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
     pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
   }
-  for (const c of d.cars || []) if (CAR_MODELS[c.model]) spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
+  for (const c of d.cars || []) if (CAR_MODELS[c.model]) {
+    const o = spawnOwnedCar(c.model, c.x, c.y, c.hx, c.hy, true);
+    if (Number.isInteger(c.body)) o.body = c.body; // (resprayed)
+    if (c.wrecked) { o.dmg = DMG_FIRE; o.wrecked = true; } else if (c.dmg > 0) o.dmg = clamp(c.dmg, 0, DMG_FIRE - 1); // (a fire's out by the time you're back)
+  }
   ensureCarKeys();
   loadBoats(d.boats);
   loadCourier(d.courier);
@@ -20791,14 +21101,15 @@ function drawTireMarks() {
 }
 function drive(dt) {
   const oldA = a;
-  const spun = me.spunT > T; // spun out by the police: no say in it till you've stopped turning
+  const spun = me.spunT > T || me.wrecked; // spun out by the police (no say in it till you've stopped turning), or a burnt-out shell
   const c = me, f = spun ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = spun ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
   const traction = roadTraction(c.x, c.y), braking = 0.55 + traction * 0.45, acceleration = 0.75 + traction * 0.25;
   if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (me.spunT - T) / 2.5; }
   if (f > 0) c.v += (c.v < 0 ? 2.5 * braking : acceleration) * dt;
   else if (f < 0) c.v -= (c.v > 0 ? 2.5 * braking : 0.8 * acceleration) * dt;
   else c.v *= 1 - 0.7 * dt;
-  c.v = clamp(c.v, -0.5, K.ShiftLeft || K.ShiftRight ? c.boost || 3.2 : c.top || 2.2); // (a car you own goes as fast as its model)
+  c.v = clamp(c.v, -0.5, (K.ShiftLeft || K.ShiftRight ? c.boost || 3.2 : c.top || 2.2) * carPower(c)); // (a car you own goes as fast as its model; a smoking one doesn't)
+  if (c.wrecked) c.v = 0;
   const handbrake = !!K.Space && !spun, fast = Math.abs(c.v) > 0.8;
   if (handbrake) c.v *= Math.exp(-dt * (fast ? 0.65 : 5) * braking);
   a += s * dt * (handbrake && fast ? 2.5 : 1.8) * clamp(c.v / 0.5, -1, 1);
@@ -20830,8 +21141,8 @@ function drive(dt) {
   const hit = bodyHit || !free(fx, fy) || hitCar || hitPerson;
   if (hit) { // a real crash only above CRASH_V; anything slower is a bump
     const sp = Math.abs(c.v);
-    if (hitPerson && sp > 0.4) { hitPerson.talk = 3; say(pick(['"Watch it!"', '"Are you CRAZY?"', '"Hey! You hit me!"']), 2); crime('hit', c.x, c.y); } // you hit someone
-    if (sp > CRASH_V) { say('*CRUNCH*', 1); taxiCrash(); if (actx) playClip('crash', clamp(0.3 + (sp - CRASH_V) * 0.35, 0.3, 0.8)); if (hitCar && !hitCar.player) crime('crash', c.x, c.y); }
+    if (hitPerson && sp > 0.4) { hitPerson.talk = 3; say(pick(['"Watch it!"', '"Are you CRAZY?"', '"Hey! You hit me!"']), 2); crime(footCops.includes(hitPerson) ? 'hitcop' : 'hit', c.x, c.y); } // you hit someone (a cop: worse)
+    if (sp > CRASH_V) { damageCar(c, crashDamage(sp)); if (hitCar) damageCar(hitCar, crashDamage(sp) * 0.8); say('*CRUNCH*', 1); taxiCrash(); if (actx) playClip('crash', clamp(0.3 + (sp - CRASH_V) * 0.35, 0.3, 0.8)); if (hitCar && !hitCar.player) crime(hitCar.patrol ? 'ram' : 'crash', c.x, c.y); }
     else if (sp > 0.2 && actx) tone(actx.currentTime, 70, 0.12, 0.08 * sp); // a soft thud
     if (bodyHit || hitCar) a = oldA;
     c.v = 0; c.travelA = a;
@@ -20879,7 +21190,7 @@ function loop(t) {
       move(airborne ? body.mx * dt : ix, airborne ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if(mode==='ladder')stepCourierLadder(dt);
-  else if (mode === 'drive') { drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (eyes back on the road a moment after you stop looking about)
+  else if (mode === 'drive') { if (!sleep) drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (not while the respray's under way) // (eyes back on the road a moment after you stop looking about)
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
   else if (mode === 'sea') stepSea(dt);
@@ -20889,6 +21200,7 @@ function loop(t) {
   }
   stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
+  stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepTask(dt);
   stepLaundry();
   stepEvents(dt);
@@ -20939,7 +21251,7 @@ function loop(t) {
     a += sa; pitch += sp_; render(dt); a -= sa + lk; pitch -= sp_;
     if (wob > 0.08) drunkVision(wob);
   }
-  audioTick(dt);
+  audioTick(dt); stepChopperSound(dt);
   requestAnimationFrame(loop);
 }
 // double vision: a ghost of the frame laid over itself, drifting apart and back, stronger the more you've had

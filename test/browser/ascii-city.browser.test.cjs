@@ -2468,3 +2468,48 @@ test('street lamps: you walk straight through the post, and so does your car; a 
   await page.waitForFunction(x => rel(px - x) > 0.05, r.x, { timeout: 8000 }); // walked on past it (game time: slower than the clock on a busy machine)
   await page.keyboard.up('KeyW');
 }));
+
+test('car damage: a crash at speed dents it and the dash says so; a burning car goes up with you thrown clear; a respray mends it; your own wreck comes back by the key fob, and the paint and dents are saved', () => withPage(async page => {
+  // straight into a wall at full speed, through the real driving step
+  const crash = await page.evaluate(() => {
+    let spot = null;
+    for (let y = 1; y < N && !spot; y += 8) for (let x = 2; x < N && !spot; x += 8)
+      if (ROAD[idx(x, y)] === 2 && map[idx(x, y - 2)] > 0) spot = [x + 0.5, y - 0.65]; // the north side of the street, a building just beyond the kerb
+    const c = addCar({ x: spot[0], y: spot[1], hx: 0, hy: -1, body: GREEN }); me = c; c.player = true; mode = 'drive'; px = c.x; py = c.y; a = -Math.PI / 2; c.travelA = a; c.v = 2.2;
+    for (let k = 0; k < 30 && !c.dmg; k++) drive(1 / 60);
+    return { dmg: Math.round(c.dmg), v: c.v };
+  });
+  assert.ok(crash.dmg >= 30 && crash.dmg <= 40 && crash.v === 0, JSON.stringify(crash));
+  await page.evaluate(() => { damageCar(me, 30); third = false; }); // (60: smoking)
+  await page.waitForTimeout(300);
+  const dash = await page.evaluate(() => { const row = (rows - 2) * cols; return CH.slice(row, row + cols).join(''); });
+  assert.match(dash, /ENGINE/);
+  // on fire, and you stay in it: thrown clear, hurt, and a burnt-out shell left
+  await page.evaluate(() => { needs.health = 100; damageCar(me, 50); window.wreck = me; });
+  await page.waitForFunction(() => wreck.wrecked, null, { timeout: 15000 });
+  assert.deepStrictEqual(await page.evaluate(() => [mode, me === null || me !== wreck, needs.health < 70, wreck.parked, /thrown|tarmac/.test(msgText)]), ['walk', true, true, true, true], 'out on the tarmac, singed (35 off, healing a little since)');
+  // a respray at an AUTO REPAIR, by E at its door
+  const before = await page.evaluate(() => {
+    const d = doors.find(o => o.sh.word === 'AUTO REPAIR'), c = addCar({ x: d.x - d.nx * 6, y: d.y - d.ny * 6, hx: 1, hy: 0, body: RED });
+    me = c; c.player = true; mode = 'drive'; px = c.x; py = c.y; a = 0; money = 300; damageCar(c, 40);
+    for (const o of cars) if (o.patrol) { o.x = mod(o.x + 100, N); o.ex = o.x; } for (const o of footCops) o.x = mod(o.x + 100, N);
+    addWanted('crash', px, py, false);
+    return promptText();
+  });
+  assert.match(before, /AUTO REPAIR {3}E: respray and fix it up \(\$100\.00\)/);
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => !sleep, null, { timeout: 15000 });
+  assert.deepStrictEqual(await page.evaluate(() => [money, me.dmg, me.body !== RED, wanted.stars]), [200, 0, true, 0]);
+  // your own car, burnt out: the fob has the garage tow it in and put it right; dents and paint are saved
+  const tow = await page.evaluate(() => {
+    leaveCar(); money = 10000; inv.length = 0; held = -1; buy('car_sedan');
+    const c = owned.cars[owned.cars.length - 1]; c.wrecked = true; c.dmg = 100; c.body = MAG;
+    held = inv.findIndex(it => it.id === 'key_car_sedan'); useHeldItem();
+    return { msg: msgText, fixed: !c.wrecked && !c.dmg, money };
+  });
+  assert.match(tow.msg, /towed what was left of it/);
+  assert.deepStrictEqual([tow.fixed, tow.money], [true, 10000 - await page.evaluate(() => ITEMS.car_sedan.price) - 200]);
+  await page.evaluate(() => { const c = owned.cars[owned.cars.length - 1]; c.dmg = 45; saveGame(); });
+  await page.reload(); await page.waitForTimeout(300);
+  assert.deepStrictEqual(await page.evaluate(() => { const c = owned.cars[owned.cars.length - 1]; return [c.dmg, c.body === MAG, !!c.wrecked]; }), [45, true, false]);
+}));

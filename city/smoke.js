@@ -2,7 +2,7 @@
 // cigarette sends up the odd wisp, and the vape's cloud is a lot more (mango-coloured). Outside they drift off on the
 // wind and are gone in a few seconds; indoors they hang about for half a minute, so a room you keep smoking in gets
 // hazy. Walk into a cloud and it fogs your view. (The close-up wisps on the screen, goods-ui.js, are as they were.)
-const haze = []; // { at: placeKey, kind: 'smoke' | 'vape', x, y, z, r, vx, vy, s (world units a metre), life 1..0, fade, seed }
+const haze = []; // { at: placeKey, kind: 'smoke' | 'vape' | 'steam' | 'engine' | 'soot', x, y, z, r, vx, vy, s (world units a metre), life 1..0, fade, seed }
 let hazeLastTip = 0, hazeDue = 0, hazeWisp = 0;
 const HAZE_WIND = [0.035, 0.012]; // outside, in cells a second (a light breeze)
 // breathe out (amount 0..3: a wisp, a drag, a big vape cloud) in front of you
@@ -41,7 +41,7 @@ function drawHaze() {
     if (p.at !== at) continue;
     const rx_ = room_ ? p.x - px : rel(p.x - px), ry_ = room_ ? p.y - py : rel(p.y - py), depth = dx * rx_ + dy * ry_;
     const near = Math.hypot(rx_, ry_, p.z - eye) / p.r;
-    if (near < 1 && p.life * (1 - near) > inside) { inside = p.life * (1 - near); insideKind = p.kind; }
+    if (near < 1 && p.life * (1 - near) > inside && p.kind !== 'engine' && p.kind !== 'soot') { inside = p.life * (1 - near); insideKind = p.kind; } // (a car's smoke drifts past you, it doesn't swallow the view)
     if (depth < 0.05 * p.s * 10 || depth > vis) continue;
     const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc, rw = p.r * sc, cy = hor - (p.z - eye) * projY / depth, rh = p.r * projY / depth * 0.75;
     const c0 = Math.max(0, Math.floor(cx - rw)), c1 = Math.min(cols, Math.ceil(cx + rw)), r0 = Math.max(0, Math.floor(cy - rh)), r1 = Math.min(rows, Math.ceil(cy + rh));
@@ -61,6 +61,9 @@ function drawHaze() {
   }
 }
 function hazeCell(i, dens, kind) {
+  if (kind === 'soot') { // a burning car's: thick and black
+    set(i, dens > 0.6 ? '%' : dens > 0.4 ? '~' : ':', C(GRAY, 2 + dens * 3)); if (dens > 0.45) BG[i] = C(GRAY, 0.3 + dens * 0.8); FOGS[i] = 0; return;
+  }
   const vape = kind === 'vape', lit = Math.max(vape ? 0.7 : 0.35, amb) * (kind === 'steam' ? 1.25 : 1); // (steam: whiter; a vape cloud's thick and pale, even at night)
   set(i, dens > 0.7 ? '%' : dens > 0.5 ? '~' : dens > 0.33 ? ':' : '.', C(vape ? (dens > 0.55 ? YEL : WARM) : dens > 0.55 ? WHITE : GRAY, (5 + dens * 9) * lit));
   if (dens > (vape ? 0.5 : 0.7)) BG[i] = vape ? C(WARM, (1.2 + dens * 2.2) * lit) : C(GRAY, (0.8 + dens * 1.2) * lit); // (only the thick middle hides what's behind)
