@@ -135,7 +135,7 @@ function promptText() {
   if (mode === 'drive') return TOUCH ? 'stick: gas, brake and steer (to the rim: floor it)   get out when slow' : 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
   if (mode === 'taxi') return TOUCH ? 'drag: look around' : 'mouse: look around | V: camera | E: get out';
   if (mode === 'air') return airPrompt();
-  { const ac = nearAircraft(); if (ac) return `E: get in the ${PLANE_TYPES[ac.type].name}`; }
+  { const ac = nearAircraft(); if (ac) return aircraftPrompt(ac); }
   const c = nearestCar(0.5);
   const dr = droppedHere();
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;

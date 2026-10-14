@@ -138,3 +138,42 @@ test('a burning aircraft goes up after a few seconds, like a car', () => {
   assert.deepEqual(boom, ['burn']);
   assert.ok(ev(`aircraft.find(a => a.tag === 'burn').wrecked`));
 });
+
+test('one you stole and left lying about goes back to its stand once you are well away; yours stays put', () => {
+  const { ev } = loadCity();
+  ev(`var mine = aircraft.find(a => a.type === 'prop'), took = aircraft.find(a => a.type === 'heli');
+    mine.owned = true; mine.forSale = false; mine.x = 120; mine.y = 100;
+    took.stolen = true; took.x = 122; took.y = 100; took.dmg = 30`);
+  assert.equal(ev('stepFleet(121, 101, null).length'), 0, 'not while you are standing by them');
+  assert.deepEqual(JSON.parse(ev('JSON.stringify(stepFleet(200, 30, null).map(a => a.type))')), ['heli']);
+  assert.equal(ev('took.x === took.home.x && took.y === took.home.y && took.dmg === 0 && !took.stolen'), true);
+  assert.equal(ev('mine.x'), 120, 'yours is where you left it');
+});
+
+test('your aircraft, wrecked or sunk, is replaced on its stand', () => {
+  const { ev } = loadCity();
+  ev(`var mine = aircraft.find(a => a.type === 'jet'); mine.owned = true; mine.x = 120; mine.y = 100; damageCraft(mine, 500); stepAircraftFires(10)`);
+  assert.equal(ev('mine.wrecked'), true);
+  assert.deepEqual(JSON.parse(ev('JSON.stringify(stepFleet(200, 30, null).map(a => a.type))')), ['jet']);
+  assert.equal(ev('!mine.wrecked && mine.fireT === undefined && mine.dmg === 0 && mine.owned'), true);
+});
+
+test('owned aircraft are saved and loaded where you parked them; one in the air comes back on its stand', () => {
+  const { ev } = loadCity();
+  ev(`var pa = aircraft.find(c => c.type === 'prop'), pb = aircraft.find(c => c.type === 'heli');
+    pa.owned = pb.owned = true; pa.x = 130.5; pa.y = 60.5; pa.yaw = 1; pa.dmg = 20;
+    pb.x = 90; pb.y = 90; pb.z = 6; pb.state = 'flown'; pb.ground = false`);
+  const saved = ev('JSON.stringify(savedPlanes())');
+  const fresh = loadCity().ev;
+  fresh(`loadPlanes(${saved})`);
+  const got = JSON.parse(fresh(`JSON.stringify(aircraft.filter(a => a.owned).map(a => [a.type, a.x, a.y, a.dmg, a.forSale, a.x === a.home.x]))`));
+  assert.deepEqual(got.find(g => g[0] === 'prop').slice(0, 5), ['prop', 130.5, 60.5, 20, false]);
+  assert.equal(got.find(g => g[0] === 'heli')[5], true, 'the helicopter was in the air: it is back on its pad');
+});
+
+test('stealing an aircraft is two stars', () => {
+  const { ev } = loadCity();
+  ev(`addWanted('planetheft', 40, 220, true)`);
+  assert.equal(ev('wanted.stars'), 2);
+  assert.equal(ev('wanted.crime'), 'aircraft theft');
+});

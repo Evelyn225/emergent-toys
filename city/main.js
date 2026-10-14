@@ -47,6 +47,7 @@ onkeydown = e => {
   }
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
+  if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;

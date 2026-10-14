@@ -3243,6 +3243,7 @@ let aircraftId = 0;
 const STAND_Y = APRON.y0 + 1.75; // an airliner at its gate: nose to the terminal
 function addAircraft(type, x, y, yaw, extra) {
   const a = { id: aircraftId++, type, x, y, z: 0, yaw, pitch: 0, roll: 0, v: 0, state: 'parked', dmg: 0, ...extra };
+  if (a.forSale) a.home = { x, y, yaw }; // (the airport's own: whoever takes it, it finds its way back here)
   aircraft.push(a); return a;
 }
 // the fleet at dawn of the first day: an airliner at two of the three gates, light aircraft by the hangars, the jet in
@@ -3437,6 +3438,47 @@ function stepAircraftFires(dt) {
   const out = [];
   for (const a of aircraft) if (a.fireT != null && !a.wrecked && (a.fireT += dt) >= BURN_T) { a.wrecked = true; a.boomT = T; out.push(a); }
   return out;
+}
+
+// ---- the airport's fleet, bought or stolen. Yours stays where you leave it (and is saved); one you stole and left
+// somewhere goes back to its stand once you're well away; a wreck, or one at the bottom of the bay, is replaced on its
+// stand (yours on the insurance, which charges the excess)
+const AIR_EXCESS = 500;
+const AIR_AWAY = 30; // how far off you must be (from it, and from its stand) before it's quietly put back
+function returnHome(a) {
+  const h = a.home;
+  Object.assign(a, { x: h.x, y: h.y, yaw: h.yaw, z: 0, pitch: 0, roll: 0, v: 0, vz: 0, hvx: 0, hvy: 0, throttle: 0, rotor: 0, dmg: 0, ground: true, state: 'parked' });
+  for (const k of ['wrecked', 'fireT', 'ditched', 'sinkT', 'boomT', 'stalled', 'warnedFire', 'crashSpeed', 'stolen']) delete a[k];
+}
+// what wants putting back, given where you are and what you're flying: returns the ones it put back
+function stepFleet(px_, py_, flying) {
+  const back = [];
+  for (const a of aircraft) {
+    if (!a.home || a === flying || a.fireT != null && !a.wrecked) continue; // (let a fire burn out first)
+    const lost = a.wrecked || a.ditched, astray = !a.owned && (Math.abs(rel(a.x - a.home.x)) > 0.05 || Math.abs(rel(a.y - a.home.y)) > 0.05 || a.dmg > 0);
+    if (!lost && !astray) continue;
+    const far = (x, y) => Math.hypot(rel(x - px_), rel(y - py_)) > AIR_AWAY;
+    if (!a.ditched && !far(a.x, a.y) || !far(a.home.x, a.home.y)) continue;
+    if (aircraft.some(b => b !== a && !b.ditched && Math.hypot(rel(b.x - a.home.x), rel(b.y - a.home.y)) < 1)) continue; // (something's on its stand)
+    returnHome(a); back.push(a);
+  }
+  return back;
+}
+// the save: which of the fleet are yours, and where they are
+// (one that's up in the air when you leave is waiting on its stand when you come back)
+const savedPlanes = () => aircraft.filter(a => a.owned).map(a => {
+  const up = a.state === 'flown' && !a.ground, at = up ? a.home : a;
+  return { id: a.id, type: a.type, x: at.x, y: at.y, yaw: at.yaw, dmg: a.dmg || 0, lost: !!(a.wrecked || a.ditched || a.fireT != null) };
+});
+function loadPlanes(list) {
+  for (const p of list || []) {
+    const a = aircraft.find(b => b.id === p.id && b.type === p.type && b.home);
+    if (!a) continue;
+    a.owned = true; a.forSale = false;
+    if (p.lost) { returnHome(a); a.owed = true; continue; } // (the insurance has it: the excess is due when you next fly)
+    if (![p.x, p.y, p.yaw].every(Number.isFinite) || overWater(p.x, p.y)) continue;
+    a.x = mod(p.x, N); a.y = mod(p.y, N); a.yaw = p.yaw; a.z = builtHeight(a.x, a.y); a.dmg = clamp(p.dmg || 0, 0, DMG_FIRE - 1);
+  }
 }
 // ---- doors: every shop, lobby and front door, as a point on the sidewalk outside it.
 // {x, y: on the walking line (0.12 / 1.88 into a street), nx, ny: one step inside, sh: the shop, use: what it's for}
@@ -6741,7 +6783,8 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  burglary: { stars: 2, name: 'breaking and entering' }, graffiti: { stars: 1, name: 'vandalism' },
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
                  boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' },
-                 ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' } };
+                 ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' },
+                 planetheft: { stars: 2, name: 'aircraft theft' } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -16155,7 +16198,7 @@ function promptText() {
   if (mode === 'drive') return TOUCH ? 'stick: gas, brake and steer (to the rim: floor it)   get out when slow' : 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
   if (mode === 'taxi') return TOUCH ? 'drag: look around' : 'mouse: look around | V: camera | E: get out';
   if (mode === 'air') return airPrompt();
-  { const ac = nearAircraft(); if (ac) return `E: get in the ${PLANE_TYPES[ac.type].name}`; }
+  { const ac = nearAircraft(); if (ac) return aircraftPrompt(ac); }
   const c = nearestCar(0.5);
   const dr = droppedHere();
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
@@ -17413,7 +17456,7 @@ function craftPanel(o, F, a_, b_, c_, ef, er, eu, col, k = 1, ch = ' ') {
 const craftLight = (p, col, r = 0.03) => dot(p[0], p[1], p[2], r, (i, t, L) => { BG[i] = C(col, 12); return set(i, '*', C(WHITE, 15)), true; });
 function drawAircraft() {
   for (const a of aircraft) {
-    if (a === pilot && mode === 'air' && !chaseOn) continue; // (you're in it, looking out)
+    if (a === pilot && mode === 'air' && !chaseOn || a.sinkT != null && T - a.sinkT > 4) continue; // (you're in it, looking out; or it's under)
     const vx = rel(a.x - px), vy = rel(a.y - py), T_ = PLANE_TYPES[a.type];
     if (Math.hypot(vx, vy) > vis + 4 || !inView(vx, vy, (T_.span || 1) / 2 + 0.3)) continue;
     if (T_.heli) drawHeliCraft(a, T_, vx, vy); else drawPlaneCraft(a, T_, vx, vy);
@@ -17522,10 +17565,33 @@ function nearAircraft() {
 }
 function enterAircraft(c) {
   const T_ = PLANE_TYPES[c.type];
+  if (c.owed) { // the insurance's excess, from last time
+    if (!pay(AIR_EXCESS)) return say(`The hangar won't release your ${T_.name} till the insurance excess is paid: ${fmt$(AIR_EXCESS)}.`, 4);
+    c.owed = false; say(`You settle the insurance excess on the ${T_.name}: ${fmt$(AIR_EXCESS)}.`, 3);
+  }
+  const theft = !c.owned && !c.stolen;
   pilot = c; mode = 'air'; c.state = 'flown'; c.throttle = 0; c.v = 0; c.vz = 0; c.ground = true; c.z = builtHeight(c.x, c.y);
   airCamYaw = c.yaw; px = c.x; py = c.y; airMouse[0] = airMouse[1] = 0;
   say(T_.heli ? `You climb into the ${T_.name}. The rotor starts to turn.   R/F up and down, W/S forward and back, A/D turn` :
     `You climb into the ${T_.name}.   W/S throttle, A/D bank, arrows pitch; past ${Math.round(T_.vr * 36)} km/h, pull up`, 5);
+  if (theft) { // not yours: the tower's on the radio to the police before you're off the ground
+    c.stolen = true; addWanted('planetheft', c.x, c.y, true);
+    say(`You climb into the ${T_.name} and get it started. The radio crackles: "Unauthorised movement on stand ${c.id}. Police are on the way."`, 5);
+  }
+}
+// buying the one you're standing by: it's yours, kept where you leave it (and saved)
+function buyAircraft(c) {
+  const T_ = PLANE_TYPES[c.type];
+  if (c.stolen && !c.owned) return say('Not one you\'ve just stolen.', 2);
+  if (!pay(T_.price)) return say(`The ${T_.name} is ${fmt$(T_.price)}. You can't cover it.`, 3);
+  c.owned = true; c.forSale = false; saveGame();
+  if (actx) sfxUse('click');
+  say(`The ${T_.name} is yours. Keys, logbook, and a full tank. Park it anywhere: it stays where you leave it.`, 5);
+}
+function aircraftPrompt(c) {
+  const T_ = PLANE_TYPES[c.type];
+  if (c.owned) return `E: get in your ${T_.name}${c.owed ? ` (insurance excess ${fmt$(AIR_EXCESS)})` : ''}`;
+  return `E: steal the ${T_.name}   U: buy it for ${fmt$(T_.price)}`;
 }
 // out, onto the ground beside it (its left side), as long as it's on the ground and stopped
 function leaveAircraft(why) {
@@ -17591,7 +17657,12 @@ function stepAirWrecks(dt) {
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
   }
-  for (let k = aircraft.length - 1; k >= 0; k--) if (aircraft[k].sinkT != null && T - aircraft[k].sinkT > 4 && aircraft[k] !== pilot) aircraft.splice(k, 1);
+  for (const c of aircraft) if (c.sinkT != null) c.z = -Math.min(0.5, (T - c.sinkT) * 0.12); // (going under)
+  for (let k = aircraft.length - 1; k >= 0; k--) if (aircraft[k].sinkT != null && T - aircraft[k].sinkT > 4 && aircraft[k] !== pilot && !aircraft[k].home) aircraft.splice(k, 1);
+  for (const c of stepFleet(px, py, pilot)) if (c.owned) { // yours, replaced on the insurance
+    if (pay(AIR_EXCESS)) say(`The insurers have a new ${PLANE_TYPES[c.type].name} waiting on its stand at the airport. The excess: ${fmt$(AIR_EXCESS)}.`, 5);
+    else { c.owed = true; say(`The insurers have a new ${PLANE_TYPES[c.type].name} on its stand at the airport, for when you can pay the ${fmt$(AIR_EXCESS)} excess.`, 5); }
+  }
   if ((airSmokeT -= dt) > 0) return;
   airSmokeT = 0.12;
   for (const c of aircraft) {
@@ -21620,7 +21691,7 @@ function saveGame() {
   const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank };
+    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
 function loadGame() {
@@ -21654,6 +21725,7 @@ function loadGame() {
   }
   ensureCarKeys();
   loadBoats(d.boats);
+  loadPlanes(d.planes);
   loadCourier(d.courier);
   if (Number.isFinite(d.season)) seasonShift = mod(d.season + Math.floor(dayNum / (d.seasonDays > 0 ? d.seasonDays : 7)) - Math.floor(dayNum / SEASON_DAYS), 4);
   grandHotelStolen = {};
@@ -21723,6 +21795,7 @@ onkeydown = e => {
   }
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
+  if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;

@@ -16,6 +16,7 @@ let aircraftId = 0;
 const STAND_Y = APRON.y0 + 1.75; // an airliner at its gate: nose to the terminal
 function addAircraft(type, x, y, yaw, extra) {
   const a = { id: aircraftId++, type, x, y, z: 0, yaw, pitch: 0, roll: 0, v: 0, state: 'parked', dmg: 0, ...extra };
+  if (a.forSale) a.home = { x, y, yaw }; // (the airport's own: whoever takes it, it finds its way back here)
   aircraft.push(a); return a;
 }
 // the fleet at dawn of the first day: an airliner at two of the three gates, light aircraft by the hangars, the jet in
@@ -210,4 +211,45 @@ function stepAircraftFires(dt) {
   const out = [];
   for (const a of aircraft) if (a.fireT != null && !a.wrecked && (a.fireT += dt) >= BURN_T) { a.wrecked = true; a.boomT = T; out.push(a); }
   return out;
+}
+
+// ---- the airport's fleet, bought or stolen. Yours stays where you leave it (and is saved); one you stole and left
+// somewhere goes back to its stand once you're well away; a wreck, or one at the bottom of the bay, is replaced on its
+// stand (yours on the insurance, which charges the excess)
+const AIR_EXCESS = 500;
+const AIR_AWAY = 30; // how far off you must be (from it, and from its stand) before it's quietly put back
+function returnHome(a) {
+  const h = a.home;
+  Object.assign(a, { x: h.x, y: h.y, yaw: h.yaw, z: 0, pitch: 0, roll: 0, v: 0, vz: 0, hvx: 0, hvy: 0, throttle: 0, rotor: 0, dmg: 0, ground: true, state: 'parked' });
+  for (const k of ['wrecked', 'fireT', 'ditched', 'sinkT', 'boomT', 'stalled', 'warnedFire', 'crashSpeed', 'stolen']) delete a[k];
+}
+// what wants putting back, given where you are and what you're flying: returns the ones it put back
+function stepFleet(px_, py_, flying) {
+  const back = [];
+  for (const a of aircraft) {
+    if (!a.home || a === flying || a.fireT != null && !a.wrecked) continue; // (let a fire burn out first)
+    const lost = a.wrecked || a.ditched, astray = !a.owned && (Math.abs(rel(a.x - a.home.x)) > 0.05 || Math.abs(rel(a.y - a.home.y)) > 0.05 || a.dmg > 0);
+    if (!lost && !astray) continue;
+    const far = (x, y) => Math.hypot(rel(x - px_), rel(y - py_)) > AIR_AWAY;
+    if (!a.ditched && !far(a.x, a.y) || !far(a.home.x, a.home.y)) continue;
+    if (aircraft.some(b => b !== a && !b.ditched && Math.hypot(rel(b.x - a.home.x), rel(b.y - a.home.y)) < 1)) continue; // (something's on its stand)
+    returnHome(a); back.push(a);
+  }
+  return back;
+}
+// the save: which of the fleet are yours, and where they are
+// (one that's up in the air when you leave is waiting on its stand when you come back)
+const savedPlanes = () => aircraft.filter(a => a.owned).map(a => {
+  const up = a.state === 'flown' && !a.ground, at = up ? a.home : a;
+  return { id: a.id, type: a.type, x: at.x, y: at.y, yaw: at.yaw, dmg: a.dmg || 0, lost: !!(a.wrecked || a.ditched || a.fireT != null) };
+});
+function loadPlanes(list) {
+  for (const p of list || []) {
+    const a = aircraft.find(b => b.id === p.id && b.type === p.type && b.home);
+    if (!a) continue;
+    a.owned = true; a.forSale = false;
+    if (p.lost) { returnHome(a); a.owed = true; continue; } // (the insurance has it: the excess is due when you next fly)
+    if (![p.x, p.y, p.yaw].every(Number.isFinite) || overWater(p.x, p.y)) continue;
+    a.x = mod(p.x, N); a.y = mod(p.y, N); a.yaw = p.yaw; a.z = builtHeight(a.x, a.y); a.dmg = clamp(p.dmg || 0, 0, DMG_FIRE - 1);
+  }
 }

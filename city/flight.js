@@ -21,10 +21,33 @@ function nearAircraft() {
 }
 function enterAircraft(c) {
   const T_ = PLANE_TYPES[c.type];
+  if (c.owed) { // the insurance's excess, from last time
+    if (!pay(AIR_EXCESS)) return say(`The hangar won't release your ${T_.name} till the insurance excess is paid: ${fmt$(AIR_EXCESS)}.`, 4);
+    c.owed = false; say(`You settle the insurance excess on the ${T_.name}: ${fmt$(AIR_EXCESS)}.`, 3);
+  }
+  const theft = !c.owned && !c.stolen;
   pilot = c; mode = 'air'; c.state = 'flown'; c.throttle = 0; c.v = 0; c.vz = 0; c.ground = true; c.z = builtHeight(c.x, c.y);
   airCamYaw = c.yaw; px = c.x; py = c.y; airMouse[0] = airMouse[1] = 0;
   say(T_.heli ? `You climb into the ${T_.name}. The rotor starts to turn.   R/F up and down, W/S forward and back, A/D turn` :
     `You climb into the ${T_.name}.   W/S throttle, A/D bank, arrows pitch; past ${Math.round(T_.vr * 36)} km/h, pull up`, 5);
+  if (theft) { // not yours: the tower's on the radio to the police before you're off the ground
+    c.stolen = true; addWanted('planetheft', c.x, c.y, true);
+    say(`You climb into the ${T_.name} and get it started. The radio crackles: "Unauthorised movement on stand ${c.id}. Police are on the way."`, 5);
+  }
+}
+// buying the one you're standing by: it's yours, kept where you leave it (and saved)
+function buyAircraft(c) {
+  const T_ = PLANE_TYPES[c.type];
+  if (c.stolen && !c.owned) return say('Not one you\'ve just stolen.', 2);
+  if (!pay(T_.price)) return say(`The ${T_.name} is ${fmt$(T_.price)}. You can't cover it.`, 3);
+  c.owned = true; c.forSale = false; saveGame();
+  if (actx) sfxUse('click');
+  say(`The ${T_.name} is yours. Keys, logbook, and a full tank. Park it anywhere: it stays where you leave it.`, 5);
+}
+function aircraftPrompt(c) {
+  const T_ = PLANE_TYPES[c.type];
+  if (c.owned) return `E: get in your ${T_.name}${c.owed ? ` (insurance excess ${fmt$(AIR_EXCESS)})` : ''}`;
+  return `E: steal the ${T_.name}   U: buy it for ${fmt$(T_.price)}`;
 }
 // out, onto the ground beside it (its left side), as long as it's on the ground and stopped
 function leaveAircraft(why) {
@@ -90,7 +113,12 @@ function stepAirWrecks(dt) {
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
   }
-  for (let k = aircraft.length - 1; k >= 0; k--) if (aircraft[k].sinkT != null && T - aircraft[k].sinkT > 4 && aircraft[k] !== pilot) aircraft.splice(k, 1);
+  for (const c of aircraft) if (c.sinkT != null) c.z = -Math.min(0.5, (T - c.sinkT) * 0.12); // (going under)
+  for (let k = aircraft.length - 1; k >= 0; k--) if (aircraft[k].sinkT != null && T - aircraft[k].sinkT > 4 && aircraft[k] !== pilot && !aircraft[k].home) aircraft.splice(k, 1);
+  for (const c of stepFleet(px, py, pilot)) if (c.owned) { // yours, replaced on the insurance
+    if (pay(AIR_EXCESS)) say(`The insurers have a new ${PLANE_TYPES[c.type].name} waiting on its stand at the airport. The excess: ${fmt$(AIR_EXCESS)}.`, 5);
+    else { c.owed = true; say(`The insurers have a new ${PLANE_TYPES[c.type].name} on its stand at the airport, for when you can pay the ${fmt$(AIR_EXCESS)} excess.`, 5); }
+  }
   if ((airSmokeT -= dt) > 0) return;
   airSmokeT = 0.12;
   for (const c of aircraft) {
