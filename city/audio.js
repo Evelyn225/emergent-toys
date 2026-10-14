@@ -259,7 +259,7 @@ function sfxThunder(d, indoors) {
 let heardBolt = null, dripT = 0;
 
 // ---- per frame
-let stepAcc = 0, lastPos = null, clackT = 0;
+let stepAcc = 0, lastPos = null, clackT = 0, rotorT = 0;
 function audioTick(dt) {
   if (!actx || actx.state !== 'running') return;
   const now = actx.currentTime, indoors = mode === 'room';
@@ -271,7 +271,7 @@ function audioTick(dt) {
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
   const waterfall = mode === 'room' && room.kind === 'conservatory' ? clamp(1 - Math.hypot(px - CONS_POOL.x, py - 0.8) / 6.5, 0, 1) : 0;
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
-    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : 0,
+    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
@@ -285,6 +285,11 @@ function audioTick(dt) {
     const v = Math.abs((me || sea).v), m = me ? 1 : 0.7;
     synth.engineOsc.frequency.setTargetAtTime((38 + v * 32) * m, now, 0.08);
     synth.engineLP.frequency.setTargetAtTime(300 + v * 400 * m, now, 0.1);
+  } else if (pilot) { // a prop's drone or a jet's whine, up with the throttle; a helicopter's rotor thudding round
+    const T_ = PLANE_TYPES[pilot.type], th = T_.heli ? pilot.rotor || 0 : pilot.throttle || 0;
+    synth.engineOsc.frequency.setTargetAtTime(T_.heli ? 30 + th * 25 : pilot.type === 'jet' ? 90 + th * 160 : 55 + th * 70, now, 0.15);
+    synth.engineLP.frequency.setTargetAtTime(T_.heli ? 260 + th * 200 : pilot.type === 'jet' ? 900 + th * 1800 : 400 + th * 500, now, 0.2);
+    if (T_.heli && th > 0.1 && (rotorT -= dt * (4 + th * 14)) < 0) { rotorT = 1; burst(now, 0.07, [filt('lowpass', 220)], 0.12 * th, 0); }
   }
   // riding the el: wheels clatter over the rail joints, faster with speed
   if (mode === 'el') {

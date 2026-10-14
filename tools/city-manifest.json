@@ -67,6 +67,7 @@
     "city/damage-fx.js",
     "city/airport-render.js",
     "city/aircraft-render.js",
+    "city/flight.js",
     "city/events.js",
     "city/laundry.js",
     "city/audio.js",

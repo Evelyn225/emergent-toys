@@ -3262,6 +3262,7 @@ function stepAirTraffic(dt, rnd = Math.random) {
   const moving = aircraft.find(a => a.type === 'airliner' && a.state !== 'parked');
   if (moving) stepAirliner(moving, dt);
   if (moving || (airNext -= dt) > 0) return;
+  if (aircraft.some(a => a.type !== 'airliner' && !a.ditched && onRunway(a.x, a.y) && a.z < 1)) { airNext = 15; return; } // (something's on the runway: the tower holds them)
   airNext = AIR_GAP[0] + rnd() * (AIR_GAP[1] - AIR_GAP[0]);
   const parked = aircraft.filter(a => a.type === 'airliner' && a.state === 'parked');
   const free = [0, 1, 2].filter(gateFree);
@@ -3333,6 +3334,109 @@ function aircraftAt(x, y, pad = 0) {
     if (T_.heli ? Math.abs(along) < 0.24 + pad && Math.abs(across) < 0.09 + pad : Math.abs(along) < T_.len / 2 + pad && Math.abs(across) < T_.r + pad) return a;
   }
   return null;
+}
+
+// ---- flying one (flight.js has your hands on the controls, the camera and the instruments). Arcade, GTA-style.
+// input: { throttle: -1..1 (W/S), pitch: -1..1 (nose up +), turn: -1..1 (right +), lift: -1..1 (a helicopter's up +) }
+// Returns what happened: 'takeoff', 'land', 'hard' (a heavy landing, some damage), 'crash', 'ditch' (into the water),
+// 'stall' (too slow: the nose drops), 'bump'.
+const G = 0.98; // gravity, cells a second a second
+const stallSpeed = T_ => T_.vr * 0.85;
+// the top of whatever's built at (x, y), from the ground up: a building's roof, the el's deck, the airport's
+// buildings, a bridge tower; 0 on the ground
+function builtHeight(x, y) {
+  let h = Math.max(policeRoofHeight(x, y), airportHeight(x, y));
+  for (const t of towers) if (Math.abs(rel(x - t.x)) < 0.4 && Math.abs(rel(y - t.y)) < 0.25) h = Math.max(h, TOWER_H);
+  return h;
+}
+const overWater = (x, y) => seaAt(x, y) && !onPier(x, y) && !ROAD[idx(Math.floor(x), Math.floor(y))];
+function flyStep(a, inp, dt) {
+  const T_ = PLANE_TYPES[a.type], ev = [];
+  if (a.wrecked) return ev;
+  return T_.heli ? heliStep(a, T_, inp, dt, ev) : planeStep(a, T_, inp, dt, ev);
+}
+function planeStep(a, T_, inp, dt, ev) {
+  a.throttle = clamp((a.throttle || 0) + inp.throttle * 0.7 * dt, 0, 1);
+  const stall = stallSpeed(T_);
+  if (a.ground) { // on the wheels: steer the nose wheel, brake with the throttle shut, rotate at speed
+    a.v += (a.throttle * T_.top - a.v) * 0.12 * dt;
+    if (inp.throttle < 0 && a.throttle === 0) a.v = Math.max(0, a.v - 1.4 * dt); // (the brakes)
+    a.yaw += inp.turn * 0.9 * clamp(a.v / 0.8, 0, 1) * (a.v < 2 ? 1 : 0.3) * dt;
+    a.roll = 0; a.pitch = Math.max(0, a.pitch - dt * 0.5);
+    if (a.v > T_.vr && inp.pitch > 0.2) { a.ground = false; a.pitch = 0.1; ev.push('takeoff'); }
+  } else {
+    const pull = a.throttle * T_.top - a.v;
+    a.v += (pull * (pull > 0 ? 0.25 : 0.1) - G * Math.sin(a.pitch) * 1.2) * dt; // (diving speeds you up, climbing slows you; with the power off it glides)
+    a.roll += (inp.turn * 0.75 - a.roll) * Math.min(1, 2.5 * dt); // bank into the turn, level out when you let go
+    a.yaw += a.roll * 0.9 * dt;
+    if (inp.pitch) a.pitch += inp.pitch * 0.7 * dt; else a.pitch -= a.pitch * 0.4 * dt;
+    if (a.v < stall) { a.pitch -= (stall - a.v) * 0.7 * dt; if (!a.stalled) ev.push('stall'); a.stalled = true; } else a.stalled = false; // too slow: the nose drops
+    a.pitch = clamp(a.pitch, -0.9, 0.55);
+  }
+  a.v = clamp(a.v, 0, T_.top * 1.3);
+  // short of flying speed the wings hold you up less: throttle back and it settles gently (that's how you land);
+  // below the stall it drops
+  const level = T_.vr * 1.2, sink = a.ground ? 0 : Math.min(1.3, Math.max(0, level - Math.max(a.v, stall)) * 0.5 + Math.max(0, stall - a.v) * 0.9);
+  a.vz = a.ground ? 0 : a.v * Math.sin(a.pitch) - sink;
+  return moveCraft(a, T_, Math.cos(a.yaw) * a.v * Math.cos(a.pitch), Math.sin(a.yaw) * a.v * Math.cos(a.pitch), dt, ev);
+}
+function heliStep(a, T_, inp, dt, ev) {
+  a.rotor = Math.min(1, (a.rotor || 0) + dt / 3); // spinning up when you get in
+  a.rotorA = ((a.rotorA || 0) + a.rotor * 25 * dt) % TAU;
+  const ready = a.rotor > 0.95;
+  a.yaw += inp.turn * 1.3 * dt;
+  const fwd = inp.throttle > 0 ? inp.throttle * T_.top : inp.throttle * T_.top * 0.4, hx = Math.cos(a.yaw), hy = Math.sin(a.yaw);
+  a.hvx = (a.hvx || 0) + (hx * fwd * (ready ? 1 : 0) - (a.hvx || 0)) * Math.min(1, 1.1 * dt);
+  a.hvy = (a.hvy || 0) + (hy * fwd * (ready ? 1 : 0) - (a.hvy || 0)) * Math.min(1, 1.1 * dt);
+  a.v = Math.hypot(a.hvx, a.hvy);
+  a.vz = ready ? (a.vz || 0) + (inp.lift * T_.climb * (inp.lift < 0 ? 0.55 : 1) - (a.vz || 0)) * Math.min(1, 2 * dt) : a.ground ? 0 : (a.vz || 0) - G * dt;
+  if (a.ground && a.vz <= 0) { a.vz = 0; a.hvx *= 1 - Math.min(1, 4 * dt); a.hvy *= 1 - Math.min(1, 4 * dt); }
+  else if (a.ground && a.vz > 0) { a.ground = false; ev.push('takeoff'); }
+  a.pitch += (-inp.throttle * 0.2 * (a.ground ? 0 : 1) - a.pitch) * Math.min(1, 3 * dt); // (nose down to go forward)
+  a.roll += (inp.turn * 0.12 * (a.ground ? 0 : 1) - a.roll) * Math.min(1, 3 * dt);
+  return moveCraft(a, T_, a.hvx, a.hvy, dt, ev);
+}
+// move it, and what it meets: the ground (a landing, or not), a building (on top: a landing; its side: a crash), the water
+function moveCraft(a, T_, vx, vy, dt, ev) {
+  const nx = mod(a.x + vx * dt, N), ny = mod(a.y + vy * dt, N), nz = a.z + a.vz * dt, h = builtHeight(nx, ny), speed = Math.hypot(vx, vy);
+  if (a.ground) { // rolling or sitting: into a wall, a building, another aircraft, the water?
+    const nose = T_.heli ? 0.25 : T_.len / 2, fx = nx + Math.cos(a.yaw) * nose * Math.sign(speed), fy = ny + Math.sin(a.yaw) * nose * Math.sign(speed);
+    if (speed > 0.02 && (builtHeight(fx, fy) > a.z + 0.2 || airportBlocked(fx, fy) || aircraftAt(fx, fy) && aircraftAt(fx, fy) !== a)) {
+      if (speed > 1.2) return crashCraft(a, speed, ev);
+      a.v = 0; a.hvx = a.hvy = 0; ev.push('bump'); return ev;
+    }
+    if (overWater(nx, ny)) return ditchCraft(a, ev);
+    a.x = nx; a.y = ny; a.z = Math.max(h, nz); return ev;
+  }
+  if (nz > h) { a.x = nx; a.y = ny; a.z = nz; return ev; }
+  // down to something: water, the side of a building, or a surface to land on
+  if (overWater(nx, ny) && h === 0) return ditchCraft(a, ev);
+  if (a.z < h - 0.1) return crashCraft(a, Math.hypot(speed, a.vz), ev); // flew into its side
+  const down = -a.vz, gentle = T_.heli ? down < 1 && speed < 1.5 : down < 0.9 && Math.abs(a.roll) < 0.35 && a.pitch > -0.12;
+  const hard = T_.heli ? down < 1.8 && speed < 2.5 : down < 1.6 && Math.abs(a.roll) < 0.55 && a.pitch > -0.25;
+  if (!gentle && !hard) return crashCraft(a, Math.hypot(speed, a.vz), ev);
+  a.x = nx; a.y = ny; a.z = h; a.vz = 0; a.ground = true; a.roll = 0; a.stalled = false;
+  if (!T_.heli) a.pitch = Math.max(0, a.pitch);
+  if (!gentle) { damageCraft(a, 25 + down * 15); ev.push('hard'); } else ev.push('land');
+  return ev;
+}
+function crashCraft(a, speed, ev) {
+  a.crashSpeed = speed; a.v = 0; a.hvx = a.hvy = 0; a.vz = 0; a.ground = true; a.roll = 0; a.pitch = 0;
+  a.z = Math.max(0, builtHeight(a.x, a.y));
+  damageCraft(a, speed > 1.5 ? DMG_FIRE : 40 + speed * 30);
+  ev.push('crash'); return ev;
+}
+function ditchCraft(a, ev) { a.ditched = true; a.v = 0; a.hvx = a.hvy = 0; a.vz = 0; a.z = 0; a.ground = true; ev.push('ditch'); return ev; }
+// aircraft damage works as the cars' does (damage.js): at the top it burns, and BURN_T later it goes up
+function damageCraft(a, n) {
+  if (a.wrecked || !(n > 0)) return;
+  a.dmg = Math.min(DMG_FIRE, (a.dmg || 0) + n);
+  if (a.dmg >= DMG_FIRE && a.fireT == null) a.fireT = 0;
+}
+function stepAircraftFires(dt) {
+  const out = [];
+  for (const a of aircraft) if (a.fireT != null && !a.wrecked && (a.fireT += dt) >= BURN_T) { a.wrecked = true; a.boomT = T; out.push(a); }
+  return out;
 }
 // ---- doors: every shop, lobby and front door, as a point on the sidewalk outside it.
 // {x, y: on the walking line (0.12 / 1.88 into a street), nx, ny: one step inside, sh: the shop, use: what it's for}
@@ -4286,7 +4390,7 @@ function audioMix(s) {
   const d = AUDIO_DISTRICT[s.district] || AUDIO_DISTRICT.midtown;
   // up high (a roof, the el) the street is further away and the wind gets at you
   const height = s.mode === 'roof' ? s.roofH : s.mode === 'el' || s.mode === 'elplat' ? 0.7 : s.mode === 'fair' ? s.fairEye || 0 : 0;
-  const far = 1 / (1 + height * 0.25);
+  const far = 1 / (1 + Math.max(height, s.mode === 'air' ? s.airHeight || 0 : 0) * 0.25);
   out.city = far * d.city * (0.3 + 0.7 * s.day) * (1 - 0.35 * s.rain);
   out.crowd = far * d.crowd * busyHour(s.tod) * (1 - 0.7 * s.rain);
   out.night = far * (0.5 + 0.5 * d.city) * s.night * (1 - 0.35 * s.rain); // the city at night: a distant hum, the odd car
@@ -4305,7 +4409,7 @@ function audioMix(s) {
   if (s.serenade) out.bossa = Math.max(out.bossa, 0.8 * s.serenade); // Nico on the bar roof, after his guitar came back
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
-  out.engine = s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
+  out.engine = s.mode === 'air' ? 0.35 + 0.55 * clamp(s.throttle || 0, 0, 1) : s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
   for (const k in out) out[k] = clamp(out[k], 0, 1);
   return out;
 }
@@ -15691,6 +15795,7 @@ function render(dt) {
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
+  else if (mode === 'air') eye = airEye;
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
@@ -15768,6 +15873,7 @@ function render(dt) {
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
+    if (mode === 'air') airDash();
     if (mode === 'el') elFrame();
     if (mode === 'fair') fairFrame();
     if (mode === 'boat') boatFrame();
@@ -16048,6 +16154,8 @@ function promptText() {
   }
   if (mode === 'drive') return TOUCH ? 'stick: gas, brake and steer (to the rim: floor it)   get out when slow' : 'W/S gas & brake | A/D steer | V: camera | E: get out (when slow)';
   if (mode === 'taxi') return TOUCH ? 'drag: look around' : 'mouse: look around | V: camera | E: get out';
+  if (mode === 'air') return airPrompt();
+  { const ac = nearAircraft(); if (ac) return `E: get in the ${PLANE_TYPES[ac.type].name}`; }
   const c = nearestCar(0.5);
   const dr = droppedHere();
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
@@ -16184,6 +16292,7 @@ function hud() {
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
+    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'W/S forward & back | A/D or mouse turn | R/F or arrows up & down | V: camera | E: get out (landed)' : 'W/S throttle (S brakes) | A/D or mouse bank | arrows or mouse pitch | V: camera | E: get out (stopped)')
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
@@ -16464,11 +16573,14 @@ function interact() {
   if (mode === 'drive' && sprayPrompt()) return startRespray(); // pulled up at a garage's door (or told why not)
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
+  if (mode === 'air') { if (pilot.ground && pilot.v < 0.3) leaveAircraft(); else say(pilot.ground ? 'Slow down first.' : 'Not up here. Not without a parachute.', 2); return; }
   const dr = droppedHere();
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
   if (useGardens() || useMarina()) return;
+  const ac = nearAircraft();
+  if (ac) return enterAircraft(ac);
   const c = nearestCar(0.5);
   if (c && c.v < 0.6) {
     me = c;
@@ -16538,7 +16650,7 @@ let wakeT = 0;
 function passOut(why) {
   if(failCourier()){why+=' Your courier delivery failed.';saveGame();}
   climbing=null;
-  if (me) outOfCar(); else if (mode === 'sea') { sea.v = 0; sea = null; }
+  if (me) outOfCar(); else if (mode === 'sea') { sea.v = 0; sea = null; } else if (pilot) { pilot.state = 'parked'; pilot.throttle = 0; pilot = null; }
   body.seat = null; body.z = body.vz = 0; fx.skating = false; if (game) game = null;
   const s = SERVICES.filter(b => b.kind === 'amb').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity])[0];
   const bill = hospitalised();
@@ -17301,7 +17413,7 @@ function craftPanel(o, F, a_, b_, c_, ef, er, eu, col, k = 1, ch = ' ') {
 const craftLight = (p, col, r = 0.03) => dot(p[0], p[1], p[2], r, (i, t, L) => { BG[i] = C(col, 12); return set(i, '*', C(WHITE, 15)), true; });
 function drawAircraft() {
   for (const a of aircraft) {
-    if (a === me && !chaseOn) continue; // (you're in it, looking out)
+    if (a === pilot && mode === 'air' && !chaseOn) continue; // (you're in it, looking out)
     const vx = rel(a.x - px), vy = rel(a.y - py), T_ = PLANE_TYPES[a.type];
     if (Math.hypot(vx, vy) > vis + 4 || !inView(vx, vy, (T_.span || 1) / 2 + 0.3)) continue;
     if (T_.heli) drawHeliCraft(a, T_, vx, vy); else drawPlaneCraft(a, T_, vx, vy);
@@ -17386,6 +17498,149 @@ function drawHeliCraft(a, T_, vx, vy) {
     return set(i, ':', C(GRAY, 8)), true;
   });
   if (fract(T * 1.2 + a.id * 0.3) < 0.2) craftLight(at(o, F, -0.5, 0, 0.0), RED, 0.022);
+}
+// ===== at the controls of an aircraft (the physics: aircraft.js; the airport: world.js). On foot by one that's
+// parked, E gets you in. A plane: W/S throttle (shut, S brakes on the ground), A/D or the mouse across to bank and
+// turn, the up/down arrows or the mouse up and down for the nose; past lift-off speed, pull up. A helicopter: W/S
+// forward and back, A/D or the mouse to turn, R/F (or up/down) climb and descend. V: behind it, or in the cockpit.
+// On the ground and stopped, E gets you out. Crash and you're thrown clear (hurt, or the hospital); ditch in the bay
+// and a boat fishes you out; whatever's left burns and goes up, as a car does.
+let pilot = null, airEye = 0, airCamYaw = 0;
+const airMouse = [0, 0]; // the mouse's say on the controls: it springs back
+const flyable = c => !!PLANE_TYPES[c.type].price;
+// the parked aircraft you're standing by (at its cockpit door, its side), or null
+function nearAircraft() {
+  if (mode !== 'walk') return null;
+  let best = null, bd = 0.55;
+  for (const c of aircraft) {
+    if (!flyable(c) || c.state === 'flown' || c.wrecked || c.ditched || c.fireT != null || c.z > builtHeight(c.x, c.y) + 0.05) continue;
+    const T_ = PLANE_TYPES[c.type], fx = Math.cos(c.yaw), fy = Math.sin(c.yaw), ax = c.x + fx * (T_.heli ? 0.05 : T_.len * 0.25), ay = c.y + fy * (T_.heli ? 0.05 : T_.len * 0.25);
+    const d = Math.hypot(rel(ax - px), rel(ay - py));
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best;
+}
+function enterAircraft(c) {
+  const T_ = PLANE_TYPES[c.type];
+  pilot = c; mode = 'air'; c.state = 'flown'; c.throttle = 0; c.v = 0; c.vz = 0; c.ground = true; c.z = builtHeight(c.x, c.y);
+  airCamYaw = c.yaw; px = c.x; py = c.y; airMouse[0] = airMouse[1] = 0;
+  say(T_.heli ? `You climb into the ${T_.name}. The rotor starts to turn.   R/F up and down, W/S forward and back, A/D turn` :
+    `You climb into the ${T_.name}.   W/S throttle, A/D bank, arrows pitch; past ${Math.round(T_.vr * 36)} km/h, pull up`, 5);
+}
+// out, onto the ground beside it (its left side), as long as it's on the ground and stopped
+function leaveAircraft(why) {
+  const c = pilot, T_ = PLANE_TYPES[c.type], side = T_.heli ? 0.22 : T_.r + 0.15;
+  const [x, y] = spotNear(c.x + Math.sin(c.yaw) * side, c.y - Math.cos(c.yaw) * side);
+  pilot = null; mode = 'walk'; c.state = 'parked'; c.throttle = 0; c.v = 0;
+  px = x; py = y; a = c.yaw; pitch = 0; body.z = body.vz = 0;
+  if (why) say(why, 4);
+}
+// somewhere you can stand near (x, y): out from it in a widening ring
+function spotNear(x, y) {
+  if (free(x, y)) return [x, y];
+  for (let r = 0.2; r < 6; r += 0.2) for (let k = 0; k < 12; k++) {
+    const qx = mod(x + Math.cos(k / 12 * TAU) * r, N), qy = mod(y + Math.sin(k / 12 * TAU) * r, N);
+    if (free(qx, qy) && !overWater(qx, qy)) return [qx, qy];
+  }
+  return [x, y];
+}
+function stepFlight(dt) {
+  const c = pilot, T_ = PLANE_TYPES[c.type];
+  const turn = clamp((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0) + airMouse[0], -1, 1);
+  const thr = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0);
+  const nose = clamp((K.ArrowUp ? 1 : 0) - (K.ArrowDown ? 1 : 0) - airMouse[1], -1, 1);
+  const lift = clamp((K.KeyR || K.Space ? 1 : 0) - (K.KeyF ? 1 : 0) + (T_.heli ? nose : 0), -1, 1);
+  for (const k of [0, 1]) airMouse[k] *= Math.exp(-6 * dt);
+  const ev = flyStep(c, { throttle: thr, pitch: T_.heli ? 0 : nose, turn, lift }, dt);
+  px = c.x; py = c.y; a = c.yaw;
+  for (const e of ev) {
+    if (e === 'takeoff') say(T_.heli ? 'Up you go.' : 'Wheels up.', 2);
+    else if (e === 'land') say(T_.heli ? 'Down. Skids on the ground.' : 'Down. A smooth one.', 2);
+    else if (e === 'hard') { say('A heavy landing. Something cracked.', 3); if (actx) playClip('crash', 0.4); }
+    else if (e === 'stall') say('STALL! Nose down, power on.', 2);
+    else if (e === 'bump') { if (actx) tone(actx.currentTime, 70, 0.12, 0.08); }
+    else if (e === 'crash') return airCrash(c);
+    else if (e === 'ditch') return airDitch(c);
+  }
+  if (burning(c) && !c.warnedFire) { c.warnedFire = true; say('Fire! Get it down and get out.', 4); }
+}
+// thrown clear: hurt by how hard it hit, or the hospital
+function airCrash(c) {
+  if (actx) playClip('crash', 1);
+  const hurtBy = clamp(20 + (c.crashSpeed || 0) * 14, 20, 95), [x, y] = spotNear(c.x, c.y + 0.4);
+  pilot = null; c.state = 'parked'; mode = 'walk'; px = x; py = y; a = Math.atan2(rel(c.y - y), rel(c.x - x)); pitch = 0; body.z = body.vz = 0;
+  if (hurt(hurtBy)) return passOut('Pulled from the wreck of an aircraft. Lucky to be alive.');
+  if (needs.health < 35) needs.warned = 'weak'; // (you know)
+  say('You come down hard. You crawl out of the wreck before it goes up.', 5);
+}
+// into the bay: it sinks, you swim, a boat hauls you out at the marina
+function airDitch(c) {
+  if (actx) playClip('crash', 0.7);
+  pilot = null; c.state = 'parked'; mode = 'walk';
+  c.sinkT = T;
+  px = MARINA.x - 1.2; py = MARINA.y0 - 0.4; a = -Math.PI / 2; pitch = 0; body.z = body.vz = 0;
+  hurt(15); say('It hits the water and goes under. You swim for it, and a harbour launch hauls you out at the marina.', 6);
+}
+// burning aircraft go up (the bang hurts whoever's near); sunk ones sink; smoke off the damaged ones
+let airSmokeT = 0;
+function stepAirWrecks(dt) {
+  for (const c of stepAircraftFires(dt)) {
+    const d = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
+    if (c === pilot) { airCrash(c); continue; }
+    if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
+    for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
+  }
+  for (let k = aircraft.length - 1; k >= 0; k--) if (aircraft[k].sinkT != null && T - aircraft[k].sinkT > 4 && aircraft[k] !== pilot) aircraft.splice(k, 1);
+  if ((airSmokeT -= dt) > 0) return;
+  airSmokeT = 0.12;
+  for (const c of aircraft) {
+    if (!(c.dmg >= DMG_SMOKE || c.wrecked && T - (c.boomT || 0) < 40) || Math.hypot(rel(c.x - px), rel(c.y - py)) > 20) continue;
+    haze.push({ at: '', kind: c.dmg >= DMG_BAD || c.wrecked ? 'soot' : 'engine', s: 0.1, x: c.x, y: c.y, z: c.z + 0.2, r: 0.05, rMax: 0.25, vx: 0, vy: 0, vz: 0.15, life: 1, fade: 1 / 3, seed: Math.random() * 100 });
+  }
+}
+// ---- the camera: behind it and a little above, swinging round after it; or from the cockpit
+function airCam(dt) {
+  const c = pilot, T_ = PLANE_TYPES[c.type], f = n => Math.max(-0.95, Math.min(1.2, n));
+  if (!third) { // the cockpit: out over the nose
+    const ahead = T_.heli ? 0.12 : T_.len * 0.32, z = c.z + (T_.heli ? 0.2 : T_.r * 1.9 + (c.ground ? T_.r * 1.8 : 0));
+    return [mod(c.x + Math.cos(c.yaw) * ahead, N), mod(c.y + Math.sin(c.yaw) * ahead, N), c.yaw, z, f(Math.tan(c.pitch) * projY / rows)];
+  }
+  airCamYaw += (mod(c.yaw - airCamYaw + Math.PI, TAU) - Math.PI) * (1 - Math.exp(-2.5 * dt));
+  const back = T_.heli ? 1.15 : T_.len * 0.9 + 0.45, up = T_.heli ? 0.38 : 0.22 + T_.len * 0.12;
+  const cx = mod(c.x - Math.cos(airCamYaw) * back, N), cy = mod(c.y - Math.sin(airCamYaw) * back, N);
+  const cz = Math.max(c.z + up + (c.ground ? 0.12 : 0) - Math.sin(c.pitch) * back * 0.5, builtHeight(cx, cy) + 0.15);
+  const down = Math.atan2(cz - (c.z + 0.15), back); // (looking down at it a little, and up and down with its nose)
+  return [cx, cy, airCamYaw, cz, f((Math.tan(c.pitch * 0.35) - Math.tan(down) * 0.8) * projY / rows)];
+}
+// ---- the instruments, along the bottom: speed, height, throttle, climb, heading, and a little horizon that banks
+function airDash() {
+  const c = pilot, T_ = PLANE_TYPES[c.type], r0 = rows - 3;
+  if (!third) { // in the cockpit: the window posts either side, and (a plane) the nose out ahead
+    const col = C(T_.heli ? GRAY : WHITE, 4);
+    for (let r = 0; r < r0 - 1; r++) for (const s of [-1, 1]) {
+      const x = Math.round(cols / 2 + s * (cols * 0.36 + (r0 - r) * 0.18));
+      for (let k = 0; k < 3; k++) { const xx = x + s * k; if (xx >= 0 && xx < cols) { const i = r * cols + xx; set(i, k ? ' ' : s < 0 ? '\\' : '/', col); BG[i] = C(GRAY, 2); FOGS[i] = FOGB[i] = 0; } }
+    }
+    if (!T_.heli) for (let r = r0 - 4; r < r0 - 1; r++) { const w = Math.round(cols * (0.06 + (r - r0 + 4) * 0.035)); for (let x = (cols >> 1) - w; x <= (cols >> 1) + w; x++) { const i = r * cols + x; set(i, r === r0 - 4 ? '_' : ' ', col); BG[i] = C(c.type === 'jet' ? GRAY : RED, 3); FOGS[i] = FOGB[i] = 0; } }
+  }
+  for (let r = r0 - 1; r < rows; r++) for (let x = 0; x < cols; x++) { const i = r * cols + x; FOGS[i] = FOGB[i] = 0; if (r >= r0) { set(i, ' ', 0); BG[i] = C(GRAY, 1); } }
+  const alt = Math.round(c.z * 10), sp = Math.round(c.v * 36), climb = Math.round((c.vz || 0) * 10), hdg = Math.round(mod(c.yaw * 180 / Math.PI + 90, 360)); // (north up: 0 is north)
+  const thr = Math.round((T_.heli ? c.rotor || 0 : c.throttle || 0) * 10), bar = '#'.repeat(thr) + '-'.repeat(10 - thr);
+  putText(r0, 2, `${sp} km/h`, C(CYAN, 15)); putText(r0 + 1, 2, `ALT ${alt} m`, C(CYAN, 14)); putText(r0 + 2, 2, `${climb >= 0 ? '+' : ''}${climb} m/s`, C(climb < -8 ? RED : CYAN, 13));
+  putText(r0, 18, `${T_.heli ? 'ROTOR' : 'THR'} [${bar}]`, C(YEL, 14)); putText(r0 + 1, 18, `HDG ${String(hdg).padStart(3, '0')}`, C(WHITE, 13));
+  putText(r0 + 2, 18, c.ground ? (T_.heli ? 'ON THE GROUND' : 'ON THE WHEELS') : 'AIRBORNE', C(GRAY, 11));
+  // the horizon: a line tilted by the bank, up and down with the nose
+  const hc = cols >> 1, hw = 8;
+  for (let k = -hw; k <= hw; k++) { const y = Math.round(r0 + 1 + k * Math.tan(-c.roll) * 0.5 + Math.sin(c.pitch) * 2); if (y >= r0 && y < rows) set(y * cols + hc + k, k ? '-' : '+', C(k ? WHITE : YEL, 15)); }
+  set((r0 + 1) * cols + hc - hw - 2, '[', C(GRAY, 10)); set((r0 + 1) * cols + hc + hw + 2, ']', C(GRAY, 10));
+  const blink = fract(T * 2) < 0.5, warn = burning(c) ? 'FIRE' : c.stalled ? 'STALL' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
+  if (warn) putText(r0 + 1, cols - warn.length - 3, warn, C(RED, blink ? 15 : 7));
+}
+function airPrompt() {
+  const c = pilot;
+  if (c.ground && c.v < 0.3) return 'E: get out';
+  return '';
 }
 // ===== the calendar: which day of the week it is, and what's on. Days tick over at midnight (and when you sleep
 // through one). Starting simple: every Saturday night, fireworks over the bay off the Sunset Pier.
@@ -17765,7 +18020,7 @@ function sfxThunder(d, indoors) {
 let heardBolt = null, dripT = 0;
 
 // ---- per frame
-let stepAcc = 0, lastPos = null, clackT = 0;
+let stepAcc = 0, lastPos = null, clackT = 0, rotorT = 0;
 function audioTick(dt) {
   if (!actx || actx.state !== 'running') return;
   const now = actx.currentTime, indoors = mode === 'room';
@@ -17777,7 +18032,7 @@ function audioTick(dt) {
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
   const waterfall = mode === 'room' && room.kind === 'conservatory' ? clamp(1 - Math.hypot(px - CONS_POOL.x, py - 0.8) / 6.5, 0, 1) : 0;
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
-    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : 0,
+    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
@@ -17791,6 +18046,11 @@ function audioTick(dt) {
     const v = Math.abs((me || sea).v), m = me ? 1 : 0.7;
     synth.engineOsc.frequency.setTargetAtTime((38 + v * 32) * m, now, 0.08);
     synth.engineLP.frequency.setTargetAtTime(300 + v * 400 * m, now, 0.1);
+  } else if (pilot) { // a prop's drone or a jet's whine, up with the throttle; a helicopter's rotor thudding round
+    const T_ = PLANE_TYPES[pilot.type], th = T_.heli ? pilot.rotor || 0 : pilot.throttle || 0;
+    synth.engineOsc.frequency.setTargetAtTime(T_.heli ? 30 + th * 25 : pilot.type === 'jet' ? 90 + th * 160 : 55 + th * 70, now, 0.15);
+    synth.engineLP.frequency.setTargetAtTime(T_.heli ? 260 + th * 200 : pilot.type === 'jet' ? 900 + th * 1800 : 400 + th * 500, now, 0.2);
+    if (T_.heli && th > 0.1 && (rotorT -= dt * (4 + th * 14)) < 0) { rotorT = 1; burst(now, 0.07, [filt('lowpass', 220)], 0.12 * th, 0); }
   }
   // riding the el: wheels clatter over the rail joints, faster with speed
   if (mode === 'el') {
@@ -21464,7 +21724,7 @@ onkeydown = e => {
   if (e.code === 'KeyH') hail();
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
-  if (e.code === 'KeyV' && (me || mode === 'sea')) third = !third;
+  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
@@ -21496,6 +21756,7 @@ onmousemove = e => {
 };
 function moveMouseBy(mx, my) {
   if (paused) return;
+  if (mode === 'air' && !freecam) { const s = settings.sensitivity; airMouse[0] = clamp(airMouse[0] + mx * 0.012 * s, -1, 1); airMouse[1] = clamp(airMouse[1] + my * 0.012 * s * (settings.invertY ? -1 : 1), -1, 1); return; } // (the stick)
   if (flick && !freecam) { flick.x += mx; flick.y += my; return say(`let go: ${trickName(flickTrick(flick.x, flick.y)).toUpperCase()}`, 0.6); }
   turnBy(mx, my);
 }
@@ -21634,7 +21895,7 @@ function loop(t) {
     requestAnimationFrame(loop); return;
   }
   if (sleep) stepSleep(dt);
-  pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch();
+  if (mode !== 'air') { pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective)
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
   if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
@@ -21655,6 +21916,7 @@ function loop(t) {
   else if (mode === 'fair') stepFair(dt);
   else if (mode === 'boat') stepBoat(dt);
   else if (mode === 'sea') stepSea(dt);
+  else if (mode === 'air') { if (!sleep) stepFlight(dt); } // (flight.js)
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
     px = mod(elRiding().x + ride.off, N);
@@ -21663,6 +21925,7 @@ function loop(t) {
   stepTraffic(dt, T);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
+  stepAirWrecks(dt); // (burning and sinking aircraft: flight.js)
   stepTask(dt);
   stepLaundry();
   stepEvents(dt);
@@ -21702,8 +21965,10 @@ function loop(t) {
     room.track += dt * 2.5 * clamp(room.rideT / 2, 0, 1) * clamp((9 - room.rideT) / 2, 0, 1);
     if (room.rideT <= 0) arriveAt(room.dest);
   }
-  chaseOn = (!!me || mode === 'sea') && third;
-  if (chaseOn || mode === 'sea') { // render from behind the car (or boat, or at its helm), then put the real position back
+  if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
+    const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
+    px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third; render(dt); [px, py, a, pitch] = saved;
+  } else if ((chaseOn = (!!me || mode === 'sea') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { // a drink or two and the world sways; more and you're seeing double

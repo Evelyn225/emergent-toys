@@ -51,7 +51,7 @@ function craftPanel(o, F, a_, b_, c_, ef, er, eu, col, k = 1, ch = ' ') {
 const craftLight = (p, col, r = 0.03) => dot(p[0], p[1], p[2], r, (i, t, L) => { BG[i] = C(col, 12); return set(i, '*', C(WHITE, 15)), true; });
 function drawAircraft() {
   for (const a of aircraft) {
-    if (a === me && !chaseOn) continue; // (you're in it, looking out)
+    if (a === pilot && mode === 'air' && !chaseOn) continue; // (you're in it, looking out)
     const vx = rel(a.x - px), vy = rel(a.y - py), T_ = PLANE_TYPES[a.type];
     if (Math.hypot(vx, vy) > vis + 4 || !inView(vx, vy, (T_.span || 1) / 2 + 0.3)) continue;
     if (T_.heli) drawHeliCraft(a, T_, vx, vy); else drawPlaneCraft(a, T_, vx, vy);
