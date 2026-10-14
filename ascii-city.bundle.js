@@ -14181,21 +14181,61 @@ const lakeSpot = (lo, hi, seed) => { // somewhere on the lake lo..hi cells in fr
   return [LAKE.x, LAKE.y];
 };
 const flamingos = Array.from({ length: 5 }, (_, k) => { const [gx, gy] = lakeSpot(0.05, 0.45, 40 + k * 3); return { gx, gy, k }; }).filter(f => f.gy > LAKE.y - 0.5);
-const ducks = Array.from({ length: 9 }, (_, k) => ({ k, gx: LAKE.x, gy: LAKE.y, ph: k * 0.7, r: 0.8 + (k % 3) * 0.8 }));
+const ducks = Array.from({ length: 9 }, (_, k) => { const [gx, gy] = lakeSpot(0.3, 2, 60 + k * 5); return { k, gx, gy, ph: k * 0.7, r: 0.8 + (k % 3) * 0.8, pace: 0.32 + hash(k, 7, 833) * 0.25, wake: hash(k, 9, 834) * 1.6 }; });
 const tortoises = [0, 1, 2].map(k => ({ k, ph: k * 2.1 }));
 const BOATS_PARKED = [[11.3, JETTY.gy - 0.3], [11.6, JETTY.gy - 0.3], [11.45, JETTY.gy + 0.3]]; // (out at the end of the jetty, where it's deep enough)
-let duckFeed = null, boat = null; // { gx, gy, t0 } while the ducks have something to swim over for; your swan boat
-function stepGardens(dt) {
-  for (const d of ducks) { // round the lake in little loops, or (fed) over to where the crumbs are landing
-    const hx = LAKE.x + Math.cos(T * 0.05 + d.ph) * LAKE.rx * 0.45 + Math.cos(T * 0.3 + d.k) * 0.3 * d.r, hy = LAKE.y + Math.sin(T * 0.05 + d.ph) * LAKE.ry * 0.45 + Math.sin(T * 0.27 + d.k) * 0.3 * d.r;
-    const fed = duckFeed && T - duckFeed.t0 < 18, tx = fed ? duckFeed.gx + Math.cos(d.k * 2.3) * 0.25 : hx, ty = fed ? duckFeed.gy + Math.sin(d.k * 2.3) * 0.25 : hy;
-    const nx = d.gx + (tx - d.gx) * Math.min(1, dt * (fed ? 0.6 : 0.3)), ny = d.gy + (ty - d.gy) * Math.min(1, dt * (fed ? 0.6 : 0.3));
+// feeding: the crumbs you throw scatter over the water in front of you. The ducks near enough to see notice (some
+// quicker than others), race for the nearest crumb, jostle, snatch it, and go for the next; when it's all gone they
+// hang about hopefully for a bit, then drift back to paddling round
+let duckFeed = null, boat = null; // { crumbs: [{ gx, gy, lands, eaten }], t0, done }; your swan boat
+const DUCK_SEE = 4.5, DUCK_ROOM = 0.1, DUCK_HANG = 9;
+function throwCrumbs(gx0, gy0, ang) {
+  const crumbs = [];
+  for (let k = 0; k < 7; k++) {
+    const th = ang + (Math.random() - 0.5) * 0.9, r = 0.35 + Math.random() * 0.6, gx = gx0 + Math.cos(th) * r, gy = gy0 + Math.sin(th) * r;
+    if (gardenLakeEdge(gx, gy) > 0.05 && !onJetty(gx, gy)) crumbs.push({ gx, gy, lands: T + 0.35 + r * 0.4, eaten: false, fx: gx0, fy: gy0 });
+  }
+  duckFeed = { crumbs, t0: T, done: null };
+  return crumbs.length;
+}
+function stepDucks(dt) {
+  const f = duckFeed, live = f ? f.crumbs.filter(c => !c.eaten && T >= c.lands) : [];
+  if (f && !live.length && f.crumbs.every(c => c.eaten || T >= c.lands)) f.done ??= T; // (all gone)
+  if (f && f.done != null && T - f.done > DUCK_HANG) duckFeed = null;
+  for (const d of ducks) {
+    let tx, ty, speed;
+    const keen = f && T - f.t0 > d.wake && Math.hypot(d.gx - f.crumbs[0]?.gx, d.gy - f.crumbs[0]?.gy) < DUCK_SEE;
+    if (keen && live.length) { // the nearest crumb, flat out
+      const c = live.reduce((m, c) => Math.hypot(c.gx - d.gx, c.gy - d.gy) < Math.hypot(m.gx - d.gx, m.gy - d.gy) ? c : m);
+      tx = c.gx; ty = c.gy; speed = d.pace;
+      if (Math.hypot(c.gx - d.gx, c.gy - d.gy) < 0.05 && !(d.peck > T)) { c.eaten = true; d.peck = T + 0.4 + Math.random() * 0.4; if (actx && Math.random() < 0.4) quack(d); }
+    } else if (keen && f.done != null) { // nothing left: bob about where it was, hopeful
+      d.hope ??= [d.gx + (Math.random() - 0.5) * 0.3, d.gy + (Math.random() - 0.5) * 0.3];
+      [tx, ty] = d.hope; speed = 0.08;
+    } else { // round the lake in little loops
+      d.hope = null;
+      tx = LAKE.x + Math.cos(T * 0.05 + d.ph) * LAKE.rx * 0.45 + Math.cos(T * 0.3 + d.k) * 0.3 * d.r;
+      ty = LAKE.y + Math.sin(T * 0.05 + d.ph) * LAKE.ry * 0.45 + Math.sin(T * 0.27 + d.k) * 0.3 * d.r; speed = 0.14;
+    }
+    if (d.peck > T) speed = 0; // (head down, eating)
+    let mx = tx - d.gx, my = ty - d.gy;
+    const mn = Math.hypot(mx, my), step = Math.min(mn, speed * dt);
+    mx = mn > 1e-6 ? mx / mn * step : 0; my = mn > 1e-6 ? my / mn * step : 0;
+    for (const o of ducks) if (o !== d) { // elbow room: they shove each other aside
+      const ox = d.gx - o.gx, oy = d.gy - o.gy, on = Math.hypot(ox, oy);
+      if (on < DUCK_ROOM && on > 1e-6) { mx += ox / on * (DUCK_ROOM - on) * 2 * dt; my += oy / on * (DUCK_ROOM - on) * 2 * dt; }
+    }
+    const nx = d.gx + mx, ny = d.gy + my;
     if (gardenLakeEdge(nx, ny) > 0.08) {
-      const mx = nx - d.gx, my = ny - d.gy, mn = Math.hypot(mx, my);
-      if (mn > 1e-4) { d.hx = mx / mn; d.hy = my / mn; } // which way it's swimming
-      d.dir = nx > d.gx ? 1 : -1; d.gx = nx; d.gy = ny;
+      const sn = Math.hypot(mx, my);
+      if (sn > 1e-4 && step > 1e-5) { d.hx = mx / sn; d.hy = my / sn; d.dir = mx > 0 ? 1 : -1; } // which way it's swimming
+      d.gx = nx; d.gy = ny;
     }
   }
+}
+function quack(d) { const at = actx.currentTime; tone(at, 520 + d.k * 20, 0.08, 0.03, 'sawtooth'); tone(at + 0.09, 480 + d.k * 20, 0.1, 0.025, 'sawtooth'); }
+function stepGardens(dt) {
+  stepDucks(dt);
   // the bell at closing time
   const inside = inGardens(px, py) && mode === 'walk';
   if (inside && !gardensOpen(tod) && !stepGardens.rang) { stepGardens.rang = true; say('A bell rings: the Gardens are closing. You can still let yourself out.', 4); }
@@ -14217,6 +14257,13 @@ function gardenSprites() {
   const animal = (gx, gy, z, h, fx, fy, look, frame = 0) => drawFigure(...V(gx, gy), z, h, fx, fy, look, 'f' + frame, { light: 4 });
   for (const f of flamingos) { const th = f.k * 2.4; animal(f.gx, f.gy, 0, 0.104, Math.cos(th), Math.sin(th), A.flamingo, Math.sin(T * 0.4 + f.k * 2) > 0.85 ? 1 : 0); }
   for (const d of ducks) animal(d.gx, d.gy, 0, 0.12, d.hx ?? (d.dir || 1), d.hy ?? 0, A.duck);
+  if (duckFeed) for (const c of duckFeed.crumbs) { // the crumbs: arcing out from your hand, then floating till they're eaten
+    if (c.eaten) continue;
+    const k = clamp(1 - (c.lands - T) / (0.35 + Math.hypot(c.gx - c.fx, c.gy - c.fy) * 0.4), 0, 1);
+    const gx = c.fx + (c.gx - c.fx) * k, gy = c.fy + (c.gy - c.fy) * k, z = k < 1 ? 0.12 * (1 - k) + 0.25 * k * (1 - k) : 0.004;
+    const [vx, vy] = V(gx, gy);
+    dot(vx, vy, z, 0.007, (i, t, L) => (BG[i] = C(YEL, 2 + L * 0.2), set(i, '.', C(WARM, L * 1.4)), true));
+  }
   const tp = GARDEN_PENS.find(p => p.kind === 'tortoise'), bp = GARDEN_PENS.find(p => p.kind === 'bear');
   const tortoiseAt = (t, tt) => [tp.gx0 + 0.5 + (tp.gx1 - tp.gx0 - 1) * (0.5 + 0.45 * Math.sin(tt * 0.015 + t.ph)), tp.gy0 + 0.6 + (tp.gy1 - tp.gy0 - 1.2) * (0.5 + 0.45 * Math.cos(tt * 0.011 + t.ph * 1.7))];
   for (const t of tortoises) { const [gx, gy] = tortoiseAt(t, T), [nx, ny] = tortoiseAt(t, T + 2); animal(gx, gy, 0, 0.1, nx - gx, ny - gy, A.tortoise, Math.floor(T * 1.5 + t.k) & 1); }
@@ -14224,7 +14271,7 @@ function gardenSprites() {
   art((bp.gx0 + bp.gx1) / 2 + 0.16, (bp.gy0 + bp.gy1) / 2, 0.14 + fract(T * 0.3) * 0.08, 0.025, 0.025, ['z'], () => C(WHITE, 12 * (1 - fract(T * 0.3)))); // zzz
   const pk = T * 0.02, pgx = 12 + Math.cos(pk) * 1.4, pgy = 6.2 + Math.sin(pk * 2) * 0.5; // the peacock, strutting about the middle lawn
   animal(pgx, pgy, 0, 0.13, -Math.sin(pk) * 1.4, Math.cos(pk * 2), A.peacock, Math.floor(T * 4) & 3);
-  for (const [bx, by] of BOATS_PARKED) drawSwanBoat(...V(bx, by), 1, 0); // moored along the jetty, pointing out over the lake
+  BOATS_PARKED.forEach(([bx, by], k) => { if (!boat || boat.from !== k) drawSwanBoat(...V(bx, by), 1, 0); }); // moored along the jetty, pointing out over the lake (less the one you're out in)
   for (let k = 0; k < (gardensOpen(tod) ? 2 : 0); k++) { // two boats out on the lake, being paddled round (by day)
     const th = T * 0.03 + k * 3, bgx = LAKE.x + Math.cos(th) * LAKE.rx * 0.55, bgy = LAKE.y + Math.sin(th) * LAKE.ry * 0.55;
     const [bx, by] = V(bgx, bgy), hx = -Math.sin(th) * LAKE.rx, hy = Math.cos(th) * LAKE.ry, hn = Math.hypot(hx, hy);
@@ -14262,7 +14309,11 @@ function gardenSprites() {
     const s = body.seat, al = PICNIC_AHEAD + PICNIC_LONG * 0.55, ac = -PICNIC_HALF * 0.55, bx = s.x + s.fx * al - s.fy * ac, by = s.y + s.fy * al + s.fx * ac;
     drawPicnicBasket(rel(bx - px), rel(by - py), s.fx, s.fy);
   }
-  if (boat) return;
+  if (boat) { // yours: from the seat (its neck and head out in front, to your right), or from behind with you sat in it
+    const hx = Math.cos(a), hy = Math.sin(a), [bx, by] = V(boat.gx, boat.gy);
+    if (chaseOn) { drawSwanBoat(bx, by, hx, hy); drawFigure(bx - hx * 0.01, by - hy * 0.01, 0.01, 0.17, hx, hy, GARDEN_FOLK[20] ||= figAnyone(YEL), 'sit6'); }
+    else drawSwanBoat(bx + hx * 0.032 - hy * 0.02, by + hy * 0.032 + hx * 0.02, hx, hy); // (you're in the left of its two seats: the neck's off to your right)
+  }
 }
 // a picnickers' blanket: a checked cloth lying flat on the grass (like yours, see gardenFloor), a fringe at the ends
 function drawPicnicBlanket(vx, vy, col) {
@@ -14322,7 +14373,9 @@ function drawSwanBoat(vx, vy, hx, hy) {
 }
 
 // ---- out on the lake in a swan boat (mode 'boat')
-const nearJettyFoot = () => mode === 'walk' && (() => { const [gx, gy] = gardenLocal(px, py); return inGardens(px, py) && Math.abs(gx - JETTY.gx0 - 0.25) < 0.45 && Math.abs(gy - JETTY.gy) < 0.45; })();
+const nearJettyFoot = () => mode === 'walk' && inGardens(px, py) && (() => { const [gx, gy] = gardenLocal(px, py); return gx > JETTY.gx0 - 0.2 && gx < JETTY.gx1 + 0.1 && Math.abs(gy - JETTY.gy) < JETTY.hw + 0.25; })(); // (on the jetty, or at its foot)
+// tied up again: the end of the jetty, or alongside it
+const atJetty = () => boat && boat.gx > JETTY.gx0 + 0.6 && boat.gx < JETTY.gx1 + 0.6 && Math.abs(boat.gy - JETTY.gy) < JETTY.hw + 0.45;
 const nearShore = () => { if (mode !== 'walk' || !inGardens(px, py)) return false; const [gx, gy] = gardenLocal(px, py), e = gardenLakeEdge(gx + Math.cos(a) * 0.4, gy + Math.sin(a) * 0.4); return e > -0.2; };
 const nearShed = () => mode === 'walk' && inGardens(px, py) && (() => { const [gx, gy] = gardenLocal(px, py); return Math.hypot(gx - GARDEN_SHED.gx, gy - GARDEN_SHED.gy + 0.45) < 0.5; })();
 const gateShutHere = (x, y) => { // a closed gate, approached from outside: just the gate itself, across the gap
@@ -14331,7 +14384,7 @@ const gateShutHere = (x, y) => { // a closed gate, approached from outside: just
   return GARDEN_GATES.some(([ggx, ggy, run]) => run === 'h' ? Math.abs(gx - ggx) < 0.75 && Math.abs(gy - ggy) < 0.15 : Math.abs(gy - ggy) < 0.75 && Math.abs(gx - ggx) < 0.15);
 };
 function gardensPrompt() {
-  if (mode === 'boat') { const [gx, gy] = [boat.gx, boat.gy]; return Math.hypot(gx - JETTY.gx1, gy - JETTY.gy) < 0.7 ? 'E: back to the jetty' : `W/S paddle, A/D steer${TOUCH ? '' : ''}   (back to the jetty to get out)`; }
+  if (mode === 'boat') return atJetty() ? 'E: tie up and climb out onto the jetty' : 'W/S pedal, A/D steer, V: camera   (back to the jetty to get out)';
   if (!inGardens(px, py) && mode === 'walk') {
     const [gx, gy] = gardenLocal(px + Math.cos(a) * 0.5, py + Math.sin(a) * 0.5);
     if (!gardensOpen(tod) && GARDEN_GATES.some(([ggx, ggy]) => Math.abs(gx - ggx) < 0.8 && Math.abs(gy - ggy) < 0.8)) return 'The gates are locked. The Gardens open at 8.';
@@ -14344,25 +14397,28 @@ function gardensPrompt() {
 }
 function useGardens() { // true if E did something
   if (mode === 'boat') {
-    if (Math.hypot(boat.gx - JETTY.gx1, boat.gy - JETTY.gy) < 0.7) { [px, py] = gw(JETTY.gx1 - 0.3, JETTY.gy); a = Math.PI; mode = 'walk'; boat = null; say('You tie the swan up and climb back onto the jetty.', 3); }
+    if (atJetty()) { [px, py] = gw(clamp(boat.gx, JETTY.gx0 + 0.4, JETTY.gx1 - 0.3), JETTY.gy); a = Math.PI; pitch = 0; mode = 'walk'; boat = null; say('You tie the swan up and climb back onto the jetty.', 3); }
     else say('Paddle back to the end of the jetty to get out.', 2);
     return true;
   }
   if (nearJettyFoot()) {
     if (!gardensOpen(tod)) { say('Chained up till morning.'); return true; }
     if (!pay(BOAT_FARE)) { say(`A swan boat's ${fmt$(BOAT_FARE)}.`); return true; }
-    boat = { gx: JETTY.gx1 + 0.3, gy: JETTY.gy, v: 0 }; mode = 'boat'; a = 0; pitch = 0;
-    say('You step down into a swan boat. Pedal with W, steer with A and D.', 4);
+    const [hx, hy] = gardenLocal(px, py), from = BOATS_PARKED.reduce((m, b, k) => Math.hypot(b[0] - hx, b[1] - hy) < Math.hypot(BOATS_PARKED[m][0] - hx, BOATS_PARKED[m][1] - hy) ? k : m, 0);
+    const [sx, sy] = BOATS_PARKED[from]; // (the nearest of the moored ones, nudged out clear of the jetty)
+    boat = { gx: sx + 0.25, gy: sy + Math.sign(sy - JETTY.gy) * 0.1, v: 0, from }; mode = 'boat'; a = 0; pitch = -0.05; camYaw = a;
+    say('You step down into a swan boat. Pedal with W, steer with A and D. V to see yourself from behind.', 4);
     return true;
   }
   if (nearShed() && gardensOpen(tod)) { startGame('garden', 'shift'); say('"Grab a can. Water the dry ones, pull the weeds. Don\'t let anything die."', 4); return true; }
   if (nearShore()) {
     const it = heldItem();
     if (!it || ITEMS[it.id].kind !== 'food') { say('You wave at the ducks. They wanted bread.', 2); return true; }
-    const [gx, gy] = gardenLocal(px + Math.cos(a) * 0.6, py + Math.sin(a) * 0.6);
-    duckFeed = { gx, gy, t0: T };
+    const [gx, gy] = gardenLocal(px, py);
+    const n = throwCrumbs(gx, gy, a);
     if (--it.uses <= 0) removeHeld();
-    say(pick(['You throw some crumbs. The ducks race over, quacking.', 'A duck snatches the crumb right out of the air.', 'The ducks paddle over in a hurry. One climbs right out to get closer.']), 3);
+    say(n ? pick(['You scatter some crumbs on the water. Heads turn all over the lake.', 'Crumbs on the water. The nearest duck is already on its way, the rest not far behind.', 'You toss a handful. There\'s a scramble, and a lot of quacking.'])
+      : 'The crumbs land in the reeds. A duck eyes them from the water.', 3);
     return true;
   }
   return false;
@@ -14375,11 +14431,13 @@ function stepBoat(dt) { // pedal and steer; the shore and the jetty stop you
   if (gardenLakeEdge(ngx, ngy) > 0.15 && !(Math.abs(ngy - JETTY.gy) < JETTY.hw + 0.12 && ngx < JETTY.gx1 + 0.05)) { boat.gx = ngx; boat.gy = ngy; } else boat.v = 0;
   [px, py] = gw(boat.gx, boat.gy);
 }
-function boatFrame() { // your swan's neck and head in front of you, its white sides at the bottom of the view
-  const mid = cols >> 1, art = ['   __', '  (o >', '   \\ \\', '    \\ \\', '     ) )', '    / /'];
-  art.forEach((l, k) => putText(rows - 10 + k, mid - 3, l, C(k === 1 && l.includes('>') ? WHITE : WHITE, 15)));
-  putText(rows - 9, mid + 2, '>', C(ORANGE, 15));
-  for (let r = rows - 3; r < rows; r++) for (let x = 0; x < cols; x++) { const i = r * cols + x; set(i, r === rows - 3 ? '_' : ' ', C(WHITE, 12)); BG[i] = C(WHITE, r === rows - 3 ? 0 : 5); FOGS[i] = FOGB[i] = 0; }
+// behind your swan, a little above, swinging round after it (V); pulled in if the shore's in the way
+function swanCam(dt) {
+  camYaw += (mod(a - camYaw + Math.PI, TAU) - Math.PI) * Math.min(1, dt * 3);
+  const hx = Math.cos(camYaw), hy = Math.sin(camYaw);
+  let back = 0.38;
+  while (back > 0.15 && map[idx(Math.floor(px - hx * back), Math.floor(py - hy * back))]) back -= 0.03;
+  return [mod(px - hx * back, N), mod(py - hy * back, N), camYaw];
 }
 
 // ---- inside the conservatory: the tropical house (a waterfall into a pool, palms, butterflies, steam) and, through a
@@ -15919,7 +15977,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
-      : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
+      : mode === 'walk' ? 0.17 : mode === 'boat' ? (chaseOn ? 0.2 : 0.11) : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
   else if (mode === 'air') eye = airEye;
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
@@ -16003,7 +16061,6 @@ function render(dt) {
     chuteFrame();
     if (mode === 'el') elFrame();
     if (mode === 'fair') fairFrame();
-    if (mode === 'boat') boatFrame();
     drawHeld(dt); // what's in your hand (or mouth, or under your feet)
   }
   present();
@@ -16421,6 +16478,7 @@ function hud() {
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
+    : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'W/S forward & back | A/D or mouse turn | R/F or arrows up & down | V: camera | E: get out (landed)' : 'W/S throttle (S brakes) | A/D or mouse bank | arrows or mouse pitch | V: camera | E: get out (stopped)')
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
@@ -21989,7 +22047,7 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
-  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air')) third = !third;
+  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
@@ -22235,8 +22293,8 @@ function loop(t) {
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third; render(dt); [px, py, a, pitch] = saved;
-  } else if ((chaseOn = (!!me || mode === 'sea') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm), then put the real position back
-    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : chaseCam(dt);
+  } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
+    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? swanCam(dt) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { // a drink or two and the world sways; more and you're seeing double
     camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : 0; // (and at the wheel, wherever you're looking)

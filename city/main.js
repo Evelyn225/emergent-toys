@@ -50,7 +50,7 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
-  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air')) third = !third;
+  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
@@ -296,8 +296,8 @@ function loop(t) {
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third; render(dt); [px, py, a, pitch] = saved;
-  } else if ((chaseOn = (!!me || mode === 'sea') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm), then put the real position back
-    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : chaseCam(dt);
+  } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
+    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? swanCam(dt) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { // a drink or two and the world sways; more and you're seeing double
     camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : 0; // (and at the wheel, wherever you're looking)

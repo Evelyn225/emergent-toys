@@ -274,6 +274,7 @@ function hud() {
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
+    : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'W/S forward & back | A/D or mouse turn | R/F or arrows up & down | V: camera | E: get out (landed)' : 'W/S throttle (S brakes) | A/D or mouse bank | arrows or mouse pitch | V: camera | E: get out (stopped)')
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
