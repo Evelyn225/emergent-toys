@@ -6,7 +6,7 @@ const {ev}=loadCity();
 
 test('street fixtures clear every new building family and retain their spatial and lighting indices',()=>{
   const result=JSON.parse(ev(`JSON.stringify((()=>{
-    const groups=[[lamps,lampsB,'lamp'],[lights,lightsB,'signal'],[machines,machinesB,'machine'],[benches,benchesB,'bench'],[trees,treesB,'tree'],[subwayBlades,bucketed(subwayBlades),'blade'],[elStairs,bucketed(elStairs),'el-stairs']];
+    const groups=[[lamps,lampsB,'lamp'],[lights,lightsB,'signal'],[machines,machinesB,'machine'],[benches,benchesB,'bench'],[trees,treesB,'tree'],[subwayBlades,bucketed(subwayBlades),'blade']];
     const clear=groups.every(([items,,kind])=>items.every(o=>streetFixtureClear(o,kind)));
     const indexed=groups.every(([items,buckets])=>buckets.flat().length===items.length&&items.every(o=>buckets[bi(Math.floor(o.x/8),Math.floor(o.y/8))].includes(o)));
     return {clear,indexed,lit:lamps.every(l=>glow(l.gx,l.gy)>.99),report:STREET_CLEARANCE};
@@ -15,7 +15,7 @@ test('street fixtures clear every new building family and retain their spatial a
   assert.equal(result.indexed,true);
   assert.equal(result.lit,true,'ground light follows the fitted lamps');
   assert.ok(result.report.moved.lamp>0&&result.report.moved.signal>0&&result.report.moved.machine>0);
-  assert.ok(result.report.moved.blade>0&&result.report.moved['el-stairs']>0,'fixed subway entries and el stairs receive clearance too');
+  assert.ok(result.report.moved.blade>0,'fixed subway entries receive clearance too');
   assert.ok(result.report.conflicts.awning>0&&result.report.conflicts['balcony-slab']>0,'the audit finds projecting awnings and balconies');
   assert.ok(ev("['awning','balcony-slab','escape-rail','bay'].every(kind=>STREET_GEOMETRY.some(o=>o.kind===kind))"),'the clearance index includes all building families');
   assert.ok(Object.values(result.report.removed).every(n=>n===0),'fixtures fit without disappearing');
@@ -67,4 +67,14 @@ test('cached ground shelters agree with full geometry at rotated shapes, edges a
   })())`));
   assert.ok(result.tested>100000);
   assert.equal(result.errors,0,JSON.stringify(result));
+});
+
+test('the el stairs run clear of the buildings, the pillars, the lamps and the trees, and reach their platforms',()=>{
+  const r=JSON.parse(ev(`JSON.stringify(EL_STATIONS.flatMap(s=>s.stairs.map(st=>{
+    const top=[st.ox+st.c*(st.off+(ELS.u3+ELS.u4)/2),st.oy+st.ay*(ELS.top-0.02)];
+    return {clear:elStairClear(st),lamps:lamps.filter(l=>elStairLocal(l.x,l.y)).length,trees:trees.filter(t=>elStairLocal(t.x,t.y)).length,
+      reaches:!!elStationAt(top[0])&&underEl(top[1])&&elStairGround(top[0],top[1])===EL_TOP,foot:elStairGround(st.x,st.y)};
+  })))`));
+  assert.equal(r.length,8);
+  for(const s of r){assert.ok(s.clear,JSON.stringify(s));assert.equal(s.lamps,0);assert.equal(s.trees,0);assert.ok(s.reaches,'the top landing runs out onto the deck at the station');assert.equal(s.foot,0,'the turnstile stands on the street');}
 });

@@ -91,9 +91,9 @@ function elUp({ s, tr }) {
   mode = 'elplat'; plat = { s, tr }; px = s.x; py = EL_PLAT[tr]; a = tr ? 0 : Math.PI; pitch = 0; // facing the way the trains go
   say(`${s.name} el, ${tr ? 'eastbound' : 'westbound'} platform`);
 }
-function elDown() {
+function elDown() { // (E on the platform: a shortcut to the foot of the stairs)
   const stairs=plat.s.stairs[plat.tr];
-  mode = 'walk'; px = stairs.x; py = stairs.y-stairs.ay*.02; plat = null;
+  mode = 'walk'; px = stairs.x; py = stairs.y; a = Math.atan2(-stairs.s, -stairs.c); plat = null;
   body.z=body.vz=body.peak=0;roofH=0;
 }
 // the train standing at your platform, if there is one
@@ -123,6 +123,7 @@ function enterRoom(kind, extra, spawn) {
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
 }
 function interact() {
+  if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
   if(courierUse())return;
   if (mode === 'room') {
     if (room.kind === 'train') return;
@@ -272,8 +273,9 @@ function interact() {
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }
   const el = nearElStairs();
+  if (el && elPass && elPass.st === el.s.stairs[el.tr]) return say('The turnstile\'s open. Up you go.', 2);
   if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
-  if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
+  if (el) { elPass = { st: el.s.stairs[el.tr] }; if (actx) sfxUse('click'); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. The turnstile clicks round. Up the stairs to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'}.`, 3); }
   const fsp = fairSpot();
   if (fsp) return useFair(fsp);
   const mk = marketSpot();

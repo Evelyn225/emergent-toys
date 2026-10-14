@@ -3975,6 +3975,64 @@ function elPlatformAt(x,y) {
   for(const tr of [0,1])if(Math.abs(rel(y-EL_PLAT[tr]))<.14)return {s,tr};
   return null;
 }
+// ---- the stairs up: one per platform, a straight run along the curb side of the sidewalk (clear of the bays and
+// balconies on the buildings). Two flights with a landing halfway, then a landing at the top that runs out onto the
+// platform's end. In each stair's own frame u runs along the street (up the stairs) and v out from the building face
+// toward the deck; st.ox, st.oy is the face at the station's middle, st.off how far along it's been slid to find a
+// clear run (streetscape.js). A turnstile at the foot (st.x, st.y: where you stand to swipe).
+const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: EL_Y0 - EL_Y + 0.05 };
+// (top: the top landing reaches a little past the deck's edge, 0.4 out from the face, so you step off it onto the deck)
+for (const s of EL_STATIONS) s.stairs = [0, 1].map(tr => {
+  const ay = tr ? -1 : 1, oy = tr ? EL_Y + 2 : EL_Y; // (c, s: u's direction; for the south side, u runs west)
+  return elStairFoot({ tr, ox: s.x, oy, ax: 0, ay, c: ay, s: 0, off: 0 });
+});
+function elStairFoot(st) { st.x = mod(st.ox + st.c * (st.off + ELS.u0 - 0.08), N); st.y = st.oy + st.ay * (ELS.v0 + ELS.v1) / 2; return st; }
+// the stairs' steelwork as boxes (for the street clearance): the flights in short pieces, the landings, the top
+const elStairBoxes = st => {
+  const out = [], at = (u, v) => [mod(st.ox + st.c * (st.off + u) + st.ax * v, N), st.oy + st.s * (st.off + u) + st.ay * v];
+  for (let u = ELS.u0 + 0.05; u < ELS.u3; u += 0.1) {
+    const [x, y] = at(u, (ELS.v0 + ELS.v1) / 2), g = elStairGround(x, y);
+    out.push({ x, y, c: 1, s: 0, hl: 0.05, hw: (ELS.v1 - ELS.v0) / 2 + 0.01, z0: Math.max(0, g - 0.04), z1: g + 0.2 });
+  }
+  const [x, y] = at((ELS.u3 + ELS.u4) / 2, (ELS.v0 + ELS.top - 0.06) / 2);
+  out.push({ x, y, c: 1, s: 0, hl: (ELS.u4 - ELS.u3) / 2 + 0.01, hw: (ELS.top - 0.06 - ELS.v0) / 2, z0: EL_TOP - 0.04, z1: EL_TOP + 0.2 });
+  return out;
+};
+// where (x, y) is on a station's stairs: { st, s, u, v, g } (g: the height of the treads, landings or top under you), or null
+function elStairAt(x, y) {
+  if (Math.abs(rel(y - EL_Y - 1)) > 1.05) return null; // (nowhere near the el's street)
+  for (const s of EL_STATIONS) {
+    const dx = rel(x - s.x);
+    if (Math.abs(dx) > 2.9) continue;
+    for (const st of s.stairs) {
+      const dy = rel(y - st.oy), u = st.c * dx + st.s * dy - st.off, v = st.ax * dx + st.ay * dy;
+      const H = EL_TOP, lane = v >= ELS.v0 && v <= ELS.v1;
+      let g = -1;
+      if (u >= ELS.u3 && u <= ELS.u4 && v >= ELS.v0 && v <= ELS.top) g = H; // the top landing
+      else if (lane && u >= ELS.u0 && u < ELS.u1) g = (u - ELS.u0) / (ELS.u1 - ELS.u0) * H / 2; // the first flight
+      else if (lane && u >= ELS.u1 && u < ELS.u2) g = H / 2; // the landing halfway
+      else if (lane && u >= ELS.u2 && u < ELS.u3) g = H / 2 + (u - ELS.u2) / (ELS.u3 - ELS.u2) * H / 2; // the second
+      if (g >= 0) return { st, s, u, v, g };
+    }
+  }
+  return null;
+}
+const elStairGround = (x, y) => { const h = elStairAt(x, y); return h ? h.g : 0; };
+// walking from (x0, y0) to (x, y) as the stairs see it: true (blocked), false (fine), or null (nothing to do with them).
+// On the stairs you keep to them (the rails), up or down a step at a time, or off the top onto the deck; from the
+// street you can only step onto the bottom step, and only once you've swiped through the turnstile (pass)
+const EL_TREAD = 0.08;
+function elStairStep(x0, y0, x, y, pass) {
+  const a = elStairAt(x0, y0), b = elStairAt(x, y);
+  if (!a && !b) return null;
+  if (a) { // on them: a step at a time; off the bottom, or off the top onto the deck, but not over the rails
+    if (!b) return a.g > EL_TREAD * 0.6 && !(underEl(y) && a.g > EL_TOP - 0.01);
+    return Math.abs(b.g - a.g) > EL_TREAD;
+  }
+  if (b.g > EL_TREAD * 0.6) return true; // from the street: the steelwork under the stairs
+  return !(pass && pass.st === b.st); // the bottom step, through the turnstile
+}
+
 // pillars at both curbs, clear of the cross streets
 const elPillars = [];
 for (let bx = 0; bx < NB; bx++) for (const s of [2.6, 4.6, 6.6]) for (const y of [EL_Y0 + 0.05, EL_Y1 - 0.05]) elPillars.push({ x: bx * 8 + s, y });
@@ -4223,7 +4281,6 @@ function streetFixtureBoxes(o, kind) {
   }
   if (kind === 'signal') return [box(.025,.025,0,.4)];
   if (kind === 'blade') return [box(.022,.006,0,.33,o.x,o.y,0,1)];
-  if (kind === 'el-stairs') return [box(.11,.11,0,EL_BOT-.02)];
   if (kind === 'bench') return [box(.18,.07,.01,.13,o.x,o.y,-o.fy,o.fx)];
   if (kind === 'tree') return [box(.03,.03,0,.6*(o.s || 1))];
   return [box(VM_HL,VM_HW,0,VM_H,o.x,o.y,o.c,o.s)];
@@ -4292,11 +4349,26 @@ const subwayBlades=stations.flatMap(s=>{
   return s.blades;
 });
 fitStreetFixtures(subwayBlades,bucketed(subwayBlades),'blade');
-const elStairs=EL_STATIONS.flatMap(s=>{
-  s.stairs=[0,1].map(tr=>({x:s.x,y:EL_Y+(tr?1.86:.14),ax:0,ay:tr?-1:1}));
-  return s.stairs;
-});
-fitStreetFixtures(elStairs,bucketed(elStairs),'el-stairs');
+// the el stairs (elevated.js): each slid along its station to the first run that's clear of the buildings' bays,
+// balconies and canopies and of the el's own pillars (the top must still meet the platform); then the lamps and trees
+// standing where the stairs go step aside, lamps to just past the ends, trees out of the way altogether
+const elStairClear = st => elStairBoxes(st).every(b => !streetGeometryCollision(b, false) &&
+  !elPillars.some(p => Math.abs(rel(p.x - b.x)) < b.hl + 0.04 && Math.abs(rel(p.y - b.y)) < b.hw + 0.04));
+for (const s of EL_STATIONS) for (const st of s.stairs) {
+  for (const off of [0, -0.2, 0.2, -0.4, 0.4, -0.6, -0.8, -1, -1.2, -1.4, 0.6, 0.8, 1]) { st.off = off; if (elStairClear(st)) break; }
+  if (!elStairClear(st)) st.off = 0; // (none clear: back where it started)
+  elStairFoot(st);
+}
+const elStairLocal = (x, y) => { // a fixture's [u, v] in the stairs' frame if it's within reach of them, else null
+  for (const s of EL_STATIONS) for (const st of s.stairs) {
+    const dx = rel(x - st.ox), dy = rel(y - st.oy), u = st.c * dx + st.s * dy - st.off, v = st.ax * dx + st.ay * dy;
+    if (u > ELS.u0 - 0.2 && u < ELS.u4 + 0.15 && v > ELS.v0 - 0.08 && v < ELS.top + 0.05) return [st, u, v];
+  }
+  return null;
+};
+for (let k = trees.length - 1; k >= 0; k--) if (elStairLocal(trees[k].x, trees[k].y)) trees.splice(k, 1);
+for (const l of lamps) { const h = elStairLocal(l.x, l.y); if (!h) continue; const [st, u] = h, to = u < (ELS.u0 + ELS.u4) / 2 ? ELS.u0 - 0.7 : ELS.u4 + 0.3, d = to - u; l.x = mod(l.x + st.c * d, N); l.y += st.s * d; }
+for (const [items, buckets] of [[trees, treesB], [lamps, lampsB]]) { for (const b of buckets) b.length = 0; for (const o of items) buckets[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o); }
 // Ground-light queries visit only the heads whose pools can reach this cell, including relocated lamps.
 for (const l of lamps) {
   const belle = districtAt(l.x,l.y)==='belle';
@@ -10260,42 +10332,53 @@ function drawElPillar(p) {
     BG[i] = C(GRAY, (0.8 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face < 5 ? '=' : ' ', C(GRAY, L * 0.7)), true;
   });
 }
-// The stair tower: flights switching back between two lanes, a landing at each turn, a post at each corner, a deck on
-// top with a short bridge across to the platform, and the green EL sign up there facing the street. st.ax/ay point
-// toward the street (and the deck); u runs along the street. Flights are inclined slabs (rayBeveledBay's planes).
-const EL_FLIGHTS = 6, EL_TOWER = 0.11, EL_RUN = 0.075;
+// The stairs up to the el (laid out in elevated.js): two straight flights along the curb side of the sidewalk with a
+// landing halfway, a landing at the top that runs out onto the platform, posts down to the street, a rail each side,
+// a turnstile at the foot, and the green EL sign at the top facing the street. Flights are inclined slabs (planes).
 const elStairShade = (i, t, L) => {
   if (HIT.face >= 7) { // the treads: open steel, the street showing between them
-    if (fract((HIT.u + EL_RUN) * 60) < 0.3) return false;
+    if (fract(HIT.u * 55) < 0.25) return false;
     BG[i] = C(GRAY, 1.3 + L * 0.25); return set(i, '=', C(WHITE, L * 0.7)), true;
   }
   BG[i] = C(GRAY, (1.1 + L * 0.25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; // the stringers
 };
 function drawElStairs(st) {
-  const [vx, vy] = R(st.x, st.y), d = Math.hypot(vx, vy);
-  if (d > vis + 1) return;
-  const fx = st.ax, fy = st.ay, c = fy, s = -fx, W = EL_TOWER, h = EL_TOP / EL_FLIGHTS;
-  const at = (u, v) => [vx + c * u + fx * v, vy + s * u + fy * v]; // (the boxes' v axis is fx, fy: +v faces the street)
-  for (const su of [-1, 1]) for (const sv of [-1, 1]) { const [x, y] = at(su * (W - 0.008), sv * (W - 0.008)); rod(x, y, 0, x, y, EL_TOP + 0.1, 0.006); }
-  for (let k = 0; k < EL_FLIGHTS; k++) {
-    const dir = k & 1 ? -1 : 1, lane = (k & 1 ? 1 : -1) * 0.05, mid = (k + 0.5) * h, slope = dir * h / (2 * EL_RUN), [x, y] = at(0, lane);
-    if (d > 10) { const [ax, ay] = at(-dir * EL_RUN, lane), [bx, by] = at(dir * EL_RUN, lane); rod(ax, ay, k * h, bx, by, (k + 1) * h, 0.012); continue; }
-    drawBox({ x, y, c, s, hl: EL_RUN, hw: 0.035, z0: k * h - 0.012, z1: (k + 1) * h + 0.012,
-      planes: [[1, 0, 0, EL_RUN, 1], [-1, 0, 0, EL_RUN, 2], [0, 1, 0, 0.035, 3], [0, -1, 0, 0.035, 4], [-slope, 0, 1, mid + 0.012, 7], [slope, 0, -1, -mid + 0.012, 8]] },
+  const H = EL_TOP, c = st.c, s = st.s, fx = st.ax, fy = st.ay;
+  const [ox, oy] = R(st.ox, st.oy), at = (u, v) => [ox + c * (st.off + u) + fx * v, oy + s * (st.off + u) + fy * v];
+  const [mx, my] = at(0, 0.3), d = Math.hypot(mx, my);
+  if (d > vis + 2) return;
+  const vm = (ELS.v0 + ELS.v1) / 2, hw = (ELS.v1 - ELS.v0) / 2, far = d > 12;
+  for (const [ua, ub, za, zb] of [[ELS.u0, ELS.u1, 0, H / 2], [ELS.u2, ELS.u3, H / 2, H]]) { // the two flights
+    const run = (ub - ua) / 2, mid = (za + zb) / 2, slope = (zb - za) / (ub - ua), [x, y] = at((ua + ub) / 2, vm);
+    if (far) { const [ax, ay] = at(ua, vm), [bx, by] = at(ub, vm); rod(ax, ay, za, bx, by, zb, 0.03); continue; }
+    drawBox({ x, y, c, s, hl: run, hw, z0: za - 0.015, z1: zb + 0.015,
+      planes: [[1, 0, 0, run, 1], [-1, 0, 0, run, 2], [0, 1, 0, hw, 3], [0, -1, 0, hw, 4], [-slope, 0, 1, mid, 7], [slope, 0, -1, -mid + 0.02, 8]] },
       elStairShade, rayBeveledBay);
-    const [lx, ly] = at(dir * (EL_RUN + 0.017), 0); // the landing at its top, across both lanes
-    drawBox(boxAt(lx, ly, c, s, 0.017, W - 0.01, (k + 1) * h - 0.012, (k + 1) * h), STEEL.cap);
+    for (const e of [-1, 1]) { const [ax, ay] = at(ua, vm + e * hw), [bx, by] = at(ub, vm + e * hw); rod(ax, ay, za + 0.1, bx, by, zb + 0.1, 0.004); } // the rails
   }
-  // the top: the tower's deck, the bridge over to the platform's edge with a rail each side, the sign
-  const gap = Math.max(0.02, (fy > 0 ? EL_Y0 - st.y : fy < 0 ? st.y - EL_Y1 : 0.15) - W), [bx, by] = at(0, W + gap / 2);
-  drawBox(boxAt(vx, vy, c, s, W, W, EL_TOP - 0.012, EL_TOP), STEEL.cap);
-  drawBox(boxAt(bx, by, c, s, 0.06, gap / 2 + 0.005, EL_TOP - 0.015, EL_TOP), STEEL.cap);
-  for (const su of [-1, 1]) { const [ax, ay] = at(su * 0.06, W), [ex, ey] = at(su * 0.06, W + gap); rod(ax, ay, EL_TOP + 0.1, ex, ey, EL_TOP + 0.1, 0.004); }
-  const [sx, sy] = at(0, W - 0.01), far = farDepth(sx, sy, 0.07);
-  drawBox(boxAt(sx, sy, c, s, 0.07, 0.008, EL_TOP + 0.1, EL_TOP + 0.16), (i, t, L) => {
+  const landing = (ua, ub, va, vb, z) => { const [x, y] = at((ua + ub) / 2, (va + vb) / 2); drawBox(boxAt(x, y, c, s, (ub - ua) / 2, (vb - va) / 2, z - 0.015, z), STEEL.cap); };
+  landing(ELS.u1, ELS.u2, ELS.v0, ELS.v1, H / 2);
+  landing(ELS.u3, ELS.u4, ELS.v0, ELS.top, H);
+  // the posts: under the landings and halfway along each flight
+  for (const [u, z] of [[(ELS.u0 + ELS.u1) / 2, H / 4], [ELS.u1, H / 2], [ELS.u2, H / 2], [(ELS.u2 + ELS.u3) / 2, H * 0.75], [ELS.u3, H], [ELS.u4, H]])
+    for (const v of [ELS.v0 + 0.01, ELS.v1 - 0.01]) { const [x, y] = at(u, v); rod(x, y, 0, x, y, z - 0.015, 0.008); }
+  if (far) return;
+  // rails round the landings (open where the stairs come in, and onto the deck)
+  for (const [ua, ub, z] of [[ELS.u1, ELS.u2, H / 2]]) for (const v of [ELS.v0, ELS.v1]) { const [ax, ay] = at(ua, v), [bx, by] = at(ub, v); rod(ax, ay, z + 0.1, bx, by, z + 0.1, 0.004); }
+  { const [ax, ay] = at(ELS.u1, ELS.v0), [bx, by] = at(ELS.u1, ELS.v1); rod(ax, ay, H / 2 + 0.1, bx, by, H / 2 + 0.1, 0.004); } // (the end of the halfway landing)
+  { const [ax, ay] = at(ELS.u4, ELS.v0), [bx, by] = at(ELS.u4, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the far end of the top
+  { const [ax, ay] = at(ELS.u3, ELS.v0), [bx, by] = at(ELS.u4, ELS.v0); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the building side of the top
+  { const [ax, ay] = at(ELS.u3, ELS.v1), [bx, by] = at(ELS.u3, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the near side, past the stairs' head
+  // the turnstile at the foot: a post, its arm across the way (swung round once you've swiped)
+  { const pu = ELS.u0 - 0.02, pv = ELS.v1 - 0.015, [x, y] = at(pu, pv), open = elPass && elPass.st === st;
+    drawBox(boxAt(x, y, c, s, 0.012, 0.012, 0, 0.09), STEEL.cap);
+    const [bx, by] = open ? at(pu + 0.11, pv - 0.01) : at(pu, ELS.v0 + 0.01); rod(x, y, 0.075, bx, by, 0.075, 0.004, open ? GREEN : RED, 1.5); }
+  // the sign at the top, facing the street
+  const [sx, sy] = at((ELS.u3 + ELS.u4) / 2, ELS.v0 + 0.005), sfar = farDepth(sx, sy, 0.07);
+  drawBox(boxAt(sx, sy, c, s, 0.07, 0.008, H + 0.1, H + 0.16), (i, t, L) => {
     BG[i] = C(GREEN, 4 + Math.max(night, overcast * 0.6) * 5);
     if (HIT.face !== 3 && HIT.face !== 4) return set(i, ' ', 0), true;
-    const q = ((HIT.face === 3 ? HIT.u : -HIT.u) + 0.07) / 0.14, ch = signLine('EL', q * 4 - 1, (EL_TOP + 0.15 - HIT.w) / 0.04, i, EL_TOP + 0.13, midDepth(sx, sy), t, 0.035, 0.04, far, ...faceDir(c, s));
+    const q = ((HIT.face === 3 ? HIT.u : -HIT.u) + 0.07) / 0.14, ch = signLine('EL', q * 4 - 1, (H + 0.15 - HIT.w) / 0.04, i, H + 0.13, midDepth(sx, sy), t, 0.035, 0.04, sfar, ...faceDir(c, s));
     return set(i, ch ?? ' ', C(WHITE, 15)), true;
   });
 }
@@ -11116,7 +11199,7 @@ function drawElCar(vx, vy, cab) {
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
 function elSprites() {
   forNear(elPillarsB, p => { if (inView(rel(p.x - px), rel(p.y - py), 0.1)) drawElPillar(p); });
-  for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.x - px), rel(stairs.y - py), 0.5)) drawElStairs(stairs);
+  for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.ox + stairs.c * stairs.off - px), rel(stairs.oy + stairs.ay * 0.25 - py), 1.7)) drawElStairs(stairs);
   for (const t of elTrains(T)) {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
@@ -15842,7 +15925,7 @@ function render(dt) {
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
-    if (mode === 'walk') eye += architectureGroundHeight(px, py);
+    if (mode === 'walk') eye += walkGround(px, py);
   }
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
@@ -16134,6 +16217,7 @@ const homeSpot = () => { const s = room.def.spots; if (!s) return null; for (con
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
+  if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return ''; // (up the el stairs: nothing at street level is in reach)
   const deliveryPrompt=courierPrompt();if(deliveryPrompt)return deliveryPrompt;
   const cp = crimePrompt();
   if (cp) return cp;
@@ -16215,7 +16299,7 @@ function promptText() {
   if (who) return task && task.who === who ? (fetchHave() ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
   const el = nearElStairs();
-  if (el) return `E: up to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
+  if (el) return elPass && elPass.st === el.s.stairs[el.tr] ? `Up the stairs to the ${el.s.name} el` : `E: swipe in for the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
   const st = nearStation();
   if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
@@ -16473,9 +16557,9 @@ function elUp({ s, tr }) {
   mode = 'elplat'; plat = { s, tr }; px = s.x; py = EL_PLAT[tr]; a = tr ? 0 : Math.PI; pitch = 0; // facing the way the trains go
   say(`${s.name} el, ${tr ? 'eastbound' : 'westbound'} platform`);
 }
-function elDown() {
+function elDown() { // (E on the platform: a shortcut to the foot of the stairs)
   const stairs=plat.s.stairs[plat.tr];
-  mode = 'walk'; px = stairs.x; py = stairs.y-stairs.ay*.02; plat = null;
+  mode = 'walk'; px = stairs.x; py = stairs.y; a = Math.atan2(-stairs.s, -stairs.c); plat = null;
   body.z=body.vz=body.peak=0;roofH=0;
 }
 // the train standing at your platform, if there is one
@@ -16505,6 +16589,7 @@ function enterRoom(kind, extra, spawn) {
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
 }
 function interact() {
+  if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
   if(courierUse())return;
   if (mode === 'room') {
     if (room.kind === 'train') return;
@@ -16654,8 +16739,9 @@ function interact() {
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }
   const el = nearElStairs();
+  if (el && elPass && elPass.st === el.s.stairs[el.tr]) return say('The turnstile\'s open. Up you go.', 2);
   if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
-  if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
+  if (el) { elPass = { st: el.s.stairs[el.tr] }; if (actx) sfxUse('click'); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. The turnstile clicks round. Up the stairs to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'}.`, 3); }
   const fsp = fairSpot();
   if (fsp) return useFair(fsp);
   const mk = marketSpot();
@@ -20857,7 +20943,7 @@ function peeSpray(flow) {
   const look = Math.atan(pitch * rows / projY), el = clamp(look + 0.55, -1.3, 1.3) + Math.sin(T * 2.9) * 0.03;
   let ang = a + wob, sp = 1.5 + flow * 4.5, up = Math.sin(el) * sp;
   // Input can arrive before the first render after entering a room. Derive height from the feet, not the last camera.
-  let ground = architectureGroundHeight(px, py);
+  let ground = walkGround(px, py);
   if (mode === 'room') ground = stairRise(px, py);
   else if (mode === 'roof') ground = roofH;
   else if (mode === 'elplat') ground = EL_TOP;
@@ -21596,7 +21682,7 @@ function standUp() { // back where you sat down from (it was walkable)
 }
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
-  const ground = mode === 'walk' ? architectureGroundHeight(px, py) : 0;
+  const ground = mode === 'walk' ? walkGround(px, py) : 0;
   if (body.groundMode === mode && (body.z > 0 || body.vz > 0)) body.z += ((body.ground || 0) - ground) * 10;
   body.ground = ground; body.groundMode = mode;
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
@@ -21657,7 +21743,14 @@ function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anyw
 const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z + Math.max(0, -body.vz) * 0.05; };
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
+// the ground under your feet on the street, in cells: a building's front steps, or the el stairs (elevated.js)
+const walkGround = (x, y) => Math.max(architectureGroundHeight(x, y), elStairGround(x, y));
+let elPass = null; // the turnstile you've swiped through: { st }, till you're up on the platform or off the stairs
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
+  if (mode === 'walk' && underEl(py) && elStairGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
+    mode = 'roof'; roofH = EL_TOP; roofLot = new Set(); room = null; elPass = null; return;
+  }
+  if (mode === 'walk' && elPass && !elStairAt(px, py) && Math.hypot(rel(px - elPass.st.x), rel(py - elPass.st.y)) > 0.6) elPass = null; // (walked away from the turnstile)
   if(mode==='elplat') {
     const p=elPlatformAt(px,py);
     if(p&&p.s===plat.s&&p.tr===plat.tr)return;
@@ -21681,13 +21774,14 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
-  shiftFeet(roofH * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
+  const g = elStairGround(px, py); // (off the deck onto the top of the el stairs: no drop at all)
+  shiftFeet((roofH - g) * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
 function outdoorFeet() {
   let base;
   if(mode==='roof')base=roofH;
   else if(mode==='elplat')base=EL_TOP;
-  else base=architectureGroundHeight(px,py);
+  else base=walkGround(px,py);
   return [px,py,base+body.z/10];
 }
 function stepElImpact(from,t0,t1) {
@@ -21953,6 +22047,7 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
+  if (mode === 'walk') { const st = elStairStep(px, py, x, y, elPass); if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))]; } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&

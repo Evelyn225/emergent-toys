@@ -243,7 +243,7 @@ function peeSpray(flow) {
   const look = Math.atan(pitch * rows / projY), el = clamp(look + 0.55, -1.3, 1.3) + Math.sin(T * 2.9) * 0.03;
   let ang = a + wob, sp = 1.5 + flow * 4.5, up = Math.sin(el) * sp;
   // Input can arrive before the first render after entering a room. Derive height from the feet, not the last camera.
-  let ground = architectureGroundHeight(px, py);
+  let ground = walkGround(px, py);
   if (mode === 'room') ground = stairRise(px, py);
   else if (mode === 'roof') ground = roofH;
   else if (mode === 'elplat') ground = EL_TOP;

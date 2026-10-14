@@ -17,6 +17,64 @@ function elPlatformAt(x,y) {
   for(const tr of [0,1])if(Math.abs(rel(y-EL_PLAT[tr]))<.14)return {s,tr};
   return null;
 }
+// ---- the stairs up: one per platform, a straight run along the curb side of the sidewalk (clear of the bays and
+// balconies on the buildings). Two flights with a landing halfway, then a landing at the top that runs out onto the
+// platform's end. In each stair's own frame u runs along the street (up the stairs) and v out from the building face
+// toward the deck; st.ox, st.oy is the face at the station's middle, st.off how far along it's been slid to find a
+// clear run (streetscape.js). A turnstile at the foot (st.x, st.y: where you stand to swipe).
+const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: EL_Y0 - EL_Y + 0.05 };
+// (top: the top landing reaches a little past the deck's edge, 0.4 out from the face, so you step off it onto the deck)
+for (const s of EL_STATIONS) s.stairs = [0, 1].map(tr => {
+  const ay = tr ? -1 : 1, oy = tr ? EL_Y + 2 : EL_Y; // (c, s: u's direction; for the south side, u runs west)
+  return elStairFoot({ tr, ox: s.x, oy, ax: 0, ay, c: ay, s: 0, off: 0 });
+});
+function elStairFoot(st) { st.x = mod(st.ox + st.c * (st.off + ELS.u0 - 0.08), N); st.y = st.oy + st.ay * (ELS.v0 + ELS.v1) / 2; return st; }
+// the stairs' steelwork as boxes (for the street clearance): the flights in short pieces, the landings, the top
+const elStairBoxes = st => {
+  const out = [], at = (u, v) => [mod(st.ox + st.c * (st.off + u) + st.ax * v, N), st.oy + st.s * (st.off + u) + st.ay * v];
+  for (let u = ELS.u0 + 0.05; u < ELS.u3; u += 0.1) {
+    const [x, y] = at(u, (ELS.v0 + ELS.v1) / 2), g = elStairGround(x, y);
+    out.push({ x, y, c: 1, s: 0, hl: 0.05, hw: (ELS.v1 - ELS.v0) / 2 + 0.01, z0: Math.max(0, g - 0.04), z1: g + 0.2 });
+  }
+  const [x, y] = at((ELS.u3 + ELS.u4) / 2, (ELS.v0 + ELS.top - 0.06) / 2);
+  out.push({ x, y, c: 1, s: 0, hl: (ELS.u4 - ELS.u3) / 2 + 0.01, hw: (ELS.top - 0.06 - ELS.v0) / 2, z0: EL_TOP - 0.04, z1: EL_TOP + 0.2 });
+  return out;
+};
+// where (x, y) is on a station's stairs: { st, s, u, v, g } (g: the height of the treads, landings or top under you), or null
+function elStairAt(x, y) {
+  if (Math.abs(rel(y - EL_Y - 1)) > 1.05) return null; // (nowhere near the el's street)
+  for (const s of EL_STATIONS) {
+    const dx = rel(x - s.x);
+    if (Math.abs(dx) > 2.9) continue;
+    for (const st of s.stairs) {
+      const dy = rel(y - st.oy), u = st.c * dx + st.s * dy - st.off, v = st.ax * dx + st.ay * dy;
+      const H = EL_TOP, lane = v >= ELS.v0 && v <= ELS.v1;
+      let g = -1;
+      if (u >= ELS.u3 && u <= ELS.u4 && v >= ELS.v0 && v <= ELS.top) g = H; // the top landing
+      else if (lane && u >= ELS.u0 && u < ELS.u1) g = (u - ELS.u0) / (ELS.u1 - ELS.u0) * H / 2; // the first flight
+      else if (lane && u >= ELS.u1 && u < ELS.u2) g = H / 2; // the landing halfway
+      else if (lane && u >= ELS.u2 && u < ELS.u3) g = H / 2 + (u - ELS.u2) / (ELS.u3 - ELS.u2) * H / 2; // the second
+      if (g >= 0) return { st, s, u, v, g };
+    }
+  }
+  return null;
+}
+const elStairGround = (x, y) => { const h = elStairAt(x, y); return h ? h.g : 0; };
+// walking from (x0, y0) to (x, y) as the stairs see it: true (blocked), false (fine), or null (nothing to do with them).
+// On the stairs you keep to them (the rails), up or down a step at a time, or off the top onto the deck; from the
+// street you can only step onto the bottom step, and only once you've swiped through the turnstile (pass)
+const EL_TREAD = 0.08;
+function elStairStep(x0, y0, x, y, pass) {
+  const a = elStairAt(x0, y0), b = elStairAt(x, y);
+  if (!a && !b) return null;
+  if (a) { // on them: a step at a time; off the bottom, or off the top onto the deck, but not over the rails
+    if (!b) return a.g > EL_TREAD * 0.6 && !(underEl(y) && a.g > EL_TOP - 0.01);
+    return Math.abs(b.g - a.g) > EL_TREAD;
+  }
+  if (b.g > EL_TREAD * 0.6) return true; // from the street: the steelwork under the stairs
+  return !(pass && pass.st === b.st); // the bottom step, through the turnstile
+}
+
 // pillars at both curbs, clear of the cross streets
 const elPillars = [];
 for (let bx = 0; bx < NB; bx++) for (const s of [2.6, 4.6, 6.6]) for (const y of [EL_Y0 + 0.05, EL_Y1 - 0.05]) elPillars.push({ x: bx * 8 + s, y });

@@ -134,7 +134,7 @@ function render(dt) {
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
-    if (mode === 'walk') eye += architectureGroundHeight(px, py);
+    if (mode === 'walk') eye += walkGround(px, py);
   }
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
