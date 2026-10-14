@@ -241,7 +241,7 @@ function useHeld(near) {
     it.uses--;
     if (d.caffeine) fx.caffeine = Math.min(180, fx.caffeine + d.caffeine / d.uses);
     if (d.sugar) fx.caffeine = Math.min(180, fx.caffeine + d.sugar / d.uses); // (a sugar rush: you go quicker, same as coffee)
-    if (d.heal) needs.health = Math.min(100, needs.health + d.heal / d.uses);
+    if (d.heal) needs.health = Math.min(maxHealth(), needs.health + d.heal / d.uses);
     if (it.id === 'stinkytofu') fx.stink = 150; // (and you'll smell of it a while)
     if (d.booze) fx.booze = Math.min(1.5, fx.booze + d.booze / d.uses);
     if (d.sober) fx.booze = Math.max(0, fx.booze - d.sober / d.uses);
@@ -313,8 +313,8 @@ function useHeld(near) {
     case 'redstring': return [pick(['You tug the red string round your wrist. A little luck at the tables and the games, the stallholder said.', 'A thread of red. Keeps the bad stuff off, and tips the odds a hair your way at the games.']), null];
     case 'luckycoin': return [`You flip the lucky coin: ${Math.random() < 0.5 ? 'heads' : 'tails'}. (On you, it nudges the odds at the games.)`, 'click'];
     case 'tigerbalm':
-      if (needs.health >= 99) return ['You smell the tiger balm. Camphor. You don\'t need it right now.', null];
-      it.uses--; needs.health = Math.min(100, needs.health + 30);
+      if (needs.health >= maxHealth() - 1) return ['You smell the tiger balm. Camphor. You don\'t need it right now.', null];
+      it.uses--; needs.health = Math.min(maxHealth(), needs.health + 30);
       if (it.uses <= 0) removeHeld();
       return [`You rub the tiger balm in. It burns, then it doesn't, and everything aches less.${it.uses > 0 ? ` (${it.uses} left)` : ' The tin\'s empty.'}`, null];
     case 'lantern': return [night > 0.3 ? 'You hold the lantern up. Its warm light spills round you.' : 'A red paper lantern. It\'ll come into its own after dark.', null];

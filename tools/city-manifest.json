@@ -60,6 +60,7 @@
     "city/taxi-job.js",
     "city/fair.js",
     "city/nightmarket.js",
+    "city/gym.js",
     "city/events.js",
     "city/laundry.js",
     "city/audio.js",

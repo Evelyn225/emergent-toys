@@ -103,9 +103,10 @@ function promptText() {
     if (cs) return `E: play ${CASINO_NAMES[cs]} ($5 to $100 a go)`;
     if (aviaryKeeper()) return T - seedT < 12 ? 'The birds are all over you.' : `"Seed for the birds? Hold it out flat."   E: a cup of seed (${fmt$(1)})`;
     { const sp = shotengaiPrompt(); if (sp) return sp; }
+    { const gp = gymPrompt(); if (gp) return gp; }
     if (roomPerson()) return 'E: talk';
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
-    if (room.kind === 'hospital' && nearKeeper() && needs.health < 95) return `E: get patched up (${fmt$(NURSE_FEE)})`;
+    if (room.kind === 'hospital' && nearKeeper() && needs.health < maxHealth() - 5) return `E: get patched up (${fmt$(NURSE_FEE)})`;
     if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return room.line ? `"${room.line}"   E: shop` : 'E: shop';
     if (nearKeeper() && room.line) return `"${room.line}"`;
@@ -248,12 +249,13 @@ function wrapText(s, maxW) {
 }
 // [text, colour] for each meter: "food [######--]"
 function needMeters() {
-  const bar = (label, v) => {
+  const bar = (label, v, of = 100) => {
+    v = v / of * 100; // (health is out of your max, which the gym raises)
     const n = Math.round(v / 12.5), col = v <= 0 ? (fract(T * 2) < 0.5 ? '#f44' : '#822') : v < 20 ? '#f84' : v < 50 ? '#dd5' : '#7c7';
     return [`${label} [${'#'.repeat(n)}${'-'.repeat(8 - n)}]`, col];
   };
   const out = [bar('food', needs.food), bar('drink', needs.drink)];
-  if (needs.health < 100) out.push(bar('health', needs.health));
+  if (needs.health < maxHealth()) out.push(bar('health', needs.health, maxHealth()));
   return out;
 }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen

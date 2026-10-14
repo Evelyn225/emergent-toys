@@ -1250,6 +1250,242 @@ GAMES.garden = (rnd = Math.random) => {
 // which shift each room offers
 const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
+// ---- the ring at the gym: a bout against the next fighter on the card, seen over your own shoulders (you're a
+// wireframe, so they show through you). Read the wind-up and get out of the way: LEFT / RIGHT slip a punch (away
+// from a hook; either way from a jab or an uppercut), DOWN held blocks (a jab all of it, a hook most of it, an
+// uppercut none). UP throws at the head, SPACE at the body, and whichever their gloves are covering takes it. Make
+// them miss and they're wide open for a moment. Three rounds of a minute: knock them down three times and it's over,
+// or go down three times yourself; otherwise the judges decide.
+// opts: { foe: index into BOXERS, hp: your health going in, max: your most }. After: g.hp (your health),
+// g.result { win, how: 'KO' | 'TKO' | 'decision' | 'towel' }.
+// wind: seconds of wind-up before a punch; gap: seconds between attacks; open: how long a miss leaves them open;
+// guard: seconds between switching it high and low; moves: how often [jab, hook, uppercut]; combo: the chance of
+// another punch straight after one that landed; feint: the chance a wind-up is only a fake
+const BOXERS = [
+  { name: 'Kid Pigeon', short: 'PIGEON', from: 'the Docks', rec: '2-9', hp: 80, dmg: 0.7, wind: 0.85, gap: [1.6, 2.6], open: 1.3, guard: 3,
+    moves: [3, 2, 0], combo: 0, feint: 0, purse: 40, skin: [SKIN, 11], hair: [YEL, 10], trunks: [GRAY, 8], gloves: [RED, 11], wide: 0 },
+  { name: 'Tommy Two-Tone', short: 'TWO-TONE', from: 'Chinatown', rec: '11-8', hp: 120, dmg: 0.85, wind: 0.66, gap: [1.2, 2.0], open: 1.0, guard: 2.2,
+    moves: [3, 3, 1], combo: 0.15, feint: 0, purse: 75, skin: [SKIN, 8], hair: [BRICK, 3], trunks: [GREEN, 9], trunks2: [WHITE, 12], gloves: [RED, 11], wide: 0 },
+  { name: 'Big Dumpling', short: 'DUMPLING', from: 'the Night Market', rec: '17-4', hp: 170, dmg: 1.3, wind: 0.8, gap: [1.7, 2.7], open: 1.2, guard: 2.8,
+    moves: [1, 3, 2], combo: 0.1, feint: 0, purse: 120, skin: [SKIN, 10], hair: null, trunks: [YEL, 11], gloves: [BLUE, 10], wide: 2 },
+  { name: 'Rosa "Rattlesnake" Ruiz', short: 'RUIZ', from: 'the Waterfront', rec: '24-2', hp: 160, dmg: 1.05, wind: 0.45, gap: [0.8, 1.4], open: 0.7, guard: 1.4,
+    moves: [3, 3, 2], combo: 0.5, feint: 0.15, purse: 200, skin: [SKIN, 6], hair: [BRICK, 2], trunks: [MAG, 9], gloves: [RED, 11], wide: -1 },
+  { name: 'The Ferryman', short: 'FERRYMAN', from: 'Lighthouse Island', rec: '39-0', hp: 220, dmg: 1.3, wind: 0.42, gap: [0.7, 1.3], open: 0.6, guard: 1.1,
+    moves: [2, 3, 3], combo: 0.4, feint: 0.3, purse: 350, skin: [SKIN, 4], hair: [GRAY, 13], trunks: [BLUE, 8], gloves: [WHITE, 13], wide: 1 },
+];
+let boxRank = 0; // who's next on the card: the fighters you've beaten (all five: the champ, for a rematch)
+const BOX_ROUND = 60, BOX_MOVES = ['jab', 'hook', 'upper'], BOX_HIT = { jab: 6, hook: 12, upper: 18 }, BOX_COUNT = 0.8;
+GAMES.boxing = (rnd = Math.random, word = '', o = {}) => {
+  const W = 32, H = 20, fi = clamp(o.foe | 0, 0, BOXERS.length - 1), F = BOXERS[fi], max = o.max || 100, omax = F.hp;
+  const g = { id: 'boxing', title: 'BOXING', W, H, score: 0, over: false, foe: fi, name: F.name, purse: F.purse, result: null, hp: clamp(o.hp ?? max, 1, max) };
+  let ohp = omax, phase = 'intro', pt = 0, round = 1, clock = BOX_ROUND, t = 0;
+  // them: idle | wind | strike | open (missed you) | recover | flinch (just hit) | shell (covering up) | down
+  let st = 'idle', stT = 0, guard = rnd() < 0.5 ? 'high' : 'low', guardT = F.guard, gapT = 0, move = 'jab', side = 1, fake = false, missed = false, landed = 0;
+  // you: ready | block | dodge | punch | hurt | down
+  let me = 'ready', meT = 0, dir = 0, aim = 'head', hand = 1, cool = 0, slipCool = 0;
+  let downs = 0, myDowns = 0, who = '', count = 0, countT = 0, mash = 0, getUp = 0, flashT = 0, hurtT = 0, msg = '', msgT = 0;
+  const pts = [0, 0];
+  const say_ = (s, d = 0.8) => { msg = s; msgT = d; };
+  const nextGap = () => F.gap[0] + rnd() * (F.gap[1] - F.gap[0]);
+  const pickMove = () => { let r = rnd() * (F.moves[0] + F.moves[1] + F.moves[2]); for (let k = 0; k < 3; k++) if ((r -= F.moves[k]) < 0) return BOX_MOVES[k]; return 'jab'; };
+  const windUp = (m, quick = 1) => { move = m; side = rnd() < 0.5 ? -1 : 1; st = 'wind'; stT = F.wind * (m === 'jab' ? 0.75 : m === 'upper' ? 1.15 : 1) * quick; fake = quick === 1 && rnd() < F.feint; };
+  const end = (win, how) => {
+    g.result = { win, how }; phase = 'end'; pt = 0;
+    say_(how === 'decision' ? (win ? 'YOU WIN ON POINTS' : 'THE JUDGES GO THE OTHER WAY') : win ? how + '!' : how === 'KO' ? 'COUNTED OUT' : 'THE REF WAVES IT OFF', 9);
+  };
+  g.towel = () => { if (!g.result) g.result = { win: false, how: 'towel' }; };
+  gapT = nextGap();
+  // their punch lands now: slipped, blocked, or in the face
+  const strike = ev => {
+    // (a slip only gets you out of the way for its first 0.3s: after that you're coming back)
+    if (me === 'dodge' && meT > 0.15 && (move !== 'hook' || dir === -side)) { missed = true; say_('SLIPPED IT', 0.6); ev.push('hop'); return; }
+    missed = false;
+    const full = BOX_HIT[move] * F.dmg, blocked = me === 'block' && move !== 'upper', d = blocked ? (move === 'jab' ? 0 : full * 0.35) : full;
+    if (blocked) { say_('BLOCKED', 0.5); ev.push('wall'); }
+    else { me = 'hurt'; meT = 0.35; say_(move === 'upper' ? 'UPPERCUT!' : move === 'hook' ? 'HOOK!' : 'JAB', 0.5); }
+    if (d > 0) { g.hp = Math.max(0, g.hp - d); pts[1] += d; hurtT = 0.25; if (!blocked) ev.push('miss'); }
+    if (g.hp <= 0) { // down you go
+      myDowns++; ev.push('score');
+      if (myDowns >= 3) return end(false, 'TKO');
+      me = 'down'; phase = 'count'; who = 'you'; count = 0; countT = 0; mash = 0; getUp = 4 + myDowns * 5; say_('YOU\'RE DOWN', 9);
+    }
+  };
+  // your punch: lands where they aren't covering, or anywhere when they're open
+  const punch = (target, ev) => {
+    aim = target; hand = -hand; me = 'punch'; meT = 0.2; cool = 0.34;
+    // (staggered from your last one, they cover where it went in: a combo goes head, body, head)
+    const lands = st === 'open' || (st === 'idle' || st === 'flinch' || st === 'recover') && (guard === 'high') !== (target === 'head');
+    if (!lands) { // off the gloves, and now and then they make you pay for it
+      ev.push('wall'); say_('BLOCKED', 0.4);
+      if ((st === 'idle' || st === 'recover') && rnd() < 0.35 + fi * 0.1) windUp('jab', 0.55);
+      return;
+    }
+    let d = target === 'head' ? 7 : 5;
+    if (st === 'open') { d *= 1.5; say_('COUNTER!', 0.5); }
+    ohp -= d; pts[0] += d; flashT = 0.12; ev.push('bump'); landed++;
+    if (ohp <= 0) { // down they go
+      downs++; ev.push('score'); ohp = 0;
+      if (downs >= 3) { st = 'down'; return end(true, 'TKO'); }
+      st = 'down'; phase = 'count'; who = 'them'; count = 0; countT = 0; say_('KNOCKDOWN!', 1.5);
+      getUp = downs === 1 ? 3 + Math.floor(rnd() * 3) : rnd() < 0.5 ? 10 : 6 + Math.floor(rnd() * 3); // (the second time they might stay down)
+      return;
+    }
+    if (st === 'open') { if (landed >= 3) { st = 'recover'; stT = 0.3; } return; } // (get a few in while it lasts)
+    if (landed >= 3) { st = 'shell'; stT = 0.75; } else { st = 'flinch'; stT = 0.4; guard = target === 'head' ? 'high' : 'low'; } // (and they cover where you hit)
+  };
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt; pt += dt; msgT -= dt; flashT -= dt; hurtT -= dt;
+    if (phase === 'intro') { if (pt > 2.6) { phase = 'fight'; say_('FIGHT!', 0.8); ev.push('end'); } return ev; }
+    if (phase === 'end') { if (pt > 2.4) { g.over = true; ev.push(g.result.win ? 'clear' : 'end'); } return ev; }
+    if (phase === 'break') { // between rounds: on the stool, a breather
+      if (pt > 3) { phase = 'fight'; round++; clock = BOX_ROUND; st = 'idle'; me = 'ready'; gapT = nextGap(); say_(`ROUND ${round}`, 1); ev.push('end'); }
+      return ev;
+    }
+    if (phase === 'count') {
+      if (who === 'you' && (k.actP || k.upP || k.leftP || k.rightP || k.downP)) mash++;
+      countT += dt;
+      if (countT < BOX_COUNT) return ev;
+      countT -= BOX_COUNT; count++; ev.push('brick');
+      if (who === 'them') {
+        if (count >= getUp && getUp < 10) { phase = 'fight'; st = 'recover'; stT = 0.6; ohp = omax * (downs === 1 ? 0.6 : 0.4); landed = 0; gapT = nextGap(); say_('BACK UP', 0.8); }
+        else if (count >= 10) end(true, 'KO');
+      } else if (mash >= getUp) { phase = 'fight'; me = 'ready'; g.hp = max * 0.3; say_('BACK ON YOUR FEET', 0.8); }
+      else if (count >= 10) end(false, 'KO');
+      return ev;
+    }
+    // the fight: you first (a slip on the very frame their punch arrives still counts), then them
+    cool -= dt; slipCool -= dt; meT -= dt;
+    if ((me === 'dodge' || me === 'punch' || me === 'hurt') && meT <= 0) { if (me === 'dodge') slipCool = 0.25; me = 'ready'; dir = 0; }
+    if (me === 'ready' || me === 'block') {
+      me = k.down ? 'block' : 'ready';
+      if (me === 'ready' && slipCool <= 0 && (k.leftP || k.rightP)) { me = 'dodge'; dir = k.leftP ? -1 : 1; meT = 0.45; }
+      else if (me === 'ready' && cool <= 0 && (k.upP || k.actP)) punch(k.upP ? 'head' : 'body', ev);
+    }
+    if (phase !== 'fight') return ev;
+    stT -= dt;
+    if (st === 'idle' || st === 'flinch' || st === 'shell' || st === 'recover') gapT -= dt; // (hitting them doesn't stop them coming back at you)
+    if (st === 'idle') {
+      if ((guardT -= dt) <= 0) { guard = rnd() < 0.5 ? 'high' : 'low'; guardT = F.guard * (0.6 + rnd() * 0.8); }
+      if (gapT <= 0) windUp(pickMove());
+    } else if (st === 'wind') {
+      if (stT <= 0) { if (fake) { say_('FEINT', 0.5); windUp(pickMove(), 0.5); } else { st = 'strike'; stT = 0.28; strike(ev); } } // (a fake, then the real one, quick)
+    } else if (st === 'strike') {
+      if (stT <= 0 && phase === 'fight') {
+        if (missed) { st = 'open'; stT = F.open; landed = 0; }
+        else if (rnd() < F.combo) windUp(pickMove(), 0.6);
+        else { st = 'recover'; stT = 0.35; }
+      }
+    } else if (stT <= 0) { if (st === 'shell') guard = rnd() < 0.5 ? 'high' : 'low'; st = 'idle'; landed = 0; }
+    if (phase === 'fight' && (clock -= dt) <= 0) { // the bell
+      ev.push('end');
+      if (round < 3) { phase = 'break'; pt = 0; g.hp = Math.min(max, g.hp + max * 0.1); ohp = Math.min(omax, ohp + omax * 0.15); say_(`END OF ROUND ${round}`, 3); }
+      else end(pts[0] + downs * 20 > pts[1] + myDowns * 20, 'decision');
+    }
+    g.score = Math.round(pts[0]);
+    return ev;
+  };
+  // where everything is this frame: their body (dx, dy), head (hx, hy) and gloves ([x, y, size, flashing])
+  const pose = () => {
+    const hw = 4 + F.wide, flash = (Math.floor(t * 10) & 1) === 1;
+    const high = [[-4, 4, 3], [2, 4, 3]], low = [[-hw - 1, 8, 3], [hw - 1, 8, 3]], P = { dx: 0, dy: 0, hx: 0, hy: 0, gl: guard === 'high' ? high : low };
+    if (phase === 'end' && !g.result.win && st !== 'down') return { ...P, gl: [[-hw - 3, 0, 3], [hw + 1, 0, 3]] }; // arms up
+    if (st === 'down') return { ...P, down: true };
+    if (phase === 'count' || phase === 'break') return { ...P, gl: high }; // (standing off while you're down, or between rounds)
+    if (st === 'wind') { // the tell: the punching glove drawn back and flashing
+      const out = move === 'hook' ? [side < 0 ? -hw - 4 : hw + 2, 2, 3, flash] : move === 'upper' ? [side < 0 ? -hw : hw - 2, 11, 3, flash] : [side < 0 ? -hw - 1 : hw - 1, 6, 3, flash];
+      const gl = side < 0 ? [out, high[1]] : [high[0], out];
+      return { ...P, dx: move === 'hook' ? side : 0, dy: move === 'upper' ? 1 : 0, gl };
+    }
+    if (st === 'strike') { // coming at you, big
+      const at = move === 'jab' ? [-2, 7, 5] : move === 'upper' ? [-2, 2, 5] : [-2 - side, 4, 5];
+      return { ...P, gl: side < 0 ? [at, high[1]] : [high[0], at] };
+    }
+    if (st === 'open') return { ...P, dx: -side * 2, dizzy: true, gl: [[-hw - 1, 10, 3], [hw - 1, 10, 3]] };
+    if (st === 'flinch') return aim === 'head' ? { ...P, hx: -hand, hy: -1, gl: [[-hw - 2, 6, 3], [hw, 6, 3]] } : { ...P, dy: 1, gl: [[-hw - 1, 9, 3], [hw - 1, 9, 3]] };
+    if (st === 'shell') return { ...P, gl: [[-3, 3, 3], [0, 3, 3]] };
+    if (st === 'recover') return { ...P, gl: [[-4, 6, 3], [2, 6, 3]] };
+    return { ...P, dy: phase === 'fight' && (Math.floor(t * 2) & 1) ? 1 : 0 }; // (on their toes)
+  };
+  g.draw = (put, text) => {
+    const blk = (x0, y0, w, h, bg, ch = ' ', col = 0) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) put(x, y, ch, col, bg); };
+    // the crowd in the dark (a camera flash now and then), the ropes behind them, the canvas
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (y >= 12) { put(x, y, ' ', 0, C(GRAY, y < 14 ? 5 : 6)); continue; }
+      const h = hash(x, y, 77), pop = hash(x, y, Math.floor(t * 3)) > 0.996 && y < 6;
+      put(x, y, pop ? '*' : y < 6 && h > 0.78 ? (h > 0.93 ? 'o' : '.') : ' ', pop ? C(WHITE, 15) : C(GRAY, 3), C(GRAY, y < 6 ? 1 : 2));
+    }
+    for (const [y, c] of [[7, RED], [9, WHITE], [11, BLUE]]) for (let x = 3; x < 29; x++) put(x, y, '=', C(c, 11));
+    for (const x of [2, 29]) blk(x, 6, 1, 7, C(GRAY, 7), '|', C(GRAY, 12));
+    // them
+    const P = pose(), hw = 4 + F.wide, bx = 16 + P.dx, by = P.dy;
+    const sk = flashT > 0 ? C(F.skin[0], 15) : C(F.skin[0], F.skin[1]), hr = F.hair && C(F.hair[0], F.hair[1]), gl = C(F.gloves[0], F.gloves[1]);
+    if (P.down) { // flat on the canvas
+      blk(bx - 9, 14, 4, 3, sk); if (hr) blk(bx - 9, 14, 1, 3, hr);
+      blk(bx - 5, 15, 9, 2, sk); blk(bx + 4, 15, 3, 2, C(F.trunks[0], F.trunks[1])); blk(bx + 7, 15, 5, 2, sk);
+      blk(bx - 4, 13, 2, 2, gl); blk(bx + 1, 13, 2, 2, gl);
+      text(bx - 7, 12, (Math.floor(t * 4) & 1) ? '* . *' : '. * .', C(YEL, 15), 'center');
+    } else {
+      for (const x0 of [bx - 3, bx + 2]) { blk(x0, 14 + by, 2, 3 - by, sk); blk(x0, 17, 2, 1, C(GRAY, 2)); } // legs, boots
+      blk(bx - hw, 11 + by, 2 * hw + 1, 3, C(F.trunks[0], F.trunks[1]));
+      if (F.trunks2) blk(bx, 11 + by, hw + 1, 3, C(F.trunks2[0], F.trunks2[1]));
+      blk(bx - hw, 11 + by, 2 * hw + 1, 1, C(WHITE, 12)); // the waistband
+      const skD = C(F.skin[0], Math.max(1, F.skin[1] - 3));
+      blk(bx - hw, 7 + by, 2 * hw + 1, 4, sk); blk(bx - 1, 6 + by, 3, 1, sk); // chest, neck
+      blk(bx - hw, 7 + by, 1, 4, skD); blk(bx + hw, 7 + by, 1, 4, skD); // (shaded down the sides)
+      for (const e of [-1, 1]) blk(e < 0 ? bx - hw + 1 : bx + 1, 8 + by, hw - 1, 1, skD); // and under the chest
+      const hx = bx + P.hx, hy = 1 + by + P.hy;
+      blk(hx - 2, hy, 5, 5, sk);
+      if (hr) { blk(hx - 2, hy, 5, 1, hr); put(hx - 2, hy + 1, ' ', 0, hr); put(hx + 2, hy + 1, ' ', 0, hr); }
+      for (const e of [-1, 1]) put(hx + e, hy + 2, P.dizzy ? 'x' : ' ', C(WHITE, 15), C(GRAY, 1));
+      put(hx, hy + 4, ' ', 0, C(RED, st === 'flinch' || st === 'open' ? 6 : 3)); // the mouth
+      if (P.dizzy) text(hx, hy - 1, (Math.floor(t * 4) & 1) ? '* . *' : '. * .', C(YEL, 15), 'center');
+      const line = (ax, ay, bx_, by_, bg) => { const n = Math.max(1, Math.abs(bx_ - ax), Math.abs(by_ - ay)); for (let q = 0; q <= n; q++) put(Math.round(ax + (bx_ - ax) * q / n), Math.round(ay + (by_ - ay) * q / n), ' ', 0, bg); };
+      P.gl.forEach(([gx, gy, s, fl], j) => { // an arm from the shoulder, bent at the elbow, and its glove
+        const e = j ? 1 : -1, sx = bx + e * (hw + 1), sy = 7 + by, x1 = bx + gx + (s >> 1), y1 = gy + by + s - 1;
+        const ex = y1 < 10 + by ? sx + e * (Math.abs(x1 - sx) < 3 ? 1 : 0) : Math.round((sx + x1) / 2), ey = y1 < 10 + by ? Math.max(sy + 2, y1 + 1) : Math.round((sy + y1) / 2);
+        line(sx, sy, ex, ey, skD); line(ex, ey, x1, y1, sk);
+        const x0 = bx + gx, y0 = gy + by, base = fl ? [WHITE, 15] : F.gloves;
+        blk(x0, y0, s, s - 1, C(base[0], base[1])); blk(x0, y0 + s - 1, s, 1, fl ? C(YEL, 14) : C(WHITE, 12)); // the glove and its laced cuff
+        put(x0, y0, ' ', 0, C(base[0], Math.min(15, base[1] + 3))); put(x0 + s - 1, y0 + s - 2, ' ', 0, C(base[0], Math.max(1, base[1] - 4))); // (lit top left)
+      });
+      if (st === 'wind') text(bx, 0, (Math.floor(t * 8) & 1) ? '!!' : '', C(YEL, 15), 'center');
+    }
+    // you, from behind: head and shoulders in wire, gloves up
+    const col = hurtT > 0 ? C(RED, 15) : C(GREEN, 14), fill = hurtT > 0 ? C(RED, 8) : C(GREEN, 7);
+    const pcx = 16 + (me === 'dodge' ? dir * 7 : 0), pdy = me === 'down' || phase === 'end' && !g.result.win && myDowns ? 5 : me === 'hurt' ? 1 : 0;
+    const wire = (x0, y0, w, h) => { for (let y = y0; y < Math.min(H, y0 + h); y++) for (let x = x0; x < x0 + w; x++) { const edge = y === y0 || x === x0 || x === x0 + w - 1; if (y === y0 && (x === x0 || x === x0 + w - 1)) continue; put(x, y, edge ? '#' : ':', edge ? col : fill); } }; // (rounded off at the top)
+    wire(pcx - 2, 13 + pdy, 5, 4); wire(pcx - 6, 17 + pdy, 13, 3);
+    for (const e of [-1, 1]) {
+      let gx = pcx + (e < 0 ? -9 : 7), gy = 13 + pdy, s = 3;
+      if (me === 'block') { gx = pcx + (e < 0 ? -4 : 2); gy = 11; }
+      if (me === 'punch' && e === hand) { gx = bx + (e < 0 ? -2 : 1); gy = (aim === 'head' ? 3 : 8) + by; s = 2; } // out at the target
+      const sx = pcx + e * 6, sy = 17 + pdy, x1 = gx + (s >> 1), y1 = gy + (s >> 1), n = Math.max(1, Math.abs(x1 - sx), Math.abs(y1 - sy));
+      for (let q = 1; q < n; q++) put(Math.round(sx + (x1 - sx) * q / n), Math.round(sy + (y1 - sy) * q / n), ':', fill);
+      blk(gx, gy, s, s, C(GREEN, 4), '@', col);
+    }
+    // the cards: both of you, the round, what just happened
+    const bar = (v, m) => { const n = Math.ceil(clamp(v / m, 0, 1) * 10); return '[' + '#'.repeat(n) + '-'.repeat(10 - n) + ']'; };
+    text(6, 0, 'YOU ' + bar(g.hp, max), C(g.hp < max * 0.25 ? RED : GREEN, 15), 'center');
+    text(W - 7, 0, bar(ohp, omax) + ' ' + F.short, C(ohp < omax * 0.25 ? RED : YEL, 15), 'center');
+    if (phase === 'intro') {
+      text(6, 2, F.name.toUpperCase(), C(YEL, 15), 'center');
+      text(6, 3, `${F.rec}, out of ${F.from}`, C(WHITE, 13), 'center');
+      text(6, 4, `PURSE $${F.purse}`, C(GREEN, 14), 'center');
+    } else if (phase === 'count') text(who === 'them' ? W - 7 : 6, 3, count ? String(count) : '', C(WHITE, 15), 'center');
+    if (msgT > 0 && msg) text(who === 'you' && phase === 'count' ? 16 : 6, phase === 'count' && who === 'you' ? 9 : 3 + (phase === 'count' ? 2 : 0), msg, C(msg === 'COUNTER!' || msg.endsWith('!') ? YEL : WHITE, 15), 'center');
+  };
+  g.status = () => {
+    if (phase === 'count' && who === 'you') return 'MASH SPACE TO GET UP';
+    const c = Math.max(0, Math.ceil(clock)), when = `ROUND ${round}  ${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`;
+    return `${when}   LEFT/RIGHT slip   DOWN block   UP head   SPACE body`;
+  };
+  g.reward = () => g.result && g.result.win ? F.purse : 0;
+  g.peek = () => ({ phase, st, stT, move, side, guard, fake, me, ohp, omax, hp: g.hp, round, clock, downs, myDowns, who, count });
+  return g;
+};
+
 const ARCADE_GAMES = ['snake', 'breakout', 'crosser', 'pong'], CREDIT = 1;
 
 // ---- driving a taxi: what a trip pays. The meter (taxiFare) by distance, and a tip for getting there quickly and

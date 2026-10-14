@@ -2412,3 +2412,45 @@ test('dev tools (F2): search and jump to a place, spawn an item, give money, set
   const r = await page.evaluate(() => [inv.map(i => i.id), money, Math.floor(tod), weekday(), weather, devOpen()]); // (the clock's running again)
   assert.deepStrictEqual(r, [['ball'], 1100, 12, 'Sun', 'fog', false]);
 }));
+
+test('the gym: an hour with the trainer raises your max health once a day; in the ring a win pays the purse and brings on the next fighter, and both are kept in the save', () => withPage(async page => {
+  await page.evaluate(() => { tod = 14; money = 100; needs.food = needs.drink = 90; needs.health = 100; enterRoom('gym', { word: 'GYM', neon: ORANGE, ret: [px, py, a] }, [3, 8.7, -Math.PI / 2]); });
+  assert.match(await page.evaluate(() => promptText()), /E: an hour with the trainer \(\$20\.00\)/);
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => !sleep, null, { timeout: 15000 });
+  assert.deepStrictEqual(await page.evaluate(() => [money, maxHealth(), Math.round(tod), msgText.includes('Health up to 102')]), [80, 102, 15, true], 'paid, an hour on, stronger');
+  assert.match(await page.evaluate(() => promptText()), /Same time tomorrow/);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => money), 80, 'no second session the same day');
+  // the ring: the first fighter on the card, through the real game screen
+  await page.evaluate(() => { px = 9.3; py = 5; a = 0; });
+  assert.match(await page.evaluate(() => promptText()), /E: fight Kid Pigeon \(purse \$40\.00\)/);
+  await page.keyboard.press('KeyE');
+  assert.deepStrictEqual(await page.evaluate(() => [game && game.kind, game && game.g.id, game && game.g.hp]), ['bout', 'boxing', 102], 'in with the health you have');
+  await page.evaluate(() => { // fight it out, reading every punch
+    const g = game.g;
+    for (let i = 0; i < 60 * 300 && !g.over; i++) { const p = g.peek();
+      g.step(1 / 60, p.phase === 'count' ? {} : p.st === 'wind' && !p.fake && p.stT < 0.12 ? (p.move === 'hook' ? (p.side < 0 ? { rightP: 1 } : { leftP: 1 }) : { leftP: 1 })
+        : p.st === 'idle' || p.st === 'flinch' || p.st === 'recover' ? (p.guard === 'high' ? { actP: 1 } : { upP: 1 }) : p.st === 'open' ? { upP: 1 } : {}); }
+  });
+  await page.waitForFunction(() => game && game.paid, null, { timeout: 5000 });
+  assert.deepStrictEqual(await page.evaluate(() => [money, boxRank, needs.health === game.g.hp]), [120, 1, true], 'the purse, and your health as the fight left it');
+  await page.keyboard.press('KeyE'); // (leave the result card)
+  assert.strictEqual(await page.evaluate(() => game), null);
+  assert.match(await page.evaluate(() => promptText()), /E: fight Tommy Two-Tone \(purse \$75\.00\)/);
+  // too beaten up to fight: the trainer won't let you in
+  await page.evaluate(() => { needs.health = 20; });
+  assert.match(await page.evaluate(() => promptText()), /Not in that state/);
+  await page.keyboard.press('KeyE');
+  assert.strictEqual(await page.evaluate(() => game), null);
+  // the towel: no purse, and the beating so far is yours to keep
+  await page.evaluate(() => { needs.health = 90; });
+  await page.keyboard.press('KeyE');
+  await page.evaluate(() => { game.g.hp = 61; });
+  await page.keyboard.press('Escape');
+  assert.deepStrictEqual(await page.evaluate(() => [game, money, Math.round(needs.health), boxRank, msgText]), [null, 120, 61, 1, 'You throw in the towel. No purse.']);
+  // kept in the save
+  await page.evaluate(() => { leaveRoom(); saveGame(); });
+  await page.reload(); await page.waitForTimeout(300);
+  assert.deepStrictEqual(await page.evaluate(() => [boxRank, needs.fit, maxHealth()]), [1, 1, 102]);
+}));
