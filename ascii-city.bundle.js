@@ -1620,7 +1620,7 @@ for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x
 const FB_LAMP = 3;
 for (let y = FOOTBRIDGE.y0 + 1.5, k = 0; y < FOOTBRIDGE.y1; y += FB_LAMP, k++) { const s = k & 1 ? 1 : -1; lamps.push({ x: FOOTBRIDGE.x + s * FOOTBRIDGE.hw, y, ax: -s, ay: 0 }); }
 const lampsB = bucketed(lamps);
-// is (x, y) up against a lamp post (grown by pad)? They're solid: you walk round them
+// is (x, y) up against a lamp post (grown by pad)? A kicked ball bounces off one; you and your car go straight past
 function lampAt(x, y, pad) {
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const l of lampsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)])
     if (Math.abs(rel(x - l.x)) < 0.028 + pad && Math.abs(rel(y - l.y)) < 0.028 + pad) return true;
@@ -20752,7 +20752,7 @@ const free = (x, y) => {
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !lampAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {

@@ -2454,3 +2454,17 @@ test('the gym: an hour with the trainer raises your max health once a day; in th
   await page.reload(); await page.waitForTimeout(300);
   assert.deepStrictEqual(await page.evaluate(() => [boxRank, needs.fit, maxHealth()]), [1, 1, 102]);
 }));
+
+test('street lamps: you walk straight through the post, and so does your car; a kicked ball still bounces off it', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    const l = lamps.find(o => !machineAt(o.x, o.y, 0.1) && !solidAt(o.x, o.y, 0.1) && free(o.x - 0.3, o.y) && free(o.x + 0.3, o.y) && (mode = 'walk', free(o.x, o.y)));
+    const walk = free(l.x, l.y); mode = 'drive'; const drive = free(l.x, l.y); mode = 'walk';
+    px = l.x - 0.3; py = l.y; a = 0; pitch = 0; people.forEach(m => m.hidden = true);
+    return { x: l.x, walk, drive, ball: ballBlocked(l.x, l.y, 0.05) };
+  });
+  assert.deepStrictEqual([r.walk, r.drive, r.ball], [true, true, true]);
+  await page.evaluate(x => { px = x - 0.12; }, r.x);
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(x => rel(px - x) > 0.05, r.x, { timeout: 8000 }); // walked on past it (game time: slower than the clock on a busy machine)
+  await page.keyboard.up('KeyW');
+}));

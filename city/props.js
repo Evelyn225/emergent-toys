@@ -24,7 +24,7 @@ for (const s of LAMP_AT) for (const o of [CURB, 2 - CURB]) alongStreets(s, o, (x
 const FB_LAMP = 3;
 for (let y = FOOTBRIDGE.y0 + 1.5, k = 0; y < FOOTBRIDGE.y1; y += FB_LAMP, k++) { const s = k & 1 ? 1 : -1; lamps.push({ x: FOOTBRIDGE.x + s * FOOTBRIDGE.hw, y, ax: -s, ay: 0 }); }
 const lampsB = bucketed(lamps);
-// is (x, y) up against a lamp post (grown by pad)? They're solid: you walk round them
+// is (x, y) up against a lamp post (grown by pad)? A kicked ball bounces off one; you and your car go straight past
 function lampAt(x, y, pad) {
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const l of lampsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)])
     if (Math.abs(rel(x - l.x)) < 0.028 + pad && Math.abs(rel(y - l.y)) < 0.028 + pad) return true;
