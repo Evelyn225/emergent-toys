@@ -66,6 +66,7 @@ function touchActions() {
       if (st === 'spin' || st === 'dealer') return [['Leave', 'KeyE', 'pop']];
       return [['Leave', 'KeyE', 'pop'], ...id === 'roulette' ? [['Bet <', 'ArrowLeft', 'pop'], ['Bet >', 'ArrowRight', 'pop']] : [], ['Stake -', 'ArrowDown', 'pop'], ['Stake +', 'ArrowUp', 'pop'], [id === 'slots' ? 'Pull' : id === 'roulette' ? 'Spin' : 'Deal', 'Space', 'main']];
     }
+    if (game.kind === 'bout') return [['Towel', 'KeyE', 'pop'], ['Block', 'ArrowDown', 'pop'], ['Head', 'ArrowUp', 'pop'], ['Body', 'Space', 'main']]; // (the stick slips)
     if (game.g.id === 'mahjong') return [['Leave', 'KeyE', 'pop'], ['Mahjong!', 'ArrowUp', 'pop'], [game.g.state() === 'claim' ? 'Pass' : 'Throw', 'Space', 'main']];
     return [[game.kind === 'shift' ? 'Clock off' : game.kind === 'crime' ? 'Back off' : 'Leave', 'KeyE', 'pop'], ['Go', 'Space', 'main']];
   }

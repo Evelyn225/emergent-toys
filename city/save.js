@@ -13,7 +13,7 @@ function saveGame() {
   const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet),
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder } };
+    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
 }
 function loadGame() {
@@ -50,7 +50,10 @@ function loadGame() {
   else if (d.hotelStolen && typeof d.hotelStolen === 'object')
     for (const p of HOTEL_PAINTINGS) if (d.hotelStolen[p.id] === true) grandHotelStolen[p.id] = true;
   if (d.stolen && typeof d.stolen === 'object') museumStolen = { diamond: !!d.stolen.diamond, orrery: !!d.stolen.orrery };
-  if (d.needs) for (const k of ['food', 'drink', 'health', 'bladder']) if (isFinite(d.needs[k])) needs[k] = clamp(d.needs[k], k === 'health' ? 1 : 0, 100);
+  if (d.needs && isFinite(d.needs.fit)) needs.fit = clamp(d.needs.fit | 0, 0, FIT_MAX); // (before health: it sets the most you can have)
+  if (d.needs && isFinite(d.needs.trained)) needs.trained = d.needs.trained;
+  if (d.needs) for (const k of ['food', 'drink', 'health', 'bladder']) if (isFinite(d.needs[k])) needs[k] = clamp(d.needs[k], k === 'health' ? 1 : 0, k === 'health' ? maxHealth() : 100);
+  if (isFinite(d.boxRank)) boxRank = clamp(d.boxRank | 0, 0, BOXERS.length);
   const at = d.at;
   if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
     px = mod(at.x, N); py = mod(at.y, N); a = at.a || 0; streetSpot = { x: px, y: py, a };

@@ -411,10 +411,17 @@ const ROOM_DEFS = {
                  POT_PLANT(10.6, 1.4), POT_PLANT(10.6, 6, 1.4), standing(8, 4, shirt())] },
   apts: { grid: boxRoom(8, 7, { '3,0': 'E', '4,0': 'E' }), light: 0.7, floor: 'tile', ceil: 'pendant', wall: aptsWall, ex: 4,
     props: r => [POT_PLANT(6.6, 5.4), ...(chance(0.6) ? [standing(2.2, 4.4, shirt())] : [])] },
-  gym: { grid: boxRoom(12, 9), light: 1, floor: 'rubber', ceil: 'strip', sign: true, wall: gymWall,
+  // the gym: treadmills along the back, the ring in the far corner (gym.js) with whoever's next on the card warming up
+  // in it, the weights by the door, and the trainer at the front desk
+  gym: { grid: boxRoom(16, 11), light: 1, floor: 'rubber', ceil: 'strip', sign: true, wall: gymWall, keeper: [3, 7.3],
     props: r => {
-      const p = [WEIGHT_RACK(3, 7.6), WEIGHT_RACK(9, 7.6)];
-      for (const x of [2.5, 5, 7.5, 9.5]) {
+      const foe = nextBoxer(), fx = GYM_RING.x + 1.1, fy = GYM_RING.y - 1.1;
+      const p = [WEIGHT_RACK(10.6, 9.6), WEIGHT_RACK(12.9, 9.6), BOXING_RING(GYM_RING.x, GYM_RING.y),
+        BX(3, 7.95, 1.1, 0.3, 0, 1.05, solid(GRAY, { panel: 0.5, trim: 1.04, top: '=' })), // the front desk
+        figProp(3, 7.3, figAnyone(RED, { top: 'tee', bot: 'pants' }), { face: [0, 1] }), // the trainer
+        figProp(fx, fy, figAnyone(foe.trunks[0], { top: 'tank', bot: 'shorts' }), { z: GYM_RING.top, face: [-1, 1], chat: false, // the next fighter, in their corner
+          pose: () => (Math.floor(T * 3) & 1) ? 'run1' : 'run5' })]; // (bouncing on their toes)
+      for (const x of [2, 4, 6, 8]) {
         p.push(TREADMILL(x, 2.75));
         if (chance(0.7)) { const k = Math.random() * 2, s = shirt(); // running in place
           p.push(figProp(x, 2.55, figAnyone(s, { top: pick(['tee', 'tank']), bot: 'shorts' }), { z: 0.2, face: [0, -1], chat: false, pose: () => 'run' + (Math.floor(T * 9 + k * 4) & 7) })); }

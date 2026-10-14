@@ -470,3 +470,93 @@ test('the stock market: prices wander but stay positive, only trade while it is 
   ev('tod = 20; stepMarket(); var t1 = MARKET.tick; tod = 23; stepMarket()');
   assert.strictEqual(ev('MARKET.tick - t1'), 0, 'nothing at night');
 });
+
+// ---- the ring at the gym. A constant rnd pins the fighter: 0.7 against Kid Pigeon is a low guard and nothing but
+// hooks from your right; 0.3 a high guard and jabs; 0.9 against Big Dumpling, uppercuts.
+const bout = (ev, rnd, foe = 0, hp = 100, max = 100) => ev(`var g = GAMES.boxing(() => ${rnd}, '', { foe: ${foe}, hp: ${hp}, max: ${max} })`);
+const toWind = ev => ev(`(() => { for (let i = 0; i < 2000; i++) { const p = g.peek(); if (p.phase === 'fight' && p.st === 'wind' && p.stT < 0.1) return p.move + ' ' + p.side; g.step(1 / 60, {}); } return ''; })()`);
+const steps = (ev, n, keys = '{}') => ev(`for (let i = 0; i < ${n}; i++) g.step(1 / 60, ${keys})`);
+
+test('boxing: slip a hook away from it and it misses and leaves them open; slip into it and it lands', () => {
+  const { ev } = fresh();
+  bout(ev, 0.7);
+  assert.strictEqual(toWind(ev), 'hook 1', 'a hook winding up on your right');
+  ev('g.step(1 / 60, { leftP: 1 })'); steps(ev, 30);
+  assert.strictEqual(ev('g.hp'), 100, 'it went past');
+  assert.strictEqual(ev('g.peek().st'), 'open', 'and they are wide open');
+  const before = ev('g.peek().ohp'); steps(ev, 12); ev('g.step(1 / 60, { upP: 1 })');
+  assert.strictEqual(Math.round((before - ev('g.peek().ohp')) * 10) / 10, 10.5, 'a counter to the head: half as much again');
+  bout(ev, 0.7); toWind(ev);
+  ev('g.step(1 / 60, { rightP: 1 })'); steps(ev, 30);
+  assert.strictEqual(Math.round(ev('g.hp') * 10) / 10, 91.6, 'into the hook: the full 12 (by Pigeon, 0.7 of it)');
+  bout(ev, 0.7); toWind(ev); steps(ev, 2, '{ down: 1 }'); steps(ev, 20, '{ down: 1 }');
+  assert.ok(ev('g.hp') > 96 && ev('g.hp') < 100, 'blocked: only some of it gets through');
+});
+
+test('boxing: the covered target takes your punch on the gloves, the other lands; a block stops a jab dead but never an uppercut', () => {
+  const { ev } = fresh();
+  bout(ev, 0.3); steps(ev, 160); // (past the introductions: a high guard)
+  assert.strictEqual(ev('g.peek().guard'), 'high');
+  const o = ev('g.peek().ohp');
+  ev('g.step(1 / 60, { upP: 1 })');
+  assert.strictEqual(ev('g.peek().ohp'), o, 'to the head: blocked');
+  assert.strictEqual(ev('g.peek().st'), 'wind', 'and they come straight back at you for it');
+  bout(ev, 0.3); steps(ev, 160); ev('g.step(1 / 60, { actP: 1 })');
+  assert.strictEqual(ev('g.peek().ohp'), o - 5, 'to the body: in');
+  bout(ev, 0.3); assert.strictEqual(toWind(ev), 'jab -1'); steps(ev, 30, '{ down: 1 }');
+  assert.strictEqual(ev('g.hp'), 100, 'a jab, blocked');
+  bout(ev, 0.9, 2); assert.strictEqual(toWind(ev), 'upper 1'); steps(ev, 30, '{ down: 1 }');
+  assert.strictEqual(Math.round(ev('g.hp') * 10) / 10, 76.6, "an uppercut comes through the gloves: Big Dumpling's 18 x 1.3");
+});
+
+test('boxing: knock them down three times and it is stopped, purse paid; go down yourself and mash to get up; the towel pays nothing', () => {
+  const { ev } = fresh();
+  ev('var r = (() => { let a = 7; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })()');
+  ev("var g = GAMES.boxing(r, '', { foe: 0, hp: 100, max: 100 })");
+  const events = play(ev, 400, `() => { const p = g.peek(); if (p.phase === 'count') return {};
+    if (p.st === 'wind' && !p.fake && p.stT < 0.12) return p.move === 'hook' ? (p.side < 0 ? { rightP: 1 } : { leftP: 1 }) : { leftP: 1 };
+    if (p.st === 'idle' || p.st === 'flinch' || p.st === 'recover') return p.guard === 'high' ? { actP: 1 } : { upP: 1 };
+    return p.st === 'open' ? { upP: 1 } : {}; }`);
+  assert.ok(ev('g.over'));
+  assert.ok(ev('g.result.win'));
+  const downs = ev('g.peek().downs'), how = ev('g.result.how');
+  assert.ok(how === 'TKO' && downs === 3 || how === 'KO' && downs >= 2, `${how} after ${downs} knockdowns`); // (the second time they might stay down)
+  assert.strictEqual(events.filter(e => e === 'score').length, downs);
+  assert.strictEqual(ev('g.reward()'), 40);
+  // stand there: the Ferryman puts you down; mash and you're back up with something in the tank, don't and you're counted out
+  ev("var g = GAMES.boxing(r, '', { foe: 4, hp: 100, max: 100 })");
+  ev("for (let i = 0; i < 60 * 200 && !(g.peek().phase === 'count' && g.peek().who === 'you'); i++) g.step(1 / 60, {})");
+  assert.strictEqual(ev('g.peek().who') + ' ' + ev('g.peek().phase'), 'you count');
+  ev("for (let i = 0; i < 60 * 10 && g.peek().phase === 'count'; i++) g.step(1 / 60, { actP: i % 6 === 0 })");
+  assert.strictEqual(ev('g.peek().phase'), 'fight', 'back on your feet');
+  assert.strictEqual(ev('g.hp'), 30);
+  play(ev, 400, "() => ({})");
+  assert.ok(ev('g.over') && !ev('g.result.win'));
+  ev("var g = GAMES.boxing(r, '', { foe: 0 }); g.towel()");
+  assert.deepStrictEqual(ev('JSON.stringify(g.result)'), JSON.stringify({ win: false, how: 'towel' }));
+  assert.strictEqual(ev('g.reward()'), 0);
+});
+
+test('boxing: a fight that goes the distance goes to the judges on points', () => {
+  const { ev } = fresh();
+  bout(ev, 0.3); // (jabs only, and you block every one: nobody's hurt, and the home fighter keeps it)
+  play(ev, 400, "() => ({ down: 1 })");
+  assert.ok(ev('g.over'));
+  assert.deepStrictEqual(ev('JSON.stringify(g.result)'), JSON.stringify({ win: false, how: 'decision' }));
+  assert.strictEqual(ev('g.peek().round'), 3);
+});
+
+test('the gym: the first workout each day builds your health up (2 a day, 30 at most); a second the same day does nothing', () => {
+  const { ev } = fresh();
+  assert.strictEqual(ev('maxHealth()'), 100);
+  ev('dayNum = 10; needs.health = 100; needs.food = needs.drink = 80');
+  assert.strictEqual(ev('workout()'), true);
+  assert.deepStrictEqual([ev('maxHealth()'), ev('needs.health'), ev('needs.food'), ev('needs.drink')], [102, 102, 68, 60], 'stronger, and hungry and thirsty');
+  assert.strictEqual(ev('workout()'), false, 'the same day: no more');
+  assert.strictEqual(ev('maxHealth()'), 102);
+  for (let d = 11; d < 40; d++) ev(`dayNum = ${d}; workout()`);
+  assert.strictEqual(ev('maxHealth()'), 130, 'as fit as you get');
+  assert.ok(ev('trainedOut()'));
+  ev('needs.health = 50; refillNeeds()');
+  assert.strictEqual(ev('needs.health'), 130, 'and full health is your max');
+});

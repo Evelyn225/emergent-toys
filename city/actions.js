@@ -202,6 +202,7 @@ function interact() {
     }
     const dr = droppedHere(); // something you put down here earlier
     if (dr) return say(pickUpDropped(dr)[1]);
+    if (gymAct()) return; // the ring, or the trainer (gym.js)
     if (room.kind === 'arcade') {
       const cab = nearCabinet();
       if (cab) return cab.busy ? say('Somebody\'s on this one.') : playCabinet(cab);
@@ -211,9 +212,9 @@ function interact() {
     if (room.kind === 'storage' && nearKeeper()) return openStorage(stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town');
     if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
     if (room.kind === 'hospital' && nearKeeper()) {
-      if (needs.health >= 95) return say(`"${pick(NURSE_LINES)}"`, 3);
+      if (needs.health >= maxHealth() - 5) return say(`"${pick(NURSE_LINES)}"`, 3);
       if (!pay(NURSE_FEE)) return say(`"Treatment's ${fmt$(NURSE_FEE)}, I'm afraid." You can't cover it.`, 3);
-      needs.health = 100; return say('The nurse cleans you up, checks your eyes with a little light and sends you off with a lollipop. Good as new.', 4);
+      needs.health = maxHealth(); return say('The nurse cleans you up, checks your eyes with a little light and sends you off with a lollipop. Good as new.', 4);
     }
     if (nearKeeper()) { const stock = stockFor(room.kind, room.word); return stock.length ? openShop(room.word, stock) : room.line && say(`"${room.line}"`); }
     if (nearExit()) return leaveRoom();
@@ -331,6 +332,7 @@ function bookRoom() {
   sleep = { t: 0, lobby: { word: room.word, neon: room.neon, ret: room.ret, cell: room.cell, line: room.line } };
 }
 function stepSleep(dt) {
+  if (sleep.workout) return stepWorkout(dt); // (an hour at the gym: gym.js)
   sleep.t += dt;
   fade = sleep.t < 1.5 ? sleep.t / 1.5 : sleep.t < 3 ? 1 : clamp(1 - (sleep.t - 3) / 2, 0, 1);
   if (sleep.t >= 1.5 && !sleep.done) {
