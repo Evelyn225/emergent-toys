@@ -1,0 +1,80 @@
+'use strict';
+// The airport's aircraft, end to end in the real page: buy one, fly it off the runway, bail out, come down on the
+// parachute; steal one and the tower calls it in; an owned one is kept across a reload.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+const { chromium } = require('playwright');
+
+const URL_ = pathToFileURL(path.join(__dirname, '../../ascii-city.html')).href;
+
+test('buy a Skylark, take off, bail out, and land on the parachute; steal a Hornet and the police hear', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage(), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof stepFlight === 'function' && Number.isFinite(eye));
+    const r = await page.evaluate(() => {
+      paused = true; mode = 'walk'; room = null; money = 20000; clearWanted(); needs.health = 100;
+      for (const k of Object.keys(K)) K[k] = 0;
+      const dt = 1 / 60, out = {};
+      const stand = c => { const T_ = PLANE_TYPES[c.type], f = T_.heli ? 0.05 : T_.len * 0.25; px = c.x + Math.cos(c.yaw) * f + 0.2; py = c.y + Math.sin(c.yaw) * f; };
+      // buy
+      const prop = aircraft.find(c => c.type === 'prop'); stand(prop);
+      out.prompt = promptText();
+      buyAircraft(prop); out.bought = [prop.owned, money];
+      // in, onto the runway, full power, pull up at speed
+      interact(); out.inMode = mode;
+      prop.x = RUNWAY.x0 + 1; prop.y = RUNWAY.y; prop.yaw = 0;
+      K.KeyW = 1;
+      for (let t = 0; t < 30 && prop.ground; t += dt) { K.ArrowUp = prop.v > PLANE_TYPES.prop.vr ? 1 : 0; stepFlight(dt); }
+      out.offAt = prop.x; out.airborne = !prop.ground;
+      for (let t = 0; t < 12; t += dt) { K.ArrowUp = prop.z < 12 ? 1 : 0; stepFlight(dt); }
+      K.KeyW = K.ArrowUp = 0; out.alt = prop.z;
+      out.airPrompt = promptText();
+      // bail out, and fall till the canopy opens itself and you land
+      interact(); out.bailed = [mode, !!chute, prop.state];
+      let opened = false;
+      for (let t = 0; t < 120 && chute; t += dt) { stepChute(dt); stepBody(dt); stepRoof(); stepAirWrecks(dt); opened ||= !!(chute && chute.open); }
+      out.chute = { opened, down: !chute, mode, health: needs.health, z: body.z };
+      for (let t = 0; t < 60 && prop.state === 'abandoned'; t += dt) stepAirWrecks(dt);
+      out.planeDown = [prop.state, prop.fireT != null || !!prop.ditched || prop.ground];
+      // steal
+      mode = 'walk'; body.z = body.vz = 0; chute = null;
+      const heli = aircraft.find(c => c.type === 'heli'); stand(heli);
+      out.stealPrompt = promptText();
+      interact(); out.stolen = [mode, wanted.stars, wanted.crime];
+      return out;
+    });
+    assert.equal(r.prompt, 'E: steal the Skylark   U: buy it for $9000.00');
+    assert.deepEqual(r.bought, [true, 11000]);
+    assert.equal(r.inMode, 'air');
+    assert.ok(r.airborne && r.offAt < 50, `off the ground with runway to spare (x ${r.offAt})`);
+    assert.ok(r.alt > 8, `climbing (${r.alt * 10}m)`);
+    assert.equal(r.airPrompt, 'E: bail out');
+    assert.deepEqual(r.bailed, ['walk', true, 'abandoned']);
+    assert.ok(r.chute.opened && r.chute.down, JSON.stringify(r.chute));
+    assert.equal(r.chute.health, 100, 'a landing under a full canopy doesn\'t hurt');
+    assert.ok(r.planeDown[0] === 'parked' && r.planeDown[1], `the empty plane came down: ${r.planeDown}`);
+    assert.equal(r.stealPrompt, 'E: steal the Hornet   U: buy it for $14000.00');
+    assert.deepEqual(r.stolen, ['air', 2, 'aircraft theft']);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('an aircraft you own is kept, where you parked it, across a reload', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof saveGame === 'function' && typeof aircraft !== 'undefined');
+    await page.evaluate(() => { localStorage.clear(); const c = aircraft.find(c => c.type === 'jet'); c.owned = true; c.forSale = false; c.x = 35; c.y = RUNWAY.y; saveGame(); });
+    await page.reload();
+    await page.waitForFunction(() => typeof aircraft !== 'undefined' && aircraft.some(c => c.owned));
+    const got = await page.evaluate(() => aircraft.filter(c => c.owned).map(c => [c.type, c.x, c.y === RUNWAY.y]));
+    assert.deepEqual(got, [['jet', 35, true]]);
+    await page.evaluate(() => localStorage.clear());
+  } finally { await browser.close(); }
+});

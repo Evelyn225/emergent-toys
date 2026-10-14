@@ -177,3 +177,11 @@ test('stealing an aircraft is two stars', () => {
   assert.equal(ev('wanted.stars'), 2);
   assert.equal(ev('wanted.crime'), 'aircraft theft');
 });
+
+test('bail out and the empty aircraft comes down: a plane noses in, a helicopter falls as its rotor winds down', () => {
+  const { ev } = loadCity();
+  const plane = fly(ev, `addAircraft('prop', 100, 100, 0, { z: 20, v: 4.5, throttle: 0.8 })`, `{ throttle: 0, pitch: -0.25, turn: 0.1, lift: -1, dead: true }`, 120);
+  assert.ok(kinds(plane).includes('crash') || kinds(plane).includes('ditch'), `the plane: ${kinds(plane)}`);
+  const heli = fly(ev, `addAircraft('heli', 120, 60, 0, { z: 10, rotor: 1 })`, `{ throttle: 0, pitch: 0, turn: 0.4, lift: -1, dead: true }`, 60);
+  assert.ok(kinds(heli).includes('crash') || kinds(heli).includes('ditch'), `the helicopter: ${kinds(heli)}`);
+});

@@ -237,7 +237,7 @@ function interact() {
   if (mode === 'drive' && sprayPrompt()) return startRespray(); // pulled up at a garage's door (or told why not)
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
-  if (mode === 'air') { if (pilot.ground && pilot.v < 0.3) leaveAircraft(); else say(pilot.ground ? 'Slow down first.' : 'Not up here. Not without a parachute.', 2); return; }
+  if (mode === 'air') { if (pilot.ground && pilot.v < 0.3) leaveAircraft(); else if (pilot.ground) say('Slow down first.', 2); else bailOut(); return; }
   const dr = droppedHere();
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
@@ -314,6 +314,7 @@ let wakeT = 0;
 function passOut(why) {
   if(failCourier()){why+=' Your courier delivery failed.';saveGame();}
   climbing=null;
+  chute = null;
   if (me) outOfCar(); else if (mode === 'sea') { sea.v = 0; sea = null; } else if (pilot) { pilot.state = 'parked'; pilot.throttle = 0; pilot = null; }
   body.seat = null; body.z = body.vz = 0; fx.skating = false; if (game) game = null;
   const s = SERVICES.filter(b => b.kind === 'amb').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity])[0];

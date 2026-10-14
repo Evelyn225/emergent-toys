@@ -155,7 +155,7 @@ function planeStep(a, T_, inp, dt, ev) {
   return moveCraft(a, T_, Math.cos(a.yaw) * a.v * Math.cos(a.pitch), Math.sin(a.yaw) * a.v * Math.cos(a.pitch), dt, ev);
 }
 function heliStep(a, T_, inp, dt, ev) {
-  a.rotor = Math.min(1, (a.rotor || 0) + dt / 3); // spinning up when you get in
+  a.rotor = inp.dead ? Math.max(0, (a.rotor || 0) - dt / 4) : Math.min(1, (a.rotor || 0) + dt / 3); // spinning up when you get in (down, with nobody at the controls)
   a.rotorA = ((a.rotorA || 0) + a.rotor * 25 * dt) % TAU;
   const ready = a.rotor > 0.95;
   a.yaw += inp.turn * 1.3 * dt;
@@ -227,7 +227,7 @@ function returnHome(a) {
 function stepFleet(px_, py_, flying) {
   const back = [];
   for (const a of aircraft) {
-    if (!a.home || a === flying || a.fireT != null && !a.wrecked) continue; // (let a fire burn out first)
+    if (!a.home || a === flying || a.state === 'abandoned' || a.fireT != null && !a.wrecked) continue; // (let a fire burn out first)
     const lost = a.wrecked || a.ditched, astray = !a.owned && (Math.abs(rel(a.x - a.home.x)) > 0.05 || Math.abs(rel(a.y - a.home.y)) > 0.05 || a.dmg > 0);
     if (!lost && !astray) continue;
     const far = (x, y) => Math.hypot(rel(x - px_), rel(y - py_)) > AIR_AWAY;

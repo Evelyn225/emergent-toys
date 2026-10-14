@@ -29,6 +29,7 @@ onkeydown = e => {
   if (e.repeat) return;
   audioStart(); // sound can only start from a key press or click
   if (e.code === 'KeyN') toggleSound();
+  if (chute && (e.code === 'Space' || e.code === 'KeyE')) return pullCord(); // (in the air, out of an aircraft)
   if (e.code === 'KeyE' && !sleep) interact();
   if(e.code==='Space'&&mode==='ladder'){leaveCourierLadder();return;}
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
@@ -222,7 +223,8 @@ function loop(t) {
   if (sleep) stepSleep(dt);
   if (mode !== 'air') { pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective)
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
-  if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
+  if (chute) stepChute(dt); // (hanging under a parachute, or falling before it opens: flight.js)
+  else if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
     const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.5 : 1); // sprint 29 km/h (43 on the board), cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);

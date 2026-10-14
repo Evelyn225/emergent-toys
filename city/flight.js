@@ -113,6 +113,7 @@ function stepAirWrecks(dt) {
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
   }
+  stepAbandoned(dt);
   for (const c of aircraft) if (c.sinkT != null) c.z = -Math.min(0.5, (T - c.sinkT) * 0.12); // (going under)
   for (let k = aircraft.length - 1; k >= 0; k--) if (aircraft[k].sinkT != null && T - aircraft[k].sinkT > 4 && aircraft[k] !== pilot && !aircraft[k].home) aircraft.splice(k, 1);
   for (const c of stepFleet(px, py, pilot)) if (c.owned) { // yours, replaced on the insurance
@@ -167,5 +168,88 @@ function airDash() {
 function airPrompt() {
   const c = pilot;
   if (c.ground && c.v < 0.3) return 'E: get out';
-  return '';
+  return c.ground ? '' : 'E: bail out';
+}
+// ---- bailing out (E, in the air): you're out, falling, the aircraft flies on without you till it comes down. Space
+// (or E) pulls the cord; below 150m it opens by itself. Under the canopy: A/D or the mouse to steer, W to run faster
+// and drop quicker, S to flare. Land with it open and you walk away; without, it's the fall that hurts. In the water,
+// a launch picks you up. Freefall and the canopy are on foot (moves.js): it's your fall, roofs and all.
+let chute = null; // { open, t, openT }
+const CHUTE_AUTO = 15; // (150m: the cord pulls itself)
+const chuteAlt = () => body.z + (mode === 'roof' ? roofH * 10 : 0); // (metres; over a roof, body.z counts from its top)
+function bailOut() {
+  const c = pilot, T_ = PLANE_TYPES[c.type], side = T_.heli ? 0.2 : T_.r + 0.2;
+  c.state = 'abandoned'; pilot = null; mode = 'walk'; // (the empty aircraft: stepAbandoned)
+  px = mod(c.x + Math.sin(c.yaw) * side, N); py = mod(c.y - Math.cos(c.yaw) * side, N); a = c.yaw; pitch = -0.45;
+  body.z = Math.max(0.5, c.z * 10 - 1); body.vz = Math.min(0, (c.vz || 0) * 10); body.peak = body.z; body.seat = null; body.trick = null;
+  const vx = T_.heli ? c.hvx || 0 : Math.cos(c.yaw) * c.v * Math.cos(c.pitch), vy = T_.heli ? c.hvy || 0 : Math.sin(c.yaw) * c.v * Math.cos(c.pitch);
+  body.mx = vx * 0.6; body.my = vy * 0.6; // (cells a second: out the door you carry some of its speed)
+  chute = { open: false, t: 0 };
+  if (actx) playClip('crash', 0.15);
+  say(`You jump.   SPACE: pull the cord${body.z > CHUTE_AUTO * 10 ? ' (it opens by itself at 150m)' : ''}`, 4);
+}
+function pullCord() {
+  if (!chute || chute.open) return;
+  chute.open = true; chute.openT = T; body.peak = body.z;
+  if (actx) { burst(actx.currentTime, 0.35, [filt('bandpass', 500, 0.7)], 0.25); tone(actx.currentTime, 90, 0.2, 0.08); }
+  say('The canopy snaps open over you.   A/D or mouse: steer   W: faster down   S: flare', 4);
+}
+function stepChute(dt) {
+  if (!(body.z > 0 || body.vz > 0)) return chuteDown(); // (down: stepBody has done the landing, and any hurt)
+  chute.t += dt;
+  if (!chute.open && chuteAlt() < CHUTE_AUTO * 10 && body.z > 2) pullCord();
+  const turn = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0), f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
+  if (!chute.open) { // falling: the air slows you to 55 m/s, and you can track a little
+    body.vz = Math.max(body.vz, -55); a += turn * 1.2 * dt;
+    const k = Math.exp(-0.5 * dt); body.mx = body.mx * k + Math.cos(a) * f * 0.4 * dt; body.my = body.my * k + Math.sin(a) * f * 0.4 * dt;
+  } else { // under the canopy: gliding where it points, sinking at 4 m/s
+    a += turn * 1.1 * dt;
+    const opening = clamp((T - chute.openT) / 1.2, 0, 1), sink = f > 0 ? -6.5 : f < 0 ? -2.5 : -4, fwd = f > 0 ? 1.3 : f < 0 ? 0.45 : 0.9;
+    body.vz += (sink - body.vz) * Math.min(1, (0.8 + 3 * opening) * dt) + GRAV * dt; // (stepBody takes the gravity back off)
+    const k = Math.min(1, 1.5 * dt);
+    body.mx += (Math.cos(a) * fwd - body.mx) * k; body.my += (Math.sin(a) * fwd - body.my) * k;
+    if (opening >= 1) body.peak = body.z; // (on a full canopy the landing doesn't count as a fall; opened too low, it does)
+  }
+  move(body.mx * dt, body.my * dt);
+}
+function chuteDown() {
+  const was = chute; chute = null; body.mx = body.my = 0;
+  if (mode === 'room') return; // (passed out on the way down: the hospital has you)
+  if (isWater(px, py) || overWater(px, py)) { // in the bay: swim, and the launch
+    px = MARINA.x - 1.2; py = MARINA.y0 - 0.4; a = -Math.PI / 2; pitch = 0; body.z = body.vz = 0;
+    return say('Splashdown. You cut yourself free of the lines and a harbour launch fishes you out at the marina.', 5);
+  }
+  if (was.open) say(mode === 'roof' ? 'You flare and set down on the roof. Not bad.' : 'You flare, run out the landing, and gather up the canopy.', 4);
+}
+// the empty aircraft: a plane's nose drops and it goes in; a helicopter's rotor winds down and it falls
+function stepAbandoned(dt) {
+  for (const c of aircraft) {
+    if (c.state !== 'abandoned') continue;
+    const heli = PLANE_TYPES[c.type].heli;
+    const ev = flyStep(c, { throttle: 0, pitch: heli ? 0 : -0.25, turn: heli ? 0.4 : 0.1, lift: -1, dead: true }, dt);
+    const d = Math.hypot(rel(c.x - px), rel(c.y - py));
+    if (ev.includes('crash')) { c.state = 'parked'; if (actx && d < 40) playClip('crash', clamp(1 - d / 40, 0.2, 1)); }
+    else if (ev.includes('ditch')) { c.state = 'parked'; c.sinkT = T; if (actx && d < 40) playClip('crash', 0.3 * clamp(1 - d / 40, 0, 1)); }
+    else if (ev.includes('land') || ev.includes('hard')) c.state = 'parked';
+  }
+}
+// what you see hanging under it: the canopy's edge across the top, the lines down to your shoulders
+function chuteFrame() {
+  if (!chute) return;
+  if (!chute.open) { // the wind
+    const s = Math.round(clamp(-body.vz / 55, 0, 1) * 30);
+    for (let k = 0; k < s; k++) { const x = hash(k, Math.floor(T * 12), 3) * cols | 0, y = hash(k, Math.floor(T * 12), 5) * rows | 0; set(y * cols + x, '|', C(WHITE, 6)); }
+    putText(rows - 2, 2, `ALT ${Math.round(chuteAlt())} m   ${Math.round(-body.vz * 3.6)} km/h`, C(CYAN, 14));
+    return;
+  }
+  const open = clamp((T - chute.openT) / 0.6, 0, 1), depth = Math.round(rows * 0.16 * open), hc = cols / 2;
+  for (let x = 0; x < cols; x++) {
+    const u = (x - hc) / hc, bottom = Math.round(depth * (1 - 0.55 * u * u));
+    for (let r = 0; r < bottom; r++) { const i = r * cols + x, cell = Math.floor((u + 1) * 4); BG[i] = C(cell % 2 ? RED : WHITE, r === bottom - 1 ? 5 : 4); set(i, r === bottom - 1 ? '~' : ' ', C(GRAY, 9)); FOGS[i] = FOGB[i] = 0; }
+  }
+  for (const s of [-1, -0.45, 0.45, 1]) { // the lines, from the canopy's edge in to you
+    const x0 = hc + s * hc * 0.95, y0 = depth * (1 - 0.55 * s * s), x1 = hc + s * cols * 0.08, y1 = rows;
+    for (let r = Math.ceil(y0); r < y1; r++) { const x = Math.round(x0 + (x1 - x0) * (r - y0) / (y1 - y0)); if (x >= 0 && x < cols) { const i = r * cols + x; set(i, s < 0 ? '\\' : '/', C(WHITE, 13)); FOGS[i] = FOGB[i] = 0; } }
+  }
+  putText(rows - 2, 2, `ALT ${Math.round(chuteAlt())} m   down ${Math.max(0, -body.vz).toFixed(1)} m/s`, C(CYAN, 14));
 }

@@ -209,6 +209,7 @@ function render(dt) {
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
     if (mode === 'air') airDash();
+    chuteFrame();
     if (mode === 'el') elFrame();
     if (mode === 'fair') fairFrame();
     if (mode === 'boat') boatFrame();
