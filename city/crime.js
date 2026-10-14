@@ -3,21 +3,24 @@
 //
 // A crime only counts if somebody sees it. A cop who sees it (in their line of sight, within COP_SIGHT) puts you
 // straight on the wanted list; a passer-by who sees it calls it in a few seconds later, and then only if there's a
-// police unit within DISPATCH_R to send. Wanted is 1-3 stars: more stars, more units after you. They chase where
+// police unit within DISPATCH_R to send. Wanted is 1-5 stars: more stars, more units after you; at 4 they set up
+// roadblocks across the street ahead of you, at 5 the helicopter comes out with its searchlight. They chase where
 // they last saw you; stay out of every cop's sight for ESCAPE_T seconds and they give up. Caught: a fine, or jail.
 //
 // Police: patrol cars cruising in the traffic (cars with patrol: true; in pursuit they run lights and siren and steer
 // for you), and officers on foot walking beats round the police stations (footCops), who chase you on foot.
 const COP_SIGHT = 13, CIV_SIGHT = 8, DISPATCH_R = 45, REPORT_DELAY = 5;
-const ESCAPE_T = [0, 25, 40, 60];            // seconds out of sight to lose them, by stars
-const UNITS = [0, 2, 3, 5];                  // patrol cars after you, by stars
-const FINE = [0, 50, 150, 300];              // what they'll take instead of a cell
+const MAX_STARS = 5;
+const ESCAPE_T = [0, 25, 40, 60, 80, 100];   // seconds out of sight to lose them, by stars
+const UNITS = [0, 2, 3, 5, 6, 7];            // patrol cars after you, by stars
+const FINE = [0, 50, 150, 300, 600, 1000];   // what they'll take instead of a cell
 const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 'hitting someone with a car' },
                  crash: { stars: 1, name: 'reckless driving' }, redlight: { stars: 1, name: 'running a red light' },
                  pickpocket: { stars: 1, name: 'pickpocketing' }, shoplift: { stars: 1, name: 'shoplifting' },
                  burglary: { stars: 2, name: 'breaking and entering' }, graffiti: { stars: 1, name: 'vandalism' },
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
-                 boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' } };
+                 boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' },
+                 ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -287,7 +290,7 @@ function redLightCrime(x, y) {
   return cop;
 }
 function addWanted(kind, x, y, seen) {
-  wanted.stars = Math.min(3, Math.max(wanted.stars, 0) + CRIMES[kind].stars);
+  wanted.stars = Math.min(MAX_STARS, Math.max(wanted.stars, 0) + CRIMES[kind].stars);
   wanted.crime = CRIMES[kind].name; wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
   wanted.lastVX = 0; wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
   if (seen) observeSuspect(x, y);
@@ -439,6 +442,117 @@ function stepReturningPolice(dt) {
   }
 }
 // is a cop near enough a police unit to be sent to (x, y)?
+// ---- roadblocks, from 4 stars, while you're at the wheel: three cruisers parked nose to tail across the street a
+// block or two ahead of you, lights going, with an officer out of two of them. The gaps between them are a car's width
+// and a little: thread one, ram one, or turn off before you get there. One at a time: the next goes up once you're
+// past the last one or well away from it, and they're packed up (out of your sight) once the heat's off.
+const roadblocks = []; // { x, y, cars, cops, t, stale }
+const ROADBLOCK_STARS = 4, ROADBLOCK_AHEAD = [10, 20], ROADBLOCK_SPACING = 0.74, ROADBLOCK_EVERY = 10;
+let roadblockT = -Infinity;
+function placeRoadblock() {
+  if (!me || mode !== 'drive') return null;
+  const head = me.travelA ?? Math.atan2(me.hy, me.hx), vert = Math.abs(Math.sin(head)) > Math.abs(Math.cos(head));
+  const dir = Math.sign(vert ? Math.sin(head) : Math.cos(head)) || 1, street = vert ? 1 : 2;
+  const mid = Math.floor((vert ? me.x : me.y) / 8) * 8 + 1; // the middle of the street you're on
+  if (Math.abs(rel((vert ? me.x : me.y) - mid)) > 1.1) return null; // (not on a street)
+  for (let d = 2; d <= ROADBLOCK_AHEAD[1]; d++) { // the street ahead, as far as it goes
+    const along = (vert ? me.y : me.x) + dir * d, x = vert ? mid : mod(along, N), y = vert ? mod(along, N) : mid, r = ROAD[idx(Math.floor(x), Math.floor(y))];
+    if (r !== street && r !== 3) return null; // it ends (or bends) before then
+    if (d < ROADBLOCK_AHEAD[0] || r !== street || mod(along, 8) < 3.5 || mod(along, 8) > 6.5) continue; // mid-block, far enough off
+    const spots = [-1, 0, 1].map(k => vert ? [mod(x + k * ROADBLOCK_SPACING, N), y] : [x, mod(y + k * ROADBLOCK_SPACING, N)]);
+    const hx = vert ? 1 : 0, hy = vert ? 0 : 1; // (lying across the street)
+    if (!spots.every(([sx, sy]) => carBodyClear(sx, sy, hx, hy) && !cars.some(o => near(o.x, o.y, sx, sy) < 0.5))) continue;
+    const block = { x, y, cars: [], cops: [], t: T, stale: false };
+    spots.forEach(([sx, sy], k) => {
+      const c = { id: carId++, v: 0, brake: true, off: 0, cruise: 0, kind: 'police', body: BLUE, patrol: true, extra: true, parked: true, roadblock: true,
+        state: 'scene', x: sx, y: sy, ex: sx, ey: sy, hx: k === 1 ? -hx : hx, hy: k === 1 ? -hy : hy };
+      cars.push(c); block.cars.push(c);
+      if (k !== 1) { // an officer behind each end car, on your side of it
+        const cop = { x: vert ? sx : mod(sx - dir * 0.35, N), y: vert ? mod(sy - dir * 0.35, N) : sy, car: c, corner: null, dir: 0, goal: null, chase: false, ph: 0, extra: true, post: true };
+        footCops.push(cop); block.cops.push(cop);
+      }
+    });
+    roadblocks.push(block); roadblockT = T;
+    return block;
+  }
+  return null;
+}
+function removeRoadblock(b) {
+  for (const c of b.cars) { const k = cars.indexOf(c); if (k >= 0 && c !== me) cars.splice(k, 1); }
+  for (const c of b.cops) { const k = footCops.indexOf(c); if (k >= 0) footCops.splice(k, 1); }
+  roadblocks.splice(roadblocks.indexOf(b), 1);
+}
+function stepRoadblocks() {
+  const [wx, wy] = crimePos(), hot = wanted.stars >= ROADBLOCK_STARS;
+  for (const b of [...roadblocks]) {
+    const d = near(b.x, b.y, wx, wy);
+    if (!hot || d > 35) b.stale = true;
+    if (me && mode === 'drive') { // gone past it
+      const head = me.travelA ?? Math.atan2(me.hy, me.hx);
+      if (rel(b.x - me.x) * Math.cos(head) + rel(b.y - me.y) * Math.sin(head) < -6) b.stale = true;
+    }
+    if (b.stale && d > 25 && !b.cars.includes(me)) removeRoadblock(b);
+  }
+  if (hot && mode === 'drive' && !roadblocks.some(b => !b.stale) && T - roadblockT > ROADBLOCK_EVERY) placeRoadblock();
+}
+
+// ---- the helicopter, at 5 stars: it flies out to where you were last seen and sweeps its searchlight over the
+// streets round there. Caught in the light, you're seen: from up there the buildings don't hide you, only a roof over
+// your head does (indoors, under the el's deck, under the Shotengai's glass). The light swings slower than the
+// helicopter flies, so a fast car can get out from under it. Once the heat's off it flies away.
+const HELI_STARS = 5, HELI_Z = 4, HELI_SPEED = 2.6, SPOT_SPEED = 1.9, SPOT_R = 0.7, SPOT_REACH = 4, HELI_GONE = 45;
+let heli = null; // { x, y, z, h (heading), sx, sy (where the light's on the ground), leaving }
+const underCover = (x, y) => mode === 'room' || (mode === 'walk' || mode === 'drive' || mode === 'taxi') && (arcadeAt(x, y) || underEl(y));
+function stepHeli(dt) {
+  const hot = wanted.stars >= HELI_STARS, [wx, wy] = crimePos();
+  if (!heli) {
+    if (!hot) return false;
+    const k = Math.random() * TAU; // in from somewhere off over the rooftops
+    heli = { x: mod(wanted.lastX + Math.cos(k) * 30, N), y: mod(wanted.lastY + Math.sin(k) * 30, N), z: HELI_Z, h: k + Math.PI, sx: 0, sy: 0, leaving: false, sweep: Math.random() * TAU };
+    heli.sx = heli.x; heli.sy = heli.y;
+  }
+  if (!hot) heli.leaving = true;
+  const lit = !heli.leaving && near(heli.sx, heli.sy, wx, wy) < SPOT_R && !underCover(wx, wy);
+  // the helicopter: over you while it has you, over the search otherwise; away over the rooftops once it's called off
+  let tx = heli.leaving ? heli.x + Math.cos(heli.h) * 50 : lit ? wx : wanted.searchX, ty = heli.leaving ? heli.y + Math.sin(heli.h) * 50 : lit ? wy : wanted.searchY;
+  const vx = rel(tx - heli.x), vy = rel(ty - heli.y), d = Math.hypot(vx, vy);
+  if (d > 0.3) {
+    const want = Math.atan2(vy, vx), turn = mod(want - heli.h + Math.PI, TAU) - Math.PI;
+    heli.h += clamp(turn, -1.2 * dt, 1.2 * dt);
+    const sp = Math.min(HELI_SPEED, d * 0.8) * Math.max(0.3, Math.cos(turn));
+    heli.x = mod(heli.x + Math.cos(heli.h) * sp * dt, N); heli.y = mod(heli.y + Math.sin(heli.h) * sp * dt, N);
+  }
+  // the light: on you, or sweeping round the search
+  heli.sweep += dt * 0.9;
+  const lx = lit ? wx : wanted.searchX + Math.cos(heli.sweep) * 1.6, ly = lit ? wy : wanted.searchY + Math.sin(heli.sweep * 1.3) * 1.6;
+  let sx = rel(lx - heli.sx), sy = rel(ly - heli.sy), sd = Math.hypot(sx, sy);
+  if (sd > 0.001) { const step = Math.min(sd, SPOT_SPEED * dt); heli.sx = mod(heli.sx + sx / sd * step, N); heli.sy = mod(heli.sy + sy / sd * step, N); }
+  sx = rel(heli.sx - heli.x); sy = rel(heli.sy - heli.y); sd = Math.hypot(sx, sy);
+  if (sd > SPOT_REACH) { heli.sx = mod(heli.x + sx / sd * SPOT_REACH, N); heli.sy = mod(heli.y + sy / sd * SPOT_REACH, N); } // (as far as the beam can lean)
+  if (heli.leaving && near(heli.x, heli.y, wx, wy) > HELI_GONE) heli = null;
+  return lit;
+}
+
+// ---- the spray shop: any AUTO REPAIR will respray a car you pull up at its door in and knock the dents out (put a
+// fire out, too) in ten minutes, for SPRAY_FEE. A new colour, and nobody's looking for this car any more: the stars
+// go. Not with a cop watching, though: they won't open the shutter.
+const SPRAY_FEE = 100, SPRAY_COLS = [RED, BLUE, GREEN, WHITE, YEL, ORANGE, MAG, CYAN, GRAY, BRICK];
+function sprayShopAt(x, y) {
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++)
+    for (const d of doorsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) if (d.sh.word === 'AUTO REPAIR' && near(d.x, d.y, x, y) < 0.9) return d;
+  return null;
+}
+// why not ('wreck', 'seen', 'money'), or '' to go ahead
+const sprayRefusal = c => c.wrecked ? 'wreck' : wanted.stars && copSees(c.x, c.y) ? 'seen' : money < SPRAY_FEE ? 'money' : '';
+function applyRespray(c) {
+  const was = c.body;
+  c.body = pick(SPRAY_COLS.filter(k => k !== was));
+  repairCar(c);
+  const lost = wanted.stars > 0;
+  if (lost) clearWanted();
+  return lost;
+}
+
 const policeNear = (x, y) => cars.some(c => c.patrol && near(c.x, c.y, x, y) < DISPATCH_R) || footCops.some(c => near(c.x, c.y, x, y) < DISPATCH_R);
 
 // ---- every frame
@@ -450,7 +564,9 @@ function stepCrime(dt) {
     if (policeNear(r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened
   }
   stepReturningPolice(dt);
-  for (const c of footCops) if (!c.chase && !c.returnCar) patrolStep(c, dt);
+  stepRoadblocks();
+  const heliSees = stepHeli(dt);
+  for (const c of footCops) if (!c.chase && !c.returnCar && !c.post) patrolStep(c, dt);
   // a cab you've paid to step on it, seen by a cop: pulled over, and the driver's arrested
   if (mode === 'taxi' && me && me.rush && Math.abs(me.v) > 1.5 && copSees(me.x, me.y)) return 'cab';
   if (!wanted.stars) return;
@@ -458,7 +574,7 @@ function stepCrime(dt) {
   const roofSeen = roofSearchLead(dt);
   const [wx, wy] = crimePos(), inside = mode === 'room', onRoof = mode === 'roof';
   const sees = c => !inside && !onRoof && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
-  wanted.seen = inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees);
+  wanted.seen = (inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees)) || heliSees;
   if (wanted.seen) { if (!inside) observeSuspect(wx, wy); wanted.hideT = 0; wanted.searchX = wanted.lastX; wanted.searchY = wanted.lastY; }
   else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
   else if ((wanted.searchT -= dt) <= 0) {
@@ -467,7 +583,7 @@ function stepCrime(dt) {
   for (const c of cars) if (c.pursuit) c.dest = [wanted.searchX, wanted.searchY];
   const onFoot = mode === 'walk';
   for (const c of footCops) { // officers within a few blocks join the chase on foot
-    if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < 20) { c.chase = true; c.returnCar = null; }
+    if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < (c.post ? 3 : 20) && (!c.post || mode !== 'drive')) { c.chase = true; c.returnCar = null; } // (at a roadblock: only for you on foot, close by)
     if (c.chase) chaseStep(c, wanted.searchX, wanted.searchY, dt);
   }
   // pulls up, an officer jumps out and sprints for you; outrun him and the car comes round again for another go

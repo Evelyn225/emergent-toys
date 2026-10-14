@@ -234,6 +234,7 @@ function interact() {
   if (mode === 'sea') return useMarina();
   if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
   if (mode === 'elplat') return elBoard() || elDown();
+  if (mode === 'drive' && sprayPrompt()) return startRespray(); // pulled up at a garage's door (or told why not)
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
   const dr = droppedHere();
@@ -333,6 +334,7 @@ function bookRoom() {
 }
 function stepSleep(dt) {
   if (sleep.workout) return stepWorkout(dt); // (an hour at the gym: gym.js)
+  if (sleep.spray) return stepSpray(dt); // (a respray: damage-fx.js)
   sleep.t += dt;
   fade = sleep.t < 1.5 ? sleep.t / 1.5 : sleep.t < 3 ? 1 : clamp(1 - (sleep.t - 3) / 2, 0, 1);
   if (sleep.t >= 1.5 && !sleep.done) {

@@ -402,7 +402,7 @@ test('a walked dog stays with its walker whatever they are up to, and trots roun
   assert.ok(r.behind);
 });
 
-test('street lamps are solid, and no emergency vehicle is parked on one', () => {
+test('a lamp post is there for a ball to bounce off (you walk and drive past them), and no emergency vehicle is parked on one', () => {
   const r = j(`(() => {
     const l = lamps[40];
     const parkedOnLamp = SERVICES.filter(b => lamps.some(m => Math.abs(rel(m.x - b.x)) < 0.45 && Math.abs(rel(m.y - b.y)) < 0.2)).map(b => b.kind);

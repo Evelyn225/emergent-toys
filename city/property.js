@@ -47,14 +47,19 @@ function summonCar(model) {
   const name = ITEMS[model].name, mine = owned.cars.filter(c => c.model === model && !c.player), dist = c => Math.hypot(rel(c.x - px), rel(c.y - py));
   if (!mine.length) return [`You press the fob. Nothing. Wherever your ${name} is, it isn't listening.`, 'click'];
   if (mode !== 'walk') return [mode === 'room' ? 'No signal in here. Try it out on the street.' : 'Not from up here. Try it down on the street.', null];
-  const here = mine.find(c => dist(c) < 2);
+  const here = mine.find(c => dist(c) < 2 && !c.wrecked && c.fireT == null); // (a wreck, even right here, goes to the garage)
   if (here) { here.fobBlinkAt = T; return [`Your ${name}'s right here. Its lights blink at you.`, 'click']; }
   const c = mine.reduce((b, c) => dist(c) < dist(b) ? c : b), l = laneNear(px, py);
+  let towed = '';
+  if (c.wrecked || c.fireT != null) { // a burnt-out shell: the garage tows it in and puts it right, for a price
+    if (!pay(TOW_FEE)) return [`Your ${name}'s a wreck. The garage wants ${fmt$(TOW_FEE)} to tow it in and fix it, and you're short.`, 'click'];
+    repairCar(c); towed = ` The garage towed what was left of it and put it right (${fmt$(TOW_FEE)}).`;
+  }
   for (const s of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4]) { // along the kerb to a gap between parked cars
     c.x = mod(l.x + l.hx * s, N); c.y = mod(l.y + l.hy * s, N); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);
     if (!cars.some(o => o !== c && Math.hypot(rel(o.ex - c.x), rel(o.ey - c.y)) < 0.5)) break;
   }
-  return [`You press the fob. A minute later your ${name} rolls up at the kerb, lights blinking.`, 'click'];
+  return [`You press the fob. A minute later your ${name} rolls up at the kerb, lights blinking.${towed}`, 'click'];
 }
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
 const homeRoomKind = kind => kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
