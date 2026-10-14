@@ -185,6 +185,8 @@ function mapTile(mx, my) {
   if (h) { const v = Math.min(h, 12) * 12; return `rgb(${60 + v},${60 + v},${75 + v})`; } // taller is lighter
   if (Math.abs(rel(wx - FOOTBRIDGE.x)) < 0.6 && onFootbridge(FOOTBRIDGE.x, wy) || onPier(wx, wy)) return '#5a4030'; // (the bridge is thinner than a tile)
   if (onIsland(wx, wy)) return '#2a5a30';
+  if (onCauseway(wx, wy)) return '#16161c';
+  if (onAirport(wx, wy)) return airportBlocked(wx, wy) ? '#8a8a96' : onRunway(wx, wy) ? '#101014' : Math.abs(wy - TAXIWAY.y) < 0.6 || mod(wy, N) > APRON.y0 && mod(wy, N) < APRON.y1 || mod(wy, N) < AIRPORT.y0 + 1.6 ? '#3a3a42' : airportEdge(wx, wy) < 0.5 ? '#4a4a4a' : '#2a5a30';
   if (ROAD[k]) return underEl(wy) ? '#3a2420' : '#16161c';
   if (seaAt(wx, wy) || gardenLake(wx, wy)) return MAP_COL.sea;
   if (inGardens(wx, wy)) { const [gx, gy] = gardenLocal(wx, wy); return gardenPathDist(gx, gy) < 0.4 ? '#5a5038' : '#24662e'; }
@@ -265,7 +267,7 @@ function hud() {
   drawHeldBig();
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
+  const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';

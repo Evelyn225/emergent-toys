@@ -207,6 +207,50 @@ function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cel
 }
 const onIsland = (x, y) => isleEdge(x, y) > 0;
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
+// ---- the airport: Glyphport International, on reclaimed land out in the bay west of the first bridge, joined to the
+// promenade by a causeway you can walk or drive. North to south: the landside road where the causeway comes in, the
+// hangars (west), the terminal and the control tower and two helipads (east); the apron in front of them, the taxiway,
+// grass, the runway (east-west: 09 / 27), grass, and rocks round the shore.
+const AIRPORT = { x0: 14, x1: 66, y0: SHORE_S * 8 + 16, y1: SHORE_S * 8 + 33 };
+const RUNWAY = { x0: 17, x1: 63, y: AIRPORT.y0 + 13, hw: 1.5 }; // 460m by 30m
+const TAXIWAY = { x0: 18.5, x1: 61.5, y: AIRPORT.y0 + 9.2, hw: 0.45 }; // joined to the runway at both ends
+const APRON = { x0: 16, x1: 64, y0: AIRPORT.y0 + 4.4, y1: AIRPORT.y0 + 8.6 };
+const CAUSEWAY = { x: 40, hw: 0.75, y0: SHORE_S * 8 + 2.6, y1: AIRPORT.y0 + 1.5 };
+const STANDS_X = [33.5, 40, 46.5]; // the gates, in front of the terminal
+const HELIPADS = [{ x: 56.5, y: AIRPORT.y0 + 3.2, r: 1 }, { x: 60.8, y: AIRPORT.y0 + 3.2, r: 1 }];
+const TOWER = { x: 51.5, y: AIRPORT.y0 + 2.6, r: 0.28, h: 3.6, cab: 0.5 }; // a 36m shaft, the glass cab on top
+// the buildings, as boxes { x, y, hl (east-west), hw (north-south), h, kind }: you walk round them, aircraft hit them
+const AIRPORT_BLDG = [
+  { x: 40, y: AIRPORT.y0 + 3.4, hl: 7, hw: 1.05, h: 1.2, kind: 'terminal' },
+  { x: 20.2, y: AIRPORT.y0 + 2.6, hl: 3, hw: 1.8, h: 1.4, kind: 'hangar' },
+  { x: 27.2, y: AIRPORT.y0 + 2.6, hl: 3, hw: 1.8, h: 1.4, kind: 'hangar' },
+];
+// how far inside the island's shore (x, y) is, in cells (negative: out in the water). The corners are rounded off and
+// the shore wobbles a little, so it reads as made ground, not a box
+function airportEdge(x, y) {
+  const ex = rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2), ey = rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2), hx = (AIRPORT.x1 - AIRPORT.x0) / 2, hy = (AIRPORT.y1 - AIRPORT.y0) / 2;
+  if (Math.abs(ex) > hx + 3 || Math.abs(ey) > hy + 3) return -3;
+  const R = 2.5, qx = Math.abs(ex) - hx + R, qy = Math.abs(ey) - hy + R;
+  const box = Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - R; // (a rounded rectangle's signed distance)
+  return -box + 0.25 * Math.sin(x * 1.3) * Math.sin(y * 0.9 + 1);
+}
+const onAirport = (x, y) => airportEdge(x, y) > 0;
+const onCauseway = (x, y) => Math.abs(rel(x - CAUSEWAY.x)) < CAUSEWAY.hw && mod(y, N) > CAUSEWAY.y0 && mod(y, N) < CAUSEWAY.y1;
+const onRunway = (x, y) => Math.abs(rel(y - RUNWAY.y)) < RUNWAY.hw && mod(x, N) > RUNWAY.x0 && mod(x, N) < RUNWAY.x1;
+// a building, the tower, in the way at (x, y) (grown by pad)?
+function airportBlocked(x, y, pad = 0) {
+  if (Math.abs(rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2)) > 12 || Math.abs(rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2)) > 30) return false;
+  if (Math.hypot(rel(x - TOWER.x), rel(y - TOWER.y)) < TOWER.r + pad) return true;
+  return AIRPORT_BLDG.some(b => Math.abs(rel(x - b.x)) < b.hl + pad && Math.abs(rel(y - b.y)) < b.hw + pad);
+}
+// the top of whatever's built at (x, y), for what flies: a building's roof, the tower's cab, or 0
+function airportHeight(x, y) {
+  if (Math.abs(rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2)) > 12 || Math.abs(rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2)) > 30) return 0;
+  const t = Math.hypot(rel(x - TOWER.x), rel(y - TOWER.y));
+  if (t < TOWER.cab) return t < TOWER.r ? TOWER.h + 0.62 : TOWER.h + 0.6;
+  const b = AIRPORT_BLDG.find(b => Math.abs(rel(x - b.x)) < b.hl && Math.abs(rel(y - b.y)) < b.hw);
+  return b ? b.h : 0;
+}
 // the Sunset Pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
 // docks or a bridge. Game booths and a prize stall down its sides, a carousel in the middle, the Ferris wheel out at
 // the end (its wheel stands across the pier, east-west, so you see it face on from the promenade).
@@ -239,8 +283,8 @@ for (let bx = 0; bx < NB; bx++) {
   else if (hash(bx, 5, 43) < 0.35 && bx !== FAIR_BX) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
   if (hash(bx, 6, 43) < 0.25) PIERS.push([bx * 8 + 4.6, N + SHORE_N * 8 - 9, bx * 8 + 5.4, N + SHORE_N * 8 + 5]);
 }
-const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y);
-const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy); };
+const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y) || onCauseway(x, y);
+const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy) && !onAirport(wx, wy); };
 // ---- the Botanical Gardens: a walled garden over three blocks by two (the streets inside it are gone). In garden
 // coordinates gx, gy (cells from its north-west inside corner): a lake to the east with a jetty for the swan boats,
 // the glass conservatory to the north-west, the aviary to the south-west, enclosures, winding gravel paths between.

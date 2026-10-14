@@ -1109,6 +1109,50 @@ function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cel
 }
 const onIsland = (x, y) => isleEdge(x, y) > 0;
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
+// ---- the airport: Glyphport International, on reclaimed land out in the bay west of the first bridge, joined to the
+// promenade by a causeway you can walk or drive. North to south: the landside road where the causeway comes in, the
+// hangars (west), the terminal and the control tower and two helipads (east); the apron in front of them, the taxiway,
+// grass, the runway (east-west: 09 / 27), grass, and rocks round the shore.
+const AIRPORT = { x0: 14, x1: 66, y0: SHORE_S * 8 + 16, y1: SHORE_S * 8 + 33 };
+const RUNWAY = { x0: 17, x1: 63, y: AIRPORT.y0 + 13, hw: 1.5 }; // 460m by 30m
+const TAXIWAY = { x0: 18.5, x1: 61.5, y: AIRPORT.y0 + 9.2, hw: 0.45 }; // joined to the runway at both ends
+const APRON = { x0: 16, x1: 64, y0: AIRPORT.y0 + 4.4, y1: AIRPORT.y0 + 8.6 };
+const CAUSEWAY = { x: 40, hw: 0.75, y0: SHORE_S * 8 + 2.6, y1: AIRPORT.y0 + 1.5 };
+const STANDS_X = [33.5, 40, 46.5]; // the gates, in front of the terminal
+const HELIPADS = [{ x: 56.5, y: AIRPORT.y0 + 3.2, r: 1 }, { x: 60.8, y: AIRPORT.y0 + 3.2, r: 1 }];
+const TOWER = { x: 51.5, y: AIRPORT.y0 + 2.6, r: 0.28, h: 3.6, cab: 0.5 }; // a 36m shaft, the glass cab on top
+// the buildings, as boxes { x, y, hl (east-west), hw (north-south), h, kind }: you walk round them, aircraft hit them
+const AIRPORT_BLDG = [
+  { x: 40, y: AIRPORT.y0 + 3.4, hl: 7, hw: 1.05, h: 1.2, kind: 'terminal' },
+  { x: 20.2, y: AIRPORT.y0 + 2.6, hl: 3, hw: 1.8, h: 1.4, kind: 'hangar' },
+  { x: 27.2, y: AIRPORT.y0 + 2.6, hl: 3, hw: 1.8, h: 1.4, kind: 'hangar' },
+];
+// how far inside the island's shore (x, y) is, in cells (negative: out in the water). The corners are rounded off and
+// the shore wobbles a little, so it reads as made ground, not a box
+function airportEdge(x, y) {
+  const ex = rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2), ey = rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2), hx = (AIRPORT.x1 - AIRPORT.x0) / 2, hy = (AIRPORT.y1 - AIRPORT.y0) / 2;
+  if (Math.abs(ex) > hx + 3 || Math.abs(ey) > hy + 3) return -3;
+  const R = 2.5, qx = Math.abs(ex) - hx + R, qy = Math.abs(ey) - hy + R;
+  const box = Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - R; // (a rounded rectangle's signed distance)
+  return -box + 0.25 * Math.sin(x * 1.3) * Math.sin(y * 0.9 + 1);
+}
+const onAirport = (x, y) => airportEdge(x, y) > 0;
+const onCauseway = (x, y) => Math.abs(rel(x - CAUSEWAY.x)) < CAUSEWAY.hw && mod(y, N) > CAUSEWAY.y0 && mod(y, N) < CAUSEWAY.y1;
+const onRunway = (x, y) => Math.abs(rel(y - RUNWAY.y)) < RUNWAY.hw && mod(x, N) > RUNWAY.x0 && mod(x, N) < RUNWAY.x1;
+// a building, the tower, in the way at (x, y) (grown by pad)?
+function airportBlocked(x, y, pad = 0) {
+  if (Math.abs(rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2)) > 12 || Math.abs(rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2)) > 30) return false;
+  if (Math.hypot(rel(x - TOWER.x), rel(y - TOWER.y)) < TOWER.r + pad) return true;
+  return AIRPORT_BLDG.some(b => Math.abs(rel(x - b.x)) < b.hl + pad && Math.abs(rel(y - b.y)) < b.hw + pad);
+}
+// the top of whatever's built at (x, y), for what flies: a building's roof, the tower's cab, or 0
+function airportHeight(x, y) {
+  if (Math.abs(rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2)) > 12 || Math.abs(rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2)) > 30) return 0;
+  const t = Math.hypot(rel(x - TOWER.x), rel(y - TOWER.y));
+  if (t < TOWER.cab) return t < TOWER.r ? TOWER.h + 0.62 : TOWER.h + 0.6;
+  const b = AIRPORT_BLDG.find(b => Math.abs(rel(x - b.x)) < b.hl && Math.abs(rel(y - b.y)) < b.hw);
+  return b ? b.h : 0;
+}
 // the Sunset Pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
 // docks or a bridge. Game booths and a prize stall down its sides, a carousel in the middle, the Ferris wheel out at
 // the end (its wheel stands across the pier, east-west, so you see it face on from the promenade).
@@ -1141,8 +1185,8 @@ for (let bx = 0; bx < NB; bx++) {
   else if (hash(bx, 5, 43) < 0.35 && bx !== FAIR_BX) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
   if (hash(bx, 6, 43) < 0.25) PIERS.push([bx * 8 + 4.6, N + SHORE_N * 8 - 9, bx * 8 + 5.4, N + SHORE_N * 8 + 5]);
 }
-const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y);
-const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy); };
+const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y) || onCauseway(x, y);
+const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy) && !onAirport(wx, wy); };
 // ---- the Botanical Gardens: a walled garden over three blocks by two (the streets inside it are gone). In garden
 // coordinates gx, gy (cells from its north-west inside corner): a lake to the east with a jetty for the swan boats,
 // the glass conservatory to the north-west, the aviary to the south-west, enclosures, winding gravel paths between.
@@ -1758,6 +1802,8 @@ function blockedOn(y0, y1) { // x intervals [a, b] that the band y0..y1 of sea i
   const ir = ISLE.r * 1.35 + 0.6; // past the widest the coast goes, and its surf
   if (y1 > ISLE.y - ir && y0 < ISLE.y + ir) out.push([ISLE.x - ir, ISLE.x + ir]);
   for (const [x0, py0, x1, py1] of PIERS) if (y1 > py0 - 0.4 && y0 < py1 + 0.4) out.push([x0 - 0.4, x1 + 0.4]);
+  if (y1 > AIRPORT.y0 - 1.2 && y0 < AIRPORT.y1 + 1.2) out.push([AIRPORT.x0 - 1.2, AIRPORT.x1 + 1.2]); // the airport, and the rocks round it
+  if (y1 > CAUSEWAY.y0 && y0 < CAUSEWAY.y1) out.push([CAUSEWAY.x - CAUSEWAY.hw - 0.5, CAUSEWAY.x + CAUSEWAY.hw + 0.5]);
   return out;
 }
 function freeSpan(x, y0, y1) { // the open stretch [a, b] of that band (b > a, may run past N) that x is in, or null
@@ -3179,6 +3225,115 @@ function stepCarFires(dt) {
   return out;
 }
 function repairCar(c) { c.dmg = 0; c.fireT = null; c.wrecked = false; c.boomT = undefined; }
+// ===== aircraft: everything that flies from the airport (world.js has the airport, aircraft-render.js draws them,
+// flight.js flies the one you're in). Speeds in cells a second (1 = 36 km/h), heights in cells (1 = 10m).
+// The airliners belong to the airport: they sit at the gates, and every few minutes one pushes back, taxis out, rolls
+// down the runway and climbs away east over the bay, or one comes in from the west, lands, and taxis to an empty gate.
+// The light planes, the jet and the helicopters are there to be flown: bought at the terminal, or just taken.
+const PLANE_TYPES = {
+  // len: nose to tail; span: wingtip to wingtip; r: the fuselage's radius; tail: the fin's height; vr: rotation speed
+  // (lift-off); cruise / top: in the air; climb: how hard it can climb (cells a second at full throttle); price: to buy
+  airliner: { name: 'airliner', len: 3.4, span: 3.2, r: 0.2, tail: 0.85, body: WHITE, stripe: BLUE, engines: 'wing', vr: 7.5, cruise: 9 },
+  prop: { name: 'Skylark', len: 0.8, span: 1.1, r: 0.065, tail: 0.24, body: WHITE, stripe: RED, prop: true, vr: 2.4, cruise: 4, top: 5.6, climb: 1.1, price: 9000 },
+  jet: { name: 'Comet', len: 1.45, span: 1.15, r: 0.09, tail: 0.36, body: GRAY, stripe: CYAN, engines: 'tail', vr: 4, cruise: 7, top: 10, climb: 2.2, price: 30000 },
+  heli: { name: 'Hornet', heli: true, len: 0.45, rotor: 0.5, body: RED, stripe: WHITE, top: 4.2, climb: 1.4, price: 14000 },
+};
+const aircraft = []; // { id, type, x, y, z, yaw, pitch, roll, v, state, ... }
+let aircraftId = 0;
+const STAND_Y = APRON.y0 + 1.75; // an airliner at its gate: nose to the terminal
+function addAircraft(type, x, y, yaw, extra) {
+  const a = { id: aircraftId++, type, x, y, z: 0, yaw, pitch: 0, roll: 0, v: 0, state: 'parked', dmg: 0, ...extra };
+  aircraft.push(a); return a;
+}
+// the fleet at dawn of the first day: an airliner at two of the three gates, light aircraft by the hangars, the jet in
+// the first hangar, a helicopter on each pad
+addAircraft('airliner', STANDS_X[0], STAND_Y, -Math.PI / 2, { gate: 0 });
+addAircraft('airliner', STANDS_X[2], STAND_Y, -Math.PI / 2, { gate: 2 });
+addAircraft('jet', 20.2, AIRPORT.y0 + 2.4, Math.PI / 2, { forSale: true });
+addAircraft('prop', 25.2, AIRPORT.y0 + 6.2, Math.PI / 2, { forSale: true });
+addAircraft('prop', 29, AIRPORT.y0 + 6.2, Math.PI / 2, { forSale: true });
+for (const h of HELIPADS) addAircraft('heli', h.x, h.y, 0, { forSale: true });
+
+// ---- the airliners' day: a timetable that's a little irregular, one movement at a time on the runway
+const AIR_GAP = [100, 220]; // seconds between movements
+let airNext = 40; // (the first one soon after you arrive, so there's something to see)
+const gateFree = k => !aircraft.some(a => a.type === 'airliner' && a.gate === k);
+function stepAirTraffic(dt, rnd = Math.random) {
+  const moving = aircraft.find(a => a.type === 'airliner' && a.state !== 'parked');
+  if (moving) stepAirliner(moving, dt);
+  if (moving || (airNext -= dt) > 0) return;
+  airNext = AIR_GAP[0] + rnd() * (AIR_GAP[1] - AIR_GAP[0]);
+  const parked = aircraft.filter(a => a.type === 'airliner' && a.state === 'parked');
+  const free = [0, 1, 2].filter(gateFree);
+  if (parked.length && (!free.length || rnd() < 0.5)) departAirliner(parked[Math.floor(rnd() * parked.length)]);
+  else if (free.length) arriveAirliner(free[Math.floor(rnd() * free.length)]);
+}
+// a departure: push back off the gate to the taxiway, taxi to the west end, down onto the runway, line up east
+function departAirliner(a) {
+  const sx = STANDS_X[a.gate];
+  a.gate = null; a.state = 'push';
+  a.path = [[sx, TAXIWAY.y, 'push'], [TAXIWAY.x0 + 1.2, TAXIWAY.y], [TAXIWAY.x0, TAXIWAY.y + 1.2], [TAXIWAY.x0, RUNWAY.y - 0.8], [TAXIWAY.x0 + 1, RUNWAY.y], [RUNWAY.x0 + 3, RUNWAY.y]];
+}
+// an arrival: from out west over the water, down the glide slope, onto the runway at the touchdown marks
+function arriveAirliner(gate) {
+  const T_ = PLANE_TYPES.airliner, d = 60;
+  addAircraft('airliner', RUNWAY.x0 + 6 - d, RUNWAY.y, 0, { z: d * GLIDE_SLOPE, v: T_.vr * 0.95, pitch: 0.03, state: 'approach', target: gate });
+}
+const GLIDE_SLOPE = 0.052; // three degrees
+const TAXI_V = 0.7, PUSH_V = 0.25;
+function stepAirliner(a, dt) {
+  const T_ = PLANE_TYPES.airliner;
+  if (a.state === 'push' || a.state === 'taxi') { // along the path, at walking pace (backwards at first)
+    const [tx, ty, kind] = a.path[0], vx = rel(tx - a.x), vy = rel(ty - a.y), d = Math.hypot(vx, vy);
+    const back = kind === 'push', want = back ? Math.atan2(-vy, -vx) : Math.atan2(vy, vx);
+    a.yaw += clamp(mod(want - a.yaw + Math.PI, TAU) - Math.PI, -0.6 * dt, 0.6 * dt);
+    a.v += clamp((back ? PUSH_V : TAXI_V) - a.v, -0.5 * dt, 0.3 * dt);
+    const step = Math.min(d, a.v * dt);
+    a.x = mod(a.x + vx / (d || 1) * step, N); a.y = mod(a.y + vy / (d || 1) * step, N);
+    if (d < 0.05) { a.path.shift(); a.state = 'taxi'; if (!a.path.length) { a.state = a.parkAt != null ? 'parked' : 'roll'; if (a.parkAt != null) { a.gate = a.parkAt; a.parkAt = null; a.v = 0; a.yaw = -Math.PI / 2; } } }
+    return;
+  }
+  if (a.state === 'roll') { // full power down the runway, nose up at rotation speed
+    a.yaw = 0; a.y += (RUNWAY.y - a.y) * Math.min(1, dt * 2);
+    a.v += 1.25 * dt; a.x = mod(a.x + a.v * dt, N);
+    if (a.v >= T_.vr) a.state = 'climb';
+    return;
+  }
+  if (a.state === 'climb') { // away east over the bay, climbing, then a long turn to the south out of sight
+    a.v = Math.min(T_.cruise, a.v + 0.5 * dt); a.pitch += (0.14 - a.pitch) * Math.min(1, dt * 1.5);
+    const turn = a.z > 3 ? 0.06 : 0;
+    a.yaw += turn * dt; a.roll += (turn * 4 - a.roll) * Math.min(1, dt);
+    a.x = mod(a.x + Math.cos(a.yaw) * a.v * dt, N); a.y = mod(a.y + Math.sin(a.yaw) * a.v * dt, N); a.z += Math.sin(a.pitch) * a.v * dt;
+    if (a.z > 14) aircraft.splice(aircraft.indexOf(a), 1); // (gone, high over the bay)
+    return;
+  }
+  if (a.state === 'approach') { // on the glide slope, flaring just before the marks
+    const toGo = rel(RUNWAY.x0 + 6 - a.x);
+    a.x = mod(a.x + a.v * dt, N); a.yaw = 0;
+    a.z = Math.max(0, toGo * GLIDE_SLOPE + (toGo < 2 ? 0.02 * toGo : 0));
+    a.pitch = toGo < 3 ? 0.08 : 0.03;
+    if (toGo <= 0) { a.z = 0; a.pitch = 0; a.state = 'rollout'; }
+    return;
+  }
+  if (a.state === 'rollout') { // brakes and reversers, off at the east end, back along the taxiway to the gate
+    a.v = Math.max(TAXI_V, a.v - 1.6 * dt); a.x = mod(a.x + a.v * dt, N);
+    if (mod(a.x, N) >= TAXIWAY.x1 - 1) {
+      const sx = STANDS_X[a.target];
+      a.state = 'taxi'; a.parkAt = a.target; a.target = null;
+      a.path = [[TAXIWAY.x1, RUNWAY.y - 0.8], [TAXIWAY.x1, TAXIWAY.y + 0.8], [TAXIWAY.x1 - 1, TAXIWAY.y], [sx + 1.2, TAXIWAY.y], [sx, TAXIWAY.y - 1], [sx, STAND_Y]];
+    }
+  }
+}
+// what you'd walk into: a parked (or taxiing) aircraft's fuselage and its wheels; under the wings you can walk
+function aircraftAt(x, y, pad = 0) {
+  for (const a of aircraft) {
+    if (a.z > 0.3 || Math.abs(rel(a.x - x)) > 2.5 || Math.abs(rel(a.y - y)) > 2.5) continue;
+    const T_ = PLANE_TYPES[a.type], fx = Math.cos(a.yaw), fy = Math.sin(a.yaw), qx = rel(x - a.x), qy = rel(y - a.y);
+    const along = qx * fx + qy * fy, across = -qx * fy + qy * fx;
+    if (T_.heli ? Math.abs(along) < 0.24 + pad && Math.abs(across) < 0.09 + pad : Math.abs(along) < T_.len / 2 + pad && Math.abs(across) < T_.r + pad) return a;
+  }
+  return null;
+}
 // ---- doors: every shop, lobby and front door, as a point on the sidewalk outside it.
 // {x, y: on the walking line (0.12 / 1.88 into a street), nx, ny: one step inside, sh: the shop, use: what it's for}
 const NIGHTLIFE = new Set(['BAR', 'KARAOKE', 'MAHJONG', 'ARCADE', 'LIQUOR']);
@@ -8165,6 +8320,12 @@ function floorBaseCell(i, r, x, rx, ry) {
       const gf = gardenFloor(i, r, x, wx, wy, L);
       if (gf === true) return;
       [ch, base, k] = gf; soft = true;
+    } else if (onCauseway(wx, wy)) { // the road out to the airport
+      soft = true; [ch, base, k] = causewayFloor(r, x, wx, wy);
+    } else if (onAirport(wx, wy)) { // the airport: runway, taxiway, apron, grass (airport-render.js)
+      const af = airportFloor(i, r, x, wx, wy, L);
+      if (!af) return; // (a light, painted already)
+      soft = true; [ch, base, k] = af;
     } else if (onFootbridge(wx, wy)) { // the footbridge: boards across it, lamplight pooling under each lamp after dark
       soft = true; base = BRICK; k = 1.3;
       const e = Math.abs(rel(wx - FOOTBRIDGE.x)) / FOOTBRIDGE.hw;
@@ -9522,6 +9683,8 @@ function citySprites() {
   drawMuseumRoof();
   drawRoofPolice();
   drawChopper(); // (5 stars: chopper.js)
+  drawAirport(); // (airport-render.js)
+  drawAircraft(); // (aircraft-render.js)
   drawBelleBuildings();
   drawArchitecture();
   drawLandmarks();
@@ -15936,6 +16099,8 @@ function mapTile(mx, my) {
   if (h) { const v = Math.min(h, 12) * 12; return `rgb(${60 + v},${60 + v},${75 + v})`; } // taller is lighter
   if (Math.abs(rel(wx - FOOTBRIDGE.x)) < 0.6 && onFootbridge(FOOTBRIDGE.x, wy) || onPier(wx, wy)) return '#5a4030'; // (the bridge is thinner than a tile)
   if (onIsland(wx, wy)) return '#2a5a30';
+  if (onCauseway(wx, wy)) return '#16161c';
+  if (onAirport(wx, wy)) return airportBlocked(wx, wy) ? '#8a8a96' : onRunway(wx, wy) ? '#101014' : Math.abs(wy - TAXIWAY.y) < 0.6 || mod(wy, N) > APRON.y0 && mod(wy, N) < APRON.y1 || mod(wy, N) < AIRPORT.y0 + 1.6 ? '#3a3a42' : airportEdge(wx, wy) < 0.5 ? '#4a4a4a' : '#2a5a30';
   if (ROAD[k]) return underEl(wy) ? '#3a2420' : '#16161c';
   if (seaAt(wx, wy) || gardenLake(wx, wy)) return MAP_COL.sea;
   if (inGardens(wx, wy)) { const [gx, gy] = gardenLocal(wx, wy); return gardenPathDist(gx, gy) < 0.4 ? '#5a5038' : '#24662e'; }
@@ -16016,7 +16181,7 @@ function hud() {
   drawHeldBig();
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
-  const isle = onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
+  const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
@@ -16925,6 +17090,302 @@ function stepSpray(dt) { // (stepSleep hands it over: ten minutes in a fade)
   if (sleep.t >= 1 && !sleep.done) { sleep.done = true; sleep.lost = applyRespray(me); if ((tod += 1 / 6) >= 24) { tod -= 24; dayNum++; } }
   if (sleep.t > 2 && !sleep.said) { sleep.said = true; say(`Ten minutes later the shutter rolls up: new paint, the dents knocked out.${sleep.lost ? ' Nobody\'s looking for this car now.' : ''}`, 5); }
   if (sleep.t > 3.2) { sleep = null; fade = 0; }
+}
+// ===== the airport on screen (where everything is: world.js). The ground: the runway with its edge and centre lines,
+// threshold stripes and numbers (09 at the west end, 27 at the east, the way a pilot coming in reads them), touchdown
+// bars; the taxiway's yellow line; the apron's concrete and the stands' lead-in lines; the helipads; the landside road;
+// grass and rocks round the shore; and after dark the runway's white edge lights, green and red at its ends, blue along
+// the taxiway. The buildings: the terminal (glass both sides, its name along the top), the two hangars (arched, open
+// at the front), the control tower, the windsock.
+const runwayNumber = (num, along, across) => { // is (along, across) on a painted digit? along 0..1.25 from its foot, across -0.55..0.55
+  if (along < 0 || along >= 1.25 || Math.abs(across) >= 0.55) return false;
+  const k = across < 0 ? 0 : 1, col = Math.floor(((across < 0 ? across + 0.55 : across - 0.1) / 0.45) * 3);
+  if (col < 0 || col > 2) return false;
+  const row = 4 - Math.floor(along / 0.25);
+  return (DIGIT5[num[k]] >> (14 - row * 3 - col) & 1) === 1;
+};
+function airportFloor(i, r, x, wx, wy, L) { // [ch, base, k] for the floor cell; or null, having painted it itself (a light)
+  const X = mod(wx, N), Y = mod(wy, N), lit = lampsOn > 0.2, blink = (light, col, ch = '*') => { set(i, ch, C(col, 15)); BG[i] = C(col, 3 + light * 4); FOGS[i] = 0; return null; };
+  if (airportEdge(wx, wy) < 0.5) return [hash(Math.floor(wx * 9), Math.floor(wy * 9), 341) > 0.45 ? '%' : 'o', GRAY, 1.2]; // rocks
+  if (onRunway(wx, wy)) {
+    const u = X - RUNWAY.x0, v = Y - RUNWAY.y, len = RUNWAY.x1 - RUNWAY.x0;
+    if (lit && Math.abs(v) > 1.38 && fract(u / 3) < 0.07) return blink(lampsOn, u < 0.5 ? GREEN : u > len - 0.5 ? RED : WHITE); // edge lights
+    if (lit && (u < 0.12 || u > len - 0.12)) return blink(lampsOn, u < 0.12 ? GREEN : RED, 'o'); // the threshold bars
+    if (Math.abs(v) > 1.36) return ['=', WHITE, 1.2]; // edge lines
+    if ((u < 1.8 || u > len - 1.8) && Math.abs(v) < 1.2 && fract(v * 2.5) < 0.55) return ['#', WHITE, 1.3]; // piano keys
+    if (runwayNumber('09', u - 2.2, v) || runwayNumber('27', len - 2.2 - u, -v)) return ['#', WHITE, 1.3];
+    if ((Math.abs(u - 6) < 0.7 || Math.abs(u - (len - 6)) < 0.7) && Math.abs(Math.abs(v) - 0.7) < 0.2) return ['=', WHITE, 1.2]; // touchdown bars
+    if (Math.abs(v) < 0.06 && fract(u / 1.6) < 0.55) return ['-', WHITE, 1.2]; // centre line
+    return [hash(Math.floor(wx * 7), Math.floor(wy * 7), 342) > 0.8 ? '.' : ' ', GRAY, 0.55];
+  }
+  const taxiA = Math.abs(Y - TAXIWAY.y) < TAXIWAY.hw && X > TAXIWAY.x0 - TAXIWAY.hw && X < TAXIWAY.x1 + TAXIWAY.hw;
+  const link = [TAXIWAY.x0, TAXIWAY.x1].find(tx => Math.abs(X - tx) < TAXIWAY.hw && Y > TAXIWAY.y && Y < RUNWAY.y);
+  if (taxiA || link != null) {
+    const v = taxiA ? Y - TAXIWAY.y : X - link;
+    if (lit && Math.abs(v) > TAXIWAY.hw - 0.06 && fract((taxiA ? X : Y) / 2) < 0.1) return blink(lampsOn, BLUE);
+    if (Math.abs(v) < 0.05) return ['-', YEL, 1.4];
+    return [' ', GRAY, 0.6];
+  }
+  for (const h of HELIPADS) { // a ring and an H
+    const du = X - h.x, dv = Y - h.y, d = Math.hypot(du, dv);
+    if (d > h.r) continue;
+    if (lit && d > h.r - 0.08 && fract(Math.atan2(dv, du) / TAU * 12) < 0.12) return blink(lampsOn, GREEN);
+    if (Math.abs(d - h.r * 0.8) < 0.06 || Math.abs(du) < 0.35 && Math.abs(dv) < 0.45 && (Math.abs(du) > 0.24 || Math.abs(dv) < 0.06)) return ['#', WHITE, 1.3];
+    return [' ', GREEN, 0.5];
+  }
+  if (Y > APRON.y0 && Y < APRON.y1 && X > APRON.x0 && X < APRON.x1) { // concrete, its joints, and a yellow line in to each stand
+    const s = STANDS_X.find(sx => Math.abs(X - sx) < 0.05);
+    if (s != null) return ['|', YEL, 1.3];
+    if (fract(X / 1.5) < 0.04 || fract(Y / 1.5) < 0.04) return ['+', GRAY, 0.8];
+    return [(r + x) % 4 ? ' ' : '.', GRAY, 0.9];
+  }
+  if (AIRPORT_BLDG.some(b => Math.abs(rel(wx - b.x)) < b.hl && Math.abs(rel(wy - b.y)) < b.hw)) return [(r + x) % 3 ? ' ' : '.', GRAY, 0.9]; // a hangar's floor
+  if (Y < AIRPORT.y0 + 1.6) { // the landside road, from the causeway along the front
+    if (Math.abs(Y - (AIRPORT.y0 + 0.85)) < 0.04 && fract(X * 2) < 0.5) return ['=', YEL, 1.4];
+    return [(r + x) & 1 ? '.' : ' ', GRAY, 0.75];
+  }
+  return [(r * 3 + x) % 4 ? '"' : ',', GREEN, 1.1]; // grass
+}
+// the causeway: a road out over the water, railings each side, lamps along it
+function causewayFloor(r, x, wx, wy) {
+  const e = Math.abs(rel(wx - CAUSEWAY.x)) / CAUSEWAY.hw;
+  if (e > 0.9) return ['|', GRAY, 1.5];
+  if (e < 0.04 && fract(wy * 2) < 0.5) return ['=', YEL, 1.4];
+  return [(r + x) & 1 ? '.' : ' ', GRAY, 0.8];
+}
+// ---- the buildings
+// a vault (a Nissen hut's roof): part of a cylinder lying along the box's long axis (b.c, b.s), radius b.r, its axis at
+// height b.z0 (below the ground for a shallow arch), cut off at the ground and at its two ends (flat end walls)
+function rayVault(ox, oy, oz, rx, ry, rz, b) {
+  const qx = ox - b.x, qy = oy - b.y, lx = qx * b.c + qy * b.s, ly = -qx * b.s + qy * b.c, rl = rx * b.c + ry * b.s, rw = -rx * b.s + ry * b.c, dz = oz - b.z0;
+  let best = -1, face = 0;
+  const aa = rw * rw + rz * rz, bb = ly * rw + dz * rz, cc = ly * ly + dz * dz - b.r * b.r, disc = bb * bb - aa * cc;
+  if (disc >= 0 && aa > 1e-12) for (const t of [(-bb - Math.sqrt(disc)) / aa]) {
+    const z = oz + rz * t, along = lx + rl * t;
+    if (t > 0.01 && z >= 0 && Math.abs(along) <= b.hl) { best = t; face = 5; }
+  }
+  if (Math.abs(rl) > 1e-9) for (const end of [-1, 1]) { // the end walls
+    const t = (end * b.hl - lx) / rl, w = ly + rw * t, z = oz + rz * t;
+    if (t > 0.01 && (best < 0 || t < best) && z >= 0 && w * w + (z - b.z0) ** 2 <= b.r * b.r) { best = t; face = end > 0 ? 1 : 2; }
+  }
+  if (best < 0) return -1;
+  HIT.u = lx + rl * best; HIT.v = ly + rw * best; HIT.w = oz + rz * best; HIT.face = face;
+  return best;
+}
+function drawAirport() {
+  const cx = (AIRPORT.x0 + AIRPORT.x1) / 2, cy = (AIRPORT.y0 + AIRPORT.y1) / 2;
+  if (Math.hypot(rel(cx - px), rel(cy - py)) > vis + 30) return;
+  const lit = Math.max(night, overcast * 0.6);
+  for (const b of AIRPORT_BLDG) {
+    const [vx, vy] = R(b.x, b.y);
+    if (!inView(vx, vy, b.hl + 0.2)) continue;
+    if (b.kind === 'terminal') drawTerminal(b, vx, vy, lit);
+    else drawHangar(b, vx, vy, lit);
+  }
+  { // the control tower: a concrete shaft with slit windows, the glass cab, its roof, the mast and its red light
+    const [vx, vy] = R(TOWER.x, TOWER.y);
+    if (inView(vx, vy, TOWER.cab + 0.1)) {
+      drawBox(boxAt(vx, vy, 1, 0, TOWER.r, TOWER.r, 0, TOWER.h), (i, t, L) => {
+        BG[i] = C(STONE, (1.6 + L * 0.3) * drumLit(TOWER.r));
+        return set(i, fract(HIT.w * 2.2) < 0.12 && Math.abs(Math.atan2(HIT.v, HIT.u)) < 0.6 ? '=' : ' ', C(CYAN, 6 + lit * 6)), true;
+      }, rayCopperDrum);
+      drawBox(boxAt(vx, vy, 1, 0, TOWER.cab, TOWER.cab, TOWER.h, TOWER.h + 0.52), (i, t, L) => {
+        if (HIT.face > 4) { BG[i] = C(GRAY, 2 + L * 0.3); return set(i, ' ', 0), true; }
+        const mull = fract(Math.atan2(HIT.v, HIT.u) / TAU * 10) < 0.1 || HIT.w > TOWER.h + 0.46;
+        BG[i] = mull ? C(GRAY, 2 + L * 0.3) : C(CYAN, 1.5 + lit * 3 + L * 0.15); return set(i, mull ? '|' : lit > 0.3 && hash(i, 3, 5) > 0.9 ? '.' : ' ', C(WARM, 12)), true;
+      }, rayCopperDrum);
+      drawBox(boxAt(vx, vy, 1, 0, TOWER.cab + 0.06, TOWER.cab + 0.06, TOWER.h + 0.52, TOWER.h + 0.6), (i, t, L) => { BG[i] = C(GRAY, 2.5 + L * 0.3); return set(i, ' ', 0), true; }, rayCopperDrum);
+      rod(vx, vy, TOWER.h + 0.6, vx, vy, TOWER.h + 1.1, 0.012, GRAY, 1.2);
+      if (fract(T * 0.8) < 0.5) dot(vx, vy, TOWER.h + 1.12, 0.03, (i, t, L) => { BG[i] = C(RED, 13); return set(i, '*', C(WHITE, 15)), true; });
+    }
+  }
+  { // the windsock, at the east end: a pole, and the sock streaming off downwind in orange and white
+    const [vx, vy] = R(RUNWAY.x1 - 1.5, RUNWAY.y - RUNWAY.hw - 1.2), wl = Math.hypot(...HAZE_WIND) || 1, ax = HAZE_WIND[0] / wl, ay = HAZE_WIND[1] / wl;
+    if (inView(vx, vy, 0.6)) {
+      rod(vx, vy, 0, vx, vy, 0.62, 0.01, GRAY, 1.2);
+      for (let k = 0; k < 5; k++) {
+        const f0 = k * 0.09, f1 = (k + 1) * 0.09, droop = 0.03 + 0.02 * Math.sin(T * 3 + k);
+        rod(vx + ax * f0, vy + ay * f0, 0.6 - droop * k / 5, vx + ax * f1, vy + ay * f1, 0.6 - droop * (k + 1) / 5, 0.035 - k * 0.004, k & 1 ? WHITE : ORANGE, 1.4);
+      }
+    }
+  }
+}
+// the terminal: glass both long sides (airside and landside) between concrete ends, a band across the top with its
+// name, a flat roof with plant on it, the doors where the causeway road comes in
+function drawTerminal(b, vx, vy, lit) {
+  const NAME = 'GLYPHPORT INTERNATIONAL';
+  drawBox(boxAt(vx, vy, 1, 0, b.hl, b.hw, 0, b.h), (i, t, L) => {
+    const f = HIT.face, u = HIT.u, w = HIT.w, k = shadeFace(f);
+    if (f === 5) { BG[i] = C(GRAY, 2 + L * 0.25); return set(i, hash(Math.floor(u * 3), Math.floor(HIT.v * 3), 77) > 0.85 ? '#' : ' ', C(GRAY, 6)), true; } // roof, plant on it
+    if (f === 1 || f === 2) { BG[i] = C(STONE, (1.6 + L * 0.3) * k); return set(i, ' ', 0), true; } // the ends
+    if (w > b.h - 0.22) { // the name band
+      BG[i] = C(BLUE, 1.5 + L * 0.2);
+      const n = NAME.length, side = f === 3 ? 1 : -1, q = (u * side / b.hl + 1) / 2;
+      const ch = signLine(NAME, q * n, (b.h - 0.11 - w) / 0.2, i, b.h - 0.11, midDepth(vx, vy), t, 2 * b.hl / n, 0.16, farDepth(vx, vy, b.hl), side, 0);
+      return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 13 + lit * 2)), true;
+    }
+    const mull = fract(u * 1.6) < 0.08 || w < 0.04 || Math.abs(w - 0.55) < 0.02, door = f === 4 && Math.abs(u) < 0.6 && w < 0.4;
+    if (mull) { BG[i] = C(GRAY, 2.5 + L * 0.3); return set(i, '|', C(GRAY, 6)), true; }
+    BG[i] = door ? C(GRAY, 1) : C(CYAN, 1.2 + lit * 2.5 + L * 0.15); // glass: lit up inside after dark
+    return set(i, door ? '|' : lit > 0.3 && hash(Math.floor(u * 6), Math.floor(w * 8), 79) > 0.88 ? 'i' : ' ', C(WARM, 11)), true; // (people inside)
+  });
+}
+// a hangar: an arched roof over it front to back, its doors open on the apron side, dark inside
+function drawHangar(b, vx, vy, lit) {
+  const r = (b.hl * b.hl + b.h * b.h) / (2 * b.h), z0 = b.h - r; // the arch through the walls' feet and the roof's peak
+  const box = { x: vx, y: vy, c: 0, s: 1, hl: b.hw, hw: b.hl, z0: 0, z1: b.h, r, z0Axis: z0 };
+  drawBox({ ...box, z0: z0 }, (i, t, L) => {
+    const f = HIT.face, across = HIT.v, w = HIT.w;
+    if (f === 5) { BG[i] = C(GRAY, (3 + L * 0.35) * (0.8 + 0.2 * Math.abs(across) / b.hl)); return set(i, fract(across * 3) < 0.15 ? '|' : ' ', C(GRAY, 7)), true; } // corrugated
+    const front = f === 1, door = front && Math.abs(across) < b.hl * 0.85 && w < b.h * 0.75;
+    if (door) return false; // open: you see in
+    BG[i] = C(GRAY, 2.8 + L * 0.35); return set(i, front && w > b.h * 0.8 ? '=' : ' ', C(ORANGE, 12)), true;
+  }, (ox, oy, oz, rx, ry, rz) => rayVault(ox, oy, oz, rx, ry, rz, { x: vx, y: vy, c: 0, s: 1, hl: b.hw, r, z0 }));
+  // inside, through the open doors: the back wall, under strip lights, and the underside of the roof
+  drawBox(boxAt(vx, vy - b.hw + 0.06, 1, 0, b.hl * 0.95, 0.03, 0, b.h * 0.95), (i, t, L) => {
+    const strip = fract(HIT.w * 1.6) < 0.08;
+    BG[i] = strip ? C(WHITE, 6 + lit * 4) : C(GRAY, 1 + lit * 0.8); return set(i, fract(HIT.u * 2) < 0.06 ? '|' : ' ', C(GRAY, 5)), true;
+  });
+  drawBox(boxAt(vx, vy, 1, 0, b.hl * 0.9, b.hw * 0.95, b.h * 0.75, b.h * 0.76), (i, t, L) => { BG[i] = C(GRAY, 0.8); return set(i, fract(HIT.u * 1.5) < 0.1 ? '=' : ' ', C(WHITE, 6 + lit * 6)), true; });
+}
+// ===== aircraft on screen (aircraft.js says where they are). They pitch and bank, so their parts are boxes and rods
+// in the aircraft's own frame: forward along the fuselage, right along the right wing, up through the roof.
+// A plane: the fuselage (a rod, tapering to the tail), the cockpit glass, wings (swept on the jets), the tailplane and
+// fin, the engines, a spinning propeller on the light plane, wheels while it's low, and its lights: red on the left
+// wingtip, green on the right, a white strobe, a red beacon on top, landing lights coming in. A helicopter: the cabin,
+// its glass, the tail boom and fin, skids, the main rotor a blur with two blades, the tail rotor.
+// ---- an oriented box: centre (px, py, pz) (px, py camera-relative), unit axes A[0..2], half extents E[0..2]
+function rayOBox(ox, oy, oz, rx, ry, rz, b) {
+  const qx = ox - b.px, qy = oy - b.py, qz = oz - b.pz;
+  let t0 = -Infinity, t1 = Infinity, face = 0;
+  for (let k = 0; k < 3; k++) {
+    const A = b.A[k], e = b.E[k], o = qx * A[0] + qy * A[1] + qz * A[2], d = rx * A[0] + ry * A[1] + rz * A[2];
+    if (Math.abs(d) < 1e-12) { if (Math.abs(o) > e) return -1; continue; }
+    let ta = (-e - o) / d, tb = (e - o) / d, plus = false;
+    if (ta > tb) { const s = ta; ta = tb; tb = s; plus = true; }
+    if (ta > t0) { t0 = ta; face = k * 2 + (plus ? 1 : 2); }
+    if (tb < t1) t1 = tb;
+    if (t0 > t1) return -1;
+  }
+  if (t0 < 0.01) return -1;
+  const hx = qx + rx * t0, hy = qy + ry * t0, hz = qz + rz * t0, A = b.A;
+  HIT.u = hx * A[0][0] + hy * A[0][1] + hz * A[0][2]; HIT.v = hx * A[1][0] + hy * A[1][1] + hz * A[1][2]; HIT.w = hx * A[2][0] + hy * A[2][1] + hz * A[2][2];
+  HIT.face = face;
+  return t0;
+}
+function drawOBox(px_, py_, pz, A, E, shade) {
+  const hx = Math.abs(A[0][0]) * E[0] + Math.abs(A[1][0]) * E[1] + Math.abs(A[2][0]) * E[2];
+  const hy = Math.abs(A[0][1]) * E[0] + Math.abs(A[1][1]) * E[1] + Math.abs(A[2][1]) * E[2];
+  const hz = Math.abs(A[0][2]) * E[0] + Math.abs(A[1][2]) * E[1] + Math.abs(A[2][2]) * E[2];
+  drawBox({ x: px_, y: py_, c: 1, s: 0, hl: hx, hw: hy, z0: pz - hz, z1: pz + hz, px: px_, py: py_, pz, A, E }, shade, rayOBox);
+}
+// how lit a face is that points along n (the light comes from up over your left shoulder, as everywhere)
+const faceLit = n => 0.55 + 0.45 * Math.max(0, -n[0] * 0.45 + n[1] * 0.3 + n[2] * 0.84);
+// the frame of an aircraft heading yaw, nose up pitch, banked roll (right wing down)
+function craftFrame(yaw, pitch, roll) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
+  const f = [cy * cp, sy * cp, sp], r0 = [-sy, cy, 0], u0 = [f[1] * r0[2] - f[2] * r0[1], f[2] * r0[0] - f[0] * r0[2], f[0] * r0[1] - f[1] * r0[0]];
+  const r = [r0[0] * cr - u0[0] * sr, r0[1] * cr - u0[1] * sr, r0[2] * cr - u0[2] * sr], u = [u0[0] * cr + r0[0] * sr, u0[1] * cr + r0[1] * sr, u0[2] * cr + r0[2] * sr];
+  return { f, r, u };
+}
+// a point on the aircraft: its position (camera-relative x, y; world z) plus a along f, b along r, c along u
+const at = (o, F, a_, b_, c_) => [o[0] + F.f[0] * a_ + F.r[0] * b_ + F.u[0] * c_, o[1] + F.f[1] * a_ + F.r[1] * b_ + F.u[1] * c_, o[2] + F.f[2] * a_ + F.r[2] * b_ + F.u[2] * c_];
+// a panel in the aircraft's frame (centre a, b, c; half extents along f, r, u), in one colour
+function craftPanel(o, F, a_, b_, c_, ef, er, eu, col, k = 1, ch = ' ') {
+  const p = at(o, F, a_, b_, c_), axes = [F.f, F.r, F.u];
+  drawOBox(p[0], p[1], p[2], axes, [ef, er, eu], (i, t, L) => {
+    const n = axes[(HIT.face - 1) >> 1].map(v => HIT.face & 1 ? v : -v);
+    BG[i] = C(col, (1.4 + L * 0.35) * faceLit(n) * k); return set(i, ch, C(GRAY, L * 0.4)), true;
+  });
+}
+const craftLight = (p, col, r = 0.03) => dot(p[0], p[1], p[2], r, (i, t, L) => { BG[i] = C(col, 12); return set(i, '*', C(WHITE, 15)), true; });
+function drawAircraft() {
+  for (const a of aircraft) {
+    if (a === me && !chaseOn) continue; // (you're in it, looking out)
+    const vx = rel(a.x - px), vy = rel(a.y - py), T_ = PLANE_TYPES[a.type];
+    if (Math.hypot(vx, vy) > vis + 4 || !inView(vx, vy, (T_.span || 1) / 2 + 0.3)) continue;
+    if (T_.heli) drawHeliCraft(a, T_, vx, vy); else drawPlaneCraft(a, T_, vx, vy);
+  }
+}
+function drawPlaneCraft(a, T_, vx, vy) {
+  const F = craftFrame(a.yaw, a.pitch, a.roll), gear = a.z < 0.6, h = T_.r + (gear ? T_.r * 0.9 + 0.02 : 0), o = [vx, vy, a.z + h], L2 = T_.len / 2;
+  const depth = dx * vx + dy * vy, far = depth > 22, wreck = a.wrecked, body = wreck ? GRAY : T_.body, burnt = wreck ? 0.3 : 1;
+  const nightLit = Math.max(night, overcast * 0.6);
+  // the fuselage, its livery: a stripe along the lower half, a row of windows, the cockpit glass at the nose
+  const fus = (p0, p1, r) => drawRod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], r, (i, t, L) => {
+    const s = ((HIT.u - o[0]) * F.f[0] + (HIT.v - o[1]) * F.f[1] + (HIT.w - o[2]) * F.f[2]) / L2; // -1 tail .. 1 nose
+    const row = Math.floor(i / cols), ad = Math.max(0.05, dx * HIT.u + dy * HIT.v), axisRow = hor - (HIT.w - eye) * projY / ad, below = row > axisRow + 0.3;
+    if (s > 0.8 && !below && !wreck) { BG[i] = C(CYAN, 1.5 + L * 0.2); return set(i, ' ', 0), true; } // the cockpit glass
+    const win = !far && !wreck && Math.abs(row - axisRow + 0.6) < 0.5 && s > -0.6 && s < 0.7;
+    BG[i] = C(below ? T_.stripe : body, (1.6 + L * 0.35) * burnt); return set(i, win ? (nightLit > 0.3 ? 'o' : '.') : ' ', win ? C(nightLit > 0.3 ? WARM : GRAY, nightLit > 0.3 ? 14 : 4) : 0), true;
+  });
+  fus(at(o, F, L2 - T_.r, 0, 0), at(o, F, -L2 * 0.35, 0, 0), T_.r);
+  fus(at(o, F, -L2 * 0.35, 0, 0), at(o, F, -L2 + T_.r * 0.6, 0, T_.r * 0.4), T_.r * 0.62);
+  // wings: the jets' swept back in two pieces each side, the Skylark's straight and up on top of the cabin
+  const sweep = T_.engines ? T_.span * 0.12 : 0, chord = T_.len * (T_.engines ? 0.13 : 0.12), wz = T_.prop ? T_.r * 0.9 : -T_.r * 0.4;
+  for (const e of [-1, 1]) {
+    craftPanel(o, F, -T_.len * 0.02, e * T_.span * 0.14, wz, chord, T_.span * 0.14, 0.012, body, burnt);
+    craftPanel(o, F, -T_.len * 0.02 - sweep, e * T_.span * 0.37, wz + (T_.prop ? 0 : 0.02), chord * 0.75, T_.span * 0.13, 0.01, body, burnt);
+    if (!far) craftLight(at(o, F, -sweep - chord * 0.3, e * T_.span * 0.5, wz), e < 0 ? RED : GREEN, Math.max(0.02, T_.r * 0.25)); // nav lights
+  }
+  // the tail: tailplane and fin (the fin in the stripe colour)
+  craftPanel(o, F, -L2 + chord * 0.5, 0, T_.r * 0.4, chord * 0.55, T_.span * 0.17, 0.008, body, burnt);
+  craftPanel(o, F, -L2 + chord * 0.6, 0, T_.r * 0.4 + T_.tail / 2, chord * 0.65, 0.012, T_.tail / 2, wreck ? GRAY : T_.stripe, burnt);
+  if (far) return;
+  // engines
+  if (T_.engines === 'wing') for (const e of [-1, 1]) { const p0 = at(o, F, T_.len * 0.1, e * T_.span * 0.2, -T_.r * 1.3), p1 = at(o, F, -T_.len * 0.04, e * T_.span * 0.2, -T_.r * 1.3); rod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], T_.r * 0.38, GRAY, 1.2); }
+  if (T_.engines === 'tail') for (const e of [-1, 1]) { const p0 = at(o, F, -L2 * 0.45, e * T_.r * 1.6, T_.r * 0.5), p1 = at(o, F, -L2 * 0.8, e * T_.r * 1.6, T_.r * 0.5); rod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], T_.r * 0.5, GRAY, 1.2); }
+  // the Skylark's propeller: the spinner and a blur of a disc
+  if (T_.prop) {
+    const sp = at(o, F, L2 + 0.01, 0, 0);
+    dot(sp[0], sp[1], sp[2], 0.02, (i, t, L) => { BG[i] = C(T_.stripe, 9); return set(i, ' ', 0), true; });
+    if (a.v > 0.05 || a.engine) drawOBox(...at(o, F, L2 + 0.015, 0, 0), [F.f, F.r, F.u], [0.004, 0.13, 0.13], (i, t, L) => {
+      if (Math.hypot(HIT.v, HIT.w) > 0.13 || hash(i, Math.floor(T * 40), 3) > 0.35) return false;
+      return set(i, ':', C(GRAY, 8)), true;
+    });
+  }
+  // the wheels, while it's down low
+  if (gear) for (const [fa, fb] of [[L2 * 0.7, 0], [-0.05, -T_.span * 0.12], [-0.05, T_.span * 0.12]]) {
+    const top = at(o, F, fa, fb, -T_.r * 0.7), foot = [top[0], top[1], Math.max(0.02, a.z + 0.02)];
+    rod(top[0], top[1], top[2], foot[0], foot[1], foot[2], 0.008, GRAY, 1);
+    dot(foot[0], foot[1], foot[2], Math.max(0.018, T_.r * 0.18), (i, t, L) => { BG[i] = C(GRAY, 0.8); return set(i, 'o', C(GRAY, 4)), true; });
+  }
+  // the lights: the beacon on top, the strobe on the tail, landing lights when it's low and moving
+  if (wreck) return;
+  if (fract(T * 1.1 + a.id * 0.3) < 0.15) craftLight(at(o, F, 0, 0, T_.r * 1.1), RED, Math.max(0.02, T_.r * 0.22));
+  if (fract(T * 0.9 + a.id * 0.17) < 0.06) craftLight(at(o, F, -L2, 0, T_.r * 0.4 + T_.tail), WHITE, Math.max(0.02, T_.r * 0.25));
+  if (a.z > 0.05 && a.z < 3 && nightLit > 0.3) craftLight(at(o, F, L2 * 0.6, 0, -T_.r), WHITE, T_.r * 0.4);
+}
+function drawHeliCraft(a, T_, vx, vy) {
+  const F = craftFrame(a.yaw, a.pitch, a.roll), o = [vx, vy, a.z + 0.16], wreck = a.wrecked, body = wreck ? GRAY : T_.body, burnt = wreck ? 0.3 : 1;
+  const glass = (i, t, L) => { BG[i] = C(CYAN, 1.5 + L * 0.2); return set(i, ' ', 0), true; };
+  craftPanel(o, F, 0, 0, 0, 0.17, 0.075, 0.075, body, burnt); // the cabin
+  if (!wreck) { const n = at(o, F, 0.16, 0, 0.01); dot(n[0], n[1], n[2], 0.072, glass); } // the bubble at the front
+  const t0 = at(o, F, -0.15, 0, 0.03), t1 = at(o, F, -0.5, 0, 0.06);
+  rod(t0[0], t0[1], t0[2], t1[0], t1[1], t1[2], 0.022, body, burnt); // the tail boom
+  craftPanel(o, F, -0.5, 0, 0.12, 0.04, 0.008, 0.07, wreck ? GRAY : T_.stripe, burnt); // the fin
+  for (const e of [-1, 1]) { // skids on struts
+    const s0 = at(o, F, 0.19, e * 0.08, -0.15), s1 = at(o, F, -0.17, e * 0.08, -0.15);
+    rod(s0[0], s0[1], s0[2], s1[0], s1[1], s1[2], 0.008, GRAY, 1.1);
+    for (const f of [-0.1, 0.1]) { const p0 = at(o, F, f, e * 0.05, -0.07), p1 = at(o, F, f, e * 0.08, -0.15); rod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], 0.006, GRAY, 1.1); }
+  }
+  const m0 = at(o, F, 0, 0, 0.075), m1 = at(o, F, 0, 0, 0.12);
+  rod(m0[0], m0[1], m0[2], m1[0], m1[1], m1[2], 0.012, GRAY, 1); // the mast
+  if (wreck) return;
+  const spin = a.rotor || 0; // 0 stopped .. 1 flying
+  drawOBox(...at(o, F, 0, 0, 0.125), [F.f, F.r, F.u], [T_.rotor, T_.rotor, 0.004], (i, t, L) => { // the rotor: two blades round and round, a blur between them when it's going
+    const ang = Math.atan2(HIT.v, HIT.u), r = Math.hypot(HIT.u, HIT.v);
+    if (r > T_.rotor) return false;
+    const phase = (a.rotorA || 0) / Math.PI, blade = Math.abs(fract(ang / Math.PI - phase) - 0.5) > 0.47;
+    if (!blade && (spin < 0.3 || hash(i, Math.floor(T * 30), 7) > 0.22 * spin)) return false;
+    return set(i, blade ? '=' : '-', C(GRAY, L * (blade ? 0.8 : 0.4))), true;
+  });
+  const tr = at(o, F, -0.5, 0.012, 0.08); // the tail rotor
+  drawOBox(tr[0], tr[1], tr[2], [F.r, F.f, F.u], [0.003, 0.07, 0.07], (i, t, L) => {
+    if (Math.hypot(HIT.v, HIT.w) > 0.07 || spin > 0.3 && hash(i, Math.floor(T * 40), 9) > 0.4) return false;
+    return set(i, ':', C(GRAY, 8)), true;
+  });
+  if (fract(T * 1.2 + a.id * 0.3) < 0.2) craftLight(at(o, F, -0.5, 0, 0.0), RED, 0.022);
 }
 // ===== the calendar: which day of the week it is, and what's on. Days tick over at midnight (and when you sleep
 // through one). Starting simple: every Saturday night, fireworks over the bay off the Sunset Pier.
@@ -17927,7 +18388,7 @@ function bigMapLabels() {
   place(GRAND_HOTEL.bx * 8 + 5, GRAND_HOTEL.by * 8 + 5, 'Grand Hotel');
   place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
   place(...COURIER_DEPOT.roof,COURIER_COMPANY);
-  place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
+  place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place((AIRPORT.x0 + AIRPORT.x1) / 2, RUNWAY.y + 0.5, 'Airport'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'Big screens', radio: 'Radio tower' };
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { const lm = landmarkOf.get(bi(bx, by)); if (lm) place(bx * 8 + 5, by * 8 + 5, LM[lm] || lm); }
   for (const s of SERVICES) place(s.x, s.y - 0.8, { police: 'Police', fire: 'Fire station', amb: 'Hospital' }[s.kind] || s.kind);
@@ -21062,7 +21523,7 @@ const free = (x, y) => {
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
@@ -21201,6 +21662,7 @@ function loop(t) {
   stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
+  stepAirTraffic(dt); // (the airliners: aircraft.js)
   stepTask(dt);
   stepLaundry();
   stepEvents(dt);

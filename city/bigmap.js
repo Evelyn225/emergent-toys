@@ -31,7 +31,7 @@ function bigMapLabels() {
   place(GRAND_HOTEL.bx * 8 + 5, GRAND_HOTEL.by * 8 + 5, 'Grand Hotel');
   place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
   place(...COURIER_DEPOT.roof,COURIER_COMPANY);
-  place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
+  place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place((AIRPORT.x0 + AIRPORT.x1) / 2, RUNWAY.y + 0.5, 'Airport'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'Big screens', radio: 'Radio tower' };
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { const lm = landmarkOf.get(bi(bx, by)); if (lm) place(bx * 8 + 5, by * 8 + 5, LM[lm] || lm); }
   for (const s of SERVICES) place(s.x, s.y - 0.8, { police: 'Police', fire: 'Fire station', amb: 'Hospital' }[s.kind] || s.kind);

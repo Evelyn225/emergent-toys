@@ -511,6 +511,12 @@ function floorBaseCell(i, r, x, rx, ry) {
       const gf = gardenFloor(i, r, x, wx, wy, L);
       if (gf === true) return;
       [ch, base, k] = gf; soft = true;
+    } else if (onCauseway(wx, wy)) { // the road out to the airport
+      soft = true; [ch, base, k] = causewayFloor(r, x, wx, wy);
+    } else if (onAirport(wx, wy)) { // the airport: runway, taxiway, apron, grass (airport-render.js)
+      const af = airportFloor(i, r, x, wx, wy, L);
+      if (!af) return; // (a light, painted already)
+      soft = true; [ch, base, k] = af;
     } else if (onFootbridge(wx, wy)) { // the footbridge: boards across it, lamplight pooling under each lamp after dark
       soft = true; base = BRICK; k = 1.3;
       const e = Math.abs(rel(wx - FOOTBRIDGE.x)) / FOOTBRIDGE.hw;
