@@ -84,7 +84,7 @@ function standUp() { // back where you sat down from (it was walkable)
 }
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
-  const ground = mode === 'walk' ? architectureGroundHeight(px, py) : 0;
+  const ground = mode === 'walk' ? walkGround(px, py) : 0;
   if (body.groundMode === mode && (body.z > 0 || body.vz > 0)) body.z += ((body.ground || 0) - ground) * 10;
   body.ground = ground; body.groundMode = mode;
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
@@ -145,7 +145,14 @@ function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anyw
 const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z + Math.max(0, -body.vz) * 0.05; };
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
+// the ground under your feet on the street, in cells: a building's front steps, or the el stairs (elevated.js)
+const walkGround = (x, y) => Math.max(architectureGroundHeight(x, y), elStairGround(x, y));
+let elPass = null; // the turnstile you've swiped through: { st }, till you're up on the platform or off the stairs
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
+  if (mode === 'walk' && underEl(py) && elStairGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
+    mode = 'roof'; roofH = EL_TOP; roofLot = new Set(); room = null; elPass = null; return;
+  }
+  if (mode === 'walk' && elPass && !elStairAt(px, py) && Math.hypot(rel(px - elPass.st.x), rel(py - elPass.st.y)) > 0.6) elPass = null; // (walked away from the turnstile)
   if(mode==='elplat') {
     const p=elPlatformAt(px,py);
     if(p&&p.s===plat.s&&p.tr===plat.tr)return;
@@ -169,13 +176,14 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
-  shiftFeet(roofH * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
+  const g = elStairGround(px, py); // (off the deck onto the top of the el stairs: no drop at all)
+  shiftFeet((roofH - g) * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
 function outdoorFeet() {
   let base;
   if(mode==='roof')base=roofH;
   else if(mode==='elplat')base=EL_TOP;
-  else base=architectureGroundHeight(px,py);
+  else base=walkGround(px,py);
   return [px,py,base+body.z/10];
 }
 function stepElImpact(from,t0,t1) {

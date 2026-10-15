@@ -547,42 +547,53 @@ function drawElPillar(p) {
     BG[i] = C(GRAY, (0.8 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face < 5 ? '=' : ' ', C(GRAY, L * 0.7)), true;
   });
 }
-// The stair tower: flights switching back between two lanes, a landing at each turn, a post at each corner, a deck on
-// top with a short bridge across to the platform, and the green EL sign up there facing the street. st.ax/ay point
-// toward the street (and the deck); u runs along the street. Flights are inclined slabs (rayBeveledBay's planes).
-const EL_FLIGHTS = 6, EL_TOWER = 0.11, EL_RUN = 0.075;
+// The stairs up to the el (laid out in elevated.js): two straight flights along the curb side of the sidewalk with a
+// landing halfway, a landing at the top that runs out onto the platform, posts down to the street, a rail each side,
+// a turnstile at the foot, and the green EL sign at the top facing the street. Flights are inclined slabs (planes).
 const elStairShade = (i, t, L) => {
   if (HIT.face >= 7) { // the treads: open steel, the street showing between them
-    if (fract((HIT.u + EL_RUN) * 60) < 0.3) return false;
+    if (fract(HIT.u * 55) < 0.25) return false;
     BG[i] = C(GRAY, 1.3 + L * 0.25); return set(i, '=', C(WHITE, L * 0.7)), true;
   }
   BG[i] = C(GRAY, (1.1 + L * 0.25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; // the stringers
 };
 function drawElStairs(st) {
-  const [vx, vy] = R(st.x, st.y), d = Math.hypot(vx, vy);
-  if (d > vis + 1) return;
-  const fx = st.ax, fy = st.ay, c = fy, s = -fx, W = EL_TOWER, h = EL_TOP / EL_FLIGHTS;
-  const at = (u, v) => [vx + c * u + fx * v, vy + s * u + fy * v]; // (the boxes' v axis is fx, fy: +v faces the street)
-  for (const su of [-1, 1]) for (const sv of [-1, 1]) { const [x, y] = at(su * (W - 0.008), sv * (W - 0.008)); rod(x, y, 0, x, y, EL_TOP + 0.1, 0.006); }
-  for (let k = 0; k < EL_FLIGHTS; k++) {
-    const dir = k & 1 ? -1 : 1, lane = (k & 1 ? 1 : -1) * 0.05, mid = (k + 0.5) * h, slope = dir * h / (2 * EL_RUN), [x, y] = at(0, lane);
-    if (d > 10) { const [ax, ay] = at(-dir * EL_RUN, lane), [bx, by] = at(dir * EL_RUN, lane); rod(ax, ay, k * h, bx, by, (k + 1) * h, 0.012); continue; }
-    drawBox({ x, y, c, s, hl: EL_RUN, hw: 0.035, z0: k * h - 0.012, z1: (k + 1) * h + 0.012,
-      planes: [[1, 0, 0, EL_RUN, 1], [-1, 0, 0, EL_RUN, 2], [0, 1, 0, 0.035, 3], [0, -1, 0, 0.035, 4], [-slope, 0, 1, mid + 0.012, 7], [slope, 0, -1, -mid + 0.012, 8]] },
+  const H = EL_TOP, c = st.c, s = st.s, fx = st.ax, fy = st.ay;
+  const [ox, oy] = R(st.ox, st.oy), at = (u, v) => [ox + c * (st.off + u) + fx * v, oy + s * (st.off + u) + fy * v];
+  const [mx, my] = at(0, 0.3), d = Math.hypot(mx, my);
+  if (d > vis + 2) return;
+  const vm = (ELS.v0 + ELS.v1) / 2, hw = (ELS.v1 - ELS.v0) / 2, far = d > 12;
+  for (const [ua, ub, za, zb] of [[ELS.u0, ELS.u1, 0, H / 2], [ELS.u2, ELS.u3, H / 2, H]]) { // the two flights
+    const run = (ub - ua) / 2, mid = (za + zb) / 2, slope = (zb - za) / (ub - ua), [x, y] = at((ua + ub) / 2, vm);
+    if (far) { const [ax, ay] = at(ua, vm), [bx, by] = at(ub, vm); rod(ax, ay, za, bx, by, zb, 0.03); continue; }
+    drawBox({ x, y, c, s, hl: run, hw, z0: za - 0.015, z1: zb + 0.015,
+      planes: [[1, 0, 0, run, 1], [-1, 0, 0, run, 2], [0, 1, 0, hw, 3], [0, -1, 0, hw, 4], [-slope, 0, 1, mid, 7], [slope, 0, -1, -mid + 0.02, 8]] },
       elStairShade, rayBeveledBay);
-    const [lx, ly] = at(dir * (EL_RUN + 0.017), 0); // the landing at its top, across both lanes
-    drawBox(boxAt(lx, ly, c, s, 0.017, W - 0.01, (k + 1) * h - 0.012, (k + 1) * h), STEEL.cap);
+    for (const e of [-1, 1]) { const [ax, ay] = at(ua, vm + e * hw), [bx, by] = at(ub, vm + e * hw); rod(ax, ay, za + 0.1, bx, by, zb + 0.1, 0.004); } // the rails
   }
-  // the top: the tower's deck, the bridge over to the platform's edge with a rail each side, the sign
-  const gap = Math.max(0.02, (fy > 0 ? EL_Y0 - st.y : fy < 0 ? st.y - EL_Y1 : 0.15) - W), [bx, by] = at(0, W + gap / 2);
-  drawBox(boxAt(vx, vy, c, s, W, W, EL_TOP - 0.012, EL_TOP), STEEL.cap);
-  drawBox(boxAt(bx, by, c, s, 0.06, gap / 2 + 0.005, EL_TOP - 0.015, EL_TOP), STEEL.cap);
-  for (const su of [-1, 1]) { const [ax, ay] = at(su * 0.06, W), [ex, ey] = at(su * 0.06, W + gap); rod(ax, ay, EL_TOP + 0.1, ex, ey, EL_TOP + 0.1, 0.004); }
-  const [sx, sy] = at(0, W - 0.01), far = farDepth(sx, sy, 0.07);
-  drawBox(boxAt(sx, sy, c, s, 0.07, 0.008, EL_TOP + 0.1, EL_TOP + 0.16), (i, t, L) => {
+  const landing = (ua, ub, va, vb, z) => { const [x, y] = at((ua + ub) / 2, (va + vb) / 2); drawBox(boxAt(x, y, c, s, (ub - ua) / 2, (vb - va) / 2, z - 0.015, z), STEEL.cap); };
+  landing(ELS.u1, ELS.u2, ELS.v0, ELS.v1, H / 2);
+  landing(ELS.u3, ELS.u4, ELS.v0, ELS.top, H);
+  // the posts: under the landings and halfway along each flight
+  for (const [u, z] of [[(ELS.u0 + ELS.u1) / 2, H / 4], [ELS.u1, H / 2], [ELS.u2, H / 2], [(ELS.u2 + ELS.u3) / 2, H * 0.75], [ELS.u3, H], [ELS.u4, H]])
+    for (const v of [ELS.v0 + 0.01, ELS.v1 - 0.01]) { const [x, y] = at(u, v); rod(x, y, 0, x, y, z - 0.015, 0.008); }
+  if (far) return;
+  // rails round the landings (open where the stairs come in, and onto the deck)
+  for (const [ua, ub, z] of [[ELS.u1, ELS.u2, H / 2]]) for (const v of [ELS.v0, ELS.v1]) { const [ax, ay] = at(ua, v), [bx, by] = at(ub, v); rod(ax, ay, z + 0.1, bx, by, z + 0.1, 0.004); }
+  { const [ax, ay] = at(ELS.u1, ELS.v0), [bx, by] = at(ELS.u1, ELS.v1); rod(ax, ay, H / 2 + 0.1, bx, by, H / 2 + 0.1, 0.004); } // (the end of the halfway landing)
+  { const [ax, ay] = at(ELS.u4, ELS.v0), [bx, by] = at(ELS.u4, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the far end of the top
+  { const [ax, ay] = at(ELS.u3, ELS.v0), [bx, by] = at(ELS.u4, ELS.v0); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the building side of the top
+  { const [ax, ay] = at(ELS.u3, ELS.v1), [bx, by] = at(ELS.u3, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the near side, past the stairs' head
+  // the turnstile at the foot: a post, its arm across the way (swung round once you've swiped)
+  { const pu = ELS.u0 - 0.02, pv = ELS.v1 - 0.015, [x, y] = at(pu, pv), open = elPass && elPass.st === st;
+    drawBox(boxAt(x, y, c, s, 0.012, 0.012, 0, 0.09), STEEL.cap);
+    const [bx, by] = open ? at(pu + 0.11, pv - 0.01) : at(pu, ELS.v0 + 0.01); rod(x, y, 0.075, bx, by, 0.075, 0.004, open ? GREEN : RED, 1.5); }
+  // the sign at the top, facing the street
+  const [sx, sy] = at((ELS.u3 + ELS.u4) / 2, ELS.v0 + 0.005), sfar = farDepth(sx, sy, 0.07);
+  drawBox(boxAt(sx, sy, c, s, 0.07, 0.008, H + 0.1, H + 0.16), (i, t, L) => {
     BG[i] = C(GREEN, 4 + Math.max(night, overcast * 0.6) * 5);
     if (HIT.face !== 3 && HIT.face !== 4) return set(i, ' ', 0), true;
-    const q = ((HIT.face === 3 ? HIT.u : -HIT.u) + 0.07) / 0.14, ch = signLine('EL', q * 4 - 1, (EL_TOP + 0.15 - HIT.w) / 0.04, i, EL_TOP + 0.13, midDepth(sx, sy), t, 0.035, 0.04, far, ...faceDir(c, s));
+    const q = ((HIT.face === 3 ? HIT.u : -HIT.u) + 0.07) / 0.14, ch = signLine('EL', q * 4 - 1, (H + 0.15 - HIT.w) / 0.04, i, H + 0.13, midDepth(sx, sy), t, 0.035, 0.04, sfar, ...faceDir(c, s));
     return set(i, ch ?? ' ', C(WHITE, 15)), true;
   });
 }
@@ -1403,7 +1414,7 @@ function drawElCar(vx, vy, cab) {
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
 function elSprites() {
   forNear(elPillarsB, p => { if (inView(rel(p.x - px), rel(p.y - py), 0.1)) drawElPillar(p); });
-  for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.x - px), rel(stairs.y - py), 0.5)) drawElStairs(stairs);
+  for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.ox + stairs.c * stairs.off - px), rel(stairs.oy + stairs.ay * 0.25 - py), 1.7)) drawElStairs(stairs);
   for (const t of elTrains(T)) {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {

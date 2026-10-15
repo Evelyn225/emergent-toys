@@ -3975,6 +3975,64 @@ function elPlatformAt(x,y) {
   for(const tr of [0,1])if(Math.abs(rel(y-EL_PLAT[tr]))<.14)return {s,tr};
   return null;
 }
+// ---- the stairs up: one per platform, a straight run along the curb side of the sidewalk (clear of the bays and
+// balconies on the buildings). Two flights with a landing halfway, then a landing at the top that runs out onto the
+// platform's end. In each stair's own frame u runs along the street (up the stairs) and v out from the building face
+// toward the deck; st.ox, st.oy is the face at the station's middle, st.off how far along it's been slid to find a
+// clear run (streetscape.js). A turnstile at the foot (st.x, st.y: where you stand to swipe).
+const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: EL_Y0 - EL_Y + 0.05 };
+// (top: the top landing reaches a little past the deck's edge, 0.4 out from the face, so you step off it onto the deck)
+for (const s of EL_STATIONS) s.stairs = [0, 1].map(tr => {
+  const ay = tr ? -1 : 1, oy = tr ? EL_Y + 2 : EL_Y; // (c, s: u's direction; for the south side, u runs west)
+  return elStairFoot({ tr, ox: s.x, oy, ax: 0, ay, c: ay, s: 0, off: 0 });
+});
+function elStairFoot(st) { st.x = mod(st.ox + st.c * (st.off + ELS.u0 - 0.08), N); st.y = st.oy + st.ay * (ELS.v0 + ELS.v1) / 2; return st; }
+// the stairs' steelwork as boxes (for the street clearance): the flights in short pieces, the landings, the top
+const elStairBoxes = st => {
+  const out = [], at = (u, v) => [mod(st.ox + st.c * (st.off + u) + st.ax * v, N), st.oy + st.s * (st.off + u) + st.ay * v];
+  for (let u = ELS.u0 + 0.05; u < ELS.u3; u += 0.1) {
+    const [x, y] = at(u, (ELS.v0 + ELS.v1) / 2), g = elStairGround(x, y);
+    out.push({ x, y, c: 1, s: 0, hl: 0.05, hw: (ELS.v1 - ELS.v0) / 2 + 0.01, z0: Math.max(0, g - 0.04), z1: g + 0.2 });
+  }
+  const [x, y] = at((ELS.u3 + ELS.u4) / 2, (ELS.v0 + ELS.top - 0.06) / 2);
+  out.push({ x, y, c: 1, s: 0, hl: (ELS.u4 - ELS.u3) / 2 + 0.01, hw: (ELS.top - 0.06 - ELS.v0) / 2, z0: EL_TOP - 0.04, z1: EL_TOP + 0.2 });
+  return out;
+};
+// where (x, y) is on a station's stairs: { st, s, u, v, g } (g: the height of the treads, landings or top under you), or null
+function elStairAt(x, y) {
+  if (Math.abs(rel(y - EL_Y - 1)) > 1.05) return null; // (nowhere near the el's street)
+  for (const s of EL_STATIONS) {
+    const dx = rel(x - s.x);
+    if (Math.abs(dx) > 2.9) continue;
+    for (const st of s.stairs) {
+      const dy = rel(y - st.oy), u = st.c * dx + st.s * dy - st.off, v = st.ax * dx + st.ay * dy;
+      const H = EL_TOP, lane = v >= ELS.v0 && v <= ELS.v1;
+      let g = -1;
+      if (u >= ELS.u3 && u <= ELS.u4 && v >= ELS.v0 && v <= ELS.top) g = H; // the top landing
+      else if (lane && u >= ELS.u0 && u < ELS.u1) g = (u - ELS.u0) / (ELS.u1 - ELS.u0) * H / 2; // the first flight
+      else if (lane && u >= ELS.u1 && u < ELS.u2) g = H / 2; // the landing halfway
+      else if (lane && u >= ELS.u2 && u < ELS.u3) g = H / 2 + (u - ELS.u2) / (ELS.u3 - ELS.u2) * H / 2; // the second
+      if (g >= 0) return { st, s, u, v, g };
+    }
+  }
+  return null;
+}
+const elStairGround = (x, y) => { const h = elStairAt(x, y); return h ? h.g : 0; };
+// walking from (x0, y0) to (x, y) as the stairs see it: true (blocked), false (fine), or null (nothing to do with them).
+// On the stairs you keep to them (the rails), up or down a step at a time, or off the top onto the deck; from the
+// street you can only step onto the bottom step, and only once you've swiped through the turnstile (pass)
+const EL_TREAD = 0.08;
+function elStairStep(x0, y0, x, y, pass) {
+  const a = elStairAt(x0, y0), b = elStairAt(x, y);
+  if (!a && !b) return null;
+  if (a) { // on them: a step at a time; off the bottom, or off the top onto the deck, but not over the rails
+    if (!b) return a.g > EL_TREAD * 0.6 && !(underEl(y) && a.g > EL_TOP - 0.01);
+    return Math.abs(b.g - a.g) > EL_TREAD;
+  }
+  if (b.g > EL_TREAD * 0.6) return true; // from the street: the steelwork under the stairs
+  return !(pass && pass.st === b.st); // the bottom step, through the turnstile
+}
+
 // pillars at both curbs, clear of the cross streets
 const elPillars = [];
 for (let bx = 0; bx < NB; bx++) for (const s of [2.6, 4.6, 6.6]) for (const y of [EL_Y0 + 0.05, EL_Y1 - 0.05]) elPillars.push({ x: bx * 8 + s, y });
@@ -4223,7 +4281,6 @@ function streetFixtureBoxes(o, kind) {
   }
   if (kind === 'signal') return [box(.025,.025,0,.4)];
   if (kind === 'blade') return [box(.022,.006,0,.33,o.x,o.y,0,1)];
-  if (kind === 'el-stairs') return [box(.11,.11,0,EL_BOT-.02)];
   if (kind === 'bench') return [box(.18,.07,.01,.13,o.x,o.y,-o.fy,o.fx)];
   if (kind === 'tree') return [box(.03,.03,0,.6*(o.s || 1))];
   return [box(VM_HL,VM_HW,0,VM_H,o.x,o.y,o.c,o.s)];
@@ -4292,11 +4349,26 @@ const subwayBlades=stations.flatMap(s=>{
   return s.blades;
 });
 fitStreetFixtures(subwayBlades,bucketed(subwayBlades),'blade');
-const elStairs=EL_STATIONS.flatMap(s=>{
-  s.stairs=[0,1].map(tr=>({x:s.x,y:EL_Y+(tr?1.86:.14),ax:0,ay:tr?-1:1}));
-  return s.stairs;
-});
-fitStreetFixtures(elStairs,bucketed(elStairs),'el-stairs');
+// the el stairs (elevated.js): each slid along its station to the first run that's clear of the buildings' bays,
+// balconies and canopies and of the el's own pillars (the top must still meet the platform); then the lamps and trees
+// standing where the stairs go step aside, lamps to just past the ends, trees out of the way altogether
+const elStairClear = st => elStairBoxes(st).every(b => !streetGeometryCollision(b, false) &&
+  !elPillars.some(p => Math.abs(rel(p.x - b.x)) < b.hl + 0.04 && Math.abs(rel(p.y - b.y)) < b.hw + 0.04));
+for (const s of EL_STATIONS) for (const st of s.stairs) {
+  for (const off of [0, -0.2, 0.2, -0.4, 0.4, -0.6, -0.8, -1, -1.2, -1.4, 0.6, 0.8, 1]) { st.off = off; if (elStairClear(st)) break; }
+  if (!elStairClear(st)) st.off = 0; // (none clear: back where it started)
+  elStairFoot(st);
+}
+const elStairLocal = (x, y) => { // a fixture's [u, v] in the stairs' frame if it's within reach of them, else null
+  for (const s of EL_STATIONS) for (const st of s.stairs) {
+    const dx = rel(x - st.ox), dy = rel(y - st.oy), u = st.c * dx + st.s * dy - st.off, v = st.ax * dx + st.ay * dy;
+    if (u > ELS.u0 - 0.2 && u < ELS.u4 + 0.15 && v > ELS.v0 - 0.08 && v < ELS.top + 0.05) return [st, u, v];
+  }
+  return null;
+};
+for (let k = trees.length - 1; k >= 0; k--) if (elStairLocal(trees[k].x, trees[k].y)) trees.splice(k, 1);
+for (const l of lamps) { const h = elStairLocal(l.x, l.y); if (!h) continue; const [st, u] = h, to = u < (ELS.u0 + ELS.u4) / 2 ? ELS.u0 - 0.7 : ELS.u4 + 0.3, d = to - u; l.x = mod(l.x + st.c * d, N); l.y += st.s * d; }
+for (const [items, buckets] of [[trees, treesB], [lamps, lampsB]]) { for (const b of buckets) b.length = 0; for (const o of items) buckets[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o); }
 // Ground-light queries visit only the heads whose pools can reach this cell, including relocated lamps.
 for (const l of lamps) {
   const belle = districtAt(l.x,l.y)==='belle';
@@ -10260,42 +10332,53 @@ function drawElPillar(p) {
     BG[i] = C(GRAY, (0.8 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face < 5 ? '=' : ' ', C(GRAY, L * 0.7)), true;
   });
 }
-// The stair tower: flights switching back between two lanes, a landing at each turn, a post at each corner, a deck on
-// top with a short bridge across to the platform, and the green EL sign up there facing the street. st.ax/ay point
-// toward the street (and the deck); u runs along the street. Flights are inclined slabs (rayBeveledBay's planes).
-const EL_FLIGHTS = 6, EL_TOWER = 0.11, EL_RUN = 0.075;
+// The stairs up to the el (laid out in elevated.js): two straight flights along the curb side of the sidewalk with a
+// landing halfway, a landing at the top that runs out onto the platform, posts down to the street, a rail each side,
+// a turnstile at the foot, and the green EL sign at the top facing the street. Flights are inclined slabs (planes).
 const elStairShade = (i, t, L) => {
   if (HIT.face >= 7) { // the treads: open steel, the street showing between them
-    if (fract((HIT.u + EL_RUN) * 60) < 0.3) return false;
+    if (fract(HIT.u * 55) < 0.25) return false;
     BG[i] = C(GRAY, 1.3 + L * 0.25); return set(i, '=', C(WHITE, L * 0.7)), true;
   }
   BG[i] = C(GRAY, (1.1 + L * 0.25) * shadeFace(HIT.face)); return set(i, ' ', 0), true; // the stringers
 };
 function drawElStairs(st) {
-  const [vx, vy] = R(st.x, st.y), d = Math.hypot(vx, vy);
-  if (d > vis + 1) return;
-  const fx = st.ax, fy = st.ay, c = fy, s = -fx, W = EL_TOWER, h = EL_TOP / EL_FLIGHTS;
-  const at = (u, v) => [vx + c * u + fx * v, vy + s * u + fy * v]; // (the boxes' v axis is fx, fy: +v faces the street)
-  for (const su of [-1, 1]) for (const sv of [-1, 1]) { const [x, y] = at(su * (W - 0.008), sv * (W - 0.008)); rod(x, y, 0, x, y, EL_TOP + 0.1, 0.006); }
-  for (let k = 0; k < EL_FLIGHTS; k++) {
-    const dir = k & 1 ? -1 : 1, lane = (k & 1 ? 1 : -1) * 0.05, mid = (k + 0.5) * h, slope = dir * h / (2 * EL_RUN), [x, y] = at(0, lane);
-    if (d > 10) { const [ax, ay] = at(-dir * EL_RUN, lane), [bx, by] = at(dir * EL_RUN, lane); rod(ax, ay, k * h, bx, by, (k + 1) * h, 0.012); continue; }
-    drawBox({ x, y, c, s, hl: EL_RUN, hw: 0.035, z0: k * h - 0.012, z1: (k + 1) * h + 0.012,
-      planes: [[1, 0, 0, EL_RUN, 1], [-1, 0, 0, EL_RUN, 2], [0, 1, 0, 0.035, 3], [0, -1, 0, 0.035, 4], [-slope, 0, 1, mid + 0.012, 7], [slope, 0, -1, -mid + 0.012, 8]] },
+  const H = EL_TOP, c = st.c, s = st.s, fx = st.ax, fy = st.ay;
+  const [ox, oy] = R(st.ox, st.oy), at = (u, v) => [ox + c * (st.off + u) + fx * v, oy + s * (st.off + u) + fy * v];
+  const [mx, my] = at(0, 0.3), d = Math.hypot(mx, my);
+  if (d > vis + 2) return;
+  const vm = (ELS.v0 + ELS.v1) / 2, hw = (ELS.v1 - ELS.v0) / 2, far = d > 12;
+  for (const [ua, ub, za, zb] of [[ELS.u0, ELS.u1, 0, H / 2], [ELS.u2, ELS.u3, H / 2, H]]) { // the two flights
+    const run = (ub - ua) / 2, mid = (za + zb) / 2, slope = (zb - za) / (ub - ua), [x, y] = at((ua + ub) / 2, vm);
+    if (far) { const [ax, ay] = at(ua, vm), [bx, by] = at(ub, vm); rod(ax, ay, za, bx, by, zb, 0.03); continue; }
+    drawBox({ x, y, c, s, hl: run, hw, z0: za - 0.015, z1: zb + 0.015,
+      planes: [[1, 0, 0, run, 1], [-1, 0, 0, run, 2], [0, 1, 0, hw, 3], [0, -1, 0, hw, 4], [-slope, 0, 1, mid, 7], [slope, 0, -1, -mid + 0.02, 8]] },
       elStairShade, rayBeveledBay);
-    const [lx, ly] = at(dir * (EL_RUN + 0.017), 0); // the landing at its top, across both lanes
-    drawBox(boxAt(lx, ly, c, s, 0.017, W - 0.01, (k + 1) * h - 0.012, (k + 1) * h), STEEL.cap);
+    for (const e of [-1, 1]) { const [ax, ay] = at(ua, vm + e * hw), [bx, by] = at(ub, vm + e * hw); rod(ax, ay, za + 0.1, bx, by, zb + 0.1, 0.004); } // the rails
   }
-  // the top: the tower's deck, the bridge over to the platform's edge with a rail each side, the sign
-  const gap = Math.max(0.02, (fy > 0 ? EL_Y0 - st.y : fy < 0 ? st.y - EL_Y1 : 0.15) - W), [bx, by] = at(0, W + gap / 2);
-  drawBox(boxAt(vx, vy, c, s, W, W, EL_TOP - 0.012, EL_TOP), STEEL.cap);
-  drawBox(boxAt(bx, by, c, s, 0.06, gap / 2 + 0.005, EL_TOP - 0.015, EL_TOP), STEEL.cap);
-  for (const su of [-1, 1]) { const [ax, ay] = at(su * 0.06, W), [ex, ey] = at(su * 0.06, W + gap); rod(ax, ay, EL_TOP + 0.1, ex, ey, EL_TOP + 0.1, 0.004); }
-  const [sx, sy] = at(0, W - 0.01), far = farDepth(sx, sy, 0.07);
-  drawBox(boxAt(sx, sy, c, s, 0.07, 0.008, EL_TOP + 0.1, EL_TOP + 0.16), (i, t, L) => {
+  const landing = (ua, ub, va, vb, z) => { const [x, y] = at((ua + ub) / 2, (va + vb) / 2); drawBox(boxAt(x, y, c, s, (ub - ua) / 2, (vb - va) / 2, z - 0.015, z), STEEL.cap); };
+  landing(ELS.u1, ELS.u2, ELS.v0, ELS.v1, H / 2);
+  landing(ELS.u3, ELS.u4, ELS.v0, ELS.top, H);
+  // the posts: under the landings and halfway along each flight
+  for (const [u, z] of [[(ELS.u0 + ELS.u1) / 2, H / 4], [ELS.u1, H / 2], [ELS.u2, H / 2], [(ELS.u2 + ELS.u3) / 2, H * 0.75], [ELS.u3, H], [ELS.u4, H]])
+    for (const v of [ELS.v0 + 0.01, ELS.v1 - 0.01]) { const [x, y] = at(u, v); rod(x, y, 0, x, y, z - 0.015, 0.008); }
+  if (far) return;
+  // rails round the landings (open where the stairs come in, and onto the deck)
+  for (const [ua, ub, z] of [[ELS.u1, ELS.u2, H / 2]]) for (const v of [ELS.v0, ELS.v1]) { const [ax, ay] = at(ua, v), [bx, by] = at(ub, v); rod(ax, ay, z + 0.1, bx, by, z + 0.1, 0.004); }
+  { const [ax, ay] = at(ELS.u1, ELS.v0), [bx, by] = at(ELS.u1, ELS.v1); rod(ax, ay, H / 2 + 0.1, bx, by, H / 2 + 0.1, 0.004); } // (the end of the halfway landing)
+  { const [ax, ay] = at(ELS.u4, ELS.v0), [bx, by] = at(ELS.u4, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the far end of the top
+  { const [ax, ay] = at(ELS.u3, ELS.v0), [bx, by] = at(ELS.u4, ELS.v0); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the building side of the top
+  { const [ax, ay] = at(ELS.u3, ELS.v1), [bx, by] = at(ELS.u3, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the near side, past the stairs' head
+  // the turnstile at the foot: a post, its arm across the way (swung round once you've swiped)
+  { const pu = ELS.u0 - 0.02, pv = ELS.v1 - 0.015, [x, y] = at(pu, pv), open = elPass && elPass.st === st;
+    drawBox(boxAt(x, y, c, s, 0.012, 0.012, 0, 0.09), STEEL.cap);
+    const [bx, by] = open ? at(pu + 0.11, pv - 0.01) : at(pu, ELS.v0 + 0.01); rod(x, y, 0.075, bx, by, 0.075, 0.004, open ? GREEN : RED, 1.5); }
+  // the sign at the top, facing the street
+  const [sx, sy] = at((ELS.u3 + ELS.u4) / 2, ELS.v0 + 0.005), sfar = farDepth(sx, sy, 0.07);
+  drawBox(boxAt(sx, sy, c, s, 0.07, 0.008, H + 0.1, H + 0.16), (i, t, L) => {
     BG[i] = C(GREEN, 4 + Math.max(night, overcast * 0.6) * 5);
     if (HIT.face !== 3 && HIT.face !== 4) return set(i, ' ', 0), true;
-    const q = ((HIT.face === 3 ? HIT.u : -HIT.u) + 0.07) / 0.14, ch = signLine('EL', q * 4 - 1, (EL_TOP + 0.15 - HIT.w) / 0.04, i, EL_TOP + 0.13, midDepth(sx, sy), t, 0.035, 0.04, far, ...faceDir(c, s));
+    const q = ((HIT.face === 3 ? HIT.u : -HIT.u) + 0.07) / 0.14, ch = signLine('EL', q * 4 - 1, (H + 0.15 - HIT.w) / 0.04, i, H + 0.13, midDepth(sx, sy), t, 0.035, 0.04, sfar, ...faceDir(c, s));
     return set(i, ch ?? ' ', C(WHITE, 15)), true;
   });
 }
@@ -11116,7 +11199,7 @@ function drawElCar(vx, vy, cab) {
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
 function elSprites() {
   forNear(elPillarsB, p => { if (inView(rel(p.x - px), rel(p.y - py), 0.1)) drawElPillar(p); });
-  for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.x - px), rel(stairs.y - py), 0.5)) drawElStairs(stairs);
+  for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.ox + stairs.c * stairs.off - px), rel(stairs.oy + stairs.ay * 0.25 - py), 1.7)) drawElStairs(stairs);
   for (const t of elTrains(T)) {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
@@ -14098,21 +14181,61 @@ const lakeSpot = (lo, hi, seed) => { // somewhere on the lake lo..hi cells in fr
   return [LAKE.x, LAKE.y];
 };
 const flamingos = Array.from({ length: 5 }, (_, k) => { const [gx, gy] = lakeSpot(0.05, 0.45, 40 + k * 3); return { gx, gy, k }; }).filter(f => f.gy > LAKE.y - 0.5);
-const ducks = Array.from({ length: 9 }, (_, k) => ({ k, gx: LAKE.x, gy: LAKE.y, ph: k * 0.7, r: 0.8 + (k % 3) * 0.8 }));
+const ducks = Array.from({ length: 9 }, (_, k) => { const [gx, gy] = lakeSpot(0.3, 2, 60 + k * 5); return { k, gx, gy, ph: k * 0.7, r: 0.8 + (k % 3) * 0.8, pace: 0.32 + hash(k, 7, 833) * 0.25, wake: hash(k, 9, 834) * 1.6 }; });
 const tortoises = [0, 1, 2].map(k => ({ k, ph: k * 2.1 }));
 const BOATS_PARKED = [[11.3, JETTY.gy - 0.3], [11.6, JETTY.gy - 0.3], [11.45, JETTY.gy + 0.3]]; // (out at the end of the jetty, where it's deep enough)
-let duckFeed = null, boat = null; // { gx, gy, t0 } while the ducks have something to swim over for; your swan boat
-function stepGardens(dt) {
-  for (const d of ducks) { // round the lake in little loops, or (fed) over to where the crumbs are landing
-    const hx = LAKE.x + Math.cos(T * 0.05 + d.ph) * LAKE.rx * 0.45 + Math.cos(T * 0.3 + d.k) * 0.3 * d.r, hy = LAKE.y + Math.sin(T * 0.05 + d.ph) * LAKE.ry * 0.45 + Math.sin(T * 0.27 + d.k) * 0.3 * d.r;
-    const fed = duckFeed && T - duckFeed.t0 < 18, tx = fed ? duckFeed.gx + Math.cos(d.k * 2.3) * 0.25 : hx, ty = fed ? duckFeed.gy + Math.sin(d.k * 2.3) * 0.25 : hy;
-    const nx = d.gx + (tx - d.gx) * Math.min(1, dt * (fed ? 0.6 : 0.3)), ny = d.gy + (ty - d.gy) * Math.min(1, dt * (fed ? 0.6 : 0.3));
+// feeding: the crumbs you throw scatter over the water in front of you. The ducks near enough to see notice (some
+// quicker than others), race for the nearest crumb, jostle, snatch it, and go for the next; when it's all gone they
+// hang about hopefully for a bit, then drift back to paddling round
+let duckFeed = null, boat = null; // { crumbs: [{ gx, gy, lands, eaten }], t0, done }; your swan boat
+const DUCK_SEE = 4.5, DUCK_ROOM = 0.1, DUCK_HANG = 9;
+function throwCrumbs(gx0, gy0, ang) {
+  const crumbs = [];
+  for (let k = 0; k < 7; k++) {
+    const th = ang + (Math.random() - 0.5) * 0.9, r = 0.35 + Math.random() * 0.6, gx = gx0 + Math.cos(th) * r, gy = gy0 + Math.sin(th) * r;
+    if (gardenLakeEdge(gx, gy) > 0.05 && !onJetty(gx, gy)) crumbs.push({ gx, gy, lands: T + 0.35 + r * 0.4, eaten: false, fx: gx0, fy: gy0 });
+  }
+  duckFeed = { crumbs, t0: T, done: null };
+  return crumbs.length;
+}
+function stepDucks(dt) {
+  const f = duckFeed, live = f ? f.crumbs.filter(c => !c.eaten && T >= c.lands) : [];
+  if (f && !live.length && f.crumbs.every(c => c.eaten || T >= c.lands)) f.done ??= T; // (all gone)
+  if (f && f.done != null && T - f.done > DUCK_HANG) duckFeed = null;
+  for (const d of ducks) {
+    let tx, ty, speed;
+    const keen = f && T - f.t0 > d.wake && Math.hypot(d.gx - f.crumbs[0]?.gx, d.gy - f.crumbs[0]?.gy) < DUCK_SEE;
+    if (keen && live.length) { // the nearest crumb, flat out
+      const c = live.reduce((m, c) => Math.hypot(c.gx - d.gx, c.gy - d.gy) < Math.hypot(m.gx - d.gx, m.gy - d.gy) ? c : m);
+      tx = c.gx; ty = c.gy; speed = d.pace;
+      if (Math.hypot(c.gx - d.gx, c.gy - d.gy) < 0.05 && !(d.peck > T)) { c.eaten = true; d.peck = T + 0.4 + Math.random() * 0.4; if (actx && Math.random() < 0.4) quack(d); }
+    } else if (keen && f.done != null) { // nothing left: bob about where it was, hopeful
+      d.hope ??= [d.gx + (Math.random() - 0.5) * 0.3, d.gy + (Math.random() - 0.5) * 0.3];
+      [tx, ty] = d.hope; speed = 0.08;
+    } else { // round the lake in little loops
+      d.hope = null;
+      tx = LAKE.x + Math.cos(T * 0.05 + d.ph) * LAKE.rx * 0.45 + Math.cos(T * 0.3 + d.k) * 0.3 * d.r;
+      ty = LAKE.y + Math.sin(T * 0.05 + d.ph) * LAKE.ry * 0.45 + Math.sin(T * 0.27 + d.k) * 0.3 * d.r; speed = 0.14;
+    }
+    if (d.peck > T) speed = 0; // (head down, eating)
+    let mx = tx - d.gx, my = ty - d.gy;
+    const mn = Math.hypot(mx, my), step = Math.min(mn, speed * dt);
+    mx = mn > 1e-6 ? mx / mn * step : 0; my = mn > 1e-6 ? my / mn * step : 0;
+    for (const o of ducks) if (o !== d) { // elbow room: they shove each other aside
+      const ox = d.gx - o.gx, oy = d.gy - o.gy, on = Math.hypot(ox, oy);
+      if (on < DUCK_ROOM && on > 1e-6) { mx += ox / on * (DUCK_ROOM - on) * 2 * dt; my += oy / on * (DUCK_ROOM - on) * 2 * dt; }
+    }
+    const nx = d.gx + mx, ny = d.gy + my;
     if (gardenLakeEdge(nx, ny) > 0.08) {
-      const mx = nx - d.gx, my = ny - d.gy, mn = Math.hypot(mx, my);
-      if (mn > 1e-4) { d.hx = mx / mn; d.hy = my / mn; } // which way it's swimming
-      d.dir = nx > d.gx ? 1 : -1; d.gx = nx; d.gy = ny;
+      const sn = Math.hypot(mx, my);
+      if (sn > 1e-4 && step > 1e-5) { d.hx = mx / sn; d.hy = my / sn; d.dir = mx > 0 ? 1 : -1; } // which way it's swimming
+      d.gx = nx; d.gy = ny;
     }
   }
+}
+function quack(d) { const at = actx.currentTime; tone(at, 520 + d.k * 20, 0.08, 0.03, 'sawtooth'); tone(at + 0.09, 480 + d.k * 20, 0.1, 0.025, 'sawtooth'); }
+function stepGardens(dt) {
+  stepDucks(dt);
   // the bell at closing time
   const inside = inGardens(px, py) && mode === 'walk';
   if (inside && !gardensOpen(tod) && !stepGardens.rang) { stepGardens.rang = true; say('A bell rings: the Gardens are closing. You can still let yourself out.', 4); }
@@ -14134,6 +14257,13 @@ function gardenSprites() {
   const animal = (gx, gy, z, h, fx, fy, look, frame = 0) => drawFigure(...V(gx, gy), z, h, fx, fy, look, 'f' + frame, { light: 4 });
   for (const f of flamingos) { const th = f.k * 2.4; animal(f.gx, f.gy, 0, 0.104, Math.cos(th), Math.sin(th), A.flamingo, Math.sin(T * 0.4 + f.k * 2) > 0.85 ? 1 : 0); }
   for (const d of ducks) animal(d.gx, d.gy, 0, 0.12, d.hx ?? (d.dir || 1), d.hy ?? 0, A.duck);
+  if (duckFeed) for (const c of duckFeed.crumbs) { // the crumbs: arcing out from your hand, then floating till they're eaten
+    if (c.eaten) continue;
+    const k = clamp(1 - (c.lands - T) / (0.35 + Math.hypot(c.gx - c.fx, c.gy - c.fy) * 0.4), 0, 1);
+    const gx = c.fx + (c.gx - c.fx) * k, gy = c.fy + (c.gy - c.fy) * k, z = k < 1 ? 0.12 * (1 - k) + 0.25 * k * (1 - k) : 0.004;
+    const [vx, vy] = V(gx, gy);
+    dot(vx, vy, z, 0.007, (i, t, L) => (BG[i] = C(YEL, 2 + L * 0.2), set(i, '.', C(WARM, L * 1.4)), true));
+  }
   const tp = GARDEN_PENS.find(p => p.kind === 'tortoise'), bp = GARDEN_PENS.find(p => p.kind === 'bear');
   const tortoiseAt = (t, tt) => [tp.gx0 + 0.5 + (tp.gx1 - tp.gx0 - 1) * (0.5 + 0.45 * Math.sin(tt * 0.015 + t.ph)), tp.gy0 + 0.6 + (tp.gy1 - tp.gy0 - 1.2) * (0.5 + 0.45 * Math.cos(tt * 0.011 + t.ph * 1.7))];
   for (const t of tortoises) { const [gx, gy] = tortoiseAt(t, T), [nx, ny] = tortoiseAt(t, T + 2); animal(gx, gy, 0, 0.1, nx - gx, ny - gy, A.tortoise, Math.floor(T * 1.5 + t.k) & 1); }
@@ -14141,7 +14271,7 @@ function gardenSprites() {
   art((bp.gx0 + bp.gx1) / 2 + 0.16, (bp.gy0 + bp.gy1) / 2, 0.14 + fract(T * 0.3) * 0.08, 0.025, 0.025, ['z'], () => C(WHITE, 12 * (1 - fract(T * 0.3)))); // zzz
   const pk = T * 0.02, pgx = 12 + Math.cos(pk) * 1.4, pgy = 6.2 + Math.sin(pk * 2) * 0.5; // the peacock, strutting about the middle lawn
   animal(pgx, pgy, 0, 0.13, -Math.sin(pk) * 1.4, Math.cos(pk * 2), A.peacock, Math.floor(T * 4) & 3);
-  for (const [bx, by] of BOATS_PARKED) drawSwanBoat(...V(bx, by), 1, 0); // moored along the jetty, pointing out over the lake
+  BOATS_PARKED.forEach(([bx, by], k) => { if (!boat || boat.from !== k) drawSwanBoat(...V(bx, by), 1, 0); }); // moored along the jetty, pointing out over the lake (less the one you're out in)
   for (let k = 0; k < (gardensOpen(tod) ? 2 : 0); k++) { // two boats out on the lake, being paddled round (by day)
     const th = T * 0.03 + k * 3, bgx = LAKE.x + Math.cos(th) * LAKE.rx * 0.55, bgy = LAKE.y + Math.sin(th) * LAKE.ry * 0.55;
     const [bx, by] = V(bgx, bgy), hx = -Math.sin(th) * LAKE.rx, hy = Math.cos(th) * LAKE.ry, hn = Math.hypot(hx, hy);
@@ -14179,7 +14309,11 @@ function gardenSprites() {
     const s = body.seat, al = PICNIC_AHEAD + PICNIC_LONG * 0.55, ac = -PICNIC_HALF * 0.55, bx = s.x + s.fx * al - s.fy * ac, by = s.y + s.fy * al + s.fx * ac;
     drawPicnicBasket(rel(bx - px), rel(by - py), s.fx, s.fy);
   }
-  if (boat) return;
+  if (boat) { // yours: from the seat (its neck and head out in front, to your right), or from behind with you sat in it
+    const hx = Math.cos(a), hy = Math.sin(a), [bx, by] = V(boat.gx, boat.gy);
+    if (chaseOn) { drawSwanBoat(bx, by, hx, hy); drawFigure(bx - hx * 0.01, by - hy * 0.01, 0.01, 0.17, hx, hy, GARDEN_FOLK[20] ||= figAnyone(YEL), 'sit6'); }
+    else drawSwanBoat(bx + hx * 0.032 - hy * 0.02, by + hy * 0.032 + hx * 0.02, hx, hy); // (you're in the left of its two seats: the neck's off to your right)
+  }
 }
 // a picnickers' blanket: a checked cloth lying flat on the grass (like yours, see gardenFloor), a fringe at the ends
 function drawPicnicBlanket(vx, vy, col) {
@@ -14239,7 +14373,9 @@ function drawSwanBoat(vx, vy, hx, hy) {
 }
 
 // ---- out on the lake in a swan boat (mode 'boat')
-const nearJettyFoot = () => mode === 'walk' && (() => { const [gx, gy] = gardenLocal(px, py); return inGardens(px, py) && Math.abs(gx - JETTY.gx0 - 0.25) < 0.45 && Math.abs(gy - JETTY.gy) < 0.45; })();
+const nearJettyFoot = () => mode === 'walk' && inGardens(px, py) && (() => { const [gx, gy] = gardenLocal(px, py); return gx > JETTY.gx0 - 0.2 && gx < JETTY.gx1 + 0.1 && Math.abs(gy - JETTY.gy) < JETTY.hw + 0.25; })(); // (on the jetty, or at its foot)
+// tied up again: the end of the jetty, or alongside it
+const atJetty = () => boat && boat.gx > JETTY.gx0 + 0.6 && boat.gx < JETTY.gx1 + 0.6 && Math.abs(boat.gy - JETTY.gy) < JETTY.hw + 0.45;
 const nearShore = () => { if (mode !== 'walk' || !inGardens(px, py)) return false; const [gx, gy] = gardenLocal(px, py), e = gardenLakeEdge(gx + Math.cos(a) * 0.4, gy + Math.sin(a) * 0.4); return e > -0.2; };
 const nearShed = () => mode === 'walk' && inGardens(px, py) && (() => { const [gx, gy] = gardenLocal(px, py); return Math.hypot(gx - GARDEN_SHED.gx, gy - GARDEN_SHED.gy + 0.45) < 0.5; })();
 const gateShutHere = (x, y) => { // a closed gate, approached from outside: just the gate itself, across the gap
@@ -14248,7 +14384,7 @@ const gateShutHere = (x, y) => { // a closed gate, approached from outside: just
   return GARDEN_GATES.some(([ggx, ggy, run]) => run === 'h' ? Math.abs(gx - ggx) < 0.75 && Math.abs(gy - ggy) < 0.15 : Math.abs(gy - ggy) < 0.75 && Math.abs(gx - ggx) < 0.15);
 };
 function gardensPrompt() {
-  if (mode === 'boat') { const [gx, gy] = [boat.gx, boat.gy]; return Math.hypot(gx - JETTY.gx1, gy - JETTY.gy) < 0.7 ? 'E: back to the jetty' : `W/S paddle, A/D steer${TOUCH ? '' : ''}   (back to the jetty to get out)`; }
+  if (mode === 'boat') return atJetty() ? 'E: tie up and climb out onto the jetty' : 'W/S pedal, A/D steer, V: camera   (back to the jetty to get out)';
   if (!inGardens(px, py) && mode === 'walk') {
     const [gx, gy] = gardenLocal(px + Math.cos(a) * 0.5, py + Math.sin(a) * 0.5);
     if (!gardensOpen(tod) && GARDEN_GATES.some(([ggx, ggy]) => Math.abs(gx - ggx) < 0.8 && Math.abs(gy - ggy) < 0.8)) return 'The gates are locked. The Gardens open at 8.';
@@ -14261,25 +14397,28 @@ function gardensPrompt() {
 }
 function useGardens() { // true if E did something
   if (mode === 'boat') {
-    if (Math.hypot(boat.gx - JETTY.gx1, boat.gy - JETTY.gy) < 0.7) { [px, py] = gw(JETTY.gx1 - 0.3, JETTY.gy); a = Math.PI; mode = 'walk'; boat = null; say('You tie the swan up and climb back onto the jetty.', 3); }
+    if (atJetty()) { [px, py] = gw(clamp(boat.gx, JETTY.gx0 + 0.4, JETTY.gx1 - 0.3), JETTY.gy); a = Math.PI; pitch = 0; mode = 'walk'; boat = null; say('You tie the swan up and climb back onto the jetty.', 3); }
     else say('Paddle back to the end of the jetty to get out.', 2);
     return true;
   }
   if (nearJettyFoot()) {
     if (!gardensOpen(tod)) { say('Chained up till morning.'); return true; }
     if (!pay(BOAT_FARE)) { say(`A swan boat's ${fmt$(BOAT_FARE)}.`); return true; }
-    boat = { gx: JETTY.gx1 + 0.3, gy: JETTY.gy, v: 0 }; mode = 'boat'; a = 0; pitch = 0;
-    say('You step down into a swan boat. Pedal with W, steer with A and D.', 4);
+    const [hx, hy] = gardenLocal(px, py), from = BOATS_PARKED.reduce((m, b, k) => Math.hypot(b[0] - hx, b[1] - hy) < Math.hypot(BOATS_PARKED[m][0] - hx, BOATS_PARKED[m][1] - hy) ? k : m, 0);
+    const [sx, sy] = BOATS_PARKED[from]; // (the nearest of the moored ones, nudged out clear of the jetty)
+    boat = { gx: sx + 0.25, gy: sy + Math.sign(sy - JETTY.gy) * 0.1, v: 0, from }; mode = 'boat'; a = 0; pitch = -0.05; camYaw = a;
+    say('You step down into a swan boat. Pedal with W, steer with A and D. V to see yourself from behind.', 4);
     return true;
   }
   if (nearShed() && gardensOpen(tod)) { startGame('garden', 'shift'); say('"Grab a can. Water the dry ones, pull the weeds. Don\'t let anything die."', 4); return true; }
   if (nearShore()) {
     const it = heldItem();
     if (!it || ITEMS[it.id].kind !== 'food') { say('You wave at the ducks. They wanted bread.', 2); return true; }
-    const [gx, gy] = gardenLocal(px + Math.cos(a) * 0.6, py + Math.sin(a) * 0.6);
-    duckFeed = { gx, gy, t0: T };
+    const [gx, gy] = gardenLocal(px, py);
+    const n = throwCrumbs(gx, gy, a);
     if (--it.uses <= 0) removeHeld();
-    say(pick(['You throw some crumbs. The ducks race over, quacking.', 'A duck snatches the crumb right out of the air.', 'The ducks paddle over in a hurry. One climbs right out to get closer.']), 3);
+    say(n ? pick(['You scatter some crumbs on the water. Heads turn all over the lake.', 'Crumbs on the water. The nearest duck is already on its way, the rest not far behind.', 'You toss a handful. There\'s a scramble, and a lot of quacking.'])
+      : 'The crumbs land in the reeds. A duck eyes them from the water.', 3);
     return true;
   }
   return false;
@@ -14292,11 +14431,13 @@ function stepBoat(dt) { // pedal and steer; the shore and the jetty stop you
   if (gardenLakeEdge(ngx, ngy) > 0.15 && !(Math.abs(ngy - JETTY.gy) < JETTY.hw + 0.12 && ngx < JETTY.gx1 + 0.05)) { boat.gx = ngx; boat.gy = ngy; } else boat.v = 0;
   [px, py] = gw(boat.gx, boat.gy);
 }
-function boatFrame() { // your swan's neck and head in front of you, its white sides at the bottom of the view
-  const mid = cols >> 1, art = ['   __', '  (o >', '   \\ \\', '    \\ \\', '     ) )', '    / /'];
-  art.forEach((l, k) => putText(rows - 10 + k, mid - 3, l, C(k === 1 && l.includes('>') ? WHITE : WHITE, 15)));
-  putText(rows - 9, mid + 2, '>', C(ORANGE, 15));
-  for (let r = rows - 3; r < rows; r++) for (let x = 0; x < cols; x++) { const i = r * cols + x; set(i, r === rows - 3 ? '_' : ' ', C(WHITE, 12)); BG[i] = C(WHITE, r === rows - 3 ? 0 : 5); FOGS[i] = FOGB[i] = 0; }
+// behind your swan, a little above, swinging round after it (V); pulled in if the shore's in the way
+function swanCam(dt) {
+  camYaw += (mod(a - camYaw + Math.PI, TAU) - Math.PI) * Math.min(1, dt * 3);
+  const hx = Math.cos(camYaw), hy = Math.sin(camYaw);
+  let back = 0.38;
+  while (back > 0.15 && map[idx(Math.floor(px - hx * back), Math.floor(py - hy * back))]) back -= 0.03;
+  return [mod(px - hx * back, N), mod(py - hy * back, N), camYaw];
 }
 
 // ---- inside the conservatory: the tropical house (a waterfall into a pool, palms, butterflies, steam) and, through a
@@ -15836,13 +15977,13 @@ function drawDeck(x, rx, ry, t0, t1) {
 function render(dt) {
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
-      : mode === 'walk' ? 0.17 : mode === 'boat' ? 0.09 : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
+      : mode === 'walk' ? 0.17 : mode === 'boat' ? (chaseOn ? 0.2 : 0.11) : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
   else if (mode === 'air') eye = airEye;
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
-    if (mode === 'walk') eye += architectureGroundHeight(px, py);
+    if (mode === 'walk') eye += walkGround(px, py);
   }
   tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
@@ -15920,7 +16061,6 @@ function render(dt) {
     chuteFrame();
     if (mode === 'el') elFrame();
     if (mode === 'fair') fairFrame();
-    if (mode === 'boat') boatFrame();
     drawHeld(dt); // what's in your hand (or mouth, or under your feet)
   }
   present();
@@ -16134,6 +16274,7 @@ const homeSpot = () => { const s = room.def.spots; if (!s) return null; for (con
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
+  if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return ''; // (up the el stairs: nothing at street level is in reach)
   const deliveryPrompt=courierPrompt();if(deliveryPrompt)return deliveryPrompt;
   const cp = crimePrompt();
   if (cp) return cp;
@@ -16215,7 +16356,7 @@ function promptText() {
   if (who) return task && task.who === who ? (fetchHave() ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
   const el = nearElStairs();
-  if (el) return `E: up to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
+  if (el) return elPass && elPass.st === el.s.stairs[el.tr] ? `Up the stairs to the ${el.s.name} el` : `E: swipe in for the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
   const st = nearStation();
   if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
@@ -16337,6 +16478,7 @@ function hud() {
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
+    : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'W/S forward & back | A/D or mouse turn | R/F or arrows up & down | V: camera | E: get out (landed)' : 'W/S throttle (S brakes) | A/D or mouse bank | arrows or mouse pitch | V: camera | E: get out (stopped)')
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
@@ -16473,9 +16615,9 @@ function elUp({ s, tr }) {
   mode = 'elplat'; plat = { s, tr }; px = s.x; py = EL_PLAT[tr]; a = tr ? 0 : Math.PI; pitch = 0; // facing the way the trains go
   say(`${s.name} el, ${tr ? 'eastbound' : 'westbound'} platform`);
 }
-function elDown() {
+function elDown() { // (E on the platform: a shortcut to the foot of the stairs)
   const stairs=plat.s.stairs[plat.tr];
-  mode = 'walk'; px = stairs.x; py = stairs.y-stairs.ay*.02; plat = null;
+  mode = 'walk'; px = stairs.x; py = stairs.y; a = Math.atan2(-stairs.s, -stairs.c); plat = null;
   body.z=body.vz=body.peak=0;roofH=0;
 }
 // the train standing at your platform, if there is one
@@ -16505,6 +16647,7 @@ function enterRoom(kind, extra, spawn) {
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
 }
 function interact() {
+  if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
   if(courierUse())return;
   if (mode === 'room') {
     if (room.kind === 'train') return;
@@ -16654,8 +16797,9 @@ function interact() {
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }
   const el = nearElStairs();
+  if (el && elPass && elPass.st === el.s.stairs[el.tr]) return say('The turnstile\'s open. Up you go.', 2);
   if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
-  if (el) { elUp(el); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. ${msgText}`); }
+  if (el) { elPass = { st: el.s.stairs[el.tr] }; if (actx) sfxUse('click'); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. The turnstile clicks round. Up the stairs to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'}.`, 3); }
   const fsp = fairSpot();
   if (fsp) return useFair(fsp);
   const mk = marketSpot();
@@ -20857,7 +21001,7 @@ function peeSpray(flow) {
   const look = Math.atan(pitch * rows / projY), el = clamp(look + 0.55, -1.3, 1.3) + Math.sin(T * 2.9) * 0.03;
   let ang = a + wob, sp = 1.5 + flow * 4.5, up = Math.sin(el) * sp;
   // Input can arrive before the first render after entering a room. Derive height from the feet, not the last camera.
-  let ground = architectureGroundHeight(px, py);
+  let ground = walkGround(px, py);
   if (mode === 'room') ground = stairRise(px, py);
   else if (mode === 'roof') ground = roofH;
   else if (mode === 'elplat') ground = EL_TOP;
@@ -21596,7 +21740,7 @@ function standUp() { // back where you sat down from (it was walkable)
 }
 // every frame: gravity, the crouch easing in and out, a trick's progress, landing (and how hard: see needs.js), a hop
 function stepBody(dt) {
-  const ground = mode === 'walk' ? architectureGroundHeight(px, py) : 0;
+  const ground = mode === 'walk' ? walkGround(px, py) : 0;
   if (body.groundMode === mode && (body.z > 0 || body.vz > 0)) body.z += ((body.ground || 0) - ground) * 10;
   body.ground = ground; body.groundMode = mode;
   const da = mod(a - (body.lastA ?? a) + Math.PI, Math.PI * 2) - Math.PI, moved = Math.hypot(rel(px - (body.lx ?? px)), rel(py - (body.ly ?? py))) > 1e-4;
@@ -21657,7 +21801,14 @@ function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anyw
 const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.z > 0 && h * 10 <= body.z + Math.max(0, -body.vz) * 0.05; };
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
+// the ground under your feet on the street, in cells: a building's front steps, or the el stairs (elevated.js)
+const walkGround = (x, y) => Math.max(architectureGroundHeight(x, y), elStairGround(x, y));
+let elPass = null; // the turnstile you've swiped through: { st }, till you're up on the platform or off the stairs
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
+  if (mode === 'walk' && underEl(py) && elStairGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
+    mode = 'roof'; roofH = EL_TOP; roofLot = new Set(); room = null; elPass = null; return;
+  }
+  if (mode === 'walk' && elPass && !elStairAt(px, py) && Math.hypot(rel(px - elPass.st.x), rel(py - elPass.st.y)) > 0.6) elPass = null; // (walked away from the turnstile)
   if(mode==='elplat') {
     const p=elPlatformAt(px,py);
     if(p&&p.s===plat.s&&p.tr===plat.tr)return;
@@ -21681,13 +21832,14 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
-  shiftFeet(roofH * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
+  const g = elStairGround(px, py); // (off the deck onto the top of the el stairs: no drop at all)
+  shiftFeet((roofH - g) * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
 function outdoorFeet() {
   let base;
   if(mode==='roof')base=roofH;
   else if(mode==='elplat')base=EL_TOP;
-  else base=architectureGroundHeight(px,py);
+  else base=walkGround(px,py);
   return [px,py,base+body.z/10];
 }
 function stepElImpact(from,t0,t1) {
@@ -21895,7 +22047,7 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
-  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air')) third = !third;
+  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat')) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
@@ -21953,6 +22105,7 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
+  if (mode === 'walk') { const st = elStairStep(px, py, x, y, elPass); if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))]; } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
@@ -22140,8 +22293,8 @@ function loop(t) {
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third; render(dt); [px, py, a, pitch] = saved;
-  } else if ((chaseOn = (!!me || mode === 'sea') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm), then put the real position back
-    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : chaseCam(dt);
+  } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
+    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? swanCam(dt) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else { // a drink or two and the world sways; more and you're seeing double
     camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : 0; // (and at the wheel, wherever you're looking)

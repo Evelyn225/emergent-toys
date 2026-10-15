@@ -46,13 +46,16 @@ test('walking off the el edge falls, and stepping onto its tracks allows free mo
     py=EL_Y1+.02;stepRoof();const leaving={mode,z:body.z};
     for(let i=0;i<300;i++){stepBody(.01);stepRoof();}
     const landed={mode,z:body.z};
-    elUp({s:EL_STATIONS[0],tr:0});py=EL_Y0-.02;stepRoof();
-    return {tracks,leaving,landed,platformEdge:{mode,z:body.z}};
+    elUp({s:EL_STATIONS[0],tr:0});px=EL_STATIONS[0].x+2;py=EL_Y0-.02;stepRoof(); // (off the edge clear of the stairs)
+    const platformEdge={mode,z:body.z};
+    const st=EL_STATIONS[0].stairs[0];elUp({s:EL_STATIONS[0],tr:0});px=st.ox+st.c*(st.off+(ELS.u3+ELS.u4)/2);py=EL_Y0-.02;stepRoof(); // (off it onto the stairs' top landing)
+    return {tracks,leaving,landed,platformEdge,stairsTop:{mode,z:body.z,ground:walkGround(px,py)}};
   });
   assert.deepEqual(result.tracks,{mode:'roof',height:1.27,free:true});
   assert.equal(result.leaving.mode,'walk');assert.ok(result.leaving.z>12);
   assert.equal(result.landed.z,0);
   assert.equal(result.platformEdge.mode,'walk');assert.ok(result.platformEdge.z>12);
+  assert.equal(result.stairsTop.mode,'walk');assert.ok(result.stairsTop.z<0.01,'onto the top of the el stairs: no drop');assert.equal(result.stairsTop.ground,1.27);
 }));
 
 test('a moving el train hospitalises the player through the actual frame loop and fails a courier job',()=>withCity(async page=>{

@@ -45,7 +45,6 @@ function streetFixtureBoxes(o, kind) {
   }
   if (kind === 'signal') return [box(.025,.025,0,.4)];
   if (kind === 'blade') return [box(.022,.006,0,.33,o.x,o.y,0,1)];
-  if (kind === 'el-stairs') return [box(.11,.11,0,EL_BOT-.02)];
   if (kind === 'bench') return [box(.18,.07,.01,.13,o.x,o.y,-o.fy,o.fx)];
   if (kind === 'tree') return [box(.03,.03,0,.6*(o.s || 1))];
   return [box(VM_HL,VM_HW,0,VM_H,o.x,o.y,o.c,o.s)];
@@ -114,11 +113,26 @@ const subwayBlades=stations.flatMap(s=>{
   return s.blades;
 });
 fitStreetFixtures(subwayBlades,bucketed(subwayBlades),'blade');
-const elStairs=EL_STATIONS.flatMap(s=>{
-  s.stairs=[0,1].map(tr=>({x:s.x,y:EL_Y+(tr?1.86:.14),ax:0,ay:tr?-1:1}));
-  return s.stairs;
-});
-fitStreetFixtures(elStairs,bucketed(elStairs),'el-stairs');
+// the el stairs (elevated.js): each slid along its station to the first run that's clear of the buildings' bays,
+// balconies and canopies and of the el's own pillars (the top must still meet the platform); then the lamps and trees
+// standing where the stairs go step aside, lamps to just past the ends, trees out of the way altogether
+const elStairClear = st => elStairBoxes(st).every(b => !streetGeometryCollision(b, false) &&
+  !elPillars.some(p => Math.abs(rel(p.x - b.x)) < b.hl + 0.04 && Math.abs(rel(p.y - b.y)) < b.hw + 0.04));
+for (const s of EL_STATIONS) for (const st of s.stairs) {
+  for (const off of [0, -0.2, 0.2, -0.4, 0.4, -0.6, -0.8, -1, -1.2, -1.4, 0.6, 0.8, 1]) { st.off = off; if (elStairClear(st)) break; }
+  if (!elStairClear(st)) st.off = 0; // (none clear: back where it started)
+  elStairFoot(st);
+}
+const elStairLocal = (x, y) => { // a fixture's [u, v] in the stairs' frame if it's within reach of them, else null
+  for (const s of EL_STATIONS) for (const st of s.stairs) {
+    const dx = rel(x - st.ox), dy = rel(y - st.oy), u = st.c * dx + st.s * dy - st.off, v = st.ax * dx + st.ay * dy;
+    if (u > ELS.u0 - 0.2 && u < ELS.u4 + 0.15 && v > ELS.v0 - 0.08 && v < ELS.top + 0.05) return [st, u, v];
+  }
+  return null;
+};
+for (let k = trees.length - 1; k >= 0; k--) if (elStairLocal(trees[k].x, trees[k].y)) trees.splice(k, 1);
+for (const l of lamps) { const h = elStairLocal(l.x, l.y); if (!h) continue; const [st, u] = h, to = u < (ELS.u0 + ELS.u4) / 2 ? ELS.u0 - 0.7 : ELS.u4 + 0.3, d = to - u; l.x = mod(l.x + st.c * d, N); l.y += st.s * d; }
+for (const [items, buckets] of [[trees, treesB], [lamps, lampsB]]) { for (const b of buckets) b.length = 0; for (const o of items) buckets[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o); }
 // Ground-light queries visit only the heads whose pools can reach this cell, including relocated lamps.
 for (const l of lamps) {
   const belle = districtAt(l.x,l.y)==='belle';
