@@ -5,11 +5,12 @@
 // The light planes, the jet and the helicopters are there to be flown: bought at the terminal, or just taken.
 const PLANE_TYPES = {
   // len: nose to tail; span: wingtip to wingtip; r: the fuselage's radius; tail: the fin's height; vr: rotation speed
-  // (lift-off); cruise / top: in the air; climb: how hard it can climb (cells a second at full throttle); price: to buy
+  // (lift-off); cruise / top: in the air; climb: how hard it can climb (cells a second at full throttle); ceil: as high as
+  // it'll go (the air's too thin above: well clear of the tallest tower, 17); price: to buy
   airliner: { name: 'airliner', len: 3.4, span: 3.2, r: 0.2, tail: 0.85, body: WHITE, stripe: BLUE, engines: 'wing', vr: 7.5, cruise: 9 },
-  prop: { name: 'Skylark', len: 0.8, span: 1.1, r: 0.065, tail: 0.24, body: WHITE, stripe: RED, prop: true, vr: 2.4, cruise: 4, top: 5.6, climb: 1.1, price: 9000 },
-  jet: { name: 'Comet', len: 1.45, span: 1.15, r: 0.09, tail: 0.36, body: GRAY, stripe: CYAN, engines: 'tail', vr: 4, cruise: 7, top: 10, climb: 2.2, price: 30000 },
-  heli: { name: 'Hornet', heli: true, len: 0.45, rotor: 0.5, body: RED, stripe: WHITE, top: 4.2, climb: 1.4, price: 14000 },
+  prop: { name: 'Skylark', len: 0.8, span: 1.1, r: 0.065, tail: 0.24, body: WHITE, stripe: RED, prop: true, vr: 2.4, cruise: 4, top: 5.6, climb: 1.1, ceil: 36, price: 9000 },
+  jet: { name: 'Comet', len: 1.45, span: 1.15, r: 0.09, tail: 0.36, body: GRAY, stripe: CYAN, engines: 'tail', vr: 4, cruise: 7, top: 10, climb: 2.2, ceil: 50, price: 30000 },
+  heli: { name: 'Hornet', heli: true, len: 0.45, rotor: 0.5, body: RED, stripe: WHITE, top: 4.2, climb: 1.4, ceil: 30, price: 14000 },
 };
 const aircraft = []; // { id, type, x, y, z, yaw, pitch, roll, v, state, ... }
 let aircraftId = 0;
@@ -117,9 +118,9 @@ function aircraftAt(x, y, pad = 0) {
 const G = 0.98; // gravity, cells a second a second
 const stallSpeed = T_ => T_.vr * 0.85;
 // the top of whatever's built at (x, y), from the ground up: a building's roof, the el's deck, the airport's
-// buildings, a bridge tower; 0 on the ground
-function builtHeight(x, y) {
-  let h = Math.max(policeRoofHeight(x, y), airportHeight(x, y));
+// buildings, a bridge tower; 0 on the ground. Given the height z something's at, a hangar it's inside is just its floor
+function builtHeight(x, y, z = Infinity) {
+  let h = Math.max(policeRoofHeight(x, y), airportHeight(x, y, z));
   for (const t of towers) if (Math.abs(rel(x - t.x)) < 0.4 && Math.abs(rel(y - t.y)) < 0.25) h = Math.max(h, TOWER_H);
   return h;
 }
@@ -172,16 +173,21 @@ function heliStep(a, T_, inp, dt, ev) {
 }
 // move it, and what it meets: the ground (a landing, or not), a building (on top: a landing; its side: a crash), the water
 function moveCraft(a, T_, vx, vy, dt, ev) {
-  const nx = mod(a.x + vx * dt, N), ny = mod(a.y + vy * dt, N), nz = a.z + a.vz * dt, h = builtHeight(nx, ny), speed = Math.hypot(vx, vy);
+  if (a.vz > 0 && T_.ceil) a.vz *= clamp((T_.ceil - a.z) / 2, 0, 1); // near its ceiling the climb fades away to nothing
+  const nx = mod(a.x + vx * dt, N), ny = mod(a.y + vy * dt, N), h = builtHeight(nx, ny, a.z), speed = Math.hypot(vx, vy);
+  let nz = a.z + a.vz * dt;
   if (a.ground) { // rolling or sitting: into a wall, a building, another aircraft, the water?
     const nose = T_.heli ? 0.25 : T_.len / 2, fx = nx + Math.cos(a.yaw) * nose * Math.sign(speed), fy = ny + Math.sin(a.yaw) * nose * Math.sign(speed);
-    if (speed > 0.02 && (builtHeight(fx, fy) > a.z + 0.2 || airportBlocked(fx, fy) || aircraftAt(fx, fy) && aircraftAt(fx, fy) !== a)) {
+    if (speed > 0.02 && (builtHeight(fx, fy, a.z) > a.z + 0.2 || airportBlocked(fx, fy) || aircraftAt(fx, fy) && aircraftAt(fx, fy) !== a)) {
       if (speed > 1.2) return crashCraft(a, speed, ev);
       a.v = 0; a.hvx = a.hvy = 0; ev.push('bump'); return ev;
     }
     if (overWater(nx, ny)) return ditchCraft(a, ev);
     a.x = nx; a.y = ny; a.z = Math.max(h, nz); return ev;
   }
+  const top = builtHeight(nx, ny); // (what's there, all of it: in a hangar, its roof overhead)
+  if (h < top && nz > top - 0.05) { nz = top - 0.05; a.vz = Math.min(0, a.vz); } // inside a hangar: the roof stops you
+  if (airportBlocked(nx, ny) && a.z < top - 0.1) return crashCraft(a, Math.hypot(speed, a.vz), ev); // into a wall, from the side
   if (nz > h) { a.x = nx; a.y = ny; a.z = nz; return ev; }
   // down to something: water, the side of a building, or a surface to land on
   if (overWater(nx, ny) && h === 0) return ditchCraft(a, ev);
@@ -196,7 +202,7 @@ function moveCraft(a, T_, vx, vy, dt, ev) {
 }
 function crashCraft(a, speed, ev) {
   a.crashSpeed = speed; a.v = 0; a.hvx = a.hvy = 0; a.vz = 0; a.ground = true; a.roll = 0; a.pitch = 0;
-  a.z = Math.max(0, builtHeight(a.x, a.y));
+  a.z = Math.max(0, builtHeight(a.x, a.y, a.z));
   damageCraft(a, speed > 1.5 ? DMG_FIRE : 40 + speed * 30);
   ev.push('crash'); return ev;
 }
@@ -250,6 +256,6 @@ function loadPlanes(list) {
     a.owned = true; a.forSale = false;
     if (p.lost) { returnHome(a); a.owed = true; continue; } // (the insurance has it: the excess is due when you next fly)
     if (![p.x, p.y, p.yaw].every(Number.isFinite) || overWater(p.x, p.y)) continue;
-    a.x = mod(p.x, N); a.y = mod(p.y, N); a.yaw = p.yaw; a.z = builtHeight(a.x, a.y); a.dmg = clamp(p.dmg || 0, 0, DMG_FIRE - 1);
+    a.x = mod(p.x, N); a.y = mod(p.y, N); a.yaw = p.yaw; a.z = builtHeight(a.x, a.y, 0); a.dmg = clamp(p.dmg || 0, 0, DMG_FIRE - 1);
   }
 }

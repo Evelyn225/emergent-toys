@@ -458,12 +458,13 @@ function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0, surfaceZ = 0) {
   if (snowCover <= 0 || !snowExposed(wx,wy,surfaceZ)) return;
   const amount = settledSnow(wx, wy, wear) * exposure;
   if (amount < 0.02) return;
-  const grain = snowNoise(wx, wy, 3), old = BG[i] === NONE ? 0 : BG[i] & 15;
+  const had = BG[i] !== NONE && BG[i] !== BG_UNSET; // (a background under it: not when the surface painted none)
+  const grain = snowNoise(wx, wy, 3), old = had ? BG[i] & 15 : 0;
   const fleck = hash(Math.floor(wx * 32), Math.floor(wy * 32), 44);
   const lampLight = lampsOn > 0 ? lampsOn * glow(wx, wy) * 4 : 0;
   const light = (2.4 + day * 6.5 + lampLight) * (0.85 + grain * 0.25);
   let base = WHITE;
-  if (amount < 0.15 && BG[i] !== NONE) base = BG[i] >> 4;
+  if (amount < 0.15 && had) base = BG[i] >> 4;
   else if (amount < 0.55) base = GRAY;
   BG[i] = C(base, old + (light - old) * amount + fleck); // world-anchored dither softens palette banding
   if (FL[i] === 2) FL[i] = 1; // settled snow is matte, even when it covers a puddle
@@ -740,7 +741,7 @@ function reflect() {
 const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
 function rainFx(dt) {
   const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
-  const roofed = eye < ARCADE_Z && arcadeAt(px, py); // under the Shotengai's roof: dry
+  const roofed = eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye); // under the Shotengai's roof, or the airport's: dry
   const n = roofed ? 0 : drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];

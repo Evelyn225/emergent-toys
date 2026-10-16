@@ -46,8 +46,11 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
     const z = eye + (hor - r - 0.5) * dz - z0;
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      const bg = BG[i];
-      if (depth < ZB[i] && fn(i, (c + 0.5 - cx) * du, z, du, dz, L)) { ZB[i] = depth; FL[i] = 0; if (BG[i] !== bg) ZBG[i] = depth; } // (a background it paints is its own, for the fog)
+      if (depth >= ZB[i]) continue;
+      const bg = BG[i]; BG[i] = BG_UNSET;
+      const drew = fn(i, (c + 0.5 - cx) * du, z, du, dz, L);
+      if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = depth; // (a background it paints is its own, for the fog)
+      if (drew) { ZB[i] = depth; FL[i] = 0; }
     }
   }
 }
@@ -91,8 +94,10 @@ function drawBox(b, shade, intersect = rayBox) {
       if (ZB[i] <= near) continue;
       const t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
       if (t < 0 || t >= ZB[i] || t > vis) continue;
-      const bg = BG[i];
-      if (shade(i, t, (1 - t / vis) * 15 * amb)) { ZB[i] = t; FL[i] = 0; if (BG[i] !== bg) ZBG[i] = t; } // (as drawShape: only a background it paints is its own, for the fog)
+      const bg = BG[i]; BG[i] = BG_UNSET;
+      const drew = shade(i, t, (1 - t / vis) * 15 * amb);
+      if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = t; // (as drawShape: only a background it paints is its own, for the fog)
+      if (drew) { ZB[i] = t; FL[i] = 0; }
     }
   }
 }

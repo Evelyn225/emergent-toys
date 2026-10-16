@@ -25,7 +25,7 @@ test('the airport is an island in the bay, joined to the shore by the causeway',
   assert.equal(ev('onRunway((RUNWAY.x0 + RUNWAY.x1) / 2, RUNWAY.y)'), true);
   for (let y = ev('CAUSEWAY.y0') + 0.5; y < ev('AIRPORT.y0') + 2; y += 0.5)
     assert.ok(ev(`onPier(CAUSEWAY.x, ${y}) || onAirport(CAUSEWAY.x, ${y})`), `the causeway carries you across at y ${y}`);
-  assert.ok(ev('airportBlocked(40, AIRPORT.y0 + 3.4, 0)'), 'the terminal is solid');
+  assert.ok(ev('airportBlocked(TERMINAL.x + 3, TERMINAL.y + TERMINAL.hw - 0.02, 0)'), 'the terminal glass is solid');
   assert.ok(ev('airportHeight(TOWER.x, TOWER.y)') > 3, 'the control tower stands tall');
 });
 
@@ -184,4 +184,79 @@ test('bail out and the empty aircraft comes down: a plane noses in, a helicopter
   assert.ok(kinds(plane).includes('crash') || kinds(plane).includes('ditch'), `the plane: ${kinds(plane)}`);
   const heli = fly(ev, `addAircraft('heli', 120, 60, 0, { z: 10, rotor: 1 })`, `{ throttle: 0, pitch: 0, turn: 0.4, lift: -1, dead: true }`, 60);
   assert.ok(kinds(heli).includes('crash') || kinds(heli).includes('ditch'), `the helicopter: ${kinds(heli)}`);
+});
+
+test('out over the bay, with no street for blocks, an emergency or a police unit is not conjured from nowhere (it used to hang the page)', () => {
+  const { ev } = loadCity();
+  ev('px = 123.3; py = 248.6'); // (where a Skylark climbing out east over the bay froze the game)
+  assert.equal(ev('randomLane(12, px, py)'), null, 'no lane near: null, not an endless search');
+  assert.equal(ev('spawnEmergency("amb")'), null);
+  assert.ok(ev('randomLane(12, 100, 100)'), 'in town there is always a lane');
+  // the police, when no lane turns up for one to drive in from: it's one short, not a crash
+  assert.doesNotThrow(() => ev('(() => { const real = randomLane; randomLane = () => null; try { cars.forEach(c => c.patrol = false); wanted.stars = 3; wanted.lastX = px; wanted.lastY = py; callUnits(); } finally { randomLane = real; } })()'));
+});
+
+test('the hangars are open at the front: walk in, and the jet taxis out the doors', () => {
+  const { ev } = loadCity();
+  const H = 'AIRPORT_BLDG[1]'; // (the first hangar, with the jet in it)
+  const blocked = (dx, dy) => ev(`airportBlocked(${H}.x + ${dx}, ${H}.y + ${dy}, 0.03)`);
+  assert.equal(blocked(0, 0), false, 'its floor is open');
+  assert.equal(blocked(0, 1.79), false, 'through the middle of the doorway');
+  assert.equal(blocked(0, -1.79), true, 'the back wall');
+  assert.equal(blocked(2.85, 1.79), true, 'the front wall either side of the opening');
+  assert.equal(blocked(2.9, 0), true, 'the sides, where the arch comes down to the ground');
+  assert.equal(ev(`airportHeight(${H}.x, ${H}.y)`), 1.4, 'from above: its roof');
+  assert.equal(ev(`airportHeight(${H}.x, ${H}.y, 0)`), 0, 'from its floor: the floor');
+  assert.ok(ev(`hangarRoof(${H}, 2) > 0.5 && hangarRoof(${H}, 2) < 1.4`), 'the roof curves down to the sides');
+  // the jet: in, full power, straight out the doors and across the apron
+  const r = JSON.parse(ev(`(() => { const c = aircraft.find(c => c.type === 'jet'); c.state = 'flown'; c.ground = true; c.z = builtHeight(c.x, c.y, c.z); // (as getting in does: flight.js)
+    const z0 = c.z, evs = [];
+    for (let t = 0; t < 30 && c.y < APRON.y1; t += 1 / 60) evs.push(...flyStep(c, { throttle: 0.4, pitch: 0, turn: 0, lift: 0 }, 1 / 60));
+    return JSON.stringify({ z0, evs, y: c.y, dmg: c.dmg }); })()`));
+  assert.equal(r.z0, 0, 'on its floor, not up on the roof');
+  assert.deepEqual(r.evs, [], 'no bumps, no crash');
+  assert.ok(r.y >= ev('APRON.y1'), `out on the apron (y ${r.y})`);
+});
+
+test('a helicopter flown into a hangar wall crashes; one set down on a roof lands on it', () => {
+  const { ev } = loadCity();
+  const into = fly(ev, `addAircraft('heli', AIRPORT_BLDG[1].x - 5, AIRPORT_BLDG[1].y, 0, { z: 0.5, rotor: 1 })`, `{ throttle: 1, pitch: 0, turn: 0, lift: 0 }`, 10);
+  assert.ok(kinds(into).includes('crash'), `into its side: ${kinds(into)}`);
+  for (const b of ['AIRPORT_BLDG[0]', 'AIRPORT_BLDG[1]']) { // the terminal's flat roof, a hangar's crown
+    const down = fly(ev, `addAircraft('heli', ${b}.x, ${b}.y, 0, { z: ${b}.h + 1, rotor: 1 })`, `{ throttle: 0, pitch: 0, turn: 0, lift: -1 }`, 10);
+    assert.deepEqual(kinds(down), ['land'], `down on ${b}`);
+    assert.ok(Math.abs(down.z - ev(`${b}.h`)) < 0.05, `on top (${down.z})`);
+  }
+});
+
+test('every aircraft has a ceiling: climb flat out and it levels off there, well above the tallest tower', () => {
+  const { ev } = loadCity();
+  for (const type of ['prop', 'jet', 'heli']) {
+    const r = JSON.parse(ev(`(() => { const T_ = PLANE_TYPES['${type}'], c = addAircraft('${type}', 120, 40, 0, { z: 5, v: T_.heli ? 0 : T_.cruise, rotor: 1, throttle: 1 }); c.state = 'flown';
+      let top = 0;
+      for (let t = 0; t < 240; t += 1 / 60) { flyStep(c, { throttle: 1, pitch: c.z < T_.ceil - 4 ? 0.6 : 0.2, turn: 0.1, lift: 1 }, 1 / 60); top = Math.max(top, c.z); }
+      aircraft.splice(aircraft.indexOf(c), 1);
+      return JSON.stringify({ top, ceil: T_.ceil }); })()`));
+    assert.ok(r.top <= r.ceil + 0.01, `${type} stops at its ceiling (${r.top} / ${r.ceil})`);
+    assert.ok(r.top > r.ceil - 1, `${type} gets up near it (${r.top})`);
+    assert.ok(r.ceil > 20, 'well clear of the 174m tower');
+  }
+});
+
+test('the terminal: in through the doors, round the desks and seats, and out of the weather', () => {
+  const { ev } = loadCity();
+  const blocked = (u, v) => ev(`airportBlocked(TERMINAL.x + ${u}, TERMINAL.y + ${v}, 0.03)`);
+  for (let v = -1.3; v < 0; v += 0.1) assert.equal(blocked(0, v), false, `a clear way in through the doors (v ${v.toFixed(1)})`);
+  assert.equal(blocked(1, -1.04), true, 'the landside glass either side of them');
+  assert.equal(blocked(3, 1.04), true, 'the airside glass: no way out to the planes');
+  assert.equal(blocked(-6.98, 0), true, 'the end walls');
+  assert.equal(blocked(-0.5, -0.2), false, 'the hall is open');
+  assert.equal(blocked(-4.5, -0.62), true, 'a check-in desk');
+  assert.equal(blocked(0.4, 0.48), true, 'the seats at a gate');
+  assert.equal(blocked(2, 0.12), true, 'a column');
+  for (let u = -6.3; u <= 6.3; u += 0.1) for (const v of [-0.2, 0.29]) assert.equal(blocked(u, v), false, `the walkers' lanes stay clear (${u.toFixed(1)}, ${v})`);
+  assert.equal(ev('airportIndoors(TERMINAL.x, TERMINAL.y, 0.17)'), true, 'under its roof');
+  assert.equal(ev('snowExposed(TERMINAL.x + 1, TERMINAL.y, 0)'), false, 'no snow settles on its floor');
+  assert.equal(ev('snowExposed(AIRPORT_BLDG[1].x, AIRPORT_BLDG[1].y, 0)'), false, 'nor in a hangar');
+  assert.equal(ev('airportIndoors(TERMINAL.x, TERMINAL.y, 1.3)'), false, 'up on the roof is outdoors');
 });

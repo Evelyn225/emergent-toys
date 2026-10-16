@@ -190,7 +190,7 @@ function mapTile(mx, my) {
   if (Math.abs(rel(wx - FOOTBRIDGE.x)) < 0.6 && onFootbridge(FOOTBRIDGE.x, wy) || onPier(wx, wy)) return '#5a4030'; // (the bridge is thinner than a tile)
   if (onIsland(wx, wy)) return '#2a5a30';
   if (onCauseway(wx, wy)) return '#16161c';
-  if (onAirport(wx, wy)) return airportBlocked(wx, wy) ? '#8a8a96' : onRunway(wx, wy) ? '#101014' : Math.abs(wy - TAXIWAY.y) < 0.6 || mod(wy, N) > APRON.y0 && mod(wy, N) < APRON.y1 || mod(wy, N) < AIRPORT.y0 + 1.6 ? '#3a3a42' : airportEdge(wx, wy) < 0.5 ? '#4a4a4a' : '#2a5a30';
+  if (onAirport(wx, wy)) return airportBlocked(wx, wy) || airportBldgAt(wx, wy) ? '#8a8a96' : onRunway(wx, wy) ? '#101014' : Math.abs(wy - TAXIWAY.y) < 0.6 || mod(wy, N) > APRON.y0 && mod(wy, N) < APRON.y1 || mod(wy, N) < AIRPORT.y0 + 1.6 ? '#3a3a42' : airportEdge(wx, wy) < 0.5 ? '#4a4a4a' : '#2a5a30';
   if (ROAD[k]) return underEl(wy) ? '#3a2420' : '#16161c';
   if (seaAt(wx, wy) || gardenLake(wx, wy)) return MAP_COL.sea;
   if (inGardens(wx, wy)) { const [gx, gy] = gardenLocal(wx, wy); return gardenPathDist(gx, gy) < 0.4 ? '#5a5038' : '#24662e'; }
@@ -276,7 +276,7 @@ function hud() {
   const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
-    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'W/S forward & back | A/D or mouse turn | R/F or arrows up & down | V: camera | E: get out (landed)' : 'W/S throttle (S brakes) | A/D or mouse bank | arrows or mouse pitch | V: camera | E: get out (stopped)')
+    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
@@ -307,7 +307,7 @@ function hud() {
   }
   // the prompt near the bottom (on a phone, in the space left of the buttons), any message under the text block
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
-  const prompt = wrapText(keyless(promptText()), left), pb = (mode === 'drive' || mode === 'taxi' ? rows - 5 : rows - 2) * FS - (TOUCH && hotbarUp() ? FS * 2 + 12 : 0);
+  const prompt = wrapText(keyless(promptText()), left), pb = (mode === 'drive' || mode === 'taxi' || mode === 'air' ? rows - 5 : rows - 2) * FS - (TOUCH && hotbarUp() ? FS * 2 + 12 : 0);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
                                    [msg, Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8), '#fff', cv.width / 2]]) {

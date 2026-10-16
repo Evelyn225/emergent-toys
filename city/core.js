@@ -1,6 +1,9 @@
 // City: 1 unit ~ 10m, eye ~1.7m. Interiors: 1 unit = 1m.
 let FS = 12, FOV = 1.1; // character size (px) and field of view (radians): both settings, see pause.js
 const MAXD = 40, RAMP = '.:-=+*#%@', NONE = 255;
+// (BG_UNSET: never a real colour (palette indices stop at 239): what drawBox and drawShape leave in a cell while it's
+// shaded, to tell a background the shader painted from one it left alone, even when they're the same colour)
+const BG_UNSET = 254;
 
 const hash = (a, b, c = 0) => {
   let h = (a * 374761393 + b * 668265263 + c * 1442695041) | 0;
