@@ -12,7 +12,7 @@ function nearAircraft() {
   if (mode !== 'walk') return null;
   let best = null, bd = 0.55;
   for (const c of aircraft) {
-    if (!flyable(c) || c.state === 'flown' || c.wrecked || c.ditched || c.fireT != null || c.z > builtHeight(c.x, c.y) + 0.05) continue;
+    if (!flyable(c) || c.state === 'flown' || c.wrecked || c.ditched || c.fireT != null || c.z > builtHeight(c.x, c.y, c.z) + 0.05) continue;
     const T_ = PLANE_TYPES[c.type], fx = Math.cos(c.yaw), fy = Math.sin(c.yaw), ax = c.x + fx * (T_.heli ? 0.05 : T_.len * 0.25), ay = c.y + fy * (T_.heli ? 0.05 : T_.len * 0.25);
     const d = Math.hypot(rel(ax - px), rel(ay - py));
     if (d < bd) { bd = d; best = c; }
@@ -26,10 +26,11 @@ function enterAircraft(c) {
     c.owed = false; say(`You settle the insurance excess on the ${T_.name}: ${fmt$(AIR_EXCESS)}.`, 3);
   }
   const theft = !c.owned && !c.stolen;
-  pilot = c; mode = 'air'; c.state = 'flown'; c.throttle = 0; c.v = 0; c.vz = 0; c.ground = true; c.z = builtHeight(c.x, c.y);
+  pilot = c; mode = 'air'; c.state = 'flown'; c.throttle = 0; c.v = 0; c.vz = 0; c.ground = true; c.z = builtHeight(c.x, c.y, c.z);
   airCamYaw = c.yaw; px = c.x; py = c.y; airMouse[0] = airMouse[1] = 0;
-  say(T_.heli ? `You climb into the ${T_.name}. The rotor starts to turn.   R/F up and down, W/S forward and back, A/D turn` :
-    `You climb into the ${T_.name}.   W/S throttle, A/D bank, arrows pitch; past ${Math.round(T_.vr * 36)} km/h, pull up`, 5);
+  const up = settings.invertY ? 'down' : 'up', click = TOUCH || mouseCaptured() ? '' : '   (click to take it with the mouse)';
+  say(T_.heli ? `You climb into the ${T_.name}. The rotor starts to turn.   MOUSE: turn, and ${up} to climb   W/S forward and back${click}` :
+    `You climb into the ${T_.name}.   MOUSE flies it: ${up} to climb, sideways to bank   W: throttle up; past ${Math.round(T_.vr * 36)} km/h, mouse ${up} to lift off${click}`, 6);
   if (theft) { // not yours: the tower's on the radio to the police before you're off the ground
     c.stolen = true; addWanted('planetheft', c.x, c.y, true);
     say(`You climb into the ${T_.name} and get it started. The radio crackles: "Unauthorised movement on stand ${c.id}. Police are on the way."`, 5);
@@ -137,7 +138,7 @@ function airCam(dt) {
   airCamYaw += (mod(c.yaw - airCamYaw + Math.PI, TAU) - Math.PI) * (1 - Math.exp(-2.5 * dt));
   const back = T_.heli ? 1.15 : T_.len * 0.9 + 0.45, up = T_.heli ? 0.38 : 0.22 + T_.len * 0.12;
   const cx = mod(c.x - Math.cos(airCamYaw) * back, N), cy = mod(c.y - Math.sin(airCamYaw) * back, N);
-  const cz = Math.max(c.z + up + (c.ground ? 0.12 : 0) - Math.sin(c.pitch) * back * 0.5, builtHeight(cx, cy) + 0.15);
+  const cz = Math.max(c.z + up + (c.ground ? 0.12 : 0) - Math.sin(c.pitch) * back * 0.5, builtHeight(cx, cy, c.z + up) + 0.15);
   const down = Math.atan2(cz - (c.z + 0.15), back); // (looking down at it a little, and up and down with its nose)
   return [cx, cy, airCamYaw, cz, f((Math.tan(c.pitch * 0.35) - Math.tan(down) * 0.8) * projY / rows)];
 }
@@ -162,13 +163,22 @@ function airDash() {
   const hc = cols >> 1, hw = 8;
   for (let k = -hw; k <= hw; k++) { const y = Math.round(r0 + 1 + k * Math.tan(-c.roll) * 0.5 + Math.sin(c.pitch) * 2); if (y >= r0 && y < rows) set(y * cols + hc + k, k ? '-' : '+', C(k ? WHITE : YEL, 15)); }
   set((r0 + 1) * cols + hc - hw - 2, '[', C(GRAY, 10)); set((r0 + 1) * cols + hc + hw + 2, ']', C(GRAY, 10));
-  const blink = fract(T * 2) < 0.5, warn = burning(c) ? 'FIRE' : c.stalled ? 'STALL' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
+  // the stick: where the mouse has it, in a box that springs back to the middle as the mouse lets go
+  const sx = hc + hw + 18, sw = 4, held = Math.hypot(airMouse[0], airMouse[1]) > 0.08;
+  if (sx + sw + 2 < cols - 12) {
+    putText(r0 + 1, sx - sw - 8, TOUCH ? 'STICK' : 'MOUSE', C(held ? YEL : GRAY, held ? 14 : 10));
+    for (let r = r0; r < rows; r++) { set(r * cols + sx - sw - 1, '|', C(GRAY, 8)); set(r * cols + sx + sw + 1, '|', C(GRAY, 8)); }
+    set((r0 + 1) * cols + sx, '+', C(GRAY, 7));
+    const kx = sx + Math.round(clamp(airMouse[0], -1, 1) * sw), ky = r0 + 1 + Math.round(clamp(airMouse[1], -1, 1));
+    set(ky * cols + kx, 'O', C(held ? YEL : WHITE, 15));
+  }
+  const blink = fract(T * 2) < 0.5, warn = burning(c) ? 'FIRE' : c.stalled ? 'STALL' : T_.ceil && c.z > T_.ceil - 0.5 ? 'CEILING' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y, c.z) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
   if (warn) putText(r0 + 1, cols - warn.length - 3, warn, C(RED, blink ? 15 : 7));
 }
 function airPrompt() {
-  const c = pilot;
-  if (c.ground && c.v < 0.3) return 'E: get out';
-  return c.ground ? '' : 'E: bail out';
+  const c = pilot, act = c.ground ? (c.v < 0.3 ? 'E: get out' : '') : 'E: bail out';
+  if (TOUCH || mouseCaptured()) return act;
+  return 'CLICK to fly with the mouse' + (act ? '   ' + act : ''); // (it's the stick, and it only works captured)
 }
 // ---- bailing out (E, in the air): you're out, falling, the aircraft flies on without you till it comes down. Space
 // (or E) pulls the cord; below 150m it opens by itself. Under the canopy: A/D or the mouse to steer, W to run faster

@@ -237,20 +237,71 @@ function airportEdge(x, y) {
 const onAirport = (x, y) => airportEdge(x, y) > 0;
 const onCauseway = (x, y) => Math.abs(rel(x - CAUSEWAY.x)) < CAUSEWAY.hw && mod(y, N) > CAUSEWAY.y0 && mod(y, N) < CAUSEWAY.y1;
 const onRunway = (x, y) => Math.abs(rel(y - RUNWAY.y)) < RUNWAY.hw && mod(x, N) > RUNWAY.x0 && mod(x, N) < RUNWAY.x1;
-// a building, the tower, in the way at (x, y) (grown by pad)?
+// The hangars are Nissen-style: an arched roof springing from the ground along both long sides (a slice of a cylinder
+// lying front to back), a flat wall at the back, and at the front (the apron side, +y) a wall with a wide opening whose
+// top follows the arch down to the shoulders, under a straight lintel. Inside is a floor you walk and taxi across.
+const HANGAR_DOOR = { hw: 2.7, lintel: 1.02, frame: 0.12 }; // the opening's half width, its top, and the frame round it
+const HANGAR_WALL = 0.08; // (the thickness of its walls, for walking into them)
+const hangarArch = b => { const r = (b.hl * b.hl + b.h * b.h) / (2 * b.h); return { r, z0: b.h - r }; }; // the arch's circle: through the feet and the crown
+// the underside of the roof `across` from the hangar's middle line (0 at and past its feet)
+function hangarRoof(b, across) {
+  const { r, z0 } = hangarArch(b);
+  return Math.max(0, z0 + Math.sqrt(Math.max(0, r * r - across * across)));
+}
+// is (across, z) in the front wall's opening?
+const hangarDoor = (b, across, z) => Math.abs(across) < HANGAR_DOOR.hw && z < Math.min(HANGAR_DOOR.lintel, hangarRoof(b, across) - HANGAR_DOOR.frame);
+// The terminal: glass both long sides (frames, a transom and the name band solid), doors in the middle of the landside
+// wall, and inside, a hall you walk through. What's in it, solid to walk into, in metres-of-ten relative to its middle
+// (u east, v south toward the planes): check-in desks along the landside wall west of the doors, the café's counter
+// east of them, columns down the middle, and rows of seats at each gate, facing the planes.
+const TERMINAL = AIRPORT_BLDG[0], TERMINAL_DOOR = 0.6, TERMINAL_WALL = 0.05;
+const TERMINAL_GATES = [-5.9, 0, 5.9]; // the seats at each gate (gates 1 to 3, by the stands; pulled in clear of the ends)
+const TERMINAL_IN = [
+  ...[-5.7, -4.5, -3.3, -2.1].map((u, k) => ({ u, v: -0.62, hu: 0.4, hv: 0.07, h: 0.11, kind: 'desk', n: k + 1 })),
+  { u: 3.4, v: -0.62, hu: 0.9, hv: 0.08, h: 0.11, kind: 'cafe' },
+  ...[-6, -4, -2, 2, 4, 6].map(u => ({ u, v: 0.12, hu: 0.06, hv: 0.06, h: TERMINAL.h, kind: 'column' })),
+  ...TERMINAL_GATES.flatMap(g => [0.48, 0.74].flatMap(v => [-0.45, 0.45].map(e => ({ u: g + e, v, hu: 0.38, hv: 0.05, h: 0.085, kind: 'seats' })))),
+];
+// is the long wall glass (or the open doors) at u along it, z up? (else its frame: the sill, the mullions, the band
+// along the top with the name on it, and the doors' head)
+function terminalGlass(landside, u, z) {
+  if (z < 0.04 || z > TERMINAL.h - 0.22) return false;
+  if (landside && Math.abs(u) < TERMINAL_DOOR) return z < 0.4 || z > 0.43;
+  return fract(u * 1.6) >= 0.08;
+}
+// the airport building whose footprint (x, y) is in (grown by pad), or undefined
+const airportBldgAt = (x, y, pad = 0) => AIRPORT_BLDG.find(b => Math.abs(rel(x - b.x)) < b.hl + pad && Math.abs(rel(y - b.y)) < b.hw + pad);
+// a building, the tower, in the way at (x, y) (grown by pad)? A hangar only by its walls, and under the roof where it
+// comes down too low to stand (or taxi) under; the terminal by its walls (in at the doors) and what's in it
 function airportBlocked(x, y, pad = 0) {
   if (Math.abs(rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2)) > 12 || Math.abs(rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2)) > 30) return false;
   if (Math.hypot(rel(x - TOWER.x), rel(y - TOWER.y)) < TOWER.r + pad) return true;
-  return AIRPORT_BLDG.some(b => Math.abs(rel(x - b.x)) < b.hl + pad && Math.abs(rel(y - b.y)) < b.hw + pad);
+  const b = airportBldgAt(x, y, pad);
+  if (!b) return false;
+  if (b.kind === 'terminal') {
+    const u = rel(x - b.x), v = rel(y - b.y), wall = TERMINAL_WALL + pad;
+    if (Math.abs(u) > b.hl - wall) return true; // the ends
+    if (Math.abs(v) > b.hw - wall) return !(v < 0 && Math.abs(u) < TERMINAL_DOOR - pad); // the glass, but for the doors
+    return TERMINAL_IN.some(o => Math.abs(u - o.u) < o.hu + pad && Math.abs(v - o.v) < o.hv + pad);
+  }
+  const across = Math.abs(rel(x - b.x)), along = rel(y - b.y); // (along: + toward the front)
+  if (hangarRoof(b, across + pad) < 0.2) return true; // the sides, where the arch comes down to the ground
+  if (along < -b.hw + HANGAR_WALL + pad) return true; // the back wall
+  return along > b.hw - HANGAR_WALL - pad && across + pad > HANGAR_DOOR.hw; // the front wall either side of the opening
 }
-// the top of whatever's built at (x, y), for what flies: a building's roof, the tower's cab, or 0
-function airportHeight(x, y) {
+// the top of whatever's built at (x, y), for what flies: a building's roof, the tower's cab, or 0. Something at height z
+// inside a building, under its roof, is on its floor: 0 (leave z out for the top of what's there)
+function airportHeight(x, y, z = Infinity) {
   if (Math.abs(rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2)) > 12 || Math.abs(rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2)) > 30) return 0;
   const t = Math.hypot(rel(x - TOWER.x), rel(y - TOWER.y));
   if (t < TOWER.cab) return t < TOWER.r ? TOWER.h + 0.62 : TOWER.h + 0.6;
-  const b = AIRPORT_BLDG.find(b => Math.abs(rel(x - b.x)) < b.hl && Math.abs(rel(y - b.y)) < b.hw);
-  return b ? b.h : 0;
+  const b = airportBldgAt(x, y);
+  if (!b) return 0;
+  const roof = b.kind === 'hangar' ? hangarRoof(b, Math.abs(rel(x - b.x))) : b.h;
+  return z < roof - 0.05 ? 0 : roof;
 }
+// under an airport building's roof (out of the rain and snow)?
+const airportIndoors = (x, y, z) => !!airportBldgAt(x, y) && z < airportHeight(x, y) - 0.02;
 // the Sunset Pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
 // docks or a bridge. Game booths and a prize stall down its sides, a carousel in the middle, the Ferris wheel out at
 // the end (its wheel stands across the pier, east-west, so you see it face on from the promenade).

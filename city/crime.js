@@ -341,6 +341,7 @@ function callUnits() {
     let c = free[k];
     if (!c || near(c.x, c.y, wanted.lastX, wanted.lastY) > DISPATCH_R) { // nobody close: one drives in
       const p = randomLane(30, wanted.lastX, wanted.lastY);
+      if (!p) continue; // (no streets for miles: out over the bay)
       c = addCar({ ...p, kind: 'police', body: BLUE, patrol: true, extra: true });
     }
     Object.assign(c, { pursuit: true, returning: false, state: 'out', home: false, born: T, waitingCrew: false, merging: null, route: null, routeT: 0, pursuitDrive: false, cruise: COP_CAR_SPEED, dest: [wanted.lastX, wanted.lastY] });

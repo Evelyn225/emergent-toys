@@ -25,6 +25,25 @@ test('boxes straddling the camera but outside its view skip per-cell rays, while
   assert.ok(result.rays>0 && result.painted>0,JSON.stringify(result));
 }));
 
+test('a box owns the background it paints for the fog, even one the same colour as what was behind it', () => withPage(async page => {
+  const r=await page.evaluate(()=>{
+    paused=true;render(0);dx=1;dy=0;
+    const far=30,dark=C(GRAY,1);
+    ZB.fill(far);ZBG.fill(far);BG.fill(dark); // (say, a dark window a long way off behind everything)
+    const i=Math.floor(hor)*cols+(cols>>1);
+    drawBox(boxAt(2,0,1,0,.2,.3,0,.8),j=>{BG[j]=dark;return set(j,' ',0),true;}); // painted: the very same colour
+    const painted={bg:BG[i],zbg:ZBG[i],zb:ZB[i]};
+    ZB.fill(far);ZBG.fill(far);BG.fill(dark);
+    drawBox(boxAt(2,0,1,0,.2,.3,0,.8),j=>(set(j,'#',C(WHITE,12)),true)); // a character only: the background stays the far one's
+    return {painted,left:{bg:BG[i],zbg:ZBG[i],zb:ZB[i]},dark,far};
+  });
+  assert.equal(r.painted.bg,r.dark);
+  assert.ok(r.painted.zbg<3,`its own background, at its own depth (${r.painted.zbg})`);
+  assert.equal(r.left.bg,r.dark,'a background it never touched is put back');
+  assert.equal(r.left.zbg,r.far,'and keeps the depth of whatever is really there');
+  assert.ok(r.left.zb<3);
+}));
+
 test('near-plane balconies outside the vertical view skip rays, and looking up or down reveals them', () => withPage(async page => {
   const result=await page.evaluate(()=>{
     paused=true;render(0);dx=1;dy=0;eye=.17;hor=rows/2;

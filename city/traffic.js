@@ -245,9 +245,10 @@ function taxiLaneTarget(c, line) {
   u = clamp(u, 0, 1);
   return c.pass.offset * u * u * (3 - 2 * u);
 }
-// a random lane position on an existing street segment: anywhere, or (near) in the blocks within `near` cells of (x, y)
+// a random lane position on an existing street segment: anywhere, or (near) in the blocks within `near` cells of (x, y).
+// Near somewhere with no streets round it (out over the bay, at the airport) there may be none: then null
 function randomLane(near = 0, x = 0, y = 0) {
-  for (;;) {
+  for (let k = 0; !near || k < 64; k++) {
     const bx = near ? Math.floor((x + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
     const by = near ? Math.floor((y + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
     const vert = Math.random() < 0.5, dir = pick([-1, 1]);
@@ -255,6 +256,7 @@ function randomLane(near = 0, x = 0, y = 0) {
     const along = (vert ? by : bx) * 8 + 2.5 + Math.random() * 4.5, lane = (vert ? bx : by) * 8 + 1 + (vert ? 0.4 : -0.4) * dir;
     return { x: vert ? lane : along, y: vert ? along : lane, hx: vert ? 0 : dir, hy: vert ? dir : 0 };
   }
+  return null;
 }
 const cars = [];
 while (cars.length < 420) {
@@ -304,7 +306,9 @@ const nearestBase = (kind, free) => SERVICES.filter(b => b.kind === kind && (!fr
 function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police'])) {
   let scene = null; // somewhere on a street a few blocks from you, so you'll see it go by or pull up
   for (let tries = 0; tries < 200 && !scene; tries++) {
-    const p = randomLane(12, px, py), d = Math.hypot(rel(p.x - px), rel(p.y - py));
+    const p = randomLane(12, px, py);
+    if (!p) return null; // (no streets near: nothing to see go by)
+    const d = Math.hypot(rel(p.x - px), rel(p.y - py));
     if (d > 3 && d < 10) scene = [p.x, p.y];
   }
   if (!scene) return null;
@@ -314,7 +318,9 @@ function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police'])) {
     return addCar({ ...props, x: base.x, y: base.lane, hx: -1, hy: 0, base });
   }
   for (let tries = 0; tries < 200; tries++) { // no station near: it comes in from a few blocks away
-    const p = randomLane(32, px, py), d = Math.hypot(rel(p.x - px), rel(p.y - py));
+    const p = randomLane(32, px, py);
+    if (!p) return null;
+    const d = Math.hypot(rel(p.x - px), rel(p.y - py));
     if (d < 16 || d > 30 || cars.some(o => Math.hypot(rel(o.x - p.x), rel(o.y - p.y)) < 1.2)) continue;
     return addCar({ ...props, ...p, base: nearestBase(kind, false)[0] });
   }

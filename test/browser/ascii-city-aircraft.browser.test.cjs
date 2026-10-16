@@ -53,7 +53,7 @@ test('buy a Skylark, take off, bail out, and land on the parachute; steal a Horn
     assert.equal(r.inMode, 'air');
     assert.ok(r.airborne && r.offAt < 50, `off the ground with runway to spare (x ${r.offAt})`);
     assert.ok(r.alt > 8, `climbing (${r.alt * 10}m)`);
-    assert.equal(r.airPrompt, 'E: bail out');
+    assert.equal(r.airPrompt, 'CLICK to fly with the mouse   E: bail out', 'the mouse is the stick: uncaptured (as here, headless), it says so');
     assert.deepEqual(r.bailed, ['walk', true, 'abandoned']);
     assert.ok(r.chute.opened && r.chute.down, JSON.stringify(r.chute));
     assert.equal(r.chute.health, 100, 'a landing under a full canopy doesn\'t hurt');
@@ -76,5 +76,38 @@ test('an aircraft you own is kept, where you parked it, across a reload', async 
     const got = await page.evaluate(() => aircraft.filter(c => c.owned).map(c => [c.type, c.x, c.y === RUNWAY.y]));
     assert.deepEqual(got, [['jet', 35, true]]);
     await page.evaluate(() => localStorage.clear());
+  } finally { await browser.close(); }
+});
+
+test('the terminal hall: the departures board keeps time all day and night, and the hall draws without a hitch', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage(), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof stepFlight === 'function' && Number.isFinite(eye));
+    const r = await page.evaluate(() => {
+      const out = { counts: [], ordered: true };
+      for (let h = 0; h < 24; h += 0.25) {
+        tod = h;
+        for (const dep of [true, false]) {
+          const lines = boardLines(dep), mins = lines.map(l => +l.text.slice(0, 2) * 60 + +l.text.slice(3, 5));
+          out.counts.push(lines.length);
+          for (let k = 1; k < mins.length; k++) if (!(mins[k] > mins[k - 1] || mins[k - 1] >= 22 * 60 && mins[k] === 6 * 60)) out.ordered = false; // (late on, tomorrow's first follows tonight's last)
+        }
+      }
+      tod = 23.5; out.late = boardLines(true)[0].text;
+      tod = 11.1; out.now = boardLines(true).map(l => l.status);
+      // stand in the doors and look in: the board, in letters
+      paused = true; room = null; mode = 'walk'; px = TERMINAL.x; py = TERMINAL.y - TERMINAL.hw - 0.4; a = Math.PI / 2; pitch = 0.1; render(0);
+      out.seen = CH.join('');
+      return out;
+    });
+    assert.ok(r.counts.every(n => n === 5), 'always five flights up');
+    assert.ok(r.ordered, 'in time order');
+    assert.ok(r.late.startsWith('06:00'), `after the last flight, the morning's first: ${r.late}`);
+    assert.deepEqual(r.now.slice(0, 2), ['DEPARTED', 'BOARDING'], 'the one just gone, then the one boarding');
+    assert.ok(/D\s*E\s*P\s*A\s*R\s*T\s*U\s*R\s*E\s*S/.test(r.seen), 'DEPARTURES, through the doors');
+    assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
