@@ -109,7 +109,7 @@ function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
     const qx = mx + 0.5 - x, qy = my + 0.5 - y;
     if (Math.abs(qx) < ex + 0.5 && Math.abs(qy) < ey + 0.5 && Math.abs(qx * hx + qy * hy) < hl + diagonal && Math.abs(-qx * hy + qy * hx) < hw + diagonal) return false;
   }
-  return architectureCarClear(x, y, hx, hy, hl, hw) && landmarkCarClear(x, y, hx, hy, hl, hw);
+  return architectureCarClear(x, y, hx, hy, hl, hw) && landmarkCarClear(x, y, hx, hy, hl, hw) && gasCarClear(x, y, hx, hy, hl, hw);
 }
 // A short local route around buildings for a cruiser in close pursuit. The wider street network still handles
 // dispatch from far away; nearby cruisers can leave their lane, reverse and intercept rather than circling a block.
@@ -206,7 +206,7 @@ function toLane(c) {
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
   else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
-  c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; plan(c);
+  c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; c.pit = null; c.gas = null; plan(c);
 }
 
 // Routing keeps cardinal headings; the body and passenger camera follow the actual steering.
@@ -358,7 +358,7 @@ function parkedCarAt(x, y, pad) {
     const [hl, hw] = VEHICLES[kind] || VEHICLES.car, qx = rel(x - cx), qy = rel(y - cy);
     return Math.abs(qx * hx + qy * hy) < hl + pad && Math.abs(-qx * hy + qy * hx) < hw + pad;
   };
-  for (const c of cars) if (c.parked && !c.player && Math.abs(rel(c.ex - x)) < 0.6 && Math.abs(rel(c.ey - y)) < 0.6 && inCar(c.ex, c.ey, c.hx, c.hy, c.kind)) return true;
+  for (const c of cars) if ((c.parked || gasFilling(c)) && !c.player && Math.abs(rel(c.ex - x)) < 0.6 && Math.abs(rel(c.ey - y)) < 0.6 && inCar(c.ex, c.ey, c.hx, c.hy, c.kind)) return true;
   for (const b of SERVICES) if (!b.out && Math.abs(rel(b.x - x)) < 0.6 && Math.abs(rel(b.y - y)) < 0.6 && inCar(b.x, b.y, -1, 0, b.kind)) return true;
   return false;
 }
@@ -389,6 +389,7 @@ function stepTraffic(dt, t, everywhere = false) {
   for (const c of cars) {
     if (!live(c)) continue; // driven by you, or too far away to matter
     if (c.waitingCrew) { c.v = 0; c.brake = true; c.ex = c.x; c.ey = c.y; continue; }
+    if (c.pit) { stepPit(c, dt); continue; } // (at a gas station: gas.js)
     if (c.pursuit && c.dest && (c.pursuitDrive || Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < 18)) { stepPursuitCar(c, dt); continue; }
     if (c.merging) {
       const l = c.merging;
@@ -424,6 +425,7 @@ function stepTraffic(dt, t, everywhere = false) {
       const siren = evs.some(e => e.nodeX === nx && e.nodeY === ny && (e.hx === 0) !== vert);
       if (s === 'R' || s === 'Y' && line > 0.5 || siren) room_ = Math.min(room_, line - 0.25);
     }
+    if (c.gas) room_ = Math.min(room_, 0.28); // (slowing to turn in for gas)
     if (code(c)) { c.nodeX = nx; c.nodeY = ny; }
     // don't turn into a lane if a car is sitting right where we'd land
     if (!c.pursuit && c.left < 0.6 && (c.nh[0] !== c.hx || c.nh[1] !== c.hy)) {
@@ -506,6 +508,8 @@ function stepTraffic(dt, t, everywhere = false) {
     if (c.rider) c.fare += step;
     if (c.left <= 0) { [c.hx, c.hy] = c.nh; plan(c); }
     c.ex = mod(c.x + c.hy * c.off, N); c.ey = mod(c.y - c.hx * c.off, N);
+    const gz = GAS_ZONE[idx(Math.floor(c.x), Math.floor(c.y))];
+    if (gz || c.gas) gasConsider(c, gz || null);
     if (taxi) {
       const vx = rel(c.ex - oldX), vy = rel(c.ey - oldY);
       const yaw = Math.hypot(vx, vy) > 1e-5 ? Math.atan2(vy, vx) : Math.atan2(c.hy, c.hx);

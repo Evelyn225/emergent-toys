@@ -2,7 +2,7 @@
 // threshold stripes and numbers (09 at the west end, 27 at the east, the way a pilot coming in reads them), touchdown
 // bars; the taxiway's yellow line; the apron's concrete and the stands' lead-in lines; the helipads; the landside road;
 // grass and rocks round the shore; and after dark the runway's white edge lights, green and red at its ends, blue along
-// the taxiway. The buildings: the terminal (glass both sides, its name along the top), the two hangars (arched, open
+// the taxiway. The buildings: the terminal (glass all round, its name along the top; inside, terminal.js), the two hangars (arched, open
 // at the front), the control tower, the windsock.
 const runwayNumber = (num, along, across) => { // is (along, across) on a painted digit? along 0..1.25 from its foot, across -0.55..0.55
   if (along < 0 || along >= 1.25 || Math.abs(across) >= 0.55) return false;
@@ -46,14 +46,6 @@ function airportFloor(i, r, x, wx, wy, L) { // [ch, base, k] for the floor cell;
     return [(r + x) % 4 ? ' ' : '.', GRAY, 0.9];
   }
   const bld = airportBldgAt(wx, wy);
-  if (bld && bld.kind === 'terminal') { // the hall: polished terrazzo under the lights, mats in the doors, carpet at the gates
-    const u = X - bld.x, v = Y - bld.y, f = Math.max(0, 1 - Math.hypot(rel(wx - px), rel(wy - py)) / vis * 1.5);
-    const mat = v < -0.75 && Math.abs(u) < TERMINAL_DOOR || v > 0.75 && TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR), carpet = v > 0.38 && TERMINAL_GATES.some(g => Math.abs(u - g) < 1);
-    const joint = fract(u * 4) < 0.05 || fract(v * 4) < 0.05, fleck = hash(Math.floor(wx * 30), Math.floor(wy * 30), 343) > 0.93;
-    BG[i] = mat ? C(BRICK, 1 + f * 1.5) : carpet ? C(BLUE, 1 + f * 1.4) : C(STONE, 2 + f * 3);
-    set(i, mat ? '=' : carpet ? ((r + x) % 3 ? ' ' : '.') : joint ? '+' : fleck ? '.' : ' ', C(mat ? BRICK : carpet ? BLUE : STONE, 4 + f * 4));
-    return null;
-  }
   if (bld) { // a hangar's floor: in its shade, a yellow line down the middle out to the apron
     if (bld.kind === 'hangar' && Math.abs(X - bld.x) < 0.012) return ['|', YEL, 1];
     return [(r + x) % 3 ? ' ' : '.', GRAY, 0.6];
@@ -130,70 +122,63 @@ function drawAirport() {
     }
   }
 }
-// ---- the terminal (world.js has its plan). rayTerminal, for drawBox: the nearest of its solid parts, from outside or
-// in: the roof (5) or the ceiling under it (16), the ends (1 east, 2 west; their insides 11, 12), the long walls' frames
-// (3 airside, 4 landside; inside 13, 14). The glass and the open doors let the ray on through, into the hall and out the
-// far side. HIT.u east along it, v south across it.
-function rayTerminal(ox, oy, oz, rx, ry, rz, b) {
-  const qu = ox - b.x, qv = oy - b.y;
-  let best = Infinity, face = 0;
-  if (Math.abs(rx) > 1e-9) for (const e of [1, -1]) {
-    const t = (e * b.hl - qu) / rx, v = qv + ry * t, z = oz + rz * t;
-    if (t > 0.01 && t < best && Math.abs(v) <= b.hw && z >= 0 && z <= b.h) { best = t; face = (e > 0) === (rx < 0) ? (e > 0 ? 1 : 2) : (e > 0 ? 11 : 12); }
-  }
-  if (Math.abs(ry) > 1e-9) for (const e of [1, -1]) {
-    const t = (e * b.hw - qv) / ry, u = qu + rx * t, z = oz + rz * t;
-    if (t > 0.01 && t < best && Math.abs(u) <= b.hl && z >= 0 && z <= b.h && !terminalGlass(e < 0, u, z)) { best = t; face = (e > 0) === (ry < 0) ? (e > 0 ? 3 : 4) : (e > 0 ? 13 : 14); }
-  }
-  if (Math.abs(rz) > 1e-9) {
-    const t = (b.h - oz) / rz, u = qu + rx * t, v = qv + ry * t;
-    if (t > 0.01 && t < best && Math.abs(u) <= b.hl && Math.abs(v) <= b.hw) { best = t; face = rz < 0 ? 5 : 16; }
-  }
-  if (best === Infinity) return -1;
-  HIT.u = qu + rx * best; HIT.v = qv + ry * best; HIT.w = oz + rz * best; HIT.face = face;
-  return best;
-}
 const inLight = t => (1 - t / vis) * 15; // (indoors the lights are on, day and night)
 // a line of text across a box's broad face (3 or 4, a box along x), on the band from z0 (its foot) bandH tall
 function faceText(word, i, t, vx, vy, hl, z0, bandH) {
   const n = word.length, [ex, ey] = faceDir(1, 0);
   return signLine(word, faceQ(HIT.u, hl) * n, (z0 + bandH - HIT.w) / bandH, i, z0 + bandH / 2, midDepth(vx, vy), t, 2 * hl / n, bandH, farDepth(vx, vy, hl), ex, ey);
 }
-// the terminal's shell: concrete ends, the name in a band along the top of both long sides, frames round the glass; from
-// inside, the ceiling's rows of light panels and an advert lit up on each end wall
+// the terminal from outside: glass between concrete piers all the way round, the ends as well as the long sides, on a
+// concrete plinth, under a blue band with the name along it. By day the glass has the sky in it; after dark it's lit
+// from within. Its doors (world.js): the main doors landside under a canopy, DEPARTURES over them; the two airside ones
+// out to the gates, which gates over each
+const TERMINAL_DOOR_SIGNS = ['DEPARTURES', 'GATES 1-2', 'GATES 2-3'];
 function drawTerminal(b, vx, vy, lit) {
   const NAME = 'GLYPHPORT INTERNATIONAL', band = b.h - 0.22;
   drawBox(boxAt(vx, vy, 1, 0, b.hl, b.hw, 0, b.h), (i, t, L) => {
-    const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
-    if (f === 5) { BG[i] = C(GRAY, 2 + L * 0.25); return set(i, hash(Math.floor(u * 3), Math.floor(v * 3), 77) > 0.85 ? '#' : ' ', C(GRAY, 6)), true; } // roof, plant on it
-    if (f === 1 || f === 2) { BG[i] = C(STONE, (1.6 + L * 0.3) * shadeFace(f)); return set(i, ' ', 0), true; } // the ends
-    const IN = inLight(t);
-    if (f === 16) { // the ceiling: two rows of light panels the length of the hall, a grid of tiles between
-      if (Math.abs(Math.abs(v) - 0.45) < 0.09 && fract(u * 1.25) < 0.7) { BG[i] = C(WHITE, 7 + IN * 0.35); return set(i, ' ', 0), true; }
-      BG[i] = C(GRAY, 1.8 + IN * 0.12); return set(i, fract(u * 4) < 0.08 || fract(v * 4) < 0.08 ? '+' : ' ', C(GRAY, 5)), true;
-    }
-    if (f === 11 || f === 12) { // the ends, inside: an advert lit up on each, framed in steel
-      if (!(Math.abs(v) < 0.7 && w > 0.42 && w < 0.86)) { BG[i] = C(STONE, 1.6 + IN * 0.12); return set(i, Math.abs(v) < 0.74 && w > 0.38 && w < 0.9 ? '#' : ' ', C(GRAY, 7)), true; }
-      const ad = f === 11 ? 'FLY AIR 9' : 'WELCOME', n = ad.length, q = f === 11 ? (v + 0.7) / 1.4 : (0.7 - v) / 1.4, wx = f === 11 ? vx + b.hl : vx - b.hl;
-      const ch = signLine(ad, q * n, (0.78 - w) / 0.28, i, 0.64, midDepth(wx, vy), t, 1.4 / n, 0.28, farDepth(wx, vy, 0.7), 0, f === 11 ? 1 : -1);
-      BG[i] = C(f === 11 ? BLUE : MAG, 4 + IN * 0.2);
-      return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 15)), true;
-    }
-    if (w > band) { // the band along the top: the name outside, a plain soffit in
-      if (f > 10) { BG[i] = C(GRAY, 1.6 + IN * 0.1); return set(i, ' ', 0), true; }
-      BG[i] = C(BLUE, 1.5 + L * 0.2);
-      const n = NAME.length, side = f === 3 ? 1 : -1, q = (u * side / b.hl + 1) / 2;
-      const ch = signLine(NAME, q * n, (b.h - 0.11 - w) / 0.2, i, b.h - 0.11, midDepth(vx, vy), t, 2 * b.hl / n, 0.16, farDepth(vx, vy, b.hl), side, 0);
+    const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f), long = f === 3 || f === 4, along = long ? u : v, half = long ? b.hl : b.hw;
+    if (f >= 5) { BG[i] = C(GRAY, 2 + L * 0.25); return set(i, hash(Math.floor(u * 3), Math.floor(v * 3), 77) > 0.85 ? '#' : ' ', C(GRAY, 6)), true; } // the roof, plant on it
+    if (w > band) { // the band along the top: the name on the long sides, GLYPHPORT on the ends
+      BG[i] = C(BLUE, (1.5 + L * 0.2) * k);
+      const word = long ? NAME : 'GLYPHPORT', n = word.length, q = (f === 3 || f === 2 ? along + half : half - along) / (2 * half);
+      const [ex, ey] = f === 3 ? [1, 0] : f === 4 ? [-1, 0] : f === 1 ? [0, -1] : [0, 1], nx = f === 1 ? 1 : f === 2 ? -1 : 0, ny = f === 3 ? 1 : f === 4 ? -1 : 0;
+      const fx = vx + nx * b.hl, fy = vy + ny * b.hw, letterW = Math.min(2 * half / (n + 2), 0.5);
+      const ch = signLine(word, (q - 0.5) * 2 * half / letterW + n / 2, (b.h - 0.11 - w) / 0.2, i, b.h - 0.11, midDepth(fx, fy), t, letterW, 0.16, farDepth(fx, fy, half), ex, ey);
       return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 13 + lit * 2)), true;
     }
-    const landside = f === 4 || f === 14, door = landside ? Math.abs(u) < TERMINAL_DOOR + 0.06 : TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR + 0.06);
-    if (door && w < 0.47) { BG[i] = C(YEL, f < 10 ? 3 + L * 0.3 : 2.5 + IN * 0.1); return set(i, ' ', 0), true; } // the doors' frames
-    const bay = terminalBay(u), frame = (landside ? w > 0.46 && w < 0.9 : w > 0.12) && (bay < (landside ? 0.18 : 0.16) || bay > 0.97); // (round the windows: steel)
-    if (frame || !landside) { BG[i] = C(GRAY, f < 10 ? 2.5 + L * 0.3 : 2 + IN * 0.1); return set(i, frame && bay < 0.1 ? '|' : '=', C(GRAY, 6)), true; }
-    BG[i] = C(STONE, f < 10 ? (1.8 + L * 0.3) * shadeFace(f) : 1.8 + IN * 0.12); // the landside wall: concrete panels
-    return set(i, fract(u * 2.4) < 0.04 || fract(w * 4) < 0.05 ? '.' : ' ', C(GRAY, 5)), true;
-  }, (ox, oy, oz, rx, ry, rz) => rayTerminal(ox, oy, oz, rx, ry, rz, { x: vx, y: vy, hl: b.hl, hw: b.hw, h: b.h }));
-  if (Math.hypot(vx, vy) < 22) drawTerminalHall(b, vx, vy);
+    if (long) { // a door?
+      const d = TERMINAL_DOORS.findIndex(o => o.land === (f === 4) && Math.abs(u - o.u) < TERMINAL_DOOR_W[o.land ? 0 : 1] + 0.05);
+      if (d >= 0) {
+        const o = TERMINAL_DOORS[d], du = u - o.u, hw = TERMINAL_DOOR_W[o.land ? 0 : 1];
+        if (w > 0.37 && w < 0.47) { // the sign over it
+          BG[i] = C(BLACK, 3);
+          const fy = vy + (o.land ? -b.hw : b.hw), word = TERMINAL_DOOR_SIGNS[d], letterW = 0.07;
+          const ch = signLine(word, (f === 3 ? du : -du) / letterW + word.length / 2, (0.455 - w) / 0.07, i, 0.42, midDepth(vx + o.u, fy), t, letterW, 0.07, farDepth(vx + o.u, fy, hw), f === 3 ? 1 : -1, 0);
+          return set(i, ch && ch !== ' ' ? ch : ' ', C(YEL, 15)), true;
+        }
+        if (w < 0.37) { // glass doors in a steel frame, the hall lit up behind
+          if (Math.abs(du) > hw - 0.02 || w > 0.35) { BG[i] = C(GRAY, 2.5 + L * 0.3); return set(i, ' ', 0), true; }
+          BG[i] = lit > 0.35 ? C(WARM, 2 + lit * 4) : C(CYAN, 1.4 + day * 2.4); // (lit up inside after dark)
+          return set(i, Math.abs(fract(du / 0.3) - 0.5) > 0.47 ? '|' : w < 0.03 ? '=' : ' ', C(GRAY, 8)), true;
+        }
+      }
+    }
+    // the piers (every 12.5m, and at the corners), the plinth, the upper floor's edge across the glass, mullions: the rest
+    // is glass
+    if (half - Math.abs(along) < 0.06 || terminalBay(along) < 0.1 || w < 0.04 || Math.abs(w - 0.6) < 0.025) { BG[i] = C(STONE, (1.8 + L * 0.3) * k); return set(i, ' ', 0), true; }
+    if (fract(along * 4) < 0.045) { BG[i] = C(GRAY, (2.2 + L * 0.3) * k); return set(i, '|', C(GRAY, 6)), true; }
+    if (lit > 0.35) { // lit from within: the ceiling's lights along the top, the hall's glow under them
+      const top = band - w < 0.08;
+      BG[i] = C(top ? WHITE : WARM, top ? 6 + lit * 4 : 1.6 + lit * 3);
+      return set(i, !top && hash(Math.floor(along * 9), Math.floor(w * 7), 341) > 0.9 ? '.' : ' ', C(WARM, 9)), true;
+    }
+    BG[i] = C(CYAN, (1.2 + day * 2.4) * k); // the sky in it, a streak of reflection here and there
+    return set(i, fract((along + w) * 2.3) < 0.04 ? '/' : ' ', C(WHITE, 6 + L * 0.3)), true;
+  });
+  // the canopy out over the main doors, on two posts
+  const d0 = TERMINAL_DOORS[0], cy = vy - b.hw - 0.3;
+  drawBox(boxAt(vx + d0.u, cy, 1, 0, 0.95, 0.3, 0.47, 0.5), (i, t, L) => { BG[i] = C(HIT.face === 6 ? WHITE : GRAY, HIT.face === 6 ? 2 + lit * 5 : 2.4 + L * 0.3); return set(i, ' ', 0), true; });
+  for (const e of [-0.85, 0.85]) rod(vx + d0.u + e, cy - 0.22, 0, vx + d0.u + e, cy - 0.22, 0.47, 0.012, GRAY, 1.2);
 }
 // the departures (or arrivals) board's lines: a flight every 25 minutes from six in the morning; the next few, and the
 // last one gone (or landed). Each: time, where, gate, and how it's doing
@@ -214,15 +199,6 @@ function boardLines(dep) {
 }
 const FLIGHT_BOARD = { hl: 0.95, z0: 0.56, z1: 0.94, row: 0.06, n: 27, status: 17 }; // (n: characters a line; status: where that starts)
 const statusCol = s => s === 'BOARDING' || s === 'LANDING' ? (fract(T) < 0.6 ? GREEN : BLACK) : s === 'DELAYED' ? RED : s === 'DEPARTED' || s === 'LANDED' ? GRAY : s === 'GO TO GATE' ? ORANGE : YEL;
-// the folk in the hall: staff behind the desks and the café counter, people queueing, sitting at the gates, walking through
-const HALL_SHIRTS = [RED, BLUE, GREEN, YEL, MAG, CYAN, ORANGE, WHITE, BRICK];
-const HALL_FOLK = [
-  ...[-5.7, -4.5, -3.3, -2.1].map((u, k) => ({ u, v: -0.8, fx: 0, fy: 1, shirt: BLUE, pants: BLUE, seed: 700 + k })), // at the desks
-  ...[[-5.7, 2], [-4.5, 1], [-2.1, 2], [3.1, 1], [3.8, 1]].flatMap(([u, n], k) => [...Array(n)].map((_, j) => ({ u: u + j * 0.04, v: -0.43 + j * 0.13, fx: 0, fy: -1, seed: 720 + k * 3 + j }))), // queueing
-  ...[3.0, 3.8].map((u, k) => ({ u, v: -0.82, fx: 0, fy: 1, shirt: WHITE, pants: GRAY, seed: 740 + k })), // the café's
-  ...TERMINAL_GATES.flatMap((g, k) => [[-0.7, 0.48], [-0.2, 0.48], [0.35, 0.74], [0.75, 0.48], [-0.55, 0.74]].map(([e, v], j) => ({ u: g + e, v, fx: 0, fy: 1, sit: true, seed: 760 + k * 7 + j }))), // waiting at the gates
-].map(m => ({ ...m, shirt: m.shirt ?? HALL_SHIRTS[m.seed % HALL_SHIRTS.length] }));
-const HALL_WALKERS = [[-0.2, 0.11, 0], [-0.2, 0.08, 1.1], [0.29, 0.1, 0.5], [0.29, 0.07, 1.6]].map(([v, sp, ph], k) => ({ v, sp, ph, seed: 800 + k, shirt: HALL_SHIRTS[(k * 4 + 1) % HALL_SHIRTS.length] }));
 // a sign hung from the ceiling on two rods: word on both faces, in col on bg
 function hallSign(x, y, hl, z0, z1, ceiling, word, bg, col) {
   for (const e of [-1, 1]) rod(x + e * hl * 0.8, y, z1, x + e * hl * 0.8, y, ceiling, 0.004, GRAY, 0.8);
@@ -231,54 +207,6 @@ function hallSign(x, y, hl, z0, z1, ceiling, word, bg, col) {
     const ch = faceText(word, i, t, x, y, hl, z0 + 0.008, z1 - z0 - 0.016);
     BG[i] = bg; return set(i, ch && ch !== ' ' ? ch : ' ', col), true;
   });
-}
-// inside: the desks and their signs, the café, the columns, the seats and gate signs, the departures board, the people
-function drawTerminalHall(b, vx, vy) {
-  for (const o of TERMINAL_IN) {
-    const x = vx + o.u, y = vy + o.v;
-    if (o.kind === 'column') { drum(x, y, o.hu, 0, b.h, (i, t) => { BG[i] = C(STONE, (3 + inLight(t) * 0.35) * drumLit(o.hu)); return set(i, ' ', 0), true; }); continue; }
-    if (o.kind === 'seats') { // a row of blue seats on a steel beam, facing the planes
-      drawBox(boxAt(x, y + 0.01, 1, 0, o.hu, o.hv - 0.01, 0.036, 0.046), (i, t) => { BG[i] = C(BLUE, 2 + inLight(t) * 0.18); return set(i, fract(HIT.u * 10) < 0.1 ? '|' : ' ', C(BLUE, 8)), true; });
-      drawBox(boxAt(x, y - o.hv + 0.006, 1, 0, o.hu, 0.006, 0.046, o.h), (i, t) => { BG[i] = C(BLUE, 1.6 + inLight(t) * 0.16); return set(i, fract(HIT.u * 10) < 0.1 ? '|' : ' ', C(BLUE, 7)), true; });
-      drawBox(boxAt(x, y, 1, 0, o.hu * 0.9, 0.008, 0, 0.036), i => { BG[i] = C(GRAY, 1.2); return set(i, '|', C(GRAY, 6)), true; });
-      continue;
-    }
-    const cafe = o.kind === 'cafe'; // a counter: its front panelled, a pale top; screens on a desk, a coffee machine and a cake case on the café's
-    drawBox(boxAt(x, y, 1, 0, o.hu, o.hv, 0, o.h), (i, t) => {
-      const IN = inLight(t);
-      if (HIT.face === 5) { BG[i] = C(cafe ? WARM : WHITE, 2.5 + IN * 0.2); return set(i, ' ', 0), true; }
-      const stripe = !cafe && Math.abs(HIT.w - 0.08) < 0.01;
-      BG[i] = stripe ? C(YEL, 5 + IN * 0.3) : C(cafe ? BRICK : BLUE, 1.5 + IN * 0.18);
-      return set(i, cafe && fract(HIT.u * 5) < 0.06 ? '|' : ' ', C(BRICK, 6)), true;
-    });
-    for (const e of cafe ? [-0.3, 0.45] : [-0.2, 0.2]) drawBox(boxAt(x + e, y - o.hv * 0.4, 1, 0, cafe ? 0.07 : 0.035, cafe ? 0.03 : 0.006, o.h, o.h + (cafe ? 0.07 : 0.05)), (i, t) => {
-      if (cafe) { BG[i] = C(e < 0 ? GRAY : WARM, (e < 0 ? 2 : 4) + inLight(t) * 0.2); return set(i, e < 0 && HIT.face !== 5 && HIT.w > o.h + 0.05 ? 'o' : ' ', C(RED, 13)), true; }
-      BG[i] = HIT.face === 3 || HIT.face === 4 ? C(CYAN, 5 + fract(T * 0.3 + e) * 3) : C(GRAY, 1.5); return set(i, ' ', 0), true;
-    });
-    if (cafe) hallSign(x, y, 0.45, 0.4, 0.47, b.h, 'CAFE  GLYPH', C(WARM, 4), C(BRICK, 15));
-    else hallSign(x, y, 0.3, 0.4, 0.47, b.h, `CHECK-IN ${o.n}`, C(BLUE, 3.5), C(WHITE, 15));
-  }
-  STANDS_X.forEach((sx, k) => hallSign(vx + sx - b.x, vy + 0.88, 0.2, 0.45, 0.53, b.h, `GATE ${k + 1}`, C(BLACK, 4), C(YEL, 15))); // over the seats by each gate
-  // the board, hung over the middle of the hall: departures facing the doors, arrivals facing the gates
-  const lines = { 4: boardLines(true), 3: boardLines(false) }, x = vx, y = vy - 0.15;
-  for (const e of [-1, 1]) rod(x + e * FLIGHT_BOARD.hl * 0.85, y, FLIGHT_BOARD.z1, x + e * FLIGHT_BOARD.hl * 0.85, y, b.h, 0.005, GRAY, 0.9);
-  drawBox(boxAt(x, y, 1, 0, FLIGHT_BOARD.hl, 0.02, FLIGHT_BOARD.z0, FLIGHT_BOARD.z1), (i, t) => {
-    const f = HIT.face, row = Math.floor((FLIGHT_BOARD.z1 - 0.01 - HIT.w) / FLIGHT_BOARD.row);
-    if (f !== 3 && f !== 4) { BG[i] = C(GRAY, 1.6); return set(i, ' ', 0), true; }
-    BG[i] = C(BLACK, 3);
-    if (row < 0 || row > 5) return set(i, ' ', 0), true;
-    const z0 = FLIGHT_BOARD.z1 - 0.01 - (row + 1) * FLIGHT_BOARD.row, line = row ? lines[f][row - 1] : null;
-    if (row && !line) return set(i, ' ', 0), true;
-    const ch = faceText(row ? line.text : (f === 4 ? 'DEPARTURES' : 'ARRIVALS').padEnd(FLIGHT_BOARD.n), i, t, x, y, FLIGHT_BOARD.hl, z0, FLIGHT_BOARD.row);
-    const col = !row ? C(WHITE, 15) : Math.floor(faceQ(HIT.u, FLIGHT_BOARD.hl) * FLIGHT_BOARD.n) >= FLIGHT_BOARD.status ? C(statusCol(line.status), 14) : C(YEL, 14);
-    return set(i, ch && ch !== ' ' ? ch : ' ', col), true;
-  });
-  // the people
-  for (const m of HALL_FOLK) drawFigure(vx + m.u, vy + m.v, 0, 0.175, m.fx, m.fy, streetLook(m), m.sit ? 'sit7' : 'stand', { light: 9 });
-  for (const m of HALL_WALKERS) { // up and down the hall, turning at the ends
-    const p = mod(T * m.sp + m.ph, 2), dir = p < 1 ? 1 : -1, u = -6.3 + 12.6 * (p < 1 ? p : 2 - p);
-    drawFigure(vx + u, vy + m.v, 0, 0.175, dir, 0, streetLook(m), 'walk' + (Math.floor(T * 7 + m.seed) & 7), { light: 9 });
-  }
 }
 // a hangar: corrugated sheeting arched over it front to back, a strip of rooflights along the crown, its number over
 // the opening; inside, steel ribs under the roof, lamps hung between them, a workbench and tool board along the back

@@ -378,7 +378,7 @@ test('the Botanical Gardens: one big walled park, no streets through it, a lake 
 test('chatting indoors: every room people sit or stand about in has its own lines, never the same one twice running', () => {
   const r = j(`(() => {
     const kinds = ['store', 'bar', 'diner', 'arcade', 'laundry', 'cinema', 'hotel', 'apts', 'barber', 'hospital', 'bank', 'karaoke', 'petshop', 'florist', 'station', 'train', 'cafe', 'books', 'noodle', 'garage', 'tea', 'storage', 'jail', 'lighthouse', 'showroom', 'realty', 'aquarium', 'cathedral', 'pachinko', 'cranes', 'capsule', 'conservatory', 'aviary', 'jade', 'casino', 'exchange', 'stripclub',
-      'grocer', 'deli', 'hardware', 'skate', 'sports', 'toys', 'thrift', 'pharmacy', 'tobacco', 'video', 'herbs', 'phones', 'pawn', 'liquor', 'jeweler'];
+      'grocer', 'deli', 'hardware', 'skate', 'sports', 'toys', 'thrift', 'pharmacy', 'tobacco', 'video', 'herbs', 'phones', 'pawn', 'liquor', 'jeweler', 'gas', 'terminal'];
     const missing = kinds.filter(k => !ROOM_TALK[k] || ROOM_TALK[k].length < 2);
     let repeats = 0, prev = '', fromList = true;
     for (let n = 0; n < 200; n++) { const l = roomTalkLine('cafe', 14); if (l === prev) repeats++; prev = l; }

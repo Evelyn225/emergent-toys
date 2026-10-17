@@ -12,8 +12,8 @@ const URL_ = pathToFileURL(path.join(__dirname, '../../ascii-city.html')).href;
 const SHOPS = { GROCERY: 'grocer', MARKET: 'grocer', FRUIT: 'grocer', DELI: 'deli', DELICATESSEN: 'deli', HARDWARE: 'hardware', SKATE: 'skate',
   SPORTS: 'sports', TOYS: 'toys', THRIFT: 'thrift', ANTIQUES: 'thrift', TAILOR: 'thrift', PHARMACY: 'pharmacy', DRUGSTORE: 'pharmacy',
   TOBACCO: 'tobacco', VIDEO: 'video', HERBS: 'herbs', PHONES: 'phones', PAWN: 'pawn', LIQUOR: 'liquor', JEWELER: 'jeweler', '24/7': 'store', BODEGA: 'store',
-  CAFE: 'cafe', RAMEN: 'noodle', 'TEA HOUSE': 'tea', KARAOKE: 'karaoke', HOTEL: 'hotel', BAR: 'bar', DINER: 'diner' };
-const WITH_WC = ['DELI', 'TOBACCO', 'CAFE', 'RAMEN', 'TEA HOUSE', 'KARAOKE', 'HOTEL', 'BAR', 'DINER'];
+  CAFE: 'cafe', RAMEN: 'noodle', 'TEA HOUSE': 'tea', KARAOKE: 'karaoke', HOTEL: 'hotel', BAR: 'bar', DINER: 'diner', GAS: 'gas' };
+const WITH_WC = ['DELI', 'TOBACCO', 'CAFE', 'RAMEN', 'TEA HOUSE', 'KARAOKE', 'HOTEL', 'BAR', 'DINER', 'GAS'];
 
 // walk every room: flood its floor from the door on a 10cm grid, and see what you can reach
 async function walkRooms(page) {
@@ -84,7 +84,7 @@ test('every shop and the rooms with bathrooms: its own room, all of it reachable
       else assert.ok(s.shop > 0, `${word}: and they'll sell you something`);
     }
     for (const word of WITH_WC) assert.ok(r[word].hasWc && r[word].wc, `${word}: a bathroom, and you can get in and use the toilet`);
-    assert.ok(new Set(Object.values(r).map(s => s.kind)).size >= 22, 'all those different rooms behind the signs');
+    assert.ok(new Set(Object.values(r).map(s => s.kind)).size >= 23, 'all those different rooms behind the signs');
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });

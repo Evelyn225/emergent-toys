@@ -929,7 +929,7 @@ const HOURS = { VELVET: [20, 4], CASINO: [14, 2], EXCHANGE: [8, 19], BAR: [16, 3
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
   NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [0, 24], BODEGA: [0, 24], STORAGE: [0, 24], AQUARIUM: [9, 21],
-  PACHINKO: [10, 23], 'CRANE GAME': [10, 2], IZAKAYA: [17, 3], YAKITORI: [17, 2], TAKOYAKI: [11, 23], BENTO: [7, 21], CAPSULE: [0, 24], MANGA: [10, 23], DRUGSTORE: [9, 23], KISSATEN: [7, 20], GACHA: [10, 22] };
+  PACHINKO: [10, 23], 'CRANE GAME': [10, 2], IZAKAYA: [17, 3], YAKITORI: [17, 2], TAKOYAKI: [11, 23], BENTO: [7, 21], CAPSULE: [0, 24], MANGA: [10, 23], DRUGSTORE: [9, 23], KISSATEN: [7, 20], GACHA: [10, 22], GAS: [0, 24] };
 const hoursOf = word => HOURS[word] || [9, 20];
 const openAt = (sh, t) => { // is this shop open at game hour t?
   if (sh.kind === SHOP_APTS) return true;
@@ -1156,48 +1156,28 @@ function hangarRoof(b, across) {
 }
 // is (across, z) in the front wall's opening?
 const hangarDoor = (b, across, z) => Math.abs(across) < HANGAR_DOOR.hw && z < Math.min(HANGAR_DOOR.lintel, hangarRoof(b, across) - HANGAR_DOOR.frame);
-// The terminal: a solid landside wall with a band of windows along it and the doors in the middle; airside, big
-// windows from knee height to the name band, between steel piers, so you can watch the planes, and a door out to the
-// apron either side of the middle gate. Inside, a hall you walk through. What's in it, solid to walk into, in metres-of-ten relative to its middle
-// (u east, v south toward the planes): check-in desks along the landside wall west of the doors, the café's counter
-// east of them, columns down the middle, and rows of seats at each gate, facing the planes.
-const TERMINAL = AIRPORT_BLDG[0], TERMINAL_DOOR = 0.6, TERMINAL_WALL = 0.05;
-const TERMINAL_AIRDOORS = [-3.2, 3.2], TERMINAL_AIRDOOR = 0.35; // (out to the planes: where along it, and half their width)
-const TERMINAL_GATES = [-5.9, 0, 5.9]; // the seats at each gate (gates 1 to 3, by the stands; pulled in clear of the ends)
-const TERMINAL_IN = [
-  ...[-5.7, -4.5, -3.3, -2.1].map((u, k) => ({ u, v: -0.62, hu: 0.4, hv: 0.07, h: 0.11, kind: 'desk', n: k + 1 })),
-  { u: 3.4, v: -0.62, hu: 0.9, hv: 0.08, h: 0.11, kind: 'cafe' },
-  ...[-6, -4, -2, 2, 4, 6].map(u => ({ u, v: 0.12, hu: 0.06, hv: 0.06, h: TERMINAL.h, kind: 'column' })),
-  ...TERMINAL_GATES.flatMap(g => [0.48, 0.74].flatMap(v => [-0.45, 0.45].map(e => ({ u: g + e, v, hu: 0.38, hv: 0.05, h: 0.085, kind: 'seats' })))),
-];
-// is the long wall glass (or the open doors) at u along it, z up? (else it's solid: the landside wall, the airside
-// piers and the sill under the windows, the band along the top with the name on it, the doors' heads)
-const terminalBay = u => fract(u * 0.8 + 0.5); // (a window bay every 12.5m, 0..1 across it)
-const terminalAirDoor = u => TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR);
-function terminalGlass(landside, u, z) {
-  if (z < 0.04 || z > TERMINAL.h - 0.22) return false;
-  if (landside) {
-    if (Math.abs(u) < TERMINAL_DOOR) return z < 0.4 || z > 0.43;
-    return z > 0.5 && z < 0.86 && terminalBay(u) > 0.14;
-  }
-  if (terminalAirDoor(u)) return z < 0.36 || z > 0.39;
-  return z > 0.16 && !(z > 0.6 && z < 0.63) && terminalBay(u) > 0.12; // (a transom across them)
+// The terminal: a building like any other, walled in glass between concrete piers all the way round, its name along
+// the top. You go in by its doors, with E: the main doors in the middle of the landside, and two out on the apron, each
+// between two gates. Inside is the hall (terminal.js): check-in, the café, security, the gates, the planes out of the
+// windows. TERMINAL_DOORS: where along it each door is (u east of its middle), and which side
+const TERMINAL = AIRPORT_BLDG[0];
+const TERMINAL_DOORS = [{ u: 0, land: true }, { u: -3.2, land: false }, { u: 3.2, land: false }], TERMINAL_DOOR_W = [0.6, 0.35];
+const terminalBay = u => fract(u * 0.8 + 0.5); // (a pier every 12.5m: 0..1 across the bay between two)
+// standing at one of its doors (just outside, near enough to touch it)? Its index, or -1
+function terminalDoor(x, y) {
+  const u = rel(x - TERMINAL.x), v = rel(y - TERMINAL.y);
+  return TERMINAL_DOORS.findIndex(d => Math.abs(u - d.u) < TERMINAL_DOOR_W[d.land ? 0 : 1] && (d.land ? v > -TERMINAL.hw - 0.4 && v < -TERMINAL.hw : v < TERMINAL.hw + 0.4 && v > TERMINAL.hw));
 }
 // the airport building whose footprint (x, y) is in (grown by pad), or undefined
 const airportBldgAt = (x, y, pad = 0) => AIRPORT_BLDG.find(b => Math.abs(rel(x - b.x)) < b.hl + pad && Math.abs(rel(y - b.y)) < b.hw + pad);
 // a building, the tower, in the way at (x, y) (grown by pad)? A hangar only by its walls, and under the roof where it
-// comes down too low to stand (or taxi) under; the terminal by its walls (in at the doors) and what's in it
+// comes down too low to stand (or taxi) under; the terminal, all of it
 function airportBlocked(x, y, pad = 0) {
   if (Math.abs(rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2)) > 12 || Math.abs(rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2)) > 30) return false;
   if (Math.hypot(rel(x - TOWER.x), rel(y - TOWER.y)) < TOWER.r + pad) return true;
   const b = airportBldgAt(x, y, pad);
   if (!b) return false;
-  if (b.kind === 'terminal') {
-    const u = rel(x - b.x), v = rel(y - b.y), wall = TERMINAL_WALL + pad;
-    if (Math.abs(u) > b.hl - wall) return true; // the ends
-    if (Math.abs(v) > b.hw - wall) return !(v < 0 ? Math.abs(u) < TERMINAL_DOOR - pad : TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR - pad)); // the walls, but for the doors
-    return TERMINAL_IN.some(o => Math.abs(u - o.u) < o.hu + pad && Math.abs(v - o.v) < o.hv + pad);
-  }
+  if (b.kind === 'terminal') return true; // (you go in by its doors: terminalDoor)
   const across = Math.abs(rel(x - b.x)), along = rel(y - b.y); // (along: + toward the front)
   if (hangarRoof(b, across + pad) < 0.2) return true; // the sides, where the arch comes down to the ground
   if (along < -b.hw + HANGAR_WALL + pad) return true; // the back wall
@@ -1450,6 +1430,43 @@ for (const gh of GLASSHOUSES) {
     map[i] = mid || gh.gx1 - gh.gx0 === 2 && gx === gh.gx0 + 1 && gy === gh.gy0 + 1 ? gh.dome : gh.h; STY[i] = gh.sty; SHOP[i] = sh; SEED[i] = 0.5;
   }
 }
+
+// ---- gas stations: a few corner lots (the north-east one of a built-up block, streets along its north and east sides)
+// are a forecourt instead of a building: a canopy over two pump islands with a lane either side of each, the shop a low
+// building along the back. It's on the kerb side of the cars going north up the side street and west along the main
+// one: now and then one of them pulls in, fills up, and pulls back out onto the main street (gas.js).
+// Measured from the forecourt's north-west corner (x0, y0), 3 cells wide and 2 deep, the shop the row of cells behind:
+// lanes = the middle of each lane (a car fills up with its middle at slotX, its filler cap by the pump), islands = the
+// middle of each island, from ix0 to ix1, its pump at pumpX
+const GAS = { lanes: [0.42, 1.02, 1.62], islands: [0.72, 1.32], ix0: 1.1, ix1: 1.9, pumpX: 1.5, slotX: 1.37, h: 0.38 };
+const GAS_BRANDS = [['GLYPHCO', RED], ['APEX', BLUE], ['NOVA', GREEN], ['SUNSTOP', YEL], ['ROCKET', ORANGE], ['METRO', CYAN]];
+const GAS_STATIONS = [], GAS_CELL = new Uint8Array(N * N); // (1: forecourt, 2: the shop)
+{
+  const taken = new Set([...SERVICES, GRAND_HOTEL, AQUARIUM, CASINO, EXCHANGE, MUSEUM, CLUB].map(b => bi(b.bx, b.by))), cand = [];
+  for (let by = SHORE_N + 2; by < SHORE_S - 1; by++) for (let bx = 0; bx < NB; bx++) {
+    const d = DIST[bi(bx, by)];
+    if (blockKind(bx, by) || !hseg(bx, by) || !vseg(bx + 1, by) || by === EL_ROW || taken.has(bi(bx, by))) continue;
+    if (!['midtown', 'industrial', 'brownstones', 'downtown'].includes(d)) continue;
+    let built = true;
+    for (let y = 2; y <= 4; y++) for (let x = 5; x <= 7; x++) if (!map[idx(bx * 8 + x, by * 8 + y)]) built = false;
+    if (built) cand.push([hash(bx, by, 85) * (d === 'downtown' ? 2.5 : 1), bx, by]); // (fewer downtown)
+  }
+  cand.sort((p, q) => p[0] - q[0]);
+  for (const [, bx, by] of cand) {
+    if (GAS_STATIONS.length >= 6) break;
+    if (GAS_STATIONS.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 6)) continue;
+    const k = GAS_STATIONS.length, [brand, col] = GAS_BRANDS[k % GAS_BRANDS.length];
+    const sh = { kind: SHOP_LIT, word: 'GAS', neon: col, glyphs: 'o#=@', hours: hoursOf('GAS') };
+    const st = sh.gas = { k, bx, by, x0: bx * 8 + 5, y0: by * 8 + 2, brand, col, price: 3.09 + Math.round(hash(bx, by, 86) * 60) / 100 }; // (no way back to sh: shop records stay plain data)
+    for (let y = 2; y <= 4; y++) for (let x = 5; x <= 7; x++) {
+      const i = idx(bx * 8 + x, by * 8 + y), shop = y === 4;
+      map[i] = shop ? GAS.h : 0; STY[i] = shop ? 2 : 0; SHOP[i] = shop ? sh : null; SEED[i] = shop ? 0.5 : 0; GAS_CELL[i] = shop ? 2 : 1;
+    }
+    GAS_STATIONS.push(st);
+  }
+}
+const onForecourt = (x, y) => GAS_CELL[idx(Math.floor(x), Math.floor(y))] === 1;
+const gasStationAt = (x, y) => GAS_STATIONS.find(s => s.bx === (Math.floor(x / 8) & (NB - 1)) && s.by === (Math.floor(y / 8) & (NB - 1)));
 
 // Belle Époque: preserve flat roofs with public access. Other buildings have recessed courts / clipped wings
 // and a real mansard above the masonry. A lot's material and vines are stable across all its faces.
@@ -1932,7 +1949,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   }
   if (districtOf(bx, by) === 'industrial' && !kind && hash(bx, by, 51) < 0.45) { // a smokestack on the warehouse roof
     const x = X + 3 + hash(bx, by, 52) * 4, y = Y + 3 + hash(bx, by, 53) * 4;
-    stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
+    if (map[idx(x, y)]) stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
   }
 }
 // subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
@@ -1942,7 +1959,7 @@ const stations = [], STATION_AT = new Map(); // block -> its station
 {
   const cand = [];
   for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++)
-    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW) cand.push([hash(bx, by, 71), bx, by]);
+    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW && !gasStationAt(bx * 8, by * 8)) cand.push([hash(bx, by, 71), bx, by]); // (a forecourt's driveway is no place for the steps)
   cand.sort((p, q) => p[0] - q[0]);
   for (const [, bx, by] of cand) {
     if (stations.length >= 20) break;
@@ -2134,6 +2151,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     if (bx === GRAND_HOTEL.bx && by === GRAND_HOTEL.by) continue;
     if (dist === 'belle') continue; // the district has geometric mansards, bays and turrets (belle.js)
     if (dist === 'industrial' || dist === 'brownstones' && r > 0.3) continue;
+    if (!h) continue; // (no roof there: a forecourt)
     if (h >= 5 && r < 0.5) roofs.push({ x, y, z: h, kind: 'antenna', turn: hash(...lot, 18) * Math.PI });
     else if (r < 0.35) roofs.push({ x, y, z: h, kind: 'tank', turn: hash(...lot, 18) * Math.PI });
     else if (r < 0.55) { // a billboard facing out of the block, over one of the two streets its lot is on
@@ -2846,7 +2864,7 @@ function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
     const qx = mx + 0.5 - x, qy = my + 0.5 - y;
     if (Math.abs(qx) < ex + 0.5 && Math.abs(qy) < ey + 0.5 && Math.abs(qx * hx + qy * hy) < hl + diagonal && Math.abs(-qx * hy + qy * hx) < hw + diagonal) return false;
   }
-  return architectureCarClear(x, y, hx, hy, hl, hw) && landmarkCarClear(x, y, hx, hy, hl, hw);
+  return architectureCarClear(x, y, hx, hy, hl, hw) && landmarkCarClear(x, y, hx, hy, hl, hw) && gasCarClear(x, y, hx, hy, hl, hw);
 }
 // A short local route around buildings for a cruiser in close pursuit. The wider street network still handles
 // dispatch from far away; nearby cruisers can leave their lane, reverse and intercept rather than circling a block.
@@ -2943,7 +2961,7 @@ function toLane(c) {
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
   else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
-  c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; plan(c);
+  c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; c.pit = null; c.gas = null; plan(c);
 }
 
 // Routing keeps cardinal headings; the body and passenger camera follow the actual steering.
@@ -3095,7 +3113,7 @@ function parkedCarAt(x, y, pad) {
     const [hl, hw] = VEHICLES[kind] || VEHICLES.car, qx = rel(x - cx), qy = rel(y - cy);
     return Math.abs(qx * hx + qy * hy) < hl + pad && Math.abs(-qx * hy + qy * hx) < hw + pad;
   };
-  for (const c of cars) if (c.parked && !c.player && Math.abs(rel(c.ex - x)) < 0.6 && Math.abs(rel(c.ey - y)) < 0.6 && inCar(c.ex, c.ey, c.hx, c.hy, c.kind)) return true;
+  for (const c of cars) if ((c.parked || gasFilling(c)) && !c.player && Math.abs(rel(c.ex - x)) < 0.6 && Math.abs(rel(c.ey - y)) < 0.6 && inCar(c.ex, c.ey, c.hx, c.hy, c.kind)) return true;
   for (const b of SERVICES) if (!b.out && Math.abs(rel(b.x - x)) < 0.6 && Math.abs(rel(b.y - y)) < 0.6 && inCar(b.x, b.y, -1, 0, b.kind)) return true;
   return false;
 }
@@ -3126,6 +3144,7 @@ function stepTraffic(dt, t, everywhere = false) {
   for (const c of cars) {
     if (!live(c)) continue; // driven by you, or too far away to matter
     if (c.waitingCrew) { c.v = 0; c.brake = true; c.ex = c.x; c.ey = c.y; continue; }
+    if (c.pit) { stepPit(c, dt); continue; } // (at a gas station: gas.js)
     if (c.pursuit && c.dest && (c.pursuitDrive || Math.hypot(rel(c.dest[0] - c.x), rel(c.dest[1] - c.y)) < 18)) { stepPursuitCar(c, dt); continue; }
     if (c.merging) {
       const l = c.merging;
@@ -3161,6 +3180,7 @@ function stepTraffic(dt, t, everywhere = false) {
       const siren = evs.some(e => e.nodeX === nx && e.nodeY === ny && (e.hx === 0) !== vert);
       if (s === 'R' || s === 'Y' && line > 0.5 || siren) room_ = Math.min(room_, line - 0.25);
     }
+    if (c.gas) room_ = Math.min(room_, 0.28); // (slowing to turn in for gas)
     if (code(c)) { c.nodeX = nx; c.nodeY = ny; }
     // don't turn into a lane if a car is sitting right where we'd land
     if (!c.pursuit && c.left < 0.6 && (c.nh[0] !== c.hx || c.nh[1] !== c.hy)) {
@@ -3243,6 +3263,8 @@ function stepTraffic(dt, t, everywhere = false) {
     if (c.rider) c.fare += step;
     if (c.left <= 0) { [c.hx, c.hy] = c.nh; plan(c); }
     c.ex = mod(c.x + c.hy * c.off, N); c.ey = mod(c.y - c.hx * c.off, N);
+    const gz = GAS_ZONE[idx(Math.floor(c.x), Math.floor(c.y))];
+    if (gz || c.gas) gasConsider(c, gz || null);
     if (taxi) {
       const vx = rel(c.ex - oldX), vy = rel(c.ey - oldY);
       const yaw = Math.hypot(vx, vy) > 1e-5 ? Math.atan2(vy, vx) : Math.atan2(c.hy, c.hx);
@@ -3270,6 +3292,181 @@ function selfTest(steps = 9000) {
   console.log(`selftest: crash-frames=${crashes} turns=${turns} longest stop=${worst.toFixed(1)}s`);
   return { crashes, turns, worst };
 }
+// ---- gas stations (world.js has where they are and how a forecourt's laid out; gas-render.js draws them). The canopy,
+// islands, pumps and price sign are solids, the islands solid to cars as well as people. Now and then a car going past
+// pulls in (going west along the main street, into one of the two nearer lanes; going north up the side street, into
+// one of the two further ones), stops with its filler cap by a pump while the driver fills up, then waits for a gap
+// and pulls out onto the main street. Off its lane it follows a path of its own (c.pit), and stepTraffic leaves it to
+// stepPit till it's back in the traffic. You never need gas yourself.
+
+// the solids, measured from the forecourt's corner (x0, y0)
+function gasSolid(st, x, y, alongX, hl, hw, z0, z1, kind, extra) {
+  const o = { x: mod(st.x0 + x, N), y: mod(st.y0 + y, N), c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k: st.k, st, ...extra };
+  solids.push(o); solidsB[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o);
+  return o;
+}
+// and the driveways across the pavement: lamps and trees there step aside (streetscape.js)
+const GAS_CLEAR = [];
+for (const st of GAS_STATIONS) {
+  gasSolid(st, 1.5, 0.95, true, 1.05, 0.88, 0.43, 0.51, 'gascanopy');
+  for (const [k, iy] of GAS.islands.entries()) {
+    gasSolid(st, GAS.pumpX, iy, true, (GAS.ix1 - GAS.ix0) / 2, 0.06, 0, 0.025, 'gasisle');
+    gasSolid(st, GAS.pumpX, iy, true, 0.06, 0.045, 0, 0.2, 'gaspump', { isle: k });
+    for (const x of [GAS.ix0 + 0.035, GAS.ix1 - 0.035]) gasSolid(st, x, iy, true, 0.022, 0.022, 0, 0.43, 'gaspost');
+  }
+  gasSolid(st, 0.12, 0.2, false, 0.015, 0.015, 0, 0.33, 'gaspost'); // the price sign on its pole, by the way out
+  gasSolid(st, 0.12, 0.2, false, 0.17, 0.02, 0.33, 0.66, 'gassign');
+  gasSolid(st, 2.45, 1.91, true, 0.13, 0.05, 0, 0.09, 'gasice'); // the ice chest by the shop door
+  for (const [x, y, hl, hw] of [[0.2, -0.16, 0.5, 0.16], [2.6, -0.16, 0.42, 0.16], [3.16, 1.35, 0.16, 0.65]])
+    GAS_CLEAR.push({ x: mod(st.x0 + x, N), y: mod(st.y0 + y, N), c: 1, s: 0, hl, hw, z0: 0, z1: 0.02 }); // (flat: no shelter from the snow)
+}
+// is a car's body (as carBodyClear's) clear of the islands (and the sign's pole)?
+function gasCarClear(x, y, hx, hy, hl, hw) {
+  if (GAS_CELL[idx(Math.floor(x), Math.floor(y))] !== 1) return true;
+  const st = gasStationAt(x, y), lx = rel(x - st.x0), ly = rel(y - st.y0), ax = Math.abs(hx), ay = Math.abs(hy);
+  const hit = (bx, by, bl, bw) => { // a box along x at (bx, by), half bl by bw: separating axes
+    const qx = bx - lx, qy = by - ly;
+    return Math.abs(qx * hx + qy * hy) < hl + bl * ax + bw * ay && Math.abs(-qx * hy + qy * hx) < hw + bl * ay + bw * ax &&
+      Math.abs(qx) < bl + hl * ax + hw * ay && Math.abs(qy) < bw + hl * ay + hw * ax;
+  };
+  return !GAS.islands.some(iy => hit(GAS.pumpX, iy, (GAS.ix1 - GAS.ix0) / 2, 0.06)) && !hit(0.12, 0.2, 0.015, 0.015);
+}
+
+// ---- pulling in. Where cars think about it: going west, along the main street from the far side of the junction
+// (cells x0+3..x0+6 of the lane's row); going north, the side street alongside (x0+3, y0+1..y0+4)
+const GAS_CHANCE = 0.4, GAS_ZONE = new Array(N * N);
+for (const st of GAS_STATIONS) {
+  for (let x = 3; x <= 6; x++) GAS_ZONE[idx(st.x0 + x, st.y0 - 1)] = st;
+  for (let y = 1; y <= 4; y++) GAS_ZONE[idx(st.x0 + 3, st.y0 + y)] = st;
+}
+const gasLaneFree = (st, l) => !cars.some(o => o.pit && o.pit.st === st && o.pit.lane === l && !o.player && !o.parked) &&
+  !cars.some(o => (o.parked || o.player) && Math.abs(rel(o.ex - st.x0 - 1.5)) < 1.8 && Math.abs(rel(o.ey - st.y0 - GAS.lanes[l])) < 0.35); // (nor anything left in it)
+// a car in the zone (st, or null just out of it): decide whether to fill up; once it has, slow for the turn (c.gas, see
+// stepTraffic) and turn in at the right spot, if there's a lane free by then
+function gasConsider(c, st) {
+  if (c.gas && c.gas.st !== st) c.gas = null; // (turned off, or went by)
+  if (!st) return;
+  const lx = rel(c.x - st.x0), ly = rel(c.y - st.y0), west = c.hx === -1, north = c.hy === -1;
+  if (!c.gas) {
+    if (c.gasSeen === st && T - c.gasSeenT < 90) return; // (made its mind up about this one already)
+    c.gasSeen = st; c.gasSeenT = T;
+    if (c.kind !== 'car' || c.ev || c.patrol || c.pursuit || c.dest || c.rush || c.hail || Math.abs(c.off) > 0.01 || Math.random() > GAS_CHANCE) return;
+    if (west && lx > 4.9 && c.nh[0] === -1 || north && ly > 2.6) c.gas = { st, from: west ? 'h' : 'v' };
+    else return;
+  }
+  const g = c.gas;
+  if (g.from === 'h' ? !west : !north) { c.gas = null; return; }
+  const lane = l => [GAS.slotX, GAS.lanes[l], -1, 0];
+  if (g.from === 'h' && lx <= 3.4) { // round the corner and straight in
+    const l = [0, 1].find(l => gasLaneFree(st, l));
+    c.gas = null;
+    if (l !== undefined) startPit(c, st, l, [[lx, ly, -1, 0], [2.35, GAS.lanes[l], -1, 0], lane(l)]);
+  } else if (g.from === 'v') for (const l of [2, 1]) { // a right turn off the side street, into the far lane if it's free
+    if (g[l] || ly > GAS.lanes[l] + 0.72) continue;
+    g[l] = true;
+    if (gasLaneFree(st, l)) return startPit(c, st, l, [[lx, ly, 0, -1], [2.9, GAS.lanes[l], -1, 0], lane(l)]);
+    if (l === 1) c.gas = null;
+  }
+}
+// a path through poses [x, y, hx, hy] (forecourt coordinates): a cubic between each pair, its handles along their
+// headings, sampled every couple of centimetres. hold: how far along it a car leaving waits for a gap
+function gasPath(poses) {
+  const pts = [[poses[0][0], poses[0][1]]], len = [0];
+  for (let k = 1; k < poses.length; k++) {
+    const [ax, ay, ahx, ahy] = poses[k - 1], [bx, by, bhx, bhy] = poses[k], h = Math.hypot(bx - ax, by - ay) * 0.4;
+    const c1x = ax + ahx * h, c1y = ay + ahy * h, c2x = bx - bhx * h, c2y = by - bhy * h, n = Math.max(2, Math.ceil(h / 0.008));
+    for (let j = 1; j <= n; j++) {
+      const t = j / n, u = 1 - t, x = u * u * u * ax + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * bx, y = u * u * u * ay + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * by;
+      const [qx, qy] = pts[pts.length - 1];
+      len.push(len[len.length - 1] + Math.hypot(x - qx, y - qy)); pts.push([x, y]);
+    }
+  }
+  const k = pts.findIndex(p => p[1] < 0.27); // (the front bumper about to cross the pavement)
+  return { pts, len, total: len[len.length - 1], i: 0, hold: k < 0 ? Infinity : len[k] };
+}
+// the way out of lane l: on past the island, round to the right, across the pavement, left into the main street
+function gasExitPoses(l) {
+  const y = GAS.lanes[l], poses = [[GAS.slotX, y, -1, 0], [0.85, y, -1, 0]];
+  if (y - 0.47 > 0.05) poses.push([0.38, y - 0.47, 0, -1]);
+  poses.push([0.38, -0.05, 0, -1], [-0.17, -0.6, -1, 0], [-0.45, -0.6, -1, 0]);
+  return poses;
+}
+function startPit(c, st, lane, poses) {
+  c.pit = { st, lane, stage: 'in', path: gasPath(poses), s: 0, stuck: 0 };
+  c.v = Math.min(c.v, 0.8); c.off = 0; c.offV = 0; c.pass = null; c.laneYaw = null; c.gas = null; c.travelA = null;
+}
+function placeOnPath(c) {
+  const p = c.pit, P = p.path;
+  while (P.i < P.len.length - 2 && P.len[P.i + 1] < p.s) P.i++;
+  const a = P.pts[P.i], b = P.pts[P.i + 1], seg = P.len[P.i + 1] - P.len[P.i] || 1, f = clamp((p.s - P.len[P.i]) / seg, 0, 1);
+  const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  c.x = mod(p.st.x0 + a[0] + (b[0] - a[0]) * f, N); c.y = mod(p.st.y0 + a[1] + (b[1] - a[1]) * f, N);
+  c.hx = (b[0] - a[0]) / d; c.hy = (b[1] - a[1]) / d; c.ex = c.x; c.ey = c.y; c.off = 0;
+}
+// how far c can go along its heading before it's up against something: a car (whichever way it's facing), somebody on
+// foot, you. Two of them waiting on each other: the older goes
+function pitRoom(c) {
+  let room_ = Infinity;
+  const see = (x, y, band, gap) => {
+    const rx = rel(x - c.x), ry = rel(y - c.y), al = rx * c.hx + ry * c.hy;
+    return al > 0 && al < 1.6 && Math.abs(rx * c.hy - ry * c.hx) < band ? al - gap : Infinity;
+  };
+  c.pitBlk = null;
+  for (const o of c.near) {
+    if (o === c || (o.pitBlk === c || o.blk === c) && c.v < 0.05 && o.v < 0.05 && c.id < o.id) continue;
+    const x = Math.abs(c.hx * o.hy - c.hy * o.hx), g = see(o.ex, o.ey, 0.2 + 0.2 * x, 0.52 - 0.15 * x);
+    if (g < room_) { room_ = g; c.pitBlk = o; }
+  }
+  for (const m of nearby(pplGrid, c.ex, c.ey, nearPeople)) if (!m.hidden) room_ = Math.min(room_, see(m.x, m.y, 0.15, 0.3));
+  if (mode === 'walk') room_ = Math.min(room_, see(px, py, 0.17, 0.32));
+  return room_;
+}
+// clear to pull out? Nothing at the way out, nothing coming along the main street for a good few cells, nobody on the
+// pavement where it crosses
+function gasClear(c) {
+  const st = c.pit.st, mx = st.x0 - 0.45, my = st.y0 - 0.6, wx = st.x0 + 0.2, wy = st.y0 - 0.15;
+  for (const o of cars) if (o !== c && Math.abs(rel(o.ey - my)) < 0.35 && rel(o.ex - mx) > -0.7 && rel(o.ex - mx) < 3.8) return false;
+  for (const m of nearby(pplGrid, wx, wy, nearPeople)) if (!m.hidden && Math.abs(rel(m.x - wx)) < 0.45 && Math.abs(rel(m.y - wy)) < 0.25) return false;
+  return !(mode === 'walk' && Math.abs(rel(px - wx)) < 0.45 && Math.abs(rel(py - wy)) < 0.25);
+}
+const PIT_V = 0.4, PIT_ACC = 0.8, PIT_BRAKE = 0.9;
+const gasFilling = c => !!c.pit && c.pit.stage === 'fill' && !c.player && !c.parked;
+function stepPit(c, dt) {
+  const p = c.pit;
+  c.ex = c.x; c.ey = c.y;
+  if (p.stage === 'fill') { // the driver's out at the pump
+    c.v = 0; c.brake = true;
+    if (T > p.until) { p.stage = 'out'; p.path = gasPath(gasExitPoses(p.lane)); p.s = 0; p.go = false; }
+    return;
+  }
+  const P = p.path;
+  let vt = PIT_V;
+  if (p.stage === 'in') vt = Math.min(vt, Math.max(0.03, Math.sqrt(2 * 0.6 * Math.max(0, P.total - p.s)))); // (creeping the last bit)
+  else if (!p.go) { // waiting at the pavement for a gap
+    if (p.s >= P.hold - 0.01) { if (gasClear(c)) p.go = true; else vt = 0; }
+    else vt = Math.min(vt, Math.max(0.03, Math.sqrt(2 * 0.8 * Math.max(0, P.hold - p.s))));
+  } else vt = 0.7; // (and away, smartly)
+  vt = Math.min(vt, Math.max(0, (pitRoom(c) - 0.05) * 2.5));
+  c.brake = vt < c.v;
+  c.v = Math.max(0, c.v + clamp(vt - c.v, -PIT_BRAKE * dt, PIT_ACC * dt));
+  p.s = Math.min(P.total, p.s + c.v * dt);
+  placeOnPath(c);
+  // stuck a long while (something left in the way): give up and get back on the road somehow, if you're not looking
+  p.stuck = c.v < 0.02 && !(p.stage === 'out' && !p.go && p.s >= P.hold - 0.01) ? p.stuck + dt : 0;
+  if (p.stuck > 40 && Math.hypot(rel(c.x - px), rel(c.y - py)) > 8) return gasRejoin(c);
+  if (p.s < P.total - 1e-4) return;
+  if (p.stage === 'in') { p.stage = 'fill'; c.v = 0; p.t0 = T; p.until = T + 8 + Math.random() * 10; }
+  else gasRejoin(c);
+}
+function gasRejoin(c) { // back in the westbound lane of the main street, just past the way out
+  const st = c.pit.st;
+  c.x = mod(st.x0 - 0.45, N); c.y = mod(st.y0 - 0.6, N); c.hx = -1; c.hy = 0; c.ex = c.x; c.ey = c.y;
+  c.pit = null; c.pitBlk = null; c.off = 0; c.offV = 0; c.pass = null; c.laneYaw = null; c.travelA = null;
+  plan(c);
+}
+// which island a car in each lane fills up from, and which face of that island's pump looks at it (rayBox's: 3 the
+// pump's south face, 4 its north)
+const GAS_FILL = [[0, 4], [0, 3], [1, 3]];
 // ===== car damage (any car: yours, a stolen one, the traffic, a cruiser). Every crash harder than a bump takes
 // something out of a car, both of them when it's two: at a quarter it's dented and scraped, at half the windscreen
 // cracks and the engine smokes, at three quarters it's black smoke and down on power, and at the top it catches fire.
@@ -4041,6 +4238,8 @@ const ROOM_TALK = {
   phones: ['Cracked my screen again. Same corner. Every time.', 'It\'s the same phone as last year but in a new colour.', 'Number forty-seven. They\'re on twelve.', 'I just want a charger that lasts longer than a week.'],
   pawn: ['That\'s my guitar on the wall. I\'m buying it back. Again.', 'Everything here has a story. Mostly sad ones.', 'He offered me twelve bucks for a gold watch. Twelve.', 'I\'m not selling, I\'m "short-term liquidating".'],
   liquor: ['It\'s for a party. A party of one.', 'The wine with the animal on it. That\'s all I know about wine.', 'Don\'t judge my basket.', 'They know me by name here. Not a great sign.'],
+  gas: ['Forty on pump three. And these. And one of those.', 'I only came in for the bathroom key. It\'s on a hubcap.', 'That hot dog\'s been going round since Tuesday. I\'m having it.', 'Four dollars a gallon. I\'m walking from now on.', 'Coffee\'s free if you buy the cup. The cup is two dollars.'],
+  terminal: ['My flight\'s delayed. Again. Third time today.', 'They changed the gate twice. I\'ve walked a marathon.', 'Nine dollars for a bottle of water. Nine.', 'I always get here three hours early. Always.', 'They lost my bag on the way IN.', 'Window seat. I\'ve been looking forward to it for a month.'],
   jeweler: ['Just looking. With my eyes. Not my wallet.', 'That ring costs more than my flat.', 'The guard\'s been staring at me for ten minutes.', 'Anniversary. It needs to sparkle. A lot.'],
   stripclub: ['I\'m only here for the wings.', 'Don\'t make eye contact with the bouncer.', 'My friend\'s bachelor party. He left an hour ago.', 'Those are six very talented characters.',
     'Twelve dollars for a soda. A SODA.', 'She remembered my name. She calls everyone "hon". Still.', 'I\'m an accountant. This is my one night.',
@@ -4352,7 +4551,7 @@ function belleLampParts(x, y, ax, ay) {
   return parts;
 }
 // Static clearance and shelter are resolved once after all building families have supplied their geometry.
-const STREET_GEOMETRY = [...ARCH_DETAILS, ...LANDMARK_SOLIDS, ...PAVILION_SOLIDS, ...belleDetails, ...solids, ...COURIER_SURFACES];
+const STREET_GEOMETRY = [...ARCH_DETAILS, ...LANDMARK_SOLIDS, ...PAVILION_SOLIDS, ...belleDetails, ...solids, ...COURIER_SURFACES, ...GAS_CLEAR];
 const streetGeometryCells = new Array(N * N);
 function geometryBounds(o) {
   return [Math.abs(o.c) * o.hl + Math.abs(o.s) * o.hw, Math.abs(o.s) * o.hl + Math.abs(o.c) * o.hw];
@@ -4572,7 +4771,7 @@ const ROOM_AUDIO = {
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
   hotel: [0.2, 0.4, 0], grandhotel: [0.15, 0.35, 0], casino: [0.7, 0, 0], stripclub: [0.55, 0.8, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
   grocer: [0, 0, 0.45], deli: [0.35, 0, 0.35], hardware: [0, 0, 0.3], skate: [0.15, 0, 0.3], sports: [0.1, 0, 0.4], toys: [0.2, 0, 0.45], thrift: [0, 0.35, 0.2],
-  pharmacy: [0, 0, 0.4], tobacco: [0, 0.5, 0], video: [0, 0, 0.45], herbs: [0, 0, 0.25], phones: [0.1, 0, 0.35], pawn: [0, 0, 0.3], liquor: [0, 0, 0.4], jeweler: [0, 0.45, 0],
+  pharmacy: [0, 0, 0.4], tobacco: [0, 0.5, 0], video: [0, 0, 0.45], herbs: [0, 0, 0.25], phones: [0.1, 0, 0.35], pawn: [0, 0, 0.3], liquor: [0, 0, 0.4], jeweler: [0, 0.45, 0], gas: [0, 0, 0.35], terminal: [0.55, 0, 0.15],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);
 // how busy the streets sound by hour: quiet small hours, morning and evening peaks
@@ -4774,6 +4973,7 @@ const STOCK_WORD = {
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft', 'home_belle'],
   DELICATESSEN: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'], JEWELER: ['jadebangle', 'luckycoin', 'redstring'], ANTIQUES: ['vinyl', 'book', 'harmonica', 'lantern'], TAILOR: ['umbrella'],
+  GAS: ['hotdog', 'coffee', 'candy', 'chips', 'soda', 'energy', 'water', 'cigarettes'], // (the shop, not the pumps: you never need gas)
   'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], 'PET SHOP': ['petcat', 'petdog'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
@@ -8287,6 +8487,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
   if(sh?.courier)return courierFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
+  if (sh?.gas) return gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc); // (gas-render.js)
   if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 25) return grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
   if (sty === 22) return clubFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -8657,6 +8858,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false;
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
+    if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L); // a gas station's forecourt (gas-render.js)
     if (kind === 'gardens' && inGardens(wx, wy)) {
       const gf = gardenFloor(i, r, x, wx, wy, L);
       if (gf === true) return;
@@ -10087,6 +10289,7 @@ function citySprites() {
   });
   islandSprites();
   fairSprites();
+  gasSprites(); // (the drivers at the pumps: gas-render.js)
   forNear(solidsB, o => { const [vx, vy] = R(o.x, o.y); if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, Math.max(o.hl, o.hw) + 0.1)) drawBox(boxAt(vx, vy, o.c, o.s, o.hl, o.hw, o.z0, o.z1), SOLID_SHADE[o.kind](o)); });
   forNear(machinesB, m => { const [vx, vy] = R(m.x, m.y); if (Math.hypot(vx, vy) < vis) drawVending(m, vx, vy); });
   forNear(lanternsB, l => { const [vx, vy] = R(l.x, l.y); if (Math.hypot(vx, vy) < 30) drawLanternString(vx, vy, l.ax, l.ay); });
@@ -12755,6 +12958,89 @@ function roomFloor(i, r, x, rx, ry) {
     }
   }
 }
+// ---- ceiling lights, laid out to fit the room: each fitting hangs whole over the floor (or a shelf, or anything else
+// the ceiling shows over), a hand's width clear of the walls, never over a doorway, and they're spread evenly over each
+// part of the room its walls divide it into (the shop, the back room, the toilet), not a pattern tiled from the corner
+// that the walls cut through. spec: { s: spacing, r: radius } round fittings; { s, w, strip: true } tubes running along
+// y; { s, r, track: true } tracks along x every s with a spot every r. Cached on the room as a mask, CEIL_RES a metre:
+// 1 a fitting (lit), 2 a track
+const CEIL_RES = 20, CEIL_GAP = 0.2;
+function ceilMask(key, spec) {
+  const R = room;
+  if (R.ceilMasks?.[key]) return R.ceilMasks[key];
+  const W = R.W, H = R.H, top = (R.def.height || 3) - 0.05, RW = W * CEIL_RES, mask = new Uint8Array(RW * H * CEIL_RES);
+  const under = (x, y) => x >= 0 && y >= 0 && x < W && y < H && ROOMW.cell(x, y) < top;
+  // doorways: a run of one to three cells through a wall a cell thick (the far side of the wall's ends open)
+  const door = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!under(x, y)) continue;
+    let a = x, b = x;
+    while (under(a - 1, y)) a--; while (under(b + 1, y)) b++;
+    if (b - a < 3 && (under(a - 1, y - 1) || under(b + 1, y - 1)) && (under(a - 1, y + 1) || under(b + 1, y + 1))) door[y * W + x] = 1;
+    a = y; b = y;
+    while (under(x, a - 1)) a--; while (under(x, b + 1)) b++;
+    if (b - a < 3 && (under(x - 1, a - 1) || under(x - 1, b + 1)) && (under(x + 1, a - 1) || under(x + 1, b + 1))) door[y * W + x] = 1;
+  }
+  // the parts of the room: what's left joined up once the doorways are taken out
+  const part = new Int16Array(W * H).fill(-1), parts = [];
+  for (let k = 0; k < W * H; k++) {
+    if (part[k] >= 0 || door[k] || !under(k % W, k / W | 0)) continue;
+    const box = [W, H, 0, 0], q = [k]; part[k] = parts.length;
+    while (q.length) {
+      const c = q.pop(), x = c % W, y = c / W | 0;
+      box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x + 1); box[3] = Math.max(box[3], y + 1);
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        const n = ny * W + nx;
+        if (nx >= 0 && ny >= 0 && nx < W && ny < H && part[n] < 0 && !door[n] && under(nx, ny)) { part[n] = parts.length; q.push(n); }
+      }
+    }
+    parts.push(box);
+  }
+  const tall = R.props.filter(p => p.box && !p.walk && p.box.z1 >= top).map(p => p.box); // (lintels and the like, up to the ceiling)
+  const fits = (id, x0, y0, x1, y1) => { // is all of [x0, x1] x [y0, y1], and a gap round it, over this part of the room?
+    for (let y = Math.floor(y0 - CEIL_GAP); y <= Math.floor(y1 + CEIL_GAP); y++) for (let x = Math.floor(x0 - CEIL_GAP); x <= Math.floor(x1 + CEIL_GAP); x++)
+      if (x < 0 || y < 0 || x >= W || y >= H || part[y * W + x] !== id) return false;
+    return !tall.some(b => inBox(b, (x0 + x1) / 2, (y0 + y1) / 2, Math.max(x1 - x0, y1 - y0) / 2 + 0.1));
+  };
+  const paint = (x0, y0, x1, y1, v, round) => {
+    for (let py = Math.max(0, Math.floor(y0 * CEIL_RES)); py < Math.min(H * CEIL_RES, Math.ceil(y1 * CEIL_RES)); py++)
+      for (let qx = Math.max(0, Math.floor(x0 * CEIL_RES)); qx < Math.min(RW, Math.ceil(x1 * CEIL_RES)); qx++) {
+        const u = (qx + 0.5) / CEIL_RES, w = (py + 0.5) / CEIL_RES;
+        if (!round || Math.hypot(u - (x0 + x1) / 2, w - (y0 + y1) / 2) < (x1 - x0) / 2) mask[py * RW + qx] = v; // (a spot over its track)
+      }
+  };
+  const even = (a, b, s) => { const n = Math.max(1, Math.round((b - a) / s)), d = (b - a) / n; return Array.from({ length: n }, (_, k) => a + (k + 0.5) * d); };
+  parts.forEach(([x0, y0, x1, y1], id) => {
+    if (spec.strip) for (const cx of even(x0, x1, spec.s)) { // tubes along y, broken where they'd run into a wall
+      if (spec.keep && !spec.keep(cx)) continue;
+      let ya = -1;
+      for (let y = y0; y <= y1; y++) {
+        const ok = y < y1 && fits(id, cx - spec.w / 2, y + 0.5, cx + spec.w / 2, y + 0.5);
+        if (ok && ya < 0) ya = y;
+        if (!ok && ya >= 0) { if (y - ya >= 1) paint(cx - spec.w / 2, ya + 0.3, cx + spec.w / 2, y - 0.3, 1); ya = -1; }
+      }
+    } else if (spec.track) for (const cy of even(y0, y1, spec.s)) { // a track along x, spots spaced along it
+      let xa = -1;
+      for (let x = x0; x <= x1; x++) {
+        const ok = x < x1 && fits(id, x + 0.5, cy - 0.04, x + 0.5, cy + 0.04);
+        if (ok && xa < 0) xa = x;
+        if (!ok && xa >= 0) {
+          if (x - xa >= 1) { paint(xa + 0.3, cy - 0.04, x - 0.3, cy + 0.04, 2); for (const sx of even(xa + 0.3, x - 0.3, spec.r)) paint(sx - 0.1, cy - 0.1, sx + 0.1, cy + 0.1, 1, true); }
+          xa = -1;
+        }
+      }
+    } else for (const cy of even(y0, y1, spec.s)) for (const cx of even(x0, x1, spec.s)) // round fittings on an even grid
+      if (fits(id, cx - spec.r, cy - spec.r, cx + spec.r, cy + spec.r)) paint(cx - spec.r, cy - spec.r, cx + spec.r, cy + spec.r, 1, true);
+  });
+  (R.ceilMasks ||= {})[key] = mask;
+  return mask;
+}
+const ceilAt = (key, spec, wx, wy) => {
+  if (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H) return 0;
+  return ceilMask(key, spec)[Math.floor(wy * CEIL_RES) * room.W * CEIL_RES + Math.floor(wx * CEIL_RES)];
+};
+const CEIL_PENDANT = { s: 2, r: 0.14 }, CEIL_LANTERN = { s: 1.6, r: 0.18 }, CEIL_STRIP = { s: 2.5, w: 0.4, strip: true },
+  CEIL_STATION = { s: 2.5, w: 0.4, strip: true, keep: x => x > 9 && x < 37 }; // (not down the tunnels)
 function roomCeil(i, r, x, rx, ry) {
   const d = ((room.def.height || 3) - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
   ZB[i] = d; FL[i] = 0;
@@ -12768,12 +13054,12 @@ function roomCeil(i, r, x, rx, ry) {
     BG[i] = C(WHITE, 5);
     return set(i, lamp ? 'o' : rose && room.def.tier === 2 ? '+' : ' ', C(lamp ? WARM : YEL, lamp ? 15 : 9));
   }
-  if (st === 'pendant') { // warm hanging lamps on a 2m grid
-    const on = Math.hypot(fract(wx / 2) - 0.5, fract(wy / 2) - 0.5) < 0.07;
+  if (st === 'pendant') { // warm hanging lamps, about 2m apart
+    const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
     return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
   }
-  if (st === 'lantern') { // red paper lanterns on a 1.5m grid
-    const on = Math.hypot(fract(wx / 1.5) - 0.5, fract(wy / 1.5) - 0.5) < 0.12;
+  if (st === 'lantern') { // red paper lanterns, about 1.6m apart
+    const on = ceilAt('lantern', CEIL_LANTERN, wx, wy) === 1;
     if (on) BG[i] = C(RED, 6);
     return set(i, on ? 'O' : (r + x) % 5 ? ' ' : '.', on ? C(YEL, 15) : C(RED, 2));
   }
@@ -12787,7 +13073,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'glass') return glassCeil(i, wx, wy);
   if (st === 'chandelier') return casinoCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
-  const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
+  const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {
@@ -13030,16 +13316,16 @@ Object.assign(ROOM_FLOORS, {
     BG[i] = C(BRICK, 0.8 + f * 1.6 + (Math.floor(wx * 3) & 1) * 0.25); return set(i, fract(wx * 3) < 0.06 ? '|' : fract(wy / 1.7 + Math.floor(wx * 3) * 0.37) < 0.02 ? '-' : ' ', C(GRAY, L * 0.5));
   },
 });
+const CEIL_SPOTS = { s: 2, r: 1.2, track: true };
 Object.assign(ROOM_CEILS, {
   tin: (i, r, x, wx, wy) => { // pressed tin: a square motif on a grid, a lamp every 2m
-    const on = Math.hypot(fract(wx / 2) - 0.5, fract(wy / 2) - 0.5) < 0.07;
-    if (on) return set(i, 'o', C(WARM, 15));
+    if (ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1) return set(i, 'o', C(WARM, 15));
     const u = fract(wx / 0.6) - 0.5, v = fract(wy / 0.6) - 0.5, m = Math.abs(u) + Math.abs(v);
     BG[i] = C(STONE, 2); return set(i, Math.abs(u) > 0.46 || Math.abs(v) > 0.46 ? '+' : Math.abs(m - 0.28) < 0.05 ? '.' : ' ', C(GRAY, 6));
   },
   spots: (i, r, x, wx, wy) => { // black, with tracks of little spotlights
-    const track = fract(wy / 2) < 0.04, spot = track && Math.abs(fract(wx / 1.2) - 0.5) < 0.08;
-    return set(i, spot ? 'o' : track ? '-' : ' ', spot ? C(WHITE, 15) : C(GRAY, 4));
+    const k = ceilAt('spots', CEIL_SPOTS, wx, wy);
+    return set(i, k === 1 ? 'o' : k === 2 ? '-' : ' ', k === 1 ? C(WHITE, 15) : C(GRAY, 4));
   },
 });
 
@@ -13859,6 +14145,535 @@ ROOM_DEFS.store.props = r => {
 };
 
 Object.assign(ROOM_FOR, { TOBACCO: 'tobacco', VIDEO: 'video', HERBS: 'herbs', PHONES: 'phones', PAWN: 'pawn', LIQUOR: 'liquor', JEWELER: 'jeweler' });
+
+// ---- the gas station's shop (GAS): coolers along the back, aisles of snacks and motor oil, coffee and the hot dog
+// roller down the left, the clerk behind a counter by the door with the cigarettes and the lottery on the wall behind
+// and the pump console in front of them, the restroom in the back corner (the key's on a hubcap). The front is glass:
+// through it the forecourt, the pumps under the lit canopy, and whoever's filling up out there right now
+const GAS_ISLE = [6.8, 12.8], GAS_LANE = [15.8, 9.8, 3.8]; // (the forecourt from the windows: metres out to each island, each lane)
+// what's out there, as boxes in room coordinates (the front wall's at y = H - 1; out past it is the forecourt, turned
+// round so it lines up: room x = 6.5 - 10 * (forecourt x - 1.5), room y = H - 1 + 10 * (2 - forecourt y))
+function gasOutside(H) {
+  const st = room.gas, out = [];
+  for (const d of GAS_ISLE) {
+    const y = H - 1 + d;
+    out.push({ b: boxAt(6.5, y, 1, 0, 4, 0.6, 0, 0.25), kind: 'isle' }, { b: boxAt(6.5, y, 1, 0, 0.6, 0.45, 0.25, 2), kind: 'pump' });
+    for (const e of [-3.65, 3.65]) out.push({ b: boxAt(6.5 + e, y, 1, 0, 0.22, 0.22, 0.25, 4.3), kind: 'post' });
+  }
+  if (st) for (const c of cars) { // the cars in the forecourt: filling up, pulling in, pulling out
+    if (!c.pit || c.pit.st !== st || c.player || c.parked) continue;
+    const x = 6.5 - 10 * (rel(c.x - st.x0) - 1.5), y = H - 1 + 10 * (2 - rel(c.y - st.y0)), hx = -c.hx, hy = -c.hy;
+    out.push({ b: boxAt(x, y, hx, hy, 2.4, 1.05, 0.25, 1), kind: 'car', col: c.body }, { b: boxAt(x - hx * 0.2, y - hy * 0.2, hx, hy, 1.3, 0.95, 1, 1.45), kind: 'cab', col: c.body });
+  }
+  return out;
+}
+// one cell of the view through the front windows: the nearest of the forecourt's boxes, its ground, the canopy's
+// lights overhead, the street and the buildings across it, the sky
+function gasWindow(i, x, z, L) {
+  const H = room.H, ox = px, oy = py, rx = x - px, ry = H - 1 - py, rz = z - eye;
+  if (ry <= 0.01) return set(i, ' ', 0);
+  const f = gasWindow.frame === T ? gasWindow : Object.assign(gasWindow, { frame: T, out: gasOutside(H) });
+  const lit = gasLights(), sun = 2 + day * 7, under = (gx, gy) => gy > H - 1 + 1.7 && gy < H - 1 + 19.3 && gx > -4 && gx < 17;
+  let best = Infinity, hit = null, hu = 0, hv = 0, hw = 0, hf = 0;
+  for (const o of f.out) {
+    const t = rayBox(ox, oy, eye, rx, ry, rz, o.b);
+    if (t > 1 && t < best) { best = t; hit = o; hu = HIT.u; hv = HIT.v; hw = HIT.w; hf = HIT.face; }
+  }
+  const tg = rz < 0 ? -eye / rz : Infinity, tc = rz > 0 ? (4.3 - eye) / rz : Infinity, tw = (H - 1 + 40 - oy) / ry;
+  const cy = oy + ry * tc, cx = ox + rx * tc, canopy = tc < best && tc < tw && under(cx, cy);
+  if (hit && best < Math.min(tg, canopy ? tc : Infinity, tw)) {
+    const gl = Math.max(sun, lit * 9);
+    if (hit.kind === 'car') { BG[i] = C(hit.col, (1.6 + gl * 0.25) * (hf === 5 ? 1.2 : 1)); return set(i, hw < 0.5 ? (Math.abs(hu) > 1.6 ? 'o' : '_') : ' ', C(GRAY, 4)); }
+    if (hit.kind === 'cab') { BG[i] = hf === 5 ? C(hit.col, 1.6 + gl * 0.25) : C(CYAN, 1 + gl * 0.15); return set(i, ' ', 0); }
+    if (hit.kind === 'pump') { BG[i] = hw > 1.75 ? C(room.gas ? room.gas.col : RED, 2 + gl * 0.3) : C(WHITE, 1.5 + gl * 0.25); return set(i, hw > 1.3 && hw < 1.6 && Math.abs(hu) < 0.4 ? ':' : ' ', C(GREEN, 12)); }
+    if (hit.kind === 'post') { BG[i] = C(WHITE, 1.4 + gl * 0.25); return set(i, '|', C(GRAY, 6)); }
+    BG[i] = C(fract(hu * 1.5 + hw * 4) < 0.5 ? YEL : GRAY, 1.5 + gl * 0.2); return set(i, ' ', 0); // the island's kerb
+  }
+  if (canopy) { // its underside, rows of lights over the lanes
+    const d = cy - (H - 1), on = GAS_LANE.some(l => Math.abs(d - l) < 0.5) && Math.abs(fract((cx - 6.5) / 7 + 0.5) - 0.5) * 7 < 0.7;
+    BG[i] = on ? C(WHITE, 7 + lit * 8) : C(WHITE, 1.2 + day * 2 + lit * 2.2);
+    return set(i, on ? ' ' : fract(cx / 1.5) < 0.06 || fract(cy / 1.5) < 0.06 ? '+' : ' ', C(GRAY, 5));
+  }
+  if (tg < tw) { // the ground: the forecourt's concrete, lit under the canopy, then the street
+    const gx = ox + rx * tg, gy = oy + ry * tg, d = gy - (H - 1), glow = under(gx, gy) ? lit * 10 : lit * 2;
+    if (d < 20) { BG[i] = C(GRAY, 1 + day * 2.5 + glow * 0.25); return set(i, fract(gx / 5) < 0.04 || fract(d / 5) < 0.04 ? '+' : ' ', C(GRAY, 4 + glow * 0.5)); }
+    BG[i] = C(GRAY, 0.5 + day * 1.5); return set(i, Math.abs(d - 30) < 0.25 && fract(gx / 4) < 0.5 ? '=' : d < 22 || d > 38 ? ',' : ' ', C(Math.abs(d - 30) < 0.25 ? YEL : GRAY, 5 + day * 4));
+  }
+  const wz = eye + rz * tw, wx = ox + rx * tw; // the buildings across the street, and over them the sky
+  if (wz < 22) {
+    const win = fract(wx / 3) > 0.3 && fract(wz / 3) > 0.35 && fract(wz / 3) < 0.8, on = hash(Math.floor(wx / 3), Math.floor(wz / 3), 881) > 0.45;
+    BG[i] = C(BRICK, 0.6 + day * 2.2); return set(i, win ? '#' : ' ', C(win && on && night > 0.3 ? WARM : GRAY, win && on ? 4 + night * 9 : 3));
+  }
+  BG[i] = C(BLUE, 0.4 + day * 5); return set(i, night > 0.6 && hash(Math.floor(wx), Math.floor(wz), 882) > 0.97 ? '.' : ' ', C(WHITE, 10));
+}
+function gasWall(i, u, uStep, z, d, mx, my, L) {
+  const H = room.H, c = roomAt(mx, my);
+  if (c === 'W') return mx === 9 && my === 3 && wallText(i, u, uStep, z, d, 'KEY AT COUNTER', 3.5, 1.6, 0.11, 0.15, C(WHITE, 13), C(BLUE, 2)); // (round the restroom door)
+  if (backWall(my) && mx < 9) {
+    if (z > 2.25 && z < 2.6) return wallText(i, u, uStep, z, d, 'ICE COLD', 4.5, 2.42, 0.22, 0.28, C(CYAN, 15), C(BLUE, 2)) || (BG[i] = C(BLUE, 2), set(i, ' ', 0), true);
+    return fridgeWall(i, u, z, L, 12, '!iU#');
+  }
+  if (rightWall(mx) && my >= 5) { // behind the counter: the cigarettes, the lottery
+    if (z > 2.2 && z < 2.6) return wallText(i, u, uStep, z, d, 'LOTTO', 7, 2.4, 0.2, 0.28, C(YEL, 15), C(RED, 3)) || (BG[i] = C(RED, 3), set(i, ' ', 0), true);
+    if (z > 1.15 && z < 2.15) {
+      const row = Math.floor((z - 1.15) / 0.2), k = hash(Math.floor(u / 0.12), row, 884);
+      if (fract((z - 1.15) / 0.2) < 0.15) return set(i, '_', C(GRAY, L)), true;
+      BG[i] = C([RED, WHITE, BLUE, GREEN, YEL, GRAY][k * 6 | 0], 2.2 + L * 0.1); return set(i, fract(u / 0.12) < 0.12 ? '|' : ' ', C(GRAY, 5)), true; // packs, every brand
+    }
+    if (z < 1.05) { BG[i] = C(GRAY, 1.4); return set(i, fract(u * 2) < 0.05 ? '|' : '_', C(GRAY, L * 0.7)), true; }
+  }
+  if (leftWall(mx) && my <= 3 && z > 1.5 && z < 2.3) { // over the coffee: the menu board
+    BG[i] = C(GRAY, 0.8);
+    for (const [k, it] of ['COFFEE 1.99', 'REFILL .99', 'HOT DOG 2.49'].entries()) if (wallText(i, u, uStep, z, d, it, -2, 2.15 - k * 0.27, 0.12, 0.2, C(k === 2 ? ORANGE : WHITE, 14), C(GRAY, 0.8))) return true;
+    return set(i, ' ', 0), true;
+  }
+  if (my === H - 1 && z > 0.4 && z < 2.45) { // the front: glass from wall to wall
+    const x = Math.abs(u);
+    if (z > 2.4 || z < 0.45) return set(i, '=', C(GRAY, L * 1.2)), true; // the frames
+    if (fract((x - 1) / 1.6) < 0.035) return set(i, '|', C(GRAY, L * 1.2)), true;
+    if (x > 2 && x < 3.4 && z > 1.25 && z < 1.85) { // a poster stuck to the glass
+      BG[i] = C(RED, 3); return wallText(i, u, uStep, z, d, '2 FOR $3', -2.7, 1.55, 0.15, 0.22, C(YEL, 15), C(RED, 3)) || (set(i, ' ', 0), true);
+    }
+    return gasWindow(i, x, z, L), true;
+  }
+  return false;
+}
+// a low shelf of motor oil and screenwash under the front windows: quarts in rows, blue jugs along the bottom
+const oilShelf = (x, y, hl) => BX(x, y, hl, 0.2, 0, 0.62, (i, t, L) => {
+  const f = HIT.face, w = HIT.w;
+  if (f !== 4) { BG[i] = C(GRAY, (1.4 + L * 0.3) * shadeFace(f)); return set(i, f === 5 ? '=' : ' ', C(GRAY, 7)), true; }
+  if (fract(w / 0.3) < 0.12) return set(i, '_', C(GRAY, L)), true;
+  const k = hash(Math.floor(HIT.u * 9), Math.floor(w / 0.3), 883);
+  if (k < 0.15 || fract(HIT.u * 9) < 0.2) return set(i, ' ', 0), true;
+  return set(i, w < 0.3 ? 'U' : '[', C(w < 0.3 ? BLUE : [YEL, GRAY, RED, BLUE][k * 4 | 0], 13)), true;
+});
+const roller = (x, y) => BX(x, y, 0.3, 0.2, 0.92, 1.04, (i, t, L) => { // hot dogs turning on the rollers, under a sneeze guard
+  if (HIT.face === 5) { BG[i] = C(BRICK, 3.2); return set(i, fract(HIT.v * 9 + T * 0.4) < 0.5 ? '=' : '-', C(ORANGE, 13)), true; }
+  BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }, 0, 1);
+const coffeeMaker = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // a brewer, its glass pot on the hot plate
+  BXD(vx - 0.08, vy, 0.12, 0.17, 0.92, 1.42, solid(GRAY, { top: '=' }));
+  BXD(vx + 0.02, vy, 0.12, 0.17, 1.32, 1.42, solid(GRAY));
+  drum(vx + 0.06, vy, 0.08, 0.93, 1.12, (i, t, L) => { BG[i] = HIT.w < 1.05 ? C(BRICK, 1.2) : C(CYAN, 0.8 + L * 0.1); return set(i, HIT.w > 1.05 && fract(HIT.w * 30) < 0.2 ? '.' : ' ', C(WHITE, 8)), true; });
+  dot(vx + 0.06, vy, 0.935, 0.03, (i, t, L) => { BG[i] = C(RED, 9); return set(i, ' ', 0), true; }); // (the hot plate's light)
+}, [0.25, 0.2, 1.42]);
+ROOM_DEFS.gas = { grid: ['#############', '#........W..#', '#...........#', '#..SS....W..#', '#..SS....WWW#', '#..SS.......#', '#..SS.......#', '#...........#', '#...........#', '######DD#####'],
+  wc: { x0: 10, y0: 1, x1: 12, y1: 4, sign: [9, 1, 1.5] }, light: 1.2, floor: 'lino', ceil: 'strip', sign: false, wall: gasWall, keeper: [10.4, 7.2], glyphs: 'o#=@%',
+  props: r => {
+    const counter = solid(GRAY, { panel: 0.5, trim: 0.94, top: '=' });
+    const p = [BX(9.3, 7.2, 1, 0.32, 0, 1, counter, 0, 1), // the counter, along the aisle
+      { ...standing(10.4, 7.2, r.neon), face: [-1, 0] },
+      BX(9.35, 7.75, 0.2, 0.18, 1, 1.3, (i, t, L) => { // the till
+        if (HIT.face === 2 && HIT.w > 1.15) { BG[i] = C(GREEN, 2); return set(i, ' $'[Math.floor(HIT.v * 20 + 4) & 1], C(GREEN, 14)), true; }
+        BG[i] = C(GRAY, (1.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '#' : ' ', C(GRAY, 7)), true; }),
+      BX(9.4, 6.65, 0.22, 0.16, 1, 1.32, (i, t, L) => { // the pump console: the six pumps, which are going
+        if (HIT.face !== 4 || HIT.w < 1.08) { BG[i] = C(GRAY, (1.2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; } // (the screen faces the clerk)
+        const k = Math.floor((HIT.u + 0.22) / 0.44 * 3) + 3 * (HIT.w < 1.2 ? 1 : 0), on = r.gas && cars.some(c => gasFilling(c) && c.pit.st === r.gas && c.pit.lane === k % 3);
+        BG[i] = C(on ? GREEN : GRAY, on ? 3 : 0.8); return set(i, String(k + 1), C(WHITE, 13)), true; }, 0, 1),
+      ROOM_MODEL(9.25, 6.3, (vx, vy) => { // the restroom key, on a hubcap so it comes back
+        drum(vx, vy, 0.16, 1, 1.03, (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.3); return set(i, HIT.face === 5 ? (Math.hypot(HIT.u, HIT.v) < 0.04 ? 'o' : fract(Math.atan2(HIT.v, HIT.u) * 1.6) < 0.2 ? '-' : ' ') : '=', C(WHITE, 11)), true; });
+        rod(vx + 0.1, vy, 1.035, vx + 0.22, vy, 1.035, 0.008, YEL, 1.4);
+      }),
+      BX(9.2, 8.05, 0.12, 0.12, 1, 1.3, (i, t, L) => { BG[i] = C(BRICK, 1.5 + L * 0.2); return set(i, HIT.face === 5 ? '%' : fract(HIT.w * 20) < 0.3 ? '=' : ' ', C(BRICK, 11)), true; }), // a jar of jerky
+      BX(1.3, 2, 0.9, 0.3, 0, 0.92, solid(BRICK, { panel: 0.6, top: '=' }), 0, 1), coffeeMaker(1.25, 1.55), coffeeMaker(1.25, 2.15), // coffee
+      ...Array.from({ length: 6 }, (_, k) => BX(1.3, 2.7, 0.06, 0.06, 0.92 + k * 0.06, 0.97 + k * 0.06, solid(WHITE))), // a stack of cups
+      BX(1.3, 6.1, 0.8, 0.3, 0, 0.92, solid(BRICK, { panel: 0.6, top: '=' }), 0, 1), roller(1.3, 5.75), // hot food
+      ROOM_MODEL(1.3, 6.55, (vx, vy) => { // the slushie machine: red and blue churning
+        for (const [e, col] of [[-0.12, RED], [0.12, BLUE]]) drum(vx, vy + e, 0.1, 0.92, 1.32, (i, t, L) => { BG[i] = C(col, 3 + L * 0.3); return set(i, fract(HIT.w * 6 - T * 1.5 + Math.atan2(HIT.v, HIT.u)) < 0.2 ? '~' : ' ', C(WHITE, 12)), true; });
+        BXD(vx, vy, 0.13, 0.24, 1.32, 1.42, solid(WHITE, { top: '=' }));
+      }, [0.15, 0.26, 1.42]),
+      BX(1.6, 8.55, 0.55, 0.3, 0, 0.85, (i, t, L) => { // the ice chest
+        BG[i] = C(WHITE, (2.6 + L * 0.3) * shadeFace(HIT.face));
+        if (HIT.face === 4 && Math.abs(HIT.w - 0.5) < 0.15) return set(i, ' ICE '[Math.floor((HIT.u + 0.55) / 1.1 * 5)] || ' ', C(BLUE, 14)), true;
+        return set(i, HIT.face === 5 ? '-' : ' ', C(CYAN, 8)), true; }),
+      BX(8.5, 8.6, 0.25, 0.2, 0, 1.55, (i, t, L) => { // the ATM
+        if (HIT.face === 4 && HIT.w > 1.05 && HIT.w < 1.4 && Math.abs(HIT.u) < 0.17) { BG[i] = C(BLUE, 3); return set(i, HIT.w > 1.3 ? 'ATM'[Math.floor((HIT.u + 0.17) / 0.34 * 3)] || ' ' : ' ', C(WHITE, 14)), true; }
+        BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 4 && Math.abs(HIT.w - 0.95) < 0.02 ? '=' : ' ', C(GRAY, 9)), true; }),
+      oilShelf(3.6, 8.75, 0.9), BX(6.6, 4.4, 0.55, 0.35, 0, 1.15, (i, t, L) => { // a low stand of crisps in the middle, bags hung on pegs
+        if (HIT.face === 5) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; }
+        const k = hash(Math.floor((HIT.face <= 2 ? HIT.v : HIT.u) * 6), Math.floor(HIT.w / 0.28), 885);
+        BG[i] = C(ITEM_COL[k * 8 | 0], fract(HIT.w / 0.28) < 0.15 ? 0.8 : 2.4 + L * 0.2); return set(i, fract(HIT.w / 0.28) < 0.15 ? '_' : ' ', C(GRAY, 8)), true; }),
+      BX(5.2, 8.7, 0.25, 0.12, 0, 0.75, (i, t, L) => { BG[i] = C(WHITE, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 4 ? (fract(HIT.w * 12) < 0.4 ? '=' : '-') : ' ', C(GRAY, 7)), true; }), // the newspapers
+      ...toilet(11.3, 3.45, 1, porcelain), washbasin(10.6, 1.3, 0, 1), // the restroom
+      aisleSign(4, 5, 'SNACKS', C(RED, 4), C(WHITE, 15), 0.4), aisleSign(6.6, 1.8, 'DRINKS', C(BLUE, 4), C(WHITE, 15), 0.4),
+      hung(11.6, 5.3, 2.55, (vx, vy, z) => dot(vx, vy, z - 0.12, 0.12, (i, t, L) => { BG[i] = C(GRAY, 4 + L * 0.3); return set(i, fract(HIT.u * 4 + HIT.v * 4) < 0.2 ? ')' : ' ', C(WHITE, 12)), true; })), // the round mirror, for the aisles
+    ];
+    if (chance(0.3)) p.push(BX(8.4, 1.3, 0.08, 0.14, 0, 0.6, (i, t, L) => { BG[i] = C(YEL, 4 + L * 0.2); return set(i, HIT.face <= 2 && Math.abs(HIT.w - 0.35) < 0.06 ? '!' : ' ', C(GRAY, 3)), true; })); // wet floor
+    p.push(...shoppers([[2.4, 5.2, -1, 0], [5.5, 3.5, -1, 0], [8.4, 2, 0, -1], [2.2, 1.8, -1, 0], [7.6, 4.4, -1, 0]], 0.35));
+    return p;
+  } };
+Object.assign(ROOM_FOR, { GAS: 'gas' });
+// ---- gas stations, drawn (gas.js and world.js have the rest): the forecourt's concrete, the canopy with its lights
+// and the brand along its edge, the islands and pumps (the pump's display counting up while someone fills up), the
+// price sign on its pole, the shop's front; the drivers out at the pumps with the hose in the car.
+
+// the canopy's lights: on day and night, but you only see them make a difference after dark (or in the murk)
+const gasLights = () => clamp(night * 1.4 + fogAmt * 0.5 + storm * 0.4, 0, 1);
+// a line of text across one face of a box solid (any of its four sides), centred, letters letterW apart, its middle
+// at zc. null off the ends of the text, ' ' off its row
+function gasFaceText(o, word, i, t, vx, vy, zc, bandH, letterW) {
+  const f = HIT.face, along = f === 3 ? HIT.u : f === 4 ? -HIT.u : f === 1 ? -HIT.v : HIT.v; // (the way it reads)
+  const [ex, ey] = f === 3 ? [o.c, o.s] : f === 4 ? [-o.c, -o.s] : f === 1 ? [o.s, -o.c] : [-o.s, o.c];
+  const end = f <= 2, out = end ? o.hl : o.hw, nx = end ? o.c * (f === 1 ? 1 : -1) : -o.s * (f === 3 ? 1 : -1), ny = end ? o.s * (f === 1 ? 1 : -1) : o.c * (f === 3 ? 1 : -1);
+  const fx = vx + nx * out, fy = vy + ny * out; // (the middle of the face itself: a deep box's middle is well behind it)
+  return signLine(word, along / letterW + word.length / 2, (zc + bandH / 2 - HIT.w) / bandH, i, zc, midDepth(fx, fy), t, letterW, bandH, farDepth(fx, fy, end ? o.hw : o.hl), ex, ey);
+}
+const gasPrices = st => [['REG', st.price], ['MID', st.price + 0.3], ['DSL', st.price + 0.5]].map(([g, p]) => `${g} ${p.toFixed(2)}`);
+Object.assign(SOLID_SHADE, {
+  // the canopy: from below, white panels with rows of lights over the lanes; round its edge a white fascia with a band
+  // of the brand's colour and its name, facing the streets
+  gascanopy: o => (i, t, L) => {
+    const f = HIT.face, st = o.st, lit = gasLights();
+    if (f === 6) {
+      const du = Math.min(...[-0.7, 0, 0.7].map(c => Math.abs(HIT.u - c))), dv = Math.min(...GAS.lanes.map(l => Math.abs(HIT.v - l + 0.95)));
+      if (du < 0.11 && dv < 0.06) { BG[i] = C(WHITE, 6 + lit * 9); return set(i, du > 0.095 || dv > 0.048 ? '+' : ' ', C(GRAY, 9)), true; }
+      BG[i] = C(WHITE, 1.4 + L * 0.15 + lit * 2.5);
+      return set(i, fract(HIT.u * 5) < 0.06 || fract(HIT.v * 5) < 0.06 ? '+' : ' ', C(GRAY, 4 + L * 0.3)), true;
+    }
+    if (f === 5) { BG[i] = C(GRAY, 1.6 + L * 0.3); return set(i, fract(HIT.u * 3) < 0.04 ? '=' : ' ', C(GRAY, L * 0.5)), true; }
+    const w = HIT.w;
+    if (w > 0.495 || w < 0.445) { BG[i] = C(WHITE, (2.6 + L * 0.3 + lit * 2) * shadeFace(f)); return set(i, w < 0.445 && w > 0.437 ? '_' : ' ', C(GRAY, 6)), true; }
+    BG[i] = C(st.col, 2.6 + L * 0.25 + lit * 3);
+    if (f !== 3) { // (not on the side over the shop)
+      const ch = gasFaceText(o, st.brand, i, t, ...R(o.x, o.y), 0.47, 0.045, 0.07);
+      if (ch !== null && ch !== ' ') return set(i, ch, C(WHITE, 15)), true;
+    }
+    return set(i, ' ', 0), true;
+  },
+  // an island: a kerb painted in yellow and black hazard stripes, concrete on top
+  gasisle: () => (i, t, L) => {
+    if (HIT.face === 5) { BG[i] = C(GRAY, 1.6 + L * 0.25); return set(i, '.', C(GRAY, L * 0.6)), true; }
+    const s = fract((HIT.face <= 2 ? HIT.v : HIT.u) * 12 + HIT.w * 12) < 0.5;
+    BG[i] = C(s ? YEL : GRAY, s ? 2.5 + L * 0.3 : 0.6); return set(i, ' ', 0), true;
+  },
+  // a pump: the brand's colours, a lit display on each face that looks at a lane (dollars and gallons running up while
+  // somebody fills up from it, the price per gallon when nobody is), three grade buttons, the nozzle hung up in its
+  // holster when it isn't in a car
+  gaspump: o => (i, t, L) => {
+    const f = HIT.face, w = HIT.w, st = o.st, k = shadeFace(f);
+    if (f === 5) { BG[i] = C(st.col, 2.5 + L * 0.3); return set(i, ' ', 0), true; }
+    if (w > 0.17) { BG[i] = C(st.col, (2.4 + L * 0.3) * k); return set(i, w > 0.193 ? '_' : ' ', C(WHITE, 10)), true; } // the lit header
+    if (f !== 3 && f !== 4) { BG[i] = C(GRAY, (1.8 + L * 0.3) * k); return set(i, fract(w * 30) < 0.2 ? '-' : ' ', C(GRAY, L * 0.5)), true; }
+    const l = o.isle + (f === 3 ? 1 : 0), c = GAS_FILLING[st.k] && GAS_FILLING[st.k][l], busy = c && GAS_FILL[l][0] === o.isle;
+    const q = (f === 3 ? HIT.u : -HIT.u) / o.hl; // -1..1 across the face, left to right as you look at it
+    if (w > 0.115 && Math.abs(q) < 0.8) { // the display
+      BG[i] = C(GRAY, 0.5);
+      const [vx, vy] = R(o.x, o.y), sale = busy ? (T - c.pit.t0) * 2.15 : 0;
+      const line = w > 0.142 ? (busy ? '$' + sale.toFixed(2) : 'PAY HERE') : (busy ? (sale / st.price).toFixed(2) + 'G' : st.price.toFixed(2));
+      const ch = gasFaceText(o, line, i, t, vx, vy, w > 0.142 ? 0.155 : 0.128, 0.022, 0.011);
+      return set(i, ch && ch !== ' ' ? ch : ' ', C(busy ? GREEN : CYAN, 14)), true;
+    }
+    if (w > 0.075 && w < 0.1 && Math.abs(q) < 0.6) { // the grade buttons
+      const b = Math.floor((q + 0.6) / 0.4); BG[i] = C([YEL, GREEN, BLUE][b] ?? GRAY, 3 + L * 0.2);
+      return set(i, fract((q + 0.6) / 0.4) < 0.2 ? '|' : ' ', C(GRAY, 4)), true;
+    }
+    if (q > 0.62 && w > 0.04 && w < 0.115) { // the holster, and the nozzle in it unless it's out filling a car
+      BG[i] = C(GRAY, 1.2);
+      return set(i, busy ? ' ' : w > 0.09 ? 'J' : '|', C(busy ? GRAY : BLUE, 12)), true;
+    }
+    BG[i] = C(f === 3 || f === 4 ? WHITE : GRAY, (2.2 + L * 0.3) * k);
+    return set(i, w < 0.03 ? '#' : ' ', C(st.col, L)), true;
+  },
+  gaspost: () => (i, t, L) => { BG[i] = C(WHITE, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, '|', C(GRAY, L * 0.7)), true; },
+  // the price sign: the brand at the top, the three grades below in lit red digits, both faces
+  gassign: o => (i, t, L) => {
+    const f = HIT.face, w = HIT.w, st = o.st, lit = Math.max(gasLights(), 0.35);
+    if (f !== 3 && f !== 4) { BG[i] = C(GRAY, (1.5 + L * 0.3) * shadeFace(f)); return set(i, ' ', 0), true; }
+    const [vx, vy] = R(o.x, o.y);
+    if (w > 0.57) { // the brand
+      BG[i] = C(st.col, 3 + lit * 7);
+      const ch = gasFaceText(o, st.brand, i, t, vx, vy, 0.615, 0.06, 0.04);
+      return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 15)), true;
+    }
+    BG[i] = C(GRAY, 0.6 + lit * 0.6);
+    const row = Math.floor((0.565 - w) / 0.075), p = gasPrices(st)[row];
+    if (!p || Math.abs(HIT.u) > o.hl - 0.012 || w < 0.34) return set(i, w < 0.345 ? '=' : '|', C(WHITE, L)), true; // the frame
+    const ch = gasFaceText(o, p, i, t, vx, vy, 0.53 - row * 0.075, 0.045, 0.036);
+    return set(i, ch && ch !== ' ' ? ch : ' ', C(ch && ch >= 'A' ? WHITE : RED, 15)), true;
+  },
+  // the ice chest by the door: white, ICE in blue down its front, frost on the lid
+  gasice: o => (i, t, L) => {
+    const f = HIT.face;
+    BG[i] = C(WHITE, (2.6 + L * 0.3) * shadeFace(f));
+    if (f === 5) return set(i, '-', C(CYAN, 8)), true;
+    if (f === 4) { const ch = gasFaceText(o, 'ICE', i, t, ...R(o.x, o.y), 0.05, 0.05, 0.06); if (ch && ch !== ' ') return set(i, ch, C(BLUE, 14)), true; }
+    return set(i, ' ', 0), true;
+  },
+});
+
+// the forecourt: concrete slabs, oil where the cars stand, yellow hatching in front of the shop door; shaded under the
+// canopy by day, lit up white under it after dark
+function gasFloor(i, r, x, wx, wy, f, L) {
+  const st = gasStationAt(wx, wy), lx = rel(wx - st.x0), ly = rel(wy - st.y0);
+  const out = Math.hypot(Math.max(0, 0.45 - lx, lx - 2.55), Math.max(0, 0.07 - ly, ly - 1.83)), under = out === 0;
+  const lit = gasLights() * clamp(1 - out / 0.45, 0, 1);
+  let ch = (r + x) & 1 ? '.' : ' ', col = GRAY, k = 1;
+  if (fract(lx * 2) < 0.025 || fract(ly * 2) < 0.025) ch = '+'; // the joints between slabs
+  else if (GAS.lanes.some(l => Math.abs(ly - l) < 0.07) && Math.abs(lx - GAS.slotX) < 0.16 && noise(wx * 7, wy * 7, 87) > 0.52) { ch = '%'; k = 0.55; } // oil
+  if (ly > 1.86 && Math.abs(lx - 1.5) < 0.3) { ch = fract((lx + ly) * 7) < 0.45 ? '/' : ' '; col = YEL; k = 1.3; }
+  const glowL = lit * 12;
+  set(i, ch, C(col === GRAY && glowL > L ? WHITE : col, Math.max(L * k * (under ? 0.7 : 1), glowL * k)));
+  BG[i] = glowL > 2 ? C(WHITE, 1 + lit * 2.4) : bgAt(GRAY, day * 2.2 * f * (under ? 0.5 : 1));
+  LAMPL[i] = glowL;
+}
+
+// the shop: a low box along the back of the forecourt. Its front (facing the pumps): glass between steel columns,
+// shelves lit up behind it, sliding doors in the middle, the brand's colour along the top with FOOD MART on it.
+// Its side on the street has a door of its own
+function gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
+  const st = SHOP[idx(mx, my)].gas, L = fog * amb * (side ? 10 : 15), glow = Math.max(L, 7 + night * 6);
+  const front = side && rel(py - my) < 0, s = Math.abs(u - wc) < 1e-6 ? 1 : -1; // (u is wc, or -wc)
+  const a = front ? mod(wc - st.x0, N) : mod(wc - st.y0 - 2, N); // along the face, from its west / north end
+  BG[i] = bgAt(front ? WHITE : BRICK, day * 2.6 * (0.45 + 0.55 * fog) * (side ? 0.8 : 1), d);
+  if (z > h - 0.025) return set(i, '=', C(GRAY, L));
+  if (z > 0.29) { // the fascia
+    BG[i] = C(st.col, 2 + L * 0.2 + night * 3);
+    if (front && wallText(i, u, uStep, z, d, 'FOOD MART', s * (wc - a + 1.5), 0.335, 0.07, 0.06, C(WHITE, 15), C(st.col, 2 + L * 0.2 + night * 3))) return;
+    if (!front && wallText(i, u, uStep, z, d, st.brand, s * (wc - a + 0.5), 0.335, 0.06, 0.06, C(WHITE, 15), C(st.col, 2 + L * 0.2 + night * 3))) return;
+    return set(i, ' ', 0);
+  }
+  if (!front) { // the side: brick, a door, a poster for the car wash
+    if (Math.abs(a - 0.5) < 0.1 && z < 0.24) { BG[i] = C(CYAN, 1.5 + night * 2); return set(i, Math.abs(a - 0.5) > 0.085 ? '|' : z > 0.22 ? '=' : ':', C(WHITE, glow)); }
+    if (Math.abs(a - 0.8) < 0.09 && z > 0.1 && z < 0.24) { BG[i] = C(BLUE, 2.5); if (wallText(i, u, uStep, z, d, 'CAR WASH', s * (wc - a + 0.8), 0.19, 0.02, 0.03, C(WHITE, 14), C(BLUE, 2.5))) return; return set(i, z < 0.15 && fract(a * 40) < 0.5 ? '~' : ' ', C(CYAN, 12)); }
+    return set(i, fract(a * 12 + (Math.floor(z * 24) & 1) * 0.5) < 0.15 ? '|' : '_', C(BRICK, L));
+  }
+  if (a < 0.08 || a > 2.92 || Math.abs(a - 1.2) < 0.03 || Math.abs(a - 1.8) < 0.03) return set(i, '|', C(GRAY, L * 1.2)); // the columns
+  if (z < 0.035) return set(i, '_', C(GRAY, L)); // the kerb along its foot
+  if (Math.abs(a - 1.5) < 0.27) { // the sliding doors: glass, a seam down the middle, OPEN 24 HRS on them
+    BG[i] = C(CYAN, 1.5 + night * 2.5);
+    if (z > 0.25) return set(i, '=', C(GRAY, L));
+    if (wallText(i, u, uStep, z, d, 'OPEN 24H', s * (wc - a + 1.5), 0.2, 0.03, 0.035, C(RED, 15), C(CYAN, 1.5 + night * 2.5))) return;
+    return set(i, Math.abs(a - 1.5) < 0.006 ? '|' : ' ', C(GRAY, 8));
+  }
+  if (z > 0.265) return set(i, '-', C(GRAY, L)); // the frame over the glass
+  // the windows: shelves of snacks lit up behind them, posters stuck to the glass
+  BG[i] = C(WARM, 1.2 + night * 2.5);
+  const pane = Math.floor(a / 0.6), poster = hash(pane, st.k, 871) > 0.5 && fract(a / 0.6) > 0.25 && fract(a / 0.6) < 0.7 && z > 0.13 && z < 0.23;
+  if (poster) { const col = [RED, YEL, BLUE, GREEN][hash(pane, st.k, 872) * 4 | 0]; BG[i] = C(col, 3); return set(i, fract(z * 40) < 0.3 ? '=' : ' ', C(WHITE, 12)); }
+  if (fract(z / 0.06) < 0.18) return set(i, '_', C(GRAY, glow * 0.7)); // the shelves
+  const g = hash(Math.floor(a * 30), Math.floor(z / 0.06), st.k + 873);
+  return set(i, g < 0.3 ? ' ' : 'o#=@%'[g * 50 % 5 | 0], C(ITEM_COL[g * 97 % 8 | 0], glow * 0.8));
+}
+
+// before the solids: who's filling up where (for the pumps' displays), and the drivers out at the pumps, the hose from
+// the pump to the filler cap
+const GAS_FILLING = []; // (per station, by lane: the car filling up there, while it's near enough to see)
+function gasSprites() {
+  for (const st of GAS_STATIONS) {
+    const [vx, vy] = R(st.x0 + 1.5, st.y0 + 1);
+    GAS_FILLING[st.k] = Math.abs(vx) < vis + 2 && Math.abs(vy) < vis + 2 ? [null, null, null] : null;
+  }
+  for (const c of cars) {
+    if (!gasFilling(c) || !GAS_FILLING[c.pit.st.k]) continue;
+    const p = c.pit, st = p.st, l = p.lane, [isle] = GAS_FILL[l], iy = GAS.islands[isle], ly = GAS.lanes[l], sd = Math.sign(iy - ly);
+    GAS_FILLING[st.k][l] = c;
+    const [vx, vy] = R(st.x0 + GAS.pumpX + 0.13, st.y0 + ly + sd * 0.175);
+    if (!inView(vx, vy, 0.4)) continue;
+    drawFigure(vx, vy, 0, 0.175, 0, -sd, p.look ||= figStreetLook(c.id * 7919 + 17, pick([RED, BLUE, GREEN, WHITE, GRAY]), BLUE), 'stand');
+    // the hose: out of the pump's side, sagging, into the filler cap
+    const [ax, ay] = R(st.x0 + GAS.pumpX + 0.05, st.y0 + iy - sd * 0.045), [bx, by] = R(st.x0 + GAS.pumpX, st.y0 + ly + sd * 0.115);
+    const z = q => 0.13 + (0.075 - 0.13) * q - Math.sin(q * Math.PI) * 0.05;
+    for (let k = 0; k < 4; k++) { const q0 = k / 4, q1 = (k + 1) / 4; rod(ax + (bx - ax) * q0, ay + (by - ay) * q0, z(q0), ax + (bx - ax) * q1, ay + (by - ay) * q1, z(q1), 0.004, GRAY, 0.7); }
+  }
+}
+// ===== the airport terminal, inside (world.js has the building and its doors; you go in and out by them with E). A
+// long hall, the landside along the near wall where the main doors are: check-in desks with their baggage belt behind
+// on the left, the café on the right, the restrooms in the corner; the departures board hung over the middle; security
+// across the hall, through the arches; then the gates, rows of seats looking out through the glass at the planes
+// (whichever are really parked at the gates out there), a door out to the apron between each two gates.
+// The hall's x runs the other way to the world's (you face the planes, south, coming in), so gate 1 is on the right.
+const TERMINAL_GATE_X = [27, 16, 5], TERMINAL_ROOM_DOOR_X = [16, 23, 9]; // (by gate; by door, as TERMINAL_DOORS)
+const TERMINAL_GRID = ['########DD############DD########', ...Array.from({ length: 8 }, () => '#' + '.'.repeat(30) + '#'),
+  '#' + '.'.repeat(27) + 'WWW#', '#' + '.'.repeat(27) + 'W..#', '#' + '.'.repeat(30) + '#', '#' + '.'.repeat(27) + 'W..#', '###############DD###############'];
+
+// in by one of the building's doors: the main doors into check-in, the airside ones in by the gates
+function enterTerminal(d) {
+  enterRoom('terminal', { word: 'GLYPHPORT', neon: BLUE, ret: [px, py, a], line: '' }, d ? [TERMINAL_ROOM_DOOR_X[d], 1.8, Math.PI / 2] : [16, 12.2, -Math.PI / 2]);
+}
+// and out: by the door you walk into, the main doors or the nearer airside one
+function leaveTerminal() {
+  const d = py < room.H / 2 ? (px > room.W / 2 ? 1 : 2) : 0, o = TERMINAL_DOORS[d];
+  px = mod(TERMINAL.x + o.u, N); py = mod(TERMINAL.y + (o.land ? -1 : 1) * (TERMINAL.hw + 0.22), N); a = o.land ? -Math.PI / 2 : Math.PI / 2;
+}
+
+// ---- out of the windows. The gates' side: the airliners parked at them, nose in, a jet bridge out to each; the apron,
+// the taxiway, the grass and the runway, the sea beyond. Real distances (metres), though the gates are closer together
+// in here than out there, so each plane's a regional jet, stubby enough not to clip its neighbours
+const TV_PLANE = gx => [ // { b: box, kind }
+  { b: boxAt(gx, -10.5, 0, 1, 7.5, 1.5, 0.9, 3.9), kind: 'body' }, { b: boxAt(gx, -11.5, 1, 0, 5.2, 1.6, 1.7, 2), kind: 'wing' },
+  ...[-3.2, 3.2].map(e => ({ b: boxAt(gx + e, -10, 0, 1, 1.2, 0.7, 0.8, 1.9), kind: 'engine' })),
+  { b: boxAt(gx, -16.8, 0, 1, 1.4, 0.15, 3.9, 8), kind: 'fin' }, { b: boxAt(gx, -17, 1, 0, 3.2, 0.8, 3.9, 4.15), kind: 'wing' }];
+function terminalOutside() {
+  const out = [];
+  TERMINAL_GATE_X.forEach((gx, k) => {
+    out.push({ b: boxAt(gx - 2.4, -1.6, 0, 1, 1.6, 0.9, 2.3, 4.4), kind: 'bridge' }); // the jet bridge, out from the wall
+    if (aircraft.some(c => c.type === 'airliner' && c.gate === k && c.state === 'parked')) out.push(...TV_PLANE(gx));
+  });
+  return out;
+}
+function terminalView(i, x, z) {
+  const rx = x - px, ry = -py, rz = z - eye;
+  if (ry >= -0.01) return set(i, ' ', 0);
+  const f = terminalView.frame === T ? terminalView : Object.assign(terminalView, { frame: T, out: terminalOutside() });
+  const lit = Math.max(night, overcast * 0.6), sun = 2 + day * 7, flood = lit * 6;
+  let best = Infinity, hit = null, hf = 0, hu = 0, hv = 0, hw = 0;
+  for (const o of f.out) {
+    const t = rayBox(px, py, eye, rx, ry, rz, o.b);
+    if (t > 1 && t < best) { best = t; hit = o; hf = HIT.face; hu = HIT.u; hv = HIT.v; hw = HIT.w; }
+  }
+  const tg = rz < 0 ? -eye / rz : Infinity;
+  if (hit && best < tg) {
+    const k = shadeFace(hf), L = Math.max(sun, flood) * k;
+    if (hit.kind === 'bridge') { BG[i] = C(GRAY, 1.2 + L * 0.2); return set(i, Math.abs(hw - 3.4) < 0.3 && fract(hu * 0.8) < 0.5 ? '#' : fract(hu * 2) < 0.06 ? '|' : ' ', C(CYAN, 6 + lit * 6)); }
+    if (hit.kind === 'body') { // white, the airline's blue cheat line, a row of windows, the flight deck's windows on the nose
+      if (hf === 1 && hw > 2.8 && hw < 3.4 && Math.abs(hv) < 1) { BG[i] = C(GRAY, 0.6); return set(i, Math.abs(hv) < 0.06 ? '|' : ' ', C(GRAY, 4)); }
+      if (Math.abs(hw - 2.3) < 0.2) { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, ' ', 0); }
+      BG[i] = C(WHITE, 1.4 + L * 0.3);
+      return set(i, Math.abs(hw - 2.9) < 0.15 && fract(hu * 1.2) < 0.4 ? '.' : ' ', C(lit > 0.4 ? WARM : GRAY, lit > 0.4 ? 13 : 5));
+    }
+    if (hit.kind === 'fin') { BG[i] = C(hw > 6 ? BLUE : WHITE, 1.4 + L * 0.3); return set(i, ' ', 0); }
+    if (hit.kind === 'engine') { BG[i] = C(GRAY, 1.2 + L * 0.25); return set(i, hf <= 2 ? 'O' : ' ', C(GRAY, 4)); }
+    BG[i] = C(WHITE, 1.2 + L * 0.25); return set(i, hf === 6 ? '=' : ' ', C(GRAY, 5)); // a wing, a tailplane
+  }
+  if (tg < Infinity) { // the ground, out to wherever the ray comes down
+    const gx = px + rx * tg, d = -(py + ry * tg); // (metres out from the glass)
+    if (d > 130) { // the sea
+      BG[i] = C(BLUE, 0.6 + day * 3); return set(i, noise(gx * 0.05 + T * 0.1, d * 0.05, 93) > 0.6 ? '~' : ' ', C(CYAN, 4 + day * 6));
+    }
+    if (d > 80 && d < 95) { BG[i] = C(GRAY, 0.5 + day * 1.4); return set(i, Math.abs(d - 87.5) < 0.6 && fract(gx / 12) < 0.5 ? '=' : ' ', C(WHITE, 6 + day * 6)); } // the runway
+    if (d > 44 && d < 52) { BG[i] = C(GRAY, 0.6 + day * 1.6); return set(i, Math.abs(d - 48) < 0.3 ? '-' : ' ', C(YEL, 6 + day * 5)); } // the taxiway
+    if (d > 52) { BG[i] = C(GREEN, 0.5 + day * 2); return set(i, hash(Math.floor(gx), Math.floor(d), 94) > 0.8 ? ',' : ' ', C(GREEN, 4 + day * 5)); } // grass
+    const lead = TERMINAL_GATE_X.some(g => Math.abs(gx - g) < 0.12) && d < 30; // the apron: concrete, a yellow line in to each gate
+    BG[i] = C(GRAY, 1 + day * 2.6 + flood * 0.35);
+    return set(i, lead ? '|' : fract(gx / 7.5) < 0.02 || fract(d / 7.5) < 0.02 ? '+' : ' ', C(lead ? YEL : GRAY, lead ? 9 + day * 5 : 4 + day * 3));
+  }
+  const el = rz / Math.hypot(rx, ry); // the sky: dusk low down, stars at night
+  BG[i] = C(BLUE, 0.4 + day * 6 - el * day * 2);
+  return set(i, night > 0.6 && hash(Math.floor(x * 9 + px), Math.floor(z * 9), 95) > 0.985 ? '.' : ' ', C(WHITE, 12));
+}
+// the landside: the road out front, the bay, the city across it, lit up after dark
+function terminalLandView(i, x, z) {
+  const H = room.H, rx = x - px, ry = H - 1 - py, rz = z - eye;
+  if (ry <= 0.01) return set(i, ' ', 0);
+  if (rz < 0) {
+    const tg = -eye / rz, d = py + ry * tg - (H - 1), gx = px + rx * tg;
+    if (d < 4) { BG[i] = C(STONE, 1 + day * 3); return set(i, fract(gx / 1.5) < 0.05 ? '+' : ' ', C(GRAY, 5)); } // the pavement
+    if (d < 20) { BG[i] = C(GRAY, 0.5 + day * 1.6); return set(i, Math.abs(d - 12) < 0.15 && fract(gx / 4) < 0.5 ? '=' : ' ', C(YEL, 5 + day * 5)); } // the road
+    BG[i] = C(BLUE, 0.6 + day * 3); return set(i, noise(gx * 0.05, d * 0.05 + T * 0.05, 96) > 0.62 ? '~' : ' ', C(CYAN, 4 + day * 5)); // the bay
+  }
+  const el = rz / Math.hypot(rx, ry), az = Math.atan2(rx, ry), col = Math.floor(az * 60), sky = 0.015 + 0.06 * hash(col, 3, 97) ** 2;
+  if (el < sky) { // the skyline across the water, its windows lit at night
+    const on = night > 0.3 && hash(col, Math.floor(el * 400), 98) > 0.7;
+    BG[i] = C(GRAY, 0.5 + day * 1.8); return set(i, on ? '.' : ' ', C(WARM, 12));
+  }
+  BG[i] = C(BLUE, 0.4 + day * 6); return set(i, ' ', 0);
+}
+
+// ---- its walls: the planes' side glass from the floor nearly to the ceiling, between steel mullions; the landside
+// glass over the desks and the café; adverts on the end walls; the restrooms' sign
+function terminalWall(i, u, uStep, z, d, mx, my, L) {
+  const H = room.H, c = roomAt(mx, my);
+  if (c === 'W') return mx === 28 && my === 12 && wallText(i, u, uStep, z, d, 'RESTROOMS', 12.5, 2.2, 0.12, 0.16, C(WHITE, 14), C(BLUE, 2.5));
+  if (my === 0) { // the gates' glass
+    if (z > 4.4 || z < 0.3) { BG[i] = C(GRAY, 1.6); return set(i, '=', C(GRAY, L)), true; }
+    if (fract(u / 2) < 0.03 || Math.abs(z - 2.7) < 0.04) { BG[i] = C(GRAY, 2); return set(i, fract(u / 2) < 0.03 ? '|' : '-', C(GRAY, 8)), true; }
+    return terminalView(i, u, z), true;
+  }
+  if (my === H - 1) { // the landside: glass above the desks and the café, a wall below
+    if (z < 1.6 || z > 4) { BG[i] = C(STONE, 1.4 + L * 0.1); return set(i, z > 4 ? '=' : fract(Math.abs(u) / 1.5) < 0.04 ? '|' : ' ', C(GRAY, L * 0.6)), true; }
+    if (fract(Math.abs(u) / 2) < 0.03) { BG[i] = C(GRAY, 2); return set(i, '|', C(GRAY, 8)), true; }
+    return terminalLandView(i, Math.abs(u), z), true;
+  }
+  if ((mx === 0 || mx === room.W - 1) && z > 1.2 && z < 3.6) { // an advert lit up on each end
+    const end = mx === 0, word = end ? 'FLY AIR 9' : 'WELCOME', mid = end ? -6.5 : 6.5;
+    BG[i] = C(end ? BLUE : MAG, 4);
+    return wallText(i, u, uStep, z, d, word, mid, 2.4, 0.38, 0.6, C(WHITE, 15), C(end ? BLUE : MAG, 4)) || (set(i, ' ', 0), true);
+  }
+  BG[i] = C(STONE, 1.6 + L * 0.1); return set(i, fract(z / 1.25) < 0.03 ? '-' : ' ', C(GRAY, L * 0.6)), true; // stone panels
+}
+// the floor: polished terrazzo, carpet at the gates, a mat inside each door
+ROOM_FLOORS.terrazzo = (i, f, wx, wy, r, x, L) => {
+  const mat = TERMINAL_ROOM_DOOR_X.some((dx, k) => Math.abs(wx - dx) < 1.2 && (k ? wy < 2.2 : wy > room.H - 2.2));
+  const carpet = wy < 6.6 && TERMINAL_GATE_X.some(g => Math.abs(wx - g) < 3.6);
+  if (mat) { BG[i] = C(BRICK, 1 + f * 1.5); return set(i, '=', C(BRICK, L)); }
+  if (carpet) { BG[i] = C(BLUE, 1 + f * 1.6); return set(i, (r + x) % 3 ? ' ' : '.', C(BLUE, L)); }
+  BG[i] = C(STONE, 1.6 + f * 3);
+  return set(i, fract(wx / 1.5) < 0.03 || fract(wy / 1.5) < 0.03 ? '+' : hash(Math.floor(wx * 30), Math.floor(wy * 30), 343) > 0.93 ? '.' : ' ', C(STONE, L * 0.8));
+};
+
+// ---- what's in it
+// the departures board, both faces: departures toward the doors, arrivals toward the gates
+const TBOARD = { hl: 3, z0: 2.7, z1: 4.3, row: 0.26, n: 27, status: 17 };
+const departuresBoard = (x, y) => ({ x, y, draw: (vx, vy) => {
+  for (const e of [-1, 1]) rod(vx + e * TBOARD.hl * 0.85, vy, TBOARD.z1, vx + e * TBOARD.hl * 0.85, vy, room.def.height, 0.02, GRAY, 0.9);
+  const lines = { 3: boardLines(true), 4: boardLines(false) };
+  drawBox(boxAt(vx, vy, 1, 0, TBOARD.hl, 0.06, TBOARD.z0, TBOARD.z1), (i, t) => {
+    const f = HIT.face, row = Math.floor((TBOARD.z1 - 0.04 - HIT.w) / TBOARD.row);
+    if (f !== 3 && f !== 4) { BG[i] = C(GRAY, 1.6); return set(i, ' ', 0), true; }
+    BG[i] = C(BLACK, 3);
+    if (row < 0 || row > 5) return set(i, ' ', 0), true;
+    const z0 = TBOARD.z1 - 0.04 - (row + 1) * TBOARD.row, line = row ? lines[f][row - 1] : null;
+    if (row && !line) return set(i, ' ', 0), true;
+    const ch = faceText(row ? line.text : (f === 3 ? 'DEPARTURES' : 'ARRIVALS').padEnd(TBOARD.n), i, t, vx, vy, TBOARD.hl, z0, TBOARD.row);
+    const col = !row ? C(WHITE, 15) : Math.floor(faceQ(HIT.u, TBOARD.hl) * TBOARD.n) >= TBOARD.status ? C(statusCol(line.status), 14) : C(YEL, 14);
+    return set(i, ch && ch !== ' ' ? ch : ' ', col), true;
+  });
+} });
+// a walk-through metal detector: two grey posts and a head, a light on top going green (red now and then)
+const detector = x => ROOM_MODEL(x, 7.3, (vx, vy) => {
+  for (const e of [-0.55, 0.55]) BXD(vx + e, vy, 0.06, 0.3, 0, 2.15, solid(GRAY));
+  BXD(vx, vy, 0.62, 0.3, 2.15, 2.4, solid(GRAY, { top: '=' }));
+  dot(vx, vy, 2.48, 0.06, (i, t, L) => { const red = fract(T / 7 + x) < 0.08; BG[i] = C(red ? RED : GREEN, 10); return set(i, ' ', 0), true; });
+});
+const glassScreen = (x0, x1) => BX((x0 + x1) / 2, 7.3, (x1 - x0) / 2, 0.05, 0, 1.1, (i, t, L) => { // the barrier along security: glass panels
+  if (HIT.face === 5 || HIT.w > 1.06) { BG[i] = C(GRAY, 3); return set(i, ' ', 0), true; }
+  return fract(HIT.u / 1.2) < 0.03 ? (set(i, '|', C(GRAY, 9)), true) : HIT.face <= 2 ? (BG[i] = C(GRAY, 2), set(i, ' ', 0), true) : false; // (see-through)
+});
+// a row of airport seats along x, facing the windows (-y): steel frame, blue seats, their backs on the +y side
+const seatRow = (x, y, hl) => ROOM_MODEL(x, y, (vx, vy) => {
+  BXD(vx, vy, hl, 0.25, 0.4, 0.48, (i, t, L) => { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, fract(HIT.u / 0.55 + 0.5) < 0.08 ? '|' : ' ', C(BLUE, 8)), true; });
+  BXD(vx, vy + 0.22, hl, 0.04, 0.48, 0.95, (i, t, L) => { BG[i] = C(BLUE, 1.7 + L * 0.2); return set(i, fract(HIT.u / 0.55 + 0.5) < 0.08 ? '|' : ' ', C(BLUE, 7)), true; });
+  BXD(vx, vy, hl * 0.9, 0.03, 0, 0.4, (i, t, L) => { BG[i] = C(GRAY, 1.3); return set(i, '|', C(GRAY, 6)), true; });
+}, [hl, 0.27, 0.95]);
+const suitcase = (x, y, col) => BX(x, y, 0.2, 0.12, 0, 0.62, (i, t, L) => { BG[i] = C(col, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : fract(HIT.w * 6) < 0.1 ? '-' : ' ', C(GRAY, 7)), true; });
+
+ROOM_DEFS.terminal = { grid: TERMINAL_GRID, height: 5, light: 1.15, floor: 'terrazzo', ceil: 'strip', sign: false, wall: terminalWall, keeper: [23.5, 12.2],
+  wc: { x0: 29, y0: 10, x1: 31, y1: 13, sign: [28, 10, 10.5] },
+  props: r => {
+    const desk = solid(BLUE, { panel: 0.5, trim: 1, top: '=' }), counter = solid(BRICK, { panel: 0.6, trim: 1, top: '=' });
+    const p = [
+      BX(8, 12.72, 6.6, 0.2, 0, 0.45, (i, t, L) => { // the baggage belt behind the desks, running
+        if (HIT.face === 5) { BG[i] = C(GRAY, 1.2); return set(i, fract(HIT.u * 2 - T * 0.6) < 0.1 ? '|' : ' ', C(GRAY, 7)), true; }
+        BG[i] = C(GRAY, (1.8 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
+      BX(23.5, 11.3, 2.2, 0.35, 0, 1.05, counter), { ...standing(23.5, 12.2, WHITE), face: [0, -1] }, // the café, and its barista
+      BX(22.4, 11.3, 0.3, 0.22, 1.05, 1.55, (i, t, L) => { BG[i] = C(GRAY, (2.2 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 4 && HIT.w > 1.35 ? 'o' : ' ', C(RED, 13)), true; }), // the espresso machine
+      ...glassCase(24.8, 11.3, 0.6, 0.3, 1.5, caseGoods('@o%', [WARM, BRICK, YEL], false, 7), BRICK),
+      aisleSign(23.5, 11.3, 'CAFE  GLYPH', C(WARM, 4), C(BRICK, 15), 0.75),
+      departuresBoard(16, 9.4), aisleSign(16, 7.3, 'SECURITY', C(GRAY, 4), C(WHITE, 15), 0.6),
+      glassScreen(1, 13.35), detector(14), detector(18), glassScreen(18.65, 31),
+      BX(16, 7.3, 1.35, 0.35, 0, 0.9, (i, t, L) => { // the X-ray belt between the arches, the tunnel over it
+        if (HIT.face === 5) { BG[i] = C(GRAY, 1.2); return set(i, fract(HIT.u * 3 - T * 0.5) < 0.1 ? '|' : ' ', C(GRAY, 7)), true; }
+        BG[i] = C(GRAY, (1.7 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
+      BX(16, 7.3, 0.6, 0.4, 0.9, 1.6, (i, t, L) => { BG[i] = C(GRAY, (2.3 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face <= 2 && HIT.w < 1.3 ? '#' : HIT.face === 4 && HIT.w > 1.4 ? '-' : ' ', C(BLACK, 6)), true; }),
+      { ...figProp(12.6, 7.9, figGuardLook(11), { chat: false }), face: [1, 0] }, { ...figProp(19.4, 7.9, figGuardLook(12), { chat: false }), face: [-1, 0] },
+      ...toilet(30.2, 12.45, 1, porcelain), washbasin(29.4, 10.3, 0, 1), // the restrooms
+    ];
+    [3.5, 6.5, 9.5, 12.5].forEach((x, k) => { // check-in: four desks, an agent at each, a sign over it
+      p.push(BX(x, 11.4, 1.05, 0.33, 0, 1, desk), { ...standing(x, 12.25, BLUE), face: [0, -1] }, aisleSign(x, 11.4, `CHECK-IN ${k + 1}`, C(BLUE, 3.5), C(WHITE, 15), 0.6));
+      if (chance(0.7)) p.push({ ...standing(x - 0.2, 10.35, shirt()), face: [0, 1] }, suitcase(x + 0.35, 10.3, pick([RED, BLUE, GRAY, GREEN])));
+    });
+    TERMINAL_GATE_X.forEach((g, k) => { // each gate: four rows of seats facing the glass, the podium, its sign; people waiting
+      for (const [dx, y] of [[-1.7, 3], [1.7, 3], [-1.7, 4.5], [1.7, 4.5]]) {
+        p.push(seatRow(g + dx, y, 1.25));
+        for (const s of [-0.825, 0, 0.825]) if (chance(0.3)) p.push({ ...sitting(g + dx + s, y, shirt(), 0.48), face: [0, -1] });
+      }
+      const pd = g + (k < 2 ? 3 : -3); // (gate 3's on the far side, out of the way of the door)
+      p.push(BX(pd, 1.7, 0.5, 0.28, 0, 1.05, desk), { ...standing(pd, 1.15, BLUE), face: [0, 1] }, aisleSign(g, 1.9, `GATE ${k + 1}`, C(BLACK, 4), C(YEL, 15), 0.55));
+    });
+    for (const [x, y] of [[21, 9], [26, 9]]) p.push(...tableBox(x, y, 0.4, 0.4), STOOL(x - 0.7, y, RED, 0.62), STOOL(x + 0.7, y, RED, 0.62)); // the café's tables
+    p.push(...shoppers([[9, 8.4, 0, 1], [20.5, 9.9, 1, 0], [5, 6, 0, -1], [26.5, 6.2, 0, -1], [11, 5.8, -1, 0]], 0.5));
+    return p;
+  } };
+STOCK_ROOM.terminal = ['coffee', 'latte', 'croissant', 'sandwich', 'water'];
 ROOM_FOR.COURIER='courier';
 const COURIER_DISPATCH_LINES=['ROOFTOP COURIERS','PARCEL DISPATCH','GREEN ROOF $80','SITE RUSH $100','NIGHT RUN $120'];
 function courierWall(i,u,uStep,z,d,mx,my,L) {
@@ -17562,6 +18377,7 @@ function promptText() {
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';
   if (churchDoor()) return cathOpen() ? 'E: go into the cathedral' : 'The cathedral: locked for the night (opens at 7)';
+  { const td = terminalDoor(px, py); if (td >= 0) return td ? 'E: in to the gates' : 'E: into the terminal'; }
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base === 'amb') return 'E: go into the hospital';
@@ -17973,7 +18789,12 @@ function interact() {
     }
     else { // a stolen car: if anyone saw, the police hear about it
       mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
-      if (c.owned) { c.parked = false; say(`You get into your ${ITEMS[c.model].name}.`, 2); } // yours, bought and paid for
+      const pump = gasFilling(c); c.pit = null; c.gas = null; // (filling up at a gas station: gas.js)
+      if (pump && !c.owned && !c.mine) {
+        c.mine = true; ejectDriver(c);
+        const w = crime('steal', c.x, c.y);
+        say(w === 'cop' ? 'A cop saw that.' : 'The driver\'s round the back with the nozzle. You slide in and pull away; the hose drops out of the tank and they\'re left shouting at the pump.', 3);
+      } else if (c.owned) { c.parked = false; say(`You get into your ${ITEMS[c.model].name}.`, 2); } // yours, bought and paid for
       else if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
       else {
         c.mine = true; ejectDriver(c);
@@ -18008,6 +18829,8 @@ function interact() {
   if (nearLighthouse()) return enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [px, py, a], line: 'Mind the stairs. Two hundred and twelve of them.' }, [4, 6.2, -Math.PI / 2]);
   const cd = churchDoor();
   if (cd) return enterCathedral(cd);
+  const td = terminalDoor(px, py);
+  if (td >= 0) return enterTerminal(td); // (the airport: terminal.js)
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
@@ -18077,6 +18900,7 @@ function leaveRoom() {
   if (room.kind === 'hotelroom' && room.lobby.grandHotel) return enterRoom('grandhotel', room.lobby, [7, 6.5, -Math.PI / 2]);
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
+  else if (room.kind === 'terminal') leaveTerminal(); // (by whichever door: terminal.js)
   else if (room.kind === 'hospital') {
     // Use the front door for visits and recovery, including saved rooms with the old ambulance return point.
     const [rx, ry] = room.ret;
@@ -18591,7 +19415,7 @@ function stepSpray(dt) { // (stepSleep hands it over: ten minutes in a fade)
 // threshold stripes and numbers (09 at the west end, 27 at the east, the way a pilot coming in reads them), touchdown
 // bars; the taxiway's yellow line; the apron's concrete and the stands' lead-in lines; the helipads; the landside road;
 // grass and rocks round the shore; and after dark the runway's white edge lights, green and red at its ends, blue along
-// the taxiway. The buildings: the terminal (glass both sides, its name along the top), the two hangars (arched, open
+// the taxiway. The buildings: the terminal (glass all round, its name along the top; inside, terminal.js), the two hangars (arched, open
 // at the front), the control tower, the windsock.
 const runwayNumber = (num, along, across) => { // is (along, across) on a painted digit? along 0..1.25 from its foot, across -0.55..0.55
   if (along < 0 || along >= 1.25 || Math.abs(across) >= 0.55) return false;
@@ -18635,14 +19459,6 @@ function airportFloor(i, r, x, wx, wy, L) { // [ch, base, k] for the floor cell;
     return [(r + x) % 4 ? ' ' : '.', GRAY, 0.9];
   }
   const bld = airportBldgAt(wx, wy);
-  if (bld && bld.kind === 'terminal') { // the hall: polished terrazzo under the lights, mats in the doors, carpet at the gates
-    const u = X - bld.x, v = Y - bld.y, f = Math.max(0, 1 - Math.hypot(rel(wx - px), rel(wy - py)) / vis * 1.5);
-    const mat = v < -0.75 && Math.abs(u) < TERMINAL_DOOR || v > 0.75 && TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR), carpet = v > 0.38 && TERMINAL_GATES.some(g => Math.abs(u - g) < 1);
-    const joint = fract(u * 4) < 0.05 || fract(v * 4) < 0.05, fleck = hash(Math.floor(wx * 30), Math.floor(wy * 30), 343) > 0.93;
-    BG[i] = mat ? C(BRICK, 1 + f * 1.5) : carpet ? C(BLUE, 1 + f * 1.4) : C(STONE, 2 + f * 3);
-    set(i, mat ? '=' : carpet ? ((r + x) % 3 ? ' ' : '.') : joint ? '+' : fleck ? '.' : ' ', C(mat ? BRICK : carpet ? BLUE : STONE, 4 + f * 4));
-    return null;
-  }
   if (bld) { // a hangar's floor: in its shade, a yellow line down the middle out to the apron
     if (bld.kind === 'hangar' && Math.abs(X - bld.x) < 0.012) return ['|', YEL, 1];
     return [(r + x) % 3 ? ' ' : '.', GRAY, 0.6];
@@ -18719,70 +19535,63 @@ function drawAirport() {
     }
   }
 }
-// ---- the terminal (world.js has its plan). rayTerminal, for drawBox: the nearest of its solid parts, from outside or
-// in: the roof (5) or the ceiling under it (16), the ends (1 east, 2 west; their insides 11, 12), the long walls' frames
-// (3 airside, 4 landside; inside 13, 14). The glass and the open doors let the ray on through, into the hall and out the
-// far side. HIT.u east along it, v south across it.
-function rayTerminal(ox, oy, oz, rx, ry, rz, b) {
-  const qu = ox - b.x, qv = oy - b.y;
-  let best = Infinity, face = 0;
-  if (Math.abs(rx) > 1e-9) for (const e of [1, -1]) {
-    const t = (e * b.hl - qu) / rx, v = qv + ry * t, z = oz + rz * t;
-    if (t > 0.01 && t < best && Math.abs(v) <= b.hw && z >= 0 && z <= b.h) { best = t; face = (e > 0) === (rx < 0) ? (e > 0 ? 1 : 2) : (e > 0 ? 11 : 12); }
-  }
-  if (Math.abs(ry) > 1e-9) for (const e of [1, -1]) {
-    const t = (e * b.hw - qv) / ry, u = qu + rx * t, z = oz + rz * t;
-    if (t > 0.01 && t < best && Math.abs(u) <= b.hl && z >= 0 && z <= b.h && !terminalGlass(e < 0, u, z)) { best = t; face = (e > 0) === (ry < 0) ? (e > 0 ? 3 : 4) : (e > 0 ? 13 : 14); }
-  }
-  if (Math.abs(rz) > 1e-9) {
-    const t = (b.h - oz) / rz, u = qu + rx * t, v = qv + ry * t;
-    if (t > 0.01 && t < best && Math.abs(u) <= b.hl && Math.abs(v) <= b.hw) { best = t; face = rz < 0 ? 5 : 16; }
-  }
-  if (best === Infinity) return -1;
-  HIT.u = qu + rx * best; HIT.v = qv + ry * best; HIT.w = oz + rz * best; HIT.face = face;
-  return best;
-}
 const inLight = t => (1 - t / vis) * 15; // (indoors the lights are on, day and night)
 // a line of text across a box's broad face (3 or 4, a box along x), on the band from z0 (its foot) bandH tall
 function faceText(word, i, t, vx, vy, hl, z0, bandH) {
   const n = word.length, [ex, ey] = faceDir(1, 0);
   return signLine(word, faceQ(HIT.u, hl) * n, (z0 + bandH - HIT.w) / bandH, i, z0 + bandH / 2, midDepth(vx, vy), t, 2 * hl / n, bandH, farDepth(vx, vy, hl), ex, ey);
 }
-// the terminal's shell: concrete ends, the name in a band along the top of both long sides, frames round the glass; from
-// inside, the ceiling's rows of light panels and an advert lit up on each end wall
+// the terminal from outside: glass between concrete piers all the way round, the ends as well as the long sides, on a
+// concrete plinth, under a blue band with the name along it. By day the glass has the sky in it; after dark it's lit
+// from within. Its doors (world.js): the main doors landside under a canopy, DEPARTURES over them; the two airside ones
+// out to the gates, which gates over each
+const TERMINAL_DOOR_SIGNS = ['DEPARTURES', 'GATES 1-2', 'GATES 2-3'];
 function drawTerminal(b, vx, vy, lit) {
   const NAME = 'GLYPHPORT INTERNATIONAL', band = b.h - 0.22;
   drawBox(boxAt(vx, vy, 1, 0, b.hl, b.hw, 0, b.h), (i, t, L) => {
-    const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
-    if (f === 5) { BG[i] = C(GRAY, 2 + L * 0.25); return set(i, hash(Math.floor(u * 3), Math.floor(v * 3), 77) > 0.85 ? '#' : ' ', C(GRAY, 6)), true; } // roof, plant on it
-    if (f === 1 || f === 2) { BG[i] = C(STONE, (1.6 + L * 0.3) * shadeFace(f)); return set(i, ' ', 0), true; } // the ends
-    const IN = inLight(t);
-    if (f === 16) { // the ceiling: two rows of light panels the length of the hall, a grid of tiles between
-      if (Math.abs(Math.abs(v) - 0.45) < 0.09 && fract(u * 1.25) < 0.7) { BG[i] = C(WHITE, 7 + IN * 0.35); return set(i, ' ', 0), true; }
-      BG[i] = C(GRAY, 1.8 + IN * 0.12); return set(i, fract(u * 4) < 0.08 || fract(v * 4) < 0.08 ? '+' : ' ', C(GRAY, 5)), true;
-    }
-    if (f === 11 || f === 12) { // the ends, inside: an advert lit up on each, framed in steel
-      if (!(Math.abs(v) < 0.7 && w > 0.42 && w < 0.86)) { BG[i] = C(STONE, 1.6 + IN * 0.12); return set(i, Math.abs(v) < 0.74 && w > 0.38 && w < 0.9 ? '#' : ' ', C(GRAY, 7)), true; }
-      const ad = f === 11 ? 'FLY AIR 9' : 'WELCOME', n = ad.length, q = f === 11 ? (v + 0.7) / 1.4 : (0.7 - v) / 1.4, wx = f === 11 ? vx + b.hl : vx - b.hl;
-      const ch = signLine(ad, q * n, (0.78 - w) / 0.28, i, 0.64, midDepth(wx, vy), t, 1.4 / n, 0.28, farDepth(wx, vy, 0.7), 0, f === 11 ? 1 : -1);
-      BG[i] = C(f === 11 ? BLUE : MAG, 4 + IN * 0.2);
-      return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 15)), true;
-    }
-    if (w > band) { // the band along the top: the name outside, a plain soffit in
-      if (f > 10) { BG[i] = C(GRAY, 1.6 + IN * 0.1); return set(i, ' ', 0), true; }
-      BG[i] = C(BLUE, 1.5 + L * 0.2);
-      const n = NAME.length, side = f === 3 ? 1 : -1, q = (u * side / b.hl + 1) / 2;
-      const ch = signLine(NAME, q * n, (b.h - 0.11 - w) / 0.2, i, b.h - 0.11, midDepth(vx, vy), t, 2 * b.hl / n, 0.16, farDepth(vx, vy, b.hl), side, 0);
+    const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f), long = f === 3 || f === 4, along = long ? u : v, half = long ? b.hl : b.hw;
+    if (f >= 5) { BG[i] = C(GRAY, 2 + L * 0.25); return set(i, hash(Math.floor(u * 3), Math.floor(v * 3), 77) > 0.85 ? '#' : ' ', C(GRAY, 6)), true; } // the roof, plant on it
+    if (w > band) { // the band along the top: the name on the long sides, GLYPHPORT on the ends
+      BG[i] = C(BLUE, (1.5 + L * 0.2) * k);
+      const word = long ? NAME : 'GLYPHPORT', n = word.length, q = (f === 3 || f === 2 ? along + half : half - along) / (2 * half);
+      const [ex, ey] = f === 3 ? [1, 0] : f === 4 ? [-1, 0] : f === 1 ? [0, -1] : [0, 1], nx = f === 1 ? 1 : f === 2 ? -1 : 0, ny = f === 3 ? 1 : f === 4 ? -1 : 0;
+      const fx = vx + nx * b.hl, fy = vy + ny * b.hw, letterW = Math.min(2 * half / (n + 2), 0.5);
+      const ch = signLine(word, (q - 0.5) * 2 * half / letterW + n / 2, (b.h - 0.11 - w) / 0.2, i, b.h - 0.11, midDepth(fx, fy), t, letterW, 0.16, farDepth(fx, fy, half), ex, ey);
       return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 13 + lit * 2)), true;
     }
-    const landside = f === 4 || f === 14, door = landside ? Math.abs(u) < TERMINAL_DOOR + 0.06 : TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR + 0.06);
-    if (door && w < 0.47) { BG[i] = C(YEL, f < 10 ? 3 + L * 0.3 : 2.5 + IN * 0.1); return set(i, ' ', 0), true; } // the doors' frames
-    const bay = terminalBay(u), frame = (landside ? w > 0.46 && w < 0.9 : w > 0.12) && (bay < (landside ? 0.18 : 0.16) || bay > 0.97); // (round the windows: steel)
-    if (frame || !landside) { BG[i] = C(GRAY, f < 10 ? 2.5 + L * 0.3 : 2 + IN * 0.1); return set(i, frame && bay < 0.1 ? '|' : '=', C(GRAY, 6)), true; }
-    BG[i] = C(STONE, f < 10 ? (1.8 + L * 0.3) * shadeFace(f) : 1.8 + IN * 0.12); // the landside wall: concrete panels
-    return set(i, fract(u * 2.4) < 0.04 || fract(w * 4) < 0.05 ? '.' : ' ', C(GRAY, 5)), true;
-  }, (ox, oy, oz, rx, ry, rz) => rayTerminal(ox, oy, oz, rx, ry, rz, { x: vx, y: vy, hl: b.hl, hw: b.hw, h: b.h }));
-  if (Math.hypot(vx, vy) < 22) drawTerminalHall(b, vx, vy);
+    if (long) { // a door?
+      const d = TERMINAL_DOORS.findIndex(o => o.land === (f === 4) && Math.abs(u - o.u) < TERMINAL_DOOR_W[o.land ? 0 : 1] + 0.05);
+      if (d >= 0) {
+        const o = TERMINAL_DOORS[d], du = u - o.u, hw = TERMINAL_DOOR_W[o.land ? 0 : 1];
+        if (w > 0.37 && w < 0.47) { // the sign over it
+          BG[i] = C(BLACK, 3);
+          const fy = vy + (o.land ? -b.hw : b.hw), word = TERMINAL_DOOR_SIGNS[d], letterW = 0.07;
+          const ch = signLine(word, (f === 3 ? du : -du) / letterW + word.length / 2, (0.455 - w) / 0.07, i, 0.42, midDepth(vx + o.u, fy), t, letterW, 0.07, farDepth(vx + o.u, fy, hw), f === 3 ? 1 : -1, 0);
+          return set(i, ch && ch !== ' ' ? ch : ' ', C(YEL, 15)), true;
+        }
+        if (w < 0.37) { // glass doors in a steel frame, the hall lit up behind
+          if (Math.abs(du) > hw - 0.02 || w > 0.35) { BG[i] = C(GRAY, 2.5 + L * 0.3); return set(i, ' ', 0), true; }
+          BG[i] = lit > 0.35 ? C(WARM, 2 + lit * 4) : C(CYAN, 1.4 + day * 2.4); // (lit up inside after dark)
+          return set(i, Math.abs(fract(du / 0.3) - 0.5) > 0.47 ? '|' : w < 0.03 ? '=' : ' ', C(GRAY, 8)), true;
+        }
+      }
+    }
+    // the piers (every 12.5m, and at the corners), the plinth, the upper floor's edge across the glass, mullions: the rest
+    // is glass
+    if (half - Math.abs(along) < 0.06 || terminalBay(along) < 0.1 || w < 0.04 || Math.abs(w - 0.6) < 0.025) { BG[i] = C(STONE, (1.8 + L * 0.3) * k); return set(i, ' ', 0), true; }
+    if (fract(along * 4) < 0.045) { BG[i] = C(GRAY, (2.2 + L * 0.3) * k); return set(i, '|', C(GRAY, 6)), true; }
+    if (lit > 0.35) { // lit from within: the ceiling's lights along the top, the hall's glow under them
+      const top = band - w < 0.08;
+      BG[i] = C(top ? WHITE : WARM, top ? 6 + lit * 4 : 1.6 + lit * 3);
+      return set(i, !top && hash(Math.floor(along * 9), Math.floor(w * 7), 341) > 0.9 ? '.' : ' ', C(WARM, 9)), true;
+    }
+    BG[i] = C(CYAN, (1.2 + day * 2.4) * k); // the sky in it, a streak of reflection here and there
+    return set(i, fract((along + w) * 2.3) < 0.04 ? '/' : ' ', C(WHITE, 6 + L * 0.3)), true;
+  });
+  // the canopy out over the main doors, on two posts
+  const d0 = TERMINAL_DOORS[0], cy = vy - b.hw - 0.3;
+  drawBox(boxAt(vx + d0.u, cy, 1, 0, 0.95, 0.3, 0.47, 0.5), (i, t, L) => { BG[i] = C(HIT.face === 6 ? WHITE : GRAY, HIT.face === 6 ? 2 + lit * 5 : 2.4 + L * 0.3); return set(i, ' ', 0), true; });
+  for (const e of [-0.85, 0.85]) rod(vx + d0.u + e, cy - 0.22, 0, vx + d0.u + e, cy - 0.22, 0.47, 0.012, GRAY, 1.2);
 }
 // the departures (or arrivals) board's lines: a flight every 25 minutes from six in the morning; the next few, and the
 // last one gone (or landed). Each: time, where, gate, and how it's doing
@@ -18803,15 +19612,6 @@ function boardLines(dep) {
 }
 const FLIGHT_BOARD = { hl: 0.95, z0: 0.56, z1: 0.94, row: 0.06, n: 27, status: 17 }; // (n: characters a line; status: where that starts)
 const statusCol = s => s === 'BOARDING' || s === 'LANDING' ? (fract(T) < 0.6 ? GREEN : BLACK) : s === 'DELAYED' ? RED : s === 'DEPARTED' || s === 'LANDED' ? GRAY : s === 'GO TO GATE' ? ORANGE : YEL;
-// the folk in the hall: staff behind the desks and the café counter, people queueing, sitting at the gates, walking through
-const HALL_SHIRTS = [RED, BLUE, GREEN, YEL, MAG, CYAN, ORANGE, WHITE, BRICK];
-const HALL_FOLK = [
-  ...[-5.7, -4.5, -3.3, -2.1].map((u, k) => ({ u, v: -0.8, fx: 0, fy: 1, shirt: BLUE, pants: BLUE, seed: 700 + k })), // at the desks
-  ...[[-5.7, 2], [-4.5, 1], [-2.1, 2], [3.1, 1], [3.8, 1]].flatMap(([u, n], k) => [...Array(n)].map((_, j) => ({ u: u + j * 0.04, v: -0.43 + j * 0.13, fx: 0, fy: -1, seed: 720 + k * 3 + j }))), // queueing
-  ...[3.0, 3.8].map((u, k) => ({ u, v: -0.82, fx: 0, fy: 1, shirt: WHITE, pants: GRAY, seed: 740 + k })), // the café's
-  ...TERMINAL_GATES.flatMap((g, k) => [[-0.7, 0.48], [-0.2, 0.48], [0.35, 0.74], [0.75, 0.48], [-0.55, 0.74]].map(([e, v], j) => ({ u: g + e, v, fx: 0, fy: 1, sit: true, seed: 760 + k * 7 + j }))), // waiting at the gates
-].map(m => ({ ...m, shirt: m.shirt ?? HALL_SHIRTS[m.seed % HALL_SHIRTS.length] }));
-const HALL_WALKERS = [[-0.2, 0.11, 0], [-0.2, 0.08, 1.1], [0.29, 0.1, 0.5], [0.29, 0.07, 1.6]].map(([v, sp, ph], k) => ({ v, sp, ph, seed: 800 + k, shirt: HALL_SHIRTS[(k * 4 + 1) % HALL_SHIRTS.length] }));
 // a sign hung from the ceiling on two rods: word on both faces, in col on bg
 function hallSign(x, y, hl, z0, z1, ceiling, word, bg, col) {
   for (const e of [-1, 1]) rod(x + e * hl * 0.8, y, z1, x + e * hl * 0.8, y, ceiling, 0.004, GRAY, 0.8);
@@ -18820,54 +19620,6 @@ function hallSign(x, y, hl, z0, z1, ceiling, word, bg, col) {
     const ch = faceText(word, i, t, x, y, hl, z0 + 0.008, z1 - z0 - 0.016);
     BG[i] = bg; return set(i, ch && ch !== ' ' ? ch : ' ', col), true;
   });
-}
-// inside: the desks and their signs, the café, the columns, the seats and gate signs, the departures board, the people
-function drawTerminalHall(b, vx, vy) {
-  for (const o of TERMINAL_IN) {
-    const x = vx + o.u, y = vy + o.v;
-    if (o.kind === 'column') { drum(x, y, o.hu, 0, b.h, (i, t) => { BG[i] = C(STONE, (3 + inLight(t) * 0.35) * drumLit(o.hu)); return set(i, ' ', 0), true; }); continue; }
-    if (o.kind === 'seats') { // a row of blue seats on a steel beam, facing the planes
-      drawBox(boxAt(x, y + 0.01, 1, 0, o.hu, o.hv - 0.01, 0.036, 0.046), (i, t) => { BG[i] = C(BLUE, 2 + inLight(t) * 0.18); return set(i, fract(HIT.u * 10) < 0.1 ? '|' : ' ', C(BLUE, 8)), true; });
-      drawBox(boxAt(x, y - o.hv + 0.006, 1, 0, o.hu, 0.006, 0.046, o.h), (i, t) => { BG[i] = C(BLUE, 1.6 + inLight(t) * 0.16); return set(i, fract(HIT.u * 10) < 0.1 ? '|' : ' ', C(BLUE, 7)), true; });
-      drawBox(boxAt(x, y, 1, 0, o.hu * 0.9, 0.008, 0, 0.036), i => { BG[i] = C(GRAY, 1.2); return set(i, '|', C(GRAY, 6)), true; });
-      continue;
-    }
-    const cafe = o.kind === 'cafe'; // a counter: its front panelled, a pale top; screens on a desk, a coffee machine and a cake case on the café's
-    drawBox(boxAt(x, y, 1, 0, o.hu, o.hv, 0, o.h), (i, t) => {
-      const IN = inLight(t);
-      if (HIT.face === 5) { BG[i] = C(cafe ? WARM : WHITE, 2.5 + IN * 0.2); return set(i, ' ', 0), true; }
-      const stripe = !cafe && Math.abs(HIT.w - 0.08) < 0.01;
-      BG[i] = stripe ? C(YEL, 5 + IN * 0.3) : C(cafe ? BRICK : BLUE, 1.5 + IN * 0.18);
-      return set(i, cafe && fract(HIT.u * 5) < 0.06 ? '|' : ' ', C(BRICK, 6)), true;
-    });
-    for (const e of cafe ? [-0.3, 0.45] : [-0.2, 0.2]) drawBox(boxAt(x + e, y - o.hv * 0.4, 1, 0, cafe ? 0.07 : 0.035, cafe ? 0.03 : 0.006, o.h, o.h + (cafe ? 0.07 : 0.05)), (i, t) => {
-      if (cafe) { BG[i] = C(e < 0 ? GRAY : WARM, (e < 0 ? 2 : 4) + inLight(t) * 0.2); return set(i, e < 0 && HIT.face !== 5 && HIT.w > o.h + 0.05 ? 'o' : ' ', C(RED, 13)), true; }
-      BG[i] = HIT.face === 3 || HIT.face === 4 ? C(CYAN, 5 + fract(T * 0.3 + e) * 3) : C(GRAY, 1.5); return set(i, ' ', 0), true;
-    });
-    if (cafe) hallSign(x, y, 0.45, 0.4, 0.47, b.h, 'CAFE  GLYPH', C(WARM, 4), C(BRICK, 15));
-    else hallSign(x, y, 0.3, 0.4, 0.47, b.h, `CHECK-IN ${o.n}`, C(BLUE, 3.5), C(WHITE, 15));
-  }
-  STANDS_X.forEach((sx, k) => hallSign(vx + sx - b.x, vy + 0.88, 0.2, 0.45, 0.53, b.h, `GATE ${k + 1}`, C(BLACK, 4), C(YEL, 15))); // over the seats by each gate
-  // the board, hung over the middle of the hall: departures facing the doors, arrivals facing the gates
-  const lines = { 4: boardLines(true), 3: boardLines(false) }, x = vx, y = vy - 0.15;
-  for (const e of [-1, 1]) rod(x + e * FLIGHT_BOARD.hl * 0.85, y, FLIGHT_BOARD.z1, x + e * FLIGHT_BOARD.hl * 0.85, y, b.h, 0.005, GRAY, 0.9);
-  drawBox(boxAt(x, y, 1, 0, FLIGHT_BOARD.hl, 0.02, FLIGHT_BOARD.z0, FLIGHT_BOARD.z1), (i, t) => {
-    const f = HIT.face, row = Math.floor((FLIGHT_BOARD.z1 - 0.01 - HIT.w) / FLIGHT_BOARD.row);
-    if (f !== 3 && f !== 4) { BG[i] = C(GRAY, 1.6); return set(i, ' ', 0), true; }
-    BG[i] = C(BLACK, 3);
-    if (row < 0 || row > 5) return set(i, ' ', 0), true;
-    const z0 = FLIGHT_BOARD.z1 - 0.01 - (row + 1) * FLIGHT_BOARD.row, line = row ? lines[f][row - 1] : null;
-    if (row && !line) return set(i, ' ', 0), true;
-    const ch = faceText(row ? line.text : (f === 4 ? 'DEPARTURES' : 'ARRIVALS').padEnd(FLIGHT_BOARD.n), i, t, x, y, FLIGHT_BOARD.hl, z0, FLIGHT_BOARD.row);
-    const col = !row ? C(WHITE, 15) : Math.floor(faceQ(HIT.u, FLIGHT_BOARD.hl) * FLIGHT_BOARD.n) >= FLIGHT_BOARD.status ? C(statusCol(line.status), 14) : C(YEL, 14);
-    return set(i, ch && ch !== ' ' ? ch : ' ', col), true;
-  });
-  // the people
-  for (const m of HALL_FOLK) drawFigure(vx + m.u, vy + m.v, 0, 0.175, m.fx, m.fy, streetLook(m), m.sit ? 'sit7' : 'stand', { light: 9 });
-  for (const m of HALL_WALKERS) { // up and down the hall, turning at the ends
-    const p = mod(T * m.sp + m.ph, 2), dir = p < 1 ? 1 : -1, u = -6.3 + 12.6 * (p < 1 ? p : 2 - p);
-    drawFigure(vx + u, vy + m.v, 0, 0.175, dir, 0, streetLook(m), 'walk' + (Math.floor(T * 7 + m.seed) & 7), { light: 9 });
-  }
 }
 // a hangar: corrugated sheeting arched over it front to back, a strip of rooflights along the crown, its number over
 // the opening; inside, steel ribs under the roof, lamps hung between them, a workbench and tool board along the back

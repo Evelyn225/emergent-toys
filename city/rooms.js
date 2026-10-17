@@ -1163,6 +1163,89 @@ function roomFloor(i, r, x, rx, ry) {
     }
   }
 }
+// ---- ceiling lights, laid out to fit the room: each fitting hangs whole over the floor (or a shelf, or anything else
+// the ceiling shows over), a hand's width clear of the walls, never over a doorway, and they're spread evenly over each
+// part of the room its walls divide it into (the shop, the back room, the toilet), not a pattern tiled from the corner
+// that the walls cut through. spec: { s: spacing, r: radius } round fittings; { s, w, strip: true } tubes running along
+// y; { s, r, track: true } tracks along x every s with a spot every r. Cached on the room as a mask, CEIL_RES a metre:
+// 1 a fitting (lit), 2 a track
+const CEIL_RES = 20, CEIL_GAP = 0.2;
+function ceilMask(key, spec) {
+  const R = room;
+  if (R.ceilMasks?.[key]) return R.ceilMasks[key];
+  const W = R.W, H = R.H, top = (R.def.height || 3) - 0.05, RW = W * CEIL_RES, mask = new Uint8Array(RW * H * CEIL_RES);
+  const under = (x, y) => x >= 0 && y >= 0 && x < W && y < H && ROOMW.cell(x, y) < top;
+  // doorways: a run of one to three cells through a wall a cell thick (the far side of the wall's ends open)
+  const door = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!under(x, y)) continue;
+    let a = x, b = x;
+    while (under(a - 1, y)) a--; while (under(b + 1, y)) b++;
+    if (b - a < 3 && (under(a - 1, y - 1) || under(b + 1, y - 1)) && (under(a - 1, y + 1) || under(b + 1, y + 1))) door[y * W + x] = 1;
+    a = y; b = y;
+    while (under(x, a - 1)) a--; while (under(x, b + 1)) b++;
+    if (b - a < 3 && (under(x - 1, a - 1) || under(x - 1, b + 1)) && (under(x + 1, a - 1) || under(x + 1, b + 1))) door[y * W + x] = 1;
+  }
+  // the parts of the room: what's left joined up once the doorways are taken out
+  const part = new Int16Array(W * H).fill(-1), parts = [];
+  for (let k = 0; k < W * H; k++) {
+    if (part[k] >= 0 || door[k] || !under(k % W, k / W | 0)) continue;
+    const box = [W, H, 0, 0], q = [k]; part[k] = parts.length;
+    while (q.length) {
+      const c = q.pop(), x = c % W, y = c / W | 0;
+      box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x + 1); box[3] = Math.max(box[3], y + 1);
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        const n = ny * W + nx;
+        if (nx >= 0 && ny >= 0 && nx < W && ny < H && part[n] < 0 && !door[n] && under(nx, ny)) { part[n] = parts.length; q.push(n); }
+      }
+    }
+    parts.push(box);
+  }
+  const tall = R.props.filter(p => p.box && !p.walk && p.box.z1 >= top).map(p => p.box); // (lintels and the like, up to the ceiling)
+  const fits = (id, x0, y0, x1, y1) => { // is all of [x0, x1] x [y0, y1], and a gap round it, over this part of the room?
+    for (let y = Math.floor(y0 - CEIL_GAP); y <= Math.floor(y1 + CEIL_GAP); y++) for (let x = Math.floor(x0 - CEIL_GAP); x <= Math.floor(x1 + CEIL_GAP); x++)
+      if (x < 0 || y < 0 || x >= W || y >= H || part[y * W + x] !== id) return false;
+    return !tall.some(b => inBox(b, (x0 + x1) / 2, (y0 + y1) / 2, Math.max(x1 - x0, y1 - y0) / 2 + 0.1));
+  };
+  const paint = (x0, y0, x1, y1, v, round) => {
+    for (let py = Math.max(0, Math.floor(y0 * CEIL_RES)); py < Math.min(H * CEIL_RES, Math.ceil(y1 * CEIL_RES)); py++)
+      for (let qx = Math.max(0, Math.floor(x0 * CEIL_RES)); qx < Math.min(RW, Math.ceil(x1 * CEIL_RES)); qx++) {
+        const u = (qx + 0.5) / CEIL_RES, w = (py + 0.5) / CEIL_RES;
+        if (!round || Math.hypot(u - (x0 + x1) / 2, w - (y0 + y1) / 2) < (x1 - x0) / 2) mask[py * RW + qx] = v; // (a spot over its track)
+      }
+  };
+  const even = (a, b, s) => { const n = Math.max(1, Math.round((b - a) / s)), d = (b - a) / n; return Array.from({ length: n }, (_, k) => a + (k + 0.5) * d); };
+  parts.forEach(([x0, y0, x1, y1], id) => {
+    if (spec.strip) for (const cx of even(x0, x1, spec.s)) { // tubes along y, broken where they'd run into a wall
+      if (spec.keep && !spec.keep(cx)) continue;
+      let ya = -1;
+      for (let y = y0; y <= y1; y++) {
+        const ok = y < y1 && fits(id, cx - spec.w / 2, y + 0.5, cx + spec.w / 2, y + 0.5);
+        if (ok && ya < 0) ya = y;
+        if (!ok && ya >= 0) { if (y - ya >= 1) paint(cx - spec.w / 2, ya + 0.3, cx + spec.w / 2, y - 0.3, 1); ya = -1; }
+      }
+    } else if (spec.track) for (const cy of even(y0, y1, spec.s)) { // a track along x, spots spaced along it
+      let xa = -1;
+      for (let x = x0; x <= x1; x++) {
+        const ok = x < x1 && fits(id, x + 0.5, cy - 0.04, x + 0.5, cy + 0.04);
+        if (ok && xa < 0) xa = x;
+        if (!ok && xa >= 0) {
+          if (x - xa >= 1) { paint(xa + 0.3, cy - 0.04, x - 0.3, cy + 0.04, 2); for (const sx of even(xa + 0.3, x - 0.3, spec.r)) paint(sx - 0.1, cy - 0.1, sx + 0.1, cy + 0.1, 1, true); }
+          xa = -1;
+        }
+      }
+    } else for (const cy of even(y0, y1, spec.s)) for (const cx of even(x0, x1, spec.s)) // round fittings on an even grid
+      if (fits(id, cx - spec.r, cy - spec.r, cx + spec.r, cy + spec.r)) paint(cx - spec.r, cy - spec.r, cx + spec.r, cy + spec.r, 1, true);
+  });
+  (R.ceilMasks ||= {})[key] = mask;
+  return mask;
+}
+const ceilAt = (key, spec, wx, wy) => {
+  if (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H) return 0;
+  return ceilMask(key, spec)[Math.floor(wy * CEIL_RES) * room.W * CEIL_RES + Math.floor(wx * CEIL_RES)];
+};
+const CEIL_PENDANT = { s: 2, r: 0.14 }, CEIL_LANTERN = { s: 1.6, r: 0.18 }, CEIL_STRIP = { s: 2.5, w: 0.4, strip: true },
+  CEIL_STATION = { s: 2.5, w: 0.4, strip: true, keep: x => x > 9 && x < 37 }; // (not down the tunnels)
 function roomCeil(i, r, x, rx, ry) {
   const d = ((room.def.height || 3) - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
   ZB[i] = d; FL[i] = 0;
@@ -1176,12 +1259,12 @@ function roomCeil(i, r, x, rx, ry) {
     BG[i] = C(WHITE, 5);
     return set(i, lamp ? 'o' : rose && room.def.tier === 2 ? '+' : ' ', C(lamp ? WARM : YEL, lamp ? 15 : 9));
   }
-  if (st === 'pendant') { // warm hanging lamps on a 2m grid
-    const on = Math.hypot(fract(wx / 2) - 0.5, fract(wy / 2) - 0.5) < 0.07;
+  if (st === 'pendant') { // warm hanging lamps, about 2m apart
+    const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
     return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
   }
-  if (st === 'lantern') { // red paper lanterns on a 1.5m grid
-    const on = Math.hypot(fract(wx / 1.5) - 0.5, fract(wy / 1.5) - 0.5) < 0.12;
+  if (st === 'lantern') { // red paper lanterns, about 1.6m apart
+    const on = ceilAt('lantern', CEIL_LANTERN, wx, wy) === 1;
     if (on) BG[i] = C(RED, 6);
     return set(i, on ? 'O' : (r + x) % 5 ? ' ' : '.', on ? C(YEL, 15) : C(RED, 2));
   }
@@ -1195,7 +1278,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'glass') return glassCeil(i, wx, wy);
   if (st === 'chandelier') return casinoCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
-  const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
+  const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {

@@ -23,7 +23,7 @@ const HOURS = { VELVET: [20, 4], CASINO: [14, 2], EXCHANGE: [8, 19], BAR: [16, 3
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
   NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [0, 24], BODEGA: [0, 24], STORAGE: [0, 24], AQUARIUM: [9, 21],
-  PACHINKO: [10, 23], 'CRANE GAME': [10, 2], IZAKAYA: [17, 3], YAKITORI: [17, 2], TAKOYAKI: [11, 23], BENTO: [7, 21], CAPSULE: [0, 24], MANGA: [10, 23], DRUGSTORE: [9, 23], KISSATEN: [7, 20], GACHA: [10, 22] };
+  PACHINKO: [10, 23], 'CRANE GAME': [10, 2], IZAKAYA: [17, 3], YAKITORI: [17, 2], TAKOYAKI: [11, 23], BENTO: [7, 21], CAPSULE: [0, 24], MANGA: [10, 23], DRUGSTORE: [9, 23], KISSATEN: [7, 20], GACHA: [10, 22], GAS: [0, 24] };
 const hoursOf = word => HOURS[word] || [9, 20];
 const openAt = (sh, t) => { // is this shop open at game hour t?
   if (sh.kind === SHOP_APTS) return true;
@@ -250,48 +250,28 @@ function hangarRoof(b, across) {
 }
 // is (across, z) in the front wall's opening?
 const hangarDoor = (b, across, z) => Math.abs(across) < HANGAR_DOOR.hw && z < Math.min(HANGAR_DOOR.lintel, hangarRoof(b, across) - HANGAR_DOOR.frame);
-// The terminal: a solid landside wall with a band of windows along it and the doors in the middle; airside, big
-// windows from knee height to the name band, between steel piers, so you can watch the planes, and a door out to the
-// apron either side of the middle gate. Inside, a hall you walk through. What's in it, solid to walk into, in metres-of-ten relative to its middle
-// (u east, v south toward the planes): check-in desks along the landside wall west of the doors, the café's counter
-// east of them, columns down the middle, and rows of seats at each gate, facing the planes.
-const TERMINAL = AIRPORT_BLDG[0], TERMINAL_DOOR = 0.6, TERMINAL_WALL = 0.05;
-const TERMINAL_AIRDOORS = [-3.2, 3.2], TERMINAL_AIRDOOR = 0.35; // (out to the planes: where along it, and half their width)
-const TERMINAL_GATES = [-5.9, 0, 5.9]; // the seats at each gate (gates 1 to 3, by the stands; pulled in clear of the ends)
-const TERMINAL_IN = [
-  ...[-5.7, -4.5, -3.3, -2.1].map((u, k) => ({ u, v: -0.62, hu: 0.4, hv: 0.07, h: 0.11, kind: 'desk', n: k + 1 })),
-  { u: 3.4, v: -0.62, hu: 0.9, hv: 0.08, h: 0.11, kind: 'cafe' },
-  ...[-6, -4, -2, 2, 4, 6].map(u => ({ u, v: 0.12, hu: 0.06, hv: 0.06, h: TERMINAL.h, kind: 'column' })),
-  ...TERMINAL_GATES.flatMap(g => [0.48, 0.74].flatMap(v => [-0.45, 0.45].map(e => ({ u: g + e, v, hu: 0.38, hv: 0.05, h: 0.085, kind: 'seats' })))),
-];
-// is the long wall glass (or the open doors) at u along it, z up? (else it's solid: the landside wall, the airside
-// piers and the sill under the windows, the band along the top with the name on it, the doors' heads)
-const terminalBay = u => fract(u * 0.8 + 0.5); // (a window bay every 12.5m, 0..1 across it)
-const terminalAirDoor = u => TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR);
-function terminalGlass(landside, u, z) {
-  if (z < 0.04 || z > TERMINAL.h - 0.22) return false;
-  if (landside) {
-    if (Math.abs(u) < TERMINAL_DOOR) return z < 0.4 || z > 0.43;
-    return z > 0.5 && z < 0.86 && terminalBay(u) > 0.14;
-  }
-  if (terminalAirDoor(u)) return z < 0.36 || z > 0.39;
-  return z > 0.16 && !(z > 0.6 && z < 0.63) && terminalBay(u) > 0.12; // (a transom across them)
+// The terminal: a building like any other, walled in glass between concrete piers all the way round, its name along
+// the top. You go in by its doors, with E: the main doors in the middle of the landside, and two out on the apron, each
+// between two gates. Inside is the hall (terminal.js): check-in, the café, security, the gates, the planes out of the
+// windows. TERMINAL_DOORS: where along it each door is (u east of its middle), and which side
+const TERMINAL = AIRPORT_BLDG[0];
+const TERMINAL_DOORS = [{ u: 0, land: true }, { u: -3.2, land: false }, { u: 3.2, land: false }], TERMINAL_DOOR_W = [0.6, 0.35];
+const terminalBay = u => fract(u * 0.8 + 0.5); // (a pier every 12.5m: 0..1 across the bay between two)
+// standing at one of its doors (just outside, near enough to touch it)? Its index, or -1
+function terminalDoor(x, y) {
+  const u = rel(x - TERMINAL.x), v = rel(y - TERMINAL.y);
+  return TERMINAL_DOORS.findIndex(d => Math.abs(u - d.u) < TERMINAL_DOOR_W[d.land ? 0 : 1] && (d.land ? v > -TERMINAL.hw - 0.4 && v < -TERMINAL.hw : v < TERMINAL.hw + 0.4 && v > TERMINAL.hw));
 }
 // the airport building whose footprint (x, y) is in (grown by pad), or undefined
 const airportBldgAt = (x, y, pad = 0) => AIRPORT_BLDG.find(b => Math.abs(rel(x - b.x)) < b.hl + pad && Math.abs(rel(y - b.y)) < b.hw + pad);
 // a building, the tower, in the way at (x, y) (grown by pad)? A hangar only by its walls, and under the roof where it
-// comes down too low to stand (or taxi) under; the terminal by its walls (in at the doors) and what's in it
+// comes down too low to stand (or taxi) under; the terminal, all of it
 function airportBlocked(x, y, pad = 0) {
   if (Math.abs(rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2)) > 12 || Math.abs(rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2)) > 30) return false;
   if (Math.hypot(rel(x - TOWER.x), rel(y - TOWER.y)) < TOWER.r + pad) return true;
   const b = airportBldgAt(x, y, pad);
   if (!b) return false;
-  if (b.kind === 'terminal') {
-    const u = rel(x - b.x), v = rel(y - b.y), wall = TERMINAL_WALL + pad;
-    if (Math.abs(u) > b.hl - wall) return true; // the ends
-    if (Math.abs(v) > b.hw - wall) return !(v < 0 ? Math.abs(u) < TERMINAL_DOOR - pad : TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR - pad)); // the walls, but for the doors
-    return TERMINAL_IN.some(o => Math.abs(u - o.u) < o.hu + pad && Math.abs(v - o.v) < o.hv + pad);
-  }
+  if (b.kind === 'terminal') return true; // (you go in by its doors: terminalDoor)
   const across = Math.abs(rel(x - b.x)), along = rel(y - b.y); // (along: + toward the front)
   if (hangarRoof(b, across + pad) < 0.2) return true; // the sides, where the arch comes down to the ground
   if (along < -b.hw + HANGAR_WALL + pad) return true; // the back wall
@@ -544,6 +524,43 @@ for (const gh of GLASSHOUSES) {
     map[i] = mid || gh.gx1 - gh.gx0 === 2 && gx === gh.gx0 + 1 && gy === gh.gy0 + 1 ? gh.dome : gh.h; STY[i] = gh.sty; SHOP[i] = sh; SEED[i] = 0.5;
   }
 }
+
+// ---- gas stations: a few corner lots (the north-east one of a built-up block, streets along its north and east sides)
+// are a forecourt instead of a building: a canopy over two pump islands with a lane either side of each, the shop a low
+// building along the back. It's on the kerb side of the cars going north up the side street and west along the main
+// one: now and then one of them pulls in, fills up, and pulls back out onto the main street (gas.js).
+// Measured from the forecourt's north-west corner (x0, y0), 3 cells wide and 2 deep, the shop the row of cells behind:
+// lanes = the middle of each lane (a car fills up with its middle at slotX, its filler cap by the pump), islands = the
+// middle of each island, from ix0 to ix1, its pump at pumpX
+const GAS = { lanes: [0.42, 1.02, 1.62], islands: [0.72, 1.32], ix0: 1.1, ix1: 1.9, pumpX: 1.5, slotX: 1.37, h: 0.38 };
+const GAS_BRANDS = [['GLYPHCO', RED], ['APEX', BLUE], ['NOVA', GREEN], ['SUNSTOP', YEL], ['ROCKET', ORANGE], ['METRO', CYAN]];
+const GAS_STATIONS = [], GAS_CELL = new Uint8Array(N * N); // (1: forecourt, 2: the shop)
+{
+  const taken = new Set([...SERVICES, GRAND_HOTEL, AQUARIUM, CASINO, EXCHANGE, MUSEUM, CLUB].map(b => bi(b.bx, b.by))), cand = [];
+  for (let by = SHORE_N + 2; by < SHORE_S - 1; by++) for (let bx = 0; bx < NB; bx++) {
+    const d = DIST[bi(bx, by)];
+    if (blockKind(bx, by) || !hseg(bx, by) || !vseg(bx + 1, by) || by === EL_ROW || taken.has(bi(bx, by))) continue;
+    if (!['midtown', 'industrial', 'brownstones', 'downtown'].includes(d)) continue;
+    let built = true;
+    for (let y = 2; y <= 4; y++) for (let x = 5; x <= 7; x++) if (!map[idx(bx * 8 + x, by * 8 + y)]) built = false;
+    if (built) cand.push([hash(bx, by, 85) * (d === 'downtown' ? 2.5 : 1), bx, by]); // (fewer downtown)
+  }
+  cand.sort((p, q) => p[0] - q[0]);
+  for (const [, bx, by] of cand) {
+    if (GAS_STATIONS.length >= 6) break;
+    if (GAS_STATIONS.some(s => Math.hypot(relB(s.bx - bx), s.by - by) < 6)) continue;
+    const k = GAS_STATIONS.length, [brand, col] = GAS_BRANDS[k % GAS_BRANDS.length];
+    const sh = { kind: SHOP_LIT, word: 'GAS', neon: col, glyphs: 'o#=@', hours: hoursOf('GAS') };
+    const st = sh.gas = { k, bx, by, x0: bx * 8 + 5, y0: by * 8 + 2, brand, col, price: 3.09 + Math.round(hash(bx, by, 86) * 60) / 100 }; // (no way back to sh: shop records stay plain data)
+    for (let y = 2; y <= 4; y++) for (let x = 5; x <= 7; x++) {
+      const i = idx(bx * 8 + x, by * 8 + y), shop = y === 4;
+      map[i] = shop ? GAS.h : 0; STY[i] = shop ? 2 : 0; SHOP[i] = shop ? sh : null; SEED[i] = shop ? 0.5 : 0; GAS_CELL[i] = shop ? 2 : 1;
+    }
+    GAS_STATIONS.push(st);
+  }
+}
+const onForecourt = (x, y) => GAS_CELL[idx(Math.floor(x), Math.floor(y))] === 1;
+const gasStationAt = (x, y) => GAS_STATIONS.find(s => s.bx === (Math.floor(x / 8) & (NB - 1)) && s.by === (Math.floor(y / 8) & (NB - 1)));
 
 // Belle Époque: preserve flat roofs with public access. Other buildings have recessed courts / clipped wings
 // and a real mansard above the masonry. A lot's material and vines are stable across all its faces.

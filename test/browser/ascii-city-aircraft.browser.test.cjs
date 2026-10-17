@@ -79,7 +79,7 @@ test('an aircraft you own is kept, where you parked it, across a reload', async 
   } finally { await browser.close(); }
 });
 
-test('the terminal hall: the departures board keeps time all day and night, and the hall draws without a hitch', async () => {
+test('the terminal: in by its doors with E, the departures board keeping time inside, every part of the hall reachable, and out by the gates onto the apron', async () => {
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage(), errors = [];
@@ -98,16 +98,52 @@ test('the terminal hall: the departures board keeps time all day and night, and 
       }
       tod = 23.5; out.late = boardLines(true)[0].text;
       tod = 11.1; out.now = boardLines(true).map(l => l.status);
-      // stand in the doors and look in: the board, in letters
-      paused = true; room = null; mode = 'walk'; px = TERMINAL.x; py = TERMINAL.y - TERMINAL.hw - 0.4; a = Math.PI / 2; pitch = 0.1; render(0);
+      // at the main doors, E takes you in: the board, in letters, over the hall
+      paused = true; tod = 11.1; room = null; mode = 'walk'; px = TERMINAL.x; py = TERMINAL.y - TERMINAL.hw - 0.2; a = Math.PI / 2;
+      out.prompt = promptText(); interact(); out.inside = mode === 'room' && room.kind;
+      px = 16; py = 12.4; a = -Math.PI / 2; pitch = 0.45; render(0);
       out.seen = CH.join('');
+      // every bit of it reachable from the main doors: both doors out to the gates, the café's counter, the toilet
+      const S = 10, W = room.W * S, H = room.H * S, seen = new Uint8Array(W * H), q = [[16 * S, Math.round(12.4 * S)]];
+      out.gates = new Set(); out.cafe = false; out.loo = false;
+      while (q.length) {
+        const [x, y] = q.pop();
+        if (x < 0 || y < 0 || x >= W || y >= H || seen[y * W + x]) continue;
+        seen[y * W + x] = 2;
+        const wx = x / S, wy = y / S;
+        if (!free(wx, wy)) { seen[y * W + x] = 1; continue; }
+        if (roomAt(wx, wy - 0.45) === 'D') out.gates.add(Math.floor(wx) < 16 ? 'east' : 'west');
+        px = wx; py = wy;
+        if (nearKeeper()) out.cafe = true;
+        if (inWc(wx, wy) && looNear()) out.loo = true;
+        q.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+      }
+      out.gates = [...out.gates].sort();
+      out.pockets = [];
+      for (let cy = 0; cy < room.H; cy++) for (let cx = 0; cx < room.W; cx++) {
+        if (roomAt(cx, cy) !== '.') continue;
+        let clear = 0, reached = 0;
+        for (let sy = 1; sy < S; sy += 2) for (let sx = 1; sx < S; sx += 2) { const x = cx * S + sx, y = cy * S + sy; if (free(x / S, y / S)) { clear++; if (seen[y * W + x] === 2) reached++; } }
+        if (clear >= 6 && !reached) out.pockets.push(`${cx},${cy}`);
+      }
+      out.stock = stockFor('terminal', room.word).length;
+      // out through the west gates' door: on the apron, by it, facing the planes
+      px = 23; py = 1.6; a = -Math.PI / 2; leaveRoom();
+      out.out = [mode, terminalDoor(px, py), !airportBlocked(px, py, 0.03)];
       return out;
     });
     assert.ok(r.counts.every(n => n === 5), 'always five flights up');
     assert.ok(r.ordered, 'in time order');
     assert.ok(r.late.startsWith('06:00'), `after the last flight, the morning's first: ${r.late}`);
     assert.deepEqual(r.now.slice(0, 2), ['DEPARTED', 'BOARDING'], 'the one just gone, then the one boarding');
-    assert.ok(/D\s*E\s*P\s*A\s*R\s*T\s*U\s*R\s*E\s*S/.test(r.seen), 'DEPARTURES, through the doors');
+    assert.equal(r.prompt, 'E: into the terminal');
+    assert.equal(r.inside, 'terminal', 'E at the doors takes you in');
+    assert.ok(/D\s*E\s*P\s*A\s*R\s*T\s*U\s*R\s*E\s*S/.test(r.seen), 'DEPARTURES, up on the board');
+    assert.deepEqual(r.gates, ['east', 'west'], 'both doors out to the gates, past security');
+    assert.ok(r.cafe && r.stock > 0, 'up to the café counter, and it sells you something');
+    assert.ok(r.loo, 'and the restrooms');
+    assert.deepEqual(r.pockets, [], 'no floor you cannot get to');
+    assert.deepEqual(r.out, ['walk', 1, true], 'out by the gates: on the apron at that door');
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
