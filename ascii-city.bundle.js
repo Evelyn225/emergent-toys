@@ -11686,8 +11686,9 @@ const barCrowd = () => { const h = mod(tod - 16, 24); return h < 12 ? 0.15 + 0.8
 const BX = (x, y, hl, hw, z0, z1, shade, ca = 1, sa = 0) => ({ box: { x, y, c: ca, s: sa, hl, hw, z0, z1 }, shade });
 const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
 // ---- room furniture in 3D (metres). Each is a prop { x, y, draw(vx, vy) } drawn from where you are.
-// foot: [half length, half width, height] of what blocks you, as furniture boxes do (none: you walk over or through it)
-const ROOM_MODEL = (x, y, draw, foot) => ({ x, y, draw, ...(foot && { box: { x, y, c: 1, s: 0, hl: foot[0], hw: foot[1], z0: 0, z1: foot[2] } }) });
+// foot: [half length, half width, height] of what blocks you, as furniture boxes do (none: you walk over or through it).
+// far: a plain shade for that box, for when it's seen from outside at the city's scale (a balcony's plant from the street)
+const ROOM_MODEL = (x, y, draw, foot, far) => ({ x, y, draw, ...(foot && { box: { x, y, c: 1, s: 0, hl: foot[0], hw: foot[1], z0: 0, z1: foot[2] } }), ...(far && { far }) });
 const drum = (vx, vy, r, z0, z1, shade) => drawBox(boxAt(vx, vy, 1, 0, r, r, z0, z1), shade, rayCopperDrum);
 const drumLit = r => 0.55 + 0.45 * Math.max(0, (-HIT.u * 0.55 + HIT.v * 0.35) / r); // (lit from over your left shoulder, as everything is)
 const CHROME = (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.5); return set(i, ' ', 0), true; };
@@ -11700,7 +11701,7 @@ const POT_PLANT = (x, y, h = 1.3, seed = x * 7 + y, solid = true) => ROOM_MODEL(
     const a = hash(seed, k, 4401) * Math.PI * 2, rr = 0.13 + hash(seed, k, 4403) * 0.07, r = Math.min(rr * 0.8, 0.05 + hash(seed, k, 4402) * 0.1), z = 0.5 + (h - 0.65) * (k + 0.5) / 7, tone = 0.75 + hash(seed, k, 4404) * 0.5; // (each clump touching the stem, the bush within 0.3m of it)
     dot(vx + Math.cos(a) * r, vy + Math.sin(a) * r, z, rr, (i, t, L) => { BG[i] = C(GREEN, (1.4 + L * 0.3) * tone); return set(i, k & 1 ? '%' : '&', C(GREEN, L * 0.55 * tone)), true; });
   }
-}, solid && [0.19, 0.19, h]);
+}, solid && [0.19, 0.19, h], (i, t, L) => { BG[i] = HIT.w < 0.3 ? C(ORANGE, 2 + L * 0.3) : C(GREEN, 1.5 + L * 0.3); return set(i, HIT.w < 0.3 ? ' ' : '&', C(GREEN, L * 0.6)), true; });
 // a bar stool: a padded seat on a chrome post, a ring for your feet, a round base. seatZ: the top of the cushion
 const STOOL = (x, y, col = RED, seatZ = 0.62) => ROOM_MODEL(x, y, (vx, vy) => {
   drum(vx, vy, 0.2, 0, 0.03, CHROME);
@@ -12937,22 +12938,74 @@ const beadCurtain = (x, y, hl, ca = 1, sa = 0) => ({ ...BX(x, y, hl, 0.02, 0, 2.
   if (Math.abs(fract(s) - 0.5) > 0.22) return false;
   return set(i, fract(HIT.w * 9) < 0.55 ? 'o' : ':', C(NEON[(k + Math.floor(HIT.w * 9)) & 3], 11)), true;
 }, ca, sa), walk: true });
-// an archway filling a gap hl either side of (x, y): a round-headed opening `open` either side of the middle, its
-// sides springing up to `spring` and the arch over them, the wall round it in `col`, a keystone at the top
-const archway = (x, y, hl, ca, sa, col = BRICK, open = hl - 0.25, spring = 1.9) => ({ ...BX(x, y, hl, 0.5, 0, 3, (i, t, L) => {
-  const u = HIT.u, w = HIT.w, k = (w - spring) / (open * 0.75), hole = Math.abs(u) < open && (w < spring || (u / open) ** 2 + k * k < 1);
-  if (hole && HIT.face !== 5 && HIT.face !== 6) return false;
-  const edge = Math.abs(u) < open + 0.08 && (w < spring + 0.05 ? Math.abs(Math.abs(u) - open) < 0.08 : (u / (open + 0.08)) ** 2 + ((w - spring) / (open * 0.75 + 0.08)) ** 2 < 1);
-  BG[i] = C(edge ? STONE : col, (edge ? 2.4 : 1.4) + L * 0.15);
-  return set(i, edge && Math.abs(u) < 0.08 && w > spring + open * 0.6 ? '#' : edge ? '=' : fract(w * 4 + (Math.floor(u * 3) & 1) * 0.5) < 0.08 ? '-' : ' ', C(edge ? GRAY : WARM, L * 0.6)), true;
-}, ca, sa), walk: true });
-// a moon gate: a round opening r across, its middle zc up, in a red wall with a gold ring round it
-const moonGate = (x, y, hl, ca, sa, r = 0.95, zc = 1.15) => ({ ...BX(x, y, hl, 0.5, 0, 3, (i, t, L) => {
+// A wall with a hole through it, for drawBox: the box b (as rayBox's: u along it, v through it, w up) with b.hole cut
+// right through it along v. The hole's outline is convex: an arch (straight sides a either side of the middle up to
+// the springing s, then half an ellipse b high) or a circle (r across, its middle c up). The ray meets the wall's face,
+// or, going in through the hole, the hole's own sides, the soffit (face 7), where it comes out of the outline before
+// it's through the wall; or passes through. You can be in the hole yourself, walking through it
+function inHole(u, w, h) {
+  return h.r ? u * u + (w - h.c) ** 2 < h.r * h.r : Math.abs(u) < h.a && (w < h.s || (u / h.a) ** 2 + ((w - h.s) / h.b) ** 2 < 1);
+}
+function holeExit(lu, du, oz, rz, t0, h) { // the first t past t0 where the ray leaves the outline
+  let best = Infinity;
+  const take = t => { if (t > t0 + 1e-6 && t < best) best = t; };
+  const ellipse = (A, B, C, ok) => {
+    const qa = du * du / (A * A) + rz * rz / (B * B), qb = 2 * (lu * du / (A * A) + (oz - C) * rz / (B * B)), qc = lu * lu / (A * A) + (oz - C) ** 2 / (B * B) - 1, disc = qb * qb - 4 * qa * qc;
+    if (qa < 1e-12 || disc < 0) return;
+    for (const e of [-1, 1]) { const t = (-qb + e * Math.sqrt(disc)) / (2 * qa); if (ok(oz + rz * t)) take(t); }
+  };
+  if (h.r) ellipse(h.r, h.r, h.c, () => true);
+  else {
+    if (Math.abs(du) > 1e-12) for (const e of [-1, 1]) { const t = (e * h.a - lu) / du; if (oz + rz * t <= h.s) take(t); } // its straight sides
+    ellipse(h.a, h.b, h.s, w => w >= h.s); // and the arch over them
+  }
+  return best;
+}
+function rayHoled(ox, oy, oz, rx, ry, rz, b) {
+  const qx = ox - b.x, qy = oy - b.y, lu = qx * b.c + qy * b.s, lv = -qx * b.s + qy * b.c, du = rx * b.c + ry * b.s, dv = -rx * b.s + ry * b.c;
+  let tmin = -Infinity, tmax = Infinity, face = 0;
+  const slab = (o, d, lo, hi, fLo, fHi) => {
+    if (Math.abs(d) < 1e-12) return o >= lo && o <= hi;
+    let t1 = (lo - o) / d, t2 = (hi - o) / d, f1 = fLo, f2 = fHi;
+    if (t1 > t2) { [t1, t2] = [t2, t1]; f1 = fHi; f2 = fLo; }
+    if (t1 > tmin) { tmin = t1; face = f1; }
+    if (t2 < tmax) tmax = t2;
+    return tmin <= tmax;
+  };
+  if (!slab(lu, du, -b.hl, b.hl, 2, 1) || !slab(lv, dv, -b.hw, b.hw, 4, 3) || !slab(oz, rz, b.z0, b.z1, 6, 5) || tmax < 0.01) return -1;
+  const t0 = Math.max(tmin, 0.01), u0 = lu + du * t0, w0 = oz + rz * t0;
+  if (!inHole(u0, w0, b.hole)) { // the wall's own face (or, standing inside the wall itself, nothing)
+    if (tmin < 0.01) return -1;
+    HIT.face = face; HIT.u = u0; HIT.v = lv + dv * t0; HIT.w = w0; return t0;
+  }
+  const te = holeExit(lu, du, oz, rz, t0, b.hole);
+  if (te >= tmax) return -1; // straight through
+  HIT.face = 7; HIT.u = lu + du * te; HIT.v = lv + dv * te; HIT.w = oz + rz * te; return te;
+}
+// a wall with a hole through it filling a gap hl either side of (x, y), along (ca, sa): drawn by shade (face 7 is the
+// hole's sides), and solid either side of the hole (to `side` out from the middle) where you'd walk into it
+const holedWall = (x, y, hl, ca, sa, hole, side, shade) => [
+  { x, y, draw: (vx, vy) => drawBox({ ...boxAt(vx, vy, ca, sa, hl, 0.5, 0, 3), hole }, shade, rayHoled) },
+  ...[-1, 1].map(e => { const m = (hl + side) / 2, bx = x + ca * e * m, by = y + sa * e * m; return { x: bx, y: by, draw: () => {}, box: { x: bx, y: by, c: ca, s: sa, hl: (hl - side) / 2, hw: 0.5, z0: 0, z1: 3 } }; })];
+// an archway: a round-headed opening, `open` either side of the middle, springing at 1.9m into a half ellipse, in a
+// wall of brick; dressed stone round it and through it, a keystone at the top
+const archway = (x, y, hl, ca, sa, col = BRICK, open = hl - 0.25, spring = 1.9) => holedWall(x, y, hl, ca, sa, { a: open, s: spring, b: open * 0.75 }, open, (i, t, L) => {
+  const u = HIT.u, w = HIT.w;
+  if (HIT.face === 7) { // the soffit: voussoirs over the arch, ashlar down the sides
+    const course = w > spring ? Math.atan2(w - spring, u) / Math.PI * 9 : w * 3.3;
+    BG[i] = C(STONE, (1.8 + L * 0.12) * (w > spring ? 0.8 : 1)); return set(i, fract(course) < 0.1 ? (w > spring ? '-' : '=') : fract(HIT.v * 2) < 0.04 ? '|' : ' ', C(GRAY, L * 0.6)), true;
+  }
+  const rim = Math.abs(u) < open + 0.12 && (w < spring + 0.05 ? Math.abs(u) > open - 0.01 : (u / (open + 0.12)) ** 2 + ((w - spring) / (open * 0.75 + 0.12)) ** 2 < 1);
+  BG[i] = C(rim ? STONE : col, (rim ? 2.4 : 1.4) + L * 0.15);
+  return set(i, rim && Math.abs(u) < 0.08 && w > spring + open * 0.6 ? '#' : rim ? '=' : fract(w * 4 + (Math.floor(u * 3) & 1) * 0.5) < 0.08 ? '-' : ' ', C(rim ? GRAY : WARM, L * 0.6)), true;
+});
+// a moon gate: a round opening r across, its middle zc up, in a red wall; a gold ring round it, and through it
+const moonGate = (x, y, hl, ca, sa, r = 0.95, zc = 1.15) => holedWall(x, y, hl, ca, sa, { r, c: zc }, r * 0.72, (i, t, L) => {
+  if (HIT.face === 7) { BG[i] = C(YEL, 2.4 + L * 0.15 + Math.sin(Math.atan2(HIT.w - zc, HIT.u)) * 0.6); return set(i, fract(HIT.v * 3) < 0.08 ? '-' : ' ', C(ORANGE, 9)), true; }
   const d = Math.hypot(HIT.u, HIT.w - zc);
-  if (d < r && HIT.face !== 5 && HIT.face !== 6) return false;
   if (d < r + 0.07) { BG[i] = C(YEL, 4 + L * 0.2); return set(i, 'o', C(ORANGE, 12)), true; }
   BG[i] = C(RED, 1.2 + L * 0.1); return set(i, ' ', 0), true;
-}, ca, sa), walk: true });
+});
 // cartons on a pallet, stacked as they came off the lorry
 const cartons = (x, y, n, seed) => [BX(x, y, 0.5, 0.4, 0, 0.12, solid(BRICK, { panel: 0.2 })),
   ...Array.from({ length: n }, (_, k) => BX(x + (hash(k, seed, 1) - 0.5) * 0.12, y + (hash(k, seed, 2) - 0.5) * 0.1, 0.42, 0.34, 0.12 + k * 0.38, 0.12 + k * 0.38 + 0.37, (i, t, L) => {
@@ -13557,7 +13610,7 @@ ROOM_DEFS.tobacco = { grid: ['############', '#.......W..#', '#..........#', '#.
   props: r => {
     const p = [...glassCase(9.2, 6.6, 1.1, 0.32, 1.05, caseGoods('J?P7', [BRICK, WARM, GRAY, YEL], false, 94), BRICK, 0, 1), standing(10.1, 6.6, BRICK),
       humidor(2.3, 6.3, 0.95, 1.05), { x: 2.3, y: 7.45, draw: (vx, vy) => hallSign(vx, vy, 0.45, 2.45, 2.62, 3, 'HUMIDOR', C(BRICK, 2), C(YEL, 15)) },
-      archway(5.5, 4.5, 1.5, 1, 0, BRICK), // through to the lounge
+      ...archway(5.5, 4.5, 1.5, 1, 0, BRICK), // through to the lounge
       ...armchair(2.4, 2, 1, 0, BRICK), ...armchair(4.8, 2, -1, 0, BRICK), ...armchair(6.9, 1.7, 0, 1, GREEN), ...tableBox(3.6, 2, 0.25, 0.25),
       ROOM_MODEL(3.6, 2, (vx, vy) => drum(vx, vy, 0.08, 0.78, 0.81, (i, t, L) => { BG[i] = C(GRAY, 2.5); return set(i, HIT.face === 5 ? 'o' : '=', C(GRAY, 8)), true; })), // the ashtray
       smoke(3.6, 2, 0.82), ceilingFan(4.2, 2.1, 1.6), lampStand(1.5, 1.4),
@@ -13637,7 +13690,7 @@ ROOM_DEFS.herbs = { grid: ['###############', '#........#....#', '#........#....
       jar(3.4, 2.05, 1.0, RED), jar(3.75, 2.15, 1.0, YEL), jar(6.4, 2.1, 1.0, BRICK), brassScale(5.7, 2.1, 1.0),
       ...glassCase(1.75, 4.2, 0.7, 0.3, 1.0, caseGoods('Yy&', [WARM, YEL, BRICK], false, 95), BRICK, 0, 1),
       sack(1.7, 5.75, BRICK, '@'), sack(1.7, 6.4, RED, 'o'), sack(2.35, 6.45, YEL, '*'), sack(3.0, 6.45, GREEN, '%'),
-      moonGate(9.5, 4, 1, 0, 1), // through to the tea room
+      ...moonGate(9.5, 4, 1, 0, 1), // through to the tea room
       BX(11.8, 3.5, 0.45, 0.35, 0.28, 0.36, solid(BRICK, { top: '=' })), BX(11.8, 3.5, 0.3, 0.2, 0, 0.28, solid(BRICK)), // its low table
       ROOM_MODEL(11.8, 3.5, (vx, vy) => { // a tea set: the pot, four cups
         drum(vx, vy, 0.07, 0.36, 0.48, (i, t, L) => { BG[i] = C(WHITE, 3.5 * drumLit(0.07)); return set(i, HIT.face === 5 ? 'o' : ' ', C(BLUE, 8)), true; });
@@ -14508,11 +14561,12 @@ function drawHomeBalconies() {
     for (const y of [b.y0,b.y1]) drawBox(boxAt(rel(b.x0 + .3 - px),rel(y - py),1,0,.3,.01,b.z,b.z + .11),rail);
     for (const o of model) {
       const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
-      if (o.box) {
+      const shade = o.shade || o.far; // (a model drawn in metres has a plain stand-in for out here, or isn't drawn)
+      if (o.box && shade) {
         const q = o.box;
         drawBox(boxAt(rel(x - px),rel(y - py),q.c,q.s,q.hl / 10,q.hw / 10,b.z + q.z0 / 10,b.z + q.z1 / 10),(i,t,L) => {
           HIT.u *= 10; HIT.v *= 10; HIT.w = (HIT.w - b.z) * 10;
-          return o.shade(i,t * 10,L);
+          return shade(i,t * 10,L);
         });
       } else if (o.art) drawArt(rel(x - px),rel(y - py),b.z + (o.z || 0) / 10,o.w / 10,o.h / 10,typeof o.art === 'function' ? o.art() : o.art,o.col);
     }
