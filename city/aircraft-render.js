@@ -72,7 +72,7 @@ function drawPlaneCraft(a, T_, vx, vy) {
   fus(at(o, F, L2 - T_.r, 0, 0), at(o, F, -L2 * 0.35, 0, 0), T_.r);
   fus(at(o, F, -L2 * 0.35, 0, 0), at(o, F, -L2 + T_.r * 0.6, 0, T_.r * 0.4), T_.r * 0.62);
   // wings: the jets' swept back in two pieces each side, the Skylark's straight and up on top of the cabin
-  const sweep = T_.engines ? T_.span * 0.12 : 0, chord = T_.len * (T_.engines ? 0.13 : 0.12), wz = T_.prop ? T_.r * 0.9 : -T_.r * 0.4;
+  const { sweep, chord, wz } = wingGeom(T_);
   for (const e of [-1, 1]) {
     craftPanel(o, F, -T_.len * 0.02, e * T_.span * 0.14, wz, chord, T_.span * 0.14, 0.012, body, burnt);
     craftPanel(o, F, -T_.len * 0.02 - sweep, e * T_.span * 0.37, wz + (T_.prop ? 0 : 0.02), chord * 0.75, T_.span * 0.13, 0.01, body, burnt);

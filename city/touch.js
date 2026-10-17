@@ -2,6 +2,7 @@
 // run), dragging anywhere on the right looks round. Buttons are words, not keys, and only the ones that do something
 // right here show: the big one is whatever E would do (Talk, Enter, Get in...), smaller ones pop up beside it when
 // they apply (Hail taxi, Pick pocket, a taxi's destinations), and everything else lives in the More sheet up top.
+// At the controls of an aircraft the left stick is its control stick, and Power + / Power - work the throttle.
 // Everything goes through the same key handlers as the keyboard (synthetic keydown / keyup), so nothing in the game
 // knows the difference. Menus are plain HTML: tap their rows.
 const TOUCH_CSS = `
@@ -41,7 +42,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^a private dance/, 'VIP dance'], [/^tip the dancer/, 'Tip'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^rent the/, 'Rent'], [/^buy the/, 'Buy'], [/^take the/, 'Take out'], [/^tie up/, 'Tie up'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^a private dance/, 'VIP dance'], [/^tip the dancer/, 'Tip'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^rent the/, 'Rent'], [/^buy the/, 'Buy'], [/^take the/, 'Take out'], [/^tie up/, 'Tie up'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed'], [/^bail out/, 'Bail out'], [/^steal/, 'Steal']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
@@ -78,6 +79,10 @@ function touchActions() {
     return out;
   }
   if (mode === 'drive') return [['Camera', 'KeyV', 'pop'], ['Get out', 'KeyE', 'main']];
+  if (mode === 'air') {
+    const heli = PLANE_TYPES[pilot.type].heli; // (Power - shut: the brakes, then backing up)
+    return [['Camera', 'KeyV', 'pop'], [heli ? 'Back' : 'Power -', 'KeyS', 'pop'], [heli ? 'Forward' : 'Power +', 'KeyW', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
+  }
   if (mode === 'sea') return [['Camera', 'KeyV', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
@@ -166,12 +171,14 @@ function showTouch() {
 }
 
 // the stick: wherever the left thumb lands, it measures from there. Its direction holds W / A / S / D down, and
-// pushed right out to the rim, Shift too
+// pushed right out to the rim, Shift too. Flying, it's the control stick instead (flight.js), as far as it's pushed
 const STICK_R = 50, stickKeys = new Set();
 let stickId = null, stickX = 0, stickY = 0, lookId = null, lookX = 0, lookY = 0;
 function setStick(dx, dy) {
-  const m = Math.hypot(dx, dy) / STICK_R, want = new Set();
-  if (m > 0.3) {
+  const m = Math.hypot(dx, dy) / STICK_R, want = new Set(), fly = mode === 'air' && !freecam;
+  const dead = q => Math.sign(q) * clamp((Math.abs(q) / STICK_R - 0.12) / 0.88, 0, 1); // (a little slack in the middle)
+  airStick[0] = fly ? dead(dx) : 0; airStick[1] = fly ? dead(dy) * (settings.invertY ? -1 : 1) : 0;
+  if (m > 0.3 && !fly) {
     if (dy < -0.38 * STICK_R) want.add('KeyW'); if (dy > 0.38 * STICK_R) want.add('KeyS');
     if (dx < -0.38 * STICK_R) want.add('KeyA'); if (dx > 0.38 * STICK_R) want.add('KeyD');
     if (m > 0.95 && !game) want.add('ShiftLeft');

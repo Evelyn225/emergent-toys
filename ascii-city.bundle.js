@@ -1155,11 +1155,13 @@ function hangarRoof(b, across) {
 }
 // is (across, z) in the front wall's opening?
 const hangarDoor = (b, across, z) => Math.abs(across) < HANGAR_DOOR.hw && z < Math.min(HANGAR_DOOR.lintel, hangarRoof(b, across) - HANGAR_DOOR.frame);
-// The terminal: glass both long sides (frames, a transom and the name band solid), doors in the middle of the landside
-// wall, and inside, a hall you walk through. What's in it, solid to walk into, in metres-of-ten relative to its middle
+// The terminal: a solid landside wall with a band of windows along it and the doors in the middle; airside, big
+// windows from knee height to the name band, between steel piers, so you can watch the planes, and a door out to the
+// apron either side of the middle gate. Inside, a hall you walk through. What's in it, solid to walk into, in metres-of-ten relative to its middle
 // (u east, v south toward the planes): check-in desks along the landside wall west of the doors, the café's counter
 // east of them, columns down the middle, and rows of seats at each gate, facing the planes.
 const TERMINAL = AIRPORT_BLDG[0], TERMINAL_DOOR = 0.6, TERMINAL_WALL = 0.05;
+const TERMINAL_AIRDOORS = [-3.2, 3.2], TERMINAL_AIRDOOR = 0.35; // (out to the planes: where along it, and half their width)
 const TERMINAL_GATES = [-5.9, 0, 5.9]; // the seats at each gate (gates 1 to 3, by the stands; pulled in clear of the ends)
 const TERMINAL_IN = [
   ...[-5.7, -4.5, -3.3, -2.1].map((u, k) => ({ u, v: -0.62, hu: 0.4, hv: 0.07, h: 0.11, kind: 'desk', n: k + 1 })),
@@ -1167,12 +1169,18 @@ const TERMINAL_IN = [
   ...[-6, -4, -2, 2, 4, 6].map(u => ({ u, v: 0.12, hu: 0.06, hv: 0.06, h: TERMINAL.h, kind: 'column' })),
   ...TERMINAL_GATES.flatMap(g => [0.48, 0.74].flatMap(v => [-0.45, 0.45].map(e => ({ u: g + e, v, hu: 0.38, hv: 0.05, h: 0.085, kind: 'seats' })))),
 ];
-// is the long wall glass (or the open doors) at u along it, z up? (else its frame: the sill, the mullions, the band
-// along the top with the name on it, and the doors' head)
+// is the long wall glass (or the open doors) at u along it, z up? (else it's solid: the landside wall, the airside
+// piers and the sill under the windows, the band along the top with the name on it, the doors' heads)
+const terminalBay = u => fract(u * 0.8 + 0.5); // (a window bay every 12.5m, 0..1 across it)
+const terminalAirDoor = u => TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR);
 function terminalGlass(landside, u, z) {
   if (z < 0.04 || z > TERMINAL.h - 0.22) return false;
-  if (landside && Math.abs(u) < TERMINAL_DOOR) return z < 0.4 || z > 0.43;
-  return fract(u * 1.6) >= 0.08;
+  if (landside) {
+    if (Math.abs(u) < TERMINAL_DOOR) return z < 0.4 || z > 0.43;
+    return z > 0.5 && z < 0.86 && terminalBay(u) > 0.14;
+  }
+  if (terminalAirDoor(u)) return z < 0.36 || z > 0.39;
+  return z > 0.16 && !(z > 0.6 && z < 0.63) && terminalBay(u) > 0.12; // (a transom across them)
 }
 // the airport building whose footprint (x, y) is in (grown by pad), or undefined
 const airportBldgAt = (x, y, pad = 0) => AIRPORT_BLDG.find(b => Math.abs(rel(x - b.x)) < b.hl + pad && Math.abs(rel(y - b.y)) < b.hw + pad);
@@ -1186,7 +1194,7 @@ function airportBlocked(x, y, pad = 0) {
   if (b.kind === 'terminal') {
     const u = rel(x - b.x), v = rel(y - b.y), wall = TERMINAL_WALL + pad;
     if (Math.abs(u) > b.hl - wall) return true; // the ends
-    if (Math.abs(v) > b.hw - wall) return !(v < 0 && Math.abs(u) < TERMINAL_DOOR - pad); // the glass, but for the doors
+    if (Math.abs(v) > b.hw - wall) return !(v < 0 ? Math.abs(u) < TERMINAL_DOOR - pad : TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR - pad)); // the walls, but for the doors
     return TERMINAL_IN.some(o => Math.abs(u - o.u) < o.hu + pad && Math.abs(v - o.v) < o.hv + pad);
   }
   const across = Math.abs(rel(x - b.x)), along = rel(y - b.y); // (along: + toward the front)
@@ -3289,12 +3297,14 @@ function repairCar(c) { c.dmg = 0; c.fireT = null; c.wrecked = false; c.boomT = 
 // flight.js flies the one you're in). Speeds in cells a second (1 = 36 km/h), heights in cells (1 = 10m).
 // The airliners belong to the airport: they sit at the gates, and every few minutes one pushes back, taxis out, rolls
 // down the runway and climbs away east over the bay, or one comes in from the west, lands, and taxis to an empty gate.
-// The light planes, the jet and the helicopters are there to be flown: bought at the terminal, or just taken.
+// The light planes, the jet and the helicopters are there to be flown: bought at the terminal, or just taken. An
+// airliner parked at its gate can be taken too (not bought): big, slow, and slow to answer the controls.
 const PLANE_TYPES = {
   // len: nose to tail; span: wingtip to wingtip; r: the fuselage's radius; tail: the fin's height; vr: rotation speed
   // (lift-off); cruise / top: in the air; climb: how hard it can climb (cells a second at full throttle); ceil: as high as
-  // it'll go (the air's too thin above: well clear of the tallest tower, 17); price: to buy
-  airliner: { name: 'airliner', len: 3.4, span: 3.2, r: 0.2, tail: 0.85, body: WHITE, stripe: BLUE, engines: 'wing', vr: 7.5, cruise: 9 },
+  // it'll go (the air's too thin above: well clear of the tallest tower, 17); price: to buy; handling: how quickly it
+// answers the stick, the throttle and the nose wheel (1, or less for something heavy)
+  airliner: { name: 'airliner', len: 3.4, span: 3.2, r: 0.2, tail: 0.85, body: WHITE, stripe: BLUE, engines: 'wing', vr: 5, cruise: 7, top: 7.5, ceil: 40, handling: 0.35 },
   prop: { name: 'Skylark', len: 0.8, span: 1.1, r: 0.065, tail: 0.24, body: WHITE, stripe: RED, prop: true, vr: 2.4, cruise: 4, top: 5.6, climb: 1.1, ceil: 36, price: 9000 },
   jet: { name: 'Comet', len: 1.45, span: 1.15, r: 0.09, tail: 0.36, body: GRAY, stripe: CYAN, engines: 'tail', vr: 4, cruise: 7, top: 10, climb: 2.2, ceil: 50, price: 30000 },
   heli: { name: 'Hornet', heli: true, len: 0.45, rotor: 0.5, body: RED, stripe: WHITE, top: 4.2, climb: 1.4, ceil: 30, price: 14000 },
@@ -3319,14 +3329,15 @@ for (const h of HELIPADS) addAircraft('heli', h.x, h.y, 0, { forSale: true });
 // ---- the airliners' day: a timetable that's a little irregular, one movement at a time on the runway
 const AIR_GAP = [100, 220]; // seconds between movements
 let airNext = 40; // (the first one soon after you arrive, so there's something to see)
-const gateFree = k => !aircraft.some(a => a.type === 'airliner' && a.gate === k);
+const airline = a => a.type === 'airliner' && !a.stolen; // (the airline's own: not one you've taken)
+const gateFree = k => !aircraft.some(a => a.type === 'airliner' && (a.gate === k || a.stolen && Math.hypot(rel(a.x - STANDS_X[k]), rel(a.y - STAND_Y)) < 2));
 function stepAirTraffic(dt, rnd = Math.random) {
-  const moving = aircraft.find(a => a.type === 'airliner' && a.state !== 'parked');
+  const moving = aircraft.find(a => airline(a) && a.state !== 'parked');
   if (moving) stepAirliner(moving, dt);
   if (moving || (airNext -= dt) > 0) return;
-  if (aircraft.some(a => a.type !== 'airliner' && !a.ditched && onRunway(a.x, a.y) && a.z < 1)) { airNext = 15; return; } // (something's on the runway: the tower holds them)
+  if (aircraft.some(a => !airline(a) && !a.ditched && onRunway(a.x, a.y) && a.z < 1)) { airNext = 15; return; } // (something's on the runway: the tower holds them)
   airNext = AIR_GAP[0] + rnd() * (AIR_GAP[1] - AIR_GAP[0]);
-  const parked = aircraft.filter(a => a.type === 'airliner' && a.state === 'parked');
+  const parked = aircraft.filter(a => airline(a) && a.state === 'parked');
   const free = [0, 1, 2].filter(gateFree);
   if (parked.length && (!free.length || rnd() < 0.5)) departAirliner(parked[Math.floor(rnd() * parked.length)]);
   else if (free.length) arriveAirliner(free[Math.floor(rnd() * free.length)]);
@@ -3387,13 +3398,28 @@ function stepAirliner(a, dt) {
     }
   }
 }
-// what you'd walk into: a parked (or taxiing) aircraft's fuselage and its wheels; under the wings you can walk
+// a plane's wings, in its own frame (aircraft-render.js draws them from this too): how far the outer panels are swept
+// back, the inner panels' half chord, and how high they sit off the fuselage's axis
+const wingGeom = T_ => ({ sweep: T_.engines ? T_.span * 0.12 : 0, chord: T_.len * (T_.engines ? 0.13 : 0.12), wz: T_.prop ? T_.r * 0.9 : -T_.r * 0.4 });
+// its footprint seen from above, as rectangles [along, across (from the middle line, either side), half along, half
+// across]: the fuselage, both wing panels, the tailplane, the engines. A helicopter: its cabin and the tail boom
+function craftParts(T_) {
+  if (T_.parts) return T_.parts;
+  if (T_.heli) return T_.parts = [[0.02, 0, 0.22, 0.09], [-0.33, 0, 0.19, 0.03]];
+  const { sweep, chord } = wingGeom(T_), L2 = T_.len / 2;
+  T_.parts = [[0, 0, L2, T_.r], [-T_.len * 0.02, T_.span * 0.14, chord, T_.span * 0.14], [-T_.len * 0.02 - sweep, T_.span * 0.37, chord * 0.75, T_.span * 0.13],
+    [-L2 + chord * 0.5, 0, chord * 0.55, T_.span * 0.17]];
+  if (T_.engines === 'wing') T_.parts.push([T_.len * 0.03, T_.span * 0.2, T_.len * 0.07 + T_.r * 0.38, T_.r * 0.38]);
+  if (T_.engines === 'tail') T_.parts.push([-L2 * 0.625, T_.r * 1.6, L2 * 0.175 + T_.r * 0.5, T_.r * 0.5]);
+  return T_.parts;
+}
+// what you'd walk into: a parked (or taxiing) aircraft, wings and tail and all
 function aircraftAt(x, y, pad = 0) {
   for (const a of aircraft) {
     if (a.z > 0.3 || Math.abs(rel(a.x - x)) > 2.5 || Math.abs(rel(a.y - y)) > 2.5) continue;
     const T_ = PLANE_TYPES[a.type], fx = Math.cos(a.yaw), fy = Math.sin(a.yaw), qx = rel(x - a.x), qy = rel(y - a.y);
-    const along = qx * fx + qy * fy, across = -qx * fy + qy * fx;
-    if (T_.heli ? Math.abs(along) < 0.24 + pad && Math.abs(across) < 0.09 + pad : Math.abs(along) < T_.len / 2 + pad && Math.abs(across) < T_.r + pad) return a;
+    const along = qx * fx + qy * fy, across = Math.abs(-qx * fy + qy * fx);
+    if (craftParts(T_).some(([ca, cb, ha, hb]) => Math.abs(along - ca) < ha + pad && Math.abs(across - cb) < hb + pad)) return a;
   }
   return null;
 }
@@ -3418,24 +3444,27 @@ function flyStep(a, inp, dt) {
   return T_.heli ? heliStep(a, T_, inp, dt, ev) : planeStep(a, T_, inp, dt, ev);
 }
 function planeStep(a, T_, inp, dt, ev) {
-  a.throttle = clamp((a.throttle || 0) + inp.throttle * 0.7 * dt, 0, 1);
+  const hd = T_.handling || 1;
+  a.throttle = clamp((a.throttle || 0) + inp.throttle * 0.7 * hd * dt, 0, 1);
   const stall = stallSpeed(T_);
-  if (a.ground) { // on the wheels: steer the nose wheel, brake with the throttle shut, rotate at speed
+  if (a.ground) { // on the wheels: steer the nose wheel, brake with the throttle shut (stopped, it backs up), rotate at speed
     a.v += (a.throttle * T_.top - a.v) * 0.12 * dt;
-    if (inp.throttle < 0 && a.throttle === 0) a.v = Math.max(0, a.v - 1.4 * dt); // (the brakes)
-    a.yaw += inp.turn * 0.9 * clamp(a.v / 0.8, 0, 1) * (a.v < 2 ? 1 : 0.3) * dt;
+    if (inp.throttle < 0 && a.throttle === 0) a.v = a.v > 0.02 ? Math.max(0, a.v - 1.4 * dt) : Math.max(-0.35, a.v - 0.5 * dt); // (the brakes; then reverse)
+    else if (a.v < 0) a.v = Math.min(0, a.v + 1 * dt);
+    a.yaw += inp.turn * 0.9 * hd * clamp(a.v / 0.8, -1, 1) * (a.v < 2 ? 1 : 0.3) * dt;
     a.roll = 0; a.pitch = Math.max(0, a.pitch - dt * 0.5);
     if (a.v > T_.vr && inp.pitch > 0.2) { a.ground = false; a.pitch = 0.1; ev.push('takeoff'); }
   } else {
     const pull = a.throttle * T_.top - a.v;
     a.v += (pull * (pull > 0 ? 0.25 : 0.1) - G * Math.sin(a.pitch) * 1.2) * dt; // (diving speeds you up, climbing slows you; with the power off it glides)
-    a.roll += (inp.turn * 0.75 - a.roll) * Math.min(1, 2.5 * dt); // bank into the turn, level out when you let go
-    a.yaw += a.roll * 0.9 * dt;
-    if (inp.pitch) a.pitch += inp.pitch * 0.7 * dt; else a.pitch -= a.pitch * 0.4 * dt;
+    const heavy = 0.5 + 0.5 * hd; // (a big one banks less, and turns less for it)
+    a.roll += (inp.turn * 0.75 * heavy - a.roll) * Math.min(1, 2.5 * hd * dt); // bank into the turn, level out when you let go
+    a.yaw += a.roll * 0.9 * heavy * dt;
+    if (inp.pitch) a.pitch += inp.pitch * 0.7 * hd * dt; else a.pitch -= a.pitch * 0.4 * dt;
     if (a.v < stall) { a.pitch -= (stall - a.v) * 0.7 * dt; if (!a.stalled) ev.push('stall'); a.stalled = true; } else a.stalled = false; // too slow: the nose drops
     a.pitch = clamp(a.pitch, -0.9, 0.55);
   }
-  a.v = clamp(a.v, 0, T_.top * 1.3);
+  a.v = clamp(a.v, a.ground ? -0.35 : 0, T_.top * 1.3);
   // short of flying speed the wings hold you up less: throttle back and it settles gently (that's how you land);
   // below the stall it drops
   const level = T_.vr * 1.2, sink = a.ground ? 0 : Math.min(1.3, Math.max(0, level - Math.max(a.v, stall)) * 0.5 + Math.max(0, stall - a.v) * 0.9);
@@ -3458,14 +3487,16 @@ function heliStep(a, T_, inp, dt, ev) {
   a.roll += (inp.turn * 0.12 * (a.ground ? 0 : 1) - a.roll) * Math.min(1, 3 * dt);
   return moveCraft(a, T_, a.hvx, a.hvy, dt, ev);
 }
+// what an aircraft can't go into: the airport's walls, and the terminal at all (it fits through the doors; it mustn't)
+const craftBlocked = (x, y) => airportBlocked(x, y) || airportBldgAt(x, y)?.kind === 'terminal';
 // move it, and what it meets: the ground (a landing, or not), a building (on top: a landing; its side: a crash), the water
 function moveCraft(a, T_, vx, vy, dt, ev) {
   if (a.vz > 0 && T_.ceil) a.vz *= clamp((T_.ceil - a.z) / 2, 0, 1); // near its ceiling the climb fades away to nothing
   const nx = mod(a.x + vx * dt, N), ny = mod(a.y + vy * dt, N), h = builtHeight(nx, ny, a.z), speed = Math.hypot(vx, vy);
   let nz = a.z + a.vz * dt;
   if (a.ground) { // rolling or sitting: into a wall, a building, another aircraft, the water?
-    const nose = T_.heli ? 0.25 : T_.len / 2, fx = nx + Math.cos(a.yaw) * nose * Math.sign(speed), fy = ny + Math.sin(a.yaw) * nose * Math.sign(speed);
-    if (speed > 0.02 && (builtHeight(fx, fy, a.z) > a.z + 0.2 || airportBlocked(fx, fy) || aircraftAt(fx, fy) && aircraftAt(fx, fy) !== a)) {
+    const nose = (T_.heli ? 0.25 : T_.len / 2) * (!T_.heli && a.v < 0 ? -1 : 1), fx = nx + Math.cos(a.yaw) * nose, fy = ny + Math.sin(a.yaw) * nose; // (backing up: its tail)
+    if (speed > 0.02 && (builtHeight(fx, fy, a.z) > a.z + 0.2 || craftBlocked(fx, fy) || aircraftAt(fx, fy) && aircraftAt(fx, fy) !== a)) {
       if (speed > 1.2) return crashCraft(a, speed, ev);
       a.v = 0; a.hvx = a.hvy = 0; ev.push('bump'); return ev;
     }
@@ -3474,7 +3505,7 @@ function moveCraft(a, T_, vx, vy, dt, ev) {
   }
   const top = builtHeight(nx, ny); // (what's there, all of it: in a hangar, its roof overhead)
   if (h < top && nz > top - 0.05) { nz = top - 0.05; a.vz = Math.min(0, a.vz); } // inside a hangar: the roof stops you
-  if (airportBlocked(nx, ny) && a.z < top - 0.1) return crashCraft(a, Math.hypot(speed, a.vz), ev); // into a wall, from the side
+  if (craftBlocked(nx, ny) && a.z < top - 0.1) return crashCraft(a, Math.hypot(speed, a.vz), ev); // into a wall, from the side
   if (nz > h) { a.x = nx; a.y = ny; a.z = nz; return ev; }
   // down to something: water, the side of a building, or a surface to land on
   if (overWater(nx, ny) && h === 0) return ditchCraft(a, ev);
@@ -3519,6 +3550,10 @@ function returnHome(a) {
 // what wants putting back, given where you are and what you're flying: returns the ones it put back
 function stepFleet(px_, py_, flying) {
   const back = [];
+  for (let k = aircraft.length - 1; k >= 0; k--) { // a stolen airliner left somewhere: once you're well away, the airline has it towed off
+    const a = aircraft[k];
+    if (a.type === 'airliner' && a.stolen && a !== flying && a.state !== 'abandoned' && !(a.fireT != null && !a.wrecked) && Math.hypot(rel(a.x - px_), rel(a.y - py_)) > AIR_AWAY) aircraft.splice(k, 1);
+  }
   for (const a of aircraft) {
     if (!a.home || a === flying || a.state === 'abandoned' || a.fireT != null && !a.wrecked) continue; // (let a fire burn out first)
     const lost = a.wrecked || a.ditched, astray = !a.owned && (Math.abs(rel(a.x - a.home.x)) > 0.05 || Math.abs(rel(a.y - a.home.y)) > 0.05 || a.dmg > 0);
@@ -16140,6 +16175,7 @@ function render(dt) {
   if (freecam) freecamHud();
   else {
     if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
+    wreckOverlay(); // (going in, in an aircraft: flight.js)
     hud();
   }
 }
@@ -16550,10 +16586,10 @@ function hud() {
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
-  const help = TOUCH ? settings.help ? 'left thumb: move | drag: look' : ''
+  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : 'left thumb: move | drag: look' : ''
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
-    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
+    : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them
   const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
@@ -16835,7 +16871,7 @@ function interact() {
   if (mode === 'drive' && sprayPrompt()) return startRespray(); // pulled up at a garage's door (or told why not)
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
-  if (mode === 'air') { if (pilot.ground && pilot.v < 0.3) leaveAircraft(); else if (pilot.ground) say('Slow down first.', 2); else bailOut(); return; }
+  if (mode === 'air') { if (wreckCam) return; if (pilot.ground && pilot.v < 0.3) leaveAircraft(); else if (pilot.ground) say('Slow down first.', 2); else bailOut(); return; }
   const dr = droppedHere();
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
@@ -17515,9 +17551,9 @@ function airportFloor(i, r, x, wx, wy, L) { // [ch, base, k] for the floor cell;
     return [(r + x) % 4 ? ' ' : '.', GRAY, 0.9];
   }
   const bld = airportBldgAt(wx, wy);
-  if (bld && bld.kind === 'terminal') { // the hall: polished terrazzo under the lights, a mat in the doors, carpet at the gates
+  if (bld && bld.kind === 'terminal') { // the hall: polished terrazzo under the lights, mats in the doors, carpet at the gates
     const u = X - bld.x, v = Y - bld.y, f = Math.max(0, 1 - Math.hypot(rel(wx - px), rel(wy - py)) / vis * 1.5);
-    const mat = v < -0.75 && Math.abs(u) < TERMINAL_DOOR, carpet = v > 0.38 && TERMINAL_GATES.some(g => Math.abs(u - g) < 1);
+    const mat = v < -0.75 && Math.abs(u) < TERMINAL_DOOR || v > 0.75 && TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR), carpet = v > 0.38 && TERMINAL_GATES.some(g => Math.abs(u - g) < 1);
     const joint = fract(u * 4) < 0.05 || fract(v * 4) < 0.05, fleck = hash(Math.floor(wx * 30), Math.floor(wy * 30), 343) > 0.93;
     BG[i] = mat ? C(BRICK, 1 + f * 1.5) : carpet ? C(BLUE, 1 + f * 1.4) : C(STONE, 2 + f * 3);
     set(i, mat ? '=' : carpet ? ((r + x) % 3 ? ' ' : '.') : joint ? '+' : fleck ? '.' : ' ', C(mat ? BRICK : carpet ? BLUE : STONE, 4 + f * 4));
@@ -17655,8 +17691,12 @@ function drawTerminal(b, vx, vy, lit) {
       const ch = signLine(NAME, q * n, (b.h - 0.11 - w) / 0.2, i, b.h - 0.11, midDepth(vx, vy), t, 2 * b.hl / n, 0.16, farDepth(vx, vy, b.hl), side, 0);
       return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 13 + lit * 2)), true;
     }
-    BG[i] = C(GRAY, f < 10 ? 2.5 + L * 0.3 : 2 + IN * 0.1); // the frames round the glass
-    return set(i, fract(u * 1.6) < 0.08 && w > 0.04 ? '|' : '=', C(GRAY, 6)), true;
+    const landside = f === 4 || f === 14, door = landside ? Math.abs(u) < TERMINAL_DOOR + 0.06 : TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR + 0.06);
+    if (door && w < 0.47) { BG[i] = C(YEL, f < 10 ? 3 + L * 0.3 : 2.5 + IN * 0.1); return set(i, ' ', 0), true; } // the doors' frames
+    const bay = terminalBay(u), frame = (landside ? w > 0.46 && w < 0.9 : w > 0.12) && (bay < (landside ? 0.18 : 0.16) || bay > 0.97); // (round the windows: steel)
+    if (frame || !landside) { BG[i] = C(GRAY, f < 10 ? 2.5 + L * 0.3 : 2 + IN * 0.1); return set(i, frame && bay < 0.1 ? '|' : '=', C(GRAY, 6)), true; }
+    BG[i] = C(STONE, f < 10 ? (1.8 + L * 0.3) * shadeFace(f) : 1.8 + IN * 0.12); // the landside wall: concrete panels
+    return set(i, fract(u * 2.4) < 0.04 || fract(w * 4) < 0.05 ? '.' : ' ', C(GRAY, 5)), true;
   }, (ox, oy, oz, rx, ry, rz) => rayTerminal(ox, oy, oz, rx, ry, rz, { x: vx, y: vy, hl: b.hl, hw: b.hw, h: b.h }));
   if (Math.hypot(vx, vy) < 22) drawTerminalHall(b, vx, vy);
 }
@@ -17861,7 +17901,7 @@ function drawPlaneCraft(a, T_, vx, vy) {
   fus(at(o, F, L2 - T_.r, 0, 0), at(o, F, -L2 * 0.35, 0, 0), T_.r);
   fus(at(o, F, -L2 * 0.35, 0, 0), at(o, F, -L2 + T_.r * 0.6, 0, T_.r * 0.4), T_.r * 0.62);
   // wings: the jets' swept back in two pieces each side, the Skylark's straight and up on top of the cabin
-  const sweep = T_.engines ? T_.span * 0.12 : 0, chord = T_.len * (T_.engines ? 0.13 : 0.12), wz = T_.prop ? T_.r * 0.9 : -T_.r * 0.4;
+  const { sweep, chord, wz } = wingGeom(T_);
   for (const e of [-1, 1]) {
     craftPanel(o, F, -T_.len * 0.02, e * T_.span * 0.14, wz, chord, T_.span * 0.14, 0.012, body, burnt);
     craftPanel(o, F, -T_.len * 0.02 - sweep, e * T_.span * 0.37, wz + (T_.prop ? 0 : 0.02), chord * 0.75, T_.span * 0.13, 0.01, body, burnt);
@@ -17930,11 +17970,16 @@ function drawHeliCraft(a, T_, vx, vy) {
 // parked, E gets you in. A plane: W/S throttle (shut, S brakes on the ground), A/D or the mouse across to bank and
 // turn, the up/down arrows or the mouse up and down for the nose; past lift-off speed, pull up. A helicopter: W/S
 // forward and back, A/D or the mouse to turn, R/F (or up/down) climb and descend. V: behind it, or in the cockpit.
-// On the ground and stopped, E gets you out. Crash and you're thrown clear (hurt, or the hospital); ditch in the bay
-// and a boat fishes you out; whatever's left burns and goes up, as a car does.
+// On a phone the left thumb's stick is the control stick (up to climb, across to bank or turn), and buttons work the
+// throttle. On the ground with the throttle shut, S (or Power -) brakes, and once stopped backs it up.
+// On the ground and stopped, E gets you out. Crash and you watch it happen, shaken about, the world going white and
+// then dark, and you come round beside the wreck (hurt, or in the hospital); ditch in the bay and you watch it settle
+// and go under, then swim for the nearest dry land. Whatever's left burns and goes up, as a car does.
 let pilot = null, airEye = 0, airCamYaw = 0;
 const airMouse = [0, 0]; // the mouse's say on the controls: it springs back
-const flyable = c => !!PLANE_TYPES[c.type].price;
+const airStick = [0, 0]; // the touch stick's (touch.js): held where the thumb has it, back to the middle when it lets go
+const airInput = k => clamp(airMouse[k] + airStick[k], -1, 1);
+const flyable = c => c.type === 'airliner' ? c.state === 'parked' : !!PLANE_TYPES[c.type].price; // (an airliner: only one at its gate)
 // the parked aircraft you're standing by (at its cockpit door, its side), or null
 function nearAircraft() {
   if (mode !== 'walk') return null;
@@ -17954,19 +17999,24 @@ function enterAircraft(c) {
     c.owed = false; say(`You settle the insurance excess on the ${T_.name}: ${fmt$(AIR_EXCESS)}.`, 3);
   }
   const theft = !c.owned && !c.stolen;
+  if (c.type === 'airliner') c.gate = null; // (the airline's lost it)
+  wreckCam = null;
   pilot = c; mode = 'air'; c.state = 'flown'; c.throttle = 0; c.v = 0; c.vz = 0; c.ground = true; c.z = builtHeight(c.x, c.y, c.z);
-  airCamYaw = c.yaw; px = c.x; py = c.y; airMouse[0] = airMouse[1] = 0;
+  airCamYaw = c.yaw; px = c.x; py = c.y; airMouse[0] = airMouse[1] = airStick[0] = airStick[1] = 0;
   const up = settings.invertY ? 'down' : 'up', click = TOUCH || mouseCaptured() ? '' : '   (click to take it with the mouse)';
-  say(T_.heli ? `You climb into the ${T_.name}. The rotor starts to turn.   MOUSE: turn, and ${up} to climb   W/S forward and back${click}` :
-    `You climb into the ${T_.name}.   MOUSE flies it: ${up} to climb, sideways to bank   W: throttle up; past ${Math.round(T_.vr * 36)} km/h, mouse ${up} to lift off${click}`, 6);
+  const stick = TOUCH ? 'LEFT STICK' : 'MOUSE', w = TOUCH ? 'POWER +' : 'W', ws = TOUCH ? 'POWER +/-' : 'W/S';
+  say(T_.heli ? `You climb into the ${T_.name}. The rotor starts to turn.   ${stick}: turn, and ${up} to climb   ${ws} forward and back${click}` :
+    `You climb into the ${T_.name}.   ${stick} flies it: ${up} to climb, sideways to bank   ${w}: throttle up; past ${Math.round(T_.vr * 36)} km/h, ${TOUCH ? 'stick' : 'mouse'} ${up} to lift off${click}`, 6);
   if (theft) { // not yours: the tower's on the radio to the police before you're off the ground
     c.stolen = true; addWanted('planetheft', c.x, c.y, true);
-    say(`You climb into the ${T_.name} and get it started. The radio crackles: "Unauthorised movement on stand ${c.id}. Police are on the way."`, 5);
+    say(T_.price ? `You climb into the ${T_.name} and get it started. The radio crackles: "Unauthorised movement on stand ${c.id}. Police are on the way."` :
+      `You shut the door on the empty cabin and spool up the engines. The tower: "Glyphport heavy at the gate, you are NOT cleared to push. Police are on the way."   (S backs it off the gate)`, 6);
   }
 }
 // buying the one you're standing by: it's yours, kept where you leave it (and saved)
 function buyAircraft(c) {
   const T_ = PLANE_TYPES[c.type];
+  if (!T_.price) return say(`The airline isn't selling.`, 2);
   if (c.stolen && !c.owned) return say('Not one you\'ve just stolen.', 2);
   if (!pay(T_.price)) return say(`The ${T_.name} is ${fmt$(T_.price)}. You can't cover it.`, 3);
   c.owned = true; c.forSale = false; saveGame();
@@ -17976,12 +18026,13 @@ function buyAircraft(c) {
 function aircraftPrompt(c) {
   const T_ = PLANE_TYPES[c.type];
   if (c.owned) return `E: get in your ${T_.name}${c.owed ? ` (insurance excess ${fmt$(AIR_EXCESS)})` : ''}`;
+  if (!T_.price) return `E: steal the ${T_.name}`;
   return `E: steal the ${T_.name}   U: buy it for ${fmt$(T_.price)}`;
 }
-// out, onto the ground beside it (its left side), as long as it's on the ground and stopped
+// out, onto the ground by its door (its left side, ahead of the wing), as long as it's on the ground and stopped
 function leaveAircraft(why) {
-  const c = pilot, T_ = PLANE_TYPES[c.type], side = T_.heli ? 0.22 : T_.r + 0.15;
-  const [x, y] = spotNear(c.x + Math.sin(c.yaw) * side, c.y - Math.cos(c.yaw) * side);
+  const c = pilot, T_ = PLANE_TYPES[c.type], side = T_.heli ? 0.22 : T_.r + 0.15, fwd = T_.heli ? 0.05 : T_.len * 0.25;
+  const [x, y] = spotNear(c.x + Math.cos(c.yaw) * fwd + Math.sin(c.yaw) * side, c.y + Math.sin(c.yaw) * fwd - Math.cos(c.yaw) * side);
   pilot = null; mode = 'walk'; c.state = 'parked'; c.throttle = 0; c.v = 0;
   px = x; py = y; a = c.yaw; pitch = 0; body.z = body.vz = 0;
   if (why) say(why, 4);
@@ -17995,11 +18046,54 @@ function spotNear(x, y) {
   }
   return [x, y];
 }
+// dry land you can stand on nearest (x, y), out in widening rings (the bay is never more than a few blocks across)
+function nearestShore(x, y) {
+  for (let r = 0.5; r < 120; r += 0.5) {
+    const n = Math.max(16, Math.round(r * 6)), k0 = Math.random() * TAU;
+    for (let k = 0; k < n; k++) {
+      const qx = mod(x + Math.cos(k0 + k / n * TAU) * r, N), qy = mod(y + Math.sin(k0 + k / n * TAU) * r, N);
+      if (!seaAt(qx, qy) && !isWater(qx, qy) && free(qx, qy)) return [qx, qy];
+    }
+  }
+  return [MARINA.x - 1.2, MARINA.y0 - 0.4]; // (can't happen; but the marina, if it did)
+}
+// ---- going in: a few seconds of it from outside (the camera shaken, pulled back, the screen white with the hit and
+// then going dark, or the water closing over), then you, wherever you end up (airCrash, airDitch)
+const WRECK_T = { crash: 2.6, ditch: 3.4 };
+let wreckCam = null; // { kind, t, c }
+function startWreck(c, kind) {
+  wreckCam = { kind, t: 0, c }; c.throttle = 0; airMouse[0] = airMouse[1] = 0;
+  if (kind === 'ditch') c.sinkT = T;
+  if (actx) playClip('crash', kind === 'crash' ? 1 : 0.7);
+  say(kind === 'crash' ? 'BRACE!' : 'It hits the water hard...', 2);
+}
+function stepWreck(dt) {
+  const w = wreckCam;
+  if ((w.t += dt) < WRECK_T[w.kind]) return;
+  wreckCam = null;
+  if (w.kind === 'crash') airCrash(w.c); else airDitch(w.c);
+  if (mode !== 'room') { wakeT = 2; fade = 1; } // (coming round: in from black)
+}
+// over the picture (render.js, after it's drawn): the flash of the hit, then dark; or the bay's green-blue over it
+function wreckOverlay() {
+  if (!wreckCam || mode !== 'air') return;
+  const k = wreckCam.t / WRECK_T[wreckCam.kind];
+  if (wreckCam.kind === 'crash') {
+    const flash = clamp(1 - wreckCam.t / 0.35, 0, 1), dark = clamp((k - 0.55) / 0.4, 0, 1);
+    if (flash > 0) { g.fillStyle = `rgba(255,240,210,${flash * 0.85})`; g.fillRect(0, 0, cv.width, cv.height); }
+    if (dark > 0) { g.fillStyle = `rgba(0,0,0,${dark})`; g.fillRect(0, 0, cv.width, cv.height); }
+    return;
+  }
+  const under = clamp((k - 0.35) / 0.4, 0, 1), dark = clamp((k - 0.75) / 0.25, 0, 1);
+  if (under > 0) { g.fillStyle = `rgba(10,60,70,${under * 0.75})`; g.fillRect(0, 0, cv.width, cv.height); }
+  if (dark > 0) { g.fillStyle = `rgba(0,0,0,${dark})`; g.fillRect(0, 0, cv.width, cv.height); }
+}
 function stepFlight(dt) {
+  if (wreckCam) return stepWreck(dt);
   const c = pilot, T_ = PLANE_TYPES[c.type];
-  const turn = clamp((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0) + airMouse[0], -1, 1);
+  const turn = clamp((K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0) + airInput(0), -1, 1);
   const thr = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0);
-  const nose = clamp((K.ArrowUp ? 1 : 0) - (K.ArrowDown ? 1 : 0) - airMouse[1], -1, 1);
+  const nose = clamp((K.ArrowUp ? 1 : 0) - (K.ArrowDown ? 1 : 0) - airInput(1), -1, 1);
   const lift = clamp((K.KeyR || K.Space ? 1 : 0) - (K.KeyF ? 1 : 0) + (T_.heli ? nose : 0), -1, 1);
   for (const k of [0, 1]) airMouse[k] *= Math.exp(-6 * dt);
   const ev = flyStep(c, { throttle: thr, pitch: T_.heli ? 0 : nose, turn, lift }, dt);
@@ -18010,27 +18104,29 @@ function stepFlight(dt) {
     else if (e === 'hard') { say('A heavy landing. Something cracked.', 3); if (actx) playClip('crash', 0.4); }
     else if (e === 'stall') say('STALL! Nose down, power on.', 2);
     else if (e === 'bump') { if (actx) tone(actx.currentTime, 70, 0.12, 0.08); }
-    else if (e === 'crash') return airCrash(c);
-    else if (e === 'ditch') return airDitch(c);
+    else if (e === 'crash' || e === 'ditch') return startWreck(c, e);
   }
   if (burning(c) && !c.warnedFire) { c.warnedFire = true; say('Fire! Get it down and get out.', 4); }
 }
 // thrown clear: hurt by how hard it hit, or the hospital
 function airCrash(c) {
-  if (actx) playClip('crash', 1);
   const hurtBy = clamp(20 + (c.crashSpeed || 0) * 14, 20, 95), [x, y] = spotNear(c.x, c.y + 0.4);
   pilot = null; c.state = 'parked'; mode = 'walk'; px = x; py = y; a = Math.atan2(rel(c.y - y), rel(c.x - x)); pitch = 0; body.z = body.vz = 0;
   if (hurt(hurtBy)) return passOut('Pulled from the wreck of an aircraft. Lucky to be alive.');
   if (needs.health < 35) needs.warned = 'weak'; // (you know)
   say('You come down hard. You crawl out of the wreck before it goes up.', 5);
 }
-// into the bay: it sinks, you swim, a boat hauls you out at the marina
+// into the bay: it sinks, and you swim for the nearest dry land
 function airDitch(c) {
-  if (actx) playClip('crash', 0.7);
   pilot = null; c.state = 'parked'; mode = 'walk';
-  c.sinkT = T;
-  px = MARINA.x - 1.2; py = MARINA.y0 - 0.4; a = -Math.PI / 2; pitch = 0; body.z = body.vz = 0;
-  hurt(15); say('It hits the water and goes under. You swim for it, and a harbour launch hauls you out at the marina.', 6);
+  if (c.sinkT == null) c.sinkT = T;
+  swimAshore(c.x, c.y);
+  hurt(15); say('It goes under. You kick free of the cockpit and swim for the nearest shore, and drag yourself out, soaked.', 6);
+}
+// out of the water at the nearest land to (x, y), looking inland
+function swimAshore(x, y) {
+  [px, py] = nearestShore(x, y);
+  a = Math.atan2(rel(py - y), rel(px - x)); pitch = 0; body.z = body.vz = 0;
 }
 // burning aircraft go up (the bang hurts whoever's near); sunk ones sink; smoke off the damaged ones
 let airSmokeT = 0;
@@ -18038,7 +18134,7 @@ function stepAirWrecks(dt) {
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
-    if (c === pilot) { airCrash(c); continue; }
+    if (c === pilot) { if (!wreckCam) startWreck(c, 'crash'); continue; }
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
   }
@@ -18059,19 +18155,35 @@ function stepAirWrecks(dt) {
 // ---- the camera: behind it and a little above, swinging round after it; or from the cockpit
 function airCam(dt) {
   const c = pilot, T_ = PLANE_TYPES[c.type], f = n => Math.max(-0.95, Math.min(1.2, n));
+  if (wreckCam) return wreckView(c, T_, dt);
   if (!third) { // the cockpit: out over the nose
     const ahead = T_.heli ? 0.12 : T_.len * 0.32, z = c.z + (T_.heli ? 0.2 : T_.r * 1.9 + (c.ground ? T_.r * 1.8 : 0));
     return [mod(c.x + Math.cos(c.yaw) * ahead, N), mod(c.y + Math.sin(c.yaw) * ahead, N), c.yaw, z, f(Math.tan(c.pitch) * projY / rows)];
   }
   airCamYaw += (mod(c.yaw - airCamYaw + Math.PI, TAU) - Math.PI) * (1 - Math.exp(-2.5 * dt));
-  const back = T_.heli ? 1.15 : T_.len * 0.9 + 0.45, up = T_.heli ? 0.38 : 0.22 + T_.len * 0.12;
-  const cx = mod(c.x - Math.cos(airCamYaw) * back, N), cy = mod(c.y - Math.sin(airCamYaw) * back, N);
-  const cz = Math.max(c.z + up + (c.ground ? 0.12 : 0) - Math.sin(c.pitch) * back * 0.5, builtHeight(cx, cy, c.z + up) + 0.15);
+  const want = T_.heli ? 1.15 : T_.len * 0.9 + 0.45, up = T_.heli ? 0.38 : 0.22 + T_.len * 0.12, bx = Math.cos(airCamYaw), by = Math.sin(airCamYaw);
+  let back = 0.2; // (pulled in short of a wall behind it: in a hangar, not out the back of it looking at the back wall)
+  for (let s = 0.2; s <= want; s += 0.05) { if (airportBlocked(c.x - bx * s, c.y - by * s, 0.08)) break; back = s; }
+  const cx = mod(c.x - bx * back, N), cy = mod(c.y - by * back, N), roof = builtHeight(cx, cy), floor = builtHeight(cx, cy, c.z + 0.05);
+  let cz = Math.max(c.z + up + (c.ground ? 0.12 : 0) - Math.sin(c.pitch) * back * 0.5, builtHeight(cx, cy, c.z + up) + 0.15);
+  if (roof > floor + 0.3 && c.z < roof) cz = Math.min(cz, roof - 0.12); // (indoors: under the roof)
   const down = Math.atan2(cz - (c.z + 0.15), back); // (looking down at it a little, and up and down with its nose)
   return [cx, cy, airCamYaw, cz, f((Math.tan(c.pitch * 0.35) - Math.tan(down) * 0.8) * projY / rows)];
 }
+// going in: from outside, shaken hard at first, swinging round it and pulling back (a crash), or sinking down to the
+// water's surface beside it as it goes under (a ditching)
+function wreckView(c, T_, dt) {
+  const w = wreckCam, k = w.t / WRECK_T[w.kind], size = T_.heli ? 1 : T_.len, shake = Math.max(0, 1 - w.t / 1.2) * 0.05 * size;
+  airCamYaw += dt * (w.kind === 'crash' ? 0.7 : 0.25);
+  const back = size * (w.kind === 'crash' ? 1 + k * 1.2 : 1.3), j = () => (Math.random() - 0.5) * shake;
+  const cx = mod(c.x - Math.cos(airCamYaw) * back + j(), N), cy = mod(c.y - Math.sin(airCamYaw) * back + j(), N);
+  const cz = w.kind === 'crash' ? Math.max(c.z, builtHeight(cx, cy)) + 0.25 + k * size * 0.5 + j() : Math.max(0.03, 0.4 * size * (1 - k)) + j();
+  const tilt = Math.atan2(cz - c.z, back);
+  return [cx, cy, airCamYaw, cz, Math.max(-0.95, Math.min(1.2, (-Math.tan(tilt) * 0.8 + j() * 4) * projY / rows))];
+}
 // ---- the instruments, along the bottom: speed, height, throttle, climb, heading, and a little horizon that banks
 function airDash() {
+  if (wreckCam) return; // (going in: no instruments, just the view)
   const c = pilot, T_ = PLANE_TYPES[c.type], r0 = rows - 3;
   if (!third) { // in the cockpit: the window posts either side, and (a plane) the nose out ahead
     const col = C(T_.heli ? GRAY : WHITE, 4);
@@ -18092,18 +18204,19 @@ function airDash() {
   for (let k = -hw; k <= hw; k++) { const y = Math.round(r0 + 1 + k * Math.tan(-c.roll) * 0.5 + Math.sin(c.pitch) * 2); if (y >= r0 && y < rows) set(y * cols + hc + k, k ? '-' : '+', C(k ? WHITE : YEL, 15)); }
   set((r0 + 1) * cols + hc - hw - 2, '[', C(GRAY, 10)); set((r0 + 1) * cols + hc + hw + 2, ']', C(GRAY, 10));
   // the stick: where the mouse has it, in a box that springs back to the middle as the mouse lets go
-  const sx = hc + hw + 18, sw = 4, held = Math.hypot(airMouse[0], airMouse[1]) > 0.08;
+  const sx = hc + hw + 18, sw = 4, held = Math.hypot(airInput(0), airInput(1)) > 0.08;
   if (sx + sw + 2 < cols - 12) {
     putText(r0 + 1, sx - sw - 8, TOUCH ? 'STICK' : 'MOUSE', C(held ? YEL : GRAY, held ? 14 : 10));
     for (let r = r0; r < rows; r++) { set(r * cols + sx - sw - 1, '|', C(GRAY, 8)); set(r * cols + sx + sw + 1, '|', C(GRAY, 8)); }
     set((r0 + 1) * cols + sx, '+', C(GRAY, 7));
-    const kx = sx + Math.round(clamp(airMouse[0], -1, 1) * sw), ky = r0 + 1 + Math.round(clamp(airMouse[1], -1, 1));
+    const kx = sx + Math.round(airInput(0) * sw), ky = r0 + 1 + Math.round(airInput(1));
     set(ky * cols + kx, 'O', C(held ? YEL : WHITE, 15));
   }
   const blink = fract(T * 2) < 0.5, warn = burning(c) ? 'FIRE' : c.stalled ? 'STALL' : T_.ceil && c.z > T_.ceil - 0.5 ? 'CEILING' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y, c.z) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
   if (warn) putText(r0 + 1, cols - warn.length - 3, warn, C(RED, blink ? 15 : 7));
 }
 function airPrompt() {
+  if (wreckCam) return '';
   const c = pilot, act = c.ground ? (c.v < 0.3 ? 'E: get out' : '') : 'E: bail out';
   if (TOUCH || mouseCaptured()) return act;
   return 'CLICK to fly with the mouse' + (act ? '   ' + act : ''); // (it's the stick, and it only works captured)
@@ -18153,9 +18266,9 @@ function stepChute(dt) {
 function chuteDown() {
   const was = chute; chute = null; body.mx = body.my = 0;
   if (mode === 'room') return; // (passed out on the way down: the hospital has you)
-  if (isWater(px, py) || overWater(px, py)) { // in the bay: swim, and the launch
-    px = MARINA.x - 1.2; py = MARINA.y0 - 0.4; a = -Math.PI / 2; pitch = 0; body.z = body.vz = 0;
-    return say('Splashdown. You cut yourself free of the lines and a harbour launch fishes you out at the marina.', 5);
+  if (isWater(px, py) || overWater(px, py)) { // in the bay: swim for it
+    swimAshore(px, py);
+    return say('Splashdown. You cut yourself free of the lines and swim for the nearest shore.', 5);
   }
   if (was.open) say(mode === 'roof' ? 'You flare and set down on the roof. Not bad.' : 'You flare, run out the landing, and gather up the canopy.', 4);
 }
@@ -22539,7 +22652,7 @@ function loop(t) {
   }
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
-    px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third; render(dt); [px, py, a, pitch] = saved;
+    px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
   } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? swanCam(dt) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
@@ -22606,6 +22719,7 @@ addEventListener('wheel', e => { if (!paused && inv.length) cycleQuickSlot(Math.
 // run), dragging anywhere on the right looks round. Buttons are words, not keys, and only the ones that do something
 // right here show: the big one is whatever E would do (Talk, Enter, Get in...), smaller ones pop up beside it when
 // they apply (Hail taxi, Pick pocket, a taxi's destinations), and everything else lives in the More sheet up top.
+// At the controls of an aircraft the left stick is its control stick, and Power + / Power - work the throttle.
 // Everything goes through the same key handlers as the keyboard (synthetic keydown / keyup), so nothing in the game
 // knows the difference. Menus are plain HTML: tap their rows.
 const TOUCH_CSS = `
@@ -22645,7 +22759,7 @@ const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take t
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
-  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^a private dance/, 'VIP dance'], [/^tip the dancer/, 'Tip'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^rent the/, 'Rent'], [/^buy the/, 'Buy'], [/^take the/, 'Take out'], [/^tie up/, 'Tie up'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed']];
+  [/^your storage/, 'Storage'], [/^call the dog/, 'Call dog'], [/^pet the dog/, 'Pet dog'], [/^the till/, 'Till'], [/machine$/, 'Buy'], [/^ride/, 'Ride'], [/^prize stall/, 'Prizes'], [/^run a wash/, 'Wash'], [/^take out/, 'Take out'], [/^touch the touch pool/, 'Touch'], [/^light a candle/, 'Candle'], [/^sit in on a hand/, 'Play'], [/^climb/, 'Climb'], [/^crack the vault/, 'Vault'], [/^trade/, 'Trade'], [/^a private dance/, 'VIP dance'], [/^tip the dancer/, 'Tip'], [/^go into/, 'Enter'], [/^back down/, 'Go down'], [/^rent a swan/, 'Rent boat'], [/^rent the/, 'Rent'], [/^buy the/, 'Buy'], [/^take the/, 'Take out'], [/^tie up/, 'Tie up'], [/^back to the jetty/, 'Jetty'], [/^feed the ducks/, 'Feed ducks'], [/^work a shift/, 'Work'], [/^a cup of seed/, 'Buy seed'], [/^bail out/, 'Bail out'], [/^steal/, 'Steal']];
 function eLabel(p) {
   const m = /(?:^|\s)E(?: \([^)]*\))?: ([^"]+?)(?:\s{3}|$)/.exec(p);
   if (!m) return '';
@@ -22682,6 +22796,10 @@ function touchActions() {
     return out;
   }
   if (mode === 'drive') return [['Camera', 'KeyV', 'pop'], ['Get out', 'KeyE', 'main']];
+  if (mode === 'air') {
+    const heli = PLANE_TYPES[pilot.type].heli; // (Power - shut: the brakes, then backing up)
+    return [['Camera', 'KeyV', 'pop'], [heli ? 'Back' : 'Power -', 'KeyS', 'pop'], [heli ? 'Forward' : 'Power +', 'KeyW', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
+  }
   if (mode === 'sea') return [['Camera', 'KeyV', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
@@ -22770,12 +22888,14 @@ function showTouch() {
 }
 
 // the stick: wherever the left thumb lands, it measures from there. Its direction holds W / A / S / D down, and
-// pushed right out to the rim, Shift too
+// pushed right out to the rim, Shift too. Flying, it's the control stick instead (flight.js), as far as it's pushed
 const STICK_R = 50, stickKeys = new Set();
 let stickId = null, stickX = 0, stickY = 0, lookId = null, lookX = 0, lookY = 0;
 function setStick(dx, dy) {
-  const m = Math.hypot(dx, dy) / STICK_R, want = new Set();
-  if (m > 0.3) {
+  const m = Math.hypot(dx, dy) / STICK_R, want = new Set(), fly = mode === 'air' && !freecam;
+  const dead = q => Math.sign(q) * clamp((Math.abs(q) / STICK_R - 0.12) / 0.88, 0, 1); // (a little slack in the middle)
+  airStick[0] = fly ? dead(dx) : 0; airStick[1] = fly ? dead(dy) * (settings.invertY ? -1 : 1) : 0;
+  if (m > 0.3 && !fly) {
     if (dy < -0.38 * STICK_R) want.add('KeyW'); if (dy > 0.38 * STICK_R) want.add('KeyS');
     if (dx < -0.38 * STICK_R) want.add('KeyA'); if (dx > 0.38 * STICK_R) want.add('KeyD');
     if (m > 0.95 && !game) want.add('ShiftLeft');

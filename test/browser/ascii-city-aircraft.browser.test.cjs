@@ -111,3 +111,43 @@ test('the terminal hall: the departures board keeps time all day and night, and 
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+test('going in: the crash plays out before you are on foot; ditched in the bay, you swim to the nearest land', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage(), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof stepFlight === 'function' && Number.isFinite(eye));
+    const r = await page.evaluate(() => {
+      paused = true; mode = 'walk'; room = null; money = 0; clearWanted(); needs.health = 100;
+      for (const k of Object.keys(K)) K[k] = 0;
+      const dt = 1 / 60, out = {}, run = secs => { for (let t = 0; t < secs && mode === 'air'; t += dt) { stepFlight(dt); stepAirWrecks(dt); stepWake(dt); } };
+      // into the ground: still in the air mode a second after, then on foot beside the wreck, the screen coming back
+      const jet = aircraft.find(c => c.type === 'jet'); enterAircraft(jet);
+      Object.assign(jet, { x: 120, y: 40, z: 2, v: 8, pitch: -0.8, ground: false, throttle: 1 });
+      for (let t = 0; t < 20 && !wreckCam && mode === 'air'; t += dt) stepFlight(dt);
+      out.wreck = wreckCam && wreckCam.kind; run(1);
+      out.stillWatching = mode === 'air'; run(5);
+      out.after = [mode, fade > 0, Math.hypot(rel(px - jet.x), rel(py - jet.y)) < 6];
+      // into the bay, off the airport's far shore: ashore close by, not at the marina
+      needs.health = 100; clearWanted(); wakeT = 0; fade = 0;
+      const heli = aircraft.find(c => c.type === 'heli'); enterAircraft(heli);
+      const x0 = 40, y0 = AIRPORT.y1 + 5; Object.assign(heli, { x: x0, y: y0, z: 0.5, rotor: 1, ground: false, vz: -1, hvx: 0, hvy: 0 });
+      out.overBay = overWater(x0, y0);
+      K.KeyF = 1; for (let t = 0; t < 20 && !wreckCam && mode === 'air'; t += dt) stepFlight(dt); K.KeyF = 0;
+      out.ditch = wreckCam && wreckCam.kind; run(6);
+      out.ashore = [mode, seaAt(px, py) || isWater(px, py), Math.hypot(rel(px - x0), rel(py - y0)), Math.hypot(rel(px - MARINA.x), rel(py - MARINA.y0))];
+      return out;
+    });
+    assert.equal(r.wreck, 'crash');
+    assert.ok(r.stillWatching, 'the crash plays out before you are put on foot');
+    assert.deepEqual(r.after, ['walk', true, true], 'then on foot by the wreck, fading in');
+    assert.ok(r.overBay, 'the test ditches over open water');
+    assert.equal(r.ditch, 'ditch');
+    assert.equal(r.ashore[0], 'walk');
+    assert.equal(r.ashore[1], false, 'on dry land');
+    assert.ok(r.ashore[2] < 8, `ashore near where it went in (${r.ashore[2].toFixed(1)} cells)`);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
