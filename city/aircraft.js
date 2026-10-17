@@ -103,13 +103,28 @@ function stepAirliner(a, dt) {
     }
   }
 }
-// what you'd walk into: a parked (or taxiing) aircraft's fuselage and its wheels; under the wings you can walk
+// a plane's wings, in its own frame (aircraft-render.js draws them from this too): how far the outer panels are swept
+// back, the inner panels' half chord, and how high they sit off the fuselage's axis
+const wingGeom = T_ => ({ sweep: T_.engines ? T_.span * 0.12 : 0, chord: T_.len * (T_.engines ? 0.13 : 0.12), wz: T_.prop ? T_.r * 0.9 : -T_.r * 0.4 });
+// its footprint seen from above, as rectangles [along, across (from the middle line, either side), half along, half
+// across]: the fuselage, both wing panels, the tailplane, the engines. A helicopter: its cabin and the tail boom
+function craftParts(T_) {
+  if (T_.parts) return T_.parts;
+  if (T_.heli) return T_.parts = [[0.02, 0, 0.22, 0.09], [-0.33, 0, 0.19, 0.03]];
+  const { sweep, chord } = wingGeom(T_), L2 = T_.len / 2;
+  T_.parts = [[0, 0, L2, T_.r], [-T_.len * 0.02, T_.span * 0.14, chord, T_.span * 0.14], [-T_.len * 0.02 - sweep, T_.span * 0.37, chord * 0.75, T_.span * 0.13],
+    [-L2 + chord * 0.5, 0, chord * 0.55, T_.span * 0.17]];
+  if (T_.engines === 'wing') T_.parts.push([T_.len * 0.03, T_.span * 0.2, T_.len * 0.07 + T_.r * 0.38, T_.r * 0.38]);
+  if (T_.engines === 'tail') T_.parts.push([-L2 * 0.625, T_.r * 1.6, L2 * 0.175 + T_.r * 0.5, T_.r * 0.5]);
+  return T_.parts;
+}
+// what you'd walk into: a parked (or taxiing) aircraft, wings and tail and all
 function aircraftAt(x, y, pad = 0) {
   for (const a of aircraft) {
     if (a.z > 0.3 || Math.abs(rel(a.x - x)) > 2.5 || Math.abs(rel(a.y - y)) > 2.5) continue;
     const T_ = PLANE_TYPES[a.type], fx = Math.cos(a.yaw), fy = Math.sin(a.yaw), qx = rel(x - a.x), qy = rel(y - a.y);
-    const along = qx * fx + qy * fy, across = -qx * fy + qy * fx;
-    if (T_.heli ? Math.abs(along) < 0.24 + pad && Math.abs(across) < 0.09 + pad : Math.abs(along) < T_.len / 2 + pad && Math.abs(across) < T_.r + pad) return a;
+    const along = qx * fx + qy * fy, across = Math.abs(-qx * fy + qy * fx);
+    if (craftParts(T_).some(([ca, cb, ha, hb]) => Math.abs(along - ca) < ha + pad && Math.abs(across - cb) < hb + pad)) return a;
   }
   return null;
 }

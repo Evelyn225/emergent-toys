@@ -223,6 +223,7 @@ function render(dt) {
   if (freecam) freecamHud();
   else {
     if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
+    wreckOverlay(); // (going in, in an aircraft: flight.js)
     hud();
   }
 }

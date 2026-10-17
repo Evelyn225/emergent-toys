@@ -287,3 +287,14 @@ test('a parked airliner can be taken: it backs off its gate, takes off from the 
   assert.ok(turned('airliner') < turned('jet') * 0.5, `the airliner is clunky (${turned('airliner')} vs ${turned('jet')} rad)`);
   assert.ok(ev('PLANE_TYPES.airliner.top < PLANE_TYPES.jet.top'), 'and slower than the jet');
 });
+
+test('you walk into a parked plane\'s wings and tail, not just its fuselage', () => {
+  const { ev } = loadCity();
+  for (const type of ['airliner', 'jet', 'prop']) {
+    const r = JSON.parse(ev(`(() => { const T_ = PLANE_TYPES['${type}'], c = addAircraft('${type}', 120, 40, 0), g = wingGeom(T_), at = (f, s) => !!aircraftAt(120 + f, 40 + s, 0.03);
+      const out = { tipL: at(-T_.len * 0.02 - g.sweep, -T_.span * 0.45), tipR: at(-T_.len * 0.02 - g.sweep, T_.span * 0.45), root: at(-T_.len * 0.02, T_.span * 0.2),
+        tail: at(-T_.len / 2 + g.chord * 0.5, T_.span * 0.12), clearAhead: at(T_.len * 0.25, T_.span * 0.3), clearPast: at(0, T_.span * 0.6) };
+      aircraft.splice(aircraft.indexOf(c), 1); return JSON.stringify(out); })()`));
+    assert.deepEqual(r, { tipL: true, tipR: true, root: true, tail: true, clearAhead: false, clearPast: false }, type);
+  }
+});

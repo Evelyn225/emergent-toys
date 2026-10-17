@@ -238,7 +238,7 @@ function interact() {
   if (mode === 'drive' && sprayPrompt()) return startRespray(); // pulled up at a garage's door (or told why not)
   if (mode === 'drive') { if (Math.abs(me.v) < 0.3) leaveCar(); else say('Slow down first.'); return; }
   if (mode === 'taxi') return leaveCar();
-  if (mode === 'air') { if (pilot.ground && pilot.v < 0.3) leaveAircraft(); else if (pilot.ground) say('Slow down first.', 2); else bailOut(); return; }
+  if (mode === 'air') { if (wreckCam) return; if (pilot.ground && pilot.v < 0.3) leaveAircraft(); else if (pilot.ground) say('Slow down first.', 2); else bailOut(); return; }
   const dr = droppedHere();
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it

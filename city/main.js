@@ -295,7 +295,7 @@ function loop(t) {
   }
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
-    px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third; render(dt); [px, py, a, pitch] = saved;
+    px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
   } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? swanCam(dt) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
