@@ -25,7 +25,7 @@ test('the airport is an island in the bay, joined to the shore by the causeway',
   assert.equal(ev('onRunway((RUNWAY.x0 + RUNWAY.x1) / 2, RUNWAY.y)'), true);
   for (let y = ev('CAUSEWAY.y0') + 0.5; y < ev('AIRPORT.y0') + 2; y += 0.5)
     assert.ok(ev(`onPier(CAUSEWAY.x, ${y}) || onAirport(CAUSEWAY.x, ${y})`), `the causeway carries you across at y ${y}`);
-  assert.ok(ev('airportBlocked(TERMINAL.x + 3, TERMINAL.y + TERMINAL.hw - 0.02, 0)'), 'the terminal glass is solid');
+  assert.ok(ev('airportBlocked(TERMINAL.x + 1.5, TERMINAL.y + TERMINAL.hw - 0.02, 0)'), 'the terminal glass is solid');
   assert.ok(ev('airportHeight(TOWER.x, TOWER.y)') > 3, 'the control tower stands tall');
 });
 
@@ -248,7 +248,9 @@ test('the terminal: in through the doors, round the desks and seats, and out of 
   const blocked = (u, v) => ev(`airportBlocked(TERMINAL.x + ${u}, TERMINAL.y + ${v}, 0.03)`);
   for (let v = -1.3; v < 0; v += 0.1) assert.equal(blocked(0, v), false, `a clear way in through the doors (v ${v.toFixed(1)})`);
   assert.equal(blocked(1, -1.04), true, 'the landside glass either side of them');
-  assert.equal(blocked(3, 1.04), true, 'the airside glass: no way out to the planes');
+  assert.equal(blocked(1.5, 1.04), true, 'the airside glass');
+  for (const u of [-3.2, 3.2]) for (let v = 0.2; v < 1.4; v += 0.1) assert.equal(blocked(u, v), false, `out to the planes by the airside doors (${u}, ${v.toFixed(1)})`);
+  assert.equal(ev('craftBlocked(TERMINAL.x + 3.2, TERMINAL.y + 1)'), true, 'no aircraft through them');
   assert.equal(blocked(-6.98, 0), true, 'the end walls');
   assert.equal(blocked(-0.5, -0.2), false, 'the hall is open');
   assert.equal(blocked(-4.5, -0.62), true, 'a check-in desk');
@@ -259,4 +261,29 @@ test('the terminal: in through the doors, round the desks and seats, and out of 
   assert.equal(ev('snowExposed(TERMINAL.x + 1, TERMINAL.y, 0)'), false, 'no snow settles on its floor');
   assert.equal(ev('snowExposed(AIRPORT_BLDG[1].x, AIRPORT_BLDG[1].y, 0)'), false, 'nor in a hangar');
   assert.equal(ev('airportIndoors(TERMINAL.x, TERMINAL.y, 1.3)'), false, 'up on the roof is outdoors');
+});
+
+test('a parked airliner can be taken: it backs off its gate, takes off from the runway, and is heavy to fly', () => {
+  const { ev } = loadCity();
+  // back off the gate (the nose is at the terminal), then the timetable leaves it alone
+  const r = JSON.parse(ev(`(() => { const c = aircraft.find(a => a.type === 'airliner' && a.state === 'parked'); c.state = 'flown'; c.stolen = true; c.gate = null; c.ground = true;
+    const y0 = c.y, evs = [];
+    for (let t = 0; t < 12; t += 1 / 60) evs.push(...flyStep(c, { throttle: -1, pitch: 0, turn: 0, lift: 0 }, 1 / 60));
+    const busy = aircraft.filter(a => airline(a) && a.state !== 'parked').length;
+    for (let t = 0; t < 600; t += 0.5) stepAirTraffic(0.5);
+    return JSON.stringify({ back: c.y - y0, evs, flown: c.state, gate: c.gate, busy }); })()`));
+  assert.ok(r.back > 1.5, `backed off the gate (${r.back})`);
+  assert.deepEqual(r.evs, [], 'no bumps');
+  assert.equal(r.flown, 'flown', 'the airline\'s timetable doesn\'t take it back');
+  // off the runway from the west end
+  const off = fly(ev, `addAircraft('airliner', RUNWAY.x0 + 2, RUNWAY.y, 0, { ground: true, stolen: true })`,
+    `(c, t) => ({ throttle: 1, pitch: c.v > PLANE_TYPES.airliner.vr ? 1 : 0, turn: 0, lift: 0 })`, 40);
+  assert.ok(kinds(off).includes('takeoff'), `it gets airborne: ${kinds(off)}`);
+  assert.ok(off.evs.find(e => e.k === 'takeoff').x < ev('RUNWAY.x1'), 'before the runway runs out');
+  // the same hard turn for three seconds: the jet comes round much further than the airliner
+  const turned = type => JSON.parse(ev(`(() => { const c = addAircraft('${type}', 120, 40, 0, { z: 10, v: PLANE_TYPES.${type}.top * 0.8, throttle: 0.8 }); c.state = 'flown';
+    for (let t = 0; t < 3; t += 1 / 60) flyStep(c, { throttle: 0, pitch: 0, turn: 1, lift: 0 }, 1 / 60);
+    aircraft.splice(aircraft.indexOf(c), 1); return JSON.stringify(c.yaw); })()`));
+  assert.ok(turned('airliner') < turned('jet') * 0.5, `the airliner is clunky (${turned('airliner')} vs ${turned('jet')} rad)`);
+  assert.ok(ev('PLANE_TYPES.airliner.top < PLANE_TYPES.jet.top'), 'and slower than the jet');
 });

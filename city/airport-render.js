@@ -46,9 +46,9 @@ function airportFloor(i, r, x, wx, wy, L) { // [ch, base, k] for the floor cell;
     return [(r + x) % 4 ? ' ' : '.', GRAY, 0.9];
   }
   const bld = airportBldgAt(wx, wy);
-  if (bld && bld.kind === 'terminal') { // the hall: polished terrazzo under the lights, a mat in the doors, carpet at the gates
+  if (bld && bld.kind === 'terminal') { // the hall: polished terrazzo under the lights, mats in the doors, carpet at the gates
     const u = X - bld.x, v = Y - bld.y, f = Math.max(0, 1 - Math.hypot(rel(wx - px), rel(wy - py)) / vis * 1.5);
-    const mat = v < -0.75 && Math.abs(u) < TERMINAL_DOOR, carpet = v > 0.38 && TERMINAL_GATES.some(g => Math.abs(u - g) < 1);
+    const mat = v < -0.75 && Math.abs(u) < TERMINAL_DOOR || v > 0.75 && TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR), carpet = v > 0.38 && TERMINAL_GATES.some(g => Math.abs(u - g) < 1);
     const joint = fract(u * 4) < 0.05 || fract(v * 4) < 0.05, fleck = hash(Math.floor(wx * 30), Math.floor(wy * 30), 343) > 0.93;
     BG[i] = mat ? C(BRICK, 1 + f * 1.5) : carpet ? C(BLUE, 1 + f * 1.4) : C(STONE, 2 + f * 3);
     set(i, mat ? '=' : carpet ? ((r + x) % 3 ? ' ' : '.') : joint ? '+' : fleck ? '.' : ' ', C(mat ? BRICK : carpet ? BLUE : STONE, 4 + f * 4));
@@ -186,8 +186,12 @@ function drawTerminal(b, vx, vy, lit) {
       const ch = signLine(NAME, q * n, (b.h - 0.11 - w) / 0.2, i, b.h - 0.11, midDepth(vx, vy), t, 2 * b.hl / n, 0.16, farDepth(vx, vy, b.hl), side, 0);
       return set(i, ch && ch !== ' ' ? ch : ' ', C(WHITE, 13 + lit * 2)), true;
     }
-    BG[i] = C(GRAY, f < 10 ? 2.5 + L * 0.3 : 2 + IN * 0.1); // the frames round the glass
-    return set(i, fract(u * 1.6) < 0.08 && w > 0.04 ? '|' : '=', C(GRAY, 6)), true;
+    const landside = f === 4 || f === 14, door = landside ? Math.abs(u) < TERMINAL_DOOR + 0.06 : TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR + 0.06);
+    if (door && w < 0.47) { BG[i] = C(YEL, f < 10 ? 3 + L * 0.3 : 2.5 + IN * 0.1); return set(i, ' ', 0), true; } // the doors' frames
+    const bay = terminalBay(u), frame = (landside ? w > 0.46 && w < 0.9 : w > 0.12) && (bay < (landside ? 0.18 : 0.16) || bay > 0.97); // (round the windows: steel)
+    if (frame || !landside) { BG[i] = C(GRAY, f < 10 ? 2.5 + L * 0.3 : 2 + IN * 0.1); return set(i, frame && bay < 0.1 ? '|' : '=', C(GRAY, 6)), true; }
+    BG[i] = C(STONE, f < 10 ? (1.8 + L * 0.3) * shadeFace(f) : 1.8 + IN * 0.12); // the landside wall: concrete panels
+    return set(i, fract(u * 2.4) < 0.04 || fract(w * 4) < 0.05 ? '.' : ' ', C(GRAY, 5)), true;
   }, (ox, oy, oz, rx, ry, rz) => rayTerminal(ox, oy, oz, rx, ry, rz, { x: vx, y: vy, hl: b.hl, hw: b.hw, h: b.h }));
   if (Math.hypot(vx, vy) < 22) drawTerminalHall(b, vx, vy);
 }

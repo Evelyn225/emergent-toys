@@ -250,11 +250,13 @@ function hangarRoof(b, across) {
 }
 // is (across, z) in the front wall's opening?
 const hangarDoor = (b, across, z) => Math.abs(across) < HANGAR_DOOR.hw && z < Math.min(HANGAR_DOOR.lintel, hangarRoof(b, across) - HANGAR_DOOR.frame);
-// The terminal: glass both long sides (frames, a transom and the name band solid), doors in the middle of the landside
-// wall, and inside, a hall you walk through. What's in it, solid to walk into, in metres-of-ten relative to its middle
+// The terminal: a solid landside wall with a band of windows along it and the doors in the middle; airside, big
+// windows from knee height to the name band, between steel piers, so you can watch the planes, and a door out to the
+// apron either side of the middle gate. Inside, a hall you walk through. What's in it, solid to walk into, in metres-of-ten relative to its middle
 // (u east, v south toward the planes): check-in desks along the landside wall west of the doors, the café's counter
 // east of them, columns down the middle, and rows of seats at each gate, facing the planes.
 const TERMINAL = AIRPORT_BLDG[0], TERMINAL_DOOR = 0.6, TERMINAL_WALL = 0.05;
+const TERMINAL_AIRDOORS = [-3.2, 3.2], TERMINAL_AIRDOOR = 0.35; // (out to the planes: where along it, and half their width)
 const TERMINAL_GATES = [-5.9, 0, 5.9]; // the seats at each gate (gates 1 to 3, by the stands; pulled in clear of the ends)
 const TERMINAL_IN = [
   ...[-5.7, -4.5, -3.3, -2.1].map((u, k) => ({ u, v: -0.62, hu: 0.4, hv: 0.07, h: 0.11, kind: 'desk', n: k + 1 })),
@@ -262,12 +264,18 @@ const TERMINAL_IN = [
   ...[-6, -4, -2, 2, 4, 6].map(u => ({ u, v: 0.12, hu: 0.06, hv: 0.06, h: TERMINAL.h, kind: 'column' })),
   ...TERMINAL_GATES.flatMap(g => [0.48, 0.74].flatMap(v => [-0.45, 0.45].map(e => ({ u: g + e, v, hu: 0.38, hv: 0.05, h: 0.085, kind: 'seats' })))),
 ];
-// is the long wall glass (or the open doors) at u along it, z up? (else its frame: the sill, the mullions, the band
-// along the top with the name on it, and the doors' head)
+// is the long wall glass (or the open doors) at u along it, z up? (else it's solid: the landside wall, the airside
+// piers and the sill under the windows, the band along the top with the name on it, the doors' heads)
+const terminalBay = u => fract(u * 0.8 + 0.5); // (a window bay every 12.5m, 0..1 across it)
+const terminalAirDoor = u => TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR);
 function terminalGlass(landside, u, z) {
   if (z < 0.04 || z > TERMINAL.h - 0.22) return false;
-  if (landside && Math.abs(u) < TERMINAL_DOOR) return z < 0.4 || z > 0.43;
-  return fract(u * 1.6) >= 0.08;
+  if (landside) {
+    if (Math.abs(u) < TERMINAL_DOOR) return z < 0.4 || z > 0.43;
+    return z > 0.5 && z < 0.86 && terminalBay(u) > 0.14;
+  }
+  if (terminalAirDoor(u)) return z < 0.36 || z > 0.39;
+  return z > 0.16 && !(z > 0.6 && z < 0.63) && terminalBay(u) > 0.12; // (a transom across them)
 }
 // the airport building whose footprint (x, y) is in (grown by pad), or undefined
 const airportBldgAt = (x, y, pad = 0) => AIRPORT_BLDG.find(b => Math.abs(rel(x - b.x)) < b.hl + pad && Math.abs(rel(y - b.y)) < b.hw + pad);
@@ -281,7 +289,7 @@ function airportBlocked(x, y, pad = 0) {
   if (b.kind === 'terminal') {
     const u = rel(x - b.x), v = rel(y - b.y), wall = TERMINAL_WALL + pad;
     if (Math.abs(u) > b.hl - wall) return true; // the ends
-    if (Math.abs(v) > b.hw - wall) return !(v < 0 && Math.abs(u) < TERMINAL_DOOR - pad); // the glass, but for the doors
+    if (Math.abs(v) > b.hw - wall) return !(v < 0 ? Math.abs(u) < TERMINAL_DOOR - pad : TERMINAL_AIRDOORS.some(d => Math.abs(u - d) < TERMINAL_AIRDOOR - pad)); // the walls, but for the doors
     return TERMINAL_IN.some(o => Math.abs(u - o.u) < o.hu + pad && Math.abs(v - o.v) < o.hv + pad);
   }
   const across = Math.abs(rel(x - b.x)), along = rel(y - b.y); // (along: + toward the front)

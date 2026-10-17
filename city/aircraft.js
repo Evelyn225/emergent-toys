@@ -2,12 +2,14 @@
 // flight.js flies the one you're in). Speeds in cells a second (1 = 36 km/h), heights in cells (1 = 10m).
 // The airliners belong to the airport: they sit at the gates, and every few minutes one pushes back, taxis out, rolls
 // down the runway and climbs away east over the bay, or one comes in from the west, lands, and taxis to an empty gate.
-// The light planes, the jet and the helicopters are there to be flown: bought at the terminal, or just taken.
+// The light planes, the jet and the helicopters are there to be flown: bought at the terminal, or just taken. An
+// airliner parked at its gate can be taken too (not bought): big, slow, and slow to answer the controls.
 const PLANE_TYPES = {
   // len: nose to tail; span: wingtip to wingtip; r: the fuselage's radius; tail: the fin's height; vr: rotation speed
   // (lift-off); cruise / top: in the air; climb: how hard it can climb (cells a second at full throttle); ceil: as high as
-  // it'll go (the air's too thin above: well clear of the tallest tower, 17); price: to buy
-  airliner: { name: 'airliner', len: 3.4, span: 3.2, r: 0.2, tail: 0.85, body: WHITE, stripe: BLUE, engines: 'wing', vr: 7.5, cruise: 9 },
+  // it'll go (the air's too thin above: well clear of the tallest tower, 17); price: to buy; handling: how quickly it
+// answers the stick, the throttle and the nose wheel (1, or less for something heavy)
+  airliner: { name: 'airliner', len: 3.4, span: 3.2, r: 0.2, tail: 0.85, body: WHITE, stripe: BLUE, engines: 'wing', vr: 5, cruise: 7, top: 7.5, ceil: 40, handling: 0.35 },
   prop: { name: 'Skylark', len: 0.8, span: 1.1, r: 0.065, tail: 0.24, body: WHITE, stripe: RED, prop: true, vr: 2.4, cruise: 4, top: 5.6, climb: 1.1, ceil: 36, price: 9000 },
   jet: { name: 'Comet', len: 1.45, span: 1.15, r: 0.09, tail: 0.36, body: GRAY, stripe: CYAN, engines: 'tail', vr: 4, cruise: 7, top: 10, climb: 2.2, ceil: 50, price: 30000 },
   heli: { name: 'Hornet', heli: true, len: 0.45, rotor: 0.5, body: RED, stripe: WHITE, top: 4.2, climb: 1.4, ceil: 30, price: 14000 },
@@ -32,14 +34,15 @@ for (const h of HELIPADS) addAircraft('heli', h.x, h.y, 0, { forSale: true });
 // ---- the airliners' day: a timetable that's a little irregular, one movement at a time on the runway
 const AIR_GAP = [100, 220]; // seconds between movements
 let airNext = 40; // (the first one soon after you arrive, so there's something to see)
-const gateFree = k => !aircraft.some(a => a.type === 'airliner' && a.gate === k);
+const airline = a => a.type === 'airliner' && !a.stolen; // (the airline's own: not one you've taken)
+const gateFree = k => !aircraft.some(a => a.type === 'airliner' && (a.gate === k || a.stolen && Math.hypot(rel(a.x - STANDS_X[k]), rel(a.y - STAND_Y)) < 2));
 function stepAirTraffic(dt, rnd = Math.random) {
-  const moving = aircraft.find(a => a.type === 'airliner' && a.state !== 'parked');
+  const moving = aircraft.find(a => airline(a) && a.state !== 'parked');
   if (moving) stepAirliner(moving, dt);
   if (moving || (airNext -= dt) > 0) return;
-  if (aircraft.some(a => a.type !== 'airliner' && !a.ditched && onRunway(a.x, a.y) && a.z < 1)) { airNext = 15; return; } // (something's on the runway: the tower holds them)
+  if (aircraft.some(a => !airline(a) && !a.ditched && onRunway(a.x, a.y) && a.z < 1)) { airNext = 15; return; } // (something's on the runway: the tower holds them)
   airNext = AIR_GAP[0] + rnd() * (AIR_GAP[1] - AIR_GAP[0]);
-  const parked = aircraft.filter(a => a.type === 'airliner' && a.state === 'parked');
+  const parked = aircraft.filter(a => airline(a) && a.state === 'parked');
   const free = [0, 1, 2].filter(gateFree);
   if (parked.length && (!free.length || rnd() < 0.5)) departAirliner(parked[Math.floor(rnd() * parked.length)]);
   else if (free.length) arriveAirliner(free[Math.floor(rnd() * free.length)]);
@@ -131,24 +134,27 @@ function flyStep(a, inp, dt) {
   return T_.heli ? heliStep(a, T_, inp, dt, ev) : planeStep(a, T_, inp, dt, ev);
 }
 function planeStep(a, T_, inp, dt, ev) {
-  a.throttle = clamp((a.throttle || 0) + inp.throttle * 0.7 * dt, 0, 1);
+  const hd = T_.handling || 1;
+  a.throttle = clamp((a.throttle || 0) + inp.throttle * 0.7 * hd * dt, 0, 1);
   const stall = stallSpeed(T_);
-  if (a.ground) { // on the wheels: steer the nose wheel, brake with the throttle shut, rotate at speed
+  if (a.ground) { // on the wheels: steer the nose wheel, brake with the throttle shut (stopped, it backs up), rotate at speed
     a.v += (a.throttle * T_.top - a.v) * 0.12 * dt;
-    if (inp.throttle < 0 && a.throttle === 0) a.v = Math.max(0, a.v - 1.4 * dt); // (the brakes)
-    a.yaw += inp.turn * 0.9 * clamp(a.v / 0.8, 0, 1) * (a.v < 2 ? 1 : 0.3) * dt;
+    if (inp.throttle < 0 && a.throttle === 0) a.v = a.v > 0.02 ? Math.max(0, a.v - 1.4 * dt) : Math.max(-0.35, a.v - 0.5 * dt); // (the brakes; then reverse)
+    else if (a.v < 0) a.v = Math.min(0, a.v + 1 * dt);
+    a.yaw += inp.turn * 0.9 * hd * clamp(a.v / 0.8, -1, 1) * (a.v < 2 ? 1 : 0.3) * dt;
     a.roll = 0; a.pitch = Math.max(0, a.pitch - dt * 0.5);
     if (a.v > T_.vr && inp.pitch > 0.2) { a.ground = false; a.pitch = 0.1; ev.push('takeoff'); }
   } else {
     const pull = a.throttle * T_.top - a.v;
     a.v += (pull * (pull > 0 ? 0.25 : 0.1) - G * Math.sin(a.pitch) * 1.2) * dt; // (diving speeds you up, climbing slows you; with the power off it glides)
-    a.roll += (inp.turn * 0.75 - a.roll) * Math.min(1, 2.5 * dt); // bank into the turn, level out when you let go
-    a.yaw += a.roll * 0.9 * dt;
-    if (inp.pitch) a.pitch += inp.pitch * 0.7 * dt; else a.pitch -= a.pitch * 0.4 * dt;
+    const heavy = 0.5 + 0.5 * hd; // (a big one banks less, and turns less for it)
+    a.roll += (inp.turn * 0.75 * heavy - a.roll) * Math.min(1, 2.5 * hd * dt); // bank into the turn, level out when you let go
+    a.yaw += a.roll * 0.9 * heavy * dt;
+    if (inp.pitch) a.pitch += inp.pitch * 0.7 * hd * dt; else a.pitch -= a.pitch * 0.4 * dt;
     if (a.v < stall) { a.pitch -= (stall - a.v) * 0.7 * dt; if (!a.stalled) ev.push('stall'); a.stalled = true; } else a.stalled = false; // too slow: the nose drops
     a.pitch = clamp(a.pitch, -0.9, 0.55);
   }
-  a.v = clamp(a.v, 0, T_.top * 1.3);
+  a.v = clamp(a.v, a.ground ? -0.35 : 0, T_.top * 1.3);
   // short of flying speed the wings hold you up less: throttle back and it settles gently (that's how you land);
   // below the stall it drops
   const level = T_.vr * 1.2, sink = a.ground ? 0 : Math.min(1.3, Math.max(0, level - Math.max(a.v, stall)) * 0.5 + Math.max(0, stall - a.v) * 0.9);
@@ -171,14 +177,16 @@ function heliStep(a, T_, inp, dt, ev) {
   a.roll += (inp.turn * 0.12 * (a.ground ? 0 : 1) - a.roll) * Math.min(1, 3 * dt);
   return moveCraft(a, T_, a.hvx, a.hvy, dt, ev);
 }
+// what an aircraft can't go into: the airport's walls, and the terminal at all (it fits through the doors; it mustn't)
+const craftBlocked = (x, y) => airportBlocked(x, y) || airportBldgAt(x, y)?.kind === 'terminal';
 // move it, and what it meets: the ground (a landing, or not), a building (on top: a landing; its side: a crash), the water
 function moveCraft(a, T_, vx, vy, dt, ev) {
   if (a.vz > 0 && T_.ceil) a.vz *= clamp((T_.ceil - a.z) / 2, 0, 1); // near its ceiling the climb fades away to nothing
   const nx = mod(a.x + vx * dt, N), ny = mod(a.y + vy * dt, N), h = builtHeight(nx, ny, a.z), speed = Math.hypot(vx, vy);
   let nz = a.z + a.vz * dt;
   if (a.ground) { // rolling or sitting: into a wall, a building, another aircraft, the water?
-    const nose = T_.heli ? 0.25 : T_.len / 2, fx = nx + Math.cos(a.yaw) * nose * Math.sign(speed), fy = ny + Math.sin(a.yaw) * nose * Math.sign(speed);
-    if (speed > 0.02 && (builtHeight(fx, fy, a.z) > a.z + 0.2 || airportBlocked(fx, fy) || aircraftAt(fx, fy) && aircraftAt(fx, fy) !== a)) {
+    const nose = (T_.heli ? 0.25 : T_.len / 2) * (!T_.heli && a.v < 0 ? -1 : 1), fx = nx + Math.cos(a.yaw) * nose, fy = ny + Math.sin(a.yaw) * nose; // (backing up: its tail)
+    if (speed > 0.02 && (builtHeight(fx, fy, a.z) > a.z + 0.2 || craftBlocked(fx, fy) || aircraftAt(fx, fy) && aircraftAt(fx, fy) !== a)) {
       if (speed > 1.2) return crashCraft(a, speed, ev);
       a.v = 0; a.hvx = a.hvy = 0; ev.push('bump'); return ev;
     }
@@ -187,7 +195,7 @@ function moveCraft(a, T_, vx, vy, dt, ev) {
   }
   const top = builtHeight(nx, ny); // (what's there, all of it: in a hangar, its roof overhead)
   if (h < top && nz > top - 0.05) { nz = top - 0.05; a.vz = Math.min(0, a.vz); } // inside a hangar: the roof stops you
-  if (airportBlocked(nx, ny) && a.z < top - 0.1) return crashCraft(a, Math.hypot(speed, a.vz), ev); // into a wall, from the side
+  if (craftBlocked(nx, ny) && a.z < top - 0.1) return crashCraft(a, Math.hypot(speed, a.vz), ev); // into a wall, from the side
   if (nz > h) { a.x = nx; a.y = ny; a.z = nz; return ev; }
   // down to something: water, the side of a building, or a surface to land on
   if (overWater(nx, ny) && h === 0) return ditchCraft(a, ev);
@@ -232,6 +240,10 @@ function returnHome(a) {
 // what wants putting back, given where you are and what you're flying: returns the ones it put back
 function stepFleet(px_, py_, flying) {
   const back = [];
+  for (let k = aircraft.length - 1; k >= 0; k--) { // a stolen airliner left somewhere: once you're well away, the airline has it towed off
+    const a = aircraft[k];
+    if (a.type === 'airliner' && a.stolen && a !== flying && a.state !== 'abandoned' && !(a.fireT != null && !a.wrecked) && Math.hypot(rel(a.x - px_), rel(a.y - py_)) > AIR_AWAY) aircraft.splice(k, 1);
+  }
   for (const a of aircraft) {
     if (!a.home || a === flying || a.state === 'abandoned' || a.fireT != null && !a.wrecked) continue; // (let a fire burn out first)
     const lost = a.wrecked || a.ditched, astray = !a.owned && (Math.abs(rel(a.x - a.home.x)) > 0.05 || Math.abs(rel(a.y - a.home.y)) > 0.05 || a.dmg > 0);
