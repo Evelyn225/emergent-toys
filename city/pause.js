@@ -51,6 +51,8 @@ function buildPause() {
       <p class="sub">Glyphport</p>
       <button class="item" data-act="resume">Resume</button>
       <button class="item" data-act="map">Map of the city</button>
+      <button class="item" data-act="cancel-courier" style="display:none">Cancel courier delivery</button>
+      <button class="item" data-act="cancel-fare" style="display:none">Cancel this fare</button>
       <button class="item" data-act="newgame">Start over</button>
       <button class="item" data-act="dev">Dev tools <span class="k" style="margin-left:auto">F2</span></button>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -93,6 +95,11 @@ function buildPause() {
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
     fullscreen.disabled = desktopFullscreenBusy;
     if (GLYPHPORT_DESKTOP_APP) showDesktopUpdate(el);
+    // the jobs you're on, to call off: only while there's one
+    el.querySelector('[data-act="cancel-courier"]').style.display = courierJob ? 'flex' : 'none';
+    const fare = el.querySelector('[data-act="cancel-fare"]');
+    fare.style.display = job && (job.ride || job.hail) ? 'flex' : 'none';
+    fare.firstChild.textContent = job && job.ride ? 'Cancel this fare (let them out, find another)' : 'Cancel this pickup (find another fare)';
     for (const inp of el.querySelectorAll('[data-set]')) inp.value = settings[inp.dataset.set];
     for (const s of el.querySelectorAll('[data-show]')) {
       const k = s.dataset.show, v = settings[k];
@@ -119,6 +126,8 @@ function buildPause() {
     if (b.dataset.act === 'resume') closePause(true);
     if (b.dataset.act === 'dev') openDev();
     if (b.dataset.act === 'map') openBigMap();
+    if (b.dataset.act === 'cancel-courier' && cancelCourier()) { saveGame(); say('You call dispatch and hand the parcel back. No pay, no hard feelings.', 4); closePause(true); }
+    if (b.dataset.act === 'cancel-fare' && cancelFare()) { say('You call it off. The light goes back on: someone else will flag you down soon.', 4); closePause(true); }
     if (b.dataset.act === 'newgame') { if (b.dataset.sure) newGame(); else { b.dataset.sure = 1; b.textContent = 'Start over: lose your money, things, home and car? Click again'; } }
     if (b.dataset.toggle) settings[b.dataset.toggle] = !settings[b.dataset.toggle];
     if (b.dataset.detail) settings.detail = b.dataset.detail;

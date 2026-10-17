@@ -152,11 +152,11 @@ const glassScreen = (x0, x1) => BX((x0 + x1) / 2, 7.3, (x1 - x0) / 2, 0.05, 0, 1
   return fract(HIT.u / 1.2) < 0.03 ? (set(i, '|', C(GRAY, 9)), true) : HIT.face <= 2 ? (BG[i] = C(GRAY, 2), set(i, ' ', 0), true) : false; // (see-through)
 });
 // a row of airport seats along x, facing the windows (-y): steel frame, blue seats, their backs on the +y side
-const seatRow = (x, y, hl) => ROOM_MODEL(x, y, (vx, vy) => {
+const seatRow = (x, y, hl) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
   BXD(vx, vy, hl, 0.25, 0.4, 0.48, (i, t, L) => { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, fract(HIT.u / 0.55 + 0.5) < 0.08 ? '|' : ' ', C(BLUE, 8)), true; });
   BXD(vx, vy + 0.22, hl, 0.04, 0.48, 0.95, (i, t, L) => { BG[i] = C(BLUE, 1.7 + L * 0.2); return set(i, fract(HIT.u / 0.55 + 0.5) < 0.08 ? '|' : ' ', C(BLUE, 7)), true; });
   BXD(vx, vy, hl * 0.9, 0.03, 0, 0.4, (i, t, L) => { BG[i] = C(GRAY, 1.3); return set(i, '|', C(GRAY, 6)), true; });
-}, [hl, 0.27, 0.95]);
+}, [hl, 0.27, 0.95]), seatRow: { x0: x - hl + 0.28, x1: x + hl - 0.28, y, fx: 0, fy: -1 } }); // (C: sit in one)
 const suitcase = (x, y, col) => BX(x, y, 0.2, 0.12, 0, 0.62, (i, t, L) => { BG[i] = C(col, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : fract(HIT.w * 6) < 0.1 ? '-' : ' ', C(GRAY, 7)), true; });
 
 ROOM_DEFS.terminal = { grid: TERMINAL_GRID, height: 5, light: 1.15, floor: 'terrazzo', ceil: 'strip', sign: false, wall: terminalWall, keeper: [23.5, 12.2],

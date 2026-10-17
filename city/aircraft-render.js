@@ -45,8 +45,39 @@ function craftPanel(o, F, a_, b_, c_, ef, er, eu, col, k = 1, ch = ' ') {
   const p = at(o, F, a_, b_, c_), axes = [F.f, F.r, F.u];
   drawOBox(p[0], p[1], p[2], axes, [ef, er, eu], (i, t, L) => {
     const n = axes[(HIT.face - 1) >> 1].map(v => HIT.face & 1 ? v : -v);
-    BG[i] = C(col, (1.4 + L * 0.35) * faceLit(n) * k); return set(i, ch, C(GRAY, L * 0.4)), true;
+    BG[i] = C(col, (2 + L * 0.5) * faceLit(n) * k); return set(i, ch, C(GRAY, L * 0.4)), true;
   });
+}
+// A tapered tube, for drawBox: a cone frustum from a (radius ra) to b (radius rb), rounded off at both ends by a ball
+// of its radius there. The ray meets its real surface (not just its outline), so it can be lit round: HIT.u, v, w is
+// where on it (camera-relative x, y; world z), HIT.n the surface's normal, HIT.s how far along it (0 at a, 1 at b)
+function rayTube(ox, oy, oz, rx, ry, rz, b) {
+  const ex = b.bx - b.ax, ey = b.by - b.ay, ez = b.bz - b.az, h = Math.hypot(ex, ey, ez), dx_ = ex / h, dy_ = ey / h, dz_ = ez / h;
+  const Wx = ox - b.ax, Wy = oy - b.ay, Wz = oz - b.az, k = (b.rb - b.ra) / h;
+  const Rd = rx * dx_ + ry * dy_ + rz * dz_, Wd = Wx * dx_ + Wy * dy_ + Wz * dz_, RR = rx * rx + ry * ry + rz * rz, WR = Wx * rx + Wy * ry + Wz * rz;
+  const qa = RR - (1 + k * k) * Rd * Rd, qb = 2 * (WR - (1 + k * k) * Wd * Rd - k * b.ra * Rd), qc = Wx * Wx + Wy * Wy + Wz * Wz - Wd * Wd - (b.ra + k * Wd) ** 2;
+  let best = Infinity, cx = 0, cy = 0, cz = 0, rad = 1, s = 0;
+  const disc = qb * qb - 4 * qa * qc;
+  if (Math.abs(qa) > 1e-12 && disc >= 0) for (const e of [-1, 1]) { // the cone's side
+    const t = (-qb + e * Math.sqrt(disc)) / (2 * qa), y = Wd + t * Rd;
+    if (t > 0.01 && t < best && y >= 0 && y <= h) { best = t; s = y / h; cx = b.ax + dx_ * y; cy = b.ay + dy_ * y; cz = b.az + dz_ * y; rad = b.ra + k * y; }
+  }
+  for (const [px_, py_, pz_, r_, s_] of [[b.ax, b.ay, b.az, b.ra, 0], [b.bx, b.by, b.bz, b.rb, 1]]) { // and the two ends
+    const qx = ox - px_, qy = oy - py_, qz = oz - pz_, B = qx * rx + qy * ry + qz * rz, Cq = qx * qx + qy * qy + qz * qz - r_ * r_, D = B * B - RR * Cq;
+    if (D < 0) continue;
+    const t = (-B - Math.sqrt(D)) / RR;
+    if (t > 0.01 && t < best) { best = t; s = s_; cx = px_; cy = py_; cz = pz_; rad = r_; }
+  }
+  if (best === Infinity) return -1;
+  HIT.u = ox + rx * best; HIT.v = oy + ry * best; HIT.w = oz + rz * best; HIT.face = 0; HIT.s = s;
+  const nx = HIT.u - cx, ny = HIT.v - cy, nz = HIT.w - cz, nl = Math.hypot(nx, ny, nz) || 1;
+  HIT.n = [nx / nl, ny / nl, nz / nl];
+  return best;
+}
+function drawTube(a_, b_, ra, rb, shade) {
+  const m = Math.max(ra, rb) + 0.01;
+  drawBox({ x: (a_[0] + b_[0]) / 2, y: (a_[1] + b_[1]) / 2, c: 1, s: 0, hl: Math.abs(b_[0] - a_[0]) / 2 + m, hw: Math.abs(b_[1] - a_[1]) / 2 + m,
+    z0: Math.min(a_[2], b_[2]) - m, z1: Math.max(a_[2], b_[2]) + m, ax: a_[0], ay: a_[1], az: a_[2], bx: b_[0], by: b_[1], bz: b_[2], ra, rb }, shade, rayTube);
 }
 const craftLight = (p, col, r = 0.03) => dot(p[0], p[1], p[2], r, (i, t, L) => { BG[i] = C(col, 12); return set(i, '*', C(WHITE, 15)), true; });
 function drawAircraft() {
@@ -61,29 +92,43 @@ function drawPlaneCraft(a, T_, vx, vy) {
   const F = craftFrame(a.yaw, a.pitch, a.roll), gear = a.z < 0.6, h = T_.r + (gear ? T_.r * 0.9 + 0.02 : 0), o = [vx, vy, a.z + h], L2 = T_.len / 2;
   const depth = dx * vx + dy * vy, far = depth > 22, wreck = a.wrecked, body = wreck ? GRAY : T_.body, burnt = wreck ? 0.3 : 1;
   const nightLit = Math.max(night, overcast * 0.6);
-  // the fuselage, its livery: a stripe along the lower half, a row of windows, the cockpit glass at the nose
-  const fus = (p0, p1, r) => drawRod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], r, (i, t, L) => {
-    const s = ((HIT.u - o[0]) * F.f[0] + (HIT.v - o[1]) * F.f[1] + (HIT.w - o[2]) * F.f[2]) / L2; // -1 tail .. 1 nose
-    const row = Math.floor(i / cols), ad = Math.max(0.05, dx * HIT.u + dy * HIT.v), axisRow = hor - (HIT.w - eye) * projY / ad, below = row > axisRow + 0.3;
-    if (s > 0.8 && !below && !wreck) { BG[i] = C(CYAN, 1.5 + L * 0.2); return set(i, ' ', 0), true; } // the cockpit glass
-    const win = !far && !wreck && Math.abs(row - axisRow + 0.6) < 0.5 && s > -0.6 && s < 0.7;
-    BG[i] = C(below ? T_.stripe : body, (1.6 + L * 0.35) * burnt); return set(i, win ? (nightLit > 0.3 ? 'o' : '.') : ' ', win ? C(nightLit > 0.3 ? WARM : GRAY, nightLit > 0.3 ? 14 : 4) : 0), true;
+  // the fuselage: a barrel, the nose tapering to a point and dipping a little, the tail cone sweeping up; lit round, its
+  // livery on it: the cheat line along each side in the stripe colour, the row of windows above it, the flight deck's
+  // windscreen wrapped round the nose, a paler belly
+  const R = T_.r, fus = (a0, c0, r0, a1, c1, r1) => drawTube(at(o, F, a0, 0, c0), at(o, F, a1, 0, c1), r0, r1, (i, t, L) => {
+    const n = HIT.n, along = (HIT.u - o[0]) * F.f[0] + (HIT.v - o[1]) * F.f[1] + (HIT.w - o[2]) * F.f[2], s = along / L2; // (-1 tail .. 1 nose)
+    const nr = n[0] * F.r[0] + n[1] * F.r[1] + n[2] * F.r[2], nu = n[0] * F.u[0] + n[1] * F.u[1] + n[2] * F.u[2], phi = Math.atan2(nu, Math.abs(nr)); // (up the side: 0 level, +-pi/2 top, belly)
+    const lit = (2.4 + L * 0.6) * faceLit(n) ** 1.5 * burnt; // (contrasty, so it reads round)
+    if (!wreck && s > 0.78 && phi > 0.12 && phi < 0.62 && Math.abs(nr) > 0.25) { BG[i] = C(GRAY, 0.5 + lit * 0.15); return set(i, ' ', 0), true; } // the windscreen
+    if (!wreck && phi > -0.32 && phi < -0.05 && s < 0.8) { BG[i] = C(T_.stripe, lit); return set(i, ' ', 0), true; } // the cheat line
+    const win = !far && !wreck && phi > 0.08 && phi < 0.3 && s > -0.62 && s < 0.7 && fract(along / (R * 0.45)) < 0.42;
+    BG[i] = C(phi < -0.75 ? GRAY : body, phi < -0.75 ? lit * 1.1 : lit);
+    return set(i, win ? (nightLit > 0.3 ? 'o' : '.') : ' ', win ? C(nightLit > 0.3 ? WARM : GRAY, nightLit > 0.3 ? 14 : 3) : 0), true;
   });
-  fus(at(o, F, L2 - T_.r, 0, 0), at(o, F, -L2 * 0.35, 0, 0), T_.r);
-  fus(at(o, F, -L2 * 0.35, 0, 0), at(o, F, -L2 + T_.r * 0.6, 0, T_.r * 0.4), T_.r * 0.62);
-  // wings: the jets' swept back in two pieces each side, the Skylark's straight and up on top of the cabin
-  const { sweep, chord, wz } = wingGeom(T_);
+  fus(L2 * 0.6, 0, R, -L2 * 0.35, 0, R); // the barrel
+  fus(L2 * 0.6, 0, R, L2 - R * 0.25, -R * 0.22, R * 0.25); // the nose
+  fus(-L2 * 0.35, 0, R, -L2 + R * 0.3, R * 0.45, R * 0.32); // the tail cone
+  // wings: the jets' swept back in two pieces each side, the Skylark's straight and up on top of the cabin; a fairing
+  // where they meet the fuselage, winglets on the airliner's tips
+  const { sweep, chord, wz } = wingGeom(T_), thick = T_.r * (T_.prop ? 0.12 : 0.11);
   for (const e of [-1, 1]) {
-    craftPanel(o, F, -T_.len * 0.02, e * T_.span * 0.14, wz, chord, T_.span * 0.14, 0.012, body, burnt);
-    craftPanel(o, F, -T_.len * 0.02 - sweep, e * T_.span * 0.37, wz + (T_.prop ? 0 : 0.02), chord * 0.75, T_.span * 0.13, 0.01, body, burnt);
+    craftPanel(o, F, -T_.len * 0.02, e * T_.span * 0.14, wz, chord, T_.span * 0.14, thick, body, burnt * 0.85); // (a shade greyer than the body)
+    craftPanel(o, F, -T_.len * 0.02 - sweep, e * T_.span * 0.37, wz + (T_.prop ? 0 : 0.02), chord * 0.75, T_.span * 0.13, thick * 0.6, body, burnt * 0.85);
+    if (T_.engines === 'wing') craftPanel(o, F, -T_.len * 0.02 - sweep * 1.45, e * T_.span * 0.5, wz + 0.02 + T_.r * 0.3, chord * 0.28, 0.006, T_.r * 0.3, wreck ? GRAY : T_.stripe, burnt); // winglet
     if (!far) craftLight(at(o, F, -sweep - chord * 0.3, e * T_.span * 0.5, wz), e < 0 ? RED : GREEN, Math.max(0.02, T_.r * 0.25)); // nav lights
   }
+  if (!T_.prop) craftPanel(o, F, -T_.len * 0.02, 0, -R * 0.55, chord * 1.15, R * 0.75, R * 0.4, body, burnt * 0.92); // the wing-to-body fairing
   // the tail: tailplane and fin (the fin in the stripe colour)
   craftPanel(o, F, -L2 + chord * 0.5, 0, T_.r * 0.4, chord * 0.55, T_.span * 0.17, 0.008, body, burnt);
-  craftPanel(o, F, -L2 + chord * 0.6, 0, T_.r * 0.4 + T_.tail / 2, chord * 0.65, 0.012, T_.tail / 2, wreck ? GRAY : T_.stripe, burnt);
+  craftPanel(o, F, -L2 + chord * 0.6, 0, T_.r * 0.4 + T_.tail / 2, chord * 0.65, T_.r * 0.06, T_.tail / 2, wreck ? GRAY : T_.stripe, burnt);
+  craftPanel(o, F, -L2 + chord * 0.9, 0, T_.r * 0.4 + T_.tail * 0.98, chord * 0.4, T_.r * 0.06, T_.tail * 0.03, wreck ? GRAY : T_.stripe, burnt); // (its swept-back tip)
   if (far) return;
   // engines
-  if (T_.engines === 'wing') for (const e of [-1, 1]) { const p0 = at(o, F, T_.len * 0.1, e * T_.span * 0.2, -T_.r * 1.3), p1 = at(o, F, -T_.len * 0.04, e * T_.span * 0.2, -T_.r * 1.3); rod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], T_.r * 0.38, GRAY, 1.2); }
+  if (T_.engines === 'wing') for (const e of [-1, 1]) { // the engines under the wings, their intakes dark
+    const p0 = at(o, F, T_.len * 0.1, e * T_.span * 0.2, -T_.r * 1.3), p1 = at(o, F, -T_.len * 0.04, e * T_.span * 0.2, -T_.r * 1.3), r_ = T_.r * 0.38;
+    drawTube(p0, p1, r_, r_ * 0.8, (i, t, L) => { BG[i] = HIT.s < 0.02 && Math.abs((HIT.n[0] * F.f[0] + HIT.n[1] * F.f[1] + HIT.n[2] * F.f[2])) > 0.6 ? C(GRAY, 0.4) : C(GRAY, (1.3 + L * 0.3) * faceLit(HIT.n) * burnt); return set(i, ' ', 0), true; });
+    craftPanel(o, F, T_.len * 0.03, e * T_.span * 0.2, -T_.r * 0.95, T_.len * 0.04, 0.008, T_.r * 0.2, GRAY, burnt); // (the pylon it hangs from)
+  }
   if (T_.engines === 'tail') for (const e of [-1, 1]) { const p0 = at(o, F, -L2 * 0.45, e * T_.r * 1.6, T_.r * 0.5), p1 = at(o, F, -L2 * 0.8, e * T_.r * 1.6, T_.r * 0.5); rod(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], T_.r * 0.5, GRAY, 1.2); }
   // the Skylark's propeller: the spinner and a blur of a disc
   if (T_.prop) {

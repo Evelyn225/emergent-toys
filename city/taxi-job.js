@@ -18,6 +18,15 @@ function endTaxiShift() { // leaving the car
   if (job.hail) { job.hail.hailing = false; job.hail.talk = 0; }
   job = null;
 }
+// called off from the pause menu: the fare gets out here (or the one waving gives up), unpaid, and the shift goes on:
+// soon someone else flags you down
+function cancelFare() {
+  if (!job || !(job.ride || job.hail)) return false;
+  if (job.ride) { dropOff(job.ride.p); job.ride = null; }
+  if (job.hail) { job.hail.hailing = false; job.hail.talk = 0; job.hail = null; }
+  job.next = 2 + Math.random() * 3;
+  return true;
+}
 // somewhere on a street 12-40 cells away, for a trip
 function tripDest(c) {
   for (let k = 0; k < 300; k++) {

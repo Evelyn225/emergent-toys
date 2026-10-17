@@ -2532,3 +2532,23 @@ test('car damage: a crash at speed dents it and the dash says so; a burning car 
   await page.reload(); await page.waitForTimeout(300);
   assert.deepStrictEqual(await page.evaluate(() => { const c = owned.cars[owned.cars.length - 1]; return [c.dmg, c.body === MAG, !!c.wrecked]; }), [45, true, false]);
 }));
+
+test('jobs can be called off from the pause menu: the courier parcel goes back; a taxi fare gets out and the shift finds another', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    const out = {};
+    openPause(); out.none = ['cancel-courier', 'cancel-fare'].map(k => pauseEl.querySelector(`[data-act="${k}"]`).style.display); closePause(false);
+    courierJob = { id: COURIER_ROUTES[0].id, took: 3 };
+    openPause(); pauseEl.querySelector('[data-act="cancel-courier"]').click(); out.courier = courierJob;
+    const c = cars.find(o => o.kind === 'taxi' && !o.rider); startTaxiShift(c);
+    const p = people.find(q => !q.hidden); pickUp(p);
+    openPause(); pauseEl.querySelector('[data-act="cancel-fare"]').click();
+    out.fare = [job.ride, p.hidden, !!job, paused];
+    for (let t = 0; t < 20 && !job.hail; t += 0.1) stepTaxiJob(0.1);
+    out.next = !!job.hail;
+    return out;
+  });
+  assert.deepStrictEqual(r.none, ['none', 'none'], 'nothing to cancel: no buttons');
+  assert.strictEqual(r.courier, null, 'the delivery is off');
+  assert.deepStrictEqual(r.fare, [null, false, true, false], 'the fare is out on the pavement, still on shift, back to the game');
+  assert.ok(r.next, 'and soon someone else is waving you down');
+}));

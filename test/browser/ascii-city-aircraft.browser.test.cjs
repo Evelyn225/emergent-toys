@@ -127,6 +127,8 @@ test('the terminal: in by its doors with E, the departures board keeping time in
         if (clear >= 6 && !reached) out.pockets.push(`${cx},${cy}`);
       }
       out.stock = stockFor('terminal', room.word).length;
+      // C at a row of seats at a gate: you sit in one, facing the planes
+      px = 14.3; py = 3.6; a = -Math.PI / 2; out.sat = sitDown() && body.seat.fy === -1; standUp();
       // out through the west gates' door: on the apron, by it, facing the planes
       px = 23; py = 1.6; a = -Math.PI / 2; leaveRoom();
       out.out = [mode, terminalDoor(px, py), !airportBlocked(px, py, 0.03)];
@@ -142,6 +144,7 @@ test('the terminal: in by its doors with E, the departures board keeping time in
     assert.deepEqual(r.gates, ['east', 'west'], 'both doors out to the gates, past security');
     assert.ok(r.cafe && r.stock > 0, 'up to the café counter, and it sells you something');
     assert.ok(r.loo, 'and the restrooms');
+    assert.ok(r.sat, 'and you can sit at a gate');
     assert.deepEqual(r.pockets, [], 'no floor you cannot get to');
     assert.deepEqual(r.out, ['walk', 1, true], 'out by the gates: on the apron at that door');
     assert.deepEqual(errors, []);
