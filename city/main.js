@@ -254,6 +254,7 @@ function loop(t) {
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
   stepAirWrecks(dt); // (burning and sinking aircraft: flight.js)
+  stepWakes(); // (boat wakes: marina.js)
   stepTask(dt);
   stepLaundry();
   stepEvents(dt);

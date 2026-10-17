@@ -8913,8 +8913,8 @@ function floorBaseCell(i, r, x, rx, ry) {
       const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = isleEdge(wx, wy) > -0.3; // white water round the island
       set(i, surf ? '~' : n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', surf ? C(WHITE, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
-      if (wakes.length && wakeAt(wx, wy) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her
-        const froth = noise(wx * 22, wy * 22 + T * 0.8, 95), k = WAKE_HIT.k * (WAKE_HIT.arm ? 0.6 + 0.4 * froth : froth); // (churn: broken white water)
+      if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her
+        const froth = noise(wx * 7, wy * 7 + T * 0.8, 95), k = WAKE_HIT.k * (WAKE_HIT.arm ? 0.6 + 0.4 * froth : froth); // (churn: broken white water)
         if (k > 0.18) { set(i, k > 0.5 ? '~' : WAKE_HIT.arm ? '-' : ':', C(WHITE, Math.max(L * 1.5, 5 + k * 10))); BG[i] = C(BLUE, 1 + day * 3 + k * 1.6); FL[i] = 0; }
       }
       const lb = beamOnWater(wx, wy); // the lighthouse beam sweeping over it
@@ -17695,7 +17695,8 @@ function trailWake(b, x, y, hw, moving) {
   if (!w) { if (moving < 0.05) return; wakes.push(w = { b, pts: [] }); }
   const last = w.pts[w.pts.length - 1];
   if (moving >= 0.05 && (!last || T - last.t > WAKE_STEP)) {
-    const v = last ? Math.min(1.5, Math.hypot(rel(x - last.x), rel(y - last.y)) / Math.max(0.01, T - last.t)) : 0.3;
+    if (last) { x = last.x + rel(x - last.x); y = last.y + rel(y - last.y); } // (unwrapped, so a trail across the world's edge stays in one piece)
+    const v = last ? Math.min(1.5, Math.hypot(x - last.x, y - last.y) / Math.max(0.01, T - last.t)) : 0.3;
     w.pts.push({ x, y, t: T, v, hw, s: moving });
   }
   while (w.pts.length && T - w.pts[0].t > WAKE_LIFE) w.pts.shift();
@@ -17703,9 +17704,22 @@ function trailWake(b, x, y, hw, moving) {
   const pad = 0.6;
   w.bb = [Math.min(...w.pts.map(p => p.x)) - pad, Math.min(...w.pts.map(p => p.y)) - pad, Math.max(...w.pts.map(p => p.x)) + pad, Math.max(...w.pts.map(p => p.y)) + pad];
 }
-// how much foam at (wx, wy): 0 none; and whether it's one of the arms (else the churn down the middle)
+// every frame, seen or not (a trail laid only while she's drawn dies whenever you look away): the bay boats going
+// round, and the one you're driving
+function stepWakes() {
+  const stern = (b, x, y, hx, hy, moving) => { const { hl, hw } = BOAT_KINDS[b.kind]; trailWake(b, mod(x - hx * hl * 0.9, N), mod(y - hy * hl * 0.9, N), hw, moving); };
+  for (const b of boats) {
+    const p = boatAt(b, T);
+    if (Math.hypot(rel(p.x - px), rel(p.y - py)) > vis + 4) continue; // (out past sight: and so slow her trail's under a cell)
+    const q = boatAt(b, T + 0.3), hx = rel(q.x - p.x), hy = rel(q.y - p.y), n = Math.hypot(hx, hy) || 1;
+    stern(b, p.x, p.y, hx / n, hy / n, 0.6);
+  }
+  for (const b of fleet) stern(b, b.x, b.y, b.hx, b.hy, b === sea ? clamp(Math.abs(b.v) / 0.8, 0, 1) : 0);
+}
+// how much foam at (wx, wy): 0 none; and whether it's one of the arms (else the churn down the middle). foot: how much
+// water the screen cell covers there, so a far arm still lands on a whole cell instead of flickering between them
 const WAKE_HIT = { k: 0, arm: false };
-function wakeAt(wx, wy) {
+function wakeAt(wx, wy, foot = 0) {
   WAKE_HIT.k = 0;
   for (const w of wakes) {
     const [x0, y0, x1, y1] = w.bb, qx = x0 + rel(wx - x0), qy = y0 + rel(wy - y0);
@@ -17715,9 +17729,9 @@ function wakeAt(wx, wy) {
       const f = clamp(((qx - p.x) * ex + (qy - p.y) * ey) / l2, 0, 1), d = Math.hypot(qx - p.x - ex * f, qy - p.y - ey * f);
       const age = T - (p.t + (q.t - p.t) * f), v = p.v + (q.v - p.v) * f, life = 1 - age / WAKE_LIFE;
       if (life <= 0) break;
-      const spread = p.hw * 0.7 + age * v * 0.36, band = 0.03 + age * 0.014; // (the arms open at about 20 degrees off its track)
+      const spread = p.hw * 0.7 + age * v * 0.36, band = Math.max(0.03 + age * 0.014, foot * 0.6); // (the arms open at about 20 degrees off its track)
       const arm = Math.max(0, 1 - Math.abs(d - spread) / band) * life * p.s;
-      const churn = d < p.hw * 0.6 && age < 1.2 ? (1 - d / (p.hw * 0.6)) * (1 - age / 1.2) * p.s : 0;
+      const cw = Math.max(p.hw * 0.6, foot * 0.6), churn = d < cw && age < 1.2 ? (1 - d / cw) * (1 - age / 1.2) * p.s : 0;
       if (arm > WAKE_HIT.k) { WAKE_HIT.k = arm; WAKE_HIT.arm = true; }
       if (churn > WAKE_HIT.k) { WAKE_HIT.k = churn; WAKE_HIT.arm = false; }
     }
@@ -17757,7 +17771,6 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
     const top = fb * (1 + 0.28 * tm * tm);
     part((u0 + u1) / 2, (u1 - u0) / 2 + 0.002, hw * Math.max(0.12, Math.sqrt(1 - tm ** 1.7)), 0, top, hull(top));
   }
-  trailWake(b, mod(vx + px - hx * hl * 0.9, N), mod(vy + py - hy * hl * 0.9, N), hw, moving); // (the wake: laid on the water, see wakeAt)
   const glass = (frame) => (i, t, L) => { // windows: dark by day with a glint, lit up warm after dark
     const f = HIT.face;
     if (f === 5 || f === 6) { BG[i] = C(WHITE, 1.5 + L * 0.35); return set(i, ' ', 0), true; }
@@ -24573,6 +24586,7 @@ function loop(t) {
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
   stepAirWrecks(dt); // (burning and sinking aircraft: flight.js)
+  stepWakes(); // (boat wakes: marina.js)
   stepTask(dt);
   stepLaundry();
   stepEvents(dt);
