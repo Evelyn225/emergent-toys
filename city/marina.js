@@ -9,6 +9,44 @@ function signChar(word, q, dz, t, half) {
   return Math.abs(dz) < t / projY / 2 && k >= 0 && k < word.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
 }
 const BOW_SLICES = 6;
+// ---- wakes: where each moving boat's stern has been lately, laid on the water (floorBaseCell asks wakeAt): two arms of
+// foam spreading out behind it at the angle wakes make, churned white water close behind, all of it fading. A trail
+// follows the boat's actual path, round its turns. { b, pts: [{ x, y, t, v, hw }], bb: [x0, y0, x1, y1] }
+const WAKE_LIFE = 4.5, WAKE_STEP = 0.14, wakes = [];
+function trailWake(b, x, y, hw, moving) {
+  let w = wakes.find(o => o.b === b);
+  if (!w) { if (moving < 0.05) return; wakes.push(w = { b, pts: [] }); }
+  const last = w.pts[w.pts.length - 1];
+  if (moving >= 0.05 && (!last || T - last.t > WAKE_STEP)) {
+    const v = last ? Math.min(1.5, Math.hypot(rel(x - last.x), rel(y - last.y)) / Math.max(0.01, T - last.t)) : 0.3;
+    w.pts.push({ x, y, t: T, v, hw, s: moving });
+  }
+  while (w.pts.length && T - w.pts[0].t > WAKE_LIFE) w.pts.shift();
+  if (!w.pts.length) { wakes.splice(wakes.indexOf(w), 1); return; }
+  const pad = 0.6;
+  w.bb = [Math.min(...w.pts.map(p => p.x)) - pad, Math.min(...w.pts.map(p => p.y)) - pad, Math.max(...w.pts.map(p => p.x)) + pad, Math.max(...w.pts.map(p => p.y)) + pad];
+}
+// how much foam at (wx, wy): 0 none; and whether it's one of the arms (else the churn down the middle)
+const WAKE_HIT = { k: 0, arm: false };
+function wakeAt(wx, wy) {
+  WAKE_HIT.k = 0;
+  for (const w of wakes) {
+    const [x0, y0, x1, y1] = w.bb, qx = x0 + rel(wx - x0), qy = y0 + rel(wy - y0);
+    if (qx < x0 || qx > x1 || qy < y0 || qy > y1) continue;
+    for (let n = w.pts.length - 1; n > 0; n--) {
+      const p = w.pts[n], q = w.pts[n - 1], ex = q.x - p.x, ey = q.y - p.y, l2 = ex * ex + ey * ey || 1e-6;
+      const f = clamp(((qx - p.x) * ex + (qy - p.y) * ey) / l2, 0, 1), d = Math.hypot(qx - p.x - ex * f, qy - p.y - ey * f);
+      const age = T - (p.t + (q.t - p.t) * f), v = p.v + (q.v - p.v) * f, life = 1 - age / WAKE_LIFE;
+      if (life <= 0) break;
+      const spread = p.hw * 0.7 + age * v * 0.36, band = 0.03 + age * 0.014; // (the arms open at about 20 degrees off its track)
+      const arm = Math.max(0, 1 - Math.abs(d - spread) / band) * life * p.s;
+      const churn = d < p.hw * 0.6 && age < 1.2 ? (1 - d / (p.hw * 0.6)) * (1 - age / 1.2) * p.s : 0;
+      if (arm > WAKE_HIT.k) { WAKE_HIT.k = arm; WAKE_HIT.arm = true; }
+      if (churn > WAKE_HIT.k) { WAKE_HIT.k = churn; WAKE_HIT.arm = false; }
+    }
+  }
+  return WAKE_HIT.k;
+}
 const boatBob = (x, y) => Math.sin(T * 1.3 + x * 3 + y * 2) * 0.0035;
 // b: { kind, col }. (vx, vy) relative to you, (hx, hy) the way the bow points. moving: 0..1 how hard it's going (a wake)
 function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
@@ -42,14 +80,7 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
     const top = fb * (1 + 0.28 * tm * tm);
     part((u0 + u1) / 2, (u1 - u0) / 2 + 0.002, hw * Math.max(0.12, Math.sqrt(1 - tm ** 1.7)), 0, top, hull(top));
   }
-  if (moving > 0.05) part(-hl - hl * 1.2, hl * 1.2, hw * 3, 0, 0.002, (i, t, L) => { // the wake: a V of foam opening out behind
-    if (HIT.face !== 5) return false;
-    const q = (-hl - HIT.u) / (hl * 2.4), edge = hw * (0.7 + q * 2.2), av = Math.abs(HIT.v);
-    const n = hash(Math.floor(HIT.u * 50 - T * 6), Math.floor(HIT.v * 50), 1502);
-    if (Math.abs(av - edge) < 0.02 + q * 0.02 && n > q * 0.8) return set(i, '~', C(WHITE, L * (1.3 - q) * moving)), true;
-    if (av < hw * 0.4 * (1 - q) && n > 0.7 + q * 0.3) return set(i, n > 0.8 ? '~' : '-', C(WHITE, L * (1 - q) * moving)), true; // the propeller's wash
-    return false;
-  });
+  trailWake(b, mod(vx + px - hx * hl * 0.9, N), mod(vy + py - hy * hl * 0.9, N), hw, moving); // (the wake: laid on the water, see wakeAt)
   const glass = (frame) => (i, t, L) => { // windows: dark by day with a glint, lit up warm after dark
     const f = HIT.face;
     if (f === 5 || f === 6) { BG[i] = C(WHITE, 1.5 + L * 0.35); return set(i, ' ', 0), true; }

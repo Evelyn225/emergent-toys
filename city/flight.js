@@ -101,9 +101,11 @@ function startWreck(c, kind) {
 }
 function stepWreck(dt) {
   const w = wreckCam;
-  if ((w.t += dt) < WRECK_T[w.kind]) return;
+  w.t += dt;
+  if (w.c.falling && w.t > WRECK_T[w.kind] * 0.5) w.t = WRECK_T[w.kind] * 0.5; // (still coming down: watch it all the way)
+  if (w.t < WRECK_T[w.kind]) return;
   wreckCam = null;
-  if (w.kind === 'crash') airCrash(w.c); else airDitch(w.c);
+  if (w.kind === 'crash' && !w.c.ditched) airCrash(w.c); else airDitch(w.c);
   if (mode !== 'room') { wakeT = 2; fade = 1; } // (coming round: in from black)
 }
 // over the picture (render.js, after it's drawn): the flash of the hit, then dark; or the bay's green-blue over it
@@ -163,6 +165,7 @@ function swimAshore(x, y) {
 // burning aircraft go up (the bang hurts whoever's near); sunk ones sink; smoke off the damaged ones
 let airSmokeT = 0;
 function stepAirWrecks(dt) {
+  stepCraftFalls(dt);
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }

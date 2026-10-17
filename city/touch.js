@@ -11,10 +11,10 @@ const TOUCH_CSS = `
     color: rgba(255,255,255,0.9); font: inherit; touch-action: none; user-select: none; -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent; padding: 0 12px; height: 44px; border-radius: 22px; white-space: nowrap; }
   #touch button.down { background: rgba(255,255,255,0.25); color: #fff; }
-  #touch .bar { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: flex; gap: 6px; }
-  #touch .bar button { height: 36px; border-radius: 6px; padding: 0 10px; }
+  #touch .bar { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: flex; gap: 8px; }
+  #touch .bar button { height: 50px; min-width: 64px; border-radius: 8px; padding: 0 16px; font-size: 19px; } /* (big enough for a thumb) */
   #touch .bar button.on { background: rgba(255,255,255,0.2); }
-  #touch .sheet { position: absolute; top: calc(52px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: none;
+  #touch .sheet { position: absolute; top: calc(66px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: none;
     grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px; background: rgba(6,6,8,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; pointer-events: auto; }
   #touch .sheet.open { display: grid; }
   #touch .sheet button { border-radius: 6px; min-width: 110px; }
@@ -33,6 +33,13 @@ const TOUCH_CSS = `
 // how much of the screen the buttons take, for the HUD and the minigames to keep clear of (px)
 const TOUCH_PAD_W = 180, TOUCH_PAD_H = 190;
 let touchEl = null, sheetOpen = false;
+// where the button bar up top is, in canvas pixels (null: no bar showing)
+function touchBarBox() {
+  const b = touchEl && touchEl.querySelector('.bar');
+  if (!b || b.style.visibility === 'hidden') return null;
+  const r = b.getBoundingClientRect(), k = cv.width / innerWidth;
+  return { left: r.left * k, bottom: r.bottom * k };
+}
 function keyDown(code) { onkeydown({ code, repeat: false }); }
 function keyUp(code) { onkeyup({ code }); }
 

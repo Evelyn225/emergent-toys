@@ -292,3 +292,24 @@ test('you walk into a parked plane\'s wings and tail, not just its fuselage', ()
     assert.deepEqual(r, { tipL: true, tipR: true, root: true, tail: true, clearAhead: false, clearPast: false }, type);
   }
 });
+
+test('flown into the side of a building up high, a plane drops from where it hit, nose going over, instead of jumping to the ground', () => {
+  const { ev } = loadCity();
+  const r = JSON.parse(ev(`(() => {
+    // a tall building, and a plane flying at it at half its height
+    let cell = -1;
+    for (let k = 0; k < N * N && cell < 0; k++) if (map[k] > 6 && !map[k - 1] && !map[k - 2] && !map[k - 3]) cell = k;
+    const x = cell % N, y = Math.floor(cell / N), c = aircraft.find(o => o.type === 'jet');
+    Object.assign(c, { x: x - 2, y: y + 0.5, z: map[cell] / 2, yaw: 0, pitch: 0, roll: 0, v: 4, vz: 0, ground: false, throttle: 1, state: 'flown' });
+    let hit = null;
+    for (let t = 0; t < 3 && !hit; t += 1 / 60) { const e = flyStep(c, { throttle: 0, pitch: 0, turn: 0, lift: 0 }, 1 / 60); if (e.includes('crash')) hit = c.z; }
+    const after = c.z, zs = [];
+    for (let t = 0; t < 8 && c.falling; t += 1 / 60) { T += 1 / 60; stepCraftFalls(1 / 60); zs.push(c.z); }
+    return JSON.stringify({ hit, after, falling: c.falling, landed: c.z, ground: c.ground, smooth: zs.every((z, k) => k === 0 || zs[k - 1] - z < 0.5), steps: zs.length, nose: c.pitch });
+  })()`));
+  assert.ok(r.hit > 1, `it hit up high (${r.hit})`);
+  assert.equal(r.after, r.hit, 'and stays where it hit, for the moment');
+  assert.ok(r.steps > 30 && r.smooth, `then comes down, a little each frame (${r.steps} frames)`);
+  assert.ok(!r.falling && r.ground && r.landed < 0.5, `down on the ground at the end (${r.landed})`);
+  assert.ok(r.nose < 0, 'nose first');
+});

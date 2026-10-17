@@ -3716,11 +3716,30 @@ function moveCraft(a, T_, vx, vy, dt, ev) {
   if (!gentle) { damageCraft(a, 25 + down * 15); ev.push('hard'); } else ev.push('land');
   return ev;
 }
+// it hits: where it is, if that's on something (the ground, a roof); up in the air against a wall it doesn't stop there
+// or jump to the ground below: it drops, nose going over, till it lands on whatever's under it (stepCraftFalls)
 function crashCraft(a, speed, ev) {
-  a.crashSpeed = speed; a.v = 0; a.hvx = a.hvy = 0; a.vz = 0; a.ground = true; a.roll = 0; a.pitch = 0;
-  a.z = Math.max(0, builtHeight(a.x, a.y, a.z));
+  a.crashSpeed = speed; a.v = 0; a.hvx = a.hvy = 0; a.vz = 0; a.roll = 0;
+  const below = Math.max(0, builtHeight(a.x, a.y, a.z));
+  if (a.z > below + 0.05) { a.falling = true; a.ground = false; a.spin = (a.yaw * 7 % 2 > 1 ? 1 : -1) * (0.6 + speed * 0.2); }
+  else { a.z = below; a.ground = true; a.pitch = 0; }
   damageCraft(a, speed > 1.5 ? DMG_FIRE : 40 + speed * 30);
   ev.push('crash'); return ev;
+}
+// wrecks coming down: gravity, tumbling, bounced back off the wall a little; onto the ground or a roof, or into the
+// water (where it sinks)
+function stepCraftFalls(dt) {
+  for (const a of aircraft) {
+    if (!a.falling) continue;
+    a.vz -= G * dt; a.z += a.vz * dt;
+    a.pitch = Math.max(-1.1, a.pitch - 0.8 * dt); a.roll += a.spin * dt;
+    const bx = mod(a.x - Math.cos(a.yaw) * 0.25 * dt, N), by = mod(a.y - Math.sin(a.yaw) * 0.25 * dt, N);
+    if (!craftBlocked(bx, by) && builtHeight(bx, by, a.z) <= a.z) { a.x = bx; a.y = by; }
+    const below = Math.max(0, builtHeight(a.x, a.y, a.z));
+    if (a.z > below) continue;
+    a.z = below; a.vz = 0; a.falling = false; a.ground = true; a.roll = 0; a.pitch = Math.max(a.pitch, -0.35);
+    if (below === 0 && overWater(a.x, a.y)) { a.ditched = true; a.sinkT = T; }
+  }
 }
 function ditchCraft(a, ev) { a.ditched = true; a.v = 0; a.hvx = a.hvy = 0; a.vz = 0; a.z = 0; a.ground = true; ev.push('ditch'); return ev; }
 // aircraft damage works as the cars' does (damage.js): at the top it burns, and BURN_T later it goes up
@@ -8894,6 +8913,10 @@ function floorBaseCell(i, r, x, rx, ry) {
       const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = isleEdge(wx, wy) > -0.3; // white water round the island
       set(i, surf ? '~' : n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', surf ? C(WHITE, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
+      if (wakes.length && wakeAt(wx, wy) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her
+        const froth = noise(wx * 22, wy * 22 + T * 0.8, 95), k = WAKE_HIT.k * (WAKE_HIT.arm ? 0.6 + 0.4 * froth : froth); // (churn: broken white water)
+        if (k > 0.18) { set(i, k > 0.5 ? '~' : WAKE_HIT.arm ? '-' : ':', C(WHITE, Math.max(L * 1.5, 5 + k * 10))); BG[i] = C(BLUE, 1 + day * 3 + k * 1.6); FL[i] = 0; }
+      }
       const lb = beamOnWater(wx, wy); // the lighthouse beam sweeping over it
       if (lb > 0.05) { BG[i] = C(WARM, 1 + lb * 7); if (CH[i] === ' ') CH[i] = '-'; COL[i] = C(YEL, 6 + lb * 9); FL[i] = 0; }
       return;
@@ -10695,7 +10718,6 @@ function drawElStairs(st) {
   if (far) return;
   // rails round the landings (open where the stairs come in, and onto the deck)
   for (const [ua, ub, z] of [[ELS.u1, ELS.u2, H / 2]]) for (const v of [ELS.v0, ELS.v1]) { const [ax, ay] = at(ua, v), [bx, by] = at(ub, v); rod(ax, ay, z + 0.1, bx, by, z + 0.1, 0.004); }
-  { const [ax, ay] = at(ELS.u1, ELS.v0), [bx, by] = at(ELS.u1, ELS.v1); rod(ax, ay, H / 2 + 0.1, bx, by, H / 2 + 0.1, 0.004); } // (the end of the halfway landing)
   { const [ax, ay] = at(ELS.u4, ELS.v0), [bx, by] = at(ELS.u4, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the far end of the top
   { const [ax, ay] = at(ELS.u3, ELS.v0), [bx, by] = at(ELS.u4, ELS.v0); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the building side of the top
   { const [ax, ay] = at(ELS.u3, ELS.v1), [bx, by] = at(ELS.u3, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the near side, past the stairs' head
@@ -17664,6 +17686,44 @@ function signChar(word, q, dz, t, half) {
   return Math.abs(dz) < t / projY / 2 && k >= 0 && k < word.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
 }
 const BOW_SLICES = 6;
+// ---- wakes: where each moving boat's stern has been lately, laid on the water (floorBaseCell asks wakeAt): two arms of
+// foam spreading out behind it at the angle wakes make, churned white water close behind, all of it fading. A trail
+// follows the boat's actual path, round its turns. { b, pts: [{ x, y, t, v, hw }], bb: [x0, y0, x1, y1] }
+const WAKE_LIFE = 4.5, WAKE_STEP = 0.14, wakes = [];
+function trailWake(b, x, y, hw, moving) {
+  let w = wakes.find(o => o.b === b);
+  if (!w) { if (moving < 0.05) return; wakes.push(w = { b, pts: [] }); }
+  const last = w.pts[w.pts.length - 1];
+  if (moving >= 0.05 && (!last || T - last.t > WAKE_STEP)) {
+    const v = last ? Math.min(1.5, Math.hypot(rel(x - last.x), rel(y - last.y)) / Math.max(0.01, T - last.t)) : 0.3;
+    w.pts.push({ x, y, t: T, v, hw, s: moving });
+  }
+  while (w.pts.length && T - w.pts[0].t > WAKE_LIFE) w.pts.shift();
+  if (!w.pts.length) { wakes.splice(wakes.indexOf(w), 1); return; }
+  const pad = 0.6;
+  w.bb = [Math.min(...w.pts.map(p => p.x)) - pad, Math.min(...w.pts.map(p => p.y)) - pad, Math.max(...w.pts.map(p => p.x)) + pad, Math.max(...w.pts.map(p => p.y)) + pad];
+}
+// how much foam at (wx, wy): 0 none; and whether it's one of the arms (else the churn down the middle)
+const WAKE_HIT = { k: 0, arm: false };
+function wakeAt(wx, wy) {
+  WAKE_HIT.k = 0;
+  for (const w of wakes) {
+    const [x0, y0, x1, y1] = w.bb, qx = x0 + rel(wx - x0), qy = y0 + rel(wy - y0);
+    if (qx < x0 || qx > x1 || qy < y0 || qy > y1) continue;
+    for (let n = w.pts.length - 1; n > 0; n--) {
+      const p = w.pts[n], q = w.pts[n - 1], ex = q.x - p.x, ey = q.y - p.y, l2 = ex * ex + ey * ey || 1e-6;
+      const f = clamp(((qx - p.x) * ex + (qy - p.y) * ey) / l2, 0, 1), d = Math.hypot(qx - p.x - ex * f, qy - p.y - ey * f);
+      const age = T - (p.t + (q.t - p.t) * f), v = p.v + (q.v - p.v) * f, life = 1 - age / WAKE_LIFE;
+      if (life <= 0) break;
+      const spread = p.hw * 0.7 + age * v * 0.36, band = 0.03 + age * 0.014; // (the arms open at about 20 degrees off its track)
+      const arm = Math.max(0, 1 - Math.abs(d - spread) / band) * life * p.s;
+      const churn = d < p.hw * 0.6 && age < 1.2 ? (1 - d / (p.hw * 0.6)) * (1 - age / 1.2) * p.s : 0;
+      if (arm > WAKE_HIT.k) { WAKE_HIT.k = arm; WAKE_HIT.arm = true; }
+      if (churn > WAKE_HIT.k) { WAKE_HIT.k = churn; WAKE_HIT.arm = false; }
+    }
+  }
+  return WAKE_HIT.k;
+}
 const boatBob = (x, y) => Math.sin(T * 1.3 + x * 3 + y * 2) * 0.0035;
 // b: { kind, col }. (vx, vy) relative to you, (hx, hy) the way the bow points. moving: 0..1 how hard it's going (a wake)
 function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
@@ -17697,14 +17757,7 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
     const top = fb * (1 + 0.28 * tm * tm);
     part((u0 + u1) / 2, (u1 - u0) / 2 + 0.002, hw * Math.max(0.12, Math.sqrt(1 - tm ** 1.7)), 0, top, hull(top));
   }
-  if (moving > 0.05) part(-hl - hl * 1.2, hl * 1.2, hw * 3, 0, 0.002, (i, t, L) => { // the wake: a V of foam opening out behind
-    if (HIT.face !== 5) return false;
-    const q = (-hl - HIT.u) / (hl * 2.4), edge = hw * (0.7 + q * 2.2), av = Math.abs(HIT.v);
-    const n = hash(Math.floor(HIT.u * 50 - T * 6), Math.floor(HIT.v * 50), 1502);
-    if (Math.abs(av - edge) < 0.02 + q * 0.02 && n > q * 0.8) return set(i, '~', C(WHITE, L * (1.3 - q) * moving)), true;
-    if (av < hw * 0.4 * (1 - q) && n > 0.7 + q * 0.3) return set(i, n > 0.8 ? '~' : '-', C(WHITE, L * (1 - q) * moving)), true; // the propeller's wash
-    return false;
-  });
+  trailWake(b, mod(vx + px - hx * hl * 0.9, N), mod(vy + py - hy * hl * 0.9, N), hw, moving); // (the wake: laid on the water, see wakeAt)
   const glass = (frame) => (i, t, L) => { // windows: dark by day with a glint, lit up warm after dark
     const f = HIT.face;
     if (f === 5 || f === 6) { BG[i] = C(WHITE, 1.5 + L * 0.35); return set(i, ' ', 0), true; }
@@ -18496,13 +18549,15 @@ function hud() {
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
-  // on a phone the buttons take the top right: the text stays left of them
-  const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
+  // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
+  // phone held upright), goes underneath them
+  const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, top = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
+  const maxW = top ? cv.width - 12 : beside;
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = [...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
   const meters = needMeters();
-  hudBottom = (lines.length + task_.length + 1) * FS + 14;
+  hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
   wantedHud();
   if (job && mode === 'drive') jobArrow();
   else if(courierRoute()&&mode!=='room')jobArrow(...courierGuide());
@@ -18510,16 +18565,16 @@ function hud() {
   hotbar();
   g.font = FS + 'px monospace';
   const w = Math.max(...lines.map(l => g.measureText(l).width));
-  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, w + 8, FS * lines.length + 6);
-  g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, top, w + 8, FS * lines.length + 6);
+  g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, top + 3 + k * FS));
   { // hunger, thirst and (once it's down) health, under the help line: short bars, red and blinking when empty
-    const y = FS * lines.length + 6;
+    const y = top + FS * lines.length + 6;
     let x0 = 4;
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, meters.reduce((t, m) => t + g.measureText(m[0]).width + g.measureText('  ').width, 4) + 4, FS + 4);
     for (const [txt, col] of meters) { g.fillStyle = col; g.fillText(txt, x0, y + 2); x0 += g.measureText(txt + '  ').width; }
   }
   if (task_.length) { // the favour you're doing, under the help line
-    const y = FS * (lines.length + 1) + 10, tw = Math.max(...task_.map(l => g.measureText(l).width));
+    const y = top + FS * (lines.length + 1) + 10, tw = Math.max(...task_.map(l => g.measureText(l).width));
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
     g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
   }
@@ -19964,9 +20019,11 @@ function startWreck(c, kind) {
 }
 function stepWreck(dt) {
   const w = wreckCam;
-  if ((w.t += dt) < WRECK_T[w.kind]) return;
+  w.t += dt;
+  if (w.c.falling && w.t > WRECK_T[w.kind] * 0.5) w.t = WRECK_T[w.kind] * 0.5; // (still coming down: watch it all the way)
+  if (w.t < WRECK_T[w.kind]) return;
   wreckCam = null;
-  if (w.kind === 'crash') airCrash(w.c); else airDitch(w.c);
+  if (w.kind === 'crash' && !w.c.ditched) airCrash(w.c); else airDitch(w.c);
   if (mode !== 'room') { wakeT = 2; fade = 1; } // (coming round: in from black)
 }
 // over the picture (render.js, after it's drawn): the flash of the hit, then dark; or the bay's green-blue over it
@@ -20026,6 +20083,7 @@ function swimAshore(x, y) {
 // burning aircraft go up (the bang hurts whoever's near); sunk ones sink; smoke off the damaged ones
 let airSmokeT = 0;
 function stepAirWrecks(dt) {
+  stepCraftFalls(dt);
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
@@ -24632,10 +24690,10 @@ const TOUCH_CSS = `
     color: rgba(255,255,255,0.9); font: inherit; touch-action: none; user-select: none; -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent; padding: 0 12px; height: 44px; border-radius: 22px; white-space: nowrap; }
   #touch button.down { background: rgba(255,255,255,0.25); color: #fff; }
-  #touch .bar { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: flex; gap: 6px; }
-  #touch .bar button { height: 36px; border-radius: 6px; padding: 0 10px; }
+  #touch .bar { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: flex; gap: 8px; }
+  #touch .bar button { height: 50px; min-width: 64px; border-radius: 8px; padding: 0 16px; font-size: 19px; } /* (big enough for a thumb) */
   #touch .bar button.on { background: rgba(255,255,255,0.2); }
-  #touch .sheet { position: absolute; top: calc(52px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: none;
+  #touch .sheet { position: absolute; top: calc(66px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: none;
     grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px; background: rgba(6,6,8,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; pointer-events: auto; }
   #touch .sheet.open { display: grid; }
   #touch .sheet button { border-radius: 6px; min-width: 110px; }
@@ -24654,6 +24712,13 @@ const TOUCH_CSS = `
 // how much of the screen the buttons take, for the HUD and the minigames to keep clear of (px)
 const TOUCH_PAD_W = 180, TOUCH_PAD_H = 190;
 let touchEl = null, sheetOpen = false;
+// where the button bar up top is, in canvas pixels (null: no bar showing)
+function touchBarBox() {
+  const b = touchEl && touchEl.querySelector('.bar');
+  if (!b || b.style.visibility === 'hidden') return null;
+  const r = b.getBoundingClientRect(), k = cv.width / innerWidth;
+  return { left: r.left * k, bottom: r.bottom * k };
+}
 function keyDown(code) { onkeydown({ code, repeat: false }); }
 function keyUp(code) { onkeyup({ code }); }
 
