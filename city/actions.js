@@ -256,7 +256,12 @@ function interact() {
     }
     else { // a stolen car: if anyone saw, the police hear about it
       mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
-      if (c.owned) { c.parked = false; say(`You get into your ${ITEMS[c.model].name}.`, 2); } // yours, bought and paid for
+      const pump = gasFilling(c); c.pit = null; c.gas = null; // (filling up at a gas station: gas.js)
+      if (pump && !c.owned && !c.mine) {
+        c.mine = true; ejectDriver(c);
+        const w = crime('steal', c.x, c.y);
+        say(w === 'cop' ? 'A cop saw that.' : 'The driver\'s round the back with the nozzle. You slide in and pull away; the hose drops out of the tank and they\'re left shouting at the pump.', 3);
+      } else if (c.owned) { c.parked = false; say(`You get into your ${ITEMS[c.model].name}.`, 2); } // yours, bought and paid for
       else if (c.mine) { c.parked = false; } // your own (stolen) car, where you left it
       else {
         c.mine = true; ejectDriver(c);
@@ -291,6 +296,8 @@ function interact() {
   if (nearLighthouse()) return enterRoom('lighthouse', { word: 'LIGHTHOUSE', ret: [px, py, a], line: 'Mind the stairs. Two hundred and twelve of them.' }, [4, 6.2, -Math.PI / 2]);
   const cd = churchDoor();
   if (cd) return enterCathedral(cd);
+  const td = terminalDoor(px, py);
+  if (td >= 0) return enterTerminal(td); // (the airport: terminal.js)
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
@@ -360,6 +367,7 @@ function leaveRoom() {
   if (room.kind === 'hotelroom' && room.lobby.grandHotel) return enterRoom('grandhotel', room.lobby, [7, 6.5, -Math.PI / 2]);
   if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
+  else if (room.kind === 'terminal') leaveTerminal(); // (by whichever door: terminal.js)
   else if (room.kind === 'hospital') {
     // Use the front door for visits and recovery, including saved rooms with the old ambulance return point.
     const [rx, ry] = room.ret;

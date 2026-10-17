@@ -42,6 +42,11 @@ function failCourier() {
   if(!courierJob)return false;
   courierJob=null;courierRecords.failed++;return true;
 }
+// called off from the pause menu: the parcel goes back to the depot, no pay, nothing held against you
+function cancelCourier() {
+  if(!courierJob)return false;
+  courierJob=null;return true;
+}
 function courierRoute() { return courierJob && COURIER_ROUTES.find(r=>r.id===courierJob.id); }
 function courierAtRecipient() {
   const r=courierRoute();

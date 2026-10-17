@@ -61,10 +61,23 @@ ROOM_FOR.STORAGE = 'storage';
 // a room's bathroom (def.wc): its own little room off the floor, 'W' walls round it with a doorway, white tiles inside.
 // sign: the wall cell the WC sign goes on (mx, my) and where along it
 const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && y >= w.y0 && y < w.y1;
+// is wall cell (mx, my) one of the bathroom's own (touching it), seen from inside it? Then it's tiled
+const wcWallInside = (mx, my, w = room.def.wc) => !!w && inWc(px, py, w) && mx >= w.x0 - 1 && mx <= w.x1 && my >= w.y0 - 1 && my <= w.y1;
+// a washbasin on its pedestal, its back to the wall behind (-fx, -fy), a mirror over it
+const washbasin = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx, vy, 0.06, 0, 0.72, (i, t, L) => { BG[i] = C(WHITE, (3 + L * 0.3) * drumLit(0.06)); return set(i, ' ', 0), true; });
+  drum(vx, vy, 0.22, 0.72, 0.86, (i, t, L) => { if (HIT.face === 5) { const r = Math.hypot(HIT.u, HIT.v); BG[i] = C(r < 0.15 ? CYAN : WHITE, r < 0.15 ? 2 : 4); return set(i, r < 0.03 ? 'o' : ' ', C(GRAY, 4)), true; }
+    BG[i] = C(WHITE, (3.4 + L * 0.3) * drumLit(0.22)); return set(i, ' ', 0), true; });
+  rod(vx - fx * 0.2, vy - fy * 0.2, 0.86, vx - fx * 0.12, vy - fy * 0.12, 0.98, 0.012, GRAY, 1.3); // the tap
+  drawBox(boxAt(vx - fx * 0.27, vy - fy * 0.27, fx, fy, 0.01, 0.25, 1.15, 1.75), (i, t, L) => { BG[i] = C(CYAN, 1.6 + (HIT.w - 1.15) * 2); return set(i, fract((HIT.v + HIT.w) * 3) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; }); // the mirror
+}, [0.24, 0.24, 0.86]);
 function roomAt(x, y) {
   x = Math.floor(x); y = Math.floor(y);
   return room?.grid[y]?.[x] ?? '#'; // Cell centres and out-of-bounds search rays are safe.
 }
+// floors and ceilings beyond the ones roomFloor and roomCeil know, by name: (i, f, wx, wy, r, x, L) and (i, r, x, wx, wy)
+// (shops.js has the specialist shops')
+const ROOM_FLOORS = {}, ROOM_CEILS = {};
 // props
 const SP = (x, y, w, h, art, col, z = 0) => ({ x, y, w, h, art, col, z });
 // people (figures.js): standing about looking at you, or sitting (back: facing -y, the bar or the stage or the screen)
@@ -81,8 +94,9 @@ const barCrowd = () => { const h = mod(tod - 16, 24); return h < 12 ? 0.15 + 0.8
 const BX = (x, y, hl, hw, z0, z1, shade, ca = 1, sa = 0) => ({ box: { x, y, c: ca, s: sa, hl, hw, z0, z1 }, shade });
 const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
 // ---- room furniture in 3D (metres). Each is a prop { x, y, draw(vx, vy) } drawn from where you are.
-// foot: [half length, half width, height] of what blocks you, as furniture boxes do (none: you walk over or through it)
-const ROOM_MODEL = (x, y, draw, foot) => ({ x, y, draw, ...(foot && { box: { x, y, c: 1, s: 0, hl: foot[0], hw: foot[1], z0: 0, z1: foot[2] } }) });
+// foot: [half length, half width, height] of what blocks you, as furniture boxes do (none: you walk over or through it).
+// far: a plain shade for that box, for when it's seen from outside at the city's scale (a balcony's plant from the street)
+const ROOM_MODEL = (x, y, draw, foot, far) => ({ x, y, draw, ...(foot && { box: { x, y, c: 1, s: 0, hl: foot[0], hw: foot[1], z0: 0, z1: foot[2] } }), ...(far && { far }) });
 const drum = (vx, vy, r, z0, z1, shade) => drawBox(boxAt(vx, vy, 1, 0, r, r, z0, z1), shade, rayCopperDrum);
 const drumLit = r => 0.55 + 0.45 * Math.max(0, (-HIT.u * 0.55 + HIT.v * 0.35) / r); // (lit from over your left shoulder, as everything is)
 const CHROME = (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.5); return set(i, ' ', 0), true; };
@@ -95,7 +109,7 @@ const POT_PLANT = (x, y, h = 1.3, seed = x * 7 + y, solid = true) => ROOM_MODEL(
     const a = hash(seed, k, 4401) * Math.PI * 2, rr = 0.13 + hash(seed, k, 4403) * 0.07, r = Math.min(rr * 0.8, 0.05 + hash(seed, k, 4402) * 0.1), z = 0.5 + (h - 0.65) * (k + 0.5) / 7, tone = 0.75 + hash(seed, k, 4404) * 0.5; // (each clump touching the stem, the bush within 0.3m of it)
     dot(vx + Math.cos(a) * r, vy + Math.sin(a) * r, z, rr, (i, t, L) => { BG[i] = C(GREEN, (1.4 + L * 0.3) * tone); return set(i, k & 1 ? '%' : '&', C(GREEN, L * 0.55 * tone)), true; });
   }
-}, solid && [0.19, 0.19, h]);
+}, solid && [0.19, 0.19, h], (i, t, L) => { BG[i] = HIT.w < 0.3 ? C(ORANGE, 2 + L * 0.3) : C(GREEN, 1.5 + L * 0.3); return set(i, HIT.w < 0.3 ? ' ' : '&', C(GREEN, L * 0.6)), true; });
 // a bar stool: a padded seat on a chrome post, a ring for your feet, a round base. seatZ: the top of the cushion
 const STOOL = (x, y, col = RED, seatZ = 0.62) => ROOM_MODEL(x, y, (vx, vy) => {
   drum(vx, vy, 0.2, 0, 0.03, CHROME);
@@ -305,10 +319,11 @@ function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a 
   set(i, z < 0.18 && Math.abs(bay - 0.5) < 0.08 ? '_' : fract(z * 12) < 0.5 ? '=' : '-', C(ORANGE, L * 0.9)); return true;
 }
 function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind the counter, warm brick elsewhere
-  if (my === 0 && Math.abs(u - room.W / 2) < 2 && z > 1.4 && z < 2.5) {
+  const board = room.def.keeper[0];
+  if (my === 0 && Math.abs(u - board) < 2 && z > 1.4 && z < 2.5) {
     BG[i] = C(GRAY, 1);
     for (const [k, item] of ['ESPRESSO 3', 'LATTE 4', 'CROISSANT 3', 'COOKIE 2'].entries())
-      if (wallText(i, u, uStep, z, d, item, room.W / 2, 2.3 - k * 0.25, 0.15, 0.2, C(WHITE, 13), C(GRAY, 1))) return true;
+      if (wallText(i, u, uStep, z, d, item, board, 2.3 - k * 0.25, 0.15, 0.2, C(WHITE, 13), C(GRAY, 1))) return true;
     set(i, ' ', 0); return true;
   }
   if (z < 2.6) { set(i, fract(u * 4 + (Math.floor(z * 8) & 1) * 0.5) < 0.12 ? '|' : '_', C(BRICK, L * 0.7)); BG[i] = C(BRICK, 1); return true; }
@@ -321,7 +336,7 @@ function booksWall(i, u, uStep, z, d, mx, my, L) { // floor-to-ceiling shelves o
   set(i, rec ? (fract(u * 3) < 0.1 ? '|' : 'O') : k > 0.15 ? '|' : ' ', C(ITEM_COL[k * 80 & 7], L * (rec ? 0.8 : 1))); BG[i] = C(BRICK, 1); return true;
 }
 function noodleWall(i, u, uStep, z, d, mx, my, L) { // the open kitchen: steam rising off the pots, red walls hung with signs
-  if (my === 0 && z < 2.4) {
+  if (my === 0 && mx < 11 && z < 2.4) {
     if (z < 1.0) { set(i, fract(u * 2) < 0.1 ? '|' : '#', C(GRAY, L * 0.6)); return true; }
     if (z < 1.2) { set(i, Math.abs(fract(u / 1.5) - 0.5) < 0.2 ? 'U' : '_', C(GRAY, L)); return true; } // pots on the range
     const s = noise(u * 3, z * 4 - T * 1.5, 41);
@@ -405,10 +420,12 @@ const ROOM_DEFS = {
       }
       return p;
     } },
-  hotel: { grid: boxRoom(12, 8, { '5,0': 'E', '6,0': 'E' }), light: 0.9, floor: 'wood', ceil: 'pendant', sign: true, signAt: 2.6, wall: hotelWall,
+  // the hotel lobby: the desk, the lift up to the roof, the restrooms off to one side
+  hotel: { grid: ['#####EE#######', '#.........W..#', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '######DD######'],
+    wc: { x0: 11, y0: 1, x1: 13, y1: 4, sign: [11, 4, 11.5] }, light: 0.9, floor: 'wood', ceil: 'pendant', sign: true, signAt: 2.6, wall: hotelWall,
     keeper: [3.2, 2.0], ex: 6,
     props: r => [BX(3.2, 2.6, 1.3, 0.35, 0, 1.1, solid(BRICK, { panel: 0.5, trim: 1.04, top: '=' })), standing(3.2, 2.0, r.neon), POT_PLANT(1.4, 1.4),
-                 POT_PLANT(10.6, 1.4), POT_PLANT(10.6, 6, 1.4), standing(8, 4, shirt())] },
+                 POT_PLANT(9.4, 1.4), POT_PLANT(12.3, 6.2, 1.4), standing(8, 4, shirt()), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.68, 2.6, -1, 0)] },
   apts: { grid: boxRoom(8, 7, { '3,0': 'E', '4,0': 'E' }), light: 0.7, floor: 'tile', ceil: 'pendant', wall: aptsWall, ex: 4,
     props: r => [POT_PLANT(6.6, 5.4), ...(chance(0.6) ? [standing(2.2, 4.4, shirt())] : [])] },
   // the gym: treadmills along the back, the ring in the far corner (gym.js) with whoever's next on the card warming up
@@ -464,9 +481,11 @@ const ROOM_DEFS = {
     props: r => [BX(7, 2.4, 4.5, 0.35, 0, 1.1, solid(WHITE, { panel: 1.5, trim: 1.04, top: '=' })),
                  BX(7, 2.3, 4.5, 0.03, 1.1, 1.95, (i, t, L) => { BG[i] = C(CYAN, 1); return set(i, Math.abs(fract(HIT.u / 1.5) - 0.5) > 0.47 ? '|' : ' ', C(GRAY, L)), true; }), // the glass
                  standing(3.5, 1.5, BLUE), standing(7, 1.5, BLUE), standing(10.5, 1.5, BLUE), standing(12.3, 6, GRAY)] },
-  karaoke: { grid: boxRoom(12, 9), light: 0.45, floor: 'carpet', ceil: 'disco', wall: karaokeWall,
+  // karaoke: the stage and its screen, the crowd on the floor, the toilets in the back corner
+  karaoke: { grid: ['##############', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '#............#', '#............#', '######DD######'],
+    wc: { x0: 11, y0: 1, x1: 13, y1: 3, sign: [11, 3, 11.5] }, light: 0.45, floor: 'carpet', ceil: 'disco', wall: karaokeWall,
     props: r => {
-      const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })),
+      const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.68, 2.3, -1, 0),
                  figProp(6, 2.25, figAnyone(r.neon, { mic: true, top: pick(['dress', 'tee', 'jacket']) }), { z: 0.3, face: [0, 1], pose: 'sing', chat: false, light: 14 }), // giving it everything, to the room
                  SPEAKER(3.5, 2.3), SPEAKER(8.5, 2.3)];
       for (let k = 0; k < 6; k++) if (chance(barCrowd())) p.push(sitting(2.5 + Math.random() * 7, 4.5 + Math.random() * 2.5, shirt(), 0.35, true));
@@ -502,9 +521,11 @@ const ROOM_DEFS = {
       for (const x of [5.5, 10.5, 15.5]) p.push(GRAB_POLE(x, 2.5));
       return p;
     } },
-  cafe: { grid: boxRoom(10, 8), light: 0.9, floor: 'wood', ceil: 'pendant', sign: false, wall: cafeWall, keeper: [5, 1.05],
+  // the cafe: the counter and its pastry case, five tables, and the toilet through the door in the back corner
+  cafe: { grid: ['#############', '#........W..#', '#........W..#', '#........WW.#', '#...........#', '#...........#', '#...........#', '#####DD######'],
+    wc: { x0: 10, y0: 1, x1: 12, y1: 3, sign: [10, 3, 10.5] }, light: 0.9, floor: 'wood', ceil: 'pendant', sign: false, wall: cafeWall, keeper: [4.6, 1.05],
     props: r => {
-      const p = [...counterBox(4.6, 1.7, 1.4), standing(4.6, 1.05, r.neon),
+      const p = [...counterBox(4.6, 1.7, 1.4), standing(4.6, 1.05, r.neon), ...toilet(10.6, 1.4, -1, porcelain), washbasin(11.68, 2.3, -1, 0), POT_PLANT(11.4, 6.2, 1.4),
         BX(3.7, 1.65, 0.28, 0.2, 1.05, 1.5, solid(GRAY, { top: 'o', trim: 1.42 })), // the espresso machine
         BX(7.2, 1.7, 0.7, 0.3, 0, 1.05, (i, t, L) => { // the pastry case
           const f = HIT.face; BG[i] = f === 5 ? C(GRAY, 2) : C(CYAN, 1 + L * 0.1);
@@ -523,9 +544,12 @@ const ROOM_DEFS = {
     props: r => [...counterBox(7.8, 5.1, 0.9), standing(7.8, 4.6, r.neon),
       BX(2.2, 5, 0.4, 0.4, 0, 0.45, solid(RED, { top: '=' })), BX(2.2, 4.62, 0.4, 0.06, 0.45, 1.0, solid(RED)), // a reading chair
       ...(chance(0.5) ? [standing(4.5, 4.3, shirt())] : [])] },
-  noodle: { grid: boxRoom(12, 7), light: 0.75, floor: 'tile', ceil: 'lantern', sign: true, wall: noodleWall, keeper: [6, 1.0],
+  // the noodle bar: one long counter in front of the open kitchen, stools along it, a narrow WC past its far end
+  noodle: { grid: ['###############', '#..........W..#', '#..........W..#', '#..........W..#', '#..........W..#', '#.............#', '######DD#######'],
+    wc: { x0: 12, y0: 1, x1: 14, y1: 5, sign: [11, 4, 4.5] }, light: 0.75, floor: 'tile', ceil: 'lantern', sign: true, signAt: 6, wall: noodleWall, keeper: [6, 1.0],
     props: r => {
-      const p = [BX(6, 2.0, 4.6, 0.3, 0, 1.0, solid(BRICK, { panel: 0.75, trim: 0.95, top: '=' })), standing(6, 1.0, WHITE), standing(3.5, 1.0, WHITE)];
+      const p = [BX(6, 2.0, 4.6, 0.3, 0, 1.0, solid(BRICK, { panel: 0.75, trim: 0.95, top: '=' })), standing(6, 1.0, WHITE), standing(3.5, 1.0, WHITE),
+        ...toilet(12.6, 1.4, -1, porcelain), washbasin(13.68, 3.3, -1, 0)];
       for (let x = 2; x <= 10; x += 1.35) { p.push(STOOL(x, 2.65, BRICK)); if (chance(0.5)) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
       return p;
     } },
@@ -537,9 +561,11 @@ const ROOM_DEFS = {
       BX(11.8, 2.2, 0.35, 0.35, 0, 1.2, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, 'O', C(GRAY, L * 0.8)), true; }), // stacked tyres
       BX(2.2, 8.2, 1.2, 0.35, 0, 0.9, solid(GRAY, { top: '=', panel: 0.6 })), // the workbench
       standing(6.5, 6.4, BLUE)] },
-  tea: { grid: boxRoom(12, 9), light: 0.7, floor: 'wood', ceil: 'lantern', sign: true, wall: teaWall, keeper: [6, 1.1],
+  // the tea house: mahjong at four tables, tea from the counter, the toilet in the back corner
+  tea: { grid: ['##############', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '#............#', '#............#', '######DD######'],
+    wc: { x0: 11, y0: 1, x1: 13, y1: 3, sign: [11, 3, 11.5] }, light: 0.7, floor: 'wood', ceil: 'lantern', sign: true, signAt: 6, wall: teaWall, keeper: [6, 1.1],
     props: r => {
-      const p = [...counterBox(6, 1.7, 1.4), standing(6, 1.1, RED)];
+      const p = [...counterBox(6, 1.7, 1.4), standing(6, 1.1, RED), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.68, 2.3, -1, 0), POT_PLANT(12.3, 7.2, 1.5)];
       for (const [x, y] of [[3, 4], [9, 4], [3, 6.8], [9, 6.8]]) {
         p.push({ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
           const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
@@ -970,11 +996,12 @@ function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (my === 0) return false; // back wall: the sign
   set(i, noise(u * 2, z * 2, 7) > 0.62 ? '~' : ' ', C(GRAY, L * 0.6)); BG[i] = C(WHITE, 3); return true; // marble
 }
+const KARAOKE_STAGE = 6; // (the stage's middle, and the screen's over it)
 function karaokeWall(i, u, uStep, z, d, mx, my, L) {
-  if (my === 0 && z > 1.1 && z < 2.7 && Math.abs(u - room.W / 2) < 3) { // lyrics screen: the sung part lights up
+  if (my === 0 && z > 1.1 && z < 2.7 && Math.abs(u - KARAOKE_STAGE) < 3) { // lyrics screen: the sung part lights up
     BG[i] = C(BLUE, 2);
     const line = LYRICS[Math.floor(T / 5) % LYRICS.length], sung = fract(T / 5) * 1.3 * line.length;
-    const q = (u - room.W / 2) / 0.28 + line.length / 2, p = Math.floor(q);
+    const q = (u - KARAOKE_STAGE) / 0.28 + line.length / 2, p = Math.floor(q);
     if (Math.abs(z - 1.9) < 0.15 && p >= 0 && p < line.length) {
       const on = (uStep >= 0.28 || oneCell((fract(q) - 0.5) * 0.28, uStep)) && oneCell(z - 1.9, d / projY);
       set(i, on ? line[p] : ' ', C(p < sung ? MAG : WHITE, 15)); return true;
@@ -1051,13 +1078,15 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
   if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
-  if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: a plain wall, the WC sign by the doorway
+  if (!D.home && wcWallInside(mx, my)) { BG[i] = C(WHITE, 2.4 + L * 0.12); return set(i, fract(u * 3.3) < 0.07 || fract(z * 3.3) < 0.07 ? '+' : z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6)); } // in the bathroom: tiled
+  if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: the room's own walls (or a plain one), the WC sign by the doorway
     const [sx, sy, su] = D.wc.sign; // (u runs whichever way reads left to right, so it's negative from some sides)
     if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
     if (D.home) {
       BG[i] = C(WHITE, 3 + L * 0.3);
       return set(i, inWc(px, py) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
     }
+    if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
     if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
     if (z < 0.95) return set(i, '=', C(GRAY, L));
     return set(i, '.', C(GRAY, L * 0.3));
@@ -1084,6 +1113,7 @@ function roomFloor(i, r, x, rx, ry) {
   ZB[i] = d; FL[i] = 1;
   if (room.def.balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
   if (room.def.wc && inWc(wx, wy)) { BG[i] = C(WHITE, 1 + L * 0.2); return set(i, fract(wx * 3) < 0.1 || fract(wy * 3) < 0.1 ? '+' : ' ', C(GRAY, L)); } // bathroom tiles
+  if (ROOM_FLOORS[room.def.floor]) return ROOM_FLOORS[room.def.floor](i, f, wx, wy, r, x, L);
   switch (room.def.floor) {
     case 'home': {
       const b = room.def.balcony, sofa = room.def.home.sofa;
@@ -1133,10 +1163,94 @@ function roomFloor(i, r, x, rx, ry) {
     }
   }
 }
+// ---- ceiling lights, laid out to fit the room: each fitting hangs whole over the floor (or a shelf, or anything else
+// the ceiling shows over), a hand's width clear of the walls, never over a doorway, and they're spread evenly over each
+// part of the room its walls divide it into (the shop, the back room, the toilet), not a pattern tiled from the corner
+// that the walls cut through. spec: { s: spacing, r: radius } round fittings; { s, w, strip: true } tubes running along
+// y; { s, r, track: true } tracks along x every s with a spot every r. Cached on the room as a mask, CEIL_RES a metre:
+// 1 a fitting (lit), 2 a track
+const CEIL_RES = 20, CEIL_GAP = 0.2;
+function ceilMask(key, spec) {
+  const R = room;
+  if (R.ceilMasks?.[key]) return R.ceilMasks[key];
+  const W = R.W, H = R.H, top = (R.def.height || 3) - 0.05, RW = W * CEIL_RES, mask = new Uint8Array(RW * H * CEIL_RES);
+  const under = (x, y) => x >= 0 && y >= 0 && x < W && y < H && ROOMW.cell(x, y) < top;
+  // doorways: a run of one to three cells through a wall a cell thick (the far side of the wall's ends open)
+  const door = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!under(x, y)) continue;
+    let a = x, b = x;
+    while (under(a - 1, y)) a--; while (under(b + 1, y)) b++;
+    if (b - a < 3 && (under(a - 1, y - 1) || under(b + 1, y - 1)) && (under(a - 1, y + 1) || under(b + 1, y + 1))) door[y * W + x] = 1;
+    a = y; b = y;
+    while (under(x, a - 1)) a--; while (under(x, b + 1)) b++;
+    if (b - a < 3 && (under(x - 1, a - 1) || under(x - 1, b + 1)) && (under(x + 1, a - 1) || under(x + 1, b + 1))) door[y * W + x] = 1;
+  }
+  // the parts of the room: what's left joined up once the doorways are taken out
+  const part = new Int16Array(W * H).fill(-1), parts = [];
+  for (let k = 0; k < W * H; k++) {
+    if (part[k] >= 0 || door[k] || !under(k % W, k / W | 0)) continue;
+    const box = [W, H, 0, 0], q = [k]; part[k] = parts.length;
+    while (q.length) {
+      const c = q.pop(), x = c % W, y = c / W | 0;
+      box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x + 1); box[3] = Math.max(box[3], y + 1);
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        const n = ny * W + nx;
+        if (nx >= 0 && ny >= 0 && nx < W && ny < H && part[n] < 0 && !door[n] && under(nx, ny)) { part[n] = parts.length; q.push(n); }
+      }
+    }
+    parts.push(box);
+  }
+  const tall = R.props.filter(p => p.box && !p.walk && p.box.z1 >= top).map(p => p.box); // (lintels and the like, up to the ceiling)
+  const fits = (id, x0, y0, x1, y1) => { // is all of [x0, x1] x [y0, y1], and a gap round it, over this part of the room?
+    for (let y = Math.floor(y0 - CEIL_GAP); y <= Math.floor(y1 + CEIL_GAP); y++) for (let x = Math.floor(x0 - CEIL_GAP); x <= Math.floor(x1 + CEIL_GAP); x++)
+      if (x < 0 || y < 0 || x >= W || y >= H || part[y * W + x] !== id) return false;
+    return !tall.some(b => inBox(b, (x0 + x1) / 2, (y0 + y1) / 2, Math.max(x1 - x0, y1 - y0) / 2 + 0.1));
+  };
+  const paint = (x0, y0, x1, y1, v, round) => {
+    for (let py = Math.max(0, Math.floor(y0 * CEIL_RES)); py < Math.min(H * CEIL_RES, Math.ceil(y1 * CEIL_RES)); py++)
+      for (let qx = Math.max(0, Math.floor(x0 * CEIL_RES)); qx < Math.min(RW, Math.ceil(x1 * CEIL_RES)); qx++) {
+        const u = (qx + 0.5) / CEIL_RES, w = (py + 0.5) / CEIL_RES;
+        if (!round || Math.hypot(u - (x0 + x1) / 2, w - (y0 + y1) / 2) < (x1 - x0) / 2) mask[py * RW + qx] = v; // (a spot over its track)
+      }
+  };
+  const even = (a, b, s) => { const n = Math.max(1, Math.round((b - a) / s)), d = (b - a) / n; return Array.from({ length: n }, (_, k) => a + (k + 0.5) * d); };
+  parts.forEach(([x0, y0, x1, y1], id) => {
+    if (spec.strip) for (const cx of even(x0, x1, spec.s)) { // tubes along y, broken where they'd run into a wall
+      if (spec.keep && !spec.keep(cx)) continue;
+      let ya = -1;
+      for (let y = y0; y <= y1; y++) {
+        const ok = y < y1 && fits(id, cx - spec.w / 2, y + 0.5, cx + spec.w / 2, y + 0.5);
+        if (ok && ya < 0) ya = y;
+        if (!ok && ya >= 0) { if (y - ya >= 1) paint(cx - spec.w / 2, ya + 0.3, cx + spec.w / 2, y - 0.3, 1); ya = -1; }
+      }
+    } else if (spec.track) for (const cy of even(y0, y1, spec.s)) { // a track along x, spots spaced along it
+      let xa = -1;
+      for (let x = x0; x <= x1; x++) {
+        const ok = x < x1 && fits(id, x + 0.5, cy - 0.04, x + 0.5, cy + 0.04);
+        if (ok && xa < 0) xa = x;
+        if (!ok && xa >= 0) {
+          if (x - xa >= 1) { paint(xa + 0.3, cy - 0.04, x - 0.3, cy + 0.04, 2); for (const sx of even(xa + 0.3, x - 0.3, spec.r)) paint(sx - 0.1, cy - 0.1, sx + 0.1, cy + 0.1, 1, true); }
+          xa = -1;
+        }
+      }
+    } else for (const cy of even(y0, y1, spec.s)) for (const cx of even(x0, x1, spec.s)) // round fittings on an even grid
+      if (fits(id, cx - spec.r, cy - spec.r, cx + spec.r, cy + spec.r)) paint(cx - spec.r, cy - spec.r, cx + spec.r, cy + spec.r, 1, true);
+  });
+  (R.ceilMasks ||= {})[key] = mask;
+  return mask;
+}
+const ceilAt = (key, spec, wx, wy) => {
+  if (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H) return 0;
+  return ceilMask(key, spec)[Math.floor(wy * CEIL_RES) * room.W * CEIL_RES + Math.floor(wx * CEIL_RES)];
+};
+const CEIL_PENDANT = { s: 2, r: 0.14 }, CEIL_LANTERN = { s: 1.6, r: 0.18 }, CEIL_STRIP = { s: 2.5, w: 0.4, strip: true },
+  CEIL_STATION = { s: 2.5, w: 0.4, strip: true, keep: x => x > 9 && x < 37 }; // (not down the tunnels)
 function roomCeil(i, r, x, rx, ry) {
   const d = ((room.def.height || 3) - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
   ZB[i] = d; FL[i] = 0;
   const st = room.def.ceil;
+  if (ROOM_CEILS[st]) return ROOM_CEILS[st](i, r, x, wx, wy);
   if (st === 'home') {
     const b = room.def.balcony;
     if (b && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx >= b.x0 - 1 && wy >= b.y0 && wy < b.y1)) return homeOutdoorRay(i, rx, ry);
@@ -1145,12 +1259,12 @@ function roomCeil(i, r, x, rx, ry) {
     BG[i] = C(WHITE, 5);
     return set(i, lamp ? 'o' : rose && room.def.tier === 2 ? '+' : ' ', C(lamp ? WARM : YEL, lamp ? 15 : 9));
   }
-  if (st === 'pendant') { // warm hanging lamps on a 2m grid
-    const on = Math.hypot(fract(wx / 2) - 0.5, fract(wy / 2) - 0.5) < 0.07;
+  if (st === 'pendant') { // warm hanging lamps, about 2m apart
+    const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
     return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
   }
-  if (st === 'lantern') { // red paper lanterns on a 1.5m grid
-    const on = Math.hypot(fract(wx / 1.5) - 0.5, fract(wy / 1.5) - 0.5) < 0.12;
+  if (st === 'lantern') { // red paper lanterns, about 1.6m apart
+    const on = ceilAt('lantern', CEIL_LANTERN, wx, wy) === 1;
     if (on) BG[i] = C(RED, 6);
     return set(i, on ? 'O' : (r + x) % 5 ? ' ' : '.', on ? C(YEL, 15) : C(RED, 2));
   }
@@ -1164,7 +1278,7 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'glass') return glassCeil(i, wx, wy);
   if (st === 'chandelier') return casinoCeil(i, wx, wy);
   if (st === 'dark') return set(i, hash(Math.floor(wx * 2), Math.floor(wy * 2), 9) > 0.93 ? '.' : ' ', C(MAG, 4));
-  const strip = fract(wx / 2.5) < 0.18 && wy > 0.6 && wy < room.H - 0.6 && !(room.kind === 'station' && (wx < 9 || wx > 37)); // fluorescent tubes (not down the tunnels)
+  const strip = room.kind === 'station' ? ceilAt('station', CEIL_STATION, wx, wy) === 1 : ceilAt('strip', CEIL_STRIP, wx, wy) === 1; // fluorescent tubes
   set(i, strip ? '=' : (r + x) % 3 ? ' ' : '.', strip ? C(WHITE, 15) : C(GRAY, 3));
 }
 function roomSprites() {

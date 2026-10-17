@@ -229,7 +229,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   }
   if (districtOf(bx, by) === 'industrial' && !kind && hash(bx, by, 51) < 0.45) { // a smokestack on the warehouse roof
     const x = X + 3 + hash(bx, by, 52) * 4, y = Y + 3 + hash(bx, by, 53) * 4;
-    stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
+    if (map[idx(x, y)]) stacks.push({ x, y, z: map[idx(x, y)], H: 3 + hash(bx, by, 54) * 3 });
   }
 }
 // subway: stations with a sidewalk entrance on a block's north side, spread out across town. The stairwell is a
@@ -239,7 +239,7 @@ const stations = [], STATION_AT = new Map(); // block -> its station
 {
   const cand = [];
   for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++)
-    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW) cand.push([hash(bx, by, 71), bx, by]);
+    if (!blockKind(bx, by) && hseg(bx, by) && by !== EL_ROW && !gasStationAt(bx * 8, by * 8)) cand.push([hash(bx, by, 71), bx, by]); // (a forecourt's driveway is no place for the steps)
   cand.sort((p, q) => p[0] - q[0]);
   for (const [, bx, by] of cand) {
     if (stations.length >= 20) break;
@@ -431,6 +431,7 @@ for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
     if (bx === GRAND_HOTEL.bx && by === GRAND_HOTEL.by) continue;
     if (dist === 'belle') continue; // the district has geometric mansards, bays and turrets (belle.js)
     if (dist === 'industrial' || dist === 'brownstones' && r > 0.3) continue;
+    if (!h) continue; // (no roof there: a forecourt)
     if (h >= 5 && r < 0.5) roofs.push({ x, y, z: h, kind: 'antenna', turn: hash(...lot, 18) * Math.PI });
     else if (r < 0.35) roofs.push({ x, y, z: h, kind: 'tank', turn: hash(...lot, 18) * Math.PI });
     else if (r < 0.55) { // a billboard facing out of the block, over one of the two streets its lot is on

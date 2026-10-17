@@ -78,11 +78,12 @@ function drawHomeBalconies() {
     for (const y of [b.y0,b.y1]) drawBox(boxAt(rel(b.x0 + .3 - px),rel(y - py),1,0,.3,.01,b.z,b.z + .11),rail);
     for (const o of model) {
       const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
-      if (o.box) {
+      const shade = o.shade || o.far; // (a model drawn in metres has a plain stand-in for out here, or isn't drawn)
+      if (o.box && shade) {
         const q = o.box;
         drawBox(boxAt(rel(x - px),rel(y - py),q.c,q.s,q.hl / 10,q.hw / 10,b.z + q.z0 / 10,b.z + q.z1 / 10),(i,t,L) => {
           HIT.u *= 10; HIT.v *= 10; HIT.w = (HIT.w - b.z) * 10;
-          return o.shade(i,t * 10,L);
+          return shade(i,t * 10,L);
         });
       } else if (o.art) drawArt(rel(x - px),rel(y - py),b.z + (o.z || 0) / 10,o.w / 10,o.h / 10,typeof o.art === 'function' ? o.art() : o.art,o.col);
     }

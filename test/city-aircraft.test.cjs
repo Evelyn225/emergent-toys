@@ -243,23 +243,17 @@ test('every aircraft has a ceiling: climb flat out and it levels off there, well
   }
 });
 
-test('the terminal: in through the doors, round the desks and seats, and out of the weather', () => {
+test('the terminal: a building you go into by its doors (E), solid all the way round, and out of the weather', () => {
   const { ev } = loadCity();
   const blocked = (u, v) => ev(`airportBlocked(TERMINAL.x + ${u}, TERMINAL.y + ${v}, 0.03)`);
-  for (let v = -1.3; v < 0; v += 0.1) assert.equal(blocked(0, v), false, `a clear way in through the doors (v ${v.toFixed(1)})`);
-  assert.equal(blocked(1, -1.04), true, 'the landside glass either side of them');
-  assert.equal(blocked(1.5, 1.04), true, 'the airside glass');
-  for (const u of [-3.2, 3.2]) for (let v = 0.2; v < 1.4; v += 0.1) assert.equal(blocked(u, v), false, `out to the planes by the airside doors (${u}, ${v.toFixed(1)})`);
-  assert.equal(ev('craftBlocked(TERMINAL.x + 3.2, TERMINAL.y + 1)'), true, 'no aircraft through them');
-  assert.equal(blocked(-6.98, 0), true, 'the end walls');
-  assert.equal(blocked(-0.5, -0.2), false, 'the hall is open');
-  assert.equal(blocked(-4.5, -0.62), true, 'a check-in desk');
-  assert.equal(blocked(0.4, 0.48), true, 'the seats at a gate');
-  assert.equal(blocked(2, 0.12), true, 'a column');
-  for (let u = -6.3; u <= 6.3; u += 0.1) for (const v of [-0.2, 0.29]) assert.equal(blocked(u, v), false, `the walkers' lanes stay clear (${u.toFixed(1)}, ${v})`);
-  assert.equal(ev('airportIndoors(TERMINAL.x, TERMINAL.y, 0.17)'), true, 'under its roof');
-  assert.equal(ev('snowExposed(TERMINAL.x + 1, TERMINAL.y, 0)'), false, 'no snow settles on its floor');
-  assert.equal(ev('snowExposed(AIRPORT_BLDG[1].x, AIRPORT_BLDG[1].y, 0)'), false, 'nor in a hangar');
+  for (const [u, v] of [[0, -1.03], [0, 0], [1, -1.03], [1.5, 1.03], [-3.2, 1.03], [3.2, 1.03], [-6.98, 0], [6.98, 0.5]]) assert.equal(blocked(u, v), true, `walls (and doors) all round, the hall not open to walk into (${u}, ${v})`);
+  assert.equal(blocked(0, -1.3), false, 'the pavement out front');
+  assert.equal(blocked(-3.2, 1.3), false, 'the apron out back');
+  const door = (u, v) => ev(`terminalDoor(TERMINAL.x + ${u}, TERMINAL.y + ${v})`);
+  assert.deepEqual([door(0, -1.25), door(-3.2, 1.25), door(3.2, 1.25)], [0, 1, 2], 'the main doors, and one out to the gates either side of the middle');
+  assert.deepEqual([door(1.5, -1.25), door(0, -1.8), door(0, 1.25), door(-3.2, -1.25)], [-1, -1, -1, -1], 'nowhere else');
+  assert.equal(ev('craftBlocked(TERMINAL.x + 3.2, TERMINAL.y + 1)'), true, 'no aircraft into it');
+  assert.equal(ev('snowExposed(AIRPORT_BLDG[1].x, AIRPORT_BLDG[1].y, 0)'), false, 'no snow settles in a hangar');
   assert.equal(ev('airportIndoors(TERMINAL.x, TERMINAL.y, 1.3)'), false, 'up on the roof is outdoors');
 });
 

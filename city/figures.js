@@ -332,7 +332,8 @@ const figWorkerLook = seed => figLook({ hair: 'short', hat: 'hardhat', top: 'lon
 
 // ---- people among a room's props (rooms.js draws them): { fig: look, x, y, z (floor), h (height), pose (key, or a
 // function of the prop), seatZ (seat height, sitting), face: [fx, fy] or null (turns to you), dir (heading, radians: a
-// guard), chat: false (not someone you can talk to), light (least brightness) }
+// guard), chat: false (not someone you can talk to), still: true (not a person at all: a mannequin, a cut-out, the shop
+// cat; still there when you break in at night), light (least brightness) }
 const figProp = (x, y, fig, o) => ({ fig, x, y, z: 0, h: 1.75, pose: 'stand', face: null, ...o });
 const isRoomPerson = s => !!s.fig && s.chat !== false; // someone you could talk to
 // where something drawn as a figure is heading, from how it's moved since it was last drawn
