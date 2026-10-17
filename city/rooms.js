@@ -65,6 +65,9 @@ function roomAt(x, y) {
   x = Math.floor(x); y = Math.floor(y);
   return room?.grid[y]?.[x] ?? '#'; // Cell centres and out-of-bounds search rays are safe.
 }
+// floors and ceilings beyond the ones roomFloor and roomCeil know, by name: (i, f, wx, wy, r, x, L) and (i, r, x, wx, wy)
+// (shops.js has the specialist shops')
+const ROOM_FLOORS = {}, ROOM_CEILS = {};
 // props
 const SP = (x, y, w, h, art, col, z = 0) => ({ x, y, w, h, art, col, z });
 // people (figures.js): standing about looking at you, or sitting (back: facing -y, the bar or the stage or the screen)
@@ -1084,6 +1087,7 @@ function roomFloor(i, r, x, rx, ry) {
   ZB[i] = d; FL[i] = 1;
   if (room.def.balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
   if (room.def.wc && inWc(wx, wy)) { BG[i] = C(WHITE, 1 + L * 0.2); return set(i, fract(wx * 3) < 0.1 || fract(wy * 3) < 0.1 ? '+' : ' ', C(GRAY, L)); } // bathroom tiles
+  if (ROOM_FLOORS[room.def.floor]) return ROOM_FLOORS[room.def.floor](i, f, wx, wy, r, x, L);
   switch (room.def.floor) {
     case 'home': {
       const b = room.def.balcony, sofa = room.def.home.sofa;
@@ -1137,6 +1141,7 @@ function roomCeil(i, r, x, rx, ry) {
   const d = ((room.def.height || 3) - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
   ZB[i] = d; FL[i] = 0;
   const st = room.def.ceil;
+  if (ROOM_CEILS[st]) return ROOM_CEILS[st](i, r, x, wx, wy);
   if (st === 'home') {
     const b = room.def.balcony;
     if (b && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx >= b.x0 - 1 && wy >= b.y0 && wy < b.y1)) return homeOutdoorRay(i, rx, ry);

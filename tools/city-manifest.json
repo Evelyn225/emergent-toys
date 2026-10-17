@@ -43,6 +43,7 @@
     "city/city-sprites.js",
     "city/jail.js",
     "city/rooms.js",
+    "city/shops.js",
     "city/courier-ui.js",
     "city/home-balcony.js",
     "city/aquarium.js",

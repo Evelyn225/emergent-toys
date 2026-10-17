@@ -147,7 +147,7 @@ test('the first route uses existing building entrances for recovery without redu
     const kind=i===0?'courier':'apts';
     assert.deepEqual(entry,{entered:kind,up:{mode:'roof',free:true,active:true},down:{mode:'room',kind}});
   }
-  assert.deepEqual(r.garden,{entered:'store',word:'GROCERY',elevator:false});
+  assert.deepEqual(r.garden,{entered:'grocer',word:'GROCERY',elevator:false});
 }));
 
 test('a street run to a mid-route elevator still delivers, for base pay only',()=>withCity(async page=>{
