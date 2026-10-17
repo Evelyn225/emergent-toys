@@ -61,6 +61,16 @@ ROOM_FOR.STORAGE = 'storage';
 // a room's bathroom (def.wc): its own little room off the floor, 'W' walls round it with a doorway, white tiles inside.
 // sign: the wall cell the WC sign goes on (mx, my) and where along it
 const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && y >= w.y0 && y < w.y1;
+// is wall cell (mx, my) one of the bathroom's own (touching it), seen from inside it? Then it's tiled
+const wcWallInside = (mx, my, w = room.def.wc) => !!w && inWc(px, py, w) && mx >= w.x0 - 1 && mx <= w.x1 && my >= w.y0 - 1 && my <= w.y1;
+// a washbasin on its pedestal, its back to the wall behind (-fx, -fy), a mirror over it
+const washbasin = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx, vy, 0.06, 0, 0.72, (i, t, L) => { BG[i] = C(WHITE, (3 + L * 0.3) * drumLit(0.06)); return set(i, ' ', 0), true; });
+  drum(vx, vy, 0.22, 0.72, 0.86, (i, t, L) => { if (HIT.face === 5) { const r = Math.hypot(HIT.u, HIT.v); BG[i] = C(r < 0.15 ? CYAN : WHITE, r < 0.15 ? 2 : 4); return set(i, r < 0.03 ? 'o' : ' ', C(GRAY, 4)), true; }
+    BG[i] = C(WHITE, (3.4 + L * 0.3) * drumLit(0.22)); return set(i, ' ', 0), true; });
+  rod(vx - fx * 0.2, vy - fy * 0.2, 0.86, vx - fx * 0.12, vy - fy * 0.12, 0.98, 0.012, GRAY, 1.3); // the tap
+  drawBox(boxAt(vx - fx * 0.27, vy - fy * 0.27, fx, fy, 0.01, 0.25, 1.15, 1.75), (i, t, L) => { BG[i] = C(CYAN, 1.6 + (HIT.w - 1.15) * 2); return set(i, fract((HIT.v + HIT.w) * 3) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; }); // the mirror
+}, [0.24, 0.24, 0.86]);
 function roomAt(x, y) {
   x = Math.floor(x); y = Math.floor(y);
   return room?.grid[y]?.[x] ?? '#'; // Cell centres and out-of-bounds search rays are safe.
@@ -308,10 +318,11 @@ function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a 
   set(i, z < 0.18 && Math.abs(bay - 0.5) < 0.08 ? '_' : fract(z * 12) < 0.5 ? '=' : '-', C(ORANGE, L * 0.9)); return true;
 }
 function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind the counter, warm brick elsewhere
-  if (my === 0 && Math.abs(u - room.W / 2) < 2 && z > 1.4 && z < 2.5) {
+  const board = room.def.keeper[0];
+  if (my === 0 && Math.abs(u - board) < 2 && z > 1.4 && z < 2.5) {
     BG[i] = C(GRAY, 1);
     for (const [k, item] of ['ESPRESSO 3', 'LATTE 4', 'CROISSANT 3', 'COOKIE 2'].entries())
-      if (wallText(i, u, uStep, z, d, item, room.W / 2, 2.3 - k * 0.25, 0.15, 0.2, C(WHITE, 13), C(GRAY, 1))) return true;
+      if (wallText(i, u, uStep, z, d, item, board, 2.3 - k * 0.25, 0.15, 0.2, C(WHITE, 13), C(GRAY, 1))) return true;
     set(i, ' ', 0); return true;
   }
   if (z < 2.6) { set(i, fract(u * 4 + (Math.floor(z * 8) & 1) * 0.5) < 0.12 ? '|' : '_', C(BRICK, L * 0.7)); BG[i] = C(BRICK, 1); return true; }
@@ -324,7 +335,7 @@ function booksWall(i, u, uStep, z, d, mx, my, L) { // floor-to-ceiling shelves o
   set(i, rec ? (fract(u * 3) < 0.1 ? '|' : 'O') : k > 0.15 ? '|' : ' ', C(ITEM_COL[k * 80 & 7], L * (rec ? 0.8 : 1))); BG[i] = C(BRICK, 1); return true;
 }
 function noodleWall(i, u, uStep, z, d, mx, my, L) { // the open kitchen: steam rising off the pots, red walls hung with signs
-  if (my === 0 && z < 2.4) {
+  if (my === 0 && mx < 11 && z < 2.4) {
     if (z < 1.0) { set(i, fract(u * 2) < 0.1 ? '|' : '#', C(GRAY, L * 0.6)); return true; }
     if (z < 1.2) { set(i, Math.abs(fract(u / 1.5) - 0.5) < 0.2 ? 'U' : '_', C(GRAY, L)); return true; } // pots on the range
     const s = noise(u * 3, z * 4 - T * 1.5, 41);
@@ -408,10 +419,12 @@ const ROOM_DEFS = {
       }
       return p;
     } },
-  hotel: { grid: boxRoom(12, 8, { '5,0': 'E', '6,0': 'E' }), light: 0.9, floor: 'wood', ceil: 'pendant', sign: true, signAt: 2.6, wall: hotelWall,
+  // the hotel lobby: the desk, the lift up to the roof, the restrooms off to one side
+  hotel: { grid: ['#####EE#######', '#.........W..#', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '######DD######'],
+    wc: { x0: 11, y0: 1, x1: 13, y1: 4, sign: [11, 4, 11.5] }, light: 0.9, floor: 'wood', ceil: 'pendant', sign: true, signAt: 2.6, wall: hotelWall,
     keeper: [3.2, 2.0], ex: 6,
     props: r => [BX(3.2, 2.6, 1.3, 0.35, 0, 1.1, solid(BRICK, { panel: 0.5, trim: 1.04, top: '=' })), standing(3.2, 2.0, r.neon), POT_PLANT(1.4, 1.4),
-                 POT_PLANT(10.6, 1.4), POT_PLANT(10.6, 6, 1.4), standing(8, 4, shirt())] },
+                 POT_PLANT(9.4, 1.4), POT_PLANT(12.3, 6.2, 1.4), standing(8, 4, shirt()), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.68, 2.6, -1, 0)] },
   apts: { grid: boxRoom(8, 7, { '3,0': 'E', '4,0': 'E' }), light: 0.7, floor: 'tile', ceil: 'pendant', wall: aptsWall, ex: 4,
     props: r => [POT_PLANT(6.6, 5.4), ...(chance(0.6) ? [standing(2.2, 4.4, shirt())] : [])] },
   // the gym: treadmills along the back, the ring in the far corner (gym.js) with whoever's next on the card warming up
@@ -467,9 +480,11 @@ const ROOM_DEFS = {
     props: r => [BX(7, 2.4, 4.5, 0.35, 0, 1.1, solid(WHITE, { panel: 1.5, trim: 1.04, top: '=' })),
                  BX(7, 2.3, 4.5, 0.03, 1.1, 1.95, (i, t, L) => { BG[i] = C(CYAN, 1); return set(i, Math.abs(fract(HIT.u / 1.5) - 0.5) > 0.47 ? '|' : ' ', C(GRAY, L)), true; }), // the glass
                  standing(3.5, 1.5, BLUE), standing(7, 1.5, BLUE), standing(10.5, 1.5, BLUE), standing(12.3, 6, GRAY)] },
-  karaoke: { grid: boxRoom(12, 9), light: 0.45, floor: 'carpet', ceil: 'disco', wall: karaokeWall,
+  // karaoke: the stage and its screen, the crowd on the floor, the toilets in the back corner
+  karaoke: { grid: ['##############', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '#............#', '#............#', '######DD######'],
+    wc: { x0: 11, y0: 1, x1: 13, y1: 3, sign: [11, 3, 11.5] }, light: 0.45, floor: 'carpet', ceil: 'disco', wall: karaokeWall,
     props: r => {
-      const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })),
+      const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.68, 2.3, -1, 0),
                  figProp(6, 2.25, figAnyone(r.neon, { mic: true, top: pick(['dress', 'tee', 'jacket']) }), { z: 0.3, face: [0, 1], pose: 'sing', chat: false, light: 14 }), // giving it everything, to the room
                  SPEAKER(3.5, 2.3), SPEAKER(8.5, 2.3)];
       for (let k = 0; k < 6; k++) if (chance(barCrowd())) p.push(sitting(2.5 + Math.random() * 7, 4.5 + Math.random() * 2.5, shirt(), 0.35, true));
@@ -505,9 +520,11 @@ const ROOM_DEFS = {
       for (const x of [5.5, 10.5, 15.5]) p.push(GRAB_POLE(x, 2.5));
       return p;
     } },
-  cafe: { grid: boxRoom(10, 8), light: 0.9, floor: 'wood', ceil: 'pendant', sign: false, wall: cafeWall, keeper: [5, 1.05],
+  // the cafe: the counter and its pastry case, five tables, and the toilet through the door in the back corner
+  cafe: { grid: ['#############', '#........W..#', '#........W..#', '#........WW.#', '#...........#', '#...........#', '#...........#', '#####DD######'],
+    wc: { x0: 10, y0: 1, x1: 12, y1: 3, sign: [10, 3, 10.5] }, light: 0.9, floor: 'wood', ceil: 'pendant', sign: false, wall: cafeWall, keeper: [4.6, 1.05],
     props: r => {
-      const p = [...counterBox(4.6, 1.7, 1.4), standing(4.6, 1.05, r.neon),
+      const p = [...counterBox(4.6, 1.7, 1.4), standing(4.6, 1.05, r.neon), ...toilet(10.6, 1.4, -1, porcelain), washbasin(11.68, 2.3, -1, 0), POT_PLANT(11.4, 6.2, 1.4),
         BX(3.7, 1.65, 0.28, 0.2, 1.05, 1.5, solid(GRAY, { top: 'o', trim: 1.42 })), // the espresso machine
         BX(7.2, 1.7, 0.7, 0.3, 0, 1.05, (i, t, L) => { // the pastry case
           const f = HIT.face; BG[i] = f === 5 ? C(GRAY, 2) : C(CYAN, 1 + L * 0.1);
@@ -526,9 +543,12 @@ const ROOM_DEFS = {
     props: r => [...counterBox(7.8, 5.1, 0.9), standing(7.8, 4.6, r.neon),
       BX(2.2, 5, 0.4, 0.4, 0, 0.45, solid(RED, { top: '=' })), BX(2.2, 4.62, 0.4, 0.06, 0.45, 1.0, solid(RED)), // a reading chair
       ...(chance(0.5) ? [standing(4.5, 4.3, shirt())] : [])] },
-  noodle: { grid: boxRoom(12, 7), light: 0.75, floor: 'tile', ceil: 'lantern', sign: true, wall: noodleWall, keeper: [6, 1.0],
+  // the noodle bar: one long counter in front of the open kitchen, stools along it, a narrow WC past its far end
+  noodle: { grid: ['###############', '#..........W..#', '#..........W..#', '#..........W..#', '#..........W..#', '#.............#', '######DD#######'],
+    wc: { x0: 12, y0: 1, x1: 14, y1: 5, sign: [11, 4, 4.5] }, light: 0.75, floor: 'tile', ceil: 'lantern', sign: true, signAt: 6, wall: noodleWall, keeper: [6, 1.0],
     props: r => {
-      const p = [BX(6, 2.0, 4.6, 0.3, 0, 1.0, solid(BRICK, { panel: 0.75, trim: 0.95, top: '=' })), standing(6, 1.0, WHITE), standing(3.5, 1.0, WHITE)];
+      const p = [BX(6, 2.0, 4.6, 0.3, 0, 1.0, solid(BRICK, { panel: 0.75, trim: 0.95, top: '=' })), standing(6, 1.0, WHITE), standing(3.5, 1.0, WHITE),
+        ...toilet(12.6, 1.4, -1, porcelain), washbasin(13.68, 3.3, -1, 0)];
       for (let x = 2; x <= 10; x += 1.35) { p.push(STOOL(x, 2.65, BRICK)); if (chance(0.5)) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
       return p;
     } },
@@ -540,9 +560,11 @@ const ROOM_DEFS = {
       BX(11.8, 2.2, 0.35, 0.35, 0, 1.2, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, 'O', C(GRAY, L * 0.8)), true; }), // stacked tyres
       BX(2.2, 8.2, 1.2, 0.35, 0, 0.9, solid(GRAY, { top: '=', panel: 0.6 })), // the workbench
       standing(6.5, 6.4, BLUE)] },
-  tea: { grid: boxRoom(12, 9), light: 0.7, floor: 'wood', ceil: 'lantern', sign: true, wall: teaWall, keeper: [6, 1.1],
+  // the tea house: mahjong at four tables, tea from the counter, the toilet in the back corner
+  tea: { grid: ['##############', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '#............#', '#............#', '######DD######'],
+    wc: { x0: 11, y0: 1, x1: 13, y1: 3, sign: [11, 3, 11.5] }, light: 0.7, floor: 'wood', ceil: 'lantern', sign: true, signAt: 6, wall: teaWall, keeper: [6, 1.1],
     props: r => {
-      const p = [...counterBox(6, 1.7, 1.4), standing(6, 1.1, RED)];
+      const p = [...counterBox(6, 1.7, 1.4), standing(6, 1.1, RED), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.68, 2.3, -1, 0), POT_PLANT(12.3, 7.2, 1.5)];
       for (const [x, y] of [[3, 4], [9, 4], [3, 6.8], [9, 6.8]]) {
         p.push({ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
           const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
@@ -973,11 +995,12 @@ function bankWall(i, u, uStep, z, d, mx, my, L) {
   if (my === 0) return false; // back wall: the sign
   set(i, noise(u * 2, z * 2, 7) > 0.62 ? '~' : ' ', C(GRAY, L * 0.6)); BG[i] = C(WHITE, 3); return true; // marble
 }
+const KARAOKE_STAGE = 6; // (the stage's middle, and the screen's over it)
 function karaokeWall(i, u, uStep, z, d, mx, my, L) {
-  if (my === 0 && z > 1.1 && z < 2.7 && Math.abs(u - room.W / 2) < 3) { // lyrics screen: the sung part lights up
+  if (my === 0 && z > 1.1 && z < 2.7 && Math.abs(u - KARAOKE_STAGE) < 3) { // lyrics screen: the sung part lights up
     BG[i] = C(BLUE, 2);
     const line = LYRICS[Math.floor(T / 5) % LYRICS.length], sung = fract(T / 5) * 1.3 * line.length;
-    const q = (u - room.W / 2) / 0.28 + line.length / 2, p = Math.floor(q);
+    const q = (u - KARAOKE_STAGE) / 0.28 + line.length / 2, p = Math.floor(q);
     if (Math.abs(z - 1.9) < 0.15 && p >= 0 && p < line.length) {
       const on = (uStep >= 0.28 || oneCell((fract(q) - 0.5) * 0.28, uStep)) && oneCell(z - 1.9, d / projY);
       set(i, on ? line[p] : ' ', C(p < sung ? MAG : WHITE, 15)); return true;
@@ -1054,13 +1077,15 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
   if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
-  if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: a plain wall, the WC sign by the doorway
+  if (!D.home && wcWallInside(mx, my)) { BG[i] = C(WHITE, 2.4 + L * 0.12); return set(i, fract(u * 3.3) < 0.07 || fract(z * 3.3) < 0.07 ? '+' : z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6)); } // in the bathroom: tiled
+  if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: the room's own walls (or a plain one), the WC sign by the doorway
     const [sx, sy, su] = D.wc.sign; // (u runs whichever way reads left to right, so it's negative from some sides)
     if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
     if (D.home) {
       BG[i] = C(WHITE, 3 + L * 0.3);
       return set(i, inWc(px, py) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
     }
+    if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
     if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
     if (z < 0.95) return set(i, '=', C(GRAY, L));
     return set(i, '.', C(GRAY, L * 0.3));
