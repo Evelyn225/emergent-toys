@@ -1408,6 +1408,7 @@ test('covered streets stay free of snow and the Shotengai glass has no yellow ro
   assert.ok(result.lampFits&&result.balconySheltered&&result.deckExposed,JSON.stringify(result));
 }));
 
+const HOP_MAX_TEST = 1.6;
 test('bunny hopping: land and go straight back up and each hop is faster; stop and it is gone', () => withPage(async page => {
   const r = await page.evaluate(() => {
     refillNeeds();
@@ -1425,10 +1426,25 @@ test('bunny hopping: land and go straight back up and each hop is faster; stop a
     body.hop = 1; const plain = go(180); body.z = body.vz = 0; body.hop = 1; const strafed = go(180, { strafe: 1 });
     return { hopped, capped, after, plain, strafed };
   });
-  assert.ok(r.hopped > 1.1, `faster for every hop (${r.hopped})`);
-  assert.strictEqual(r.capped, 1.9, 'up to a cap');
+  assert.ok(r.hopped > 1.05 && r.hopped < 1.2, `faster for every hop, a little at a time (${r.hopped})`);
+  assert.ok(r.capped > 1.5 && r.capped <= HOP_MAX_TEST, `tailing off toward a cap (${r.capped})`);
   assert.deepStrictEqual(r.after, [0, 1], 'on the ground a moment and it bleeds away');
   assert.ok(r.strafed > r.plain, `strafing into the turn builds it quicker (${r.plain} vs ${r.strafed})`);
+}));
+
+test('carrying hop speed you swing round to a new direction instead of snapping to it, and a hard turn costs the speed', () => withPage(async page => {
+  const r = await page.evaluate(async () => {
+    refillNeeds(); paused = false; mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0;
+    Object.assign(body, { z: 0, vz: 0, hop: 1.5, mx: 0.75, my: 0, landedAt: T, seat: null });
+    for (const k in K) K[k] = 0; K.KeyA = 1; // hard left the moment you land
+    await new Promise(r => requestAnimationFrame(r));
+    const first = [body.mx, body.my];
+    for (let n = 0; n < 30; n++) await new Promise(r => requestAnimationFrame(r));
+    const after = [body.mx, body.my, body.hop]; K.KeyA = 0; paused = true;
+    return { first, after };
+  });
+  assert.ok(r.first[0] > 0.2, `the first frame still carries you mostly the way you were going (${r.first})`);
+  assert.ok(Math.abs(r.after[0]) < 0.02 && r.after[1] < -0.45 && r.after[2] === 1, `then you're going left at walking pace (${r.after})`);
 }));
 
 test('parked cars are solid on foot; you can still get in', () => withPage(async page => {

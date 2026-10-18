@@ -239,9 +239,14 @@ function loop(t) {
     if (!body.seat) {
       const scale = sp * footSlow() * (body.hop || 1), ix = (cx * f - cy * (s + lurch)) * scale, iy = (cy * f + cx * (s + lurch)) * scale;
       const airborne = body.z > 0 || body.vz > 0;
-      if (!airborne && dt > 0) { body.mx = ix / dt; body.my = iy / dt; }
-      else if (airborne && dt > 0) airStrafe(f, s + lurch, scale / dt, dt);
-      move(airborne ? body.mx * dt : ix, airborne ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
+      if (!airborne && dt > 0) {
+        const wx = ix / dt, wy = iy / dt, vx = body.mx || 0, vy = body.my || 0, v = Math.hypot(vx, vy), w = Math.hypot(wx, wy);
+        if (body.hop > 1.001) { // carrying speed from hopping: swing round to where you're going, and a sharp turn costs the speed
+          if (v > 0 && w > 0) body.hop = 1 + (body.hop - 1) * Math.max(0, 1 - (1 - (vx * wx + vy * wy) / (v * w)) * 4 * dt);
+          const k = 1 - Math.exp(-10 * dt); body.mx = vx + (wx - vx) * k; body.my = vy + (wy - vy) * k;
+        } else { body.mx = wx; body.my = wy; } // (walking: you go where you're going)
+      } else if (airborne && dt > 0) airStrafe(f, s + lurch, scale / dt, dt);
+      move(dt > 0 ? body.mx * dt : ix, dt > 0 ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if(mode==='ladder')stepCourierLadder(dt);
   else if (mode === 'drive') { if (!sleep) drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (not while the respray's under way) // (eyes back on the road a moment after you stop looking about)

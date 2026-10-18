@@ -6,9 +6,13 @@
 // on a phone, swipe off the Ollie button the same way. Seen from your own eyes (V), the board under you is a little 3D
 // model in front of the camera (like a held weapon), so it really flips and spins.
 // Bunny hopping: jump again the moment you land (press Space just before or just after you touch down) and each hop
-// carries you a bit faster; turn the way you're strafing while you're in the air (A + mouse left, D + mouse right)
-// and it builds quicker. Stay on the ground and the speed's gone in a moment.
-const HOP_GAIN = 0.06, HOP_STRAFE = 0.12, HOP_MAX = 1.9, HOP_BUF = 0.2, HOP_GRACE = 0.16; // speed x per hop, x more for a good strafe, cap, s early
+// carries you a bit faster, less so the faster you're going; turn the way you're strafing while you're in the air
+// (A + mouse left, D + mouse right) and it builds quicker. Carrying that speed, you can't just cut the other way: on
+// the ground you swing round to where you're going over a moment, and a sharp turn costs you the speed (main.js).
+// Stay on the ground and the speed's gone in a moment.
+const HOP_GAIN = 0.035, HOP_STRAFE = 0.07, HOP_MAX = 1.6, HOP_BUF = 0.2, HOP_GRACE = 0.16; // speed x per hop, x more for a good strafe, cap, s early
+// the hop multiplier after one more hop (swirl: how far you turned into your strafe in the air), tailing off near the cap
+const hopUp = (hop, swirl) => Math.min(HOP_MAX, hop + (HOP_GAIN + Math.min(HOP_STRAFE, swirl * 0.1)) * Math.max(0, 1 - (hop - 1) / (HOP_MAX - 1)));
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
@@ -35,7 +39,7 @@ function jump(trick) { // trick: a TRICKS key from a flick; otherwise (on the bo
   body.buf = -9;
   if (skatingNow()) return skatePop(trick); // (skate.js)
   if (T - (body.landedAt ?? -9) <= HOP_GRACE && Math.hypot(body.mx || 0, body.my || 0) > 0.05)
-    body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.landingSwirl || 0) * 0.15));
+    body.hop = hopUp(body.hop || 1, body.landingSwirl || 0);
   body.landedAt = -9; body.vz = JUMP_V;
   if (actx) sfxUse('kick');
 }
@@ -97,7 +101,7 @@ function stepBody(dt) {
       if (skatingNow()) { skateLand(); if (actx) sfxUse('ollie-land'); } // (clean, or a bail: skate.js)
       body.trick = null;
       if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
-        if (moved) body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.swirl || 0) * 0.15));
+        if (moved) body.hop = hopUp(body.hop || 1, body.swirl || 0);
         body.swirl = 0; body.buf = -9; body.vz = JUMP_V;
         if (actx) sfxUse('kick');
         return;
