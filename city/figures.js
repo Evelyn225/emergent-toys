@@ -62,6 +62,8 @@ const FIG_POSES = {
              arms: [[0.5 * p, 0.25, 0.5 * p + 0.4, 0.15], [-0.5 * p, 0.25, -0.5 * p + 0.4, 0.15]], lean: 0.18 };
   },
   sprawl: () => ({ seat: 0, legs: [[1.45, 0.3, 1.5, 0.25], [1.3, 0.2, 1.7, 0.15]], arms: [[-0.7, 0.35, -0.5, 0.3], [-0.6, 0.4, -0.4, 0.3]], lean: -0.45 }),
+  // flat on their back (knocked down by a car: people.js), arms flung out, one knee up
+  down: () => ({ seat: -1.2, legs: [[1.55, 0.2, 1.55, 0.15], [1.1, 0.35, 2.0, 0.25]], arms: [[-1.5, 0.9, -1.4, 0.8], [-1.4, 0.75, -1.5, 0.9]], lean: -1.5 }),
 };
 // a pose key: 'stand', 'walk3', 'sit7' (seat height in pixels), 'dance2'
 function figPose(key) {

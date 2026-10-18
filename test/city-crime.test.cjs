@@ -259,3 +259,25 @@ test('wrecks in the traffic are towed once you are well away; a car left smoking
   assert.strictEqual(ev('cars.includes(w)'), false, 'towed');
   assert.deepStrictEqual([ev('cars.includes(s)'), ev('s.parked'), ev('s.dmg')], [true, false, 0], 'back on the road, mended');
 });
+
+test('knocked down by a car: a passer-by lies there a few seconds, then gets up and carries on', () => {
+  const { ev } = scene();
+  ev('var p = people[0]; p.hidden = false; p.x = px + 0.5; p.y = py; knockDown(p, 1, 0, 3); var x0 = p.x');
+  assert.ok(ev('p.x > px + 0.5'), 'thrown along the way the car was going');
+  assert.strictEqual(ev('downPose(p.down)'), 'sprawl', 'falling');
+  ev('for (let t = 0; t < 1; t += 0.05) stepPeople(0.05, tod)');
+  assert.ok(ev('!!p.down && p.x === x0'), 'flat on the ground, not walking');
+  assert.strictEqual(ev('downPose(p.down)'), 'down');
+  ev('for (let t = 0; t < 8; t += 0.05) stepPeople(0.05, tod)');
+  assert.ok(ev('!p.down'), 'up again');
+});
+
+test('an officer you knock down: no chasing, no seeing you, no grabbing you, until they get up', () => {
+  const { ev, step } = scene();
+  ev("footCops[0].x = px + 0.15; footCops[0].y = py; footCops[0].chase = true; addWanted('hit', px, py, true); knockDown(footCops[0], 1, 0, 2); footCops[0].x = px + 0.1; var cx = footCops[0].x");
+  assert.notStrictEqual(step(0.5), 'busted', 'right beside you, but on the ground');
+  assert.ok(ev('footCops[0].x === cx'), 'not running anywhere');
+  assert.ok(ev('wanted.busted') !== true);
+  step(6);
+  assert.ok(ev('!footCops[0].down'), 'back on their feet');
+});

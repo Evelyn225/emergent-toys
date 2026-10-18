@@ -441,6 +441,8 @@ const FIG_POSES = {
              arms: [[0.5 * p, 0.25, 0.5 * p + 0.4, 0.15], [-0.5 * p, 0.25, -0.5 * p + 0.4, 0.15]], lean: 0.18 };
   },
   sprawl: () => ({ seat: 0, legs: [[1.45, 0.3, 1.5, 0.25], [1.3, 0.2, 1.7, 0.15]], arms: [[-0.7, 0.35, -0.5, 0.3], [-0.6, 0.4, -0.4, 0.3]], lean: -0.45 }),
+  // flat on their back (knocked down by a car: people.js), arms flung out, one knee up
+  down: () => ({ seat: -1.2, legs: [[1.55, 0.2, 1.55, 0.15], [1.1, 0.35, 2.0, 0.25]], arms: [[-1.5, 0.9, -1.4, 0.8], [-1.4, 0.75, -1.5, 0.9]], lean: -1.5 }),
 };
 // a pose key: 'stand', 'walk3', 'sit7' (seat height in pixels), 'dance2'
 function figPose(key) {
@@ -4138,6 +4140,22 @@ function settle(p) {
 // behind the clock. Only people you can see walk: out of sight they settle instantly, and anyone coming back into
 // the simulated area after a while frozen catches up the same way.
 const SEEN_R = 28, VIS_R = MAXD + 4; // beyond SEEN_R, anyone a building hides from you; beyond VIS_R, anyone at all
+// knocked flat by a car going (dx, dy) at speed: thrown a little way along it (unless there's a wall there), down for a
+// few seconds, then up again. Pedestrians and police on foot alike (crime.js holds the officers still while they're down)
+function knockDown(p, dx_, dy_, speed) {
+  p.down = { t: 0, dur: 2.5 + Math.min(3, speed * 1.2), fx: dx_, fy: dy_ };
+  const k = Math.min(0.6, 0.15 + speed * 0.12), nx = mod(p.x + dx_ * k, N), ny = mod(p.y + dy_ * k, N);
+  if (!map[idx(Math.floor(nx), Math.floor(ny))]) { p.x = nx; p.y = ny; }
+}
+// down and getting up again: true while they're still on the ground
+function stepDown(p, dt) {
+  if (!p.down) return false;
+  if ((p.down.t += dt) < p.down.dur) return true;
+  delete p.down; p.talk = 2; // (up, dusting themselves off)
+  return false;
+}
+// what they look like on the way down, down, and getting up
+const downPose = d => d.t < 0.2 || d.t > d.dur - 0.6 ? 'sprawl' : 'down';
 function stepPeople(dt, t, everywhere = false) {
   for (const p of people) {
     if (!everywhere && !p.follow && !simulated(p.x, p.y)) continue;
@@ -4146,6 +4164,7 @@ function stepPeople(dt, t, everywhere = false) {
       else if (p.goal && !p.hidden) { const d = Math.hypot(rel(p.x - px), rel(p.y - py)); if (d > VIS_R || d > SEEN_R && !lineOfSight(px, py, p.x, p.y)) settle(p); } // (never vanishing in plain view)
       p.simT = T;
     }
+    if (stepDown(p, dt)) continue; // (knocked down by a car)
     if (p.talk > 0) { p.talk -= dt; continue; } // stopped to chat with you
     if (p.follow) { followYou(p, dt); continue; }
     if (p.wait > 0) {
@@ -7409,6 +7428,7 @@ for (const b of SERVICES) if (b.kind === 'police') for (let k = 0; k < 3; k++) {
   footCops.push({ x, y, corner, dir: k % 2 ? 2 : 0, goal: null, chase: false, ph: Math.random() * 9, base: b });
 }
 function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn (never straight back)
+  if (c.down) return; // (flat on the street: a car)
   if (!c.goal) {
     const opts = [0, 1, 2, 3].filter(d => d !== (c.dir + 2) % 4).map(d => [d, stepCorner(c.corner, d)]).filter(o => o[1]);
     const [d, next] = opts.length ? pick(opts) : [(c.dir + 2) % 4, stepCorner(c.corner, (c.dir + 2) % 4)];
@@ -7420,6 +7440,7 @@ function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn
   else { c.x = mod(c.x + dx / d * s, N); c.y = mod(c.y + dy / d * s, N); c.ph += dt * 4; }
 }
 function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls (just out of the car: a sprint)
+  if (c.down) return;
   const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = Math.min(d, (c.burst > T ? COP_FOOT_SPEED * 1.1 : COP_FOOT_SPEED) * dt);
   const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
   if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = mod(nx, N);
@@ -7766,7 +7787,7 @@ function stepReturningPolice(dt) {
   }
   for (let k = footCops.length - 1; k >= 0; k--) {
     const c = footCops[k], car = c.returnCar;
-    if (!car) continue;
+    if (!car || c.down) continue;
     if (!cars.includes(car)) { c.returnCar = null; backToBeat(c); continue; }
     if (near(c.x, c.y, car.x, car.y) < 0.2) { footCops.splice(k, 1); continue; }
     if ((c.returnPathT -= dt) <= 0) { c.returnPathT = 0.7; c.returnPath = pursuitRoute(c, car.x, car.y); }
@@ -7911,6 +7932,7 @@ const policeNear = (x, y) => cars.some(c => c.patrol && near(c.x, c.y, x, y) < D
 
 // ---- every frame
 function stepCrime(dt) {
+  for (const c of footCops) stepDown(c, dt); // (an officer a car's knocked down: up again in a few seconds)
   for (let k = reports.length - 1; k >= 0; k--) { // calls coming in
     const r = reports[k];
     if (T < r.t) continue;
@@ -7927,7 +7949,7 @@ function stepCrime(dt) {
   const roomSeen = roomSearchLead(dt);
   const roofSeen = roofSearchLead(dt);
   const [wx, wy] = crimePos(), inside = mode === 'room', onRoof = mode === 'roof';
-  const sees = c => !inside && !onRoof && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
+  const sees = c => !c.down && !inside && !onRoof && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
   wanted.seen = (inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees)) || heliSees;
   if (wanted.seen) { if (!inside) observeSuspect(wx, wy); wanted.hideT = 0; wanted.searchX = wanted.lastX; wanted.searchY = wanted.lastY; }
   else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
@@ -7953,10 +7975,10 @@ function stepCrime(dt) {
     if (wanted.pitPending) { wanted.pitPending = false; return 'pit'; }
   }
   // caught: a hand on your shoulder, or boxed in and stopped
-  const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22)
+  const grabbed = onFoot && footCops.some(c => c.chase && !c.down && near(c.x, c.y, px, py) < 0.22)
     || inside && roomCops.some(c => c.sees && Math.hypot(c.x - px, c.y - py) < 0.32)
     || onRoof && body.z < 1 && roofCops.some(c => c.sees && near(c.x, c.y, px, py) < 0.22);
-  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
+  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
   return told ? 'pullover' : wanted.seen ? 'seen' : 'hiding';
@@ -10522,7 +10544,8 @@ function citySprites() {
     if (Math.abs(vx) < vis && Math.abs(vy) < vis) { figMotion(m); drawFigure(vx, vy, 0, 0.175, m._fx || 0, m._fy || 0, streetLook(m), walkPose(m)); }
   }
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
-    drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
+    if (m.down) drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
+    else drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), s = d.small ? 0.7 : 1;
       drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3);
@@ -10535,6 +10558,7 @@ function citySprites() {
   for (const c of footCops) { // police on foot: navy cap, uniform, running when they're after you
     const [vx, vy] = R(c.x, c.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
+    if (c.down) { drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, -c.down.fx, -c.down.fy, copLook(c), downPose(c.down)); continue; }
     figMotion(c); drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
@@ -26744,7 +26768,7 @@ function drive(dt) {
   const nx = c.x + Math.cos(c.travelA) * c.v * dt, ny = c.y + Math.sin(c.travelA) * c.v * dt;
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
   let hitCar = null;
-  let hitPerson = people.find(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
+  let hitPerson = people.find(p => !p.hidden && !p.down && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
   const samples = Math.max(1, Math.ceil(Math.abs(c.v * dt) / 0.04), Math.ceil(Math.abs(a - oldA) / 0.08));
   let bodyHit = false;
   for (let k = 1; k <= samples; k++) {
@@ -26753,11 +26777,21 @@ function drive(dt) {
     hitCar = cars.find(o => o !== c && carContact(c, o, oldX + (nx - oldX) * f, oldY + (ny - oldY) * f, Math.cos(angle), Math.sin(angle)));
     if (hitCar) break;
     const officer=footCops.find(p=>{
+      if(p.down)return false; // (already on the ground: you go over them)
       const overlap=carPersonOverlap(c,p,oldX+(nx-oldX)*f,oldY+(ny-oldY)*f,Math.cos(angle),Math.sin(angle));
       // An officer may walk into a stopped car. Let it move away or slide clear of that existing overlap.
       return overlap>0 && overlap>carPersonOverlap(c,p,oldX,oldY,Math.cos(oldA),Math.sin(oldA))+1e-9;
     });
     if(officer){hitPerson=officer;break;}
+  }
+  if (hitPerson && !bodyHit && !hitCar && free(fx, fy) && Math.abs(c.v) > 0.4) { // someone in the road: knocked flat, and you plough on, slower
+    const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson);
+    knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
+    say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"']), 2);
+    crime(cop ? 'hitcop' : 'hit', c.x, c.y);
+    if (actx) { tone(actx.currentTime, 60, 0.18, 0.12 * Math.min(1, sp / 3)); playClip('crash', 0.2); }
+    if (sp > CRASH_V) damageCar(c, crashDamage(sp) * 0.2);
+    c.v *= 0.6; hitPerson = null;
   }
   const hit = bodyHit || !free(fx, fy) || hitCar || hitPerson;
   if (hit) { // a real crash only above CRASH_V; anything slower is a bump

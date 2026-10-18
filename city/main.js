@@ -176,7 +176,7 @@ function drive(dt) {
   const nx = c.x + Math.cos(c.travelA) * c.v * dt, ny = c.y + Math.sin(c.travelA) * c.v * dt;
   const fx = nx + hx * 0.22 * Math.sign(c.v), fy = ny + hy * 0.22 * Math.sign(c.v); // bumper
   let hitCar = null;
-  let hitPerson = people.find(p => !p.hidden && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
+  let hitPerson = people.find(p => !p.hidden && !p.down && Math.hypot(rel(p.x - fx), rel(p.y - fy)) < 0.15);
   const samples = Math.max(1, Math.ceil(Math.abs(c.v * dt) / 0.04), Math.ceil(Math.abs(a - oldA) / 0.08));
   let bodyHit = false;
   for (let k = 1; k <= samples; k++) {
@@ -185,11 +185,21 @@ function drive(dt) {
     hitCar = cars.find(o => o !== c && carContact(c, o, oldX + (nx - oldX) * f, oldY + (ny - oldY) * f, Math.cos(angle), Math.sin(angle)));
     if (hitCar) break;
     const officer=footCops.find(p=>{
+      if(p.down)return false; // (already on the ground: you go over them)
       const overlap=carPersonOverlap(c,p,oldX+(nx-oldX)*f,oldY+(ny-oldY)*f,Math.cos(angle),Math.sin(angle));
       // An officer may walk into a stopped car. Let it move away or slide clear of that existing overlap.
       return overlap>0 && overlap>carPersonOverlap(c,p,oldX,oldY,Math.cos(oldA),Math.sin(oldA))+1e-9;
     });
     if(officer){hitPerson=officer;break;}
+  }
+  if (hitPerson && !bodyHit && !hitCar && free(fx, fy) && Math.abs(c.v) > 0.4) { // someone in the road: knocked flat, and you plough on, slower
+    const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson);
+    knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
+    say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"']), 2);
+    crime(cop ? 'hitcop' : 'hit', c.x, c.y);
+    if (actx) { tone(actx.currentTime, 60, 0.18, 0.12 * Math.min(1, sp / 3)); playClip('crash', 0.2); }
+    if (sp > CRASH_V) damageCar(c, crashDamage(sp) * 0.2);
+    c.v *= 0.6; hitPerson = null;
   }
   const hit = bodyHit || !free(fx, fy) || hitCar || hitPerson;
   if (hit) { // a real crash only above CRASH_V; anything slower is a bump
