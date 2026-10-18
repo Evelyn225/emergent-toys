@@ -66,7 +66,7 @@ function stepSkate(dt) {
     const lost = SK.v * (1 - got / want);
     SK.v *= got / want;
     if (got > 1e-6) { SK.dir = Math.atan2(my, mx); if (!air) a = SK.dir; }
-    if (lost > 0.45) return bailOut('BAIL! Straight into it.');
+    if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }
   if (SK.combo && !air && T - SK.combo.t > SK_COMBO_GAP) bankCombo();
 }
@@ -88,8 +88,8 @@ function skateArrow() { if (skateAir() && !body.trick && SK.trickKeyT < 0) SK.tr
 function skateLand() {
   if (SK.bail > 0) return; // (already down: hit a wall on the way up)
   const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
-  if (tr && tr.t < tr.air * 0.8) return bailOut('BAIL! Your feet never found the board.');
-  if (Math.abs(d) > SK_LAND && Math.PI - Math.abs(d) > SK_LAND) return bailOut('BAIL! You came down sideways.');
+  if (tr && tr.t < tr.air * 0.8) return skateBail('BAIL! Your feet never found the board.');
+  if (Math.abs(d) > SK_LAND && Math.PI - Math.abs(d) > SK_LAND) return skateBail('BAIL! You came down sideways.');
   if (Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance; // backwards: riding away switch
   a = SK.dir;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
@@ -106,7 +106,7 @@ function bankCombo() {
   SK.combo = null; SK.score += total; SK.best = Math.max(SK.best, total);
   if (c.names.length > 1) say(`${c.names.length}-TRICK COMBO!  ${total}`, 2);
 }
-function bailOut(msg) {
+function skateBail(msg) {
   SK.bail = SK_BAIL_T; SK.bailAt = [px, py, SK.dir, a]; SK.v = 0; SK.spin = 0; SK.combo = null; SK.charge = -1; body.trick = null;
   say(msg, 2);
   if (actx) playClip('ground-impact', 0.25);
