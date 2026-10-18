@@ -1219,7 +1219,7 @@ test('on the board the camera rides behind you: your skater and the board are dr
     mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0; fx.skating = true; third = true;
     window.seen = 0; const draw = drawSkater; drawSkater = () => { if (skateView) seen++; draw(); };
   });
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => seen > 3, null, { timeout: 3000 }).catch(() => {}); // (a few frames: slower on a busy runner)
   const behind = await page.evaluate(() => [seen, skateCamOn()]);
   assert.ok(behind[0] > 3 && behind[1], `drawn from behind (${behind})`);
   await page.keyboard.press('KeyV');
