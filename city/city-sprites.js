@@ -124,6 +124,7 @@ function citySprites() {
   drawLandmarks();
   drawPavilions();
   drawHomeBalconies();
+  drawSkater(); // you, on the board, seen from behind (skate.js)
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
@@ -581,7 +582,6 @@ function drawElStairs(st) {
   if (far) return;
   // rails round the landings (open where the stairs come in, and onto the deck)
   for (const [ua, ub, z] of [[ELS.u1, ELS.u2, H / 2]]) for (const v of [ELS.v0, ELS.v1]) { const [ax, ay] = at(ua, v), [bx, by] = at(ub, v); rod(ax, ay, z + 0.1, bx, by, z + 0.1, 0.004); }
-  { const [ax, ay] = at(ELS.u1, ELS.v0), [bx, by] = at(ELS.u1, ELS.v1); rod(ax, ay, H / 2 + 0.1, bx, by, H / 2 + 0.1, 0.004); } // (the end of the halfway landing)
   { const [ax, ay] = at(ELS.u4, ELS.v0), [bx, by] = at(ELS.u4, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the far end of the top
   { const [ax, ay] = at(ELS.u3, ELS.v0), [bx, by] = at(ELS.u4, ELS.v0); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the building side of the top
   { const [ax, ay] = at(ELS.u3, ELS.v1), [bx, by] = at(ELS.u3, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the near side, past the stairs' head

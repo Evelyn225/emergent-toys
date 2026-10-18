@@ -274,18 +274,21 @@ function hud() {
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
-  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : 'left thumb: move | drag: look' : ''
+  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
+    : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
-  // on a phone the buttons take the top right: the text stays left of them
-  const maxW = cv.width - 12 - (TOUCH ? Math.min(250, cv.width * 0.45) : 0);
+  // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
+  // phone held upright), goes underneath them
+  const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, top = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
+  const maxW = top ? cv.width - 12 : beside;
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = [...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
   const meters = needMeters();
-  hudBottom = (lines.length + task_.length + 1) * FS + 14;
+  hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
   wantedHud();
   if (job && mode === 'drive') jobArrow();
   else if(courierRoute()&&mode!=='room')jobArrow(...courierGuide());
@@ -293,16 +296,16 @@ function hud() {
   hotbar();
   g.font = FS + 'px monospace';
   const w = Math.max(...lines.map(l => g.measureText(l).width));
-  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, w + 8, FS * lines.length + 6);
-  g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, 3 + k * FS));
+  g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, top, w + 8, FS * lines.length + 6);
+  g.fillStyle = '#bbb'; lines.forEach((l, k) => g.fillText(l, 4, top + 3 + k * FS));
   { // hunger, thirst and (once it's down) health, under the help line: short bars, red and blinking when empty
-    const y = FS * lines.length + 6;
+    const y = top + FS * lines.length + 6;
     let x0 = 4;
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, meters.reduce((t, m) => t + g.measureText(m[0]).width + g.measureText('  ').width, 4) + 4, FS + 4);
     for (const [txt, col] of meters) { g.fillStyle = col; g.fillText(txt, x0, y + 2); x0 += g.measureText(txt + '  ').width; }
   }
   if (task_.length) { // the favour you're doing, under the help line
-    const y = FS * (lines.length + 1) + 10, tw = Math.max(...task_.map(l => g.measureText(l).width));
+    const y = top + FS * (lines.length + 1) + 10, tw = Math.max(...task_.map(l => g.measureText(l).width));
     g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y, tw + 8, FS * task_.length + 4);
     g.fillStyle = '#4ff'; task_.forEach((l, k) => g.fillText(l, 4, y + 2 + k * FS));
   }

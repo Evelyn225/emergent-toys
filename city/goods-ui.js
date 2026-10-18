@@ -187,7 +187,7 @@ const putCell = (r, c, ch, col) => { if (r < 0 || r >= rows || c < 0 || c >= col
 function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r)))); }
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
-  if (fx.skating && mode === 'walk') drawBoard3D(); // the board under your feet
+  if (fx.skating && mode === 'walk' && !skateCamOn()) drawBoard3D(); // the board under your feet (or, from behind you, it's in the world: skate.js)
 }
 
 // ---- drawn big over the finished frame, in characters with a dark outline instead of a background
@@ -228,7 +228,7 @@ function drawHeldBig() {
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();
-  if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
+  if (!it || !onFoot || fx.skating && (it.id === 'skateboard' || skateCamOn())) return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
@@ -394,7 +394,7 @@ function hotbar() {
     g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.fresh > 0 && 'fresh clothes', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
   if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 

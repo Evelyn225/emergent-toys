@@ -223,11 +223,30 @@ function moveCraft(a, T_, vx, vy, dt, ev) {
   if (!gentle) { damageCraft(a, 25 + down * 15); ev.push('hard'); } else ev.push('land');
   return ev;
 }
+// it hits: where it is, if that's on something (the ground, a roof); up in the air against a wall it doesn't stop there
+// or jump to the ground below: it drops, nose going over, till it lands on whatever's under it (stepCraftFalls)
 function crashCraft(a, speed, ev) {
-  a.crashSpeed = speed; a.v = 0; a.hvx = a.hvy = 0; a.vz = 0; a.ground = true; a.roll = 0; a.pitch = 0;
-  a.z = Math.max(0, builtHeight(a.x, a.y, a.z));
+  a.crashSpeed = speed; a.v = 0; a.hvx = a.hvy = 0; a.vz = 0; a.roll = 0;
+  const below = Math.max(0, builtHeight(a.x, a.y, a.z));
+  if (a.z > below + 0.05) { a.falling = true; a.ground = false; a.spin = (a.yaw * 7 % 2 > 1 ? 1 : -1) * (0.6 + speed * 0.2); }
+  else { a.z = below; a.ground = true; a.pitch = 0; }
   damageCraft(a, speed > 1.5 ? DMG_FIRE : 40 + speed * 30);
   ev.push('crash'); return ev;
+}
+// wrecks coming down: gravity, tumbling, bounced back off the wall a little; onto the ground or a roof, or into the
+// water (where it sinks)
+function stepCraftFalls(dt) {
+  for (const a of aircraft) {
+    if (!a.falling) continue;
+    a.vz -= G * dt; a.z += a.vz * dt;
+    a.pitch = Math.max(-1.1, a.pitch - 0.8 * dt); a.roll += a.spin * dt;
+    const bx = mod(a.x - Math.cos(a.yaw) * 0.25 * dt, N), by = mod(a.y - Math.sin(a.yaw) * 0.25 * dt, N);
+    if (!craftBlocked(bx, by) && builtHeight(bx, by, a.z) <= a.z) { a.x = bx; a.y = by; }
+    const below = Math.max(0, builtHeight(a.x, a.y, a.z));
+    if (a.z > below) continue;
+    a.z = below; a.vz = 0; a.falling = false; a.ground = true; a.roll = 0; a.pitch = Math.max(a.pitch, -0.35);
+    if (below === 0 && overWater(a.x, a.y)) { a.ditched = true; a.sinkT = T; }
+  }
 }
 function ditchCraft(a, ev) { a.ditched = true; a.v = 0; a.hvx = a.hvy = 0; a.vz = 0; a.z = 0; a.ground = true; ev.push('ditch'); return ev; }
 // aircraft damage works as the cars' does (damage.js): at the top it burns, and BURN_T later it goes up

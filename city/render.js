@@ -136,6 +136,7 @@ function render(dt) {
       : mode === 'walk' ? 0.17 : mode === 'boat' ? (chaseOn ? 0.2 : 0.11) : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
   else if (mode === 'air') eye = airEye;
+  else if (skateView) eye = skateView.eye; // (behind you on the board: skate.js)
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
