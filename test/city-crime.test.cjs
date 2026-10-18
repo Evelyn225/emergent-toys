@@ -281,3 +281,19 @@ test('an officer you knock down: no chasing, no seeing you, no grabbing you, unt
   step(6);
   assert.ok(ev('!footCops[0].down'), 'back on their feet');
 });
+
+test('someone knocked down: the people about stop and stare, the nearest runs over to them, and all of them carry on once they\'re up', () => {
+  const { ev } = scene();
+  ev(`var q = people.slice(0, 5); for (const p of q) { p.hidden = false; p.inside = null; p.talk = 0; p.follow = false; p.hailing = false; }
+      var v = q[0]; v.x = px + 0.5; v.y = py; knockDown(v, 0, 1, 1); v.x = px + 0.5; v.y = py;
+      q[1].x = v.x + 0.4; q[1].y = py; q[2].x = v.x - 0.9; q[2].y = py; q[3].x = v.x; q[3].y = py + 1.3; q[4].x = v.x + 3; q[4].y = py;
+      var saw = gawkAt(v)`);
+  assert.strictEqual(ev('saw'), 3, 'everyone close enough, not the one down the street');
+  assert.ok(ev('q[1].help === v'), 'the nearest goes to them');
+  assert.ok(ev('q[2].gawk === v && q[3].gawk === v && !q[4].gawk'), 'the rest stare');
+  ev('var x2 = q[2].x; for (let t = 0; t < 2; t += 0.05) stepPeople(0.05, tod)');
+  assert.ok(ev('Math.hypot(rel(q[1].x - v.x), rel(q[1].y - v.y)) < 0.13'), 'kneeling by them');
+  assert.ok(ev('q[2].x === x2'), 'staring, not walking');
+  ev('for (let t = 0; t < 12; t += 0.05) stepPeople(0.05, tod)');
+  assert.ok(ev('!v.down && !q[1].help && !q[1].gawk && !q[2].gawk && !(q[1].talk > 0)'), 'up, and everyone on their way');
+});

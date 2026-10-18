@@ -11,7 +11,7 @@ const PLANE_TYPES = {
 // answers the stick, the throttle and the nose wheel (1, or less for something heavy)
   airliner: { name: 'airliner', len: 3.4, span: 3.2, r: 0.2, tail: 0.85, body: WHITE, stripe: BLUE, engines: 'wing', vr: 5, cruise: 7, top: 7.5, ceil: 40, handling: 0.35 },
   prop: { name: 'Skylark', len: 0.8, span: 1.1, r: 0.065, tail: 0.24, body: WHITE, stripe: RED, prop: true, vr: 2.4, cruise: 4, top: 5.6, climb: 1.1, ceil: 36, price: 9000 },
-  jet: { name: 'Comet', len: 1.45, span: 1.15, r: 0.09, tail: 0.36, body: GRAY, stripe: CYAN, engines: 'tail', vr: 4, cruise: 7, top: 10, climb: 2.2, ceil: 50, price: 30000 },
+  jet: { name: 'Comet', len: 1.45, span: 1.15, r: 0.09, tail: 0.36, body: GRAY, stripe: CYAN, engines: 'tail', vr: 4, cruise: 7, top: 10, climb: 2.2, ceil: 50, price: 30000, eject: true },
   heli: { name: 'Hornet', heli: true, len: 0.45, rotor: 0.5, body: RED, stripe: WHITE, top: 4.2, climb: 1.4, ceil: 30, price: 14000 },
 };
 const aircraft = []; // { id, type, x, y, z, yaw, pitch, roll, v, state, ... }
@@ -269,7 +269,7 @@ const AIR_AWAY = 30; // how far off you must be (from it, and from its stand) be
 function returnHome(a) {
   const h = a.home;
   Object.assign(a, { x: h.x, y: h.y, yaw: h.yaw, z: 0, pitch: 0, roll: 0, v: 0, vz: 0, hvx: 0, hvy: 0, throttle: 0, rotor: 0, dmg: 0, ground: true, state: 'parked' });
-  for (const k of ['wrecked', 'fireT', 'ditched', 'sinkT', 'boomT', 'stalled', 'warnedFire', 'crashSpeed', 'stolen']) delete a[k];
+  for (const k of ['wrecked', 'fireT', 'ditched', 'sinkT', 'boomT', 'stalled', 'warnedFire', 'crashSpeed', 'stolen', 'blown']) delete a[k];
 }
 // what wants putting back, given where you are and what you're flying: returns the ones it put back
 function stepFleet(px_, py_, flying) {

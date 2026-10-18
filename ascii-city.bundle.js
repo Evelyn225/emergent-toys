@@ -415,6 +415,7 @@ const FIG_POSES = {
   grass: () => ({ seat: 0, legs: [[1.95, 0.22, 0.8, 0.1], [1.95, 0.22, 0.8, 0.1]], arms: [[0.75, 0.2, 1.7, -0.5], [0.75, 0.2, 1.7, -0.5]], lean: -0.1 }), // on the lawn, hugging her knees
   reach: () => ({ ...FIG_STAND, arms: [[1.0, 0.15, 1.3, 0.05], [1.0, 0.15, 1.3, 0.05]], lean: 0.35 }), // hands in the touch pool
   sing: () => ({ ...FIG_STAND, arms: [[0.9, 0.25, 2.7, -0.6], [0.5, 0.7, 0.9, 0.5]] }), // the mic up to her mouth
+  gasp: () => ({ ...FIG_STAND, arms: [[0.9, 0.25, 2.7, -0.6], [0.9, 0.25, 2.7, -0.6]] }), // hands to their face (someone's just been hit)
   sitfold: seat => ({ ...FIG_POSES.sit(seat), arms: FIG_POSES.fold().arms }),
   sit: seat => { // thighs angled down just enough that the feet reach the floor
     const t = clamp(Math.acos(clamp((seat + 1.3 - 6.76) / 6.2, -1, 1)), 0.95, 1.5);
@@ -3532,7 +3533,7 @@ const PLANE_TYPES = {
 // answers the stick, the throttle and the nose wheel (1, or less for something heavy)
   airliner: { name: 'airliner', len: 3.4, span: 3.2, r: 0.2, tail: 0.85, body: WHITE, stripe: BLUE, engines: 'wing', vr: 5, cruise: 7, top: 7.5, ceil: 40, handling: 0.35 },
   prop: { name: 'Skylark', len: 0.8, span: 1.1, r: 0.065, tail: 0.24, body: WHITE, stripe: RED, prop: true, vr: 2.4, cruise: 4, top: 5.6, climb: 1.1, ceil: 36, price: 9000 },
-  jet: { name: 'Comet', len: 1.45, span: 1.15, r: 0.09, tail: 0.36, body: GRAY, stripe: CYAN, engines: 'tail', vr: 4, cruise: 7, top: 10, climb: 2.2, ceil: 50, price: 30000 },
+  jet: { name: 'Comet', len: 1.45, span: 1.15, r: 0.09, tail: 0.36, body: GRAY, stripe: CYAN, engines: 'tail', vr: 4, cruise: 7, top: 10, climb: 2.2, ceil: 50, price: 30000, eject: true },
   heli: { name: 'Hornet', heli: true, len: 0.45, rotor: 0.5, body: RED, stripe: WHITE, top: 4.2, climb: 1.4, ceil: 30, price: 14000 },
 };
 const aircraft = []; // { id, type, x, y, z, yaw, pitch, roll, v, state, ... }
@@ -3790,7 +3791,7 @@ const AIR_AWAY = 30; // how far off you must be (from it, and from its stand) be
 function returnHome(a) {
   const h = a.home;
   Object.assign(a, { x: h.x, y: h.y, yaw: h.yaw, z: 0, pitch: 0, roll: 0, v: 0, vz: 0, hvx: 0, hvy: 0, throttle: 0, rotor: 0, dmg: 0, ground: true, state: 'parked' });
-  for (const k of ['wrecked', 'fireT', 'ditched', 'sinkT', 'boomT', 'stalled', 'warnedFire', 'crashSpeed', 'stolen']) delete a[k];
+  for (const k of ['wrecked', 'fireT', 'ditched', 'sinkT', 'boomT', 'stalled', 'warnedFire', 'crashSpeed', 'stolen', 'blown']) delete a[k];
 }
 // what wants putting back, given where you are and what you're flying: returns the ones it put back
 function stepFleet(px_, py_, flying) {
@@ -4156,6 +4157,30 @@ function stepDown(p, dt) {
 }
 // what they look like on the way down, down, and getting up
 const downPose = d => d.t < 0.2 || d.t > d.dur - 0.6 ? 'sprawl' : 'down';
+// everyone near enough to see it stops and stares, and the nearest comes running to kneel by them till they're up.
+// Returns how many saw it
+const GAWK_R = 1.6;
+function gawkAt(v) {
+  let helper = null, hd = 1.2, n = 0;
+  for (const p of people) {
+    if (p === v || p.hidden || p.down || p.follow || p.hailing || p.help || p.talk > 10) continue;
+    const d = Math.hypot(rel(p.x - v.x), rel(p.y - v.y));
+    if (d > GAWK_R) continue;
+    n++; p.gawk = v; p.talk = Math.max(p.talk || 0, 3 + Math.random() * 3);
+    if (d < hd) { hd = d; helper = p; }
+  }
+  if (helper) { helper.help = v; helper.talk = 0; }
+  return n;
+}
+// the one who came to help: over to them at a run, then crouched beside them; when they're up, a moment more with them
+function stepHelp(p, dt) {
+  const v = p.help;
+  if (!v.down) { delete p.help; p.gawk = v; p.talk = 2; return; }
+  const dx = rel(v.x - p.x), dy = rel(v.y - p.y), d = Math.hypot(dx, dy);
+  if (d < 0.12) return;
+  const s = Math.min(d - 0.1, p.sp * 2.5 * dt), nx = mod(p.x + dx / d * s, N), ny = mod(p.y + dy / d * s, N);
+  if (!map[idx(Math.floor(nx), Math.floor(ny))]) { p.x = nx; p.y = ny; p.ph += dt * 8; }
+}
 function stepPeople(dt, t, everywhere = false) {
   for (const p of people) {
     if (!everywhere && !p.follow && !simulated(p.x, p.y)) continue;
@@ -4165,7 +4190,8 @@ function stepPeople(dt, t, everywhere = false) {
       p.simT = T;
     }
     if (stepDown(p, dt)) continue; // (knocked down by a car)
-    if (p.talk > 0) { p.talk -= dt; continue; } // stopped to chat with you
+    if (p.help) { stepHelp(p, dt); continue; } // (gone to them)
+    if (p.talk > 0) { if ((p.talk -= dt) <= 0) delete p.gawk; continue; } // stopped to chat with you (or to stare)
     if (p.follow) { followYou(p, dt); continue; }
     if (p.wait > 0) {
       p.wait -= dt;
@@ -10545,7 +10571,10 @@ function citySprites() {
   }
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
     if (m.down) drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
-    else drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
+    else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
+      const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
+      drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
+    } else drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), s = d.small ? 0.7 : 1;
       drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3);
@@ -22033,15 +22062,16 @@ function stepFlight(dt) {
     else if (e === 'bump') { if (actx) tone(actx.currentTime, 70, 0.12, 0.08); }
     else if (e === 'crash' || e === 'ditch') return startWreck(c, e);
   }
-  if (burning(c) && !c.warnedFire) { c.warnedFire = true; say('Fire! Get it down and get out.', 4); }
+  if (burning(c) && !c.warnedFire) { c.warnedFire = true; say(c.ground ? 'Fire! Get out of it.' : 'FIRE! It\'s going to go up.   E: bail out', 4); }
 }
 // thrown clear: hurt by how hard it hit, or the hospital
 function airCrash(c) {
   const hurtBy = clamp(20 + (c.crashSpeed || 0) * 14, 20, 95), [x, y] = spotNear(c.x, c.y + 0.4);
   pilot = null; c.state = 'parked'; mode = 'walk'; px = x; py = y; a = Math.atan2(rel(c.y - y), rel(c.x - x)); pitch = 0; body.z = body.vz = 0;
-  if (hurt(hurtBy)) return passOut('Pulled from the wreck of an aircraft. Lucky to be alive.');
+  const blown = c.blown; delete c.blown;
+  if (hurt(hurtBy)) return passOut(blown ? 'It blew apart in the air with you still in it. They found you in the wreckage, somehow alive.' : 'Pulled from the wreck of an aircraft. Lucky to be alive.');
   if (needs.health < 35) needs.warned = 'weak'; // (you know)
-  say('You come down hard. You crawl out of the wreck before it goes up.', 5);
+  say(blown ? 'It blows apart around you. You come to in the wreckage, burnt and half deaf, somehow alive.' : 'You come down hard. You crawl out of the wreck before it goes up.', 5);
 }
 // into the bay: it sinks, and you swim for the nearest dry land
 function airDitch(c) {
@@ -22062,7 +22092,7 @@ function stepAirWrecks(dt) {
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
-    if (c === pilot) { if (!wreckCam) startWreck(c, 'crash'); continue; }
+    if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
   }
@@ -22141,7 +22171,7 @@ function airDash() {
     set(ky * cols + kx, 'O', C(held ? YEL : WHITE, 15));
   }
   const sixes = fighters.filter(f => f.sixed && !fighters.leaving).length;
-  const blink = fract(T * 2) < 0.5, warn = burning(c) ? 'FIRE' : sixes ? 'BANDIT 6 O\'CLOCK' : c.stalled ? 'STALL' : T_.ceil && c.z > T_.ceil - 0.5 ? 'CEILING' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y, c.z) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
+  const blink = fract(T * 2) < 0.5, warn = burning(c) ? (c.ground ? 'FIRE' : 'FIRE  E: BAIL OUT') : sixes ? 'BANDIT 6 O\'CLOCK' : c.stalled ? 'STALL' : T_.ceil && c.z > T_.ceil - 0.5 ? 'CEILING' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y, c.z) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
   if (warn) putText(r0 + 1, cols - warn.length - 3, warn, C(RED, blink ? 15 : 7));
   if (fighters.length && !fighters.leaving) { const s = `FIGHTERS ${fighters.length}`; putText(r0 + 2, cols - s.length - 3, s, C(YEL, 13)); }
 }
@@ -22194,6 +22224,11 @@ function bailOut() {
   const vx = T_.heli ? c.hvx || 0 : Math.cos(c.yaw) * c.v * Math.cos(c.pitch), vy = T_.heli ? c.hvy || 0 : Math.sin(c.yaw) * c.v * Math.cos(c.pitch);
   body.mx = vx * 0.6; body.my = vy * 0.6; // (cells a second: out the door you carry some of its speed)
   chute = { open: false, t: 0 };
+  if (T_.eject) { // the Comet's seat: a rocket under you, up and clear of the tail, and the chute opens by itself
+    body.vz = 25; chute.autoT = T + 1.6;
+    if (actx) { burst(actx.currentTime, 0.5, [filt('lowpass', 900, 0.7)], 0.35); playClip('crash', 0.3); }
+    return say('BANG! The seat fires you up and out through the canopy. The chute will open by itself.', 4);
+  }
   if (actx) playClip('crash', 0.15);
   say(`You jump.   SPACE: pull the cord${body.z > CHUTE_AUTO * 10 ? ' (it opens by itself at 150m)' : ''}`, 4);
 }
@@ -22206,7 +22241,7 @@ function pullCord() {
 function stepChute(dt) {
   if (!(body.z > 0 || body.vz > 0)) return chuteDown(); // (down: stepBody has done the landing, and any hurt)
   chute.t += dt;
-  if (!chute.open && chuteAlt() < CHUTE_AUTO * 10 && body.z > 2) pullCord();
+  if (!chute.open && (chuteAlt() < CHUTE_AUTO * 10 && body.z > 2 || chute.autoT && T >= chute.autoT)) pullCord(); // (low enough, or the seat's done it)
   const turn = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0), f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
   if (!chute.open) { // falling: the air slows you to 55 m/s, and you can track a little
     body.vz = Math.max(body.vz, -55); a += turn * 1.2 * dt;
@@ -26787,7 +26822,9 @@ function drive(dt) {
   if (hitPerson && !bodyHit && !hitCar && free(fx, fy) && Math.abs(c.v) > 0.4) { // someone in the road: knocked flat, and you plough on, slower
     const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson);
     knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
-    say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"']), 2);
+    const saw = gawkAt(hitPerson); // (the people about: staring, and one running over to them)
+    say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"'])
+      + (saw ? ' ' + pick(cop ? ['"Officer down!"', '"You just hit a COP!"'] : ['"Oh my God!"', '"Somebody call an ambulance!"', '"Did you SEE that?"', '"Hey! HEY! Stop!"']) : ''), 3);
     crime(cop ? 'hitcop' : 'hit', c.x, c.y);
     if (actx) { tone(actx.currentTime, 60, 0.18, 0.12 * Math.min(1, sp / 3)); playClip('crash', 0.2); }
     if (sp > CRASH_V) damageCar(c, crashDamage(sp) * 0.2);

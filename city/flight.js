@@ -140,15 +140,16 @@ function stepFlight(dt) {
     else if (e === 'bump') { if (actx) tone(actx.currentTime, 70, 0.12, 0.08); }
     else if (e === 'crash' || e === 'ditch') return startWreck(c, e);
   }
-  if (burning(c) && !c.warnedFire) { c.warnedFire = true; say('Fire! Get it down and get out.', 4); }
+  if (burning(c) && !c.warnedFire) { c.warnedFire = true; say(c.ground ? 'Fire! Get out of it.' : 'FIRE! It\'s going to go up.   E: bail out', 4); }
 }
 // thrown clear: hurt by how hard it hit, or the hospital
 function airCrash(c) {
   const hurtBy = clamp(20 + (c.crashSpeed || 0) * 14, 20, 95), [x, y] = spotNear(c.x, c.y + 0.4);
   pilot = null; c.state = 'parked'; mode = 'walk'; px = x; py = y; a = Math.atan2(rel(c.y - y), rel(c.x - x)); pitch = 0; body.z = body.vz = 0;
-  if (hurt(hurtBy)) return passOut('Pulled from the wreck of an aircraft. Lucky to be alive.');
+  const blown = c.blown; delete c.blown;
+  if (hurt(hurtBy)) return passOut(blown ? 'It blew apart in the air with you still in it. They found you in the wreckage, somehow alive.' : 'Pulled from the wreck of an aircraft. Lucky to be alive.');
   if (needs.health < 35) needs.warned = 'weak'; // (you know)
-  say('You come down hard. You crawl out of the wreck before it goes up.', 5);
+  say(blown ? 'It blows apart around you. You come to in the wreckage, burnt and half deaf, somehow alive.' : 'You come down hard. You crawl out of the wreck before it goes up.', 5);
 }
 // into the bay: it sinks, and you swim for the nearest dry land
 function airDitch(c) {
@@ -169,7 +170,7 @@ function stepAirWrecks(dt) {
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
-    if (c === pilot) { if (!wreckCam) startWreck(c, 'crash'); continue; }
+    if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
   }
@@ -248,7 +249,7 @@ function airDash() {
     set(ky * cols + kx, 'O', C(held ? YEL : WHITE, 15));
   }
   const sixes = fighters.filter(f => f.sixed && !fighters.leaving).length;
-  const blink = fract(T * 2) < 0.5, warn = burning(c) ? 'FIRE' : sixes ? 'BANDIT 6 O\'CLOCK' : c.stalled ? 'STALL' : T_.ceil && c.z > T_.ceil - 0.5 ? 'CEILING' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y, c.z) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
+  const blink = fract(T * 2) < 0.5, warn = burning(c) ? (c.ground ? 'FIRE' : 'FIRE  E: BAIL OUT') : sixes ? 'BANDIT 6 O\'CLOCK' : c.stalled ? 'STALL' : T_.ceil && c.z > T_.ceil - 0.5 ? 'CEILING' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y, c.z) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
   if (warn) putText(r0 + 1, cols - warn.length - 3, warn, C(RED, blink ? 15 : 7));
   if (fighters.length && !fighters.leaving) { const s = `FIGHTERS ${fighters.length}`; putText(r0 + 2, cols - s.length - 3, s, C(YEL, 13)); }
 }
@@ -301,6 +302,11 @@ function bailOut() {
   const vx = T_.heli ? c.hvx || 0 : Math.cos(c.yaw) * c.v * Math.cos(c.pitch), vy = T_.heli ? c.hvy || 0 : Math.sin(c.yaw) * c.v * Math.cos(c.pitch);
   body.mx = vx * 0.6; body.my = vy * 0.6; // (cells a second: out the door you carry some of its speed)
   chute = { open: false, t: 0 };
+  if (T_.eject) { // the Comet's seat: a rocket under you, up and clear of the tail, and the chute opens by itself
+    body.vz = 25; chute.autoT = T + 1.6;
+    if (actx) { burst(actx.currentTime, 0.5, [filt('lowpass', 900, 0.7)], 0.35); playClip('crash', 0.3); }
+    return say('BANG! The seat fires you up and out through the canopy. The chute will open by itself.', 4);
+  }
   if (actx) playClip('crash', 0.15);
   say(`You jump.   SPACE: pull the cord${body.z > CHUTE_AUTO * 10 ? ' (it opens by itself at 150m)' : ''}`, 4);
 }
@@ -313,7 +319,7 @@ function pullCord() {
 function stepChute(dt) {
   if (!(body.z > 0 || body.vz > 0)) return chuteDown(); // (down: stepBody has done the landing, and any hurt)
   chute.t += dt;
-  if (!chute.open && chuteAlt() < CHUTE_AUTO * 10 && body.z > 2) pullCord();
+  if (!chute.open && (chuteAlt() < CHUTE_AUTO * 10 && body.z > 2 || chute.autoT && T >= chute.autoT)) pullCord(); // (low enough, or the seat's done it)
   const turn = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0), f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
   if (!chute.open) { // falling: the air slows you to 55 m/s, and you can track a little
     body.vz = Math.max(body.vz, -55); a += turn * 1.2 * dt;

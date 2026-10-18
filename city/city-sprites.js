@@ -207,7 +207,10 @@ function citySprites() {
   }
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
     if (m.down) drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
-    else drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
+    else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
+      const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
+      drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
+    } else drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), s = d.small ? 0.7 : 1;
       drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3);

@@ -64,6 +64,46 @@ test('buy a Skylark, take off, bail out, and land on the parachute; steal a Horn
   } finally { await browser.close(); }
 });
 
+test('shot to burning in a stolen Comet: told to bail, the seat fires you up and the chute opens itself; stay in and it nearly kills you', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage(), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof stepFlight === 'function' && Number.isFinite(eye));
+    const r = await page.evaluate(() => {
+      const dt = 1 / 60, out = {};
+      const up = () => { // in the Comet, stolen, up at 300m over the bay side of the runway, and on fire
+        paused = true; mode = 'walk'; room = null; clearWanted(); needs.health = 100; chute = null; body.z = body.vz = 0;
+        for (const k of Object.keys(K)) K[k] = 0;
+        const c = aircraft.find(c => c.type === 'jet'); returnHome(c);
+        px = c.x + Math.cos(c.yaw) * PLANE_TYPES.jet.len * 0.25 + 0.2; py = c.y + Math.sin(c.yaw) * PLANE_TYPES.jet.len * 0.25; interact();
+        Object.assign(c, { ground: false, z: 30, v: 7, pitch: 0, roll: 0, vz: 0, x: RUNWAY.x0 + 5, y: RUNWAY.y, yaw: 0 });
+        damageCraft(c, DMG_FIRE); stepFlight(dt);
+        return c;
+      };
+      let c = up();
+      out.warned = msgText;
+      interact(); out.out = [mode, !!chute, c.state, body.vz];
+      let opened = null, top = body.z;
+      for (let t = 0; t < 4 && chute && opened == null; t += dt) { T += dt; stepChute(dt); stepBody(dt); stepRoof(); top = Math.max(top, body.z); if (chute.open) opened = t; }
+      out.ejected = { opened, rose: top - 299 };
+      // again, and stay in it till it goes up
+      c = up(); c.throttle = 0.6;
+      for (let t = 0; t < 20 && mode === 'air'; t += dt) { T += dt; stepAirWrecks(dt); if (mode === 'air') stepFlight(dt); }
+      out.stayed = { mode, health: needs.health, said: msgText };
+      return out;
+    });
+    assert.match(r.warned, /E: bail out/, 'it tells you how to get out');
+    assert.deepEqual(r.out.slice(0, 3), ['walk', true, 'abandoned']);
+    assert.ok(r.out[3] > 20, 'the seat fires you upward');
+    assert.ok(r.ejected.rose > 20, `well up and clear (${r.ejected.rose.toFixed(1)}m)`);
+    assert.ok(r.ejected.opened != null && r.ejected.opened < 2, `the chute opens by itself, high up (${r.ejected.opened})`);
+    assert.ok(r.stayed.mode === 'room' || r.stayed.health <= 10, `going up with it all but kills you: ${JSON.stringify(r.stayed)}`);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
 test('an aircraft you own is kept, where you parked it, across a reload', async () => {
   const browser = await chromium.launch();
   try {
