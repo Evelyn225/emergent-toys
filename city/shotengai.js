@@ -117,13 +117,14 @@ const crane = (x, y, k) => ({ ...BX(x, y, 0.45, 0.45, 0, 1.95, (i, t, L) => { //
 }), crane: true, cx: x, cy: y });
 const nearPachinko = () => mode === 'room' && room.props.find(s => s.pachi && Math.abs(px - s.cx) < 0.4 && Math.abs(py - (s.cy + s.fy * 0.75)) < 0.4) || null;
 const nearCrane = () => mode === 'room' && room.props.find(s => s.crane && Math.abs(px - s.cx) < 0.6 && py > s.cy + 0.4 && py < s.cy + 1.4) || null;
-const nearMahjong = () => mode === 'room' && room.kind === 'tea' && room.props.find(s => s.mj && Math.hypot(px - s.cx, py - s.cy) < 1.3) || null;
+const nearMahjong = () => mode === 'room' && room.props.find(s => s.mj && Math.hypot(px - s.cx, py - s.cy) < 1.3) || null;
 function shotengaiPrompt() {
   if (nearMahjong()) return `E: sit in on a hand of mahjong (${fmt$(MJ_BUYIN)} in the pot)`;
   const pm = nearPachinko();
   if (pm) return pm.busy ? 'Somebody\'s on this one' : `E: play pachinko (${fmt$(CREDIT)} for 40 balls)`;
   if (room.kind === 'pachinko' && nearKeeper()) return `E: swap tickets for prizes (${tickets} tickets)`;
   if (nearCrane()) return `E: try the crane (${fmt$(CREDIT)})`;
+  if (nearGacha()) return `E: turn the handle (${fmt$(GACHA_PRICE)})`;
   if (room.kind === 'capsule' && nearKeeper()) return `E: a pod for the night (${fmt$(CAPSULE_RATE)})`;
   return '';
 }
@@ -134,6 +135,7 @@ function useShotengai() { // true if E did something (and the mahjong tables in 
   if (pm) { if (pm.busy) say('Somebody\'s on this one. He doesn\'t look up.'); else if (!pay(CREDIT)) say(`It's ${fmt$(CREDIT)} for a tray of balls.`); else startGame('pachinko', 'arcade'); return true; }
   if (room.kind === 'pachinko' && nearKeeper()) { openPrizes(); return true; }
   if (nearCrane()) { if (!pay(CREDIT)) say(`It's ${fmt$(CREDIT)} a go.`); else startGame('crane', 'arcade'); return true; }
+  if (nearGacha()) { turnGacha(); return true; }
   if (room.kind === 'capsule' && nearKeeper()) {
     if (!pay(CAPSULE_RATE)) { say(`A pod's ${fmt$(CAPSULE_RATE)}.`); return true; }
     sleep = { t: 0, home: true };
@@ -162,7 +164,10 @@ const SHOTENGAI_ROOMS = {
       const p = [];
       for (let x = 2; x <= 12; x += 0.85) p.push({ ...pachinkoMachine(x, 1.5, Math.round(x * 3), 1), busy: chance(0.55) });
       for (let x = 2.4; x <= 10.4; x += 0.85) { p.push({ ...pachinkoMachine(x, 4.9, Math.round(x * 5), -1), busy: chance(0.5) }, { ...pachinkoMachine(x, 5.45, Math.round(x * 7), 1), busy: chance(0.5) }); }
-      for (const s of p.slice()) if (s.busy) p.push({ ...sitting(s.cx, s.cy + s.fy * 0.6, shirt(), 0.45), face: [0, -s.fy] });
+      for (const s of p.slice()) { // a stool at every machine (you walk past them; sit, and you're at the machine), somebody on some
+        p.push({ ...STOOL(s.cx, s.cy + s.fy * 0.6, RED, 0.45), walk: true, fx: 0, fy: -s.fy });
+        if (s.busy) p.push({ ...sitting(s.cx, s.cy + s.fy * 0.6, shirt(), 0.45), face: [0, -s.fy] });
+      }
       p.push(...counterBox(12.3, 9.2, 0.9), standing(12.3, 8.6, RED));
       return p;
     } },
@@ -177,7 +182,6 @@ const SHOTENGAI_ROOMS = {
     props: r => [...counterBox(5.2, 9.7, 0.65), standing(5.2, 9.1, BLUE), POT_PLANT(1.4, 10.6)] },
 };
 Object.assign(ROOM_DEFS, SHOTENGAI_ROOMS);
-Object.assign(ROOM_FOR, { PACHINKO: 'pachinko', 'CRANE GAME': 'cranes', GACHA: 'cranes', CAPSULE: 'capsule', IZAKAYA: 'bar', KISSATEN: 'cafe', MANGA: 'books', DRUGSTORE: 'pharmacy',
-  YAKITORI: 'diner', TAKOYAKI: 'diner', BENTO: 'diner' });
+Object.assign(ROOM_FOR, { PACHINKO: 'pachinko', 'CRANE GAME': 'cranes', CAPSULE: 'capsule', MANGA: 'books' }); // (the food: counters.js, dining.js; GACHA, DRUGSTORE: storefronts.js)
 MENU_ITEMS.push(['YAKITORI 6', 'EDAMAME 3', 'SAKE 7', 'BEER 6'], ['TAKOYAKI 5', 'RAMUNE 2', 'ONIGIRI 3', 'TEA 2'], ['BENTO 9', 'ONIGIRI 3', 'MISO 3', 'TEA 2']);
 Object.assign(MENUS, { YAKITORI: MENU_ITEMS.length - 3, TAKOYAKI: MENU_ITEMS.length - 2, BENTO: MENU_ITEMS.length - 1 });

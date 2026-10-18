@@ -87,6 +87,7 @@ ROOM_DEFS.casino = { grid: boxRoom(CASINO_W, CASINO_H), light: 0.7, height: 3.6,
     for (const x of [1.3, CASINO_W - 1.3]) for (let y = 4.5; y < CASINO_H - 2; y += 1.6) { // slot machines down both walls, lights going
       const ph = x * 3 + y;
       p.push({ casino: 'slots', cx: x + (x < 5 ? 0.9 : -0.9), cy: y, ...SP(x, y, 0.75, 1.7, SLOT_ART, (c, row, L) => c === '7' ? C(RED, 15) : c === '=' && row === 1 ? C(YEL, 15) : c === 'o' ? C(RED, 14) : row === 0 ? C(NEON[(Math.floor(T * 5 + ph)) & 3], 15) : C(GRAY, Math.max(L, 8))) });
+      p.push({ ...STOOL(x + (x < 5 ? 0.7 : -0.7), y, RED, 0.45), walk: true, fx: x < 5 ? -1 : 1, fy: 0 }); // (its stool: walk past, or sit and you're at it)
       if (chance(0.3)) p.push({ ...sitting(x + (x < 5 ? 0.7 : -0.7), y, shirt(), 0.45), face: [x < 5 ? -1 : 1, 0] }); // (at the machine)
     }
     return p;

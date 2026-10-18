@@ -6,9 +6,17 @@
 // on a phone, swipe off the Ollie button the same way. Seen from your own eyes (V), the board under you is a little 3D
 // model in front of the camera (like a held weapon), so it really flips and spins.
 // Bunny hopping: jump again the moment you land (press Space just before or just after you touch down) and each hop
-// carries you a bit faster; turn the way you're strafing while you're in the air (A + mouse left, D + mouse right)
-// and it builds quicker. Stay on the ground and the speed's gone in a moment.
-const HOP_GAIN = 0.06, HOP_STRAFE = 0.12, HOP_MAX = 1.9, HOP_BUF = 0.2, HOP_GRACE = 0.16; // speed x per hop, x more for a good strafe, cap, s early
+// carries you a bit faster (tailing off near the top); turn the way you're strafing while you're in the air
+// (A + mouse left, D + mouse right) and it builds quicker. (A whole walkway of hops gets you fast enough to leap a
+// side street: the night courier run's shortcut.) Carrying that speed, you can't just cut the other way: on
+// the ground you swing round to where you're going over a moment, and a sharp turn costs you the speed (main.js).
+// Stay on the ground and the speed's gone in a moment (time enough for a few strides to an edge, and leap it).
+const HOP_GAIN = 0.06, HOP_STRAFE = 0.06, HOP_MAX = 1.9, HOP_TAPER = 1.75, HOP_BUF = 0.2, HOP_GRACE = 0.16, HOP_KEEP = 0.35; // speed x per hop, x more for a good strafe, cap (gains tail off above HOP_TAPER), s early; s late; s on the ground before the speed starts to go (a run-up to an edge)
+// the hop multiplier after one more hop (swirl: how far you turned into your strafe in the air), tailing off near the cap
+const hopUp = (hop, swirl) => Math.min(HOP_MAX, hop + (HOP_GAIN + Math.min(HOP_STRAFE, swirl * 0.08)) * clamp((HOP_MAX - hop) / (HOP_MAX - HOP_TAPER), 0, 1));
+// one more hop: the multiplier goes up, and so does the speed you carry (a run of hops never touches the ground long
+// enough for walking to pick it up)
+function hopFaster(swirl) { const h0 = body.hop || 1; body.hop = hopUp(h0, swirl); body.mx = (body.mx || 0) * body.hop / h0; body.my = (body.my || 0) * body.hop / h0; }
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
@@ -35,7 +43,7 @@ function jump(trick) { // trick: a TRICKS key from a flick; otherwise (on the bo
   body.buf = -9;
   if (skatingNow()) return skatePop(trick); // (skate.js)
   if (T - (body.landedAt ?? -9) <= HOP_GRACE && Math.hypot(body.mx || 0, body.my || 0) > 0.05)
-    body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.landingSwirl || 0) * 0.15));
+    hopFaster(body.landingSwirl || 0);
   body.landedAt = -9; body.vz = JUMP_V;
   if (actx) sfxUse('kick');
 }
@@ -48,8 +56,9 @@ function nearSeat() {
       if (!s.bench && !s.seat && !r) continue;
       const sx = r ? freeOnRow(r) : s.x;
       if (sx == null) continue; // (a full bench)
+      if (!r && room.props.some(o => o.fig && /^sit/.test(typeof o.pose === 'string' ? o.pose : '') && Math.hypot(o.x - s.x, o.y - s.y) < 0.4)) continue; // (somebody's in it)
       const d = Math.hypot((r ? clamp(px, r.x0, r.x1) : sx) - px, sy - py); // (how near the bench is: a step along it to a free spot doesn't count)
-      if (d < bd) { bd = d; best = { x: sx, y: sy, fx: r ? r.fx : s.fx, fy: r ? r.fy : s.fy }; }
+      if (d < bd) { bd = d; best = { x: sx, y: sy, fx: r ? r.fx : s.fx, fy: r ? r.fy : s.fy, h: r ? r.h : s.h }; }
     }
     return best;
   }
@@ -71,7 +80,7 @@ function freeOnRow(r) {
 function sitDown() {
   const s = nearSeat();
   if (!s) return false;
-  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; a = Math.atan2(s.fy, s.fx); pitch = s.grass ? -0.4 : 0; // (on the grass: looking down at the picnic)
+  body.seat = { ...s, from: [px, py] }; px = s.x; py = s.y; if (s.fx != null) a = Math.atan2(s.fy, s.fx); pitch = s.grass ? -0.4 : 0; // (on the grass: looking down at the picnic; a stool: whichever way you were facing)
   say(s.grass ? 'You sit down on the grass.' : 'You sit down.', 1.5);
   return true;
 }
@@ -97,7 +106,7 @@ function stepBody(dt) {
       if (skatingNow()) { skateLand(); if (actx) sfxUse('ollie-land'); } // (clean, or a bail: skate.js)
       body.trick = null;
       if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
-        if (moved) body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.swirl || 0) * 0.15));
+        if (moved) hopFaster(body.swirl || 0);
         body.swirl = 0; body.buf = -9; body.vz = JUMP_V;
         if (actx) sfxUse('kick');
         return;
@@ -111,7 +120,7 @@ function stepBody(dt) {
         else say(fell > 15 ? 'You hit the ground hard. Something in your ankle goes crunch.' : 'Oof. You land hard.', 3);
       }
     }
-  } else if (T - (body.landedAt ?? -9) > HOP_GRACE) body.hop = Math.max(1, (body.hop || 1) - dt * 4); // on the ground: the speed bleeds off
+  } else if (T - (body.landedAt ?? -9) > HOP_KEEP) body.hop = Math.max(1, (body.hop || 1) - dt * 2.5); // on the ground: a moment, then the speed bleeds off
 }
 
 // ---- roofs: no invisible walls. Step across onto the roof next door if it's about level (a storey up or down,
@@ -221,7 +230,7 @@ function edgeDrop() {
   return h < roofH - ROOF_STEP ? Math.round((roofH - h) * 10) : 0;
 }
 // how far your eyes are off standing height (metres): up in a jump, down crouching or sitting, up a little on the board
-const eyeLift = () => onFootMode() ? body.z + (skatingNow() ? BOARD_H : 0) - (body.seat ? SIT_H : body.crouch * CROUCH_H) : 0;
+const eyeLift = () => onFootMode() ? body.z + (skatingNow() ? BOARD_H : 0) - (body.seat ? SIT_H - ((body.seat.h ?? 0.45) - 0.45) : body.crouch * CROUCH_H) : 0; // (sat on something higher, a stool, you're higher)
 const footSlow = () => body.crouch > 0.5 ? 0.45 : 1;
 
 // ---- the board under your feet, in camera space: x right, y down, z ahead (metres), drawn into the character grid

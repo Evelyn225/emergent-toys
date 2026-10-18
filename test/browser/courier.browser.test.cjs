@@ -130,7 +130,7 @@ test('the first route uses existing building entrances for recovery without redu
     for(const [x,y,yaw,kind] of [[177.72,102.5,0,'courier'],[183.8,105.7,Math.PI/2,'apts']]) {
       mode='walk';room=null;px=x;py=y;a=yaw;pitch=0;body.z=body.vz=body.peak=0;render();interact();
       const entered=room?.kind;
-      if(entered!==kind){recovery.push({entered});continue;}
+      if(kind==='apts'?!LOBBY_KINDS.has(entered):entered!==kind){recovery.push({entered});continue;} // (an apartment building: whichever lobby suits it)
       px=room.def.ex;py=1.7;interact();
       const up={mode,free:roofFree(px,py),active:!!courierJob};
       interact();const down={mode,kind:room?.kind};
@@ -144,7 +144,7 @@ test('the first route uses existing building entrances for recovery without redu
   assert.equal(r.ladders,0);assert.equal(r.recovery.length,2);
   assert.deepEqual(r.survived,{active:true,health:100,z:0,street:true,hud:true});
   for(const [i,entry] of r.recovery.entries()) {
-    const kind=i===0?'courier':'apts';
+    const kind=i===0?'courier':entry.entered; // (the apartments: whichever lobby kind suits the building)
     assert.deepEqual(entry,{entered:kind,up:{mode:'roof',free:true,active:true},down:{mode:'room',kind}});
   }
   assert.deepEqual(r.garden,{entered:'grocer',word:'GROCERY',elevator:false});

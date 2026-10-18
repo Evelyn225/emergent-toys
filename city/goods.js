@@ -46,6 +46,13 @@ const ITEMS = {
   key_car_sports: { name: 'sports car keys', price: 0, kind: 'keys', car: 'car_sports' },
   home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 7000, kind: 'home' },
   home_belle: { name: 'Belle Époque residence', price: 16000, kind: 'home' },
+  // tattoos (the tattoo parlour): not carried, they're on you for good. hours: how long you sit for it; where: on you
+  tattoo_swallow: { name: 'swallow', price: 60, kind: 'tattoo', hours: 1, where: 'on the back of your hand' },
+  tattoo_anchor: { name: 'anchor', price: 80, kind: 'tattoo', hours: 1, where: 'on your forearm' },
+  tattoo_rose: { name: 'rose', price: 120, kind: 'tattoo', hours: 2, where: 'on your other forearm' },
+  tattoo_dagger: { name: 'dagger through a heart', price: 150, kind: 'tattoo', hours: 2, where: 'on your upper arm' },
+  tattoo_panther: { name: 'crawling panther', price: 220, kind: 'tattoo', hours: 3, where: 'climbing up your arm' },
+  tattoo_koi: { name: 'koi half sleeve', price: 480, kind: 'tattoo', hours: 5, where: 'from your elbow to your shoulder, waves and all' },
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
@@ -107,6 +114,7 @@ const STOCK_WORD = {
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft', 'home_belle'],
   DELICATESSEN: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'], JEWELER: ['jadebangle', 'luckycoin', 'redstring'], ANTIQUES: ['vinyl', 'book', 'harmonica', 'lantern'], TAILOR: ['umbrella'],
+  TATTOO: ['tattoo_swallow', 'tattoo_anchor', 'tattoo_rose', 'tattoo_dagger', 'tattoo_panther', 'tattoo_koi'],
   GAS: ['hotdog', 'coffee', 'candy', 'chips', 'soda', 'energy', 'water', 'cigarettes'], // (the shop, not the pumps: you never need gas)
   'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], 'PET SHOP': ['petcat', 'petdog'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
@@ -185,6 +193,7 @@ const heldItem = () => inv[held] || null;
 function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
   if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }
+  if (it.kind === 'tattoo') return getTattoo(id);
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   carryItem({ id, uses: it.uses || 0 });
@@ -194,6 +203,18 @@ const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
 // your storage unit: one unit, the same at every STORAGE place in town
 const STORE_SIZE = 30, stored = [], closet = []; // (closet: the stash at home, same rules)
+// your ink (tattoo ids, oldest first): sit in the chair, pay, and the hours go by
+const tattoos = [];
+function getTattoo(id) {
+  const it = ITEMS[id];
+  if (tattoos.includes(id)) return [false, `You've already got the ${it.name}. Pick something new off the wall.`];
+  if (!pay(it.price)) return [false, `The ${it.name} is ${fmt$(it.price)}. Come back when you've saved up.`];
+  tattoos.push(id);
+  for (tod += it.hours; tod >= 24; tod -= 24) dayNum++;
+  return [true, `${it.hours > 1 ? it.hours + ' hours' : 'An hour'} in the chair. The ${it.name}, ${it.where}. It stings, and it's perfect. (${fmt$(it.price)})`];
+}
+// what you could walk off with (not a car, a flat or somebody's needlework)
+const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo'].includes(ITEMS[id].kind));
 const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
 const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding

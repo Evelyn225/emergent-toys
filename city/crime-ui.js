@@ -128,13 +128,13 @@ function pickpocket(p) {
   });
 }
 // shoplifting: in a shop with its clerk at the counter and something on sale
-const canShoplift = () => mode === 'room' && !room.burgled && room.def.keeper && stockFor(room.kind, room.word).length && !room.caught;
+const canShoplift = () => mode === 'room' && !room.burgled && room.def.keeper && stealable(stockFor(room.kind, room.word)).length && !room.caught;
 function shoplift() {
   startCrime('shoplift', ok => {
     if (ok === 'abort') return;
     if (ok) {
       if (inv.length >= INV_SIZE) return say("Your bag is full.");
-      const id = pick(stockFor(room.kind, room.word)); carryItem({ id, uses: ITEMS[id].uses || 0 });
+      const id = pick(stealable(stockFor(room.kind, room.word))); carryItem({ id, uses: ITEMS[id].uses || 0 });
       return say(`You slip ${aOrSome(ITEMS[id].name)} into your coat.`, 3);
     }
     room.caught = true; say('"HEY! Put that back! I\'m calling the police."', 4);
@@ -156,10 +156,10 @@ function pickLock(sh) {
     if (ok === 'abort') return;
     if (!ok) { jammed.set(sh, T + 120); return say('The pick snaps in the lock. It\'s jammed now.', 3); }
     if (crime('burglary') !== 'cop') { /* (somebody may have seen you go in: crime() queues their call) */ }
-    const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
-    enterRoom(kind, { ...sh, cell, ret, line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]);
+    const kind = sh.kind === SHOP_APTS ? lobbyKind(cell[0], cell[1]) : ROOM_FOR[sh.word] || 'store';
+    enterRoom(kind, { ...sh, cell, district: districtAt(cell[0] + 0.5, cell[1] + 0.5), ret, line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]);
     px = room.W / 2; py = room.H - 1.6;
-    room.props = room.props.filter(p => !p.fig || p.guard !== undefined || p.still); // nobody here (but the night guards, and the mannequins and the shop cat)
+    room.props = room.props.filter(p => !p.fig || p.guard !== undefined || p.still && !p.cutout); // nobody here (but the night guards, and the mannequins and the shop cat; the cardboard film star's put away for the night: in the dark he'd pass for a person)
     if (Math.random() < 0.35) { reports.push({ t: T + 12, x: ret[0], y: ret[1], kind: 'burglary' }); say('The lock gives. A little red light blinks by the door...', 4); }
     else say('The lock gives. Inside, it\'s dark and quiet.', 3);
   });
@@ -195,7 +195,7 @@ function crackVault() {
   });
 }
 function grabStock() {
-  const stock = stockFor(room.kind, room.word);
+  const stock = stealable(stockFor(room.kind, room.word));
   if (!stock.length) return say('Nothing worth taking.');
   if (room.loot >= 4) return say("You've cleaned the place out.");
   if (inv.length >= INV_SIZE) return say('Your bag is full.');

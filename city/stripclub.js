@@ -132,7 +132,7 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
       p.push({ ...SP(x, y, 0.12, 0.14, ['*'], () => C(fract(T * 3 + x) < 0.85 ? YEL : ORANGE, 15), 0.74) }); // (the candle flickers)
       for (const cx of [x - 0.42, x + 0.42]) {
         const cy = y + 0.55;
-        p.push(BX(cx, cy, 0.22, 0.22, 0, 0.42, solid(MAG, { top: '=', bright: 1.6 })), BX(cx, cy + 0.2, 0.22, 0.04, 0.42, 0.72, tufted)); // (a low back: you can see who's in it)
+        p.push({ ...BX(cx, cy, 0.22, 0.22, 0, 0.42, solid(MAG, { top: '=', bright: 1.6 })), seat: true, x: cx, y: cy, fx: 0, fy: -1, h: 0.42 }, BX(cx, cy + 0.2, 0.22, 0.04, 0.42, 0.72, tufted)); // (a low back: you can see who's in it)
         if (chance(busy)) p.push(sitting(cx, cy - 0.04, shirt(), 0.42, true));
       }
     }

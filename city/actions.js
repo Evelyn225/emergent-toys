@@ -120,7 +120,7 @@ function enterRoom(kind, extra, spawn) {
   fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
   if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
-  if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
+  if (actx && kind !== 'station' && kind !== 'train' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
 }
 function interact() {
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
@@ -195,7 +195,7 @@ function interact() {
       const [mx, my] = room.cell, [cx, cy] = buildingMiddle(mx, my);
       roofH = map[idx(cx, cy)]; mode = 'roof'; px = cx + 0.5; py = cy + 0.5; pitch = 0; roofLot = roofCells(cx, cy);
       notePoliceRoofEntry(px, py, room.ret);
-      return say(`Roof, ${roofH * 10}m up`);
+      return say(`${room.def.upSay ? room.def.upSay + ' ' : ''}Roof, ${roofH * 10}m up.`, room.def.upSay ? 3 : 2);
     }
     if (canBoard()) {
       const from = room.st;
@@ -211,7 +211,7 @@ function interact() {
     }
     if (roomPerson()) return talkInRoom();
     if (room.kind === 'storage' && nearKeeper()) return openStorage(stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town');
-    if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
+    if (room.def.rent && nearKeeper()) return bookRoom();
     if (room.kind === 'hospital' && nearKeeper()) {
       if (needs.health >= maxHealth() - 5) return say(`"${pick(NURSE_LINES)}"`, 3);
       if (!pay(NURSE_FEE)) return say(`"Treatment's ${fmt$(NURSE_FEE)}, I'm afraid." You can't cover it.`, 3);
@@ -312,8 +312,8 @@ function interact() {
     if (sh.club && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
     if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
     if (sh.fee) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : sh.museum ? 'Enjoy the collection. No flash photography.' : 'Mind the butterflies.'}"`, 3);
-    const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
-    const r = { ...sh, cell: [lookHit.mx, lookHit.my], ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
+    const kind = sh.kind === SHOP_APTS ? lobbyKind(lookHit.mx, lookHit.my) : ROOM_FOR[sh.word] || 'store'; // (an apartment building: the way up suits the building, lobbies.js)
+    const r = { ...sh, cell: [lookHit.mx, lookHit.my], district: districtAt(lookHit.mx + 0.5, lookHit.my + 0.5), ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
     enterRoom(kind, r, [0, 0, -Math.PI / 2]);
     [px, py] = room.def.spawn || [room.W / 2, room.H - 1.6];
   }
@@ -365,7 +365,7 @@ function leaveRoom() {
   if (hotelAlarm) stepGrandHotel(); // A late exit still triggers the alarm while you're inside.
   if (room.kind === 'grandhotelheist') return enterRoom('grandhotel', room.lobby, [10.7, 2.65, Math.PI / 2]);
   if (room.kind === 'hotelroom' && room.lobby.grandHotel) return enterRoom('grandhotel', room.lobby, [7, 6.5, -Math.PI / 2]);
-  if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
+  if (room.kind === 'hotelroom') { const k = ROOM_FOR[room.lobby.word] || 'hotel'; return enterRoom(k, room.lobby, ROOM_DEFS[k].rentBack || [7.5, 3, Math.PI / 2]); } // back down to the lobby (or the motel office)
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
   else if (room.kind === 'terminal') leaveTerminal(); // (by whichever door: terminal.js)
   else if (room.kind === 'hospital') {

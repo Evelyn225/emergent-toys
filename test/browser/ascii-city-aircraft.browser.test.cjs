@@ -190,3 +190,30 @@ test('going in: the crash plays out before you are on foot; ditched in the bay, 
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+test('flying in fog: the view is fogged right down to the instruments, from the cockpit and from behind; the instruments never are', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1000, height: 640 } }), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof stepFlight === 'function' && Number.isFinite(eye));
+    const rowFog = () => page.evaluate(() => { const mean = r => { let s = 0; for (let x = 0; x < cols; x++) s += FOGB[r * cols + x]; return s / cols; }; return [mean(rows - 9), mean(rows - 4), mean(rows - 3), mean(rows - 1)]; }); // (above the nose, just over the panel, the panel)
+    const out = {};
+    for (const view of [true, false]) {
+      await page.evaluate(view => {
+        tod = 12; weather = 'fog'; fogAmt = 1; wTimer = 999; clearWanted(); third = view;
+        if (mode !== 'air') enterAircraft(aircraft.find(c => c.type === 'jet'));
+        Object.assign(pilot, { ground: false, z: 15, v: 25, throttle: 0.8, x: 60, y: 60 }); paused = false;
+      }, view);
+      await page.waitForTimeout(600);
+      out[view ? 'behind' : 'cockpit'] = await rowFog();
+    }
+    for (const [view, [above, last, panel, bottom]] of Object.entries(out)) {
+      assert.ok(above > 6, `${view}: the ground far below is lost in the fog (${above})`);
+      assert.ok(last > 6, `${view}: and so is the row just over the instruments (${last})`);
+      assert.deepEqual([panel, bottom], [0, 0], `${view}: the instruments are clear`);
+    }
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});

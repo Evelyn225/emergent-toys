@@ -55,8 +55,9 @@ const clothesRack = (x, y, hl, seed, cols = ITEM_COL, long = false) => ROOM_MODE
     });
   }
 }, [hl + 0.05, 0.28, 1.45]);
-// a mannequin in an outfit, facing (fx, fy): a person-shaped blank, white plaster where the skin would be
-const mannequin = (x, y, top, bot, col, fx = 0, fy = 1) => figProp(x, y, figLook({ hair: 'bald', top, bot,
+// a mannequin in an outfit, facing (fx, fy): a dress form (no head, no arms, no legs: a torso on a pole), so it's never
+// mistaken for somebody standing there, even in the dark
+const mannequin = (x, y, top, bot, col, fx = 0, fy = 1) => figProp(x, y, figLook({ hair: 'bald', top, bot, form: true,
   col: { skin: [WHITE, 12], top: [col, 11], inner: [WHITE, 13], bot: [GRAY, 4], shoe: [GRAY, 2], hair: [WHITE, 12] } }), { face: [fx, fy], chat: false, still: true, light: 6 });
 // things hung from the ceiling on strings at (x, y): what hangs is drawn by thing(vx, vy, z), its top at z (string above)
 const hung = (x, y, z, thing) => ROOM_MODEL(x, y, (vx, vy) => { rod(vx, vy, z, vx, vy, room.def.height || 3, 0.003, GRAY, 0.7); thing(vx, vy, z); });
@@ -246,7 +247,7 @@ ROOM_DEFS.grocer = { grid: ['##############', '#.......#....#', '#..SS...#....#'
   },
   props: r => {
     const fruit = r.word === 'FRUIT', p = [...checkout(10.65, 7.6, 0.85), standing(11.45, 7.6, GREEN),
-      ...produceStand(9.6, 4.9, 1.4, 63), ...produceStand(9, 6.25, 1, 70), ...(fruit ? produceStand(6.5, 2.4, 0.8, 11) : []),
+      ...produceStand(8.9, 4.9, 0.9, 63), ...produceStand(8.5, 6.6, 0.8, 70), // (a clear way down from the stockroom door, and between the two) ...(fruit ? produceStand(6.5, 2.4, 0.8, 11) : []),
       BX(12.2, 6.1, 0.5, 0.5, 0, 0.8, (i, t, L) => { // a bin of watermelons
         const f = HIT.face; if (f === 5) { BG[i] = C(GREEN, 1.5); return set(i, hash(i, 9) > 0.5 ? 'O' : 'o', C(GREEN, 9)), true; }
         BG[i] = C(BRICK, (1.2 + L * 0.2) * shadeFace(f)); return set(i, fract(HIT.w * 6) < 0.25 ? '=' : ' ', C(WARM, L * 0.5)), true; }),
@@ -255,10 +256,11 @@ ROOM_DEFS.grocer = { grid: ['##############', '#.......#....#', '#..SS...#....#'
       BX(10.9, 1.35, 0.35, 0.25, 0, 0.45, (i, t, L) => { if (HIT.face === 5) { BG[i] = C(YEL, 3); return set(i, ')', C(GREEN, 10)), true; } // a crate of green bananas
         BG[i] = C(BRICK, (1.3 + L * 0.2) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 8) < 0.3 ? '=' : ' ', C(WARM, L * 0.5)), true; })];
     for (let k = 0; k < 5; k++) p.push(BX(1.4, 8.5, 0.24, 0.18, k * 0.09, k * 0.09 + 0.08, solid(k & 1 ? RED : ORANGE, { top: '#' }))); // a stack of baskets by the door
-    p.push(aisleSign(9.6, 4.5, fruit ? 'FRESH FRUIT' : 'PRODUCE', C(GREEN, 4), C(WHITE, 15), 0.6));
+    p.push(aisleSign(8.9, 4.5, fruit ? 'FRESH FRUIT' : 'PRODUCE', C(GREEN, 4), C(WHITE, 15), 0.6));
     if (!fruit) p.push(aisleSign(4, 3.6, 'AISLE 1', C(BLUE, 4), C(WHITE, 15), 0.35));
     p.push(...shoppers([[2, 4, -1, 0], [7.2, 3.6, 1, 0], [7.2, 6, 0, -1], [5.6, 2.6, -1, 0]], 0.35));
-    if (chance(0.4)) p.push({ ...sitting(11.5, 2.6, GREEN, 0.4), face: [-1, 0] }); // somebody on their break, on an upturned crate
+    p.push(BX(11.5, 2.6, 0.2, 0.17, 0, 0.38, (i, t, L) => { BG[i] = C(BRICK, (1.3 + L * 0.2) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 8) < 0.3 || HIT.face === 5 && fract(HIT.u * 5) < 0.2 ? '=' : ' ', C(WARM, L * 0.5)), true; }), SEAT(11.5, 2.6, -1, 0, 0.4)); // an upturned crate
+    if (chance(0.4)) p.push({ ...sitting(11.5, 2.6, GREEN, 0.4), face: [-1, 0] }); // somebody on their break, on it
     return p;
   } };
 
@@ -377,7 +379,7 @@ ROOM_DEFS.hardware = { grid: ['##################', '#............#...#', '#...S
     return p;
   } };
 
-Object.assign(ROOM_FOR, { GROCERY: 'grocer', MARKET: 'grocer', FRUIT: 'grocer', DELI: 'deli', DELICATESSEN: 'deli', HARDWARE: 'hardware' });
+Object.assign(ROOM_FOR, { GROCERY: 'grocer', DELI: 'deli', HARDWARE: 'hardware' }); // (MARKET, FRUIT, DELICATESSEN: storefronts.js)
 
 // ---- painters for walls of things: each takes the wall's (i, u, z, L) and a seed, paints the cell and returns true,
 // or returns false where the wall shows through
@@ -595,7 +597,7 @@ const clockTall = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // a grandfather cloc
     BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(f)); return set(i, f === 5 ? '^' : fract(w * 2) < 0.04 ? '-' : ' ', C(YEL, L * 0.6)), true;
   });
 }, [0.24, 0.16, 2.1]);
-const armchair = (x, y, fx, fy, col = BRICK) => [BX(x, y, 0.4, 0.38, 0, 0.42, solid(col, { top: '=', bright: 1.4 }), fx, fy), BX(x - fx * 0.32, y - fy * 0.32, 0.08, 0.4, 0.42, 1.0, solid(col, { bright: 1.4 }), fx, fy),
+const armchair = (x, y, fx, fy, col = BRICK) => [{ ...BX(x, y, 0.4, 0.38, 0, 0.42, solid(col, { top: '=', bright: 1.4 }), fx, fy), seat: true, x, y, fx, fy, h: 0.42 }, BX(x - fx * 0.32, y - fy * 0.32, 0.08, 0.4, 0.42, 1.0, solid(col, { bright: 1.4 }), fx, fy),
   ...[-1, 1].map(e => BX(x + fy * e * 0.36, y - fx * e * 0.36, 0.38, 0.06, 0.42, 0.62, solid(col, { top: '=', bright: 1.4 }), fx, fy))];
 const lampStand = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // a standard lamp: a fringed shade, glowing
   rod(vx, vy, 0, vx, vy, 1.45, 0.012, BRICK, 1.2); drum(vx, vy, 0.14, 0, 0.03, solid(BRICK));
@@ -678,7 +680,7 @@ ROOM_DEFS.pharmacy = { grid: ['############', '#..........#', '#..........#', '#
       aisleSign(2.9, 4.95, 'COLD & FLU', C(BLUE, 4), C(WHITE, 15), 0.6), aisleSign(9.1, 4.95, 'VITAMINS', C(ORANGE, 4), C(WHITE, 15), 0.5),
       BX(10.8, 7.4, 0.3, 0.3, 0, 1.3, (i, t, L) => { if (HIT.face === 2 && HIT.w > 0.9 && HIT.w < 1.2) { BG[i] = C(CYAN, 3); return set(i, HIT.w > 1.05 ? '1' : '2', C(WHITE, 14)), true; } // the blood pressure machine
         BG[i] = C(WHITE, (2.5 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 2 && Math.abs(HIT.w - 0.75) < 0.05 ? 'O' : ' ', C(GRAY, 6)), true; }),
-      BX(10.15, 7.4, 0.25, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), sunglassSpinner(4.5, 7.5),
+      { ...BX(10.15, 7.4, 0.25, 0.25, 0, 0.45, solid(BLUE, { top: '=' })), seat: true, x: 10.15, y: 7.4, fx: 1, fy: 0, h: 0.45 }, sunglassSpinner(4.5, 7.5),
       BX(1.5, 6.5, 0.35, 0.3, 0, 0.75, solid(WHITE, { top: '=', panel: 0.35 })), STOOL(1.5, 7.4, BLUE, 0.5), // the consultation room: a desk, a stool
       BX(1.35, 6.5, 0.12, 0.1, 0.75, 1.0, (i, t, L) => { BG[i] = HIT.face === 1 ? C(CYAN, 4) : C(GRAY, 1.5); return set(i, ' ', 0), true; })]; // and its screen
     p.push(...shoppers([[6, 3.1, 0, -1], [6.3, 3.9, 0, -1], [4.8, 4.6, -1, 0], [7.2, 6.2, 1, 0]], 0.45));
@@ -686,7 +688,7 @@ ROOM_DEFS.pharmacy = { grid: ['############', '#..........#', '#..........#', '#
     return p;
   } };
 
-Object.assign(ROOM_FOR, { SKATE: 'skate', SPORTS: 'sports', TOYS: 'toys', THRIFT: 'thrift', ANTIQUES: 'thrift', TAILOR: 'thrift', PHARMACY: 'pharmacy' }); // (and the shotengai's DRUGSTORE: shotengai.js)
+Object.assign(ROOM_FOR, { SKATE: 'skate', SPORTS: 'sports', TOYS: 'toys', THRIFT: 'thrift', PHARMACY: 'pharmacy' }); // (ANTIQUES, TAILOR, DRUGSTORE: storefronts.js)
 
 // more walls of things
 // tapes face out on a shelf: a cover each, the title strip across its top
@@ -820,7 +822,7 @@ ROOM_DEFS.video = { grid: ['############', '#.......#..#', '#.SS.SS.#..#', '#.SS
       tvSet(9.15, 7.45, 1.0, 0, 1, 0.24, movie), popcornMachine(10.6, 7.45, 1.0),
       BX(1.6, 8.2, 0.3, 0.25, 0, 0.9, (i, t, L) => { if (HIT.face === 1 && Math.abs(HIT.w - 0.7) < 0.03 && Math.abs(HIT.v) < 0.15) return set(i, '=', C(GRAY, 1)), true; // the returns box
         BG[i] = C(BLUE, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
-      figProp(1.5, 6.6, figLook({ hair: 'buzz', shades: true, top: 'tank', bot: 'pants', bw: 1.3, col: { top: [GRAY, 3], bot: [GREEN, 4], skin: [SKIN, 12], hair: [GRAY, 1] } }), { face: [0.6, 1], chat: false, still: true }), // a cardboard action hero
+      figProp(1.5, 6.6, figLook({ hair: 'buzz', shades: true, top: 'tank', bot: 'pants', bw: 1.3, col: { top: [GRAY, 3], bot: [GREEN, 4], skin: [SKIN, 12], hair: [GRAY, 1] } }), { face: [0.6, 1], chat: false, still: true, cutout: true }), // a cardboard action hero
       aisleSign(3, 3.6, 'ACTION', C(RED, 4), C(WHITE, 15), 0.4), aisleSign(6, 3.6, 'HORROR', C(GRAY, 1), C(RED, 15), 0.4),
       beadCurtain(9.5, 4.5, 0.5), lintelSign(9.5, 4.5, 0.5, '18+', C(GRAY, 0.5), C(RED, 15)), // the way through to the back
       hung(10, 2.3, 2.45, (vx, vy, z) => dot(vx, vy, z - 0.06, 0.06, (i, t, L) => { BG[i] = C(RED, 12); return set(i, 'o', C(YEL, 15)), true; }))]; // its red bulb
@@ -868,7 +870,7 @@ ROOM_DEFS.herbs = { grid: ['###############', '#........#....#', '#........#....
         drum(vx, vy, 0.07, 0.36, 0.48, (i, t, L) => { BG[i] = C(WHITE, 3.5 * drumLit(0.07)); return set(i, HIT.face === 5 ? 'o' : ' ', C(BLUE, 8)), true; });
         for (const [e, w] of [[-0.25, -0.15], [0.25, -0.15], [-0.25, 0.15], [0.25, 0.15]]) drum(vx + e, vy + w, 0.03, 0.36, 0.41, (i, t, L) => { BG[i] = C(WHITE, 3); return set(i, ' ', 0), true; });
       }),
-      ...[[11.0, 3.5], [12.6, 3.5], [11.8, 2.7], [11.8, 4.3]].map(([x, y]) => ({ ...BX(x, y, 0.25, 0.25, 0, 0.1, solid(RED, { top: '#', bright: 1.5 })), walk: true })), // cushions
+      ...[[11.0, 3.5, 1, 0], [12.6, 3.5, -1, 0], [11.8, 2.7, 0, 1], [11.8, 4.3, 0, -1]].map(([x, y, fx, fy]) => ({ ...BX(x, y, 0.25, 0.25, 0, 0.1, solid(RED, { top: '#', bright: 1.5 })), walk: true, seat: true, x, y, fx, fy, h: 0.12 })), // cushions
       POT_PLANT(13.4, 1.5, 1.4), POT_PLANT(13.4, 6.4, 1.1)];
     for (const [x, y] of [[3, 3.4], [4.2, 4.2], [5.6, 3.4], [6.8, 4.4], [4.6, 5.4], [6, 5.6]]) p.push(hung(x, y, 2.35, herbBundle));
     if (chance(0.6)) p.push({ ...sitting(11.0, 3.5, shirt(), 0.12), face: [1, 0] }, { ...sitting(12.6, 3.5, shirt(), 0.12), face: [-1, 0] }); // two over a pot of tea
@@ -1188,3 +1190,194 @@ ROOM_DEFS.gas = { grid: ['#############', '#........W..#', '#...........#', '#..
     return p;
   } };
 Object.assign(ROOM_FOR, { GAS: 'gas' });
+
+// ---- the record shop (RECORDS): two long bins of LPs down the middle to flip through, divider cards sticking up out
+// of them; a wall of sleeves face-out at the back, gig posters down the left, CDs and tapes racked on the right; a
+// listening station with its headphones; and the counter by the door, a record going round on the deck behind it
+const RECORD_COLS = [RED, ORANGE, YEL, GREEN, CYAN, BLUE, MAG, WHITE, BRICK];
+const recordBin = (x, y, hl, seed) => [ // along y; waist high, the sleeves standing in it as a row of spines
+  BX(x, y, hl, 0.42, 0, 0.62, solid(BRICK, { panel: 0.8, trim: 0.58, top: '=' }), 0, 1),
+  BX(x, y, hl - 0.04, 0.36, 0.62, 0.9, (i, t, L) => {
+    if (HIT.face !== 5) { BG[i] = C(GRAY, 0.8 + L * 0.1); return set(i, fract(HIT.u * 9) < 0.4 ? '|' : ' ', C(RECORD_COLS[hash(Math.floor(HIT.u * 9), seed, 71) * 9 | 0], L * 0.9)), true; }
+    const s = Math.floor((HIT.u + hl) * 14), col = RECORD_COLS[hash(s, seed, 72) * 9 | 0]; // the sleeves' top edges, one after another
+    BG[i] = C(col, 1.6 + L * 0.3); return set(i, fract((HIT.u + hl) * 14) < 0.25 ? '|' : ' ', C(GRAY, 1)), true;
+  }, 0, 1),
+  ...[-0.55, 0.55].map((f, k) => BX(x, y + f * hl, 0.02, 0.36, 0.9, 1.05, (i, t, L) => { // divider cards: A-K, L-Z
+    BG[i] = C(WHITE, 3.4 + L * 0.2); return set(i, HIT.face <= 2 && Math.abs(HIT.w - 0.98) < 0.03 ? (k ? 'L' : 'A') : ' ', C(GRAY, 1)), true; }, 0, 1)),
+];
+// a turntable on top of something z high: the platter going round, the tonearm across it
+const turntable = (x, y, z) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, 0.22, 0.17, z, z + 0.06), solid(GRAY, { top: ' ' }));
+  drum(vx - 0.04, vy, 0.15, z + 0.06, z + 0.075, (i, t, L) => {
+    if (HIT.face !== 5) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
+    const r = Math.hypot(HIT.u, HIT.v), ang = Math.atan2(HIT.v, HIT.u) - T * 3.5; // (33 and a third)
+    if (r < 0.04) { BG[i] = C(RED, 6); return set(i, r < 0.01 ? '.' : ' ', C(GRAY, 1)), true; } // the label
+    BG[i] = C(GRAY, 0.4 + (Math.abs(fract(ang / (Math.PI * 2)) - 0.5) < 0.04 ? 1.6 : 0)); // the light running round the grooves
+    return set(i, fract(r * 40) < 0.3 ? ':' : ' ', C(GRAY, 3)), true;
+  });
+  rod(vx + 0.15, vy - 0.12, z + 0.11, vx - 0.02, vy - 0.05, z + 0.085, 0.006, WHITE, 1.3); // the tonearm
+});
+function recordsWall(i, u, uStep, z, d, mx, my, L) {
+  if (backWall(my) && z > 0.4 && z < 2.6) { // sleeves face out, three rows of them on narrow ledges
+    if (wallText(i, u, uStep, z, d, 'NEW IN', 2.4, 2.75, 0.18, 0.25, C(YEL, 15))) return true;
+    const row = Math.floor((z - 0.4) / 0.72), cu = Math.floor(u / 0.36), fu = fract(u / 0.36), fz = fract((z - 0.4) / 0.72);
+    if (fz < 0.08) { BG[i] = C(BRICK, 1.4); return set(i, '=', C(WARM, L)), true; } // the ledge
+    if (fu < 0.07 || fz > 0.9) { BG[i] = C(GRAY, 1.2); return set(i, ' ', 0), true; }
+    const h = hash(cu, row, 73), col = RECORD_COLS[h * 9 | 0], cx = fu - 0.53, cz = fz - 0.5, ring = Math.hypot(cx, cz);
+    BG[i] = C(col, 2.4 + L * 0.2); // a sleeve: its colour, and a design on it (a disc, stripes or a block letter)
+    if (h < 0.4) return set(i, ring < 0.3 && ring > 0.12 ? 'O' : ' ', C(GRAY, 1)), true;
+    if (h < 0.7) return set(i, fract(cz * 5) < 0.3 ? '=' : ' ', C(WHITE, 12)), true;
+    return set(i, ring < 0.2 ? '#' : ' ', C(WHITE, 14)), true;
+  }
+  if (leftWall(mx) && z > 0.9 && z < 2.5) { // gig posters and flyers, pasted over each other
+    const pu = Math.floor(u / 0.7), pz = Math.floor((z - 0.9) / 0.8), h = hash(pu, pz, 74), col = RECORD_COLS[h * 9 | 0];
+    if (fract(u / 0.7) < 0.08 || fract((z - 0.9) / 0.8) < 0.06) return false;
+    BG[i] = C(col, 2.2 + L * 0.2);
+    return set(i, fract((z - 0.9) / 0.8) > 0.75 ? (fract(u * 9) < 0.6 ? '#' : ' ') : fract(z * 9) < 0.25 ? '-' : ' ', C(h > 0.5 ? WHITE : GRAY, h > 0.5 ? 13 : 1)), true;
+  }
+  if (rightWall(mx) && u < 4.6 && z > 0.3 && z < 2.3) { // CDs and tapes, spines out
+    if (fract((z - 0.3) / 0.4) < 0.12) { BG[i] = C(GRAY, 1.6); return set(i, '=', C(GRAY, L)), true; }
+    const k = hash(Math.floor(u * 30), Math.floor((z - 0.3) / 0.4), 75);
+    BG[i] = C(GRAY, 0.6); return set(i, '|', C(RECORD_COLS[k * 9 | 0], L * 1.1)), true;
+  }
+  if (z < 1.0) { BG[i] = C(GRAY, 0.6 + L * 0.1); return set(i, ' ', 0), true; }
+  BG[i] = C(MAG, 0.8 + L * 0.12); return set(i, ' ', 0), true; // painted a deep purple, the way record shops are
+}
+ROOM_DEFS.records = { grid: boxRoom(12, 9), light: 0.75, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, wall: recordsWall, keeper: [10.35, 6.2],
+  props: r => {
+    const p = [...recordBin(3.3, 3.7, 1.7, 1), ...recordBin(6.1, 3.7, 1.7, 2),
+      BX(9.6, 6.2, 1.25, 0.32, 0, 1.0, solid(BRICK, { panel: 0.5, trim: 0.96, top: '=' }), 0, 1), // the counter by the door,
+      { ...standing(10.35, 6.2, r.neon), face: [-1, 0] }, // and behind it, facing the shop
+      BX(9.6, 7.0, 0.16, 0.2, 1.0, 1.25, (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, HIT.face === 2 ? '$' : '#', C(GREEN, L)), true; }, 0, 1), // the till
+      turntable(9.6, 5.5, 1.0), // what's playing
+      BX(1.35, 6.6, 0.4, 0.28, 0, 0.9, solid(GRAY, { top: '=' }), 0, 1), turntable(1.35, 6.6, 0.9), STOOL(2.1, 6.6, RED, 0.62), // the listening station
+      ROOM_MODEL(1.35, 6.25, (vx, vy) => { rod(vx - 0.08, vy, 1.05, vx + 0.08, vy, 1.05, 0.01, GRAY, 1); for (const e of [-1, 1]) dot(vx + e * 0.09, vy, 0.98, 0.04, solid(GRAY)); }), // its headphones
+      aisleSign(3.3, 3.7, 'ROCK  SOUL', C(GRAY, 1), C(YEL, 15), 0.6), aisleSign(6.1, 3.7, 'JAZZ  DUB', C(GRAY, 1), C(CYAN, 15), 0.6)];
+    p.push(...shoppers([[2.4, 3.2, 1, 0], [4.2, 4.4, -1, 0], [5.2, 2.6, 1, 0], [7.0, 4.6, -1, 0]], 0.4)); // crate diggers, heads down
+    return p;
+  } };
+Object.assign(ROOM_FOR, { RECORDS: 'records' });
+
+// ---- the tattoo parlour (TATTOO), the good kind: black and white floor, oxblood damask walls hung with gilt-framed
+// flash, a big koi mural over the lounge (a chesterfield, a rug, the portfolios on the table, the jukebox), a glass
+// case of piercing jewellery for a counter with ink bottles racked behind it, and three stations down the back: a
+// contoured chair with its leg rest and arm pads, the artist's stool, a ring light, a rolling cart with the machine and
+// a row of ink caps, a sharps bin on the wall, and art-covered screens between them. NO REGRETS in pink neon. You can
+// get tattooed: pick a design off the wall at the counter (goods.js), sit for it, and wear it (skate.js shows it).
+const INK_COLS = [RED, ORANGE, YEL, GREEN, CYAN, BLUE, MAG, GRAY, WHITE];
+// a sheet of flash in its frame: little designs in rows on cream paper. (u, z) across the sheet from its corner, w x h
+const FLASH = [['<3', RED], ['@', RED], ['+-', GRAY], ['v', BLUE], ['$', GREEN], ['*', YEL], ['%', MAG], ['()', CYAN], ['&', RED], ['#', BLUE]];
+function flashSheet(i, u, z, w, h, seed, L) {
+  if (u < 0.05 || z < 0.05 || w - u < 0.05 || h - z < 0.05) { BG[i] = C(YEL, 4.5 + L * 0.2); return set(i, '=', C(ORANGE, 9)), true; } // gilt frame
+  BG[i] = C(STONE, 3.2 + L * 0.1); // the paper
+  const cu = Math.floor(u / 0.17), cz = Math.floor(z / 0.17), fu = fract(u / 0.17), fz = fract(z / 0.17);
+  if (fu < 0.2 || fz < 0.25) return set(i, ' ', 0), true;
+  const [glyph, col] = FLASH[hash(cu, cz, seed) * FLASH.length | 0];
+  return set(i, glyph[Math.floor(fu * glyph.length * 0.99)] || glyph[0], C(col, 7)), true;
+}
+// the koi mural: deep water, ripples, a big orange-and-white koi turning, its tail fanned, blossom on the surface
+function koiMural(i, u, z, L) {
+  const cx = 7.4, cz = 1.8, du = u - cx, dz = z - cz, ang = -0.35, ru = du * Math.cos(ang) - dz * Math.sin(ang), rz = du * Math.sin(ang) + dz * Math.cos(ang);
+  const body = (ru / 1.15) ** 2 + (rz / (0.36 * (1 - Math.max(0, ru) * 0.25))) ** 2;
+  if (body < 1) { // the koi: white with orange patches, a scale pattern, an eye near the head
+    if (Math.hypot(ru - 0.85, rz - 0.08) < 0.05) { BG[i] = C(GRAY, 0.4); return set(i, ' ', 0), true; }
+    const patch = noise(ru * 2.6 + 3, rz * 3, 81) > 0.45;
+    BG[i] = patch ? C(ORANGE, 7 + L * 0.2) : C(WHITE, 8 + L * 0.2);
+    return set(i, fract(ru * 9 + Math.abs(rz) * 5) < 0.3 ? ')' : ' ', C(patch ? RED : STONE, 8)), true;
+  }
+  const tu = -ru - 1.05, tail = tu > 0 && tu < 0.55 && Math.abs(rz) < tu * 0.9 + 0.05; // the tail, fanned out behind
+  if (tail) { BG[i] = C(ORANGE, 6 + L * 0.2); return set(i, fract(rz * 8) < 0.3 ? '/' : ' ', C(RED, 9)), true; }
+  for (const sg of [1, -1]) if (Math.hypot(ru - 0.3, rz - sg * 0.45) < 0.16) { BG[i] = C(ORANGE, 6); return set(i, '~', C(WHITE, 10)), true; } // fins
+  if (hash(Math.floor(u * 4), Math.floor(z * 4), 82) > 0.93 && z > 2.3) { BG[i] = C(BLUE, 2.2); return set(i, '*', C(MAG, 13)), true; } // blossom, floating
+  BG[i] = C(BLUE, 1.5 + z * 0.35 + L * 0.1); // the water, lighter toward the top
+  return set(i, fract(u * 1.4 + Math.sin(z * 5) * 0.3) < 0.06 ? '~' : ' ', C(CYAN, 6)), true;
+}
+function tattooWall(i, u, uStep, z, d, mx, my, L) {
+  const W = room.W, H = room.H;
+  if (z > 2.95) { BG[i] = C(GRAY, 0.4); return set(i, ' ', 0), true; } // the cornice, in shadow
+  if (z < 1.0) { BG[i] = C(GRAY, 0.5 + L * 0.06); return set(i, z > 0.95 ? '=' : z < 0.1 ? '_' : ' ', C(YEL, z > 0.95 ? 9 : 2)), true; } // black wainscot, a brass rail
+  if (backWall(my)) {
+    if (z > 2.35 && z < 2.85) { // NO REGRETS, in pink neon, a glow round it
+      if (wallText(i, u, uStep, z, d, 'NO REGRETS', W / 2, 2.6, 0.22, 0.34, C(WHITE, 15))) { BG[i] = C(MAG, 9); return true; }
+      if (Math.abs(u - W / 2) < 1.4) { BG[i] = C(MAG, 2.4); return set(i, ' ', 0), true; }
+    }
+    for (const sx of [2.6, 7, 11.4]) { // over each station: a mirror, two flash sheets either side
+      if (Math.abs(u - sx) < 0.42 && z > 1.25 && z < 2.25) { if (Math.abs(u - sx) > 0.38 || z < 1.29 || z > 2.21) { BG[i] = C(YEL, 4.5); return set(i, '=', C(ORANGE, 9)), true; } BG[i] = C(CYAN, 1.3); return set(i, fract((u + z) * 3) < 0.05 ? '/' : ' ', C(WHITE, 11)), true; }
+      for (const e of [-1, 1]) { const fx = sx + e * 0.95 - 0.35; if (u > fx && u < fx + 0.7 && z > 1.3 && z < 2.2) return flashSheet(i, u - fx, z - 1.3, 0.7, 0.9, Math.round(sx * 3 + e), L); }
+    }
+  }
+  if (leftWall(mx) && -u > 4.9 && -u < 9.9 && z < 2.95) return koiMural(i, -u, z, L); // over the lounge (from inside, u runs the other way along this wall)
+  if (rightWall(mx) && u > 5.6 && u < 9.6) { // behind the counter: WALK-INS WELCOME, and the ink, racked by colour
+    if (z > 2.45 && wallText(i, u, uStep, z, d, 'WALK-INS WELCOME', 7.6, 2.62, 0.13, 0.22, C(YEL, 15))) { BG[i] = C(GRAY, 0.6); return true; }
+    if (z > 1.15 && z < 2.3) {
+      if (fract((z - 1.15) / 0.38) < 0.14) { BG[i] = C(BRICK, 1.6); return set(i, '=', C(WARM, L)), true; } // the shelves
+      const k = Math.floor(u / 0.13), col = INK_COLS[hash(k, Math.floor((z - 1.15) / 0.38), 83) * INK_COLS.length | 0];
+      if (fract(u / 0.13) < 0.25) { BG[i] = C(GRAY, 0.6); return set(i, ' ', 0), true; }
+      BG[i] = C(col, 2.2 + L * 0.2); return set(i, fract((z - 1.15) / 0.38) > 0.7 ? '^' : 'U', C(WHITE, 9)), true; // a bottle, its cap
+    }
+  }
+  if (z > 1.25 && z < 2.3) { // gilt-framed flash, salon-style, everywhere else
+    const fw = 0.75, fh = 0.85, cu = Math.floor(u / 1.0), fu = u - cu * 1.0 - 0.12, fz = z - 1.3 - (cu & 1) * 0.08;
+    if (fu > 0 && fu < fw && fz > 0 && fz < fh) return flashSheet(i, fu, fz, fw, fh, cu * 7 + mx * 3 + my, L);
+  }
+  BG[i] = C(BRICK, 1.0 + L * 0.12); // oxblood damask
+  return set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 3 === 0 && fract(u * 5) > 0.5 ? '%' : ' ', C(RED, L * 0.35)), true;
+}
+// a station, the chair along x (its head end at -x): what everything at it is made of, and where
+const vinyl = (i, t, L) => { BG[i] = C(GRAY, (1.5 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (fract(HIT.u * 6) < 0.12 ? '-' : ' ') : '=', C(RED, HIT.face === 5 ? 6 : 9)), true; }; // black vinyl, red piping
+const tattooStation = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx + 0.1, vy, 0.22, 0, 0.06, CHROME); drum(vx + 0.1, vy, 0.08, 0.06, 0.48, CHROME); // the hydraulic pedestal
+  drawBox(boxAt(vx + 0.1, vy, 1, 0, 0.36, 0.28, 0.48, 0.62), vinyl); // the seat
+  drawBox(boxAt(vx - 0.5, vy, Math.cos(0.55), 0, 0.3, 0.27, 0.6, 1.0), vinyl); // the back, tilted up
+  drawBox(boxAt(vx - 0.86, vy, 1, 0, 0.08, 0.15, 1.0, 1.12), vinyl); // the headrest
+  drawBox(boxAt(vx + 0.68, vy, Math.cos(-0.3), 0, 0.26, 0.24, 0.32, 0.48), vinyl); // the leg rest, angled down
+  for (const e of [-1, 1]) { drawBox(boxAt(vx - 0.05, vy + e * 0.42, 1, 0, 0.32, 0.07, 0.68, 0.76), vinyl); rod(vx - 0.05, vy + e * 0.36, 0.55, vx - 0.05, vy + e * 0.42, 0.68, 0.012, GRAY, 1.3); } // the arm pads
+  const sx = vx + 0.25, sy = vy + 0.75; // the artist's stool
+  drum(sx, sy, 0.19, 0.44, 0.52, (i, t, L) => { BG[i] = C(GRAY, (1.5 + L * 0.2) * drumLit(0.19)); return set(i, HIT.face === 5 ? 'o' : ' ', C(RED, 8)), true; });
+  drum(sx, sy, 0.03, 0.06, 0.44, CHROME); drum(sx, sy, 0.2, 0, 0.06, CHROME);
+  const lx = vx - 0.75, ly = vy - 0.55; // the ring light on its stand, glowing
+  rod(lx, ly, 0, lx, ly, 1.45, 0.012, GRAY, 1.2);
+  for (let k = 0; k < 14; k++) { const t = k / 14 * Math.PI * 2; dot(lx + Math.cos(t) * 0.17 * 0.3, ly + Math.cos(t) * 0.17 * 0.95, 1.62 + Math.sin(t) * 0.17, 0.022, (i, t2, L) => { BG[i] = C(WHITE, 14); return set(i, ' ', 0), true; }); }
+  const cx = vx + 0.75, cy = vy - 0.6; // the rolling cart: two chrome shelves, the tray on top
+  for (const e of [-1, 1]) for (const f of [-1, 1]) rod(cx + e * 0.2, cy + f * 0.15, 0.05, cx + e * 0.2, cy + f * 0.15, 0.85, 0.008, GRAY, 1.4);
+  drawBox(boxAt(cx, cy, 1, 0, 0.22, 0.17, 0.35, 0.37), CHROME); drawBox(boxAt(cx, cy, 1, 0, 0.22, 0.17, 0.85, 0.87), CHROME);
+  for (let k = 0; k < 7; k++) dot(cx - 0.15 + k * 0.05, cy - 0.08, 0.89, 0.016, (i, t, L) => { BG[i] = C(INK_COLS[k], 9); return set(i, ' ', 0), true; }); // the ink caps
+  rod(cx + 0.02, cy + 0.06, 0.885, cx + 0.16, cy + 0.03, 0.9, 0.012, GRAY, 1.6); // the machine
+  drum(cx - 0.12, cy + 0.07, 0.035, 0.87, 1.02, (i, t, L) => { BG[i] = C(CYAN, 3); return set(i, ' ', 0), true; }); // green soap, in its spray bottle
+  drum(cx + 0.14, cy - 0.08, 0.04, 0.37, 0.6, (i, t, L) => { BG[i] = C(WHITE, 8 * drumLit(0.04)); return set(i, ' ', 0), true; }); // the paper towel, on the shelf below
+  drawBox(boxAt(vx - 0.2, vy - 0.93, 1, 0, 0.1, 0.06, 1.15, 1.35), (i, t, L) => { BG[i] = C(RED, 5); return set(i, HIT.face === 4 && Math.abs(HIT.w - 1.3) < 0.02 ? '!' : ' ', C(YEL, 14)), true; }); // the sharps bin, on the wall
+}, [1.0, 0.45, 1.1]);
+// the screens between stations: tall black panels, a framed sheet of flash on each face
+const tattooScreen = (x, y0, y1) => BX(x, (y0 + y1) / 2, (y1 - y0) / 2, 0.04, 0, 1.95, (i, t, L) => {
+  const f = HIT.face, u = HIT.u + (y1 - y0) / 2, w = HIT.w;
+  if ((f === 3 || f === 4) && u > 0.2 && u < 1.0 && w > 0.9 && w < 1.8) return flashSheet(i, u - 0.2, w - 0.9, 0.8, 0.9, Math.round(x * 10) + f, L);
+  BG[i] = C(GRAY, (0.7 + L * 0.08) * shadeFace(f)); return set(i, f === 5 ? '=' : ' ', C(YEL, 6)), true;
+}, 0, 1);
+// the chesterfield: oxblood leather, buttoned all over
+const chesterfield = (x, y, hl) => [SEAT(x + 0.05, y - hl * 0.55, 1, 0), SEAT(x + 0.05, y, 1, 0), SEAT(x + 0.05, y + hl * 0.55, 1, 0), BX(x, y, hl, 0.42, 0, 0.45, (i, t, L) => { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 && fract(HIT.u * 4) < 0.15 ? '.' : ' ', C(GRAY, 1)), true; }, 0, 1),
+  BX(x - 0.36, y, hl, 0.1, 0.45, 0.85, (i, t, L) => { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, fract(HIT.u * 4) < 0.15 && fract(HIT.w * 5) < 0.3 ? '.' : ' ', C(GRAY, 1)), true; }, 0, 1),
+  ...[-1, 1].map(e => BX(x, y + e * hl, 0.42, 0.1, 0, 0.7, solid(BRICK, { top: '=' }), 0, 1))];
+// the artists: tees, both arms done, every one a bit different
+const artistLook = seed => figStreetLook(seed, [GRAY, RED, GREEN, BLUE][seed & 3], GRAY, seasonIdx(), { top: 'tee', bot: 'pants', ink: 0.8 + (seed % 3) * 0.1,
+  col: { ...figStreetLook(seed, GRAY, GRAY).col, top: [[GRAY, 2], [GRAY, 3], [RED, 3], [GREEN, 3]][seed & 3], ink: [[GRAY, 2], [BLUE, 4], [GREEN, 4], [RED, 4]][(seed >> 2) & 3] } });
+const artist = (x, y, seed, o) => figProp(x, y, artistLook(seed), o);
+ROOM_DEFS.tattoo = { grid: boxRoom(14, 11), light: 0.85, floor: 'checker', ceil: 'pendant', height: 3.1, sign: false, neon: true, wall: tattooWall, keeper: [10.2, 6.75],
+  props: r => {
+    const p = [tattooScreen(4.8, 1, 3.6), tattooScreen(9.2, 1, 3.6),
+      ...[2.6, 7.0, 11.4].flatMap(sx => [tattooStation(sx, 2.3), SEAT(sx - 0.1, 2.3, 1, 0, 0.6), SEAT(sx + 0.25, 3.05, 0, -1, 0.52)]), // (sit in the chair, or on the artist's stool)
+      ...glassCase(10.2, 7.45, 1.5, 0.34, 1.0, caseGoods('o.oO*', [YEL, WHITE, GRAY, CYAN], true, 84), GRAY), // the counter: rings, studs, barbells
+      { ...artist(10.2, 6.75, (r.cell ? r.cell[0] * 31 + r.cell[1] : 7) | 0, { face: [0, 1] }) }, // behind it
+      BX(11.2, 7.45, 0.18, 0.15, 1.0, 1.24, (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, HIT.face === 4 ? '$' : '#', C(GREEN, L)), true; }), // the till
+      BX(9.3, 7.4, 0.14, 0.2, 1.0, 1.08, solid(GRAY, { top: '#' })), BX(9.3, 7.4, 0.14, 0.2, 1.08, 1.14, solid(RED, { top: '=' })), // portfolios
+      ROOM_MODEL(9.8, 7.5, (vx, vy) => drum(vx, vy, 0.07, 1.0, 1.18, (i, t, L) => { BG[i] = C(CYAN, 1); const k = hash(Math.floor(HIT.u * 40), Math.floor(HIT.w * 30), 85); return set(i, k > 0.55 ? 'o' : ' ', C(INK_COLS[k * 9 | 0], 13)), true; })), // a jar of lollipops
+      ...chesterfield(1.4, 8.0, 1.2), JUKEBOX(1.35, 5.6, 1, 0), POT_PLANT(5.4, 9.4, 1.5),
+      BX(2.75, 8.0, 0.35, 0.55, 0, 0.42, solid(GRAY, { top: '=' }), 0, 1), BX(2.75, 7.8, 0.12, 0.16, 0.42, 0.47, solid(MAG, { top: '#' })), BX(2.7, 8.3, 0.12, 0.16, 0.42, 0.46, solid(BLUE, { top: '#' })), // the low table and its binders
+      BX(2.6, 8.0, 1.25, 1.0, 0, 0.012, (i, t, L) => { const e = Math.min(1.25 - Math.abs(HIT.u), 1.0 - Math.abs(HIT.v)); BG[i] = C(e < 0.12 ? YEL : RED, e < 0.12 ? 3 : 1.6 + L * 0.2); return set(i, e > 0.12 && fract((HIT.u + HIT.v) * 3) < 0.15 ? '+' : ' ', C(ORANGE, 6)), true; }, 0, 1)]; // the rug
+    let seed = 11;
+    for (const sx of [2.6, 7.0, 11.4]) if (chance(0.55)) p.push( // someone in the chair, and their artist hunched over the work
+      { ...sitting(sx - 0.2, 2.3, shirt(), 0.62), face: [1, 0] }, artist(sx + 0.25, 3.05, seed++, { pose: 'sit6', face: [0, -1] }));
+    if (chance(0.6)) p.push({ ...sitting(1.45, 8.3, shirt(), 0.45), face: [1, 0] }); // waiting their turn, flicking through a binder
+    if (chance(0.4)) p.push({ ...standing(4.2, 6.2, shirt()), face: [-1, 0] }); // looking at the mural
+    return p;
+  } };
+Object.assign(ROOM_FOR, { TATTOO: 'tattoo' });

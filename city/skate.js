@@ -9,6 +9,7 @@
 // times how many; a bail loses it. The mouse looks round (the camera swings back behind you); V: your own eyes.
 // Units: cells (10m), seconds, radians, as everywhere outdoors.
 const SK_PUSH = 0.75, SK_TOP = 0.9, SK_RUN_TOP = 1.2, SK_ROLL = 0.05, SK_BRAKE = 1.3, SK_SPIN = 7.5, SK_LAND = 0.6, SK_CHARGE = 0.6;
+const SK_STILL = 0.12; // (slower than this, a messy landing is only a hop: nothing to fall off)
 const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 0.9, SK_BAIL_T = 1.3;
 // v: speed; dir: the way you're rolling (in the air, the way you left the ground: a spins, dir doesn't); spin: how
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
@@ -88,8 +89,10 @@ function skateArrow() { if (skateAir() && !body.trick && SK.trickKeyT < 0) SK.tr
 function skateLand() {
   if (SK.bail > 0) return; // (already down: hit a wall on the way up)
   const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
-  if (tr && tr.t < tr.air * 0.8) return skateBail('BAIL! Your feet never found the board.');
-  if (Math.abs(d) > SK_LAND && Math.PI - Math.abs(d) > SK_LAND) return skateBail('BAIL! You came down sideways.');
+  const flubbed = tr && tr.t < tr.air * 0.8, sideways = Math.abs(d) > SK_LAND && Math.PI - Math.abs(d) > SK_LAND;
+  if ((flubbed || sideways) && SK.v < SK_STILL) { SK.dir = a; SK.spin = 0; return; } // (standing still: you just come down where you are, facing however you ended up)
+  if (flubbed) return skateBail('BAIL! Your feet never found the board.');
+  if (sideways) return skateBail('BAIL! You came down sideways.');
   if (Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance; // backwards: riding away switch
   a = SK.dir;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
@@ -147,10 +150,20 @@ function skateCam(dt) {
 // k: how much bigger. The deck: half length, width, thickness; its middle this high; the kicktails; trucks this far
 // along from the middle; your height on it
 const SB_K = 1.55, SB = { k: SB_K, hl: 0.04 * SB_K, hw: 0.0105 * SB_K, ht: 0.0012 * SB_K, up: 0.0085 * SB_K, tail: 0.006 * SB_K, truck: 0.027 * SB_K, rider: 0.165 };
-let skaterLookMemo = null;
-// whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers
-const skaterLook = () => skaterLookMemo ||= figLook({ hair: 'short', hat: 'beanie', top: 'long', bot: 'pants', bw: 1,
-  col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [ORANGE, 11], hatD: [ORANGE, 7], top: [GREEN, 7], bot: [BLUE, 5], shoe: [WHITE, 13], belt: [GRAY, 2] } });
+let skaterLookMemo = null, skaterLookKey = '';
+// the ink each tattoo is done in (the newest one shows): the rest is blackwork
+const TATTOO_INK = { tattoo_swallow: [BLUE, 6], tattoo_anchor: [BLUE, 5], tattoo_rose: [RED, 7], tattoo_dagger: [RED, 6], tattoo_panther: [GRAY, 2], tattoo_koi: [ORANGE, 9] };
+// whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers. Got some ink? Then
+// a short-sleeved tee, to show it off: the more hours you've sat for, the more of your arms it covers
+function skaterLook() {
+  const key = tattoos.join(',');
+  if (skaterLookMemo && key === skaterLookKey) return skaterLookMemo;
+  const hours = tattoos.reduce((s, id) => s + ITEMS[id].hours, 0);
+  skaterLookKey = key;
+  return skaterLookMemo = figLook({ hair: 'short', hat: 'beanie', top: hours ? 'tee' : 'long', bot: 'pants', bw: 1, ink: hours ? Math.round(clamp(hours / 10, 0.2, 1) * 10) / 10 : 0,
+    col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [ORANGE, 11], hatD: [ORANGE, 7], top: [GREEN, 7], bot: [BLUE, 5], shoe: [WHITE, 13], belt: [GRAY, 2],
+           ink: hours ? TATTOO_INK[tattoos[tattoos.length - 1]] : undefined } });
+}
 function drawSkateBoard(vx, vy, z, yaw, nose, roll) {
   const F = craftFrame(yaw, nose, roll), o = [vx, vy, z + SB.up + Math.abs(Math.sin(roll)) * SB.hw * 0.9]; // (on its edge mid-flip it stands taller)
   const deck = (i, t, L) => {

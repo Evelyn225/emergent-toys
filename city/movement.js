@@ -19,3 +19,11 @@ function airStrafe(forward, side, speed, dt, yaw = a) {
   const acceleration = Math.min(add, AIR_ACCEL * wishSpeed * dt);
   body.mx = vx + wx * acceleration; body.my = vy + wy * acceleration;
 }
+// Hopping (body.hop > 1), your momentum also swings round toward where you're going, rate radians a second, at the
+// same speed: a run of hops follows you round a corner in the air instead of jerking round on each landing.
+function airSteer(wx, wy, rate, dt) {
+  const vx = body.mx || 0, vy = body.my || 0, v = Math.hypot(vx, vy);
+  if (dt <= 0 || v < 1e-6 || !(wx || wy)) return;
+  const va = Math.atan2(vy, vx), turn = clamp(mod(Math.atan2(wy, wx) - va + Math.PI, Math.PI * 2) - Math.PI, -rate * dt, rate * dt);
+  body.mx = Math.cos(va + turn) * v; body.my = Math.sin(va + turn) * v;
+}

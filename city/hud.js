@@ -1,22 +1,24 @@
+// a readout over the view: its letters stay out of the fog (the street behind them doesn't)
+const dashText = (r, c, s, col) => { putText(r, c, s, col); for (let k = 0; k < s.length; k++) if (s[k] !== ' ' && r >= 0 && r < rows && c + k >= 0 && c + k < cols) FOGS[r * cols + c + k] = 0; };
 function dash() {
   const c = me;
-  FOGS.fill(0, (rows - 4) * cols); FOGB.fill(0, (rows - 4) * cols); // the dashboard is never in the fog
-  if (!chaseOn) { // hood and dashboard only from the driver's seat
+  if (!chaseOn) { // hood and dashboard only from the driver's seat (and they're never in the fog)
+    FOGS.fill(0, (rows - 4) * cols); FOGB.fill(0, (rows - 4) * cols);
     for (let r = rows - 4; r < rows; r++) for (let x = 0; x < cols; x++) {
       const i = r * cols + x;
       set(i, r === rows - 4 ? '_' : ' ', C(c.body, 6)); BG[i] = r === rows - 4 ? NONE : C(GRAY, 1);
     }
-    if (mode === 'drive') ['.--------.', '|---()---|', "'--------'"].forEach((l, k) => putText(rows - 3 + k, (cols - 10) >> 1, l, C(GRAY, 10)));
+    if (mode === 'drive') ['.--------.', '|---()---|', "'--------'"].forEach((l, k) => dashText(rows - 3 + k, (cols - 10) >> 1, l, C(GRAY, 10)));
   }
   if (mode === 'drive' && job) { // on a taxi shift
-    putText(rows - 3, 3, `TAXI SHIFT   trips ${job.trips}   earned ${fmt$(job.earned)}${job.ride ? `   meter ${fmt$(taxiFare(job.ride.odo))}` : ''}`, C(TAXI, 15));
-    putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h   ${jobLine()}`, C(WHITE, 13));
+    dashText(rows - 3, 3, `TAXI SHIFT   trips ${job.trips}   earned ${fmt$(job.earned)}${job.ride ? `   meter ${fmt$(taxiFare(job.ride.odo))}` : ''}`, C(TAXI, 15));
+    dashText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h   ${jobLine()}`, C(WHITE, 13));
   } else if (mode === 'drive') {
-    putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
+    dashText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
     damageDash();
   } else {
-    putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
-    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway' + (owned.homes.length ? '   6: home' : ''), C(WHITE, 12));
+    dashText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
+    dashText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway' + (owned.homes.length ? '   6: home' : ''), C(WHITE, 12));
   }
 }
 
@@ -54,7 +56,7 @@ const nearMachine = () => mode === 'walk' ? machinesB[bi(Math.floor(px / 8), Mat
   return d < 0.3 && (d < 0.12 || dot > 0.5 || d < 0.2 && dot > 0);
 }) : null;
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
-const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
+const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < (room.def.exReach ?? 1.3) && py < 2.4;
 const canBoard = () => room.kind === 'station' && trainStopped(room) && py > ST_TRACK - 1.8 && Math.abs(px - 23) < 13;
 // near a way out: a door, or the foot of the station stairs
 const nearExit = () => {
@@ -89,7 +91,7 @@ function promptText() {
     if (room.kind === 'museum' && !room.burgled) { const m = museumPrompt(); if (m) return m; }
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
-    if (nearElevator()) return room.kind==='courier'?'E: stairs to the courier roof':'E: elevator to the roof';
+    if (nearElevator()) return room.kind==='courier'?'E: stairs to the courier roof':room.def.upPrompt||'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
     if (room.kind === 'arcade') {
       const cab = nearCabinet();
@@ -111,7 +113,7 @@ function promptText() {
     if (roomPerson()) return 'E: talk';
     if (room.kind === 'storage' && nearKeeper()) return `E: your storage unit (${stored.length} stored)`;
     if (room.kind === 'hospital' && nearKeeper() && needs.health < maxHealth() - 5) return `E: get patched up (${fmt$(NURSE_FEE)})`;
-    if (room.kind === 'hotel' && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
+    if (room.def.rent && nearKeeper()) return checkInOpen(tod) ? `E: book a room for the night (${fmt$(ROOM_RATE(room.word))})` : '"Check-in is from 6pm."';
     if (nearKeeper() && stockFor(room.kind, room.word).length) return room.line ? `"${room.line}"   E: shop` : 'E: shop';
     if (nearKeeper() && room.line) return `"${room.line}"`;
     if (nearExit()) return room.kind === 'station' ? 'E: up the stairs to the street' : 'E: leave';
@@ -174,7 +176,7 @@ function promptText() {
     if (!openAt(sh, tod)) return `${sh.word}: closed, opens at ${sh.hours[0]}:00`;
     if (homeAt(sh)) return 'E: enter your apartment';
     if (sh.kind === SHOP_APTS) return 'E: enter the building (roof access)';
-    return `E: enter ${sh.word}${ROOM_FOR[sh.word] === 'hotel' ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
+    return `E: enter ${sh.word}${ROOM_DEFS[ROOM_FOR[sh.word]]?.rent ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
   }
   if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
   return '';

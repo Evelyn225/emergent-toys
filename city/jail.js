@@ -20,7 +20,7 @@ const barShade = (i, t, L) => {
 };
 const bars = (x, y) => ({ ...BX(x, y, 3, 0.03, 0, 3, barShade), peeThrough: true });
 const inmate = (x, y, sit) => sit ? sitting(x, y, ORANGE, 0.42) : standing(x, y, ORANGE);
-const bunk = (x, y) => [BX(x, y, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // a blanket on a steel frame
+const bunk = (x, y, fy = 1) => [SEAT(x - 0.4, y, 0, fy, 0.58), SEAT(x + 0.3, y, 0, fy, 0.58), BX(x, y, 0.95, 0.42, 0.42, 0.58, solid(BLUE, { top: '~', bright: 2 })), // a blanket on a steel frame
   BX(x, y, 0.95, 0.42, 0, 0.42, (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, HIT.face <= 2 || fract(HIT.u * 2) < 0.12 ? '|' : '_', C(GRAY, L)), true; })];
 // a toilet: the cistern against the wall, a pedestal, and the bowl on it with a rim round the water. back: which way
 // the wall is (-1: toward -y). Steel in a cell, white porcelain anywhere nicer. The bowl carries `loo` (where it is),
@@ -46,7 +46,7 @@ function jailProps(r) {
   for (const cx of [4, 11, 18]) { // the three cells on your side (yours is the middle) and the three across
     p.push(bars(cx, JAIL_BARS_NEAR), bars(cx, JAIL_BARS_FAR));
     p.push(...bunk(cx - 1.1, 1.55), ...toilet(cx + 1.9, 1.4, -1)); // ours: bunk along the back wall
-    p.push(...bunk(cx - 1.1, JAIL_D - 2.55), ...toilet(cx + 1.9, JAIL_D - 2.4, 1)); // theirs, the mirror of it
+    p.push(...bunk(cx - 1.1, JAIL_D - 2.55, -1), ...toilet(cx + 1.9, JAIL_D - 2.4, 1)); // theirs, the mirror of it
   }
   if (r.cabbie) p.push({ ...sitting(9.9, 1.75, YEL, 0.58), pose: 'sitfold', face: [-1, 0], cabbie: true }); // your cab driver, on the bunk, arms folded, not looking at you
   // who's across the way: one at the bars, one asleep on his bunk, one pacing

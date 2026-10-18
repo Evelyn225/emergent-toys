@@ -532,6 +532,47 @@ test('downtown apartment elevators still lead to usable flat rooftops', () => wi
   assert.ok(result.clear && result.stairs, JSON.stringify(result));
 }));
 
+test('each kind of building has its own way up to the roof: a walk-up\'s stairs, a tower\'s lifts, a loft\'s freight lift, a Belle Époque cage', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    paused = true; clearWanted();
+    const out = {};
+    for (const region of ['brownstones', 'downtown', 'industrial', 'belle']) {
+      const b = ARCH_BUILDINGS.find(b => b.region === region && b.sh.kind === SHOP_APTS) || (() => { // (any apartment building in that district)
+        for (let k = 0; k < N * N; k++) if (SHOP[k] && SHOP[k].kind === SHOP_APTS && districtAt(k % N + 0.5, (k / N | 0) + 0.5) === region) return { sh: SHOP[k], x0: k % N, y0: k / N | 0 };
+      })();
+      if (!b) { out[region] = null; continue; }
+      const kind = lobbyKind(b.x0, b.y0);
+      room = null; mode = 'walk';
+      enterRoom(kind, { ...b.sh, cell: [b.x0, b.y0], district: region, ret: [b.x0 - 0.2, b.y0 - 0.2, 0] }, [0, 0, -Math.PI / 2]);
+      px = room.W / 2; py = room.H - 1.6;
+      // walk up to the way up, the way a player would: straight at it, then along the back
+      const dt = 1 / 30, ex = room.def.ex;
+      for (let t = 0; t < 12 && !nearElevator(); t += dt) { const tx = ex, ty = 1.6, d = Math.hypot(tx - px, ty - py) || 1; move((tx - px) / d * 1.6 * dt, (ty - py) / d * 1.6 * dt); }
+      const at = { near: nearElevator(), prompt: promptText(), rise: stairRise(px, py) };
+      interact(); const up = mode;
+      interact(); const down = [mode, room.kind, Math.abs(px - ex) < 1e-9];
+      out[region] = { kind, ...at, up, down };
+    }
+    // the walk-up's banister: on the landing, stepping left off it is stopped
+    room = null; mode = 'walk';
+    enterRoom('walkup', { word: 'No.1', cell: [0, 0], district: 'brownstones', ret: [0, 0, 0] }, [4.85, 1.8, Math.PI]);
+    for (let k = 0; k < 60; k++) move(-1.6 / 30, 0);
+    out.rail = [px, stairRise(px, py)];
+    return out;
+  });
+  assert.deepStrictEqual(Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'rail').map(([k, v]) => [k, v && v.kind])),
+    { brownstones: 'walkup', downtown: 'tower', industrial: 'freightlobby', belle: 'bellelobby' });
+  for (const [region, v] of Object.entries(r)) {
+    if (region === 'rail') continue;
+    assert.ok(v.near, `${region}: you can reach the way up (${JSON.stringify(v)})`);
+    assert.equal(v.up, 'roof', `${region}: E takes you up`);
+    assert.deepStrictEqual(v.down, ['room', v.kind, true], `${region}: and back down to it`);
+  }
+  assert.match(r.brownstones.prompt, /stairs to the roof/); assert.equal(r.brownstones.rise, 1, 'up on the landing');
+  assert.match(r.industrial.prompt, /freight lift/); assert.match(r.downtown.prompt, /elevator to the roof/);
+  assert.ok(r.rail[0] > 3.6 && r.rail[1] === 1, `the banister keeps you on the landing (${r.rail})`);
+}));
+
 test('redesigned storefronts keep their opening hours, glazing and closed shutters', () => withPage(async page => {
   const result = await page.evaluate(() => {
     paused = true; mode = 'walk'; room = null; me = null; clearWanted();
@@ -1367,6 +1408,7 @@ test('covered streets stay free of snow and the Shotengai glass has no yellow ro
   assert.ok(result.lampFits&&result.balconySheltered&&result.deckExposed,JSON.stringify(result));
 }));
 
+const HOP_MAX_TEST = 1.9;
 test('bunny hopping: land and go straight back up and each hop is faster; stop and it is gone', () => withPage(async page => {
   const r = await page.evaluate(() => {
     refillNeeds();
@@ -1384,10 +1426,39 @@ test('bunny hopping: land and go straight back up and each hop is faster; stop a
     body.hop = 1; const plain = go(180); body.z = body.vz = 0; body.hop = 1; const strafed = go(180, { strafe: 1 });
     return { hopped, capped, after, plain, strafed };
   });
-  assert.ok(r.hopped > 1.1, `faster for every hop (${r.hopped})`);
-  assert.strictEqual(r.capped, 1.9, 'up to a cap');
+  assert.ok(r.hopped > 1.1 && r.hopped < 1.3, `faster for every hop, a little at a time (${r.hopped})`);
+  assert.ok(r.capped > 1.85 && r.capped <= HOP_MAX_TEST, `tailing off toward a cap (${r.capped})`);
   assert.deepStrictEqual(r.after, [0, 1], 'on the ground a moment and it bleeds away');
   assert.ok(r.strafed > r.plain, `strafing into the turn builds it quicker (${r.plain} vs ${r.strafed})`);
+}));
+
+test('carrying hop speed you swing round to a new direction instead of snapping to it, and a hard turn costs the speed', () => withPage(async page => {
+  const r = await page.evaluate(async () => {
+    refillNeeds(); paused = false; mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0;
+    Object.assign(body, { z: 0, vz: 0, hop: 1.5, mx: 0.75, my: 0, landedAt: T, seat: null });
+    for (const k in K) K[k] = 0; K.KeyA = 1; // hard left the moment you land
+    await new Promise(r => requestAnimationFrame(r));
+    const first = [body.mx, body.my];
+    for (let n = 0; n < 30; n++) await new Promise(r => requestAnimationFrame(r));
+    const after = [body.mx, body.my, body.hop]; K.KeyA = 0; paused = true;
+    return { first, after };
+  });
+  assert.ok(r.first[0] > 0.2, `the first frame still carries you mostly the way you were going (${r.first})`);
+  assert.ok(Math.abs(r.after[0]) < 0.02 && r.after[1] < -0.45 && r.after[2] === 1, `then you're going left at walking pace (${r.after})`);
+}));
+
+test('hopping fast, sweeping your aim round in the air steers you without pumping up your speed', () => withPage(async page => {
+  const r = await page.evaluate(async () => {
+    refillNeeds(); paused = false; mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0;
+    for (const k in K) K[k] = 0; K.KeyW = K.ShiftLeft = 1;
+    Object.assign(body, { z: 0.3, vz: 2.5, hop: 1.9, mx: 0.8 * 1.9, my: 0, seat: null, landedAt: -9, buf: -9 });
+    const v0 = Math.hypot(body.mx, body.my); let top = v0;
+    for (let n = 0; n < 20 && (body.z > 0 || body.vz > 0); n++) { a += 0.09; await new Promise(r => requestAnimationFrame(r)); top = Math.max(top, Math.hypot(body.mx, body.my)); } // (the old aim-sweep pump)
+    const turned = Math.atan2(body.my, body.mx); for (const k in K) K[k] = 0; paused = true;
+    return { v0, top, turned };
+  });
+  assert.ok(r.top <= r.v0 * 1.02, `no faster than the hops made you (${r.v0} -> ${r.top})`);
+  assert.ok(r.turned > 0.3, `but you do swing round with your aim (${r.turned})`);
 }));
 
 test('parked cars are solid on foot; you can still get in', () => withPage(async page => {
@@ -1643,7 +1714,11 @@ test('balloon darts on the pier: $1 at the booth, a dart on a balloon pops it', 
   assert.strictEqual(await page.evaluate(() => promptText()), 'E: play BALLOON DARTS ($1.00 a go)');
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, money]), ['darts', 9]);
-  await page.evaluate(() => { const g = game.g; for (let k = 0; k < 3000 && !g.hitAt(...g.aim().map(Math.round)); k++) g.step(1 / 60, {}); g.step(1 / 60, { actP: 1 }); }); // (thrown the moment it's on one: the reticle won't wait)
+  await page.evaluate(() => { // thrown the moment the reticle is well inside a balloon: the throw itself sways it one more frame, so not on an edge
+    const g = game.g, inside = () => { const [x, y] = g.aim(); return [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]].every(([ox, oy]) => g.hitAt(Math.round(x + ox), Math.round(y + oy))); };
+    for (let k = 0; k < 3000 && !inside(); k++) g.step(1 / 60, {});
+    g.step(1 / 60, { actP: 1 });
+  });
   await page.waitForFunction(() => game.g.score > 0 || game.g.balloons.some(b => b.popped), null, { timeout: 10000 });
   assert.ok(await page.evaluate(() => game.g.balloons.filter(b => b.popped).length === 1 && game.g.score >= 3));
 }));
@@ -2180,6 +2255,41 @@ test('every food and drink shows itself being used up (a level going down, steam
   assert.deepStrictEqual(same, []);
 }));
 
+test('broken into after dark, nobody is left in any shop: the mannequins are dress forms, the cardboard film star is put away; records and tattoos have rooms of their own', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    paused = true; tod = 2;
+    const seen = new Map();
+    for (let k = 0; k < N * N; k++) { const sh = SHOP[k]; if (sh && sh.word && !sh.base && sh.kind !== SHOP_APTS && sh.kind !== SHOP_SHUT && !seen.has(sh.word)) seen.set(sh.word, k); }
+    const left = [];
+    for (const [word, k] of seen) {
+      const sh = SHOP[k];
+      if (openAt(sh, tod)) continue; // (open all night: not one to break into)
+      room = null; mode = 'walk'; lookHit = { mx: k % N, my: k / N | 0 }; clearWanted(); jammed.clear?.();
+      pickLock(sh); if (!game) continue;
+      const done = game.onDone; game = null; done(true);
+      for (const p of room.props) if (p.fig && !p.guard && !(p.still && (p.fig.form || !p.fig.top || p.fig.scale))) left.push(word + ' (' + room.kind + ')');
+    }
+    const kinds = ['RECORDS', 'TATTOO', 'BOOKS', 'BARBER'].map(w => ROOM_FOR[w]);
+    return { left: [...new Set(left)], kinds, tried: seen.size };
+  });
+  assert.ok(r.tried > 40, `${r.tried} kinds of shop`);
+  assert.deepStrictEqual(r.left, [], 'nobody who could pass for a person');
+  assert.deepStrictEqual(r.kinds, ['records', 'tattoo', 'books', 'barber']);
+}));
+
+test('your tattoos are saved with you, and your skater wears them: short sleeves, ink on both arms', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    paused = true; money = 1000; const before = skaterLook().top;
+    buy('tattoo_anchor'); buy('tattoo_panther'); saveGame();
+    tattoos.length = 0; loadGame();
+    const look = skaterLook();
+    return { before, tattoos: [...tattoos], top: look.top, ink: look.ink };
+  });
+  assert.deepStrictEqual(r.tattoos, ['tattoo_anchor', 'tattoo_panther']);
+  assert.strictEqual(r.before, 'long');
+  assert.ok(r.top === 'tee' && r.ink > 0.3, JSON.stringify(r));
+}));
+
 test('a shop you\'ve broken into: E means the till only at the counter, the way out only by the door', () => withPage(async page => {
   await page.evaluate(() => { enterRoom('store', { word: 'DELI', neon: RED, ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]); });
   const at = (x, y) => page.evaluate(([x, y]) => { px = x; py = y; return [promptText(), eLabel(promptText())]; }, [x, y]);
@@ -2602,6 +2712,7 @@ test('jobs can be called off from the pause menu: the courier parcel goes back; 
     const p = people.find(q => !q.hidden); pickUp(p);
     openPause(); pauseEl.querySelector('[data-act="cancel-fare"]').click();
     out.fare = [job.ride, p.hidden, !!job, paused];
+    const q = people.find(o => !o.hidden && o !== p); c.x = q.x + 8; c.y = q.y; // (only the people round you are out: cruise past one of them)
     for (let t = 0; t < 20 && !job.hail; t += 0.1) stepTaxiJob(0.1);
     out.next = !!job.hail;
     return out;

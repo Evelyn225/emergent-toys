@@ -5,7 +5,7 @@
 // Units: sprite pixels; a standing adult's head is FIG_TALL high. Body frame: x their right, y ahead of them, z up.
 const FIG_W = 29, FIG_H = 34, FIG_TALL = 26.45, FIG_VIEWS = 16;
 const FR = Object.fromEntries(['HAIR', 'HAIR_D', 'SKIN', 'SKIN_D', 'EYE', 'TOP', 'TOP_D', 'INNER', 'BOT', 'BOT_D', 'POCKET', 'BELT',
-  'BUCKLE', 'SHOE', 'HAT', 'HAT_D', 'BADGE', 'CAPBADGE', 'PACK', 'PACK_D', 'STRAP', 'SHADES', 'TIE', 'MIC', 'TIGHTS'].map((k, i) => [k, i + 1]));
+  'BUCKLE', 'SHOE', 'HAT', 'HAT_D', 'BADGE', 'CAPBADGE', 'PACK', 'PACK_D', 'STRAP', 'SHADES', 'TIE', 'MIC', 'TIGHTS', 'INK'].map((k, i) => [k, i + 1]));
 const FIG_ROLES = Object.keys(FR).length + 1;
 // a detail one pixel across, and what it reads as once a pixel is smaller than a screen cell (or it would flicker)
 const FIG_COARSE = new Uint8Array(FIG_ROLES);
@@ -145,7 +145,8 @@ function figBody(look, key) {
     if (look.shades && l[1] > 0.35 && Math.abs(l[0]) < 0.8 && l[2] > -0.05 && l[2] < 0.32) return R.SHADES;
     return hair(l) ? R.HAIR : R.SKIN;
   });
-  parts.push(head);
+  if (look.form) parts.push(figEll(U(0, 0.1, 8.6), ax, [1.2, 1.2, 0.8], () => R.SKIN)); // a dress form: the knob on its neck, no head
+  else parts.push(head);
   const HU = (x, y, z) => fAdd(H, fAdd(fMul(ex, x), fAdd(fMul(ey, y), fMul(ez, z))));
   if (look.hair === 'long') parts.push(figBox(U(0, -1.4, 8.1), ax, [2.9, 1.1, 2.9], () => R.HAIR)); // down over the shoulders
   if (look.hair === 'bun') parts.push(figEll(HU(0, -2.2, 2.2), ax, [1.4, 1.4, 1.4], () => R.HAIR));
@@ -158,14 +159,17 @@ function figBody(look, key) {
     decals.push({ p: HU(0, 3.46, 2.65), n: ey, role: R.CAPBADGE, part: parts.length - 3 });
   }
   if (hat === 'hardhat') parts.push(figEll(HU(0, 0.1, 0.8), ax, [3.45, 3.35, 2.6], h => h.l[2] < 0.25 ? 0 : R.HAT), figBox(HU(0, 0.5, 1.4), ax, [3.7, 3.8, 0.17], () => R.HAT_D, false));
-  if (!look.shades) for (const sg of [1, -1]) { // the eyes
+  if (!look.shades && !look.form) for (const sg of [1, -1]) { // the eyes
     const n = fNorm([sg * 0.33, 0.93, 0.1]);
     decals.push({ p: HU(n[0] * hr[0], n[1] * hr[1], n[2] * hr[2]), n: fNorm(fAdd(fMul(ex, n[0]), fAdd(fMul(ey, n[1]), fMul(ez, n[2])))), role: R.EYE, part: parts.indexOf(head) });
   }
   // the arms
-  const sleeve = FIG_SLEEVELESS.has(top) ? () => R.SKIN : top === 'tee' || top === 'dress' ? h => h.s < 0.55 ? R.TOP_D : R.SKIN : () => R.TOP_D;
-  const fore = FIG_LONG.has(top) ? () => R.TOP_D : () => R.SKIN;
-  for (const [k, sg] of [[0, 1], [1, -1]]) {
+  // tattoos (look.ink: how much of the bare arm they cover, 0..1): bold shapes wrapping round, more of the arm the more there is
+  const inked = h => look.ink > 0 && fract(h.s * 3.2 + Math.atan2(h.n[1], h.n[0]) * 0.32 + (h.n[2] > 0 ? 0.13 : 0)) < 0.25 + look.ink * 0.55 && h.s > 1 - look.ink * 1.6;
+  const bare = h => inked(h) ? R.INK : R.SKIN;
+  const sleeve = FIG_SLEEVELESS.has(top) ? bare : top === 'tee' || top === 'dress' ? h => h.s < 0.55 ? R.TOP_D : bare(h) : () => R.TOP_D;
+  const fore = FIG_LONG.has(top) ? () => R.TOP_D : bare;
+  for (const [k, sg] of look.form ? [] : [[0, 1], [1, -1]]) {
     const [up, ua, fp, fa] = P.arms[k], toU = d => fAdd(fMul(ex, d[0]), fAdd(fMul(ey, d[1]), fMul(ez, d[2])));
     const sh = U(sg * 4.05 * bw, 0, 6.35), du = toU(fLimb(up, ua, sg)), df = toU(fLimb(fp, fa, sg));
     const elbow = fAdd(sh, fMul(du, 4.3)), wrist = fAdd(elbow, fMul(df, 3.9)), hand = fAdd(wrist, fMul(df, 0.55));
@@ -175,7 +179,8 @@ function figBody(look, key) {
   // the legs, the feet
   const thigh = bot === 'pants' ? () => R.BOT : bot === 'shorts' ? h => h.s < 0.7 ? R.BOT : legSkin : () => legSkin;
   const shin = bot === 'pants' ? () => R.BOT : () => legSkin;
-  for (const l of legs) parts.push(figCap(l.hip, l.knee, legR, thigh), figCap(l.knee, fAdd(l.ankle, fMul(l.fz, shinR - FIG_SHOE_LO)), shinR, shin), // (its round end down to the sole, no further)
+  if (look.form) parts.push(figCap([0, 0, hipZ - 1], [0, 0, 0.6], 0.35, () => R.SHOE, false), figEll([0, 0, 0.3], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [2.6, 2.6, 0.35], () => R.SHOE)); // on its pole and foot
+  else for (const l of legs) parts.push(figCap(l.hip, l.knee, legR, thigh), figCap(l.knee, fAdd(l.ankle, fMul(l.fz, shinR - FIG_SHOE_LO)), shinR, shin), // (its round end down to the sole, no further)
     figBox(fAdd(l.ankle, fAdd(fMul(l.fy, (FIG_SOLE[0] + FIG_SOLE[1]) / 2), fMul(l.fz, (FIG_SHOE_HI - FIG_SHOE_LO) / 2))), [[1, 0, 0], l.fy, l.fz],
            [shinR * 1.1, (FIG_SOLE[1] - FIG_SOLE[0]) / 2, (FIG_SHOE_HI + FIG_SHOE_LO) / 2], () => R.SHOE, false));
   if (bot === 'skirt' || top === 'dress') parts.push(figEll([0, 0, hipZ - 2.4], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [3.4 * bw, 2.8 * bd, 4.2], h => h.l[2] > 0.35 ? 0 : top === 'dress' ? R.TOP : R.BOT));
@@ -295,14 +300,14 @@ function figLook(o) {
   const col = { hair: [GRAY, 1], skin: [SKIN, 13], top: [GRAY, 8], inner: [WHITE, 12], bot: [BLUE, 5], belt: [GRAY, 1], shoe: [GRAY, 1],
                 hat: [GRAY, 3], hatD: [GRAY, 1], pack: [GRAY, 4], tie: [GRAY, 1], tights: [GRAY, 2], ...o.col };
   const look = { hair: 'short', top: 'tee', bot: 'pants', bw: 1, ...o, col };
-  look.shape = ['hair', 'hat', 'top', 'bot', 'pack', 'shades', 'holster', 'badge', 'mic', 'tights', 'kid', 'bw'].map(k => look[k] ?? '').join(',');
+  look.shape = ['hair', 'hat', 'top', 'bot', 'pack', 'shades', 'holster', 'badge', 'mic', 'tights', 'kid', 'bw', 'form', 'ink'].map(k => look[k] ?? '').join(',');
   // per role: palette base and brightness (shadow roles darker)
   const B = new Uint8Array(FIG_ROLES), Lv = new Float32Array(FIG_ROLES), put = (role, [b, l], k = 1) => { B[FR[role]] = b; Lv[FR[role]] = l * k; };
   put('HAIR', col.hair); put('HAIR_D', col.hair, 0.65); put('SKIN', col.skin); put('SKIN_D', col.skin, 0.72); put('EYE', [GRAY, 0]);
   put('TOP', col.top); put('TOP_D', col.top, 0.68); put('INNER', col.inner); put('BOT', col.bot); put('BOT_D', col.bot, 0.68);
   put('POCKET', col.bot, 0.45); put('BELT', col.belt); put('BUCKLE', [YEL, 12]); put('SHOE', col.shoe); put('HAT', col.hat); put('HAT_D', col.hatD);
   put('BADGE', [YEL, 15]); put('CAPBADGE', [YEL, 15]); put('PACK', col.pack); put('PACK_D', col.pack, 0.65); put('STRAP', col.pack, 0.65);
-  put('SHADES', [GRAY, 0]); put('TIE', col.tie); put('MIC', [GRAY, 5]); put('TIGHTS', col.tights);
+  put('SHADES', [GRAY, 0]); put('TIE', col.tie); put('MIC', [GRAY, 5]); put('TIGHTS', col.tights); put('INK', col.ink || [GREEN, 5]);
   look.base = B; look.lvl = Lv;
   return look;
 }

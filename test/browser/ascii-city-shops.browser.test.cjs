@@ -11,9 +11,15 @@ const { chromium } = require('playwright');
 const URL_ = pathToFileURL(path.join(__dirname, '../../ascii-city.html')).href;
 const SHOPS = { GROCERY: 'grocer', MARKET: 'grocer', FRUIT: 'grocer', DELI: 'deli', DELICATESSEN: 'deli', HARDWARE: 'hardware', SKATE: 'skate',
   SPORTS: 'sports', TOYS: 'toys', THRIFT: 'thrift', ANTIQUES: 'thrift', TAILOR: 'thrift', PHARMACY: 'pharmacy', DRUGSTORE: 'pharmacy',
-  TOBACCO: 'tobacco', VIDEO: 'video', HERBS: 'herbs', PHONES: 'phones', PAWN: 'pawn', LIQUOR: 'liquor', JEWELER: 'jeweler', '24/7': 'store', BODEGA: 'store',
-  CAFE: 'cafe', RAMEN: 'noodle', 'TEA HOUSE': 'tea', KARAOKE: 'karaoke', HOTEL: 'hotel', BAR: 'bar', DINER: 'diner', GAS: 'gas' };
-const WITH_WC = ['DELI', 'TOBACCO', 'CAFE', 'RAMEN', 'TEA HOUSE', 'KARAOKE', 'HOTEL', 'BAR', 'DINER', 'GAS'];
+  TOBACCO: 'tobacco', VIDEO: 'video', RECORDS: 'records', TATTOO: 'tattoo', HERBS: 'herbs', PHONES: 'phones', PAWN: 'pawn', LIQUOR: 'liquor', JEWELER: 'jeweler', '24/7': 'store', BODEGA: 'store',
+  CAFE: 'cafe', RAMEN: 'noodle', 'TEA HOUSE': 'tea', KARAOKE: 'karaoke', HOTEL: 'hotel', BAR: 'bar', DINER: 'diner', GAS: 'gas',
+  PIZZA: 'pizzeria', BURGERS: 'burgerjoint', TACOS: 'taqueria', SUSHI: 'sushibar', 'ICE CREAM': 'icecream', BAKERY: 'bakery',
+  CHICKEN: 'chickenshop', KEBAB: 'kebabshop', BENTO: 'bento', TAKOYAKI: 'takoyaki', YAKITORI: 'yakitori', DONUTS: 'donutshop', JUICE: 'juicebar', BAGELS: 'bagelshop',
+  THAI: 'thai', PHO: 'pho', DUMPLINGS: 'dumplings', 'DIM SUM': 'dimsum', KISSATEN: 'kissaten', IZAKAYA: 'izakaya', MAHJONG: 'mahjong',
+  BODEGA: 'bodega', MARKET: 'markethall', FRUIT: 'fruitshop', MOTEL: 'motel', WELDING: 'welding', TIRES: 'tireshop', TAILOR: 'tailor', ANTIQUES: 'antiques',
+  DRUGSTORE: 'drugstore', DELICATESSEN: 'delicatessen', GACHA: 'gacha', COFFEE: 'roastery', NOODLES: 'noodlehouse' };
+const JUST_CHAT = ['PHONES', 'WELDING', 'TIRES']; // (a clerk with nothing you can carry off)
+const WITH_WC = ['DELI', 'TOBACCO', 'CAFE', 'RAMEN', 'TEA HOUSE', 'KARAOKE', 'HOTEL', 'BAR', 'DINER', 'GAS', 'PIZZA', 'BURGERS', 'TACOS', 'SUSHI', 'THAI', 'PHO', 'DUMPLINGS', 'DIM SUM', 'KISSATEN', 'IZAKAYA', 'MAHJONG', 'COFFEE', 'NOODLES'];
 
 // walk every room: flood its floor from the door on a 10cm grid, and see what you can reach
 async function walkRooms(page) {
@@ -51,12 +57,19 @@ async function walkRooms(page) {
         }
         if (clear >= 6 && !reached) pockets.push(`${cx},${cy}`);
       }
+      // every seat is one you can get to: some floor you reached is in reach of it (nearSeat's 1.1m)
+      const unseatable = room.props.filter(o => o.seat || o.bench).filter(o => {
+        for (let y = Math.max(0, Math.floor((o.y - 1) * S)); y <= Math.min(H - 1, Math.ceil((o.y + 1) * S)); y++)
+          for (let x = Math.max(0, Math.floor((o.x - 1) * S)); x <= Math.min(W - 1, Math.ceil((o.x + 1) * S)); x++)
+            if (seen[y * W + x] === 2 && Math.hypot(x / S - o.x, y / S - o.y) < 1.05) return false;
+        return true;
+      }).map(o => `${o.x.toFixed(1)},${o.y.toFixed(1)}`);
       let shop = null;
       if (clerk) { [px, py] = clerk; shop = nearKeeper() && stockFor(room.kind, room.word).length; }
       // draw it from the door, looking round, from the counter, and from the bathroom
       const t0 = performance.now(), spots = [spawn, clerk || spawn, ...wc ? [wc] : []];
       for (const [x, y] of spots) for (let d = 0; d < 4; d++) { px = x; py = y; a = -Math.PI / 2 + d * Math.PI / 2; pitch = 0; render(0); }
-      out[word] = { kind: room.kind, open, clerk: !!clerk, door, shop, wc: !!wc, hasWc: !!room.def.wc, keeper: !!k, pockets, ms: (performance.now() - t0) / (spots.length * 4) };
+      out[word] = { kind: room.kind, open, clerk: !!clerk, door, shop, wc: !!wc, hasWc: !!room.def.wc, keeper: !!k, rent: !!room.def.rent, pockets, unseatable, ms: (performance.now() - t0) / (spots.length * 4) };
     }
     mode = 'walk'; room = null;
     return out;
@@ -77,14 +90,105 @@ test('every shop and the rooms with bathrooms: its own room, all of it reachable
       assert.ok(s.open, `${word}: you come in on clear floor`);
       assert.deepEqual(s.pockets, [], `${word}: no floor you can't get to`);
       assert.ok(s.door, `${word}: and you can get back out`);
+      assert.deepEqual(s.unseatable, [], `${word}: every seat in it is one you can walk up to`);
       assert.ok(s.ms < 250, `${word} draws in ${s.ms.toFixed(0)}ms a frame`);
-      if (!s.keeper || kind === 'hotel') continue; // (karaoke's nobody's counter; the hotel's desk is for rooms upstairs)
+      if (!s.keeper || s.rent) continue; // (karaoke's nobody's counter; the hotel's and the motel's desks are for rooms)
       assert.ok(s.clerk, `${word}: you can walk up to the clerk`);
-      if (word === 'PHONES') assert.equal(s.shop, 0, 'the phone shop has nothing you can carry off: the clerk just chats');
+      if (JUST_CHAT.includes(word)) assert.equal(s.shop, 0, `${word}: nothing you can carry off, the clerk just chats`);
       else assert.ok(s.shop > 0, `${word}: and they'll sell you something`);
     }
     for (const word of WITH_WC) assert.ok(r[word].hasWc && r[word].wc, `${word}: a bathroom, and you can get in and use the toilet`);
     assert.ok(new Set(Object.values(r).map(s => s.kind)).size >= 23, 'all those different rooms behind the signs');
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('anywhere somebody is sitting there is a seat, and every empty seat takes you (C): stools, chairs, booths, sofas, bunks', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 800, height: 500 } }), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof enterRoom === 'function' && Number.isFinite(eye));
+    const r = await page.evaluate(() => {
+      paused = true; tod = 21; const lonely = [], refused = [], kinds = {};
+      for (const kind of Object.keys(ROOM_DEFS)) {
+        const def = ROOM_DEFS[kind]; if (def.home || kind === 'train' || kind === 'hotelSuite') continue;
+        for (let k = 0; k < 3; k++) {
+          mode = 'walk'; room = null; body.seat = null;
+          enterRoom(kind, { word: kind.toUpperCase(), neon: RED, cell: [10, 10], ret: [41, 73, 0], st: 0, line: '' }, [2, 2, 0]);
+          const seats = room.props.filter(s => s.seat || s.bench || s.seatRow);
+          for (const o of room.props.filter(o => o.fig && /^sit/.test(typeof o.pose === 'string' ? o.pose : '')))
+            if (!seats.some(s => s.seatRow ? Math.abs(o.y - s.seatRow.y) < 0.5 && o.x > s.seatRow.x0 - 0.6 && o.x < s.seatRow.x1 + 0.6 : Math.hypot(o.x - s.x, o.y - s.y) < 0.6)) lonely.push(`${kind} ${o.x.toFixed(1)},${o.y.toFixed(1)}`);
+          for (const s of seats.filter(s => s.seat)) {
+            if (room.props.some(o => o.fig && /^sit/.test(typeof o.pose === 'string' ? o.pose : '') && Math.hypot(o.x - s.x, o.y - s.y) < 0.4)) continue; // (taken)
+            px = s.x + 0.05; py = s.y; body.seat = null;
+            kinds[kind] = (kinds[kind] || 0) + 1;
+            if (!sitDown() || Math.hypot(px - s.x, py - s.y) > 0.3 || s.fx != null && Math.abs(Math.atan2(Math.sin(a - Math.atan2(s.fy, s.fx)), Math.cos(a - Math.atan2(s.fy, s.fx)))) > 0.01) refused.push(`${kind} ${s.x.toFixed(1)},${s.y.toFixed(1)}`);
+            else standUp();
+          }
+        }
+      }
+      mode = 'walk'; room = null; body.seat = null;
+      return { lonely, refused, kinds };
+    });
+    assert.deepEqual(r.lonely, [], 'nobody sitting on thin air');
+    assert.deepEqual(r.refused, [], 'and you sit where they would, facing the way they do');
+    for (const kind of ['burgerjoint', 'pizzeria', 'sushibar', 'tattoo', 'karaoke', 'cafe', 'tea', 'jail', 'pachinko', 'stripclub', 'hospital'])
+      assert.ok(r.kinds[kind] > 0, `${kind}: somewhere free to sit`);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('the mahjong parlour: a seat at any of its tables gets you into a hand', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 800, height: 500 } });
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof enterRoom === 'function' && Number.isFinite(eye));
+    const r = await page.evaluate(() => {
+      paused = true; mode = 'walk'; room = null;
+      enterRoom(ROOM_FOR.MAHJONG, { word: 'MAHJONG', neon: RED, ret: [px, py, a], line: '' }, [7.5, 8.4, -Math.PI / 2]);
+      const tables = room.props.filter(s => s.mj), out = [room.kind, tables.length];
+      for (const t of tables) { px = t.cx + 0.95; py = t.cy + 0.6; out.push(!!nearMahjong()); }
+      mode = 'walk'; room = null;
+      return out;
+    });
+    assert.deepEqual(r, ['mahjong', 5, true, true, true, true, true]);
+  } finally { await browser.close(); }
+});
+
+test('gacha: turn a handle, pay, and a capsule toy rolls out; the motel books you a room and you come back down to its office', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 800, height: 500 } }), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof enterRoom === 'function' && Number.isFinite(eye));
+    const r = await page.evaluate(() => {
+      paused = true; mode = 'walk'; room = null; money = 10; clearInventory();
+      enterRoom(ROOM_FOR.GACHA, { word: 'GACHA', neon: MAG, ret: [px, py, a], line: '' }, [5, 6.4, -Math.PI / 2]);
+      const m = room.props.find(s => s.gacha); px = m.cx; py = m.cy;
+      const prompt = promptText(), used = useShotengai(), toy = inv[0] && inv[0].id;
+      const out = { kind: room.kind, machines: room.props.filter(s => s.gacha).length, prompt, used, toy, money };
+      mode = 'walk'; room = null; money = 100; tod = 20;
+      enterRoom(ROOM_FOR.MOTEL, { word: 'MOTEL', neon: RED, ret: [41, 73, 0], line: '' }, [5, 6.4, -Math.PI / 2]);
+      px = 3.0; py = 3.1; out.motel = [room.kind, promptText()];
+      bookRoom(); out.booked = [money, !!sleep];
+      for (let k = 0; k < 400 && sleep; k++) stepSleep(0.05);
+      out.upstairs = room.kind; leaveRoom(); out.back = [room.kind, free(px, py)];
+      mode = 'walk'; room = null; sleep = null;
+      return out;
+    });
+    assert.equal(r.kind, 'gacha');
+    assert.ok(r.machines > 20, 'walls of machines');
+    assert.match(r.prompt, /turn the handle/);
+    assert.ok(r.used && ['yoyo', 'duck', 'dinotoy', 'luckycoin', 'redstring', 'candy'].includes(r.toy), `a toy: ${r.toy}`);
+    assert.equal(r.money, 8, 'two dollars a go');
+    assert.equal(r.motel[0], 'motel'); assert.match(r.motel[1], /book a room/);
+    assert.deepEqual(r.booked, [80, true], 'twenty a night at the motel');
+    assert.equal(r.upstairs, 'hotelroom');
+    assert.deepEqual(r.back, ['motel', true], 'and back down to the office, on clear floor');
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });

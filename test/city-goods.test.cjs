@@ -270,3 +270,19 @@ test('seasons: 28 days each, spring first; winter snows, snow settles and melts,
   assert.match(j('useHeld({})')[0], /settling/); assert.strictEqual(j('season()'), 'autumn');
   ev('T += 20'); j('useHeld({})'); assert.strictEqual(j('season()'), 'winter');
 });
+
+test('the tattoo parlour: pick a design, sit for it, pay; it is on you for good, not in your bag, and nobody can shoplift it', () => {
+  const { ev, j } = fresh();
+  ev('money = 300; tod = 14');
+  const stock = j("stockFor('tattoo', 'TATTOO')");
+  assert.ok(stock.length >= 5 && stock.every(id => id.startsWith('tattoo_')), 'designs off the wall');
+  const [ok, line] = j("buy('tattoo_rose')");
+  assert.strictEqual(ok, true); assert.match(line, /^2 hours in the chair\. The rose, /);
+  assert.deepStrictEqual(j('[money, tod, inv.length, tattoos]'), [180, 16, 0, ['tattoo_rose']]);
+  assert.deepStrictEqual(j("buy('tattoo_rose')"), [false, "You've already got the rose. Pick something new off the wall."]);
+  assert.strictEqual(j("buy('tattoo_koi')")[0], false, "can't afford the sleeve");
+  ev('tod = 22; money = 1000'); j("buy('tattoo_koi')");
+  assert.deepStrictEqual(j('[tod, dayNum > 4]'), [3, true], 'five hours from ten at night: three in the morning, the next day');
+  assert.deepStrictEqual(j("stealable(stockFor('tattoo', 'TATTOO'))"), []);
+  assert.deepStrictEqual(j("stealable(['coffee', 'car_hatch', 'tattoo_swallow', 'vinyl'])"), ['coffee', 'vinyl']);
+});

@@ -108,7 +108,7 @@ addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.pr
 
 const free = (x, y) => {
   if (mode === 'room') return x >= 0 && y >= 0 && x < room.W && y < room.H && !ROOMW.cell(Math.floor(x), Math.floor(y)) && !(room.def.block && room.def.block(x, y)) &&
-    !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture
+    !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && s.box.z1 > 0.05 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture (not rugs and mats: you walk on those)
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
   if (mode === 'walk') { const st = elStairStep(px, py, x, y, elPass); if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))]; } // (the el stairs: elevated.js)
@@ -239,9 +239,15 @@ function loop(t) {
     if (!body.seat) {
       const scale = sp * footSlow() * (body.hop || 1), ix = (cx * f - cy * (s + lurch)) * scale, iy = (cy * f + cx * (s + lurch)) * scale;
       const airborne = body.z > 0 || body.vz > 0;
-      if (!airborne && dt > 0) { body.mx = ix / dt; body.my = iy / dt; }
-      else if (airborne && dt > 0) airStrafe(f, s + lurch, scale / dt, dt);
-      move(airborne ? body.mx * dt : ix, airborne ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
+      if (!airborne && dt > 0) {
+        const wx = ix / dt, wy = iy / dt, vx = body.mx || 0, vy = body.my || 0, v = Math.hypot(vx, vy), w = Math.hypot(wx, wy);
+        if (body.hop > 1.001 && v > 1e-6 && w > 0) { // carrying speed from hopping: at that speed, but swinging round to where you're going (not snapping), and a sharp turn costs the speed
+          body.hop = 1 + (body.hop - 1) * Math.max(0, 1 - (1 - (vx * wx + vy * wy) / (v * w)) * 4 * dt);
+          const va = Math.atan2(vy, vx), turn = clamp(mod(Math.atan2(wy, wx) - va + Math.PI, Math.PI * 2) - Math.PI, -10 * dt, 10 * dt);
+          body.mx = Math.cos(va + turn) * w; body.my = Math.sin(va + turn) * w;
+        } else { body.mx = wx; body.my = wy; } // (walking: you go where you're going)
+      } else if (airborne && dt > 0) { airStrafe(f, s + lurch, scale / dt, dt); if (body.hop > 1.001) airSteer(ix, iy, 3, dt); }
+      move(dt > 0 ? body.mx * dt : ix, dt > 0 ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if(mode==='ladder')stepCourierLadder(dt);
   else if (mode === 'drive') { if (!sleep) drive(dt); if (T - lookT > 1.2) look *= 1 - Math.min(1, dt * 2.5); } // (not while the respray's under way) // (eyes back on the road a moment after you stop looking about)
