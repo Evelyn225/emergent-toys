@@ -36,6 +36,7 @@ const FIG_POSES = {
   grass: () => ({ seat: 0, legs: [[1.95, 0.22, 0.8, 0.1], [1.95, 0.22, 0.8, 0.1]], arms: [[0.75, 0.2, 1.7, -0.5], [0.75, 0.2, 1.7, -0.5]], lean: -0.1 }), // on the lawn, hugging her knees
   reach: () => ({ ...FIG_STAND, arms: [[1.0, 0.15, 1.3, 0.05], [1.0, 0.15, 1.3, 0.05]], lean: 0.35 }), // hands in the touch pool
   sing: () => ({ ...FIG_STAND, arms: [[0.9, 0.25, 2.7, -0.6], [0.5, 0.7, 0.9, 0.5]] }), // the mic up to her mouth
+  gasp: () => ({ ...FIG_STAND, arms: [[0.9, 0.25, 2.7, -0.6], [0.9, 0.25, 2.7, -0.6]] }), // hands to their face (someone's just been hit)
   sitfold: seat => ({ ...FIG_POSES.sit(seat), arms: FIG_POSES.fold().arms }),
   sit: seat => { // thighs angled down just enough that the feet reach the floor
     const t = clamp(Math.acos(clamp((seat + 1.3 - 6.76) / 6.2, -1, 1)), 0.95, 1.5);

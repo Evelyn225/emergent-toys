@@ -249,6 +249,30 @@ function stepDown(p, dt) {
 }
 // what they look like on the way down, down, and getting up
 const downPose = d => d.t < 0.2 || d.t > d.dur - 0.6 ? 'sprawl' : 'down';
+// everyone near enough to see it stops and stares, and the nearest comes running to kneel by them till they're up.
+// Returns how many saw it
+const GAWK_R = 1.6;
+function gawkAt(v) {
+  let helper = null, hd = 1.2, n = 0;
+  for (const p of people) {
+    if (p === v || p.hidden || p.down || p.follow || p.hailing || p.help || p.talk > 10) continue;
+    const d = Math.hypot(rel(p.x - v.x), rel(p.y - v.y));
+    if (d > GAWK_R) continue;
+    n++; p.gawk = v; p.talk = Math.max(p.talk || 0, 3 + Math.random() * 3);
+    if (d < hd) { hd = d; helper = p; }
+  }
+  if (helper) { helper.help = v; helper.talk = 0; }
+  return n;
+}
+// the one who came to help: over to them at a run, then crouched beside them; when they're up, a moment more with them
+function stepHelp(p, dt) {
+  const v = p.help;
+  if (!v.down) { delete p.help; p.gawk = v; p.talk = 2; return; }
+  const dx = rel(v.x - p.x), dy = rel(v.y - p.y), d = Math.hypot(dx, dy);
+  if (d < 0.12) return;
+  const s = Math.min(d - 0.1, p.sp * 2.5 * dt), nx = mod(p.x + dx / d * s, N), ny = mod(p.y + dy / d * s, N);
+  if (!map[idx(Math.floor(nx), Math.floor(ny))]) { p.x = nx; p.y = ny; p.ph += dt * 8; }
+}
 function stepPeople(dt, t, everywhere = false) {
   for (const p of people) {
     if (!everywhere && !p.follow && !simulated(p.x, p.y)) continue;
@@ -258,7 +282,8 @@ function stepPeople(dt, t, everywhere = false) {
       p.simT = T;
     }
     if (stepDown(p, dt)) continue; // (knocked down by a car)
-    if (p.talk > 0) { p.talk -= dt; continue; } // stopped to chat with you
+    if (p.help) { stepHelp(p, dt); continue; } // (gone to them)
+    if (p.talk > 0) { if ((p.talk -= dt) <= 0) delete p.gawk; continue; } // stopped to chat with you (or to stare)
     if (p.follow) { followYou(p, dt); continue; }
     if (p.wait > 0) {
       p.wait -= dt;

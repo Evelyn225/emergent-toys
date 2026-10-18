@@ -195,7 +195,9 @@ function drive(dt) {
   if (hitPerson && !bodyHit && !hitCar && free(fx, fy) && Math.abs(c.v) > 0.4) { // someone in the road: knocked flat, and you plough on, slower
     const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson);
     knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
-    say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"']), 2);
+    const saw = gawkAt(hitPerson); // (the people about: staring, and one running over to them)
+    say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"'])
+      + (saw ? ' ' + pick(cop ? ['"Officer down!"', '"You just hit a COP!"'] : ['"Oh my God!"', '"Somebody call an ambulance!"', '"Did you SEE that?"', '"Hey! HEY! Stop!"']) : ''), 3);
     crime(cop ? 'hitcop' : 'hit', c.x, c.y);
     if (actx) { tone(actx.currentTime, 60, 0.18, 0.12 * Math.min(1, sp / 3)); playClip('crash', 0.2); }
     if (sp > CRASH_V) damageCar(c, crashDamage(sp) * 0.2);
