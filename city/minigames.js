@@ -1248,7 +1248,7 @@ GAMES.garden = (rnd = Math.random) => {
 };
 
 // which shift each room offers
-const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', pizzeria: 'serve', burgerjoint: 'serve', taqueria: 'serve', sushibar: 'serve', icecream: 'serve', bakery: 'serve', chickenshop: 'serve', kebabshop: 'serve', bento: 'serve', takoyaki: 'serve', yakitori: 'serve', donutshop: 'serve', juicebar: 'serve', bagelshop: 'serve', thai: 'serve', pho: 'serve', dumplings: 'serve', dimsum: 'serve', kissaten: 'serve', izakaya: 'tapper', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
+const SHIFT_FOR = { diner: 'serve', cafe: 'serve', noodle: 'serve', pizzeria: 'serve', burgerjoint: 'serve', taqueria: 'serve', sushibar: 'serve', icecream: 'serve', bakery: 'serve', chickenshop: 'serve', kebabshop: 'serve', bento: 'serve', takoyaki: 'serve', yakitori: 'serve', donutshop: 'serve', juicebar: 'serve', bagelshop: 'serve', thai: 'serve', pho: 'serve', dumplings: 'serve', dimsum: 'serve', kissaten: 'serve', izakaya: 'tapper', bodega: 'stock', drugstore: 'stock', fruitshop: 'stock', markethall: 'stock', delicatessen: 'serve', roastery: 'serve', noodlehouse: 'serve', store: 'stock', books: 'stock', bar: 'tapper', karaoke: 'tapper' };
 // the cabinets in an arcade, in order, cycle through these; a credit is a dollar
 // ---- the ring at the gym: a bout against the next fighter on the card, seen over your own shoulders (you're a
 // wireframe, so they show through you). Read the wind-up and get out of the way: LEFT / RIGHT slip a punch (away

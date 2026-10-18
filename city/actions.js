@@ -211,7 +211,7 @@ function interact() {
     }
     if (roomPerson()) return talkInRoom();
     if (room.kind === 'storage' && nearKeeper()) return openStorage(stored, 'your unit', 'Storage unit', 'The same unit at every storage place in town');
-    if (room.kind === 'hotel' && nearKeeper()) return bookRoom();
+    if (room.def.rent && nearKeeper()) return bookRoom();
     if (room.kind === 'hospital' && nearKeeper()) {
       if (needs.health >= maxHealth() - 5) return say(`"${pick(NURSE_LINES)}"`, 3);
       if (!pay(NURSE_FEE)) return say(`"Treatment's ${fmt$(NURSE_FEE)}, I'm afraid." You can't cover it.`, 3);
@@ -365,7 +365,7 @@ function leaveRoom() {
   if (hotelAlarm) stepGrandHotel(); // A late exit still triggers the alarm while you're inside.
   if (room.kind === 'grandhotelheist') return enterRoom('grandhotel', room.lobby, [10.7, 2.65, Math.PI / 2]);
   if (room.kind === 'hotelroom' && room.lobby.grandHotel) return enterRoom('grandhotel', room.lobby, [7, 6.5, -Math.PI / 2]);
-  if (room.kind === 'hotelroom') return enterRoom('hotel', room.lobby, [7.5, 3, Math.PI / 2]); // back down to the lobby
+  if (room.kind === 'hotelroom') { const k = ROOM_FOR[room.lobby.word] || 'hotel'; return enterRoom(k, room.lobby, ROOM_DEFS[k].rentBack || [7.5, 3, Math.PI / 2]); } // back down to the lobby (or the motel office)
   if (room.kind === 'station') { const s = stations[room.st]; px = s.x - 0.22; py = s.y; a = Math.PI; } // up out of the entrance, onto the sidewalk
   else if (room.kind === 'terminal') leaveTerminal(); // (by whichever door: terminal.js)
   else if (room.kind === 'hospital') {

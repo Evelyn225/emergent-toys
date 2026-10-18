@@ -241,4 +241,56 @@ ROOM_DEFS.mahjong = { grid: backWc(15, 10), wc: wcAt(15), light: 0.85, floor: 'l
     BX(8.0, 1.4, 0.6, 0.3, 0, 0.85, solid(BRICK, { top: '=' })), ...[7.7, 8.0, 8.3].map(x => ROOM_MODEL(x, 1.4, (vx, vy) => drum(vx, vy, 0.07, 0.85, 1.2, (i, t, L) => { BG[i] = C(RED, 3 + L * 0.3 * drumLit(0.07)); return set(i, HIT.face === 5 ? 'o' : ' ', C(WHITE, 6)), true; }))), // the flasks of tea
     ...mahjongTable(2.6, 5.2), ...mahjongTable(7.0, 5.2), ...mahjongTable(11.2, 5.2), ...mahjongTable(2.6, 7.8), ...mahjongTable(11.2, 7.8), ...wcFittings(15)] };
 
-Object.assign(ROOM_FOR, { THAI: 'thai', PHO: 'pho', DUMPLINGS: 'dumplings', 'DIM SUM': 'dimsum', KISSATEN: 'kissaten', IZAKAYA: 'izakaya', MAHJONG: 'mahjong' });
+// ---- the coffee roastery (COFFEE; CAFE keeps the old cafe): the roaster turning its beans over in the cooling tray,
+// sacks of green coffee stacked, a pour-over bar with stools, a long table to work at, armchairs by the plants
+const roaster = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, 0.45, 0.35, 0, 1.1), (i, t, L) => { BG[i] = C(GRAY, (0.9 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face === 3 && Math.hypot(HIT.u, HIT.w - 0.75) < 0.2 ? 'O' : HIT.face === 3 && Math.abs(HIT.w - 1.0) < 0.03 ? '=' : ' ', C(YEL, 9)), true; }); // the body, its brass door
+  for (let k = 0; k < 4; k++) drum(vx - 0.1, vy - 0.05, 0.08 + k * 0.05, 1.1 + k * 0.1, 1.2 + k * 0.1, (i, t, L) => { BG[i] = C(YEL, (3 + L * 0.3) * drumLit(0.2)); return set(i, HIT.face === 5 ? '.' : ' ', C(BRICK, 6)), true; }); // the hopper
+  rod(vx + 0.25, vy - 0.2, 1.1, vx + 0.25, vy - 0.2, 3.0, 0.07, GRAY, 0.9); // the chimney
+  drum(vx + 0.05, vy + 0.6, 0.32, 0.55, 0.62, (i, t, L) => { // the cooling tray, the beans stirred round
+    if (HIT.face !== 5) { BG[i] = C(GRAY, 2.4); return set(i, ' ', 0), true; }
+    const a = Math.atan2(HIT.v, HIT.u) + T * 1.5; BG[i] = C(BRICK, 2 + fract(a * 1.5) * 1.5); return set(i, fract(a * 4 + Math.hypot(HIT.u, HIT.v) * 9) < 0.4 ? '.' : ':', C(WARM, 8)), true; });
+  drawBox(boxAt(vx + 0.05, vy + 0.6, 1, 0, 0.15, 0.15, 0, 0.55), solid(GRAY));
+}, [0.45, 0.65, 1.1]);
+const beanSacks = (x, y) => [[0, 0, 0], [0.5, 0, 0], [0.25, 0.05, 0.38]].map(([dx, dy, z]) => BX(x + dx, y + dy, 0.24, 0.2, z, z + 0.38, (i, t, L) => { BG[i] = C(STONE, (2.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, (HIT.face === 3 || HIT.face === 4) && Math.abs(HIT.w - z - 0.2) < 0.05 ? '#' : fract(HIT.u * 10 + HIT.w * 10) < 0.15 ? ',' : ' ', C(BRICK, 6)), true; }));
+const pourOver = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { rod(vx, vy, 1.0, vx, vy, 1.25, 0.012, BRICK, 1.2); drum(vx, vy, 0.06, 1.25, 1.35, (i, t, L) => { BG[i] = C(WHITE, 7); return set(i, ' ', 0), true; }); drum(vx, vy, 0.05, 1.0, 1.1, (i, t, L) => { BG[i] = C(CYAN, 1.4); return set(i, HIT.w < 1.04 + fract(T * 0.2) * 0.05 ? '~' : ' ', C(BRICK, 6)), true; }); }); // a cone dripping into its glass carafe
+function roasteryWall(i, u, uStep, z, d, mx, my, L) {
+  if (frontWindow(i, u, uStep, z, d, my, L)) return true;
+  if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.6, 0.32, 0.36, C(WHITE, 15), C(GRAY, 1))) return true;
+  if (backWall(my) && menuBoard(i, u, uStep, z, d, 6.0, 2.0, ['ETHIOPIA  FLORAL', 'COLOMBIA  CARAMEL', ...menuLines()], 1.5, C(GRAY, 0.9), C(WHITE, 13))) return true; // (the beans this week, chalked up over the bar)
+  if (z > 1.5 && !backWall(my) && my !== room.H - 1 && Math.abs(fract(Math.abs(u) / 3.2) - 0.5) < 0.18) { const k = hash(Math.floor(Math.abs(u) * 6), Math.floor(z * 6), 147); BG[i] = C(GREEN, 2 + k * 2.5); return set(i, k > 0.6 ? '&' : k > 0.4 ? '%' : ' ', C(GREEN, 9)), true; } // plants trailing down the walls
+  BG[i] = C(WHITE, 4.6 + L * 0.15); return set(i, fract(z / 0.16) < 0.1 ? '-' : fract(u / 0.36 + (Math.floor(z / 0.16) & 1) * 0.5) < 0.05 ? '|' : ' ', C(GRAY, 4)), true; // white-painted brick
+}
+ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hinoki', ceil: 'pendant', sign: false, wall: roasteryWall, keeper: [6.0, 1.7],
+  props: r => [BX(6.0, 2.4, 2.4, 0.3, 0, 1.0, solid(BRICK, { top: '=', panel: 0.6, bright: 1.2 })), { ...standing(6.0, 1.7, GREEN), face: [0, 1] }, roaster(1.7, 1.5), ...beanSacks(1.4, 3.6),
+    pourOver(4.4, 2.4), pourOver(4.8, 2.4), pourOver(5.2, 2.4), BX(7.5, 2.4, 0.3, 0.22, 1.0, 1.45, solid(GRAY, { top: 'o', trim: 1.38 })), // the pour-overs, the espresso machine
+    ...stools(4.0, 8.0, 3.05, 1.0, BRICK, 0, -1, 0.4),
+    BX(3.6, 6.2, 1.4, 0.45, 0.72, 0.78, solid(BRICK, { top: '=', bright: 1.2 })), ...[2.7, 4.5].map(x => BX(x, 6.2, 0.06, 0.35, 0, 0.72, solid(GRAY))), // the long table
+    ...[2.8, 4.4].flatMap(x => [[5.4, 1], [7.0, -1]].flatMap(([y, fy]) => [...homeChair(x, y, 0, fy, BRICK), ...(chance(0.45) ? [{ ...sitting(x, y, shirt(), 0.48), face: [0, fy] }] : [])])),
+    ...armchair(10.8, 5.3, -1, 0, GREEN), ...armchair(10.8, 7.0, -1, 0, BRICK), BX(9.9, 6.15, 0.25, 0.25, 0, 0.5, solid(BRICK, { top: '=' })), POT_PLANT(11.4, 4.1, 1.5), ...wcFittings(13)] };
+
+// ---- the noodle house (NOODLES; RAMEN keeps the noodle bar): the cook pulling noodles by hand at the floury table in
+// the window to the kitchen, the pots boiling, red lacquer round tables, the menu brushed on red strips
+const noodlePuller = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // the dough stretched between the cook's hands, folded, stretched again
+  const s = 0.15 + Math.abs(Math.sin(T * 1.6)) * 0.45;
+  for (let k = 0; k < 5; k++) rod(vx - s, vy + 0.05, 1.25 + k * 0.012, vx + s, vy + 0.05, 1.25 + Math.sin(k) * 0.02 - s * 0.15, 0.006, WHITE, 2);
+});
+function noodleHouseWall(i, u, uStep, z, d, mx, my, L) {
+  if (frontWindow(i, u, uStep, z, d, my, L)) return true;
+  if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.55, 0.3, 0.34, C(YEL, 14), C(RED, 2.6))) return true;
+  if (z > 1.3 && z < 2.25 && (backWall(my) ? u > 7.8 && u < 9.6 : my !== room.H - 1 && fract(Math.abs(u) / 3) < 0.5)) { // the menu, brushed on red strips
+    const tu = fract(Math.abs(u) / 0.32), k = Math.floor(Math.abs(u) / 0.32);
+    if (tu < 0.2 || tu > 0.8 || z < 1.35 + hash(k, 1, 148) * 0.1) { BG[i] = C(YEL, 5.4 + L * 0.15); return set(i, ' ', 0), true; }
+    BG[i] = C(RED, 4.5); return set(i, fract(z * 8 + hash(k, 2, 149)) < 0.4 ? '#' : ' ', C(BRICK, 1)), true;
+  }
+  if (z < 1.0) { BG[i] = C(RED, 2.2 + L * 0.2); return set(i, fract(u * 3) < 0.05 ? '|' : ' ', C(BRICK, 4)), true; }
+  BG[i] = C(YEL, 5.4 + L * 0.15); return set(i, ' ', 0), true;
+}
+ROOM_DEFS.noodlehouse = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'lantern', sign: false, wall: noodleHouseWall, keeper: [6.6, 1.65],
+  props: r => [BX(6.0, 2.5, 2.6, 0.3, 0, 1.0, solid(RED, { top: '=', panel: 0.6, bright: 1.3 })), { ...standing(6.6, 1.65, RED), face: [0, 1] },
+    BX(2.6, 1.45, 0.9, 0.35, 0, 0.9, foldingTable), { ...standing(2.6, 2.05, WHITE), face: [0, -1] }, noodlePuller(2.6, 1.95), // the noodle maker at work
+    stockPot(8.0, 1.45), stockPot(8.75, 1.45),
+    ...[[2.5, 4.6, 0.45], [9.5, 4.6, 0.45], [2.5, 6.9, 0.35], [9.5, 6.9, 0.35]].flatMap(([x, y, busy]) => roundTable(x, y, 0.45, 4, { cloth: RED, chair: lowStool, chairCol: BRICK, busy, a0: Math.PI / 4 })),
+    roundLantern(4.5, 5.8), roundLantern(7.7, 5.8), ...wcFittings(13)] };
+
+Object.assign(ROOM_FOR, { COFFEE: 'roastery', NOODLES: 'noodlehouse', THAI: 'thai', PHO: 'pho', DUMPLINGS: 'dumplings', 'DIM SUM': 'dimsum', KISSATEN: 'kissaten', IZAKAYA: 'izakaya', MAHJONG: 'mahjong' });

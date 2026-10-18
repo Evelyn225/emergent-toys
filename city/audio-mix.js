@@ -24,6 +24,8 @@ const ROOM_AUDIO = {
   pizzeria: [0.65, 0.4, 0], burgerjoint: [0.65, 0.6, 0], taqueria: [0.6, 0.35, 0], sushibar: [0.5, 0, 0.2], icecream: [0.25, 0, 0.45], bakery: [0.2, 0.3, 0.3],
   chickenshop: [0.55, 0.3, 0], kebabshop: [0.5, 0.2, 0], bento: [0.3, 0, 0.3], takoyaki: [0.35, 0, 0.2], yakitori: [0.7, 0, 0], donutshop: [0.25, 0.2, 0.4], juicebar: [0.2, 0.3, 0.3], bagelshop: [0.35, 0, 0.4],
   thai: [0.55, 0.3, 0], pho: [0.6, 0, 0], dumplings: [0.6, 0, 0], dimsum: [0.85, 0, 0], kissaten: [0.15, 0.55, 0.3], izakaya: [0.85, 0.2, 0], mahjong: [0.6, 0, 0],
+  bodega: [0.2, 0, 0.45], markethall: [0.7, 0, 0.2], fruitshop: [0.15, 0, 0.4], motel: [0.1, 0, 0.3], welding: [0.1, 0, 0.2], tireshop: [0.2, 0, 0.3], tailor: [0.1, 0.35, 0.2], antiques: [0.05, 0.45, 0.1],
+  drugstore: [0.25, 0, 0.5], delicatessen: [0.35, 0.2, 0.3], gacha: [0.25, 0, 0.3], roastery: [0.2, 0.45, 0.55], noodlehouse: [0.65, 0, 0],
   pharmacy: [0, 0, 0.4], tobacco: [0, 0.5, 0], video: [0, 0, 0.45], herbs: [0, 0, 0.25], phones: [0.1, 0, 0.35], pawn: [0, 0, 0.3], liquor: [0, 0, 0.4], jeweler: [0, 0.45, 0], gas: [0, 0, 0.35], terminal: [0.55, 0, 0.15],
 };
 const CAFE_WORDS = new Set(['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'TEA HOUSE', 'DIM SUM']);

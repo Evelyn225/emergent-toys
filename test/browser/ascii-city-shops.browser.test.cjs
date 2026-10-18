@@ -15,8 +15,11 @@ const SHOPS = { GROCERY: 'grocer', MARKET: 'grocer', FRUIT: 'grocer', DELI: 'del
   CAFE: 'cafe', RAMEN: 'noodle', 'TEA HOUSE': 'tea', KARAOKE: 'karaoke', HOTEL: 'hotel', BAR: 'bar', DINER: 'diner', GAS: 'gas',
   PIZZA: 'pizzeria', BURGERS: 'burgerjoint', TACOS: 'taqueria', SUSHI: 'sushibar', 'ICE CREAM': 'icecream', BAKERY: 'bakery',
   CHICKEN: 'chickenshop', KEBAB: 'kebabshop', BENTO: 'bento', TAKOYAKI: 'takoyaki', YAKITORI: 'yakitori', DONUTS: 'donutshop', JUICE: 'juicebar', BAGELS: 'bagelshop',
-  THAI: 'thai', PHO: 'pho', DUMPLINGS: 'dumplings', 'DIM SUM': 'dimsum', KISSATEN: 'kissaten', IZAKAYA: 'izakaya', MAHJONG: 'mahjong' };
-const WITH_WC = ['DELI', 'TOBACCO', 'CAFE', 'RAMEN', 'TEA HOUSE', 'KARAOKE', 'HOTEL', 'BAR', 'DINER', 'GAS', 'PIZZA', 'BURGERS', 'TACOS', 'SUSHI', 'THAI', 'PHO', 'DUMPLINGS', 'DIM SUM', 'KISSATEN', 'IZAKAYA', 'MAHJONG'];
+  THAI: 'thai', PHO: 'pho', DUMPLINGS: 'dumplings', 'DIM SUM': 'dimsum', KISSATEN: 'kissaten', IZAKAYA: 'izakaya', MAHJONG: 'mahjong',
+  BODEGA: 'bodega', MARKET: 'markethall', FRUIT: 'fruitshop', MOTEL: 'motel', WELDING: 'welding', TIRES: 'tireshop', TAILOR: 'tailor', ANTIQUES: 'antiques',
+  DRUGSTORE: 'drugstore', DELICATESSEN: 'delicatessen', GACHA: 'gacha', COFFEE: 'roastery', NOODLES: 'noodlehouse' };
+const JUST_CHAT = ['PHONES', 'WELDING', 'TIRES']; // (a clerk with nothing you can carry off)
+const WITH_WC = ['DELI', 'TOBACCO', 'CAFE', 'RAMEN', 'TEA HOUSE', 'KARAOKE', 'HOTEL', 'BAR', 'DINER', 'GAS', 'PIZZA', 'BURGERS', 'TACOS', 'SUSHI', 'THAI', 'PHO', 'DUMPLINGS', 'DIM SUM', 'KISSATEN', 'IZAKAYA', 'MAHJONG', 'COFFEE', 'NOODLES'];
 
 // walk every room: flood its floor from the door on a 10cm grid, and see what you can reach
 async function walkRooms(page) {
@@ -66,7 +69,7 @@ async function walkRooms(page) {
       // draw it from the door, looking round, from the counter, and from the bathroom
       const t0 = performance.now(), spots = [spawn, clerk || spawn, ...wc ? [wc] : []];
       for (const [x, y] of spots) for (let d = 0; d < 4; d++) { px = x; py = y; a = -Math.PI / 2 + d * Math.PI / 2; pitch = 0; render(0); }
-      out[word] = { kind: room.kind, open, clerk: !!clerk, door, shop, wc: !!wc, hasWc: !!room.def.wc, keeper: !!k, pockets, unseatable, ms: (performance.now() - t0) / (spots.length * 4) };
+      out[word] = { kind: room.kind, open, clerk: !!clerk, door, shop, wc: !!wc, hasWc: !!room.def.wc, keeper: !!k, rent: !!room.def.rent, pockets, unseatable, ms: (performance.now() - t0) / (spots.length * 4) };
     }
     mode = 'walk'; room = null;
     return out;
@@ -89,9 +92,9 @@ test('every shop and the rooms with bathrooms: its own room, all of it reachable
       assert.ok(s.door, `${word}: and you can get back out`);
       assert.deepEqual(s.unseatable, [], `${word}: every seat in it is one you can walk up to`);
       assert.ok(s.ms < 250, `${word} draws in ${s.ms.toFixed(0)}ms a frame`);
-      if (!s.keeper || kind === 'hotel') continue; // (karaoke's nobody's counter; the hotel's desk is for rooms upstairs)
+      if (!s.keeper || s.rent) continue; // (karaoke's nobody's counter; the hotel's and the motel's desks are for rooms)
       assert.ok(s.clerk, `${word}: you can walk up to the clerk`);
-      if (word === 'PHONES') assert.equal(s.shop, 0, 'the phone shop has nothing you can carry off: the clerk just chats');
+      if (JUST_CHAT.includes(word)) assert.equal(s.shop, 0, `${word}: nothing you can carry off, the clerk just chats`);
       else assert.ok(s.shop > 0, `${word}: and they'll sell you something`);
     }
     for (const word of WITH_WC) assert.ok(r[word].hasWc && r[word].wc, `${word}: a bathroom, and you can get in and use the toilet`);
@@ -152,5 +155,40 @@ test('the mahjong parlour: a seat at any of its tables gets you into a hand', as
       return out;
     });
     assert.deepEqual(r, ['mahjong', 5, true, true, true, true, true]);
+  } finally { await browser.close(); }
+});
+
+test('gacha: turn a handle, pay, and a capsule toy rolls out; the motel books you a room and you come back down to its office', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 800, height: 500 } }), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof enterRoom === 'function' && Number.isFinite(eye));
+    const r = await page.evaluate(() => {
+      paused = true; mode = 'walk'; room = null; money = 10; clearInventory();
+      enterRoom(ROOM_FOR.GACHA, { word: 'GACHA', neon: MAG, ret: [px, py, a], line: '' }, [5, 6.4, -Math.PI / 2]);
+      const m = room.props.find(s => s.gacha); px = m.cx; py = m.cy;
+      const prompt = promptText(), used = useShotengai(), toy = inv[0] && inv[0].id;
+      const out = { kind: room.kind, machines: room.props.filter(s => s.gacha).length, prompt, used, toy, money };
+      mode = 'walk'; room = null; money = 100; tod = 20;
+      enterRoom(ROOM_FOR.MOTEL, { word: 'MOTEL', neon: RED, ret: [41, 73, 0], line: '' }, [5, 6.4, -Math.PI / 2]);
+      px = 3.0; py = 3.1; out.motel = [room.kind, promptText()];
+      bookRoom(); out.booked = [money, !!sleep];
+      for (let k = 0; k < 400 && sleep; k++) stepSleep(0.05);
+      out.upstairs = room.kind; leaveRoom(); out.back = [room.kind, free(px, py)];
+      mode = 'walk'; room = null; sleep = null;
+      return out;
+    });
+    assert.equal(r.kind, 'gacha');
+    assert.ok(r.machines > 20, 'walls of machines');
+    assert.match(r.prompt, /turn the handle/);
+    assert.ok(r.used && ['yoyo', 'duck', 'dinotoy', 'luckycoin', 'redstring', 'candy'].includes(r.toy), `a toy: ${r.toy}`);
+    assert.equal(r.money, 8, 'two dollars a go');
+    assert.equal(r.motel[0], 'motel'); assert.match(r.motel[1], /book a room/);
+    assert.deepEqual(r.booked, [80, true], 'twenty a night at the motel');
+    assert.equal(r.upstairs, 'hotelroom');
+    assert.deepEqual(r.back, ['motel', true], 'and back down to the office, on clear floor');
+    assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });

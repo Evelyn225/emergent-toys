@@ -379,7 +379,7 @@ ROOM_DEFS.hardware = { grid: ['##################', '#............#...#', '#...S
     return p;
   } };
 
-Object.assign(ROOM_FOR, { GROCERY: 'grocer', MARKET: 'grocer', FRUIT: 'grocer', DELI: 'deli', DELICATESSEN: 'deli', HARDWARE: 'hardware' });
+Object.assign(ROOM_FOR, { GROCERY: 'grocer', DELI: 'deli', HARDWARE: 'hardware' }); // (MARKET, FRUIT, DELICATESSEN: storefronts.js)
 
 // ---- painters for walls of things: each takes the wall's (i, u, z, L) and a seed, paints the cell and returns true,
 // or returns false where the wall shows through
@@ -688,7 +688,7 @@ ROOM_DEFS.pharmacy = { grid: ['############', '#..........#', '#..........#', '#
     return p;
   } };
 
-Object.assign(ROOM_FOR, { SKATE: 'skate', SPORTS: 'sports', TOYS: 'toys', THRIFT: 'thrift', ANTIQUES: 'thrift', TAILOR: 'thrift', PHARMACY: 'pharmacy' }); // (and the shotengai's DRUGSTORE: shotengai.js)
+Object.assign(ROOM_FOR, { SKATE: 'skate', SPORTS: 'sports', TOYS: 'toys', THRIFT: 'thrift', PHARMACY: 'pharmacy' }); // (ANTIQUES, TAILOR, DRUGSTORE: storefronts.js)
 
 // more walls of things
 // tapes face out on a shelf: a cover each, the title strip across its top
