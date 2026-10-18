@@ -62,6 +62,7 @@ for (const b of SERVICES) if (b.kind === 'police') for (let k = 0; k < 3; k++) {
   footCops.push({ x, y, corner, dir: k % 2 ? 2 : 0, goal: null, chase: false, ph: Math.random() * 9, base: b });
 }
 function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn (never straight back)
+  if (c.down) return; // (flat on the street: a car)
   if (!c.goal) {
     const opts = [0, 1, 2, 3].filter(d => d !== (c.dir + 2) % 4).map(d => [d, stepCorner(c.corner, d)]).filter(o => o[1]);
     const [d, next] = opts.length ? pick(opts) : [(c.dir + 2) % 4, stepCorner(c.corner, (c.dir + 2) % 4)];
@@ -73,6 +74,7 @@ function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn
   else { c.x = mod(c.x + dx / d * s, N); c.y = mod(c.y + dy / d * s, N); c.ph += dt * 4; }
 }
 function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls (just out of the car: a sprint)
+  if (c.down) return;
   const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = Math.min(d, (c.burst > T ? COP_FOOT_SPEED * 1.1 : COP_FOOT_SPEED) * dt);
   const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
   if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = mod(nx, N);
@@ -419,7 +421,7 @@ function stepReturningPolice(dt) {
   }
   for (let k = footCops.length - 1; k >= 0; k--) {
     const c = footCops[k], car = c.returnCar;
-    if (!car) continue;
+    if (!car || c.down) continue;
     if (!cars.includes(car)) { c.returnCar = null; backToBeat(c); continue; }
     if (near(c.x, c.y, car.x, car.y) < 0.2) { footCops.splice(k, 1); continue; }
     if ((c.returnPathT -= dt) <= 0) { c.returnPathT = 0.7; c.returnPath = pursuitRoute(c, car.x, car.y); }
@@ -564,6 +566,7 @@ const policeNear = (x, y) => cars.some(c => c.patrol && near(c.x, c.y, x, y) < D
 
 // ---- every frame
 function stepCrime(dt) {
+  for (const c of footCops) stepDown(c, dt); // (an officer a car's knocked down: up again in a few seconds)
   for (let k = reports.length - 1; k >= 0; k--) { // calls coming in
     const r = reports[k];
     if (T < r.t) continue;
@@ -580,7 +583,7 @@ function stepCrime(dt) {
   const roomSeen = roomSearchLead(dt);
   const roofSeen = roofSearchLead(dt);
   const [wx, wy] = crimePos(), inside = mode === 'room', onRoof = mode === 'roof';
-  const sees = c => !inside && !onRoof && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
+  const sees = c => !c.down && !inside && !onRoof && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
   wanted.seen = (inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees)) || heliSees;
   if (wanted.seen) { if (!inside) observeSuspect(wx, wy); wanted.hideT = 0; wanted.searchX = wanted.lastX; wanted.searchY = wanted.lastY; }
   else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
@@ -606,10 +609,10 @@ function stepCrime(dt) {
     if (wanted.pitPending) { wanted.pitPending = false; return 'pit'; }
   }
   // caught: a hand on your shoulder, or boxed in and stopped
-  const grabbed = onFoot && footCops.some(c => c.chase && near(c.x, c.y, px, py) < 0.22)
+  const grabbed = onFoot && footCops.some(c => c.chase && !c.down && near(c.x, c.y, px, py) < 0.22)
     || inside && roomCops.some(c => c.sees && Math.hypot(c.x - px, c.y - py) < 0.32)
     || onRoof && body.z < 1 && roofCops.some(c => c.sees && near(c.x, c.y, px, py) < 0.22);
-  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && near(c.x, c.y, me.x, me.y) < 0.5));
+  const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
   return told ? 'pullover' : wanted.seen ? 'seen' : 'hiding';
