@@ -241,11 +241,12 @@ function loop(t) {
       const airborne = body.z > 0 || body.vz > 0;
       if (!airborne && dt > 0) {
         const wx = ix / dt, wy = iy / dt, vx = body.mx || 0, vy = body.my || 0, v = Math.hypot(vx, vy), w = Math.hypot(wx, wy);
-        if (body.hop > 1.001) { // carrying speed from hopping: swing round to where you're going, and a sharp turn costs the speed
-          if (v > 0 && w > 0) body.hop = 1 + (body.hop - 1) * Math.max(0, 1 - (1 - (vx * wx + vy * wy) / (v * w)) * 4 * dt);
-          const k = 1 - Math.exp(-10 * dt); body.mx = vx + (wx - vx) * k; body.my = vy + (wy - vy) * k;
+        if (body.hop > 1.001 && v > 1e-6 && w > 0) { // carrying speed from hopping: at that speed, but swinging round to where you're going (not snapping), and a sharp turn costs the speed
+          body.hop = 1 + (body.hop - 1) * Math.max(0, 1 - (1 - (vx * wx + vy * wy) / (v * w)) * 4 * dt);
+          const va = Math.atan2(vy, vx), turn = clamp(mod(Math.atan2(wy, wx) - va + Math.PI, Math.PI * 2) - Math.PI, -10 * dt, 10 * dt);
+          body.mx = Math.cos(va + turn) * w; body.my = Math.sin(va + turn) * w;
         } else { body.mx = wx; body.my = wy; } // (walking: you go where you're going)
-      } else if (airborne && dt > 0) airStrafe(f, s + lurch, scale / dt, dt);
+      } else if (airborne && dt > 0) { airStrafe(f, s + lurch, scale / dt, dt); if (body.hop > 1.001) airSteer(ix, iy, 3, dt); }
       move(dt > 0 ? body.mx * dt : ix, dt > 0 ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if(mode==='ladder')stepCourierLadder(dt);

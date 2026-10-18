@@ -1408,7 +1408,7 @@ test('covered streets stay free of snow and the Shotengai glass has no yellow ro
   assert.ok(result.lampFits&&result.balconySheltered&&result.deckExposed,JSON.stringify(result));
 }));
 
-const HOP_MAX_TEST = 1.6;
+const HOP_MAX_TEST = 1.9;
 test('bunny hopping: land and go straight back up and each hop is faster; stop and it is gone', () => withPage(async page => {
   const r = await page.evaluate(() => {
     refillNeeds();
@@ -1426,8 +1426,8 @@ test('bunny hopping: land and go straight back up and each hop is faster; stop a
     body.hop = 1; const plain = go(180); body.z = body.vz = 0; body.hop = 1; const strafed = go(180, { strafe: 1 });
     return { hopped, capped, after, plain, strafed };
   });
-  assert.ok(r.hopped > 1.05 && r.hopped < 1.2, `faster for every hop, a little at a time (${r.hopped})`);
-  assert.ok(r.capped > 1.5 && r.capped <= HOP_MAX_TEST, `tailing off toward a cap (${r.capped})`);
+  assert.ok(r.hopped > 1.1 && r.hopped < 1.3, `faster for every hop, a little at a time (${r.hopped})`);
+  assert.ok(r.capped > 1.85 && r.capped <= HOP_MAX_TEST, `tailing off toward a cap (${r.capped})`);
   assert.deepStrictEqual(r.after, [0, 1], 'on the ground a moment and it bleeds away');
   assert.ok(r.strafed > r.plain, `strafing into the turn builds it quicker (${r.plain} vs ${r.strafed})`);
 }));
@@ -1445,6 +1445,20 @@ test('carrying hop speed you swing round to a new direction instead of snapping 
   });
   assert.ok(r.first[0] > 0.2, `the first frame still carries you mostly the way you were going (${r.first})`);
   assert.ok(Math.abs(r.after[0]) < 0.02 && r.after[1] < -0.45 && r.after[2] === 1, `then you're going left at walking pace (${r.after})`);
+}));
+
+test('hopping fast, sweeping your aim round in the air steers you without pumping up your speed', () => withPage(async page => {
+  const r = await page.evaluate(async () => {
+    refillNeeds(); paused = false; mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0;
+    for (const k in K) K[k] = 0; K.KeyW = K.ShiftLeft = 1;
+    Object.assign(body, { z: 0.3, vz: 2.5, hop: 1.9, mx: 0.8 * 1.9, my: 0, seat: null, landedAt: -9, buf: -9 });
+    const v0 = Math.hypot(body.mx, body.my); let top = v0;
+    for (let n = 0; n < 20 && (body.z > 0 || body.vz > 0); n++) { a += 0.09; await new Promise(r => requestAnimationFrame(r)); top = Math.max(top, Math.hypot(body.mx, body.my)); } // (the old aim-sweep pump)
+    const turned = Math.atan2(body.my, body.mx); for (const k in K) K[k] = 0; paused = true;
+    return { v0, top, turned };
+  });
+  assert.ok(r.top <= r.v0 * 1.02, `no faster than the hops made you (${r.v0} -> ${r.top})`);
+  assert.ok(r.turned > 0.3, `but you do swing round with your aim (${r.turned})`);
 }));
 
 test('parked cars are solid on foot; you can still get in', () => withPage(async page => {

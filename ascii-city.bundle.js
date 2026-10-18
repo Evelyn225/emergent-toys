@@ -219,6 +219,14 @@ function airStrafe(forward, side, speed, dt, yaw = a) {
   const acceleration = Math.min(add, AIR_ACCEL * wishSpeed * dt);
   body.mx = vx + wx * acceleration; body.my = vy + wy * acceleration;
 }
+// Hopping (body.hop > 1), your momentum also swings round toward where you're going, rate radians a second, at the
+// same speed: a run of hops follows you round a corner in the air instead of jerking round on each landing.
+function airSteer(wx, wy, rate, dt) {
+  const vx = body.mx || 0, vy = body.my || 0, v = Math.hypot(vx, vy);
+  if (dt <= 0 || v < 1e-6 || !(wx || wy)) return;
+  const va = Math.atan2(vy, vx), turn = clamp(mod(Math.atan2(wy, wx) - va + Math.PI, Math.PI * 2) - Math.PI, -rate * dt, rate * dt);
+  body.mx = Math.cos(va + turn) * v; body.my = Math.sin(va + turn) * v;
+}
 // ===== hunger, thirst and health. Food fills `food`, drink fills `drink` (0-100); both run down as you play
 // (real time: neither fast-forward nor a night's sleep speeds them up), thirst a little faster. Run either dry and
 // your health starts to go, faster with both; at nothing you pass out and wake up in the hospital with a bill
@@ -376,7 +384,7 @@ const ADS = ['DRINK COLA', 'NEO PHONES', 'EAT AT JOES', 'MEGA BANK', 'FLY AIR 9'
 // Units: sprite pixels; a standing adult's head is FIG_TALL high. Body frame: x their right, y ahead of them, z up.
 const FIG_W = 29, FIG_H = 34, FIG_TALL = 26.45, FIG_VIEWS = 16;
 const FR = Object.fromEntries(['HAIR', 'HAIR_D', 'SKIN', 'SKIN_D', 'EYE', 'TOP', 'TOP_D', 'INNER', 'BOT', 'BOT_D', 'POCKET', 'BELT',
-  'BUCKLE', 'SHOE', 'HAT', 'HAT_D', 'BADGE', 'CAPBADGE', 'PACK', 'PACK_D', 'STRAP', 'SHADES', 'TIE', 'MIC', 'TIGHTS'].map((k, i) => [k, i + 1]));
+  'BUCKLE', 'SHOE', 'HAT', 'HAT_D', 'BADGE', 'CAPBADGE', 'PACK', 'PACK_D', 'STRAP', 'SHADES', 'TIE', 'MIC', 'TIGHTS', 'INK'].map((k, i) => [k, i + 1]));
 const FIG_ROLES = Object.keys(FR).length + 1;
 // a detail one pixel across, and what it reads as once a pixel is smaller than a screen cell (or it would flicker)
 const FIG_COARSE = new Uint8Array(FIG_ROLES);
@@ -535,8 +543,11 @@ function figBody(look, key) {
     decals.push({ p: HU(n[0] * hr[0], n[1] * hr[1], n[2] * hr[2]), n: fNorm(fAdd(fMul(ex, n[0]), fAdd(fMul(ey, n[1]), fMul(ez, n[2])))), role: R.EYE, part: parts.indexOf(head) });
   }
   // the arms
-  const sleeve = FIG_SLEEVELESS.has(top) ? () => R.SKIN : top === 'tee' || top === 'dress' ? h => h.s < 0.55 ? R.TOP_D : R.SKIN : () => R.TOP_D;
-  const fore = FIG_LONG.has(top) ? () => R.TOP_D : () => R.SKIN;
+  // tattoos (look.ink: how much of the bare arm they cover, 0..1): bold shapes wrapping round, more of the arm the more there is
+  const inked = h => look.ink > 0 && fract(h.s * 3.2 + Math.atan2(h.n[1], h.n[0]) * 0.32 + (h.n[2] > 0 ? 0.13 : 0)) < 0.25 + look.ink * 0.55 && h.s > 1 - look.ink * 1.6;
+  const bare = h => inked(h) ? R.INK : R.SKIN;
+  const sleeve = FIG_SLEEVELESS.has(top) ? bare : top === 'tee' || top === 'dress' ? h => h.s < 0.55 ? R.TOP_D : bare(h) : () => R.TOP_D;
+  const fore = FIG_LONG.has(top) ? () => R.TOP_D : bare;
   for (const [k, sg] of look.form ? [] : [[0, 1], [1, -1]]) {
     const [up, ua, fp, fa] = P.arms[k], toU = d => fAdd(fMul(ex, d[0]), fAdd(fMul(ey, d[1]), fMul(ez, d[2])));
     const sh = U(sg * 4.05 * bw, 0, 6.35), du = toU(fLimb(up, ua, sg)), df = toU(fLimb(fp, fa, sg));
@@ -668,14 +679,14 @@ function figLook(o) {
   const col = { hair: [GRAY, 1], skin: [SKIN, 13], top: [GRAY, 8], inner: [WHITE, 12], bot: [BLUE, 5], belt: [GRAY, 1], shoe: [GRAY, 1],
                 hat: [GRAY, 3], hatD: [GRAY, 1], pack: [GRAY, 4], tie: [GRAY, 1], tights: [GRAY, 2], ...o.col };
   const look = { hair: 'short', top: 'tee', bot: 'pants', bw: 1, ...o, col };
-  look.shape = ['hair', 'hat', 'top', 'bot', 'pack', 'shades', 'holster', 'badge', 'mic', 'tights', 'kid', 'bw', 'form'].map(k => look[k] ?? '').join(',');
+  look.shape = ['hair', 'hat', 'top', 'bot', 'pack', 'shades', 'holster', 'badge', 'mic', 'tights', 'kid', 'bw', 'form', 'ink'].map(k => look[k] ?? '').join(',');
   // per role: palette base and brightness (shadow roles darker)
   const B = new Uint8Array(FIG_ROLES), Lv = new Float32Array(FIG_ROLES), put = (role, [b, l], k = 1) => { B[FR[role]] = b; Lv[FR[role]] = l * k; };
   put('HAIR', col.hair); put('HAIR_D', col.hair, 0.65); put('SKIN', col.skin); put('SKIN_D', col.skin, 0.72); put('EYE', [GRAY, 0]);
   put('TOP', col.top); put('TOP_D', col.top, 0.68); put('INNER', col.inner); put('BOT', col.bot); put('BOT_D', col.bot, 0.68);
   put('POCKET', col.bot, 0.45); put('BELT', col.belt); put('BUCKLE', [YEL, 12]); put('SHOE', col.shoe); put('HAT', col.hat); put('HAT_D', col.hatD);
   put('BADGE', [YEL, 15]); put('CAPBADGE', [YEL, 15]); put('PACK', col.pack); put('PACK_D', col.pack, 0.65); put('STRAP', col.pack, 0.65);
-  put('SHADES', [GRAY, 0]); put('TIE', col.tie); put('MIC', [GRAY, 5]); put('TIGHTS', col.tights);
+  put('SHADES', [GRAY, 0]); put('TIE', col.tie); put('MIC', [GRAY, 5]); put('TIGHTS', col.tights); put('INK', col.ink || [GREEN, 5]);
   look.base = B; look.lvl = Lv;
   return look;
 }
@@ -24294,13 +24305,17 @@ function crimePrompt() {
 // on a phone, swipe off the Ollie button the same way. Seen from your own eyes (V), the board under you is a little 3D
 // model in front of the camera (like a held weapon), so it really flips and spins.
 // Bunny hopping: jump again the moment you land (press Space just before or just after you touch down) and each hop
-// carries you a bit faster, less so the faster you're going; turn the way you're strafing while you're in the air
-// (A + mouse left, D + mouse right) and it builds quicker. Carrying that speed, you can't just cut the other way: on
+// carries you a bit faster (tailing off near the top); turn the way you're strafing while you're in the air
+// (A + mouse left, D + mouse right) and it builds quicker. (A whole walkway of hops gets you fast enough to leap a
+// side street: the night courier run's shortcut.) Carrying that speed, you can't just cut the other way: on
 // the ground you swing round to where you're going over a moment, and a sharp turn costs you the speed (main.js).
-// Stay on the ground and the speed's gone in a moment.
-const HOP_GAIN = 0.035, HOP_STRAFE = 0.07, HOP_MAX = 1.6, HOP_BUF = 0.2, HOP_GRACE = 0.16; // speed x per hop, x more for a good strafe, cap, s early
+// Stay on the ground and the speed's gone in a moment (time enough for a few strides to an edge, and leap it).
+const HOP_GAIN = 0.06, HOP_STRAFE = 0.06, HOP_MAX = 1.9, HOP_TAPER = 1.75, HOP_BUF = 0.2, HOP_GRACE = 0.16, HOP_KEEP = 0.35; // speed x per hop, x more for a good strafe, cap (gains tail off above HOP_TAPER), s early; s late; s on the ground before the speed starts to go (a run-up to an edge)
 // the hop multiplier after one more hop (swirl: how far you turned into your strafe in the air), tailing off near the cap
-const hopUp = (hop, swirl) => Math.min(HOP_MAX, hop + (HOP_GAIN + Math.min(HOP_STRAFE, swirl * 0.1)) * Math.max(0, 1 - (hop - 1) / (HOP_MAX - 1)));
+const hopUp = (hop, swirl) => Math.min(HOP_MAX, hop + (HOP_GAIN + Math.min(HOP_STRAFE, swirl * 0.08)) * clamp((HOP_MAX - hop) / (HOP_MAX - HOP_TAPER), 0, 1));
+// one more hop: the multiplier goes up, and so does the speed you carry (a run of hops never touches the ground long
+// enough for walking to pick it up)
+function hopFaster(swirl) { const h0 = body.hop || 1; body.hop = hopUp(h0, swirl); body.mx = (body.mx || 0) * body.hop / h0; body.my = (body.my || 0) * body.hop / h0; }
 const GRAV = 9.8, JUMP_V = 3.4, POP_V = 3.3, SIT_H = 0.55, CROUCH_H = 0.7, BOARD_H = 0.1; // metres
 // [name, flips (+ kick, - heel), body turns of the board]
 const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit', 0, 0.5], AS: ['360 flip', 1, 1], DS: ['varial heelflip', -1, 0.5],
@@ -24327,7 +24342,7 @@ function jump(trick) { // trick: a TRICKS key from a flick; otherwise (on the bo
   body.buf = -9;
   if (skatingNow()) return skatePop(trick); // (skate.js)
   if (T - (body.landedAt ?? -9) <= HOP_GRACE && Math.hypot(body.mx || 0, body.my || 0) > 0.05)
-    body.hop = hopUp(body.hop || 1, body.landingSwirl || 0);
+    hopFaster(body.landingSwirl || 0);
   body.landedAt = -9; body.vz = JUMP_V;
   if (actx) sfxUse('kick');
 }
@@ -24389,7 +24404,7 @@ function stepBody(dt) {
       if (skatingNow()) { skateLand(); if (actx) sfxUse('ollie-land'); } // (clean, or a bail: skate.js)
       body.trick = null;
       if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
-        if (moved) body.hop = hopUp(body.hop || 1, body.swirl || 0);
+        if (moved) hopFaster(body.swirl || 0);
         body.swirl = 0; body.buf = -9; body.vz = JUMP_V;
         if (actx) sfxUse('kick');
         return;
@@ -24403,7 +24418,7 @@ function stepBody(dt) {
         else say(fell > 15 ? 'You hit the ground hard. Something in your ankle goes crunch.' : 'Oof. You land hard.', 3);
       }
     }
-  } else if (T - (body.landedAt ?? -9) > HOP_GRACE) body.hop = Math.max(1, (body.hop || 1) - dt * 4); // on the ground: the speed bleeds off
+  } else if (T - (body.landedAt ?? -9) > HOP_KEEP) body.hop = Math.max(1, (body.hop || 1) - dt * 2.5); // on the ground: a moment, then the speed bleeds off
 }
 
 // ---- roofs: no invisible walls. Step across onto the roof next door if it's about level (a storey up or down,
@@ -25121,11 +25136,12 @@ function loop(t) {
       const airborne = body.z > 0 || body.vz > 0;
       if (!airborne && dt > 0) {
         const wx = ix / dt, wy = iy / dt, vx = body.mx || 0, vy = body.my || 0, v = Math.hypot(vx, vy), w = Math.hypot(wx, wy);
-        if (body.hop > 1.001) { // carrying speed from hopping: swing round to where you're going, and a sharp turn costs the speed
-          if (v > 0 && w > 0) body.hop = 1 + (body.hop - 1) * Math.max(0, 1 - (1 - (vx * wx + vy * wy) / (v * w)) * 4 * dt);
-          const k = 1 - Math.exp(-10 * dt); body.mx = vx + (wx - vx) * k; body.my = vy + (wy - vy) * k;
+        if (body.hop > 1.001 && v > 1e-6 && w > 0) { // carrying speed from hopping: at that speed, but swinging round to where you're going (not snapping), and a sharp turn costs the speed
+          body.hop = 1 + (body.hop - 1) * Math.max(0, 1 - (1 - (vx * wx + vy * wy) / (v * w)) * 4 * dt);
+          const va = Math.atan2(vy, vx), turn = clamp(mod(Math.atan2(wy, wx) - va + Math.PI, Math.PI * 2) - Math.PI, -10 * dt, 10 * dt);
+          body.mx = Math.cos(va + turn) * w; body.my = Math.sin(va + turn) * w;
         } else { body.mx = wx; body.my = wy; } // (walking: you go where you're going)
-      } else if (airborne && dt > 0) airStrafe(f, s + lurch, scale / dt, dt);
+      } else if (airborne && dt > 0) { airStrafe(f, s + lurch, scale / dt, dt); if (body.hop > 1.001) airSteer(ix, iy, 3, dt); }
       move(dt > 0 ? body.mx * dt : ix, dt > 0 ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if(mode==='ladder')stepCourierLadder(dt);

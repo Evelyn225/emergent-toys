@@ -85,7 +85,7 @@ function timeSiteRuns() {
   });
 }
 // The night run, at 10pm: down the backs, over the LATE NITE gantry and the footbridge to the ARCADE sign's catwalk;
-// or hop the walkway up to speed and leap the side street off No.299's condenser onto the bar roof.
+// or hop the walkway up to speed, run the last strides to the condenser's edge and leap the side street onto the bar roof.
 function timeNightRuns() {
   paused=true;window.requestAnimationFrame=()=>0;render=()=>{};hud=()=>{};actx=null;
   clearWanted();cars.length=people.length=footCops.length=0;
@@ -93,7 +93,7 @@ function timeNightRuns() {
   (0,eval)('tod=22');
   const prefix=[[179.5,106.5],[178.5,107.4],[178.5,110.5]];
   const safe=[[178.5,117.4],[178.3,119.6],[178.3,122.51],[179.73,122.51],[179.73,123.9],[180.4,123.4],[180.75,123.3]];
-  const leap=[[178.5,117.3,'hop',.1],[179.7,118.5,'hop',.12],[180.55,119.3,'hop',.12],[180.55,121.5,'hop',.05],[180.75,123.3]];
+  const leap=[[178.5,117.3,'hop',.1],[179.7,118.5,'hop',.12],[180.55,121.5,'leap',.05,120],[180.75,123.3]];
   return [['safe',safe],['leap',leap]].map(([name,tail])=>{
     courierJob=null;startCourier('night');needs.health=needs.food=needs.drink=100;sleep=false;
     for(const key of Object.keys(K))K[key]=false;
@@ -102,22 +102,25 @@ function timeNightRuns() {
     enterRoom('courier',{word:'COURIER',cell:[179,103],ret:[179.5,104.2,-Math.PI/2]},[10.3,4.9,0]);
     paused=false;
     const legs=[];
-    // A hop leg keeps jumping on every landing and only stops once it's close, or past its mark.
-    function go(x,y,action,tol=.018) {
-      let frames=0;
+    // A hop leg keeps jumping on every landing and only stops once it's close, or past its mark. A leap leg hops on
+    // while the next hop still lands short of the edge, runs the last strides, and jumps off the edge itself.
+    function go(x,y,action,tol=.018,edge) {
+      let frames=0,leapt=false;
       while(near(px,py,x,y)>tol&&frames++<1500) {
         a=Math.atan2(y-py,x-px);
-        if(action==='hop'&&!(body.z>0||body.vz>0))jump();
+        const down=!(body.z>0||body.vz>0);
+        if(action==='hop'&&down)jump();
+        if(action==='leap'&&down&&!leapt&&(py>=edge-.06||py+Math.hypot(body.mx,body.my)*.75<edge)){leapt=py>=edge-.06;jump();}
         loop(t0+10);
-        if(action==='hop'&&py>y+.05)break;
+        if((action==='hop'||action==='leap')&&py>y+.05)break;
       }
-      const reached=action==='hop'?near(px,py,x,y)<=tol||py>y:near(px,py,x,y)<=tol;
+      const reached=action==='hop'||action==='leap'?near(px,py,x,y)<=tol||py>y:near(px,py,x,y)<=tol;
       legs.push({target:[x,y],reached,at:[px,py],mode,height:roofH});
       return reached;
     }
     go(4,4.9);go(4,1.7);interact();
-    for(const [x,y,action,tol] of [...prefix,...tail]) {
-      if(!go(x,y,action,tol))break;
+    for(const [x,y,action,tol,edge] of [...prefix,...tail]) {
+      if(!go(x,y,action,tol,edge))break;
       if(!action)for(let k=0;k<200&&(body.z>0||body.vz>0);k++)loop(t0+10);
     }
     K.KeyW=false;for(let k=0;k<200&&body.z>0;k++)loop(t0+10);
