@@ -96,7 +96,7 @@ ROOM_DEFS.tower = { grid: boxRoom(14, 10, Object.fromEntries([3, 4, 5, 6, 7, 8, 
     return [BX(2.45, 5, 1.4, 0.4, 0, 1.1, solid(GRAY, { panel: 0.9, trim: 1.04, top: '=', bright: 1.3 }), 0, 1), // the desk, in polished stone
       BX(2.35, 4.4, 0.15, 0.25, 1.1, 1.35, (i, t, L) => { BG[i] = HIT.face === 1 ? C(CYAN, 2.5) : C(GRAY, 1.2); return set(i, HIT.face === 1 && fract(HIT.w * 20) < 0.3 ? '-' : ' ', C(GREEN, 9)), true; }), // the camera monitor
       guard, POT_PLANT(1.6, 1.6, 1.8), POT_PLANT(12.4, 1.6, 1.8), POT_PLANT(1.6, 8.2, 1.5), POT_PLANT(12.4, 8.2, 1.5),
-      BENCHP(12.6, 5, -1, 0), BX(12.75, 5, 0.9, 0.25, 0, 0.45, solid(BRICK, { top: '=' }), 0, 1), // a bench along the far wall
+      SEAT(12.6, 4.6, -1, 0), SEAT(12.6, 5.4, -1, 0), BX(12.75, 5, 0.9, 0.25, 0, 0.45, solid(BRICK, { top: '=' }), 0, 1), // a bench along the far wall
       ...(chance(0.7) ? [{ ...standing(9.5, 2.6, shirt()), face: [0, -1] }] : []), ...(chance(0.5) ? [{ ...standing(4.4, 2.8, shirt()), face: [0, -1] }] : [])]; // waiting for a lift
   } };
 function towerWall(i, u, z, L) { // big stone panels with a bronze reveal between them
@@ -148,7 +148,7 @@ ROOM_DEFS.bellelobby = { grid: boxRoom(9, 9, { '3,0': 'E', '4,0': 'E', '5,0': 'E
   },
   props: r => [POT_PLANT(1.5, 1.5, 1.9), POT_PLANT(7.5, 1.5, 1.9),
     BX(7.3, 4.6, 0.6, 0.25, 0, 0.8, solid(BRICK, { panel: 0.4, top: '=' }), 0, 1), BOUQUET(7.3, 4.6, MAG), // a console table, flowers on it
-    BENCHP(1.4, 6.4, 1, 0), BX(1.3, 6.4, 0.75, 0.28, 0, 0.45, solid(RED, { top: '#' }), 0, 1), // a velvet banquette
+    SEAT(1.4, 6.0, 1, 0), SEAT(1.4, 6.8, 1, 0), BX(1.3, 6.4, 0.75, 0.28, 0, 0.45, solid(RED, { top: '#' }), 0, 1), // a velvet banquette
     ...(chance(0.6) ? [{ ...standing(6.2, 3.2, shirt()), face: [-1, 0] }] : [])] };
 function belleWall(i, u, z, L) { // dark wood panelling below, cream and gold stripes above, a moulded cornice
   if (z > 3.3) { BG[i] = C(WHITE, 2.8 + L * 0.15); return set(i, fract(u * 5) < 0.3 ? '^' : ' ', C(YEL, L * 0.6)), true; }

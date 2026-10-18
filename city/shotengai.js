@@ -162,7 +162,10 @@ const SHOTENGAI_ROOMS = {
       const p = [];
       for (let x = 2; x <= 12; x += 0.85) p.push({ ...pachinkoMachine(x, 1.5, Math.round(x * 3), 1), busy: chance(0.55) });
       for (let x = 2.4; x <= 10.4; x += 0.85) { p.push({ ...pachinkoMachine(x, 4.9, Math.round(x * 5), -1), busy: chance(0.5) }, { ...pachinkoMachine(x, 5.45, Math.round(x * 7), 1), busy: chance(0.5) }); }
-      for (const s of p.slice()) if (s.busy) p.push({ ...sitting(s.cx, s.cy + s.fy * 0.6, shirt(), 0.45), face: [0, -s.fy] });
+      for (const s of p.slice()) { // a stool at every machine (you walk past them; sit, and you're at the machine), somebody on some
+        p.push({ ...STOOL(s.cx, s.cy + s.fy * 0.6, RED, 0.45), walk: true, fx: 0, fy: -s.fy });
+        if (s.busy) p.push({ ...sitting(s.cx, s.cy + s.fy * 0.6, shirt(), 0.45), face: [0, -s.fy] });
+      }
       p.push(...counterBox(12.3, 9.2, 0.9), standing(12.3, 8.6, RED));
       return p;
     } },
