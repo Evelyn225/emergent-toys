@@ -1617,8 +1617,9 @@ test('P to pee, any time: aimed where you look (your view stays put), falls unde
   const reach = () => page.evaluate(() => Math.max(...peeDrops.filter(p => !p.splash).map(p => Math.hypot(rel(p.x - px), rel(p.y - py)))));
   await page.evaluate(() => { pitch = -0.4; }); await page.waitForTimeout(900);
   const low = await reach();
-  await page.evaluate(() => { pitch = 0.4; for (const q of puddles) q.life = 0; stepPee(0); }); await page.waitForTimeout(1200);
-  const high = await reach();
+  await page.evaluate(() => { pitch = 0.4; for (const q of puddles) q.life = 0; stepPee(0); }); await page.waitForTimeout(600);
+  let high = await reach(); // (the higher stream takes a moment to get out there: longer on a busy machine)
+  for (let k = 0; k < 17 && !(high > low * 1.2); k++) { await page.waitForTimeout(200); high = await reach(); }
   assert.ok(high > low * 1.2, `further aimed up (${low.toFixed(3)} -> ${high.toFixed(3)})`);
   assert.deepStrictEqual(await page.evaluate(() => [puddles.length > 0, puddles.every(q => q.z === 0)]), [true, true], 'and it still lands');
   await page.keyboard.press('KeyP'); // cut it off

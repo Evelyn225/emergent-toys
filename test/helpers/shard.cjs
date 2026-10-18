@@ -2,7 +2,7 @@
 // Splits the browser suite across CI runners (--require this; TEST_SHARD=2/4 runs the second of four). One file holds
 // most of the suite's time, so it goes test by test, not file by file: each shard keeps every nth top-level test of
 // every file, counting from a different place in each so files with only a test or two spread out as well. Every test
-// lands in exactly one shard. Without TEST_SHARD it does nothing.
+// runs in exactly one shard (the others list it as skipped). Without TEST_SHARD it does nothing.
 const Module = require('module');
 
 const spec = /^(\d+)\/(\d+)$/.exec(process.env.TEST_SHARD || '');
@@ -15,7 +15,9 @@ if (spec) {
     const real = load.call(this, request, parent, ...rest);
     if (request !== 'node:test' && request !== 'test' || !parent) return real;
     let i = [...parent.filename].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0) % n; // (where this file starts counting)
-    const test = function (...args) { return i++ % n === k ? real.apply(this, args) : Promise.resolve(); };
+    // (another shard's test is still registered, skipped, so a file's before and after hooks pair up even when this
+    // shard has none of its tests: an after that never ran would leave its browser open and the run hung)
+    const test = function (...args) { return i++ % n === k ? real.apply(this, args) : real.call(this, typeof args[0] === 'string' ? args[0] : '', { skip: `shard ${k + 1}/${n}: not this one` }, () => {}); };
     // test(...) and require('node:test').test(...) are both counted; before, after and the rest pass straight through
     return new Proxy(real, { apply: (_, self, args) => test.apply(self, args), get: (t, p) => p === 'test' ? test : t[p] });
   };
