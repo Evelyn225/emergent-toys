@@ -2708,6 +2708,7 @@ test('jobs can be called off from the pause menu: the courier parcel goes back; 
     const p = people.find(q => !q.hidden); pickUp(p);
     openPause(); pauseEl.querySelector('[data-act="cancel-fare"]').click();
     out.fare = [job.ride, p.hidden, !!job, paused];
+    const q = people.find(o => !o.hidden && o !== p); c.x = q.x + 8; c.y = q.y; // (only the people round you are out: cruise past one of them)
     for (let t = 0; t < 20 && !job.hail; t += 0.1) stepTaxiJob(0.1);
     out.next = !!job.hail;
     return out;
