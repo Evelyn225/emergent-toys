@@ -66,13 +66,13 @@ ROOM_DEFS.walkup = { grid: boxRoom(7, 10, { '4,0': 'E', '5,0': 'E' }), light: 0.
     ...(chance(0.5) ? [{ ...standing(1.9, 3.4, shirt()), face: [-1, 0] }] : [])], // a neighbour at the mailboxes
 };
 function walkupWall(i, u, uStep, z, d, mx, my, L) {
-  const tint = walkupTint(room);
-  if (mx === 0 && u > 2.4 && u < 4.4 && z > 1.0 && z < 1.75) { // the mailboxes, a row of little brass doors
+  const tint = walkupTint(room), wu = Math.abs(u); // (u is signed to read left to right: from inside, its size is where along the wall)
+  if (mx === 0 && wu > 2.4 && wu < 4.4 && z > 1.0 && z < 1.75) { // the mailboxes, a row of little brass doors
     BG[i] = C(tint === RED ? RED : BRICK, 1.6 + L * 0.2);
     return set(i, fract(u / 0.4) < 0.1 || fract(z / 0.25) < 0.12 ? '+' : fract(u / 0.4) > 0.75 && fract(z / 0.25) > 0.5 ? '-' : ' ', C(YEL, L * 0.8)), true;
   }
-  if (mx === 0 && wallDoor(i, u, z, 6.2, 0.9, 0, 2.05, BRICK, L)) return true; // 1A
-  if (mx === 0 && wallText(i, u, uStep, z, d, '1A', 6.2, 2.25, 0.14, 0.18, C(YEL, 13))) return true;
+  if (mx === 0 && wallDoor(i, wu, z, 6.2, 0.9, 0, 2.05, BRICK, L)) return true; // 1A
+  if (mx === 0 && wallText(i, u, uStep, z, d, '1A', Math.sign(u) * 6.2, 2.25, 0.14, 0.18, C(YEL, 13))) return true;
   if (z < 1.0) { BG[i] = C(tint, 1 + L * 0.15); return set(i, z > 0.94 ? '=' : fract(u * 2) < 0.04 ? '|' : ' ', C(tint, L * 0.6)), true; } // the dado: tongue and groove
   BG[i] = C(STONE, 1.3 + L * 0.12); return set(i, ' ', 0), true; // painted plaster, a bit tired
 }
@@ -140,8 +140,8 @@ ROOM_DEFS.bellelobby = { grid: boxRoom(9, 9, { '3,0': 'E', '4,0': 'E', '5,0': 'E
     return set(i, a1 < 0.1 && a2 < 0.1 ? '+' : a1 < 0.1 ? '/' : a2 < 0.1 ? '\\' : ' ', C(YEL, L * 1.2));
   },
   wall: (i, u, uStep, z, d, mx, my, L) => {
-    if (mx === 0 && Math.abs(u - 4.5) < 0.7 && z > 0.9 && z < 2.4) { // the gilt mirror
-      if (Math.abs(u - 4.5) > 0.62 || z < 0.98 || z > 2.32) { BG[i] = C(YEL, 4 + L * 0.3); return set(i, '*', C(ORANGE, L)), true; }
+    if (mx === 0 && Math.abs(Math.abs(u) - 4.5) < 0.7 && z > 0.9 && z < 2.4) { // the gilt mirror
+      if (Math.abs(Math.abs(u) - 4.5) > 0.62 || z < 0.98 || z > 2.32) { BG[i] = C(YEL, 4 + L * 0.3); return set(i, '*', C(ORANGE, L)), true; }
       BG[i] = C(CYAN, 1.4); return set(i, fract((u + z) * 2.5) < 0.05 ? '/' : ' ', C(WHITE, 10)), true;
     }
     return belleWall(i, u, z, L);

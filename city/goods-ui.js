@@ -447,7 +447,8 @@ function openInventory() {
     const slot = quickSlots.indexOf(k), name = ITEMS[it.id].name;
     return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
-  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
+  const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
+  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${ink}${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); } };
   invEl.onchange = e => { const s = e.target.closest('[data-quick-item]'); if (s) { assignQuickSlot(+s.dataset.quickItem, +s.value); openInventory(); } };
 }

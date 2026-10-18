@@ -150,10 +150,20 @@ function skateCam(dt) {
 // k: how much bigger. The deck: half length, width, thickness; its middle this high; the kicktails; trucks this far
 // along from the middle; your height on it
 const SB_K = 1.55, SB = { k: SB_K, hl: 0.04 * SB_K, hw: 0.0105 * SB_K, ht: 0.0012 * SB_K, up: 0.0085 * SB_K, tail: 0.006 * SB_K, truck: 0.027 * SB_K, rider: 0.165 };
-let skaterLookMemo = null;
-// whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers
-const skaterLook = () => skaterLookMemo ||= figLook({ hair: 'short', hat: 'beanie', top: 'long', bot: 'pants', bw: 1,
-  col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [ORANGE, 11], hatD: [ORANGE, 7], top: [GREEN, 7], bot: [BLUE, 5], shoe: [WHITE, 13], belt: [GRAY, 2] } });
+let skaterLookMemo = null, skaterLookKey = '';
+// the ink each tattoo is done in (the newest one shows): the rest is blackwork
+const TATTOO_INK = { tattoo_swallow: [BLUE, 6], tattoo_anchor: [BLUE, 5], tattoo_rose: [RED, 7], tattoo_dagger: [RED, 6], tattoo_panther: [GRAY, 2], tattoo_koi: [ORANGE, 9] };
+// whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers. Got some ink? Then
+// a short-sleeved tee, to show it off: the more hours you've sat for, the more of your arms it covers
+function skaterLook() {
+  const key = tattoos.join(',');
+  if (skaterLookMemo && key === skaterLookKey) return skaterLookMemo;
+  const hours = tattoos.reduce((s, id) => s + ITEMS[id].hours, 0);
+  skaterLookKey = key;
+  return skaterLookMemo = figLook({ hair: 'short', hat: 'beanie', top: hours ? 'tee' : 'long', bot: 'pants', bw: 1, ink: hours ? Math.round(clamp(hours / 10, 0.2, 1) * 10) / 10 : 0,
+    col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [ORANGE, 11], hatD: [ORANGE, 7], top: [GREEN, 7], bot: [BLUE, 5], shoe: [WHITE, 13], belt: [GRAY, 2],
+           ink: hours ? TATTOO_INK[tattoos[tattoos.length - 1]] : undefined } });
+}
 function drawSkateBoard(vx, vy, z, yaw, nose, roll) {
   const F = craftFrame(yaw, nose, roll), o = [vx, vy, z + SB.up + Math.abs(Math.sin(roll)) * SB.hw * 0.9]; // (on its edge mid-flip it stands taller)
   const deck = (i, t, L) => {

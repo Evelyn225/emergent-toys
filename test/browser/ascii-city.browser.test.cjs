@@ -2273,6 +2273,19 @@ test('broken into after dark, nobody is left in any shop: the mannequins are dre
   assert.deepStrictEqual(r.kinds, ['records', 'tattoo', 'books', 'barber']);
 }));
 
+test('your tattoos are saved with you, and your skater wears them: short sleeves, ink on both arms', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    paused = true; money = 1000; const before = skaterLook().top;
+    buy('tattoo_anchor'); buy('tattoo_panther'); saveGame();
+    tattoos.length = 0; loadGame();
+    const look = skaterLook();
+    return { before, tattoos: [...tattoos], top: look.top, ink: look.ink };
+  });
+  assert.deepStrictEqual(r.tattoos, ['tattoo_anchor', 'tattoo_panther']);
+  assert.strictEqual(r.before, 'long');
+  assert.ok(r.top === 'tee' && r.ink > 0.3, JSON.stringify(r));
+}));
+
 test('a shop you\'ve broken into: E means the till only at the counter, the way out only by the door', () => withPage(async page => {
   await page.evaluate(() => { enterRoom('store', { word: 'DELI', neon: RED, ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]); });
   const at = (x, y) => page.evaluate(([x, y]) => { px = x; py = y; return [promptText(), eLabel(promptText())]; }, [x, y]);

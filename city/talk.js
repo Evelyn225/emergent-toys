@@ -202,6 +202,7 @@ function roomTalkLine(kind, h = tod) {
   if (h >= 5 && h < 9 && kind !== 'jail') lines.push('Too early for people.', 'Haven\'t had my coffee yet. Speak slowly.');
   if ((h >= 23 || h < 4) && kind !== 'jail') lines.push('Shouldn\'t you be in bed?', 'It\'s late. Why are we both here?');
   if (rain > 0.4 && kind !== 'jail' && kind !== 'station' && kind !== 'train') lines.push('Waiting out the rain. You too?');
+  if (tattoos.length && kind !== 'tattoo') lines.push(`Is that a ${ITEMS[tattoos[tattoos.length - 1]].name}? Nice ink.`, 'Who did your tattoo? I\'ve been wanting one.'); // (they've noticed)
   let line = pick(lines);
   for (let k = 0; k < 4 && line === lastRoomLine; k++) line = pick(lines); // (not the same one twice running)
   return (lastRoomLine = line);

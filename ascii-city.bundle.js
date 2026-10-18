@@ -4305,6 +4305,7 @@ function roomTalkLine(kind, h = tod) {
   if (h >= 5 && h < 9 && kind !== 'jail') lines.push('Too early for people.', 'Haven\'t had my coffee yet. Speak slowly.');
   if ((h >= 23 || h < 4) && kind !== 'jail') lines.push('Shouldn\'t you be in bed?', 'It\'s late. Why are we both here?');
   if (rain > 0.4 && kind !== 'jail' && kind !== 'station' && kind !== 'train') lines.push('Waiting out the rain. You too?');
+  if (tattoos.length && kind !== 'tattoo') lines.push(`Is that a ${ITEMS[tattoos[tattoos.length - 1]].name}? Nice ink.`, 'Who did your tattoo? I\'ve been wanting one.'); // (they've noticed)
   let line = pick(lines);
   for (let k = 0; k < 4 && line === lastRoomLine; k++) line = pick(lines); // (not the same one twice running)
   return (lastRoomLine = line);
@@ -4963,6 +4964,13 @@ const ITEMS = {
   key_car_sports: { name: 'sports car keys', price: 0, kind: 'keys', car: 'car_sports' },
   home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 7000, kind: 'home' },
   home_belle: { name: 'Belle Époque residence', price: 16000, kind: 'home' },
+  // tattoos (the tattoo parlour): not carried, they're on you for good. hours: how long you sit for it; where: on you
+  tattoo_swallow: { name: 'swallow', price: 60, kind: 'tattoo', hours: 1, where: 'on the back of your hand' },
+  tattoo_anchor: { name: 'anchor', price: 80, kind: 'tattoo', hours: 1, where: 'on your forearm' },
+  tattoo_rose: { name: 'rose', price: 120, kind: 'tattoo', hours: 2, where: 'on your other forearm' },
+  tattoo_dagger: { name: 'dagger through a heart', price: 150, kind: 'tattoo', hours: 2, where: 'on your upper arm' },
+  tattoo_panther: { name: 'crawling panther', price: 220, kind: 'tattoo', hours: 3, where: 'climbing up your arm' },
+  tattoo_koi: { name: 'koi half sleeve', price: 480, kind: 'tattoo', hours: 5, where: 'from your elbow to your shoulder, waves and all' },
   // arcade prizes (tickets, not dollars: price is what they'd fetch new, for the pawn shop)
   vhs: { name: 'VHS tape', price: 4, kind: 'gear' },
   yoyo: { name: 'yo-yo', price: 5, kind: 'gear' }, harmonica: { name: 'harmonica', price: 12, kind: 'gear' },
@@ -5024,6 +5032,7 @@ const STOCK_WORD = {
   THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft', 'home_belle'],
   DELICATESSEN: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'], JEWELER: ['jadebangle', 'luckycoin', 'redstring'], ANTIQUES: ['vinyl', 'book', 'harmonica', 'lantern'], TAILOR: ['umbrella'],
+  TATTOO: ['tattoo_swallow', 'tattoo_anchor', 'tattoo_rose', 'tattoo_dagger', 'tattoo_panther', 'tattoo_koi'],
   GAS: ['hotdog', 'coffee', 'candy', 'chips', 'soda', 'energy', 'water', 'cigarettes'], // (the shop, not the pumps: you never need gas)
   'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], 'PET SHOP': ['petcat', 'petdog'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
 };
@@ -5102,6 +5111,7 @@ const heldItem = () => inv[held] || null;
 function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
   if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }
+  if (it.kind === 'tattoo') return getTattoo(id);
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   carryItem({ id, uses: it.uses || 0 });
@@ -5111,6 +5121,18 @@ const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
 // your storage unit: one unit, the same at every STORAGE place in town
 const STORE_SIZE = 30, stored = [], closet = []; // (closet: the stash at home, same rules)
+// your ink (tattoo ids, oldest first): sit in the chair, pay, and the hours go by
+const tattoos = [];
+function getTattoo(id) {
+  const it = ITEMS[id];
+  if (tattoos.includes(id)) return [false, `You've already got the ${it.name}. Pick something new off the wall.`];
+  if (!pay(it.price)) return [false, `The ${it.name} is ${fmt$(it.price)}. Come back when you've saved up.`];
+  tattoos.push(id);
+  for (tod += it.hours; tod >= 24; tod -= 24) dayNum++;
+  return [true, `${it.hours > 1 ? it.hours + ' hours' : 'An hour'} in the chair. The ${it.name}, ${it.where}. It stings, and it's perfect. (${fmt$(it.price)})`];
+}
+// what you could walk off with (not a car, a flat or somebody's needlework)
+const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo'].includes(ITEMS[id].kind));
 const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
 const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
@@ -14436,44 +14458,125 @@ ROOM_DEFS.records = { grid: boxRoom(12, 9), light: 0.75, floor: 'boards', ceil: 
   } };
 Object.assign(ROOM_FOR, { RECORDS: 'records' });
 
-// ---- the tattoo parlour (TATTOO): flash sheets pasted up everywhere, two stations along the back (a black padded
-// bench that tilts like a dentist's, the artist's rolling stool, a lamp on an arm, a tray of ink caps), a black couch
-// to wait on with the portfolios on a table, and the counter by the door
-const tattooBench = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // along x, the head end at -x
-  const vinyl = (i, t, L) => { BG[i] = C(GRAY, (1.5 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (fract(HIT.u * 6) < 0.12 ? '-' : ' ') : HIT.w > 0.58 && HIT.w < 0.62 || HIT.w > 0.91 ? '=' : ' ', C(RED, 9)), true; }; // black vinyl, red piping
-  drum(vx, vy, 0.12, 0, 0.45, CHROME);
-  drawBox(boxAt(vx + 0.15, vy, 1, 0, 0.55, 0.3, 0.45, 0.62), vinyl);
-  drawBox(boxAt(vx - 0.62, vy, Math.cos(0.5), 0, 0.25, 0.3, 0.55, 0.95), vinyl); // the back, tilted up
-  const sx = vx + 0.2, sy = vy + 0.65; // the artist's stool
-  drum(sx, sy, 0.18, 0.4, 0.48, (i, t, L) => { BG[i] = C(GRAY, (1.5 + L * 0.2) * drumLit(0.18)); return set(i, HIT.face === 5 ? 'o' : ' ', C(RED, 8)), true; });
-  drum(sx, sy, 0.03, 0.05, 0.4, CHROME);
-  const lx = vx - 0.7, ly = vy - 0.55; // the lamp on its arm
-  rod(lx, ly, 0, lx, ly, 1.6, 0.015, GRAY, 1.2); rod(lx, ly, 1.6, vx - 0.2, vy - 0.15, 1.45, 0.012, GRAY, 1.2);
-  dot(vx - 0.2, vy - 0.15, 1.42, 0.07, (i, t, L) => { BG[i] = C(WHITE, 12); return set(i, ' ', 0), true; });
-  drawBox(boxAt(vx + 0.75, vy - 0.55, 1, 0, 0.2, 0.15, 0.85, 0.88), solid(GRAY)); // the tray, the ink caps on it
-  for (let k = 0; k < 5; k++) dot(vx + 0.62 + k * 0.065, vy - 0.55, 0.9, 0.018, (i, t, L) => { BG[i] = C(RECORD_COLS[k * 2], 8); return set(i, ' ', 0), true; });
-  rod(vx + 0.75, vy - 0.55, 0, vx + 0.75, vy - 0.55, 0.85, 0.015, GRAY, 1.2);
-}, [0.85, 0.35, 0.95]);
-function tattooWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, 'NO REGRETS', room.W / 2, 2.5, 0.2, 0.3, C(MAG, 15))) return true; // in pink neon
-  if (z > 0.9 && z < 2.3 && !(my === room.H - 1)) { // flash: sheets of designs, a grid of little pictures on each
-    const fu = fract(u / 0.6), fz = fract((z - 0.9) / 0.7);
-    if (fu < 0.06 || fz < 0.07) { BG[i] = C(GRAY, 0.5); return set(i, ' ', 0), true; }
-    BG[i] = C(WHITE, 3.4 + L * 0.15);
-    const h = hash(Math.floor(u * 5), Math.floor(z * 5), 76);
-    return set(i, h > 0.45 ? '*@%&#$<>'[h * 8 | 0] : ' ', C(ITEM_COL[h * 80 & 7], 9)), true;
-  }
-  BG[i] = C(GRAY, 0.5 + L * 0.08); return set(i, ' ', 0), true; // black walls
+// ---- the tattoo parlour (TATTOO), the good kind: black and white floor, oxblood damask walls hung with gilt-framed
+// flash, a big koi mural over the lounge (a chesterfield, a rug, the portfolios on the table, the jukebox), a glass
+// case of piercing jewellery for a counter with ink bottles racked behind it, and three stations down the back: a
+// contoured chair with its leg rest and arm pads, the artist's stool, a ring light, a rolling cart with the machine and
+// a row of ink caps, a sharps bin on the wall, and art-covered screens between them. NO REGRETS in pink neon. You can
+// get tattooed: pick a design off the wall at the counter (goods.js), sit for it, and wear it (skate.js shows it).
+const INK_COLS = [RED, ORANGE, YEL, GREEN, CYAN, BLUE, MAG, GRAY, WHITE];
+// a sheet of flash in its frame: little designs in rows on cream paper. (u, z) across the sheet from its corner, w x h
+const FLASH = [['<3', RED], ['@', RED], ['+-', GRAY], ['v', BLUE], ['$', GREEN], ['*', YEL], ['%', MAG], ['()', CYAN], ['&', RED], ['#', BLUE]];
+function flashSheet(i, u, z, w, h, seed, L) {
+  if (u < 0.05 || z < 0.05 || w - u < 0.05 || h - z < 0.05) { BG[i] = C(YEL, 4.5 + L * 0.2); return set(i, '=', C(ORANGE, 9)), true; } // gilt frame
+  BG[i] = C(STONE, 3.2 + L * 0.1); // the paper
+  const cu = Math.floor(u / 0.17), cz = Math.floor(z / 0.17), fu = fract(u / 0.17), fz = fract(z / 0.17);
+  if (fu < 0.2 || fz < 0.25) return set(i, ' ', 0), true;
+  const [glyph, col] = FLASH[hash(cu, cz, seed) * FLASH.length | 0];
+  return set(i, glyph[Math.floor(fu * glyph.length * 0.99)] || glyph[0], C(col, 7)), true;
 }
-ROOM_DEFS.tattoo = { grid: boxRoom(11, 9), light: 0.75, floor: 'checker', ceil: 'strip', sign: false, neon: true, wall: tattooWall, keeper: [8.9, 6.95],
+// the koi mural: deep water, ripples, a big orange-and-white koi turning, its tail fanned, blossom on the surface
+function koiMural(i, u, z, L) {
+  const cx = 7.4, cz = 1.8, du = u - cx, dz = z - cz, ang = -0.35, ru = du * Math.cos(ang) - dz * Math.sin(ang), rz = du * Math.sin(ang) + dz * Math.cos(ang);
+  const body = (ru / 1.15) ** 2 + (rz / (0.36 * (1 - Math.max(0, ru) * 0.25))) ** 2;
+  if (body < 1) { // the koi: white with orange patches, a scale pattern, an eye near the head
+    if (Math.hypot(ru - 0.85, rz - 0.08) < 0.05) { BG[i] = C(GRAY, 0.4); return set(i, ' ', 0), true; }
+    const patch = noise(ru * 2.6 + 3, rz * 3, 81) > 0.45;
+    BG[i] = patch ? C(ORANGE, 7 + L * 0.2) : C(WHITE, 8 + L * 0.2);
+    return set(i, fract(ru * 9 + Math.abs(rz) * 5) < 0.3 ? ')' : ' ', C(patch ? RED : STONE, 8)), true;
+  }
+  const tu = -ru - 1.05, tail = tu > 0 && tu < 0.55 && Math.abs(rz) < tu * 0.9 + 0.05; // the tail, fanned out behind
+  if (tail) { BG[i] = C(ORANGE, 6 + L * 0.2); return set(i, fract(rz * 8) < 0.3 ? '/' : ' ', C(RED, 9)), true; }
+  for (const sg of [1, -1]) if (Math.hypot(ru - 0.3, rz - sg * 0.45) < 0.16) { BG[i] = C(ORANGE, 6); return set(i, '~', C(WHITE, 10)), true; } // fins
+  if (hash(Math.floor(u * 4), Math.floor(z * 4), 82) > 0.93 && z > 2.3) { BG[i] = C(BLUE, 2.2); return set(i, '*', C(MAG, 13)), true; } // blossom, floating
+  BG[i] = C(BLUE, 1.5 + z * 0.35 + L * 0.1); // the water, lighter toward the top
+  return set(i, fract(u * 1.4 + Math.sin(z * 5) * 0.3) < 0.06 ? '~' : ' ', C(CYAN, 6)), true;
+}
+function tattooWall(i, u, uStep, z, d, mx, my, L) {
+  const W = room.W, H = room.H;
+  if (z > 2.95) { BG[i] = C(GRAY, 0.4); return set(i, ' ', 0), true; } // the cornice, in shadow
+  if (z < 1.0) { BG[i] = C(GRAY, 0.5 + L * 0.06); return set(i, z > 0.95 ? '=' : z < 0.1 ? '_' : ' ', C(YEL, z > 0.95 ? 9 : 2)), true; } // black wainscot, a brass rail
+  if (backWall(my)) {
+    if (z > 2.35 && z < 2.85) { // NO REGRETS, in pink neon, a glow round it
+      if (wallText(i, u, uStep, z, d, 'NO REGRETS', W / 2, 2.6, 0.22, 0.34, C(WHITE, 15))) { BG[i] = C(MAG, 9); return true; }
+      if (Math.abs(u - W / 2) < 1.4) { BG[i] = C(MAG, 2.4); return set(i, ' ', 0), true; }
+    }
+    for (const sx of [2.6, 7, 11.4]) { // over each station: a mirror, two flash sheets either side
+      if (Math.abs(u - sx) < 0.42 && z > 1.25 && z < 2.25) { if (Math.abs(u - sx) > 0.38 || z < 1.29 || z > 2.21) { BG[i] = C(YEL, 4.5); return set(i, '=', C(ORANGE, 9)), true; } BG[i] = C(CYAN, 1.3); return set(i, fract((u + z) * 3) < 0.05 ? '/' : ' ', C(WHITE, 11)), true; }
+      for (const e of [-1, 1]) { const fx = sx + e * 0.95 - 0.35; if (u > fx && u < fx + 0.7 && z > 1.3 && z < 2.2) return flashSheet(i, u - fx, z - 1.3, 0.7, 0.9, Math.round(sx * 3 + e), L); }
+    }
+  }
+  if (leftWall(mx) && -u > 4.9 && -u < 9.9 && z < 2.95) return koiMural(i, -u, z, L); // over the lounge (from inside, u runs the other way along this wall)
+  if (rightWall(mx) && u > 5.6 && u < 9.6) { // behind the counter: WALK-INS WELCOME, and the ink, racked by colour
+    if (z > 2.45 && wallText(i, u, uStep, z, d, 'WALK-INS WELCOME', 7.6, 2.62, 0.13, 0.22, C(YEL, 15))) { BG[i] = C(GRAY, 0.6); return true; }
+    if (z > 1.15 && z < 2.3) {
+      if (fract((z - 1.15) / 0.38) < 0.14) { BG[i] = C(BRICK, 1.6); return set(i, '=', C(WARM, L)), true; } // the shelves
+      const k = Math.floor(u / 0.13), col = INK_COLS[hash(k, Math.floor((z - 1.15) / 0.38), 83) * INK_COLS.length | 0];
+      if (fract(u / 0.13) < 0.25) { BG[i] = C(GRAY, 0.6); return set(i, ' ', 0), true; }
+      BG[i] = C(col, 2.2 + L * 0.2); return set(i, fract((z - 1.15) / 0.38) > 0.7 ? '^' : 'U', C(WHITE, 9)), true; // a bottle, its cap
+    }
+  }
+  if (z > 1.25 && z < 2.3) { // gilt-framed flash, salon-style, everywhere else
+    const fw = 0.75, fh = 0.85, cu = Math.floor(u / 1.0), fu = u - cu * 1.0 - 0.12, fz = z - 1.3 - (cu & 1) * 0.08;
+    if (fu > 0 && fu < fw && fz > 0 && fz < fh) return flashSheet(i, fu, fz, fw, fh, cu * 7 + mx * 3 + my, L);
+  }
+  BG[i] = C(BRICK, 1.0 + L * 0.12); // oxblood damask
+  return set(i, (Math.floor(u * 5) + Math.floor(z * 5)) % 3 === 0 && fract(u * 5) > 0.5 ? '%' : ' ', C(RED, L * 0.35)), true;
+}
+// a station, the chair along x (its head end at -x): what everything at it is made of, and where
+const vinyl = (i, t, L) => { BG[i] = C(GRAY, (1.5 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (fract(HIT.u * 6) < 0.12 ? '-' : ' ') : '=', C(RED, HIT.face === 5 ? 6 : 9)), true; }; // black vinyl, red piping
+const tattooStation = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
+  drum(vx + 0.1, vy, 0.22, 0, 0.06, CHROME); drum(vx + 0.1, vy, 0.08, 0.06, 0.48, CHROME); // the hydraulic pedestal
+  drawBox(boxAt(vx + 0.1, vy, 1, 0, 0.36, 0.28, 0.48, 0.62), vinyl); // the seat
+  drawBox(boxAt(vx - 0.5, vy, Math.cos(0.55), 0, 0.3, 0.27, 0.6, 1.0), vinyl); // the back, tilted up
+  drawBox(boxAt(vx - 0.86, vy, 1, 0, 0.08, 0.15, 1.0, 1.12), vinyl); // the headrest
+  drawBox(boxAt(vx + 0.68, vy, Math.cos(-0.3), 0, 0.26, 0.24, 0.32, 0.48), vinyl); // the leg rest, angled down
+  for (const e of [-1, 1]) { drawBox(boxAt(vx - 0.05, vy + e * 0.42, 1, 0, 0.32, 0.07, 0.68, 0.76), vinyl); rod(vx - 0.05, vy + e * 0.36, 0.55, vx - 0.05, vy + e * 0.42, 0.68, 0.012, GRAY, 1.3); } // the arm pads
+  const sx = vx + 0.25, sy = vy + 0.75; // the artist's stool
+  drum(sx, sy, 0.19, 0.44, 0.52, (i, t, L) => { BG[i] = C(GRAY, (1.5 + L * 0.2) * drumLit(0.19)); return set(i, HIT.face === 5 ? 'o' : ' ', C(RED, 8)), true; });
+  drum(sx, sy, 0.03, 0.06, 0.44, CHROME); drum(sx, sy, 0.2, 0, 0.06, CHROME);
+  const lx = vx - 0.75, ly = vy - 0.55; // the ring light on its stand, glowing
+  rod(lx, ly, 0, lx, ly, 1.45, 0.012, GRAY, 1.2);
+  for (let k = 0; k < 14; k++) { const t = k / 14 * Math.PI * 2; dot(lx + Math.cos(t) * 0.17 * 0.3, ly + Math.cos(t) * 0.17 * 0.95, 1.62 + Math.sin(t) * 0.17, 0.022, (i, t2, L) => { BG[i] = C(WHITE, 14); return set(i, ' ', 0), true; }); }
+  const cx = vx + 0.75, cy = vy - 0.6; // the rolling cart: two chrome shelves, the tray on top
+  for (const e of [-1, 1]) for (const f of [-1, 1]) rod(cx + e * 0.2, cy + f * 0.15, 0.05, cx + e * 0.2, cy + f * 0.15, 0.85, 0.008, GRAY, 1.4);
+  drawBox(boxAt(cx, cy, 1, 0, 0.22, 0.17, 0.35, 0.37), CHROME); drawBox(boxAt(cx, cy, 1, 0, 0.22, 0.17, 0.85, 0.87), CHROME);
+  for (let k = 0; k < 7; k++) dot(cx - 0.15 + k * 0.05, cy - 0.08, 0.89, 0.016, (i, t, L) => { BG[i] = C(INK_COLS[k], 9); return set(i, ' ', 0), true; }); // the ink caps
+  rod(cx + 0.02, cy + 0.06, 0.885, cx + 0.16, cy + 0.03, 0.9, 0.012, GRAY, 1.6); // the machine
+  drum(cx - 0.12, cy + 0.07, 0.035, 0.87, 1.02, (i, t, L) => { BG[i] = C(CYAN, 3); return set(i, ' ', 0), true; }); // green soap, in its spray bottle
+  drum(cx + 0.14, cy - 0.08, 0.04, 0.37, 0.6, (i, t, L) => { BG[i] = C(WHITE, 8 * drumLit(0.04)); return set(i, ' ', 0), true; }); // the paper towel, on the shelf below
+  drawBox(boxAt(vx - 0.2, vy - 0.93, 1, 0, 0.1, 0.06, 1.15, 1.35), (i, t, L) => { BG[i] = C(RED, 5); return set(i, HIT.face === 4 && Math.abs(HIT.w - 1.3) < 0.02 ? '!' : ' ', C(YEL, 14)), true; }); // the sharps bin, on the wall
+}, [1.0, 0.45, 1.1]);
+// the screens between stations: tall black panels, a framed sheet of flash on each face
+const tattooScreen = (x, y0, y1) => BX(x, (y0 + y1) / 2, (y1 - y0) / 2, 0.04, 0, 1.95, (i, t, L) => {
+  const f = HIT.face, u = HIT.u + (y1 - y0) / 2, w = HIT.w;
+  if ((f === 3 || f === 4) && u > 0.2 && u < 1.0 && w > 0.9 && w < 1.8) return flashSheet(i, u - 0.2, w - 0.9, 0.8, 0.9, Math.round(x * 10) + f, L);
+  BG[i] = C(GRAY, (0.7 + L * 0.08) * shadeFace(f)); return set(i, f === 5 ? '=' : ' ', C(YEL, 6)), true;
+}, 0, 1);
+// the chesterfield: oxblood leather, buttoned all over
+const chesterfield = (x, y, hl) => [BX(x, y, hl, 0.42, 0, 0.45, (i, t, L) => { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 && fract(HIT.u * 4) < 0.15 ? '.' : ' ', C(GRAY, 1)), true; }, 0, 1),
+  BX(x - 0.36, y, hl, 0.1, 0.45, 0.85, (i, t, L) => { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, fract(HIT.u * 4) < 0.15 && fract(HIT.w * 5) < 0.3 ? '.' : ' ', C(GRAY, 1)), true; }, 0, 1),
+  ...[-1, 1].map(e => BX(x, y + e * hl, 0.42, 0.1, 0, 0.7, solid(BRICK, { top: '=' }), 0, 1))];
+// the artists: tees, both arms done, every one a bit different
+const artistLook = seed => figStreetLook(seed, [GRAY, RED, GREEN, BLUE][seed & 3], GRAY, seasonIdx(), { top: 'tee', bot: 'pants', ink: 0.8 + (seed % 3) * 0.1,
+  col: { ...figStreetLook(seed, GRAY, GRAY).col, top: [[GRAY, 2], [GRAY, 3], [RED, 3], [GREEN, 3]][seed & 3], ink: [[GRAY, 2], [BLUE, 4], [GREEN, 4], [RED, 4]][(seed >> 2) & 3] } });
+const artist = (x, y, seed, o) => figProp(x, y, artistLook(seed), o);
+ROOM_DEFS.tattoo = { grid: boxRoom(14, 11), light: 0.85, floor: 'checker', ceil: 'pendant', height: 3.1, sign: false, neon: true, wall: tattooWall, keeper: [10.2, 6.75],
   props: r => {
-    const p = [tattooBench(3.0, 2.0), tattooBench(7.4, 2.0),
-      BX(8.9, 6.3, 1.0, 0.3, 0, 1.0, solid(GRAY, { panel: 0.5, trim: 0.96, top: '=' })), { ...standing(8.9, 6.95, r.neon), face: [0, -1] }, // the counter, and behind it
-      BX(8.5, 6.3, 0.2, 0.15, 1.0, 1.06, solid(RED, { top: '=' })), BX(9.2, 6.3, 0.2, 0.15, 1.0, 1.08, solid(BLUE, { top: '=' })), // portfolios on it
-      BENCHP(1.4, 5.6, 1, 0), BX(1.3, 5.6, 1.0, 0.3, 0, 0.45, solid(GRAY, { top: ' ' }), 0, 1), BX(1.05, 5.6, 1.0, 0.07, 0.45, 0.9, solid(GRAY), 0, 1), // the couch
-      BX(2.3, 5.6, 0.3, 0.4, 0, 0.4, solid(BRICK, { top: '=' })), BX(2.3, 5.5, 0.15, 0.12, 0.4, 0.44, solid(MAG, { top: '#' }))]; // the low table, a binder on it
-    for (const x of [3.0, 7.4]) if (chance(0.6)) p.push({ ...sitting(x + 0.2, 2.65, shirt(), 0.48), face: [0, -1] }, { ...sitting(x + 0.1, 2.0, shirt(), 0.62), face: [0, 1] }); // the artist at work, someone gritting their teeth
-    if (chance(0.5)) p.push({ ...sitting(1.4, 5.6, shirt(), 0.45), face: [1, 0] }); // waiting their turn
+    const p = [tattooStation(2.6, 2.3), tattooStation(7.0, 2.3), tattooStation(11.4, 2.3), tattooScreen(4.8, 1, 3.6), tattooScreen(9.2, 1, 3.6),
+      ...glassCase(10.2, 7.45, 1.5, 0.34, 1.0, caseGoods('o.oO*', [YEL, WHITE, GRAY, CYAN], true, 84), GRAY), // the counter: rings, studs, barbells
+      { ...artist(10.2, 6.75, (r.cell ? r.cell[0] * 31 + r.cell[1] : 7) | 0, { face: [0, 1] }) }, // behind it
+      BX(11.2, 7.45, 0.18, 0.15, 1.0, 1.24, (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, HIT.face === 4 ? '$' : '#', C(GREEN, L)), true; }), // the till
+      BX(9.3, 7.4, 0.14, 0.2, 1.0, 1.08, solid(GRAY, { top: '#' })), BX(9.3, 7.4, 0.14, 0.2, 1.08, 1.14, solid(RED, { top: '=' })), // portfolios
+      ROOM_MODEL(9.8, 7.5, (vx, vy) => drum(vx, vy, 0.07, 1.0, 1.18, (i, t, L) => { BG[i] = C(CYAN, 1); const k = hash(Math.floor(HIT.u * 40), Math.floor(HIT.w * 30), 85); return set(i, k > 0.55 ? 'o' : ' ', C(INK_COLS[k * 9 | 0], 13)), true; })), // a jar of lollipops
+      ...chesterfield(1.4, 8.0, 1.2), JUKEBOX(1.35, 5.6, 1, 0), POT_PLANT(5.4, 9.4, 1.5),
+      BX(2.75, 8.0, 0.35, 0.55, 0, 0.42, solid(GRAY, { top: '=' }), 0, 1), BX(2.75, 7.8, 0.12, 0.16, 0.42, 0.47, solid(MAG, { top: '#' })), BX(2.7, 8.3, 0.12, 0.16, 0.42, 0.46, solid(BLUE, { top: '#' })), // the low table and its binders
+      BX(2.6, 8.0, 1.25, 1.0, 0, 0.012, (i, t, L) => { const e = Math.min(1.25 - Math.abs(HIT.u), 1.0 - Math.abs(HIT.v)); BG[i] = C(e < 0.12 ? YEL : RED, e < 0.12 ? 3 : 1.6 + L * 0.2); return set(i, e > 0.12 && fract((HIT.u + HIT.v) * 3) < 0.15 ? '+' : ' ', C(ORANGE, 6)), true; }, 0, 1)]; // the rug
+    let seed = 11;
+    for (const sx of [2.6, 7.0, 11.4]) if (chance(0.55)) p.push( // someone in the chair, and their artist hunched over the work
+      { ...sitting(sx - 0.2, 2.3, shirt(), 0.62), face: [1, 0] }, artist(sx + 0.25, 3.05, seed++, { pose: 'sit6', face: [0, -1] }));
+    if (chance(0.6)) p.push({ ...sitting(1.45, 8.3, shirt(), 0.45), face: [1, 0] }); // waiting their turn, flicking through a binder
+    if (chance(0.4)) p.push({ ...standing(4.2, 6.2, shirt()), face: [-1, 0] }); // looking at the mural
     return p;
   } };
 Object.assign(ROOM_FOR, { TATTOO: 'tattoo' });
@@ -14917,13 +15020,13 @@ ROOM_DEFS.walkup = { grid: boxRoom(7, 10, { '4,0': 'E', '5,0': 'E' }), light: 0.
     ...(chance(0.5) ? [{ ...standing(1.9, 3.4, shirt()), face: [-1, 0] }] : [])], // a neighbour at the mailboxes
 };
 function walkupWall(i, u, uStep, z, d, mx, my, L) {
-  const tint = walkupTint(room);
-  if (mx === 0 && u > 2.4 && u < 4.4 && z > 1.0 && z < 1.75) { // the mailboxes, a row of little brass doors
+  const tint = walkupTint(room), wu = Math.abs(u); // (u is signed to read left to right: from inside, its size is where along the wall)
+  if (mx === 0 && wu > 2.4 && wu < 4.4 && z > 1.0 && z < 1.75) { // the mailboxes, a row of little brass doors
     BG[i] = C(tint === RED ? RED : BRICK, 1.6 + L * 0.2);
     return set(i, fract(u / 0.4) < 0.1 || fract(z / 0.25) < 0.12 ? '+' : fract(u / 0.4) > 0.75 && fract(z / 0.25) > 0.5 ? '-' : ' ', C(YEL, L * 0.8)), true;
   }
-  if (mx === 0 && wallDoor(i, u, z, 6.2, 0.9, 0, 2.05, BRICK, L)) return true; // 1A
-  if (mx === 0 && wallText(i, u, uStep, z, d, '1A', 6.2, 2.25, 0.14, 0.18, C(YEL, 13))) return true;
+  if (mx === 0 && wallDoor(i, wu, z, 6.2, 0.9, 0, 2.05, BRICK, L)) return true; // 1A
+  if (mx === 0 && wallText(i, u, uStep, z, d, '1A', Math.sign(u) * 6.2, 2.25, 0.14, 0.18, C(YEL, 13))) return true;
   if (z < 1.0) { BG[i] = C(tint, 1 + L * 0.15); return set(i, z > 0.94 ? '=' : fract(u * 2) < 0.04 ? '|' : ' ', C(tint, L * 0.6)), true; } // the dado: tongue and groove
   BG[i] = C(STONE, 1.3 + L * 0.12); return set(i, ' ', 0), true; // painted plaster, a bit tired
 }
@@ -14991,8 +15094,8 @@ ROOM_DEFS.bellelobby = { grid: boxRoom(9, 9, { '3,0': 'E', '4,0': 'E', '5,0': 'E
     return set(i, a1 < 0.1 && a2 < 0.1 ? '+' : a1 < 0.1 ? '/' : a2 < 0.1 ? '\\' : ' ', C(YEL, L * 1.2));
   },
   wall: (i, u, uStep, z, d, mx, my, L) => {
-    if (mx === 0 && Math.abs(u - 4.5) < 0.7 && z > 0.9 && z < 2.4) { // the gilt mirror
-      if (Math.abs(u - 4.5) > 0.62 || z < 0.98 || z > 2.32) { BG[i] = C(YEL, 4 + L * 0.3); return set(i, '*', C(ORANGE, L)), true; }
+    if (mx === 0 && Math.abs(Math.abs(u) - 4.5) < 0.7 && z > 0.9 && z < 2.4) { // the gilt mirror
+      if (Math.abs(Math.abs(u) - 4.5) > 0.62 || z < 0.98 || z > 2.32) { BG[i] = C(YEL, 4 + L * 0.3); return set(i, '*', C(ORANGE, L)), true; }
       BG[i] = C(CYAN, 1.4); return set(i, fract((u + z) * 2.5) < 0.05 ? '/' : ' ', C(WHITE, 10)), true;
     }
     return belleWall(i, u, z, L);
@@ -22234,7 +22337,8 @@ function openInventory() {
     const slot = quickSlots.indexOf(k), name = ITEMS[it.id].name;
     return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
-  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
+  const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
+  showPanel(invEl, `<h1>Carrying</h1><p class="sub">${fmt$(money)} on you &middot; ${inv.length}/${INV_SIZE}</p>${ink}${rows_}<p class="hint">Click an item to hold it; assign quick slots here. 1-8 select &middot; Q use &middot; X drop &middot; I / Esc close</p>`);
   invEl.onclick = e => { const b = e.target.closest('[data-slot]'); if (b) { holdSlot(+b.dataset.slot); openInventory(); } };
   invEl.onchange = e => { const s = e.target.closest('[data-quick-item]'); if (s) { assignQuickSlot(+s.dataset.quickItem, +s.value); openInventory(); } };
 }
@@ -24198,13 +24302,13 @@ function pickpocket(p) {
   });
 }
 // shoplifting: in a shop with its clerk at the counter and something on sale
-const canShoplift = () => mode === 'room' && !room.burgled && room.def.keeper && stockFor(room.kind, room.word).length && !room.caught;
+const canShoplift = () => mode === 'room' && !room.burgled && room.def.keeper && stealable(stockFor(room.kind, room.word)).length && !room.caught;
 function shoplift() {
   startCrime('shoplift', ok => {
     if (ok === 'abort') return;
     if (ok) {
       if (inv.length >= INV_SIZE) return say("Your bag is full.");
-      const id = pick(stockFor(room.kind, room.word)); carryItem({ id, uses: ITEMS[id].uses || 0 });
+      const id = pick(stealable(stockFor(room.kind, room.word))); carryItem({ id, uses: ITEMS[id].uses || 0 });
       return say(`You slip ${aOrSome(ITEMS[id].name)} into your coat.`, 3);
     }
     room.caught = true; say('"HEY! Put that back! I\'m calling the police."', 4);
@@ -24265,7 +24369,7 @@ function crackVault() {
   });
 }
 function grabStock() {
-  const stock = stockFor(room.kind, room.word);
+  const stock = stealable(stockFor(room.kind, room.word));
   if (!stock.length) return say('Nothing worth taking.');
   if (room.loot >= 4) return say("You've cleaned the place out.");
   if (inv.length >= INV_SIZE) return say('Your bag is full.');
@@ -24725,10 +24829,20 @@ function skateCam(dt) {
 // k: how much bigger. The deck: half length, width, thickness; its middle this high; the kicktails; trucks this far
 // along from the middle; your height on it
 const SB_K = 1.55, SB = { k: SB_K, hl: 0.04 * SB_K, hw: 0.0105 * SB_K, ht: 0.0012 * SB_K, up: 0.0085 * SB_K, tail: 0.006 * SB_K, truck: 0.027 * SB_K, rider: 0.165 };
-let skaterLookMemo = null;
-// whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers
-const skaterLook = () => skaterLookMemo ||= figLook({ hair: 'short', hat: 'beanie', top: 'long', bot: 'pants', bw: 1,
-  col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [ORANGE, 11], hatD: [ORANGE, 7], top: [GREEN, 7], bot: [BLUE, 5], shoe: [WHITE, 13], belt: [GRAY, 2] } });
+let skaterLookMemo = null, skaterLookKey = '';
+// the ink each tattoo is done in (the newest one shows): the rest is blackwork
+const TATTOO_INK = { tattoo_swallow: [BLUE, 6], tattoo_anchor: [BLUE, 5], tattoo_rose: [RED, 7], tattoo_dagger: [RED, 6], tattoo_panther: [GRAY, 2], tattoo_koi: [ORANGE, 9] };
+// whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers. Got some ink? Then
+// a short-sleeved tee, to show it off: the more hours you've sat for, the more of your arms it covers
+function skaterLook() {
+  const key = tattoos.join(',');
+  if (skaterLookMemo && key === skaterLookKey) return skaterLookMemo;
+  const hours = tattoos.reduce((s, id) => s + ITEMS[id].hours, 0);
+  skaterLookKey = key;
+  return skaterLookMemo = figLook({ hair: 'short', hat: 'beanie', top: hours ? 'tee' : 'long', bot: 'pants', bw: 1, ink: hours ? Math.round(clamp(hours / 10, 0.2, 1) * 10) / 10 : 0,
+    col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [ORANGE, 11], hatD: [ORANGE, 7], top: [GREEN, 7], bot: [BLUE, 5], shoe: [WHITE, 13], belt: [GRAY, 2],
+           ink: hours ? TATTOO_INK[tattoos[tattoos.length - 1]] : undefined } });
+}
 function drawSkateBoard(vx, vy, z, yaw, nose, roll) {
   const F = craftFrame(yaw, nose, roll), o = [vx, vy, z + SB.up + Math.abs(Math.sin(roll)) * SB.hw * 0.9]; // (on its edge mid-flip it stands taller)
   const deck = (i, t, L) => {
@@ -24835,7 +24949,7 @@ function noteStreet() {
 function saveGame() {
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
-  const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet),
+  const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
@@ -24850,6 +24964,7 @@ function loadGame() {
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
+  tattoos.length = 0; for (const id of d.tattoos || []) if (ITEMS[id] && ITEMS[id].kind === 'tattoo' && !tattoos.includes(id)) tattoos.push(id);
   quickSlots.fill(-1);
   if (Array.isArray(d.quickSlots)) {
     for (let s = 0; s < QUICK_SLOTS; s++) { const k = d.quickSlots[s]; if (Number.isInteger(k) && k >= 0 && k < inv.length && !quickSlots.includes(k)) quickSlots[s] = k; }

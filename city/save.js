@@ -10,7 +10,7 @@ function noteStreet() {
 function saveGame() {
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
-  const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet),
+  const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
@@ -25,6 +25,7 @@ function loadGame() {
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
+  tattoos.length = 0; for (const id of d.tattoos || []) if (ITEMS[id] && ITEMS[id].kind === 'tattoo' && !tattoos.includes(id)) tattoos.push(id);
   quickSlots.fill(-1);
   if (Array.isArray(d.quickSlots)) {
     for (let s = 0; s < QUICK_SLOTS; s++) { const k = d.quickSlots[s]; if (Number.isInteger(k) && k >= 0 && k < inv.length && !quickSlots.includes(k)) quickSlots[s] = k; }

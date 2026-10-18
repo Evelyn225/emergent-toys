@@ -128,13 +128,13 @@ function pickpocket(p) {
   });
 }
 // shoplifting: in a shop with its clerk at the counter and something on sale
-const canShoplift = () => mode === 'room' && !room.burgled && room.def.keeper && stockFor(room.kind, room.word).length && !room.caught;
+const canShoplift = () => mode === 'room' && !room.burgled && room.def.keeper && stealable(stockFor(room.kind, room.word)).length && !room.caught;
 function shoplift() {
   startCrime('shoplift', ok => {
     if (ok === 'abort') return;
     if (ok) {
       if (inv.length >= INV_SIZE) return say("Your bag is full.");
-      const id = pick(stockFor(room.kind, room.word)); carryItem({ id, uses: ITEMS[id].uses || 0 });
+      const id = pick(stealable(stockFor(room.kind, room.word))); carryItem({ id, uses: ITEMS[id].uses || 0 });
       return say(`You slip ${aOrSome(ITEMS[id].name)} into your coat.`, 3);
     }
     room.caught = true; say('"HEY! Put that back! I\'m calling the police."', 4);
@@ -195,7 +195,7 @@ function crackVault() {
   });
 }
 function grabStock() {
-  const stock = stockFor(room.kind, room.word);
+  const stock = stealable(stockFor(room.kind, room.word));
   if (!stock.length) return say('Nothing worth taking.');
   if (room.loot >= 4) return say("You've cleaned the place out.");
   if (inv.length >= INV_SIZE) return say('Your bag is full.');

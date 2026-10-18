@@ -5,7 +5,7 @@
 // Units: sprite pixels; a standing adult's head is FIG_TALL high. Body frame: x their right, y ahead of them, z up.
 const FIG_W = 29, FIG_H = 34, FIG_TALL = 26.45, FIG_VIEWS = 16;
 const FR = Object.fromEntries(['HAIR', 'HAIR_D', 'SKIN', 'SKIN_D', 'EYE', 'TOP', 'TOP_D', 'INNER', 'BOT', 'BOT_D', 'POCKET', 'BELT',
-  'BUCKLE', 'SHOE', 'HAT', 'HAT_D', 'BADGE', 'CAPBADGE', 'PACK', 'PACK_D', 'STRAP', 'SHADES', 'TIE', 'MIC', 'TIGHTS'].map((k, i) => [k, i + 1]));
+  'BUCKLE', 'SHOE', 'HAT', 'HAT_D', 'BADGE', 'CAPBADGE', 'PACK', 'PACK_D', 'STRAP', 'SHADES', 'TIE', 'MIC', 'TIGHTS', 'INK'].map((k, i) => [k, i + 1]));
 const FIG_ROLES = Object.keys(FR).length + 1;
 // a detail one pixel across, and what it reads as once a pixel is smaller than a screen cell (or it would flicker)
 const FIG_COARSE = new Uint8Array(FIG_ROLES);
@@ -164,8 +164,11 @@ function figBody(look, key) {
     decals.push({ p: HU(n[0] * hr[0], n[1] * hr[1], n[2] * hr[2]), n: fNorm(fAdd(fMul(ex, n[0]), fAdd(fMul(ey, n[1]), fMul(ez, n[2])))), role: R.EYE, part: parts.indexOf(head) });
   }
   // the arms
-  const sleeve = FIG_SLEEVELESS.has(top) ? () => R.SKIN : top === 'tee' || top === 'dress' ? h => h.s < 0.55 ? R.TOP_D : R.SKIN : () => R.TOP_D;
-  const fore = FIG_LONG.has(top) ? () => R.TOP_D : () => R.SKIN;
+  // tattoos (look.ink: how much of the bare arm they cover, 0..1): bold shapes wrapping round, more of the arm the more there is
+  const inked = h => look.ink > 0 && fract(h.s * 3.2 + Math.atan2(h.n[1], h.n[0]) * 0.32 + (h.n[2] > 0 ? 0.13 : 0)) < 0.25 + look.ink * 0.55 && h.s > 1 - look.ink * 1.6;
+  const bare = h => inked(h) ? R.INK : R.SKIN;
+  const sleeve = FIG_SLEEVELESS.has(top) ? bare : top === 'tee' || top === 'dress' ? h => h.s < 0.55 ? R.TOP_D : bare(h) : () => R.TOP_D;
+  const fore = FIG_LONG.has(top) ? () => R.TOP_D : bare;
   for (const [k, sg] of look.form ? [] : [[0, 1], [1, -1]]) {
     const [up, ua, fp, fa] = P.arms[k], toU = d => fAdd(fMul(ex, d[0]), fAdd(fMul(ey, d[1]), fMul(ez, d[2])));
     const sh = U(sg * 4.05 * bw, 0, 6.35), du = toU(fLimb(up, ua, sg)), df = toU(fLimb(fp, fa, sg));
@@ -297,14 +300,14 @@ function figLook(o) {
   const col = { hair: [GRAY, 1], skin: [SKIN, 13], top: [GRAY, 8], inner: [WHITE, 12], bot: [BLUE, 5], belt: [GRAY, 1], shoe: [GRAY, 1],
                 hat: [GRAY, 3], hatD: [GRAY, 1], pack: [GRAY, 4], tie: [GRAY, 1], tights: [GRAY, 2], ...o.col };
   const look = { hair: 'short', top: 'tee', bot: 'pants', bw: 1, ...o, col };
-  look.shape = ['hair', 'hat', 'top', 'bot', 'pack', 'shades', 'holster', 'badge', 'mic', 'tights', 'kid', 'bw', 'form'].map(k => look[k] ?? '').join(',');
+  look.shape = ['hair', 'hat', 'top', 'bot', 'pack', 'shades', 'holster', 'badge', 'mic', 'tights', 'kid', 'bw', 'form', 'ink'].map(k => look[k] ?? '').join(',');
   // per role: palette base and brightness (shadow roles darker)
   const B = new Uint8Array(FIG_ROLES), Lv = new Float32Array(FIG_ROLES), put = (role, [b, l], k = 1) => { B[FR[role]] = b; Lv[FR[role]] = l * k; };
   put('HAIR', col.hair); put('HAIR_D', col.hair, 0.65); put('SKIN', col.skin); put('SKIN_D', col.skin, 0.72); put('EYE', [GRAY, 0]);
   put('TOP', col.top); put('TOP_D', col.top, 0.68); put('INNER', col.inner); put('BOT', col.bot); put('BOT_D', col.bot, 0.68);
   put('POCKET', col.bot, 0.45); put('BELT', col.belt); put('BUCKLE', [YEL, 12]); put('SHOE', col.shoe); put('HAT', col.hat); put('HAT_D', col.hatD);
   put('BADGE', [YEL, 15]); put('CAPBADGE', [YEL, 15]); put('PACK', col.pack); put('PACK_D', col.pack, 0.65); put('STRAP', col.pack, 0.65);
-  put('SHADES', [GRAY, 0]); put('TIE', col.tie); put('MIC', [GRAY, 5]); put('TIGHTS', col.tights);
+  put('SHADES', [GRAY, 0]); put('TIE', col.tie); put('MIC', [GRAY, 5]); put('TIGHTS', col.tights); put('INK', col.ink || [GREEN, 5]);
   look.base = B; look.lvl = Lv;
   return look;
 }
