@@ -54,8 +54,8 @@ const FIG_POSES = {
   dance: f => FIG_DANCE[f],
   // on a skateboard (skate.js), side on to it, feet apart along it: riding (0 leaning back, 1 upright, 2 leaning in),
   // crouched to pop or tucked in the air, pushing (facing ahead, eight frames a kick), or sprawled after a bail
-  ride: f => ({ legs: [[0.4, 0.3, 0.05, 0.2], [0.4, 0.3, 0.05, 0.2]], arms: [[0.25, 0.5, 0.45, 0.3], [0.25, 0.5, 0.45, 0.3]], lean: [-0.08, 0.12, 0.32][f] ?? 0.12 }),
-  crouch: () => ({ legs: [[1.15, 0.32, -0.45, 0.22], [1.15, 0.32, -0.45, 0.22]], arms: [[0.7, 0.75, 0.9, 0.45], [0.7, 0.75, 0.9, 0.45]], lean: 0.38 }),
+  ride: f => ({ legs: [[0.45, 0.42, 0.05, 0.3], [0.45, 0.42, 0.05, 0.3]], arms: [[0.25, 0.5, 0.45, 0.3], [0.25, 0.5, 0.45, 0.3]], lean: [-0.08, 0.12, 0.32][f] ?? 0.12 }),
+  crouch: () => ({ legs: [[1.15, 0.42, -0.45, 0.3], [1.15, 0.42, -0.45, 0.3]], arms: [[0.7, 0.75, 0.9, 0.45], [0.7, 0.75, 0.9, 0.45]], lean: 0.38 }),
   push: f => {
     const w = f / 8 * Math.PI * 2, p = 0.15 + 0.5 * Math.cos(w); // the kicking leg: reaching ahead, down, raking back
     return { legs: [[p, 0.12, p - 0.25 - 0.4 * Math.max(0, Math.sin(w)), 0.1], [0.3, 0.04, 0.05, 0.04]],

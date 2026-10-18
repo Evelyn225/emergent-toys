@@ -425,8 +425,8 @@ const FIG_POSES = {
   dance: f => FIG_DANCE[f],
   // on a skateboard (skate.js), side on to it, feet apart along it: riding (0 leaning back, 1 upright, 2 leaning in),
   // crouched to pop or tucked in the air, pushing (facing ahead, eight frames a kick), or sprawled after a bail
-  ride: f => ({ legs: [[0.4, 0.3, 0.05, 0.2], [0.4, 0.3, 0.05, 0.2]], arms: [[0.25, 0.5, 0.45, 0.3], [0.25, 0.5, 0.45, 0.3]], lean: [-0.08, 0.12, 0.32][f] ?? 0.12 }),
-  crouch: () => ({ legs: [[1.15, 0.32, -0.45, 0.22], [1.15, 0.32, -0.45, 0.22]], arms: [[0.7, 0.75, 0.9, 0.45], [0.7, 0.75, 0.9, 0.45]], lean: 0.38 }),
+  ride: f => ({ legs: [[0.45, 0.42, 0.05, 0.3], [0.45, 0.42, 0.05, 0.3]], arms: [[0.25, 0.5, 0.45, 0.3], [0.25, 0.5, 0.45, 0.3]], lean: [-0.08, 0.12, 0.32][f] ?? 0.12 }),
+  crouch: () => ({ legs: [[1.15, 0.42, -0.45, 0.3], [1.15, 0.42, -0.45, 0.3]], arms: [[0.7, 0.75, 0.9, 0.45], [0.7, 0.75, 0.9, 0.45]], lean: 0.38 }),
   push: f => {
     const w = f / 8 * Math.PI * 2, p = 0.15 + 0.5 * Math.cos(w); // the kicking leg: reaching ahead, down, raking back
     return { legs: [[p, 0.12, p - 0.25 - 0.4 * Math.max(0, Math.sin(w)), 0.1], [0.3, 0.04, 0.05, 0.04]],
@@ -24415,7 +24415,10 @@ function skateCam(dt) {
 }
 
 // ---- you and the board, drawn into the city (citySprites) while the camera's behind you
-const SB = { hl: 0.04, hw: 0.0105, ht: 0.0012, up: 0.0085, tail: 0.006 }; // the deck: half length, width, thickness; its middle this high; kicktails
+// the board, a bit bigger than life (as the old games drew it: real size, it's lost under a grown-up seen from behind).
+// k: how much bigger. The deck: half length, width, thickness; its middle this high; the kicktails; trucks this far
+// along from the middle; your height on it
+const SB_K = 1.4, SB = { k: SB_K, hl: 0.04 * SB_K, hw: 0.0105 * SB_K, ht: 0.0012 * SB_K, up: 0.0085 * SB_K, tail: 0.006 * SB_K, truck: 0.027 * SB_K, rider: 0.165 };
 let skaterLookMemo = null;
 // whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers
 const skaterLook = () => skaterLookMemo ||= figLook({ hair: 'short', hat: 'beanie', top: 'long', bot: 'pants', bw: 1,
@@ -24439,13 +24442,14 @@ function drawSkateBoard(vx, vy, z, yaw, nose, roll) {
   const metal = (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.5); return set(i, '-', C(WHITE, L * 0.7)), true; };
   const wheel = (i, t, L) => { BG[i] = C(WHITE, 5 + L * 0.7); return set(i, 'o', C(GRAY, L * 0.4)), true; };
   for (const e of [1, -1]) {
-    box(F, at(o, F, e * 0.027, 0, -SB.ht - 0.0015), 0.0035, 0.0085, 0.0015, metal); // the trucks
-    for (const sd of [1, -1]) box(F, at(o, F, e * 0.027, sd * 0.0095, -SB.ht - 0.0045), 0.0028, 0.0016, 0.0028, wheel);
+    const k = SB.k;
+    box(F, at(o, F, e * SB.truck, 0, -SB.ht - 0.0015 * k), 0.0035 * k, 0.0085 * k, 0.0015 * k, metal); // the trucks
+    for (const sd of [1, -1]) box(F, at(o, F, e * SB.truck, sd * 0.0095 * k, -SB.ht - 0.0045 * k), 0.0028 * k, 0.0016 * k, 0.0028 * k, wheel);
   }
 }
 // your shadow on the ground, under the board: how high you are, in the air
 function drawSkateShadow(vx, vy, g, yaw, up) {
-  const k = 1 / (1 + up * 8), F = craftFrame(yaw, 0, 0), ru = 0.046 * k, rv = 0.017 * k;
+  const k = 1 / (1 + up * 8), F = craftFrame(yaw, 0, 0), ru = (SB.hl + 0.006) * k, rv = SB.hw * 1.6 * k;
   drawOBox(vx, vy, g + 0.0004, [F.f, F.r, F.u], [ru, rv, 0.0003], (i, t, L) => {
     if ((HIT.u / ru) ** 2 + (HIT.v / rv) ** 2 > 1) return false;
     BG[i] = C(GRAY, 0.55); return set(i, ' ', 0), true;
@@ -24456,8 +24460,8 @@ function drawSkater() {
   const tr = body.trick, p = tr ? clamp(tr.t / tr.air, 0, 1) : 0, e = p * p * (3 - 2 * p), look = skaterLook();
   if (SK.bailAt) { // sprawled where you came off, the board upside down a little way on
     const [bx, by, dir, ang] = SK.bailAt, g = walkGround(bx, by), [vx, vy] = R(bx, by);
-    drawSkateBoard(...R(bx + Math.cos(dir) * 0.06, by + Math.sin(dir) * 0.06), g - SB.up + SB.ht, ang + 0.6, 0, Math.PI);
-    return drawFigure(vx, vy, g, 0.175, Math.cos(dir), Math.sin(dir), look, 'sprawl', { light: 5 });
+    drawSkateBoard(...R(bx + Math.cos(dir) * 0.08, by + Math.sin(dir) * 0.08), g - SB.up + SB.ht, ang + 0.6, 0, Math.PI);
+    return drawFigure(vx, vy, g, SB.rider, Math.cos(dir), Math.sin(dir), look, 'sprawl', { light: 5 });
   }
   const { x, y } = skateView, [vx, vy] = R(x, y), g = walkGround(x, y), z = g + body.z / 10;
   drawSkateShadow(vx, vy, g, skateView.a, body.z / 10);
@@ -24466,7 +24470,7 @@ function drawSkater() {
   const air = skateAir(), pushing = SK.kicking && !air, ang = skateView.a + (pushing ? 0 : SK.stance * Math.PI / 2);
   const pose = air || SK.charge >= 0 ? 'crouch' : pushing ? 'push' + (Math.floor(SK.kick * 8) & 7) : 'ride' + (1 + SK.steer * SK.stance);
   const feet = z + SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
-  drawFigure(vx, vy, feet, 0.175, Math.cos(ang), Math.sin(ang), look, pose, { light: 5 });
+  drawFigure(vx, vy, feet, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, { light: 5 });
 }
 // ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
 // your cars and boats are), how hungry, thirsty and hurt you are, the city time, and the last spot you stood on the
