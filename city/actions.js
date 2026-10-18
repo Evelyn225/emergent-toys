@@ -120,7 +120,7 @@ function enterRoom(kind, extra, spawn) {
   fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
   if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
-  if (actx && kind !== 'station' && kind !== 'train' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
+  if (actx && kind !== 'station' && kind !== 'train' && kind !== 'backrooms' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
 }
 function interact() {
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
@@ -298,7 +298,7 @@ function interact() {
   if (cd) return enterCathedral(cd);
   const td = terminalDoor(px, py);
   if (td >= 0) return enterTerminal(td); // (the airport: terminal.js)
-  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)]) {
+  if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && !seamWall(lookHit)) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say(pick(['Closed down for good. A FOR LEASE sign on the shutter.', 'Shuttered for good. The FOR LEASE sign has a phone number nobody answers.', 'Gone out of business. Just the old sign left.']));

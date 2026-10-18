@@ -59,6 +59,7 @@ function audioMix(s) {
     if (k === 'pachinko') out.pachinko = 0.75;
     if (k === 'laundry') out.fluorescent = 0.28;
     if (k === 'jail') out.fluorescent = 0.55;
+    if (k === 'backrooms') out.fluorescent = 1; // (nothing else in there but the lights)
     if (k === 'aviary') out.birds = 0.8;
     if (k === 'conservatory') out.birds = 0.16;
     if (k === 'conservatory') out.waterfall = s.waterfall || 0;

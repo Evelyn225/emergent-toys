@@ -132,6 +132,7 @@ function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const ah = arcadeRoofHit(z,side,mx,my,wc); // the Shotengai canopy occludes the painted wall behind it
   if (ah) return arcadeRoofCell(i,mod(ah[0],N),mod(ah[1],N));
+  if (backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc)) return; // (a stretch of blank wall down a lane: backrooms.js)
   baseFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   graffitiCell(i,u,uStep,z,h,d,side,mx,my,fog,wc);
 }

@@ -192,3 +192,51 @@ test('gacha: turn a handle, pay, and a capsule toy rolls out; the motel books yo
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+test('the backrooms: a doorframe seam down an industrial back lane; walk into it and you are through, every bit of it reachable, and back out the same way', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1000, height: 640 } }), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof enterRoom === 'function' && Number.isFinite(eye));
+    const r = await page.evaluate(() => {
+      paused = true; tod = 14; mode = 'walk'; room = null;
+      const s = BACKROOMS_SEAM, out = { seam: !!s };
+      out.lane = [districtAt(s.x - 1, s.y), map[idx(s.x - 1, s.cy)], map[idx(s.x, s.cy)] > 0];
+      px = s.x - 0.3; py = s.y; a = 0; render(0); out.prompt = promptText(); // (nothing to give it away)
+      px = s.x - 0.3; py = s.y + 0.25; for (let k = 0; k < 30; k++) move(0.03, 0); out.beside = [mode, room && room.kind]; // (a step to one side: just wall)
+      px = s.x - 0.3; py = s.y; for (let k = 0; k < 30 && mode === 'walk'; k++) move(0.03, 0);
+      out.inside = [mode, room && room.kind, room && room.W, room && room.H, free(px, py)];
+      // the whole place, flooded from where you come in on a 10cm grid: every room you could stand in, you can get to
+      const S = 10, W = room.W * S, H = room.H * S, seen = new Uint8Array(W * H), q = [[Math.round(px * S), Math.round(py * S)]];
+      let door = false, reached = 0, open = 0;
+      while (q.length) {
+        const [x, y] = q.pop();
+        if (x < 0 || y < 0 || x >= W || y >= H || seen[y * W + x]) continue;
+        seen[y * W + x] = 1;
+        if (!free(x / S, y / S)) continue;
+        seen[y * W + x] = 2; reached++;
+        if (roomAt(x / S, y / S + 0.45) === 'D') door = true;
+        q.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+      }
+      for (let y = 0; y < room.H; y++) for (let x = 0; x < room.W; x++) if (roomAt(x, y) === '.') { open++; if (!seen[(y * S + 5) * W + x * S + 5] || seen[(y * S + 5) * W + x * S + 5] !== 2) out.cut = (out.cut || 0) + 1; }
+      out.flood = { door, open, cut: out.cut || 0 };
+      const t0 = performance.now(); for (let k = 0; k < 8; k++) { a = k * Math.PI / 4; render(0); } out.ms = (performance.now() - t0) / 8;
+      [px, py, a] = [2.5, room.H - 1.6, Math.PI / 2]; for (let k = 0; k < 40 && mode === 'room'; k++) move(0, 0.03);
+      out.back = [mode, Math.floor(px) === s.x - 1, Math.abs(rel(py - s.y)) < 0.1, Math.cos(a) < -0.9]; // (in the lane, turned round, facing away from the wall)
+      return out;
+    });
+    assert.ok(r.seam, 'there is a seam somewhere');
+    assert.deepEqual(r.lane, ['industrial', 0, true], 'in a back lane in the industrial district, on a building wall');
+    assert.equal(r.prompt, '', 'looking at it tells you nothing');
+    assert.deepEqual(r.beside, ['walk', null], 'beside it, the wall is just a wall');
+    assert.deepEqual(r.inside, ['room', 'backrooms', 73, 73, true], 'through it: the backrooms, on clear floor');
+    assert.ok(r.flood.open > 3000, `a big place (${r.flood.open} m2 of floor)`);
+    assert.equal(r.flood.cut, 0, 'no room in it you can not get to');
+    assert.ok(r.flood.door, 'and the way back is reachable');
+    assert.ok(r.ms < 250, `draws in ${r.ms.toFixed(0)}ms`);
+    assert.deepEqual(r.back, ['walk', true, true, true]);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
