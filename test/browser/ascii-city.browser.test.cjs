@@ -532,6 +532,47 @@ test('downtown apartment elevators still lead to usable flat rooftops', () => wi
   assert.ok(result.clear && result.stairs, JSON.stringify(result));
 }));
 
+test('each kind of building has its own way up to the roof: a walk-up\'s stairs, a tower\'s lifts, a loft\'s freight lift, a Belle Époque cage', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    paused = true; clearWanted();
+    const out = {};
+    for (const region of ['brownstones', 'downtown', 'industrial', 'belle']) {
+      const b = ARCH_BUILDINGS.find(b => b.region === region && b.sh.kind === SHOP_APTS) || (() => { // (any apartment building in that district)
+        for (let k = 0; k < N * N; k++) if (SHOP[k] && SHOP[k].kind === SHOP_APTS && districtAt(k % N + 0.5, (k / N | 0) + 0.5) === region) return { sh: SHOP[k], x0: k % N, y0: k / N | 0 };
+      })();
+      if (!b) { out[region] = null; continue; }
+      const kind = lobbyKind(b.x0, b.y0);
+      room = null; mode = 'walk';
+      enterRoom(kind, { ...b.sh, cell: [b.x0, b.y0], district: region, ret: [b.x0 - 0.2, b.y0 - 0.2, 0] }, [0, 0, -Math.PI / 2]);
+      px = room.W / 2; py = room.H - 1.6;
+      // walk up to the way up, the way a player would: straight at it, then along the back
+      const dt = 1 / 30, ex = room.def.ex;
+      for (let t = 0; t < 12 && !nearElevator(); t += dt) { const tx = ex, ty = 1.6, d = Math.hypot(tx - px, ty - py) || 1; move((tx - px) / d * 1.6 * dt, (ty - py) / d * 1.6 * dt); }
+      const at = { near: nearElevator(), prompt: promptText(), rise: stairRise(px, py) };
+      interact(); const up = mode;
+      interact(); const down = [mode, room.kind, Math.abs(px - ex) < 1e-9];
+      out[region] = { kind, ...at, up, down };
+    }
+    // the walk-up's banister: on the landing, stepping left off it is stopped
+    room = null; mode = 'walk';
+    enterRoom('walkup', { word: 'No.1', cell: [0, 0], district: 'brownstones', ret: [0, 0, 0] }, [4.85, 1.8, Math.PI]);
+    for (let k = 0; k < 60; k++) move(-1.6 / 30, 0);
+    out.rail = [px, stairRise(px, py)];
+    return out;
+  });
+  assert.deepStrictEqual(Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'rail').map(([k, v]) => [k, v && v.kind])),
+    { brownstones: 'walkup', downtown: 'tower', industrial: 'loft', belle: 'bellelobby' });
+  for (const [region, v] of Object.entries(r)) {
+    if (region === 'rail') continue;
+    assert.ok(v.near, `${region}: you can reach the way up (${JSON.stringify(v)})`);
+    assert.equal(v.up, 'roof', `${region}: E takes you up`);
+    assert.deepStrictEqual(v.down, ['room', v.kind, true], `${region}: and back down to it`);
+  }
+  assert.match(r.brownstones.prompt, /stairs to the roof/); assert.equal(r.brownstones.rise, 1, 'up on the landing');
+  assert.match(r.industrial.prompt, /freight lift/); assert.match(r.downtown.prompt, /elevator to the roof/);
+  assert.ok(r.rail[0] > 3.6 && r.rail[1] === 1, `the banister keeps you on the landing (${r.rail})`);
+}));
+
 test('redesigned storefronts keep their opening hours, glazing and closed shutters', () => withPage(async page => {
   const result = await page.evaluate(() => {
     paused = true; mode = 'walk'; room = null; me = null; clearWanted();

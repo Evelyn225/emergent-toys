@@ -47,6 +47,7 @@
     "city/shops.js",
     "city/gas-render.js",
     "city/terminal.js",
+    "city/lobbies.js",
     "city/courier-ui.js",
     "city/home-balcony.js",
     "city/aquarium.js",

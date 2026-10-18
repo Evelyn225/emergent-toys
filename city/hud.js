@@ -54,7 +54,7 @@ const nearMachine = () => mode === 'walk' ? machinesB[bi(Math.floor(px / 8), Mat
   return d < 0.3 && (d < 0.12 || dot > 0.5 || d < 0.2 && dot > 0);
 }) : null;
 const nearStation = () => stations.find(s => Math.hypot(rel(s.x - px), rel(s.y - py)) < 0.35);
-const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < 1.3 && py < 2.4;
+const nearElevator = () => room.def.ex && Math.abs(px - room.def.ex) < (room.def.exReach ?? 1.3) && py < 2.4;
 const canBoard = () => room.kind === 'station' && trainStopped(room) && py > ST_TRACK - 1.8 && Math.abs(px - 23) < 13;
 // near a way out: a door, or the foot of the station stairs
 const nearExit = () => {
@@ -89,7 +89,7 @@ function promptText() {
     if (room.kind === 'museum' && !room.burgled) { const m = museumPrompt(); if (m) return m; }
     const drIn = droppedHere();
     if (drIn) return `E: pick up the ${ITEMS[drIn.id].name}`;
-    if (nearElevator()) return room.kind==='courier'?'E: stairs to the courier roof':'E: elevator to the roof';
+    if (nearElevator()) return room.kind==='courier'?'E: stairs to the courier roof':room.def.upPrompt||'E: elevator to the roof';
     if (canBoard()) return 'E: board the train';
     if (room.kind === 'arcade') {
       const cab = nearCabinet();

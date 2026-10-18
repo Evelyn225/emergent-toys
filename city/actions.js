@@ -120,7 +120,7 @@ function enterRoom(kind, extra, spawn) {
   fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
   if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
-  if (actx && kind !== 'station' && kind !== 'train' && kind !== 'apts') sfxDoor(); // the bell over the shop door
+  if (actx && kind !== 'station' && kind !== 'train' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
 }
 function interact() {
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
@@ -195,7 +195,7 @@ function interact() {
       const [mx, my] = room.cell, [cx, cy] = buildingMiddle(mx, my);
       roofH = map[idx(cx, cy)]; mode = 'roof'; px = cx + 0.5; py = cy + 0.5; pitch = 0; roofLot = roofCells(cx, cy);
       notePoliceRoofEntry(px, py, room.ret);
-      return say(`Roof, ${roofH * 10}m up`);
+      return say(`${room.def.upSay ? room.def.upSay + ' ' : ''}Roof, ${roofH * 10}m up.`, room.def.upSay ? 3 : 2);
     }
     if (canBoard()) {
       const from = room.st;
@@ -312,8 +312,8 @@ function interact() {
     if (sh.club && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
     if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
     if (sh.fee) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : sh.museum ? 'Enjoy the collection. No flash photography.' : 'Mind the butterflies.'}"`, 3);
-    const kind = sh.kind === SHOP_APTS ? 'apts' : ROOM_FOR[sh.word] || 'store';
-    const r = { ...sh, cell: [lookHit.mx, lookHit.my], ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
+    const kind = sh.kind === SHOP_APTS ? lobbyKind(lookHit.mx, lookHit.my) : ROOM_FOR[sh.word] || 'store'; // (an apartment building: the way up suits the building, lobbies.js)
+    const r = { ...sh, cell: [lookHit.mx, lookHit.my], district: districtAt(lookHit.mx + 0.5, lookHit.my + 0.5), ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
     enterRoom(kind, r, [0, 0, -Math.PI / 2]);
     [px, py] = room.def.spawn || [room.W / 2, room.H - 1.6];
   }

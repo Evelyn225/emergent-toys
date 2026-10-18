@@ -1081,7 +1081,8 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (z > 2.3) return set(i, '=', C(GRAY, L));
     return fract(u) < 0.08 ? set(i, '|', C(GRAY, L)) : set(i, ':', C(day > 0.3 ? CYAN : WARM, 6 + day * 6));
   }
-  if (c === 'E') { // elevator
+  if (c === 'E') { // elevator (or whatever this building has instead: lobbies.js)
+    if (D.liftWall) return D.liftWall(i, u, uStep, z, d, mx, my, L);
     if (z > 2.25) return wallText(i, u, uStep, z, d, 'ROOF ^', D.ex, 2.5, 0.18, 0.3, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
     BG[i] = C(GRAY, 2);
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
