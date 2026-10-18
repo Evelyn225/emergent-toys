@@ -35,7 +35,8 @@ onkeydown = e => {
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
-    if (e.code === 'Space') jump();
+    if (e.code === 'Space') { if (skatingNow()) { if (!e.repeat) skateSpace(true); } else jump(); } // (on the board: it pops when you let go, skate.js)
+    if (/^Arrow/.test(e.code) && skatingNow() && !e.repeat) skateArrow(); // (a flip trick, in the air)
     if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
     if (e.code === 'KeyI') openInventory();
     if (e.code === 'KeyX') dropHere();
@@ -50,13 +51,13 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
-  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat')) third = !third;
+  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
 };
-onkeyup = e => K[e.code] = 0;
+onkeyup = e => { K[e.code] = 0; if (e.code === 'Space' && skatingNow() && !paused) skateSpace(false); };
 cv.onclick = () => { audioStart(); if (!paused) lockMouse(); };
 // how far you can look down / up; behind the wheel (or in the back of a cab) only a little down, not at your feet
 const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
@@ -72,7 +73,9 @@ function turnBy(mx, my) {
   if (game) return;
   if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
-  else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
+  else if (mode === 'taxi') look += mx * 0.003 * s;
+  else if (skatingNow()) { SK.look = clamp(SK.look + mx * 0.003 * s, -2.6, 2.6); SK.lookT = T; } // on the board: look round (the camera swings back behind you)
+  else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
 // on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
@@ -225,9 +228,10 @@ function loop(t) {
   if (mode !== 'air') { pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective)
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
   if (chute) stepChute(dt); // (hanging under a parachute, or falling before it opens: flight.js)
+  else if (!sleep && skatingNow()) stepSkate(dt); // (on the board: skate.js)
   else if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
-    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.5 : 1); // sprint 29 km/h (43 on the board), cars top out at 79
+    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1); // sprint 29 km/h (the board: skate.js), cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
@@ -300,8 +304,11 @@ function loop(t) {
   } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? swanCam(dt) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
+  } else if (skateCamOn()) { // on the board: from behind your skater (skate.js), then put the real position back
+    const saved = [px, py, a], [cx, cy, yaw, cz] = skateCam(dt);
+    skateView = { x: px, y: py, a, eye: cz }; px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved; skateView = null;
   } else { // a drink or two and the world sways; more and you're seeing double
-    camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : 0; // (and at the wheel, wherever you're looking)
+    camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : skatingNow() ? SK.look : 0; // (and at the wheel, wherever you're looking)
     a += lk;
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
     a += sa; pitch += sp_; render(dt); a -= sa + lk; pitch -= sp_;

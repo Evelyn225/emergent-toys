@@ -52,6 +52,16 @@ const FIG_POSES = {
              arms: [[-p, 0.15, -p + 1.6, 0.1], [p, 0.15, p + 1.6, 0.1]], lean: 0.22 };
   },
   dance: f => FIG_DANCE[f],
+  // on a skateboard (skate.js), side on to it, feet apart along it: riding (0 leaning back, 1 upright, 2 leaning in),
+  // crouched to pop or tucked in the air, pushing (facing ahead, eight frames a kick), or sprawled after a bail
+  ride: f => ({ legs: [[0.4, 0.3, 0.05, 0.2], [0.4, 0.3, 0.05, 0.2]], arms: [[0.25, 0.5, 0.45, 0.3], [0.25, 0.5, 0.45, 0.3]], lean: [-0.08, 0.12, 0.32][f] ?? 0.12 }),
+  crouch: () => ({ legs: [[1.15, 0.32, -0.45, 0.22], [1.15, 0.32, -0.45, 0.22]], arms: [[0.7, 0.75, 0.9, 0.45], [0.7, 0.75, 0.9, 0.45]], lean: 0.38 }),
+  push: f => {
+    const w = f / 8 * Math.PI * 2, p = 0.15 + 0.5 * Math.cos(w); // the kicking leg: reaching ahead, down, raking back
+    return { legs: [[p, 0.12, p - 0.25 - 0.4 * Math.max(0, Math.sin(w)), 0.1], [0.3, 0.04, 0.05, 0.04]],
+             arms: [[0.5 * p, 0.25, 0.5 * p + 0.4, 0.15], [-0.5 * p, 0.25, -0.5 * p + 0.4, 0.15]], lean: 0.18 };
+  },
+  sprawl: () => ({ seat: 0, legs: [[1.45, 0.3, 1.5, 0.25], [1.3, 0.2, 1.7, 0.15]], arms: [[-0.7, 0.35, -0.5, 0.3], [-0.6, 0.4, -0.4, 0.3]], lean: -0.45 }),
 };
 // a pose key: 'stand', 'walk3', 'sit7' (seat height in pixels), 'dance2'
 function figPose(key) {

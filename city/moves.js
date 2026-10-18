@@ -1,10 +1,10 @@
 // ===== on your feet: Space jumps, C held crouches, C by a bench or a seat sits you down (C again, or walk, to get
-// up). On the skateboard Space pops an ollie, and what you're holding as you pop makes it a trick: A kickflip,
-// D heelflip, S pop shuvit, A+S 360 flip, D+S varial heelflip. Or, without touching where you're going, flick for it:
+// up). On the skateboard (skate.js) Space pops an ollie, and the arrows you're holding as you pop make it a trick:
+// left kickflip, right heelflip, down pop shuvit, down-left 360 flip, down-right varial heelflip. Or flick for it:
 // hold the right mouse button and flick (left kickflip, right heelflip, back shuvit, back-left 360 flip, back-right
 // varial heelflip, forward-left hardflip, forward-right inward heelflip, or straight forward ollie) and let go to pop;
-// on a phone, swipe off the Ollie button the same
-// way. The board under you is a little 3D model in front of the camera (like a held weapon), so it really flips and spins.
+// on a phone, swipe off the Ollie button the same way. Seen from your own eyes (V), the board under you is a little 3D
+// model in front of the camera (like a held weapon), so it really flips and spins.
 // Bunny hopping: jump again the moment you land (press Space just before or just after you touch down) and each hop
 // carries you a bit faster; turn the way you're strafing while you're in the air (A + mouse left, D + mouse right)
 // and it builds quicker. Stay on the ground and the speed's gone in a moment.
@@ -15,7 +15,7 @@ const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit'
   WA: ['hardflip', 1, 0.5], WD: ['inward heelflip', -1, -0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
 const skatingNow = () => fx.skating && mode === 'walk';
-const wheelsRolling = () => fx.skating && !body.z && !body.vz && !!(K.KeyW || K.KeyS || K.KeyA || K.KeyD); // (the roar: on the ground, going somewhere)
+const wheelsRolling = () => fx.skating && !body.z && !body.vz && (SK.v > 0.05 || !!K.KeyW); // (the roar: on the ground, going somewhere)
 
 // a flick (screen pixels: x right, y down) to the trick it calls for: the nearest of the eight directions
 const FLICK_DIRS = [['A', -1, 0], ['D', 1, 0], ['S', 0, 1], ['AS', -0.71, 0.71], ['DS', 0.71, 0.71],
@@ -29,19 +29,15 @@ function flickTrick(dx, dy, min = 20) {
 }
 const trickName = key => (TRICKS[key] || ['ollie'])[0];
 
-function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read off A / D / S
+function jump(trick) { // trick: a TRICKS key from a flick; otherwise (on the board) the arrows held say
   if (body.z > 0 || body.vz > 0) { body.buf = T; return; } // (in the air: it'll go off when you land, see stepBody)
   if (body.seat) return standUp();
   body.buf = -9;
-  if (skatingNow()) {
-    const key = trick ?? (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
-    body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
-  } else {
-    if (T - (body.landedAt ?? -9) <= HOP_GRACE && Math.hypot(body.mx || 0, body.my || 0) > 0.05)
-      body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.landingSwirl || 0) * 0.15));
-    body.landedAt = -9; body.vz = JUMP_V;
-  }
-  if (actx) sfxUse(skatingNow() ? 'ollie' : 'kick');
+  if (skatingNow()) return skatePop(trick); // (skate.js)
+  if (T - (body.landedAt ?? -9) <= HOP_GRACE && Math.hypot(body.mx || 0, body.my || 0) > 0.05)
+    body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.landingSwirl || 0) * 0.15));
+  body.landedAt = -9; body.vz = JUMP_V;
+  if (actx) sfxUse('kick');
 }
 // a seat within reach: a bench (indoors or out) or a cinema seat. {x, y, fx, fy}: where you sit and which way you face
 function nearSeat() {
@@ -98,7 +94,8 @@ function stepBody(dt) {
     if (s && Math.sign(da) === s) body.swirl = (body.swirl || 0) + Math.abs(da); // air strafing: turning into it
     if (body.z <= 0) { // landed
       const fell = body.peak, tricked = !!body.trick; body.z = body.vz = body.peak = 0;
-      if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('ollie-land'); }
+      if (skatingNow()) { skateLand(); if (actx) sfxUse('ollie-land'); } // (clean, or a bail: skate.js)
+      body.trick = null;
       if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
         if (moved) body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.swirl || 0) * 0.15));
         body.swirl = 0; body.buf = -9; body.vz = JUMP_V;

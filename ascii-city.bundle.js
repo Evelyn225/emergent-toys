@@ -423,6 +423,16 @@ const FIG_POSES = {
              arms: [[-p, 0.15, -p + 1.6, 0.1], [p, 0.15, p + 1.6, 0.1]], lean: 0.22 };
   },
   dance: f => FIG_DANCE[f],
+  // on a skateboard (skate.js), side on to it, feet apart along it: riding (0 leaning back, 1 upright, 2 leaning in),
+  // crouched to pop or tucked in the air, pushing (facing ahead, eight frames a kick), or sprawled after a bail
+  ride: f => ({ legs: [[0.4, 0.3, 0.05, 0.2], [0.4, 0.3, 0.05, 0.2]], arms: [[0.25, 0.5, 0.45, 0.3], [0.25, 0.5, 0.45, 0.3]], lean: [-0.08, 0.12, 0.32][f] ?? 0.12 }),
+  crouch: () => ({ legs: [[1.15, 0.32, -0.45, 0.22], [1.15, 0.32, -0.45, 0.22]], arms: [[0.7, 0.75, 0.9, 0.45], [0.7, 0.75, 0.9, 0.45]], lean: 0.38 }),
+  push: f => {
+    const w = f / 8 * Math.PI * 2, p = 0.15 + 0.5 * Math.cos(w); // the kicking leg: reaching ahead, down, raking back
+    return { legs: [[p, 0.12, p - 0.25 - 0.4 * Math.max(0, Math.sin(w)), 0.1], [0.3, 0.04, 0.05, 0.04]],
+             arms: [[0.5 * p, 0.25, 0.5 * p + 0.4, 0.15], [-0.5 * p, 0.25, -0.5 * p + 0.4, 0.15]], lean: 0.18 };
+  },
+  sprawl: () => ({ seat: 0, legs: [[1.45, 0.3, 1.5, 0.25], [1.3, 0.2, 1.7, 0.15]], arms: [[-0.7, 0.35, -0.5, 0.3], [-0.6, 0.4, -0.4, 0.3]], lean: -0.45 }),
 };
 // a pose key: 'stand', 'walk3', 'sit7' (seat height in pixels), 'dance2'
 function figPose(key) {
@@ -10261,6 +10271,7 @@ function citySprites() {
   drawLandmarks();
   drawPavilions();
   drawHomeBalconies();
+  drawSkater(); // you, on the board, seen from behind (skate.js)
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
   forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
   gardenSprites();
@@ -18058,6 +18069,7 @@ function render(dt) {
       : mode === 'walk' ? 0.17 : mode === 'boat' ? (chaseOn ? 0.2 : 0.11) : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
   else if (mode === 'air') eye = airEye;
+  else if (skateView) eye = skateView.eye; // (behind you on the board: skate.js)
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
@@ -18557,7 +18569,8 @@ function hud() {
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
   const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
-  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : 'left thumb: move | drag: look' : ''
+  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
+    : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
@@ -20918,7 +20931,7 @@ function buildPause() {
       ${toggle('invertY', 'Invert Y')}
       <h2>controls</h2>
       <div class="keys">
-        <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock); on a skateboard, right-click and flick for tricks</span>
+        <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock); on a skateboard, W pushes, A/D carve, Space (held, let go) ollies, arrows or a right-click flick do flip tricks, A/D in the air spin</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
         <b>space</b><span>jump (tap near landing to bunny hop); in car: handbrake / drift; on board: ollie</span><b>right mouse</b><span>on a board: hold and flick for tricks</span><b>C</b><span>crouch (hold) / sit</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
@@ -21666,7 +21679,7 @@ const putCell = (r, c, ch, col) => { if (r < 0 || r >= rows || c < 0 || c >= col
 function putArt(art, r0, c0, col) { art.forEach((l, r) => [...l].forEach((ch, k) => putCell(r0 + r, c0 + k, ch, col(ch, r)))); }
 function drawHeld(dt) {
   if (!(mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) return;
-  if (fx.skating && mode === 'walk') drawBoard3D(); // the board under your feet
+  if (fx.skating && mode === 'walk' && !skateCamOn()) drawBoard3D(); // the board under your feet (or, from behind you, it's in the world: skate.js)
 }
 
 // ---- drawn big over the finished frame, in characters with a dark outline instead of a background
@@ -21707,7 +21720,7 @@ function drawHeldBig() {
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();
-  if (!it || !onFoot || fx.skating && it.id === 'skateboard') return;
+  if (!it || !onFoot || fx.skating && (it.id === 'skateboard' || skateCamOn())) return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
@@ -21873,7 +21886,7 @@ function hotbar() {
     g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && 'skating', fx.fresh > 0 && 'fresh clothes', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
   if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 
@@ -23990,12 +24003,12 @@ function crimePrompt() {
   return use + ((jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`);
 }
 // ===== on your feet: Space jumps, C held crouches, C by a bench or a seat sits you down (C again, or walk, to get
-// up). On the skateboard Space pops an ollie, and what you're holding as you pop makes it a trick: A kickflip,
-// D heelflip, S pop shuvit, A+S 360 flip, D+S varial heelflip. Or, without touching where you're going, flick for it:
+// up). On the skateboard (skate.js) Space pops an ollie, and the arrows you're holding as you pop make it a trick:
+// left kickflip, right heelflip, down pop shuvit, down-left 360 flip, down-right varial heelflip. Or flick for it:
 // hold the right mouse button and flick (left kickflip, right heelflip, back shuvit, back-left 360 flip, back-right
 // varial heelflip, forward-left hardflip, forward-right inward heelflip, or straight forward ollie) and let go to pop;
-// on a phone, swipe off the Ollie button the same
-// way. The board under you is a little 3D model in front of the camera (like a held weapon), so it really flips and spins.
+// on a phone, swipe off the Ollie button the same way. Seen from your own eyes (V), the board under you is a little 3D
+// model in front of the camera (like a held weapon), so it really flips and spins.
 // Bunny hopping: jump again the moment you land (press Space just before or just after you touch down) and each hop
 // carries you a bit faster; turn the way you're strafing while you're in the air (A + mouse left, D + mouse right)
 // and it builds quicker. Stay on the ground and the speed's gone in a moment.
@@ -24006,7 +24019,7 @@ const TRICKS = { A: ['kickflip', 1, 0], D: ['heelflip', -1, 0], S: ['pop shuvit'
   WA: ['hardflip', 1, 0.5], WD: ['inward heelflip', -1, -0.5] };
 const onFootMode = () => mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
 const skatingNow = () => fx.skating && mode === 'walk';
-const wheelsRolling = () => fx.skating && !body.z && !body.vz && !!(K.KeyW || K.KeyS || K.KeyA || K.KeyD); // (the roar: on the ground, going somewhere)
+const wheelsRolling = () => fx.skating && !body.z && !body.vz && (SK.v > 0.05 || !!K.KeyW); // (the roar: on the ground, going somewhere)
 
 // a flick (screen pixels: x right, y down) to the trick it calls for: the nearest of the eight directions
 const FLICK_DIRS = [['A', -1, 0], ['D', 1, 0], ['S', 0, 1], ['AS', -0.71, 0.71], ['DS', 0.71, 0.71],
@@ -24020,19 +24033,15 @@ function flickTrick(dx, dy, min = 20) {
 }
 const trickName = key => (TRICKS[key] || ['ollie'])[0];
 
-function jump(trick) { // trick: a TRICKS key from a flick; otherwise it's read off A / D / S
+function jump(trick) { // trick: a TRICKS key from a flick; otherwise (on the board) the arrows held say
   if (body.z > 0 || body.vz > 0) { body.buf = T; return; } // (in the air: it'll go off when you land, see stepBody)
   if (body.seat) return standUp();
   body.buf = -9;
-  if (skatingNow()) {
-    const key = trick ?? (K.KeyA ? 'A' : K.KeyD ? 'D' : '') + (K.KeyS ? 'S' : ''), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
-    body.vz = POP_V; body.trick = { name, flip, turn, t: 0, air: 2 * POP_V / GRAV };
-  } else {
-    if (T - (body.landedAt ?? -9) <= HOP_GRACE && Math.hypot(body.mx || 0, body.my || 0) > 0.05)
-      body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.landingSwirl || 0) * 0.15));
-    body.landedAt = -9; body.vz = JUMP_V;
-  }
-  if (actx) sfxUse(skatingNow() ? 'ollie' : 'kick');
+  if (skatingNow()) return skatePop(trick); // (skate.js)
+  if (T - (body.landedAt ?? -9) <= HOP_GRACE && Math.hypot(body.mx || 0, body.my || 0) > 0.05)
+    body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.landingSwirl || 0) * 0.15));
+  body.landedAt = -9; body.vz = JUMP_V;
+  if (actx) sfxUse('kick');
 }
 // a seat within reach: a bench (indoors or out) or a cinema seat. {x, y, fx, fy}: where you sit and which way you face
 function nearSeat() {
@@ -24089,7 +24098,8 @@ function stepBody(dt) {
     if (s && Math.sign(da) === s) body.swirl = (body.swirl || 0) + Math.abs(da); // air strafing: turning into it
     if (body.z <= 0) { // landed
       const fell = body.peak, tricked = !!body.trick; body.z = body.vz = body.peak = 0;
-      if (body.trick) { if (body.trick.name !== 'ollie') say(body.trick.name.toUpperCase() + '!', 1.5); body.trick = null; if (actx) sfxUse('ollie-land'); }
+      if (skatingNow()) { skateLand(); if (actx) sfxUse('ollie-land'); } // (clean, or a bail: skate.js)
+      body.trick = null;
       if (!tricked && !skatingNow() && !body.seat && fell < 1.5 && (T - (body.buf ?? -9) < HOP_BUF)) { // straight back up: a hop
         if (moved) body.hop = Math.min(HOP_MAX, (body.hop || 1) + HOP_GAIN + Math.min(HOP_STRAFE, (body.swirl || 0) * 0.15));
         body.swirl = 0; body.buf = -9; body.vz = JUMP_V;
@@ -24260,6 +24270,204 @@ function drawBoard3D() {
     for (const wv of [-0.1, 0.1]) for (let dh = 0; dh < 0.05; dh += 0.01) plot(tu, wv, -BOARD_T / 2 - 0.035 - dh, 'O', C(WHITE, 15), C(GRAY, 4));
   }
 }
+// ===== the skateboard, played the way the old skateboarding games played it: you see your skater from behind, the
+// camera trailing a little above, and the board handles like something you drive. W kicks (each push adds speed, up to
+// what pushing can give; Shift pushes harder), S drags a foot to slow you, A and D carve. Space crouches to load an
+// ollie and pops it as you let go (held longer, higher). Hold an arrow as you pop, or tap one in the air, for a flip
+// trick: left kickflip, right heelflip, down pop shuvit, down-left 360 flip, down-right varial heelflip, up-left
+// hardflip, up-right inward heelflip (or flick for one with the right mouse button). In the air A and D spin you:
+// come down rolling straight, or backwards (and ride away switch), and it counts; come down sideways, or mid-flip, or
+// hit a wall going fast, and you bail. Pop again soon after landing and the tricks chain into a combo, worth its points
+// times how many; a bail loses it. The mouse looks round (the camera swings back behind you); V: your own eyes.
+// Units: cells (10m), seconds, radians, as everywhere outdoors.
+const SK_PUSH = 0.75, SK_TOP = 0.9, SK_RUN_TOP = 1.2, SK_ROLL = 0.05, SK_BRAKE = 1.3, SK_SPIN = 7.5, SK_LAND = 0.6, SK_CHARGE = 0.6;
+const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 0.9, SK_BAIL_T = 1.3;
+// v: speed; dir: the way you're rolling (in the air, the way you left the ground: a spins, dir doesn't); spin: how
+// far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
+// kick: the push in progress (0..1), charge: when Space went down (-1: it isn't), combo: { names, pts, t }
+const SK = { v: 0, dir: 0, spin: 0, stance: 1, steer: 0, kick: 0, kicking: false, charge: -1, popT: -9, bail: 0, bailAt: null,
+  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0 };
+let skateView = null; // while the frame's drawn from behind you: { x, y, a } (where you really are) and the camera's eye
+const skateCamOn = () => skatingNow() && third && !freecam;
+const skateAir = () => body.z > 0 || body.vz > 0;
+// the arrows held down, as a TRICKS key (moves.js)
+function arrowTrick() {
+  const l = K.ArrowLeft, r = K.ArrowRight;
+  if (K.ArrowUp) return l ? 'WA' : r ? 'WD' : '';
+  return (l ? 'A' : r ? 'D' : '') + (K.ArrowDown ? 'S' : '');
+}
+const SK_POINTS = { ollie: 50, kickflip: 100, heelflip: 100, 'pop shuvit': 100, '360 flip': 300, 'varial heelflip': 250, hardflip: 250, 'inward heelflip': 250 };
+
+// every frame on the board, in place of walking
+function stepSkate(dt) {
+  if (T - SK.lastT > 0.25) { // just stepped on: rolling off at whatever pace you were walking
+    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: -1, bail: 0, bailAt: null, combo: null, look: 0, camYaw: null, camZ: null });
+    if (third) pitch = -0.12;
+  }
+  SK.lastT = T;
+  if (SK.bail > 0) { // picking yourself up
+    SK.bail -= dt; SK.v = 0; body.mx = body.my = 0;
+    if (SK.bail <= 0) { SK.bailAt = null; a = SK.dir; }
+    return;
+  }
+  const air = skateAir(), f = (K.KeyW ? 1 : 0) - (K.KeyS ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
+  SK.steer = s; SK.kicking = false;
+  if (SK.charge >= 0 && !K.Space) SK.charge = -1; // (let go somewhere it couldn't pop: the menu, say)
+  if (air) { a += s * SK_SPIN * dt; SK.spin += s * SK_SPIN * dt; } // spinning: the way you're going stays put
+  else {
+    const top = (K.ShiftLeft || K.ShiftRight ? SK_RUN_TOP : SK_TOP) * (fx.caffeine > 0 ? 1.1 : 1);
+    if (f > 0 && SK.charge < 0 && (SK.v < top - 0.01 || SK.kick > 0)) { // a push: a foot down, kicking along
+      SK.kicking = true; SK.kick += dt / 0.7;
+      if (SK.kick >= 1) SK.kick = 0;
+      if (SK.kick > 0.15 && SK.kick < 0.6) SK.v = Math.min(top, SK.v + SK_PUSH * 2.2 * dt);
+    } else SK.kick = 0;
+    SK.v = Math.max(0, SK.v - (f < 0 ? SK_BRAKE : SK_ROLL + SK.v * 0.05) * dt);
+    a += s * (2.6 - 1.3 * Math.min(1, SK.v / SK_TOP)) * dt; // carving: tighter slow, wider fast
+    SK.dir = a;
+  }
+  // arrows tapped in the air: a flip trick, once the rest of the chord's had a moment to come down
+  if (SK.trickKeyT >= 0 && T - SK.trickKeyT > 0.07) {
+    SK.trickKeyT = -1;
+    if (air && !body.trick) { const [name, flip, turn] = TRICKS[arrowTrick()] || ['ollie', 0, 0]; if (name !== 'ollie') body.trick = { name, flip, turn, t: 0, air: 0.45 }; }
+  }
+  const want = SK.v * dt, x0 = px, y0 = py;
+  move(Math.cos(SK.dir) * want, Math.sin(SK.dir) * want);
+  const mx = rel(px - x0), my = rel(py - y0), got = Math.hypot(mx, my);
+  if (dt > 0) { body.mx = mx / dt; body.my = my / dt; }
+  if (want > 1e-6 && got < want * 0.98) { // something in the way: scrape along it, or stop dead
+    const lost = SK.v * (1 - got / want);
+    SK.v *= got / want;
+    if (got > 1e-6) { SK.dir = Math.atan2(my, mx); if (!air) a = SK.dir; }
+    if (lost > 0.45) return bailOut('BAIL! Straight into it.');
+  }
+  if (SK.combo && !air && T - SK.combo.t > SK_COMBO_GAP) bankCombo();
+}
+// Space on the board: down crouches, up pops (or a tap off the touch button, or a flick: straight away)
+function skateSpace(down) {
+  if (SK.bail > 0 || skateAir()) { if (!down) SK.charge = -1; return; }
+  if (down) { if (SK.charge < 0) SK.charge = T; return; }
+  if (SK.charge >= 0) skatePop();
+}
+function skatePop(trick) {
+  if (SK.bail > 0 || skateAir()) return;
+  const load = SK.charge >= 0 ? clamp((T - SK.charge) / SK_CHARGE, 0, 1) : 0, key = trick ?? arrowTrick(), [name, flip, turn] = TRICKS[key] || ['ollie', 0, 0];
+  SK.charge = -1; SK.dir = a; SK.spin = 0; SK.popT = T; SK.trickKeyT = -1;
+  body.vz = POP_V * (1 + 0.35 * load); body.trick = { name, flip, turn, t: 0, air: 2 * body.vz / GRAV };
+  if (actx) sfxUse('ollie');
+}
+function skateArrow() { if (skateAir() && !body.trick && SK.trickKeyT < 0) SK.trickKeyT = T; }
+// back on the ground (stepBody): rolling away clean, or not
+function skateLand() {
+  if (SK.bail > 0) return; // (already down: hit a wall on the way up)
+  const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
+  if (tr && tr.t < tr.air * 0.8) return bailOut('BAIL! Your feet never found the board.');
+  if (Math.abs(d) > SK_LAND && Math.PI - Math.abs(d) > SK_LAND) return bailOut('BAIL! You came down sideways.');
+  if (Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance; // backwards: riding away switch
+  a = SK.dir;
+  const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
+  const side = deg ? (Math.sign(SK.spin) === -st0 ? 'FS ' : 'BS ') + deg : ''; // frontside: turning chest first
+  const label = (side + (name !== 'ollie' || !side ? ' ' + name : '')).trim().toUpperCase();
+  const pts = Math.round((SK_POINTS[name] || 50) + deg / 180 * 150 + Math.max(0, T - SK.popT) * 60);
+  const c = SK.combo ||= { names: [], pts: 0, t: T };
+  c.names.push(label); c.pts += pts; c.t = T;
+  say(c.names.length > 1 ? `${c.names.join(' + ')}  ${c.pts} x ${c.names.length}` : `${label}!  ${pts}`, 2);
+  SK.spin = 0;
+}
+function bankCombo() {
+  const c = SK.combo, total = c.pts * c.names.length;
+  SK.combo = null; SK.score += total; SK.best = Math.max(SK.best, total);
+  if (c.names.length > 1) say(`${c.names.length}-TRICK COMBO!  ${total}`, 2);
+}
+function bailOut(msg) {
+  SK.bail = SK_BAIL_T; SK.bailAt = [px, py, SK.dir, a]; SK.v = 0; SK.spin = 0; SK.combo = null; SK.charge = -1; body.trick = null;
+  say(msg, 2);
+  if (actx) playClip('ground-impact', 0.25);
+}
+
+// ---- the camera: behind you, a little above and round to the side you face, swinging after you (not while you spin).
+// A wall in the way: first it gives up the side, then it comes in closer, and lower, to keep you in the picture.
+// Returns [x, y, yaw, eye]
+// (on a narrow screen, a phone held upright, it comes in closer: the view's as wide as ever, so you'd be a speck)
+const skateCamBack = () => SK_CAM_BACK * clamp(cv.width / cv.height / 1.6, 0.4, 1);
+function skateClear(yaw) { // how far back from you the camera can go that way
+  const bx = Math.cos(yaw), by = Math.sin(yaw), most = skateCamBack();
+  let back = 0;
+  for (let step = 0.02; step <= most + 1e-9; step += 0.02) {
+    const x = px - bx * step, y = py - by * step;
+    if ([-0.03, 0.03].some(ox => [-0.03, 0.03].some(oy => map[idx(Math.floor(x + ox), Math.floor(y + oy))] > 0.28 || architectureBlocked(x + ox, y + oy) || landmarkBlocked(x + ox, y + oy)))) break;
+    back = step;
+  }
+  return back;
+}
+function skateCam(dt) {
+  const fresh = SK.camYaw == null, air = skateAir(), ease = k => fresh ? 1 : 1 - Math.exp(-k * dt);
+  if (T - SK.lookT > 1) SK.look *= 1 - Math.min(1, dt * 2.5);
+  const base = (SK.bail > 0 ? SK.bailAt[2] : air ? SK.dir : a) + SK.look, side = base - SK.stance * SK_CAM_SIDE;
+  SK.camSide = (fresh ? 1 : SK.camSide ?? 1) + ((skateClear(side) > skateCamBack() * 0.9 ? 1 : 0) - (SK.camSide ?? 1)) * ease(3);
+  const target = base - SK.stance * SK_CAM_SIDE * SK.camSide;
+  if (fresh) SK.camYaw = target;
+  SK.camYaw += (mod(target - SK.camYaw + Math.PI, 2 * Math.PI) - Math.PI) * ease(4);
+  const room_ = skateClear(SK.camYaw); // (in at once, back out gently)
+  SK.camBack = fresh || room_ < SK.camBack ? room_ : SK.camBack + (room_ - SK.camBack) * ease(2);
+  const want = walkGround(px, py) + 0.12 + (SK_CAM_UP - 0.12) * Math.min(1, SK.camBack / SK_CAM_BACK) + body.z / 10 * 0.6;
+  SK.camZ = fresh || SK.camZ == null ? want : SK.camZ + (want - SK.camZ) * ease(6);
+  return [mod(px - Math.cos(SK.camYaw) * SK.camBack, N), mod(py - Math.sin(SK.camYaw) * SK.camBack, N), SK.camYaw, SK.camZ];
+}
+
+// ---- you and the board, drawn into the city (citySprites) while the camera's behind you
+const SB = { hl: 0.04, hw: 0.0105, ht: 0.0012, up: 0.0085, tail: 0.006 }; // the deck: half length, width, thickness; its middle this high; kicktails
+let skaterLookMemo = null;
+// whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers
+const skaterLook = () => skaterLookMemo ||= figLook({ hair: 'short', hat: 'beanie', top: 'long', bot: 'pants', bw: 1,
+  col: { hair: [BRICK, 4], skin: [SKIN, 11], hat: [ORANGE, 11], hatD: [ORANGE, 7], top: [GREEN, 7], bot: [BLUE, 5], shoe: [WHITE, 13], belt: [GRAY, 2] } });
+function drawSkateBoard(vx, vy, z, yaw, nose, roll) {
+  const F = craftFrame(yaw, nose, roll), o = [vx, vy, z + SB.up + Math.abs(Math.sin(roll)) * SB.hw * 0.9]; // (on its edge mid-flip it stands taller)
+  const deck = (i, t, L) => {
+    if (HIT.face === 5) { // black grip tape, the maple showing round its edge (so it reads on dark asphalt)
+      if (Math.abs(HIT.v) > SB.hw * 0.7) { BG[i] = C(YEL, 3 + L * 0.45); return set(i, '=', C(BRICK, L)), true; }
+      BG[i] = C(GRAY, 0.3 + L * 0.05); return set(i, fract(HIT.u * 300) < 0.5 ? ':' : '.', C(GRAY, L * 0.3)), true;
+    }
+    if (HIT.face === 6) { const stripe = Math.floor((HIT.u / SB.hl + 1) * 3) & 1; BG[i] = C(stripe ? RED : YEL, 2.5 + L * 0.6); return set(i, ' ', 0), true; } // its graphic
+    BG[i] = C(YEL, 3 + L * 0.45); return set(i, '=', C(BRICK, L)), true; // the ply
+  };
+  const box = (Fr, c, ef, er, eu, shade) => drawOBox(c[0], c[1], c[2], [Fr.f, Fr.r, Fr.u], [ef, er, eu], shade);
+  box(F, o, SB.hl, SB.hw, SB.ht, deck);
+  for (const e of [1, -1]) { // the kicktails, turned up at each end
+    const Ft = craftFrame(yaw, nose + e * 0.45, roll), end = at(o, F, e * SB.hl, 0, 0);
+    box(Ft, at(end, Ft, e * SB.tail * 0.9, 0, 0), SB.tail, SB.hw * 0.85, SB.ht, deck);
+  }
+  const metal = (i, t, L) => { BG[i] = C(GRAY, 2 + L * 0.5); return set(i, '-', C(WHITE, L * 0.7)), true; };
+  const wheel = (i, t, L) => { BG[i] = C(WHITE, 5 + L * 0.7); return set(i, 'o', C(GRAY, L * 0.4)), true; };
+  for (const e of [1, -1]) {
+    box(F, at(o, F, e * 0.027, 0, -SB.ht - 0.0015), 0.0035, 0.0085, 0.0015, metal); // the trucks
+    for (const sd of [1, -1]) box(F, at(o, F, e * 0.027, sd * 0.0095, -SB.ht - 0.0045), 0.0028, 0.0016, 0.0028, wheel);
+  }
+}
+// your shadow on the ground, under the board: how high you are, in the air
+function drawSkateShadow(vx, vy, g, yaw, up) {
+  const k = 1 / (1 + up * 8), F = craftFrame(yaw, 0, 0), ru = 0.046 * k, rv = 0.017 * k;
+  drawOBox(vx, vy, g + 0.0004, [F.f, F.r, F.u], [ru, rv, 0.0003], (i, t, L) => {
+    if ((HIT.u / ru) ** 2 + (HIT.v / rv) ** 2 > 1) return false;
+    BG[i] = C(GRAY, 0.55); return set(i, ' ', 0), true;
+  });
+}
+function drawSkater() {
+  if (!skateView) return;
+  const tr = body.trick, p = tr ? clamp(tr.t / tr.air, 0, 1) : 0, e = p * p * (3 - 2 * p), look = skaterLook();
+  if (SK.bailAt) { // sprawled where you came off, the board upside down a little way on
+    const [bx, by, dir, ang] = SK.bailAt, g = walkGround(bx, by), [vx, vy] = R(bx, by);
+    drawSkateBoard(...R(bx + Math.cos(dir) * 0.06, by + Math.sin(dir) * 0.06), g - SB.up + SB.ht, ang + 0.6, 0, Math.PI);
+    return drawFigure(vx, vy, g, 0.175, Math.cos(dir), Math.sin(dir), look, 'sprawl', { light: 5 });
+  }
+  const { x, y } = skateView, [vx, vy] = R(x, y), g = walkGround(x, y), z = g + body.z / 10;
+  drawSkateShadow(vx, vy, g, skateView.a, body.z / 10);
+  const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = skateView.a + (tr ? e * tr.turn * Math.PI * 2 : 0), nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0;
+  drawSkateBoard(vx, vy, z, yaw, nose, roll);
+  const air = skateAir(), pushing = SK.kicking && !air, ang = skateView.a + (pushing ? 0 : SK.stance * Math.PI / 2);
+  const pose = air || SK.charge >= 0 ? 'crouch' : pushing ? 'push' + (Math.floor(SK.kick * 8) & 7) : 'ride' + (1 + SK.steer * SK.stance);
+  const feet = z + SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
+  drawFigure(vx, vy, feet, 0.175, Math.cos(ang), Math.sin(ang), look, pose, { light: 5 });
+}
 // ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
 // your cars and boats are), how hungry, thirsty and hurt you are, the city time, and the last spot you stood on the
 // street, kept in localStorage every few seconds and when you leave. Not saved: the police (you start each visit clean).
@@ -24367,7 +24575,8 @@ onkeydown = e => {
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
-    if (e.code === 'Space') jump();
+    if (e.code === 'Space') { if (skatingNow()) { if (!e.repeat) skateSpace(true); } else jump(); } // (on the board: it pops when you let go, skate.js)
+    if (/^Arrow/.test(e.code) && skatingNow() && !e.repeat) skateArrow(); // (a flip trick, in the air)
     if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
     if (e.code === 'KeyI') openInventory();
     if (e.code === 'KeyX') dropHere();
@@ -24382,13 +24591,13 @@ onkeydown = e => {
   if (e.code === 'KeyG' && mode === 'taxi') tipDriver();
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
-  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat')) third = !third;
+  if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
   if (e.code === 'KeyM') showMap = !showMap;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
 };
-onkeyup = e => K[e.code] = 0;
+onkeyup = e => { K[e.code] = 0; if (e.code === 'Space' && skatingNow() && !paused) skateSpace(false); };
 cv.onclick = () => { audioStart(); if (!paused) lockMouse(); };
 // how far you can look down / up; behind the wheel (or in the back of a cab) only a little down, not at your feet
 const clampPitch = () => pitch = clamp(pitch, me ? -0.3 : -1.2, 1.6);
@@ -24404,7 +24613,9 @@ function turnBy(mx, my) {
   if (game) return;
   if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
-  else if (mode === 'taxi') look += mx * 0.003 * s; else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
+  else if (mode === 'taxi') look += mx * 0.003 * s;
+  else if (skatingNow()) { SK.look = clamp(SK.look + mx * 0.003 * s, -2.6, 2.6); SK.lookT = T; } // on the board: look round (the camera swings back behind you)
+  else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
 }
 // on the board, the right mouse button held is a flick stick for tricks: the view holds still, flick and let go
@@ -24557,9 +24768,10 @@ function loop(t) {
   if (mode !== 'air') { pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective)
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
   if (chute) stepChute(dt); // (hanging under a parachute, or falling before it opens: flight.js)
+  else if (!sleep && skatingNow()) stepSkate(dt); // (on the board: skate.js)
   else if (!sleep && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat')) {
     if (!yoyo.out) a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt; else yoyo.angV = clamp(yoyo.angV + ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 7 * dt, -14, 14); // (arrows swing it too)
-    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1) * (fx.skating && mode === 'walk' ? 1.5 : 1); // sprint 29 km/h (43 on the board), cars top out at 79
+    const run = K.ShiftLeft || K.ShiftRight, sp = (mode === 'room' ? (run ? 2.5 : 1.6) : run ? 0.8 : 0.5) * dt * (fx.caffeine > 0 ? 1.25 : 1); // sprint 29 km/h (the board: skate.js), cars top out at 79
     const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD ? 1 : 0) - (K.KeyA ? 1 : 0);
     const cx = Math.cos(a), cy = Math.sin(a);
     const lurch = (f || s) ? Math.sin(T * 1.7) * 0.35 * Math.min(1, fx.booze) : 0; // drunk: you weave as you walk
@@ -24632,8 +24844,11 @@ function loop(t) {
   } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? swanCam(dt) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
+  } else if (skateCamOn()) { // on the board: from behind your skater (skate.js), then put the real position back
+    const saved = [px, py, a], [cx, cy, yaw, cz] = skateCam(dt);
+    skateView = { x: px, y: py, a, eye: cz }; px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved; skateView = null;
   } else { // a drink or two and the world sways; more and you're seeing double
-    camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : 0; // (and at the wheel, wherever you're looking)
+    camYaw = a; const wob = Math.min(1.3, fx.booze), lk = mode === 'drive' ? look : skatingNow() ? SK.look : 0; // (and at the wheel, wherever you're looking)
     a += lk;
     const sa = (Math.sin(T * 0.9) * 0.07 + Math.sin(T * 2.3) * 0.02) * wob, sp_ = (Math.sin(T * 1.3) * 0.04 + Math.sin(T * 3.1) * 0.01) * wob;
     a += sa; pitch += sp_; render(dt); a -= sa + lk; pitch -= sp_;

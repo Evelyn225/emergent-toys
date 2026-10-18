@@ -90,6 +90,7 @@
     "city/minigame-ui.js",
     "city/crime-ui.js",
     "city/moves.js",
+    "city/skate.js",
     "city/save.js",
     "city/main.js",
     "city/touch.js"

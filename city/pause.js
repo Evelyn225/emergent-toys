@@ -75,7 +75,7 @@ function buildPause() {
       ${toggle('invertY', 'Invert Y')}
       <h2>controls</h2>
       <div class="keys">
-        <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock); on a skateboard, right-click and flick for tricks</span>
+        <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock); on a skateboard, W pushes, A/D carve, Space (held, let go) ollies, arrows or a right-click flick do flip tricks, A/D in the air spin</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
         <b>space</b><span>jump (tap near landing to bunny hop); in car: handbrake / drift; on board: ollie</span><b>right mouse</b><span>on a board: hold and flick for tricks</span><b>C</b><span>crouch (hold) / sit</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>

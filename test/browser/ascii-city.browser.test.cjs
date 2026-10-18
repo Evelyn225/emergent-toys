@@ -1060,10 +1060,10 @@ test('on your feet: Space jumps, a trick on the board lands with its name, C sit
   await page.waitForTimeout(800);
   assert.strictEqual(await page.evaluate(() => body.z), 0, 'and down again');
   await page.evaluate(() => { fx.skating = true; });
-  await page.keyboard.down('KeyA'); await page.keyboard.press('Space'); await page.keyboard.up('KeyA');
+  await page.keyboard.down('ArrowLeft'); await page.keyboard.press('Space'); await page.keyboard.up('ArrowLeft'); // (it pops as Space comes up)
   assert.strictEqual(await page.evaluate(() => body.trick && body.trick.name), 'kickflip');
   await page.waitForTimeout(900);
-  assert.strictEqual(await page.evaluate(() => msgText), 'KICKFLIP!');
+  assert.match(await page.evaluate(() => msgText), /^KICKFLIP!  \d+$/);
   await page.evaluate(() => { fx.skating = false; enterRoom('cinema', { word: 'CINEMA', ret: [px, py, a] }, [7, 10.5, -Math.PI / 2]); px = 4.2; py = 9.0; });
   await page.keyboard.press('KeyC');
   assert.ok(await page.evaluate(() => !!body.seat && Math.abs(py - 9.5) < 0.01), 'in the seat');
@@ -1119,7 +1119,7 @@ test('the board shows under you on a big desktop screen too; the wheels go quiet
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto(PAGE); await page.waitForTimeout(300);
-    await page.evaluate(() => { mode = 'walk'; fx.skating = true; pitch = -1; }); // look down at the board under your feet
+    await page.evaluate(() => { mode = 'walk'; fx.skating = true; third = false; pitch = -1; }); // through your own eyes (V), look down at the board under your feet
     await page.waitForTimeout(200);
     const cells = await page.evaluate(() => { let n = 0; for (let i = 0; i < cols * rows; i++) if (boardZ[i] < 1e9) n++; return [cols * rows > 1 << 14, n]; });
     assert.ok(cells[0] && cells[1] > 50, `more cells than the old buffer held, and the board drawn in them (${cells})`);
@@ -1129,6 +1129,65 @@ test('the board shows under you on a big desktop screen too; the wheels go quiet
   } finally { await browser.close(); }
 });
 
+// the board driven frame by frame, the clock stopped: on a long street, rolling east
+const SKATE_SETUP = () => {
+  paused = true; mode = 'walk'; room = null; me = null; px = 41.5; py = 73.5; a = 0; fx.skating = true; third = true;
+  Object.assign(body, { z: 0, vz: 0, peak: 0, mx: 0, my: 0, trick: null, seat: null, crouch: 0, buf: -9 }); SK.lastT = -9; msgText = '';
+  window.skRide = (n, keys = {}) => { for (let k = 0; k < n; k++) { for (const c in K) K[c] = 0; Object.assign(K, keys); T += 1 / 30; stepSkate(1 / 30); stepBody(1 / 30); } };
+  window.skFly = (keys = {}) => { let n = 0; while ((body.z > 0 || body.vz > 0) && n++ < 120) skRide(1, keys); };
+};
+test('the board drives like a vehicle: W kicks you up to speed, you roll on when you let go, S brakes, A and D carve', () => withPage(async page => {
+  await page.evaluate(SKATE_SETUP);
+  const r = await page.evaluate(() => {
+    skRide(1);
+    skRide(10, { KeyW: 1 }); const early = SK.v;
+    skRide(110, { KeyW: 1 }); const top = SK.v, x0 = px;
+    skRide(30); const coast = SK.v, rolled = rel(px - x0);
+    const a0 = a; skRide(20, { KeyA: 1 }); const left = a - a0;
+    skRide(20, { KeyS: 1 }); const braked = SK.v;
+    return { early, top, cruise: SK_TOP, coast, rolled, left, braked };
+  });
+  assert.ok(r.early > 0 && r.early < 0.4, `the first push is not top speed (${r.early})`);
+  assert.ok(Math.abs(r.top - r.cruise) < 0.03, `kicking gets you to cruising speed (${r.top})`);
+  assert.ok(r.coast > r.top * 0.85 && r.rolled > 0.6, `let go and you keep rolling (${r.coast}, ${r.rolled})`);
+  assert.ok(r.left < -0.5, `A carves left (${r.left})`);
+  assert.strictEqual(r.braked, 0, 'S drags you to a stop');
+}));
+test('in the air A and D spin you: a 180 rides away switch, a quarter turn is a bail, and tricks back to back are a combo', () => withPage(async page => {
+  await page.evaluate(SKATE_SETUP);
+  const r = await page.evaluate(() => {
+    skRide(1); skRide(60, { KeyW: 1 });
+    skatePop(); skRide(13, { KeyD: 1 }); skFly(); skRide(1);
+    const half = { msg: msgText, stance: SK.stance, bail: SK.bail };
+    skRide(40);
+    skatePop(); skRide(6, { KeyD: 1 }); skFly();
+    const quarter = { msg: msgText, bail: SK.bail > 0 }; skRide(60);
+    skRide(40, { KeyW: 1 }); const score0 = SK.score;
+    K.ArrowLeft = 1; skatePop(); skFly(); skatePop('D'); skFly();
+    const chain = msgText; skRide(40);
+    return { half, quarter, chain, banked: SK.score - score0, after: msgText };
+  });
+  assert.match(r.half.msg, /^BS 180!  \d+$/); assert.strictEqual(r.half.stance, -1, 'riding away switch'); assert.strictEqual(r.half.bail, 0);
+  assert.ok(r.quarter.bail && /^BAIL!/.test(r.quarter.msg), `a quarter turn comes down sideways (${r.quarter.msg})`);
+  assert.match(r.chain, /^KICKFLIP \+ HEELFLIP  \d+ x 2$/);
+  assert.ok(r.banked > 400, `the combo banks, times two (${r.banked})`);
+  assert.match(r.after, /^2-TRICK COMBO!  \d+$/);
+}));
+test('on the board the camera rides behind you: your skater and the board are drawn in the street, V goes back to your own eyes', () => withPage(async page => {
+  await page.evaluate(() => {
+    mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0; fx.skating = true; third = true;
+    window.seen = 0; const draw = drawSkater; drawSkater = () => { if (skateView) seen++; draw(); };
+  });
+  await page.waitForTimeout(300);
+  const behind = await page.evaluate(() => [seen, skateCamOn()]);
+  assert.ok(behind[0] > 3 && behind[1], `drawn from behind (${behind})`);
+  await page.keyboard.press('KeyV');
+  await page.waitForTimeout(200);
+  const own = await page.evaluate(() => [third, skateCamOn(), seen]);
+  assert.deepStrictEqual(own.slice(0, 2), [false, false]);
+  await page.waitForTimeout(200);
+  assert.strictEqual(await page.evaluate(() => seen), own[2], 'no skater drawn through your own eyes');
+}));
 test('skateboard tricks by flick: each way picks its trick, and on a phone a swipe off the Ollie button pops it', async () => {
   const browser = await chromium.launch();
   try {
