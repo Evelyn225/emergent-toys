@@ -11897,8 +11897,9 @@ ROOM_FOR.STORAGE = 'storage';
 // a room's bathroom (def.wc): its own little room off the floor, 'W' walls round it with a doorway, white tiles inside.
 // sign: the wall cell the WC sign goes on (mx, my) and where along it
 const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && y >= w.y0 && y < w.y1;
-// is wall cell (mx, my) one of the bathroom's own (touching it), seen from inside it? Then it's tiled
-const wcWallInside = (mx, my, w = room.def.wc) => !!w && inWc(px, py, w) && mx >= w.x0 - 1 && mx <= w.x1 && my >= w.y0 - 1 && my <= w.y1;
+// is this face of wall cell (mx, my) (side: 0 an x-face, 1 a y-face) one that faces into the bathroom? Then it's tiled,
+// from wherever you see it (through the doorway too), and the face on the other side of the same wall isn't
+const wcFaceInside = (mx, my, side, w = room.def.wc) => !!w && (side ? inWc(mx + 0.5, my + (py < my ? -0.5 : 1.5), w) : inWc(mx + (px < mx ? -0.5 : 1.5), my + 0.5, w));
 // a washbasin on its pedestal, its back to the wall behind (-fx, -fy), a mirror over it
 const washbasin = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
   drum(vx, vy, 0.06, 0, 0.72, (i, t, L) => { BG[i] = C(WHITE, (3 + L * 0.3) * drumLit(0.06)); return set(i, ' ', 0), true; });
@@ -11907,6 +11908,14 @@ const washbasin = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
   rod(vx - fx * 0.2, vy - fy * 0.2, 0.86, vx - fx * 0.12, vy - fy * 0.12, 0.98, 0.012, GRAY, 1.3); // the tap
   drawBox(boxAt(vx - fx * 0.27, vy - fy * 0.27, fx, fy, 0.01, 0.25, 1.15, 1.75), (i, t, L) => { BG[i] = C(CYAN, 1.6 + (HIT.w - 1.15) * 2); return set(i, fract((HIT.v + HIT.w) * 3) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; }); // the mirror
 }, [0.24, 0.24, 0.86]);
+// a bathroom wall from inside: white tiles to shoulder height (thin grout lines), a trim, painted plaster above
+function wcWall(i, u, z, L) {
+  if (z > 1.3) { BG[i] = C(WHITE, 1.7 + L * 0.1); return set(i, ' ', 0); }
+  if (z > 1.22) { BG[i] = C(BLUE, 2.5 + L * 0.15); return set(i, '=', C(WHITE, L * 0.5)); }
+  BG[i] = C(WHITE, 2.6 + L * 0.12);
+  const gu = fract(u * 4) < 0.05, gz = fract(z * 4) < 0.05;
+  return set(i, z < 0.1 ? '_' : gu && gz ? '+' : gz ? '-' : gu ? '|' : ' ', C(GRAY, L * 0.3));
+}
 function roomAt(x, y) {
   x = Math.floor(x); y = Math.floor(y);
   return room?.grid[y]?.[x] ?? '#'; // Cell centres and out-of-bounds search rays are safe.
@@ -12261,7 +12270,7 @@ const ROOM_DEFS = {
     wc: { x0: 11, y0: 1, x1: 13, y1: 4, sign: [11, 4, 11.5] }, light: 0.9, floor: 'wood', ceil: 'pendant', sign: true, signAt: 2.6, wall: hotelWall,
     keeper: [3.2, 2.0], ex: 6,
     props: r => [BX(3.2, 2.6, 1.3, 0.35, 0, 1.1, solid(BRICK, { panel: 0.5, trim: 1.04, top: '=' })), standing(3.2, 2.0, r.neon), POT_PLANT(1.4, 1.4),
-                 POT_PLANT(9.4, 1.4), POT_PLANT(12.3, 6.2, 1.4), standing(8, 4, shirt()), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.68, 2.6, -1, 0)] },
+                 POT_PLANT(9.4, 1.4), POT_PLANT(12.3, 6.2, 1.4), standing(8, 4, shirt()), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1)] },
   apts: { grid: boxRoom(8, 7, { '3,0': 'E', '4,0': 'E' }), light: 0.7, floor: 'tile', ceil: 'pendant', wall: aptsWall, ex: 4,
     props: r => [POT_PLANT(6.6, 5.4), ...(chance(0.6) ? [standing(2.2, 4.4, shirt())] : [])] },
   // the gym: treadmills along the back, the ring in the far corner (gym.js) with whoever's next on the card warming up
@@ -12321,7 +12330,7 @@ const ROOM_DEFS = {
   karaoke: { grid: ['##############', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '#............#', '#............#', '######DD######'],
     wc: { x0: 11, y0: 1, x1: 13, y1: 3, sign: [11, 3, 11.5] }, light: 0.45, floor: 'carpet', ceil: 'disco', wall: karaokeWall,
     props: r => {
-      const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.68, 2.3, -1, 0),
+      const p = [BX(6, 2.3, 2, 0.6, 0, 0.3, solid(BRICK, { top: '=', bright: 2 })), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1),
                  figProp(6, 2.25, figAnyone(r.neon, { mic: true, top: pick(['dress', 'tee', 'jacket']) }), { z: 0.3, face: [0, 1], pose: 'sing', chat: false, light: 14 }), // giving it everything, to the room
                  SPEAKER(3.5, 2.3), SPEAKER(8.5, 2.3)];
       for (let k = 0; k < 6; k++) if (chance(barCrowd())) p.push(sitting(2.5 + Math.random() * 7, 4.5 + Math.random() * 2.5, shirt(), 0.35, true));
@@ -12361,7 +12370,7 @@ const ROOM_DEFS = {
   cafe: { grid: ['#############', '#........W..#', '#........W..#', '#........WW.#', '#...........#', '#...........#', '#...........#', '#####DD######'],
     wc: { x0: 10, y0: 1, x1: 12, y1: 3, sign: [10, 3, 10.5] }, light: 0.9, floor: 'wood', ceil: 'pendant', sign: false, wall: cafeWall, keeper: [4.6, 1.05],
     props: r => {
-      const p = [...counterBox(4.6, 1.7, 1.4), standing(4.6, 1.05, r.neon), ...toilet(10.6, 1.4, -1, porcelain), washbasin(11.68, 2.3, -1, 0), POT_PLANT(11.4, 6.2, 1.4),
+      const p = [...counterBox(4.6, 1.7, 1.4), standing(4.6, 1.05, r.neon), ...toilet(10.6, 1.4, -1, porcelain), washbasin(11.55, 1.3, 0, 1), POT_PLANT(11.4, 6.2, 1.4),
         BX(3.7, 1.65, 0.28, 0.2, 1.05, 1.5, solid(GRAY, { top: 'o', trim: 1.42 })), // the espresso machine
         BX(7.2, 1.7, 0.7, 0.3, 0, 1.05, (i, t, L) => { // the pastry case
           const f = HIT.face; BG[i] = f === 5 ? C(GRAY, 2) : C(CYAN, 1 + L * 0.1);
@@ -12401,7 +12410,7 @@ const ROOM_DEFS = {
   tea: { grid: ['##############', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '#............#', '#............#', '######DD######'],
     wc: { x0: 11, y0: 1, x1: 13, y1: 3, sign: [11, 3, 11.5] }, light: 0.7, floor: 'wood', ceil: 'lantern', sign: true, signAt: 6, wall: teaWall, keeper: [6, 1.1],
     props: r => {
-      const p = [...counterBox(6, 1.7, 1.4), standing(6, 1.1, RED), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.68, 2.3, -1, 0), POT_PLANT(12.3, 7.2, 1.5)];
+      const p = [...counterBox(6, 1.7, 1.4), standing(6, 1.1, RED), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1), POT_PLANT(12.3, 7.2, 1.5)];
       for (const [x, y] of [[3, 4], [9, 4], [3, 6.8], [9, 6.8]]) {
         p.push({ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
           const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
@@ -12914,13 +12923,13 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
   if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
-  if (!D.home && wcWallInside(mx, my)) { BG[i] = C(WHITE, 2.4 + L * 0.12); return set(i, fract(u * 3.3) < 0.07 || fract(z * 3.3) < 0.07 ? '+' : z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6)); } // in the bathroom: tiled
+  if (!D.home && wcFaceInside(mx, my, side)) return wcWall(i, u, z, L); // in the bathroom
   if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: the room's own walls (or a plain one), the WC sign by the doorway
     const [sx, sy, su] = D.wc.sign; // (u runs whichever way reads left to right, so it's negative from some sides)
     if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;
     if (D.home) {
       BG[i] = C(WHITE, 3 + L * 0.3);
-      return set(i, inWc(px, py) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
+      return set(i, wcFaceInside(mx, my, side) && (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) ? '+' : z < 0.12 ? '=' : ' ', C(GRAY, L * 0.6));
     }
     if (D.wall && D.wall(i, u, uStep, z, d, mx, my, L)) return;
     if (z < 0.9) return set(i, '#', C(BRICK, L * 0.6));
@@ -12948,7 +12957,7 @@ function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
   ZB[i] = d; FL[i] = 1;
   if (room.def.balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
-  if (room.def.wc && inWc(wx, wy)) { BG[i] = C(WHITE, 1 + L * 0.2); return set(i, fract(wx * 3) < 0.1 || fract(wy * 3) < 0.1 ? '+' : ' ', C(GRAY, L)); } // bathroom tiles
+  if (room.def.wc && inWc(wx, wy)) { const k = (Math.floor(wx * 5) + Math.floor(wy * 5)) & 1; BG[i] = k ? C(WHITE, 1.3 + L * 0.2) : C(GRAY, 0.5 + L * 0.06); return set(i, ' ', 0); } // the bathroom floor: little black and white squares
   if (ROOM_FLOORS[room.def.floor]) return ROOM_FLOORS[room.def.floor](i, f, wx, wy, r, x, L);
   switch (room.def.floor) {
     case 'home': {
@@ -13401,7 +13410,7 @@ ROOM_DEFS.grocer = { grid: ['##############', '#.......#....#', '#..SS...#....#'
   },
   props: r => {
     const fruit = r.word === 'FRUIT', p = [...checkout(10.65, 7.6, 0.85), standing(11.45, 7.6, GREEN),
-      ...produceStand(9.6, 4.9, 1.4, 63), ...produceStand(9, 6.25, 1, 70), ...(fruit ? produceStand(6.5, 2.4, 0.8, 11) : []),
+      ...produceStand(8.9, 4.9, 0.9, 63), ...produceStand(8.5, 6.6, 0.8, 70), // (a clear way down from the stockroom door, and between the two) ...(fruit ? produceStand(6.5, 2.4, 0.8, 11) : []),
       BX(12.2, 6.1, 0.5, 0.5, 0, 0.8, (i, t, L) => { // a bin of watermelons
         const f = HIT.face; if (f === 5) { BG[i] = C(GREEN, 1.5); return set(i, hash(i, 9) > 0.5 ? 'O' : 'o', C(GREEN, 9)), true; }
         BG[i] = C(BRICK, (1.2 + L * 0.2) * shadeFace(f)); return set(i, fract(HIT.w * 6) < 0.25 ? '=' : ' ', C(WARM, L * 0.5)), true; }),
@@ -13410,7 +13419,7 @@ ROOM_DEFS.grocer = { grid: ['##############', '#.......#....#', '#..SS...#....#'
       BX(10.9, 1.35, 0.35, 0.25, 0, 0.45, (i, t, L) => { if (HIT.face === 5) { BG[i] = C(YEL, 3); return set(i, ')', C(GREEN, 10)), true; } // a crate of green bananas
         BG[i] = C(BRICK, (1.3 + L * 0.2) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 8) < 0.3 ? '=' : ' ', C(WARM, L * 0.5)), true; })];
     for (let k = 0; k < 5; k++) p.push(BX(1.4, 8.5, 0.24, 0.18, k * 0.09, k * 0.09 + 0.08, solid(k & 1 ? RED : ORANGE, { top: '#' }))); // a stack of baskets by the door
-    p.push(aisleSign(9.6, 4.5, fruit ? 'FRESH FRUIT' : 'PRODUCE', C(GREEN, 4), C(WHITE, 15), 0.6));
+    p.push(aisleSign(8.9, 4.5, fruit ? 'FRESH FRUIT' : 'PRODUCE', C(GREEN, 4), C(WHITE, 15), 0.6));
     if (!fruit) p.push(aisleSign(4, 3.6, 'AISLE 1', C(BLUE, 4), C(WHITE, 15), 0.35));
     p.push(...shoppers([[2, 4, -1, 0], [7.2, 3.6, 1, 0], [7.2, 6, 0, -1], [5.6, 2.6, -1, 0]], 0.35));
     if (chance(0.4)) p.push({ ...sitting(11.5, 2.6, GREEN, 0.4), face: [-1, 0] }); // somebody on their break, on an upturned crate
@@ -24284,6 +24293,7 @@ function drawBoard3D() {
 // times how many; a bail loses it. The mouse looks round (the camera swings back behind you); V: your own eyes.
 // Units: cells (10m), seconds, radians, as everywhere outdoors.
 const SK_PUSH = 0.75, SK_TOP = 0.9, SK_RUN_TOP = 1.2, SK_ROLL = 0.05, SK_BRAKE = 1.3, SK_SPIN = 7.5, SK_LAND = 0.6, SK_CHARGE = 0.6;
+const SK_STILL = 0.12; // (slower than this, a messy landing is only a hop: nothing to fall off)
 const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 0.9, SK_BAIL_T = 1.3;
 // v: speed; dir: the way you're rolling (in the air, the way you left the ground: a spins, dir doesn't); spin: how
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
@@ -24363,8 +24373,10 @@ function skateArrow() { if (skateAir() && !body.trick && SK.trickKeyT < 0) SK.tr
 function skateLand() {
   if (SK.bail > 0) return; // (already down: hit a wall on the way up)
   const tr = body.trick, d = mod(a - SK.dir + Math.PI, Math.PI * 2) - Math.PI, st0 = SK.stance;
-  if (tr && tr.t < tr.air * 0.8) return skateBail('BAIL! Your feet never found the board.');
-  if (Math.abs(d) > SK_LAND && Math.PI - Math.abs(d) > SK_LAND) return skateBail('BAIL! You came down sideways.');
+  const flubbed = tr && tr.t < tr.air * 0.8, sideways = Math.abs(d) > SK_LAND && Math.PI - Math.abs(d) > SK_LAND;
+  if ((flubbed || sideways) && SK.v < SK_STILL) { SK.dir = a; SK.spin = 0; return; } // (standing still: you just come down where you are, facing however you ended up)
+  if (flubbed) return skateBail('BAIL! Your feet never found the board.');
+  if (sideways) return skateBail('BAIL! You came down sideways.');
   if (Math.abs(d) > Math.PI / 2) SK.stance = -SK.stance; // backwards: riding away switch
   a = SK.dir;
   const deg = Math.round(Math.abs(SK.spin) / Math.PI) * 180, name = tr ? tr.name : 'ollie';
