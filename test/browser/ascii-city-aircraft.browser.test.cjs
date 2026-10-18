@@ -217,3 +217,24 @@ test('flying in fog: the view is fogged right down to the instruments, from the 
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+test('steal a jet and get it up: the air force scrambles two fighters, the radio tells you, the instruments count them, and they draw', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1000, height: 640 } }), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof stepFlight === 'function' && Number.isFinite(eye));
+    await page.evaluate(() => {
+      tod = 13; weather = 'clear'; fogAmt = 0; wTimer = 999;
+      const c = aircraft.find(c => c.type === 'jet'); enterAircraft(c);
+      Object.assign(c, { ground: false, z: 9, v: 7, throttle: 0.7, pitch: 0.02, x: 120, y: 60, yaw: 0 }); third = true; scramble = SCRAMBLE_T - 0.5; paused = false;
+    });
+    await page.waitForTimeout(1500);
+    const r = await page.evaluate(() => { let dash = ''; for (let k = (rows - 3) * cols; k < rows * cols; k++) dash += CH[k]; return { n: fighters.length, msg: msgText, dash }; });
+    assert.equal(r.n, 2, 'two of them');
+    assert.match(r.msg, /interceptors/);
+    assert.match(r.dash, /FIGHTERS 2/);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});

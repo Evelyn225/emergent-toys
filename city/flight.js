@@ -247,8 +247,38 @@ function airDash() {
     const kx = sx + Math.round(airInput(0) * sw), ky = r0 + 1 + Math.round(airInput(1));
     set(ky * cols + kx, 'O', C(held ? YEL : WHITE, 15));
   }
-  const blink = fract(T * 2) < 0.5, warn = burning(c) ? 'FIRE' : c.stalled ? 'STALL' : T_.ceil && c.z > T_.ceil - 0.5 ? 'CEILING' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y, c.z) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
+  const sixes = fighters.filter(f => f.sixed && !fighters.leaving).length;
+  const blink = fract(T * 2) < 0.5, warn = burning(c) ? 'FIRE' : sixes ? 'BANDIT 6 O\'CLOCK' : c.stalled ? 'STALL' : T_.ceil && c.z > T_.ceil - 0.5 ? 'CEILING' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y, c.z) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
   if (warn) putText(r0 + 1, cols - warn.length - 3, warn, C(RED, blink ? 15 : 7));
+  if (fighters.length && !fighters.leaving) { const s = `FIGHTERS ${fighters.length}`; putText(r0 + 2, cols - s.length - 3, s, C(YEL, 13)); }
+}
+// the interceptors (fighters.js): what you hear about them, on the radio and otherwise
+function fighterNews(ev) {
+  for (const e of ev) {
+    if (e === 'scramble') say('The radio: "Unidentified aircraft, this is the air force. Two interceptors are on their way to you. Land at once."', 6);
+    else if (e === 'six') { say('BANDIT ON YOUR SIX! Bank hard, or get down low among the rooftops.', 3); if (actx) for (let k = 0; k < 4; k++) tone(actx.currentTime + k * 0.18, 1400, 0.1, 0.05, 'square'); }
+    else if (e === 'hit') { say('Hit! Rounds slamming into the airframe.', 1.5); if (actx) { playClip('crash', 0.25); tone(actx.currentTime, 90, 0.2, 0.08, 'sawtooth'); } }
+    else if (e === 'toolow') say('They pull up: too low over the rooftops to take the shot.', 2);
+    else if (e === 'breakoff') say('The fighters break off, circle once, and climb away.', 4);
+    else if (e === 'bingo') say('"Bingo fuel, returning to base." The fighters peel away.', 4);
+    if (e === 'guns' && actx) gunBurst();
+  }
+}
+function gunBurst() { // brrrt, from wherever the nearest one is
+  const f = fighters.reduce((b, o) => !b || Math.hypot(rel(o.x - px), rel(o.y - py)) < Math.hypot(rel(b.x - px), rel(b.y - py)) ? o : b, null);
+  if (!f) return;
+  const d = Math.hypot(rel(f.x - px), rel(f.y - py)), loud = clamp(1 - d / 30, 0.15, 1), pan = clamp((-dy * rel(f.x - px) + dx * rel(f.y - py)) / Math.max(1, d), -1, 1);
+  for (let k = 0; k < 8; k++) tone(actx.currentTime + k * 0.045, 140 + Math.random() * 40, 0.035, 0.06 * loud, 'square', pan);
+}
+// the jets' roar, louder as one comes past
+let fighterRoarT = 0;
+function stepFighterSound(dt) {
+  if (!actx || paused || !fighters.length || (fighterRoarT -= dt) > 0) return;
+  fighterRoarT = 0.12;
+  for (const f of fighters) {
+    const d = Math.hypot(rel(f.x - px), rel(f.y - py), f.z - eye), loud = clamp(1 - d / 25, 0, 1);
+    if (loud > 0) tone(actx.currentTime, 60 + loud * 40 + Math.random() * 20, 0.14, 0.05 * loud * loud, 'sawtooth', clamp((-dy * rel(f.x - px) + dx * rel(f.y - py)) / Math.max(1, d), -1, 1));
+  }
 }
 function airPrompt() {
   if (wreckCam) return '';

@@ -86,8 +86,23 @@ function drawAircraft() {
     const vx = rel(a.x - px), vy = rel(a.y - py), T_ = PLANE_TYPES[a.type];
     if (Math.hypot(vx, vy) > vis + 4 || !inView(vx, vy, (T_.span || 1) / 2 + 0.3)) continue;
     if (T_.heli) drawHeliCraft(a, T_, vx, vy); else drawPlaneCraft(a, T_, vx, vy);
+  }  drawFighters(); // (the interceptors: fighters.js)
+}
+// the interceptors: grey, swept, a sharp canopy, the afterburners glowing; their tracers streaking past
+function drawFighters() {
+  for (const f of fighters) {
+    const vx = rel(f.x - px), vy = rel(f.y - py);
+    if (Math.hypot(vx, vy) > vis + 4 || !inView(vx, vy, 1)) continue;
+    drawPlaneCraft(f, FIGHTER_T, vx, vy);
+    const F = craftFrame(f.yaw, f.pitch, f.roll), o = [vx, vy, f.z + FIGHTER_T.r], d = Math.max(0.5, dx * vx + dy * vy);
+    for (const e of [-1, 1]) { const p = at(o, F, -FIGHTER_T.len / 2 - 0.02, e * 0.035, 0.01); dot(p[0], p[1], p[2], Math.max(0.03, d * 0.6 / projX), (i, t, L) => { BG[i] = C(fract(T * 9) < 0.5 ? ORANGE : YEL, 13); return set(i, '*', C(WHITE, 15)), true; }); } // (afterburners)
+  }
+  for (const r of tracers) {
+    const vx = rel(r.x - px), vy = rel(r.y - py), l = 0.04;
+    rod(vx, vy, r.z, vx - r.vx * l, vy - r.vy * l, r.z - r.vz * l, 0.012, YEL, 2);
   }
 }
+
 function drawPlaneCraft(a, T_, vx, vy) {
   const F = craftFrame(a.yaw, a.pitch, a.roll), gear = a.z < 0.6, h = T_.r + (gear ? T_.r * 0.9 + 0.02 : 0), o = [vx, vy, a.z + h], L2 = T_.len / 2;
   const depth = dx * vx + dy * vy, far = depth > 22, wreck = a.wrecked, body = wreck ? GRAY : T_.body, burnt = wreck ? 0.3 : 1;
@@ -101,7 +116,7 @@ function drawPlaneCraft(a, T_, vx, vy) {
     const lit = (2.4 + L * 0.6) * faceLit(n) ** 1.5 * burnt; // (contrasty, so it reads round)
     if (!wreck && s > 0.78 && phi > 0.12 && phi < 0.62 && Math.abs(nr) > 0.25) { BG[i] = C(GRAY, 0.5 + lit * 0.15); return set(i, ' ', 0), true; } // the windscreen
     if (!wreck && phi > -0.32 && phi < -0.05 && s < 0.8) { BG[i] = C(T_.stripe, lit); return set(i, ' ', 0), true; } // the cheat line
-    const win = !far && !wreck && phi > 0.08 && phi < 0.3 && s > -0.62 && s < 0.7 && fract(along / (R * 0.45)) < 0.42;
+    const win = !T_.fighter && !far && !wreck && phi > 0.08 && phi < 0.3 && s > -0.62 && s < 0.7 && fract(along / (R * 0.45)) < 0.42;
     BG[i] = C(phi < -0.75 ? GRAY : body, phi < -0.75 ? lit * 1.1 : lit);
     return set(i, win ? (nightLit > 0.3 ? 'o' : '.') : ' ', win ? C(nightLit > 0.3 ? WARM : GRAY, nightLit > 0.3 ? 14 : 3) : 0), true;
   });
