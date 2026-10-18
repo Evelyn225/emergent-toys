@@ -561,7 +561,7 @@ test('each kind of building has its own way up to the roof: a walk-up\'s stairs,
     return out;
   });
   assert.deepStrictEqual(Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'rail').map(([k, v]) => [k, v && v.kind])),
-    { brownstones: 'walkup', downtown: 'tower', industrial: 'loft', belle: 'bellelobby' });
+    { brownstones: 'walkup', downtown: 'tower', industrial: 'freightlobby', belle: 'bellelobby' });
   for (const [region, v] of Object.entries(r)) {
     if (region === 'rail') continue;
     assert.ok(v.near, `${region}: you can reach the way up (${JSON.stringify(v)})`);

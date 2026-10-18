@@ -4229,7 +4229,7 @@ const ROOM_TALK = {
   hotel: ['Room service took an hour and forgot the fork.', 'I\'m here for a conference. I think. Lost the badge.', 'The lifts are haunted. Fourth floor, every night, ding.', 'Checking out. Taking all the little soaps.'],
   walkup: ['Five floors, no lift. You get used to it. Your knees don\'t.', 'Mind the third step, it\'s been loose since the eighties.', 'Somebody keeps taking my newspaper.', 'Super says the heat\'s coming back on Tuesday. Which Tuesday, he didn\'t say.'],
   tower: ['Sign in at the desk, please.', 'Forty floors and they still can\'t fix the lift music.', 'Express lift skips the first twenty. Saves a whole minute.', 'I work up top. Never once seen the roof.'],
-  loft: ['Used to be a cannery. You can still smell it when it rains.', 'Mind the gate, it bites.', 'The freight lift takes your bike. And your patience.', 'We\'re all artists here. Or say we are.'],
+  freightlobby: ['Used to be a cannery. You can still smell it when it rains.', 'Mind the gate, it bites.', 'The freight lift takes your bike. And your patience.', 'We\'re all artists here. Or say we are.'],
   bellelobby: ['Madame on the second has lived here since before the war. Which war, nobody\'s sure.', 'Do close the cage gate behind you. Manners.', 'The chandelier came from Paris. Allegedly.', 'Wipe your feet. This carpet is older than both of us.'],
   apts: ['The lift\'s been "being fixed" since March.', 'Whoever\'s cooking fish on three, I will find you.', 'Package room\'s a lottery. Never your parcel.', 'You new in the building? Don\'t park in 4B.'],
   barber: ['Just a trim, I told him. Just. A. Trim.', 'Best gossip in the city is in this chair.', 'Don\'t let him talk you into the hot towel. Actually, do.', 'My barber knows more about me than my wife.'],
@@ -4805,7 +4805,7 @@ const AUDIO_DISTRICT = {
 const ROOM_AUDIO = {
   bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
-  hotel: [0.2, 0.4, 0], grandhotel: [0.15, 0.35, 0], casino: [0.7, 0, 0], stripclub: [0.55, 0.8, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], walkup: [0, 0, 0], tower: [0.1, 0, 0], loft: [0, 0, 0], bellelobby: [0.1, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
+  hotel: [0.2, 0.4, 0], grandhotel: [0.15, 0.35, 0], casino: [0.7, 0, 0], stripclub: [0.55, 0.8, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], walkup: [0, 0, 0], tower: [0.1, 0, 0], freightlobby: [0, 0, 0], bellelobby: [0.1, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
   grocer: [0, 0, 0.45], deli: [0.35, 0, 0.35], hardware: [0, 0, 0.3], skate: [0.15, 0, 0.3], sports: [0.1, 0, 0.4], toys: [0.2, 0, 0.45], thrift: [0, 0.35, 0.2],
   pharmacy: [0, 0, 0.4], tobacco: [0, 0.5, 0], video: [0, 0, 0.45], herbs: [0, 0, 0.25], phones: [0.1, 0, 0.35], pawn: [0, 0, 0.3], liquor: [0, 0, 0.4], jeweler: [0, 0.45, 0], gas: [0, 0, 0.35], terminal: [0.55, 0, 0.15],
 };
@@ -14733,17 +14733,17 @@ STOCK_ROOM.terminal = ['coffee', 'latte', 'croissant', 'sandwich', 'water'];
 // - a walk-up (the Brownstones, Chinatown, the Shotengai): a narrow hall, the mailboxes, a bike, and a real flight of
 //   stairs you climb to the roof door on the landing
 // - a tower (Downtown, the taller Midtown blocks): a stone lobby, the security desk and its guard, a bank of lifts
-// - a loft (the Docks, the Yards): bare brick, a concrete floor, a freight lift behind its gate
+// - a freight lobby (the Docks, the Yards): bare brick, a concrete floor, a freight lift behind its gate
 // - the Belle Époque Quarter: carpet, panelling, a gilt mirror, and a brass cage lift
 // - anywhere else: the plain lobby (apts, rooms.js)
 // Each has ex (the way up, along the back wall) and, where it isn't a lift, upPrompt; liftWall draws the way up (the
 // 'E' cells on the back wall: u runs along x there).
-const LOBBY_KINDS = new Set(['apts', 'walkup', 'tower', 'loft', 'bellelobby']);
+const LOBBY_KINDS = new Set(['apts', 'walkup', 'tower', 'freightlobby', 'bellelobby']);
 function lobbyKind(mx, my) {
   const d = districtAt(mx + 0.5, my + 0.5), h = map[idx(mx, my)];
   if (d === 'belle') return 'bellelobby';
   if (d === 'brownstones' || d === 'chinatown' || d === 'shotengai') return 'walkup';
-  if (d === 'industrial' || d === 'yards' || d === 'waterfront') return 'loft';
+  if (d === 'industrial' || d === 'yards' || d === 'waterfront') return 'freightlobby';
   if (d === 'downtown' || d === 'midtown' && h >= 4) return 'tower';
   return 'apts';
 }
@@ -14836,8 +14836,8 @@ function towerWall(i, u, z, L) { // big stone panels with a bronze reveal betwee
   return set(i, fract(u / 1.5) < 0.025 || fract(z / 1.2) < 0.03 ? '|' : ' ', C(ORANGE, L * 0.5)), true;
 }
 
-// ---- the loft: an old warehouse's way in: brick, concrete, pipes, and the freight lift behind its gate
-ROOM_DEFS.loft = { grid: boxRoom(10, 9, { '3,0': 'E', '4,0': 'E', '5,0': 'E', '6,0': 'E' }), light: 0.8, floor: 'concrete', ceil: 'strip', height: 3.8, ex: 5, exReach: 1.6,
+// ---- the freight lobby: an old warehouse's way in: brick, concrete, pipes, and the freight lift behind its gate
+ROOM_DEFS.freightlobby = { grid: boxRoom(10, 9, { '3,0': 'E', '4,0': 'E', '5,0': 'E', '6,0': 'E' }), light: 0.8, floor: 'concrete', ceil: 'strip', height: 3.8, ex: 5, exReach: 1.6,
   upPrompt: 'E: freight lift to the roof', upSay: 'The gate rattles shut and the old lift grinds its way up.',
   liftWall: (i, u, uStep, z, d, mx, my, L) => {
     const du = u - 5;

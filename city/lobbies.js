@@ -2,17 +2,17 @@
 // - a walk-up (the Brownstones, Chinatown, the Shotengai): a narrow hall, the mailboxes, a bike, and a real flight of
 //   stairs you climb to the roof door on the landing
 // - a tower (Downtown, the taller Midtown blocks): a stone lobby, the security desk and its guard, a bank of lifts
-// - a loft (the Docks, the Yards): bare brick, a concrete floor, a freight lift behind its gate
+// - a freight lobby (the Docks, the Yards): bare brick, a concrete floor, a freight lift behind its gate
 // - the Belle Époque Quarter: carpet, panelling, a gilt mirror, and a brass cage lift
 // - anywhere else: the plain lobby (apts, rooms.js)
 // Each has ex (the way up, along the back wall) and, where it isn't a lift, upPrompt; liftWall draws the way up (the
 // 'E' cells on the back wall: u runs along x there).
-const LOBBY_KINDS = new Set(['apts', 'walkup', 'tower', 'loft', 'bellelobby']);
+const LOBBY_KINDS = new Set(['apts', 'walkup', 'tower', 'freightlobby', 'bellelobby']);
 function lobbyKind(mx, my) {
   const d = districtAt(mx + 0.5, my + 0.5), h = map[idx(mx, my)];
   if (d === 'belle') return 'bellelobby';
   if (d === 'brownstones' || d === 'chinatown' || d === 'shotengai') return 'walkup';
-  if (d === 'industrial' || d === 'yards' || d === 'waterfront') return 'loft';
+  if (d === 'industrial' || d === 'yards' || d === 'waterfront') return 'freightlobby';
   if (d === 'downtown' || d === 'midtown' && h >= 4) return 'tower';
   return 'apts';
 }
@@ -105,8 +105,8 @@ function towerWall(i, u, z, L) { // big stone panels with a bronze reveal betwee
   return set(i, fract(u / 1.5) < 0.025 || fract(z / 1.2) < 0.03 ? '|' : ' ', C(ORANGE, L * 0.5)), true;
 }
 
-// ---- the loft: an old warehouse's way in: brick, concrete, pipes, and the freight lift behind its gate
-ROOM_DEFS.loft = { grid: boxRoom(10, 9, { '3,0': 'E', '4,0': 'E', '5,0': 'E', '6,0': 'E' }), light: 0.8, floor: 'concrete', ceil: 'strip', height: 3.8, ex: 5, exReach: 1.6,
+// ---- the freight lobby: an old warehouse's way in: brick, concrete, pipes, and the freight lift behind its gate
+ROOM_DEFS.freightlobby = { grid: boxRoom(10, 9, { '3,0': 'E', '4,0': 'E', '5,0': 'E', '6,0': 'E' }), light: 0.8, floor: 'concrete', ceil: 'strip', height: 3.8, ex: 5, exReach: 1.6,
   upPrompt: 'E: freight lift to the roof', upSay: 'The gate rattles shut and the old lift grinds its way up.',
   liftWall: (i, u, uStep, z, d, mx, my, L) => {
     const du = u - 5;

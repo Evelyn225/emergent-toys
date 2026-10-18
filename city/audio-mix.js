@@ -19,7 +19,7 @@ const AUDIO_DISTRICT = {
 const ROOM_AUDIO = {
   bar: [1, 0.55, 0], diner: [0.7, 0.75, 0], karaoke: [0.8, 0, 0], arcade: [0.35, 0, 0], store: [0, 0, 0.5],
   laundry: [0, 0, 0.45], barber: [0.1, 0, 0.55], petshop: [0, 0, 0.5], florist: [0, 0.35, 0.4],
-  hotel: [0.2, 0.4, 0], grandhotel: [0.15, 0.35, 0], casino: [0.7, 0, 0], stripclub: [0.55, 0.8, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], walkup: [0, 0, 0], tower: [0.1, 0, 0], loft: [0, 0, 0], bellelobby: [0.1, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
+  hotel: [0.2, 0.4, 0], grandhotel: [0.15, 0.35, 0], casino: [0.7, 0, 0], stripclub: [0.55, 0.8, 0], aquarium: [0.2, 0, 0], conservatory: [0.1, 0, 0], aviary: [0.1, 0, 0], cathedral: [0.06, 0, 0], pachinko: [0.3, 0, 0], cranes: [0.25, 0, 0], capsule: [0, 0, 0], hospital: [0.25, 0, 0], hotelroom: [0, 0, 0], bank: [0.15, 0, 0], gym: [0.15, 0, 0], cinema: [0, 0, 0], apts: [0, 0, 0], walkup: [0, 0, 0], tower: [0.1, 0, 0], freightlobby: [0, 0, 0], bellelobby: [0.1, 0, 0], station: [0.25, 0, 0], train: [0, 0, 0],
   grocer: [0, 0, 0.45], deli: [0.35, 0, 0.35], hardware: [0, 0, 0.3], skate: [0.15, 0, 0.3], sports: [0.1, 0, 0.4], toys: [0.2, 0, 0.45], thrift: [0, 0.35, 0.2],
   pharmacy: [0, 0, 0.4], tobacco: [0, 0.5, 0], video: [0, 0, 0.45], herbs: [0, 0, 0.25], phones: [0.1, 0, 0.35], pawn: [0, 0, 0.3], liquor: [0, 0, 0.4], jeweler: [0, 0.45, 0], gas: [0, 0, 0.35], terminal: [0.55, 0, 0.15],
 };
