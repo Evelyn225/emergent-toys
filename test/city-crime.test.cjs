@@ -203,6 +203,9 @@ test('the helicopter: at five stars it comes out, its light finds you in the ope
   assert.ok(ev('near(heli.x, heli.y, px, py)') > 20, 'from somewhere off over the rooftops');
   step(30);
   assert.ok(ev('near(heli.sx, heli.sy, px, py) < SPOT_R'), 'its light on you');
+  const off = ev('near(heli.x, heli.y, px, py)');
+  assert.ok(off > 1.5 && off < ev('SPOT_REACH') + 0.5, `circling off to one side where you can see it, not straight overhead (${off.toFixed(2)})`);
+  assert.ok(ev('heli.z >= HELI_Z'));
   assert.strictEqual(ev('wanted.seen'), true);
   assert.strictEqual(ev('wanted.hideT'), 0);
   ev("mode = 'room'; room = { ret: [px, py, 0], def: {}, kind: 'store' }");

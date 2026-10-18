@@ -502,7 +502,7 @@ function stepRoadblocks() {
 // streets round there. Caught in the light, you're seen: from up there the buildings don't hide you, only a roof over
 // your head does (indoors, under the el's deck, under the Shotengai's glass). The light swings slower than the
 // helicopter flies, so a fast car can get out from under it. Once the heat's off it flies away.
-const HELI_STARS = 5, HELI_Z = 4, HELI_SPEED = 2.6, SPOT_SPEED = 1.9, SPOT_R = 0.7, SPOT_REACH = 4, HELI_GONE = 45;
+const HELI_STARS = 5, HELI_Z = 4, HELI_ORBIT = 3, HELI_SPEED = 2.6, SPOT_SPEED = 1.9, SPOT_R = 0.7, SPOT_REACH = 4, HELI_GONE = 45;
 let heli = null; // { x, y, z, h (heading), sx, sy (where the light's on the ground), leaving }
 const underCover = (x, y) => mode === 'room' || (mode === 'walk' || mode === 'drive' || mode === 'taxi') && (arcadeAt(x, y) || underEl(y));
 function stepHeli(dt) {
@@ -515,8 +515,13 @@ function stepHeli(dt) {
   }
   if (!hot) heli.leaving = true;
   const lit = !heli.leaving && near(heli.sx, heli.sy, wx, wy) < SPOT_R && !underCover(wx, wy);
-  // the helicopter: over you while it has you, over the search otherwise; away over the rooftops once it's called off
-  let tx = heli.leaving ? heli.x + Math.cos(heli.h) * 50 : lit ? wx : wanted.searchX, ty = heli.leaving ? heli.y + Math.sin(heli.h) * 50 : lit ? wy : wanted.searchY;
+  // the helicopter: circling you while it has you (off to one side, its beam leaning in, where you can see it), circling
+  // the search otherwise; away over the rooftops once it's called off. High enough to clear the towers it passes over.
+  heli.orbit = (heli.orbit ?? heli.h + Math.PI) + dt * 0.22;
+  const ox = Math.cos(heli.orbit) * HELI_ORBIT, oy = Math.sin(heli.orbit) * HELI_ORBIT;
+  let tx = heli.leaving ? heli.x + Math.cos(heli.h) * 50 : (lit ? wx : wanted.searchX) + ox, ty = heli.leaving ? heli.y + Math.sin(heli.h) * 50 : (lit ? wy : wanted.searchY) + oy;
+  const clear = Math.max(HELI_Z, (map[idx(Math.floor(heli.x), Math.floor(heli.y))] || 0) + 1.5, builtHeight(heli.x, heli.y) + 1.5);
+  heli.z += clamp(clear - heli.z, -0.8 * dt, 1.5 * dt);
   const vx = rel(tx - heli.x), vy = rel(ty - heli.y), d = Math.hypot(vx, vy);
   if (d > 0.3) {
     const want = Math.atan2(vy, vx), turn = mod(want - heli.h + Math.PI, TAU) - Math.PI;
