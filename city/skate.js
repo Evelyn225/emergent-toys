@@ -146,7 +146,7 @@ function skateCam(dt) {
 // the board, a bit bigger than life (as the old games drew it: real size, it's lost under a grown-up seen from behind).
 // k: how much bigger. The deck: half length, width, thickness; its middle this high; the kicktails; trucks this far
 // along from the middle; your height on it
-const SB_K = 1.4, SB = { k: SB_K, hl: 0.04 * SB_K, hw: 0.0105 * SB_K, ht: 0.0012 * SB_K, up: 0.0085 * SB_K, tail: 0.006 * SB_K, truck: 0.027 * SB_K, rider: 0.165 };
+const SB_K = 1.55, SB = { k: SB_K, hl: 0.04 * SB_K, hw: 0.0105 * SB_K, ht: 0.0012 * SB_K, up: 0.0085 * SB_K, tail: 0.006 * SB_K, truck: 0.027 * SB_K, rider: 0.165 };
 let skaterLookMemo = null;
 // whoever you are: a beanie, short hair under it, a long-sleeved tee, jeans and white sneakers
 const skaterLook = () => skaterLookMemo ||= figLook({ hair: 'short', hat: 'beanie', top: 'long', bot: 'pants', bw: 1,
@@ -175,6 +175,51 @@ function drawSkateBoard(vx, vy, z, yaw, nose, roll) {
     for (const sd of [1, -1]) box(F, at(o, F, e * SB.truck, sd * 0.0095 * k, -SB.ht - 0.0045 * k), 0.0028 * k, 0.0016 * k, 0.0028 * k, wheel);
   }
 }
+// ---- you, in true perspective. Anyone else is a cut-out stood at one depth and seen as if from eye level: fine for
+// passers-by, but from behind and above, on a board, its feet don't land where they stand (the front foot belongs
+// further off, higher up the screen, over the front truck), and from a little to the side you'd seem to stand on the
+// end of the deck. So each pixel of your sprite goes where its bit of you really is: the sprite for this angle (one
+// of SK_VIEWS round you) remembers how near each pixel's surface is, toward whoever's looking.
+const SK_VIEWS = 32;
+function skaterSprite(look, key, view) {
+  const id = look.shape + '|' + key + '|sk' + view;
+  let s = figCache.get(id);
+  if (!s) {
+    const bid = look.shape + '|' + key;
+    let fb = figCache.get(bid);
+    if (!fb) figCache.set(bid, fb = figBody(look, key));
+    const near = new Float32Array(FIG_W * FIG_H);
+    figCache.set(id, s = { role: figRasterAt(fb, view / SK_VIEWS * Math.PI * 2, near), near });
+  }
+  return s;
+}
+// as drawFigure: (rx, ry) from the camera, standing on z0, h tall, facing (fx, fy), a figPose key, least brightness
+function drawSkaterFigure(rx, ry, z0, h, fx, fy, look, key, light = 5) {
+  const d0 = Math.hypot(rx, ry) || 1, vx = -rx / d0, vy = -ry / d0;
+  const view = mod(Math.round(Math.atan2(vx * -fy + vy * fx, vx * fx + vy * fy) / (Math.PI * 2) * SK_VIEWS), SK_VIEWS);
+  const { role, near } = skaterSprite(look, key, view), th = view / SK_VIEWS * Math.PI * 2, unit = h / FIG_TALL;
+  // the sprite's two directions in the world: across it (left to right as drawn), and toward the viewer
+  const toW = (bx, by) => [-fy * bx + fx * by, fx * bx + fy * by]; // (body frame: x their right, y ahead)
+  const [ax, ay] = toW(-Math.cos(th), Math.sin(th)), [nx, ny] = toW(Math.sin(th), Math.cos(th));
+  for (let r = 0; r < FIG_H; r++) for (let c = 0; c < FIG_W; c++) {
+    const k = role[r * FIG_W + c];
+    if (!k) continue;
+    const u = c - (FIG_W - 1) / 2, n = near[r * FIG_W + c], X = rx + (ax * u + nx * n) * unit, Y = ry + (ay * u + ny * n) * unit, Z = z0 + (FIG_H - r - 0.5) * unit;
+    const depth = dx * X + dy * Y;
+    if (depth < 0.05 || depth > vis) continue;
+    const col = cols / 2 + (-dy * X + dx * Y) * projX / depth, row = hor - (Z - eye) * projY / depth;
+    const hu = unit * projX / depth * 0.55, hz = unit * projY / depth * 0.55; // (half a pixel and a touch more: no gaps)
+    let c0 = Math.ceil(col - hu - 0.5), c1 = Math.floor(col + hu - 0.5), r0 = Math.ceil(row - hz - 0.5), r1 = Math.floor(row + hz - 0.5);
+    if (c1 < c0) c0 = c1 = Math.floor(col); // (smaller than a cell: the cell it's in)
+    if (r1 < r0) r0 = r1 = Math.floor(row);
+    const ro = hu < 0.5 || hz < 0.5 ? FIG_COARSE[k] || k : k, L = (1 - depth / vis) * 15 * amb, lit = clamp(0.32 + Math.max(light, L) / 15 * 0.78, 0.32, 1);
+    for (let rr = Math.max(0, r0); rr <= Math.min(rows - 1, r1); rr++) for (let cc = Math.max(0, c0); cc <= Math.min(cols - 1, c1); cc++) {
+      const i = rr * cols + cc;
+      if (depth >= ZB[i]) continue;
+      BG[i] = C(look.base[ro], look.lvl[ro] * lit); set(i, ' ', 0); ZB[i] = ZBG[i] = depth; FL[i] = 0;
+    }
+  }
+}
 // your shadow on the ground, under the board: how high you are, in the air
 function drawSkateShadow(vx, vy, g, yaw, up) {
   const k = 1 / (1 + up * 8), F = craftFrame(yaw, 0, 0), ru = (SB.hl + 0.006) * k, rv = SB.hw * 1.6 * k;
@@ -189,7 +234,7 @@ function drawSkater() {
   if (SK.bailAt) { // sprawled where you came off, the board upside down a little way on
     const [bx, by, dir, ang] = SK.bailAt, g = walkGround(bx, by), [vx, vy] = R(bx, by);
     drawSkateBoard(...R(bx + Math.cos(dir) * 0.08, by + Math.sin(dir) * 0.08), g - SB.up + SB.ht, ang + 0.6, 0, Math.PI);
-    return drawFigure(vx, vy, g, SB.rider, Math.cos(dir), Math.sin(dir), look, 'sprawl', { light: 5 });
+    return drawSkaterFigure(vx, vy, g, SB.rider, Math.cos(dir), Math.sin(dir), look, 'sprawl');
   }
   const { x, y } = skateView, [vx, vy] = R(x, y), g = walkGround(x, y), z = g + body.z / 10;
   drawSkateShadow(vx, vy, g, skateView.a, body.z / 10);
@@ -198,5 +243,5 @@ function drawSkater() {
   const air = skateAir(), pushing = SK.kicking && !air, ang = skateView.a + (pushing ? 0 : SK.stance * Math.PI / 2);
   const pose = air || SK.charge >= 0 ? 'crouch' : pushing ? 'push' + (Math.floor(SK.kick * 8) & 7) : 'ride' + (1 + SK.steer * SK.stance);
   const feet = z + SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
-  drawFigure(vx, vy, feet, SB.rider, Math.cos(ang), Math.sin(ang), look, pose, { light: 5 });
+  drawSkaterFigure(vx, vy, feet, SB.rider, Math.cos(ang), Math.sin(ang), look, pose);
 }
