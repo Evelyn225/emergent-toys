@@ -233,9 +233,11 @@ function figHitPart(P, o, d) {
   FIG_HIT.n = fMul(A[axis], sgn);
   return tmin;
 }
-// the sprite for a view (0..FIG_VIEWS-1: 0 = from in front of them, going round to their right): a role per pixel
-function figRaster(body, view) {
-  const th = view / FIG_VIEWS * Math.PI * 2, V = [Math.sin(th), Math.cos(th), 0], Rv = [-V[1], V[0], 0], d = fMul(V, -1);
+// the sprite for a view (0..FIG_VIEWS-1: 0 = from in front of them, going round to their right): a role per pixel.
+// figRasterAt takes the angle itself, and (near) gets how far toward you each pixel's surface is from the middle
+const figRaster = (body, view) => figRasterAt(body, view / FIG_VIEWS * Math.PI * 2);
+function figRasterAt(body, th, near) {
+  const V = [Math.sin(th), Math.cos(th), 0], Rv = [-V[1], V[0], 0], d = fMul(V, -1);
   const light = fNorm(fAdd(V, fAdd([0, 0, 0.7], fMul(Rv, -0.6)))); // from over your left shoulder
   const spr = new Uint8Array(FIG_W * FIG_H), owner = new Int16Array(FIG_W * FIG_H).fill(-1);
   // each part's extent on the view plane (a bounding sphere's), so a pixel only tries the parts that could cover it
@@ -261,6 +263,7 @@ function figRaster(body, view) {
       best = t; role = ro; who = k;
     });
     spr[r * FIG_W + c] = role; owner[r * FIG_W + c] = who;
+    if (near) near[r * FIG_W + c] = 60 - best;
   }
   for (const dc of body.decals) { // one pixel each, only where its part is what you see and it's turned toward you
     if (fDot(dc.n, V) < 0.25) continue;
