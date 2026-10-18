@@ -122,6 +122,7 @@ function move(fx, fy) {
   // walking into a way out (a shop's door, the top of the subway stairs) takes you through it
   const n = Math.hypot(fx, fy);
   if (mode === 'room' && n > 0 && roomAt(Math.floor(px + fx / n * 0.45), Math.floor(py + fy / n * 0.45)) === 'D') return leaveRoom();
+  if (mode === 'walk' && n > 0 && backroomsSeamAt(px + fx / n * 0.1, py + fy / n * 0.1)) return enterBackrooms(); // (backrooms.js)
   const stuck = !free(px, py); // (somewhere you shouldn't be, a teleport or a gate shutting on you: you can always walk out)
   if (stuck || free(px + fx + Math.sign(fx) * m, py)) px += fx;
   if (stuck || free(px, py + fy + Math.sign(fy) * m)) py += fy;

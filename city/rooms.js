@@ -1086,7 +1086,7 @@ function trainWall(i, u, uStep, z, d, mx, my, L) {
 function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const R = room, D = R.def, c = roomAt(mx, my), L = fog * (side ? 10 : 14) * D.light;
   BG[i] = NONE;
-  if (c === 'D' && R.kind !== 'cathedral') { // the way out: glass doors, or stairs up from the subway
+  if (c === 'D' && R.kind !== 'cathedral' && !D.doorWall) { // the way out: glass doors, or stairs up from the subway
     if (R.kind === 'station') {
       // The doorway reaches the sign's lower edge; keep the complete sign 6cm below the ceiling.
       if (z > STATION_EXIT_Z - STATION_EXIT_H / 2 - 0.04) return wallText(i, u, uStep, z, d, 'EXIT', 11.5, STATION_EXIT_Z, 0.25, STATION_EXIT_H, C(GREEN, 15)) || set(i, '=', C(GRAY, L));
