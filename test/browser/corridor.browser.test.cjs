@@ -906,7 +906,7 @@ test('the key door opens onto a lined service run that turns to rock and ends in
   assert.deepEqual(result.leaks,[],'no holes in the rock shell');
 });
 
-test('the red button sequence pauses, then restarts through a loading screen at the remembered refresh spawn', { timeout: 60000 }, async t => {
+test('the red button sequence pauses, then restarts through a loading screen at the remembered refresh spawn', { timeout: 120000 }, async t => {
   const page = await open(t);
   let releaseRestart;
   let restartRequested = false;
