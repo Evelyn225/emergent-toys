@@ -264,6 +264,7 @@ function loop(t) {
   stepTraffic(dt, T);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
+  fighterNews(stepFighters(mode === 'air' && !wreckCam ? pilot : null, dt)); // (the interceptors after a stolen aircraft: fighters.js, flight.js)
   stepAirWrecks(dt); // (burning and sinking aircraft: flight.js)
   stepWakes(); // (boat wakes: marina.js)
   stepTask(dt);
@@ -321,7 +322,7 @@ function loop(t) {
     a += sa; pitch += sp_; render(dt); a -= sa + lk; pitch -= sp_;
     if (wob > 0.08) drunkVision(wob);
   }
-  audioTick(dt); stepChopperSound(dt);
+  audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);
   requestAnimationFrame(loop);
 }
 // double vision: a ghost of the frame laid over itself, drifting apart and back, stronger the more you've had

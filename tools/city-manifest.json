@@ -17,7 +17,7 @@
     "city/traffic.js",
     "city/gas.js",
     "city/damage.js",
-    "city/aircraft.js",
+    "city/aircraft.js", "city/fighters.js",
     "city/people.js",
     "city/talk.js",
     "city/elevated.js",

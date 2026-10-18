@@ -3824,6 +3824,85 @@ function loadPlanes(list) {
     a.x = mod(p.x, N); a.y = mod(p.y, N); a.yaw = p.yaw; a.z = builtHeight(a.x, a.y, 0); a.dmg = clamp(p.dmg || 0, 0, DMG_FIRE - 1);
   }
 }
+// ===== the interceptors: steal an aircraft and get it up, and before long the air force scrambles two fighters to
+// shoot it down. They come in fast from far off, get on your tail and open up with their cannon in short bursts. A
+// straight, level target is easy meat; one banked hard over and turning isn't, and the fighters, much faster, overshoot
+// a tight turn and have to come round again. They won't fire down among the rooftops (below LOW_PASS over whatever's
+// under you), so dragging them down low over the city is the other way to live. Land and stop, or get out, and they
+// circle once and go home; after FIGHTER_FUEL seconds of it they have to go home anyway.
+// Pure: stepFighters(target, dt, rnd) flies them against the aircraft you're in (or null) and returns what happened;
+// aircraft-render.js draws them and their tracers, flight.js tells you about it.
+const FIGHTER_T = { name: 'interceptor', fighter: true, len: 1.25, span: 0.85, r: 0.075, tail: 0.3, body: GRAY, stripe: GRAY, engines: 'jet', vr: 4, top: 13.5 };
+const SCRAMBLE_T = 20; // seconds airborne in something stolen before they're on their way
+const TRAIL = 3, FIGHTER_FUEL = 150, FIGHTER_TURN = 1.3, FIGHTER_FLOOR = 3, LOW_PASS = 1.6, GUN_RANGE = 12, GUN_CONE = 0.18, ROUND_DMG = 7, BREAK_T = 6;
+const fighters = []; // { id, x, y, z, yaw, pitch, roll, v, wing (-1, 1: which side of the pair), cool, sixed }
+const tracers = []; // { x, y, z, vx, vy, vz, t }
+let scramble = 0, fighterHunt = 0, fighterCalm = 0; // seconds airborne stolen; seconds they've been on you; seconds with nothing to chase
+const hunted = c => !!c && c.stolen && !c.owned && !c.wrecked && !c.ditched;
+// how high a fighter has to stay over (x, y): its floor, and a cell clear of whatever's built there
+const fighterFloor = (x, y) => Math.max(FIGHTER_FLOOR, (map[idx(Math.floor(x), Math.floor(y))] || 0) + 1.2, builtHeight(x, y) + 1.2);
+function stepFighters(c, dt, rnd = Math.random) {
+  const ev = [];
+  if (hunted(c) && !c.ground && c.z > 0.8) scramble += dt; else if (!fighters.length) scramble = Math.max(0, scramble - dt * 0.5);
+  if (!fighters.length && scramble > SCRAMBLE_T && hunted(c)) { // two of them, in from far off, side by side
+    const k = rnd() * TAU;
+    for (const wing of [-1, 1]) fighters.push({ id: 900 + fighters.length, x: mod(c.x + Math.cos(k) * 45 - Math.sin(k) * wing * 1.5, N), y: mod(c.y + Math.sin(k) * 45 + Math.cos(k) * wing * 1.5, N),
+      z: Math.max(c.z, 6), yaw: k + Math.PI, pitch: 0, roll: 0, v: FIGHTER_T.top, wing, cool: 2 + rnd() * 2, sixed: false });
+    fighterHunt = 0; fighterCalm = 0; ev.push('scramble');
+  }
+  for (let k = tracers.length - 1; k >= 0; k--) { const r = tracers[k]; r.x += r.vx * dt; r.y += r.vy * dt; r.z += r.vz * dt; if ((r.t -= dt) <= 0) tracers.splice(k, 1); }
+  if (!fighters.length) return ev;
+  // still a target? on the ground and stopped, or got out, or it's down: they hang about a few seconds, then go home
+  const live = hunted(c) && !(c.ground && Math.abs(c.v) < 0.5) && !c.falling;
+  fighterCalm = live ? 0 : fighterCalm + dt;
+  if (live) fighterHunt += dt;
+  const leaving = fighterCalm > BREAK_T || fighterHunt > FIGHTER_FUEL;
+  if (leaving && !fighters.leaving) { fighters.leaving = true; ev.push(fighterHunt > FIGHTER_FUEL ? 'bingo' : 'breakoff'); }
+  for (let k = fighters.length - 1; k >= 0; k--) {
+    const f = fighters[k], fx = Math.cos(f.yaw), fy = Math.sin(f.yaw);
+    let want = f.yaw, wantZ = f.z, wantV = FIGHTER_T.top;
+    if (fighters.leaving) { wantZ = 9; const o = c || { x: px, y: py }; if (Math.hypot(rel(f.x - o.x), rel(f.y - o.y)) > 70) { fighters.splice(k, 1); continue; } }
+    else if (c) { // the pursuit: at where it's going to be, a little to its own side of the pair; down to its height, never below the floor
+      const cx = Math.cos(c.yaw), cy = Math.sin(c.yaw), cv = c.v || 0;
+      const sit = TRAIL + f.wing * 0.6 + 0.6; // (a spot a few lengths behind it, one a little further back than the other)
+      const tx = rel(c.x - cx * sit - cy * f.wing * 0.7 - f.x), ty = rel(c.y - cy * sit + cx * f.wing * 0.7 - f.y), d = Math.hypot(tx, ty);
+      const onTo = (tx * fx + ty * fy) / (d || 1); // (heading for the spot, or past it and having to come round)
+      want = Math.atan2(ty, tx); wantZ = c.z;
+      wantV = onTo < 0.3 ? clamp(cv + 1.5, 6, FIGHTER_T.top) : clamp(cv + d * 0.6, 5, FIGHTER_T.top); // (closing fast, easing off to sit in behind; slower to come round)
+      // the guns: close, nose on, and not down among the rooftops
+      const rx = rel(c.x - f.x), ry = rel(c.y - f.y), rz = c.z - f.z, dist = Math.hypot(rx, ry, rz), off = Math.acos(clamp((rx * fx + ry * fy) / (Math.hypot(rx, ry) || 1), -1, 1));
+      const low = c.z - builtHeight(c.x, c.y) - (map[idx(Math.floor(c.x), Math.floor(c.y))] || 0) < LOW_PASS;
+      const behind = (rx * cx + ry * cy) / (Math.hypot(rx, ry) || 1) > 0.6; // (it's ahead of the fighter, going away: the fighter's on its six)
+      if (dist < GUN_RANGE + 3 && behind && !f.sixed && live) { f.sixed = true; ev.push('six'); } else if (dist > GUN_RANGE + 6) f.sixed = false;
+      if ((f.cool -= dt) <= 0 && live && dist < GUN_RANGE && off < GUN_CONE && Math.abs(rz) < 2.5) {
+        f.cool = 1.6 + rnd() * 0.9;
+        if (low) { ev.push('toolow'); f.cool += 2; }
+        else {
+          // a burst of six: each round's chance by the range, and how hard you're banked over and turning
+          const p = clamp(0.5 - dist * 0.03 - Math.abs(c.roll || 0) * 0.55 - (PLANE_TYPES[c.type].heli ? 0.1 : 0), 0.02, 0.6);
+          let hits = 0;
+          for (let n = 0; n < 6; n++) {
+            const hit = rnd() < p, sp = hit ? 0.04 : 0.25, s = 40, ax = rx / dist + (rnd() - 0.5) * sp, ay = ry / dist + (rnd() - 0.5) * sp, az = rz / dist + (rnd() - 0.5) * sp;
+            tracers.push({ x: f.x + fx * 0.7, y: f.y + fy * 0.7, z: f.z, vx: ax * s, vy: ay * s, vz: az * s, t: Math.min(0.6, dist / s + 0.1) + n * 0.03 });
+            if (hit) hits++;
+          }
+          if (hits) { damageCraft(c, hits * ROUND_DMG); ev.push('hit'); } else ev.push('miss');
+          ev.push('guns');
+        }
+      }
+    }
+    // fly: turn toward it at its best rate (banking into the turn), climb or dive for the height, never under the floor
+    const turn = clamp(mod(want - f.yaw + Math.PI, TAU) - Math.PI, -FIGHTER_TURN * dt, FIGHTER_TURN * dt);
+    f.yaw += turn; f.roll += (clamp(turn / dt / FIGHTER_TURN, -1, 1) * 1.1 - f.roll) * Math.min(1, 3 * dt);
+    f.v += clamp(wantV - f.v, -6 * dt, 3 * dt);
+    const ahead = fighterFloor(f.x + Math.cos(f.yaw) * f.v * 0.8, f.y + Math.sin(f.yaw) * f.v * 0.8), floor = Math.max(fighterFloor(f.x, f.y), ahead);
+    const vz = clamp((Math.max(wantZ, floor) - f.z) * 1.5, -3, 4);
+    f.pitch += (Math.atan2(vz, f.v) - f.pitch) * Math.min(1, 3 * dt);
+    f.x = mod(f.x + Math.cos(f.yaw) * f.v * dt, N); f.y = mod(f.y + Math.sin(f.yaw) * f.v * dt, N); f.z = Math.max(floor, f.z + vz * dt);
+  }
+  if (!fighters.length) { delete fighters.leaving; scramble = 0; ev.push('gone'); }
+  return ev;
+}
 // ---- doors: every shop, lobby and front door, as a point on the sidewalk outside it.
 // {x, y: on the walking line (0.12 / 1.88 into a street), nx, ny: one step inside, sh: the shop, use: what it's for}
 const NIGHTLIFE = new Set(['BAR', 'KARAOKE', 'MAHJONG', 'ARCADE', 'LIQUOR']);
@@ -21647,8 +21726,23 @@ function drawAircraft() {
     const vx = rel(a.x - px), vy = rel(a.y - py), T_ = PLANE_TYPES[a.type];
     if (Math.hypot(vx, vy) > vis + 4 || !inView(vx, vy, (T_.span || 1) / 2 + 0.3)) continue;
     if (T_.heli) drawHeliCraft(a, T_, vx, vy); else drawPlaneCraft(a, T_, vx, vy);
+  }  drawFighters(); // (the interceptors: fighters.js)
+}
+// the interceptors: grey, swept, a sharp canopy, the afterburners glowing; their tracers streaking past
+function drawFighters() {
+  for (const f of fighters) {
+    const vx = rel(f.x - px), vy = rel(f.y - py);
+    if (Math.hypot(vx, vy) > vis + 4 || !inView(vx, vy, 1)) continue;
+    drawPlaneCraft(f, FIGHTER_T, vx, vy);
+    const F = craftFrame(f.yaw, f.pitch, f.roll), o = [vx, vy, f.z + FIGHTER_T.r], d = Math.max(0.5, dx * vx + dy * vy);
+    for (const e of [-1, 1]) { const p = at(o, F, -FIGHTER_T.len / 2 - 0.02, e * 0.035, 0.01); dot(p[0], p[1], p[2], Math.max(0.03, d * 0.6 / projX), (i, t, L) => { BG[i] = C(fract(T * 9) < 0.5 ? ORANGE : YEL, 13); return set(i, '*', C(WHITE, 15)), true; }); } // (afterburners)
+  }
+  for (const r of tracers) {
+    const vx = rel(r.x - px), vy = rel(r.y - py), l = 0.04;
+    rod(vx, vy, r.z, vx - r.vx * l, vy - r.vy * l, r.z - r.vz * l, 0.012, YEL, 2);
   }
 }
+
 function drawPlaneCraft(a, T_, vx, vy) {
   const F = craftFrame(a.yaw, a.pitch, a.roll), gear = a.z < 0.6, h = T_.r + (gear ? T_.r * 0.9 + 0.02 : 0), o = [vx, vy, a.z + h], L2 = T_.len / 2;
   const depth = dx * vx + dy * vy, far = depth > 22, wreck = a.wrecked, body = wreck ? GRAY : T_.body, burnt = wreck ? 0.3 : 1;
@@ -21662,7 +21756,7 @@ function drawPlaneCraft(a, T_, vx, vy) {
     const lit = (2.4 + L * 0.6) * faceLit(n) ** 1.5 * burnt; // (contrasty, so it reads round)
     if (!wreck && s > 0.78 && phi > 0.12 && phi < 0.62 && Math.abs(nr) > 0.25) { BG[i] = C(GRAY, 0.5 + lit * 0.15); return set(i, ' ', 0), true; } // the windscreen
     if (!wreck && phi > -0.32 && phi < -0.05 && s < 0.8) { BG[i] = C(T_.stripe, lit); return set(i, ' ', 0), true; } // the cheat line
-    const win = !far && !wreck && phi > 0.08 && phi < 0.3 && s > -0.62 && s < 0.7 && fract(along / (R * 0.45)) < 0.42;
+    const win = !T_.fighter && !far && !wreck && phi > 0.08 && phi < 0.3 && s > -0.62 && s < 0.7 && fract(along / (R * 0.45)) < 0.42;
     BG[i] = C(phi < -0.75 ? GRAY : body, phi < -0.75 ? lit * 1.1 : lit);
     return set(i, win ? (nightLit > 0.3 ? 'o' : '.') : ' ', win ? C(nightLit > 0.3 ? WARM : GRAY, nightLit > 0.3 ? 14 : 3) : 0), true;
   });
@@ -22022,8 +22116,38 @@ function airDash() {
     const kx = sx + Math.round(airInput(0) * sw), ky = r0 + 1 + Math.round(airInput(1));
     set(ky * cols + kx, 'O', C(held ? YEL : WHITE, 15));
   }
-  const blink = fract(T * 2) < 0.5, warn = burning(c) ? 'FIRE' : c.stalled ? 'STALL' : T_.ceil && c.z > T_.ceil - 0.5 ? 'CEILING' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y, c.z) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
+  const sixes = fighters.filter(f => f.sixed && !fighters.leaving).length;
+  const blink = fract(T * 2) < 0.5, warn = burning(c) ? 'FIRE' : sixes ? 'BANDIT 6 O\'CLOCK' : c.stalled ? 'STALL' : T_.ceil && c.z > T_.ceil - 0.5 ? 'CEILING' : !c.ground && c.vz < -1 && c.z - builtHeight(c.x, c.y, c.z) < 1.5 ? 'PULL UP' : c.dmg >= DMG_SMOKE ? 'DAMAGE' : '';
   if (warn) putText(r0 + 1, cols - warn.length - 3, warn, C(RED, blink ? 15 : 7));
+  if (fighters.length && !fighters.leaving) { const s = `FIGHTERS ${fighters.length}`; putText(r0 + 2, cols - s.length - 3, s, C(YEL, 13)); }
+}
+// the interceptors (fighters.js): what you hear about them, on the radio and otherwise
+function fighterNews(ev) {
+  for (const e of ev) {
+    if (e === 'scramble') say('The radio: "Unidentified aircraft, this is the air force. Two interceptors are on their way to you. Land at once."', 6);
+    else if (e === 'six') { say('BANDIT ON YOUR SIX! Bank hard, or get down low among the rooftops.', 3); if (actx) for (let k = 0; k < 4; k++) tone(actx.currentTime + k * 0.18, 1400, 0.1, 0.05, 'square'); }
+    else if (e === 'hit') { say('Hit! Rounds slamming into the airframe.', 1.5); if (actx) { playClip('crash', 0.25); tone(actx.currentTime, 90, 0.2, 0.08, 'sawtooth'); } }
+    else if (e === 'toolow') say('They pull up: too low over the rooftops to take the shot.', 2);
+    else if (e === 'breakoff') say('The fighters break off, circle once, and climb away.', 4);
+    else if (e === 'bingo') say('"Bingo fuel, returning to base." The fighters peel away.', 4);
+    if (e === 'guns' && actx) gunBurst();
+  }
+}
+function gunBurst() { // brrrt, from wherever the nearest one is
+  const f = fighters.reduce((b, o) => !b || Math.hypot(rel(o.x - px), rel(o.y - py)) < Math.hypot(rel(b.x - px), rel(b.y - py)) ? o : b, null);
+  if (!f) return;
+  const d = Math.hypot(rel(f.x - px), rel(f.y - py)), loud = clamp(1 - d / 30, 0.15, 1), pan = clamp((-dy * rel(f.x - px) + dx * rel(f.y - py)) / Math.max(1, d), -1, 1);
+  for (let k = 0; k < 8; k++) tone(actx.currentTime + k * 0.045, 140 + Math.random() * 40, 0.035, 0.06 * loud, 'square', pan);
+}
+// the jets' roar, louder as one comes past
+let fighterRoarT = 0;
+function stepFighterSound(dt) {
+  if (!actx || paused || !fighters.length || (fighterRoarT -= dt) > 0) return;
+  fighterRoarT = 0.12;
+  for (const f of fighters) {
+    const d = Math.hypot(rel(f.x - px), rel(f.y - py), f.z - eye), loud = clamp(1 - d / 25, 0, 1);
+    if (loud > 0) tone(actx.currentTime, 60 + loud * 40 + Math.random() * 20, 0.14, 0.05 * loud * loud, 'sawtooth', clamp((-dy * rel(f.x - px) + dx * rel(f.y - py)) / Math.max(1, d), -1, 1));
+  }
 }
 function airPrompt() {
   if (wreckCam) return '';
@@ -26708,6 +26832,7 @@ function loop(t) {
   stepTraffic(dt, T);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
   stepAirTraffic(dt); // (the airliners: aircraft.js)
+  fighterNews(stepFighters(mode === 'air' && !wreckCam ? pilot : null, dt)); // (the interceptors after a stolen aircraft: fighters.js, flight.js)
   stepAirWrecks(dt); // (burning and sinking aircraft: flight.js)
   stepWakes(); // (boat wakes: marina.js)
   stepTask(dt);
@@ -26765,7 +26890,7 @@ function loop(t) {
     a += sa; pitch += sp_; render(dt); a -= sa + lk; pitch -= sp_;
     if (wob > 0.08) drunkVision(wob);
   }
-  audioTick(dt); stepChopperSound(dt);
+  audioTick(dt); stepChopperSound(dt); stepFighterSound(dt);
   requestAnimationFrame(loop);
 }
 // double vision: a ghost of the frame laid over itself, drifting apart and back, stronger the more you've had
