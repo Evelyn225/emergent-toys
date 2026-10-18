@@ -1714,7 +1714,11 @@ test('balloon darts on the pier: $1 at the booth, a dart on a balloon pops it', 
   assert.strictEqual(await page.evaluate(() => promptText()), 'E: play BALLOON DARTS ($1.00 a go)');
   await page.keyboard.press('KeyE');
   assert.deepStrictEqual(await page.evaluate(() => [game && game.g.id, money]), ['darts', 9]);
-  await page.evaluate(() => { const g = game.g; for (let k = 0; k < 3000 && !g.hitAt(...g.aim().map(Math.round)); k++) g.step(1 / 60, {}); g.step(1 / 60, { actP: 1 }); }); // (thrown the moment it's on one: the reticle won't wait)
+  await page.evaluate(() => { // thrown the moment the reticle is well inside a balloon: the throw itself sways it one more frame, so not on an edge
+    const g = game.g, inside = () => { const [x, y] = g.aim(); return [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]].every(([ox, oy]) => g.hitAt(Math.round(x + ox), Math.round(y + oy))); };
+    for (let k = 0; k < 3000 && !inside(); k++) g.step(1 / 60, {});
+    g.step(1 / 60, { actP: 1 });
+  });
   await page.waitForFunction(() => game.g.score > 0 || game.g.balloons.some(b => b.popped), null, { timeout: 10000 });
   assert.ok(await page.evaluate(() => game.g.balloons.filter(b => b.popped).length === 1 && game.g.score >= 3));
 }));
