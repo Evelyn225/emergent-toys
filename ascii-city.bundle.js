@@ -20000,25 +20000,27 @@ function present2D() {
     x = end;
   }
 }
+// a readout over the view: its letters stay out of the fog (the street behind them doesn't)
+const dashText = (r, c, s, col) => { putText(r, c, s, col); for (let k = 0; k < s.length; k++) if (s[k] !== ' ' && r >= 0 && r < rows && c + k >= 0 && c + k < cols) FOGS[r * cols + c + k] = 0; };
 function dash() {
   const c = me;
-  FOGS.fill(0, (rows - 4) * cols); FOGB.fill(0, (rows - 4) * cols); // the dashboard is never in the fog
-  if (!chaseOn) { // hood and dashboard only from the driver's seat
+  if (!chaseOn) { // hood and dashboard only from the driver's seat (and they're never in the fog)
+    FOGS.fill(0, (rows - 4) * cols); FOGB.fill(0, (rows - 4) * cols);
     for (let r = rows - 4; r < rows; r++) for (let x = 0; x < cols; x++) {
       const i = r * cols + x;
       set(i, r === rows - 4 ? '_' : ' ', C(c.body, 6)); BG[i] = r === rows - 4 ? NONE : C(GRAY, 1);
     }
-    if (mode === 'drive') ['.--------.', '|---()---|', "'--------'"].forEach((l, k) => putText(rows - 3 + k, (cols - 10) >> 1, l, C(GRAY, 10)));
+    if (mode === 'drive') ['.--------.', '|---()---|', "'--------'"].forEach((l, k) => dashText(rows - 3 + k, (cols - 10) >> 1, l, C(GRAY, 10)));
   }
   if (mode === 'drive' && job) { // on a taxi shift
-    putText(rows - 3, 3, `TAXI SHIFT   trips ${job.trips}   earned ${fmt$(job.earned)}${job.ride ? `   meter ${fmt$(taxiFare(job.ride.odo))}` : ''}`, C(TAXI, 15));
-    putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h   ${jobLine()}`, C(WHITE, 13));
+    dashText(rows - 3, 3, `TAXI SHIFT   trips ${job.trips}   earned ${fmt$(job.earned)}${job.ride ? `   meter ${fmt$(taxiFare(job.ride.odo))}` : ''}`, C(TAXI, 15));
+    dashText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h   ${jobLine()}`, C(WHITE, 13));
   } else if (mode === 'drive') {
-    putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
+    dashText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
     damageDash();
   } else {
-    putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
-    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway' + (owned.homes.length ? '   6: home' : ''), C(WHITE, 12));
+    dashText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
+    dashText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway' + (owned.homes.length ? '   6: home' : ''), C(WHITE, 12));
   }
 }
 
@@ -21184,7 +21186,7 @@ function damageDash() {
   if (!c || !c.dmg) return;
   const fire = burning(c), bad = c.dmg >= DMG_BAD, blink = fract(T * 2) < 0.5;
   const label = fire ? 'FIRE! GET OUT' : c.dmg >= DMG_SMOKE ? 'ENGINE' : 'DAMAGE';
-  if (c.dmg >= DMG_DENTS) putText(rows - 2, cols - label.length - 3, label, C(fire || bad ? RED : YEL, fire || bad ? (blink ? 15 : 7) : 13));
+  if (c.dmg >= DMG_DENTS) dashText(rows - 2, cols - label.length - 3, label, C(fire || bad ? RED : YEL, fire || bad ? (blink ? 15 : 7) : 13));
   if (fire && !chaseOn) for (let x = 0; x < cols; x++) { // flames over the hood, flickering
     const h = Math.floor((0.5 + 0.5 * Math.sin(x * 0.7 + T * 11)) * (1 + Math.sin(x * 0.23 - T * 3)) * 2), mid = Math.abs(x - cols / 2) < cols * 0.3;
     if (!mid) continue;
@@ -21879,7 +21881,7 @@ function airDash() {
     }
     if (!T_.heli) for (let r = r0 - 4; r < r0 - 1; r++) { const w = Math.round(cols * (0.06 + (r - r0 + 4) * 0.035)); for (let x = (cols >> 1) - w; x <= (cols >> 1) + w; x++) { const i = r * cols + x; set(i, r === r0 - 4 ? '_' : ' ', col); BG[i] = C(c.type === 'jet' ? GRAY : RED, 3); FOGS[i] = FOGB[i] = 0; } }
   }
-  for (let r = r0 - 1; r < rows; r++) for (let x = 0; x < cols; x++) { const i = r * cols + x; FOGS[i] = FOGB[i] = 0; if (r >= r0) { set(i, ' ', 0); BG[i] = C(GRAY, 1); } }
+  for (let r = r0; r < rows; r++) for (let x = 0; x < cols; x++) { const i = r * cols + x; FOGS[i] = FOGB[i] = 0; set(i, ' ', 0); BG[i] = C(GRAY, 1); } // (the panel: out of the fog; the view above it isn't)
   const alt = Math.round(c.z * 10), sp = Math.round(c.v * 36), climb = Math.round((c.vz || 0) * 10), hdg = Math.round(mod(c.yaw * 180 / Math.PI + 90, 360)); // (north up: 0 is north)
   const thr = Math.round((T_.heli ? c.rotor || 0 : c.throttle || 0) * 10), bar = '#'.repeat(thr) + '-'.repeat(10 - thr);
   putText(r0, 2, `${sp} km/h`, C(CYAN, 15)); putText(r0 + 1, 2, `ALT ${alt} m`, C(CYAN, 14)); putText(r0 + 2, 2, `${climb >= 0 ? '+' : ''}${climb} m/s`, C(climb < -8 ? RED : CYAN, 13));

@@ -34,7 +34,7 @@ function damageDash() {
   if (!c || !c.dmg) return;
   const fire = burning(c), bad = c.dmg >= DMG_BAD, blink = fract(T * 2) < 0.5;
   const label = fire ? 'FIRE! GET OUT' : c.dmg >= DMG_SMOKE ? 'ENGINE' : 'DAMAGE';
-  if (c.dmg >= DMG_DENTS) putText(rows - 2, cols - label.length - 3, label, C(fire || bad ? RED : YEL, fire || bad ? (blink ? 15 : 7) : 13));
+  if (c.dmg >= DMG_DENTS) dashText(rows - 2, cols - label.length - 3, label, C(fire || bad ? RED : YEL, fire || bad ? (blink ? 15 : 7) : 13));
   if (fire && !chaseOn) for (let x = 0; x < cols; x++) { // flames over the hood, flickering
     const h = Math.floor((0.5 + 0.5 * Math.sin(x * 0.7 + T * 11)) * (1 + Math.sin(x * 0.23 - T * 3)) * 2), mid = Math.abs(x - cols / 2) < cols * 0.3;
     if (!mid) continue;

@@ -1,22 +1,24 @@
+// a readout over the view: its letters stay out of the fog (the street behind them doesn't)
+const dashText = (r, c, s, col) => { putText(r, c, s, col); for (let k = 0; k < s.length; k++) if (s[k] !== ' ' && r >= 0 && r < rows && c + k >= 0 && c + k < cols) FOGS[r * cols + c + k] = 0; };
 function dash() {
   const c = me;
-  FOGS.fill(0, (rows - 4) * cols); FOGB.fill(0, (rows - 4) * cols); // the dashboard is never in the fog
-  if (!chaseOn) { // hood and dashboard only from the driver's seat
+  if (!chaseOn) { // hood and dashboard only from the driver's seat (and they're never in the fog)
+    FOGS.fill(0, (rows - 4) * cols); FOGB.fill(0, (rows - 4) * cols);
     for (let r = rows - 4; r < rows; r++) for (let x = 0; x < cols; x++) {
       const i = r * cols + x;
       set(i, r === rows - 4 ? '_' : ' ', C(c.body, 6)); BG[i] = r === rows - 4 ? NONE : C(GRAY, 1);
     }
-    if (mode === 'drive') ['.--------.', '|---()---|', "'--------'"].forEach((l, k) => putText(rows - 3 + k, (cols - 10) >> 1, l, C(GRAY, 10)));
+    if (mode === 'drive') ['.--------.', '|---()---|', "'--------'"].forEach((l, k) => dashText(rows - 3 + k, (cols - 10) >> 1, l, C(GRAY, 10)));
   }
   if (mode === 'drive' && job) { // on a taxi shift
-    putText(rows - 3, 3, `TAXI SHIFT   trips ${job.trips}   earned ${fmt$(job.earned)}${job.ride ? `   meter ${fmt$(taxiFare(job.ride.odo))}` : ''}`, C(TAXI, 15));
-    putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h   ${jobLine()}`, C(WHITE, 13));
+    dashText(rows - 3, 3, `TAXI SHIFT   trips ${job.trips}   earned ${fmt$(job.earned)}${job.ride ? `   meter ${fmt$(taxiFare(job.ride.odo))}` : ''}`, C(TAXI, 15));
+    dashText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h   ${jobLine()}`, C(WHITE, 13));
   } else if (mode === 'drive') {
-    putText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
+    dashText(rows - 2, 3, `${Math.abs(c.v * 36) | 0} km/h`, C(CYAN, 15)); // 1 unit/s = 10 m/s
     damageDash();
   } else {
-    putText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
-    putText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway' + (owned.homes.length ? '   6: home' : ''), C(WHITE, 12));
+    dashText(rows - 3, 3, `TAXI   fare ${fmt$(taxiFare(c.fare))}   you have ${fmt$(money)}`, C(TAXI, 15));
+    dashText(rows - 2, 3, c.dest ? `to: ${c.destName}${c.rush ? '   (stepping on it)' : TOUCH ? '' : `   G: slip the driver ${fmt$(TIP)} to step on it`}` : TOUCH ? 'Where to? Pick a stop.' : 'Where to?   1: nearest park   2: across town   3: anywhere   4: the waterfront   5: subway' + (owned.homes.length ? '   6: home' : ''), C(WHITE, 12));
   }
 }
 
