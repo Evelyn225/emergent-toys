@@ -45,12 +45,12 @@ const MENU_ITEMS = [['RAMEN 9', 'GYOZA 5', 'MISO 3', 'TEA 2'], ['TACO 3', 'BURRI
                     ['PHO 11', 'BANH MI 7', 'ROLLS 5', 'TEA 2'], ['PAD THAI 11', 'CURRY 12', 'MANGO 6', 'THAI TEA 4'],
                     ['CHICKEN 9', 'WINGS 7', 'FRIES 3', 'SODA 2'], ['NIGIRI 12', 'MAKI 8', 'MISO 3', 'TEA 2']];
 const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arcade', LAUNDRY: 'laundry',
-                   CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber', TATTOO: 'barber',
+                   CINEMA: 'cinema', HOTEL: 'hotel', MOTEL: 'hotel', GYM: 'gym', BARBER: 'barber',
                    BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };
 const LYRICS = ['SWEET CAROLINE', 'BAH BAH BAH', 'SO GOOD SO GOOD SO GOOD', 'SWEET CAROLINE']; // what the karaoke bar's playing (audio/ascii-city/karaoke.mp3)
 for (const w in MENUS) ROOM_FOR[w] = 'diner';
 for (const w of ['CAFE', 'COFFEE', 'DONUTS', 'BAKERY', 'JUICE', 'ICE CREAM', 'BAGELS']) ROOM_FOR[w] = 'cafe';
-for (const w of ['BOOKS', 'RECORDS']) ROOM_FOR[w] = 'books';
+ROOM_FOR.BOOKS = 'books'; // (the record shop has its own: shops.js)
 for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM', 'SUSHI']) ROOM_FOR[w] = 'noodle';
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
 for (const w of ['TEA HOUSE', 'MAHJONG']) ROOM_FOR[w] = 'tea';
@@ -338,11 +338,11 @@ function cafeWall(i, u, uStep, z, d, mx, my, L) { // a chalkboard menu behind th
   if (z < 2.6) { set(i, fract(u * 4 + (Math.floor(z * 8) & 1) * 0.5) < 0.12 ? '|' : '_', C(BRICK, L * 0.7)); BG[i] = C(BRICK, 1); return true; }
   return false;
 }
-function booksWall(i, u, uStep, z, d, mx, my, L) { // floor-to-ceiling shelves of coloured spines (records: sleeves)
+function booksWall(i, u, uStep, z, d, mx, my, L) { // floor-to-ceiling shelves of coloured spines
   if (z > 2.6 || (my === room.H - 1)) return false;
   if (fract(z / 0.42) < 0.12) { set(i, '=', C(BRICK, L)); return true; }
-  const k = hash(Math.floor(u * 14), Math.floor(z / 0.42), mx * 7 + my), rec = room.word === 'RECORDS';
-  set(i, rec ? (fract(u * 3) < 0.1 ? '|' : 'O') : k > 0.15 ? '|' : ' ', C(ITEM_COL[k * 80 & 7], L * (rec ? 0.8 : 1))); BG[i] = C(BRICK, 1); return true;
+  const k = hash(Math.floor(u * 14), Math.floor(z / 0.42), mx * 7 + my);
+  set(i, k > 0.15 ? '|' : ' ', C(ITEM_COL[k * 80 & 7], L)); BG[i] = C(BRICK, 1); return true;
 }
 function noodleWall(i, u, uStep, z, d, mx, my, L) { // the open kitchen: steam rising off the pots, red walls hung with signs
   if (my === 0 && mx < 11 && z < 2.4) {
@@ -741,11 +741,6 @@ function barberWall(i, u, uStep, z, d, mx, my, L) {
   if (my === 0 && z > 0.9 && z < 2.0) { // a mirror behind each chair
     if (fract(u / 2.5) < 0.05 || z < 0.95 || z > 1.95) { set(i, '=', C(GRAY, L)); return true; }
     set(i, fract(u * 3 + z) < 0.08 ? '/' : ' ', C(CYAN, L * 0.6)); BG[i] = C(CYAN, 1); return true;
-  }
-  if (room.word === 'TATTOO' && my !== 0 && z > 0.9 && z < 2.4) { // flash art sheets covering the walls
-    if (fract(u * 3) < 0.08 || fract(z * 3) < 0.08) { set(i, '+', C(GRAY, L * 0.5)); return true; }
-    const h = hash(Math.floor(u * 3), Math.floor(z * 3), 31) * 0.999;
-    set(i, '*@%&#'[h * 5 | 0], C(ITEM_COL[h * 80 & 7], L)); return true;
   }
   return false;
 }

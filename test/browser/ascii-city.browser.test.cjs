@@ -2237,6 +2237,28 @@ test('every food and drink shows itself being used up (a level going down, steam
   assert.deepStrictEqual(same, []);
 }));
 
+test('broken into after dark, nobody is left in any shop: the mannequins are dress forms, the cardboard film star is put away; records and tattoos have rooms of their own', () => withPage(async page => {
+  const r = await page.evaluate(() => {
+    paused = true; tod = 2;
+    const seen = new Map();
+    for (let k = 0; k < N * N; k++) { const sh = SHOP[k]; if (sh && sh.word && !sh.base && sh.kind !== SHOP_APTS && sh.kind !== SHOP_SHUT && !seen.has(sh.word)) seen.set(sh.word, k); }
+    const left = [];
+    for (const [word, k] of seen) {
+      const sh = SHOP[k];
+      if (openAt(sh, tod)) continue; // (open all night: not one to break into)
+      room = null; mode = 'walk'; lookHit = { mx: k % N, my: k / N | 0 }; clearWanted(); jammed.clear?.();
+      pickLock(sh); if (!game) continue;
+      const done = game.onDone; game = null; done(true);
+      for (const p of room.props) if (p.fig && !p.guard && !(p.still && (p.fig.form || !p.fig.top || p.fig.scale))) left.push(word + ' (' + room.kind + ')');
+    }
+    const kinds = ['RECORDS', 'TATTOO', 'BOOKS', 'BARBER'].map(w => ROOM_FOR[w]);
+    return { left: [...new Set(left)], kinds, tried: seen.size };
+  });
+  assert.ok(r.tried > 40, `${r.tried} kinds of shop`);
+  assert.deepStrictEqual(r.left, [], 'nobody who could pass for a person');
+  assert.deepStrictEqual(r.kinds, ['records', 'tattoo', 'books', 'barber']);
+}));
+
 test('a shop you\'ve broken into: E means the till only at the counter, the way out only by the door', () => withPage(async page => {
   await page.evaluate(() => { enterRoom('store', { word: 'DELI', neon: RED, ret: [px, py, a], line: '', burgled: true, light: 0.28, loot: 0 }, [0, 0, -Math.PI / 2]); });
   const at = (x, y) => page.evaluate(([x, y]) => { px = x; py = y; return [promptText(), eLabel(promptText())]; }, [x, y]);

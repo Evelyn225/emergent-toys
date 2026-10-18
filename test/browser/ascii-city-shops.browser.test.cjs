@@ -11,7 +11,7 @@ const { chromium } = require('playwright');
 const URL_ = pathToFileURL(path.join(__dirname, '../../ascii-city.html')).href;
 const SHOPS = { GROCERY: 'grocer', MARKET: 'grocer', FRUIT: 'grocer', DELI: 'deli', DELICATESSEN: 'deli', HARDWARE: 'hardware', SKATE: 'skate',
   SPORTS: 'sports', TOYS: 'toys', THRIFT: 'thrift', ANTIQUES: 'thrift', TAILOR: 'thrift', PHARMACY: 'pharmacy', DRUGSTORE: 'pharmacy',
-  TOBACCO: 'tobacco', VIDEO: 'video', HERBS: 'herbs', PHONES: 'phones', PAWN: 'pawn', LIQUOR: 'liquor', JEWELER: 'jeweler', '24/7': 'store', BODEGA: 'store',
+  TOBACCO: 'tobacco', VIDEO: 'video', RECORDS: 'records', HERBS: 'herbs', PHONES: 'phones', PAWN: 'pawn', LIQUOR: 'liquor', JEWELER: 'jeweler', '24/7': 'store', BODEGA: 'store',
   CAFE: 'cafe', RAMEN: 'noodle', 'TEA HOUSE': 'tea', KARAOKE: 'karaoke', HOTEL: 'hotel', BAR: 'bar', DINER: 'diner', GAS: 'gas' };
 const WITH_WC = ['DELI', 'TOBACCO', 'CAFE', 'RAMEN', 'TEA HOUSE', 'KARAOKE', 'HOTEL', 'BAR', 'DINER', 'GAS'];
 

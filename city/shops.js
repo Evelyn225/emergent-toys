@@ -55,8 +55,9 @@ const clothesRack = (x, y, hl, seed, cols = ITEM_COL, long = false) => ROOM_MODE
     });
   }
 }, [hl + 0.05, 0.28, 1.45]);
-// a mannequin in an outfit, facing (fx, fy): a person-shaped blank, white plaster where the skin would be
-const mannequin = (x, y, top, bot, col, fx = 0, fy = 1) => figProp(x, y, figLook({ hair: 'bald', top, bot,
+// a mannequin in an outfit, facing (fx, fy): a dress form (no head, no arms, no legs: a torso on a pole), so it's never
+// mistaken for somebody standing there, even in the dark
+const mannequin = (x, y, top, bot, col, fx = 0, fy = 1) => figProp(x, y, figLook({ hair: 'bald', top, bot, form: true,
   col: { skin: [WHITE, 12], top: [col, 11], inner: [WHITE, 13], bot: [GRAY, 4], shoe: [GRAY, 2], hair: [WHITE, 12] } }), { face: [fx, fy], chat: false, still: true, light: 6 });
 // things hung from the ceiling on strings at (x, y): what hangs is drawn by thing(vx, vy, z), its top at z (string above)
 const hung = (x, y, z, thing) => ROOM_MODEL(x, y, (vx, vy) => { rod(vx, vy, z, vx, vy, room.def.height || 3, 0.003, GRAY, 0.7); thing(vx, vy, z); });
@@ -820,7 +821,7 @@ ROOM_DEFS.video = { grid: ['############', '#.......#..#', '#.SS.SS.#..#', '#.SS
       tvSet(9.15, 7.45, 1.0, 0, 1, 0.24, movie), popcornMachine(10.6, 7.45, 1.0),
       BX(1.6, 8.2, 0.3, 0.25, 0, 0.9, (i, t, L) => { if (HIT.face === 1 && Math.abs(HIT.w - 0.7) < 0.03 && Math.abs(HIT.v) < 0.15) return set(i, '=', C(GRAY, 1)), true; // the returns box
         BG[i] = C(BLUE, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
-      figProp(1.5, 6.6, figLook({ hair: 'buzz', shades: true, top: 'tank', bot: 'pants', bw: 1.3, col: { top: [GRAY, 3], bot: [GREEN, 4], skin: [SKIN, 12], hair: [GRAY, 1] } }), { face: [0.6, 1], chat: false, still: true }), // a cardboard action hero
+      figProp(1.5, 6.6, figLook({ hair: 'buzz', shades: true, top: 'tank', bot: 'pants', bw: 1.3, col: { top: [GRAY, 3], bot: [GREEN, 4], skin: [SKIN, 12], hair: [GRAY, 1] } }), { face: [0.6, 1], chat: false, still: true, cutout: true }), // a cardboard action hero
       aisleSign(3, 3.6, 'ACTION', C(RED, 4), C(WHITE, 15), 0.4), aisleSign(6, 3.6, 'HORROR', C(GRAY, 1), C(RED, 15), 0.4),
       beadCurtain(9.5, 4.5, 0.5), lintelSign(9.5, 4.5, 0.5, '18+', C(GRAY, 0.5), C(RED, 15)), // the way through to the back
       hung(10, 2.3, 2.45, (vx, vy, z) => dot(vx, vy, z - 0.06, 0.06, (i, t, L) => { BG[i] = C(RED, 12); return set(i, 'o', C(YEL, 15)), true; }))]; // its red bulb
@@ -1188,3 +1189,112 @@ ROOM_DEFS.gas = { grid: ['#############', '#........W..#', '#...........#', '#..
     return p;
   } };
 Object.assign(ROOM_FOR, { GAS: 'gas' });
+
+// ---- the record shop (RECORDS): two long bins of LPs down the middle to flip through, divider cards sticking up out
+// of them; a wall of sleeves face-out at the back, gig posters down the left, CDs and tapes racked on the right; a
+// listening station with its headphones; and the counter by the door, a record going round on the deck behind it
+const RECORD_COLS = [RED, ORANGE, YEL, GREEN, CYAN, BLUE, MAG, WHITE, BRICK];
+const recordBin = (x, y, hl, seed) => [ // along y; waist high, the sleeves standing in it as a row of spines
+  BX(x, y, hl, 0.42, 0, 0.62, solid(BRICK, { panel: 0.8, trim: 0.58, top: '=' }), 0, 1),
+  BX(x, y, hl - 0.04, 0.36, 0.62, 0.9, (i, t, L) => {
+    if (HIT.face !== 5) { BG[i] = C(GRAY, 0.8 + L * 0.1); return set(i, fract(HIT.u * 9) < 0.4 ? '|' : ' ', C(RECORD_COLS[hash(Math.floor(HIT.u * 9), seed, 71) * 9 | 0], L * 0.9)), true; }
+    const s = Math.floor((HIT.u + hl) * 14), col = RECORD_COLS[hash(s, seed, 72) * 9 | 0]; // the sleeves' top edges, one after another
+    BG[i] = C(col, 1.6 + L * 0.3); return set(i, fract((HIT.u + hl) * 14) < 0.25 ? '|' : ' ', C(GRAY, 1)), true;
+  }, 0, 1),
+  ...[-0.55, 0.55].map((f, k) => BX(x, y + f * hl, 0.02, 0.36, 0.9, 1.05, (i, t, L) => { // divider cards: A-K, L-Z
+    BG[i] = C(WHITE, 3.4 + L * 0.2); return set(i, HIT.face <= 2 && Math.abs(HIT.w - 0.98) < 0.03 ? (k ? 'L' : 'A') : ' ', C(GRAY, 1)), true; }, 0, 1)),
+];
+// a turntable on top of something z high: the platter going round, the tonearm across it
+const turntable = (x, y, z) => ROOM_MODEL(x, y, (vx, vy) => {
+  drawBox(boxAt(vx, vy, 1, 0, 0.22, 0.17, z, z + 0.06), solid(GRAY, { top: ' ' }));
+  drum(vx - 0.04, vy, 0.15, z + 0.06, z + 0.075, (i, t, L) => {
+    if (HIT.face !== 5) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
+    const r = Math.hypot(HIT.u, HIT.v), ang = Math.atan2(HIT.v, HIT.u) - T * 3.5; // (33 and a third)
+    if (r < 0.04) { BG[i] = C(RED, 6); return set(i, r < 0.01 ? '.' : ' ', C(GRAY, 1)), true; } // the label
+    BG[i] = C(GRAY, 0.4 + (Math.abs(fract(ang / (Math.PI * 2)) - 0.5) < 0.04 ? 1.6 : 0)); // the light running round the grooves
+    return set(i, fract(r * 40) < 0.3 ? ':' : ' ', C(GRAY, 3)), true;
+  });
+  rod(vx + 0.15, vy - 0.12, z + 0.11, vx - 0.02, vy - 0.05, z + 0.085, 0.006, WHITE, 1.3); // the tonearm
+});
+function recordsWall(i, u, uStep, z, d, mx, my, L) {
+  if (backWall(my) && z > 0.4 && z < 2.6) { // sleeves face out, three rows of them on narrow ledges
+    if (wallText(i, u, uStep, z, d, 'NEW IN', 2.4, 2.75, 0.18, 0.25, C(YEL, 15))) return true;
+    const row = Math.floor((z - 0.4) / 0.72), cu = Math.floor(u / 0.36), fu = fract(u / 0.36), fz = fract((z - 0.4) / 0.72);
+    if (fz < 0.08) { BG[i] = C(BRICK, 1.4); return set(i, '=', C(WARM, L)), true; } // the ledge
+    if (fu < 0.07 || fz > 0.9) { BG[i] = C(GRAY, 1.2); return set(i, ' ', 0), true; }
+    const h = hash(cu, row, 73), col = RECORD_COLS[h * 9 | 0], cx = fu - 0.53, cz = fz - 0.5, ring = Math.hypot(cx, cz);
+    BG[i] = C(col, 2.4 + L * 0.2); // a sleeve: its colour, and a design on it (a disc, stripes or a block letter)
+    if (h < 0.4) return set(i, ring < 0.3 && ring > 0.12 ? 'O' : ' ', C(GRAY, 1)), true;
+    if (h < 0.7) return set(i, fract(cz * 5) < 0.3 ? '=' : ' ', C(WHITE, 12)), true;
+    return set(i, ring < 0.2 ? '#' : ' ', C(WHITE, 14)), true;
+  }
+  if (leftWall(mx) && z > 0.9 && z < 2.5) { // gig posters and flyers, pasted over each other
+    const pu = Math.floor(u / 0.7), pz = Math.floor((z - 0.9) / 0.8), h = hash(pu, pz, 74), col = RECORD_COLS[h * 9 | 0];
+    if (fract(u / 0.7) < 0.08 || fract((z - 0.9) / 0.8) < 0.06) return false;
+    BG[i] = C(col, 2.2 + L * 0.2);
+    return set(i, fract((z - 0.9) / 0.8) > 0.75 ? (fract(u * 9) < 0.6 ? '#' : ' ') : fract(z * 9) < 0.25 ? '-' : ' ', C(h > 0.5 ? WHITE : GRAY, h > 0.5 ? 13 : 1)), true;
+  }
+  if (rightWall(mx) && u < 4.6 && z > 0.3 && z < 2.3) { // CDs and tapes, spines out
+    if (fract((z - 0.3) / 0.4) < 0.12) { BG[i] = C(GRAY, 1.6); return set(i, '=', C(GRAY, L)), true; }
+    const k = hash(Math.floor(u * 30), Math.floor((z - 0.3) / 0.4), 75);
+    BG[i] = C(GRAY, 0.6); return set(i, '|', C(RECORD_COLS[k * 9 | 0], L * 1.1)), true;
+  }
+  if (z < 1.0) { BG[i] = C(GRAY, 0.6 + L * 0.1); return set(i, ' ', 0), true; }
+  BG[i] = C(MAG, 0.8 + L * 0.12); return set(i, ' ', 0), true; // painted a deep purple, the way record shops are
+}
+ROOM_DEFS.records = { grid: boxRoom(12, 9), light: 0.75, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, wall: recordsWall, keeper: [10.35, 6.2],
+  props: r => {
+    const p = [...recordBin(3.3, 3.7, 1.7, 1), ...recordBin(6.1, 3.7, 1.7, 2),
+      BX(9.6, 6.2, 1.25, 0.32, 0, 1.0, solid(BRICK, { panel: 0.5, trim: 0.96, top: '=' }), 0, 1), // the counter by the door,
+      { ...standing(10.35, 6.2, r.neon), face: [-1, 0] }, // and behind it, facing the shop
+      BX(9.6, 7.0, 0.16, 0.2, 1.0, 1.25, (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, HIT.face === 2 ? '$' : '#', C(GREEN, L)), true; }, 0, 1), // the till
+      turntable(9.6, 5.5, 1.0), // what's playing
+      BX(1.35, 6.6, 0.4, 0.28, 0, 0.9, solid(GRAY, { top: '=' }), 0, 1), turntable(1.35, 6.6, 0.9), STOOL(2.1, 6.6, RED, 0.62), // the listening station
+      ROOM_MODEL(1.35, 6.25, (vx, vy) => { rod(vx - 0.08, vy, 1.05, vx + 0.08, vy, 1.05, 0.01, GRAY, 1); for (const e of [-1, 1]) dot(vx + e * 0.09, vy, 0.98, 0.04, solid(GRAY)); }), // its headphones
+      aisleSign(3.3, 3.7, 'ROCK  SOUL', C(GRAY, 1), C(YEL, 15), 0.6), aisleSign(6.1, 3.7, 'JAZZ  DUB', C(GRAY, 1), C(CYAN, 15), 0.6)];
+    p.push(...shoppers([[2.4, 3.2, 1, 0], [4.2, 4.4, -1, 0], [5.2, 2.6, 1, 0], [7.0, 4.6, -1, 0]], 0.4)); // crate diggers, heads down
+    return p;
+  } };
+Object.assign(ROOM_FOR, { RECORDS: 'records' });
+
+// ---- the tattoo parlour (TATTOO): flash sheets pasted up everywhere, two stations along the back (a black padded
+// bench that tilts like a dentist's, the artist's rolling stool, a lamp on an arm, a tray of ink caps), a black couch
+// to wait on with the portfolios on a table, and the counter by the door
+const tattooBench = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // along x, the head end at -x
+  const vinyl = (i, t, L) => { BG[i] = C(GRAY, (1.5 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (fract(HIT.u * 6) < 0.12 ? '-' : ' ') : HIT.w > 0.58 && HIT.w < 0.62 || HIT.w > 0.91 ? '=' : ' ', C(RED, 9)), true; }; // black vinyl, red piping
+  drum(vx, vy, 0.12, 0, 0.45, CHROME);
+  drawBox(boxAt(vx + 0.15, vy, 1, 0, 0.55, 0.3, 0.45, 0.62), vinyl);
+  drawBox(boxAt(vx - 0.62, vy, Math.cos(0.5), 0, 0.25, 0.3, 0.55, 0.95), vinyl); // the back, tilted up
+  const sx = vx + 0.2, sy = vy + 0.65; // the artist's stool
+  drum(sx, sy, 0.18, 0.4, 0.48, (i, t, L) => { BG[i] = C(GRAY, (1.5 + L * 0.2) * drumLit(0.18)); return set(i, HIT.face === 5 ? 'o' : ' ', C(RED, 8)), true; });
+  drum(sx, sy, 0.03, 0.05, 0.4, CHROME);
+  const lx = vx - 0.7, ly = vy - 0.55; // the lamp on its arm
+  rod(lx, ly, 0, lx, ly, 1.6, 0.015, GRAY, 1.2); rod(lx, ly, 1.6, vx - 0.2, vy - 0.15, 1.45, 0.012, GRAY, 1.2);
+  dot(vx - 0.2, vy - 0.15, 1.42, 0.07, (i, t, L) => { BG[i] = C(WHITE, 12); return set(i, ' ', 0), true; });
+  drawBox(boxAt(vx + 0.75, vy - 0.55, 1, 0, 0.2, 0.15, 0.85, 0.88), solid(GRAY)); // the tray, the ink caps on it
+  for (let k = 0; k < 5; k++) dot(vx + 0.62 + k * 0.065, vy - 0.55, 0.9, 0.018, (i, t, L) => { BG[i] = C(RECORD_COLS[k * 2], 8); return set(i, ' ', 0), true; });
+  rod(vx + 0.75, vy - 0.55, 0, vx + 0.75, vy - 0.55, 0.85, 0.015, GRAY, 1.2);
+}, [0.85, 0.35, 0.95]);
+function tattooWall(i, u, uStep, z, d, mx, my, L) {
+  if (backWall(my) && z > 2.2 && wallText(i, u, uStep, z, d, 'NO REGRETS', room.W / 2, 2.5, 0.2, 0.3, C(MAG, 15))) return true; // in pink neon
+  if (z > 0.9 && z < 2.3 && !(my === room.H - 1)) { // flash: sheets of designs, a grid of little pictures on each
+    const fu = fract(u / 0.6), fz = fract((z - 0.9) / 0.7);
+    if (fu < 0.06 || fz < 0.07) { BG[i] = C(GRAY, 0.5); return set(i, ' ', 0), true; }
+    BG[i] = C(WHITE, 3.4 + L * 0.15);
+    const h = hash(Math.floor(u * 5), Math.floor(z * 5), 76);
+    return set(i, h > 0.45 ? '*@%&#$<>'[h * 8 | 0] : ' ', C(ITEM_COL[h * 80 & 7], 9)), true;
+  }
+  BG[i] = C(GRAY, 0.5 + L * 0.08); return set(i, ' ', 0), true; // black walls
+}
+ROOM_DEFS.tattoo = { grid: boxRoom(11, 9), light: 0.75, floor: 'checker', ceil: 'strip', sign: false, neon: true, wall: tattooWall, keeper: [8.9, 6.95],
+  props: r => {
+    const p = [tattooBench(3.0, 2.0), tattooBench(7.4, 2.0),
+      BX(8.9, 6.3, 1.0, 0.3, 0, 1.0, solid(GRAY, { panel: 0.5, trim: 0.96, top: '=' })), { ...standing(8.9, 6.95, r.neon), face: [0, -1] }, // the counter, and behind it
+      BX(8.5, 6.3, 0.2, 0.15, 1.0, 1.06, solid(RED, { top: '=' })), BX(9.2, 6.3, 0.2, 0.15, 1.0, 1.08, solid(BLUE, { top: '=' })), // portfolios on it
+      BENCHP(1.4, 5.6, 1, 0), BX(1.3, 5.6, 1.0, 0.3, 0, 0.45, solid(GRAY, { top: ' ' }), 0, 1), BX(1.05, 5.6, 1.0, 0.07, 0.45, 0.9, solid(GRAY), 0, 1), // the couch
+      BX(2.3, 5.6, 0.3, 0.4, 0, 0.4, solid(BRICK, { top: '=' })), BX(2.3, 5.5, 0.15, 0.12, 0.4, 0.44, solid(MAG, { top: '#' }))]; // the low table, a binder on it
+    for (const x of [3.0, 7.4]) if (chance(0.6)) p.push({ ...sitting(x + 0.2, 2.65, shirt(), 0.48), face: [0, -1] }, { ...sitting(x + 0.1, 2.0, shirt(), 0.62), face: [0, 1] }); // the artist at work, someone gritting their teeth
+    if (chance(0.5)) p.push({ ...sitting(1.4, 5.6, shirt(), 0.45), face: [1, 0] }); // waiting their turn
+    return p;
+  } };
+Object.assign(ROOM_FOR, { TATTOO: 'tattoo' });
