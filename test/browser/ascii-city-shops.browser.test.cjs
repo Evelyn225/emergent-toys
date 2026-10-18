@@ -13,8 +13,10 @@ const SHOPS = { GROCERY: 'grocer', MARKET: 'grocer', FRUIT: 'grocer', DELI: 'del
   SPORTS: 'sports', TOYS: 'toys', THRIFT: 'thrift', ANTIQUES: 'thrift', TAILOR: 'thrift', PHARMACY: 'pharmacy', DRUGSTORE: 'pharmacy',
   TOBACCO: 'tobacco', VIDEO: 'video', RECORDS: 'records', TATTOO: 'tattoo', HERBS: 'herbs', PHONES: 'phones', PAWN: 'pawn', LIQUOR: 'liquor', JEWELER: 'jeweler', '24/7': 'store', BODEGA: 'store',
   CAFE: 'cafe', RAMEN: 'noodle', 'TEA HOUSE': 'tea', KARAOKE: 'karaoke', HOTEL: 'hotel', BAR: 'bar', DINER: 'diner', GAS: 'gas',
-  PIZZA: 'pizzeria', BURGERS: 'burgerjoint', TACOS: 'taqueria', SUSHI: 'sushibar', 'ICE CREAM': 'icecream', BAKERY: 'bakery' };
-const WITH_WC = ['DELI', 'TOBACCO', 'CAFE', 'RAMEN', 'TEA HOUSE', 'KARAOKE', 'HOTEL', 'BAR', 'DINER', 'GAS', 'PIZZA', 'BURGERS', 'TACOS', 'SUSHI'];
+  PIZZA: 'pizzeria', BURGERS: 'burgerjoint', TACOS: 'taqueria', SUSHI: 'sushibar', 'ICE CREAM': 'icecream', BAKERY: 'bakery',
+  CHICKEN: 'chickenshop', KEBAB: 'kebabshop', BENTO: 'bento', TAKOYAKI: 'takoyaki', YAKITORI: 'yakitori', DONUTS: 'donutshop', JUICE: 'juicebar', BAGELS: 'bagelshop',
+  THAI: 'thai', PHO: 'pho', DUMPLINGS: 'dumplings', 'DIM SUM': 'dimsum', KISSATEN: 'kissaten', IZAKAYA: 'izakaya', MAHJONG: 'mahjong' };
+const WITH_WC = ['DELI', 'TOBACCO', 'CAFE', 'RAMEN', 'TEA HOUSE', 'KARAOKE', 'HOTEL', 'BAR', 'DINER', 'GAS', 'PIZZA', 'BURGERS', 'TACOS', 'SUSHI', 'THAI', 'PHO', 'DUMPLINGS', 'DIM SUM', 'KISSATEN', 'IZAKAYA', 'MAHJONG'];
 
 // walk every room: flood its floor from the door on a 10cm grid, and see what you can reach
 async function walkRooms(page) {
@@ -132,5 +134,23 @@ test('anywhere somebody is sitting there is a seat, and every empty seat takes y
     for (const kind of ['burgerjoint', 'pizzeria', 'sushibar', 'tattoo', 'karaoke', 'cafe', 'tea', 'jail', 'pachinko', 'stripclub', 'hospital'])
       assert.ok(r.kinds[kind] > 0, `${kind}: somewhere free to sit`);
     assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('the mahjong parlour: a seat at any of its tables gets you into a hand', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 800, height: 500 } });
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof enterRoom === 'function' && Number.isFinite(eye));
+    const r = await page.evaluate(() => {
+      paused = true; mode = 'walk'; room = null;
+      enterRoom(ROOM_FOR.MAHJONG, { word: 'MAHJONG', neon: RED, ret: [px, py, a], line: '' }, [7.5, 8.4, -Math.PI / 2]);
+      const tables = room.props.filter(s => s.mj), out = [room.kind, tables.length];
+      for (const t of tables) { px = t.cx + 0.95; py = t.cy + 0.6; out.push(!!nearMahjong()); }
+      mode = 'walk'; room = null;
+      return out;
+    });
+    assert.deepEqual(r, ['mahjong', 5, true, true, true, true, true]);
   } finally { await browser.close(); }
 });

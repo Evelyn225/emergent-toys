@@ -117,7 +117,7 @@ const crane = (x, y, k) => ({ ...BX(x, y, 0.45, 0.45, 0, 1.95, (i, t, L) => { //
 }), crane: true, cx: x, cy: y });
 const nearPachinko = () => mode === 'room' && room.props.find(s => s.pachi && Math.abs(px - s.cx) < 0.4 && Math.abs(py - (s.cy + s.fy * 0.75)) < 0.4) || null;
 const nearCrane = () => mode === 'room' && room.props.find(s => s.crane && Math.abs(px - s.cx) < 0.6 && py > s.cy + 0.4 && py < s.cy + 1.4) || null;
-const nearMahjong = () => mode === 'room' && room.kind === 'tea' && room.props.find(s => s.mj && Math.hypot(px - s.cx, py - s.cy) < 1.3) || null;
+const nearMahjong = () => mode === 'room' && room.props.find(s => s.mj && Math.hypot(px - s.cx, py - s.cy) < 1.3) || null;
 function shotengaiPrompt() {
   if (nearMahjong()) return `E: sit in on a hand of mahjong (${fmt$(MJ_BUYIN)} in the pot)`;
   const pm = nearPachinko();
@@ -180,7 +180,6 @@ const SHOTENGAI_ROOMS = {
     props: r => [...counterBox(5.2, 9.7, 0.65), standing(5.2, 9.1, BLUE), POT_PLANT(1.4, 10.6)] },
 };
 Object.assign(ROOM_DEFS, SHOTENGAI_ROOMS);
-Object.assign(ROOM_FOR, { PACHINKO: 'pachinko', 'CRANE GAME': 'cranes', GACHA: 'cranes', CAPSULE: 'capsule', IZAKAYA: 'bar', KISSATEN: 'cafe', MANGA: 'books', DRUGSTORE: 'pharmacy',
-  YAKITORI: 'diner', TAKOYAKI: 'diner', BENTO: 'diner' });
+Object.assign(ROOM_FOR, { PACHINKO: 'pachinko', 'CRANE GAME': 'cranes', GACHA: 'cranes', CAPSULE: 'capsule', MANGA: 'books', DRUGSTORE: 'pharmacy' }); // (the food: counters.js, dining.js)
 MENU_ITEMS.push(['YAKITORI 6', 'EDAMAME 3', 'SAKE 7', 'BEER 6'], ['TAKOYAKI 5', 'RAMUNE 2', 'ONIGIRI 3', 'TEA 2'], ['BENTO 9', 'ONIGIRI 3', 'MISO 3', 'TEA 2']);
 Object.assign(MENUS, { YAKITORI: MENU_ITEMS.length - 3, TAKOYAKI: MENU_ITEMS.length - 2, BENTO: MENU_ITEMS.length - 1 });

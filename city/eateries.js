@@ -39,8 +39,39 @@ function booth(x, y, hl, col, { top, busy = 0.45, depth = 0.55 } = {}) {
 // stools along a counter (at y, from x0 to x1, every step), people on some, facing (fx, fy)
 function stools(x0, x1, y, step, col, fx, fy, busy = 0.4, seatZ = 0.62) {
   const p = [];
-  for (let x = x0; x <= x1 + 1e-6; x += step) { p.push(STOOL(x, y, col, seatZ)); if (chance(busy)) p.push({ ...sitting(x, y, shirt(), seatZ), face: [fx, fy] }); }
+  for (let x = x0; x <= x1 + 1e-6; x += step) { p.push({ ...STOOL(x, y, col, seatZ), fx, fy }); if (chance(busy)) p.push({ ...sitting(x, y, shirt(), seatZ), face: [fx, fy] }); }
   return p;
+}
+// and down a side (at x, from y0 to y1), facing fx
+function stoolsY(x, y0, y1, step, col, fx, busy = 0.4, seatZ = 0.62) {
+  const p = [];
+  for (let y = y0; y <= y1 + 1e-6; y += step) { p.push({ ...STOOL(x, y, col, seatZ), fx, fy: 0 }); if (chance(busy)) p.push({ ...sitting(x, y, shirt(), seatZ), face: [fx, 0] }); }
+  return p;
+}
+// a plain bench without a back, facing (fx, fy), hl either side of (x, y): room for two
+function plainBench(x, y, hl, fx, fy, col = BRICK, busy = 0.35) {
+  const ax = -fy, ay = fx, p = [BX(x, y, hl, 0.2, 0.4, 0.45, solid(col, { top: '=', bright: 1.3 }), ax, ay), ...[-1, 1].map(e => BX(x + ax * e * (hl - 0.08), y + ay * e * (hl - 0.08), 0.05, 0.17, 0, 0.4, solid(col), ax, ay))];
+  for (const e of [-1, 1]) {
+    const sx = x + ax * e * hl * 0.5, sy = y + ay * e * hl * 0.5;
+    p.push(SEAT(sx, sy, fx, fy)); if (chance(busy)) p.push({ ...sitting(sx, sy, shirt(), 0.45), face: [fx, fy] });
+  }
+  return p;
+}
+// a moulded plastic chair on steel legs, facing (fx, fy)
+const shellChair = (x, y, fx, fy, col) => [{ ...BX(x, y, 0.22, 0.22, 0.42, 0.47, solid(col, { bright: 1.5 })), seat: true, x, y, fx, fy, h: 0.47 },
+  BX(x - fx * 0.21, y - fy * 0.21, 0.22, 0.03, 0.47, 0.86, solid(col, { bright: 1.5 }), fy, -fx),
+  ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.17, y + sy * 0.17, 0.015, 0.015, 0, 0.42, solid(GRAY))))];
+// a crate (beer, fruit), h high; slatted
+const crateShade = col => (i, t, L) => { BG[i] = C(col, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (fract(HIT.u * 5) < 0.2 ? '=' : ' ') : fract(HIT.w * 6) < 0.25 ? '=' : ' ', C(GRAY, L * 0.6)), true; };
+// the menu, from what they sell: 'NAME PRICE' a line (worked out once a visit)
+const menuLines = () => room.board || (room.board = stockFor(room.kind, room.word).map(id => `${ITEMS[id].name.toUpperCase()} ${ITEMS[id].price}`));
+// the shop window, from inside, on the front wall: dark glass (the street's lights in it after dark), mullions, a sill
+function frontWindow(i, u, uStep, z, d, my, L, z0 = 0.95, z1 = 2.35) {
+  if (my !== room.H - 1 || z < z0 || z > z1) return false;
+  const x = -u; // (on the front wall u runs the other way)
+  if (z < z0 + 0.06 || z > z1 - 0.05 || fract(x / 1.5) < 0.04) { BG[i] = C(GRAY, 2.2 + L * 0.2); return set(i, ' ', 0), true; }
+  const glow = hash(Math.floor(x * 3), Math.floor(z * 4), 103);
+  BG[i] = C(BLUE, 0.5 + day * 1.8); return set(i, night > 0.5 && glow > 0.9 ? 'o' : fract((x + z) * 2.5) < 0.04 ? '/' : ' ', C(glow > 0.95 ? YEL : WHITE, 9)), true;
 }
 // a menu board on a wall, centred at u0, its lines from z0 down: true if it painted this cell
 function menuBoard(i, u, uStep, z, d, u0, z0, lines, hw, bg, col, title, titleCol) {

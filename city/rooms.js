@@ -49,11 +49,11 @@ const ROOM_FOR = { BAR: 'bar', KARAOKE: 'karaoke', DINER: 'diner', ARCADE: 'arca
                    BANK: 'bank', 'PET SHOP': 'petshop', FLORIST: 'florist' };
 const LYRICS = ['SWEET CAROLINE', 'BAH BAH BAH', 'SO GOOD SO GOOD SO GOOD', 'SWEET CAROLINE']; // what the karaoke bar's playing (audio/ascii-city/karaoke.mp3)
 for (const w in MENUS) ROOM_FOR[w] = 'diner';
-for (const w of ['CAFE', 'COFFEE', 'DONUTS', 'JUICE', 'BAGELS']) ROOM_FOR[w] = 'cafe';
+for (const w of ['CAFE', 'COFFEE']) ROOM_FOR[w] = 'cafe';
 ROOM_FOR.BOOKS = 'books'; // (the record shop has its own: shops.js)
-for (const w of ['RAMEN', 'NOODLES', 'PHO', 'DUMPLINGS', 'DIM SUM']) ROOM_FOR[w] = 'noodle';
+for (const w of ['RAMEN', 'NOODLES']) ROOM_FOR[w] = 'noodle';
 for (const w of ['AUTO REPAIR', 'TIRES', 'WELDING']) ROOM_FOR[w] = 'garage';
-for (const w of ['TEA HOUSE', 'MAHJONG']) ROOM_FOR[w] = 'tea';
+ROOM_FOR['TEA HOUSE'] = 'tea';
 ROOM_FOR.HOSPITAL = 'hospital';
 ROOM_FOR.CARS = 'showroom'; ROOM_FOR.REALTY = 'realty';
 ROOM_FOR.STORAGE = 'storage';
