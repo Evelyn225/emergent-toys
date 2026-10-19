@@ -7592,7 +7592,8 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' }, // (spotted: notoriety.js)
                  // the revolver (gun.js): these don't add up, they set how bad it is at least (a killing: one more each time)
                  gunfire: { stars: 2, name: 'firing a gun in the street', least: 0 }, murder: { stars: 4, name: 'murder', least: 1, kills: true },
-                 copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true } };
+                 copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true },
+                 roadkill: { stars: 4, name: 'killing someone with a car', least: 1, kills: true } }; // (hit too fast to survive: main.js)
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -8228,7 +8229,7 @@ function goToJail() {
 // Gentle on purpose: a crime is easy to commit by accident (a red light, a fender bender, a bad moment with a pedestrian),
 // and the odd slip should barely register. It takes a run of serious ones to get you known.
 const NOTO_BY_STARS = [0, 3, 8, 15], NOTO_SLIP = { redlight: 1, crash: 1, urination: 2, graffiti: 2 }; // (a crime: by its stars, slips less)
-const NOTO_GUN = { gunfire: 4, murder: 25, copkill: 35 }; // (the revolver, gun.js: a shot less than its stars, a killing a lot more)
+const NOTO_GUN = { gunfire: 4, murder: 25, copkill: 35, roadkill: 22 }; // (the revolver, gun.js, and a car driven into somebody too fast: a shot less than its stars, a killing a lot more)
 const NOTO_EVENT = { scramble: 12, blownup: 8, ejected: 6, planecrash: 6 };
 const NOTO_FADE = 0.5; // what's left of it each morning
 const NOTO_LOOK = { haircut: 0.5, coat: 0.5, tattoo: 0.6 }; // what's left after a change of look (once a day each)
@@ -8309,7 +8310,8 @@ const NEWS = {
   bigfish: (w, n, e) => `A ${e.kg ? e.kg + 'kg ' : 'large '}${e.fish || 'fish'} was landed in ${w} by a member of the public. The fish was not available for comment.`,
   gunfire: (w, n) => n > 1 ? `Gunshots reported in ${w}, ${n} times in one day. Police ask residents to stop describing them as fireworks.` : `A gunshot was reported in ${w}. Residents who thought it was a car backfiring have been asked to think again.`,
   murder: (w, n) => n > 1 ? `${inWords(n)} people shot dead in ${w} in one day. Police describe the suspect as armed, and the day as long.` : `A pedestrian was shot dead in ${w}. Police say the suspect is armed, and that this is the main thing to know about them.`,
-  copkill: (w, n) => n > 1 ? `${inWords(n)} police officers shot dead in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was shot dead in ${w}. The department has cancelled all leave, and most of its patience.`,
+  roadkill: (w, n) => n > 1 ? `${inWords(n)} pedestrians killed by the same car in ${w}. Police say the driver did not stop, any of the times.` : `A pedestrian was killed by a speeding car in ${w}. The driver did not stop. Police would like a word, and then several more.`,
+  copkill: (w, n) => n > 1 ? `${inWords(n)} police officers killed in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was killed in ${w}. The department has cancelled all leave, and most of its patience.`,
   bout: (w, n, e) => `An unknown fighter beat ${e.who} at the gym in ${w}. The promoter did not catch the name. The purse was paid in cash.`,
 };
 // the stories that run, biggest first: what happened yesterday (and so far today, on the telly), with a word from the
@@ -28815,6 +28817,7 @@ function move(fx, fy) {
   stepHomeBalcony(fx);
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
+const FATAL_V = 1.6; // 58 km/h: hit somebody faster than this and they don't get up (gun.js sees to the body)
 // Short, bounded skid segments remain on the road for two minutes.
 const tireMarks = [];
 function leaveTireMarks(c, hx, hy, oldX, oldY) {
@@ -28879,12 +28882,18 @@ function drive(dt) {
     if(officer){hitPerson=officer;break;}
   }
   if (hitPerson && !bodyHit && !hitCar && free(fx, fy) && Math.abs(c.v) > 0.4) { // someone in the road: knocked flat, and you plough on, slower
-    const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson);
-    knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
-    const saw = gawkAt(hitPerson); // (the people about: staring, and one running over to them)
-    say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"'])
-      + (saw ? ' ' + pick(cop ? ['"Officer down!"', '"You just hit a COP!"'] : ['"Oh my God!"', '"Somebody call an ambulance!"', '"Did you SEE that?"', '"Hey! HEY! Stop!"']) : ''), 3);
-    crime(cop ? 'hitcop' : 'hit', c.x, c.y);
+    const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson), fatal = sp > FATAL_V && !hitPerson.dead;
+    if (fatal) { // too fast to survive: thrown down the road and still, as a shooting's victim (gun.js)
+      knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); killFigure(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, cop);
+      panicAt(hitPerson.x, hitPerson.y);
+      say(pick(cop ? ['*CRUNCH* The officer goes over the bonnet and doesn\'t get up.', 'You hit the cop at full speed. They don\'t move.'] : ['*CRUNCH* They go over the bonnet and lie still.', 'At that speed, nobody gets up.', '*CRUNCH* Somebody screams. The body in the road doesn\'t move.']), 3);
+    } else {
+      knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
+      const saw = gawkAt(hitPerson); // (the people about: staring, and one running over to them)
+      say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"'])
+        + (saw ? ' ' + pick(cop ? ['"Officer down!"', '"You just hit a COP!"'] : ['"Oh my God!"', '"Somebody call an ambulance!"', '"Did you SEE that?"', '"Hey! HEY! Stop!"']) : ''), 3);
+    }
+    crime(fatal ? cop ? 'copkill' : 'roadkill' : cop ? 'hitcop' : 'hit', c.x, c.y);
     if (actx) { tone(actx.currentTime, 60, 0.18, 0.12 * Math.min(1, sp / 3)); playClip('crash', 0.2); }
     if (sp > CRASH_V) damageCar(c, crashDamage(sp) * 0.2);
     c.v *= 0.6; hitPerson = null;

@@ -24,7 +24,8 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' }, // (spotted: notoriety.js)
                  // the revolver (gun.js): these don't add up, they set how bad it is at least (a killing: one more each time)
                  gunfire: { stars: 2, name: 'firing a gun in the street', least: 0 }, murder: { stars: 4, name: 'murder', least: 1, kills: true },
-                 copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true } };
+                 copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true },
+                 roadkill: { stars: 4, name: 'killing someone with a car', least: 1, kills: true } }; // (hit too fast to survive: main.js)
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
