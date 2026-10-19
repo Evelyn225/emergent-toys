@@ -74,9 +74,12 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
       return set(i, ' ', 0);
     }
     const archTop = 0.31 - (du / (spacing * 0.36)) ** 2 * 0.065;
-    if (Math.abs(du) < spacing * 0.35 && z > 0.045 && z < archTop) {
+    const doorway = f.sign && SHOP[k].kind !== SHOP_APTS && Math.abs(start + (bay + 0.5) * spacing - f.sign.center) < spacing / 2; // (the arch under the sign: the shop's door, to the pavement)
+    if (Math.abs(du) < spacing * 0.35 && (z > 0.045 || doorway) && z < archTop) {
       if (Math.abs(du) > spacing * 0.32 || z > archTop - 0.02) return set(i, z > archTop - 0.02 ? '^' : '|', C(WHITE, L));
-      BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : CYAN, 1 + night * 2);
+      if (doorway && architectureShutter(i, z, SHOP[k], L)) return;
+      if (doorway && z < 0.02) { BG[i] = C(GRAY, 1 + L * 0.15); return set(i, '_', C(GRAY, L * 0.8)); }
+      BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : doorway ? WARM : CYAN, 1 + night * 2);
       return set(i, Math.abs(du) < 0.015 ? '|' : ':', C(WARM, Math.max(L * 0.65, glowL * 0.75)));
     }
   } else {

@@ -8791,9 +8791,12 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
       return set(i, ' ', 0);
     }
     const archTop = 0.31 - (du / (spacing * 0.36)) ** 2 * 0.065;
-    if (Math.abs(du) < spacing * 0.35 && z > 0.045 && z < archTop) {
+    const doorway = f.sign && SHOP[k].kind !== SHOP_APTS && Math.abs(start + (bay + 0.5) * spacing - f.sign.center) < spacing / 2; // (the arch under the sign: the shop's door, to the pavement)
+    if (Math.abs(du) < spacing * 0.35 && (z > 0.045 || doorway) && z < archTop) {
       if (Math.abs(du) > spacing * 0.32 || z > archTop - 0.02) return set(i, z > archTop - 0.02 ? '^' : '|', C(WHITE, L));
-      BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : CYAN, 1 + night * 2);
+      if (doorway && architectureShutter(i, z, SHOP[k], L)) return;
+      if (doorway && z < 0.02) { BG[i] = C(GRAY, 1 + L * 0.15); return set(i, '_', C(GRAY, L * 0.8)); }
+      BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : doorway ? WARM : CYAN, 1 + night * 2);
       return set(i, Math.abs(du) < 0.015 ? '|' : ':', C(WARM, Math.max(L * 0.65, glowL * 0.75)));
     }
   } else {
@@ -9963,6 +9966,18 @@ function brownstoneWindow(i, du, z, half, z0, z1, lit, L, base) {
   set(i, Math.abs(du) < 0.011 ? '|' : Math.abs(z - (z0 + z1) / 2) < 0.012 ? '-' : lit ? ' ' : ':', C(lit ? WARM : WHITE, Math.max(L * 0.6, lit ? night * 13 : 0)));
   return true;
 }
+// a shop's way in, down to the pavement: du across it (0 its middle), up to SHOP_DOOR_TOP (clear of the awnings and
+// signs above). Glass in a frame, a kick plate, a push bar; lit from inside when it's open. True if it drew (i)
+const SHOP_DOOR_HALF = 0.055, SHOP_DOOR_TOP = 0.26;
+function shopDoor(i, du, z, sh, L, trim) {
+  if (Math.abs(du) > SHOP_DOOR_HALF + 0.012 || z > SHOP_DOOR_TOP + 0.014) return false;
+  if (architectureShutter(i, z, sh, L)) return true;
+  if (Math.abs(du) > SHOP_DOOR_HALF || z > SHOP_DOOR_TOP) { BG[i] = C(trim, 1 + L * 0.2); return set(i, z > SHOP_DOOR_TOP ? '=' : '|', C(trim, L)), true; }
+  if (z < 0.02) { BG[i] = C(GRAY, 1 + L * 0.15); return set(i, '_', C(GRAY, L * 0.8)), true; } // the kick plate, on the ground
+  const open = openAt(sh, tod);
+  BG[i] = C(WARM, open ? 1.4 + night * 3.5 : 0.6);
+  return set(i, Math.abs(z - 0.115) < 0.01 && du > 0 ? '-' : Math.abs(du) < 0.006 ? '|' : ':', C(open ? WHITE : GRAY, Math.max(L * 0.6, open ? night * 11 : 0))), true;
+}
 function architectureShutter(i, z, sh, L) {
   if (openAt(sh, tod)) return false;
   BG[i] = C(GRAY, 1 + day);
@@ -9997,7 +10012,8 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
         return set(i, z > 0.3 ? ':' : Math.abs(door) < 0.01 ? '|' : z < 0.15 ? '=' : '#', C(z > 0.3 ? WARM : BRICK, z > 0.3 ? Math.max(L, night * 11) : L * 0.65));
       }
       if (brownstoneWindow(i, local - f.spacing * 0.22, z, f.spacing * 0.15, 0.16, 0.32, hash(unit, 5, sk) > litT, L, STONE)) return;
-    } else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
+    } else if (f.front && shopDoor(i, local - f.spacing * 0.24, z, sh, L, STONE)) return;
+    else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
       if (architectureShutter(i, z, sh, L)) return;
       BG[i] = C(CYAN, 1 + night * 2);
       return set(i, Math.abs(local) < f.spacing * 0.03 ? '|' : z > 0.3 ? '=' : ':', C(WARM, Math.max(L * 0.65, night * 11)));
@@ -10030,6 +10046,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
       Math.min(0.085, (width - 0.3) / sh.word.length), 0.055, C(sh.neon, signLight), C(GRAY, 1))) return;
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
+    if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY)) return;
     if (z > 0.04 && z < 0.31 && (lobby || fu > 0.16 && fu < 0.84)) {
       if (architectureShutter(i, z, sh, L)) return;
       BG[i] = C(lobby ? WARM : CYAN, 1 + night * 3);
@@ -10117,10 +10134,11 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
   if (f.front && z > .335 && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), .38,
     Math.min(.067, (width - .3) / sh.word.length), .043, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return;
   if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
-  if (z > .325 || z < .045) return set(i, z > .325 ? '=' : '_', C(trim, L * .75));
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
+  if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim)) return; // (the shop's door, to the pavement)
+  if (z > .325 || z < .045 && !(f.front && sh.kind === SHOP_APTS && door < doorHalf)) return set(i, z > .325 ? '=' : '_', C(trim, L * .75));
   if (f.front && sh.kind === SHOP_APTS) {
-    if (door < doorHalf && z < .30) {
+    if (door < doorHalf && z < .30) { // (the lobby doors, to the pavement)
       BG[i] = C(WARM, 1 + night * 3);
       return set(i, door < .009 || door > doorHalf - .015 ? '|' : Math.abs(z - .16) < .012 ? '-' : ':', C(WHITE, Math.max(L * .7, night * 12)));
     }
@@ -10361,10 +10379,15 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       return true;
     }
     if (architectureLeaseSign(i,u,uStep,z,d,wc,f,sh,L)) return true;
-    if (f.front && Math.abs(local) < width / 2 - .15 && z > .03 && z < .32) {
+    const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
+    if (f.front && Math.abs(door) < doorHalf + .012 && z < .27) { // the way in: down to the pavement, under the awning
       if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
-      const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
-      if (Math.abs(door) < doorHalf) {
+      if (Math.abs(door) > doorHalf || z > .255) { BG[i] = C(p.trim,1 + L * .2); set(i,z > .255 ? '=' : '|',C(p.trim,L)); return true; }
+      if (z < .02) { BG[i] = C(GRAY,1 + L * .15); set(i,'_',C(GRAY,L * .8)); return true; }
+    }
+    if (f.front && Math.abs(local) < width / 2 - .15 && (z > .03 || Math.abs(door) < doorHalf) && z < .32) {
+      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
+      if (Math.abs(door) < doorHalf && z < .255) {
         if (japan && z > .225) {
           BG[i] = C(p.trim,2 + L * .22);
           set(i,Math.abs(door) < .012 ? ' ' : Math.abs(z - .267) < .016 ? 'o' : ' ',C(WHITE,L));
