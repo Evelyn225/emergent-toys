@@ -10059,7 +10059,7 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
         return set(i, z > 0.3 ? ':' : Math.abs(door) < 0.01 ? '|' : z < 0.15 ? '=' : '#', C(z > 0.3 ? WARM : BRICK, z > 0.3 ? Math.max(L, night * 11) : L * 0.65));
       }
       if (brownstoneWindow(i, local - f.spacing * 0.22, z, f.spacing * 0.15, 0.16, 0.32, hash(unit, 5, sk) > litT, L, STONE)) return;
-    } else if (f.front && shopDoor(i, local - f.spacing * 0.24, z, sh, L, STONE)) return;
+    } else if (f.front && shopDoor(i, local + f.spacing * 0.24, z, sh, L, STONE)) return; // (where the walk-ups have theirs)
     else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
       if (architectureShutter(i, z, sh, L)) return;
       BG[i] = C(CYAN, 1 + night * 2);

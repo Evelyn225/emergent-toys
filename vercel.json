@@ -26,8 +26,6 @@
   ],
   "routes": [
     { "src": "^/vornoi(\\.html)?$", "status": 301, "headers": { "Location": "/voronoi" } },
-    { "src": "^/ottawa/?$", "dest": "/ottawa-trip.html" },
-    { "src": "^/api/ottawa-state/?$", "dest": "/api/ottawa-state.js" },
     { "src": "/api/(.*)", "dest": "/api/$1" },
     { "src": "^/([a-zA-Z0-9_\\-]+)$", "dest": "/$1.html" },
     { "src": "/(.*)", "dest": "/$1" }

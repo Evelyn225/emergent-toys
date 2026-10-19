@@ -581,7 +581,7 @@ test('redesigned storefronts keep their opening hours, glazing and closed shutte
     return ['brownstones', 'downtown', 'midtown'].map(region => {
       const b = ARCH_BUILDINGS.find(b => b.region === region && b.faces.some(f => f.front) &&
         b.sh.kind !== SHOP_APTS && b.sh.kind !== SHOP_SHUT && openAt(b.sh, 12) && !openAt(b.sh, 3));
-      const f = b.faces.find(f => f.front), along = region === 'brownstones' ? f.start + f.spacing * 0.74 : (f.start + f.end) / 2 + (region === 'midtown' ? .17 : 0);
+      const f = b.faces.find(f => f.front), along = region === 'brownstones' ? f.start + f.spacing * 0.74 : (f.start + f.end) / 2 + .17; // (the glass beside the door)
       px = (f.side ? along : f.line) + f.nx * 0.7; py = (f.side ? f.line : along) + f.ny * 0.7;
       a = Math.atan2(-f.ny, -f.nx); pitch = 0;
       const pixels = [12, 3].map(hour => {

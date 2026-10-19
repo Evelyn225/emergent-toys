@@ -23,19 +23,6 @@ async function getHandler(moduleName) {
 // Voronoi used to be misspelled; keep old links working.
 app.get(['/vornoi', '/vornoi.html'], (req, res) => res.redirect(301, '/voronoi.html'));
 
-app.get(['/ottawa', '/ottawa/'], (req, res) => {
-  res.sendFile(path.resolve('ottawa-trip.html'));
-});
-
-app.all('/api/ottawa-state', async (req, res) => {
-  try {
-    const handler = await getHandler('ottawa-state');
-    await handler(req, res);
-  } catch {
-    res.status(500).json({ error: 'Failed to load Ottawa planner API' });
-  }
-});
-
 // Route for /api/random-words (with and without .js extension)
 app.all('/api/random-words', async (req, res) => {
   try {
