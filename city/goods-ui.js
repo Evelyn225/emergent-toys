@@ -228,7 +228,8 @@ function drawHeldBig() {
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();
-  if (!it || !onFoot || fx.skating && (it.id === 'skateboard' || skateCamOn())) return;
+  const rodAfloat = it && ITEMS[it.id].rod && afloat() && !third; // (fishing from a boat: the rod, nothing else)
+  if (!it || !(onFoot || rodAfloat) || fx.skating && (it.id === 'skateboard' || skateCamOn())) return;
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
   const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;

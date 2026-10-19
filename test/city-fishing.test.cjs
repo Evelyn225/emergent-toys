@@ -148,3 +148,47 @@ test('the hut: at its hatch on the promenade, open early till eight; a big fish 
   assert.deepStrictEqual(j(ev, '[fishLog.caught, fishLog.best.kg]'), [1, 31.5]);
   assert.match(ev('hutPrompt()'), /your best: 31.5kg bluefin tuna/);
 });
+
+test('the sushi bars buy sea fish for more than the hut does, and turn pond fish away', () => {
+  const { ev } = loadCity();
+  ev(`clearInventory(); money = 0; carryItem({ id: 'mackerel', uses: 0, kg: 0.7 }); carryItem({ id: 'carp', uses: 0, kg: 4 }); carryItem({ id: 'oldboot', uses: 0 })`);
+  const hut = ev("sellPrice(inv[0], SELL_RATE['BAIT & TACKLE'])"), sushi = ev('sellPrice(inv[0], SELL_RATE.SUSHI)');
+  assert.ok(sushi > hut, `the sushi bar pays more: ${sushi} against ${hut}`);
+  assert.ok(Math.abs(sushi - hut * ev('SUSHI_PAYS')) <= 0.25);
+  assert.deepStrictEqual(j(ev, 'sellSlot(1, SELL_RATE.SUSHI)'), [false, '"Fish from the sea only. Not carp."']);
+  assert.deepStrictEqual(j(ev, 'sellSlot(2, SELL_RATE.SUSHI)'), [false, '"We don\'t take old boot."'], 'and they don\'t bin your junk');
+  assert.match(ev('sellSlot(0, SELL_RATE.SUSHI)[1]'), /^You sell the 0.7kg mackerel for \$/);
+  assert.strictEqual(ev('money'), sushi);
+});
+
+test('the regulars: each stood on dry ground, facing water, their bobber out on it; now and then one lands something', () => {
+  const { ev } = loadCity();
+  const anglers = j(ev, 'ANGLERS.map(o => ({ dry: !waterKind(o.x, o.y) && !map[idx(Math.floor(o.x), Math.floor(o.y))], wet: waterKind(o.x + Math.cos(o.a) * o.cast, o.y + Math.sin(o.a) * o.cast) }))');
+  assert.ok(anglers.length >= 8, `${anglers.length} of them`);
+  for (const [k, o] of anglers.entries()) { assert.ok(o.dry, `angler ${k} on dry ground`); assert.ok(o.wet && o.wet !== 'ice', `angler ${k}'s bobber on the water`); }
+  assert.ok(ev("ANGLERS.some(o => waterKind(o.x + Math.cos(o.a) * o.cast, o.y + Math.sin(o.a) * o.cast) === 'pond') && ANGLERS.some(o => waterKind(o.x + Math.cos(o.a) * o.cast, o.y + Math.sin(o.a) * o.cast) === 'lake')"), 'a pond and the lake too');
+  const phases = j(ev, '(() => { const o = ANGLERS[0], seen = {}; for (let t = 0; t < 400; t += 0.5) seen[anglerPhase(o, t).st] = 1; return Object.keys(seen).sort(); })()');
+  assert.deepStrictEqual(phases, ['catch', 'wait']);
+  ev('mode = "walk"; px = ANGLERS[0].x + 0.1; py = ANGLERS[0].y');
+  assert.ok(ev('nearAngler() === ANGLERS[0]'));
+});
+
+test('from a boat: sit still and Q puts you in your seat with the rod; it casts over the side; get under way and the line comes in', () => {
+  const { ev } = loadCity();
+  ev(`tod = 11; rain = 0; clearInventory(); carryItem({ id: 'rod', uses: 0 }); boardBoat(fleet.find(b => b.deal === 'rent'));
+      sea.x = px = MARINA.x + 1; sea.y = py = MARINA.end + 1.6; a = Math.PI / 2; sea.hx = 0; sea.hy = 1; third = true; fishing = null;
+      var steps = (s, n = 20) => { for (let k = 0; k < n; k++) { T += s / n; stepFishing(s / n); } };`);
+  ev('sea.v = 0.5');
+  assert.match(ev('useHeld({ indoors: false })[0]'), /moving/);
+  ev('sea.v = 0');
+  assert.match(ev('useHeld({ indoors: false })[0]'), /settle in/);
+  assert.strictEqual(ev('third'), false, 'the view from your seat');
+  ev('useHeld({ indoors: false }); K.KeyQ = 1; steps(0.6); K.KeyQ = 0; steps(0.05, 1); steps(fishing.dur + 0.05)');
+  assert.strictEqual(ev('fishing.st'), 'wait');
+  assert.ok(['deep', 'sea', 'marina'].includes(ev('fishing.water')));
+  ev('sea.v = 0.6; steps(0.05, 1)');
+  assert.strictEqual(ev('fishing.st'), 'reel');
+  assert.match(ev('msgText'), /trolling/);
+  ev('sea.v = 0; third = true; steps(0.05, 1)');
+  assert.strictEqual(ev('fishing'), null, 'the view from behind again: the line comes in');
+});

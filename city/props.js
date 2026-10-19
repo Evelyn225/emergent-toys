@@ -366,8 +366,12 @@ solidBox(FISH_HUT.x, FISH_HUT.y, true, FISH_HUT.hl, FISH_HUT.hw, 0, FISH_HUT.h, 
 for (let k = 0; k < 5; k++) solidBox(FISH_HUT.x, FISH_HUT.y, true, FISH_HUT.hl + 0.05, (FISH_HUT.hw + 0.06) * (1 - k / 5) + 0.012, FISH_HUT.h + k * 0.018, FISH_HUT.h + (k + 1) * 0.018, 'hutroof', k);
 solidBox(FISH_HUT.x, FISH_HUT.y, true, 0.34, 0.006, FISH_HUT.h + 0.09, FISH_HUT.h + 0.16, 'hutsign', 0);
 solidBox(FISH_HUT.x - 0.84, FISH_HUT.y + 0.02, true, 0.27, 0.006, 0, 0.25, 'netrack', 0);
-for (const [ox, oy, z0] of [[0.5, -0.11, 0], [0.5, 0.11, 0], [0.5, 0, 0.075]]) solidBox(FISH_HUT.x + ox, FISH_HUT.y + oy, false, 0.1, 0.055, z0, z0 + 0.075, 'lobsterpot', 0);
-solidBox(FISH_HUT.x - FISH_HUT.hl - 0.06, FISH_HUT.y - FISH_HUT.hw + 0.05, true, 0.035, 0.035, 0, 0.09, 'barrel', 0);
+for (const [ox, oy, base] of [[0.5, -0.11, 0], [0.5, 0.11, 0], [0.5, -0.02, 0.068]]) { // three pots, one on the others: each a slatted half-barrel (in slices, narrowing to the top)
+  for (const [k, hw, za, zb] of [[0, 0.055, 0, 0.035], [1, 0.044, 0.035, 0.055], [2, 0.026, 0.055, 0.068]]) { solidBox(FISH_HUT.x + ox, FISH_HUT.y + oy, false, 0.1, hw, base + za, base + zb, 'lobsterpot', k); solids[solids.length - 1].base = base; }
+}
+solidBox(FISH_HUT.x + 0.53, FISH_HUT.y - 0.06, true, 0.014, 0.014, 0.136, 0.17, 'potbuoy', 0); // (a marker buoy left on top)
+solidBox(FISH_HUT.x - FISH_HUT.hl - 0.075, FISH_HUT.y - FISH_HUT.hw + 0.07, true, 0.048, 0.048, 0, 0.115, 'barrel', 0);
+solidBox(FISH_HUT.x - FISH_HUT.hl - 0.075, FISH_HUT.y - FISH_HUT.hw + 0.2, true, 0.055, 0.04, 0, 0.05, 'fishcrate', 0); // the morning's catch, on ice
 extras.push({ x: FISH_HUT.x + FISH_HUT.hatch, y: FISH_HUT.y - FISH_HUT.hw + 0.09, z: 0.02, person: YEL, when: () => hutOpen(tod) }); // (in his oilskins, behind the hatch)
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count

@@ -128,8 +128,11 @@ function promptText() {
     return [onRoofLot() ? 'E: take the stairs down' : 'E: fire escape down', edge].filter(Boolean).join('   ');
   }
   if (mode === 'fair') return fairRidePrompt();
-  if (mode === 'boat') return gardensPrompt();
-  if (mode === 'sea') return marinaPrompt();
+  if (mode === 'boat' || mode === 'sea') { // (with a rod in hand and the boat still, you can fish over the side: fishing.js)
+    if (fishing && fishingFrom()) return fishPrompt();
+    const base = mode === 'boat' ? gardensPrompt() : marinaPrompt();
+    return heldRod() && boatSpeed() < 0.12 ? `${base}   Q: ${third ? 'fish over the side' : 'hold to cast'}` : base;
+  }
   if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
     if (elHere()) return 'E: board the train';
@@ -151,6 +154,7 @@ function promptText() {
   if (gp) return gp;
   if (c && c.v < 0.6 && !c.ev) return c.body === TAXI ? 'E: get in the taxi   J: drive it (taxi shift)' : c.owned ? `E: get in your ${ITEMS[c.model].name}` : 'E: take this car';
   if (nearWalkedDog()) return 'E: pet the dog';
+  if (nearAngler()) return 'E: talk to the angler';
   const who = nearPerson();
   if (who) return task && task.who === who ? (fetchHave() ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';

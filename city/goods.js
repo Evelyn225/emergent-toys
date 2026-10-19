@@ -236,13 +236,14 @@ function storeSlot(k, list = stored, where = 'your unit', accepts = null, capaci
 }
 // pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
 // (and the bait hut buys what you catch: rate 'catch', see catchPrice in fishing.js; it bins your junk for nothing)
-const SELL_RATE = { PAWN: 0.4, 'BAIT & TACKLE': 'catch' };
-const sellPrice = (it, rate) => rate === 'catch' ? catchPrice(it) : ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
+const SELL_RATE = { PAWN: 0.4, 'BAIT & TACKLE': 'catch', SUSHI: 'sushi' }; // (and the sushi bars, sea fish only: sushiPrice)
+const sellPrice = (it, rate) => rate === 'catch' ? catchPrice(it) : rate === 'sushi' ? sushiPrice(it) : ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
 const binnable = (it, rate) => rate === 'catch' && ITEMS[it.id].kind === 'junk';
 function sellSlot(k, rate) {
   if (!inv[k]) return [false, 'Nothing there.'];
   const p = sellPrice(inv[k], rate), name = ITEMS[inv[k].id].name;
   if (!p && binnable(inv[k], rate)) { takeSlot(k); return [true, `They take the ${name} off your hands and drop it in the bin.`]; }
+  if (!p && rate === 'sushi' && ITEMS[inv[k].id].kind === 'fish') return [false, `"Fish from the sea only. Not ${name}."`];
   if (!p) return [false, `"We don't take ${name}."`];
   const it = takeSlot(k); earn(p);
   return [true, `You sell the ${it.kg ? catchName(it) : name} for ${fmt$(p)}.`];

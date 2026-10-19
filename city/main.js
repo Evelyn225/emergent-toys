@@ -33,6 +33,11 @@ onkeydown = e => {
   if (e.code === 'KeyE' && !sleep) interact();
   if(e.code==='Space'&&mode==='ladder'){leaveCourierLadder();return;}
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+  if ((mode === 'sea' || mode === 'boat') && !sleep) { // out on the water: the quick slots, and Q for a rod (fishing.js)
+    const slot = /^Digit([1-8])$/.exec(e.code);
+    if (slot) holdQuickSlot(slot[1] - 1);
+    if (e.code === 'KeyQ' && heldRod()) useHeldItem();
+  }
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
     if (e.code === 'Space') { if (skatingNow()) { if (!e.repeat) skateSpace(true); } else jump(); } // (on the board: it pops when you let go, skate.js)
