@@ -157,22 +157,33 @@ function drawShots() {
     if (p0 && p1) fishSeg(p0, p1, C(age < 0.04 ? WHITE : YEL, 15));
     if (p1 && (s.what === 'wall' || s.what === 'ground' || s.what === 'car')) fishPut(p1.c, p1.r, p1.depth, '*', C(s.what === 'car' ? YEL : WHITE, 14)); // (sparks, or a puff of grit)
   }
-  for (const s of gun.copShots) { // theirs: a flash at the officer's hand
-    if (T - s.t > 0.08 || s.room) continue;
-    const [vx, vy] = R(s.x, s.y);
-    drawArt(vx, vy, 0.1, 0.05, 0.05, ['\\|/', '-*-', '/|\\'], ch => ch === '*' ? C(WHITE, 15) : C(YEL, 15));
+  for (const s of gun.copShots) { // theirs: a flash at the officer's outstretched hands, and a streak coming at you
+    if (T - s.t > 0.09 || s.room) continue;
+    const [vx, vy] = R(s.x, s.y), d = Math.hypot(vx, vy) || 1, hx = vx - vx / d * 0.03, hy = vy - vy / d * 0.03; // (a step toward you from them: the muzzle)
+    drawArt(hx, hy, 0.11, 0.07, 0.07, ['\\|/', '-@-', '/|\\'], ch => ch === '@' ? C(WHITE, 15) : C(T - s.t < 0.04 ? YEL : ORANGE, 15));
+    if (T - s.t < 0.06) { // passing you on one side (a miss) or straight at you (a hit), ending just short of your eyes
+      const k = 0.12 / d, mx = vx * k - vy / d * (s.hit ? 0 : 0.05 * s.side), my = vy * k + vx / d * (s.hit ? 0 : 0.05 * s.side);
+      const p0 = fishProj(hx, hy, 0.13), p1 = fishProj(mx, my, eye - 0.02);
+      if (p0 && p1) fishSeg(p0, p1, C(YEL, 14));
+    }
   }
 }
-// pools of blood: spreading out over the first few seconds, an uneven edge, darkening as they dry
+// pools of blood: spreading over the first few seconds from under them, an uneven edge that soaks into the ground in
+// spatters, a wet sheen in the middle while it's fresh, going dark brown as it dries
 function drawBlood() {
   for (const b of pools) {
     const vx = rel(b.x - px), vy = rel(b.y - py);
     if (Math.hypot(vx, vy) > Math.min(vis, 14)) continue;
-    const age = T - b.t, r = 0.03 + 0.07 * Math.min(1, age / 9), dry = clamp((age - 60) / 120, 0, 1), seed = b.x * 13 + b.y * 7;
-    drawBox(boxAt(vx, vy, 1, 0, r * 1.2, r * 1.2, 0, 0.0004), (i, t, L) => {
-      const an = Math.atan2(HIT.v, HIT.u), edge = r * (0.75 + 0.25 * Math.sin(an * 3 + seed) * Math.sin(an * 5 + seed * 1.7));
-      if (Math.hypot(HIT.u, HIT.v) > edge) { BG[i] = BG_UNSET; return false; }
-      BG[i] = C(RED, (2.6 - dry * 1.2) * Math.max(0.5, L * 0.1)); return set(i, Math.hypot(HIT.u, HIT.v) < edge * 0.5 ? ' ' : '.', C(RED, 4 - dry)), true;
+    const age = T - b.t, r = 0.025 + 0.085 * (1 - Math.exp(-age / 3.5)), dry = clamp((age - 50) / 130, 0, 1), seed = b.x * 13 + b.y * 7;
+    drawBox(boxAt(vx, vy, 1, 0, r * 1.35, r * 1.35, 0, 0.0004), (i, t, L) => {
+      const an = Math.atan2(HIT.v, HIT.u), q = Math.hypot(HIT.u, HIT.v);
+      const edge = r * (0.78 + 0.14 * Math.sin(an * 3 + seed) + 0.08 * Math.sin(an * 7 + seed * 1.7) + 0.05 * Math.sin(an * 13 + seed * 0.3)), k = q / edge;
+      if (k > 1.25 || k > 1 && hash(Math.floor(HIT.u * 300), Math.floor(HIT.v * 300), 4411) > 0.35) { BG[i] = BG_UNSET; return false; }
+      const col = dry > 0.5 ? BRICK : RED, lv = Math.max(0.6, L * 0.1);
+      if (k > 0.85) { BG[i] = BG_UNSET; return set(i, k > 1 ? '.' : ',', C(col, (5 - dry * 2) * lv)), true; } // (the soaked-in edge, and the spatters past it)
+      BG[i] = C(col, (2.6 - k * 0.8 - dry * 1.1) * lv);
+      const glint = dry < 0.4 && k < 0.5 && hash(Math.floor(HIT.u * 160), Math.floor(HIT.v * 160), 4412) > 0.9; // (wet: it catches the light)
+      return set(i, glint ? '~' : ' ', C(RED, 9 * lv)), true;
     });
   }
 }

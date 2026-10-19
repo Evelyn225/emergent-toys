@@ -5,15 +5,30 @@
 // Units: sprite pixels; a standing adult's head is FIG_TALL high. Body frame: x their right, y ahead of them, z up.
 const FIG_W = 29, FIG_H = 34, FIG_TALL = 26.45, FIG_VIEWS = 16;
 const FR = Object.fromEntries(['HAIR', 'HAIR_D', 'SKIN', 'SKIN_D', 'EYE', 'TOP', 'TOP_D', 'INNER', 'BOT', 'BOT_D', 'POCKET', 'BELT',
-  'BUCKLE', 'SHOE', 'HAT', 'HAT_D', 'BADGE', 'CAPBADGE', 'PACK', 'PACK_D', 'STRAP', 'SHADES', 'TIE', 'MIC', 'TIGHTS', 'INK'].map((k, i) => [k, i + 1]));
+  'BUCKLE', 'SHOE', 'HAT', 'HAT_D', 'BADGE', 'CAPBADGE', 'PACK', 'PACK_D', 'STRAP', 'SHADES', 'TIE', 'MIC', 'TIGHTS', 'INK', 'SCLERA', 'MOUTH'].map((k, i) => [k, i + 1]));
 const FIG_ROLES = Object.keys(FR).length + 1;
 // a detail one pixel across, and what it reads as once a pixel is smaller than a screen cell (or it would flicker)
 const FIG_COARSE = new Uint8Array(FIG_ROLES);
-for (const [d, c] of [['EYE', 'SKIN'], ['POCKET', 'BOT'], ['BUCKLE', 'BELT'], ['BADGE', 'TOP'], ['CAPBADGE', 'HAT'], ['STRAP', 'TOP'], ['TIE', 'INNER']]) FIG_COARSE[FR[d]] = FR[c];
+for (const [d, c] of [['EYE', 'SKIN'], ['SCLERA', 'SKIN'], ['MOUTH', 'SKIN'], ['POCKET', 'BOT'], ['BUCKLE', 'BELT'], ['BADGE', 'TOP'], ['CAPBADGE', 'HAT'], ['STRAP', 'TOP'], ['TIE', 'INNER']]) FIG_COARSE[FR[d]] = FR[c];
 // lit side / shadow side: which roles have a darker shade for the faces turned away from the light
 const FIG_DARK = new Uint8Array(FIG_ROLES);
 for (const k of ['HAIR', 'SKIN', 'TOP', 'BOT', 'HAT', 'PACK']) FIG_DARK[FR[k]] = FR[k + '_D'];
 
+// up close (figSprite's fine sprites, FIG_FINE while one's being cast) a face has eyes with whites, brows, a nose and a
+// mouth, and hair has strands; further off a face is a pixel an eye and that's all there's room for
+let FIG_FINE = false;
+// where on the front of a head (its unit-sphere point l: x their right, y ahead, z up) the features are, or 0
+function figFace(l) {
+  if (l[1] < 0.45) return 0;
+  for (const sg of [1, -1]) {
+    const ex = (l[0] - sg * 0.34) / 0.15, ez = (l[2] - 0.1) / 0.1, e = Math.hypot(ex, ez);
+    if (e < 1) return FR.SCLERA; // (the pupil: the eye's decal, a pixel in the middle)
+    if (Math.abs(l[2] - 0.28) < 0.04 && Math.abs(l[0] - sg * 0.33) < 0.17 - Math.abs(l[0] - sg * 0.33) * 0.3) return FR.HAIR; // a brow
+  }
+  if (l[0] > -0.02 && l[0] < 0.08 && l[2] > -0.24 && l[2] < 0.04) return FR.SKIN_D; // the side of the nose, in shadow
+  if (Math.abs(l[0]) < 0.2 && Math.abs(l[2] + 0.42 - l[0] * l[0] * 0.8) < 0.09) return FR.MOUTH;
+  return 0;
+}
 const fAdd = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], fMul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const fSub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], fDot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const fNorm = a => fMul(a, 1 / (Math.hypot(a[0], a[1], a[2]) || 1));
@@ -33,6 +48,7 @@ const FIG_POSES = {
   fold: () => ({ ...FIG_STAND, arms: [[0.3, 0.14, 1.57, -1.15], [0.3, 0.14, 1.57, -1.15]] }), // arms folded
   ease: () => ({ ...FIG_STAND, arms: [[-0.35, 0.12, -0.9, -0.6], [-0.35, 0.12, -0.9, -0.6]] }), // hands behind the back
   wave: () => ({ ...FIG_STAND, arms: [[2.7, 0.5, 3.1, 0.5], FIG_STAND.arms[1]] }), // hailing a cab
+  aim: () => ({ ...FIG_STAND, arms: [[1.45, -0.28, 1.55, -0.22], [1.45, -0.34, 1.55, -0.3]], gun: true, lean: 0.06 }), // both hands out on a pistol (the police, shooting back: gun.js)
   grass: () => ({ seat: 0, legs: [[1.95, 0.22, 0.8, 0.1], [1.95, 0.22, 0.8, 0.1]], arms: [[0.75, 0.2, 1.7, -0.5], [0.75, 0.2, 1.7, -0.5]], lean: -0.1 }), // on the lawn, hugging her knees
   reach: () => ({ ...FIG_STAND, arms: [[1.0, 0.15, 1.3, 0.05], [1.0, 0.15, 1.3, 0.05]], lean: 0.35 }), // hands in the touch pool
   sing: () => ({ ...FIG_STAND, arms: [[0.9, 0.25, 2.7, -0.6], [0.5, 0.7, 0.9, 0.5]] }), // the mic up to her mouth
@@ -65,6 +81,8 @@ const FIG_POSES = {
   sprawl: () => ({ seat: 0, legs: [[1.45, 0.3, 1.5, 0.25], [1.3, 0.2, 1.7, 0.15]], arms: [[-0.7, 0.35, -0.5, 0.3], [-0.6, 0.4, -0.4, 0.3]], lean: -0.45 }),
   // flat on their back (knocked down by a car: people.js), arms flung out, one knee up
   down: () => ({ seat: -1.2, legs: [[1.55, 0.2, 1.55, 0.15], [1.1, 0.35, 2.0, 0.25]], arms: [[-1.5, 0.9, -1.4, 0.8], [-1.4, 0.75, -1.5, 0.9]], lean: -1.5 }),
+  // shot (gun.js): flat out and still, one arm flung wide, the other across them, legs crooked
+  dead: () => ({ seat: -1.25, legs: [[1.5, 0.42, 1.25, 0.35], [1.62, 0.05, 1.75, 0.02]], arms: [[-1.55, 1.35, -1.6, 1.5], [0.6, -0.35, 1.9, -0.9]], lean: -1.56, roll: 0.12 }),
 };
 // a pose key: 'stand', 'walk3', 'sit7' (seat height in pixels), 'dance2'
 function figPose(key) {
@@ -146,7 +164,8 @@ function figBody(look, key) {
     if (hat === 'cap' && l[2] > 0.28) return R.HAT;
     if (hat === 'beanie' && l[2] > 0.12) return l[2] < 0.34 ? R.HAT_D : R.HAT;
     if (look.shades && l[1] > 0.35 && Math.abs(l[0]) < 0.8 && l[2] > -0.05 && l[2] < 0.32) return R.SHADES;
-    return hair(l) ? R.HAIR : R.SKIN;
+    if (hair(l)) return FIG_FINE && fract(Math.atan2(l[0], -l[1]) * 5 + l[2] * 1.5) < 0.2 ? R.HAIR_D : R.HAIR; // (strands, close up)
+    return FIG_FINE && !look.form && figFace(l) || R.SKIN;
   });
   if (look.form) parts.push(figEll(U(0, 0.1, 8.6), ax, [1.2, 1.2, 0.8], () => R.SKIN)); // a dress form: the knob on its neck, no head
   else parts.push(head);
@@ -162,7 +181,7 @@ function figBody(look, key) {
     decals.push({ p: HU(0, 3.46, 2.65), n: ey, role: R.CAPBADGE, part: parts.length - 3 });
   }
   if (hat === 'hardhat') parts.push(figEll(HU(0, 0.1, 0.8), ax, [3.45, 3.35, 2.6], h => h.l[2] < 0.25 ? 0 : R.HAT), figBox(HU(0, 0.5, 1.4), ax, [3.7, 3.8, 0.17], () => R.HAT_D, false));
-  if (!look.shades && !look.form) for (const sg of [1, -1]) { // the eyes
+  if (!look.shades && !look.form) for (const sg of [1, -1]) { // the eyes (a pixel each: close up, figFace draws them)
     const n = fNorm([sg * 0.33, 0.93, 0.1]);
     decals.push({ p: HU(n[0] * hr[0], n[1] * hr[1], n[2] * hr[2]), n: fNorm(fAdd(fMul(ex, n[0]), fAdd(fMul(ey, n[1]), fMul(ez, n[2])))), role: R.EYE, part: parts.indexOf(head) });
   }
@@ -178,6 +197,8 @@ function figBody(look, key) {
     const elbow = fAdd(sh, fMul(du, 4.3)), wrist = fAdd(elbow, fMul(df, 3.9)), hand = fAdd(wrist, fMul(df, 0.55));
     parts.push(figCap(sh, elbow, 0.95 * (0.9 + 0.1 * bw), sleeve, false), figCap(elbow, wrist, 0.85 * (0.9 + 0.1 * bw), fore, false), figEll(hand, ax, [0.95, 0.95, 0.95], () => R.SKIN));
     if (look.mic && sg === 1) parts.push(figEll(fAdd(hand, fMul(df, 0.9)), ax, [0.7, 0.7, 0.7], () => R.MIC, false));
+    if (P.gun && sg === 1) parts.push(figBox(fAdd(hand, fAdd(fMul(df, 1.2), fMul(ez, 0.3))), ax, [0.35, 1.25, 0.5], () => R.MIC, false), // the pistol, gunmetal, and its grip down into the hand
+      figBox(fAdd(hand, fMul(ez, -0.2)), ax, [0.3, 0.4, 0.7], () => R.BELT, false));
   }
   // the legs, the feet
   const thigh = bot === 'pants' ? () => R.BOT : bot === 'shorts' ? h => h.s < 0.7 ? R.BOT : legSkin : () => legSkin;
@@ -243,19 +264,22 @@ function figHitPart(P, o, d) {
 }
 // the sprite for a view (0..FIG_VIEWS-1: 0 = from in front of them, going round to their right): a role per pixel.
 // figRasterAt takes the angle itself, and (near) gets how far toward you each pixel's surface is from the middle
-const figRaster = (body, view) => figRasterAt(body, view / FIG_VIEWS * Math.PI * 2);
-function figRasterAt(body, th, near) {
+// S: pixels to a sprite pixel (1, or more for a fine sprite up close: see drawFigure)
+const figRaster = (body, view, S = 1) => figRasterAt(body, view / FIG_VIEWS * Math.PI * 2, null, S);
+function figRasterAt(body, th, near, S = 1) {
+  const W = FIG_W * S, H = FIG_H * S;
   const V = [Math.sin(th), Math.cos(th), 0], Rv = [-V[1], V[0], 0], d = fMul(V, -1);
   const light = fNorm(fAdd(V, fAdd([0, 0, 0.7], fMul(Rv, -0.6)))); // from over your left shoulder
-  const spr = new Uint8Array(FIG_W * FIG_H), owner = new Int16Array(FIG_W * FIG_H).fill(-1);
+  const spr = new Uint8Array(W * H), owner = new Int16Array(W * H).fill(-1);
+  spr.S = S; FIG_FINE = S > 1;
   // each part's extent on the view plane (a bounding sphere's), so a pixel only tries the parts that could cover it
   const box = body.parts.map(P => {
     const [a, b, r] = P.k === 2 ? [P.a, P.b, P.r] : [P.c, P.c, P.k === 0 ? Math.max(...P.r) : Math.hypot(...P.h)];
     const ua = fDot(a, Rv), ub = fDot(b, Rv);
     return [Math.min(ua, ub) - r, Math.max(ua, ub) + r, Math.min(a[2], b[2]) - r, Math.max(a[2], b[2]) + r];
   });
-  for (let r = 0; r < FIG_H; r++) for (let c = 0; c < FIG_W; c++) {
-    const u = c - (FIG_W - 1) / 2, z = FIG_H - r - 0.5, o = fAdd(fMul(Rv, u), fAdd([0, 0, z], fMul(V, 60)));
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const u = (c + 0.5) / S - FIG_W / 2, z = FIG_H - (r + 0.5) / S, o = fAdd(fMul(Rv, u), fAdd([0, 0, z], fMul(V, 60)));
     let best = Infinity, role = 0, who = -1;
     body.parts.forEach((P, k) => {
       const e = box[k];
@@ -270,26 +294,30 @@ function figRasterAt(body, th, near) {
       }
       best = t; role = ro; who = k;
     });
-    spr[r * FIG_W + c] = role; owner[r * FIG_W + c] = who;
-    if (near) near[r * FIG_W + c] = 60 - best;
+    spr[r * W + c] = role; owner[r * W + c] = who;
+    if (near) near[r * W + c] = 60 - best;
   }
-  for (const dc of body.decals) { // one pixel each, only where its part is what you see and it's turned toward you
+  FIG_FINE = false;
+  for (const dc of body.decals) { // one pixel each (in a fine sprite, a dab), only where its part is what you see and it's turned toward you
     if (fDot(dc.n, V) < 0.25) continue;
-    const c = Math.floor(fDot(dc.p, Rv) + FIG_W / 2), r = FIG_H - 1 - Math.floor(dc.p[2]);
-    if (c >= 0 && c < FIG_W && r >= 0 && r < FIG_H && owner[r * FIG_W + c] === dc.part) spr[r * FIG_W + c] = dc.role;
+    // (close up, an eye's pupil is still the one pixel, in its white)
+    const c0 = (fDot(dc.p, Rv) + FIG_W / 2) * S, k = S > 1 && dc.role !== FR.EYE ? S * 0.4 : 0, r0 = S > 1 ? (FIG_H - dc.p[2]) * S : FIG_H - 1 - Math.floor(dc.p[2]);
+    for (let r = Math.floor(r0 - k); r <= Math.floor(r0 + k); r++) for (let c = Math.floor(c0 - k); c <= Math.floor(c0 + k); c++)
+      if (c >= 0 && c < W && r >= 0 && r < H && owner[r * W + c] === dc.part) spr[r * W + c] = dc.role;
   }
   return spr;
 }
-const figCache = new Map();
-function figSprite(look, view, key) {
-  const id = look.shape + '|' + key + '|' + view;
-  let s = figCache.get(id);
-  if (s) { figCache.delete(id); figCache.set(id, s); return s; } // (most recently used last)
+const figCache = new Map(), figFineCache = new Map(); // (fine sprites are big: only a few kept, for whoever's close)
+function figSprite(look, view, key, S = 1) {
+  const id = look.shape + '|' + key + '|' + view + (S > 1 ? '|' + S : ''), cache = S > 1 ? figFineCache : figCache;
+  let s = cache.get(id);
+  if (s) { cache.delete(id); cache.set(id, s); return s; } // (most recently used last)
   const bid = look.shape + '|' + key;
   let body = figCache.get(bid);
   if (!body) figCache.set(bid, body = look.build ? look.build(key) : figBody(look, key)); // (an animal brings its own)
-  figCache.set(id, s = figRaster(body, view));
+  cache.set(id, s = figRaster(body, view, S));
   if (figCache.size > 8000) for (const old of [...figCache.keys()].slice(0, 1000)) figCache.delete(old); // the least recently used go
+  if (figFineCache.size > 300) for (const old of [...figFineCache.keys()].slice(0, 60)) figFineCache.delete(old);
   return s;
 }
 
@@ -306,11 +334,12 @@ function figLook(o) {
   look.shape = ['hair', 'hat', 'top', 'bot', 'pack', 'shades', 'holster', 'badge', 'mic', 'tights', 'kid', 'bw', 'form', 'ink'].map(k => look[k] ?? '').join(',');
   // per role: palette base and brightness (shadow roles darker)
   const B = new Uint8Array(FIG_ROLES), Lv = new Float32Array(FIG_ROLES), put = (role, [b, l], k = 1) => { B[FR[role]] = b; Lv[FR[role]] = l * k; };
-  put('HAIR', col.hair); put('HAIR_D', col.hair, 0.65); put('SKIN', col.skin); put('SKIN_D', col.skin, 0.72); put('EYE', [GRAY, 0]);
+  put('HAIR', col.hair); put('HAIR_D', col.hair, 0.65); put('SKIN', col.skin); put('SKIN_D', col.skin, 0.72); put('EYE', [GRAY, 1]);
   put('TOP', col.top); put('TOP_D', col.top, 0.68); put('INNER', col.inner); put('BOT', col.bot); put('BOT_D', col.bot, 0.68);
   put('POCKET', col.bot, 0.45); put('BELT', col.belt); put('BUCKLE', [YEL, 12]); put('SHOE', col.shoe); put('HAT', col.hat); put('HAT_D', col.hatD);
   put('BADGE', [YEL, 15]); put('CAPBADGE', [YEL, 15]); put('PACK', col.pack); put('PACK_D', col.pack, 0.65); put('STRAP', col.pack, 0.65);
   put('SHADES', [GRAY, 0]); put('TIE', col.tie); put('MIC', [GRAY, 5]); put('TIGHTS', col.tights); put('INK', col.ink || [GREEN, 5]);
+  put('SCLERA', [WHITE, 13]); put('MOUTH', [BRICK, Math.max(3, col.skin[1] * 0.55)]); // (close up: the whites of the eyes, the lips)
   look.base = B; look.lvl = Lv;
   return look;
 }
@@ -384,19 +413,21 @@ function figView(rx, ry, fx, fy) {
 }
 const figCount = new Uint16Array(FIG_ROLES);
 function figSample(spr, pu, pz, su, sz) {
+  const S = spr.S || 1, W = FIG_W * S, H = FIG_H * S;
+  pu *= S; pz *= S; su *= S; sz *= S;
   if (su <= 1.25 && sz <= 1.25) { // a pixel to a cell or bigger: just that pixel (its details too, once nothing can be skipped)
-    const c = Math.floor(pu), r = FIG_H - 1 - Math.floor(pz);
-    if (c < 0 || c >= FIG_W || r < 0 || r >= FIG_H) return 0;
-    const k = spr[r * FIG_W + c];
+    const c = Math.floor(pu), r = H - 1 - Math.floor(pz);
+    if (c < 0 || c >= W || r < 0 || r >= H) return 0;
+    const k = spr[r * W + c];
     return su <= 1 && sz <= 1 ? k : FIG_COARSE[k] || k;
   }
   // smaller: the commonest thing under the cell, or nothing if it's mostly see-through (no flicker as it walks)
   const a0 = Math.floor(pu - su / 2), a1 = Math.floor(pu + su / 2), b0 = Math.floor(pz - sz / 2), b1 = Math.floor(pz + sz / 2);
   let n = 0, best = 0, bn = 0;
   for (let b = b0; b <= b1; b++) for (let a = a0; a <= a1; a++) {
-    const r = FIG_H - 1 - b;
-    if (a < 0 || a >= FIG_W || r < 0 || r >= FIG_H) continue;
-    const k0 = spr[r * FIG_W + a];
+    const r = H - 1 - b;
+    if (a < 0 || a >= W || r < 0 || r >= H) continue;
+    const k0 = spr[r * W + a];
     if (!k0) continue;
     const k = FIG_COARSE[k0] || k0; n++;
     if (++figCount[k] > bn) { bn = figCount[k]; best = k; }
@@ -404,12 +435,27 @@ function figSample(spr, pu, pz, su, sz) {
   figCount.fill(0);
   return n * 2.2 >= (a1 - a0 + 1) * (b1 - b0 + 1) ? best : 0;
 }
+// a sprite pixel this many screen cells across or more: cast it finer, about a pixel to a cell (in steps, so a few
+// sprites serve whoever's coming toward you)
+const FIG_MARK = []; FIG_MARK[FR.EYE] = 'o'; FIG_MARK[FR.MOUTH] = '-'; // (drawn as characters on the skin: see drawFigure)
+// (cells are taller than they're wide, so it's how many rows a pixel spans that counts)
+const FIG_FINE_AT = 2, FIG_FINE_MAX = 6;
 function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
-  const spr = figSprite(look, figView(rx, ry, fx, fy), pose), unit = h / FIG_TALL, floor = opts?.light || 0, sparkle = look.sparkle;
+  const unit = h / FIG_TALL, depth = typeof projY === 'number' ? Math.max(0.01, dx * rx + dy * ry) : 1e9, rowsPer = unit * projY / depth; // (no screen in the node tests)
+  const spr = figSprite(look, figView(rx, ry, fx, fy), pose, !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1), floor = opts?.light || 0, sparkle = look.sparkle;
   drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
     if (!role) return false;
     const lit = Math.max(floor, L), k = clamp(0.32 + lit / 15 * 0.78, 0.32, 1);
+    // an eye or a mouth is a mark on the face, not a block of its own colour: the skin, with the feature drawn on it
+    const mark = FIG_MARK[role];
+    if (mark && !look.build) {
+      const under = role === FR.EYE && spr.S > 1 ? FR.SCLERA : FR.SKIN; // (close up, the pupil in the white of the eye)
+      BG[i] = C(look.base[under], look.lvl[under] * k);
+      const S = spr.S || 1, cu = fract((u / unit + FIG_W / 2) * S), cz = fract(z / unit * S), hu = du / unit * S / 2, hz = dz / unit * S / 2;
+      const centre = Math.abs(cu - 0.5) <= Math.max(0.5, hu) && Math.abs(cz - 0.5) <= Math.max(0.5, hz) && (hu >= 0.5 || Math.abs(cu - 0.5) < hu + 1e-6) && (hz >= 0.5 || Math.abs(cz - 0.5) < hz + 1e-6);
+      return set(i, role === FR.MOUTH || centre ? mark : ' ', C(look.base[role], Math.max(1, look.lvl[role] * k))), true; // (an eye: one mark, in the cell at its middle)
+    }
     BG[i] = sparkle && role === FR.TOP && hash(i, Math.floor(T * 7), 9074) > 0.8 ? C(WHITE, 15) : C(look.base[role], look.lvl[role] * k);
     return set(i, ' ', 0), true;
   });

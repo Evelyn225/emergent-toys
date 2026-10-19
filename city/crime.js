@@ -254,14 +254,16 @@ function roofSearchLead(dt) {
 function drawRoofPolice() {
   for (const c of roofCops) {
     const z = policeRoofHeight(c.x, c.y);
-    figMotion(c); drawFigure(...R(c.x, c.y), z, 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, 'run'), { light: 7 });
+    figMotion(c); const aim = c.aimT > T, [ax, ay] = aimAt(rel(px - c.x), rel(py - c.y)); // (shooting at you: gun.js)
+    drawFigure(...R(c.x, c.y), z, 0.18, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : walkPose(c, 'run'), { light: 7 });
     if (c.sees && fract(T * 3) < 0.5) drawArt(...R(c.x, c.y), z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
 }
 function drawRoomPolice() {
   for (const c of roomCops) {
     figMotion(c);
-    drawFigure(c.x - px, c.y - py, 0, 1.8, c._fx || 0, c._fy || 0, copLook(c), c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9 });
+    const aim = c.aimT > T, [ax, ay] = aimAt(px - c.x, py - c.y); // (shooting at you: gun.js)
+    drawFigure(c.x - px, c.y - py, 0, 1.8, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9 });
     if (c.sees && fract(T * 3) < 0.55) drawArt(c.x - px, c.y - py, 1.65, 0.1, 0.12, ['!'], () => C(RED, 15));
   }
 }

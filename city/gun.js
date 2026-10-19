@@ -185,6 +185,8 @@ function stepGun(dt) {
   if (!wanted.stars && T - gun.lastShotT > CALM_T) wanted.fired = false;
   return copsShoot(dt);
 }
+// an officer shooting at (dx, dy) away stands bladed to it, turned a little off square (and so you see the arms out)
+const aimAt = (dx, dy) => { const an = Math.atan2(dy, dx) - 0.45; return [Math.cos(an), Math.sin(an)]; };
 // a body under a sheet: the paramedics are there
 const sheeted = o => bodies.some(b => b.who === o && b.atT && T - b.atT > 2.5);
 
@@ -200,12 +202,13 @@ function copsShoot(dt) {
   const live = new Set(shooters.map(s => s[0]));
   for (const c of [...footCops, ...cars, ...roomCops, ...roofCops]) if (c.fireT && !live.has(c)) delete c.fireT; // (lost sight: they'll take a moment to aim again)
   for (const [c, d] of shooters) {
+    c.aimT = T + 1.2; // (drawn aiming at you: city-sprites.js)
     if (!c.fireT) { c.fireT = T + 0.7 + Math.random() * 0.8; continue; }
     if (T < c.fireT) continue;
     c.fireT = T + COP_FIRE_GAP[0] + Math.random() * (COP_FIRE_GAP[1] - COP_FIRE_GAP[0]);
     const odds = clamp(0.5 - d / COP_FIRE_R * 0.3 - Math.min(0.2, moving * 0.12) - body.crouch * 0.1 - (driving ? 0.15 : 0), 0.06, 0.5);
     const hit = Math.random() < odds;
-    gun.copShots.push({ x: c.x, y: c.y, hit, t: T, room: inside });
+    gun.copShots.push({ x: c.x, y: c.y, hit, t: T, room: inside, side: Math.random() < 0.5 ? -1 : 1 });
     if (!inside) panicAt(c.x, c.y);
     if (!hit) continue;
     if (driving) { damageCar(me, 7); if (Math.random() < 0.3) hurt(8); }

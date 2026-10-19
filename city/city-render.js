@@ -677,12 +677,26 @@ function slabEdge(i, u, z, d, side) {
   if (z > EL_TOP - 0.025 || z < EL_BOT + 0.02) return set(i, '=', C(GRAY, L));
   set(i, Math.abs(fract(u * 3 + (z - EL_BOT) * 12) - 0.5) < 0.12 ? 'X' : fract(u * 6) < 0.15 ? 'o' : ' ', C(GRAY, L * 0.8));
 }
+// sunrise and sunset: one ramp of the colours the sky goes through from the horizon up, looking toward the sun (gold,
+// orange, red, a dusky pink, then blue going dark); looking away from it the sky starts further along (pink over blue)
+const DUSK_RAMP = [C(YEL, 13), C(ORANGE, 13), C(ORANGE, 11), C(ORANGE, 9), C(RED, 8), C(RED, 6), C(MAG, 5), C(MAG, 4), C(BLUE, 4), C(BLUE, 3)]; // (and above that, the ordinary sky)
+const sunAz = () => (tod - 6) / 12 * Math.PI; // (rising in +x, setting in -x: as sunMoon draws it)
+// how much a direction faces the low sun: 1 straight at it, 0 straight away
+const towardSun = az => (1 + Math.cos(az - sunAz())) / 2;
+// the sky's colour at (up, az), or -1 for the ordinary sky above it: a point along the ramp, ordered-dithered (d)
+// between neighbouring colours only. As the sun climbs or sinks (k falls) the band sinks into the horizon
+function duskSky(up, az, d, k) {
+  const to = towardSun(az), t = (Math.max(0, up) / (0.28 + 0.3 * to) * 7 + (1 - to) * 4.5) / Math.max(k, 0.01), n = Math.floor(t);
+  const at = n + (d < t - n ? 1 : 0);
+  return at < DUSK_RAMP.length ? DUSK_RAMP[at] : -1;
+}
 function skyCell(i, r, x, rx, ry) {
   ZB[i] = Infinity; FL[i] = 0;
   const up = (hor - r - 0.5) / projY, az = Math.atan2(ry, rx); // up = tan(elevation)
   if (arcadeSky(i, rx, ry, up)) return; // the Shotengai's roof overhead
+  const dk = clamp((dusk - 0.1) / 0.6, 0, 1) * (1 - overcast), glow = dk > 0 ? duskSky(up, az, BAYER[(r & 3) * 4 + (x & 3)], dk * dk * (3 - 2 * dk)) : -1; // (the sunset rising out of the horizon over the hour, and sinking back)
   BG[i] = rain > 0.5 ? C(GRAY, 1 + day * 6) : fogAmt > 0.5 ? bgAt(GRAY, day * 4)
-        : dusk > 0.3 && up < 0.3 ? bgAt(up < 0.1 ? ORANGE : MAG, dusk * (up < 0.1 ? 8 : 4) * (1 - overcast), 0)
+        : glow >= 0 ? glow
         : day > 0.15 ? bgAt(up < 0.08 ? CYAN : BLUE, day * (9 - Math.min(4, up * 8)), 0)
         : up < 0.05 ? C(ORANGE, 1) : up < 0.35 ? C(BLUE, 1) : C(BLUE, 0); // night: navy, city glow at the horizon
   // clouds: a flat layer CLOUD_H up, so they flatten into the horizon in perspective (and look the same from a roof).
@@ -694,7 +708,12 @@ function skyCell(i, r, x, rx, ry) {
     const n = noise(wx, wy, 31) * (1 - 0.3 * fine) + noise(wx * 2.6, wy * 2.6, 32) * 0.3 * fine, cover = 0.62 - overcast * 0.3;
     if (n > cover) {
       const k = (n - cover) / (1 - cover) * fade;
-      if (k > 0.08) { BG[i] = day > 0.3 ? C(WHITE, (6 + k * 8) * day) : C(GRAY, 1 + k * 2); return set(i, ' ', 0); }
+      if (k > 0.08) {
+        const glow = dusk * (1 - overcast), to = towardSun(az); // low sun: lit from underneath, gold toward it, pink away
+        BG[i] = glow > 0.35 ? (to > 0.55 ? C(k > 0.55 && to > 0.8 ? YEL : ORANGE, 4 + (k * 4 + to * 6) * glow) : C(to > 0.3 ? RED : MAG, 3 + (k * 3 + to * 4) * glow))
+              : day > 0.3 ? C(WHITE, (6 + k * 8) * day) : C(GRAY, 1 + k * 2);
+        return set(i, ' ', 0);
+      }
     }
   }
   // stars: one cell each (indexed per screen column, but fixed to the world), twinkling
@@ -749,8 +768,8 @@ function lightning() {
   branch(cols / 2 + Math.tan(ra) * projX, top, bot, 0);
 }
 function sunMoon() { // sun rises in +x, sets in -x
-  const sunEl = Math.sin((tod - 6) / 12 * Math.PI), az = (tod - 6) / 12 * Math.PI;
-  disc(az, Math.asin(sunEl), C(YEL, 15), C(YEL, 11), 1.8, false);
+  const sunEl = Math.sin((tod - 6) / 12 * Math.PI), az = (tod - 6) / 12 * Math.PI, low = sunEl < 0.2; // (low, it goes orange and swells)
+  disc(az, Math.asin(sunEl), low ? C(sunEl < 0.08 ? ORANGE : YEL, 15) : C(YEL, 15), low ? C(ORANGE, 12) : C(YEL, 11), low ? 2.2 : 1.8, false);
   disc(az + Math.PI, Math.asin(-sunEl), C(WHITE, 13), C(BLUE, 2), 1.4, true);
 }
 
