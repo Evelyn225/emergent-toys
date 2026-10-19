@@ -266,8 +266,8 @@ function nourish(id, d) {
   return [(FILLING[id] || 0) * 30, d.booze ? base * 0.5 : base];
 }
 // a bite or a sip of it: returns a word about how you feel now, or ''
-function eatSome(id, d) {
-  const [f, w] = nourish(id, d), wasHungry = needs.food < 30, wasThirsty = needs.drink < 30;
+function eatSome(id, d, k = 1) { // k: how much more (or less) it does for you (a dish as good as you cooked it)
+  const [f0, w0] = nourish(id, d), f = f0 * k, w = w0 * k, wasHungry = needs.food < 30, wasThirsty = needs.drink < 30;
   needs.food = Math.min(100, needs.food + f / d.uses); needs.drink = Math.min(100, needs.drink + w / d.uses);
   needs.health = Math.min(maxHealth(), needs.health + f * FOOD_HEALS / d.uses); // a proper meal patches you up a bit
   needs.bladder = Math.min(100, needs.bladder + wetting(d, w) / d.uses);
@@ -277,8 +277,9 @@ function eatSome(id, d) {
 }
 // every frame (on your feet or not). Returns 'faint' when you've gone down, or a warning to show once
 function stepNeeds(dt, canFaint) {
-  needs.food = Math.max(0, needs.food - dt * 100 / FOOD_LAST);
-  needs.drink = Math.max(0, needs.drink - dt * 100 / DRINK_LAST);
+  const fed = typeof fx !== 'undefined' && fx.fed > 0 ? 0.5 : 1; // (well fed, after something perfect you cooked: cooking.js)
+  needs.food = Math.max(0, needs.food - dt * 100 / FOOD_LAST * fed);
+  needs.drink = Math.max(0, needs.drink - dt * 100 / DRINK_LAST * fed);
   needs.bladder = Math.min(100, needs.bladder + dt * 100 / BLADDER_FILL);
   const empty = (needs.food <= 0) + (needs.drink <= 0);
   if (empty) needs.health = Math.max(canFaint ? 0 : 1, needs.health - dt * 100 / STARVE_T * empty); // (not at the wheel: you hang on till you're out)
@@ -2124,6 +2125,17 @@ for (const [ox, oy, base] of [[0.5, -0.11, 0], [0.5, 0.11, 0], [0.5, -0.02, 0.06
 solidBox(FISH_HUT.x + 0.53, FISH_HUT.y - 0.06, true, 0.014, 0.014, 0.136, 0.17, 'potbuoy', 0); // (a marker buoy left on top)
 solidBox(FISH_HUT.x - FISH_HUT.hl - 0.075, FISH_HUT.y - FISH_HUT.hw + 0.07, true, 0.048, 0.048, 0, 0.115, 'barrel', 0);
 solidBox(FISH_HUT.x - FISH_HUT.hl - 0.075, FISH_HUT.y - FISH_HUT.hw + 0.2, true, 0.055, 0.04, 0, 0.05, 'fishcrate', 0); // the morning's catch, on ice
+// somewhere to cook out of doors (cooking.js): a public grill on the sand at the two beaches nearest the Sunset Pier,
+// one in the first park, and a ring of stones for a campfire on Lighthouse Island. { x, y, on: 'grill' | 'fire' }
+const GRILLS = [];
+{
+  const beach = bx => blockKind(bx, SHORE_S) === 'waterfront' && hash(bx & (NB - 1), 1, 47) < 0.35 && !BRIDGE_X.includes(bx) && bx !== FAIR_BX && bx !== ISLE_BX && bx !== MARINA_BX;
+  const near = []; for (let d = 1; d < NB && near.length < 2; d++) for (const bx of [FAIR_BX + d, FAIR_BX - d]) if (near.length < 2 && beach(mod(bx, NB))) near.push(mod(bx, NB));
+  for (const bx of near) { const x = bx * 8 + 5.5; GRILLS.push({ x, y: shoreS(x) - 0.75, on: 'grill' }); }
+  park: for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) if (blockKind(bx, by) === 'park') { GRILLS.push({ x: bx * 8 + 6.4, y: by * 8 + 2.6, on: 'grill' }); break park; }
+  GRILLS.push({ x: ISLE.x - 1.6, y: ISLE.y + 0.4, on: 'fire' });
+}
+for (const o of GRILLS) solidBox(o.x, o.y, true, o.on === 'fire' ? 0.07 : 0.06, o.on === 'fire' ? 0.07 : 0.04, 0, o.on === 'fire' ? 0.11 : 0.1, o.on === 'fire' ? 'campfire' : 'grill', 0), Object.assign(solids[solids.length - 1], { spot: o });
 extras.push({ x: FISH_HUT.x + FISH_HUT.hatch, y: FISH_HUT.y - FISH_HUT.hw + 0.09, z: 0.02, person: YEL, when: () => hutOpen(tod) }); // (in his oilskins, behind the hatch)
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
@@ -5221,10 +5233,11 @@ const STOCK_WORD = {
   'STREET FOOD': ['bao', 'eggwaffle', 'stinkytofu', 'bubbletea'], CHARMS: ['redstring', 'luckycoin', 'fortunecookie', 'tigerbalm'], CURIOS: ['mysterybox', 'lantern', 'firecrackers', 'cityglobe'], // (the night market's stalls)
   YAKITORI: ['yakitori', 'beer', 'sake'], TAKOYAKI: ['takoyaki', 'melonsoda'], BENTO: ['bento', 'onigiri', 'tea'], IZAKAYA: ['beer', 'sake', 'yakitori'],
   KISSATEN: ['coffee', 'melonsoda', 'sandwich'], DRUGSTORE: ['water', 'energy', 'umbrella', 'candy'], MANGA: ['book'], CAPSULE: ['water', 'onigiri'],
-  '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella'],
-  BODEGA: ['sandwich', 'chips', 'apple', 'soda', 'energy', 'cigarettes', 'newspaper'], DELI: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'],
+  '24/7': ['sandwich', 'chips', 'soda', 'water', 'energy', 'cigarettes', 'newspaper', 'umbrella', 'eggs', 'bread', 'drynoodles'],
+  BODEGA: ['sandwich', 'chips', 'apple', 'soda', 'energy', 'cigarettes', 'newspaper', 'eggs', 'bread', 'pasta', 'rice'], DELI: ['sandwich', 'bagel', 'chips', 'soda', 'coffee', 'bread', 'cheese', 'bacon', 'butter'],
   LIQUOR: ['beer', 'whiskey', 'cigarettes', 'chips'], PHARMACY: ['water', 'energy', 'umbrella'],
-  GROCERY: ['apple', 'chips', 'water', 'soda'], MARKET: ['apple', 'chips', 'water'], FRUIT: ['apple'],
+  GROCERY: ['apple', 'chips', 'water', 'soda', 'eggs', 'bread', 'butter', 'cheese', 'rice', 'pasta', 'drynoodles', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon', 'rawchicken', 'mince', 'bacon', 'tofu'], // (and the makings of dinner: cooking.js)
+  MARKET: ['apple', 'chips', 'water', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon'], FRUIT: ['apple', 'lemon', 'tomatoes'],
   PAWN: ['skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda', 'spraypaint'],
   HARDWARE: ['umbrella', 'spraypaint'], RECORDS: ['vinyl', 'boombox'], BOOKS: ['book', 'newspaper', 'coffee'], FLORIST: ['flowers'],
   CAFE: ['coffee', 'latte', 'croissant', 'donut'], COFFEE: ['coffee', 'latte', 'croissant'], DONUTS: ['donut', 'coffee'], BAKERY: ['bagel', 'croissant', 'donut'],
@@ -5235,7 +5248,7 @@ const STOCK_WORD = {
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
   THRIFT: ['coat', 'umbrella', 'vinyl', 'book', 'boombox'], BARBER: ['haircut'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft', 'home_belle'],
-  DELICATESSEN: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'], JEWELER: ['jadebangle', 'luckycoin', 'redstring'], ANTIQUES: ['vinyl', 'book', 'harmonica', 'lantern'], TAILOR: ['umbrella'],
+  DELICATESSEN: ['sandwich', 'bagel', 'chips', 'soda', 'coffee', 'bread', 'cheese', 'bacon', 'butter'], JEWELER: ['jadebangle', 'luckycoin', 'redstring'], ANTIQUES: ['vinyl', 'book', 'harmonica', 'lantern'], TAILOR: ['umbrella'],
   TATTOO: ['tattoo_swallow', 'tattoo_anchor', 'tattoo_rose', 'tattoo_dagger', 'tattoo_panther', 'tattoo_koi'],
   GAS: ['hotdog', 'coffee', 'candy', 'chips', 'soda', 'energy', 'water', 'cigarettes'], // (the shop, not the pumps: you never need gas)
   'TEA HOUSE': ['tea', 'mooncake'], JADE: ['jadebangle', 'jadedragon'], 'PET SHOP': ['petcat', 'petdog'], CASINO: ['cocktail', 'whiskey', 'water'], VELVET: ['beer', 'whiskey', 'cocktail'], MAHJONG: ['tea', 'beer'], HERBS: ['herbaltea', 'ginseng', 'tea'],
@@ -5277,7 +5290,7 @@ function cycleQuickSlot(direction) {
   const choices = [-1, ...quickSlots.filter(k => k >= 0 && inv[k])], at = choices.indexOf(held);
   held = choices[mod((at < 0 ? 0 : at) + direction, choices.length)];
 }
-const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0 };
+const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0, fed: 0 }; // (fed: well fed, after a perfect dish: cooking.js)
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
 // anything, the dragon's a bit more, and they add up
@@ -5339,7 +5352,7 @@ function getTattoo(id) {
 // what you could walk off with (not a car, a flat or somebody's needlework)
 const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look'].includes(ITEMS[id].kind));
 const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
-const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink', 'fish'].includes(ITEMS[it.id].kind);
+const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink', 'fish', 'ingredient'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
   held = k; removeHeld();
@@ -5387,7 +5400,8 @@ function useHeld(near) {
   if (!it) return ['Your hands are empty.', null];
   const d = ITEMS[it.id];
   if (d.kind === 'food' || d.kind === 'drink') {
-    const feel = eatSome(it.id, d); // (needs.js)
+    const feel = eatSome(it.id, d, it.q ? DISH_EAT[it.q] : 1); // (needs.js; a dish you cooked eats as well as you cooked it)
+    if (it.q === 'perfect') fx.fed = Math.max(fx.fed, WELL_FED);
     it.uses--;
     if (d.caffeine) fx.caffeine = Math.min(180, fx.caffeine + d.caffeine / d.uses);
     if (d.sugar) fx.caffeine = Math.min(180, fx.caffeine + d.sugar / d.uses); // (a sugar rush: you go quicker, same as coffee)
@@ -5398,6 +5412,7 @@ function useHeld(near) {
     const done = it.uses <= 0;
     if (done) removeHeld();
     if (it.id === 'fortunecookie') return [`You crack it open. The fortune reads: "${fortune()}"`, 'bite'];
+    if (d.cooked) { const nm = dishName(it), q = it.q; return [(done ? `You finish the ${nm}.` : q === 'burnt' ? pick([`The ${nm} is burnt. You eat it anyway.`, `Crunchy. Black. ${cap(nm)}, technically.`]) : q === 'perfect' ? pick([`The ${nm} is exactly right.`, `You made this ${nm}, and it's good.`]) : `You take a bite of the ${nm}.`) + feel, 'bite']; }
     return [(done ? `You finish the ${d.name}.` : d.kind === 'food' ? `You take a bite of the ${d.name}.` : `You sip the ${d.name}.`) + feel,
             it.id === 'soda' && it.uses === 2 ? 'cancrush' : d.kind === 'food' ? 'bite' : 'sip'];
   }
@@ -5412,6 +5427,7 @@ function useHeld(near) {
   if (d.kind === 'keys') return summonCar(d.car);
   if (d.rod) return rodUse(near); // (fishing.js)
   if (d.kind === 'fish') return [pick([`The ${d.name} looks at you. You look at the ${d.name}.`, `A ${catchName(it)}. The hut by the Sunset Pier will take it off you.`, `You hold the ${d.name} up. It is, unmistakably, a fish.`]), null];
+  if (d.kind === 'ingredient') return [pick([`You'll want to cook the ${d.name} first. The stove at home, or a grill down by the water.`, `Raw ${d.name}. It needs a pan.`]), null];
   if (d.kind === 'junk') return [pick([`It's still ${aOrSome(d.name)}.`, 'You turn it over. No, still junk. The bait hut will bin it for you.']), null];
   switch (it.id) {
     case 'goldkoi': return koiWish();
@@ -5564,7 +5580,7 @@ function stepGoods(dt) {
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
   fx.stink = Math.max(0, fx.stink - dt); fx.bang = Math.max(0, fx.bang - dt);
   stepYoyo(dt); if (!heldItem() || heldItem().id !== 'yoyo') yoyo.out = false; // (put it away and it comes back up)
-  fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt);
+  fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt); fx.fed = Math.max(0, fx.fed - dt);
   cigTip = Math.max(0, cigTip - dt * 0.8);
   if (fx.vape > 0) { // pulling on the vape: the longer, the bigger the cloud
     const it = heldItem();
@@ -8831,6 +8847,205 @@ function anglerPhase(o, t = T) {
   const P = 50 + hash(o.seed, 3, 1621) * 60, q = fract((t + hash(o.seed, 4, 1621) * 300) / P), land = 4 / P;
   return q < 1 - land ? { st: 'wait' } : { st: 'catch', k: (q - (1 - land)) / land };
 }
+// ===== cooking. A stove in every home you own, and out of doors the public grills on the beaches and in the park and
+// a campfire on Lighthouse Island (props.js puts those up, cooking-ui.js draws them and the panel). E at one and pick
+// something you've got the makings of (from your bag, and at home the fridge too); then the pan: hold SPACE to keep
+// the heat in the green, and when it says so FLIP it (UP), STIR it (UP) or ADD the next thing (DOWN). Too hot and it
+// catches, too cool and it takes forever. What comes out is perfect, fine or burnt, and eats accordingly: a perfect
+// dish fills you more and leaves you well fed a while (you get hungry slower); a burnt one, less.
+// The groceries for it (goods.js STOCK_WORD): the grocer's has most things, the market the vegetables, the deli the
+// bread, cheese and bacon, the corner shops eggs and the basics.
+Object.assign(ITEMS, {
+  // the pantry: not for eating as it comes
+  eggs: { name: 'eggs', price: 3, kind: 'ingredient', col: WHITE }, bread: { name: 'loaf of bread', price: 3, kind: 'ingredient', col: WARM },
+  butter: { name: 'butter', price: 3, kind: 'ingredient', col: YEL }, cheese: { name: 'cheese', price: 5, kind: 'ingredient', col: YEL },
+  rice: { name: 'bag of rice', price: 3, kind: 'ingredient', col: WHITE }, pasta: { name: 'pasta', price: 2, kind: 'ingredient', col: YEL },
+  drynoodles: { name: 'dried noodles', price: 2, kind: 'ingredient', col: YEL }, potatoes: { name: 'potatoes', price: 2, kind: 'ingredient', col: BRICK },
+  onion: { name: 'onion', price: 1, kind: 'ingredient', col: WARM }, tomatoes: { name: 'tomatoes', price: 2, kind: 'ingredient', col: RED },
+  garlic: { name: 'garlic', price: 1, kind: 'ingredient', col: WHITE }, mushrooms: { name: 'mushrooms', price: 3, kind: 'ingredient', col: WARM },
+  greens: { name: 'bok choy', price: 2, kind: 'ingredient', col: GREEN }, peppers: { name: 'peppers', price: 2, kind: 'ingredient', col: RED },
+  chilli: { name: 'chillies', price: 1, kind: 'ingredient', col: RED }, lemon: { name: 'lemon', price: 1, kind: 'ingredient', col: YEL },
+  rawchicken: { name: 'chicken thighs', price: 7, kind: 'ingredient', col: WARM }, mince: { name: 'beef mince', price: 6, kind: 'ingredient', col: RED },
+  bacon: { name: 'bacon', price: 5, kind: 'ingredient', col: RED }, tofu: { name: 'tofu', price: 3, kind: 'ingredient', col: WHITE },
+});
+// what you can make: needs (ingredient ids; 'fish' is any fish you caught), where (stove: a home's hob and oven; grill:
+// a public grill; fire: the campfire), how (pan: one flip; pot: stirred twice; grill: turned twice; oven: turned once,
+// low and slow), the heat it wants (the green band), how long it takes at that heat, and what it makes: fill (how much
+// a whole one fills you), uses (bites), heal (health back, a whole one), soup (it's a drink too, a bit)
+const RECIPES = [
+  { id: 'panfish', name: 'pan-fried fish', of: 'pan-fried {}', needs: ['fish', 'butter'], where: ['stove', 'fire'], how: 'pan', fill: 50, uses: 3 },
+  { id: 'fishchips', name: 'fish and chips', of: '{} and chips', needs: ['fish', 'potatoes'], where: ['stove'], how: 'pan', fill: 75, uses: 4 },
+  { id: 'fishcurry', name: 'fish curry', of: '{} curry', needs: ['fish', 'rice', 'chilli'], where: ['stove'], how: 'pot', fill: 80, uses: 5, soup: 0.5 },
+  { id: 'grilledfish', name: 'grilled fish with lemon', of: 'grilled {} with lemon', needs: ['fish', 'lemon'], where: ['grill', 'fire'], how: 'grill', fill: 55, uses: 3, heal: 15 },
+  { id: 'fishstick', name: 'fish on a stick', of: '{} on a stick', needs: ['fish'], where: ['fire'], how: 'grill', fill: 40, uses: 3 },
+  { id: 'fishsandwich', name: 'fish sandwich', of: '{} sandwich', needs: ['fish', 'bread'], where: ['stove', 'grill'], how: 'pan', fill: 60, uses: 4 },
+  { id: 'friedeggs', name: 'fried eggs on toast', needs: ['eggs', 'bread'], where: ['stove', 'fire'], how: 'pan', fill: 45, uses: 3 },
+  { id: 'omelette', name: 'mushroom omelette', needs: ['eggs', 'mushrooms', 'cheese'], where: ['stove'], how: 'pan', fill: 55, uses: 3 },
+  { id: 'baconeggs', name: 'bacon and eggs', needs: ['bacon', 'eggs'], where: ['stove', 'grill', 'fire'], how: 'pan', fill: 60, uses: 3 },
+  { id: 'grilledcheese', name: 'grilled cheese', needs: ['bread', 'cheese', 'butter'], where: ['stove', 'grill'], how: 'pan', fill: 50, uses: 3 },
+  { id: 'toast', name: 'toast', needs: ['bread'], where: ['stove', 'grill', 'fire'], how: 'grill', fill: 25, uses: 2 },
+  { id: 'pomodoro', name: 'pasta pomodoro', needs: ['pasta', 'tomatoes', 'garlic'], where: ['stove'], how: 'pot', fill: 65, uses: 4 },
+  { id: 'bolognese', name: 'spaghetti bolognese', needs: ['pasta', 'mince', 'tomatoes', 'onion'], where: ['stove'], how: 'pot', fill: 85, uses: 5 },
+  { id: 'macncheese', name: 'mac and cheese', needs: ['pasta', 'cheese', 'butter'], where: ['stove'], how: 'pot', fill: 75, uses: 4 },
+  { id: 'homeburger', name: 'homemade burger', needs: ['mince', 'bread', 'onion'], where: ['grill', 'stove', 'fire'], how: 'grill', fill: 75, uses: 4 },
+  { id: 'friedrice', name: 'egg fried rice', needs: ['rice', 'eggs', 'onion'], where: ['stove'], how: 'pan', fill: 65, uses: 4 },
+  { id: 'chickencurry', name: 'chicken curry', needs: ['rawchicken', 'rice', 'chilli', 'onion'], where: ['stove'], how: 'pot', fill: 90, uses: 5, soup: 0.5 },
+  { id: 'roastchicken', name: 'roast chicken and potatoes', needs: ['rawchicken', 'potatoes', 'garlic'], where: ['stove'], how: 'oven', fill: 100, uses: 6, heal: 20 },
+  { id: 'skewers', name: 'chicken skewers', needs: ['rawchicken', 'peppers', 'onion'], where: ['grill', 'fire'], how: 'grill', fill: 70, uses: 4 },
+  { id: 'stirfry', name: 'noodle stir-fry', needs: ['drynoodles', 'greens', 'tofu'], where: ['stove', 'fire'], how: 'pan', fill: 65, uses: 4 },
+  { id: 'risotto', name: 'mushroom risotto', needs: ['rice', 'mushrooms', 'butter', 'cheese'], where: ['stove'], how: 'pot', fill: 80, uses: 5 },
+  { id: 'jacketpotato', name: 'jacket potato', needs: ['potatoes', 'cheese', 'butter'], where: ['stove', 'fire'], how: 'oven', fill: 60, uses: 3 },
+  { id: 'tomatosoup', name: 'tomato soup', needs: ['tomatoes', 'onion', 'garlic'], where: ['stove', 'fire'], how: 'pot', fill: 45, uses: 4, soup: 1 },
+  { id: 'grilledveg', name: 'grilled vegetables', needs: ['peppers', 'mushrooms', 'onion'], where: ['grill', 'fire'], how: 'grill', fill: 40, uses: 3, heal: 15 },
+];
+const RECIPE = Object.fromEntries(RECIPES.map(r => [r.id, r]));
+for (const r of RECIPES) ITEMS[r.id] = { name: r.name, price: Math.round(r.fill / 8), kind: 'food', uses: r.uses, fill: r.fill, heal: r.heal, cooked: true };
+for (const r of RECIPES) if (r.soup) SOUPY[r.id] = r.soup;
+// each way of cooking: the green band of heat it wants, how long it takes in it, and the moves it asks for on the way
+const HOW = {
+  pan: { band: [0.45, 0.75], time: 9, moves: [[0.55, 'up', 'FLIP IT']] },
+  pot: { band: [0.32, 0.6], time: 11, moves: [[0.45, 'up', 'STIR IT'], [0.78, 'up', 'STIR IT']] },
+  grill: { band: [0.5, 0.8], time: 9, moves: [[0.4, 'up', 'TURN IT'], [0.75, 'up', 'TURN IT']] },
+  oven: { band: [0.35, 0.55], time: 12, moves: [[0.6, 'up', 'TURN THE TRAY']] },
+};
+const STATION_NAME = { stove: 'the stove', grill: 'the grill', fire: 'the campfire' };
+const DISH_EAT = { perfect: 1.25, fine: 1, burnt: 0.6 }; // (how much more, or less, it fills you)
+const WELL_FED = 600; // seconds of getting hungry and thirsty at half the rate, after something perfect
+const isIngredient = it => !!it && ITEMS[it.id] && (ITEMS[it.id].kind === 'ingredient' || ITEMS[it.id].kind === 'fish');
+// the name a cooked thing goes by: the fish in it, if there is one ("pan-fried mackerel")
+const dishName = it => it.of && RECIPE[it.id] && RECIPE[it.id].of ? RECIPE[it.id].of.replace('{}', ITEMS[it.of].name) : ITEMS[it.id].name;
+// does this carried thing count for that ingredient? (any fish for 'fish'; the golden koi is not dinner)
+const fits = (it, need) => need === 'fish' ? ITEMS[it.id].kind === 'fish' : it.id === need;
+// what's needed and what's there: for each ingredient, where it'd come from (your bag, or the fridge at home), or null
+function makings(r, pantry = []) {
+  const usedInv = new Set(), usedP = new Set();
+  return r.needs.map(need => {
+    const k = inv.findIndex((it, j) => !usedInv.has(j) && fits(it, need));
+    if (k >= 0) { usedInv.add(k); return { need, from: 'bag', k }; }
+    const p = pantry.findIndex((it, j) => !usedP.has(j) && fits(it, need));
+    if (p >= 0) { usedP.add(p); return { need, from: 'fridge', k: p }; }
+    return { need, from: null };
+  });
+}
+const canMake = (r, pantry) => makings(r, pantry).every(m => m.from);
+const recipesAt = station => RECIPES.filter(r => r.where.includes(station));
+// it's done: out of the bag and the fridge with the makings, onto a plate (in your bag) with the dish. Returns a line
+function serveDish(r, verdict, pantry = []) {
+  const ms = makings(r, pantry);
+  if (!ms.every(m => m.from)) return 'Something you needed has gone. There\'s nothing to cook.';
+  let fish = null;
+  // (take from the end first, so the indexes still point at the right things)
+  for (const m of ms.filter(m => m.from === 'fridge').sort((p, q) => q.k - p.k)) { const it = pantry.splice(m.k, 1)[0]; if (m.need === 'fish') fish = it; }
+  for (const m of ms.filter(m => m.from === 'bag').sort((p, q) => q.k - p.k)) { const it = takeSlot(m.k); if (m.need === 'fish') fish = it; }
+  const uses = r.uses + (fish && fish.kg ? clamp(Math.floor(fish.kg / 2), 0, 3) : 0); // (a bigger fish goes further)
+  const dish = { id: r.id, uses, q: verdict, ...(fish ? { of: fish.id } : {}) };
+  carryItem(dish, false);
+  return `${verdict === 'perfect' ? 'Perfect.' : verdict === 'burnt' ? 'Burnt.' : 'Not bad.'} ${cap(dishName(dish))}${verdict === 'perfect' ? ', exactly as it should be' : verdict === 'burnt' ? ', mostly black. You could still eat it' : ''}.`;
+}
+
+// ---- the pan itself (the minigame: minigame-ui.js plays it, cooking-ui.js starts it). opts: { recipe }
+GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
+  const r = RECIPE[o.recipe] || RECIPES[0], how = HOW[r.how], W = 32, H = 15;
+  const g = { id: 'cook', title: r.name.toUpperCase(), W, H, score: 0, over: false, recipe: r.id, how: r.how };
+  // the moves: put in each extra ingredient early on (DOWN), then the flips or stirs (UP)
+  const adds = r.needs.slice(1).map((need, k, a) => [0.12 + 0.25 * (k + 1) / (a.length + 1), 'down', `ADD THE ${(need === 'fish' ? 'FISH' : ITEMS[need].name.replace(/^(bag|loaf) of /, '')).toUpperCase()}`]);
+  const moves = [...adds, ...how.moves].map(([at, key, label]) => ({ at, key, label, state: 'wait', t: 0 }));
+  let heat = 0.15, done = 0, char = 0, t = 0, missed = 0, flare = 0, sizzleT = 0, flipT = -9, drift = 0;
+  const [lo, hi] = how.band;
+  const now = () => moves.find(m => m.state === 'now');
+  g.step = (dt, k) => {
+    const ev = [];
+    if (g.over) return ev;
+    t += dt;
+    drift += ((rnd() - 0.5) * 0.6 - drift) * Math.min(1, dt * 2); // (the flame's never quite steady)
+    heat = clamp(heat + (k.act ? 0.6 : -0.42) * dt + drift * 0.08 * dt, 0, 1);
+    if (r.how === 'grill' && flare <= 0 && rnd() < dt * 0.08) { flare = 0.8; ev.push('flare'); } // a flare-up: fat on the coals
+    if (flare > 0) { flare -= dt; heat = Math.min(1, heat + dt * 0.5); }
+    const pace = heat < lo ? 0.25 + 0.75 * (heat / lo) ** 1.5 : heat > hi ? 1.25 : 1; // too cool: slow; too hot: quick, and catching
+    done = Math.min(1, done + pace * dt / how.time);
+    if (heat > hi) char += (heat - hi) * 1.6 * dt;
+    // the move that's due: it waits a moment for you, and the pan doesn't wait at all
+    const m = now() || moves.find(q => q.state === 'wait' && done >= q.at);
+    if (m) {
+      if (m.state === 'wait') { m.state = 'now'; m.t = 0; ev.push('due'); }
+      m.t += dt;
+      const press = m.key === 'up' ? k.upP : k.downP;
+      if (press) { m.state = 'done'; flipT = t; ev.push(m.label.startsWith('ADD') ? 'add' : m.label.startsWith('STIR') ? 'stir' : 'flip'); }
+      else if (m.t > 1.6) { m.state = 'missed'; missed++; ev.push('miss'); }
+      else if (heat > lo && !m.label.startsWith('ADD')) char += 0.05 * dt; // (the side that's down's still cooking)
+    }
+    if ((sizzleT -= dt) <= 0 && heat > 0.35) { sizzleT = 0.35 + rnd() * 0.3; ev.push('sizzle'); }
+    if (done >= 1 && !now()) { // done: how it turned out
+      const late = Math.max(0, t / how.time - 1.8) * 0.4; // (stewed: you kept it too cool too long)
+      const q = clamp(1 - char - missed * 0.18 - late, 0, 1);
+      g.score = Math.round(q * 100);
+      g.result = q >= 0.8 ? 'perfect' : q >= 0.45 ? 'fine' : 'burnt';
+      g.over = true; ev.push(g.result === 'burnt' ? 'die' : 'clear');
+    }
+    return ev;
+  };
+  // the look of what's in it: one glyph string per recipe, its colour going from raw to golden to brown to black
+  const LOOK = { panfish: '<o)))><', fishchips: '<o)>=-=-', fishcurry: '~o~o~o~', grilledfish: '<o)))>< ()', fishstick: '-<o)))><', fishsandwich: '[<o)>]',
+    friedeggs: '(O) (O)', omelette: '(======)', baconeggs: '~~ (O) ~~', grilledcheese: '[####]', toast: '[ ] [ ]', pomodoro: '~@~@~@~', bolognese: '~@#@#@~', macncheese: 'oooooo',
+    homeburger: '(####)', friedrice: ':.:.:.:', chickencurry: '~#~#~#~', roastchicken: '(%%) o o', skewers: '-#-o-#-o-', stirfry: '~%~%~%~', risotto: ':o:o:o:', jacketpotato: '(  )(  )', tomatosoup: '~~~~~~~', grilledveg: '#o# #o#' };
+  const look = LOOK[r.id] || 'oooo';
+  const foodCol = () => { const c = char > 0.45 ? GRAY : char > 0.2 ? BRICK : done > 0.6 ? ORANGE : done > 0.3 ? YEL : ITEMS[r.needs[0] === 'fish' ? 'mackerel' : r.needs[0]].col || WARM; return C(c, char > 0.45 ? 5 : 14); };
+  g.draw = (put, text, textAt, fill) => {
+    // the heat gauge down the left, its green band, the needle
+    for (let y = 2; y <= 12; y++) {
+      const v = (12 - y) / 10, band = v >= lo - 0.001 && v <= hi + 0.001;
+      put(1, y, band ? '=' : '-', C(band ? GREEN : v > hi ? RED : BLUE, band ? 13 : 9), C(band ? GREEN : GRAY, band ? 3 : 1));
+    }
+    const ny = Math.round(12 - heat * 10); put(2, ny, '<', C(heat > hi ? RED : heat < lo ? CYAN : WHITE, 15));
+    text(1.5, 0.6, 'HEAT', C(WHITE, 11), 'center');
+    // how done, along the top
+    for (let x = 5; x < W - 1; x++) { const f = (x - 5) / (W - 6); put(x, 0, f < done ? '#' : '.', f < done ? foodCol() : C(GRAY, 6)); }
+    // the cookware, the food in or on it, the flames under it
+    const cx = 18, fy = 8, hop = t - flipT < 0.45 ? Math.round(Math.sin((t - flipT) / 0.45 * Math.PI) * 3) : 0;
+    if (r.how === 'pan') {
+      for (let x = cx - 8; x <= cx + 8; x++) put(x, fy + 1, '_', C(GRAY, 12), C(GRAY, 2));
+      put(cx - 9, fy, '\\', C(GRAY, 12)); put(cx + 9, fy, '/', C(GRAY, 12));
+      for (let x = cx + 10; x <= cx + 13; x++) put(x, fy - 1, '=', C(BRICK, 12)); // the handle
+    } else if (r.how === 'pot') {
+      for (let y = fy - 3; y <= fy + 1; y++) { put(cx - 7, y, '|', C(GRAY, 12), C(GRAY, 2)); put(cx + 7, y, '|', C(GRAY, 12), C(GRAY, 2)); }
+      for (let x = cx - 7; x <= cx + 7; x++) put(x, fy + 1, '=', C(GRAY, 12), C(GRAY, 2));
+      put(cx - 8, fy - 2, 'o', C(GRAY, 12)); put(cx + 8, fy - 2, 'o', C(GRAY, 12)); // the handles
+      for (let x = cx - 6; x <= cx + 6; x++) put(x, fy - 1, (x + Math.floor(t * 6)) % 3 ? '~' : heat > lo ? 'o' : '~', heat > lo ? C(WHITE, 11) : C(CYAN, 9)); // bubbling
+      if (heat > lo) for (let s = 0; s < 3; s++) { const sy = fy - 4 - ((t * 2 + s * 0.7) % 3 | 0); put(cx - 4 + s * 4 + Math.round(Math.sin(t * 3 + s)), sy, '~', C(WHITE, 7)); } // steam
+      const sp = moves.find(m => m.label.startsWith('STIR') && m.state === 'done') && t - flipT < 0.6; // the spoon going round
+      if (sp) put(cx + Math.round(Math.cos((t - flipT) * 14) * 4), fy - 2, '/', C(BRICK, 14));
+    } else if (r.how === 'grill') {
+      for (let x = cx - 9; x <= cx + 9; x++) { put(x, fy + 1, x % 2 ? '=' : '#', C(GRAY, 10), C(GRAY, 1)); }
+    } else { // the oven: a door with a window, the tray in it
+      for (let x = cx - 9; x <= cx + 9; x++) { put(x, fy - 3, '=', C(GRAY, 12), C(GRAY, 3)); put(x, fy + 2, '=', C(GRAY, 12), C(GRAY, 3)); }
+      for (let y = fy - 2; y <= fy + 1; y++) { put(cx - 9, y, '|', C(GRAY, 12), C(GRAY, 3)); put(cx + 9, y, '|', C(GRAY, 12), C(GRAY, 3)); for (let x = cx - 8; x <= cx + 8; x++) put(x, y, ' ', 0, C(ORANGE, 1 + heat * 3)); }
+      for (let x = cx - 6; x <= cx + 6; x++) put(x, fy + 1, '_', C(GRAY, 13));
+    }
+    const fyy = (r.how === 'pot' ? fy - 1 : fy) - hop;
+    // the food, at the screen's own character size (a block per letter reads as a smear): a heap of it, its look worked
+    // across it, browning as it goes; in the pot, the top of what's bubbling
+    const tex = n => (look + '  ').repeat(12).slice(0, n);
+    if (r.how === 'pot') { if (done > 0.15) fill(cx - 6, fy - 2, 13, 1, Wc => [tex(Wc - 2)], foodCol()); }
+    else fill(cx - 7, fyy - 1, 15, 2, Wc => [' .' + '-'.repeat(Wc - 6) + '. ', '( ' + tex(Wc - 6) + ' )', '( ' + tex(Wc - 6).split('').reverse().join('') + ' )', " `" + '-'.repeat(Wc - 6) + "' "], foodCol());
+    if (r.how !== 'oven') for (let x = cx - 8; x <= cx + 8; x += 2) { // the flames
+      const tall = heat * 2.2 + (hash(x, Math.floor(t * 10), 1701) - 0.5) * 0.8 + (flare > 0 ? 1.5 : 0);
+      if (tall > 0.3) put(x, fy + 3, tall > 1.6 ? 'A' : '^', C(tall > 1.8 ? YEL : heat > hi ? RED : ORANGE, 13));
+      if (tall > 1.2) put(x, fy + 2, r.how === 'grill' ? '*' : '^', C(heat > hi ? YEL : ORANGE, 12));
+    }
+    if (heat > lo + 0.1) for (let s = 0; s < 6; s++) if (hash(s, Math.floor(t * 8), 1703) < heat - 0.3) text(cx - 5 + s * 2 + hash(s, Math.floor(t * 8), 1704) * 2, fyy - 1 - hash(s, 7, Math.floor(t * 8)) * 2, hash(s, 3, Math.floor(t * 8)) < 0.5 ? '*' : "'", C(YEL, 12)); // spitting
+    if (char > 0.2) for (let s = 0; s < 4; s++) text(cx - 3 + s * 2 + Math.sin(t * 2 + s), fyy - 2 - ((t * 1.5 + s * 0.7) % 3), s & 1 ? '(' : ')', C(GRAY, 6 + char * 5)); // smoke, curling up
+    // the move that's due, big, blinking
+    const m = now();
+    if (m && fract(t * 3) < 0.7) text(W / 2, 2, `${m.label}!  [${m.key === 'up' ? 'UP' : 'DOWN'}]`, C(m.key === 'up' ? YEL : CYAN, 15), 'center');
+    else if (heat > hi) text(W / 2, 2, 'TOO HOT', C(RED, 14), 'center');
+    else if (heat < lo && done > 0.05) text(W / 2, 2, 'TOO COOL', C(CYAN, 12), 'center');
+    if (flare > 0) text(W / 2, 13.5, 'FLARE-UP!', C(ORANGE, 15), 'center');
+  };
+  g.status = () => `HOLD SPACE heat, keep it in the green   UP flip / stir   DOWN add   ${Math.round(done * 100)}% done`;
+  g.reward = () => 0;
+  g.state = () => ({ heat, done, char, missed, moves, t });
+  return g;
+};
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
 let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
@@ -9674,6 +9889,7 @@ function floorBaseCell(i, r, x, rx, ry) {
     const gl = glow(wx, wy) * lampsOn;
     if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (ch === ' ') ch = '.'; LAMPL[i] = gl * 13; }
   }
+  { const fg = FIRES.length ? fireGlow(wx, wy) : 0; if (fg > 0.02) { col = C(fg > 0.45 ? YEL : ORANGE, Math.max(L * k, 4 + fg * 11)); if (fg > 0.18) BG[i] = C(fg > 0.5 ? ORANGE : RED, fg * 6); if (ch === ' ') ch = '.'; } } // a campfire's light (cooking-ui.js): the ground itself lit only near, further out just what's on it
   if (siren) { // an emergency vehicle's lights wash over the street round it
     const s = 1 - Math.hypot(rel(wx - siren.ex), rel(wy - siren.ey)) / 1.2;
     const on = strobe();
@@ -10992,6 +11208,7 @@ function citySprites() {
   bayBoats(); // (marina.js: real 3D boats)
   marinaSprites();
   drawAnglers(); // (fishing-render.js)
+  drawCampfires(); // (cooking-ui.js)
   forNear(extrasB, o => {
     if (!inView(rel(o.x - px), rel(o.y - py), 0.6)) return;
     if (o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8 || o.when && !o.when()) return; // (not the spire you're standing under)
@@ -13419,6 +13636,23 @@ function homeChair(x, y, fx, fy, col = BRICK) {
   return [seat, BX(x - fx * 0.28, y - fy * 0.28, 0.31, 0.045, 0.48, 1.12, solid(col), fy, -fx),
     ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.23, y + sy * 0.23, 0.035, 0.035, 0, 0.42, solid(BRICK))))];
 }
+// the kitchen counter with the hob set in it: four rings on top (red while something's on: cooking-ui.js), the knobs
+// along the front edge and the oven door under them with its window; worktop either side
+const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : BRICK, { panel: 0.6, top: '=' }); return (i, t, L) => {
+  const f = HIT.face, u = HIT.u, w = HIT.w, hob = Math.abs(u) < half, on = typeof cookingOn !== 'undefined' && cookingOn() === 'stove';
+  if (!hob || f !== 5 && f !== 3) return counter(i, t, L);
+  if (f === 5) {
+    BG[i] = C(GRAY, 0.7 + L * 0.08);
+    const ring = Math.min(...[-1, 1].flatMap(a => [-1, 1].map(b => Math.hypot(u - a * half / 2, HIT.v - b * 0.15))));
+    if (Math.abs(ring - 0.08) < 0.03) return set(i, 'O', on ? C(RED, 11 + Math.sin(T * 6) * 3) : C(GRAY, L * 0.8)), true;
+    return set(i, ' ', 0), true;
+  }
+  BG[i] = C(tier === 2 ? WHITE : GRAY, (1.1 + L * 0.22)); // the front
+  if (w > 0.84) return set(i, Math.abs(fract(u / half * 2 + 0.5) - 0.5) < 0.12 ? 'o' : ' ', C(GRAY, L)), true; // the knobs
+  if (w > 0.72) return set(i, '-', C(GRAY, Math.max(L, 8))), true; // the door's handle
+  if (Math.abs(u) < half - 0.08 && w > 0.22 && w < 0.62) { BG[i] = on ? C(ORANGE, 2 + Math.sin(T * 3)) : C(GRAY, 0.5); return set(i, ' ', 0), true; } // its window
+  return set(i, Math.abs(Math.abs(u) - half + 0.02) < 0.02 ? '|' : ' ', C(GRAY, L * 0.7)), true;
+}; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
   const fridgeShade = (i, t, L) => {
@@ -13430,7 +13664,7 @@ function homeDef(w, h, tier) {
     return set(i, ' ', 0), true;
   };
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
-    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet },
+    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)] },
     props: r => [
       BX(bed[0], bed[1] + 0.2, tier ? 1.25 : 1, 0.85, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? tier === 2 ? GREEN : BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
       BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
@@ -13452,7 +13686,7 @@ function homeDef(w, h, tier) {
       ...tableBox(dining[0], dining[1], tier ? 1.25 : 0.6, 0.5),
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
-      BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, solid(tier === 2 ? WHITE : BRICK, { panel: 0.6, top: '=' }), 0, 1),
+      BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, stoveShade(tier, tier ? 0.55 : 0.5), 0, 1), // the kitchen counter, the hob and oven in it (cooking.js)
       ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), BX(10.9, 1.4, 0.7, 0.18, 0, 2.4, solid(BRICK, { panel: 0.3, top: '=' })),
         ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), POT_PLANT(1.6, 8.9, 1.5)] : []),
       ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),
@@ -20830,7 +21064,7 @@ const nearExit = () => {
 };
 const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px), rel(LIGHTHOUSE.y - py)) < LIGHTHOUSE.r + 0.12;
 // in your own place: which thing you're by (bed, closet, tv)
-const homeSpot = () => { const s = room.def.spots; if (!s) return null; for (const k in s) if (Math.hypot(px - s[k][0], py - s[k][1]) < 1.3) return k; return null; };
+const homeSpot = () => { const s = room.def.spots; if (!s) return null; let best = null, bd = 1.3; for (const k in s) { const d = Math.hypot(px - s[k][0], py - s[k][1]); if (d < bd) { bd = d; best = k; } } return best; }; // (the nearest: the stove and the fridge are side by side)
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
@@ -20846,7 +21080,7 @@ function promptText() {
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
-    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', shelf: 'E: decorate shelf', fridge: 'E: open fridge', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', shelf: 'E: decorate shelf', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
     if (room.kind === 'grandhotel') { const m = grandHotelPrompt(); if (m) return m; }
@@ -20931,6 +21165,7 @@ function promptText() {
   if (mk) return marketPrompt(mk);
   if (pottyNear()) return 'E: use the portapotty';
   if (nearHut()) return hutPrompt();
+  { const gr = nearGrill(); if (gr) return grillPrompt(gr); } // (cooking-ui.js)
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';
@@ -21234,6 +21469,7 @@ function interact() {
         }
         return openStorage(home.decor, 'the shelf', 'Display shelf', 'Keepsakes you have brought home. Click one to take it down.', isHomeDecor, HOME_SHELF_CAPACITY);
       }
+      if (hs === 'stove') { home.fridge ||= []; return openCooking('stove', home.fridge); }
       if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
       if (hs === 'pet') {
         home.pets ||= home.pet ? [home.pet] : [];
@@ -21379,6 +21615,7 @@ function interact() {
   const mk = marketSpot();
   if (mk) return useMarket(mk);
   if (nearHut()) return useHut();
+  { const gr = nearGrill(); if (gr) return openCooking(gr.on, null, gr); }
   const pot = pottyNear();
   if (pot) return enterPotty(pot), say(pick(['You hold your breath and step in.', 'The smell hits you before the door shuts.', 'It\'s exactly as nice as you\'d think.']), 2.5);
   const ven = nearVendor();
@@ -24416,7 +24653,7 @@ function drawDropped(d, vx, vy, s) {
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
 // left of the buttons)
-const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh);
+const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed);
 function hotbar() {
   if (!hotbarUp()) return;
   const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0);
@@ -24429,7 +24666,7 @@ function hotbar() {
     g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
     x += w + 4;
   });
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
   if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
 }
 
@@ -24442,7 +24679,7 @@ function showPanel(el, html) {
   releaseMouse();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => [shopEl, invEl, storeEl].some(el => el && el.style.display === 'flex');
+const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' && cookEl].some(el => el && el.style.display === 'flex'); // (and the cooking panel: cooking-ui.js)
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
@@ -24511,6 +24748,7 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if (cookPanelKey(e)) return true;
   if (storeEl && storeEl.style.display === 'flex') {
     const n = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(storeEl);
@@ -26057,6 +26295,151 @@ function drawAnglerLines() {
   }
 }
 const SILVER_FISH = [WHITE, CYAN, YEL];
+// ===== cooking, on screen (cooking.js has the rules): the public grills and the campfire out of doors, the panel of
+// what you can make where you are, the pan itself (a minigame: minigame-ui.js shows it), and the pictures of the
+// groceries and what you make of them
+
+// ---- out of doors: a kettle grill on its three legs, the coals glowing while you're cooking on it; and a campfire in its
+// ring of stones on Lighthouse Island, always burning a little, roaring while there's something over it
+let cookCtx = null; // what's on, and where: { on: 'stove' | 'grill' | 'fire', spot, recipe, pantry }
+const cookingOn = () => game && game.g.id === 'cook' && cookCtx ? cookCtx.on : null;
+SOLID_SHADE.grill = o => (i, t, L) => {
+  const f = HIT.face, w = HIT.w, lit = cookCtx && cookCtx.spot === o.spot && game && game.g.id === 'cook';
+  if (w < 0.06 && f !== 5) return Math.abs(Math.abs(HIT.u) - o.hl + 0.008) < 0.008 && (f === 3 || f === 4) ? (set(i, '|', C(GRAY, L)), true) : false; // the legs: see-through between
+  if (f === 5) { BG[i] = lit ? C(RED, 2 + Math.sin(T * 7 + HIT.u * 40) * 0.8) : C(GRAY, 0.8); return set(i, fract(HIT.u * 40) < 0.4 ? '#' : lit && hash(Math.floor(HIT.u * 60), Math.floor(T * 6), 1801) > 0.7 ? '*' : '=', C(lit ? ORANGE : GRAY, lit ? 13 : L * 0.7)), true; } // the grate, the coals under it
+  BG[i] = C(GRAY, (0.7 + L * 0.12) * shadeFace(f)); // the kettle: black enamel
+  return set(i, w > 0.094 ? '=' : f === 3 && Math.abs(HIT.u) < 0.012 && w < 0.075 ? 'o' : ' ', C(GRAY, L)), true;
+};
+// the campfire: a ring of round stones, logs leaning in together, flames that face you from whichever side you
+// come at it (licking up in tongues, white-hot at the heart, red at the tips), sparks drifting up out of it, and a warm
+// pool of light flickering on the ground round it (fireGlow: the floor asks). It's always burning a little; it roars
+// while you've something over it. (Its solid box is only there to walk round)
+SOLID_SHADE.campfire = () => () => false;
+const fireRoar = o => cookCtx && cookCtx.spot === o && game && game.g.id === 'cook' ? 1 : 0.6;
+const FIRES = GRILLS.filter(o => o.on === 'fire');
+function fireGlow(wx, wy) {
+  let k = 0;
+  for (const o of FIRES) {
+    const d = Math.hypot(rel(wx - o.x), rel(wy - o.y)), R = 0.32 + fireRoar(o) * 0.3;
+    if (d < R) k = Math.max(k, (1 - d / R) ** 2.2 * (0.85 + 0.15 * Math.sin(T * 9 + d * 20) * Math.sin(T * 5.3)));
+  }
+  return k * clamp(Math.max(night, overcast * 0.5) * 1.4 - 0.1, 0, 1); // (by day you'd never see it)
+}
+function drawCampfires() {
+  for (const o of FIRES) {
+    const [vx, vy] = R(o.x, o.y);
+    if (Math.hypot(vx, vy) > Math.min(vis, 16) || !inView(vx, vy, 0.4)) continue;
+    const roar = fireRoar(o), warm = 0.35 + 0.65 * Math.max(night, overcast * 0.5);
+    for (let k = 0; k < 10; k++) { // the stones
+      const an = k / 10 * TAU + 0.3, sx = vx + Math.cos(an) * 0.075, sy = vy + Math.sin(an) * 0.075, face = Math.cos(an - Math.atan2(-vy, -vx)); // (the side towards the fire's lit)
+      dot(sx, sy, 0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i, hash(k, 1, 1811) > 0.5 ? 'o' : '@', C(GRAY, L * 0.8)), true; });
+    }
+    for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
+      const an = k / 5 * TAU + 0.6;
+      drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, 0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, 0.055, 0.006, (i, t, L) => {
+        const ember = HIT.w > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
+        BG[i] = ember ? C(RED, 2 + warm * 3) : C(BRICK, 1 + L * 0.15); return set(i, ember ? '*' : '=', ember ? C(ORANGE, 14) : C(BRICK, L * 0.7)), true;
+      });
+    }
+    // the flames and the sparks over them: a billboard, so it's round from every side
+    const H = 0.1 + 0.08 * roar, top = 0.36;
+    drawShape(vx, vy, 0.008, 0.07, top, (i, u, z, du, dz, L) => {
+      if (z > H) { // above it: sparks drifting up and fading
+        const cell = hash(Math.floor(u / du + Math.sin(z * 30 + T) * 2), Math.floor(z / dz - T * 9), 1815);
+        if (cell > 0.985 - roar * 0.008 && Math.abs(u) < 0.03 + (z - H) * 0.15) return set(i, cell > 0.997 ? '*' : '.', C(z > H + 0.12 ? ORANGE : YEL, 14 - (z - H) * 25)), true;
+        return false;
+      }
+      const h = z / H, n = noise(u * 55, z * 28 - T * 7, 1817), width = 0.055 * (1 - h) ** 0.7 * (0.75 + 0.5 * n); // tongues licking up, flickering
+      const off = Math.abs(u - Math.sin(T * 3 + z * 40) * 0.006 * h);
+      if (off > width) return false;
+      const core = off / Math.max(width, 1e-4) < 0.45 && h < 0.6;
+      BG[i] = core ? C(YEL, 5 + (1 - h) * 6) : C(h > 0.7 ? RED : ORANGE, 3 + (1 - h) * 6);
+      return set(i, core ? (h < 0.25 ? '@' : '#') : h > 0.75 ? "'" : n > 0.5 ? '^' : 'A', C(core ? WHITE : YEL, 15)), true;
+    });
+  }
+}
+// standing at one, out of doors
+const nearGrill = () => mode === 'walk' ? GRILLS.find(o => Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.28) || null : null;
+const grillPrompt = o => o.on === 'fire' ? 'E: cook over the campfire' : 'E: cook on the grill';
+
+// ---- the panel: what you can make here, what each needs, and whether you've got it (in your bag, or at home in the
+// fridge); the ones you can make first. 1-9 or a click to start one
+let cookEl = null;
+function openCooking(on, pantry = null, spot = null) {
+  if (!cookEl) { cookEl = panel('cooking'); cookEl.querySelector('.panel').style.width = 'min(580px, calc(100vw - 32px))'; } // (wider: what each needs goes along the row)
+  cookCtx = { on, pantry: pantry || [], spot };
+  const list = recipesAt(on).map(r => ({ r, ms: makings(r, cookCtx.pantry) })).sort((p, q) => q.ms.every(m => m.from) - p.ms.every(m => m.from));
+  cookCtx.list = list.map(e => e.r);
+  const ready = list.filter(e => e.ms.every(m => m.from)).length;
+  const rows_ = list.map(({ r, ms }, k) => {
+    const ok = ms.every(m => m.from), needs = ms.map(m => `<span style="color:${m.from ? '#9d9' : 'rgba(255,255,255,0.3)'}">${m.need === 'fish' ? 'a fish' : ITEMS[m.need].name}${m.from === 'fridge' ? ' (fridge)' : ''}</span>`).join(', ');
+    return `${k === 0 && ready ? '<h2>you can make</h2>' : ''}${k === ready ? `<h2>${ready ? 'missing something' : 'nothing you have the makings of yet'}</h2>` : ''}<button class="item" data-cook="${k}" ${ok ? '' : 'disabled'}><span class="k">${k < 9 ? k + 1 : ''}</span><span>${r.name}</span><span class="lead"></span><span class="v" style="font-size:0.85em">${needs}</span></button>`;
+  }).join('');
+  const where = { stove: 'At the stove', grill: 'At the grill', fire: 'At the campfire' }[on];
+  showPanel(cookEl, `<h1>${where}</h1><p class="sub">${pantry ? 'From your bag and the fridge' : 'From your bag'} &middot; the grocer's, the market and the deli sell the makings</p>${rows_}
+    <p class="hint">1-9 cook &middot; then HOLD SPACE for heat, UP to flip or stir, DOWN to add &middot; E / Esc close</p>`);
+  cookEl.onclick = e => { const b = e.target.closest('[data-cook]'); if (b) startCooking(cookCtx.list[+b.dataset.cook]); };
+}
+function startCooking(r) {
+  if (!r || !canMake(r, cookCtx.pantry)) return;
+  hidePanel(cookEl);
+  cookCtx.recipe = r.id;
+  startGame('cook', 'cook', '', { recipe: r.id });
+  game.onDone = verdict => { say(serveDish(r, verdict, cookCtx.pantry), 5); if (actx) sfxUse('chime'); };
+}
+// keys while the panel's up (goods-ui.js panelKey asks); true if handled
+function cookPanelKey(e) {
+  if (!cookEl || cookEl.style.display !== 'flex') return false;
+  const n = /^Digit([1-9])$/.exec(e.code);
+  if (e.code === 'Escape' || e.code === 'KeyE') hidePanel(cookEl);
+  else if (n) startCooking(cookCtx.list[n[1] - 1]);
+  return true;
+}
+// the pan's noises (minigame-ui.js sfxGame asks first)
+function sfxCook(e) {
+  const at = actx.currentTime;
+  if (e === 'sizzle') { fishNoise(at, 0.3, 5000, 3500, 1.2, 0.05, 0.1); return true; }
+  if (e === 'flip') { fishNoise(at, 0.12, 900, 1600, 1, 0.12, 0.2); tone(at + 0.1, 140, 0.08, 0.1); return true; }
+  if (e === 'stir') { fishNoise(at, 0.25, 600, 400, 2, 0.1, 0.3); return true; }
+  if (e === 'add') { fishNoise(at, 0.4, 4500, 3000, 1, 0.14, 0.05); return true; } // into the hot pan: a hiss
+  if (e === 'flare') { fishNoise(at, 0.5, 800, 300, 0.7, 0.2, 0.1); return true; }
+  if (e === 'due') { tone(at, 990, 0.06, 0.04, 'square'); return true; }
+  return false;
+}
+
+// ---- the pictures: the groceries, and what you make of them (eaten down bite by bite)
+Object.assign(DROPPED_ART, {
+  eggs: () => [[' ______', '|(O)(O)|', '|(O)(O)|', "'------'"], c => c === 'O' ? C(WHITE, 15) : C(BRICK, 12)],
+  bread: () => [['  .----.', ' (~~~~~~)', ' |      |', ' |______|'], (c, r) => r < 2 ? C(BRICK, 13) : C(WARM, 14)],
+  butter: () => [[' ______', '|BUTTER|', "'------'"], (c, r) => r === 1 && /[A-Z]/.test(c) ? C(RED, 13) : C(YEL, 14)],
+  cheese: () => [['   ___', '  /o  \\', ' /__o__\\', '|  o   |', "'------'"], c => c === 'o' ? C(WARM, 9) : C(YEL, 14)],
+  rice: () => [['  _____', ' | RICE|', ' |.....|', " '-----'"], (c, r) => /[A-Z]/.test(c) ? C(RED, 13) : c === '.' ? C(WHITE, 14) : C(WHITE, 11)],
+  pasta: () => [['  _____', ' |PASTA|', ' ||||||| ', " '-----'"], (c, r) => /[A-Z]/.test(c) ? C(BLUE, 13) : c === '|' && r === 2 ? C(YEL, 14) : C(WHITE, 11)],
+  drynoodles: () => [[' ~~~~~~', '(~~~~~~)', " ~~~~~~"], () => C(YEL, 13)],
+  potatoes: () => [['  .-. .-.', ' ( o )( . )', "  `-' `-'"], c => c === 'o' || c === '.' ? C(BRICK, 8) : C(BRICK, 13)],
+  onion: () => [['   |', '  .^.', ' ( | )', "  `-'"], (c, r) => r === 0 ? C(GREEN, 12) : C(WARM, 14)],
+  tomatoes: () => [['  v   v', ' (o) (o)', "  -   -"], (c, r) => c === 'v' ? C(GREEN, 13) : C(RED, 14)],
+  garlic: () => [['   |', '  /|\\', ' (_|_)'], (c, r) => C(WHITE, 14)],
+  mushrooms: () => [[' .--. .--.', '(____)(____)', '  ||    ||'], (c, r) => r === 2 ? C(WHITE, 13) : C(WARM, 13)],
+  greens: () => [['  \\|/', '  \\|/', '  (|)', '   |'], (c, r) => r < 2 ? C(GREEN, 14) : C(WHITE, 12)],
+  peppers: () => [['   |   |', '  (R) (Y)', "   V   V"], c => c === 'Y' ? C(YEL, 14) : c === '|' ? C(GREEN, 12) : C(RED, 14)],
+  chilli: () => [['  _', ' / )', '( /', ' V'], (c, r) => r === 0 ? C(GREEN, 12) : C(RED, 14)],
+  lemon: () => [['  .--.', ' (    )>', "  `--'"], () => C(YEL, 15)],
+  rawchicken: () => [[' ______', '|(%%%%)|', '|(%%%%)|', "'------'"], c => c === '%' ? C(MAG, 12) : C(WHITE, 12)],
+  mince: () => [[' ______', '|~%~%~%|', '|%~%~%~|', "'------'"], c => c === '%' || c === '~' ? C(RED, 12) : C(WHITE, 12)],
+  bacon: () => [[' ~=~=~=~', ' =~=~=~=', ' ~=~=~=~'], c => c === '=' ? C(WHITE, 13) : C(RED, 13)],
+  tofu: () => [[' ______', '|      |', '|______|'], () => C(WHITE, 14)],
+});
+// the dishes: a plate (or a bowl, or a bun), less of it each bite
+const plate = (food, col, bowl = false) => (it, f) => [[bitten([` ${food}`], f)[0] || ' ', bowl ? '\\_____/' : '(_______)'], (c, r) => r === 0 && c !== ' ' ? C(it.q === 'burnt' ? GRAY : col, it.q === 'burnt' ? 7 : 14) : C(WHITE, 12)]; // (the food goes, the plate stays)
+Object.assign(DROPPED_ART, {
+  panfish: plate('<o)))><', ORANGE), fishchips: plate('<o)>=-=-', YEL), fishcurry: plate('~o~o~o', ORANGE, true), grilledfish: plate('<o)))>()', WARM),
+  fishstick: plate('-<o)))>', ORANGE), fishsandwich: plate('[<o)>]', WARM), friedeggs: plate('(O) (O)', YEL), omelette: plate('(=====)', YEL),
+  baconeggs: plate('~~(O)~~', ORANGE), grilledcheese: plate('[####]', YEL), toast: plate('[ ] [ ]', BRICK), pomodoro: plate('~@~@~@', RED, true),
+  bolognese: plate('~@#@#@', RED, true), macncheese: plate('oooooo', YEL, true), homeburger: plate('(####)', BRICK), friedrice: plate(':.:.:.', YEL, true),
+  chickencurry: plate('~#~#~#', ORANGE, true), roastchicken: plate('(%%)oo', WARM), skewers: plate('-#-o-#-', BRICK), stirfry: plate('~%~%~%', GREEN, true),
+  risotto: plate(':o:o:o', WHITE, true), jacketpotato: plate('(    )', BRICK), tomatosoup: plate('~~~~~~', RED, true), grilledveg: plate('#o# #o#', GREEN),
+});
 // ===== smoke and vapour that hangs in the air. Every drag you breathe out leaves a few puffs in front of you, a lit
 // cigarette sends up the odd wisp, and the vape's cloud is a lot more (mango-coloured). Outside they drift off on the
 // wind and are gone in a few seconds; indoors they hang about for half a minute, so a room you keep smoking in gets
@@ -26650,6 +27033,7 @@ function gameKey(e) {
     if (game.kind === 'show') { game = null; say('You leave in the middle of the song. No refunds.', 3); return true; }
     if (game.kind === 'casino') { if (game.g.inRound()) say('You get up mid-hand. Your bet stays on the table.', 3); game = null; return true; }
     if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
+    if (game.kind === 'cook') { game = null; say('You take it off the heat. Nothing\'s wasted.', 2); return true; } // (cooking.js: nothing's used till it's done)
     finishGame(true); game = null; return true;
   }
   if (k) game.pressed[k + 'P'] = 1;
@@ -26661,6 +27045,7 @@ function finishGame(quit) {
   if (game.paid) return;
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
+  if (game.kind === 'cook') { game.onDone(g.result); return; } // (dished up: cooking-ui.js)
   if (game.kind === 'casino' || game.kind === 'market') return; // (its money changes hands round by round, or trade by trade)
   if (game.kind === 'bout') return finishBout(g, quit); // (gym.js)
   if (game.kind === 'show') { say(g.endLine, 5); game.closeT = T + 0.6; return; }
@@ -26695,6 +27080,7 @@ function stepGame(dt) {
 }
 // blips and buzzes
 function sfxGame(e) {
+  if (game && game.kind === 'cook' && sfxCook(e)) return; // (the pan's own noises: cooking-ui.js)
   const at = actx.currentTime, sq = (f, len, gain = 0.05) => tone(at, f, len, gain, 'square');
   if (e === 'eat' || e === 'place' || e === 'serve') { sq(880, 0.06); tone(at + 0.06, 1320, 0.08, 0.05, 'square'); }
   else if (e === 'brick') sq(660 + Math.random() * 200, 0.05);
@@ -26726,7 +27112,7 @@ function drawGame() {
   const [cr, cb] = gameClear(), ac = cols - Math.ceil(cr / cw), ar = rows - Math.ceil(cb / FS); // the columns and rows we can use
   const s = clamp(Math.floor(Math.min((ar - 9) / g.H, (ac - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
   const gw = g.W * bw, gh = g.H * bh, x0 = (ac - gw) >> 1, y0 = Math.max(4, (ar - gh) >> 1);
-  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' || game.kind === 'bout' ? RED : game.kind === 'table' ? GREEN : g.id === 'serve' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
+  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' || game.kind === 'bout' ? RED : game.kind === 'table' ? GREEN : g.id === 'serve' || g.id === 'cook' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
     const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;
@@ -26751,7 +27137,7 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? '   E / ESC take it off the heat' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
   const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
   const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
@@ -26763,6 +27149,8 @@ function drawGame() {
       : game.kind === 'bout'
       ? [res.win ? 'YOU WIN' : 'YOU LOSE', `${{ KO: 'KNOCKOUT', TKO: 'STOPPAGE', decision: 'ON POINTS', towel: 'THE TOWEL' }[res.how] || ''}  vs  ${g.name.toUpperCase()}`,
          res.win ? `PURSE ${fmt$(g.purse)}` : 'NO PURSE', ...TOUCH ? [] : ['', 'E or SPACE to leave']]
+      : game.kind === 'cook'
+      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
       : game.kind === 'arcade'
       ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, ...TOUCH ? [] : ['', `SPACE play again (${fmt$(CREDIT)})   E leave`]]
       : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, ...TOUCH ? [] : ['', 'E or SPACE to finish']];
@@ -27593,7 +27981,7 @@ function noteStreet() {
 }
 function saveGame() {
   noteStreet();
-  const items = list => list.map(it => it.kg ? { id: it.id, uses: it.uses, kg: it.kg } : { id: it.id, uses: it.uses });
+  const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
   const data = { v: 1, day: dayNum, tod, tags, money, tickets, fish: fishLog, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
@@ -27605,7 +27993,7 @@ function loadGame() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return; }
   if (!d || d.v !== 1) return;
-  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push(Number.isFinite(it.kg) ? { id: it.id, uses: it.uses, kg: it.kg } : { id: it.id, uses: it.uses }); } };
+  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses, ...(Number.isFinite(it.kg) ? { kg: it.kg } : {}), ...(DISH_EAT[it.q] ? { q: it.q } : {}), ...(ITEMS[it.of] ? { of: it.of } : {}) }); } };
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
@@ -28102,7 +28490,7 @@ function keyUp(code) { onkeyup({ code }); }
 
 // the big button's label: what E does here, as a word or two (from the prompt line, so it always agrees with it)
 const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
-  [/^get off/, 'Get off'], [/^board/, 'Board'], [/^pick up/, 'Pick up'], [/^buy/, 'Buy'], [/^(shop|bait)/, 'Shop'], [/^play/, 'Play'],
+  [/^get off/, 'Get off'], [/^board/, 'Board'], [/^pick up/, 'Pick up'], [/^buy/, 'Buy'], [/^(shop|bait)/, 'Shop'], [/^cook/, 'Cook'], [/^play/, 'Play'],
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],

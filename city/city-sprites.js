@@ -133,6 +133,7 @@ function citySprites() {
   bayBoats(); // (marina.js: real 3D boats)
   marinaSprites();
   drawAnglers(); // (fishing-render.js)
+  drawCampfires(); // (cooking-ui.js)
   forNear(extrasB, o => {
     if (!inView(rel(o.x - px), rel(o.y - py), 0.6)) return;
     if (o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8 || o.when && !o.when()) return; // (not the spire you're standing under)

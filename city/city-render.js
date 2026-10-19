@@ -629,6 +629,7 @@ function floorBaseCell(i, r, x, rx, ry) {
     const gl = glow(wx, wy) * lampsOn;
     if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (ch === ' ') ch = '.'; LAMPL[i] = gl * 13; }
   }
+  { const fg = FIRES.length ? fireGlow(wx, wy) : 0; if (fg > 0.02) { col = C(fg > 0.45 ? YEL : ORANGE, Math.max(L * k, 4 + fg * 11)); if (fg > 0.18) BG[i] = C(fg > 0.5 ? ORANGE : RED, fg * 6); if (ch === ' ') ch = '.'; } } // a campfire's light (cooking-ui.js): the ground itself lit only near, further out just what's on it
   if (siren) { // an emergency vehicle's lights wash over the street round it
     const s = 1 - Math.hypot(rel(wx - siren.ex), rel(wy - siren.ey)) / 1.2;
     const on = strobe();

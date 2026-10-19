@@ -868,6 +868,23 @@ function homeChair(x, y, fx, fy, col = BRICK) {
   return [seat, BX(x - fx * 0.28, y - fy * 0.28, 0.31, 0.045, 0.48, 1.12, solid(col), fy, -fx),
     ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.23, y + sy * 0.23, 0.035, 0.035, 0, 0.42, solid(BRICK))))];
 }
+// the kitchen counter with the hob set in it: four rings on top (red while something's on: cooking-ui.js), the knobs
+// along the front edge and the oven door under them with its window; worktop either side
+const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : BRICK, { panel: 0.6, top: '=' }); return (i, t, L) => {
+  const f = HIT.face, u = HIT.u, w = HIT.w, hob = Math.abs(u) < half, on = typeof cookingOn !== 'undefined' && cookingOn() === 'stove';
+  if (!hob || f !== 5 && f !== 3) return counter(i, t, L);
+  if (f === 5) {
+    BG[i] = C(GRAY, 0.7 + L * 0.08);
+    const ring = Math.min(...[-1, 1].flatMap(a => [-1, 1].map(b => Math.hypot(u - a * half / 2, HIT.v - b * 0.15))));
+    if (Math.abs(ring - 0.08) < 0.03) return set(i, 'O', on ? C(RED, 11 + Math.sin(T * 6) * 3) : C(GRAY, L * 0.8)), true;
+    return set(i, ' ', 0), true;
+  }
+  BG[i] = C(tier === 2 ? WHITE : GRAY, (1.1 + L * 0.22)); // the front
+  if (w > 0.84) return set(i, Math.abs(fract(u / half * 2 + 0.5) - 0.5) < 0.12 ? 'o' : ' ', C(GRAY, L)), true; // the knobs
+  if (w > 0.72) return set(i, '-', C(GRAY, Math.max(L, 8))), true; // the door's handle
+  if (Math.abs(u) < half - 0.08 && w > 0.22 && w < 0.62) { BG[i] = on ? C(ORANGE, 2 + Math.sin(T * 3)) : C(GRAY, 0.5); return set(i, ' ', 0), true; } // its window
+  return set(i, Math.abs(Math.abs(u) - half + 0.02) < 0.02 ? '|' : ' ', C(GRAY, L * 0.7)), true;
+}; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
   const fridgeShade = (i, t, L) => {
@@ -879,7 +896,7 @@ function homeDef(w, h, tier) {
     return set(i, ' ', 0), true;
   };
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
-    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet },
+    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)] },
     props: r => [
       BX(bed[0], bed[1] + 0.2, tier ? 1.25 : 1, 0.85, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? tier === 2 ? GREEN : BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
       BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
@@ -901,7 +918,7 @@ function homeDef(w, h, tier) {
       ...tableBox(dining[0], dining[1], tier ? 1.25 : 0.6, 0.5),
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
-      BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, solid(tier === 2 ? WHITE : BRICK, { panel: 0.6, top: '=' }), 0, 1),
+      BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, stoveShade(tier, tier ? 0.55 : 0.5), 0, 1), // the kitchen counter, the hob and oven in it (cooking.js)
       ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), BX(10.9, 1.4, 0.7, 0.18, 0, 2.4, solid(BRICK, { panel: 0.3, top: '=' })),
         ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), POT_PLANT(1.6, 8.9, 1.5)] : []),
       ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),

@@ -26,6 +26,7 @@ function gameKey(e) {
     if (game.kind === 'show') { game = null; say('You leave in the middle of the song. No refunds.', 3); return true; }
     if (game.kind === 'casino') { if (game.g.inRound()) say('You get up mid-hand. Your bet stays on the table.', 3); game = null; return true; }
     if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
+    if (game.kind === 'cook') { game = null; say('You take it off the heat. Nothing\'s wasted.', 2); return true; } // (cooking.js: nothing's used till it's done)
     finishGame(true); game = null; return true;
   }
   if (k) game.pressed[k + 'P'] = 1;
@@ -37,6 +38,7 @@ function finishGame(quit) {
   if (game.paid) return;
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
+  if (game.kind === 'cook') { game.onDone(g.result); return; } // (dished up: cooking-ui.js)
   if (game.kind === 'casino' || game.kind === 'market') return; // (its money changes hands round by round, or trade by trade)
   if (game.kind === 'bout') return finishBout(g, quit); // (gym.js)
   if (game.kind === 'show') { say(g.endLine, 5); game.closeT = T + 0.6; return; }
@@ -71,6 +73,7 @@ function stepGame(dt) {
 }
 // blips and buzzes
 function sfxGame(e) {
+  if (game && game.kind === 'cook' && sfxCook(e)) return; // (the pan's own noises: cooking-ui.js)
   const at = actx.currentTime, sq = (f, len, gain = 0.05) => tone(at, f, len, gain, 'square');
   if (e === 'eat' || e === 'place' || e === 'serve') { sq(880, 0.06); tone(at + 0.06, 1320, 0.08, 0.05, 'square'); }
   else if (e === 'brick') sq(660 + Math.random() * 200, 0.05);
@@ -102,7 +105,7 @@ function drawGame() {
   const [cr, cb] = gameClear(), ac = cols - Math.ceil(cr / cw), ar = rows - Math.ceil(cb / FS); // the columns and rows we can use
   const s = clamp(Math.floor(Math.min((ar - 9) / g.H, (ac - 6) / (2 * g.W))), 1, 3), bw = 2 * s, bh = s;
   const gw = g.W * bw, gh = g.H * bh, x0 = (ac - gw) >> 1, y0 = Math.max(4, (ar - gh) >> 1);
-  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' || game.kind === 'bout' ? RED : game.kind === 'table' ? GREEN : g.id === 'serve' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
+  const frame = game.kind === 'arcade' ? NEON[ARCADE_GAMES.indexOf(g.id) & 3] : game.kind === 'crime' || game.kind === 'bout' ? RED : game.kind === 'table' ? GREEN : g.id === 'serve' || g.id === 'cook' ? ORANGE : g.id === 'tapper' ? YEL : CYAN;
   for (let y = y0 - 2; y <= y0 + gh + 1; y++) for (let x = x0 - 3; x <= x0 + gw + 2; x++) { // the bezel
     if (y < 0 || y >= rows || x < 0 || x >= cols) continue;
     const i = y * cols + x, edgeY = y === y0 - 2 || y === y0 + gh + 1, edgeX = x === x0 - 3 || x === x0 + gw + 2;
@@ -127,7 +130,7 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? '   E / ESC take it off the heat' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
   const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
   const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
@@ -139,6 +142,8 @@ function drawGame() {
       : game.kind === 'bout'
       ? [res.win ? 'YOU WIN' : 'YOU LOSE', `${{ KO: 'KNOCKOUT', TKO: 'STOPPAGE', decision: 'ON POINTS', towel: 'THE TOWEL' }[res.how] || ''}  vs  ${g.name.toUpperCase()}`,
          res.win ? `PURSE ${fmt$(g.purse)}` : 'NO PURSE', ...TOUCH ? [] : ['', 'E or SPACE to leave']]
+      : game.kind === 'cook'
+      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
       : game.kind === 'arcade'
       ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, ...TOUCH ? [] : ['', `SPACE play again (${fmt$(CREDIT)})   E leave`]]
       : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, ...TOUCH ? [] : ['', 'E or SPACE to finish']];

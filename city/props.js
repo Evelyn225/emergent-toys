@@ -372,6 +372,17 @@ for (const [ox, oy, base] of [[0.5, -0.11, 0], [0.5, 0.11, 0], [0.5, -0.02, 0.06
 solidBox(FISH_HUT.x + 0.53, FISH_HUT.y - 0.06, true, 0.014, 0.014, 0.136, 0.17, 'potbuoy', 0); // (a marker buoy left on top)
 solidBox(FISH_HUT.x - FISH_HUT.hl - 0.075, FISH_HUT.y - FISH_HUT.hw + 0.07, true, 0.048, 0.048, 0, 0.115, 'barrel', 0);
 solidBox(FISH_HUT.x - FISH_HUT.hl - 0.075, FISH_HUT.y - FISH_HUT.hw + 0.2, true, 0.055, 0.04, 0, 0.05, 'fishcrate', 0); // the morning's catch, on ice
+// somewhere to cook out of doors (cooking.js): a public grill on the sand at the two beaches nearest the Sunset Pier,
+// one in the first park, and a ring of stones for a campfire on Lighthouse Island. { x, y, on: 'grill' | 'fire' }
+const GRILLS = [];
+{
+  const beach = bx => blockKind(bx, SHORE_S) === 'waterfront' && hash(bx & (NB - 1), 1, 47) < 0.35 && !BRIDGE_X.includes(bx) && bx !== FAIR_BX && bx !== ISLE_BX && bx !== MARINA_BX;
+  const near = []; for (let d = 1; d < NB && near.length < 2; d++) for (const bx of [FAIR_BX + d, FAIR_BX - d]) if (near.length < 2 && beach(mod(bx, NB))) near.push(mod(bx, NB));
+  for (const bx of near) { const x = bx * 8 + 5.5; GRILLS.push({ x, y: shoreS(x) - 0.75, on: 'grill' }); }
+  park: for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) if (blockKind(bx, by) === 'park') { GRILLS.push({ x: bx * 8 + 6.4, y: by * 8 + 2.6, on: 'grill' }); break park; }
+  GRILLS.push({ x: ISLE.x - 1.6, y: ISLE.y + 0.4, on: 'fire' });
+}
+for (const o of GRILLS) solidBox(o.x, o.y, true, o.on === 'fire' ? 0.07 : 0.06, o.on === 'fire' ? 0.07 : 0.04, 0, o.on === 'fire' ? 0.11 : 0.1, o.on === 'fire' ? 'campfire' : 'grill', 0), Object.assign(solids[solids.length - 1], { spot: o });
 extras.push({ x: FISH_HUT.x + FISH_HUT.hatch, y: FISH_HUT.y - FISH_HUT.hw + 0.09, z: 0.02, person: YEL, when: () => hutOpen(tod) }); // (in his oilskins, behind the hatch)
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count

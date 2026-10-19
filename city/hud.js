@@ -68,7 +68,7 @@ const nearExit = () => {
 };
 const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px), rel(LIGHTHOUSE.y - py)) < LIGHTHOUSE.r + 0.12;
 // in your own place: which thing you're by (bed, closet, tv)
-const homeSpot = () => { const s = room.def.spots; if (!s) return null; for (const k in s) if (Math.hypot(px - s[k][0], py - s[k][1]) < 1.3) return k; return null; };
+const homeSpot = () => { const s = room.def.spots; if (!s) return null; let best = null, bd = 1.3; for (const k in s) { const d = Math.hypot(px - s[k][0], py - s[k][1]); if (d < bd) { bd = d; best = k; } } return best; }; // (the nearest: the stove and the fridge are side by side)
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
@@ -84,7 +84,7 @@ function promptText() {
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
-    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', shelf: 'E: decorate shelf', fridge: 'E: open fridge', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', shelf: 'E: decorate shelf', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
     if (room.kind === 'grandhotel') { const m = grandHotelPrompt(); if (m) return m; }
@@ -169,6 +169,7 @@ function promptText() {
   if (mk) return marketPrompt(mk);
   if (pottyNear()) return 'E: use the portapotty';
   if (nearHut()) return hutPrompt();
+  { const gr = nearGrill(); if (gr) return grillPrompt(gr); } // (cooking-ui.js)
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';

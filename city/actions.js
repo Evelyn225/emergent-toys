@@ -142,6 +142,7 @@ function interact() {
         }
         return openStorage(home.decor, 'the shelf', 'Display shelf', 'Keepsakes you have brought home. Click one to take it down.', isHomeDecor, HOME_SHELF_CAPACITY);
       }
+      if (hs === 'stove') { home.fridge ||= []; return openCooking('stove', home.fridge); }
       if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
       if (hs === 'pet') {
         home.pets ||= home.pet ? [home.pet] : [];
@@ -287,6 +288,7 @@ function interact() {
   const mk = marketSpot();
   if (mk) return useMarket(mk);
   if (nearHut()) return useHut();
+  { const gr = nearGrill(); if (gr) return openCooking(gr.on, null, gr); }
   const pot = pottyNear();
   if (pot) return enterPotty(pot), say(pick(['You hold your breath and step in.', 'The smell hits you before the door shuts.', 'It\'s exactly as nice as you\'d think.']), 2.5);
   const ven = nearVendor();
