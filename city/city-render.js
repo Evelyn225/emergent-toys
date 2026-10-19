@@ -74,9 +74,12 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
       return set(i, ' ', 0);
     }
     const archTop = 0.31 - (du / (spacing * 0.36)) ** 2 * 0.065;
-    if (Math.abs(du) < spacing * 0.35 && z > 0.045 && z < archTop) {
+    const doorway = f.sign && SHOP[k].kind !== SHOP_APTS && Math.abs(start + (bay + 0.5) * spacing - f.sign.center) < spacing / 2; // (the arch under the sign: the shop's door, to the pavement)
+    if (Math.abs(du) < spacing * 0.35 && (z > 0.045 || doorway) && z < archTop) {
       if (Math.abs(du) > spacing * 0.32 || z > archTop - 0.02) return set(i, z > archTop - 0.02 ? '^' : '|', C(WHITE, L));
-      BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : CYAN, 1 + night * 2);
+      if (doorway && architectureShutter(i, z, SHOP[k], L)) return;
+      if (doorway) return void doorGlass(i, du, z, openAt(SHOP[k], tod), L, WHITE);
+      BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : doorway ? WARM : CYAN, 1 + night * 2);
       return set(i, Math.abs(du) < 0.015 ? '|' : ':', C(WARM, Math.max(L * 0.65, glowL * 0.75)));
     }
   } else {
@@ -479,9 +482,38 @@ function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0, surfaceZ = 0) {
   set(i, ch, col);
 }
 
+// a park pond, sd in from its edge (below 0): shallow and green-brown at the margin, deepening to a dark middle, slow
+// ripples with the sky in them (reflect()), raindrops ringing it in the wet; lily pads in patches near the edge, round,
+// the odd one flowering. Frozen in winter
+function pondCell(i, r, x, wx, wy, sd, L) {
+  if (seasonIdx() === 3) { // pale ice, cracks, snow drifted on it
+    const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03;
+    BG[i] = C(CYAN, 1.4 + day * 3.5); return set(i, cr ? '/' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
+  }
+  const depth = clamp(-sd / 0.55, 0, 1), lamp = lampsOn * glow(wx, wy) * 2;
+  if (sd > -0.45 && sd < -0.03 && noise(wx * 1.6, wy * 1.6, 932) > 0.52) { // a patch of lily pads
+    const gx = Math.floor(wx / 0.13), gy = Math.floor(wy / 0.13), h = hash(gx, gy, 931);
+    if (h > 0.3) {
+      const cx = (gx + 0.25 + 0.5 * hash(gx, gy, 936)) * 0.13, cy = (gy + 0.25 + 0.5 * hash(gx, gy, 937)) * 0.13, d = Math.hypot(wx - cx, wy - cy), rad = 0.035 + 0.02 * h;
+      if (d < rad && Math.atan2(wy - cy, wx - cx) + Math.PI > 0.5) { // (the notch cut out of each pad)
+        const flower = h > 0.88 && d < 0.014;
+        BG[i] = C(GREEN, 1.1 + day * 2 + lamp * 0.5); FL[i] = 0;
+        return set(i, flower ? '*' : d > rad * 0.7 ? 'o' : ' ', C(flower ? (h > 0.94 ? WHITE : MAG) : GREEN, flower ? Math.max(L * 1.6, 8) : L * 1.2));
+      }
+    }
+  }
+  const n = noise(wx * 3 + T * 0.18, wy * 3 - T * 0.11, 92), drop = rain > 0.15 && hash(Math.floor(wx * 14), Math.floor(wy * 14), Math.floor(T * 3)) > 1 - rain * 0.06;
+  // (in bands, not a smooth ramp, and the ripples one colour: on the canvas path every change of colour along a row is
+  // another draw call, and a pond full of them is what made looking at one slow)
+  const shallow = depth < 0.07, deep = depth > 0.55;
+  BG[i] = shallow ? C(GREEN, 1 + day * 1.4 + lamp) : C(BLUE, (deep ? 0.8 + day * 2 : 1 + day * 2.6) + lamp);
+  FL[i] = 4; // (still water: reflect() mirrors what's round it, in one tint)
+  return set(i, drop ? 'o' : shallow ? (hash(Math.floor(wx * 24), Math.floor(wy * 24), 938) > 0.6 ? '.' : ' ') : n > 0.68 ? '~' : n > 0.6 ? '-' : ' ',
+    drop ? C(WHITE, 6 + day * 6) : C(shallow ? GREEN : CYAN, 4 + day * 5));
+}
 function floorCell(i, r, x, rx, ry) {
   floorBaseCell(i, r, x, rx, ry);
-  if (snowCover <= 0 || FL[i] === 3) return; // open water remains open water
+  if (snowCover <= 0 || FL[i] >= 3) return; // open water remains open water
   const d = ZB[i], wx = px + rx * d, wy = py + ry * d, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
   if (road === 2 && subwayHole(wx, wy, Math.floor(wx / 8), Math.floor(wy / 8)) >= 0) return;
   const lx = mod(wx, 8), ly = mod(wy, 8);
@@ -565,17 +597,10 @@ function floorBaseCell(i, r, x, rx, ry) {
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
-      if (inPond(lx, ly, pbx, pby)) { // the pond: ripples, lily pads by the edge, the sky and trees in it
-        if (seasonIdx() === 3) { // frozen over: pale ice, cracks, snow drifted on it
-          const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03;
-          BG[i] = C(CYAN, 1.4 + day * 3.5); return set(i, cr ? '/' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
-        }
-        const n = noise(wx * 4 + T * 0.3, wy * 4 - T * 0.1, 92), lily = !inPond(lx, ly, pbx, pby, -0.18) && hash(Math.floor(wx * 9), Math.floor(wy * 9), 93) > 0.8;
-        set(i, lily ? (hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? '*' : 'o') : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? MAG : GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
-        BG[i] = C(BLUE, 1 + day * 2.5 + lampsOn * glow(wx, wy) * 2); FL[i] = lily ? 0 : 3;
-        return;
-      }
-      else if (inPond(lx, ly, pbx, pby, 0.15)) { ch = (r + x) % 3 ? '|' : ','; base = GREEN; k = 0.9; } // reeds round the edge
+      const sd = pondSD(lx, ly, pbx, pby); // (how far out of the pond: below 0, how far in)
+      if (sd < 0) return pondCell(i, r, x, wx, wy, sd, L);
+      else if (sd < 0.025) { ch = hash(Math.floor(wx * 30), Math.floor(wy * 30), 934) > 0.7 ? '.' : ' '; base = BRICK; k = 0.6; } // a thin muddy edge
+      else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) { const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935); ch = h > 0.8 ? '!' : h > 0.3 ? '|' : ' '; base = h > 0.8 ? BRICK : GREEN; k = 1.2; } // reeds in clumps, the odd cattail
       else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
     } else if (fract(lx * 2) < 0.06 || fract(ly * 2) < 0.06) ch = '+'; // paving
@@ -734,11 +759,11 @@ function reflect() {
     for (let r = Math.max(b, hor + 1); r < rows; r++) {
       const i = r * cols + x, f = FL[i];
       if (f < 2) continue;
-      const s = 2 * b - r - 1 + (f === 3 ? Math.round(Math.sin(r * 1.7 + T * 3) * 0.6) : 0), j = s * cols + x; // water ripples
+      const s = 2 * b - r - 1 + (f >= 3 ? Math.round(Math.sin(r * 1.7 + T * 3) * 0.6) : 0), j = s * cols + x; // water ripples
       const lamp = f === 2 ? LAMPL[i] : 0; // a puddle under a streetlamp holds its light as well as the reflection
       if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ') {
         const lv = (COL[j] & 15) * 0.55;
-        CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : (COL[j] & 0xf0) | (lv | 0);
+        CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : f === 4 ? C(CYAN, lv > 4 ? 6 : 3) : (COL[j] & 0xf0) | (lv | 0); // (a pond's in one tint: on the canvas path every change of colour is another draw)
       } else if (f === 2) set(i, '~', lamp ? C(WARM, Math.max(3 + day * 3, lamp)) : C(BLUE, 3 + day * 3));
       if (lamp > 2) BG[i] = C(WARM, Math.max(BG[i] === NONE ? 0 : BG[i] & 15, lamp * 0.2)); // and a warm sheen under it
     }

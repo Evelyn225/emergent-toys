@@ -11,6 +11,7 @@ function saveGame() {
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+    noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
@@ -26,6 +27,11 @@ function loadGame() {
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
   tattoos.length = 0; for (const id of d.tattoos || []) if (ITEMS[id] && ITEMS[id].kind === 'tattoo' && !tattoos.includes(id)) tattoos.push(id);
+  if (d.noto) { // how well known you are, and what's in the papers
+    noto.level = clamp(+d.noto.level || 0, 0, 100); noto.day = Number.isInteger(d.noto.day) ? d.noto.day : dayNum; noto.lookDay = d.noto.lookDay ?? -9;
+    noto.looked = d.noto.looked && typeof d.noto.looked === 'object' ? { ...d.noto.looked } : {};
+    noto.log = (Array.isArray(d.noto.log) ? d.noto.log : []).filter(e => e && typeof e.kind === 'string' && Number.isInteger(e.day)).slice(0, 40);
+  } else noto.day = dayNum;
   quickSlots.fill(-1);
   if (Array.isArray(d.quickSlots)) {
     for (let s = 0; s < QUICK_SLOTS; s++) { const k = d.quickSlots[s]; if (Number.isInteger(k) && k >= 0 && k < inv.length && !quickSlots.includes(k)) quickSlots[s] = k; }

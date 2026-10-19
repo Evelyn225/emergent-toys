@@ -5,10 +5,11 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
   if (f.front && z > .335 && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), .38,
     Math.min(.067, (width - .3) / sh.word.length), .043, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return;
   if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
-  if (z > .325 || z < .045) return set(i, z > .325 ? '=' : '_', C(trim, L * .75));
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
+  if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim)) return; // (the shop's door, to the pavement)
+  if (z > .325 || z < .045 && !(f.front && sh.kind === SHOP_APTS && door < doorHalf)) return set(i, z > .325 ? '=' : '_', C(trim, L * .75));
   if (f.front && sh.kind === SHOP_APTS) {
-    if (door < doorHalf && z < .30) {
+    if (door < doorHalf && z < .30) { // (the lobby doors, to the pavement)
       BG[i] = C(WARM, 1 + night * 3);
       return set(i, door < .009 || door > doorHalf - .015 ? '|' : Math.abs(z - .16) < .012 ? '-' : ':', C(WHITE, Math.max(L * .7, night * 12)));
     }

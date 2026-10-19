@@ -27,7 +27,7 @@
     "city/goods.js",
     "city/minigames.js",
     "city/stocks.js",
-    "city/crime.js",
+    "city/crime.js", "city/notoriety.js",
     "city/courier.js",
     "city/property.js",
     "city/boats.js"
@@ -90,7 +90,7 @@
     "city/pee.js",
     "city/ambient.js",
     "city/minigame-ui.js",
-    "city/crime-ui.js",
+    "city/crime-ui.js", "city/news-ui.js",
     "city/moves.js",
     "city/skate.js",
     "city/save.js",

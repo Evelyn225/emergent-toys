@@ -294,6 +294,7 @@ function loop(t) {
   stepGrandHotel();
   stepTaxiJob(dt);
   const law = stepCrime(dt);
+  stepNewsUI(dt); // (being known, and the news: notoriety.js, news-ui.js)
   if (law === 'busted') openBusted();
   else if (law === 'lost') say('You lost them.', 3);
   else if (law === 'pullover') say('"PULL OVER!" booms from the cruiser on your tail.', 3);

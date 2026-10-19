@@ -106,6 +106,9 @@ const districtOf = (bx, by) => DIST[bi(bx, by)];
 // what a neighbourhood is called: industry on the shore is the Docks; inland, with no water in sight, the Yards
 const seedName = s => s[2] === 'industrial' && !s[3] ? 'yards' : s[2];
 const districtName = (bx, by) => { const k = DIST_OWNER[bi(bx, by)]; return k < 0 ? DIST[bi(bx, by)] : seedName(DIST_SEEDS[k]); };
+// what each is called (the HUD's place line, the map, the papers)
+const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards', belle: 'Belle Époque Quarter',
+                         brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay', shotengai: 'the Shotengai' };
 const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8));
 
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea

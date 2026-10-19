@@ -156,7 +156,7 @@ function interact() {
         }
         return say('Adopt a pet at the pet shop and bring it home.', 2);
       }
-      if (hs === 'tv') { room.tv = !room.tv; return say(room.tv ? 'The telly flickers on.' : 'You switch the telly off.', 2); }
+      if (hs === 'tv') { room.tv = !room.tv; const news = room.tv ? tellyNews() : ''; return say(room.tv ? 'The telly flickers on.' + news : 'You switch the telly off.', news ? 6 : 2); }
     }
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
       enterRoom('lamproom', { word: 'LAMP ROOM', below: { word: room.word, ret: room.ret, line: room.line } }, [1.6, 4.4, -Math.PI / 4]);

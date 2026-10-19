@@ -46,6 +46,9 @@ const ITEMS = {
   key_car_sports: { name: 'sports car keys', price: 0, kind: 'keys', car: 'car_sports' },
   home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 7000, kind: 'home' },
   home_belle: { name: 'Belle Époque residence', price: 16000, kind: 'home' },
+  // a change of look (nothing to carry: it's on you), which makes you harder to place (notoriety.js)
+  haircut: { name: 'haircut', price: 15, kind: 'look', look: 'haircut', line: 'Twenty minutes in the chair, a mirror held up behind you. You look like somebody else. Somebody tidier.' },
+  coat: { name: 'secondhand coat', price: 25, kind: 'look', look: 'coat', line: 'You leave in a coat that used to be somebody else\'s. It fits well enough. The old one goes in the donation bin.' },
   // tattoos (the tattoo parlour): not carried, they're on you for good. hours: how long you sit for it; where: on you
   tattoo_swallow: { name: 'swallow', price: 60, kind: 'tattoo', hours: 1, where: 'on the back of your hand' },
   tattoo_anchor: { name: 'anchor', price: 80, kind: 'tattoo', hours: 1, where: 'on your forearm' },
@@ -111,7 +114,7 @@ const STOCK_WORD = {
   'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['sushi', 'tea'], VIDEO: ['vhs', 'candy', 'soda'], THAI: ['padthai', 'greencurry', 'mangorice', 'thaitea'],
   BURGERS: ['burger', 'fries', 'milkshake', 'soda'], CHICKEN: ['chicken', 'fries', 'soda'], JUICE: ['smoothie', 'water', 'apple'],
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
-  THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
+  THRIFT: ['coat', 'umbrella', 'vinyl', 'book', 'boombox'], BARBER: ['haircut'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft', 'home_belle'],
   DELICATESSEN: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'], JEWELER: ['jadebangle', 'luckycoin', 'redstring'], ANTIQUES: ['vinyl', 'book', 'harmonica', 'lantern'], TAILOR: ['umbrella'],
   TATTOO: ['tattoo_swallow', 'tattoo_anchor', 'tattoo_rose', 'tattoo_dagger', 'tattoo_panther', 'tattoo_koi'],
@@ -194,6 +197,7 @@ function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
   if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }
   if (it.kind === 'tattoo') return getTattoo(id);
+  if (it.kind === 'look') return pay(it.price) ? [true, `${it.line}${changeLook(it.look)} (${fmt$(it.price)})`] : [false, `A ${it.name} is ${fmt$(it.price)}. You can't afford it.`];
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   carryItem({ id, uses: it.uses || 0 });
@@ -211,10 +215,10 @@ function getTattoo(id) {
   if (!pay(it.price)) return [false, `The ${it.name} is ${fmt$(it.price)}. Come back when you've saved up.`];
   tattoos.push(id);
   for (tod += it.hours; tod >= 24; tod -= 24) dayNum++;
-  return [true, `${it.hours > 1 ? it.hours + ' hours' : 'An hour'} in the chair. The ${it.name}, ${it.where}. It stings, and it's perfect. (${fmt$(it.price)})`];
+  return [true, `${it.hours > 1 ? it.hours + ' hours' : 'An hour'} in the chair. The ${it.name}, ${it.where}. It stings, and it's perfect.${changeLook('tattoo')} (${fmt$(it.price)})`];
 }
 // what you could walk off with (not a car, a flat or somebody's needlework)
-const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo'].includes(ITEMS[id].kind));
+const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look'].includes(ITEMS[id].kind));
 const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
 const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding

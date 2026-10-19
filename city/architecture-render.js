@@ -21,6 +21,26 @@ function brownstoneWindow(i, du, z, half, z0, z1, lit, L, base) {
   set(i, Math.abs(du) < 0.011 ? '|' : Math.abs(z - (z0 + z1) / 2) < 0.012 ? '-' : lit ? ' ' : ':', C(lit ? WARM : WHITE, Math.max(L * 0.6, lit ? night * 13 : 0)));
   return true;
 }
+// a shop's way in, down to the pavement: du across it (0 its middle), up to SHOP_DOOR_TOP (clear of the awnings and
+// signs above). Glass in a frame, a kick plate, a push bar; lit from inside when it's open. True if it drew (i)
+const SHOP_DOOR_HALF = 0.055, SHOP_DOOR_TOP = 0.26;
+function shopDoor(i, du, z, sh, L, trim) {
+  if (Math.abs(du) > SHOP_DOOR_HALF + 0.012 || z > SHOP_DOOR_TOP + 0.014) return false;
+  if (architectureShutter(i, z, sh, L)) return true;
+  if (Math.abs(du) > SHOP_DOOR_HALF || z > SHOP_DOOR_TOP) { BG[i] = C(trim, 1 + L * 0.2); return set(i, z > SHOP_DOOR_TOP ? '=' : '|', C(trim, L)), true; }
+  return doorGlass(i, du, z, openAt(sh, tod), L, trim);
+}
+// the glass of a shop's double door, du across it (0 where the two leaves meet): a solid panel at the foot, a push bar
+// across each leaf, the meeting stiles; by day the street and a streak of sky in it, after dark the shop lit up behind
+// it (if it's open). True: it drew (i)
+function doorGlass(i, du, z, open, L, trim) {
+  if (z < 0.035) { BG[i] = C(trim, 1.1 + L * 0.2); return set(i, z < 0.006 ? '_' : ' ', C(GRAY, L * 0.7)), true; }
+  if (Math.abs(du) < 0.006) { BG[i] = C(trim, 1 + L * 0.2); return set(i, '|', C(GRAY, L * 0.8)), true; }
+  if (Math.abs(z - 0.11) < 0.008 && Math.abs(du) > 0.012 && Math.abs(du) < 0.04) { BG[i] = C(GRAY, 1.5 + L * 0.2); return set(i, '-', C(WHITE, L)), true; }
+  const warm = open && (night > 0.3 || overcast > 0.6), streak = fract(du * 7 + z * 4) < 0.07;
+  BG[i] = warm ? C(WARM, 1.2 + night * 3.2) : C(CYAN, 0.55 + day * 1.25);
+  return set(i, streak ? '/' : warm && hash(Math.floor(du * 60), Math.floor(z * 50), 377) > 0.86 ? '.' : ' ', C(warm ? YEL : WHITE, warm ? Math.max(L * 0.5, night * 8) : 4 + day * 7)), true;
+}
 function architectureShutter(i, z, sh, L) {
   if (openAt(sh, tod)) return false;
   BG[i] = C(GRAY, 1 + day);
@@ -55,7 +75,8 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
         return set(i, z > 0.3 ? ':' : Math.abs(door) < 0.01 ? '|' : z < 0.15 ? '=' : '#', C(z > 0.3 ? WARM : BRICK, z > 0.3 ? Math.max(L, night * 11) : L * 0.65));
       }
       if (brownstoneWindow(i, local - f.spacing * 0.22, z, f.spacing * 0.15, 0.16, 0.32, hash(unit, 5, sk) > litT, L, STONE)) return;
-    } else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
+    } else if (f.front && shopDoor(i, local - f.spacing * 0.24, z, sh, L, STONE)) return;
+    else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
       if (architectureShutter(i, z, sh, L)) return;
       BG[i] = C(CYAN, 1 + night * 2);
       return set(i, Math.abs(local) < f.spacing * 0.03 ? '|' : z > 0.3 ? '=' : ':', C(WARM, Math.max(L * 0.65, night * 11)));
@@ -88,6 +109,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
       Math.min(0.085, (width - 0.3) / sh.word.length), 0.055, C(sh.neon, signLight), C(GRAY, 1))) return;
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
+    if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY)) return;
     if (z > 0.04 && z < 0.31 && (lobby || fu > 0.16 && fu < 0.84)) {
       if (architectureShutter(i, z, sh, L)) return;
       BG[i] = C(lobby ? WARM : CYAN, 1 + night * 3);

@@ -242,8 +242,6 @@ function minimap() {
   g.font = FS + 'px monospace';
 }
 
-const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards', belle: 'Belle Époque Quarter',
-                         brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay', shotengai: 'the Shotengai' };
 // a line of HUD text broken to fit maxW px: at the wide gaps between its parts first, then between words
 function wrapText(s, maxW) {
   const out = [];

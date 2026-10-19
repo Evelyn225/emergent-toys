@@ -1041,6 +1041,9 @@ const districtOf = (bx, by) => DIST[bi(bx, by)];
 // what a neighbourhood is called: industry on the shore is the Docks; inland, with no water in sight, the Yards
 const seedName = s => s[2] === 'industrial' && !s[3] ? 'yards' : s[2];
 const districtName = (bx, by) => { const k = DIST_OWNER[bi(bx, by)]; return k < 0 ? DIST[bi(bx, by)] : seedName(DIST_SEEDS[k]); };
+// what each is called (the HUD's place line, the map, the papers)
+const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards', belle: 'Belle Époque Quarter',
+                         brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay', shotengai: 'the Shotengai' };
 const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8));
 
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea
@@ -1792,12 +1795,29 @@ function glow(wx, wy) {
 // parks: grass, a cross of dirt paths through each block (block-local centre 5), a pond, trees, benches.
 // A superblock park also grows over the streets it swallowed.
 const POND = [3.5, 3.5, 0.85]; // block-local x, y, base radius
-// a lumpy, slightly oval pond outline (different per park); `pad` grows it, for shores and keeping trees out
-function inPond(lx, ly, bx, by, pad = 0) {
+// a lumpy, slightly oval pond outline (different per park): how far (lx, ly) is outside it (inside: below 0)
+function pondEdgeSD(lx, ly, bx, by) {
   const ex = (lx - POND[0]) / 1.15, ey = ly - POND[1], ang = Math.atan2(ey, ex);
-  const edge = POND[2] * (0.75 + 0.55 * noise(Math.cos(ang) * 1.4 + bx * 3.1, Math.sin(ang) * 1.4 + by * 2.3, 13));
-  return Math.hypot(ex, ey) < edge + pad;
+  return Math.hypot(ex, ey) - POND[2] * (0.75 + 0.55 * noise(Math.cos(ang) * 1.4 + bx * 3.1, Math.sin(ang) * 1.4 + by * 2.3, 13));
 }
+// the same, from a grid worked out once per park (every pixel of a park asks, some of them more than once: the shape
+// itself was an atan2 and a noise each time); far from the pond, 9
+const POND_SD = new Map(), POND_RES = 0.05, POND_X0 = POND[0] - 2.1, POND_Y0 = POND[1] - 1.8, POND_NX = 85, POND_NY = 73;
+function pondSD(lx, ly, bx, by) {
+  const gx = (lx - POND_X0) / POND_RES, gy = (ly - POND_Y0) / POND_RES;
+  if (!(gx >= 0 && gy >= 0 && gx < POND_NX - 1 && gy < POND_NY - 1)) return 9;
+  const key = bx * NB + by;
+  let g = POND_SD.get(key);
+  if (!g) {
+    g = new Float32Array(POND_NX * POND_NY);
+    for (let y = 0; y < POND_NY; y++) for (let x = 0; x < POND_NX; x++) g[y * POND_NX + x] = pondEdgeSD(POND_X0 + x * POND_RES, POND_Y0 + y * POND_RES, bx, by);
+    POND_SD.set(key, g);
+  }
+  const x0 = gx | 0, y0 = gy | 0, fx = gx - x0, fy = gy - y0, k = y0 * POND_NX + x0;
+  return (g[k] * (1 - fx) + g[k + 1] * fx) * (1 - fy) + (g[k + POND_NX] * (1 - fx) + g[k + POND_NX + 1] * fx) * fy;
+}
+// in it? `pad` grows it, for shores and keeping trees out
+const inPond = (lx, ly, bx, by, pad = 0) => pondSD(lx, ly, bx, by) < pad;
 // relative to block center, and the way each faces: toward the path through the middle
 const BENCH = [[0.35, -2, -1, 0], [0.35, 2, -1, 0], [-2, 0.35, 0, -1], [2, -0.35, 0, 1]];
 const trees = [], benches = [], parks = [];
@@ -3851,7 +3871,7 @@ function stepFighters(c, dt, rnd = Math.random) {
     const k = rnd() * TAU;
     for (const wing of [-1, 1]) fighters.push({ id: 900 + fighters.length, x: mod(c.x + Math.cos(k) * 45 - Math.sin(k) * wing * 1.5, N), y: mod(c.y + Math.sin(k) * 45 + Math.cos(k) * wing * 1.5, N),
       z: Math.max(c.z, 6), yaw: k + Math.PI, pitch: 0, roll: 0, v: FIGHTER_T.top, wing, cool: 2 + rnd() * 2, sixed: false });
-    fighterHunt = 0; fighterCalm = 0; ev.push('scramble');
+    fighterHunt = 0; fighterCalm = 0; ev.push('scramble'); newsEvent('scramble', c.x, c.y); // (that makes the papers)
   }
   for (let k = tracers.length - 1; k >= 0; k--) { const r = tracers[k]; r.x += r.vx * dt; r.y += r.vy * dt; r.z += r.vz * dt; if ((r.t -= dt) <= 0) tracers.splice(k, 1); }
   if (!fighters.length) return ev;
@@ -4259,7 +4279,7 @@ function talkLine(p) {
   if (st && Math.hypot(rel(st.x - p.x), rel(st.y - p.y)) < 40) lines.push(`The ${st.name} train is late again.`, `Is ${st.name} station still closed for repairs?`);
   if (Math.abs(rel(p.y - (EL_ROW * 8 + 1))) < 12) lines.push('That el train shakes my whole apartment.', 'You get used to the trains. Mostly.');
   if (cars.some(c => code(c) && Math.hypot(rel(c.x - p.x), rel(c.y - p.y)) < 25)) lines.push("Another siren. Hope everyone's okay.", 'Something going on round the corner?');
-  lines.push('Hey.', 'Can I help you?', 'Nice evening for it.'.replace('evening', h < 12 ? 'morning' : h < 18 ? 'day' : 'evening'));
+  lines.push('Hey.', 'Can I help you?', 'Nice evening for it.'.replace('evening', h < 12 ? 'morning' : h < 18 ? 'day' : 'evening'), ...newsGossip());
   return pick(lines);
 }
 
@@ -4464,6 +4484,7 @@ function roomTalkLine(kind, h = tod) {
   if ((h >= 23 || h < 4) && kind !== 'jail') lines.push('Shouldn\'t you be in bed?', 'It\'s late. Why are we both here?');
   if (rain > 0.4 && kind !== 'jail' && kind !== 'station' && kind !== 'train') lines.push('Waiting out the rain. You too?');
   if (tattoos.length && kind !== 'tattoo') lines.push(`Is that a ${ITEMS[tattoos[tattoos.length - 1]].name}? Nice ink.`, 'Who did your tattoo? I\'ve been wanting one.'); // (they've noticed)
+  if (kind !== 'jail') lines.push(...newsGossip()); // (what's in the papers, and whether you look like it)
   let line = pick(lines);
   for (let k = 0; k < 4 && line === lastRoomLine; k++) line = pick(lines); // (not the same one twice running)
   return (lastRoomLine = line);
@@ -5128,6 +5149,9 @@ const ITEMS = {
   key_car_sports: { name: 'sports car keys', price: 0, kind: 'keys', car: 'car_sports' },
   home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 7000, kind: 'home' },
   home_belle: { name: 'Belle Époque residence', price: 16000, kind: 'home' },
+  // a change of look (nothing to carry: it's on you), which makes you harder to place (notoriety.js)
+  haircut: { name: 'haircut', price: 15, kind: 'look', look: 'haircut', line: 'Twenty minutes in the chair, a mirror held up behind you. You look like somebody else. Somebody tidier.' },
+  coat: { name: 'secondhand coat', price: 25, kind: 'look', look: 'coat', line: 'You leave in a coat that used to be somebody else\'s. It fits well enough. The old one goes in the donation bin.' },
   // tattoos (the tattoo parlour): not carried, they're on you for good. hours: how long you sit for it; where: on you
   tattoo_swallow: { name: 'swallow', price: 60, kind: 'tattoo', hours: 1, where: 'on the back of your hand' },
   tattoo_anchor: { name: 'anchor', price: 80, kind: 'tattoo', hours: 1, where: 'on your forearm' },
@@ -5193,7 +5217,7 @@ const STOCK_WORD = {
   'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['sushi', 'tea'], VIDEO: ['vhs', 'candy', 'soda'], THAI: ['padthai', 'greencurry', 'mangorice', 'thaitea'],
   BURGERS: ['burger', 'fries', 'milkshake', 'soda'], CHICKEN: ['chicken', 'fries', 'soda'], JUICE: ['smoothie', 'water', 'apple'],
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
-  THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
+  THRIFT: ['coat', 'umbrella', 'vinyl', 'book', 'boombox'], BARBER: ['haircut'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft', 'home_belle'],
   DELICATESSEN: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'], JEWELER: ['jadebangle', 'luckycoin', 'redstring'], ANTIQUES: ['vinyl', 'book', 'harmonica', 'lantern'], TAILOR: ['umbrella'],
   TATTOO: ['tattoo_swallow', 'tattoo_anchor', 'tattoo_rose', 'tattoo_dagger', 'tattoo_panther', 'tattoo_koi'],
@@ -5276,6 +5300,7 @@ function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
   if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }
   if (it.kind === 'tattoo') return getTattoo(id);
+  if (it.kind === 'look') return pay(it.price) ? [true, `${it.line}${changeLook(it.look)} (${fmt$(it.price)})`] : [false, `A ${it.name} is ${fmt$(it.price)}. You can't afford it.`];
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   carryItem({ id, uses: it.uses || 0 });
@@ -5293,10 +5318,10 @@ function getTattoo(id) {
   if (!pay(it.price)) return [false, `The ${it.name} is ${fmt$(it.price)}. Come back when you've saved up.`];
   tattoos.push(id);
   for (tod += it.hours; tod >= 24; tod -= 24) dayNum++;
-  return [true, `${it.hours > 1 ? it.hours + ' hours' : 'An hour'} in the chair. The ${it.name}, ${it.where}. It stings, and it's perfect. (${fmt$(it.price)})`];
+  return [true, `${it.hours > 1 ? it.hours + ' hours' : 'An hour'} in the chair. The ${it.name}, ${it.where}. It stings, and it's perfect.${changeLook('tattoo')} (${fmt$(it.price)})`];
 }
 // what you could walk off with (not a car, a flat or somebody's needlework)
-const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo'].includes(ITEMS[id].kind));
+const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look'].includes(ITEMS[id].kind));
 const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
 const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
@@ -7413,7 +7438,7 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
                  boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' },
                  ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' },
-                 planetheft: { stars: 2, name: 'aircraft theft' } };
+                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' } }; // (spotted: notoriety.js)
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -7595,7 +7620,7 @@ function notePoliceRoofEntry(x, y, ret = null) {
 }
 function roofPoliceSees(c) {
   const vx = rel(px - c.x), vy = rel(py - c.y), d = Math.hypot(vx, vy);
-  if (d > COP_SIGHT) return false;
+  if (d > copSight()) return false;
   const z0 = policeRoofHeight(c.x, c.y) + 0.16, z1 = policeRoofHeight(px, py) + 0.15 + body.z / 10, n = Math.ceil(d * 8);
   for (let k = 1; k < n; k++) {
     const t = k / n;
@@ -7669,13 +7694,13 @@ for (let n = 0; n < PATROLS; n++) {
 // ---- a crime, here and now: who saw it, and what follows
 // returns 'cop' (wanted now), 'reported' (somebody will call it in), or '' (nobody saw)
 // can any cop, in a car or on foot, see (x, y)?
-const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y))
-  || footCops.some(c => near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y));
+const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y))
+  || footCops.some(c => near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y));
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
   const copSees_ = copSees(x, y);
   if (copSees_) { addWanted(kind, x, y, true); return 'cop'; }
   const civSees = people.some(p => !p.hidden && near(p.x, p.y, x, y) < CIV_SIGHT && lineOfSight(p.x, p.y, x, y)) || kind === 'steal' || kind === 'shoplift' || kind === 'boattheft';
-  if (civSees) { reports.push({ t: T + REPORT_DELAY, x, y, kind }); return 'reported'; } // (a carjacked driver, a clerk, or a boat's owner always calls it in)
+  if (civSees) { reports.push({ t: T + reportDelay(), x, y, kind }); return 'reported'; } // (a carjacked driver, a clerk, or a boat's owner always calls it in)
   return '';
 }
 // a red light only counts with a cop right there
@@ -7685,6 +7710,7 @@ function redLightCrime(x, y) {
   return cop;
 }
 function addWanted(kind, x, y, seen) {
+  if (kind !== 'spotted') newsEvent(kind, x, y); // (it's in the papers, and it's yours: notoriety.js)
   wanted.stars = Math.min(MAX_STARS, Math.max(wanted.stars, 0) + CRIMES[kind].stars);
   wanted.crime = CRIMES[kind].name; wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
   wanted.lastVX = 0; wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
@@ -7964,6 +7990,7 @@ function stepCrime(dt) {
     if (T < r.t) continue;
     reports.splice(k, 1);
     if (policeNear(r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened
+    else if (r.kind !== 'spotted') newsEvent(r.kind, r.x, r.y); // (nobody to send, but it's still in the papers)
   }
   stepReturningPolice(dt);
   stepRoadblocks();
@@ -7975,10 +8002,10 @@ function stepCrime(dt) {
   const roomSeen = roomSearchLead(dt);
   const roofSeen = roofSearchLead(dt);
   const [wx, wy] = crimePos(), inside = mode === 'room', onRoof = mode === 'roof';
-  const sees = c => !c.down && !inside && !onRoof && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
+  const sees = c => !c.down && !inside && !onRoof && near(c.x, c.y, wx, wy) < copSight() && lineOfSight(c.x, c.y, wx, wy); // (further, the better they know your face)
   wanted.seen = (inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees)) || heliSees;
   if (wanted.seen) { if (!inside) observeSuspect(wx, wy); wanted.hideT = 0; wanted.searchX = wanted.lastX; wanted.searchY = wanted.lastY; }
-  else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
+  else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { if (wanted.stars >= 2) newsEvent('escape', wanted.lastX, wanted.lastY); clearWanted(); return 'lost'; }
   else if ((wanted.searchT -= dt) <= 0) {
     wanted.searchT = 0.35; [wanted.searchX, wanted.searchY] = policeSearchTarget();
   }
@@ -8006,7 +8033,7 @@ function stepCrime(dt) {
     || onRoof && body.z < 1 && roofCops.some(c => c.sees && near(c.x, c.y, px, py) < 0.22);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
-  if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
+  if (grabbed || wanted.bustT > 2.5) { if (wanted.stars >= 2) newsEvent('arrest', px, py, { crime: wanted.crime }); wanted.busted = true; return 'busted'; }
   return told ? 'pullover' : wanted.seen ? 'seen' : 'hiding';
 }
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
@@ -8030,6 +8057,114 @@ function goToJail() {
   seized.length = 0; seized.push(...inv);
   clearInventory(); fx.skating = false; fx.boombox = false;
   clearWanted();
+}
+// ===== notoriety: the city remembers. A crime somebody saw (crime.js: addWanted, or a call that came in with no unit
+// to send) makes you known, and so does anything that brings out the air force. Known, people look twice at you in the
+// street and the police pick you out from further off; very well known, the odd passer-by gets their phone out. It
+// fades a day at a time, and faster if you change how you look: a haircut, a different coat, new ink.
+// What happened goes in the papers a day behind, written up in the papers' usual tone (newsLines), and it's on the
+// telly, on in the bars, and what people talk about.
+// Pure: the score, the log and the headlines. goods-ui.js reads the paper, actions.js the telly, news-ui.js the rest.
+// Gentle on purpose: a crime is easy to commit by accident (a red light, a fender bender, a bad moment with a pedestrian),
+// and the odd slip should barely register. It takes a run of serious ones to get you known.
+const NOTO_BY_STARS = [0, 3, 8, 15], NOTO_SLIP = { redlight: 1, crash: 1, urination: 2, graffiti: 2 }; // (a crime: by its stars, slips less)
+const NOTO_EVENT = { scramble: 12, blownup: 8, ejected: 6, planecrash: 6 };
+const NOTO_FADE = 0.5; // what's left of it each morning
+const NOTO_LOOK = { haircut: 0.5, coat: 0.5, tattoo: 0.6 }; // what's left after a change of look (once a day each)
+const NOTO_KNOWN = 30, NOTO_INFAMOUS = 65, NOTO_SPOT_R = 2.2, NOTO_CALL = 0.25, NOTO_CALL_GAP = 120; // (seconds between call-ins at most)
+const noto = { level: 0, day: dayNum, looked: {}, log: [], lookDay: -9, scanT: 0, callT: -Infinity };
+// where (x, y) is, as the papers put it
+const placeTitle = (x, y) => { const d = districtName(Math.floor(mod(x, N) / 8), Math.floor(mod(y, N) / 8)); return d === 'belle' ? 'the Belle Époque Quarter' : DISTRICT_TITLE[d] || 'the city'; };
+// a count as the papers print one: in words, up to ten
+const inWords = n => ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][n] || String(n);
+// something for the papers: a kind (a crime's, or one of NEWS's), where, and anything the line needs; the same thing
+// in the same place on the same day counts up instead (so a spree reads as one story)
+function newsEvent(kind, x = px, y = py, extra = {}) {
+  const where = placeTitle(x, y), same = noto.log.find(e => e.kind === kind && e.day === dayNum && e.where === where);
+  if (same) same.n++; else noto.log.unshift({ kind, day: dayNum, where, n: 1, ...extra });
+  if (noto.log.length > 40) noto.log.length = 40;
+  noto.level = Math.min(100, noto.level + (NOTO_SLIP[kind] ?? (CRIMES[kind] ? NOTO_BY_STARS[Math.min(3, CRIMES[kind].stars)] : NOTO_EVENT[kind] || 0)));
+}
+// a new look: knocks it down (each kind once a day: a second haircut doesn't fool anybody twice). What it did, for the
+// line at the counter: '' if there was nothing to lose
+function changeLook(kind) {
+  if (noto.looked[kind] === dayNum || noto.level < 1) return '';
+  noto.looked[kind] = dayNum; noto.lookDay = dayNum;
+  const was = noto.level; noto.level *= NOTO_LOOK[kind];
+  return was >= NOTO_KNOWN ? ' Nobody is going to match you to a description now.' : ' One fewer thing anybody might remember about you.';
+}
+// each morning it fades; the log keeps three days
+function stepNotoriety() {
+  while (noto.day < dayNum) { noto.day++; noto.level *= NOTO_FADE; if (noto.level < 1) noto.level = 0; }
+  if (noto.day > dayNum) noto.day = dayNum; // (a load or the dev panel going back)
+  for (let k = noto.log.length - 1; k >= 0; k--) if (noto.log[k].day < dayNum - 2) noto.log.splice(k, 1);
+}
+// police see you a little further off, and calls come in a little quicker, the better known you are (a quarter at most)
+const copSight = () => COP_SIGHT * (1 + noto.level / 400);
+const reportDelay = () => REPORT_DELAY * (1 - noto.level / 400);
+// out on foot and known: now and then a passer-by close enough knows your face (once a day each), stops and stares;
+// infamous, now and then one calls it in (one star, and not again for a while). Returns { who, called } for whoever did, or null. Checked twice a second
+const YOU_SPOT = { get x() { return px; }, get y() { return py; } }; // (what a staring passer-by looks at)
+function recognise(dt, rnd = Math.random) {
+  if ((noto.scanT -= dt) > 0) return null;
+  noto.scanT = 0.5;
+  if (noto.level < NOTO_KNOWN || mode !== 'walk' || wanted.stars > 0) return null;
+  for (const p of people) {
+    if (p.hidden || p.down || p.follow || p.help || p.hailing || p.talk > 0 || p.knew === dayNum) continue;
+    if (near(p.x, p.y, px, py) > NOTO_SPOT_R || !lineOfSight(p.x, p.y, px, py)) continue;
+    if (rnd() > (noto.level - 20) / 400) continue;
+    p.knew = dayNum; p.gawk = YOU_SPOT; p.talk = 3 + rnd() * 2;
+    const called = noto.level >= NOTO_INFAMOUS && T - noto.callT > NOTO_CALL_GAP && rnd() < NOTO_CALL;
+    if (called) { noto.callT = T; reports.push({ t: T + reportDelay(), x: px, y: py, kind: 'spotted' }); }
+    return { who: p, called };
+  }
+  return null;
+}
+
+// ---- the papers. One line a story, as the papers would print it: flat, factual, unimpressed
+const NEWS = {
+  steal: (w, n) => n > 1 ? `${inWords(n)} cars stolen in ${w} in one day. Police say they are aware of the pattern.` : `Car stolen in ${w}. The owner says they had only just washed it.`,
+  hit: (w, n) => n > 1 ? `${inWords(n)} pedestrians struck by the same car in ${w}. All have since got up. Police would still like a word.` : `Pedestrian struck by a car in ${w}. The driver did not stop. The pedestrian has since got up.`,
+  hitcop: w => `Police officer knocked down by a car in ${w}. The department describes this as unhelpful.`,
+  crash: w => `Reckless driving reported in ${w}. Residents say they were not surprised.`,
+  redlight: w => `Driver runs a red light in ${w} in full view of a police officer. The officer describes this as a choice.`,
+  pickpocket: (w, n) => `${n > 1 ? 'Several pickpocketings' : 'Pickpocketing'} reported in ${w}. Residents are reminded to keep their wallets in their pockets, and their hands on them.`,
+  shoplift: w => `A shop in ${w} reports the theft of low-value goods. The owner says it is the principle of the thing.`,
+  burglary: w => `Break-in at a business in ${w}. The owner says nothing of value was taken, then checked again.`,
+  alarm: w => `Burglar alarm at a business in ${w}. Police attended. The alarm was correct.`,
+  bankjob: w => `Bank robbed in ${w}. The bank reminds customers that deposits are insured, and asks them not to think about it further.`,
+  heist: () => 'An item is missing from the city museum. The museum says the gift shop remains open.',
+  boattheft: () => 'Boat reported missing from the marina. It was last seen floating.',
+  graffiti: (w, n) => `New graffiti in ${w}${n > 1 ? ', in several places' : ''}. The council has added it to a list.`,
+  urination: w => `Public urination reported in ${w}. Police attended. Police had seen worse.`,
+  ram: w => `Police car rammed in ${w}. The other car is described as also damaged.`,
+  planetheft: () => 'An aircraft was taken from the city airport without permission. The airport would like it back.',
+  scramble: () => 'The air force confirms two interceptors flew over the city. A spokesperson would not say why, beyond "an aircraft."',
+  blownup: w => `Stolen aircraft comes apart in the air over ${w}. The pilot survived, which the air force describes as noted.`,
+  ejected: w => `The pilot of a stolen aircraft parachuted into ${w} and has not come forward. The air force has recovered most of the aircraft.`,
+  planecrash: w => `Stolen aircraft comes down in ${w}. Nobody has claimed it.`,
+  escape: w => `Police call off a pursuit in ${w} after losing sight of the suspect. The search is described as ongoing, in a general sense.`,
+  arrest: (w, n, e) => `Arrest in ${w} following ${e.crime || 'an incident'}. Officers describe the suspect as cooperative, eventually.`,
+  bout: (w, n, e) => `An unknown fighter beat ${e.who} at the gym in ${w}. The promoter did not catch the name. The purse was paid in cash.`,
+};
+// the stories that run, biggest first: what happened yesterday (and so far today, on the telly), with a word from the
+// police about the suspect when you're well known
+function newsLines(today = false) {
+  const from = dayNum - 1, to = today ? dayNum : dayNum - 1;
+  const big = e => (CRIMES[e.kind] ? CRIMES[e.kind].stars : NOTO_EVENT[e.kind] ? 3 : 1) * 10 + Math.min(e.n, 5);
+  const lines = noto.log.filter(e => e.day >= from && e.day <= to && NEWS[e.kind]).sort((p, q) => big(q) - big(p)).map(e => NEWS[e.kind](e.where, e.n, e));
+  if (lines.length && noto.level >= 40) lines.push(noto.lookDay >= dayNum - 1
+    ? 'Police say the suspect may since have changed their appearance, and that this does not help.'
+    : 'Police have issued a description of a suspect: medium build, seen recently. The public is asked not to approach anyone matching it, which is most people.');
+  return lines;
+}
+// what people say about it (talk.js): the top story, and, if you're known, that you look like somebody
+function newsGossip() {
+  const out = [], top = newsLines(true)[0];
+  if (top) { const s = top.split('. ')[0].replace(/\.$/, '') + '.'; out.push(`Did you see the paper? "${s}"`, `${s} That's this city for you.`); }
+  if (noto.level >= NOTO_KNOWN) out.push('Hang on. Have I seen you somewhere? No. Never mind.', 'You look like somebody. I can\'t think who.');
+  if (noto.level >= NOTO_INFAMOUS) out.push('You look a lot like that description in the paper. So does my cousin, to be fair.');
+  return out;
 }
 let courierJob = null;
 // best: fastest delivery per route id. A completed route unlocks any route that names it.
@@ -8673,9 +8808,12 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
       return set(i, ' ', 0);
     }
     const archTop = 0.31 - (du / (spacing * 0.36)) ** 2 * 0.065;
-    if (Math.abs(du) < spacing * 0.35 && z > 0.045 && z < archTop) {
+    const doorway = f.sign && SHOP[k].kind !== SHOP_APTS && Math.abs(start + (bay + 0.5) * spacing - f.sign.center) < spacing / 2; // (the arch under the sign: the shop's door, to the pavement)
+    if (Math.abs(du) < spacing * 0.35 && (z > 0.045 || doorway) && z < archTop) {
       if (Math.abs(du) > spacing * 0.32 || z > archTop - 0.02) return set(i, z > archTop - 0.02 ? '^' : '|', C(WHITE, L));
-      BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : CYAN, 1 + night * 2);
+      if (doorway && architectureShutter(i, z, SHOP[k], L)) return;
+      if (doorway) return void doorGlass(i, du, z, openAt(SHOP[k], tod), L, WHITE);
+      BG[i] = C(SHOP[k].kind === SHOP_APTS ? BRICK : doorway ? WARM : CYAN, 1 + night * 2);
       return set(i, Math.abs(du) < 0.015 ? '|' : ':', C(WARM, Math.max(L * 0.65, glowL * 0.75)));
     }
   } else {
@@ -9078,9 +9216,38 @@ function paintSettledSnow(i, wx, wy, L, exposure = 1, wear = 0, surfaceZ = 0) {
   set(i, ch, col);
 }
 
+// a park pond, sd in from its edge (below 0): shallow and green-brown at the margin, deepening to a dark middle, slow
+// ripples with the sky in them (reflect()), raindrops ringing it in the wet; lily pads in patches near the edge, round,
+// the odd one flowering. Frozen in winter
+function pondCell(i, r, x, wx, wy, sd, L) {
+  if (seasonIdx() === 3) { // pale ice, cracks, snow drifted on it
+    const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03;
+    BG[i] = C(CYAN, 1.4 + day * 3.5); return set(i, cr ? '/' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
+  }
+  const depth = clamp(-sd / 0.55, 0, 1), lamp = lampsOn * glow(wx, wy) * 2;
+  if (sd > -0.45 && sd < -0.03 && noise(wx * 1.6, wy * 1.6, 932) > 0.52) { // a patch of lily pads
+    const gx = Math.floor(wx / 0.13), gy = Math.floor(wy / 0.13), h = hash(gx, gy, 931);
+    if (h > 0.3) {
+      const cx = (gx + 0.25 + 0.5 * hash(gx, gy, 936)) * 0.13, cy = (gy + 0.25 + 0.5 * hash(gx, gy, 937)) * 0.13, d = Math.hypot(wx - cx, wy - cy), rad = 0.035 + 0.02 * h;
+      if (d < rad && Math.atan2(wy - cy, wx - cx) + Math.PI > 0.5) { // (the notch cut out of each pad)
+        const flower = h > 0.88 && d < 0.014;
+        BG[i] = C(GREEN, 1.1 + day * 2 + lamp * 0.5); FL[i] = 0;
+        return set(i, flower ? '*' : d > rad * 0.7 ? 'o' : ' ', C(flower ? (h > 0.94 ? WHITE : MAG) : GREEN, flower ? Math.max(L * 1.6, 8) : L * 1.2));
+      }
+    }
+  }
+  const n = noise(wx * 3 + T * 0.18, wy * 3 - T * 0.11, 92), drop = rain > 0.15 && hash(Math.floor(wx * 14), Math.floor(wy * 14), Math.floor(T * 3)) > 1 - rain * 0.06;
+  // (in bands, not a smooth ramp, and the ripples one colour: on the canvas path every change of colour along a row is
+  // another draw call, and a pond full of them is what made looking at one slow)
+  const shallow = depth < 0.07, deep = depth > 0.55;
+  BG[i] = shallow ? C(GREEN, 1 + day * 1.4 + lamp) : C(BLUE, (deep ? 0.8 + day * 2 : 1 + day * 2.6) + lamp);
+  FL[i] = 4; // (still water: reflect() mirrors what's round it, in one tint)
+  return set(i, drop ? 'o' : shallow ? (hash(Math.floor(wx * 24), Math.floor(wy * 24), 938) > 0.6 ? '.' : ' ') : n > 0.68 ? '~' : n > 0.6 ? '-' : ' ',
+    drop ? C(WHITE, 6 + day * 6) : C(shallow ? GREEN : CYAN, 4 + day * 5));
+}
 function floorCell(i, r, x, rx, ry) {
   floorBaseCell(i, r, x, rx, ry);
-  if (snowCover <= 0 || FL[i] === 3) return; // open water remains open water
+  if (snowCover <= 0 || FL[i] >= 3) return; // open water remains open water
   const d = ZB[i], wx = px + rx * d, wy = py + ry * d, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
   if (road === 2 && subwayHole(wx, wy, Math.floor(wx / 8), Math.floor(wy / 8)) >= 0) return;
   const lx = mod(wx, 8), ly = mod(wy, 8);
@@ -9164,17 +9331,10 @@ function floorBaseCell(i, r, x, rx, ry) {
     } else if (kind === 'park') {
       soft = true;
       const pbx = bx & (NB - 1), pby = by & (NB - 1);
-      if (inPond(lx, ly, pbx, pby)) { // the pond: ripples, lily pads by the edge, the sky and trees in it
-        if (seasonIdx() === 3) { // frozen over: pale ice, cracks, snow drifted on it
-          const cr = Math.abs(noise(wx * 2, wy * 2, 95) - 0.5) < 0.03;
-          BG[i] = C(CYAN, 1.4 + day * 3.5); return set(i, cr ? '/' : (r + x) % 5 ? ' ' : '-', C(WHITE, L * 1.2));
-        }
-        const n = noise(wx * 4 + T * 0.3, wy * 4 - T * 0.1, 92), lily = !inPond(lx, ly, pbx, pby, -0.18) && hash(Math.floor(wx * 9), Math.floor(wy * 9), 93) > 0.8;
-        set(i, lily ? (hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? '*' : 'o') : n > 0.62 ? '~' : n > 0.48 ? '-' : ' ', lily ? C(hash(Math.floor(wx * 9), Math.floor(wy * 9), 94) > 0.85 ? MAG : GREEN, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
-        BG[i] = C(BLUE, 1 + day * 2.5 + lampsOn * glow(wx, wy) * 2); FL[i] = lily ? 0 : 3;
-        return;
-      }
-      else if (inPond(lx, ly, pbx, pby, 0.15)) { ch = (r + x) % 3 ? '|' : ','; base = GREEN; k = 0.9; } // reeds round the edge
+      const sd = pondSD(lx, ly, pbx, pby); // (how far out of the pond: below 0, how far in)
+      if (sd < 0) return pondCell(i, r, x, wx, wy, sd, L);
+      else if (sd < 0.025) { ch = hash(Math.floor(wx * 30), Math.floor(wy * 30), 934) > 0.7 ? '.' : ' '; base = BRICK; k = 0.6; } // a thin muddy edge
+      else if (sd < 0.2 && noise(wx * 2.2, wy * 2.2, 933) > 0.52) { const h = hash(Math.floor(wx * 26), Math.floor(wy * 26), 935); ch = h > 0.8 ? '!' : h > 0.3 ? '|' : ' '; base = h > 0.8 ? BRICK : GREEN; k = 1.2; } // reeds in clumps, the odd cattail
       else if (Math.abs(lx - 5) < 0.2 || Math.abs(ly - 5) < 0.2) { ch = ':'; base = BRICK; k = 1.2; } // dirt path
       else { ch = (r * 3 + x) % 4 ? '"' : ','; base = GREEN; k = 1.3; }
     } else if (fract(lx * 2) < 0.06 || fract(ly * 2) < 0.06) ch = '+'; // paving
@@ -9333,11 +9493,11 @@ function reflect() {
     for (let r = Math.max(b, hor + 1); r < rows; r++) {
       const i = r * cols + x, f = FL[i];
       if (f < 2) continue;
-      const s = 2 * b - r - 1 + (f === 3 ? Math.round(Math.sin(r * 1.7 + T * 3) * 0.6) : 0), j = s * cols + x; // water ripples
+      const s = 2 * b - r - 1 + (f >= 3 ? Math.round(Math.sin(r * 1.7 + T * 3) * 0.6) : 0), j = s * cols + x; // water ripples
       const lamp = f === 2 ? LAMPL[i] : 0; // a puddle under a streetlamp holds its light as well as the reflection
       if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ') {
         const lv = (COL[j] & 15) * 0.55;
-        CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : (COL[j] & 0xf0) | (lv | 0);
+        CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : f === 4 ? C(CYAN, lv > 4 ? 6 : 3) : (COL[j] & 0xf0) | (lv | 0); // (a pond's in one tint: on the canvas path every change of colour is another draw)
       } else if (f === 2) set(i, '~', lamp ? C(WARM, Math.max(3 + day * 3, lamp)) : C(BLUE, 3 + day * 3));
       if (lamp > 2) BG[i] = C(WARM, Math.max(BG[i] === NONE ? 0 : BG[i] & 15, lamp * 0.2)); // and a warm sheen under it
     }
@@ -9845,6 +10005,26 @@ function brownstoneWindow(i, du, z, half, z0, z1, lit, L, base) {
   set(i, Math.abs(du) < 0.011 ? '|' : Math.abs(z - (z0 + z1) / 2) < 0.012 ? '-' : lit ? ' ' : ':', C(lit ? WARM : WHITE, Math.max(L * 0.6, lit ? night * 13 : 0)));
   return true;
 }
+// a shop's way in, down to the pavement: du across it (0 its middle), up to SHOP_DOOR_TOP (clear of the awnings and
+// signs above). Glass in a frame, a kick plate, a push bar; lit from inside when it's open. True if it drew (i)
+const SHOP_DOOR_HALF = 0.055, SHOP_DOOR_TOP = 0.26;
+function shopDoor(i, du, z, sh, L, trim) {
+  if (Math.abs(du) > SHOP_DOOR_HALF + 0.012 || z > SHOP_DOOR_TOP + 0.014) return false;
+  if (architectureShutter(i, z, sh, L)) return true;
+  if (Math.abs(du) > SHOP_DOOR_HALF || z > SHOP_DOOR_TOP) { BG[i] = C(trim, 1 + L * 0.2); return set(i, z > SHOP_DOOR_TOP ? '=' : '|', C(trim, L)), true; }
+  return doorGlass(i, du, z, openAt(sh, tod), L, trim);
+}
+// the glass of a shop's double door, du across it (0 where the two leaves meet): a solid panel at the foot, a push bar
+// across each leaf, the meeting stiles; by day the street and a streak of sky in it, after dark the shop lit up behind
+// it (if it's open). True: it drew (i)
+function doorGlass(i, du, z, open, L, trim) {
+  if (z < 0.035) { BG[i] = C(trim, 1.1 + L * 0.2); return set(i, z < 0.006 ? '_' : ' ', C(GRAY, L * 0.7)), true; }
+  if (Math.abs(du) < 0.006) { BG[i] = C(trim, 1 + L * 0.2); return set(i, '|', C(GRAY, L * 0.8)), true; }
+  if (Math.abs(z - 0.11) < 0.008 && Math.abs(du) > 0.012 && Math.abs(du) < 0.04) { BG[i] = C(GRAY, 1.5 + L * 0.2); return set(i, '-', C(WHITE, L)), true; }
+  const warm = open && (night > 0.3 || overcast > 0.6), streak = fract(du * 7 + z * 4) < 0.07;
+  BG[i] = warm ? C(WARM, 1.2 + night * 3.2) : C(CYAN, 0.55 + day * 1.25);
+  return set(i, streak ? '/' : warm && hash(Math.floor(du * 60), Math.floor(z * 50), 377) > 0.86 ? '.' : ' ', C(warm ? YEL : WHITE, warm ? Math.max(L * 0.5, night * 8) : 4 + day * 7)), true;
+}
 function architectureShutter(i, z, sh, L) {
   if (openAt(sh, tod)) return false;
   BG[i] = C(GRAY, 1 + day);
@@ -9879,7 +10059,8 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
         return set(i, z > 0.3 ? ':' : Math.abs(door) < 0.01 ? '|' : z < 0.15 ? '=' : '#', C(z > 0.3 ? WARM : BRICK, z > 0.3 ? Math.max(L, night * 11) : L * 0.65));
       }
       if (brownstoneWindow(i, local - f.spacing * 0.22, z, f.spacing * 0.15, 0.16, 0.32, hash(unit, 5, sk) > litT, L, STONE)) return;
-    } else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
+    } else if (f.front && shopDoor(i, local - f.spacing * 0.24, z, sh, L, STONE)) return;
+    else if (f.front && z > 0.04 && z < 0.34 && Math.abs(local) < f.spacing * 0.39) {
       if (architectureShutter(i, z, sh, L)) return;
       BG[i] = C(CYAN, 1 + night * 2);
       return set(i, Math.abs(local) < f.spacing * 0.03 ? '|' : z > 0.3 ? '=' : ':', C(WARM, Math.max(L * 0.65, night * 11)));
@@ -9912,6 +10093,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
       Math.min(0.085, (width - 0.3) / sh.word.length), 0.055, C(sh.neon, signLight), C(GRAY, 1))) return;
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
+    if (f.front && shopDoor(i, along - width / 2, z, sh, L, b.sty === 14 ? STONE : GRAY)) return;
     if (z > 0.04 && z < 0.31 && (lobby || fu > 0.16 && fu < 0.84)) {
       if (architectureShutter(i, z, sh, L)) return;
       BG[i] = C(lobby ? WARM : CYAN, 1 + night * 3);
@@ -9999,10 +10181,11 @@ function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, tr
   if (f.front && z > .335 && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), .38,
     Math.min(.067, (width - .3) / sh.word.length), .043, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return;
   if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
-  if (z > .325 || z < .045) return set(i, z > .325 ? '=' : '_', C(trim, L * .75));
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
+  if (f.front && sh.kind !== SHOP_APTS && shopDoor(i, along - center, z, sh, L, trim)) return; // (the shop's door, to the pavement)
+  if (z > .325 || z < .045 && !(f.front && sh.kind === SHOP_APTS && door < doorHalf)) return set(i, z > .325 ? '=' : '_', C(trim, L * .75));
   if (f.front && sh.kind === SHOP_APTS) {
-    if (door < doorHalf && z < .30) {
+    if (door < doorHalf && z < .30) { // (the lobby doors, to the pavement)
       BG[i] = C(WARM, 1 + night * 3);
       return set(i, door < .009 || door > doorHalf - .015 ? '|' : Math.abs(z - .16) < .012 ? '-' : ':', C(WHITE, Math.max(L * .7, night * 12)));
     }
@@ -10243,17 +10426,18 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
       return true;
     }
     if (architectureLeaseSign(i,u,uStep,z,d,wc,f,sh,L)) return true;
-    if (f.front && Math.abs(local) < width / 2 - .15 && z > .03 && z < .32) {
+    const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
+    if (f.front && Math.abs(door) < doorHalf + .012 && z < .27) { // the way in: down to the pavement, under the awning
       if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
-      const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
-      if (Math.abs(door) < doorHalf) {
+      if (Math.abs(door) > doorHalf || z > .255) { BG[i] = C(p.trim,1 + L * .2); set(i,z > .255 ? '=' : '|',C(p.trim,L)); return true; }
+    }
+    if (f.front && Math.abs(local) < width / 2 - .15 && (z > .03 || Math.abs(door) < doorHalf) && z < .32) {
+      if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
+      if (Math.abs(door) < doorHalf && z < .255) {
         if (japan && z > .225) {
           BG[i] = C(p.trim,2 + L * .22);
           set(i,Math.abs(door) < .012 ? ' ' : Math.abs(z - .267) < .016 ? 'o' : ' ',C(WHITE,L));
-        } else {
-          BG[i] = C(WARM,1.5 + night * 3);
-          set(i,z > .295 ? '=' : ':',C(WARM,Math.max(L * .6,night * 11)));
-        }
+        } else doorGlass(i,door,z,open,L,p.trim);
         return true;
       }
       const mullion = Math.abs(local - width * .12) < .014 || Math.abs(local + width * .35) < .014;
@@ -14979,10 +15163,21 @@ const TV_PLANE = gx => [ // { b: box, kind }
   { b: boxAt(gx, -10.5, 0, 1, 7.5, 1.5, 0.9, 3.9), kind: 'body' }, { b: boxAt(gx, -11.5, 1, 0, 5.2, 1.6, 1.7, 2), kind: 'wing' },
   ...[-3.2, 3.2].map(e => ({ b: boxAt(gx + e, -10, 0, 1, 1.2, 0.7, 0.8, 1.9), kind: 'engine' })),
   { b: boxAt(gx, -16.8, 0, 1, 1.4, 0.15, 3.9, 8), kind: 'fin' }, { b: boxAt(gx, -17, 1, 0, 3.2, 0.8, 3.9, 4.15), kind: 'wing' }];
+// the jet bridge: the rotunda on its post a step out from the wall (clear of the glass), the tunnel angled out from it
+// to the plane's front door, the cab on the end, and the drive leg on its wheels under the far end of the tunnel
+const TV_BRIDGE = gx => {
+  const rx = gx - 4.4, ry = -1.5, dx = gx - 2.2, dy = -4.6, len = Math.hypot(dx - rx, dy - ry), c = (dx - rx) / len, s = (dy - ry) / len;
+  const lx = rx + (dx - rx) * 0.72, ly = ry + (dy - ry) * 0.72;
+  return [
+    { b: boxAt(rx, ry, 1, 0, 1, 1, 2.2, 4.6), kind: 'bridge' }, { b: boxAt(rx, ry, 1, 0, 0.32, 0.32, 0, 2.2), kind: 'leg' },
+    { b: boxAt((rx + dx) / 2, (ry + dy) / 2, c, s, len / 2, 0.8, 2.45, 4.35), kind: 'bridge' },
+    { b: boxAt(dx, dy, 1, 0, 0.75, 1.05, 2.3, 4.5), kind: 'bridge' },
+    { b: boxAt(lx, ly, c, s, 0.18, 0.5, 0.5, 2.45), kind: 'leg' }, { b: boxAt(lx, ly, -s, c, 0.8, 0.3, 0, 0.55), kind: 'wheels' }];
+};
 function terminalOutside() {
   const out = [];
   TERMINAL_GATE_X.forEach((gx, k) => {
-    out.push({ b: boxAt(gx - 2.4, -1.6, 0, 1, 1.6, 0.9, 2.3, 4.4), kind: 'bridge' }); // the jet bridge, out from the wall
+    out.push(...TV_BRIDGE(gx));
     if (aircraft.some(c => c.type === 'airliner' && c.gate === k && c.state === 'parked')) out.push(...TV_PLANE(gx));
   });
   return out;
@@ -15000,7 +15195,16 @@ function terminalView(i, x, z) {
   const tg = rz < 0 ? -eye / rz : Infinity;
   if (hit && best < tg) {
     const k = shadeFace(hf), L = Math.max(sun, flood) * k;
-    if (hit.kind === 'bridge') { BG[i] = C(GRAY, 1.2 + L * 0.2); return set(i, Math.abs(hw - 3.4) < 0.3 && fract(hu * 0.8) < 0.5 ? '#' : fract(hu * 2) < 0.06 ? '|' : ' ', C(CYAN, 6 + lit * 6)); }
+    if (hit.kind === 'bridge') { // ribbed steel, a strip of windows along it (lit inside after dark), pale on top, dark under
+      if (hf === 6) { BG[i] = C(GRAY, 0.5 + L * 0.08); return set(i, fract(hu * 1.2) < 0.08 ? '-' : ' ', C(GRAY, 3)); }
+      if (hf === 5) { BG[i] = C(WHITE, 1 + L * 0.2); return set(i, ' ', 0); }
+      const along = hf <= 2 ? hv : hu, win = hw > 3.25 && hw < 3.75 && Math.abs(fract(along * 0.9) - 0.5) < 0.32;
+      if (win) { BG[i] = lit > 0.35 ? C(WARM, 2 + lit * 4) : C(CYAN, 1 + day * 2); return set(i, Math.abs(hw - 3.5) < 0.04 ? '-' : ' ', C(GRAY, 6)); }
+      BG[i] = C(WHITE, 0.9 + L * 0.22);
+      return set(i, Math.abs(hw - 3.2) < 0.05 || Math.abs(hw - 3.8) < 0.05 ? '=' : fract(along * 2.5) < 0.08 ? '|' : ' ', C(GRAY, 4 + L * 0.3));
+    }
+    if (hit.kind === 'leg') { BG[i] = C(GRAY, 0.8 + L * 0.15); return set(i, hf <= 4 && fract(hw * 2) < 0.1 ? '-' : '|', C(GRAY, 4)); }
+    if (hit.kind === 'wheels') { BG[i] = C(GRAY, 0.4 + L * 0.06); return set(i, hf <= 4 && hw < 0.45 ? 'O' : '=', C(GRAY, 5)); }
     if (hit.kind === 'body') { // white, the airline's blue cheat line, a row of windows, the flight deck's windows on the nose
       if (hf === 1 && hw > 2.8 && hw < 3.4 && Math.abs(hv) < 1) { BG[i] = C(GRAY, 0.6); return set(i, Math.abs(hv) < 0.06 ? '|' : ' ', C(GRAY, 4)); }
       if (Math.abs(hw - 2.3) < 0.2) { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, ' ', 0); }
@@ -20486,8 +20690,6 @@ function minimap() {
   g.font = FS + 'px monospace';
 }
 
-const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards', belle: 'Belle Époque Quarter',
-                         brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay', shotengai: 'the Shotengai' };
 // a line of HUD text broken to fit maxW px: at the wide gaps between its parts first, then between words
 function wrapText(s, maxW) {
   const out = [];
@@ -20726,7 +20928,7 @@ function interact() {
         }
         return say('Adopt a pet at the pet shop and bring it home.', 2);
       }
-      if (hs === 'tv') { room.tv = !room.tv; return say(room.tv ? 'The telly flickers on.' : 'You switch the telly off.', 2); }
+      if (hs === 'tv') { room.tv = !room.tv; const news = room.tv ? tellyNews() : ''; return say(room.tv ? 'The telly flickers on.' + news : 'You switch the telly off.', news ? 6 : 2); }
     }
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
       enterRoom('lamproom', { word: 'LAMP ROOM', below: { word: room.word, ret: room.ret, line: room.line } }, [1.6, 4.4, -Math.PI / 4]);
@@ -21323,7 +21525,7 @@ function finishBout(g, quit) {
   const res = g.result || { win: false, how: 'towel' }, champ = g.foe === BOXERS.length - 1;
   needs.health = clamp(g.hp, RING_FLOOR, maxHealth());
   if (res.win) {
-    earn(g.purse);
+    earn(g.purse); newsEvent('bout', ...crimePos(), { who: g.name }); // (it makes the papers)
     if (g.foe >= boxRank) boxRank = Math.min(BOXERS.length, g.foe + 1);
     const how = { KO: 'by knockout', TKO: 'on a stoppage', decision: 'on points' }[res.how] || '';
     const next = champ ? ' You\'re the champion of Glyphport.' : ` Next on the card: ${nextBoxer().name}.`;
@@ -22069,6 +22271,7 @@ function airCrash(c) {
   const hurtBy = clamp(20 + (c.crashSpeed || 0) * 14, 20, 95), [x, y] = spotNear(c.x, c.y + 0.4);
   pilot = null; c.state = 'parked'; mode = 'walk'; px = x; py = y; a = Math.atan2(rel(c.y - y), rel(c.x - x)); pitch = 0; body.z = body.vz = 0;
   const blown = c.blown; delete c.blown;
+  if (c.stolen && !blown) newsEvent('planecrash', c.x, c.y);
   if (hurt(hurtBy)) return passOut(blown ? 'It blew apart in the air with you still in it. They found you in the wreckage, somehow alive.' : 'Pulled from the wreck of an aircraft. Lucky to be alive.');
   if (needs.health < 35) needs.warned = 'weak'; // (you know)
   say(blown ? 'It blows apart around you. You come to in the wreckage, burnt and half deaf, somehow alive.' : 'You come down hard. You crawl out of the wreck before it goes up.', 5);
@@ -22076,6 +22279,7 @@ function airCrash(c) {
 // into the bay: it sinks, and you swim for the nearest dry land
 function airDitch(c) {
   pilot = null; c.state = 'parked'; mode = 'walk';
+  if (c.stolen) newsEvent('planecrash', c.x, c.y);
   if (c.sinkT == null) c.sinkT = T;
   swimAshore(c.x, c.y);
   hurt(15); say('It goes under. You kick free of the cockpit and swim for the nearest shore, and drag yourself out, soaked.', 6);
@@ -22092,7 +22296,7 @@ function stepAirWrecks(dt) {
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
-    if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
+    if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; if (c.stolen) newsEvent('blownup', c.x, c.y); } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
   }
@@ -22220,6 +22424,7 @@ function bailOut() {
   const c = pilot, T_ = PLANE_TYPES[c.type], side = T_.heli ? 0.2 : T_.r + 0.2;
   c.state = 'abandoned'; pilot = null; mode = 'walk'; // (the empty aircraft: stepAbandoned)
   px = mod(c.x + Math.sin(c.yaw) * side, N); py = mod(c.y - Math.cos(c.yaw) * side, N); a = c.yaw; pitch = -0.45;
+  if (c.stolen) newsEvent('ejected', px, py);
   body.z = Math.max(0.5, c.z * 10 - 1); body.vz = Math.min(0, (c.vz || 0) * 10); body.peak = body.z; body.seat = null; body.trick = null;
   const vx = T_.heli ? c.hvx || 0 : Math.cos(c.yaw) * c.v * Math.cos(c.pitch), vy = T_.heli ? c.hvy || 0 : Math.sin(c.yaw) * c.v * Math.cos(c.pitch);
   body.mx = vx * 0.6; body.my = vy * 0.6; // (cells a second: out the door you carry some of its speed)
@@ -24001,7 +24206,7 @@ function panelKey(e) {
 }
 
 // ---- using things: the sounds that go with them
-const HEADLINES = () => [...MARKET.news.slice(0, 2).map(n => n.line), `${pick(stations).name} station closed for repairs`, 'Mayor vows to fix the el (again)', 'Bridge tolls to rise',
+const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice(0, 2).map(n => n.line), // (anything with you in it leads) `${pick(stations).name} station closed for repairs`, 'Mayor vows to fix the el (again)', 'Bridge tolls to rise',
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
@@ -24014,7 +24219,7 @@ function useHeldItem() {
   }
   const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
     water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
-  if (line) say(line, 3);
+  if (line) say(line, Math.max(3, line.length / 20)); // (long enough to read)
   if (actx && sound) sfxUse(sound);
 }
 function sfxUse(s) {
@@ -26017,6 +26222,25 @@ function crimePrompt() {
   if (!sh || !nightTime()) return '';
   return use + ((jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`);
 }
+// ===== being known, and the news (notoriety.js), out in the world: a passer-by who knows your face, and the TV that's
+// always on over the bar and in the motel office. The paper is goods-ui.js (HEADLINES), your own telly actions.js
+function stepNewsUI(dt) {
+  stepNotoriety();
+  const seen = recognise(dt);
+  if (seen) say(seen.called ? 'A passer-by looks at you, then at their phone, then at you again. They start dialling.'
+    : pick(['Someone stops and looks at you a beat too long, then walks on.', 'A passer-by gives you a second look. Then a third.', '"Aren\'t you...?" They decide you aren\'t.']), 3);
+  // walk into a bar (or the motel office) and the news is on: the top story, once a visit, when nothing else is being said
+  if (mode === 'room' && room && (room.kind === 'bar' || room.kind === 'motel') && !room.newsShown) {
+    room.newsAt ??= T + 2;
+    if (T >= room.newsAt && msgT <= 0.5) {
+      room.newsShown = true;
+      const top = newsLines(true)[0];
+      if (top) say(`${room.kind === 'bar' ? 'The TV over the bar' : 'The TV in the corner'}: ${top}`, 6);
+    }
+  }
+}
+// switching your own telly on: the local news, if there's any worth hearing
+const tellyNews = () => { const l = newsLines(true); return l.length ? ` The local news is on. ${pick(l)}` : ''; };
 // ===== on your feet: Space jumps, C held crouches, C by a bench or a seat sits you down (C again, or walk, to get
 // up). On the skateboard (skate.js) Space pops an ollie, and the arrows you're holding as you pop make it a trick:
 // left kickflip, right heelflip, down pop shuvit, down-left 360 flip, down-right varial heelflip. Or flick for it:
@@ -26567,6 +26791,7 @@ function saveGame() {
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+    noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
@@ -26582,6 +26807,11 @@ function loadGame() {
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
   tattoos.length = 0; for (const id of d.tattoos || []) if (ITEMS[id] && ITEMS[id].kind === 'tattoo' && !tattoos.includes(id)) tattoos.push(id);
+  if (d.noto) { // how well known you are, and what's in the papers
+    noto.level = clamp(+d.noto.level || 0, 0, 100); noto.day = Number.isInteger(d.noto.day) ? d.noto.day : dayNum; noto.lookDay = d.noto.lookDay ?? -9;
+    noto.looked = d.noto.looked && typeof d.noto.looked === 'object' ? { ...d.noto.looked } : {};
+    noto.log = (Array.isArray(d.noto.log) ? d.noto.log : []).filter(e => e && typeof e.kind === 'string' && Number.isInteger(e.day)).slice(0, 40);
+  } else noto.day = dayNum;
   quickSlots.fill(-1);
   if (Array.isArray(d.quickSlots)) {
     for (let s = 0; s < QUICK_SLOTS; s++) { const k = d.quickSlots[s]; if (Number.isInteger(k) && k >= 0 && k < inv.length && !quickSlots.includes(k)) quickSlots[s] = k; }
@@ -26921,6 +27151,7 @@ function loop(t) {
   stepGrandHotel();
   stepTaxiJob(dt);
   const law = stepCrime(dt);
+  stepNewsUI(dt); // (being known, and the news: notoriety.js, news-ui.js)
   if (law === 'busted') openBusted();
   else if (law === 'lost') say('You lost them.', 3);
   else if (law === 'pullover') say('"PULL OVER!" booms from the cruiser on your tail.', 3);
