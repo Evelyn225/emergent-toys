@@ -201,7 +201,7 @@ function buy(id) { // false + why, if you can't
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   carryItem({ id, uses: it.uses || 0 });
-  return [true, `You buy ${aOrSome(it.name)}. (${fmt$(it.price)})`];
+  return [true, `You buy ${aOrSome(it.name)}. (${fmt$(it.price)})${it.rod ? ' Hold Q to wind up and let go to cast; when the bobber goes under, Q to strike.' : ''}`];
 }
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
@@ -220,7 +220,7 @@ function getTattoo(id) {
 // what you could walk off with (not a car, a flat or somebody's needlework)
 const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look'].includes(ITEMS[id].kind));
 const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
-const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink'].includes(ITEMS[it.id].kind);
+const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink', 'fish'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
   held = k; removeHeld();
@@ -235,14 +235,17 @@ function storeSlot(k, list = stored, where = 'your unit', accepts = null, capaci
   return [true, `You put the ${ITEMS[it.id].name} in ${where}.`];
 }
 // pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
-const SELL_RATE = { PAWN: 0.4 };
-const sellPrice = (it, rate) => ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
+// (and the bait hut buys what you catch: rate 'catch', see catchPrice in fishing.js; it bins your junk for nothing)
+const SELL_RATE = { PAWN: 0.4, 'BAIT & TACKLE': 'catch' };
+const sellPrice = (it, rate) => rate === 'catch' ? catchPrice(it) : ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
+const binnable = (it, rate) => rate === 'catch' && ITEMS[it.id].kind === 'junk';
 function sellSlot(k, rate) {
   if (!inv[k]) return [false, 'Nothing there.'];
   const p = sellPrice(inv[k], rate), name = ITEMS[inv[k].id].name;
+  if (!p && binnable(inv[k], rate)) { takeSlot(k); return [true, `They take the ${name} off your hands and drop it in the bin.`]; }
   if (!p) return [false, `"We don't take ${name}."`];
-  takeSlot(k); earn(p);
-  return [true, `You sell the ${name} for ${fmt$(p)}.`];
+  const it = takeSlot(k); earn(p);
+  return [true, `You sell the ${it.kg ? catchName(it) : name} for ${fmt$(p)}.`];
 }
 function retrieveSlot(k, list = stored, where = 'your unit') { // the unit's item k -> your hands
   if (!list[k]) return [false, 'Nothing there.'];
@@ -287,7 +290,18 @@ function useHeld(near) {
     return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
   }
   if (d.kind === 'keys') return summonCar(d.car);
+  if (d.rod) return rodUse(near); // (fishing.js)
+  if (d.kind === 'fish') return [pick([`The ${d.name} looks at you. You look at the ${d.name}.`, `A ${catchName(it)}. The hut by the Sunset Pier will take it off you.`, `You hold the ${d.name} up. It is, unmistakably, a fish.`]), null];
+  if (d.kind === 'junk') return [pick([`It's still ${aOrSome(d.name)}.`, 'You turn it over. No, still junk. The bait hut will bin it for you.']), null];
   switch (it.id) {
+    case 'goldkoi': return koiWish();
+    case 'bottlemsg': return readBottle();
+    case 'oldcoin': return [`You turn the coin over. Heads: the king. Tails: a ship.`, 'click'];
+    case 'goldring': return ['You try the ring on. It fits. "Again?" it says, on the inside.', null];
+    case 'pearl': return ['You roll the pearl in your palm. It is the only perfectly round thing you own.', null];
+    case 'compass': return ['The needle swings round and settles. North is where it always was.', null];
+    case 'divewatch': return [`The watch says ${String(Math.floor(tod)).padStart(2, '0')}:${String(Math.floor(fract(tod) * 60)).padStart(2, '0')}. It has never been wrong.`, 'click'];
+    case 'pocketknife': return ['A good knife. The gardeners\' crest on the handle. You could hand it in at the gardens. You could.', null];
     case 'vape': // hold Q to pull, let go to blow it out (stepGoods)
       if (fx.vape > 0) return ['', null];
       fx.vape = 0.001; return ['', 'drag'];

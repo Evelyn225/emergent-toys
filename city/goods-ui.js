@@ -236,6 +236,7 @@ function drawHeldBig() {
   const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
+  else if (heldIsRod(it)) drawFishingRod(it); // (fishing-render.js: the rod, and whatever's on its line)
   else drawHeldDense(it, cx, hy, hsz, grip);
   drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
   if (it.id === 'yoyo') drawYoyo(cx - hsz * 0.2, hy + HAND_ART.length * hsz); // (in your hand or out on its string, it hangs from under your fist)
@@ -413,8 +414,8 @@ function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
   const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
-  const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate);
-    return `<button class="item" data-sell="${k}" ${p ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
+  const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate), bin = binnable(it, rate);
+    return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${it.kg ? catchName(it) : ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
   const work = shiftHere();
   const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${{ serve: 'Wait tables for a shift', tapper: 'Tend bar for a shift' }[work] || 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
   showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
@@ -444,7 +445,7 @@ function openInventory() {
   invEl = invEl || panel('inventory');
   if (!invStyle) { const style = document.createElement('style'); style.textContent = `#inventory .carry-row { display:flex; align-items:center; gap:10px; } #inventory .carry-row > .item { flex:1; width:auto; min-width:0; } #inventory .quick-slot { display:flex; align-items:center; gap:4px; white-space:nowrap; color:rgba(255,255,255,0.3); } #inventory .quick-slot select { width:4.5em; padding:2px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); background:#08080a; font:inherit; } #inventory .quick-slot option { color:#fff; background:#08080a; }`; document.head.appendChild(style); invStyle = true; }
   const rows_ = inv.length ? inv.map((it, k) => {
-    const slot = quickSlots.indexOf(k), name = ITEMS[it.id].name;
+    const slot = quickSlots.indexOf(k), name = it.kg ? catchName(it) : ITEMS[it.id].name;
     return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';

@@ -357,6 +357,18 @@ for (const [x0, y0, x1, y1] of PIERS.filter(p => !p.marina)) if (x1 - x0 > 2 && 
 // the marina office: a clapboard hut at the foot of the jetty, its sign facing the road; bollards down the fingers
 solidBox(MARINA.office.x, MARINA.office.y, true, 0.55, 0.3, 0, 0.3, 'marina', 0);
 for (const fy of MARINA.fingers) for (const s of [-1, 1]) for (const ox of [-3.1, -1.2, 1.2, 3.1]) solidBox(MARINA.x + ox, fy + s * 0.12, true, 0.025, 0.025, 0, 0.04, 'bollard', 0);
+// the bait and tackle hut (fishing.js): weathered clapboard on the promenade just west of the Sunset Pier, its hatch
+// facing the road. A gabled tin roof (in slices, each narrower and higher), the sign along its ridge, a net hung out to
+// dry on a rack beside it, lobster pots stacked against its east end, a barrel at the corner, and the old boy who runs
+// it behind the hatch while it's open. hatch: where along its front the hatch is
+const FISH_HUT = { x: FAIR.x0 - 1.05, y: SHORE_S * 8 + 3.6, hl: 0.42, hw: 0.27, h: 0.27, hatch: -0.08 };
+solidBox(FISH_HUT.x, FISH_HUT.y, true, FISH_HUT.hl, FISH_HUT.hw, 0, FISH_HUT.h, 'fishhut', 0);
+for (let k = 0; k < 5; k++) solidBox(FISH_HUT.x, FISH_HUT.y, true, FISH_HUT.hl + 0.05, (FISH_HUT.hw + 0.06) * (1 - k / 5) + 0.012, FISH_HUT.h + k * 0.018, FISH_HUT.h + (k + 1) * 0.018, 'hutroof', k);
+solidBox(FISH_HUT.x, FISH_HUT.y, true, 0.34, 0.006, FISH_HUT.h + 0.09, FISH_HUT.h + 0.16, 'hutsign', 0);
+solidBox(FISH_HUT.x - 0.84, FISH_HUT.y + 0.02, true, 0.27, 0.006, 0, 0.25, 'netrack', 0);
+for (const [ox, oy, z0] of [[0.5, -0.11, 0], [0.5, 0.11, 0], [0.5, 0, 0.075]]) solidBox(FISH_HUT.x + ox, FISH_HUT.y + oy, false, 0.1, 0.055, z0, z0 + 0.075, 'lobsterpot', 0);
+solidBox(FISH_HUT.x - FISH_HUT.hl - 0.06, FISH_HUT.y - FISH_HUT.hw + 0.05, true, 0.035, 0.035, 0, 0.09, 'barrel', 0);
+extras.push({ x: FISH_HUT.x + FISH_HUT.hatch, y: FISH_HUT.y - FISH_HUT.hw + 0.09, z: 0.02, person: YEL, when: () => hutOpen(tod) }); // (in his oilskins, behind the hatch)
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
 function solidAt(x, y, pad) {

@@ -142,6 +142,7 @@ function promptText() {
   { const ac = nearAircraft(); if (ac) return aircraftPrompt(ac); }
   const c = nearestCar(0.5);
   const dr = droppedHere();
+  if (fishing) return fishPrompt(); // (the line's out: fishing.js)
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
   if (heldItem() && heldItem().id === 'spraypaint' && sprayTarget()) return 'Q: spray a tag (if the police see, it\'s vandalism)';
   const vm = nearMachine();
@@ -163,6 +164,7 @@ function promptText() {
   const mk = marketSpot();
   if (mk) return marketPrompt(mk);
   if (pottyNear()) return 'E: use the portapotty';
+  if (nearHut()) return hutPrompt();
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';
@@ -179,7 +181,7 @@ function promptText() {
     return `E: enter ${sh.word}${ROOM_DEFS[ROOM_FOR[sh.word]]?.rent ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
   }
   if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
-  return '';
+  return fishPrompt();
 }
 // north-up minimap, top right: buildings shaded by height, parks, water, stations, cars, people, you, taxi destination
 let showMap = false;

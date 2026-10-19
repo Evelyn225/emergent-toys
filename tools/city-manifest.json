@@ -30,7 +30,8 @@
     "city/crime.js", "city/notoriety.js",
     "city/courier.js",
     "city/property.js",
-    "city/boats.js"
+    "city/boats.js",
+    "city/fishing.js"
   ],
   "dom": [
     "city/screen.js",
@@ -86,6 +87,7 @@
     "city/goods-ui.js",
     "city/held-dense.js",
     "city/held-dense-items.js",
+    "city/fishing-render.js",
     "city/smoke.js",
     "city/pee.js",
     "city/ambient.js",

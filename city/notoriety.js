@@ -85,6 +85,7 @@ const NEWS = {
   planecrash: w => `Stolen aircraft comes down in ${w}. Nobody has claimed it.`,
   escape: w => `Police call off a pursuit in ${w} after losing sight of the suspect. The search is described as ongoing, in a general sense.`,
   arrest: (w, n, e) => `Arrest in ${w} following ${e.crime || 'an incident'}. Officers describe the suspect as cooperative, eventually.`,
+  bigfish: (w, n, e) => `A ${e.kg ? e.kg + 'kg ' : 'large '}${e.fish || 'fish'} was landed in ${w} by a member of the public. The fish was not available for comment.`,
   bout: (w, n, e) => `An unknown fighter beat ${e.who} at the gym in ${w}. The promoter did not catch the name. The purse was paid in cash.`,
 };
 // the stories that run, biggest first: what happened yesterday (and so far today, on the telly), with a word from the

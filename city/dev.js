@@ -92,7 +92,7 @@ function districtSpot(d) {
 function devPlaces() {
   const out = [];
   const land = [['Casino', () => gotoShop('CASINO')], ['Stock Exchange', () => gotoShop('EXCHANGE')], ['The Velvet Rope', () => gotoShop('VELVET')],
-    ['Marina', () => devAt(MARINA.x, MARINA.y0 + 0.6, Math.PI / 2)], ['Sunset Pier', () => devAt(FAIR.cx, FAIR.y0 - 0.5, Math.PI / 2)],
+    ['Marina', () => devAt(MARINA.x, MARINA.y0 + 0.6, Math.PI / 2)], ['Sunset Pier', () => devAt(FAIR.cx, FAIR.y0 - 0.5, Math.PI / 2)], ['Bait & tackle hut', () => devAt(FISH_HUT.x + FISH_HUT.hatch, FISH_HUT.y - FISH_HUT.hw - 0.2, Math.PI / 2)],
     ['Airport', () => devAt(CAUSEWAY.x, AIRPORT.y0 + 1.5, Math.PI / 2)],
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
     ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],

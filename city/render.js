@@ -212,6 +212,7 @@ function render(dt) {
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
+  drawFishing(); // the line, the bobber and the rings round it (fishing-render.js; after the water's reflections, or they'd double it)
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
     if (mode === 'air') airDash();
