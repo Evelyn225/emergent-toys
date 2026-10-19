@@ -62,3 +62,32 @@ test('the pawnbroker after nine, the gun in your hand, Q and R, the fortune tell
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+test('hit somebody fast enough in a car and they die: a body for the ambulance, 4 stars for it, no fine; slower, they get up', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage(), errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto(URL_);
+    await page.waitForFunction(() => typeof drive === 'function' && Number.isFinite(eye));
+    await page.evaluate(() => localStorage.clear());
+    const run = speed => page.evaluate(speed => { // at the wheel down an empty street, somebody standing in the road ahead, a cop watching
+      paused = true; clearWanted(); reports.length = 0; mode = 'walk'; room = null; me = null;
+      for (const p of people) p.hidden = true;
+      for (const c of cars) if (c.player) c.player = false;
+      const lane = randomLane(0), c = cars.find(o => !o.patrol && !o.ev && !o.player);
+      Object.assign(c, { x: lane.x, y: lane.y, hx: lane.hx, hy: lane.hy, v: speed, travelA: Math.atan2(lane.hy, lane.hx), player: true, parked: false });
+      for (const o of cars) if (o !== c && Math.hypot(rel(o.x - c.x), rel(o.y - c.y)) < 3) { o.x = mod(o.x + 40, N); o.ex = o.x; }
+      me = c; mode = 'drive'; px = c.x; py = c.y; a = c.travelA;
+      const who = people[0]; Object.assign(who, { hidden: false, path: [], talk: 99, wait: 0, x: mod(c.x + c.hx * 0.6, N), y: mod(c.y + c.hy * 0.6, N) }); delete who.dead; delete who.down;
+      Object.assign(footCops[0], { x: mod(c.x - c.hy * 1.2, N), y: mod(c.y + c.hx * 1.2, N), goal: null, corner: null, post: true }); delete footCops[0].down;
+      K.KeyW = 1; for (let k = 0; k < 40 && !who.down; k++) drive(0.02); K.KeyW = 0;
+      return { down: !!who.down, dead: !!who.dead, body: bodies.some(b => b.who === who), stars: wanted.stars, crime: wanted.crime, fine: wanted.killed };
+    }, speed);
+    const slow = await run(0.8);
+    assert.deepEqual([slow.down, slow.dead, slow.body], [true, false, false], JSON.stringify(slow));
+    const fast = await run(2.6);
+    assert.deepEqual(fast, { down: true, dead: true, body: true, stars: 4, crime: 'killing someone with a car', fine: true });
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});

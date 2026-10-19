@@ -87,3 +87,27 @@ test('every pose builds on a sprite the body fits inside, standing feet on the f
   }
   assert.ok(r.dance1.bottom<ev('FIG_H')-2,'the spin is off the floor');
 });
+
+test('up close a face is cast finer: an eye each, brows, a mouth; far off, as before',()=>{
+  const {ev}=loadCity();
+  const r=JSON.parse(ev(`JSON.stringify((()=>{
+    const count=${COUNT},look=figLook({hair:'short',top:'tee',bot:'pants'});
+    return {near:count(figSprite(look,0,'stand',4)),far:count(figSprite(look,0,'stand')),back:count(figSprite(look,8,'stand',4)),S:figSprite(look,0,'stand',4).S,len:figSprite(look,0,'stand',4).length};
+  })())`));
+  assert.equal(r.S,4); assert.equal(r.len,ev('FIG_W*FIG_H*16'));
+  assert.equal(r.near.EYE,2,'an eye each'); assert.ok(r.near.MOUTH>0,'a mouth');
+  assert.equal(r.far.MOUTH,undefined,'far off, no room for it'); assert.equal(r.far.EYE,2);
+  assert.equal(r.back.MOUTH,undefined,'and none of it from behind');
+});
+
+test('the police shooting back stand with both arms out on a pistol; somebody shot lies flat and stays there',()=>{
+  const {ev}=loadCity();
+  const r=JSON.parse(ev(`JSON.stringify((()=>{
+    const count=${COUNT},cop=figCopLook(3),side=count(figSprite(cop,4,'aim')),bounds=key=>{const rows=[];figSprite(cop,4,key).forEach((k,i)=>{if(k)rows.push(Math.floor(i/FIG_W));});return [Math.min(...rows),Math.max(...rows)];};
+    return {side,stand:count(figSprite(cop,4,'stand')),aim:bounds('aim'),dead:bounds('dead'),pose:downPose({t:5,dur:Infinity})};
+  })())`));
+  assert.ok(r.side.MIC>0,'the pistol shows from the side'); assert.equal(r.stand.MIC,undefined,'and only while aiming');
+  assert.equal(r.aim[1],ev('FIG_H')-1,'feet on the floor');
+  assert.equal(r.pose,'dead');
+  assert.ok(r.dead[1]-r.dead[0]<8,`flat on the ground: rows ${r.dead}`);
+});

@@ -385,15 +385,28 @@ const ADS = ['DRINK COLA', 'NEO PHONES', 'EAT AT JOES', 'MEGA BANK', 'FLY AIR 9'
 // Units: sprite pixels; a standing adult's head is FIG_TALL high. Body frame: x their right, y ahead of them, z up.
 const FIG_W = 29, FIG_H = 34, FIG_TALL = 26.45, FIG_VIEWS = 16;
 const FR = Object.fromEntries(['HAIR', 'HAIR_D', 'SKIN', 'SKIN_D', 'EYE', 'TOP', 'TOP_D', 'INNER', 'BOT', 'BOT_D', 'POCKET', 'BELT',
-  'BUCKLE', 'SHOE', 'HAT', 'HAT_D', 'BADGE', 'CAPBADGE', 'PACK', 'PACK_D', 'STRAP', 'SHADES', 'TIE', 'MIC', 'TIGHTS', 'INK'].map((k, i) => [k, i + 1]));
+  'BUCKLE', 'SHOE', 'HAT', 'HAT_D', 'BADGE', 'CAPBADGE', 'PACK', 'PACK_D', 'STRAP', 'SHADES', 'TIE', 'MIC', 'TIGHTS', 'INK', 'SCLERA', 'MOUTH'].map((k, i) => [k, i + 1]));
 const FIG_ROLES = Object.keys(FR).length + 1;
 // a detail one pixel across, and what it reads as once a pixel is smaller than a screen cell (or it would flicker)
 const FIG_COARSE = new Uint8Array(FIG_ROLES);
-for (const [d, c] of [['EYE', 'SKIN'], ['POCKET', 'BOT'], ['BUCKLE', 'BELT'], ['BADGE', 'TOP'], ['CAPBADGE', 'HAT'], ['STRAP', 'TOP'], ['TIE', 'INNER']]) FIG_COARSE[FR[d]] = FR[c];
+for (const [d, c] of [['EYE', 'SKIN'], ['SCLERA', 'SKIN'], ['MOUTH', 'SKIN'], ['POCKET', 'BOT'], ['BUCKLE', 'BELT'], ['BADGE', 'TOP'], ['CAPBADGE', 'HAT'], ['STRAP', 'TOP'], ['TIE', 'INNER']]) FIG_COARSE[FR[d]] = FR[c];
 // lit side / shadow side: which roles have a darker shade for the faces turned away from the light
 const FIG_DARK = new Uint8Array(FIG_ROLES);
 for (const k of ['HAIR', 'SKIN', 'TOP', 'BOT', 'HAT', 'PACK']) FIG_DARK[FR[k]] = FR[k + '_D'];
 
+// up close (figSprite's fine sprites, FIG_FINE while one's being cast) a face has brows, a nose and a mouth round its
+// eyes; further off a face is a pixel an eye and that's all there's room for
+let FIG_FINE = false;
+// where on the front of a head (its unit-sphere point l: x their right, y ahead, z up) the features are, or 0
+function figFace(l) {
+  if (l[1] < 0.45) return 0;
+  for (const sg of [1, -1]) {
+    if (Math.abs(l[2] - 0.28) < 0.04 && Math.abs(l[0] - sg * 0.33) < 0.17 - Math.abs(l[0] - sg * 0.33) * 0.3) return FR.HAIR; // a brow
+  }
+  if (l[0] > -0.02 && l[0] < 0.08 && l[2] > -0.24 && l[2] < 0.04) return FR.SKIN_D; // the side of the nose, in shadow
+  if (Math.abs(l[0]) < 0.2 && Math.abs(l[2] + 0.42 - l[0] * l[0] * 0.8) < 0.09) return FR.MOUTH;
+  return 0;
+}
 const fAdd = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], fMul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const fSub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], fDot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const fNorm = a => fMul(a, 1 / (Math.hypot(a[0], a[1], a[2]) || 1));
@@ -413,6 +426,7 @@ const FIG_POSES = {
   fold: () => ({ ...FIG_STAND, arms: [[0.3, 0.14, 1.57, -1.15], [0.3, 0.14, 1.57, -1.15]] }), // arms folded
   ease: () => ({ ...FIG_STAND, arms: [[-0.35, 0.12, -0.9, -0.6], [-0.35, 0.12, -0.9, -0.6]] }), // hands behind the back
   wave: () => ({ ...FIG_STAND, arms: [[2.7, 0.5, 3.1, 0.5], FIG_STAND.arms[1]] }), // hailing a cab
+  aim: () => ({ ...FIG_STAND, arms: [[1.45, -0.28, 1.55, -0.22], [1.45, -0.34, 1.55, -0.3]], gun: true, lean: 0.06 }), // both hands out on a pistol (the police, shooting back: gun.js)
   grass: () => ({ seat: 0, legs: [[1.95, 0.22, 0.8, 0.1], [1.95, 0.22, 0.8, 0.1]], arms: [[0.75, 0.2, 1.7, -0.5], [0.75, 0.2, 1.7, -0.5]], lean: -0.1 }), // on the lawn, hugging her knees
   reach: () => ({ ...FIG_STAND, arms: [[1.0, 0.15, 1.3, 0.05], [1.0, 0.15, 1.3, 0.05]], lean: 0.35 }), // hands in the touch pool
   sing: () => ({ ...FIG_STAND, arms: [[0.9, 0.25, 2.7, -0.6], [0.5, 0.7, 0.9, 0.5]] }), // the mic up to her mouth
@@ -445,6 +459,8 @@ const FIG_POSES = {
   sprawl: () => ({ seat: 0, legs: [[1.45, 0.3, 1.5, 0.25], [1.3, 0.2, 1.7, 0.15]], arms: [[-0.7, 0.35, -0.5, 0.3], [-0.6, 0.4, -0.4, 0.3]], lean: -0.45 }),
   // flat on their back (knocked down by a car: people.js), arms flung out, one knee up
   down: () => ({ seat: -1.2, legs: [[1.55, 0.2, 1.55, 0.15], [1.1, 0.35, 2.0, 0.25]], arms: [[-1.5, 0.9, -1.4, 0.8], [-1.4, 0.75, -1.5, 0.9]], lean: -1.5 }),
+  // shot (gun.js): flat out and still, one arm flung wide, the other across them, legs crooked
+  dead: () => ({ seat: -1.25, legs: [[1.5, 0.42, 1.25, 0.35], [1.62, 0.05, 1.75, 0.02]], arms: [[-1.55, 1.35, -1.6, 1.5], [0.6, -0.35, 1.9, -0.9]], lean: -1.56, roll: 0.12 }),
 };
 // a pose key: 'stand', 'walk3', 'sit7' (seat height in pixels), 'dance2'
 function figPose(key) {
@@ -526,7 +542,8 @@ function figBody(look, key) {
     if (hat === 'cap' && l[2] > 0.28) return R.HAT;
     if (hat === 'beanie' && l[2] > 0.12) return l[2] < 0.34 ? R.HAT_D : R.HAT;
     if (look.shades && l[1] > 0.35 && Math.abs(l[0]) < 0.8 && l[2] > -0.05 && l[2] < 0.32) return R.SHADES;
-    return hair(l) ? R.HAIR : R.SKIN;
+    if (hair(l)) return R.HAIR;
+    return FIG_FINE && !look.form && figFace(l) || R.SKIN;
   });
   if (look.form) parts.push(figEll(U(0, 0.1, 8.6), ax, [1.2, 1.2, 0.8], () => R.SKIN)); // a dress form: the knob on its neck, no head
   else parts.push(head);
@@ -542,7 +559,7 @@ function figBody(look, key) {
     decals.push({ p: HU(0, 3.46, 2.65), n: ey, role: R.CAPBADGE, part: parts.length - 3 });
   }
   if (hat === 'hardhat') parts.push(figEll(HU(0, 0.1, 0.8), ax, [3.45, 3.35, 2.6], h => h.l[2] < 0.25 ? 0 : R.HAT), figBox(HU(0, 0.5, 1.4), ax, [3.7, 3.8, 0.17], () => R.HAT_D, false));
-  if (!look.shades && !look.form) for (const sg of [1, -1]) { // the eyes
+  if (!look.shades && !look.form) for (const sg of [1, -1]) { // the eyes (a pixel each: close up, figFace draws them)
     const n = fNorm([sg * 0.33, 0.93, 0.1]);
     decals.push({ p: HU(n[0] * hr[0], n[1] * hr[1], n[2] * hr[2]), n: fNorm(fAdd(fMul(ex, n[0]), fAdd(fMul(ey, n[1]), fMul(ez, n[2])))), role: R.EYE, part: parts.indexOf(head) });
   }
@@ -558,6 +575,8 @@ function figBody(look, key) {
     const elbow = fAdd(sh, fMul(du, 4.3)), wrist = fAdd(elbow, fMul(df, 3.9)), hand = fAdd(wrist, fMul(df, 0.55));
     parts.push(figCap(sh, elbow, 0.95 * (0.9 + 0.1 * bw), sleeve, false), figCap(elbow, wrist, 0.85 * (0.9 + 0.1 * bw), fore, false), figEll(hand, ax, [0.95, 0.95, 0.95], () => R.SKIN));
     if (look.mic && sg === 1) parts.push(figEll(fAdd(hand, fMul(df, 0.9)), ax, [0.7, 0.7, 0.7], () => R.MIC, false));
+    if (P.gun && sg === 1) parts.push(figBox(fAdd(hand, fAdd(fMul(df, 1.2), fMul(ez, 0.3))), ax, [0.35, 1.25, 0.5], () => R.MIC, false), // the pistol, gunmetal, and its grip down into the hand
+      figBox(fAdd(hand, fMul(ez, -0.2)), ax, [0.3, 0.4, 0.7], () => R.BELT, false));
   }
   // the legs, the feet
   const thigh = bot === 'pants' ? () => R.BOT : bot === 'shorts' ? h => h.s < 0.7 ? R.BOT : legSkin : () => legSkin;
@@ -623,19 +642,22 @@ function figHitPart(P, o, d) {
 }
 // the sprite for a view (0..FIG_VIEWS-1: 0 = from in front of them, going round to their right): a role per pixel.
 // figRasterAt takes the angle itself, and (near) gets how far toward you each pixel's surface is from the middle
-const figRaster = (body, view) => figRasterAt(body, view / FIG_VIEWS * Math.PI * 2);
-function figRasterAt(body, th, near) {
+// S: pixels to a sprite pixel (1, or more for a fine sprite up close: see drawFigure)
+const figRaster = (body, view, S = 1) => figRasterAt(body, view / FIG_VIEWS * Math.PI * 2, null, S);
+function figRasterAt(body, th, near, S = 1) {
+  const W = FIG_W * S, H = FIG_H * S;
   const V = [Math.sin(th), Math.cos(th), 0], Rv = [-V[1], V[0], 0], d = fMul(V, -1);
   const light = fNorm(fAdd(V, fAdd([0, 0, 0.7], fMul(Rv, -0.6)))); // from over your left shoulder
-  const spr = new Uint8Array(FIG_W * FIG_H), owner = new Int16Array(FIG_W * FIG_H).fill(-1);
+  const spr = new Uint8Array(W * H), owner = new Int16Array(W * H).fill(-1);
+  spr.S = S; FIG_FINE = S > 1;
   // each part's extent on the view plane (a bounding sphere's), so a pixel only tries the parts that could cover it
   const box = body.parts.map(P => {
     const [a, b, r] = P.k === 2 ? [P.a, P.b, P.r] : [P.c, P.c, P.k === 0 ? Math.max(...P.r) : Math.hypot(...P.h)];
     const ua = fDot(a, Rv), ub = fDot(b, Rv);
     return [Math.min(ua, ub) - r, Math.max(ua, ub) + r, Math.min(a[2], b[2]) - r, Math.max(a[2], b[2]) + r];
   });
-  for (let r = 0; r < FIG_H; r++) for (let c = 0; c < FIG_W; c++) {
-    const u = c - (FIG_W - 1) / 2, z = FIG_H - r - 0.5, o = fAdd(fMul(Rv, u), fAdd([0, 0, z], fMul(V, 60)));
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const u = (c + 0.5) / S - FIG_W / 2, z = FIG_H - (r + 0.5) / S, o = fAdd(fMul(Rv, u), fAdd([0, 0, z], fMul(V, 60)));
     let best = Infinity, role = 0, who = -1;
     body.parts.forEach((P, k) => {
       const e = box[k];
@@ -650,26 +672,30 @@ function figRasterAt(body, th, near) {
       }
       best = t; role = ro; who = k;
     });
-    spr[r * FIG_W + c] = role; owner[r * FIG_W + c] = who;
-    if (near) near[r * FIG_W + c] = 60 - best;
+    spr[r * W + c] = role; owner[r * W + c] = who;
+    if (near) near[r * W + c] = 60 - best;
   }
-  for (const dc of body.decals) { // one pixel each, only where its part is what you see and it's turned toward you
+  FIG_FINE = false;
+  for (const dc of body.decals) { // one pixel each (in a fine sprite, a dab), only where its part is what you see and it's turned toward you
     if (fDot(dc.n, V) < 0.25) continue;
-    const c = Math.floor(fDot(dc.p, Rv) + FIG_W / 2), r = FIG_H - 1 - Math.floor(dc.p[2]);
-    if (c >= 0 && c < FIG_W && r >= 0 && r < FIG_H && owner[r * FIG_W + c] === dc.part) spr[r * FIG_W + c] = dc.role;
+    // (close up, an eye's pupil is still the one pixel, in its white)
+    const c0 = (fDot(dc.p, Rv) + FIG_W / 2) * S, k = S > 1 && dc.role !== FR.EYE ? S * 0.4 : 0, r0 = S > 1 ? (FIG_H - dc.p[2]) * S : FIG_H - 1 - Math.floor(dc.p[2]);
+    for (let r = Math.floor(r0 - k); r <= Math.floor(r0 + k); r++) for (let c = Math.floor(c0 - k); c <= Math.floor(c0 + k); c++)
+      if (c >= 0 && c < W && r >= 0 && r < H && owner[r * W + c] === dc.part) spr[r * W + c] = dc.role;
   }
   return spr;
 }
-const figCache = new Map();
-function figSprite(look, view, key) {
-  const id = look.shape + '|' + key + '|' + view;
-  let s = figCache.get(id);
-  if (s) { figCache.delete(id); figCache.set(id, s); return s; } // (most recently used last)
+const figCache = new Map(), figFineCache = new Map(); // (fine sprites are big: only a few kept, for whoever's close)
+function figSprite(look, view, key, S = 1) {
+  const id = look.shape + '|' + key + '|' + view + (S > 1 ? '|' + S : ''), cache = S > 1 ? figFineCache : figCache;
+  let s = cache.get(id);
+  if (s) { cache.delete(id); cache.set(id, s); return s; } // (most recently used last)
   const bid = look.shape + '|' + key;
   let body = figCache.get(bid);
   if (!body) figCache.set(bid, body = look.build ? look.build(key) : figBody(look, key)); // (an animal brings its own)
-  figCache.set(id, s = figRaster(body, view));
+  cache.set(id, s = figRaster(body, view, S));
   if (figCache.size > 8000) for (const old of [...figCache.keys()].slice(0, 1000)) figCache.delete(old); // the least recently used go
+  if (figFineCache.size > 300) for (const old of [...figFineCache.keys()].slice(0, 60)) figFineCache.delete(old);
   return s;
 }
 
@@ -686,11 +712,12 @@ function figLook(o) {
   look.shape = ['hair', 'hat', 'top', 'bot', 'pack', 'shades', 'holster', 'badge', 'mic', 'tights', 'kid', 'bw', 'form', 'ink'].map(k => look[k] ?? '').join(',');
   // per role: palette base and brightness (shadow roles darker)
   const B = new Uint8Array(FIG_ROLES), Lv = new Float32Array(FIG_ROLES), put = (role, [b, l], k = 1) => { B[FR[role]] = b; Lv[FR[role]] = l * k; };
-  put('HAIR', col.hair); put('HAIR_D', col.hair, 0.65); put('SKIN', col.skin); put('SKIN_D', col.skin, 0.72); put('EYE', [GRAY, 0]);
+  put('HAIR', col.hair); put('HAIR_D', col.hair, 0.65); put('SKIN', col.skin); put('SKIN_D', col.skin, 0.72); put('EYE', [GRAY, 1]);
   put('TOP', col.top); put('TOP_D', col.top, 0.68); put('INNER', col.inner); put('BOT', col.bot); put('BOT_D', col.bot, 0.68);
   put('POCKET', col.bot, 0.45); put('BELT', col.belt); put('BUCKLE', [YEL, 12]); put('SHOE', col.shoe); put('HAT', col.hat); put('HAT_D', col.hatD);
   put('BADGE', [YEL, 15]); put('CAPBADGE', [YEL, 15]); put('PACK', col.pack); put('PACK_D', col.pack, 0.65); put('STRAP', col.pack, 0.65);
   put('SHADES', [GRAY, 0]); put('TIE', col.tie); put('MIC', [GRAY, 5]); put('TIGHTS', col.tights); put('INK', col.ink || [GREEN, 5]);
+  put('SCLERA', [WHITE, 13]); put('MOUTH', [BRICK, Math.max(3, col.skin[1] * 0.55)]); // (close up: the whites of the eyes, the lips)
   look.base = B; look.lvl = Lv;
   return look;
 }
@@ -764,19 +791,21 @@ function figView(rx, ry, fx, fy) {
 }
 const figCount = new Uint16Array(FIG_ROLES);
 function figSample(spr, pu, pz, su, sz) {
+  const S = spr.S || 1, W = FIG_W * S, H = FIG_H * S;
+  pu *= S; pz *= S; su *= S; sz *= S;
   if (su <= 1.25 && sz <= 1.25) { // a pixel to a cell or bigger: just that pixel (its details too, once nothing can be skipped)
-    const c = Math.floor(pu), r = FIG_H - 1 - Math.floor(pz);
-    if (c < 0 || c >= FIG_W || r < 0 || r >= FIG_H) return 0;
-    const k = spr[r * FIG_W + c];
+    const c = Math.floor(pu), r = H - 1 - Math.floor(pz);
+    if (c < 0 || c >= W || r < 0 || r >= H) return 0;
+    const k = spr[r * W + c];
     return su <= 1 && sz <= 1 ? k : FIG_COARSE[k] || k;
   }
   // smaller: the commonest thing under the cell, or nothing if it's mostly see-through (no flicker as it walks)
   const a0 = Math.floor(pu - su / 2), a1 = Math.floor(pu + su / 2), b0 = Math.floor(pz - sz / 2), b1 = Math.floor(pz + sz / 2);
   let n = 0, best = 0, bn = 0;
   for (let b = b0; b <= b1; b++) for (let a = a0; a <= a1; a++) {
-    const r = FIG_H - 1 - b;
-    if (a < 0 || a >= FIG_W || r < 0 || r >= FIG_H) continue;
-    const k0 = spr[r * FIG_W + a];
+    const r = H - 1 - b;
+    if (a < 0 || a >= W || r < 0 || r >= H) continue;
+    const k0 = spr[r * W + a];
     if (!k0) continue;
     const k = FIG_COARSE[k0] || k0; n++;
     if (++figCount[k] > bn) { bn = figCount[k]; best = k; }
@@ -784,12 +813,26 @@ function figSample(spr, pu, pz, su, sz) {
   figCount.fill(0);
   return n * 2.2 >= (a1 - a0 + 1) * (b1 - b0 + 1) ? best : 0;
 }
+// a sprite pixel this many screen cells across or more: cast it finer, about a pixel to a cell (in steps, so a few
+// sprites serve whoever's coming toward you)
+const FIG_MARK = []; FIG_MARK[FR.EYE] = 'o'; FIG_MARK[FR.MOUTH] = '-'; // (drawn as characters on the skin: see drawFigure)
+// (cells are taller than they're wide, so it's how many rows a pixel spans that counts)
+const FIG_FINE_AT = 2, FIG_FINE_MAX = 6;
 function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
-  const spr = figSprite(look, figView(rx, ry, fx, fy), pose), unit = h / FIG_TALL, floor = opts?.light || 0, sparkle = look.sparkle;
+  const unit = h / FIG_TALL, depth = typeof projY === 'number' ? Math.max(0.01, dx * rx + dy * ry) : 1e9, rowsPer = unit * projY / depth; // (no screen in the node tests)
+  const spr = figSprite(look, figView(rx, ry, fx, fy), pose, !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1), floor = opts?.light || 0, sparkle = look.sparkle;
   drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
     if (!role) return false;
     const lit = Math.max(floor, L), k = clamp(0.32 + lit / 15 * 0.78, 0.32, 1);
+    // an eye or a mouth is a mark on the face, not a block of its own colour: the skin, with the feature drawn on it
+    const mark = FIG_MARK[role];
+    if (mark && !look.build) {
+      BG[i] = C(look.base[FR.SKIN], look.lvl[FR.SKIN] * k);
+      const S = spr.S || 1, cu = fract((u / unit + FIG_W / 2) * S), cz = fract(z / unit * S), hu = du / unit * S / 2, hz = dz / unit * S / 2;
+      const centre = Math.abs(cu - 0.5) <= Math.max(0.5, hu) && Math.abs(cz - 0.5) <= Math.max(0.5, hz) && (hu >= 0.5 || Math.abs(cu - 0.5) < hu + 1e-6) && (hz >= 0.5 || Math.abs(cz - 0.5) < hz + 1e-6);
+      return set(i, role === FR.MOUTH || centre ? mark : ' ', C(look.base[role], Math.max(1, look.lvl[role] * k))), true; // (an eye: one mark, in the cell at its middle)
+    }
     BG[i] = sparkle && role === FR.TOP && hash(i, Math.floor(T * 7), 9074) > 0.8 ? C(WHITE, 15) : C(look.base[role], look.lvl[role] * k);
     return set(i, ' ', 0), true;
   });
@@ -4226,7 +4269,7 @@ function stepDown(p, dt) {
   return false;
 }
 // what they look like on the way down, down, and getting up
-const downPose = d => d.t < 0.2 || d.t > d.dur - 0.6 ? 'sprawl' : 'down';
+const downPose = d => d.t < 0.2 || d.t > d.dur - 0.6 ? 'sprawl' : d.dur === Infinity ? 'dead' : 'down'; // (shot: they don't get up)
 // everyone near enough to see it stops and stares, and the nearest comes running to kneel by them till they're up.
 // Returns how many saw it
 const GAWK_R = 1.6;
@@ -7549,7 +7592,8 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' }, // (spotted: notoriety.js)
                  // the revolver (gun.js): these don't add up, they set how bad it is at least (a killing: one more each time)
                  gunfire: { stars: 2, name: 'firing a gun in the street', least: 0 }, murder: { stars: 4, name: 'murder', least: 1, kills: true },
-                 copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true } };
+                 copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true },
+                 roadkill: { stars: 4, name: 'killing someone with a car', least: 1, kills: true } }; // (hit too fast to survive: main.js)
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -7779,14 +7823,16 @@ function roofSearchLead(dt) {
 function drawRoofPolice() {
   for (const c of roofCops) {
     const z = policeRoofHeight(c.x, c.y);
-    figMotion(c); drawFigure(...R(c.x, c.y), z, 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, 'run'), { light: 7 });
+    figMotion(c); const aim = c.aimT > T, [ax, ay] = aimAt(rel(px - c.x), rel(py - c.y)); // (shooting at you: gun.js)
+    drawFigure(...R(c.x, c.y), z, 0.18, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : walkPose(c, 'run'), { light: 7 });
     if (c.sees && fract(T * 3) < 0.5) drawArt(...R(c.x, c.y), z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
 }
 function drawRoomPolice() {
   for (const c of roomCops) {
     figMotion(c);
-    drawFigure(c.x - px, c.y - py, 0, 1.8, c._fx || 0, c._fy || 0, copLook(c), c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9 });
+    const aim = c.aimT > T, [ax, ay] = aimAt(px - c.x, py - c.y); // (shooting at you: gun.js)
+    drawFigure(c.x - px, c.y - py, 0, 1.8, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9 });
     if (c.sees && fract(T * 3) < 0.55) drawArt(c.x - px, c.y - py, 1.65, 0.1, 0.12, ['!'], () => C(RED, 15));
   }
 }
@@ -8183,7 +8229,7 @@ function goToJail() {
 // Gentle on purpose: a crime is easy to commit by accident (a red light, a fender bender, a bad moment with a pedestrian),
 // and the odd slip should barely register. It takes a run of serious ones to get you known.
 const NOTO_BY_STARS = [0, 3, 8, 15], NOTO_SLIP = { redlight: 1, crash: 1, urination: 2, graffiti: 2 }; // (a crime: by its stars, slips less)
-const NOTO_GUN = { gunfire: 4, murder: 25, copkill: 35 }; // (the revolver, gun.js: a shot less than its stars, a killing a lot more)
+const NOTO_GUN = { gunfire: 4, murder: 25, copkill: 35, roadkill: 22 }; // (the revolver, gun.js, and a car driven into somebody too fast: a shot less than its stars, a killing a lot more)
 const NOTO_EVENT = { scramble: 12, blownup: 8, ejected: 6, planecrash: 6 };
 const NOTO_FADE = 0.5; // what's left of it each morning
 const NOTO_LOOK = { haircut: 0.5, coat: 0.5, tattoo: 0.6 }; // what's left after a change of look (once a day each)
@@ -8264,7 +8310,8 @@ const NEWS = {
   bigfish: (w, n, e) => `A ${e.kg ? e.kg + 'kg ' : 'large '}${e.fish || 'fish'} was landed in ${w} by a member of the public. The fish was not available for comment.`,
   gunfire: (w, n) => n > 1 ? `Gunshots reported in ${w}, ${n} times in one day. Police ask residents to stop describing them as fireworks.` : `A gunshot was reported in ${w}. Residents who thought it was a car backfiring have been asked to think again.`,
   murder: (w, n) => n > 1 ? `${inWords(n)} people shot dead in ${w} in one day. Police describe the suspect as armed, and the day as long.` : `A pedestrian was shot dead in ${w}. Police say the suspect is armed, and that this is the main thing to know about them.`,
-  copkill: (w, n) => n > 1 ? `${inWords(n)} police officers shot dead in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was shot dead in ${w}. The department has cancelled all leave, and most of its patience.`,
+  roadkill: (w, n) => n > 1 ? `${inWords(n)} pedestrians killed by the same car in ${w}. Police say the driver did not stop, any of the times.` : `A pedestrian was killed by a speeding car in ${w}. The driver did not stop. Police would like a word, and then several more.`,
+  copkill: (w, n) => n > 1 ? `${inWords(n)} police officers killed in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was killed in ${w}. The department has cancelled all leave, and most of its patience.`,
   bout: (w, n, e) => `An unknown fighter beat ${e.who} at the gym in ${w}. The promoter did not catch the name. The purse was paid in cash.`,
 };
 // the stories that run, biggest first: what happened yesterday (and so far today, on the telly), with a word from the
@@ -9305,6 +9352,8 @@ function stepGun(dt) {
   if (!wanted.stars && T - gun.lastShotT > CALM_T) wanted.fired = false;
   return copsShoot(dt);
 }
+// an officer shooting at (dx, dy) away stands bladed to it, turned a little off square (and so you see the arms out)
+const aimAt = (dx, dy) => { const an = Math.atan2(dy, dx) - 0.45; return [Math.cos(an), Math.sin(an)]; };
 // a body under a sheet: the paramedics are there
 const sheeted = o => bodies.some(b => b.who === o && b.atT && T - b.atT > 2.5);
 
@@ -9320,12 +9369,13 @@ function copsShoot(dt) {
   const live = new Set(shooters.map(s => s[0]));
   for (const c of [...footCops, ...cars, ...roomCops, ...roofCops]) if (c.fireT && !live.has(c)) delete c.fireT; // (lost sight: they'll take a moment to aim again)
   for (const [c, d] of shooters) {
+    c.aimT = T + 1.2; // (drawn aiming at you: city-sprites.js)
     if (!c.fireT) { c.fireT = T + 0.7 + Math.random() * 0.8; continue; }
     if (T < c.fireT) continue;
     c.fireT = T + COP_FIRE_GAP[0] + Math.random() * (COP_FIRE_GAP[1] - COP_FIRE_GAP[0]);
     const odds = clamp(0.5 - d / COP_FIRE_R * 0.3 - Math.min(0.2, moving * 0.12) - body.crouch * 0.1 - (driving ? 0.15 : 0), 0.06, 0.5);
     const hit = Math.random() < odds;
-    gun.copShots.push({ x: c.x, y: c.y, hit, t: T, room: inside });
+    gun.copShots.push({ x: c.x, y: c.y, hit, t: T, room: inside, side: Math.random() < 0.5 ? -1 : 1 });
     if (!inside) panicAt(c.x, c.y);
     if (!hit) continue;
     if (driving) { damageCar(me, 7); if (Math.random() < 0.3) hurt(8); }
@@ -9461,10 +9511,10 @@ const fogCache = new Map();
 let fogRGB = [0, 0, 0], fogKey = -1;
 // Also always: distance haze, so far scenery fades into a sky-tinted color instead of ending in black at the draw distance.
 function fogSteps() {
-  const foggy = fogAmt > 0.3, k = Math.round(day * 16) * 2 + foggy;
-  if (k !== fogKey) { // fog is grey; clear-weather haze is a little bluer
-    fogKey = k; fogCache.clear(); const v = 22 + day * 150;
-    fogRGB = foggy ? [v, v + 4, v + 12] : [v * 0.7, v * 0.85, Math.min(255, v * 1.15)];
+  const foggy = fogAmt > 0.3, glow = foggy ? 0 : Math.round(dusk * (1 - overcast) * 6), k = (Math.round(day * 16) * 2 + foggy) * 8 + glow;
+  if (k !== fogKey) { // fog is grey; clear-weather haze is a little bluer, and warm at sunrise and sunset
+    fogKey = k; fogCache.clear(); const v = 22 + day * 150, w = glow / 6 * 0.55;
+    fogRGB = foggy ? [v, v + 4, v + 12] : [v * 0.7 * (1 - w) + 190 * w, v * 0.85 * (1 - w) + 105 * w, Math.min(255, v * 1.15) * (1 - w) + 95 * w];
   }
   const anyFog = fogAmt > 0.03, sky = anyFog ? clamp(Math.floor(fogAmt * 8), 0, 8) : 0; // open sky: only real fog
   const level = (z, wisp, dith) => {
@@ -10233,12 +10283,26 @@ function slabEdge(i, u, z, d, side) {
   if (z > EL_TOP - 0.025 || z < EL_BOT + 0.02) return set(i, '=', C(GRAY, L));
   set(i, Math.abs(fract(u * 3 + (z - EL_BOT) * 12) - 0.5) < 0.12 ? 'X' : fract(u * 6) < 0.15 ? 'o' : ' ', C(GRAY, L * 0.8));
 }
+// sunrise and sunset: one ramp of the colours the sky goes through from the horizon up, looking toward the sun (gold,
+// orange, red, a dusky pink, then blue going dark); looking away from it the sky starts further along (pink over blue)
+const DUSK_RAMP = [C(YEL, 13), C(ORANGE, 13), C(ORANGE, 11), C(ORANGE, 9), C(RED, 8), C(RED, 6), C(MAG, 5), C(MAG, 4), C(BLUE, 4), C(BLUE, 3)]; // (and above that, the ordinary sky)
+const sunAz = () => (tod - 6) / 12 * Math.PI; // (rising in +x, setting in -x: as sunMoon draws it)
+// how much a direction faces the low sun: 1 straight at it, 0 straight away
+const towardSun = az => (1 + Math.cos(az - sunAz())) / 2;
+// the sky's colour at (up, az), or -1 for the ordinary sky above it: a point along the ramp, ordered-dithered (d)
+// between neighbouring colours only. As the sun climbs or sinks (k falls) the band sinks into the horizon
+function duskSky(up, az, d, k) {
+  const to = towardSun(az), t = (Math.max(0, up) / (0.28 + 0.3 * to) * 7 + (1 - to) * 4.5) / Math.max(k, 0.01), n = Math.floor(t);
+  const at = n + (d < t - n ? 1 : 0);
+  return at < DUSK_RAMP.length ? DUSK_RAMP[at] : -1;
+}
 function skyCell(i, r, x, rx, ry) {
   ZB[i] = Infinity; FL[i] = 0;
   const up = (hor - r - 0.5) / projY, az = Math.atan2(ry, rx); // up = tan(elevation)
   if (arcadeSky(i, rx, ry, up)) return; // the Shotengai's roof overhead
+  const dk = clamp((dusk - 0.1) / 0.6, 0, 1) * (1 - overcast), glow = dk > 0 ? duskSky(up, az, BAYER[(r & 3) * 4 + (x & 3)], dk * dk * (3 - 2 * dk)) : -1; // (the sunset rising out of the horizon over the hour, and sinking back)
   BG[i] = rain > 0.5 ? C(GRAY, 1 + day * 6) : fogAmt > 0.5 ? bgAt(GRAY, day * 4)
-        : dusk > 0.3 && up < 0.3 ? bgAt(up < 0.1 ? ORANGE : MAG, dusk * (up < 0.1 ? 8 : 4) * (1 - overcast), 0)
+        : glow >= 0 ? glow
         : day > 0.15 ? bgAt(up < 0.08 ? CYAN : BLUE, day * (9 - Math.min(4, up * 8)), 0)
         : up < 0.05 ? C(ORANGE, 1) : up < 0.35 ? C(BLUE, 1) : C(BLUE, 0); // night: navy, city glow at the horizon
   // clouds: a flat layer CLOUD_H up, so they flatten into the horizon in perspective (and look the same from a roof).
@@ -10250,7 +10314,12 @@ function skyCell(i, r, x, rx, ry) {
     const n = noise(wx, wy, 31) * (1 - 0.3 * fine) + noise(wx * 2.6, wy * 2.6, 32) * 0.3 * fine, cover = 0.62 - overcast * 0.3;
     if (n > cover) {
       const k = (n - cover) / (1 - cover) * fade;
-      if (k > 0.08) { BG[i] = day > 0.3 ? C(WHITE, (6 + k * 8) * day) : C(GRAY, 1 + k * 2); return set(i, ' ', 0); }
+      if (k > 0.08) {
+        const glow = dusk * (1 - overcast), to = towardSun(az); // low sun: lit from underneath, gold toward it, pink away
+        BG[i] = glow > 0.35 ? (to > 0.55 ? C(k > 0.55 && to > 0.8 ? YEL : ORANGE, 4 + (k * 4 + to * 6) * glow) : C(to > 0.3 ? RED : MAG, 3 + (k * 3 + to * 4) * glow))
+              : day > 0.3 ? C(WHITE, (6 + k * 8) * day) : C(GRAY, 1 + k * 2);
+        return set(i, ' ', 0);
+      }
     }
   }
   // stars: one cell each (indexed per screen column, but fixed to the world), twinkling
@@ -10305,8 +10374,8 @@ function lightning() {
   branch(cols / 2 + Math.tan(ra) * projX, top, bot, 0);
 }
 function sunMoon() { // sun rises in +x, sets in -x
-  const sunEl = Math.sin((tod - 6) / 12 * Math.PI), az = (tod - 6) / 12 * Math.PI;
-  disc(az, Math.asin(sunEl), C(YEL, 15), C(YEL, 11), 1.8, false);
+  const sunEl = Math.sin((tod - 6) / 12 * Math.PI), az = (tod - 6) / 12 * Math.PI, low = sunEl < 0.2; // (low, it goes orange and swells)
+  disc(az, Math.asin(sunEl), low ? C(sunEl < 0.08 ? ORANGE : YEL, 15) : C(YEL, 15), low ? C(ORANGE, 12) : C(YEL, 11), low ? 2.2 : 1.8, false);
   disc(az + Math.PI, Math.asin(-sunEl), C(WHITE, 13), C(BLUE, 2), 1.4, true);
 }
 
@@ -11601,7 +11670,9 @@ function citySprites() {
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
     if (c.dead && sheeted(c)) { drawSheet(c, vx, vy); continue; }
     if (c.down) { drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, -c.down.fx, -c.down.fy, copLook(c), downPose(c.down)); continue; }
-    figMotion(c); drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
+    figMotion(c);
+    if (c.aimT > T) { const [fx_, fy_] = aimAt(rel(px - c.x), rel(py - c.y)); drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, fx_, fy_, copLook(c), 'aim'); continue; } // (shooting at you: gun.js)
+    drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
   for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.007); } // things you put down
@@ -26909,22 +26980,33 @@ function drawShots() {
     if (p0 && p1) fishSeg(p0, p1, C(age < 0.04 ? WHITE : YEL, 15));
     if (p1 && (s.what === 'wall' || s.what === 'ground' || s.what === 'car')) fishPut(p1.c, p1.r, p1.depth, '*', C(s.what === 'car' ? YEL : WHITE, 14)); // (sparks, or a puff of grit)
   }
-  for (const s of gun.copShots) { // theirs: a flash at the officer's hand
-    if (T - s.t > 0.08 || s.room) continue;
-    const [vx, vy] = R(s.x, s.y);
-    drawArt(vx, vy, 0.1, 0.05, 0.05, ['\\|/', '-*-', '/|\\'], ch => ch === '*' ? C(WHITE, 15) : C(YEL, 15));
+  for (const s of gun.copShots) { // theirs: a flash at the officer's outstretched hands, and a streak coming at you
+    if (T - s.t > 0.09 || s.room) continue;
+    const [vx, vy] = R(s.x, s.y), d = Math.hypot(vx, vy) || 1, hx = vx - vx / d * 0.03, hy = vy - vy / d * 0.03; // (a step toward you from them: the muzzle)
+    drawArt(hx, hy, 0.11, 0.07, 0.07, ['\\|/', '-@-', '/|\\'], ch => ch === '@' ? C(WHITE, 15) : C(T - s.t < 0.04 ? YEL : ORANGE, 15));
+    if (T - s.t < 0.06) { // passing you on one side (a miss) or straight at you (a hit), ending just short of your eyes
+      const k = 0.12 / d, mx = vx * k - vy / d * (s.hit ? 0 : 0.05 * s.side), my = vy * k + vx / d * (s.hit ? 0 : 0.05 * s.side);
+      const p0 = fishProj(hx, hy, 0.13), p1 = fishProj(mx, my, eye - 0.02);
+      if (p0 && p1) fishSeg(p0, p1, C(YEL, 14));
+    }
   }
 }
-// pools of blood: spreading out over the first few seconds, an uneven edge, darkening as they dry
+// pools of blood: spreading over the first few seconds from under them, an uneven edge that soaks into the ground in
+// spatters, a wet sheen in the middle while it's fresh, going dark brown as it dries
 function drawBlood() {
   for (const b of pools) {
     const vx = rel(b.x - px), vy = rel(b.y - py);
     if (Math.hypot(vx, vy) > Math.min(vis, 14)) continue;
-    const age = T - b.t, r = 0.03 + 0.07 * Math.min(1, age / 9), dry = clamp((age - 60) / 120, 0, 1), seed = b.x * 13 + b.y * 7;
-    drawBox(boxAt(vx, vy, 1, 0, r * 1.2, r * 1.2, 0, 0.0004), (i, t, L) => {
-      const an = Math.atan2(HIT.v, HIT.u), edge = r * (0.75 + 0.25 * Math.sin(an * 3 + seed) * Math.sin(an * 5 + seed * 1.7));
-      if (Math.hypot(HIT.u, HIT.v) > edge) { BG[i] = BG_UNSET; return false; }
-      BG[i] = C(RED, (2.6 - dry * 1.2) * Math.max(0.5, L * 0.1)); return set(i, Math.hypot(HIT.u, HIT.v) < edge * 0.5 ? ' ' : '.', C(RED, 4 - dry)), true;
+    const age = T - b.t, r = 0.025 + 0.085 * (1 - Math.exp(-age / 3.5)), dry = clamp((age - 50) / 130, 0, 1), seed = b.x * 13 + b.y * 7;
+    drawBox(boxAt(vx, vy, 1, 0, r * 1.35, r * 1.35, 0, 0.0004), (i, t, L) => {
+      const an = Math.atan2(HIT.v, HIT.u), q = Math.hypot(HIT.u, HIT.v);
+      const edge = r * (0.78 + 0.14 * Math.sin(an * 3 + seed) + 0.08 * Math.sin(an * 7 + seed * 1.7) + 0.05 * Math.sin(an * 13 + seed * 0.3)), k = q / edge;
+      if (k > 1.25 || k > 1 && hash(Math.floor(HIT.u * 300), Math.floor(HIT.v * 300), 4411) > 0.35) { BG[i] = BG_UNSET; return false; }
+      const col = dry > 0.5 ? BRICK : RED, lv = Math.max(0.6, L * 0.1);
+      if (k > 0.85) { BG[i] = BG_UNSET; return set(i, k > 1 ? '.' : ',', C(col, (5 - dry * 2) * lv)), true; } // (the soaked-in edge, and the spatters past it)
+      BG[i] = C(col, (2.6 - k * 0.8 - dry * 1.1) * lv);
+      const glint = dry < 0.4 && k < 0.5 && hash(Math.floor(HIT.u * 160), Math.floor(HIT.v * 160), 4412) > 0.9; // (wet: it catches the light)
+      return set(i, glint ? '~' : ' ', C(RED, 9 * lv)), true;
     });
   }
 }
@@ -28735,6 +28817,7 @@ function move(fx, fy) {
   stepHomeBalcony(fx);
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
+const FATAL_V = 1.6; // 58 km/h: hit somebody faster than this and they don't get up (gun.js sees to the body)
 // Short, bounded skid segments remain on the road for two minutes.
 const tireMarks = [];
 function leaveTireMarks(c, hx, hy, oldX, oldY) {
@@ -28799,12 +28882,18 @@ function drive(dt) {
     if(officer){hitPerson=officer;break;}
   }
   if (hitPerson && !bodyHit && !hitCar && free(fx, fy) && Math.abs(c.v) > 0.4) { // someone in the road: knocked flat, and you plough on, slower
-    const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson);
-    knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
-    const saw = gawkAt(hitPerson); // (the people about: staring, and one running over to them)
-    say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"'])
-      + (saw ? ' ' + pick(cop ? ['"Officer down!"', '"You just hit a COP!"'] : ['"Oh my God!"', '"Somebody call an ambulance!"', '"Did you SEE that?"', '"Hey! HEY! Stop!"']) : ''), 3);
-    crime(cop ? 'hitcop' : 'hit', c.x, c.y);
+    const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson), fatal = sp > FATAL_V && !hitPerson.dead;
+    if (fatal) { // too fast to survive: thrown down the road and still, as a shooting's victim (gun.js)
+      knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); killFigure(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, cop);
+      panicAt(hitPerson.x, hitPerson.y);
+      say(pick(cop ? ['*CRUNCH* The officer goes over the bonnet and doesn\'t get up.', 'You hit the cop at full speed. They don\'t move.'] : ['*CRUNCH* They go over the bonnet and lie still.', 'At that speed, nobody gets up.', '*CRUNCH* Somebody screams. The body in the road doesn\'t move.']), 3);
+    } else {
+      knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
+      const saw = gawkAt(hitPerson); // (the people about: staring, and one running over to them)
+      say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"'])
+        + (saw ? ' ' + pick(cop ? ['"Officer down!"', '"You just hit a COP!"'] : ['"Oh my God!"', '"Somebody call an ambulance!"', '"Did you SEE that?"', '"Hey! HEY! Stop!"']) : ''), 3);
+    }
+    crime(fatal ? cop ? 'copkill' : 'roadkill' : cop ? 'hitcop' : 'hit', c.x, c.y);
     if (actx) { tone(actx.currentTime, 60, 0.18, 0.12 * Math.min(1, sp / 3)); playClip('crash', 0.2); }
     if (sp > CRASH_V) damageCar(c, crashDamage(sp) * 0.2);
     c.v *= 0.6; hitPerson = null;

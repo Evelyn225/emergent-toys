@@ -248,7 +248,7 @@ function stepDown(p, dt) {
   return false;
 }
 // what they look like on the way down, down, and getting up
-const downPose = d => d.t < 0.2 || d.t > d.dur - 0.6 ? 'sprawl' : 'down';
+const downPose = d => d.t < 0.2 || d.t > d.dur - 0.6 ? 'sprawl' : d.dur === Infinity ? 'dead' : 'down'; // (shot: they don't get up)
 // everyone near enough to see it stops and stares, and the nearest comes running to kneel by them till they're up.
 // Returns how many saw it
 const GAWK_R = 1.6;

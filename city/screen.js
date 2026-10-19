@@ -117,10 +117,10 @@ const fogCache = new Map();
 let fogRGB = [0, 0, 0], fogKey = -1;
 // Also always: distance haze, so far scenery fades into a sky-tinted color instead of ending in black at the draw distance.
 function fogSteps() {
-  const foggy = fogAmt > 0.3, k = Math.round(day * 16) * 2 + foggy;
-  if (k !== fogKey) { // fog is grey; clear-weather haze is a little bluer
-    fogKey = k; fogCache.clear(); const v = 22 + day * 150;
-    fogRGB = foggy ? [v, v + 4, v + 12] : [v * 0.7, v * 0.85, Math.min(255, v * 1.15)];
+  const foggy = fogAmt > 0.3, glow = foggy ? 0 : Math.round(dusk * (1 - overcast) * 6), k = (Math.round(day * 16) * 2 + foggy) * 8 + glow;
+  if (k !== fogKey) { // fog is grey; clear-weather haze is a little bluer, and warm at sunrise and sunset
+    fogKey = k; fogCache.clear(); const v = 22 + day * 150, w = glow / 6 * 0.55;
+    fogRGB = foggy ? [v, v + 4, v + 12] : [v * 0.7 * (1 - w) + 190 * w, v * 0.85 * (1 - w) + 105 * w, Math.min(255, v * 1.15) * (1 - w) + 95 * w];
   }
   const anyFog = fogAmt > 0.03, sky = anyFog ? clamp(Math.floor(fogAmt * 8), 0, 8) : 0; // open sky: only real fog
   const level = (z, wisp, dith) => {

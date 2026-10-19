@@ -135,6 +135,7 @@ function move(fx, fy) {
   stepHomeBalcony(fx);
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something
+const FATAL_V = 1.6; // 58 km/h: hit somebody faster than this and they don't get up (gun.js sees to the body)
 // Short, bounded skid segments remain on the road for two minutes.
 const tireMarks = [];
 function leaveTireMarks(c, hx, hy, oldX, oldY) {
@@ -199,12 +200,18 @@ function drive(dt) {
     if(officer){hitPerson=officer;break;}
   }
   if (hitPerson && !bodyHit && !hitCar && free(fx, fy) && Math.abs(c.v) > 0.4) { // someone in the road: knocked flat, and you plough on, slower
-    const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson);
-    knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
-    const saw = gawkAt(hitPerson); // (the people about: staring, and one running over to them)
-    say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"'])
-      + (saw ? ' ' + pick(cop ? ['"Officer down!"', '"You just hit a COP!"'] : ['"Oh my God!"', '"Somebody call an ambulance!"', '"Did you SEE that?"', '"Hey! HEY! Stop!"']) : ''), 3);
-    crime(cop ? 'hitcop' : 'hit', c.x, c.y);
+    const sp = Math.abs(c.v), sg = Math.sign(c.v), cop = footCops.includes(hitPerson), fatal = sp > FATAL_V && !hitPerson.dead;
+    if (fatal) { // too fast to survive: thrown down the road and still, as a shooting's victim (gun.js)
+      knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); killFigure(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, cop);
+      panicAt(hitPerson.x, hitPerson.y);
+      say(pick(cop ? ['*CRUNCH* The officer goes over the bonnet and doesn\'t get up.', 'You hit the cop at full speed. They don\'t move.'] : ['*CRUNCH* They go over the bonnet and lie still.', 'At that speed, nobody gets up.', '*CRUNCH* Somebody screams. The body in the road doesn\'t move.']), 3);
+    } else {
+      knockDown(hitPerson, Math.cos(c.travelA) * sg, Math.sin(c.travelA) * sg, sp); hitPerson.talk = 0;
+      const saw = gawkAt(hitPerson); // (the people about: staring, and one running over to them)
+      say(pick(cop ? ['*THUMP* The officer goes flying.', 'You knock the cop clean off their feet.'] : ['*THUMP* Somebody goes down hard.', 'You knock someone flying.', '*THUMP* "AAH!"'])
+        + (saw ? ' ' + pick(cop ? ['"Officer down!"', '"You just hit a COP!"'] : ['"Oh my God!"', '"Somebody call an ambulance!"', '"Did you SEE that?"', '"Hey! HEY! Stop!"']) : ''), 3);
+    }
+    crime(fatal ? cop ? 'copkill' : 'roadkill' : cop ? 'hitcop' : 'hit', c.x, c.y);
     if (actx) { tone(actx.currentTime, 60, 0.18, 0.12 * Math.min(1, sp / 3)); playClip('crash', 0.2); }
     if (sp > CRASH_V) damageCar(c, crashDamage(sp) * 0.2);
     c.v *= 0.6; hitPerson = null;

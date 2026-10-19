@@ -8,7 +8,7 @@
 // Gentle on purpose: a crime is easy to commit by accident (a red light, a fender bender, a bad moment with a pedestrian),
 // and the odd slip should barely register. It takes a run of serious ones to get you known.
 const NOTO_BY_STARS = [0, 3, 8, 15], NOTO_SLIP = { redlight: 1, crash: 1, urination: 2, graffiti: 2 }; // (a crime: by its stars, slips less)
-const NOTO_GUN = { gunfire: 4, murder: 25, copkill: 35 }; // (the revolver, gun.js: a shot less than its stars, a killing a lot more)
+const NOTO_GUN = { gunfire: 4, murder: 25, copkill: 35, roadkill: 22 }; // (the revolver, gun.js, and a car driven into somebody too fast: a shot less than its stars, a killing a lot more)
 const NOTO_EVENT = { scramble: 12, blownup: 8, ejected: 6, planecrash: 6 };
 const NOTO_FADE = 0.5; // what's left of it each morning
 const NOTO_LOOK = { haircut: 0.5, coat: 0.5, tattoo: 0.6 }; // what's left after a change of look (once a day each)
@@ -89,7 +89,8 @@ const NEWS = {
   bigfish: (w, n, e) => `A ${e.kg ? e.kg + 'kg ' : 'large '}${e.fish || 'fish'} was landed in ${w} by a member of the public. The fish was not available for comment.`,
   gunfire: (w, n) => n > 1 ? `Gunshots reported in ${w}, ${n} times in one day. Police ask residents to stop describing them as fireworks.` : `A gunshot was reported in ${w}. Residents who thought it was a car backfiring have been asked to think again.`,
   murder: (w, n) => n > 1 ? `${inWords(n)} people shot dead in ${w} in one day. Police describe the suspect as armed, and the day as long.` : `A pedestrian was shot dead in ${w}. Police say the suspect is armed, and that this is the main thing to know about them.`,
-  copkill: (w, n) => n > 1 ? `${inWords(n)} police officers shot dead in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was shot dead in ${w}. The department has cancelled all leave, and most of its patience.`,
+  roadkill: (w, n) => n > 1 ? `${inWords(n)} pedestrians killed by the same car in ${w}. Police say the driver did not stop, any of the times.` : `A pedestrian was killed by a speeding car in ${w}. The driver did not stop. Police would like a word, and then several more.`,
+  copkill: (w, n) => n > 1 ? `${inWords(n)} police officers killed in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was killed in ${w}. The department has cancelled all leave, and most of its patience.`,
   bout: (w, n, e) => `An unknown fighter beat ${e.who} at the gym in ${w}. The promoter did not catch the name. The purse was paid in cash.`,
 };
 // the stories that run, biggest first: what happened yesterday (and so far today, on the telly), with a word from the

@@ -24,7 +24,8 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' }, // (spotted: notoriety.js)
                  // the revolver (gun.js): these don't add up, they set how bad it is at least (a killing: one more each time)
                  gunfire: { stars: 2, name: 'firing a gun in the street', least: 0 }, murder: { stars: 4, name: 'murder', least: 1, kills: true },
-                 copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true } };
+                 copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true },
+                 roadkill: { stars: 4, name: 'killing someone with a car', least: 1, kills: true } }; // (hit too fast to survive: main.js)
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -254,14 +255,16 @@ function roofSearchLead(dt) {
 function drawRoofPolice() {
   for (const c of roofCops) {
     const z = policeRoofHeight(c.x, c.y);
-    figMotion(c); drawFigure(...R(c.x, c.y), z, 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, 'run'), { light: 7 });
+    figMotion(c); const aim = c.aimT > T, [ax, ay] = aimAt(rel(px - c.x), rel(py - c.y)); // (shooting at you: gun.js)
+    drawFigure(...R(c.x, c.y), z, 0.18, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : walkPose(c, 'run'), { light: 7 });
     if (c.sees && fract(T * 3) < 0.5) drawArt(...R(c.x, c.y), z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
 }
 function drawRoomPolice() {
   for (const c of roomCops) {
     figMotion(c);
-    drawFigure(c.x - px, c.y - py, 0, 1.8, c._fx || 0, c._fy || 0, copLook(c), c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9 });
+    const aim = c.aimT > T, [ax, ay] = aimAt(px - c.x, py - c.y); // (shooting at you: gun.js)
+    drawFigure(c.x - px, c.y - py, 0, 1.8, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9 });
     if (c.sees && fract(T * 3) < 0.55) drawArt(c.x - px, c.y - py, 1.65, 0.1, 0.12, ['!'], () => C(RED, 15));
   }
 }
