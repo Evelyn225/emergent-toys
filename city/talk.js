@@ -32,7 +32,7 @@ function talkLine(p) {
   if (st && Math.hypot(rel(st.x - p.x), rel(st.y - p.y)) < 40) lines.push(`The ${st.name} train is late again.`, `Is ${st.name} station still closed for repairs?`);
   if (Math.abs(rel(p.y - (EL_ROW * 8 + 1))) < 12) lines.push('That el train shakes my whole apartment.', 'You get used to the trains. Mostly.');
   if (cars.some(c => code(c) && Math.hypot(rel(c.x - p.x), rel(c.y - p.y)) < 25)) lines.push("Another siren. Hope everyone's okay.", 'Something going on round the corner?');
-  lines.push('Hey.', 'Can I help you?', 'Nice evening for it.'.replace('evening', h < 12 ? 'morning' : h < 18 ? 'day' : 'evening'));
+  lines.push('Hey.', 'Can I help you?', 'Nice evening for it.'.replace('evening', h < 12 ? 'morning' : h < 18 ? 'day' : 'evening'), ...newsGossip());
   return pick(lines);
 }
 
@@ -237,6 +237,7 @@ function roomTalkLine(kind, h = tod) {
   if ((h >= 23 || h < 4) && kind !== 'jail') lines.push('Shouldn\'t you be in bed?', 'It\'s late. Why are we both here?');
   if (rain > 0.4 && kind !== 'jail' && kind !== 'station' && kind !== 'train') lines.push('Waiting out the rain. You too?');
   if (tattoos.length && kind !== 'tattoo') lines.push(`Is that a ${ITEMS[tattoos[tattoos.length - 1]].name}? Nice ink.`, 'Who did your tattoo? I\'ve been wanting one.'); // (they've noticed)
+  if (kind !== 'jail') lines.push(...newsGossip()); // (what's in the papers, and whether you look like it)
   let line = pick(lines);
   for (let k = 0; k < 4 && line === lastRoomLine; k++) line = pick(lines); // (not the same one twice running)
   return (lastRoomLine = line);

@@ -21,7 +21,7 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
                  boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' },
                  ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' },
-                 planetheft: { stars: 2, name: 'aircraft theft' } };
+                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' } }; // (spotted: notoriety.js)
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -203,7 +203,7 @@ function notePoliceRoofEntry(x, y, ret = null) {
 }
 function roofPoliceSees(c) {
   const vx = rel(px - c.x), vy = rel(py - c.y), d = Math.hypot(vx, vy);
-  if (d > COP_SIGHT) return false;
+  if (d > copSight()) return false;
   const z0 = policeRoofHeight(c.x, c.y) + 0.16, z1 = policeRoofHeight(px, py) + 0.15 + body.z / 10, n = Math.ceil(d * 8);
   for (let k = 1; k < n; k++) {
     const t = k / n;
@@ -277,13 +277,13 @@ for (let n = 0; n < PATROLS; n++) {
 // ---- a crime, here and now: who saw it, and what follows
 // returns 'cop' (wanted now), 'reported' (somebody will call it in), or '' (nobody saw)
 // can any cop, in a car or on foot, see (x, y)?
-const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y))
-  || footCops.some(c => near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y));
+const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y))
+  || footCops.some(c => near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y));
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
   const copSees_ = copSees(x, y);
   if (copSees_) { addWanted(kind, x, y, true); return 'cop'; }
   const civSees = people.some(p => !p.hidden && near(p.x, p.y, x, y) < CIV_SIGHT && lineOfSight(p.x, p.y, x, y)) || kind === 'steal' || kind === 'shoplift' || kind === 'boattheft';
-  if (civSees) { reports.push({ t: T + REPORT_DELAY, x, y, kind }); return 'reported'; } // (a carjacked driver, a clerk, or a boat's owner always calls it in)
+  if (civSees) { reports.push({ t: T + reportDelay(), x, y, kind }); return 'reported'; } // (a carjacked driver, a clerk, or a boat's owner always calls it in)
   return '';
 }
 // a red light only counts with a cop right there
@@ -293,6 +293,7 @@ function redLightCrime(x, y) {
   return cop;
 }
 function addWanted(kind, x, y, seen) {
+  if (kind !== 'spotted') newsEvent(kind, x, y); // (it's in the papers, and it's yours: notoriety.js)
   wanted.stars = Math.min(MAX_STARS, Math.max(wanted.stars, 0) + CRIMES[kind].stars);
   wanted.crime = CRIMES[kind].name; wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
   wanted.lastVX = 0; wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
@@ -572,6 +573,7 @@ function stepCrime(dt) {
     if (T < r.t) continue;
     reports.splice(k, 1);
     if (policeNear(r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened
+    else if (r.kind !== 'spotted') newsEvent(r.kind, r.x, r.y); // (nobody to send, but it's still in the papers)
   }
   stepReturningPolice(dt);
   stepRoadblocks();
@@ -583,10 +585,10 @@ function stepCrime(dt) {
   const roomSeen = roomSearchLead(dt);
   const roofSeen = roofSearchLead(dt);
   const [wx, wy] = crimePos(), inside = mode === 'room', onRoof = mode === 'roof';
-  const sees = c => !c.down && !inside && !onRoof && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
+  const sees = c => !c.down && !inside && !onRoof && near(c.x, c.y, wx, wy) < copSight() && lineOfSight(c.x, c.y, wx, wy); // (further, the better they know your face)
   wanted.seen = (inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees)) || heliSees;
   if (wanted.seen) { if (!inside) observeSuspect(wx, wy); wanted.hideT = 0; wanted.searchX = wanted.lastX; wanted.searchY = wanted.lastY; }
-  else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
+  else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { if (wanted.stars >= 2) newsEvent('escape', wanted.lastX, wanted.lastY); clearWanted(); return 'lost'; }
   else if ((wanted.searchT -= dt) <= 0) {
     wanted.searchT = 0.35; [wanted.searchX, wanted.searchY] = policeSearchTarget();
   }
@@ -614,7 +616,7 @@ function stepCrime(dt) {
     || onRoof && body.z < 1 && roofCops.some(c => c.sees && near(c.x, c.y, px, py) < 0.22);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
-  if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
+  if (grabbed || wanted.bustT > 2.5) { if (wanted.stars >= 2) newsEvent('arrest', px, py, { crime: wanted.crime }); wanted.busted = true; return 'busted'; }
   return told ? 'pullover' : wanted.seen ? 'seen' : 'hiding';
 }
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off

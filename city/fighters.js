@@ -22,7 +22,7 @@ function stepFighters(c, dt, rnd = Math.random) {
     const k = rnd() * TAU;
     for (const wing of [-1, 1]) fighters.push({ id: 900 + fighters.length, x: mod(c.x + Math.cos(k) * 45 - Math.sin(k) * wing * 1.5, N), y: mod(c.y + Math.sin(k) * 45 + Math.cos(k) * wing * 1.5, N),
       z: Math.max(c.z, 6), yaw: k + Math.PI, pitch: 0, roll: 0, v: FIGHTER_T.top, wing, cool: 2 + rnd() * 2, sixed: false });
-    fighterHunt = 0; fighterCalm = 0; ev.push('scramble');
+    fighterHunt = 0; fighterCalm = 0; ev.push('scramble'); newsEvent('scramble', c.x, c.y); // (that makes the papers)
   }
   for (let k = tracers.length - 1; k >= 0; k--) { const r = tracers[k]; r.x += r.vx * dt; r.y += r.vy * dt; r.z += r.vz * dt; if ((r.t -= dt) <= 0) tracers.splice(k, 1); }
   if (!fighters.length) return ev;

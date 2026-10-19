@@ -82,7 +82,7 @@ function finishBout(g, quit) {
   const res = g.result || { win: false, how: 'towel' }, champ = g.foe === BOXERS.length - 1;
   needs.health = clamp(g.hp, RING_FLOOR, maxHealth());
   if (res.win) {
-    earn(g.purse);
+    earn(g.purse); newsEvent('bout', ...crimePos(), { who: g.name }); // (it makes the papers)
     if (g.foe >= boxRank) boxRank = Math.min(BOXERS.length, g.foe + 1);
     const how = { KO: 'by knockout', TKO: 'on a stoppage', decision: 'on points' }[res.how] || '';
     const next = champ ? ' You\'re the champion of Glyphport.' : ` Next on the card: ${nextBoxer().name}.`;

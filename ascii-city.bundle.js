@@ -1041,6 +1041,9 @@ const districtOf = (bx, by) => DIST[bi(bx, by)];
 // what a neighbourhood is called: industry on the shore is the Docks; inland, with no water in sight, the Yards
 const seedName = s => s[2] === 'industrial' && !s[3] ? 'yards' : s[2];
 const districtName = (bx, by) => { const k = DIST_OWNER[bi(bx, by)]; return k < 0 ? DIST[bi(bx, by)] : seedName(DIST_SEEDS[k]); };
+// what each is called (the HUD's place line, the map, the papers)
+const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards', belle: 'Belle Époque Quarter',
+                         brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay', shotengai: 'the Shotengai' };
 const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8));
 
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea
@@ -3851,7 +3854,7 @@ function stepFighters(c, dt, rnd = Math.random) {
     const k = rnd() * TAU;
     for (const wing of [-1, 1]) fighters.push({ id: 900 + fighters.length, x: mod(c.x + Math.cos(k) * 45 - Math.sin(k) * wing * 1.5, N), y: mod(c.y + Math.sin(k) * 45 + Math.cos(k) * wing * 1.5, N),
       z: Math.max(c.z, 6), yaw: k + Math.PI, pitch: 0, roll: 0, v: FIGHTER_T.top, wing, cool: 2 + rnd() * 2, sixed: false });
-    fighterHunt = 0; fighterCalm = 0; ev.push('scramble');
+    fighterHunt = 0; fighterCalm = 0; ev.push('scramble'); newsEvent('scramble', c.x, c.y); // (that makes the papers)
   }
   for (let k = tracers.length - 1; k >= 0; k--) { const r = tracers[k]; r.x += r.vx * dt; r.y += r.vy * dt; r.z += r.vz * dt; if ((r.t -= dt) <= 0) tracers.splice(k, 1); }
   if (!fighters.length) return ev;
@@ -4259,7 +4262,7 @@ function talkLine(p) {
   if (st && Math.hypot(rel(st.x - p.x), rel(st.y - p.y)) < 40) lines.push(`The ${st.name} train is late again.`, `Is ${st.name} station still closed for repairs?`);
   if (Math.abs(rel(p.y - (EL_ROW * 8 + 1))) < 12) lines.push('That el train shakes my whole apartment.', 'You get used to the trains. Mostly.');
   if (cars.some(c => code(c) && Math.hypot(rel(c.x - p.x), rel(c.y - p.y)) < 25)) lines.push("Another siren. Hope everyone's okay.", 'Something going on round the corner?');
-  lines.push('Hey.', 'Can I help you?', 'Nice evening for it.'.replace('evening', h < 12 ? 'morning' : h < 18 ? 'day' : 'evening'));
+  lines.push('Hey.', 'Can I help you?', 'Nice evening for it.'.replace('evening', h < 12 ? 'morning' : h < 18 ? 'day' : 'evening'), ...newsGossip());
   return pick(lines);
 }
 
@@ -4464,6 +4467,7 @@ function roomTalkLine(kind, h = tod) {
   if ((h >= 23 || h < 4) && kind !== 'jail') lines.push('Shouldn\'t you be in bed?', 'It\'s late. Why are we both here?');
   if (rain > 0.4 && kind !== 'jail' && kind !== 'station' && kind !== 'train') lines.push('Waiting out the rain. You too?');
   if (tattoos.length && kind !== 'tattoo') lines.push(`Is that a ${ITEMS[tattoos[tattoos.length - 1]].name}? Nice ink.`, 'Who did your tattoo? I\'ve been wanting one.'); // (they've noticed)
+  if (kind !== 'jail') lines.push(...newsGossip()); // (what's in the papers, and whether you look like it)
   let line = pick(lines);
   for (let k = 0; k < 4 && line === lastRoomLine; k++) line = pick(lines); // (not the same one twice running)
   return (lastRoomLine = line);
@@ -5128,6 +5132,9 @@ const ITEMS = {
   key_car_sports: { name: 'sports car keys', price: 0, kind: 'keys', car: 'car_sports' },
   home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 7000, kind: 'home' },
   home_belle: { name: 'Belle Époque residence', price: 16000, kind: 'home' },
+  // a change of look (nothing to carry: it's on you), which makes you harder to place (notoriety.js)
+  haircut: { name: 'haircut', price: 15, kind: 'look', look: 'haircut', line: 'Twenty minutes in the chair, a mirror held up behind you. You look like somebody else. Somebody tidier.' },
+  coat: { name: 'secondhand coat', price: 25, kind: 'look', look: 'coat', line: 'You leave in a coat that used to be somebody else\'s. It fits well enough. The old one goes in the donation bin.' },
   // tattoos (the tattoo parlour): not carried, they're on you for good. hours: how long you sit for it; where: on you
   tattoo_swallow: { name: 'swallow', price: 60, kind: 'tattoo', hours: 1, where: 'on the back of your hand' },
   tattoo_anchor: { name: 'anchor', price: 80, kind: 'tattoo', hours: 1, where: 'on your forearm' },
@@ -5193,7 +5200,7 @@ const STOCK_WORD = {
   'DIM SUM': ['dumplings', 'tea', 'mooncake'], SUSHI: ['sushi', 'tea'], VIDEO: ['vhs', 'candy', 'soda'], THAI: ['padthai', 'greencurry', 'mangorice', 'thaitea'],
   BURGERS: ['burger', 'fries', 'milkshake', 'soda'], CHICKEN: ['chicken', 'fries', 'soda'], JUICE: ['smoothie', 'water', 'apple'],
   'ICE CREAM': ['icecream', 'milkshake'], BAGELS: ['bagel', 'coffee'], TOYS: ['yoyo', 'duck', 'ball', 'sparklers'],
-  THRIFT: ['umbrella', 'vinyl', 'book', 'boombox'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
+  THRIFT: ['coat', 'umbrella', 'vinyl', 'book', 'boombox'], BARBER: ['haircut'], TOBACCO: ['cigarettes', 'pipe', 'vape', 'newspaper'],
   CARS: ['car_hatch', 'car_sedan', 'car_sports'], REALTY: ['home_studio', 'home_loft', 'home_belle'],
   DELICATESSEN: ['sandwich', 'bagel', 'chips', 'soda', 'coffee'], JEWELER: ['jadebangle', 'luckycoin', 'redstring'], ANTIQUES: ['vinyl', 'book', 'harmonica', 'lantern'], TAILOR: ['umbrella'],
   TATTOO: ['tattoo_swallow', 'tattoo_anchor', 'tattoo_rose', 'tattoo_dagger', 'tattoo_panther', 'tattoo_koi'],
@@ -5276,6 +5283,7 @@ function buy(id) { // false + why, if you can't
   const it = ITEMS[id];
   if (it.kind === 'car' || it.kind === 'home') { const [x, y] = room && room.ret ? room.ret : [px, py]; return buyProperty(id, x, y); }
   if (it.kind === 'tattoo') return getTattoo(id);
+  if (it.kind === 'look') return pay(it.price) ? [true, `${it.line}${changeLook(it.look)} (${fmt$(it.price)})`] : [false, `A ${it.name} is ${fmt$(it.price)}. You can't afford it.`];
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   carryItem({ id, uses: it.uses || 0 });
@@ -5293,10 +5301,10 @@ function getTattoo(id) {
   if (!pay(it.price)) return [false, `The ${it.name} is ${fmt$(it.price)}. Come back when you've saved up.`];
   tattoos.push(id);
   for (tod += it.hours; tod >= 24; tod -= 24) dayNum++;
-  return [true, `${it.hours > 1 ? it.hours + ' hours' : 'An hour'} in the chair. The ${it.name}, ${it.where}. It stings, and it's perfect. (${fmt$(it.price)})`];
+  return [true, `${it.hours > 1 ? it.hours + ' hours' : 'An hour'} in the chair. The ${it.name}, ${it.where}. It stings, and it's perfect.${changeLook('tattoo')} (${fmt$(it.price)})`];
 }
 // what you could walk off with (not a car, a flat or somebody's needlework)
-const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo'].includes(ITEMS[id].kind));
+const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look'].includes(ITEMS[id].kind));
 const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
 const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
@@ -7413,7 +7421,7 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
                  boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' },
                  ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' },
-                 planetheft: { stars: 2, name: 'aircraft theft' } };
+                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' } }; // (spotted: notoriety.js)
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -7595,7 +7603,7 @@ function notePoliceRoofEntry(x, y, ret = null) {
 }
 function roofPoliceSees(c) {
   const vx = rel(px - c.x), vy = rel(py - c.y), d = Math.hypot(vx, vy);
-  if (d > COP_SIGHT) return false;
+  if (d > copSight()) return false;
   const z0 = policeRoofHeight(c.x, c.y) + 0.16, z1 = policeRoofHeight(px, py) + 0.15 + body.z / 10, n = Math.ceil(d * 8);
   for (let k = 1; k < n; k++) {
     const t = k / n;
@@ -7669,13 +7677,13 @@ for (let n = 0; n < PATROLS; n++) {
 // ---- a crime, here and now: who saw it, and what follows
 // returns 'cop' (wanted now), 'reported' (somebody will call it in), or '' (nobody saw)
 // can any cop, in a car or on foot, see (x, y)?
-const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y))
-  || footCops.some(c => near(c.x, c.y, x, y) < COP_SIGHT && lineOfSight(c.x, c.y, x, y));
+const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y))
+  || footCops.some(c => near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y));
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
   const copSees_ = copSees(x, y);
   if (copSees_) { addWanted(kind, x, y, true); return 'cop'; }
   const civSees = people.some(p => !p.hidden && near(p.x, p.y, x, y) < CIV_SIGHT && lineOfSight(p.x, p.y, x, y)) || kind === 'steal' || kind === 'shoplift' || kind === 'boattheft';
-  if (civSees) { reports.push({ t: T + REPORT_DELAY, x, y, kind }); return 'reported'; } // (a carjacked driver, a clerk, or a boat's owner always calls it in)
+  if (civSees) { reports.push({ t: T + reportDelay(), x, y, kind }); return 'reported'; } // (a carjacked driver, a clerk, or a boat's owner always calls it in)
   return '';
 }
 // a red light only counts with a cop right there
@@ -7685,6 +7693,7 @@ function redLightCrime(x, y) {
   return cop;
 }
 function addWanted(kind, x, y, seen) {
+  if (kind !== 'spotted') newsEvent(kind, x, y); // (it's in the papers, and it's yours: notoriety.js)
   wanted.stars = Math.min(MAX_STARS, Math.max(wanted.stars, 0) + CRIMES[kind].stars);
   wanted.crime = CRIMES[kind].name; wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
   wanted.lastVX = 0; wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
@@ -7964,6 +7973,7 @@ function stepCrime(dt) {
     if (T < r.t) continue;
     reports.splice(k, 1);
     if (policeNear(r.x, r.y)) addWanted(r.kind, r.x, r.y, false); // they come to where it happened
+    else if (r.kind !== 'spotted') newsEvent(r.kind, r.x, r.y); // (nobody to send, but it's still in the papers)
   }
   stepReturningPolice(dt);
   stepRoadblocks();
@@ -7975,10 +7985,10 @@ function stepCrime(dt) {
   const roomSeen = roomSearchLead(dt);
   const roofSeen = roofSearchLead(dt);
   const [wx, wy] = crimePos(), inside = mode === 'room', onRoof = mode === 'roof';
-  const sees = c => !c.down && !inside && !onRoof && near(c.x, c.y, wx, wy) < COP_SIGHT && lineOfSight(c.x, c.y, wx, wy);
+  const sees = c => !c.down && !inside && !onRoof && near(c.x, c.y, wx, wy) < copSight() && lineOfSight(c.x, c.y, wx, wy); // (further, the better they know your face)
   wanted.seen = (inside ? roomSeen : onRoof ? roofSeen : cars.some(c => c.pursuit && sees(c)) || footCops.some(sees)) || heliSees;
   if (wanted.seen) { if (!inside) observeSuspect(wx, wy); wanted.hideT = 0; wanted.searchX = wanted.lastX; wanted.searchY = wanted.lastY; }
-  else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { clearWanted(); return 'lost'; }
+  else if ((wanted.hideT += dt) > ESCAPE_T[wanted.stars]) { if (wanted.stars >= 2) newsEvent('escape', wanted.lastX, wanted.lastY); clearWanted(); return 'lost'; }
   else if ((wanted.searchT -= dt) <= 0) {
     wanted.searchT = 0.35; [wanted.searchX, wanted.searchY] = policeSearchTarget();
   }
@@ -8006,7 +8016,7 @@ function stepCrime(dt) {
     || onRoof && body.z < 1 && roofCops.some(c => c.sees && near(c.x, c.y, px, py) < 0.22);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
-  if (grabbed || wanted.bustT > 2.5) { wanted.busted = true; return 'busted'; }
+  if (grabbed || wanted.bustT > 2.5) { if (wanted.stars >= 2) newsEvent('arrest', px, py, { crime: wanted.crime }); wanted.busted = true; return 'busted'; }
   return told ? 'pullover' : wanted.seen ? 'seen' : 'hiding';
 }
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
@@ -8030,6 +8040,114 @@ function goToJail() {
   seized.length = 0; seized.push(...inv);
   clearInventory(); fx.skating = false; fx.boombox = false;
   clearWanted();
+}
+// ===== notoriety: the city remembers. A crime somebody saw (crime.js: addWanted, or a call that came in with no unit
+// to send) makes you known, and so does anything that brings out the air force. Known, people look twice at you in the
+// street and the police pick you out from further off; very well known, the odd passer-by gets their phone out. It
+// fades a day at a time, and faster if you change how you look: a haircut, a different coat, new ink.
+// What happened goes in the papers a day behind, written up in the papers' usual tone (newsLines), and it's on the
+// telly, on in the bars, and what people talk about.
+// Pure: the score, the log and the headlines. goods-ui.js reads the paper, actions.js the telly, news-ui.js the rest.
+// Gentle on purpose: a crime is easy to commit by accident (a red light, a fender bender, a bad moment with a pedestrian),
+// and the odd slip should barely register. It takes a run of serious ones to get you known.
+const NOTO_BY_STARS = [0, 3, 8, 15], NOTO_SLIP = { redlight: 1, crash: 1, urination: 2, graffiti: 2 }; // (a crime: by its stars, slips less)
+const NOTO_EVENT = { scramble: 12, blownup: 8, ejected: 6, planecrash: 6 };
+const NOTO_FADE = 0.5; // what's left of it each morning
+const NOTO_LOOK = { haircut: 0.5, coat: 0.5, tattoo: 0.6 }; // what's left after a change of look (once a day each)
+const NOTO_KNOWN = 30, NOTO_INFAMOUS = 65, NOTO_SPOT_R = 2.2, NOTO_CALL = 0.25, NOTO_CALL_GAP = 120; // (seconds between call-ins at most)
+const noto = { level: 0, day: dayNum, looked: {}, log: [], lookDay: -9, scanT: 0, callT: -Infinity };
+// where (x, y) is, as the papers put it
+const placeTitle = (x, y) => { const d = districtName(Math.floor(mod(x, N) / 8), Math.floor(mod(y, N) / 8)); return d === 'belle' ? 'the Belle Époque Quarter' : DISTRICT_TITLE[d] || 'the city'; };
+// a count as the papers print one: in words, up to ten
+const inWords = n => ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][n] || String(n);
+// something for the papers: a kind (a crime's, or one of NEWS's), where, and anything the line needs; the same thing
+// in the same place on the same day counts up instead (so a spree reads as one story)
+function newsEvent(kind, x = px, y = py, extra = {}) {
+  const where = placeTitle(x, y), same = noto.log.find(e => e.kind === kind && e.day === dayNum && e.where === where);
+  if (same) same.n++; else noto.log.unshift({ kind, day: dayNum, where, n: 1, ...extra });
+  if (noto.log.length > 40) noto.log.length = 40;
+  noto.level = Math.min(100, noto.level + (NOTO_SLIP[kind] ?? (CRIMES[kind] ? NOTO_BY_STARS[Math.min(3, CRIMES[kind].stars)] : NOTO_EVENT[kind] || 0)));
+}
+// a new look: knocks it down (each kind once a day: a second haircut doesn't fool anybody twice). What it did, for the
+// line at the counter: '' if there was nothing to lose
+function changeLook(kind) {
+  if (noto.looked[kind] === dayNum || noto.level < 1) return '';
+  noto.looked[kind] = dayNum; noto.lookDay = dayNum;
+  const was = noto.level; noto.level *= NOTO_LOOK[kind];
+  return was >= NOTO_KNOWN ? ' Nobody is going to match you to a description now.' : ' One fewer thing anybody might remember about you.';
+}
+// each morning it fades; the log keeps three days
+function stepNotoriety() {
+  while (noto.day < dayNum) { noto.day++; noto.level *= NOTO_FADE; if (noto.level < 1) noto.level = 0; }
+  if (noto.day > dayNum) noto.day = dayNum; // (a load or the dev panel going back)
+  for (let k = noto.log.length - 1; k >= 0; k--) if (noto.log[k].day < dayNum - 2) noto.log.splice(k, 1);
+}
+// police see you a little further off, and calls come in a little quicker, the better known you are (a quarter at most)
+const copSight = () => COP_SIGHT * (1 + noto.level / 400);
+const reportDelay = () => REPORT_DELAY * (1 - noto.level / 400);
+// out on foot and known: now and then a passer-by close enough knows your face (once a day each), stops and stares;
+// infamous, now and then one calls it in (one star, and not again for a while). Returns { who, called } for whoever did, or null. Checked twice a second
+const YOU_SPOT = { get x() { return px; }, get y() { return py; } }; // (what a staring passer-by looks at)
+function recognise(dt, rnd = Math.random) {
+  if ((noto.scanT -= dt) > 0) return null;
+  noto.scanT = 0.5;
+  if (noto.level < NOTO_KNOWN || mode !== 'walk' || wanted.stars > 0) return null;
+  for (const p of people) {
+    if (p.hidden || p.down || p.follow || p.help || p.hailing || p.talk > 0 || p.knew === dayNum) continue;
+    if (near(p.x, p.y, px, py) > NOTO_SPOT_R || !lineOfSight(p.x, p.y, px, py)) continue;
+    if (rnd() > (noto.level - 20) / 400) continue;
+    p.knew = dayNum; p.gawk = YOU_SPOT; p.talk = 3 + rnd() * 2;
+    const called = noto.level >= NOTO_INFAMOUS && T - noto.callT > NOTO_CALL_GAP && rnd() < NOTO_CALL;
+    if (called) { noto.callT = T; reports.push({ t: T + reportDelay(), x: px, y: py, kind: 'spotted' }); }
+    return { who: p, called };
+  }
+  return null;
+}
+
+// ---- the papers. One line a story, as the papers would print it: flat, factual, unimpressed
+const NEWS = {
+  steal: (w, n) => n > 1 ? `${inWords(n)} cars stolen in ${w} in one day. Police say they are aware of the pattern.` : `Car stolen in ${w}. The owner says they had only just washed it.`,
+  hit: (w, n) => n > 1 ? `${inWords(n)} pedestrians struck by the same car in ${w}. All have since got up. Police would still like a word.` : `Pedestrian struck by a car in ${w}. The driver did not stop. The pedestrian has since got up.`,
+  hitcop: w => `Police officer knocked down by a car in ${w}. The department describes this as unhelpful.`,
+  crash: w => `Reckless driving reported in ${w}. Residents say they were not surprised.`,
+  redlight: w => `Driver runs a red light in ${w} in full view of a police officer. The officer describes this as a choice.`,
+  pickpocket: (w, n) => `${n > 1 ? 'Several pickpocketings' : 'Pickpocketing'} reported in ${w}. Residents are reminded to keep their wallets in their pockets, and their hands on them.`,
+  shoplift: w => `A shop in ${w} reports the theft of low-value goods. The owner says it is the principle of the thing.`,
+  burglary: w => `Break-in at a business in ${w}. The owner says nothing of value was taken, then checked again.`,
+  alarm: w => `Burglar alarm at a business in ${w}. Police attended. The alarm was correct.`,
+  bankjob: w => `Bank robbed in ${w}. The bank reminds customers that deposits are insured, and asks them not to think about it further.`,
+  heist: () => 'An item is missing from the city museum. The museum says the gift shop remains open.',
+  boattheft: () => 'Boat reported missing from the marina. It was last seen floating.',
+  graffiti: (w, n) => `New graffiti in ${w}${n > 1 ? ', in several places' : ''}. The council has added it to a list.`,
+  urination: w => `Public urination reported in ${w}. Police attended. Police had seen worse.`,
+  ram: w => `Police car rammed in ${w}. The other car is described as also damaged.`,
+  planetheft: () => 'An aircraft was taken from the city airport without permission. The airport would like it back.',
+  scramble: () => 'The air force confirms two interceptors flew over the city. A spokesperson would not say why, beyond "an aircraft."',
+  blownup: w => `Stolen aircraft comes apart in the air over ${w}. The pilot survived, which the air force describes as noted.`,
+  ejected: w => `The pilot of a stolen aircraft parachuted into ${w} and has not come forward. The air force has recovered most of the aircraft.`,
+  planecrash: w => `Stolen aircraft comes down in ${w}. Nobody has claimed it.`,
+  escape: w => `Police call off a pursuit in ${w} after losing sight of the suspect. The search is described as ongoing, in a general sense.`,
+  arrest: (w, n, e) => `Arrest in ${w} following ${e.crime || 'an incident'}. Officers describe the suspect as cooperative, eventually.`,
+  bout: (w, n, e) => `An unknown fighter beat ${e.who} at the gym in ${w}. The promoter did not catch the name. The purse was paid in cash.`,
+};
+// the stories that run, biggest first: what happened yesterday (and so far today, on the telly), with a word from the
+// police about the suspect when you're well known
+function newsLines(today = false) {
+  const from = dayNum - 1, to = today ? dayNum : dayNum - 1;
+  const big = e => (CRIMES[e.kind] ? CRIMES[e.kind].stars : NOTO_EVENT[e.kind] ? 3 : 1) * 10 + Math.min(e.n, 5);
+  const lines = noto.log.filter(e => e.day >= from && e.day <= to && NEWS[e.kind]).sort((p, q) => big(q) - big(p)).map(e => NEWS[e.kind](e.where, e.n, e));
+  if (lines.length && noto.level >= 40) lines.push(noto.lookDay >= dayNum - 1
+    ? 'Police say the suspect may since have changed their appearance, and that this does not help.'
+    : 'Police have issued a description of a suspect: medium build, seen recently. The public is asked not to approach anyone matching it, which is most people.');
+  return lines;
+}
+// what people say about it (talk.js): the top story, and, if you're known, that you look like somebody
+function newsGossip() {
+  const out = [], top = newsLines(true)[0];
+  if (top) { const s = top.split('. ')[0].replace(/\.$/, '') + '.'; out.push(`Did you see the paper? "${s}"`, `${s} That's this city for you.`); }
+  if (noto.level >= NOTO_KNOWN) out.push('Hang on. Have I seen you somewhere? No. Never mind.', 'You look like somebody. I can\'t think who.');
+  if (noto.level >= NOTO_INFAMOUS) out.push('You look a lot like that description in the paper. So does my cousin, to be fair.');
+  return out;
 }
 let courierJob = null;
 // best: fastest delivery per route id. A completed route unlocks any route that names it.
@@ -20486,8 +20604,6 @@ function minimap() {
   g.font = FS + 'px monospace';
 }
 
-const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'Chinatown', industrial: 'the Docks', yards: 'the Yards', belle: 'Belle Époque Quarter',
-                         brownstones: 'the Brownstones', waterfront: 'the Waterfront', sea: 'the Bay', shotengai: 'the Shotengai' };
 // a line of HUD text broken to fit maxW px: at the wide gaps between its parts first, then between words
 function wrapText(s, maxW) {
   const out = [];
@@ -20726,7 +20842,7 @@ function interact() {
         }
         return say('Adopt a pet at the pet shop and bring it home.', 2);
       }
-      if (hs === 'tv') { room.tv = !room.tv; return say(room.tv ? 'The telly flickers on.' : 'You switch the telly off.', 2); }
+      if (hs === 'tv') { room.tv = !room.tv; const news = room.tv ? tellyNews() : ''; return say(room.tv ? 'The telly flickers on.' + news : 'You switch the telly off.', news ? 6 : 2); }
     }
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) { // up the spiral
       enterRoom('lamproom', { word: 'LAMP ROOM', below: { word: room.word, ret: room.ret, line: room.line } }, [1.6, 4.4, -Math.PI / 4]);
@@ -21323,7 +21439,7 @@ function finishBout(g, quit) {
   const res = g.result || { win: false, how: 'towel' }, champ = g.foe === BOXERS.length - 1;
   needs.health = clamp(g.hp, RING_FLOOR, maxHealth());
   if (res.win) {
-    earn(g.purse);
+    earn(g.purse); newsEvent('bout', ...crimePos(), { who: g.name }); // (it makes the papers)
     if (g.foe >= boxRank) boxRank = Math.min(BOXERS.length, g.foe + 1);
     const how = { KO: 'by knockout', TKO: 'on a stoppage', decision: 'on points' }[res.how] || '';
     const next = champ ? ' You\'re the champion of Glyphport.' : ` Next on the card: ${nextBoxer().name}.`;
@@ -22069,6 +22185,7 @@ function airCrash(c) {
   const hurtBy = clamp(20 + (c.crashSpeed || 0) * 14, 20, 95), [x, y] = spotNear(c.x, c.y + 0.4);
   pilot = null; c.state = 'parked'; mode = 'walk'; px = x; py = y; a = Math.atan2(rel(c.y - y), rel(c.x - x)); pitch = 0; body.z = body.vz = 0;
   const blown = c.blown; delete c.blown;
+  if (c.stolen && !blown) newsEvent('planecrash', c.x, c.y);
   if (hurt(hurtBy)) return passOut(blown ? 'It blew apart in the air with you still in it. They found you in the wreckage, somehow alive.' : 'Pulled from the wreck of an aircraft. Lucky to be alive.');
   if (needs.health < 35) needs.warned = 'weak'; // (you know)
   say(blown ? 'It blows apart around you. You come to in the wreckage, burnt and half deaf, somehow alive.' : 'You come down hard. You crawl out of the wreck before it goes up.', 5);
@@ -22076,6 +22193,7 @@ function airCrash(c) {
 // into the bay: it sinks, and you swim for the nearest dry land
 function airDitch(c) {
   pilot = null; c.state = 'parked'; mode = 'walk';
+  if (c.stolen) newsEvent('planecrash', c.x, c.y);
   if (c.sinkT == null) c.sinkT = T;
   swimAshore(c.x, c.y);
   hurt(15); say('It goes under. You kick free of the cockpit and swim for the nearest shore, and drag yourself out, soaked.', 6);
@@ -22092,7 +22210,7 @@ function stepAirWrecks(dt) {
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
-    if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
+    if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; if (c.stolen) newsEvent('blownup', c.x, c.y); } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
   }
@@ -22220,6 +22338,7 @@ function bailOut() {
   const c = pilot, T_ = PLANE_TYPES[c.type], side = T_.heli ? 0.2 : T_.r + 0.2;
   c.state = 'abandoned'; pilot = null; mode = 'walk'; // (the empty aircraft: stepAbandoned)
   px = mod(c.x + Math.sin(c.yaw) * side, N); py = mod(c.y - Math.cos(c.yaw) * side, N); a = c.yaw; pitch = -0.45;
+  if (c.stolen) newsEvent('ejected', px, py);
   body.z = Math.max(0.5, c.z * 10 - 1); body.vz = Math.min(0, (c.vz || 0) * 10); body.peak = body.z; body.seat = null; body.trick = null;
   const vx = T_.heli ? c.hvx || 0 : Math.cos(c.yaw) * c.v * Math.cos(c.pitch), vy = T_.heli ? c.hvy || 0 : Math.sin(c.yaw) * c.v * Math.cos(c.pitch);
   body.mx = vx * 0.6; body.my = vy * 0.6; // (cells a second: out the door you carry some of its speed)
@@ -24001,7 +24120,7 @@ function panelKey(e) {
 }
 
 // ---- using things: the sounds that go with them
-const HEADLINES = () => [...MARKET.news.slice(0, 2).map(n => n.line), `${pick(stations).name} station closed for repairs`, 'Mayor vows to fix the el (again)', 'Bridge tolls to rise',
+const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice(0, 2).map(n => n.line), // (anything with you in it leads) `${pick(stations).name} station closed for repairs`, 'Mayor vows to fix the el (again)', 'Bridge tolls to rise',
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
@@ -24014,7 +24133,7 @@ function useHeldItem() {
   }
   const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
     water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
-  if (line) say(line, 3);
+  if (line) say(line, Math.max(3, line.length / 20)); // (long enough to read)
   if (actx && sound) sfxUse(sound);
 }
 function sfxUse(s) {
@@ -26017,6 +26136,25 @@ function crimePrompt() {
   if (!sh || !nightTime()) return '';
   return use + ((jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`);
 }
+// ===== being known, and the news (notoriety.js), out in the world: a passer-by who knows your face, and the TV that's
+// always on over the bar and in the motel office. The paper is goods-ui.js (HEADLINES), your own telly actions.js
+function stepNewsUI(dt) {
+  stepNotoriety();
+  const seen = recognise(dt);
+  if (seen) say(seen.called ? 'A passer-by looks at you, then at their phone, then at you again. They start dialling.'
+    : pick(['Someone stops and looks at you a beat too long, then walks on.', 'A passer-by gives you a second look. Then a third.', '"Aren\'t you...?" They decide you aren\'t.']), 3);
+  // walk into a bar (or the motel office) and the news is on: the top story, once a visit, when nothing else is being said
+  if (mode === 'room' && room && (room.kind === 'bar' || room.kind === 'motel') && !room.newsShown) {
+    room.newsAt ??= T + 2;
+    if (T >= room.newsAt && msgT <= 0.5) {
+      room.newsShown = true;
+      const top = newsLines(true)[0];
+      if (top) say(`${room.kind === 'bar' ? 'The TV over the bar' : 'The TV in the corner'}: ${top}`, 6);
+    }
+  }
+}
+// switching your own telly on: the local news, if there's any worth hearing
+const tellyNews = () => { const l = newsLines(true); return l.length ? ` The local news is on. ${pick(l)}` : ''; };
 // ===== on your feet: Space jumps, C held crouches, C by a bench or a seat sits you down (C again, or walk, to get
 // up). On the skateboard (skate.js) Space pops an ollie, and the arrows you're holding as you pop make it a trick:
 // left kickflip, right heelflip, down pop shuvit, down-left 360 flip, down-right varial heelflip. Or flick for it:
@@ -26567,6 +26705,7 @@ function saveGame() {
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
   const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+    noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
     homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
@@ -26582,6 +26721,11 @@ function loadGame() {
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
   tattoos.length = 0; for (const id of d.tattoos || []) if (ITEMS[id] && ITEMS[id].kind === 'tattoo' && !tattoos.includes(id)) tattoos.push(id);
+  if (d.noto) { // how well known you are, and what's in the papers
+    noto.level = clamp(+d.noto.level || 0, 0, 100); noto.day = Number.isInteger(d.noto.day) ? d.noto.day : dayNum; noto.lookDay = d.noto.lookDay ?? -9;
+    noto.looked = d.noto.looked && typeof d.noto.looked === 'object' ? { ...d.noto.looked } : {};
+    noto.log = (Array.isArray(d.noto.log) ? d.noto.log : []).filter(e => e && typeof e.kind === 'string' && Number.isInteger(e.day)).slice(0, 40);
+  } else noto.day = dayNum;
   quickSlots.fill(-1);
   if (Array.isArray(d.quickSlots)) {
     for (let s = 0; s < QUICK_SLOTS; s++) { const k = d.quickSlots[s]; if (Number.isInteger(k) && k >= 0 && k < inv.length && !quickSlots.includes(k)) quickSlots[s] = k; }
@@ -26921,6 +27065,7 @@ function loop(t) {
   stepGrandHotel();
   stepTaxiJob(dt);
   const law = stepCrime(dt);
+  stepNewsUI(dt); // (being known, and the news: notoriety.js, news-ui.js)
   if (law === 'busted') openBusted();
   else if (law === 'lost') say('You lost them.', 3);
   else if (law === 'pullover') say('"PULL OVER!" booms from the cruiser on your tail.', 3);

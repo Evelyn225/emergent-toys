@@ -147,6 +147,7 @@ function airCrash(c) {
   const hurtBy = clamp(20 + (c.crashSpeed || 0) * 14, 20, 95), [x, y] = spotNear(c.x, c.y + 0.4);
   pilot = null; c.state = 'parked'; mode = 'walk'; px = x; py = y; a = Math.atan2(rel(c.y - y), rel(c.x - x)); pitch = 0; body.z = body.vz = 0;
   const blown = c.blown; delete c.blown;
+  if (c.stolen && !blown) newsEvent('planecrash', c.x, c.y);
   if (hurt(hurtBy)) return passOut(blown ? 'It blew apart in the air with you still in it. They found you in the wreckage, somehow alive.' : 'Pulled from the wreck of an aircraft. Lucky to be alive.');
   if (needs.health < 35) needs.warned = 'weak'; // (you know)
   say(blown ? 'It blows apart around you. You come to in the wreckage, burnt and half deaf, somehow alive.' : 'You come down hard. You crawl out of the wreck before it goes up.', 5);
@@ -154,6 +155,7 @@ function airCrash(c) {
 // into the bay: it sinks, and you swim for the nearest dry land
 function airDitch(c) {
   pilot = null; c.state = 'parked'; mode = 'walk';
+  if (c.stolen) newsEvent('planecrash', c.x, c.y);
   if (c.sinkT == null) c.sinkT = T;
   swimAshore(c.x, c.y);
   hurt(15); say('It goes under. You kick free of the cockpit and swim for the nearest shore, and drag yourself out, soaked.', 6);
@@ -170,7 +172,7 @@ function stepAirWrecks(dt) {
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
     if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
-    if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
+    if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; if (c.stolen) newsEvent('blownup', c.x, c.y); } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
   }
@@ -298,6 +300,7 @@ function bailOut() {
   const c = pilot, T_ = PLANE_TYPES[c.type], side = T_.heli ? 0.2 : T_.r + 0.2;
   c.state = 'abandoned'; pilot = null; mode = 'walk'; // (the empty aircraft: stepAbandoned)
   px = mod(c.x + Math.sin(c.yaw) * side, N); py = mod(c.y - Math.cos(c.yaw) * side, N); a = c.yaw; pitch = -0.45;
+  if (c.stolen) newsEvent('ejected', px, py);
   body.z = Math.max(0.5, c.z * 10 - 1); body.vz = Math.min(0, (c.vz || 0) * 10); body.peak = body.z; body.seat = null; body.trick = null;
   const vx = T_.heli ? c.hvx || 0 : Math.cos(c.yaw) * c.v * Math.cos(c.pitch), vy = T_.heli ? c.hvy || 0 : Math.sin(c.yaw) * c.v * Math.cos(c.pitch);
   body.mx = vx * 0.6; body.my = vy * 0.6; // (cells a second: out the door you carry some of its speed)
