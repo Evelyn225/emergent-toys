@@ -15120,10 +15120,21 @@ const TV_PLANE = gx => [ // { b: box, kind }
   { b: boxAt(gx, -10.5, 0, 1, 7.5, 1.5, 0.9, 3.9), kind: 'body' }, { b: boxAt(gx, -11.5, 1, 0, 5.2, 1.6, 1.7, 2), kind: 'wing' },
   ...[-3.2, 3.2].map(e => ({ b: boxAt(gx + e, -10, 0, 1, 1.2, 0.7, 0.8, 1.9), kind: 'engine' })),
   { b: boxAt(gx, -16.8, 0, 1, 1.4, 0.15, 3.9, 8), kind: 'fin' }, { b: boxAt(gx, -17, 1, 0, 3.2, 0.8, 3.9, 4.15), kind: 'wing' }];
+// the jet bridge: the rotunda on its post a step out from the wall (clear of the glass), the tunnel angled out from it
+// to the plane's front door, the cab on the end, and the drive leg on its wheels under the far end of the tunnel
+const TV_BRIDGE = gx => {
+  const rx = gx - 4.4, ry = -1.5, dx = gx - 2.2, dy = -4.6, len = Math.hypot(dx - rx, dy - ry), c = (dx - rx) / len, s = (dy - ry) / len;
+  const lx = rx + (dx - rx) * 0.72, ly = ry + (dy - ry) * 0.72;
+  return [
+    { b: boxAt(rx, ry, 1, 0, 1, 1, 2.2, 4.6), kind: 'bridge' }, { b: boxAt(rx, ry, 1, 0, 0.32, 0.32, 0, 2.2), kind: 'leg' },
+    { b: boxAt((rx + dx) / 2, (ry + dy) / 2, c, s, len / 2, 0.8, 2.45, 4.35), kind: 'bridge' },
+    { b: boxAt(dx, dy, 1, 0, 0.75, 1.05, 2.3, 4.5), kind: 'bridge' },
+    { b: boxAt(lx, ly, c, s, 0.18, 0.5, 0.5, 2.45), kind: 'leg' }, { b: boxAt(lx, ly, -s, c, 0.8, 0.3, 0, 0.55), kind: 'wheels' }];
+};
 function terminalOutside() {
   const out = [];
   TERMINAL_GATE_X.forEach((gx, k) => {
-    out.push({ b: boxAt(gx - 2.4, -1.6, 0, 1, 1.6, 0.9, 2.3, 4.4), kind: 'bridge' }); // the jet bridge, out from the wall
+    out.push(...TV_BRIDGE(gx));
     if (aircraft.some(c => c.type === 'airliner' && c.gate === k && c.state === 'parked')) out.push(...TV_PLANE(gx));
   });
   return out;
@@ -15141,7 +15152,16 @@ function terminalView(i, x, z) {
   const tg = rz < 0 ? -eye / rz : Infinity;
   if (hit && best < tg) {
     const k = shadeFace(hf), L = Math.max(sun, flood) * k;
-    if (hit.kind === 'bridge') { BG[i] = C(GRAY, 1.2 + L * 0.2); return set(i, Math.abs(hw - 3.4) < 0.3 && fract(hu * 0.8) < 0.5 ? '#' : fract(hu * 2) < 0.06 ? '|' : ' ', C(CYAN, 6 + lit * 6)); }
+    if (hit.kind === 'bridge') { // ribbed steel, a strip of windows along it (lit inside after dark), pale on top, dark under
+      if (hf === 6) { BG[i] = C(GRAY, 0.5 + L * 0.08); return set(i, fract(hu * 1.2) < 0.08 ? '-' : ' ', C(GRAY, 3)); }
+      if (hf === 5) { BG[i] = C(WHITE, 1 + L * 0.2); return set(i, ' ', 0); }
+      const along = hf <= 2 ? hv : hu, win = hw > 3.25 && hw < 3.75 && Math.abs(fract(along * 0.9) - 0.5) < 0.32;
+      if (win) { BG[i] = lit > 0.35 ? C(WARM, 2 + lit * 4) : C(CYAN, 1 + day * 2); return set(i, Math.abs(hw - 3.5) < 0.04 ? '-' : ' ', C(GRAY, 6)); }
+      BG[i] = C(WHITE, 0.9 + L * 0.22);
+      return set(i, Math.abs(hw - 3.2) < 0.05 || Math.abs(hw - 3.8) < 0.05 ? '=' : fract(along * 2.5) < 0.08 ? '|' : ' ', C(GRAY, 4 + L * 0.3));
+    }
+    if (hit.kind === 'leg') { BG[i] = C(GRAY, 0.8 + L * 0.15); return set(i, hf <= 4 && fract(hw * 2) < 0.1 ? '-' : '|', C(GRAY, 4)); }
+    if (hit.kind === 'wheels') { BG[i] = C(GRAY, 0.4 + L * 0.06); return set(i, hf <= 4 && hw < 0.45 ? 'O' : '=', C(GRAY, 5)); }
     if (hit.kind === 'body') { // white, the airline's blue cheat line, a row of windows, the flight deck's windows on the nose
       if (hf === 1 && hw > 2.8 && hw < 3.4 && Math.abs(hv) < 1) { BG[i] = C(GRAY, 0.6); return set(i, Math.abs(hv) < 0.06 ? '|' : ' ', C(GRAY, 4)); }
       if (Math.abs(hw - 2.3) < 0.2) { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, ' ', 0); }
