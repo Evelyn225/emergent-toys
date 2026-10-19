@@ -2684,7 +2684,7 @@ test('car damage: a crash at speed dents it and the dash says so; a burning car 
   const before = await page.evaluate(() => {
     const d = doors.find(o => o.sh.word === 'AUTO REPAIR'), c = addCar({ x: d.x - d.nx * 6, y: d.y - d.ny * 6, hx: 1, hy: 0, body: RED });
     me = c; c.player = true; mode = 'drive'; px = c.x; py = c.y; a = 0; money = 300; damageCar(c, 40);
-    for (const o of cars) if (o.patrol) { o.x = mod(o.x + 100, N); o.ex = o.x; } for (const o of footCops) o.x = mod(o.x + 100, N);
+    for (const o of cars) if (o.patrol) { o.x = o.ex = mod(px + N / 2, N); o.y = o.ey = mod(py + N / 2, N); } for (const o of footCops) { o.x = mod(px + N / 2, N); o.y = mod(py + N / 2, N); } // (the far side of the city: a shift by a set amount could wrap one right back round to here)
     addWanted('crash', px, py, false);
     return promptText();
   });
