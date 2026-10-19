@@ -42,7 +42,7 @@ const nearPerson = () => {
   if (mode !== 'walk') return null;
   let best = null, bd = 0.45;
   for (const p of [...people, ...fairFolk]) { // (and the crowd at the fair)
-    if (p.hidden) continue;
+    if (p.hidden || p.dead || p.flee) continue; // (not somebody lying dead, or running for their life)
     const ex = rel(p.x - px), ey = rel(p.y - py), d = Math.hypot(ex, ey);
     if (d < bd && (ex * Math.cos(a) + ey * Math.sin(a)) / d > 0.85) { bd = d; best = p; }
   }
@@ -277,6 +277,7 @@ function needMeters() {
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
   drawHeldBig();
+  drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';

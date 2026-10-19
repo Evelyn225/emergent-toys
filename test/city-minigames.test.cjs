@@ -306,7 +306,8 @@ test('duck pond: dip the hook on a duck and up it comes with its tickets on the 
   // three ducks: wait for one under the hook, dip, see its number, again
   let total = 0;
   for (let n = 0; n < 3; n++) {
-    ev('(() => { for (let k = 0; k < 2000 && !g.under(); k++) g.step(1 / 60, {}); })()');
+    // (one just coming under the hook, not one at the far edge about to swim off it before the hook goes in)
+    ev('(() => { let was = g.under(); for (let k = 0; k < 2000; k++) { g.step(1 / 60, {}); const d = g.under(); if (d && d !== was) return; was = d; } })()');
     const want = ev('g.under().worth');
     const evs = play(ev, 4, '(t) => ({ actP: t < 0.02 })');
     assert.ok(evs.includes('eat'), 'hooked one');

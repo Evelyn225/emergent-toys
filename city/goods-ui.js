@@ -238,6 +238,7 @@ function drawHeldBig() {
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
   else if (heldIsRod(it)) drawFishingRod(it); // (fishing-render.js: the rod, and whatever's on its line)
+  else if (ITEMS[it.id].kind === 'gun') drawRevolver(it); // (gun-ui.js)
   else drawHeldDense(it, cx, hy, hsz, grip);
   drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
   if (it.id === 'yoyo') drawYoyo(cx - hsz * 0.2, hy + HAND_ART.length * hsz); // (in your hand or out on its string, it hangs from under your fist)
@@ -414,7 +415,7 @@ const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' &
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
-  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
+  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `${id === UNDER_COUNTER[0] ? '<h2>under the counter</h2>' : ''}<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
   const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate), bin = binnable(it, rate);
     return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${it.kg ? catchName(it) : ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
   const work = shiftHere();
@@ -502,6 +503,7 @@ const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
+  if (heldGun()) return pullTrigger(); // (gun-ui.js)
   if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
   if (body.seat && body.seat.grass && heldItem() && ITEMS[heldItem().id].kind === 'food' && chance(0.5)) { // a picnic
     const name = ITEMS[heldItem().id].name, [, sound] = useHeld({ indoors: false, x: px, y: py, a, rain, person: null, headlines: HEADLINES(), water: false });

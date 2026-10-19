@@ -124,7 +124,8 @@ const STOCK_WORD = {
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
-const stockFor = (kind, word) => STOCK_WORD[word] || STOCK_ROOM[kind] || [];
+// (and the pawnbroker, after nine, has something under the counter: gun.js)
+const stockFor = (kind, word) => word === 'PAWN' && underCounter(tod) ? [...STOCK_WORD.PAWN, ...UNDER_COUNTER] : STOCK_WORD[word] || STOCK_ROOM[kind] || [];
 // the street carts
 const VENDOR_STOCK = { 'COTTON CANDY': ['cottoncandy', 'lemonade'], 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 'ICE CREAM': ['icecream'], COFFEE: ['coffee', 'donut'], NOODLES: ['noodlebox', 'tea'] };
 
@@ -200,8 +201,11 @@ function buy(id) { // false + why, if you can't
   if (it.kind === 'tattoo') return getTattoo(id);
   if (it.kind === 'look') return pay(it.price) ? [true, `${it.line}${changeLook(it.look)} (${fmt$(it.price)})`] : [false, `A ${it.name} is ${fmt$(it.price)}. You can't afford it.`];
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
-  if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
+  if ((it.kind === 'gun' || it.kind === 'ammo') && wanted.stars > 0) return [false, '"Not with the police out looking for you. Come back when it\'s quiet."'];
+  if (!pay(it.price)) return [false, it.kind === 'gun' ? `"${fmt$(it.price)}. Cash. I don't do layaway."` : `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   carryItem({ id, uses: it.uses || 0 });
+  if (it.kind === 'gun') return [true, `${GUN_SOLD} (${fmt$(it.price)})${ammoLeft() ? '' : ' It isn\'t loaded. You\'ll want a box of rounds.'}`];
+  if (it.kind === 'ammo') return [true, `A box of ${it.uses} rounds goes across the counter in a paper bag. (${fmt$(it.price)})`];
   return [true, `You buy ${aOrSome(it.name)}. (${fmt$(it.price)})${it.rod ? ' Hold Q to wind up and let go to cast; when the bobber goes under, Q to strike.' : ''}`];
 }
 const cap = s => s[0].toUpperCase() + s.slice(1);
@@ -219,7 +223,7 @@ function getTattoo(id) {
   return [true, `${it.hours > 1 ? it.hours + ' hours' : 'An hour'} in the chair. The ${it.name}, ${it.where}. It stings, and it's perfect.${changeLook('tattoo')} (${fmt$(it.price)})`];
 }
 // what you could walk off with (not a car, a flat or somebody's needlework)
-const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look'].includes(ITEMS[id].kind));
+const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look', 'gun', 'ammo'].includes(ITEMS[id].kind)); // (nor what's under the counter)
 const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
 const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink', 'fish', 'ingredient'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
@@ -238,7 +242,7 @@ function storeSlot(k, list = stored, where = 'your unit', accepts = null, capaci
 // pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
 // (and the bait hut buys what you catch: rate 'catch', see catchPrice in fishing.js; it bins your junk for nothing)
 const SELL_RATE = { PAWN: 0.4, 'BAIT & TACKLE': 'catch', SUSHI: 'sushi' }; // (and the sushi bars, sea fish only: sushiPrice)
-const sellPrice = (it, rate) => rate === 'catch' ? catchPrice(it) : rate === 'sushi' ? sushiPrice(it) : ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
+const sellPrice = (it, rate) => rate === 'catch' ? catchPrice(it) : rate === 'sushi' ? sushiPrice(it) : ['gear', 'gun'].includes(ITEMS[it.id].kind) ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
 const binnable = (it, rate) => rate === 'catch' && ITEMS[it.id].kind === 'junk';
 function sellSlot(k, rate) {
   if (!inv[k]) return [false, 'Nothing there.'];
@@ -294,6 +298,8 @@ function useHeld(near) {
     return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
   }
   if (d.kind === 'keys') return summonCar(d.car);
+  if (d.kind === 'ammo') return [`${it.uses} rounds in a cardboard box. With the revolver in your hand, R loads them.`, null];
+  if (d.kind === 'gun') return ['', null]; // (Q fires it: gun-ui.js)
   if (d.rod) return rodUse(near); // (fishing.js)
   if (d.kind === 'fish') return [pick([`The ${d.name} looks at you. You look at the ${d.name}.`, `A ${catchName(it)}. The hut by the Sunset Pier will take it off you.`, `You hold the ${d.name} up. It is, unmistakably, a fish.`]), null];
   if (d.kind === 'ingredient') return [pick([`You'll want to cook the ${d.name} first. The stove at home, or a grill down by the water.`, `Raw ${d.name}. It needs a pan.`]), null];

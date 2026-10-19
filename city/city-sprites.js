@@ -208,7 +208,9 @@ function citySprites() {
     if (Math.abs(vx) < vis && Math.abs(vy) < vis) { figMotion(m); drawFigure(vx, vy, 0, 0.175, m._fx || 0, m._fy || 0, streetLook(m), walkPose(m)); }
   }
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
-    if (m.down) drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
+    if (m.dead && sheeted(m)) drawSheet(m, ...R(m.x, m.y)); // (shot, and the paramedics are here: gun-ui.js)
+    else if (m.down) drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
+    else if (m.flee) { drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.flee.x, m.flee.y, streetLook(m), walkPose(m, 'run')); if (m.flee.scream && fract(T * 2.5 + m.ph) < 0.6) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.05, ['!'], () => C(WHITE, 14)); } // (running from a gunshot)
     else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
       const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
       drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
@@ -225,6 +227,7 @@ function citySprites() {
   for (const c of footCops) { // police on foot: navy cap, uniform, running when they're after you
     const [vx, vy] = R(c.x, c.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
+    if (c.dead && sheeted(c)) { drawSheet(c, vx, vy); continue; }
     if (c.down) { drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, -c.down.fx, -c.down.fy, copLook(c), downPose(c.down)); continue; }
     figMotion(c); drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));

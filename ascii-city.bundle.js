@@ -959,7 +959,7 @@ const HOURS = { VELVET: [20, 4], CASINO: [14, 2], EXCHANGE: [8, 19], BAR: [16, 3
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
   NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [0, 24], BODEGA: [0, 24], STORAGE: [0, 24], AQUARIUM: [9, 21],
-  PACHINKO: [10, 23], 'CRANE GAME': [10, 2], IZAKAYA: [17, 3], YAKITORI: [17, 2], TAKOYAKI: [11, 23], BENTO: [7, 21], CAPSULE: [0, 24], MANGA: [10, 23], DRUGSTORE: [9, 23], KISSATEN: [7, 20], GACHA: [10, 22], GAS: [0, 24] };
+  PACHINKO: [10, 23], 'CRANE GAME': [10, 2], IZAKAYA: [17, 3], YAKITORI: [17, 2], TAKOYAKI: [11, 23], BENTO: [7, 21], CAPSULE: [0, 24], MANGA: [10, 23], DRUGSTORE: [9, 23], KISSATEN: [7, 20], GACHA: [10, 22], GAS: [0, 24], PAWN: [10, 2] };
 const hoursOf = word => HOURS[word] || [9, 20];
 const openAt = (sh, t) => { // is this shop open at game hour t?
   if (sh.kind === SHOP_APTS) return true;
@@ -2865,7 +2865,11 @@ function plan(c) {
   const ix = (vert ? Math.floor(c.x / 8) : c.B / 8), iy = (vert ? c.B / 8 : Math.floor(c.y / 8)); // the intersection, in blocks
   let opts = [[c.hx, c.hy], [c.hy, -c.hx], [-c.hy, c.hx]].filter(o => exitOK(ix, iy, o[0], o[1])); // straight, right, left
   if (!opts.length) opts = [[c.hx, c.hy]]; // can't happen on a checked street network (see streetProblems)
-  if (c.dest) { // score each choice from the intersection itself, not from where we are now
+  if (c.dest && c.ev && !c.pursuit && c.state === 'out') { // on a call: the shortest way through the streets to the stretch the scene is on
+    const f = sceneRoute(c), [sx, sy] = c.sceneAt;
+    const cost = o => (o[0] ? c.sceneH : !c.sceneH) && ((o[0] < 0 ? ix - 1 : ix) & (NB - 1)) === sx && ((o[1] < 0 ? iy - 1 : iy) & (NB - 1)) === sy ? -1 : f[bi(ix + o[0], iy + o[1])];
+    c.nh = opts.reduce((b, o) => cost(o) < cost(b) ? o : b);
+  } else if (c.dest) { // score each choice from the intersection itself, not from where we are now
     const ex = rel(c.dest[0] - (vert ? c.x : c.B + 1)), ey = rel(c.dest[1] - (vert ? c.B + 1 : c.y));
     c.nh = opts.reduce((b, o) => o[0] * ex + o[1] * ey > b[0] * ex + b[1] * ey ? o : b);
   } else {
@@ -2877,6 +2881,24 @@ function plan(c) {
   const P = straight ? (dir > 0 ? c.B + 2 : c.B)
           : vert ? c.B + 1 - 0.4 * c.nh[0] : c.B + 1 + 0.4 * c.nh[1]; // the new lane's coordinate
   c.left = mod((P - along) * dir, N);
+}
+
+// how many stretches of street it is from each intersection to either end of the one a call's scene is on (breadth
+// first, over the street network): worked out once a call. sceneAt, sceneH: that stretch's block, and which way it runs
+function sceneRoute(c) {
+  const [x, y] = c.dest, key = x + ',' + y;
+  if (c.sceneKey === key) return c.sceneF;
+  const bx = Math.floor(mod(x, N) / 8), by = Math.floor(mod(y, N) / 8), horiz = Math.abs(mod(y, 8) - 1) < 0.8;
+  const f = new Int16Array(NB * NB).fill(9999), queue = horiz ? [bi(bx, by), bi(bx + 1, by)] : [bi(bx, by), bi(bx, by + 1)];
+  for (const k of queue) f[k] = 0;
+  for (let h = 0; h < queue.length; h++) {
+    const k = queue[h], qx = k % NB, qy = k / NB | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (exitOK(qx, qy, dx, dy)) {
+      const m = bi(qx + dx, qy + dy); if (f[m] > f[k] + 1) { f[m] = f[k] + 1; queue.push(m); }
+    }
+  }
+  Object.assign(c, { sceneKey: key, sceneF: f, sceneAt: [bx, by], sceneH: horiz });
+  return f;
 }
 
 const BODIES = [RED, BLUE, WHITE, TAXI, TAXI, GREEN, GRAY];
@@ -3135,8 +3157,8 @@ const BASE_R = 50; // a station further away than this (500m) doesn't send the c
 let evTimer = 45;
 const nearestBase = (kind, free) => SERVICES.filter(b => b.kind === kind && (!free || !b.out))
   .reduce((best, b) => { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); return d < best[1] ? [b, d] : best; }, [null, Infinity]);
-function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police'])) {
-  let scene = null; // somewhere on a street a few blocks from you, so you'll see it go by or pull up
+function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police']), at = null) {
+  let scene = at; // somewhere on a street a few blocks from you, so you'll see it go by or pull up (or where it's needed)
   for (let tries = 0; tries < 200 && !scene; tries++) {
     const p = randomLane(12, px, py);
     if (!p) return null; // (no streets near: nothing to see go by)
@@ -4180,7 +4202,7 @@ function rethink(p, t) {
 // straight to wherever the routine has them right now: indoors at the place, or out from their front door
 function settle(p) {
   const act = activity(p, tod), place = placeFor(p, act, tod);
-  p.act = act; p.goal = null; p.loiter = false; p.legs = 0;
+  p.act = act; p.goal = null; p.loiter = false; p.legs = 0; delete p.flee;
   if (place) { p.x = place.x; p.y = place.y; p.inside = place; p.hidden = true; p.wait = 3 + Math.random() * 15; }
   else { p.x = p.home.x; p.y = p.home.y; p.inside = null; p.hidden = false; p.wait = 0; }
   snapToCorner(p);
@@ -4229,8 +4251,40 @@ function stepHelp(p, dt) {
   const s = Math.min(d - 0.1, p.sp * 2.5 * dt), nx = mod(p.x + dx / d * s, N), ny = mod(p.y + dy / d * s, N);
   if (!map[idx(Math.floor(nx), Math.floor(ny))]) { p.x = nx; p.y = ny; p.ph += dt * 8; }
 }
+// running from a gunshot (gun.js): flat out away from it, sliding along walls, for a few seconds; then back to the
+// nearest sidewalk and on with the day, or (somewhere you can't see them) straight to wherever the routine has them
+function stepFlee(p, dt) {
+  const f = p.flee;
+  if ((f.t -= dt) <= 0) { delete p.flee; return backToSidewalk(p); }
+  const s = p.sp * 5 * dt, open = (x, y) => !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y);
+  let moved = false;
+  if (open(p.x + f.x * s, p.y)) { p.x = mod(p.x + f.x * s, N); moved = true; }
+  if (open(p.x, p.y + f.y * s)) { p.y = mod(p.y + f.y * s, N); moved = true; }
+  if (!moved) [f.x, f.y] = Math.random() < 0.5 ? [-f.y, f.x] : [f.y, -f.x]; // (cornered: off another way)
+  p.last = [f.x, f.y]; p.ph += dt * 9;
+}
+function backToSidewalk(p) {
+  const d = Math.hypot(rel(p.x - px), rel(p.y - py));
+  if (d > VIS_R || d > SEEN_R && !lineOfSight(px, py, p.x, p.y)) return settle(p);
+  // the nearest sidewalk line (0.12 / 1.88 into a street, either way), then on from there to its corner
+  const line = v => { const b = Math.floor(v / 8) * 8; return [b - 6.12, b + 0.12, b + 1.88, b + 8.12].reduce((m, c) => Math.abs(c - v) < Math.abs(m - v) ? c : m); };
+  const lx = line(p.x), ly = line(p.y), at = Math.abs(lx - p.x) < Math.abs(ly - p.y) ? { x: mod(lx, N), y: p.y } : { x: p.x, y: mod(ly, N) };
+  const [x, y] = [p.x, p.y];
+  p.x = at.x; p.y = at.y; snapToCorner(p); p.x = x; p.y = y;
+  p.path.unshift(at); p.goal = null; p.legs = 0; p.wait = 0;
+}
+// somebody new in the city, in place of somebody who's gone (gun.js): their own home, their own routine
+function respawnPerson(p) {
+  for (const k of ['down', 'dead', 'flee', 'gawk', 'help', 'talk', 'dog', 'knew', 'follow', 'hailing']) delete p[k];
+  p.home = pickHome();
+  p.work = nearestDoor(p.home.x + (Math.random() - 0.5) * 24, p.home.y + (Math.random() - 0.5) * 24, d => d.use === 'work' || d.use === 'shop', 2) || pick(jobs);
+  p.shirt = pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]); p.pants = pick([BLUE, GRAY]); p.ph = Math.random() * 9;
+  p.x = p.home.x; p.y = p.home.y; p.path = [];
+  settle(p);
+}
 function stepPeople(dt, t, everywhere = false) {
   for (const p of people) {
+    if (p.dead) continue; // (lying where they fell: gun.js sees to them)
     if (!everywhere && !p.follow && !simulated(p.x, p.y)) continue;
     if (!everywhere && !p.follow && !(p.talk > 0)) {
       if (p.simT !== undefined && T - p.simT > 2) settle(p);
@@ -4238,6 +4292,7 @@ function stepPeople(dt, t, everywhere = false) {
       p.simT = T;
     }
     if (stepDown(p, dt)) continue; // (knocked down by a car)
+    if (p.flee) { stepFlee(p, dt); continue; } // (running from a gunshot)
     if (p.help) { stepHelp(p, dt); continue; } // (gone to them)
     if (p.talk > 0) { if ((p.talk -= dt) <= 0) delete p.gawk; continue; } // stopped to chat with you (or to stare)
     if (p.follow) { followYou(p, dt); continue; }
@@ -5255,7 +5310,8 @@ const STOCK_WORD = {
 };
 const STOCK_ROOM = { bar: ['beer', 'whiskey', 'cocktail'], karaoke: ['beer', 'cocktail'], diner: ['burger', 'coffee', 'soda'],
                      hotel: ['water', 'soda', 'chips'], arcade: ['soda', 'chips'], gym: ['water', 'energy'], cinema: ['soda', 'chips'] };
-const stockFor = (kind, word) => STOCK_WORD[word] || STOCK_ROOM[kind] || [];
+// (and the pawnbroker, after nine, has something under the counter: gun.js)
+const stockFor = (kind, word) => word === 'PAWN' && underCounter(tod) ? [...STOCK_WORD.PAWN, ...UNDER_COUNTER] : STOCK_WORD[word] || STOCK_ROOM[kind] || [];
 // the street carts
 const VENDOR_STOCK = { 'COTTON CANDY': ['cottoncandy', 'lemonade'], 'HOT DOGS': ['hotdog', 'soda'], TACOS: ['taco', 'soda'], 'ICE CREAM': ['icecream'], COFFEE: ['coffee', 'donut'], NOODLES: ['noodlebox', 'tea'] };
 
@@ -5331,8 +5387,11 @@ function buy(id) { // false + why, if you can't
   if (it.kind === 'tattoo') return getTattoo(id);
   if (it.kind === 'look') return pay(it.price) ? [true, `${it.line}${changeLook(it.look)} (${fmt$(it.price)})`] : [false, `A ${it.name} is ${fmt$(it.price)}. You can't afford it.`];
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
-  if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
+  if ((it.kind === 'gun' || it.kind === 'ammo') && wanted.stars > 0) return [false, '"Not with the police out looking for you. Come back when it\'s quiet."'];
+  if (!pay(it.price)) return [false, it.kind === 'gun' ? `"${fmt$(it.price)}. Cash. I don't do layaway."` : `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   carryItem({ id, uses: it.uses || 0 });
+  if (it.kind === 'gun') return [true, `${GUN_SOLD} (${fmt$(it.price)})${ammoLeft() ? '' : ' It isn\'t loaded. You\'ll want a box of rounds.'}`];
+  if (it.kind === 'ammo') return [true, `A box of ${it.uses} rounds goes across the counter in a paper bag. (${fmt$(it.price)})`];
   return [true, `You buy ${aOrSome(it.name)}. (${fmt$(it.price)})${it.rod ? ' Hold Q to wind up and let go to cast; when the bobber goes under, Q to strike.' : ''}`];
 }
 const cap = s => s[0].toUpperCase() + s.slice(1);
@@ -5350,7 +5409,7 @@ function getTattoo(id) {
   return [true, `${it.hours > 1 ? it.hours + ' hours' : 'An hour'} in the chair. The ${it.name}, ${it.where}. It stings, and it's perfect.${changeLook('tattoo')} (${fmt$(it.price)})`];
 }
 // what you could walk off with (not a car, a flat or somebody's needlework)
-const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look'].includes(ITEMS[id].kind));
+const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look', 'gun', 'ammo'].includes(ITEMS[id].kind)); // (nor what's under the counter)
 const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
 const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink', 'fish', 'ingredient'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
@@ -5369,7 +5428,7 @@ function storeSlot(k, list = stored, where = 'your unit', accepts = null, capaci
 // pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
 // (and the bait hut buys what you catch: rate 'catch', see catchPrice in fishing.js; it bins your junk for nothing)
 const SELL_RATE = { PAWN: 0.4, 'BAIT & TACKLE': 'catch', SUSHI: 'sushi' }; // (and the sushi bars, sea fish only: sushiPrice)
-const sellPrice = (it, rate) => rate === 'catch' ? catchPrice(it) : rate === 'sushi' ? sushiPrice(it) : ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
+const sellPrice = (it, rate) => rate === 'catch' ? catchPrice(it) : rate === 'sushi' ? sushiPrice(it) : ['gear', 'gun'].includes(ITEMS[it.id].kind) ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
 const binnable = (it, rate) => rate === 'catch' && ITEMS[it.id].kind === 'junk';
 function sellSlot(k, rate) {
   if (!inv[k]) return [false, 'Nothing there.'];
@@ -5425,6 +5484,8 @@ function useHeld(near) {
     return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
   }
   if (d.kind === 'keys') return summonCar(d.car);
+  if (d.kind === 'ammo') return [`${it.uses} rounds in a cardboard box. With the revolver in your hand, R loads them.`, null];
+  if (d.kind === 'gun') return ['', null]; // (Q fires it: gun-ui.js)
   if (d.rod) return rodUse(near); // (fishing.js)
   if (d.kind === 'fish') return [pick([`The ${d.name} looks at you. You look at the ${d.name}.`, `A ${catchName(it)}. The hut by the Sunset Pier will take it off you.`, `You hold the ${d.name} up. It is, unmistakably, a fish.`]), null];
   if (d.kind === 'ingredient') return [pick([`You'll want to cook the ${d.name} first. The stove at home, or a grill down by the water.`, `Raw ${d.name}. It needs a pan.`]), null];
@@ -7485,7 +7546,10 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
                  boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' },
                  ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' },
-                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' } }; // (spotted: notoriety.js)
+                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' }, // (spotted: notoriety.js)
+                 // the revolver (gun.js): these don't add up, they set how bad it is at least (a killing: one more each time)
+                 gunfire: { stars: 2, name: 'firing a gun in the street', least: 0 }, murder: { stars: 4, name: 'murder', least: 1, kills: true },
+                 copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -7742,7 +7806,7 @@ for (let n = 0; n < PATROLS; n++) {
 // returns 'cop' (wanted now), 'reported' (somebody will call it in), or '' (nobody saw)
 // can any cop, in a car or on foot, see (x, y)?
 const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y))
-  || footCops.some(c => near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y));
+  || footCops.some(c => !c.dead && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y)); // (not one lying shot: gun.js)
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
   const copSees_ = copSees(x, y);
   if (copSees_) { addWanted(kind, x, y, true); return 'cop'; }
@@ -7758,8 +7822,11 @@ function redLightCrime(x, y) {
 }
 function addWanted(kind, x, y, seen) {
   if (kind !== 'spotted') newsEvent(kind, x, y); // (it's in the papers, and it's yours: notoriety.js)
-  wanted.stars = Math.min(MAX_STARS, Math.max(wanted.stars, 0) + CRIMES[kind].stars);
-  wanted.crime = CRIMES[kind].name; wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
+  const c = CRIMES[kind], was = Math.max(wanted.stars, 0);
+  wanted.stars = Math.min(MAX_STARS, c.least === undefined ? was + c.stars : Math.max(c.stars, was && was + c.least));
+  if (c.kills || !wanted.killed) wanted.crime = c.name; // (a shot fired doesn't make a murder sound any better)
+  if (c.kills) wanted.killed = true;
+  wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
   wanted.lastVX = 0; wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
   if (seen) observeSuspect(x, y);
   wanted.searchX = x; wanted.searchY = y;
@@ -7817,7 +7884,7 @@ function callUnits() {
 function clearWanted() {
   wanted.stars = 0; wanted.seen = false; wanted.hideT = 0; wanted.bustT = 0; wanted.busted = false;
   wanted.lastVX = wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
-  wanted.toldT = 0; wanted.pitPending = false;
+  wanted.toldT = 0; wanted.pitPending = false; wanted.fired = false; wanted.killed = false;
   const units = cars.filter(c => c.pursuit);
   const closestCar = (x, y) => units.reduce((best, c) => !best || near(c.x, c.y, x, y) < near(best.x, best.y, x, y) ? c : best, null);
   const exit = searchedRoom?.ret || room?.ret;
@@ -8093,7 +8160,8 @@ function tidyPolice() {
 const fineFor = stars => FINE[stars];
 function payFine() {
   const f = fineFor(wanted.stars);
-  if (!pay(f)) return false;
+  if (wanted.killed || !pay(f)) return false; // (there's no fine for a killing)
+  confiscateGun(); // (they keep the gun: gun.js)
   clearWanted(); return true;
 }
 // jail: everything you're carrying is taken (not your money) and locked in evidence, and you do your time. Break out
@@ -8115,6 +8183,7 @@ function goToJail() {
 // Gentle on purpose: a crime is easy to commit by accident (a red light, a fender bender, a bad moment with a pedestrian),
 // and the odd slip should barely register. It takes a run of serious ones to get you known.
 const NOTO_BY_STARS = [0, 3, 8, 15], NOTO_SLIP = { redlight: 1, crash: 1, urination: 2, graffiti: 2 }; // (a crime: by its stars, slips less)
+const NOTO_GUN = { gunfire: 4, murder: 25, copkill: 35 }; // (the revolver, gun.js: a shot less than its stars, a killing a lot more)
 const NOTO_EVENT = { scramble: 12, blownup: 8, ejected: 6, planecrash: 6 };
 const NOTO_FADE = 0.5; // what's left of it each morning
 const NOTO_LOOK = { haircut: 0.5, coat: 0.5, tattoo: 0.6 }; // what's left after a change of look (once a day each)
@@ -8130,7 +8199,7 @@ function newsEvent(kind, x = px, y = py, extra = {}) {
   const where = placeTitle(x, y), same = noto.log.find(e => e.kind === kind && e.day === dayNum && e.where === where);
   if (same) same.n++; else noto.log.unshift({ kind, day: dayNum, where, n: 1, ...extra });
   if (noto.log.length > 40) noto.log.length = 40;
-  noto.level = Math.min(100, noto.level + (NOTO_SLIP[kind] ?? (CRIMES[kind] ? NOTO_BY_STARS[Math.min(3, CRIMES[kind].stars)] : NOTO_EVENT[kind] || 0)));
+  noto.level = Math.min(100, noto.level + (NOTO_SLIP[kind] ?? NOTO_GUN[kind] ?? (CRIMES[kind] ? NOTO_BY_STARS[Math.min(3, CRIMES[kind].stars)] : NOTO_EVENT[kind] || 0)));
 }
 // a new look: knocks it down (each kind once a day: a second haircut doesn't fool anybody twice). What it did, for the
 // line at the counter: '' if there was nothing to lose
@@ -8193,6 +8262,9 @@ const NEWS = {
   escape: w => `Police call off a pursuit in ${w} after losing sight of the suspect. The search is described as ongoing, in a general sense.`,
   arrest: (w, n, e) => `Arrest in ${w} following ${e.crime || 'an incident'}. Officers describe the suspect as cooperative, eventually.`,
   bigfish: (w, n, e) => `A ${e.kg ? e.kg + 'kg ' : 'large '}${e.fish || 'fish'} was landed in ${w} by a member of the public. The fish was not available for comment.`,
+  gunfire: (w, n) => n > 1 ? `Gunshots reported in ${w}, ${n} times in one day. Police ask residents to stop describing them as fireworks.` : `A gunshot was reported in ${w}. Residents who thought it was a car backfiring have been asked to think again.`,
+  murder: (w, n) => n > 1 ? `${inWords(n)} people shot dead in ${w} in one day. Police describe the suspect as armed, and the day as long.` : `A pedestrian was shot dead in ${w}. Police say the suspect is armed, and that this is the main thing to know about them.`,
+  copkill: (w, n) => n > 1 ? `${inWords(n)} police officers shot dead in ${w}. Every officer in the city is now looking for the same person.` : `A police officer was shot dead in ${w}. The department has cancelled all leave, and most of its patience.`,
   bout: (w, n, e) => `An unknown fighter beat ${e.who} at the gym in ${w}. The promoter did not catch the name. The purse was paid in cash.`,
 };
 // the stories that run, biggest first: what happened yesterday (and so far today, on the telly), with a word from the
@@ -9046,6 +9118,230 @@ GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
   g.state = () => ({ heat, done, char, missed, moves, t });
   return g;
 };
+// ===== the revolver: a .38 the pawnbroker keeps under the counter, brought up after nine at night for anybody with
+// the money and no police behind them. Pure (no DOM), so the node tests can run it; gun-ui.js draws it, the shots,
+// the blood and the crosshair, and makes the noise.
+//
+// Six in the cylinder. Q fires where the crosshair is; R reloads from the boxes of rounds in your bag. A shot stops at
+// the first thing in its way (a wall, the road, a car, somebody) and whoever it reaches is dead: down for good, a pool
+// spreading under them, till an ambulance comes and takes them away (and somewhere across town somebody new steps out
+// of their front door). Everyone in earshot runs for it, screaming, and the traffic puts its foot down.
+// The law: a shot a cop sees, or a passer-by hears and phones in, is 2 stars; a killing somebody sees, 4 (and one more
+// for every one after); a dead officer, 5. The police only shoot once you have: then, while they're after you, any
+// officer with a clear look at you opens fire, and enough of it puts you in hospital. Caught, they take the gun.
+ITEMS.revolver = { name: '.38 revolver', price: 600, kind: 'gun' }; // (uses: rounds in the cylinder)
+ITEMS.ammo = { name: 'box of .38 rounds', price: 40, kind: 'ammo', uses: 24 };
+const CYLINDER = 6, SHOT_RANGE = 14, RELOAD_T = 1.6, FIRE_GAP = 0.3;
+const UNDER_COUNTER = ['revolver', 'ammo'];
+const underCounter = t => t >= 21 || t < 2; // (after nine, till the pawnbroker shuts at two)
+const HEAR_R = 9, PANIC_T = [5, 9], SPEED_OFF_T = 8; // how far a shot carries, how long people run, how long the traffic does
+const BODY_CALL = 4, BODY_LOAD = 7, BODY_MAX = 150, POOL_T = 240; // seconds: till the call goes in; at the scene; at most; the blood
+const COP_FIRE_R = 8, COP_FIRE_GAP = [1.1, 2.3], COP_HURT = [10, 18], COP_GUNS = 3, CALM_T = 30; // (the nearest three take aim)
+const CAR_HIT = { amb: [0.25, 0.1, 0.15], fire: [0.37, 0.1, 0.17] }, CAR_DEFAULT = [0.21, 0.09, 0.14]; // [half length, half width, height]
+const gun = { cool: 0, reload: 0, kick: 0, spin: 0, lastShotT: -Infinity, shots: [], copShots: [], hurtT: -Infinity };
+const bodies = []; // { who, cop, x, y, t, amb, atT }
+const pools = []; // { x, y, t }: blood, spreading, then dried and gone
+const heldGun = () => { const it = heldItem(); return it && ITEMS[it.id].kind === 'gun' ? it : null; };
+const ammoLeft = () => inv.reduce((n, it) => n + (it.id === 'ammo' ? it.uses : 0), 0);
+// what the pawnbroker says, handing it over
+const GUN_SOLD = 'The pawnbroker looks at the door, then at you, and brings a bundle up from under the counter in a rag. "You didn\'t get it here." Q to fire, R to reload.';
+// R: thumb the rounds in. Done when the time's up (stepGun)
+function reloadGun() {
+  const g = heldGun();
+  if (!g || gun.reload > 0) return null;
+  if (g.uses >= CYLINDER) return ['All six are in.', null];
+  if (!ammoLeft()) return ['No rounds. The pawnbroker sells them by the box, after nine.', 'click'];
+  gun.reload = RELOAD_T;
+  return ['', 'reload'];
+}
+function finishReload() {
+  const g = heldGun();
+  if (!g) return;
+  while (g.uses < CYLINDER) {
+    const k = inv.findIndex(it => it.id === 'ammo' && it.uses > 0);
+    if (k < 0) break;
+    const n = Math.min(CYLINDER - g.uses, inv[k].uses);
+    g.uses += n; inv[k].uses -= n;
+    if (inv[k].uses <= 0) { const keep = inv.indexOf(g); removeInventoryAt(k); held = inv.indexOf(g) >= 0 ? inv.indexOf(g) : keep; } // (an empty box goes in the bin)
+  }
+}
+
+// ---- where a shot goes: along the crosshair from (x, y, z) heading (hx, hy), climbing `slope` per unit, to the first
+// thing in its way. { d, x, y, z, what: 'air' | 'ground' | 'wall' | 'person' | 'cop' | 'car', who }
+function traceShot(x, y, z, hx, hy, slope) {
+  let end = SHOT_RANGE, what = 'air';
+  for (let d = 0.02; d < SHOT_RANGE; d += 0.02) { // the road, or the first building, along the way
+    const zz = z + slope * d;
+    if (zz <= 0) { end = slope < 0 ? Math.max(0, -z / slope) : d; what = 'ground'; break; }
+    if (map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))] > zz) { end = d; what = 'wall'; break; }
+  }
+  let best = null;
+  const closer = d => d > 0 && d < (best ? best.d : end);
+  const figure = (o, kind) => { // somebody standing (a body 3cm either side of the line, up to head height), or lying flat
+    const ox = rel(o.x - x), oy = rel(o.y - y), along = ox * hx + oy * hy, across = Math.abs(oy * hx - ox * hy), zz = z + slope * along;
+    if (!closer(along)) return;
+    if (o.down ? across < 0.08 && zz < 0.04 : across < 0.032 && zz < (kind === 'cop' ? 0.185 : 0.175)) best = { d: along, what: kind, who: o };
+  };
+  for (const p of people) if (!p.hidden && !p.dead && near(p.x, p.y, x, y) < SHOT_RANGE) figure(p, 'person');
+  for (const c of footCops) if (!c.dead && near(c.x, c.y, x, y) < SHOT_RANGE) figure(c, 'cop');
+  for (const c of cars) { // a car: where the line goes into its box, if that's below its roof
+    if (c.player || near(c.x, c.y, x, y) > SHOT_RANGE + 0.4) continue;
+    const [hl, hw, h] = CAR_HIT[c.kind] || CAR_DEFAULT, ox = rel(x - c.x), oy = rel(y - c.y);
+    const ux = ox * c.hx + oy * c.hy, uy = -ox * c.hy + oy * c.hx, vx = hx * c.hx + hy * c.hy, vy = -hx * c.hy + hy * c.hx;
+    let t0 = 0, t1 = Infinity;
+    for (const [o, v, half] of [[ux, vx, hl], [uy, vy, hw]]) {
+      if (Math.abs(v) < 1e-9) { if (Math.abs(o) > half) { t0 = Infinity; break; } continue; }
+      const a_ = (-half - o) / v, b_ = (half - o) / v;
+      t0 = Math.max(t0, Math.min(a_, b_)); t1 = Math.min(t1, Math.max(a_, b_));
+    }
+    if (t0 <= t1 && closer(t0) && z + slope * t0 < h) best = { d: t0, what: 'car', who: c };
+  }
+  const r = best || { d: end, what };
+  return { ...r, x: mod(x + hx * r.d, N), y: mod(y + hy * r.d, N), z: Math.max(0, z + slope * r.d) };
+}
+
+// ---- Q: pull the trigger. From (x, y, z), turned to yaw, looking up `slope`; indoors, the room's own coordinates.
+// What happened, for gun-ui.js: null (not ready), { empty }, or the shot and what it hit
+function fireGun(x, y, z, yaw, slope, indoors = false) {
+  const g = heldGun();
+  if (!g || gun.cool > 0 || gun.reload > 0) return null;
+  if (g.uses <= 0) { gun.cool = 0.25; return { empty: true }; }
+  g.uses--; gun.cool = FIRE_GAP; gun.kick = 1; gun.spin++; gun.lastShotT = T;
+  wanted.fired = true; // (and now they'll shoot back)
+  if (indoors) { // in a shop: into the ceiling, near enough. They're on the phone before the ringing stops
+    const [rx, ry] = crimePos();
+    if (gunCrime('gunfire', rx, ry) === '') reports.push({ t: T + reportDelay(), x: rx, y: ry, kind: 'gunfire' });
+    const shot = { x0: x, y0: y, z0: z, x: x + Math.cos(yaw) * 3, y: y + Math.sin(yaw) * 3, z: z + slope * 3, what: 'wall', indoors: true, t: T };
+    gun.shots.push(shot); return shot;
+  }
+  const hx = Math.cos(yaw), hy = Math.sin(yaw), hit = traceShot(x, y, z, hx, hy, slope);
+  const shot = { x0: x, y0: y, z0: z, ...hit, t: T };
+  gun.shots.push(shot);
+  if (hit.what === 'person' || hit.what === 'cop') {
+    if (!hit.who.dead) {
+      killFigure(hit.who, hx, hy, hit.what === 'cop');
+      if (gunCrime(hit.what === 'cop' ? 'copkill' : 'murder', x, y) === '') gunCrime('gunfire', x, y); // (nobody saw it: they heard it)
+    } else gunCrime('gunfire', x, y);
+  } else {
+    if (hit.what === 'car') { damageCar(hit.who, 12); if (!hit.who.patrol && !hit.who.parked) speedOff(hit.who); }
+    gunCrime('gunfire', x, y);
+  }
+  panicAt(x, y);
+  return shot;
+}
+// who saw it, or heard it: a cop who can see you puts you on the list straight away; a shot is heard by anybody in
+// earshot, a killing has to be seen. 'cop', 'reported' or ''
+function gunCrime(kind, x, y) {
+  if (copSees(x, y)) { addWanted(kind, x, y, true); return 'cop'; }
+  const heard = kind === 'gunfire', r = heard ? HEAR_R : CIV_SIGHT;
+  if (people.some(p => !p.hidden && !p.dead && near(p.x, p.y, x, y) < r && (heard || lineOfSight(p.x, p.y, x, y)))) {
+    reports.push({ t: T + reportDelay(), x, y, kind }); return 'reported';
+  }
+  return '';
+}
+// somebody shot: down where they stood, falling away from the shot, and staying there
+function killFigure(o, hx, hy, cop = false) {
+  o.down = { t: 0, dur: Infinity, fx: hx, fy: hy }; o.dead = true;
+  for (const k of ['talk', 'flee', 'gawk', 'help', 'hailing', 'follow', 'chase', 'goal']) delete o[k];
+  if (o.path) o.path.length = 0;
+  bodies.push({ who: o, cop, x: o.x, y: o.y, t: T, amb: null, atT: 0 });
+  pools.push({ x: o.x, y: o.y, t: T });
+  if (pools.length > 24) pools.shift();
+  for (const p of people) if (p.help === o || p.gawk === o) { delete p.help; delete p.gawk; }
+}
+// everyone in earshot runs; the cars nearby put their foot down
+function panicAt(x, y) {
+  for (const p of people) {
+    if (p.hidden || p.dead || p.follow || near(p.x, p.y, x, y) > HEAR_R) continue;
+    const dx = rel(p.x - x), dy = rel(p.y - y), d = Math.hypot(dx, dy) || 1, k = Math.random() * 0.8 - 0.4; // (away, give or take)
+    p.flee = { x: dx / d * Math.cos(k) - dy / d * Math.sin(k), y: dy / d * Math.cos(k) + dx / d * Math.sin(k), t: PANIC_T[0] + Math.random() * (PANIC_T[1] - PANIC_T[0]), scream: Math.random() < 0.4 };
+    for (const k_ of ['talk', 'gawk', 'help', 'hailing', 'wait']) delete p[k_];
+    p.loiter = false; // (the crowd outside the bar too)
+  }
+  for (const c of cars) if (near(c.x, c.y, x, y) < HEAR_R * 0.7) speedOff(c);
+}
+function speedOff(c) {
+  if (c.player || c.rider || c.patrol || c.ev || c.parked || c.rush && !c.panicT) return;
+  c.rush = true; c.panicT = T + SPEED_OFF_T;
+}
+// an ambulance for whoever's lying there: the nearest that's in, lights and siren, to the nearest bit of street
+function ambulanceFor(b) {
+  let best = null, bd = Infinity;
+  for (let k = 0; k < 40; k++) { const l = randomLane(3, b.x, b.y); if (!l) break; const d = near(l.x, l.y, b.x, b.y); if (d < bd) { bd = d; best = l; } }
+  if (!best || bd > 3) return null; // (not near a street: the gardens, the pier)
+  const c = spawnEmergency('amb', [best.x, best.y]);
+  if (c) c.corpse = true;
+  return c;
+}
+function removeBody(k) {
+  const b = bodies[k], o = b.who;
+  bodies.splice(k, 1);
+  if (b.cop) { // the department sends somebody else out on that beat
+    const at = footCops.indexOf(o);
+    if (at >= 0) footCops.splice(at, 1);
+    if (o.base) { const corner = { ix: o.base.bx, iy: o.base.by, qx: 0, qy: 1 }, [x, y] = cornerXY(corner); footCops.push({ x, y, corner, dir: 0, goal: null, chase: false, ph: Math.random() * 9, base: o.base }); }
+  } else respawnPerson(o);
+}
+// every frame: the reload, the bodies and their ambulances, the panic dying down, and the police shooting back.
+// Returns 'down' when they've put you on the ground
+function stepGun(dt) {
+  gun.cool = Math.max(0, gun.cool - dt); gun.kick = Math.max(0, gun.kick - dt * 5);
+  if (gun.reload > 0) { if (!heldGun()) gun.reload = 0; else if ((gun.reload -= dt) <= 0) { gun.reload = 0; finishReload(); } }
+  while (gun.shots.length && T - gun.shots[0].t > 1) gun.shots.shift();
+  while (gun.copShots.length && T - gun.copShots[0].t > 1) gun.copShots.shift();
+  while (pools.length && T - pools[0].t > POOL_T) pools.shift();
+  for (let k = bodies.length - 1; k >= 0; k--) {
+    const b = bodies[k];
+    if (T - b.t > BODY_MAX || !simulated(b.x, b.y)) { removeBody(k); continue; }
+    if (!b.amb && T - b.t > BODY_CALL && fract((T - b.t) / 5) < dt / 5 + 1e-9) b.amb = ambulanceFor(b);
+    if (b.amb && !cars.includes(b.amb)) b.amb = null; // (gone back without them)
+    if (b.amb && b.amb.state === 'out' && near(b.amb.x, b.amb.y, b.x, b.y) < 1.6) evArrive(b.amb); // (close enough: it pulls in here)
+    if (b.amb && b.amb.state === 'scene' && near(b.amb.x, b.amb.y, b.x, b.y) < 3.5) {
+      b.atT ||= T;
+      if (T - b.atT > BODY_LOAD) { b.amb.until = Math.min(b.amb.until, T + 3); removeBody(k); }
+    }
+  }
+  for (const c of cars) if (c.panicT && T > c.panicT) { c.rush = false; delete c.panicT; }
+  if (!wanted.stars && T - gun.lastShotT > CALM_T) wanted.fired = false;
+  return copsShoot(dt);
+}
+// a body under a sheet: the paramedics are there
+const sheeted = o => bodies.some(b => b.who === o && b.atT && T - b.atT > 2.5);
+
+// ---- the police, shooting back. Only after you've fired, only while they're after you, only with a clear look at you
+function copsShoot(dt) {
+  if (!wanted.fired || !wanted.stars || wanted.busted) return null;
+  const inside = mode === 'room', [wx, wy] = crimePos(), driving = !!me && (mode === 'drive' || mode === 'taxi');
+  const moving = driving ? Math.abs(me.v) : Math.hypot(body.mx || 0, body.my || 0);
+  const shooters = inside ? roomCops.filter(c => c.sees).map(c => [c, Math.hypot(c.x - px, c.y - py) / 10]) // (a room's in metres)
+    : mode === 'roof' ? roofCops.filter(c => c.sees).map(c => [c, near(c.x, c.y, px, py)])
+    : [...footCops.filter(c => c.chase && !c.down), ...cars.filter(c => c.pursuit && !c.player && !c.wrecked)]
+      .map(c => [c, near(c.x, c.y, wx, wy)]).filter(([c, d]) => d < COP_FIRE_R && lineOfSight(c.x, c.y, wx, wy)).sort((p, q) => p[1] - q[1]).slice(0, COP_GUNS);
+  const live = new Set(shooters.map(s => s[0]));
+  for (const c of [...footCops, ...cars, ...roomCops, ...roofCops]) if (c.fireT && !live.has(c)) delete c.fireT; // (lost sight: they'll take a moment to aim again)
+  for (const [c, d] of shooters) {
+    if (!c.fireT) { c.fireT = T + 0.7 + Math.random() * 0.8; continue; }
+    if (T < c.fireT) continue;
+    c.fireT = T + COP_FIRE_GAP[0] + Math.random() * (COP_FIRE_GAP[1] - COP_FIRE_GAP[0]);
+    const odds = clamp(0.5 - d / COP_FIRE_R * 0.3 - Math.min(0.2, moving * 0.12) - body.crouch * 0.1 - (driving ? 0.15 : 0), 0.06, 0.5);
+    const hit = Math.random() < odds;
+    gun.copShots.push({ x: c.x, y: c.y, hit, t: T, room: inside });
+    if (!inside) panicAt(c.x, c.y);
+    if (!hit) continue;
+    if (driving) { damageCar(me, 7); if (Math.random() < 0.3) hurt(8); }
+    else hurt(COP_HURT[0] + Math.random() * (COP_HURT[1] - COP_HURT[0]));
+    gun.hurtT = T;
+    if (needs.health <= 0) return 'down';
+  }
+  return null;
+}
+// taken off you: busted (the fine; jail takes everything anyway) or carried off to hospital
+function confiscateGun() {
+  let took = false;
+  for (let k = inv.length - 1; k >= 0; k--) if (ITEMS[inv[k].id].kind === 'gun' || inv[k].id === 'ammo') { removeInventoryAt(k); took = true; }
+  gun.reload = 0;
+  return took;
+}
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
 let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
@@ -9890,6 +10186,7 @@ function floorBaseCell(i, r, x, rx, ry) {
     if (gl > 0) { col = C(WARM, Math.max(L * k, gl * 13)); if (ch === ' ') ch = '.'; LAMPL[i] = gl * 13; }
   }
   { const fg = FIRES.length ? fireGlow(wx, wy) : 0; if (fg > 0.02) { col = C(fg > 0.45 ? YEL : ORANGE, Math.max(L * k, 4 + fg * 11)); if (fg > 0.18) BG[i] = C(fg > 0.5 ? ORANGE : RED, fg * 6); if (ch === ' ') ch = '.'; } } // a campfire's light (cooking-ui.js): the ground itself lit only near, further out just what's on it
+  if (gunLit()) { const mf = muzzleGlow(wx, wy); if (mf > 0.02) { col = C(mf > 0.4 ? WHITE : YEL, Math.max(L * k, 5 + mf * 10)); BG[i] = C(ORANGE, 1 + mf * 6); if (ch === ' ') ch = '.'; } } // a shot's flash (gun-ui.js)
   if (siren) { // an emergency vehicle's lights wash over the street round it
     const s = 1 - Math.hypot(rel(wx - siren.ex), rel(wy - siren.ey)) / 1.2;
     const on = strobe();
@@ -11283,7 +11580,9 @@ function citySprites() {
     if (Math.abs(vx) < vis && Math.abs(vy) < vis) { figMotion(m); drawFigure(vx, vy, 0, 0.175, m._fx || 0, m._fy || 0, streetLook(m), walkPose(m)); }
   }
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
-    if (m.down) drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
+    if (m.dead && sheeted(m)) drawSheet(m, ...R(m.x, m.y)); // (shot, and the paramedics are here: gun-ui.js)
+    else if (m.down) drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
+    else if (m.flee) { drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.flee.x, m.flee.y, streetLook(m), walkPose(m, 'run')); if (m.flee.scream && fract(T * 2.5 + m.ph) < 0.6) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.05, ['!'], () => C(WHITE, 14)); } // (running from a gunshot)
     else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
       const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
       drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
@@ -11300,6 +11599,7 @@ function citySprites() {
   for (const c of footCops) { // police on foot: navy cap, uniform, running when they're after you
     const [vx, vy] = R(c.x, c.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
+    if (c.dead && sheeted(c)) { drawSheet(c, vx, vy); continue; }
     if (c.down) { drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, -c.down.fx, -c.down.fy, copLook(c), downPose(c.down)); continue; }
     figMotion(c); drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
@@ -20836,7 +21136,7 @@ function render(dt) {
   }
   if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
-  if (city) drawTireMarks();
+  if (city) { drawTireMarks(); drawBlood(); } // (and blood: gun-ui.js)
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
   drawPeeMarks(); // stains on walls and solid static objects
@@ -20846,6 +21146,7 @@ function render(dt) {
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (city) drawAnglerLines(); // (the regulars' lines too)
   drawFishing(); // the line, the bobber and the rings round it (fishing-render.js; after the water's reflections, or they'd double it)
+  drawShots(); // a shot's streak, the police's flashes (gun-ui.js)
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
     if (mode === 'air') airDash();
@@ -21038,7 +21339,7 @@ const nearPerson = () => {
   if (mode !== 'walk') return null;
   let best = null, bd = 0.45;
   for (const p of [...people, ...fairFolk]) { // (and the crowd at the fair)
-    if (p.hidden) continue;
+    if (p.hidden || p.dead || p.flee) continue; // (not somebody lying dead, or running for their life)
     const ex = rel(p.x - px), ey = rel(p.y - py), d = Math.hypot(ex, ey);
     if (d < bd && (ex * Math.cos(a) + ey * Math.sin(a)) / d > 0.85) { bd = d; best = p; }
   }
@@ -21273,6 +21574,7 @@ function needMeters() {
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
   drawHeldBig();
+  drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
@@ -21989,7 +22291,13 @@ function useMarket(o) {
   return openShop(o.word, stockFor('', o.word));
 }
 // the fortune teller: she turns a card, looks at you a long moment, and says one thing. It comes true
+let gunHintDay = -1; // (she only says it once a day)
 function tellFortune() {
+  // known for your crimes, and nothing in your pocket to show for it: she knows somebody
+  if (noto.level >= NOTO_KNOWN && gunHintDay !== dayNum && !inv.some(it => ITEMS[it.id].kind === 'gun')) {
+    gunHintDay = dayNum;
+    return 'She turns the Seven of Swords and looks at you a long moment. "You have a name in this city now, and not a good one. The pawnbroker keeps something under the counter for people like you. After nine. Bring six hundred."';
+  }
   const opts = ['stock', 'duck', 'luck', 'sky'];
   if (season() === 'winter' && weather !== 'snow') opts.push('snow');
   switch (pick(opts)) {
@@ -24508,6 +24816,7 @@ function drawHeldBig() {
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
   else if (heldIsRod(it)) drawFishingRod(it); // (fishing-render.js: the rod, and whatever's on its line)
+  else if (ITEMS[it.id].kind === 'gun') drawRevolver(it); // (gun-ui.js)
   else drawHeldDense(it, cx, hy, hsz, grip);
   drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
   if (it.id === 'yoyo') drawYoyo(cx - hsz * 0.2, hy + HAND_ART.length * hsz); // (in your hand or out on its string, it hangs from under your fist)
@@ -24684,7 +24993,7 @@ const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' &
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
-  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
+  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `${id === UNDER_COUNTER[0] ? '<h2>under the counter</h2>' : ''}<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
   const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate), bin = binnable(it, rate);
     return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${it.kg ? catchName(it) : ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
   const work = shiftHere();
@@ -24772,6 +25081,7 @@ const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
+  if (heldGun()) return pullTrigger(); // (gun-ui.js)
   if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
   if (body.seat && body.seat.grass && heldItem() && ITEMS[heldItem().id].kind === 'food' && chance(0.5)) { // a picnic
     const name = ITEMS[heldItem().id].name, [, sound] = useHeld({ indoors: false, x: px, y: py, a, rain, person: null, headlines: HEADLINES(), water: false });
@@ -26440,6 +26750,245 @@ Object.assign(DROPPED_ART, {
   chickencurry: plate('~#~#~#', ORANGE, true), roastchicken: plate('(%%)oo', WARM), skewers: plate('-#-o-#-', BRICK), stirfry: plate('~%~%~%', GREEN, true),
   risotto: plate(':o:o:o', WHITE, true), jacketpotato: plate('(    )', BRICK), tomatosoup: plate('~~~~~~', RED, true), grilledveg: plate('#o# #o#', GREEN),
 });
+// ===== the revolver on screen and in your ears (gun.js has the rules): the gun in your hand, turning its cylinder,
+// kicking up when it goes off, swung open to reload; the crosshair; the shot (the flash, the street lit up for an
+// instant, a streak to where it went, the bang and the buildings throwing it back); the blood, the sheet the
+// paramedics put over somebody; the police shooting back; and the screaming.
+
+// ---- Q and R
+function pullTrigger() {
+  const indoors = mode === 'room', slope = (hor - (rows >> 1)) / projY; // (the crosshair's on the middle row)
+  const r = fireGun(px, py, eye, a, slope, indoors);
+  if (!r) return;
+  if (r.empty) { if (actx) dryFire(actx.currentTime); return say('*click* It\'s empty. R to reload.', 1.5); }
+  if (actx) { gunBang(actx.currentTime, 1, 0, indoors ? 'in' : ''); screams(px, py); }
+  if (r.what === 'person' || r.what === 'cop') say(pick(r.what === 'cop' ? ['The officer drops. Somebody on the radio is asking for them.', 'The officer goes down and stays down.']
+    : ['They go down and don\'t get up.', 'They drop where they stood.', 'They fall. Nobody near them moves to help.']), 2.5);
+  else if (r.what === 'car') say(pick(['The round punches through a door panel.', '*PANG* off the car.']), 1.5);
+  else if (heldGun().uses === 0) say(ammoLeft() ? 'That\'s six. R to reload.' : 'That\'s six, and no more rounds.', 2);
+}
+function reloadKey() {
+  const r = reloadGun();
+  if (!r) return;
+  if (r[0]) say(r[0], 2);
+  if (actx && r[1] === 'reload') reloadSound(actx.currentTime);
+  else if (actx && r[1]) sfxUse(r[1]);
+}
+// shot by the police till you dropped: the hospital, and they've kept the gun
+function shotDown() {
+  confiscateGun();
+  passOut('Gunshot wounds. You\'re lucky. The police have your revolver, and would like to talk when you\'re up.');
+}
+
+// ---- the gun in your hand: side-on, muzzle toward the crosshair, the fist round the grip. Drawn in characters and
+// turned on the canvas as a piece: up with the kick of a shot, right up to reload with the cylinder swung out
+const REVOLVER = [
+  '                                     _',
+  ' _                                  / )',
+  '[_]__________________________ _____/ /__',
+  '|____________________________|=====|::::\\',
+  ' `---------------------------|-----|:::::\\',
+  '       `===================\'  |=====|::o::|',
+  '                          \\  |-----|:::::\\',
+  '                           \\_|_____|::::::\\',
+  '                              \\ ( \\ \\#######\\',
+  '                               `--`--\'#######\\',
+  '                                      \\#######\\',
+  '                                       \\#######\\',
+  '                                        |#######|',
+  '                                        \\_______/'];
+const GUN_GRIP = [43, 9]; // (the column and row your fist closes round)
+const CYL_FACE = [' .---. ', '/ o o \\', '| o+o |', '\\ o o /', " `---' "]; // swung out: the chambers, filling as you load
+const gunView = { spin: 0, t: 0 }; // the cylinder's turn as drawn, easing after gun.spin
+function gunGeom() {
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), hsz = Math.round(u * 1.15), s = Math.round(u * 0.7);
+  const bob = moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08, k = gun.kick, rl = gun.reload > 0 ? Math.min(1, (RELOAD_T - gun.reload) * 5, gun.reload * 5) : 0;
+  const cx = Math.round(cv.width * 0.8 + k * u * 0.6), hy = Math.round(cv.height - 5.6 * hsz + bob + k * u * 0.5 + rl * u * 2.5);
+  return { u, s, hsz, cx, hy, ang: 0.05 + k * 0.32 + rl * 0.85 }; // (kicked up by a shot; tipped right up to reload)
+}
+// the picture as it is this instant: the cylinder's flutes moved round, the hammer back or down, the cylinder out
+function revolverArt(open, rounds) {
+  const art = REVOLVER.map(l => [...l]), turn = Math.floor(gunView.spin * 2);
+  for (let r = 3; r <= 6; r++) for (let c = 30; c <= 34; c++) art[r][c] = open ? ' ' : (r + turn) & 1 ? '-' : '=';
+  if (gun.kick > 0.45) { // fired: the hammer's down on the frame
+    for (const [r, c] of [[0, 37], [1, 36], [1, 37], [1, 38], [2, 37]]) art[r][c] = ' ';
+    art[2][36] = '_'; art[2][37] = ')';
+  }
+  if (open) { // swung out to the side, its face to you: a round in each chamber as it goes in
+    let k = 0;
+    CYL_FACE.forEach((l, r) => [...l].forEach((ch, c) => { const row = art[8 + r] || (art[8 + r] = []); while (row.length < 22 + c) row.push(' '); row[21 + c] = ch === 'o' ? (k++ < rounds ? '@' : 'o') : ch; }));
+  }
+  return art.map(r => r.join(''));
+}
+function revolverCol(ch, r, c) {
+  if (ch === '@') return C(YEL, 14); // (brass)
+  if (r >= 8 && c >= 20 && c < 30) return C(GRAY, ch === 'o' ? 4 : 11); // (the cylinder, swung out: an empty chamber's dark)
+  if (r >= 8 && c >= 37 || r >= 10) return ch === '#' ? C((r + c) & 1 ? BRICK : WARM, 9 + ((r * 3 + c) % 4)) : C(BRICK, 10); // the walnut grip, chequered
+  if (ch === '=' && r >= 3 && r <= 6 && c >= 30 && c <= 34) return C(CYAN, 13); // the cylinder catching the light
+  if (ch === ':') return C(GRAY, 7);
+  if (ch === 'o') return C(YEL, 11);
+  if (r <= 2 || ch === '[' || ch === ']') return C(WHITE, 14); // the top edge, in the light
+  return C(GRAY, 11 - (r > 4 ? 2 : 0));
+}
+function drawRevolver(it) {
+  const G = gunGeom(), dt = clamp(T - gunView.t, 0, 0.05); gunView.t = T;
+  gunView.spin += (gun.spin - gunView.spin) * Math.min(1, dt * 14); // (a sixth of a turn a shot, snapping round)
+  const open = gun.reload > 0, rounds = open ? Math.min(CYLINDER, it.uses + Math.floor((1 - gun.reload / RELOAD_T) * 7)) : it.uses;
+  g.font = G.s + 'px monospace';
+  const w = g.measureText('M').width, gx = -(GUN_GRIP[0] + 0.5) * w, gy = -GUN_GRIP[1] * G.s;
+  g.save(); g.beginPath(); g.rect(0, 0, cv.width, G.hy + 0.75 * G.hsz); g.clip(); // (your fingers hide the bottom of the grip)
+  g.translate(G.cx, G.hy + 0.2 * G.hsz); g.rotate(G.ang);
+  artText(revolverArt(open, rounds), gx, gy, G.s, revolverCol);
+  if (gun.kick > 0.55) { // the flash, off the end of the barrel
+    const big = Math.round(G.u * (0.8 + gun.kick * 0.5)), k = gun.kick;
+    g.font = big + 'px monospace';
+    const fw = g.measureText('M').width;
+    artText(k > 0.8 ? ['\\|/', '-*-', '/|\\'] : [' . ', '-#-', " ' "], gx - fw * 3.2, gy + 3.5 * G.s - big * 1.5, big, ch => ch === '*' || ch === '#' ? C(WHITE, 15) : ch === '-' ? C(YEL, 15) : C(ORANGE, 14));
+  }
+  g.restore();
+  g.font = FS + 'px monospace';
+}
+
+// ---- the crosshair, the cylinder count, the flash lighting everything for an instant, and being hit
+function drawGunHud() {
+  const it = heldGun();
+  if (it && onFootMode() && !game) {
+    const x = cols / 2 * cw, y = (rows >> 1) * FS, moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
+    const spread = cw * (1.2 + gun.kick * 2.5 + (moving ? 0.6 : 0)); // (opening up as it kicks, and as you walk)
+    const on = mode !== 'room' && aimingAt(); // (red when somebody's in it)
+    g.font = FS + 'px monospace'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, FS * 0.16); g.strokeStyle = 'rgba(0,0,0,0.85)';
+    g.fillStyle = on ? '#f44' : 'rgba(255,255,255,0.92)';
+    for (const [ch, ox, oy] of [['-', -spread - cw * 0.5, -FS * 0.5], ['-', spread - cw * 0.5, -FS * 0.5], ['|', -cw * 0.5, -FS * 0.5 - spread * 0.8], ['|', -cw * 0.5, -FS * 0.5 + spread * 0.8], ['.', -cw * 0.5, -FS * 0.75]]) {
+      g.strokeText(ch, x + ox, y + oy); g.fillText(ch, x + ox, y + oy);
+    }
+    // the cylinder: a round for each, under the crosshair to the right, and what's left in the boxes
+    const loaded = 'o'.repeat(it.uses) + '.'.repeat(CYLINDER - it.uses), txt = gun.reload > 0 ? 'reloading' : `${loaded}  ${ammoLeft()}`;
+    g.fillStyle = it.uses ? 'rgba(255,220,120,0.9)' : '#f66';
+    g.strokeText(txt, x + cw * 3, y + FS * 1.6); g.fillText(txt, x + cw * 3, y + FS * 1.6);
+  }
+  const flash = Math.max(0, 1 - (T - gun.lastShotT) / 0.07);
+  if (flash > 0) { // the street lit up for an instant
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const gr = g.createRadialGradient(cv.width * 0.6, cv.height * 0.7, 0, cv.width * 0.6, cv.height * 0.7, cv.width * 0.7);
+    gr.addColorStop(0, `rgba(255,190,90,${0.35 * flash})`); gr.addColorStop(1, `rgba(255,150,60,${0.08 * flash})`);
+    g.fillStyle = gr; g.fillRect(0, 0, cv.width, cv.height); g.restore();
+  }
+  const hurt_ = Math.max(0, 1 - (T - gun.hurtT) / 0.6);
+  if (hurt_ > 0) { // hit: the edges go red
+    const gr = g.createRadialGradient(cv.width / 2, cv.height / 2, cv.height * 0.25, cv.width / 2, cv.height / 2, cv.width * 0.7);
+    gr.addColorStop(0, 'rgba(160,0,0,0)'); gr.addColorStop(1, `rgba(170,0,0,${0.55 * hurt_})`);
+    g.fillStyle = gr; g.fillRect(0, 0, cv.width, cv.height);
+  }
+}
+// is somebody in the crosshair? (a cheap look, a few times a second)
+let aimLook = { t: -1, on: false };
+function aimingAt() {
+  if (T - aimLook.t < 0.1) return aimLook.on;
+  const r = traceShot(px, py, eye, Math.cos(a), Math.sin(a), (hor - (rows >> 1)) / projY);
+  aimLook = { t: T, on: r.what === 'person' || r.what === 'cop' };
+  return aimLook.on;
+}
+// a flash's light on the ground round it (city-render.js): yours, and the police's
+function muzzleGlow(wx, wy) {
+  let k = 0;
+  const lit = (x, y, t, R) => { const age = T - t; if (age > 0.08) return; const d = Math.hypot(rel(wx - x), rel(wy - y)); if (d < R) k = Math.max(k, (1 - d / R) ** 1.6 * (1 - age / 0.08)); };
+  for (const s of gun.shots) if (!s.indoors) lit(s.x0, s.y0, s.t, 1.4);
+  for (const s of gun.copShots) if (!s.room) lit(s.x, s.y, s.t, 1);
+  return k * clamp(0.35 + night, 0, 1);
+}
+const gunLit = () => T - gun.lastShotT < 0.08 || gun.copShots.some(s => T - s.t < 0.08);
+
+// ---- out in the world: the streak of a shot, the police's flashes, the blood
+function drawShots() {
+  if (mode === 'room') return;
+  for (const s of gun.shots) { // yours: from just under your eye, off to the right where the gun is, to wherever it stopped
+    const age = T - s.t;
+    if (age > 0.09 || s.indoors) continue;
+    const ox = rel(s.x0 - px) + Math.cos(a + 0.6) * 0.02, oy = rel(s.y0 - py) + Math.sin(a + 0.6) * 0.02;
+    const p0 = fishProj(ox + Math.cos(a) * 0.08, oy + Math.sin(a) * 0.08, s.z0 - 0.02), p1 = fishProj(rel(s.x - px), rel(s.y - py), s.z);
+    if (p0 && p1) fishSeg(p0, p1, C(age < 0.04 ? WHITE : YEL, 15));
+    if (p1 && (s.what === 'wall' || s.what === 'ground' || s.what === 'car')) fishPut(p1.c, p1.r, p1.depth, '*', C(s.what === 'car' ? YEL : WHITE, 14)); // (sparks, or a puff of grit)
+  }
+  for (const s of gun.copShots) { // theirs: a flash at the officer's hand
+    if (T - s.t > 0.08 || s.room) continue;
+    const [vx, vy] = R(s.x, s.y);
+    drawArt(vx, vy, 0.1, 0.05, 0.05, ['\\|/', '-*-', '/|\\'], ch => ch === '*' ? C(WHITE, 15) : C(YEL, 15));
+  }
+}
+// pools of blood: spreading out over the first few seconds, an uneven edge, darkening as they dry
+function drawBlood() {
+  for (const b of pools) {
+    const vx = rel(b.x - px), vy = rel(b.y - py);
+    if (Math.hypot(vx, vy) > Math.min(vis, 14)) continue;
+    const age = T - b.t, r = 0.03 + 0.07 * Math.min(1, age / 9), dry = clamp((age - 60) / 120, 0, 1), seed = b.x * 13 + b.y * 7;
+    drawBox(boxAt(vx, vy, 1, 0, r * 1.2, r * 1.2, 0, 0.0004), (i, t, L) => {
+      const an = Math.atan2(HIT.v, HIT.u), edge = r * (0.75 + 0.25 * Math.sin(an * 3 + seed) * Math.sin(an * 5 + seed * 1.7));
+      if (Math.hypot(HIT.u, HIT.v) > edge) { BG[i] = BG_UNSET; return false; }
+      BG[i] = C(RED, (2.6 - dry * 1.2) * Math.max(0.5, L * 0.1)); return set(i, Math.hypot(HIT.u, HIT.v) < edge * 0.5 ? ' ' : '.', C(RED, 4 - dry)), true;
+    });
+  }
+}
+// what the people round a body look like: the paramedics' white sheet over it, once they've got there
+function drawSheet(o, vx, vy) {
+  const fx_ = o.down.fx, fy_ = o.down.fy;
+  drawBox(boxAt(vx + fx_ * 0.02, vy + fy_ * 0.02, fx_, fy_, 0.1, 0.04, 0, 0.025), (i, t, L) => {
+    BG[i] = C(WHITE, 4 + L * 0.6); return set(i, HIT.face === 5 ? (fract(HIT.u * 9 + HIT.v * 4) < 0.25 ? '~' : ' ') : '_', C(GRAY, 9 + L * 0.3)), true; // (folds in it, over the shape of them)
+  });
+}
+
+// ---- the sound: every frame, the police's shots you haven't heard yet, and what happens when one hits you
+function stepGunUI() {
+  for (const s of gun.copShots) {
+    if (s.heard) continue;
+    s.heard = true;
+    const d = s.room ? Math.hypot(s.x - px, s.y - py) / 10 : near(s.x, s.y, px, py), side = s.room ? 0 : Math.sin(Math.atan2(rel(s.y - py), rel(s.x - px)) - a);
+    if (actx) gunBang(actx.currentTime, clamp(1.1 - d / 9, 0.2, 0.9), clamp(side, -0.8, 0.8), s.room ? 'in' : d > 3 ? 'far' : '');
+    if (s.hit) { if (actx) tone(actx.currentTime + 0.02, 70, 0.2, 0.25); say(pick(['You\'re hit!', 'Something punches you in the side. You\'re hit.', 'Hit! It burns.']) + (needs.health < 35 ? ' You can\'t take much more of this.' : ''), 2); }
+    else if (actx && d < 5) whizz(actx.currentTime + 0.05, clamp(side, -0.8, 0.8)); // (it went past you)
+  }
+}
+// noise through a filter: a sharp start and a falling tail
+function gunNoise(at, len, type, freq, q, gain, pan = 0) {
+  const s = actx.createBufferSource(), fl = actx.createBiquadFilter(), g_ = actx.createGain(), p = actx.createStereoPanner();
+  s.buffer = noiseBuf; fl.type = type; fl.frequency.value = freq; fl.Q.value = q; p.pan.value = pan;
+  g_.gain.setValueAtTime(0, at); g_.gain.linearRampToValueAtTime(gain, at + 0.002); g_.gain.exponentialRampToValueAtTime(0.0005, at + len);
+  shot(s, fl, g_, p, sfxBus); s.start(at, Math.random() * 1.5, len + 0.05);
+}
+// the bang: a crack, the blast, a thump in your chest, and the street throwing it back off every wall a few times
+// over, a little later and a little duller each time ('in': a room, short and boxy; 'far': somebody else's, down the street)
+function gunBang(at, vol, pan = 0, where = '') {
+  const far = where === 'far';
+  if (!far) gunNoise(at, 0.06, 'highpass', 2200, 0.7, 0.5 * vol, pan);
+  gunNoise(at, far ? 0.3 : 0.4, 'lowpass', far ? 1100 : 3200, 0.8, 0.9 * vol, pan);
+  const o = actx.createOscillator(), g_ = actx.createGain(), p = actx.createStereoPanner();
+  o.type = 'sine'; o.frequency.setValueAtTime(150, at); o.frequency.exponentialRampToValueAtTime(42, at + 0.25); p.pan.value = pan;
+  g_.gain.setValueAtTime(0, at); g_.gain.linearRampToValueAtTime(0.7 * vol, at + 0.004); g_.gain.exponentialRampToValueAtTime(0.0005, at + 0.3);
+  shot(o, g_, p, sfxBus); o.start(at); o.stop(at + 0.35);
+  const echoes = where === 'in' ? [[0.04, 0.3], [0.09, 0.12]] : [[0.19, 0.3], [0.42, 0.17], [0.78, 0.09], [1.25, 0.05]];
+  for (const [d, k] of echoes) gunNoise(at + d, 0.35 + d * 0.5, 'lowpass', 900 - d * 300, 0.7, k * vol, -pan * 0.6);
+}
+const dryFire = at => { tone(at, 2600, 0.025, 0.09, 'square'); gunNoise(at, 0.03, 'bandpass', 3500, 4, 0.12); };
+const whizz = (at, pan) => gunNoise(at, 0.12, 'bandpass', 5000, 6, 0.1, pan);
+// thumbing the cylinder out, six rounds in one after another, and snapping it shut
+function reloadSound(at) {
+  gunNoise(at, 0.05, 'bandpass', 2400, 3, 0.22);
+  for (let k = 0; k < 6; k++) gunNoise(at + 0.3 + k * 0.17, 0.035, 'bandpass', 3800 + k * 90, 5, 0.12);
+  gunNoise(at + RELOAD_T - 0.12, 0.07, 'bandpass', 1800, 2, 0.3);
+}
+// somebody screaming: a voice (a buzz through two formants), up, wavering, and down
+function scream(at, vol, pan, pitch) {
+  const o = actx.createOscillator(), lfo = actx.createOscillator(), lg = actx.createGain(), f1 = actx.createBiquadFilter(), f2 = actx.createBiquadFilter(), g_ = actx.createGain(), p = actx.createStereoPanner(), len = 0.7 + Math.random() * 0.6;
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(pitch * 0.8, at); o.frequency.linearRampToValueAtTime(pitch * 1.35, at + 0.15); o.frequency.linearRampToValueAtTime(pitch * 0.9, at + len);
+  lfo.frequency.value = 6 + Math.random() * 3; lg.gain.value = pitch * 0.03; lfo.connect(lg); lg.connect(o.frequency);
+  f1.type = 'bandpass'; f1.frequency.value = 900; f1.Q.value = 3; f2.type = 'peaking'; f2.frequency.value = 2600; f2.gain.value = 9; p.pan.value = pan;
+  g_.gain.setValueAtTime(0, at); g_.gain.linearRampToValueAtTime(vol, at + 0.06); g_.gain.setValueAtTime(vol * 0.8, at + len * 0.7); g_.gain.exponentialRampToValueAtTime(0.0005, at + len);
+  shot(o, f1, f2, g_, p, sfxBus); o.start(at); o.stop(at + len + 0.05); lfo.start(at); lfo.stop(at + len + 0.05);
+}
+// the ones who scream as they run: the nearest few
+function screams(x, y) {
+  const near_ = people.filter(p => p.flee && p.flee.scream && !p.hidden).map(p => [p, Math.hypot(rel(p.x - x), rel(p.y - y))]).sort((p, q) => p[1] - q[1]).slice(0, 3);
+  near_.forEach(([p, d], k) => scream(actx.currentTime + 0.25 + k * 0.3 + Math.random() * 0.2, clamp(0.06 - d * 0.006, 0.012, 0.06), clamp(Math.sin(Math.atan2(rel(p.y - py), rel(p.x - px)) - a), -0.8, 0.8), 520 + (p.ph * 97 % 1) * 420));
+}
 // ===== smoke and vapour that hangs in the air. Every drag you breathe out leaves a few puffs in front of you, a lit
 // cigarette sends up the odd wisp, and the vape's cloud is a lot more (mango-coloured). Outside they drift off on the
 // wind and are gone in a few seconds; indoors they hang about for half a minute, so a room you keep smoking in gets
@@ -27228,12 +27777,12 @@ function openBusted() {
   if(deliveryFailed){say('Delivery failed: you were arrested.',5);saveGame();}
   if (actx) tickSirens(mode === 'room'); // the sirens cut out (they'd hang on one note while this is up)
   bustedEl = bustedEl || panel('busted');
-  const f = fineFor(wanted.stars), can = money >= f;
+  const f = fineFor(wanted.stars), can = money >= f && !wanted.killed; // (there's no fine for a killing)
   showPanel(bustedEl, `<h1>Busted</h1><p class="sub">${wanted.crime || 'trouble'} &middot; ${'*'.repeat(wanted.stars)}</p>
     ${deliveryFailed?'<p>Your courier delivery failed. The parcel has been confiscated.</p>':''}
     <button class="item" data-fine ${can ? '' : 'disabled'}><span class="k">1</span><span>Pay the fine</span><span class="lead"></span><span class="v">${fmt$(f)}</span></button>
     <button class="item" data-jail><span class="k">2</span><span>Go to jail</span><span class="lead"></span><span class="v">${JAIL_T}s, lose what you carry</span></button>
-    <p class="hint">${can ? '' : "You can't cover the fine. "}1 / 2 choose</p>`);
+    <p class="hint">${wanted.killed ? 'There\'s no fine for this. ' : can ? '' : "You can't cover the fine. "}1 / 2 choose</p>`);
   bustedEl.onclick = e => { if (e.target.closest('[data-fine]')) bustedChoice('fine'); else if (e.target.closest('[data-jail]')) bustedChoice('jail'); };
 }
 function bustedKey(e) { // nothing else while they've got you: not even Esc
@@ -27255,9 +27804,10 @@ function outOfCar(keepCar = false) { // paying a fine leaves the car parked wher
 }
 function bustedChoice(how) {
   const f = fineFor(wanted.stars);
+  const armed = inv.some(it => ITEMS[it.id].kind === 'gun');
   if (how === 'fine' && !payFine()) return;
   hidePanel(bustedEl); endTaxiShift(); outOfCar(how === 'fine');
-  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."`, 4);
+  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."${armed ? ' They keep the revolver.' : ''}`, 4);
   const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
   goToJail();
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T }, [11, 3.2, Math.PI / 2]); // facing the bars
@@ -28090,6 +28640,7 @@ onkeydown = e => {
   }
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
+    if (e.code === 'KeyR' && heldGun()) reloadKey(); // (the revolver: gun-ui.js)
     if (e.code === 'Space') { if (skatingNow()) { if (!e.repeat) skateSpace(true); } else jump(); } // (on the board: it pops when you let go, skate.js)
     if (/^Arrow/.test(e.code) && skatingNow() && !e.repeat) skateArrow(); // (a flip trick, in the air)
     if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
@@ -28293,7 +28844,7 @@ function loop(t) {
     requestAnimationFrame(loop); return;
   }
   if (sleep) stepSleep(dt);
-  if (mode !== 'air') { pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective)
+  if (mode !== 'air') { pitch += ((K.KeyR && !(heldGun() && onFootMode()) ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective; with the revolver in your hand, R reloads)
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
   if (chute) stepChute(dt); // (hanging under a parachute, or falling before it opens: flight.js)
   else if (!sleep && skatingNow()) stepSkate(dt); // (on the board: skate.js)
@@ -28362,6 +28913,7 @@ function loop(t) {
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
   stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
+  if (stepGun(dt) === 'down') shotDown(); stepGunUI(); // (the revolver, and the police shooting back: gun.js, gun-ui.js)
   const need = stepNeeds(dt, onFootMode() && !game && !sleep); // (at the wheel or mid-shift you hang on till you stop)
   if (need === 'faint') passOut(needs.drink <= 0 ? 'You collapsed in the street. Dehydration. Drink some water, would you?' : 'You collapsed in the street. When did you last eat?');
   else if (need) say(need, 4);
@@ -28503,7 +29055,7 @@ function eLabel(p) {
   return m[1].split(' ').slice(0, 2).join(' ');
 }
 const TAXI_STOPS = ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway'];
-const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use' };
+const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use', gun: 'Fire' };
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
 function touchActions() {
   if (freecam) return [['Up', 'KeyE', 'main'], ['Down', 'KeyQ', 'pop']];
@@ -28544,7 +29096,7 @@ function touchActions() {
     if (/\bG: take/.test(p)) out.push(['Grab', 'KeyG', 'pop']);
     if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
-    if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
+    if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
   }

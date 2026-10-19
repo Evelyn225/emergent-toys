@@ -204,7 +204,7 @@ function render(dt) {
   }
   if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
-  if (city) drawTireMarks();
+  if (city) { drawTireMarks(); drawBlood(); } // (and blood: gun-ui.js)
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
   drawPeeMarks(); // stains on walls and solid static objects
@@ -214,6 +214,7 @@ function render(dt) {
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
   if (city) drawAnglerLines(); // (the regulars' lines too)
   drawFishing(); // the line, the bobber and the rings round it (fishing-render.js; after the water's reflections, or they'd double it)
+  drawShots(); // a shot's streak, the police's flashes (gun-ui.js)
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
     if (mode === 'air') airDash();

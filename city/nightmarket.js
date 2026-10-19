@@ -19,7 +19,13 @@ function useMarket(o) {
   return openShop(o.word, stockFor('', o.word));
 }
 // the fortune teller: she turns a card, looks at you a long moment, and says one thing. It comes true
+let gunHintDay = -1; // (she only says it once a day)
 function tellFortune() {
+  // known for your crimes, and nothing in your pocket to show for it: she knows somebody
+  if (noto.level >= NOTO_KNOWN && gunHintDay !== dayNum && !inv.some(it => ITEMS[it.id].kind === 'gun')) {
+    gunHintDay = dayNum;
+    return 'She turns the Seven of Swords and looks at you a long moment. "You have a name in this city now, and not a good one. The pawnbroker keeps something under the counter for people like you. After nine. Bring six hundred."';
+  }
   const opts = ['stock', 'duck', 'luck', 'sky'];
   if (season() === 'winter' && weather !== 'snow') opts.push('snow');
   switch (pick(opts)) {

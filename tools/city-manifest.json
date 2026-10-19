@@ -32,7 +32,8 @@
     "city/property.js",
     "city/boats.js",
     "city/fishing.js",
-    "city/cooking.js"
+    "city/cooking.js",
+    "city/gun.js"
   ],
   "dom": [
     "city/screen.js",
@@ -90,6 +91,7 @@
     "city/held-dense-items.js",
     "city/fishing-render.js",
     "city/cooking-ui.js",
+    "city/gun-ui.js",
     "city/smoke.js",
     "city/pee.js",
     "city/ambient.js",

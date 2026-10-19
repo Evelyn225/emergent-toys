@@ -1,0 +1,239 @@
+// ===== the revolver on screen and in your ears (gun.js has the rules): the gun in your hand, turning its cylinder,
+// kicking up when it goes off, swung open to reload; the crosshair; the shot (the flash, the street lit up for an
+// instant, a streak to where it went, the bang and the buildings throwing it back); the blood, the sheet the
+// paramedics put over somebody; the police shooting back; and the screaming.
+
+// ---- Q and R
+function pullTrigger() {
+  const indoors = mode === 'room', slope = (hor - (rows >> 1)) / projY; // (the crosshair's on the middle row)
+  const r = fireGun(px, py, eye, a, slope, indoors);
+  if (!r) return;
+  if (r.empty) { if (actx) dryFire(actx.currentTime); return say('*click* It\'s empty. R to reload.', 1.5); }
+  if (actx) { gunBang(actx.currentTime, 1, 0, indoors ? 'in' : ''); screams(px, py); }
+  if (r.what === 'person' || r.what === 'cop') say(pick(r.what === 'cop' ? ['The officer drops. Somebody on the radio is asking for them.', 'The officer goes down and stays down.']
+    : ['They go down and don\'t get up.', 'They drop where they stood.', 'They fall. Nobody near them moves to help.']), 2.5);
+  else if (r.what === 'car') say(pick(['The round punches through a door panel.', '*PANG* off the car.']), 1.5);
+  else if (heldGun().uses === 0) say(ammoLeft() ? 'That\'s six. R to reload.' : 'That\'s six, and no more rounds.', 2);
+}
+function reloadKey() {
+  const r = reloadGun();
+  if (!r) return;
+  if (r[0]) say(r[0], 2);
+  if (actx && r[1] === 'reload') reloadSound(actx.currentTime);
+  else if (actx && r[1]) sfxUse(r[1]);
+}
+// shot by the police till you dropped: the hospital, and they've kept the gun
+function shotDown() {
+  confiscateGun();
+  passOut('Gunshot wounds. You\'re lucky. The police have your revolver, and would like to talk when you\'re up.');
+}
+
+// ---- the gun in your hand: side-on, muzzle toward the crosshair, the fist round the grip. Drawn in characters and
+// turned on the canvas as a piece: up with the kick of a shot, right up to reload with the cylinder swung out
+const REVOLVER = [
+  '                                     _',
+  ' _                                  / )',
+  '[_]__________________________ _____/ /__',
+  '|____________________________|=====|::::\\',
+  ' `---------------------------|-----|:::::\\',
+  '       `===================\'  |=====|::o::|',
+  '                          \\  |-----|:::::\\',
+  '                           \\_|_____|::::::\\',
+  '                              \\ ( \\ \\#######\\',
+  '                               `--`--\'#######\\',
+  '                                      \\#######\\',
+  '                                       \\#######\\',
+  '                                        |#######|',
+  '                                        \\_______/'];
+const GUN_GRIP = [43, 9]; // (the column and row your fist closes round)
+const CYL_FACE = [' .---. ', '/ o o \\', '| o+o |', '\\ o o /', " `---' "]; // swung out: the chambers, filling as you load
+const gunView = { spin: 0, t: 0 }; // the cylinder's turn as drawn, easing after gun.spin
+function gunGeom() {
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), hsz = Math.round(u * 1.15), s = Math.round(u * 0.7);
+  const bob = moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08, k = gun.kick, rl = gun.reload > 0 ? Math.min(1, (RELOAD_T - gun.reload) * 5, gun.reload * 5) : 0;
+  const cx = Math.round(cv.width * 0.8 + k * u * 0.6), hy = Math.round(cv.height - 5.6 * hsz + bob + k * u * 0.5 + rl * u * 2.5);
+  return { u, s, hsz, cx, hy, ang: 0.05 + k * 0.32 + rl * 0.85 }; // (kicked up by a shot; tipped right up to reload)
+}
+// the picture as it is this instant: the cylinder's flutes moved round, the hammer back or down, the cylinder out
+function revolverArt(open, rounds) {
+  const art = REVOLVER.map(l => [...l]), turn = Math.floor(gunView.spin * 2);
+  for (let r = 3; r <= 6; r++) for (let c = 30; c <= 34; c++) art[r][c] = open ? ' ' : (r + turn) & 1 ? '-' : '=';
+  if (gun.kick > 0.45) { // fired: the hammer's down on the frame
+    for (const [r, c] of [[0, 37], [1, 36], [1, 37], [1, 38], [2, 37]]) art[r][c] = ' ';
+    art[2][36] = '_'; art[2][37] = ')';
+  }
+  if (open) { // swung out to the side, its face to you: a round in each chamber as it goes in
+    let k = 0;
+    CYL_FACE.forEach((l, r) => [...l].forEach((ch, c) => { const row = art[8 + r] || (art[8 + r] = []); while (row.length < 22 + c) row.push(' '); row[21 + c] = ch === 'o' ? (k++ < rounds ? '@' : 'o') : ch; }));
+  }
+  return art.map(r => r.join(''));
+}
+function revolverCol(ch, r, c) {
+  if (ch === '@') return C(YEL, 14); // (brass)
+  if (r >= 8 && c >= 20 && c < 30) return C(GRAY, ch === 'o' ? 4 : 11); // (the cylinder, swung out: an empty chamber's dark)
+  if (r >= 8 && c >= 37 || r >= 10) return ch === '#' ? C((r + c) & 1 ? BRICK : WARM, 9 + ((r * 3 + c) % 4)) : C(BRICK, 10); // the walnut grip, chequered
+  if (ch === '=' && r >= 3 && r <= 6 && c >= 30 && c <= 34) return C(CYAN, 13); // the cylinder catching the light
+  if (ch === ':') return C(GRAY, 7);
+  if (ch === 'o') return C(YEL, 11);
+  if (r <= 2 || ch === '[' || ch === ']') return C(WHITE, 14); // the top edge, in the light
+  return C(GRAY, 11 - (r > 4 ? 2 : 0));
+}
+function drawRevolver(it) {
+  const G = gunGeom(), dt = clamp(T - gunView.t, 0, 0.05); gunView.t = T;
+  gunView.spin += (gun.spin - gunView.spin) * Math.min(1, dt * 14); // (a sixth of a turn a shot, snapping round)
+  const open = gun.reload > 0, rounds = open ? Math.min(CYLINDER, it.uses + Math.floor((1 - gun.reload / RELOAD_T) * 7)) : it.uses;
+  g.font = G.s + 'px monospace';
+  const w = g.measureText('M').width, gx = -(GUN_GRIP[0] + 0.5) * w, gy = -GUN_GRIP[1] * G.s;
+  g.save(); g.beginPath(); g.rect(0, 0, cv.width, G.hy + 0.75 * G.hsz); g.clip(); // (your fingers hide the bottom of the grip)
+  g.translate(G.cx, G.hy + 0.2 * G.hsz); g.rotate(G.ang);
+  artText(revolverArt(open, rounds), gx, gy, G.s, revolverCol);
+  if (gun.kick > 0.55) { // the flash, off the end of the barrel
+    const big = Math.round(G.u * (0.8 + gun.kick * 0.5)), k = gun.kick;
+    g.font = big + 'px monospace';
+    const fw = g.measureText('M').width;
+    artText(k > 0.8 ? ['\\|/', '-*-', '/|\\'] : [' . ', '-#-', " ' "], gx - fw * 3.2, gy + 3.5 * G.s - big * 1.5, big, ch => ch === '*' || ch === '#' ? C(WHITE, 15) : ch === '-' ? C(YEL, 15) : C(ORANGE, 14));
+  }
+  g.restore();
+  g.font = FS + 'px monospace';
+}
+
+// ---- the crosshair, the cylinder count, the flash lighting everything for an instant, and being hit
+function drawGunHud() {
+  const it = heldGun();
+  if (it && onFootMode() && !game) {
+    const x = cols / 2 * cw, y = (rows >> 1) * FS, moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
+    const spread = cw * (1.2 + gun.kick * 2.5 + (moving ? 0.6 : 0)); // (opening up as it kicks, and as you walk)
+    const on = mode !== 'room' && aimingAt(); // (red when somebody's in it)
+    g.font = FS + 'px monospace'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, FS * 0.16); g.strokeStyle = 'rgba(0,0,0,0.85)';
+    g.fillStyle = on ? '#f44' : 'rgba(255,255,255,0.92)';
+    for (const [ch, ox, oy] of [['-', -spread - cw * 0.5, -FS * 0.5], ['-', spread - cw * 0.5, -FS * 0.5], ['|', -cw * 0.5, -FS * 0.5 - spread * 0.8], ['|', -cw * 0.5, -FS * 0.5 + spread * 0.8], ['.', -cw * 0.5, -FS * 0.75]]) {
+      g.strokeText(ch, x + ox, y + oy); g.fillText(ch, x + ox, y + oy);
+    }
+    // the cylinder: a round for each, under the crosshair to the right, and what's left in the boxes
+    const loaded = 'o'.repeat(it.uses) + '.'.repeat(CYLINDER - it.uses), txt = gun.reload > 0 ? 'reloading' : `${loaded}  ${ammoLeft()}`;
+    g.fillStyle = it.uses ? 'rgba(255,220,120,0.9)' : '#f66';
+    g.strokeText(txt, x + cw * 3, y + FS * 1.6); g.fillText(txt, x + cw * 3, y + FS * 1.6);
+  }
+  const flash = Math.max(0, 1 - (T - gun.lastShotT) / 0.07);
+  if (flash > 0) { // the street lit up for an instant
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const gr = g.createRadialGradient(cv.width * 0.6, cv.height * 0.7, 0, cv.width * 0.6, cv.height * 0.7, cv.width * 0.7);
+    gr.addColorStop(0, `rgba(255,190,90,${0.35 * flash})`); gr.addColorStop(1, `rgba(255,150,60,${0.08 * flash})`);
+    g.fillStyle = gr; g.fillRect(0, 0, cv.width, cv.height); g.restore();
+  }
+  const hurt_ = Math.max(0, 1 - (T - gun.hurtT) / 0.6);
+  if (hurt_ > 0) { // hit: the edges go red
+    const gr = g.createRadialGradient(cv.width / 2, cv.height / 2, cv.height * 0.25, cv.width / 2, cv.height / 2, cv.width * 0.7);
+    gr.addColorStop(0, 'rgba(160,0,0,0)'); gr.addColorStop(1, `rgba(170,0,0,${0.55 * hurt_})`);
+    g.fillStyle = gr; g.fillRect(0, 0, cv.width, cv.height);
+  }
+}
+// is somebody in the crosshair? (a cheap look, a few times a second)
+let aimLook = { t: -1, on: false };
+function aimingAt() {
+  if (T - aimLook.t < 0.1) return aimLook.on;
+  const r = traceShot(px, py, eye, Math.cos(a), Math.sin(a), (hor - (rows >> 1)) / projY);
+  aimLook = { t: T, on: r.what === 'person' || r.what === 'cop' };
+  return aimLook.on;
+}
+// a flash's light on the ground round it (city-render.js): yours, and the police's
+function muzzleGlow(wx, wy) {
+  let k = 0;
+  const lit = (x, y, t, R) => { const age = T - t; if (age > 0.08) return; const d = Math.hypot(rel(wx - x), rel(wy - y)); if (d < R) k = Math.max(k, (1 - d / R) ** 1.6 * (1 - age / 0.08)); };
+  for (const s of gun.shots) if (!s.indoors) lit(s.x0, s.y0, s.t, 1.4);
+  for (const s of gun.copShots) if (!s.room) lit(s.x, s.y, s.t, 1);
+  return k * clamp(0.35 + night, 0, 1);
+}
+const gunLit = () => T - gun.lastShotT < 0.08 || gun.copShots.some(s => T - s.t < 0.08);
+
+// ---- out in the world: the streak of a shot, the police's flashes, the blood
+function drawShots() {
+  if (mode === 'room') return;
+  for (const s of gun.shots) { // yours: from just under your eye, off to the right where the gun is, to wherever it stopped
+    const age = T - s.t;
+    if (age > 0.09 || s.indoors) continue;
+    const ox = rel(s.x0 - px) + Math.cos(a + 0.6) * 0.02, oy = rel(s.y0 - py) + Math.sin(a + 0.6) * 0.02;
+    const p0 = fishProj(ox + Math.cos(a) * 0.08, oy + Math.sin(a) * 0.08, s.z0 - 0.02), p1 = fishProj(rel(s.x - px), rel(s.y - py), s.z);
+    if (p0 && p1) fishSeg(p0, p1, C(age < 0.04 ? WHITE : YEL, 15));
+    if (p1 && (s.what === 'wall' || s.what === 'ground' || s.what === 'car')) fishPut(p1.c, p1.r, p1.depth, '*', C(s.what === 'car' ? YEL : WHITE, 14)); // (sparks, or a puff of grit)
+  }
+  for (const s of gun.copShots) { // theirs: a flash at the officer's hand
+    if (T - s.t > 0.08 || s.room) continue;
+    const [vx, vy] = R(s.x, s.y);
+    drawArt(vx, vy, 0.1, 0.05, 0.05, ['\\|/', '-*-', '/|\\'], ch => ch === '*' ? C(WHITE, 15) : C(YEL, 15));
+  }
+}
+// pools of blood: spreading out over the first few seconds, an uneven edge, darkening as they dry
+function drawBlood() {
+  for (const b of pools) {
+    const vx = rel(b.x - px), vy = rel(b.y - py);
+    if (Math.hypot(vx, vy) > Math.min(vis, 14)) continue;
+    const age = T - b.t, r = 0.03 + 0.07 * Math.min(1, age / 9), dry = clamp((age - 60) / 120, 0, 1), seed = b.x * 13 + b.y * 7;
+    drawBox(boxAt(vx, vy, 1, 0, r * 1.2, r * 1.2, 0, 0.0004), (i, t, L) => {
+      const an = Math.atan2(HIT.v, HIT.u), edge = r * (0.75 + 0.25 * Math.sin(an * 3 + seed) * Math.sin(an * 5 + seed * 1.7));
+      if (Math.hypot(HIT.u, HIT.v) > edge) { BG[i] = BG_UNSET; return false; }
+      BG[i] = C(RED, (2.6 - dry * 1.2) * Math.max(0.5, L * 0.1)); return set(i, Math.hypot(HIT.u, HIT.v) < edge * 0.5 ? ' ' : '.', C(RED, 4 - dry)), true;
+    });
+  }
+}
+// what the people round a body look like: the paramedics' white sheet over it, once they've got there
+function drawSheet(o, vx, vy) {
+  const fx_ = o.down.fx, fy_ = o.down.fy;
+  drawBox(boxAt(vx + fx_ * 0.02, vy + fy_ * 0.02, fx_, fy_, 0.1, 0.04, 0, 0.025), (i, t, L) => {
+    BG[i] = C(WHITE, 4 + L * 0.6); return set(i, HIT.face === 5 ? (fract(HIT.u * 9 + HIT.v * 4) < 0.25 ? '~' : ' ') : '_', C(GRAY, 9 + L * 0.3)), true; // (folds in it, over the shape of them)
+  });
+}
+
+// ---- the sound: every frame, the police's shots you haven't heard yet, and what happens when one hits you
+function stepGunUI() {
+  for (const s of gun.copShots) {
+    if (s.heard) continue;
+    s.heard = true;
+    const d = s.room ? Math.hypot(s.x - px, s.y - py) / 10 : near(s.x, s.y, px, py), side = s.room ? 0 : Math.sin(Math.atan2(rel(s.y - py), rel(s.x - px)) - a);
+    if (actx) gunBang(actx.currentTime, clamp(1.1 - d / 9, 0.2, 0.9), clamp(side, -0.8, 0.8), s.room ? 'in' : d > 3 ? 'far' : '');
+    if (s.hit) { if (actx) tone(actx.currentTime + 0.02, 70, 0.2, 0.25); say(pick(['You\'re hit!', 'Something punches you in the side. You\'re hit.', 'Hit! It burns.']) + (needs.health < 35 ? ' You can\'t take much more of this.' : ''), 2); }
+    else if (actx && d < 5) whizz(actx.currentTime + 0.05, clamp(side, -0.8, 0.8)); // (it went past you)
+  }
+}
+// noise through a filter: a sharp start and a falling tail
+function gunNoise(at, len, type, freq, q, gain, pan = 0) {
+  const s = actx.createBufferSource(), fl = actx.createBiquadFilter(), g_ = actx.createGain(), p = actx.createStereoPanner();
+  s.buffer = noiseBuf; fl.type = type; fl.frequency.value = freq; fl.Q.value = q; p.pan.value = pan;
+  g_.gain.setValueAtTime(0, at); g_.gain.linearRampToValueAtTime(gain, at + 0.002); g_.gain.exponentialRampToValueAtTime(0.0005, at + len);
+  shot(s, fl, g_, p, sfxBus); s.start(at, Math.random() * 1.5, len + 0.05);
+}
+// the bang: a crack, the blast, a thump in your chest, and the street throwing it back off every wall a few times
+// over, a little later and a little duller each time ('in': a room, short and boxy; 'far': somebody else's, down the street)
+function gunBang(at, vol, pan = 0, where = '') {
+  const far = where === 'far';
+  if (!far) gunNoise(at, 0.06, 'highpass', 2200, 0.7, 0.5 * vol, pan);
+  gunNoise(at, far ? 0.3 : 0.4, 'lowpass', far ? 1100 : 3200, 0.8, 0.9 * vol, pan);
+  const o = actx.createOscillator(), g_ = actx.createGain(), p = actx.createStereoPanner();
+  o.type = 'sine'; o.frequency.setValueAtTime(150, at); o.frequency.exponentialRampToValueAtTime(42, at + 0.25); p.pan.value = pan;
+  g_.gain.setValueAtTime(0, at); g_.gain.linearRampToValueAtTime(0.7 * vol, at + 0.004); g_.gain.exponentialRampToValueAtTime(0.0005, at + 0.3);
+  shot(o, g_, p, sfxBus); o.start(at); o.stop(at + 0.35);
+  const echoes = where === 'in' ? [[0.04, 0.3], [0.09, 0.12]] : [[0.19, 0.3], [0.42, 0.17], [0.78, 0.09], [1.25, 0.05]];
+  for (const [d, k] of echoes) gunNoise(at + d, 0.35 + d * 0.5, 'lowpass', 900 - d * 300, 0.7, k * vol, -pan * 0.6);
+}
+const dryFire = at => { tone(at, 2600, 0.025, 0.09, 'square'); gunNoise(at, 0.03, 'bandpass', 3500, 4, 0.12); };
+const whizz = (at, pan) => gunNoise(at, 0.12, 'bandpass', 5000, 6, 0.1, pan);
+// thumbing the cylinder out, six rounds in one after another, and snapping it shut
+function reloadSound(at) {
+  gunNoise(at, 0.05, 'bandpass', 2400, 3, 0.22);
+  for (let k = 0; k < 6; k++) gunNoise(at + 0.3 + k * 0.17, 0.035, 'bandpass', 3800 + k * 90, 5, 0.12);
+  gunNoise(at + RELOAD_T - 0.12, 0.07, 'bandpass', 1800, 2, 0.3);
+}
+// somebody screaming: a voice (a buzz through two formants), up, wavering, and down
+function scream(at, vol, pan, pitch) {
+  const o = actx.createOscillator(), lfo = actx.createOscillator(), lg = actx.createGain(), f1 = actx.createBiquadFilter(), f2 = actx.createBiquadFilter(), g_ = actx.createGain(), p = actx.createStereoPanner(), len = 0.7 + Math.random() * 0.6;
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(pitch * 0.8, at); o.frequency.linearRampToValueAtTime(pitch * 1.35, at + 0.15); o.frequency.linearRampToValueAtTime(pitch * 0.9, at + len);
+  lfo.frequency.value = 6 + Math.random() * 3; lg.gain.value = pitch * 0.03; lfo.connect(lg); lg.connect(o.frequency);
+  f1.type = 'bandpass'; f1.frequency.value = 900; f1.Q.value = 3; f2.type = 'peaking'; f2.frequency.value = 2600; f2.gain.value = 9; p.pan.value = pan;
+  g_.gain.setValueAtTime(0, at); g_.gain.linearRampToValueAtTime(vol, at + 0.06); g_.gain.setValueAtTime(vol * 0.8, at + len * 0.7); g_.gain.exponentialRampToValueAtTime(0.0005, at + len);
+  shot(o, f1, f2, g_, p, sfxBus); o.start(at); o.stop(at + len + 0.05); lfo.start(at); lfo.stop(at + len + 0.05);
+}
+// the ones who scream as they run: the nearest few
+function screams(x, y) {
+  const near_ = people.filter(p => p.flee && p.flee.scream && !p.hidden).map(p => [p, Math.hypot(rel(p.x - x), rel(p.y - y))]).sort((p, q) => p[1] - q[1]).slice(0, 3);
+  near_.forEach(([p, d], k) => scream(actx.currentTime + 0.25 + k * 0.3 + Math.random() * 0.2, clamp(0.06 - d * 0.006, 0.012, 0.06), clamp(Math.sin(Math.atan2(rel(p.y - py), rel(p.x - px)) - a), -0.8, 0.8), 520 + (p.ph * 97 % 1) * 420));
+}

@@ -58,7 +58,7 @@ function eLabel(p) {
   return m[1].split(' ').slice(0, 2).join(' ');
 }
 const TAXI_STOPS = ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway'];
-const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use' };
+const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use', gun: 'Fire' };
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
 function touchActions() {
   if (freecam) return [['Up', 'KeyE', 'main'], ['Down', 'KeyQ', 'pop']];
@@ -99,7 +99,7 @@ function touchActions() {
     if (/\bG: take/.test(p)) out.push(['Grab', 'KeyG', 'pop']);
     if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
-    if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
+    if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
   }
