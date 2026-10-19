@@ -28,10 +28,18 @@ function shopDoor(i, du, z, sh, L, trim) {
   if (Math.abs(du) > SHOP_DOOR_HALF + 0.012 || z > SHOP_DOOR_TOP + 0.014) return false;
   if (architectureShutter(i, z, sh, L)) return true;
   if (Math.abs(du) > SHOP_DOOR_HALF || z > SHOP_DOOR_TOP) { BG[i] = C(trim, 1 + L * 0.2); return set(i, z > SHOP_DOOR_TOP ? '=' : '|', C(trim, L)), true; }
-  if (z < 0.02) { BG[i] = C(GRAY, 1 + L * 0.15); return set(i, '_', C(GRAY, L * 0.8)), true; } // the kick plate, on the ground
-  const open = openAt(sh, tod);
-  BG[i] = C(WARM, open ? 1.4 + night * 3.5 : 0.6);
-  return set(i, Math.abs(z - 0.115) < 0.01 && du > 0 ? '-' : Math.abs(du) < 0.006 ? '|' : ':', C(open ? WHITE : GRAY, Math.max(L * 0.6, open ? night * 11 : 0))), true;
+  return doorGlass(i, du, z, openAt(sh, tod), L, trim);
+}
+// the glass of a shop's double door, du across it (0 where the two leaves meet): a solid panel at the foot, a push bar
+// across each leaf, the meeting stiles; by day the street and a streak of sky in it, after dark the shop lit up behind
+// it (if it's open). True: it drew (i)
+function doorGlass(i, du, z, open, L, trim) {
+  if (z < 0.035) { BG[i] = C(trim, 1.1 + L * 0.2); return set(i, z < 0.006 ? '_' : ' ', C(GRAY, L * 0.7)), true; }
+  if (Math.abs(du) < 0.006) { BG[i] = C(trim, 1 + L * 0.2); return set(i, '|', C(GRAY, L * 0.8)), true; }
+  if (Math.abs(z - 0.11) < 0.008 && Math.abs(du) > 0.012 && Math.abs(du) < 0.04) { BG[i] = C(GRAY, 1.5 + L * 0.2); return set(i, '-', C(WHITE, L)), true; }
+  const warm = open && (night > 0.3 || overcast > 0.6), streak = fract(du * 7 + z * 4) < 0.07;
+  BG[i] = warm ? C(WARM, 1.2 + night * 3.2) : C(CYAN, 0.55 + day * 1.25);
+  return set(i, streak ? '/' : warm && hash(Math.floor(du * 60), Math.floor(z * 50), 377) > 0.86 ? '.' : ' ', C(warm ? YEL : WHITE, warm ? Math.max(L * 0.5, night * 8) : 4 + day * 7)), true;
 }
 function architectureShutter(i, z, sh, L) {
   if (openAt(sh, tod)) return false;

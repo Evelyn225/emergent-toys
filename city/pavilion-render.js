@@ -24,7 +24,6 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     if (f.front && Math.abs(door) < doorHalf + .012 && z < .27) { // the way in: down to the pavement, under the awning
       if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
       if (Math.abs(door) > doorHalf || z > .255) { BG[i] = C(p.trim,1 + L * .2); set(i,z > .255 ? '=' : '|',C(p.trim,L)); return true; }
-      if (z < .02) { BG[i] = C(GRAY,1 + L * .15); set(i,'_',C(GRAY,L * .8)); return true; }
     }
     if (f.front && Math.abs(local) < width / 2 - .15 && (z > .03 || Math.abs(door) < doorHalf) && z < .32) {
       if (sh.kind !== SHOP_APTS && architectureShutter(i,z,sh,L)) return true;
@@ -32,10 +31,7 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
         if (japan && z > .225) {
           BG[i] = C(p.trim,2 + L * .22);
           set(i,Math.abs(door) < .012 ? ' ' : Math.abs(z - .267) < .016 ? 'o' : ' ',C(WHITE,L));
-        } else {
-          BG[i] = C(WARM,1.5 + night * 3);
-          set(i,z > .295 ? '=' : ':',C(WARM,Math.max(L * .6,night * 11)));
-        }
+        } else doorGlass(i,door,z,open,L,p.trim);
         return true;
       }
       const mullion = Math.abs(local - width * .12) < .014 || Math.abs(local + width * .35) < .014;
