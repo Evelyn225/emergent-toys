@@ -224,7 +224,7 @@ function rethink(p, t) {
 // straight to wherever the routine has them right now: indoors at the place, or out from their front door
 function settle(p) {
   const act = activity(p, tod), place = placeFor(p, act, tod);
-  p.act = act; p.goal = null; p.loiter = false; p.legs = 0;
+  p.act = act; p.goal = null; p.loiter = false; p.legs = 0; delete p.flee;
   if (place) { p.x = place.x; p.y = place.y; p.inside = place; p.hidden = true; p.wait = 3 + Math.random() * 15; }
   else { p.x = p.home.x; p.y = p.home.y; p.inside = null; p.hidden = false; p.wait = 0; }
   snapToCorner(p);
@@ -273,8 +273,40 @@ function stepHelp(p, dt) {
   const s = Math.min(d - 0.1, p.sp * 2.5 * dt), nx = mod(p.x + dx / d * s, N), ny = mod(p.y + dy / d * s, N);
   if (!map[idx(Math.floor(nx), Math.floor(ny))]) { p.x = nx; p.y = ny; p.ph += dt * 8; }
 }
+// running from a gunshot (gun.js): flat out away from it, sliding along walls, for a few seconds; then back to the
+// nearest sidewalk and on with the day, or (somewhere you can't see them) straight to wherever the routine has them
+function stepFlee(p, dt) {
+  const f = p.flee;
+  if ((f.t -= dt) <= 0) { delete p.flee; return backToSidewalk(p); }
+  const s = p.sp * 5 * dt, open = (x, y) => !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y);
+  let moved = false;
+  if (open(p.x + f.x * s, p.y)) { p.x = mod(p.x + f.x * s, N); moved = true; }
+  if (open(p.x, p.y + f.y * s)) { p.y = mod(p.y + f.y * s, N); moved = true; }
+  if (!moved) [f.x, f.y] = Math.random() < 0.5 ? [-f.y, f.x] : [f.y, -f.x]; // (cornered: off another way)
+  p.last = [f.x, f.y]; p.ph += dt * 9;
+}
+function backToSidewalk(p) {
+  const d = Math.hypot(rel(p.x - px), rel(p.y - py));
+  if (d > VIS_R || d > SEEN_R && !lineOfSight(px, py, p.x, p.y)) return settle(p);
+  // the nearest sidewalk line (0.12 / 1.88 into a street, either way), then on from there to its corner
+  const line = v => { const b = Math.floor(v / 8) * 8; return [b - 6.12, b + 0.12, b + 1.88, b + 8.12].reduce((m, c) => Math.abs(c - v) < Math.abs(m - v) ? c : m); };
+  const lx = line(p.x), ly = line(p.y), at = Math.abs(lx - p.x) < Math.abs(ly - p.y) ? { x: mod(lx, N), y: p.y } : { x: p.x, y: mod(ly, N) };
+  const [x, y] = [p.x, p.y];
+  p.x = at.x; p.y = at.y; snapToCorner(p); p.x = x; p.y = y;
+  p.path.unshift(at); p.goal = null; p.legs = 0; p.wait = 0;
+}
+// somebody new in the city, in place of somebody who's gone (gun.js): their own home, their own routine
+function respawnPerson(p) {
+  for (const k of ['down', 'dead', 'flee', 'gawk', 'help', 'talk', 'dog', 'knew', 'follow', 'hailing']) delete p[k];
+  p.home = pickHome();
+  p.work = nearestDoor(p.home.x + (Math.random() - 0.5) * 24, p.home.y + (Math.random() - 0.5) * 24, d => d.use === 'work' || d.use === 'shop', 2) || pick(jobs);
+  p.shirt = pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]); p.pants = pick([BLUE, GRAY]); p.ph = Math.random() * 9;
+  p.x = p.home.x; p.y = p.home.y; p.path = [];
+  settle(p);
+}
 function stepPeople(dt, t, everywhere = false) {
   for (const p of people) {
+    if (p.dead) continue; // (lying where they fell: gun.js sees to them)
     if (!everywhere && !p.follow && !simulated(p.x, p.y)) continue;
     if (!everywhere && !p.follow && !(p.talk > 0)) {
       if (p.simT !== undefined && T - p.simT > 2) settle(p);
@@ -282,6 +314,7 @@ function stepPeople(dt, t, everywhere = false) {
       p.simT = T;
     }
     if (stepDown(p, dt)) continue; // (knocked down by a car)
+    if (p.flee) { stepFlee(p, dt); continue; } // (running from a gunshot)
     if (p.help) { stepHelp(p, dt); continue; } // (gone to them)
     if (p.talk > 0) { if ((p.talk -= dt) <= 0) delete p.gawk; continue; } // stopped to chat with you (or to stare)
     if (p.follow) { followYou(p, dt); continue; }

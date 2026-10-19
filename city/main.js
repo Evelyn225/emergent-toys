@@ -40,6 +40,7 @@ onkeydown = e => {
   }
   if (onFoot && !sleep) {
     if (e.code === 'KeyQ') useHeldItem();
+    if (e.code === 'KeyR' && heldGun()) reloadKey(); // (the revolver: gun-ui.js)
     if (e.code === 'Space') { if (skatingNow()) { if (!e.repeat) skateSpace(true); } else jump(); } // (on the board: it pops when you let go, skate.js)
     if (/^Arrow/.test(e.code) && skatingNow() && !e.repeat) skateArrow(); // (a flip trick, in the air)
     if (e.code === 'KeyC') { if (body.seat) standUp(); else sitDown(); } // (held without a seat near: crouch)
@@ -243,7 +244,7 @@ function loop(t) {
     requestAnimationFrame(loop); return;
   }
   if (sleep) stepSleep(dt);
-  if (mode !== 'air') { pitch += ((K.KeyR ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective)
+  if (mode !== 'air') { pitch += ((K.KeyR && !(heldGun() && onFootMode()) ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective; with the revolver in your hand, R reloads)
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
   if (chute) stepChute(dt); // (hanging under a parachute, or falling before it opens: flight.js)
   else if (!sleep && skatingNow()) stepSkate(dt); // (on the board: skate.js)
@@ -312,6 +313,7 @@ function loop(t) {
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
   stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
+  if (stepGun(dt) === 'down') shotDown(); stepGunUI(); // (the revolver, and the police shooting back: gun.js, gun-ui.js)
   const need = stepNeeds(dt, onFootMode() && !game && !sleep); // (at the wheel or mid-shift you hang on till you stop)
   if (need === 'faint') passOut(needs.drink <= 0 ? 'You collapsed in the street. Dehydration. Drink some water, would you?' : 'You collapsed in the street. When did you last eat?');
   else if (need) say(need, 4);

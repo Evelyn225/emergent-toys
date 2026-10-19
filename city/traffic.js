@@ -33,7 +33,11 @@ function plan(c) {
   const ix = (vert ? Math.floor(c.x / 8) : c.B / 8), iy = (vert ? c.B / 8 : Math.floor(c.y / 8)); // the intersection, in blocks
   let opts = [[c.hx, c.hy], [c.hy, -c.hx], [-c.hy, c.hx]].filter(o => exitOK(ix, iy, o[0], o[1])); // straight, right, left
   if (!opts.length) opts = [[c.hx, c.hy]]; // can't happen on a checked street network (see streetProblems)
-  if (c.dest) { // score each choice from the intersection itself, not from where we are now
+  if (c.dest && c.ev && !c.pursuit && c.state === 'out') { // on a call: the shortest way through the streets to the stretch the scene is on
+    const f = sceneRoute(c), [sx, sy] = c.sceneAt;
+    const cost = o => (o[0] ? c.sceneH : !c.sceneH) && ((o[0] < 0 ? ix - 1 : ix) & (NB - 1)) === sx && ((o[1] < 0 ? iy - 1 : iy) & (NB - 1)) === sy ? -1 : f[bi(ix + o[0], iy + o[1])];
+    c.nh = opts.reduce((b, o) => cost(o) < cost(b) ? o : b);
+  } else if (c.dest) { // score each choice from the intersection itself, not from where we are now
     const ex = rel(c.dest[0] - (vert ? c.x : c.B + 1)), ey = rel(c.dest[1] - (vert ? c.B + 1 : c.y));
     c.nh = opts.reduce((b, o) => o[0] * ex + o[1] * ey > b[0] * ex + b[1] * ey ? o : b);
   } else {
@@ -45,6 +49,24 @@ function plan(c) {
   const P = straight ? (dir > 0 ? c.B + 2 : c.B)
           : vert ? c.B + 1 - 0.4 * c.nh[0] : c.B + 1 + 0.4 * c.nh[1]; // the new lane's coordinate
   c.left = mod((P - along) * dir, N);
+}
+
+// how many stretches of street it is from each intersection to either end of the one a call's scene is on (breadth
+// first, over the street network): worked out once a call. sceneAt, sceneH: that stretch's block, and which way it runs
+function sceneRoute(c) {
+  const [x, y] = c.dest, key = x + ',' + y;
+  if (c.sceneKey === key) return c.sceneF;
+  const bx = Math.floor(mod(x, N) / 8), by = Math.floor(mod(y, N) / 8), horiz = Math.abs(mod(y, 8) - 1) < 0.8;
+  const f = new Int16Array(NB * NB).fill(9999), queue = horiz ? [bi(bx, by), bi(bx + 1, by)] : [bi(bx, by), bi(bx, by + 1)];
+  for (const k of queue) f[k] = 0;
+  for (let h = 0; h < queue.length; h++) {
+    const k = queue[h], qx = k % NB, qy = k / NB | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (exitOK(qx, qy, dx, dy)) {
+      const m = bi(qx + dx, qy + dy); if (f[m] > f[k] + 1) { f[m] = f[k] + 1; queue.push(m); }
+    }
+  }
+  Object.assign(c, { sceneKey: key, sceneF: f, sceneAt: [bx, by], sceneH: horiz });
+  return f;
 }
 
 const BODIES = [RED, BLUE, WHITE, TAXI, TAXI, GREEN, GRAY];
@@ -303,8 +325,8 @@ const BASE_R = 50; // a station further away than this (500m) doesn't send the c
 let evTimer = 45;
 const nearestBase = (kind, free) => SERVICES.filter(b => b.kind === kind && (!free || !b.out))
   .reduce((best, b) => { const d = Math.hypot(rel(b.x - px), rel(b.y - py)); return d < best[1] ? [b, d] : best; }, [null, Infinity]);
-function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police'])) {
-  let scene = null; // somewhere on a street a few blocks from you, so you'll see it go by or pull up
+function spawnEmergency(kind = pick(['amb', 'amb', 'fire', 'police']), at = null) {
+  let scene = at; // somewhere on a street a few blocks from you, so you'll see it go by or pull up (or where it's needed)
   for (let tries = 0; tries < 200 && !scene; tries++) {
     const p = randomLane(12, px, py);
     if (!p) return null; // (no streets near: nothing to see go by)

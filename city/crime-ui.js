@@ -41,12 +41,12 @@ function openBusted() {
   if(deliveryFailed){say('Delivery failed: you were arrested.',5);saveGame();}
   if (actx) tickSirens(mode === 'room'); // the sirens cut out (they'd hang on one note while this is up)
   bustedEl = bustedEl || panel('busted');
-  const f = fineFor(wanted.stars), can = money >= f;
+  const f = fineFor(wanted.stars), can = money >= f && !wanted.killed; // (there's no fine for a killing)
   showPanel(bustedEl, `<h1>Busted</h1><p class="sub">${wanted.crime || 'trouble'} &middot; ${'*'.repeat(wanted.stars)}</p>
     ${deliveryFailed?'<p>Your courier delivery failed. The parcel has been confiscated.</p>':''}
     <button class="item" data-fine ${can ? '' : 'disabled'}><span class="k">1</span><span>Pay the fine</span><span class="lead"></span><span class="v">${fmt$(f)}</span></button>
     <button class="item" data-jail><span class="k">2</span><span>Go to jail</span><span class="lead"></span><span class="v">${JAIL_T}s, lose what you carry</span></button>
-    <p class="hint">${can ? '' : "You can't cover the fine. "}1 / 2 choose</p>`);
+    <p class="hint">${wanted.killed ? 'There\'s no fine for this. ' : can ? '' : "You can't cover the fine. "}1 / 2 choose</p>`);
   bustedEl.onclick = e => { if (e.target.closest('[data-fine]')) bustedChoice('fine'); else if (e.target.closest('[data-jail]')) bustedChoice('jail'); };
 }
 function bustedKey(e) { // nothing else while they've got you: not even Esc
@@ -68,9 +68,10 @@ function outOfCar(keepCar = false) { // paying a fine leaves the car parked wher
 }
 function bustedChoice(how) {
   const f = fineFor(wanted.stars);
+  const armed = inv.some(it => ITEMS[it.id].kind === 'gun');
   if (how === 'fine' && !payFine()) return;
   hidePanel(bustedEl); endTaxiShift(); outOfCar(how === 'fine');
-  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."`, 4);
+  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."${armed ? ' They keep the revolver.' : ''}`, 4);
   const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
   goToJail();
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T }, [11, 3.2, Math.PI / 2]); // facing the bars

@@ -21,7 +21,10 @@ const CRIMES = { steal: { stars: 1, name: 'car theft' }, hit: { stars: 2, name: 
                  alarm: { stars: 2, name: 'burglary' }, bankjob: { stars: 3, name: 'robbing a bank' },
                  boattheft: { stars: 1, name: 'boat theft' }, urination: { stars: 1, name: 'public urination' }, heist: { stars: 3, name: 'the museum heist' },
                  ram: { stars: 1, name: 'ramming a police car' }, hitcop: { stars: 2, name: 'running down an officer' },
-                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' } }; // (spotted: notoriety.js)
+                 planetheft: { stars: 2, name: 'aircraft theft' }, spotted: { stars: 1, name: 'being recognised' }, // (spotted: notoriety.js)
+                 // the revolver (gun.js): these don't add up, they set how bad it is at least (a killing: one more each time)
+                 gunfire: { stars: 2, name: 'firing a gun in the street', least: 0 }, murder: { stars: 4, name: 'murder', least: 1, kills: true },
+                 copkill: { stars: 5, name: 'killing a police officer', least: 1, kills: true } };
 const wanted = { stars: 0, lastX: 0, lastY: 0, lastVX: 0, lastVY: 0, observedT: -Infinity, searchX: 0, searchY: 0, searchT: 0, seen: false, hideT: 0, bustT: 0, busted: false, crime: '' };
 const reports = []; // a passer-by on the phone: { t (when it comes in), x, y, kind }
 const jammed = new Map(); // shop -> T until its lock can be tried again
@@ -278,7 +281,7 @@ for (let n = 0; n < PATROLS; n++) {
 // returns 'cop' (wanted now), 'reported' (somebody will call it in), or '' (nobody saw)
 // can any cop, in a car or on foot, see (x, y)?
 const copSees = (x, y) => cars.some(c => c.patrol && !c.player && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y))
-  || footCops.some(c => near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y));
+  || footCops.some(c => !c.dead && near(c.x, c.y, x, y) < copSight() && lineOfSight(c.x, c.y, x, y)); // (not one lying shot: gun.js)
 function crime(kind, x = crimePos()[0], y = crimePos()[1]) {
   const copSees_ = copSees(x, y);
   if (copSees_) { addWanted(kind, x, y, true); return 'cop'; }
@@ -294,8 +297,11 @@ function redLightCrime(x, y) {
 }
 function addWanted(kind, x, y, seen) {
   if (kind !== 'spotted') newsEvent(kind, x, y); // (it's in the papers, and it's yours: notoriety.js)
-  wanted.stars = Math.min(MAX_STARS, Math.max(wanted.stars, 0) + CRIMES[kind].stars);
-  wanted.crime = CRIMES[kind].name; wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
+  const c = CRIMES[kind], was = Math.max(wanted.stars, 0);
+  wanted.stars = Math.min(MAX_STARS, c.least === undefined ? was + c.stars : Math.max(c.stars, was && was + c.least));
+  if (c.kills || !wanted.killed) wanted.crime = c.name; // (a shot fired doesn't make a murder sound any better)
+  if (c.kills) wanted.killed = true;
+  wanted.lastX = x; wanted.lastY = y; wanted.hideT = 0; wanted.seen = seen;
   wanted.lastVX = 0; wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
   if (seen) observeSuspect(x, y);
   wanted.searchX = x; wanted.searchY = y;
@@ -353,7 +359,7 @@ function callUnits() {
 function clearWanted() {
   wanted.stars = 0; wanted.seen = false; wanted.hideT = 0; wanted.bustT = 0; wanted.busted = false;
   wanted.lastVX = wanted.lastVY = 0; wanted.observedT = -Infinity; wanted.searchT = 0;
-  wanted.toldT = 0; wanted.pitPending = false;
+  wanted.toldT = 0; wanted.pitPending = false; wanted.fired = false; wanted.killed = false;
   const units = cars.filter(c => c.pursuit);
   const closestCar = (x, y) => units.reduce((best, c) => !best || near(c.x, c.y, x, y) < near(best.x, best.y, x, y) ? c : best, null);
   const exit = searchedRoom?.ret || room?.ret;
@@ -629,7 +635,8 @@ function tidyPolice() {
 const fineFor = stars => FINE[stars];
 function payFine() {
   const f = fineFor(wanted.stars);
-  if (!pay(f)) return false;
+  if (wanted.killed || !pay(f)) return false; // (there's no fine for a killing)
+  confiscateGun(); // (they keep the gun: gun.js)
   clearWanted(); return true;
 }
 // jail: everything you're carrying is taken (not your money) and locked in evidence, and you do your time. Break out

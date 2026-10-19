@@ -23,7 +23,7 @@ const HOURS = { VELVET: [20, 4], CASINO: [14, 2], EXCHANGE: [8, 19], BAR: [16, 3
   CARS: [9, 19], REALTY: [9, 18], BURGERS: [11, 1], CHICKEN: [11, 2], JUICE: [7, 18], 'ICE CREAM': [12, 22], BAGELS: [6, 14], TOYS: [10, 19], THRIFT: [10, 18], TOBACCO: [8, 22],
   BANK: [9, 17], PHARMACY: [8, 22], GYM: [5, 23], LIQUOR: [10, 23], 'DIM SUM': [8, 15], 'TEA HOUSE': [9, 21], MAHJONG: [14, 2],
   NOODLES: [11, 1], RAMEN: [11, 1], DUMPLINGS: [10, 23], PHO: [9, 22], LAUNDRY: [0, 24], BODEGA: [0, 24], STORAGE: [0, 24], AQUARIUM: [9, 21],
-  PACHINKO: [10, 23], 'CRANE GAME': [10, 2], IZAKAYA: [17, 3], YAKITORI: [17, 2], TAKOYAKI: [11, 23], BENTO: [7, 21], CAPSULE: [0, 24], MANGA: [10, 23], DRUGSTORE: [9, 23], KISSATEN: [7, 20], GACHA: [10, 22], GAS: [0, 24] };
+  PACHINKO: [10, 23], 'CRANE GAME': [10, 2], IZAKAYA: [17, 3], YAKITORI: [17, 2], TAKOYAKI: [11, 23], BENTO: [7, 21], CAPSULE: [0, 24], MANGA: [10, 23], DRUGSTORE: [9, 23], KISSATEN: [7, 20], GACHA: [10, 22], GAS: [0, 24], PAWN: [10, 2] };
 const hoursOf = word => HOURS[word] || [9, 20];
 const openAt = (sh, t) => { // is this shop open at game hour t?
   if (sh.kind === SHOP_APTS) return true;
