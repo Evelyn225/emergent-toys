@@ -80,6 +80,11 @@ let fishing = null; // the line, while it's out (see stepFishing)
 const fishLog = { caught: 0, best: null }; // how many you've landed, and your heaviest fish { id, kg }
 const fishSfx = []; // sounds for fishing-render.js to play: 'whoosh' | 'plop' | 'splash' | 'reel' | 'land'
 const fishFx = []; // spray off the water { x, y, z, vx, vy, vz, life }
+// where you can fish from: on foot, or sat still in a boat (yours, a rental, a swan), looking from your seat (picking
+// the rod up out there swaps the chase view, V, for your seat)
+const afloat = () => mode === 'sea' || mode === 'boat';
+const fishingFrom = () => mode === 'walk' || afloat() && !third;
+const boatSpeed = () => mode === 'sea' && sea ? Math.abs(sea.v) : mode === 'boat' && boat ? Math.abs(boat.v) : 0;
 const heldRod = () => { const it = heldItem(); return it && ITEMS[it.id].rod ? it : null; };
 // what water is at (x, y), if any: 'sea' | 'deep' | 'marina' | 'pond' | 'lake', 'ice' (a frozen pond), or null (dry land)
 function waterKind(x, y) {
@@ -109,6 +114,10 @@ function catchPrice(it) {
   if (d.kind === 'fish') { const mid = (d.kg[0] + d.kg[1]) / 2; return Math.max(0.25, Math.round(d.price * (it.kg || mid) / mid * 4) / 4); }
   return d.fished ? Math.max(0.25, Math.round(d.price * 0.4 * 4) / 4) : 0;
 }
+// the sushi bars buy sea fish too (not the ponds' or the lake's), and pay better than the hut
+for (const id of ['mackerel', 'herring', 'seabass', 'flounder', 'cod', 'crab', 'squid', 'conger', 'bream', 'bluefish', 'monkfish', 'tuna', 'mullet']) ITEMS[id].salt = true;
+const SUSHI_PAYS = 1.4;
+const sushiPrice = it => ITEMS[it.id].salt ? Math.round(catchPrice(it) * SUSHI_PAYS * 4) / 4 : 0;
 const catchName = it => it.kg ? `${it.kg}kg ${ITEMS[it.id].name}` : ITEMS[it.id].name;
 // how long till something comes for it: quicker in the rain and round dawn and dusk, with a good rod
 const biteWait = (rod, rnd = Math.random) => (5 + rnd() * 13) * ITEMS[rod].rod.wait * (rain > 0.3 ? 0.7 : 1) * (tod >= 5 && tod < 8 || tod >= 18 && tod < 21 ? 0.75 : 1);
@@ -117,7 +126,9 @@ const biteWait = (rod, rnd = Math.random) => (5 + rnd() * 13) * ITEMS[rod].rod.w
 function rodUse(near) {
   const it = heldRod();
   if (near.indoors) return ['Not in here.', null];
-  if (mode !== 'walk') return ['Not from up here.', null];
+  if (afloat() && boatSpeed() > 0.12 && !fishing) return ['Not while she\'s moving. Ease off and let her drift.', null];
+  if (afloat() && third) { third = false; return ['You settle in over the side with the rod. (V: the view from behind again, and the line comes in)', null]; }
+  if (!fishingFrom()) return ['Not from up here.', null];
   if (fx.skating) return ['Not while you\'re on the board.', null];
   const f = fishing;
   if (!f) { fishing = { st: 'wind', t: 0, power: 0, rod: it.id }; return ['', null]; }
@@ -153,9 +164,10 @@ function stepFishing(dt, rnd = Math.random) {
   }
   const f = fishing;
   if (!f) return;
-  if (!heldRod() || heldRod().id !== f.rod || mode !== 'walk' || fx.skating) { fishing = null; return; } // (put it away: the line comes in with it)
+  if (!heldRod() || heldRod().id !== f.rod || !fishingFrom() || fx.skating) { fishing = null; return; } // (put it away: the line comes in with it)
   f.t += dt;
   const out = f.st === 'wait' || f.st === 'lure' || f.st === 'bite' || f.st === 'land';
+  if (out && boatSpeed() > 0.3) { f.catch = null; reelIn(); say('You\'d be trolling. You wind the line in.', 2); fishSfx.push('reel'); return; } // (under way)
   if (out && Math.hypot(rel(f.x - px), rel(f.y - py)) > f.d + 0.5) { f.catch = null; reelIn(); say('The line pulls tight, and you reel it in.', 2); fishSfx.push('reel'); return; }
   if (f.st === 'wind') { // Q held: winding up. Let go to cast
     f.power = Math.min(1, f.t / 1.1);
@@ -174,7 +186,7 @@ function stepFishing(dt, rnd = Math.random) {
   } else if (f.st === 'wait') { // bobbing: then something comes for it, from somewhere off to one side
     if (f.t >= f.next) Object.assign(f, { st: 'lure', t: 0, dur: 1.2 + rnd() * 1.3, from: rnd() * TAU });
   } else if (f.st === 'lure') {
-    if (f.t >= f.dur) { Object.assign(f, { st: 'bite', t: 0 }); splash(f.x, f.y, 10, 0.35); fishSfx.push('splash'); f.ring = T; }
+    if (f.t >= f.dur) { Object.assign(f, { st: 'bite', t: 0 }); splash(f.x, f.y, 18, 0.5); fishSfx.push('splash'); f.ring = T; }
   } else if (f.st === 'bite') { // pulled under: a moment to strike
     if (f.t >= ITEMS[f.rod].rod.window) { Object.assign(f, { st: 'wait', t: 0, next: biteWait(f.rod, rnd) * 0.5 }); say(pick(['It got away.', 'Missed it.', 'Gone. It took the bait with it, in spirit.']), 1.5); f.ring = T; }
   } else if (f.st === 'reel') { // in it comes, skipping over the water, the catch swinging up out of it at the end
@@ -225,4 +237,43 @@ const nearHut = () => mode === 'walk' && Math.abs(rel(px - FISH_HUT.x - FISH_HUT
 function hutPrompt() {
   if (!hutOpen()) return 'BAIT & TACKLE: shut. Open 5am till 8pm.';
   return `E: bait & tackle (rods, and they buy your catch)${fishLog.best ? `   your best: ${catchName(fishLog.best)}` : ''}`;
+}
+
+// ---- the regulars: a few anglers out at the ends of the piers, along the Lighthouse Walk, at a park pond and on the
+// Gardens' lake shore, rods out (fishing-render.js draws them, and now and then one of them lands something). Talk to
+// one and you get a tip. { x, y, a: the way they face, cast: how far out their bobber sits, seed, shirt }
+const ANGLERS = [];
+{
+  const add = (x, y, a, cast = 0.6) => { const k = ANGLERS.length; ANGLERS.push({ x: mod(x, N), y: mod(y, N), a, cast, seed: k, shirt: [BLUE, GREEN, BRICK, GRAY, RED, YEL, CYAN][k % 7] }); };
+  add(FAIR.x0 + 0.14, FAIR.y1 - 0.7, Math.PI); // the Sunset Pier's end, over each side and off the end
+  add(FAIR.x1 - 0.14, FAIR.y1 - 1.1, 0);
+  add(FAIR.cx + 1.6, FAIR.y1 - 0.14, Math.PI / 2, 0.8);
+  add(MARINA.x + 0.75, MARINA.end - 0.06, Math.PI / 2); // the end of the marina's T
+  let south = 0, north = 0;
+  for (const p of PIERS) { // the narrow piers: one at the end of a couple on each shore
+    if (p.marina || p[2] - p[0] > 1 || p[0] === FAIR.x0) continue;
+    const far = p[3] > N; // (the north shore's run out north, over the wrap)
+    if (far ? north++ >= 2 : south++ >= 2) continue;
+    add((p[0] + p[2]) / 2 + 0.15, far ? p[1] + 0.14 : p[3] - 0.14, far ? -Math.PI / 2 : Math.PI / 2, 0.7);
+  }
+  add(FOOTBRIDGE.x + FOOTBRIDGE.hw - 0.05, (FOOTBRIDGE.y0 + FOOTBRIDGE.y1) / 2, 0, 0.7); // halfway along the Lighthouse Walk, over the rail
+  pond: for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) { // the first park's pond: on its west bank, facing in
+    if (blockKind(bx, by) !== 'park') continue;
+    for (let lx = POND[0] - 2; lx < POND[0]; lx += 0.02) if (pondSD(lx, POND[1], bx, by) < 0.12) { add(bx * 8 + lx, by * 8 + POND[1], 0, 0.45); break pond; }
+  }
+  for (let gx = LAKE.x - LAKE.rx * 1.5; gx < LAKE.x; gx += 0.02) if (gardenLakeEdge(gx, LAKE.y + 0.6) > -0.12) { const [x, y] = gx2w(gx, LAKE.y + 0.6); add(x, y, 0, 0.6); break; } // the lake's west shore
+}
+for (const o of ANGLERS) { const ca = Math.cos(o.a), sa = Math.sin(o.a); while (o.cast > 0.2 && !waterKind(o.x + ca * o.cast, o.y + sa * o.cast)) o.cast -= 0.05; } // (their bobbers on the water)
+const ANGLER_TIPS = ['"Squid come in after dark. They like the lights."', '"Pond\'s all carp. The sushi place won\'t touch carp. Sea fish only."',
+  '"Sushi bars pay better than the hut. For the right fish."', '"Get the carbon rod. They bite quicker, and you\'ve longer to strike."',
+  '"Strike when it goes under. Not before. Everybody strikes before."', '"There\'s a golden koi in the Gardens\' lake. I\'ve seen it twice. Nobody believes me."',
+  '"Out past the end of the long piers, that\'s where the big ones are."', '"Rain\'s good. The fish don\'t mind rain."', '"Dawn and dusk. That\'s when they bite."',
+  '"Caught a boot once. Then the other boot. Different years."', '"You can fish off a boat, you know. Have to sit still, mind."', '"Catfish. Nights, in the ponds. Ugly things. Good eating."'];
+// standing by one (a little closer than you'd stand to a stranger), and their line on the go
+const nearAngler = () => mode === 'walk' ? ANGLERS.find(o => Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.32) || null : null;
+// where one's at in their own slow round: most of the time waiting, then a bite and a fish reeled up (0..1 through it),
+// every minute or two
+function anglerPhase(o, t = T) {
+  const P = 50 + hash(o.seed, 3, 1621) * 60, q = fract((t + hash(o.seed, 4, 1621) * 300) / P), land = 4 / P;
+  return q < 1 - land ? { st: 'wait' } : { st: 'catch', k: (q - (1 - land)) / land };
 }

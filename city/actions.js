@@ -142,6 +142,7 @@ function interact() {
         }
         return openStorage(home.decor, 'the shelf', 'Display shelf', 'Keepsakes you have brought home. Click one to take it down.', isHomeDecor, HOME_SHELF_CAPACITY);
       }
+      if (hs === 'stove') { home.fridge ||= []; return openCooking('stove', home.fridge); }
       if (hs === 'fridge') { home.fridge ||= []; return openStorage(home.fridge, 'the fridge', 'Fridge', 'Food and drinks stay here. Click one to take it out.', isFridgeItem); }
       if (hs === 'pet') {
         home.pets ||= home.pet ? [home.pet] : [];
@@ -274,6 +275,7 @@ function interact() {
   }
   if (pickUpBall()) return say('You pick up the ball.');
   if (nearWalkedDog()) { const p = nearWalkedDog(); p.talk = 3; return say(pick(['The dog leans into your hand. Its owner smiles: "She likes you."', 'A wet nose, a wag, a happy little snort.', '"He\'s friendly!" He is. Very.', 'The dog rolls straight over for a belly rub. Its owner sighs and waits.']), 3); }
+  if (nearAngler()) return say(pick(ANGLER_TIPS), 4);
   const who = nearPerson();
   if (who) return talkTo(who);
   if (nearDog()) { task.dog.follow = true; return say('The dog wags its whole body and trots after you.'); }
@@ -286,6 +288,7 @@ function interact() {
   const mk = marketSpot();
   if (mk) return useMarket(mk);
   if (nearHut()) return useHut();
+  { const gr = nearGrill(); if (gr) return openCooking(gr.on, null, gr); }
   const pot = pottyNear();
   if (pot) return enterPotty(pot), say(pick(['You hold your breath and step in.', 'The smell hits you before the door shuts.', 'It\'s exactly as nice as you\'d think.']), 2.5);
   const ven = nearVendor();

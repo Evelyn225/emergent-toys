@@ -2345,8 +2345,11 @@ test('the casino: blackjack, roulette and slots take your stake and pay out; jad
     await page.keyboard.press('Space');
     await page.waitForTimeout(150);
     assert.ok(await page.evaluate(b => money !== b || game.g.state() !== 'bet', before), `${id}: the stake goes down`);
-    await page.waitForTimeout(id === 'roulette' ? 4500 : 1500);
-    if (id === 'blackjack' && await page.evaluate(() => game.g.state() === 'play')) { await page.keyboard.press('Space'); await page.waitForTimeout(3000); }
+    if (id === 'blackjack') { // (stand, if it's waiting on you)
+      await page.waitForFunction(() => ['play', 'done'].includes(game.g.state()), null, { timeout: 20000 }).catch(() => {});
+      if (await page.evaluate(() => game.g.state() === 'play')) await page.keyboard.press('Space');
+    }
+    await page.waitForFunction(() => game.g.state() === 'done', null, { timeout: 30000 }).catch(() => {}); // (the wheel takes its time, more on a slow machine)
     assert.strictEqual(await page.evaluate(() => game.g.state()), 'done', `${id}: a round finishes`);
     await page.keyboard.press('KeyE');
   }
@@ -2681,7 +2684,7 @@ test('car damage: a crash at speed dents it and the dash says so; a burning car 
   const before = await page.evaluate(() => {
     const d = doors.find(o => o.sh.word === 'AUTO REPAIR'), c = addCar({ x: d.x - d.nx * 6, y: d.y - d.ny * 6, hx: 1, hy: 0, body: RED });
     me = c; c.player = true; mode = 'drive'; px = c.x; py = c.y; a = 0; money = 300; damageCar(c, 40);
-    for (const o of cars) if (o.patrol) { o.x = mod(o.x + 100, N); o.ex = o.x; } for (const o of footCops) o.x = mod(o.x + 100, N);
+    for (const o of cars) if (o.patrol) { o.x = o.ex = mod(px + N / 2, N); o.y = o.ey = mod(py + N / 2, N); } for (const o of footCops) { o.x = mod(px + N / 2, N); o.y = mod(py + N / 2, N); } // (the far side of the city: a shift by a set amount could wrap one right back round to here)
     addWanted('crash', px, py, false);
     return promptText();
   });

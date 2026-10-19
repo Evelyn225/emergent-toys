@@ -37,8 +37,8 @@ function nourish(id, d) {
   return [(FILLING[id] || 0) * 30, d.booze ? base * 0.5 : base];
 }
 // a bite or a sip of it: returns a word about how you feel now, or ''
-function eatSome(id, d) {
-  const [f, w] = nourish(id, d), wasHungry = needs.food < 30, wasThirsty = needs.drink < 30;
+function eatSome(id, d, k = 1) { // k: how much more (or less) it does for you (a dish as good as you cooked it)
+  const [f0, w0] = nourish(id, d), f = f0 * k, w = w0 * k, wasHungry = needs.food < 30, wasThirsty = needs.drink < 30;
   needs.food = Math.min(100, needs.food + f / d.uses); needs.drink = Math.min(100, needs.drink + w / d.uses);
   needs.health = Math.min(maxHealth(), needs.health + f * FOOD_HEALS / d.uses); // a proper meal patches you up a bit
   needs.bladder = Math.min(100, needs.bladder + wetting(d, w) / d.uses);
@@ -48,8 +48,9 @@ function eatSome(id, d) {
 }
 // every frame (on your feet or not). Returns 'faint' when you've gone down, or a warning to show once
 function stepNeeds(dt, canFaint) {
-  needs.food = Math.max(0, needs.food - dt * 100 / FOOD_LAST);
-  needs.drink = Math.max(0, needs.drink - dt * 100 / DRINK_LAST);
+  const fed = typeof fx !== 'undefined' && fx.fed > 0 ? 0.5 : 1; // (well fed, after something perfect you cooked: cooking.js)
+  needs.food = Math.max(0, needs.food - dt * 100 / FOOD_LAST * fed);
+  needs.drink = Math.max(0, needs.drink - dt * 100 / DRINK_LAST * fed);
   needs.bladder = Math.min(100, needs.bladder + dt * 100 / BLADDER_FILL);
   const empty = (needs.food <= 0) + (needs.drink <= 0);
   if (empty) needs.health = Math.max(canFaint ? 0 : 1, needs.health - dt * 100 / STARVE_T * empty); // (not at the wheel: you hang on till you're out)
