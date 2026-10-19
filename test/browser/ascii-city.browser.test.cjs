@@ -2345,8 +2345,11 @@ test('the casino: blackjack, roulette and slots take your stake and pay out; jad
     await page.keyboard.press('Space');
     await page.waitForTimeout(150);
     assert.ok(await page.evaluate(b => money !== b || game.g.state() !== 'bet', before), `${id}: the stake goes down`);
-    await page.waitForTimeout(id === 'roulette' ? 4500 : 1500);
-    if (id === 'blackjack' && await page.evaluate(() => game.g.state() === 'play')) { await page.keyboard.press('Space'); await page.waitForTimeout(3000); }
+    if (id === 'blackjack') { // (stand, if it's waiting on you)
+      await page.waitForFunction(() => ['play', 'done'].includes(game.g.state()), null, { timeout: 20000 }).catch(() => {});
+      if (await page.evaluate(() => game.g.state() === 'play')) await page.keyboard.press('Space');
+    }
+    await page.waitForFunction(() => game.g.state() === 'done', null, { timeout: 30000 }).catch(() => {}); // (the wheel takes its time, more on a slow machine)
     assert.strictEqual(await page.evaluate(() => game.g.state()), 'done', `${id}: a round finishes`);
     await page.keyboard.press('KeyE');
   }
