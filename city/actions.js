@@ -285,6 +285,7 @@ function interact() {
   if (fsp) return useFair(fsp);
   const mk = marketSpot();
   if (mk) return useMarket(mk);
+  if (nearHut()) return useHut();
   const pot = pottyNear();
   if (pot) return enterPotty(pot), say(pick(['You hold your breath and step in.', 'The smell hits you before the door shuts.', 'It\'s exactly as nice as you\'d think.']), 2.5);
   const ven = nearVendor();

@@ -306,6 +306,7 @@ function loop(t) {
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
   const need = stepNeeds(dt, onFootMode() && !game && !sleep); // (at the wheel or mid-shift you hang on till you stop)
   if (need === 'faint') passOut(needs.drink <= 0 ? 'You collapsed in the street. Dehydration. Drink some water, would you?' : 'You collapsed in the street. When did you last eat?');
   else if (need) say(need, 4);

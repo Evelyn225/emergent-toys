@@ -2109,6 +2109,18 @@ for (const [x0, y0, x1, y1] of PIERS.filter(p => !p.marina)) if (x1 - x0 > 2 && 
 // the marina office: a clapboard hut at the foot of the jetty, its sign facing the road; bollards down the fingers
 solidBox(MARINA.office.x, MARINA.office.y, true, 0.55, 0.3, 0, 0.3, 'marina', 0);
 for (const fy of MARINA.fingers) for (const s of [-1, 1]) for (const ox of [-3.1, -1.2, 1.2, 3.1]) solidBox(MARINA.x + ox, fy + s * 0.12, true, 0.025, 0.025, 0, 0.04, 'bollard', 0);
+// the bait and tackle hut (fishing.js): weathered clapboard on the promenade just west of the Sunset Pier, its hatch
+// facing the road. A gabled tin roof (in slices, each narrower and higher), the sign along its ridge, a net hung out to
+// dry on a rack beside it, lobster pots stacked against its east end, a barrel at the corner, and the old boy who runs
+// it behind the hatch while it's open. hatch: where along its front the hatch is
+const FISH_HUT = { x: FAIR.x0 - 1.05, y: SHORE_S * 8 + 3.6, hl: 0.42, hw: 0.27, h: 0.27, hatch: -0.08 };
+solidBox(FISH_HUT.x, FISH_HUT.y, true, FISH_HUT.hl, FISH_HUT.hw, 0, FISH_HUT.h, 'fishhut', 0);
+for (let k = 0; k < 5; k++) solidBox(FISH_HUT.x, FISH_HUT.y, true, FISH_HUT.hl + 0.05, (FISH_HUT.hw + 0.06) * (1 - k / 5) + 0.012, FISH_HUT.h + k * 0.018, FISH_HUT.h + (k + 1) * 0.018, 'hutroof', k);
+solidBox(FISH_HUT.x, FISH_HUT.y, true, 0.34, 0.006, FISH_HUT.h + 0.09, FISH_HUT.h + 0.16, 'hutsign', 0);
+solidBox(FISH_HUT.x - 0.84, FISH_HUT.y + 0.02, true, 0.27, 0.006, 0, 0.25, 'netrack', 0);
+for (const [ox, oy, z0] of [[0.5, -0.11, 0], [0.5, 0.11, 0], [0.5, 0, 0.075]]) solidBox(FISH_HUT.x + ox, FISH_HUT.y + oy, false, 0.1, 0.055, z0, z0 + 0.075, 'lobsterpot', 0);
+solidBox(FISH_HUT.x - FISH_HUT.hl - 0.06, FISH_HUT.y - FISH_HUT.hw + 0.05, true, 0.035, 0.035, 0, 0.09, 'barrel', 0);
+extras.push({ x: FISH_HUT.x + FISH_HUT.hatch, y: FISH_HUT.y - FISH_HUT.hw + 0.09, z: 0.02, person: YEL, when: () => hutOpen(tod) }); // (in his oilskins, behind the hatch)
 const extrasB = bucketed(extras), solidsB = bucketed(solids);
 // is (x, y) inside one of the solids (grown by pad)? only the ones standing on the ground count
 function solidAt(x, y, pad) {
@@ -5304,7 +5316,7 @@ function buy(id) { // false + why, if you can't
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   carryItem({ id, uses: it.uses || 0 });
-  return [true, `You buy ${aOrSome(it.name)}. (${fmt$(it.price)})`];
+  return [true, `You buy ${aOrSome(it.name)}. (${fmt$(it.price)})${it.rod ? ' Hold Q to wind up and let go to cast; when the bobber goes under, Q to strike.' : ''}`];
 }
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
@@ -5323,7 +5335,7 @@ function getTattoo(id) {
 // what you could walk off with (not a car, a flat or somebody's needlework)
 const stealable = stock => stock.filter(id => !['car', 'home', 'tattoo', 'look'].includes(ITEMS[id].kind));
 const isHomeDecor = it => !!it && ITEMS[it.id] && ITEMS[it.id].kind === 'gear' && !['skateboard', 'boombox', 'umbrella', 'ball', 'goldfish'].includes(it.id);
-const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink'].includes(ITEMS[it.id].kind);
+const isFridgeItem = it => !!it && ITEMS[it.id] && ['food', 'drink', 'fish'].includes(ITEMS[it.id].kind);
 function takeSlot(k) { // carried slot k out of your hands, still holding whatever you were holding
   const was = held, it = inv[k];
   held = k; removeHeld();
@@ -5338,14 +5350,17 @@ function storeSlot(k, list = stored, where = 'your unit', accepts = null, capaci
   return [true, `You put the ${ITEMS[it.id].name} in ${where}.`];
 }
 // pawn shops buy gear off you (not half-eaten food) for a fraction of what it cost new
-const SELL_RATE = { PAWN: 0.4 };
-const sellPrice = (it, rate) => ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
+// (and the bait hut buys what you catch: rate 'catch', see catchPrice in fishing.js; it bins your junk for nothing)
+const SELL_RATE = { PAWN: 0.4, 'BAIT & TACKLE': 'catch' };
+const sellPrice = (it, rate) => rate === 'catch' ? catchPrice(it) : ITEMS[it.id].kind === 'gear' ? Math.max(0.25, Math.round(ITEMS[it.id].price * rate * 4) / 4) : 0;
+const binnable = (it, rate) => rate === 'catch' && ITEMS[it.id].kind === 'junk';
 function sellSlot(k, rate) {
   if (!inv[k]) return [false, 'Nothing there.'];
   const p = sellPrice(inv[k], rate), name = ITEMS[inv[k].id].name;
+  if (!p && binnable(inv[k], rate)) { takeSlot(k); return [true, `They take the ${name} off your hands and drop it in the bin.`]; }
   if (!p) return [false, `"We don't take ${name}."`];
-  takeSlot(k); earn(p);
-  return [true, `You sell the ${name} for ${fmt$(p)}.`];
+  const it = takeSlot(k); earn(p);
+  return [true, `You sell the ${it.kg ? catchName(it) : name} for ${fmt$(p)}.`];
 }
 function retrieveSlot(k, list = stored, where = 'your unit') { // the unit's item k -> your hands
   if (!list[k]) return [false, 'Nothing there.'];
@@ -5390,7 +5405,18 @@ function useHeld(near) {
     return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
   }
   if (d.kind === 'keys') return summonCar(d.car);
+  if (d.rod) return rodUse(near); // (fishing.js)
+  if (d.kind === 'fish') return [pick([`The ${d.name} looks at you. You look at the ${d.name}.`, `A ${catchName(it)}. The hut by the Sunset Pier will take it off you.`, `You hold the ${d.name} up. It is, unmistakably, a fish.`]), null];
+  if (d.kind === 'junk') return [pick([`It's still ${aOrSome(d.name)}.`, 'You turn it over. No, still junk. The bait hut will bin it for you.']), null];
   switch (it.id) {
+    case 'goldkoi': return koiWish();
+    case 'bottlemsg': return readBottle();
+    case 'oldcoin': return [`You turn the coin over. Heads: the king. Tails: a ship.`, 'click'];
+    case 'goldring': return ['You try the ring on. It fits. "Again?" it says, on the inside.', null];
+    case 'pearl': return ['You roll the pearl in your palm. It is the only perfectly round thing you own.', null];
+    case 'compass': return ['The needle swings round and settles. North is where it always was.', null];
+    case 'divewatch': return [`The watch says ${String(Math.floor(tod)).padStart(2, '0')}:${String(Math.floor(fract(tod) * 60)).padStart(2, '0')}. It has never been wrong.`, 'click'];
+    case 'pocketknife': return ['A good knife. The gardeners\' crest on the handle. You could hand it in at the gardens. You could.', null];
     case 'vape': // hold Q to pull, let go to blow it out (stepGoods)
       if (fx.vape > 0) return ['', null];
       fx.vape = 0.001; return ['', 'drag'];
@@ -8145,6 +8171,7 @@ const NEWS = {
   planecrash: w => `Stolen aircraft comes down in ${w}. Nobody has claimed it.`,
   escape: w => `Police call off a pursuit in ${w} after losing sight of the suspect. The search is described as ongoing, in a general sense.`,
   arrest: (w, n, e) => `Arrest in ${w} following ${e.crime || 'an incident'}. Officers describe the suspect as cooperative, eventually.`,
+  bigfish: (w, n, e) => `A ${e.kg ? e.kg + 'kg ' : 'large '}${e.fish || 'fish'} was landed in ${w} by a member of the public. The fish was not available for comment.`,
   bout: (w, n, e) => `An unknown fighter beat ${e.who} at the gym in ${w}. The promoter did not catch the name. The purse was paid in cash.`,
 };
 // the stories that run, biggest first: what happened yesterday (and so far today, on the telly), with a word from the
@@ -8519,6 +8546,234 @@ function loadBoats(list) {
     if (sold >= 0) fleet.splice(sold, 1);
     fleet.push({ kind: s.kind, deal: 'mine', x: s.x, y: s.y, hx: s.hx, hy: s.hy, col: s.col ?? WHITE, name: s.name || 'Boaty', v: 0, slot: -1 });
   }
+}
+// ===== fishing. A rod from the bait and tackle hut at the foot of the Sunset Pier (props.js puts the hut up,
+// fishing-render.js draws it and everything on the line), and any water you can stand beside: the bay off the sea
+// wall, a pier or a bridge, the open water out past the end of the long piers, the marina, a park pond, the lake in the
+// Botanical Gardens. Each has its own fish, and its own junk, and now and then something worth keeping.
+// Like Minecraft: hold Q to wind up and let go to cast (longer, further), wait for the bobber, watch for the fish
+// coming in, and when it pulls the bobber under, Q to strike. Too soon and it bolts; too late and it's away.
+// The hut buys what you catch (the fish by weight, the junk for the bin); the pawn shop takes the treasure too.
+Object.assign(ITEMS, {
+  rod: { name: 'fishing rod', price: 35, kind: 'gear', rod: { wait: 1, window: 0.85, junk: 1, treasure: 1 } },
+  carbonrod: { name: 'carbon fishing rod', price: 160, kind: 'gear', rod: { wait: 0.7, window: 1.15, junk: 0.6, treasure: 1.7 } },
+  // fish: price is what a middling one fetches at the hut; kg the range they come in
+  mackerel: { name: 'mackerel', price: 5, kind: 'fish', kg: [0.3, 1.1], col: BLUE, stripes: true },
+  herring: { name: 'herring', price: 3, kind: 'fish', kg: [0.1, 0.4], col: CYAN },
+  seabass: { name: 'sea bass', price: 14, kind: 'fish', kg: [0.8, 4], col: GRAY },
+  flounder: { name: 'flounder', price: 8, kind: 'fish', kg: [0.4, 2], col: BRICK, flat: true },
+  cod: { name: 'cod', price: 12, kind: 'fish', kg: [1, 7], col: GREEN },
+  crab: { name: 'crab', price: 7, kind: 'fish', kg: [0.3, 1.4], col: RED, crab: true },
+  squid: { name: 'squid', price: 8, kind: 'fish', kg: [0.2, 1.2], col: MAG, squid: true },
+  conger: { name: 'conger eel', price: 10, kind: 'fish', kg: [1, 14], col: GRAY, eel: true },
+  bream: { name: 'sea bream', price: 15, kind: 'fish', kg: [0.5, 3], col: WHITE },
+  bluefish: { name: 'bluefish', price: 13, kind: 'fish', kg: [1, 6], col: BLUE },
+  monkfish: { name: 'monkfish', price: 24, kind: 'fish', kg: [2, 12], col: BRICK, ugly: true },
+  tuna: { name: 'bluefin tuna', price: 70, kind: 'fish', kg: [8, 45], col: BLUE },
+  mullet: { name: 'grey mullet', price: 4, kind: 'fish', kg: [0.4, 2.5], col: GRAY },
+  carp: { name: 'carp', price: 6, kind: 'fish', kg: [1, 9], col: YEL },
+  perch: { name: 'perch', price: 5, kind: 'fish', kg: [0.2, 1.5], col: GREEN, stripes: true },
+  bluegill: { name: 'bluegill', price: 3, kind: 'fish', kg: [0.1, 0.5], col: BLUE },
+  catfish: { name: 'catfish', price: 11, kind: 'fish', kg: [2, 16], col: BRICK, whiskers: true },
+  strayfish: { name: 'goldfish somebody let go', price: 2, kind: 'fish', kg: [0.1, 0.6], col: ORANGE },
+  trout: { name: 'brown trout', price: 12, kind: 'fish', kg: [0.5, 4], col: BRICK, spots: true },
+  tench: { name: 'tench', price: 8, kind: 'fish', kg: [0.5, 3.5], col: GREEN },
+  orfe: { name: 'golden orfe', price: 9, kind: 'fish', kg: [0.3, 2], col: ORANGE },
+  pike: { name: 'pike', price: 22, kind: 'fish', kg: [2, 14], col: GREEN, spots: true, long: true },
+  // the Botanical Gardens' golden koi: Q makes a wish, and then it's gone
+  goldkoi: { name: 'golden koi', price: 0, kind: 'wish', kg: [1.5, 4], col: YEL },
+  // junk: the hut bins it for you
+  oldboot: { name: 'old boot', price: 0, kind: 'junk', line: 'An old boot. Left foot. The right one is presumably still down there.' },
+  tincan: { name: 'tin can', price: 0, kind: 'junk', line: 'A tin can. Beans, once.' },
+  seaweed: { name: 'clump of seaweed', price: 0, kind: 'junk', line: 'A clump of seaweed. It smells exactly how you would expect.' },
+  plasticbag: { name: 'plastic bag', price: 0, kind: 'junk', line: 'A plastic bag. You were going to put the fish in it, if you caught one.' },
+  tyre: { name: 'bicycle tyre', price: 0, kind: 'junk', line: 'A bicycle tyre. Flat, which is fair.' },
+  trafficcone: { name: 'traffic cone', price: 0, kind: 'junk', line: 'A traffic cone. Nobody knows how they get into the water. Nobody asks.' },
+  flipflop: { name: 'flip-flop', price: 0, kind: 'junk', line: 'One flip-flop. Somebody walked home lopsided.' },
+  trolleywheel: { name: 'shopping trolley wheel', price: 0, kind: 'junk', line: 'A wheel off a shopping trolley. The rest of the trolley is still in there. It always is.' },
+  soggybook: { name: 'soggy paperback', price: 0, kind: 'junk', line: 'A paperback, swollen to twice its size. A detective novel. You will never know who did it.' },
+  // treasure: gear, so it keeps (and the pawn shop will take it)
+  bottlemsg: { name: 'message in a bottle', price: 6, kind: 'gear', fished: true, line: 'A bottle with a rolled-up note in it. Q to read it.' },
+  oldcoin: { name: 'old silver coin', price: 45, kind: 'gear', fished: true, line: 'Something glints on the hook: a silver coin, black with age. A king you don\'t recognise.' },
+  goldring: { name: 'gold ring', price: 140, kind: 'gear', fished: true, line: 'A gold ring, caught round the hook. There is an inscription inside. It says "Again?"' },
+  pearl: { name: 'pearl', price: 110, kind: 'gear', fished: true, line: 'An oyster, clamped shut. You prise it open. A pearl, a good one.' },
+  compass: { name: 'brass compass', price: 40, kind: 'gear', fished: true, line: 'A brass compass, green with the sea. The needle still finds north.' },
+  divewatch: { name: 'dive watch', price: 75, kind: 'gear', fished: true, line: 'A diver\'s watch. Still ticking. It is, to be fair, the one thing it was built for.' },
+  pocketknife: { name: 'pocket knife', price: 18, kind: 'gear', fished: true, line: 'A folding knife with the gardens\' crest on it. A gardener is looking for this.' },
+  wishcoins: { name: 'wishing coins', price: 0, kind: 'cash', line: 'A clump of coins, thrown in for luck by somebody else.' }, // (straight into your pocket)
+});
+// what bites where: [id, weight, 'night' | 'day' (only then)]
+const WATERS = {
+  sea: { name: 'the bay', fish: [['mackerel', 28], ['herring', 22], ['seabass', 12], ['flounder', 12], ['cod', 9], ['crab', 9], ['squid', 10, 'night'], ['conger', 6, 'night']],
+    junk: [['oldboot', 3], ['tincan', 3], ['seaweed', 5], ['plasticbag', 3], ['flipflop', 2], ['tyre', 1]],
+    treasure: [['bottlemsg', 5], ['oldcoin', 3], ['compass', 2], ['pearl', 1], ['goldring', 1], ['divewatch', 1]] },
+  deep: { name: 'open water', fish: [['mackerel', 20], ['bluefish', 16], ['bream', 14], ['cod', 14], ['monkfish', 8], ['seabass', 10], ['squid', 8, 'night'], ['conger', 6, 'night'], ['tuna', 2.5]],
+    junk: [['seaweed', 5], ['oldboot', 2], ['plasticbag', 2]],
+    treasure: [['bottlemsg', 4], ['pearl', 2], ['oldcoin', 3], ['compass', 2], ['divewatch', 2], ['goldring', 1]] },
+  marina: { name: 'the marina', fish: [['mullet', 30], ['herring', 18], ['crab', 18], ['mackerel', 12], ['conger', 6, 'night']],
+    junk: [['tincan', 4], ['trafficcone', 3], ['flipflop', 3], ['oldboot', 3], ['plasticbag', 3], ['tyre', 2]],
+    treasure: [['divewatch', 3], ['goldring', 2], ['compass', 2], ['bottlemsg', 1]] },
+  pond: { name: 'the pond', fish: [['carp', 30], ['perch', 22], ['bluegill', 26], ['strayfish', 8], ['catfish', 10, 'night']],
+    junk: [['trolleywheel', 4], ['soggybook', 3], ['tincan', 3], ['oldboot', 2], ['plasticbag', 2]],
+    treasure: [['wishcoins', 6], ['goldring', 1]] },
+  lake: { name: 'the gardens\' lake', fish: [['trout', 24], ['tench', 22], ['orfe', 22], ['perch', 16], ['pike', 7], ['catfish', 6, 'night'], ['goldkoi', 1.4]],
+    junk: [['soggybook', 3], ['tincan', 2], ['oldboot', 2]],
+    treasure: [['wishcoins', 4], ['pocketknife', 3], ['goldring', 1]] },
+};
+const CAST_MIN = 0.35, CAST_MAX = 1.9; // how far a cast goes (cells: 3.5m with no wind-up, 19m at full)
+const ROD_Z = 0.22; // how high the rod tip is held (the eye's 0.17: screen.js)
+const FISH_DEEP = 9; // this far off the shore (cells) the bay counts as open water
+const HUT_HOURS = [5, 20]; // (anglers get up early)
+const hutOpen = (t = tod) => t >= HUT_HOURS[0] && t < HUT_HOURS[1];
+let fishing = null; // the line, while it's out (see stepFishing)
+const fishLog = { caught: 0, best: null }; // how many you've landed, and your heaviest fish { id, kg }
+const fishSfx = []; // sounds for fishing-render.js to play: 'whoosh' | 'plop' | 'splash' | 'reel' | 'land'
+const fishFx = []; // spray off the water { x, y, z, vx, vy, vz, life }
+const heldRod = () => { const it = heldItem(); return it && ITEMS[it.id].rod ? it : null; };
+// what water is at (x, y), if any: 'sea' | 'deep' | 'marina' | 'pond' | 'lake', 'ice' (a frozen pond), or null (dry land)
+function waterKind(x, y) {
+  if (onPier(x, y) || ROAD[idx(Math.floor(x), Math.floor(y))]) return null;
+  if (gardenLake(x, y)) return 'lake';
+  const bx = Math.floor(x / 8) & (NB - 1), by = Math.floor(y / 8) & (NB - 1);
+  if (blockKind(bx, by) === 'park') return pondSD(mod(x, 8), mod(y, 8), bx, by) < -0.02 ? (seasonIdx() === 3 ? 'ice' : 'pond') : null;
+  if (!seaAt(x, y)) return null;
+  if (inMarina(x, y)) return 'marina';
+  const m = mod(y, N), off = Math.min(mod(m - shoreS(x), N), mod(shoreN(x) - m, N));
+  return off >= FISH_DEEP ? 'deep' : 'sea';
+}
+// what's on the hook: fish mostly, some junk, now and then treasure (a better rod, and luck, tip it)
+function rollCatch(water, rod, rnd = Math.random) {
+  const W = WATERS[water], R = ITEMS[rod].rod, night_ = tod < 6 || tod >= 20;
+  const pJunk = (water === 'marina' ? 0.2 : 0.1) * R.junk, pTreasure = (0.05 + luck() * 0.3) * R.treasure;
+  const r = rnd(), cat = r < pTreasure ? 'treasure' : r < pTreasure + pJunk ? 'junk' : 'fish';
+  const list = W[cat].filter(([, , when]) => !when || (when === 'night') === night_);
+  let s = rnd() * list.reduce((t, e) => t + e[1], 0), id = list[0][0];
+  for (const [k, w] of list) if ((s -= w) < 0) { id = k; break; }
+  const kg = ITEMS[id].kg;
+  return kg ? { id, kg: Math.round((kg[0] + (kg[1] - kg[0]) * rnd() ** 2) * 10) / 10 } : { id }; // (small ones are commoner)
+}
+// what the hut gives for a catch: a fish by its weight, junk for nothing (they bin it), treasure at the pawn shop's rate
+function catchPrice(it) {
+  const d = ITEMS[it.id];
+  if (d.kind === 'fish') { const mid = (d.kg[0] + d.kg[1]) / 2; return Math.max(0.25, Math.round(d.price * (it.kg || mid) / mid * 4) / 4); }
+  return d.fished ? Math.max(0.25, Math.round(d.price * 0.4 * 4) / 4) : 0;
+}
+const catchName = it => it.kg ? `${it.kg}kg ${ITEMS[it.id].name}` : ITEMS[it.id].name;
+// how long till something comes for it: quicker in the rain and round dawn and dusk, with a good rod
+const biteWait = (rod, rnd = Math.random) => (5 + rnd() * 13) * ITEMS[rod].rod.wait * (rain > 0.3 ? 0.7 : 1) * (tod >= 5 && tod < 8 || tod >= 18 && tod < 21 ? 0.75 : 1);
+
+// Q with a rod in your hand: start winding up; or, with the line out, strike (or reel in)
+function rodUse(near) {
+  const it = heldRod();
+  if (near.indoors) return ['Not in here.', null];
+  if (mode !== 'walk') return ['Not from up here.', null];
+  if (fx.skating) return ['Not while you\'re on the board.', null];
+  const f = fishing;
+  if (!f) { fishing = { st: 'wind', t: 0, power: 0, rod: it.id }; return ['', null]; }
+  if (f.st === 'bite') { // got it
+    f.catch = rollCatch(f.water, f.rod); reelIn();
+    return [pick(['Fish on!', 'Got it!', 'Something\'s on!']), 'reel'];
+  }
+  if (f.st === 'lure') { reelIn(); return ['Too soon. Whatever it was bolts.', 'reel']; }
+  if (f.st === 'wait' || f.st === 'land') { reelIn(); return ['', 'reel']; }
+  return ['', null];
+}
+function reelIn() {
+  const f = fishing;
+  Object.assign(f, { st: 'reel', t: 0, sx: f.x, sy: f.y, sz: f.z, dur: 0.45 + Math.hypot(rel(f.x - px), rel(f.y - py)) * 0.35 + (f.catch && f.catch.kg ? Math.min(1.2, f.catch.kg * 0.05) : 0) });
+}
+// let go of Q: the cast, off the rod tip out in front of you and arcing down, stopped short by a wall
+function castLine() {
+  const f = fishing, d = CAST_MIN + f.power * (CAST_MAX - CAST_MIN), ca = Math.cos(a), sa = Math.sin(a);
+  let reach = d;
+  for (let s = 0.1; s <= d; s += 0.05) if (map[idx(Math.floor(px + ca * s), Math.floor(py + sa * s))] > 0) { reach = Math.max(0.1, s - 0.08); break; }
+  Object.assign(f, { st: 'fly', t: 0, d: reach, dur: 0.3 + reach * 0.2, ox: px + ca * 0.06, oy: py + sa * 0.06, oz: ROD_Z,
+    tx: px + ca * reach, ty: py + sa * reach, x: px, y: py, z: ROD_Z });
+  fishSfx.push('whoosh');
+}
+function splash(x, y, n, up) {
+  for (let k = 0; k < n; k++) { const an = Math.random() * TAU, s = 0.02 + Math.random() * 0.06; fishFx.push({ x, y, z: 0.002, vx: Math.cos(an) * s, vy: Math.sin(an) * s, vz: up * (0.5 + Math.random() * 0.6), life: 1 }); }
+}
+// every frame: the line's state, and the spray off the water
+function stepFishing(dt, rnd = Math.random) {
+  for (let k = fishFx.length - 1; k >= 0; k--) {
+    const p = fishFx[k]; p.vz -= 1.6 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.life -= dt * 1.5;
+    if (p.z < 0 || p.life <= 0) fishFx.splice(k, 1);
+  }
+  const f = fishing;
+  if (!f) return;
+  if (!heldRod() || heldRod().id !== f.rod || mode !== 'walk' || fx.skating) { fishing = null; return; } // (put it away: the line comes in with it)
+  f.t += dt;
+  const out = f.st === 'wait' || f.st === 'lure' || f.st === 'bite' || f.st === 'land';
+  if (out && Math.hypot(rel(f.x - px), rel(f.y - py)) > f.d + 0.5) { f.catch = null; reelIn(); say('The line pulls tight, and you reel it in.', 2); fishSfx.push('reel'); return; }
+  if (f.st === 'wind') { // Q held: winding up. Let go to cast
+    f.power = Math.min(1, f.t / 1.1);
+    if (!K.KeyQ) castLine();
+  } else if (f.st === 'fly') {
+    const q = Math.min(1, f.t / f.dur), arc = 0.06 + f.d * 0.09;
+    f.x = mod(f.ox + rel(f.tx - f.ox) * q, N); f.y = mod(f.oy + rel(f.ty - f.oy) * q, N); f.z = f.oz * (1 - q) + arc * 4 * q * (1 - q);
+    if (q >= 1) {
+      f.water = waterKind(f.x, f.y); f.z = 0; f.t = 0;
+      if (f.water && f.water !== 'ice') { f.st = 'wait'; f.next = biteWait(f.rod, rnd); splash(f.x, f.y, 6, 0.25); fishSfx.push('plop'); f.ring = T; }
+      else {
+        f.st = 'land';
+        say(f.water === 'ice' ? 'The bobber skitters across the ice. The pond is frozen solid.' : pick(['It lands on dry ground. Nothing is biting there.', 'Not even close to the water.', 'You catch some ground. It does not fight.']), 2.5);
+      }
+    }
+  } else if (f.st === 'wait') { // bobbing: then something comes for it, from somewhere off to one side
+    if (f.t >= f.next) Object.assign(f, { st: 'lure', t: 0, dur: 1.2 + rnd() * 1.3, from: rnd() * TAU });
+  } else if (f.st === 'lure') {
+    if (f.t >= f.dur) { Object.assign(f, { st: 'bite', t: 0 }); splash(f.x, f.y, 10, 0.35); fishSfx.push('splash'); f.ring = T; }
+  } else if (f.st === 'bite') { // pulled under: a moment to strike
+    if (f.t >= ITEMS[f.rod].rod.window) { Object.assign(f, { st: 'wait', t: 0, next: biteWait(f.rod, rnd) * 0.5 }); say(pick(['It got away.', 'Missed it.', 'Gone. It took the bait with it, in spirit.']), 1.5); f.ring = T; }
+  } else if (f.st === 'reel') { // in it comes, skipping over the water, the catch swinging up out of it at the end
+    const q = Math.min(1, f.t / f.dur), ex = px + Math.cos(a) * 0.12, ey = py + Math.sin(a) * 0.12;
+    f.x = mod(f.sx + rel(ex - f.sx) * q, N); f.y = mod(f.sy + rel(ey - f.sy) * q, N);
+    f.z = q < 0.65 ? f.sz * (1 - q / 0.65) : (q - 0.65) / 0.35 * (ROD_Z - 0.07);
+    if (q > 0.05 && q < 0.65 && f.catch && rnd() < dt * 12) splash(f.x, f.y, 1, 0.2); // (thrashing as it comes)
+    if (q >= 1) { if (f.catch) landCatch(f); else fishing = null; }
+  } else if (f.st === 'landed') { if (f.t > 1.6) fishing = null; }
+}
+// out of the water and into your bag
+function landCatch(f) {
+  const c = f.catch, d = ITEMS[c.id];
+  Object.assign(f, { st: 'landed', t: 0 });
+  fishSfx.push('land');
+  if (d.kind === 'cash') { const amt = Math.round((0.5 + Math.random() * 3.5) * 4) / 4; earn(amt); return say(`${d.line} ${fmt$(amt)} in all.`, 4); }
+  if (inv.length >= INV_SIZE) return say(`${d.kind === 'fish' ? `A ${catchName(c)}` : cap(d.name)}. Your bag's full, so back it goes.`, 3);
+  carryItem(c.kg ? { id: c.id, uses: 0, kg: c.kg } : { id: c.id, uses: 0 }, false);
+  if (d.kind === 'fish') {
+    fishLog.caught++;
+    const best = !fishLog.best || c.kg > fishLog.best.kg;
+    if (best) fishLog.best = { id: c.id, kg: c.kg };
+    if (c.kg >= 10) newsEvent('bigfish', px, py, { fish: d.name, kg: c.kg });
+    return say(`A ${catchName(c)}.${best && fishLog.caught > 1 ? ' Your biggest yet.' : ''}`, 3);
+  }
+  if (d.kind === 'wish') return say(`A golden koi, ${c.kg}kg, shining like a coin. It looks at you as if it's expecting something. (Q: make a wish)`, 5);
+  return say(d.line, Math.max(3, d.line.length / 20));
+}
+// the golden koi in your hand: Q, and a wish, and back it goes. Something small, and right away
+const KOI_WISHES = [
+  ['heal', () => needs.health < maxHealth() - 1, () => { needs.health = maxHealth(); return 'Every ache you had is gone.'; }],
+  ['cash', () => true, () => { const amt = 25 * (2 + Math.floor(Math.random() * 7)); earn(amt); return `There is ${fmt$(amt)} in your pocket that was not there before.`; }],
+  ['clear', () => weather !== 'clear', () => { weather = 'clear'; wTimer = 600; return 'The clouds pull apart. The sun comes out to see.'; }],
+];
+function koiWish() {
+  const w = pick(KOI_WISHES.filter(([, ok]) => ok()));
+  removeHeld();
+  return [`You close your eyes and wish. When you open them the koi gives one flick of its tail and is gone. ${w[2]()}`, 'chime'];
+}
+// a message in a bottle: somebody's
+const BOTTLE_NOTES = ['"If you are reading this, I have moved. The new address is enclosed." Nothing else is enclosed.',
+  '"Day 4. Still on the island. The lighthouse keeper says the footbridge is right there. I am choosing not to look."',
+  '"Whoever finds this: the stock tip is PIER. Buy." It is not dated.', '"Please return this bottle. It was my good bottle."',
+  '"I threw my phone in after this. Do not look for it."', '"Hello from 1987. Are the trains on time yet."'];
+const readBottle = () => [pick(BOTTLE_NOTES), 'page'];
+// the hut: standing at its hatch on the promenade side
+const nearHut = () => mode === 'walk' && Math.abs(rel(px - FISH_HUT.x - FISH_HUT.hatch)) < 0.2 && rel(FISH_HUT.y - FISH_HUT.hw - py) > 0 && rel(FISH_HUT.y - FISH_HUT.hw - py) < 0.4;
+function hutPrompt() {
+  if (!hutOpen()) return 'BAIT & TACKLE: shut. Open 5am till 8pm.';
+  return `E: bait & tackle (rods, and they buy your catch)${fishLog.best ? `   your best: ${catchName(fishLog.best)}` : ''}`;
 }
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
@@ -20298,6 +20553,7 @@ function render(dt) {
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
+  drawFishing(); // the line, the bobber and the rings round it (fishing-render.js; after the water's reflections, or they'd double it)
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
     if (mode === 'air') airDash();
@@ -20590,6 +20846,7 @@ function promptText() {
   { const ac = nearAircraft(); if (ac) return aircraftPrompt(ac); }
   const c = nearestCar(0.5);
   const dr = droppedHere();
+  if (fishing) return fishPrompt(); // (the line's out: fishing.js)
   if (dr) return `E: pick up the ${ITEMS[dr.id].name}`;
   if (heldItem() && heldItem().id === 'spraypaint' && sprayTarget()) return 'Q: spray a tag (if the police see, it\'s vandalism)';
   const vm = nearMachine();
@@ -20611,6 +20868,7 @@ function promptText() {
   const mk = marketSpot();
   if (mk) return marketPrompt(mk);
   if (pottyNear()) return 'E: use the portapotty';
+  if (nearHut()) return hutPrompt();
   const ven = nearVendor();
   if (ven) return `E: buy from the ${ven.type.name.toLowerCase()} cart`;
   if (nearLighthouse()) return 'E: go into the lighthouse';
@@ -20627,7 +20885,7 @@ function promptText() {
     return `E: enter ${sh.word}${ROOM_DEFS[ROOM_FOR[sh.word]]?.rent ? ' (roof access)' : sh.fee ? ` (${fmt$(sh.fee)})` : ''}`;
   }
   if (cars.some(c => c.body === TAXI && !c.rider && !c.player && !c.hail && Math.hypot(rel(c.x - px), rel(c.y - py)) < 2.5)) return 'H: hail the taxi';
-  return '';
+  return fishPrompt();
 }
 // north-up minimap, top right: buildings shaded by height, parks, water, stations, cars, people, you, taxi destination
 let showMap = false;
@@ -21057,6 +21315,7 @@ function interact() {
   if (fsp) return useFair(fsp);
   const mk = marketSpot();
   if (mk) return useMarket(mk);
+  if (nearHut()) return useHut();
   const pot = pottyNear();
   if (pot) return enterPotty(pot), say(pick(['You hold your breath and step in.', 'The smell hits you before the door shuts.', 'It\'s exactly as nice as you\'d think.']), 2.5);
   const ven = nearVendor();
@@ -23372,7 +23631,7 @@ function districtSpot(d) {
 function devPlaces() {
   const out = [];
   const land = [['Casino', () => gotoShop('CASINO')], ['Stock Exchange', () => gotoShop('EXCHANGE')], ['The Velvet Rope', () => gotoShop('VELVET')],
-    ['Marina', () => devAt(MARINA.x, MARINA.y0 + 0.6, Math.PI / 2)], ['Sunset Pier', () => devAt(FAIR.cx, FAIR.y0 - 0.5, Math.PI / 2)],
+    ['Marina', () => devAt(MARINA.x, MARINA.y0 + 0.6, Math.PI / 2)], ['Sunset Pier', () => devAt(FAIR.cx, FAIR.y0 - 0.5, Math.PI / 2)], ['Bait & tackle hut', () => devAt(FISH_HUT.x + FISH_HUT.hatch, FISH_HUT.y - FISH_HUT.hw - 0.2, Math.PI / 2)],
     ['Airport', () => devAt(CAUSEWAY.x, AIRPORT.y0 + 1.5, Math.PI / 2)],
     ['Ferris wheel', () => devAt(WHEEL_BOARD.x, WHEEL_BOARD.y - 0.3, Math.PI / 2)], ['Carousel', () => devAt(CAROUSEL.x - CAROUSEL.r - 0.3, CAROUSEL.y, 0)],
     ['Lighthouse Island', () => devAt(LIGHTHOUSE.x, LIGHTHOUSE.y - 1, Math.PI / 2)], ['The Lighthouse Walk', () => devAt(FOOTBRIDGE.x, FOOTBRIDGE.y0 + 0.5, Math.PI / 2)],
@@ -23525,7 +23784,7 @@ function bigMapLabels() {
   for (const sd of DIST_SEEDS) { const [sx] = sd, d = seedName(sd), sy = d === 'industrial' ? (sd[1] > (SHORE_N + SHORE_S) / 2 ? SHORE_S - 0.4 : SHORE_N + 1.4) : sd[1]; out.push([sx * 8, sy * 8, (DISTRICT_TITLE[d] || d).replace(/^the /, 'The '), 'rgba(255,255,255,0.55)', 'area']); }
   const place = (x, y, t) => out.push([x, y, t, '#fd8', 'place']);
   place(GRAND_HOTEL.bx * 8 + 5, GRAND_HOTEL.by * 8 + 5, 'Grand Hotel');
-  place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
+  place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(FISH_HUT.x - 1, FISH_HUT.y - 1, 'Bait & Tackle'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
   place(...COURIER_DEPOT.roof,COURIER_COMPANY);
   place(LIGHTHOUSE.x, LIGHTHOUSE.y - 2, 'Lighthouse'); place((AIRPORT.x0 + AIRPORT.x1) / 2, RUNWAY.y + 0.5, 'Airport'); place(GARDEN.x0 + 12, GARDEN.y0 + 10, 'Botanical Gardens');
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'Big screens', radio: 'Radio tower' };
@@ -23947,6 +24206,7 @@ function drawHeldBig() {
   const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
   const grip = hy + 1.1 * hsz; // where the fingers wrap round
   if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
+  else if (heldIsRod(it)) drawFishingRod(it); // (fishing-render.js: the rod, and whatever's on its line)
   else drawHeldDense(it, cx, hy, hsz, grip);
   drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
   if (it.id === 'yoyo') drawYoyo(cx - hsz * 0.2, hy + HAND_ART.length * hsz); // (in your hand or out on its string, it hangs from under your fist)
@@ -24124,8 +24384,8 @@ function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
   const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
-  const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate);
-    return `<button class="item" data-sell="${k}" ${p ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
+  const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate), bin = binnable(it, rate);
+    return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${it.kg ? catchName(it) : ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
   const work = shiftHere();
   const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${{ serve: 'Wait tables for a shift', tapper: 'Tend bar for a shift' }[work] || 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
   showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
@@ -24155,7 +24415,7 @@ function openInventory() {
   invEl = invEl || panel('inventory');
   if (!invStyle) { const style = document.createElement('style'); style.textContent = `#inventory .carry-row { display:flex; align-items:center; gap:10px; } #inventory .carry-row > .item { flex:1; width:auto; min-width:0; } #inventory .quick-slot { display:flex; align-items:center; gap:4px; white-space:nowrap; color:rgba(255,255,255,0.3); } #inventory .quick-slot select { width:4.5em; padding:2px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); background:#08080a; font:inherit; } #inventory .quick-slot option { color:#fff; background:#08080a; }`; document.head.appendChild(style); invStyle = true; }
   const rows_ = inv.length ? inv.map((it, k) => {
-    const slot = quickSlots.indexOf(k), name = ITEMS[it.id].name;
+    const slot = quickSlots.indexOf(k), name = it.kg ? catchName(it) : ITEMS[it.id].name;
     return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
@@ -25253,6 +25513,376 @@ function heldPetCarrier(it) {
 }
 DENSE.petcat = heldPetCarrier;
 DENSE.petdog = heldPetCarrier;
+// ===== fishing, drawn (fishing.js has the rules): the bait and tackle hut and what's piled round it, the rod in your
+// hand (winding back, whipping forward, bending when something's on, the reel spinning as you wind in), the line out to
+// the bobber, the bobber riding the swell, rings spreading round it, the fish coming in under the water, the strike,
+// and whatever you've caught swinging off the end of the line.
+
+// ---- the hut and its clutter (solids: props.js)
+const hutWall = (i, f, L, k = 1) => { BG[i] = C(CYAN, (1 + L * 0.24) * shadeFace(f) * k); };
+SOLID_SHADE.fishhut = o => (i, t, L) => {
+  const f = HIT.face, w = HIT.w, u = HIT.u, v = HIT.v, glow = Math.max(night, overcast * 0.6), open = hutOpen();
+  if (f === 5 || f === 6) { BG[i] = C(BRICK, 1); return set(i, ' ', 0), true; }
+  const along = f >= 3 ? u : v, half = f >= 3 ? o.hl : o.hw;
+  const board = hash(Math.floor(w * 30), Math.floor(along * 5 + f * 7), 1601), worn = board > 0.85; // board by board, some weathered paler
+  hutWall(i, f, L, worn ? 1.25 : 0.88 + board * 0.18);
+  if (half - Math.abs(along) < 0.014) { BG[i] = C(WHITE, (1.4 + L * 0.4) * shadeFace(f)); return set(i, '|', C(GRAY, L * 0.6)), true; } // corner boards
+  const clap = () => set(i, fract(w * 30) < 0.2 ? '_' : ' ', C(worn ? WHITE : BLUE, L * 0.75));
+  if (f === 4) { // the front, on the promenade: the hatch with him behind it, its flap propped up over it, the door, a life ring
+    const hu = u - FISH_HUT.hatch;
+    if (Math.abs(hu) < 0.11 && w > 0.205 && w < 0.228 && open) { BG[i] = C(fract(u * 18) < 0.5 ? RED : WHITE, 1.4 + L * 0.4); return set(i, '=', C(GRAY, L * 0.5)), true; } // the flap
+    if (Math.abs(hu) < 0.1 && w > 0.095 && w < 0.205) {
+      if (!open) { BG[i] = C(BRICK, 1.2 + L * 0.28); return set(i, Math.abs(hu) < 0.008 && Math.abs(w - 0.15) < 0.01 ? 'o' : fract(u * 30) < 0.15 ? '|' : ' ', C(Math.abs(hu) < 0.008 ? YEL : BRICK, L * 0.8)), true; } // shuttered
+      if (w < 0.108) { BG[i] = C(BRICK, 1.4 + L * 0.3); return set(i, '=', C(WARM, L * 0.9)), true; } // the counter
+      if (ZB[i] >= 0 && ZB[i] < t + 2 * o.hw) { BG[i] = BG_UNSET; return false; } // him, inside
+      BG[i] = C(GRAY, 0.5 + glow * 1.5); // in the dark behind him: lures hanging off a rail, tins of bait on a shelf
+      const lure = w > 0.17 && fract(u * 28) < 0.3;
+      return set(i, lure ? 'jJ?'[Math.floor(u * 28) & 1 ? 1 : 0] : w < 0.13 && fract(u * 16) < 0.5 ? 'o' : ' ', C(lure ? [YEL, RED, GREEN][Math.abs(Math.floor(u * 28)) % 3] : WARM, Math.max(5, L * 0.6 + glow * 6))), true;
+    }
+    if (u > 0.17 && u < 0.3 && w < 0.21) { // the door: tarred planks, a porthole window, the latch
+      BG[i] = C(BRICK, 1.1 + L * 0.25);
+      if (u < 0.182 || u > 0.288 || w > 0.198) return set(i, '|', C(WHITE, L * 0.7)), true;
+      if (Math.hypot((u - 0.235) * 1.6, w - 0.16) < 0.026) { BG[i] = glow > 0.3 && open ? C(WARM, 2 + glow * 4) : C(CYAN, 0.8 + L * 0.12); return set(i, ' ', 0), true; }
+      if (Math.abs(u - 0.195) < 0.008 && Math.abs(w - 0.1) < 0.01) return set(i, 'o', C(YEL, Math.max(L, 9))), true;
+      return set(i, fract(u * 60) < 0.18 ? '|' : ' ', C(BRICK, L * 0.6)), true;
+    }
+    const rd = Math.hypot((u + 0.3) * 1.15, w - 0.15); // the life ring, red and white quarters
+    if (Math.abs(rd - 0.03) < 0.012) { const q = Math.floor((Math.atan2(w - 0.15, u + 0.3) + TAU) / (TAU / 8)) & 1; BG[i] = C(q ? RED : WHITE, 1.5 + L * 0.4); return set(i, 'O', C(q ? WHITE : RED, L)), true; }
+    if (Math.abs(u - 0.37) < 0.016 && Math.abs(w - 0.19) < 0.013 || Math.abs(u - 0.36) < 0.016 && Math.abs(w - 0.15) < 0.013) { BG[i] = C(w > 0.17 ? ORANGE : RED, 1.5 + L * 0.4); return set(i, '@', C(WHITE, L * 0.9)), true; } // floats on a string
+    if (Math.abs(u - 0.365) < 0.004 && w > 0.13 && w < 0.24) return set(i, '|', C(WARM, L * 0.7)), true;
+    return clap(), true;
+  }
+  if (f === 3) { // the back, to the sea: a net hung over it in a swag, cork floats along its rope, two big buoys
+    const top = 0.24, bottom = 0.075 + 0.1 * (1 - (u / 0.38) ** 2), r = Math.hypot(Math.abs(u) - 0.25, (w - 0.08) * 1.1);
+    if (r < 0.03) { BG[i] = C(fract(w * 55) < 0.5 ? RED : WHITE, 1.5 + L * 0.4); return set(i, '@', C(GRAY, L * 0.5)), true; }
+    if (Math.abs(u) < 0.38 && Math.abs(w - top) < 0.008) return set(i, fract(u * 16) < 0.3 ? 'o' : '-', C(fract(u * 16) < 0.3 ? ORANGE : WARM, Math.max(L, 8))), true;
+    if (Math.abs(u) < 0.38 && w < top && w > bottom) {
+      const m1 = fract((u + w) * 42), m2 = fract((u - w) * 42);
+      if (m1 < 0.2 || m2 < 0.2) return set(i, m1 < 0.2 && m2 < 0.2 ? 'x' : m1 < 0.2 ? '/' : '\\', C(GREEN, Math.max(L * 0.9, 6))), true;
+    }
+    return clap(), true;
+  }
+  // the ends: a window each (lit at night when he's in), oars racked on the west end, rods leaning on the east
+  if (Math.abs(v) < 0.08 && Math.abs(w - 0.15) < 0.045) {
+    if (Math.abs(v) > 0.07 || Math.abs(w - 0.15) > 0.037 || Math.abs(v) < 0.005) return set(i, '+', C(WHITE, L * 0.9)), true;
+    BG[i] = glow > 0.3 && open ? C(WARM, 2 + glow * 5) : C(CYAN, 0.8 + L * 0.12);
+    return set(i, glow > 0.3 ? ' ' : hash(Math.floor(v * 50), Math.floor(w * 60), 1603) > 0.9 ? '/' : ' ', C(WHITE, 12)), true;
+  }
+  if (f === 2 && w > 0.215 && w < 0.24 && Math.abs(v) < 0.24) return set(i, Math.abs(v) > 0.2 ? '#' : '=', C(BRICK, Math.max(L, 7))), true; // an oar on two hooks
+  if (f === 1) for (const [v0, lean, col] of [[0.14, 0.32, YEL], [0.19, 0.22, BLUE]]) if (Math.abs(v - v0 + w * lean) < 0.006 && w < 0.27) return set(i, '/', C(col, Math.max(L, 8))), true;
+  return clap(), true;
+};
+// the roof: corrugated tin, gone rusty in places; the gables boarded
+SOLID_SHADE.hutroof = o => (i, t, L) => {
+  const f = HIT.face, u = HIT.u, rust = noise(u * 7, o.k * 1.7 + HIT.v * 3, 1605) > 0.6;
+  if (f === 1 || f === 2) { hutWall(i, f, L); return set(i, o.k === 4 ? '^' : '-', C(WHITE, L * 0.6)), true; }
+  BG[i] = C(rust ? BRICK : RED, (f === 5 ? 1.3 : 1) + L * 0.26);
+  if (f === 6) return set(i, ' ', 0), true;
+  return set(i, f === 5 ? (o.k === 4 ? '=' : '_') : fract(u * 40) < 0.35 ? '|' : ' ', C(rust ? ORANGE : RED, L * 0.75)), true;
+};
+// the sign along the ridge, readable from the road and the sea: BAIT & TACKLE between two painted fish
+const HUT_WORD = 'BAIT & TACKLE';
+SOLID_SHADE.hutsign = o => (i, t, L) => {
+  const f = HIT.face, w = HIT.w, z0 = o.z0, z1 = o.z1, edge = Math.min(o.hl - Math.abs(HIT.u), z1 - w, w - z0) < 0.009, glow = Math.max(night, overcast * 0.6);
+  BG[i] = edge ? C(BLUE, 1.5 + L * 0.3) : C(WHITE, 1.6 + L * 0.42 + glow * 2);
+  if (f !== 3 && f !== 4 || edge) return set(i, ' ', 0), true;
+  const vx = rel(o.x - px), vy = rel(o.y - py), n = HUT_WORD.length + 2, h = z1 - z0 - 0.02;
+  const ch = signLine(HUT_WORD, faceQ(HIT.u, o.hl) * n - 1, (z1 - 0.01 - w) / h, i, (z0 + z1) / 2, midDepth(vx, vy), t, 2 * o.hl / n, h, farDepth(vx, vy, o.hl), ...faceDir(1, 0));
+  return set(i, ch ?? ' ', C(ch === '&' ? RED : BLUE, 14)), true;
+};
+// a net hung out to dry between two posts: see-through mesh, sagging in scallops from its rope, cork floats along the top
+SOLID_SHADE.netrack = o => (i, t, L) => {
+  const f = HIT.face, u = HIT.u, w = HIT.w;
+  if (Math.abs(u) > o.hl - 0.012 || f === 1 || f === 2) { BG[i] = C(BRICK, 1.1 + L * 0.25); return set(i, '|', C(WARM, L * 0.8)), true; } // the posts
+  if (w > 0.232 || f === 5) return set(i, fract(u * 14) < 0.28 ? 'o' : '-', C(fract(u * 14) < 0.28 ? ORANGE : WARM, Math.max(L, 8))), true;
+  const s = fract((u + o.hl) / (2 * o.hl) * 3), bottom = 0.03 + 0.07 * (1 - 4 * s * (1 - s)); // (lower in the middle of each span)
+  if (w < bottom) return false;
+  const m1 = fract((u + w) * 40), m2 = fract((u - w) * 40);
+  if (m1 < 0.2 || m2 < 0.2) return set(i, m1 < 0.2 && m2 < 0.2 ? 'x' : m1 < 0.2 ? '/' : '\\', C(GREEN, Math.max(L * 0.9, 6))), true;
+  return hash(Math.floor(u * 70), Math.floor(w * 70), 1607) > 0.985 ? (set(i, '~', C(GREEN, L)), true) : false; // (a strand of weed caught in it)
+};
+// lobster pots: wooden slats over a dark netted inside, rope mesh at the ends
+SOLID_SHADE.lobsterpot = o => (i, t, L) => {
+  const f = HIT.face, u = HIT.u, w = HIT.w - o.z0;
+  if (f === 1 || f === 2) { BG[i] = C(GRAY, 0.7); return set(i, fract((HIT.v + w) * 60) < 0.25 || fract((HIT.v - w) * 60) < 0.25 ? 'x' : ' ', C(GREEN, L * 0.8)), true; }
+  if (f === 5) { BG[i] = C(WARM, 1.2 + L * 0.3); return set(i, fract(u * 22) < 0.3 ? ' ' : '=', C(BRICK, L * 0.8)), true; }
+  if (fract(u * 22) < 0.42) { BG[i] = C(GRAY, 0.6); return set(i, w > 0.02 && w < 0.06 && fract(u * 44) < 0.3 ? 'x' : ' ', C(GREEN, L * 0.5)), true; } // between the slats
+  BG[i] = C(WARM, (1.1 + L * 0.28) * shadeFace(f));
+  return set(i, w < 0.008 || w > 0.067 ? '=' : '|', C(BRICK, L * 0.8)), true;
+};
+// a barrel at the corner: staves and iron hoops, rainwater in the top
+SOLID_SHADE.barrel = o => (i, t, L) => {
+  const f = HIT.face, w = HIT.w;
+  if (f === 5) { BG[i] = C(BLUE, 1 + L * 0.2); return set(i, '~', C(CYAN, L * 0.6)), true; }
+  BG[i] = C(BRICK, (1.1 + L * 0.28) * shadeFace(f));
+  return set(i, Math.abs(w - 0.02) < 0.006 || Math.abs(w - 0.07) < 0.006 ? '=' : fract((f >= 3 ? HIT.u : HIT.v) * 50) < 0.2 ? '|' : ' ', C(Math.abs(w - 0.02) < 0.006 || Math.abs(w - 0.07) < 0.006 ? GRAY : BRICK, L * 0.8)), true;
+};
+
+// ---- the rod in your hand: where it points (radians off upright, toward the middle of the screen) and how much it
+// bends, eased toward what you're doing; worked out once a frame, before the world's drawn, so the line in the world and
+// the rod over it meet at the tip
+const rodView = { ang: 0.62, bend: 0, spin: 0, t: 0, swing: 0, swingV: 0 };
+function rodTarget() {
+  const f = fishing, sway = Math.sin(T * 1.3) * 0.02;
+  if (!f) return [0.62 + sway, 0, 6];
+  const windAng = 0.62 - (f.power || 0) * 1.05;
+  switch (f.st) {
+    case 'wind': return [windAng + (f.power >= 1 ? Math.sin(T * 40) * 0.012 : 0), 0.04, 10];
+    case 'fly': return f.t < 0.12 ? [1.15, -0.12, 40] : [0.74, 0.02, 6]; // whipped forward, then back up to watch it go
+    case 'wait': case 'land': return [0.74 + sway * 0.5, 0.04, 5];
+    case 'lure': return [0.74 + (f.t > f.dur * 0.55 ? Math.sin(T * 28) * 0.018 : 0), 0.07, 12]; // a twitch or two as it noses the bait
+    case 'bite': return [0.86 + Math.sin(T * 34) * 0.04, 0.32, 20]; // yanked down
+    case 'reel': return f.catch ? [0.45 + Math.sin(T * 17) * 0.03, 0.32 + Math.min(0.3, (f.catch.kg || 0.5) * 0.025), 10] : [0.5, 0.08, 10];
+    case 'landed': return [0.32, 0.18 + Math.min(0.2, (f.catch.kg || 0.5) * 0.02), 8];
+  }
+  return [0.62, 0, 6];
+}
+function stepRodView() {
+  const dt = clamp(T - rodView.t, 0, 0.05); rodView.t = T;
+  const [ang, bend, rate] = rodTarget(), k = Math.min(1, dt * rate);
+  const was = rodView.ang;
+  rodView.ang += (ang - rodView.ang) * k; rodView.bend += (bend - rodView.bend) * k;
+  if (fishing && fishing.st === 'reel' || fishing && fishing.st === 'wind') rodView.spin += dt * (fishing.st === 'reel' ? 22 : 0);
+  // whatever hangs off the tip swings: pushed by the rod moving, pulled back down
+  rodView.swingV += (-rodView.swing * 30 - rodView.swingV * 3 + (rodView.ang - was) / Math.max(dt, 1e-3) * 2.5) * dt;
+  rodView.swing = clamp(rodView.swing + rodView.swingV * dt, -1.2, 1.2);
+}
+// the rod on screen, in pixels: grip, length, and the point at s (0 at the grip, 1 the tip; under 0 the butt)
+function rodGeom() {
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), hsz = Math.round(u * 1.15);
+  const bob = moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
+  const cx = Math.round(cv.width * 0.84), hy = Math.round(cv.height - 5.6 * hsz + bob), grip = hy + 1.1 * hsz;
+  const Lr = Math.min(cv.height * 0.62, cv.width * 0.5), sa = Math.sin(rodView.ang), ca = Math.cos(rodView.ang);
+  const at = s => ({ x: cx - sa * s * Lr, y: grip - ca * s * Lr + rodView.bend * Lr * 0.42 * s * s });
+  return { u, hsz, cx, hy, grip, Lr, at, tip: at(1) };
+}
+// screen (pixels) at depth D, back into the world: relative to you
+function unproject(sx, sy, D) {
+  const c = sx / cw, r = sy / FS, lat = (c - cols / 2) * D / projX;
+  return { x: dx * D - dy * lat, y: dy * D + dx * lat, z: eye + (hor - r) * D / projY };
+}
+const fishProj = (X, Y, Z) => { const depth = dx * X + dy * Y; return depth < 0.008 ? null : { c: cols / 2 + (-dy * X + dx * Y) * projX / depth, r: hor - (Z - eye) * projY / depth, depth }; };
+function fishPut(c, r, depth, ch, col, bg) {
+  c = Math.floor(c); r = Math.floor(r);
+  if (c < 0 || c >= cols || r < 0 || r >= rows) return false;
+  const i = r * cols + c;
+  if (ZB[i] >= 0 && ZB[i] < depth * 0.985) return false; // something's in front of it
+  set(i, ch, col); if (bg !== undefined) BG[i] = bg; FL[i] = 0; FOGS[i] = 0;
+  return true;
+}
+// a run of characters between two projected points, each following the slope, hidden where something's in front
+function fishSeg(p0, p1, col) {
+  const dc = p1.c - p0.c, dr = p1.r - p0.r, n = Math.min(300, Math.ceil(Math.max(Math.abs(dc), Math.abs(dr))) + 1);
+  const ch = Math.abs(dr) > Math.abs(dc) * 2 ? '|' : Math.abs(dc) > Math.abs(dr) * 2 ? '-' : (dc > 0) === (dr > 0) ? '\\' : '/';
+  for (let k = 0; k <= n; k++) { const f = k / n; fishPut(p0.c + dc * f, p0.r + dr * f, p0.depth + (p1.depth - p0.depth) * f, ch, col); }
+}
+
+// ---- out in the world, after the sprites: the line, the bobber, the rings, the fish coming in, the spray
+function drawFishing() {
+  if (mode !== 'walk') return;
+  for (const p of fishFx) { const q = fishProj(rel(p.x - px), rel(p.y - py), p.z); if (q) fishPut(q.c, q.r, q.depth, p.vz > 0 ? '\'' : '.', C(WHITE, 8 + p.life * 6)); }
+  const f = fishing;
+  if (!heldRod()) return;
+  stepRodView();
+  if (!f || f.st === 'wind' || f.st === 'landed') return; // (the line's short, off the tip: drawn with the rod)
+  const lit = Math.max(0.5, amb), bx = rel(f.x - px), by = rel(f.y - py);
+  const onWater = f.st === 'wait' || f.st === 'lure' || f.st === 'bite';
+  let bz = f.z;
+  if (f.st === 'wait') bz = 0.003 + Math.sin(T * 2.4) * 0.002;
+  if (f.st === 'lure') bz = 0.003 + (f.t > f.dur * 0.6 ? Math.max(-0.002, Math.sin(T * 26)) * 0.003 : Math.sin(T * 2.4) * 0.002);
+  if (f.st === 'bite') bz = -0.01;
+  // rings spreading over the water: when it lands, when something takes it, and a slow one as it rides the swell
+  if (onWater) {
+    const rings = [[T - (f.ring ?? -9), 1.4, 1], [fract(T / 2.6) * 2.6, 2.6, 0.45]];
+    for (const [age, life, k] of rings) if (age < life) fishRing(bx, by, 0.012 + age * 0.13, (1 - age / life) * k, lit);
+  }
+  // the fish, coming in: a swirl and a trail of bubbles through the water toward the bobber
+  if (f.st === 'lure') {
+    for (let j = 0; j < 7; j++) {
+      const q = clamp(f.t / f.dur - j * 0.05, 0, 1), dist = 0.55 * (1 - q) ** 1.1;
+      const fxp = bx + Math.cos(f.from) * dist, fyp = by + Math.sin(f.from) * dist, p = fishProj(fxp, fyp, 0.001 + j * 0.0015 * (j & 1));
+      if (p) fishPut(p.c, p.r, p.depth, j === 0 ? '~' : j & 1 ? 'o' : '.', C(j === 0 ? WHITE : CYAN, (j === 0 ? 14 : 12 - j) * lit));
+    }
+  }
+  // the line: off the rod tip, sagging in the slack (lying on the water near the bobber), taut when something's on
+  const G = rodGeom(), tip = unproject(G.tip.x, G.tip.y, 0.06);
+  const sag = f.st === 'bite' || f.st === 'reel' && f.catch ? 0.004 : f.st === 'fly' ? 0.01 : f.st === 'reel' ? 0.012 : 0.012 + Math.hypot(bx, by) * 0.012;
+  let prev = null;
+  const lineCol = C(WHITE, (night > 0.5 ? 7 : 10) * lit);
+  for (let k = 0; k <= 36; k++) {
+    const s = (k / 36) ** 1.7, z = Math.max(0.0015, tip.z + (bz + 0.008 - tip.z) * s - sag * 4 * s * (1 - s));
+    const p = fishProj(tip.x + (bx - tip.x) * s, tip.y + (by - tip.y) * s, z);
+    if (p && prev) fishSeg(prev, p, lineCol);
+    prev = p;
+  }
+  // the bobber: red over white, a little stick on top. Pulled under, just a swirl where it went
+  const p = fishProj(bx, by, bz + 0.004);
+  if (!p) return;
+  if (f.st === 'bite') { fishPut(p.c, p.r, p.depth, '@', C(WHITE, 15 * lit)); return; }
+  const rc = 0.007 * projX / p.depth, rr = 0.007 * projY / p.depth;
+  if (rc < 0.9) { fishPut(p.c, p.r, p.depth, 'o', C(RED, 15), C(WHITE, 1.5)); }
+  else {
+    for (let r = Math.floor(p.r - rr); r <= p.r + rr; r++) for (let c = Math.floor(p.c - rc); c <= p.c + rc; c++) {
+      const ex = (c + 0.5 - p.c) / rc, ey = (r + 0.5 - p.r) / rr;
+      if (ex * ex + ey * ey <= 1) { const b = dSphere(ex, ey, 1); fishPut(c, r, p.depth, dFill(b), C(ey < 0 ? RED : WHITE, 6 + b * 9)); }
+    }
+    fishPut(p.c, p.r - rr - 0.5, p.depth, '|', C(RED, 12)); // (its stick)
+  }
+  if (f.st === 'reel' && f.catch && f.z > 0.004) { // up out of the water on the end of the line, wriggling
+    const d = ITEMS[f.catch.id], q = fishProj(bx, by, Math.max(0.001, f.z - 0.02));
+    if (q) {
+      const word = d.kind === 'fish' || d.kind === 'wish' ? (Math.sin(T * 18) > 0 ? '<o)))><' : '<o)))>-') : d.kind === 'junk' ? '[#]' : '(*)';
+      const n = clamp(Math.round(0.05 * projX / q.depth), 1, word.length), w0 = word.slice(0, n);
+      fishSeg(p, q, lineCol);
+      for (let k = 0; k < w0.length; k++) fishPut(q.c - w0.length / 2 + k, q.r, q.depth * 0.99, w0[k], C(d.col ?? (d.kind === 'junk' ? GRAY : YEL), 14));
+    }
+  }
+}
+function fishRing(bx, by, R, k, lit) {
+  const p = fishProj(bx, by, 0);
+  if (!p) return;
+  const n = clamp(Math.round(R * projX / p.depth * 5), 8, 64);
+  for (let j = 0; j < n; j++) {
+    const an = j / n * TAU, q = fishProj(bx + Math.cos(an) * R, by + Math.sin(an) * R, 0.0005);
+    if (q) fishPut(q.c, q.r, q.depth, Math.abs(Math.sin(an + Math.atan2(dy, dx))) > 0.7 ? '-' : '~', C(WHITE, (5 + k * 9) * lit));
+  }
+}
+
+// ---- over the frame: the rod itself, the reel on it, and the bobber (or your catch) hanging off the tip
+function drawFishingRod(it) {
+  const G = rodGeom(), s = Math.round(G.u * 0.85), carbon = it.id === 'carbonrod';
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width;
+  g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
+  const put = (ch, x, y, col) => { g.strokeText(ch, x - w / 2, y - s / 2); g.fillStyle = PAL[col]; g.fillText(ch, x - w / 2, y - s / 2); };
+  const slopeCh = (a_, b_) => { const dxs = (b_.x - a_.x) / w, dys = (b_.y - a_.y) / s; return Math.abs(dys) > Math.abs(dxs) * 2 ? '|' : Math.abs(dxs) > Math.abs(dys) * 2 ? '-' : dxs * dys < 0 ? '/' : '\\'; };
+  const n = Math.ceil(G.Lr * 1.12 / (Math.min(w, s) * 0.8)), guides = [0.34, 0.52, 0.67, 0.8, 0.91];
+  for (let k = 0; k <= n; k++) { // butt (cork, in your fist), the reel seat, the blank, thinner and lighter toward the tip
+    const sv = -0.12 + 1.12 * k / n, p = G.at(sv), q = G.at(sv + 0.02);
+    const cork = sv < 0.15, seat = sv >= 0.15 && sv < 0.2, wrap = guides.some(gs => Math.abs(sv - gs) < 0.012);
+    const col = cork ? C(WARM, 13) : seat ? C(GRAY, 12) : wrap ? C(carbon ? BLUE : RED, 13) : carbon ? C(GRAY, 9 + sv * 3) : C(WHITE, 12 + sv * 3);
+    put(cork ? '#' : seat ? '=' : slopeCh(p, q), p.x, p.y, col);
+    if (cork || seat || sv < 0.42) { const o = G.at(sv); if (!cork && !seat) { put(slopeCh(p, q), o.x + w * 0.5 * Math.cos(rodView.ang), o.y + w * 0.5 * Math.sin(rodView.ang), col); continue; } put(cork ? '#' : '=', o.x + w * 0.55 * Math.cos(rodView.ang), o.y + w * 0.55 * Math.sin(rodView.ang), cork ? C(BRICK, 12) : C(GRAY, 9)); } // (thicker down there)
+  }
+  g.font = Math.round(s * 0.7) + 'px monospace';
+  for (const gs of guides) { const p = G.at(gs); put('o', p.x + Math.cos(rodView.ang) * w * 0.45, p.y + Math.sin(rodView.ang) * w * 0.45, C(GRAY, 13)); } // the guides, under the blank
+  g.font = s + 'px monospace';
+  put('.', G.tip.x, G.tip.y, C(carbon ? BLUE : RED, 15));
+  // the reel, hanging under the rod above your fist on its foot: the spool with the line wound on, and the handle going
+  // round (a knob on an arm) as you wind in
+  const R = G.at(0.19), ca = Math.cos(rodView.ang), sa = Math.sin(rodView.ang), rx = R.x + ca * w * 2.2, ry = R.y + sa * w * 2.2, ph = rodView.spin;
+  put('|', R.x + ca * w * 0.9, R.y + sa * w * 0.9, C(GRAY, 12)); // the foot
+  const spool = carbon ? BLUE : GREEN, turning = fishing && fishing.st === 'reel';
+  put('(', rx - w, ry, C(GRAY, 13)); put(turning && fract(ph) < 0.5 ? '=' : '#', rx, ry, C(spool, 13)); put(')', rx + w, ry, C(GRAY, 13));
+  put('_', rx, ry - s * 0.75, C(GRAY, 12)); put('-', rx, ry + s * 0.55, C(GRAY, 12));
+  const hx = rx + w * 1.4 + Math.cos(ph) * w * 0.9, hy = ry + Math.sin(ph) * s * 0.7; // the handle
+  put(Math.abs(Math.sin(ph)) > 0.7 ? '|' : Math.cos(ph) * Math.sin(ph) > 0 ? '\\' : '/', (rx + w * 1.4 + hx) / 2, (ry + hy) / 2, C(GRAY, 12));
+  put('o', hx, hy, C(WHITE, 15));
+  // what hangs off the tip: the bobber, when the line's in; your catch, when you've just landed it
+  const f = fishing, sw = rodView.swing + (f && f.st === 'wind' ? f.power * 0.9 : 0);
+  if (!f || f.st === 'wind' || f.st === 'landed') {
+    const len = (f && f.st === 'landed' ? 2 : 2.6) * s, ex = G.tip.x + Math.sin(sw) * len, ey = G.tip.y + Math.cos(sw) * len;
+    charLine(G.tip.x, G.tip.y, ex, ey, w, s, PAL[C(WHITE, 11)]);
+    g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
+    if (f && f.st === 'landed') drawCatchHanging(f.catch, ex, ey);
+    else { put('o', ex, ey, C(RED, 15)); put('o', ex, ey + s * 0.6, C(WHITE, 15)); }
+  }
+  if (f && f.st === 'wind') { const k = Math.round(f.power * 10); msgText = `Casting [${'#'.repeat(k)}${'-'.repeat(10 - k)}]${k >= 10 ? ' (as far as it goes)' : ''}`; msgT = 0.3; }
+  g.font = FS + 'px monospace';
+}
+// the catch on the end of the line: its picture, top centre at (x, y), flapping if it's a fish
+function drawCatchHanging(c, x, y) {
+  const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72);
+  g.font = s + 'px monospace';
+  const w = g.measureText('M').width, [art, col] = (DENSE[c.id] || droppedArt)({ id: c.id, uses: 0, kg: c.kg, hang: true }, 1), aw = Math.max(...art.map(l => l.length));
+  artText(art, x - aw * w / 2, y, s, col);
+}
+
+// ---- what you catch, in your hand: fish sculpted side on (head left), the rest as little pictures
+const FLAPPING = it => it.hang || fishing && fishing.st === 'landed';
+function denseFish(it) {
+  const d = ITEMS[it.id], col = d.col, eel = d.eel || d.long, flap = FLAPPING(it) ? Math.sin(T * 14) : Math.sin(T * 1.3) * 0.2;
+  const W = eel ? 36 : 30, H = eel ? 8 : 12, rx = eel ? 9.4 : 6.2, ry = eel ? 1.9 : d.flat ? 3.9 : 3.3, cx0 = eel ? -1 : -1.3, koi = it.id === 'goldkoi';
+  return sculpt(W, H, (x, y) => {
+    y -= flap * Math.max(0, x - cx0) / (rx + 3) * 1.3; // (the tail end swings)
+    const tailX = cx0 + rx * 0.84;
+    if (x > tailX) { // the tail, forked
+      const tx = x - tailX, spread = Math.min(tx * 1.1 + 0.5, eel ? 1.4 : 3.3), len = eel ? 1.8 : koi ? 4.2 : 3.4;
+      if (tx < len && Math.abs(y) < spread && !(!eel && tx > len * 0.5 && Math.abs(y) < (tx - len * 0.5) * 1.2)) return [koi ? '~' : Math.abs(y) > spread - 0.6 ? (y < 0 ? '/' : '\\') : '=', C(col, koi ? 12 + Math.sin(T * 3 + y) * 3 : 9)];
+    }
+    const e = dEll(x, y, cx0, 0, rx, ry);
+    if (e >= 1) {
+      const fx = x - cx0 - 0.4, fin = 1 - Math.abs(fx) / 2.6;
+      if (!eel && y < 0 && fin > 0 && y > -ry - (koi ? 2 : 1.4) * fin) return [y < -ry - 0.5 ? '^' : '|', C(col, koi ? 13 : 8)]; // the dorsal fin
+      if (d.whiskers && y > -0.2 && x < cx0 - rx + 1.2 && x > cx0 - rx - 2.6 && Math.abs(y - (cx0 - rx + 1.2 - x) * 0.7) < 0.45) return ['\\', C(GRAY, 12)];
+      if (d.ugly && y > -0.5 && y < ry * 0.6 && x < cx0 - rx + 0.6 && x > cx0 - rx - 0.9) return [fract(y * 2) < 0.5 ? 'v' : '^', C(WHITE, 14)]; // teeth
+      return null;
+    }
+    const nx = (x - cx0) / rx, ny = y / ry, b = dSphere(nx, ny, 1);
+    if (Math.hypot(x - (cx0 - rx * 0.64), y + ry * 0.25) < 0.55) return ['o', C(WHITE, 15)]; // the eye
+    if (x < cx0 - rx * 0.86 && Math.abs(y - ry * 0.15) < 0.45) return ['<', C(GRAY, 11)]; // the mouth
+    if (Math.abs(x - (cx0 - rx * 0.42)) < 0.3 && Math.abs(ny) < 0.7) return [')', C(col, 6)]; // the gill
+    if (koi && fract(x * 0.35 - T * 0.9 + y * 0.25) < 0.08) return ['*', C(WHITE, 15)]; // the shimmer, running along it
+    if (d.stripes && ny < 0.1 && fract(x * 0.55 + Math.sin(y * 1.8) * 0.4) < 0.28) return ['~', C(col === BLUE ? GRAY : BRICK, 6 + b * 4)];
+    if (d.spots && hash(Math.floor(x * 2), Math.floor(y * 2), 1611) > 0.8) return ['.', C(BRICK, 5)];
+    if (ny > 0.35 && !d.ugly && !koi) return [dFill(b), C(WHITE, 5 + b * 9)]; // the belly, paler
+    return [b > 0.9 ? '@' : dFill(b), C(koi ? (fract(x * 0.3 + y * 0.1) < 0.5 ? YEL : ORANGE) : col, 5 + b * 10)];
+  });
+}
+for (const id in ITEMS) if ((ITEMS[id].kind === 'fish' || ITEMS[id].kind === 'wish') && !ITEMS[id].crab && !ITEMS[id].squid) DENSE[id] = denseFish;
+// on the ground (and in hand, for the ones without a sculpture)
+for (const id in ITEMS) if ((ITEMS[id].kind === 'fish' || ITEMS[id].kind === 'wish') && !DROPPED_ART[id]) {
+  const col = ITEMS[id].col; DROPPED_ART[id] = () => [['  <o)))><'], c => c === 'o' ? C(WHITE, 15) : C(col, 13)];
+}
+Object.assign(DROPPED_ART, {
+  rod: () => [['#####======---------------------.'], c => c === '#' ? C(WARM, 13) : c === '.' ? C(RED, 15) : C(WHITE, 13)],
+  carbonrod: () => [['#####======---------------------.'], c => c === '#' ? C(WARM, 13) : c === '.' ? C(BLUE, 15) : C(GRAY, 12)],
+  crab: () => [[' (\\/)   (\\/)', '  \\_ o o _/', '   (_____)', '   /|/ \\|\\'], c => c === 'o' ? C(WHITE, 15) : C(RED, 14)],
+  squid: () => [['    /\\', '   /  \\', '  | oo |', '   \\  /', '   ||||', '   ))(('], (c, r) => c === 'o' ? C(WHITE, 15) : C(MAG, 13 - (r > 3 ? 2 : 0))],
+  oldboot: () => [['   ___', '  |   |', '  |   |__', '  |      \\_', '  |________)'], (c, r) => r === 4 ? C(GRAY, 11) : C(BRICK, 13)],
+  tincan: () => [[' _____', '|=====|', '|BEANS|', '|=====|', "'-----'"], (c, r) => r === 2 && /[A-Z]/.test(c) ? C(WHITE, 14) : r === 2 ? C(ORANGE, 12) : C(GRAY, 12)],
+  seaweed: () => [['  ) ( )', ' ( ) (', '  ) ( )', ' (_)_('], () => C(GREEN, 12)],
+  plasticbag: () => [['  /\\ /\\', ' (  V  )', ' |     |', ' |THANK|', '  \\___/'], (c, r) => r === 3 && /[A-Z]/.test(c) ? C(RED, 13) : C(WHITE, 13)],
+  tyre: () => [['  .-""-.', ' / .--. \\', '| |    | |', ' \\ `--` /', "  `-..-'"], () => C(GRAY, 9)],
+  trafficcone: () => [['   /\\', '  /==\\', ' /    \\', '/======\\', '[______]'], c => c === '=' ? C(WHITE, 14) : C(ORANGE, 14)],
+  flipflop: () => [['  .--.', ' / /\\ \\', '| (  ) |', ' \\    /', "  `--'"], c => '()'.includes(c) ? C(MAG, 14) : C(CYAN, 13)],
+  trolleywheel: () => [['  _[]_', ' / __ \\', '| (  ) |', ' \\_--_/'], (c, r) => r === 0 ? C(GRAY, 13) : C(GRAY, 9)],
+  soggybook: () => [['  _______', ' /~~~~~~/|', '/______/ |', '|SOGGY | /', '|______|/'], (c, r) => c === '~' ? C(CYAN, 11) : /[A-Z]/.test(c) ? C(WHITE, 12) : C(BRICK, 12)],
+  bottlemsg: () => [['   [=]', '   | |', '  /   \\', ' | ~~~ |', ' | ~~~ |', ' |_____|'], (c, r) => c === '~' ? C(WHITE, 14) : r === 0 ? C(BRICK, 12) : C(GREEN, 11)],
+  oldcoin: () => [['  .---.', ' / (K) \\', '|  ~~~  |', ' \\     /', "  `---'"], (c, r) => c === 'K' ? C(WHITE, 15) : C(GRAY, 12)],
+  goldring: () => [['   .<>.', '  /    \\', ' |      |', '  \\    /', "   `--'"], c => c === '<' || c === '>' ? C(CYAN, 15) : C(YEL, 14)],
+  pearl: () => [['   .--.', '  ( o  )', "   `--'"], c => c === 'o' ? C(WHITE, 15) : C(WARM, 14)],
+  compass: () => [['  .-N-.', ' /  |  \\', '|W  *  E|', ' \\  |  /', "  `-S-'"], c => c === '*' || c === '|' ? C(RED, 14) : /[NSEW]/.test(c) ? C(WHITE, 14) : C(YEL, 12)],
+  divewatch: () => [['  [===]', ' .-----.', '| 12:00 |', " `-----'", '  [===]'], (c, r) => r === 2 && /[0-9:]/.test(c) ? C(CYAN, 15) : C(GRAY, 12)],
+  wishcoins: () => [['  (o)(o)', ' (o)(o)(o)', '  (o)(o)'], c => c === 'o' ? C(YEL, 15) : C(GRAY, 12)],
+  pocketknife: () => [['  ___________', ' (__o___=====>'], (c, r) => r === 1 && c === '=' || c === '>' ? C(GRAY, 13) : c === 'o' ? C(YEL, 14) : C(RED, 13)],
+});
+// a rod in the hand: the rod, not a picture of one (drawHeldBig asks)
+const heldIsRod = it => !!ITEMS[it.id].rod;
+
+// ---- sounds, a prompt, and the hut's counter
+function stepFishingUI() {
+  while (fishSfx.length) {
+    const s = fishSfx.shift();
+    if (!actx) continue;
+    const at = actx.currentTime;
+    if (s === 'whoosh') { burst(at, 0.25, [filt('bandpass', 1800, 2)], 0.12); burst(at + 0.05, 0.3, [filt('bandpass', 900, 2)], 0.06); }
+    if (s === 'plop') { tone(at, 220, 0.12, 0.12); burst(at, 0.12, [filt('lowpass', 900)], 0.12); }
+    if (s === 'splash') { burst(at, 0.35, [filt('bandpass', 1200, 0.8)], 0.22); tone(at, 140, 0.15, 0.1); }
+    if (s === 'reel') for (let k = 0; k < 8; k++) tone(at + k * 0.045, 2400, 0.02, 0.04, 'square');
+    if (s === 'land') { burst(at, 0.2, [filt('bandpass', 700, 1)], 0.15); tone(at + 0.05, 330, 0.1, 0.06); }
+  }
+  if (actx && fishing && fishing.st === 'reel' && fract(T * 22) < 0.12 && T - (stepFishingUI.tick ?? 0) > 0.04) { stepFishingUI.tick = T; tone(actx.currentTime, 2600, 0.015, 0.025, 'square'); } // the reel's ratchet
+}
+function fishPrompt() {
+  const f = fishing;
+  if (!f) return heldRod() && mode === 'walk' ? 'Q (hold): wind up, let go to cast' : '';
+  return { wind: 'let go of Q to cast', fly: '', wait: 'Waiting for a bite...   Q: reel in', lure: 'Something\'s nosing at it... wait for it', bite: 'Q: STRIKE!', reel: 'Reeling in...', land: 'Q: reel in', landed: '' }[f.st] ?? '';
+}
+function useHut() {
+  if (!hutOpen()) return say('Shuttered. A card in the hatch: BACK AT 5AM. FISH DON\'T WAIT AND NEITHER DO WE.', 3);
+  return openShop('BAIT & TACKLE', ['rod', 'carbonrod']);
+}
 // ===== smoke and vapour that hangs in the air. Every drag you breathe out leaves a few puffs in front of you, a lit
 // cigarette sends up the odd wisp, and the vape's cloud is a lot more (mango-coloured). Outside they drift off on the
 // wind and are gone in a few seconds; indoors they hang about for half a minute, so a room you keep smoking in gets
@@ -26789,8 +27419,8 @@ function noteStreet() {
 }
 function saveGame() {
   noteStreet();
-  const items = list => list.map(it => ({ id: it.id, uses: it.uses }));
-  const data = { v: 1, day: dayNum, tod, tags, money, tickets, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+  const items = list => list.map(it => it.kg ? { id: it.id, uses: it.uses, kg: it.kg } : { id: it.id, uses: it.uses });
+  const data = { v: 1, day: dayNum, tod, tags, money, tickets, fish: fishLog, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
@@ -26801,10 +27431,11 @@ function loadGame() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return; }
   if (!d || d.v !== 1) return;
-  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses }); } };
+  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push(Number.isFinite(it.kg) ? { id: it.id, uses: it.uses, kg: it.kg } : { id: it.id, uses: it.uses }); } };
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
+  fishLog.caught = d.fish?.caught | 0; fishLog.best = d.fish?.best && ITEMS[d.fish.best.id] && Number.isFinite(d.fish.best.kg) ? { id: d.fish.best.id, kg: d.fish.best.kg } : null;
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
   tattoos.length = 0; for (const id of d.tattoos || []) if (ITEMS[id] && ITEMS[id].kind === 'tattoo' && !tattoos.includes(id)) tattoos.push(id);
   if (d.noto) { // how well known you are, and what's in the papers
@@ -27163,6 +27794,7 @@ function loop(t) {
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
   const need = stepNeeds(dt, onFootMode() && !game && !sleep); // (at the wheel or mid-shift you hang on till you stop)
   if (need === 'faint') passOut(needs.drink <= 0 ? 'You collapsed in the street. Dehydration. Drink some water, would you?' : 'You collapsed in the street. When did you last eat?');
   else if (need) say(need, 4);
@@ -27291,7 +27923,7 @@ function keyUp(code) { onkeyup({ code }); }
 
 // the big button's label: what E does here, as a word or two (from the prompt line, so it always agrees with it)
 const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
-  [/^get off/, 'Get off'], [/^board/, 'Board'], [/^pick up/, 'Pick up'], [/^buy/, 'Buy'], [/^shop/, 'Shop'], [/^play/, 'Play'],
+  [/^get off/, 'Get off'], [/^board/, 'Board'], [/^pick up/, 'Pick up'], [/^buy/, 'Buy'], [/^(shop|bait)/, 'Shop'], [/^play/, 'Play'],
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],
   [/^telly/, 'TV'], [/^book/, 'Book room'], [/^try to break out/, 'Break out'], [/^prize counter/, 'Prizes'],
@@ -27345,7 +27977,7 @@ function touchActions() {
     if (/\bG: take/.test(p)) out.push(['Grab', 'KeyG', 'pop']);
     if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
-    if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
+    if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); }
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
   }
