@@ -88,17 +88,16 @@ test('every pose builds on a sprite the body fits inside, standing feet on the f
   assert.ok(r.dance1.bottom<ev('FIG_H')-2,'the spin is off the floor');
 });
 
-test('up close a face is cast finer: whites to the eyes with a pupil in each, brows, a mouth, strands in the hair; far off, as before',()=>{
+test('up close a face is cast finer: an eye each, brows, a mouth; far off, as before',()=>{
   const {ev}=loadCity();
   const r=JSON.parse(ev(`JSON.stringify((()=>{
     const count=${COUNT},look=figLook({hair:'short',top:'tee',bot:'pants'});
     return {near:count(figSprite(look,0,'stand',4)),far:count(figSprite(look,0,'stand')),back:count(figSprite(look,8,'stand',4)),S:figSprite(look,0,'stand',4).S,len:figSprite(look,0,'stand',4).length};
   })())`));
   assert.equal(r.S,4); assert.equal(r.len,ev('FIG_W*FIG_H*16'));
-  assert.equal(r.near.EYE,2,'a pupil each'); assert.ok(r.near.SCLERA>=4,'and the whites round them'); assert.ok(r.near.MOUTH>0,'a mouth');
-  assert.ok(r.near.HAIR_D>0,'strands');
-  assert.equal(r.far.SCLERA,undefined,'far off, no room for any of it'); assert.equal(r.far.EYE,2);
-  assert.equal(r.back.SCLERA,undefined,'and none of it from behind');
+  assert.equal(r.near.EYE,2,'an eye each'); assert.ok(r.near.MOUTH>0,'a mouth');
+  assert.equal(r.far.MOUTH,undefined,'far off, no room for it'); assert.equal(r.far.EYE,2);
+  assert.equal(r.back.MOUTH,undefined,'and none of it from behind');
 });
 
 test('the police shooting back stand with both arms out on a pistol; somebody shot lies flat and stays there',()=>{

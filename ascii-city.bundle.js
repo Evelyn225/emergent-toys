@@ -394,15 +394,13 @@ for (const [d, c] of [['EYE', 'SKIN'], ['SCLERA', 'SKIN'], ['MOUTH', 'SKIN'], ['
 const FIG_DARK = new Uint8Array(FIG_ROLES);
 for (const k of ['HAIR', 'SKIN', 'TOP', 'BOT', 'HAT', 'PACK']) FIG_DARK[FR[k]] = FR[k + '_D'];
 
-// up close (figSprite's fine sprites, FIG_FINE while one's being cast) a face has eyes with whites, brows, a nose and a
-// mouth, and hair has strands; further off a face is a pixel an eye and that's all there's room for
+// up close (figSprite's fine sprites, FIG_FINE while one's being cast) a face has brows, a nose and a mouth round its
+// eyes; further off a face is a pixel an eye and that's all there's room for
 let FIG_FINE = false;
 // where on the front of a head (its unit-sphere point l: x their right, y ahead, z up) the features are, or 0
 function figFace(l) {
   if (l[1] < 0.45) return 0;
   for (const sg of [1, -1]) {
-    const ex = (l[0] - sg * 0.34) / 0.15, ez = (l[2] - 0.1) / 0.1, e = Math.hypot(ex, ez);
-    if (e < 1) return FR.SCLERA; // (the pupil: the eye's decal, a pixel in the middle)
     if (Math.abs(l[2] - 0.28) < 0.04 && Math.abs(l[0] - sg * 0.33) < 0.17 - Math.abs(l[0] - sg * 0.33) * 0.3) return FR.HAIR; // a brow
   }
   if (l[0] > -0.02 && l[0] < 0.08 && l[2] > -0.24 && l[2] < 0.04) return FR.SKIN_D; // the side of the nose, in shadow
@@ -544,7 +542,7 @@ function figBody(look, key) {
     if (hat === 'cap' && l[2] > 0.28) return R.HAT;
     if (hat === 'beanie' && l[2] > 0.12) return l[2] < 0.34 ? R.HAT_D : R.HAT;
     if (look.shades && l[1] > 0.35 && Math.abs(l[0]) < 0.8 && l[2] > -0.05 && l[2] < 0.32) return R.SHADES;
-    if (hair(l)) return FIG_FINE && fract(Math.atan2(l[0], -l[1]) * 5 + l[2] * 1.5) < 0.2 ? R.HAIR_D : R.HAIR; // (strands, close up)
+    if (hair(l)) return R.HAIR;
     return FIG_FINE && !look.form && figFace(l) || R.SKIN;
   });
   if (look.form) parts.push(figEll(U(0, 0.1, 8.6), ax, [1.2, 1.2, 0.8], () => R.SKIN)); // a dress form: the knob on its neck, no head
@@ -830,8 +828,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     // an eye or a mouth is a mark on the face, not a block of its own colour: the skin, with the feature drawn on it
     const mark = FIG_MARK[role];
     if (mark && !look.build) {
-      const under = role === FR.EYE && spr.S > 1 ? FR.SCLERA : FR.SKIN; // (close up, the pupil in the white of the eye)
-      BG[i] = C(look.base[under], look.lvl[under] * k);
+      BG[i] = C(look.base[FR.SKIN], look.lvl[FR.SKIN] * k);
       const S = spr.S || 1, cu = fract((u / unit + FIG_W / 2) * S), cz = fract(z / unit * S), hu = du / unit * S / 2, hz = dz / unit * S / 2;
       const centre = Math.abs(cu - 0.5) <= Math.max(0.5, hu) && Math.abs(cz - 0.5) <= Math.max(0.5, hz) && (hu >= 0.5 || Math.abs(cu - 0.5) < hu + 1e-6) && (hz >= 0.5 || Math.abs(cz - 0.5) < hz + 1e-6);
       return set(i, role === FR.MOUTH || centre ? mark : ' ', C(look.base[role], Math.max(1, look.lvl[role] * k))), true; // (an eye: one mark, in the cell at its middle)
