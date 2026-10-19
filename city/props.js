@@ -43,12 +43,29 @@ function glow(wx, wy) {
 // parks: grass, a cross of dirt paths through each block (block-local centre 5), a pond, trees, benches.
 // A superblock park also grows over the streets it swallowed.
 const POND = [3.5, 3.5, 0.85]; // block-local x, y, base radius
-// a lumpy, slightly oval pond outline (different per park); `pad` grows it, for shores and keeping trees out
-function inPond(lx, ly, bx, by, pad = 0) {
+// a lumpy, slightly oval pond outline (different per park): how far (lx, ly) is outside it (inside: below 0)
+function pondEdgeSD(lx, ly, bx, by) {
   const ex = (lx - POND[0]) / 1.15, ey = ly - POND[1], ang = Math.atan2(ey, ex);
-  const edge = POND[2] * (0.75 + 0.55 * noise(Math.cos(ang) * 1.4 + bx * 3.1, Math.sin(ang) * 1.4 + by * 2.3, 13));
-  return Math.hypot(ex, ey) < edge + pad;
+  return Math.hypot(ex, ey) - POND[2] * (0.75 + 0.55 * noise(Math.cos(ang) * 1.4 + bx * 3.1, Math.sin(ang) * 1.4 + by * 2.3, 13));
 }
+// the same, from a grid worked out once per park (every pixel of a park asks, some of them more than once: the shape
+// itself was an atan2 and a noise each time); far from the pond, 9
+const POND_SD = new Map(), POND_RES = 0.05, POND_X0 = POND[0] - 2.1, POND_Y0 = POND[1] - 1.8, POND_NX = 85, POND_NY = 73;
+function pondSD(lx, ly, bx, by) {
+  const gx = (lx - POND_X0) / POND_RES, gy = (ly - POND_Y0) / POND_RES;
+  if (!(gx >= 0 && gy >= 0 && gx < POND_NX - 1 && gy < POND_NY - 1)) return 9;
+  const key = bx * NB + by;
+  let g = POND_SD.get(key);
+  if (!g) {
+    g = new Float32Array(POND_NX * POND_NY);
+    for (let y = 0; y < POND_NY; y++) for (let x = 0; x < POND_NX; x++) g[y * POND_NX + x] = pondEdgeSD(POND_X0 + x * POND_RES, POND_Y0 + y * POND_RES, bx, by);
+    POND_SD.set(key, g);
+  }
+  const x0 = gx | 0, y0 = gy | 0, fx = gx - x0, fy = gy - y0, k = y0 * POND_NX + x0;
+  return (g[k] * (1 - fx) + g[k + 1] * fx) * (1 - fy) + (g[k + POND_NX] * (1 - fx) + g[k + POND_NX + 1] * fx) * fy;
+}
+// in it? `pad` grows it, for shores and keeping trees out
+const inPond = (lx, ly, bx, by, pad = 0) => pondSD(lx, ly, bx, by) < pad;
 // relative to block center, and the way each faces: toward the path through the middle
 const BENCH = [[0.35, -2, -1, 0], [0.35, 2, -1, 0], [-2, 0.35, 0, -1], [2, -0.35, 0, 1]];
 const trees = [], benches = [], parks = [];
