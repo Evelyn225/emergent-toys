@@ -466,7 +466,7 @@ test('Save As does not ask about a new name, or once Save As itself was closed',
       dlg.querySelector('input[type="text"]').value = 'fresh.png';
       [...dlg.querySelectorAll('button')].find(b => b.textContent === 'Save').click();
       const askedForNew = !!document.querySelector('[id^="win-os-confirm-"]');
-      await new Promise(res => setTimeout(res, 300));
+      for (let k = 0; k < 60 && !vfsStatSync('fresh.png', 'PICTURES'); k++) await new Promise(res => setTimeout(res, 50)); // (the save is async: slow under load)
       const freshSaved = !!vfsStatSync('fresh.png', 'PICTURES');
 
       // Ask about old.png, close Save As underneath the prompt, then say Yes.

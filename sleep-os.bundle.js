@@ -12198,10 +12198,12 @@ Start here:
 Also installed:
   NOTEPAD.exe   - text editor with syntax highlighting
   EXPLORER.exe  - file browser
-  SYSMON.exe    - system monitor
   DEFRAG.exe    - disk defragmenter
   CALC.exe      - calculator
-  REGEDIT.exe   - registry editor
+
+In the Start menu:
+  Start > SYSMON.exe   - system monitor
+  Start > REGEDIT.exe  - registry editor
 
 Files:
   Right-click the desktop or any folder - long-press

@@ -116,6 +116,15 @@ test('walls, bridge rails, ramp rails, ceilings, and unsupported edges prevent e
   assert.equal(result.noWaterFloor, null);
 });
 
+// with a key held: wait (up to 5s) till the walker's z passes the mark. A fixed wait gets too few frames on a slow
+// software-GL runner; the assertion after it still says whether they walked
+async function walkedPast(page, past) {
+  for (const end = Date.now() + 5000; Date.now() < end;) {
+    if (past(await page.evaluate(() => corridorTest.getState().z))) return;
+    await page.waitForTimeout(50);
+  }
+}
+
 test('walking is camera-relative, can stop and turn around, and pauses without stuck keys', async t => {
   const page = await open(t);
   await page.click('#enter');
@@ -124,13 +133,13 @@ test('walking is camera-relative, can stop and turn around, and pauses without s
   await page.waitForTimeout(180);
   assert.equal((await page.evaluate(() => corridorTest.getState())).z,start.z,'standing still causes no drift');
   await page.keyboard.down('w');
-  await page.waitForTimeout(400);
+  await walkedPast(page, z => z < start.z-.1);
   await page.keyboard.up('w');
   const walked = await page.evaluate(() => corridorTest.getState());
   assert.ok(walked.z < start.z-.1,'W walks forward');
   await page.evaluate(() => corridorTest.setLook(Math.PI));
   await page.keyboard.down('w');
-  await page.waitForTimeout(400);
+  await walkedPast(page, z => z > walked.z+.1);
   await page.keyboard.up('w');
   assert.ok((await page.evaluate(() => corridorTest.getState())).z > walked.z+.1,'can face and walk backward');
   await page.keyboard.down('w');
@@ -897,7 +906,7 @@ test('the key door opens onto a lined service run that turns to rock and ends in
   assert.deepEqual(result.leaks,[],'no holes in the rock shell');
 });
 
-test('the red button sequence pauses, then restarts through a loading screen at the remembered refresh spawn', { timeout: 60000 }, async t => {
+test('the red button sequence pauses, then restarts through a loading screen at the remembered refresh spawn', { timeout: 120000 }, async t => {
   const page = await open(t);
   let releaseRestart;
   let restartRequested = false;
@@ -973,7 +982,7 @@ test('the red button sequence pauses, then restarts through a loading screen at 
   await page.click('canvas');
   await page.waitForFunction(() => !!document.pointerLockElement);
   await page.waitForFunction(() => corridorTest.getState().audio === 'running');
-  await page.keyboard.down('w'); await page.waitForTimeout(200); await page.keyboard.up('w');
+  await page.keyboard.down('w'); await walkedPast(page, z => z < restarted.z-.1); await page.keyboard.up('w');
   assert.ok((await state()).z < restarted.z-.1,'mouse capture and movement work after the automatic restart');
   await page.reload(); await page.waitForFunction(() => !!window.corridorTest);
   const refreshed = await state();
