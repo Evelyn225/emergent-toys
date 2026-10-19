@@ -33,4 +33,4 @@ Reference for changes to `corridor.html`, based on the reservoir, ascent, bell d
 1. Walk the route forward and back, including every landing and doorway. Exercise interactions with real E input; check completion, reversal, and repeat use.
 2. Inspect close and wide browser views from both sides of each join. Look up at the crown, down at floor seams, and sideways along rails. Collision passing does not prove the visible geometry is correct.
 3. Probe **rendered meshes**, including walls and props, rather than only the walkable-floor list. Check for coplanar surfaces, missing walls, and clear doorway approaches. For arches, test just above and below the roof edge across the full width, including the crown. Account for water when probing the basin floor.
-4. Run `node --test test/browser/corridor.browser.test.cjs`. Keep regression checks tied to the reported defect, alongside visual inspection. Syntax checks alone cannot catch these issues.
+4. Run `node --test test/browser/corridor.browser.manual.cjs`. Keep regression checks tied to the reported defect, alongside visual inspection. Syntax checks alone cannot catch these issues.

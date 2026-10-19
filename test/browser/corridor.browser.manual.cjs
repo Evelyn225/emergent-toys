@@ -1,4 +1,6 @@
 'use strict';
+// The corridor's browser tests. Not part of npm run test:browser or CI (slow: WebGL in software, and a separate toy);
+// run them by hand when working on the corridor: node --test test/browser/corridor.browser.manual.cjs
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
