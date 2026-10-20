@@ -648,7 +648,7 @@ const ROOM_DEFS = {
   realty: { grid: boxRoom(9, 7), light: 0.9, floor: 'carpet', ceil: 'pendant', sign: true, signAt: 2.6, wall: realtyWall, keeper: [4.5, 2.0],
     props: r => [BX(4.5, 1.4, 1.2, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), standing(4.5, 2.0, GREEN),
       POT_PLANT(1.3, 1.3, 1.2), BENCHP(7.2, 4.6, -1, 0)] },
-  home: homeDef(10, 9, 0), loft: homeDef(20, 16, 1), bellehome: homeDef(26, 20, 2),
+  home: homeDef(...HOME_ROOM_SIZE.home_studio, 0), loft: homeDef(...HOME_ROOM_SIZE.home_loft, 1), bellehome: homeDef(...HOME_ROOM_SIZE.home_belle, 2),
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -666,6 +666,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind === 'hotelroom' && extra.suite ? ROOM_DEFS.hotelSuite : ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
+  if (def.home) r.props.push(...workshopProps(r));
   if (def.home) r.exterior = homeExterior(r);
   return r;
 }
@@ -858,8 +859,8 @@ function homePlan(w, h, tier) {
   wall(entryX - 1, h - 1, entryX, h - 1, 'D');
   const windows = [{ face: 'west', center: 2.5, half: 1 }, { face: 'west', center: tier ? 5.4 : 6.3, half: tier ? 1 : 1.25 }];
   if (tier) windows.push({ face: 'west', center: tier === 2 ? 12.7 : 11, half: 2.3 }, { face: 'north', center: 4.2, half: 2 }, { face: 'north', center: 11.8, half: 1.8 });
-  const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6]]
-    : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3]];
+  const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6], [3.5, h - 4], [inside - 3, h - 4]]
+    : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3], [3.5, h - 4], [w - 3, h - 4]];
   return { home, wc, balcony, windows, lamps, tier, grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
 }
 // Upholstered seating and separate dining chairs, with real legs and backs.
@@ -896,11 +897,12 @@ function homeDef(w, h, tier) {
     return set(i, ' ', 0), true;
   };
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
-    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)] },
+    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
       BX(bed[0], bed[1] + 0.2, tier ? 1.25 : 1, 0.85, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? tier === 2 ? GREEN : BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
       BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
       BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
+      BX(1.45, h - 2.6, .4, .5, 0, 1.1, solid(BRICK, { panel: .3, top: '=' })), // workshop supply cupboard
       BX(tv[0], tv[1] - 0.3, 0.7, 0.12, 0.6, 1.3, (i, t, L) => { // the telly: static, or a show on
         if (HIT.face !== 4 && HIT.face !== 3) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
         if (!r.tv) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
@@ -1336,6 +1338,7 @@ function roomSprites() {
   for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
   const home = homeRecord(room);
   if (home) {
+    drawWorkshopPreview();
     const { shelf, pet } = homeLayout(room);
     for (const [k, it] of (home.decor || []).entries()) {
       const x = shelf[0] + (k - ((home.decor.length - 1) / 2)) * 0.3;

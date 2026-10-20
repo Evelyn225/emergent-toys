@@ -651,7 +651,7 @@ test('Belle residence survives reload, has an open balcony and district geometry
     for (const b of BELLE_BUILDINGS.slice(0, 6)) { px = b.x0 - 1; py = b.y0 - 1; a = 0.8; pitch = 0.3; render(0); a += Math.PI; render(0); }
     return { homeFound, openAir, balcony: !!balcony, count: bits.length, noMurals, money };
   });
-  assert.deepEqual(result, { homeFound: true, openAir: true, balcony: true, count: result.count, noMurals: true, money: 4000 });
+  assert.deepEqual(result, { homeFound: true, openAir: true, balcony: true, count: result.count, noMurals: true, money: 9000 });
   assert.ok(result.count > 50, 'real slabs and railings across the district');
 }));
 
@@ -2585,7 +2585,7 @@ test('the big map: opened from the pause menu, dragged and zoomed, Esc back to t
   assert.ok(await page.evaluate(z => BIGMAP.z > z, start[3]), 'the wheel zooms in');
   for (let k = 0; k < 20; k++) await page.mouse.wheel(0, 800);
   await page.waitForTimeout(100);
-  assert.ok(await page.evaluate(() => Math.abs(BIGMAP.z * N - Math.max(innerWidth, innerHeight)) < 1), 'zoomed out, the whole city just fills the screen');
+  assert.ok(await page.evaluate(() => Math.abs(BIGMAP.z * N - Math.min(innerWidth, innerHeight)*.9) < 1), 'zoomed out, the whole city fits within both screen dimensions');
   await page.keyboard.press('Escape');
   assert.deepStrictEqual(await page.evaluate(() => [bigMapOpen(), paused, pauseEl.style.display]), [false, true, 'flex']);
 }));

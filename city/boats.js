@@ -22,7 +22,7 @@ const SLOT_PLAN = [['speedboat', 'rent', WHITE], ['sailboat', 'rent', BLUE], ['c
 // every boat tied up somewhere (or under you): { kind, deal: rent | sale | private | mine | stolen, x, y, hx, hy, col,
 // name, v, slot, hired (a rental out on its trip) }
 const fleet = SLOTS.map((s, k) => ({ kind: SLOT_PLAN[k][0], deal: SLOT_PLAN[k][1], col: SLOT_PLAN[k][2], x: s.x, y: s.y, hx: s.hx, hy: s.hy,
-  name: BOAT_NAMES[(k * 5 + 3) % BOAT_NAMES.length], v: 0, slot: k }));
+  id: `marina:${k}`, name: BOAT_NAMES[(k * 5 + 3) % BOAT_NAMES.length], v: 0, slot: k }));
 let sea = null; // the boat you're at the helm of
 
 // how far (x, y) is from boat b's hull (0 inside it)
@@ -45,13 +45,14 @@ const boatTitle = b => `the ${BOAT_KINDS[b.kind].name} '${b.name}'`;
 function marinaPrompt() {
   if (mode === 'sea') {
     const k = BOAT_KINDS[sea.kind];
-    if (landingSpot(sea)) return Math.abs(sea.v) > 0.25 ? 'Slow down to step off' : `E: tie up and step off${sea.hired ? ' (the rental goes back)' : ''}`;
+    if (landingSpot(sea)) return Math.abs(sea.v) > 0.25 ? 'Slow down to step off' : `E: tie up and step off${sea.hired && inMarina(sea.x, sea.y) ? ' (return rental)' : ''}`;
     return typeof TOUCH !== 'undefined' && TOUCH ? 'stick: throttle and helm' : `W throttle | S astern | A/D steer | V: camera   ${Math.round(Math.abs(sea.v) * 19.4)} knots${sea.v > k.top * 0.9 ? ' (flat out)' : ''}`;
   }
   const b = nearBoat();
   if (!b) return nearOffice() ? (marinaOpen() ? 'MARINA: boats by the trip or to buy, down on the jetty.' : 'MARINA: shut. Open 7am till 9pm.') : '';
   const k = BOAT_KINDS[b.kind], nm = boatTitle(b);
   if (b.deal === 'mine' || b.deal === 'stolen') return `E: take ${nm} out`;
+  if (b.deal === 'rent' && b.hired) return `E: continue your trip in ${nm}`;
   if (b.deal === 'rent') return marinaOpen() ? `E: rent ${nm} (${fmt$(k.rent)} a trip)   L: hotwire it` : 'The rentals are chained up till 7.   L: hotwire one';
   if (b.deal === 'sale') return `${marinaOpen() ? `E: buy ${nm}` : `FOR SALE: ${nm}`} (${fmt$(k.price)})   L: hotwire it`;
   return `${nm}: somebody's pride and joy.   L: hotwire it`;
@@ -61,13 +62,14 @@ function useMarina() { // true if E did something
   const b = nearBoat();
   if (!b) return false;
   const k = BOAT_KINDS[b.kind];
+  if (b.deal === 'rent' && b.hired) { boardBoat(b); say(`You cast off. Return the '${b.name}' to the marina when you're finished.`, 3); return true; }
   if (b.deal === 'mine' || b.deal === 'stolen') { boardBoat(b); say(b.deal === 'mine' ? `You cast off the '${b.name}'.` : 'Back at the helm of your ill-gotten boat.', 3); return true; }
   if (b.deal === 'private') { say("Somebody's boat. Not for hire. (L to hotwire it, if you're that kind of person.)", 3); return true; }
   if (!marinaOpen()) { say('The marina\'s shut. Open 7am till 9pm.', 3); return true; }
   if (b.deal === 'rent') {
     if (!pay(k.rent)) { say(`That's ${fmt$(k.rent)} for the trip.`); return true; }
     b.hired = true; boardBoat(b);
-    say(`"Have her back in one piece." The ${k.name}'s yours till you step off. W to go, A and D to steer.`, 4);
+    say(`"Have her back in one piece." Return the ${k.name} to the marina when you're finished. W to go, A and D to steer.`, 4);
     return true;
   }
   if (!pay(k.price)) { say(`The '${b.name}' is ${fmt$(k.price)}. You have ${fmt$(money)}.`, 3); return true; }
@@ -77,7 +79,7 @@ function useMarina() { // true if E did something
 }
 function stealBoat() { // L beside a boat that isn't yours: true if it did
   const b = nearBoat();
-  if (!b || b.deal === 'mine' || b.deal === 'stolen') return false;
+  if (!b || b.deal === 'mine' || b.deal === 'stolen' || b.hired) return false;
   b.deal = 'stolen'; b.hired = false;
   const seen = crime('boattheft', b.x, b.y);
   boardBoat(b);
@@ -104,10 +106,12 @@ function leaveBoat() {
   const at = landingSpot(b);
   if (!at) return say('Nowhere to step off. Pull up alongside a jetty or the sea wall.', 3);
   a = Math.atan2(rel(at[1] - b.y), rel(at[0] - b.x)); [px, py] = at; mode = 'walk'; sea = null; b.v = 0;
-  if (b.hired) { // the rental goes back to its slip
-    const s = SLOTS[b.slot], home = inMarina(b.x, b.y);
-    b.hired = false; Object.assign(b, { x: s.x, y: s.y, hx: s.hx, hy: s.hy });
-    say(home ? 'You tie her up and hand the keys back.' : 'You tie her up. Someone from the marina will come and fetch her.', 3);
+  if (b.hired) {
+    if (inMarina(b.x, b.y)) {
+      const s = SLOTS[b.slot];
+      b.hired = false; Object.assign(b, { x: s.x, y: s.y, hx: s.hx, hy: s.hy });
+      say('You tie her up and hand the keys back.', 3);
+    } else say(`You tie up the '${b.name}'. She's waiting for your return trip.`, 3);
   } else say(b.deal === 'mine' ? `You tie up the '${b.name}'. She'll be here when you get back.` : 'You tie her up and walk away whistling.', 3);
 }
 // out on the water: nothing solid at the hull's corners (the shore, a jetty, a bridge, a moored boat)
@@ -138,13 +142,28 @@ function stepSea(dt) { // throttle and helm; the shore and everything else in th
   }
   px = b.x; py = b.y;
 }
-// saving: the boats you own (where they're tied up). One bought from the marina leaves its slip empty
-const savedBoats = () => fleet.filter(b => b.deal === 'mine').map(({ kind, x, y, hx, hy, col, name }) => ({ kind, x, y, hx, hy, col, name }));
+// Keep an active rental ashore too: an island visit must survive a save/reload without stranding you.
+const savedBoats = () => fleet.filter(b => b.deal === 'mine' || b.hired).map(({ id, kind, x, y, hx, hy, col, name, deal, slot }) =>
+  ({ id, kind, x, y, hx, hy, col, name, ...(deal === 'rent' ? { deal, slot, hired: true } : {}) }));
 function loadBoats(list) {
-  for (const s of list || []) {
-    if (!BOAT_KINDS[s.kind] || !BOAT_KINDS[s.kind].price) continue;
+  const restoredRentals = new Set();
+  for (const [index, s] of (list || []).entries()) {
+    if (!s || !BOAT_KINDS[s.kind]?.price) continue;
+    if (![s.x, s.y, s.hx, s.hy].every(Number.isFinite) || Math.hypot(s.hx, s.hy) < .1) continue;
+    const length = Math.hypot(s.hx, s.hy), position = { x: mod(s.x, N), y: mod(s.y, N), hx: s.hx / length, hy: s.hy / length, v: 0 };
+    if (s.deal === 'rent') {
+      if (s.hired !== true || !Number.isInteger(s.slot) || restoredRentals.has(s.slot)) continue;
+      const rental = fleet.find(b => b.slot === s.slot && b.deal === 'rent' && b.kind === s.kind);
+      if (!rental || !waterClear(rental, position.x, position.y, position.hx, position.hy)) continue;
+      Object.assign(rental, position, { hired: true });
+      restoredRentals.add(s.slot);
+      continue;
+    }
+    const id = typeof s.id === 'string' && s.id.length <= 100 ? s.id : `owned:${index}`;
+    const existing = fleet.find(b => b.id === id && b.deal === 'mine');
+    if (existing) { Object.assign(existing, position); continue; }
     const sold = fleet.findIndex(b => b.deal === 'sale' && b.kind === s.kind);
     if (sold >= 0) fleet.splice(sold, 1);
-    fleet.push({ kind: s.kind, deal: 'mine', x: s.x, y: s.y, hx: s.hx, hy: s.hy, col: s.col ?? WHITE, name: s.name || 'Boaty', v: 0, slot: -1 });
+    fleet.push({ id, kind: s.kind, deal: 'mine', ...position, col: s.col ?? WHITE, name: s.name || 'Boaty', slot: -1 });
   }
 }

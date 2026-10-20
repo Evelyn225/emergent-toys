@@ -226,6 +226,7 @@ function render(dt) {
     drawHeld(dt); // what's in your hand (or mouth, or under your feet)
   }
   present();
+  drawDrugVision();
   if (freecam) freecamHud();
   else {
     if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }

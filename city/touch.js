@@ -62,11 +62,13 @@ const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', ge
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
 function touchActions() {
   if (freecam) return [['Up', 'KeyE', 'main'], ['Down', 'KeyQ', 'pop']];
+  if (workshopPlacement) return [['Cancel','KeyX','pop'],['Rotate','KeyQ','pop'],['Place','KeyE','main']];
   if (sleep || bustedEl && bustedEl.style.display === 'flex') return []; // (busted: tap a row)
   if (panelOpen() || prizeEl && prizeEl.style.display === 'flex') return [['Close', 'KeyE', 'main']];
   if (game) {
     if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : game.kind === 'table' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(MJ_BUYIN)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
     if (game.kind === 'show') return [['Leave', 'KeyE', 'pop'], ['Tip $1', 'Space', 'main']];
+    if (game.kind === 'workshop') return [['Stop','KeyE','pop'],['Vent','ArrowUp','pop'],['Seal','ArrowDown','pop'],['Power (hold)','Space','main']];
     if (game.kind === 'cook') return [['Off heat', 'KeyE', 'pop'], ['Add', 'ArrowDown', 'pop'], [cookVerb(game.g), 'ArrowUp', 'pop'], ['Heat (hold)', 'Space', 'main']];
     if (game.kind === 'market') return [['Leave', 'KeyE', 'pop'], ['Up', 'ArrowUp', 'pop'], ['Down', 'ArrowDown', 'pop'], ['Sell', 'ArrowLeft', 'pop'], ['Buy', 'ArrowRight', 'pop'], [`Lot ${game.g.lot()}`, 'Space', 'main']];
     if (game.kind === 'casino') { // the casino: what the buttons do depends on where the hand's at
@@ -101,6 +103,7 @@ function touchActions() {
     if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
     if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
+    else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
   }
@@ -166,7 +169,7 @@ function showTouch() {
   const busy = !!game || sleep || panelOpen();
   touchEl.querySelector('.bar').style.visibility = busy ? 'hidden' : 'visible';
   if (busy && sheetOpen) setSheet(false);
-  touchEl.querySelector('[data-key="KeyM"]').classList.toggle('on', showMap);
+  touchEl.querySelector('[data-key="KeyM"]').classList.toggle('on', bigMapOpen());
   for (const [l, , when] of SHEET) touchEl.querySelector(`[data-sheet="${l}"]`).style.display = !when || when() ? '' : 'none';
   // the pad: rebuilt only when what's on it changes (a button being held keeps its key down until it's let go)
   const acts = touchActions(), sig = acts.map(x => x.join(':')).join('|');

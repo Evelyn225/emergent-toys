@@ -77,7 +77,11 @@ function homeBalconyHeight(x, y) {
   }
   return height;
 }
-function restoreHomeCell(cell) {
+function restoreHomeCell(cell, placeId = null) {
+  if (placeId != null) {
+    cell = cityPlaceCell(placeId, cell);
+    if (cell < 0 || homeAt(SHOP[cell])) return -1;
+  }
   if (!Number.isInteger(cell) || cell < 0 || cell >= N * N) return -1;
   const x = cell % N, y = Math.floor(cell / N);
   if (SHOP[cell] && map[cell] && (SHOP[cell].kind === SHOP_APTS || districtAt(x, y) === 'belle')) return cell;

@@ -34,11 +34,11 @@ test('the luxury home is sold in Belle Époque and older clipped home cells are 
   const { ev } = loadCity();
   ev("money = 20000; var bought = buyProperty('home_belle', 0.3, 4)");
   assert.equal(ev('bought[0]'), true);
-  assert.equal(ev('money'), 4000);
+  assert.equal(ev('money'), 9000);
   assert.equal(ev('districtAt(owned.homes[0].cell % N, Math.floor(owned.homes[0].cell / N))'), 'belle');
   assert.equal(ev('homeRoomKind(owned.homes[0].kind)'), 'bellehome');
   assert.ok(ev('(() => { const b = SHOP[owned.homes[0].cell].belle; for (let y=b.y0;y<b.y1;y++) if(map[idx(b.x1,y)]) return false; return true; })()'), 'private balcony faces the street');
-  assert.equal(ev('ITEMS.home_loft.price'), 7000);
+  assert.equal(ev('ITEMS.home_loft.price'), 4200);
   assert.ok(ev('(() => { const b = BELLE_BUILDINGS.find(b => !b.access); const cell = restoreHomeCell(idx(b.x0, b.y0)); return cell >= 0 && !!SHOP[cell] && !!map[cell]; })()'));
 });
 

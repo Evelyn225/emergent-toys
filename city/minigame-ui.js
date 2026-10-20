@@ -13,6 +13,7 @@ function startGame(id, kind, word = '', opts) { // word: the shop's sign, for wh
 function gameKey(e) {
   if (!game) return false;
   const k = GAME_KEYS[e.code];
+  if (k || e.code === 'Escape' || e.code === 'KeyE') e.preventDefault?.(); // Space must not activate the menu button that started the game.
   if (k) K[e.code] = 1; // held, for the paddle (keyup clears it as usual)
   if (e.repeat) return true;
   if (game.g.over) { // the results screen: go again, or walk away
@@ -27,6 +28,7 @@ function gameKey(e) {
     if (game.kind === 'casino') { if (game.g.inRound()) say('You get up mid-hand. Your bet stays on the table.', 3); game = null; return true; }
     if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
     if (game.kind === 'cook') { game = null; say('You take it off the heat. Nothing\'s wasted.', 2); return true; } // (cooking.js: nothing's used till it's done)
+    if (game.kind === 'workshop') {game=null;workshopRun=null;say('You switch the machine off. Your supplies are kept.',3);return true;}
     finishGame(true); game = null; return true;
   }
   if (k) game.pressed[k + 'P'] = 1;
@@ -39,6 +41,7 @@ function finishGame(quit) {
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
   if (game.kind === 'cook') { game.onDone(g.result); return; } // (dished up: cooking-ui.js)
+  if (game.kind === 'workshop') {game.onDone(g.result);return;}
   if (game.kind === 'casino' || game.kind === 'market') return; // (its money changes hands round by round, or trade by trade)
   if (game.kind === 'bout') return finishBout(g, quit); // (gym.js)
   if (game.kind === 'show') { say(g.endLine, 5); game.closeT = T + 0.6; return; }
@@ -88,7 +91,7 @@ function sfxGame(e) {
 function gameClear() {
   if (!TOUCH) return [0, 0];
   if (innerWidth > innerHeight) return [TOUCH_PAD_W - 30, 0];
-  return [0, game && game.kind === 'cook' ? 250 : TOUCH_PAD_H];
+  return [0, game && (game.kind === 'cook' || game.kind === 'workshop') ? 250 : TOUCH_PAD_H];
 }
 // the character size that fits the whole cabinet on screen, never bigger than the detail setting's
 function gameFS(g) {
@@ -101,6 +104,7 @@ function gameFS(g) {
 const cookVerb = g => ({ pot: 'Stir', oven: 'Turn', grill: 'Turn' }[g.how] || 'Flip');
 function gameText(s, g) {
   if (!TOUCH) return s;
+  if (g?.id === 'workshop') return s.replace('HOLD SPACE power','HOLD POWER').replace('UP vent','VENT').replace('DOWN seal','SEAL').replace(/\[UP\]/g,'[VENT]').replace(/\[DOWN\]/g,'[SEAL]');
   if (g && g.id === 'cook') {
     const verb = cookVerb(g).toUpperCase();
     return s.replace('HOLD SPACE heat', 'HOLD HEAT').replace('UP flip / stir', verb).replace('DOWN add', 'ADD')
@@ -136,7 +140,7 @@ function drawGame() {
       set(i, ch, col); if (bg !== undefined && bg !== NONE) BG[i] = bg;
     }
   }, (x, y, s_, col, align) => {
-       if (g.id === 'cook') s_ = gameText(s_, g);
+       if (g.id === 'cook' || g.id === 'workshop') s_ = gameText(s_, g);
        putText(y0 + y * bh + (bh >> 1), Math.round(x0 + x * bw - (align === 'center' ? s_.length / 2 : 0)), s_, col);
      }, // a label, at normal size
      (c, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + c, s_, col), // one placed by character (a column in a table): c counts characters from the left
@@ -148,7 +152,7 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? '   E / ESC take it off the heat' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? '   E / ESC take it off the heat' : game.kind === 'workshop' ? '   E / ESC stop (supplies kept)' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
   const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
   const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
@@ -162,6 +166,8 @@ function drawGame() {
          res.win ? `PURSE ${fmt$(g.purse)}` : 'NO PURSE', ...TOUCH ? [] : ['', 'E or SPACE to leave']]
       : game.kind === 'cook'
       ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
+      : game.kind === 'workshop'
+      ? ['BATCH SEALED', `${DRUG_QUALITY[res]} Neon`, 'A buyer waits outside with cash', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
       : game.kind === 'arcade'
       ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, ...TOUCH ? [] : ['', `SPACE play again (${fmt$(CREDIT)})   E leave`]]
       : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, ...TOUCH ? [] : ['', 'E or SPACE to finish']];

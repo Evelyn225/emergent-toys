@@ -44,8 +44,8 @@ const ITEMS = {
   // a car's keys (you get them with it; Q calls it round to you, see property.js). Not for sale, not worth anything
   key_car_hatch: { name: 'hatchback keys', price: 0, kind: 'keys', car: 'car_hatch' }, key_car_sedan: { name: 'sedan keys', price: 0, kind: 'keys', car: 'car_sedan' },
   key_car_sports: { name: 'sports car keys', price: 0, kind: 'keys', car: 'car_sports' },
-  home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 7000, kind: 'home' },
-  home_belle: { name: 'Belle Époque residence', price: 16000, kind: 'home' },
+  home_studio: { name: 'studio apartment', price: 1200, kind: 'home' }, home_loft: { name: 'loft', price: 4200, kind: 'home' },
+  home_belle: { name: 'Belle Époque residence', price: 11000, kind: 'home' },
   // a change of look (nothing to carry: it's on you), which makes you harder to place (notoriety.js)
   haircut: { name: 'haircut', price: 15, kind: 'look', look: 'haircut', line: 'Twenty minutes in the chair, a mirror held up behind you. You look like somebody else. Somebody tidier.' },
   coat: { name: 'secondhand coat', price: 25, kind: 'look', look: 'coat', line: 'You leave in a coat that used to be somebody else\'s. It fits well enough. The old one goes in the donation bin.' },
@@ -232,7 +232,7 @@ function buy(id) { // false + why, if you can't
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
 // your storage unit: one unit, the same at every STORAGE place in town
-const STORE_SIZE = 30, stored = [], closet = []; // (closet: the stash at home, same rules)
+const STORE_SIZE = 30, HOME_STORE_SIZE = 120, stored = [], closet = []; // the larger home stash is shared between apartments
 // your ink (tattoo ids, oldest first): sit in the chair, pay, and the hours go by
 const tattoos = [];
 function getTattoo(id) {
@@ -291,8 +291,9 @@ const BOOK_LINES = ['"It was a dark and stormy night..." You read a chapter.', '
   'A guidebook to the city. Half the shops in it have closed.'];
 function useHeld(near) {
   const it = heldItem();
-  if (!it) return ['Your hands are empty.', null];
+  if (!it) return fx.smoke>0 ? takeSmokeDrag() : ['Your hands are empty.', null];
   const d = ITEMS[it.id];
+  if (d.kind === 'drug') return consumeDrug(it);
   animateHeldUse(it);
   if (d.kind === 'food' || d.kind === 'drink') {
     const feel = eatSome(it.id, d, it.q ? DISH_EAT[it.q] : 1); // (needs.js; a dish you cooked eats as well as you cooked it)
@@ -304,6 +305,7 @@ function useHeld(near) {
     if (it.id === 'stinkytofu') fx.stink = 150; // (and you'll smell of it a while)
     if (d.booze) fx.booze = Math.min(1.5, fx.booze + d.booze / d.uses);
     if (d.sober) fx.booze = Math.max(0, fx.booze - d.sober / d.uses);
+    if (d.sober) clearDrugEffects(30);
     const done = it.uses <= 0;
     if (done) removeHeld();
     if (it.id === 'fortunecookie') return [`You crack it open. The fortune reads: "${fortune()}"`, 'bite'];
@@ -312,9 +314,10 @@ function useHeld(near) {
             it.id === 'soda' && it.uses === 2 ? 'cancrush' : d.kind === 'food' ? 'bite' : 'sip'];
   }
   if (d.kind === 'smoke') {
-    if (fx.smoke > 0) { cigTip = 1; return ['You take a drag.', 'drag']; }
+    if (it.id==='joint') return lightJoint(it);
+    if (fx.smoke > 0) return takeSmokeDrag();
     const pipe = it.id === 'pipe';
-    it.uses--; fx.smoke = pipe ? 70 : 45; fx.pipe = pipe; cigTip = 1;
+    it.uses--; fx.smoke = pipe ? 70 : 45; fx.pipe = pipe; fx.smokeKind=pipe?'pipe':'cigarette';cigTip = 1;
     if (it.uses <= 0) removeHeld();
     if (pipe) return [`You pack the bowl and light the pipe.${it.uses > 0 ? ` (${it.uses} bowls left)` : ' The last of the tobacco.'}`, 'light'];
     return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
@@ -455,6 +458,7 @@ const hurrying = () => usingHeldItem() && !paused && !!heldItem() && heldItem().
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
 // Half-eaten stays half-eaten; cooking quality, ingredients and catch weight stay with the item too.
 function itemName(it) {
+  if (ITEMS[it.id].kind === 'drug') return `${DRUG_QUALITY[it.q] || 'standard'} ${ITEMS[it.id].name}`;
   if (ITEMS[it.id].cooked) return `${it.q ? it.q + ' ' : ''}${dishName(it)}`;
   return it.kg ? catchName(it) : ITEMS[it.id].name;
 }

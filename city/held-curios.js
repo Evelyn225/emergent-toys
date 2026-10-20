@@ -1,4 +1,31 @@
 // Fishing finds, small treasures and ammunition get full held art as well as their small ground icons.
+DENSE.neon = it => sculpt(28, 23, (x,y) => {
+  if (Math.abs(x)>5.8 || y < -9.5 || y > 9.5) return null;
+  if (Math.abs(y)>8.2 || Math.abs(x)>5.1) return ['=',C(GRAY,12)];
+  const text=dText(x,y,0,-1,'NEON') || dText(x,y,0,3,`${it.uses} PACKS`);
+  if(text)return[text,C(WHITE,15)];
+  return dLit(.7-x*.035,MAG,7);
+});
+DROPPED_ART.neon = () => [['.------.','| NEON |','| :::: |',"'------'"],ch=>C(/[NEON]/.test(ch)?WHITE:MAG,13)];
+DENSE.weed = it => sculpt(28,25,(x,y)=>{
+  if (Math.abs(x)>6.3 || y < -10.3 || y>10.3) return null;
+  if (Math.abs(x)>5.6 || Math.abs(y)>9) return ['=',C(WARM,12)];
+  const text=dText(x,y,0,-6.6,'WEED') || dText(x,y,0,6.7,`${it.uses} PACKS`);
+  if(text) return [text,C(WHITE,15)];
+  // A central stalk and three joined leaf pairs behind the clear front of the pouch.
+  if(Math.abs(x)<.4&&Math.abs(y)<4.5) return ['|',C(GREEN,15)];
+  for(const v of [-2.8,0,2.8]) if(Math.abs(y-v+Math.abs(x)*.6)<.65&&Math.abs(x)<4.6) return [x<0?'\\':'/',C(GREEN,13)];
+  return dLit(.65-x*.03,GREEN,4);
+});
+DROPPED_ART.weed = () => [['.------.','| WEED |','| \\|/ |',"'------'"],ch=>C(/[WEED]/.test(ch)?WHITE:GREEN,13)];
+DENSE.joint = () => sculpt(20,27,(x,y)=>{
+  if(y < -11 || y>11) return null;
+  const width=1.1+(y+11)*.025;
+  if(Math.abs(x)>width)return null;
+  if(y < -9.5)return ['~',C(GREEN,8)];
+  return [Math.abs(x)>width-.35?'/':'=',C(y>8?STONE:WHITE,Math.abs(x)>.7?10:14)];
+});
+DROPPED_ART.joint = () => [['  __',' /==/','/==/',' --'],ch=>C(ch==='='?WHITE:STONE,13)];
 function heldAmmo(it) {
   return sculpt(32, 18, (x, y) => {
     if (Math.abs(x) > 8.4 || y < -6.6 || y > 7.6) return null;

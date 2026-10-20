@@ -97,3 +97,40 @@ test('sailing: the jetty, the shore and the bridges stop you; open water does no
   assert.ok(j('sea.x < BRIDGE_X[0] * 8'));
   ev('sea.v = 0; mode = "walk"; sea = null');
 });
+
+test('an offshore rental waits for the return trip, survives loading, and can be reboarded after hours without paying twice', () => {
+  const fresh = loadCity().ev;
+  const run = code => fresh(code);
+  run(`tod=12;money=500;globalThis.rental=fleet.find(b=>b.deal==='rent'&&b.kind==='speedboat');
+    rental.hired=true;money-=BOAT_KINDS.speedboat.rent;
+    rental.x=FOOTBRIDGE.x+.4;rental.y=FOOTBRIDGE.y0+10;rental.hx=0;rental.hy=1;
+    boardBoat(rental);`);
+  assert.equal(run('waterClear(rental,rental.x,rental.y,rental.hx,rental.hy)'), true);
+  assert.ok(run('landingSpot(rental)'));
+  const before = JSON.parse(run('JSON.stringify([rental.x,rental.y])'));
+  run('leaveBoat()');
+  assert.equal(run('mode'), 'walk');
+  assert.equal(run('rental.hired'), true);
+  assert.deepEqual(JSON.parse(run('JSON.stringify([rental.x,rental.y])')), before);
+  const saved = run('JSON.stringify(savedBoats())');
+  const loaded = loadCity().ev;
+  loaded(`loadBoats(${saved});globalThis.rental=fleet.find(b=>b.hired);tod=23;money=470;
+    const at=landingSpot(rental);[px,py]=at;mode='walk';a=Math.atan2(rel(rental.y-py),rel(rental.x-px));`);
+  assert.equal(loaded('nearBoat()===rental'), true);
+  assert.match(loaded('marinaPrompt()'), /continue your trip/);
+  loaded('useMarina()');
+  assert.equal(loaded('sea===rental'), true);
+  assert.equal(loaded('money'), 470);
+  loaded(`const s=SLOTS[rental.slot];Object.assign(rental,{x:MARINA.x-.9,y:s.y,v:0});leaveBoat();`);
+  assert.equal(loaded('rental.hired'), false);
+  assert.equal(loaded('savedBoats().length'), 0);
+});
+
+test('invalid or duplicate rental records cannot replace another slip or inject invalid boat coordinates', () => {
+  const fresh = loadCity().ev;
+  fresh(`globalThis.rental=fleet.find(b=>b.deal==='rent');globalThis.record={...rental,deal:'rent',hired:true};
+    loadBoats([{...record,slot:999},{...record,x:NaN},{...record,hx:0,hy:0}]);`);
+  assert.equal(fresh('fleet.some(b=>b.hired)'), false);
+  fresh('loadBoats([record,record])');
+  assert.equal(fresh('fleet.filter(b=>b.hired).length'), 1);
+});

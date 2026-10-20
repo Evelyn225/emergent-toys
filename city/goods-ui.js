@@ -350,13 +350,19 @@ function drawCanopy(cx, grip, size, bob) {
 function drawCigarette() {
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 1.6);
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, len = 1 + Math.round(6 * fx.smoke / 45);
+  const joint=fx.smokeKind==='joint';
+  const w = g.measureText('M').width, len = 1 + Math.round(6 * fx.smoke / (joint?55:45));
   const x0 = cv.width * 0.5 - w, y0 = cv.height - s * 0.9, dx = w * 0.95, dy = -s * 0.32;
-  const chars = fx.pipe ? ['=', '=', '=', '=', 'U', '*'] : ['#', '#', ...Array(len).fill('='), '*']; // a pipe: the stem, and the bowl with its glow
+  const chars = fx.pipe ? ['=', '=', '=', '=', 'U', '*'] : [joint?'|':'#',joint?'=':'#', ...Array(len).fill('='), '*']; // a pipe: the stem, and the bowl with its glow
   g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
   chars.forEach((ch, k) => {
     const x = x0 + k * dx, y = y0 + k * dy, ember = k === chars.length - 1;
-    g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : fx.pipe ? C(BRICK, 12) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
+    let color=C(WHITE,15);
+    if(ember)color=C(cigTip>.3?YEL:ORANGE,fract(T*3)<.5?12+cigTip*3:10+cigTip*5);
+    else if(fx.pipe)color=C(BRICK,12);
+    else if(joint)color=C(STONE,14);
+    else if(k<2)color=C(ORANGE,12);
+    g.fillStyle=PAL[color];
     const yy = fx.pipe && ember ? y + s * 0.55 : y; // (the pipe's glow sits in the bowl)
     g.strokeText(ch, x, yy); g.fillText(ch, x, yy);
   });
@@ -488,7 +494,7 @@ function drawDropped(d, vx, vy, s) {
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
 // left of the buttons)
-const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed);
+const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed && !drugEffects.weed && !drugEffects.neon);
 function hotbar() {
   if (!hotbarUp()) return cv.height;
   const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0), width = maxX - 6;
@@ -514,7 +520,7 @@ function hotbar() {
     }
     bottom = y - 4;
   }
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', ...drugEffectTags(), fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
   if (tags.length) {
     const lines = wrapText(tags.join('  '), width - 12), h = lines.length * (FS + 4) + 4;
     bottom -= h;
@@ -533,7 +539,7 @@ function showPanel(el, html) {
   releaseMouse();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' && cookEl].some(el => el && el.style.display === 'flex'); // (and the cooking panel: cooking-ui.js)
+const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
@@ -590,18 +596,22 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
   const carried = eligible.length ? eligible.map(({ it, k }) => { const slot = quickSlots.indexOf(k); return `<button class="item" data-store="${k}"><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`; }).join('') : `<p class="sub" style="padding-left:18px">${inv.length ? 'Nothing suitable to put here.' : 'Nothing in your hands.'}</p>`;
   const unit = list.length ? list.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
   showPanel(storeEl, `<h1>${title}</h1><p class="sub">${sub}</p>
-    <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
-    <h2>in ${where.replace('your ', 'the ')} ${list.length}/${capacity}</h2>${unit}
+    <h2>carrying ${inv.length}/${INV_SIZE}</h2>${capacity >= STORE_SIZE && eligible.length ? '<button class="item" data-store-all>Store all carried items that fit</button>' : ''}${carried}
+    <h2>in ${where.replace('your ', 'the ')} ${list.length}/${capacity}</h2>${capacity >= STORE_SIZE && list.length ? '<button class="item" data-take-all>Take all that fit in your bag</button>' : ''}${unit}
     <p class="hint">1-8 store quick slot &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
-    if (s) say(storeSlot(+s.dataset.store, list, where, accepts, capacity)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
+    if (e.target.closest('[data-store-all]')) { for (const {k} of [...eligible].reverse()) if (list.length < capacity) storeSlot(k,list,where,accepts,capacity); }
+    else if (e.target.closest('[data-take-all]')) { while(list.length && inv.length < INV_SIZE) retrieveSlot(0,list,where); }
+    else if (s) say(storeSlot(+s.dataset.store, list, where, accepts, capacity)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
+    saveGame();
     openStorage();
   };
 }
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if (workshopPanelKey(e)) return true;
   if (cookPanelKey(e)) return true;
   if (storeEl && storeEl.style.display === 'flex') {
     const n = /^Digit([1-9])$/.exec(e.code);
@@ -626,6 +636,7 @@ const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
+  if (workshopPlacement) {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return;}
   if (heldGun()) return pullTrigger(); // (gun-ui.js)
   if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
   if (body.seat && body.seat.grass && heldItem() && ITEMS[heldItem().id].kind === 'food' && chance(0.5)) { // a picnic
@@ -634,8 +645,10 @@ function useHeldItem() {
     if (actx && sound) sfxUse(sound);
     return;
   }
+  const used=heldItem();
   const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
     water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
+  if ((ITEMS[used?.id]?.kind==='drug' || used?.id==='joint') && sound) {updateDrugBuyer();saveGame();}
   if (line) say(line, Math.max(3, line.length / 20)); // (long enough to read)
   if (actx && sound) sfxUse(sound);
 }

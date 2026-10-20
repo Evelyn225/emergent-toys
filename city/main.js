@@ -22,6 +22,12 @@ onkeydown = e => {
   if (!e.repeat && prizeKey(e)) return relock(e);
   if (!e.repeat && courierBoardKey(e)) return relock(e); // the courier dispatch board
   if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
+  if(e.code==='KeyM'&&!e.repeat&&!sleep&&!game) {
+    e.preventDefault();
+    if(e.shiftKey&&!paused)showMap=!showMap;else openBigMap();
+    return;
+  }
+  if (workshopPlacement && !paused && workshopKey(e)) return;
   if (e.code === 'Escape' && !e.repeat) return togglePause();
   if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
   if (paused) return;
@@ -58,7 +64,6 @@ onkeydown = e => {
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
-  if (e.code === 'KeyM') showMap = !showMap;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
@@ -260,6 +265,8 @@ function loop(t) {
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
   if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   T += dt; msgT -= dt;
+  stepWorkshop(dt); stepDrugEffects(dt);
+  updateMapNavigation();
   env(dt);
   if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
   stepCourierEncore();
@@ -337,6 +344,7 @@ function loop(t) {
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  updateDrugBuyer();
   stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
   if (stepGun(dt) === 'down') shotDown(); stepGunUI(); // (the revolver, and the police shooting back: gun.js, gun-ui.js)
   const need = stepNeeds(dt, onFootMode() && !game && !sleep); // (at the wheel or mid-shift you hang on till you stop)

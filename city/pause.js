@@ -68,6 +68,7 @@ function buildPause() {
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
       ${slider('fov', 'Field of view', 50, 120, 1)}
+      ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
       <h2>mouse</h2>
@@ -79,7 +80,7 @@ function buildPause() {
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
         <b>space</b><span>jump (tap near landing to bunny hop); in car: handbrake / drift; on board: ollie</span><b>right mouse</b><span>hold to aim the revolver; on a board: hold and flick for tricks</span><b>C</b><span>crouch (hold) / sit</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
-        <b>M</b><span>map</span><b>1-8</b><span>quick slots; again to put away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
+        <b>M / Shift+M</b><span>full map / minimap</span><b>1-8</b><span>quick slots; again to put away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry; assign items to quick slots</span><b>Q / left mouse</b><span>use held item; R reloads the revolver</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
         <b>P</b><span>pee</span>
