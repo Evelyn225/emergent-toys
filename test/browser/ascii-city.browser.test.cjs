@@ -1100,7 +1100,7 @@ test('on your feet: Space jumps, a trick on the board lands with its name, C sit
   assert.ok(await page.evaluate(() => body.z) > 0, 'up in the air');
   await page.waitForTimeout(800);
   assert.strictEqual(await page.evaluate(() => body.z), 0, 'and down again');
-  await page.evaluate(() => { fx.skating = true; });
+  await page.evaluate(() => { (inv.some(it => it.id === 'skateboard') || carryItem({ id: 'skateboard', uses: 0 }), held = inv.findIndex(it => it.id === 'skateboard'), fx.skating = true); });
   await page.keyboard.down('ArrowLeft'); await page.keyboard.press('Space'); await page.keyboard.up('ArrowLeft'); // (it pops as Space comes up)
   assert.strictEqual(await page.evaluate(() => body.trick && body.trick.name), 'kickflip');
   await page.waitForTimeout(900);
@@ -1160,7 +1160,7 @@ test('the board shows under you on a big desktop screen too; the wheels go quiet
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto(PAGE); await page.waitForTimeout(300);
-    await page.evaluate(() => { mode = 'walk'; fx.skating = true; third = false; pitch = -1; }); // through your own eyes (V), look down at the board under your feet
+    await page.evaluate(() => { mode = 'walk'; (inv.some(it => it.id === 'skateboard') || carryItem({ id: 'skateboard', uses: 0 }), held = inv.findIndex(it => it.id === 'skateboard'), fx.skating = true); third = false; pitch = -1; }); // through your own eyes (V), look down at the board under your feet
     await page.waitForTimeout(200);
     const cells = await page.evaluate(() => { let n = 0; for (let i = 0; i < cols * rows; i++) if (boardZ[i] < 1e9) n++; return [cols * rows > 1 << 14, n]; });
     assert.ok(cells[0] && cells[1] > 50, `more cells than the old buffer held, and the board drawn in them (${cells})`);
@@ -1172,7 +1172,7 @@ test('the board shows under you on a big desktop screen too; the wheels go quiet
 
 // the board driven frame by frame, the clock stopped: on a long street, rolling east
 const SKATE_SETUP = () => {
-  paused = true; mode = 'walk'; room = null; me = null; px = 41.5; py = 73.5; a = 0; fx.skating = true; third = true;
+  paused = true; mode = 'walk'; room = null; me = null; px = 41.5; py = 73.5; a = 0; (inv.some(it => it.id === 'skateboard') || carryItem({ id: 'skateboard', uses: 0 }), held = inv.findIndex(it => it.id === 'skateboard'), fx.skating = true); third = true;
   Object.assign(body, { z: 0, vz: 0, peak: 0, mx: 0, my: 0, trick: null, seat: null, crouch: 0, buf: -9 }); SK.lastT = -9; msgText = '';
   window.skRide = (n, keys = {}) => { for (let k = 0; k < n; k++) { for (const c in K) K[c] = 0; Object.assign(K, keys); T += 1 / 30; stepSkate(1 / 30); stepBody(1 / 30); } };
   window.skFly = (keys = {}) => { let n = 0; while ((body.z > 0 || body.vz > 0) && n++ < 120) skRide(1, keys); };
@@ -1216,7 +1216,7 @@ test('in the air A and D spin you: a 180 rides away switch, a quarter turn is a 
 }));
 test('on the board the camera rides behind you: your skater and the board are drawn in the street, V goes back to your own eyes', () => withPage(async page => {
   await page.evaluate(() => {
-    mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0; fx.skating = true; third = true;
+    mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0; (inv.some(it => it.id === 'skateboard') || carryItem({ id: 'skateboard', uses: 0 }), held = inv.findIndex(it => it.id === 'skateboard'), fx.skating = true); third = true;
     window.seen = 0; const draw = drawSkater; drawSkater = () => { if (skateView) seen++; draw(); };
   });
   await page.waitForFunction(() => seen > 3, null, { timeout: 3000 }).catch(() => {}); // (a few frames: slower on a busy runner)
@@ -1238,7 +1238,7 @@ test('skateboard tricks by flick: each way picks its trick, and on a phone a swi
     await page.goto(PAGE); await page.waitForTimeout(300);
     assert.deepStrictEqual(await page.evaluate(() => [[-60, 0], [60, 0], [0, 60], [-50, 50], [50, 50], [0, -60], [3, 2]].map(([x, y]) => trickName(flickTrick(x, y)))),
       ['kickflip', 'heelflip', 'pop shuvit', '360 flip', 'varial heelflip', 'ollie', 'ollie']);
-    await page.evaluate(() => { mode = 'walk'; fx.skating = true; });
+    await page.evaluate(() => { mode = 'walk'; (inv.some(it => it.id === 'skateboard') || carryItem({ id: 'skateboard', uses: 0 }), held = inv.findIndex(it => it.id === 'skateboard'), fx.skating = true); });
     await page.waitForTimeout(300); // the pad relabels
     const swipe = (dx, dy) => page.evaluate(([dx, dy]) => {
       const b = [...document.querySelectorAll('#touch .pad button')].find(x => x.textContent === 'Ollie'), r = b.getBoundingClientRect();
