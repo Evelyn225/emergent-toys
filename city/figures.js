@@ -464,9 +464,16 @@ const FIG_MARK = []; FIG_MARK[FR.EYE] = 'o'; FIG_MARK[FR.MOUTH] = '-'; // (drawn
 // (cells are taller than they're wide, so it's how many rows a pixel spans that counts)
 const FIG_FINE_AT = 2, FIG_FINE_MAX = 4;
 function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
-  const unit = h / FIG_TALL, depth = typeof projY === 'number' ? Math.max(0.01, dx * rx + dy * ry) : 1e9, rowsPer = unit * projY / depth; // (no screen in the node tests)
-  const spr = figSprite(look, figView(rx, ry, fx, fy), pose, !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1), floor = opts?.light || 0, sparkle = look.sparkle;
+  const unit = h / FIG_TALL, floor = opts?.light || 0, sparkle = look.sparkle;
+  let spr;
   drawShape(rx, ry, z0, FIG_W / 2 * unit, FIG_H * unit, (i, u, z, du, dz, L) => {
+    // Request a sprite only when a screen cell passes the bounds and depth checks. Invisible figures never cast
+    // sprites or use the frame's fine-detail allowance; this also covers people hidden behind buildings.
+    if (!spr) {
+      const rowsPer = unit / dz;
+      const S = !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1;
+      spr = figSprite(look, figView(rx, ry, fx, fy), pose, S);
+    }
     const role = figSample(spr, u / unit + FIG_W / 2, z / unit, du / unit, dz / unit);
     if (!role) return false;
     const lit = Math.max(floor, L), k = clamp(0.32 + lit / 15 * 0.78, 0.32, 1);
