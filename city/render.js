@@ -144,7 +144,7 @@ function render(dt) {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
     if (mode === 'walk') eye += walkGround(px, py);
   }
-  tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
+  tf = Math.tan(FOV / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;

@@ -57,6 +57,22 @@ test('cigarettes: light one, take drags, five in a pack', () => {
   assert.strictEqual(ev('fx.smoke'), 0, 'burned down');
 });
 
+test('the last sparkler stays lit until burnout, cannot be relit, and removal preserves the held item and quick slots', () => {
+  const { ev, j } = fresh();
+  ev("clearInventory(); carryItem({ id: 'sparklers', uses: 1 }); carryItem({ id: 'book', uses: 0 }, false); held = 0; assignQuickSlot(0, 0); assignQuickSlot(1, 1)");
+  assert.match(j('useHeld({})')[0], /last one/);
+  assert.deepStrictEqual(j('[heldItem().id, heldItem().uses, fx.spark]'), ['sparklers', 0, 25]);
+  ev('stepGoods(12)');
+  assert.match(j('useHeld({})')[0], /still fizzing/);
+  assert.strictEqual(ev('fx.spark'), 13, 'pressing use does not restart the timer');
+  ev('held = 1; stepGoods(12.9)');
+  assert.strictEqual(ev('inv.length'), 2);
+  ev('stepGoods(.2)');
+  assert.deepStrictEqual(j('[inv.map(it => it.id), held, heldItem().id, quickSlots.slice(0, 2)]'), [['book'], 0, 'book', [-1, 0]]);
+  ev("clearInventory(); carryItem({ id: 'sparklers', uses: 0 }); stepGoods(0)");
+  assert.strictEqual(ev('inv.length'), 0, 'an empty pack from an old save cannot be lit again');
+});
+
 test('the skateboard only rolls outside; the ball rolls, stops, and comes back', () => {
   const { ev, j } = fresh();
   ev("buy('skateboard')");

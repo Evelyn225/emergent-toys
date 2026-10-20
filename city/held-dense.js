@@ -58,18 +58,6 @@ const DENSE = {
     }
     return [dFill(b), C(WHITE, 7 + b * 8)];
   }),
-  soda: (it, f) => sculpt(26, 15, (x, y) => {
-    const hw = 4.3, top = -6.2, bot = 6.5;
-    if (y < top || y > bot || Math.abs(x) > hw + (y < top + 0.8 || y > bot - 0.8 ? -0.35 : 0)) return null;
-    if (dBites(x, y, f, hw) === true) return null; // (bites out of the can: why not)
-    const b = dCyl(x, hw);
-    if (y < top + 0.8) return Math.abs(x - 1) < 0.6 && y < top + 0.4 ? ['o', C(GRAY, 14)] : ['=', C(GRAY, 7 + b * 8)]; // the lid and its ring pull
-    if (y > bot - 0.8) return ['_', C(GRAY, 7 + b * 8)];
-    const wave = Math.abs(y - (1.4 + Math.sin(x * 1.3) * 0.7)) < 0.45; // a white swoosh round it
-    if (Math.abs(y + 1.6) < 0.5) { const k = Math.floor((x + 1.2) / 0.6); if (k >= 0 && k < 4) return ['COLA'[k], C(WHITE, 15)]; }
-    if (wave) return ['~', C(WHITE, 9 + b * 6)];
-    return [b > 0.92 ? '|' : dFill(b), b > 0.92 ? C(WHITE, 15) : C(RED, 6 + b * 9)];
-  }),
   slice: (it, f) => sculpt(26, 14, (x, y) => {
     const top = -6, tip = 7, half = 7.4 * (tip - y) / (tip - top); // a wedge, point down
     if (y < top || y > tip || Math.abs(x) > half) return null;
@@ -86,12 +74,13 @@ const DENSE = {
 };
 const sparkBurn = () => fx.spark > 0 ? clamp(1 - fx.spark / 25, 0, 1) : 0; // how far down a lit sparkler has burnt, 0..1
 // the item; the hand is drawn as usual afterwards
-function drawHeldDense(it, cx, hy, hsz, grip) {
-  const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72); // a little over the world's character size
+function drawHeldDense(it, cx, hy, hsz, picture = heldPicture(it), s = heldFrame(it, picture).s) {
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, [art, col] = (DENSE[it.id] || droppedArt)(it, usesLeft(it)), artW = Math.max(...art.map(l => l.length)), top = grip + 0.6 * s - art.length * s;
+  const w = g.measureText('M').width, { art, col, width: artW } = picture, top = hy + heldPictureTop(picture, s, hsz);
   if (it.id !== 'yoyo') { // (a yo-yo is drawn by drawYoyo, hanging from your fingers)
-    g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
+    g.save();
+    const phase = heldUsePhase(it);
+    if (HELD_FLIP.has(it.id) && phase >= 0) g.scale(.12 + .88 * Math.abs(Math.cos(phase * Math.PI * 2)), 1);
     artText(art, cx - artW * w / 2, top, s, col); g.restore();
   }
   if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top + (sparkBurn() * 9) * s, s * 2); // (at the burning point, working its way down)

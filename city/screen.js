@@ -199,6 +199,7 @@ function browserMouseCapture() {
   } catch (error) { limited(); }
 }
 function releaseMouse() {
+  K.MouseUse = 0; gun.aimHeld = false;
   cv.style.cursor = '';
   if (NATIVE_MOUSE_APP) {
     ++desktopMouseRequest;

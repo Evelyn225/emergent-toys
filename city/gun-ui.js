@@ -49,10 +49,14 @@ const GUN_GRIP = [43, 9]; // (the column and row your fist closes round)
 const CYL_FACE = [' .---. ', '/ o o \\', '| o+o |', '\\ o o /', " `---' "]; // swung out: the chambers, filling as you load
 const gunView = { spin: 0, t: 0 }; // the cylinder's turn as drawn, easing after gun.spin
 function gunGeom() {
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), hsz = Math.round(u * 1.15), s = Math.round(u * 0.7);
-  const bob = moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08, k = gun.kick, rl = gun.reload > 0 ? Math.min(1, (RELOAD_T - gun.reload) * 5, gun.reload * 5) : 0;
-  const cx = Math.round(cv.width * 0.8 + k * u * 0.6), hy = Math.round(cv.height - 5.6 * hsz + bob + k * u * 0.5 + rl * u * 2.5);
-  return { u, s, hsz, cx, hy, ang: 0.05 + k * 0.32 + rl * 0.85 }; // (kicked up by a shot; tipped right up to reload)
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, aim = gunAim();
+  const u = Math.max(10, Math.min(Math.max(14, cv.height / 36), cv.width / 45));
+  const hsz = Math.round(u * 1.15), s = Math.round(u * (0.7 + aim * 0.04));
+  const bob = (moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08) * (1 - aim * 0.75);
+  const k = gun.kick, rl = gun.reload > 0 ? Math.min(1, (RELOAD_T - gun.reload) * 5, gun.reload * 5) : 0;
+  const cx = Math.round(cv.width * (0.82 - aim * 0.075) + k * u * 0.6);
+  const hy = Math.round(cv.height - 5.6 * hsz + bob + k * u * 0.5 + rl * u * 0.6 - aim * u * 1.5);
+  return { u, s, hsz, cx, hy, ang: 0.05 + k * 0.32 + rl * 0.85 - aim * 0.06 };
 }
 // the picture as it is this instant: the cylinder's flutes moved round, the hammer back or down, the cylinder out
 function revolverArt(open, rounds) {
@@ -81,18 +85,24 @@ function revolverCol(ch, r, c) {
 function drawRevolver(it) {
   const G = gunGeom(), dt = clamp(T - gunView.t, 0, 0.05); gunView.t = T;
   gunView.spin += (gun.spin - gunView.spin) * Math.min(1, dt * 14); // (a sixth of a turn a shot, snapping round)
-  const open = gun.reload > 0, rounds = open ? Math.min(CYLINDER, it.uses + Math.floor((1 - gun.reload / RELOAD_T) * 7)) : it.uses;
+  const open = gun.reload > 0, rounds = open ? Math.min(CYLINDER, it.uses + ammoLeft(), it.uses + Math.floor((1 - gun.reload / RELOAD_T) * 7)) : it.uses;
   g.font = G.s + 'px monospace';
   const w = g.measureText('M').width, gx = -(GUN_GRIP[0] + 0.5) * w, gy = -GUN_GRIP[1] * G.s;
-  g.save(); g.beginPath(); g.rect(0, 0, cv.width, G.hy + 0.75 * G.hsz); g.clip(); // (your fingers hide the bottom of the grip)
+  g.save();
   g.translate(G.cx, G.hy + 0.2 * G.hsz); g.rotate(G.ang);
-  artText(revolverArt(open, rounds), gx, gy, G.s, revolverCol);
-  if (gun.kick > 0.55) { // the flash, off the end of the barrel
-    const big = Math.round(G.u * (0.8 + gun.kick * 0.5)), k = gun.kick;
-    g.font = big + 'px monospace';
-    const fw = g.measureText('M').width;
-    artText(k > 0.8 ? ['\\|/', '-*-', '/|\\'] : [' . ', '-#-', " ' "], gx - fw * 3.2, gy + 3.5 * G.s - big * 1.5, big, ch => ch === '*' || ch === '#' ? C(WHITE, 15) : ch === '-' ? C(YEL, 15) : C(ORANGE, 14));
-  }
+  drawBehindHand(0, -G.hsz * .2, G.hsz, () => {
+    artText(revolverArt(open, rounds), gx, gy, G.s, revolverCol);
+    if (open) { // the other hand steadies the swung-out cylinder as the rounds go in
+      artText(['   __', ' _/ /', '( _/ ', ' \\__'], gx + w * 18, gy + G.s * 11, G.s,
+        () => C(SKIN, 12));
+    }
+    if (gun.kick > 0.55) { // the flash, off the end of the barrel
+      const big = Math.round(G.u * (0.8 + gun.kick * 0.5)), k = gun.kick;
+      g.font = big + 'px monospace';
+      const fw = g.measureText('M').width;
+      artText(k > 0.8 ? ['\\|/', '-*-', '/|\\'] : [' . ', '-#-', " ' "], gx - fw * 3.2, gy + 3.5 * G.s - big * 1.5, big, ch => ch === '*' || ch === '#' ? C(WHITE, 15) : ch === '-' ? C(YEL, 15) : C(ORANGE, 14));
+    }
+  });
   g.restore();
   g.font = FS + 'px monospace';
 }
@@ -102,7 +112,7 @@ function drawGunHud() {
   const it = heldGun();
   if (it && onFootMode() && !game) {
     const x = cols / 2 * cw, y = (rows >> 1) * FS, moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
-    const spread = cw * (1.2 + gun.kick * 2.5 + (moving ? 0.6 : 0)); // (opening up as it kicks, and as you walk)
+    const spread = cw * (1.2 - gunAim() * 0.45 + gun.kick * 2.5 + (moving ? 0.6 : 0));
     const on = mode !== 'room' && aimingAt(); // (red when somebody's in it)
     g.font = FS + 'px monospace'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, FS * 0.16); g.strokeStyle = 'rgba(0,0,0,0.85)';
     g.fillStyle = on ? '#f44' : 'rgba(255,255,255,0.92)';
@@ -110,7 +120,8 @@ function drawGunHud() {
       g.strokeText(ch, x + ox, y + oy); g.fillText(ch, x + ox, y + oy);
     }
     // the cylinder: a round for each, under the crosshair to the right, and what's left in the boxes
-    const loaded = 'o'.repeat(it.uses) + '.'.repeat(CYLINDER - it.uses), txt = gun.reload > 0 ? 'reloading' : `${loaded}  ${ammoLeft()}`;
+    const loaded = 'o'.repeat(it.uses) + '.'.repeat(CYLINDER - it.uses);
+    const txt = gun.reload > 0 ? 'reloading' : `${loaded}  ${ammoLeft()}`;
     g.fillStyle = it.uses ? 'rgba(255,220,120,0.9)' : '#f66';
     g.strokeText(txt, x + cw * 3, y + FS * 1.6); g.fillText(txt, x + cw * 3, y + FS * 1.6);
   }

@@ -18,13 +18,15 @@ const HEAR_R = 9, PANIC_T = [5, 9], SPEED_OFF_T = 8; // how far a shot carries, 
 const BODY_CALL = 4, BODY_LOAD = 7, BODY_MAX = 150, POOL_T = 240; // seconds: till the call goes in; at the scene; at most; the blood
 const COP_FIRE_R = 8, COP_FIRE_GAP = [1.1, 2.3], COP_HURT = [10, 18], COP_GUNS = 3, CALM_T = 30; // (the nearest three take aim)
 const CAR_HIT = { amb: [0.25, 0.1, 0.15], fire: [0.37, 0.1, 0.17] }, CAR_DEFAULT = [0.21, 0.09, 0.14]; // [half length, half width, height]
-const gun = { cool: 0, reload: 0, kick: 0, spin: 0, lastShotT: -Infinity, shots: [], copShots: [], hurtT: -Infinity };
+const gun = { cool: 0, reload: 0, kick: 0, spin: 0, aimHeld: false, aim: 0, lastShotT: -Infinity, shots: [], copShots: [], hurtT: -Infinity };
 const bodies = []; // { who, cop, x, y, t, amb, atT }
 const pools = []; // { x, y, t }: blood, spreading, then dried and gone
 const heldGun = () => { const it = heldItem(); return it && ITEMS[it.id].kind === 'gun' ? it : null; };
+const canAimGun = () => !!heldGun() && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') && !freecam && !gun.reload;
+const gunAim = () => canAimGun() ? gun.aim : 0;
 const ammoLeft = () => inv.reduce((n, it) => n + (it.id === 'ammo' ? it.uses : 0), 0);
 // what the pawnbroker says, handing it over
-const GUN_SOLD = 'The pawnbroker looks at the door, then at you, and brings a bundle up from under the counter in a rag. "You didn\'t get it here." Q to fire, R to reload.';
+const GUN_SOLD = 'The pawnbroker looks at the door, then at you, and brings a bundle up from under the counter in a rag. "You didn\'t get it here." Left click or Q to fire, hold right click to aim, R to reload.';
 // R: thumb the rounds in. Done when the time's up (stepGun)
 function reloadGun() {
   const g = heldGun();
@@ -104,7 +106,10 @@ function fireGun(x, y, z, yaw, slope, indoors = false) {
     } else gunCrime('gunfire', x, y);
   } else {
     if (hit.what === 'car') { damageCar(hit.who, 12); if (!hit.who.patrol && !hit.who.parked) speedOff(hit.who); }
-    gunCrime('gunfire', x, y);
+    // The driver calls it in; an unattended car's alarm does too. Don't depend on a pedestrian being outside.
+    if (gunCrime('gunfire', x, y) === '' && hit.what === 'car') {
+      reports.push({ t: T + reportDelay(), x, y, kind: 'gunfire' });
+    }
   }
   panicAt(x, y);
   return shot;
@@ -165,6 +170,7 @@ function removeBody(k) {
 // every frame: the reload, the bodies and their ambulances, the panic dying down, and the police shooting back.
 // Returns 'down' when they've put you on the ground
 function stepGun(dt) {
+  gun.aim += ((gun.aimHeld && canAimGun() ? 1 : 0) - gun.aim) * (1 - Math.exp(-14 * dt));
   gun.cool = Math.max(0, gun.cool - dt); gun.kick = Math.max(0, gun.kick - dt * 5);
   if (gun.reload > 0) { if (!heldGun()) gun.reload = 0; else if ((gun.reload -= dt) <= 0) { gun.reload = 0; finishReload(); } }
   while (gun.shots.length && T - gun.shots[0].t > 1) gun.shots.shift();

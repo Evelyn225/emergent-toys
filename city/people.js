@@ -42,9 +42,10 @@ const USES = { home: d => d.use === 'home', lobby: d => d.use === 'home' || d.us
 // ---- routines: what someone wants to be doing at game hour t. `jit` staggers people by up to an hour or so.
 // worker: home, work 7-17, a drink or errands, an evening stroll, home. owl: bars till 3:30, sleeps till noon, out
 // again at night. errands: shops in the morning and afternoon. dogwalker: walks the dog first thing, at lunch and before
-// dinner (only in daylight hours), errands in between. Everyone's in by 4am bar a few stragglers.
+// dinner (only in daylight hours), errands in between. A few residents take late walks, even before dawn.
 function activity(p, t) {
   const h = mod(t - p.jit, 24);
+  if (p.nightWalk && (h >= 21 || h < 7)) return 'wander';
   if (p.role === 'worker') return h < 7 ? 'home' : h < 17 ? 'work' : h < 19.5 ? (p.social ? 'bar' : 'shop') : h < 21.5 ? 'wander' : 'home';
   if (p.role === 'dogwalker') return h < 7.5 ? 'home' : h < 9 ? 'wander' : h < 12 ? 'shop' : h < 12.5 ? 'home' : h < 14 ? 'wander' : h < 17 ? 'shop' : h < 19.5 ? 'wander' : 'home';
   if (p.role === 'owl') return h < 3.5 ? 'bar' : h < 12 ? 'home' : h < 17 ? 'wander' : h < 19 ? 'shop' : 'bar';
@@ -84,6 +85,7 @@ function spawnPerson() {
   const p = { x: home.x, y: home.y, path: [], last: [0, 0], wait: 0, hidden: false, sp: 0.1 + Math.random() * 0.06, legs: 0,
               shirt: pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]), pants: pick([BLUE, GRAY]), ph: Math.random() * 9,
               home, work, role, social: Math.random() < 0.6, jit: Math.random() * 1.5 - 0.5, act: '', goal: null };
+  p.nightWalk = role !== 'owl' && hash(home.x, home.y, Math.floor(p.jit * 1e6)) < 0.075;
   people.push(p);
   // start the day where the routine has them: indoors somewhere, or out on the street near home
   const act = activity(p, tod), place = placeFor(p, act, tod);

@@ -129,6 +129,24 @@ test('streets are busy in the evening and empty out by 4am', () => {
   assert.ok(r.night * 3 < r.evening, JSON.stringify(r));
 });
 
+test('a small number of residents keep walking throughout the night, including before dawn', () => {
+  const { ev: nightEv } = loadCity();
+  const r = JSON.parse(nightEv(`JSON.stringify((() => {
+    const counts = [23, 0, 2, 4, 6].map(hour => {
+      tod = hour; people.forEach(settle);
+      return people.filter(p => !p.hidden).length;
+    });
+    const walker = people.find(p => p.nightWalk);
+    px = walker.x; py = walker.y; const start = [walker.x, walker.y];
+    for (let k = 0; k < 160; k++) { T += .05; stepPeople(.05, T); }
+    return { counts, total: people.length, moved: Math.hypot(rel(walker.x - start[0]), rel(walker.y - start[1])), hidden: walker.hidden };
+  })())`));
+  for (const count of r.counts) {
+    assert.ok(count > r.total * .025 && count < r.total * .15, JSON.stringify(r));
+  }
+  assert.ok(r.moved > .1 && !r.hidden, JSON.stringify(r));
+});
+
 test('pedestrians find their way to a door two blocks off', () => {
   const r = j(`(() => {
     let ok = 0, worst = 0;

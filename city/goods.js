@@ -161,6 +161,12 @@ function cycleQuickSlot(direction) {
   held = choices[mod((at < 0 ? 0 : at) + direction, choices.length)];
 }
 const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0, fed: 0 }; // (fed: well fed, after a perfect dish: cooking.js)
+let heldUse = null; // a short visual gesture, tied to this inventory item rather than its slot
+function animateHeldUse(it) {
+  const d = ITEMS[it.id];
+  if (d.kind === 'gun' || d.rod || ['yoyo', 'skateboard', 'ball'].includes(it.id)) return;
+  heldUse = { item: it, t: T, duration: d.kind === 'drink' ? .7 : .65 };
+}
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
 // anything, the dragon's a bit more, and they add up
@@ -272,6 +278,7 @@ function useHeld(near) {
   const it = heldItem();
   if (!it) return ['Your hands are empty.', null];
   const d = ITEMS[it.id];
+  animateHeldUse(it);
   if (d.kind === 'food' || d.kind === 'drink') {
     const feel = eatSome(it.id, d, it.q ? DISH_EAT[it.q] : 1); // (needs.js; a dish you cooked eats as well as you cooked it)
     if (it.q === 'perfect') fx.fed = Math.max(fx.fed, WELL_FED);
@@ -349,8 +356,8 @@ function useHeld(near) {
     case 'duck': return [near.water ? 'You float the duck on the water a while, then fish it back out.' : 'Squeak.', 'squeak'];
     case 'sparklers':
       if (fx.spark > 0) return ['It\'s still fizzing.', null];
+      if (it.uses <= 0) { removeHeld(); return ['The sparkler is spent.', null]; }
       it.uses--; fx.spark = 25;
-      if (it.uses <= 0) removeHeld();
       return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
     case 'pocketwatch': return [pick(['The second hand runs fast. Hold Q to hurry the hours and the weather.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
     case 'cityglobe': return shakeGlobe();
@@ -428,7 +435,7 @@ function turnOrrery() {
   return [`You turn the crank. ${ORRERY_LINE[season()]}`, 'whirr'];
 }
 // the pocket watch in your hand and Q held down: the hours hurry along (the globe's a Q press too, see useHeld)
-const hurrying = () => !!K.KeyQ && !paused && !!heldItem() && heldItem().id === 'pocketwatch';
+const hurrying = () => usingHeldItem() && !paused && !!heldItem() && heldItem().id === 'pocketwatch';
 // things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
 // Half-eaten stays half-eaten.
@@ -456,10 +463,14 @@ function stepGoods(dt) {
   fx.stink = Math.max(0, fx.stink - dt); fx.bang = Math.max(0, fx.bang - dt);
   stepYoyo(dt); if (!heldItem() || heldItem().id !== 'yoyo') yoyo.out = false; // (put it away and it comes back up)
   fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt); fx.fed = Math.max(0, fx.fed - dt);
+  // The last wire stays in your hand while burning. Empty entries loaded from an old save are cleaned up too.
+  if (!fx.spark) for (let k = inv.length - 1; k >= 0; k--) {
+    if (inv[k].id === 'sparklers' && inv[k].uses <= 0) removeInventoryAt(k);
+  }
   cigTip = Math.max(0, cigTip - dt * 0.8);
   if (fx.vape > 0) { // pulling on the vape: the longer, the bigger the cloud
     const it = heldItem();
-    if (K.KeyQ && it && it.id === 'vape') fx.vape = Math.min(3, fx.vape + dt);
+    if (usingHeldItem() && it && it.id === 'vape') fx.vape = Math.min(3, fx.vape + dt);
     else { fx.cloud = fx.vape; fx.vape = 0; }
   }
   return stepBall(dt);

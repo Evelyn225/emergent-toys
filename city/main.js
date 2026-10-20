@@ -108,8 +108,26 @@ if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
   desktopMouseReady.catch(() => {}); // lockMouse handles subscription failure and tries browser capture
   addEventListener('blur', lostCapture);
 }
-addEventListener('mousedown', e => { if (!freecam && e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });
-addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });
+addEventListener('mousedown', e => {
+  if (!mouseCaptured() || paused || freecam || sleep || game || panelOpen() || devOpen()) return;
+  if (e.button === 0 && (onFootMode() || (mode === 'sea' || mode === 'boat') && heldRod())) {
+    K.MouseUse = 1; audioStart(); useHeldItem();
+  }
+  if (e.button === 2) {
+    if (canAimGun()) gun.aimHeld = true;
+    else if (skatingNow() && !body.z) flick = { x: 0, y: 0 };
+  }
+});
+addEventListener('mouseup', e => {
+  if (e.button === 0) K.MouseUse = 0;
+  if (e.button === 2) {
+    gun.aimHeld = false;
+    if (flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) jump(flickTrick(f.x, f.y)); }
+  }
+});
+function releaseHeldMouse() { K.MouseUse = 0; gun.aimHeld = false; }
+addEventListener('blur', releaseHeldMouse);
+document.addEventListener('pointerlockchange', () => { if (!mouseCaptured()) releaseHeldMouse(); });
 addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.preventDefault(); });
 
 const free = (x, y) => {

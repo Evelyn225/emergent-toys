@@ -171,7 +171,7 @@ function stepFishing(dt, rnd = Math.random) {
   if (out && Math.hypot(rel(f.x - px), rel(f.y - py)) > f.d + 0.5) { f.catch = null; reelIn(); say('The line pulls tight, and you reel it in.', 2); fishSfx.push('reel'); return; }
   if (f.st === 'wind') { // Q held: winding up. Let go to cast
     f.power = Math.min(1, f.t / 1.1);
-    if (!K.KeyQ) castLine();
+    if (!usingHeldItem()) castLine();
   } else if (f.st === 'fly') {
     const q = Math.min(1, f.t / f.dur), arc = 0.06 + f.d * 0.09;
     f.x = mod(f.ox + rel(f.tx - f.ox) * q, N); f.y = mod(f.oy + rel(f.ty - f.oy) * q, N); f.z = f.oz * (1 - q) + arc * 4 * q * (1 - q);

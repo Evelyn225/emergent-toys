@@ -90,6 +90,7 @@ let day, night, dusk, amb, vis, lampsOn, overcast, litT;
 let me = null, room = null, roofH = 0, msgText = '', msgT = 0;
 let third = true, chaseOn = false, camYaw = 0; // in a car: third-person chase camera (V toggles)
 const K = {}; // keys held, by KeyboardEvent.code
+const usingHeldItem = () => !!(K.KeyQ || K.MouseUse);
 const body = { z: 0, vz: 0, crouch: 0, seat: null, trick: null }; // jumping, crouching, sitting (see moves.js)
 let fade = 0, sleep = null; // screen fade to black (0..1); the hotel sleep in progress
 let paused = false;
@@ -4095,9 +4096,10 @@ const USES = { home: d => d.use === 'home', lobby: d => d.use === 'home' || d.us
 // ---- routines: what someone wants to be doing at game hour t. `jit` staggers people by up to an hour or so.
 // worker: home, work 7-17, a drink or errands, an evening stroll, home. owl: bars till 3:30, sleeps till noon, out
 // again at night. errands: shops in the morning and afternoon. dogwalker: walks the dog first thing, at lunch and before
-// dinner (only in daylight hours), errands in between. Everyone's in by 4am bar a few stragglers.
+// dinner (only in daylight hours), errands in between. A few residents take late walks, even before dawn.
 function activity(p, t) {
   const h = mod(t - p.jit, 24);
+  if (p.nightWalk && (h >= 21 || h < 7)) return 'wander';
   if (p.role === 'worker') return h < 7 ? 'home' : h < 17 ? 'work' : h < 19.5 ? (p.social ? 'bar' : 'shop') : h < 21.5 ? 'wander' : 'home';
   if (p.role === 'dogwalker') return h < 7.5 ? 'home' : h < 9 ? 'wander' : h < 12 ? 'shop' : h < 12.5 ? 'home' : h < 14 ? 'wander' : h < 17 ? 'shop' : h < 19.5 ? 'wander' : 'home';
   if (p.role === 'owl') return h < 3.5 ? 'bar' : h < 12 ? 'home' : h < 17 ? 'wander' : h < 19 ? 'shop' : 'bar';
@@ -4137,6 +4139,7 @@ function spawnPerson() {
   const p = { x: home.x, y: home.y, path: [], last: [0, 0], wait: 0, hidden: false, sp: 0.1 + Math.random() * 0.06, legs: 0,
               shirt: pick([RED, BLUE, GREEN, MAG, ORANGE, WHITE, YEL]), pants: pick([BLUE, GRAY]), ph: Math.random() * 9,
               home, work, role, social: Math.random() < 0.6, jit: Math.random() * 1.5 - 0.5, act: '', goal: null };
+  p.nightWalk = role !== 'owl' && hash(home.x, home.y, Math.floor(p.jit * 1e6)) < 0.075;
   people.push(p);
   // start the day where the routine has them: indoors somewhere, or out on the street near home
   const act = activity(p, tod), place = placeFor(p, act, tod);
@@ -5422,6 +5425,12 @@ function cycleQuickSlot(direction) {
   held = choices[mod((at < 0 ? 0 : at) + direction, choices.length)];
 }
 const fx = { stink: 0, bang: 0, pipe: false, vape: 0, cloud: 0, caffeine: 0, booze: 0, smoke: 0, skating: false, boombox: false, song: null, yoyo: 0, spark: 0, fresh: 0, fed: 0 }; // (fed: well fed, after a perfect dish: cooking.js)
+let heldUse = null; // a short visual gesture, tied to this inventory item rather than its slot
+function animateHeldUse(it) {
+  const d = ITEMS[it.id];
+  if (d.kind === 'gun' || d.rod || ['yoyo', 'skateboard', 'ball'].includes(it.id)) return;
+  heldUse = { item: it, t: T, duration: d.kind === 'drink' ? .7 : .65 };
+}
 // the boombox's tapes: which recorded music bed each one plays (see audio-mix.js)
 // luck: carry jade and the odds tip your way a little (pachinko, mahjong; more to come). The bangle's barely
 // anything, the dragon's a bit more, and they add up
@@ -5533,6 +5542,7 @@ function useHeld(near) {
   const it = heldItem();
   if (!it) return ['Your hands are empty.', null];
   const d = ITEMS[it.id];
+  animateHeldUse(it);
   if (d.kind === 'food' || d.kind === 'drink') {
     const feel = eatSome(it.id, d, it.q ? DISH_EAT[it.q] : 1); // (needs.js; a dish you cooked eats as well as you cooked it)
     if (it.q === 'perfect') fx.fed = Math.max(fx.fed, WELL_FED);
@@ -5610,8 +5620,8 @@ function useHeld(near) {
     case 'duck': return [near.water ? 'You float the duck on the water a while, then fish it back out.' : 'Squeak.', 'squeak'];
     case 'sparklers':
       if (fx.spark > 0) return ['It\'s still fizzing.', null];
+      if (it.uses <= 0) { removeHeld(); return ['The sparkler is spent.', null]; }
       it.uses--; fx.spark = 25;
-      if (it.uses <= 0) removeHeld();
       return [`You light a sparkler.${it.uses > 0 ? ` (${it.uses} left)` : ' The last one.'}`, 'light'];
     case 'pocketwatch': return [pick(['The second hand runs fast. Hold Q to hurry the hours and the weather.', 'It ticks a little too loud. The engraving inside the lid has been scratched out.', 'You open the lid. For a moment the street goes quiet, as if waiting.']), 'click'];
     case 'cityglobe': return shakeGlobe();
@@ -5689,7 +5699,7 @@ function turnOrrery() {
   return [`You turn the crank. ${ORRERY_LINE[season()]}`, 'whirr'];
 }
 // the pocket watch in your hand and Q held down: the hours hurry along (the globe's a Q press too, see useHeld)
-const hurrying = () => !!K.KeyQ && !paused && !!heldItem() && heldItem().id === 'pocketwatch';
+const hurrying = () => usingHeldItem() && !paused && !!heldItem() && heldItem().id === 'pocketwatch';
 // things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
 // Half-eaten stays half-eaten.
@@ -5717,10 +5727,14 @@ function stepGoods(dt) {
   fx.stink = Math.max(0, fx.stink - dt); fx.bang = Math.max(0, fx.bang - dt);
   stepYoyo(dt); if (!heldItem() || heldItem().id !== 'yoyo') yoyo.out = false; // (put it away and it comes back up)
   fx.spark = Math.max(0, fx.spark - dt); fx.fresh = Math.max(0, fx.fresh - dt); fx.fed = Math.max(0, fx.fed - dt);
+  // The last wire stays in your hand while burning. Empty entries loaded from an old save are cleaned up too.
+  if (!fx.spark) for (let k = inv.length - 1; k >= 0; k--) {
+    if (inv[k].id === 'sparklers' && inv[k].uses <= 0) removeInventoryAt(k);
+  }
   cigTip = Math.max(0, cigTip - dt * 0.8);
   if (fx.vape > 0) { // pulling on the vape: the longer, the bigger the cloud
     const it = heldItem();
-    if (K.KeyQ && it && it.id === 'vape') fx.vape = Math.min(3, fx.vape + dt);
+    if (usingHeldItem() && it && it.id === 'vape') fx.vape = Math.min(3, fx.vape + dt);
     else { fx.cloud = fx.vape; fx.vape = 0; }
   }
   return stepBall(dt);
@@ -8892,7 +8906,7 @@ function stepFishing(dt, rnd = Math.random) {
   if (out && Math.hypot(rel(f.x - px), rel(f.y - py)) > f.d + 0.5) { f.catch = null; reelIn(); say('The line pulls tight, and you reel it in.', 2); fishSfx.push('reel'); return; }
   if (f.st === 'wind') { // Q held: winding up. Let go to cast
     f.power = Math.min(1, f.t / 1.1);
-    if (!K.KeyQ) castLine();
+    if (!usingHeldItem()) castLine();
   } else if (f.st === 'fly') {
     const q = Math.min(1, f.t / f.dur), arc = 0.06 + f.d * 0.09;
     f.x = mod(f.ox + rel(f.tx - f.ox) * q, N); f.y = mod(f.oy + rel(f.ty - f.oy) * q, N); f.z = f.oz * (1 - q) + arc * 4 * q * (1 - q);
@@ -9217,13 +9231,15 @@ const HEAR_R = 9, PANIC_T = [5, 9], SPEED_OFF_T = 8; // how far a shot carries, 
 const BODY_CALL = 4, BODY_LOAD = 7, BODY_MAX = 150, POOL_T = 240; // seconds: till the call goes in; at the scene; at most; the blood
 const COP_FIRE_R = 8, COP_FIRE_GAP = [1.1, 2.3], COP_HURT = [10, 18], COP_GUNS = 3, CALM_T = 30; // (the nearest three take aim)
 const CAR_HIT = { amb: [0.25, 0.1, 0.15], fire: [0.37, 0.1, 0.17] }, CAR_DEFAULT = [0.21, 0.09, 0.14]; // [half length, half width, height]
-const gun = { cool: 0, reload: 0, kick: 0, spin: 0, lastShotT: -Infinity, shots: [], copShots: [], hurtT: -Infinity };
+const gun = { cool: 0, reload: 0, kick: 0, spin: 0, aimHeld: false, aim: 0, lastShotT: -Infinity, shots: [], copShots: [], hurtT: -Infinity };
 const bodies = []; // { who, cop, x, y, t, amb, atT }
 const pools = []; // { x, y, t }: blood, spreading, then dried and gone
 const heldGun = () => { const it = heldItem(); return it && ITEMS[it.id].kind === 'gun' ? it : null; };
+const canAimGun = () => !!heldGun() && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') && !freecam && !gun.reload;
+const gunAim = () => canAimGun() ? gun.aim : 0;
 const ammoLeft = () => inv.reduce((n, it) => n + (it.id === 'ammo' ? it.uses : 0), 0);
 // what the pawnbroker says, handing it over
-const GUN_SOLD = 'The pawnbroker looks at the door, then at you, and brings a bundle up from under the counter in a rag. "You didn\'t get it here." Q to fire, R to reload.';
+const GUN_SOLD = 'The pawnbroker looks at the door, then at you, and brings a bundle up from under the counter in a rag. "You didn\'t get it here." Left click or Q to fire, hold right click to aim, R to reload.';
 // R: thumb the rounds in. Done when the time's up (stepGun)
 function reloadGun() {
   const g = heldGun();
@@ -9303,7 +9319,10 @@ function fireGun(x, y, z, yaw, slope, indoors = false) {
     } else gunCrime('gunfire', x, y);
   } else {
     if (hit.what === 'car') { damageCar(hit.who, 12); if (!hit.who.patrol && !hit.who.parked) speedOff(hit.who); }
-    gunCrime('gunfire', x, y);
+    // The driver calls it in; an unattended car's alarm does too. Don't depend on a pedestrian being outside.
+    if (gunCrime('gunfire', x, y) === '' && hit.what === 'car') {
+      reports.push({ t: T + reportDelay(), x, y, kind: 'gunfire' });
+    }
   }
   panicAt(x, y);
   return shot;
@@ -9364,6 +9383,7 @@ function removeBody(k) {
 // every frame: the reload, the bodies and their ambulances, the panic dying down, and the police shooting back.
 // Returns 'down' when they've put you on the ground
 function stepGun(dt) {
+  gun.aim += ((gun.aimHeld && canAimGun() ? 1 : 0) - gun.aim) * (1 - Math.exp(-14 * dt));
   gun.cool = Math.max(0, gun.cool - dt); gun.kick = Math.max(0, gun.kick - dt * 5);
   if (gun.reload > 0) { if (!heldGun()) gun.reload = 0; else if ((gun.reload -= dt) <= 0) { gun.reload = 0; finishReload(); } }
   while (gun.shots.length && T - gun.shots[0].t > 1) gun.shots.shift();
@@ -9625,6 +9645,7 @@ function browserMouseCapture() {
   } catch (error) { limited(); }
 }
 function releaseMouse() {
+  K.MouseUse = 0; gun.aimHeld = false;
   cv.style.cursor = '';
   if (NATIVE_MOUSE_APP) {
     ++desktopMouseRequest;
@@ -21179,7 +21200,7 @@ function render(dt) {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
     if (mode === 'walk') eye += walkGround(px, py);
   }
-  tf = Math.tan(FOV / 2); projX = cols / 2 / tf; projY = projX * cw / FS;
+  tf = Math.tan(FOV / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
@@ -21689,7 +21710,8 @@ function hud() {
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
-    : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
+    : settings.help && heldGun() ? 'WASD move | left click / Q fire | hold right click: aim | R reload | E use / talk | Esc: pause'
+    : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | left click / Q: item | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
   // phone held upright), goes underneath them
   const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, top = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
@@ -24124,10 +24146,10 @@ function buildPause() {
       <div class="keys">
         <b>WASD</b><span>move / drive</span><b>mouse</b><span>look (click to lock); on a skateboard, W pushes, A/D carve, Space (held, let go) ollies, arrows or a right-click flick do flip tricks, A/D in the air spin</span>
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
-        <b>space</b><span>jump (tap near landing to bunny hop); in car: handbrake / drift; on board: ollie</span><b>right mouse</b><span>on a board: hold and flick for tricks</span><b>C</b><span>crouch (hold) / sit</span>
+        <b>space</b><span>jump (tap near landing to bunny hop); in car: handbrake / drift; on board: ollie</span><b>right mouse</b><span>hold to aim the revolver; on a board: hold and flick for tricks</span><b>C</b><span>crouch (hold) / sit</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
         <b>M</b><span>map</span><b>1-8</b><span>quick slots; again to put away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
-        <b>I</b><span>what you carry; assign items to quick slots</span><b>Q</b><span>use held item</span>
+        <b>I</b><span>what you carry; assign items to quick slots</span><b>Q / left mouse</b><span>use held item; R reloads the revolver</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
         <b>P</b><span>pee</span>
         <b>Esc</b><span>pause</span>
@@ -24712,6 +24734,13 @@ const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars
 // car keys: a fob with its buttons, the ring, the key hanging off it
 const KEYS_ART = [['  .---.', ' | (o) |', ' | [=] |', "  '-.-'", '   (O)', '    |', '    |=', '    |=', '    V'],
   (c, r) => c === 'o' ? C(RED, 14) : c === '=' && r < 3 ? C(GRAY, 12) : r < 4 ? C(GRAY, 5 + (c === '|' || c === '.' || c === "'" || c === '-' ? 6 : 0)) : C(YEL, 13)];
+function droppedCan(word, col, ink, f) {
+  const crushed = f < .5;
+  const art = [' _______', '(_______)', '|       |', `| ${word.padEnd(5)} |`, '|  ~~~  |', '(_______)'];
+  if (f < 1) art[2] = '|  /    |';
+  if (crushed) { art.splice(2, 1); art[2] = art[2].replace(/\|/g, '/'); }
+  return [art, (ch, r) => r === 0 || r === art.length - 1 ? C(GRAY, 12) : /[A-Z~]/.test(ch) ? C(ink, 15) : C(col, 13)];
+}
 const DROPPED_ART = {
   // the night market's: street food, charms, curios, and the two that bend the world
   bao: (it, f) => [bitten(['   _.~~._', '  ( ~ ~  )', ' (        )', "  `------'"], f), (c, r) => r < 2 && c === '~' ? C(GRAY, 12) : C(WHITE, 14)],
@@ -24745,8 +24774,8 @@ const DROPPED_ART = {
     (c, r) => c === ':' ? C(BRICK, 13) : c === '~' ? C(WHITE, 15) : C(WHITE, 12)],
   tea: (it, f) => [filled(['   ) )', ' ._______.', ' |       |\\', ' |       | )', '  \\_____/_/', ' ========='], [[2, 2, 8], [3, 2, 8]], f, ':', '~'),
     (c, r) => r === 0 ? C(WHITE, 7) : c === ':' || c === '~' ? C(ORANGE, 12) : C(WHITE, 13)],
-  soda: (it, f) => [bitten([' _______', '(_______)', '|       |', '| C O L |', '|   A   |', '|  ~~~  |', '(_______)'], 0.45 + f * 0.55), (c, r) => /[A-Z~]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
-  energy: (it, f) => [bitten([' _______', '(_______)', '|  ZAP  |', '|   /   |', '|  /_   |', '|   /   |', '(_______)'], 0.45 + f * 0.55), (c, r) => /[A-Z/_]/.test(c) && r > 1 && r < 6 ? C(YEL, 15) : C(GREEN, 12)],
+  soda: (it, f) => droppedCan('COLA', RED, WHITE, f),
+  energy: (it, f) => droppedCan('ZAP', GREEN, YEL, f),
   water: (it, f) => [filled(['   [=]', '   | |', '  /   \\', ' |     |', ' |     |', ' |     |', ' |_____|'], [[3, 2, 6], [4, 2, 6], [5, 2, 6]], f, ':', '~'),
     (c, r) => c === ':' || c === '~' ? C(CYAN, 14) : r === 0 ? C(BLUE, 13) : C(CYAN, 9)],
   beer: (it, f) => [filled([' ________', '|        |__', '|        |  |', '|        |  |', '|        |__|', '|        |', ' \\______/'], [[1, 1, 8], [2, 1, 8], [3, 1, 8], [4, 1, 8], [5, 1, 8]], f, '#', '@'),
@@ -24890,11 +24919,76 @@ let HAND_ART = [
   '(__________',
   ' (____________.---'];
 const HAND_GRIP = 6;
-function drawHand(cx, top, size) {
+const HAND_MASK_COLS = 18, handPixelCache = new Map();
+function handGeometry(cx, size) {
+  const font = g.font;
   g.font = size + 'px monospace';
   const w = g.measureText('M').width, x0 = cx - (HAND_GRIP + 0.5) * w;
-  const reach = Math.ceil((cv.width - x0) / w) + 1; // the arm carries on off the edge of the screen
-  const art = HAND_ART.map(l => l.endsWith('-') ? l.padEnd(reach, '-') : l);
+  g.font = font;
+  const transform = g.getTransform(), edgeX = (cv.width - transform.e) / Math.max(.2, transform.a);
+  const reach = Math.max(HAND_MASK_COLS, Math.ceil((edgeX - x0) / w) + 1);
+  return { w, x0, reach };
+}
+function handPixels(size, w) {
+  const key = size + '|' + w;
+  if (handPixelCache.has(key)) return handPixelCache.get(key);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(HAND_MASK_COLS * w); canvas.height = Math.ceil((HAND_ART.length + 1) * size);
+  const ctx = canvas.getContext('2d');
+  ctx.font = size + 'px monospace'; ctx.textBaseline = 'top'; ctx.fillStyle = '#fff';
+  HAND_ART.forEach((line, r) => {
+    const text = line.endsWith('-') ? line.padEnd(HAND_MASK_COLS, '-') : line;
+    for (let c = 0; c < text.length; c++) if (text[c] !== ' ') ctx.fillText(text[c], c * w, r * size);
+  });
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const upper = new Float32Array(canvas.width).fill(NaN), lower = new Float32Array(canvas.width).fill(NaN);
+  let left = canvas.width, right = 0;
+  for (let x = 0; x < canvas.width; x++) for (let y = 0; y < canvas.height; y++) {
+    if (data[(y * canvas.width + x) * 4 + 3] < 64) continue;
+    if (!Number.isFinite(upper[x])) upper[x] = y;
+    lower[x] = y + 1; left = Math.min(left, x); right = Math.max(right, x);
+  }
+  // Join character spacing along the arm so item pixels cannot leak between adjacent dashes.
+  for (let x = left; x <= right; x++) {
+    if (Number.isFinite(upper[x])) continue;
+    let next = x + 1;
+    while (next <= right && !Number.isFinite(upper[next])) next++;
+    const previous = x - 1;
+    for (let c = x; c < next; c++) {
+      const t = (c - previous) / (next - previous);
+      upper[c] = upper[previous] + (upper[next] - upper[previous]) * t;
+      lower[c] = lower[previous] + (lower[next] - lower[previous]) * t;
+    }
+    x = next - 1;
+  }
+  const pixels = { upper, lower, left, right };
+  if (handPixelCache.size >= 6) handPixelCache.delete(handPixelCache.keys().next().value);
+  handPixelCache.set(key, pixels);
+  return pixels;
+}
+function drawBehindHand(cx, top, size, drawItem) {
+  const { w, x0, reach } = handGeometry(cx, size), { upper, lower, left, right } = handPixels(size, w);
+  const visible = new Path2D();
+  visible.rect(-cv.width * 3, -cv.height * 3, cv.width * 6, cv.height * 6);
+  visible.moveTo(x0 + left, top + upper[left]);
+  for (let x = left + 1; x <= right; x++) if (upper[x] !== upper[x - 1]) {
+    visible.lineTo(x0 + x, top + upper[x - 1]); visible.lineTo(x0 + x, top + upper[x]);
+  }
+  visible.lineTo(x0 + reach * w, top + upper[right]);
+  visible.lineTo(x0 + reach * w, top + lower[right]);
+  visible.lineTo(x0 + right + 1, top + lower[right]);
+  for (let x = right - 1; x >= left; x--) if (lower[x] !== lower[x + 1]) {
+    visible.lineTo(x0 + x + 1, top + lower[x + 1]); visible.lineTo(x0 + x + 1, top + lower[x]);
+  }
+  visible.lineTo(x0 + left, top + lower[left]); visible.closePath();
+  g.save();
+  try { g.clip(visible, 'evenodd'); drawItem(); } finally { g.restore(); }
+  drawHand(cx, top, size);
+}
+function drawHand(cx, top, size) {
+  const { x0, reach } = handGeometry(cx, size);
+  g.font = size + 'px monospace';
+  const art = HAND_ART.map(line => line.endsWith('-') ? line.padEnd(reach, '-') : line);
   artText(art, x0, top, size, c => c === '-' || c === "'" || c === '.' ? C(SKIN, 11) : C(SKIN, 13));
 }
 // a run of characters along a straight line on screen (a string, a shaft), each one picked to follow its slope
@@ -24913,18 +25007,23 @@ function drawHeldBig() {
   const it = heldItem();
   const rodAfloat = it && ITEMS[it.id].rod && afloat() && !third; // (fishing from a boat: the rod, nothing else)
   if (!it || !(onFoot || rodAfloat) || fx.skating && (it.id === 'skateboard' || skateCamOn())) return;
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
-  const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
-  const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const lift = it.id === 'yoyo' ? Math.min(1, 0.55 + yoyo.len * 3) : 0; // (holding a yo-yo your hand's up, so it hangs below; higher still to work it)
-  const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
-  const grip = hy + 1.1 * hsz; // where the fingers wrap round
-  if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
-  else if (heldIsRod(it)) drawFishingRod(it); // (fishing-render.js: the rod, and whatever's on its line)
-  else if (ITEMS[it.id].kind === 'gun') drawRevolver(it); // (gun-ui.js)
-  else drawHeldDense(it, cx, hy, hsz, grip);
-  drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
-  if (it.id === 'yoyo') drawYoyo(cx - hsz * 0.2, hy + HAND_ART.length * hsz); // (in your hand or out on its string, it hangs from under your fist)
+  if (ITEMS[it.id].kind === 'gun') {
+    drawRevolver(it); handDrawn = { id: it.id, t: T }; return;
+  }
+  if (heldIsRod(it)) {
+    const G = rodGeom(); drawBehindHand(G.cx, G.hy, G.hsz, () => drawFishingRod(it));
+  } else {
+    const canopy = it.id === 'umbrella' && rain > .2 && mode !== 'room';
+    const picture = it.id === 'yoyo' || canopy ? null : heldPicture(it), G = heldFrame(it, picture);
+    if (canopy) drawBehindHand(G.cx, G.hy, G.hsz, () => drawCanopy(G.cx, G.hy + G.grip, Math.round(G.u * 1.5), 0));
+    else {
+      g.save(); g.translate(G.cx, G.hy); g.rotate(G.angle); g.scale(G.sx, G.sy);
+      drawBehindHand(0, 0, G.hsz, () => { if (picture) drawHeldDense(it, 0, 0, G.hsz, picture, G.s); });
+      g.restore();
+    }
+    if (it.id === 'yoyo') drawYoyo(G.cx - G.hsz * .2, G.hy + HAND_ART.length * G.hsz);
+  }
+  handDrawn = { id: it.id, t: T };
   g.font = FS + 'px monospace';
 }
 // the umbrella open over you, seen from underneath: panels of fabric between ribs fanning out from the hub (just off
@@ -25327,18 +25426,6 @@ const DENSE = {
     }
     return [dFill(b), C(WHITE, 7 + b * 8)];
   }),
-  soda: (it, f) => sculpt(26, 15, (x, y) => {
-    const hw = 4.3, top = -6.2, bot = 6.5;
-    if (y < top || y > bot || Math.abs(x) > hw + (y < top + 0.8 || y > bot - 0.8 ? -0.35 : 0)) return null;
-    if (dBites(x, y, f, hw) === true) return null; // (bites out of the can: why not)
-    const b = dCyl(x, hw);
-    if (y < top + 0.8) return Math.abs(x - 1) < 0.6 && y < top + 0.4 ? ['o', C(GRAY, 14)] : ['=', C(GRAY, 7 + b * 8)]; // the lid and its ring pull
-    if (y > bot - 0.8) return ['_', C(GRAY, 7 + b * 8)];
-    const wave = Math.abs(y - (1.4 + Math.sin(x * 1.3) * 0.7)) < 0.45; // a white swoosh round it
-    if (Math.abs(y + 1.6) < 0.5) { const k = Math.floor((x + 1.2) / 0.6); if (k >= 0 && k < 4) return ['COLA'[k], C(WHITE, 15)]; }
-    if (wave) return ['~', C(WHITE, 9 + b * 6)];
-    return [b > 0.92 ? '|' : dFill(b), b > 0.92 ? C(WHITE, 15) : C(RED, 6 + b * 9)];
-  }),
   slice: (it, f) => sculpt(26, 14, (x, y) => {
     const top = -6, tip = 7, half = 7.4 * (tip - y) / (tip - top); // a wedge, point down
     if (y < top || y > tip || Math.abs(x) > half) return null;
@@ -25355,12 +25442,13 @@ const DENSE = {
 };
 const sparkBurn = () => fx.spark > 0 ? clamp(1 - fx.spark / 25, 0, 1) : 0; // how far down a lit sparkler has burnt, 0..1
 // the item; the hand is drawn as usual afterwards
-function drawHeldDense(it, cx, hy, hsz, grip) {
-  const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72); // a little over the world's character size
+function drawHeldDense(it, cx, hy, hsz, picture = heldPicture(it), s = heldFrame(it, picture).s) {
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, [art, col] = (DENSE[it.id] || droppedArt)(it, usesLeft(it)), artW = Math.max(...art.map(l => l.length)), top = grip + 0.6 * s - art.length * s;
+  const w = g.measureText('M').width, { art, col, width: artW } = picture, top = hy + heldPictureTop(picture, s, hsz);
   if (it.id !== 'yoyo') { // (a yo-yo is drawn by drawYoyo, hanging from your fingers)
-    g.save(); g.beginPath(); g.rect(0, 0, cv.width, hy + 0.75 * hsz); g.clip(); // the fingers hide its bottom
+    g.save();
+    const phase = heldUsePhase(it);
+    if (HELD_FLIP.has(it.id) && phase >= 0) g.scale(.12 + .88 * Math.abs(Math.cos(phase * Math.PI * 2)), 1);
     artText(art, cx - artW * w / 2, top, s, col); g.restore();
   }
   if (it.id === 'sparklers' && fx.spark > 0) drawSparks(cx, top + (sparkBurn() * 9) * s, s * 2); // (at the burning point, working its way down)
@@ -25414,14 +25502,15 @@ const dSteam = (x, y, top, f, xs, h = 3.4) => { // wisps curling up from top whi
   for (const s of xs) { const ph = y * 1.3 + T * 2.5 + s * 2, wx = s + Math.sin(ph) * 0.5; if (Math.abs(x - wx) < 0.22) return [Math.cos(ph) > 0 ? '(' : ')', C(WHITE, 6 + (y - top + h) * 1.5)]; }
   return null;
 };
-// a drinks can: a colour, a word, a stripe; bites out of it as it goes
+// A can stays closed around its drink. As it's emptied, the shell shortens and creases under your grip.
 const dCan = (col, word, stripe, deco) => (it, f) => sculpt(26, 15, (x, y) => {
-  const hw = 4.3, top = -6.2, bot = 6.5;
+  const crush = 1 - f, top = -6.2 + crush * 2.2, bot = 6.5;
+  const waist = (y - 1) / 2.5, hw = 4.3 - crush * .85 * Math.exp(-waist * waist);
   if (y < top || y > bot || Math.abs(x) > hw + (y < top + 0.8 || y > bot - 0.8 ? -0.35 : 0)) return null;
-  if (dBites(x, y, 0.45 + f * 0.55, hw) === true) return null;
   const b = dCyl(x, hw);
   if (y < top + 0.8) return Math.abs(x - 1) < 0.6 && y < top + 0.4 ? ['o', C(GRAY, 14)] : ['=', dCol(GRAY, b, 7)];
   if (y > bot - 0.8) return ['_', dCol(GRAY, b, 7)];
+  if (crush > .2 && Math.abs(y - 2.6 - x * .2) < .35) return ['/', dCol(col, b, 5, 11)];
   const t = dText(x, y, 0, -1.6, word); if (t) return [t, C(stripe, 15)];
   const d = deco && deco(x, y); if (d) return d;
   return [b > 0.92 ? '|' : dFill(b), b > 0.92 ? C(WHITE, 15) : dCol(col, b)];
@@ -25608,6 +25697,7 @@ Object.assign(DENSE, {
     const g = dGlass(x, y, -3.5, 5.6, yy => 4 - Math.max(0, yy - 2) * 0.35, f, [ORANGE, null]);
     return g === undefined ? null : g;
   }),
+  soda: dCan(RED, 'COLA', WHITE, (x, y) => Math.abs(y - 1.4 - Math.sin(x * 1.3) * .7) < .35 ? ['~', C(WHITE, 14)] : null),
   energy: dCan(GREEN, 'ZAP', YEL, (x, y) => Math.abs(x - (y > 1.5 ? 0.5 : -0.2) + (y - 1.5) * 0.25) < 0.4 && y > -0.6 && y < 4.4 ? ['/', C(YEL, 15)] : null), // a lightning bolt
   water: (it, f) => sculpt(22, 17, (x, y) => { // a plastic bottle: blue cap, a label round the middle, the water going down
     if (y < -7 && Math.abs(x) < 1.3) return dLit(0.4 + 0.5 * dCyl(x, 1.3), BLUE, 8);
@@ -26067,7 +26157,7 @@ Object.assign(DENSE, {
     for (const s of [-1, 1]) if (y > -6.4 && y < -3.6 && Math.abs(x - s * 2.4) < 1.2 - (y + 6.4) * -0.1 && Math.abs(x - s * 2.4) < (y + 6.4) * 0.5) return ['^', C(s > 0 ? WHITE : WHITE, 13)];
     const head = dEll(x, y, 0, -2.4, 3.8, 3);
     if (head < 1) {
-      for (const s of [-1, 1]) if (dEll(x, y, s * 1.4, -2.8, 0.5, 0.5) < 1) return ['o', C(GREEN, 15)];
+      for (const s of [-1, 1]) if (dEll(x, y, s * 1.4, -2.8, 0.5, 0.5) < 1) return [T % 5.4 < .18 ? '-' : 'o', C(GREEN, 15)];
       if (dEll(x, y, 0, -1.6, 0.4, 0.3) < 1) return ['v', C(MAG, 15)];
       return dLit(dBall(x, y, 0, -2.4, 3.8, 3), WHITE, 9);
     }
@@ -26078,7 +26168,7 @@ Object.assign(DENSE, {
     for (const s of [-1, 1]) if (dEll(x, y, s * 2.8, -5.4, 1.2, 1.2) < 1) return dLit(0.6, BRICK, 8);
     const head = dEll(x, y, 0, -2.8, 3.4, 2.8);
     if (head < 1) {
-      for (const s of [-1, 1]) if (dEll(x, y, s * 1.3, -3.2, 0.4, 0.4) < 1) return ['o', C(GRAY, 2)];
+      for (const s of [-1, 1]) if (dEll(x, y, s * 1.3, -3.2, 0.4, 0.4) < 1) return [T % 6.2 < .18 ? '-' : 'o', C(GRAY, 2)];
       if (dEll(x, y, 0, -1.8, 1.2, 0.9) < 1) return [dEll(x, y, 0, -2, 0.4, 0.3) < 1 ? '@' : '%', C(WARM, 12)];
       return dLit(dBall(x, y, 0, -2.8, 3.4, 2.8), BRICK, 7);
     }
@@ -26219,7 +26309,7 @@ function heldPetCarrier(it) {
     if (y > 7 || Math.abs(x) > 7 - Math.max(0, -y - 3) * 0.35) return null;
     if (y < -4 || y > 5.7 || Math.abs(x) > 5.7) return dLit(0.55 - x * 0.03, BLUE);
     const face = dEll(x, y, 0, 0, 2.8, 2.3);
-    if (Math.abs(Math.abs(x) - 1.1) < 0.4 && Math.abs(y + 0.3) < 0.4) return ['o', C(cat ? GREEN : BRICK, 15)];
+    if (Math.abs(Math.abs(x) - 1.1) < 0.4 && Math.abs(y + 0.3) < 0.4) return [T % 5.8 < .2 ? '-' : 'o', C(cat ? GREEN : BRICK, 15)];
     if (Math.abs(x) < 0.4 && Math.abs(y - 0.8) < 0.4) return ['v', C(GRAY, 4)];
     if (face < 1) return dLit(0.7 - x * 0.07, cat ? GRAY : BRICK);
     if (cat && y < -1.2 && y > -3.6 && Math.abs(Math.abs(x) - 1.8) < (-y - 1) * 0.4) return ['^', C(GRAY, 12)];
@@ -26230,6 +26320,466 @@ function heldPetCarrier(it) {
 }
 DENSE.petcat = heldPetCarrier;
 DENSE.petdog = heldPetCarrier;
+// Groceries have their own full-size pictures; dropped icons stay small. Meals show their food, serving dish,
+// remaining portions and cooking quality, rather than stretching a ground icon into a hand.
+function heldGroceryPackage(it) {
+  const id = it.id, meat = ['rawchicken', 'mince', 'bacon'].includes(id);
+  const labels = { rice: 'RICE', pasta: 'PASTA', drynoodles: 'NOODLES', butter: 'BUTTER', tofu: 'TOFU' };
+  return sculpt(30, 17, (x, y) => {
+    if (id === 'eggs') {
+      if (Math.abs(x) > 7.8 || y < -5.8 || y > 6.5) return null;
+      for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
+        const ex = -4.8 + c * 4.8, ey = -2.6 + r * 5;
+        if (dEll(x, y, ex, ey, 1.8, 2.2) < 1) return dLit(dBall(x, y, ex, ey, 1.8, 2.2), WHITE, 10);
+      }
+      return dLit(.45 + x * -.02, BRICK, 7, 12);
+    }
+    if (id === 'bread') {
+      const d = dEll(x, y, 0, .6, 8, 5.3);
+      if (d > 1) return null;
+      if (y < 1 && Math.abs(fract((x + y * .5) / 4) - .5) < .1) return ['/', C(WARM, 14)];
+      return dLit(dBall(x, y, 0, .6, 8, 5.3), BRICK, 8);
+    }
+    const top = meat ? -4.8 : -6.5, bottom = meat ? 5.2 : 7;
+    const half = meat ? 8 : id === 'butter' || id === 'tofu' ? 6 : 5.5 + Math.sin((y - top) / (bottom - top) * Math.PI) * 1.1;
+    if (y < top || y > bottom || Math.abs(x) > half) return null;
+    if (Math.abs(x) > half - .6 || y > bottom - .8 || y < top + .6) return dLit(.6, meat ? WHITE : WARM, 9);
+    if (meat) {
+      const n = noise(x * 2.4, y * 2.4, 8103), b = dCyl(x, half);
+      if (id === 'rawchicken') {
+        const joint = dEll(x, y, x < 0 ? -3.3 : 3.3, 0, 3.1, 3.5);
+        return joint < 1 ? [n > .7 ? ':' : dFill(b * .6), C(n > .7 ? WHITE : MAG, 9 + b * 3)] : [':', C(WHITE, 9)];
+      }
+      if (id === 'bacon') return [Math.sin(y * 2 + x * .35) > .1 ? '=' : '~', C(Math.sin(y * 2 + x * .35) > .1 ? RED : WHITE, 11 + b * 3)];
+      return [n > .65 ? '~' : '%', C(n > .65 ? WARM : RED, 8 + b * 5)];
+    }
+    const label = dText(x, y, 0, .4, labels[id] || id.toUpperCase());
+    if (label) return [label, C(id === 'butter' ? RED : BLUE, 14)];
+    if (id === 'pasta' || id === 'drynoodles') {
+      if (y > 2 && y < 5.8) return [id === 'pasta' ? '|' : '~', C(YEL, 12 + dCyl(x, half) * 3)];
+    }
+    if (id === 'rice' && y > 2) return [hash(Math.floor(x * 3), Math.floor(y * 3), 8104) > .4 ? ':' : '.', C(WHITE, 14)];
+    return dLit(dCyl(x, half), id === 'butter' ? YEL : WHITE, 8);
+  });
+}
+function heldProduce(it) {
+  const id = it.id;
+  return sculpt(30, 17, (x, y) => {
+    const oval = (cx, cy, rx, ry, col) => dEll(x, y, cx, cy, rx, ry) < 1 ? dLit(dBall(x, y, cx, cy, rx, ry), col, 8) : null;
+    if (id === 'cheese') {
+      if (y < -5 || y > 6 || x < -6.5 || x > 6.5 - (y + 5) * .25) return null;
+      for (const [cx, cy, r] of [[-3, -2, 1.1], [2, 1, 1.3], [-2, 4, .8]]) {
+        if (Math.hypot(x - cx, y - cy) < r) return ['o', C(ORANGE, 8)];
+      }
+      return dLit(.8 - x * .035 - y * .02, YEL, 9);
+    }
+    if (id === 'potatoes') {
+      for (const [cx, cy, rx, ry] of [[-3.6, 1, 3.4, 4.6], [3.3, .4, 3.8, 4.8], [0, -2.5, 3, 3.7]]) {
+        const v = oval(cx, cy, rx, ry, BRICK);
+        if (v) return hash(Math.floor(x * 2), Math.floor(y * 2), 8105) > .94 ? ['o', C(BRICK, 6)] : v;
+      }
+    } else if (id === 'onion' || id === 'garlic') {
+      if (Math.abs(x) < .6 && y < -3.5 && y > -7.5) return ['|', C(id === 'onion' ? GREEN : WARM, 13)];
+      const v = oval(0, 1, id === 'onion' ? 5 : 4.8, 5, id === 'onion' ? WARM : WHITE);
+      if (v) return Math.abs(Math.sin(x * (id === 'onion' ? .85 : 1.3) + y * .1)) < .18 ? [')', C(id === 'onion' ? BRICK : WARM, 10)] : v;
+    } else if (id === 'tomatoes' || id === 'peppers') {
+      for (const [cx, cy, col] of [[-3.2, 1.2, RED], [3, 0, id === 'peppers' ? YEL : RED]]) {
+        if (y < cy - 2.3 && y > cy - 5.4 && Math.abs(x - cx) < .45) return ['|', C(GREEN, 13)];
+        const v = oval(cx, cy, 3.6, id === 'peppers' ? 4.7 : 3.6, col);
+        if (v) return v;
+      }
+    } else if (id === 'mushrooms') {
+      for (const [cx, cy] of [[-4.7, 1], [0, -1.7], [4.6, 1.4]]) {
+        if (y > cy && y < cy + 5.2 && Math.abs(x - cx) < .8) return ['|', C(WHITE, 13)];
+        const v = oval(cx, cy, 2.7, 2.3, WARM);
+        if (v && y <= cy + .4) return v;
+      }
+    } else if (id === 'greens') {
+      if (y > 0 && y < 7 && Math.abs(x) < 2.6 - y * .2) return ['|', C(WHITE, 13)];
+      for (const [cx, cy] of [[-3, -1.3], [0, -3], [3, -1.3]]) {
+        const v = oval(cx, cy, 2.8, 4.2, GREEN);
+        if (v) return Math.abs(x - cx) < .25 ? ['|', C(GREEN, 8)] : v;
+      }
+    } else if (id === 'chilli') {
+      for (const sg of [-1, 1]) {
+        const cy = y + sg * .8, center = sg * 2.5 + Math.sin(cy * .32) * 1.2;
+        if (cy > -5.4 && cy < 6.4 && Math.abs(x - center) < (6.4 - cy) * .17) return dLit(.7 - (x - center) * .15, RED, 8);
+        if (cy > -7 && cy < -5.2 && Math.abs(x - center) < .45) return ['|', C(GREEN, 13)];
+      }
+    } else if (id === 'lemon') {
+      const v = oval(0, 0, 6, 4, YEL);
+      if (v) return hash(Math.floor(x * 4), Math.floor(y * 4), 8106) > .85 ? ['.', C(YEL, 11)] : v;
+      if (Math.abs(x) < 6.8 && Math.abs(y) < .5) return ['>', C(YEL, 12)];
+    }
+    return null;
+  });
+}
+for (const id of ['eggs', 'bread', 'butter', 'rice', 'pasta', 'drynoodles', 'rawchicken', 'mince', 'bacon', 'tofu']) DENSE[id] = heldGroceryPackage;
+for (const id of ['cheese', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon']) DENSE[id] = heldProduce;
+
+const HELD_BOWLS = new Set(['fishcurry', 'pomodoro', 'bolognese', 'macncheese', 'friedrice', 'chickencurry', 'stirfry', 'risotto', 'tomatosoup']);
+const HELD_HAND_FOOD = { homeburger: 'burger', skewers: 'yakitori', fishstick: 'yakitori' };
+function heldToast(it, f) {
+  const toast = it.id === 'toast', fish = it.id === 'fishsandwich', burnt = it.q === 'burnt';
+  return sculpt(30, 15, (x, y) => {
+    const bite = dBites(x, y, f, 7);
+    if (bite === true) return null;
+    const half = 6.8 + (y < -2 ? Math.sqrt(Math.max(0, 1 - ((y + 2) / 4.5) ** 2)) * 1.4 : 0);
+    if (y < -6.5 || y > 6 || Math.abs(x) > half) return null;
+    const edge = Math.abs(x) > half - .8 || y < -5.6 || y > 5.2;
+    let ch = dFill(.75 - x * .025), col = edge ? BRICK : WARM;
+    if (bite === 'rim') { ch = ':'; col = WHITE; }
+    else if (!toast && Math.abs(y - 1.4) < 1.5) {
+      col = fish ? WHITE : YEL; ch = fish ? (Math.floor(x * 2) & 1 ? '/' : '%') : '~';
+    } else if (Math.abs(fract((x + y * .25) / 3.5) - .5) < .12 && y < 1) {
+      ch = '/'; col = BRICK; // toasted grill lines
+    }
+    return [ch, C(burnt ? GRAY : col, burnt ? 4 + hash(x, y, 8112) * 3 : edge ? 11 : 14)];
+  });
+}
+function heldMeal(it, f) {
+  const id = it.id, burnt = it.q === 'burnt';
+  if (['toast', 'grilledcheese', 'fishsandwich'].includes(id)) return heldToast(it, f);
+  if (HELD_HAND_FOOD[id]) {
+    const [art, col] = DENSE[HELD_HAND_FOOD[id]](it, f);
+    return [art, (ch, r, c) => burnt ? C(GRAY, 5 + (r + c) % 3) : col(ch, r, c)];
+  }
+  const bowl = HELD_BOWLS.has(id), soup = ['fishcurry', 'chickencurry', 'tomatosoup'].includes(id);
+  return sculpt(34, 19, (x, y) => {
+    const steam = dSteam(x, y, -3.3, f, [-3.1, 2.7], 5);
+    if (steam && !burnt) return steam;
+    const dish = dEll(x, y, 0, 2.6, 9.4, bowl ? 5.5 : 4.6);
+    if (dish > 1) return null;
+    const b = dBall(x, y, 0, 2.6, 9.4, 6), rim = dEll(x, y, 0, 1.3, 8.4, bowl ? 2.9 : 3.5);
+    const ceramic = () => dLit(b, WHITE, 8);
+    if (rim > 1 || bowl && y > 3) return ceramic();
+    if (rim > .87) return ['=', C(it.q === 'perfect' ? CYAN : WHITE, 13)];
+    const eaten = x > -8 + f * 16;
+    if (eaten) return bowl ? [':', C(WHITE, 7)] : ceramic();
+    const food = (ch, col, light = 13) => [ch, C(burnt ? GRAY : col, burnt ? 4 + hash(x, y, 8111) * 3 : light)];
+    const n = hash(Math.floor(x * 2.3), Math.floor(y * 2.3), 8110);
+    if (['panfish', 'fishchips', 'grilledfish'].includes(id)) {
+      if (id === 'grilledfish' && dEll(x, y, 5.4, 1.8, 1.8, 1.5) < 1) return food('o', YEL, 15);
+      if (id === 'fishchips' && y > 1.7 && Math.abs(x) < 7.2) return food(Math.floor(x * 1.2) & 1 ? '|' : '=', YEL);
+      if (dEll(x, y, -1, 0, 5.9, 2.1) < 1) return food(Math.abs(fract((x + y) * .35) - .5) < .1 ? '/' : dFill(b), id === 'panfish' ? ORANGE : WARM);
+      return ceramic();
+    }
+    if (id === 'friedeggs' || id === 'baconeggs') {
+      if (id === 'baconeggs' && y > 2.6) return food(Math.sin(x * 2 + y) > 0 ? '~' : '=', RED);
+      for (const cx of [-3.2, 3]) {
+        if (dEll(x, y, cx, .5, 3.2, 2.5) < 1) return food(dEll(x, y, cx, .4, 1.2, 1.1) < 1 ? '@' : '#', dEll(x, y, cx, .4, 1.2, 1.1) < 1 ? YEL : WHITE, 15);
+      }
+      return ceramic();
+    }
+    if (id === 'omelette') {
+      if (dEll(x, y, 0, .6, 6.8, 3) < 1 && y > -.6) return food(n > .82 ? 'o' : dFill(b), n > .82 ? BRICK : YEL);
+      return ceramic();
+    }
+    if (id === 'roastchicken') {
+      if (dEll(x, y, 0, .3, 4.5, 2.8) < 1) return food(n > .8 ? '%' : '#', BRICK, 14);
+      for (const cx of [-6, 6]) if (dEll(x, y, cx, 1.8, 1.7, 2) < 1) return food('o', WARM);
+      return ceramic();
+    }
+    if (id === 'jacketpotato') {
+      if (dEll(x, y, 0, 1, 5.6, 2.7) < 1) return food(Math.abs(y - 1) < .6 || Math.abs(x) < .5 ? '=' : '#', Math.abs(y - 1) < .6 ? YEL : BRICK);
+      return ceramic();
+    }
+    if (id === 'grilledveg') return food(n > .7 ? '%' : n > .4 ? '#' : 'o', n > .7 ? GREEN : n > .4 ? RED : WARM);
+    if (soup) return food(n > .82 ? 'o' : n > .68 ? ',' : '~', n > .82 ? WARM : n > .68 ? GREEN : id === 'tomatosoup' ? RED : ORANGE);
+    if (id === 'risotto' && n > .8) return food('o', BRICK);
+    if (id === 'friedrice' && n > .75) return food(n > .9 ? '%' : '@', n > .9 ? GREEN : YEL);
+    if (id === 'stirfry' && n > .8) return food('%', GREEN);
+    const col = id === 'pomodoro' || id === 'bolognese' ? RED : id === 'risotto' || id === 'friedrice' ? WHITE : YEL;
+    return food(id === 'risotto' || id === 'friedrice' ? ':' : Math.sin(x * 2 + y * 1.5) > 0 ? '~' : '=', col);
+  });
+}
+for (const recipe of RECIPES) DENSE[recipe.id] = heldMeal;
+// Fishing finds, small treasures and ammunition get full held art as well as their small ground icons.
+function heldAmmo(it) {
+  return sculpt(32, 18, (x, y) => {
+    if (Math.abs(x) > 8.4 || y < -6.6 || y > 7.6) return null;
+    if (Math.abs(x) > 7.8 || y < -6 || Math.abs(y - 2.3) < .5 || y > 7) return dLit(.65 - x * .025, WARM, 8);
+    if (y < 2.3) {
+      for (let k = 0; k < Math.min(24, it.uses); k++) {
+        const cx = -6.3 + (k % 8) * 1.8, cy = -4.3 + Math.floor(k / 8) * 2.1;
+        const d = dEll(x, y, cx, cy, .65, .8);
+        if (d < 1) return [d < .25 ? '.' : 'o', C(d < .25 ? BRICK : YEL, d < .25 ? 6 : 14)];
+      }
+      return [':', C(BRICK, 5)];
+    }
+    const word = dText(x, y, 0, 4, '.38 SPECIAL') || dText(x, y, 0, 6, '24 ROUNDS');
+    return word ? [word, C(RED, 13)] : dLit(.6 - x * .025, WARM, 8);
+  });
+}
+DENSE.ammo = heldAmmo;
+DROPPED_ART.ammo = it => [[' .--------.', '| o o o o |', '|.38 BOX  |', " '--------'"], ch => ch === 'o' ? C(YEL, 14) : /[.38BOX]/.test(ch) ? C(RED, 13) : C(WARM, 12)];
+
+function heldShellfish(it) {
+  const crab = it.id === 'crab', wave = Math.sin(T * 2.4);
+  return sculpt(32, 19, (x, y) => {
+    if (crab) {
+      for (const sg of [-1, 1]) {
+        for (let k = 0; k < 3; k++) if (Math.abs(y - (2 + k * 1.7 + sg * x * .15)) < .35 && x * sg > 2.7 && x * sg < 8) return ['/', C(RED, 12)];
+        const claw = dEll(x, y, sg * 6.2, -3.4 + wave * sg * .4, 2, 2.5);
+        if (claw < 1 && !(Math.abs(x - sg * 6.2) < .5 && y < -3.4)) return dLit(.8 - sg * (x - sg * 6.2) * .12, RED, 9);
+      }
+      if (Math.abs(Math.abs(x) - 1.7) < .5 && y < -1.8 && y > -3.5) return ['o', C(WHITE, 15)];
+      if (dEll(x, y, 0, .7, 5.4, 3.4) < 1) return dLit(dBall(x, y, 0, .7, 5.4, 3.4), RED, 8);
+    } else {
+      if (y > 2.7 && y < 8.8) for (let k = 0; k < 6; k++) {
+        const cx = (k - 2.5) * 1.25 + Math.sin(y * .7 + T * 2 + k) * .55;
+        if (Math.abs(x - cx) < .32) return [Math.cos(y * .7 + T * 2 + k) > 0 ? '(' : ')', C(MAG, 11)];
+      }
+      if (y < -7.6 || y > 3.2 || Math.abs(x) > Math.max(0, (y + 7.6) * .52)) return null;
+      if (Math.abs(Math.abs(x) - 1.4) < .5 && Math.abs(y - 1.2) < .55) return ['o', C(WHITE, 15)];
+      return dLit(.8 - Math.abs(x) * .07, MAG, 8);
+    }
+    return null;
+  });
+}
+DENSE.crab = DENSE.squid = heldShellfish;
+
+function heldFishingJunk(it) {
+  const id = it.id;
+  return sculpt(32, 19, (x, y) => {
+    if (id === 'oldboot') {
+      const cuff = x > -5.6 && x < 1.5 && y > -7.7 && y < 2.5;
+      const foot = dEll(x, y, 1.2, 4.5, 7.2, 3.1) < 1;
+      if (!cuff && !foot) return null;
+      if (y > 6.4) return ['=', C(GRAY, 8)];
+      if (cuff && Math.abs(x + 1.7) < 1.3 && Math.abs(fract(y / 2) - .5) < .2) return ['x', C(WARM, 12)];
+      return dLit(.55 - x * .025, BRICK, 6);
+    }
+    if (id === 'tincan') {
+      if (Math.abs(x) > 5.4 - Math.max(0, 1 - Math.abs(y)) || Math.abs(y) > 6.7) return null;
+      if (Math.abs(y) > 5.8) return ['=', C(GRAY, 12)];
+      const word = dText(x, y, 0, -.4, 'BEANS');
+      return word ? [word, C(WHITE, 14)] : [Math.abs(y - x * .4 - 2) < .4 ? '/' : '#', C(y < 2.4 ? ORANGE : GRAY, 8 + dCyl(x, 5.4) * 5)];
+    }
+    if (id === 'seaweed') {
+      for (let k = 0; k < 5; k++) if (Math.abs(x - (k - 2) * 2.2 - Math.sin(y * .5 + T * .9 + k) * .8) < .45 && Math.abs(y) < 7.7 - Math.abs(k - 2)) return [k & 1 ? ')' : '(', C(GREEN, 10 + k)];
+      return null;
+    }
+    if (id === 'plasticbag') {
+      const d = dEll(x, y, 0, 1.4, 6.5, 6.4);
+      if (y < -4.4 && y > -8 && Math.abs(Math.abs(x) - 3) < .6) return ['|', C(WHITE, 12)];
+      if (d > 1) return null;
+      const word = dText(x, y, 0, 1, 'THANK YOU');
+      if (word) return [word, C(RED, 13)];
+      return d > .85 ? ['|', C(WHITE, 11)] : Math.abs(x + 3.2) < .3 ? [':', C(WHITE, 8)] : null;
+    }
+    if (id === 'tyre' || id === 'trolleywheel') {
+      const d = dEll(x, y, 0, .2, 6.8, 7.4), hole = dEll(x, y, 0, .2, 3.6, 4.5);
+      if (d > 1 || hole < 1 && id === 'tyre') return null;
+      if (hole < 1) return Math.abs(x) < .6 || Math.abs(y - .2) < .5 ? ['+', C(GRAY, 13)] : ['.', C(GRAY, 5)];
+      return [Math.abs(fract((x + y) * .4) - .5) < .16 ? '/' : '#', C(GRAY, 4 + dBall(x, y, 0, .2, 6.8, 7.4) * 5)];
+    }
+    if (id === 'trafficcone') {
+      if (y > 6 && y < 8 && Math.abs(x) < 7.4) return ['=', C(ORANGE, 10)];
+      if (y < -7 || y > 6 || Math.abs(x) > (y + 7) * .45) return null;
+      return dLit(.7 - x * .04, y > -3.3 && y < -1 || y > 2.5 && y < 4 ? WHITE : ORANGE, 8);
+    }
+    if (id === 'flipflop') {
+      if (dEll(x, y, 0, .3, 4.8, 7.7) > 1) return null;
+      if (Math.abs(y + 1.7 - Math.abs(x) * 1.2) < .5 && y < 2.6) return ['/', C(MAG, 13)];
+      return dLit(.75 - x * .04, CYAN, 8);
+    }
+    return null;
+  });
+}
+for (const id of ['oldboot', 'tincan', 'seaweed', 'plasticbag', 'tyre', 'trafficcone', 'flipflop', 'trolleywheel']) DENSE[id] = heldFishingJunk;
+DENSE.soggybook = it => {
+  const [art, col] = DENSE.book(it, 1);
+  return [art, (ch, r, c) => { const value = col(ch, r, c); return C(value >> 4 === BLUE ? BRICK : value >> 4, Math.min(11, value & 15)); }];
+};
+
+function heldPocketknife(it) {
+  const phase = heldUsePhase(it), open = phase >= 0 ? Math.sin(phase * Math.PI) : 0;
+  const angle = -Math.PI / 2 - (1 - open) * Math.PI, ca = Math.cos(angle), sa = Math.sin(angle);
+  return sculpt(32, 25, (x, y) => {
+    // Upright handle in the fist, hinge above it. The blade folds into the handle and opens upward.
+    if (Math.abs(x) < 1.6 && y > -2.5 && y < 9) {
+      if (Math.hypot(x, y + 1.3) < .75 || Math.hypot(x, y - 6.5) < .45) return ['o', C(YEL, 14)];
+      return dLit(.8 - x * .15, RED, 8);
+    }
+    const dy = y + 2, along = x * ca + dy * sa, across = -x * sa + dy * ca;
+    if (along > .5 && along < 8.6 && Math.abs(across) < .9 * (1 - along / 9))
+      return [Math.abs(across) > .4 ? '/' : '#', C(GRAY, across > 0 ? 15 : 11)];
+    return null;
+  });
+}
+function heldTreasure(it) {
+  const id = it.id, phase = heldUsePhase(it), glint = Math.sin(T * 2.3) > .94;
+  if (id === 'pocketknife') return heldPocketknife(it);
+  return sculpt(28, 19, (x, y) => {
+    if (id === 'bottlemsg') {
+      const half = y < -4.4 ? 1.4 : y < -1.8 ? 1.4 + (y + 4.4) : 4.2;
+      if (y < -8 || y > 8 || Math.abs(x) > half) return null;
+      if (y < -6.8) return dLit(.6, BRICK, 8);
+      if (Math.abs(x) > half - .4 || y > 7.2) return ['|', C(GREEN, 13)];
+      if (y > -.5 && y < 5 && Math.abs(x) < 2.8) return [Math.abs(fract(y * .6) - .5) < .12 ? '~' : '#', C(WARM, 13)];
+      return Math.abs(x + half * .5) < .3 ? [':', C(WHITE, 10)] : null;
+    }
+    if (id === 'pearl') {
+      const b = dSphere(x, y, 5.2);
+      if (b < 0) return null;
+      return [glint && x < -1.5 && y < -1.5 ? '*' : dFill(b), C(b > .8 ? WHITE : WARM, 9 + b * 6)];
+    }
+    if (id === 'goldring') {
+      const d = dEll(x, y, 0, 1.4, 5.7, 5.4), hole = dEll(x, y, 0, 1.4, 4.3, 4);
+      if (dEll(x, y, 0, -4, 1.7, 1.5) < 1) return [glint ? '*' : '#', C(CYAN, 15)];
+      return d < 1 && hole > 1 ? dLit(.65 - x * .045, YEL, 9) : null;
+    }
+    if (id === 'divewatch') {
+      if (Math.abs(x) < 3.7 && Math.abs(y) < 8) {
+        if (Math.abs(y) > 4.3) return [Math.floor(y) & 1 ? '=' : '#', C(GRAY, 9)];
+        if (Math.abs(x) > 3 || Math.abs(y) > 3.5) return dLit(.7, GRAY, 10);
+        const time = String(Math.floor(tod)).padStart(2, '0') + ':' + String(Math.floor(fract(tod) * 60)).padStart(2, '0');
+        const text = dText(x, y, 0, .2, time);
+        return text ? [text, C(CYAN, 15)] : ['.', C(GRAY, 3)];
+      }
+      return null;
+    }
+    if (id === 'wishcoins') {
+      for (const [cx, cy] of [[-3, -2], [2, -3], [-4, 2], [1, 2], [4, 5]]) {
+        if (dEll(x, y, cx, cy, 2.3, 2) < 1) return [glint ? '*' : 'o', C(YEL, 13)];
+      }
+      return null;
+    }
+    const d = Math.hypot(x, y) / 6.2;
+    if (d > 1) return null;
+    if (d > .82) return dLit(.6 - x * .035, id === 'compass' ? YEL : GRAY, 9);
+    if (id === 'compass') {
+      for (const [cx, cy, word] of [[0, -4.1, 'N'], [4.1, .2, 'E'], [0, 4.2, 'S'], [-4.1, .2, 'W']]) {
+        const text = dText(x, y, cx, cy, word); if (text) return [text, C(WHITE, 14)];
+      }
+      const angle = -a + (phase >= 0 ? Math.sin(phase * 10) * .15 * (1 - phase) : 0);
+      const along = x * Math.sin(angle) - y * Math.cos(angle), across = x * Math.cos(angle) + y * Math.sin(angle);
+      if (Math.abs(across) < .5 && Math.abs(along) < 3.7) return ['|', C(along > 0 ? RED : WHITE, 14)];
+      return ['.', C(GRAY, 3)];
+    }
+    const stamp = dText(x, y, 0, -1.2, 'KING') || dText(x, y, 0, 2, '1908');
+    return stamp ? [stamp, C(WHITE, 14)] : dLit(.7 - x * .035, GRAY, 8);
+  });
+}
+for (const id of ['bottlemsg', 'oldcoin', 'goldring', 'pearl', 'compass', 'divewatch', 'pocketknife', 'wishcoins']) DENSE[id] = heldTreasure;
+// Small gestures when an item is used. The picture and its hand move together; the world and aim stay put.
+const HELD_SQUEEZE = new Set(['duck', 'sharkplush', 'plushcat', 'plushbear', 'petcat', 'petdog']);
+const HELD_FLIP = new Set(['luckycoin', 'oldcoin', 'goldring', 'pearl', 'wishcoins']);
+const HELD_PAGES = new Set(['book', 'newspaper', 'postcard', 'vinyl', 'vhs', 'hotelmasterpiece', 'hotelharbour', 'hotelstilllife']);
+function heldUsePhase(it) {
+  if (!heldUse || heldUse.item !== it) return -1;
+  const phase = (T - heldUse.t) / heldUse.duration;
+  return phase >= 0 && phase < 1 ? phase : -1;
+}
+function heldGesture(it, u) {
+  const phase = heldUsePhase(it), pose = { x: 0, y: 0, angle: 0, sx: 1, sy: 1 };
+  if (phase < 0) return pose;
+  const pulse = Math.sin(phase * Math.PI), id = it.id, kind = ITEMS[id].kind;
+  if (kind === 'drink' || kind === 'food' || id === 'harmonica') {
+    pose.x = -u * pulse; pose.y = -u * (kind === 'drink' ? 2.2 : 1.2) * pulse;
+    pose.angle = (kind === 'drink' ? -.2 : -.07) * pulse;
+  } else if (HELD_SQUEEZE.has(id)) {
+    pose.sx = 1 + pulse * .09; pose.sy = 1 - pulse * .13; pose.y = -u * pulse * .4;
+  } else if (HELD_FLIP.has(id)) {
+    // The hand stays full width; only the object turns edge-on (drawHeldDense).
+    pose.y = -u * pulse * 1.2;
+  } else if (id === 'snowglobe' || id === 'cityglobe' || kind === 'keys') {
+    pose.angle = Math.sin(phase * Math.PI * 6) * pulse * .13;
+    pose.y = -u * pulse * .6;
+  } else if (HELD_PAGES.has(id)) {
+    pose.angle = Math.sin(phase * Math.PI * 2) * .1; pose.y = -u * pulse * .7;
+  } else {
+    pose.angle = Math.sin(phase * Math.PI * 2) * .07; pose.y = -u * pulse * .65;
+  }
+  return pose;
+}
+
+let heldPictureCache = null;
+function heldPageTurn(it, picture) {
+  const phase = heldUsePhase(it);
+  if (phase < 0 || !['book', 'newspaper'].includes(it.id)) return picture;
+  const span = Math.floor(Math.sin(phase * Math.PI) * (picture.width - 6));
+  if (span < 2) return picture;
+  const left = 3, right = left + span, rows = picture.art.map(line => [...line]);
+  for (let r = 2; r < picture.height - 2; r++) for (let c = left; c < right; c++) {
+    let ch = r % 3 === 0 ? '=' : '.';
+    if (c === right - 1) ch = '/';
+    rows[r][c] = ch;
+  }
+  return { ...picture, art: rows.map(row => row.join('')), col: (ch, r, c) =>
+    r >= 2 && r < picture.height - 2 && c >= left && c < right ? C(ch === '/' ? WHITE : WARM, 13) : picture.col(ch, r, c) };
+}
+function heldPicture(it) {
+  // Cell animation runs at 15 fps; the hand's movement remains smooth. Only the current picture is retained.
+  const key = [it.id, it.uses, it.q, it.of, it.kg, Math.floor(T * 15), weather, night > .3,
+    fx.boombox, Math.floor(fx.spark * 2), fx.vape > 0, hurrying(), Math.floor(heldUsePhase(it) * 15),
+    Math.floor(a * 30), Math.floor(tod * 60)].join('|');
+  if (heldPictureCache?.key === key) return heldPictureCache.picture;
+  const [rawArt, col] = (DENSE[it.id] || droppedArt)(it, usesLeft(it)), art = rawArt.slice();
+  // Empty padding is not part of the grip. Keep the last visible row tucked into the fingers.
+  while (art.length > 1 && !art[art.length - 1].trim()) art.pop();
+  const width = Math.max(...art.map(line => line.length)), middle = Math.floor(width / 2);
+  let gripRow = art.length - 1;
+  // A claw, tail or hanging corner can extend below the part actually resting in your fist.
+  while (gripRow > 0 && !art[gripRow].slice(Math.max(0, middle - 2), middle + 3).trim()) gripRow--;
+  if (!art[gripRow].slice(Math.max(0, middle - 2), middle + 3).trim()) gripRow = art.length - 1;
+  const picture = heldPageTurn(it, { art, col, width, height: art.length, gripRows: gripRow + 1 });
+  heldPictureCache = { key, picture };
+  return picture;
+}
+function heldPictureTop(picture, s, hsz) {
+  const cached = picture.gripLayout;
+  if (cached?.s === s && cached.hsz === hsz) return cached.top;
+  g.font = hsz + 'px monospace';
+  const handEdge = -g.measureText('_').actualBoundingBoxAscent;
+  g.font = s + 'px monospace';
+  const middle = Math.floor(picture.width / 2), metrics = new Map();
+  let bottom = -Infinity, strokeHeight = s;
+  // Align the actual ink to the fingers. Many characters end well above the bottom of their cell.
+  for (let r = Math.max(0, picture.gripRows - 2); r < picture.gripRows; r++) {
+    for (let c = Math.max(0, middle - 2); c < Math.min(picture.width, middle + 3); c++) {
+      const ch = picture.art[r][c];
+      if (!ch || ch === ' ') continue;
+      if (!metrics.has(ch)) metrics.set(ch, g.measureText(ch));
+      const ink = metrics.get(ch), edge = r * s + ink.actualBoundingBoxDescent;
+      if (edge > bottom) {
+        bottom = edge;
+        strokeHeight = ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent;
+      }
+    }
+  }
+  if (!Number.isFinite(bottom)) bottom = picture.gripRows * s;
+  // Leave the item's last stroke visible above the hand's dark outline, including one-pixel bases such as '_'.
+  const clearance = Math.max(strokeHeight < s * .3 ? 2 : 1.5, hsz * .07);
+  const top = handEdge - clearance - bottom;
+  picture.gripLayout = { s, hsz, top };
+  return top;
+}
+function heldFrame(it, picture = null) {
+  const base = Math.max(10, Math.min(Math.max(14, cv.height / 36), cv.width / 32));
+  let s = Math.round(base * .72);
+  if (picture) s = Math.max(7, Math.min(s, Math.floor(cv.width * .64 / (picture.width * D_ASPECT)),
+    Math.floor(cv.height * .46 / picture.height)));
+  const u = picture ? s / .72 : base, hsz = Math.round(u * 1.15), pose = heldGesture(it, u);
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
+  const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * .35 : Math.sin(T * 1.5) * u * .08;
+  const lift = it.id === 'yoyo' ? Math.min(1, .55 + yoyo.len * 3) : 0;
+  let cx = cv.width * (.84 - lift * .14) + pose.x, hy = cv.height - 5.6 * hsz + bob - lift * cv.height * .34 + pose.y;
+  if (picture) {
+    g.font = s + 'px monospace';
+    const width = picture.width * g.measureText('M').width;
+    const top = heldPictureTop(picture, s, hsz), bottom = top + picture.height * s;
+    const ca = Math.cos(pose.angle), sa = Math.sin(pose.angle);
+    const corners = [-width / 2, width / 2].flatMap(x => [top, bottom].map(y => ({
+      x: x * pose.sx * ca - y * pose.sy * sa, y: x * pose.sx * sa + y * pose.sy * ca
+    })));
+    const minX = Math.min(...corners.map(p => p.x)), maxX = Math.max(...corners.map(p => p.x));
+    cx = clamp(cx, 12 - minX, cv.width - 12 - maxX);
+    hy = Math.max(hy, 12 - Math.min(...corners.map(p => p.y)));
+  }
+  return { u, s, hsz, cx: Math.round(cx), hy: Math.round(hy), grip: 1.1 * hsz, ...pose };
+}
 // ===== fishing, drawn (fishing.js has the rules): the bait and tackle hut and what's piled round it, the rod in your
 // hand (winding back, whipping forward, bending when something's on, the reel spinning as you wind in), the line out to
 // the bobber, the bobber riding the swell, rings spreading round it, the fish coming in under the water, the strike,
@@ -26390,9 +26940,7 @@ function stepRodView() {
 }
 // the rod on screen, in pixels: grip, length, and the point at s (0 at the grip, 1 the tip; under 0 the butt)
 function rodGeom() {
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), hsz = Math.round(u * 1.15);
-  const bob = moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const cx = Math.round(cv.width * 0.84), hy = Math.round(cv.height - 5.6 * hsz + bob), grip = hy + 1.1 * hsz;
+  const { u, hsz, cx, hy } = heldFrame(heldItem() || { id: 'rod' }), grip = hy + 1.1 * hsz;
   const Lr = Math.min(cv.height * 0.62, cv.width * 0.5), sa = Math.sin(rodView.ang), ca = Math.cos(rodView.ang);
   const at = s => ({ x: cx - sa * s * Lr, y: grip - ca * s * Lr + rodView.bend * Lr * 0.42 * s * s });
   return { u, hsz, cx, hy, grip, Lr, at, tip: at(1) };
@@ -26515,7 +27063,7 @@ function drawFishingRod(it) {
   const put = (ch, x, y, col) => { g.strokeText(ch, x - w / 2, y - s / 2); g.fillStyle = PAL[col]; g.fillText(ch, x - w / 2, y - s / 2); };
   const slopeCh = (a_, b_) => { const dxs = (b_.x - a_.x) / w, dys = (b_.y - a_.y) / s; return Math.abs(dys) > Math.abs(dxs) * 2 ? '|' : Math.abs(dxs) > Math.abs(dys) * 2 ? '-' : dxs * dys < 0 ? '/' : '\\'; };
   const n = Math.ceil(G.Lr * 1.12 / (Math.min(w, s) * 0.8)), guides = [0.34, 0.52, 0.67, 0.8, 0.91];
-  g.save(); g.beginPath(); g.rect(0, 0, cv.width, G.hy + 0.75 * G.hsz); g.clip(); // (your fingers hide the butt, as with anything you hold)
+  g.save(); // the hand's outline covers the butt after the complete rod is drawn
   for (let k = 0; k <= n; k++) { // butt (cork, in your fist), the reel seat, the blank, thinner and lighter toward the tip
     const sv = -0.12 + 1.12 * k / n, p = G.at(sv), q = G.at(sv + 0.02);
     const cork = sv < 0.15, seat = sv >= 0.15 && sv < 0.2, wrap = guides.some(gs => Math.abs(sv - gs) < 0.012);
@@ -26906,10 +27454,14 @@ const GUN_GRIP = [43, 9]; // (the column and row your fist closes round)
 const CYL_FACE = [' .---. ', '/ o o \\', '| o+o |', '\\ o o /', " `---' "]; // swung out: the chambers, filling as you load
 const gunView = { spin: 0, t: 0 }; // the cylinder's turn as drawn, easing after gun.spin
 function gunGeom() {
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), hsz = Math.round(u * 1.15), s = Math.round(u * 0.7);
-  const bob = moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08, k = gun.kick, rl = gun.reload > 0 ? Math.min(1, (RELOAD_T - gun.reload) * 5, gun.reload * 5) : 0;
-  const cx = Math.round(cv.width * 0.8 + k * u * 0.6), hy = Math.round(cv.height - 5.6 * hsz + bob + k * u * 0.5 + rl * u * 2.5);
-  return { u, s, hsz, cx, hy, ang: 0.05 + k * 0.32 + rl * 0.85 }; // (kicked up by a shot; tipped right up to reload)
+  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, aim = gunAim();
+  const u = Math.max(10, Math.min(Math.max(14, cv.height / 36), cv.width / 45));
+  const hsz = Math.round(u * 1.15), s = Math.round(u * (0.7 + aim * 0.04));
+  const bob = (moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08) * (1 - aim * 0.75);
+  const k = gun.kick, rl = gun.reload > 0 ? Math.min(1, (RELOAD_T - gun.reload) * 5, gun.reload * 5) : 0;
+  const cx = Math.round(cv.width * (0.82 - aim * 0.075) + k * u * 0.6);
+  const hy = Math.round(cv.height - 5.6 * hsz + bob + k * u * 0.5 + rl * u * 0.6 - aim * u * 1.5);
+  return { u, s, hsz, cx, hy, ang: 0.05 + k * 0.32 + rl * 0.85 - aim * 0.06 };
 }
 // the picture as it is this instant: the cylinder's flutes moved round, the hammer back or down, the cylinder out
 function revolverArt(open, rounds) {
@@ -26938,18 +27490,24 @@ function revolverCol(ch, r, c) {
 function drawRevolver(it) {
   const G = gunGeom(), dt = clamp(T - gunView.t, 0, 0.05); gunView.t = T;
   gunView.spin += (gun.spin - gunView.spin) * Math.min(1, dt * 14); // (a sixth of a turn a shot, snapping round)
-  const open = gun.reload > 0, rounds = open ? Math.min(CYLINDER, it.uses + Math.floor((1 - gun.reload / RELOAD_T) * 7)) : it.uses;
+  const open = gun.reload > 0, rounds = open ? Math.min(CYLINDER, it.uses + ammoLeft(), it.uses + Math.floor((1 - gun.reload / RELOAD_T) * 7)) : it.uses;
   g.font = G.s + 'px monospace';
   const w = g.measureText('M').width, gx = -(GUN_GRIP[0] + 0.5) * w, gy = -GUN_GRIP[1] * G.s;
-  g.save(); g.beginPath(); g.rect(0, 0, cv.width, G.hy + 0.75 * G.hsz); g.clip(); // (your fingers hide the bottom of the grip)
+  g.save();
   g.translate(G.cx, G.hy + 0.2 * G.hsz); g.rotate(G.ang);
-  artText(revolverArt(open, rounds), gx, gy, G.s, revolverCol);
-  if (gun.kick > 0.55) { // the flash, off the end of the barrel
-    const big = Math.round(G.u * (0.8 + gun.kick * 0.5)), k = gun.kick;
-    g.font = big + 'px monospace';
-    const fw = g.measureText('M').width;
-    artText(k > 0.8 ? ['\\|/', '-*-', '/|\\'] : [' . ', '-#-', " ' "], gx - fw * 3.2, gy + 3.5 * G.s - big * 1.5, big, ch => ch === '*' || ch === '#' ? C(WHITE, 15) : ch === '-' ? C(YEL, 15) : C(ORANGE, 14));
-  }
+  drawBehindHand(0, -G.hsz * .2, G.hsz, () => {
+    artText(revolverArt(open, rounds), gx, gy, G.s, revolverCol);
+    if (open) { // the other hand steadies the swung-out cylinder as the rounds go in
+      artText(['   __', ' _/ /', '( _/ ', ' \\__'], gx + w * 18, gy + G.s * 11, G.s,
+        () => C(SKIN, 12));
+    }
+    if (gun.kick > 0.55) { // the flash, off the end of the barrel
+      const big = Math.round(G.u * (0.8 + gun.kick * 0.5)), k = gun.kick;
+      g.font = big + 'px monospace';
+      const fw = g.measureText('M').width;
+      artText(k > 0.8 ? ['\\|/', '-*-', '/|\\'] : [' . ', '-#-', " ' "], gx - fw * 3.2, gy + 3.5 * G.s - big * 1.5, big, ch => ch === '*' || ch === '#' ? C(WHITE, 15) : ch === '-' ? C(YEL, 15) : C(ORANGE, 14));
+    }
+  });
   g.restore();
   g.font = FS + 'px monospace';
 }
@@ -26959,7 +27517,7 @@ function drawGunHud() {
   const it = heldGun();
   if (it && onFootMode() && !game) {
     const x = cols / 2 * cw, y = (rows >> 1) * FS, moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
-    const spread = cw * (1.2 + gun.kick * 2.5 + (moving ? 0.6 : 0)); // (opening up as it kicks, and as you walk)
+    const spread = cw * (1.2 - gunAim() * 0.45 + gun.kick * 2.5 + (moving ? 0.6 : 0));
     const on = mode !== 'room' && aimingAt(); // (red when somebody's in it)
     g.font = FS + 'px monospace'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, FS * 0.16); g.strokeStyle = 'rgba(0,0,0,0.85)';
     g.fillStyle = on ? '#f44' : 'rgba(255,255,255,0.92)';
@@ -26967,7 +27525,8 @@ function drawGunHud() {
       g.strokeText(ch, x + ox, y + oy); g.fillText(ch, x + ox, y + oy);
     }
     // the cylinder: a round for each, under the crosshair to the right, and what's left in the boxes
-    const loaded = 'o'.repeat(it.uses) + '.'.repeat(CYLINDER - it.uses), txt = gun.reload > 0 ? 'reloading' : `${loaded}  ${ammoLeft()}`;
+    const loaded = 'o'.repeat(it.uses) + '.'.repeat(CYLINDER - it.uses);
+    const txt = gun.reload > 0 ? 'reloading' : `${loaded}  ${ammoLeft()}`;
     g.fillStyle = it.uses ? 'rgba(255,220,120,0.9)' : '#f66';
     g.strokeText(txt, x + cw * 3, y + FS * 1.6); g.fillText(txt, x + cw * 3, y + FS * 1.6);
   }
@@ -28824,8 +29383,26 @@ if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
   desktopMouseReady.catch(() => {}); // lockMouse handles subscription failure and tries browser capture
   addEventListener('blur', lostCapture);
 }
-addEventListener('mousedown', e => { if (!freecam && e.button === 2 && skatingNow() && mouseCaptured() && !paused && !body.z) flick = { x: 0, y: 0 }; });
-addEventListener('mouseup', e => { if (e.button === 2 && flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) jump(flickTrick(f.x, f.y)); } });
+addEventListener('mousedown', e => {
+  if (!mouseCaptured() || paused || freecam || sleep || game || panelOpen() || devOpen()) return;
+  if (e.button === 0 && (onFootMode() || (mode === 'sea' || mode === 'boat') && heldRod())) {
+    K.MouseUse = 1; audioStart(); useHeldItem();
+  }
+  if (e.button === 2) {
+    if (canAimGun()) gun.aimHeld = true;
+    else if (skatingNow() && !body.z) flick = { x: 0, y: 0 };
+  }
+});
+addEventListener('mouseup', e => {
+  if (e.button === 0) K.MouseUse = 0;
+  if (e.button === 2) {
+    gun.aimHeld = false;
+    if (flick) { const f = flick; flick = null; msgT = 0; if (!freecam && skatingNow() && !paused) jump(flickTrick(f.x, f.y)); }
+  }
+});
+function releaseHeldMouse() { K.MouseUse = 0; gun.aimHeld = false; }
+addEventListener('blur', releaseHeldMouse);
+document.addEventListener('pointerlockchange', () => { if (!mouseCaptured()) releaseHeldMouse(); });
 addEventListener('contextmenu', e => { if (mouseCaptured() || skatingNow()) e.preventDefault(); });
 
 const free = (x, y) => {

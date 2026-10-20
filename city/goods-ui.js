@@ -29,6 +29,13 @@ const hue = (map, dflt) => (c, r) => { for (const [chars, col] of map) if (chars
 // car keys: a fob with its buttons, the ring, the key hanging off it
 const KEYS_ART = [['  .---.', ' | (o) |', ' | [=] |', "  '-.-'", '   (O)', '    |', '    |=', '    |=', '    V'],
   (c, r) => c === 'o' ? C(RED, 14) : c === '=' && r < 3 ? C(GRAY, 12) : r < 4 ? C(GRAY, 5 + (c === '|' || c === '.' || c === "'" || c === '-' ? 6 : 0)) : C(YEL, 13)];
+function droppedCan(word, col, ink, f) {
+  const crushed = f < .5;
+  const art = [' _______', '(_______)', '|       |', `| ${word.padEnd(5)} |`, '|  ~~~  |', '(_______)'];
+  if (f < 1) art[2] = '|  /    |';
+  if (crushed) { art.splice(2, 1); art[2] = art[2].replace(/\|/g, '/'); }
+  return [art, (ch, r) => r === 0 || r === art.length - 1 ? C(GRAY, 12) : /[A-Z~]/.test(ch) ? C(ink, 15) : C(col, 13)];
+}
 const DROPPED_ART = {
   // the night market's: street food, charms, curios, and the two that bend the world
   bao: (it, f) => [bitten(['   _.~~._', '  ( ~ ~  )', ' (        )', "  `------'"], f), (c, r) => r < 2 && c === '~' ? C(GRAY, 12) : C(WHITE, 14)],
@@ -62,8 +69,8 @@ const DROPPED_ART = {
     (c, r) => c === ':' ? C(BRICK, 13) : c === '~' ? C(WHITE, 15) : C(WHITE, 12)],
   tea: (it, f) => [filled(['   ) )', ' ._______.', ' |       |\\', ' |       | )', '  \\_____/_/', ' ========='], [[2, 2, 8], [3, 2, 8]], f, ':', '~'),
     (c, r) => r === 0 ? C(WHITE, 7) : c === ':' || c === '~' ? C(ORANGE, 12) : C(WHITE, 13)],
-  soda: (it, f) => [bitten([' _______', '(_______)', '|       |', '| C O L |', '|   A   |', '|  ~~~  |', '(_______)'], 0.45 + f * 0.55), (c, r) => /[A-Z~]/.test(c) ? C(WHITE, 15) : C(RED, 13)],
-  energy: (it, f) => [bitten([' _______', '(_______)', '|  ZAP  |', '|   /   |', '|  /_   |', '|   /   |', '(_______)'], 0.45 + f * 0.55), (c, r) => /[A-Z/_]/.test(c) && r > 1 && r < 6 ? C(YEL, 15) : C(GREEN, 12)],
+  soda: (it, f) => droppedCan('COLA', RED, WHITE, f),
+  energy: (it, f) => droppedCan('ZAP', GREEN, YEL, f),
   water: (it, f) => [filled(['   [=]', '   | |', '  /   \\', ' |     |', ' |     |', ' |     |', ' |_____|'], [[3, 2, 6], [4, 2, 6], [5, 2, 6]], f, ':', '~'),
     (c, r) => c === ':' || c === '~' ? C(CYAN, 14) : r === 0 ? C(BLUE, 13) : C(CYAN, 9)],
   beer: (it, f) => [filled([' ________', '|        |__', '|        |  |', '|        |  |', '|        |__|', '|        |', ' \\______/'], [[1, 1, 8], [2, 1, 8], [3, 1, 8], [4, 1, 8], [5, 1, 8]], f, '#', '@'),
@@ -207,11 +214,76 @@ let HAND_ART = [
   '(__________',
   ' (____________.---'];
 const HAND_GRIP = 6;
-function drawHand(cx, top, size) {
+const HAND_MASK_COLS = 18, handPixelCache = new Map();
+function handGeometry(cx, size) {
+  const font = g.font;
   g.font = size + 'px monospace';
   const w = g.measureText('M').width, x0 = cx - (HAND_GRIP + 0.5) * w;
-  const reach = Math.ceil((cv.width - x0) / w) + 1; // the arm carries on off the edge of the screen
-  const art = HAND_ART.map(l => l.endsWith('-') ? l.padEnd(reach, '-') : l);
+  g.font = font;
+  const transform = g.getTransform(), edgeX = (cv.width - transform.e) / Math.max(.2, transform.a);
+  const reach = Math.max(HAND_MASK_COLS, Math.ceil((edgeX - x0) / w) + 1);
+  return { w, x0, reach };
+}
+function handPixels(size, w) {
+  const key = size + '|' + w;
+  if (handPixelCache.has(key)) return handPixelCache.get(key);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(HAND_MASK_COLS * w); canvas.height = Math.ceil((HAND_ART.length + 1) * size);
+  const ctx = canvas.getContext('2d');
+  ctx.font = size + 'px monospace'; ctx.textBaseline = 'top'; ctx.fillStyle = '#fff';
+  HAND_ART.forEach((line, r) => {
+    const text = line.endsWith('-') ? line.padEnd(HAND_MASK_COLS, '-') : line;
+    for (let c = 0; c < text.length; c++) if (text[c] !== ' ') ctx.fillText(text[c], c * w, r * size);
+  });
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const upper = new Float32Array(canvas.width).fill(NaN), lower = new Float32Array(canvas.width).fill(NaN);
+  let left = canvas.width, right = 0;
+  for (let x = 0; x < canvas.width; x++) for (let y = 0; y < canvas.height; y++) {
+    if (data[(y * canvas.width + x) * 4 + 3] < 64) continue;
+    if (!Number.isFinite(upper[x])) upper[x] = y;
+    lower[x] = y + 1; left = Math.min(left, x); right = Math.max(right, x);
+  }
+  // Join character spacing along the arm so item pixels cannot leak between adjacent dashes.
+  for (let x = left; x <= right; x++) {
+    if (Number.isFinite(upper[x])) continue;
+    let next = x + 1;
+    while (next <= right && !Number.isFinite(upper[next])) next++;
+    const previous = x - 1;
+    for (let c = x; c < next; c++) {
+      const t = (c - previous) / (next - previous);
+      upper[c] = upper[previous] + (upper[next] - upper[previous]) * t;
+      lower[c] = lower[previous] + (lower[next] - lower[previous]) * t;
+    }
+    x = next - 1;
+  }
+  const pixels = { upper, lower, left, right };
+  if (handPixelCache.size >= 6) handPixelCache.delete(handPixelCache.keys().next().value);
+  handPixelCache.set(key, pixels);
+  return pixels;
+}
+function drawBehindHand(cx, top, size, drawItem) {
+  const { w, x0, reach } = handGeometry(cx, size), { upper, lower, left, right } = handPixels(size, w);
+  const visible = new Path2D();
+  visible.rect(-cv.width * 3, -cv.height * 3, cv.width * 6, cv.height * 6);
+  visible.moveTo(x0 + left, top + upper[left]);
+  for (let x = left + 1; x <= right; x++) if (upper[x] !== upper[x - 1]) {
+    visible.lineTo(x0 + x, top + upper[x - 1]); visible.lineTo(x0 + x, top + upper[x]);
+  }
+  visible.lineTo(x0 + reach * w, top + upper[right]);
+  visible.lineTo(x0 + reach * w, top + lower[right]);
+  visible.lineTo(x0 + right + 1, top + lower[right]);
+  for (let x = right - 1; x >= left; x--) if (lower[x] !== lower[x + 1]) {
+    visible.lineTo(x0 + x + 1, top + lower[x + 1]); visible.lineTo(x0 + x + 1, top + lower[x]);
+  }
+  visible.lineTo(x0 + left, top + lower[left]); visible.closePath();
+  g.save();
+  try { g.clip(visible, 'evenodd'); drawItem(); } finally { g.restore(); }
+  drawHand(cx, top, size);
+}
+function drawHand(cx, top, size) {
+  const { x0, reach } = handGeometry(cx, size);
+  g.font = size + 'px monospace';
+  const art = HAND_ART.map(line => line.endsWith('-') ? line.padEnd(reach, '-') : line);
   artText(art, x0, top, size, c => c === '-' || c === "'" || c === '.' ? C(SKIN, 11) : C(SKIN, 13));
 }
 // a run of characters along a straight line on screen (a string, a shaft), each one picked to follow its slope
@@ -230,18 +302,23 @@ function drawHeldBig() {
   const it = heldItem();
   const rodAfloat = it && ITEMS[it.id].rod && afloat() && !third; // (fishing from a boat: the rod, nothing else)
   if (!it || !(onFoot || rodAfloat) || fx.skating && (it.id === 'skateboard' || skateCamOn())) return;
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36); // scaled to the screen, not the detail setting
-  const isz = Math.round(u * 1.5), hsz = Math.round(u * 1.15);
-  const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const lift = it.id === 'yoyo' ? Math.min(1, 0.55 + yoyo.len * 3) : 0; // (holding a yo-yo your hand's up, so it hangs below; higher still to work it)
-  const cx = Math.round(cv.width * (0.84 - lift * 0.14)), hy = Math.round(cv.height - 5.6 * hsz + bob - lift * cv.height * 0.34); // the top of the fist: all of it on screen, a short arm to the edge
-  const grip = hy + 1.1 * hsz; // where the fingers wrap round
-  if (it.id === 'umbrella' && rain > 0.2 && mode !== 'room') drawCanopy(cx, grip, isz, bob);
-  else if (heldIsRod(it)) drawFishingRod(it); // (fishing-render.js: the rod, and whatever's on its line)
-  else if (ITEMS[it.id].kind === 'gun') drawRevolver(it); // (gun-ui.js)
-  else drawHeldDense(it, cx, hy, hsz, grip);
-  drawHand(cx, hy, hsz); handDrawn = { id: it.id, t: T };
-  if (it.id === 'yoyo') drawYoyo(cx - hsz * 0.2, hy + HAND_ART.length * hsz); // (in your hand or out on its string, it hangs from under your fist)
+  if (ITEMS[it.id].kind === 'gun') {
+    drawRevolver(it); handDrawn = { id: it.id, t: T }; return;
+  }
+  if (heldIsRod(it)) {
+    const G = rodGeom(); drawBehindHand(G.cx, G.hy, G.hsz, () => drawFishingRod(it));
+  } else {
+    const canopy = it.id === 'umbrella' && rain > .2 && mode !== 'room';
+    const picture = it.id === 'yoyo' || canopy ? null : heldPicture(it), G = heldFrame(it, picture);
+    if (canopy) drawBehindHand(G.cx, G.hy, G.hsz, () => drawCanopy(G.cx, G.hy + G.grip, Math.round(G.u * 1.5), 0));
+    else {
+      g.save(); g.translate(G.cx, G.hy); g.rotate(G.angle); g.scale(G.sx, G.sy);
+      drawBehindHand(0, 0, G.hsz, () => { if (picture) drawHeldDense(it, 0, 0, G.hsz, picture, G.s); });
+      g.restore();
+    }
+    if (it.id === 'yoyo') drawYoyo(G.cx - G.hsz * .2, G.hy + HAND_ART.length * G.hsz);
+  }
+  handDrawn = { id: it.id, t: T };
   g.font = FS + 'px monospace';
 }
 // the umbrella open over you, seen from underneath: panels of fabric between ribs fanning out from the hub (just off

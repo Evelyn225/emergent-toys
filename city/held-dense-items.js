@@ -46,14 +46,15 @@ const dSteam = (x, y, top, f, xs, h = 3.4) => { // wisps curling up from top whi
   for (const s of xs) { const ph = y * 1.3 + T * 2.5 + s * 2, wx = s + Math.sin(ph) * 0.5; if (Math.abs(x - wx) < 0.22) return [Math.cos(ph) > 0 ? '(' : ')', C(WHITE, 6 + (y - top + h) * 1.5)]; }
   return null;
 };
-// a drinks can: a colour, a word, a stripe; bites out of it as it goes
+// A can stays closed around its drink. As it's emptied, the shell shortens and creases under your grip.
 const dCan = (col, word, stripe, deco) => (it, f) => sculpt(26, 15, (x, y) => {
-  const hw = 4.3, top = -6.2, bot = 6.5;
+  const crush = 1 - f, top = -6.2 + crush * 2.2, bot = 6.5;
+  const waist = (y - 1) / 2.5, hw = 4.3 - crush * .85 * Math.exp(-waist * waist);
   if (y < top || y > bot || Math.abs(x) > hw + (y < top + 0.8 || y > bot - 0.8 ? -0.35 : 0)) return null;
-  if (dBites(x, y, 0.45 + f * 0.55, hw) === true) return null;
   const b = dCyl(x, hw);
   if (y < top + 0.8) return Math.abs(x - 1) < 0.6 && y < top + 0.4 ? ['o', C(GRAY, 14)] : ['=', dCol(GRAY, b, 7)];
   if (y > bot - 0.8) return ['_', dCol(GRAY, b, 7)];
+  if (crush > .2 && Math.abs(y - 2.6 - x * .2) < .35) return ['/', dCol(col, b, 5, 11)];
   const t = dText(x, y, 0, -1.6, word); if (t) return [t, C(stripe, 15)];
   const d = deco && deco(x, y); if (d) return d;
   return [b > 0.92 ? '|' : dFill(b), b > 0.92 ? C(WHITE, 15) : dCol(col, b)];
@@ -240,6 +241,7 @@ Object.assign(DENSE, {
     const g = dGlass(x, y, -3.5, 5.6, yy => 4 - Math.max(0, yy - 2) * 0.35, f, [ORANGE, null]);
     return g === undefined ? null : g;
   }),
+  soda: dCan(RED, 'COLA', WHITE, (x, y) => Math.abs(y - 1.4 - Math.sin(x * 1.3) * .7) < .35 ? ['~', C(WHITE, 14)] : null),
   energy: dCan(GREEN, 'ZAP', YEL, (x, y) => Math.abs(x - (y > 1.5 ? 0.5 : -0.2) + (y - 1.5) * 0.25) < 0.4 && y > -0.6 && y < 4.4 ? ['/', C(YEL, 15)] : null), // a lightning bolt
   water: (it, f) => sculpt(22, 17, (x, y) => { // a plastic bottle: blue cap, a label round the middle, the water going down
     if (y < -7 && Math.abs(x) < 1.3) return dLit(0.4 + 0.5 * dCyl(x, 1.3), BLUE, 8);
@@ -699,7 +701,7 @@ Object.assign(DENSE, {
     for (const s of [-1, 1]) if (y > -6.4 && y < -3.6 && Math.abs(x - s * 2.4) < 1.2 - (y + 6.4) * -0.1 && Math.abs(x - s * 2.4) < (y + 6.4) * 0.5) return ['^', C(s > 0 ? WHITE : WHITE, 13)];
     const head = dEll(x, y, 0, -2.4, 3.8, 3);
     if (head < 1) {
-      for (const s of [-1, 1]) if (dEll(x, y, s * 1.4, -2.8, 0.5, 0.5) < 1) return ['o', C(GREEN, 15)];
+      for (const s of [-1, 1]) if (dEll(x, y, s * 1.4, -2.8, 0.5, 0.5) < 1) return [T % 5.4 < .18 ? '-' : 'o', C(GREEN, 15)];
       if (dEll(x, y, 0, -1.6, 0.4, 0.3) < 1) return ['v', C(MAG, 15)];
       return dLit(dBall(x, y, 0, -2.4, 3.8, 3), WHITE, 9);
     }
@@ -710,7 +712,7 @@ Object.assign(DENSE, {
     for (const s of [-1, 1]) if (dEll(x, y, s * 2.8, -5.4, 1.2, 1.2) < 1) return dLit(0.6, BRICK, 8);
     const head = dEll(x, y, 0, -2.8, 3.4, 2.8);
     if (head < 1) {
-      for (const s of [-1, 1]) if (dEll(x, y, s * 1.3, -3.2, 0.4, 0.4) < 1) return ['o', C(GRAY, 2)];
+      for (const s of [-1, 1]) if (dEll(x, y, s * 1.3, -3.2, 0.4, 0.4) < 1) return [T % 6.2 < .18 ? '-' : 'o', C(GRAY, 2)];
       if (dEll(x, y, 0, -1.8, 1.2, 0.9) < 1) return [dEll(x, y, 0, -2, 0.4, 0.3) < 1 ? '@' : '%', C(WARM, 12)];
       return dLit(dBall(x, y, 0, -2.8, 3.4, 2.8), BRICK, 7);
     }
@@ -851,7 +853,7 @@ function heldPetCarrier(it) {
     if (y > 7 || Math.abs(x) > 7 - Math.max(0, -y - 3) * 0.35) return null;
     if (y < -4 || y > 5.7 || Math.abs(x) > 5.7) return dLit(0.55 - x * 0.03, BLUE);
     const face = dEll(x, y, 0, 0, 2.8, 2.3);
-    if (Math.abs(Math.abs(x) - 1.1) < 0.4 && Math.abs(y + 0.3) < 0.4) return ['o', C(cat ? GREEN : BRICK, 15)];
+    if (Math.abs(Math.abs(x) - 1.1) < 0.4 && Math.abs(y + 0.3) < 0.4) return [T % 5.8 < .2 ? '-' : 'o', C(cat ? GREEN : BRICK, 15)];
     if (Math.abs(x) < 0.4 && Math.abs(y - 0.8) < 0.4) return ['v', C(GRAY, 4)];
     if (face < 1) return dLit(0.7 - x * 0.07, cat ? GRAY : BRICK);
     if (cat && y < -1.2 && y > -3.6 && Math.abs(Math.abs(x) - 1.8) < (-y - 1) * 0.4) return ['^', C(GRAY, 12)];

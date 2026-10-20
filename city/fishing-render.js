@@ -158,9 +158,7 @@ function stepRodView() {
 }
 // the rod on screen, in pixels: grip, length, and the point at s (0 at the grip, 1 the tip; under 0 the butt)
 function rodGeom() {
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, u = Math.max(14, cv.height / 36), hsz = Math.round(u * 1.15);
-  const bob = moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08;
-  const cx = Math.round(cv.width * 0.84), hy = Math.round(cv.height - 5.6 * hsz + bob), grip = hy + 1.1 * hsz;
+  const { u, hsz, cx, hy } = heldFrame(heldItem() || { id: 'rod' }), grip = hy + 1.1 * hsz;
   const Lr = Math.min(cv.height * 0.62, cv.width * 0.5), sa = Math.sin(rodView.ang), ca = Math.cos(rodView.ang);
   const at = s => ({ x: cx - sa * s * Lr, y: grip - ca * s * Lr + rodView.bend * Lr * 0.42 * s * s });
   return { u, hsz, cx, hy, grip, Lr, at, tip: at(1) };
@@ -283,7 +281,7 @@ function drawFishingRod(it) {
   const put = (ch, x, y, col) => { g.strokeText(ch, x - w / 2, y - s / 2); g.fillStyle = PAL[col]; g.fillText(ch, x - w / 2, y - s / 2); };
   const slopeCh = (a_, b_) => { const dxs = (b_.x - a_.x) / w, dys = (b_.y - a_.y) / s; return Math.abs(dys) > Math.abs(dxs) * 2 ? '|' : Math.abs(dxs) > Math.abs(dys) * 2 ? '-' : dxs * dys < 0 ? '/' : '\\'; };
   const n = Math.ceil(G.Lr * 1.12 / (Math.min(w, s) * 0.8)), guides = [0.34, 0.52, 0.67, 0.8, 0.91];
-  g.save(); g.beginPath(); g.rect(0, 0, cv.width, G.hy + 0.75 * G.hsz); g.clip(); // (your fingers hide the butt, as with anything you hold)
+  g.save(); // the hand's outline covers the butt after the complete rod is drawn
   for (let k = 0; k <= n; k++) { // butt (cork, in your fist), the reel seat, the blank, thinner and lighter toward the tip
     const sv = -0.12 + 1.12 * k / n, p = G.at(sv), q = G.at(sv + 0.02);
     const cork = sv < 0.15, seat = sv >= 0.15 && sv < 0.2, wrap = guides.some(gs => Math.abs(sv - gs) < 0.012);

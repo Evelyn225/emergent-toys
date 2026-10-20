@@ -106,6 +106,22 @@ test('stars: a shot a cop sees is 2 (and stays 2, shot after shot); a shot nobod
   assert.deepStrictEqual(j(ev, '[wanted.stars, wanted.crime, footCops[0].dead]'), [5, 'killing a police officer', true]);
 });
 
+test('shooting an occupied or parked car gets reported without a pedestrian witness', () => {
+  const { ev } = loadCity();
+  armed(ev);
+  for (const parked of [false, true]) {
+    ev(`clearWanted(); reports.length = 0; cars.length = 0; who.hidden = true;
+      for (const c of footCops) Object.assign(c, at(120));
+      Object.assign(footCops[0], at(20));
+      var target = addCar({ ...at(-.6), hx: Math.cos(a), hy: Math.sin(a), parked: ${parked}, body: RED });
+      heldGun().uses = 6; gun.cool = 0; gun.reload = 0;`);
+    assert.equal(fire(ev, -.12), 'car');
+    assert.deepStrictEqual(j(ev, '[wanted.stars, reports.length, reports[0].kind, target.dmg > 0]'), [0, 1, 'gunfire', true]);
+    ev('T = reports[0].t + .01; stepCrime(.01)');
+    assert.equal(ev('wanted.stars'), 2, 'the call reaches dispatch after the normal delay');
+  }
+});
+
 test('the police shoot back only once you\'ve fired (at anything): then they hit, and enough of it puts you down', () => {
   const { ev } = loadCity();
   armed(ev);
