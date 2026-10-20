@@ -66,3 +66,15 @@ Build actual natural terrain, waterfall, fishing locations, rough strip, dock, h
 - Browser fixtures use the real `ascii-city.html`; disable RAF only for deterministic checks and call `env(0)` before `render(0)`. Separately verify real movement/rendering and inspect screenshots. A green build alone is not proof of playable terrain or bridge clearance.
 - Tests must cover coordinate migration once only, property identity/contents, coast and bridge agreement, finite routing/rail behavior, boat round trips and reboarding, real prop landing/takeoff, and map agreement. Maintain performance evidence in city, water, and flight views.
 - Continue through the remaining stages with meaningful progress updates. The user already approved the design and wants implementation, with reviewable checkpoints. Report actual completion and remaining limits honestly.
+
+## Continuation after a usage interruption
+
+The user also wants work to pick back up automatically when included usage becomes available again. Do not claim that a reset-triggered scheduler exists or that this Markdown creates one. The installed CLI and IDE do not expose scheduled-task management. Official documentation describes scheduled follow-ups in an existing web chat, but does not establish a quota-reset event or guarantee rescheduling when usage itself is unavailable.
+
+Before an orderly stop, update a concise progress file on the task branch with the completed stage, current code state, test results, exact remaining work, and any real blockers. Preserve uncommitted work in the same cloud task; make reviewable checkpoint commits when appropriate. On resumption, inspect the actual working tree and latest checkpoint before continuing. Do not restart the migration or apply coordinate transforms a second time.
+
+If this cloud chat offers Scheduled, test a recurring continuation in this same chat after normal cloud execution is working. A suggested prompt is:
+
+> Every hour, return to this same cloud chat and continue the unfinished ASCII City archipelago work described in CLOUD_HANDOFF.md, using the existing task workspace and latest checkpoint. Skip a check if work is already running. Continue the next incomplete implementation stage and verify it. Respect usage limits; do not purchase credits or enable paid overages. Stop the schedule when the approved scope and required checks are complete. If access or a necessary decision is missing, report the blocker. Keep changes on the task branch; do not merge to main or deploy.
+
+This is a proposed periodic fallback, not a guaranteed usage-reset restart. Confirm that a scheduled run actually resumes the intended cloud task with its files before relying on it unattended. If the account does not offer this combination, manual continuation from web/mobile is the supported fallback until a separate always-on runner is explicitly selected and configured.
