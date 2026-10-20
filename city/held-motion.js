@@ -99,7 +99,7 @@ function heldFrame(it, picture = null) {
   const u = picture ? s / .72 : base, hsz = Math.round(u * 1.15), pose = heldGesture(it, u);
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * .35 : Math.sin(T * 1.5) * u * .08;
-  const lift = it.id === 'yoyo' ? Math.min(1, .55 + yoyo.len * 3) : 0;
+  const lift = it.id === 'yoyo' ? .55 + .45 * smooth(clamp(yoyo.len / .18, 0, 1)) : 0;
   let cx = cv.width * (.84 - lift * .14) + pose.x, hy = cv.height - 5.6 * hsz + bob - lift * cv.height * .34 + pose.y;
   if (picture) {
     g.font = s + 'px monospace';
@@ -113,5 +113,5 @@ function heldFrame(it, picture = null) {
     cx = clamp(cx, 12 - minX, cv.width - 12 - maxX);
     hy = Math.max(hy, 12 - Math.min(...corners.map(p => p.y)));
   }
-  return { u, s, hsz, cx: Math.round(cx), hy: Math.round(hy), grip: 1.1 * hsz, ...pose };
+  return { u, s, hsz, cx: it.id === 'yoyo' ? cx : Math.round(cx), hy: it.id === 'yoyo' ? hy : Math.round(hy), grip: 1.1 * hsz, ...pose };
 }

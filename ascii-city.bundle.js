@@ -5442,17 +5442,32 @@ const luck = () => (carrying('jadebangle') ? 0.03 : 0) + (carrying('jadedragon')
 // The yo-yo is steered by a virtual cursor bounded to a circle around the hand. Cursor distance pays out string;
 // direction sets the target position, while the yo-yo carries momentum as it catches up.
 const yoyo = { out: false, len: 0, lenV: 0, ang: 0, angV: 0, spin: 0, aimX: 0, aimY: 0 };
+// Exact damped-spring motion keeps the same response through uneven frame times.
+function yoyoSpring(value, velocity, target, stiffness, damping, dt) {
+  const decay = damping / 2, frequency = Math.sqrt(stiffness - decay * decay);
+  const offset = value - target, fade = Math.exp(-decay * dt), c = Math.cos(frequency * dt), s = Math.sin(frequency * dt);
+  return [target + fade * (offset * c + (velocity + decay * offset) * s / frequency),
+    fade * (velocity * c - (decay * velocity + stiffness * offset) * s / frequency)];
+}
 function stepYoyo(dt) {
   const targetLen = yoyo.out ? Math.hypot(yoyo.aimX, yoyo.aimY) : 0;
-  const targetAng = Math.atan2(yoyo.aimX, yoyo.aimY), da = mod(targetAng - yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
-  yoyo.lenV += ((targetLen - yoyo.len) * 36 - yoyo.lenV * 8) * dt;
-  yoyo.len = clamp(yoyo.len + yoyo.lenV * dt, 0, 1);
+  [yoyo.len, yoyo.lenV] = yoyoSpring(yoyo.len, yoyo.lenV, targetLen, 36, 8, dt);
+  yoyo.len = clamp(yoyo.len, 0, 1);
   if ((yoyo.len === 0 && yoyo.lenV < 0) || (yoyo.len === 1 && yoyo.lenV > 0)) yoyo.lenV = 0;
-  yoyo.angV += (da * 34 - yoyo.angV * 4) * dt;
-  yoyo.ang += yoyo.angV * dt;
+  // Direction is undefined at the hand: let momentum coast instead of snapping toward tiny cursor movements.
+  if (yoyo.out && targetLen <= .04) {
+    const fade = Math.exp(-6 * dt);
+    yoyo.ang += yoyo.angV * (1 - fade) / 6; yoyo.angV *= fade;
+  } else {
+    const targetAng = yoyo.out ? Math.atan2(yoyo.aimX, yoyo.aimY) : 0;
+    const da = mod(targetAng - yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
+    [yoyo.ang, yoyo.angV] = yoyoSpring(yoyo.ang, yoyo.angV, yoyo.ang + da, 34, 6, dt);
+  }
   yoyo.ang = mod(yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
-  yoyo.spin += dt * (20 + Math.abs(yoyo.angV) * 6);
-  if (!yoyo.out && yoyo.len < 0.01 && Math.abs(yoyo.lenV) < 0.08) { yoyo.len = yoyo.lenV = yoyo.ang = yoyo.angV = 0; yoyo.aimX = yoyo.aimY = 0; }
+  if (yoyo.out || yoyo.len > 0) yoyo.spin += dt * (20 + Math.abs(yoyo.angV) * 6);
+  if (!yoyo.out && yoyo.len < .01 && Math.abs(yoyo.lenV) < .08 && Math.abs(yoyo.ang) < .01 && Math.abs(yoyo.angV) < .05) {
+    yoyo.len = yoyo.lenV = yoyo.ang = yoyo.angV = 0; yoyo.aimX = yoyo.aimY = 0;
+  }
   fx.yoyo = yoyo.len > 0 || yoyo.out ? 1 : 0;
 }
 // About 200 screen pixels reaches the end of the string. Clamp the virtual cursor to its hand-centered circle.
@@ -25132,24 +25147,51 @@ function yoyoPos(x, y, ang, len) {
   const L = cv.height * 0.36 * len, ground = cv.height * 0.95;
   let px_ = x + Math.sin(ang) * L, py_ = y + Math.cos(ang) * L;
   const rolling = py_ > ground;
-  if (rolling) { px_ = x + Math.sin(ang) * L * 1.15; py_ = ground; } // on the ground: it runs on along it (walk the dog)
+  if (rolling) { // walk the dog: keep the full sideways roll, easing into it as the string meets the pavement
+    const contact = smooth(clamp((py_ - ground) / (cv.height * .025), 0, 1));
+    px_ += Math.sin(ang) * L * .15 * contact; py_ = ground;
+  }
   return { x: px_, y: py_, rolling };
+}
+function drawYoyoString(x, y, endX, endY, w, size, col) {
+  const dx = (endX - x) / w, dy = (endY - y) / size, length = Math.hypot(dx, dy);
+  if (!length) return;
+  const slope = mod(Math.atan2(dy, dx), Math.PI) * 4 / Math.PI, index = Math.floor(slope), blend = smooth(fract(slope));
+  const glyphs = ['-', '\\', '|', '/'];
+  const layers = [[glyphs[index], 1 - blend], [glyphs[(index + 1) % 4], blend]];
+  g.save(); g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * .14); g.strokeStyle = 'rgba(0,0,0,0.8)'; g.fillStyle = col;
+  // Fixed spacing keeps existing characters from jumping when another character is needed at the end.
+  for (let k = 0; k <= Math.ceil(length); k++) {
+    const t = Math.min(k / length, 1), alpha = clamp(length - k + 1, 0, 1);
+    const px_ = x + (endX - x) * t - w / 2, py_ = y + (endY - y) * t - size / 2;
+    for (const [ch, weight] of layers) {
+      if (weight < .01) continue;
+      g.globalAlpha = alpha * weight; g.strokeText(ch, px_, py_); g.fillText(ch, px_, py_);
+    }
+  }
+  g.restore();
 }
 function drawYoyo(x, y) {
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72);
   g.font = s + 'px monospace';
   const hang = 5 * s / (cv.height * 0.36); // (enough string to hang it clear of your hand)
-  const idle = !yoyo.out && yoyo.len < hang, len = Math.max(yoyo.len, hang), ang = idle ? Math.sin(T * 1.3) * 0.07 : yoyo.ang; // (just held: dangling on a short string, swaying a little)
+  const len = Math.max(yoyo.len, hang), rest = Math.sin(T * 1.3) * .07;
+  const extended = smooth(clamp(yoyo.len / hang, 0, 1)), ang = yoyo.ang + rest * (1 - extended);
   const w = g.measureText('M').width, p = yoyoPos(x, y, ang, len), str = PAL[C(WHITE, 11)];
-  charLine(x, y, p.x, p.y, w, s, str);
-  if (Math.abs(yoyo.angV) > 3) for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * 0.02 * k, len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
-  const spin = idle ? 0 : yoyo.spin * (p.rolling ? 1.6 : 1); // (still, in your hand)
+  drawYoyoString(x, y, p.x, p.y, w, s, str);
+  const trail = clamp((Math.abs(yoyo.angV) - 2) / 4, 0, 1);
+  if (trail > 0) {
+    g.save(); g.globalAlpha = trail;
+    for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * .02 * k, len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); }
+    g.restore();
+  }
+  const spin = yoyo.spin * .2; // slower visible spokes avoid strobing; contact and recall never reset their phase
   const [art, col] = sculpt(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
     const r = Math.hypot(cx, cy * 1.1) * 2.5 / 3.2;
     if (r > 2.5) return null;
     if (r < 0.6) return ['@', C(WHITE, 15)];
-    const an = Math.atan2(cy, cx) + spin, spoke = Math.cos(an * 3) > 0.55;
-    return r > 2.1 ? ['o', C(RED, 11)] : [spoke ? '#' : dFill(dSphere(cx, cy * 1.1, 2.5)), spoke ? C(RED, 6) : C(RED, 7 + dSphere(cx, cy * 1.1, 2.5) * 8)];
+    const an = Math.atan2(cy, cx) + spin, spoke = .5 + .5 * Math.cos(an * 3), shade = Math.max(0, dSphere(cx, cy * 1.1, 2.5));
+    return r > 2.1 ? ['o', C(RED, 11)] : [dFill(shade), C(RED, 7 + shade * 8 - spoke * 4)];
   });
   artText(art, p.x - 5.5 * w, p.y - 3.5 * s, s, col);
 }
@@ -26810,7 +26852,7 @@ function heldFrame(it, picture = null) {
   const u = picture ? s / .72 : base, hsz = Math.round(u * 1.15), pose = heldGesture(it, u);
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
   const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * .35 : Math.sin(T * 1.5) * u * .08;
-  const lift = it.id === 'yoyo' ? Math.min(1, .55 + yoyo.len * 3) : 0;
+  const lift = it.id === 'yoyo' ? .55 + .45 * smooth(clamp(yoyo.len / .18, 0, 1)) : 0;
   let cx = cv.width * (.84 - lift * .14) + pose.x, hy = cv.height - 5.6 * hsz + bob - lift * cv.height * .34 + pose.y;
   if (picture) {
     g.font = s + 'px monospace';
@@ -26824,7 +26866,7 @@ function heldFrame(it, picture = null) {
     cx = clamp(cx, 12 - minX, cv.width - 12 - maxX);
     hy = Math.max(hy, 12 - Math.min(...corners.map(p => p.y)));
   }
-  return { u, s, hsz, cx: Math.round(cx), hy: Math.round(hy), grip: 1.1 * hsz, ...pose };
+  return { u, s, hsz, cx: it.id === 'yoyo' ? cx : Math.round(cx), hy: it.id === 'yoyo' ? hy : Math.round(hy), grip: 1.1 * hsz, ...pose };
 }
 // ===== fishing, drawn (fishing.js has the rules): the bait and tackle hut and what's piled round it, the rod in your
 // hand (winding back, whipping forward, bending when something's on, the reel spinning as you wind in), the line out to

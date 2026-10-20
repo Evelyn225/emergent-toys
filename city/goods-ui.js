@@ -406,24 +406,51 @@ function yoyoPos(x, y, ang, len) {
   const L = cv.height * 0.36 * len, ground = cv.height * 0.95;
   let px_ = x + Math.sin(ang) * L, py_ = y + Math.cos(ang) * L;
   const rolling = py_ > ground;
-  if (rolling) { px_ = x + Math.sin(ang) * L * 1.15; py_ = ground; } // on the ground: it runs on along it (walk the dog)
+  if (rolling) { // walk the dog: keep the full sideways roll, easing into it as the string meets the pavement
+    const contact = smooth(clamp((py_ - ground) / (cv.height * .025), 0, 1));
+    px_ += Math.sin(ang) * L * .15 * contact; py_ = ground;
+  }
   return { x: px_, y: py_, rolling };
+}
+function drawYoyoString(x, y, endX, endY, w, size, col) {
+  const dx = (endX - x) / w, dy = (endY - y) / size, length = Math.hypot(dx, dy);
+  if (!length) return;
+  const slope = mod(Math.atan2(dy, dx), Math.PI) * 4 / Math.PI, index = Math.floor(slope), blend = smooth(fract(slope));
+  const glyphs = ['-', '\\', '|', '/'];
+  const layers = [[glyphs[index], 1 - blend], [glyphs[(index + 1) % 4], blend]];
+  g.save(); g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * .14); g.strokeStyle = 'rgba(0,0,0,0.8)'; g.fillStyle = col;
+  // Fixed spacing keeps existing characters from jumping when another character is needed at the end.
+  for (let k = 0; k <= Math.ceil(length); k++) {
+    const t = Math.min(k / length, 1), alpha = clamp(length - k + 1, 0, 1);
+    const px_ = x + (endX - x) * t - w / 2, py_ = y + (endY - y) * t - size / 2;
+    for (const [ch, weight] of layers) {
+      if (weight < .01) continue;
+      g.globalAlpha = alpha * weight; g.strokeText(ch, px_, py_); g.fillText(ch, px_, py_);
+    }
+  }
+  g.restore();
 }
 function drawYoyo(x, y) {
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 0.72);
   g.font = s + 'px monospace';
   const hang = 5 * s / (cv.height * 0.36); // (enough string to hang it clear of your hand)
-  const idle = !yoyo.out && yoyo.len < hang, len = Math.max(yoyo.len, hang), ang = idle ? Math.sin(T * 1.3) * 0.07 : yoyo.ang; // (just held: dangling on a short string, swaying a little)
+  const len = Math.max(yoyo.len, hang), rest = Math.sin(T * 1.3) * .07;
+  const extended = smooth(clamp(yoyo.len / hang, 0, 1)), ang = yoyo.ang + rest * (1 - extended);
   const w = g.measureText('M').width, p = yoyoPos(x, y, ang, len), str = PAL[C(WHITE, 11)];
-  charLine(x, y, p.x, p.y, w, s, str);
-  if (Math.abs(yoyo.angV) > 3) for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * 0.02 * k, len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); } // a smear behind it
-  const spin = idle ? 0 : yoyo.spin * (p.rolling ? 1.6 : 1); // (still, in your hand)
+  drawYoyoString(x, y, p.x, p.y, w, s, str);
+  const trail = clamp((Math.abs(yoyo.angV) - 2) / 4, 0, 1);
+  if (trail > 0) {
+    g.save(); g.globalAlpha = trail;
+    for (const k of [1, 2]) { const r = yoyoPos(x, y, ang - yoyo.angV * .02 * k, len); g.fillStyle = PAL[C(RED, 8 - k * 2)]; g.fillText('o', r.x - w / 2, r.y - s / 2); }
+    g.restore();
+  }
+  const spin = yoyo.spin * .2; // slower visible spokes avoid strobing; contact and recall never reset their phase
   const [art, col] = sculpt(11, 7, (cx, cy) => { // the yo-yo face on: a hub, spokes going round
     const r = Math.hypot(cx, cy * 1.1) * 2.5 / 3.2;
     if (r > 2.5) return null;
     if (r < 0.6) return ['@', C(WHITE, 15)];
-    const an = Math.atan2(cy, cx) + spin, spoke = Math.cos(an * 3) > 0.55;
-    return r > 2.1 ? ['o', C(RED, 11)] : [spoke ? '#' : dFill(dSphere(cx, cy * 1.1, 2.5)), spoke ? C(RED, 6) : C(RED, 7 + dSphere(cx, cy * 1.1, 2.5) * 8)];
+    const an = Math.atan2(cy, cx) + spin, spoke = .5 + .5 * Math.cos(an * 3), shade = Math.max(0, dSphere(cx, cy * 1.1, 2.5));
+    return r > 2.1 ? ['o', C(RED, 11)] : [dFill(shade), C(RED, 7 + shade * 8 - spoke * 4)];
   });
   artText(art, p.x - 5.5 * w, p.y - 3.5 * s, s, col);
 }

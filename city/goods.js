@@ -178,17 +178,32 @@ const luck = () => (carrying('jadebangle') ? 0.03 : 0) + (carrying('jadedragon')
 // The yo-yo is steered by a virtual cursor bounded to a circle around the hand. Cursor distance pays out string;
 // direction sets the target position, while the yo-yo carries momentum as it catches up.
 const yoyo = { out: false, len: 0, lenV: 0, ang: 0, angV: 0, spin: 0, aimX: 0, aimY: 0 };
+// Exact damped-spring motion keeps the same response through uneven frame times.
+function yoyoSpring(value, velocity, target, stiffness, damping, dt) {
+  const decay = damping / 2, frequency = Math.sqrt(stiffness - decay * decay);
+  const offset = value - target, fade = Math.exp(-decay * dt), c = Math.cos(frequency * dt), s = Math.sin(frequency * dt);
+  return [target + fade * (offset * c + (velocity + decay * offset) * s / frequency),
+    fade * (velocity * c - (decay * velocity + stiffness * offset) * s / frequency)];
+}
 function stepYoyo(dt) {
   const targetLen = yoyo.out ? Math.hypot(yoyo.aimX, yoyo.aimY) : 0;
-  const targetAng = Math.atan2(yoyo.aimX, yoyo.aimY), da = mod(targetAng - yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
-  yoyo.lenV += ((targetLen - yoyo.len) * 36 - yoyo.lenV * 8) * dt;
-  yoyo.len = clamp(yoyo.len + yoyo.lenV * dt, 0, 1);
+  [yoyo.len, yoyo.lenV] = yoyoSpring(yoyo.len, yoyo.lenV, targetLen, 36, 8, dt);
+  yoyo.len = clamp(yoyo.len, 0, 1);
   if ((yoyo.len === 0 && yoyo.lenV < 0) || (yoyo.len === 1 && yoyo.lenV > 0)) yoyo.lenV = 0;
-  yoyo.angV += (da * 34 - yoyo.angV * 4) * dt;
-  yoyo.ang += yoyo.angV * dt;
+  // Direction is undefined at the hand: let momentum coast instead of snapping toward tiny cursor movements.
+  if (yoyo.out && targetLen <= .04) {
+    const fade = Math.exp(-6 * dt);
+    yoyo.ang += yoyo.angV * (1 - fade) / 6; yoyo.angV *= fade;
+  } else {
+    const targetAng = yoyo.out ? Math.atan2(yoyo.aimX, yoyo.aimY) : 0;
+    const da = mod(targetAng - yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
+    [yoyo.ang, yoyo.angV] = yoyoSpring(yoyo.ang, yoyo.angV, yoyo.ang + da, 34, 6, dt);
+  }
   yoyo.ang = mod(yoyo.ang + Math.PI, Math.PI * 2) - Math.PI;
-  yoyo.spin += dt * (20 + Math.abs(yoyo.angV) * 6);
-  if (!yoyo.out && yoyo.len < 0.01 && Math.abs(yoyo.lenV) < 0.08) { yoyo.len = yoyo.lenV = yoyo.ang = yoyo.angV = 0; yoyo.aimX = yoyo.aimY = 0; }
+  if (yoyo.out || yoyo.len > 0) yoyo.spin += dt * (20 + Math.abs(yoyo.angV) * 6);
+  if (!yoyo.out && yoyo.len < .01 && Math.abs(yoyo.lenV) < .08 && Math.abs(yoyo.ang) < .01 && Math.abs(yoyo.angV) < .05) {
+    yoyo.len = yoyo.lenV = yoyo.ang = yoyo.angV = 0; yoyo.aimX = yoyo.aimY = 0;
+  }
   fx.yoyo = yoyo.len > 0 || yoyo.out ? 1 : 0;
 }
 // About 200 screen pixels reaches the end of the string. Clamp the virtual cursor to its hand-centered circle.
