@@ -286,3 +286,14 @@ test('the tattoo parlour: pick a design, sit for it, pay; it is on you for good,
   assert.deepStrictEqual(j("stealable(stockFor('tattoo', 'TATTOO'))"), []);
   assert.deepStrictEqual(j("stealable(['coffee', 'car_hatch', 'tattoo_swallow', 'vinyl'])"), ['coffee', 'vinyl']);
 });
+
+test('riding the board needs it in your hand: switch to something else, or empty your hands, and you step off', () => {
+  const { ev } = loadCity();
+  ev("mode = 'walk'; clearInventory(); carryItem({ id: 'skateboard', uses: 0 }); carryItem({ id: 'apple', uses: 3 }, false); held = 0; fx.skating = true; stepGoods(0.05)");
+  assert.strictEqual(ev('fx.skating'), true, 'still riding with the board in hand');
+  ev('holdQuickSlot(1); stepGoods(0.05)');
+  assert.strictEqual(ev("heldItem().id"), 'apple');
+  assert.strictEqual(ev('fx.skating'), false, 'the apple came out: off the board');
+  ev('held = 0; fx.skating = true; stepGoods(0.05); held = -1; stepGoods(0.05)');
+  assert.strictEqual(ev('fx.skating'), false, 'empty hands: off the board');
+});

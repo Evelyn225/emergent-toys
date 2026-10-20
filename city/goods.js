@@ -451,7 +451,7 @@ function pickUpDropped(d) {
   return [true, `You pick up the ${ITEMS[d.id].name}.`];
 }
 function stepGoods(dt) {
-  if (fx.skating && mode !== 'walk') fx.skating = false;
+  if (fx.skating && (mode !== 'walk' || !heldItem() || heldItem().id !== 'skateboard')) fx.skating = false; // (on foot again: indoors, or something else in your hand)
   fx.caffeine = Math.max(0, fx.caffeine - dt); fx.booze = Math.max(0, fx.booze - dt / 120); fx.smoke = Math.max(0, fx.smoke - dt);
   fx.stink = Math.max(0, fx.stink - dt); fx.bang = Math.max(0, fx.bang - dt);
   stepYoyo(dt); if (!heldItem() || heldItem().id !== 'yoyo') yoyo.out = false; // (put it away and it comes back up)

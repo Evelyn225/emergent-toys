@@ -165,6 +165,7 @@ function figBody(look, key) {
     if (hair(l)) return R.HAIR;
     return FIG_FINE && !look.form && figFace(l) || R.SKIN;
   });
+  const faceFrom = parts.length; // (the head and what's on it, from here: the only parts a fine sprite casts finer)
   if (look.form) parts.push(figEll(U(0, 0.1, 8.6), ax, [1.2, 1.2, 0.8], () => R.SKIN)); // a dress form: the knob on its neck, no head
   else parts.push(head);
   const HU = (x, y, z) => fAdd(H, fAdd(fMul(ex, x), fAdd(fMul(ey, y), fMul(ez, z))));
@@ -183,6 +184,7 @@ function figBody(look, key) {
     const n = fNorm([sg * 0.33, 0.93, 0.1]);
     decals.push({ p: HU(n[0] * hr[0], n[1] * hr[1], n[2] * hr[2]), n: fNorm(fAdd(fMul(ex, n[0]), fAdd(fMul(ey, n[1]), fMul(ez, n[2])))), role: R.EYE, part: parts.indexOf(head) });
   }
+  const faceTo = parts.length;
   // the arms
   // tattoos (look.ink: how much of the bare arm they cover, 0..1): bold shapes wrapping round, more of the arm the more there is
   const inked = h => look.ink > 0 && fract(h.s * 3.2 + Math.atan2(h.n[1], h.n[0]) * 0.32 + (h.n[2] > 0 ? 0.13 : 0)) < 0.25 + look.ink * 0.55 && h.s > 1 - look.ink * 1.6;
@@ -212,7 +214,7 @@ function figBody(look, key) {
   if (look.badge) decals.push({ p: U(-1.45 * bw, 2.0 * bd + 0.01, 5.6), n: ey, role: R.BADGE, part: parts.indexOf(chest) });
   if (belted) decals.push({ p: U(0, 1.8 * bd + 0.01, 0.3), n: ey, role: R.BUCKLE, part: parts.indexOf(waist) });
   if (bot === 'pants' || bot === 'shorts') for (const sg of [1, -1]) decals.push({ p: [sg * 1.35 * bw, -1.7 * bd - 0.01, hipZ - 0.75], n: [0, -1, 0], role: R.POCKET, part: parts.indexOf(pelvis) });
-  return { parts, decals };
+  return { parts, decals, face: [faceFrom, faceTo] };
 }
 
 // ---- ray casting the parts: a ray along -V through (u, z) on the view plane. Fills FIG_HIT; returns t or -1.
@@ -264,37 +266,55 @@ function figHitPart(P, o, d) {
 // figRasterAt takes the angle itself, and (near) gets how far toward you each pixel's surface is from the middle
 // S: pixels to a sprite pixel (1, or more for a fine sprite up close: see drawFigure)
 const figRaster = (body, view, S = 1) => figRasterAt(body, view / FIG_VIEWS * Math.PI * 2, null, S);
-function figRasterAt(body, th, near, S = 1) {
+function figRasterAt(body, th, near, S = 1, ownerOut = null) {
   const W = FIG_W * S, H = FIG_H * S;
+  // a fine sprite casts only round the head finer (where there's a face to see); the rest is the ordinary sprite, scaled
+  let base = null, baseOwner = null;
+  if (S > 1 && body.face) { baseOwner = new Int16Array(FIG_W * FIG_H); base = figRasterAt(body, th, null, 1, baseOwner); }
+  const [f0, f1] = body.face || [0, 0], headMask = base && new Uint8Array(FIG_W * FIG_H); // (the head's pixels, and a pixel round them)
+  if (base) for (let r = 0; r < FIG_H; r++) for (let c = 0; c < FIG_W; c++) {
+    const o = baseOwner[r * FIG_W + c];
+    if (o >= f0 && o < f1) for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const cc = c + i, rr = r + j; if (cc >= 0 && cc < FIG_W && rr >= 0 && rr < FIG_H) headMask[rr * FIG_W + cc] = 1; }
+  }
   const V = [Math.sin(th), Math.cos(th), 0], Rv = [-V[1], V[0], 0], d = fMul(V, -1);
   const light = fNorm(fAdd(V, fAdd([0, 0, 0.7], fMul(Rv, -0.6)))); // from over your left shoulder
   const spr = new Uint8Array(W * H), owner = new Int16Array(W * H).fill(-1);
-  spr.S = S; FIG_FINE = S > 1;
+  FIG_FINE = S > 1;
   // each part's extent on the view plane (a bounding sphere's), so a pixel only tries the parts that could cover it
   const box = body.parts.map(P => {
     const [a, b, r] = P.k === 2 ? [P.a, P.b, P.r] : [P.c, P.c, P.k === 0 ? Math.max(...P.r) : Math.hypot(...P.h)];
     const ua = fDot(a, Rv), ub = fDot(b, Rv);
     return [Math.min(ua, ub) - r, Math.max(ua, ub) + r, Math.min(a[2], b[2]) - r, Math.max(a[2], b[2]) + r];
   });
-  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+  const cast = (r, c, bi_) => { // one pixel: the nearest part along its ray, and what it is there
     const u = (c + 0.5) / S - FIG_W / 2, z = FIG_H - (r + 0.5) / S, o = fAdd(fMul(Rv, u), fAdd([0, 0, z], fMul(V, 60)));
     let best = Infinity, role = 0, who = -1;
-    body.parts.forEach((P, k) => {
-      const e = box[k];
-      if (u < e[0] || u > e[1] || z < e[2] || z > e[3]) return;
+    for (let k = base ? f0 : 0, kn = base ? f1 : body.parts.length; k < kn; k++) { // (round the head, only the head and what's on it: anything else is as the ordinary sprite has it)
+      const P = body.parts[k], e = box[k];
+      if (u < e[0] || u > e[1] || z < e[2] || z > e[3]) continue;
       const t = figHitPart(P, o, d);
-      if (t < 0 || t >= best) return;
+      if (t < 0 || t >= best) continue;
       let ro = P.role(FIG_HIT);
-      if (!ro) return;
+      if (!ro) continue;
       if (P.shade && FIG_DARK[ro]) {
         const n = P.k === 2 ? fNorm([FIG_HIT.n[0], FIG_HIT.n[1], 0]) : FIG_HIT.n;
         if (fDot(n, light) < (P.k === 0 ? -0.12 : 0.08)) ro = FIG_DARK[ro];
       }
       best = t; role = ro; who = k;
-    });
+    }
+    if (base && who < 0 && baseOwner[bi_] >= 0 && (baseOwner[bi_] < f0 || baseOwner[bi_] >= f1)) { role = base[bi_]; who = baseOwner[bi_]; }
     spr[r * W + c] = role; owner[r * W + c] = who;
     if (near) near[r * W + c] = 60 - best;
+  };
+  if (!base) { for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) cast(r, c, -1); }
+  else for (let br = 0; br < FIG_H; br++) for (let bc = 0; bc < FIG_W; bc++) { // the ordinary sprite's pixels in blocks, the head's cast again finer
+    const bi_ = br * FIG_W + bc;
+    if (headMask[bi_]) { for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) cast(br * S + j, bc * S + i, bi_); continue; }
+    const v = base[bi_], ow = baseOwner[bi_];
+    if (!v && ow < 0) continue;
+    for (let j = 0; j < S; j++) { const row = (br * S + j) * W + bc * S; spr.fill(v, row, row + S); owner.fill(ow, row, row + S); }
   }
+  if (ownerOut) ownerOut.set(owner);
   FIG_FINE = false;
   for (const dc of body.decals) { // one pixel each (in a fine sprite, a dab), only where its part is what you see and it's turned toward you
     if (fDot(dc.n, V) < 0.25) continue;
@@ -303,13 +323,18 @@ function figRasterAt(body, th, near, S = 1) {
     for (let r = Math.floor(r0 - k); r <= Math.floor(r0 + k); r++) for (let c = Math.floor(c0 - k); c <= Math.floor(c0 + k); c++)
       if (c >= 0 && c < W && r >= 0 && r < H && owner[r * W + c] === dc.part) spr[r * W + c] = dc.role;
   }
+  spr.S = S; // (set last: a property on a typed array slows every write to it after)
   return spr;
 }
 const figCache = new Map(), figFineCache = new Map(); // (fine sprites are big: only a few kept, for whoever's close)
+// new fine sprites cast a frame, at most: past that, whoever's left waits a frame or two in the ordinary one
+const FIG_FINE_PER_FRAME = 1;
+let figFineT = -1, figFineN = 0;
 function figSprite(look, view, key, S = 1) {
   const id = look.shape + '|' + key + '|' + view + (S > 1 ? '|' + S : ''), cache = S > 1 ? figFineCache : figCache;
   let s = cache.get(id);
   if (s) { cache.delete(id); cache.set(id, s); return s; } // (most recently used last)
+  if (S > 1) { if (figFineT !== T) { figFineT = T; figFineN = 0; } if (++figFineN > FIG_FINE_PER_FRAME) return figSprite(look, view, key, 1); }
   const bid = look.shape + '|' + key;
   let body = figCache.get(bid);
   if (!body) figCache.set(bid, body = look.build ? look.build(key) : figBody(look, key)); // (an animal brings its own)
@@ -437,7 +462,7 @@ function figSample(spr, pu, pz, su, sz) {
 // sprites serve whoever's coming toward you)
 const FIG_MARK = []; FIG_MARK[FR.EYE] = 'o'; FIG_MARK[FR.MOUTH] = '-'; // (drawn as characters on the skin: see drawFigure)
 // (cells are taller than they're wide, so it's how many rows a pixel spans that counts)
-const FIG_FINE_AT = 2, FIG_FINE_MAX = 6;
+const FIG_FINE_AT = 2, FIG_FINE_MAX = 4;
 function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
   const unit = h / FIG_TALL, depth = typeof projY === 'number' ? Math.max(0.01, dx * rx + dy * ry) : 1e9, rowsPer = unit * projY / depth; // (no screen in the node tests)
   const spr = figSprite(look, figView(rx, ry, fx, fy), pose, !look.build && rowsPer >= FIG_FINE_AT ? Math.min(FIG_FINE_MAX, Math.floor(rowsPer)) : 1), floor = opts?.light || 0, sparkle = look.sparkle;
