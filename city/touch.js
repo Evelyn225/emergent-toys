@@ -67,6 +67,7 @@ function touchActions() {
   if (game) {
     if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : game.kind === 'table' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(MJ_BUYIN)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
     if (game.kind === 'show') return [['Leave', 'KeyE', 'pop'], ['Tip $1', 'Space', 'main']];
+    if (game.kind === 'cook') return [['Off heat', 'KeyE', 'pop'], ['Add', 'ArrowDown', 'pop'], [cookVerb(game.g), 'ArrowUp', 'pop'], ['Heat (hold)', 'Space', 'main']];
     if (game.kind === 'market') return [['Leave', 'KeyE', 'pop'], ['Up', 'ArrowUp', 'pop'], ['Down', 'ArrowDown', 'pop'], ['Sell', 'ArrowLeft', 'pop'], ['Buy', 'ArrowRight', 'pop'], [`Lot ${game.g.lot()}`, 'Space', 'main']];
     if (game.kind === 'casino') { // the casino: what the buttons do depends on where the hand's at
       const st = game.g.state(), id = game.g.id;

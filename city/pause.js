@@ -89,7 +89,6 @@ function buildPause() {
       <h2></h2>
       ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
     </div>`);
-  const RANGE = { fov: [50, 100], sensitivity: [0.25, 3] };
   const show = () => {
     const fullscreen = el.querySelector('[data-act="fullscreen"]');
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
@@ -105,7 +104,10 @@ function buildPause() {
       const k = s.dataset.show, v = settings[k];
       s.textContent = k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : Math.round(v * 100) + '%';
     }
-    for (const b of el.querySelectorAll('[data-bar]')) { const [lo, hi] = RANGE[b.dataset.bar] || [0, 1]; b.innerHTML = asciiBar((settings[b.dataset.bar] - lo) / (hi - lo)); }
+    for (const b of el.querySelectorAll('[data-bar]')) {
+      const inp = el.querySelector(`[data-set="${b.dataset.bar}"]`), lo = +inp.min, hi = +inp.max;
+      b.innerHTML = asciiBar((settings[b.dataset.bar] - lo) / (hi - lo));
+    }
     for (const b of el.querySelectorAll('[data-toggle]')) b.textContent = settings[b.dataset.toggle] ? '[x] on' : '[ ] off';
     for (const b of el.querySelectorAll('[data-detail]')) b.classList.toggle('on', b.dataset.detail === settings.detail);
   };
@@ -138,9 +140,14 @@ function buildPause() {
 }
 
 const homeEl = document.getElementById('home');
+function resetStartOver() {
+  const button = pauseEl && pauseEl.querySelector('[data-act="newgame"]');
+  if (button) { delete button.dataset.sure; button.textContent = 'Start over'; }
+}
 function openPause() {
   if (paused) return;
   pauseEl = pauseEl || buildPause();
+  resetStartOver();
   paused = true;
   for (const k in K) K[k] = 0; // nothing held down while we're away
   pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
@@ -150,6 +157,7 @@ function openPause() {
 }
 function closePause(lock) {
   if (!paused) return;
+  resetStartOver();
   paused = false; pauseEl.style.display = 'none'; homeEl.style.display = 'none';
   if (lock) lockMouse(); // resuming with the mouse: take it straight back
 }

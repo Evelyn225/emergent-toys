@@ -463,19 +463,38 @@ function drawDropped(d, vx, vy, s) {
 // left of the buttons)
 const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed);
 function hotbar() {
-  if (!hotbarUp()) return;
-  const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0);
-  let x = 6, y = cv.height - FS * 2 - 10;
+  if (!hotbarUp()) return cv.height;
+  const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0), width = maxX - 6;
+  const rows_ = [[]];
+  let rowWidth = 0;
   quickSlots.forEach((k, slot) => {
     const it = inv[k]; if (!it) return;
-    const s = `${slot + 1} ${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`, w = g.measureText(s).width + 12;
-    if (x > 6 && x + w > maxX) { x = 6; y -= FS + 12; }
-    g.fillStyle = k === held ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
-    g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
-    x += w + 4;
+    const s = `${slot + 1} ${itemName(it)}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
+    const lines = wrapText(s, width - 12), w = Math.max(...lines.map(l => g.measureText(l).width)) + 12;
+    if (rowWidth && rowWidth + w > width) { rows_.push([]); rowWidth = 0; }
+    rows_.at(-1).push({ k, lines, w }); rowWidth += w + 4;
   });
+  let bottom = cv.height - FS - 2;
+  for (const row of rows_) {
+    if (!row.length) continue;
+    const h = Math.max(...row.map(c => c.lines.length)) * (FS + 4) + 4, y = bottom - h;
+    let x = 6;
+    for (const { k, lines, w } of row) {
+      g.fillStyle = k === held ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, h);
+      g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)';
+      lines.forEach((s, n) => g.fillText(s, x + 6, y + 4 + n * (FS + 4)));
+      x += w + 4;
+    }
+    bottom = y - 4;
+  }
   const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
-  if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
+  if (tags.length) {
+    const lines = wrapText(tags.join('  '), width - 12), h = lines.length * (FS + 4) + 4;
+    bottom -= h;
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, bottom, Math.max(...lines.map(s => g.measureText(s).width)) + 12, h);
+    g.fillStyle = 'rgba(255,255,255,0.7)'; lines.forEach((s, n) => g.fillText(s, 12, bottom + 4 + n * (FS + 4)));
+  }
+  return bottom;
 }
 
 // ---- shop menu and inventory: small panels over a frozen game, keyboard or mouse
@@ -492,13 +511,13 @@ const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' &
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
-  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `${id === UNDER_COUNTER[0] ? '<h2>under the counter</h2>' : ''}<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
+  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `${id === UNDER_COUNTER[0] ? '<h2>under the counter</h2>' : ''}<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k < 9 ? k + 1 : ''}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
   const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate), bin = binnable(it, rate);
-    return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${it.kg ? catchName(it) : ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
+    return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${itemName(it)}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
   const work = shiftHere();
   const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${{ serve: 'Wait tables for a shift', tapper: 'Tend bar for a shift' }[work] || 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
   showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
-    ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${stock.length} buy${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
+    ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${Math.min(9, stock.length)} buy &middot; click any item${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
   shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); else if (e.target.closest('[data-work]')) startShift(); };
 }
 function shopBuy(id) {
@@ -524,7 +543,7 @@ function openInventory() {
   invEl = invEl || panel('inventory');
   if (!invStyle) { const style = document.createElement('style'); style.textContent = `#inventory .carry-row { display:flex; align-items:center; gap:10px; } #inventory .carry-row > .item { flex:1; width:auto; min-width:0; } #inventory .quick-slot { display:flex; align-items:center; gap:4px; white-space:nowrap; color:rgba(255,255,255,0.3); } #inventory .quick-slot select { width:4.5em; padding:2px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); background:#08080a; font:inherit; } #inventory .quick-slot option { color:#fff; background:#08080a; }`; document.head.appendChild(style); invStyle = true; }
   const rows_ = inv.length ? inv.map((it, k) => {
-    const slot = quickSlots.indexOf(k), name = it.kg ? catchName(it) : ITEMS[it.id].name;
+    const slot = quickSlots.indexOf(k), name = itemName(it);
     return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
@@ -539,7 +558,7 @@ let storeCtx = [stored, 'your unit', 'Storage unit', 'The same unit at every sto
 function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3], accepts = storeCtx[4], capacity = storeCtx[5]) {
   storeCtx = [list, where, title, sub, accepts, capacity];
   storeEl = storeEl || panel('storage');
-  const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
+  const item = it => `${itemName(it)}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
   const eligible = inv.map((it, k) => ({ it, k })).filter(({ it }) => !accepts || accepts(it));
   const carried = eligible.length ? eligible.map(({ it, k }) => { const slot = quickSlots.indexOf(k); return `<button class="item" data-store="${k}"><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`; }).join('') : `<p class="sub" style="padding-left:18px">${inv.length ? 'Nothing suitable to put here.' : 'Nothing in your hands.'}</p>`;
   const unit = list.length ? list.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';

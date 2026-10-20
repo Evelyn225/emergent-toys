@@ -85,7 +85,11 @@ function sfxGame(e) {
 }
 
 // on a phone the buttons keep part of the screen (the bottom, held upright; the right, sideways): px to leave clear
-const gameClear = () => !TOUCH ? [0, 0] : innerWidth > innerHeight ? [TOUCH_PAD_W - 30, 0] : [0, TOUCH_PAD_H];
+function gameClear() {
+  if (!TOUCH) return [0, 0];
+  if (innerWidth > innerHeight) return [TOUCH_PAD_W - 30, 0];
+  return [0, game && game.kind === 'cook' ? 250 : TOUCH_PAD_H];
+}
 // the character size that fits the whole cabinet on screen, never bigger than the detail setting's
 function gameFS(g) {
   const [cr, cb] = gameClear(), ratio = cw / FS; // (a character's width per px of height, in this font)
@@ -94,7 +98,18 @@ function gameFS(g) {
 // what the screen says to press: on a phone, the buttons' names
 // (on a phone: what the buttons are called. UP is the Mahjong! button only at the mahjong table; lockpicking's HOLD UP
 // is the stick held up)
-const gameText = (s, g) => !TOUCH ? s : (g && g.id === 'mahjong' ? s.replace(/\bUP\b/g, 'MAHJONG') : g && g.id === 'boxing' ? s.replace('DOWN block   UP head   SPACE body', 'the buttons block and punch') : s).replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/SPACE/g, 'GO');
+const cookVerb = g => ({ pot: 'Stir', oven: 'Turn', grill: 'Turn' }[g.how] || 'Flip');
+function gameText(s, g) {
+  if (!TOUCH) return s;
+  if (g && g.id === 'cook') {
+    const verb = cookVerb(g).toUpperCase();
+    return s.replace('HOLD SPACE heat', 'HOLD HEAT').replace('UP flip / stir', verb).replace('DOWN add', 'ADD')
+      .replace(/\[UP\]/g, `[${verb}]`).replace(/\[DOWN\]/g, '[ADD]');
+  }
+  if (g && g.id === 'mahjong') s = s.replace(/\bUP\b/g, 'MAHJONG');
+  if (g && g.id === 'boxing') s = s.replace('DOWN block   UP head   SPACE body', 'the buttons block and punch');
+  return s.replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/SPACE/g, 'GO');
+}
 // the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
 function drawGame() {
   const g = game.g, fs = gameFS(g);
@@ -120,7 +135,10 @@ function drawGame() {
       const i = (y0 + y * bh + r) * cols + x0 + x * bw + c;
       set(i, ch, col); if (bg !== undefined && bg !== NONE) BG[i] = bg;
     }
-  }, (x, y, s_, col, align) => putText(y0 + y * bh + (bh >> 1), Math.round(x0 + x * bw - (align === 'center' ? s_.length / 2 : 0)), s_, col), // a label, at normal size
+  }, (x, y, s_, col, align) => {
+       if (g.id === 'cook') s_ = gameText(s_, g);
+       putText(y0 + y * bh + (bh >> 1), Math.round(x0 + x * bw - (align === 'center' ? s_.length / 2 : 0)), s_, col);
+     }, // a label, at normal size
      (c, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + c, s_, col), // one placed by character (a column in a table): c counts characters from the left
      (x, y, w, h, fill, col) => { // lines of characters filling a w x h patch of cells, centred: fill(chars wide, chars high) gives them
        const W_ = w * bw, H_ = h * bh, lines = fill(W_, H_).slice(0, H_), top = y0 + y * bh + ((H_ - lines.length) >> 1);

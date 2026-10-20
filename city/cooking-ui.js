@@ -80,7 +80,7 @@ function openCooking(on, pantry = null, spot = null) {
   }).join('');
   const where = { stove: 'At the stove', grill: 'At the grill', fire: 'At the campfire' }[on];
   showPanel(cookEl, `<h1>${where}</h1><p class="sub">${pantry ? 'From your bag and the fridge' : 'From your bag'} &middot; the grocer's, the market and the deli sell the makings</p>${rows_}
-    <p class="hint">1-9 cook &middot; then HOLD SPACE for heat, UP to flip or stir, DOWN to add &middot; E / Esc close</p>`);
+    <p class="hint">${TOUCH ? 'Tap a recipe, then hold Heat; use Flip / Stir / Turn and Add when prompted. Close to leave.' : '1-9 cook &middot; then HOLD SPACE for heat, UP to flip or stir, DOWN to add &middot; E / Esc close'}</p>`);
   cookEl.onclick = e => { const b = e.target.closest('[data-cook]'); if (b) startCooking(cookCtx.list[+b.dataset.cook]); };
 }
 function startCooking(r) {

@@ -9,10 +9,10 @@ const BIGMAP_CSS = `
   #bigmap { background: #000; }
   #bigmap canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
   #bigmap canvas.drag { cursor: grabbing; }
-  #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); display: flex; gap: 6px; }
-  #bigmap .bar button { min-width: 38px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
+  #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); right: calc(12px + env(safe-area-inset-right)); max-width: 420px; display: flex; gap: 6px; }
+  #bigmap .bar button { flex: 0 0 auto; min-width: 38px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
   #bigmap .bar button:hover { border-color: #fff; }
-  #bigmap .bar input { width: 200px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; font: inherit; outline: none; }
+  #bigmap .bar input { flex: 1; min-width: 0; width: 200px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; font: inherit; outline: none; }
   #bigmap .bar input:focus { border-color: #fff; }
   #bigmap .tip { position: absolute; z-index: 2; left: calc(12px + env(safe-area-inset-left)); bottom: 10px; color: rgba(255, 255, 255, 0.45); pointer-events: none; }`;
 
@@ -175,6 +175,7 @@ function openBigMap() {
   BIGMAP.z = clamp(Math.min(innerWidth, innerHeight) / 60, 4, 10); // a few blocks round you to start
   BIGMAP.keys = {}; BIGMAP.pts.clear();
   bigMapEl.style.display = 'block';
+  homeEl.style.display = 'none';
   paused = true;
   const tick = () => { if (!bigMapOpen()) return; bigMapStep(); bigMapDraw(); requestAnimationFrame(tick); };
   BIGMAP.last = performance.now(); requestAnimationFrame(tick);
@@ -198,7 +199,14 @@ function bigMapStep() { // held keys pan smoothly, a screen's width every second
   const dx = (k.ArrowLeft || k.KeyA ? 1 : 0) - (k.ArrowRight || k.KeyD ? 1 : 0), dy = (k.ArrowUp || k.KeyW ? 1 : 0) - (k.ArrowDown || k.KeyS ? 1 : 0);
   if (dx || dy) bigMapPan(dx * s, dy * s);
 }
-function closeBigMap() { if (!bigMapOpen()) return; bigMapEl.style.display = 'none'; BIGMAP.keys = {}; if (pauseEl) pauseEl.querySelector('[data-act="map"]').focus(); }
+function closeBigMap() {
+  if (!bigMapOpen()) return;
+  bigMapEl.style.display = 'none'; BIGMAP.keys = {};
+  if (pauseEl && pauseEl.style.display === 'flex') {
+    homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block';
+    pauseEl.querySelector('[data-act="map"]').focus();
+  }
+}
 const bigMapOpen = () => !!bigMapEl && bigMapEl.style.display !== 'none';
 // keys while the map's up: it takes them all (the game's paused under it)
 function bigMapKey(e, down) {

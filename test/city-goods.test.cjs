@@ -183,6 +183,24 @@ test('you can hold nothing: pick the same slot again, and nothing is in your han
   assert.strictEqual(ev('heldItem().id'), 'book');
 });
 
+test('dropping and retrieving meals and catches preserves their identity, quality and value', () => {
+  const { ev, j } = fresh();
+  for (const item of [
+    { id: 'panfish', uses: 2, q: 'perfect', of: 'seabass' },
+    { id: 'panfish', uses: 1, q: 'burnt', of: 'mackerel' },
+    { id: 'tuna', uses: 0, kg: 30 }
+  ]) {
+    ev(`clearInventory(); carryItem(${JSON.stringify(item)}); held = 0`);
+    const name = ev('itemName(heldItem())'), price = ev('catchPrice(heldItem())');
+    assert.strictEqual(ev("dropHeldAt(10, 20, '', 2)"), name);
+    assert.deepStrictEqual(j('pickUpDropped(dropped[0])'), [true, `You pick up the ${name}.`]);
+    assert.deepStrictEqual(j('heldItem()'), item, 'ground coordinates must not leak back into the bag');
+    assert.strictEqual(ev('catchPrice(heldItem())'), price);
+  }
+  assert.match(ev("itemName({id:'panfish', q:'perfect', of:'seabass'})"), /perfect pan-fried sea bass/);
+  assert.match(ev("itemName({id:'panfish', q:'burnt', of:'mackerel'})"), /burnt pan-fried mackerel/);
+});
+
 test('the boombox: a random tape when you switch it on, B steps through them in order', () => {
   const { ev } = fresh();
   ev("money = 100; buy('boombox')");

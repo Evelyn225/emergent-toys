@@ -438,13 +438,17 @@ function turnOrrery() {
 const hurrying = () => usingHeldItem() && !paused && !!heldItem() && heldItem().id === 'pocketwatch';
 // things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
-// Half-eaten stays half-eaten.
-const dropped = []; // { id, uses, x, y, at, z }
+// Half-eaten stays half-eaten; cooking quality, ingredients and catch weight stay with the item too.
+function itemName(it) {
+  if (ITEMS[it.id].cooked) return `${it.q ? it.q + ' ' : ''}${dishName(it)}`;
+  return it.kg ? catchName(it) : ITEMS[it.id].name;
+}
+const dropped = []; // inventory item plus { x, y, at, z }
 function dropHeldAt(x, y, at, z = 0) {
   const it = heldItem();
   if (!it) return null;
-  removeHeld(); dropped.push({ id: it.id, uses: it.uses, x, y, at, z });
-  return ITEMS[it.id].name;
+  removeHeld(); dropped.push({ ...it, x, y, at, z });
+  return itemName(it);
 }
 // the nearest thing lying within r of (x, y) in the same place, if any
 function droppedNear(x, y, at, r, z = 0) {
@@ -454,8 +458,9 @@ function droppedNear(x, y, at, r, z = 0) {
 }
 function pickUpDropped(d) {
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
-  dropped.splice(dropped.indexOf(d), 1); carryItem({ id: d.id, uses: d.uses });
-  return [true, `You pick up the ${ITEMS[d.id].name}.`];
+  const { x, y, at, z, displayZ, ...it } = d;
+  dropped.splice(dropped.indexOf(d), 1); carryItem(it);
+  return [true, `You pick up the ${itemName(it)}.`];
 }
 function stepGoods(dt) {
   if (fx.skating && (mode !== 'walk' || !heldItem() || heldItem().id !== 'skateboard')) fx.skating = false; // (on foot again: indoors, or something else in your hand)

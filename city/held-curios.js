@@ -100,15 +100,21 @@ DENSE.soggybook = it => {
 function heldPocketknife(it) {
   const phase = heldUsePhase(it), open = phase >= 0 ? Math.sin(phase * Math.PI) : 0;
   const angle = -Math.PI / 2 - (1 - open) * Math.PI, ca = Math.cos(angle), sa = Math.sin(angle);
-  return sculpt(32, 25, (x, y) => {
+  return sculpt(46, 34, (x, y) => {
     // Upright handle in the fist, hinge above it. The blade folds into the handle and opens upward.
-    if (Math.abs(x) < 1.6 && y > -2.5 && y < 9) {
-      if (Math.hypot(x, y + 1.3) < .75 || Math.hypot(x, y - 6.5) < .45) return ['o', C(YEL, 14)];
+    if (Math.abs(x) < 1.6 && y > -2.5 && y < 10.8) {
+      if (y < -1) return [Math.abs(x) < .5 ? 'o' : '=', C(GRAY, 14)]; // steel bolster and hinge
+      if (Math.hypot(x, y - 8) < .5) return ['o', C(YEL, 14)];
       return dLit(.8 - x * .15, RED, 8);
     }
     const dy = y + 2, along = x * ca + dy * sa, across = -x * sa + dy * ca;
-    if (along > .5 && along < 8.6 && Math.abs(across) < .9 * (1 - along / 9))
-      return [Math.abs(across) > .4 ? '/' : '#', C(GRAY, across > 0 ? 15 : 11)];
+    // A broad drop-point blade: straight spine, rounded belly, bright cutting bevel and a nail nick.
+    const tip = clamp((along - 8.5) / 4, 0, 1), spine = -1.35 * (1 - tip * tip), edge = 1.55 * (1 - tip);
+    if (along > .5 && along < 12.5 && across > spine && across < edge) {
+      if (along > 3 && along < 7.5 && across > spine + .35 && across < spine + .8) return ['-', C(GRAY, 7)];
+      if (across > edge - .55) return ['/', C(GRAY, 15)];
+      return ['#', C(GRAY, across < spine + .4 ? 13 : 11)];
+    }
     return null;
   });
 }

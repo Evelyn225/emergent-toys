@@ -5702,13 +5702,17 @@ function turnOrrery() {
 const hurrying = () => usingHeldItem() && !paused && !!heldItem() && heldItem().id === 'pocketwatch';
 // things you put down stay where you left them till you pick them up again: out on the street (at '') or inside
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
-// Half-eaten stays half-eaten.
-const dropped = []; // { id, uses, x, y, at, z }
+// Half-eaten stays half-eaten; cooking quality, ingredients and catch weight stay with the item too.
+function itemName(it) {
+  if (ITEMS[it.id].cooked) return `${it.q ? it.q + ' ' : ''}${dishName(it)}`;
+  return it.kg ? catchName(it) : ITEMS[it.id].name;
+}
+const dropped = []; // inventory item plus { x, y, at, z }
 function dropHeldAt(x, y, at, z = 0) {
   const it = heldItem();
   if (!it) return null;
-  removeHeld(); dropped.push({ id: it.id, uses: it.uses, x, y, at, z });
-  return ITEMS[it.id].name;
+  removeHeld(); dropped.push({ ...it, x, y, at, z });
+  return itemName(it);
 }
 // the nearest thing lying within r of (x, y) in the same place, if any
 function droppedNear(x, y, at, r, z = 0) {
@@ -5718,8 +5722,9 @@ function droppedNear(x, y, at, r, z = 0) {
 }
 function pickUpDropped(d) {
   if (inv.length >= INV_SIZE) return [false, 'Your bag is full.'];
-  dropped.splice(dropped.indexOf(d), 1); carryItem({ id: d.id, uses: d.uses });
-  return [true, `You pick up the ${ITEMS[d.id].name}.`];
+  const { x, y, at, z, displayZ, ...it } = d;
+  dropped.splice(dropped.indexOf(d), 1); carryItem(it);
+  return [true, `You pick up the ${itemName(it)}.`];
 }
 function stepGoods(dt) {
   if (fx.skating && (mode !== 'walk' || !heldItem() || heldItem().id !== 'skateboard')) fx.skating = false; // (on foot again: indoors, or something else in your hand)
@@ -21725,7 +21730,7 @@ function hud() {
   if (job && mode === 'drive') jobArrow();
   else if(courierRoute()&&mode!=='room')jobArrow(...courierGuide());
   minimap();
-  hotbar();
+  const hotbarTop = hotbar();
   g.font = FS + 'px monospace';
   const w = Math.max(...lines.map(l => g.measureText(l).width));
   g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, top, w + 8, FS * lines.length + 6);
@@ -21743,7 +21748,7 @@ function hud() {
   }
   // the prompt near the bottom (on a phone, in the space left of the buttons), any message under the text block
   const left = TOUCH ? Math.max(12, cv.width - TOUCH_PAD_W - 12) : cv.width - 24;
-  const prompt = wrapText(keyless(promptText()), left), pb = (mode === 'drive' || mode === 'taxi' || mode === 'air' ? rows - 5 : rows - 2) * FS - (TOUCH && hotbarUp() ? FS * 2 + 12 : 0);
+  const prompt = wrapText(keyless(promptText()), left), pb = Math.min((mode === 'drive' || mode === 'taxi' || mode === 'air' ? rows - 5 : rows - 2) * FS, hotbarTop - 8);
   const msg = msgT > 0 && msgText ? wrapText(msgText, cv.width - 24) : [];
   for (const [ls, y0, col, cx] of [[prompt, pb - prompt.length * (FS + 4), '#ff8', TOUCH ? left / 2 + 6 : cv.width / 2],
                                    [msg, Math.max(FS * 4, hudBottom + FS * 1.5, wantedBottom + 8), '#fff', cv.width / 2]]) {
@@ -24158,7 +24163,6 @@ function buildPause() {
       <h2></h2>
       ${GLYPHPORT_DESKTOP_APP ? '<button class="item" data-act="quit">Quit game</button>' : '<a class="item" href="index.html">Quit to Eve Net</a>'}
     </div>`);
-  const RANGE = { fov: [50, 100], sensitivity: [0.25, 3] };
   const show = () => {
     const fullscreen = el.querySelector('[data-act="fullscreen"]');
     fullscreen.firstChild.textContent = desktopFullscreen ? 'Exit fullscreen ' : 'Fullscreen ';
@@ -24174,7 +24178,10 @@ function buildPause() {
       const k = s.dataset.show, v = settings[k];
       s.textContent = k === 'fov' ? v + '°' : k === 'sensitivity' ? v.toFixed(2) + 'x' : Math.round(v * 100) + '%';
     }
-    for (const b of el.querySelectorAll('[data-bar]')) { const [lo, hi] = RANGE[b.dataset.bar] || [0, 1]; b.innerHTML = asciiBar((settings[b.dataset.bar] - lo) / (hi - lo)); }
+    for (const b of el.querySelectorAll('[data-bar]')) {
+      const inp = el.querySelector(`[data-set="${b.dataset.bar}"]`), lo = +inp.min, hi = +inp.max;
+      b.innerHTML = asciiBar((settings[b.dataset.bar] - lo) / (hi - lo));
+    }
     for (const b of el.querySelectorAll('[data-toggle]')) b.textContent = settings[b.dataset.toggle] ? '[x] on' : '[ ] off';
     for (const b of el.querySelectorAll('[data-detail]')) b.classList.toggle('on', b.dataset.detail === settings.detail);
   };
@@ -24207,9 +24214,14 @@ function buildPause() {
 }
 
 const homeEl = document.getElementById('home');
+function resetStartOver() {
+  const button = pauseEl && pauseEl.querySelector('[data-act="newgame"]');
+  if (button) { delete button.dataset.sure; button.textContent = 'Start over'; }
+}
 function openPause() {
   if (paused) return;
   pauseEl = pauseEl || buildPause();
+  resetStartOver();
   paused = true;
   for (const k in K) K[k] = 0; // nothing held down while we're away
   pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
@@ -24219,6 +24231,7 @@ function openPause() {
 }
 function closePause(lock) {
   if (!paused) return;
+  resetStartOver();
   paused = false; pauseEl.style.display = 'none'; homeEl.style.display = 'none';
   if (lock) lockMouse(); // resuming with the mouse: take it straight back
 }
@@ -24499,10 +24512,10 @@ const BIGMAP_CSS = `
   #bigmap { background: #000; }
   #bigmap canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
   #bigmap canvas.drag { cursor: grabbing; }
-  #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); display: flex; gap: 6px; }
-  #bigmap .bar button { min-width: 38px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
+  #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); right: calc(12px + env(safe-area-inset-right)); max-width: 420px; display: flex; gap: 6px; }
+  #bigmap .bar button { flex: 0 0 auto; min-width: 38px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
   #bigmap .bar button:hover { border-color: #fff; }
-  #bigmap .bar input { width: 200px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; font: inherit; outline: none; }
+  #bigmap .bar input { flex: 1; min-width: 0; width: 200px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; font: inherit; outline: none; }
   #bigmap .bar input:focus { border-color: #fff; }
   #bigmap .tip { position: absolute; z-index: 2; left: calc(12px + env(safe-area-inset-left)); bottom: 10px; color: rgba(255, 255, 255, 0.45); pointer-events: none; }`;
 
@@ -24665,6 +24678,7 @@ function openBigMap() {
   BIGMAP.z = clamp(Math.min(innerWidth, innerHeight) / 60, 4, 10); // a few blocks round you to start
   BIGMAP.keys = {}; BIGMAP.pts.clear();
   bigMapEl.style.display = 'block';
+  homeEl.style.display = 'none';
   paused = true;
   const tick = () => { if (!bigMapOpen()) return; bigMapStep(); bigMapDraw(); requestAnimationFrame(tick); };
   BIGMAP.last = performance.now(); requestAnimationFrame(tick);
@@ -24688,7 +24702,14 @@ function bigMapStep() { // held keys pan smoothly, a screen's width every second
   const dx = (k.ArrowLeft || k.KeyA ? 1 : 0) - (k.ArrowRight || k.KeyD ? 1 : 0), dy = (k.ArrowUp || k.KeyW ? 1 : 0) - (k.ArrowDown || k.KeyS ? 1 : 0);
   if (dx || dy) bigMapPan(dx * s, dy * s);
 }
-function closeBigMap() { if (!bigMapOpen()) return; bigMapEl.style.display = 'none'; BIGMAP.keys = {}; if (pauseEl) pauseEl.querySelector('[data-act="map"]').focus(); }
+function closeBigMap() {
+  if (!bigMapOpen()) return;
+  bigMapEl.style.display = 'none'; BIGMAP.keys = {};
+  if (pauseEl && pauseEl.style.display === 'flex') {
+    homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block';
+    pauseEl.querySelector('[data-act="map"]').focus();
+  }
+}
 const bigMapOpen = () => !!bigMapEl && bigMapEl.style.display !== 'none';
 // keys while the map's up: it takes them all (the game's paused under it)
 function bigMapKey(e, down) {
@@ -25168,19 +25189,38 @@ function drawDropped(d, vx, vy, s) {
 // left of the buttons)
 const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed);
 function hotbar() {
-  if (!hotbarUp()) return;
-  const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0);
-  let x = 6, y = cv.height - FS * 2 - 10;
+  if (!hotbarUp()) return cv.height;
+  const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0), width = maxX - 6;
+  const rows_ = [[]];
+  let rowWidth = 0;
   quickSlots.forEach((k, slot) => {
     const it = inv[k]; if (!it) return;
-    const s = `${slot + 1} ${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`, w = g.measureText(s).width + 12;
-    if (x > 6 && x + w > maxX) { x = 6; y -= FS + 12; }
-    g.fillStyle = k === held ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, FS + 8);
-    g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)'; g.fillText(s, x + 6, y + 4);
-    x += w + 4;
+    const s = `${slot + 1} ${itemName(it)}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
+    const lines = wrapText(s, width - 12), w = Math.max(...lines.map(l => g.measureText(l).width)) + 12;
+    if (rowWidth && rowWidth + w > width) { rows_.push([]); rowWidth = 0; }
+    rows_.at(-1).push({ k, lines, w }); rowWidth += w + 4;
   });
+  let bottom = cv.height - FS - 2;
+  for (const row of rows_) {
+    if (!row.length) continue;
+    const h = Math.max(...row.map(c => c.lines.length)) * (FS + 4) + 4, y = bottom - h;
+    let x = 6;
+    for (const { k, lines, w } of row) {
+      g.fillStyle = k === held ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.6)'; g.fillRect(x, y, w, h);
+      g.fillStyle = k === held ? '#fff' : 'rgba(255,255,255,0.5)';
+      lines.forEach((s, n) => g.fillText(s, x + 6, y + 4 + n * (FS + 4)));
+      x += w + 4;
+    }
+    bottom = y - 4;
+  }
   const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
-  if (tags.length) { const s = tags.join('  '); g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, y - FS - 10, g.measureText(s).width + 12, FS + 6); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(s, 12, y - FS - 7); }
+  if (tags.length) {
+    const lines = wrapText(tags.join('  '), width - 12), h = lines.length * (FS + 4) + 4;
+    bottom -= h;
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(6, bottom, Math.max(...lines.map(s => g.measureText(s).width)) + 12, h);
+    g.fillStyle = 'rgba(255,255,255,0.7)'; lines.forEach((s, n) => g.fillText(s, 12, bottom + 4 + n * (FS + 4)));
+  }
+  return bottom;
 }
 
 // ---- shop menu and inventory: small panels over a frozen game, keyboard or mouse
@@ -25197,13 +25237,13 @@ const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' &
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
   shopCtx = { title, stock, vendor };
-  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `${id === UNDER_COUNTER[0] ? '<h2>under the counter</h2>' : ''}<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k + 1}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
+  const rows_ = stock.map((id, k) => { const it = ITEMS[id]; return `${id === UNDER_COUNTER[0] ? '<h2>under the counter</h2>' : ''}<button class="item" data-buy="${id}" ${money < it.price ? 'disabled' : ''}><span class="k">${k < 9 ? k + 1 : ''}</span><span>${it.name}</span><span class="lead"></span><span class="v">${fmt$(it.price)}</span></button>`; }).join('');
   const rate = SELL_RATE[title], sells = rate ? inv.map((it, k) => { const p = sellPrice(it, rate), bin = binnable(it, rate);
-    return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">^${k + 1}</span><span>${it.kg ? catchName(it) : ITEMS[it.id].name}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
+    return `<button class="item" data-sell="${k}" ${p || bin ? '' : 'disabled'}><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${itemName(it)}</span><span class="lead"></span><span class="v">${p ? fmt$(p) : bin ? 'bin it' : 'no'}</span></button>`; }).join('') || '<p class="sub" style="padding-left:18px">Nothing to sell.</p>' : '';
   const work = shiftHere();
   const workRow = work ? `<h2>work</h2><button class="item" data-work><span class="k">J</span><span>${{ serve: 'Wait tables for a shift', tapper: 'Tend bar for a shift' }[work] || 'Stock the shelves for a shift'}</span><span class="lead"></span><span class="v">paid</span></button>` : '';
   showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
-    ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${stock.length} buy${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
+    ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${Math.min(9, stock.length)} buy &middot; click any item${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
   shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); else if (e.target.closest('[data-work]')) startShift(); };
 }
 function shopBuy(id) {
@@ -25229,7 +25269,7 @@ function openInventory() {
   invEl = invEl || panel('inventory');
   if (!invStyle) { const style = document.createElement('style'); style.textContent = `#inventory .carry-row { display:flex; align-items:center; gap:10px; } #inventory .carry-row > .item { flex:1; width:auto; min-width:0; } #inventory .quick-slot { display:flex; align-items:center; gap:4px; white-space:nowrap; color:rgba(255,255,255,0.3); } #inventory .quick-slot select { width:4.5em; padding:2px; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); background:#08080a; font:inherit; } #inventory .quick-slot option { color:#fff; background:#08080a; }`; document.head.appendChild(style); invStyle = true; }
   const rows_ = inv.length ? inv.map((it, k) => {
-    const slot = quickSlots.indexOf(k), name = it.kg ? catchName(it) : ITEMS[it.id].name;
+    const slot = quickSlots.indexOf(k), name = itemName(it);
     return `<div class="carry-row"><button class="item" data-slot="${k}"${k === held ? ' style="color:#fff"' : ''}><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${name}${k === held ? ' &middot; in hand' : ''}</span><span class="lead"></span><span class="v">${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? 'x' + it.uses : ''}</span></button><label class="quick-slot">slot <select data-quick-item="${k}" aria-label="Quick slot for ${name}"><option value="-1"${slot < 0 ? ' selected' : ''}>none</option>${Array.from({ length: QUICK_SLOTS }, (_, s) => `<option value="${s}"${slot === s ? ' selected' : ''}>${s + 1}</option>`).join('')}</select></label></div>`;
   }).join('') : '<p class="sub" style="padding-left:18px">Nothing. Shops sell things.</p>';
   const ink = tattoos.length ? `<p class="sub">Your ink: ${tattoos.map(id => ITEMS[id].name).join(', ')}</p>` : '';
@@ -25244,7 +25284,7 @@ let storeCtx = [stored, 'your unit', 'Storage unit', 'The same unit at every sto
 function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2], sub = storeCtx[3], accepts = storeCtx[4], capacity = storeCtx[5]) {
   storeCtx = [list, where, title, sub, accepts, capacity];
   storeEl = storeEl || panel('storage');
-  const item = it => `${ITEMS[it.id].name}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
+  const item = it => `${itemName(it)}${it.uses > 0 && ITEMS[it.id].kind !== 'gear' ? ` x${it.uses}` : ''}`;
   const eligible = inv.map((it, k) => ({ it, k })).filter(({ it }) => !accepts || accepts(it));
   const carried = eligible.length ? eligible.map(({ it, k }) => { const slot = quickSlots.indexOf(k); return `<button class="item" data-store="${k}"><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`; }).join('') : `<p class="sub" style="padding-left:18px">${inv.length ? 'Nothing suitable to put here.' : 'Nothing in your hands.'}</p>`;
   const unit = list.length ? list.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
@@ -26596,15 +26636,21 @@ DENSE.soggybook = it => {
 function heldPocketknife(it) {
   const phase = heldUsePhase(it), open = phase >= 0 ? Math.sin(phase * Math.PI) : 0;
   const angle = -Math.PI / 2 - (1 - open) * Math.PI, ca = Math.cos(angle), sa = Math.sin(angle);
-  return sculpt(32, 25, (x, y) => {
+  return sculpt(46, 34, (x, y) => {
     // Upright handle in the fist, hinge above it. The blade folds into the handle and opens upward.
-    if (Math.abs(x) < 1.6 && y > -2.5 && y < 9) {
-      if (Math.hypot(x, y + 1.3) < .75 || Math.hypot(x, y - 6.5) < .45) return ['o', C(YEL, 14)];
+    if (Math.abs(x) < 1.6 && y > -2.5 && y < 10.8) {
+      if (y < -1) return [Math.abs(x) < .5 ? 'o' : '=', C(GRAY, 14)]; // steel bolster and hinge
+      if (Math.hypot(x, y - 8) < .5) return ['o', C(YEL, 14)];
       return dLit(.8 - x * .15, RED, 8);
     }
     const dy = y + 2, along = x * ca + dy * sa, across = -x * sa + dy * ca;
-    if (along > .5 && along < 8.6 && Math.abs(across) < .9 * (1 - along / 9))
-      return [Math.abs(across) > .4 ? '/' : '#', C(GRAY, across > 0 ? 15 : 11)];
+    // A broad drop-point blade: straight spine, rounded belly, bright cutting bevel and a nail nick.
+    const tip = clamp((along - 8.5) / 4, 0, 1), spine = -1.35 * (1 - tip * tip), edge = 1.55 * (1 - tip);
+    if (along > .5 && along < 12.5 && across > spine && across < edge) {
+      if (along > 3 && along < 7.5 && across > spine + .35 && across < spine + .8) return ['-', C(GRAY, 7)];
+      if (across > edge - .55) return ['/', C(GRAY, 15)];
+      return ['#', C(GRAY, across < spine + .4 ? 13 : 11)];
+    }
     return null;
   });
 }
@@ -27340,7 +27386,7 @@ function openCooking(on, pantry = null, spot = null) {
   }).join('');
   const where = { stove: 'At the stove', grill: 'At the grill', fire: 'At the campfire' }[on];
   showPanel(cookEl, `<h1>${where}</h1><p class="sub">${pantry ? 'From your bag and the fridge' : 'From your bag'} &middot; the grocer's, the market and the deli sell the makings</p>${rows_}
-    <p class="hint">1-9 cook &middot; then HOLD SPACE for heat, UP to flip or stir, DOWN to add &middot; E / Esc close</p>`);
+    <p class="hint">${TOUCH ? 'Tap a recipe, then hold Heat; use Flip / Stir / Turn and Add when prompted. Close to leave.' : '1-9 cook &middot; then HOLD SPACE for heat, UP to flip or stir, DOWN to add &middot; E / Esc close'}</p>`);
   cookEl.onclick = e => { const b = e.target.closest('[data-cook]'); if (b) startCooking(cookCtx.list[+b.dataset.cook]); };
 }
 function startCooking(r) {
@@ -28316,7 +28362,11 @@ function sfxGame(e) {
 }
 
 // on a phone the buttons keep part of the screen (the bottom, held upright; the right, sideways): px to leave clear
-const gameClear = () => !TOUCH ? [0, 0] : innerWidth > innerHeight ? [TOUCH_PAD_W - 30, 0] : [0, TOUCH_PAD_H];
+function gameClear() {
+  if (!TOUCH) return [0, 0];
+  if (innerWidth > innerHeight) return [TOUCH_PAD_W - 30, 0];
+  return [0, game && game.kind === 'cook' ? 250 : TOUCH_PAD_H];
+}
 // the character size that fits the whole cabinet on screen, never bigger than the detail setting's
 function gameFS(g) {
   const [cr, cb] = gameClear(), ratio = cw / FS; // (a character's width per px of height, in this font)
@@ -28325,7 +28375,18 @@ function gameFS(g) {
 // what the screen says to press: on a phone, the buttons' names
 // (on a phone: what the buttons are called. UP is the Mahjong! button only at the mahjong table; lockpicking's HOLD UP
 // is the stick held up)
-const gameText = (s, g) => !TOUCH ? s : (g && g.id === 'mahjong' ? s.replace(/\bUP\b/g, 'MAHJONG') : g && g.id === 'boxing' ? s.replace('DOWN block   UP head   SPACE body', 'the buttons block and punch') : s).replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/SPACE/g, 'GO');
+const cookVerb = g => ({ pot: 'Stir', oven: 'Turn', grill: 'Turn' }[g.how] || 'Flip');
+function gameText(s, g) {
+  if (!TOUCH) return s;
+  if (g && g.id === 'cook') {
+    const verb = cookVerb(g).toUpperCase();
+    return s.replace('HOLD SPACE heat', 'HOLD HEAT').replace('UP flip / stir', verb).replace('DOWN add', 'ADD')
+      .replace(/\[UP\]/g, `[${verb}]`).replace(/\[DOWN\]/g, '[ADD]');
+  }
+  if (g && g.id === 'mahjong') s = s.replace(/\bUP\b/g, 'MAHJONG');
+  if (g && g.id === 'boxing') s = s.replace('DOWN block   UP head   SPACE body', 'the buttons block and punch');
+  return s.replace(/HOLD UP/g, 'HOLD THE STICK UP').replace(/UP\/DOWN|ARROWS|LEFT\/RIGHT/g, 'STICK').replace(/SPACE/g, 'GO');
+}
 // the screen: a dark room, the cabinet bezel in the game's colour, the game blown up into blocks of characters
 function drawGame() {
   const g = game.g, fs = gameFS(g);
@@ -28351,7 +28412,10 @@ function drawGame() {
       const i = (y0 + y * bh + r) * cols + x0 + x * bw + c;
       set(i, ch, col); if (bg !== undefined && bg !== NONE) BG[i] = bg;
     }
-  }, (x, y, s_, col, align) => putText(y0 + y * bh + (bh >> 1), Math.round(x0 + x * bw - (align === 'center' ? s_.length / 2 : 0)), s_, col), // a label, at normal size
+  }, (x, y, s_, col, align) => {
+       if (g.id === 'cook') s_ = gameText(s_, g);
+       putText(y0 + y * bh + (bh >> 1), Math.round(x0 + x * bw - (align === 'center' ? s_.length / 2 : 0)), s_, col);
+     }, // a label, at normal size
      (c, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + c, s_, col), // one placed by character (a column in a table): c counts characters from the left
      (x, y, w, h, fill, col) => { // lines of characters filling a w x h patch of cells, centred: fill(chars wide, chars high) gives them
        const W_ = w * bw, H_ = h * bh, lines = fill(W_, H_).slice(0, H_), top = y0 + y * bh + ((H_ - lines.length) >> 1);
@@ -29764,6 +29828,7 @@ function touchActions() {
   if (game) {
     if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : game.kind === 'table' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(MJ_BUYIN)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
     if (game.kind === 'show') return [['Leave', 'KeyE', 'pop'], ['Tip $1', 'Space', 'main']];
+    if (game.kind === 'cook') return [['Off heat', 'KeyE', 'pop'], ['Add', 'ArrowDown', 'pop'], [cookVerb(game.g), 'ArrowUp', 'pop'], ['Heat (hold)', 'Space', 'main']];
     if (game.kind === 'market') return [['Leave', 'KeyE', 'pop'], ['Up', 'ArrowUp', 'pop'], ['Down', 'ArrowDown', 'pop'], ['Sell', 'ArrowLeft', 'pop'], ['Buy', 'ArrowRight', 'pop'], [`Lot ${game.g.lot()}`, 'Space', 'main']];
     if (game.kind === 'casino') { // the casino: what the buttons do depends on where the hand's at
       const st = game.g.state(), id = game.g.id;
