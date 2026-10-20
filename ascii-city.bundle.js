@@ -97,7 +97,7 @@ let paused = false;
 let freecam = null; // developer camera; player state stays put and is never saved from this viewpoint
 // settings, kept in localStorage (the pause menu edits them; pause.js applies them)
 const SETTINGS_KEY = 'asciiCity.settings';
-const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true };
+const settings = { master: 0.8, music: 0.8, ambience: 0.8, effects: 0.8, sensitivity: 1, invertY: false, fov: 90, detail: 'medium', help: true, tripVisuals: 1 };
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
@@ -5308,8 +5308,8 @@ const ITEMS = {
   // a car's keys (you get them with it; Q calls it round to you, see property.js). Not for sale, not worth anything
   key_car_hatch: { name: 'hatchback keys', price: 0, kind: 'keys', car: 'car_hatch' }, key_car_sedan: { name: 'sedan keys', price: 0, kind: 'keys', car: 'car_sedan' },
   key_car_sports: { name: 'sports car keys', price: 0, kind: 'keys', car: 'car_sports' },
-  home_studio: { name: 'studio apartment', price: 2500, kind: 'home' }, home_loft: { name: 'loft', price: 7000, kind: 'home' },
-  home_belle: { name: 'Belle Époque residence', price: 16000, kind: 'home' },
+  home_studio: { name: 'studio apartment', price: 1200, kind: 'home' }, home_loft: { name: 'loft', price: 4200, kind: 'home' },
+  home_belle: { name: 'Belle Époque residence', price: 11000, kind: 'home' },
   // a change of look (nothing to carry: it's on you), which makes you harder to place (notoriety.js)
   haircut: { name: 'haircut', price: 15, kind: 'look', look: 'haircut', line: 'Twenty minutes in the chair, a mirror held up behind you. You look like somebody else. Somebody tidier.' },
   coat: { name: 'secondhand coat', price: 25, kind: 'look', look: 'coat', line: 'You leave in a coat that used to be somebody else\'s. It fits well enough. The old one goes in the donation bin.' },
@@ -5496,7 +5496,7 @@ function buy(id) { // false + why, if you can't
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const aOrSome = n => /s$/.test(n) && !/ss$/.test(n) ? n : (/^[aeiou]/.test(n) ? 'an ' : 'a ') + n;
 // your storage unit: one unit, the same at every STORAGE place in town
-const STORE_SIZE = 30, stored = [], closet = []; // (closet: the stash at home, same rules)
+const STORE_SIZE = 30, HOME_STORE_SIZE = 120, stored = [], closet = []; // the larger home stash is shared between apartments
 // your ink (tattoo ids, oldest first): sit in the chair, pay, and the hours go by
 const tattoos = [];
 function getTattoo(id) {
@@ -5555,8 +5555,9 @@ const BOOK_LINES = ['"It was a dark and stormy night..." You read a chapter.', '
   'A guidebook to the city. Half the shops in it have closed.'];
 function useHeld(near) {
   const it = heldItem();
-  if (!it) return ['Your hands are empty.', null];
+  if (!it) return fx.smoke>0 ? takeSmokeDrag() : ['Your hands are empty.', null];
   const d = ITEMS[it.id];
+  if (d.kind === 'drug') return consumeDrug(it);
   animateHeldUse(it);
   if (d.kind === 'food' || d.kind === 'drink') {
     const feel = eatSome(it.id, d, it.q ? DISH_EAT[it.q] : 1); // (needs.js; a dish you cooked eats as well as you cooked it)
@@ -5568,6 +5569,7 @@ function useHeld(near) {
     if (it.id === 'stinkytofu') fx.stink = 150; // (and you'll smell of it a while)
     if (d.booze) fx.booze = Math.min(1.5, fx.booze + d.booze / d.uses);
     if (d.sober) fx.booze = Math.max(0, fx.booze - d.sober / d.uses);
+    if (d.sober) clearDrugEffects(30);
     const done = it.uses <= 0;
     if (done) removeHeld();
     if (it.id === 'fortunecookie') return [`You crack it open. The fortune reads: "${fortune()}"`, 'bite'];
@@ -5576,9 +5578,10 @@ function useHeld(near) {
             it.id === 'soda' && it.uses === 2 ? 'cancrush' : d.kind === 'food' ? 'bite' : 'sip'];
   }
   if (d.kind === 'smoke') {
-    if (fx.smoke > 0) { cigTip = 1; return ['You take a drag.', 'drag']; }
+    if (it.id==='joint') return lightJoint(it);
+    if (fx.smoke > 0) return takeSmokeDrag();
     const pipe = it.id === 'pipe';
-    it.uses--; fx.smoke = pipe ? 70 : 45; fx.pipe = pipe; cigTip = 1;
+    it.uses--; fx.smoke = pipe ? 70 : 45; fx.pipe = pipe; fx.smokeKind=pipe?'pipe':'cigarette';cigTip = 1;
     if (it.uses <= 0) removeHeld();
     if (pipe) return [`You pack the bowl and light the pipe.${it.uses > 0 ? ` (${it.uses} bowls left)` : ' The last of the tobacco.'}`, 'light'];
     return [`You light a cigarette.${it.uses > 0 ? ` (${it.uses} left)` : ' Last one.'}`, 'light'];
@@ -5719,6 +5722,7 @@ const hurrying = () => usingHeldItem() && !paused && !!heldItem() && heldItem().
 // somewhere (at = that room's key, see placeKey); outdoors z is the height it's lying at (0, or up on a roof).
 // Half-eaten stays half-eaten; cooking quality, ingredients and catch weight stay with the item too.
 function itemName(it) {
+  if (ITEMS[it.id].kind === 'drug') return `${DRUG_QUALITY[it.q] || 'standard'} ${ITEMS[it.id].name}`;
   if (ITEMS[it.id].cooked) return `${it.q ? it.q + ' ' : ''}${dishName(it)}`;
   return it.kg ? catchName(it) : ITEMS[it.id].name;
 }
@@ -8558,7 +8562,11 @@ function homeBalconyHeight(x, y) {
   }
   return height;
 }
-function restoreHomeCell(cell) {
+function restoreHomeCell(cell, placeId = null) {
+  if (placeId != null) {
+    cell = cityPlaceCell(placeId, cell);
+    if (cell < 0 || homeAt(SHOP[cell])) return -1;
+  }
   if (!Number.isInteger(cell) || cell < 0 || cell >= N * N) return -1;
   const x = cell % N, y = Math.floor(cell / N);
   if (SHOP[cell] && map[cell] && (SHOP[cell].kind === SHOP_APTS || districtAt(x, y) === 'belle')) return cell;
@@ -8627,7 +8635,7 @@ const SLOT_PLAN = [['speedboat', 'rent', WHITE], ['sailboat', 'rent', BLUE], ['c
 // every boat tied up somewhere (or under you): { kind, deal: rent | sale | private | mine | stolen, x, y, hx, hy, col,
 // name, v, slot, hired (a rental out on its trip) }
 const fleet = SLOTS.map((s, k) => ({ kind: SLOT_PLAN[k][0], deal: SLOT_PLAN[k][1], col: SLOT_PLAN[k][2], x: s.x, y: s.y, hx: s.hx, hy: s.hy,
-  name: BOAT_NAMES[(k * 5 + 3) % BOAT_NAMES.length], v: 0, slot: k }));
+  id: `marina:${k}`, name: BOAT_NAMES[(k * 5 + 3) % BOAT_NAMES.length], v: 0, slot: k }));
 let sea = null; // the boat you're at the helm of
 
 // how far (x, y) is from boat b's hull (0 inside it)
@@ -8650,13 +8658,14 @@ const boatTitle = b => `the ${BOAT_KINDS[b.kind].name} '${b.name}'`;
 function marinaPrompt() {
   if (mode === 'sea') {
     const k = BOAT_KINDS[sea.kind];
-    if (landingSpot(sea)) return Math.abs(sea.v) > 0.25 ? 'Slow down to step off' : `E: tie up and step off${sea.hired ? ' (the rental goes back)' : ''}`;
+    if (landingSpot(sea)) return Math.abs(sea.v) > 0.25 ? 'Slow down to step off' : `E: tie up and step off${sea.hired && inMarina(sea.x, sea.y) ? ' (return rental)' : ''}`;
     return typeof TOUCH !== 'undefined' && TOUCH ? 'stick: throttle and helm' : `W throttle | S astern | A/D steer | V: camera   ${Math.round(Math.abs(sea.v) * 19.4)} knots${sea.v > k.top * 0.9 ? ' (flat out)' : ''}`;
   }
   const b = nearBoat();
   if (!b) return nearOffice() ? (marinaOpen() ? 'MARINA: boats by the trip or to buy, down on the jetty.' : 'MARINA: shut. Open 7am till 9pm.') : '';
   const k = BOAT_KINDS[b.kind], nm = boatTitle(b);
   if (b.deal === 'mine' || b.deal === 'stolen') return `E: take ${nm} out`;
+  if (b.deal === 'rent' && b.hired) return `E: continue your trip in ${nm}`;
   if (b.deal === 'rent') return marinaOpen() ? `E: rent ${nm} (${fmt$(k.rent)} a trip)   L: hotwire it` : 'The rentals are chained up till 7.   L: hotwire one';
   if (b.deal === 'sale') return `${marinaOpen() ? `E: buy ${nm}` : `FOR SALE: ${nm}`} (${fmt$(k.price)})   L: hotwire it`;
   return `${nm}: somebody's pride and joy.   L: hotwire it`;
@@ -8666,13 +8675,14 @@ function useMarina() { // true if E did something
   const b = nearBoat();
   if (!b) return false;
   const k = BOAT_KINDS[b.kind];
+  if (b.deal === 'rent' && b.hired) { boardBoat(b); say(`You cast off. Return the '${b.name}' to the marina when you're finished.`, 3); return true; }
   if (b.deal === 'mine' || b.deal === 'stolen') { boardBoat(b); say(b.deal === 'mine' ? `You cast off the '${b.name}'.` : 'Back at the helm of your ill-gotten boat.', 3); return true; }
   if (b.deal === 'private') { say("Somebody's boat. Not for hire. (L to hotwire it, if you're that kind of person.)", 3); return true; }
   if (!marinaOpen()) { say('The marina\'s shut. Open 7am till 9pm.', 3); return true; }
   if (b.deal === 'rent') {
     if (!pay(k.rent)) { say(`That's ${fmt$(k.rent)} for the trip.`); return true; }
     b.hired = true; boardBoat(b);
-    say(`"Have her back in one piece." The ${k.name}'s yours till you step off. W to go, A and D to steer.`, 4);
+    say(`"Have her back in one piece." Return the ${k.name} to the marina when you're finished. W to go, A and D to steer.`, 4);
     return true;
   }
   if (!pay(k.price)) { say(`The '${b.name}' is ${fmt$(k.price)}. You have ${fmt$(money)}.`, 3); return true; }
@@ -8682,7 +8692,7 @@ function useMarina() { // true if E did something
 }
 function stealBoat() { // L beside a boat that isn't yours: true if it did
   const b = nearBoat();
-  if (!b || b.deal === 'mine' || b.deal === 'stolen') return false;
+  if (!b || b.deal === 'mine' || b.deal === 'stolen' || b.hired) return false;
   b.deal = 'stolen'; b.hired = false;
   const seen = crime('boattheft', b.x, b.y);
   boardBoat(b);
@@ -8709,10 +8719,12 @@ function leaveBoat() {
   const at = landingSpot(b);
   if (!at) return say('Nowhere to step off. Pull up alongside a jetty or the sea wall.', 3);
   a = Math.atan2(rel(at[1] - b.y), rel(at[0] - b.x)); [px, py] = at; mode = 'walk'; sea = null; b.v = 0;
-  if (b.hired) { // the rental goes back to its slip
-    const s = SLOTS[b.slot], home = inMarina(b.x, b.y);
-    b.hired = false; Object.assign(b, { x: s.x, y: s.y, hx: s.hx, hy: s.hy });
-    say(home ? 'You tie her up and hand the keys back.' : 'You tie her up. Someone from the marina will come and fetch her.', 3);
+  if (b.hired) {
+    if (inMarina(b.x, b.y)) {
+      const s = SLOTS[b.slot];
+      b.hired = false; Object.assign(b, { x: s.x, y: s.y, hx: s.hx, hy: s.hy });
+      say('You tie her up and hand the keys back.', 3);
+    } else say(`You tie up the '${b.name}'. She's waiting for your return trip.`, 3);
   } else say(b.deal === 'mine' ? `You tie up the '${b.name}'. She'll be here when you get back.` : 'You tie her up and walk away whistling.', 3);
 }
 // out on the water: nothing solid at the hull's corners (the shore, a jetty, a bridge, a moored boat)
@@ -8743,14 +8755,29 @@ function stepSea(dt) { // throttle and helm; the shore and everything else in th
   }
   px = b.x; py = b.y;
 }
-// saving: the boats you own (where they're tied up). One bought from the marina leaves its slip empty
-const savedBoats = () => fleet.filter(b => b.deal === 'mine').map(({ kind, x, y, hx, hy, col, name }) => ({ kind, x, y, hx, hy, col, name }));
+// Keep an active rental ashore too: an island visit must survive a save/reload without stranding you.
+const savedBoats = () => fleet.filter(b => b.deal === 'mine' || b.hired).map(({ id, kind, x, y, hx, hy, col, name, deal, slot }) =>
+  ({ id, kind, x, y, hx, hy, col, name, ...(deal === 'rent' ? { deal, slot, hired: true } : {}) }));
 function loadBoats(list) {
-  for (const s of list || []) {
-    if (!BOAT_KINDS[s.kind] || !BOAT_KINDS[s.kind].price) continue;
+  const restoredRentals = new Set();
+  for (const [index, s] of (list || []).entries()) {
+    if (!s || !BOAT_KINDS[s.kind]?.price) continue;
+    if (![s.x, s.y, s.hx, s.hy].every(Number.isFinite) || Math.hypot(s.hx, s.hy) < .1) continue;
+    const length = Math.hypot(s.hx, s.hy), position = { x: mod(s.x, N), y: mod(s.y, N), hx: s.hx / length, hy: s.hy / length, v: 0 };
+    if (s.deal === 'rent') {
+      if (s.hired !== true || !Number.isInteger(s.slot) || restoredRentals.has(s.slot)) continue;
+      const rental = fleet.find(b => b.slot === s.slot && b.deal === 'rent' && b.kind === s.kind);
+      if (!rental || !waterClear(rental, position.x, position.y, position.hx, position.hy)) continue;
+      Object.assign(rental, position, { hired: true });
+      restoredRentals.add(s.slot);
+      continue;
+    }
+    const id = typeof s.id === 'string' && s.id.length <= 100 ? s.id : `owned:${index}`;
+    const existing = fleet.find(b => b.id === id && b.deal === 'mine');
+    if (existing) { Object.assign(existing, position); continue; }
     const sold = fleet.findIndex(b => b.deal === 'sale' && b.kind === s.kind);
     if (sold >= 0) fleet.splice(sold, 1);
-    fleet.push({ kind: s.kind, deal: 'mine', x: s.x, y: s.y, hx: s.hx, hy: s.hy, col: s.col ?? WHITE, name: s.name || 'Boaty', v: 0, slot: -1 });
+    fleet.push({ id, kind: s.kind, deal: 'mine', ...position, col: s.col ?? WHITE, name: s.name || 'Boaty', slot: -1 });
   }
 }
 // ===== fishing. A rod from the bait and tackle hut at the foot of the Sunset Pier (props.js puts the hut up,
@@ -9463,6 +9490,554 @@ function confiscateGun() {
   for (let k = inv.length - 1; k >= 0; k--) if (ITEMS[inv[k].id].kind === 'gun' || inv[k].id === 'ammo') { removeInventoryAt(k); took = true; }
   gun.reload = 0;
   return took;
+}
+// Apartment workshops. The machines and Neon are fictional; this is a short timing/balance game.
+const WORKSHOP_KIT_PRICE = 120, WORKSHOP_REFILL_PRICE = 30, WORKSHOP_FAN_PRICE = 65;
+const HOME_ROOM_SIZE = { home_studio: [14,15], home_loft: [20,22], home_belle: [26,26] };
+const WORKSHOP_PARTS = {
+  bench: { name: 'folding workbench', halfX: .95, halfY: .48 },
+  processor: { name: 'batch processor' }, packer: { name: 'packet press' }, fan: { name: 'cooling fan' },
+  growrack: { name: 'grow rack', halfX: .75, halfY: .48 }
+};
+const WORKSHOP_UPGRADES = {
+  controller: { name: 'thermal controller', price: 95, description: 'Wider Neon balance range on every bench' },
+  press: { name: 'precision press', price: 85, description: 'Two extra packets per Neon batch' },
+  lamp: { name: 'grow lamps', price: 55, description: 'Faster growth and two extra weed packs per harvest' }
+};
+const WEED_RACK_PRICE = 90, WEED_SEEDS_PRICE = 18, WEED_GROW_TIME = 75;
+const DRUG_QUALITY = { perfect: 'premium', fine: 'standard', burnt: 'weak' };
+const DRUG_PACKET_PRICE = { perfect: 18, fine: 14, burnt: 8 };
+ITEMS.neon = { name: 'Neon', price: 0, kind: 'drug', uses: 4 };
+ITEMS.weed = { name: 'weed', price: 0, kind: 'drug', uses: 4 };
+CRIMES.dealing = { stars: 1, name: 'drug dealing' };
+NEWS.dealing = w => `Drug dealing reported in ${w}. Police are looking into a brief exchange and a very ordinary bag.`;
+const drugCount = () => inv.reduce((n, it) => n + (ITEMS[it.id]?.kind === 'drug' ? it.uses : 0), 0);
+const drugValue = () => inv.reduce((n, it) => n + (ITEMS[it.id]?.kind === 'drug' ? it.uses * drugPacketPrice(it) : 0), 0);
+const drugPacketPrice = it => it.id === 'weed' ? ({perfect:12,fine:9,burnt:6}[it.q] || 9) : (DRUG_PACKET_PRICE[it.q] || 14);
+const drugStockLabel = () => {
+  const ids = [...new Set(inv.filter(it=>ITEMS[it.id]?.kind==='drug' && it.uses>0).map(it=>it.id))];
+  return ids.length === 1 ? ITEMS[ids[0]].name : 'mixed';
+};
+const drugDemand = { next: 0, until: 0 };
+function drugBuyerInterested(now = T, random = Math.random) {
+  if (drugCount()) return true;
+  if (!closet.some(it => ITEMS[it.id]?.kind === 'drug' && it.uses > 0)) {
+    drugDemand.until = 0; drugDemand.next = now + 20; return false;
+  }
+  if (now < drugDemand.until) return true;
+  if (now < drugDemand.next) return false;
+  drugDemand.next = now + 20;
+  if (random() < .35) {drugDemand.until = now + 90; return true;}
+  return false;
+}
+function workshopState(home) {
+  const w = home.workshop ||= { owned: { bench: 0, processor: 0, packer: 0, fan: 0 }, parts: [], supplies: 0, powered: false, next: 1 };
+  w.owned.growrack ??= 0; w.seeds ??= 0; w.upgrades ||= {};
+  return w;
+}
+function workshopAttachment(id, bench) {
+  const offset = {processor:-.43, packer:.43, fan:0}[id], back = id==='fan' ? -.3 : 0;
+  return {id, bench:bench.key, x:bench.x+offset*Math.cos(bench.a)-back*Math.sin(bench.a), y:bench.y+offset*Math.sin(bench.a)+back*Math.cos(bench.a), a:bench.a};
+}
+function restoreWorkshop(raw, kind = 'home_studio') {
+  const [width,height] = HOME_ROOM_SIZE[kind] || HOME_ROOM_SIZE.home_studio;
+  const w = { owned: {}, parts: [], supplies: clamp(Math.floor(+raw?.supplies || 0), 0, 300), powered: raw?.powered === true, next: 1,
+    seeds: clamp(Math.floor(+raw?.seeds || 0),0,300), upgrades: {} };
+  for (const id of Object.keys(WORKSHOP_UPGRADES)) if (raw?.upgrades?.[id] === true) w.upgrades[id] = true;
+  for (const id of Object.keys(WORKSHOP_PARTS)) w.owned[id] = clamp(Math.floor(+raw?.owned?.[id] || 0), 0, 3);
+  for (const p of Array.isArray(raw?.parts) ? raw.parts : []) {
+    if (!WORKSHOP_PARTS[p?.id] || !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < 1 || p.y < 1 || p.x > 25 || p.y > 25 ||
+        !Number.isInteger(p.key) || p.key < 1 || w.parts.some(q => q.key === p.key) || w.parts.filter(q => q.id === p.id).length >= w.owned[p.id]) continue;
+    const part = { id: p.id, key: p.key, x: p.x, y: p.y, a: mod(Math.round((+p.a || 0) / (Math.PI / 2)), 4) * Math.PI / 2, ...(Number.isInteger(p.bench) ? { bench: p.bench } : {}) };
+    if (p.id === 'growrack' && Number.isFinite(p.crop?.left)) part.crop = {left:clamp(p.crop.left,0,WEED_GROW_TIME), tended:p.crop.tended===true};
+    w.parts.push(part);
+    w.next = Math.max(w.next, p.key + 1);
+  }
+  w.parts = w.parts.filter(p => {
+    const d=WORKSHOP_PARTS[p.id]; if (!d.halfX) return true;
+    const hx=Math.abs(Math.cos(p.a))*d.halfX+Math.abs(Math.sin(p.a))*d.halfY, hy=Math.abs(Math.sin(p.a))*d.halfX+Math.abs(Math.cos(p.a))*d.halfY;
+    return p.x-hx>=1 && p.x+hx<=width-1.4 && p.y-hy>=height-6 && p.y+hy<=height-1.4 && Math.abs(p.x-(kind==='home_belle'?9:width/2))>=hx+1;
+  });
+  w.parts = w.parts.filter((p,index,all) => WORKSHOP_PARTS[p.id].halfX || all.some(b => b.id === 'bench' && b.key === p.bench) &&
+    !all.slice(0,index).some(q=>q.id===p.id && q.bench===p.bench));
+  w.parts = w.parts.map(p => WORKSHOP_PARTS[p.id].halfX ? p : {...workshopAttachment(p.id,w.parts.find(b=>b.key===p.bench)),a:p.a,key:p.key});
+  return w;
+}
+function buyWorkshopKit(home) {
+  const w = workshopState(home);
+  if (w.owned.bench >= 3) return [false, 'Three benches is plenty for one apartment.'];
+  if (!pay(WORKSHOP_KIT_PRICE)) return [false, `The starter kit costs ${fmt$(WORKSHOP_KIT_PRICE)}.`];
+  for (const id of ['bench', 'processor', 'packer']) w.owned[id]++;
+  w.supplies += 3;
+  return [true, 'A crate arrives: a folding bench, processor, packet press and supplies for three batches. Unpack and place each piece.'];
+}
+function buyWorkshopSupplies(home) {
+  const w = workshopState(home);
+  if (w.supplies > 294) return [false, 'The supply cupboard is full.'];
+  if (!pay(WORKSHOP_REFILL_PRICE)) return [false, `Five batches of supplies cost ${fmt$(WORKSHOP_REFILL_PRICE)}.`];
+  w.supplies += 5; return [true, 'Five sealed refill cartridges delivered to the workshop cupboard.'];
+}
+function buyWorkshopUpgrade(home, id) {
+  const w=workshopState(home), upgrade=WORKSHOP_UPGRADES[id];
+  if (!upgrade || w.upgrades[id]) return [false,'That upgrade is already installed.'];
+  if (!pay(upgrade.price)) return [false,`You need ${fmt$(upgrade.price)} for that upgrade.`];
+  w.upgrades[id]=true;
+  return [true,`${cap(upgrade.name)} installed. ${upgrade.description}.`];
+}
+function buyWeedEquipment(home, rack = true) {
+  const w=workshopState(home), price=rack?WEED_RACK_PRICE:WEED_SEEDS_PRICE;
+  if (rack && w.owned.growrack>=3) return [false,'There is room for three grow racks at most.'];
+  if (w.seeds>294) return [false,'The seed cupboard is full.'];
+  if (!pay(price)) return [false,`You need ${fmt$(price)}.`];
+  if (rack) w.owned.growrack++;
+  w.seeds+=rack?3:5;
+  return [true,rack?'A grow rack and three seed pods arrive. Place the rack, connect power and start growing.':'Five seed pods delivered.'];
+}
+function plantWeed(home,rack) {
+  const w=workshopState(home);
+  if (!w.parts.includes(rack) || rack.id!=='growrack' || rack.crop) return [false,'Use an empty grow rack.'];
+  if (!w.powered) return [false,'Connect workshop power first.'];
+  if (!w.seeds) return [false,'Buy seed pods at the cupboard.'];
+  w.seeds--; rack.crop={left:WEED_GROW_TIME,tended:false};
+  return [true,'Seed pod planted. Check back to tend the plant once it has sprouted.'];
+}
+function tendWeed(rack) {
+  if (!rack?.crop || rack.crop.left>50 || rack.crop.left<=0 || rack.crop.tended) return [false,'The plant does not need tending right now.'];
+  rack.crop.tended=true;
+  return [true,'You tend the plant. This harvest will be premium.'];
+}
+function harvestWeed(home,rack) {
+  const w=workshopState(home);
+  if (!w.parts.includes(rack) || !rack.crop || rack.crop.left>0) return [false,'The plant is still growing.'];
+  if (inv.length>=INV_SIZE) return [false,'Make room in your bag; the harvest can wait.'];
+  const quality=rack.crop.tended?'perfect':'fine', count=4+(w.upgrades.lamp?2:0);
+  carryItem({id:'weed',uses:count,q:quality});delete rack.crop;
+  return [true,`${count} ${DRUG_QUALITY[quality]} weed packs harvested. Keep some, store them, or meet the buyer outside.`];
+}
+function stepWorkshop(dt) {
+  for (const home of owned.homes) {
+    const w=home.workshop; if (!w?.powered) continue;
+    for (const p of w.parts) if (p.id==='growrack' && p.crop) p.crop.left=Math.max(0,p.crop.left-dt*(w.upgrades?.lamp?1.5:1));
+  }
+}
+const workshopBenchReady = (w, bench) => ['processor', 'packer'].every(id => w.parts.some(p => p.id === id && p.bench === bench.key));
+function workshopCanRun(home, bench) {
+  const w = workshopState(home);
+  if (!bench || !w.parts.includes(bench) || !workshopBenchReady(w, bench)) return 'Put the processor and packet press on this bench first.';
+  if (!w.powered) return 'Plug the equipment in at the workshop cupboard.';
+  if (!w.supplies) return 'The workshop needs refill cartridges.';
+  if (inv.length >= INV_SIZE) return 'Make room in your bag for the finished batch.';
+  return '';
+}
+function finishWorkshopBatch(home, bench, quality) {
+  const problem = workshopCanRun(home, bench);
+  if (problem) return [false, problem];
+  if (!DRUG_QUALITY[quality]) return [false, 'The batch is not finished.'];
+  workshopState(home).supplies--;
+  const count = { perfect: 6, fine: 4, burnt: 2 }[quality] + (workshopState(home).upgrades.press ? 2 : 0);
+  carryItem({ id: 'neon', uses: count, q: quality });
+  return [true, `${count} ${DRUG_QUALITY[quality]} Neon packets sealed. A buyer will wait outside while you carry them.`];
+}
+function sellDrugBatch() {
+  const count = drugCount(), value = drugValue();
+  if (!count) return [false, 'Nothing to sell. Your stored stock stays at home.'];
+  for (let k = inv.length - 1; k >= 0; k--) if (ITEMS[inv[k].id]?.kind === 'drug') takeSlot(k);
+  earn(value);
+  return [true, `${count} packets change hands. ${fmt$(value)} in your pocket.`, value];
+}
+// Thirty-two seconds: hold power to balance the rotor, vent twice, and seal two sections when prompted.
+GAMES.workshop = (rnd, word, opts = {}) => {
+  const g = { id: 'workshop', title: 'NEON BATCH', W: 32, H: 16, score: 0, over: false };
+  let t = 0, heat = .45, steady = 0, completed = 0;
+  const band = [.4 - (opts.fan ? .1 : 0) - (opts.controller ? .08 : 0), .7 + (opts.fan ? .08 : 0) + (opts.controller ? .07 : 0)];
+  const moves = [{ at: 7, key: 'up', name: 'VENT' }, { at: 15, key: 'down', name: 'SEAL' }, { at: 23, key: 'up', name: 'VENT' }, { at: 28, key: 'down', name: 'SEAL' }];
+  const current = () => moves.find(m => !m.done && !m.missed && t >= m.at);
+  g.step = (dt, keys) => {
+    if (g.over) return [];
+    t = Math.min(32, t + dt); heat = clamp(heat + (keys.act ? .3 : -.18) * dt, 0, 1);
+    if (heat >= band[0] && heat <= band[1]) steady += dt;
+    const m = current();
+    if (m) {
+      if (t - m.at > 1.6) m.missed = true;
+      else if (keys[m.key + 'P']) { m.done = true; completed++; if (m.key === 'up') heat = Math.max(0, heat - .08); }
+    }
+    if (t >= 32) {
+      g.over = true; g.score = Math.round(75 * steady / 32 + 25 * completed / moves.length);
+      g.result = g.score >= 80 ? 'perfect' : g.score >= 45 ? 'fine' : 'burnt';
+      return ['clear'];
+    }
+    return [];
+  };
+  g.state = () => ({ t, heat, band, moves, current: current() });
+  g.reward = () => 0;
+  g.status = () => `HOLD SPACE power   UP vent   DOWN seal   ${Math.ceil(32 - t)}s left`;
+  g.draw = (put, text) => {
+    for (let x = 2; x < 30; x++) {
+      const level = (x - 2) / 27, color = level >= band[0] && level <= band[1] ? GREEN : RED;
+      put(x, 3, level <= heat ? '#' : '.', C(color, level <= heat ? 14 : 6));
+      put(x, 13, level < t / 32 ? '=' : '.', C(MAG, 12));
+    }
+    text(16, 1, 'KEEP THE ROTOR IN THE GREEN', C(WHITE, 13), 'center');
+    put(Math.round(2+heat*27), 2, 'v', C(WHITE,15));
+    const spin = Math.floor(t * (3 + heat * 8)) % 4;
+    for (let y = 6; y < 11; y++) for (let x = 6; x < 18; x++) put(x, y, y === 6 || y === 10 ? '=' : x === 6 || x === 17 ? '|' : x === 11 && y === 8 ? '|/-\\'[spin] : '.', C(GRAY, 11), C(GRAY, 1));
+    text(23, 8, '[NEON]', C(MAG, 15), 'center');
+    put(11,8,'O',C(MAG,15));
+    for(const [ox,oy] of [[-1,0],[1,0],[0,-1],[0,1]]) put(11+ox,8+oy,'|/-\\'[(spin+(ox?0:2))%4],C(CYAN,14));
+    text(12,11.5,`POWER ${Math.round(heat*100)}%`,C(WHITE,12),'center');
+    const sealed=moves.filter(m=>m.key==='down'&&m.done).length;
+    for(let n=0;n<sealed;n++) text(23,10+n,'[SEALED]',C(GREEN,14),'center');
+    const m = current();
+    if (m && !m.missed) text(16, 5, `${m.name}! [${m.key === 'up' ? 'UP' : 'DOWN'}]`, C(YEL, 15), 'center');
+  };
+  return g;
+};
+// Temporary, deliberately fantastical screen effects. Timers use simulation seconds, never wall-clock time.
+const DRUG_EFFECTS = {
+  weed: { duration: 80, label: 'green haze', line: 'You use a little weed. The city takes a long, warm breath.', sound: 'drag' },
+  neon: { duration: 65, label: 'Neon vision', line: 'You take a Neon packet. The edges of the city start remembering where they were.', sound: 'sip' }
+};
+const drugEffects = { weed: 0, neon: 0, weedIn: 0, neonIn: 0, cooldown: 0 };
+ITEMS.joint = {name:'joint',price:0,kind:'smoke',uses:1,weed:true};
+function addDrugEffect(id,quality,amount=1) {
+  const potency={perfect:1.15,fine:1,burnt:.8}[quality] || 1;
+  if(!drugEffects[id])drugEffects[id+'In']=0;
+  drugEffects[id]=Math.min(120,drugEffects[id]+DRUG_EFFECTS[id].duration*potency*amount);
+}
+function prepareJoint(it) {
+  if(it.uses>1&&inv.length>=INV_SIZE)return ['Make room in your bag for the joint.',null];
+  const joint={id:'joint',uses:1,...(it.q?{q:it.q}:{})};
+  animateHeldUse(it);
+  if(it.uses===1) {inv[inv.indexOf(it)]=joint;held=inv.indexOf(joint);}
+  else {it.uses--;carryItem(joint);}
+  return ['You take out a joint. Q / left click to light it, then take drags with empty hands.','page'];
+}
+function takeSmokeDrag() {
+  if(fx.smokeKind==='joint') {
+    if(drugEffects.cooldown>0)return ['Give it a moment.',null];
+    addDrugEffect('weed',fx.smokeQuality,.15);drugEffects.cooldown=1.2;
+  }
+  cigTip=1;
+  return [fx.smokeKind==='joint'?'You take a drag of the joint. The city breathes with you.':'You take a drag.','drag'];
+}
+function lightJoint(it) {
+  if(fx.smoke>0)return takeSmokeDrag();
+  if(drugEffects.cooldown>0)return ['Give it a moment.',null];
+  addDrugEffect('weed',it.q,.75);drugEffects.cooldown=1.2;
+  fx.smoke=55;fx.pipe=false;fx.smokeKind='joint';fx.smokeQuality=it.q;cigTip=1;
+  removeInventoryAt(inv.indexOf(it));held=-1;
+  return ['You light the joint. Q / left click with empty hands takes a drag.','light'];
+}
+function consumeDrug(it) {
+  const effect=DRUG_EFFECTS[it?.id];
+  if (!effect || !inv.includes(it) || it.uses<=0) return ['Nothing left in that pack.',null];
+  if(it.id==='weed')return prepareJoint(it);
+  if (drugEffects.cooldown>0) return ['Give it a moment.',null];
+  addDrugEffect(it.id,it.q);
+  drugEffects.cooldown=1.2;
+  animateHeldUse(it);it.uses--;
+  if (!it.uses) removeInventoryAt(inv.indexOf(it));
+  return [effect.line,effect.sound];
+}
+function stepDrugEffects(dt) {
+  drugEffects.cooldown=Math.max(0,drugEffects.cooldown-dt);
+  for (const id of Object.keys(DRUG_EFFECTS)) {
+    drugEffects[id]=Math.max(0,drugEffects[id]-dt);
+    drugEffects[id+'In']=drugEffects[id]?Math.min(3,drugEffects[id+'In']+dt):0;
+  }
+}
+function clearDrugEffects(amount=Infinity) {
+  for (const id of Object.keys(DRUG_EFFECTS)) {
+    drugEffects[id]=Math.max(0,drugEffects[id]-amount);
+    if (!drugEffects[id]) drugEffects[id+'In']=0;
+  }
+}
+function drugVisualStrength(id) {
+  const start=clamp(drugEffects[id+'In']/3,0,1), end=clamp(drugEffects[id]/12,0,1);
+  return start*start*(3-2*start)*end;
+}
+function drugEffectTags() {
+  return Object.entries(DRUG_EFFECTS).filter(([id])=>drugEffects[id]>0)
+    .map(([id,effect])=>`${effect.label} ${Math.ceil(drugEffects[id])}s`);
+}
+// Recurring faces, small orders, and a bounded negotiation. Relationships persist; active visits do not.
+const DRUG_BUYERS = [
+  {id:'kit',name:'Kit',description:'Blue jacket, red backpack. Easygoing, buys either.',product:'any',max:8,rate:1,margin:.22,
+    hello:'Got anything going? I can take a few packs.',again:'Good to see you again. Same deal?',look:{hair:'short',top:'jacket',pack:true,col:{top:[BLUE,10],pack:[RED,10],skin:[SKIN,12]}}},
+  {id:'juno',name:'Juno',description:'Green jacket, hair in a bun. A little good weed.',product:'weed',max:3,rate:1.15,margin:.22,
+    hello:'Just a little weed. Good stuff, if you have it.',again:'That last batch was nice. What have you got?',look:{hair:'bun',top:'jacket',bw:.9,col:{top:[GREEN,10],skin:[BRICK,10],hair:[GRAY,1]}}},
+  {id:'dex',name:'Dex',description:'Orange cap, gray hoodie. Quantity over fancy labels.',product:'weed',max:8,rate:.85,margin:.15,
+    hello:'I buy a bit more, but I watch the price.',again:'Back for more. Keep it reasonable, yeah?',look:{hair:'buzz',hat:'cap',top:'long',bw:1.1,col:{top:[GRAY,8],hat:[ORANGE,13],skin:[STONE,13]}}},
+  {id:'vale',name:'Vale',description:'Violet suit, shades. Premium Neon only.',product:'neon',premium:true,max:4,rate:1.35,margin:.3,
+    hello:'Premium Neon. Nothing else, please.',again:'You know what I like. Show me the good batch.',look:{hair:'bob',top:'suit',shades:true,col:{top:[MAG,7],inner:[WHITE,14],skin:[BRICK,8],hair:[GRAY,1]}}}
+];
+const SUPPLIER = {name:'Mara',description:'Yellow cap, teal jacket, a backpack full of spares.',
+  look:{hair:'pony',hat:'cap',top:'jacket',pack:true,col:{top:[CYAN,7],hat:[YEL,13],pack:[BRICK,8],skin:[SKIN,11]}}};
+const drugContacts = {buyers:{},supplierOrders:0,visits:0,last:''};
+const drugBuyerProfile = id => DRUG_BUYERS.find(b=>b.id===id) || DRUG_BUYERS[0];
+function drugRelationship(id) {
+  return drugContacts.buyers[id] ||= {deals:0,trust:0,spent:0};
+}
+function loadDrugContacts(raw) {
+  drugContacts.buyers={};
+  for (const b of DRUG_BUYERS) {
+    const r=raw?.buyers?.[b.id];
+    if(r) drugContacts.buyers[b.id]={deals:clamp(Math.floor(+r.deals||0),0,9999),trust:clamp(Math.floor(+r.trust||0),0,10),spent:clamp(Math.floor(+r.spent||0),0,1e7)};
+  }
+  drugContacts.supplierOrders=clamp(Math.floor(+raw?.supplierOrders||0),0,9999);
+  drugContacts.visits=clamp(Math.floor(+raw?.visits||0),0,1e7);
+  drugContacts.last=DRUG_BUYERS.some(b=>b.id===raw?.last)?raw.last:'';
+}
+function buyerLikesStock(b,it) {
+  return ITEMS[it?.id]?.kind==='drug' && it.uses>0 && (b.product==='any'||b.product===it.id) && (!b.premium||it.q==='perfect');
+}
+function newDrugVisit() {
+  const stock=[...inv,...closet], start=drugContacts.visits%DRUG_BUYERS.length;
+  let b=DRUG_BUYERS[0];
+  for(let n=0;n<DRUG_BUYERS.length;n++) {
+    const candidate=DRUG_BUYERS[(start+n)%DRUG_BUYERS.length];
+    if(stock.some(it=>buyerLikesStock(candidate,it))) {b=candidate;break;}
+  }
+  drugContacts.visits=DRUG_BUYERS.indexOf(b)+1;drugContacts.last=b.id;
+  return {id:b.id,remaining:b.max,attempts:0,counter:null};
+}
+function buyerUnitPrice(visit,it) {
+  const b=drugBuyerProfile(visit.id), r=drugRelationship(b.id);
+  return Math.max(1,Math.round(drugPacketPrice(it)*b.rate*(1+Math.min(.12,r.deals*.02))));
+}
+function buyerStocks(visit) {
+  const b=drugBuyerProfile(visit.id);
+  return inv.map((it,index)=>({it,index})).filter(({it})=>buyerLikesStock(b,it));
+}
+function drugOrderProblem(visit,it,count,price) {
+  if (!visit || !inv.includes(it) || !buyerLikesStock(drugBuyerProfile(visit.id),it)) return 'That is not the stock they asked for.';
+  if (!Number.isInteger(count)||count<1||count>it.uses||count>visit.remaining) return 'Choose a quantity within the order and your carried stock.';
+  if (!Number.isInteger(price)||price<1||price>999) return 'Choose a whole-dollar price per pack.';
+  return '';
+}
+function negotiateDrugOrder(visit,it,count,price) {
+  const problem=drugOrderProblem(visit,it,count,price);
+  if(problem) return {status:'invalid',line:problem};
+  const b=drugBuyerProfile(visit.id), r=drugRelationship(b.id), fair=buyerUnitPrice(visit,it);
+  if(price<=fair) return {status:'accepted',price};
+  visit.attempts++;visit.counter=null;
+  const ceiling=Math.ceil(fair*(1+b.margin+r.trust*.01));
+  if(price<=ceiling && visit.attempts<3) {
+    const counter=fair+Math.floor((price-fair)*.4);
+    visit.counter={it,count,price:counter};
+    return {status:'counter',price:counter,line:`"I can do ${fmt$(counter)} a pack. ${count} for ${fmt$(counter*count)}. Deal?"`};
+  }
+  if(visit.attempts>=3) {
+    r.trust=Math.max(0,r.trust-1);
+    return {status:'leave',line:'"Forget it. Maybe another time."'};
+  }
+  return {status:'refused',line:'"Too steep. Give me a sensible price."'};
+}
+function tradeDrugOrder(visit,it,count,price) {
+  const problem=drugOrderProblem(visit,it,count,price);
+  if(problem) return [false,problem];
+  const b=drugBuyerProfile(visit.id), fair=buyerUnitPrice(visit,it);
+  // Only an accepted asking price or this visit's exact counter can settle.
+  const counter=visit.counter;
+  if(price>fair && !(counter?.it===it && counter.count===count && counter.price===price)) return [false,'Agree a price first.'];
+  const total=count*price, r=drugRelationship(b.id), name=ITEMS[it.id].name;
+  it.uses-=count;if(!it.uses) removeInventoryAt(inv.indexOf(it));
+  earn(total);visit.remaining-=count;visit.counter=null;r.deals++;r.trust=Math.min(10,r.trust+1);r.spent+=total;
+  return [true,`${b.name} takes ${count} ${name} packs. ${fmt$(total)} in your pocket.`,total];
+}
+function orderWorkshopSupply(home,id) {
+  let result;
+  if(id==='kit') result=buyWorkshopKit(home);
+  else if(id==='refill') result=buyWorkshopSupplies(home);
+  else if(id==='rack') result=buyWeedEquipment(home);
+  else if(id==='seeds') result=buyWeedEquipment(home,false);
+  else if(WORKSHOP_UPGRADES[id]) result=buyWorkshopUpgrade(home,id);
+  else if(id==='fan') {
+    const w=workshopState(home);
+    if(w.owned.fan>=3) return [false,'You already have three fans.'];
+    if(!pay(WORKSHOP_FAN_PRICE)) return [false,`A fan costs ${fmt$(WORKSHOP_FAN_PRICE)}.`];
+    w.owned.fan++;result=[true,'A cooling fan delivered. Place it on a bench.'];
+  } else return [false,'That is not on Mara\'s order sheet.'];
+  if(result[0]) drugContacts.supplierOrders++;
+  return result;
+}
+// Content identities are assigned before any layout relocation. Keep these IDs when moving a lot;
+// its current grid cell is an address into the runtime map, not its save identity.
+const CITY_LAYOUT_ID = 'coastal-v1';
+const CITY_PLACES = new Map();
+const cityPlaceByShop = new WeakMap();
+for (let cell = 0; cell < SHOP.length; cell++) {
+  const shop = SHOP[cell];
+  if (!shop || !map[cell]) continue;
+  let place = cityPlaceByShop.get(shop);
+  if (!place) {
+    place = { id: `shop:${cell}`, shop, cell, cells: [], x0: N, y0: N, x1: 0, y1: 0 };
+    CITY_PLACES.set(place.id, place);
+    cityPlaceByShop.set(shop, place);
+  }
+  const x = cell % N, y = Math.floor(cell / N);
+  place.cells.push(cell);
+  place.x0 = Math.min(place.x0, x); place.y0 = Math.min(place.y0, y);
+  place.x1 = Math.max(place.x1, x + 1); place.y1 = Math.max(place.y1, y + 1);
+}
+function cityPlaceAtCell(cell) {
+  const shop = Number.isInteger(cell) && cell >= 0 && cell < SHOP.length && SHOP[cell];
+  return shop ? cityPlaceByShop.get(shop) || null : null;
+}
+function cityPlaceCell(id, preferred = -1) {
+  const place = CITY_PLACES.get(id);
+  if (!place) return -1;
+  if (cityPlaceAtCell(preferred) === place && map[preferred]) return preferred;
+  return place.cells.find(cell => SHOP[cell] === place.shop && map[cell]) ?? -1;
+}
+function cityHomeId(home) {
+  const place = cityPlaceAtCell(home.cell);
+  return place ? `home:${place.id}` : `home:${home.cell}`;
+}
+function cityWaypointId(id) {
+  const match = /^home:(\d+)$/.exec(id);
+  if (!match) return id;
+  return cityHomeId({ cell: Number(match[1]) });
+}
+// A machine-readable preservation inventory. The cut is a candidate until every footprint clears it.
+function cityLayoutInventory(splitY = 72) {
+  const group = (id, name, x0, y0, x1, y1, kind = 'authored') => ({ id, name, kind, x0, y0, x1, y1 });
+  const fixed = [
+    group('grand-hotel', 'Grand Hotel', GRAND_HOTEL.bx * 8 + 2, GRAND_HOTEL.by * 8 + 2, GRAND_HOTEL.bx * 8 + 8, GRAND_HOTEL.by * 8 + 8),
+    group('gardens', 'Botanical Gardens', GARDEN.x0, GARDEN.y0, GARDEN.x0 + GARDEN.w, GARDEN.y0 + GARDEN.h),
+    ...[['casino', CASINO], ['exchange', EXCHANGE], ['museum', MUSEUM], ['club', CLUB], ['aquarium', AQUARIUM]].map(([id, b]) =>
+      group(id, b.sh.word, b.bx * 8, b.by * 8, b.bx * 8 + 8, b.by * 8 + 8)),
+    group('airport', 'Glyphport International', AIRPORT.x0, AIRPORT.y0, AIRPORT.x1, AIRPORT.y1),
+    group('lighthouse', 'Lighthouse and footbridge', ISLE.x - ISLE.r * 1.5, FOOTBRIDGE.y0, ISLE.x + ISLE.r * 1.5, ISLE.y + ISLE.r * 1.5),
+    group('fair', 'Sunset Pier', FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1),
+    group('marina', 'Marina', MARINA.x - MARINA.reach - 1.2, MARINA.y0 - 1.2, MARINA.x + MARINA.reach + 1.2, MARINA.end + .8),
+    group('courier-cluster', 'All authored courier routes',
+      Math.min(COURIER_DEPOT.x0, ...COURIER_SURFACES.map(s => s.x - s.hl)),
+      Math.min(COURIER_DEPOT.y0, ...COURIER_SURFACES.map(s => s.y - s.hw)),
+      Math.max(COURIER_GARDEN.x + 1, ...COURIER_SURFACES.map(s => s.x + s.hl)),
+      Math.max(COURIER_NICO.y + 1, ...COURIER_SURFACES.map(s => s.y + s.hw))),
+    group('elevated-railway', 'Elevated railway and station approaches', 0, EL_Y - 1, N, EL_Y + 3, 'transport'),
+    ...SUPER.map(([x0, y0, x1, y1, kind], i) => group(`superblock:${i}`, kind, x0 * 8, y0 * 8, (x1 + 1) * 8, (y1 + 1) * 8, 'superblock')),
+    ...Array.from(landmarkOf, ([cell, kind]) => group(`landmark:${cell}`, kind, cell % NB * 8, Math.floor(cell / NB) * 8, cell % NB * 8 + 8, Math.floor(cell / NB) * 8 + 8, 'landmark')),
+  ];
+  const places = Array.from(CITY_PLACES.values(), p => ({
+    ...group(p.id, p.shop.word, p.x0, p.y0, p.x1, p.y1, p.shop.kind === SHOP_APTS ? 'apartments' : 'shop'),
+    cell: p.cell, cells: p.cells.length,
+  }));
+  const architecture = [...ARCH_BUILDINGS, ...BELLE_BUILDINGS, ...MERCHANT_BUILDINGS].map((b, i) =>
+    group(`building:${i}`, b.sh?.word || 'Building', b.x0, b.y0, b.x1, b.y1, 'building'));
+  const infrastructure = [
+    ...stations.map((s, i) => group(`subway:${i}`, s.name, s.x - .3, s.y - .15, s.x + .3, s.y + .15, 'transport')),
+    ...EL_STATIONS.map((s, i) => group(`el-station:${i}`, s.name, s.x - 3, EL_Y, s.x + 3, EL_Y + 2, 'transport')),
+    ...GAS_STATIONS.map(s => group(`gas:${s.k}`, s.brand, s.x0, s.y0, s.x0 + 3, s.y0 + 3, 'service')),
+    ...SERVICES.map((s, i) => group(`service:${i}`, BASE_KINDS[s.kind].title, s.bx * 8, s.by * 8, s.bx * 8 + 8, s.by * 8 + 8, 'service')),
+    ...PIERS.map(([x0, y0, x1, y1], i) => {
+      // Old northern piers cross y=256. Unroll that legacy representation onto the north coast for the audit.
+      const offset = y1 > N ? N : 0;
+      return group(`pier:${i}`, 'Pier', x0, y0 - offset, x1, y1 - offset, 'landing');
+    }),
+    group('fishing-hut', 'Bait and tackle hut', FISH_HUT.x - FISH_HUT.hl, FISH_HUT.y - FISH_HUT.hw, FISH_HUT.x + FISH_HUT.hl, FISH_HUT.y + FISH_HUT.hw, 'activity'),
+    ...GRILLS.map((g, i) => group(`grill:${i}`, g.on, g.x - .2, g.y - .2, g.x + .2, g.y + .2, 'activity')),
+    ...vendors.map((v, i) => group(`vendor:${i}`, v.type.name, v.x - v.type.w, v.y - .3, v.x + v.type.w, v.y + .3, 'activity')),
+    ...STALLS.map((s, i) => group(`night-market:${i}`, s.word, s.x - .56, s.y - .15, s.x + .56, s.y + .15, 'activity')),
+    ...ANGLERS.map((p, i) => {
+      const y = p.y > N - 16 ? p.y - N : p.y;
+      return group(`angler:${i}`, 'Fishing regular', p.x - .1, y - .1, p.x + .1, y + .1, 'activity');
+    }),
+  ];
+  const crosses = p => p.y0 < splitY && p.y1 > splitY;
+  const all = [...fixed, ...places, ...architecture, ...infrastructure];
+  const classify = p => ({ ...p, island: p.y1 <= splitY ? 'north' : p.y0 >= splitY ? 'south' : 'crosses-cut' });
+  return {
+    layout: CITY_LAYOUT_ID, splitY, contentCells: N * N,
+    counts: { places: places.length, apartmentLots: places.filter(p => p.kind === 'apartments').length, authoredGroups: fixed.length, architecturalBuildings: architecture.length, infrastructure: infrastructure.length },
+    fixed: fixed.map(classify), places: places.map(classify), infrastructure: infrastructure.map(classify),
+    conflicts: all.filter(crosses),
+    coordinateState: ['player street position', 'owned-home cell and entrance', 'parked cars', 'owned and hired boats', 'owned aircraft', 'graffiti', 'map waypoint'],
+    identityState: ['inventory and closet', 'home decor and fridge', 'workshop equipment, upgrades and production', 'courier route IDs and records', 'supplier and buyer history'],
+    seamDependencies: ['east/west road connections', 'bridges across old north/south seam', 'elevated train loop', 'boat patrol bands', 'spatial buckets', 'renderer and camera nearest-copy distances'],
+  };
+}
+// Pure schema upgrade. Terrain relocation gets its own explicit layout migration later;
+// never load an unknown layout's raw cells into this one.
+const CITY_SAVE_VERSION = 2;
+function prepareCitySave(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  for (const key of ['homes', 'cars', 'boats', 'planes', 'inv', 'stored', 'closet', 'tags', 'tattoos'])
+    if (raw[key] != null && !Array.isArray(raw[key])) return null;
+  for (const key of ['homes', 'cars', 'boats', 'planes'])
+    if (raw[key]?.some(value => !value || typeof value !== 'object' || Array.isArray(value))) return null;
+  if (raw.v === CITY_SAVE_VERSION) {
+    if (raw.world?.layout !== CITY_LAYOUT_ID) return null;
+    return { data: raw, upgraded: false };
+  }
+  if (raw.v !== 1) return null;
+  const data = JSON.parse(JSON.stringify(raw));
+  data.v = CITY_SAVE_VERSION;
+  data.world = { layout: CITY_LAYOUT_ID };
+  if (Array.isArray(data.homes)) for (const home of data.homes) {
+    const place = cityPlaceAtCell(home?.cell);
+    if (place) home.placeId = place.id;
+  }
+  if (data.waypoint && typeof data.waypoint.id === 'string') data.waypoint.id = cityWaypointId(data.waypoint.id);
+  return { data, upgraded: true };
+}
+function savedCityHomes() {
+  return owned.homes.map(home => ({ ...home, placeId: cityPlaceAtCell(home.cell)?.id || home.placeId }));
+}
+// Map topology lives here so the map and walking routes can later use a bounded world.
+const MAP_WORLD = {width:N,height:N,wrap:true};
+function mapCoordinate(value,size,world=MAP_WORLD) {return world.wrap?mod(value,size):clamp(value,0,size-.001);}
+function mapDifference(value,size,world=MAP_WORLD) {return world.wrap?mod(value+size/2,size)-size/2:value;}
+function mapDistance(a,b,world=MAP_WORLD) {
+  return Math.hypot(mapDifference(b.x-a.x,world.width,world),mapDifference(b.y-a.y,world.height,world));
+}
+function findMapRoute(start,goal,world=MAP_WORLD,passable=mapWalkableCell) {
+  const W=world.width,H=world.height;
+  function key(x,y) {
+    if(!world.wrap&&(x<0||y<0||x>=W||y>=H))return -1;
+    return mod(y,H)*W+mod(x,W);
+  }
+  function snap(point) {
+    const x=Math.floor(point.x),y=Math.floor(point.y);
+    let best=-1,dist=Infinity;
+    for(let r=0;r<=10;r++) {
+      for(let oy=-r;oy<=r;oy++)for(let ox=-r;ox<=r;ox++) {
+        if(r&&Math.abs(ox)!==r&&Math.abs(oy)!==r)continue;
+        const k=key(x+ox,y+oy);if(k<0)continue;
+        const cx=k%W,cy=Math.floor(k/W);if(!passable(cx,cy))continue;
+        const d=mapDistance(point,{x:cx+.5,y:cy+.5},world);
+        if(d<dist){dist=d;best=k;}
+      }
+      if(best>=0)return best;
+    }
+    return -1;
+  }
+  const from=snap(start),to=snap(goal);if(from<0||to<0)return null;
+  const previous=new Int32Array(W*H);previous.fill(-2);previous[from]=-1;
+  const queue=new Int32Array(W*H);queue[0]=from;let head=0,tail=1;
+  while(head<tail && previous[to]===-2) {
+    const k=queue[head++],x=k%W,y=Math.floor(k/W);
+    for(const [ox,oy] of [[1,0],[0,1],[-1,0],[0,-1]]) {
+      const next=key(x+ox,y+oy);
+      if(next<0||previous[next]!==-2||!passable(next%W,Math.floor(next/W)))continue;
+      previous[next]=k;queue[tail++]=next;
+    }
+  }
+  if(previous[to]===-2)return null;
+  const path=[];
+  for(let k=to;k>=0;k=previous[k])path.push({x:k%W+.5,y:Math.floor(k/W)+.5});
+  path.reverse();return path;
+}
+function mapWalkableCell(x,y) {
+  return !map[idx(x,y)]&&!isWater(x+.5,y+.5)&&!architectureBlocked(x+.5,y+.5)&&!landmarkBlocked(x+.5,y+.5);
+}
+let mapWaypoint=null;
+function loadMapWaypoint(raw) {
+  mapWaypoint=null;
+  if(!raw||!Number.isFinite(raw.x)||!Number.isFinite(raw.y)||typeof raw.name!=='string')return;
+  if(raw.x<0||raw.y<0||raw.x>=MAP_WORLD.width||raw.y>=MAP_WORLD.height)return;
+  mapWaypoint={id:typeof raw.id==='string'?cityWaypointId(raw.id).slice(0,100):'pin',name:raw.name.slice(0,100),x:raw.x,y:raw.y};
 }
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
@@ -11627,6 +12202,8 @@ function walkPose(m, gait = 'walk') {
   return T - (m._phT ?? -1) < 0.3 || m.chase ? gait + (Math.floor(m.ph * 2) & 7) : 'stand'; // (still walking if they stepped a moment ago: a pause doesn't stop them)
 }
 function citySprites() {
+  drawDrugBuyer();
+  drawWorkshopSupplier();
   drawCourier();
   drawMuseumRoof();
   drawRoofPolice();
@@ -13860,7 +14437,7 @@ const ROOM_DEFS = {
   realty: { grid: boxRoom(9, 7), light: 0.9, floor: 'carpet', ceil: 'pendant', sign: true, signAt: 2.6, wall: realtyWall, keeper: [4.5, 2.0],
     props: r => [BX(4.5, 1.4, 1.2, 0.35, 0, 0.8, solid(BRICK, { panel: 0.5, top: '=' })), standing(4.5, 2.0, GREEN),
       POT_PLANT(1.3, 1.3, 1.2), BENCHP(7.2, 4.6, -1, 0)] },
-  home: homeDef(10, 9, 0), loft: homeDef(20, 16, 1), bellehome: homeDef(26, 20, 2),
+  home: homeDef(...HOME_ROOM_SIZE.home_studio, 0), loft: homeDef(...HOME_ROOM_SIZE.home_loft, 1), bellehome: homeDef(...HOME_ROOM_SIZE.home_belle, 2),
   hotelroom: { grid: boxRoom(6, 5), light: 0.65, floor: 'wood', ceil: 'pendant', wall: hotelRoomWall,
     props: r => [
       BX(1.85, 2.15, 1.0, 0.75, 0, 0.55, (i, t, L) => { // the bed: white sheets, a red blanket over the foot
@@ -13878,6 +14455,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind === 'hotelroom' && extra.suite ? ROOM_DEFS.hotelSuite : ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
+  if (def.home) r.props.push(...workshopProps(r));
   if (def.home) r.exterior = homeExterior(r);
   return r;
 }
@@ -14070,8 +14648,8 @@ function homePlan(w, h, tier) {
   wall(entryX - 1, h - 1, entryX, h - 1, 'D');
   const windows = [{ face: 'west', center: 2.5, half: 1 }, { face: 'west', center: tier ? 5.4 : 6.3, half: tier ? 1 : 1.25 }];
   if (tier) windows.push({ face: 'west', center: tier === 2 ? 12.7 : 11, half: 2.3 }, { face: 'north', center: 4.2, half: 2 }, { face: 'north', center: 11.8, half: 1.8 });
-  const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6]]
-    : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3]];
+  const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6], [3.5, h - 4], [inside - 3, h - 4]]
+    : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3], [3.5, h - 4], [w - 3, h - 4]];
   return { home, wc, balcony, windows, lamps, tier, grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
 }
 // Upholstered seating and separate dining chairs, with real legs and backs.
@@ -14108,11 +14686,12 @@ function homeDef(w, h, tier) {
     return set(i, ' ', 0), true;
   };
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
-    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)] },
+    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
       BX(bed[0], bed[1] + 0.2, tier ? 1.25 : 1, 0.85, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? tier === 2 ? GREEN : BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
       BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
       BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
+      BX(1.45, h - 2.6, .4, .5, 0, 1.1, solid(BRICK, { panel: .3, top: '=' })), // workshop supply cupboard
       BX(tv[0], tv[1] - 0.3, 0.7, 0.12, 0.6, 1.3, (i, t, L) => { // the telly: static, or a show on
         if (HIT.face !== 4 && HIT.face !== 3) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
         if (!r.tv) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
@@ -14548,6 +15127,7 @@ function roomSprites() {
   for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
   const home = homeRecord(room);
   if (home) {
+    drawWorkshopPreview();
     const { shelf, pet } = homeLayout(room);
     for (const [k, it] of (home.decor || []).entries()) {
       const x = shelf[0] + (k - ((home.decor.length - 1) / 2)) * 0.3;
@@ -21302,6 +21882,7 @@ function render(dt) {
     drawHeld(dt); // what's in your hand (or mouth, or under your feet)
   }
   present();
+  drawDrugVision();
   if (freecam) freecamHud();
   else {
     if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, cv.width, cv.height); }
@@ -21441,6 +22022,52 @@ function present2D() {
     x = end;
   }
 }
+// Reused canvas surfaces work with both presenters. No pixel readbacks and no work while sober.
+let drugVisionCanvas=null, drugVisionTrail=null, drugVisionTrailReady=false;
+function drawDrugVision() {
+  const amount=clamp(Number(settings.tripVisuals) || 0,0,1);
+  const weed=drugVisualStrength('weed')*amount, neon=drugVisualStrength('neon')*amount;
+  if (freecam || (!weed && !neon)) {drugVisionTrailReady=false;return;}
+  drugVisionCanvas ||= document.createElement('canvas');
+  drugVisionTrail ||= document.createElement('canvas');
+  const source=drugVisionCanvas, trail=drugVisionTrail, w=cv.width,h=cv.height;
+  if (source.width!==w || source.height!==h) {
+    source.width=trail.width=w;source.height=trail.height=h;drugVisionTrailReady=false;
+  }
+  const ctx=source.getContext('2d'), memory=trail.getContext('2d');
+  ctx.save();
+  const hue=neon*(Math.sin(T*.32)*150+Math.sin(T*.11)*55)+weed*12;
+  ctx.filter=`hue-rotate(${hue}deg) saturate(${1+neon*1.4+weed*.35})`;
+  ctx.drawImage(frameCanvas(),0,0);ctx.restore();
+  g.save();g.fillStyle='#000';g.fillRect(0,0,w,h);
+  const breathe=1+weed*(.018+.012*Math.sin(T*.8))+neon*.012;
+  g.translate(w/2,h/2);g.scale(breathe,breathe);g.translate(-w/2,-h/2);
+  // Smooth horizontal ribbons bend independently; overscan keeps their edges out of view.
+  const strip=12, pad=26*(weed+neon);
+  for (let y=0;y<h;y+=strip) {
+    const sh=Math.min(strip,h-y), v=y/h;
+    const shift=weed*Math.sin(v*5+T*.8)*8+neon*Math.sin(v*13-T*1.5)*17;
+    const stretch=neon*Math.sin(v*8+T*.9)*.035;
+    g.drawImage(source,0,y,w,sh,shift-pad-w*stretch/2,y,w+pad*2+w*stretch,sh);
+  }
+  if (neon && drugVisionTrailReady) {
+    g.globalCompositeOperation='screen';g.globalAlpha=.3*neon;
+    g.drawImage(trail,Math.sin(T*.9)*9,Math.cos(T*.7)*4,w,h);
+    g.globalAlpha=.16*neon;g.drawImage(source,-8*neon,0,w,h);
+  }
+  g.restore();
+  if (weed) {
+    g.save();const glow=g.createRadialGradient(w*.5,h*.5,h*.1,w*.5,h*.5,w*.65);
+    glow.addColorStop(0,'rgba(152,190,68,0)');glow.addColorStop(1,`rgba(116,153,35,${weed*.18})`);
+    g.fillStyle=glow;g.fillRect(0,0,w,h);g.restore();
+  }
+  if (neon) {
+    // A decaying history, rather than an extra copy of this frame, leaves moving objects with trails.
+    if (!drugVisionTrailReady) memory.clearRect(0,0,w,h);
+    memory.globalAlpha=drugVisionTrailReady ? .24 : 1;
+    memory.drawImage(source,0,0);memory.globalAlpha=1;drugVisionTrailReady=true;
+  } else drugVisionTrailReady=false;
+}
 // a readout over the view: its letters stay out of the fog (the street behind them doesn't)
 const dashText = (r, c, s, col) => { putText(r, c, s, col); for (let k = 0; k < s.length; k++) if (s[k] !== ' ' && r >= 0 && r < rows && c + k >= 0 && c + k < cols) FOGS[r * cols + c + k] = 0; };
 function dash() {
@@ -21517,6 +22144,7 @@ function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return ''; // (up the el stairs: nothing at street level is in reach)
   const deliveryPrompt=courierPrompt();if(deliveryPrompt)return deliveryPrompt;
+  const workshopLine = workshopPrompt(); if (workshopLine) return workshopLine;
   const cp = crimePrompt();
   if (cp) return cp;
   { const sp = sprayPrompt(); if (sp) return sp; } // (at the wheel, at a garage's door)
@@ -21527,7 +22155,7 @@ function promptText() {
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
-    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: 'E: your closet', shelf: 'E: decorate shelf', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'E: decorate shelf', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
     if (room.kind === 'grandhotel') { const m = grandHotelPrompt(); if (m) return m; }
@@ -21638,6 +22266,7 @@ let showMap = false;
 const MAP_R = 12;
 const MAP_COL = { park: '#1f5a2a', sea: '#1d3f7a', construction: '#4a3a28', yard: '#3a3428', waterfront: '#4a4636' };
 function mapTile(mx, my) {
+  if(!MAP_WORLD.wrap&&(mx<0||my<0||mx>=MAP_WORLD.width||my>=MAP_WORLD.height))return '#080b10';
   const k = idx(mx, my), h = map[k], wx = mx + 0.5, wy = my + 0.5;
   if (h) { const v = Math.min(h, 12) * 12; return `rgb(${60 + v},${60 + v},${75 + v})`; } // taller is lighter
   if (Math.abs(rel(wx - FOOTBRIDGE.x)) < 0.6 && onFootbridge(FOOTBRIDGE.x, wy) || onPier(wx, wy)) return '#5a4030'; // (the bridge is thinner than a tile)
@@ -21657,12 +22286,13 @@ function minimap() {
   g.fillStyle = 'rgba(0,0,0,0.82)'; g.fillRect(x0 - cw_ * 1.5, y0 - fs * 1.2, W + cw_ * 3, H + fs * 2.4);
   const ox = Math.floor(px), oy = Math.floor(py), tw = 2 * cw_;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { g.fillStyle = mapTile(ox + i - MAP_R, oy + j - MAP_R); g.fillRect(x0 + i * tw, y0 + j * fs, tw + 0.5, fs + 0.5); }
-  const inMap = (wx, wy) => { const i = Math.floor(rel(wx - px)) + MAP_R, j = Math.floor(rel(wy - py)) + MAP_R; return i >= 0 && j >= 0 && i < n && j < n ? [x0 + i * tw, y0 + j * fs] : null; };
+  const inMap = (wx, wy) => { const i = Math.floor(mapDifference(wx - px,MAP_WORLD.width)) + MAP_R, j = Math.floor(mapDifference(wy - py,MAP_WORLD.height)) + MAP_R; return i >= 0 && j >= 0 && i < n && j < n ? [x0 + i * tw, y0 + j * fs] : null; };
   const mark = (wx, wy, ch, col) => { // a character on a dark chip, so it reads over any tile
     const p = inMap(wx, wy); if (!p) return;
     g.fillStyle = 'rgba(0,0,0,0.85)'; g.fillRect(p[0], p[1], tw, fs);
     g.fillStyle = col; g.fillText(ch, p[0] + (ch.length < 2 ? cw_ / 2 : 0), p[1]);
   };
+  if(MAP_NAV.path)for(const point of MAP_NAV.path.slice(MAP_NAV.next)){const p=inMap(point.x,point.y);if(p){g.fillStyle='#78d8d1';g.fillRect(p[0]+tw*.25,p[1]+fs*.35,tw*.5,fs*.3);}}
   for (const pp of people) if (!pp.hidden) { const p = inMap(pp.x, pp.y); if (p) { g.fillStyle = '#b9a'; g.fillRect(p[0] + cw_ * 0.8, p[1] + fs * 0.4, 2, 2); } }
   for (const c of cars) if (c !== me) mark(c.x, c.y, c.pursuit ? 'P' : 'o', c.pursuit ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : PAL[C(c.body, 13)]);
   for (const c of footCops) mark(c.x, c.y, 'p', c.chase ? (fract(T * 3) < 0.5 ? '#f44' : '#48f') : '#69f');
@@ -21682,6 +22312,9 @@ function minimap() {
   mark(...COURIER_DEPOT.door,'C','#6c9');
   const courier=courierRoute();if(courier)mark(courier.recipient.x,courier.recipient.y,'!','#6f9');
   if (me && me.dest) mark(me.dest[0], me.dest[1], 'X', '#f4f');
+  if(supplierVisit)mark(supplierVisit.x,supplierVisit.y,'+','#ffd575');
+  if(drugBuyer)mark(drugBuyer.x,drugBuyer.y,'$','#f8a0d9');
+  if(mapWaypoint)mark(mapWaypoint.x,mapWaypoint.y,'X','#8de5df');
   const ang = me ? Math.atan2(me.hy, me.hx) : a; // you, and which way you're facing
   mark(px, py, '@' + ['>', 'v', '<', '^'][mod(Math.round(ang / (Math.PI / 2)), 4)], '#ff5');
   g.fillStyle = PAL[C(GRAY, 9)]; // the frame
@@ -21741,6 +22374,7 @@ function hud() {
   const task_ = [...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
   const meters = needMeters();
   hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
+  drawMapNavigation();
   wantedHud();
   if (job && mode === 'drive') jobArrow();
   else if(courierRoute()&&mode!=='room')jobArrow(...courierGuide());
@@ -21895,12 +22529,15 @@ function elGetOff() {
 function enterRoom(kind, extra, spawn) {
   fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
+  const residence = homeRecord(room);
+  if (residence && room.ret) residence.door = room.ret.slice(0, 2);
   if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'backrooms' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
 }
 function interact() {
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
   if(courierUse())return;
+  if (workshopUse()) return;
   if (mode === 'room') {
     if (room.kind === 'train') return;
     if (grandHotelUse()) return;
@@ -21909,7 +22546,8 @@ function interact() {
       const home = homeRecord(room);
       if (!home) return say('This apartment is not yours.', 2);
       if (hs === 'bed') { sleep = { t: 0, home: true }; return say('You crawl into your own bed.', 3); }
-      if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', 'Kept at home, whichever home you go to');
+      if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', '120 spaces. Shared between your apartments; equipment and batches fit too.', null, HOME_STORE_SIZE);
+      if (hs === 'workshop') return openWorkshop();
       if (hs === 'shelf') {
         home.decor ||= [];
         if (heldItem() && isHomeDecor(heldItem())) {
@@ -22087,7 +22725,7 @@ function interact() {
     if (home) {
       const kind = homeRoomKind(home.kind), def = ROOM_DEFS[kind];
       enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, def.entry);
-      return say('Home.', 1.5);
+      return say('Home. Workshop cupboard by the entrance; 120 spaces in your closet.', 5);
     }
     if (sh.club && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
     if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
@@ -22132,6 +22770,8 @@ function stepSleep(dt) {
   fade = sleep.t < 1.5 ? sleep.t / 1.5 : sleep.t < 3 ? 1 : clamp(1 - (sleep.t - 3) / 2, 0, 1);
   if (sleep.t >= 1.5 && !sleep.done) {
     sleep.done = true;
+    clearDrugEffects();
+    if(fx.smokeKind==='joint')fx.smoke=0;
     if (tod > 7) dayNum++; // slept through midnight
     tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
@@ -24157,6 +24797,7 @@ function buildPause() {
       ${slider('master', 'Master', 0, 1, 0.05)}${slider('music', 'Music', 0, 1, 0.05)}${slider('ambience', 'Ambience', 0, 1, 0.05)}${slider('effects', 'Effects', 0, 1, 0.05)}
       <h2>view</h2>
       ${slider('fov', 'Field of view', 50, 120, 1)}
+      ${slider('tripVisuals', 'Drug visuals', 0, 1, 0.05)}
       <div class="row"><span>Detail</span><div class="opts">${Object.keys(DETAIL).map(d => `<button class="opt" data-detail="${d}">${d}</button>`).join('')}</div><span></span></div>
       ${toggle('help', 'Help line')}
       <h2>mouse</h2>
@@ -24168,7 +24809,7 @@ function buildPause() {
         <b>shift</b><span>run</span><b>E</b><span>use, talk, enter, buy</span>
         <b>space</b><span>jump (tap near landing to bunny hop); in car: handbrake / drift; on board: ollie</span><b>right mouse</b><span>hold to aim the revolver; on a board: hold and flick for tricks</span><b>C</b><span>crouch (hold) / sit</span>
         <b>H</b><span>hail a taxi</span><b>V</b><span>car camera</span>
-        <b>M</b><span>map</span><b>1-8</b><span>quick slots; again to put away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
+        <b>M / Shift+M</b><span>full map / minimap</span><b>1-8</b><span>quick slots; again to put away (taxi / train: pick a stop)</span><b>0</b><span>empty hands</span><b>B</b><span>boombox: next tape</span><b>G</b><span>pickpocket / shoplift / grab</span><b>L</b><span>pick a lock (at night)</span>
         <b>I</b><span>what you carry; assign items to quick slots</span><b>Q / left mouse</b><span>use held item; R reloads the revolver</span>
         <b>J</b><span>drive a taxi / work a shift</span><b>N</b><span>sound on / off</span>
         <b>P</b><span>pee</span>
@@ -24516,30 +25157,241 @@ function openDev() {
 }
 function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = false; lockMouse(); }
 const devKey = e => { if (e.code !== 'F2' || e.repeat) return false; e.preventDefault(); devOpen() ? closeDev() : openDev(); return true; };
-// ===== the big map: the whole city on one sheet, opened from the pause menu. Drag it about (mouse or finger),
-// zoom with the wheel, a pinch, or the + / - buttons; arrows or WASD pan too. Neighbourhood names always, the
-// landmarks and stations, and (zoomed in) every shop by its sign. Esc, M or the x closes it, back to the pause menu.
+// Searchable places are data; the map, list, contacts and waypoints share the same records.
+const MAP_CATEGORIES={all:'All',contacts:'Contacts',homes:'Homes',food:'Food',transport:'Transport',essentials:'Services',activities:'Things to do',shops:'Shops'};
+const MAP_COLORS={contacts:'#ffd575',homes:'#ffe960',food:'#f9a67b',transport:'#8ecbff',essentials:'#9bdfbb',activities:'#d9b6ff',shops:'#c8cbd4',area:'#b2b9c7'};
+const MAP_NAV={path:null,next:0,lastT:-99,routeFrom:null,nearby:false};
+let mapPlaceCache=null;
+function mapPlayerLocation() {
+  if(mode==='room') {
+    if(room?.ret?.length>=2)return {x:room.ret[0],y:room.ret[1]};
+    if(streetSpot)return {x:streetSpot.x,y:streetSpot.y};
+  }
+  return {x:px,y:py};
+}
+const mapMetres = distance => distance>=1000?`${(distance/1000).toFixed(1)} km`:`${Math.round(distance/10)*10} m`;
+const mapEscape = text => String(text).replace(/[&<>"']/g,c=>`&#${c.charCodeAt(0)};`);
+function nearestWorkshopHome() {
+  const p=mapPlayerLocation();
+  return owned.homes.reduce((best,h)=>!best||mapDistance(p,{x:h.cell%N,y:Math.floor(h.cell/N)})<mapDistance(p,{x:best.cell%N,y:Math.floor(best.cell/N)})?h:best,null);
+}
+function mapShopCategory(sh) {
+  if(sh.word==='REALTY')return 'homes';
+  if(/^(PHARMACY|DRUGSTORE|HOSPITAL|POLICE|BANK|LAUNDRY|STORAGE|AUTO REPAIR)$/.test(sh.word))return 'essentials';
+  if(/^(GAS|CARS)$/.test(sh.word))return 'transport';
+  if(/^(ARCADE|GYM|CINEMA|KARAOKE|PACHINKO|CRANE GAME|GACHA|CASINO|MUSEUM|AQUARIUM|VELVET|MAHJONG)$/.test(sh.word))return 'activities';
+  if(stockFor('',sh.word).some(id=>['food','drink'].includes(ITEMS[id]?.kind)))return 'food';
+  return 'shops';
+}
+function mapDirectory() {
+  const out=[],seen=new Set(),add=p=>{out.push({...p,color:MAP_COLORS[p.category]||'#ccc'});};
+  for(const [x,y,name,color,kind] of bigMapLabels()) {
+    if(kind==='shop')continue;
+    let category=kind==='area'?'area':'activities';
+    if(stations.some(s=>s.name===name)||EL_STATIONS.some(s=>s.name===name)||name==='Airport')category='transport';
+    if(['Police','Fire station','Hospital'].includes(name))category='essentials';
+    add({id:`place:${name}:${x}:${y}`,name,x,y,category,kind,description:category==='transport'?'Station or transport connection.':'City landmark.',color});
+  }
+  for(let k=0;k<SHOP.length;k++) {
+    const sh=SHOP[k];if(!sh?.word||sh.kind===SHOP_APTS||sh.kind===SHOP_SHUT||seen.has(sh))continue;
+    seen.add(sh);const x=k%N+.5,y=Math.floor(k/N)+.5;
+    const stock=stockFor('',sh.word).slice(0,6).map(id=>ITEMS[id]?.name).filter(Boolean);
+    add({id:cityPlaceAtCell(k)?.id||`shop:${k}`,name:sh.word,x,y,category:mapShopCategory(sh),kind:'shop',shop:sh,
+      description:stock.length?`Sells ${stock.join(', ')}.`:'Visit the counter to see what is available.',
+      status:openAt(sh,tod)?'Open now':'Closed now',hours:sh.hours,fee:sh.fee||0});
+  }
+  for(const h of owned.homes) {
+    const point=h.door||buyerDoor(h)||[h.cell%N+.5,Math.floor(h.cell/N)+.5];
+    add({id:cityHomeId(h),name:`Your ${ITEMS[h.kind].name}`,x:point[0],y:point[1],category:'homes',kind:'home',home:h,
+      description:'Your apartment: workshop, bed and a shared 120-item closet.',status:'Owned'});
+  }
+  const home=nearestWorkshopHome(),meeting=home&&(home.door||buyerDoor(home));
+  add({id:'supplier',name:'Mara · workshop supplier',x:supplierVisit?.x??meeting?.[0]??null,y:supplierVisit?.y??meeting?.[1]??null,
+    category:'contacts',kind:'supplier',virtual:!supplierVisit,description:'Yellow cap, teal jacket. Equipment, seed pods, refills and upgrades. Call her to your apartment from here.',
+    status:supplierVisit?'Waiting outside your apartment':home?'Available to call':'Buy an apartment to set up a workshop'});
+  if(drugBuyer) {
+    const b=drugBuyerProfile(drugBuyer.visit.id);
+    add({id:`buyer:${b.id}`,name:`${b.name} · buyer`,x:drugBuyer.x,y:drugBuyer.y,category:'contacts',kind:'buyer',description:b.description,status:'Waiting outside your apartment'});
+  }
+  for(const [index,c] of owned.cars.entries())add({id:`car:${index}`,name:`Your ${CAR_MODELS[c.model]?.name||'car'}`,x:c.x,y:c.y,category:'transport',kind:'car',description:'Your parked vehicle.',status:c.wrecked?'Wrecked':'Owned'});
+  for(const b of fleet)if(b.deal==='mine'||b.hired)add({id:`boat:${b.id}`,name:`${b.hired?'Your rental':'Your boat'} · ${b.name}`,x:b.x,y:b.y,category:'transport',kind:'boat',description:b.hired?'Waiting for your return trip. Bring it back to the marina to end the rental.':'Your boat stays where you tie it up.',status:b.hired?'Hired':'Owned'});
+  for(const [index,v] of vendors.entries())add({id:`vendor:${index}`,name:v.type.name,x:v.x,y:v.y,category:'food',kind:'vendor',description:`Street vendor: ${v.type.item}.`});
+  const task=taskTarget(),job=jobTarget(),delivery=courierRoute();
+  for(const [id,p,name] of [['task',task,'Current favour'],['job',job,'Current job'],['courier',delivery?.recipient,'Courier delivery']]) {
+    if(p)add({id,name,x:p.x,y:p.y,category:'activities',kind:'objective',description:id==='courier'?'Rooftop destination. The route marks a street approach; use the stairs or roof route.':'Your current objective.'});
+  }
+  return out;
+}
+function mapFilteredPlaces() {
+  const q=BIGMAP.query.trim().toLowerCase(),origin=mapPlayerLocation();
+  const key=`${q}|${BIGMAP.category}|${origin.x}|${origin.y}`;
+  if(mapPlaceCache?.places===BIGMAP.places&&mapPlaceCache.key===key)return mapPlaceCache.results;
+  const results=BIGMAP.places.filter(p=>(BIGMAP.category==='all'?(p.category!=='area'||q):p.category===BIGMAP.category)&&
+    (!q||`${p.name} ${p.description} ${p.category}`.toLowerCase().includes(q)))
+    .sort((a,b)=>{
+      if(!q&&a.id==='supplier')return -1;if(!q&&b.id==='supplier')return 1;
+      if(a.x===null)return -1;if(b.x===null)return 1;
+      return mapDistance(origin,a)-mapDistance(origin,b)||a.name.localeCompare(b.name);
+    });
+  mapPlaceCache={places:BIGMAP.places,key,results};return results;
+}
+function mapPlaceDistance(p) {return p.virtual?'On call':p.x===null?'Contact':mapMetres(mapDistance(mapPlayerLocation(),p)*10);}
+function mapPlaceStreet(p) {
+  if(p.x===null||p.virtual)return '';
+  const street=streetName(p.x,p.y);if(street)return street;
+  for(let r=1;r<=8;r++)for(let oy=-r;oy<=r;oy++)for(let ox=-r;ox<=r;ox++) {
+    if(Math.abs(ox)!==r&&Math.abs(oy)!==r)continue;
+    const x=mapCoordinate(Math.floor(p.x)+ox,MAP_WORLD.width),y=mapCoordinate(Math.floor(p.y)+oy,MAP_WORLD.height);
+    if(ROAD[idx(x,y)]){const name=streetName(x+.5,y+.5);if(name)return name;}
+  }
+  return '';
+}
+function mapDirectoryUI() {
+  const list=bigMapEl.querySelector('.places'),details=bigMapEl.querySelector('.place-detail'),hits=mapFilteredPlaces();
+  const route=bigMapEl.querySelector('.route-status');route.hidden=!mapWaypoint;
+  if(mapWaypoint)route.innerHTML=`<span>${mapEscape(mapWaypoint.name)}<br>${mapMetres(mapRouteDistance())} · ${MAP_NAV.path?'walking route':'direction only'}</span><button data-map="clear-route">Clear</button>`;
+  const selected=BIGMAP.places.find(p=>p.id===BIGMAP.selected);
+  bigMapEl.querySelector('.directory').classList.toggle('has-selection',!!selected);
+  bigMapEl.querySelector('.results-count').textContent=`${hits.length} places · nearest first`;
+  list.innerHTML=hits.slice(0,BIGMAP.limit).map(p=>`<button class="place-row ${BIGMAP.selected===p.id?'selected':''}" data-place="${mapEscape(p.id)}"><span><b style="color:${p.color}">${mapEscape(p.name)}</b><small>${mapEscape([p.status||MAP_CATEGORIES[p.category]||'District',mapPlaceStreet(p)].filter(Boolean).join(' · '))}</small></span><span class="distance">${mapPlaceDistance(p)}</span></button>`).join('')||'<p class="empty">No places match. Try another name or category.</p>';
+  if(hits.length>BIGMAP.limit)list.innerHTML+='<button class="more-places" data-map="more">Show more places</button>';
+  for(const b of bigMapEl.querySelectorAll('[data-category]'))b.setAttribute('aria-pressed',String(b.dataset.category===BIGMAP.category));
+  details.hidden=!selected;
+  if(!selected)return;
+  const p=selected,hours=p.hours?`${String(p.hours[0]).padStart(2,'0')}:00–${String(p.hours[1]).padStart(2,'0')}:00`:'';
+  const address=p.x===null?'':[mapPlaceStreet(p),DISTRICT_TITLE[districtAt(p.x,p.y)]].filter(Boolean).join(' · ');
+  const supplierWaiting=p.kind==='supplier'&&supplierVisit&&supplierVisit.home===nearestWorkshopHome()?.cell;
+  const actions=[];
+  if(p.kind==='supplier'&&!supplierWaiting)actions.push(`<button data-map="call-supplier" ${owned.homes.length?'':'disabled'}>${supplierVisit?'Call Mara to nearest home':'Call Mara to my apartment'}</button>`);
+  if(p.x!==null&&!p.virtual) {
+    if(mapWaypoint?.id===p.id)actions.push('<button data-map="go">Follow waypoint</button>');
+    else actions.push('<button data-map="waypoint">Set walking waypoint</button>');
+  }
+  if(p.kind==='supplier'&&!owned.homes.length)actions.push('<button data-map="find-housing">Find a realty office</button>');
+  details.innerHTML=`<div class="detail-head"><small>${mapEscape(MAP_CATEGORIES[p.category]||'District')} · ${mapPlaceDistance(p)}</small><button data-map="unselect" aria-label="Close place details">×</button></div><h2>${mapEscape(p.name)}</h2><p>${mapEscape(p.description)}</p>
+    <p>${mapEscape(address)}</p><p class="place-status">${mapEscape([p.status,hours,p.fee?`Entry ${fmt$(p.fee)}`:''].filter(Boolean).join(' · '))}</p>
+    <div class="detail-actions">${actions.join('')}</div>`;
+}
+function selectMapPlace(id,centre=true) {
+  const p=BIGMAP.places.find(p=>p.id===id);if(!p)return;
+  BIGMAP.selected=id;
+  bigMapEl.querySelector('.directory').hidden=false;
+  if(centre&&p.x!==null) {BIGMAP.cx=p.x;BIGMAP.cy=p.y;BIGMAP.z=Math.max(BIGMAP.z,12);}
+  BIGMAP.found=p.x!==null?{x:p.x,y:p.y,t:performance.now()/1000}:null;
+  mapDirectoryUI();bigMapDraw();
+}
+function setMapWaypoint(p) {
+  if(!p||p.x===null||p.virtual)return;
+  mapWaypoint={id:p.id,name:p.name,x:p.x,y:p.y};MAP_NAV.path=null;MAP_NAV.routeFrom=null;MAP_NAV.next=0;
+  updateMapNavigation(true);showMap=true;saveGame();
+  if(bigMapOpen()){mapDirectoryUI();bigMapDraw();}
+  say(`Walking waypoint: ${p.name}. M opens the map.`,4);
+}
+function clearMapWaypoint() {
+  mapWaypoint=null;MAP_NAV.path=null;MAP_NAV.routeFrom=null;MAP_NAV.next=0;
+  saveGame();if(bigMapOpen()){mapDirectoryUI();bigMapDraw();}
+}
+function updateMapNavigation(force=false) {
+  if(!mapWaypoint)return;
+  if(mapWaypoint.id==='supplier'&&!supplierVisit){mapWaypoint=null;MAP_NAV.path=null;return;}
+  if(mapWaypoint.id.startsWith('buyer:')&&!drugBuyer){mapWaypoint=null;MAP_NAV.path=null;return;}
+  if(!force&&T-MAP_NAV.lastT<.3)return;MAP_NAV.lastT=T;
+  const p=mapPlayerLocation(),path=MAP_NAV.path;
+  let nearest=Infinity,index=MAP_NAV.next;
+  if(path)for(let n=MAP_NAV.next;n<path.length;n++){const d=mapDistance(p,path[n]);if(d<nearest){nearest=d;index=n;}}
+  MAP_NAV.next=index;
+  if(force||!MAP_NAV.routeFrom||nearest>1.6&&mapDistance(p,MAP_NAV.routeFrom)>1) {
+    MAP_NAV.path=findMapRoute(p,mapWaypoint);MAP_NAV.next=0;MAP_NAV.routeFrom={...p};
+  }
+  const end=MAP_NAV.path?.at(-1);MAP_NAV.nearby=!!end&&mapDistance(p,end)<.65;
+}
+function mapRouteDistance() {
+  const path=MAP_NAV.path,p=mapPlayerLocation();
+  return path?Math.max(0,path.length-1-MAP_NAV.next)*10+mapDistance(p,path[MAP_NAV.next])*10:mapDistance(p,mapWaypoint)*10;
+}
+function drawMapNavigation() {
+  if(!mapWaypoint)return;
+  const p=mapPlayerLocation(),next=MAP_NAV.path?.[Math.min(MAP_NAV.next+1,MAP_NAV.path.length-1)]||mapWaypoint;
+  const yaw=Math.atan2(mapDifference(next.y-p.y,MAP_WORLD.height),mapDifference(next.x-p.x,MAP_WORLD.width));
+  const turn=mod(yaw-a+Math.PI,Math.PI*2)-Math.PI;
+  let direction='AHEAD';if(turn>.5)direction='RIGHT';else if(turn<-.5)direction='LEFT';if(Math.abs(turn)>2.5)direction='BEHIND';
+  const text=`${MAP_NAV.nearby?'NEARBY':direction} > ${mapWaypoint.name} · ${mapMetres(mapRouteDistance())}${MAP_NAV.path?'':' · direction only'}`;
+  let max=cv.width-24-(TOUCH?TOUCH_PAD_W:0);
+  if(showMap&&!TOUCH&&cv.width>700)max=Math.min(max,cv.width-360);
+  const lines=wrapText(text,Math.max(100,max));
+  let y=hudBottom+6;g.font=FS+'px monospace';
+  for(const line of lines){g.fillStyle='rgba(0,0,0,.8)';g.fillRect(6,y,g.measureText(line).width+12,FS+5);g.fillStyle='#8de5df';g.fillText(line,12,y+2);y+=FS+5;}
+  hudBottom=y+4;
+}
+// Full map and city directory. M opens it directly; Pause can open it without changing the return destination.
 let bigMapEl = null, bigMapCv = null, bigMapSheet = null;
-const BIGMAP = { cx: 0, cy: 0, z: 4, drag: null, pts: new Map(), pinch: null, keys: {}, found: null, hits: [], hitK: 0 };
+const BIGMAP = { cx: 0, cy: 0, z: 4, pts: new Map(), pinch: null, keys: {}, found: null, hits: [], hitK: -1,
+  category:'all',query:'',selected:null,places:[],limit:30,points:[],returnPaused:false,tap:null };
 const BIGMAP_Z = 48; // most px per cell: a shop front across the screen. The least: the whole city just fills the screen
-const bigMapMinZ = () => Math.max(bigMapCv.clientWidth, bigMapCv.clientHeight) / N;
+const bigMapMinZ = () => Math.min(bigMapCv.clientWidth/MAP_WORLD.width,bigMapCv.clientHeight/MAP_WORLD.height)*.9;
 const BIGMAP_CSS = `
-  #bigmap { background: #000; }
+  #bigmap { background: #080b10; color:#d3d8df; }
   #bigmap canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
   #bigmap canvas.drag { cursor: grabbing; }
-  #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); right: calc(12px + env(safe-area-inset-right)); max-width: 420px; display: flex; gap: 6px; }
-  #bigmap .bar button { flex: 0 0 auto; min-width: 38px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
+  #bigmap .bar { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top)); left:332px; right:12px; max-width:520px; display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:6px; }
+  #bigmap .bar button { flex: 0 0 auto; min-width: 38px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.94); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
+  #bigmap .tools { grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap; }
   #bigmap .bar button:hover { border-color: #fff; }
-  #bigmap .bar input { flex: 1; min-width: 0; width: 200px; height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; font: inherit; outline: none; }
+  #bigmap .bar input { min-width: 0; width:100%; box-sizing:border-box;height: 38px; padding: 0 10px; background: rgba(6, 6, 8, 0.94); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; font: inherit; outline: none; }
   #bigmap .bar input:focus { border-color: #fff; }
-  #bigmap .tip { position: absolute; z-index: 2; left: calc(12px + env(safe-area-inset-left)); bottom: 10px; color: rgba(255, 255, 255, 0.45); pointer-events: none; }`;
+  #bigmap .tip { position:absolute;z-index:2;right:12px;bottom:10px;max-width:calc(100% - 350px);text-align:right;color:#a7b2bf;background:#080b10dd;padding:8px 10px;pointer-events:none;font-size:12px; }
+  #bigmap .directory {position:absolute;z-index:2;left:12px;top:12px;bottom:12px;width:304px;box-sizing:border-box;display:flex;flex-direction:column;padding:18px;background:rgba(9,12,17,.97);border:1px solid #35404a; }
+  #bigmap .directory[hidden] {display:none;}
+  #bigmap .directory h1 {font-size:26px;letter-spacing:1px;color:#f1f3ec;line-height:1;margin:0 0 6px;}
+  #bigmap .directory .subtitle {font-size:12px;letter-spacing:2px;color:#84c9c7;margin-bottom:16px;}
+  #bigmap .route-status {padding:9px 0;border-top:1px solid #344b50;border-bottom:1px solid #344b50;display:flex;gap:8px;align-items:center;margin:6px 0 10px;font-size:12px;color:#a9e4df;}
+  #bigmap .route-status[hidden] {display:none;}
+  #bigmap .route-status span {flex:1;min-width:0;overflow-wrap:anywhere;}
+  #bigmap .route-status button {padding:6px;border:1px solid #40545d;color:#b6c5ca;}
+  #bigmap .filters {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;}
+  #bigmap .filters button {text-align:left;padding:6px 8px;border:1px solid #28313b;font-size:13px;}
+  #bigmap .filters [aria-pressed="true"] {background:#163437;border-color:#7bc5c3;color:#c4ffff;}
+  #bigmap .results-count {font-size:12px;color:#8694a2;margin:12px 0 8px;}
+  #bigmap .places {overflow:auto;min-height:0;flex:1;scrollbar-width:thin;}
+  #bigmap .place-row {display:flex;width:100%;gap:8px;align-items:center;text-align:left;padding:10px 2px;border-bottom:1px solid #202730;box-sizing:border-box;}
+  #bigmap .place-row>span:first-child {min-width:0;flex:1;}
+  #bigmap .place-row b {font-weight:normal;display:block;overflow-wrap:anywhere;}
+  #bigmap .place-row small {display:block;color:#8c98a5;font-size:12px;}
+  #bigmap .place-row.selected {background:#183137;}
+  #bigmap .distance {font-size:12px;color:#b5c0cb;white-space:nowrap;}
+  #bigmap .empty {color:#9ba5b0;font-size:13px;}
+  #bigmap .more-places {padding:12px 0;color:#9bdbd8;}
+  #bigmap .place-detail {border-bottom:1px solid #46535f;padding:8px 0 14px;margin-bottom:4px;flex:0 1 auto;overflow:auto;}
+  #bigmap .place-detail[hidden] {display:none;}
+  #bigmap .detail-head {display:flex;align-items:center;justify-content:space-between;color:#8fbbbd;font-size:12px;}
+  #bigmap .detail-head button {padding:0 6px;font-size:24px;color:#fff;}
+  #bigmap .place-detail h2 {display:block;color:#f1f2e7;font-size:20px;margin:4px 0 8px;line-height:1.15;}
+  #bigmap .place-detail h2::after {display:none;}
+  #bigmap .place-detail p {font-size:13px;line-height:1.35;margin:6px 0;color:#adb7c2;}
+  #bigmap .place-status {color:#b8d2b6!important;}
+  #bigmap .detail-actions {display:grid;gap:6px;margin-top:12px;}
+  #bigmap .detail-actions button {text-align:left;padding:8px;border:1px solid #58676f;color:#b3eeeb;font-size:13px;}
+  #bigmap .detail-actions button:disabled {opacity:.4;cursor:default;}
+  #bigmap button:focus-visible {outline:2px solid #93ece4;outline-offset:2px;}
+  @media(max-width:700px) {
+    #bigmap .bar {left:12px;max-width:none;}
+    #bigmap .directory {top:auto;bottom:12px;left:12px;right:12px;width:auto;height:42vh;max-height:380px;padding:12px;}
+    #bigmap .directory h1 {font-size:21px;}
+    #bigmap .directory .subtitle {display:none;}
+    #bigmap .filters {grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-top:8px;}
+    #bigmap .filters button {font-size:11px;padding:6px 3px;}
+    #bigmap .has-selection .filters,#bigmap .has-selection .places,#bigmap .has-selection .results-count {display:none;}
+    #bigmap .place-detail {min-height:0;margin:6px 0 0;border:0;}
+    #bigmap .tip {bottom:calc(42vh + 24px);max-width:calc(100% - 24px);font-size:10px;}
+    #bigmap .directory[hidden]~.tip {bottom:12px;}
+  }`;
 
 // the city drawn once, a pixel a cell, then scaled up crisp
 function bigMapRender() {
   const c = bigMapSheet || (bigMapSheet = document.createElement('canvas'));
-  c.width = c.height = N;
+  c.width = MAP_WORLD.width;c.height=MAP_WORLD.height;
   const x = c.getContext('2d');
-  for (let my = 0; my < N; my++) for (let mx = 0; mx < N; mx++) { x.fillStyle = mapTile(mx, my); x.fillRect(mx, my, 1, 1); }
+  for (let my = 0; my < MAP_WORLD.height; my++) for (let mx = 0; mx < MAP_WORLD.width; mx++) { x.fillStyle = mapTile(mx, my); x.fillRect(mx, my, 1, 1); }
 }
 // what's named on the map: [x, y, text, colour, kind]. kind: 'area' (always), 'place' (always), 'shop' (zoomed in)
 function bigMapLabels() {
@@ -24573,10 +25425,22 @@ function bigMapDraw() {
   x.setTransform(dpr, 0, 0, dpr, 0, 0); x.imageSmoothingEnabled = false;
   x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
   // world (wx, wy) -> screen, taking the copy of the (wrapping) city nearest the middle of the view
-  const sx = wx => W / 2 + rel(wx - BIGMAP.cx) * z, sy = wy => H / 2 + rel(wy - BIGMAP.cy) * z;
-  const ox = W / 2 - BIGMAP.cx * z, oy = H / 2 - BIGMAP.cy * z, S = N * z;
-  for (let tx = Math.floor(-ox / S) - 1; tx * S + ox < W; tx++) for (let ty = Math.floor(-oy / S) - 1; ty * S + oy < H; ty++)
-    x.drawImage(bigMapSheet, ox + tx * S, oy + ty * S, S, S);
+  const sx = wx => W / 2 + mapDifference(wx - BIGMAP.cx,MAP_WORLD.width) * z, sy = wy => H / 2 + mapDifference(wy - BIGMAP.cy,MAP_WORLD.height) * z;
+  const ox = W / 2 - BIGMAP.cx * z, oy = H / 2 - BIGMAP.cy * z, SW = MAP_WORLD.width*z,SH=MAP_WORLD.height*z;
+  if(MAP_WORLD.wrap) {
+    for (let tx = Math.floor(-ox / SW) - 1; tx * SW + ox < W; tx++) for (let ty = Math.floor(-oy / SH) - 1; ty * SH + oy < H; ty++)
+      x.drawImage(bigMapSheet, ox + tx * SW, oy + ty * SH, SW, SH);
+  } else x.drawImage(bigMapSheet,ox,oy,SW,SH);
+  if(MAP_NAV.path?.length) {
+    x.strokeStyle='#87e6df';x.lineWidth=3;x.setLineDash([6,4]);x.lineDashOffset=-now*10;x.beginPath();
+    let previous=null;
+    for(const p of MAP_NAV.path.slice(MAP_NAV.next)) {
+      const X=sx(p.x),Y=sy(p.y);
+      if(!previous||Math.abs(X-previous[0])>z*2||Math.abs(Y-previous[1])>z*2)x.moveTo(X,Y);else x.lineTo(X,Y);
+      previous=[X,Y];
+    }
+    x.stroke();x.setLineDash([]);
+  }
   if (z >= 10) { // the street grid gets block lines once there's room
     x.strokeStyle = 'rgba(255,255,255,0.05)'; x.lineWidth = 1;
     for (let gx = Math.floor((BIGMAP.cx - W / 2 / z) / 8) * 8; gx < BIGMAP.cx + W / 2 / z; gx += 8) { const p = W / 2 + (gx - BIGMAP.cx) * z; x.beginPath(); x.moveTo(p, 0); x.lineTo(p, H); x.stroke(); }
@@ -24592,11 +25456,11 @@ function bigMapDraw() {
   x.textAlign = 'center'; x.textBaseline = 'middle';
   // names: biggest first, and nothing drawn over something already written
   const taken = [];
-  const label = (wx, wy, t, col, size, bold) => {
+  const label = (wx, wy, t, col, size, bold, force=false) => {
     const X = sx(wx), Y = sy(wy); if (!onScreen(X, Y, 120)) return;
     x.font = `${bold ? 'bold ' : ''}${size}px monospace`;
     const w = x.measureText(t).width, r = [X - w / 2 - 3, Y - size / 2 - 2, X + w / 2 + 3, Y + size / 2 + 2];
-    if (taken.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) return;
+    if (!force&&taken.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) return;
     taken.push(r);
     x.fillStyle = 'rgba(0,0,0,0.6)'; x.fillRect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
     x.fillStyle = col; x.fillText(t, X, Y + 1);
@@ -24607,8 +25471,8 @@ function bigMapDraw() {
     label(delivery.recipient.x,delivery.recipient.y-.8,'ROOF GARDEN','#6f9',14,true);
   }
   // you, and what's yours, go on first so nothing hides them
-  const ang = me ? Math.atan2(me.hy, me.hx) : a;
-  const youX = sx(px), youY = sy(py);
+  const ang = me ? Math.atan2(me.hy, me.hx) : a,player=mapPlayerLocation();
+  const youX = sx(player.x), youY = sy(player.y);
   if (onScreen(youX, youY)) {
     x.save(); x.translate(youX, youY); x.rotate(ang);
     x.fillStyle = fract(T * 2) < 0.5 ? '#ff5' : '#fff'; x.strokeStyle = '#000'; x.lineWidth = 2;
@@ -24631,6 +25495,20 @@ function bigMapDraw() {
   const jt = jobTarget(); if (jt) dot(jt.x, jt.y, '!', '#ff0');
   if (me && me.dest) dot(me.dest[0], me.dest[1], 'X', '#f4f');
   for (const c of cars) if (c.pursuit) dot(c.x, c.y, 'P', fract(T * 3) < 0.5 ? '#f44' : '#48f', 10);
+  BIGMAP.points=[];
+  const visible=mapFilteredPlaces();
+  for(const p of visible) {
+    if(p.x===null||p.virtual||p.category==='area'||p.kind==='shop'&&z<10&&p.id!==BIGMAP.selected)continue;
+    const X=sx(p.x),Y=sy(p.y);if(!onScreen(X,Y))continue;
+    BIGMAP.points.push({id:p.id,x:X,y:Y});
+    const selected=p.id===BIGMAP.selected;
+    x.fillStyle=p.color;x.strokeStyle='#080b10';x.lineWidth=2;x.beginPath();x.arc(X,Y,selected?7:4,0,Math.PI*2);x.fill();x.stroke();
+    if(selected||p.category==='contacts')label(p.x,p.y-1.8,p.name,p.color,13,true,selected);
+  }
+  if(mapWaypoint) {
+    dot(mapWaypoint.x,mapWaypoint.y,'X','#8de5df',18);
+    if(mapWaypoint.id!==BIGMAP.selected)label(mapWaypoint.x,mapWaypoint.y-1.8,mapWaypoint.name,'#8de5df',13,true,true);
+  }
   const f = BIGMAP.found;
   if (f && now - f.t < 6 && onScreen(sx(f.x), sy(f.y))) {
     x.strokeStyle = '#4ff'; x.lineWidth = 2; x.globalAlpha = 1 - (now - f.t) / 6;
@@ -24640,39 +25518,78 @@ function bigMapDraw() {
   for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'area') label(lx, ly, z < 7 ? t.toUpperCase() : t, col, big, true);
   for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'place' && z >= 6) label(lx, ly, t, col, mid, false);
   if (z >= 14) for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'shop') label(lx, ly, t, col, small, false);
+  x.font='12px monospace';x.fillStyle='#a6babf';x.textAlign='right';x.fillText('N ↑',W-18,128);
+  const scale=100; x.strokeStyle='#a6babf';x.lineWidth=1;x.beginPath();x.moveTo(W-18-scale,148);x.lineTo(W-18,148);x.stroke();x.fillText(mapMetres(scale/z*10),W-18,163);
+  bigMapEl.querySelector('.tip').textContent=mapWaypoint?`${mapWaypoint.name} · ${mapMetres(mapRouteDistance())} · ${MAP_NAV.path?'walking route to street approach':'direction only; no street route found'}`:TOUCH?'Tap places or drop a pin · drag / pinch to explore':'Click a place or drop a pin · / search · F city · M / Esc close';
   x.textAlign = 'left'; x.textBaseline = 'alphabetic';
 }
 
 function bigMapZoom(f, X, Y) { // zoom by f about screen point (X, Y): the spot under it stays put
   const W = bigMapCv.clientWidth, H = bigMapCv.clientHeight, z0 = BIGMAP.z, z1 = clamp(z0 * f, bigMapMinZ(), BIGMAP_Z);
   if (X === undefined) { X = W / 2; Y = H / 2; }
-  BIGMAP.cx = mod(BIGMAP.cx + (X - W / 2) * (1 / z0 - 1 / z1), N); BIGMAP.cy = mod(BIGMAP.cy + (Y - H / 2) * (1 / z0 - 1 / z1), N);
+  BIGMAP.cx = mapCoordinate(BIGMAP.cx + (X - W / 2) * (1 / z0 - 1 / z1),MAP_WORLD.width); BIGMAP.cy = mapCoordinate(BIGMAP.cy + (Y - H / 2) * (1 / z0 - 1 / z1),MAP_WORLD.height);
   BIGMAP.z = z1;
 }
-function bigMapPan(dx, dy) { BIGMAP.cx = mod(BIGMAP.cx - dx / BIGMAP.z, N); BIGMAP.cy = mod(BIGMAP.cy - dy / BIGMAP.z, N); }
-function bigMapCentre() { BIGMAP.cx = px; BIGMAP.cy = py; }
+function bigMapPan(dx, dy) { BIGMAP.cx = mapCoordinate(BIGMAP.cx - dx / BIGMAP.z,MAP_WORLD.width); BIGMAP.cy = mapCoordinate(BIGMAP.cy - dy / BIGMAP.z,MAP_WORLD.height); }
+function bigMapCentre() { const p=mapPlayerLocation();BIGMAP.cx = p.x; BIGMAP.cy = p.y; }
+function bigMapFit() {BIGMAP.cx=MAP_WORLD.width/2;BIGMAP.cy=MAP_WORLD.height/2;BIGMAP.z=bigMapMinZ();}
+function bigMapPick(X,Y) {
+  const hit=BIGMAP.points.filter(p=>Math.hypot(p.x-X,p.y-Y)<14).sort((a,b)=>Math.hypot(a.x-X,a.y-Y)-Math.hypot(b.x-X,b.y-Y))[0];
+  if(hit)return selectMapPlace(hit.id,false);
+  const p={id:'pin',name:'Dropped pin',category:'activities',kind:'pin',color:MAP_COLORS.activities,
+    x:mapCoordinate(BIGMAP.cx+(X-bigMapCv.clientWidth/2)/BIGMAP.z,MAP_WORLD.width),
+    y:mapCoordinate(BIGMAP.cy+(Y-bigMapCv.clientHeight/2)/BIGMAP.z,MAP_WORLD.height),description:'A place you marked. Walking routes stop at the nearest clear street approach.'};
+  const sh=SHOP[idx(Math.floor(p.x),Math.floor(p.y))],place=sh&&mapFilteredPlaces().find(place=>place.shop===sh);
+  if(place)return selectMapPlace(place.id,false);
+  BIGMAP.places=BIGMAP.places.filter(p=>p.id!=='pin');BIGMAP.places.push(p);selectMapPlace(p.id,false);
+}
 
 function openBigMap() {
+  if(bigMapOpen())return;
+  BIGMAP.returnPaused=paused;
   if (!bigMapEl) {
     const st = document.createElement('style'); st.textContent = BIGMAP_CSS; document.head.appendChild(st);
     bigMapEl = menuEl('bigmap', 900, `<canvas></canvas>
-      <div class="bar"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">-</button><button data-map="me">you</button><input type="search" list="bigmap-names" placeholder="find a place..." aria-label="Find a place"><datalist id="bigmap-names"></datalist><button data-map="close" aria-label="Close map">x</button></div>
-      <div class="tip">${TOUCH ? 'drag to move, pinch to zoom' : 'drag to move, wheel to zoom, Esc to close'}</div>`);
+      <div class="bar"><input type="search" placeholder="Find Mara, food, a place..." aria-label="Find a place"><button data-map="close" aria-label="Close map">×</button>
+      <div class="tools"><button data-map="in" aria-label="Zoom in">+</button><button data-map="out" aria-label="Zoom out">−</button><button data-map="me">You</button><button data-map="fit">City</button><button data-map="supplier">Supplier</button><button data-map="places">Places</button></div></div>
+      <aside class="directory" aria-label="City directory"><h1>GLYPHPORT</h1><div class="subtitle">CITY DIRECTORY / WALKING GUIDE</div><div class="route-status" hidden></div><div class="filters">${Object.entries(MAP_CATEGORIES).map(([id,name])=>`<button data-category="${id}" aria-pressed="${id==='all'}" style="border-left-color:${MAP_COLORS[id]||'#bbc4cc'}">${name}</button>`).join('')}</div><section class="place-detail" hidden></section><div class="results-count"></div><div class="places"></div></aside>
+      <div class="tip"></div>`);
     bigMapCv = bigMapEl.querySelector('canvas');
     const q = bigMapEl.querySelector('input');
     q.addEventListener('keydown', e => { if (e.code === 'Enter') bigMapFind(q.value, true); });
     q.addEventListener('input', () => bigMapFind(q.value, false));
     bigMapEl.addEventListener('click', e => {
+      const place=e.target.closest('[data-place]');if(place){selectMapPlace(place.dataset.place);return;}
+      const category=e.target.closest('[data-category]');
+      if(category){BIGMAP.category=category.dataset.category;BIGMAP.limit=30;BIGMAP.selected=null;mapDirectoryUI();bigMapDraw();return;}
       const b = e.target.closest('[data-map]'); if (!b) return;
       const m = b.dataset.map;
-      if (m === 'in') bigMapZoom(1.5); if (m === 'out') bigMapZoom(1 / 1.5); if (m === 'me') bigMapCentre(); if (m === 'close') closeBigMap();
+      if (m === 'in') bigMapZoom(1.5); if (m === 'out') bigMapZoom(1 / 1.5); if (m === 'me') bigMapCentre();
+      if(m==='go'||m==='close'){closeBigMap();if(!paused)lockMouse();}
+      if(m==='fit')bigMapFit();
+      if(m==='places')bigMapEl.querySelector('.directory').hidden=!bigMapEl.querySelector('.directory').hidden;
+      if(m==='supplier'){BIGMAP.category='contacts';BIGMAP.query='';q.value='';selectMapPlace('supplier');}
+      if(m==='more'){BIGMAP.limit+=30;mapDirectoryUI();}
+      if(m==='unselect'){BIGMAP.selected=null;mapDirectoryUI();}
+      if(m==='waypoint')setMapWaypoint(BIGMAP.places.find(p=>p.id===BIGMAP.selected));
+      if(m==='clear-route')clearMapWaypoint();
+      if(m==='find-housing'){BIGMAP.category='homes';BIGMAP.selected=null;BIGMAP.query='REALTY';q.value='REALTY';mapDirectoryUI();}
+      if(m==='call-supplier') {
+        if(callWorkshopSupplier()) {
+          BIGMAP.places=mapDirectory();selectMapPlace('supplier');
+        }
+      }
+      bigMapDraw();
     });
     bigMapCv.addEventListener('pointerdown', e => {
       bigMapCv.setPointerCapture(e.pointerId); BIGMAP.pts.set(e.pointerId, [e.offsetX, e.offsetY]); bigMapCv.classList.add('drag');
       BIGMAP.pinch = null;
+      if(BIGMAP.pts.size===1)BIGMAP.tap={id:e.pointerId,x:e.offsetX,y:e.offsetY,moved:false};
+      else if(BIGMAP.tap)BIGMAP.tap.moved=true;
     });
     bigMapCv.addEventListener('pointermove', e => {
       const p = BIGMAP.pts.get(e.pointerId); if (!p) return;
+      if(BIGMAP.tap&&Math.hypot(e.offsetX-BIGMAP.tap.x,e.offsetY-BIGMAP.tap.y)>6)BIGMAP.tap.moved=true;
       if (BIGMAP.pts.size >= 2) { // two fingers: pinch to zoom (and drag with the pair)
         p[0] = e.offsetX; p[1] = e.offsetY;
         const [[ax, ay], [bx, by]] = [...BIGMAP.pts.values()], d = Math.hypot(bx - ax, by - ay), mx = (ax + bx) / 2, my = (ay + by) / 2;
@@ -24682,34 +25599,34 @@ function openBigMap() {
       }
       bigMapPan(e.offsetX - p[0], e.offsetY - p[1]); p[0] = e.offsetX; p[1] = e.offsetY;
     });
-    const up = e => { BIGMAP.pts.delete(e.pointerId); BIGMAP.pinch = null; if (!BIGMAP.pts.size) bigMapCv.classList.remove('drag'); };
+    const up = e => {
+      if(e.type==='pointerup'&&BIGMAP.tap?.id===e.pointerId&&!BIGMAP.tap.moved)bigMapPick(e.offsetX,e.offsetY);
+      BIGMAP.pts.delete(e.pointerId); BIGMAP.pinch = null;BIGMAP.tap=null;
+      if (!BIGMAP.pts.size) bigMapCv.classList.remove('drag');
+    };
     bigMapCv.addEventListener('pointerup', up); bigMapCv.addEventListener('pointercancel', up);
     bigMapCv.addEventListener('wheel', e => { e.preventDefault(); bigMapZoom(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
   }
-  bigMapRender(); bigMapNames = bigMapLabels(); bigMapCentre();
-  const names = [...new Set(bigMapNames.map(n => n[2]))].sort((p, q) => p.localeCompare(q));
-  bigMapEl.querySelector('datalist').innerHTML = names.map(n => `<option value="${n.replace(/[&"<]/g, c => `&#${c.charCodeAt(0)};`)}">`).join('');
+  bigMapRender(); bigMapNames = bigMapLabels();BIGMAP.places=mapDirectory();bigMapCentre();
   bigMapEl.querySelector('input').value = ''; BIGMAP.found = null; BIGMAP.hits = [];
   BIGMAP.z = clamp(Math.min(innerWidth, innerHeight) / 60, 4, 10); // a few blocks round you to start
-  BIGMAP.keys = {}; BIGMAP.pts.clear();
+  BIGMAP.keys = {}; BIGMAP.pts.clear();BIGMAP.query='';BIGMAP.category='all';BIGMAP.selected=null;BIGMAP.limit=30;
+  updateMapNavigation(true);mapDirectoryUI();bigMapEl.querySelector('.directory').hidden=false;
   bigMapEl.style.display = 'block';
   homeEl.style.display = 'none';
   paused = true;
+  for(const key in K)K[key]=0;
+  releaseMouse();bigMapDraw();
   const tick = () => { if (!bigMapOpen()) return; bigMapStep(); bigMapDraw(); requestAnimationFrame(tick); };
   BIGMAP.last = performance.now(); requestAnimationFrame(tick);
 }
-// search: typing jumps to the nearest place whose name matches; Enter again steps on to the next nearest of them
+// Typing filters the directory; Enter visits matching results in distance order.
 function bigMapFind(text, next) {
-  const t = text.trim().toLowerCase();
-  if (!t) { BIGMAP.found = null; BIGMAP.hits = []; return; }
-  if (!next || !BIGMAP.hits.length || BIGMAP.hitQ !== t) {
-    const hits = bigMapNames.filter(n => n[2].toLowerCase().includes(t)), d = n => Math.hypot(rel(n[0] - px), rel(n[1] - py));
-    const exact = hits.filter(n => n[2].toLowerCase() === t); // (picked from the list: only that name)
-    BIGMAP.hits = (exact.length ? exact : hits).sort((p, q) => d(p) - d(q)); BIGMAP.hitQ = t; BIGMAP.hitK = 0;
-  } else BIGMAP.hitK = (BIGMAP.hitK + 1) % BIGMAP.hits.length;
-  const h = BIGMAP.hits[BIGMAP.hitK]; if (!h) return;
-  BIGMAP.cx = mod(h[0], N); BIGMAP.cy = mod(h[1], N); BIGMAP.z = Math.max(BIGMAP.z, h[4] === 'shop' ? 16 : 8); // (close enough that its name's drawn)
-  BIGMAP.found = { x: h[0], y: h[1], t: performance.now() / 1000 };
+  BIGMAP.query=text;BIGMAP.limit=30;
+  if(!next){BIGMAP.hitK=-1;BIGMAP.selected=null;BIGMAP.category='all';}
+  BIGMAP.hits=mapFilteredPlaces();
+  if(next&&BIGMAP.hits.length){BIGMAP.hitK=(BIGMAP.hitK+1)%BIGMAP.hits.length;selectMapPlace(BIGMAP.hits[BIGMAP.hitK].id);}
+  else mapDirectoryUI();
 }
 function bigMapStep() { // held keys pan smoothly, a screen's width every second or so
   const now = performance.now(), dt = Math.min(0.05, (now - BIGMAP.last) / 1000), k = BIGMAP.keys, s = 700 * dt;
@@ -24720,20 +25637,25 @@ function bigMapStep() { // held keys pan smoothly, a screen's width every second
 function closeBigMap() {
   if (!bigMapOpen()) return;
   bigMapEl.style.display = 'none'; BIGMAP.keys = {};
-  if (pauseEl && pauseEl.style.display === 'flex') {
+  if(bigMapEl.contains(document.activeElement))document.activeElement.blur();
+  BIGMAP.pts.clear();BIGMAP.tap=null;paused=BIGMAP.returnPaused;
+  if (paused && pauseEl && pauseEl.style.display === 'flex') {
     homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block';
     pauseEl.querySelector('[data-act="map"]').focus();
   }
+  else homeEl.style.display='none';
 }
 const bigMapOpen = () => !!bigMapEl && bigMapEl.style.display !== 'none';
 // keys while the map's up: it takes them all (the game's paused under it)
 function bigMapKey(e, down) {
   if (!bigMapOpen()) return false;
-  if (e.target && e.target.tagName === 'INPUT') { if (down && e.code === 'Escape') e.target.blur(); return true; } // typing in the search box: the keys are its own
-  if (down && !e.repeat && (e.code === 'Escape' || e.code === 'KeyM')) { closeBigMap(); return true; }
+  if (e.target && e.target.tagName === 'INPUT') { if (down && e.code === 'Escape'){e.preventDefault();closeBigMap();} return true; }
+  if (down && !e.repeat && (e.code === 'Escape' || e.code === 'KeyM')) { e.preventDefault();closeBigMap();if(!paused)relock(e);return true; }
   if (down && (e.key === '+' || e.key === '=')) bigMapZoom(1.25);
   if (down && (e.key === '-' || e.key === '_')) bigMapZoom(0.8);
   if (down && e.code === 'Space') bigMapCentre();
+  if(down&&e.code==='KeyF')bigMapFit();
+  if(down&&e.code==='Slash'){e.preventDefault();bigMapEl.querySelector('input').focus();}
   BIGMAP.keys[e.code] = down;
   if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
   return true;
@@ -25091,13 +26013,19 @@ function drawCanopy(cx, grip, size, bob) {
 function drawCigarette() {
   const u = Math.max(14, cv.height / 36), s = Math.round(u * 1.6);
   g.font = s + 'px monospace';
-  const w = g.measureText('M').width, len = 1 + Math.round(6 * fx.smoke / 45);
+  const joint=fx.smokeKind==='joint';
+  const w = g.measureText('M').width, len = 1 + Math.round(6 * fx.smoke / (joint?55:45));
   const x0 = cv.width * 0.5 - w, y0 = cv.height - s * 0.9, dx = w * 0.95, dy = -s * 0.32;
-  const chars = fx.pipe ? ['=', '=', '=', '=', 'U', '*'] : ['#', '#', ...Array(len).fill('='), '*']; // a pipe: the stem, and the bowl with its glow
+  const chars = fx.pipe ? ['=', '=', '=', '=', 'U', '*'] : [joint?'|':'#',joint?'=':'#', ...Array(len).fill('='), '*']; // a pipe: the stem, and the bowl with its glow
   g.lineJoin = 'round'; g.lineWidth = Math.max(2, s * 0.14); g.strokeStyle = 'rgba(0,0,0,0.8)';
   chars.forEach((ch, k) => {
     const x = x0 + k * dx, y = y0 + k * dy, ember = k === chars.length - 1;
-    g.fillStyle = PAL[ember ? C(cigTip > 0.3 ? YEL : ORANGE, fract(T * 3) < 0.5 ? 12 + cigTip * 3 : 10 + cigTip * 5) : fx.pipe ? C(BRICK, 12) : k < 2 ? C(ORANGE, 12) : C(WHITE, 15)];
+    let color=C(WHITE,15);
+    if(ember)color=C(cigTip>.3?YEL:ORANGE,fract(T*3)<.5?12+cigTip*3:10+cigTip*5);
+    else if(fx.pipe)color=C(BRICK,12);
+    else if(joint)color=C(STONE,14);
+    else if(k<2)color=C(ORANGE,12);
+    g.fillStyle=PAL[color];
     const yy = fx.pipe && ember ? y + s * 0.55 : y; // (the pipe's glow sits in the bowl)
     g.strokeText(ch, x, yy); g.fillText(ch, x, yy);
   });
@@ -25229,7 +26157,7 @@ function drawDropped(d, vx, vy, s) {
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
 // left of the buttons)
-const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed);
+const hotbarUp = () => !(mode === 'drive' || mode === 'taxi' || !inv.length && !fx.caffeine && !fx.booze && !fx.fresh && !fx.fed && !drugEffects.weed && !drugEffects.neon);
 function hotbar() {
   if (!hotbarUp()) return cv.height;
   const maxX = cv.width - 6 - (TOUCH ? TOUCH_PAD_W : 0), width = maxX - 6;
@@ -25255,7 +26183,7 @@ function hotbar() {
     }
     bottom = y - 4;
   }
-  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
+  const tags = [tickets > 0 && `${tickets} tickets`, fx.caffeine > 0 && 'caffeinated', fx.booze > 0.5 ? 'drunk' : fx.booze > 0.15 && 'tipsy', ...drugEffectTags(), fx.skating && (SK.score ? `skating: ${SK.score} pts` : 'skating'), fx.fresh > 0 && 'fresh clothes', fx.fed > 0 && 'well fed', fx.boombox && `playing: ${SONG_NAMES[fx.song] || 'music'}${heldItem() && heldItem().id === 'boombox' ? keyless(' (B: next)') : ''}`].filter(Boolean);
   if (tags.length) {
     const lines = wrapText(tags.join('  '), width - 12), h = lines.length * (FS + 4) + 4;
     bottom -= h;
@@ -25274,7 +26202,7 @@ function showPanel(el, html) {
   releaseMouse();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' && cookEl].some(el => el && el.style.display === 'flex'); // (and the cooking panel: cooking-ui.js)
+const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
@@ -25331,18 +26259,22 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
   const carried = eligible.length ? eligible.map(({ it, k }) => { const slot = quickSlots.indexOf(k); return `<button class="item" data-store="${k}"><span class="k">${slot < 0 ? '' : slot + 1}</span><span>${item(it)}</span><span class="lead"></span><span class="v">store</span></button>`; }).join('') : `<p class="sub" style="padding-left:18px">${inv.length ? 'Nothing suitable to put here.' : 'Nothing in your hands.'}</p>`;
   const unit = list.length ? list.map((it, k) => `<button class="item" data-take="${k}"><span class="k">${k < 9 ? '^' + (k + 1) : ''}</span><span>${item(it)}</span><span class="lead"></span><span class="v">take</span></button>`).join('') : '<p class="sub" style="padding-left:18px">Empty.</p>';
   showPanel(storeEl, `<h1>${title}</h1><p class="sub">${sub}</p>
-    <h2>carrying ${inv.length}/${INV_SIZE}</h2>${carried}
-    <h2>in ${where.replace('your ', 'the ')} ${list.length}/${capacity}</h2>${unit}
+    <h2>carrying ${inv.length}/${INV_SIZE}</h2>${capacity >= STORE_SIZE && eligible.length ? '<button class="item" data-store-all>Store all carried items that fit</button>' : ''}${carried}
+    <h2>in ${where.replace('your ', 'the ')} ${list.length}/${capacity}</h2>${capacity >= STORE_SIZE && list.length ? '<button class="item" data-take-all>Take all that fit in your bag</button>' : ''}${unit}
     <p class="hint">1-8 store quick slot &middot; shift+1-9 take &middot; E / Esc close</p>`);
   storeEl.onclick = e => {
     const s = e.target.closest('[data-store]'), t = e.target.closest('[data-take]');
-    if (s) say(storeSlot(+s.dataset.store, list, where, accepts, capacity)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
+    if (e.target.closest('[data-store-all]')) { for (const {k} of [...eligible].reverse()) if (list.length < capacity) storeSlot(k,list,where,accepts,capacity); }
+    else if (e.target.closest('[data-take-all]')) { while(list.length && inv.length < INV_SIZE) retrieveSlot(0,list,where); }
+    else if (s) say(storeSlot(+s.dataset.store, list, where, accepts, capacity)[1], 2); else if (t) say(retrieveSlot(+t.dataset.take, list, where)[1], 2); else return;
+    saveGame();
     openStorage();
   };
 }
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if (workshopPanelKey(e)) return true;
   if (cookPanelKey(e)) return true;
   if (storeEl && storeEl.style.display === 'flex') {
     const n = /^Digit([1-9])$/.exec(e.code);
@@ -25367,6 +26299,7 @@ const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
+  if (workshopPlacement) {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return;}
   if (heldGun()) return pullTrigger(); // (gun-ui.js)
   if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
   if (body.seat && body.seat.grass && heldItem() && ITEMS[heldItem().id].kind === 'food' && chance(0.5)) { // a picnic
@@ -25375,8 +26308,10 @@ function useHeldItem() {
     if (actx && sound) sfxUse(sound);
     return;
   }
+  const used=heldItem();
   const [line, sound] = useHeld({ indoors: mode === 'room', x: px, y: py, a, rain, person: nearPerson(), headlines: HEADLINES(),
     water: mode === 'walk' && (seaDist(px, py) < 1.2 || blockKind(Math.floor(px / 8), Math.floor(py / 8)) === 'park' && inPond(mod(px, 8), mod(py, 8), Math.floor(px / 8) & (NB - 1), Math.floor(py / 8) & (NB - 1), 0.4)) });
+  if ((ITEMS[used?.id]?.kind==='drug' || used?.id==='joint') && sound) {updateDrugBuyer();saveGame();}
   if (line) say(line, Math.max(3, line.length / 20)); // (long enough to read)
   if (actx && sound) sfxUse(sound);
 }
@@ -26577,6 +27512,33 @@ function heldMeal(it, f) {
 }
 for (const recipe of RECIPES) DENSE[recipe.id] = heldMeal;
 // Fishing finds, small treasures and ammunition get full held art as well as their small ground icons.
+DENSE.neon = it => sculpt(28, 23, (x,y) => {
+  if (Math.abs(x)>5.8 || y < -9.5 || y > 9.5) return null;
+  if (Math.abs(y)>8.2 || Math.abs(x)>5.1) return ['=',C(GRAY,12)];
+  const text=dText(x,y,0,-1,'NEON') || dText(x,y,0,3,`${it.uses} PACKS`);
+  if(text)return[text,C(WHITE,15)];
+  return dLit(.7-x*.035,MAG,7);
+});
+DROPPED_ART.neon = () => [['.------.','| NEON |','| :::: |',"'------'"],ch=>C(/[NEON]/.test(ch)?WHITE:MAG,13)];
+DENSE.weed = it => sculpt(28,25,(x,y)=>{
+  if (Math.abs(x)>6.3 || y < -10.3 || y>10.3) return null;
+  if (Math.abs(x)>5.6 || Math.abs(y)>9) return ['=',C(WARM,12)];
+  const text=dText(x,y,0,-6.6,'WEED') || dText(x,y,0,6.7,`${it.uses} PACKS`);
+  if(text) return [text,C(WHITE,15)];
+  // A central stalk and three joined leaf pairs behind the clear front of the pouch.
+  if(Math.abs(x)<.4&&Math.abs(y)<4.5) return ['|',C(GREEN,15)];
+  for(const v of [-2.8,0,2.8]) if(Math.abs(y-v+Math.abs(x)*.6)<.65&&Math.abs(x)<4.6) return [x<0?'\\':'/',C(GREEN,13)];
+  return dLit(.65-x*.03,GREEN,4);
+});
+DROPPED_ART.weed = () => [['.------.','| WEED |','| \\|/ |',"'------'"],ch=>C(/[WEED]/.test(ch)?WHITE:GREEN,13)];
+DENSE.joint = () => sculpt(20,27,(x,y)=>{
+  if(y < -11 || y>11) return null;
+  const width=1.1+(y+11)*.025;
+  if(Math.abs(x)>width)return null;
+  if(y < -9.5)return ['~',C(GREEN,8)];
+  return [Math.abs(x)>width-.35?'/':'=',C(y>8?STONE:WHITE,Math.abs(x)>.7?10:14)];
+});
+DROPPED_ART.joint = () => [['  __',' /==/','/==/',' --'],ch=>C(ch==='='?WHITE:STONE,13)];
 function heldAmmo(it) {
   return sculpt(32, 18, (x, y) => {
     if (Math.abs(x) > 8.4 || y < -6.6 || y > 7.6) return null;
@@ -26764,7 +27726,7 @@ function heldGesture(it, u) {
   const phase = heldUsePhase(it), pose = { x: 0, y: 0, angle: 0, sx: 1, sy: 1 };
   if (phase < 0) return pose;
   const pulse = Math.sin(phase * Math.PI), id = it.id, kind = ITEMS[id].kind;
-  if (kind === 'drink' || kind === 'food' || id === 'harmonica') {
+  if (kind === 'drink' || kind === 'food' || kind === 'drug' || id === 'harmonica') {
     pose.x = -u * pulse; pose.y = -u * (kind === 'drink' ? 2.2 : 1.2) * pulse;
     pose.angle = (kind === 'drink' ? -.2 : -.07) * pulse;
   } else if (HELD_SQUEEZE.has(id)) {
@@ -28332,6 +29294,7 @@ function startGame(id, kind, word = '', opts) { // word: the shop's sign, for wh
 function gameKey(e) {
   if (!game) return false;
   const k = GAME_KEYS[e.code];
+  if (k || e.code === 'Escape' || e.code === 'KeyE') e.preventDefault?.(); // Space must not activate the menu button that started the game.
   if (k) K[e.code] = 1; // held, for the paddle (keyup clears it as usual)
   if (e.repeat) return true;
   if (game.g.over) { // the results screen: go again, or walk away
@@ -28346,6 +29309,7 @@ function gameKey(e) {
     if (game.kind === 'casino') { if (game.g.inRound()) say('You get up mid-hand. Your bet stays on the table.', 3); game = null; return true; }
     if (game.kind === 'crime') { const cb = game.onDone; game = null; cb('abort'); return true; }
     if (game.kind === 'cook') { game = null; say('You take it off the heat. Nothing\'s wasted.', 2); return true; } // (cooking.js: nothing's used till it's done)
+    if (game.kind === 'workshop') {game=null;workshopRun=null;say('You switch the machine off. Your supplies are kept.',3);return true;}
     finishGame(true); game = null; return true;
   }
   if (k) game.pressed[k + 'P'] = 1;
@@ -28358,6 +29322,7 @@ function finishGame(quit) {
   game.paid = true;
   if (game.kind === 'crime') { game.closeT = T + 0.8; game.onDone(g.success); return; } // (and the screen closes a moment later)
   if (game.kind === 'cook') { game.onDone(g.result); return; } // (dished up: cooking-ui.js)
+  if (game.kind === 'workshop') {game.onDone(g.result);return;}
   if (game.kind === 'casino' || game.kind === 'market') return; // (its money changes hands round by round, or trade by trade)
   if (game.kind === 'bout') return finishBout(g, quit); // (gym.js)
   if (game.kind === 'show') { say(g.endLine, 5); game.closeT = T + 0.6; return; }
@@ -28407,7 +29372,7 @@ function sfxGame(e) {
 function gameClear() {
   if (!TOUCH) return [0, 0];
   if (innerWidth > innerHeight) return [TOUCH_PAD_W - 30, 0];
-  return [0, game && game.kind === 'cook' ? 250 : TOUCH_PAD_H];
+  return [0, game && (game.kind === 'cook' || game.kind === 'workshop') ? 250 : TOUCH_PAD_H];
 }
 // the character size that fits the whole cabinet on screen, never bigger than the detail setting's
 function gameFS(g) {
@@ -28420,6 +29385,7 @@ function gameFS(g) {
 const cookVerb = g => ({ pot: 'Stir', oven: 'Turn', grill: 'Turn' }[g.how] || 'Flip');
 function gameText(s, g) {
   if (!TOUCH) return s;
+  if (g?.id === 'workshop') return s.replace('HOLD SPACE power','HOLD POWER').replace('UP vent','VENT').replace('DOWN seal','SEAL').replace(/\[UP\]/g,'[VENT]').replace(/\[DOWN\]/g,'[SEAL]');
   if (g && g.id === 'cook') {
     const verb = cookVerb(g).toUpperCase();
     return s.replace('HOLD SPACE heat', 'HOLD HEAT').replace('UP flip / stir', verb).replace('DOWN add', 'ADD')
@@ -28455,7 +29421,7 @@ function drawGame() {
       set(i, ch, col); if (bg !== undefined && bg !== NONE) BG[i] = bg;
     }
   }, (x, y, s_, col, align) => {
-       if (g.id === 'cook') s_ = gameText(s_, g);
+       if (g.id === 'cook' || g.id === 'workshop') s_ = gameText(s_, g);
        putText(y0 + y * bh + (bh >> 1), Math.round(x0 + x * bw - (align === 'center' ? s_.length / 2 : 0)), s_, col);
      }, // a label, at normal size
      (c, y, s_, col) => putText(y0 + y * bh + (bh >> 1), x0 + c, s_, col), // one placed by character (a column in a table): c counts characters from the left
@@ -28467,7 +29433,7 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? '   E / ESC take it off the heat' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? '   E / ESC take it off the heat' : game.kind === 'workshop' ? '   E / ESC stop (supplies kept)' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
   const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
   const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
@@ -28481,6 +29447,8 @@ function drawGame() {
          res.win ? `PURSE ${fmt$(g.purse)}` : 'NO PURSE', ...TOUCH ? [] : ['', 'E or SPACE to leave']]
       : game.kind === 'cook'
       ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
+      : game.kind === 'workshop'
+      ? ['BATCH SEALED', `${DRUG_QUALITY[res]} Neon`, 'A buyer waits outside with cash', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
       : game.kind === 'arcade'
       ? ['GAME OVER', `${g.status().split('   ')[0]}`, `+${r} TICKETS`, ...TOUCH ? [] : ['', `SPACE play again (${fmt$(CREDIT)})   E leave`]]
       : ['SHIFT OVER', g.status().split('   ').slice(0, 2).join('   '), `PAID ${fmt$(r)}`, ...TOUCH ? [] : ['', 'E or SPACE to finish']];
@@ -28764,6 +29732,398 @@ function stepNewsUI(dt) {
 }
 // switching your own telly on: the local news, if there's any worth hearing
 const tellyNews = () => { const l = newsLines(true); return l.length ? ` The local news is on. ${pick(l)}` : ''; };
+// Physical workshop furniture, placement, supplies, and the customer outside your own building.
+let workshopEl = null, drugSaleEl = null, workshopPlacement = null, workshopRun = null, drugBuyer = null;
+const workshopHome = () => mode === 'room' ? homeRecord(room) : null;
+function workshopProps(r) {
+  const home = homeRecord(r); if (!home) return [];
+  const w = workshopState(home), props = [];
+  for (const p of w.parts) {
+    const ca = Math.cos(p.a), sa = Math.sin(p.a), box = (ox, oy, hl, hw, z0, z1, shade) =>
+      BX(p.x + ox * ca - oy * sa, p.y + ox * sa + oy * ca, hl, hw, z0, z1, shade, ca, sa);
+    if (p.id === 'bench') {
+      props.push(box(0, 0, .95, .48, .83, .93, solid(BRICK, { panel: .3, top: '=' })));
+      for (const x of [-.82, .82]) for (const y of [-.35, .35]) props.push(box(x, y, .035, .035, 0, .83, solid(GRAY)));
+      continue;
+    }
+    if (p.id === 'growrack') {
+      props.push(box(0,0,.75,.48,.55,.68,solid(GRAY,{top:'='})));
+      for (const x of [-.62,.62]) for (const y of [-.35,.35]) props.push(box(x,y,.035,.035,0,.55,solid(GRAY)));
+      for (const x of [-.4,0,.4]) {
+        props.push(box(x,0,.12,.16,.68,.85,solid(BRICK,{top:':'})));
+        if (p.crop) props.push(box(x,0,.19,.2,.85,1.7,(i,t,L)=>{
+          const height=.2+(1-p.crop.left/WEED_GROW_TIME)*.65, z=HIT.w-.85;
+          if (z>height) return false;
+          const u=HIT.face<=2?HIT.v:HIT.u, width=Math.min(.19,.04+(height-z)*.45);
+          const stem=Math.abs(u)<.018, branch=Math.abs(mod(z+Math.abs(u)*.85,.18)-.09)<.032;
+          if (!stem && (!branch || Math.abs(u)>width)) return false;
+          const bud=p.crop.left===0 && z>height-.08;
+          let ch='|';
+          if (bud) ch='*';
+          else if (!stem) ch=u<0?'\\':'/';
+          set(i,ch,C(bud?WARM:GREEN,L+4));
+          return true;
+        }));
+      }
+      // The rail is always there; bought lamps visibly attach above the plants.
+      props.push(box(0,-.4,.72,.035,1.82,1.9,(i,t,L)=>{
+        set(i,'=',C(w.upgrades.lamp&&w.powered?WARM:GRAY,w.upgrades.lamp&&w.powered?15:L));
+        return true;
+      }));
+      for (const x of [-.68,.68]) props.push(box(x,-.4,.025,.025,.68,1.82,solid(GRAY)));
+      continue;
+    }
+    const running = () => workshopRun?.home === home && workshopRun.bench.key === p.bench && game?.kind === 'workshop';
+    if (p.id === 'processor') props.push(box(0, 0, .24, .27, .93, 1.6, (i, t, L) => {
+      const on = w.powered, active = running();
+      BG[i] = C(GRAY, 1 + L * .15);
+      const ch = HIT.face === 5 ? '=' : HIT.w > 1.15 && HIT.w < 1.4 ? (active ? '|/-\\'[Math.floor(T * 8) % 4] : 'O') : HIT.w > 1.48 ? '*' : ':';
+      return set(i, ch, C(on ? MAG : GRAY, on ? 12 : L)), true;
+    }));
+    if (p.id === 'packer') props.push(box(0, 0, .23, .27, .93, 1.23, solid(GRAY, { panel: .2, top: '=' })),
+      box(0, 0, .06, .22, 1.23, 1.5, solid(MAG, { top: '_' })));
+    if (p.id === 'fan') props.push(box(0, 0, .15, .12, .93, 1.06, solid(GRAY)),
+      box(0, 0, .15, .12, 1.06, 1.52, (i, t, L) => { BG[i] = C(GRAY, 1); return set(i, running() ? '|/-\\'[Math.floor(T * 10) % 4] : '+', C(CYAN, L + 3)), true; }));
+  }
+  return props;
+}
+function refreshWorkshopRoom() {
+  if (!workshopHome()) return;
+  room.props = [...room.def.props(room), ...workshopProps(room)];
+}
+function nearWorkshopBench() {
+  const home = workshopHome(); if (!home) return null;
+  return workshopState(home).parts.filter(p => WORKSHOP_PARTS[p.id].halfX && Math.hypot(p.x - px, p.y - py) < 1.9 &&
+    (p.x - px) * Math.cos(a) + (p.y - py) * Math.sin(a) > .15).sort((p,q) => Math.hypot(p.x-px,p.y-py)-Math.hypot(q.x-px,q.y-py))[0] || null;
+}
+function openWorkshop() {
+  const home = workshopHome(); if (!home) return;
+  const w = workshopState(home);
+  workshopEl ||= panel('workshop');
+  const available = Object.entries(WORKSHOP_PARTS).map(([id, d]) => {
+    const remaining = w.owned[id] - w.parts.filter(p => p.id === id).length;
+    return remaining > 0 ? `<button class="item" data-place="${id}"><span>Place ${d.name}</span><span class="lead"></span><span class="v">${remaining} packed</span></button>` : '';
+  }).join('');
+  const benches = w.parts.filter(p => p.id === 'bench').map((b, n) => {
+    const names = w.parts.filter(p => p.bench === b.key).map(p => WORKSHOP_PARTS[p.id].name).join(', ') || 'empty tabletop';
+    return `<p class="sub">Bench ${n+1}: ${names}</p><button class="item" data-run="${b.key}" ${workshopCanRun(home,b) ? 'disabled' : ''}>Run a 32-second batch</button><button class="item" data-pack="${b.key}">Pack up bench ${n+1} and its equipment</button>`;
+  }).join('');
+  const upgrades=Object.entries(WORKSHOP_UPGRADES).map(([id,u])=>`<button class="item" data-upgrade="${id}" ${w.upgrades[id]||money<u.price?'disabled':''}><span>${cap(u.name)}<br><small>${u.description}</small></span><span class="lead"></span><span class="v">${w.upgrades[id]?'installed':fmt$(u.price)}</span></button>`).join('');
+  const racks=w.parts.filter(p=>p.id==='growrack').map((p,n)=>{
+    let status='empty', action=`<button class="item" data-plant="${p.key}" ${!w.powered||!w.seeds?'disabled':''}>Plant a seed pod</button>`;
+    if (p.crop) {
+      status=p.crop.left===0?'ready to harvest':`${Math.ceil(p.crop.left/(w.upgrades.lamp?1.5:1))}s left${w.powered?'':' (power off)'}${p.crop.tended?' · tended':''}`;
+      action=p.crop.left===0?`<button class="item" data-harvest="${p.key}">Harvest weed</button>`:`<button class="item" data-tend="${p.key}" ${p.crop.left>50||p.crop.tended?'disabled':''}>Tend for premium quality</button>`;
+    }
+    return `<p class="sub">Grow rack ${n+1}: ${status}</p>${action}<button class="item" data-pack="${p.key}" ${p.crop?'disabled':''}>Pack up empty rack ${n+1}</button>`;
+  }).join('');
+  showPanel(workshopEl, `<h1>Apartment workshop</h1><p class="sub">${fmt$(money)} &middot; ${w.supplies} Neon refills &middot; ${w.seeds} seed pods &middot; power ${w.powered ? 'connected' : 'unplugged'}</p>
+    <p class="sub">Make Neon on a workbench or grow weed on a rack. Place furniture in the open area by the entrance and connect power. Carried stock guarantees a buyer; closet stock sometimes attracts one too. Q / left click uses a pack yourself.</p>
+    <h2>Mara's order book</h2>
+    <button class="item" data-call-supplier>Meet Mara outside &middot; supplies and equipment</button>
+    <button class="item" data-kit ${w.owned.bench >= 3 || money < WORKSHOP_KIT_PRICE ? 'disabled' : ''}>Starter crate &middot; 3 pieces + 3 batches<span class="lead"></span><span class="v">${fmt$(WORKSHOP_KIT_PRICE)}</span></button>
+    <button class="item" data-refill ${money < WORKSHOP_REFILL_PRICE ? 'disabled' : ''}>Five refill cartridges<span class="lead"></span><span class="v">${fmt$(WORKSHOP_REFILL_PRICE)}</span></button>
+    <button class="item" data-fan ${money < WORKSHOP_FAN_PRICE || w.owned.fan >= 3 ? 'disabled' : ''}>Cooling fan &middot; wider safe range<span class="lead"></span><span class="v">${fmt$(WORKSHOP_FAN_PRICE)}</span></button>
+    <button class="item" data-rack ${money<WEED_RACK_PRICE||w.owned.growrack>=3?'disabled':''}>Grow rack + 3 seed pods<span class="lead"></span><span class="v">${fmt$(WEED_RACK_PRICE)}</span></button>
+    <button class="item" data-seeds ${money<WEED_SEEDS_PRICE?'disabled':''}>Five seed pods<span class="lead"></span><span class="v">${fmt$(WEED_SEEDS_PRICE)}</span></button>
+    <button class="item" data-power ${!w.parts.some(p=>p.id==='processor'||p.id==='growrack') ? 'disabled' : ''}>${w.powered ? 'Unplug equipment' : 'Connect equipment to power'}</button>
+    <h2>upgrades</h2>${upgrades}
+    ${available ? '<h2>in the crate</h2>' + available : ''}${benches ? '<h2>your benches</h2>' + benches : ''}
+    ${racks?'<h2>your grow racks</h2>'+racks:''}
+    <p class="hint">E / Esc close. Neon: hold SPACE for power, UP vent, DOWN seal. Weed: 75 seconds of powered growth (50 with lamps); tend after sprouting for premium quality. Harvest when ready. Power off pauses growth.</p>`);
+  workshopEl.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    let result;
+    if (b.hasAttribute('data-call-supplier')) return callWorkshopSupplier();
+    if (b.hasAttribute('data-kit')) result = orderWorkshopSupply(home,'kit');
+    if (b.hasAttribute('data-refill')) result = orderWorkshopSupply(home,'refill');
+    if (b.hasAttribute('data-rack')) result=orderWorkshopSupply(home,'rack');
+    if (b.hasAttribute('data-seeds')) result=orderWorkshopSupply(home,'seeds');
+    if (b.dataset.upgrade) result=orderWorkshopSupply(home,b.dataset.upgrade);
+    if (b.dataset.plant) result=plantWeed(home,w.parts.find(p=>p.key===+b.dataset.plant));
+    if (b.dataset.tend) result=tendWeed(w.parts.find(p=>p.key===+b.dataset.tend));
+    if (b.dataset.harvest) result=harvestWeed(home,w.parts.find(p=>p.key===+b.dataset.harvest));
+    if (b.hasAttribute('data-fan')) result=orderWorkshopSupply(home,'fan');
+    if (b.hasAttribute('data-power')) w.powered = !w.powered;
+    if (b.dataset.place) return beginWorkshopPlacement(b.dataset.place);
+    if (b.dataset.run) return startWorkshopBatch(w.parts.find(p=>p.key===+b.dataset.run));
+    if (b.dataset.pack) {
+      const key = +b.dataset.pack;
+      if (w.parts.find(p=>p.key===key)?.crop) return say('Harvest this plant before packing up the rack.',3);
+      w.parts = w.parts.filter(p=>p.key!==key && p.bench!==key); refreshWorkshopRoom();
+    }
+    if (result) say(result[1], 5);
+    refreshWorkshopRoom();updateDrugBuyer();saveGame(); openWorkshop();
+  };
+}
+function beginWorkshopPlacement(id) {
+  const home = workshopHome(), w = home && workshopState(home);
+  if (!w || !WORKSHOP_PARTS[id] || w.owned[id] <= w.parts.filter(p=>p.id===id).length) return;
+  hidePanel(workshopEl); workshopPlacement = { id, home, a: 0, held }; held = -1;
+  lockMouse();
+  say('Walk and look to position it. E places; Q / left click rotates; Esc cancels.', 5);
+}
+function workshopCandidate() {
+  const placement = workshopPlacement;
+  if (!placement || workshopHome() !== placement.home) return { ok:false, reason:'Return to your apartment.' };
+  const { id, home } = placement, w = workshopState(home);
+  if (!WORKSHOP_PARTS[id].halfX) {
+    const b = w.parts.filter(p=>p.id==='bench' && !w.parts.some(q=>q.bench===p.key && q.id===id))
+      .sort((p,q)=>Math.hypot(p.x-px,p.y-py)-Math.hypot(q.x-px,q.y-py))[0];
+    if (!b || Math.hypot(b.x-px,b.y-py)>3) return {ok:false, reason:'Stand near a bench with a free spot for this piece.'};
+    return {ok:true, ...workshopAttachment(id,b), a:mod(b.a+placement.a,Math.PI*2)};
+  }
+  const x = Math.round((px+Math.cos(a)*1.8)*4)/4, y = Math.round((py+Math.sin(a)*1.8)*4)/4, angle=placement.a;
+  const d=WORKSHOP_PARTS[id];
+  const hx = Math.abs(Math.cos(angle))*d.halfX+Math.abs(Math.sin(angle))*d.halfY, hy=Math.abs(Math.sin(angle))*d.halfX+Math.abs(Math.cos(angle))*d.halfY;
+  const p = {id,x,y,a:angle}, bad = reason => ({...p,ok:false,reason});
+  if (y-hy < room.H-6 || y+hy > room.H-1.4 || x-hx < 1 || x+hx > room.W-1.4) return bad('Use the open workshop area near the entrance.');
+  if (Math.abs(x-room.def.entry[0]) < hx+1) return bad('Keep the center aisle to the door clear.');
+  for (let yy=y-hy-.15;yy<=y+hy+.15;yy+=.2) for(let xx=x-hx-.15;xx<=x+hx+.15;xx+=.2) {
+    if (roomAt(Math.floor(xx),Math.floor(yy))!=='.' || room.props.some(o=>o.box && !o.walk && o.box.z0<1.3 && inBox(o.box,xx,yy,.1))) return bad('Leave space around the furniture.');
+  }
+  return {...p,ok:true};
+}
+function endWorkshopPlacement() {
+  if (!workshopPlacement) return;
+  held = workshopPlacement.held < inv.length ? workshopPlacement.held : -1; workshopPlacement = null;
+}
+function placeWorkshopPart() {
+  const p = workshopCandidate();
+  if (!p.ok) return say(p.reason, 3);
+  const w = workshopState(workshopPlacement.home), {ok,...part}=p;
+  w.parts.push({...part,key:w.next++});
+  endWorkshopPlacement(); refreshWorkshopRoom(); saveGame();
+  say(`${cap(WORKSHOP_PARTS[p.id].name)} set down. E at the cupboard for the next piece.`,4);
+}
+function workshopKey(e) {
+  if (e.repeat || !workshopPlacement) return false;
+  if (e.code==='Escape'||e.code==='KeyX') {endWorkshopPlacement(); return true;}
+  if (e.code==='KeyQ'||e.code==='KeyR') {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return true;}
+  if (e.code==='KeyE') {placeWorkshopPart();return true;}
+  return /^Digit/.test(e.code);
+}
+function drawWorkshopPreview() {
+  if (!workshopPlacement) return;
+  const p=workshopCandidate(); if (!Number.isFinite(p.x)) return;
+  const d=WORKSHOP_PARTS[p.id], floor=!!d.halfX, b=boxAt(p.x-px,p.y-py,Math.cos(p.a),Math.sin(p.a),d.halfX||.25,d.halfY||.25,floor ? .02 : .94,floor ? .08 : 1.5);
+  drawBox(b,(i,t,L)=>{set(i,'+',C(p.ok?GREEN:RED,13));return true;});
+}
+function startWorkshopBatch(bench) {
+  const home=workshopHome(), problem=home && workshopCanRun(home,bench);
+  if (!home || problem) return say(problem || 'Use your own workshop.',4);
+  hidePanel(workshopEl); workshopRun={home,bench};
+  const w=workshopState(home);
+  startGame('workshop','workshop','',{fan:w.parts.some(p=>p.id==='fan'&&p.bench===bench.key),controller:w.upgrades.controller});
+  game.onDone=quality=>{say(finishWorkshopBatch(home,bench,quality)[1],6);updateDrugBuyer();saveGame();};
+}
+function buyerDoor(home) {
+  const clear=(x,y)=>!map[idx(Math.floor(x),Math.floor(y))]&&!isWater(x,y);
+  if (home.door) for(const offset of [.24,-.24,.4,-.4,0]) {
+    const [x,y]=home.door;
+    for(const [dx,dy] of [[offset,0],[0,offset]]) if(clear(mod(x+dx,N),mod(y+dy,N))) return [mod(x+dx,N),mod(y+dy,N)];
+  }
+  const cx=home.cell%N,cy=Math.floor(home.cell/N),sh=SHOP[home.cell];
+  for(let r=1;r<9;r++) for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++) {
+    const x=mod(cx+dx,N),y=mod(cy+dy,N);
+    if(clear(x+.5,y+.5)&&[[1,0],[-1,0],[0,1],[0,-1]].some(([ox,oy])=>SHOP[idx(mod(x+ox,N),mod(y+oy,N))]===sh)) return [x+.5,y+.5];
+  }
+  return null;
+}
+function updateDrugBuyer() {
+  if (T<buyerAwayUntil || !owned.homes.length || !drugBuyerInterested()) {drugBuyer=null;return;}
+  const inside=workshopHome(), home=inside || (drugBuyer && owned.homes.find(h=>h.cell===drugBuyer.home)) ||
+    owned.homes.reduce((b,h)=>near(h.cell%N,Math.floor(h.cell/N),px,py)<near(b.cell%N,Math.floor(b.cell/N),px,py)?h:b);
+  const doorKey = home.door?.join(',') || '';
+  if (drugBuyer?.home===home.cell && drugBuyer.doorKey===doorKey) return;
+  const point=buyerDoor(home); if(!point)return;
+  const visit=drugBuyer?.home===home.cell?drugBuyer.visit:newDrugVisit();
+  drugBuyer={home:home.cell,doorKey,x:point[0],y:point[1],visit,look:streetContactLook(drugBuyerProfile(visit.id))};
+}
+function nearDrugBuyer() {
+  updateDrugBuyer();
+  if(mode!=='walk'||!drugBuyer)return null;
+  const ex=rel(drugBuyer.x-px),ey=rel(drugBuyer.y-py),d=Math.hypot(ex,ey);
+  return d<.5&&(d<.12||(ex*Math.cos(a)+ey*Math.sin(a))/d>.4) ? drugBuyer : null;
+}
+function drawDrugBuyer() {
+  updateDrugBuyer();if(drugBuyer)drawStreetContact(drugBuyer,'$',MAG);
+}
+function openDrugSale() {
+  beginDrugNegotiation();
+}
+function completeDrugSale() {
+  offerDrugSale();
+}
+function workshopPanelKey(e) {
+  const el=[workshopEl,drugSaleEl,supplierEl].find(el=>el?.style.display==='flex');if(!el)return false;
+  if(el===drugSaleEl && /^(INPUT|SELECT)$/.test(e.target?.tagName) && e.code!=='Escape' && e.code!=='KeyE')return true;
+  if(e.code==='Escape'||e.code==='KeyE')hidePanel(el);
+  else if(el===drugSaleEl&&e.code==='Digit1')completeDrugSale();
+  return true;
+}
+function workshopPrompt() {
+  if(workshopPlacement) {const p=workshopCandidate();return p.ok?'E: place equipment   Q: rotate   X: cancel':p.reason+'   X: cancel';}
+  if(nearWorkshopSupplier())return 'E: Mara · supplies and equipment';
+  if(nearDrugBuyer()) {
+    const b=drugBuyerProfile(drugBuyer.visit.id), product=b.product==='any'?'weed or Neon':ITEMS[b.product].name;
+    return `E: ${b.name} · ${product}${b.premium?' (premium)':''} · up to ${drugBuyer.visit.remaining} packs`;
+  }
+  const b=nearWorkshopBench();
+  if(b?.id==='growrack') return b.crop?.left===0?'E: harvest weed':'E: check grow rack';
+  if(b)return workshopCanRun(workshopHome(),b)?'E: set up workshop equipment':'E: run a Neon batch';
+  return '';
+}
+function workshopUse() {
+  if(workshopPlacement){placeWorkshopPart();return true;}
+  if(nearWorkshopSupplier()){openWorkshopSupplier();return true;}
+  if(nearDrugBuyer()){openDrugSale();return true;}
+  const b=nearWorkshopBench();
+  if(b?.id==='growrack') {
+    if (b.crop?.left===0) {say(harvestWeed(workshopHome(),b)[1],5);refreshWorkshopRoom();updateDrugBuyer();saveGame();}
+    else openWorkshop();
+    return true;
+  }
+  if(b){if(workshopCanRun(workshopHome(),b))openWorkshop();else startWorkshopBatch(b);return true;}
+  return false;
+}
+// Negotiation and a supplier who can visit your building. The cupboard remains a convenient order book.
+let drugSaleContext=null, buyerAwayUntil=0, supplierEl=null, supplierVisit=null;
+function streetContactLook(profile) {return figLook(profile.look);}
+function drawStreetContact(contact,marker,color,pose='fold') {
+  const [vx,vy]=R(contact.x,contact.y);if(!inView(vx,vy,.25))return;
+  const ground=architectureGroundHeight(contact.x,contact.y), n=Math.hypot(vx,vy)||1;
+  drawFigure(vx,vy,ground,.175,-vx/n,-vy/n,contact.look,pose);
+  const depth=dx*vx+dy*vy;
+  if(depth<.05||depth>vis)return;
+  const c=Math.floor(cols/2+(-dy*vx+dx*vy)*projX/depth),r=Math.floor(hor-(ground+.215-eye)*projY/depth);
+  if(c<0||c>=cols||r<0||r>=rows)return;
+  const i=r*cols+c;
+  if(depth<ZB[i]){set(i,marker,C(color,15));ZB[i]=depth;FL[i]=0;}
+}
+function showDrugNegotiation(line='') {
+  const context=drugSaleContext;if(!context)return;
+  const {visit}=context,b=drugBuyerProfile(visit.id),r=drugRelationship(b.id),stock=buyerStocks(visit);
+  if(!stock.some(s=>s.it===context.it)) {
+    context.it=stock[0]?.it;
+    if(context.it) {context.count=Math.min(context.it.uses,visit.remaining);context.price=buyerUnitPrice(visit,context.it);}
+  }
+  const it=context.it, max=it?Math.min(it.uses,visit.remaining):0;
+  let familiarity='First meeting';
+  if(r.deals>=3)familiarity='Regular customer';
+  else if(r.deals)familiarity='Familiar face';
+  const fieldStyle='display:grid;grid-template-columns:88px minmax(0,1fr);gap:12px;align-items:center;margin:8px 0';
+  const options=stock.map(({it,index})=>`<option value="${index}" ${context.it===it?'selected':''}>${itemName(it)} · ${it.uses} carried</option>`).join('');
+  const counter=visit.counter;
+  drugSaleEl ||= panel('drug-sale');
+  showPanel(drugSaleEl,`<h1>${b.name}</h1><p class="sub">${b.description}</p><p>${line || (r.deals?b.again:b.hello)}</p>
+    <p class="sub">${familiarity} &middot; ${r.deals} completed deals<br>Wants up to ${visit.remaining} ${b.product==='any'?'weed or Neon':ITEMS[b.product].name} packs${b.premium?' · premium only':''}.</p>
+    ${it?`<label style="${fieldStyle}"><span>Stock</span><select data-deal-stock aria-label="Stock to offer">${options}</select></label>
+    <label style="${fieldStyle}"><span>Packs</span><input data-deal-count aria-label="Packs to offer" type="number" min="1" max="${max}" step="1" value="${context.count}"></label>
+    <label style="${fieldStyle}"><span>Each ($)</span><input data-deal-price aria-label="Price per pack" type="number" min="1" max="999" step="1" value="${context.price}"></label>
+    <p class="sub">Usual price: ${fmt$(buyerUnitPrice(visit,it))} each. A fair deal builds the relationship.</p>
+    <button class="item" data-drug-sell>Offer ${context.count} for ${fmt$(context.count*context.price)}</button>
+    ${counter?`<button class="item" data-drug-counter>Accept ${b.name}'s offer &middot; ${fmt$(counter.count*counter.price)}</button>`:''}`:
+    '<p class="sub">Bring the right stock from your closet. You can keep the rest.</p>'}
+    <button class="item" data-drug-leave>Maybe later</button><p class="hint">1 make offer &middot; E / Esc close. Three unreasonable offers end the visit. Visible deals can be reported.</p>`);
+  drugSaleEl.querySelector('.panel').style.width='min(480px, calc(100vw - 32px))';
+  for(const el of drugSaleEl.querySelectorAll('input,select')) Object.assign(el.style,{font:'inherit',color:'#ddd',background:'#141418',border:'1px solid #444',padding:'5px',minWidth:'0',width:'100%',boxSizing:'border-box'});
+  drugSaleEl.onchange=e=>{
+    if(e.target.hasAttribute('data-deal-stock')) {
+      context.it=inv[+e.target.value];context.count=Math.min(context.it.uses,visit.remaining);context.price=buyerUnitPrice(visit,context.it);
+      visit.counter=null;showDrugNegotiation();
+    }
+  };
+  drugSaleEl.oninput=e=>{
+    if(e.target.hasAttribute('data-deal-count')) context.count=+e.target.value;
+    if(e.target.hasAttribute('data-deal-price')) context.price=+e.target.value;
+    const offer=drugSaleEl.querySelector('[data-drug-sell]');
+    if(offer) offer.textContent=`Offer ${context.count} for ${fmt$(context.count*context.price)}`;
+  };
+  drugSaleEl.onclick=e=>{
+    if(e.target.closest('[data-drug-sell]'))completeDrugSale();
+    if(e.target.closest('[data-drug-counter]'))settleDrugCounter();
+    if(e.target.closest('[data-drug-leave]'))hidePanel(drugSaleEl);
+  };
+}
+function beginDrugNegotiation() {
+  const buyer=nearDrugBuyer();if(!buyer)return;
+  const b=drugBuyerProfile(buyer.visit.id);
+  if(wanted.stars)return say(`${b.name} shakes their head. "Lose the police first."`,3);
+  drugSaleContext={buyer,visit:buyer.visit,it:null,count:0,price:0};
+  showDrugNegotiation();
+}
+function endDrugBuyerVisit(delay=20) {
+  drugBuyer=null;drugSaleContext=null;buyerAwayUntil=T+delay;
+  drugDemand.until=0;drugDemand.next=T+delay;hidePanel(drugSaleEl);
+}
+function offerDrugSale() {
+  const c=drugSaleContext;if(!c||nearDrugBuyer()!==c.buyer||wanted.stars)return;
+  const result=negotiateDrugOrder(c.visit,c.it,c.count,c.price);
+  if(result.status==='accepted')return settleDrugOrder(c.it,c.count,result.price);
+  if(result.status==='leave'){endDrugBuyerVisit(40);say(result.line,4);saveGame();return;}
+  showDrugNegotiation(result.line);
+}
+function settleDrugCounter() {
+  const offer=drugSaleContext?.visit.counter;
+  if(offer)settleDrugOrder(offer.it,offer.count,offer.price);
+}
+function settleDrugOrder(it,count,price) {
+  const c=drugSaleContext;if(!c||nearDrugBuyer()!==c.buyer||wanted.stars)return;
+  const result=tradeDrugOrder(c.visit,it,count,price);
+  if(!result[0])return showDrugNegotiation(result[1]);
+  const seen=crime('dealing',c.buyer.x,c.buyer.y);
+  say(result[1]+(seen==='cop'?' A cop saw the exchange.':seen==='reported'?' Someone noticed the exchange.':''),5);
+  endDrugBuyerVisit();saveGame();
+}
+function callWorkshopSupplier(home=workshopHome()||nearestWorkshopHome()) {
+  if(!home){say('Mara delivers to your apartment. Find a realty office on the map to get set up.',5);return false;}
+  const door=buyerDoor(home);if(!door)return say('Mara cannot find a clear place outside.',3);
+  let point=null;
+  const offsets=[.35,.6,1,1.5].flatMap(r=>[[r,0],[-r,0],[0,r],[0,-r],[r,r],[-r,r],[r,-r],[-r,-r]]);
+  for(const [ox,oy] of offsets) {
+    const x=mod(door[0]+ox,N),y=mod(door[1]+oy,N);
+    if(!map[idx(Math.floor(x),Math.floor(y))]&&!isWater(x,y)&&!architectureBlocked(x,y)&&!landmarkBlocked(x,y)&&!lampAt(x,y,.05)) {point=[x,y];break;}
+  }
+  if(!point){say('Mara cannot find a clear place by this building.',4);return false;}
+  supplierVisit={home:home.cell,x:point[0],y:point[1],until:Infinity,look:streetContactLook(SUPPLIER)};
+  hidePanel(workshopEl);
+  setMapWaypoint({id:'supplier',name:'Mara · workshop supplier',x:point[0],y:point[1]});
+  say('Mara: "I\'m outside. Yellow cap." Waypoint set; M opens the map. She will wait for you.',6);
+  return true;
+}
+function nearWorkshopSupplier() {
+  if(supplierVisit && (T>=supplierVisit.until||!owned.homes.some(h=>h.cell===supplierVisit.home)))supplierVisit=null;
+  if(!supplierVisit||mode!=='walk')return null;
+  const ex=rel(supplierVisit.x-px),ey=rel(supplierVisit.y-py),d=Math.hypot(ex,ey);
+  const buyer=nearDrugBuyer();
+  if(buyer && Math.hypot(rel(buyer.x-px),rel(buyer.y-py))<d)return null;
+  return d<.5&&(d<.12||(ex*Math.cos(a)+ey*Math.sin(a))/d>.4)?supplierVisit:null;
+}
+function drawWorkshopSupplier() {
+  nearWorkshopSupplier();
+  if(supplierVisit)drawStreetContact(supplierVisit,'+',YEL,'ease');
+}
+function openWorkshopSupplier(line='') {
+  const contact=nearWorkshopSupplier(),home=contact&&owned.homes.find(h=>h.cell===contact.home);if(!home)return;
+  if(wanted.stars)return say('Mara: "Call me when the police are gone."',4);
+  const w=workshopState(home),orders=drugContacts.supplierOrders;
+  const stock=[['kit','Starter crate',WORKSHOP_KIT_PRICE,w.owned.bench>=3],['refill','Five Neon refills',WORKSHOP_REFILL_PRICE,w.supplies>294],
+    ['rack','Grow rack + 3 seed pods',WEED_RACK_PRICE,w.owned.growrack>=3],['seeds','Five seed pods',WEED_SEEDS_PRICE,w.seeds>294],['fan','Cooling fan',WORKSHOP_FAN_PRICE,w.owned.fan>=3],
+    ...Object.entries(WORKSHOP_UPGRADES).map(([id,u])=>[id,u.name,u.price,w.upgrades[id]])];
+  supplierEl ||= panel('workshop-supplier');
+  showPanel(supplierEl,`<h1>Mara</h1><p class="sub">${SUPPLIER.description}</p><p>${line || (orders>=3?'"My regular. What are we running short on?"':'"Mara. Equipment, refills, seed pods. I keep things moving."')}</p>
+    <p class="sub">${fmt$(money)} &middot; ${orders} completed orders. Everything goes straight to this apartment's cupboard.</p>
+    ${stock.map(([id,name,price,full])=>`<button class="item" data-supplier-order="${id}" ${full||money<price?'disabled':''}><span>${cap(name)}</span><span class="lead"></span><span class="v">${full?'stocked':fmt$(price)}</span></button>`).join('')}
+    <button class="item" data-supplier-dismiss>Thanks, see you around</button><p class="hint">E / Esc close. You can also order through Mara's book in your workshop cupboard.</p>`);
+  supplierEl.onclick=e=>{
+    const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.supplierOrder) {
+      const result=orderWorkshopSupply(home,b.dataset.supplierOrder);saveGame();openWorkshopSupplier(result[1]);
+    }
+    if(b.hasAttribute('data-supplier-dismiss')){supplierVisit=null;hidePanel(supplierEl);if(mapWaypoint?.id==='supplier')clearMapWaypoint();}
+  };
+}
 // ===== on your feet: Space jumps, C held crouches, C by a bench or a seat sits you down (C again, or walk, to get
 // up). On the skateboard (skate.js) Space pops an ollie, and the arrows you're holding as you pop make it a trick:
 // left kickflip, right heelflip, down pop shuvit, down-left 360 flip, down-right varial heelflip. Or flick for it:
@@ -29305,25 +30665,49 @@ function drawSkater() {
 // your cars and boats are), how hungry, thirsty and hurt you are, the city time, and the last spot you stood on the
 // street, kept in localStorage every few seconds and when you leave. Not saved: the police (you start each visit clean).
 const SAVE_KEY = 'ascii-city-save';
+const SAVE_BACKUP_KEY = 'ascii-city-save-backup-v1-coastal-v1';
+let citySaveBlocked = false; // protect an unrecognized save or one whose backup could not be written
+let citySaveBackupPending = null;
+function keepCitySaveBackup(text) {
+  try {
+    if (localStorage.getItem(SAVE_BACKUP_KEY) == null) localStorage.setItem(SAVE_BACKUP_KEY, text);
+    return localStorage.getItem(SAVE_BACKUP_KEY) != null;
+  } catch (e) { return false; }
+}
 let streetSpot = null; // where you last were on foot outdoors (inside a shop or on a train, you come back out where you went in)
 function noteStreet() {
   if (mode === 'walk') streetSpot = { x: px, y: py, a };
   else if (mode === 'drive' && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) };
 }
 function saveGame() {
+  if (citySaveBackupPending != null && keepCitySaveBackup(citySaveBackupPending)) {
+    citySaveBackupPending = null; citySaveBlocked = false;
+  }
+  if (citySaveBlocked) return false;
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
-  const data = { v: 1, day: dayNum, tod, tags, money, tickets, fish: fishLog, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
+    drugContacts,
+    waypoint:mapWaypoint,
+    homes: savedCityHomes(), cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
 }
 function loadGame() {
-  let d = null;
-  try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return; }
-  if (!d || d.v !== 1) return;
+  let text, prepared;
+  citySaveBackupPending = null;
+  try {
+    text = localStorage.getItem(SAVE_KEY);
+    if (text == null) return;
+    prepared = prepareCitySave(JSON.parse(text));
+  } catch (e) { citySaveBlocked = true; return; }
+  if (!prepared) { citySaveBlocked = true; return; }
+  citySaveBlocked = true;
+  // Still load progress if storage is full, but retry the backup before allowing any overwrite.
+  if (prepared.upgraded && !keepCitySaveBackup(text)) citySaveBackupPending = text;
+  const d = prepared.data;
   const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses, ...(Number.isFinite(it.kg) ? { kg: it.kg } : {}), ...(DISH_EAT[it.q] ? { q: it.q } : {}), ...(ITEMS[it.of] ? { of: it.of } : {}) }); } };
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
@@ -29344,11 +30728,13 @@ function loadGame() {
   for (const sym in d.shares || {}) if (stockBy(sym)) shares[sym] = d.shares[sym];
   if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }
   owned.homes.length = 0; for (const h of d.homes || []) {
-    const cell = restoreHomeCell(h.cell);
+    const cell = restoreHomeCell(h.cell, h.placeId);
     if (cell < 0 || ITEMS[h.kind]?.kind !== 'home') continue;
     owned.homes.push({ ...h, cell,
     decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY),
     fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
+    workshop: restoreWorkshop(h.workshop,h.kind),
+    door: Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => mod(v, N)) : null,
     pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
   }
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) {
@@ -29360,6 +30746,8 @@ function loadGame() {
   loadBoats(d.boats);
   loadPlanes(d.planes);
   loadCourier(d.courier);
+  loadDrugContacts(d.drugContacts);
+  loadMapWaypoint(d.waypoint);
   if (Number.isFinite(d.season)) seasonShift = mod(d.season + Math.floor(dayNum / (d.seasonDays > 0 ? d.seasonDays : 7)) - Math.floor(dayNum / SEASON_DAYS), 4);
   grandHotelStolen = {};
   if (d.hotelStolen === true) grandHotelStolen.hotelmasterpiece = true; // Older saves only had the Duke.
@@ -29374,6 +30762,7 @@ function loadGame() {
   if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
     px = mod(at.x, N); py = mod(at.y, N); a = at.a || 0; streetSpot = { x: px, y: py, a };
   }
+  citySaveBlocked = citySaveBackupPending != null;
 }
 function newGame() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ } location.reload(); }
 loadGame();
@@ -29403,6 +30792,12 @@ onkeydown = e => {
   if (!e.repeat && prizeKey(e)) return relock(e);
   if (!e.repeat && courierBoardKey(e)) return relock(e); // the courier dispatch board
   if (!e.repeat && panelKey(e)) return relock(e); // a shop or the inventory is open (and may just have closed)
+  if(e.code==='KeyM'&&!e.repeat&&!sleep&&!game) {
+    e.preventDefault();
+    if(e.shiftKey&&!paused)showMap=!showMap;else openBigMap();
+    return;
+  }
+  if (workshopPlacement && !paused && workshopKey(e)) return;
   if (e.code === 'Escape' && !e.repeat) return togglePause();
   if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
   if (paused) return;
@@ -29439,7 +30834,6 @@ onkeydown = e => {
   if (e.code === 'KeyU' && mode === 'walk' && !sleep) { const ac = nearAircraft(); if (ac && !ac.owned) buyAircraft(ac); }
   if (e.code === 'KeyJ' && mode === 'walk') { const c = nearestCar(0.5); if (c && c.body === TAXI && c.v < 0.6) startTaxiShift(c); }
   if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
-  if (e.code === 'KeyM') showMap = !showMap;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
   if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
@@ -29641,6 +31035,8 @@ function loop(t) {
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
   if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   T += dt; msgT -= dt;
+  stepWorkshop(dt); stepDrugEffects(dt);
+  updateMapNavigation();
   env(dt);
   if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
   stepCourierEncore();
@@ -29718,6 +31114,7 @@ function loop(t) {
   }
   if (fract(T / 2) < dt / 2) tidyPolice();
   if (stepGoods(dt) === 'lost') say('Splash. The ball floats away.');
+  updateDrugBuyer();
   stepFishing(dt); stepFishingUI(); // (fishing.js, fishing-render.js)
   if (stepGun(dt) === 'down') shotDown(); stepGunUI(); // (the revolver, and the police shooting back: gun.js, gun-ui.js)
   const need = stepNeeds(dt, onFootMode() && !game && !sleep); // (at the wheel or mid-shift you hang on till you stop)
@@ -29865,11 +31262,13 @@ const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', ge
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
 function touchActions() {
   if (freecam) return [['Up', 'KeyE', 'main'], ['Down', 'KeyQ', 'pop']];
+  if (workshopPlacement) return [['Cancel','KeyX','pop'],['Rotate','KeyQ','pop'],['Place','KeyE','main']];
   if (sleep || bustedEl && bustedEl.style.display === 'flex') return []; // (busted: tap a row)
   if (panelOpen() || prizeEl && prizeEl.style.display === 'flex') return [['Close', 'KeyE', 'main']];
   if (game) {
     if (game.g.over) return game.kind === 'arcade' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(CREDIT)}`, 'Space', 'main']] : game.kind === 'table' ? [['Leave', 'KeyE', 'pop'], [`Again ${fmt$(MJ_BUYIN)}`, 'Space', 'main']] : [['Done', 'KeyE', 'main']];
     if (game.kind === 'show') return [['Leave', 'KeyE', 'pop'], ['Tip $1', 'Space', 'main']];
+    if (game.kind === 'workshop') return [['Stop','KeyE','pop'],['Vent','ArrowUp','pop'],['Seal','ArrowDown','pop'],['Power (hold)','Space','main']];
     if (game.kind === 'cook') return [['Off heat', 'KeyE', 'pop'], ['Add', 'ArrowDown', 'pop'], [cookVerb(game.g), 'ArrowUp', 'pop'], ['Heat (hold)', 'Space', 'main']];
     if (game.kind === 'market') return [['Leave', 'KeyE', 'pop'], ['Up', 'ArrowUp', 'pop'], ['Down', 'ArrowDown', 'pop'], ['Sell', 'ArrowLeft', 'pop'], ['Buy', 'ArrowRight', 'pop'], [`Lot ${game.g.lot()}`, 'Space', 'main']];
     if (game.kind === 'casino') { // the casino: what the buttons do depends on where the hand's at
@@ -29904,6 +31303,7 @@ function touchActions() {
     if (/\bL: hotwire/.test(p)) out.push(['Hotwire', 'KeyL', 'pop']); else if (/\bL: /.test(p)) out.push(['Pick lock', 'KeyL', 'pop']);
     const it = heldItem();
     if (it) { out.push([it.id === 'spraypaint' ? 'Spray' : ITEMS[it.id].rod ? (fishing && fishing.st === 'bite' ? 'Strike!' : fishing && fishing.st !== 'wind' ? 'Reel in' : 'Cast') : it.id === 'goldkoi' ? 'Wish' : ITEM_VERB[ITEMS[it.id].kind] || 'Use', 'KeyQ', 'pop']); if (it.id === 'boombox' && fx.boombox) out.push(['Next tape', 'KeyB', 'pop']); if (ITEMS[it.id].kind === 'gun') out.push(['Reload', 'KeyR', 'pop']); }
+    else if(fx.smoke>0)out.push(['Drag','KeyQ','pop']);
     if (body.seat) out.push(['Stand', 'KeyC', 'pop']); else if (nearSeat()) out.push(['Sit', 'KeyC', 'pop']);
     out.push([skatingNow() ? 'Ollie' : 'Jump', 'Space', 'jump']); // (on the board: swipe off it for a trick, see bindFlick)
   }
@@ -29969,7 +31369,7 @@ function showTouch() {
   const busy = !!game || sleep || panelOpen();
   touchEl.querySelector('.bar').style.visibility = busy ? 'hidden' : 'visible';
   if (busy && sheetOpen) setSheet(false);
-  touchEl.querySelector('[data-key="KeyM"]').classList.toggle('on', showMap);
+  touchEl.querySelector('[data-key="KeyM"]').classList.toggle('on', bigMapOpen());
   for (const [l, , when] of SHEET) touchEl.querySelector(`[data-sheet="${l}"]`).style.display = !when || when() ? '' : 'none';
   // the pad: rebuilt only when what's on it changes (a button being held keeps its key down until it's let go)
   const acts = touchActions(), sig = acts.map(x => x.join(':')).join('|');

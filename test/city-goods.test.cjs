@@ -228,8 +228,8 @@ test('property: a car from the lot is parked on the street outside, yours, and s
   assert.strictEqual(ev("money"), 6000);
   assert.strictEqual(ev("buy('home_studio')[0]"), true);
   assert.strictEqual(ev('SHOP[owned.homes[0].cell].kind === SHOP_APTS'), true);
-  assert.strictEqual(ev("buy('home_loft')[0] && owned.homes[1].cell !== owned.homes[0].cell"), false, "can't afford a loft now (and it would be a different building)");
-  assert.strictEqual(ev("buy('car_hatch')[0] && money"), 3050, 'a second car, for what was left');
+  assert.strictEqual(ev("buy('home_loft')[0] && owned.homes[1].cell !== owned.homes[0].cell"), true, 'the cheaper loft is affordable now and occupies a different building');
+  assert.strictEqual(ev("buy('car_hatch')[0] && money"), 150, 'a second car, for what was left');
   assert.strictEqual(ev("buy('car_sports')[1]"), "Sports car is $4000.00. You can't afford it.");
 });
 

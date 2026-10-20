@@ -11,7 +11,7 @@ function heldGesture(it, u) {
   const phase = heldUsePhase(it), pose = { x: 0, y: 0, angle: 0, sx: 1, sy: 1 };
   if (phase < 0) return pose;
   const pulse = Math.sin(phase * Math.PI), id = it.id, kind = ITEMS[id].kind;
-  if (kind === 'drink' || kind === 'food' || id === 'harmonica') {
+  if (kind === 'drink' || kind === 'food' || kind === 'drug' || id === 'harmonica') {
     pose.x = -u * pulse; pose.y = -u * (kind === 'drink' ? 2.2 : 1.2) * pulse;
     pose.angle = (kind === 'drink' ? -.2 : -.07) * pulse;
   } else if (HELD_SQUEEZE.has(id)) {

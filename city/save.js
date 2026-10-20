@@ -2,25 +2,49 @@
 // your cars and boats are), how hungry, thirsty and hurt you are, the city time, and the last spot you stood on the
 // street, kept in localStorage every few seconds and when you leave. Not saved: the police (you start each visit clean).
 const SAVE_KEY = 'ascii-city-save';
+const SAVE_BACKUP_KEY = 'ascii-city-save-backup-v1-coastal-v1';
+let citySaveBlocked = false; // protect an unrecognized save or one whose backup could not be written
+let citySaveBackupPending = null;
+function keepCitySaveBackup(text) {
+  try {
+    if (localStorage.getItem(SAVE_BACKUP_KEY) == null) localStorage.setItem(SAVE_BACKUP_KEY, text);
+    return localStorage.getItem(SAVE_BACKUP_KEY) != null;
+  } catch (e) { return false; }
+}
 let streetSpot = null; // where you last were on foot outdoors (inside a shop or on a train, you come back out where you went in)
 function noteStreet() {
   if (mode === 'walk') streetSpot = { x: px, y: py, a };
   else if (mode === 'drive' && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) };
 }
 function saveGame() {
+  if (citySaveBackupPending != null && keepCitySaveBackup(citySaveBackupPending)) {
+    citySaveBackupPending = null; citySaveBlocked = false;
+  }
+  if (citySaveBlocked) return false;
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
-  const data = { v: 1, day: dayNum, tod, tags, money, tickets, fish: fishLog, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
-    homes: owned.homes, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* private window: just not kept */ }
+    drugContacts,
+    waypoint:mapWaypoint,
+    homes: savedCityHomes(), cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
 }
 function loadGame() {
-  let d = null;
-  try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return; }
-  if (!d || d.v !== 1) return;
+  let text, prepared;
+  citySaveBackupPending = null;
+  try {
+    text = localStorage.getItem(SAVE_KEY);
+    if (text == null) return;
+    prepared = prepareCitySave(JSON.parse(text));
+  } catch (e) { citySaveBlocked = true; return; }
+  if (!prepared) { citySaveBlocked = true; return; }
+  citySaveBlocked = true;
+  // Still load progress if storage is full, but retry the backup before allowing any overwrite.
+  if (prepared.upgraded && !keepCitySaveBackup(text)) citySaveBackupPending = text;
+  const d = prepared.data;
   const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses, ...(Number.isFinite(it.kg) ? { kg: it.kg } : {}), ...(DISH_EAT[it.q] ? { q: it.q } : {}), ...(ITEMS[it.of] ? { of: it.of } : {}) }); } };
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
@@ -41,11 +65,13 @@ function loadGame() {
   for (const sym in d.shares || {}) if (stockBy(sym)) shares[sym] = d.shares[sym];
   if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }
   owned.homes.length = 0; for (const h of d.homes || []) {
-    const cell = restoreHomeCell(h.cell);
+    const cell = restoreHomeCell(h.cell, h.placeId);
     if (cell < 0 || ITEMS[h.kind]?.kind !== 'home') continue;
     owned.homes.push({ ...h, cell,
     decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY),
     fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
+    workshop: restoreWorkshop(h.workshop,h.kind),
+    door: Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => mod(v, N)) : null,
     pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
   }
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) {
@@ -57,6 +83,8 @@ function loadGame() {
   loadBoats(d.boats);
   loadPlanes(d.planes);
   loadCourier(d.courier);
+  loadDrugContacts(d.drugContacts);
+  loadMapWaypoint(d.waypoint);
   if (Number.isFinite(d.season)) seasonShift = mod(d.season + Math.floor(dayNum / (d.seasonDays > 0 ? d.seasonDays : 7)) - Math.floor(dayNum / SEASON_DAYS), 4);
   grandHotelStolen = {};
   if (d.hotelStolen === true) grandHotelStolen.hotelmasterpiece = true; // Older saves only had the Duke.
@@ -71,6 +99,7 @@ function loadGame() {
   if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
     px = mod(at.x, N); py = mod(at.y, N); a = at.a || 0; streetSpot = { x: px, y: py, a };
   }
+  citySaveBlocked = citySaveBackupPending != null;
 }
 function newGame() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to clear */ } location.reload(); }
 loadGame();
