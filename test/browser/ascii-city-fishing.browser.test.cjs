@@ -29,8 +29,14 @@ test('buy a rod at the hut, cast with Q, strike on the bite, land it, sell it ba
     assert.deepEqual([shop.open, shop.title], [true, 'BAIT & TACKLE']);
     await page.keyboard.press('Digit1'); await page.keyboard.press('Escape');
     assert.deepEqual(await page.evaluate(() => [heldItem() && heldItem().id, money]), ['rod', 65]);
-    // out to the sea wall west of the hut, facing the bay: hold Q, let go
-    await page.evaluate(() => { px = FISH_HUT.x - 3; py = shoreS(px) - 0.25; a = Math.PI / 2; pitch = 0; paused = false; });
+    // A real fishing spot on the finite coast, with open bay throughout the possible cast.
+    const spot = await page.evaluate(() => {
+      const o = ANGLERS.find(o => free(o.x,o.y) && [.7,1,1.3,1.6,1.9].every(d =>
+        waterKind(o.x+Math.cos(o.a)*d,o.y+Math.sin(o.a)*d)==='sea'));
+      if(!o)return false;
+      px=o.x;py=o.y;a=o.a;pitch=0;body.z=outdoorGroundHeight(px,py);body.vz=0;paused=false;return true;
+    });
+    assert.ok(spot,'a reachable coastal fishing spot faces unobstructed bay water');
     await page.keyboard.down('KeyQ');
     await page.waitForFunction(() => fishing && fishing.st === 'wind' && fishing.power > 0.4);
     await page.keyboard.up('KeyQ');
