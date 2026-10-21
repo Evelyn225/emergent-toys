@@ -1,10 +1,11 @@
-// ---- the elevated train: a steel deck on pillars over the whole length of H(., EL_ROW), which wraps round the world
-// east-west, so the line is a loop. Two tracks: westbound on the north half, eastbound on the south half.
+// ---- the elevated train: a steel deck on pillars along H(., EL_ROW).
+// The live archipelago has a finite east-west route; trains reverse at both terminals.
+// The source-city fixture below retains its original wrapping loop.
 // Stations every 8 blocks, with narrow platforms over the sidewalks and stairs down to the street.
 // The deck is 12m wide over the middle of the street (clear of the building faces either side) and high enough
 // that the street lamps fit under it: y EL_Y0..EL_Y1, z EL_BOT..EL_TOP.
 let EL_Y = EL_ROW * 8, EL_HALF = 0.6, EL_Y0 = EL_Y + 1 - EL_HALF, EL_Y1 = EL_Y + 1 + EL_HALF, EL_BOT = 1.15, EL_TOP = 1.27;
-const EL_TRACK = [EL_Y + 0.78, EL_Y + 1.22]; // [westbound, eastbound]
+const EL_TRACK = [EL_Y + 0.78, EL_Y + 1.22]; // [north track, south track]; direction comes from elTrain().dir
 const EL_PLAT = [EL_Y0 + 0.08, EL_Y1 - 0.08]; // where you stand on each platform, along the deck's edges
 const underEl = (y,x=px) => (!worldReady||x>=140&&x<=352)&&Math.abs(rel(y - (EL_Y + 1))) < EL_HALF;
 const EL_STATIONS = [2, 10, 18, 26].map(bx => ({ x: bx * 8 + 5, x0: bx * 8 + 2.6, x1: bx * 8 + 7.4, name: AVE_NAMES[bx] }));
@@ -85,7 +86,7 @@ const elPillarsB = bucketed(elPillars);
 const HOP = N / EL_STATIONS.length, HOP_T = 26, DWELL = 10, EL_CYCLE = (HOP_T + DWELL) * EL_STATIONS.length, EL_CARS = 3, EL_CAR_LEN = 1.9;
 const EL_HL = EL_CAR_LEN / 2 - 0.03, EL_HW = 0.14, EL_H = 0.32;
 const smooth = v => v * v * (3 - 2 * v);
-// where train k on track tr (0 west, 1 east) is at time t: {x of its middle, dir, stopped, station index it's at or leaving}
+// where train k on track tr (0 north, 1 south) is at time t: {x of its middle, dir, stopped, station index it's at or leaving}
 function elTrain(tr, k, t) {
   if(worldReady) {
     const sequence=[0,1,2,3,2,1],period=(HOP_T+DWELL)*sequence.length,c=mod(t+tr*period/2,period),hop=Math.floor(c/(HOP_T+DWELL)),p=c-hop*(HOP_T+DWELL);

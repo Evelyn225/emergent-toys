@@ -48,6 +48,7 @@ function applyVolumes() {
 }
 function toggleSound() {
   soundOn = !soundOn;
+  if (!soundOn) cancelTransitAnnouncements();
   if (master) master.gain.setTargetAtTime(soundOn ? MASTER : 0, actx.currentTime, 0.15);
   say(soundOn ? 'Sound on' : 'Sound off', 1.5);
 }
@@ -177,7 +178,10 @@ function sfxCoin() { const at = actx.currentTime; tone(at, 3100, 0.15, 0.08); to
 const CLIPS = {};
 function clipBuffer(name) {
   const file = name.includes('.') ? name : name + '.mp3';
-  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + file).then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
+  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + file).then(r => {
+    if (!r.ok) throw new Error('Audio unavailable: ' + file);
+    return r.arrayBuffer();
+  }).then(b => actx.decodeAudioData(b)).catch(() => null);
   return CLIPS[name];
 }
 function playClip(name, gain, when = actx.currentTime) {

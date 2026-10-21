@@ -89,12 +89,14 @@ const nearElStairs = () => {
 function elUp({ s, tr }) {
   body.z=body.vz=body.peak=0;roofH=EL_TOP;
   mode = 'elplat'; plat = { s, tr }; px = s.x; py = EL_PLAT[tr]; a = tr ? 0 : Math.PI; pitch = 0; // facing the way the trains go
-  say(`${s.name} el, ${tr ? 'eastbound' : 'westbound'} platform`);
+  transitSync();
+  say(`${s.name} el platform`);
 }
 function elDown() { // (E on the platform: a shortcut to the foot of the stairs)
   const stairs=plat.s.stairs[plat.tr];
   mode = 'walk'; px = stairs.x; py = stairs.y; a = Math.atan2(-stairs.s, -stairs.c); plat = null;
   body.z=body.vz=body.peak=0;roofH=0;
+  transitSync();
 }
 // the train standing at your platform, if there is one
 const elHere = () => plat && elTrains(T).find(t => t.tr === plat.tr && t.stopped && EL_STATIONS[t.station] === plat.s);
@@ -103,6 +105,7 @@ function elBoard() {
   if (!t) return false;
   ride = { tr: t.tr, k: t.k, off: clamp(rel(px - t.x), -EL_CAR_LEN, EL_CAR_LEN) };
   mode = 'el'; py = EL_TRACK[t.tr] + (t.tr ? 0.12 : -0.12); // by the window on the platform side
+  transitBoarded();
   say(`Next stop: ${EL_STATIONS[t.next].name}`);
   return true;
 }
@@ -115,6 +118,7 @@ function elGetOff() {
   px = clamp(px, s.x0, s.x1);
   body.z=body.vz=body.peak=0;roofH=EL_TOP;
   say(`${s.name}`);
+  transitSync();
 }
 function enterRoom(kind, extra, spawn) {
   fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
@@ -123,6 +127,7 @@ function enterRoom(kind, extra, spawn) {
   if (residence && room.ret) residence.door = room.ret.slice(0, 2);
   if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'backrooms' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
+  transitSync();
 }
 function interact() {
   if (islandBuildingUse()) return;
@@ -207,7 +212,10 @@ function interact() {
     }
     if (canBoard()) {
       const from = room.st;
-      return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
+      const platformTime = room.t0;
+      enterRoom('train', { st: from, t0: platformTime, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
+      transitBoarded();
+      return;
     }
     const dr = droppedHere(); // something you put down here earlier
     if (dr) return say(pickUpDropped(dr)[1]);
@@ -289,7 +297,7 @@ function interact() {
   const el = nearElStairs();
   if (el && elPass && elPass.st === el.s.stairs[el.tr]) return say('The turnstile\'s open. Up you go.', 2);
   if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
-  if (el) { elPass = { st: el.s.stairs[el.tr] }; if (actx) sfxUse('click'); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. The turnstile clicks round. Up the stairs to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'}.`, 3); }
+  if (el) { elPass = { st: el.s.stairs[el.tr] }; if (actx) sfxUse('click'); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. The turnstile clicks round. Up the stairs to the ${el.s.name} el, ${el.tr ? 'south' : 'north'} platform.`, 3); }
   const fsp = fairSpot();
   if (fsp) return useFair(fsp);
   const mk = marketSpot();
@@ -392,11 +400,13 @@ function leaveRoom() {
   }
   else { [px, py, a] = room.ret; a += Math.PI; }
   room = null; mode = 'walk';
+  transitSync();
   hotelAlarm = null; // Leaving the building before the deadline cancels its untriggered alarm.
 }
 function arriveAt(n) { // off the train onto the destination platform; the train pulls out a few seconds later
   enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, ST_TRACK - 2.4, -Math.PI / 2]); // back from the edge, facing the stairs
   say(`${stations[n].name}`);
+  transitSubwayArrived();
 }
 function hail() {
   if (mode !== 'walk') return;

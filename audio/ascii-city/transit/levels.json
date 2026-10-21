@@ -1,0 +1,272 @@
+{
+  "targetLUFS": -20,
+  "maxTruePeakDB": -3,
+  "treatment": "Pitch ratio 1.12 (about +2 semitones) with shifted formants for brighter resonance, 300-4800 Hz, presence, 4:1 compression and soft saturation; final shared PA bus adds narrower speaker colour and a 22 ms reflection.",
+  "clips": [
+    {
+      "key": "next",
+      "source": "The next stop is.mp3",
+      "file": "transit/next.wav",
+      "sourceSha256": "b69fd2456e9af686dfba9329b9fb35398d6b5bbcaa4a9ff9930ff7703147a85a",
+      "lufs": -20.03,
+      "truePeakDB": -14.78
+    },
+    {
+      "key": "arrival",
+      "source": "This is.mp3",
+      "file": "transit/arrival.wav",
+      "sourceSha256": "23a1e44a9f3bfce4568dc753677c25bdc4752e55cc2dfddbda6c0cbb72b99932",
+      "lufs": -20.05,
+      "truePeakDB": -14.22
+    },
+    {
+      "key": "east",
+      "source": "This is an eastbound train.mp3",
+      "file": "transit/east.wav",
+      "sourceSha256": "bd033bcfb13638e267def566cc2bafd6cc4b7a0930ac3e04d387400dc474f391",
+      "lufs": -20.01,
+      "truePeakDB": -13.92
+    },
+    {
+      "key": "west",
+      "source": "This is a westbound train.mp3",
+      "file": "transit/west.wav",
+      "sourceSha256": "541ee8befa20e12edb090479ef7205cbbaf280c7a9042b4ab323f5c059e91eac",
+      "lufs": -20.02,
+      "truePeakDB": -13.73
+    },
+    {
+      "key": "returnEast",
+      "source": "This train will now return eastbound.mp3",
+      "file": "transit/return-east.wav",
+      "sourceSha256": "c529520bcb23c943878eec7683cc0878541d71be051f1a8af252da9331b673c1",
+      "lufs": -20,
+      "truePeakDB": -15.31
+    },
+    {
+      "key": "returnWest",
+      "source": "This train will now return westbound.mp3",
+      "file": "transit/return-west.wav",
+      "sourceSha256": "f6e4f35161071b08ac5fd585788994b0a3bf15e40c315e3d9e435736348f9e20",
+      "lufs": -20.01,
+      "truePeakDB": -14.53
+    },
+    {
+      "key": "doors",
+      "source": "Please stand clear of the closing doors.mp3",
+      "file": "transit/doors.wav",
+      "sourceSha256": "6137398dd66c29efc818b7bf1f4160e7f8f031bb90756e95fb593844fb2ca367",
+      "lufs": -20.01,
+      "truePeakDB": -13.72
+    },
+    {
+      "key": "alight",
+      "source": "Please allow passengers to leave the train before boarding.mp3",
+      "file": "transit/alight.wav",
+      "sourceSha256": "46b2626c7d5014ae2d6a5bd553cbb06521b3532a2c2c9e9a005c1052d44279a2",
+      "lufs": -20.01,
+      "truePeakDB": -14.32
+    },
+    {
+      "key": "edge",
+      "source": "Please stand back from the platform edge.mp3",
+      "file": "transit/edge.wav",
+      "sourceSha256": "764b6921261a3396eb811a84a3f50f0840b4f83a5df2a87123df8c2018128787",
+      "lufs": -20.01,
+      "truePeakDB": -14.17
+    },
+    {
+      "key": "belongings",
+      "source": "Please remember to take your belongings with you.mp3",
+      "file": "transit/belongings.wav",
+      "sourceSha256": "a566cfdc9271b1177296dfa51275b814f1350c2b467169547f024405c23952c9",
+      "lufs": -20,
+      "truePeakDB": -13.14
+    },
+    {
+      "key": "MERCER ST",
+      "source": "Mercer street.mp3",
+      "file": "transit/mercer-st.wav",
+      "sourceSha256": "4a85668ece387790a1dbdfbbd8b3940261791d6da7b1089d8413e32b895d2aab",
+      "lufs": -20.04,
+      "truePeakDB": -15.06
+    },
+    {
+      "key": "BLEECKER ST",
+      "source": "Bleecker street.mp3",
+      "file": "transit/bleecker-st.wav",
+      "sourceSha256": "4395876cc5b0bb4f722dc128ce36534a9c35150a2a79fa0c255c8b83378c9724",
+      "lufs": -20,
+      "truePeakDB": -14.49
+    },
+    {
+      "key": "WATER ST",
+      "source": "Water street.mp3",
+      "file": "transit/water-st.wav",
+      "sourceSha256": "e464dc78915bf03dd22dc253d17f3c5eaefaefb4891370451c1416743e22c2ad",
+      "lufs": -20.03,
+      "truePeakDB": -14.85
+    },
+    {
+      "key": "8TH AVE",
+      "source": "Eighth avenue.mp3",
+      "file": "transit/8th-ave.wav",
+      "sourceSha256": "29d0d5eaace2868c5729c82880cbe333a9aff5abeff21969534ddd70595a4a02",
+      "lufs": -20.02,
+      "truePeakDB": -15.06
+    },
+    {
+      "key": "HOUSTON ST",
+      "source": "Houston street.mp3",
+      "file": "transit/houston-st.wav",
+      "sourceSha256": "073a5541f1b4db18216b4c720a751b514c0a6465b362c29466ac0fcbdbc1cba4",
+      "lufs": -20.06,
+      "truePeakDB": -14.7
+    },
+    {
+      "key": "PEARL ST",
+      "source": "Pearl street.mp3",
+      "file": "transit/pearl-st.wav",
+      "sourceSha256": "5df240f4a35245e73a76e54a935eca39ea4cdc83684db1e373c047e88feb3b56",
+      "lufs": -20,
+      "truePeakDB": -14.94
+    },
+    {
+      "key": "14TH ST",
+      "source": "Fourteenth street.mp3",
+      "file": "transit/14th-st.wav",
+      "sourceSha256": "05c605b33071c0b4a6aa4d6e802c9d8aedd4123b9f55da23f5b439566a3aa533",
+      "lufs": -20.07,
+      "truePeakDB": -14.02
+    },
+    {
+      "key": "GRAND ST",
+      "source": "Grand street.mp3",
+      "file": "transit/grand-st.wav",
+      "sourceSha256": "53aa5b7a1b8a45cf6271e40411236680ef20bf63bfe47d21ed5aff48194805f7",
+      "lufs": -20.04,
+      "truePeakDB": -15.7
+    },
+    {
+      "key": "2ND AVE",
+      "source": "Second avenue.mp3",
+      "file": "transit/2nd-ave.wav",
+      "sourceSha256": "a72bcb86197ebcce5bfb3f7e1b2badaf4500cffe117f542ef12f811b0e0f36c2",
+      "lufs": -20,
+      "truePeakDB": -15.72
+    },
+    {
+      "key": "6TH AVE",
+      "source": "Sixth avenue.mp3",
+      "file": "transit/6th-ave.wav",
+      "sourceSha256": "05a631ee9817b12d503fe46cd242ce92c539ed37a65b90a34c08998fa342c6f0",
+      "lufs": -20.03,
+      "truePeakDB": -13.62
+    },
+    {
+      "key": "5TH ST",
+      "source": "Fifth street.mp3",
+      "file": "transit/5th-st.wav",
+      "sourceSha256": "bbba0a685d83daf2fc09df7e4e61ee7e8cfcee3acd1f1b0af0c3cf5548e260d5",
+      "lufs": -20.04,
+      "truePeakDB": -12.63
+    },
+    {
+      "key": "20TH ST",
+      "source": "Twentieth street.mp3",
+      "file": "transit/20th-st.wav",
+      "sourceSha256": "1964f38ff240b7686029c48173552d8968fd6b3b17a48f35baeddc03c10f7441",
+      "lufs": -20,
+      "truePeakDB": -14.55
+    },
+    {
+      "key": "HARBOR ST",
+      "source": "Harbor street.mp3",
+      "file": "transit/harbor-st.wav",
+      "sourceSha256": "adb6bbcd69a5ea4fd0f4993057b4b1ddf708fb0d01925b9b2378959337930c98",
+      "lufs": -20.03,
+      "truePeakDB": -15.18
+    },
+    {
+      "key": "12TH ST",
+      "source": "Twelfth street.mp3",
+      "file": "transit/12th-st.wav",
+      "sourceSha256": "a31190a0d2a91543d7c28644ca9c85cfcfbaa8023a22ff0c9eb2ec9c01e9258f",
+      "lufs": -20,
+      "truePeakDB": -14.07
+    },
+    {
+      "key": "23RD ST",
+      "source": "Twenty-third street.mp3",
+      "file": "transit/23rd-st.wav",
+      "sourceSha256": "b61cb8547aadf791363e08baa3ca4865cfec7a4f13fdf88d7694daf249fef4b0",
+      "lufs": -20,
+      "truePeakDB": -14.34
+    },
+    {
+      "key": "FRONT ST",
+      "source": "Front street.mp3",
+      "file": "transit/front-st.wav",
+      "sourceSha256": "44c0618e0d9bbbbe128b02d7dec2bc37d5cc0f273683ed42186e16ffc7f9fbe8",
+      "lufs": -20.06,
+      "truePeakDB": -15.23
+    },
+    {
+      "key": "HUDSON ST",
+      "source": "Hudson street.mp3",
+      "file": "transit/hudson-st.wav",
+      "sourceSha256": "24512bc4bd9dfb9bb90fe99bf4e55c2492991842e6d9dcc44c8419075116198e",
+      "lufs": -20.04,
+      "truePeakDB": -14.01
+    },
+    {
+      "key": "SPRING ST",
+      "source": "Spring street.mp3",
+      "file": "transit/spring-st.wav",
+      "sourceSha256": "4a17dc1407eaaf694c423658038c8cdf856de236a35dea6ad97e64e0bb0b7202",
+      "lufs": -20.02,
+      "truePeakDB": -15.45
+    },
+    {
+      "key": "3RD AVE",
+      "source": "Third avenue.mp3",
+      "file": "transit/3rd-ave.wav",
+      "sourceSha256": "0f5eabfedb95931c5357d60d1e83bba32956eeace2728b41ef985fad573fafff",
+      "lufs": -20.01,
+      "truePeakDB": -16.32
+    },
+    {
+      "key": "KING ST",
+      "source": "King street.mp3",
+      "file": "transit/king-st.wav",
+      "sourceSha256": "6115eb4f1967a8395fc72218b416030ee9041c0499211396fd191deeaf50994e",
+      "lufs": -20.01,
+      "truePeakDB": -16.02
+    },
+    {
+      "key": "11TH AVE",
+      "source": "Eleventh avenue.mp3",
+      "file": "transit/11th-ave.wav",
+      "sourceSha256": "802a7c7f48d059044018b8ef7edf98bda9edd443d63e78ba1cd56a4a58b3c554",
+      "lufs": -20.01,
+      "truePeakDB": -15.27
+    },
+    {
+      "key": "18TH AVE",
+      "source": "Eighteenth avenue.mp3",
+      "file": "transit/18th-ave.wav",
+      "sourceSha256": "8e8edb86920300f450c7e760227e7d8d99ba85e8b084c26a52d57561fbbc934c",
+      "lufs": -20.03,
+      "truePeakDB": -14.68
+    },
+    {
+      "key": "26TH AVE",
+      "source": "Twenty-sixth avenue.mp3",
+      "file": "transit/26th-ave.wav",
+      "sourceSha256": "fc05eaa30582f92f2a49bcdf9015f090af2e9bd2d3d963e73dfefa5d907e82fc",
+      "lufs": -20.02,
+      "truePeakDB": -13.54
+    }
+  ],
+  "missing": []
+}
