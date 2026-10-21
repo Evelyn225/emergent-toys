@@ -18,6 +18,50 @@ async function fixture(run){
  }finally{await page.close();}
 }
 
+test('coast bounds preserve land, surf and water at shorelines and across the ocean',()=>fixture(async page=>{
+ const result=await page.evaluate(()=>{
+  const errors=[];let checked=0;
+  function check(x,y){
+   checked++;
+   const exact=isleEdge(x,y);
+   if(onIsland(x,y)!==(exact>0)||onIsland(x,y,.3)!==(exact>-.3))errors.push(['island',x,y]);
+   if(onAirport(x,y)!==(airportEdge(x,y)>0))errors.push(['airport',x,y]);
+   if(seaAt(x,y)!==(archipelagoEdge(x,y)<=0))errors.push(['sea',x,y]);
+  }
+  for(let y=-100;y<1100;y+=5.13)for(let x=-100;x<1100;x+=5.17)check(x,y);
+  for(let j=0;j<720;j++){
+   const angle=j*TAU/720;
+   for(const margin of [0,.3])for(const epsilon of [-1e-7,0,1e-7]){
+    const r=isleR(angle)+margin+epsilon;
+    check(ISLE.x+Math.cos(angle)*r,ISLE.y+Math.sin(angle)*r);
+   }
+  }
+  for(let y=AIRPORT.y0-1;y<AIRPORT.y1+1;y+=.13)for(const edge of [AIRPORT.x0,AIRPORT.x1])
+   for(const offset of [-.250001,-.25,-.249999,0,.249999,.25,.250001])check(edge+offset,y);
+  for(const edge of [OCEAN_MIN,OCEAN_MIN+OCEAN_SIZE])for(const d of [-.001,0,.001]){
+   check(edge+d,ISLE.y);check(ISLE.x,edge+d);
+  }
+  return {checked,errors:errors.slice(0,10)};
+ });
+ assert.ok(result.checked>50000);assert.deepEqual(result.errors,[]);
+}));
+
+test('pier lookup keeps exact deck boundaries and sees newly added piers',()=>fixture(async page=>{
+ const result=await page.evaluate(()=>{
+  const errors=[];
+  const added=[450.25,420.25,450.75,420.75];PIERS.push(added);
+  try{
+   for(const [x0,y0,x1,y1]of PIERS)for(const x of [x0-1e-7,x0,x0+1e-7,(x0+x1)/2,x1-1e-7,x1,x1+1e-7])
+    for(const y of [y0-1e-7,y0,y0+1e-7,(y0+y1)/2,y1-1e-7,y1,y1+1e-7]){
+     const exact=PIERS.some(p=>x>=p[0]&&x<p[2]&&y>=p[1]&&y<p[3])||onFootbridge(x,y)||onCauseway(x,y);
+     if(onPier(x,y)!==exact)errors.push([x,y]);
+    }
+   return {errors,added:onPier(450.5,420.5)};
+  }finally{PIERS.pop();}
+ });
+ assert.equal(result.added,true);assert.deepEqual(result.errors,[]);
+}));
+
 test('the live archipelago preserves all lots on dry land and has connected finite streets',()=>fixture(async page=>{
  const result=await page.evaluate(()=>{
   const wet=[],badFaces=[];

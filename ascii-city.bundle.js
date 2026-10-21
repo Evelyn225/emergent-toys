@@ -1393,7 +1393,12 @@ function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cel
   if (!worldReady && (Math.abs(ex) > ISLE.r * 1.5 || Math.abs(ey) > ISLE.r * 1.5)) return -ISLE.r;
   return isleR(Math.atan2(ey, ex)) - Math.hypot(ex, ey);
 }
-const onIsland = (x, y) => isleEdge(x, y) > 0;
+function onIsland(x, y, margin = 0) {
+  // The wavy radius never exceeds 1.29 * r. Most ground cells are far away;
+  // avoid the angle, trigonometry and distance calculation outside its bounds.
+  const reach = ISLE.r * 1.5 + margin;
+  return Math.abs(rel(x - ISLE.x)) <= reach && Math.abs(rel(y - ISLE.y)) <= reach && isleEdge(x, y) > -margin;
+}
 const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && worldCoord(y) > FOOTBRIDGE.y0 && worldCoord(y) < FOOTBRIDGE.y1;
 // ---- the airport: Glyphport International, on reclaimed land out in the bay west of the first bridge, joined to the
 // promenade by a causeway you can walk or drive. North to south: the landside road where the causeway comes in, the
@@ -1422,7 +1427,11 @@ function airportEdge(x, y) {
   const box = Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - R; // (a rounded rectangle's signed distance)
   return -box + 0.25 * Math.sin(x * 1.3) * Math.sin(y * 0.9 + 1);
 }
-const onAirport = (x, y) => airportEdge(x, y) > 0;
+function onAirport(x, y) {
+  // The rounded shore stays inside the airport rectangle plus its .25-cell wave.
+  return Math.abs(rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2)) <= (AIRPORT.x1 - AIRPORT.x0) / 2 + .25 &&
+    Math.abs(rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2)) <= (AIRPORT.y1 - AIRPORT.y0) / 2 + .25 && airportEdge(x, y) > 0;
+}
 const onCauseway = (x, y) => Math.abs(rel(x - CAUSEWAY.x)) < CAUSEWAY.hw && worldCoord(y) > CAUSEWAY.y0 && worldCoord(y) < CAUSEWAY.y1 || worldReady && x > AIRPORT.x1 - 2 && x < CAUSEWAY.x + CAUSEWAY.hw && Math.abs(y - (AIRPORT.y0 + 1)) < CAUSEWAY.hw;
 const onRunway = (x, y) => Math.abs(rel(y - RUNWAY.y)) < RUNWAY.hw && worldCoord(x) > RUNWAY.x0 && worldCoord(x) < RUNWAY.x1;
 // The hangars are Nissen-style: an arched roof springing from the ground along both long sides (a slice of a cylinder
@@ -1510,8 +1519,29 @@ for (let bx = 0; bx < NB; bx++) {
   else if (hash(bx, 5, 43) < 0.35 && bx !== FAIR_BX) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
   if (hash(bx, 6, 43) < 0.25) PIERS.push([bx * 8 + 4.6, N + SHORE_N * 8 - 9, bx * 8 + 5.4, N + SHORE_N * 8 + 5]);
 }
-const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => worldReady ? x >= x0 && x < x1 && y >= y0 && y < y1 : worldCoord(x - x0) < x1 - x0 && worldCoord(y - y0) < y1 - y0) || onFootbridge(x, y) || onCauseway(x, y);
-const seaAt = (wx, wy) => { if (worldReady) return archipelagoEdge(wx,wy) <= 0; const y = worldCoord(wy); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy) && !onAirport(wx, wy); };
+function onPier(x, y) {
+  // Ground shading calls this for thousands of cells. Index the rectangles directly:
+  // destructuring in a some() callback creates an iterator for every candidate pier.
+  if (worldReady) {
+    for (let n = 0; n < PIERS.length; n++) {
+      const p = PIERS[n];
+      if (x >= p[0] && x < p[2] && y >= p[1] && y < p[3]) return true;
+    }
+  } else {
+    for (let n = 0; n < PIERS.length; n++) {
+      const p = PIERS[n];
+      if (worldCoord(x - p[0]) < p[2] - p[0] && worldCoord(y - p[1]) < p[3] - p[1]) return true;
+    }
+  }
+  return onFootbridge(x, y) || onCauseway(x, y);
+}
+const seaAt = (wx, wy) => {
+  // Only membership is needed here, rather than the exact distance to every coast.
+  if (worldReady) return !onIsland(wx, wy) && !onAirport(wx, wy) &&
+    !CITY_ISLANDS.some(island => cityIslandEdge(wx, wy, island) > 0) && !wildIslandAt(wx, wy);
+  const y = worldCoord(wy);
+  return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy) && !onAirport(wx, wy);
+};
 // ---- the Botanical Gardens: a walled garden over three blocks by two (the streets inside it are gone). In garden
 // coordinates gx, gy (cells from its north-west inside corner): a lake to the east with a jetty for the swan boats,
 // the glass conservatory to the north-west, the aviary to the south-west, enclosures, winding gravel paths between.
@@ -11399,7 +11429,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       soft = true; base = BRICK; k = 1.3;
       ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';
     } else if (seaAt(wx, wy)) { // open water: drifting waves; reflect() mirrors the skyline into it
-      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = isleEdge(wx, wy) > -0.3; // white water round the island
+      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = onIsland(wx, wy, .3); // white water round the island
       set(i, surf ? '~' : n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', surf ? C(WHITE, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
       if(worldReady&&wx>=465) {
@@ -22291,7 +22321,11 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
       const r0 = Math.max(0, Math.floor(Math.min(project(t0), project(t1))));
       const r1 = Math.min(rows, Math.ceil(Math.max(project(t0), project(t1))));
       for (let r = r0; r < r1; r++) {
-        const t = (base - eye) / ((hor - r - .5) / projY - along), i = r * cols + column;
+        const i = r * cols + column;
+        // DDA visits near triangles first. A nearer surface already owns this cell,
+        // so no intersection or shading is needed for the triangle behind it.
+        if (ZB[i] >= 0 && ZB[i] <= t0 - 1e-7) continue;
+        const t = (base - eye) / ((hor - r - .5) / projY - along);
         if (!Number.isFinite(t) || t < t0 - 1e-7 || t > t1 + 1e-7 || (ZB[i] >= 0 && ZB[i] <= t)) continue;
         const x = px + rx * t, y = py + ry * t;
         terrainCell(i, x, y, t, sx, sy);

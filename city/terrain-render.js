@@ -30,7 +30,11 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
       const r0 = Math.max(0, Math.floor(Math.min(project(t0), project(t1))));
       const r1 = Math.min(rows, Math.ceil(Math.max(project(t0), project(t1))));
       for (let r = r0; r < r1; r++) {
-        const t = (base - eye) / ((hor - r - .5) / projY - along), i = r * cols + column;
+        const i = r * cols + column;
+        // DDA visits near triangles first. A nearer surface already owns this cell,
+        // so no intersection or shading is needed for the triangle behind it.
+        if (ZB[i] >= 0 && ZB[i] <= t0 - 1e-7) continue;
+        const t = (base - eye) / ((hor - r - .5) / projY - along);
         if (!Number.isFinite(t) || t < t0 - 1e-7 || t > t1 + 1e-7 || (ZB[i] >= 0 && ZB[i] <= t)) continue;
         const x = px + rx * t, y = py + ry * t;
         terrainCell(i, x, y, t, sx, sy);

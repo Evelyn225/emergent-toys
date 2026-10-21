@@ -572,7 +572,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       soft = true; base = BRICK; k = 1.3;
       ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';
     } else if (seaAt(wx, wy)) { // open water: drifting waves; reflect() mirrors the skyline into it
-      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = isleEdge(wx, wy) > -0.3; // white water round the island
+      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = onIsland(wx, wy, .3); // white water round the island
       set(i, surf ? '~' : n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', surf ? C(WHITE, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
       if(worldReady&&wx>=465) {
