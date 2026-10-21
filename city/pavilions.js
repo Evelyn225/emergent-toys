@@ -69,7 +69,8 @@ for (const gh of GLASSHOUSES) {
         hl,hw,z0,z1,kind,{ c: f.side ? 1 : 0,s: f.side ? 0 : 1,b,f,...extra });
       detail(center,.035,half,.075,b.h - .065,b.h + .025,'eave');
       if (!f.front) continue;
-      detail(center,.035,half - .1,.055,.33,.405,'shopboard');
+      // Above the awning's sightline from pavement height, including its front lip.
+      detail(center,.035,half - .1,.055,.39,.465,'shopboard');
       const awning = detail(center,.12,half - .12,.19,.285,.325,'awning');
       if (region === 'shotengai' && p.timber) awning.kind = 'eave';
       // One blade sign per storefront, placed at its edge, instead of a neon sign repeated in every bay.

@@ -51,10 +51,21 @@ function architectureFaces(b, cells, faceIndex = ARCH_FACES) {
     }
   }
   const ground = [...faces.values()].filter(f => !f.low);
+  // A corner shop can address more than one street. Keep its primary entrance,
+  // but identify every street frontage for lettering (not internal courtyards).
+  for (const f of ground) {
+    f.street = false;
+    for (let along = f.start + .5; along < f.end; along++) {
+      const x = (f.side ? along : f.line) + f.nx * .1;
+      const y = (f.side ? f.line : along) + f.ny * .1;
+      if (ROAD[idx(Math.floor(x), Math.floor(y))]) { f.street = true; break; }
+    }
+  }
   ground.sort((a, c) => (c.end - c.start + (c.ny < 0 ? 3 : 0)) - (a.end - a.start + (a.ny < 0 ? 3 : 0)));
   if (ground[0]) ground[0].front = true;
   return [...faces.values()];
 }
+const architectureSignedFace = (f, sh) => f.front || f.street && sh.kind !== SHOP_APTS;
 function architectureDetail(b, f, along, depth, hl, hw, z0, z1, kind, extra = {}) {
   const ownerCell = idx(Math.floor((f.side ? along : f.line) - f.nx * 0.1), Math.floor((f.side ? f.line : along) - f.ny * 0.1));
   const o = { x: (f.side ? along : f.line) + f.nx * depth, y: (f.side ? f.line : along) + f.ny * depth,

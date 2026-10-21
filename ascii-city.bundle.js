@@ -2919,10 +2919,21 @@ function architectureFaces(b, cells, faceIndex = ARCH_FACES) {
     }
   }
   const ground = [...faces.values()].filter(f => !f.low);
+  // A corner shop can address more than one street. Keep its primary entrance,
+  // but identify every street frontage for lettering (not internal courtyards).
+  for (const f of ground) {
+    f.street = false;
+    for (let along = f.start + .5; along < f.end; along++) {
+      const x = (f.side ? along : f.line) + f.nx * .1;
+      const y = (f.side ? f.line : along) + f.ny * .1;
+      if (ROAD[idx(Math.floor(x), Math.floor(y))]) { f.street = true; break; }
+    }
+  }
   ground.sort((a, c) => (c.end - c.start + (c.ny < 0 ? 3 : 0)) - (a.end - a.start + (a.ny < 0 ? 3 : 0)));
   if (ground[0]) ground[0].front = true;
   return [...faces.values()];
 }
+const architectureSignedFace = (f, sh) => f.front || f.street && sh.kind !== SHOP_APTS;
 function architectureDetail(b, f, along, depth, hl, hw, z0, z1, kind, extra = {}) {
   const ownerCell = idx(Math.floor((f.side ? along : f.line) - f.nx * 0.1), Math.floor((f.side ? f.line : along) - f.ny * 0.1));
   const o = { x: (f.side ? along : f.line) + f.nx * depth, y: (f.side ? f.line : along) + f.ny * depth,
@@ -3325,7 +3336,8 @@ for (const gh of GLASSHOUSES) {
         hl,hw,z0,z1,kind,{ c: f.side ? 1 : 0,s: f.side ? 0 : 1,b,f,...extra });
       detail(center,.035,half,.075,b.h - .065,b.h + .025,'eave');
       if (!f.front) continue;
-      detail(center,.035,half - .1,.055,.33,.405,'shopboard');
+      // Above the awning's sightline from pavement height, including its front lip.
+      detail(center,.035,half - .1,.055,.39,.465,'shopboard');
       const awning = detail(center,.12,half - .12,.19,.285,.325,'awning');
       if (region === 'shotengai' && p.timber) awning.kind = 'eave';
       // One blade sign per storefront, placed at its edge, instead of a neon sign repeated in every bay.
@@ -10812,7 +10824,9 @@ const oneCell = (off, step) => { const k = off / step + 0.0137; return k >= -0.5
 // text painted on a wall: centered on wall coordinate u0 at height z0, one cell per letter however close you are.
 // Returns false when (u, z) is outside the text, so the caller draws the wall there instead.
 function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE) {
-  if (Math.abs(z - z0) > bandH / 2) return false;
+  // Even a sub-cell band must reach the row containing its centre. Otherwise
+  // narrow storefront lettering can vanish entirely as the player walks away.
+  if (Math.abs(z - z0) > bandH / 2 && !oneCell(z - z0, d / projY)) return false;
   const q = (u - u0) / cwid + text.length / 2, p = Math.floor(q);
   if (p < 0 || p >= text.length) return false;
   if (wallTextBig(u, uStep, d, u0, cwid, bandH, text.length)) { // close enough: every letter drawn large in blocks
@@ -12354,7 +12368,7 @@ function brownstoneFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (b.h - z < 0.12 || Math.abs(z - 0.44) < 0.025) return set(i, '=', C(stone ? WHITE : STONE, L));
   if (z < 0.42) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 10) : L * 0.5;
-    if (f.front && z > 0.375 && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), 0.39,
+    if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + (f.end - f.start) / 2), 0.39,
       Math.min(0.07, (f.end - f.start - 0.25) / sh.word.length), 0.038, C(STONE, signLight), C(base, 2))) return;
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     if (f.front && sh.kind === SHOP_APTS) {
@@ -12396,7 +12410,7 @@ function downtownFacade(i, u, uStep, z, d, wc, along, b, f, sh, L) {
   if (corner < 0.06) return set(i, '|', C(stone ? base : GRAY, L));
   if (z < 0.4) {
     const signLight = openAt(sh, tod) ? Math.max(L, night * 14) : L * 0.5;
-    if (f.front && z > 0.32 && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), 0.36,
+    if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + width / 2), 0.36,
       Math.min(0.085, (width - 0.3) / sh.word.length), 0.055, C(sh.neon, signLight), C(GRAY, 1))) return;
     if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
     const lobby = f.front && Math.abs(along - width / 2) < Math.min(0.7, width * 0.25);
@@ -12485,7 +12499,7 @@ function drawArchitecture() {
 const MIDTOWN_MATERIALS = [STONE, GRAY, SKIN, WHITE, STONE];
 function housingGroundFacade(i, u, uStep, z, d, wc, along, b, f, sh, L, wall, trim) {
   const width = f.end - f.start, center = width / 2, open = openAt(sh, tod);
-  if (f.front && z > .335 && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), .38,
+  if (z > .28 && architectureSignedFace(f, sh) && wallText(i, u, uStep, z, d, sh.word, (Math.sign(u * wc) || 1) * (f.start + center), .38,
     Math.min(.067, (width - .3) / sh.word.length), .043, C(trim, open ? Math.max(L, night * 10) : L * .5), C(wall, 2))) return;
   if (architectureLeaseSign(i, u, uStep, z, d, wc, f, sh, L)) return;
   const doorHalf = Math.min(.23, width * .17), door = Math.abs(along - center);
@@ -12724,14 +12738,12 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (Math.min(along,width - along) < .08 || h - z < .07) {
     set(i,h - z < .07 ? '=' : '|',C(p.trim,L)); return true;
   }
+  if (z > .28 && z < .49 && architectureSignedFace(f, sh)) {
+    const sg = Math.sign(u * wc) || 1, zc = f.front ? .4275 : .365;
+    if (wallText(i,u,uStep,z,d,sh.word,sg * (f.start + width / 2),zc,
+      Math.min(.095,(width - .35) / Math.max(1,sh.word.length)),.055,C(japan ? WHITE : YEL,Math.max(L,open ? night * 13 : 0)),C(p.trim,2))) return true;
+  }
   if (z < .43) {
-    if (z > .33 && f.front) {
-      const sg = Math.sign(u * wc) || 1;
-      set(i,' ',0);
-      wallText(i,u,uStep,z,d,sh.word,sg * (f.start + width / 2),.365,
-        Math.min(.095,(width - .35) / Math.max(1,sh.word.length)),.055,C(japan ? WHITE : YEL,Math.max(L,open ? night * 13 : 0)),C(p.trim,2));
-      return true;
-    }
     if (architectureLeaseSign(i,u,uStep,z,d,wc,f,sh,L)) return true;
     const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
     if (f.front && Math.abs(door) < doorHalf + .012 && z < .27) { // the way in: down to the pavement, under the awning
@@ -12817,8 +12829,10 @@ function pavilionDetailShade(o, i, t, L) {
   if (o.kind === 'shopboard' && face <= 4) {
     const along = face === 3 || face === 2 ? HIT.u : -HIT.u;
     if (face <= 2) { set(i,'|',C(YEL,L)); return true; }
-    const word = o.b.sh.word, letterW = Math.min(.1,(o.hl * 2 - .12) / word.length), hz = (.39 - z) / .05;
-    const ch = signLine(word,along / letterW + word.length / 2,hz,i,.365,midDepth(...R(o.x,o.y)),t,letterW,.05,farDepth(...R(o.x,o.y),o.hl),...faceDir(o.c,o.s));
+    const word = o.b.sh.word, letterW = Math.min(.1,(o.hl * 2 - .12) / word.length), zc = (o.z0 + o.z1) / 2;
+    const hz = (zc + .025 - z) / .05, normal = face === 3 ? 1 : -1;
+    const [vx, vy] = R(o.x - o.s * o.hw * normal,o.y + o.c * o.hw * normal);
+    const ch = signLine(word,along / letterW + word.length / 2,hz,i,zc,midDepth(vx,vy),t,letterW,.05,farDepth(vx,vy,o.hl),...faceDir(o.c,o.s));
     set(i,ch ?? ' ',C(o.b.region === 'chinatown' ? YEL : WHITE,Math.max(L,openAt(o.b.sh,tod) ? night * 13 : 0))); return true;
   }
   if (o.kind === 'blade') {
