@@ -126,6 +126,7 @@ function enterRoom(kind, extra, spawn) {
 }
 function interact() {
   if (islandBuildingUse()) return;
+  if (streetSceneUse()) return;
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
   if(courierUse())return;
   if (workshopUse()) return;

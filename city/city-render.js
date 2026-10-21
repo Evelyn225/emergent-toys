@@ -136,6 +136,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const ah = arcadeRoofHit(z,side,mx,my,wc); // the Shotengai canopy occludes the painted wall behind it
   if (ah) return arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]));
   if (backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc)) return; // (a stretch of blank wall down a lane: backrooms.js)
+  if (windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc)) return;
   baseFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   graffitiCell(i,u,uStep,z,h,d,side,mx,my,fog,wc);
 }
@@ -656,6 +657,7 @@ function floorBaseCell(i, r, x, rx, ry) {
     if (s > 0 && on >= 0) BG[i] = C(on, 1 + s * 3.5);
   }
   set(i, ch, col);
+  streetChalkCell(i,wx,wy,L);
 }
 
 // the lighthouse: its lamp turns once every BEAM_P seconds, two beams back to back, lit from dusk to dawn (and in fog)
@@ -750,8 +752,11 @@ function disc(az, el, body, halo, rad, craters) {
   const ra = mod(az - a + Math.PI, 2 * Math.PI) - Math.PI;
   if (Math.abs(ra) > FOV) return;
   const c0 = cols / 2 + Math.tan(ra) * projX, r0 = hor - Math.tan(el) * projY, R = rad * 2.2;
-  for (let r = Math.floor(r0 - R); r <= r0 + R; r++) for (let c = Math.floor(c0 - R * 2); c <= c0 + R * 2; c++) {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+  // Near a side-on sun tan(ra) can exceed integer precision: c++ would never
+  // advance. Clip to the screen before iterating, including at sunset/sunrise.
+  const left=Math.max(0,Math.floor(c0-R*2)),right=Math.min(cols-1,Math.ceil(c0+R*2));
+  const top=Math.max(0,Math.floor(r0-R)),bottom=Math.min(rows-1,Math.ceil(r0+R));
+  for (let r = top; r <= bottom; r++) for (let c = left; c <= right; c++) {
     const i = r * cols + c, q = Math.hypot((c - c0) * cw / FS, r - r0);
     if (ZB[i] !== Infinity || q > R) continue;
     if (q <= rad) { BG[i] = body; set(i, craters && hash(c - (c0 | 0), r - (r0 | 0), 8) > 0.75 ? 'o' : ' ', C(GRAY, 9)); }

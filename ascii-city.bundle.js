@@ -396,6 +396,73 @@ function env(dt) {
   litT = 0.62 + 0.33 * day; // fewer lit windows by day
   if (mode === 'room') { amb = (room.light ?? room.def.light) + flash() * 0.1; vis = 40; } // (a shop broken into at night is dark) // a flicker through the windows
 }
+// Small authored street stories. Coordinates are chosen on the finished city;
+// time and saved state drive them even when the player is elsewhere.
+const STREET_SCENES = { railway: null, chalk: null, moving: null, boxes: [] };
+const streetSceneState = { chalkDay: -1, wash: 0, lampWeek: -1, demoUntil: -1 };
+const movingWeek = () => Math.floor(dayNum / 7);
+const movingPhase = () => !STREET_SCENES.moving || mod(dayNum, 7) !== 4 ? 'quiet' : tod < 9 ? 'quiet' : tod < 17 ? 'loading' : 'leftovers';
+function chalkProgress() {
+  return clamp((tod - 9) / 7, 0, 1);
+}
+const chalkWash = () => streetSceneState.chalkDay === dayNum ? streetSceneState.wash : 0;
+function stepStreetScenes(dt) {
+  if (streetSceneState.chalkDay !== dayNum) {
+    streetSceneState.chalkDay = dayNum;
+    streetSceneState.wash = 0;
+  }
+  if (tod >= 9) streetSceneState.wash = clamp(streetSceneState.wash + Math.max(0, rain - .12) * dt / 45, 0, 1);
+}
+function loadStreetScenes(raw) {
+  streetSceneState.chalkDay = Number.isInteger(raw?.chalkDay) ? raw.chalkDay : dayNum;
+  streetSceneState.wash = clamp(Number(raw?.wash) || 0, 0, 1);
+  streetSceneState.lampWeek = Number.isInteger(raw?.lampWeek) ? raw.lampWeek : -1;
+  streetSceneState.demoUntil = -1;
+}
+function streetSceneBoxActive(o) {
+  const phase = movingPhase();
+  return o.leftover ? phase === 'leftovers' && streetSceneState.lampWeek !== movingWeek() : phase === 'loading';
+}
+function streetSceneHeight(x, y) {
+  const site = STREET_SCENES.moving;
+  if (!site || Math.abs(x-site.x)>2 || Math.abs(y-site.y)>2) return 0;
+  let height = 0;
+  for (const o of STREET_SCENES.boxes) if (streetSceneBoxActive(o) && architectureContains(o,x,y)) height = Math.max(height,o.z1);
+  return height;
+}
+function streetSceneBlocked(x,y,pad=.03,z=0) {
+  const site=STREET_SCENES.moving;
+  if(!site||Math.abs(x-site.x)>2||Math.abs(y-site.y)>2)return false;
+  return STREET_SCENES.boxes.some(o=>streetSceneBoxActive(o)&&z<o.z1&&z+.17>o.z0&&architectureContains(o,x,y,pad));
+}
+function streetSceneCarClear(x,y,hx,hy,hl,hw) {
+  const site=STREET_SCENES.moving;
+  if(!site||Math.abs(x-site.x)>3||Math.abs(y-site.y)>3)return true;
+  const box={x,y,c:hx,s:hy,hl,hw,z0:0,z1:.25};
+  return !STREET_SCENES.boxes.some(o=>streetSceneBoxActive(o)&&streetBoxesOverlap(box,o,0));
+}
+function railwayClock() {
+  // A short station stop each lap; the button runs an after-hours demonstration.
+  const running = tod >= 8 && tod < 22 || T < streetSceneState.demoUntil;
+  const cycle = mod(T,24), travel = cycle < 3 ? 0 : (cycle-3)/21;
+  return { running, stopped: !running || cycle < 3, angle: running ? travel*TAU : 0 };
+}
+function railwayPoint(angle) {
+  const u=.255*Math.cos(angle),v=.23+.105*Math.sin(angle);
+  const rise = v < .23 ? .018 * terrainEase(clamp((.105-Math.abs(u))/.045,0,1)) : 0;
+  return {x:u,y:v,z:.078+rise,c:-.255*Math.sin(angle),s:.105*Math.cos(angle)};
+}
+// Equal arc distances keep the coaches coupled around both ends of the oval.
+const RAILWAY_ARC = new Float64Array(257);
+for(let k=1;k<RAILWAY_ARC.length;k++) {
+  const a=(k-1)/256*Math.PI*2,b=k/256*Math.PI*2;
+  RAILWAY_ARC[k]=RAILWAY_ARC[k-1]+Math.hypot(.255*(Math.cos(b)-Math.cos(a)),.105*(Math.sin(b)-Math.sin(a)));
+}
+function railwayAtDistance(distance) {
+  const at=mod(distance,RAILWAY_ARC[256]);let lo=0,hi=256;
+  while(hi-lo>1){const mid=(lo+hi)>>1;if(RAILWAY_ARC[mid]<at)lo=mid;else hi=mid;}
+  return railwayPoint((lo+(at-RAILWAY_ARC[lo])/(RAILWAY_ARC[hi]-RAILWAY_ARC[lo]))/256*TAU);
+}
 // Moderate loss of tyre grip follows lingering wetness and accumulated, exposed snow.
 function roadTraction(x, y) {
   const water = clamp(Math.max(wet, rain * 0.65), 0, 1);
@@ -3506,7 +3573,7 @@ function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
     const qx = mx + 0.5 - x, qy = my + 0.5 - y;
     if (Math.abs(qx) < ex + 0.5 && Math.abs(qy) < ey + 0.5 && Math.abs(qx * hx + qy * hy) < hl + diagonal && Math.abs(-qx * hy + qy * hx) < hw + diagonal) return false;
   }
-  return architectureCarClear(x, y, hx, hy, hl, hw) && landmarkCarClear(x, y, hx, hy, hl, hw) && gasCarClear(x, y, hx, hy, hl, hw);
+  return architectureCarClear(x, y, hx, hy, hl, hw) && landmarkCarClear(x, y, hx, hy, hl, hw) && gasCarClear(x, y, hx, hy, hl, hw) && streetSceneCarClear(x,y,hx,hy,hl,hw);
 }
 // A short local route around buildings for a cruiser in close pursuit. The wider street network still handles
 // dispatch from far away; nearby cruisers can leave their lane, reverse and intercept rather than circling a block.
@@ -3890,7 +3957,7 @@ function stepTraffic(dt, t, everywhere = false) {
     else if (taxi) offTarget = taxiLaneTarget(c, line);
     else if (overtake) offTarget = -0.8;
     else if (passing) offTarget = -0.34;
-    const oldX = c.ex, oldY = c.ey;
+    const oldX = c.ex, oldY = c.ey, oldOff = c.off;
     const sway = c.rush ? 1.6 : 0.6; // (a rushing cab swings out and back smartly)
     if (taxi) {
       const lateralSpeed = Math.min(0.4, c.v * 0.3 + 0.08), error = offTarget - c.off;
@@ -3916,6 +3983,13 @@ function stepTraffic(dt, t, everywhere = false) {
     c.brake = target < c.v;
     c.v = Math.min(target, c.v + (c.kind === 'police' ? COP_CAR_ACCEL : code(c) || c.rush ? 1.4 : 0.8) * dt);
     const d = c.v * dt, step = Math.min(d, c.left);
+    const nextX=vert?c.x:worldCoord(c.x+dir*step),nextY=vert?worldCoord(c.y+dir*step):c.y;
+    if(!streetSceneCarClear(nextX+c.hy*c.off,nextY-c.hx*c.off,c.hx,c.hy,...carFootprint(c))) {
+      // A hailed cab may try to pull into the moving van's kerb space. Keep
+      // its previous offset; if forward motion is blocked too, wait for room.
+      c.off=oldOff;c.offV=0;
+      if(!streetSceneCarClear(nextX+c.hy*c.off,nextY-c.hx*c.off,c.hx,c.hy,...carFootprint(c))){c.v=0;continue;}
+    }
     if (vert) c.y = worldCoord(c.y + dir * step); else c.x = worldCoord(c.x + dir * step);
     c.left -= step;
     if (c.rider) c.fare += step;
@@ -4289,7 +4363,7 @@ const stallSpeed = T_ => T_.vr * 0.85;
 // the top of whatever's built at (x, y), from the ground up: a building's roof, the el's deck, the airport's
 // buildings, a bridge tower; 0 on the ground. Given the height z something's at, a hangar it's inside is just its floor
 function builtHeight(x, y, z = Infinity) {
-  let h = Math.max(map[idx(Math.floor(x),Math.floor(y))] || 0, terrainHeight(x, y), islandRoofHeight(x,y), islandSightHeight(x,y), roadBridgeBuiltHeight(x,y,z), policeRoofHeight(x, y), airportHeight(x, y, z));
+  let h = Math.max(map[idx(Math.floor(x),Math.floor(y))] || 0, terrainHeight(x, y), islandRoofHeight(x,y), islandSightHeight(x,y), streetSceneHeight(x,y), roadBridgeBuiltHeight(x,y,z), policeRoofHeight(x, y), airportHeight(x, y, z));
   for (const t of towers) if (Math.abs(rel(x - t.x)) < 0.4 && Math.abs(rel(y - t.y)) < 0.25) h = Math.max(h, TOWER_H);
   return h;
 }
@@ -5804,6 +5878,7 @@ const ITEMS = {
   boombox: { name: 'boombox', price: 45, kind: 'gear' }, umbrella: { name: 'umbrella', price: 12, kind: 'gear' },
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
   vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
+  movinglamp: { name: 'moving-day table lamp', price: 0, kind: 'gear' },
   // property (property.js): not carried, owned
   car_hatch: { name: 'old hatchback', price: 450, kind: 'car' }, car_sedan: { name: 'sedan', price: 1500, kind: 'car' },
   car_sports: { name: 'sports car', price: 4000, kind: 'car' },
@@ -6129,6 +6204,7 @@ function useHeld(near) {
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), 'squeak'];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
+    case 'movinglamp': return ['You straighten the amber shade. There is a little chip in the base, and a handwritten label: "Still works. New place has no room."',null];
     case 'yoyo': yoyo.out = !yoyo.out; if (yoyo.out) yoyo.aimX = yoyo.aimY = 0; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Move the mouse to steer and reel it in or out.' : 'You reel it back in.', 'whirr'];
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something
@@ -9844,7 +9920,7 @@ function traceShot(x, y, z, hx, hy, slope) {
       }
       end = hi; what = 'ground'; break;
     }
-    if (Math.max(map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))],islandRoofHeight(x+hx*d,y+hy*d),islandSightHeight(x+hx*d,y+hy*d)) > zz) { end = d; what = 'wall'; break; }
+    if (Math.max(map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))],islandRoofHeight(x+hx*d,y+hy*d),islandSightHeight(x+hx*d,y+hy*d),streetSceneHeight(x+hx*d,y+hy*d)) > zz) { end = d; what = 'wall'; break; }
   }
   let best = null;
   const closer = d => d > 0 && d < (best ? best.d : end);
@@ -10629,7 +10705,7 @@ function findMapRoute(start,goal,world=MAP_WORLD,passable=mapWalkableCell) {
 }
 function mapWalkableCell(x,y) {
   const p=mapRoutePoint(x,y);
-  return inWorldGrid(x,y)&&!map[idx(x,y)]&&!isWater(p.x,p.y)&&!architectureBlocked(p.x,p.y)&&!landmarkBlocked(p.x,p.y)&&!islandSightBlocked(p.x,p.y,terrainHeight(p.x,p.y));
+  return inWorldGrid(x,y)&&!map[idx(x,y)]&&!isWater(p.x,p.y)&&!architectureBlocked(p.x,p.y)&&!landmarkBlocked(p.x,p.y)&&!streetSceneBlocked(p.x,p.y)&&!islandSightBlocked(p.x,p.y,terrainHeight(p.x,p.y));
 }
 function mapRoutePoint(x,y) {
   if(worldReady&&x===Math.floor(FOOTBRIDGE.x)&&onFootbridge(FOOTBRIDGE.x,y+.5))return {x:FOOTBRIDGE.x,y:y+.5};
@@ -11151,6 +11227,7 @@ function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const ah = arcadeRoofHit(z,side,mx,my,wc); // the Shotengai canopy occludes the painted wall behind it
   if (ah) return arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]));
   if (backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc)) return; // (a stretch of blank wall down a lane: backrooms.js)
+  if (windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc)) return;
   baseFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   graffitiCell(i,u,uStep,z,h,d,side,mx,my,fog,wc);
 }
@@ -11671,6 +11748,7 @@ function floorBaseCell(i, r, x, rx, ry) {
     if (s > 0 && on >= 0) BG[i] = C(on, 1 + s * 3.5);
   }
   set(i, ch, col);
+  streetChalkCell(i,wx,wy,L);
 }
 
 // the lighthouse: its lamp turns once every BEAM_P seconds, two beams back to back, lit from dusk to dawn (and in fog)
@@ -11765,8 +11843,11 @@ function disc(az, el, body, halo, rad, craters) {
   const ra = mod(az - a + Math.PI, 2 * Math.PI) - Math.PI;
   if (Math.abs(ra) > FOV) return;
   const c0 = cols / 2 + Math.tan(ra) * projX, r0 = hor - Math.tan(el) * projY, R = rad * 2.2;
-  for (let r = Math.floor(r0 - R); r <= r0 + R; r++) for (let c = Math.floor(c0 - R * 2); c <= c0 + R * 2; c++) {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+  // Near a side-on sun tan(ra) can exceed integer precision: c++ would never
+  // advance. Clip to the screen before iterating, including at sunset/sunrise.
+  const left=Math.max(0,Math.floor(c0-R*2)),right=Math.min(cols-1,Math.ceil(c0+R*2));
+  const top=Math.max(0,Math.floor(r0-R)),bottom=Math.min(rows-1,Math.ceil(r0+R));
+  for (let r = top; r <= bottom; r++) for (let c = left; c <= right; c++) {
     const i = r * cols + c, q = Math.hypot((c - c0) * cw / FS, r - r0);
     if (ZB[i] !== Infinity || q > R) continue;
     if (q <= rad) { BG[i] = body; set(i, craters && hash(c - (c0 | 0), r - (r0 | 0), 8) > 0.75 ? 'o' : ' ', C(GRAY, 9)); }
@@ -12996,6 +13077,7 @@ function citySprites() {
   drawArchitecture();
   drawLandmarks();
   drawPavilions();
+  drawStreetScenes();
   drawHomeBalconies();
   drawSkater(); // you, on the board, seen from behind (skate.js)
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
@@ -23050,6 +23132,7 @@ const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px 
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
   const islandPrompt=islandBuildingPrompt();if(islandPrompt)return islandPrompt;
+  const scenePrompt=streetScenePrompt();if(scenePrompt)return scenePrompt;
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return ''; // (up the el stairs: nothing at street level is in reach)
   const deliveryPrompt=courierPrompt();if(deliveryPrompt)return deliveryPrompt;
   const workshopLine = workshopPrompt(); if (workshopLine) return workshopLine;
@@ -23448,6 +23531,7 @@ function enterRoom(kind, extra, spawn) {
 }
 function interact() {
   if (islandBuildingUse()) return;
+  if (streetSceneUse()) return;
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
   if(courierUse())return;
   if (workshopUse()) return;
@@ -26136,6 +26220,13 @@ function mapDirectory() {
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note,status:'Boat landing on west shore'});
   if(worldReady)for(const sight of ISLAND_SIGHTS)add({...sight,category:'activities',kind:'sight',description:sight.text,status:'Outdoor sight · free'});
+  for(const [kind,site] of Object.entries(STREET_SCENES))if(site&&kind!=='boxes') {
+    const along=kind==='moving'?(movingPhase()==='leftovers'?.46:-.35):0;
+    const p=kind==='chalk'?{x:site.x,y:site.y+1.1}:scenePoint(site,along,kind==='moving'?.28:.22);
+    add({id:`street-scene:${kind}`,name:site.name||'Moving day',...p,category:'activities',kind:'sight',
+      description:kind==='railway'?'A working miniature behind a toy shop window: station, river bridge and hillside tunnel. Press the brass button for a demonstration.':kind==='chalk'?'Stand on the white footprints to see a chalk whale carrying a golden skyline. Drawing starts at nine, develops through the afternoon, and washes away in rain.':'Friday moving day, 9am to 5pm. A van, boxes and an uncooperative sofa; a free lamp is left after five.',
+      status:kind==='moving'?(movingPhase()==='loading'?'Moving today':movingPhase()==='leftovers'?'Van has left':'Quiet today'):'Outdoor sight · free'});
+  }
   for(const h of owned.homes) {
     const point=h.door||buyerDoor(h)||[h.cell%N+.5,Math.floor(h.cell/N)+.5];
     add({id:cityHomeId(h),name:`Your ${ITEMS[h.kind].name}`,x:point[0],y:point[1],category:'homes',kind:'home',home:h,
@@ -32604,6 +32695,348 @@ function assembleArchipelago() {
 }
 let CITY_LAYOUT_CHECKPOINT=null;
 assembleArchipelago();
+// The display is raycast in the window's own coordinates, behind its pane.
+// Static miniature pieces are cached; only the three short train cars move.
+const RAILWAY_MODELS=[], RAILWAY_TRAIN=[], RAILWAY_ENGINE=[], RAILWAY_PIECES=[];
+const SCENE_LOOKS = {
+  mover:figLook({hair:'short',hat:'cap',top:'jacket',col:{top:[BLUE,8],hat:[YEL,13],skin:[SKIN,12]}}),
+  neighbor:figLook({hair:'bun',top:'long',col:{top:[GREEN,8],skin:[BRICK,11]}}),
+  artist:figLook({hair:'pony',top:'long',col:{top:[MAG,8],skin:[SKIN,12]}}),
+};
+FIG_POSES.carry = f => ({...FIG_POSES.walk(f),arms:[[.8,.25,1.5,.2],[.8,.25,1.5,.2]],lean:.08});
+function scenePoint(site,u,v) {
+  return {x:site.x+site.c*u+site.nx*v,y:site.y+site.s*u+site.ny*v};
+}
+function sceneFace(b,f,along=(f.start+f.end)/2) {
+  return {x:f.side?along:f.line,y:f.side?f.line:along,c:f.side?1:0,s:f.side?0:1,nx:f.nx,ny:f.ny,f,b};
+}
+function sceneSiteClear(site,width,depth) {
+  for(let u=-width;u<=width;u+=.1)for(let v=.04;v<=depth;v+=.08) {
+    const p=scenePoint(site,u,v);
+    if(map[idx(p.x,p.y)]||isWater(p.x,p.y)||terrainHeight(p.x,p.y)>.005||streetGeometryCollision({x:p.x,y:p.y,c:1,s:0,hl:.025,hw:.025,z0:0,z1:.27}))return false;
+    if(lamps.some(l=>near(l.x,l.y,p.x,p.y)<.09)||trees.some(t=>near(t.x,t.y,p.x,p.y)<.13)||machines.some(m=>near(m.x,m.y,p.x,p.y)<.13))return false;
+  }
+  return true;
+}
+function buildStreetScenes() {
+  // Use a toy shop's actual street window without renaming it or moving its door.
+  for(const word of ['TOYS','RECORDS','HARDWARE']) {
+    for(const b of ARCH_BUILDINGS.filter(b=>b.sh.word===word&&b.sh.kind!==SHOP_SHUT&&['midtown','downtown'].includes(b.region))) {
+      for(const f of b.faces.filter(f=>!f.low&&f.street&&f.end-f.start>=2)) {
+        const site=sceneFace(b,f,f.start+(f.end-f.start)*.72);
+        if(!sceneSiteClear(site,.43,.35))continue;
+        Object.assign(site,{half:.36,z0:.055,z1:.305,depth:.43,name:'Little Loop window railway'});
+        STREET_SCENES.railway=site;break;
+      }
+      if(STREET_SCENES.railway)break;
+    }
+    if(STREET_SCENES.railway)break;
+  }
+  for(const b of ARCH_BUILDINGS.filter(b=>b.region==='brownstones'&&b.sh.kind===SHOP_APTS)) {
+    const f=b.faces.find(f=>f.front&&f.street&&f.end-f.start>=3);if(!f)continue;
+    const site=sceneFace(b,f,f.start+.75);
+    if(!sceneSiteClear(site,1,.6))continue;
+    STREET_SCENES.moving=site;break;
+  }
+  for(let by=2;by<NB-2&&!STREET_SCENES.chalk;by++)for(let bx=2;bx<NB-2;bx++) {
+    if(blockKind(bx,by)!=='plaza')continue;
+    const x=bx*8+3.5,y=by*8+3.6;
+    const clear=[[-.7,-.5],[.7,-.5],[-.7,.5],[.7,.5],[0,0]].every(([u,v])=>!map[idx(x+u,y+v)]&&!isWater(x+u,y+v)&&terrainHeight(x+u,y+v)<.005&&!solidAt(x+u,y+v,.05));
+    if(clear){STREET_SCENES.chalk={x,y,half:.66,depth:.75,name:'The pavement artist'};break;}
+  }
+  buildRailwayModels();buildMovingModels();
+}
+function miniBox(x,y,hl,hw,z0,z1,base,kind='wall') {
+  const o={x,y,hl,hw,z0,z1,c:1,s:0,base,kind};
+  if(kind==='roof'||kind==='hill'&&z0>.1)o.planeData=roofPlaneData(landmarkPlanes(hl,hw,z0,z1,kind==='roof'?'crossgable':'hip'));
+  RAILWAY_MODELS.push(o);return o;
+}
+function buildRailwayModels() {
+  if(!STREET_SCENES.railway)return;
+  // A station on the inside of the oval, a little town, and a hillside tunnel.
+  miniBox(-.145,.184,.07,.022,.078,.083,STONE,'platform');
+  miniBox(-.15,.215,.046,.022,.083,.125,WARM,'station');
+  miniBox(-.15,.215,.053,.03,.125,.143,RED,'roof');
+  miniBox(-.21,.215,.012,.02,.078,.147,STONE,'clock');
+  for(const [x,y,h,base]of [[.13,.25,.05,BRICK],[.21,.25,.07,STONE],[.12,.31,.085,WARM]]) {
+    miniBox(x,y,.025,.02,.078,.078+h,base,'house');
+    miniBox(x,y,.031,.025,.078+h,.092+h,RED,'roof');
+  }
+  // A genuinely open tunnel: the train vanishes beneath the hill and emerges
+  // through its other portal, instead of being painted on top of the scenery.
+  miniBox(0,.32,.067,.057,.122,.169,GREEN,'hill');
+  miniBox(0,.278,.067,.013,.078,.122,GREEN,'hill');
+  // Portals leave the track through their middle, with a lintel above it.
+  for(const x of [-.075,.075]) {
+    for(const y of [.302,.359])miniBox(x,y,.008,.008,.078,.127,GRAY,'portal');
+    miniBox(x,.33,.008,.036,.117,.133,GRAY,'portal');
+  }
+  for(const x of [-.05,.05])miniBox(x,.124,.007,.026,.062,.095,BRICK,'pier');
+  miniBox(0,.125,.071,.021,.091,.096,STONE,'bridge');
+  for(const v of [.104,.146])miniBox(0,v,.075,.003,.096,.11,GRAY,'railing');
+  for(const [x,y,h]of [[-.28,.31,.05],[.28,.32,.07],[-.3,.12,.05],[.3,.17,.05],[.02,.24,.055]]) {
+    miniBox(x,y,.003,.003,.078,.078+h,BRICK,'trunk');
+    miniBox(x,y,.015,.012,.098,.078+h+.012,GREEN,'tree');
+  }
+  for(let k=0;k<3;k++)RAILWAY_TRAIN.push({x:0,y:0,hl:k?.026:.03,hw:.012,z0:.078,z1:.102,c:1,s:0,base:k?WARM:RED,kind:k?'coach':'engine'});
+  for(const [offset,hl,hw,z0,z1,base,kind]of [[-.018,.012,.014,.018,.039,RED,'engine'],[.018,.006,.006,.025,.047,GRAY,'chimney']])
+    RAILWAY_ENGINE.push({x:0,y:0,offset,hl,hw,z0,z1,dz0:z0,dz1:z1,c:1,s:0,base,kind});
+  RAILWAY_PIECES.push(...RAILWAY_MODELS,...RAILWAY_TRAIN,...RAILWAY_ENGINE);
+}
+let railwayFrame=-1,railwayRunning=null,railwayDistance=0;
+function updateWindowTrain() {
+  const running=tod>=8&&tod<22||T<streetSceneState.demoUntil;
+  if(railwayFrame===T&&railwayRunning===running)return;
+  railwayFrame=T;railwayRunning=running;
+  const clock=railwayClock();
+  railwayDistance=clock.angle/TAU*RAILWAY_ARC[256]+RAILWAY_ARC[167];
+  for(let k=0;k<RAILWAY_TRAIN.length;k++) {
+    const p=railwayAtDistance(railwayDistance-k*.063),o=RAILWAY_TRAIN[k],len=Math.hypot(p.c,p.s);
+    Object.assign(o,{x:p.x,y:p.y,z0:p.z,z1:p.z+.025,c:p.c/len,s:p.s/len});
+  }
+  const e=RAILWAY_TRAIN[0];
+  for(const o of RAILWAY_ENGINE)Object.assign(o,{x:e.x+e.c*o.offset,y:e.y+e.s*o.offset,c:e.c,s:e.s,z0:e.z0+o.dz0,z1:e.z0+o.dz1});
+}
+function windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
+  const site=STREET_SCENES.railway;
+  if(!site||SHOP[idx(mx,my)]!==site.b.sh||side!==site.f.side||z<site.z0-.01||z>site.z1+.04)return false;
+  const dir=side?(py<my?0:1):(px<mx?2:3);
+  if(dir!==site.f.dir||Math.abs(wc-(side?site.x:site.y))>site.half+.012)return false;
+  const along=wc-(side?site.x:site.y),edge=site.half-Math.abs(along);
+  if(Math.hypot(along-site.half+.022,z-.087)<.009) {
+    BG[i]=C(YEL,7);set(i,'o',C(YEL,15));return true;
+  }
+  if(z>site.z1+.01) {
+    const text='LITTLE LOOP / PUSH TO RUN',center=(Math.sign(u*wc)||1)*(side?site.x:site.y);
+    if(wallText(i,u,uStep,z,d,text,center,.326,.022,.019,C(YEL,13),C(GREEN,2)))return true;
+    return false;
+  }
+  if(edge<.009||z<site.z0+.01||z>site.z1-.01) {
+    BG[i]=C(GREEN,3);set(i,z<site.z0+.01||z>site.z1-.01?'=':'|',C(YEL,10));return true;
+  }
+  updateWindowTrain();
+  const normal=WH.dn,du=(along-((px-site.x)*site.c+(py-site.y)*site.s))/normal,dz=(z-eye)/normal;
+  let distance=site.depth,base=BLUE,ch=' ',level=6;
+  let hitU=along+du*distance,hitZ=z+dz*distance;
+  // Painted dusk backdrop and distant hills stay behind the solid model.
+  if(hitZ<.15+.025*Math.cos(hitU*23)){base=BLUE;ch='^';level=8;}
+  if(Math.hypot((hitU+.12)/.1,(hitZ-.225)/.012)<1){base=WHITE;ch=' ';level=6;}
+  if(Math.abs(du)>1e-8) {
+    const wall=(Math.sign(du)*site.half-along)/du;
+    if(wall>0&&wall<distance){distance=wall;base=GREEN;ch='|';level=4;}
+  }
+  const ceiling=(site.z1-.01-z)/dz;
+  if(ceiling>0&&ceiling<distance){distance=ceiling;base=WARM;ch='=';level=4;}
+  const table=(.078-z)/dz;
+  if(table>0&&table<distance&&Math.abs(along+du*table)<site.half) {
+    distance=table;const x=along+du*table,y=table;
+    const river=Math.abs(x-.015*Math.sin(y*40))<.038;
+    base=river?CYAN:GREEN;ch=river?(fract(y*110+T*.3)<.25?'~':' '):'.';level=river?10:5;
+    const q=Math.hypot(x/.255,(y-.23)/.105),rail=Math.abs(q-1);
+    if(rail<.07){base=rail<.022?YEL:BRICK;ch=rail<.022?'=':'#';level=rail<.022?13:7;}
+    // A lighter gravel apron connects the station with the tiny houses.
+    if(y>.21&&y<.285&&x>-.08&&x<.09){base=STONE;ch='.';level=7;}
+  }
+  let nearest=null,face=0,hu=0,hv=0,hz=0;
+  for(const o of RAILWAY_PIECES) {
+    const t=o.planeData?rayMansard(along,0,z,du,1,dz,o):rayBox(along,0,z,du,1,dz,o);
+    if(t>0&&t<distance){distance=t;nearest=o;face=HIT.face;hu=HIT.u;hv=HIT.v;hz=HIT.w;}
+  }
+  if(nearest) {
+    const o=nearest; base=o.base;level=face===5?12:face===3||face===4?9:7;ch=face===5?'_':' ';
+    if(o.kind==='roof'){ch=face===5?'=':'/';level=10;}
+    else if(o.kind==='tree'||o.kind==='hill'){ch=o.kind==='tree'?'%':':';level=face===5?10:5;}
+    else if(o.kind==='portal'){ch=face===5?'_':'|';level=10;}
+    else if(o.kind==='railing'){ch='=';level=11;}
+    else if(o.kind==='station'||o.kind==='house') {
+      if(face!==5&&hz>o.z0+.012&&hz<o.z1-.01&&Math.abs(fract(hu*120)-.5)<.27){base=YEL;ch='#';level=13;}
+    } else if(o.kind==='clock'){ch=face===5?'_':hz>.124?'o':'|';level=13;}
+    else if(o.kind==='coach'||o.kind==='engine') {
+      const top=face===5,window=hz>o.z0+.009&&hz<o.z1-.004;
+      if(top){base=GRAY;ch='_';level=10;}
+      else if(window&&o.kind==='coach'){base=CYAN;ch=Math.abs(fract(hu*140)-.5)<.32?'#':'|';level=14;}
+      else {ch=hz<o.z0+.005?'o':' ';level=12;}
+      if(o.kind==='engine'&&face===1){base=YEL;ch='O';level=15;}
+    }
+  }
+  // A restrained pane reflection, leaving the train's silhouette and colours clear.
+  if(z>.19&&fract(along*3+z*1.6)<.007&&d<1.2&&!nearest){base=CYAN;ch='/';level=5;}
+  BG[i]=C(base,Math.max(2,level*.33));set(i,ch,C(base,level));return true;
+}
+function movingBox(site,u,v,hl,hw,z0,z1,kind,base,leftover=false) {
+  if(['van','cab','wheel','van-door'].includes(kind))u+=.5;
+  const p=scenePoint(site,u,v),o={...p,c:site.c,s:site.s,hl,hw,z0,z1,kind,base,leftover};
+  STREET_SCENES.boxes.push(o);return o;
+}
+function buildMovingModels() {
+  const s=STREET_SCENES.moving;if(!s)return;
+  // Kerb-side van and open cargo doors, with a clear strip of pavement beside it.
+  movingBox(s,.05,.4,.29,.08,0,.24,'van',WHITE);
+  movingBox(s,-.29,.4,.05,.08,0,.14,'cab',BLUE);
+  for(const u of [-.28,.21])for(const v of [.325,.475])movingBox(s,u,v,.038,.009,0,.06,'wheel',GRAY);
+  movingBox(s,.345,.325,.055,.007,.025,.23,'van-door',WHITE);
+  movingBox(s,.345,.475,.055,.007,.025,.23,'van-door',WHITE);
+  for(const [u,v,h]of [[-.43,.07,.09],[-.33,.07,.14],[.45,.07,.07],[.48,.14,.05]])movingBox(s,u,v,.045,.04,0,h,'box',WARM);
+  movingBox(s,.03,.08,.135,.055,.02,.055,'sofa',GREEN);
+  movingBox(s,.03,.035,.135,.018,.055,.115,'sofa',GREEN);
+  for(const u of [-.12,.18])movingBox(s,u,.08,.02,.055,.02,.09,'sofa',GREEN);
+  // A discarded lamp remains after the van leaves; it can be kept as a souvenir.
+  movingBox(s,.46,.09,.03,.025,0,.012,'lamp-base',GRAY,true);
+  movingBox(s,.46,.09,.005,.005,.012,.11,'lamp-stem',YEL,true);
+  movingBox(s,.46,.09,.04,.035,.11,.16,'lamp-shade',ORANGE,true);
+}
+function movingShade(o,i,t,L) {
+  const top=HIT.face===5,z=HIT.w;
+  let base=o.base,ch=top?'_':' ',light=Math.max(4,L);
+  if(o.kind==='wheel'){ch='@';light=3;}
+  else if(o.kind==='box'){ch=Math.abs(HIT.u)<.009?'|':Math.abs(z-o.z1*.5)<.005?'-':top?'=':' ';}
+  else if(o.kind==='sofa'){ch=top?'_':Math.abs(fract(HIT.u*25)-.5)<.06?'|':' ';}
+  else if(o.kind==='van'&&HIT.face===1){base=GRAY;ch=' ';light=1;}
+  else if(o.kind==='cab'&&!top&&z>.08){base=CYAN;ch='/';light=8;}
+  else if(o.kind==='van'&&!top&&z>.09&&z<.19){base=BLUE;ch=' ';light=8;}
+  if(o.kind==='van'&&(HIT.face===3||HIT.face===4)) {
+    const along=HIT.face===3?HIT.u:-HIT.u,[vx,vy]=R(o.x,o.y);
+    const letter=signLine('TWO TRIPS',along/.041+4.5,(.185-z)/.04,i,.165,midDepth(vx,vy),t,.041,.04,farDepth(vx,vy,o.hl),...faceDir(o.c,o.s));
+    if(letter&&letter!==' '){ch=letter;base=WHITE;light=14;}
+  }
+  else if(o.kind==='lamp-stem')ch='|';
+  BG[i]=C(base,light*.32);set(i,ch,C(base,light));
+  if(top)paintSettledSnow(i,o.x+HIT.u*o.c-HIT.v*o.s,o.y+HIT.u*o.s+HIT.v*o.c,L,.75,0,z);
+  return true;
+}
+function drawStreetScenes() {
+  const m=STREET_SCENES.moving;
+  if(m&&near(px,py,m.x,m.y)<vis) {
+    for(const o of STREET_SCENES.boxes)if(streetSceneBoxActive(o)) {
+      const [x,y]=R(o.x,o.y);drawBox({...o,x,y},(i,t,L)=>movingShade(o,i,t,L));
+    }
+    if(movingPhase()==='loading') {
+      const shift=.34*Math.sin(T*.18),p=scenePoint(m,shift,.22),heading=Math.cos(T*.18)>0?1:-1;
+      drawFigure(...R(p.x,p.y),0,.175,m.c*heading,m.s*heading,SCENE_LOOKS.mover,'carry'+(Math.floor(T*4)%8));
+      const carried={x:p.x+m.c*heading*.025,y:p.y+m.s*heading*.025,c:m.c,s:m.s,hl:.028,hw:.025,z0:.07,z1:.115,base:WARM,kind:'box'};
+      const [vx,vy]=R(carried.x,carried.y);drawBox({...carried,x:vx,y:vy},(i,t,L)=>movingShade(carried,i,t,L));
+      const q=scenePoint(m,-.35,.18);
+      drawFigure(...R(q.x,q.y),0,.17,m.nx,m.ny,SCENE_LOOKS.neighbor,'fold');
+    }
+  }
+  const c=STREET_SCENES.chalk;
+  if(c&&tod>=9&&tod<17&&rain<.2&&snow<.2&&snowCover<.15&&chalkWash()<.65&&near(px,py,c.x,c.y)<vis) {
+    const x=c.x+.6,y=c.y+.55;
+    drawFigure(...R(x,y),terrainHeight(x,y),.17,-.6,-.8,SCENE_LOOKS.artist,fract(T*.12)<.8?'crouch':'stand');
+    drawArt(...R(x+.1,y),.005,.045,.04,[' ___ ','|===|','|___|'],()=>C(MAG,10));
+  }
+}
+// A cached pavement stencil, rather than repeated screen letters stretched over
+// the floor. Each brush stroke remembers when the artist adds it to the picture.
+const CHALK_W=160,CHALK_H=100,CHALK_INK=new Uint8Array(CHALK_W*CHALK_H),CHALK_ORDER=new Float32Array(CHALK_W*CHALK_H);
+function chalkStroke(points,base,order,width=.012) {
+  for(let k=1;k<points.length;k++) {
+    const [ax,ay]=points[k-1],[bx,by]=points[k],len=Math.hypot(bx-ax,by-ay),steps=Math.max(1,Math.ceil(len*200));
+    for(let n=0;n<=steps;n++) {
+      const x=ax+(bx-ax)*n/steps,y=ay+(by-ay)*n/steps;
+      for(let gy=Math.max(0,Math.floor((y-width)*CHALK_H));gy<=Math.min(CHALK_H-1,Math.ceil((y+width)*CHALK_H));gy++)
+        for(let gx=Math.max(0,Math.floor((x-width)*CHALK_W));gx<=Math.min(CHALK_W-1,Math.ceil((x+width)*CHALK_W));gx++)
+          if(Math.hypot((gx+.5)/CHALK_W-x,(gy+.5)/CHALK_H-y)<width) {
+            const i=gy*CHALK_W+gx;CHALK_INK[i]=base;CHALK_ORDER[i]=order+(k-1+n/steps)/points.length*.09;
+          }
+    }
+  }
+}
+function buildChalkPicture() {
+  chalkStroke([[.69,.41],[.57,.35],[.31,.35],[.16,.4],[.09,.48],[.08,.59],[.14,.7],[.28,.75],[.51,.75],[.64,.69],[.7,.57]],CYAN,.03,.014);
+  chalkStroke([[.64,.69],[.76,.72],[.9,.63],[.87,.43],[.8,.54],[.7,.57]],CYAN,.22,.014);
+  chalkStroke([[.3,.69],[.34,.82],[.44,.79],[.48,.73]],BLUE,.29,.013);
+  chalkStroke([[.57,.48],[.585,.48]],WHITE,.36,.014);
+  chalkStroke([[.6,.59],[.56,.63],[.47,.65]],CYAN,.39,.01);
+  // Four little towers sit on the whale's broad back.
+  for(const [x,h]of [[.25,.1],[.33,.19],[.43,.14],[.52,.23]]) {
+    chalkStroke([[x,.35],[x,.35-h],[x+.055,.35-h],[x+.055,.35]],YEL,.45+(x-.25)*.5,.01);
+    for(let y=.35-h+.035;y<.33;y+=.045)chalkStroke([[x+.025,y],[x+.031,y]],YEL,.65,.007);
+  }
+  for(const [x,y]of [[.16,.22],[.65,.15],[.75,.29]]) {
+    chalkStroke([[x-.018,y],[x+.018,y]],WHITE,.78,.007);
+    chalkStroke([[x,y-.024],[x,y+.024]],WHITE,.78,.007);
+  }
+  for(const x of [.12,.56,.8])chalkStroke([[x,.83],[x+.025,.815],[x+.05,.83],[x+.075,.815]],BLUE,.83,.008);
+  const text='THE CITY SAILS',scale=.025;
+  for(let k=0;k<text.length;k++)for(let y=0;y<5;y++)for(let x=0;x<3;x++)if(glyphOn(text[k],x,y)) {
+    const x0=Math.floor((.29+k*scale+x*scale/4)*CHALK_W),y0=Math.floor((.91+y*.009)*CHALK_H);
+    for(let gy=y0;gy<=y0+1&&gy<CHALK_H;gy++)for(let gx=x0;gx<=x0+1&&gx<CHALK_W;gx++) {
+      const i=gy*CHALK_W+gx;CHALK_INK[i]=MAG;CHALK_ORDER[i]=.9+k*.004;
+    }
+  }
+}
+buildChalkPicture();
+function streetChalkCell(i,wx,wy,L) {
+  const c=STREET_SCENES.chalk;if(!c||snowCover>.15||Math.abs(wx-c.x)>c.half)return false;
+  // White footprints mark the artist's intended viewpoint. The long, tapered
+  // pavement drawing resolves into the whale and skyline when viewed here.
+  if(Math.abs(wy-c.y-1.08)<.045&&Math.min(Math.abs(wx-c.x-.028),Math.abs(wx-c.x+.028))<.013) {
+    BG[i]=C(WHITE,3);set(i,':',C(WHITE,Math.max(5,L)));FL[i]=1;return true;
+  }
+  if(Math.abs(wy-c.y)>c.depth)return false;
+  const wash=chalkWash(),progress=chalkProgress();let base=0,count=0;
+  const depth=ZB[i],row=Math.floor(i/cols),r=row-hor+.5;
+  // Sample the ground footprint of this character, so thin strokes survive a
+  // normal standing view instead of falling between rows of the floor texture.
+  for(const oy of [-.3,0,.3])for(const ox of [-.3,0,.3]) {
+    const ratio=r/(r+oy),xw=px+(wx-px)*ratio-dy*depth/projX*ox,yw=py+(wy-py)*ratio+dx*depth/projX*ox;
+    const fromView=c.y+1.1-yw;
+    if(fromView<.43||fromView>1.8)continue;
+    const x=Math.floor((.5+(xw-c.x)/(fromView*.6))*CHALK_W);
+    const y=Math.floor((.17/fromView-.17/1.8)/(.17/.43-.17/1.8)*CHALK_H);
+    if(x<0||y<0||x>=CHALK_W||y>=CHALK_H)continue;
+    const at=y*CHALK_W+x,ink=CHALK_INK[at];
+    if(!ink||CHALK_ORDER[at]>progress||hash(x,y,2011)<wash)continue;
+    base=ink;count++;
+  }
+  if(!count)return false;
+  BG[i]=C(base,(2+count*.35)*(1-wash*.7));
+  set(i,count>3?':':'.',C(base,Math.max(3,L*(1.4-wash*.8))));FL[i]=1;return true;
+}
+function streetSceneNear() {
+  if(mode!=='walk'||body.z>.15||freecam)return null;
+  const r=STREET_SCENES.railway;
+  if(r) {
+    const p=scenePoint(r,0,.17);
+    if(near(px,py,p.x,p.y)<.34)return 'railway';
+  }
+  const m=STREET_SCENES.moving;
+  if(m&&movingPhase()==='loading') {
+    const person=scenePoint(m,-.35,.18),vx=person.x-px,vy=person.y-py,distance=Math.hypot(vx,vy);
+    if(distance<.24&&(distance<.05||(Math.cos(a)*vx+Math.sin(a)*vy)/distance>.5))return 'moving';
+  }
+  if(m&&movingPhase()==='leftovers'&&streetSceneState.lampWeek!==movingWeek()) {
+    const lamp=scenePoint(m,.46,.09);
+    if(near(px,py,lamp.x,lamp.y)<.24)return 'moving';
+  }
+  const c=STREET_SCENES.chalk;
+  if(c&&near(px,py,c.x,c.y)<1.25)return 'chalk';
+  return null;
+}
+function streetScenePrompt() {
+  const which=streetSceneNear();
+  if(which==='railway')return 'E: press the window railway button';
+  if(which==='moving')return movingPhase()==='loading'?'E: talk to the movers':streetSceneState.lampWeek===movingWeek()?'Moving day is over. The pavement is clear.':'E: take the free lamp';
+  if(which==='chalk')return 'E: look at the chalk drawing';
+  return '';
+}
+DROPPED_ART.movinglamp=()=>[['   ___   ','  /   \\  ',' /_____\\ ','    |    ','    |    ','  __|__  '],(ch,row)=>C(row<3?ORANGE:GRAY,12)];
+function streetSceneUse() {
+  const which=streetSceneNear();if(!which)return false;
+  if(which==='railway') {
+    streetSceneState.demoUntil=T+48;
+    say('You press the brass button. The Little Loop starts its demonstration: a red engine, two coaches, a river bridge and the hillside tunnel. A hand-lettered card says: "Built here. Please enjoy the view."',7);
+  } else if(which==='moving') {
+    if(movingPhase()==='loading')say(fract(T*.05)<.5?'"It fitted through the old door," the mover says. "We measured everything except the new one."':'"Books in the small boxes, pillows in the big ones. Wish we had remembered that this morning."',6);
+    else if(streetSceneState.lampWeek!==movingWeek()) {
+      if(inv.length>=INV_SIZE){say('Your bag is full. The lamp can wait.');return true;}
+      carryItem({id:'movinglamp',uses:0},false);streetSceneState.lampWeek=movingWeek();saveGame();say('FREE TO A GOOD HOME. You take the little amber table lamp. It will fit on your display shelf.',5);
+    } else say('The van has gone. Just a rectangle of clean pavement where the boxes stood.',4);
+  } else say(snowCover>.15?'Snow covers the artist\'s patch of paving. The chalk box is packed away.':chalkWash()>.65?'Rain has almost erased the whale and its impossible city. A few blue chalk lines linger between the paving stones.':tod<9?'Clean paving. The artist usually starts around nine.':chalkProgress()<.5?'A chalk whale is taking shape. The artist taps a blue stick against the paving. "Come back later. It is taking the whole city for a ride. Stand on the white footprints for the best view."':'THE CITY SAILS. Stand on the white footprints: the stretched chalk lines resolve into a turquoise whale carrying a tiny golden skyline. From the side, the city tumbles back into streaks of chalk.',6);
+  return true;
+}
+buildStreetScenes();
 // ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
 // your cars and boats are), how hungry, thirsty and hurt you are, the city time, and the last spot you stood on the
 // street, kept in localStorage every few seconds and when you leave. Not saved: the police (you start each visit clean).
@@ -32640,6 +33073,7 @@ function saveGame() {
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
     drugContacts,
+    streetScenes: {chalkDay:streetSceneState.chalkDay,wash:streetSceneState.wash,lampWeek:streetSceneState.lampWeek},
     waypoint:mapWaypoint,
     journey:saveCityJourney(),
     homes: savedCityHomes(), cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
@@ -32665,6 +33099,7 @@ function loadGame() {
   const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses, ...(Number.isFinite(it.kg) ? { kg: it.kg } : {}), ...(DISH_EAT[it.q] ? { q: it.q } : {}), ...(ITEMS[it.of] ? { of: it.of } : {}) }); } };
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
+  loadStreetScenes(d.streetScenes);
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   fishLog.caught = d.fish?.caught | 0; fishLog.best = d.fish?.best && ITEMS[d.fish.best.id] && Number.isFinite(d.fish.best.kg) ? { id: d.fish.best.id, kg: d.fish.best.kg } : null;
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
@@ -32875,7 +33310,7 @@ const free = (x, y) => {
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
-    !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
+    !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && !streetSceneBlocked(x,y,.03,walkGround(px,py)+body.z/10) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : 0.05;
@@ -33051,6 +33486,7 @@ function loop(t) {
   stepTask(dt);
   stepLaundry();
   stepEvents(dt);
+  stepStreetScenes(dt);
   stepGardens(dt);
   stepHaze(dt);
   stepPee(dt);
@@ -33205,7 +33641,7 @@ function keyDown(code) { onkeydown({ code, repeat: false }); }
 function keyUp(code) { onkeyup({ code }); }
 
 // the big button's label: what E does here, as a word or two (from the prompt line, so it always agrees with it)
-const E_WORDS = [[/^knock/, 'Knock'], [/^read/, 'Read'], [/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
+const E_WORDS = [[/^press the window railway/, 'Run train'], [/^look at the chalk/, 'Look'], [/^take the free lamp/, 'Take lamp'], [/^knock/, 'Knock'], [/^read/, 'Read'], [/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
   [/^get off/, 'Get off'], [/^board/, 'Board'], [/^pick up/, 'Pick up'], [/^buy/, 'Buy'], [/^(shop|bait)/, 'Shop'], [/^cook/, 'Cook'], [/^play/, 'Play'],
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],

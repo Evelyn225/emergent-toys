@@ -50,6 +50,13 @@ function mapDirectory() {
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note,status:'Boat landing on west shore'});
   if(worldReady)for(const sight of ISLAND_SIGHTS)add({...sight,category:'activities',kind:'sight',description:sight.text,status:'Outdoor sight · free'});
+  for(const [kind,site] of Object.entries(STREET_SCENES))if(site&&kind!=='boxes') {
+    const along=kind==='moving'?(movingPhase()==='leftovers'?.46:-.35):0;
+    const p=kind==='chalk'?{x:site.x,y:site.y+1.1}:scenePoint(site,along,kind==='moving'?.28:.22);
+    add({id:`street-scene:${kind}`,name:site.name||'Moving day',...p,category:'activities',kind:'sight',
+      description:kind==='railway'?'A working miniature behind a toy shop window: station, river bridge and hillside tunnel. Press the brass button for a demonstration.':kind==='chalk'?'Stand on the white footprints to see a chalk whale carrying a golden skyline. Drawing starts at nine, develops through the afternoon, and washes away in rain.':'Friday moving day, 9am to 5pm. A van, boxes and an uncooperative sofa; a free lamp is left after five.',
+      status:kind==='moving'?(movingPhase()==='loading'?'Moving today':movingPhase()==='leftovers'?'Van has left':'Quiet today'):'Outdoor sight · free'});
+  }
   for(const h of owned.homes) {
     const point=h.door||buyerDoor(h)||[h.cell%N+.5,Math.floor(h.cell/N)+.5];
     add({id:cityHomeId(h),name:`Your ${ITEMS[h.kind].name}`,x:point[0],y:point[1],category:'homes',kind:'home',home:h,

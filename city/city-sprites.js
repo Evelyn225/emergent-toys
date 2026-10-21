@@ -127,6 +127,7 @@ function citySprites() {
   drawArchitecture();
   drawLandmarks();
   drawPavilions();
+  drawStreetScenes();
   drawHomeBalconies();
   drawSkater(); // you, on the board, seen from behind (skate.js)
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });

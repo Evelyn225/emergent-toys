@@ -132,7 +132,7 @@ function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
     const qx = mx + 0.5 - x, qy = my + 0.5 - y;
     if (Math.abs(qx) < ex + 0.5 && Math.abs(qy) < ey + 0.5 && Math.abs(qx * hx + qy * hy) < hl + diagonal && Math.abs(-qx * hy + qy * hx) < hw + diagonal) return false;
   }
-  return architectureCarClear(x, y, hx, hy, hl, hw) && landmarkCarClear(x, y, hx, hy, hl, hw) && gasCarClear(x, y, hx, hy, hl, hw);
+  return architectureCarClear(x, y, hx, hy, hl, hw) && landmarkCarClear(x, y, hx, hy, hl, hw) && gasCarClear(x, y, hx, hy, hl, hw) && streetSceneCarClear(x,y,hx,hy,hl,hw);
 }
 // A short local route around buildings for a cruiser in close pursuit. The wider street network still handles
 // dispatch from far away; nearby cruisers can leave their lane, reverse and intercept rather than circling a block.
@@ -516,7 +516,7 @@ function stepTraffic(dt, t, everywhere = false) {
     else if (taxi) offTarget = taxiLaneTarget(c, line);
     else if (overtake) offTarget = -0.8;
     else if (passing) offTarget = -0.34;
-    const oldX = c.ex, oldY = c.ey;
+    const oldX = c.ex, oldY = c.ey, oldOff = c.off;
     const sway = c.rush ? 1.6 : 0.6; // (a rushing cab swings out and back smartly)
     if (taxi) {
       const lateralSpeed = Math.min(0.4, c.v * 0.3 + 0.08), error = offTarget - c.off;
@@ -542,6 +542,13 @@ function stepTraffic(dt, t, everywhere = false) {
     c.brake = target < c.v;
     c.v = Math.min(target, c.v + (c.kind === 'police' ? COP_CAR_ACCEL : code(c) || c.rush ? 1.4 : 0.8) * dt);
     const d = c.v * dt, step = Math.min(d, c.left);
+    const nextX=vert?c.x:worldCoord(c.x+dir*step),nextY=vert?worldCoord(c.y+dir*step):c.y;
+    if(!streetSceneCarClear(nextX+c.hy*c.off,nextY-c.hx*c.off,c.hx,c.hy,...carFootprint(c))) {
+      // A hailed cab may try to pull into the moving van's kerb space. Keep
+      // its previous offset; if forward motion is blocked too, wait for room.
+      c.off=oldOff;c.offV=0;
+      if(!streetSceneCarClear(nextX+c.hy*c.off,nextY-c.hx*c.off,c.hx,c.hy,...carFootprint(c))){c.v=0;continue;}
+    }
     if (vert) c.y = worldCoord(c.y + dir * step); else c.x = worldCoord(c.x + dir * step);
     c.left -= step;
     if (c.rider) c.fare += step;

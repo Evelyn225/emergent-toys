@@ -38,6 +38,7 @@ const ITEMS = {
   boombox: { name: 'boombox', price: 45, kind: 'gear' }, umbrella: { name: 'umbrella', price: 12, kind: 'gear' },
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
   vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
+  movinglamp: { name: 'moving-day table lamp', price: 0, kind: 'gear' },
   // property (property.js): not carried, owned
   car_hatch: { name: 'old hatchback', price: 450, kind: 'car' }, car_sedan: { name: 'sedan', price: 1500, kind: 'car' },
   car_sports: { name: 'sports car', price: 4000, kind: 'car' },
@@ -363,6 +364,7 @@ function useHeld(near) {
     case 'plushbear': return [pick(['You give the bear a hug. Nobody saw.', 'The bear has one ear slightly bigger than the other. You love it.']), null];
     case 'sharkplush': return [pick(['You make the plush shark do the Jaws music. Dun dun. Dun dun.', 'You give the plush shark a squeeze. It squeaks.', 'The plush shark stares back with its little felt eyes.', 'You check the tag. It says made in Sweden.']), 'squeak'];
     case 'snowglobe': return [pick(['You shake the snow globe. Glitter swirls round a tiny clownfish.', 'Snow, underwater. It makes no sense and you love it.']), null];
+    case 'movinglamp': return ['You straighten the amber shade. There is a little chip in the base, and a handwritten label: "Still works. New place has no room."',null];
     case 'yoyo': yoyo.out = !yoyo.out; if (yoyo.out) yoyo.aimX = yoyo.aimY = 0; fx.yoyo = 1; return [yoyo.out ? 'You let the yo-yo drop. Move the mouse to steer and reel it in or out.' : 'You reel it back in.', 'whirr'];
     case 'harmonica':
       if (near.person) { // a little busking: they stop to listen, and might drop you something

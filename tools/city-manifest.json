@@ -5,6 +5,7 @@
     "city/world-bridges.js",
     "city/desktop-release.js",
     "city/state.js",
+    "city/street-scenes.js",
     "city/movement.js",
     "city/needs.js",
     "city/art.js",
@@ -122,6 +123,7 @@
     "city/islands-render.js",
     "city/island-sights.js",
     "city/world-bootstrap.js",
+    "city/street-scenes-render.js",
     "city/save.js",
     "city/main.js",
     "city/touch.js"
