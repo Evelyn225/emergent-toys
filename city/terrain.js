@@ -100,6 +100,9 @@ function buildTerrain() {
   }
   for (const o of solids) if (o.z0 <= 0) pad(o.x, o.y, o.hl, o.hw, o.c, o.s);
   for (const o of [...benches, ...lamps, ...extras, ...ANGLERS]) pad(o.x, o.y, .15, .15);
+  // The narrow deck falls between terrain vertices. Clearing its full footprint
+  // prevents neighbouring hillside triangles from painting grass over the boards.
+  pad(FOOTBRIDGE.x,(FOOTBRIDGE.y0+FOOTBRIDGE.y1)/2,FOOTBRIDGE.hw,(FOOTBRIDGE.y1-FOOTBRIDGE.y0)/2);
   for (const [x0, y0, x1, y1] of PIERS) pad((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2);
   const active = [];
   for (let gy = 0; gy < Math.min(TERRAIN_N, 512*TERRAIN_SCALE); gy++) for (let gx = 0; gx < Math.min(TERRAIN_N, (worldReady ? CITY_LAYOUT.chartWidth : N)*TERRAIN_SCALE); gx++) {

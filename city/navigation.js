@@ -44,7 +44,7 @@ function findMapRoute(start,goal,world=MAP_WORLD,passable=mapWalkableCell) {
 }
 function mapWalkableCell(x,y) {
   const p=mapRoutePoint(x,y);
-  return inWorldGrid(x,y)&&!map[idx(x,y)]&&!isWater(p.x,p.y)&&!architectureBlocked(p.x,p.y)&&!landmarkBlocked(p.x,p.y);
+  return inWorldGrid(x,y)&&!map[idx(x,y)]&&!isWater(p.x,p.y)&&!architectureBlocked(p.x,p.y)&&!landmarkBlocked(p.x,p.y)&&!islandSightBlocked(p.x,p.y,terrainHeight(p.x,p.y));
 }
 function mapRoutePoint(x,y) {
   if(worldReady&&x===Math.floor(FOOTBRIDGE.x)&&onFootbridge(FOOTBRIDGE.x,y+.5))return {x:FOOTBRIDGE.x,y:y+.5};

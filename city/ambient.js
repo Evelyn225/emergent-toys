@@ -91,6 +91,6 @@ function drawPigeons() {
       if (t > 0.9) b.dx += b.dir * 0.004 * (1 / 60);
     }
     if (!f.scared && b.dir < 0) art = art.map(l => [...l].reverse().join('').replace(/>/g, '<'));
-    drawArt(vx, vy, b.z || 0, f.scared ? 0.022 : 0.03, f.scared ? 0.007 : 0.028, art, (c, row, L) => c === '>' || c === '<' ? C(ORANGE, Math.max(L, 6)) : row === 1 && c === 'o' ? C(WHITE, Math.max(L, 8)) : C(GRAY, Math.max(L, 6)));
+    drawArt(vx, vy, terrainHeight(f.x+b.dx,f.y+b.dy)+(b.z||0), f.scared ? 0.022 : 0.03, f.scared ? 0.007 : 0.028, art, (c, row, L) => c === '>' || c === '<' ? C(ORANGE, Math.max(L, 6)) : row === 1 && c === 'o' ? C(WHITE, Math.max(L, 8)) : C(GRAY, Math.max(L, 6)));
   }
 }

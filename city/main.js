@@ -142,9 +142,9 @@ const free = (x, y) => {
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
   if (mode === 'walk') { const st = elStairStep(px, py, x, y, elPass); if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))]; } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
-  if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
+  if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
-    !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
+    !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : 0.05;

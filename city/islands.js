@@ -24,8 +24,36 @@ const FERN_TRAILS = [
   [[521.5,235.5],[536,238],[536,248],[540.5,248],[540.5,247.2]],
   [[536,238],[545,230],[551,224],[555,222]],
   [[545,230],[565,240],[590,243],[615,236],[628,215],[627,197]],
+  [[521.5,235.5],[525.5,236.2],[528,237.5]],
+  [[590,243],[597,247],[603,250]],
 ];
+const ISLAND_PATHS = {
+  cabin: [[[478.5,395.5],[484,395.5],[488.5,394],[492,394],[492,392.2]]],
+  wood: [[[775.5,247.5],[781,247.5],[786,244],[791,243],[791,241.2]]],
+  rock: [[[689.5,354.5],[695,354.5],[698,353.5]]],
+  sand: [[[699.5,110.5],[705,111],[712,113],[719,115]]],
+};
+const ISLAND_SIGHTS = [
+  {id:'fern-camp',island:'fern',name:'Fern woodland camp',x:527.8,y:237.5,text:'A little canvas camp above the landing. The board asks visitors to use the existing fire ring and leave no trace.'},
+  {id:'fern-lookout',island:'fern',name:'Fern Ridge Lookout',x:603,y:250,text:'FERN RIDGE LOOKOUT. An old survey cairn marks the woodland ridge. The brass telescope points north between the trees towards the rough airstrip. Someone has left a smooth white stone on the cairn.'},
+  {id:'cabin-nets',island:'cabin',name:'Cabin Cove drying racks',x:489,y:394.8,text:'Hand-mended fishing nets dry in the sea breeze. A note on the rack: "Shelter unlocked. Logbook inside. Good luck out there."'},
+  {id:'cormorant-roost',island:'rock',name:'Cormorant roost',x:698,y:353.5,text:'Two weathered stacks rise above the tide. Cormorants spread their wings to dry; pale streaks mark the ledges. Keep a respectful distance from the roost.'},
+  {id:'crescent-pools',island:'sand',name:'Crescent tide pools',x:719,y:115,text:'Small tide pools gleam between the sand and the inlet. Shells, ribbons of seaweed and tiny shore birds gather at their edges.'},
+  {id:'juniper-garden',island:'wood',name:'Juniper sea garden',x:787,y:243.5,text:'A sheltered garden of flowers and wind-bent juniper. The washing moves on its line. The house is private; the shoreline path is open to visitors.'},
+];
+const ISLAND_OBSTACLES = [];
+function islandSightHeight(x,y) {
+  if(!worldReady||x<465)return 0;
+  let top=0;
+  for(const o of ISLAND_OBSTACLES)top=Math.max(top,landmarkSurfaceHeight(o,x,y));
+  return top;
+}
+function islandSightBlocked(x,y,z=0,pad=.03) {
+  if(!worldReady||x<465)return false;
+  return ISLAND_OBSTACLES.some(o=>z<o.z1&&z+.17>o.z0&&Math.abs(x-o.x)<o.hl+pad&&Math.abs(y-o.y)<o.hw+pad);
+}
 const WILD_FIELDS=new Map();
+const WILD_PATH_FIELDS=new Map();
 let fernTrailField=null;
 function wildFieldSample(field,x,y) {
   const fx=(x-field.x0)*2,fy=(y-field.y0)*2,gx=Math.floor(fx),gy=Math.floor(fy);
@@ -62,13 +90,21 @@ function trailDistance(x,y) {
   return fernTrailDistance(x,y);
 }
 function fernTrailDistance(x,y) {
+  return islandPolylineDistance(x,y,FERN_TRAILS);
+}
+function islandPolylineDistance(x,y,trails) {
   let distance = Infinity;
-  for (const trail of FERN_TRAILS) for (let k=1;k<trail.length;k++) {
+  for (const trail of trails) for (let k=1;k<trail.length;k++) {
     const [ax,ay]=trail[k-1],[bx,by]=trail[k],ux=bx-ax,uy=by-ay;
     const t=clamp(((x-ax)*ux+(y-ay)*uy)/(ux*ux+uy*uy),0,1);
     distance=Math.min(distance,Math.hypot(x-ax-ux*t,y-ay-uy*t));
   }
   return distance;
+}
+function islandPathDistance(x,y,island) {
+  if(island.id==='fern')return trailDistance(x,y);
+  const field=WILD_PATH_FIELDS.get(island.id);
+  return field ? wildFieldSample(field,x,y)??Infinity : islandPolylineDistance(x,y,ISLAND_PATHS[island.id]||[]);
 }
 function buildWildIslandFields() {
   function field(island,sample) {
@@ -80,6 +116,7 @@ function buildWildIslandFields() {
   }
   for(const island of WILD_ISLANDS)WILD_FIELDS.set(island.id,field(island,(x,y)=>wildAnalyticEdge(x,y,island)));
   fernTrailField=field(WILD_ISLANDS[0],fernTrailDistance);
+  for(const island of WILD_ISLANDS.slice(1))WILD_PATH_FIELDS.set(island.id,field(island,(x,y)=>islandPolylineDistance(x,y,ISLAND_PATHS[island.id]||[])));
 }
 function wildGroundHeight(x,y,island) {
   const edge=wildIslandEdge(x,y,island);
@@ -89,6 +126,15 @@ function wildGroundHeight(x,y,island) {
   // Broad low landing pads and trails keep every island explorable on foot.
   const [lx,ly]=island.landing;
   height*=terrainEase((Math.hypot(x-lx,y-ly)-3)/9);
+  if(island.id!=='fern') {
+    // A broad clearing lets the hillside meet the foundation gradually, rather
+    // than leaving a one-cell pit around the level building footprint.
+    for(const cabin of ISLAND_CABINS.slice(1)) {
+      const distance=Math.hypot(Math.max(0,cabin.x0-1.2-x,x-cabin.x1-1.2),Math.max(0,cabin.y0-1.2-y,y-cabin.y1-1.8));
+      height*=terrainEase(distance/4);
+    }
+    height=Math.min(height,.08+islandPathDistance(x,y,island)*.12);
+  }
   if(island.id==='fern') {
     const runwayDistance=Math.hypot(Math.max(0,FERN_STRIP.x0-20-x,x-FERN_STRIP.x1-20),Math.max(0,Math.abs(y-FERN_STRIP.y)-FERN_STRIP.hw-1.5));
     height*=terrainEase(runwayDistance/8);
@@ -136,6 +182,13 @@ function islandSurface(x,y) {
     if(grain>.9)ch='o';
     return {base:GRAY,background:GRAY,ch,color:'#727777',tone:.8+patch*.3};
   }
+  if(island.id==='sand') {
+    const pool=Math.hypot((x-720)/.8,(y-115.4)/.55);
+    if(pool<1)return {base:CYAN,background:BLUE,ch:fract(T*.5+grain)<.13?'~':' ',color:'#528b9f',tone:1.1,water:true};
+    if(pool<1.18)return {base:GRAY,background:GRAY,ch:grain>.8?'o':'.',color:'#727777',tone:1};
+  }
+  if((island.id==='cabin'||island.id==='wood')&&islandPathDistance(x,y,island)<.12+patch*.07)
+    return {base:WARM,background:BRICK,ch:grain>.85?':':' ',color:'#8c805c',tone:.95};
   return islandShoreSurface(x,y,edge,true,island.id==='sand',grain,patch);
 }
 function islandShoreSurface(x,y,edge,beach,allSand=false,grain=hash(Math.floor(x*21),Math.floor(y*21),1875),patch=noise(x*.3,y*.3,1876)) {
