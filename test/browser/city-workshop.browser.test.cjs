@@ -14,6 +14,9 @@ async function atHome(fn,mobile=false) {
   try {
     await page.addInitScript(()=>{window.requestAnimationFrame=()=>0;});await page.goto(PAGE);
     await page.evaluate(()=>{
+      // Desktop tests cover real mouse capture. Headless windows can steal focus
+      // from one another, so keyboard placement must not request pointer lock.
+      lockMouse=()=>{};
       paused=false;mode='walk';room=me=null;[px,py]=citySourcePoint(41,73);T=10;tod=12;env(0);render(0);money=5000;
       const purchase=buy('home_studio');if(!purchase[0])throw new Error(purchase[1]);
       const h=owned.homes[0],def=ROOM_DEFS.home;
@@ -31,6 +34,7 @@ async function setUp(page) {
   assert.equal(p.ok,true,JSON.stringify(p));await page.keyboard.press('KeyE');
   for(const id of ['processor','packer']) {
     await page.evaluate(()=>{openWorkshop();});await page.locator(`[data-place="${id}"]`).click();await page.keyboard.press('KeyE');
+    assert.equal(await page.evaluate(id=>workshopState(homeRecord()).parts.some(p=>p.id===id),id),true,`${id} placed by E`);
   }
   await page.evaluate(()=>openWorkshop());await page.locator('[data-power]').click();
   assert.equal(await page.evaluate(()=>workshopCanRun(homeRecord(),workshopState(homeRecord()).parts[0])), '');

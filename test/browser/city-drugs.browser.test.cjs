@@ -14,6 +14,9 @@ async function fixture(fn,mobile=false) {
   try {
     await page.addInitScript(()=>{window.requestAnimationFrame=()=>0;});await page.goto(PAGE);
     await page.evaluate(()=>{
+      // Desktop tests cover real mouse capture. Headless windows can steal focus
+      // from one another, so keyboard placement must not request pointer lock.
+      lockMouse=()=>{};
       paused=false;mode='walk';room=me=null;[px,py]=citySourcePoint(41,73);T=10;tod=12;money=5000;env(0);render(0);
       const purchase=buy('home_studio');if(!purchase[0])throw new Error(purchase[1]);
       const h=owned.homes[0],def=ROOM_DEFS.home;
