@@ -41,6 +41,7 @@ function saveGame() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
 }
 function loadGame() {
+  hushGameplayAudio();
   cancelTransitAnnouncements();
   let text, prepared;
   citySaveBackupPending = null;

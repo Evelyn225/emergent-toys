@@ -5892,6 +5892,13 @@ function transitFiles(phrase, station) {
   const name = TRANSIT_ASSETS.stations[station]?.file;
   return name ? [first, name] : null;
 }
+// Original recordings are local inputs only; runtime copies are normalized, lossless and loop-safe.
+const GAMEPLAY_AUDIO = {
+  gunshot: { source: 'gunshot.mp3', file: 'gunshot.wav', gain: 1.2 },
+  reload: { source: 'Revolver Reload (1.6 seconds).mp3', file: 'revolver-reload.wav', gain: .75 },
+  sizzle: { source: 'cooking sizzle (seamless).mp3', file: 'cooking-sizzle.wav', gain: .45, loop: true },
+  rotor: { source: 'helicopter-rotor-loop.mp3', file: 'helicopter-rotor.wav', gain: .85, loop: true }
+};
 // ---- goods: things you can buy, carry and use. Pure (no DOM), so the node tests can run it; goods-ui.js draws it.
 // kind: food / drink (used up in bites or sips), smoke, gear (kept). uses = bites, sips or drags.
 const ITEMS = {
@@ -24286,6 +24293,7 @@ const CHOPPER_SIZE = 2; // (against the Hornet's 1: a big twin-engined thing, an
 // the rotor's thud-thud-thud: one low pulse every tenth of a second or so, louder close by, panned to its side
 let chopperBeat = 0;
 function stepChopperSound(dt) {
+  if (gameplayBuffers.rotor) return; // The shared recorded loop follows position/height in audioTick.
   if (!heli || !actx || paused || (chopperBeat -= dt) > 0) return;
   chopperBeat = 0.105;
   const vx = rel(heli.x - px), vy = rel(heli.y - py), d = Math.hypot(vx, vy, heli.z), loud = clamp(1 - d / 40, 0, 1);
@@ -25376,6 +25384,7 @@ function audioStart() {
   for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' || k === 'aquarium' ? musicBus : ambBus);
   beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, ambBus); // muffled through the walls indoors
   makeSynths();
+  preloadGameplayAudio();
   clipBuffer('police-siren.wav').then(buf => { policeSirenBuffer = buf; });
   onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
 }
@@ -25389,6 +25398,7 @@ function applyVolumes() {
 function toggleSound() {
   soundOn = !soundOn;
   if (!soundOn) cancelTransitAnnouncements();
+  if (!soundOn) hushGameplayAudio();
   if (master) master.gain.setTargetAtTime(soundOn ? MASTER : 0, actx.currentTime, 0.15);
   say(soundOn ? 'Sound on' : 'Sound off', 1.5);
 }
@@ -25600,6 +25610,7 @@ function tickSirens(indoors) {
 // not only the pause menu, which mutes everything): the sirens fall silent rather than hold whatever note they were on.
 // tickSirens brings them back with the first frame after
 function hushSirens() {
+  hushGameplayAudio();
   if (!actx) return;
   for (const v of sirens.values()) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
 }
@@ -25621,6 +25632,7 @@ let heardBolt = null, dripT = 0;
 // ---- per frame
 let stepAcc = 0, lastPos = null, clackT = 0, rotorT = 0;
 function audioTick(dt) {
+  tickGameplayAudio();
   if (!actx || actx.state !== 'running') return;
   const now = actx.currentTime, indoors = mode === 'room';
   master.gain.setTargetAtTime(soundOn ? MASTER * settings.master ** 2 * 1.5 * (1 - fade) : 0, now, 0.3); // the world goes quiet as you fall asleep
@@ -25639,6 +25651,7 @@ function audioTick(dt) {
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
+  if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
   synth.fluorescent.gain.setTargetAtTime(mix.fluorescent * LEVEL.fluorescent, now, GLIDE);
   synth.watch.gain.setTargetAtTime(mix.watch * LEVEL.watch, now, GLIDE);
   if (indoors && room.kind === 'conservatory') {
@@ -25652,7 +25665,7 @@ function audioTick(dt) {
     const T_ = PLANE_TYPES[pilot.type], th = T_.heli ? pilot.rotor || 0 : pilot.throttle || 0;
     synth.engineOsc.frequency.setTargetAtTime(T_.heli ? 30 + th * 25 : pilot.type === 'jet' ? 90 + th * 160 : 55 + th * 70, now, 0.15);
     synth.engineLP.frequency.setTargetAtTime(T_.heli ? 260 + th * 200 : pilot.type === 'jet' ? 900 + th * 1800 : 400 + th * 500, now, 0.2);
-    if (T_.heli && th > 0.1 && (rotorT -= dt * (4 + th * 14)) < 0) { rotorT = 1; burst(now, 0.07, [filt('lowpass', 220)], 0.12 * th, 0); }
+    if (T_.heli && !gameplayBuffers.rotor && th > 0.1 && (rotorT -= dt * (4 + th * 14)) < 0) { rotorT = 1; burst(now, 0.07, [filt('lowpass', 220)], 0.12 * th, 0); }
   }
   // riding the el: wheels clatter over the rail joints, faster with speed
   if (mode === 'el') {
@@ -25669,6 +25682,104 @@ function audioTick(dt) {
     if (stepAcc >= 1) { stepAcc = 0; sfxStep(surfaceAt(mode, room, px, py), run); }
   }
   lastPos = [px, py, mode];
+}
+// Event one-shots never wait for the network: warm the cache at unlock and retain
+// synthesised fallbacks until ready. Loops start only from current simulation state.
+const gameplayBuffers = {}, gameplayLoops = new Map(), gameplayShots = new Set();
+let gameplayPreloaded = false;
+function preloadGameplayAudio() {
+  if (gameplayPreloaded) return;
+  gameplayPreloaded = true;
+  for (const [key, asset] of Object.entries(GAMEPLAY_AUDIO))
+    clipBuffer(asset.file).then(buffer => { gameplayBuffers[key] = buffer; });
+}
+function gameplayAudioAllowed() {
+  return actx?.state === 'running' && soundOn && settings.master > 0 && settings.effects > 0 && !paused && !freecam && !document.hidden;
+}
+function stopGameplayVoice(voice, fade = .02) {
+  voice.source.onended = () => { for (const node of voice.nodes) node.disconnect(); };
+  if (fade) {
+    voice.gain.gain.cancelScheduledValues(actx.currentTime);
+    voice.gain.gain.setTargetAtTime(0, actx.currentTime, .004);
+  }
+  voice.source.stop(actx.currentTime + fade);
+}
+function hushGameplayAudio() {
+  for (const voice of gameplayLoops.values()) stopGameplayVoice(voice, 0);
+  for (const voice of gameplayShots) stopGameplayVoice(voice, 0);
+  gameplayLoops.clear(); gameplayShots.clear();
+}
+function playGameplayEffect(key, at, vol = 1, pan = 0, where = '') {
+  const buffer = gameplayBuffers[key];
+  if (!buffer) return false;
+  if (!gameplayAudioAllowed()) return true; // Suppress the fallback while muted/frozen too.
+  let cutoff = 16000;
+  if (where === 'far') cutoff = 1100;
+  else if (where === 'in') cutoff = 6500;
+  const source = actx.createBufferSource(), gain = actx.createGain(), lp = filt('lowpass', cutoff), panner = actx.createStereoPanner();
+  source.buffer = buffer; gain.gain.value = GAMEPLAY_AUDIO[key].gain * vol; panner.pan.value = pan;
+  const owner = heldGun(), location = mode === 'room' ? room : null;
+  const voice = { source, gain, nodes: [source, lp, gain, panner], valid: () =>
+    (mode === 'room' ? room : null) === location && (key !== 'reload' || heldGun() === owner && gun.reload > 0) };
+  chain(source, lp, gain, panner, sfxBus);
+  source.onended = () => { for (const node of voice.nodes) node.disconnect(); gameplayShots.delete(voice); };
+  if (gameplayShots.size >= 20) { const old = gameplayShots.values().next().value; stopGameplayVoice(old); gameplayShots.delete(old); }
+  gameplayShots.add(voice); source.start(Math.max(actx.currentTime, at));
+  return true;
+}
+function gameplayLoop(owner, key, volume, pan = 0, rate = 1, cutoff = 12000) {
+  const buffer = gameplayBuffers[key];
+  if (!buffer) return;
+  let voice = gameplayLoops.get(owner);
+  if (!voice) {
+    const source = actx.createBufferSource(), gain = actx.createGain(), lp = filt('lowpass', cutoff), panner = actx.createStereoPanner();
+    source.buffer = buffer; source.loop = true; gain.gain.value = 0;
+    chain(source, lp, gain, panner, sfxBus);
+    voice = { source, gain, lp, panner, nodes: [source, lp, gain, panner] };
+    gameplayLoops.set(owner, voice); source.start();
+  }
+  const now = actx.currentTime;
+  voice.gain.gain.setTargetAtTime(volume * GAMEPLAY_AUDIO[key].gain, now, .08);
+  voice.panner.pan.setTargetAtTime(pan, now, .08);
+  voice.source.playbackRate.setTargetAtTime(rate, now, .1);
+  voice.lp.frequency.setTargetAtTime(cutoff, now, .1);
+}
+function tickGameplayAudio() {
+  if (!gameplayAudioAllowed()) return hushGameplayAudio();
+  const active = new Set();
+  const cooking = game?.kind === 'cook' && !game.g.over ? game.g : null;
+  if (cooking) {
+    const heat = cooking.state().heat;
+    if (heat > .35) { active.add(cooking); gameplayLoop(cooking, 'sizzle', clamp((heat - .2) / .8, 0, 1)); }
+  }
+  const helicopters = aircraft.filter(craft => PLANE_TYPES[craft.type].heli && craft.rotor > .02 && !craft.wrecked && !craft.ditched &&
+    (mode === 'air' && craft === pilot || craft.state === 'abandoned'));
+  if (heli) helicopters.push(heli);
+  let earX = px, earY = py, earZ = terrainHeight(px, py);
+  if (mode === 'room') {
+    const station = (room.kind === 'station' || room.kind === 'train') && stations[room.st];
+    const ret = room.ret || room.lobby?.ret;
+    if (station) { earX = station.x; earY = station.y; }
+    else if (ret) [earX, earY] = ret;
+    earZ = terrainHeight(earX, earY);
+  } else if (mode === 'air' && pilot) earZ = pilot.z;
+  else if (mode === 'roof') earZ = roofH;
+  else if (mode === 'el' || mode === 'elplat') earZ = EL_TOP;
+  for (const craft of helicopters) {
+    const aboard = mode === 'air' && pilot === craft, spin = craft === heli ? 1 : craft.rotor;
+    const rx = rel(craft.x - earX), ry = rel(craft.y - earY), height = craft.z - earZ;
+    const distance = aboard ? 0 : Math.hypot(rx, ry, height);
+    if (distance >= 40) continue;
+    active.add(craft);
+    const volume = spin ** 2 * (aboard ? .9 : clamp(1 - distance / 40, 0, 1) ** 2) * (mode === 'room' ? .15 : 1);
+    const pan = aboard ? 0 : clamp((-Math.sin(a) * rx + Math.cos(a) * ry) / Math.max(1, distance), -.9, .9);
+    let cutoff = 10000 / (1 + distance / 12);
+    if (mode === 'room') cutoff = 800;
+    else if (aboard) cutoff = 6500;
+    gameplayLoop(craft, 'rotor', volume, pan, .45 + spin * .55, cutoff);
+  }
+  for (const [owner, voice] of gameplayLoops) if (!active.has(owner)) { stopGameplayVoice(voice); gameplayLoops.delete(owner); }
+  for (const voice of gameplayShots) if (!voice.valid()) { stopGameplayVoice(voice); gameplayShots.delete(voice); }
 }
 // Recorded PA, driven by actions and simulation transitions. Rendering never requests speech.
 // A location/epoch guards both pending decodes and already scheduled AudioBufferSources.
@@ -29766,7 +29877,7 @@ function cookPanelKey(e) {
 // the pan's noises (minigame-ui.js sfxGame asks first)
 function sfxCook(e) {
   const at = actx.currentTime;
-  if (e === 'sizzle') { fishNoise(at, 0.3, 5000, 3500, 1.2, 0.05, 0.1); return true; }
+  if (e === 'sizzle') { if (!gameplayBuffers.sizzle) fishNoise(at, 0.3, 5000, 3500, 1.2, 0.05, 0.1); return true; }
   if (e === 'flip') { fishNoise(at, 0.12, 900, 1600, 1, 0.12, 0.2); tone(at + 0.1, 140, 0.08, 0.1); return true; }
   if (e === 'stir') { fishNoise(at, 0.25, 600, 400, 2, 0.1, 0.3); return true; }
   if (e === 'add') { fishNoise(at, 0.4, 4500, 3000, 1, 0.14, 0.05); return true; } // into the hot pan: a hiss
@@ -30037,6 +30148,7 @@ function gunNoise(at, len, type, freq, q, gain, pan = 0) {
 // the bang: a crack, the blast, a thump in your chest, and the street throwing it back off every wall a few times
 // over, a little later and a little duller each time ('in': a room, short and boxy; 'far': somebody else's, down the street)
 function gunBang(at, vol, pan = 0, where = '') {
+  if (playGameplayEffect('gunshot', at, vol, pan, where)) return;
   const far = where === 'far';
   if (!far) gunNoise(at, 0.06, 'highpass', 2200, 0.7, 0.5 * vol, pan);
   gunNoise(at, far ? 0.3 : 0.4, 'lowpass', far ? 1100 : 3200, 0.8, 0.9 * vol, pan);
@@ -30051,6 +30163,7 @@ const dryFire = at => { tone(at, 2600, 0.025, 0.09, 'square'); gunNoise(at, 0.03
 const whizz = (at, pan) => gunNoise(at, 0.12, 'bandpass', 5000, 6, 0.1, pan);
 // thumbing the cylinder out, six rounds in one after another, and snapping it shut
 function reloadSound(at) {
+  if (playGameplayEffect('reload', at)) return;
   gunNoise(at, 0.05, 'bandpass', 2400, 3, 0.22);
   for (let k = 0; k < 6; k++) gunNoise(at + 0.3 + k * 0.17, 0.035, 'bandpass', 3800 + k * 90, 5, 0.12);
   gunNoise(at + RELOAD_T - 0.12, 0.07, 'bandpass', 1800, 2, 0.3);
@@ -33362,6 +33475,7 @@ function saveGame() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
 }
 function loadGame() {
+  hushGameplayAudio();
   cancelTransitAnnouncements();
   let text, prepared;
   citySaveBackupPending = null;
