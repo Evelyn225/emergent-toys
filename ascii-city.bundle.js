@@ -5308,13 +5308,14 @@ function roomPerson() {
   return best && Math.hypot(best.x - px, best.y - py) < keeperD - 0.2 ? best : null;
 }
 const talkInRoom = () => say(`"${roomTalkLine(room.kind)}"`, 4);
-// ---- the elevated train: a steel deck on pillars over the whole length of H(., EL_ROW), which wraps round the world
-// east-west, so the line is a loop. Two tracks: westbound on the north half, eastbound on the south half.
+// ---- the elevated train: a steel deck on pillars along H(., EL_ROW).
+// The live archipelago has a finite east-west route; trains reverse at both terminals.
+// The source-city fixture below retains its original wrapping loop.
 // Stations every 8 blocks, with narrow platforms over the sidewalks and stairs down to the street.
 // The deck is 12m wide over the middle of the street (clear of the building faces either side) and high enough
 // that the street lamps fit under it: y EL_Y0..EL_Y1, z EL_BOT..EL_TOP.
 let EL_Y = EL_ROW * 8, EL_HALF = 0.6, EL_Y0 = EL_Y + 1 - EL_HALF, EL_Y1 = EL_Y + 1 + EL_HALF, EL_BOT = 1.15, EL_TOP = 1.27;
-const EL_TRACK = [EL_Y + 0.78, EL_Y + 1.22]; // [westbound, eastbound]
+const EL_TRACK = [EL_Y + 0.78, EL_Y + 1.22]; // [north track, south track]; direction comes from elTrain().dir
 const EL_PLAT = [EL_Y0 + 0.08, EL_Y1 - 0.08]; // where you stand on each platform, along the deck's edges
 const underEl = (y,x=px) => (!worldReady||x>=140&&x<=352)&&Math.abs(rel(y - (EL_Y + 1))) < EL_HALF;
 const EL_STATIONS = [2, 10, 18, 26].map(bx => ({ x: bx * 8 + 5, x0: bx * 8 + 2.6, x1: bx * 8 + 7.4, name: AVE_NAMES[bx] }));
@@ -5395,7 +5396,7 @@ const elPillarsB = bucketed(elPillars);
 const HOP = N / EL_STATIONS.length, HOP_T = 26, DWELL = 10, EL_CYCLE = (HOP_T + DWELL) * EL_STATIONS.length, EL_CARS = 3, EL_CAR_LEN = 1.9;
 const EL_HL = EL_CAR_LEN / 2 - 0.03, EL_HW = 0.14, EL_H = 0.32;
 const smooth = v => v * v * (3 - 2 * v);
-// where train k on track tr (0 west, 1 east) is at time t: {x of its middle, dir, stopped, station index it's at or leaving}
+// where train k on track tr (0 north, 1 south) is at time t: {x of its middle, dir, stopped, station index it's at or leaving}
 function elTrain(tr, k, t) {
   if(worldReady) {
     const sequence=[0,1,2,3,2,1],period=(HOP_T+DWELL)*sequence.length,c=mod(t+tr*period/2,period),hop=Math.floor(c/(HOP_T+DWELL)),p=c-hop*(HOP_T+DWELL);
@@ -5916,6 +5917,66 @@ function surfaceAt(mode, room, x, y) {
   if (kind === 'construction' || kind === 'yard') return 'gravel';
   return 'stone';
 }
+// One source of truth for recordings, prepared upload assets and exact in-game labels.
+// Originals stay in audio/ascii city/. Null files deliberately skip the entire utterance.
+const TRANSIT_ASSETS = {
+  phrases: {
+    next: { source: 'The next stop is.mp3', file: 'transit/next.wav' },
+    arrival: { source: 'This is.mp3', file: 'transit/arrival.wav' },
+    east: { source: 'This is an eastbound train.mp3', file: 'transit/east.wav' },
+    west: { source: 'This is a westbound train.mp3', file: 'transit/west.wav' },
+    returnEast: { source: 'This train will now return eastbound.mp3', file: 'transit/return-east.wav' },
+    returnWest: { source: 'This train will now return westbound.mp3', file: 'transit/return-west.wav' },
+    doors: { source: 'Please stand clear of the closing doors.mp3', file: 'transit/doors.wav' },
+    alight: { source: 'Please allow passengers to leave the train before boarding.mp3', file: 'transit/alight.wav' },
+    edge: { source: 'Please stand back from the platform edge.mp3', file: 'transit/edge.wav' },
+    belongings: { source: 'Please remember to take your belongings with you.mp3', file: 'transit/belongings.wav' }
+  },
+  stations: {
+    'MERCER ST': { source: 'Mercer street.mp3', file: 'transit/mercer-st.wav' },
+    'BLEECKER ST': { source: 'Bleecker street.mp3', file: 'transit/bleecker-st.wav' },
+    'WATER ST': { source: 'Water street.mp3', file: 'transit/water-st.wav' },
+    '8TH AVE': { source: 'Eighth avenue.mp3', file: 'transit/8th-ave.wav' },
+    'HOUSTON ST': { source: 'Houston street.mp3', file: 'transit/houston-st.wav' },
+    'PEARL ST': { source: 'Pearl street.mp3', file: 'transit/pearl-st.wav' },
+    '14TH ST': { source: 'Fourteenth street.mp3', file: 'transit/14th-st.wav' },
+    'GRAND ST': { source: 'Grand street.mp3', file: 'transit/grand-st.wav' },
+    '2ND AVE': { source: 'Second avenue.mp3', file: 'transit/2nd-ave.wav' },
+    '6TH AVE': { source: 'Sixth avenue.mp3', file: 'transit/6th-ave.wav' },
+    '5TH ST': { source: 'Fifth street.mp3', file: 'transit/5th-st.wav' },
+    '20TH ST': { source: 'Twentieth street.mp3', file: 'transit/20th-st.wav' },
+    'HARBOR ST': { source: 'Harbor street.mp3', file: 'transit/harbor-st.wav' },
+    '12TH ST': { source: 'Twelfth street.mp3', file: 'transit/12th-st.wav' },
+    '23RD ST': { source: 'Twenty-third street.mp3', file: 'transit/23rd-st.wav' },
+    'FRONT ST': { source: 'Front street.mp3', file: 'transit/front-st.wav' },
+    'HUDSON ST': { source: 'Hudson street.mp3', file: 'transit/hudson-st.wav' },
+    'SPRING ST': { source: 'Spring street.mp3', file: 'transit/spring-st.wav' },
+    '3RD AVE': { source: 'Third avenue.mp3', file: 'transit/3rd-ave.wav' },
+    'KING ST': { source: 'King street.mp3', file: 'transit/king-st.wav' },
+    '11TH AVE': { source: 'Eleventh avenue.mp3', file: 'transit/11th-ave.wav' },
+    '18TH AVE': { source: 'Eighteenth avenue.mp3', file: 'transit/18th-ave.wav' },
+    '26TH AVE': { source: 'Twenty-sixth avenue.mp3', file: 'transit/26th-ave.wav' }
+  }
+};
+const TRANSIT_PA = {
+  gap: .075, lead: .025, fade: .008, gain: .95, doorsLead: 4,
+  highpass: 380, lowpass: 3800, presence: 2200, presenceGain: 3.5,
+  reflectionTime: .022, reflectionGain: .2
+};
+function transitFiles(phrase, station) {
+  const first = TRANSIT_ASSETS.phrases[phrase]?.file;
+  if (!first) return null;
+  if (station == null) return [first];
+  const name = TRANSIT_ASSETS.stations[station]?.file;
+  return name ? [first, name] : null;
+}
+// Original recordings are local inputs only; runtime copies are normalized, lossless and loop-safe.
+const GAMEPLAY_AUDIO = {
+  gunshot: { source: 'gunshot.mp3', file: 'gunshot.wav', gain: 1.2 },
+  reload: { source: 'Revolver Reload (1.6 seconds).mp3', file: 'revolver-reload.wav', gain: .75 },
+  sizzle: { source: 'cooking sizzle (seamless).mp3', file: 'cooking-sizzle.wav', gain: .45, loop: true },
+  rotor: { source: 'helicopter-rotor-loop.mp3', file: 'helicopter-rotor.wav', gain: .85, loop: true }
+};
 // ---- goods: things you can buy, carry and use. Pure (no DOM), so the node tests can run it; goods-ui.js draws it.
 // kind: food / drink (used up in bites or sips), smoke, gear (kept). uses = bites, sips or drags.
 const ITEMS = {
@@ -23479,7 +23540,7 @@ function promptText() {
   if (who) return task && task.who === who ? (fetchHave() ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
   const el = nearElStairs();
-  if (el) return elPass && elPass.st === el.s.stairs[el.tr] ? `Up the stairs to the ${el.s.name} el` : `E: swipe in for the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
+  if (el) return elPass && elPass.st === el.s.stairs[el.tr] ? `Up the stairs to the ${el.s.name} el` : `E: swipe in for the ${el.s.name} el, ${el.tr ? 'south' : 'north'} platform (${fmt$(SUBWAY_FARE)})`;
   const st = nearStation();
   if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
@@ -23752,12 +23813,14 @@ const nearElStairs = () => {
 function elUp({ s, tr }) {
   body.z=body.vz=body.peak=0;roofH=EL_TOP;
   mode = 'elplat'; plat = { s, tr }; px = s.x; py = EL_PLAT[tr]; a = tr ? 0 : Math.PI; pitch = 0; // facing the way the trains go
-  say(`${s.name} el, ${tr ? 'eastbound' : 'westbound'} platform`);
+  transitSync();
+  say(`${s.name} el platform`);
 }
 function elDown() { // (E on the platform: a shortcut to the foot of the stairs)
   const stairs=plat.s.stairs[plat.tr];
   mode = 'walk'; px = stairs.x; py = stairs.y; a = Math.atan2(-stairs.s, -stairs.c); plat = null;
   body.z=body.vz=body.peak=0;roofH=0;
+  transitSync();
 }
 // the train standing at your platform, if there is one
 const elHere = () => plat && elTrains(T).find(t => t.tr === plat.tr && t.stopped && EL_STATIONS[t.station] === plat.s);
@@ -23766,6 +23829,7 @@ function elBoard() {
   if (!t) return false;
   ride = { tr: t.tr, k: t.k, off: clamp(rel(px - t.x), -EL_CAR_LEN, EL_CAR_LEN) };
   mode = 'el'; py = EL_TRACK[t.tr] + (t.tr ? 0.12 : -0.12); // by the window on the platform side
+  transitBoarded();
   say(`Next stop: ${EL_STATIONS[t.next].name}`);
   return true;
 }
@@ -23778,6 +23842,7 @@ function elGetOff() {
   px = clamp(px, s.x0, s.x1);
   body.z=body.vz=body.peak=0;roofH=EL_TOP;
   say(`${s.name}`);
+  transitSync();
 }
 function enterRoom(kind, extra, spawn) {
   fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
@@ -23786,6 +23851,7 @@ function enterRoom(kind, extra, spawn) {
   if (residence && room.ret) residence.door = room.ret.slice(0, 2);
   if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'backrooms' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
+  transitSync();
 }
 function interact() {
   if (islandBuildingUse()) return;
@@ -23870,7 +23936,10 @@ function interact() {
     }
     if (canBoard()) {
       const from = room.st;
-      return enterRoom('train', { st: from, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
+      const platformTime = room.t0;
+      enterRoom('train', { st: from, t0: platformTime, opts: [1, 2, 3, 4, 5].map(k => (from + k) % stations.length), dest: null, track: 0 }, [2, 2.5, 0.25]);
+      transitBoarded();
+      return;
     }
     const dr = droppedHere(); // something you put down here earlier
     if (dr) return say(pickUpDropped(dr)[1]);
@@ -23952,7 +24021,7 @@ function interact() {
   const el = nearElStairs();
   if (el && elPass && elPass.st === el.s.stairs[el.tr]) return say('The turnstile\'s open. Up you go.', 2);
   if (el && !pay(SUBWAY_FARE)) return say(`The turnstile wants ${fmt$(SUBWAY_FARE)}. You don't have it.`);
-  if (el) { elPass = { st: el.s.stairs[el.tr] }; if (actx) sfxUse('click'); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. The turnstile clicks round. Up the stairs to the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'}.`, 3); }
+  if (el) { elPass = { st: el.s.stairs[el.tr] }; if (actx) sfxUse('click'); return say(`Swipe: -${fmt$(SUBWAY_FARE)}. The turnstile clicks round. Up the stairs to the ${el.s.name} el, ${el.tr ? 'south' : 'north'} platform.`, 3); }
   const fsp = fairSpot();
   if (fsp) return useFair(fsp);
   const mk = marketSpot();
@@ -24055,11 +24124,13 @@ function leaveRoom() {
   }
   else { [px, py, a] = room.ret; a += Math.PI; }
   room = null; mode = 'walk';
+  transitSync();
   hotelAlarm = null; // Leaving the building before the deadline cancels its untriggered alarm.
 }
 function arriveAt(n) { // off the train onto the destination platform; the train pulls out a few seconds later
   enterRoom('station', { st: n, word: stations[n].name, t0: T - 13 }, [23, ST_TRACK - 2.4, -Math.PI / 2]); // back from the edge, facing the stairs
   say(`${stations[n].name}`);
+  transitSubwayArrived();
 }
 function hail() {
   if (mode !== 'walk') return;
@@ -24481,6 +24552,7 @@ const CHOPPER_SIZE = 2; // (against the Hornet's 1: a big twin-engined thing, an
 // the rotor's thud-thud-thud: one low pulse every tenth of a second or so, louder close by, panned to its side
 let chopperBeat = 0;
 function stepChopperSound(dt) {
+  if (gameplayBuffers.rotor) return; // The shared recorded loop follows position/height in audioTick.
   if (!heli || !actx || paused || (chopperBeat -= dt) > 0) return;
   chopperBeat = 0.105;
   const vx = rel(heli.x - px), vy = rel(heli.y - py), d = Math.hypot(vx, vy, heli.z), loud = clamp(1 - d / 40, 0, 1);
@@ -25571,6 +25643,7 @@ function audioStart() {
   for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' || k === 'aquarium' ? musicBus : ambBus);
   beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, ambBus); // muffled through the walls indoors
   makeSynths();
+  preloadGameplayAudio();
   clipBuffer('police-siren.wav').then(buf => { policeSirenBuffer = buf; });
   onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
 }
@@ -25583,6 +25656,8 @@ function applyVolumes() {
 }
 function toggleSound() {
   soundOn = !soundOn;
+  if (!soundOn) cancelTransitAnnouncements();
+  if (!soundOn) hushGameplayAudio();
   if (master) master.gain.setTargetAtTime(soundOn ? MASTER : 0, actx.currentTime, 0.15);
   say(soundOn ? 'Sound on' : 'Sound off', 1.5);
 }
@@ -25712,7 +25787,10 @@ function sfxCoin() { const at = actx.currentTime; tone(at, 3100, 0.15, 0.08); to
 const CLIPS = {};
 function clipBuffer(name) {
   const file = name.includes('.') ? name : name + '.mp3';
-  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + file).then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
+  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + file).then(r => {
+    if (!r.ok) throw new Error('Audio unavailable: ' + file);
+    return r.arrayBuffer();
+  }).then(b => actx.decodeAudioData(b)).catch(() => null);
   return CLIPS[name];
 }
 function playClip(name, gain, when = actx.currentTime) {
@@ -25791,6 +25869,7 @@ function tickSirens(indoors) {
 // not only the pause menu, which mutes everything): the sirens fall silent rather than hold whatever note they were on.
 // tickSirens brings them back with the first frame after
 function hushSirens() {
+  hushGameplayAudio();
   if (!actx) return;
   for (const v of sirens.values()) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
 }
@@ -25812,6 +25891,7 @@ let heardBolt = null, dripT = 0;
 // ---- per frame
 let stepAcc = 0, lastPos = null, clackT = 0, rotorT = 0;
 function audioTick(dt) {
+  tickGameplayAudio();
   if (!actx || actx.state !== 'running') return;
   const now = actx.currentTime, indoors = mode === 'room';
   master.gain.setTargetAtTime(soundOn ? MASTER * settings.master ** 2 * 1.5 * (1 - fade) : 0, now, 0.3); // the world goes quiet as you fall asleep
@@ -25830,6 +25910,7 @@ function audioTick(dt) {
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
+  if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
   synth.fluorescent.gain.setTargetAtTime(mix.fluorescent * LEVEL.fluorescent, now, GLIDE);
   synth.watch.gain.setTargetAtTime(mix.watch * LEVEL.watch, now, GLIDE);
   if (indoors && room.kind === 'conservatory') {
@@ -25843,7 +25924,7 @@ function audioTick(dt) {
     const T_ = PLANE_TYPES[pilot.type], th = T_.heli ? pilot.rotor || 0 : pilot.throttle || 0;
     synth.engineOsc.frequency.setTargetAtTime(T_.heli ? 30 + th * 25 : pilot.type === 'jet' ? 90 + th * 160 : 55 + th * 70, now, 0.15);
     synth.engineLP.frequency.setTargetAtTime(T_.heli ? 260 + th * 200 : pilot.type === 'jet' ? 900 + th * 1800 : 400 + th * 500, now, 0.2);
-    if (T_.heli && th > 0.1 && (rotorT -= dt * (4 + th * 14)) < 0) { rotorT = 1; burst(now, 0.07, [filt('lowpass', 220)], 0.12 * th, 0); }
+    if (T_.heli && !gameplayBuffers.rotor && th > 0.1 && (rotorT -= dt * (4 + th * 14)) < 0) { rotorT = 1; burst(now, 0.07, [filt('lowpass', 220)], 0.12 * th, 0); }
   }
   // riding the el: wheels clatter over the rail joints, faster with speed
   if (mode === 'el') {
@@ -25861,6 +25942,302 @@ function audioTick(dt) {
   }
   lastPos = [px, py, mode];
 }
+// Event one-shots never wait for the network: warm the cache at unlock and retain
+// synthesised fallbacks until ready. Loops start only from current simulation state.
+const gameplayBuffers = {}, gameplayLoops = new Map(), gameplayShots = new Set();
+let gameplayPreloaded = false;
+function preloadGameplayAudio() {
+  if (gameplayPreloaded) return;
+  gameplayPreloaded = true;
+  for (const [key, asset] of Object.entries(GAMEPLAY_AUDIO))
+    clipBuffer(asset.file).then(buffer => { gameplayBuffers[key] = buffer; });
+}
+function gameplayAudioAllowed() {
+  return actx?.state === 'running' && soundOn && settings.master > 0 && settings.effects > 0 && !paused && !freecam && !document.hidden;
+}
+function stopGameplayVoice(voice, fade = .02) {
+  voice.source.onended = () => { for (const node of voice.nodes) node.disconnect(); };
+  if (fade) {
+    voice.gain.gain.cancelScheduledValues(actx.currentTime);
+    voice.gain.gain.setTargetAtTime(0, actx.currentTime, .004);
+  }
+  voice.source.stop(actx.currentTime + fade);
+}
+function hushGameplayAudio() {
+  for (const voice of gameplayLoops.values()) stopGameplayVoice(voice, 0);
+  for (const voice of gameplayShots) stopGameplayVoice(voice, 0);
+  gameplayLoops.clear(); gameplayShots.clear();
+}
+function playGameplayEffect(key, at, vol = 1, pan = 0, where = '') {
+  const buffer = gameplayBuffers[key];
+  if (!buffer) return false;
+  if (!gameplayAudioAllowed()) return true; // Suppress the fallback while muted/frozen too.
+  let cutoff = 16000;
+  if (where === 'far') cutoff = 1100;
+  else if (where === 'in') cutoff = 6500;
+  const source = actx.createBufferSource(), gain = actx.createGain(), lp = filt('lowpass', cutoff), panner = actx.createStereoPanner();
+  source.buffer = buffer; gain.gain.value = GAMEPLAY_AUDIO[key].gain * vol; panner.pan.value = pan;
+  const owner = heldGun(), location = mode === 'room' ? room : null;
+  const voice = { source, gain, nodes: [source, lp, gain, panner], valid: () =>
+    (mode === 'room' ? room : null) === location && (key !== 'reload' || heldGun() === owner && gun.reload > 0) };
+  chain(source, lp, gain, panner, sfxBus);
+  source.onended = () => { for (const node of voice.nodes) node.disconnect(); gameplayShots.delete(voice); };
+  if (gameplayShots.size >= 20) { const old = gameplayShots.values().next().value; stopGameplayVoice(old); gameplayShots.delete(old); }
+  gameplayShots.add(voice); source.start(Math.max(actx.currentTime, at));
+  return true;
+}
+function gameplayLoop(owner, key, volume, pan = 0, rate = 1, cutoff = 12000) {
+  const buffer = gameplayBuffers[key];
+  if (!buffer) return;
+  let voice = gameplayLoops.get(owner);
+  if (!voice) {
+    const source = actx.createBufferSource(), gain = actx.createGain(), lp = filt('lowpass', cutoff), panner = actx.createStereoPanner();
+    source.buffer = buffer; source.loop = true; gain.gain.value = 0;
+    chain(source, lp, gain, panner, sfxBus);
+    voice = { source, gain, lp, panner, nodes: [source, lp, gain, panner] };
+    gameplayLoops.set(owner, voice); source.start();
+  }
+  const now = actx.currentTime;
+  voice.gain.gain.setTargetAtTime(volume * GAMEPLAY_AUDIO[key].gain, now, .08);
+  voice.panner.pan.setTargetAtTime(pan, now, .08);
+  voice.source.playbackRate.setTargetAtTime(rate, now, .1);
+  voice.lp.frequency.setTargetAtTime(cutoff, now, .1);
+}
+function tickGameplayAudio() {
+  if (!gameplayAudioAllowed()) return hushGameplayAudio();
+  const active = new Set();
+  const cooking = game?.kind === 'cook' && !game.g.over ? game.g : null;
+  if (cooking) {
+    const heat = cooking.state().heat;
+    if (heat > .35) { active.add(cooking); gameplayLoop(cooking, 'sizzle', clamp((heat - .2) / .8, 0, 1)); }
+  }
+  const helicopters = aircraft.filter(craft => PLANE_TYPES[craft.type].heli && craft.rotor > .02 && !craft.wrecked && !craft.ditched &&
+    (mode === 'air' && craft === pilot || craft.state === 'abandoned'));
+  if (heli) helicopters.push(heli);
+  let earX = px, earY = py, earZ = terrainHeight(px, py);
+  if (mode === 'room') {
+    const station = (room.kind === 'station' || room.kind === 'train') && stations[room.st];
+    const ret = room.ret || room.lobby?.ret;
+    if (station) { earX = station.x; earY = station.y; }
+    else if (ret) [earX, earY] = ret;
+    earZ = terrainHeight(earX, earY);
+  } else if (mode === 'air' && pilot) earZ = pilot.z;
+  else if (mode === 'roof') earZ = roofH;
+  else if (mode === 'el' || mode === 'elplat') earZ = EL_TOP;
+  for (const craft of helicopters) {
+    const aboard = mode === 'air' && pilot === craft, spin = craft === heli ? 1 : craft.rotor;
+    const rx = rel(craft.x - earX), ry = rel(craft.y - earY), height = craft.z - earZ;
+    const distance = aboard ? 0 : Math.hypot(rx, ry, height);
+    if (distance >= 40) continue;
+    active.add(craft);
+    const volume = spin ** 2 * (aboard ? .9 : clamp(1 - distance / 40, 0, 1) ** 2) * (mode === 'room' ? .15 : 1);
+    const pan = aboard ? 0 : clamp((-Math.sin(a) * rx + Math.cos(a) * ry) / Math.max(1, distance), -.9, .9);
+    let cutoff = 10000 / (1 + distance / 12);
+    if (mode === 'room') cutoff = 800;
+    else if (aboard) cutoff = 6500;
+    gameplayLoop(craft, 'rotor', volume, pan, .45 + spin * .55, cutoff);
+  }
+  for (const [owner, voice] of gameplayLoops) if (!active.has(owner)) { stopGameplayVoice(voice); gameplayLoops.delete(owner); }
+  for (const voice of gameplayShots) if (!voice.valid()) { stopGameplayVoice(voice); gameplayShots.delete(voice); }
+}
+// Recorded PA, driven by actions and simulation transitions. Rendering never requests speech.
+// A location/epoch guards both pending decodes and already scheduled AudioBufferSources.
+let transitEpoch = 0, transitLocation = null, transitTime = null, transitObserved = null;
+let transitQueue = [], transitVoice = null, transitLoading = false, transitBus = null;
+let transitReminderAt = -Infinity;
+
+function transitPlayerLocation() {
+  if (mode === 'room' && (room?.kind === 'station' || room?.kind === 'train'))
+    return { key: room.kind, owner: room };
+  if (mode === 'el' && ride) return { key: 'el', owner: ride };
+  if (mode === 'elplat') {
+    const platform = elPlatformAt(px, py);
+    if (platform) return { key: 'elplat:' + platform.tr, owner: platform.s };
+  }
+  return null;
+}
+function transitAudible() {
+  return !!actx && actx.state === 'running' && soundOn && settings.master > 0 && settings.effects > 0 &&
+    !paused && !freecam && !document.hidden;
+}
+function cancelTransitAnnouncements() {
+  transitEpoch++;
+  transitQueue = []; transitLoading = false;
+  if (transitVoice) {
+    for (const source of transitVoice.sources) { source.onended = null; source.stop(); source.disconnect(); }
+    for (const node of transitVoice.nodes) node.disconnect();
+    transitVoice = null;
+  }
+  transitLocation = transitTime = transitObserved = null;
+}
+function transitSameLocation(location) {
+  const current = transitPlayerLocation();
+  return current && location && current.key === location.key && current.owner === location.owner;
+}
+function transitSnapshot() {
+  if (mode === 'el') return elRiding();
+  if (mode === 'elplat') {
+    const platform = elPlatformAt(px, py);
+    return platform ? elTrains(T).find(t => t.tr === platform.tr &&
+      (EL_STATIONS[t.station] === platform.s || EL_STATIONS[t.next] === platform.s)) : null;
+  }
+  // The platform train continues its existing cycle while a rider picks a destination.
+  if (mode === 'room' && (room.kind === 'station' || room.kind === 'train' && room.dest == null)) {
+    const phase = mod(T - room.t0, TRAIN_CYCLE);
+    return { phase, cycle: Math.floor((T - room.t0) / TRAIN_CYCLE) };
+  }
+  return null;
+}
+function transitSync() {
+  const location = transitPlayerLocation();
+  if (!location || !transitAudible()) {
+    if (transitLocation || transitVoice || transitLoading) cancelTransitAnnouncements();
+    return false;
+  }
+  const changed = !transitSameLocation(transitLocation);
+  const jumped = transitTime != null && (T < transitTime || T - transitTime > .25);
+  if (changed || jumped) {
+    cancelTransitAnnouncements();
+    transitLocation = location;
+    transitObserved = transitSnapshot();
+    // Cache promises as well as decoded buffers. A failed fetch is cached as null.
+    for (const group of Object.values(TRANSIT_ASSETS)) for (const asset of Object.values(group))
+      if (asset.file) clipBuffer(asset.file);
+  }
+  transitTime = T;
+  return !changed && !jumped;
+}
+function transitValid(item) {
+  return item.epoch === transitEpoch && transitAudible() && transitSameLocation(item.location) &&
+    T >= item.at && T - item.at <= item.maxAge && Math.abs(T - transitTime) <= .25 && item.relevant();
+}
+function transitAnnounce(phrase, station = null, relevant = () => true, maxAge = 5) {
+  const files = transitFiles(phrase, station);
+  if (!files || !transitLocation || !transitAudible()) return;
+  transitQueue.push({ files, epoch: transitEpoch, location: transitLocation, at: T, maxAge, relevant });
+  // Bounded queue: speech is local and timely, never an accumulating timetable backlog.
+  if (transitQueue.length > 4) transitQueue.shift();
+  transitPump();
+}
+function transitPABus() {
+  if (transitBus) return transitBus;
+  const hp = filt('highpass', TRANSIT_PA.highpass), presence = filt('peaking', TRANSIT_PA.presence, 1.2), lp = filt('lowpass', TRANSIT_PA.lowpass);
+  presence.gain.value = TRANSIT_PA.presenceGain;
+  chain(hp, presence, lp, sfxBus);
+  const reflection = actx.createDelay(.1), reflectionGain = actx.createGain();
+  reflection.delayTime.value = TRANSIT_PA.reflectionTime;
+  reflectionGain.gain.value = TRANSIT_PA.reflectionGain;
+  chain(lp, reflection, reflectionGain, sfxBus);
+  transitBus = hp;
+  return hp;
+}
+async function transitPump() {
+  if (transitVoice || transitLoading) return;
+  const item = transitQueue.shift();
+  if (!item) return;
+  if (!transitValid(item)) return transitPump();
+  transitLoading = true;
+  const buffers = await Promise.all(item.files.map(file => clipBuffer(file)));
+  // An obsolete load must not clear the new location's loading flag or start its queue.
+  if (item.epoch !== transitEpoch) return;
+  transitLoading = false;
+  if (!transitValid(item) || buffers.some(buffer => !buffer)) return transitPump();
+  const voice = { sources: [], nodes: [] };
+  transitVoice = voice;
+  let when = actx.currentTime + TRANSIT_PA.lead;
+  for (const buffer of buffers) {
+    const source = actx.createBufferSource(), envelope = actx.createGain();
+    source.buffer = buffer;
+    const end = when + buffer.duration, fadeTime = Math.min(TRANSIT_PA.fade, buffer.duration / 4);
+    envelope.gain.setValueAtTime(0, when);
+    envelope.gain.linearRampToValueAtTime(TRANSIT_PA.gain, when + fadeTime);
+    envelope.gain.setValueAtTime(TRANSIT_PA.gain, end - fadeTime);
+    envelope.gain.linearRampToValueAtTime(0, end);
+    source.connect(envelope); envelope.connect(transitPABus());
+    voice.sources.push(source); voice.nodes.push(envelope);
+    // Both halves use one AudioContext clock, regardless of frame rate or network timing.
+    source.start(when); when = end + TRANSIT_PA.gap;
+  }
+  voice.sources[voice.sources.length - 1].onended = () => {
+    for (const source of voice.sources) source.disconnect();
+    for (const node of voice.nodes) node.disconnect();
+    if (transitVoice === voice) { transitVoice = null; transitPump(); }
+  };
+}
+function transitDirection(dir, reversal = false) {
+  if (!dir) return;
+  let phrase = dir > 0 ? 'east' : 'west';
+  if (reversal) phrase = dir > 0 ? 'returnEast' : 'returnWest';
+  transitAnnounce(phrase);
+}
+function transitSubwayDirection(from, to) {
+  return Math.sign(stations[to].x - stations[from].x);
+}
+function transitBoarded() {
+  transitSync();
+  // Subway direction is unknown until its directly selected destination is known.
+  const now = transitSnapshot();
+  // Boarding inside the warning window still hears it, even if its threshold was crossed
+  // on the platform. Keep the timetable and the destination picker unchanged.
+  if (mode === 'el' && now.stopped && now.left <= TRANSIT_PA.doorsLead)
+    transitAnnounce('doors', null, () => elRiding()?.stopped, 1);
+  if (mode === 'room' && now?.phase >= 18 - TRANSIT_PA.doorsLead && now.phase < 18)
+    transitAnnounce('doors', null, () => room?.kind === 'train' && room.dest == null, 1);
+  if (mode === 'el') transitDirection(elRiding().dir);
+}
+function transitSubwayDeparted() {
+  transitSync();
+  const journey = room, dest = room.dest;
+  transitDirection(transitSubwayDirection(room.st, dest));
+  transitAnnounce('next', stations[dest].name, () => room === journey && room.dest === dest);
+}
+function transitSubwayArrived() {
+  transitSync();
+  transitAnnounce('arrival', stations[room.st].name);
+  transitReminder('belongings');
+}
+function transitReminder(phrase) {
+  if (T - transitReminderAt < 60) return;
+  transitReminderAt = T;
+  transitAnnounce(phrase, null, () => true, 4);
+}
+function stepTransitAnnouncements() {
+  if (!transitSync()) return;
+  const before = transitObserved, now = transitSnapshot();
+  transitObserved = now;
+  if (!before || !now) return;
+  if (mode === 'el' || mode === 'elplat') {
+    const aboard = mode === 'el';
+    const platform = aboard ? null : elPlatformAt(px, py);
+    const atPlatform = aboard || EL_STATIONS[now.station] === platform?.s;
+    if (now.stopped && atPlatform && before.stopped && before.left > TRANSIT_PA.doorsLead && now.left <= TRANSIT_PA.doorsLead) {
+      const tr = aboard ? ride.tr : platform.tr, k = aboard ? ride.k : now.k;
+      transitAnnounce('doors', null, () => {
+        const t = elTrain(tr, k, T);
+        return t.stopped && t.station === now.station;
+      }, 1);
+    }
+    if (!now.stopped && before.stopped && aboard) {
+      const train = ride;
+      transitAnnounce('next', EL_STATIONS[now.next].name, () => {
+        const t = elTrain(train.tr, train.k, T);
+        return !t.stopped && t.next === now.next;
+      });
+    }
+    if (now.stopped && (!before.stopped || before.station !== now.station) && atPlatform) {
+      transitAnnounce('arrival', EL_STATIONS[now.station].name);
+      if (aboard && before.dir !== now.dir) transitDirection(now.dir, true);
+      if (!aboard) transitReminder('alight');
+    }
+  } else if (before.cycle === now.cycle) {
+    if (before.phase < 6 && now.phase >= 6 && room.kind === 'station') transitReminder('alight');
+    if (before.phase < 18 - TRANSIT_PA.doorsLead && now.phase >= 18 - TRANSIT_PA.doorsLead) {
+      const stationRoom = room;
+      transitAnnounce('doors', null, () => room === stationRoom && mod(T - room.t0, TRAIN_CYCLE) < 18, 1);
+    }
+  }
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) cancelTransitAnnouncements(); });
 // ===== the look shared by every menu (pause, shops, carrying, storage): W95 text on near-black, no boxes, a caret
 // for the row you're on, sliders drawn as an ASCII density ramp. Injected once, used through the .menu class.
 const MENU_CSS = `
@@ -26149,6 +26526,7 @@ function openPause() {
   pauseEl = pauseEl || buildPause();
   resetStartOver();
   paused = true;
+  cancelTransitAnnouncements();
   for (const k in K) K[k] = 0; // nothing held down while we're away
   pauseEl.show(); pauseEl.style.display = 'flex'; homeEl.style.display = GLYPHPORT_DESKTOP_APP ? 'none' : 'block'; // the way home: only while paused in the browser
   releaseMouse();
@@ -26233,6 +26611,7 @@ const DEV_CSS = `
 const devOpen = () => !!devEl && devEl.style.display === 'flex';
 
 function toggleFreecam() {
+  cancelTransitAnnouncements();
   if (freecam) { leaveFreecam(); return; }
   let x = px, y = py, yaw = a;
   if (mode === 'sea') [x, y, yaw] = seaCam(0, chaseOn);
@@ -29855,7 +30234,7 @@ function cookPanelKey(e) {
 // the pan's noises (minigame-ui.js sfxGame asks first)
 function sfxCook(e) {
   const at = actx.currentTime;
-  if (e === 'sizzle') { fishNoise(at, 0.3, 5000, 3500, 1.2, 0.05, 0.1); return true; }
+  if (e === 'sizzle') { if (!gameplayBuffers.sizzle) fishNoise(at, 0.3, 5000, 3500, 1.2, 0.05, 0.1); return true; }
   if (e === 'flip') { fishNoise(at, 0.12, 900, 1600, 1, 0.12, 0.2); tone(at + 0.1, 140, 0.08, 0.1); return true; }
   if (e === 'stir') { fishNoise(at, 0.25, 600, 400, 2, 0.1, 0.3); return true; }
   if (e === 'add') { fishNoise(at, 0.4, 4500, 3000, 1, 0.14, 0.05); return true; } // into the hot pan: a hiss
@@ -30175,6 +30554,7 @@ function gunNoise(at, len, type, freq, q, gain, pan = 0) {
 // the bang: a crack, the blast, a thump in your chest, and the street throwing it back off every wall a few times
 // over, a little later and a little duller each time ('in': a room, short and boxy; 'far': somebody else's, down the street)
 function gunBang(at, vol, pan = 0, where = '') {
+  if (playGameplayEffect('gunshot', at, vol, pan, where)) return;
   const far = where === 'far';
   if (!far) gunNoise(at, 0.06, 'highpass', 2200, 0.7, 0.5 * vol, pan);
   gunNoise(at, far ? 0.3 : 0.4, 'lowpass', far ? 1100 : 3200, 0.8, 0.9 * vol, pan);
@@ -30189,6 +30569,7 @@ const dryFire = at => { tone(at, 2600, 0.025, 0.09, 'square'); gunNoise(at, 0.03
 const whizz = (at, pan) => gunNoise(at, 0.12, 'bandpass', 5000, 6, 0.1, pan);
 // thumbing the cylinder out, six rounds in one after another, and snapping it shut
 function reloadSound(at) {
+  if (playGameplayEffect('reload', at)) return;
   gunNoise(at, 0.05, 'bandpass', 2400, 3, 0.22);
   for (let k = 0; k < 6; k++) gunNoise(at + 0.3 + k * 0.17, 0.035, 'bandpass', 3800 + k * 90, 5, 0.12);
   gunNoise(at + RELOAD_T - 0.12, 0.07, 'bandpass', 1800, 2, 0.3);
@@ -33529,6 +33910,8 @@ function saveGame() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
 }
 function loadGame() {
+  hushGameplayAudio();
+  cancelTransitAnnouncements();
   let text, prepared;
   citySaveBackupPending = null;
   try {
@@ -33682,7 +34065,7 @@ onkeydown = e => {
   if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
-  if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
+  if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; transitSubwayDeparted(); }
 };
 onkeyup = e => { K[e.code] = 0; if (e.code === 'Space' && skatingNow() && !paused) skateSpace(false); };
 cv.onclick = () => { audioStart(); if (!paused) lockMouse(); };
@@ -33876,10 +34259,11 @@ function drive(dt) {
 
 let t0 = performance.now();
 function loop(t) {
-  if (paused) { t0 = t; hushSirens(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
+  if (paused) { t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
-  if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
+  if (freecam) { transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
+  transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
   const fishingCompetitionLine=stepFishingCompetition(dt);
@@ -33979,6 +34363,7 @@ function loop(t) {
     room.track += dt * 2.5 * clamp(room.rideT / 2, 0, 1) * clamp((9 - room.rideT) / 2, 0, 1);
     if (room.rideT <= 0) arriveAt(room.dest);
   }
+  stepTransitAnnouncements();
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;

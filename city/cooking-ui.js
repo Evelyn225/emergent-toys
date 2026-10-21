@@ -101,7 +101,7 @@ function cookPanelKey(e) {
 // the pan's noises (minigame-ui.js sfxGame asks first)
 function sfxCook(e) {
   const at = actx.currentTime;
-  if (e === 'sizzle') { fishNoise(at, 0.3, 5000, 3500, 1.2, 0.05, 0.1); return true; }
+  if (e === 'sizzle') { if (!gameplayBuffers.sizzle) fishNoise(at, 0.3, 5000, 3500, 1.2, 0.05, 0.1); return true; }
   if (e === 'flip') { fishNoise(at, 0.12, 900, 1600, 1, 0.12, 0.2); tone(at + 0.1, 140, 0.08, 0.1); return true; }
   if (e === 'stir') { fishNoise(at, 0.25, 600, 400, 2, 0.1, 0.3); return true; }
   if (e === 'add') { fishNoise(at, 0.4, 4500, 3000, 1, 0.14, 0.05); return true; } // into the hot pan: a hiss

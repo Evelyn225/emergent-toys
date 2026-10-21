@@ -66,7 +66,7 @@ onkeydown = e => {
   if (e.code === 'KeyV' && (me || mode === 'sea' || mode === 'air' || mode === 'boat' || skatingNow())) third = !third;
   const n = /^Digit([1-6])$/.exec(e.code);
   if (n && mode === 'taxi' && !me.dest && (n[1] !== '6' || owned.homes.length)) setDest(+n[1]);
-  if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; }
+  if (n && mode === 'room' && room.kind === 'train' && room.dest == null && +n[1] <= room.opts.length) { room.dest = room.opts[n[1] - 1]; room.rideT = 9; transitSubwayDeparted(); }
 };
 onkeyup = e => { K[e.code] = 0; if (e.code === 'Space' && skatingNow() && !paused) skateSpace(false); };
 cv.onclick = () => { audioStart(); if (!paused) lockMouse(); };
@@ -260,10 +260,11 @@ function drive(dt) {
 
 let t0 = performance.now();
 function loop(t) {
-  if (paused) { t0 = t; hushSirens(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
+  if (paused) { t0 = t; hushSirens(); transitSync(); requestAnimationFrame(loop); return; } // frozen: the last frame stays up under the menu
   // The first RAF timestamp can precede the performance.now() baseline taken during startup.
   const dt = clamp((t - t0) / 1000, 0, 0.05); t0 = t;
-  if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
+  if (freecam) { transitSync(); env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
+  transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
   const fishingCompetitionLine=stepFishingCompetition(dt);
@@ -363,6 +364,7 @@ function loop(t) {
     room.track += dt * 2.5 * clamp(room.rideT / 2, 0, 1) * clamp((9 - room.rideT) / 2, 0, 1);
     if (room.rideT <= 0) arriveAt(room.dest);
   }
+  stepTransitAnnouncements();
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;

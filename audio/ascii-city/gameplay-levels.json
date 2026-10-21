@@ -1,0 +1,52 @@
+{
+  "targetLUFS": -20,
+  "sampleRate": 24000,
+  "clips": [
+    {
+      "key": "gunshot",
+      "source": "gunshot.mp3",
+      "file": "gunshot.wav",
+      "gain": 1.2,
+      "sourceSha256": "b1e432f8ddb3284ed080ce6cbe548f18722cfe4bb8d3c8376d4ee91a28561f49",
+      "duration": 2.496,
+      "seamSamples": 0,
+      "lufs": -19.98,
+      "truePeakDB": -6.67
+    },
+    {
+      "key": "reload",
+      "source": "Revolver Reload (1.6 seconds).mp3",
+      "file": "revolver-reload.wav",
+      "gain": 0.75,
+      "sourceSha256": "49bdab3a8692b211a94f5677fa35fc4fd509123f35ab9d16cde0e0ecf806be86",
+      "duration": 1.6,
+      "seamSamples": 0,
+      "lufs": -20.68,
+      "truePeakDB": -3
+    },
+    {
+      "key": "sizzle",
+      "source": "cooking sizzle (seamless).mp3",
+      "file": "cooking-sizzle.wav",
+      "gain": 0.45,
+      "loop": true,
+      "sourceSha256": "befc3d2fa63ff93e43123b7d3a9d083c08c757c75983987db4fd8f72d80a4017",
+      "duration": 27.392791666666668,
+      "seamSamples": 2880,
+      "lufs": -20,
+      "truePeakDB": -4.46
+    },
+    {
+      "key": "rotor",
+      "source": "helicopter-rotor-loop.mp3",
+      "file": "helicopter-rotor.wav",
+      "gain": 0.85,
+      "loop": true,
+      "sourceSha256": "e2687f29f5dac2121097556497dee9bf2276f9a7694e47f2c20e4eb3c826fb68",
+      "duration": 6.198708333333333,
+      "seamSamples": 2880,
+      "lufs": -20.51,
+      "truePeakDB": -3
+    }
+  ]
+}

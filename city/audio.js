@@ -36,6 +36,7 @@ function audioStart() {
   for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' || k === 'aquarium' ? musicBus : ambBus);
   beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, ambBus); // muffled through the walls indoors
   makeSynths();
+  preloadGameplayAudio();
   clipBuffer('police-siren.wav').then(buf => { policeSirenBuffer = buf; });
   onMoney = amount => amount > 0 ? sfxTill() : sfxCoin();
 }
@@ -48,6 +49,8 @@ function applyVolumes() {
 }
 function toggleSound() {
   soundOn = !soundOn;
+  if (!soundOn) cancelTransitAnnouncements();
+  if (!soundOn) hushGameplayAudio();
   if (master) master.gain.setTargetAtTime(soundOn ? MASTER : 0, actx.currentTime, 0.15);
   say(soundOn ? 'Sound on' : 'Sound off', 1.5);
 }
@@ -177,7 +180,10 @@ function sfxCoin() { const at = actx.currentTime; tone(at, 3100, 0.15, 0.08); to
 const CLIPS = {};
 function clipBuffer(name) {
   const file = name.includes('.') ? name : name + '.mp3';
-  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + file).then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).catch(() => null);
+  if (!CLIPS[name]) CLIPS[name] = fetch(AUDIO_DIR + file).then(r => {
+    if (!r.ok) throw new Error('Audio unavailable: ' + file);
+    return r.arrayBuffer();
+  }).then(b => actx.decodeAudioData(b)).catch(() => null);
   return CLIPS[name];
 }
 function playClip(name, gain, when = actx.currentTime) {
@@ -256,6 +262,7 @@ function tickSirens(indoors) {
 // not only the pause menu, which mutes everything): the sirens fall silent rather than hold whatever note they were on.
 // tickSirens brings them back with the first frame after
 function hushSirens() {
+  hushGameplayAudio();
   if (!actx) return;
   for (const v of sirens.values()) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
 }
@@ -277,6 +284,7 @@ let heardBolt = null, dripT = 0;
 // ---- per frame
 let stepAcc = 0, lastPos = null, clackT = 0, rotorT = 0;
 function audioTick(dt) {
+  tickGameplayAudio();
   if (!actx || actx.state !== 'running') return;
   const now = actx.currentTime, indoors = mode === 'room';
   master.gain.setTargetAtTime(soundOn ? MASTER * settings.master ** 2 * 1.5 * (1 - fade) : 0, now, 0.3); // the world goes quiet as you fall asleep
@@ -295,6 +303,7 @@ function audioTick(dt) {
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
+  if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
   synth.fluorescent.gain.setTargetAtTime(mix.fluorescent * LEVEL.fluorescent, now, GLIDE);
   synth.watch.gain.setTargetAtTime(mix.watch * LEVEL.watch, now, GLIDE);
   if (indoors && room.kind === 'conservatory') {
@@ -308,7 +317,7 @@ function audioTick(dt) {
     const T_ = PLANE_TYPES[pilot.type], th = T_.heli ? pilot.rotor || 0 : pilot.throttle || 0;
     synth.engineOsc.frequency.setTargetAtTime(T_.heli ? 30 + th * 25 : pilot.type === 'jet' ? 90 + th * 160 : 55 + th * 70, now, 0.15);
     synth.engineLP.frequency.setTargetAtTime(T_.heli ? 260 + th * 200 : pilot.type === 'jet' ? 900 + th * 1800 : 400 + th * 500, now, 0.2);
-    if (T_.heli && th > 0.1 && (rotorT -= dt * (4 + th * 14)) < 0) { rotorT = 1; burst(now, 0.07, [filt('lowpass', 220)], 0.12 * th, 0); }
+    if (T_.heli && !gameplayBuffers.rotor && th > 0.1 && (rotorT -= dt * (4 + th * 14)) < 0) { rotorT = 1; burst(now, 0.07, [filt('lowpass', 220)], 0.12 * th, 0); }
   }
   // riding the el: wheels clatter over the rail joints, faster with speed
   if (mode === 'el') {

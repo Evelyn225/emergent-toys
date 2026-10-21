@@ -20,6 +20,7 @@ const DEV_CSS = `
 const devOpen = () => !!devEl && devEl.style.display === 'flex';
 
 function toggleFreecam() {
+  cancelTransitAnnouncements();
   if (freecam) { leaveFreecam(); return; }
   let x = px, y = py, yaw = a;
   if (mode === 'sea') [x, y, yaw] = seaCam(0, chaseOn);
