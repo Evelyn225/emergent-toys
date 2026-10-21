@@ -37,7 +37,7 @@ function leaveFreecam() {
   if (indoors) freecam = null; else devFree();
   px = indoors ? cam.x : worldCoord(cam.x); py = indoors ? cam.y : worldCoord(cam.y);
   a = cam.yaw; pitch = cam.pitch; chaseOn = false;
-  Object.assign(body, { z: 0, vz: 0, mx: 0, my: 0, peak: 0, hop: 0, seat: null });
+  Object.assign(body, { z: 0, vz: 0, mx: 0, my: 0, peak: 0, hop: 1, crouch: 0, seat: null, trick: null, buf: -9, landedAt: -9, swirl: 0 });
   if (indoors) {
     if (!free(px, py)) {
       let best = Infinity, at = room.def.entry;
@@ -60,6 +60,10 @@ function leaveFreecam() {
       }
     }
   }
+  // The first physics frame must compare against the new terrain, not the
+  // ground left behind when freecam started.
+  body.ground=mode==='walk'?walkGround(px,py):0;body.groundMode=mode;
+  body.lastA=a;body.lx=px;body.ly=py;
 }
 
 function stepFreecam(dt) {

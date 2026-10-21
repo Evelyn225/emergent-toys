@@ -70,15 +70,16 @@ test('freecam resumes at the camera on foot, indoors and on a safe roof',()=>fix
  const r=await p.evaluate(()=>{
   const road=ROAD.findIndex((r,k)=>r && !map[k] && !solidAt(k%N+.5,Math.floor(k/N)+.5,.1));
   const x=road%N+.5,y=Math.floor(road/N)+.5;
+  body.ground=5;body.groundMode='walk';body.crouch=1;
   toggleFreecam();Object.assign(freecam,{x,y,z:walkGround(x,y)+.47,yaw:1.2,pitch:.3});toggleFreecam();
-  const outside={x:px,y:py,z:body.z,yaw:a,pitch,mode};
+  const outside={x:px,y:py,z:body.z,yaw:a,pitch,mode};stepBody(.01);const stable=Math.abs(body.z-3)<.01&&body.crouch===0;
   enterRoom('home',{ret:[x,y,0]},ROOM_DEFS.home.entry);toggleFreecam();Object.assign(freecam,{x:10.5,y:10,z:2,yaw:.8,pitch:.2});toggleFreecam();
   const inside={x:px,y:py,z:body.z,mode,open:free(px,py)};
   toggleFreecam();Object.assign(freecam,{x:0,y:0});toggleFreecam();const wallEscape=free(px,py);
   devFree();const b=ARCH_BUILDINGS[0];toggleFreecam();Object.assign(freecam,{x:b.x0+.5,y:b.y0+.5,z:.2});toggleFreecam();
-  return {x,y,outside,inside,wallEscape,roof:{mode,open:free(px,py),height:roofH}};
+  return {x,y,outside,stable,inside,wallEscape,roof:{mode,open:free(px,py),height:roofH}};
  });
- assert.equal(r.outside.x,r.x);assert.equal(r.outside.y,r.y);assert.ok(Math.abs(r.outside.z-3)<1e-6);assert.equal(r.outside.yaw,1.2);assert.equal(r.outside.pitch,.3);assert.equal(r.outside.mode,'walk');
+ assert.equal(r.outside.x,r.x);assert.equal(r.outside.y,r.y);assert.ok(Math.abs(r.outside.z-3)<1e-6);assert.equal(r.outside.yaw,1.2);assert.equal(r.outside.pitch,.3);assert.equal(r.outside.mode,'walk');assert.equal(r.stable,true);
  assert.deepEqual(r.inside,{x:10.5,y:10,z:2-1.7,mode:'room',open:true});assert.equal(r.wallEscape,true);assert.equal(r.roof.mode,'roof');assert.equal(r.roof.open,true);assert.ok(r.roof.height>0);
 }));
 test('each apartment has a wall shelf, reachable fixtures, clear bedside sleep and an open curved bath',()=>fixture(async p=>{
