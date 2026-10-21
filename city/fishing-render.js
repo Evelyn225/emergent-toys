@@ -13,6 +13,7 @@ SOLID_SHADE.fishhut = o => (i, t, L) => {
   hutWall(i, f, L, worn ? 1.25 : 0.88 + board * 0.18);
   if (half - Math.abs(along) < 0.014) { BG[i] = C(WHITE, (1.4 + L * 0.4) * shadeFace(f)); return set(i, '|', C(GRAY, L * 0.6)), true; } // corner boards
   const clap = () => set(i, fract(w * 30) < 0.2 ? '_' : ' ', C(worn ? WHITE : BLUE, L * 0.75));
+  if(f===4&&w>.232&&w<.264&&Math.abs(u)<.39)return drawHutSign(o,i,t,L,'FRIDAY FISH-OFF',.232,.264,.39,o.y-o.hw);
   if (f === 4) { // the front, on the promenade: the hatch with him behind it, its flap propped up over it, the door, a life ring
     const hu = u - FISH_HUT.hatch;
     if (Math.abs(hu) < 0.11 && w > 0.205 && w < 0.228 && open) { BG[i] = C(fract(u * 18) < 0.5 ? RED : WHITE, 1.4 + L * 0.4); return set(i, '=', C(GRAY, L * 0.5)), true; } // the flap
@@ -67,22 +68,24 @@ SOLID_SHADE.hutroof = o => (i, t, L) => {
 };
 // the sign along the ridge, readable from the road and the sea: BAIT & TACKLE between two painted fish
 const HUT_WORD = 'BAIT & TACKLE';
-SOLID_SHADE.hutsign = o => (i, t, L) => {
-  const f = HIT.face, w = HIT.w, z0 = o.z0, z1 = o.z1, edge = Math.min(o.hl - Math.abs(HIT.u), z1 - w, w - z0) < 0.009, glow = Math.max(night, overcast * 0.6);
-  BG[i] = edge ? C(BLUE, 1.5 + L * 0.3) : C(WHITE, 1.6 + L * 0.42 + glow * 2);
+function drawHutSign(o,i,t,L,word=HUT_WORD,z0=o.z0,z1=o.z1,hl=o.hl,signY=o.y) {
+  const f = HIT.face, w = HIT.w, edge = Math.min(hl - Math.abs(HIT.u), z1 - w, w - z0) < (word===HUT_WORD?.009:.002), glow = Math.max(night, overcast * 0.6);
+  const competition=word!==HUT_WORD;
+  BG[i] = edge ? C(BLUE, 1.5 + L * 0.3) : C(competition?BLUE:WHITE, 1.6 + L * 0.42 + glow * 2);
   if (f !== 3 && f !== 4 || edge) return set(i, ' ', 0), true;
-  const vx = rel(o.x - px), vy = rel(o.y - py), n = HUT_WORD.length + 2, h = z1 - z0 - 0.02, far = farDepth(vx, vy, o.hl);
-  if (!signIsBig(2 * o.hl / n, h, far)) { // between far off and up close: the word set solid along the middle row, not spread over the board
+  const vx = rel(o.x - px), vy = rel(signY - py), n = word.length + 2, h = z1 - z0 - 0.02, far = farDepth(vx, vy, hl);
+  if (!signIsBig(2 * hl / n, h, far)) { // between far off and up close: the word set solid along the middle row, not spread over the board
     const dep = midDepth(vx, vy), cc = cols / 2 + (-dy * vx + dx * vy) * projX / dep, rc = hor - ((z0 + z1) / 2 - eye) * projY / dep;
-    if (2 * o.hl * Math.abs(dy) * projX / dep >= HUT_WORD.length + 1) { // (if the board's that many columns across, seen from here)
-      const k = i % cols - Math.floor(cc - HUT_WORD.length / 2);
-      const ch = Math.floor(i / cols) === Math.floor(rc) && k >= 0 && k < HUT_WORD.length ? HUT_WORD[k] : ' ';
-      return set(i, ch, C(ch === '&' ? RED : BLUE, 14)), true;
+    if (2 * hl * Math.abs(dy) * projX / dep >= word.length + 1) { // (if the board's that many columns across, seen from here)
+      const k = i % cols - Math.floor(cc - word.length / 2);
+      const ch = Math.floor(i / cols) === Math.floor(rc) && k >= 0 && k < word.length ? word[k] : ' ';
+      return set(i, ch, C(competition?YEL:ch === '&' ? RED : BLUE, 14)), true;
     }
   }
-  const ch = signLine(HUT_WORD, faceQ(HIT.u, o.hl) * n - 1, (z1 - 0.01 - w) / h, i, (z0 + z1) / 2, midDepth(vx, vy), t, 2 * o.hl / n, h, farDepth(vx, vy, o.hl), ...faceDir(1, 0));
-  return set(i, ch ?? ' ', C(ch === '&' ? RED : BLUE, 14)), true;
-};
+  const ch = signLine(word, faceQ(HIT.u, hl) * n - 1, (z1 - 0.01 - w) / h, i, (z0 + z1) / 2, midDepth(vx, vy), t, 2 * hl / n, h, farDepth(vx, vy, hl), ...faceDir(1, 0));
+  return set(i, ch ?? ' ', C(competition?YEL:ch === '&' ? RED : BLUE, 14)), true;
+}
+SOLID_SHADE.hutsign = o => (i,t,L) => drawHutSign(o,i,t,L);
 // a net hung out to dry between two posts: see-through mesh, sagging in scallops from its rope, cork floats along the top
 SOLID_SHADE.netrack = o => (i, t, L) => {
   const f = HIT.face, u = HIT.u, w = HIT.w;
@@ -434,6 +437,7 @@ function fishPrompt() {
   return { wind: 'let go of Q to cast', fly: '', wait: 'Waiting for a bite...   Q: reel in', lure: 'Something\'s nosing at it... wait for it', bite: 'Q: STRIKE!', reel: 'Reeling in...', land: 'Q: reel in', landed: '' }[f.st] ?? '';
 }
 function useHut() {
+  if (!hutOpen() && (fishingCompetitionOpen() || fishCompetition.round)) return openFishingCompetition();
   if (!hutOpen()) return say('Shuttered. A card in the hatch: BACK AT 5AM. FISH DON\'T WAIT AND NEITHER DO WE.', 3);
   return openShop('BAIT & TACKLE', ['rod', 'carbonrod']);
 }

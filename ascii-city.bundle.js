@@ -9529,6 +9529,7 @@ function castLine() {
   const f = fishing, d = CAST_MIN + f.power * (CAST_MAX - CAST_MIN), ca = Math.cos(a), sa = Math.sin(a);
   let reach = d;
   for (let s = 0.1; s <= d; s += 0.05) if (map[idx(Math.floor(px + ca * s), Math.floor(py + sa * s))] > 0) { reach = Math.max(0.1, s - 0.08); break; }
+  f.competitionDay=fishingCompetitionActive()?fishCompetition.round.day:null;
   Object.assign(f, { st: 'fly', t: 0, d: reach, dur: 0.3 + reach * 0.2, ox: px + ca * 0.06, oy: py + sa * 0.06, oz: rodTipHeight(),
     tx: px + ca * reach, ty: py + sa * reach, x: px, y: py, z: rodTipHeight() });
   fishSfx.push('whoosh');
@@ -9582,15 +9583,16 @@ function landCatch(f) {
   const c = f.catch, d = ITEMS[c.id];
   Object.assign(f, { st: 'landed', t: 0 });
   fishSfx.push('land');
+  const competitionBest=recordFishingCompetitionCatch(f);
   if (d.kind === 'cash') { const amt = Math.round((0.5 + Math.random() * 3.5) * 4) / 4; earn(amt); return say(`${d.line} ${fmt$(amt)} in all.`, 4); }
-  if (inv.length >= INV_SIZE) return say(`${d.kind === 'fish' ? `A ${catchName(c)}` : cap(d.name)}. Your bag's full, so back it goes.`, 3);
+  if (inv.length >= INV_SIZE) return say(`${d.kind === 'fish' ? `A ${catchName(c)}` : cap(d.name)}. Your bag's full, so back it goes.${competitionBest}`, 3);
   carryItem(c.kg ? { id: c.id, uses: 0, kg: c.kg } : { id: c.id, uses: 0 }, false);
   if (d.kind === 'fish') {
     fishLog.caught++;
     const best = !fishLog.best || c.kg > fishLog.best.kg;
     if (best) fishLog.best = { id: c.id, kg: c.kg };
     if (c.kg >= 10) newsEvent('bigfish', px, py, { fish: d.name, kg: c.kg });
-    return say(`A ${catchName(c)}.${best && fishLog.caught > 1 ? ' Your biggest yet.' : ''}`, 3);
+    return say(`A ${catchName(c)}.${best && fishLog.caught > 1 ? ' Your biggest yet.' : ''}${competitionBest}`, 3);
   }
   if (d.kind === 'wish') return say(`A golden koi, ${c.kg}kg, shining like a coin. It looks at you as if it's expecting something. (Q: make a wish)`, 5);
   return say(d.line, Math.max(3, d.line.length / 20));
@@ -9615,8 +9617,9 @@ const readBottle = () => [pick(BOTTLE_NOTES), 'page'];
 // the hut: standing at its hatch on the promenade side
 const nearHut = () => mode === 'walk' && Math.abs(rel(px - FISH_HUT.x - FISH_HUT.hatch)) < 0.2 && rel(FISH_HUT.y - FISH_HUT.hw - py) > 0 && rel(FISH_HUT.y - FISH_HUT.hw - py) < 0.4;
 function hutPrompt() {
+  if (!hutOpen() && (fishingCompetitionOpen() || fishCompetition.round)) return 'E: Friday Fish-off (entry, standings & results)';
   if (!hutOpen()) return 'BAIT & TACKLE: shut. Open 5am till 8pm.';
-  return `E: bait & tackle (rods, and they buy your catch)${fishLog.best ? `   your best: ${catchName(fishLog.best)}` : ''}`;
+  return `E: bait & tackle (rods, and they buy your catch)${fishingCompetitionOpen()?'   Friday Fish-off: entries open':''}${fishLog.best ? `   your best: ${catchName(fishLog.best)}` : ''}`;
 }
 
 // ---- the regulars: a few anglers out at the ends of the piers, along the Lighthouse Walk, at a park pond and on the
@@ -9656,6 +9659,87 @@ const nearAngler = () => mode === 'walk' ? ANGLERS.find(o => Math.hypot(rel(o.x 
 function anglerPhase(o, t = T) {
   const P = 50 + hash(o.seed, 3, 1621) * 60, q = fract((t + hash(o.seed, 4, 1621) * 300) / P), land = 4 / P;
   return q < 1 - land ? { st: 'wait' } : { st: 'catch', k: (q - (1 - land)) / land };
+}
+// Friday entry is a calendar window; each angler gets a full five minutes of play.
+const FISH_OFF_SECONDS = 300, FISH_OFF_PRIZES = [250,125,60];
+const fishCompetition = {enteredDay:-1,round:null,wins:0,best:null};
+const fishingCompetitionOpen = () => mod(dayNum,7)===4;
+const fishingCompetitionActive = () => !!fishCompetition.round && fishCompetition.round.left>0;
+let fishingCompetitionFieldCache=null;
+function fishingCompetitionField(day) {
+  if(fishingCompetitionFieldCache?.day===day)return fishingCompetitionFieldCache.rows;
+  const rows=['Mags','Old Len','Jo','Rafi'].map((name,n)=>({name,catches:Array.from({length:4},(_,k)=>{
+    const id=['mackerel','seabass','cod','conger'][(n+k)%4],range=ITEMS[id].kg;
+    const kg=Math.round((range[0]+(range[1]-range[0])*hash(day,n*4+k,2719)**2*.55)*10)/10;
+    return {at:35+k*65+Math.floor(hash(day,n*4+k,2720)*25),id,kg};
+  })}));
+  fishingCompetitionFieldCache={day,rows};return rows;
+}
+function fishingCompetitionBoard(r=fishCompetition.round) {
+  if(!r)return [];
+  const elapsed=FISH_OFF_SECONDS-r.left;
+  const rows=fishingCompetitionField(r.day).map(({name,catches})=>{
+    let best=null,at=Infinity;
+    for(const c of catches)if(c.at<=elapsed&&(!best||c.kg>best.kg)){best=c;at=c.at;}
+    return {name,best,at,you:false};
+  });
+  rows.push({name:'You',best:r.best,at:r.best?r.bestAt:Infinity,you:true});
+  return rows.sort((a,b)=>(b.best?.kg||0)-(a.best?.kg||0)||a.at-b.at||Number(a.you)-Number(b.you));
+}
+function fishingCompetitionPrize(r=fishCompetition.round) {
+  if(!r||r.left>0||!r.best)return 0;
+  return FISH_OFF_PRIZES[fishingCompetitionBoard(r).findIndex(p=>p.you)]||0;
+}
+function joinFishingCompetition() {
+  if(!fishingCompetitionOpen())return [false,'Entries open all day Friday, midnight to midnight.'];
+  if(fishCompetition.round&&(!fishCompetition.round.claimed||fishCompetition.round.left>0))return [false,'Finish your round and collect its results first.'];
+  if(fishCompetition.enteredDay>=dayNum)return [false,'One entry each Friday. Come back next week.'];
+  if(!inv.some(it=>ITEMS[it.id]?.rod))return [false,'Bring a fishing rod. The tackle counter sells them from 5am to 8pm.'];
+  fishCompetition.enteredDay=dayNum;
+  fishCompetition.round={day:dayNum,left:FISH_OFF_SECONDS,best:null,bestAt:FISH_OFF_SECONDS,count:0,claimed:false};
+  fishing=null; // A fish hooked before signing up cannot become a competition entry.
+  return [true,'The whistle goes! Five minutes, biggest fish wins. Fresh catches are weighed automatically; fish anywhere.'];
+}
+function stepFishingCompetition(dt) {
+  if(paused||!fishingCompetitionActive()||!Number.isFinite(dt)||dt<=0)return '';
+  const r=fishCompetition.round;r.left=Math.max(0,r.left-dt);
+  if(r.left>0)return '';
+  const place=fishingCompetitionBoard(r).findIndex(p=>p.you)+1,prize=fishingCompetitionPrize(r);
+  return `Time! ${r.best?`${catchName(r.best)}: place ${place} of 5.`:'No fish weighed this round.'} ${prize?`${fmt$(prize)} prize waiting.`:'The regulars tip their hats.'} Collect your results at Bait & Tackle, any time.`;
+}
+function recordFishingCompetitionCatch(f) {
+  const r=fishCompetition.round,c=f.catch;
+  if(!fishingCompetitionActive()||f.competitionDay!==r.day||f.competitionScored||!c||ITEMS[c.id]?.kind!=='fish'||!Number.isFinite(c.kg)||c.kg<=0)return '';
+  f.competitionScored=true;r.count++;
+  if(r.best&&c.kg<=r.best.kg)return '';
+  r.best={id:c.id,kg:c.kg};r.bestAt=FISH_OFF_SECONDS-r.left;
+  if(!fishCompetition.best||c.kg>fishCompetition.best.kg)fishCompetition.best={...r.best};
+  return ' Your new competition best!';
+}
+function claimFishingCompetition() {
+  const r=fishCompetition.round;
+  if(!r||r.left>0||r.claimed)return [false,'No results to collect.'];
+  const prize=fishingCompetitionPrize(r);r.claimed=true;
+  if(prize)earn(prize);
+  if(r.best&&fishingCompetitionBoard(r)[0].you)fishCompetition.wins++;
+  return [true,prize?`${fmt$(prize)} paid. Your Friday result is in the book.`:'Your Friday result is in the book. There is always next week.'];
+}
+function fishingCompetitionStatus() {
+  const r=fishCompetition.round;
+  if(r&&r.left>0){const s=Math.ceil(r.left);return `FISH-OFF ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')} | best ${r.best?`${r.best.kg}kg`:'none'} | ${fishingCompetitionBoard(r).findIndex(p=>p.you)+1}/5`;}
+  if(r&&!r.claimed)return 'FISH-OFF: results waiting at Bait & Tackle';
+  return '';
+}
+function loadFishingCompetition(data) {
+  const fish=c=>c&&ITEMS[c.id]?.kind==='fish'&&Number.isFinite(c.kg)&&c.kg>0&&c.kg<=ITEMS[c.id].kg[1]?{id:c.id,kg:Math.round(c.kg*10)/10}:null;
+  fishCompetition.enteredDay=Number.isInteger(data?.enteredDay)&&data.enteredDay>=0&&data.enteredDay<=dayNum&&mod(data.enteredDay,7)===4?data.enteredDay:-1;
+  fishCompetition.wins=Number.isInteger(data?.wins)?clamp(data.wins,0,100000):0;fishCompetition.best=fish(data?.best);fishCompetition.round=null;
+  const r=data?.round;
+  if(!r||!Number.isInteger(r.day)||r.day<0||mod(r.day,7)!==4||r.day>dayNum||!Number.isFinite(r.left)||r.left<0||r.left>FISH_OFF_SECONDS)return;
+  const best=fish(r.best);
+  fishCompetition.round={day:r.day,left:r.left,best,bestAt:best&&Number.isFinite(r.bestAt)?clamp(r.bestAt,0,FISH_OFF_SECONDS-r.left):FISH_OFF_SECONDS,
+    count:Number.isInteger(r.count)?clamp(r.count,0,100000):0,claimed:r.left===0&&r.claimed===true};
+  fishCompetition.enteredDay=Math.max(fishCompetition.enteredDay,r.day);
 }
 // ===== cooking. A stove in every home you own, and out of doors the public grills on the beaches and in the park and
 // a campfire on Lighthouse Island (props.js puts those up, cooking-ui.js draws them and the panel). E at one and pick
@@ -23366,7 +23450,7 @@ function hud() {
   const maxW = top ? cv.width - 12 : beside;
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
-  const task_ = [...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
+  const task_ = [...(fishingCompetitionStatus()?wrapText(fishingCompetitionStatus(),maxW):[]),...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
   const meters = needMeters();
   hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
   drawMapNavigation();
@@ -25162,7 +25246,7 @@ function chuteFrame() {
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const weekday = () => WEEKDAYS[mod(dayNum, 7)];
 // what's on: [weekday, from hour, to hour, what, a line for the newspaper and the gossip]
-const EVENTS = [['Sat', 21, 26, 'fireworks', 'Fireworks over the bay, Saturday 9pm to 2am']];
+const EVENTS = [['Fri',0,24,'fishing-competition','Friday Fish-off at Bait & Tackle: enter all day for your own five-minute biggest-fish round'],['Sat', 21, 26, 'fireworks', 'Fireworks over the bay, Saturday 9pm to 2am']];
 const eventNow = kind => EVENTS.some(([d, h0, h1, k]) => k === kind && (d === weekday() && tod >= h0 && tod < h1 || h1 > 24 && d === WEEKDAYS[mod(dayNum - 1, 7)] && tod < h1 - 24));
 const eventToday = kind => EVENTS.find(([d, , , k]) => k === kind && d === weekday()) || null;
 let toldEvent = '';
@@ -26237,6 +26321,9 @@ function mapDirectory() {
     fernListing.description='Your secluded island house. Workshop, storage and a sea-view terrace.';
     fernListing.status='Owned';
   }
+  add({id:'friday-fish-off',name:'Friday Fish-off · Bait & Tackle',x:FISH_HUT.x+FISH_HUT.hatch,y:FISH_HUT.y-FISH_HUT.hw-.2,category:'activities',kind:'sight',
+    description:'Weekly biggest-fish competition. Join any time Friday for your own five-minute round. Free entry; cash prizes. Entry and results stay open when the tackle shop is shut.',
+    status:fishingCompetitionStatus()||(fishingCompetitionOpen()?'Friday entries open all day':'Next entry: Friday')});
   const home=nearestWorkshopHome(),meeting=home&&(home.door||buyerDoor(home));
   add({id:'supplier',name:'Mara · workshop supplier',x:supplierVisit?.x??meeting?.[0]??null,y:supplierVisit?.y??meeting?.[1]??null,
     category:'contacts',kind:'supplier',virtual:!supplierVisit,description:'Yellow cap, teal jacket. Equipment, seed pods, refills and upgrades. Call her to your apartment from here.',
@@ -27275,7 +27362,7 @@ function showPanel(el, html) {
   releaseMouse();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl].some(el => el && el.style.display === 'flex');
+const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
@@ -27288,6 +27375,7 @@ function openShop(title, stock, vendor = null) {
   showPanel(shopEl, `<h1>${title[0] + title.slice(1).toLowerCase()}</h1><p class="sub">${fmt$(money)} on you &middot; carrying ${inv.length}/${INV_SIZE}</p>
     ${rate ? `<h2>buy</h2>${rows_}<h2>sell</h2>${sells}` : rows_}${workRow}<p class="hint">1-${Math.min(9, stock.length)} buy &middot; click any item${rate ? ' &middot; shift+1-9 sell' : ''}${work ? ' &middot; J work' : ''} &middot; E / Esc close</p>`);
   shopEl.onclick = e => { const b = e.target.closest('[data-buy]'), v = e.target.closest('[data-sell]'); if (b) shopBuy(b.dataset.buy); else if (v) shopSell(+v.dataset.sell); else if (e.target.closest('[data-work]')) startShift(); };
+  if(title==='BAIT & TACKLE')addFishingCompetitionShop();
 }
 function shopBuy(id) {
   const [ok, line] = buy(id);
@@ -27347,6 +27435,7 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if (fishingCompetitionPanelKey(e)) return true;
   if (workshopPanelKey(e)) return true;
   if (cookPanelKey(e)) return true;
   if (storeEl && storeEl.style.display === 'flex') {
@@ -28932,6 +29021,7 @@ SOLID_SHADE.fishhut = o => (i, t, L) => {
   hutWall(i, f, L, worn ? 1.25 : 0.88 + board * 0.18);
   if (half - Math.abs(along) < 0.014) { BG[i] = C(WHITE, (1.4 + L * 0.4) * shadeFace(f)); return set(i, '|', C(GRAY, L * 0.6)), true; } // corner boards
   const clap = () => set(i, fract(w * 30) < 0.2 ? '_' : ' ', C(worn ? WHITE : BLUE, L * 0.75));
+  if(f===4&&w>.232&&w<.264&&Math.abs(u)<.39)return drawHutSign(o,i,t,L,'FRIDAY FISH-OFF',.232,.264,.39,o.y-o.hw);
   if (f === 4) { // the front, on the promenade: the hatch with him behind it, its flap propped up over it, the door, a life ring
     const hu = u - FISH_HUT.hatch;
     if (Math.abs(hu) < 0.11 && w > 0.205 && w < 0.228 && open) { BG[i] = C(fract(u * 18) < 0.5 ? RED : WHITE, 1.4 + L * 0.4); return set(i, '=', C(GRAY, L * 0.5)), true; } // the flap
@@ -28986,22 +29076,24 @@ SOLID_SHADE.hutroof = o => (i, t, L) => {
 };
 // the sign along the ridge, readable from the road and the sea: BAIT & TACKLE between two painted fish
 const HUT_WORD = 'BAIT & TACKLE';
-SOLID_SHADE.hutsign = o => (i, t, L) => {
-  const f = HIT.face, w = HIT.w, z0 = o.z0, z1 = o.z1, edge = Math.min(o.hl - Math.abs(HIT.u), z1 - w, w - z0) < 0.009, glow = Math.max(night, overcast * 0.6);
-  BG[i] = edge ? C(BLUE, 1.5 + L * 0.3) : C(WHITE, 1.6 + L * 0.42 + glow * 2);
+function drawHutSign(o,i,t,L,word=HUT_WORD,z0=o.z0,z1=o.z1,hl=o.hl,signY=o.y) {
+  const f = HIT.face, w = HIT.w, edge = Math.min(hl - Math.abs(HIT.u), z1 - w, w - z0) < (word===HUT_WORD?.009:.002), glow = Math.max(night, overcast * 0.6);
+  const competition=word!==HUT_WORD;
+  BG[i] = edge ? C(BLUE, 1.5 + L * 0.3) : C(competition?BLUE:WHITE, 1.6 + L * 0.42 + glow * 2);
   if (f !== 3 && f !== 4 || edge) return set(i, ' ', 0), true;
-  const vx = rel(o.x - px), vy = rel(o.y - py), n = HUT_WORD.length + 2, h = z1 - z0 - 0.02, far = farDepth(vx, vy, o.hl);
-  if (!signIsBig(2 * o.hl / n, h, far)) { // between far off and up close: the word set solid along the middle row, not spread over the board
+  const vx = rel(o.x - px), vy = rel(signY - py), n = word.length + 2, h = z1 - z0 - 0.02, far = farDepth(vx, vy, hl);
+  if (!signIsBig(2 * hl / n, h, far)) { // between far off and up close: the word set solid along the middle row, not spread over the board
     const dep = midDepth(vx, vy), cc = cols / 2 + (-dy * vx + dx * vy) * projX / dep, rc = hor - ((z0 + z1) / 2 - eye) * projY / dep;
-    if (2 * o.hl * Math.abs(dy) * projX / dep >= HUT_WORD.length + 1) { // (if the board's that many columns across, seen from here)
-      const k = i % cols - Math.floor(cc - HUT_WORD.length / 2);
-      const ch = Math.floor(i / cols) === Math.floor(rc) && k >= 0 && k < HUT_WORD.length ? HUT_WORD[k] : ' ';
-      return set(i, ch, C(ch === '&' ? RED : BLUE, 14)), true;
+    if (2 * hl * Math.abs(dy) * projX / dep >= word.length + 1) { // (if the board's that many columns across, seen from here)
+      const k = i % cols - Math.floor(cc - word.length / 2);
+      const ch = Math.floor(i / cols) === Math.floor(rc) && k >= 0 && k < word.length ? word[k] : ' ';
+      return set(i, ch, C(competition?YEL:ch === '&' ? RED : BLUE, 14)), true;
     }
   }
-  const ch = signLine(HUT_WORD, faceQ(HIT.u, o.hl) * n - 1, (z1 - 0.01 - w) / h, i, (z0 + z1) / 2, midDepth(vx, vy), t, 2 * o.hl / n, h, farDepth(vx, vy, o.hl), ...faceDir(1, 0));
-  return set(i, ch ?? ' ', C(ch === '&' ? RED : BLUE, 14)), true;
-};
+  const ch = signLine(word, faceQ(HIT.u, hl) * n - 1, (z1 - 0.01 - w) / h, i, (z0 + z1) / 2, midDepth(vx, vy), t, 2 * hl / n, h, farDepth(vx, vy, hl), ...faceDir(1, 0));
+  return set(i, ch ?? ' ', C(competition?YEL:ch === '&' ? RED : BLUE, 14)), true;
+}
+SOLID_SHADE.hutsign = o => (i,t,L) => drawHutSign(o,i,t,L);
 // a net hung out to dry between two posts: see-through mesh, sagging in scallops from its rope, cork floats along the top
 SOLID_SHADE.netrack = o => (i, t, L) => {
   const f = HIT.face, u = HIT.u, w = HIT.w;
@@ -29353,6 +29445,7 @@ function fishPrompt() {
   return { wind: 'let go of Q to cast', fly: '', wait: 'Waiting for a bite...   Q: reel in', lure: 'Something\'s nosing at it... wait for it', bite: 'Q: STRIKE!', reel: 'Reeling in...', land: 'Q: reel in', landed: '' }[f.st] ?? '';
 }
 function useHut() {
+  if (!hutOpen() && (fishingCompetitionOpen() || fishCompetition.round)) return openFishingCompetition();
   if (!hutOpen()) return say('Shuttered. A card in the hatch: BACK AT 5AM. FISH DON\'T WAIT AND NEITHER DO WE.', 3);
   return openShop('BAIT & TACKLE', ['rod', 'carbonrod']);
 }
@@ -29395,6 +29488,54 @@ function drawAnglerLines() {
   }
 }
 const SILVER_FISH = [WHITE, CYAN, YEL];
+// The notice and results remain accessible when the tackle counter is shuttered.
+let fishingCompetitionEl=null;
+function openFishingCompetition() {
+  if(shopEl?.style.display==='flex')hidePanel(shopEl);
+  const r=fishCompetition.round,active=fishingCompetitionActive(),pending=r&&!r.claimed,entered=fishCompetition.enteredDay>=dayNum;
+  const ready=fishingCompetitionOpen()&&!active&&!pending&&!entered,rod=inv.some(it=>ITEMS[it.id]?.rod);
+  const board=r?fishingCompetitionBoard(r).map((p,n)=>`<tr${p.you?' style="color:#ffe28b"':''}><td style="padding:5px">${n+1}. ${p.name}</td><td style="padding:5px;text-align:right">${p.best?`${p.best.kg}kg ${ITEMS[p.best.id].name}`:'No catch yet'}</td></tr>`).join(''):'';
+  const status=active?`${fishingCompetitionStatus()} · the clock is paused here.`:pending?'The round is over. Your final standings:':fishingCompetitionOpen()?(entered?'You have entered this Friday. Next entry: next Friday.':'Entries open until midnight. Your clock starts when you join.'):'Entries open all day Friday, midnight to midnight.';
+  fishingCompetitionEl ||= panel('fishing-competition');
+  showPanel(fishingCompetitionEl,`<h1>Friday Fish-off</h1><p class="sub">Sunset Pier angling club · free entry</p>
+    <p>${status}</p><p class="sub">Five minutes of active play. Biggest single fish wins; ties go to the earlier catch. Fish anywhere, on foot or from a boat. Only fish landed from a new cast during your round count. Fresh catches are weighed automatically, even with a full bag. You can keep or sell them.</p>
+    <p class="sub">1st ${fmt$(FISH_OFF_PRIZES[0])} · 2nd ${fmt$(FISH_OFF_PRIZES[1])} · 3rd ${fmt$(FISH_OFF_PRIZES[2])}. One round per Friday. Menus pause the clock; saving keeps your remaining time. A late entry gets the full round, even past midnight.</p>
+    ${board?`<h2>${active?'Live standings':'Last round'}</h2><table style="width:100%;font:inherit">${board}</table>`:''}
+    <p class="sub">Club wins: ${fishCompetition.wins}${fishCompetition.best?` · your competition record: ${catchName(fishCompetition.best)}`:''}</p>
+    ${ready?`<button class="item" data-fish-join ${rod?'':'disabled'}><span class="k">1</span><span>Join · start my five minutes</span></button>${rod?'':'<p class="sub">Bring a rod. The tackle counter sells them from 5am to 8pm.</p>'}`:''}
+    ${pending&&!active?`<button class="item" data-fish-claim><span class="k">1</span><span>Collect results${fishingCompetitionPrize()?` · ${fmt$(fishingCompetitionPrize())}`:''}</span></button>`:''}
+    ${hutOpen()?'<button class="item" data-fish-shop>Buy rods / sell catches</button>':'<p class="sub">Tackle counter closed · opens 5am to 8pm. Competition entry and results stay open.</p>'}
+    <button class="item" data-fish-close>${active?'Resume fishing':'Close'}</button><p class="hint">1: join / collect · E / Esc: close</p>`);
+  fishingCompetitionEl.onclick=e=>{
+    if(e.target.closest('[data-fish-join]'))return fishingCompetitionAction('join');
+    if(e.target.closest('[data-fish-claim]'))return fishingCompetitionAction('claim');
+    if(e.target.closest('[data-fish-shop]')){hidePanel(fishingCompetitionEl);return useHut();}
+    if(e.target.closest('[data-fish-close]'))hidePanel(fishingCompetitionEl);
+  };
+}
+function fishingCompetitionAction(action) {
+  const result=action==='join'?joinFishingCompetition():claimFishingCompetition();
+  if(result[0])saveGame();say(result[1],5);
+  if(result[0]&&action==='join'){hidePanel(fishingCompetitionEl);return;}
+  openFishingCompetition();
+}
+function fishingCompetitionPanelKey(e) {
+  if(fishingCompetitionEl?.style.display==='flex'){
+    if(e.code==='Escape'||e.code==='KeyE')hidePanel(fishingCompetitionEl);
+    if(e.code==='Digit1'){
+      if(fishingCompetitionEl.querySelector('[data-fish-join]:not(:disabled)'))fishingCompetitionAction('join');
+      else if(fishingCompetitionEl.querySelector('[data-fish-claim]'))fishingCompetitionAction('claim');
+    }
+    return true;
+  }
+  if(shopEl?.style.display==='flex'&&shopCtx?.title==='BAIT & TACKLE'&&e.code==='KeyF'){openFishingCompetition();return true;}
+  return false;
+}
+function addFishingCompetitionShop() {
+  const row=document.createElement('button');row.className='item';row.dataset.fishCompetition='';
+  row.innerHTML='<span class="k">F</span><span>Friday Fish-off · entry / standings / results</span>';
+  row.onclick=openFishingCompetition;shopEl.querySelector('.panel').append(row);
+}
 // ===== cooking, on screen (cooking.js has the rules): the public grills and the campfire out of doors, the panel of
 // what you can make where you are, the pan itself (a minigame: minigame-ui.js shows it), and the pictures of the
 // groceries and what you make of them
@@ -33082,7 +33223,7 @@ function saveGame() {
   if (citySaveBlocked) return false;
   noteStreet();
   const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
-  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
+  const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, fishingCompetition:fishCompetition, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
     courier: { job: courierJob, records: courierRecords },
@@ -33114,6 +33255,7 @@ function loadGame() {
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
   loadStreetScenes(d.streetScenes);
+  loadFishingCompetition(d.fishingCompetition);
   tags.length = 0; for (const t of d.tags || []) tags.push(t); reindexTags();
   fishLog.caught = d.fish?.caught | 0; fishLog.best = d.fish?.best && ITEMS[d.fish.best.id] && Number.isFinite(d.fish.best.kg) ? { id: d.fish.best.id, kg: d.fish.best.kg } : null;
   items(d.inv, inv, INV_SIZE); items(d.stored, stored); items(d.closet, closet);
@@ -33446,6 +33588,8 @@ function loop(t) {
   if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   T += dt; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
+  const fishingCompetitionLine=stepFishingCompetition(dt);
+  if(fishingCompetitionLine){say(fishingCompetitionLine,8);saveGame();}
   updateMapNavigation();
   env(dt);
   if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
@@ -33655,7 +33799,7 @@ function keyDown(code) { onkeydown({ code, repeat: false }); }
 function keyUp(code) { onkeyup({ code }); }
 
 // the big button's label: what E does here, as a word or two (from the prompt line, so it always agrees with it)
-const E_WORDS = [[/^press the window railway/, 'Run train'], [/^look at the chalk/, 'Look'], [/^take the free lamp/, 'Take lamp'], [/^knock/, 'Knock'], [/^read/, 'Read'], [/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
+const E_WORDS = [[/^friday fish-off/, 'Fish-off'], [/^press the window railway/, 'Run train'], [/^look at the chalk/, 'Look'], [/^take the free lamp/, 'Take lamp'], [/^knock/, 'Knock'], [/^read/, 'Read'], [/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
   [/^get off/, 'Get off'], [/^board/, 'Board'], [/^pick up/, 'Pick up'], [/^buy/, 'Buy'], [/^(shop|bait)/, 'Shop'], [/^cook/, 'Cook'], [/^play/, 'Play'],
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],

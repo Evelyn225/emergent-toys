@@ -3,7 +3,7 @@
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const weekday = () => WEEKDAYS[mod(dayNum, 7)];
 // what's on: [weekday, from hour, to hour, what, a line for the newspaper and the gossip]
-const EVENTS = [['Sat', 21, 26, 'fireworks', 'Fireworks over the bay, Saturday 9pm to 2am']];
+const EVENTS = [['Fri',0,24,'fishing-competition','Friday Fish-off at Bait & Tackle: enter all day for your own five-minute biggest-fish round'],['Sat', 21, 26, 'fireworks', 'Fireworks over the bay, Saturday 9pm to 2am']];
 const eventNow = kind => EVENTS.some(([d, h0, h1, k]) => k === kind && (d === weekday() && tod >= h0 && tod < h1 || h1 > 24 && d === WEEKDAYS[mod(dayNum - 1, 7)] && tod < h1 - 24));
 const eventToday = kind => EVENTS.find(([d, , , k]) => k === kind && d === weekday()) || null;
 let toldEvent = '';

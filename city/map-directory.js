@@ -67,6 +67,9 @@ function mapDirectory() {
     fernListing.description='Your secluded island house. Workshop, storage and a sea-view terrace.';
     fernListing.status='Owned';
   }
+  add({id:'friday-fish-off',name:'Friday Fish-off · Bait & Tackle',x:FISH_HUT.x+FISH_HUT.hatch,y:FISH_HUT.y-FISH_HUT.hw-.2,category:'activities',kind:'sight',
+    description:'Weekly biggest-fish competition. Join any time Friday for your own five-minute round. Free entry; cash prizes. Entry and results stay open when the tackle shop is shut.',
+    status:fishingCompetitionStatus()||(fishingCompetitionOpen()?'Friday entries open all day':'Next entry: Friday')});
   const home=nearestWorkshopHome(),meeting=home&&(home.door||buyerDoor(home));
   add({id:'supplier',name:'Mara · workshop supplier',x:supplierVisit?.x??meeting?.[0]??null,y:supplierVisit?.y??meeting?.[1]??null,
     category:'contacts',kind:'supplier',virtual:!supplierVisit,description:'Yellow cap, teal jacket. Equipment, seed pods, refills and upgrades. Call her to your apartment from here.',

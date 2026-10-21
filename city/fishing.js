@@ -150,6 +150,7 @@ function castLine() {
   const f = fishing, d = CAST_MIN + f.power * (CAST_MAX - CAST_MIN), ca = Math.cos(a), sa = Math.sin(a);
   let reach = d;
   for (let s = 0.1; s <= d; s += 0.05) if (map[idx(Math.floor(px + ca * s), Math.floor(py + sa * s))] > 0) { reach = Math.max(0.1, s - 0.08); break; }
+  f.competitionDay=fishingCompetitionActive()?fishCompetition.round.day:null;
   Object.assign(f, { st: 'fly', t: 0, d: reach, dur: 0.3 + reach * 0.2, ox: px + ca * 0.06, oy: py + sa * 0.06, oz: rodTipHeight(),
     tx: px + ca * reach, ty: py + sa * reach, x: px, y: py, z: rodTipHeight() });
   fishSfx.push('whoosh');
@@ -203,15 +204,16 @@ function landCatch(f) {
   const c = f.catch, d = ITEMS[c.id];
   Object.assign(f, { st: 'landed', t: 0 });
   fishSfx.push('land');
+  const competitionBest=recordFishingCompetitionCatch(f);
   if (d.kind === 'cash') { const amt = Math.round((0.5 + Math.random() * 3.5) * 4) / 4; earn(amt); return say(`${d.line} ${fmt$(amt)} in all.`, 4); }
-  if (inv.length >= INV_SIZE) return say(`${d.kind === 'fish' ? `A ${catchName(c)}` : cap(d.name)}. Your bag's full, so back it goes.`, 3);
+  if (inv.length >= INV_SIZE) return say(`${d.kind === 'fish' ? `A ${catchName(c)}` : cap(d.name)}. Your bag's full, so back it goes.${competitionBest}`, 3);
   carryItem(c.kg ? { id: c.id, uses: 0, kg: c.kg } : { id: c.id, uses: 0 }, false);
   if (d.kind === 'fish') {
     fishLog.caught++;
     const best = !fishLog.best || c.kg > fishLog.best.kg;
     if (best) fishLog.best = { id: c.id, kg: c.kg };
     if (c.kg >= 10) newsEvent('bigfish', px, py, { fish: d.name, kg: c.kg });
-    return say(`A ${catchName(c)}.${best && fishLog.caught > 1 ? ' Your biggest yet.' : ''}`, 3);
+    return say(`A ${catchName(c)}.${best && fishLog.caught > 1 ? ' Your biggest yet.' : ''}${competitionBest}`, 3);
   }
   if (d.kind === 'wish') return say(`A golden koi, ${c.kg}kg, shining like a coin. It looks at you as if it's expecting something. (Q: make a wish)`, 5);
   return say(d.line, Math.max(3, d.line.length / 20));
@@ -236,8 +238,9 @@ const readBottle = () => [pick(BOTTLE_NOTES), 'page'];
 // the hut: standing at its hatch on the promenade side
 const nearHut = () => mode === 'walk' && Math.abs(rel(px - FISH_HUT.x - FISH_HUT.hatch)) < 0.2 && rel(FISH_HUT.y - FISH_HUT.hw - py) > 0 && rel(FISH_HUT.y - FISH_HUT.hw - py) < 0.4;
 function hutPrompt() {
+  if (!hutOpen() && (fishingCompetitionOpen() || fishCompetition.round)) return 'E: Friday Fish-off (entry, standings & results)';
   if (!hutOpen()) return 'BAIT & TACKLE: shut. Open 5am till 8pm.';
-  return `E: bait & tackle (rods, and they buy your catch)${fishLog.best ? `   your best: ${catchName(fishLog.best)}` : ''}`;
+  return `E: bait & tackle (rods, and they buy your catch)${fishingCompetitionOpen()?'   Friday Fish-off: entries open':''}${fishLog.best ? `   your best: ${catchName(fishLog.best)}` : ''}`;
 }
 
 // ---- the regulars: a few anglers out at the ends of the piers, along the Lighthouse Walk, at a park pond and on the

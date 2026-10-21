@@ -266,6 +266,8 @@ function loop(t) {
   if (freecam) { env(0); stepFreecam(dt); renderFreecam(); audioTick(0); requestAnimationFrame(loop); return; }
   T += dt; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
+  const fishingCompetitionLine=stepFishingCompetition(dt);
+  if(fishingCompetitionLine){say(fishingCompetitionLine,8);saveGame();}
   updateMapNavigation();
   env(dt);
   if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
