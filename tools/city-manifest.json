@@ -120,6 +120,7 @@
     "city/skate.js",
     "city/islands-content.js",
     "city/islands-render.js",
+    "city/island-sights.js",
     "city/world-bootstrap.js",
     "city/save.js",
     "city/main.js",

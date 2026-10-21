@@ -65,6 +65,30 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
   HIT.face = face; HIT.u = lu + du * tmin; HIT.v = lv + dv * tmin; HIT.w = oz + rz * tmin;
   return tmin;
 }
+
+// Horizontal entry/exit shared by a drawBox column, for conservative screen
+// bounds and occlusion. The surviving cells still use the general rayBox.
+function rayBoxColumn(rx, ry, b) {
+  const lu = -b.x * b.c - b.y * b.s, lv = b.x * b.s - b.y * b.c;
+  const du = rx * b.c + ry * b.s, dv = -rx * b.s + ry * b.c;
+  let tmin = -Infinity, tmax = Infinity;
+  if (Math.abs(du) < 1e-12) {
+    if (lu < -b.hl || lu > b.hl) return null;
+  } else {
+    const a = (-b.hl - lu) / du, z = (b.hl - lu) / du;
+    tmin = Math.min(a, z); tmax = Math.max(a, z);
+  }
+  if (Math.abs(dv) < 1e-12) {
+    if (lv < -b.hw || lv > b.hw) return null;
+  } else {
+    const a = (-b.hw - lv) / dv, z = (b.hw - lv) / dv;
+    const lo = Math.min(a, z), hi = Math.max(a, z);
+    tmin = Math.max(tmin, lo);
+    tmax = Math.min(tmax, hi);
+    if (tmin > tmax) return null;
+  }
+  return { tmin, tmax };
+}
 // Source-space content is generated once. These transforms preserve each group's
 // local geometry while placing it on a finite chart. Ocean travel has its own bounds.
 const CITY_LAYOUT = {
@@ -1864,8 +1888,36 @@ const FERN_TRAILS = [
   [[521.5,235.5],[536,238],[536,248],[540.5,248],[540.5,247.2]],
   [[536,238],[545,230],[551,224],[555,222]],
   [[545,230],[565,240],[590,243],[615,236],[628,215],[627,197]],
+  [[521.5,235.5],[525.5,236.2],[528,237.5]],
+  [[590,243],[597,247],[603,250]],
 ];
+const ISLAND_PATHS = {
+  cabin: [[[478.5,395.5],[484,395.5],[488.5,394],[492,394],[492,392.2]]],
+  wood: [[[775.5,247.5],[781,247.5],[786,244],[791,243],[791,241.2]]],
+  rock: [[[689.5,354.5],[695,354.5],[698,353.5]]],
+  sand: [[[699.5,110.5],[705,111],[712,113],[719,115]]],
+};
+const ISLAND_SIGHTS = [
+  {id:'fern-camp',island:'fern',name:'Fern woodland camp',x:527.8,y:237.5,text:'A little canvas camp above the landing. The board asks visitors to use the existing fire ring and leave no trace.'},
+  {id:'fern-lookout',island:'fern',name:'Fern Ridge Lookout',x:603,y:250,text:'FERN RIDGE LOOKOUT. An old survey cairn marks the woodland ridge. The brass telescope points north between the trees towards the rough airstrip. Someone has left a smooth white stone on the cairn.'},
+  {id:'cabin-nets',island:'cabin',name:'Cabin Cove drying racks',x:489,y:394.8,text:'Hand-mended fishing nets dry in the sea breeze. A note on the rack: "Shelter unlocked. Logbook inside. Good luck out there."'},
+  {id:'cormorant-roost',island:'rock',name:'Cormorant roost',x:698,y:353.5,text:'Two weathered stacks rise above the tide. Cormorants spread their wings to dry; pale streaks mark the ledges. Keep a respectful distance from the roost.'},
+  {id:'crescent-pools',island:'sand',name:'Crescent tide pools',x:719,y:115,text:'Small tide pools gleam between the sand and the inlet. Shells, ribbons of seaweed and tiny shore birds gather at their edges.'},
+  {id:'juniper-garden',island:'wood',name:'Juniper sea garden',x:787,y:243.5,text:'A sheltered garden of flowers and wind-bent juniper. The washing moves on its line. The house is private; the shoreline path is open to visitors.'},
+];
+const ISLAND_OBSTACLES = [];
+function islandSightHeight(x,y) {
+  if(!worldReady||x<465)return 0;
+  let top=0;
+  for(const o of ISLAND_OBSTACLES)top=Math.max(top,landmarkSurfaceHeight(o,x,y));
+  return top;
+}
+function islandSightBlocked(x,y,z=0,pad=.03) {
+  if(!worldReady||x<465)return false;
+  return ISLAND_OBSTACLES.some(o=>z<o.z1&&z+.17>o.z0&&Math.abs(x-o.x)<o.hl+pad&&Math.abs(y-o.y)<o.hw+pad);
+}
 const WILD_FIELDS=new Map();
+const WILD_PATH_FIELDS=new Map();
 let fernTrailField=null;
 function wildFieldSample(field,x,y) {
   const fx=(x-field.x0)*2,fy=(y-field.y0)*2,gx=Math.floor(fx),gy=Math.floor(fy);
@@ -1902,13 +1954,21 @@ function trailDistance(x,y) {
   return fernTrailDistance(x,y);
 }
 function fernTrailDistance(x,y) {
+  return islandPolylineDistance(x,y,FERN_TRAILS);
+}
+function islandPolylineDistance(x,y,trails) {
   let distance = Infinity;
-  for (const trail of FERN_TRAILS) for (let k=1;k<trail.length;k++) {
+  for (const trail of trails) for (let k=1;k<trail.length;k++) {
     const [ax,ay]=trail[k-1],[bx,by]=trail[k],ux=bx-ax,uy=by-ay;
     const t=clamp(((x-ax)*ux+(y-ay)*uy)/(ux*ux+uy*uy),0,1);
     distance=Math.min(distance,Math.hypot(x-ax-ux*t,y-ay-uy*t));
   }
   return distance;
+}
+function islandPathDistance(x,y,island) {
+  if(island.id==='fern')return trailDistance(x,y);
+  const field=WILD_PATH_FIELDS.get(island.id);
+  return field ? wildFieldSample(field,x,y)??Infinity : islandPolylineDistance(x,y,ISLAND_PATHS[island.id]||[]);
 }
 function buildWildIslandFields() {
   function field(island,sample) {
@@ -1920,6 +1980,7 @@ function buildWildIslandFields() {
   }
   for(const island of WILD_ISLANDS)WILD_FIELDS.set(island.id,field(island,(x,y)=>wildAnalyticEdge(x,y,island)));
   fernTrailField=field(WILD_ISLANDS[0],fernTrailDistance);
+  for(const island of WILD_ISLANDS.slice(1))WILD_PATH_FIELDS.set(island.id,field(island,(x,y)=>islandPolylineDistance(x,y,ISLAND_PATHS[island.id]||[])));
 }
 function wildGroundHeight(x,y,island) {
   const edge=wildIslandEdge(x,y,island);
@@ -1929,6 +1990,15 @@ function wildGroundHeight(x,y,island) {
   // Broad low landing pads and trails keep every island explorable on foot.
   const [lx,ly]=island.landing;
   height*=terrainEase((Math.hypot(x-lx,y-ly)-3)/9);
+  if(island.id!=='fern') {
+    // A broad clearing lets the hillside meet the foundation gradually, rather
+    // than leaving a one-cell pit around the level building footprint.
+    for(const cabin of ISLAND_CABINS.slice(1)) {
+      const distance=Math.hypot(Math.max(0,cabin.x0-1.2-x,x-cabin.x1-1.2),Math.max(0,cabin.y0-1.2-y,y-cabin.y1-1.8));
+      height*=terrainEase(distance/4);
+    }
+    height=Math.min(height,.08+islandPathDistance(x,y,island)*.12);
+  }
   if(island.id==='fern') {
     const runwayDistance=Math.hypot(Math.max(0,FERN_STRIP.x0-20-x,x-FERN_STRIP.x1-20),Math.max(0,Math.abs(y-FERN_STRIP.y)-FERN_STRIP.hw-1.5));
     height*=terrainEase(runwayDistance/8);
@@ -1976,6 +2046,13 @@ function islandSurface(x,y) {
     if(grain>.9)ch='o';
     return {base:GRAY,background:GRAY,ch,color:'#727777',tone:.8+patch*.3};
   }
+  if(island.id==='sand') {
+    const pool=Math.hypot((x-720)/.8,(y-115.4)/.55);
+    if(pool<1)return {base:CYAN,background:BLUE,ch:fract(T*.5+grain)<.13?'~':' ',color:'#528b9f',tone:1.1,water:true};
+    if(pool<1.18)return {base:GRAY,background:GRAY,ch:grain>.8?'o':'.',color:'#727777',tone:1};
+  }
+  if((island.id==='cabin'||island.id==='wood')&&islandPathDistance(x,y,island)<.12+patch*.07)
+    return {base:WARM,background:BRICK,ch:grain>.85?':':' ',color:'#8c805c',tone:.95};
   return islandShoreSurface(x,y,edge,true,island.id==='sand',grain,patch);
 }
 function islandShoreSurface(x,y,edge,beach,allSand=false,grain=hash(Math.floor(x*21),Math.floor(y*21),1875),patch=noise(x*.3,y*.3,1876)) {
@@ -2458,7 +2535,7 @@ const stations = [], STATION_AT = new Map(); // block -> its station
   }
 }
 
-// the Chinatown night market: three stalls along the sidewalk of one Chinatown street (the plain block nearest the
+// the Chinatown night market: five stalls along the sidewalk of one Chinatown street (the plain block nearest the
 // middle of Chinatown, off the el's street, with no subway steps in the way), facing the road, red lanterns strung
 // above. Open 8pm to 2am; by day they're tarped over. at = where you stand to be served
 const nightMarketOpen = t => t >= 20 || t < 2;
@@ -2466,6 +2543,17 @@ const NIGHT_MARKET = (() => {
   const seed = DIST_SEEDS.find(s => s[2] === 'chinatown'); let best = null, bd = Infinity;
   for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++) {
     if (districtOf(bx, by) !== 'chinatown' || blockKind(bx, by) || !hseg(bx, by) || by === EL_ROW || by === EL_ROW + 1 || STATION_AT.has(bi(bx, by))) continue;
+    // Keep the whole market on a built-up street. A source street can become
+    // coastline when its opposite neighborhood moves to a different headland.
+    const builtUp = [2.75, 3.95, 5.15, 6.35, 7.55].every(at => {
+      const x = bx * 8 + at, y = by * 8 + 1, centre = citySourcePoint(x, y);
+      return [-1.2, 1.2].every(offset => {
+        if (!map[idx(Math.floor(x), Math.floor(y + offset))]) return false;
+        const wall = citySourcePoint(x, y + offset);
+        return Math.abs(wall[0] - centre[0]) < 1e-6 && Math.abs(wall[1] - centre[1] - offset) < 1e-6;
+      });
+    });
+    if (!builtUp) continue;
     const d = Math.hypot(relB(bx - seed[0]), by - seed[1]);
     if (d < bd) { bd = d; best = { bx, by }; }
   }
@@ -2587,14 +2675,19 @@ function solidAt(x, y, pad) {
 
 // chinatown: strings of lanterns across its streets, two per block side. {x, y, ax, ay}: across-street direction
 // strung wall to wall, so only where there's a building on both sides of the street to tie it to
-const LANTERN_SPAN = 0.95, lanterns = [];
+const LANTERN_SPAN = 1.01, lanterns = []; // ends enter the facades, rather than stopping short of them
+function lanternAnchored(l) {
+  return [-1, 1].every(sign =>
+    map[idx(l.x + l.ax * 1.2 * sign, l.y + l.ay * 1.2 * sign)] >= .5 &&
+    map[idx(Math.floor(l.x + l.ax * LANTERN_SPAN * sign), Math.floor(l.y + l.ay * LANTERN_SPAN * sign))] >= .5);
+}
 for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
   const lanternDist = d => d === 'chinatown' || d === 'shotengai';
   const d0 = districtOf(bx, by), d1 = districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by);
   const side = d0 !== 'belle' && d1 !== 'belle' && (lanternDist(d0) || lanternDist(d1));
   ax = Math.abs(ax); ay = Math.abs(ay);
-  const walls = map[idx(x - ax * 1.2, y - ay * 1.2)] > 0 && map[idx(x + ax * 1.2, y + ay * 1.2)] > 0;
-  if (side && walls) lanterns.push({ x, y, ax, ay });
+  const string = { x, y, ax, ay };
+  if (side && lanternAnchored(string)) lanterns.push(string);
 });
 const lanternsB = bucketed(lanterns);
 
@@ -3498,6 +3591,19 @@ function toLane(c) {
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   if (vert) { c.x = worldCoord(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir); c.hx = 0; c.hy = dir; }
   else { c.y = worldCoord(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir); c.hx = dir; c.hy = 0; }
+  if (worldReady && !ROAD[idx(c.x, c.y)]) {
+    // Former wrapping bridge lanes can disappear in the finite world. Choose
+    // an existing stretch instead of snapping to an imaginary infinite grid.
+    let best = null, distance = Infinity;
+    for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
+      if (!(vert ? vseg(bx, by) : hseg(bx, by))) continue;
+      const along = clamp(vert ? c.y : c.x, (vert ? by : bx) * 8 + 2.5, (vert ? by : bx) * 8 + 7.5);
+      const lane = (vert ? bx : by) * 8 + 1 + (vert ? .4 : -.4) * dir;
+      const x = vert ? lane : along, y = vert ? along : lane, d = Math.hypot(x - c.x, y - c.y);
+      if (d < distance && !cars.some(o => o !== c && Math.hypot(o.ex - x, o.ey - y) < 1)) { best = { x, y }; distance = d; }
+    }
+    if (best) { c.x = best.x; c.y = best.y; }
+  }
   c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; c.pit = null; c.gas = null; plan(c);
 }
 
@@ -4171,7 +4277,7 @@ const stallSpeed = T_ => T_.vr * 0.85;
 // the top of whatever's built at (x, y), from the ground up: a building's roof, the el's deck, the airport's
 // buildings, a bridge tower; 0 on the ground. Given the height z something's at, a hangar it's inside is just its floor
 function builtHeight(x, y, z = Infinity) {
-  let h = Math.max(map[idx(Math.floor(x),Math.floor(y))] || 0, terrainHeight(x, y), islandRoofHeight(x,y), roadBridgeBuiltHeight(x,y,z), policeRoofHeight(x, y), airportHeight(x, y, z));
+  let h = Math.max(map[idx(Math.floor(x),Math.floor(y))] || 0, terrainHeight(x, y), islandRoofHeight(x,y), islandSightHeight(x,y), roadBridgeBuiltHeight(x,y,z), policeRoofHeight(x, y), airportHeight(x, y, z));
   for (const t of towers) if (Math.abs(rel(x - t.x)) < 0.4 && Math.abs(rel(y - t.y)) < 0.25) h = Math.max(h, TOWER_H);
   return h;
 }
@@ -9726,7 +9832,7 @@ function traceShot(x, y, z, hx, hy, slope) {
       }
       end = hi; what = 'ground'; break;
     }
-    if (Math.max(map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))],islandRoofHeight(x+hx*d,y+hy*d)) > zz) { end = d; what = 'wall'; break; }
+    if (Math.max(map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))],islandRoofHeight(x+hx*d,y+hy*d),islandSightHeight(x+hx*d,y+hy*d)) > zz) { end = d; what = 'wall'; break; }
   }
   let best = null;
   const closer = d => d > 0 && d < (best ? best.d : end);
@@ -10511,7 +10617,7 @@ function findMapRoute(start,goal,world=MAP_WORLD,passable=mapWalkableCell) {
 }
 function mapWalkableCell(x,y) {
   const p=mapRoutePoint(x,y);
-  return inWorldGrid(x,y)&&!map[idx(x,y)]&&!isWater(p.x,p.y)&&!architectureBlocked(p.x,p.y)&&!landmarkBlocked(p.x,p.y);
+  return inWorldGrid(x,y)&&!map[idx(x,y)]&&!isWater(p.x,p.y)&&!architectureBlocked(p.x,p.y)&&!landmarkBlocked(p.x,p.y)&&!islandSightBlocked(p.x,p.y,terrainHeight(p.x,p.y));
 }
 function mapRoutePoint(x,y) {
   if(worldReady&&x===Math.floor(FOOTBRIDGE.x)&&onFootbridge(FOOTBRIDGE.x,y+.5))return {x:FOOTBRIDGE.x,y:y+.5};
@@ -10531,6 +10637,40 @@ let TERRAIN_N = N * TERRAIN_SCALE;
 const TERRAIN_GRADE = .28;
 let terrainHeights = new Float32Array(TERRAIN_N * TERRAIN_N);
 let terrainCells = new Uint8Array(N * N);
+// Only cells with relief need planes. Index four half-cell patches per raised
+// cell into packed data, built once with the height field (no per-frame allocation).
+let terrainPatchIndex = new Uint32Array(terrainCells.length);
+// Per patch: height, two slope pairs, two lighting values, and a relief flag.
+let terrainPatchData = new Float64Array(0);
+function terrainPatch(gx, gy) {
+  const base = terrainPatchIndex[idx(Math.floor(gx / 2), Math.floor(gy / 2))];
+  return base ? base - 1 + ((gy & 1) * 2 + (gx & 1)) * 8 : -1;
+}
+function buildTerrainPlanes() {
+  terrainPatchIndex = new Uint32Array(terrainCells.length);
+  let cells = 0;
+  for (const raised of terrainCells) if (raised) cells++;
+  terrainPatchData = new Float64Array(cells * 4 * 8);
+  let at = 0;
+  for (let k = 0; k < terrainCells.length; k++) {
+    if (!terrainCells[k]) continue;
+    terrainPatchIndex[k] = at + 1;
+    const x = k % N * 2, y = Math.floor(k / N) * 2;
+    for (let oy = 0; oy < 2; oy++) for (let ox = 0; ox < 2; ox++) {
+      const gx = x + ox, gy = y + oy;
+      const a = terrainVertex(gx, gy), b = terrainVertex(gx + 1, gy);
+      const c = terrainVertex(gx, gy + 1), d = terrainVertex(gx + 1, gy + 1);
+      const sx0 = (b - a) * TERRAIN_SCALE, sy0 = (d - b) * TERRAIN_SCALE;
+      const sx1 = (d - c) * TERRAIN_SCALE, sy1 = (c - a) * TERRAIN_SCALE;
+      terrainPatchData[at++] = a;
+      terrainPatchData[at++] = sx0; terrainPatchData[at++] = sy0;
+      terrainPatchData[at++] = sx1; terrainPatchData[at++] = sy1;
+      terrainPatchData[at++] = clamp((.85 - sx0 * .9 + sy0 * .6) / Math.sqrt(1 + sx0 * sx0 + sy0 * sy0), .5, 1.2);
+      terrainPatchData[at++] = clamp((.85 - sx1 * .9 + sy1 * .6) / Math.sqrt(1 + sx1 * sx1 + sy1 * sy1), .5, 1.2);
+      terrainPatchData[at++] = Math.max(a, b, c, d) > .00001 ? 1 : 0;
+    }
+  }
+}
 const terrainIndex = (x, y) => worldReady ? (x >= 0 && y >= 0 && x < TERRAIN_N && y < TERRAIN_N ? y * TERRAIN_N + x : TERRAIN_N * TERRAIN_N) : mod(y, TERRAIN_N) * TERRAIN_N + mod(x, TERRAIN_N);
 const terrainVertex = (x, y) => terrainHeights[terrainIndex(x, y)];
 const terrainEase = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
@@ -10592,6 +10732,9 @@ function buildTerrain() {
   }
   for (const o of solids) if (o.z0 <= 0) pad(o.x, o.y, o.hl, o.hw, o.c, o.s);
   for (const o of [...benches, ...lamps, ...extras, ...ANGLERS]) pad(o.x, o.y, .15, .15);
+  // The narrow deck falls between terrain vertices. Clearing its full footprint
+  // prevents neighbouring hillside triangles from painting grass over the boards.
+  pad(FOOTBRIDGE.x,(FOOTBRIDGE.y0+FOOTBRIDGE.y1)/2,FOOTBRIDGE.hw,(FOOTBRIDGE.y1-FOOTBRIDGE.y0)/2);
   for (const [x0, y0, x1, y1] of PIERS) pad((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2);
   const active = [];
   for (let gy = 0; gy < Math.min(TERRAIN_N, 512*TERRAIN_SCALE); gy++) for (let gx = 0; gx < Math.min(TERRAIN_N, (worldReady ? CITY_LAYOUT.chartWidth : N)*TERRAIN_SCALE); gx++) {
@@ -10627,6 +10770,7 @@ function buildTerrain() {
       for (const oy of [-1, 0]) for (const ox of [-1, 0]) terrainCells[idx(Math.floor((gx + ox) * TERRAIN_STEP), Math.floor((gy + oy) * TERRAIN_STEP))] = 1;
     }
   }
+  buildTerrainPlanes();
 }
 
 function terrainHeight(x, y) {
@@ -22303,8 +22447,8 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
     const ty = Math.abs(ry) < 1e-10 ? Infinity : (y0 + (ry > 0 ? TERRAIN_STEP : 0) - py) / ry;
     const to = Math.min(end, tx, ty);
     if (to <= from + 1e-9) break;
-    const h00 = terrainVertex(gx, gy), h10 = terrainVertex(gx + 1, gy), h01 = terrainVertex(gx, gy + 1), h11 = terrainVertex(gx + 1, gy + 1);
-    if (Math.max(h00, h10, h01, h11) > .00001) {
+    const patch = terrainPatch(gx, gy);
+    if (patch >= 0 && terrainPatchData[patch + 7]) {
       const diagonal = Math.abs(rx - ry) < 1e-10 ? Infinity : ((py - y0) - (px - x0)) / (rx - ry);
       const cut = diagonal > from && diagonal < to ? diagonal : to;
       plane(from, cut);
@@ -22314,9 +22458,9 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
 
     function plane(t0, t1) {
       const middle = (t0 + t1) / 2, lower = px + rx * middle - x0 >= py + ry * middle - y0;
-      const sx = (lower ? h10 - h00 : h11 - h01) * TERRAIN_SCALE;
-      const sy = (lower ? h11 - h10 : h01 - h00) * TERRAIN_SCALE;
-      const base = h00 + sx * (px - x0) + sy * (py - y0), along = sx * rx + sy * ry;
+      const sx = terrainPatchData[patch + (lower ? 1 : 3)], sy = terrainPatchData[patch + (lower ? 2 : 4)];
+      const light = terrainPatchData[patch + (lower ? 5 : 6)];
+      const base = terrainPatchData[patch] + sx * (px - x0) + sy * (py - y0), along = sx * rx + sy * ry;
       const project = t => hor - ((base - eye) / t + along) * projY;
       const r0 = Math.max(0, Math.floor(Math.min(project(t0), project(t1))));
       const r1 = Math.min(rows, Math.ceil(Math.max(project(t0), project(t1))));
@@ -22328,7 +22472,7 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
         const t = (base - eye) / ((hor - r - .5) / projY - along);
         if (!Number.isFinite(t) || t < t0 - 1e-7 || t > t1 + 1e-7 || (ZB[i] >= 0 && ZB[i] <= t)) continue;
         const x = px + rx * t, y = py + ry * t;
-        terrainCell(i, x, y, t, sx, sy);
+        terrainCell(i, x, y, t, sx, sy, light);
         ZB[i] = t; FL[i] = 1; painted = true;
       }
     }
@@ -22336,7 +22480,7 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
   return painted;
 }
 
-function terrainCell(i, x, y, depth, sx, sy) {
+function terrainCell(i, x, y, depth, sx, sy, light) {
   const island = onIsland(x, y), coast = coastalGround(worldCoord(x), worldCoord(y));
   let surface = islandSurface(x,y);
   if(!surface&&worldReady&&naturalCoastAt(x,y))surface=islandShoreSurface(x,y,coast.depth,coast.beach);
@@ -22346,7 +22490,6 @@ function terrainCell(i, x, y, depth, sx, sy) {
   if (rock) { base = background = GRAY; ch = grain > .7 ? '%' : ':'; }
   else if (island) { base = background = GREEN; ch = grain > .65 ? '"' : ','; }
   if (surface) { base = surface.base; background = surface.background; ch = surface.ch; }
-  const light = clamp((.85 - sx * .9 + sy * .6) / Math.sqrt(1 + sx * sx + sy * sy), .5, 1.2);
   const fog = Math.max(0, 1 - depth / vis * 1.5), L = fog * 6 * (.6 + amb) * light;
   const tone=surface?.tone??1;
   const brightness=day*2.6*tone+day*(surface?.lift||0);
@@ -22473,12 +22616,25 @@ function drawBox(b, shade, intersect = rayBox) {
   }
   c0 = Math.max(0, Math.floor(c0)); c1 = Math.min(cols, Math.ceil(c1) + 1);
   r0 = Math.max(0, Math.floor(r0)); r1 = Math.min(rows, Math.ceil(r1) + 1);
+  const clipColumn = intersect === rayBox && r1 - r0 >= 6 && (near <= 0 || far > near * 1.25);
   for (let c = c0; c < c1; c++) {
     const cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
-    for (let r = r0; r < r1; r++) {
+    let low = r0, high = r1, columnNear = near;
+    if (clipColumn) {
+      // Clip the vertical silhouette at this column's actual horizontal entry
+      // and exit, rather than casting through the whole projected rectangle.
+      const span = rayBoxColumn(rx, ry, b);
+      if (!span) continue;
+      const t0 = Math.max(.01, span.tmin), t1 = Math.min(vis, span.tmax);
+      if (t1 < t0) continue;
+      low = Math.max(low, Math.floor(Math.min(hor - (b.z1 - eye) * projY / t0, hor - (b.z1 - eye) * projY / t1)));
+      high = Math.min(high, Math.ceil(Math.max(hor - (b.z0 - eye) * projY / t0, hor - (b.z0 - eye) * projY / t1)) + 1);
+      columnNear = Math.max(near, span.tmin);
+    }
+    for (let r = low; r < high; r++) {
       const i = r * cols + c;
       // Even the nearest corner is behind this cell: skip the expensive shape intersection.
-      if (ZB[i] <= near) continue;
+      if (ZB[i] <= columnNear) continue;
       const t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
       if (t < 0 || t >= ZB[i] || t > vis) continue;
       const bg = BG[i]; BG[i] = BG_UNSET;
@@ -22756,7 +22912,7 @@ function present2D() {
     }
     g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]];
     g.fillText(s.slice(0, end - x), x * cw, r * FS);
-    x = end;
+    x = x1; // trailing blank cells were already scanned while finding this run
   }
 }
 // Reused canvas surfaces work with both presenters. No pixel readbacks and no work while sober.
@@ -25965,6 +26121,7 @@ function mapDirectory() {
       status:openAt(sh,tod)?'Open now':'Closed now',hours:sh.hours,fee:sh.fee||0});
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note,status:'Boat landing on west shore'});
+  if(worldReady)for(const sight of ISLAND_SIGHTS)add({...sight,category:'activities',kind:'sight',description:sight.text,status:'Outdoor sight · free'});
   for(const h of owned.homes) {
     const point=h.door||buyerDoor(h)||[h.cell%N+.5,Math.floor(h.cell/N)+.5];
     add({id:cityHomeId(h),name:`Your ${ITEMS[h.kind].name}`,x:point[0],y:point[1],category:'homes',kind:'home',home:h,
@@ -30089,7 +30246,7 @@ function drawPigeons() {
       if (t > 0.9) b.dx += b.dir * 0.004 * (1 / 60);
     }
     if (!f.scared && b.dir < 0) art = art.map(l => [...l].reverse().join('').replace(/>/g, '<'));
-    drawArt(vx, vy, b.z || 0, f.scared ? 0.022 : 0.03, f.scared ? 0.007 : 0.028, art, (c, row, L) => c === '>' || c === '<' ? C(ORANGE, Math.max(L, 6)) : row === 1 && c === 'o' ? C(WHITE, Math.max(L, 8)) : C(GRAY, Math.max(L, 6)));
+    drawArt(vx, vy, terrainHeight(f.x+b.dx,f.y+b.dy)+(b.z||0), f.scared ? 0.022 : 0.03, f.scared ? 0.007 : 0.028, art, (c, row, L) => c === '>' || c === '<' ? C(ORANGE, Math.max(L, 6)) : row === 1 && c === 'o' ? C(WHITE, Math.max(L, 8)) : C(GRAY, Math.max(L, 6)));
   }
 }
 // ===== playing a minigame (minigames.js): an arcade cabinet or a work shift takes over the screen. The game's grid is
@@ -31487,11 +31644,15 @@ function buildWildIslands() {
       if(wildIslandEdge(x,y,island)<3.5||hash(gx,gy,1821)>density||island.id==='sand'||island.id==='rock')continue;
       if(Math.hypot(x-island.landing[0],y-island.landing[1])<7)continue;
       if(ISLAND_CABINS.some(c=>x>c.x0-1.5&&x<c.x1+1.5&&y>c.y0-1.5&&y<c.y1+2))continue;
+      if(islandPathDistance(x,y,island)<1||ISLAND_SIGHTS.some(s=>near(x,y,s.x,s.y)<1.5))continue;
       const clearApproach=x>FERN_STRIP.x0-28&&x<FERN_STRIP.x1+28&&Math.abs(y-FERN_STRIP.y)<3.5;
       if(island.id==='fern'&&(clearApproach||trailDistance(x,y)<1.5||near(x,y,540,245)<6||near(x,y,627,191)<4))continue;
       trees.push({x,y,kind:hash(gx,gy,1822)>.3?'pine':'birch',s:.55+hash(gx,gy,1823)*.95,seed:hash(gx,gy,1824)});
     }
   }
+  // A couple of regulars use the existing fishing and conversation systems.
+  for(const [x,y,shirt]of [[474,395.94,BLUE],[694,110.94,GREEN]])
+    ANGLERS.push({x,y,a:Math.PI/2,cast:.6,seed:ANGLERS.length,shirt});
   // A fixed native place identity lets house contents survive future layout changes.
   const house=FERN_HOUSE,sh={word:'FERN HOUSE',kind:SHOP_APTS,wilderness:true,islandCabin:'fern-house',neon:GREEN,seed:.71,hours:[0,24],glyphs:'[]='};
   const cells=[];
@@ -31529,6 +31690,8 @@ function nearIslandLogbook() {
 function islandBuildingPrompt() {
   if(nearIslandLogbook())return 'E: read the visitors\' log';
   if(mode!=='walk')return '';
+  const sight=ISLAND_SIGHTS.find(s=>near(px,py,s.x,s.y)<.55);
+  if(sight)return `E: read ${sight.name}`;
   const cabin=islandCabinAtDoor();
   if(cabin)return cabin.room?'E: enter the fishing shelter':'E: knock on the door';
   const [lx,ly]=WILD_ISLANDS[0].landing;
@@ -31545,6 +31708,8 @@ function islandBuildingUse() {
     return true;
   }
   if(mode!=='walk')return false;
+  const sight=ISLAND_SIGHTS.find(s=>near(px,py,s.x,s.y)<.55);
+  if(sight){say(sight.text,7);return true;}
   const cabin=islandCabinAtDoor();
   if(cabin) {
     if(cabin.room) {
@@ -31690,6 +31855,7 @@ function islandStone(x,y,size,seed) {
 }
 function buildIslandScenery() {
   ISLAND_DETAILS.length=FERN_CASCADE.length=0;
+  ISLAND_OBSTACLES.length=0;
   for(const island of WILD_ISLANDS) {
     const [x0,y0,x1,y1]=island.dock;
     for(let x=x0+.25;x<x1-.5;x+=3)for(const y of [y0+.06,y1-.06]) {
@@ -31746,6 +31912,7 @@ function buildIslandScenery() {
     if(Math.floor(y*2)%3===0)for(const side of [-1,1])islandStone(x+side*.34,y+.2,.18+hash(side,y,1913)*.12,hash(side,y,1914));
   }
   for(const [x,y]of [[626.15,196],[627.8,196.2],[627.6,197.7]])islandStone(x,y,.18,hash(x,y,1915));
+  buildIslandSights();
   islandDetailsB=bucketed(ISLAND_DETAILS);
 }
 
@@ -31754,11 +31921,13 @@ function islandTimberShade(model,i,t,L) {
   let base=wood?BRICK:GRAY;
   if(model.kind==='trim'||model.kind==='sign')base=STONE;
   if(model.kind==='pot')base=BRICK;
+  if(model.kind==='canvas')base=model.base||GREEN;
+  if(model.base!==undefined)base=model.base;
   const brightness=(wood?1.6:2.2)+L*(top?.3:.2);
   BG[i]=C(base,brightness);
   if(model.word&&(HIT.face===3||HIT.face===4)) {
     const along=HIT.face===3?HIT.u:-HIT.u;
-    if(wallText(i,along,t/projX,HIT.w,t,model.word,0,.195,Math.min(.028,.25/model.word.length),.04,C(GREEN,Math.max(5,L)),BG[i]))return true;
+    if(wallText(i,along,t/projX,HIT.w,t,model.word,0,model.labelZ??.195,Math.min(.028,model.hl*1.7/model.word.length),model.labelH??.04,C(GREEN,Math.max(5,L)),BG[i]))return true;
   }
   let ch=' ';
   if(wood) {
@@ -31771,11 +31940,13 @@ function islandTimberShade(model,i,t,L) {
   return true;
 }
 function islandRockShade(model,i,t,L) {
-  const moss=HIT.face>=6&&model.seed>.4;
   const grain=hash(Math.floor((model.x+HIT.u)*37),Math.floor(HIT.w*59),1916);
+  const fraction=(HIT.w-model.z0)/(model.z1-model.z0);
+  const moss=fraction<.22&&model.seed>.4&&grain>.3;
   const base=moss?GREEN:GRAY;
-  BG[i]=C(base,1.1+L*(HIT.face>=6?.28:.16));
-  set(i,grain>.96?'.':' ',C(moss?GREEN:STONE,L*.65));
+  const streak=model.stack&&fraction>.6&&hash(Math.floor((HIT.u+HIT.v)*19),0,1947)>.82;
+  BG[i]=C(streak?STONE:base,1.1+L*(HIT.face>=6?.28:.16));
+  set(i,streak?'|':model.stack&&fract(HIT.w*9+model.seed)<.045?'_':grain>.96?'.':' ',C(moss?GREEN:STONE,L*.65));
   return true;
 }
 function drawIslandShrub(model,vx,vy) {
@@ -31867,6 +32038,15 @@ function drawWildScenery() {
   forNear(islandDetailsB,model=>{
     const vx=model.x-px,vy=model.y-py;
     if(!inView(vx,vy,model.hl+.2))return;
+    if(model.kind==='cover') {
+      if((model.cover==='flower'||model.cover==='fern')&&season()==='winter')return;
+      if(near(px,py,model.x,model.y)<12)drawShape(vx,vy,model.z0,model.hl,model.z1-model.z0,(i,u,z,du,dz,L)=>islandCoverShade(model,i,u,z,L));
+      return;
+    }
+    if(model.kind==='net'||model.kind==='cloth'||model.kind==='canvas') {
+      const sway=model.kind==='cloth'?Math.sin(T*1.7+model.seed)*.012:0;
+      drawBox({...model,x:vx,y:vy+sway},(i,t,L)=>islandFabricShade(model,i,t,L),model.planes?rayMansard:rayBox);return;
+    }
     if(model.kind==='shrub'||model.kind==='grass'){drawIslandShrub(model,vx,vy);return;}
     if(model.kind==='lamp') {
       drawBox({...model,x:vx,y:vy},(i,t,L)=>{BG[i]=C(WARM,3+night*6);set(i,'o',C(YEL,10+night*5));return true;});return;
@@ -31892,6 +32072,194 @@ function drawWildScenery() {
     }
   }
   drawFernCascade();
+  drawIslandLife();
+}
+// Native island sights: terrain-fitted models, a few residents, and small wildlife.
+// Built once and drawn through the existing spatial buckets and figure caches.
+const ISLAND_BIRDS=[];
+const ISLAND_FLOWERS=[];
+function islandGroundModel(x,y,hl,hw,height,kind,obstacle=false) {
+  const samples=[terrainHeight(x,y),terrainHeight(x-hl,y-hw),terrainHeight(x+hl,y-hw),terrainHeight(x-hl,y+hw),terrainHeight(x+hl,y+hw)];
+  const o=islandDetail(x,y,hl,hw,Math.min(...samples)-.018,Math.max(...samples)+height,kind);
+  if(obstacle)ISLAND_OBSTACLES.push(o);
+  return o;
+}
+function islandWaymark(x,y,word,width=.35) {
+  width=Math.min(width*.45,.2);
+  const z=terrainHeight(x,y);
+  islandDetail(x,y,.007,.007,z-.02,z+.18,'timber');
+  const sign=islandDetail(x,y,width,.012,z+.105,z+.18,'sign');
+  Object.assign(sign,{word,labelZ:z+.1425,labelH:.025});
+}
+function islandCover(x,y,kind,seed,size=.15) {
+  if(seaAt(x,y)||onPier(x,y)||map[idx(x,y)]||onFernStrip(x,y,4))return;
+  if(ISLAND_CABINS.some(c=>x>c.x0-.2&&x<c.x1+.2&&y>c.y0-.2&&y<c.y1+.4))return;
+  size*=.45;
+  const z=terrainHeight(x,y),o=islandDetail(x,y,size,size,z,z+(kind==='flower'?.08:kind==='fern'?.065:.09),'cover');
+  o.cover=kind;o.seed=seed;
+  if(kind==='flower')ISLAND_FLOWERS.push(o);
+}
+function buildIslandSights() {
+  ISLAND_BIRDS.length=ISLAND_FLOWERS.length=0;
+  for(const island of WILD_ISLANDS) {
+    const paths=island.id==='fern'?FERN_TRAILS:ISLAND_PATHS[island.id];
+    for(const path of paths)for(let k=1;k<path.length;k++) {
+      const [ax,ay]=path[k-1],[bx,by]=path[k],length=near(ax,ay,bx,by),ux=(bx-ax)/length,uy=(by-ay)/length;
+      for(let d=1;d<length;d+=2.6)for(const side of [-1,1]) {
+        const seed=hash(ax+d,ay+side,1940),off=.35+seed*.45;
+        const x=ax+ux*d-uy*off*side,y=ay+uy*d+ux*off*side;
+        islandCover(x,y,island.id==='rock'?'lichen':island.id==='sand'?'rush':seed>.52?'flower':'fern',seed,.13+seed*.1);
+      }
+    }
+    // Resting birds at each landing, clear of the boarding lane. The roost has
+    // dark cormorants instead of gulls; flight starts and ends at the same perch.
+    for(let k=0;k<3;k++) {
+      const x=island.landing[0]+1.1+k*.36,y=island.landing[1]-1.1-k*.2;
+      if(!seaAt(x,y))ISLAND_BIRDS.push({x,y,z:terrainHeight(x,y)+.008,seed:k+island.x,kind:island.id==='rock'?'cormorant':'gull',scaredAt:-99});
+    }
+  }
+  // Fern: a small camp beside the existing fire, with rolled mats and a real
+  // pitched canvas tent. Foundations and obstacles use the same model geometry.
+  const tent=islandGroundModel(528.6,239.2,.43,.32,.27,'canvas',true);
+  tent.base=ORANGE;tent.planes=landmarkPlanes(tent.hl,tent.hw,tent.z0,tent.z1,'gable');
+  for(const [x,y]of [[527.7,239.2],[526,238.7]])islandGroundModel(x,y,.27,.045,.06,'driftwood');
+  const pack=islandGroundModel(528,238.9,.06,.05,.1,'canvas');pack.base=GREEN;
+  islandWaymark(527.8,237.85,'WOODLAND CAMP',.45);
+  islandWaymark(523.6,236.1,'HOUSE / FALLS',.45);
+  for(const [x,y,word]of [[545.5,230.4,'AIRSTRIP'],[590.3,243.5,'FALLS / LOOKOUT'],[603,250.4,'FERN RIDGE']])islandWaymark(x,y,word,.42);
+  // A survey cairn and a brass telescope give the ridge a recognisable silhouette.
+  for(let k=0;k<3;k++) {
+    const r=.18-k*.045,z=terrainHeight(604.1,250.1);
+    const stone=islandDetail(604.1,250.1,r,r,z+k*.085,z+(k+1)*.085,'rock');
+    ISLAND_OBSTACLES.push(stone);
+    stone.seed=.72;stone.planes=landmarkPlanes(r,r,stone.z0,stone.z1,null).concat([[1,0,1,stone.z1+r*.8],[-1,0,1,stone.z1+r*.8],[0,1,1,stone.z1+r*.8],[0,-1,1,stone.z1+r*.8]]);
+  }
+  const z=terrainHeight(603.8,249.5);
+  for(const x of [603.72,603.88])islandDetail(x,249.5,.015,.035,z-.02,z+.18,'metal');
+  Object.assign(islandDetail(603.8,249.5,.08,.015,z+.175,z+.205,'metal',Math.PI/2),{base:YEL});
+  for(const [x,y]of [[626.3,194.8],[627.9,195.7],[626.1,197.2]])islandCover(x,y,'fern',hash(x,y,1941),.27);
+  // Cabin Cove: repaired nets and floats, a fish box, and a little hauled-up skiff.
+  for(const x of [488.55,489.65])islandGroundModel(x,395.15,.025,.025,.3,'timber');
+  const net=islandGroundModel(489.1,395.15,.55,.01,.27,'net');net.z0=net.z1-.22;
+  for(const x of [488.7,489,489.3,489.6]) {
+    const z=terrainHeight(x,395.15);
+    Object.assign(islandDetail(x,395.15,.025,.025,z+.25,z+.29,'canvas'),{base:WARM});
+  }
+  islandGroundModel(489.9,395.3,.12,.08,.075,'timber');
+  islandSkiff(481,397.2);
+  islandWaymark(489,395.1,'MENDED NETS',.4);
+  // Cormorant Rock: two solid, faceted sea stacks with bird perches.
+  for(const [x,y,hl,hw,height]of [[700.6,350.6,.62,.5,.95],[702.1,352.5,.45,.5,1.25]]) {
+    const rock=islandGroundModel(x,y,hl,hw,height,'rock',true);
+    rock.seed=.8;rock.stack=true;
+    const sx=.4/hl,sy=.35/hw;
+    rock.planes=landmarkPlanes(hl,hw,rock.z0,rock.z1,null).concat([
+      [1,1,0,hl+hw-.15],[-1,-1,0,hl+hw-.12],
+      [sx,0,1,rock.z1+sx*hl*.3],[-sx,0,1,rock.z1+sx*hl*.25],
+      [0,sy,1,rock.z1+sy*hw*.45],[0,-sy,1,rock.z1+sy*hw*.3],
+    ]);
+    ISLAND_BIRDS.push({x,y,z:rock.z1+.008,seed:x,kind:'cormorant',scaredAt:-99});
+  }
+  islandWaymark(698,353.9,'BIRD ROOST',.4);
+  // Crescent Sands: a tide pool rim, driftwood ribs, dune flowers and shore birds.
+  islandSkiff(710.3,112.7);
+  for(let k=0;k<8;k++) {
+    const angle=k*TAU/8,x=720+Math.cos(angle)*.86,y=115.4+Math.sin(angle)*.6;
+    islandStone(x,y,.055+hash(k,1,1942)*.04,hash(k,2,1942));
+    if(k%2===0)islandCover(x+.15,y+.2,'rush',k/8,.2);
+  }
+  islandWaymark(719,115.35,'TIDE POOLS',.38);
+  // Juniper: a modest sheltered garden, washing on the line and sea-facing trees.
+  for(const y of [241.7,242.5])for(let x=785;x<787.2;x+=.35)islandCover(x,y,'flower',hash(x,y,1943),.13);
+  for(const x of [785,787.3])islandGroundModel(x,240.6,.025,.025,.3,'timber');
+  const line=islandGroundModel(786.15,240.6,1.15,.006,.29,'metal');line.z0=line.z1-.008;
+  for(let k=0;k<4;k++) {
+    const cloth=islandGroundModel(785.4+k*.48,240.6,.12,.008,.28,'cloth');
+    cloth.z0=cloth.z1-.15;cloth.seed=k;cloth.base=[WHITE,CYAN,STONE,BLUE][k];
+  }
+  islandWaymark(787,243.85,'SEA GARDEN',.38);
+}
+function islandSkiff(x,y) {
+  const z=terrainHeight(x,y);
+  for(const side of [-1,1])for(let k=0;k<5;k++) {
+    const u=(k-2)*.13,width=.12*Math.sqrt(Math.max(0,1-(u/.34)**2));
+    islandDetail(x+u,y+side*width,.075,.014,z-.015,z+.07,'driftwood');
+  }
+  for(const u of [-.2,0,.2])islandDetail(x+u,y,.015,.11,z+.025,z+.045,'timber');
+}
+function islandCoverShade(model,i,u,z,L) {
+  const h=model.z1-model.z0,n=u/model.hl;
+  if(Math.abs(n)>1||z<0||z>h)return false;
+  if(model.cover==='lichen') {
+    if(z>h*.18||n*n+((z-h*.08)/(h*.1))**2>1)return false;
+    BG[i]=C(GRAY,2+L*.2);set(i,':',C(YEL,L*.8));return true;
+  }
+  const stem=Math.abs(n-Math.sin(T*.9+model.seed*8)*.045*z/h)<.06;
+  if(model.cover==='flower') {
+    const centre=clamp(Math.round(n/.55),-1,1)*.55,head=.7+.1*Math.sin(centre*7+model.seed*9);
+    const stalk=Math.abs(n-centre)<.035&&z/h<head;
+    const petal=((n-centre)/.13)**2+((z/h-head)/.1)**2<1;
+    if(!petal&&!stalk)return false;
+    const color=petal?([MAG,YEL,WHITE][Math.floor(model.seed*3)%3]):GREEN;
+    BG[i]=C(color,petal?3+L*.35:1+L*.18);set(i,petal?'*':'|',C(color,L*1.1));return true;
+  }
+  if(model.cover==='rush') {
+    if(!stem&&Math.abs(Math.sin(n*14+z*11))<.91)return false;
+    set(i,z>h*.8?'\'':'|',C(YEL,L*.85));return true;
+  }
+  const leaf=Math.abs(n)<(1-z/h)*.9&&Math.sin(z/h*22+Math.abs(n)*8)>.1&&hash(Math.floor(n*15),Math.floor(z/h*18),Math.floor(model.seed*1000))>.2;
+  if(!stem&&!leaf)return false;
+  BG[i]=C(GREEN,1.4+L*.18);set(i,stem?'|':n<0?'/':'\\',C(GREEN,L*.8));return true;
+}
+function islandFabricShade(model,i,t,L) {
+  if(model.kind==='net') {
+    if(fract((HIT.u+model.hl)*25)>.1&&fract(HIT.w*35)>.1)return false;
+    set(i,'#',C(GREEN,L*.8+2));return true;
+  }
+  const base=model.base??STONE;
+  BG[i]=C(base,2+L*.3);
+  set(i,model.kind==='cloth'&&fract(HIT.u*30)<.08?'|':HIT.w<model.z0+.02?'_':' ',C(base,L));return true;
+}
+// A small cached seabird body: folded wings on a perch, raised/lowered wings in flight.
+ANIMAL_BODIES.islandbird=frame=>{
+  const R=AR,parts=[figEll([0,0,3.5],AN_I,[2.2,4,2],()=>R.BODY),figEll([0,3.4,5],AN_I,[1.5,1.7,1.5],()=>R.HEAD),figCap([0,4.6,4.8],[0,6.5,4.5],.5,()=>R.BEAK)];
+  for(const side of [-1,1]) {
+    if(frame===0)parts.push(figEll([side*1.6,-.5,4],AN_I,[.9,3.3,1.1],()=>R.WING),figCap([side*.8,0,2],[side*.8,.7,.2],.3,()=>R.LEG));
+    else {
+      const wingZ=frame===3?4:frame===1?7:1.5,tipZ=frame===3?4:frame===1?6:2;
+      parts.push(figCap([side*1.5,0,4],[side*7,-1,wingZ],.65,()=>R.WING),figCap([side*7,-1,wingZ],[side*10,-2,tipZ],.35,()=>R.MARK));
+      if(frame===3)parts.push(figCap([side*.8,0,2],[side*.8,.7,.2],.3,()=>R.LEG));
+    }
+  }
+  return {parts,decals:animalEyes([0,3.4,5],1.5,1)};
+};
+const ISLAND_GULL_LOOK=animalLook('islandbird',{body:[WHITE,14],wing:[GRAY,10],mark:[GRAY,2],beak:[YEL,13]});
+const ISLAND_CORMORANT_LOOK=animalLook('islandbird',{body:[GRAY,3],wing:[GRAY,2],mark:[GRAY,1],beak:[WARM,10]});
+function islandBirdPose(b,time=T) {
+  const cycle=mod(time+b.seed*.13,54),scare=time-b.scaredAt;
+  const flight=scare>=0&&scare<7?scare/7:cycle>43?(cycle-43)/11:0;
+  const lift=Math.sin(flight*Math.PI);
+  return {x:b.x+lift*Math.sin(flight*TAU)*1.2,y:b.y+lift*Math.cos(flight*TAU)*.7,z:b.z+lift*.55,
+    frame:flight?1+(Math.floor(time*5+b.seed)&1):b.kind==='cormorant'&&Math.sin(time*.2+b.seed)>.2?3:0};
+}
+function drawIslandLife() {
+  if(!worldReady||px<465)return;
+  for(const bird of ISLAND_BIRDS) {
+    if(near(px,py,bird.x,bird.y)>18)continue;
+    if(!freecam&&!paused&&near(px,py,bird.x,bird.y)<.65&&T-bird.scaredAt>12)bird.scaredAt=T;
+    const p=islandBirdPose(bird),vx=p.x-px,vy=p.y-py;
+    if(!inView(vx,vy,.12))continue;
+    drawAnimal(vx,vy,p.z,.055,Math.cos(bird.seed),Math.sin(bird.seed),bird.kind==='gull'?ISLAND_GULL_LOOK:ISLAND_CORMORANT_LOOK,p.frame);
+  }
+  if(rain>.2||season()==='winter')return;
+  let drawn=0;
+  for(const flower of ISLAND_FLOWERS) {
+    if(drawn>=8)break;
+    if(near(px,py,flower.x,flower.y)>7)continue;
+    const phase=T*.6+flower.seed*TAU,x=flower.x+Math.sin(phase)*.12,y=flower.y+Math.cos(phase*.7)*.1,z=terrainHeight(x,y)+.13+Math.sin(phase*2)*.025;
+    if(!inView(x-px,y-py,.02))continue;
+    drawArt(x-px,y-py,z,.016,.014,[night>.5?'.':Math.sin(T*12+flower.seed)>0?'v':'^'],()=>C(night>.5?YEL:MAG,night>.5?12:10));drawn++;
+  }
 }
 // Assemble the generated city after authored outdoor geometry has been created,
 // before saves or the first frame. Interior coordinates never enter this pass.
@@ -32190,6 +32558,9 @@ function assembleArchipelago() {
   }
   buildWildIslandFields();
   buildWildIslands();
+  // Opposite source blocks may now be on separate headlands. Validate against
+  // the finished building map before rebuilding the renderer's spatial buckets.
+  for (let i = lanterns.length - 1; i >= 0; i--) if (!lanternAnchored(lanterns[i])) lanterns.splice(i, 1);
   function rebucket(b, items) {
     const fresh = bucketed(items);
     b.length = fresh.length;
@@ -32206,6 +32577,8 @@ function assembleArchipelago() {
     delete c.sceneKey;
     delete c.route;
     c.dest = c.nh = null;
+    // Cars on the old wrapping bridge must join the finished road network too.
+    if (!ROAD[idx(c.x, c.y)]) toLane(c);
     plan(c);
   }
   TERRAIN_N = N * TERRAIN_SCALE;
@@ -32486,9 +32859,9 @@ const free = (x, y) => {
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
   if (mode === 'walk') { const st = elStairStep(px, py, x, y, elPass); if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))]; } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
-  if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
+  if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
-    !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
+    !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
   const m = mode === 'room' ? 0.25 : 0.05;

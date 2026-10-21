@@ -229,6 +229,19 @@ function toLane(c) {
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   if (vert) { c.x = worldCoord(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir); c.hx = 0; c.hy = dir; }
   else { c.y = worldCoord(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir); c.hx = dir; c.hy = 0; }
+  if (worldReady && !ROAD[idx(c.x, c.y)]) {
+    // Former wrapping bridge lanes can disappear in the finite world. Choose
+    // an existing stretch instead of snapping to an imaginary infinite grid.
+    let best = null, distance = Infinity;
+    for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
+      if (!(vert ? vseg(bx, by) : hseg(bx, by))) continue;
+      const along = clamp(vert ? c.y : c.x, (vert ? by : bx) * 8 + 2.5, (vert ? by : bx) * 8 + 7.5);
+      const lane = (vert ? bx : by) * 8 + 1 + (vert ? .4 : -.4) * dir;
+      const x = vert ? lane : along, y = vert ? along : lane, d = Math.hypot(x - c.x, y - c.y);
+      if (d < distance && !cars.some(o => o !== c && Math.hypot(o.ex - x, o.ey - y) < 1)) { best = { x, y }; distance = d; }
+    }
+    if (best) { c.x = best.x; c.y = best.y; }
+  }
   c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; c.pit = null; c.gas = null; plan(c);
 }
 

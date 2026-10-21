@@ -5,6 +5,40 @@ let TERRAIN_N = N * TERRAIN_SCALE;
 const TERRAIN_GRADE = .28;
 let terrainHeights = new Float32Array(TERRAIN_N * TERRAIN_N);
 let terrainCells = new Uint8Array(N * N);
+// Only cells with relief need planes. Index four half-cell patches per raised
+// cell into packed data, built once with the height field (no per-frame allocation).
+let terrainPatchIndex = new Uint32Array(terrainCells.length);
+// Per patch: height, two slope pairs, two lighting values, and a relief flag.
+let terrainPatchData = new Float64Array(0);
+function terrainPatch(gx, gy) {
+  const base = terrainPatchIndex[idx(Math.floor(gx / 2), Math.floor(gy / 2))];
+  return base ? base - 1 + ((gy & 1) * 2 + (gx & 1)) * 8 : -1;
+}
+function buildTerrainPlanes() {
+  terrainPatchIndex = new Uint32Array(terrainCells.length);
+  let cells = 0;
+  for (const raised of terrainCells) if (raised) cells++;
+  terrainPatchData = new Float64Array(cells * 4 * 8);
+  let at = 0;
+  for (let k = 0; k < terrainCells.length; k++) {
+    if (!terrainCells[k]) continue;
+    terrainPatchIndex[k] = at + 1;
+    const x = k % N * 2, y = Math.floor(k / N) * 2;
+    for (let oy = 0; oy < 2; oy++) for (let ox = 0; ox < 2; ox++) {
+      const gx = x + ox, gy = y + oy;
+      const a = terrainVertex(gx, gy), b = terrainVertex(gx + 1, gy);
+      const c = terrainVertex(gx, gy + 1), d = terrainVertex(gx + 1, gy + 1);
+      const sx0 = (b - a) * TERRAIN_SCALE, sy0 = (d - b) * TERRAIN_SCALE;
+      const sx1 = (d - c) * TERRAIN_SCALE, sy1 = (c - a) * TERRAIN_SCALE;
+      terrainPatchData[at++] = a;
+      terrainPatchData[at++] = sx0; terrainPatchData[at++] = sy0;
+      terrainPatchData[at++] = sx1; terrainPatchData[at++] = sy1;
+      terrainPatchData[at++] = clamp((.85 - sx0 * .9 + sy0 * .6) / Math.sqrt(1 + sx0 * sx0 + sy0 * sy0), .5, 1.2);
+      terrainPatchData[at++] = clamp((.85 - sx1 * .9 + sy1 * .6) / Math.sqrt(1 + sx1 * sx1 + sy1 * sy1), .5, 1.2);
+      terrainPatchData[at++] = Math.max(a, b, c, d) > .00001 ? 1 : 0;
+    }
+  }
+}
 const terrainIndex = (x, y) => worldReady ? (x >= 0 && y >= 0 && x < TERRAIN_N && y < TERRAIN_N ? y * TERRAIN_N + x : TERRAIN_N * TERRAIN_N) : mod(y, TERRAIN_N) * TERRAIN_N + mod(x, TERRAIN_N);
 const terrainVertex = (x, y) => terrainHeights[terrainIndex(x, y)];
 const terrainEase = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
@@ -66,6 +100,9 @@ function buildTerrain() {
   }
   for (const o of solids) if (o.z0 <= 0) pad(o.x, o.y, o.hl, o.hw, o.c, o.s);
   for (const o of [...benches, ...lamps, ...extras, ...ANGLERS]) pad(o.x, o.y, .15, .15);
+  // The narrow deck falls between terrain vertices. Clearing its full footprint
+  // prevents neighbouring hillside triangles from painting grass over the boards.
+  pad(FOOTBRIDGE.x,(FOOTBRIDGE.y0+FOOTBRIDGE.y1)/2,FOOTBRIDGE.hw,(FOOTBRIDGE.y1-FOOTBRIDGE.y0)/2);
   for (const [x0, y0, x1, y1] of PIERS) pad((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2);
   const active = [];
   for (let gy = 0; gy < Math.min(TERRAIN_N, 512*TERRAIN_SCALE); gy++) for (let gx = 0; gx < Math.min(TERRAIN_N, (worldReady ? CITY_LAYOUT.chartWidth : N)*TERRAIN_SCALE); gx++) {
@@ -101,6 +138,7 @@ function buildTerrain() {
       for (const oy of [-1, 0]) for (const ox of [-1, 0]) terrainCells[idx(Math.floor((gx + ox) * TERRAIN_STEP), Math.floor((gy + oy) * TERRAIN_STEP))] = 1;
     }
   }
+  buildTerrainPlanes();
 }
 
 function terrainHeight(x, y) {

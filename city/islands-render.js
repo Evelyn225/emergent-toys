@@ -17,6 +17,7 @@ function islandStone(x,y,size,seed) {
 }
 function buildIslandScenery() {
   ISLAND_DETAILS.length=FERN_CASCADE.length=0;
+  ISLAND_OBSTACLES.length=0;
   for(const island of WILD_ISLANDS) {
     const [x0,y0,x1,y1]=island.dock;
     for(let x=x0+.25;x<x1-.5;x+=3)for(const y of [y0+.06,y1-.06]) {
@@ -73,6 +74,7 @@ function buildIslandScenery() {
     if(Math.floor(y*2)%3===0)for(const side of [-1,1])islandStone(x+side*.34,y+.2,.18+hash(side,y,1913)*.12,hash(side,y,1914));
   }
   for(const [x,y]of [[626.15,196],[627.8,196.2],[627.6,197.7]])islandStone(x,y,.18,hash(x,y,1915));
+  buildIslandSights();
   islandDetailsB=bucketed(ISLAND_DETAILS);
 }
 
@@ -81,11 +83,13 @@ function islandTimberShade(model,i,t,L) {
   let base=wood?BRICK:GRAY;
   if(model.kind==='trim'||model.kind==='sign')base=STONE;
   if(model.kind==='pot')base=BRICK;
+  if(model.kind==='canvas')base=model.base||GREEN;
+  if(model.base!==undefined)base=model.base;
   const brightness=(wood?1.6:2.2)+L*(top?.3:.2);
   BG[i]=C(base,brightness);
   if(model.word&&(HIT.face===3||HIT.face===4)) {
     const along=HIT.face===3?HIT.u:-HIT.u;
-    if(wallText(i,along,t/projX,HIT.w,t,model.word,0,.195,Math.min(.028,.25/model.word.length),.04,C(GREEN,Math.max(5,L)),BG[i]))return true;
+    if(wallText(i,along,t/projX,HIT.w,t,model.word,0,model.labelZ??.195,Math.min(.028,model.hl*1.7/model.word.length),model.labelH??.04,C(GREEN,Math.max(5,L)),BG[i]))return true;
   }
   let ch=' ';
   if(wood) {
@@ -98,11 +102,13 @@ function islandTimberShade(model,i,t,L) {
   return true;
 }
 function islandRockShade(model,i,t,L) {
-  const moss=HIT.face>=6&&model.seed>.4;
   const grain=hash(Math.floor((model.x+HIT.u)*37),Math.floor(HIT.w*59),1916);
+  const fraction=(HIT.w-model.z0)/(model.z1-model.z0);
+  const moss=fraction<.22&&model.seed>.4&&grain>.3;
   const base=moss?GREEN:GRAY;
-  BG[i]=C(base,1.1+L*(HIT.face>=6?.28:.16));
-  set(i,grain>.96?'.':' ',C(moss?GREEN:STONE,L*.65));
+  const streak=model.stack&&fraction>.6&&hash(Math.floor((HIT.u+HIT.v)*19),0,1947)>.82;
+  BG[i]=C(streak?STONE:base,1.1+L*(HIT.face>=6?.28:.16));
+  set(i,streak?'|':model.stack&&fract(HIT.w*9+model.seed)<.045?'_':grain>.96?'.':' ',C(moss?GREEN:STONE,L*.65));
   return true;
 }
 function drawIslandShrub(model,vx,vy) {
@@ -194,6 +200,15 @@ function drawWildScenery() {
   forNear(islandDetailsB,model=>{
     const vx=model.x-px,vy=model.y-py;
     if(!inView(vx,vy,model.hl+.2))return;
+    if(model.kind==='cover') {
+      if((model.cover==='flower'||model.cover==='fern')&&season()==='winter')return;
+      if(near(px,py,model.x,model.y)<12)drawShape(vx,vy,model.z0,model.hl,model.z1-model.z0,(i,u,z,du,dz,L)=>islandCoverShade(model,i,u,z,L));
+      return;
+    }
+    if(model.kind==='net'||model.kind==='cloth'||model.kind==='canvas') {
+      const sway=model.kind==='cloth'?Math.sin(T*1.7+model.seed)*.012:0;
+      drawBox({...model,x:vx,y:vy+sway},(i,t,L)=>islandFabricShade(model,i,t,L),model.planes?rayMansard:rayBox);return;
+    }
     if(model.kind==='shrub'||model.kind==='grass'){drawIslandShrub(model,vx,vy);return;}
     if(model.kind==='lamp') {
       drawBox({...model,x:vx,y:vy},(i,t,L)=>{BG[i]=C(WARM,3+night*6);set(i,'o',C(YEL,10+night*5));return true;});return;
@@ -219,4 +234,5 @@ function drawWildScenery() {
     }
   }
   drawFernCascade();
+  drawIslandLife();
 }

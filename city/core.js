@@ -64,3 +64,27 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
   HIT.face = face; HIT.u = lu + du * tmin; HIT.v = lv + dv * tmin; HIT.w = oz + rz * tmin;
   return tmin;
 }
+
+// Horizontal entry/exit shared by a drawBox column, for conservative screen
+// bounds and occlusion. The surviving cells still use the general rayBox.
+function rayBoxColumn(rx, ry, b) {
+  const lu = -b.x * b.c - b.y * b.s, lv = b.x * b.s - b.y * b.c;
+  const du = rx * b.c + ry * b.s, dv = -rx * b.s + ry * b.c;
+  let tmin = -Infinity, tmax = Infinity;
+  if (Math.abs(du) < 1e-12) {
+    if (lu < -b.hl || lu > b.hl) return null;
+  } else {
+    const a = (-b.hl - lu) / du, z = (b.hl - lu) / du;
+    tmin = Math.min(a, z); tmax = Math.max(a, z);
+  }
+  if (Math.abs(dv) < 1e-12) {
+    if (lv < -b.hw || lv > b.hw) return null;
+  } else {
+    const a = (-b.hw - lv) / dv, z = (b.hw - lv) / dv;
+    const lo = Math.min(a, z), hi = Math.max(a, z);
+    tmin = Math.max(tmin, lo);
+    tmax = Math.min(tmax, hi);
+    if (tmin > tmax) return null;
+  }
+  return { tmin, tmax };
+}

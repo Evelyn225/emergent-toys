@@ -12,8 +12,8 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
     const ty = Math.abs(ry) < 1e-10 ? Infinity : (y0 + (ry > 0 ? TERRAIN_STEP : 0) - py) / ry;
     const to = Math.min(end, tx, ty);
     if (to <= from + 1e-9) break;
-    const h00 = terrainVertex(gx, gy), h10 = terrainVertex(gx + 1, gy), h01 = terrainVertex(gx, gy + 1), h11 = terrainVertex(gx + 1, gy + 1);
-    if (Math.max(h00, h10, h01, h11) > .00001) {
+    const patch = terrainPatch(gx, gy);
+    if (patch >= 0 && terrainPatchData[patch + 7]) {
       const diagonal = Math.abs(rx - ry) < 1e-10 ? Infinity : ((py - y0) - (px - x0)) / (rx - ry);
       const cut = diagonal > from && diagonal < to ? diagonal : to;
       plane(from, cut);
@@ -23,9 +23,9 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
 
     function plane(t0, t1) {
       const middle = (t0 + t1) / 2, lower = px + rx * middle - x0 >= py + ry * middle - y0;
-      const sx = (lower ? h10 - h00 : h11 - h01) * TERRAIN_SCALE;
-      const sy = (lower ? h11 - h10 : h01 - h00) * TERRAIN_SCALE;
-      const base = h00 + sx * (px - x0) + sy * (py - y0), along = sx * rx + sy * ry;
+      const sx = terrainPatchData[patch + (lower ? 1 : 3)], sy = terrainPatchData[patch + (lower ? 2 : 4)];
+      const light = terrainPatchData[patch + (lower ? 5 : 6)];
+      const base = terrainPatchData[patch] + sx * (px - x0) + sy * (py - y0), along = sx * rx + sy * ry;
       const project = t => hor - ((base - eye) / t + along) * projY;
       const r0 = Math.max(0, Math.floor(Math.min(project(t0), project(t1))));
       const r1 = Math.min(rows, Math.ceil(Math.max(project(t0), project(t1))));
@@ -37,7 +37,7 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
         const t = (base - eye) / ((hor - r - .5) / projY - along);
         if (!Number.isFinite(t) || t < t0 - 1e-7 || t > t1 + 1e-7 || (ZB[i] >= 0 && ZB[i] <= t)) continue;
         const x = px + rx * t, y = py + ry * t;
-        terrainCell(i, x, y, t, sx, sy);
+        terrainCell(i, x, y, t, sx, sy, light);
         ZB[i] = t; FL[i] = 1; painted = true;
       }
     }
@@ -45,7 +45,7 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
   return painted;
 }
 
-function terrainCell(i, x, y, depth, sx, sy) {
+function terrainCell(i, x, y, depth, sx, sy, light) {
   const island = onIsland(x, y), coast = coastalGround(worldCoord(x), worldCoord(y));
   let surface = islandSurface(x,y);
   if(!surface&&worldReady&&naturalCoastAt(x,y))surface=islandShoreSurface(x,y,coast.depth,coast.beach);
@@ -55,7 +55,6 @@ function terrainCell(i, x, y, depth, sx, sy) {
   if (rock) { base = background = GRAY; ch = grain > .7 ? '%' : ':'; }
   else if (island) { base = background = GREEN; ch = grain > .65 ? '"' : ','; }
   if (surface) { base = surface.base; background = surface.background; ch = surface.ch; }
-  const light = clamp((.85 - sx * .9 + sy * .6) / Math.sqrt(1 + sx * sx + sy * sy), .5, 1.2);
   const fog = Math.max(0, 1 - depth / vis * 1.5), L = fog * 6 * (.6 + amb) * light;
   const tone=surface?.tone??1;
   const brightness=day*2.6*tone+day*(surface?.lift||0);

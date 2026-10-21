@@ -49,6 +49,7 @@ function mapDirectory() {
       status:openAt(sh,tod)?'Open now':'Closed now',hours:sh.hours,fee:sh.fee||0});
   }
   if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note,status:'Boat landing on west shore'});
+  if(worldReady)for(const sight of ISLAND_SIGHTS)add({...sight,category:'activities',kind:'sight',description:sight.text,status:'Outdoor sight · free'});
   for(const h of owned.homes) {
     const point=h.door||buyerDoor(h)||[h.cell%N+.5,Math.floor(h.cell/N)+.5];
     add({id:cityHomeId(h),name:`Your ${ITEMS[h.kind].name}`,x:point[0],y:point[1],category:'homes',kind:'home',home:h,

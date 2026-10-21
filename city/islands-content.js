@@ -11,11 +11,15 @@ function buildWildIslands() {
       if(wildIslandEdge(x,y,island)<3.5||hash(gx,gy,1821)>density||island.id==='sand'||island.id==='rock')continue;
       if(Math.hypot(x-island.landing[0],y-island.landing[1])<7)continue;
       if(ISLAND_CABINS.some(c=>x>c.x0-1.5&&x<c.x1+1.5&&y>c.y0-1.5&&y<c.y1+2))continue;
+      if(islandPathDistance(x,y,island)<1||ISLAND_SIGHTS.some(s=>near(x,y,s.x,s.y)<1.5))continue;
       const clearApproach=x>FERN_STRIP.x0-28&&x<FERN_STRIP.x1+28&&Math.abs(y-FERN_STRIP.y)<3.5;
       if(island.id==='fern'&&(clearApproach||trailDistance(x,y)<1.5||near(x,y,540,245)<6||near(x,y,627,191)<4))continue;
       trees.push({x,y,kind:hash(gx,gy,1822)>.3?'pine':'birch',s:.55+hash(gx,gy,1823)*.95,seed:hash(gx,gy,1824)});
     }
   }
+  // A couple of regulars use the existing fishing and conversation systems.
+  for(const [x,y,shirt]of [[474,395.94,BLUE],[694,110.94,GREEN]])
+    ANGLERS.push({x,y,a:Math.PI/2,cast:.6,seed:ANGLERS.length,shirt});
   // A fixed native place identity lets house contents survive future layout changes.
   const house=FERN_HOUSE,sh={word:'FERN HOUSE',kind:SHOP_APTS,wilderness:true,islandCabin:'fern-house',neon:GREEN,seed:.71,hours:[0,24],glyphs:'[]='};
   const cells=[];
@@ -53,6 +57,8 @@ function nearIslandLogbook() {
 function islandBuildingPrompt() {
   if(nearIslandLogbook())return 'E: read the visitors\' log';
   if(mode!=='walk')return '';
+  const sight=ISLAND_SIGHTS.find(s=>near(px,py,s.x,s.y)<.55);
+  if(sight)return `E: read ${sight.name}`;
   const cabin=islandCabinAtDoor();
   if(cabin)return cabin.room?'E: enter the fishing shelter':'E: knock on the door';
   const [lx,ly]=WILD_ISLANDS[0].landing;
@@ -69,6 +75,8 @@ function islandBuildingUse() {
     return true;
   }
   if(mode!=='walk')return false;
+  const sight=ISLAND_SIGHTS.find(s=>near(px,py,s.x,s.y)<.55);
+  if(sight){say(sight.text,7);return true;}
   const cabin=islandCabinAtDoor();
   if(cabin) {
     if(cabin.room) {

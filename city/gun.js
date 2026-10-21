@@ -62,7 +62,7 @@ function traceShot(x, y, z, hx, hy, slope) {
       }
       end = hi; what = 'ground'; break;
     }
-    if (Math.max(map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))],islandRoofHeight(x+hx*d,y+hy*d)) > zz) { end = d; what = 'wall'; break; }
+    if (Math.max(map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))],islandRoofHeight(x+hx*d,y+hy*d),islandSightHeight(x+hx*d,y+hy*d)) > zz) { end = d; what = 'wall'; break; }
   }
   let best = null;
   const closer = d => d > 0 && d < (best ? best.d : end);
