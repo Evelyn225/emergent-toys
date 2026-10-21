@@ -272,7 +272,7 @@ const stations = [], STATION_AT = new Map(); // block -> its station
   }
 }
 
-// the Chinatown night market: three stalls along the sidewalk of one Chinatown street (the plain block nearest the
+// the Chinatown night market: five stalls along the sidewalk of one Chinatown street (the plain block nearest the
 // middle of Chinatown, off the el's street, with no subway steps in the way), facing the road, red lanterns strung
 // above. Open 8pm to 2am; by day they're tarped over. at = where you stand to be served
 const nightMarketOpen = t => t >= 20 || t < 2;
@@ -280,6 +280,17 @@ const NIGHT_MARKET = (() => {
   const seed = DIST_SEEDS.find(s => s[2] === 'chinatown'); let best = null, bd = Infinity;
   for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++) {
     if (districtOf(bx, by) !== 'chinatown' || blockKind(bx, by) || !hseg(bx, by) || by === EL_ROW || by === EL_ROW + 1 || STATION_AT.has(bi(bx, by))) continue;
+    // Keep the whole market on a built-up street. A source street can become
+    // coastline when its opposite neighborhood moves to a different headland.
+    const builtUp = [2.75, 3.95, 5.15, 6.35, 7.55].every(at => {
+      const x = bx * 8 + at, y = by * 8 + 1, centre = citySourcePoint(x, y);
+      return [-1.2, 1.2].every(offset => {
+        if (!map[idx(Math.floor(x), Math.floor(y + offset))]) return false;
+        const wall = citySourcePoint(x, y + offset);
+        return Math.abs(wall[0] - centre[0]) < 1e-6 && Math.abs(wall[1] - centre[1] - offset) < 1e-6;
+      });
+    });
+    if (!builtUp) continue;
     const d = Math.hypot(relB(bx - seed[0]), by - seed[1]);
     if (d < bd) { bd = d; best = { bx, by }; }
   }
@@ -401,14 +412,19 @@ function solidAt(x, y, pad) {
 
 // chinatown: strings of lanterns across its streets, two per block side. {x, y, ax, ay}: across-street direction
 // strung wall to wall, so only where there's a building on both sides of the street to tie it to
-const LANTERN_SPAN = 0.95, lanterns = [];
+const LANTERN_SPAN = 1.01, lanterns = []; // ends enter the facades, rather than stopping short of them
+function lanternAnchored(l) {
+  return [-1, 1].every(sign =>
+    map[idx(l.x + l.ax * 1.2 * sign, l.y + l.ay * 1.2 * sign)] >= .5 &&
+    map[idx(Math.floor(l.x + l.ax * LANTERN_SPAN * sign), Math.floor(l.y + l.ay * LANTERN_SPAN * sign))] >= .5);
+}
 for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
   const lanternDist = d => d === 'chinatown' || d === 'shotengai';
   const d0 = districtOf(bx, by), d1 = districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by);
   const side = d0 !== 'belle' && d1 !== 'belle' && (lanternDist(d0) || lanternDist(d1));
   ax = Math.abs(ax); ay = Math.abs(ay);
-  const walls = map[idx(x - ax * 1.2, y - ay * 1.2)] > 0 && map[idx(x + ax * 1.2, y + ay * 1.2)] > 0;
-  if (side && walls) lanterns.push({ x, y, ax, ay });
+  const string = { x, y, ax, ay };
+  if (side && lanternAnchored(string)) lanterns.push(string);
 });
 const lanternsB = bucketed(lanterns);
 

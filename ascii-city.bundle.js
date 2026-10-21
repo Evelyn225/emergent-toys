@@ -65,6 +65,30 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
   HIT.face = face; HIT.u = lu + du * tmin; HIT.v = lv + dv * tmin; HIT.w = oz + rz * tmin;
   return tmin;
 }
+
+// Horizontal entry/exit shared by a drawBox column, for conservative screen
+// bounds and occlusion. The surviving cells still use the general rayBox.
+function rayBoxColumn(rx, ry, b) {
+  const lu = -b.x * b.c - b.y * b.s, lv = b.x * b.s - b.y * b.c;
+  const du = rx * b.c + ry * b.s, dv = -rx * b.s + ry * b.c;
+  let tmin = -Infinity, tmax = Infinity;
+  if (Math.abs(du) < 1e-12) {
+    if (lu < -b.hl || lu > b.hl) return null;
+  } else {
+    const a = (-b.hl - lu) / du, z = (b.hl - lu) / du;
+    tmin = Math.min(a, z); tmax = Math.max(a, z);
+  }
+  if (Math.abs(dv) < 1e-12) {
+    if (lv < -b.hw || lv > b.hw) return null;
+  } else {
+    const a = (-b.hw - lv) / dv, z = (b.hw - lv) / dv;
+    const lo = Math.min(a, z), hi = Math.max(a, z);
+    tmin = Math.max(tmin, lo);
+    tmax = Math.min(tmax, hi);
+    if (tmin > tmax) return null;
+  }
+  return { tmin, tmax };
+}
 // Source-space content is generated once. These transforms preserve each group's
 // local geometry while placing it on a finite chart. Ocean travel has its own bounds.
 const CITY_LAYOUT = {
@@ -2458,7 +2482,7 @@ const stations = [], STATION_AT = new Map(); // block -> its station
   }
 }
 
-// the Chinatown night market: three stalls along the sidewalk of one Chinatown street (the plain block nearest the
+// the Chinatown night market: five stalls along the sidewalk of one Chinatown street (the plain block nearest the
 // middle of Chinatown, off the el's street, with no subway steps in the way), facing the road, red lanterns strung
 // above. Open 8pm to 2am; by day they're tarped over. at = where you stand to be served
 const nightMarketOpen = t => t >= 20 || t < 2;
@@ -2466,6 +2490,17 @@ const NIGHT_MARKET = (() => {
   const seed = DIST_SEEDS.find(s => s[2] === 'chinatown'); let best = null, bd = Infinity;
   for (let by = 1; by < SHORE_S; by++) for (let bx = 0; bx < NB; bx++) {
     if (districtOf(bx, by) !== 'chinatown' || blockKind(bx, by) || !hseg(bx, by) || by === EL_ROW || by === EL_ROW + 1 || STATION_AT.has(bi(bx, by))) continue;
+    // Keep the whole market on a built-up street. A source street can become
+    // coastline when its opposite neighborhood moves to a different headland.
+    const builtUp = [2.75, 3.95, 5.15, 6.35, 7.55].every(at => {
+      const x = bx * 8 + at, y = by * 8 + 1, centre = citySourcePoint(x, y);
+      return [-1.2, 1.2].every(offset => {
+        if (!map[idx(Math.floor(x), Math.floor(y + offset))]) return false;
+        const wall = citySourcePoint(x, y + offset);
+        return Math.abs(wall[0] - centre[0]) < 1e-6 && Math.abs(wall[1] - centre[1] - offset) < 1e-6;
+      });
+    });
+    if (!builtUp) continue;
     const d = Math.hypot(relB(bx - seed[0]), by - seed[1]);
     if (d < bd) { bd = d; best = { bx, by }; }
   }
@@ -2587,14 +2622,19 @@ function solidAt(x, y, pad) {
 
 // chinatown: strings of lanterns across its streets, two per block side. {x, y, ax, ay}: across-street direction
 // strung wall to wall, so only where there's a building on both sides of the street to tie it to
-const LANTERN_SPAN = 0.95, lanterns = [];
+const LANTERN_SPAN = 1.01, lanterns = []; // ends enter the facades, rather than stopping short of them
+function lanternAnchored(l) {
+  return [-1, 1].every(sign =>
+    map[idx(l.x + l.ax * 1.2 * sign, l.y + l.ay * 1.2 * sign)] >= .5 &&
+    map[idx(Math.floor(l.x + l.ax * LANTERN_SPAN * sign), Math.floor(l.y + l.ay * LANTERN_SPAN * sign))] >= .5);
+}
 for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
   const lanternDist = d => d === 'chinatown' || d === 'shotengai';
   const d0 = districtOf(bx, by), d1 = districtOf(o === 'h' ? bx : bx - 1, o === 'h' ? by - 1 : by);
   const side = d0 !== 'belle' && d1 !== 'belle' && (lanternDist(d0) || lanternDist(d1));
   ax = Math.abs(ax); ay = Math.abs(ay);
-  const walls = map[idx(x - ax * 1.2, y - ay * 1.2)] > 0 && map[idx(x + ax * 1.2, y + ay * 1.2)] > 0;
-  if (side && walls) lanterns.push({ x, y, ax, ay });
+  const string = { x, y, ax, ay };
+  if (side && lanternAnchored(string)) lanterns.push(string);
 });
 const lanternsB = bucketed(lanterns);
 
@@ -3498,6 +3538,19 @@ function toLane(c) {
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
   if (vert) { c.x = worldCoord(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir); c.hx = 0; c.hy = dir; }
   else { c.y = worldCoord(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir); c.hx = dir; c.hy = 0; }
+  if (worldReady && !ROAD[idx(c.x, c.y)]) {
+    // Former wrapping bridge lanes can disappear in the finite world. Choose
+    // an existing stretch instead of snapping to an imaginary infinite grid.
+    let best = null, distance = Infinity;
+    for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
+      if (!(vert ? vseg(bx, by) : hseg(bx, by))) continue;
+      const along = clamp(vert ? c.y : c.x, (vert ? by : bx) * 8 + 2.5, (vert ? by : bx) * 8 + 7.5);
+      const lane = (vert ? bx : by) * 8 + 1 + (vert ? .4 : -.4) * dir;
+      const x = vert ? lane : along, y = vert ? along : lane, d = Math.hypot(x - c.x, y - c.y);
+      if (d < distance && !cars.some(o => o !== c && Math.hypot(o.ex - x, o.ey - y) < 1)) { best = { x, y }; distance = d; }
+    }
+    if (best) { c.x = best.x; c.y = best.y; }
+  }
   c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; c.pit = null; c.gas = null; plan(c);
 }
 
@@ -10531,6 +10584,40 @@ let TERRAIN_N = N * TERRAIN_SCALE;
 const TERRAIN_GRADE = .28;
 let terrainHeights = new Float32Array(TERRAIN_N * TERRAIN_N);
 let terrainCells = new Uint8Array(N * N);
+// Only cells with relief need planes. Index four half-cell patches per raised
+// cell into packed data, built once with the height field (no per-frame allocation).
+let terrainPatchIndex = new Uint32Array(terrainCells.length);
+// Per patch: height, two slope pairs, two lighting values, and a relief flag.
+let terrainPatchData = new Float64Array(0);
+function terrainPatch(gx, gy) {
+  const base = terrainPatchIndex[idx(Math.floor(gx / 2), Math.floor(gy / 2))];
+  return base ? base - 1 + ((gy & 1) * 2 + (gx & 1)) * 8 : -1;
+}
+function buildTerrainPlanes() {
+  terrainPatchIndex = new Uint32Array(terrainCells.length);
+  let cells = 0;
+  for (const raised of terrainCells) if (raised) cells++;
+  terrainPatchData = new Float64Array(cells * 4 * 8);
+  let at = 0;
+  for (let k = 0; k < terrainCells.length; k++) {
+    if (!terrainCells[k]) continue;
+    terrainPatchIndex[k] = at + 1;
+    const x = k % N * 2, y = Math.floor(k / N) * 2;
+    for (let oy = 0; oy < 2; oy++) for (let ox = 0; ox < 2; ox++) {
+      const gx = x + ox, gy = y + oy;
+      const a = terrainVertex(gx, gy), b = terrainVertex(gx + 1, gy);
+      const c = terrainVertex(gx, gy + 1), d = terrainVertex(gx + 1, gy + 1);
+      const sx0 = (b - a) * TERRAIN_SCALE, sy0 = (d - b) * TERRAIN_SCALE;
+      const sx1 = (d - c) * TERRAIN_SCALE, sy1 = (c - a) * TERRAIN_SCALE;
+      terrainPatchData[at++] = a;
+      terrainPatchData[at++] = sx0; terrainPatchData[at++] = sy0;
+      terrainPatchData[at++] = sx1; terrainPatchData[at++] = sy1;
+      terrainPatchData[at++] = clamp((.85 - sx0 * .9 + sy0 * .6) / Math.sqrt(1 + sx0 * sx0 + sy0 * sy0), .5, 1.2);
+      terrainPatchData[at++] = clamp((.85 - sx1 * .9 + sy1 * .6) / Math.sqrt(1 + sx1 * sx1 + sy1 * sy1), .5, 1.2);
+      terrainPatchData[at++] = Math.max(a, b, c, d) > .00001 ? 1 : 0;
+    }
+  }
+}
 const terrainIndex = (x, y) => worldReady ? (x >= 0 && y >= 0 && x < TERRAIN_N && y < TERRAIN_N ? y * TERRAIN_N + x : TERRAIN_N * TERRAIN_N) : mod(y, TERRAIN_N) * TERRAIN_N + mod(x, TERRAIN_N);
 const terrainVertex = (x, y) => terrainHeights[terrainIndex(x, y)];
 const terrainEase = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
@@ -10627,6 +10714,7 @@ function buildTerrain() {
       for (const oy of [-1, 0]) for (const ox of [-1, 0]) terrainCells[idx(Math.floor((gx + ox) * TERRAIN_STEP), Math.floor((gy + oy) * TERRAIN_STEP))] = 1;
     }
   }
+  buildTerrainPlanes();
 }
 
 function terrainHeight(x, y) {
@@ -22303,8 +22391,8 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
     const ty = Math.abs(ry) < 1e-10 ? Infinity : (y0 + (ry > 0 ? TERRAIN_STEP : 0) - py) / ry;
     const to = Math.min(end, tx, ty);
     if (to <= from + 1e-9) break;
-    const h00 = terrainVertex(gx, gy), h10 = terrainVertex(gx + 1, gy), h01 = terrainVertex(gx, gy + 1), h11 = terrainVertex(gx + 1, gy + 1);
-    if (Math.max(h00, h10, h01, h11) > .00001) {
+    const patch = terrainPatch(gx, gy);
+    if (patch >= 0 && terrainPatchData[patch + 7]) {
       const diagonal = Math.abs(rx - ry) < 1e-10 ? Infinity : ((py - y0) - (px - x0)) / (rx - ry);
       const cut = diagonal > from && diagonal < to ? diagonal : to;
       plane(from, cut);
@@ -22314,9 +22402,9 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
 
     function plane(t0, t1) {
       const middle = (t0 + t1) / 2, lower = px + rx * middle - x0 >= py + ry * middle - y0;
-      const sx = (lower ? h10 - h00 : h11 - h01) * TERRAIN_SCALE;
-      const sy = (lower ? h11 - h10 : h01 - h00) * TERRAIN_SCALE;
-      const base = h00 + sx * (px - x0) + sy * (py - y0), along = sx * rx + sy * ry;
+      const sx = terrainPatchData[patch + (lower ? 1 : 3)], sy = terrainPatchData[patch + (lower ? 2 : 4)];
+      const light = terrainPatchData[patch + (lower ? 5 : 6)];
+      const base = terrainPatchData[patch] + sx * (px - x0) + sy * (py - y0), along = sx * rx + sy * ry;
       const project = t => hor - ((base - eye) / t + along) * projY;
       const r0 = Math.max(0, Math.floor(Math.min(project(t0), project(t1))));
       const r1 = Math.min(rows, Math.ceil(Math.max(project(t0), project(t1))));
@@ -22328,7 +22416,7 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
         const t = (base - eye) / ((hor - r - .5) / projY - along);
         if (!Number.isFinite(t) || t < t0 - 1e-7 || t > t1 + 1e-7 || (ZB[i] >= 0 && ZB[i] <= t)) continue;
         const x = px + rx * t, y = py + ry * t;
-        terrainCell(i, x, y, t, sx, sy);
+        terrainCell(i, x, y, t, sx, sy, light);
         ZB[i] = t; FL[i] = 1; painted = true;
       }
     }
@@ -22336,7 +22424,7 @@ function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
   return painted;
 }
 
-function terrainCell(i, x, y, depth, sx, sy) {
+function terrainCell(i, x, y, depth, sx, sy, light) {
   const island = onIsland(x, y), coast = coastalGround(worldCoord(x), worldCoord(y));
   let surface = islandSurface(x,y);
   if(!surface&&worldReady&&naturalCoastAt(x,y))surface=islandShoreSurface(x,y,coast.depth,coast.beach);
@@ -22346,7 +22434,6 @@ function terrainCell(i, x, y, depth, sx, sy) {
   if (rock) { base = background = GRAY; ch = grain > .7 ? '%' : ':'; }
   else if (island) { base = background = GREEN; ch = grain > .65 ? '"' : ','; }
   if (surface) { base = surface.base; background = surface.background; ch = surface.ch; }
-  const light = clamp((.85 - sx * .9 + sy * .6) / Math.sqrt(1 + sx * sx + sy * sy), .5, 1.2);
   const fog = Math.max(0, 1 - depth / vis * 1.5), L = fog * 6 * (.6 + amb) * light;
   const tone=surface?.tone??1;
   const brightness=day*2.6*tone+day*(surface?.lift||0);
@@ -22473,12 +22560,25 @@ function drawBox(b, shade, intersect = rayBox) {
   }
   c0 = Math.max(0, Math.floor(c0)); c1 = Math.min(cols, Math.ceil(c1) + 1);
   r0 = Math.max(0, Math.floor(r0)); r1 = Math.min(rows, Math.ceil(r1) + 1);
+  const clipColumn = intersect === rayBox && r1 - r0 >= 6 && (near <= 0 || far > near * 1.25);
   for (let c = c0; c < c1; c++) {
     const cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
-    for (let r = r0; r < r1; r++) {
+    let low = r0, high = r1, columnNear = near;
+    if (clipColumn) {
+      // Clip the vertical silhouette at this column's actual horizontal entry
+      // and exit, rather than casting through the whole projected rectangle.
+      const span = rayBoxColumn(rx, ry, b);
+      if (!span) continue;
+      const t0 = Math.max(.01, span.tmin), t1 = Math.min(vis, span.tmax);
+      if (t1 < t0) continue;
+      low = Math.max(low, Math.floor(Math.min(hor - (b.z1 - eye) * projY / t0, hor - (b.z1 - eye) * projY / t1)));
+      high = Math.min(high, Math.ceil(Math.max(hor - (b.z0 - eye) * projY / t0, hor - (b.z0 - eye) * projY / t1)) + 1);
+      columnNear = Math.max(near, span.tmin);
+    }
+    for (let r = low; r < high; r++) {
       const i = r * cols + c;
       // Even the nearest corner is behind this cell: skip the expensive shape intersection.
-      if (ZB[i] <= near) continue;
+      if (ZB[i] <= columnNear) continue;
       const t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
       if (t < 0 || t >= ZB[i] || t > vis) continue;
       const bg = BG[i]; BG[i] = BG_UNSET;
@@ -22756,7 +22856,7 @@ function present2D() {
     }
     g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]];
     g.fillText(s.slice(0, end - x), x * cw, r * FS);
-    x = end;
+    x = x1; // trailing blank cells were already scanned while finding this run
   }
 }
 // Reused canvas surfaces work with both presenters. No pixel readbacks and no work while sober.
@@ -32190,6 +32290,9 @@ function assembleArchipelago() {
   }
   buildWildIslandFields();
   buildWildIslands();
+  // Opposite source blocks may now be on separate headlands. Validate against
+  // the finished building map before rebuilding the renderer's spatial buckets.
+  for (let i = lanterns.length - 1; i >= 0; i--) if (!lanternAnchored(lanterns[i])) lanterns.splice(i, 1);
   function rebucket(b, items) {
     const fresh = bucketed(items);
     b.length = fresh.length;
@@ -32206,6 +32309,8 @@ function assembleArchipelago() {
     delete c.sceneKey;
     delete c.route;
     c.dest = c.nh = null;
+    // Cars on the old wrapping bridge must join the finished road network too.
+    if (!ROAD[idx(c.x, c.y)]) toLane(c);
     plan(c);
   }
   TERRAIN_N = N * TERRAIN_SCALE;

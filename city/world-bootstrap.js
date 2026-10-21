@@ -295,6 +295,9 @@ function assembleArchipelago() {
   }
   buildWildIslandFields();
   buildWildIslands();
+  // Opposite source blocks may now be on separate headlands. Validate against
+  // the finished building map before rebuilding the renderer's spatial buckets.
+  for (let i = lanterns.length - 1; i >= 0; i--) if (!lanternAnchored(lanterns[i])) lanterns.splice(i, 1);
   function rebucket(b, items) {
     const fresh = bucketed(items);
     b.length = fresh.length;
@@ -311,6 +314,8 @@ function assembleArchipelago() {
     delete c.sceneKey;
     delete c.route;
     c.dest = c.nh = null;
+    // Cars on the old wrapping bridge must join the finished road network too.
+    if (!ROAD[idx(c.x, c.y)]) toLane(c);
     plan(c);
   }
   TERRAIN_N = N * TERRAIN_SCALE;

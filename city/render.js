@@ -86,12 +86,25 @@ function drawBox(b, shade, intersect = rayBox) {
   }
   c0 = Math.max(0, Math.floor(c0)); c1 = Math.min(cols, Math.ceil(c1) + 1);
   r0 = Math.max(0, Math.floor(r0)); r1 = Math.min(rows, Math.ceil(r1) + 1);
+  const clipColumn = intersect === rayBox && r1 - r0 >= 6 && (near <= 0 || far > near * 1.25);
   for (let c = c0; c < c1; c++) {
     const cx = 2 * (c + 0.5) / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
-    for (let r = r0; r < r1; r++) {
+    let low = r0, high = r1, columnNear = near;
+    if (clipColumn) {
+      // Clip the vertical silhouette at this column's actual horizontal entry
+      // and exit, rather than casting through the whole projected rectangle.
+      const span = rayBoxColumn(rx, ry, b);
+      if (!span) continue;
+      const t0 = Math.max(.01, span.tmin), t1 = Math.min(vis, span.tmax);
+      if (t1 < t0) continue;
+      low = Math.max(low, Math.floor(Math.min(hor - (b.z1 - eye) * projY / t0, hor - (b.z1 - eye) * projY / t1)));
+      high = Math.min(high, Math.ceil(Math.max(hor - (b.z0 - eye) * projY / t0, hor - (b.z0 - eye) * projY / t1)) + 1);
+      columnNear = Math.max(near, span.tmin);
+    }
+    for (let r = low; r < high; r++) {
       const i = r * cols + c;
       // Even the nearest corner is behind this cell: skip the expensive shape intersection.
-      if (ZB[i] <= near) continue;
+      if (ZB[i] <= columnNear) continue;
       const t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
       if (t < 0 || t >= ZB[i] || t > vis) continue;
       const bg = BG[i]; BG[i] = BG_UNSET;
@@ -369,6 +382,6 @@ function present2D() {
     }
     g.fillStyle = FOGS[i] ? fogged(COL[i], FOGS[i]) : PAL[COL[i]];
     g.fillText(s.slice(0, end - x), x * cw, r * FS);
-    x = end;
+    x = x1; // trailing blank cells were already scanned while finding this run
   }
 }
