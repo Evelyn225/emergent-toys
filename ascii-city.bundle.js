@@ -28786,6 +28786,20 @@ function heldTreasure(it) {
   });
 }
 for (const id of ['bottlemsg', 'oldcoin', 'goldring', 'pearl', 'compass', 'divewatch', 'pocketknife', 'wishcoins']) DENSE[id] = heldTreasure;
+
+// The moving-day lamp keeps its pleated amber shade and metal foot in your hand.
+DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
+  if(y < -11 || y > 11)return null;
+  if(y < -1){
+    const width=3.1+(y+11)*.38;
+    if(Math.abs(x)>width)return null;
+    if(y > -2)return ['=',C(ORANGE,13)];
+    return [Math.abs(x)>width-.45?(x<0?'/':'\\'):Math.floor((x+width)*2)%4===0?'|':':',C(ORANGE,11+2*dCyl(x,width))];
+  }
+  if(y < 8 && Math.abs(x)<.55)return ['|',C(GRAY,x<0?14:9)];
+  if(dEll(x,y,0,9,4.4,1.7)<1)return dLit(.65-x*.04,GRAY,9);
+  return null;
+});
 // Small gestures when an item is used. The picture and its hand move together; the world and aim stay put.
 const HELD_SQUEEZE = new Set(['duck', 'sharkplush', 'plushcat', 'plushbear', 'petcat', 'petdog']);
 const HELD_FLIP = new Set(['luckycoin', 'oldcoin', 'goldring', 'pearl', 'wishcoins']);

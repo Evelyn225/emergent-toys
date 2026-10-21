@@ -6,6 +6,12 @@ const path = require('node:path');
 const http = require('node:http');
 const { chromium } = require('playwright');
 
+// Web Audio can advance more slowly than wall time on a busy headless runner.
+async function settleAudio(page, seconds) {
+  const until = await page.evaluate(s => actx.currentTime + s, seconds);
+  await page.waitForFunction(until => actx.currentTime >= until, until);
+}
+
 test('recorded police sirens share a gapless buffer, spatialize, and stop when returning or busted', async () => {
   const root = path.resolve(__dirname, '../..');
   let releaseClip, requestedClip, clipRequests = 0;
@@ -54,7 +60,7 @@ test('recorded police sirens share a gapless buffer, spatialize, and stop when r
     await page.evaluate(() => { tickSirens(false); });
     assert.equal(await page.evaluate(() => sirens.size), 1);
     await page.evaluate(() => { sirenTestCars[1].returning = false; tickSirens(false); });
-    await page.waitForTimeout(500);
+    await settleAudio(page, .5);
     const voices = await page.evaluate(() => [...sirens.values()].map(v => ({
       recorded: v.recorded, bufferSource: v.o instanceof AudioBufferSourceNode,
       sharedBuffer: v.o.buffer === policeSirenBuffer, loop: v.o.loop,
@@ -91,7 +97,7 @@ test('recorded police sirens share a gapless buffer, spatialize, and stop when r
 
     // A frozen frame (a shop, the inventory, the map) silences them rather than leaving them holding a note
     await page.evaluate(() => { hushSirens = realHush; });
-    await page.waitForTimeout(400);
+    await settleAudio(page, .4);
     assert.ok(await page.evaluate(() => [...sirens.values()].every(v => v.g.gain.value < 0.01)), 'paused: the sirens fall silent');
     await page.evaluate(() => { hushSirens = () => {}; tickSirens(false); });
 
@@ -99,7 +105,7 @@ test('recorded police sirens share a gapless buffer, spatialize, and stop when r
       for (const c of sirenTestCars) c.v = -2;
       tickSirens(true);
     });
-    await page.waitForTimeout(650);
+    await settleAudio(page, .8);
     const indoors = await page.evaluate(() => [...sirens.values()].map(v => ({ rate: v.o.playbackRate.value, gain: v.g.gain.value, cutoff: v.lp.frequency.value })));
     for (let i = 0; i < indoors.length; i++) {
       assert.ok(indoors[i].rate < 1, 'receding cars lower pitch');

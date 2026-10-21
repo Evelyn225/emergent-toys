@@ -18,9 +18,10 @@ test('at the stove at home: E for the panel, 1 cooks, the pan played, a dish in 
     await page.waitForFunction(() => typeof openCooking === 'function' && Number.isFinite(eye));
     await page.evaluate(() => localStorage.clear());
     const at = await page.evaluate(() => {
-      paused = true; clearWanted(); sleep = null; mode = 'walk'; room = null; px = 41; py = 73; money = 20000;
-      buy('home_studio'); const h = owned.homes[0], def = ROOM_DEFS.home;
-      enterRoom('home', { cell: [h.cell % N, Math.floor(h.cell / N)], ret: [41, 73, 0] }, def.entry);
+      paused = true; clearWanted(); sleep = null; mode = 'walk'; room = null; [px, py] = citySourcePoint(41, 73); money = 20000;
+      const purchase = buy('home_studio'); if (!purchase[0]) throw new Error(purchase[1]);
+      const h = owned.homes[0], def = ROOM_DEFS.home;
+      enterRoom('home', { cell: [h.cell % N, Math.floor(h.cell / N)], ret: [...citySourcePoint(41,73),0] }, def.entry);
       [px, py] = def.spots.stove; a = 0;
       clearInventory(); carryItem({ id: 'mackerel', uses: 0, kg: 0.9 }); h.fridge.push({ id: 'butter', uses: 0 });
       const prompt = promptText(); interact();

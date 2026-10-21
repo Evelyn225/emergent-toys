@@ -14,9 +14,13 @@ async function atHome(fn,mobile=false) {
   try {
     await page.addInitScript(()=>{window.requestAnimationFrame=()=>0;});await page.goto(PAGE);
     await page.evaluate(()=>{
-      paused=false;mode='walk';room=me=null;px=41;py=73;T=10;tod=12;env(0);render(0);money=5000;
-      buy('home_studio');const h=owned.homes[0],def=ROOM_DEFS.home;
-      enterRoom('home',{cell:[h.cell%N,Math.floor(h.cell/N)],ret:[41,73,0]},def.entry);env(0);render(0);
+      // Desktop tests cover real mouse capture. Headless windows can steal focus
+      // from one another, so keyboard placement must not request pointer lock.
+      lockMouse=()=>{};
+      paused=false;mode='walk';room=me=null;[px,py]=citySourcePoint(41,73);T=10;tod=12;env(0);render(0);money=5000;
+      const purchase=buy('home_studio');if(!purchase[0])throw new Error(purchase[1]);
+      const h=owned.homes[0],def=ROOM_DEFS.home;
+      enterRoom('home',{cell:[h.cell%N,Math.floor(h.cell/N)],ret:[...citySourcePoint(41,73),0]},def.entry);env(0);render(0);
       px=def.spots.workshop[0];py=def.spots.workshop[1];a=Math.PI;clearInventory();
     });
     await fn(page);assert.deepEqual(errors,[]);
@@ -30,6 +34,7 @@ async function setUp(page) {
   assert.equal(p.ok,true,JSON.stringify(p));await page.keyboard.press('KeyE');
   for(const id of ['processor','packer']) {
     await page.evaluate(()=>{openWorkshop();});await page.locator(`[data-place="${id}"]`).click();await page.keyboard.press('KeyE');
+    assert.equal(await page.evaluate(id=>workshopState(homeRecord()).parts.some(p=>p.id===id),id),true,`${id} placed by E`);
   }
   await page.evaluate(()=>openWorkshop());await page.locator('[data-power]').click();
   assert.equal(await page.evaluate(()=>workshopCanRun(homeRecord(),workshopState(homeRecord()).parts[0])), '');
@@ -122,7 +127,7 @@ test('each apartment has a usable workshop bay and a clear entrance; rotated equ
     const home=homeRecord(), results=[];
     for(const id of ['home_studio','home_loft','home_belle']){
       home.kind=id;home.workshop=undefined;
-      const kind=homeRoomKind(id),def=ROOM_DEFS[kind];enterRoom(kind,{cell:[home.cell%N,Math.floor(home.cell/N)],ret:[41,73,0]},def.entry);
+      const kind=homeRoomKind(id),def=ROOM_DEFS[kind];enterRoom(kind,{cell:[home.cell%N,Math.floor(home.cell/N)],ret:[...citySourcePoint(41,73),0]},def.entry);
       buyWorkshopKit(home);px=3.75;py=room.H-2;a=-Math.PI/2;
       beginWorkshopPlacement('bench');const fits=workshopCandidate().ok;placeWorkshopPart();
       for(const part of ['processor','packer']){beginWorkshopPlacement(part);if(part==='processor')workshopKey({code:'KeyQ'});placeWorkshopPart();}

@@ -14,9 +14,13 @@ async function fixture(fn,mobile=false) {
   try {
     await page.addInitScript(()=>{window.requestAnimationFrame=()=>0;});await page.goto(PAGE);
     await page.evaluate(()=>{
-      paused=false;mode='walk';room=me=null;px=41;py=73;T=10;tod=12;money=5000;env(0);render(0);
-      buy('home_studio');const h=owned.homes[0],def=ROOM_DEFS.home;
-      enterRoom('home',{cell:[h.cell%N,Math.floor(h.cell/N)],ret:[41,73,0]},def.entry);clearInventory();
+      // Desktop tests cover real mouse capture. Headless windows can steal focus
+      // from one another, so keyboard placement must not request pointer lock.
+      lockMouse=()=>{};
+      paused=false;mode='walk';room=me=null;[px,py]=citySourcePoint(41,73);T=10;tod=12;money=5000;env(0);render(0);
+      const purchase=buy('home_studio');if(!purchase[0])throw new Error(purchase[1]);
+      const h=owned.homes[0],def=ROOM_DEFS.home;
+      enterRoom('home',{cell:[h.cell%N,Math.floor(h.cell/N)],ret:[...citySourcePoint(41,73),0]},def.entry);clearInventory();
     });
     await fn(page);assert.deepEqual(errors,[]);
   } finally {await page.close();}
@@ -37,7 +41,7 @@ test('weed can be bought, placed, tended, saved, harvested and sold through the 
   assert.deepEqual(await page.evaluate(()=>owned.homes[0].workshop),before);
   await page.evaluate(()=>{
     paused=false;const h=owned.homes[0],def=ROOM_DEFS.home;
-    enterRoom('home',{cell:[h.cell%N,Math.floor(h.cell/N)],ret:[41,73,0]},def.entry);
+    enterRoom('home',{cell:[h.cell%N,Math.floor(h.cell/N)],ret:[...citySourcePoint(41,73),0]},def.entry);
     stepWorkshop(31);px=3.75;py=12.7;a=-Math.PI/2;env(0);render(0);
   });
   assert.match(await page.evaluate(()=>promptText()),/harvest weed/);await page.keyboard.press('KeyE');
