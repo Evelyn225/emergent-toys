@@ -101,11 +101,12 @@ test('freecam preserves interiors, roofs and vehicles while rendering from above
       renderFreecam();
       freecam.z = -.2; renderFreecam();
       const after = JSON.stringify([px, py, a, pitch, mode, roofH, body, me?.v, sea?.v]);
+      const unchanged=before===after && room===originalRoom && me===originalCar && sea===originalBoat;
       toggleFreecam();
-      return { scene, unchanged: before === after && room === originalRoom && me === originalCar && sea === originalBoat };
+      return { scene, unchanged, resumed:!freecam };
     });
   });
-  for (const r of results) assert.ok(r.unchanged, JSON.stringify(r));
+  for (const r of results) assert.ok(r.unchanged && r.resumed, JSON.stringify(r));
 }));
 
 test('freecam movement keys leave held items, jumping and interactions alone', () => withPage(async page => {

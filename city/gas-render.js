@@ -153,7 +153,17 @@ function gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 // before the solids: who's filling up where (for the pumps' displays), and the drivers out at the pumps, the hose from
 // the pump to the filler cap
 const GAS_FILLING = []; // (per station, by lane: the car filling up there, while it's near enough to see)
+function gasFigureTargets() {
+  const out=[];
+  for(const c of cars)if(gasFilling(c)) {
+    const p=c.pit,st=p.st,l=p.lane,[isle]=GAS_FILL[l],sd=Math.sign(GAS.islands[isle]-GAS.lanes[l]);p.gasDriver=true;
+    out.push(sceneFigureTarget(p,st.x0+GAS.pumpX+.13,st.y0+GAS.lanes[l]+sd*.175,0,.175,{sd,car:c}));
+  }
+  for(const b of bodies)if(b.who.gasDriver&&!out.some(p=>p.who===b.who))out.push(sceneFigureTarget(b.who,b.x,b.y,0));
+  return out;
+}
 function gasSprites() {
+  for(const p of gasFigureTargets())if(p.who.dead&&!p.who.hidden)drawSceneFigure(p,p.who.look ||= figStreetLook(17,BLUE,BLUE));
   for (const st of GAS_STATIONS) {
     const [vx, vy] = R(st.x0 + 1.5, st.y0 + 1);
     GAS_FILLING[st.k] = Math.abs(vx) < vis + 2 && Math.abs(vy) < vis + 2 ? [null, null, null] : null;
@@ -164,6 +174,7 @@ function gasSprites() {
     GAS_FILLING[st.k][l] = c;
     const [vx, vy] = R(st.x0 + GAS.pumpX + 0.13, st.y0 + ly + sd * 0.175);
     if (!inView(vx, vy, 0.4)) continue;
+    if(p.dead||p.hidden)continue;
     drawFigure(vx, vy, 0, 0.175, 0, -sd, p.look ||= figStreetLook(c.id * 7919 + 17, pick([RED, BLUE, GREEN, WHITE, GRAY]), BLUE), 'stand');
     // the hose: out of the pump's side, sagging, into the filler cap
     const [ax, ay] = R(st.x0 + GAS.pumpX + 0.05, st.y0 + iy - sd * 0.045), [bx, by] = R(st.x0 + GAS.pumpX, st.y0 + ly + sd * 0.115);

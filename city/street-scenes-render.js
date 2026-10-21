@@ -207,26 +207,36 @@ function movingShade(o,i,t,L) {
   if(top)paintSettledSnow(i,o.x+HIT.u*o.c-HIT.v*o.s,o.y+HIT.u*o.s+HIT.v*o.c,L,.75,0,z);
   return true;
 }
+const SCENE_ACTORS={mover:{},neighbor:{},artist:{}};
+function streetSceneTargets() {
+  const out=[],m=STREET_SCENES.moving,c=STREET_SCENES.chalk;
+  const add=(key,active,p,h,hx,hy,pose)=>{
+    const who=SCENE_ACTORS[key];
+    if(!who.dead)Object.assign(who,{...p,z:outdoorGroundHeight(p.x,p.y),h,hx,hy,pose});
+    if(!who.hidden&&(active||who.dead))out.push({who,x:who.x,y:who.y,z:who.z,h:who.h,key});
+  };
+  if(m) {
+    const heading=Math.cos(T*.18)>0?1:-1;
+    add('mover',movingPhase()==='loading',scenePoint(m,.34*Math.sin(T*.18),.22),.175,m.c*heading,m.s*heading,'carry'+(Math.floor(T*4)%8));
+    add('neighbor',movingPhase()==='loading',scenePoint(m,-.35,.18),.17,m.nx,m.ny,'fold');
+  }
+  if(c)add('artist',tod>=9&&tod<17&&rain<.2&&snow<.2&&snowCover<.15&&chalkWash()<.65,{x:c.x+.6,y:c.y+.55},.17,-.6,-.8,fract(T*.12)<.8?'crouch':'stand');
+  return out;
+}
 function drawStreetScenes() {
   const m=STREET_SCENES.moving;
-  if(m&&near(px,py,m.x,m.y)<vis) {
-    for(const o of STREET_SCENES.boxes)if(streetSceneBoxActive(o)) {
-      const [x,y]=R(o.x,o.y);drawBox({...o,x,y},(i,t,L)=>movingShade(o,i,t,L));
-    }
-    if(movingPhase()==='loading') {
-      const shift=.34*Math.sin(T*.18),p=scenePoint(m,shift,.22),heading=Math.cos(T*.18)>0?1:-1;
-      drawFigure(...R(p.x,p.y),0,.175,m.c*heading,m.s*heading,SCENE_LOOKS.mover,'carry'+(Math.floor(T*4)%8));
-      const carried={x:p.x+m.c*heading*.025,y:p.y+m.s*heading*.025,c:m.c,s:m.s,hl:.028,hw:.025,z0:.07,z1:.115,base:WARM,kind:'box'};
-      const [vx,vy]=R(carried.x,carried.y);drawBox({...carried,x:vx,y:vy},(i,t,L)=>movingShade(carried,i,t,L));
-      const q=scenePoint(m,-.35,.18);
-      drawFigure(...R(q.x,q.y),0,.17,m.nx,m.ny,SCENE_LOOKS.neighbor,'fold');
-    }
+  if(m&&near(px,py,m.x,m.y)<vis)for(const o of STREET_SCENES.boxes)if(streetSceneBoxActive(o)) {
+    const [x,y]=R(o.x,o.y);drawBox({...o,x,y},(i,t,L)=>movingShade(o,i,t,L));
   }
-  const c=STREET_SCENES.chalk;
-  if(c&&tod>=9&&tod<17&&rain<.2&&snow<.2&&snowCover<.15&&chalkWash()<.65&&near(px,py,c.x,c.y)<vis) {
-    const x=c.x+.6,y=c.y+.55;
-    drawFigure(...R(x,y),terrainHeight(x,y),.17,-.6,-.8,SCENE_LOOKS.artist,fract(T*.12)<.8?'crouch':'stand');
-    drawArt(...R(x+.1,y),.005,.045,.04,[' ___ ','|===|','|___|'],()=>C(MAG,10));
+  for(const p of streetSceneTargets()) {
+    const o=p.who;if(near(px,py,p.x,p.y)>vis)continue;
+    drawFigure(...R(p.x,p.y),p.z,p.h,o.dead?o.down.fx:o.hx,o.dead?o.down.fy:o.hy,SCENE_LOOKS[p.key],o.dead?'dead':o.pose);
+    if(o.dead)continue;
+    if(p.key==='mover') {
+      const carried={x:o.x+o.hx*.025,y:o.y+o.hy*.025,c:m.c,s:m.s,hl:.028,hw:.025,z0:o.z+.07,z1:o.z+.115,base:WARM,kind:'box'};
+      const [vx,vy]=R(carried.x,carried.y);drawBox({...carried,x:vx,y:vy},(i,t,L)=>movingShade(carried,i,t,L));
+    }
+    if(p.key==='artist')drawArt(...R(o.x+.1,o.y),o.z+.005,.045,.04,[' ___ ','|===|','|___|'],()=>C(MAG,10));
   }
 }
 // A cached pavement stencil, rather than repeated screen letters stretched over
@@ -305,7 +315,7 @@ function streetSceneNear() {
     if(near(px,py,p.x,p.y)<.34)return 'railway';
   }
   const m=STREET_SCENES.moving;
-  if(m&&movingPhase()==='loading') {
+  if(m&&movingPhase()==='loading'&&!SCENE_ACTORS.neighbor.dead&&!SCENE_ACTORS.mover.dead) {
     const person=scenePoint(m,-.35,.18),vx=person.x-px,vy=person.y-py,distance=Math.hypot(vx,vy);
     if(distance<.24&&(distance<.05||(Math.cos(a)*vx+Math.sin(a)*vy)/distance>.5))return 'moving';
   }

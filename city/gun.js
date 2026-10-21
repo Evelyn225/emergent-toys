@@ -22,7 +22,7 @@ const gun = { cool: 0, reload: 0, kick: 0, spin: 0, aimHeld: false, aim: 0, last
 const bodies = []; // { who, cop, x, y, t, amb, atT }
 const pools = []; // { x, y, t }: blood, spreading, then dried and gone
 const heldGun = () => { const it = heldItem(); return it && ITEMS[it.id].kind === 'gun' ? it : null; };
-const canAimGun = () => !!heldGun() && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') && !freecam && !gun.reload;
+const canAimGun = () => !wanted.busted && !!heldGun() && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') && !freecam && !gun.reload;
 const gunAim = () => canAimGun() ? gun.aim : 0;
 const ammoLeft = () => inv.reduce((n, it) => n + (it.id === 'ammo' ? it.uses : 0), 0);
 // what the pawnbroker says, handing it over
@@ -30,7 +30,7 @@ const GUN_SOLD = 'The pawnbroker looks at the door, then at you, and brings a bu
 // R: thumb the rounds in. Done when the time's up (stepGun)
 function reloadGun() {
   const g = heldGun();
-  if (!g || gun.reload > 0) return null;
+  if (wanted.busted || !g || gun.reload > 0) return null;
   if (g.uses >= CYLINDER) return ['All six are in.', null];
   if (!ammoLeft()) return ['No rounds. The pawnbroker sells them by the box, after nine.', 'click'];
   gun.reload = RELOAD_T;
@@ -66,13 +66,16 @@ function traceShot(x, y, z, hx, hy, slope) {
   }
   let best = null;
   const closer = d => d > 0 && d < (best ? best.d : end);
-  const figure = (o, kind) => { // somebody standing (a body 3cm either side of the line, up to head height), or lying flat
-    const ox = rel(o.x - x), oy = rel(o.y - y), along = ox * hx + oy * hy, across = Math.abs(oy * hx - ox * hy), zz = z + slope * along - outdoorGroundHeight(o.x, o.y);
+  const figure = (o, kind, spot = null) => { // somebody standing (a body 3cm either side of the line, up to head height), or lying flat
+    const tx=spot?.x??o.x,ty=spot?.y??o.y;
+    const ox = rel(tx - x), oy = rel(ty - y), along = ox * hx + oy * hy, across = Math.abs(oy * hx - ox * hy), zz = z + slope * along - (spot?.z??outdoorGroundHeight(tx,ty));
     if (!closer(along)) return;
-    if (zz >= 0 && (o.down ? across < 0.08 && zz < 0.04 : across < 0.032 && zz < (kind === 'cop' ? 0.185 : 0.175))) best = { d: along, what: kind, who: o };
+    if (zz >= 0 && (o.down ? across < 0.08 && zz < 0.04 : across < 0.032 && zz < (spot?.h??(kind === 'cop' ? 0.185 : 0.175)))) best = { d: along, what: kind, who: o, anchor:spot };
   };
   for (const p of people) if (!p.hidden && !p.dead && near(p.x, p.y, x, y) < SHOT_RANGE) figure(p, 'person');
   for (const c of footCops) if (!c.dead && near(c.x, c.y, x, y) < SHOT_RANGE) figure(c, 'cop');
+  for(const c of roofCops)if(!c.dead)figure(c,'cop',{x:c.x,y:c.y,z:policeRoofHeight(c.x,c.y),h:.18});
+  if(typeof gunSceneFigures==='function')for(const target of gunSceneFigures())figure(target.who,'person',target);
   for (const c of cars) { // a car: where the line goes into its box, if that's below its roof
     if (c.player || near(c.x, c.y, x, y) > SHOT_RANGE + 0.4) continue;
     const [hl, hw, h] = CAR_HIT[c.kind] || CAR_DEFAULT, ox = rel(x - c.x), oy = rel(y - c.y);
@@ -94,22 +97,26 @@ function traceShot(x, y, z, hx, hy, slope) {
 // What happened, for gun-ui.js: null (not ready), { empty }, or the shot and what it hit
 function fireGun(x, y, z, yaw, slope, indoors = false) {
   const g = heldGun();
-  if (!g || gun.cool > 0 || gun.reload > 0) return null;
+  if (wanted.busted || !g || gun.cool > 0 || gun.reload > 0) return null;
   if (g.uses <= 0) { gun.cool = 0.25; return { empty: true }; }
   g.uses--; gun.cool = FIRE_GAP; gun.kick = 1; gun.spin++; gun.lastShotT = T;
   wanted.fired = true; // (and now they'll shoot back)
-  if (indoors) { // in a shop: into the ceiling, near enough. They're on the phone before the ringing stops
-    const [rx, ry] = crimePos();
-    if (gunCrime('gunfire', rx, ry) === '') reports.push({ t: T + reportDelay(), x: rx, y: ry, kind: 'gunfire' });
-    const shot = { x0: x, y0: y, z0: z, x: x + Math.cos(yaw) * 3, y: y + Math.sin(yaw) * 3, z: z + slope * 3, what: 'wall', indoors: true, t: T };
-    gun.shots.push(shot); return shot;
+  if (indoors) {
+    const hx=Math.cos(yaw),hy=Math.sin(yaw),hit=typeof traceRoomShot==='function'?traceRoomShot(x,y,z,hx,hy,slope):{d:3,x:x+hx*3,y:y+hy*3,z:z+slope*3,what:'wall'};
+    const [rx,ry]=crimePos();
+    if(hit.what==='person'||hit.what==='cop')killRoomFigure(hit.who,hx,hy);
+    if(hit.what==='cop')addWanted('copkill',rx,ry,true);
+    const witnesses=typeof room!=='undefined'&&room?.props.some(p=>p.fig&&!p.fig.build&&!p.still&&!p.dead&&!p.hidden);
+    if(witnesses)reports.push({t:T+reportDelay(),x:rx,y:ry,kind:hit.what==='person'?'murder':'gunfire'});
+    else gunCrime('gunfire',rx,ry);
+    const shot={x0:x,y0:y,z0:z,...hit,indoors:true,t:T};gun.shots.push(shot);return shot;
   }
   const hx = Math.cos(yaw), hy = Math.sin(yaw), hit = traceShot(x, y, z, hx, hy, slope);
   const shot = { x0: x, y0: y, z0: z, ...hit, t: T };
   gun.shots.push(shot);
   if (hit.what === 'person' || hit.what === 'cop') {
     if (!hit.who.dead) {
-      killFigure(hit.who, hx, hy, hit.what === 'cop');
+      killFigure(hit.who, hx, hy, hit.what === 'cop',hit.anchor);
       if (gunCrime(hit.what === 'cop' ? 'copkill' : 'murder', x, y) === '') gunCrime('gunfire', x, y); // (nobody saw it: they heard it)
     } else gunCrime('gunfire', x, y);
   } else {
@@ -133,12 +140,12 @@ function gunCrime(kind, x, y) {
   return '';
 }
 // somebody shot: down where they stood, falling away from the shot, and staying there
-function killFigure(o, hx, hy, cop = false) {
-  o.down = { t: 0, dur: Infinity, fx: hx, fy: hy }; o.dead = true;
+function killFigure(o, hx, hy, cop = false, anchor = null) {
+  o.down = { t: 0, dur: Infinity, fx: hx, fy: hy }; o.dead = true; o.looted=false;
   for (const k of ['talk', 'flee', 'gawk', 'help', 'hailing', 'follow', 'chase', 'goal']) delete o[k];
   if (o.path) o.path.length = 0;
-  bodies.push({ who: o, cop, x: o.x, y: o.y, t: T, amb: null, atT: 0 });
-  pools.push({ x: o.x, y: o.y, t: T });
+  bodies.push({ who: o, cop, x: anchor?.x??o.x, y: anchor?.y??o.y, t: T, amb: null, atT: 0 });
+  pools.push({ x: anchor?.x??o.x, y: anchor?.y??o.y, t: T });
   if (pools.length > 24) pools.shift();
   for (const p of people) if (p.help === o || p.gawk === o) { delete p.help; delete p.gawk; }
 }
@@ -172,8 +179,9 @@ function removeBody(k) {
   if (b.cop) { // the department sends somebody else out on that beat
     const at = footCops.indexOf(o);
     if (at >= 0) footCops.splice(at, 1);
+    for(const group of [roofCops,roomCops]){const i=group.indexOf(o);if(i>=0)group.splice(i,1);}
     if (o.base) { const corner = { ix: o.base.bx, iy: o.base.by, qx: 0, qy: 1 }, [x, y] = cornerXY(corner); footCops.push({ x, y, corner, dir: 0, goal: null, chase: false, ph: Math.random() * 9, base: o.base }); }
-  } else respawnPerson(o);
+  } else if(people.includes(o))respawnPerson(o);else o.hidden=true;
 }
 // every frame: the reload, the bodies and their ambulances, the panic dying down, and the police shooting back.
 // Returns 'down' when they've put you on the ground
@@ -209,8 +217,8 @@ function copsShoot(dt) {
   if (!wanted.fired || !wanted.stars || wanted.busted) return null;
   const inside = mode === 'room', [wx, wy] = crimePos(), driving = !!me && (mode === 'drive' || mode === 'taxi');
   const moving = driving ? Math.abs(me.v) : Math.hypot(body.mx || 0, body.my || 0);
-  const shooters = inside ? roomCops.filter(c => c.sees).map(c => [c, Math.hypot(c.x - px, c.y - py) / 10]) // (a room's in metres)
-    : mode === 'roof' ? roofCops.filter(c => c.sees).map(c => [c, near(c.x, c.y, px, py)])
+  const shooters = inside ? roomCops.filter(c => !c.dead && c.sees).map(c => [c, Math.hypot(c.x - px, c.y - py) / 10]) // (a room's in metres)
+    : mode === 'roof' ? roofCops.filter(c => !c.dead && c.sees).map(c => [c, near(c.x, c.y, px, py)])
     : [...footCops.filter(c => c.chase && !c.down), ...cars.filter(c => c.pursuit && !c.player && !c.wrecked)]
       .map(c => [c, near(c.x, c.y, wx, wy)]).filter(([c, d]) => d < COP_FIRE_R && lineOfSight(c.x, c.y, wx, wy)).sort((p, q) => p[1] - q[1]).slice(0, COP_GUNS);
   const live = new Set(shooters.map(s => s[0]));

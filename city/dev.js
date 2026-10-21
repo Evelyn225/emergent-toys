@@ -20,13 +20,46 @@ const DEV_CSS = `
 const devOpen = () => !!devEl && devEl.style.display === 'flex';
 
 function toggleFreecam() {
-  if (freecam) { freecam = null; return; }
+  if (freecam) { leaveFreecam(); return; }
   let x = px, y = py, yaw = a;
   if (mode === 'sea') [x, y, yaw] = seaCam(0, chaseOn);
   else if (chaseOn && me) [x, y, yaw] = chaseCam(0);
   let z = mode === 'room' ? 1.7 : 0.17;
   if (Number.isFinite(eye)) z = eye;
   freecam = { x, y, yaw, pitch, z };
+}
+
+// Resume at the inspected location. A camera inside solid geometry goes to the nearest
+// usable floor/roof, rather than stranding the player in a wall.
+function leaveFreecam() {
+  const cam = freecam, indoors = mode === 'room';
+  if (!cam) return;
+  if (indoors) freecam = null; else devFree();
+  px = indoors ? cam.x : worldCoord(cam.x); py = indoors ? cam.y : worldCoord(cam.y);
+  a = cam.yaw; pitch = cam.pitch; chaseOn = false;
+  Object.assign(body, { z: 0, vz: 0, mx: 0, my: 0, peak: 0, hop: 0, seat: null });
+  if (indoors) {
+    if (!free(px, py)) {
+      let best = Infinity, at = room.def.entry;
+      for (let y=.5; y<room.H; y+=.25) for (let x=.5; x<room.W; x+=.25) {
+        const d = Math.hypot(x-cam.x,y-cam.y);
+        if (d<best && free(x,y)) { best=d; at=[x,y]; }
+      }
+      [px,py]=at;
+    }
+    body.z = clamp(cam.z - 1.7 - stairRise(px,py), 0, Math.max(0,(room.def.height||3)-1.8));
+  } else {
+    const h=roofHeightAt(px,py), ground=walkGround(px,py);
+    if (h>ground) { mode='roof'; roofH=h; roofLot=new Set(); }
+    body.z=Math.max(0,(cam.z-.17-(mode==='roof'?roofH:ground))*10);
+    if (!free(px,py)) {
+      const x=px,y=py; let found=false;
+      for (let r=.1;r<=4&&!found;r+=.1) for(let k=0;k<32;k++) {
+        const nx=worldCoord(x+Math.cos(k*Math.PI/16)*r),ny=worldCoord(y+Math.sin(k*Math.PI/16)*r);
+        if(free(nx,ny)) {px=nx;py=ny;found=true;break;}
+      }
+    }
+  }
 }
 
 function stepFreecam(dt) {
@@ -118,19 +151,20 @@ function devPlaces() {
   EL_STATIONS.forEach(s => out.push(['El stations', s.name, () => devAt(s.x, EL_Y + 0.12, Math.PI / 2)]));
   owned.homes.forEach((h, k) => out.push(['Your homes', `${ITEMS[h.kind].name} ${k + 1}`, () => { const [x, y] = homeKerb(h.cell % N, Math.floor(h.cell / N)); devAt(x, y, 0); }]));
   const words = new Map(); // every kind of shop, by its sign: you land outside the nearest one
-  for (let k = 0; k < N * N; k++) { const sh = SHOP[k]; if (sh && sh.word && sh.kind !== SHOP_APTS) words.set(sh.word, (words.get(sh.word) || new Set()).add(sh)); }
+  for (let k = 0; k < N * N; k++) { const sh = SHOP[k]; if (sh && sh.word && sh.kind !== SHOP_APTS && sh.kind !== SHOP_SHUT) words.set(sh.word, (words.get(sh.word) || new Set()).add(sh)); }
   for (const [w, set] of [...words].sort((p, q) => p[0] < q[0] ? -1 : 1)) out.push(['Shops (nearest)', `${w} (${set.size})`, () => { devFree(); gotoShop(w); }]);
   return out;
 }
 function devItems() {
-  const out = [], KIND = { food: 'Food', drink: 'Drinks', smoke: 'Smokes', gear: 'Gear', toy: 'Toys' };
-  for (const id in ITEMS) { const it = ITEMS[id]; if (KIND[it.kind]) out.push([KIND[it.kind], it.name, () => devGive(id)]); }
+  const out = [], KIND = { food: 'Food & meals', drink: 'Drinks', ingredient: 'Ingredients', fish: 'Fish', smoke: 'Smokes', drug: 'Drugs', gun: 'Guns', ammo: 'Ammunition', gear: 'Gear', toy: 'Toys', keys: 'Keys', junk: 'Fishing finds', wish: 'Fishing finds', cash: 'Fishing finds' };
+  for (const id in ITEMS) { const it = ITEMS[id]; if (!['car','home','tattoo','look'].includes(it.kind)) out.push([KIND[it.kind]||'Other items', it.name, () => devGive(id)]); }
   const order = Object.values(KIND);
   return out.sort((p, q) => order.indexOf(p[0]) - order.indexOf(q[0]) || (p[1].toLowerCase() < q[1].toLowerCase() ? -1 : 1));
 }
 function devGive(id) {
   if (inv.length >= INV_SIZE) return say(`Your bag is full (${INV_SIZE}). Drop something first, or use Other: empty your pockets.`, 3);
-  carryItem({ id, uses: ITEMS[id].uses || 0 }); say(`Spawned ${aOrSome(ITEMS[id].name)}.`, 2);
+  const item=ITEMS[id];
+  carryItem({ id, uses: item.kind==='gun'?CYLINDER:item.uses||0, ...(item.kg?{kg:Math.round((item.kg[0]+item.kg[1])*5)/10}:{}), ...(item.cooked?{q:'fine'}:{}) }); say(`Spawned ${aOrSome(ITEMS[id].name)}.`, 2);
 }
 const devCash = n => { money = Math.max(0, Math.round((money + n) * 100) / 100); say(`Money: ${fmt$(money)}`, 2); };
 
@@ -150,7 +184,7 @@ function devBody() {
   devEl.acts = [];
   const act = (label, fn, extra = '') => { devEl.acts.push(fn); return btn(devEl.acts.length - 1, label, extra); };
   if (devTab === 'camera') return `<div class="bar">${act('Freecam: ' + (freecam ? 'on' : 'off'), () => { toggleFreecam(); closeDev(); }, `role="switch" aria-checked="${!!freecam}"`)}</div>
-    <p class="note">Fly through walls with the world frozen. Toggle off to return to your player.</p>
+    <p class="note">Fly through walls with the world frozen. Toggle off to continue from the camera’s location.</p>
     <p class="note">WASD move &middot; mouse/arrows look &middot; E/Q up/down &middot; Shift faster</p>`;
   if (devTab === 'money') return `<p class="note">you have ${fmt$(money)} and ${tickets} tickets</p>
     <div class="bar">${[100, 1000, 10000, 100000].map(n => act(`+${fmt$(n)}`, () => devCash(n))).join('')}${act('Broke ($0)', () => devCash(-money))}</div>
@@ -180,6 +214,7 @@ function renderDev(keepFocus) {
   if (s && keepFocus !== false) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
 }
 function openDev() {
+  if(wanted.busted)return;
   if (!devEl) {
     devEl = menuEl('dev', 1000, '<div class="panel" role="dialog" aria-label="Dev tools"></div>');
     const st = document.createElement('style'); st.textContent = DEV_CSS; document.head.appendChild(st);
@@ -212,5 +247,5 @@ function openDev() {
   releaseMouse();
   devEl.style.display = 'flex'; renderDev();
 }
-function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = false; lockMouse(); }
+function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = !!wanted.busted; if(!paused)lockMouse(); }
 const devKey = e => { if (e.code !== 'F2' || e.repeat) return false; e.preventDefault(); devOpen() ? closeDev() : openDev(); return true; };

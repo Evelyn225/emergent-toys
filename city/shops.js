@@ -931,11 +931,11 @@ function pawnWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.0) { BG[i] = C(GRAY, 1.3); return set(i, fract(u * 2) < 0.05 ? '|' : ' ', C(GRAY, L * 0.5)), true; }
   BG[i] = C(STONE, 1.3); return set(i, (Math.floor(u * 5) + Math.floor(z * 3)) % 9 ? ' ' : '.', C(GRAY, L * 0.4)), true;
 }
-const grille = (x, y, hl, z0, z1) => BX(x, y, hl, 0.02, z0, z1, (i, t, L) => { // a grille, with a window to talk through in the middle
+const grille = (x, y, hl, z0, z1) => Object.assign(BX(x, y, hl, 0.02, z0, z1, (i, t, L) => { // a grille, with a window to talk through in the middle
   if (Math.abs(HIT.u) < 0.45 && HIT.w < z0 + 0.5 || HIT.face >= 5) return false;
   if (fract(HIT.u / 0.12) < 0.25 || Math.abs(HIT.w - z0 - 0.52) < 0.03) { BG[i] = C(GRAY, 2.5 + L * 0.3); return set(i, '|', C(WHITE, 8)), true; }
   return false;
-});
+}), {shotPermeable:true});
 ROOM_DEFS.pawn = { grid: boxRoom(12, 9), light: 0.75, floor: 'lino', ceil: 'strip', sign: true, signAt: 6, wall: pawnWall, keeper: [6, 1.55],
   props: r => {
     const p = [...glassCase(6, 2.4, 2.1, 0.35, 1.0, caseGoods('o@*0', [YEL, WHITE, YEL, CYAN], true, 97), GRAY), grille(6, 2.1, 2.1, 1.0, 2.25), standing(6, 1.55, r.neon),
@@ -943,7 +943,7 @@ ROOM_DEFS.pawn = { grid: boxRoom(12, 9), light: 0.75, floor: 'lino', ceil: 'stri
       ...glassCase(10.55, 5.2, 1.2, 0.35, 1.0, caseGoods('O0o', [YEL, WHITE, GRAY], true, 98), GRAY, 0, 1),
       tvSet(10.75, 1.55, 0, -1, 0.3, 0.35), tvSet(10.75, 2.35, 0, -1, 0.3, 0.35), tvSet(10.75, 1.95, 0.55, -1, 0.3, 0.35, movie),
       BX(10.75, 1.95, 0.25, 0.75, 0, 0.0001, solid(GRAY)), bike(3.6, 7.6, BLUE), ceilingFan(6, 5)];
-    p.push(...shoppers([[5.5, 3.3, 0, -1], [9.6, 5.2, 1, 0], [2.2, 4.2, -1, 0]], 0.4));
+    p.push(...shoppers([[4.1, 3.3, 0, -1], [9.6, 5.2, 1, 0], [2.2, 4.2, -1, 0]], 0.4));
     return p;
   } };
 

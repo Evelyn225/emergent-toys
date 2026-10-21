@@ -291,6 +291,7 @@ function removeHeld() {
 const BOOK_LINES = ['"It was a dark and stormy night..." You read a chapter.', 'A detective novel. The butler, surely.', 'Poetry. You read one, then another.',
   'A guidebook to the city. Half the shops in it have closed.'];
 function useHeld(near) {
+  if(wanted.busted)return ['',null];
   const it = heldItem();
   if (!it) return fx.smoke>0 ? takeSmokeDrag() : ['Your hands are empty.', null];
   const d = ITEMS[it.id];

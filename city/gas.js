@@ -140,6 +140,7 @@ const gasFilling = c => !!c.pit && c.pit.stage === 'fill' && !c.player && !c.par
 function stepPit(c, dt) {
   const p = c.pit;
   c.ex = c.x; c.ey = c.y;
+  if(p.dead){c.v=0;c.brake=true;if(p.hidden){c.parked=true;c.pit=null;}return;}
   if (p.stage === 'fill') { // the driver's out at the pump
     c.v = 0; c.brake = true;
     if (T > p.until) { p.stage = 'out'; p.path = gasPath(gasExitPoses(p.lane)); p.s = 0; p.go = false; }

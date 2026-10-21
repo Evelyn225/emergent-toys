@@ -80,7 +80,7 @@ const FIG_POSES = {
   // flat on their back (knocked down by a car: people.js), arms flung out, one knee up
   down: () => ({ seat: -1.2, legs: [[1.55, 0.2, 1.55, 0.15], [1.1, 0.35, 2.0, 0.25]], arms: [[-1.5, 0.9, -1.4, 0.8], [-1.4, 0.75, -1.5, 0.9]], lean: -1.5 }),
   // shot (gun.js): flat out and still, one arm flung wide, the other across them, legs crooked
-  dead: () => ({ seat: -1.25, legs: [[1.5, 0.42, 1.25, 0.35], [1.62, 0.05, 1.75, 0.02]], arms: [[-1.55, 1.35, -1.6, 1.5], [0.6, -0.35, 1.9, -0.9]], lean: -1.56, roll: 0.12 }),
+  dead: () => ({ ...FIG_POSES.stand(), prone: true, legs: [[.04,.08,.05,.08],[.06,-.08,.05,-.08]], arms: [[.18,.4,.15,.4],[.2,.65,.2,.65]] }),
 };
 // a pose key: 'stand', 'walk3', 'sit7' (seat height in pixels), 'dance2'
 function figPose(key) {
@@ -214,6 +214,20 @@ function figBody(look, key) {
   if (look.badge) decals.push({ p: U(-1.45 * bw, 2.0 * bd + 0.01, 5.6), n: ey, role: R.BADGE, part: parts.indexOf(chest) });
   if (belted) decals.push({ p: U(0, 1.8 * bd + 0.01, 0.3), n: ey, role: R.BUCKLE, part: parts.indexOf(waist) });
   if (bot === 'pants' || bot === 'shorts') for (const sg of [1, -1]) decals.push({ p: [sg * 1.35 * bw, -1.7 * bd - 0.01, hipZ - 0.75], n: [0, -1, 0], role: R.POCKET, part: parts.indexOf(pelvis) });
+  if(P.prone) {
+    // Lay the whole body down; rotating only the torso leaves a seated silhouette.
+    const turn=v=>[v[0],-v[2],v[1]],point=v=>turn([v[0],v[1],v[2]-hipZ]);
+    for(const p of parts) {
+      if(p.k===2){p.a=point(p.a);p.b=point(p.b);}
+      else {p.c=point(p.c);p.ax=p.ax.map(turn);}
+    }
+    const bottom=Math.min(...parts.map(p=>p.k===2?Math.min(p.a[2],p.b[2])-p.r:p.c[2]-(p.k===1?p.ax.reduce((n,ax,k)=>n+Math.abs(ax[2])*p.h[k],0):Math.hypot(...p.ax.map((ax,k)=>ax[2]*p.r[k])))));
+    const lift=.2-bottom;
+    for(const p of parts)if(p.k===2){p.a[2]+=lift;p.b[2]+=lift;}else p.c[2]+=lift;
+    for(const d of decals){d.p=point(d.p);d.p[2]+=lift;d.n=turn(d.n);}
+    const face=[point(faceFrom),point(faceTo)];for(const v of face)v[2]+=lift;
+    return {parts,decals,face};
+  }
   return { parts, decals, face: [faceFrom, faceTo] };
 }
 
@@ -408,7 +422,7 @@ const figWorkerLook = seed => figLook({ hair: 'short', hat: 'hardhat', top: 'lon
 // guard), chat: false (not someone you can talk to), still: true (not a person at all: a mannequin, a cut-out, the shop
 // cat; still there when you break in at night), light (least brightness) }
 const figProp = (x, y, fig, o) => ({ fig, x, y, z: 0, h: 1.75, pose: 'stand', face: null, ...o });
-const isRoomPerson = s => !!s.fig && s.chat !== false; // someone you could talk to
+const isRoomPerson = s => !!s.fig && !s.dead && !s.hidden && s.chat !== false; // someone you could talk to
 // where something drawn as a figure is heading, from how it's moved since it was last drawn
 function figMotion(o) {
   const ex = rel(o.x - (o._mx ?? o.x)), ey = rel(o.y - (o._my ?? o.y)), d = Math.hypot(ex, ey);
@@ -420,10 +434,10 @@ function figMotion(o) {
 function drawFigProp(s, rx, ry) {
   figMotion(s);
   const unit = s.h / FIG_TALL;
-  let key = typeof s.pose === 'function' ? s.pose(s) : s.pose;
+  let key = s.dead ? 'dead' : typeof s.pose === 'function' ? s.pose(s) : s.pose;
   if (key === 'sit' || key === 'sitfold') key += Math.round((s.seatZ ?? 0.45) / unit);
   else if (key === 'stand' && s._moving) key = 'walk' + Math.floor(s._dist / (s.h * 0.85) * 8) % 8; // a stride every 1.5m or so
-  const [fx, fy] = s.dir != null ? [Math.cos(s.dir), Math.sin(s.dir)] : s.face || (s._fx != null && s._moving ? [s._fx, s._fy] : [0, 0]);
+  const [fx, fy] = s.dead&&s.down?[-s.down.fx,-s.down.fy]:s.dir != null ? [Math.cos(s.dir), Math.sin(s.dir)] : s.face || (s._fx != null && s._moving ? [s._fx, s._fy] : [0, 0]);
   drawFigure(rx, ry, s.z, s.h, fx, fy, s.fig, key, s.light && { light: s.light });
 }
 

@@ -48,7 +48,7 @@ const nearPerson = () => {
   }
   return best;
 };
-const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
+const nearVendor = () => vendors.find(v => !v.dead && !v.hidden && Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
 // a vending machine you're facing, within arm's reach (3m of its middle)
 const nearMachine = () => mode === 'walk' ? machinesB[bi(Math.floor(px / 8), Math.floor(py / 8))].find(m => {
   const ex = m.x - px, ey = m.y - py, d = Math.hypot(ex, ey), dot = (ex * Math.cos(a) + ey * Math.sin(a)) / d;
@@ -68,8 +68,20 @@ const nearExit = () => {
 };
 const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px), rel(LIGHTHOUSE.y - py)) < LIGHTHOUSE.r + 0.12;
 // in your own place: which thing you're by (bed, closet, tv)
-const homeSpot = () => { const s = room.def.spots; if (!s) return null; let best = null, bd = 1.3; for (const k in s) { const d = Math.hypot(px - s[k][0], py - s[k][1]); if (d < bd) { bd = d; best = k; } } return best; }; // (the nearest: the stove and the fridge are side by side)
-const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
+const homeSpot = () => {
+  const s=room.def.spots;if(!s)return null;let best=null,bd=1.3;
+  for(const k in s) {
+    let d=Math.hypot(px-s[k][0],py-s[k][1]);
+    if(k==='bed' && room.def.bedBounds) {
+      const [x,y,hx,hy]=room.def.bedBounds;
+      const edge=Math.hypot(Math.max(0,Math.abs(px-x)-hx),Math.max(0,Math.abs(py-y)-hy));
+      if(edge>.65)continue;d=edge+.3;
+    }
+    if(d<bd){bd=d;best=k;}
+  }
+  return best;
+};
+const nearKeeper = () => { if(room.keeperDead)return false;const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
   const islandPrompt=islandBuildingPrompt();if(islandPrompt)return islandPrompt;
