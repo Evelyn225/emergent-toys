@@ -111,3 +111,15 @@ test('the police shooting back stand with both arms out on a pistol; somebody sh
   assert.equal(r.pose,'dead');
   assert.ok(r.dead[1]-r.dead[0]<8,`flat on the ground: rows ${r.dead}`);
 });
+
+test('dead figures have a complete horizontal silhouette in every view and sit above the floor',()=>{
+ const {ev}=loadCity();
+ const result=JSON.parse(ev(`JSON.stringify((()=>{
+  const b=figBody(figLook({top:'tee',bot:'pants'}),'dead'),support=(p,v)=>p.k===2?p.r:p.k===1?p.ax.reduce((n,ax,k)=>n+Math.abs(fDot(ax,v))*p.h[k],0):Math.hypot(...p.ax.map((ax,k)=>fDot(ax,v)*p.r[k]));
+  const extent=v=>{let lo=Infinity,hi=-Infinity;for(const p of b.parts){const a=fDot(p.k===2?p.a:p.c,v),c=fDot(p.k===2?p.b:p.c,v),r=support(p,v);lo=Math.min(lo,a-r,c-r);hi=Math.max(hi,a+r,c+r);}return [lo,hi];};
+  return {z:extent([0,0,1]),sides:Array.from({length:FIG_VIEWS},(_,k)=>extent([Math.sin(k*TAU/FIG_VIEWS),Math.cos(k*TAU/FIG_VIEWS),0]))};
+ })())`));
+ assert.ok(result.z[0]>=0 && result.z[1]<10,JSON.stringify(result));
+ assert.ok(result.sides.every(([lo,hi])=>lo> -14.5&&hi<14.5),'the lying figure fits the sprite without cropping its head or feet');
+ assert.ok(result.sides[0][1]-result.sides[0][0]>24,'the full standing height is laid along the ground');
+});

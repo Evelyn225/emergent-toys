@@ -329,9 +329,9 @@ function interact() {
       enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, def.entry);
       return say('Home. Workshop cupboard by the entrance; 120 spaces in your closet.', 5);
     }
-    if (sh.club && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
-    if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
-    if (sh.fee) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : sh.museum ? 'Enjoy the collection. No flash photography.' : 'Mind the butterflies.'}"`, 3);
+    if (sh.club && !CLUB_BOUNCER.dead && !CLUB_BOUNCER.hidden && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
+    if (sh.fee && !(sh.club && (CLUB_BOUNCER.dead || CLUB_BOUNCER.hidden)) && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
+    if (sh.fee && !(sh.club && (CLUB_BOUNCER.dead || CLUB_BOUNCER.hidden))) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : sh.museum ? 'Enjoy the collection. No flash photography.' : 'Mind the butterflies.'}"`, 3);
     const kind = sh.kind === SHOP_APTS ? lobbyKind(lookHit.mx, lookHit.my) : ROOM_FOR[sh.word] || 'store'; // (an apartment building: the way up suits the building, lobbies.js)
     const r = { ...sh, cell: [lookHit.mx, lookHit.my], district: districtAt(lookHit.mx + 0.5, lookHit.my + 0.5), ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
     enterRoom(kind, r, [0, 0, -Math.PI / 2]);

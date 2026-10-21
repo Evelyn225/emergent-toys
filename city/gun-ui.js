@@ -3,6 +3,55 @@
 // instant, a streak to where it went, the bang and the buildings throwing it back); the blood, the sheet the
 // paramedics put over somebody; the police shooting back; and the screaming.
 
+// The same actor objects drive drawing, hit tests, death and interaction checks.
+function gunSceneFigures(includeDead=false){
+  const out=[],add=(who,x=who.x,y=who.y,z=outdoorGroundHeight(x,y),h=.175)=>{if((includeDead||!who.dead)&&!who.hidden)out.push({who,x,y,z,h});};
+  for(const p of fairFolk)add(p);
+  for(const p of extras)if(p.person!=null&&(!p.when||p.when()))add(p,p.x,p.y,p.z||0);
+  for(const p of vendors)add(p,p.x+(p.ox||0),p.y+(p.oy||0));
+  for(const p of ANGLERS)add(p);
+  if(supplierVisit)add(supplierVisit);
+  if(drugBuyer)add(drugBuyer);
+  for(const target of [clubFigureTarget(),...courierFigureTargets(),...gardenFigureTargets(),...gasFigureTargets()])if((includeDead||!target.who.dead)&&!target.who.hidden)out.push(target);
+  if(typeof streetSceneTargets==='function')out.push(...streetSceneTargets().filter(p=>(includeDead||!p.who.dead)&&!p.who.hidden));
+  return out;
+}
+
+function sceneFigureTarget(who,x,y,z,h=.175,extra={}) {
+  if(!who.dead)who.sceneAt={x,y,z,h};
+  return {who,...(who.sceneAt||{x,y,z,h}),...extra};
+}
+function drawSceneFigure(p,look,pose='stand',hx=0,hy=0,opts) {
+  const o=p.who;if(o.hidden)return;
+  drawFigure(...R(p.x,p.y),p.z,p.h,o.dead?-o.down.fx:hx,o.dead?-o.down.fy:hy,look,o.dead?'dead':pose,opts);
+}
+
+// Indoor rays use room metres and stop at real walls, counters and furniture.
+function traceRoomShot(x,y,z,hx,hy,slope) {
+  let end=SHOT_RANGE*10,what='air';
+  for(let d=.025;d<end;d+=.025){
+    const xx=x+hx*d,yy=y+hy*d,zz=z+slope*d;
+    if(zz<=0){end=d;what='ground';break;}
+    if(xx<0||yy<0||xx>=room.W||yy>=room.H||zz>= (room.def.height||3) || ROOMW.cell(Math.floor(xx),Math.floor(yy))>zz){end=d;what='wall';break;}
+  }
+  for(const p of room.props)if(p.box&&!p.shotPermeable){
+    const hit=rayBox(x,y,z,hx,hy,slope,p.box);if(hit>0&&hit<end){end=hit;what='wall';}
+  }
+  let who=null;
+  for(const p of [...room.props,...roomCops]){
+    const cop=roomCops.includes(p);
+    if((!cop&&(!p.fig||p.fig.build||p.still||p.cutout))||p.dead||p.hidden)continue;
+    const h=p.h||1.8,ox=p.x-x,oy=p.y-y,d=ox*hx+oy*hy,across=Math.abs(oy*hx-ox*hy),zz=z+slope*d-(p.z||0);
+    const seated=typeof p.pose==='string'&&p.pose.startsWith('sit'),height=seated?Math.min(h,(p.seatZ??.45)+1.15):h;
+    if(d>0&&d<end&&across<h*.18&&zz>=0&&zz<=height){end=d;what=cop?'cop':'person';who=p;}
+  }
+  return {d:end,x:x+hx*end,y:y+hy*end,z:Math.max(0,z+slope*end),what,who};
+}
+function killRoomFigure(p,hx,hy){
+  p.dead=true;p.looted=false;p.down={t:.2,dur:Infinity,fx:hx,fy:hy};p.z=0;p._moving=false;p.sees=false;delete p.fireT;delete p.aimT;
+  const k=room.def.keeper;if(k&&Math.hypot(p.x-k[0],p.y-k[1])<.6)room.keeperDead=true;
+}
+
 // ---- Q and R
 function pullTrigger() {
   const indoors = mode === 'room', slope = (hor - (rows >> 1)) / projY; // (the crosshair's on the middle row)

@@ -93,7 +93,8 @@ function timeNightRuns() {
   (0,eval)('tod=22');
   const prefix=[[179.5,106.5],[178.5,107.4],[178.5,110.5]];
   const safe=[[178.5,117.4],[178.3,119.6],[178.3,122.51],[179.73,122.51],[179.73,123.9],[180.4,123.4],[180.75,123.3]];
-  const leap=[[178.5,117.3,'hop',.1],[179.7,118.5,'hop',.12],[180.55,121.5,'leap',.05,120],[180.75,123.3]];
+  // Aim over the condenser before turning north; the tighter air control preserves momentum.
+  const leap=[[178.5,117.3,'hop',.1],[180.55,118.5,'hop',.12],[180.55,121.5,'leap',.05,120],[180.75,123.3]];
   return [['safe',safe],['leap',leap]].map(([name,tail])=>{
     courierJob=null;startCourier('night');needs.health=needs.food=needs.drink=100;sleep=false;
     for(const key of Object.keys(K))K[key]=false;

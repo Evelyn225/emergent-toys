@@ -172,6 +172,7 @@ function roomSearchLead(dt) {
   }
   let anySees = false;
   for (const c of roomCops) {
+    if(c.dead){c.sees=false;continue;}
     c.sees = Math.hypot(c.x - px, c.y - py) < 9 && roomPoliceSees(c);
     if (c.sees) { anySees = true; wanted.roomX = px; wanted.roomY = py; c.targetX = px; c.targetY = py; c.searchI = 0; }
     else if (Math.hypot(c.x - c.targetX, c.y - c.targetY) < 0.28) {
@@ -239,6 +240,7 @@ function roofSearchLead(dt) {
   }
   let seen = false;
   for (const c of roofCops) {
+    if(c.dead){c.sees=false;continue;}
     c.sees = roofPoliceSees(c);
     if (c.sees) { seen = true; c.targetX = px; c.targetY = py; }
     if ((c.pathT -= dt) <= 0) { c.pathT = 0.25; c.path = policeRoofPath(c.x, c.y, c.targetX, c.targetY); }
@@ -255,6 +257,7 @@ function roofSearchLead(dt) {
 function drawRoofPolice() {
   for (const c of roofCops) {
     const z = policeRoofHeight(c.x, c.y);
+    if(c.dead){drawFigure(...R(c.x,c.y),z,.18,-c.down.fx,-c.down.fy,copLook(c),'dead');continue;}
     figMotion(c); const aim = c.aimT > T, [ax, ay] = aimAt(rel(px - c.x), rel(py - c.y)); // (shooting at you: gun.js)
     drawFigure(...R(c.x, c.y), z, 0.18, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : walkPose(c, 'run'), { light: 7 });
     if (c.sees && fract(T * 3) < 0.5) drawArt(...R(c.x, c.y), z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
@@ -262,6 +265,7 @@ function drawRoofPolice() {
 }
 function drawRoomPolice() {
   for (const c of roomCops) {
+    if(c.dead){drawFigure(c.x-px,c.y-py,0,1.8,-c.down.fx,-c.down.fy,copLook(c),'dead');continue;}
     figMotion(c);
     const aim = c.aimT > T, [ax, ay] = aimAt(px - c.x, py - c.y); // (shooting at you: gun.js)
     drawFigure(c.x - px, c.y - py, 0, 1.8, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9 });
@@ -416,7 +420,7 @@ function policeReturnLane(c) {
 function stepReturningPolice(dt) {
   for (const [agents, indoors] of [[roomCops, true], [roofCops, false]]) for (let k = agents.length - 1; k >= 0; k--) {
     const c = agents[k];
-    if (!c.returning) continue;
+    if (!c.returning || c.dead) continue;
     const inPlace = indoors ? mode === 'room' : mode === 'roof', door = c.returnDoor;
     if (!inPlace || !door) { policeExitToStreet(c); agents.splice(k, 1); continue; }
     if ((c.pathT -= dt) <= 0) { c.pathT = 0.5; c.path = indoors ? roomPath(c.x, c.y, ...door) : policeRoofPath(c.x, c.y, ...door); }
@@ -621,8 +625,8 @@ function stepCrime(dt) {
   }
   // caught: a hand on your shoulder, or boxed in and stopped
   const grabbed = onFoot && footCops.some(c => c.chase && !c.down && near(c.x, c.y, px, py) < 0.22)
-    || inside && roomCops.some(c => c.sees && Math.hypot(c.x - px, c.y - py) < 0.32)
-    || onRoof && body.z < 1 && roofCops.some(c => c.sees && near(c.x, c.y, px, py) < 0.22);
+    || inside && roomCops.some(c => !c.dead && c.sees && Math.hypot(c.x - px, c.y - py) < 0.32)
+    || onRoof && body.z < 1 && roofCops.some(c => !c.dead && c.sees && near(c.x, c.y, px, py) < 0.22);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { if (wanted.stars >= 2) newsEvent('arrest', px, py, { crime: wanted.crime }); wanted.busted = true; return 'busted'; }

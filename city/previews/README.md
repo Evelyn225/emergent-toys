@@ -13,3 +13,21 @@ The railway capture shows one complete 24-second cycle at **2× speed**, from th
 ![Finished pavement drawing from its marked viewpoint](pavement-artist.png)
 
 ![Moving day](moving-day.png)
+
+## Friday Fish-off
+
+Search **Friday Fish-off** on the map and visit Bait & Tackle at Sunset Pier. Bring a rod. During counter hours, choose the competition row (or press F); after hours, E at the hatch opens the notice directly.
+
+Entry is free and open all Friday. Joining starts your own five-minute biggest-fish round against four local regulars, with $250 / $125 / $60 prizes. Menus pause the timer, saves retain it, and a late-Friday start continues past midnight. Fresh catches are weighed automatically, including fish released because your bag is full. Collect results at the hatch any time. One entry per Friday.
+
+![Friday Fish-off on a phone](friday-fish-off.png)
+
+## Apartment and street fixes
+
+Apartment shelves sit against the wall with a clear approach. Beds offer **E: sleep** from the bedside. Workshop furniture snaps flush to a nearby wall while keeping the entrance aisle open. Bathrooms have wall-backed toilets, pedestal basins and, in larger apartments, an open oval bath with a recessed bowl and tap.
+
+![Loft bathroom](apartment-bathroom.png)
+
+Cars follow the road's pitch and cross slope, including the bridge approaches. Shotengai roof spans attach to opposing facades; missing buildings and coastal gaps stay open to the sky.
+
+![Taxi climbing a bridge approach](taxi-grade.png)

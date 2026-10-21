@@ -54,9 +54,11 @@ function shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL
 // It's glass: the steel shows (beams down the sides, a rib every 5m, a bar down the middle and across between the
 // ribs) and between them you see the sky, and the buildings above the roofline
 function arcadeRoofPart(wx, wy) {
-  const k = idx(Math.floor(wx), Math.floor(wy)), r = ROAD[k], ns = r === 1 || r === 3 && fract(wy / 8) >= 0.25;
-  const across = (ns ? mod(wx, 8) : mod(wy, 8)) / 2, along = ns ? wy : wx;
+  const span=arcadeSpanAt(wx,wy);if(!span)return null;
+  const across=((span.ns?wx:wy)-span.lo)/(span.hi-span.lo),along=span.ns?wy:wx;
   if (across < 0.02 || across > 0.98) return 'beam';
+  const lane=Math.round(((span.ns?wx:wy)-1)/8)*8;
+  if(fract(along)<.035 && !arcadeSpanFor(span.ns,lane,Math.floor(along)-1) || fract(along)>.965 && !arcadeSpanFor(span.ns,lane,Math.floor(along)+1))return 'rib';
   if (fract(along * 2) < 0.035) return 'rib';
   if (Math.abs(across - 0.5) < 0.015 || Math.abs(fract(along * 2) - 0.5) < 0.025) return 'bar';
   return null; // glass

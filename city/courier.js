@@ -50,7 +50,7 @@ function cancelCourier() {
 function courierRoute() { return courierJob && COURIER_ROUTES.find(r=>r.id===courierJob.id); }
 function courierAtRecipient() {
   const r=courierRoute();
-  return !!r && mode==='roof' && Math.abs(roofH-r.recipient.z)<.12 && near(px,py,r.recipient.x,r.recipient.y)<.3 && body.z<.5;
+  return !!r && !r.recipient.dead && !r.recipient.hidden && mode==='roof' && Math.abs(roofH-r.recipient.z)<.12 && near(px,py,r.recipient.x,r.recipient.y)<.3 && body.z<.5;
 }
 function finishCourier() {
   const route=courierRoute();

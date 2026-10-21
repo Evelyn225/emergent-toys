@@ -169,8 +169,8 @@ test('use gestures animate the intended item, finish cleanly and stay separate f
     const camera = [px, py, a, pitch], gestures = [], pictures = [];
     for (const id of ['duck', 'book', 'newspaper', 'pocketknife', 'oldcoin', 'snowglobe', 'coffee', 'plushcat', 'compass']) {
       inv.length = 0; inv.push({ id, uses: ITEMS[id].uses || 0 }); held = 0;
-      animateHeldUse(inv[0]); const idle = heldFrame(inv[0], heldPicture(inv[0]));
-      T += .2; const use = heldFrame(inv[0], heldPicture(inv[0]));
+      animateHeldUse(inv[0]); const idle = heldGesture(inv[0], 14);
+      T += .2; const use = heldGesture(inv[0], 14);
       if (JSON.stringify(idle) !== JSON.stringify(use)) gestures.push(id);
       if (['book', 'newspaper', 'pocketknife'].includes(id)) {
         const active = heldPicture(inv[0]).art.join('\n'); T += 1;
@@ -184,7 +184,7 @@ test('use gestures animate the intended item, finish cleanly and stay separate f
     const sameFrame = heldPicture(inv[0]) === heldPicture(inv[0]);
     return { gestures, pictures, active, other, finished, sameFrame, cameraUnchanged: JSON.stringify(camera) === JSON.stringify([px, py, a, pitch]) };
   });
-  assert.equal(r.gestures.length, 9); assert.deepEqual(r.pictures, ['book', 'newspaper', 'pocketknife']);
+  assert.deepEqual(r.gestures, ['duck','book','newspaper','oldcoin','snowglobe','coffee','plushcat']); assert.deepEqual(r.pictures, ['book', 'newspaper', 'pocketknife']);
   assert.ok(r.active > 0); assert.equal(r.other, -1); assert.equal(r.finished, -1);
   assert.equal(r.sameFrame, true); assert.equal(r.cameraUnchanged, true);
 }));

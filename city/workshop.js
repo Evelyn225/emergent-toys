@@ -63,7 +63,7 @@ function restoreWorkshop(raw, kind = 'home_studio') {
   w.parts = w.parts.filter(p => {
     const d=WORKSHOP_PARTS[p.id]; if (!d.halfX) return true;
     const hx=Math.abs(Math.cos(p.a))*d.halfX+Math.abs(Math.sin(p.a))*d.halfY, hy=Math.abs(Math.sin(p.a))*d.halfX+Math.abs(Math.cos(p.a))*d.halfY;
-    return p.x-hx>=1 && p.x+hx<=width-1.4 && p.y-hy>=height-6 && p.y+hy<=height-1.4 && Math.abs(p.x-(kind==='home_belle'?9:width/2))>=hx+1;
+    return p.x-hx>=1-1e-6 && p.x+hx<=width-1+1e-6 && p.y-hy>=height-6 && p.y+hy<=height-1+1e-6 && Math.abs(p.x-(kind==='home_belle'?9:width/2))>=hx+1;
   });
   w.parts = w.parts.filter((p,index,all) => WORKSHOP_PARTS[p.id].halfX || all.some(b => b.id === 'bench' && b.key === p.bench) &&
     !all.slice(0,index).some(q=>q.id===p.id && q.bench===p.bench));

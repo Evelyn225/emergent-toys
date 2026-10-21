@@ -2,6 +2,8 @@
 let drugSaleContext=null, buyerAwayUntil=0, supplierEl=null, supplierVisit=null;
 function streetContactLook(profile) {return figLook(profile.look);}
 function drawStreetContact(contact,marker,color,pose='fold') {
+  if(contact.hidden)return;
+  if(contact.dead){drawFigure(...R(contact.x,contact.y),outdoorGroundHeight(contact.x,contact.y),.175,-contact.down.fx,-contact.down.fy,contact.look,'dead');return;}
   const [vx,vy]=R(contact.x,contact.y);if(!inView(vx,vy,.25))return;
   const ground=architectureGroundHeight(contact.x,contact.y), n=Math.hypot(vx,vy)||1;
   drawFigure(vx,vy,ground,.175,-vx/n,-vy/n,contact.look,pose);
@@ -105,7 +107,7 @@ function callWorkshopSupplier(home=workshopHome()||nearestWorkshopHome()) {
 }
 function nearWorkshopSupplier() {
   if(supplierVisit && (T>=supplierVisit.until||!owned.homes.some(h=>h.cell===supplierVisit.home)))supplierVisit=null;
-  if(!supplierVisit||mode!=='walk')return null;
+  if(!supplierVisit||supplierVisit.dead||supplierVisit.hidden||mode!=='walk')return null;
   const ex=rel(supplierVisit.x-px),ey=rel(supplierVisit.y-py),d=Math.hypot(ex,ey);
   const buyer=nearDrugBuyer();
   if(buyer && Math.hypot(rel(buyer.x-px),rel(buyer.y-py))<d)return null;

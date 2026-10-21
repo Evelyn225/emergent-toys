@@ -246,6 +246,7 @@ function roomTalkLine(kind, h = tod) {
 function roomPerson() {
   if (mode !== 'room' || !room || !room.props) return null;
   const k = room.def.keeper, keeperD = k ? Math.hypot(px - k[0], py - k[1]) : Infinity;
+  if(k && !room.keeperDead && keeperD<2 && ((k[0]-px)*Math.cos(a)+(k[1]-py)*Math.sin(a))/(keeperD||1)>.8)return null;
   let best = null, bd = 1.4;
   for (const s of room.props) {
     if (!isRoomPerson(s) || k && Math.hypot(s.x - k[0], s.y - k[1]) < 0.6) continue; // (not the one behind the counter)

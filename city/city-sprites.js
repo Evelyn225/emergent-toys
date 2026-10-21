@@ -141,6 +141,7 @@ function citySprites() {
   drawCampfires(); // (cooking-ui.js)
   forNear(extrasB, o => {
     if (!inView(rel(o.x - px), rel(o.y - py), 0.6)) return;
+    if(o.hidden)return;
     if (o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8 || o.when && !o.when()) return; // (not the spire you're standing under)
     if (o.parkLamp) drawParkLamp(...R(o.x, o.y));
     else if (o.fairPost) drawFairPost(o, ...R(o.x, o.y));
@@ -148,14 +149,14 @@ function citySprites() {
     else if (o.bike != null) drawBike(o, ...R(o.x, o.y));
     else if (o.banner) drawBanner(o, ...R(o.x, o.y));
     else if (o.fishSign) drawFishSign(o, ...R(o.x, o.y));
-    else if (o.person != null) drawFigure(...R(o.x, o.y), o.z, 0.175, 0, 0, o.look ||= figStreetLook(hash(o.x, o.y, 9081) * 1e9 | 0, o.person, GRAY), 'stand', { light: 6 });
+    else if (o.person != null) drawFigure(...R(o.x, o.y), o.z, 0.175, o.dead?-o.down.fx:0, o.dead?-o.down.fy:0, o.look ||= figStreetLook(hash(o.x, o.y, 9081) * 1e9 | 0, o.person, GRAY), o.dead?'dead':'stand', { light: 6 });
     else drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col);
   });
   drawGrandHotelDome();
   for (const v of vendors) {
     if (!inView(rel(v.x - px), rel(v.y - py), 0.5)) continue;
     drawCart(v);
-    drawFigure(...R(v.x + v.ox, v.y + v.oy), 0, 0.175, 0, 0, v.look ||= figStreetLook(hash(v.x, v.y, 9080) * 1e9 | 0, v.shirt, GRAY)); // (minding the cart: facing you)
+    if(!v.hidden)drawFigure(...R(v.x + v.ox, v.y + v.oy), 0, 0.175, v.dead?-v.down.fx:0, v.dead?-v.down.fy:0, v.look ||= figStreetLook(hash(v.x, v.y, 9080) * 1e9 | 0, v.shirt, GRAY),v.dead?'dead':'stand'); // (minding the cart: facing you)
   }
   for (const r of radios) { const [vx, vy] = R(r.x, r.y); if (inView(vx, vy, 1.2)) drawRadioTower(vx, vy); }
   for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis && inView(vx, vy, 1)) drawStationEntrance(s, vx, vy); }
@@ -208,9 +209,9 @@ function citySprites() {
     const [vx, vy] = R(b.x, b.y);
     if (Math.hypot(vx, vy) < vis) drawVehicle(b.parked || (b.parked = { kind: b.kind, body: EV_BODY[b.kind], ev: true, state: 'home', v: 0 }), vx, vy, -1, 0);
   }
-  for (const m of fairFolk) { // the crowd at the fair (fair.js)
+  for (const m of fairFolk) if(!m.hidden) { // the crowd at the fair (fair.js)
     const [vx, vy] = R(m.x, m.y);
-    if (Math.abs(vx) < vis && Math.abs(vy) < vis) { figMotion(m); drawFigure(vx, vy, 0, 0.175, m._fx || 0, m._fy || 0, streetLook(m), walkPose(m)); }
+    if (Math.abs(vx) < vis && Math.abs(vy) < vis) { figMotion(m); drawFigure(vx, vy, 0, 0.175, m._fx || 0, m._fy || 0, streetLook(m), m.dead?'dead':walkPose(m)); }
   }
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
     if (m.dead && sheeted(m)) drawSheet(m, ...R(m.x, m.y)); // (shot, and the paramedics are here: gun-ui.js)
@@ -874,7 +875,7 @@ function drawAmbulance(m, vx, vy, hx, hy) {
   const white = (f, L) => C(WHITE, (2.5 + L * 0.7) * shadeFace(f));
   const sill = (i, w, L) => { BG[i] = C(GRAY, 1); return set(i, '_', C(GRAY, L * 0.3)), true; };
   const wheel = (i, L) => { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; };
-  drawBox(boxAt(vx + hx * mo, vy + hy * mo, hx, hy, mhl, hw, 0.012, MH), (i, t, L) => { // the box
+  vehicleDrawBox(boxAt(vx + hx * mo, vy + hy * mo, hx, hy, mhl, hw, 0.012, MH), (i, t, L) => { // the box
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
     BG[i] = white(f, L);
     if (f === 6) return set(i, ' ', 0), true;
@@ -897,7 +898,7 @@ function drawAmbulance(m, vx, vy, hx, hy) {
     if (u > mhl * 0.6 && w > 0.1 && w < 0.14) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; } // a little side window
     return set(i, ' ', 0), true;
   });
-  drawBox(boxAt(vx + hx * co, vy + hy * co, hx, hy, chl, hw * 0.94, 0.012, CH), (i, t, L) => { // the cab
+  vehicleDrawBox(boxAt(vx + hx * co, vy + hy * co, hx, hy, chl, hw * 0.94, 0.012, CH), (i, t, L) => { // the cab
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
     BG[i] = white(f, L);
     if (f === 6 || f === 2) return set(i, ' ', 0), true;
@@ -915,11 +916,11 @@ function drawAmbulance(m, vx, vy, hx, hy) {
     return set(i, Math.abs(u + chl * 0.65) < 0.004 ? '|' : ' ', C(GRAY, L * 0.5)), true;
   });
   const lb = mo + mhl - 0.02; // the light bar, and a lamp on each back corner
-  drawBox(boxAt(vx + hx * lb, vy + hy * lb, hx, hy, 0.018, hw * 0.85, MH, MH + 0.016), (i, t, L) => {
+  vehicleDrawBox(boxAt(vx + hx * lb, vy + hy * lb, hx, hy, 0.018, hw * 0.85, MH, MH + 0.016), (i, t, L) => {
     const side = HIT.v > 0 ? RED : BLUE, on = !m.wrecked && lightsOn_(m) && strobe() === side;
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
-  for (const s of [-1, 1]) drawBox(boxAt(vx + hx * (mo - mhl + 0.012) - hy * s * hw * 0.8, vy + hy * (mo - mhl + 0.012) + hx * s * hw * 0.8, hx, hy, 0.01, 0.012, MH, MH + 0.012), (i, t, L) => {
+  for (const s of [-1, 1]) vehicleDrawBox(boxAt(vx + hx * (mo - mhl + 0.012) - hy * s * hw * 0.8, vy + hy * (mo - mhl + 0.012) + hx * s * hw * 0.8, hx, hy, 0.01, 0.012, MH, MH + 0.012), (i, t, L) => {
     const on = lightsOn_(m) && strobe() === (s > 0 ? RED : BLUE);
     BG[i] = C(RED, on ? 15 : 4); return set(i, on ? '*' : ' ', C(WHITE, 15)), true;
   });
@@ -938,11 +939,38 @@ function drawCarFire(m, vx, vy, hx, hy) {
     drawRod(fx_ - hy * s_, fy_ + hx * s_, top, fx_ - hy * s_ + hx * sway, fy_ + hx * s_ + hy * sway, top + tall * fl, 0.016, flame);
   }
 }
+let vehicleDrawFrame=null;
+function vehicleDrawBox(b,shade) {
+  const frame=vehicleDrawFrame;
+  if(!frame?.tilted)return drawBox(b,shade);
+  const {f,side,up,hx,hy,vx,vy}=frame;
+  const turn=(x,y,z)=>{
+    const u=x*hx+y*hy,v=-x*hy+y*hx;
+    return [f[0]*u+side[0]*v+up[0]*z,f[1]*u+side[1]*v+up[1]*z,f[2]*u+side[2]*v+up[2]*z];
+  };
+  // Conservative world bounds retain drawBox's normal culling and depth tests.
+  let x0=Infinity,y0=Infinity,z0=Infinity,x1=-Infinity,y1=-Infinity,z1=-Infinity;
+  for(const u of [-b.hl,b.hl])for(const v of [-b.hw,b.hw])for(const z of [b.z0,b.z1]) {
+    const q=turn(b.x-vx+u*b.c-v*b.s,b.y-vy+u*b.s+v*b.c,z);
+    x0=Math.min(x0,q[0]);x1=Math.max(x1,q[0]);y0=Math.min(y0,q[1]);y1=Math.max(y1,q[1]);z0=Math.min(z0,q[2]);z1=Math.max(z1,q[2]);
+  }
+  const envelope=boxAt(vx+(x0+x1)/2,vy+(y0+y1)/2,1,0,(x1-x0)/2,(y1-y0)/2,z0,z1);
+  const inverse=(x,y,z)=>{
+    const u=x*f[0]+y*f[1]+z*f[2],v=x*side[0]+y*side[1]+z*side[2];
+    return [hx*u-hy*v,hy*u+hx*v,x*up[0]+y*up[1]+z*up[2]];
+  };
+  const origin=inverse(-vx,-vy,eye);
+  drawBox(envelope,shade,(ox,oy,oz,rx,ry,rz)=>{
+    const r=inverse(rx,ry,rz);
+    return rayBox(origin[0]+vx,origin[1]+vy,origin[2],r[0],r[1],r[2],b);
+  });
+}
 function drawVehicle(m, vx, vy, hx, hy) {
-  const savedEye = eye;
-  eye -= roadGroundHeight(px + vx, py + vy);
+  const savedEye=eye,savedFrame=vehicleDrawFrame;
+  const frame=vehicleGroundFrame(VEHICLES[m.kind],px+vx,py+vy,hx,hy);
+  eye-=frame.z;vehicleDrawFrame={...frame,vx,vy};
   try { drawVehicleBody(m, vx, vy, hx, hy); }
-  finally { eye = savedEye; }
+  finally { eye=savedEye;vehicleDrawFrame=savedFrame; }
 }
 function drawVehicleBody(m, vx, vy, hx, hy) {
   drawCarFire(m, vx, vy, hx, hy);
@@ -954,7 +982,7 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
   const fobHeadlight = !fobBlinking || Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0;
   const braking = !wreck && (m.brake || m.v < 0.05), body = wreck ? GRAY : m.body, burnt = wreck ? 0.35 : 1;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
-  drawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
+  vehicleDrawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
     BG[i] = C(body, (1.5 + L * 0.45) * k * burnt);
     if (wreck) return set(i, hash(Math.floor(u * 30), Math.floor(w * 50), m.id) < 0.3 ? '%' : f === 5 ? '.' : ' ', C(GRAY, 2 + L * 0.2)), true; // (scorched)
@@ -975,7 +1003,7 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
     return set(i, Math.abs(w - 0.05) < 0.006 ? '-' : ' ', C(body, L * 0.6)), true;
   });
   // cabin: glass all round, pillars at the corners, a roof
-  if (cab) drawBox(boxAt(vx + hx * cof, vy + hy * cof, hx, hy, chl, hw * 0.9, top, cab), (i, t, L) => {
+  if (cab) vehicleDrawBox(boxAt(vx + hx * cof, vy + hy * cof, hx, hy, chl, hw * 0.9, top, cab), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
     if (f === 5 || f === 6) { BG[i] = C(body, (1.5 + L * 0.45) * shadeFace(f)); return set(i, ' ', 0), true; }
     const edge = f <= 2 ? Math.abs(v) > hw * 0.8 : Math.abs(u - cof) > chl * 0.85;
@@ -986,14 +1014,14 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
     return set(i, ' ', 0), true;
   });
   const roof = cab || top; // what sits on the roof
-  if (m.kind === 'taxi') drawBox(boxAt(vx, vy, hx, hy, 0.03, 0.05, roof, roof + 0.02), (i, t, L) => {
+  if (m.kind === 'taxi') vehicleDrawBox(boxAt(vx, vy, hx, hy, 0.03, 0.05, roof, roof + 0.02), (i, t, L) => {
     BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
   });
-  if (m.ev || m.patrol) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
+  if (m.ev || m.patrol) vehicleDrawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
     const side = HIT.v > 0 ? RED : BLUE, on = !wreck && lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
-  if (m.kind === 'fire') drawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
+  if (m.kind === 'fire') vehicleDrawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
     BG[i] = C(GRAY, 1 + L * 0.2); return set(i, Math.abs(fract(HIT.u * 30) - 0.5) < 0.2 ? '|' : '=', C(WHITE, L * 0.8)), true; // the ladder
   });
 }

@@ -6,6 +6,7 @@ function relock(e) {
 onkeydown = e => {
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
   if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
+  if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
   if (freecam) {
@@ -17,7 +18,6 @@ onkeydown = e => {
     return;
   }
   if (bigMapKey(e, true)) return; // the big map (from the pause menu) has the keys while it's up
-  if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
   if (!e.repeat && courierBoardKey(e)) return relock(e); // the courier dispatch board
@@ -114,7 +114,7 @@ if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
   addEventListener('blur', lostCapture);
 }
 addEventListener('mousedown', e => {
-  if (!mouseCaptured() || paused || freecam || sleep || game || panelOpen() || devOpen()) return;
+  if (wanted.busted || !mouseCaptured() || paused || freecam || sleep || game || panelOpen() || devOpen()) return;
   if (e.button === 0 && (onFootMode() || (mode === 'sea' || mode === 'boat') && heldRod())) {
     K.MouseUse = 1; audioStart(); useHeldItem();
   }
@@ -267,6 +267,8 @@ function loop(t) {
   transitSync(); // establish the current state before a first frame after pause/unlock can cross a departure
   T += dt; msgT -= dt;
   stepWorkshop(dt); stepDrugEffects(dt);
+  const fishingCompetitionLine=stepFishingCompetition(dt);
+  if(fishingCompetitionLine){say(fishingCompetitionLine,8);saveGame();}
   updateMapNavigation();
   env(dt);
   if (stepCourier(dt)) say('Down on the street: the speed bonus is gone. The parcel still pays.', 4);
@@ -298,7 +300,7 @@ function loop(t) {
           const va = Math.atan2(vy, vx), turn = clamp(mod(Math.atan2(wy, wx) - va + Math.PI, Math.PI * 2) - Math.PI, -10 * dt, 10 * dt);
           body.mx = Math.cos(va + turn) * w; body.my = Math.sin(va + turn) * w;
         } else { body.mx = wx; body.my = wy; } // (walking: you go where you're going)
-      } else if (airborne && dt > 0) { airStrafe(f, s + lurch, scale / dt, dt); if (body.hop > 1.001) airSteer(ix, iy, 3, dt); }
+      } else if (airborne && dt > 0) { airStrafe(f, s + lurch, scale / dt, dt); if (body.hop > 1.001) airSteer(ix, iy, HOP_TURN_RATE, dt); }
       move(dt > 0 ? body.mx * dt : ix, dt > 0 ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if(mode==='ladder')stepCourierLadder(dt);
@@ -413,7 +415,7 @@ function gotoShop(word) {
   let best = null, bd = Infinity;
   for (let k = 0; k < N * N; k++) {
     const sh = SHOP[k];
-    if (!sh || sh.word !== word) continue;
+    if (!sh || sh.word !== word || sh.kind === SHOP_SHUT) continue;
     const x = k % N, y = k / N | 0;
     for (const [ox, oy, ang] of [[0, 1, -Math.PI / 2], [0, -1, Math.PI / 2], [1, 0, Math.PI], [-1, 0, 0]]) { // a street cell beside it
       const nx = x + ox, ny = y + oy;
