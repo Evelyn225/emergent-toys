@@ -3,7 +3,7 @@
 const WHEEL_FARE = 5, CAROUSEL_FARE = 3;
 const fairOpen = () => tod >= 9 || tod < 2;
 let fairRide = null, fairEye = 0.17; // {kind: 'wheel' | 'carousel', end, ...} while you're on one; your eye height
-const onFair = (x, y) => mod(x - FAIR.x0, N) < FAIR.x1 - FAIR.x0 && mod(y - FAIR.y0, N) < FAIR.y1 - FAIR.y0;
+const onFair = (x, y) => worldReady ? x>=FAIR.x0&&x<FAIR.x1&&y>=FAIR.y0&&y<FAIR.y1 : worldCoord(x - FAIR.x0) < FAIR.x1 - FAIR.x0 && worldCoord(y - FAIR.y0) < FAIR.y1 - FAIR.y0;
 // what's within reach on the pier: a booth's counter, the wheel's platform, the carousel's rail
 function fairSpot() {
   if (mode !== 'walk' || !onFair(px, py)) return null;

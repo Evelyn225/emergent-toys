@@ -94,7 +94,7 @@ for (const gh of GLASSHOUSES) {
   }
 }
 const pavilionSolidsB = bucketed(PAVILION_SOLIDS);
-const PAVILION_ROOF_MASK = architectureCellMask(PAVILION_SOLIDS.filter(o => o.walkRoof),0);
+let PAVILION_ROOF_MASK = architectureCellMask(PAVILION_SOLIDS.filter(o => o.walkRoof),0);
 function pavilionRoofHeight(x, y) {
   if (!PAVILION_ROOF_MASK[idx(Math.floor(x),Math.floor(y))]) return 0;
   let height = 0;

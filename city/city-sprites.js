@@ -52,7 +52,7 @@ function winterTreeBranches(t) {
 }
 function drawTree(t, vx, vy) {
   const [hw, h] = TREE_SIZE[t.kind], s = t.s;
-  drawShape(vx, vy, 0, hw * s, h * s, (i, u, z, du, dz, L) => treeCell(i, u / s, z / s, du / s, dz / s, L, t));
+  drawShape(vx, vy, terrainHeight(t.x, t.y), hw * s, h * s, (i, u, z, du, dz, L) => treeCell(i, u / s, z / s, du / s, dz / s, L, t));
 }
 function treeCell(i, u, z, du, dz, L, t) {
   const k = t.kind, au = Math.abs(u), tint = 0.85 + t.seed * 0.3, sn = seasonIdx(), bare = sn === 3 && k !== 'pine';
@@ -113,6 +113,8 @@ function walkPose(m, gait = 'walk') {
   return T - (m._phT ?? -1) < 0.3 || m.chase ? gait + (Math.floor(m.ph * 2) & 7) : 'stand'; // (still walking if they stepped a moment ago: a pause doesn't stop them)
 }
 function citySprites() {
+  drawWildScenery();
+  drawRoadBridges();
   drawDrugBuyer();
   drawWorkshopSupplier();
   drawCourier();
@@ -211,16 +213,17 @@ function citySprites() {
   }
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
     if (m.dead && sheeted(m)) drawSheet(m, ...R(m.x, m.y)); // (shot, and the paramedics are here: gun-ui.js)
-    else if (m.down) drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
-    else if (m.flee) { drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.flee.x, m.flee.y, streetLook(m), walkPose(m, 'run')); if (m.flee.scream && fract(T * 2.5 + m.ph) < 0.6) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.05, ['!'], () => C(WHITE, 14)); } // (running from a gunshot)
+    else if (m.down) drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
+    else if (m.flee) { drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.flee.x, m.flee.y, streetLook(m), walkPose(m, 'run')); if (m.flee.scream && fract(T * 2.5 + m.ph) < 0.6) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.05, ['!'], () => C(WHITE, 14)); } // (running from a gunshot)
     else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
       const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
-      drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
-    } else drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
+      drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
+    } else drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), s = d.small ? 0.7 : 1;
-      drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3);
-      const lz = t => 0.085 - (0.085 - 0.04 * s) * t - Math.sin(t * Math.PI) * 0.012, cx = vx + d.mx * 0.03 * s, cy = vy + d.my * 0.03 * s; // the lead, sagging a little
+      const dogGround = walkGround(d.x, d.y), handGround = walkGround(m.x, m.y);
+      drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3, dogGround);
+      const lz = t => handGround * (1 - t) + dogGround * t + 0.085 - (0.085 - 0.04 * s) * t - Math.sin(t * Math.PI) * 0.012, cx = vx + d.mx * 0.03 * s, cy = vy + d.my * 0.03 * s; // the lead, sagging a little
       for (let k = 0; k < 5; k++) { const t0 = k / 5, t1 = (k + 1) / 5; rod(hx + (cx - hx) * t0, hy + (cy - hy) * t0, lz(t0), hx + (cx - hx) * t1, hy + (cy - hy) * t1, lz(t1), 0.0015, RED, 1.1); }
     }
     if (m.hailing) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.06, ['!'], () => C(YEL, fract(T * 3) < 0.6 ? 15 : 8)); // waving you down
@@ -230,10 +233,10 @@ function citySprites() {
     const [vx, vy] = R(c.x, c.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
     if (c.dead && sheeted(c)) { drawSheet(c, vx, vy); continue; }
-    if (c.down) { drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, -c.down.fx, -c.down.fy, copLook(c), downPose(c.down)); continue; }
+    if (c.down) { drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, -c.down.fx, -c.down.fy, copLook(c), downPose(c.down)); continue; }
     figMotion(c);
-    if (c.aimT > T) { const [fx_, fy_] = aimAt(rel(px - c.x), rel(py - c.y)); drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, fx_, fy_, copLook(c), 'aim'); continue; } // (shooting at you: gun.js)
-    drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
+    if (c.aimT > T) { const [fx_, fy_] = aimAt(rel(px - c.x), rel(py - c.y)); drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, fx_, fy_, copLook(c), 'aim'); continue; } // (shooting at you: gun.js)
+    drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
   for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.007); } // things you put down
@@ -245,7 +248,7 @@ function citySprites() {
     const g = task.dog, mx = rel(g.x - (g._lx ?? g.x)), my = rel(g.y - (g._ly ?? g.y)), v = Math.hypot(mx, my);
     if (v > 1e-4) { g._fx = mx / v; g._fy = my / v; }
     g._lx = g.x; g._ly = g.y;
-    drawDog(...R(g.x, g.y), g._fx ?? 1, g._fy ?? 0, BRICK, 1, g.follow && v > 1e-4 ? Math.floor(T * 8) & 3 : 4);
+    drawDog(...R(g.x, g.y), g._fx ?? 1, g._fy ?? 0, BRICK, 1, g.follow && v > 1e-4 ? Math.floor(T * 8) & 3 : 4, walkGround(g.x, g.y));
   }
 }
 
@@ -935,6 +938,12 @@ function drawCarFire(m, vx, vy, hx, hy) {
   }
 }
 function drawVehicle(m, vx, vy, hx, hy) {
+  const savedEye = eye;
+  eye -= roadGroundHeight(px + vx, py + vy);
+  try { drawVehicleBody(m, vx, vy, hx, hy); }
+  finally { eye = savedEye; }
+}
+function drawVehicleBody(m, vx, vy, hx, hy) {
   drawCarFire(m, vx, vy, hx, hy);
   if (m.kind === 'amb') return drawAmbulance(m, vx, vy, hx, hy);
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], wreck = !!m.wrecked, lightsOn = !wreck && (night > 0.4 || overcast > 0.5);

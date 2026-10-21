@@ -17,8 +17,16 @@ function noise(x, y, s) { // smooth value noise
     + (hash(xi, yi + 1, s) * (1 - su) + hash(xi + 1, yi + 1, s) * su) * sv;
 }
 const pick = a => a[Math.random() * a.length | 0];
-const NB = 32, N = NB * 8; // the world is NB x NB blocks of 8x8 cells (2.56km), repeating forever
-const rel = v => mod(v + N / 2, N) - N / 2; // nearest copy in the repeating world
+const CITY_SOURCE_N = 256, CITY_SOURCE_NB = 32;
+const OCEAN_SIZE = 16384, OCEAN_MIN = 256 - OCEAN_SIZE / 2;
+let NB = CITY_SOURCE_NB, N = CITY_SOURCE_N, worldReady = false;
+const rel = v => { const size = worldReady ? OCEAN_SIZE : N; return worldReady && Math.abs(v) < size / 2 ? v : mod(v + size / 2, size) - size / 2; };
+function worldCoord(value) {
+  if (!worldReady) return mod(value,N);
+  return value>=OCEAN_MIN&&value<OCEAN_MIN+OCEAN_SIZE ? value : mod(value-OCEAN_MIN,OCEAN_SIZE)+OCEAN_MIN;
+}
+function inWorldGrid(x, y) { return x >= 0 && y >= 0 && x < N && y < N; }
+function worldBlock(value) { return worldReady ? value : value & (NB - 1); }
 
 // ---- colors: palette index = base*16 + brightness(0..15); NONE = no background
 const BASES = [[200,200,230],[255,210,90],[230,50,50],[60,110,255],[240,240,240],[255,200,0],[60,200,90],

@@ -13,7 +13,7 @@ async function fixture(fn,mobile=false) {
   page.on('pageerror',e=>errors.push(e.message));
   try {
     await page.addInitScript(()=>{window.requestAnimationFrame=()=>0;});await page.goto(PAGE);
-    await page.evaluate(()=>{paused=false;mode='walk';room=me=null;px=41;py=73;T=10;tod=12;money=5000;env(0);render(0);});
+    await page.evaluate(()=>{paused=false;mode='walk';room=me=null;[px,py]=citySourcePoint(41,73);T=10;tod=12;money=5000;env(0);render(0);});
     await fn(page);assert.deepEqual(errors,[]);
   } finally {await page.close();}
 }

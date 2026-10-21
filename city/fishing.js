@@ -73,6 +73,7 @@ const WATERS = {
 };
 const CAST_MIN = 0.35, CAST_MAX = 1.9; // how far a cast goes (cells: 3.5m with no wind-up, 19m at full)
 const ROD_Z = 0.22; // how high the rod tip is held (the eye's 0.17: screen.js)
+const rodTipHeight = () => ROD_Z + (mode === 'walk' ? outdoorGroundHeight(px, py) : 0);
 const FISH_DEEP = 9; // this far off the shore (cells) the bay counts as open water
 const HUT_HOURS = [5, 20]; // (anglers get up early)
 const hutOpen = (t = tod) => t >= HUT_HOURS[0] && t < HUT_HOURS[1];
@@ -88,13 +89,13 @@ const boatSpeed = () => mode === 'sea' && sea ? Math.abs(sea.v) : mode === 'boat
 const heldRod = () => { const it = heldItem(); return it && ITEMS[it.id].rod ? it : null; };
 // what water is at (x, y), if any: 'sea' | 'deep' | 'marina' | 'pond' | 'lake', 'ice' (a frozen pond), or null (dry land)
 function waterKind(x, y) {
-  if (onPier(x, y) || ROAD[idx(Math.floor(x), Math.floor(y))]) return null;
+  if (onPier(x, y) || ROAD[idx(Math.floor(x), Math.floor(y))]&&!roadBridgeAt(x,y)) return null;
   if (gardenLake(x, y)) return 'lake';
   const bx = Math.floor(x / 8) & (NB - 1), by = Math.floor(y / 8) & (NB - 1);
   if (blockKind(bx, by) === 'park') return pondSD(mod(x, 8), mod(y, 8), bx, by) < -0.02 ? (seasonIdx() === 3 ? 'ice' : 'pond') : null;
   if (!seaAt(x, y)) return null;
   if (inMarina(x, y)) return 'marina';
-  const m = mod(y, N), off = Math.min(mod(m - shoreS(x), N), mod(shoreN(x) - m, N));
+  const m = worldCoord(y), off = worldReady ? -archipelagoEdge(x,y) : Math.min(worldCoord(m - shoreS(x)), worldCoord(shoreN(x) - m));
   return off >= FISH_DEEP ? 'deep' : 'sea';
 }
 // what's on the hook: fish mostly, some junk, now and then treasure (a better rod, and luck, tip it)
@@ -149,8 +150,8 @@ function castLine() {
   const f = fishing, d = CAST_MIN + f.power * (CAST_MAX - CAST_MIN), ca = Math.cos(a), sa = Math.sin(a);
   let reach = d;
   for (let s = 0.1; s <= d; s += 0.05) if (map[idx(Math.floor(px + ca * s), Math.floor(py + sa * s))] > 0) { reach = Math.max(0.1, s - 0.08); break; }
-  Object.assign(f, { st: 'fly', t: 0, d: reach, dur: 0.3 + reach * 0.2, ox: px + ca * 0.06, oy: py + sa * 0.06, oz: ROD_Z,
-    tx: px + ca * reach, ty: py + sa * reach, x: px, y: py, z: ROD_Z });
+  Object.assign(f, { st: 'fly', t: 0, d: reach, dur: 0.3 + reach * 0.2, ox: px + ca * 0.06, oy: py + sa * 0.06, oz: rodTipHeight(),
+    tx: px + ca * reach, ty: py + sa * reach, x: px, y: py, z: rodTipHeight() });
   fishSfx.push('whoosh');
 }
 function splash(x, y, n, up) {
@@ -174,9 +175,9 @@ function stepFishing(dt, rnd = Math.random) {
     if (!usingHeldItem()) castLine();
   } else if (f.st === 'fly') {
     const q = Math.min(1, f.t / f.dur), arc = 0.06 + f.d * 0.09;
-    f.x = mod(f.ox + rel(f.tx - f.ox) * q, N); f.y = mod(f.oy + rel(f.ty - f.oy) * q, N); f.z = f.oz * (1 - q) + arc * 4 * q * (1 - q);
+    f.x = worldCoord(f.ox + rel(f.tx - f.ox) * q); f.y = worldCoord(f.oy + rel(f.ty - f.oy) * q); f.z = f.oz * (1 - q) + terrainHeight(f.tx, f.ty) * q + arc * 4 * q * (1 - q);
     if (q >= 1) {
-      f.water = waterKind(f.x, f.y); f.z = 0; f.t = 0;
+      f.water = waterKind(f.x, f.y); f.z = terrainHeight(f.x, f.y); f.t = 0;
       if (f.water && f.water !== 'ice') { f.st = 'wait'; f.next = biteWait(f.rod, rnd); splash(f.x, f.y, 6, 0.25); fishSfx.push('plop'); f.ring = T; }
       else {
         f.st = 'land';
@@ -191,8 +192,8 @@ function stepFishing(dt, rnd = Math.random) {
     if (f.t >= ITEMS[f.rod].rod.window) { Object.assign(f, { st: 'wait', t: 0, next: biteWait(f.rod, rnd) * 0.5 }); say(pick(['It got away.', 'Missed it.', 'Gone. It took the bait with it, in spirit.']), 1.5); f.ring = T; }
   } else if (f.st === 'reel') { // in it comes, skipping over the water, the catch swinging up out of it at the end
     const q = Math.min(1, f.t / f.dur), ex = px + Math.cos(a) * 0.12, ey = py + Math.sin(a) * 0.12;
-    f.x = mod(f.sx + rel(ex - f.sx) * q, N); f.y = mod(f.sy + rel(ey - f.sy) * q, N);
-    f.z = q < 0.65 ? f.sz * (1 - q / 0.65) : (q - 0.65) / 0.35 * (ROD_Z - 0.07);
+    f.x = worldCoord(f.sx + rel(ex - f.sx) * q); f.y = worldCoord(f.sy + rel(ey - f.sy) * q);
+    f.z = q < 0.65 ? f.sz * (1 - q / 0.65) : (q - 0.65) / 0.35 * (rodTipHeight() - 0.07);
     if (q > 0.05 && q < 0.65 && f.catch && rnd() < dt * 12) splash(f.x, f.y, 1, 0.2); // (thrashing as it comes)
     if (q >= 1) { if (f.catch) landCatch(f); else fishing = null; }
   } else if (f.st === 'landed') { if (f.t > 1.6) fishing = null; }
@@ -244,7 +245,7 @@ function hutPrompt() {
 // one and you get a tip. { x, y, a: the way they face, cast: how far out their bobber sits, seed, shirt }
 const ANGLERS = [];
 {
-  const add = (x, y, a, cast = 0.6) => { const k = ANGLERS.length; ANGLERS.push({ x: mod(x, N), y: mod(y, N), a, cast, seed: k, shirt: [BLUE, GREEN, BRICK, GRAY, RED, YEL, CYAN][k % 7] }); };
+  const add = (x, y, a, cast = 0.6) => { const k = ANGLERS.length; ANGLERS.push({ x: worldCoord(x), y: worldCoord(y), a, cast, seed: k, shirt: [BLUE, GREEN, BRICK, GRAY, RED, YEL, CYAN][k % 7] }); };
   add(FAIR.x0 + 0.14, FAIR.y1 - 0.7, Math.PI); // the Sunset Pier's end, over each side and off the end
   add(FAIR.x1 - 0.14, FAIR.y1 - 1.1, 0);
   add(FAIR.cx + 1.6, FAIR.y1 - 0.14, Math.PI / 2, 0.8);

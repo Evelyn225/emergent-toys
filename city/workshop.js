@@ -1,6 +1,6 @@
 // Apartment workshops. The machines and Neon are fictional; this is a short timing/balance game.
 const WORKSHOP_KIT_PRICE = 120, WORKSHOP_REFILL_PRICE = 30, WORKSHOP_FAN_PRICE = 65;
-const HOME_ROOM_SIZE = { home_studio: [14,15], home_loft: [20,22], home_belle: [26,26] };
+const HOME_ROOM_SIZE = { home_studio: [14,15], home_loft: [20,22], home_belle: [26,26], home_island: [24,24] };
 const WORKSHOP_PARTS = {
   bench: { name: 'folding workbench', halfX: .95, halfY: .48 },
   processor: { name: 'batch processor' }, packer: { name: 'packet press' }, fan: { name: 'cooling fan' },

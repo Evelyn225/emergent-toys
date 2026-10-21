@@ -1,6 +1,6 @@
 // static props are bucketed by block, so a frame only visits the ones within draw distance (see forNear)
 function bucketed(items) {
-  const b = Array.from({ length: NB * NB }, () => []);
+  const b = Array.from({ length: NB * NB + (worldReady ? 1 : 0) }, () => []);
   for (const it of items) b[bi(Math.floor(it.x / 8), Math.floor(it.y / 8))].push(it);
   return b;
 }
@@ -45,6 +45,10 @@ function glow(wx, wy) {
 const POND = [3.5, 3.5, 0.85]; // block-local x, y, base radius
 // a lumpy, slightly oval pond outline (different per park): how far (lx, ly) is outside it (inside: below 0)
 function pondEdgeSD(lx, ly, bx, by) {
+  if (worldReady) {
+    const [x, y] = cityWorldSourcePoint(bx * 8 + 4, by * 8 + 4);
+    bx = Math.floor(x / 8); by = Math.floor(y / 8);
+  }
   const ex = (lx - POND[0]) / 1.15, ey = ly - POND[1], ang = Math.atan2(ey, ex);
   return Math.hypot(ex, ey) - POND[2] * (0.75 + 0.55 * noise(Math.cos(ang) * 1.4 + bx * 3.1, Math.sin(ang) * 1.4 + by * 2.3, 13));
 }
@@ -185,10 +189,10 @@ function blockedOn(y0, y1) { // x intervals [a, b] that the band y0..y1 of sea i
 }
 function freeSpan(x, y0, y1) { // the open stretch [a, b] of that band (b > a, may run past N) that x is in, or null
   const o = BRIDGE_X[0] * 8 - 0.4; // measure from a bridge: it closes every band, so nothing wraps round past it
-  const bl = blockedOn(y0, y1).map(([a, b]) => [mod(a - o, N), mod(a - o, N) + b - a]).sort((p, q) => p[0] - q[0]);
+  const bl = blockedOn(y0, y1).map(([a, b]) => [worldCoord(a - o), worldCoord(a - o) + b - a]).sort((p, q) => p[0] - q[0]);
   const merged = [];
   for (const [a, b] of bl) { const m = merged[merged.length - 1]; if (m && a <= m[1]) m[1] = Math.max(m[1], b); else merged.push([a, b]); }
-  const t = mod(x - o, N);
+  const t = worldCoord(x - o);
   for (let k = 0; k < merged.length; k++) {
     const a = merged[k][1], b = k + 1 < merged.length ? merged[k + 1][0] : N;
     if (t >= a && t < b) return [a + o, b + o];
@@ -409,7 +413,7 @@ for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
 const lanternsB = bucketed(lanterns);
 
 // suspension bridges: two towers each, cables sagging between them, lit up at night like a necklace
-const BRIDGE_Y0 = SHORE_S * 8 + 2, BRIDGE_LEN = N - BRIDGE_Y0 + SHORE_N * 8 + 8; // shore road to shore road, over the wrap
+let BRIDGE_Y0 = SHORE_S * 8 + 2, BRIDGE_LEN = N - BRIDGE_Y0 + SHORE_N * 8 + 8; // shore road to shore road, over the wrap
 const TOWERS = [0.2, 0.8].map(f => BRIDGE_Y0 + BRIDGE_LEN * f), TOWER_H = 7, DECK_EDGE = [0.05, 1.95];
 const bridgeBits = []; // cable points and suspenders: {x, y, z, kind}
 const cableZ = t => { // cable height along the bridge, t = 0..1
@@ -419,12 +423,12 @@ const cableZ = t => { // cable height along the bridge, t = 0..1
   const m = (t - a) / (b - a); return TOWER_H - (TOWER_H - 0.9) * 4 * m * (1 - m);
 };
 for (const bx of BRIDGE_X) for (const e of DECK_EDGE) for (let s = 0; s < BRIDGE_LEN; s += 0.5) {
-  const t = s / BRIDGE_LEN, z = cableZ(t), x = bx * 8 + e, y = mod(BRIDGE_Y0 + s, N);
+  const t = s / BRIDGE_LEN, z = cableZ(t), x = bx * 8 + e, y = worldCoord(BRIDGE_Y0 + s);
   bridgeBits.push({ x, y, z, kind: 'cable', z2: s + 0.5 < BRIDGE_LEN ? cableZ((s + 0.5) / BRIDGE_LEN) : null }); // z2: the next point's height
   if ((s * 2 | 0) % 4 === 0 && z > 0.5) bridgeBits.push({ x, y, z: 0.05, h: z - 0.05, kind: 'hanger' });
 }
 const bridgeB = bucketed(bridgeBits);
-const towers = BRIDGE_X.flatMap(bx => TOWERS.map(y => ({ x: bx * 8 + 1, y: mod(y, N) })));
+const towers = BRIDGE_X.flatMap(bx => TOWERS.map(y => ({ x: bx * 8 + 1, y: worldCoord(y) })));
 
 // street food: a rare cart at the curb, a few kinds. Two art frames each so the steam/umbrella shimmer.
 // each cart's look (drawCart in city-sprites.js): w its length, roof an umbrella / awning / candy floss, trim the

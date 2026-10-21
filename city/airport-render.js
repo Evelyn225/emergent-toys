@@ -12,7 +12,7 @@ const runwayNumber = (num, along, across) => { // is (along, across) on a painte
   return (DIGIT5[num[k]] >> (14 - row * 3 - col) & 1) === 1;
 };
 function airportFloor(i, r, x, wx, wy, L) { // [ch, base, k] for the floor cell; or null, having painted it itself (a light)
-  const X = mod(wx, N), Y = mod(wy, N), lit = lampsOn > 0.2, blink = (light, col, ch = '*') => { set(i, ch, C(col, 15)); BG[i] = C(col, 3 + light * 4); FOGS[i] = 0; return null; };
+  const X = worldCoord(wx), Y = worldCoord(wy), lit = lampsOn > 0.2, blink = (light, col, ch = '*') => { set(i, ch, C(col, 15)); BG[i] = C(col, 3 + light * 4); FOGS[i] = 0; return null; };
   if (airportEdge(wx, wy) < 0.5) return [hash(Math.floor(wx * 9), Math.floor(wy * 9), 341) > 0.45 ? '%' : 'o', GRAY, 1.2]; // rocks
   if (onRunway(wx, wy)) {
     const u = X - RUNWAY.x0, v = Y - RUNWAY.y, len = RUNWAY.x1 - RUNWAY.x0;
@@ -58,7 +58,8 @@ function airportFloor(i, r, x, wx, wy, L) { // [ch, base, k] for the floor cell;
 }
 // the causeway: a road out over the water, railings each side, lamps along it
 function causewayFloor(r, x, wx, wy) {
-  const e = Math.abs(rel(wx - CAUSEWAY.x)) / CAUSEWAY.hw;
+  const horizontal = worldReady&&wx<CAUSEWAY.x-CAUSEWAY.hw&&Math.abs(wy-AIRPORT.y0-1)<CAUSEWAY.hw;
+  const e = Math.abs(horizontal?wy-AIRPORT.y0-1:rel(wx - CAUSEWAY.x)) / CAUSEWAY.hw;
   if (e > 0.9) return ['|', GRAY, 1.5];
   if (e < 0.04 && fract(wy * 2) < 0.5) return ['=', YEL, 1.4];
   return [(r + x) & 1 ? '.' : ' ', GRAY, 0.8];

@@ -3,15 +3,15 @@
 // Stations every 8 blocks, with narrow platforms over the sidewalks and stairs down to the street.
 // The deck is 12m wide over the middle of the street (clear of the building faces either side) and high enough
 // that the street lamps fit under it: y EL_Y0..EL_Y1, z EL_BOT..EL_TOP.
-const EL_Y = EL_ROW * 8, EL_HALF = 0.6, EL_Y0 = EL_Y + 1 - EL_HALF, EL_Y1 = EL_Y + 1 + EL_HALF, EL_BOT = 1.15, EL_TOP = 1.27;
+let EL_Y = EL_ROW * 8, EL_HALF = 0.6, EL_Y0 = EL_Y + 1 - EL_HALF, EL_Y1 = EL_Y + 1 + EL_HALF, EL_BOT = 1.15, EL_TOP = 1.27;
 const EL_TRACK = [EL_Y + 0.78, EL_Y + 1.22]; // [westbound, eastbound]
 const EL_PLAT = [EL_Y0 + 0.08, EL_Y1 - 0.08]; // where you stand on each platform, along the deck's edges
-const underEl = y => Math.abs(rel(y - (EL_Y + 1))) < EL_HALF; // under (or on) the deck
+const underEl = (y,x=px) => (!worldReady||x>=140&&x<=352)&&Math.abs(rel(y - (EL_Y + 1))) < EL_HALF;
 const EL_STATIONS = [2, 10, 18, 26].map(bx => ({ x: bx * 8 + 5, x0: bx * 8 + 2.6, x1: bx * 8 + 7.4, name: AVE_NAMES[bx] }));
-const elStationAt = x => EL_STATIONS.find(s => mod(x - s.x0, N) < s.x1 - s.x0);
-const elDeckHeight = (x,y) => underEl(y) ? EL_TOP : 0;
+const elStationAt = x => EL_STATIONS.find(s => worldReady ? x>=s.x0&&x<s.x1 : worldCoord(x - s.x0) < s.x1 - s.x0);
+const elDeckHeight = (x,y) => underEl(y,x) ? EL_TOP : 0;
 function elPlatformAt(x,y) {
-  if(!underEl(y))return null;
+  if(!underEl(y,x))return null;
   const s=elStationAt(x);
   if(!s)return null;
   for(const tr of [0,1])if(Math.abs(rel(y-EL_PLAT[tr]))<.14)return {s,tr};
@@ -28,10 +28,10 @@ for (const s of EL_STATIONS) s.stairs = [0, 1].map(tr => {
   const ay = tr ? -1 : 1, oy = tr ? EL_Y + 2 : EL_Y; // (c, s: u's direction; for the south side, u runs west)
   return elStairFoot({ tr, ox: s.x, oy, ax: 0, ay, c: ay, s: 0, off: 0 });
 });
-function elStairFoot(st) { st.x = mod(st.ox + st.c * (st.off + ELS.u0 - 0.08), N); st.y = st.oy + st.ay * (ELS.v0 + ELS.v1) / 2; return st; }
+function elStairFoot(st) { st.x = worldCoord(st.ox + st.c * (st.off + ELS.u0 - 0.08)); st.y = st.oy + st.ay * (ELS.v0 + ELS.v1) / 2; return st; }
 // the stairs' steelwork as boxes (for the street clearance): the flights in short pieces, the landings, the top
 const elStairBoxes = st => {
-  const out = [], at = (u, v) => [mod(st.ox + st.c * (st.off + u) + st.ax * v, N), st.oy + st.s * (st.off + u) + st.ay * v];
+  const out = [], at = (u, v) => [worldCoord(st.ox + st.c * (st.off + u) + st.ax * v), st.oy + st.s * (st.off + u) + st.ay * v];
   for (let u = ELS.u0 + 0.05; u < ELS.u3; u += 0.1) {
     const [x, y] = at(u, (ELS.v0 + ELS.v1) / 2), g = elStairGround(x, y);
     out.push({ x, y, c: 1, s: 0, hl: 0.05, hw: (ELS.v1 - ELS.v0) / 2 + 0.01, z0: Math.max(0, g - 0.04), z1: g + 0.2 });
@@ -87,14 +87,20 @@ const EL_HL = EL_CAR_LEN / 2 - 0.03, EL_HW = 0.14, EL_H = 0.32;
 const smooth = v => v * v * (3 - 2 * v);
 // where train k on track tr (0 west, 1 east) is at time t: {x of its middle, dir, stopped, station index it's at or leaving}
 function elTrain(tr, k, t) {
+  if(worldReady) {
+    const sequence=[0,1,2,3,2,1],period=(HOP_T+DWELL)*sequence.length,c=mod(t+tr*period/2,period),hop=Math.floor(c/(HOP_T+DWELL)),p=c-hop*(HOP_T+DWELL);
+    const from=sequence[hop],next=sequence[(hop+1)%sequence.length],moving=p>=DWELL,dir=Math.sign(next-from);
+    return {x:EL_STATIONS[from].x+(EL_STATIONS[next].x-EL_STATIONS[from].x)*(moving?smooth((p-DWELL)/HOP_T):0),dir,stopped:!moving,station:from,next,left:moving?HOP_T-(p-DWELL):DWELL-p};
+  }
   const dir = tr ? 1 : -1, c = mod(t + k * EL_CYCLE / 2 + tr * 17, EL_CYCLE), hop = Math.floor(c / (HOP_T + DWELL)), p = c - hop * (HOP_T + DWELL);
   const from = tr ? hop : (EL_STATIONS.length - hop) % EL_STATIONS.length; // station index it set off from
   const x0 = EL_STATIONS[from].x, moving = p >= DWELL;
-  return { x: mod(x0 + dir * HOP * (moving ? smooth((p - DWELL) / HOP_T) : 0), N), dir, stopped: !moving, station: from,
+  return { x: worldCoord(x0 + dir * HOP * (moving ? smooth((p - DWELL) / HOP_T) : 0)), dir, stopped: !moving, station: from,
            left: moving ? HOP_T - (p - DWELL) : DWELL - p, // seconds until it arrives / until it leaves
            next: (from + (tr ? 1 : EL_STATIONS.length - 1)) % EL_STATIONS.length };
 }
-const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(tr, k, t) })));
+const elTrainKeys = () => worldReady ? [0] : [0,1];
+const elTrains = t => [0, 1].flatMap(tr => elTrainKeys().map(k => ({ tr, k, ...elTrain(tr, k, t) })));
 // Sweep the player's body against each moving car, including crossings between frames and across the world seam.
 function elTrainImpact(from,to,t0,t1,height=.17) {
   const bottom=EL_TOP+.02,top=bottom+EL_H,radius=.025;
@@ -102,7 +108,7 @@ function elTrainImpact(from,to,t0,t1,height=.17) {
   for(const tr of [0,1]) {
     const y0=rel(from[1]-EL_TRACK[tr]),y1=y0+rel(to[1]-from[1]);
     if(Math.min(y0,y1)>EL_HW+radius||Math.max(y0,y1)<-EL_HW-radius)continue;
-    for(const k of [0,1]) {
+    for(const k of elTrainKeys()) {
       const before=elTrain(tr,k,t0),after=elTrain(tr,k,t1);
       if(before.stopped&&after.stopped)continue;
       for(let j=0;j<EL_CARS;j++) {

@@ -87,7 +87,7 @@ function fitStreetFixtures(items, buckets, kind) {
         candidates.push([start[0]+nx*inward-ny*along,start[1]+ny*inward+nx*along]);
     } else for (const radius of [.2,.4,.6]) for(let n=0;n<8;n++) candidates.push([start[0]+Math.cos(n*Math.PI/4)*radius,start[1]+Math.sin(n*Math.PI/4)*radius]);
     for (const [x,y] of candidates) {
-      o.x=mod(x,N);o.y=mod(y,N);
+      o.x=worldCoord(x);o.y=worldCoord(y);
       if (isWater(o.x,o.y) || direction && !ROAD[idx(Math.floor(o.x),Math.floor(o.y))]) continue;
       if(kind==='machine') {
         const fx=-o.s*o.fs,fy=o.c*o.fs;
@@ -131,12 +131,12 @@ const elStairLocal = (x, y) => { // a fixture's [u, v] in the stairs' frame if i
   return null;
 };
 for (let k = trees.length - 1; k >= 0; k--) if (elStairLocal(trees[k].x, trees[k].y)) trees.splice(k, 1);
-for (const l of lamps) { const h = elStairLocal(l.x, l.y); if (!h) continue; const [st, u] = h, to = u < (ELS.u0 + ELS.u4) / 2 ? ELS.u0 - 0.7 : ELS.u4 + 0.3, d = to - u; l.x = mod(l.x + st.c * d, N); l.y += st.s * d; }
+for (const l of lamps) { const h = elStairLocal(l.x, l.y); if (!h) continue; const [st, u] = h, to = u < (ELS.u0 + ELS.u4) / 2 ? ELS.u0 - 0.7 : ELS.u4 + 0.3, d = to - u; l.x = worldCoord(l.x + st.c * d); l.y += st.s * d; }
 for (const [items, buckets] of [[trees, treesB], [lamps, lampsB]]) { for (const b of buckets) b.length = 0; for (const o of items) buckets[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o); }
 // Ground-light queries visit only the heads whose pools can reach this cell, including relocated lamps.
 for (const l of lamps) {
   const belle = districtAt(l.x,l.y)==='belle';
-  l.gx=mod(l.x+(belle?0:l.ax*REACH),N);l.gy=mod(l.y+(belle?0:l.ay*REACH),N);
+  l.gx=worldCoord(l.x+(belle?0:l.ax*REACH));l.gy=worldCoord(l.y+(belle?0:l.ay*REACH));
   for(let y=Math.floor(l.gy-.55);y<=Math.floor(l.gy+.55);y++)for(let x=Math.floor(l.gx-.55);x<=Math.floor(l.gx+.55);x++) {
     const cell=idx(x,y);(lampGlowCells[cell]||(lampGlowCells[cell]=[])).push(l);
   }
@@ -189,7 +189,7 @@ function geometrySnowExposed(x,y,z,overhead) {
   return true;
 }
 function snowExposed(x,y,z=0) {
-  if (underEl(y) && z<EL_BOT || arcadeAt(x,y) && z<ARCADE_Z || airportIndoors(x,y,z)) return false;
+  if (underEl(y,x) && z<EL_BOT || arcadeAt(x,y) && z<ARCADE_Z || airportIndoors(x,y,z)) return false;
   const cell = idx(Math.floor(x),Math.floor(y)), overhead = streetGeometryCells[cell];
   const canopy = BELLE_ROOF_INFILL[cell] && BELLE_ROOF_CELLS[cell];
   if (canopy && z < canopy.h - .02) return false;

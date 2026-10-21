@@ -134,3 +134,45 @@ test('invalid or duplicate rental records cannot replace another slip or inject 
   fresh('loadBoats([record,record])');
   assert.equal(fresh('fleet.filter(b=>b.hired).length'), 1);
 });
+
+test('cruise keeps normal docking speed, eases off smoothly and brakes every player boat to a stop', () => {
+  const fresh = loadCity().ev;
+  const results = JSON.parse(fresh(`JSON.stringify(['speedboat','cruiser','sailboat'].map(kind=>{
+    boats.length=fleet.length=0;
+    const b={kind,x:80,y:SHORE_S*8+20,hx:1,hy:0,v:0};fleet.push(b);boardBoat(b);
+    K.KeyW=true;K.ShiftLeft=K.ShiftRight=K.KeyS=false;
+    for(let n=0;n<120;n++)stepSea(.05);
+    const k=BOAT_KINDS[kind],normal=b.v;
+    K.ShiftRight=true;for(let n=0;n<120;n++)stepSea(.05);
+    const fast=b.v;K.ShiftRight=false;stepSea(.05);const released=b.v;
+    K.KeyW=false;K.KeyS=true;const start=b.x;let seconds=0;
+    while(b.v>.02&&seconds<10){stepSea(.05);seconds+=.05;}
+    const stopped=b.v,braking=b.x-start;
+    for(let n=0;n<120;n++)stepSea(.05);
+    K.KeyS=false;
+    return {kind,normal,top:k.top,fast,cruise:k.cruise,released,stopped,braking,seconds,reverse:b.v};
+  }))`));
+  for (const r of results) {
+    assert.equal(r.normal,r.top,JSON.stringify(r));assert.equal(r.fast,r.cruise,JSON.stringify(r));
+    assert.ok(r.released<r.fast&&r.released>r.top,JSON.stringify(r));
+    assert.ok(r.stopped<=.02&&r.seconds<5&&r.braking<8,JSON.stringify(r));
+    assert.equal(r.reverse,-r.top*.3,JSON.stringify(r));
+  }
+});
+
+test('a cruising hull sweeps thin obstacles between frames and steering becomes gentler at speed', () => {
+  const fresh = loadCity().ev;
+  const result=JSON.parse(fresh(`JSON.stringify((()=>{
+    boats.length=fleet.length=0;
+    const b={kind:'speedboat',x:MARINA.x,y:SHORE_S*8+20,hx:1,hy:0,v:0};fleet.push(b);boardBoat(b);
+    const start=b.x,k=BOAT_KINDS[b.kind],barrier=[start+.30,b.y-2,start+.32,b.y+2];PIERS.push(barrier);
+    b.v=k.cruise;K.KeyW=K.ShiftLeft=true;
+    const endpointClear=waterClear(b,b.x+b.v*.05,b.y,1,0);
+    stepSea(.05);const hit=b.v<0,stoppedBefore=b.x+k.hl<=barrier[0];PIERS.pop();
+    K.KeyW=K.ShiftLeft=false;K.KeyD=true;b.v=k.top;a=0;stepSea(.05);const normalTurn=a;
+    b.v=k.cruise;a=0;stepSea(.05);const fastTurn=a;
+    return {endpointClear,hit,stoppedBefore,normalTurn,fastTurn};
+  })())`));
+  assert.equal(result.endpointClear,true);assert.equal(result.hit,true);assert.equal(result.stoppedBefore,true);
+  assert.ok(result.fastTurn>0&&result.fastTurn<result.normalTurn*.6,JSON.stringify(result));
+});

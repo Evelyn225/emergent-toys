@@ -30,7 +30,7 @@ test('buy a Skylark, take off, bail out, and land on the parachute; steal a Horn
       prop.x = RUNWAY.x0 + 1; prop.y = RUNWAY.y; prop.yaw = 0;
       K.KeyW = 1;
       for (let t = 0; t < 30 && prop.ground; t += dt) { K.ArrowUp = prop.v > PLANE_TYPES.prop.vr ? 1 : 0; stepFlight(dt); }
-      out.offAt = prop.x; out.airborne = !prop.ground;
+      out.offAt = prop.x-CITY_LAYOUT.airportX; out.airborne = !prop.ground;
       for (let t = 0; t < 12; t += dt) { K.ArrowUp = prop.z < 12 ? 1 : 0; stepFlight(dt); }
       K.KeyW = K.ArrowUp = 0; out.alt = prop.z;
       out.airPrompt = promptText();
@@ -110,10 +110,10 @@ test('an aircraft you own is kept, where you parked it, across a reload', async 
     const page = await browser.newPage();
     await page.goto(URL_);
     await page.waitForFunction(() => typeof saveGame === 'function' && typeof aircraft !== 'undefined');
-    await page.evaluate(() => { localStorage.clear(); const c = aircraft.find(c => c.type === 'jet'); c.owned = true; c.forSale = false; c.x = 35; c.y = RUNWAY.y; saveGame(); });
+    await page.evaluate(() => { localStorage.clear(); const c = aircraft.find(c => c.type === 'jet'); c.owned = true; c.forSale = false; c.x = 35+CITY_LAYOUT.airportX; c.y = RUNWAY.y; saveGame(); });
     await page.reload();
     await page.waitForFunction(() => typeof aircraft !== 'undefined' && aircraft.some(c => c.owned));
-    const got = await page.evaluate(() => aircraft.filter(c => c.owned).map(c => [c.type, c.x, c.y === RUNWAY.y]));
+    const got = await page.evaluate(() => aircraft.filter(c => c.owned).map(c => [c.type, c.x-CITY_LAYOUT.airportX, c.y === RUNWAY.y]));
     assert.deepEqual(got, [['jet', 35, true]]);
     await page.evaluate(() => localStorage.clear());
   } finally { await browser.close(); }
@@ -204,7 +204,8 @@ test('going in: the crash plays out before you are on foot; ditched in the bay, 
       const dt = 1 / 60, out = {}, run = secs => { for (let t = 0; t < secs && mode === 'air'; t += dt) { stepFlight(dt); stepAirWrecks(dt); stepWake(dt); } };
       // into the ground: still in the air mode a second after, then on foot beside the wreck, the screen coming back
       const jet = aircraft.find(c => c.type === 'jet'); enterAircraft(jet);
-      Object.assign(jet, { x: 120, y: 40, z: 2, v: 8, pitch: -0.8, ground: false, throttle: 1 });
+      const [crashX,crashY]=citySourcePoint(120,40);
+      Object.assign(jet, { x: crashX, y: crashY, z: 2, v: 8, pitch: -0.8, ground: false, throttle: 1 });
       for (let t = 0; t < 20 && !wreckCam && mode === 'air'; t += dt) stepFlight(dt);
       out.wreck = wreckCam && wreckCam.kind; run(1);
       out.stillWatching = mode === 'air'; run(5);
@@ -212,7 +213,7 @@ test('going in: the crash plays out before you are on foot; ditched in the bay, 
       // into the bay, off the airport's far shore: ashore close by, not at the marina
       needs.health = 100; clearWanted(); wakeT = 0; fade = 0;
       const heli = aircraft.find(c => c.type === 'heli'); enterAircraft(heli);
-      const x0 = 40, y0 = AIRPORT.y1 + 5; Object.assign(heli, { x: x0, y: y0, z: 0.5, rotor: 1, ground: false, vz: -1, hvx: 0, hvy: 0 });
+      const x0 = 40+CITY_LAYOUT.airportX, y0 = AIRPORT.y1 + 5; Object.assign(heli, { x: x0, y: y0, z: 0.5, rotor: 1, ground: false, vz: -1, hvx: 0, hvy: 0 });
       out.overBay = overWater(x0, y0);
       K.KeyF = 1; for (let t = 0; t < 20 && !wreckCam && mode === 'air'; t += dt) stepFlight(dt); K.KeyF = 0;
       out.ditch = wreckCam && wreckCam.kind; run(6);
@@ -244,7 +245,8 @@ test('flying in fog: the view is fogged right down to the instruments, from the 
       await page.evaluate(view => {
         tod = 12; weather = 'fog'; fogAmt = 1; wTimer = 999; clearWanted(); third = view;
         if (mode !== 'air') enterAircraft(aircraft.find(c => c.type === 'jet'));
-        Object.assign(pilot, { ground: false, z: 15, v: 25, throttle: 0.8, x: 60, y: 60 }); paused = false;
+        const [x,y]=citySourcePoint(60,60);
+        Object.assign(pilot, { ground: false, z: 15, v: 25, throttle: 0.8, x, y }); paused = false;
       }, view);
       await page.waitForTimeout(600);
       out[view ? 'behind' : 'cockpit'] = await rowFog();
@@ -268,7 +270,8 @@ test('steal a jet and get it up: the air force scrambles two fighters, the radio
     await page.evaluate(() => {
       tod = 13; weather = 'clear'; fogAmt = 0; wTimer = 999;
       const c = aircraft.find(c => c.type === 'jet'); enterAircraft(c);
-      Object.assign(c, { ground: false, z: 9, v: 7, throttle: 0.7, pitch: 0.02, x: 120, y: 60, yaw: 0 }); third = true; scramble = SCRAMBLE_T - 0.5; paused = false;
+      const [x,y]=citySourcePoint(120,60);
+      Object.assign(c, { ground: false, z: 9, v: 7, throttle: 0.7, pitch: 0.02, x, y, yaw: 0 }); third = true; scramble = SCRAMBLE_T - 0.5; paused = false;
     });
     await page.waitForTimeout(1500);
     const r = await page.evaluate(() => { let dash = ''; for (let k = (rows - 3) * cols; k < rows * cols; k++) dash += CH[k]; return { n: fighters.length, msg: msgText, dash }; });

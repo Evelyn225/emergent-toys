@@ -143,7 +143,7 @@ const free = (x, y) => {
   if (mode === 'walk') { const st = elStairStep(px, py, x, y, elPass); if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))]; } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
@@ -165,8 +165,8 @@ function leaveTireMarks(c, hx, hy, oldX, oldY) {
   const mx = rel(c.x - oldX), my = rel(c.y - oldY), length = Math.hypot(mx, my);
   if (length < 0.008 || length > 0.2) return;
   for (const side of [-1, 1]) tireMarks.push({
-    x: mod(oldX + mx / 2 - hx * 0.13 - hy * side * 0.085, N),
-    y: mod(oldY + my / 2 - hy * 0.13 + hx * side * 0.085, N),
+    x: worldCoord(oldX + mx / 2 - hx * 0.13 - hy * side * 0.085),
+    y: worldCoord(oldY + my / 2 - hy * 0.13 + hx * side * 0.085),
     c: mx / length, s: my / length, hl: length / 2 + 0.005, t: T
   });
   if (tireMarks.length > 256) tireMarks.splice(0, tireMarks.length - 256);
@@ -247,7 +247,7 @@ function drive(dt) {
     else if (sp > 0.2 && actx) tone(actx.currentTime, 70, 0.12, 0.08 * sp); // a soft thud
     if (bodyHit || hitCar) a = oldA;
     c.v = 0; c.travelA = a;
-  } else { c.x = mod(nx, N); c.y = mod(ny, N); if (drifting) leaveTireMarks(c, hx, hy, oldX, oldY); }
+  } else { c.x = worldCoord(nx); c.y = worldCoord(ny); if (drifting) leaveTireMarks(c, hx, hy, oldX, oldY); }
   c.hx = Math.cos(a); c.hy = Math.sin(a); c.ex = c.x; c.ey = c.y; c.brake = f < 0 || handbrake; px = c.x; py = c.y;
   const road = ROAD[idx(Math.floor(c.x), Math.floor(c.y))]; // into a junction on red, right in front of a cop
   if (road === 3 && c.lastRoad && c.lastRoad !== 3 && Math.abs(c.v) > 0.4) {
@@ -308,7 +308,7 @@ function loop(t) {
   else if (mode === 'air') { if (!sleep) stepFlight(dt); } // (flight.js)
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
-    px = mod(elRiding().x + ride.off, N);
+    px = worldCoord(elRiding().x + ride.off);
   }
   stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
@@ -420,7 +420,7 @@ function gotoShop(word) {
     }
   }
   if (!best) return say(`No ${word} in town.`);
-  px = mod(best.x, N); py = mod(best.y, N); a = best.a; pitch = 0;
+  px = worldCoord(best.x); py = worldCoord(best.y); a = best.a; pitch = 0;
   say(`Outside ${word}. ${openAt(best.sh, tod) ? 'Walk up and press E.' : `Closed, opens at ${best.sh.hours[0]}:00.`}`, 5);
 }
 { const w = new URLSearchParams(location.search).get('goto'); if (w) gotoShop(w.toUpperCase()); }

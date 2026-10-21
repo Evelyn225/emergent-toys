@@ -56,12 +56,12 @@ const pickBy = (seed, a) => a[(seed * 4813 | 0) % a.length];
 // Two bridges cross it. Streets are segments between intersections and some are left out, so blocks can merge
 // into superblocks (the big park, industrial yards); every intersection keeps 0 or at least 2 streets, so there
 // are no dead ends.
-const SHORE_N = 0, SHORE_S = 25, BRIDGE_X = [9, 22];
-const EL_ROW = 13; // the elevated train runs above H(., EL_ROW), all the way round
+let SHORE_N = 0, SHORE_S = 25, BRIDGE_X = [9, 22];
+let EL_ROW = 13; // the elevated train runs above H(., EL_ROW), all the way round
 const GRAND_HOTEL = { bx: 6, by: 7, doorU: 6 * 8 + 5 };
-const relB = v => mod(v + NB / 2, NB) - NB / 2; // nearest copy, in blocks
-const bi = (bx, by) => (by & (NB - 1)) * NB + (bx & (NB - 1));
-const idx = (x, y) => (y & (N - 1)) * N + (x & (N - 1));
+const relB = v => worldReady ? v : mod(v + NB / 2, NB) - NB / 2;
+const bi = (bx, by) => worldReady ? (bx >= 0 && by >= 0 && bx < NB && by < NB ? by * NB + bx : NB * NB) : (by & (NB - 1)) * NB + (bx & (NB - 1));
+const idx = (x, y) => worldReady ? (inWorldGrid(x, y) ? Math.floor(y) * N + Math.floor(x) : N * N) : (y & (N - 1)) * N + (x & (N - 1));
 
 // districts: small neighbourhoods (~5 blocks across, a few minutes' walk) from a jittered grid of seeds, nearest seed
 // wins (wrapping east-west), with wobbly borders. Downtown sits round the middle of town, industry along the shores,
@@ -90,7 +90,7 @@ DIST_SEEDS[7][2] = 'belle';
   for (const s of DIST_SEEDS) if (s[2] === 'midtown') { const d = Math.hypot(relB(s[0] - NB / 2), s[1] - (SHORE_S + SHORE_N) / 2 - 5); if (d < bd) { bd = d; best = s; } }
   best[2] = 'shotengai';
 }
-const DIST = new Array(NB * NB), DIST_OWNER = new Int16Array(NB * NB).fill(-1); // (which seed each block belongs to)
+let DIST = new Array(NB * NB), DIST_OWNER = new Int16Array(NB * NB).fill(-1); // (which seed each block belongs to)
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   if (by === SHORE_N || by === SHORE_S) { DIST[bi(bx, by)] = 'waterfront'; continue; }
   if (by > SHORE_S) { DIST[bi(bx, by)] = 'sea'; continue; }
@@ -112,7 +112,7 @@ const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'C
 const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8));
 
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea
-const KIND = new Array(NB * NB).fill('');
+let KIND = new Array(NB * NB).fill('');
 // superblocks: [x0, y0, x1, y1, kind] - the streets inside are removed
 const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 'yard'], [15, 14, 16, 14, 'plaza'], [7, 10, 9, 11, 'gardens']];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
@@ -131,7 +131,7 @@ const blockKind = (bx, by) => KIND[bi(bx, by)];
 
 // street segments. H(bx, by): the street along the north side of block (bx, by), between intersections (bx, by) and
 // (bx+1, by). V(bx, by): the street along its west side, between intersections (bx, by) and (bx, by+1).
-const HSEG = new Uint8Array(NB * NB), VSEG = new Uint8Array(NB * NB);
+let HSEG = new Uint8Array(NB * NB), VSEG = new Uint8Array(NB * NB);
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   HSEG[bi(bx, by)] = by > SHORE_N && by <= SHORE_S ? 1 : 0; // the shore roads are H(., SHORE_N+1) and H(., SHORE_S)
   VSEG[bi(bx, by)] = by > SHORE_N && by < SHORE_S ? 1 : 0; // nothing crosses the waterfront promenades...
@@ -145,7 +145,7 @@ const hseg = (bx, by) => HSEG[bi(bx, by)], vseg = (bx, by) => VSEG[bi(bx, by)];
 // streets leaving intersection (bx, by) heading (dx, dy)
 const exitOK = (bx, by, dx, dy) => dx > 0 ? hseg(bx, by) : dx < 0 ? hseg(bx - 1, by) : dy > 0 ? vseg(bx, by) : vseg(bx, by - 1);
 const degree = (bx, by) => hseg(bx, by) + hseg(bx - 1, by) + vseg(bx, by) + vseg(bx, by - 1);
-const onBridge = (bx, by) => BRIDGE_X.includes(bx & (NB - 1)) && (by & (NB - 1)) >= SHORE_S;
+const onBridge = (bx, by) => worldReady ? BRIDGE_X.includes(bx)&&by>=21&&by<27 : BRIDGE_X.includes(bx & (NB - 1)) && (by & (NB - 1)) >= SHORE_S;
 // A city that grew rather than one laid out with a ruler: the avenues (every 6th street each way, the shore roads,
 // the el street, the bridges) run straight through, but side streets come and go. The old districts have the
 // staggered T-junctions of streets that never lined up; industry swallows streets into yards; midtown loses the odd
@@ -186,7 +186,7 @@ function streetProblems() { // for the tests: every intersection has no streets 
 }
 
 // ROAD: what kind of street a cell is. 0 not a street, 1 north-south street, 2 east-west street, 3 intersection
-const ROAD = new Uint8Array(N * N);
+let ROAD = new Uint8Array(N * N);
 for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
   const lx = x & 7, ly = y & 7, bx = x >> 3, by = y >> 3;
   ROAD[y * N + x] = lx < 2 && ly < 2 ? (degree(bx, by) ? 3 : 0) : lx < 2 ? (vseg(bx, by) ? 1 : 0) : ly < 2 ? (hseg(bx, by) ? 2 : 0) : 0;
@@ -194,22 +194,22 @@ for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
 
 // the coast: a wavy shoreline inside each waterfront row (periodic, so it meets itself across the wrap)
 const TAU = Math.PI * 2;
-const wave = (x, k) => 0.8 * Math.sin(TAU * x / N * 3 + k) + 0.5 * Math.sin(TAU * x / N * 11 + 2 * k) + 0.3 * Math.sin(TAU * x / N * 23 + 3 * k);
-const shoreS = x => SHORE_S * 8 + 4.6 + wave(x, 1); // land is north of this line in the south waterfront
-const shoreN = x => SHORE_N * 8 + 3.4 + wave(x, 4); // and south of this one in the north waterfront
+const wave = (x, k) => 0.8 * Math.sin(TAU * x / CITY_SOURCE_N * 3 + k) + 0.5 * Math.sin(TAU * x / CITY_SOURCE_N * 11 + 2 * k) + 0.3 * Math.sin(TAU * x / CITY_SOURCE_N * 23 + 3 * k);
+const shoreS = x => SHORE_S * 8 + 4.6 + wave(x - (worldReady ? CITY_LAYOUT.cityX : 0), 1);
+const shoreN = x => SHORE_N * 8 + 3.4 + wave(x - (worldReady ? CITY_LAYOUT.cityX : 0), 4);
 // lighthouse island: a small rocky island out in the bay off the foot of Broadway, its lighthouse on the far side,
 // reached by a long footbridge from the waterfront promenade. The coast wobbles (isleR), so it isn't a circle.
-const ISLE_BX = 16, ISLE = { x: ISLE_BX * 8 + 5, y: SHORE_S * 8 + 33, r: 5 };
+let ISLE_BX = 16, ISLE = { x: ISLE_BX * 8 + 5, y: SHORE_S * 8 + 33, r: 5 };
 const LIGHTHOUSE = { x: ISLE.x + 1.2, y: ISLE.y + 2.2, r: 0.26 };
 const FOOTBRIDGE = { x: ISLE.x, hw: 0.16, y0: SHORE_S * 8 + 2.6, y1: ISLE.y - 2.5 }; // a deck 3m wide, running south
 const isleR = th => ISLE.r * (1 + 0.16 * Math.sin(3 * th + 1) + 0.08 * Math.sin(5 * th + 2) + 0.05 * Math.sin(9 * th));
 function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cells; negative out at sea
   const ex = rel(x - ISLE.x), ey = rel(y - ISLE.y);
-  if (Math.abs(ex) > ISLE.r * 1.5 || Math.abs(ey) > ISLE.r * 1.5) return -ISLE.r;
+  if (!worldReady && (Math.abs(ex) > ISLE.r * 1.5 || Math.abs(ey) > ISLE.r * 1.5)) return -ISLE.r;
   return isleR(Math.atan2(ey, ex)) - Math.hypot(ex, ey);
 }
 const onIsland = (x, y) => isleEdge(x, y) > 0;
-const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
+const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && worldCoord(y) > FOOTBRIDGE.y0 && worldCoord(y) < FOOTBRIDGE.y1;
 // ---- the airport: Glyphport International, on reclaimed land out in the bay west of the first bridge, joined to the
 // promenade by a causeway you can walk or drive. North to south: the landside road where the causeway comes in, the
 // hangars (west), the terminal and the control tower and two helipads (east); the apron in front of them, the taxiway,
@@ -232,14 +232,14 @@ const AIRPORT_BLDG = [
 // the shore wobbles a little, so it reads as made ground, not a box
 function airportEdge(x, y) {
   const ex = rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2), ey = rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2), hx = (AIRPORT.x1 - AIRPORT.x0) / 2, hy = (AIRPORT.y1 - AIRPORT.y0) / 2;
-  if (Math.abs(ex) > hx + 3 || Math.abs(ey) > hy + 3) return -3;
+  if (!worldReady && (Math.abs(ex) > hx + 3 || Math.abs(ey) > hy + 3)) return -3;
   const R = 2.5, qx = Math.abs(ex) - hx + R, qy = Math.abs(ey) - hy + R;
   const box = Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - R; // (a rounded rectangle's signed distance)
   return -box + 0.25 * Math.sin(x * 1.3) * Math.sin(y * 0.9 + 1);
 }
 const onAirport = (x, y) => airportEdge(x, y) > 0;
-const onCauseway = (x, y) => Math.abs(rel(x - CAUSEWAY.x)) < CAUSEWAY.hw && mod(y, N) > CAUSEWAY.y0 && mod(y, N) < CAUSEWAY.y1;
-const onRunway = (x, y) => Math.abs(rel(y - RUNWAY.y)) < RUNWAY.hw && mod(x, N) > RUNWAY.x0 && mod(x, N) < RUNWAY.x1;
+const onCauseway = (x, y) => Math.abs(rel(x - CAUSEWAY.x)) < CAUSEWAY.hw && worldCoord(y) > CAUSEWAY.y0 && worldCoord(y) < CAUSEWAY.y1 || worldReady && x > AIRPORT.x1 - 2 && x < CAUSEWAY.x + CAUSEWAY.hw && Math.abs(y - (AIRPORT.y0 + 1)) < CAUSEWAY.hw;
+const onRunway = (x, y) => Math.abs(rel(y - RUNWAY.y)) < RUNWAY.hw && worldCoord(x) > RUNWAY.x0 && worldCoord(x) < RUNWAY.x1;
 // The hangars are Nissen-style: an arched roof springing from the ground along both long sides (a slice of a cylinder
 // lying front to back), a flat wall at the back, and at the front (the apron side, +y) a wall with a wide opening whose
 // top follows the arch down to the shoulders, under a straight lintel. Inside is a floor you walk and taxi across.
@@ -296,7 +296,7 @@ const airportIndoors = (x, y, z) => !!airportBldgAt(x, y) && z < airportHeight(x
 // the Sunset Pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
 // docks or a bridge. Game booths and a prize stall down its sides, a carousel in the middle, the Ferris wheel out at
 // the end (its wheel stands across the pier, east-west, so you see it face on from the promenade).
-const FAIR_BX = (() => { for (let bx = ISLE_BX + 3; ; bx++) if (!BRIDGE_X.includes(bx) && districtOf(bx, SHORE_S - 1) !== 'industrial') return bx; })();
+let FAIR_BX = (() => { for (let bx = ISLE_BX + 3; ; bx++) if (!BRIDGE_X.includes(bx) && districtOf(bx, SHORE_S - 1) !== 'industrial') return bx; })();
 const FAIR = { x0: FAIR_BX * 8 + 2.2, x1: FAIR_BX * 8 + 7.8, y0: SHORE_S * 8 + 3, y1: SHORE_S * 8 + 17 };
 FAIR.cx = (FAIR.x0 + FAIR.x1) / 2;
 const WHEEL = { x: FAIR.cx, y: FAIR.y1 - 2.6, R: 1.9, hub: 2.2, n: 12, rev: 60 }; // 19m radius, 42m to the top, once round a minute
@@ -313,7 +313,7 @@ const PIERS = [[FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1]];
 // the marina, on the industrial shore west of the island: a jetty straight out from the promenade, two long finger
 // piers across it and a T at the end. Boats lie in the slips along the fingers (boats.js says whose they are), and
 // the marina office stands on the promenade at the foot of the jetty
-const MARINA_BX = 13, MARINA = { x: MARINA_BX * 8 + 4, y0: SHORE_S * 8 + 3, fingers: [SHORE_S * 8 + 7, SHORE_S * 8 + 10], end: SHORE_S * 8 + 12.6, reach: 3.3 };
+let MARINA_BX = 13, MARINA = { x: MARINA_BX * 8 + 4, y0: SHORE_S * 8 + 3, fingers: [SHORE_S * 8 + 7, SHORE_S * 8 + 10], end: SHORE_S * 8 + 12.6, reach: 3.3 };
 MARINA.office = { x: MARINA.x - 2.2, y: SHORE_S * 8 + 3.55 };
 for (const p of [[MARINA.x - 0.2, MARINA.y0, MARINA.x + 0.2, MARINA.end], [MARINA.x - 1, MARINA.end - 0.3, MARINA.x + 1, MARINA.end],
   ...MARINA.fingers.map(fy => [MARINA.x - MARINA.reach, fy - 0.15, MARINA.x + MARINA.reach, fy + 0.15])]) PIERS.push(Object.assign(p, { marina: true }));
@@ -325,14 +325,14 @@ for (let bx = 0; bx < NB; bx++) {
   else if (hash(bx, 5, 43) < 0.35 && bx !== FAIR_BX) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
   if (hash(bx, 6, 43) < 0.25) PIERS.push([bx * 8 + 4.6, N + SHORE_N * 8 - 9, bx * 8 + 5.4, N + SHORE_N * 8 + 5]);
 }
-const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y) || onCauseway(x, y);
-const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy) && !onAirport(wx, wy); };
+const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => worldReady ? x >= x0 && x < x1 && y >= y0 && y < y1 : worldCoord(x - x0) < x1 - x0 && worldCoord(y - y0) < y1 - y0) || onFootbridge(x, y) || onCauseway(x, y);
+const seaAt = (wx, wy) => { if (worldReady) return archipelagoEdge(wx,wy) <= 0; const y = worldCoord(wy); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy) && !onAirport(wx, wy); };
 // ---- the Botanical Gardens: a walled garden over three blocks by two (the streets inside it are gone). In garden
 // coordinates gx, gy (cells from its north-west inside corner): a lake to the east with a jetty for the swan boats,
 // the glass conservatory to the north-west, the aviary to the south-west, enclosures, winding gravel paths between.
 const GARDEN = { x0: 7 * 8 + 2, y0: 10 * 8 + 2, w: 22, h: 14 };
-const gardenLocal = (x, y) => [mod(x, N) - GARDEN.x0, mod(y, N) - GARDEN.y0];
-const inGardens = (x, y) => { const gx = mod(x, N) - GARDEN.x0, gy = mod(y, N) - GARDEN.y0; return gx >= 0 && gy >= 0 && gx < GARDEN.w && gy < GARDEN.h; };
+const gardenLocal = (x, y) => [worldCoord(x) - GARDEN.x0, worldCoord(y) - GARDEN.y0];
+const inGardens = (x, y) => { const gx = worldCoord(x) - GARDEN.x0, gy = worldCoord(y) - GARDEN.y0; return gx >= 0 && gy >= 0 && gx < GARDEN.w && gy < GARDEN.h; };
 const LAKE = { x: 15, y: 8.2, rx: 4.6, ry: 3.4 };
 function gardenLakeEdge(gx, gy) { // how far inside the lake's shore (gx, gy) is (cells, roughly); negative on land
   const ex = (gx - LAKE.x) / LAKE.rx, ey = (gy - LAKE.y) / LAKE.ry, ang = Math.atan2(ey, ex);
@@ -370,7 +370,7 @@ const isWater = (wx, wy) => seaAt(wx, wy) && !(ROAD[idx(Math.floor(wx), Math.flo
 // ---- buildings: N x N cell heights (1 = 10m), facade style, per-lot seed and shop
 // STY 0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 chinatown shophouse;
 // 3-6 are landmarks and construction (clock tower, cathedral, video-screen tower, steel frame)
-const map = new Float32Array(N * N), STY = new Uint8Array(N * N), SEED = new Float32Array(N * N), SHOP = new Array(N * N);
+let map = new Float32Array(N * N), STY = new Uint8Array(N * N), SEED = new Float32Array(N * N), SHOP = new Array(N * N);
 const LANDMARK_TYPES = ['clock', 'cathedral', 'screens', 'radio'], landmarkOf = new Map();
 for (let by = 0, n = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++)
   if (blockKind(bx, by) === 'landmark') landmarkOf.set(bi(bx, by), LANDMARK_TYPES[n++ % 4]);
@@ -537,7 +537,7 @@ for (const gh of GLASSHOUSES) {
 // middle of each island, from ix0 to ix1, its pump at pumpX
 const GAS = { lanes: [0.42, 1.02, 1.62], islands: [0.72, 1.32], ix0: 1.1, ix1: 1.9, pumpX: 1.5, slotX: 1.37, h: 0.38 };
 const GAS_BRANDS = [['GLYPHCO', RED], ['APEX', BLUE], ['NOVA', GREEN], ['SUNSTOP', YEL], ['ROCKET', ORANGE], ['METRO', CYAN]];
-const GAS_STATIONS = [], GAS_CELL = new Uint8Array(N * N); // (1: forecourt, 2: the shop)
+let GAS_STATIONS = [], GAS_CELL = new Uint8Array(N * N); // (1: forecourt, 2: the shop)
 {
   const taken = new Set([...SERVICES, GRAND_HOTEL, AQUARIUM, CASINO, EXCHANGE, MUSEUM, CLUB].map(b => bi(b.bx, b.by))), cand = [];
   for (let by = SHORE_N + 2; by < SHORE_S - 1; by++) for (let bx = 0; bx < NB; bx++) {
@@ -563,12 +563,12 @@ const GAS_STATIONS = [], GAS_CELL = new Uint8Array(N * N); // (1: forecourt, 2: 
   }
 }
 const onForecourt = (x, y) => GAS_CELL[idx(Math.floor(x), Math.floor(y))] === 1;
-const gasStationAt = (x, y) => GAS_STATIONS.find(s => s.bx === (Math.floor(x / 8) & (NB - 1)) && s.by === (Math.floor(y / 8) & (NB - 1)));
+const gasStationAt = (x, y) => GAS_STATIONS.find(s => s.bx === worldBlock(Math.floor(x / 8)) && s.by === worldBlock(Math.floor(y / 8)));
 
 // Belle Époque: preserve flat roofs with public access. Other buildings have recessed courts / clipped wings
 // and a real mansard above the masonry. A lot's material and vines are stable across all its faces.
 const BELLE_BUILDINGS = [];
-const BELLE_ROOF_CELLS = new Array(N * N);
+let BELLE_ROOF_CELLS = new Array(N * N);
 {
   const lots = new Map();
   for (let i = 0; i < map.length; i++) if (map[i] && STY[i] === 24) {
@@ -611,10 +611,10 @@ function buildingMiddle(mx, my) { // the cell of (mx, my)'s building nearest its
 }
 // ---- street names, for talk, directions and the HUD
 const ord = n => n + ((n % 100 / 10 | 0) === 1 ? 'TH' : [, 'ST', 'ND', 'RD'][n % 10] || 'TH');
-const ST_NAMES = ['', 'BAYSIDE DR', 'KING ST', 'CANAL ST', 'MERCER ST', '5TH ST', 'GRAND ST', 'MOTT ST', 'HOUSTON ST', '9TH ST',
+let ST_NAMES = ['', 'BAYSIDE DR', 'KING ST', 'CANAL ST', 'MERCER ST', '5TH ST', 'GRAND ST', 'MOTT ST', 'HOUSTON ST', '9TH ST',
   'BLEECKER ST', 'SPRING ST', '12TH ST', 'BROOME ST', '14TH ST', 'WATER ST', 'PEARL ST', '17TH ST', 'HUDSON ST', 'BANK ST',
   '20TH ST', 'FRONT ST', 'DOCK ST', '23RD ST', 'HARBOR ST', 'WATERFRONT DR'];
-const AVE_NAMES = Array.from({ length: NB }, (_, bx) => bx === 16 ? 'BROADWAY' : ord(bx < 16 ? bx + 1 : bx) + ' AVE');
+let AVE_NAMES = Array.from({ length: NB }, (_, bx) => bx === 16 ? 'BROADWAY' : ord(bx < 16 ? bx + 1 : bx) + ' AVE');
 const BRIDGE_NAMES = { 9: 'IRON BRIDGE', 22: 'HARBOR BRIDGE' };
 function streetName(wx, wy) { // '' when not on a street
   const x = Math.floor(wx), y = Math.floor(wy), r = ROAD[idx(x, y)], bx = (x >> 3) & (NB - 1), by = (y >> 3) & (NB - 1);

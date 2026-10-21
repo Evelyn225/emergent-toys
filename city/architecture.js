@@ -29,7 +29,7 @@ function towerComposition(b) {
 function architectureFaces(b, cells, faceIndex = ARCH_FACES) {
   const faces = new Map();
   for (const k of cells) {
-    const x = b.x0 + mod(k % N - b.x0, N), y = b.y0 + mod(Math.floor(k / N) - b.y0, N), height = map[k];
+    const x = b.x0 + worldCoord(k % N - b.x0), y = b.y0 + worldCoord(Math.floor(k / N) - b.y0), height = map[k];
     for (let dir = 0; dir < 4; dir++) {
       const [nx, ny] = ARCH_DIRECTIONS[dir], low = map[idx(x + nx, y + ny)];
       if (low >= height) continue;
@@ -172,9 +172,9 @@ function architectureCellMask(items, pad) {
   }
   return mask;
 }
-const architectureStepCells = architectureCellMask(ARCH_STEPS, 0);
-const architectureWalkCells = architectureCellMask(ARCH_BLOCKERS.filter(o => o.kind !== 'step'), 0.03);
-const architectureCarCells = architectureCellMask(ARCH_BLOCKERS, 0.4);
+let architectureStepCells = architectureCellMask(ARCH_STEPS, 0);
+let architectureWalkCells = architectureCellMask(ARCH_BLOCKERS.filter(o => o.kind !== 'step'), 0.03);
+let architectureCarCells = architectureCellMask(ARCH_BLOCKERS, 0.4);
 function architectureRoofHeight(x, y) {
   const k = idx(Math.floor(x), Math.floor(y)), b = SHOP[k]?.architecture, c = b?.crown;
   if (!c || map[k] !== Math.fround(c.z0)) return 0;

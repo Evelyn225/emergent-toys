@@ -16,7 +16,7 @@ const PLANE_TYPES = {
 };
 const aircraft = []; // { id, type, x, y, z, yaw, pitch, roll, v, state, ... }
 let aircraftId = 0;
-const STAND_Y = APRON.y0 + 1.75; // an airliner at its gate: nose to the terminal
+let STAND_Y = APRON.y0 + 1.75; // an airliner at its gate: nose to the terminal
 function addAircraft(type, x, y, yaw, extra) {
   const a = { id: aircraftId++, type, x, y, z: 0, yaw, pitch: 0, roll: 0, v: 0, state: 'parked', dmg: 0, ...extra };
   if (a.forSale) a.home = { x, y, yaw }; // (the airport's own: whoever takes it, it finds its way back here)
@@ -68,13 +68,13 @@ function stepAirliner(a, dt) {
     a.yaw += clamp(mod(want - a.yaw + Math.PI, TAU) - Math.PI, -0.6 * dt, 0.6 * dt);
     a.v += clamp((back ? PUSH_V : TAXI_V) - a.v, -0.5 * dt, 0.3 * dt);
     const step = Math.min(d, a.v * dt);
-    a.x = mod(a.x + vx / (d || 1) * step, N); a.y = mod(a.y + vy / (d || 1) * step, N);
+    a.x = worldCoord(a.x + vx / (d || 1) * step); a.y = worldCoord(a.y + vy / (d || 1) * step);
     if (d < 0.05) { a.path.shift(); a.state = 'taxi'; if (!a.path.length) { a.state = a.parkAt != null ? 'parked' : 'roll'; if (a.parkAt != null) { a.gate = a.parkAt; a.parkAt = null; a.v = 0; a.yaw = -Math.PI / 2; } } }
     return;
   }
   if (a.state === 'roll') { // full power down the runway, nose up at rotation speed
     a.yaw = 0; a.y += (RUNWAY.y - a.y) * Math.min(1, dt * 2);
-    a.v += 1.25 * dt; a.x = mod(a.x + a.v * dt, N);
+    a.v += 1.25 * dt; a.x = worldCoord(a.x + a.v * dt);
     if (a.v >= T_.vr) a.state = 'climb';
     return;
   }
@@ -82,21 +82,21 @@ function stepAirliner(a, dt) {
     a.v = Math.min(T_.cruise, a.v + 0.5 * dt); a.pitch += (0.14 - a.pitch) * Math.min(1, dt * 1.5);
     const turn = a.z > 3 ? 0.06 : 0;
     a.yaw += turn * dt; a.roll += (turn * 4 - a.roll) * Math.min(1, dt);
-    a.x = mod(a.x + Math.cos(a.yaw) * a.v * dt, N); a.y = mod(a.y + Math.sin(a.yaw) * a.v * dt, N); a.z += Math.sin(a.pitch) * a.v * dt;
+    a.x = worldCoord(a.x + Math.cos(a.yaw) * a.v * dt); a.y = worldCoord(a.y + Math.sin(a.yaw) * a.v * dt); a.z += Math.sin(a.pitch) * a.v * dt;
     if (a.z > 14) aircraft.splice(aircraft.indexOf(a), 1); // (gone, high over the bay)
     return;
   }
   if (a.state === 'approach') { // on the glide slope, flaring just before the marks
     const toGo = rel(RUNWAY.x0 + 6 - a.x);
-    a.x = mod(a.x + a.v * dt, N); a.yaw = 0;
+    a.x = worldCoord(a.x + a.v * dt); a.yaw = 0;
     a.z = Math.max(0, toGo * GLIDE_SLOPE + (toGo < 2 ? 0.02 * toGo : 0));
     a.pitch = toGo < 3 ? 0.08 : 0.03;
     if (toGo <= 0) { a.z = 0; a.pitch = 0; a.state = 'rollout'; }
     return;
   }
   if (a.state === 'rollout') { // brakes and reversers, off at the east end, back along the taxiway to the gate
-    a.v = Math.max(TAXI_V, a.v - 1.6 * dt); a.x = mod(a.x + a.v * dt, N);
-    if (mod(a.x, N) >= TAXIWAY.x1 - 1) {
+    a.v = Math.max(TAXI_V, a.v - 1.6 * dt); a.x = worldCoord(a.x + a.v * dt);
+    if (worldCoord(a.x) >= TAXIWAY.x1 - 1) {
       const sx = STANDS_X[a.target];
       a.state = 'taxi'; a.parkAt = a.target; a.target = null;
       a.path = [[TAXIWAY.x1, RUNWAY.y - 0.8], [TAXIWAY.x1, TAXIWAY.y + 0.8], [TAXIWAY.x1 - 1, TAXIWAY.y], [sx + 1.2, TAXIWAY.y], [sx, TAXIWAY.y - 1], [sx, STAND_Y]];
@@ -138,7 +138,7 @@ const stallSpeed = T_ => T_.vr * 0.85;
 // the top of whatever's built at (x, y), from the ground up: a building's roof, the el's deck, the airport's
 // buildings, a bridge tower; 0 on the ground. Given the height z something's at, a hangar it's inside is just its floor
 function builtHeight(x, y, z = Infinity) {
-  let h = Math.max(policeRoofHeight(x, y), airportHeight(x, y, z));
+  let h = Math.max(map[idx(Math.floor(x),Math.floor(y))] || 0, terrainHeight(x, y), islandRoofHeight(x,y), roadBridgeBuiltHeight(x,y,z), policeRoofHeight(x, y), airportHeight(x, y, z));
   for (const t of towers) if (Math.abs(rel(x - t.x)) < 0.4 && Math.abs(rel(y - t.y)) < 0.25) h = Math.max(h, TOWER_H);
   return h;
 }
@@ -197,7 +197,7 @@ const craftBlocked = (x, y) => airportBlocked(x, y) || airportBldgAt(x, y)?.kind
 // move it, and what it meets: the ground (a landing, or not), a building (on top: a landing; its side: a crash), the water
 function moveCraft(a, T_, vx, vy, dt, ev) {
   if (a.vz > 0 && T_.ceil) a.vz *= clamp((T_.ceil - a.z) / 2, 0, 1); // near its ceiling the climb fades away to nothing
-  const nx = mod(a.x + vx * dt, N), ny = mod(a.y + vy * dt, N), h = builtHeight(nx, ny, a.z), speed = Math.hypot(vx, vy);
+  const nx = worldCoord(a.x + vx * dt), ny = worldCoord(a.y + vy * dt), h = builtHeight(nx, ny, a.z), speed = Math.hypot(vx, vy);
   let nz = a.z + a.vz * dt;
   if (a.ground) { // rolling or sitting: into a wall, a building, another aircraft, the water?
     const nose = (T_.heli ? 0.25 : T_.len / 2) * (!T_.heli && a.v < 0 ? -1 : 1), fx = nx + Math.cos(a.yaw) * nose, fy = ny + Math.sin(a.yaw) * nose; // (backing up: its tail)
@@ -206,7 +206,7 @@ function moveCraft(a, T_, vx, vy, dt, ev) {
       a.v = 0; a.hvx = a.hvy = 0; ev.push('bump'); return ev;
     }
     if (overWater(nx, ny)) return ditchCraft(a, ev);
-    a.x = nx; a.y = ny; a.z = Math.max(h, nz); return ev;
+    a.x = nx; a.y = ny; a.z = h; return ev;
   }
   const top = builtHeight(nx, ny); // (what's there, all of it: in a hangar, its roof overhead)
   if (h < top && nz > top - 0.05) { nz = top - 0.05; a.vz = Math.min(0, a.vz); } // inside a hangar: the roof stops you
@@ -240,7 +240,7 @@ function stepCraftFalls(dt) {
     if (!a.falling) continue;
     a.vz -= G * dt; a.z += a.vz * dt;
     a.pitch = Math.max(-1.1, a.pitch - 0.8 * dt); a.roll += a.spin * dt;
-    const bx = mod(a.x - Math.cos(a.yaw) * 0.25 * dt, N), by = mod(a.y - Math.sin(a.yaw) * 0.25 * dt, N);
+    const bx = worldCoord(a.x - Math.cos(a.yaw) * 0.25 * dt), by = worldCoord(a.y - Math.sin(a.yaw) * 0.25 * dt);
     if (!craftBlocked(bx, by) && builtHeight(bx, by, a.z) <= a.z) { a.x = bx; a.y = by; }
     const below = Math.max(0, builtHeight(a.x, a.y, a.z));
     if (a.z > below) continue;
@@ -290,10 +290,12 @@ function stepFleet(px_, py_, flying) {
   return back;
 }
 // the save: which of the fleet are yours, and where they are
-// (one that's up in the air when you leave is waiting on its stand when you come back)
+// Live journeys retain their airborne position; the older coastal format recovers to a stand.
 const savedPlanes = () => aircraft.filter(a => a.owned).map(a => {
-  const up = a.state === 'flown' && !a.ground, at = up ? a.home : a;
-  return { id: a.id, type: a.type, x: at.x, y: at.y, yaw: at.yaw, dmg: a.dmg || 0, lost: !!(a.wrecked || a.ditched || a.fireT != null) };
+  const up = a.state === 'flown' && !a.ground, resume = worldReady && up;
+  const at = up && !resume ? a.home : a;
+  return { id: a.id, type: a.type, x: at.x, y: at.y, yaw: at.yaw, dmg: a.dmg || 0, lost: !!(a.wrecked || a.ditched || a.fireT != null),
+    ...(resume ? {flight:{z:a.z,v:a.v,pitch:a.pitch,roll:a.roll,throttle:a.throttle,hvx:a.hvx||0,hvy:a.hvy||0}} : {}) };
 });
 function loadPlanes(list) {
   for (const p of list || []) {
@@ -301,7 +303,14 @@ function loadPlanes(list) {
     if (!a) continue;
     a.owned = true; a.forSale = false;
     if (p.lost) { returnHome(a); a.owed = true; continue; } // (the insurance has it: the excess is due when you next fly)
-    if (![p.x, p.y, p.yaw].every(Number.isFinite) || overWater(p.x, p.y)) continue;
-    a.x = mod(p.x, N); a.y = mod(p.y, N); a.yaw = p.yaw; a.z = builtHeight(a.x, a.y, 0); a.dmg = clamp(p.dmg || 0, 0, DMG_FIRE - 1);
+    if (![p.x, p.y, p.yaw].every(Number.isFinite)) continue;
+    const flight=worldReady&&p.flight;
+    const airborne=flight&&[flight.z,flight.v,flight.pitch,flight.roll,flight.throttle].every(Number.isFinite)&&
+      flight.z>builtHeight(p.x,p.y)+.05&&flight.z<100&&flight.v>=0&&flight.v<PLANE_TYPES[a.type].top*1.4;
+    if (!airborne&&overWater(p.x, p.y)) continue;
+    a.x = worldCoord(p.x); a.y = worldCoord(p.y); a.yaw = p.yaw; a.z = builtHeight(a.x, a.y, 0); a.dmg = clamp(p.dmg || 0, 0, DMG_FIRE - 1);
+    Object.assign(a,{ground:true,v:0,vz:0,throttle:0});
+    if(airborne)Object.assign(a,{z:flight.z,v:flight.v,pitch:clamp(flight.pitch,-1,1),roll:clamp(flight.roll,-1,1),throttle:clamp(flight.throttle,0,1),ground:false});
+    if(airborne&&PLANE_TYPES[a.type].heli)Object.assign(a,{rotor:1,hvx:clamp(+flight.hvx||0,-6,6),hvy:clamp(+flight.hvy||0,-6,6)});
   }
 }

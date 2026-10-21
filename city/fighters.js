@@ -20,7 +20,7 @@ function stepFighters(c, dt, rnd = Math.random) {
   if (hunted(c) && !c.ground && c.z > 0.8) scramble += dt; else if (!fighters.length) scramble = Math.max(0, scramble - dt * 0.5);
   if (!fighters.length && scramble > SCRAMBLE_T && hunted(c)) { // two of them, in from far off, side by side
     const k = rnd() * TAU;
-    for (const wing of [-1, 1]) fighters.push({ id: 900 + fighters.length, x: mod(c.x + Math.cos(k) * 45 - Math.sin(k) * wing * 1.5, N), y: mod(c.y + Math.sin(k) * 45 + Math.cos(k) * wing * 1.5, N),
+    for (const wing of [-1, 1]) fighters.push({ id: 900 + fighters.length, x: worldCoord(c.x + Math.cos(k) * 45 - Math.sin(k) * wing * 1.5), y: worldCoord(c.y + Math.sin(k) * 45 + Math.cos(k) * wing * 1.5),
       z: Math.max(c.z, 6), yaw: k + Math.PI, pitch: 0, roll: 0, v: FIGHTER_T.top, wing, cool: 2 + rnd() * 2, sixed: false });
     fighterHunt = 0; fighterCalm = 0; ev.push('scramble'); newsEvent('scramble', c.x, c.y); // (that makes the papers)
   }
@@ -72,7 +72,7 @@ function stepFighters(c, dt, rnd = Math.random) {
     const ahead = fighterFloor(f.x + Math.cos(f.yaw) * f.v * 0.8, f.y + Math.sin(f.yaw) * f.v * 0.8), floor = Math.max(fighterFloor(f.x, f.y), ahead);
     const vz = clamp((Math.max(wantZ, floor) - f.z) * 1.5, -3, 4);
     f.pitch += (Math.atan2(vz, f.v) - f.pitch) * Math.min(1, 3 * dt);
-    f.x = mod(f.x + Math.cos(f.yaw) * f.v * dt, N); f.y = mod(f.y + Math.sin(f.yaw) * f.v * dt, N); f.z = Math.max(floor, f.z + vz * dt);
+    f.x = worldCoord(f.x + Math.cos(f.yaw) * f.v * dt); f.y = worldCoord(f.y + Math.sin(f.yaw) * f.v * dt); f.z = Math.max(floor, f.z + vz * dt);
   }
   if (!fighters.length) { delete fighters.leaving; scramble = 0; ev.push('gone'); }
   return ev;

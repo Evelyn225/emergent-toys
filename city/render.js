@@ -143,6 +143,7 @@ function render(dt) {
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
     if (mode === 'walk') eye += walkGround(px, py);
+    if (mode === 'drive' || mode === 'taxi') eye += Math.max(roadGroundHeight(px, py), me ? roadGroundHeight(me.x, me.y) : 0);
   }
   tf = Math.tan(FOV / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
@@ -162,6 +163,10 @@ function render(dt) {
       const yc = py + rel(EL_Y + 1 - py), y0 = yc - EL_HALF, y1 = yc + EL_HALF;
       if (Math.abs(ry) < 1e-9) { if (py > y0 && py < y1) { te = 0; tx = Infinity; } }
       else { const a0 = (y0 - py) / ry, a1 = (y1 - py) / ry; tx = Math.max(a0, a1); te = tx > 0 ? Math.max(0, Math.min(a0, a1)) : Infinity; }
+      if(worldReady) {
+        if(Math.abs(rx)<1e-9) {if(px<140||px>352)te=Infinity;}
+        else {const a0=(140-px)/rx,a1=(352-px)/rx;te=Math.max(te,Math.min(a0,a1),0);tx=Math.min(tx,Math.max(a0,a1));if(tx<=te)te=Infinity;}
+      }
     }
     let deckDue = te < vis;
     BASE[x] = clamp(hor, 0, rows);
@@ -170,6 +175,7 @@ function render(dt) {
     while (clip > 0) {
       let d, side;
       if (sdx < sdy) { d = sdx; sdx += ddx; mx += sx; side = 0; } else { d = sdy; sdy += ddy; my += sy; side = 1; }
+      if (city && drawTerrainColumn(x, rx, ry, mx - (side === 0 ? sx : 0), my - (side === 1 ? sy : 0), dPrev, d)) holes = true;
       // the cell we just crossed spans dPrev..d; when we're above it (on a roof), draw its top
       if (hCur > 0 && hCur < eye && W.roof) {
         const k = (eye - hCur) * projY, rIn = dPrev > 0 ? Math.ceil(hor + k / dPrev) : rows, rOut = Math.max(0, Math.ceil(hor + k / Math.min(d, vis)));

@@ -35,7 +35,7 @@ function tripDest(c) {
     const d = p && Math.hypot(rel(p[0] - c.x), rel(p[1] - c.y));
     if (p && d > 12 && d < 40) return p;
   }
-  return [mod(c.x + 16, N), c.y];
+  return [worldCoord(c.x + 16), c.y];
 }
 function pickUp(p) {
   p.hailing = false; p.hidden = true; p.talk = 1e9; // in the back seat: stepPeople leaves them be

@@ -118,7 +118,7 @@ function gasFloor(i, r, x, wx, wy, f, L) {
 function gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const st = SHOP[idx(mx, my)].gas, L = fog * amb * (side ? 10 : 15), glow = Math.max(L, 7 + night * 6);
   const front = side && rel(py - my) < 0, s = Math.abs(u - wc) < 1e-6 ? 1 : -1; // (u is wc, or -wc)
-  const a = front ? mod(wc - st.x0, N) : mod(wc - st.y0 - 2, N); // along the face, from its west / north end
+  const a = front ? worldCoord(wc - st.x0) : worldCoord(wc - st.y0 - 2); // along the face, from its west / north end
   BG[i] = bgAt(front ? WHITE : BRICK, day * 2.6 * (0.45 + 0.55 * fog) * (side ? 0.8 : 1), d);
   if (z > h - 0.025) return set(i, '=', C(GRAY, L));
   if (z > 0.29) { // the fascia

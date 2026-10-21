@@ -1,6 +1,8 @@
 {
   "pure": [
     "city/core.js",
+    "city/world-layout.js",
+    "city/world-bridges.js",
     "city/desktop-release.js",
     "city/state.js",
     "city/movement.js",
@@ -8,6 +10,7 @@
     "city/art.js",
     "city/figures.js",
     "city/world.js",
+    "city/islands.js",
     "city/courier-world.js",
     "city/props.js",
     "city/residential.js",
@@ -39,7 +42,8 @@
     "city/contacts.js",
     "city/geography.js",
     "city/save-format.js",
-    "city/navigation.js"
+    "city/navigation.js",
+    "city/terrain.js"
   ],
   "dom": [
     "city/screen.js",
@@ -71,6 +75,8 @@
     "city/grand-hotel.js",
     "city/stripclub.js",
     "city/marina.js",
+    "city/terrain-render.js",
+    "city/world-bridges-render.js",
     "city/render.js",
     "city/drug-vision.js",
     "city/hud.js",
@@ -112,6 +118,9 @@
     "city/contacts-ui.js",
     "city/moves.js",
     "city/skate.js",
+    "city/islands-content.js",
+    "city/islands-render.js",
+    "city/world-bootstrap.js",
     "city/save.js",
     "city/main.js",
     "city/touch.js"

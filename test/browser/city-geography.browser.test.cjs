@@ -15,7 +15,7 @@ async function fixture(run) {
     await page.addInitScript(() => { window.requestAnimationFrame = () => 0; });
     await page.goto(PAGE);
     await page.evaluate(() => {
-      paused = false; mode = 'walk'; room = me = null; px = 41; py = 73; T = 10; tod = 12; money = 5000;
+      paused = false; mode = 'walk'; room = me = null; [px,py] = citySourcePoint(41,73); T = 10; tod = 12; money = 5000;
       env(0); render(0); buy('home_studio');
     });
     await run(page);
@@ -39,7 +39,15 @@ async function legacySave(page) {
     mapWaypoint = { id: `home:${home.cell}`, name: 'Home', x: home.door[0], y: home.door[1] };
     saveGame();
     const data = JSON.parse(localStorage.getItem(SAVE_KEY));
-    data.v = 1; delete data.world; for (const h of data.homes) delete h.placeId;
+    data.v = 1; delete data.world;
+    for (const h of data.homes) {
+      const place=cityPlaceAtCell(h.cell);
+      h.cell=place.legacyCells.find(k=>citySourceCell(k)===h.cell);
+      if(h.door)h.door=cityWorldSourcePoint(...h.door);
+      delete h.placeId;
+    }
+    data.at={x:41,y:73,a:0};
+    data.waypoint.id=`home:${data.homes[0].cell}`;[data.waypoint.x,data.waypoint.y]=cityWorldSourcePoint(data.waypoint.x,data.waypoint.y);
     const text = JSON.stringify(data);
     localStorage.removeItem(SAVE_BACKUP_KEY); localStorage.setItem(SAVE_KEY, text);
     return { text, home: data.homes[0], money: data.money, closet: data.closet, inv: data.inv };
@@ -57,8 +65,8 @@ test('a real legacy save upgrades and reloads with the original bytes backed up 
       homeId: cityHomeId(owned.homes[0]), blocked: citySaveBlocked };
   });
   assert.equal(result.backup, original.text);
-  assert.equal(result.data.v, 2);
-  assert.equal(result.data.world.layout, 'coastal-v1');
+  assert.equal(result.data.v, 5);
+  assert.equal(result.data.world.layout, 'archipelago-v3');
   assert.equal(result.data.money, original.money);
   assert.deepEqual(result.data.closet, original.closet);
   assert.deepEqual(result.data.inv, original.inv);

@@ -46,7 +46,7 @@ function stepFreecam(dt) {
   const length = Math.max(1, Math.hypot(vx, vy, vz));
   const speed = (K.ShiftLeft || K.ShiftRight ? 30 : 6) * (mode === 'room' ? 1 : 0.1) * dt / length;
   cam.x += vx * speed; cam.y += vy * speed; cam.z += vz * speed;
-  if (mode !== 'room') { cam.x = mod(cam.x, N); cam.y = mod(cam.y, N); }
+  if (mode !== 'room') { cam.x = worldCoord(cam.x); cam.y = worldCoord(cam.y); }
 }
 
 function renderFreecam() {
@@ -81,7 +81,7 @@ function devFree() {
   if (mode === 'el') ride = null;
   plat = null; body.seat = null; mode = 'walk'; pitch = 0; look = 0;
 }
-const devAt = (x, y, ang) => { devFree(); px = mod(x, N); py = mod(y, N); a = ang; };
+const devAt = (x, y, ang) => { devFree(); px = worldCoord(x); py = worldCoord(y); a = ang; };
 // a street spot in a district: the middle of the street beside one of its plain blocks
 function districtSpot(d) {
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++)

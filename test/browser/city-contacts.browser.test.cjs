@@ -14,7 +14,7 @@ async function fixture(fn,mobile=false) {
   try {
     await page.addInitScript(()=>{window.requestAnimationFrame=()=>0;});await page.goto(PAGE);
     await page.evaluate(()=>{
-      paused=false;mode='walk';room=me=null;px=41;py=73;T=10;tod=12;money=5000;env(0);render(0);
+      paused=false;mode='walk';room=me=null;[px,py]=citySourcePoint(41,73);T=10;tod=12;money=5000;env(0);render(0);
       buy('home_studio');const home=owned.homes[0];home.door=buyerDoor(home);
       for(const p of people)p.hidden=true;for(const c of cars)c.patrol=false;footCops.length=0;clearInventory();
     });

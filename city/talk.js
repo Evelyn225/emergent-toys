@@ -91,7 +91,7 @@ const tip = (lo, hi) => lo + Math.round(Math.random() * (hi - lo));
 function followYou(p, dt) {
   const ex = rel(px - p.x), ey = rel(py - p.y), d = Math.hypot(ex, ey);
   if (mode !== 'walk' || d > 10) { release(p); return endTask("You lost them. They'll have to ask someone else."); }
-  if (d > 0.35) { const s = Math.min(d - 0.35, 0.22 * dt); p.x = mod(p.x + ex / d * s, N); p.y = mod(p.y + ey / d * s, N); p.ph += dt * 5; }
+  if (d > 0.35) { const s = Math.min(d - 0.35, 0.22 * dt); p.x = worldCoord(p.x + ex / d * s); p.y = worldCoord(p.y + ey / d * s); p.ph += dt * 5; }
 }
 // per frame: the dog trots after you; escorts and hand-overs complete when you get there
 function stepTask(dt) {

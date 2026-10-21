@@ -563,7 +563,7 @@ function drawCourier() {
   drawFigure(...R(COURIER_GARDEN.x,COURIER_GARDEN.y),COURIER_GARDEN.z,.175,0,0,COURIER_FOLK.garden);
   drawFigure(...R(COURIER_FOREMAN.x,COURIER_FOREMAN.y),COURIER_FOREMAN.z,.175,0,0,COURIER_FOLK.foreman);
   // Nico paces until his guitar turns up, then sits on his crate and plays.
-  const pace=Math.cos(T*.9),nico=courierEncore?[180.98,123.42]:[COURIER_NICO.x+Math.sin(T*.9)*.08,COURIER_NICO.y];
+  const pace=Math.cos(T*.9),nico=courierEncore?[COURIER_NICO.x+.23,COURIER_NICO.y+.12]:[COURIER_NICO.x+Math.sin(T*.9)*.08,COURIER_NICO.y];
   drawFigure(...R(...nico),COURIER_NICO.z,.175,courierEncore?0:Math.sign(pace),0,COURIER_FOLK.nico,courierEncore?'sit7':Math.abs(pace)>.15?'walk'+(Math.floor(T*7)&7):'stand',{light:night*7});
 }
 // Big neon letters in the city's 3x5 font, centred on a sign face: s across the face (left to right as you read it),

@@ -72,7 +72,7 @@ function stepPigeons(dt) {
   flockT = 6;
   if (flocks.length >= 2 || tod < 6.5 || tod > 19.5 || rain > 0.3 || Math.random() > 0.3) return; // (rare)
   for (let tries = 0; tries < 20; tries++) {
-    const ang = Math.random() * Math.PI * 2, dist = 1.3 + Math.random() * 2.5, x = mod(px + Math.cos(ang) * dist, N), y = mod(py + Math.sin(ang) * dist, N);
+    const ang = Math.random() * Math.PI * 2, dist = 1.3 + Math.random() * 2.5, x = worldCoord(px + Math.cos(ang) * dist), y = worldCoord(py + Math.sin(ang) * dist);
     if (!pigeonSpot(x, y)) continue;
     const n = 5 + (Math.random() * 5 | 0), birds = [];
     for (let k = 0; k < n; k++) { const bx = (Math.random() - 0.5) * 0.12, by = (Math.random() - 0.5) * 0.12; if (pigeonSpot(x + bx, y + by)) birds.push({ dx: bx, dy: by, ph: Math.random() * 9, dir: Math.random() < 0.5 ? 1 : -1, z: 0 }); }

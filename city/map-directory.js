@@ -27,24 +27,37 @@ function mapShopCategory(sh) {
 function mapDirectory() {
   const out=[],seen=new Set(),add=p=>{out.push({...p,color:MAP_COLORS[p.category]||'#ccc'});};
   for(const [x,y,name,color,kind] of bigMapLabels()) {
-    if(kind==='shop')continue;
+    if(kind==='shop'||worldReady&&WILD_ISLANDS.some(i=>i.name===name))continue;
     let category=kind==='area'?'area':'activities';
-    if(stations.some(s=>s.name===name)||EL_STATIONS.some(s=>s.name===name)||name==='Airport')category='transport';
+    if(stations.some(s=>s.name===name)||EL_STATIONS.some(s=>s.name===name)||name==='Airport'||name==='Fern airstrip'||name==='Fern boat landing')category='transport';
+    if(name==='Fern House')category='homes';
     if(['Police','Fire station','Hospital'].includes(name))category='essentials';
-    add({id:`place:${name}:${x}:${y}`,name,x,y,category,kind,description:category==='transport'?'Station or transport connection.':'City landmark.',color});
+    add({id:`place:${name}:${x}:${y}`,name,x,y,category,kind,description:name==='Fern House'?`A secluded house with sea-view terrace, workshop and storage. For sale: ${fmt$(ITEMS.home_island.price)}. Visit the front door to view the listing.`:name==='Fern airstrip'?'Rough 660 m strip, east-west. Light planes only; clear approaches at both ends. Boat landing on the west coast.':name==='Fern boat landing'?'Long timber landing on the west coast. Tie up alongside; your rental waits for the return trip.':name==='Fern Falls'?'A small waterfall and woodland trail. Follow the path east from Fern House.':category==='transport'?'Station or transport connection.':'City landmark.',color});
   }
   for(let k=0;k<SHOP.length;k++) {
     const sh=SHOP[k];if(!sh?.word||sh.kind===SHOP_APTS||sh.kind===SHOP_SHUT||seen.has(sh))continue;
     seen.add(sh);const x=k%N+.5,y=Math.floor(k/N)+.5;
+    if(sh.islandCabin) {
+      const cabin=ISLAND_CABINS.find(c=>c.id===sh.islandCabin);
+      if(cabin?.room)add({id:cabin.id,name:cabin.name,x:cabin.door[0],y:cabin.door[1],category:'activities',kind:'shelter',
+        description:'An unlocked public fishing shelter. Sit on a bench, look through the old tackle and read the visitors\' log.',status:'Open shelter'});
+      continue;
+    }
     const stock=stockFor('',sh.word).slice(0,6).map(id=>ITEMS[id]?.name).filter(Boolean);
     add({id:cityPlaceAtCell(k)?.id||`shop:${k}`,name:sh.word,x,y,category:mapShopCategory(sh),kind:'shop',shop:sh,
       description:stock.length?`Sells ${stock.join(', ')}.`:'Visit the counter to see what is available.',
       status:openAt(sh,tod)?'Open now':'Closed now',hours:sh.hours,fee:sh.fee||0});
   }
+  if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note,status:'Boat landing on west shore'});
   for(const h of owned.homes) {
     const point=h.door||buyerDoor(h)||[h.cell%N+.5,Math.floor(h.cell/N)+.5];
     add({id:cityHomeId(h),name:`Your ${ITEMS[h.kind].name}`,x:point[0],y:point[1],category:'homes',kind:'home',home:h,
-      description:'Your apartment: workshop, bed and a shared 120-item closet.',status:'Owned'});
+      description:h.kind==='home_island'?'Your island house: workshop, sea-view terrace, bed and shared 120-item closet.':'Your apartment: workshop, bed and a shared 120-item closet.',status:'Owned'});
+  }
+  const fernListing=out.find(p=>p.name==='Fern House');
+  if(fernListing&&owned.homes.some(h=>h.kind==='home_island')) {
+    fernListing.description='Your secluded island house. Workshop, storage and a sea-view terrace.';
+    fernListing.status='Owned';
   }
   const home=nearestWorkshopHome(),meeting=home&&(home.door||buyerDoor(home));
   add({id:'supplier',name:'Mara · workshop supplier',x:supplierVisit?.x??meeting?.[0]??null,y:supplierVisit?.y??meeting?.[1]??null,
@@ -79,6 +92,7 @@ function mapFilteredPlaces() {
 function mapPlaceDistance(p) {return p.virtual?'On call':p.x===null?'Contact':mapMetres(mapDistance(mapPlayerLocation(),p)*10);}
 function mapPlaceStreet(p) {
   if(p.x===null||p.virtual)return '';
+  const island=wildIslandAt(p.x,p.y,12);if(island)return island.name;
   const street=streetName(p.x,p.y);if(street)return street;
   for(let r=1;r<=8;r++)for(let oy=-r;oy<=r;oy++)for(let ox=-r;ox<=r;ox++) {
     if(Math.abs(ox)!==r&&Math.abs(oy)!==r)continue;
@@ -87,10 +101,17 @@ function mapPlaceStreet(p) {
   }
   return '';
 }
+function mapRouteLabel() {
+  if(MAP_NAV.path)return 'walking route';
+  if(!mapWaypoint)return 'direction only';
+  const p=mapPlayerLocation(),island=wildIslandAt(mapWaypoint.x,mapWaypoint.y,12)||wildIslandAt(p.x,p.y,12);
+  if(!island)return 'direction only';
+  return island.id==='fern'?'boat / light aircraft access':'boat access';
+}
 function mapDirectoryUI() {
   const list=bigMapEl.querySelector('.places'),details=bigMapEl.querySelector('.place-detail'),hits=mapFilteredPlaces();
   const route=bigMapEl.querySelector('.route-status');route.hidden=!mapWaypoint;
-  if(mapWaypoint)route.innerHTML=`<span>${mapEscape(mapWaypoint.name)}<br>${mapMetres(mapRouteDistance())} · ${MAP_NAV.path?'walking route':'direction only'}</span><button data-map="clear-route">Clear</button>`;
+  if(mapWaypoint)route.innerHTML=`<span>${mapEscape(mapWaypoint.name)}<br>${mapMetres(mapRouteDistance())} · ${mapRouteLabel()}</span><button data-map="clear-route">Clear</button>`;
   const selected=BIGMAP.places.find(p=>p.id===BIGMAP.selected);
   bigMapEl.querySelector('.directory').classList.toggle('has-selection',!!selected);
   bigMapEl.querySelector('.results-count').textContent=`${hits.length} places · nearest first`;
@@ -103,10 +124,15 @@ function mapDirectoryUI() {
   const address=p.x===null?'':[mapPlaceStreet(p),DISTRICT_TITLE[districtAt(p.x,p.y)]].filter(Boolean).join(' · ');
   const supplierWaiting=p.kind==='supplier'&&supplierVisit&&supplierVisit.home===nearestWorkshopHome()?.cell;
   const actions=[];
+  const island=wildIslandAt(p.x,p.y,12),origin=mapPlayerLocation();
+  if(island&&!wildIslandAt(origin.x,origin.y,12)) {
+    actions.push('<button data-map="island-marina">Find a boat at the marina</button>');
+    if(island.id==='fern')actions.push('<button data-map="island-airport">Find a light plane at the airport</button>');
+  }
   if(p.kind==='supplier'&&!supplierWaiting)actions.push(`<button data-map="call-supplier" ${owned.homes.length?'':'disabled'}>${supplierVisit?'Call Mara to nearest home':'Call Mara to my apartment'}</button>`);
   if(p.x!==null&&!p.virtual) {
     if(mapWaypoint?.id===p.id)actions.push('<button data-map="go">Follow waypoint</button>');
-    else actions.push('<button data-map="waypoint">Set walking waypoint</button>');
+    else actions.push('<button data-map="waypoint">Set waypoint</button>');
   }
   if(p.kind==='supplier'&&!owned.homes.length)actions.push('<button data-map="find-housing">Find a realty office</button>');
   details.innerHTML=`<div class="detail-head"><small>${mapEscape(MAP_CATEGORIES[p.category]||'District')} · ${mapPlaceDistance(p)}</small><button data-map="unselect" aria-label="Close place details">×</button></div><h2>${mapEscape(p.name)}</h2><p>${mapEscape(p.description)}</p>
@@ -126,7 +152,7 @@ function setMapWaypoint(p) {
   mapWaypoint={id:p.id,name:p.name,x:p.x,y:p.y};MAP_NAV.path=null;MAP_NAV.routeFrom=null;MAP_NAV.next=0;
   updateMapNavigation(true);showMap=true;saveGame();
   if(bigMapOpen()){mapDirectoryUI();bigMapDraw();}
-  say(`Walking waypoint: ${p.name}. M opens the map.`,4);
+  say(`${wildIslandAt(p.x,p.y,12)?'Boat / aircraft destination':'Walking waypoint'}: ${p.name}. M opens the map.`,4);
 }
 function clearMapWaypoint() {
   mapWaypoint=null;MAP_NAV.path=null;MAP_NAV.routeFrom=null;MAP_NAV.next=0;
@@ -142,7 +168,8 @@ function updateMapNavigation(force=false) {
   if(path)for(let n=MAP_NAV.next;n<path.length;n++){const d=mapDistance(p,path[n]);if(d<nearest){nearest=d;index=n;}}
   MAP_NAV.next=index;
   if(force||!MAP_NAV.routeFrom||nearest>1.6&&mapDistance(p,MAP_NAV.routeFrom)>1) {
-    MAP_NAV.path=findMapRoute(p,mapWaypoint);MAP_NAV.next=0;MAP_NAV.routeFrom={...p};
+    const destination=wildIslandAt(mapWaypoint.x,mapWaypoint.y,12),origin=wildIslandAt(p.x,p.y,12);
+    MAP_NAV.path=destination!==origin&&(destination||origin)?null:findMapRoute(p,mapWaypoint);MAP_NAV.next=0;MAP_NAV.routeFrom={...p};
   }
   const end=MAP_NAV.path?.at(-1);MAP_NAV.nearby=!!end&&mapDistance(p,end)<.65;
 }
@@ -156,7 +183,7 @@ function drawMapNavigation() {
   const yaw=Math.atan2(mapDifference(next.y-p.y,MAP_WORLD.height),mapDifference(next.x-p.x,MAP_WORLD.width));
   const turn=mod(yaw-a+Math.PI,Math.PI*2)-Math.PI;
   let direction='AHEAD';if(turn>.5)direction='RIGHT';else if(turn<-.5)direction='LEFT';if(Math.abs(turn)>2.5)direction='BEHIND';
-  const text=`${MAP_NAV.nearby?'NEARBY':direction} > ${mapWaypoint.name} · ${mapMetres(mapRouteDistance())}${MAP_NAV.path?'':' · direction only'}`;
+  const text=`${MAP_NAV.nearby?'NEARBY':direction} > ${mapWaypoint.name} · ${mapMetres(mapRouteDistance())}${MAP_NAV.path?'':` · ${mapRouteLabel()}`}`;
   let max=cv.width-24-(TOUCH?TOUCH_PAD_W:0);
   if(showMap&&!TOUCH&&cv.width>700)max=Math.min(max,cv.width-360);
   const lines=wrapText(text,Math.max(100,max));

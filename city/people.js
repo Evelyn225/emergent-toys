@@ -18,7 +18,7 @@ const doors = [];
       // half of downtown's lobbies are offices; everywhere else a numbered door is somebody's home
       const use = sh.kind === SHOP_APTS ? (dist === 'downtown' && fract(sh.word.length * 0.37 + bx * 0.13 + by * 0.71) < 0.5 ? 'work' : 'home')
                 : NIGHTLIFE.has(sh.word) ? 'bar' : 'shop';
-      doors.push({ x: mod(face[0], N), y: mod(face[1], N), nx: face[2] * 0.1, ny: face[3] * 0.1, sh, use, dist });
+      doors.push({ x: worldCoord(face[0]), y: worldCoord(face[1]), nx: face[2] * 0.1, ny: face[3] * 0.1, sh, use, dist });
     }
   }
 }
@@ -109,12 +109,12 @@ const walkingDog = p => p.role === 'dogwalker' && !p.hidden && tod >= 7 && tod <
 function dogOf(p) {
   const mx = p.last[0], my = p.last[1], side = (p.ph * 7 | 0) % 2 ? 1 : -1, sniff = Math.sin(T * 0.7 + p.ph) > 0.7;
   const back = 0.09 + (sniff ? 0.04 : 0) + Math.sin(T * 1.9 + p.ph) * 0.01, off = 0.035 * side + Math.sin(T * 1.3 + p.ph) * 0.012;
-  const tx = mod(p.x - mx * back - my * off, N), ty = mod(p.y - my * back + mx * off, N);
+  const tx = worldCoord(p.x - mx * back - my * off), ty = worldCoord(p.y - my * back + mx * off);
   let d = p.dog;
   if (!d || Math.hypot(rel(tx - d.x), rel(ty - d.y)) > 0.6) d = p.dog = { x: tx, y: ty, mx, my, t: T }; // (first sight of it, or the walker jumped: right there)
   const k = 1 - Math.exp(-Math.max(0, Math.min(0.25, T - d.t)) * 5); d.t = T;
   const ox = d.x, oy = d.y;
-  d.x = mod(d.x + rel(tx - d.x) * k, N); d.y = mod(d.y + rel(ty - d.y) * k, N);
+  d.x = worldCoord(d.x + rel(tx - d.x) * k); d.y = worldCoord(d.y + rel(ty - d.y) * k);
   const vx = rel(d.x - ox), vy = rel(d.y - oy), v = Math.hypot(vx, vy);
   if (v > 1e-4) { d.mx += (vx / v - d.mx) * Math.min(1, k * 2); d.my += (vy / v - d.my) * Math.min(1, k * 2); } // faces the way it's going
   return { x: d.x, y: d.y, mx: d.mx, my: d.my, sniff, col: DOG_COLS[(p.ph * 13 | 0) % DOG_COLS.length], small: (p.ph * 5 | 0) % 3 === 0 };
@@ -133,7 +133,7 @@ function routeTo(d) {
   let f = routeCache.get(d);
   if (f) return f;
   f = new Int16Array(NB * NB).fill(9999);
-  const bx = Math.floor(mod(d.x, N) / 8), by = Math.floor(mod(d.y, N) / 8);
+  const bx = Math.floor(worldCoord(d.x) / 8), by = Math.floor(worldCoord(d.y) / 8);
   const queue = d.ny ? [bi(bx, by), bi(bx + 1, by)] : [bi(bx, by), bi(bx, by + 1)]; // its stretch's two intersections
   for (const k of queue) f[k] = 0;
   for (let h = 0; h < queue.length; h++) {
@@ -151,7 +151,7 @@ const cornerOK = (ix, iy, qx, qy) => !!(hseg(qx ? ix : ix - 1, iy) || vseg(ix, q
 function planPerson(p, t) {
   const lx = mod(p.x, 8), ly = mod(p.y, 8), ix = Math.floor(p.x / 8), iy = Math.floor(p.y / 8), bx = p.x - lx, by = p.y - ly;
   const qx = lx > 1 ? 1 : 0, qy = ly > 1 ? 1 : 0, opts = [];
-  p.x = mod(bx + (qx ? 1.88 : 0.12), N); p.y = mod(by + (qy ? 1.88 : 0.12), N); // exactly on the corner: no drift over many legs
+  p.x = worldCoord(bx + (qx ? 1.88 : 0.12)); p.y = worldCoord(by + (qy ? 1.88 : 0.12)); // exactly on the corner: no drift over many legs
   for (const [mx, my] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (mx === -p.last[0] && my === -p.last[1]) continue;
     const hi = mx ? (mx > 0) === !!qx : (my > 0) === !!qy; // moving away from the intersection: along the block
@@ -199,7 +199,7 @@ function planPerson(p, t) {
   if (!door && p.act && p.act !== 'wander') {
     const want = USES[p.act === 'home' && p.legs > 1 ? 'lobby' : p.act];
     // doors are bucketed by their sidewalk point, which is in the same block as this stretch's midpoint
-    const mid = [mod(p.x + o.mx * 3.12, N), mod(p.y + o.my * 3.12, N)];
+    const mid = [worldCoord(p.x + o.mx * 3.12), worldCoord(p.y + o.my * 3.12)];
     door = doorsB[bi(Math.floor(mid[0] / 8), Math.floor(mid[1] / 8))].find(d => want(d) && onLeg(d) && (p.legs > 3 || Math.random() < 0.85)) || null;
     if (door && (p.act === 'home' || p.act === 'work')) p[p.act] = door;
   }
@@ -208,7 +208,7 @@ function planPerson(p, t) {
     p.path.push(at, { x: at.x + door.nx, y: at.y + door.ny, enter: door }, { ...at }, end);
     return;
   }
-  if (!goal && blockKind(Math.floor(mod(cx, N) / 8), Math.floor(mod(cy, N) / 8)) === 'park' && Math.random() < 0.6) {
+  if (!goal && blockKind(Math.floor(worldCoord(cx) / 8), Math.floor(worldCoord(cy) / 8)) === 'park' && Math.random() < 0.6) {
     const [bx_, by_] = pick(BENCH), mid = { x: p.x + o.mx * 3.12, y: p.y + o.my * 3.12 };
     p.path.push(mid, { x: cx, y: cy }, { x: cx + bx_, y: cy + by_, stay: 6 + Math.random() * 12 }, { x: cx, y: cy }, { ...mid });
   }
@@ -239,7 +239,7 @@ const SEEN_R = 28, VIS_R = MAXD + 4; // beyond SEEN_R, anyone a building hides f
 // few seconds, then up again. Pedestrians and police on foot alike (crime.js holds the officers still while they're down)
 function knockDown(p, dx_, dy_, speed) {
   p.down = { t: 0, dur: 2.5 + Math.min(3, speed * 1.2), fx: dx_, fy: dy_ };
-  const k = Math.min(0.6, 0.15 + speed * 0.12), nx = mod(p.x + dx_ * k, N), ny = mod(p.y + dy_ * k, N);
+  const k = Math.min(0.6, 0.15 + speed * 0.12), nx = worldCoord(p.x + dx_ * k), ny = worldCoord(p.y + dy_ * k);
   if (!map[idx(Math.floor(nx), Math.floor(ny))]) { p.x = nx; p.y = ny; }
 }
 // down and getting up again: true while they're still on the ground
@@ -272,7 +272,7 @@ function stepHelp(p, dt) {
   if (!v.down) { delete p.help; p.gawk = v; p.talk = 2; return; }
   const dx = rel(v.x - p.x), dy = rel(v.y - p.y), d = Math.hypot(dx, dy);
   if (d < 0.12) return;
-  const s = Math.min(d - 0.1, p.sp * 2.5 * dt), nx = mod(p.x + dx / d * s, N), ny = mod(p.y + dy / d * s, N);
+  const s = Math.min(d - 0.1, p.sp * 2.5 * dt), nx = worldCoord(p.x + dx / d * s), ny = worldCoord(p.y + dy / d * s);
   if (!map[idx(Math.floor(nx), Math.floor(ny))]) { p.x = nx; p.y = ny; p.ph += dt * 8; }
 }
 // running from a gunshot (gun.js): flat out away from it, sliding along walls, for a few seconds; then back to the
@@ -282,8 +282,8 @@ function stepFlee(p, dt) {
   if ((f.t -= dt) <= 0) { delete p.flee; return backToSidewalk(p); }
   const s = p.sp * 5 * dt, open = (x, y) => !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y);
   let moved = false;
-  if (open(p.x + f.x * s, p.y)) { p.x = mod(p.x + f.x * s, N); moved = true; }
-  if (open(p.x, p.y + f.y * s)) { p.y = mod(p.y + f.y * s, N); moved = true; }
+  if (open(p.x + f.x * s, p.y)) { p.x = worldCoord(p.x + f.x * s); moved = true; }
+  if (open(p.x, p.y + f.y * s)) { p.y = worldCoord(p.y + f.y * s); moved = true; }
   if (!moved) [f.x, f.y] = Math.random() < 0.5 ? [-f.y, f.x] : [f.y, -f.x]; // (cornered: off another way)
   p.last = [f.x, f.y]; p.ph += dt * 9;
 }
@@ -292,7 +292,7 @@ function backToSidewalk(p) {
   if (d > VIS_R || d > SEEN_R && !lineOfSight(px, py, p.x, p.y)) return settle(p);
   // the nearest sidewalk line (0.12 / 1.88 into a street, either way), then on from there to its corner
   const line = v => { const b = Math.floor(v / 8) * 8; return [b - 6.12, b + 0.12, b + 1.88, b + 8.12].reduce((m, c) => Math.abs(c - v) < Math.abs(m - v) ? c : m); };
-  const lx = line(p.x), ly = line(p.y), at = Math.abs(lx - p.x) < Math.abs(ly - p.y) ? { x: mod(lx, N), y: p.y } : { x: p.x, y: mod(ly, N) };
+  const lx = line(p.x), ly = line(p.y), at = Math.abs(lx - p.x) < Math.abs(ly - p.y) ? { x: worldCoord(lx), y: p.y } : { x: p.x, y: worldCoord(ly) };
   const [x, y] = [p.x, p.y];
   p.x = at.x; p.y = at.y; snapToCorner(p); p.x = x; p.y = y;
   p.path.unshift(at); p.goal = null; p.legs = 0; p.wait = 0;
@@ -338,17 +338,17 @@ function stepPeople(dt, t, everywhere = false) {
     if (w.gate && !w.go) { if (!w.gate(t)) continue; w.go = true; }
     const ex = rel(w.x - p.x), ey = rel(w.y - p.y), dist = Math.hypot(ex, ey), step = p.sp * (w.fast ? 2.2 : 1) * dt;
     if (dist <= step) {
-      p.x = mod(w.x, N); p.y = mod(w.y, N); p.path.shift();
+      p.x = worldCoord(w.x); p.y = worldCoord(w.y); p.path.shift();
       if (w.stay) p.wait = w.stay;
       if (w.enter) { // the rest of the path walks back out to the line and on to the corner
         p.goal = null; p.inside = w.enter;
         // a crowd hangs about outside the bars at night: some stand by the door a while before going in
         if (w.enter.use === 'bar' && Math.random() < 0.4) {
-          p.x = mod(p.x - w.enter.nx + (Math.random() - 0.5) * 0.5 * (w.enter.ny ? 1 : 0), N);
-          p.y = mod(p.y - w.enter.ny + (Math.random() - 0.5) * 0.5 * (w.enter.nx ? 1 : 0), N);
+          p.x = worldCoord(p.x - w.enter.nx + (Math.random() - 0.5) * 0.5 * (w.enter.ny ? 1 : 0));
+          p.y = worldCoord(p.y - w.enter.ny + (Math.random() - 0.5) * 0.5 * (w.enter.nx ? 1 : 0));
           p.wait = 20 + Math.random() * 40; p.loiter = true;
         } else { p.hidden = true; p.wait = 6 + Math.random() * 14; }
       }
-    } else { p.x = mod(p.x + ex / dist * step, N); p.y = mod(p.y + ey / dist * step, N); p.ph += dt * 4; }
+    } else { p.x = worldCoord(p.x + ex / dist * step); p.y = worldCoord(p.y + ey / dist * step); p.ph += dt * 4; }
   }
 }

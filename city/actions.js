@@ -1,7 +1,7 @@
 // ---- actions
 function curbOf(c) { // sidewalk spot on the car's right, next to its lane
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
-  return vert ? [mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.88 * dir, N), c.y] : [c.x, mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.88 * dir, N)];
+  return vert ? [worldCoord(Math.round((c.x - 1) / 8) * 8 + 1 + 0.88 * dir), c.y] : [c.x, worldCoord(Math.round((c.y - 1) / 8) * 8 + 1 - 0.88 * dir)];
 }
 // in a taxi: slip the driver a twenty to step on it (faster, and red lights don't count)
 const TIP = 20;
@@ -25,7 +25,7 @@ function exitSpot(c) {
   const lx = c.hy, ly = -c.hx; // (the car's left)
   const cx = c.rider ? c.ex : c.x, cy = c.rider ? c.ey : c.y;
   for (const d of [0.22, 0.32, 0.45]) for (const [ox, oy] of [[lx, ly], [-lx, -ly], [-c.hx * 1.3, -c.hy * 1.3], [c.hx * 1.3, c.hy * 1.3]]) {
-    const x = mod(cx + ox * d, N), y = mod(cy + oy * d, N);
+    const x = worldCoord(cx + ox * d), y = worldCoord(cy + oy * d);
     if (free(x, y) && !cars.some(o => o !== c && Math.hypot(rel(o.ex - x), rel(o.ey - y)) < 0.2)) return [x, y];
   }
   return curbOf(c);
@@ -50,11 +50,11 @@ function leaveCar() {
 const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
 function homeKerb(x, y) { // the middle of the street nearest a building's cell (x, y): one of its block's four sides
   const bx = x >> 3, by = y >> 3, opts = [];
-  if (vseg(bx & (NB - 1), by & (NB - 1))) opts.push([bx * 8 + 1, y + 0.5]);
-  if (vseg((bx + 1) & (NB - 1), by & (NB - 1))) opts.push([(bx + 1) * 8 + 1, y + 0.5]);
-  if (hseg(bx & (NB - 1), by & (NB - 1))) opts.push([x + 0.5, by * 8 + 1]);
-  if (hseg(bx & (NB - 1), (by + 1) & (NB - 1))) opts.push([x + 0.5, (by + 1) * 8 + 1]);
-  return opts.reduce((b, p) => Math.hypot(p[0] - x, p[1] - y) < Math.hypot(b[0] - x, b[1] - y) ? p : b).map(v => mod(v, N));
+  if (vseg(worldBlock(bx), worldBlock(by))) opts.push([bx * 8 + 1, y + 0.5]);
+  if (vseg(worldBlock(bx + 1), worldBlock(by))) opts.push([(bx + 1) * 8 + 1, y + 0.5]);
+  if (hseg(worldBlock(bx), worldBlock(by))) opts.push([x + 0.5, by * 8 + 1]);
+  if (hseg(worldBlock(bx), worldBlock(by + 1))) opts.push([x + 0.5, (by + 1) * 8 + 1]);
+  return opts.reduce((b, p) => Math.hypot(p[0] - x, p[1] - y) < Math.hypot(b[0] - x, b[1] - y) ? p : b).map(v => worldCoord(v));
 }
 function setDest(n) {
   const c = me, far = p => Math.hypot(rel(p[0] - c.x), rel(p[1] - c.y));
@@ -125,6 +125,7 @@ function enterRoom(kind, extra, spawn) {
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'backrooms' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
 }
 function interact() {
+  if (islandBuildingUse()) return;
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
   if(courierUse())return;
   if (workshopUse()) return;
@@ -138,6 +139,7 @@ function interact() {
       if (hs === 'bed') { sleep = { t: 0, home: true }; return say('You crawl into your own bed.', 3); }
       if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', '120 spaces. Shared between your apartments; equipment and batches fit too.', null, HOME_STORE_SIZE);
       if (hs === 'workshop') return openWorkshop();
+      if (hs === 'terrace') { room.ret = [...FERN_HOUSE.terrace, 0];return leaveRoom(); }
       if (hs === 'shelf') {
         home.decor ||= [];
         if (heldItem() && isHomeDecor(heldItem())) {
@@ -308,6 +310,7 @@ function interact() {
   if (td >= 0) return enterTerminal(td); // (the airport: terminal.js)
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && !seamWall(lookHit)) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.islandCabin) return say('The door is around the front.',2);
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say(pick(['Closed down for good. A FOR LEASE sign on the shutter.', 'Shuttered for good. The FOR LEASE sign has a phone number nobody answers.', 'Gone out of business. Just the old sign left.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
@@ -371,6 +374,7 @@ function stepSleep(dt) {
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {
+  if (room.kind === 'islandhome') room.ret = px < 2.2 && py > 14 && py < 19 ? [...FERN_HOUSE.terrace,0] : [...FERN_HOUSE.door,-Math.PI/2];
   body.seat = null;
   if (hotelAlarm) stepGrandHotel(); // A late exit still triggers the alarm while you're inside.
   if (room.kind === 'grandhotelheist') return enterRoom('grandhotel', room.lobby, [10.7, 2.65, Math.PI / 2]);

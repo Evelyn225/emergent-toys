@@ -822,7 +822,7 @@ function realtyWall(i, u, uStep, z, d, mx, my, L) {
 }
 const HOME_SHELF_CAPACITY = 4;
 function homeRecord(r = room) {
-  if (!r || !r.cell || !['home', 'loft', 'bellehome'].includes(r.kind)) return null;
+  if (!r || !r.cell || !['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return null;
   const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1]));
   return owned.homes.find(h => h.cell === cell || SHOP[cell] && SHOP[h.cell] === SHOP[cell]) || null;
 }
@@ -997,6 +997,10 @@ function homeCityView(i, x, y, z, vx, vy, vz) {
     }
     if (ground < next) {
       const wx = x + vx * ground, wy = y + vy * ground, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
+      if(seaAt(wx,wy)&&!onPier(wx,wy)) {
+        BG[i]=C(BLUE,1+day*3);
+        return set(i,noise(wx*2+T*.2,wy*2,91)>.6?'~':' ',C(CYAN,3+day*6));
+      }
       BG[i] = C(road ? GRAY : GREEN, 1 + day * 2);
       return set(i, road && Math.abs(fract(road === 1 ? wx : wy) - 0.5) < 0.04 ? '-' : ' ', C(YEL, day * 8));
     }

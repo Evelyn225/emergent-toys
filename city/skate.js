@@ -142,7 +142,7 @@ function skateCam(dt) {
   SK.camBack = fresh || room_ < SK.camBack ? room_ : SK.camBack + (room_ - SK.camBack) * ease(2);
   const want = walkGround(px, py) + 0.12 + (SK_CAM_UP - 0.12) * Math.min(1, SK.camBack / SK_CAM_BACK) + body.z / 10 * 0.6;
   SK.camZ = fresh || SK.camZ == null ? want : SK.camZ + (want - SK.camZ) * ease(6);
-  return [mod(px - Math.cos(SK.camYaw) * SK.camBack, N), mod(py - Math.sin(SK.camYaw) * SK.camBack, N), SK.camYaw, SK.camZ];
+  return [worldCoord(px - Math.cos(SK.camYaw) * SK.camBack), worldCoord(py - Math.sin(SK.camYaw) * SK.camBack), SK.camYaw, SK.camZ];
 }
 
 // ---- you and the board, drawn into the city (citySprites) while the camera's behind you

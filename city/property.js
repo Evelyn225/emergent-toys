@@ -6,6 +6,7 @@ const CAR_MODELS = {
   car_hatch: { body: GREEN, top: 2.0, boost: 2.9 }, car_sedan: { body: BLUE, top: 2.3, boost: 3.3 }, car_sports: { body: RED, top: 2.8, boost: 4.2 },
 };
 // a home is the apartment building on a lot (any cell of it: they share one SHOP), and how big a place you bought
+ITEMS.home_island = { name: 'Fern Island house', price: 6800, kind: 'home' };
 const owned = { cars: [], homes: [] }; // cars: the car objects; homes: { cell, kind }
 const homeAt = sh => owned.homes.find(h => SHOP[h.cell] === sh) || null;
 
@@ -20,11 +21,11 @@ function parkCar(c) {
 }
 // the street lane nearest (x, y), on the side of the street you're on: {x, y, hx, hy}
 function laneNear(x, y) {
-  const X = Math.round((x - 1) / 8) * 8 + 1, Y = Math.round((y - 1) / 8) * 8 + 1, bx = Math.floor(x / 8) & (NB - 1), by = Math.floor(y / 8) & (NB - 1);
-  const vOK = vseg(Math.round((x - 1) / 8) & (NB - 1), by), hOK = hseg(bx, Math.round((y - 1) / 8) & (NB - 1));
+  const X = Math.round((x - 1) / 8) * 8 + 1, Y = Math.round((y - 1) / 8) * 8 + 1, bx = worldBlock(Math.floor(x / 8)), by = worldBlock(Math.floor(y / 8));
+  const vOK = vseg(worldBlock(Math.round((x - 1) / 8)), by), hOK = hseg(bx, worldBlock(Math.round((y - 1) / 8)));
   const useV = vOK && (!hOK || Math.abs(rel(x - X)) < Math.abs(rel(y - Y)));
-  if (useV) { const dir = Math.sign(rel(x - X)) || 1; return { x: mod(X + 0.4 * dir, N), y, hx: 0, hy: dir }; }
-  const dir = -(Math.sign(rel(y - Y)) || 1); return { x, y: mod(Y - 0.4 * dir, N), hx: dir, hy: 0 };
+  if (useV) { const dir = Math.sign(rel(x - X)) || 1; return { x: worldCoord(X + 0.4 * dir), y, hx: 0, hy: dir }; }
+  const dir = -(Math.sign(rel(y - Y)) || 1); return { x, y: worldCoord(Y - 0.4 * dir), hx: dir, hy: 0 };
 }
 // a car of yours, parked at (x, y) facing (hx, hy) (exactly there, or pulled in to the kerb)
 function spawnOwnedCar(model, x, y, hx, hy, exact = false) {
@@ -50,19 +51,20 @@ function summonCar(model) {
   const here = mine.find(c => dist(c) < 2 && !c.wrecked && c.fireT == null); // (a wreck, even right here, goes to the garage)
   if (here) { here.fobBlinkAt = T; return [`Your ${name}'s right here. Its lights blink at you.`, 'click']; }
   const c = mine.reduce((b, c) => dist(c) < dist(b) ? c : b), l = laneNear(px, py);
+  if(worldReady&&!ROAD[idx(Math.floor(l.x),Math.floor(l.y))])return ['No road nearby. Try the fob from a street.','click'];
   let towed = '';
   if (c.wrecked || c.fireT != null) { // a burnt-out shell: the garage tows it in and puts it right, for a price
     if (!pay(TOW_FEE)) return [`Your ${name}'s a wreck. The garage wants ${fmt$(TOW_FEE)} to tow it in and fix it, and you're short.`, 'click'];
     repairCar(c); towed = ` The garage towed what was left of it and put it right (${fmt$(TOW_FEE)}).`;
   }
   for (const s of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4]) { // along the kerb to a gap between parked cars
-    c.x = mod(l.x + l.hx * s, N); c.y = mod(l.y + l.hy * s, N); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);
+    c.x = worldCoord(l.x + l.hx * s); c.y = worldCoord(l.y + l.hy * s); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);
     if (!cars.some(o => o !== c && Math.hypot(rel(o.ex - c.x), rel(o.ey - c.y)) < 0.5)) break;
   }
   return [`You press the fob. A minute later your ${name} rolls up at the kerb, lights blinking.${towed}`, 'click'];
 }
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
-const homeRoomKind = kind => kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
+const homeRoomKind = kind => kind === 'home_island' ? 'islandhome' : kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
 function homeBalconyBounds(home) {
   const b = home?.kind === 'home_belle' && SHOP[home.cell]?.belle;
   if (!b) return null;
@@ -98,7 +100,7 @@ function freeHomeNear(x, y, district = null) {
   let best = -1, bd = district ? N : 30;
   const range = district ? N / 2 : 24;
   for (let dy = -range; dy < range + (district ? 0 : 1); dy++) for (let dx = -range; dx < range + (district ? 0 : 1); dx++) {
-    const i = idx(mod(Math.floor(x) + dx, N), mod(Math.floor(y) + dy, N)), sh = SHOP[i];
+    const i = idx(worldCoord(Math.floor(x) + dx), worldCoord(Math.floor(y) + dy)), sh = SHOP[i];
     if (!sh || sh.kind !== SHOP_APTS || !map[i] || homeAt(sh) || district && districtAt(i % N, Math.floor(i / N)) !== district) continue;
     if (district === 'belle') {
       const b = sh.belle;
@@ -120,7 +122,8 @@ function buyProperty(id, x, y) {
     const l = laneNear(x, y); spawnOwnedCar(id, l.x, l.y, l.hx, l.hy);
     return [true, `You buy ${aOrSome(it.name)}. It's parked out front (C on your map). ${giveCarKeys(id)}`];
   }
-  const cell = freeHomeNear(x, y, id === 'home_belle' ? 'belle' : null);
+  const cell = id === 'home_island' ? cityPlaceCell('fern-house') : freeHomeNear(x, y, id === 'home_belle' ? 'belle' : null);
+  if (id === 'home_island' && (cell < 0 || homeAt(SHOP[cell]))) return [false, 'Fern House is already owned.'];
   if (cell < 0) return [false, '"Nothing on the market round here right now."'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   owned.homes.push({ cell, kind: id, decor: [], fridge: [], pet: null });

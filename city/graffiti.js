@@ -339,7 +339,7 @@ function sprayTarget() {
   const hx = px + Math.cos(a) * lookHit.d, hy = py + Math.sin(a) * lookHit.d, fx_ = fract(hx), fy = fract(hy);
   const ex = Math.min(fx_, 1 - fx_), ey = Math.min(fy, 1 - fy), side = ey < ex; // which edge of the cell we hit
   const face = faceOf(side, lookHit.mx, lookHit.my);
-  return { cell: k, face, u: side ? mod(hx, N) : mod(hy, N), z: 0.16 };
+  return { cell: k, face, u: side ? worldCoord(hx) : worldCoord(hy), z: 0.16 };
 }
 function sprayTag() {
   const it = heldItem(), tg = sprayTarget();

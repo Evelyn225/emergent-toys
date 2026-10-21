@@ -18,8 +18,16 @@ function noise(x, y, s) { // smooth value noise
     + (hash(xi, yi + 1, s) * (1 - su) + hash(xi + 1, yi + 1, s) * su) * sv;
 }
 const pick = a => a[Math.random() * a.length | 0];
-const NB = 32, N = NB * 8; // the world is NB x NB blocks of 8x8 cells (2.56km), repeating forever
-const rel = v => mod(v + N / 2, N) - N / 2; // nearest copy in the repeating world
+const CITY_SOURCE_N = 256, CITY_SOURCE_NB = 32;
+const OCEAN_SIZE = 16384, OCEAN_MIN = 256 - OCEAN_SIZE / 2;
+let NB = CITY_SOURCE_NB, N = CITY_SOURCE_N, worldReady = false;
+const rel = v => { const size = worldReady ? OCEAN_SIZE : N; return worldReady && Math.abs(v) < size / 2 ? v : mod(v + size / 2, size) - size / 2; };
+function worldCoord(value) {
+  if (!worldReady) return mod(value,N);
+  return value>=OCEAN_MIN&&value<OCEAN_MIN+OCEAN_SIZE ? value : mod(value-OCEAN_MIN,OCEAN_SIZE)+OCEAN_MIN;
+}
+function inWorldGrid(x, y) { return x >= 0 && y >= 0 && x < N && y < N; }
+function worldBlock(value) { return worldReady ? value : value & (NB - 1); }
 
 // ---- colors: palette index = base*16 + brightness(0..15); NONE = no background
 const BASES = [[200,200,230],[255,210,90],[230,50,50],[60,110,255],[240,240,240],[255,200,0],[60,200,90],
@@ -56,6 +64,171 @@ function rayBox(ox, oy, oz, rx, ry, rz, b) {
   if (tmin < 0.01) return -1; // behind us, or we're inside it
   HIT.face = face; HIT.u = lu + du * tmin; HIT.v = lv + dv * tmin; HIT.w = oz + rz * tmin;
   return tmin;
+}
+// Source-space content is generated once. These transforms preserve each group's
+// local geometry while placing it on a finite chart. Ocean travel has its own bounds.
+const CITY_LAYOUT = {
+  id: 'archipelago-v3', width: 1024, height: 1024, chartWidth: 864, chartHeight: 512, cut: 72,
+  cityX: 128, northY: 96, southY: 144,
+  airportX: 128, airportY: -160,
+};
+// Move whole outer neighborhoods into headlands. Every boundary clears existing
+// lots and authored groups; the downtown, courier and railway geometry stays put.
+const CITY_EDGE_NEIGHBORHOODS = [
+  { id: 'north-west', x0: 0, y0: 8, x1: 48, y1: 32, dx: -48, dy: 24 },
+  { id: 'north-east', x0: 192, y0: 8, x1: 256, y1: 32, dx: 64, dy: 24 },
+  { id: 'north-cove', x0: 0, y0: 56, x1: 48, y1: 72, dx: -48, dy: -40 },
+  { id: 'south-west', x0: 0, y0: 72, x1: 48, y1: 104, dx: -48, dy: 40 },
+  { id: 'south-east', x0: 240, y0: 72, x1: 256, y1: 104, dx: 16, dy: 40 },
+  { id: 'south-beach', x0: 0, y0: 168, x1: 48, y1: 200, dx: -48, dy: -24 },
+  { id: 'south-harbor', x0: 192, y0: 176, x1: 256, y1: 200, dx: 64, dy: -32 },
+];
+function cityNeighborhoodOffset(x, y) {
+  // Coastal furniture and pier ends belong to their nearest waterfront block.
+  const coastY = clamp(y, 8, 199.999);
+  return CITY_EDGE_NEIGHBORHOODS.find(p => x >= p.x0 && x < p.x1 && coastY >= p.y0 && coastY < p.y1);
+}
+function citySourcePoint(x, y, kind = 'city') {
+  if (kind === 'airport') return [x + CITY_LAYOUT.airportX, y + CITY_LAYOUT.airportY];
+  // Northern fishing piers were stored across the original y=256 seam.
+  if (y >= 246) y -= CITY_SOURCE_N;
+  const offset = cityNeighborhoodOffset(x, y);
+  // The western headland joins two former waterfront strips. Its promenade and
+  // northern piers move to the outer shore rather than through the joined blocks.
+  const coastShift = y < 8 && offset?.id === 'north-west' ? -16 : 0;
+  return [x + CITY_LAYOUT.cityX + (offset?.dx || 0),
+    y + (y < CITY_LAYOUT.cut ? CITY_LAYOUT.northY : CITY_LAYOUT.southY) + (offset?.dy || 0) + coastShift];
+}
+function cityPreviousPoint(x, y) {
+  if (y < 84) return [x, y]; // The northern airfield is already in its final position.
+  const north = y < 192, sourceY = y - (north ? CITY_LAYOUT.northY : CITY_LAYOUT.southY);
+  if (north && sourceY > 72) return [x, y];
+  if (!north && (sourceY < 72 || sourceY > 216)) return [x, y];
+  const offset = cityNeighborhoodOffset(x - CITY_LAYOUT.cityX, sourceY);
+  const coastShift = sourceY < 8 && offset?.id === 'north-west' ? -16 : 0;
+  return [x + (offset?.dx || 0), y + (offset?.dy || 0) + coastShift];
+}
+function cityWorldSourcePoint(x, y) {
+  const sx = x - CITY_LAYOUT.cityX, sy = y - (y < 192 ? CITY_LAYOUT.northY : CITY_LAYOUT.southY);
+  if (sx >= -48 && sx < 0 && y < 112) return [sx + 48, sy - 8];
+  const p = CITY_EDGE_NEIGHBORHOODS.find(p => sx >= p.x0 + p.dx && sx < p.x1 + p.dx && sy >= p.y0 + p.dy && sy < p.y1 + p.dy);
+  return [sx - (p?.dx || 0), sy - (p?.dy || 0)];
+}
+function citySourceCell(cell, blocks = false) {
+  const stride = blocks ? CITY_SOURCE_NB : CITY_SOURCE_N, scale = blocks ? 8 : 1;
+  const [x,y] = citySourcePoint(cell % stride * scale, Math.floor(cell / stride) * scale);
+  return Math.floor(y / scale) * (CITY_LAYOUT.width / scale) + Math.floor(x / scale);
+}
+const CITY_ISLANDS = [
+  { id: 'north-city', x0: 128, x1: 384, y0: 99, y1: 168, north: true },
+  { id: 'south-city', x0: 128, x1: 384, y0: 216, y1: 349, north: false },
+];
+let cityBlockMask = null;
+const CITY_COAST_SIZE = 512;
+const CITY_COAST_FIELDS = [];
+function cityBlockAt(x, y) {
+  if (x < 0 || y < 0 || x >= CITY_LAYOUT.width || y >= CITY_LAYOUT.height) return false;
+  return !!cityBlockMask?.[Math.floor(y / 8) * (CITY_LAYOUT.width / 8) + Math.floor(x / 8)];
+}
+function buildCityCoasts() {
+  const width = CITY_COAST_SIZE, count = width * CITY_COAST_SIZE;
+  // Signed distance to the occupied block silhouette, cached once. The 8-neighbor
+  // sweeps round the stepped streets into beaches/coves without per-pixel searches.
+  for (const island of CITY_ISLANDS) {
+    const land = new Float32Array(count), water = new Float32Array(count);
+    for (let y = 0; y < CITY_COAST_SIZE; y++) for (let x = 0; x < width; x++) {
+      const k = y * width + x, inside = cityBlockAt(x, y) && (y < 192) === island.north;
+      land[k] = inside ? 0 : 10000;
+      water[k] = inside ? 10000 : 0;
+    }
+    function sweep(field, backwards) {
+      const step = backwards ? -1 : 1, end = backwards ? -1 : count;
+      for (let k = backwards ? count - 1 : 0; k !== end; k += step) {
+        const x = k % width, y = Math.floor(k / width);
+        let d = field[k];
+        if (x - step >= 0 && x - step < width) d = Math.min(d, field[k - step] + 1);
+        if (y - step >= 0 && y - step < CITY_COAST_SIZE) {
+          d = Math.min(d, field[k - step * width] + 1);
+          if (x > 0) d = Math.min(d, field[k - step * width - 1] + Math.SQRT2);
+          if (x + 1 < width) d = Math.min(d, field[k - step * width + 1] + Math.SQRT2);
+        }
+        field[k] = d;
+      }
+    }
+    for (const field of [land, water]) {
+      sweep(field, false);
+      sweep(field, true);
+    }
+    const landings = [...PIERS, [FOOTBRIDGE.x - .5, FOOTBRIDGE.y0, FOOTBRIDGE.x + .5, FOOTBRIDGE.y0 + 3]];
+    for (let k = 0; k < count; k++) {
+      const distance = water[k] > 0 ? water[k] - .5 : .5 - land[k];
+      const x = k % width + .5, y = Math.floor(k / width) + .5;
+      let buffer = 11 + 5 * Math.sin(x * .033 + y * .025) + 3 * Math.sin(y * .079 - x * .051);
+      // Preserve the shipping channel and existing pier/marina approaches.
+      if (island.north ? y > 160 : y < 224) buffer = 6 + 3 * Math.sin(x * .052 + (island.north ? 0 : 2)) + .7 * Math.sin(x * .14);
+      // Keep both sides of the marina fingers open for departing hulls. Its
+      // landside pier still overlaps the waterfront by more than two cells.
+      if (!island.north && Math.abs(x - MARINA.x) < 11 && y > 344) buffer = Math.min(buffer, 4.5);
+      if (distance > -24 && distance < 24) for (const [x0, y0, x1, y1] of landings) {
+        const d = Math.hypot(Math.max(0, x0 - x, x - x1), Math.max(0, y0 - y, y - y1));
+        buffer = Math.min(buffer, 6 + d * .7);
+      }
+      land[k] = distance + buffer;
+    }
+    CITY_COAST_FIELDS[island.north ? 0 : 1] = land;
+  }
+}
+function cityIslandEdge(x, y, island) {
+  const field = CITY_COAST_FIELDS[island.north ? 0 : 1];
+  if (field) {
+    const gx = Math.floor(x - .5), gy = Math.floor(y - .5), w = CITY_COAST_SIZE;
+    if (gx < 0 || gy < 0 || gx + 1 >= w || gy + 1 >= CITY_COAST_SIZE) return -1000;
+    const u = x - .5 - gx, v = y - .5 - gy, k = gy * w + gx;
+    const top = field[k] * (1 - u) + field[k + 1] * u;
+    const bottom = field[k + w] * (1 - u) + field[k + w + 1] * u;
+    return top * (1 - v) + bottom * v;
+  }
+  const side = 16 + 6 * Math.sin(y * .07) + 4 * Math.sin(y * .19 + 1);
+  const north = island.north ? island.y0 + wave(x - CITY_LAYOUT.cityX, 4) - 3 - 3 * Math.sin(x * .055) : island.y0 - 8 - 4 * Math.sin(x * .04);
+  const south = island.north ? island.y1 + 8 + 4 * Math.sin(x * .07 + 1) : shoreS(x);
+  // Natural buffers grow outside retained blocks; no occupied lots are removed.
+  const end = Math.min(y - north, south - y);
+  const corner = Math.max(0, 8 - Math.min(Math.abs(y - north), Math.abs(south - y))) * .45;
+  return Math.min(x - (island.x0 - side + corner), island.x1 + side - corner - x, end);
+}
+function archipelagoEdge(x, y) {
+  let edge = Math.max(isleEdge(x, y), airportEdge(x, y));
+  for (const island of CITY_ISLANDS) edge = Math.max(edge, cityIslandEdge(x, y, island));
+  if (worldReady && x >= 465) for (const island of WILD_ISLANDS) edge = Math.max(edge, wildIslandEdge(x,y,island));
+  return edge;
+}
+function naturalCoastAt(x, y) {
+  if (!worldReady) return false;
+  if (cityBlockMask) return !cityBlockAt(x, y) && CITY_ISLANDS.some(island => cityIslandEdge(x, y, island) > 0);
+  const outsideBlocks = x < 128 || x >= 384 || y < shoreN(x) || y >= 168 && y < 216;
+  return outsideBlocks && CITY_ISLANDS.some(island => cityIslandEdge(x, y, island) > 0);
+}
+// Ramps, deck and clearance share one description. Heights are cells (10 m).
+const ROAD_BRIDGES = [25,38].map((bx,i)=>({id:i?'harbor':'iron',x:bx*8+1,hw:1,y0:168,y1:216,ramp:12,h:1.65,thickness:.12}));
+function roadBridgeAt(x,y) {
+  return worldReady ? ROAD_BRIDGES.find(b=>Math.abs(x-b.x)<=b.hw&&y>=b.y0&&y<=b.y1) || null : null;
+}
+function roadBridgeHeight(b,y) { return b.h * Math.min(1,(y-b.y0)/b.ramp,(b.y1-y)/b.ramp); }
+function roadGroundHeight(x,y) { const b=roadBridgeAt(x,y);return Math.max(terrainHeight(x,y),b?roadBridgeHeight(b,y):0); }
+function roadBridgePierAt(x,y,pad=0) {
+  return worldReady && ROAD_BRIDGES.some(b=>[b.y0+b.ramp+2,b.y1-b.ramp-2].some(py=>[-1,1].some(side=>Math.abs(x-b.x-side*1.25)<.14+pad&&Math.abs(y-py)<.32+pad)));
+}
+function roadBridgeClearance(x,y) { const b=roadBridgeAt(x,y);return b?Math.max(0,roadBridgeHeight(b,y)-b.thickness):Infinity; }
+function roadBridgeRailAt(x,y,z) {
+  if(!worldReady)return false;
+  return ROAD_BRIDGES.some(b=>y>=b.y0&&y<=b.y1&&Math.abs(x-b.x)>.94&&Math.abs(x-b.x)<1.02&&z<roadBridgeHeight(b,y)+.115);
+}
+function roadBridgeBuiltHeight(x,y,z=Infinity) {
+  if(roadBridgePierAt(x,y))return ROAD_BRIDGES.find(b=>Math.abs(x-b.x)<2).h-.12;
+  const b=roadBridgeAt(x,y);
+  if(!b)return 0;
+  const top=roadBridgeHeight(b,y);
+  return z<top-b.thickness-.01?0:top;
 }
 // Stable desktop releases share the repo with other toys; only accept our tagged Windows installers.
 function desktopVersion(version) {
@@ -202,7 +375,7 @@ function env(dt) {
 // Moderate loss of tyre grip follows lingering wetness and accumulated, exposed snow.
 function roadTraction(x, y) {
   const water = clamp(Math.max(wet, rain * 0.65), 0, 1);
-  const cover = snowCover > 0 && snowExposed(mod(x, N), mod(y, N)) ? clamp(snowCover, 0, 1) : 0;
+  const cover = snowCover > 0 && snowExposed(worldCoord(x), worldCoord(y)) ? clamp(snowCover, 0, 1) : 0;
   return Math.max(0.55, (1 - water * 0.2) * (1 - cover * 0.4));
 }
 
@@ -991,7 +1164,7 @@ const ANIMAL_BODIES = {
 const DOG_LOOKS = new Map();
 const dogLook = col => DOG_LOOKS.get(col) || DOG_LOOKS.set(col, animalLook('dog', { body: [col, 9], wing: [col, 6], pale: [col, 12], leg: [col, 8], mark: [RED, 10], beak: [GRAY, 1], pupil: [GRAY, 0], tongue: [MAG, 11] })).get(col);
 // a dog (vx, vy) from you, facing (fx, fy); s: how big (1 a mid-sized dog); frame: see ANIMAL_BODIES.dog
-const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0) => drawAnimal(vx, vy, 0, 0.13 * s, fx, fy, dogLook(col), frame);
+const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0, z = 0) => drawAnimal(vx, vy, z, 0.13 * s, fx, fy, dogLook(col), frame);
 // a dog's eyes: on the front of its head, either side above the muzzle (clear of the ears)
 const dogEyes = (hc, part) => [1, -1].map(sg => ({ p: fAdd(hc, [sg * 1, 1.55, 0.55]), n: [sg * 0.4, 1, 0.2], role: FR.EYE, part }));
 // a dog sitting up: haunches down, front legs straight, head up, tongue out, tail sweeping the floor (wag: -1 / 1)
@@ -1068,12 +1241,12 @@ const pickBy = (seed, a) => a[(seed * 4813 | 0) % a.length];
 // Two bridges cross it. Streets are segments between intersections and some are left out, so blocks can merge
 // into superblocks (the big park, industrial yards); every intersection keeps 0 or at least 2 streets, so there
 // are no dead ends.
-const SHORE_N = 0, SHORE_S = 25, BRIDGE_X = [9, 22];
-const EL_ROW = 13; // the elevated train runs above H(., EL_ROW), all the way round
+let SHORE_N = 0, SHORE_S = 25, BRIDGE_X = [9, 22];
+let EL_ROW = 13; // the elevated train runs above H(., EL_ROW), all the way round
 const GRAND_HOTEL = { bx: 6, by: 7, doorU: 6 * 8 + 5 };
-const relB = v => mod(v + NB / 2, NB) - NB / 2; // nearest copy, in blocks
-const bi = (bx, by) => (by & (NB - 1)) * NB + (bx & (NB - 1));
-const idx = (x, y) => (y & (N - 1)) * N + (x & (N - 1));
+const relB = v => worldReady ? v : mod(v + NB / 2, NB) - NB / 2;
+const bi = (bx, by) => worldReady ? (bx >= 0 && by >= 0 && bx < NB && by < NB ? by * NB + bx : NB * NB) : (by & (NB - 1)) * NB + (bx & (NB - 1));
+const idx = (x, y) => worldReady ? (inWorldGrid(x, y) ? Math.floor(y) * N + Math.floor(x) : N * N) : (y & (N - 1)) * N + (x & (N - 1));
 
 // districts: small neighbourhoods (~5 blocks across, a few minutes' walk) from a jittered grid of seeds, nearest seed
 // wins (wrapping east-west), with wobbly borders. Downtown sits round the middle of town, industry along the shores,
@@ -1102,7 +1275,7 @@ DIST_SEEDS[7][2] = 'belle';
   for (const s of DIST_SEEDS) if (s[2] === 'midtown') { const d = Math.hypot(relB(s[0] - NB / 2), s[1] - (SHORE_S + SHORE_N) / 2 - 5); if (d < bd) { bd = d; best = s; } }
   best[2] = 'shotengai';
 }
-const DIST = new Array(NB * NB), DIST_OWNER = new Int16Array(NB * NB).fill(-1); // (which seed each block belongs to)
+let DIST = new Array(NB * NB), DIST_OWNER = new Int16Array(NB * NB).fill(-1); // (which seed each block belongs to)
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   if (by === SHORE_N || by === SHORE_S) { DIST[bi(bx, by)] = 'waterfront'; continue; }
   if (by > SHORE_S) { DIST[bi(bx, by)] = 'sea'; continue; }
@@ -1124,7 +1297,7 @@ const DISTRICT_TITLE = { downtown: 'Downtown', midtown: 'Midtown', chinatown: 'C
 const districtAt = (wx, wy) => districtOf(Math.floor(wx / 8), Math.floor(wy / 8));
 
 // block kinds: '' = buildings; open kinds: park, plaza, landmark, construction, yard, waterfront, sea
-const KIND = new Array(NB * NB).fill('');
+let KIND = new Array(NB * NB).fill('');
 // superblocks: [x0, y0, x1, y1, kind] - the streets inside are removed
 const SUPER = [[10, 3, 12, 4, 'park'], [3, 21, 4, 22, 'yard'], [28, 22, 29, 23, 'yard'], [15, 14, 16, 14, 'plaza'], [7, 10, 9, 11, 'gardens']];
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
@@ -1143,7 +1316,7 @@ const blockKind = (bx, by) => KIND[bi(bx, by)];
 
 // street segments. H(bx, by): the street along the north side of block (bx, by), between intersections (bx, by) and
 // (bx+1, by). V(bx, by): the street along its west side, between intersections (bx, by) and (bx, by+1).
-const HSEG = new Uint8Array(NB * NB), VSEG = new Uint8Array(NB * NB);
+let HSEG = new Uint8Array(NB * NB), VSEG = new Uint8Array(NB * NB);
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   HSEG[bi(bx, by)] = by > SHORE_N && by <= SHORE_S ? 1 : 0; // the shore roads are H(., SHORE_N+1) and H(., SHORE_S)
   VSEG[bi(bx, by)] = by > SHORE_N && by < SHORE_S ? 1 : 0; // nothing crosses the waterfront promenades...
@@ -1157,7 +1330,7 @@ const hseg = (bx, by) => HSEG[bi(bx, by)], vseg = (bx, by) => VSEG[bi(bx, by)];
 // streets leaving intersection (bx, by) heading (dx, dy)
 const exitOK = (bx, by, dx, dy) => dx > 0 ? hseg(bx, by) : dx < 0 ? hseg(bx - 1, by) : dy > 0 ? vseg(bx, by) : vseg(bx, by - 1);
 const degree = (bx, by) => hseg(bx, by) + hseg(bx - 1, by) + vseg(bx, by) + vseg(bx, by - 1);
-const onBridge = (bx, by) => BRIDGE_X.includes(bx & (NB - 1)) && (by & (NB - 1)) >= SHORE_S;
+const onBridge = (bx, by) => worldReady ? BRIDGE_X.includes(bx)&&by>=21&&by<27 : BRIDGE_X.includes(bx & (NB - 1)) && (by & (NB - 1)) >= SHORE_S;
 // A city that grew rather than one laid out with a ruler: the avenues (every 6th street each way, the shore roads,
 // the el street, the bridges) run straight through, but side streets come and go. The old districts have the
 // staggered T-junctions of streets that never lined up; industry swallows streets into yards; midtown loses the odd
@@ -1198,7 +1371,7 @@ function streetProblems() { // for the tests: every intersection has no streets 
 }
 
 // ROAD: what kind of street a cell is. 0 not a street, 1 north-south street, 2 east-west street, 3 intersection
-const ROAD = new Uint8Array(N * N);
+let ROAD = new Uint8Array(N * N);
 for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
   const lx = x & 7, ly = y & 7, bx = x >> 3, by = y >> 3;
   ROAD[y * N + x] = lx < 2 && ly < 2 ? (degree(bx, by) ? 3 : 0) : lx < 2 ? (vseg(bx, by) ? 1 : 0) : ly < 2 ? (hseg(bx, by) ? 2 : 0) : 0;
@@ -1206,22 +1379,22 @@ for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
 
 // the coast: a wavy shoreline inside each waterfront row (periodic, so it meets itself across the wrap)
 const TAU = Math.PI * 2;
-const wave = (x, k) => 0.8 * Math.sin(TAU * x / N * 3 + k) + 0.5 * Math.sin(TAU * x / N * 11 + 2 * k) + 0.3 * Math.sin(TAU * x / N * 23 + 3 * k);
-const shoreS = x => SHORE_S * 8 + 4.6 + wave(x, 1); // land is north of this line in the south waterfront
-const shoreN = x => SHORE_N * 8 + 3.4 + wave(x, 4); // and south of this one in the north waterfront
+const wave = (x, k) => 0.8 * Math.sin(TAU * x / CITY_SOURCE_N * 3 + k) + 0.5 * Math.sin(TAU * x / CITY_SOURCE_N * 11 + 2 * k) + 0.3 * Math.sin(TAU * x / CITY_SOURCE_N * 23 + 3 * k);
+const shoreS = x => SHORE_S * 8 + 4.6 + wave(x - (worldReady ? CITY_LAYOUT.cityX : 0), 1);
+const shoreN = x => SHORE_N * 8 + 3.4 + wave(x - (worldReady ? CITY_LAYOUT.cityX : 0), 4);
 // lighthouse island: a small rocky island out in the bay off the foot of Broadway, its lighthouse on the far side,
 // reached by a long footbridge from the waterfront promenade. The coast wobbles (isleR), so it isn't a circle.
-const ISLE_BX = 16, ISLE = { x: ISLE_BX * 8 + 5, y: SHORE_S * 8 + 33, r: 5 };
+let ISLE_BX = 16, ISLE = { x: ISLE_BX * 8 + 5, y: SHORE_S * 8 + 33, r: 5 };
 const LIGHTHOUSE = { x: ISLE.x + 1.2, y: ISLE.y + 2.2, r: 0.26 };
 const FOOTBRIDGE = { x: ISLE.x, hw: 0.16, y0: SHORE_S * 8 + 2.6, y1: ISLE.y - 2.5 }; // a deck 3m wide, running south
 const isleR = th => ISLE.r * (1 + 0.16 * Math.sin(3 * th + 1) + 0.08 * Math.sin(5 * th + 2) + 0.05 * Math.sin(9 * th));
 function isleEdge(x, y) { // how far inside the island's coast (x, y) is, in cells; negative out at sea
   const ex = rel(x - ISLE.x), ey = rel(y - ISLE.y);
-  if (Math.abs(ex) > ISLE.r * 1.5 || Math.abs(ey) > ISLE.r * 1.5) return -ISLE.r;
+  if (!worldReady && (Math.abs(ex) > ISLE.r * 1.5 || Math.abs(ey) > ISLE.r * 1.5)) return -ISLE.r;
   return isleR(Math.atan2(ey, ex)) - Math.hypot(ex, ey);
 }
 const onIsland = (x, y) => isleEdge(x, y) > 0;
-const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && mod(y, N) > FOOTBRIDGE.y0 && mod(y, N) < FOOTBRIDGE.y1;
+const onFootbridge = (x, y) => Math.abs(rel(x - FOOTBRIDGE.x)) < FOOTBRIDGE.hw && worldCoord(y) > FOOTBRIDGE.y0 && worldCoord(y) < FOOTBRIDGE.y1;
 // ---- the airport: Glyphport International, on reclaimed land out in the bay west of the first bridge, joined to the
 // promenade by a causeway you can walk or drive. North to south: the landside road where the causeway comes in, the
 // hangars (west), the terminal and the control tower and two helipads (east); the apron in front of them, the taxiway,
@@ -1244,14 +1417,14 @@ const AIRPORT_BLDG = [
 // the shore wobbles a little, so it reads as made ground, not a box
 function airportEdge(x, y) {
   const ex = rel(x - (AIRPORT.x0 + AIRPORT.x1) / 2), ey = rel(y - (AIRPORT.y0 + AIRPORT.y1) / 2), hx = (AIRPORT.x1 - AIRPORT.x0) / 2, hy = (AIRPORT.y1 - AIRPORT.y0) / 2;
-  if (Math.abs(ex) > hx + 3 || Math.abs(ey) > hy + 3) return -3;
+  if (!worldReady && (Math.abs(ex) > hx + 3 || Math.abs(ey) > hy + 3)) return -3;
   const R = 2.5, qx = Math.abs(ex) - hx + R, qy = Math.abs(ey) - hy + R;
   const box = Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - R; // (a rounded rectangle's signed distance)
   return -box + 0.25 * Math.sin(x * 1.3) * Math.sin(y * 0.9 + 1);
 }
 const onAirport = (x, y) => airportEdge(x, y) > 0;
-const onCauseway = (x, y) => Math.abs(rel(x - CAUSEWAY.x)) < CAUSEWAY.hw && mod(y, N) > CAUSEWAY.y0 && mod(y, N) < CAUSEWAY.y1;
-const onRunway = (x, y) => Math.abs(rel(y - RUNWAY.y)) < RUNWAY.hw && mod(x, N) > RUNWAY.x0 && mod(x, N) < RUNWAY.x1;
+const onCauseway = (x, y) => Math.abs(rel(x - CAUSEWAY.x)) < CAUSEWAY.hw && worldCoord(y) > CAUSEWAY.y0 && worldCoord(y) < CAUSEWAY.y1 || worldReady && x > AIRPORT.x1 - 2 && x < CAUSEWAY.x + CAUSEWAY.hw && Math.abs(y - (AIRPORT.y0 + 1)) < CAUSEWAY.hw;
+const onRunway = (x, y) => Math.abs(rel(y - RUNWAY.y)) < RUNWAY.hw && worldCoord(x) > RUNWAY.x0 && worldCoord(x) < RUNWAY.x1;
 // The hangars are Nissen-style: an arched roof springing from the ground along both long sides (a slice of a cylinder
 // lying front to back), a flat wall at the back, and at the front (the apron side, +y) a wall with a wide opening whose
 // top follows the arch down to the shoulders, under a straight lintel. Inside is a floor you walk and taxi across.
@@ -1308,7 +1481,7 @@ const airportIndoors = (x, y, z) => !!airportBldgAt(x, y) && z < airportHeight(x
 // the Sunset Pier: a wide boardwalk out into the bay off the first stretch of shore east of the island that isn't
 // docks or a bridge. Game booths and a prize stall down its sides, a carousel in the middle, the Ferris wheel out at
 // the end (its wheel stands across the pier, east-west, so you see it face on from the promenade).
-const FAIR_BX = (() => { for (let bx = ISLE_BX + 3; ; bx++) if (!BRIDGE_X.includes(bx) && districtOf(bx, SHORE_S - 1) !== 'industrial') return bx; })();
+let FAIR_BX = (() => { for (let bx = ISLE_BX + 3; ; bx++) if (!BRIDGE_X.includes(bx) && districtOf(bx, SHORE_S - 1) !== 'industrial') return bx; })();
 const FAIR = { x0: FAIR_BX * 8 + 2.2, x1: FAIR_BX * 8 + 7.8, y0: SHORE_S * 8 + 3, y1: SHORE_S * 8 + 17 };
 FAIR.cx = (FAIR.x0 + FAIR.x1) / 2;
 const WHEEL = { x: FAIR.cx, y: FAIR.y1 - 2.6, R: 1.9, hub: 2.2, n: 12, rev: 60 }; // 19m radius, 42m to the top, once round a minute
@@ -1325,7 +1498,7 @@ const PIERS = [[FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1]];
 // the marina, on the industrial shore west of the island: a jetty straight out from the promenade, two long finger
 // piers across it and a T at the end. Boats lie in the slips along the fingers (boats.js says whose they are), and
 // the marina office stands on the promenade at the foot of the jetty
-const MARINA_BX = 13, MARINA = { x: MARINA_BX * 8 + 4, y0: SHORE_S * 8 + 3, fingers: [SHORE_S * 8 + 7, SHORE_S * 8 + 10], end: SHORE_S * 8 + 12.6, reach: 3.3 };
+let MARINA_BX = 13, MARINA = { x: MARINA_BX * 8 + 4, y0: SHORE_S * 8 + 3, fingers: [SHORE_S * 8 + 7, SHORE_S * 8 + 10], end: SHORE_S * 8 + 12.6, reach: 3.3 };
 MARINA.office = { x: MARINA.x - 2.2, y: SHORE_S * 8 + 3.55 };
 for (const p of [[MARINA.x - 0.2, MARINA.y0, MARINA.x + 0.2, MARINA.end], [MARINA.x - 1, MARINA.end - 0.3, MARINA.x + 1, MARINA.end],
   ...MARINA.fingers.map(fy => [MARINA.x - MARINA.reach, fy - 0.15, MARINA.x + MARINA.reach, fy + 0.15])]) PIERS.push(Object.assign(p, { marina: true }));
@@ -1337,14 +1510,14 @@ for (let bx = 0; bx < NB; bx++) {
   else if (hash(bx, 5, 43) < 0.35 && bx !== FAIR_BX) PIERS.push([bx * 8 + 4.6, SHORE_S * 8 + 3, bx * 8 + 5.4, SHORE_S * 8 + 13]);
   if (hash(bx, 6, 43) < 0.25) PIERS.push([bx * 8 + 4.6, N + SHORE_N * 8 - 9, bx * 8 + 5.4, N + SHORE_N * 8 + 5]);
 }
-const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => mod(x - x0, N) < x1 - x0 && mod(y - y0, N) < y1 - y0) || onFootbridge(x, y) || onCauseway(x, y);
-const seaAt = (wx, wy) => { const y = mod(wy, N); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy) && !onAirport(wx, wy); };
+const onPier = (x, y) => PIERS.some(([x0, y0, x1, y1]) => worldReady ? x >= x0 && x < x1 && y >= y0 && y < y1 : worldCoord(x - x0) < x1 - x0 && worldCoord(y - y0) < y1 - y0) || onFootbridge(x, y) || onCauseway(x, y);
+const seaAt = (wx, wy) => { if (worldReady) return archipelagoEdge(wx,wy) <= 0; const y = worldCoord(wy); return (y > shoreS(wx) || y < shoreN(wx)) && !onIsland(wx, wy) && !onAirport(wx, wy); };
 // ---- the Botanical Gardens: a walled garden over three blocks by two (the streets inside it are gone). In garden
 // coordinates gx, gy (cells from its north-west inside corner): a lake to the east with a jetty for the swan boats,
 // the glass conservatory to the north-west, the aviary to the south-west, enclosures, winding gravel paths between.
 const GARDEN = { x0: 7 * 8 + 2, y0: 10 * 8 + 2, w: 22, h: 14 };
-const gardenLocal = (x, y) => [mod(x, N) - GARDEN.x0, mod(y, N) - GARDEN.y0];
-const inGardens = (x, y) => { const gx = mod(x, N) - GARDEN.x0, gy = mod(y, N) - GARDEN.y0; return gx >= 0 && gy >= 0 && gx < GARDEN.w && gy < GARDEN.h; };
+const gardenLocal = (x, y) => [worldCoord(x) - GARDEN.x0, worldCoord(y) - GARDEN.y0];
+const inGardens = (x, y) => { const gx = worldCoord(x) - GARDEN.x0, gy = worldCoord(y) - GARDEN.y0; return gx >= 0 && gy >= 0 && gx < GARDEN.w && gy < GARDEN.h; };
 const LAKE = { x: 15, y: 8.2, rx: 4.6, ry: 3.4 };
 function gardenLakeEdge(gx, gy) { // how far inside the lake's shore (gx, gy) is (cells, roughly); negative on land
   const ex = (gx - LAKE.x) / LAKE.rx, ey = (gy - LAKE.y) / LAKE.ry, ang = Math.atan2(ey, ex);
@@ -1382,7 +1555,7 @@ const isWater = (wx, wy) => seaAt(wx, wy) && !(ROAD[idx(Math.floor(wx), Math.flo
 // ---- buildings: N x N cell heights (1 = 10m), facade style, per-lot seed and shop
 // STY 0 office, 1 glass, 2 brick, 7 tenement, 8 warehouse, 9 brownstone, 10 chinatown shophouse;
 // 3-6 are landmarks and construction (clock tower, cathedral, video-screen tower, steel frame)
-const map = new Float32Array(N * N), STY = new Uint8Array(N * N), SEED = new Float32Array(N * N), SHOP = new Array(N * N);
+let map = new Float32Array(N * N), STY = new Uint8Array(N * N), SEED = new Float32Array(N * N), SHOP = new Array(N * N);
 const LANDMARK_TYPES = ['clock', 'cathedral', 'screens', 'radio'], landmarkOf = new Map();
 for (let by = 0, n = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++)
   if (blockKind(bx, by) === 'landmark') landmarkOf.set(bi(bx, by), LANDMARK_TYPES[n++ % 4]);
@@ -1549,7 +1722,7 @@ for (const gh of GLASSHOUSES) {
 // middle of each island, from ix0 to ix1, its pump at pumpX
 const GAS = { lanes: [0.42, 1.02, 1.62], islands: [0.72, 1.32], ix0: 1.1, ix1: 1.9, pumpX: 1.5, slotX: 1.37, h: 0.38 };
 const GAS_BRANDS = [['GLYPHCO', RED], ['APEX', BLUE], ['NOVA', GREEN], ['SUNSTOP', YEL], ['ROCKET', ORANGE], ['METRO', CYAN]];
-const GAS_STATIONS = [], GAS_CELL = new Uint8Array(N * N); // (1: forecourt, 2: the shop)
+let GAS_STATIONS = [], GAS_CELL = new Uint8Array(N * N); // (1: forecourt, 2: the shop)
 {
   const taken = new Set([...SERVICES, GRAND_HOTEL, AQUARIUM, CASINO, EXCHANGE, MUSEUM, CLUB].map(b => bi(b.bx, b.by))), cand = [];
   for (let by = SHORE_N + 2; by < SHORE_S - 1; by++) for (let bx = 0; bx < NB; bx++) {
@@ -1575,12 +1748,12 @@ const GAS_STATIONS = [], GAS_CELL = new Uint8Array(N * N); // (1: forecourt, 2: 
   }
 }
 const onForecourt = (x, y) => GAS_CELL[idx(Math.floor(x), Math.floor(y))] === 1;
-const gasStationAt = (x, y) => GAS_STATIONS.find(s => s.bx === (Math.floor(x / 8) & (NB - 1)) && s.by === (Math.floor(y / 8) & (NB - 1)));
+const gasStationAt = (x, y) => GAS_STATIONS.find(s => s.bx === worldBlock(Math.floor(x / 8)) && s.by === worldBlock(Math.floor(y / 8)));
 
 // Belle Époque: preserve flat roofs with public access. Other buildings have recessed courts / clipped wings
 // and a real mansard above the masonry. A lot's material and vines are stable across all its faces.
 const BELLE_BUILDINGS = [];
-const BELLE_ROOF_CELLS = new Array(N * N);
+let BELLE_ROOF_CELLS = new Array(N * N);
 {
   const lots = new Map();
   for (let i = 0; i < map.length; i++) if (map[i] && STY[i] === 24) {
@@ -1623,10 +1796,10 @@ function buildingMiddle(mx, my) { // the cell of (mx, my)'s building nearest its
 }
 // ---- street names, for talk, directions and the HUD
 const ord = n => n + ((n % 100 / 10 | 0) === 1 ? 'TH' : [, 'ST', 'ND', 'RD'][n % 10] || 'TH');
-const ST_NAMES = ['', 'BAYSIDE DR', 'KING ST', 'CANAL ST', 'MERCER ST', '5TH ST', 'GRAND ST', 'MOTT ST', 'HOUSTON ST', '9TH ST',
+let ST_NAMES = ['', 'BAYSIDE DR', 'KING ST', 'CANAL ST', 'MERCER ST', '5TH ST', 'GRAND ST', 'MOTT ST', 'HOUSTON ST', '9TH ST',
   'BLEECKER ST', 'SPRING ST', '12TH ST', 'BROOME ST', '14TH ST', 'WATER ST', 'PEARL ST', '17TH ST', 'HUDSON ST', 'BANK ST',
   '20TH ST', 'FRONT ST', 'DOCK ST', '23RD ST', 'HARBOR ST', 'WATERFRONT DR'];
-const AVE_NAMES = Array.from({ length: NB }, (_, bx) => bx === 16 ? 'BROADWAY' : ord(bx < 16 ? bx + 1 : bx) + ' AVE');
+let AVE_NAMES = Array.from({ length: NB }, (_, bx) => bx === 16 ? 'BROADWAY' : ord(bx < 16 ? bx + 1 : bx) + ' AVE');
 const BRIDGE_NAMES = { 9: 'IRON BRIDGE', 22: 'HARBOR BRIDGE' };
 function streetName(wx, wy) { // '' when not on a street
   const x = Math.floor(wx), y = Math.floor(wy), r = ROAD[idx(x, y)], bx = (x >> 3) & (NB - 1), by = (y >> 3) & (NB - 1);
@@ -1634,6 +1807,160 @@ function streetName(wx, wy) { // '' when not on a street
   if (r !== 3) return r === 1 ? ave : r === 2 ? ST_NAMES[by] : '';
   const h = hseg(bx, by) || hseg(bx - 1, by), v = vseg(bx, by) || vseg(bx, by - 1);
   return h && v ? ST_NAMES[by] + ' & ' + ave : h ? ST_NAMES[by] : ave;
+}
+// Native chart coordinates: these islands never pass through the legacy city transform.
+const WILD_ISLANDS = [
+  { id: 'fern', name: 'Fern Island', x: 586, y: 220, rx: 66, ry: 76, hill: 2.8, phase: .7,
+    dock: [510, 235, 522, 236], landing: [521.5, 235.5], note: 'Rough airstrip, waterfall, woodland trails and a house for sale. Boat or light aircraft access.' },
+  { id: 'cabin', name: 'Cabin Cove', x: 490, y: 393, rx: 15, ry: 18, hill: .65, phase: 1.8,
+    dock: [472, 395, 479, 396], landing: [478.5, 395.5], note: 'An unlocked fishing shelter with benches and a visitors\' log, beside a quiet fishing jetty. Boat access.' },
+  { id: 'rock', name: 'Cormorant Rock', x: 697, y: 352, rx: 10, ry: 14, hill: .9, phase: 2.6,
+    dock: [684, 354, 690, 355], landing: [689.5, 354.5], note: 'A rocky fishing outcrop with a low landing on its west side. Boat access.' },
+  { id: 'sand', name: 'Crescent Sands', x: 719, y: 109, rx: 23, ry: 11, hill: .18, phase: .2,
+    dock: [691, 110, 700, 111], landing: [699.5, 110.5], note: 'Pale sand, driftwood and shallow dunes. Boat access.' },
+  { id: 'wood', name: 'Juniper Isle', x: 789, y: 244, rx: 18, ry: 23, hill: .8, phase: 3.1,
+    dock: [767, 247, 776, 248], landing: [775.5, 247.5], note: 'A private house among the trees. You can knock, but nobody seems to be home. Boat access.' },
+];
+const FERN_STRIP = { x0: 551, x1: 617, y: 220, hw: 1.3 };
+const FERN_HOUSE = { x0: 539, y0: 244, x1: 542, y1: 247, door: [540.5, 247.2], terrace: [537.8, 245.5] };
+const ISLAND_CABINS = [
+  {...FERN_HOUSE, id:'fern-house', name:'Fern House', h:.38, pitch:.22, wood:BRICK, roof:GRAY},
+  {id:'cabin-cove',name:'Cabin Cove fishing shelter',door:[492,392.2],room:'islandshelter',x0:491,y0:390,x1:493,y1:392,h:.29,pitch:.17,wood:BRICK,roof:GREEN},
+  {id:'juniper-house',name:'Juniper House',door:[791,241.2],x0:790,y0:239,x1:792,y1:241,h:.3,pitch:.18,wood:STONE,roof:BRICK},
+];
+const ISLAND_ROOFS=[];
+const FERN_FALLS={x:627,y0:186,y1:200,poolY:196.5};
+const FERN_TRAILS = [
+  [[521.5,235.5],[536,238],[536,248],[540.5,248],[540.5,247.2]],
+  [[536,238],[545,230],[551,224],[555,222]],
+  [[545,230],[565,240],[590,243],[615,236],[628,215],[627,197]],
+];
+const WILD_FIELDS=new Map();
+let fernTrailField=null;
+function wildFieldSample(field,x,y) {
+  const fx=(x-field.x0)*2,fy=(y-field.y0)*2,gx=Math.floor(fx),gy=Math.floor(fy);
+  if(gx<0||gy<0||gx+1>=field.w||gy+1>=field.h)return null;
+  const u=fx-gx,v=fy-gy,k=gy*field.w+gx,a=field.values;
+  return (a[k]*(1-u)+a[k+1]*u)*(1-v)+(a[k+field.w]*(1-u)+a[k+field.w+1]*u)*v;
+}
+function wildIslandEdge(x,y,island) {
+  const field=WILD_FIELDS.get(island.id);
+  if(field)return wildFieldSample(field,x,y)??-1000;
+  return wildAnalyticEdge(x,y,island);
+}
+function wildAnalyticEdge(x, y, island) {
+  const ex = (x-island.x)/island.rx, ey = (y-island.y)/island.ry;
+  if (Math.abs(ex)>1.3 || Math.abs(ey)>1.3) return -1000;
+  const angle = Math.atan2(ey,ex);
+  const radius = 1 + .075*Math.sin(angle*3+island.phase) + .045*Math.sin(angle*5-island.phase);
+  const edge=(radius-Math.hypot(ex,ey))*Math.min(island.rx,island.ry);
+  if(island.id==='sand') {
+    const cove=Math.hypot((x-island.x-island.rx*.55)*.7,y-island.y)-island.ry*.78;
+    return Math.min(edge,cove);
+  }
+  return edge;
+}
+function wildIslandAt(x, y, margin = 0) {
+  if (!worldReady || x < 465) return null;
+  return WILD_ISLANDS.find(island => wildIslandEdge(x,y,island)>-margin) || null;
+}
+function onFernStrip(x,y,margin=0) {
+  return worldReady && x>=FERN_STRIP.x0-margin && x<=FERN_STRIP.x1+margin && Math.abs(y-FERN_STRIP.y)<=FERN_STRIP.hw+margin;
+}
+function trailDistance(x,y) {
+  if(fernTrailField){const cached=wildFieldSample(fernTrailField,x,y);if(cached!==null)return cached;}
+  return fernTrailDistance(x,y);
+}
+function fernTrailDistance(x,y) {
+  let distance = Infinity;
+  for (const trail of FERN_TRAILS) for (let k=1;k<trail.length;k++) {
+    const [ax,ay]=trail[k-1],[bx,by]=trail[k],ux=bx-ax,uy=by-ay;
+    const t=clamp(((x-ax)*ux+(y-ay)*uy)/(ux*ux+uy*uy),0,1);
+    distance=Math.min(distance,Math.hypot(x-ax-ux*t,y-ay-uy*t));
+  }
+  return distance;
+}
+function buildWildIslandFields() {
+  function field(island,sample) {
+    const x0=Math.floor(island.x-island.rx*1.3)-2,y0=Math.floor(island.y-island.ry*1.3)-2;
+    const w=(Math.ceil(island.x+island.rx*1.3)+2-x0)*2+1,h=(Math.ceil(island.y+island.ry*1.3)+2-y0)*2+1;
+    const values=new Float32Array(w*h);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)values[y*w+x]=sample(x0+x/2,y0+y/2);
+    return {x0,y0,w,h,values};
+  }
+  for(const island of WILD_ISLANDS)WILD_FIELDS.set(island.id,field(island,(x,y)=>wildAnalyticEdge(x,y,island)));
+  fernTrailField=field(WILD_ISLANDS[0],fernTrailDistance);
+}
+function wildGroundHeight(x,y,island) {
+  const edge=wildIslandEdge(x,y,island);
+  if(edge<=.5)return 0;
+  const beach=terrainEase((edge-.5)/6);
+  let height=island.hill*beach*(.65+.35*Math.sin((x-island.x)*.045+(y-island.y)*.028+1));
+  // Broad low landing pads and trails keep every island explorable on foot.
+  const [lx,ly]=island.landing;
+  height*=terrainEase((Math.hypot(x-lx,y-ly)-3)/9);
+  if(island.id==='fern') {
+    const runwayDistance=Math.hypot(Math.max(0,FERN_STRIP.x0-20-x,x-FERN_STRIP.x1-20),Math.max(0,Math.abs(y-FERN_STRIP.y)-FERN_STRIP.hw-1.5));
+    height*=terrainEase(runwayDistance/8);
+    const houseDistance=Math.hypot(Math.max(0,FERN_HOUSE.x0-2-x,x-FERN_HOUSE.x1-3),Math.max(0,FERN_HOUSE.y0-2-y,y-FERN_HOUSE.y1-2));
+    height*=terrainEase(houseDistance/7);
+    height=Math.min(height,.12+trailDistance(x,y)*.11);
+    // A shallow, level collecting pool; the trail approaches along its west bank.
+    const pool=Math.hypot((x-FERN_FALLS.x)/.9,(y-FERN_FALLS.poolY)/1.35);
+    if(pool<1.5)height=.12+(height-.12)*terrainEase((pool-1)/.5);
+  }
+  return height;
+}
+function islandRoofHeight(x,y) {
+  if(!worldReady||x<465)return 0;
+  let top=0;
+  for(const roof of ISLAND_ROOFS)top=Math.max(top,landmarkSurfaceHeight(roof,x,y));
+  return top;
+}
+function fernCreekDistance(x,y) {
+  if(y<FERN_FALLS.y0||y>FERN_FALLS.y1||Math.abs(x-FERN_FALLS.x)>1.5)return 10;
+  const center=FERN_FALLS.x+Math.sin((y-FERN_FALLS.y0)*.6)*.15;
+  const stream=Math.abs(x-center)-(.14+.045*Math.sin(y*3.3));
+  const pool=(Math.hypot((x-FERN_FALLS.x)/.72,(y-FERN_FALLS.poolY)/1.12)-1)*.72;
+  return Math.min(stream,pool);
+}
+// Shared world-anchored texture: floor triangles and level ground use the same marks.
+function islandSurface(x,y) {
+  const island=wildIslandAt(x,y);
+  if(!island)return null;
+  const grain=hash(Math.floor(x*21),Math.floor(y*21),1875);
+  const patch=noise(x*.3,y*.3,1876),edge=wildIslandEdge(x,y,island);
+  if(island.id==='fern') {
+    const creek=fernCreekDistance(x,y);
+    if(creek<0)return {base:CYAN,background:BLUE,ch:fract(y*5-T*1.8+grain*.4)<.14?'~':' ',color:'#528b9f',tone:1.1,water:true};
+    if(creek<.16+patch*.12)return {base:GRAY,background:GREEN,ch:grain>.97?'.':' ',color:'#64715d',tone:1};
+    if(onFernStrip(x,y)) {
+      let ch=grain>.85?':':' ';
+      if(Math.abs(y-FERN_STRIP.y)<.04&&fract(x*.5)<.45)ch='=';
+      return {base:WARM,background:BRICK,ch,color:'#8c805c',tone:1};
+    }
+    if(trailDistance(x,y)<.08+patch*.07)return {base:WARM,background:BRICK,ch:grain>.86?':':'.',color:'#8c805c',tone:.9};
+  }
+  if(island.id==='rock') {
+    let ch=grain>.75?':':' ';
+    if(grain>.9)ch='o';
+    return {base:GRAY,background:GRAY,ch,color:'#727777',tone:.8+patch*.3};
+  }
+  return islandShoreSurface(x,y,edge,true,island.id==='sand',grain,patch);
+}
+function islandShoreSurface(x,y,edge,beach,allSand=false,grain=hash(Math.floor(x*21),Math.floor(y*21),1875),patch=noise(x*.3,y*.3,1876)) {
+  if(!beach&&edge<1.2+patch*.6)return {base:GRAY,background:GRAY,ch:grain>.93?':':' ',color:'#727777',tone:.9};
+  if(edge<.4+patch*.2)return {base:WARM,background:BRICK,ch:grain>.92?':':' ',color:'#827858',tone:.8};
+  if(beach&&(edge<2.3+patch*1.2||allSand)) {
+    const grass=edge>1.6&&grain>.91&&patch>.55;
+    let ch=grain>.93?'.':' ';
+    if(grass)ch='\'';
+    return {base:grass?GREEN:YEL,background:STONE,ch,color:'#b3a16c',tone:.8+patch*.18,lift:3.8};
+  }
+  const scrub=edge<4.5&&patch>.45;
+  let ch=grain>.84?',':' ';
+  if(grain>.94)ch='\'';
+  return {base:GREEN,background:scrub?WARM:GREEN,ch,color:'#2a5a30',tone:1+patch*.12};
 }
 // One authored neighbourhood route. Heights are world units (10m), shared by drawing and traversal.
 const COURIER_DEPOT = { x0: 178, y0: 101, x1: 181, y1: 104, h: 1.4, roof: [179.5,102.5], door: [177.72,102.5] };
@@ -1829,7 +2156,7 @@ function courierRoofHeight(x,y) {
 }
 // static props are bucketed by block, so a frame only visits the ones within draw distance (see forNear)
 function bucketed(items) {
-  const b = Array.from({ length: NB * NB }, () => []);
+  const b = Array.from({ length: NB * NB + (worldReady ? 1 : 0) }, () => []);
   for (const it of items) b[bi(Math.floor(it.x / 8), Math.floor(it.y / 8))].push(it);
   return b;
 }
@@ -1874,6 +2201,10 @@ function glow(wx, wy) {
 const POND = [3.5, 3.5, 0.85]; // block-local x, y, base radius
 // a lumpy, slightly oval pond outline (different per park): how far (lx, ly) is outside it (inside: below 0)
 function pondEdgeSD(lx, ly, bx, by) {
+  if (worldReady) {
+    const [x, y] = cityWorldSourcePoint(bx * 8 + 4, by * 8 + 4);
+    bx = Math.floor(x / 8); by = Math.floor(y / 8);
+  }
   const ex = (lx - POND[0]) / 1.15, ey = ly - POND[1], ang = Math.atan2(ey, ex);
   return Math.hypot(ex, ey) - POND[2] * (0.75 + 0.55 * noise(Math.cos(ang) * 1.4 + bx * 3.1, Math.sin(ang) * 1.4 + by * 2.3, 13));
 }
@@ -2014,10 +2345,10 @@ function blockedOn(y0, y1) { // x intervals [a, b] that the band y0..y1 of sea i
 }
 function freeSpan(x, y0, y1) { // the open stretch [a, b] of that band (b > a, may run past N) that x is in, or null
   const o = BRIDGE_X[0] * 8 - 0.4; // measure from a bridge: it closes every band, so nothing wraps round past it
-  const bl = blockedOn(y0, y1).map(([a, b]) => [mod(a - o, N), mod(a - o, N) + b - a]).sort((p, q) => p[0] - q[0]);
+  const bl = blockedOn(y0, y1).map(([a, b]) => [worldCoord(a - o), worldCoord(a - o) + b - a]).sort((p, q) => p[0] - q[0]);
   const merged = [];
   for (const [a, b] of bl) { const m = merged[merged.length - 1]; if (m && a <= m[1]) m[1] = Math.max(m[1], b); else merged.push([a, b]); }
-  const t = mod(x - o, N);
+  const t = worldCoord(x - o);
   for (let k = 0; k < merged.length; k++) {
     const a = merged[k][1], b = k + 1 < merged.length ? merged[k + 1][0] : N;
     if (t >= a && t < b) return [a + o, b + o];
@@ -2238,7 +2569,7 @@ for (const s of [3, 6]) alongStreets(s, 1, (x, y, ax, ay, bx, by, o) => {
 const lanternsB = bucketed(lanterns);
 
 // suspension bridges: two towers each, cables sagging between them, lit up at night like a necklace
-const BRIDGE_Y0 = SHORE_S * 8 + 2, BRIDGE_LEN = N - BRIDGE_Y0 + SHORE_N * 8 + 8; // shore road to shore road, over the wrap
+let BRIDGE_Y0 = SHORE_S * 8 + 2, BRIDGE_LEN = N - BRIDGE_Y0 + SHORE_N * 8 + 8; // shore road to shore road, over the wrap
 const TOWERS = [0.2, 0.8].map(f => BRIDGE_Y0 + BRIDGE_LEN * f), TOWER_H = 7, DECK_EDGE = [0.05, 1.95];
 const bridgeBits = []; // cable points and suspenders: {x, y, z, kind}
 const cableZ = t => { // cable height along the bridge, t = 0..1
@@ -2248,12 +2579,12 @@ const cableZ = t => { // cable height along the bridge, t = 0..1
   const m = (t - a) / (b - a); return TOWER_H - (TOWER_H - 0.9) * 4 * m * (1 - m);
 };
 for (const bx of BRIDGE_X) for (const e of DECK_EDGE) for (let s = 0; s < BRIDGE_LEN; s += 0.5) {
-  const t = s / BRIDGE_LEN, z = cableZ(t), x = bx * 8 + e, y = mod(BRIDGE_Y0 + s, N);
+  const t = s / BRIDGE_LEN, z = cableZ(t), x = bx * 8 + e, y = worldCoord(BRIDGE_Y0 + s);
   bridgeBits.push({ x, y, z, kind: 'cable', z2: s + 0.5 < BRIDGE_LEN ? cableZ((s + 0.5) / BRIDGE_LEN) : null }); // z2: the next point's height
   if ((s * 2 | 0) % 4 === 0 && z > 0.5) bridgeBits.push({ x, y, z: 0.05, h: z - 0.05, kind: 'hanger' });
 }
 const bridgeB = bucketed(bridgeBits);
-const towers = BRIDGE_X.flatMap(bx => TOWERS.map(y => ({ x: bx * 8 + 1, y: mod(y, N) })));
+const towers = BRIDGE_X.flatMap(bx => TOWERS.map(y => ({ x: bx * 8 + 1, y: worldCoord(y) })));
 
 // street food: a rare cart at the curb, a few kinds. Two art frames each so the steam/umbrella shimmer.
 // each cart's look (drawCart in city-sprites.js): w its length, roof an umbrella / awning / candy floss, trim the
@@ -2443,7 +2774,7 @@ function towerComposition(b) {
 function architectureFaces(b, cells, faceIndex = ARCH_FACES) {
   const faces = new Map();
   for (const k of cells) {
-    const x = b.x0 + mod(k % N - b.x0, N), y = b.y0 + mod(Math.floor(k / N) - b.y0, N), height = map[k];
+    const x = b.x0 + worldCoord(k % N - b.x0), y = b.y0 + worldCoord(Math.floor(k / N) - b.y0), height = map[k];
     for (let dir = 0; dir < 4; dir++) {
       const [nx, ny] = ARCH_DIRECTIONS[dir], low = map[idx(x + nx, y + ny)];
       if (low >= height) continue;
@@ -2586,9 +2917,9 @@ function architectureCellMask(items, pad) {
   }
   return mask;
 }
-const architectureStepCells = architectureCellMask(ARCH_STEPS, 0);
-const architectureWalkCells = architectureCellMask(ARCH_BLOCKERS.filter(o => o.kind !== 'step'), 0.03);
-const architectureCarCells = architectureCellMask(ARCH_BLOCKERS, 0.4);
+let architectureStepCells = architectureCellMask(ARCH_STEPS, 0);
+let architectureWalkCells = architectureCellMask(ARCH_BLOCKERS.filter(o => o.kind !== 'step'), 0.03);
+let architectureCarCells = architectureCellMask(ARCH_BLOCKERS, 0.4);
 function architectureRoofHeight(x, y) {
   const k = idx(Math.floor(x), Math.floor(y)), b = SHOP[k]?.architecture, c = b?.crown;
   if (!c || map[k] !== Math.fround(c.z0)) return 0;
@@ -2756,8 +3087,8 @@ for (const [block, kind] of landmarkOf) {
 }
 const landmarkSolidsB = bucketed(LANDMARK_SOLIDS), landmarkBlockersB = bucketed(LANDMARK_BLOCKERS);
 const LANDMARK_BY_BLOCK = new Map(LANDMARK_BUILDINGS.map(b => [b.block,b]));
-const LANDMARK_ROOF_MASK = architectureCellMask(LANDMARK_SOLIDS.filter(o => o.walkRoof), 0);
-const LANDMARK_BLOCK_MASK = architectureCellMask(LANDMARK_BLOCKERS, .5);
+let LANDMARK_ROOF_MASK = architectureCellMask(LANDMARK_SOLIDS.filter(o => o.walkRoof), 0);
+let LANDMARK_BLOCK_MASK = architectureCellMask(LANDMARK_BLOCKERS, .5);
 function landmarkSurfaceHeight(o, x, y) {
   const u = rel(x - o.x), v = rel(y - o.y);
   if (Math.abs(u) > o.hl || Math.abs(v) > o.hw) return 0;
@@ -2896,7 +3227,7 @@ for (const gh of GLASSHOUSES) {
   }
 }
 const pavilionSolidsB = bucketed(PAVILION_SOLIDS);
-const PAVILION_ROOF_MASK = architectureCellMask(PAVILION_SOLIDS.filter(o => o.walkRoof),0);
+let PAVILION_ROOF_MASK = architectureCellMask(PAVILION_SOLIDS.filter(o => o.walkRoof),0);
 function pavilionRoofHeight(x, y) {
   if (!PAVILION_ROOF_MASK[idx(Math.floor(x),Math.floor(y))]) return 0;
   let height = 0;
@@ -2911,7 +3242,7 @@ for (const o of roofs) o.z = Math.max(o.z,pavilionRoofHeight(o.x,o.y));
 // Intersections are addressed by their base cell (x, y multiples of 8).
 const CYCLE = 16, HALF = CYCLE / 2, GREEN_T = HALF - 2;
 const signalled = (x, y) => degree(x >> 3, y >> 3) >= 3;
-const phase = (x, y, t) => mod(t + hash(mod(x, N), mod(y, N), 9) * CYCLE, CYCLE);
+const phase = (x, y, t) => mod(t + hash(worldCoord(x), worldCoord(y), 9) * CYCLE, CYCLE);
 const light = (x, y, vert, t) => {
   if (!signalled(x, y)) return 'G';
   const p = phase(x, y, t) - (vert ? 0 : HALF); return p >= 0 && p < GREEN_T ? 'G' : p >= GREEN_T && p < GREEN_T + 1 ? 'Y' : 'R';
@@ -2956,7 +3287,7 @@ function plan(c) {
   const straight = c.nh[0] === c.hx && c.nh[1] === c.hy;
   const P = straight ? (dir > 0 ? c.B + 2 : c.B)
           : vert ? c.B + 1 - 0.4 * c.nh[0] : c.B + 1 + 0.4 * c.nh[1]; // the new lane's coordinate
-  c.left = mod((P - along) * dir, N);
+  c.left = worldReady ? Math.max(0, (P - along) * dir) : worldCoord((P - along) * dir);
 }
 
 // how many stretches of street it is from each intersection to either end of the one a call's scene is on (breadth
@@ -2964,7 +3295,7 @@ function plan(c) {
 function sceneRoute(c) {
   const [x, y] = c.dest, key = x + ',' + y;
   if (c.sceneKey === key) return c.sceneF;
-  const bx = Math.floor(mod(x, N) / 8), by = Math.floor(mod(y, N) / 8), horiz = Math.abs(mod(y, 8) - 1) < 0.8;
+  const bx = Math.floor(worldCoord(x) / 8), by = Math.floor(worldCoord(y) / 8), horiz = Math.abs(mod(y, 8) - 1) < 0.8;
   const f = new Int16Array(NB * NB).fill(9999), queue = horiz ? [bi(bx, by), bi(bx + 1, by)] : [bi(bx, by), bi(bx, by + 1)];
   for (const k of queue) f[k] = 0;
   for (let h = 0; h < queue.length; h++) {
@@ -3009,9 +3340,9 @@ function carContact(c, o, x = c.ex, y = c.ey, hx = c.hx, hy = c.hy) {
 function resolveCruiserContact(c, o, hit) {
   const { nx, ny } = hit, depth = hit.depth + 0.0001;
   const movingPlayer = o === me && mode === 'drive', share = movingPlayer ? depth / 2 : 0;
-  const ox = mod(o.x + nx * share, N), oy = mod(o.y + ny * share, N);
+  const ox = worldCoord(o.x + nx * share), oy = worldCoord(o.y + ny * share);
   const canPush = share && carBodyClear(ox, oy, o.hx, o.hy, ...carFootprint(o)) && !isWater(ox, oy);
-  const back = canPush ? depth - share : depth, cx = mod(c.x - nx * back, N), cy = mod(c.y - ny * back, N);
+  const back = canPush ? depth - share : depth, cx = worldCoord(c.x - nx * back), cy = worldCoord(c.y - ny * back);
   if (!carBodyClear(cx, cy, c.hx, c.hy, ...carFootprint(c)) || isWater(cx, cy)) return false;
   c.x = cx; c.y = cy;
   if (canPush) { o.x = ox; o.y = oy; o.ex = ox; o.ey = oy; px = ox; py = oy; }
@@ -3033,6 +3364,7 @@ function resolveCruiserContact(c, o, hit) {
 // The full rotated footprint, including the rear bumper. Separating axes keep even a sideways drift out of walls.
 function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
   const ex = Math.abs(hx) * hl + Math.abs(hy) * hw, ey = Math.abs(hy) * hl + Math.abs(hx) * hw;
+  if(worldReady&&ROAD_BRIDGES.some(b=>y+ey>=b.y0&&y-ey<=b.y1&&[-1,1].some(side=>Math.abs(x-b.x-side*.97)<ex+.01)))return false;
   const diagonal = 0.5 * (Math.abs(hx) + Math.abs(hy));
   for (let my = Math.floor(y - ey); my <= Math.floor(y + ey); my++) for (let mx = Math.floor(x - ex); mx <= Math.floor(x + ex); mx++) {
     if (!map[idx(mx, my)]) continue;
@@ -3083,7 +3415,7 @@ function steerCruiser(c, tx, ty, speed, dt, arrive = true) {
   const step = Math.min(distance, c.v * dt), samples = Math.max(1, Math.ceil(step / 0.035), Math.ceil(Math.abs(angle - oldAngle) / 0.06));
   const sx = Math.cos(c.travelA) * step / samples, sy = Math.sin(c.travelA) * step / samples;
   for (let k = 1; k <= samples; k++) {
-    const ha = oldAngle + (angle - oldAngle) * k / samples, nhx = Math.cos(ha), nhy = Math.sin(ha), nx = mod(c.x + sx, N), ny = mod(c.y + sy, N);
+    const ha = oldAngle + (angle - oldAngle) * k / samples, nhx = Math.cos(ha), nhy = Math.sin(ha), nx = worldCoord(c.x + sx), ny = worldCoord(c.y + sy);
     if (!carBodyClear(nx, ny, nhx, nhy, ...carFootprint(c)) || isWater(nx, ny)) { c.v = 0; c.travelA = oldAngle; c.routeT = 0; break; }
     const other = (c.near || cars).find(o => o !== c && carContact(c, o, nx, ny, nhx, nhy));
     if (other) {
@@ -3134,8 +3466,8 @@ function addCar(props) {
 // snap a car onto the nearest lane in the direction it points and hand it back to the AI
 function toLane(c) {
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
-  if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
-  else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
+  if (vert) { c.x = worldCoord(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir); c.hx = 0; c.hy = dir; }
+  else { c.y = worldCoord(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir); c.hx = dir; c.hy = 0; }
   c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; c.pit = null; c.gas = null; plan(c);
 }
 
@@ -3179,8 +3511,8 @@ function taxiLaneTarget(c, line) {
 // Near somewhere with no streets round it (out over the bay, at the airport) there may be none: then null
 function randomLane(near = 0, x = 0, y = 0) {
   for (let k = 0; !near || k < 64; k++) {
-    const bx = near ? Math.floor((x + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
-    const by = near ? Math.floor((y + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
+    const bx = near ? worldBlock(Math.floor((x + (Math.random() * 2 - 1) * near) / 8)) : Math.random() * NB | 0;
+    const by = near ? worldBlock(Math.floor((y + (Math.random() * 2 - 1) * near) / 8)) : Math.random() * NB | 0;
     const vert = Math.random() < 0.5, dir = pick([-1, 1]);
     if (!(vert ? vseg(bx, by) : hseg(bx, by))) continue;
     const along = (vert ? by : bx) * 8 + 2.5 + Math.random() * 4.5, lane = (vert ? bx : by) * 8 + 1 + (vert ? 0.4 : -0.4) * dir;
@@ -3202,8 +3534,8 @@ function ahead(c, x, y, band) {
 }
 
 // spatial buckets of 2x2 cells, so each car only checks what's around it (ahead() never looks past 2 cells)
-const GN = N / 2, carGrid = Array.from({ length: GN * GN }, () => []), pplGrid = Array.from({ length: GN * GN }, () => []);
-const bucketOf = (x, y) => Math.floor(mod(y, N) / 2) * GN + Math.floor(mod(x, N) / 2);
+let GN = N / 2, carGrid = Array.from({ length: GN * GN }, () => []), pplGrid = Array.from({ length: GN * GN }, () => []);
+const bucketOf = (x, y) => worldReady && !inWorldGrid(x,y) ? GN * GN : Math.floor(worldCoord(y) / 2) * GN + Math.floor(worldCoord(x) / 2);
 function fillGrid(grid, items, xk, yk) { // empties only the buckets it filled last time
   const used = grid.used || (grid.used = []);
   for (const k of used) grid[k].length = 0;
@@ -3212,8 +3544,11 @@ function fillGrid(grid, items, xk, yk) { // empties only the buckets it filled l
 }
 function nearby(grid, x, y, out) { // everything in the 3x3 buckets round (x, y)
   out.length = 0;
-  const gx = Math.floor(mod(x, N) / 2), gy = Math.floor(mod(y, N) / 2);
-  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of grid[((gy + j) & (GN - 1)) * GN + ((gx + i) & (GN - 1))]) out.push(o);
+  const gx = Math.floor(worldCoord(x) / 2), gy = Math.floor(worldCoord(y) / 2);
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    if (worldReady && (gx+i<0 || gy+j<0 || gx+i>=GN || gy+j>=GN)) continue;
+    for (const o of grid[((gy + j) & (GN - 1)) * GN + ((gx + i) & (GN - 1))]) out.push(o);
+  }
   return out;
 }
 const nearPeople = [];
@@ -3347,7 +3682,7 @@ function stepTraffic(dt, t, everywhere = false) {
     if (c.pursuit) room_ = Infinity; // dispatch and pursuit do not queue behind ordinary traffic or pedestrians
 
     const vert = c.hx === 0, along = vert ? c.y : c.x, dir = c.hx + c.hy;
-    const line = mod(((dir > 0 ? c.B : c.B + 2) - along) * dir, N);
+    const line = worldCoord(((dir > 0 ? c.B : c.B + 2) - along) * dir);
     const nx = vert ? c.x - mod(c.x, 8) : c.B, ny = vert ? c.B : c.y - mod(c.y, 8); // the next intersection
     if (line < 3 && !code(c) && !c.rush) {
       const s = light(nx, ny, vert, t);
@@ -3433,11 +3768,11 @@ function stepTraffic(dt, t, everywhere = false) {
     c.brake = target < c.v;
     c.v = Math.min(target, c.v + (c.kind === 'police' ? COP_CAR_ACCEL : code(c) || c.rush ? 1.4 : 0.8) * dt);
     const d = c.v * dt, step = Math.min(d, c.left);
-    if (vert) c.y = mod(c.y + dir * step, N); else c.x = mod(c.x + dir * step, N);
+    if (vert) c.y = worldCoord(c.y + dir * step); else c.x = worldCoord(c.x + dir * step);
     c.left -= step;
     if (c.rider) c.fare += step;
     if (c.left <= 0) { [c.hx, c.hy] = c.nh; plan(c); }
-    c.ex = mod(c.x + c.hy * c.off, N); c.ey = mod(c.y - c.hx * c.off, N);
+    c.ex = worldCoord(c.x + c.hy * c.off); c.ey = worldCoord(c.y - c.hx * c.off);
     const gz = GAS_ZONE[idx(Math.floor(c.x), Math.floor(c.y))];
     if (gz || c.gas) gasConsider(c, gz || null);
     if (taxi) {
@@ -3476,7 +3811,7 @@ function selfTest(steps = 9000) {
 
 // the solids, measured from the forecourt's corner (x0, y0)
 function gasSolid(st, x, y, alongX, hl, hw, z0, z1, kind, extra) {
-  const o = { x: mod(st.x0 + x, N), y: mod(st.y0 + y, N), c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k: st.k, st, ...extra };
+  const o = { x: worldCoord(st.x0 + x), y: worldCoord(st.y0 + y), c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k: st.k, st, ...extra };
   solids.push(o); solidsB[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o);
   return o;
 }
@@ -3493,7 +3828,7 @@ for (const st of GAS_STATIONS) {
   gasSolid(st, 0.12, 0.2, false, 0.17, 0.02, 0.33, 0.66, 'gassign');
   gasSolid(st, 2.45, 1.91, true, 0.13, 0.05, 0, 0.09, 'gasice'); // the ice chest by the shop door
   for (const [x, y, hl, hw] of [[0.2, -0.16, 0.5, 0.16], [2.6, -0.16, 0.42, 0.16], [3.16, 1.35, 0.16, 0.65]])
-    GAS_CLEAR.push({ x: mod(st.x0 + x, N), y: mod(st.y0 + y, N), c: 1, s: 0, hl, hw, z0: 0, z1: 0.02 }); // (flat: no shelter from the snow)
+    GAS_CLEAR.push({ x: worldCoord(st.x0 + x), y: worldCoord(st.y0 + y), c: 1, s: 0, hl, hw, z0: 0, z1: 0.02 }); // (flat: no shelter from the snow)
 }
 // is a car's body (as carBodyClear's) clear of the islands (and the sign's pole)?
 function gasCarClear(x, y, hx, hy, hl, hw) {
@@ -3575,7 +3910,7 @@ function placeOnPath(c) {
   while (P.i < P.len.length - 2 && P.len[P.i + 1] < p.s) P.i++;
   const a = P.pts[P.i], b = P.pts[P.i + 1], seg = P.len[P.i + 1] - P.len[P.i] || 1, f = clamp((p.s - P.len[P.i]) / seg, 0, 1);
   const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-  c.x = mod(p.st.x0 + a[0] + (b[0] - a[0]) * f, N); c.y = mod(p.st.y0 + a[1] + (b[1] - a[1]) * f, N);
+  c.x = worldCoord(p.st.x0 + a[0] + (b[0] - a[0]) * f); c.y = worldCoord(p.st.y0 + a[1] + (b[1] - a[1]) * f);
   c.hx = (b[0] - a[0]) / d; c.hy = (b[1] - a[1]) / d; c.ex = c.x; c.ey = c.y; c.off = 0;
 }
 // how far c can go along its heading before it's up against something: a car (whichever way it's facing), somebody on
@@ -3635,7 +3970,7 @@ function stepPit(c, dt) {
 }
 function gasRejoin(c) { // back in the westbound lane of the main street, just past the way out
   const st = c.pit.st;
-  c.x = mod(st.x0 - 0.45, N); c.y = mod(st.y0 - 0.6, N); c.hx = -1; c.hy = 0; c.ex = c.x; c.ey = c.y;
+  c.x = worldCoord(st.x0 - 0.45); c.y = worldCoord(st.y0 - 0.6); c.hx = -1; c.hy = 0; c.ex = c.x; c.ey = c.y;
   c.pit = null; c.pitBlk = null; c.off = 0; c.offV = 0; c.pass = null; c.laneYaw = null; c.travelA = null;
   plan(c);
 }
@@ -3684,7 +4019,7 @@ const PLANE_TYPES = {
 };
 const aircraft = []; // { id, type, x, y, z, yaw, pitch, roll, v, state, ... }
 let aircraftId = 0;
-const STAND_Y = APRON.y0 + 1.75; // an airliner at its gate: nose to the terminal
+let STAND_Y = APRON.y0 + 1.75; // an airliner at its gate: nose to the terminal
 function addAircraft(type, x, y, yaw, extra) {
   const a = { id: aircraftId++, type, x, y, z: 0, yaw, pitch: 0, roll: 0, v: 0, state: 'parked', dmg: 0, ...extra };
   if (a.forSale) a.home = { x, y, yaw }; // (the airport's own: whoever takes it, it finds its way back here)
@@ -3736,13 +4071,13 @@ function stepAirliner(a, dt) {
     a.yaw += clamp(mod(want - a.yaw + Math.PI, TAU) - Math.PI, -0.6 * dt, 0.6 * dt);
     a.v += clamp((back ? PUSH_V : TAXI_V) - a.v, -0.5 * dt, 0.3 * dt);
     const step = Math.min(d, a.v * dt);
-    a.x = mod(a.x + vx / (d || 1) * step, N); a.y = mod(a.y + vy / (d || 1) * step, N);
+    a.x = worldCoord(a.x + vx / (d || 1) * step); a.y = worldCoord(a.y + vy / (d || 1) * step);
     if (d < 0.05) { a.path.shift(); a.state = 'taxi'; if (!a.path.length) { a.state = a.parkAt != null ? 'parked' : 'roll'; if (a.parkAt != null) { a.gate = a.parkAt; a.parkAt = null; a.v = 0; a.yaw = -Math.PI / 2; } } }
     return;
   }
   if (a.state === 'roll') { // full power down the runway, nose up at rotation speed
     a.yaw = 0; a.y += (RUNWAY.y - a.y) * Math.min(1, dt * 2);
-    a.v += 1.25 * dt; a.x = mod(a.x + a.v * dt, N);
+    a.v += 1.25 * dt; a.x = worldCoord(a.x + a.v * dt);
     if (a.v >= T_.vr) a.state = 'climb';
     return;
   }
@@ -3750,21 +4085,21 @@ function stepAirliner(a, dt) {
     a.v = Math.min(T_.cruise, a.v + 0.5 * dt); a.pitch += (0.14 - a.pitch) * Math.min(1, dt * 1.5);
     const turn = a.z > 3 ? 0.06 : 0;
     a.yaw += turn * dt; a.roll += (turn * 4 - a.roll) * Math.min(1, dt);
-    a.x = mod(a.x + Math.cos(a.yaw) * a.v * dt, N); a.y = mod(a.y + Math.sin(a.yaw) * a.v * dt, N); a.z += Math.sin(a.pitch) * a.v * dt;
+    a.x = worldCoord(a.x + Math.cos(a.yaw) * a.v * dt); a.y = worldCoord(a.y + Math.sin(a.yaw) * a.v * dt); a.z += Math.sin(a.pitch) * a.v * dt;
     if (a.z > 14) aircraft.splice(aircraft.indexOf(a), 1); // (gone, high over the bay)
     return;
   }
   if (a.state === 'approach') { // on the glide slope, flaring just before the marks
     const toGo = rel(RUNWAY.x0 + 6 - a.x);
-    a.x = mod(a.x + a.v * dt, N); a.yaw = 0;
+    a.x = worldCoord(a.x + a.v * dt); a.yaw = 0;
     a.z = Math.max(0, toGo * GLIDE_SLOPE + (toGo < 2 ? 0.02 * toGo : 0));
     a.pitch = toGo < 3 ? 0.08 : 0.03;
     if (toGo <= 0) { a.z = 0; a.pitch = 0; a.state = 'rollout'; }
     return;
   }
   if (a.state === 'rollout') { // brakes and reversers, off at the east end, back along the taxiway to the gate
-    a.v = Math.max(TAXI_V, a.v - 1.6 * dt); a.x = mod(a.x + a.v * dt, N);
-    if (mod(a.x, N) >= TAXIWAY.x1 - 1) {
+    a.v = Math.max(TAXI_V, a.v - 1.6 * dt); a.x = worldCoord(a.x + a.v * dt);
+    if (worldCoord(a.x) >= TAXIWAY.x1 - 1) {
       const sx = STANDS_X[a.target];
       a.state = 'taxi'; a.parkAt = a.target; a.target = null;
       a.path = [[TAXIWAY.x1, RUNWAY.y - 0.8], [TAXIWAY.x1, TAXIWAY.y + 0.8], [TAXIWAY.x1 - 1, TAXIWAY.y], [sx + 1.2, TAXIWAY.y], [sx, TAXIWAY.y - 1], [sx, STAND_Y]];
@@ -3806,7 +4141,7 @@ const stallSpeed = T_ => T_.vr * 0.85;
 // the top of whatever's built at (x, y), from the ground up: a building's roof, the el's deck, the airport's
 // buildings, a bridge tower; 0 on the ground. Given the height z something's at, a hangar it's inside is just its floor
 function builtHeight(x, y, z = Infinity) {
-  let h = Math.max(policeRoofHeight(x, y), airportHeight(x, y, z));
+  let h = Math.max(map[idx(Math.floor(x),Math.floor(y))] || 0, terrainHeight(x, y), islandRoofHeight(x,y), roadBridgeBuiltHeight(x,y,z), policeRoofHeight(x, y), airportHeight(x, y, z));
   for (const t of towers) if (Math.abs(rel(x - t.x)) < 0.4 && Math.abs(rel(y - t.y)) < 0.25) h = Math.max(h, TOWER_H);
   return h;
 }
@@ -3865,7 +4200,7 @@ const craftBlocked = (x, y) => airportBlocked(x, y) || airportBldgAt(x, y)?.kind
 // move it, and what it meets: the ground (a landing, or not), a building (on top: a landing; its side: a crash), the water
 function moveCraft(a, T_, vx, vy, dt, ev) {
   if (a.vz > 0 && T_.ceil) a.vz *= clamp((T_.ceil - a.z) / 2, 0, 1); // near its ceiling the climb fades away to nothing
-  const nx = mod(a.x + vx * dt, N), ny = mod(a.y + vy * dt, N), h = builtHeight(nx, ny, a.z), speed = Math.hypot(vx, vy);
+  const nx = worldCoord(a.x + vx * dt), ny = worldCoord(a.y + vy * dt), h = builtHeight(nx, ny, a.z), speed = Math.hypot(vx, vy);
   let nz = a.z + a.vz * dt;
   if (a.ground) { // rolling or sitting: into a wall, a building, another aircraft, the water?
     const nose = (T_.heli ? 0.25 : T_.len / 2) * (!T_.heli && a.v < 0 ? -1 : 1), fx = nx + Math.cos(a.yaw) * nose, fy = ny + Math.sin(a.yaw) * nose; // (backing up: its tail)
@@ -3874,7 +4209,7 @@ function moveCraft(a, T_, vx, vy, dt, ev) {
       a.v = 0; a.hvx = a.hvy = 0; ev.push('bump'); return ev;
     }
     if (overWater(nx, ny)) return ditchCraft(a, ev);
-    a.x = nx; a.y = ny; a.z = Math.max(h, nz); return ev;
+    a.x = nx; a.y = ny; a.z = h; return ev;
   }
   const top = builtHeight(nx, ny); // (what's there, all of it: in a hangar, its roof overhead)
   if (h < top && nz > top - 0.05) { nz = top - 0.05; a.vz = Math.min(0, a.vz); } // inside a hangar: the roof stops you
@@ -3908,7 +4243,7 @@ function stepCraftFalls(dt) {
     if (!a.falling) continue;
     a.vz -= G * dt; a.z += a.vz * dt;
     a.pitch = Math.max(-1.1, a.pitch - 0.8 * dt); a.roll += a.spin * dt;
-    const bx = mod(a.x - Math.cos(a.yaw) * 0.25 * dt, N), by = mod(a.y - Math.sin(a.yaw) * 0.25 * dt, N);
+    const bx = worldCoord(a.x - Math.cos(a.yaw) * 0.25 * dt), by = worldCoord(a.y - Math.sin(a.yaw) * 0.25 * dt);
     if (!craftBlocked(bx, by) && builtHeight(bx, by, a.z) <= a.z) { a.x = bx; a.y = by; }
     const below = Math.max(0, builtHeight(a.x, a.y, a.z));
     if (a.z > below) continue;
@@ -3958,10 +4293,12 @@ function stepFleet(px_, py_, flying) {
   return back;
 }
 // the save: which of the fleet are yours, and where they are
-// (one that's up in the air when you leave is waiting on its stand when you come back)
+// Live journeys retain their airborne position; the older coastal format recovers to a stand.
 const savedPlanes = () => aircraft.filter(a => a.owned).map(a => {
-  const up = a.state === 'flown' && !a.ground, at = up ? a.home : a;
-  return { id: a.id, type: a.type, x: at.x, y: at.y, yaw: at.yaw, dmg: a.dmg || 0, lost: !!(a.wrecked || a.ditched || a.fireT != null) };
+  const up = a.state === 'flown' && !a.ground, resume = worldReady && up;
+  const at = up && !resume ? a.home : a;
+  return { id: a.id, type: a.type, x: at.x, y: at.y, yaw: at.yaw, dmg: a.dmg || 0, lost: !!(a.wrecked || a.ditched || a.fireT != null),
+    ...(resume ? {flight:{z:a.z,v:a.v,pitch:a.pitch,roll:a.roll,throttle:a.throttle,hvx:a.hvx||0,hvy:a.hvy||0}} : {}) };
 });
 function loadPlanes(list) {
   for (const p of list || []) {
@@ -3969,8 +4306,15 @@ function loadPlanes(list) {
     if (!a) continue;
     a.owned = true; a.forSale = false;
     if (p.lost) { returnHome(a); a.owed = true; continue; } // (the insurance has it: the excess is due when you next fly)
-    if (![p.x, p.y, p.yaw].every(Number.isFinite) || overWater(p.x, p.y)) continue;
-    a.x = mod(p.x, N); a.y = mod(p.y, N); a.yaw = p.yaw; a.z = builtHeight(a.x, a.y, 0); a.dmg = clamp(p.dmg || 0, 0, DMG_FIRE - 1);
+    if (![p.x, p.y, p.yaw].every(Number.isFinite)) continue;
+    const flight=worldReady&&p.flight;
+    const airborne=flight&&[flight.z,flight.v,flight.pitch,flight.roll,flight.throttle].every(Number.isFinite)&&
+      flight.z>builtHeight(p.x,p.y)+.05&&flight.z<100&&flight.v>=0&&flight.v<PLANE_TYPES[a.type].top*1.4;
+    if (!airborne&&overWater(p.x, p.y)) continue;
+    a.x = worldCoord(p.x); a.y = worldCoord(p.y); a.yaw = p.yaw; a.z = builtHeight(a.x, a.y, 0); a.dmg = clamp(p.dmg || 0, 0, DMG_FIRE - 1);
+    Object.assign(a,{ground:true,v:0,vz:0,throttle:0});
+    if(airborne)Object.assign(a,{z:flight.z,v:flight.v,pitch:clamp(flight.pitch,-1,1),roll:clamp(flight.roll,-1,1),throttle:clamp(flight.throttle,0,1),ground:false});
+    if(airborne&&PLANE_TYPES[a.type].heli)Object.assign(a,{rotor:1,hvx:clamp(+flight.hvx||0,-6,6),hvy:clamp(+flight.hvy||0,-6,6)});
   }
 }
 // ===== the interceptors: steal an aircraft and get it up, and before long the air force scrambles two fighters to
@@ -3995,7 +4339,7 @@ function stepFighters(c, dt, rnd = Math.random) {
   if (hunted(c) && !c.ground && c.z > 0.8) scramble += dt; else if (!fighters.length) scramble = Math.max(0, scramble - dt * 0.5);
   if (!fighters.length && scramble > SCRAMBLE_T && hunted(c)) { // two of them, in from far off, side by side
     const k = rnd() * TAU;
-    for (const wing of [-1, 1]) fighters.push({ id: 900 + fighters.length, x: mod(c.x + Math.cos(k) * 45 - Math.sin(k) * wing * 1.5, N), y: mod(c.y + Math.sin(k) * 45 + Math.cos(k) * wing * 1.5, N),
+    for (const wing of [-1, 1]) fighters.push({ id: 900 + fighters.length, x: worldCoord(c.x + Math.cos(k) * 45 - Math.sin(k) * wing * 1.5), y: worldCoord(c.y + Math.sin(k) * 45 + Math.cos(k) * wing * 1.5),
       z: Math.max(c.z, 6), yaw: k + Math.PI, pitch: 0, roll: 0, v: FIGHTER_T.top, wing, cool: 2 + rnd() * 2, sixed: false });
     fighterHunt = 0; fighterCalm = 0; ev.push('scramble'); newsEvent('scramble', c.x, c.y); // (that makes the papers)
   }
@@ -4047,7 +4391,7 @@ function stepFighters(c, dt, rnd = Math.random) {
     const ahead = fighterFloor(f.x + Math.cos(f.yaw) * f.v * 0.8, f.y + Math.sin(f.yaw) * f.v * 0.8), floor = Math.max(fighterFloor(f.x, f.y), ahead);
     const vz = clamp((Math.max(wantZ, floor) - f.z) * 1.5, -3, 4);
     f.pitch += (Math.atan2(vz, f.v) - f.pitch) * Math.min(1, 3 * dt);
-    f.x = mod(f.x + Math.cos(f.yaw) * f.v * dt, N); f.y = mod(f.y + Math.sin(f.yaw) * f.v * dt, N); f.z = Math.max(floor, f.z + vz * dt);
+    f.x = worldCoord(f.x + Math.cos(f.yaw) * f.v * dt); f.y = worldCoord(f.y + Math.sin(f.yaw) * f.v * dt); f.z = Math.max(floor, f.z + vz * dt);
   }
   if (!fighters.length) { delete fighters.leaving; scramble = 0; ev.push('gone'); }
   return ev;
@@ -4072,7 +4416,7 @@ const doors = [];
       // half of downtown's lobbies are offices; everywhere else a numbered door is somebody's home
       const use = sh.kind === SHOP_APTS ? (dist === 'downtown' && fract(sh.word.length * 0.37 + bx * 0.13 + by * 0.71) < 0.5 ? 'work' : 'home')
                 : NIGHTLIFE.has(sh.word) ? 'bar' : 'shop';
-      doors.push({ x: mod(face[0], N), y: mod(face[1], N), nx: face[2] * 0.1, ny: face[3] * 0.1, sh, use, dist });
+      doors.push({ x: worldCoord(face[0]), y: worldCoord(face[1]), nx: face[2] * 0.1, ny: face[3] * 0.1, sh, use, dist });
     }
   }
 }
@@ -4163,12 +4507,12 @@ const walkingDog = p => p.role === 'dogwalker' && !p.hidden && tod >= 7 && tod <
 function dogOf(p) {
   const mx = p.last[0], my = p.last[1], side = (p.ph * 7 | 0) % 2 ? 1 : -1, sniff = Math.sin(T * 0.7 + p.ph) > 0.7;
   const back = 0.09 + (sniff ? 0.04 : 0) + Math.sin(T * 1.9 + p.ph) * 0.01, off = 0.035 * side + Math.sin(T * 1.3 + p.ph) * 0.012;
-  const tx = mod(p.x - mx * back - my * off, N), ty = mod(p.y - my * back + mx * off, N);
+  const tx = worldCoord(p.x - mx * back - my * off), ty = worldCoord(p.y - my * back + mx * off);
   let d = p.dog;
   if (!d || Math.hypot(rel(tx - d.x), rel(ty - d.y)) > 0.6) d = p.dog = { x: tx, y: ty, mx, my, t: T }; // (first sight of it, or the walker jumped: right there)
   const k = 1 - Math.exp(-Math.max(0, Math.min(0.25, T - d.t)) * 5); d.t = T;
   const ox = d.x, oy = d.y;
-  d.x = mod(d.x + rel(tx - d.x) * k, N); d.y = mod(d.y + rel(ty - d.y) * k, N);
+  d.x = worldCoord(d.x + rel(tx - d.x) * k); d.y = worldCoord(d.y + rel(ty - d.y) * k);
   const vx = rel(d.x - ox), vy = rel(d.y - oy), v = Math.hypot(vx, vy);
   if (v > 1e-4) { d.mx += (vx / v - d.mx) * Math.min(1, k * 2); d.my += (vy / v - d.my) * Math.min(1, k * 2); } // faces the way it's going
   return { x: d.x, y: d.y, mx: d.mx, my: d.my, sniff, col: DOG_COLS[(p.ph * 13 | 0) % DOG_COLS.length], small: (p.ph * 5 | 0) % 3 === 0 };
@@ -4187,7 +4531,7 @@ function routeTo(d) {
   let f = routeCache.get(d);
   if (f) return f;
   f = new Int16Array(NB * NB).fill(9999);
-  const bx = Math.floor(mod(d.x, N) / 8), by = Math.floor(mod(d.y, N) / 8);
+  const bx = Math.floor(worldCoord(d.x) / 8), by = Math.floor(worldCoord(d.y) / 8);
   const queue = d.ny ? [bi(bx, by), bi(bx + 1, by)] : [bi(bx, by), bi(bx, by + 1)]; // its stretch's two intersections
   for (const k of queue) f[k] = 0;
   for (let h = 0; h < queue.length; h++) {
@@ -4205,7 +4549,7 @@ const cornerOK = (ix, iy, qx, qy) => !!(hseg(qx ? ix : ix - 1, iy) || vseg(ix, q
 function planPerson(p, t) {
   const lx = mod(p.x, 8), ly = mod(p.y, 8), ix = Math.floor(p.x / 8), iy = Math.floor(p.y / 8), bx = p.x - lx, by = p.y - ly;
   const qx = lx > 1 ? 1 : 0, qy = ly > 1 ? 1 : 0, opts = [];
-  p.x = mod(bx + (qx ? 1.88 : 0.12), N); p.y = mod(by + (qy ? 1.88 : 0.12), N); // exactly on the corner: no drift over many legs
+  p.x = worldCoord(bx + (qx ? 1.88 : 0.12)); p.y = worldCoord(by + (qy ? 1.88 : 0.12)); // exactly on the corner: no drift over many legs
   for (const [mx, my] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     if (mx === -p.last[0] && my === -p.last[1]) continue;
     const hi = mx ? (mx > 0) === !!qx : (my > 0) === !!qy; // moving away from the intersection: along the block
@@ -4253,7 +4597,7 @@ function planPerson(p, t) {
   if (!door && p.act && p.act !== 'wander') {
     const want = USES[p.act === 'home' && p.legs > 1 ? 'lobby' : p.act];
     // doors are bucketed by their sidewalk point, which is in the same block as this stretch's midpoint
-    const mid = [mod(p.x + o.mx * 3.12, N), mod(p.y + o.my * 3.12, N)];
+    const mid = [worldCoord(p.x + o.mx * 3.12), worldCoord(p.y + o.my * 3.12)];
     door = doorsB[bi(Math.floor(mid[0] / 8), Math.floor(mid[1] / 8))].find(d => want(d) && onLeg(d) && (p.legs > 3 || Math.random() < 0.85)) || null;
     if (door && (p.act === 'home' || p.act === 'work')) p[p.act] = door;
   }
@@ -4262,7 +4606,7 @@ function planPerson(p, t) {
     p.path.push(at, { x: at.x + door.nx, y: at.y + door.ny, enter: door }, { ...at }, end);
     return;
   }
-  if (!goal && blockKind(Math.floor(mod(cx, N) / 8), Math.floor(mod(cy, N) / 8)) === 'park' && Math.random() < 0.6) {
+  if (!goal && blockKind(Math.floor(worldCoord(cx) / 8), Math.floor(worldCoord(cy) / 8)) === 'park' && Math.random() < 0.6) {
     const [bx_, by_] = pick(BENCH), mid = { x: p.x + o.mx * 3.12, y: p.y + o.my * 3.12 };
     p.path.push(mid, { x: cx, y: cy }, { x: cx + bx_, y: cy + by_, stay: 6 + Math.random() * 12 }, { x: cx, y: cy }, { ...mid });
   }
@@ -4293,7 +4637,7 @@ const SEEN_R = 28, VIS_R = MAXD + 4; // beyond SEEN_R, anyone a building hides f
 // few seconds, then up again. Pedestrians and police on foot alike (crime.js holds the officers still while they're down)
 function knockDown(p, dx_, dy_, speed) {
   p.down = { t: 0, dur: 2.5 + Math.min(3, speed * 1.2), fx: dx_, fy: dy_ };
-  const k = Math.min(0.6, 0.15 + speed * 0.12), nx = mod(p.x + dx_ * k, N), ny = mod(p.y + dy_ * k, N);
+  const k = Math.min(0.6, 0.15 + speed * 0.12), nx = worldCoord(p.x + dx_ * k), ny = worldCoord(p.y + dy_ * k);
   if (!map[idx(Math.floor(nx), Math.floor(ny))]) { p.x = nx; p.y = ny; }
 }
 // down and getting up again: true while they're still on the ground
@@ -4326,7 +4670,7 @@ function stepHelp(p, dt) {
   if (!v.down) { delete p.help; p.gawk = v; p.talk = 2; return; }
   const dx = rel(v.x - p.x), dy = rel(v.y - p.y), d = Math.hypot(dx, dy);
   if (d < 0.12) return;
-  const s = Math.min(d - 0.1, p.sp * 2.5 * dt), nx = mod(p.x + dx / d * s, N), ny = mod(p.y + dy / d * s, N);
+  const s = Math.min(d - 0.1, p.sp * 2.5 * dt), nx = worldCoord(p.x + dx / d * s), ny = worldCoord(p.y + dy / d * s);
   if (!map[idx(Math.floor(nx), Math.floor(ny))]) { p.x = nx; p.y = ny; p.ph += dt * 8; }
 }
 // running from a gunshot (gun.js): flat out away from it, sliding along walls, for a few seconds; then back to the
@@ -4336,8 +4680,8 @@ function stepFlee(p, dt) {
   if ((f.t -= dt) <= 0) { delete p.flee; return backToSidewalk(p); }
   const s = p.sp * 5 * dt, open = (x, y) => !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y);
   let moved = false;
-  if (open(p.x + f.x * s, p.y)) { p.x = mod(p.x + f.x * s, N); moved = true; }
-  if (open(p.x, p.y + f.y * s)) { p.y = mod(p.y + f.y * s, N); moved = true; }
+  if (open(p.x + f.x * s, p.y)) { p.x = worldCoord(p.x + f.x * s); moved = true; }
+  if (open(p.x, p.y + f.y * s)) { p.y = worldCoord(p.y + f.y * s); moved = true; }
   if (!moved) [f.x, f.y] = Math.random() < 0.5 ? [-f.y, f.x] : [f.y, -f.x]; // (cornered: off another way)
   p.last = [f.x, f.y]; p.ph += dt * 9;
 }
@@ -4346,7 +4690,7 @@ function backToSidewalk(p) {
   if (d > VIS_R || d > SEEN_R && !lineOfSight(px, py, p.x, p.y)) return settle(p);
   // the nearest sidewalk line (0.12 / 1.88 into a street, either way), then on from there to its corner
   const line = v => { const b = Math.floor(v / 8) * 8; return [b - 6.12, b + 0.12, b + 1.88, b + 8.12].reduce((m, c) => Math.abs(c - v) < Math.abs(m - v) ? c : m); };
-  const lx = line(p.x), ly = line(p.y), at = Math.abs(lx - p.x) < Math.abs(ly - p.y) ? { x: mod(lx, N), y: p.y } : { x: p.x, y: mod(ly, N) };
+  const lx = line(p.x), ly = line(p.y), at = Math.abs(lx - p.x) < Math.abs(ly - p.y) ? { x: worldCoord(lx), y: p.y } : { x: p.x, y: worldCoord(ly) };
   const [x, y] = [p.x, p.y];
   p.x = at.x; p.y = at.y; snapToCorner(p); p.x = x; p.y = y;
   p.path.unshift(at); p.goal = null; p.legs = 0; p.wait = 0;
@@ -4392,18 +4736,18 @@ function stepPeople(dt, t, everywhere = false) {
     if (w.gate && !w.go) { if (!w.gate(t)) continue; w.go = true; }
     const ex = rel(w.x - p.x), ey = rel(w.y - p.y), dist = Math.hypot(ex, ey), step = p.sp * (w.fast ? 2.2 : 1) * dt;
     if (dist <= step) {
-      p.x = mod(w.x, N); p.y = mod(w.y, N); p.path.shift();
+      p.x = worldCoord(w.x); p.y = worldCoord(w.y); p.path.shift();
       if (w.stay) p.wait = w.stay;
       if (w.enter) { // the rest of the path walks back out to the line and on to the corner
         p.goal = null; p.inside = w.enter;
         // a crowd hangs about outside the bars at night: some stand by the door a while before going in
         if (w.enter.use === 'bar' && Math.random() < 0.4) {
-          p.x = mod(p.x - w.enter.nx + (Math.random() - 0.5) * 0.5 * (w.enter.ny ? 1 : 0), N);
-          p.y = mod(p.y - w.enter.ny + (Math.random() - 0.5) * 0.5 * (w.enter.nx ? 1 : 0), N);
+          p.x = worldCoord(p.x - w.enter.nx + (Math.random() - 0.5) * 0.5 * (w.enter.ny ? 1 : 0));
+          p.y = worldCoord(p.y - w.enter.ny + (Math.random() - 0.5) * 0.5 * (w.enter.nx ? 1 : 0));
           p.wait = 20 + Math.random() * 40; p.loiter = true;
         } else { p.hidden = true; p.wait = 6 + Math.random() * 14; }
       }
-    } else { p.x = mod(p.x + ex / dist * step, N); p.y = mod(p.y + ey / dist * step, N); p.ph += dt * 4; }
+    } else { p.x = worldCoord(p.x + ex / dist * step); p.y = worldCoord(p.y + ey / dist * step); p.ph += dt * 4; }
   }
 }
 // ---- talking to people (E): a line that depends on where you are, the time and the weather. Some ask a favour.
@@ -4499,7 +4843,7 @@ const tip = (lo, hi) => lo + Math.round(Math.random() * (hi - lo));
 function followYou(p, dt) {
   const ex = rel(px - p.x), ey = rel(py - p.y), d = Math.hypot(ex, ey);
   if (mode !== 'walk' || d > 10) { release(p); return endTask("You lost them. They'll have to ask someone else."); }
-  if (d > 0.35) { const s = Math.min(d - 0.35, 0.22 * dt); p.x = mod(p.x + ex / d * s, N); p.y = mod(p.y + ey / d * s, N); p.ph += dt * 5; }
+  if (d > 0.35) { const s = Math.min(d - 0.35, 0.22 * dt); p.x = worldCoord(p.x + ex / d * s); p.y = worldCoord(p.y + ey / d * s); p.ph += dt * 5; }
 }
 // per frame: the dog trots after you; escorts and hand-overs complete when you get there
 function stepTask(dt) {
@@ -4669,15 +5013,15 @@ const talkInRoom = () => say(`"${roomTalkLine(room.kind)}"`, 4);
 // Stations every 8 blocks, with narrow platforms over the sidewalks and stairs down to the street.
 // The deck is 12m wide over the middle of the street (clear of the building faces either side) and high enough
 // that the street lamps fit under it: y EL_Y0..EL_Y1, z EL_BOT..EL_TOP.
-const EL_Y = EL_ROW * 8, EL_HALF = 0.6, EL_Y0 = EL_Y + 1 - EL_HALF, EL_Y1 = EL_Y + 1 + EL_HALF, EL_BOT = 1.15, EL_TOP = 1.27;
+let EL_Y = EL_ROW * 8, EL_HALF = 0.6, EL_Y0 = EL_Y + 1 - EL_HALF, EL_Y1 = EL_Y + 1 + EL_HALF, EL_BOT = 1.15, EL_TOP = 1.27;
 const EL_TRACK = [EL_Y + 0.78, EL_Y + 1.22]; // [westbound, eastbound]
 const EL_PLAT = [EL_Y0 + 0.08, EL_Y1 - 0.08]; // where you stand on each platform, along the deck's edges
-const underEl = y => Math.abs(rel(y - (EL_Y + 1))) < EL_HALF; // under (or on) the deck
+const underEl = (y,x=px) => (!worldReady||x>=140&&x<=352)&&Math.abs(rel(y - (EL_Y + 1))) < EL_HALF;
 const EL_STATIONS = [2, 10, 18, 26].map(bx => ({ x: bx * 8 + 5, x0: bx * 8 + 2.6, x1: bx * 8 + 7.4, name: AVE_NAMES[bx] }));
-const elStationAt = x => EL_STATIONS.find(s => mod(x - s.x0, N) < s.x1 - s.x0);
-const elDeckHeight = (x,y) => underEl(y) ? EL_TOP : 0;
+const elStationAt = x => EL_STATIONS.find(s => worldReady ? x>=s.x0&&x<s.x1 : worldCoord(x - s.x0) < s.x1 - s.x0);
+const elDeckHeight = (x,y) => underEl(y,x) ? EL_TOP : 0;
 function elPlatformAt(x,y) {
-  if(!underEl(y))return null;
+  if(!underEl(y,x))return null;
   const s=elStationAt(x);
   if(!s)return null;
   for(const tr of [0,1])if(Math.abs(rel(y-EL_PLAT[tr]))<.14)return {s,tr};
@@ -4694,10 +5038,10 @@ for (const s of EL_STATIONS) s.stairs = [0, 1].map(tr => {
   const ay = tr ? -1 : 1, oy = tr ? EL_Y + 2 : EL_Y; // (c, s: u's direction; for the south side, u runs west)
   return elStairFoot({ tr, ox: s.x, oy, ax: 0, ay, c: ay, s: 0, off: 0 });
 });
-function elStairFoot(st) { st.x = mod(st.ox + st.c * (st.off + ELS.u0 - 0.08), N); st.y = st.oy + st.ay * (ELS.v0 + ELS.v1) / 2; return st; }
+function elStairFoot(st) { st.x = worldCoord(st.ox + st.c * (st.off + ELS.u0 - 0.08)); st.y = st.oy + st.ay * (ELS.v0 + ELS.v1) / 2; return st; }
 // the stairs' steelwork as boxes (for the street clearance): the flights in short pieces, the landings, the top
 const elStairBoxes = st => {
-  const out = [], at = (u, v) => [mod(st.ox + st.c * (st.off + u) + st.ax * v, N), st.oy + st.s * (st.off + u) + st.ay * v];
+  const out = [], at = (u, v) => [worldCoord(st.ox + st.c * (st.off + u) + st.ax * v), st.oy + st.s * (st.off + u) + st.ay * v];
   for (let u = ELS.u0 + 0.05; u < ELS.u3; u += 0.1) {
     const [x, y] = at(u, (ELS.v0 + ELS.v1) / 2), g = elStairGround(x, y);
     out.push({ x, y, c: 1, s: 0, hl: 0.05, hw: (ELS.v1 - ELS.v0) / 2 + 0.01, z0: Math.max(0, g - 0.04), z1: g + 0.2 });
@@ -4753,14 +5097,20 @@ const EL_HL = EL_CAR_LEN / 2 - 0.03, EL_HW = 0.14, EL_H = 0.32;
 const smooth = v => v * v * (3 - 2 * v);
 // where train k on track tr (0 west, 1 east) is at time t: {x of its middle, dir, stopped, station index it's at or leaving}
 function elTrain(tr, k, t) {
+  if(worldReady) {
+    const sequence=[0,1,2,3,2,1],period=(HOP_T+DWELL)*sequence.length,c=mod(t+tr*period/2,period),hop=Math.floor(c/(HOP_T+DWELL)),p=c-hop*(HOP_T+DWELL);
+    const from=sequence[hop],next=sequence[(hop+1)%sequence.length],moving=p>=DWELL,dir=Math.sign(next-from);
+    return {x:EL_STATIONS[from].x+(EL_STATIONS[next].x-EL_STATIONS[from].x)*(moving?smooth((p-DWELL)/HOP_T):0),dir,stopped:!moving,station:from,next,left:moving?HOP_T-(p-DWELL):DWELL-p};
+  }
   const dir = tr ? 1 : -1, c = mod(t + k * EL_CYCLE / 2 + tr * 17, EL_CYCLE), hop = Math.floor(c / (HOP_T + DWELL)), p = c - hop * (HOP_T + DWELL);
   const from = tr ? hop : (EL_STATIONS.length - hop) % EL_STATIONS.length; // station index it set off from
   const x0 = EL_STATIONS[from].x, moving = p >= DWELL;
-  return { x: mod(x0 + dir * HOP * (moving ? smooth((p - DWELL) / HOP_T) : 0), N), dir, stopped: !moving, station: from,
+  return { x: worldCoord(x0 + dir * HOP * (moving ? smooth((p - DWELL) / HOP_T) : 0)), dir, stopped: !moving, station: from,
            left: moving ? HOP_T - (p - DWELL) : DWELL - p, // seconds until it arrives / until it leaves
            next: (from + (tr ? 1 : EL_STATIONS.length - 1)) % EL_STATIONS.length };
 }
-const elTrains = t => [0, 1].flatMap(tr => [0, 1].map(k => ({ tr, k, ...elTrain(tr, k, t) })));
+const elTrainKeys = () => worldReady ? [0] : [0,1];
+const elTrains = t => [0, 1].flatMap(tr => elTrainKeys().map(k => ({ tr, k, ...elTrain(tr, k, t) })));
 // Sweep the player's body against each moving car, including crossings between frames and across the world seam.
 function elTrainImpact(from,to,t0,t1,height=.17) {
   const bottom=EL_TOP+.02,top=bottom+EL_H,radius=.025;
@@ -4768,7 +5118,7 @@ function elTrainImpact(from,to,t0,t1,height=.17) {
   for(const tr of [0,1]) {
     const y0=rel(from[1]-EL_TRACK[tr]),y1=y0+rel(to[1]-from[1]);
     if(Math.min(y0,y1)>EL_HW+radius||Math.max(y0,y1)<-EL_HW-radius)continue;
-    for(const k of [0,1]) {
+    for(const k of elTrainKeys()) {
       const before=elTrain(tr,k,t0),after=elTrain(tr,k,t1);
       if(before.stopped&&after.stopped)continue;
       for(let j=0;j<EL_CARS;j++) {
@@ -4830,7 +5180,7 @@ function belleRoofInfill() {
   }
   return infill;
 }
-const BELLE_ROOF_INFILL = belleRoofInfill();
+let BELLE_ROOF_INFILL = belleRoofInfill();
 function belleRoofFootprint(b) {
   const width = b.x1 - b.x0, height = b.y1 - b.y0, cells = new Uint8Array(width * height);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
@@ -4872,7 +5222,7 @@ function belleFaceAt(mx, my, dir) {
   const k = idx(mx, my), cached = BELLE_FACES[dir][k];
   if (cached) return cached;
   // A removed neighbor can reveal a face absent from the initial geometry. Resolve it once against the current map.
-  const x = mod(mx, N), y = mod(my, N), sh = SHOP[k], height = map[k], [nx, ny] = ARCH_DIRECTIONS[dir];
+  const x = worldCoord(mx), y = worldCoord(my), sh = SHOP[k], height = map[k], [nx, ny] = ARCH_DIRECTIONS[dir];
   const side = ny ? 1 : 0, low = map[idx(x + nx, y + ny)];
   const same = step => {
     const xx = x + side * step, yy = y + (1 - side) * step, at = idx(xx, yy);
@@ -5031,7 +5381,7 @@ function fitStreetFixtures(items, buckets, kind) {
         candidates.push([start[0]+nx*inward-ny*along,start[1]+ny*inward+nx*along]);
     } else for (const radius of [.2,.4,.6]) for(let n=0;n<8;n++) candidates.push([start[0]+Math.cos(n*Math.PI/4)*radius,start[1]+Math.sin(n*Math.PI/4)*radius]);
     for (const [x,y] of candidates) {
-      o.x=mod(x,N);o.y=mod(y,N);
+      o.x=worldCoord(x);o.y=worldCoord(y);
       if (isWater(o.x,o.y) || direction && !ROAD[idx(Math.floor(o.x),Math.floor(o.y))]) continue;
       if(kind==='machine') {
         const fx=-o.s*o.fs,fy=o.c*o.fs;
@@ -5075,12 +5425,12 @@ const elStairLocal = (x, y) => { // a fixture's [u, v] in the stairs' frame if i
   return null;
 };
 for (let k = trees.length - 1; k >= 0; k--) if (elStairLocal(trees[k].x, trees[k].y)) trees.splice(k, 1);
-for (const l of lamps) { const h = elStairLocal(l.x, l.y); if (!h) continue; const [st, u] = h, to = u < (ELS.u0 + ELS.u4) / 2 ? ELS.u0 - 0.7 : ELS.u4 + 0.3, d = to - u; l.x = mod(l.x + st.c * d, N); l.y += st.s * d; }
+for (const l of lamps) { const h = elStairLocal(l.x, l.y); if (!h) continue; const [st, u] = h, to = u < (ELS.u0 + ELS.u4) / 2 ? ELS.u0 - 0.7 : ELS.u4 + 0.3, d = to - u; l.x = worldCoord(l.x + st.c * d); l.y += st.s * d; }
 for (const [items, buckets] of [[trees, treesB], [lamps, lampsB]]) { for (const b of buckets) b.length = 0; for (const o of items) buckets[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o); }
 // Ground-light queries visit only the heads whose pools can reach this cell, including relocated lamps.
 for (const l of lamps) {
   const belle = districtAt(l.x,l.y)==='belle';
-  l.gx=mod(l.x+(belle?0:l.ax*REACH),N);l.gy=mod(l.y+(belle?0:l.ay*REACH),N);
+  l.gx=worldCoord(l.x+(belle?0:l.ax*REACH));l.gy=worldCoord(l.y+(belle?0:l.ay*REACH));
   for(let y=Math.floor(l.gy-.55);y<=Math.floor(l.gy+.55);y++)for(let x=Math.floor(l.gx-.55);x<=Math.floor(l.gx+.55);x++) {
     const cell=idx(x,y);(lampGlowCells[cell]||(lampGlowCells[cell]=[])).push(l);
   }
@@ -5133,7 +5483,7 @@ function geometrySnowExposed(x,y,z,overhead) {
   return true;
 }
 function snowExposed(x,y,z=0) {
-  if (underEl(y) && z<EL_BOT || arcadeAt(x,y) && z<ARCADE_Z || airportIndoors(x,y,z)) return false;
+  if (underEl(y,x) && z<EL_BOT || arcadeAt(x,y) && z<ARCADE_Z || airportIndoors(x,y,z)) return false;
   const cell = idx(Math.floor(x),Math.floor(y)), overhead = streetGeometryCells[cell];
   const canopy = BELLE_ROOF_INFILL[cell] && BELLE_ROOF_CELLS[cell];
   if (canopy && z < canopy.h - .02) return false;
@@ -5176,7 +5526,8 @@ const busyHour = h => clamp(Math.sin((h - 5) / 19 * Math.PI) * 1.3, 0, 1);
 // distance to open water, in cells (0 on it)
 function seaDist(x, y) {
   if (seaAt(x, y) && !onPier(x, y)) return 0;
-  const m = mod(y, N);
+  if(worldReady)return Math.max(0,archipelagoEdge(x,y));
+  const m = worldCoord(y);
   return Math.max(0, Math.min(m - shoreN(x), shoreS(x) - m));
 }
 
@@ -5215,9 +5566,11 @@ function audioMix(s) {
     if (k === 'aviary') out.city = 0.04;
     if (s.room.burgled) { out.restaurant = out.bossa = out.coffee = out.karaoke = out.arcade = 0; out.city *= 0.6; } // broken into at night: nobody here, nothing on, just the street outside
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
+    if (k === 'islandhome') { out.waves=.3;out.city=0; }
     return out;
   }
   const d = AUDIO_DISTRICT[s.district] || AUDIO_DISTRICT.midtown;
+  out.waterfall=s.waterfall||0;
   // up high (a roof, the el) the street is further away and the wind gets at you
   const height = s.mode === 'roof' ? s.roofH : s.mode === 'el' || s.mode === 'elplat' ? 0.7 : s.mode === 'fair' ? s.fairEye || 0 : 0;
   const far = 1 / (1 + Math.max(height, s.mode === 'air' ? s.airHeight || 0 : 0) * 0.25);
@@ -5230,6 +5583,7 @@ function audioMix(s) {
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
   if (s.gardens) { out.city *= 0.35; out.crowd *= 0.4; out.night *= 0.5; out.waves = Math.max(out.waves, 0.15); } // the traffic's far off behind the trees; the lake lapping
   if (s.gardens) out.birds = (0.25 + 0.75 * s.day) * (1 - 0.65 * s.rain); // songbirds in the gardens by day
+  if (s.wilderness) { out.city=out.crowd=0;out.birds=.4*s.day*(1-.65*s.rain); }
   if (s.district === 'shotengai') out.pachinko = Math.max(out.pachinko, 0.28 * far); // parlour roar spilling into the covered street
   if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the Sunset Pier: a crowd, and the booths' bleeps and jingles drifting over it
@@ -5665,7 +6019,7 @@ function useHeld(near) {
       fx.bang = 1.2;
       if (wanted.stars > 0 && !wanted.busted) { // the cops wheel round toward the noise, and lose you for a moment
         const an = Math.random() * Math.PI * 2;
-        wanted.seen = false; wanted.lastX = mod(px + Math.cos(an) * 2.5, N); wanted.lastY = mod(py + Math.sin(an) * 2.5, N); wanted.hideT += 6;
+        wanted.seen = false; wanted.lastX = worldCoord(px + Math.cos(an) * 2.5); wanted.lastY = worldCoord(py + Math.sin(an) * 2.5); wanted.hideT += 6;
         return ['BANG BANG BANG BANG! You toss the firecrackers and slip away while every cop on the street turns toward the racket.', 'kick'];
       }
       for (const p of people) if (!p.hidden && Math.hypot(rel(p.x - px), rel(p.y - py)) < 0.8) p.talk = 3;
@@ -5775,7 +6129,7 @@ const ballBlocked = (x, y, z) => map[idx(Math.floor(x), Math.floor(y))] > z || z
 function kickBall(x, y, a, power = 2.6) {
   let d = 0; // set down just in front of you, short of any wall you're standing against
   while (d < 0.12 && !ballBlocked(x + Math.cos(a) * (d + 0.02), y + Math.sin(a) * (d + 0.02), 0.02)) d += 0.02;
-  ball = { x: mod(x + Math.cos(a) * d, N), y: mod(y + Math.sin(a) * d, N), vx: Math.cos(a) * power, vy: Math.sin(a) * power, z: 0.02, vz: power * 0.25 };
+  ball = { x: worldCoord(x + Math.cos(a) * d), y: worldCoord(y + Math.sin(a) * d), vx: Math.cos(a) * power, vy: Math.sin(a) * power, z: 0.02, vz: power * 0.25 };
 }
 function stepBall(dt) {
   if (!ball) return;
@@ -5786,7 +6140,7 @@ function stepBall(dt) {
   for (let s = 0; s < n; s++) for (const ax of ['x', 'y']) { // move one axis at a time, bouncing off whatever's solid
     const nx = ax === 'x' ? ball.x + ball.vx * dt / n : ball.x, ny = ax === 'y' ? ball.y + ball.vy * dt / n : ball.y;
     if (ballBlocked(nx, ny, ball.z)) { if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
-    else { ball.x = mod(nx, N); ball.y = mod(ny, N); }
+    else { ball.x = worldCoord(nx); ball.y = worldCoord(ny); }
   }
   if (isWater(ball.x, ball.y) && ball.z === 0) { ball = null; return 'lost'; } // into the drink
   // dribbling: walk into it and it rolls on ahead of you
@@ -7696,7 +8050,7 @@ function stepCorner(c, dir) { // the corner one step along the sidewalk in dir (
   else if (dir === 2) { if (qx) qx = 0; else { if (!hseg(ix - 1, iy)) return null; ix--; qx = 1; } }
   else if (dir === 1) { if (!qy) qy = 1; else { if (!vseg(ix, iy)) return null; iy++; qy = 0; } }
   else { if (qy) qy = 0; else { if (!vseg(ix, iy - 1)) return null; iy--; qy = 1; } }
-  return degree(ix & (NB - 1), iy & (NB - 1)) ? { ix, iy, qx, qy } : null;
+  return degree(worldBlock(ix), worldBlock(iy)) ? { ix, iy, qx, qy } : null;
 }
 for (const b of SERVICES) if (b.kind === 'police') for (let k = 0; k < 3; k++) {
   const corner = { ix: b.bx + (k === 1 ? 1 : 0), iy: b.by, qx: k & 1, qy: 1 };
@@ -7712,15 +8066,15 @@ function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn
     c.dir = d; c.goal = next;
   }
   const [gx, gy] = cornerXY(c.goal), dx = rel(gx - c.x), dy = rel(gy - c.y), d = Math.hypot(dx, dy), s = 0.42 * dt;
-  if (d <= s) { c.x = mod(gx, N); c.y = mod(gy, N); c.corner = c.goal; c.goal = null; }
-  else { c.x = mod(c.x + dx / d * s, N); c.y = mod(c.y + dy / d * s, N); c.ph += dt * 4; }
+  if (d <= s) { c.x = worldCoord(gx); c.y = worldCoord(gy); c.corner = c.goal; c.goal = null; }
+  else { c.x = worldCoord(c.x + dx / d * s); c.y = worldCoord(c.y + dy / d * s); c.ph += dt * 4; }
 }
 function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls (just out of the car: a sprint)
   if (c.down) return;
   const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = Math.min(d, (c.burst > T ? COP_FOOT_SPEED * 1.1 : COP_FOOT_SPEED) * dt);
   const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
-  if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = mod(nx, N);
-  if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = mod(ny, N);
+  if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = worldCoord(nx);
+  if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = worldCoord(ny);
   c.ph += dt * 7;
 }
 const roomOpen = (x, y) => x >= 0 && y >= 0 && x < room.W && y < room.H && ROOMW.cell(Math.floor(x), Math.floor(y)) === 0 && !(room.def.block && room.def.block(x, y)) &&
@@ -7884,7 +8238,7 @@ function roofSearchLead(dt) {
     if (!target) continue;
     const vx = rel(target[0] - c.x), vy = rel(target[1] - c.y), d = Math.hypot(vx, vy), step = Math.min(d, (c.sees ? COP_FOOT_SPEED : 0.7) * dt);
     if (d < 0.025) { c.path.shift(); continue; }
-    const nx = mod(c.x + vx / d * step, N), ny = mod(c.y + vy / d * step, N), height = policeRoofHeight(c.x, c.y), nh = policeRoofHeight(nx, ny);
+    const nx = worldCoord(c.x + vx / d * step), ny = worldCoord(c.y + vy / d * step), height = policeRoofHeight(c.x, c.y), nh = policeRoofHeight(nx, ny);
     if (nh > 0 && Math.abs(nh - height) <= 0.35) { c.x = nx; c.y = ny; c.ph += dt * 7; }
     if (d <= step) c.path.shift();
   }
@@ -7979,7 +8333,7 @@ function policeSearchTarget() {
       turns.sort((a_, b) => !!ROAD[idx(Math.floor(x + b[0]), Math.floor(y + b[1]))] - !!ROAD[idx(Math.floor(x + a_[0]), Math.floor(y + a_[1]))]);
       [hx, hy] = turns[0];
     }
-    x = mod(x + hx * stride, N); y = mod(y + hy * stride, N);
+    x = worldCoord(x + hx * stride); y = worldCoord(y + hy * stride);
   }
   return [x, y];
 }
@@ -8038,7 +8392,7 @@ function policeReturnLane(c) {
     && !cars.some(o => o !== c && o.parked && carContact(c, o, l.x, l.y, l.hx, l.hy));
   // Rotating back into the lane can need more room than the sideways cruiser currently occupies.
   for (const offset of [0, -0.6, 0.6, -1.2, 1.2]) {
-    const candidate = { ...lane, x: mod(lane.x + lane.hx * offset, N), y: mod(lane.y + lane.hy * offset, N) };
+    const candidate = { ...lane, x: worldCoord(lane.x + lane.hx * offset), y: worldCoord(lane.y + lane.hy * offset) };
     if (available(candidate)) return candidate;
   }
   let best = lane, distance = Infinity;
@@ -8060,7 +8414,7 @@ function stepReturningPolice(dt) {
     if ((c.pathT -= dt) <= 0) { c.pathT = 0.5; c.path = indoors ? roomPath(c.x, c.y, ...door) : policeRoofPath(c.x, c.y, ...door); }
     const goal = c.path[0] || door, vx = indoors ? goal[0] - c.x : rel(goal[0] - c.x), vy = indoors ? goal[1] - c.y : rel(goal[1] - c.y), d = Math.hypot(vx, vy), step = Math.min(d, (indoors ? 1.6 : 0.5) * dt);
     if (d > 1e-5) {
-      const nx = mod(c.x + vx / d * step, N), ny = mod(c.y + vy / d * step, N);
+      const nx = worldCoord(c.x + vx / d * step), ny = worldCoord(c.y + vy / d * step);
       const open = indoors ? roomOpen(nx, ny) : policeRoofHeight(nx, ny) > 0 && Math.abs(policeRoofHeight(nx, ny) - policeRoofHeight(c.x, c.y)) <= 0.35;
       if (open) { c.x = nx; c.y = ny; }
     }
@@ -8075,7 +8429,7 @@ function stepReturningPolice(dt) {
     if ((c.returnPathT -= dt) <= 0) { c.returnPathT = 0.7; c.returnPath = pursuitRoute(c, car.x, car.y); }
     const goal = c.returnPath?.[0] || [car.x, car.y], d = near(c.x, c.y, ...goal), vx = rel(goal[0] - c.x), vy = rel(goal[1] - c.y), step = Math.min(d, 0.5 * dt);
     if (d > 1e-5) {
-      const nx = mod(c.x + vx / d * step, N), ny = mod(c.y + vy / d * step, N);
+      const nx = worldCoord(c.x + vx / d * step), ny = worldCoord(c.y + vy / d * step);
       if (!map[idx(Math.floor(nx), Math.floor(ny))]) { c.x = nx; c.y = ny; c.ph += dt * 4; }
     }
     if (d <= step && c.returnPath?.length) c.returnPath.shift();
@@ -8108,10 +8462,10 @@ function placeRoadblock() {
   const mid = Math.floor((vert ? me.x : me.y) / 8) * 8 + 1; // the middle of the street you're on
   if (Math.abs(rel((vert ? me.x : me.y) - mid)) > 1.1) return null; // (not on a street)
   for (let d = 2; d <= ROADBLOCK_AHEAD[1]; d++) { // the street ahead, as far as it goes
-    const along = (vert ? me.y : me.x) + dir * d, x = vert ? mid : mod(along, N), y = vert ? mod(along, N) : mid, r = ROAD[idx(Math.floor(x), Math.floor(y))];
+    const along = (vert ? me.y : me.x) + dir * d, x = vert ? mid : worldCoord(along), y = vert ? worldCoord(along) : mid, r = ROAD[idx(Math.floor(x), Math.floor(y))];
     if (r !== street && r !== 3) return null; // it ends (or bends) before then
     if (d < ROADBLOCK_AHEAD[0] || r !== street || mod(along, 8) < 3.5 || mod(along, 8) > 6.5) continue; // mid-block, far enough off
-    const spots = [-1, 0, 1].map(k => vert ? [mod(x + k * ROADBLOCK_SPACING, N), y] : [x, mod(y + k * ROADBLOCK_SPACING, N)]);
+    const spots = [-1, 0, 1].map(k => vert ? [worldCoord(x + k * ROADBLOCK_SPACING), y] : [x, worldCoord(y + k * ROADBLOCK_SPACING)]);
     const hx = vert ? 1 : 0, hy = vert ? 0 : 1; // (lying across the street)
     if (!spots.every(([sx, sy]) => carBodyClear(sx, sy, hx, hy) && !cars.some(o => near(o.x, o.y, sx, sy) < 0.5))) continue;
     const block = { x, y, cars: [], cops: [], t: T, stale: false };
@@ -8120,7 +8474,7 @@ function placeRoadblock() {
         state: 'scene', x: sx, y: sy, ex: sx, ey: sy, hx: k === 1 ? -hx : hx, hy: k === 1 ? -hy : hy };
       cars.push(c); block.cars.push(c);
       if (k !== 1) { // an officer behind each end car, on your side of it
-        const cop = { x: vert ? sx : mod(sx - dir * 0.35, N), y: vert ? mod(sy - dir * 0.35, N) : sy, car: c, corner: null, dir: 0, goal: null, chase: false, ph: 0, extra: true, post: true };
+        const cop = { x: vert ? sx : worldCoord(sx - dir * 0.35), y: vert ? worldCoord(sy - dir * 0.35) : sy, car: c, corner: null, dir: 0, goal: null, chase: false, ph: 0, extra: true, post: true };
         footCops.push(cop); block.cops.push(cop);
       }
     });
@@ -8154,13 +8508,13 @@ function stepRoadblocks() {
 // helicopter flies, so a fast car can get out from under it. Once the heat's off it flies away.
 const HELI_STARS = 5, HELI_Z = 4, HELI_ORBIT = 3, HELI_SPEED = 2.6, SPOT_SPEED = 1.9, SPOT_R = 0.7, SPOT_REACH = 4, HELI_GONE = 45;
 let heli = null; // { x, y, z, h (heading), sx, sy (where the light's on the ground), leaving }
-const underCover = (x, y) => mode === 'room' || (mode === 'walk' || mode === 'drive' || mode === 'taxi') && (arcadeAt(x, y) || underEl(y));
+const underCover = (x, y) => mode === 'room' || (mode === 'walk' || mode === 'drive' || mode === 'taxi') && (arcadeAt(x, y) || underEl(y,x));
 function stepHeli(dt) {
   const hot = wanted.stars >= HELI_STARS, [wx, wy] = crimePos();
   if (!heli) {
     if (!hot) return false;
     const k = Math.random() * TAU; // in from somewhere off over the rooftops
-    heli = { x: mod(wanted.lastX + Math.cos(k) * 30, N), y: mod(wanted.lastY + Math.sin(k) * 30, N), z: HELI_Z, h: k + Math.PI, sx: 0, sy: 0, leaving: false, sweep: Math.random() * TAU };
+    heli = { x: worldCoord(wanted.lastX + Math.cos(k) * 30), y: worldCoord(wanted.lastY + Math.sin(k) * 30), z: HELI_Z, h: k + Math.PI, sx: 0, sy: 0, leaving: false, sweep: Math.random() * TAU };
     heli.sx = heli.x; heli.sy = heli.y;
   }
   if (!hot) heli.leaving = true;
@@ -8177,15 +8531,15 @@ function stepHeli(dt) {
     const want = Math.atan2(vy, vx), turn = mod(want - heli.h + Math.PI, TAU) - Math.PI;
     heli.h += clamp(turn, -1.2 * dt, 1.2 * dt);
     const sp = Math.min(HELI_SPEED, d * 0.8) * Math.max(0.3, Math.cos(turn));
-    heli.x = mod(heli.x + Math.cos(heli.h) * sp * dt, N); heli.y = mod(heli.y + Math.sin(heli.h) * sp * dt, N);
+    heli.x = worldCoord(heli.x + Math.cos(heli.h) * sp * dt); heli.y = worldCoord(heli.y + Math.sin(heli.h) * sp * dt);
   }
   // the light: on you, or sweeping round the search
   heli.sweep += dt * 0.9;
   const lx = lit ? wx : wanted.searchX + Math.cos(heli.sweep) * 1.6, ly = lit ? wy : wanted.searchY + Math.sin(heli.sweep * 1.3) * 1.6;
   let sx = rel(lx - heli.sx), sy = rel(ly - heli.sy), sd = Math.hypot(sx, sy);
-  if (sd > 0.001) { const step = Math.min(sd, SPOT_SPEED * dt); heli.sx = mod(heli.sx + sx / sd * step, N); heli.sy = mod(heli.sy + sy / sd * step, N); }
+  if (sd > 0.001) { const step = Math.min(sd, SPOT_SPEED * dt); heli.sx = worldCoord(heli.sx + sx / sd * step); heli.sy = worldCoord(heli.sy + sy / sd * step); }
   sx = rel(heli.sx - heli.x); sy = rel(heli.sy - heli.y); sd = Math.hypot(sx, sy);
-  if (sd > SPOT_REACH) { heli.sx = mod(heli.x + sx / sd * SPOT_REACH, N); heli.sy = mod(heli.y + sy / sd * SPOT_REACH, N); } // (as far as the beam can lean)
+  if (sd > SPOT_REACH) { heli.sx = worldCoord(heli.x + sx / sd * SPOT_REACH); heli.sy = worldCoord(heli.y + sy / sd * SPOT_REACH); } // (as far as the beam can lean)
   if (heli.leaving && near(heli.x, heli.y, wx, wy) > HELI_GONE) heli = null;
   return lit;
 }
@@ -8306,7 +8660,7 @@ const NOTO_LOOK = { haircut: 0.5, coat: 0.5, tattoo: 0.6 }; // what's left after
 const NOTO_KNOWN = 30, NOTO_INFAMOUS = 65, NOTO_SPOT_R = 2.2, NOTO_CALL = 0.25, NOTO_CALL_GAP = 120; // (seconds between call-ins at most)
 const noto = { level: 0, day: dayNum, looked: {}, log: [], lookDay: -9, scanT: 0, callT: -Infinity };
 // where (x, y) is, as the papers put it
-const placeTitle = (x, y) => { const d = districtName(Math.floor(mod(x, N) / 8), Math.floor(mod(y, N) / 8)); return d === 'belle' ? 'the Belle Époque Quarter' : DISTRICT_TITLE[d] || 'the city'; };
+const placeTitle = (x, y) => { const d = districtName(Math.floor(worldCoord(x) / 8), Math.floor(worldCoord(y) / 8)); return d === 'belle' ? 'the Belle Époque Quarter' : DISTRICT_TITLE[d] || 'the city'; };
 // a count as the papers print one: in words, up to ten
 const inWords = n => ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][n] || String(n);
 // something for the papers: a kind (a crime's, or one of NEWS's), where, and anything the line needs; the same thing
@@ -8491,6 +8845,7 @@ const CAR_MODELS = {
   car_hatch: { body: GREEN, top: 2.0, boost: 2.9 }, car_sedan: { body: BLUE, top: 2.3, boost: 3.3 }, car_sports: { body: RED, top: 2.8, boost: 4.2 },
 };
 // a home is the apartment building on a lot (any cell of it: they share one SHOP), and how big a place you bought
+ITEMS.home_island = { name: 'Fern Island house', price: 6800, kind: 'home' };
 const owned = { cars: [], homes: [] }; // cars: the car objects; homes: { cell, kind }
 const homeAt = sh => owned.homes.find(h => SHOP[h.cell] === sh) || null;
 
@@ -8505,11 +8860,11 @@ function parkCar(c) {
 }
 // the street lane nearest (x, y), on the side of the street you're on: {x, y, hx, hy}
 function laneNear(x, y) {
-  const X = Math.round((x - 1) / 8) * 8 + 1, Y = Math.round((y - 1) / 8) * 8 + 1, bx = Math.floor(x / 8) & (NB - 1), by = Math.floor(y / 8) & (NB - 1);
-  const vOK = vseg(Math.round((x - 1) / 8) & (NB - 1), by), hOK = hseg(bx, Math.round((y - 1) / 8) & (NB - 1));
+  const X = Math.round((x - 1) / 8) * 8 + 1, Y = Math.round((y - 1) / 8) * 8 + 1, bx = worldBlock(Math.floor(x / 8)), by = worldBlock(Math.floor(y / 8));
+  const vOK = vseg(worldBlock(Math.round((x - 1) / 8)), by), hOK = hseg(bx, worldBlock(Math.round((y - 1) / 8)));
   const useV = vOK && (!hOK || Math.abs(rel(x - X)) < Math.abs(rel(y - Y)));
-  if (useV) { const dir = Math.sign(rel(x - X)) || 1; return { x: mod(X + 0.4 * dir, N), y, hx: 0, hy: dir }; }
-  const dir = -(Math.sign(rel(y - Y)) || 1); return { x, y: mod(Y - 0.4 * dir, N), hx: dir, hy: 0 };
+  if (useV) { const dir = Math.sign(rel(x - X)) || 1; return { x: worldCoord(X + 0.4 * dir), y, hx: 0, hy: dir }; }
+  const dir = -(Math.sign(rel(y - Y)) || 1); return { x, y: worldCoord(Y - 0.4 * dir), hx: dir, hy: 0 };
 }
 // a car of yours, parked at (x, y) facing (hx, hy) (exactly there, or pulled in to the kerb)
 function spawnOwnedCar(model, x, y, hx, hy, exact = false) {
@@ -8535,19 +8890,20 @@ function summonCar(model) {
   const here = mine.find(c => dist(c) < 2 && !c.wrecked && c.fireT == null); // (a wreck, even right here, goes to the garage)
   if (here) { here.fobBlinkAt = T; return [`Your ${name}'s right here. Its lights blink at you.`, 'click']; }
   const c = mine.reduce((b, c) => dist(c) < dist(b) ? c : b), l = laneNear(px, py);
+  if(worldReady&&!ROAD[idx(Math.floor(l.x),Math.floor(l.y))])return ['No road nearby. Try the fob from a street.','click'];
   let towed = '';
   if (c.wrecked || c.fireT != null) { // a burnt-out shell: the garage tows it in and puts it right, for a price
     if (!pay(TOW_FEE)) return [`Your ${name}'s a wreck. The garage wants ${fmt$(TOW_FEE)} to tow it in and fix it, and you're short.`, 'click'];
     repairCar(c); towed = ` The garage towed what was left of it and put it right (${fmt$(TOW_FEE)}).`;
   }
   for (const s of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4]) { // along the kerb to a gap between parked cars
-    c.x = mod(l.x + l.hx * s, N); c.y = mod(l.y + l.hy * s, N); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);
+    c.x = worldCoord(l.x + l.hx * s); c.y = worldCoord(l.y + l.hy * s); c.hx = l.hx; c.hy = l.hy; c.v = 0; parkCar(c);
     if (!cars.some(o => o !== c && Math.hypot(rel(o.ex - c.x), rel(o.ey - c.y)) < 0.5)) break;
   }
   return [`You press the fob. A minute later your ${name} rolls up at the kerb, lights blinking.${towed}`, 'click'];
 }
 // the nearest apartment building to (x, y) that isn't yours already, within a few blocks: its cell index
-const homeRoomKind = kind => kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
+const homeRoomKind = kind => kind === 'home_island' ? 'islandhome' : kind === 'home_belle' ? 'bellehome' : kind === 'home_loft' ? 'loft' : 'home';
 function homeBalconyBounds(home) {
   const b = home?.kind === 'home_belle' && SHOP[home.cell]?.belle;
   if (!b) return null;
@@ -8583,7 +8939,7 @@ function freeHomeNear(x, y, district = null) {
   let best = -1, bd = district ? N : 30;
   const range = district ? N / 2 : 24;
   for (let dy = -range; dy < range + (district ? 0 : 1); dy++) for (let dx = -range; dx < range + (district ? 0 : 1); dx++) {
-    const i = idx(mod(Math.floor(x) + dx, N), mod(Math.floor(y) + dy, N)), sh = SHOP[i];
+    const i = idx(worldCoord(Math.floor(x) + dx), worldCoord(Math.floor(y) + dy)), sh = SHOP[i];
     if (!sh || sh.kind !== SHOP_APTS || !map[i] || homeAt(sh) || district && districtAt(i % N, Math.floor(i / N)) !== district) continue;
     if (district === 'belle') {
       const b = sh.belle;
@@ -8605,7 +8961,8 @@ function buyProperty(id, x, y) {
     const l = laneNear(x, y); spawnOwnedCar(id, l.x, l.y, l.hx, l.hy);
     return [true, `You buy ${aOrSome(it.name)}. It's parked out front (C on your map). ${giveCarKeys(id)}`];
   }
-  const cell = freeHomeNear(x, y, id === 'home_belle' ? 'belle' : null);
+  const cell = id === 'home_island' ? cityPlaceCell('fern-house') : freeHomeNear(x, y, id === 'home_belle' ? 'belle' : null);
+  if (id === 'home_island' && (cell < 0 || homeAt(SHOP[cell]))) return [false, 'Fern House is already owned.'];
   if (cell < 0) return [false, '"Nothing on the market round here right now."'];
   if (!pay(it.price)) return [false, `${cap(it.name)} is ${fmt$(it.price)}. You can't afford it.`];
   owned.homes.push({ cell, kind: id, decor: [], fridge: [], pet: null });
@@ -8613,13 +8970,12 @@ function buyProperty(id, x, y) {
 }
 // ===== boats of your own: at the marina (world.js lays out its jetty) you can rent one by the trip, buy one outright
 // (it's yours, tied up wherever you leave it, and kept in the save), or hotwire somebody else's (boat theft). Out on
-// the water it's mode 'sea': W throttle, S astern, A/D the helm, E to step off beside a jetty or the sea wall. The
-// whole bay is open to you, round the island and right across to the north shore; the bridges are too low to get
-// under. marina.js draws them (every boat in the bay is a real 3D one) and the marina itself.
+// the water it's mode 'sea': W throttle, Shift to cruise, S brake/astern, A/D the helm, E to step off beside land.
+// Raised bridges have clearance below their decks, with solid supports. marina.js draws the boats and marina.
 const BOAT_KINDS = { // hl, hw: half length and beam (cells: 10m), fb: how high the deck stands out of the water
-  speedboat: { name: 'speedboat', hl: 0.26, hw: 0.085, fb: 0.045, price: 1500, rent: 30, top: 1.8, acc: 1, turn: 1.7 },
-  sailboat: { name: 'sailboat', hl: 0.4, hw: 0.12, fb: 0.05, price: 3000, rent: 50, top: 0.85, acc: 0.3, turn: 1 },
-  cruiser: { name: 'cabin cruiser', hl: 0.55, hw: 0.16, fb: 0.065, price: 6000, rent: 80, top: 1.25, acc: 0.5, turn: 0.8 },
+  speedboat: { name: 'speedboat', hl: 0.26, hw: 0.085, fb: 0.045, price: 1500, rent: 30, top: 1.8, cruise: 4.8, acc: 1, turn: 1.7 },
+  sailboat: { name: 'sailboat', hl: 0.4, hw: 0.12, fb: 0.05, price: 3000, rent: 50, top: 0.85, cruise: 1.4, acc: 0.3, turn: 1 },
+  cruiser: { name: 'cabin cruiser', hl: 0.55, hw: 0.16, fb: 0.065, price: 6000, rent: 80, top: 1.25, cruise: 3.1, acc: 0.5, turn: 0.8 },
   tug: { name: 'tug', hl: 0.35, hw: 0.12, fb: 0.06 }, ferry: { name: 'ferry', hl: 0.8, hw: 0.2, fb: 0.06 }, // (only out in the bay)
 };
 BOAT_KINDS.sail = BOAT_KINDS.sailboat;
@@ -8659,7 +9015,8 @@ function marinaPrompt() {
   if (mode === 'sea') {
     const k = BOAT_KINDS[sea.kind];
     if (landingSpot(sea)) return Math.abs(sea.v) > 0.25 ? 'Slow down to step off' : `E: tie up and step off${sea.hired && inMarina(sea.x, sea.y) ? ' (return rental)' : ''}`;
-    return typeof TOUCH !== 'undefined' && TOUCH ? 'stick: throttle and helm' : `W throttle | S astern | A/D steer | V: camera   ${Math.round(Math.abs(sea.v) * 19.4)} knots${sea.v > k.top * 0.9 ? ' (flat out)' : ''}`;
+    const speed = `${Math.round(Math.abs(sea.v) * 19.4)} knots${sea.v > k.top + .1 ? ' (cruising)' : ''}`;
+    return typeof TOUCH !== 'undefined' && TOUCH ? `stick: throttle / helm; full forward: cruise; back: brake   ${speed}` : `W throttle | Shift: cruise | S brake / astern | A/D steer | V: camera   ${speed}`;
   }
   const b = nearBoat();
   if (!b) return nearOffice() ? (marinaOpen() ? 'MARINA: boats by the trip or to buy, down on the jetty.' : 'MARINA: shut. Open 7am till 9pm.') : '';
@@ -8682,7 +9039,8 @@ function useMarina() { // true if E did something
   if (b.deal === 'rent') {
     if (!pay(k.rent)) { say(`That's ${fmt$(k.rent)} for the trip.`); return true; }
     b.hired = true; boardBoat(b);
-    say(`"Have her back in one piece." Return the ${k.name} to the marina when you're finished. W to go, A and D to steer.`, 4);
+    const controls = typeof TOUCH !== 'undefined' && TOUCH ? 'Stick to steer; full forward to cruise, back to brake.' : 'W to go, A/D to steer. Hold Shift to cruise; S to brake.';
+    say(`"Have her back in one piece." Return the ${k.name} to the marina when you're finished. ${controls}`, 5);
     return true;
   }
   if (!pay(k.price)) { say(`The '${b.name}' is ${fmt$(k.price)}. You have ${fmt$(money)}.`, 3); return true; }
@@ -8703,13 +9061,13 @@ function boardBoat(b) {
   sea = b; b.v = 0; mode = 'sea'; px = b.x; py = b.y; a = Math.atan2(b.hy, b.hx); camYaw = a; pitch = 0;
 }
 // somewhere to step off: a jetty, the promenade, a beach, right beside the hull
-const dryLand = (x, y) => !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !solidAt(x, y, 0.06);
+const dryLand = (x, y) => !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && outdoorGroundHeight(x, y) <= .12 && !solidAt(x, y, 0.06);
 function landingSpot(b) {
   const k = BOAT_KINDS[b.kind];
   for (const off of [0.2, 0.4]) for (const [u, v] of [[0, k.hw + off], [0, -k.hw - off], [k.hl * 0.5, k.hw + off], [k.hl * 0.5, -k.hw - off],
     [-k.hl * 0.5, k.hw + off], [-k.hl * 0.5, -k.hw - off], [k.hl + off, 0], [-k.hl - off, 0]]) {
     const x = b.x + b.hx * u - b.hy * v, y = b.y + b.hy * u + b.hx * v;
-    if (dryLand(x, y)) return [mod(x, N), mod(y, N)];
+    if (dryLand(x, y)) return [worldCoord(x), worldCoord(y)];
   }
   return null;
 }
@@ -8728,12 +9086,12 @@ function leaveBoat() {
   } else say(b.deal === 'mine' ? `You tie up the '${b.name}'. She'll be here when you get back.` : 'You tie her up and walk away whistling.', 3);
 }
 // out on the water: nothing solid at the hull's corners (the shore, a jetty, a bridge, a moored boat)
-const navigable = (x, y) => seaAt(x, y) && isWater(x, y);
+const navigable = (x, y) => seaAt(x, y) && (isWater(x, y) || !!roadBridgeAt(x,y)) && !roadBridgePierAt(x,y);
 function hullPoints(b, x, y, hx, hy) {
   const k = BOAT_KINDS[b.kind];
   return [[k.hl, 0], [k.hl * 0.6, k.hw], [k.hl * 0.6, -k.hw], [0, k.hw], [0, -k.hw], [-k.hl, k.hw], [-k.hl, -k.hw]].map(([u, v]) => [x + hx * u - hy * v, y + hy * u + hx * v]);
 }
-const waterClear = (b, x, y, hx, hy) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
+const waterClear = (b, x, y, hx, hy) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy) && roadBridgeClearance(qx,qy) > (b.kind==='sailboat'?1.05:.28) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
 function trafficClear(b, x, y, hx, hy, t = T) { // the boats going round the bay
   const pts = hullPoints(b, x, y, hx, hy);
   return !boats.some(o => { const p = boatAt(o, t), r = BOAT_HL[o.kind] * 0.85; return Math.abs(rel(p.x - x)) < 3 && pts.some(([qx, qy]) => Math.hypot(rel(p.x - qx), rel(p.y - qy)) < r); });
@@ -8741,17 +9099,32 @@ function trafficClear(b, x, y, hx, hy, t = T) { // the boats going round the bay
 function stepSea(dt) { // throttle and helm; the shore and everything else in the water stops you
   const b = sea, k = BOAT_KINDS[b.kind];
   const f = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
-  if (f > 0) b.v += k.acc * (b.v < 0 ? 2 : 1) * dt; else if (f < 0) b.v -= k.acc * (b.v > 0 ? 1.5 : 0.6) * dt; else b.v *= 1 - 0.35 * dt; // no brakes: she coasts
-  b.v = clamp(b.v, -k.top * 0.3, k.top);
-  a += s * dt * k.turn * clamp(Math.abs(b.v) / 0.35, 0.25, 1) * (b.v < -0.02 ? -1 : 1); // (the rudder needs water moving past it)
-  const hx = Math.cos(a), hy = Math.sin(a), nx = b.x + hx * b.v * dt, ny = b.y + hy * b.v * dt;
-  const ok = waterClear(b, nx, ny, hx, hy) && (trafficClear(b, nx, ny, hx, hy) || !trafficClear(b, b.x, b.y, b.hx, b.hy)); // (something ran into you: you can get away)
-  if (ok) { b.x = mod(nx, N); b.y = mod(ny, N); b.hx = hx; b.hy = hy; }
-  else {
+  const cruise = K.ShiftLeft || K.ShiftRight, limit = cruise ? k.cruise : k.top;
+  if (f > 0) {
+    // Releasing cruise eases back to harbour speed instead of cutting velocity instantly.
+    if (b.v > limit) b.v = Math.max(limit, b.v - k.acc * 1.5 * dt);
+    else {
+      let acceleration = cruise ? 1.6 : 1;
+      if (b.v < 0) acceleration = 2;
+      b.v = Math.min(limit, b.v + k.acc * acceleration * dt);
+    }
+  } else if (f < 0) {
+    const brake = b.v > 0 ? k.acc * 1.5 + Math.max(0, b.v - k.top) * .75 : k.acc * .6;
+    b.v -= brake * dt;
+  } else b.v *= Math.max(0, 1 - .35 * dt);
+  b.v = clamp(b.v, -k.top * .3, k.cruise);
+  const turn = s * dt * k.turn * clamp(Math.abs(b.v) / .35, .25, 1) * Math.min(1, k.top / Math.max(k.top, Math.abs(b.v))) * (b.v < -.02 ? -1 : 1);
+  // Sweep translation and rotation: even a fast boat cannot skip a thin pier between frames.
+  const steps = Math.max(1, Math.ceil((Math.abs(b.v) * dt + k.hl * Math.abs(turn)) / .06));
+  for (let n = 0; n < steps; n++) {
+    const yaw = a + turn / steps, hx = Math.cos(yaw), hy = Math.sin(yaw), nx = b.x + hx * b.v * dt / steps, ny = b.y + hy * b.v * dt / steps;
+    const ok = waterClear(b, nx, ny, hx, hy) && (trafficClear(b, nx, ny, hx, hy) || !trafficClear(b, b.x, b.y, b.hx, b.hy)); // (something ran into you: you can get away)
+    if (ok) { b.x = worldCoord(nx); b.y = worldCoord(ny); b.hx = hx; b.hy = hy; a = yaw; continue; }
     const sp = Math.abs(b.v);
     if (sp > 0.7) { say(pick(['*THUNK*', '*CRUNCH* That\'ll buff out.', '*BONK*']), 1.5); if (typeof actx !== 'undefined' && actx) playClip('crash', clamp(0.2 + sp * 0.2, 0.2, 0.6)); }
-    if (waterClear(b, b.x, b.y, hx, hy)) { b.hx = hx; b.hy = hy; } else a = Math.atan2(b.hy, b.hx);
+    if (waterClear(b, b.x, b.y, hx, hy)) { b.hx = hx; b.hy = hy; a = yaw; }
     b.v = -b.v * 0.25;
+    break;
   }
   px = b.x; py = b.y;
 }
@@ -8763,7 +9136,7 @@ function loadBoats(list) {
   for (const [index, s] of (list || []).entries()) {
     if (!s || !BOAT_KINDS[s.kind]?.price) continue;
     if (![s.x, s.y, s.hx, s.hy].every(Number.isFinite) || Math.hypot(s.hx, s.hy) < .1) continue;
-    const length = Math.hypot(s.hx, s.hy), position = { x: mod(s.x, N), y: mod(s.y, N), hx: s.hx / length, hy: s.hy / length, v: 0 };
+    const length = Math.hypot(s.hx, s.hy), position = { x: worldCoord(s.x), y: worldCoord(s.y), hx: s.hx / length, hy: s.hy / length, v: 0 };
     if (s.deal === 'rent') {
       if (s.hired !== true || !Number.isInteger(s.slot) || restoredRentals.has(s.slot)) continue;
       const rental = fleet.find(b => b.slot === s.slot && b.deal === 'rent' && b.kind === s.kind);
@@ -8855,6 +9228,7 @@ const WATERS = {
 };
 const CAST_MIN = 0.35, CAST_MAX = 1.9; // how far a cast goes (cells: 3.5m with no wind-up, 19m at full)
 const ROD_Z = 0.22; // how high the rod tip is held (the eye's 0.17: screen.js)
+const rodTipHeight = () => ROD_Z + (mode === 'walk' ? outdoorGroundHeight(px, py) : 0);
 const FISH_DEEP = 9; // this far off the shore (cells) the bay counts as open water
 const HUT_HOURS = [5, 20]; // (anglers get up early)
 const hutOpen = (t = tod) => t >= HUT_HOURS[0] && t < HUT_HOURS[1];
@@ -8870,13 +9244,13 @@ const boatSpeed = () => mode === 'sea' && sea ? Math.abs(sea.v) : mode === 'boat
 const heldRod = () => { const it = heldItem(); return it && ITEMS[it.id].rod ? it : null; };
 // what water is at (x, y), if any: 'sea' | 'deep' | 'marina' | 'pond' | 'lake', 'ice' (a frozen pond), or null (dry land)
 function waterKind(x, y) {
-  if (onPier(x, y) || ROAD[idx(Math.floor(x), Math.floor(y))]) return null;
+  if (onPier(x, y) || ROAD[idx(Math.floor(x), Math.floor(y))]&&!roadBridgeAt(x,y)) return null;
   if (gardenLake(x, y)) return 'lake';
   const bx = Math.floor(x / 8) & (NB - 1), by = Math.floor(y / 8) & (NB - 1);
   if (blockKind(bx, by) === 'park') return pondSD(mod(x, 8), mod(y, 8), bx, by) < -0.02 ? (seasonIdx() === 3 ? 'ice' : 'pond') : null;
   if (!seaAt(x, y)) return null;
   if (inMarina(x, y)) return 'marina';
-  const m = mod(y, N), off = Math.min(mod(m - shoreS(x), N), mod(shoreN(x) - m, N));
+  const m = worldCoord(y), off = worldReady ? -archipelagoEdge(x,y) : Math.min(worldCoord(m - shoreS(x)), worldCoord(shoreN(x) - m));
   return off >= FISH_DEEP ? 'deep' : 'sea';
 }
 // what's on the hook: fish mostly, some junk, now and then treasure (a better rod, and luck, tip it)
@@ -8931,8 +9305,8 @@ function castLine() {
   const f = fishing, d = CAST_MIN + f.power * (CAST_MAX - CAST_MIN), ca = Math.cos(a), sa = Math.sin(a);
   let reach = d;
   for (let s = 0.1; s <= d; s += 0.05) if (map[idx(Math.floor(px + ca * s), Math.floor(py + sa * s))] > 0) { reach = Math.max(0.1, s - 0.08); break; }
-  Object.assign(f, { st: 'fly', t: 0, d: reach, dur: 0.3 + reach * 0.2, ox: px + ca * 0.06, oy: py + sa * 0.06, oz: ROD_Z,
-    tx: px + ca * reach, ty: py + sa * reach, x: px, y: py, z: ROD_Z });
+  Object.assign(f, { st: 'fly', t: 0, d: reach, dur: 0.3 + reach * 0.2, ox: px + ca * 0.06, oy: py + sa * 0.06, oz: rodTipHeight(),
+    tx: px + ca * reach, ty: py + sa * reach, x: px, y: py, z: rodTipHeight() });
   fishSfx.push('whoosh');
 }
 function splash(x, y, n, up) {
@@ -8956,9 +9330,9 @@ function stepFishing(dt, rnd = Math.random) {
     if (!usingHeldItem()) castLine();
   } else if (f.st === 'fly') {
     const q = Math.min(1, f.t / f.dur), arc = 0.06 + f.d * 0.09;
-    f.x = mod(f.ox + rel(f.tx - f.ox) * q, N); f.y = mod(f.oy + rel(f.ty - f.oy) * q, N); f.z = f.oz * (1 - q) + arc * 4 * q * (1 - q);
+    f.x = worldCoord(f.ox + rel(f.tx - f.ox) * q); f.y = worldCoord(f.oy + rel(f.ty - f.oy) * q); f.z = f.oz * (1 - q) + terrainHeight(f.tx, f.ty) * q + arc * 4 * q * (1 - q);
     if (q >= 1) {
-      f.water = waterKind(f.x, f.y); f.z = 0; f.t = 0;
+      f.water = waterKind(f.x, f.y); f.z = terrainHeight(f.x, f.y); f.t = 0;
       if (f.water && f.water !== 'ice') { f.st = 'wait'; f.next = biteWait(f.rod, rnd); splash(f.x, f.y, 6, 0.25); fishSfx.push('plop'); f.ring = T; }
       else {
         f.st = 'land';
@@ -8973,8 +9347,8 @@ function stepFishing(dt, rnd = Math.random) {
     if (f.t >= ITEMS[f.rod].rod.window) { Object.assign(f, { st: 'wait', t: 0, next: biteWait(f.rod, rnd) * 0.5 }); say(pick(['It got away.', 'Missed it.', 'Gone. It took the bait with it, in spirit.']), 1.5); f.ring = T; }
   } else if (f.st === 'reel') { // in it comes, skipping over the water, the catch swinging up out of it at the end
     const q = Math.min(1, f.t / f.dur), ex = px + Math.cos(a) * 0.12, ey = py + Math.sin(a) * 0.12;
-    f.x = mod(f.sx + rel(ex - f.sx) * q, N); f.y = mod(f.sy + rel(ey - f.sy) * q, N);
-    f.z = q < 0.65 ? f.sz * (1 - q / 0.65) : (q - 0.65) / 0.35 * (ROD_Z - 0.07);
+    f.x = worldCoord(f.sx + rel(ex - f.sx) * q); f.y = worldCoord(f.sy + rel(ey - f.sy) * q);
+    f.z = q < 0.65 ? f.sz * (1 - q / 0.65) : (q - 0.65) / 0.35 * (rodTipHeight() - 0.07);
     if (q > 0.05 && q < 0.65 && f.catch && rnd() < dt * 12) splash(f.x, f.y, 1, 0.2); // (thrashing as it comes)
     if (q >= 1) { if (f.catch) landCatch(f); else fishing = null; }
   } else if (f.st === 'landed') { if (f.t > 1.6) fishing = null; }
@@ -9026,7 +9400,7 @@ function hutPrompt() {
 // one and you get a tip. { x, y, a: the way they face, cast: how far out their bobber sits, seed, shirt }
 const ANGLERS = [];
 {
-  const add = (x, y, a, cast = 0.6) => { const k = ANGLERS.length; ANGLERS.push({ x: mod(x, N), y: mod(y, N), a, cast, seed: k, shirt: [BLUE, GREEN, BRICK, GRAY, RED, YEL, CYAN][k % 7] }); };
+  const add = (x, y, a, cast = 0.6) => { const k = ANGLERS.length; ANGLERS.push({ x: worldCoord(x), y: worldCoord(y), a, cast, seed: k, shirt: [BLUE, GREEN, BRICK, GRAY, RED, YEL, CYAN][k % 7] }); };
   add(FAIR.x0 + 0.14, FAIR.y1 - 0.7, Math.PI); // the Sunset Pier's end, over each side and off the end
   add(FAIR.x1 - 0.14, FAIR.y1 - 1.1, 0);
   add(FAIR.cx + 1.6, FAIR.y1 - 0.14, Math.PI / 2, 0.8);
@@ -9314,15 +9688,22 @@ function traceShot(x, y, z, hx, hy, slope) {
   let end = SHOT_RANGE, what = 'air';
   for (let d = 0.02; d < SHOT_RANGE; d += 0.02) { // the road, or the first building, along the way
     const zz = z + slope * d;
-    if (zz <= 0) { end = slope < 0 ? Math.max(0, -z / slope) : d; what = 'ground'; break; }
-    if (map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))] > zz) { end = d; what = 'wall'; break; }
+    if (zz <= Math.max(terrainHeight(x + hx * d, y + hy * d),roadBridgeBuiltHeight(x+hx*d,y+hy*d,zz))) {
+      let lo = Math.max(0, d - .02), hi = d;
+      for (let n = 0; n < 10; n++) {
+        const mid = (lo + hi) / 2;
+        if (z + slope * mid <= Math.max(terrainHeight(x + hx * mid, y + hy * mid),roadBridgeBuiltHeight(x+hx*mid,y+hy*mid,z+slope*mid))) hi = mid; else lo = mid;
+      }
+      end = hi; what = 'ground'; break;
+    }
+    if (Math.max(map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))],islandRoofHeight(x+hx*d,y+hy*d)) > zz) { end = d; what = 'wall'; break; }
   }
   let best = null;
   const closer = d => d > 0 && d < (best ? best.d : end);
   const figure = (o, kind) => { // somebody standing (a body 3cm either side of the line, up to head height), or lying flat
-    const ox = rel(o.x - x), oy = rel(o.y - y), along = ox * hx + oy * hy, across = Math.abs(oy * hx - ox * hy), zz = z + slope * along;
+    const ox = rel(o.x - x), oy = rel(o.y - y), along = ox * hx + oy * hy, across = Math.abs(oy * hx - ox * hy), zz = z + slope * along - outdoorGroundHeight(o.x, o.y);
     if (!closer(along)) return;
-    if (o.down ? across < 0.08 && zz < 0.04 : across < 0.032 && zz < (kind === 'cop' ? 0.185 : 0.175)) best = { d: along, what: kind, who: o };
+    if (zz >= 0 && (o.down ? across < 0.08 && zz < 0.04 : across < 0.032 && zz < (kind === 'cop' ? 0.185 : 0.175))) best = { d: along, what: kind, who: o };
   };
   for (const p of people) if (!p.hidden && !p.dead && near(p.x, p.y, x, y) < SHOT_RANGE) figure(p, 'person');
   for (const c of footCops) if (!c.dead && near(c.x, c.y, x, y) < SHOT_RANGE) figure(c, 'cop');
@@ -9336,10 +9717,11 @@ function traceShot(x, y, z, hx, hy, slope) {
       const a_ = (-half - o) / v, b_ = (half - o) / v;
       t0 = Math.max(t0, Math.min(a_, b_)); t1 = Math.min(t1, Math.max(a_, b_));
     }
-    if (t0 <= t1 && closer(t0) && z + slope * t0 < h) best = { d: t0, what: 'car', who: c };
+    const localZ = z + slope * t0 - roadGroundHeight(c.x, c.y);
+    if (t0 <= t1 && closer(t0) && localZ >= 0 && localZ < h) best = { d: t0, what: 'car', who: c };
   }
   const r = best || { d: end, what };
-  return { ...r, x: mod(x + hx * r.d, N), y: mod(y + hy * r.d, N), z: Math.max(0, z + slope * r.d) };
+  return { ...r, x: worldCoord(x + hx * r.d), y: worldCoord(y + hy * r.d), z: Math.max(0, z + slope * r.d) };
 }
 
 // ---- Q: pull the trigger. From (x, y, z), turned to yaw, looking up `slope`; indoors, the room's own coordinates.
@@ -9493,7 +9875,7 @@ function confiscateGun() {
 }
 // Apartment workshops. The machines and Neon are fictional; this is a short timing/balance game.
 const WORKSHOP_KIT_PRICE = 120, WORKSHOP_REFILL_PRICE = 30, WORKSHOP_FAN_PRICE = 65;
-const HOME_ROOM_SIZE = { home_studio: [14,15], home_loft: [20,22], home_belle: [26,26] };
+const HOME_ROOM_SIZE = { home_studio: [14,15], home_loft: [20,22], home_belle: [26,26], home_island: [24,24] };
 const WORKSHOP_PARTS = {
   bench: { name: 'folding workbench', halfX: .95, halfY: .48 },
   processor: { name: 'batch processor' }, packer: { name: 'packet press' }, fan: { name: 'cooling fan' },
@@ -9863,7 +10245,7 @@ function orderWorkshopSupply(home,id) {
 }
 // Content identities are assigned before any layout relocation. Keep these IDs when moving a lot;
 // its current grid cell is an address into the runtime map, not its save identity.
-const CITY_LAYOUT_ID = 'coastal-v1';
+let CITY_LAYOUT_ID = 'coastal-v1';
 const CITY_PLACES = new Map();
 const cityPlaceByShop = new WeakMap();
 for (let cell = 0; cell < SHOP.length; cell++) {
@@ -9958,9 +10340,9 @@ function cityLayoutInventory(splitY = 72) {
     seamDependencies: ['east/west road connections', 'bridges across old north/south seam', 'elevated train loop', 'boat patrol bands', 'spatial buckets', 'renderer and camera nearest-copy distances'],
   };
 }
-// Pure schema upgrade. Terrain relocation gets its own explicit layout migration later;
-// never load an unknown layout's raw cells into this one.
-const CITY_SAVE_VERSION = 2;
+// Pure save preparation for source construction and the live layout. Bootstrap sets
+// the live schema before save loading; never interpret unknown raw cells here.
+let CITY_SAVE_VERSION = 2;
 function prepareCitySave(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   for (const key of ['homes', 'cars', 'boats', 'planes', 'inv', 'stored', 'closet', 'tags', 'tattoos'])
@@ -9971,16 +10353,84 @@ function prepareCitySave(raw) {
     if (raw.world?.layout !== CITY_LAYOUT_ID) return null;
     return { data: raw, upgraded: false };
   }
-  if (raw.v !== 1) return null;
+  const previousIslands = worldReady && raw.v === 3 && raw.world?.layout === 'archipelago-v1';
+  const previousContours = worldReady && raw.v === 4 && raw.world?.layout === 'archipelago-v2';
+  if (raw.v !== 1 && !(worldReady && raw.v === 2 && raw.world?.layout === 'coastal-v1') && !previousIslands && !previousContours) return null;
   const data = JSON.parse(JSON.stringify(raw));
   data.v = CITY_SAVE_VERSION;
   data.world = { layout: CITY_LAYOUT_ID };
+  if(worldReady) {
+    if (previousContours) migrateIslandStride(data);
+    else if (previousIslands) migrateIslandContours(data);
+    else migrateCoastalSave(data);
+    return {data,upgraded:true,backupKey:previousContours?'ascii-city-save-backup-v4-archipelago-v2':previousIslands?'ascii-city-save-backup-v3-archipelago-v1':'ascii-city-save-backup-v2-coastal-v1'};
+  }
   if (Array.isArray(data.homes)) for (const home of data.homes) {
     const place = cityPlaceAtCell(home?.cell);
     if (place) home.placeId = place.id;
   }
   if (data.waypoint && typeof data.waypoint.id === 'string') data.waypoint.id = cityWaypointId(data.waypoint.id);
   return { data, upgraded: true };
+}
+
+function migrateCoastalSave(data) {
+  const legacyPlaces=new Map();
+  for(const place of CITY_PLACES.values())for(const cell of place.legacyCells)legacyPlaces.set(cell,place);
+  function position(o) {
+    if(!o||!Number.isFinite(o.x)||!Number.isFinite(o.y))return;
+    const airport=o.x>=10&&o.x<=70&&o.y>=212&&o.y<=237;
+    [o.x,o.y]=citySourcePoint(o.x,o.y,airport?'airport':'city');
+  }
+  if(data.at&&Math.abs(data.at.x-40)<1&&data.at.y>202&&data.at.y<217) {
+    data.at.x=CAUSEWAY.x;data.at.y=CAUSEWAY.y1-.5;
+  } else position(data.at);
+  for(const home of data.homes||[]) {
+    const place=CITY_PLACES.get(home.placeId)||legacyPlaces.get(home.cell);
+    if(place){home.placeId=place.id;home.cell=place.legacyCells.includes(home.cell)?citySourceCell(home.cell):place.cell;}
+    if(Array.isArray(home.door)&&home.door.length===2)home.door=citySourcePoint(...home.door);
+  }
+  for(const key of ['cars','boats','planes'])for(const o of data[key]||[])position(o);
+  for(const tag of data.tags||[]) {
+    if(!Number.isInteger(tag.cell))continue;
+    const x=tag.cell%CITY_SOURCE_N,y=Math.floor(tag.cell/CITY_SOURCE_N);
+    const [targetX,targetY]=citySourcePoint(x,y);
+    tag.cell=citySourceCell(tag.cell);
+    if(Number.isFinite(tag.u))tag.u+=tag.face==='N'||tag.face==='S'?targetX-x:targetY-y;
+  }
+  if(data.waypoint) {
+    const match=/^home:(\d+)$/.exec(data.waypoint.id||'');
+    if(match){const place=legacyPlaces.get(Number(match[1]));if(place)data.waypoint.id=`home:${place.id}`;}
+    position(data.waypoint);
+  }
+}
+function migrateIslandContours(data) {
+  function position(o) {
+    if (o && Number.isFinite(o.x) && Number.isFinite(o.y)) [o.x, o.y] = cityPreviousPoint(o.x, o.y);
+  }
+  position(data.at);
+  for (const home of data.homes || []) {
+    if (Number.isInteger(home.cell)) {
+      const [x,y] = cityPreviousPoint(home.cell % 512, Math.floor(home.cell / 512));
+      home.cell = Math.floor(y) * CITY_LAYOUT.width + Math.floor(x);
+    }
+    if (Array.isArray(home.door) && home.door.length === 2) home.door = cityPreviousPoint(...home.door);
+  }
+  for (const key of ['cars','boats','planes']) for (const o of data[key] || []) position(o);
+  for (const tag of data.tags || []) {
+    if (!Number.isInteger(tag.cell)) continue;
+    const x = tag.cell % 512, y = Math.floor(tag.cell / 512);
+    const [targetX,targetY] = cityPreviousPoint(x,y);
+    tag.cell = Math.floor(targetY) * CITY_LAYOUT.width + Math.floor(targetX);
+    if (Number.isFinite(tag.u)) tag.u += tag.face === 'N' || tag.face === 'S' ? targetX-x : targetY-y;
+  }
+  position(data.waypoint);
+}
+function migrateIslandStride(data) {
+  const cell = k => Math.floor(k / 512) * CITY_LAYOUT.width + k % 512;
+  for (const home of data.homes || []) if (Number.isInteger(home.cell)) home.cell = cell(home.cell);
+  for (const tag of data.tags || []) if (Number.isInteger(tag.cell)) tag.cell = cell(tag.cell);
+  const match = /^home:(\d+)$/.exec(data.waypoint?.id || '');
+  if (match) data.waypoint.id = cityHomeId({cell: cell(Number(match[1]))});
 }
 function savedCityHomes() {
   return owned.homes.map(home => ({ ...home, placeId: cityPlaceAtCell(home.cell)?.id || home.placeId }));
@@ -10026,11 +10476,16 @@ function findMapRoute(start,goal,world=MAP_WORLD,passable=mapWalkableCell) {
   }
   if(previous[to]===-2)return null;
   const path=[];
-  for(let k=to;k>=0;k=previous[k])path.push({x:k%W+.5,y:Math.floor(k/W)+.5});
+  for(let k=to;k>=0;k=previous[k])path.push(world===MAP_WORLD&&worldReady?mapRoutePoint(k%W,Math.floor(k/W)):{x:k%W+.5,y:Math.floor(k/W)+.5});
   path.reverse();return path;
 }
 function mapWalkableCell(x,y) {
-  return !map[idx(x,y)]&&!isWater(x+.5,y+.5)&&!architectureBlocked(x+.5,y+.5)&&!landmarkBlocked(x+.5,y+.5);
+  const p=mapRoutePoint(x,y);
+  return inWorldGrid(x,y)&&!map[idx(x,y)]&&!isWater(p.x,p.y)&&!architectureBlocked(p.x,p.y)&&!landmarkBlocked(p.x,p.y);
+}
+function mapRoutePoint(x,y) {
+  if(worldReady&&x===Math.floor(FOOTBRIDGE.x)&&onFootbridge(FOOTBRIDGE.x,y+.5))return {x:FOOTBRIDGE.x,y:y+.5};
+  return {x:x+.5,y:y+.5};
 }
 let mapWaypoint=null;
 function loadMapWaypoint(raw) {
@@ -10039,6 +10494,124 @@ function loadMapWaypoint(raw) {
   if(raw.x<0||raw.y<0||raw.x>=MAP_WORLD.width||raw.y>=MAP_WORLD.height)return;
   mapWaypoint={id:typeof raw.id==='string'?cityWaypointId(raw.id).slice(0,100):'pin',name:raw.name.slice(0,100),x:raw.x,y:raw.y};
 }
+// Low polygon ground, independent of building heights. One cell is ten metres.
+// Renderer, walking and aircraft collision all use these same triangles.
+const TERRAIN_SCALE = 2, TERRAIN_STEP = 1 / TERRAIN_SCALE;
+let TERRAIN_N = N * TERRAIN_SCALE;
+const TERRAIN_GRADE = .28;
+let terrainHeights = new Float32Array(TERRAIN_N * TERRAIN_N);
+let terrainCells = new Uint8Array(N * N);
+const terrainIndex = (x, y) => worldReady ? (x >= 0 && y >= 0 && x < TERRAIN_N && y < TERRAIN_N ? y * TERRAIN_N + x : TERRAIN_N * TERRAIN_N) : mod(y, TERRAIN_N) * TERRAIN_N + mod(x, TERRAIN_N);
+const terrainVertex = (x, y) => terrainHeights[terrainIndex(x, y)];
+const terrainEase = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+
+function coastalGround(x, y) {
+  if (worldReady) {
+    let depth = -Infinity;
+    for (const island of CITY_ISLANDS) depth = Math.max(depth, cityIslandEdge(x, y, island));
+    return { depth, beach: Math.sin(x * .035 + y * .017) > -.25 };
+  }
+  const south = y > (SHORE_S + SHORE_N) * 4;
+  const depth = south ? shoreS(x) - y : y - shoreN(x);
+  const beach = hash(Math.floor(x / 8), south ? 1 : 2, 47) < .35;
+  return { depth, beach };
+}
+
+// Leave a broad, level approach between the footbridge and the lighthouse.
+function lighthousePathDistance(x, y) {
+  const ax = FOOTBRIDGE.x, ay = FOOTBRIDGE.y1, bx = LIGHTHOUSE.x, by = LIGHTHOUSE.y;
+  const ux = bx - ax, uy = by - ay, t = clamp((rel(x - ax) * ux + rel(y - ay) * uy) / (ux * ux + uy * uy), 0, 1);
+  return Math.hypot(rel(x - ax) - ux * t, rel(y - ay) - uy * t);
+}
+
+function naturalTerrainHeight(x, y) {
+  if (onAirport(x, y) || onCauseway(x, y) || onFootbridge(x, y)) return 0;
+  if (onIsland(x, y)) {
+    const edge = isleEdge(x, y), ex = rel(x - ISLE.x), ey = rel(y - ISLE.y);
+    const ridge = .36 + .1 * Math.sin(ex * .7 + ey * .35);
+    const path = terrainEase((lighthousePathDistance(x, y) - .35) / 1.5);
+    const foundation = terrainEase((Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) - .7) / 1.4);
+    return ridge * terrainEase((edge - .7) / 2.8) * path * foundation;
+  }
+  const wild = wildIslandAt(x,y);
+  if (wild) return wildGroundHeight(x,y,wild);
+  const { depth, beach } = coastalGround(x, y);
+  if (depth < .6 || depth > 4.5 || seaAt(x, y)) return 0;
+  const shore = terrainEase((depth - .6) / (beach ? 1.5 : 1));
+  const inland = terrainEase((4.5 - depth) / 2);
+  const relief = beach ? .12 : .23;
+  return relief * shore * inland * (.8 + .2 * Math.sin(x * .23 + y * .31));
+}
+
+// Pads are level under existing furniture, piers and buildings. Feather their edges
+// into the surrounding ground; trees can grow directly from a slope instead.
+function buildTerrain() {
+  terrainHeights.fill(0); terrainCells.fill(0);
+  const reserve = new Float32Array(terrainHeights.length).fill(1);
+  function pad(x, y, hl, hw, c = 1, s = 0) {
+    const feather = 1.1, margin = .75, r = Math.hypot(hl, hw) + feather + margin;
+    if (!worldReady && y - r > (SHORE_N + 1) * 8 && y + r < SHORE_S * 8) return;
+    for (let gy = Math.floor((y - r) * TERRAIN_SCALE); gy <= (y + r) * TERRAIN_SCALE; gy++) {
+      for (let gx = Math.floor((x - r) * TERRAIN_SCALE); gx <= (x + r) * TERRAIN_SCALE; gx++) {
+        const qx = rel(gx * TERRAIN_STEP - x), qy = rel(gy * TERRAIN_STEP - y);
+        const distance = Math.hypot(Math.max(0, Math.abs(qx * c + qy * s) - hl), Math.max(0, Math.abs(-qx * s + qy * c) - hw));
+        const k = terrainIndex(gx, gy);
+        reserve[k] = Math.min(reserve[k], terrainEase((distance - margin) / feather));
+      }
+    }
+  }
+  for (const o of solids) if (o.z0 <= 0) pad(o.x, o.y, o.hl, o.hw, o.c, o.s);
+  for (const o of [...benches, ...lamps, ...extras, ...ANGLERS]) pad(o.x, o.y, .15, .15);
+  for (const [x0, y0, x1, y1] of PIERS) pad((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2);
+  const active = [];
+  for (let gy = 0; gy < Math.min(TERRAIN_N, 512*TERRAIN_SCALE); gy++) for (let gx = 0; gx < Math.min(TERRAIN_N, (worldReady ? CITY_LAYOUT.chartWidth : N)*TERRAIN_SCALE); gx++) {
+    const x = gx * TERRAIN_STEP, y = gy * TERRAIN_STEP;
+    if (!worldReady && y > (SHORE_N + 1) * 8 && y < SHORE_S * 8) continue;
+    if (worldReady && x >= CITY_COAST_SIZE && !wildIslandAt(x,y,1)) continue;
+    const raw = naturalTerrainHeight(x, y) * reserve[gy * TERRAIN_N + gx];
+    if (raw <= 0) continue;
+    // Keep the whole road/building cell flat, including its boundary vertices.
+    let clear = true;
+    for (const oy of [-.01, .01]) for (const ox of [-.01, .01]) {
+      const k = idx(Math.floor(x + ox), Math.floor(y + oy));
+      if (ROAD[k] || map[k]) clear = false;
+    }
+    if (clear) {
+      const k = gy * TERRAIN_N + gx;
+      terrainHeights[k] = raw; active.push(k);
+    }
+  }
+  // Bound both components of each triangle's gradient, including flattened pads.
+  // This caps the steepest diagonal slope as well as the grid directions.
+  const rise = TERRAIN_GRADE * TERRAIN_STEP / Math.SQRT2;
+  for (let sweep = 0; sweep < 4; sweep++) {
+    const backwards = sweep & 1;
+    for (let n = 0; n < active.length; n++) {
+      const k = active[backwards ? active.length - 1 - n : n], x = k % TERRAIN_N, y = Math.floor(k / TERRAIN_N);
+      terrainHeights[k] = Math.min(terrainHeights[k], rise + Math.min(terrainVertex(x - 1, y), terrainVertex(x + 1, y), terrainVertex(x, y - 1), terrainVertex(x, y + 1)));
+    }
+  }
+  for (const k of active) {
+    const gx = k % TERRAIN_N, gy = Math.floor(k / TERRAIN_N);
+    if (terrainHeights[k] > 0) {
+      for (const oy of [-1, 0]) for (const ox of [-1, 0]) terrainCells[idx(Math.floor((gx + ox) * TERRAIN_STEP), Math.floor((gy + oy) * TERRAIN_STEP))] = 1;
+    }
+  }
+}
+
+function terrainHeight(x, y) {
+  if (!terrainCells[idx(Math.floor(x), Math.floor(y))]) return 0;
+  const gx = Math.floor(x * TERRAIN_SCALE), gy = Math.floor(y * TERRAIN_SCALE);
+  const u = x * TERRAIN_SCALE - gx, v = y * TERRAIN_SCALE - gy;
+  const a = terrainVertex(gx, gy), b = terrainVertex(gx + 1, gy), c = terrainVertex(gx, gy + 1), d = terrainVertex(gx + 1, gy + 1);
+  return u >= v ? a + (b - a) * u + (d - b) * v : a + (d - c) * u + (c - a) * v;
+}
+
+function outdoorGroundHeight(x, y) {
+  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elStairGround(x, y));
+}
+
+buildTerrain();
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
 let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
@@ -10297,7 +10870,7 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
   else dir = rel(px - mx) < 0 ? 2 : 3;
   const f = belleFaceAt(mx, my, dir);
   const start = f.start, end = f.end;
-  const wallAlong = mod(wc, N), along = wallAlong - start, width = end - start, bays = Math.max(1, Math.floor(width / 0.85)), spacing = width / bays;
+  const wallAlong = worldCoord(wc), along = wallAlong - start, width = end - start, bays = Math.max(1, Math.floor(width / 0.85)), spacing = width / bays;
   const bay = Math.floor(along / spacing), du = along - (bay + 0.5) * spacing, half = Math.min(0.23, spacing * 0.29);
   const base = [STONE, WHITE, GRAY, BRICK, STONE][b.material], grain = hash(Math.floor(wc * 7), Math.floor(z * 10), sk);
   const course = fract(z * 8), joint = fract(wc * 2 + (Math.floor(z * 8) & 1) * 0.5);
@@ -10388,13 +10961,14 @@ function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const ah = arcadeRoofHit(z,side,mx,my,wc); // the Shotengai canopy occludes the painted wall behind it
-  if (ah) return arcadeRoofCell(i,mod(ah[0],N),mod(ah[1],N));
+  if (ah) return arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]));
   if (backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc)) return; // (a stretch of blank wall down a lane: backrooms.js)
   baseFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   graffitiCell(i,u,uStep,z,h,d,side,mx,my,fog,wc);
 }
 function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
+  if(sh?.wilderness)return islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   if(sh?.courier)return courierFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   if (sh?.gas) return gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc); // (gas-render.js)
   if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -10790,10 +11364,11 @@ function floorBaseCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
-  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), road = ROAD[idx(mx, my)], shade = underEl(wy);
+  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), shade = underEl(wy,wx);
+  const road = worldReady&&roadBridgeAt(wx,wy)&&seaAt(wx,wy)&&eye<roadGroundHeight(wx,wy)-.12 ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
-  let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false;
+  let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null;
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
     if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L); // a gas station's forecourt (gas-render.js)
@@ -10811,7 +11386,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       soft = true; base = BRICK; k = 1.3;
       const e = Math.abs(rel(wx - FOOTBRIDGE.x)) / FOOTBRIDGE.hw;
       ch = e > 0.88 ? '|' : fract(wy * 5) < 0.2 ? '=' : '-';
-      const pool = lampsOn * Math.max(0, 1 - Math.abs(fract((mod(wy, N) - FOOTBRIDGE.y0 - 1.5) / FB_LAMP + 0.5) - 0.5) * FB_LAMP / 0.5);
+      const pool = lampsOn * Math.max(0, 1 - Math.abs(fract((worldCoord(wy) - FOOTBRIDGE.y0 - 1.5) / FB_LAMP + 0.5) - 0.5) * FB_LAMP / 0.5);
       if (pool > 0) { base = WARM; k = 1.3 + pool * 1.6; }
     } else if (onIsland(wx, wy)) { // the island: rocks round the shore, a gravel path out to the lighthouse, rough grass
       soft = true;
@@ -10827,6 +11402,14 @@ function floorBaseCell(i, r, x, rx, ry) {
       const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = isleEdge(wx, wy) > -0.3; // white water round the island
       set(i, surf ? '~' : n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', surf ? C(WHITE, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
+      if(worldReady&&wx>=465) {
+        const island=wildIslandAt(wx,wy,.65);
+        if(island) {
+          const edge=-wildIslandEdge(wx,wy,island),wash=.12+.18*Math.sin(T*.9+wx*.35+wy*.2);
+          BG[i]=C(CYAN,1+day*1.8);
+          if(edge<wash&&n>.4)set(i,'~',C(WHITE,L*1.15));
+        }
+      }
       if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her
         const froth = noise(wx * 7, wy * 7 + T * 0.8, 95), k = WAKE_HIT.k * (WAKE_HIT.arm ? 0.6 + 0.4 * froth : froth); // (churn: broken white water)
         if (k > 0.18) { set(i, k > 0.5 ? '~' : WAKE_HIT.arm ? '-' : ':', C(WHITE, Math.max(L * 1.5, 5 + k * 10))); BG[i] = C(BLUE, 1 + day * 3 + k * 1.6); FL[i] = 0; }
@@ -10834,10 +11417,18 @@ function floorBaseCell(i, r, x, rx, ry) {
       const lb = beamOnWater(wx, wy); // the lighthouse beam sweeping over it
       if (lb > 0.05) { BG[i] = C(WARM, 1 + lb * 7); if (CH[i] === ' ') CH[i] = '-'; COL[i] = C(YEL, 6 + lb * 9); FL[i] = 0; }
       return;
+    } else if (wildIslandAt(wx,wy)) {
+      islandTexture=islandSurface(wx,wy);soft=true;base=islandTexture.base;ch=islandTexture.ch;k=islandTexture.tone;
+    } else if (worldReady&&naturalCoastAt(wx,wy)) {
+      const coast=coastalGround(wx,wy);soft=true;
+      islandTexture=islandShoreSurface(wx,wy,coast.depth,coast.beach);
+      base=islandTexture.base;ch=islandTexture.ch;k=islandTexture.tone;
     } else if (kind === 'waterfront') {
       soft = true;
-      const south = (by & (NB - 1)) === SHORE_S, toWater = south ? shoreS(wx) - mod(wy, N) : mod(wy, N) - shoreN(wx);
-      const beach = hash(bx & (NB - 1), south ? 1 : 2, 47) < 0.35;
+      const south = (by & (NB - 1)) === SHORE_S;
+      const coast = worldReady ? coastalGround(wx,wy) : null;
+      const toWater = coast ? coast.depth : south ? shoreS(wx) - worldCoord(wy) : worldCoord(wy) - shoreN(wx);
+      const beach = coast ? coast.beach : hash(bx & (NB - 1), south ? 1 : 2, 47) < 0.35;
       if (toWater < 0.2 && !beach) { ch = '#'; k = 1.4; } // the sea wall
       else if (beach && toWater < 1.6) { // sand, and surf where it meets the water
         const surf = toWater < 0.25; ch = surf ? '~' : (r * 7 + x * 3) % 5 ? '.' : ':'; base = surf ? WHITE : YEL; k = surf ? 1.2 : 0.8;
@@ -10877,6 +11468,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   }
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
+  if(islandTexture)BG[i]=bgAt(islandTexture.background,day*(2.6*islandTexture.tone+(islandTexture.lift||0))*f,d);
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   LAMPL[i] = 0;
   if (lampsOn > 0) {
@@ -10909,7 +11501,7 @@ function beamOnWater(wx, wy) { // how brightly the beam lights the sea at (wx, w
 // the el deck: its underside (girders and cross ties) seen from the street, and its top (two tracks, and the
 // platforms at stations) seen from up there. ly = across the deck, 0..2*EL_HALF
 function slabFace(i, wx, wy, below, d) {
-  const L = Math.max(0, 1 - d / vis) * amb * 9, ly = mod(wy, N) - EL_Y0, W = EL_HALF * 2;
+  const L = Math.max(0, 1 - d / vis) * amb * 9, ly = worldCoord(wy) - EL_Y0, W = EL_HALF * 2;
   if (below) {
     BG[i] = C(GRAY, 1);
     if (Math.abs(ly - W / 2) < 0.06 || ly < 0.07 || ly > W - 0.07) return set(i, '=', C(GRAY, L * 0.9)); // girders
@@ -10921,7 +11513,7 @@ function slabFace(i, wx, wy, below, d) {
     return set(i, ly < 0.03 || ly > W - 0.03 ? '|' : edge ? '=' : '.', edge ? C(YEL, L * 1.4) : C(GRAY, L));
   }
   if (ly < 0.04 || ly > W - 0.04) return set(i, '|', C(GRAY, L * 1.2)); // edge rail
-  for (const t of EL_TRACK) if (Math.abs(Math.abs(mod(wy, N) - t) - 0.1) < 0.025) return set(i, '=', C(GRAY, L * 1.4)); // rails
+  for (const t of EL_TRACK) if (Math.abs(Math.abs(worldCoord(wy) - t) - 0.1) < 0.025) return set(i, '=', C(GRAY, L * 1.4)); // rails
   set(i, fract(wx * 4) < 0.35 ? '-' : ' ', C(BRICK, L * 0.8)); // sleepers
 }
 // the deck's side, seen from the street: a riveted steel girder
@@ -11414,7 +12006,7 @@ function sprayTarget() {
   const hx = px + Math.cos(a) * lookHit.d, hy = py + Math.sin(a) * lookHit.d, fx_ = fract(hx), fy = fract(hy);
   const ex = Math.min(fx_, 1 - fx_), ey = Math.min(fy, 1 - fy), side = ey < ex; // which edge of the cell we hit
   const face = faceOf(side, lookHit.mx, lookHit.my);
-  return { cell: k, face, u: side ? mod(hx, N) : mod(hy, N), z: 0.16 };
+  return { cell: k, face, u: side ? worldCoord(hx) : worldCoord(hy), z: 0.16 };
 }
 function sprayTag() {
   const it = heldItem(), tg = sprayTarget();
@@ -12141,7 +12733,7 @@ function winterTreeBranches(t) {
 }
 function drawTree(t, vx, vy) {
   const [hw, h] = TREE_SIZE[t.kind], s = t.s;
-  drawShape(vx, vy, 0, hw * s, h * s, (i, u, z, du, dz, L) => treeCell(i, u / s, z / s, du / s, dz / s, L, t));
+  drawShape(vx, vy, terrainHeight(t.x, t.y), hw * s, h * s, (i, u, z, du, dz, L) => treeCell(i, u / s, z / s, du / s, dz / s, L, t));
 }
 function treeCell(i, u, z, du, dz, L, t) {
   const k = t.kind, au = Math.abs(u), tint = 0.85 + t.seed * 0.3, sn = seasonIdx(), bare = sn === 3 && k !== 'pine';
@@ -12202,6 +12794,8 @@ function walkPose(m, gait = 'walk') {
   return T - (m._phT ?? -1) < 0.3 || m.chase ? gait + (Math.floor(m.ph * 2) & 7) : 'stand'; // (still walking if they stepped a moment ago: a pause doesn't stop them)
 }
 function citySprites() {
+  drawWildScenery();
+  drawRoadBridges();
   drawDrugBuyer();
   drawWorkshopSupplier();
   drawCourier();
@@ -12300,16 +12894,17 @@ function citySprites() {
   }
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
     if (m.dead && sheeted(m)) drawSheet(m, ...R(m.x, m.y)); // (shot, and the paramedics are here: gun-ui.js)
-    else if (m.down) drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
-    else if (m.flee) { drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.flee.x, m.flee.y, streetLook(m), walkPose(m, 'run')); if (m.flee.scream && fract(T * 2.5 + m.ph) < 0.6) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.05, ['!'], () => C(WHITE, 14)); } // (running from a gunshot)
+    else if (m.down) drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, -m.down.fx, -m.down.fy, streetLook(m), downPose(m.down)); // (knocked down: flat on their back)
+    else if (m.flee) { drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.flee.x, m.flee.y, streetLook(m), walkPose(m, 'run')); if (m.flee.scream && fract(T * 2.5 + m.ph) < 0.6) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.05, ['!'], () => C(WHITE, 14)); } // (running from a gunshot)
     else if (m.help || m.gawk) { // run over to help, crouched by them; or stopped, staring (a hand to their mouth, some of them)
       const v = m.help || m.gawk, dx = rel(v.x - m.x), dy = rel(v.y - m.y), d = Math.hypot(dx, dy) || 1;
-      drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
-    } else drawFigure(...R(m.x, m.y), architectureGroundHeight(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
+      drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, dx / d, dy / d, streetLook(m), m.help ? (d < 0.13 ? 'crouch' : walkPose(m, 'run')) : m.ph % 1 < 0.4 ? 'gasp' : 'stand');
+    } else drawFigure(...R(m.x, m.y), walkGround(m.x, m.y), 0.175, m.last[0], m.last[1], streetLook(m), m.hailing ? 'wave' : walkPose(m));
     if (walkingDog(m)) { // the dog, and the lead from the walker's hand to its collar
       const d = dogOf(m), [vx, vy] = R(d.x, d.y), [hx, hy] = R(m.x, m.y), s = d.small ? 0.7 : 1;
-      drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3);
-      const lz = t => 0.085 - (0.085 - 0.04 * s) * t - Math.sin(t * Math.PI) * 0.012, cx = vx + d.mx * 0.03 * s, cy = vy + d.my * 0.03 * s; // the lead, sagging a little
+      const dogGround = walkGround(d.x, d.y), handGround = walkGround(m.x, m.y);
+      drawDog(vx, vy, d.mx, d.my, d.col, s, d.sniff ? 4 : Math.floor(T * 8 + m.ph * 4) & 3, dogGround);
+      const lz = t => handGround * (1 - t) + dogGround * t + 0.085 - (0.085 - 0.04 * s) * t - Math.sin(t * Math.PI) * 0.012, cx = vx + d.mx * 0.03 * s, cy = vy + d.my * 0.03 * s; // the lead, sagging a little
       for (let k = 0; k < 5; k++) { const t0 = k / 5, t1 = (k + 1) / 5; rod(hx + (cx - hx) * t0, hy + (cy - hy) * t0, lz(t0), hx + (cx - hx) * t1, hy + (cy - hy) * t1, lz(t1), 0.0015, RED, 1.1); }
     }
     if (m.hailing) drawArt(...R(m.x, m.y), 0.2, 0.03, 0.06, ['!'], () => C(YEL, fract(T * 3) < 0.6 ? 15 : 8)); // waving you down
@@ -12319,10 +12914,10 @@ function citySprites() {
     const [vx, vy] = R(c.x, c.y);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
     if (c.dead && sheeted(c)) { drawSheet(c, vx, vy); continue; }
-    if (c.down) { drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, -c.down.fx, -c.down.fy, copLook(c), downPose(c.down)); continue; }
+    if (c.down) { drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, -c.down.fx, -c.down.fy, copLook(c), downPose(c.down)); continue; }
     figMotion(c);
-    if (c.aimT > T) { const [fx_, fy_] = aimAt(rel(px - c.x), rel(py - c.y)); drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, fx_, fy_, copLook(c), 'aim'); continue; } // (shooting at you: gun.js)
-    drawFigure(vx, vy, architectureGroundHeight(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
+    if (c.aimT > T) { const [fx_, fy_] = aimAt(rel(px - c.x), rel(py - c.y)); drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, fx_, fy_, copLook(c), 'aim'); continue; } // (shooting at you: gun.js)
+    drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
   for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.007); } // things you put down
@@ -12334,7 +12929,7 @@ function citySprites() {
     const g = task.dog, mx = rel(g.x - (g._lx ?? g.x)), my = rel(g.y - (g._ly ?? g.y)), v = Math.hypot(mx, my);
     if (v > 1e-4) { g._fx = mx / v; g._fy = my / v; }
     g._lx = g.x; g._ly = g.y;
-    drawDog(...R(g.x, g.y), g._fx ?? 1, g._fy ?? 0, BRICK, 1, g.follow && v > 1e-4 ? Math.floor(T * 8) & 3 : 4);
+    drawDog(...R(g.x, g.y), g._fx ?? 1, g._fy ?? 0, BRICK, 1, g.follow && v > 1e-4 ? Math.floor(T * 8) & 3 : 4, walkGround(g.x, g.y));
   }
 }
 
@@ -13024,6 +13619,12 @@ function drawCarFire(m, vx, vy, hx, hy) {
   }
 }
 function drawVehicle(m, vx, vy, hx, hy) {
+  const savedEye = eye;
+  eye -= roadGroundHeight(px + vx, py + vy);
+  try { drawVehicleBody(m, vx, vy, hx, hy); }
+  finally { eye = savedEye; }
+}
+function drawVehicleBody(m, vx, vy, hx, hy) {
   drawCarFire(m, vx, vy, hx, hy);
   if (m.kind === 'amb') return drawAmbulance(m, vx, vy, hx, hy);
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], wreck = !!m.wrecked, lightsOn = !wreck && (night > 0.4 || overcast > 0.5);
@@ -14611,7 +15212,7 @@ function realtyWall(i, u, uStep, z, d, mx, my, L) {
 }
 const HOME_SHELF_CAPACITY = 4;
 function homeRecord(r = room) {
-  if (!r || !r.cell || !['home', 'loft', 'bellehome'].includes(r.kind)) return null;
+  if (!r || !r.cell || !['home', 'loft', 'bellehome', 'islandhome'].includes(r.kind)) return null;
   const cell = idx(Math.floor(r.cell[0]), Math.floor(r.cell[1]));
   return owned.homes.find(h => h.cell === cell || SHOP[cell] && SHOP[h.cell] === SHOP[cell]) || null;
 }
@@ -14786,6 +15387,10 @@ function homeCityView(i, x, y, z, vx, vy, vz) {
     }
     if (ground < next) {
       const wx = x + vx * ground, wy = y + vy * ground, road = ROAD[idx(Math.floor(wx), Math.floor(wy))];
+      if(seaAt(wx,wy)&&!onPier(wx,wy)) {
+        BG[i]=C(BLUE,1+day*3);
+        return set(i,noise(wx*2+T*.2,wy*2,91)>.6?'~':' ',C(CYAN,3+day*6));
+      }
       BG[i] = C(road ? GRAY : GREEN, 1 + day * 2);
       return set(i, road && Math.abs(fract(road === 1 ? wx : wy) - 0.5) < 0.04 ? '-' : ' ', C(YEL, day * 8));
     }
@@ -16653,7 +17258,7 @@ function gasFloor(i, r, x, wx, wy, f, L) {
 function gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const st = SHOP[idx(mx, my)].gas, L = fog * amb * (side ? 10 : 15), glow = Math.max(L, 7 + night * 6);
   const front = side && rel(py - my) < 0, s = Math.abs(u - wc) < 1e-6 ? 1 : -1; // (u is wc, or -wc)
-  const a = front ? mod(wc - st.x0, N) : mod(wc - st.y0 - 2, N); // along the face, from its west / north end
+  const a = front ? worldCoord(wc - st.x0) : worldCoord(wc - st.y0 - 2); // along the face, from its west / north end
   BG[i] = bgAt(front ? WHITE : BRICK, day * 2.6 * (0.45 + 0.55 * fog) * (side ? 0.8 : 1), d);
   if (z > h - 0.025) return set(i, '=', C(GRAY, L));
   if (z > 0.29) { // the fascia
@@ -16723,7 +17328,7 @@ function enterTerminal(d) {
 // and out: by the door you walk into, the main doors or the nearer airside one
 function leaveTerminal() {
   const d = py < room.H / 2 ? (px > room.W / 2 ? 1 : 2) : 0, o = TERMINAL_DOORS[d];
-  px = mod(TERMINAL.x + o.u, N); py = mod(TERMINAL.y + (o.land ? -1 : 1) * (TERMINAL.hw + 0.22), N); a = o.land ? -Math.PI / 2 : Math.PI / 2;
+  px = worldCoord(TERMINAL.x + o.u); py = worldCoord(TERMINAL.y + (o.land ? -1 : 1) * (TERMINAL.hw + 0.22)); a = o.land ? -Math.PI / 2 : Math.PI / 2;
 }
 
 // ---- out of the windows. The gates' side: the airliners parked at them, nose in, a jet bridge out to each; the apron,
@@ -17992,7 +18597,7 @@ function drawCourier() {
   drawFigure(...R(COURIER_GARDEN.x,COURIER_GARDEN.y),COURIER_GARDEN.z,.175,0,0,COURIER_FOLK.garden);
   drawFigure(...R(COURIER_FOREMAN.x,COURIER_FOREMAN.y),COURIER_FOREMAN.z,.175,0,0,COURIER_FOLK.foreman);
   // Nico paces until his guitar turns up, then sits on his crate and plays.
-  const pace=Math.cos(T*.9),nico=courierEncore?[180.98,123.42]:[COURIER_NICO.x+Math.sin(T*.9)*.08,COURIER_NICO.y];
+  const pace=Math.cos(T*.9),nico=courierEncore?[COURIER_NICO.x+.23,COURIER_NICO.y+.12]:[COURIER_NICO.x+Math.sin(T*.9)*.08,COURIER_NICO.y];
   drawFigure(...R(...nico),COURIER_NICO.z,.175,courierEncore?0:Math.sign(pace),0,COURIER_FOLK.nico,courierEncore?'sit7':Math.abs(pace)>.15?'walk'+(Math.floor(T*7)&7):'stand',{light:night*7});
 }
 // Big neon letters in the city's 3x5 font, centred on a sign face: s across the face (left to right as you read it),
@@ -18704,7 +19309,7 @@ function arcadeRoofHit(z, side, mx, my, wc) {
   if (eye >= ARCADE_Z || z <= ARCADE_Z) return null;
   const f = (ARCADE_Z - eye) / (z - eye), wx = side ? wc : mx + (rel(px - mx) < 0 ? 0 : 1), wy = side ? my + (rel(py - my) < 0 ? 0 : 1) : wc;
   const hx = px + rel(wx - px) * f, hy = py + rel(wy - py) * f;
-  return arcadeAt(hx, hy) && arcadeRoofPart(mod(hx, N), mod(hy, N)) ? [hx, hy] : null; // (through the glass: the wall)
+  return arcadeAt(hx, hy) && arcadeRoofPart(worldCoord(hx), worldCoord(hy)) ? [hx, hy] : null; // (through the glass: the wall)
 }
 // and the sky: where the roof is over you, that's what you see looking up
 function arcadeSky(i, rx, ry, up) {
@@ -18712,8 +19317,8 @@ function arcadeSky(i, rx, ry, up) {
   const t = (ARCADE_Z - eye) / up;
   if (t > 40) return false;
   const hx = px + rx * t, hy = py + ry * t;
-  if (!arcadeAt(hx, hy) || !arcadeRoofPart(mod(hx, N), mod(hy, N))) return false; // (through the glass: the sky)
-  ZB[i] = t; arcadeRoofCell(i, mod(hx, N), mod(hy, N));
+  if (!arcadeAt(hx, hy) || !arcadeRoofPart(worldCoord(hx), worldCoord(hy))) return false; // (through the glass: the sky)
+  ZB[i] = t; arcadeRoofCell(i, worldCoord(hx), worldCoord(hy));
   return true;
 }
 
@@ -19736,12 +20341,12 @@ const SEAM_HW = 0.055, SEAM_H = 0.215; // (a door's half width and its height, i
 // is the camera on the lane side of the seam's wall, looking at that face (the wall cell, from the west)?
 const seamSide = () => BACKROOMS_SEAM && rel(BACKROOMS_SEAM.x - px) > 0 && rel(BACKROOMS_SEAM.x - px) < 1.2;
 // the wall cell lookHit is on is the seam's, seen from the lane (no shop to go into from this side)
-const seamWall = h => seamSide() && mod(h.mx, N) === BACKROOMS_SEAM.x && mod(h.my, N) === BACKROOMS_SEAM.cy;
+const seamWall = h => seamSide() && worldCoord(h.mx) === BACKROOMS_SEAM.x && worldCoord(h.my) === BACKROOMS_SEAM.cy;
 // the seam's face from the lane: blank, grimy concrete on the ground floor (no shopfront this side), the doorframe's
 // outline cut into it, a hairline darker than the wall. True if it drew this cell.
 function backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc) {
   const S = BACKROOMS_SEAM;
-  if (!S || side || mod(mx, N) !== S.x || mod(my, N) !== S.cy || z >= 0.4 || !seamSide()) return false;
+  if (!S || side || worldCoord(mx) !== S.x || worldCoord(my) !== S.cy || z >= 0.4 || !seamSide()) return false;
   const e = rel(wc - S.y), dz = d / projY, L = fog * amb * 15, wall = day * 2.6 * (0.45 + 0.55 * fog);
   const edge = Math.abs(Math.abs(e) - SEAM_HW) < Math.max(uStep * 0.55, 0.002) && z < SEAM_H || Math.abs(z - SEAM_H) < Math.max(dz * 0.55, 0.002) && Math.abs(e) < SEAM_HW;
   if (edge) { BG[i] = bgAt(GRAY, wall * 0.55, d); return set(i, Math.abs(z - SEAM_H) < dz * 0.55 ? '-' : '|', C(GRAY, L * 0.25)), true; }
@@ -19749,7 +20354,7 @@ function backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc) {
   BG[i] = bgAt(GRAY, wall * (0.85 + noise(wc * 6, z * 6, 154) * 0.25), d); return set(i, z > 0.38 ? '=' : g > 0.93 ? '.' : g > 0.9 ? ',' : ' ', C(GRAY, L * 0.4)), true;
 }
 // walking into it from the lane (a step's look ahead at x, y)
-const backroomsSeamAt = (x, y) => { const S = BACKROOMS_SEAM; return !!S && Math.floor(mod(x, N)) === S.x && Math.floor(mod(y, N)) === S.cy && Math.abs(rel(y - S.y)) < SEAM_HW && rel(x - S.x) < 0.12; };
+const backroomsSeamAt = (x, y) => { const S = BACKROOMS_SEAM; return !!S && Math.floor(worldCoord(x)) === S.x && Math.floor(worldCoord(y)) === S.cy && Math.abs(rel(y - S.y)) < SEAM_HW && rel(x - S.x) < 0.12; };
 function enterBackrooms() {
   enterRoom('backrooms', { word: '', neon: YEL, ret: [px, py, a], line: '', cell: [BACKROOMS_SEAM.x, BACKROOMS_SEAM.cy] }, [BACKROOMS_ENTRY, BACKROOMS.length - 1.6, -Math.PI / 2]);
   say('The wall gives like a curtain. You stumble through, and the hum of the lights closes round you.', 4);
@@ -20199,7 +20804,7 @@ function swanCam(dt) {
   const hx = Math.cos(camYaw), hy = Math.sin(camYaw);
   let back = 0.38;
   while (back > 0.15 && map[idx(Math.floor(px - hx * back), Math.floor(py - hy * back))]) back -= 0.03;
-  return [mod(px - hx * back, N), mod(py - hy * back, N), camYaw];
+  return [worldCoord(px - hx * back), worldCoord(py - hy * back), camYaw];
 }
 
 // ---- inside the conservatory: the tropical house (a waterfall into a pool, palms, butterflies, steam) and, through a
@@ -21441,7 +22046,7 @@ function trailWake(b, x, y, hw, moving) {
 // every frame, seen or not (a trail laid only while she's drawn dies whenever you look away): the bay boats going
 // round, and the one you're driving
 function stepWakes() {
-  const stern = (b, x, y, hx, hy, moving) => { const { hl, hw } = BOAT_KINDS[b.kind]; trailWake(b, mod(x - hx * hl * 0.9, N), mod(y - hy * hl * 0.9, N), hw, moving); };
+  const stern = (b, x, y, hx, hy, moving) => { const { hl, hw } = BOAT_KINDS[b.kind]; trailWake(b, worldCoord(x - hx * hl * 0.9), worldCoord(y - hy * hl * 0.9), hw, moving); };
   for (const b of boats) {
     const p = boatAt(b, T);
     if (Math.hypot(rel(p.x - px), rel(p.y - py)) > vis + 4) continue; // (out past sight: and so slow her trail's under a cell)
@@ -21646,14 +22251,106 @@ SOLID_SHADE.bollard = () => (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return 
 // where the camera goes out on the water: behind and above the boat (easing round), or at the helm
 function seaCam(dt, chase) {
   const b = sea, k = BOAT_KINDS[b.kind];
-  if (!chase) { const back = k.hl * (b.kind === 'sailboat' ? 0.8 : 0.45); camYaw = a; return [mod(b.x - b.hx * back, N), mod(b.y - b.hy * back, N), a]; }
+  if (!chase) { const back = k.hl * (b.kind === 'sailboat' ? 0.8 : 0.45); camYaw = a; return [worldCoord(b.x - b.hx * back), worldCoord(b.y - b.hy * back), a]; }
   camYaw += (mod(a - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 4);
   const bx = Math.cos(camYaw), by = Math.sin(camYaw);
   let back = 0.7 + k.hl * 1.6;
   while (back > 0.3 && map[idx(Math.floor(b.x - bx * back), Math.floor(b.y - by * back))]) back -= 0.05;
-  return [mod(b.x - bx * back, N), mod(b.y - by * back, N), camYaw];
+  return [worldCoord(b.x - bx * back), worldCoord(b.y - by * back), camYaw];
 }
 const seaEye = () => { const k = BOAT_KINDS[sea.kind]; return chaseOn ? 0.22 + k.hl * 0.25 : k.fb + (sea.kind === 'cruiser' ? 0.25 : 0.16); }; // (the cruiser: up on the flybridge)
+// Draw the ground triangles inside an existing DDA interval. No per-pixel
+// marching: a sloped triangle is one plane, with an analytic ray intersection.
+function drawTerrainColumn(column, rx, ry, mx, my, start, end) {
+  if (!terrainCells[idx(mx, my)]) return false;
+  end = Math.min(end, vis);
+  let from = Math.max(.015, start), painted = false;
+  while (from < end - 1e-8) {
+    const gx = Math.floor((px + rx * (from + 1e-8)) * TERRAIN_SCALE);
+    const gy = Math.floor((py + ry * (from + 1e-8)) * TERRAIN_SCALE);
+    const x0 = gx * TERRAIN_STEP, y0 = gy * TERRAIN_STEP;
+    const tx = Math.abs(rx) < 1e-10 ? Infinity : (x0 + (rx > 0 ? TERRAIN_STEP : 0) - px) / rx;
+    const ty = Math.abs(ry) < 1e-10 ? Infinity : (y0 + (ry > 0 ? TERRAIN_STEP : 0) - py) / ry;
+    const to = Math.min(end, tx, ty);
+    if (to <= from + 1e-9) break;
+    const h00 = terrainVertex(gx, gy), h10 = terrainVertex(gx + 1, gy), h01 = terrainVertex(gx, gy + 1), h11 = terrainVertex(gx + 1, gy + 1);
+    if (Math.max(h00, h10, h01, h11) > .00001) {
+      const diagonal = Math.abs(rx - ry) < 1e-10 ? Infinity : ((py - y0) - (px - x0)) / (rx - ry);
+      const cut = diagonal > from && diagonal < to ? diagonal : to;
+      plane(from, cut);
+      if (cut < to) plane(cut, to);
+    }
+    from = to;
+
+    function plane(t0, t1) {
+      const middle = (t0 + t1) / 2, lower = px + rx * middle - x0 >= py + ry * middle - y0;
+      const sx = (lower ? h10 - h00 : h11 - h01) * TERRAIN_SCALE;
+      const sy = (lower ? h11 - h10 : h01 - h00) * TERRAIN_SCALE;
+      const base = h00 + sx * (px - x0) + sy * (py - y0), along = sx * rx + sy * ry;
+      const project = t => hor - ((base - eye) / t + along) * projY;
+      const r0 = Math.max(0, Math.floor(Math.min(project(t0), project(t1))));
+      const r1 = Math.min(rows, Math.ceil(Math.max(project(t0), project(t1))));
+      for (let r = r0; r < r1; r++) {
+        const t = (base - eye) / ((hor - r - .5) / projY - along), i = r * cols + column;
+        if (!Number.isFinite(t) || t < t0 - 1e-7 || t > t1 + 1e-7 || (ZB[i] >= 0 && ZB[i] <= t)) continue;
+        const x = px + rx * t, y = py + ry * t;
+        terrainCell(i, x, y, t, sx, sy);
+        ZB[i] = t; FL[i] = 1; painted = true;
+      }
+    }
+  }
+  return painted;
+}
+
+function terrainCell(i, x, y, depth, sx, sy) {
+  const island = onIsland(x, y), coast = coastalGround(worldCoord(x), worldCoord(y));
+  let surface = islandSurface(x,y);
+  if(!surface&&worldReady&&naturalCoastAt(x,y))surface=islandShoreSurface(x,y,coast.depth,coast.beach);
+  const rock = !surface && (island ? isleEdge(x, y) < .9 : !coast.beach);
+  const grain = hash(Math.floor(x * 12), Math.floor(y * 12), 1374);
+  let base = YEL, background = WARM, ch = grain > .8 ? ':' : '.';
+  if (rock) { base = background = GRAY; ch = grain > .7 ? '%' : ':'; }
+  else if (island) { base = background = GREEN; ch = grain > .65 ? '"' : ','; }
+  if (surface) { base = surface.base; background = surface.background; ch = surface.ch; }
+  const light = clamp((.85 - sx * .9 + sy * .6) / Math.sqrt(1 + sx * sx + sy * sy), .5, 1.2);
+  const fog = Math.max(0, 1 - depth / vis * 1.5), L = fog * 6 * (.6 + amb) * light;
+  const tone=surface?.tone??1;
+  const brightness=day*2.6*tone+day*(surface?.lift||0);
+  BG[i] = bgAt(background, brightness * fog * light, depth);
+  set(i, ch, C(base, L * (rock ? 1.15 : .9) * tone));
+  if (snowCover > 0) paintSettledSnow(i, x, y, L, 1, 0);
+}
+function drawRoadBridges() {
+  if(!worldReady)return;
+  for(const b of ROAD_BRIDGES) {
+    const vx=rel(b.x-px),vy=rel((b.y0+b.y1)/2-py);
+    if(!inView(vx,vy,(b.y1-b.y0)/2+2))continue;
+    const sections=[[b.y0,b.y0+b.ramp,0,b.h],[b.y0+b.ramp,b.y1-b.ramp,b.h,b.h],[b.y1-b.ramp,b.y1,b.h,0]];
+    for(const [y0,y1,h0,h1]of sections) {
+      const o={hl:b.hw,hw:(y1-y0)/2,h0,h1,axis:'y',thickness:b.thickness};
+      const box=boxAt(vx,rel((y0+y1)/2-py),1,0,b.hw,o.hw,Math.min(h0,h1)-b.thickness,Math.max(h0,h1));
+      box.planes=courierSurfacePlanes(o);
+      drawBox(box,(i,t,L)=>{
+        if(HIT.face===5) {
+          const edge=Math.abs(HIT.u),along=HIT.v+(y0+y1)/2;
+          BG[i]=C(GRAY,1+L*.14);
+          if(edge>.73)return set(i,',',C(WHITE,L*.65)),true;
+          if(edge<.035&&fract(along*.5)<.55)return set(i,'=',C(YEL,L)),true;
+          return set(i,hash(Math.floor(HIT.u*15),Math.floor(along*15),61)>.9?'.':' ',C(GRAY,L*.55)),true;
+        }
+        BG[i]=C(GRAY,.8+L*.18);return set(i,HIT.face===6?'=':'|',C(GRAY,L*.7)),true;
+      },rayBeveledBay);
+      for(const side of [-1,1])for(const up of [.055,.115])drawRod(vx+side*.97,rel(y0-py),h0+up,vx+side*.97,rel(y1-py),h1+up,.007,(i,t,L)=>{BG[i]=C(GRAY,1+L*.4);set(i,'=',C(WHITE,L*.8));return true;});
+    }
+    for(let y=b.y0;y<=b.y1;y+=2)for(const side of [-1,1]) {
+      const h=roadBridgeHeight(b,y);
+      drawBox(boxAt(vx+side*.97,rel(y-py),1,0,.009,.009,h,h+.115),STEEL.cap);
+    }
+    for(const y of [b.y0+b.ramp+2,b.y1-b.ramp-2])for(const side of [-1,1]) {
+      drawBox(boxAt(vx+side*1.25,rel(y-py),1,0,.14,.32,0,b.h-b.thickness),STEEL.cap);
+    }
+  }
+}
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
 function drawArt(rx_, ry_, z, w, h, art, colFn) {
@@ -21799,6 +22496,7 @@ function render(dt) {
   else {
     eye += eyeLift() * (mode === 'room' ? 1 : 0.1); // jumping, crouching, sitting (metres; a cell outdoors is 10)
     if (mode === 'walk') eye += walkGround(px, py);
+    if (mode === 'drive' || mode === 'taxi') eye += Math.max(roadGroundHeight(px, py), me ? roadGroundHeight(me.x, me.y) : 0);
   }
   tf = Math.tan(FOV / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
@@ -21818,6 +22516,10 @@ function render(dt) {
       const yc = py + rel(EL_Y + 1 - py), y0 = yc - EL_HALF, y1 = yc + EL_HALF;
       if (Math.abs(ry) < 1e-9) { if (py > y0 && py < y1) { te = 0; tx = Infinity; } }
       else { const a0 = (y0 - py) / ry, a1 = (y1 - py) / ry; tx = Math.max(a0, a1); te = tx > 0 ? Math.max(0, Math.min(a0, a1)) : Infinity; }
+      if(worldReady) {
+        if(Math.abs(rx)<1e-9) {if(px<140||px>352)te=Infinity;}
+        else {const a0=(140-px)/rx,a1=(352-px)/rx;te=Math.max(te,Math.min(a0,a1),0);tx=Math.min(tx,Math.max(a0,a1));if(tx<=te)te=Infinity;}
+      }
     }
     let deckDue = te < vis;
     BASE[x] = clamp(hor, 0, rows);
@@ -21826,6 +22528,7 @@ function render(dt) {
     while (clip > 0) {
       let d, side;
       if (sdx < sdy) { d = sdx; sdx += ddx; mx += sx; side = 0; } else { d = sdy; sdy += ddy; my += sy; side = 1; }
+      if (city && drawTerrainColumn(x, rx, ry, mx - (side === 0 ? sx : 0), my - (side === 1 ? sy : 0), dPrev, d)) holes = true;
       // the cell we just crossed spans dPrev..d; when we're above it (on a roof), draw its top
       if (hCur > 0 && hCur < eye && W.roof) {
         const k = (eye - hCur) * projY, rIn = dPrev > 0 ? Math.ceil(hor + k / dPrev) : rows, rOut = Math.max(0, Math.ceil(hor + k / Math.min(d, vis)));
@@ -22142,6 +22845,7 @@ const homeSpot = () => { const s = room.def.spots; if (!s) return null; let best
 const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
+  const islandPrompt=islandBuildingPrompt();if(islandPrompt)return islandPrompt;
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return ''; // (up the el stairs: nothing at street level is in reach)
   const deliveryPrompt=courierPrompt();if(deliveryPrompt)return deliveryPrompt;
   const workshopLine = workshopPrompt(); if (workshopLine) return workshopLine;
@@ -22155,7 +22859,7 @@ function promptText() {
       ? 'Next stop?   ' + room.opts.map((s, n) => `${n + 1}: ${stations[s].name}`).join('   ')
       : room.rideT > 0 ? `Next stop: ${stations[room.dest].name}` : '';
     if (room.kind === 'lighthouse' && Math.hypot(px - 4, py - 3.6) < 1.8) return 'E: up the stairs to the lamp room';
-    if (room.def.spots) { const hs = homeSpot(); if (hs) return { bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'E: decorate shelf', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
+    if (room.def.spots) { const hs = homeSpot(); if (hs) return { terrace: 'E: sea-view terrace', bed: 'E: sleep', closet: `E: your closet (${closet.length}/${HOME_STORE_SIZE})`, workshop: 'E: apartment workshop', shelf: 'E: decorate shelf', fridge: 'E: open fridge', stove: 'E: cook', pet: homeRecord(room)?.pets?.length || homeRecord(room)?.pet ? 'E: see your pets' : 'E: bring a pet home', tv: room.tv ? 'E: telly off' : 'E: telly on' }[hs]; }
     if (room.kind === 'lamproom') return Math.hypot(px - 1.4, py - 4.6) < 1.4 ? 'E: back down the stairs' : '';
     if (!pee && looNear()) return 'P: use the toilet';
     if (room.kind === 'grandhotel') { const m = grandHotelPrompt(); if (m) return m; }
@@ -22248,6 +22952,7 @@ function promptText() {
   { const td = terminalDoor(px, py); if (td >= 0) return td ? 'E: in to the gates' : 'E: into the terminal'; }
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && !seamWall(lookHit)) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.islandCabin) return '';
     if (sh.base === 'amb') return 'E: go into the hospital';
     if (sh.base) return `${BASE_KINDS[sh.base].title}: staff only`;
     if (sh.kind === SHOP_SHUT) return `${sh.word}: closed down for good (FOR LEASE)`;
@@ -22272,11 +22977,13 @@ function mapTile(mx, my) {
   if (Math.abs(rel(wx - FOOTBRIDGE.x)) < 0.6 && onFootbridge(FOOTBRIDGE.x, wy) || onPier(wx, wy)) return '#5a4030'; // (the bridge is thinner than a tile)
   if (onIsland(wx, wy)) return '#2a5a30';
   if (onCauseway(wx, wy)) return '#16161c';
-  if (onAirport(wx, wy)) return airportBlocked(wx, wy) || airportBldgAt(wx, wy) ? '#8a8a96' : onRunway(wx, wy) ? '#101014' : Math.abs(wy - TAXIWAY.y) < 0.6 || mod(wy, N) > APRON.y0 && mod(wy, N) < APRON.y1 || mod(wy, N) < AIRPORT.y0 + 1.6 ? '#3a3a42' : airportEdge(wx, wy) < 0.5 ? '#4a4a4a' : '#2a5a30';
-  if (ROAD[k]) return underEl(wy) ? '#3a2420' : '#16161c';
+  if (onAirport(wx, wy)) return airportBlocked(wx, wy) || airportBldgAt(wx, wy) ? '#8a8a96' : onRunway(wx, wy) ? '#101014' : Math.abs(wy - TAXIWAY.y) < 0.6 || worldCoord(wy) > APRON.y0 && worldCoord(wy) < APRON.y1 || worldCoord(wy) < AIRPORT.y0 + 1.6 ? '#3a3a42' : airportEdge(wx, wy) < 0.5 ? '#4a4a4a' : '#2a5a30';
+  if (ROAD[k]) return underEl(wy,wx) ? '#3a2420' : '#16161c';
   if (seaAt(wx, wy) || gardenLake(wx, wy)) return MAP_COL.sea;
+  const surface=islandSurface(wx,wy);if(surface)return surface.color;
+  if(naturalCoastAt(wx,wy)){const coast=coastalGround(wx,wy);return coast.beach&&coast.depth<2?'#a18e57':'#2a5a30';}
   if (inGardens(wx, wy)) { const [gx, gy] = gardenLocal(wx, wy); return gardenPathDist(gx, gy) < 0.4 ? '#5a5038' : '#24662e'; }
-  return MAP_COL[blockKind(Math.floor(mod(mx, N) / 8), Math.floor(mod(my, N) / 8))] || '#2a2a30';
+  return MAP_COL[blockKind(Math.floor(worldCoord(mx) / 8), Math.floor(worldCoord(my) / 8))] || '#2a2a30';
 }
 function minimap() {
   if (!showMap || mode === 'room') return;
@@ -22357,10 +23064,11 @@ function hud() {
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
-  const where = mode === 'room' ? '' : isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
-  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
+  const where = mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
+  const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
+    : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
     : settings.help && heldGun() ? 'WASD move | left click / Q fire | hold right click: aim | R reload | E use / talk | Esc: pause'
@@ -22411,7 +23119,7 @@ function hud() {
 // ---- actions
 function curbOf(c) { // sidewalk spot on the car's right, next to its lane
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
-  return vert ? [mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.88 * dir, N), c.y] : [c.x, mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.88 * dir, N)];
+  return vert ? [worldCoord(Math.round((c.x - 1) / 8) * 8 + 1 + 0.88 * dir), c.y] : [c.x, worldCoord(Math.round((c.y - 1) / 8) * 8 + 1 - 0.88 * dir)];
 }
 // in a taxi: slip the driver a twenty to step on it (faster, and red lights don't count)
 const TIP = 20;
@@ -22435,7 +23143,7 @@ function exitSpot(c) {
   const lx = c.hy, ly = -c.hx; // (the car's left)
   const cx = c.rider ? c.ex : c.x, cy = c.rider ? c.ey : c.y;
   for (const d of [0.22, 0.32, 0.45]) for (const [ox, oy] of [[lx, ly], [-lx, -ly], [-c.hx * 1.3, -c.hy * 1.3], [c.hx * 1.3, c.hy * 1.3]]) {
-    const x = mod(cx + ox * d, N), y = mod(cy + oy * d, N);
+    const x = worldCoord(cx + ox * d), y = worldCoord(cy + oy * d);
     if (free(x, y) && !cars.some(o => o !== c && Math.hypot(rel(o.ex - x), rel(o.ey - y)) < 0.2)) return [x, y];
   }
   return curbOf(c);
@@ -22460,11 +23168,11 @@ function leaveCar() {
 const homeDist = (h, c) => Math.hypot(rel(h.cell % N - c.x), rel(Math.floor(h.cell / N) - c.y));
 function homeKerb(x, y) { // the middle of the street nearest a building's cell (x, y): one of its block's four sides
   const bx = x >> 3, by = y >> 3, opts = [];
-  if (vseg(bx & (NB - 1), by & (NB - 1))) opts.push([bx * 8 + 1, y + 0.5]);
-  if (vseg((bx + 1) & (NB - 1), by & (NB - 1))) opts.push([(bx + 1) * 8 + 1, y + 0.5]);
-  if (hseg(bx & (NB - 1), by & (NB - 1))) opts.push([x + 0.5, by * 8 + 1]);
-  if (hseg(bx & (NB - 1), (by + 1) & (NB - 1))) opts.push([x + 0.5, (by + 1) * 8 + 1]);
-  return opts.reduce((b, p) => Math.hypot(p[0] - x, p[1] - y) < Math.hypot(b[0] - x, b[1] - y) ? p : b).map(v => mod(v, N));
+  if (vseg(worldBlock(bx), worldBlock(by))) opts.push([bx * 8 + 1, y + 0.5]);
+  if (vseg(worldBlock(bx + 1), worldBlock(by))) opts.push([(bx + 1) * 8 + 1, y + 0.5]);
+  if (hseg(worldBlock(bx), worldBlock(by))) opts.push([x + 0.5, by * 8 + 1]);
+  if (hseg(worldBlock(bx), worldBlock(by + 1))) opts.push([x + 0.5, (by + 1) * 8 + 1]);
+  return opts.reduce((b, p) => Math.hypot(p[0] - x, p[1] - y) < Math.hypot(b[0] - x, b[1] - y) ? p : b).map(v => worldCoord(v));
 }
 function setDest(n) {
   const c = me, far = p => Math.hypot(rel(p[0] - c.x), rel(p[1] - c.y));
@@ -22535,6 +23243,7 @@ function enterRoom(kind, extra, spawn) {
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'backrooms' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
 }
 function interact() {
+  if (islandBuildingUse()) return;
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
   if(courierUse())return;
   if (workshopUse()) return;
@@ -22548,6 +23257,7 @@ function interact() {
       if (hs === 'bed') { sleep = { t: 0, home: true }; return say('You crawl into your own bed.', 3); }
       if (hs === 'closet') return openStorage(closet, 'your closet', 'Your closet', '120 spaces. Shared between your apartments; equipment and batches fit too.', null, HOME_STORE_SIZE);
       if (hs === 'workshop') return openWorkshop();
+      if (hs === 'terrace') { room.ret = [...FERN_HOUSE.terrace, 0];return leaveRoom(); }
       if (hs === 'shelf') {
         home.decor ||= [];
         if (heldItem() && isHomeDecor(heldItem())) {
@@ -22718,6 +23428,7 @@ function interact() {
   if (td >= 0) return enterTerminal(td); // (the airport: terminal.js)
   if (lookHit && lookHit.d < 0.35 && SHOP[idx(lookHit.mx, lookHit.my)] && !seamWall(lookHit)) {
     const sh = SHOP[idx(lookHit.mx, lookHit.my)];
+    if (sh.islandCabin) return say('The door is around the front.',2);
     if (sh.base && sh.base !== 'amb') return say(pick([`${BASE_KINDS[sh.base].title}. Staff only.`, 'The desk sergeant shakes their head. Not for you.', 'Nobody here needs you right now. Good.']));
     if (sh.kind === SHOP_SHUT) return say(pick(['Closed down for good. A FOR LEASE sign on the shutter.', 'Shuttered for good. The FOR LEASE sign has a phone number nobody answers.', 'Gone out of business. Just the old sign left.']));
     if (!openAt(sh, tod)) return say(`Closed. Opens at ${sh.hours[0]}:00.`);
@@ -22781,6 +23492,7 @@ function stepSleep(dt) {
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {
+  if (room.kind === 'islandhome') room.ret = px < 2.2 && py > 14 && py < 19 ? [...FERN_HOUSE.terrace,0] : [...FERN_HOUSE.door,-Math.PI/2];
   body.seat = null;
   if (hotelAlarm) stepGrandHotel(); // A late exit still triggers the alarm while you're inside.
   if (room.kind === 'grandhotelheist') return enterRoom('grandhotel', room.lobby, [10.7, 2.65, Math.PI / 2]);
@@ -22846,7 +23558,7 @@ function tripDest(c) {
     const d = p && Math.hypot(rel(p[0] - c.x), rel(p[1] - c.y));
     if (p && d > 12 && d < 40) return p;
   }
-  return [mod(c.x + 16, N), c.y];
+  return [worldCoord(c.x + 16), c.y];
 }
 function pickUp(p) {
   p.hailing = false; p.hidden = true; p.talk = 1e9; // in the back seat: stepPeople leaves them be
@@ -22944,7 +23656,7 @@ function jobArrow(t=jobTarget(),courier=null) {
 const WHEEL_FARE = 5, CAROUSEL_FARE = 3;
 const fairOpen = () => tod >= 9 || tod < 2;
 let fairRide = null, fairEye = 0.17; // {kind: 'wheel' | 'carousel', end, ...} while you're on one; your eye height
-const onFair = (x, y) => mod(x - FAIR.x0, N) < FAIR.x1 - FAIR.x0 && mod(y - FAIR.y0, N) < FAIR.y1 - FAIR.y0;
+const onFair = (x, y) => worldReady ? x>=FAIR.x0&&x<FAIR.x1&&y>=FAIR.y0&&y<FAIR.y1 : worldCoord(x - FAIR.x0) < FAIR.x1 - FAIR.x0 && worldCoord(y - FAIR.y0) < FAIR.y1 - FAIR.y0;
 // what's within reach on the pier: a booth's counter, the wheel's platform, the carousel's rail
 function fairSpot() {
   if (mode !== 'walk' || !onFair(px, py)) return null;
@@ -23309,7 +24021,7 @@ const runwayNumber = (num, along, across) => { // is (along, across) on a painte
   return (DIGIT5[num[k]] >> (14 - row * 3 - col) & 1) === 1;
 };
 function airportFloor(i, r, x, wx, wy, L) { // [ch, base, k] for the floor cell; or null, having painted it itself (a light)
-  const X = mod(wx, N), Y = mod(wy, N), lit = lampsOn > 0.2, blink = (light, col, ch = '*') => { set(i, ch, C(col, 15)); BG[i] = C(col, 3 + light * 4); FOGS[i] = 0; return null; };
+  const X = worldCoord(wx), Y = worldCoord(wy), lit = lampsOn > 0.2, blink = (light, col, ch = '*') => { set(i, ch, C(col, 15)); BG[i] = C(col, 3 + light * 4); FOGS[i] = 0; return null; };
   if (airportEdge(wx, wy) < 0.5) return [hash(Math.floor(wx * 9), Math.floor(wy * 9), 341) > 0.45 ? '%' : 'o', GRAY, 1.2]; // rocks
   if (onRunway(wx, wy)) {
     const u = X - RUNWAY.x0, v = Y - RUNWAY.y, len = RUNWAY.x1 - RUNWAY.x0;
@@ -23355,7 +24067,8 @@ function airportFloor(i, r, x, wx, wy, L) { // [ch, base, k] for the floor cell;
 }
 // the causeway: a road out over the water, railings each side, lamps along it
 function causewayFloor(r, x, wx, wy) {
-  const e = Math.abs(rel(wx - CAUSEWAY.x)) / CAUSEWAY.hw;
+  const horizontal = worldReady&&wx<CAUSEWAY.x-CAUSEWAY.hw&&Math.abs(wy-AIRPORT.y0-1)<CAUSEWAY.hw;
+  const e = Math.abs(horizontal?wy-AIRPORT.y0-1:rel(wx - CAUSEWAY.x)) / CAUSEWAY.hw;
   if (e > 0.9) return ['|', GRAY, 1.5];
   if (e < 0.04 && fract(wy * 2) < 0.5) return ['=', YEL, 1.4];
   return [(r + x) & 1 ? '.' : ' ', GRAY, 0.8];
@@ -23851,7 +24564,7 @@ function leaveAircraft(why) {
 function spotNear(x, y) {
   if (free(x, y)) return [x, y];
   for (let r = 0.2; r < 6; r += 0.2) for (let k = 0; k < 12; k++) {
-    const qx = mod(x + Math.cos(k / 12 * TAU) * r, N), qy = mod(y + Math.sin(k / 12 * TAU) * r, N);
+    const qx = worldCoord(x + Math.cos(k / 12 * TAU) * r), qy = worldCoord(y + Math.sin(k / 12 * TAU) * r);
     if (free(qx, qy) && !overWater(qx, qy)) return [qx, qy];
   }
   return [x, y];
@@ -23861,7 +24574,7 @@ function nearestShore(x, y) {
   for (let r = 0.5; r < 120; r += 0.5) {
     const n = Math.max(16, Math.round(r * 6)), k0 = Math.random() * TAU;
     for (let k = 0; k < n; k++) {
-      const qx = mod(x + Math.cos(k0 + k / n * TAU) * r, N), qy = mod(y + Math.sin(k0 + k / n * TAU) * r, N);
+      const qx = worldCoord(x + Math.cos(k0 + k / n * TAU) * r), qy = worldCoord(y + Math.sin(k0 + k / n * TAU) * r);
       if (!seaAt(qx, qy) && !isWater(qx, qy) && free(qx, qy)) return [qx, qy];
     }
   }
@@ -23974,13 +24687,13 @@ function airCam(dt) {
   if (wreckCam) return wreckView(c, T_, dt);
   if (!third) { // the cockpit: out over the nose
     const ahead = T_.heli ? 0.12 : T_.len * 0.32, z = c.z + (T_.heli ? 0.2 : T_.r * 1.9 + (c.ground ? T_.r * 1.8 : 0));
-    return [mod(c.x + Math.cos(c.yaw) * ahead, N), mod(c.y + Math.sin(c.yaw) * ahead, N), c.yaw, z, f(Math.tan(c.pitch) * projY / rows)];
+    return [worldCoord(c.x + Math.cos(c.yaw) * ahead), worldCoord(c.y + Math.sin(c.yaw) * ahead), c.yaw, z, f(Math.tan(c.pitch) * projY / rows)];
   }
   airCamYaw += (mod(c.yaw - airCamYaw + Math.PI, TAU) - Math.PI) * (1 - Math.exp(-2.5 * dt));
   const want = T_.heli ? 1.15 : T_.len * 0.9 + 0.45, up = T_.heli ? 0.38 : 0.22 + T_.len * 0.12, bx = Math.cos(airCamYaw), by = Math.sin(airCamYaw);
   let back = 0.2; // (pulled in short of a wall behind it: in a hangar, not out the back of it looking at the back wall)
   for (let s = 0.2; s <= want; s += 0.05) { if (airportBlocked(c.x - bx * s, c.y - by * s, 0.08)) break; back = s; }
-  const cx = mod(c.x - bx * back, N), cy = mod(c.y - by * back, N), roof = builtHeight(cx, cy), floor = builtHeight(cx, cy, c.z + 0.05);
+  const cx = worldCoord(c.x - bx * back), cy = worldCoord(c.y - by * back), roof = builtHeight(cx, cy), floor = builtHeight(cx, cy, c.z + 0.05);
   let cz = Math.max(c.z + up + (c.ground ? 0.12 : 0) - Math.sin(c.pitch) * back * 0.5, builtHeight(cx, cy, c.z + up) + 0.15);
   if (roof > floor + 0.3 && c.z < roof) cz = Math.min(cz, roof - 0.12); // (indoors: under the roof)
   const down = Math.atan2(cz - (c.z + 0.15), back); // (looking down at it a little, and up and down with its nose)
@@ -23992,7 +24705,7 @@ function wreckView(c, T_, dt) {
   const w = wreckCam, k = w.t / WRECK_T[w.kind], size = T_.heli ? 1 : T_.len, shake = Math.max(0, 1 - w.t / 1.2) * 0.05 * size;
   airCamYaw += dt * (w.kind === 'crash' ? 0.7 : 0.25);
   const back = size * (w.kind === 'crash' ? 1 + k * 1.2 : 1.3), j = () => (Math.random() - 0.5) * shake;
-  const cx = mod(c.x - Math.cos(airCamYaw) * back + j(), N), cy = mod(c.y - Math.sin(airCamYaw) * back + j(), N);
+  const cx = worldCoord(c.x - Math.cos(airCamYaw) * back + j()), cy = worldCoord(c.y - Math.sin(airCamYaw) * back + j());
   const cz = w.kind === 'crash' ? Math.max(c.z, builtHeight(cx, cy)) + 0.25 + k * size * 0.5 + j() : Math.max(0.03, 0.4 * size * (1 - k)) + j();
   const tilt = Math.atan2(cz - c.z, back);
   return [cx, cy, airCamYaw, cz, Math.max(-0.95, Math.min(1.2, (-Math.tan(tilt) * 0.8 + j() * 4) * projY / rows))];
@@ -24077,7 +24790,7 @@ const chuteAlt = () => body.z + (mode === 'roof' ? roofH * 10 : 0); // (metres; 
 function bailOut() {
   const c = pilot, T_ = PLANE_TYPES[c.type], side = T_.heli ? 0.2 : T_.r + 0.2;
   c.state = 'abandoned'; pilot = null; mode = 'walk'; // (the empty aircraft: stepAbandoned)
-  px = mod(c.x + Math.sin(c.yaw) * side, N); py = mod(c.y - Math.cos(c.yaw) * side, N); a = c.yaw; pitch = -0.45;
+  px = worldCoord(c.x + Math.sin(c.yaw) * side); py = worldCoord(c.y - Math.cos(c.yaw) * side); a = c.yaw; pitch = -0.45;
   if (c.stolen) newsEvent('ejected', px, py);
   body.z = Math.max(0.5, c.z * 10 - 1); body.vz = Math.min(0, (c.vz || 0) * 10); body.peak = body.z; body.seat = null; body.trick = null;
   const vx = T_.heli ? c.hvx || 0 : Math.cos(c.yaw) * c.v * Math.cos(c.pitch), vy = T_.heli ? c.hvy || 0 : Math.sin(c.yaw) * c.v * Math.cos(c.pitch);
@@ -24484,6 +25197,13 @@ function setPeeAudio(on) {
   });
 }
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
+function sfxKnock() {
+  const at=actx.currentTime;
+  for(const delay of [0,.16,.34]) {
+    burst(at+delay,.065,[filt('lowpass',700)],.12);
+    tone(at+delay,155,.07,.1);
+  }
+}
 
 // ---- sirens: one voice per emergency vehicle in earshot, with Doppler and panning
 const SIREN = { amb: { type: 'square', f: t => 700 + 520 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 3.2)) },
@@ -24553,8 +25273,11 @@ function audioTick(dt) {
   const elNear = mode === 'room' ? 0 : clamp(1 - elDist / 7, 0, 1) *
     Math.max(0, ...trains.map(t => clamp(1 - Math.abs(rel(t.x - px)) / 9, 0, 1) * (t.stopped ? 0.25 : 1)));
   const bx = Math.floor(px / 8), by = Math.floor(py / 8);
-  const waterfall = mode === 'room' && room.kind === 'conservatory' ? clamp(1 - Math.hypot(px - CONS_POOL.x, py - 0.8) / 6.5, 0, 1) : 0;
+  let waterfall=0;
+  if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
+  else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
+    wilderness:worldReady&&!!wildIslandAt(px,py),
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
@@ -24989,7 +25712,7 @@ function stepFreecam(dt) {
   const length = Math.max(1, Math.hypot(vx, vy, vz));
   const speed = (K.ShiftLeft || K.ShiftRight ? 30 : 6) * (mode === 'room' ? 1 : 0.1) * dt / length;
   cam.x += vx * speed; cam.y += vy * speed; cam.z += vz * speed;
-  if (mode !== 'room') { cam.x = mod(cam.x, N); cam.y = mod(cam.y, N); }
+  if (mode !== 'room') { cam.x = worldCoord(cam.x); cam.y = worldCoord(cam.y); }
 }
 
 function renderFreecam() {
@@ -25024,7 +25747,7 @@ function devFree() {
   if (mode === 'el') ride = null;
   plat = null; body.seat = null; mode = 'walk'; pitch = 0; look = 0;
 }
-const devAt = (x, y, ang) => { devFree(); px = mod(x, N); py = mod(y, N); a = ang; };
+const devAt = (x, y, ang) => { devFree(); px = worldCoord(x); py = worldCoord(y); a = ang; };
 // a street spot in a district: the middle of the street beside one of its plain blocks
 function districtSpot(d) {
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++)
@@ -25186,24 +25909,37 @@ function mapShopCategory(sh) {
 function mapDirectory() {
   const out=[],seen=new Set(),add=p=>{out.push({...p,color:MAP_COLORS[p.category]||'#ccc'});};
   for(const [x,y,name,color,kind] of bigMapLabels()) {
-    if(kind==='shop')continue;
+    if(kind==='shop'||worldReady&&WILD_ISLANDS.some(i=>i.name===name))continue;
     let category=kind==='area'?'area':'activities';
-    if(stations.some(s=>s.name===name)||EL_STATIONS.some(s=>s.name===name)||name==='Airport')category='transport';
+    if(stations.some(s=>s.name===name)||EL_STATIONS.some(s=>s.name===name)||name==='Airport'||name==='Fern airstrip'||name==='Fern boat landing')category='transport';
+    if(name==='Fern House')category='homes';
     if(['Police','Fire station','Hospital'].includes(name))category='essentials';
-    add({id:`place:${name}:${x}:${y}`,name,x,y,category,kind,description:category==='transport'?'Station or transport connection.':'City landmark.',color});
+    add({id:`place:${name}:${x}:${y}`,name,x,y,category,kind,description:name==='Fern House'?`A secluded house with sea-view terrace, workshop and storage. For sale: ${fmt$(ITEMS.home_island.price)}. Visit the front door to view the listing.`:name==='Fern airstrip'?'Rough 660 m strip, east-west. Light planes only; clear approaches at both ends. Boat landing on the west coast.':name==='Fern boat landing'?'Long timber landing on the west coast. Tie up alongside; your rental waits for the return trip.':name==='Fern Falls'?'A small waterfall and woodland trail. Follow the path east from Fern House.':category==='transport'?'Station or transport connection.':'City landmark.',color});
   }
   for(let k=0;k<SHOP.length;k++) {
     const sh=SHOP[k];if(!sh?.word||sh.kind===SHOP_APTS||sh.kind===SHOP_SHUT||seen.has(sh))continue;
     seen.add(sh);const x=k%N+.5,y=Math.floor(k/N)+.5;
+    if(sh.islandCabin) {
+      const cabin=ISLAND_CABINS.find(c=>c.id===sh.islandCabin);
+      if(cabin?.room)add({id:cabin.id,name:cabin.name,x:cabin.door[0],y:cabin.door[1],category:'activities',kind:'shelter',
+        description:'An unlocked public fishing shelter. Sit on a bench, look through the old tackle and read the visitors\' log.',status:'Open shelter'});
+      continue;
+    }
     const stock=stockFor('',sh.word).slice(0,6).map(id=>ITEMS[id]?.name).filter(Boolean);
     add({id:cityPlaceAtCell(k)?.id||`shop:${k}`,name:sh.word,x,y,category:mapShopCategory(sh),kind:'shop',shop:sh,
       description:stock.length?`Sells ${stock.join(', ')}.`:'Visit the counter to see what is available.',
       status:openAt(sh,tod)?'Open now':'Closed now',hours:sh.hours,fee:sh.fee||0});
   }
+  if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note,status:'Boat landing on west shore'});
   for(const h of owned.homes) {
     const point=h.door||buyerDoor(h)||[h.cell%N+.5,Math.floor(h.cell/N)+.5];
     add({id:cityHomeId(h),name:`Your ${ITEMS[h.kind].name}`,x:point[0],y:point[1],category:'homes',kind:'home',home:h,
-      description:'Your apartment: workshop, bed and a shared 120-item closet.',status:'Owned'});
+      description:h.kind==='home_island'?'Your island house: workshop, sea-view terrace, bed and shared 120-item closet.':'Your apartment: workshop, bed and a shared 120-item closet.',status:'Owned'});
+  }
+  const fernListing=out.find(p=>p.name==='Fern House');
+  if(fernListing&&owned.homes.some(h=>h.kind==='home_island')) {
+    fernListing.description='Your secluded island house. Workshop, storage and a sea-view terrace.';
+    fernListing.status='Owned';
   }
   const home=nearestWorkshopHome(),meeting=home&&(home.door||buyerDoor(home));
   add({id:'supplier',name:'Mara · workshop supplier',x:supplierVisit?.x??meeting?.[0]??null,y:supplierVisit?.y??meeting?.[1]??null,
@@ -25238,6 +25974,7 @@ function mapFilteredPlaces() {
 function mapPlaceDistance(p) {return p.virtual?'On call':p.x===null?'Contact':mapMetres(mapDistance(mapPlayerLocation(),p)*10);}
 function mapPlaceStreet(p) {
   if(p.x===null||p.virtual)return '';
+  const island=wildIslandAt(p.x,p.y,12);if(island)return island.name;
   const street=streetName(p.x,p.y);if(street)return street;
   for(let r=1;r<=8;r++)for(let oy=-r;oy<=r;oy++)for(let ox=-r;ox<=r;ox++) {
     if(Math.abs(ox)!==r&&Math.abs(oy)!==r)continue;
@@ -25246,10 +25983,17 @@ function mapPlaceStreet(p) {
   }
   return '';
 }
+function mapRouteLabel() {
+  if(MAP_NAV.path)return 'walking route';
+  if(!mapWaypoint)return 'direction only';
+  const p=mapPlayerLocation(),island=wildIslandAt(mapWaypoint.x,mapWaypoint.y,12)||wildIslandAt(p.x,p.y,12);
+  if(!island)return 'direction only';
+  return island.id==='fern'?'boat / light aircraft access':'boat access';
+}
 function mapDirectoryUI() {
   const list=bigMapEl.querySelector('.places'),details=bigMapEl.querySelector('.place-detail'),hits=mapFilteredPlaces();
   const route=bigMapEl.querySelector('.route-status');route.hidden=!mapWaypoint;
-  if(mapWaypoint)route.innerHTML=`<span>${mapEscape(mapWaypoint.name)}<br>${mapMetres(mapRouteDistance())} · ${MAP_NAV.path?'walking route':'direction only'}</span><button data-map="clear-route">Clear</button>`;
+  if(mapWaypoint)route.innerHTML=`<span>${mapEscape(mapWaypoint.name)}<br>${mapMetres(mapRouteDistance())} · ${mapRouteLabel()}</span><button data-map="clear-route">Clear</button>`;
   const selected=BIGMAP.places.find(p=>p.id===BIGMAP.selected);
   bigMapEl.querySelector('.directory').classList.toggle('has-selection',!!selected);
   bigMapEl.querySelector('.results-count').textContent=`${hits.length} places · nearest first`;
@@ -25262,10 +26006,15 @@ function mapDirectoryUI() {
   const address=p.x===null?'':[mapPlaceStreet(p),DISTRICT_TITLE[districtAt(p.x,p.y)]].filter(Boolean).join(' · ');
   const supplierWaiting=p.kind==='supplier'&&supplierVisit&&supplierVisit.home===nearestWorkshopHome()?.cell;
   const actions=[];
+  const island=wildIslandAt(p.x,p.y,12),origin=mapPlayerLocation();
+  if(island&&!wildIslandAt(origin.x,origin.y,12)) {
+    actions.push('<button data-map="island-marina">Find a boat at the marina</button>');
+    if(island.id==='fern')actions.push('<button data-map="island-airport">Find a light plane at the airport</button>');
+  }
   if(p.kind==='supplier'&&!supplierWaiting)actions.push(`<button data-map="call-supplier" ${owned.homes.length?'':'disabled'}>${supplierVisit?'Call Mara to nearest home':'Call Mara to my apartment'}</button>`);
   if(p.x!==null&&!p.virtual) {
     if(mapWaypoint?.id===p.id)actions.push('<button data-map="go">Follow waypoint</button>');
-    else actions.push('<button data-map="waypoint">Set walking waypoint</button>');
+    else actions.push('<button data-map="waypoint">Set waypoint</button>');
   }
   if(p.kind==='supplier'&&!owned.homes.length)actions.push('<button data-map="find-housing">Find a realty office</button>');
   details.innerHTML=`<div class="detail-head"><small>${mapEscape(MAP_CATEGORIES[p.category]||'District')} · ${mapPlaceDistance(p)}</small><button data-map="unselect" aria-label="Close place details">×</button></div><h2>${mapEscape(p.name)}</h2><p>${mapEscape(p.description)}</p>
@@ -25285,7 +26034,7 @@ function setMapWaypoint(p) {
   mapWaypoint={id:p.id,name:p.name,x:p.x,y:p.y};MAP_NAV.path=null;MAP_NAV.routeFrom=null;MAP_NAV.next=0;
   updateMapNavigation(true);showMap=true;saveGame();
   if(bigMapOpen()){mapDirectoryUI();bigMapDraw();}
-  say(`Walking waypoint: ${p.name}. M opens the map.`,4);
+  say(`${wildIslandAt(p.x,p.y,12)?'Boat / aircraft destination':'Walking waypoint'}: ${p.name}. M opens the map.`,4);
 }
 function clearMapWaypoint() {
   mapWaypoint=null;MAP_NAV.path=null;MAP_NAV.routeFrom=null;MAP_NAV.next=0;
@@ -25301,7 +26050,8 @@ function updateMapNavigation(force=false) {
   if(path)for(let n=MAP_NAV.next;n<path.length;n++){const d=mapDistance(p,path[n]);if(d<nearest){nearest=d;index=n;}}
   MAP_NAV.next=index;
   if(force||!MAP_NAV.routeFrom||nearest>1.6&&mapDistance(p,MAP_NAV.routeFrom)>1) {
-    MAP_NAV.path=findMapRoute(p,mapWaypoint);MAP_NAV.next=0;MAP_NAV.routeFrom={...p};
+    const destination=wildIslandAt(mapWaypoint.x,mapWaypoint.y,12),origin=wildIslandAt(p.x,p.y,12);
+    MAP_NAV.path=destination!==origin&&(destination||origin)?null:findMapRoute(p,mapWaypoint);MAP_NAV.next=0;MAP_NAV.routeFrom={...p};
   }
   const end=MAP_NAV.path?.at(-1);MAP_NAV.nearby=!!end&&mapDistance(p,end)<.65;
 }
@@ -25315,7 +26065,7 @@ function drawMapNavigation() {
   const yaw=Math.atan2(mapDifference(next.y-p.y,MAP_WORLD.height),mapDifference(next.x-p.x,MAP_WORLD.width));
   const turn=mod(yaw-a+Math.PI,Math.PI*2)-Math.PI;
   let direction='AHEAD';if(turn>.5)direction='RIGHT';else if(turn<-.5)direction='LEFT';if(Math.abs(turn)>2.5)direction='BEHIND';
-  const text=`${MAP_NAV.nearby?'NEARBY':direction} > ${mapWaypoint.name} · ${mapMetres(mapRouteDistance())}${MAP_NAV.path?'':' · direction only'}`;
+  const text=`${MAP_NAV.nearby?'NEARBY':direction} > ${mapWaypoint.name} · ${mapMetres(mapRouteDistance())}${MAP_NAV.path?'':` · ${mapRouteLabel()}`}`;
   let max=cv.width-24-(TOUCH?TOUCH_PAD_W:0);
   if(showMap&&!TOUCH&&cv.width>700)max=Math.min(max,cv.width-360);
   const lines=wrapText(text,Math.max(100,max));
@@ -25328,7 +26078,13 @@ let bigMapEl = null, bigMapCv = null, bigMapSheet = null;
 const BIGMAP = { cx: 0, cy: 0, z: 4, pts: new Map(), pinch: null, keys: {}, found: null, hits: [], hitK: -1,
   category:'all',query:'',selected:null,places:[],limit:30,points:[],returnPaused:false,tap:null };
 const BIGMAP_Z = 48; // most px per cell: a shop front across the screen. The least: the whole city just fills the screen
-const bigMapMinZ = () => Math.min(bigMapCv.clientWidth/MAP_WORLD.width,bigMapCv.clientHeight/MAP_WORLD.height)*.9;
+function bigMapViewport() {
+  const W=bigMapCv.clientWidth,H=bigMapCv.clientHeight,visible=!bigMapEl.querySelector('.directory').hidden;
+  if(!visible)return {x:0,y:0,w:W,h:H};
+  if(W>700)return {x:332,y:110,w:W-344,h:H-140};
+  return {x:12,y:110,w:W-24,h:Math.max(80,H*.58-134)};
+}
+const bigMapMinZ = () => {const v=bigMapViewport();return Math.min(v.w/MAP_WORLD.width,v.h/MAP_WORLD.height)*.9;};
 const BIGMAP_CSS = `
   #bigmap { background: #080b10; color:#d3d8df; }
   #bigmap canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
@@ -25396,8 +26152,11 @@ function bigMapRender() {
 // what's named on the map: [x, y, text, colour, kind]. kind: 'area' (always), 'place' (always), 'shop' (zoomed in)
 function bigMapLabels() {
   const out = [];
-  for (const sd of DIST_SEEDS) { const [sx] = sd, d = seedName(sd), sy = d === 'industrial' ? (sd[1] > (SHORE_N + SHORE_S) / 2 ? SHORE_S - 0.4 : SHORE_N + 1.4) : sd[1]; out.push([sx * 8, sy * 8, (DISTRICT_TITLE[d] || d).replace(/^the /, 'The '), 'rgba(255,255,255,0.55)', 'area']); }
+  const areaSeeds = [...DIST_SEEDS].sort((a,b) => Number(b[2] === 'shotengai') - Number(a[2] === 'shotengai'));
+  for (const sd of areaSeeds) { const [sx] = sd, d = seedName(sd), sy = d === 'industrial' ? (sd[1] > (SHORE_N + SHORE_S) / 2 ? SHORE_S - 0.4 : SHORE_N + 1.4) : sd[1]; out.push([sx * 8, sy * 8, (DISTRICT_TITLE[d] || d).replace(/^the /, 'The '), 'rgba(255,255,255,0.55)', 'area']); }
   const place = (x, y, t) => out.push([x, y, t, '#fd8', 'place']);
+  if(worldReady)for(const island of WILD_ISLANDS)out.push([island.x,island.y,island.name,'#a6d5a1','area']);
+  if(worldReady){place(FERN_STRIP.x0+10,FERN_STRIP.y,'Fern airstrip');place(...WILD_ISLANDS[0].landing,'Fern boat landing');place(...FERN_HOUSE.door,'Fern House');place(627,197,'Fern Falls');}
   place(GRAND_HOTEL.bx * 8 + 5, GRAND_HOTEL.by * 8 + 5, 'Grand Hotel');
   place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(FISH_HUT.x - 1, FISH_HUT.y - 1, 'Bait & Tackle'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
   place(...COURIER_DEPOT.roof,COURIER_COMPANY);
@@ -25520,7 +26279,7 @@ function bigMapDraw() {
   if (z >= 14) for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'shop') label(lx, ly, t, col, small, false);
   x.font='12px monospace';x.fillStyle='#a6babf';x.textAlign='right';x.fillText('N ↑',W-18,128);
   const scale=100; x.strokeStyle='#a6babf';x.lineWidth=1;x.beginPath();x.moveTo(W-18-scale,148);x.lineTo(W-18,148);x.stroke();x.fillText(mapMetres(scale/z*10),W-18,163);
-  bigMapEl.querySelector('.tip').textContent=mapWaypoint?`${mapWaypoint.name} · ${mapMetres(mapRouteDistance())} · ${MAP_NAV.path?'walking route to street approach':'direction only; no street route found'}`:TOUCH?'Tap places or drop a pin · drag / pinch to explore':'Click a place or drop a pin · / search · F city · M / Esc close';
+  bigMapEl.querySelector('.tip').textContent=mapWaypoint?`${mapWaypoint.name} · ${mapMetres(mapRouteDistance())} · ${mapRouteLabel()}`:TOUCH?'Tap places or drop a pin · drag / pinch to explore':'Click a place or drop a pin · / search · F city · M / Esc close';
   x.textAlign = 'left'; x.textBaseline = 'alphabetic';
 }
 
@@ -25532,7 +26291,11 @@ function bigMapZoom(f, X, Y) { // zoom by f about screen point (X, Y): the spot 
 }
 function bigMapPan(dx, dy) { BIGMAP.cx = mapCoordinate(BIGMAP.cx - dx / BIGMAP.z,MAP_WORLD.width); BIGMAP.cy = mapCoordinate(BIGMAP.cy - dy / BIGMAP.z,MAP_WORLD.height); }
 function bigMapCentre() { const p=mapPlayerLocation();BIGMAP.cx = p.x; BIGMAP.cy = p.y; }
-function bigMapFit() {BIGMAP.cx=MAP_WORLD.width/2;BIGMAP.cy=MAP_WORLD.height/2;BIGMAP.z=bigMapMinZ();}
+function bigMapFit() {
+  const v=bigMapViewport();BIGMAP.z=bigMapMinZ();
+  BIGMAP.cx=MAP_WORLD.width/2-(v.x+v.w/2-bigMapCv.clientWidth/2)/BIGMAP.z;
+  BIGMAP.cy=MAP_WORLD.height/2-(v.y+v.h/2-bigMapCv.clientHeight/2)/BIGMAP.z;
+}
 function bigMapPick(X,Y) {
   const hit=BIGMAP.points.filter(p=>Math.hypot(p.x-X,p.y-Y)<14).sort((a,b)=>Math.hypot(a.x-X,a.y-Y)-Math.hypot(b.x-X,b.y-Y))[0];
   if(hit)return selectMapPlace(hit.id,false);
@@ -25572,6 +26335,10 @@ function openBigMap() {
       if(m==='more'){BIGMAP.limit+=30;mapDirectoryUI();}
       if(m==='unselect'){BIGMAP.selected=null;mapDirectoryUI();}
       if(m==='waypoint')setMapWaypoint(BIGMAP.places.find(p=>p.id===BIGMAP.selected));
+      if(m==='island-marina'||m==='island-airport') {
+        const name=m==='island-marina'?'Marina':'Airport',departure=BIGMAP.places.find(p=>p.name===name);
+        if(departure){selectMapPlace(departure.id);setMapWaypoint(departure);}
+      }
       if(m==='clear-route')clearMapWaypoint();
       if(m==='find-housing'){BIGMAP.category='homes';BIGMAP.selected=null;BIGMAP.query='REALTY';q.value='REALTY';mapDirectoryUI();}
       if(m==='call-supplier') {
@@ -26145,10 +26912,20 @@ function dropHere() {
   if (!heldItem()) return;
   if (at === null) return say('Not up here.');
   const reach = mode === 'room' ? 0.7 : 0.09; // a step in front of you (rooms are in metres, the street in 10m cells)
-  const x = mode === 'room' ? px + Math.cos(a) * reach : mod(px + Math.cos(a) * reach, N), y = mode === 'room' ? py + Math.sin(a) * reach : mod(py + Math.sin(a) * reach, N);
-  say(`You put the ${dropHeldAt(x, y, at, mode === 'roof' ? roofH : 0)} down.`);
+  const x = mode === 'room' ? px + Math.cos(a) * reach : worldCoord(px + Math.cos(a) * reach), y = mode === 'room' ? py + Math.sin(a) * reach : worldCoord(py + Math.sin(a) * reach);
+  let z = 0;
+  if (mode === 'roof') z = roofH;
+  else if (mode !== 'room') z = outdoorGroundHeight(x, y);
+  say(`You put the ${dropHeldAt(x, y, at, z)} down.`);
 }
-const droppedHere = () => { const at = placeKey(); return at === null ? null : droppedNear(px, py, at, mode === 'room' ? 1.1 : 0.2, mode === 'roof' ? roofH : 0); };
+const droppedHere = () => {
+  const at = placeKey();
+  if (at === null) return null;
+  let z = 0;
+  if (mode === 'roof') z = roofH;
+  else if (mode !== 'room') z = outdoorGroundHeight(px, py);
+  return droppedNear(px, py, at, mode === 'room' ? 1.1 : 0.2, z);
+};
 // lying on the ground: the small item picture, shrunk to life size (s = world units per character: cells or metres)
 function drawDropped(d, vx, vy, s) {
   const [lines, col] = droppedArt(d), art = pad(lines.filter(l => l.length)), W = art[0].length;
@@ -28815,7 +29592,7 @@ const PEE_SEEN = ['"Ugh, seriously?"', '"There are kids around!"', '"Oh, come ON
 function peeGround(x, y) {
   if (mode === 'room') { const h = ROOMW.cell(Math.floor(x), Math.floor(y)); return h ? { wall: h } : { z: stairRise(x, y) }; }
   const h = map[idx(Math.floor(x), Math.floor(y))] || 0;
-  return h > (mode === 'roof' ? roofH + 1e-6 : 0) ? { wall: h } : { z: h }; // (off a roof's edge it falls to whatever's below)
+  return h > (mode === 'roof' ? roofH + 1e-6 : 0) ? { wall: h } : { z: Math.max(h, outdoorGroundHeight(x, y)) }; // (off a roof's edge it falls to whatever's below)
 }
 
 // A drop moves only a few centimetres per frame, so test its short segment against the grid wall it entered.
@@ -28915,7 +29692,7 @@ function peeMarkHit(hit, p) {
     else if (hit.nx) { [hit.ux, hit.uy, hit.uz] = [0, 1, 0]; [hit.vx, hit.vy, hit.vz] = [0, 0, 1]; }
     else { [hit.ux, hit.uy, hit.uz] = [1, 0, 0]; [hit.vx, hit.vy, hit.vz] = [0, 0, 1]; }
   }
-  const s = p.s, x = p.at === '' ? mod(hit.x, N) : hit.x, y = p.at === '' ? mod(hit.y, N) : hit.y;
+  const s = p.s, x = p.at === '' ? worldCoord(hit.x) : hit.x, y = p.at === '' ? worldCoord(hit.y) : hit.y;
   let best = null, bd = Infinity;
   for (const q of peeMarks) {
     if (q.at !== p.at || q.s !== s || q.nx * hit.nx + q.ny * hit.ny + q.nz * hit.nz < 0.95) continue;
@@ -28927,8 +29704,8 @@ function peeMarkHit(hit, p) {
     const dx = p.at === '' ? rel(x - best.x) : x - best.x, dy = p.at === '' ? rel(y - best.y) : y - best.y, dz = hit.z - best.z;
     const u = dx * best.ux + dy * best.uy + dz * best.uz, v = dx * best.vx + dy * best.vy + dz * best.vz, w = PEE_DROP / (best.area + PEE_DROP);
     const mx = (best.ux * u + best.vx * v) * w, my = (best.uy * u + best.vy * v) * w, mz = (best.uz * u + best.vz * v) * w;
-    best.x = best.at === '' ? mod(best.x + mx, N) : best.x + mx;
-    best.y = best.at === '' ? mod(best.y + my, N) : best.y + my;
+    best.x = best.at === '' ? worldCoord(best.x + mx) : best.x + mx;
+    best.y = best.at === '' ? worldCoord(best.y + my) : best.y + my;
     best.z += mz;
     best.area = Math.min(best.area + PEE_DROP, 0.5); best.life = 1;
     return;
@@ -29054,7 +29831,7 @@ function peeLand(p, x, y, z) {
     const ang = Math.random() * Math.PI * 2, sp = (0.3 + Math.random() * 0.5) * p.s;
     peeDrops.push({ at: p.at, s: p.s, x, y, z: z + 0.01 * p.s, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, vz: (0.8 + Math.random() * 0.8) * p.s, t0: T, splash: true });
   }
-  if (!room_) { x = mod(x, N); y = mod(y, N); }
+  if (!room_) { x = worldCoord(x); y = worldCoord(y); }
   let best = null, bd = Infinity;
   for (const q of puddles) {
     if (q.at !== p.at || Math.abs(q.z - z) > 0.05 * p.s) continue;
@@ -29064,6 +29841,8 @@ function peeLand(p, x, y, z) {
   if (best) { // spreads, creeping a little toward where it's landing
     const w = PEE_DROP / (best.area + PEE_DROP);
     best.x += (room_ ? x - best.x : rel(x - best.x)) * w; best.y += (room_ ? y - best.y : rel(y - best.y)) * w;
+    const ground = peeGround(best.x, best.y);
+    if (Number.isFinite(ground.z)) best.z = ground.z;
     best.area = Math.min(best.area + PEE_DROP, 2.5); best.life = 1;
   } else {
     puddles.push({ at: p.at, s: p.s, x, y, z, area: PEE_DROP * 4, life: 1, seed: Math.random() * 100 });
@@ -29257,7 +30036,7 @@ function stepPigeons(dt) {
   flockT = 6;
   if (flocks.length >= 2 || tod < 6.5 || tod > 19.5 || rain > 0.3 || Math.random() > 0.3) return; // (rare)
   for (let tries = 0; tries < 20; tries++) {
-    const ang = Math.random() * Math.PI * 2, dist = 1.3 + Math.random() * 2.5, x = mod(px + Math.cos(ang) * dist, N), y = mod(py + Math.sin(ang) * dist, N);
+    const ang = Math.random() * Math.PI * 2, dist = 1.3 + Math.random() * 2.5, x = worldCoord(px + Math.cos(ang) * dist), y = worldCoord(py + Math.sin(ang) * dist);
     if (!pigeonSpot(x, y)) continue;
     const n = 5 + (Math.random() * 5 | 0), birds = [];
     for (let k = 0; k < n; k++) { const bx = (Math.random() - 0.5) * 0.12, by = (Math.random() - 0.5) * 0.12; if (pigeonSpot(x + bx, y + by)) birds.push({ dx: bx, dy: by, ph: Math.random() * 9, dir: Math.random() < 0.5 ? 1 : -1, z: 0 }); }
@@ -29921,12 +30700,12 @@ function buyerDoor(home) {
   const clear=(x,y)=>!map[idx(Math.floor(x),Math.floor(y))]&&!isWater(x,y);
   if (home.door) for(const offset of [.24,-.24,.4,-.4,0]) {
     const [x,y]=home.door;
-    for(const [dx,dy] of [[offset,0],[0,offset]]) if(clear(mod(x+dx,N),mod(y+dy,N))) return [mod(x+dx,N),mod(y+dy,N)];
+    for(const [dx,dy] of [[offset,0],[0,offset]]) if(clear(worldCoord(x+dx),worldCoord(y+dy))) return [worldCoord(x+dx),worldCoord(y+dy)];
   }
   const cx=home.cell%N,cy=Math.floor(home.cell/N),sh=SHOP[home.cell];
   for(let r=1;r<9;r++) for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++) {
-    const x=mod(cx+dx,N),y=mod(cy+dy,N);
-    if(clear(x+.5,y+.5)&&[[1,0],[-1,0],[0,1],[0,-1]].some(([ox,oy])=>SHOP[idx(mod(x+ox,N),mod(y+oy,N))]===sh)) return [x+.5,y+.5];
+    const x=worldCoord(cx+dx),y=worldCoord(cy+dy);
+    if(clear(x+.5,y+.5)&&[[1,0],[-1,0],[0,1],[0,-1]].some(([ox,oy])=>SHOP[idx(worldCoord(x+ox),worldCoord(y+oy))]===sh)) return [x+.5,y+.5];
   }
   return null;
 }
@@ -30082,7 +30861,7 @@ function callWorkshopSupplier(home=workshopHome()||nearestWorkshopHome()) {
   let point=null;
   const offsets=[.35,.6,1,1.5].flatMap(r=>[[r,0],[-r,0],[0,r],[0,-r],[r,r],[-r,r],[r,-r],[-r,-r]]);
   for(const [ox,oy] of offsets) {
-    const x=mod(door[0]+ox,N),y=mod(door[1]+oy,N);
+    const x=worldCoord(door[0]+ox),y=worldCoord(door[1]+oy);
     if(!map[idx(Math.floor(x),Math.floor(y))]&&!isWater(x,y)&&!architectureBlocked(x,y)&&!landmarkBlocked(x,y)&&!lampAt(x,y,.05)) {point=[x,y];break;}
   }
   if(!point){say('Mara cannot find a clear place by this building.',4);return false;}
@@ -30263,7 +31042,7 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
-const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], elDeckHeight(x,y), courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
+const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], islandRoofHeight(x,y), elDeckHeight(x,y), courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
@@ -30278,7 +31057,7 @@ const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
 // the ground under your feet on the street, in cells: a building's front steps, or the el stairs (elevated.js)
-const walkGround = (x, y) => Math.max(architectureGroundHeight(x, y), elStairGround(x, y));
+const walkGround = outdoorGroundHeight;
 let elPass = null; // the turnstile you've swiped through: { st }, till you're up on the platform or off the stairs
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
   if (mode === 'walk' && underEl(py) && elStairGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
@@ -30308,7 +31087,7 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
-  const g = elStairGround(px, py); // (off the deck onto the top of the el stairs: no drop at all)
+  const g = walkGround(px, py); // (off the deck onto the stairs, or down onto natural ground)
   shiftFeet((roofH - g) * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
 function outdoorFeet() {
@@ -30368,7 +31147,7 @@ function drawBoard3D() {
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
-  const cy = eye * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // Ground height uses the same camera projection as the street.
+  const cy = (eye - walkGround(px, py)) * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob;
   const cz = 2.0; // Slightly ahead of the feet, visible with a shallower downward glance.
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   const pX = projX, pY = projY;
@@ -30545,7 +31324,7 @@ function skateCam(dt) {
   SK.camBack = fresh || room_ < SK.camBack ? room_ : SK.camBack + (room_ - SK.camBack) * ease(2);
   const want = walkGround(px, py) + 0.12 + (SK_CAM_UP - 0.12) * Math.min(1, SK.camBack / SK_CAM_BACK) + body.z / 10 * 0.6;
   SK.camZ = fresh || SK.camZ == null ? want : SK.camZ + (want - SK.camZ) * ease(6);
-  return [mod(px - Math.cos(SK.camYaw) * SK.camBack, N), mod(py - Math.sin(SK.camYaw) * SK.camBack, N), SK.camYaw, SK.camZ];
+  return [worldCoord(px - Math.cos(SK.camYaw) * SK.camBack), worldCoord(py - Math.sin(SK.camYaw) * SK.camBack), SK.camYaw, SK.camZ];
 }
 
 // ---- you and the board, drawn into the city (citySprites) while the camera's behind you
@@ -30661,11 +31440,752 @@ function drawSkater() {
   const feet = z + SB.up + SB.ht + (tr && (tr.flip || tr.turn) ? Math.sin(p * Math.PI) * 0.02 : 0); // (up off the deck while it flips under you)
   drawSkaterFigure(vx, vy, feet, SB.rider, Math.cos(ang), Math.sin(ang), look, pose);
 }
+// Authored once, after relocating the old city and before buckets/terrain/save loading.
+function buildWildIslands() {
+  for (const island of WILD_ISLANDS) {
+    PIERS.push(island.dock);
+    const [lx,ly]=island.landing;
+    if(island.id!=='rock')benches.push({x:lx+1.5,y:ly+1.5,fx:-1,fy:0});
+    // Sparse woods leave the coastline, landing and marked paths open.
+    for(let gy=Math.floor(island.y-island.ry);gy<island.y+island.ry;gy+=2) for(let gx=Math.floor(island.x-island.rx);gx<island.x+island.rx;gx+=2) {
+      const x=gx+(hash(gx,gy,1825)-.5)*1.3,y=gy+(hash(gx,gy,1826)-.5)*1.3;
+      const density=.07+hash(Math.floor(x/12),Math.floor(y/12),1827)*.18;
+      if(wildIslandEdge(x,y,island)<3.5||hash(gx,gy,1821)>density||island.id==='sand'||island.id==='rock')continue;
+      if(Math.hypot(x-island.landing[0],y-island.landing[1])<7)continue;
+      if(ISLAND_CABINS.some(c=>x>c.x0-1.5&&x<c.x1+1.5&&y>c.y0-1.5&&y<c.y1+2))continue;
+      const clearApproach=x>FERN_STRIP.x0-28&&x<FERN_STRIP.x1+28&&Math.abs(y-FERN_STRIP.y)<3.5;
+      if(island.id==='fern'&&(clearApproach||trailDistance(x,y)<1.5||near(x,y,540,245)<6||near(x,y,627,191)<4))continue;
+      trees.push({x,y,kind:hash(gx,gy,1822)>.3?'pine':'birch',s:.55+hash(gx,gy,1823)*.95,seed:hash(gx,gy,1824)});
+    }
+  }
+  // A fixed native place identity lets house contents survive future layout changes.
+  const house=FERN_HOUSE,sh={word:'FERN HOUSE',kind:SHOP_APTS,wilderness:true,islandCabin:'fern-house',neon:GREEN,seed:.71,hours:[0,24],glyphs:'[]='};
+  const cells=[];
+  for(let y=house.y0;y<house.y1;y++)for(let x=house.x0;x<house.x1;x++) {
+    const k=idx(x,y);cells.push(k);map[k]=ISLAND_CABINS[0].h;SHOP[k]=sh;STY[k]=9;SEED[k]=.71;
+  }
+  const place={id:'fern-house',shop:sh,cell:cells[0],cells,legacyCells:[],x0:house.x0,y0:house.y0,x1:house.x1,y1:house.y1};
+  CITY_PLACES.set(place.id,place);cityPlaceByShop.set(sh,place);
+  const fire={x:WILD_ISLANDS[0].landing[0]+4,y:238,on:'fire'};
+  GRILLS.push(fire);solidBox(fire.x,fire.y,true,.07,.07,0,.11,'campfire',0);
+  solids[solids.length-1].spot=fire;
+  // One unlocked fishing shelter and one private house, each with a real front door.
+  for(const cabin of ISLAND_CABINS.slice(1)) {
+    const shop={word:cabin.name.toUpperCase(),kind:cabin.room?SHOP_LIT:SHOP_SHUT,islandCabin:cabin.id,wilderness:true,neon:GREEN,hours:[0,24],glyphs:'[]='};
+    for(let y=cabin.y0;y<cabin.y1;y++)for(let x=cabin.x0;x<cabin.x1;x++) {
+      const k=idx(x,y);map[k]=cabin.h;STY[k]=9;SEED[k]=.6;SHOP[k]=shop;
+    }
+  }
+  for(const cabin of ISLAND_CABINS) {
+    const hl=(cabin.x1-cabin.x0)/2+.09,hw=(cabin.y1-cabin.y0)/2+.12;
+    ISLAND_ROOFS.push({x:(cabin.x0+cabin.x1)/2,y:(cabin.y0+cabin.y1)/2,c:1,s:0,hl,hw,z0:cabin.h-.015,z1:cabin.h+cabin.pitch,
+      planes:landmarkPlanes(hl,hw,cabin.h-.015,cabin.h+cabin.pitch,'gable'),cabin});
+  }
+  ISLAND_ROOFS.push({x:541.25,y:245.1,c:1,s:0,hl:.075,hw:.08,z0:.42,z1:.74,
+    planes:landmarkPlanes(.075,.08,.42,.74,null),part:'chimney',cabin:ISLAND_CABINS[0]});
+}
+
+function islandCabinAtDoor() {
+  if(!worldReady||mode!=='walk')return null;
+  return ISLAND_CABINS.find(cabin=>cabin.id!=='fern-house'&&py>=cabin.y1&&near(px,py,...cabin.door)<.5)||null;
+}
+function nearIslandLogbook() {
+  return mode==='room'&&room.kind==='islandshelter'&&Math.hypot(px-4,py-4.3)<1.1;
+}
+function islandBuildingPrompt() {
+  if(nearIslandLogbook())return 'E: read the visitors\' log';
+  if(mode!=='walk')return '';
+  const cabin=islandCabinAtDoor();
+  if(cabin)return cabin.room?'E: enter the fishing shelter':'E: knock on the door';
+  const [lx,ly]=WILD_ISLANDS[0].landing;
+  if(near(px,py,lx+1,ly+.7)<.45)return 'E: island tackle box';
+  if(near(px,py,...FERN_HOUSE.door)<.55||near(px,py,...FERN_HOUSE.terrace)<.8)
+    return homeAt(SHOP[cityPlaceCell('fern-house')])?'E: enter Fern House':`E: Fern House for sale (${fmt$(ITEMS.home_island.price)})`;
+  return '';
+}
+let islandKnockT=-9;
+function islandBuildingUse() {
+  if(nearIslandLogbook()) {
+    const page=room.logPage||0;
+    say(ISLAND_LOG_ENTRIES[page%ISLAND_LOG_ENTRIES.length],6);room.logPage=page+1;
+    return true;
+  }
+  if(mode!=='walk')return false;
+  const cabin=islandCabinAtDoor();
+  if(cabin) {
+    if(cabin.room) {
+      // Remember the actual island door even if the player saves immediately after entering.
+      streetSpot={x:cabin.door[0],y:cabin.door[1],a:-Math.PI/2};
+      enterRoom(cabin.room,{word:cabin.name.toUpperCase(),ret:[...cabin.door,-Math.PI/2],line:''},ROOM_DEFS[cabin.room].entry);
+      say('The door is unlocked. Dry benches, old fishing gear and a visitors\' log. Leave it as you found it.',4);
+    } else if(T-islandKnockT>=1.2) {
+      islandKnockT=T;if(actx)sfxKnock();
+      say('You knock on the door. No answer. Just the wind in the trees.',3);
+    }
+    return true;
+  }
+  const [lx,ly]=WILD_ISLANDS[0].landing;
+  if(near(px,py,lx+1,ly+.7)<.45){openShop('Island tackle box',['rod','carbonrod','water','sandwich']);return true;}
+  const atDoor=near(px,py,...FERN_HOUSE.door)<.55,atTerrace=near(px,py,...FERN_HOUSE.terrace)<.8;
+  if(!atDoor&&!atTerrace)return false;
+  const cell=cityPlaceCell('fern-house'),home=homeAt(SHOP[cell]);
+  if(!home) { openShop('Fern House · sea-view retreat',['home_island']);return true; }
+  enterRoom('islandhome',{word:'FERN HOUSE',cell:[cell%N,Math.floor(cell/N)],ret:[...FERN_HOUSE.door,-Math.PI/2]},atTerrace?[1.5,16.5,0]:ROOM_DEFS.islandhome.entry);
+  say('Fern House. The sea below the windows, the workshop down the hall.',3);
+  return true;
+}
+
+const ISLAND_LOG_ENTRIES=[
+  'VISITORS\' LOG: "Shelter is open to anyone caught in the weather. Please shut the door and take your rubbish home."',
+  'A pencilled note: "Good fishing off the western jetty. Leave your boat alongside; the benches are for everyone."',
+  'The last page: "Went over to Fern. The waterfall trail was worth the crossing. Left before sunset. -- M."',
+];
+ROOM_DEFS.islandshelter={
+  grid:boxRoom(12,10),entry:[6,8.3,-Math.PI/2],height:2.7,light:.75,floor:'islandwood',ceil:'islandwood',wall:islandShelterWall,doorWall:true,
+  props:()=>[
+    BENCHP(1.7,6,1,0),BENCHP(10.2,6,-1,0),
+    ...tableBox(4,3.4,1.15,.55),
+    BX(4,3.4,.28,.2,.78,.81,(i,t,L)=>{
+      let mark='=';
+      if(HIT.face===5) {
+        mark=' ';
+        if(Math.abs(HIT.u)<.015)mark='|';
+        else if(fract(HIT.v*28)<.2)mark='-';
+      }
+      BG[i]=C(WHITE,3+L*.25);set(i,mark,C(BRICK,L));return true;
+    }),
+    ROOM_MODEL(8.6,1.6,(vx,vy)=>{
+      drawBox(boxAt(vx,vy,1,0,1,.22,.1,.3),solid(BRICK,{top:'='}));
+      for(let n=0;n<4;n++) {
+        const x=vx-.72+n*.48;
+        rod(x,vy,.3,x+.12,vy-.12,2.25,.013,GRAY,1.2);
+        drum(x,vy+.025,.055,.48,.58,CHROME);
+      }
+      drawBox(boxAt(vx,vy,1,0,1,.08,1.1,1.18),solid(BRICK));
+    },[1,.3,2.25]),
+    ROPE_COIL(2,1.7),
+    BX(9.8,3.4,.42,.3,0,.46,solid(GREEN,{panel:.3,top:'='})),
+    BX(6,5,.015,.015,2.3,2.7,solid(GRAY)),
+    BX(6,5,.18,.18,2.1,2.3,(i,t,L)=>{BG[i]=C(WARM,7);set(i,'=',C(YEL,15));return true;}),
+  ],
+};
+ROOM_FLOORS.islandwood=(i,f,wx,wy,r,x,L)=>{
+  const row=Math.floor(wy*3),seam=fract(wy*3)<.065||fract(wx/2+(row&1)*.5)<.025;
+  BG[i]=C(BRICK,1.8+f*1.7+(row&1)*.2);
+  set(i,seam?'=':' ',C(WARM,L*.7));
+};
+ROOM_CEILS.islandwood=(i,r,x,wx,wy)=>{
+  const beam=fract(wy/2)<.07;
+  BG[i]=C(BRICK,beam?1.4:2.6);
+  let mark=' ';
+  if(beam)mark='=';
+  else if(fract(wx*3)<.035)mark='|';
+  set(i,mark,C(WARM,beam?3:2));
+};
+function islandShelterWall(i,u,uStep,z,d,mx,my,L) {
+  if(room.grid[my]?.[mx]==='D') {
+    BG[i]=C(GREEN,1.5+L*.2);
+    if(wallText(i,u,uStep,z,d,'EXIT',6,2.2,.13,.2,C(STONE,L)))return true;
+    set(i,fract(u)<.055?'|':Math.abs(z-1)<.04?'=':' ',C(STONE,L*.75));return true;
+  }
+  const side=mx===0||mx===room.W-1,window=side&&Math.abs(Math.abs(u)-4.5)<1.25&&z>1&&z<2.1;
+  if(window) {
+    const frame=Math.abs(Math.abs(u)-4.5)>1.18||z<1.07||z>2.03||Math.abs(Math.abs(u)-4.5)<.035;
+    BG[i]=C(frame?STONE:CYAN,frame?2+L*.2:1.5+day*2.5);
+    set(i,frame?'|':' ',C(STONE,L));return true;
+  }
+  BG[i]=C(BRICK,2.4+L*.25);
+  let mark=' ';
+  if(fract(u*4)<.045)mark='|';
+  else if(z<.12||Math.abs(z-2.5)<.035)mark='=';
+  set(i,mark,C(WARM,L*.65));return true;
+}
+
+// An independently drawn L-shaped plan: bedroom, kitchen/dining, workshop wing.
+const FERN_ROOM_GRID=boxRoom(24,24,Object.fromEntries([
+  ...Array.from({length:10},(_,y)=>[`9,${y+1}`,'#']),
+  ...Array.from({length:22},(_,x)=>[`${x+1},10`,'#']),
+  ['5,10','.'],['6,10','.'],['15,10','.'],['16,10','.'],
+  ...Array.from({length:10},(_,y)=>[`13,${y+12}`,'#']),
+  ...Array.from({length:4},(_,y)=>[`19,${y+1}`,'W']),
+  ...Array.from({length:4},(_,x)=>[`${x+19},4`,'W']),['20,4','.'],
+  ['13,16','.'],['13,17','.'],['0,16','D'],
+]),true);
+ROOM_DEFS.islandhome={
+  grid:FERN_ROOM_GRID,entry:[12,22.3,-Math.PI/2],height:3.4,light:.9,floor:'wood',ceil:'home',wall:fernRoomWall,tier:1,
+  wc:{x0:20,y0:1,x1:23,y1:4,sign:[19,3,3.5]},
+  home:{shelf:[2,13],pet:[2,20],bed:[4,4],closet:[7,3],sofa:[5,17],tv:[5,14],fridge:[17.5,2],dining:[16,6]},
+  spots:{bed:[4,5.3],closet:[7,3],shelf:[2,14],pet:[2,20],fridge:[16.5,2],stove:[19,5.5],workshop:[17,13],tv:[5,15],terrace:[1.4,16.5]},
+  windows:[{face:'west',center:5,half:2},{face:'west',center:13.7,half:1.4},{face:'east',center:5,half:2},{face:'north',center:15,half:3}],
+  lamps:[[4,5],[16,6],[5,17],[18,17]],
+  props:r=>[
+    BX(4,3.8,1.3,1,0,.55,solid(GREEN,{top:'~'})),BX(4,2.8,1.4,.08,0,1.2,solid(BRICK)),
+    BX(7,2.1,.8,.3,0,2.2,solid(BRICK,{panel:.5})),BX(2,13,.7,.2,0,1.05,solid(BRICK,{top:'='})),
+    BX(17.5,2,.4,.4,0,1.7,solid(WHITE)),BX(20,5.5,1.2,.4,0,.94,stoveShade(1,.55),0,1),
+    ...toilet(21.5,2,1,porcelain),washbasin(20.6,1.5,0,1),
+    ...tableBox(15,6,1.4,.65),...homeChair(15,7.2,0,-1,GREEN),...homeChair(15,4.8,0,1,GREEN),
+    ...couch(5,17,1.8,0,-1,GREEN),...tableBox(5,15.4,.9,.4),
+    BX(5,13.5,.8,.2,0,.6,solid(BRICK)),BX(5,13.5,.6,.1,.6,1.3,(i,t,L)=>{BG[i]=C(r.tv?CYAN:GRAY,r.tv?6:1);set(i,r.tv?'~':' ',C(WHITE,L));return true;}),
+    BX(17,12,.5,.3,0,1.1,solid(BRICK,{panel:.3,top:'='})),
+    POT_PLANT(10.8,12,1.5),POT_PLANT(21,8,1.4),
+    ...[[4,5],[16,6],[5,17],[18,17]].map(([x,y])=>BX(x,y,.22,.22,2.8,2.95,(i,t,L)=>{BG[i]=C(WARM,7);set(i,'=',C(YEL,15));return true;})),
+  ],
+};
+
+function fernRoomWall(i,u,uStep,z,d,mx,my,L) {
+  homeWall(i,u,uStep,z,d,mx,my,L);
+  if(z<.8){BG[i]=C(BRICK,1.6+L*.2);set(i,Math.abs(z-.76)<.035?'=':fract(u*3)<.045?'|':' ',C(WARM,L*.6));}
+  return true;
+}
+// Small native models are assembled once on the finished terrain, then bucketed.
+const ISLAND_DETAILS=[];
+let islandDetailsB=null;
+const FERN_CASCADE=[];
+
+function islandDetail(x,y,hl,hw,z0,z1,kind,angle=0) {
+  const model={x,y,hl,hw,z0,z1,kind,c:Math.cos(angle),s:Math.sin(angle)};
+  ISLAND_DETAILS.push(model);
+  return model;
+}
+function islandStone(x,y,size,seed) {
+  const samples=[terrainHeight(x,y),terrainHeight(x-size,y),terrainHeight(x+size,y),terrainHeight(x,y-size),terrainHeight(x,y+size)];
+  const z0=Math.min(...samples)-.025,z1=Math.max(...samples)+size*.3;
+  const rock=islandDetail(x,y,size,size*.75,z0,z1,'rock');
+  rock.planes=landmarkPlanes(rock.hl,rock.hw,z0,z1,'hip');
+  rock.seed=seed;
+}
+function buildIslandScenery() {
+  ISLAND_DETAILS.length=FERN_CASCADE.length=0;
+  for(const island of WILD_ISLANDS) {
+    const [x0,y0,x1,y1]=island.dock;
+    for(let x=x0+.25;x<x1-.5;x+=3)for(const y of [y0+.06,y1-.06]) {
+      islandDetail(x,y,.035,.035,-.025,.12,'timber');
+      islandDetail(x,y,.047,.047,.115,.13,'metal');
+    }
+    // Small cleats sit away from the boarding point and leave the deck open.
+    islandDetail(x0+1.7,y0+.12,.07,.025,0,.035,'metal');
+    const [lx,ly]=island.landing;
+    islandDetail(lx+1.8,ly+.7,.022,.022,0,.22,'timber');
+    islandDetail(lx+1.8,ly+.7,.15,.025,.16,.23,'sign',Math.PI/2).word=island.name.toUpperCase();
+    for(let y=Math.floor(island.y-island.ry);y<island.y+island.ry;y+=4)for(let x=Math.floor(island.x-island.rx);x<island.x+island.rx;x+=4) {
+      const seed=hash(x,y,1910),wx=x+(seed-.5)*2,wy=y+(hash(x,y,1911)-.5)*2,edge=wildIslandEdge(wx,wy,island);
+      if(edge<.7||edge>16||onPier(wx,wy)||near(wx,wy,lx,ly)<5||map[idx(Math.floor(wx),Math.floor(wy))])continue;
+      const approach=wx>FERN_STRIP.x0-28&&wx<FERN_STRIP.x1+28&&Math.abs(wy-FERN_STRIP.y)<3.5;
+      if(island.id==='fern'&&(approach||trailDistance(wx,wy)<.7||near(wx,wy,540,245)<5))continue;
+      if(seed<.22&&edge<4&&island.id!=='sand')islandStone(wx,wy,.12+seed*.4,seed);
+      else if(seed>.85&&edge>2) {
+        const z=terrainHeight(wx,wy);
+        islandDetail(wx,wy,.13,.13,z,z+.12,island.id==='sand'?'grass':'shrub').seed=seed;
+      }
+    }
+  }
+  const house=FERN_HOUSE;
+  islandDetail(540.5,247.17,.58,.35,.28,.31,'timber');
+  for(const x of [540.03,540.97])islandDetail(x,247.45,.018,.018,0,.29,'trim');
+  islandDetail(540.14,247.025,.035,.025,.23,.28,'lamp');
+  islandDetail(540.5,247.52,.33,.025,.285,.32,'sign');
+  const [tx,ty]=house.terrace;
+  islandDetail(tx,ty,1.1,1.6,0,.004,'deck');
+  for(const y of [244.2,246.8]) {
+    islandDetail(tx,y,.58,.12,.045,.055,'timber');
+    islandDetail(tx,y+.1,.58,.02,.055,.11,'timber');
+    for(const x of [tx-.5,tx+.5])islandDetail(x,y,.025,.09,0,.045,'timber');
+  }
+  for(const y of [244.15,246.85]) {
+    islandDetail(538.65,y,.085,.085,0,.075,'pot');
+    islandDetail(538.65,y,.13,.13,.075,.21,'shrub').seed=hash(2,y,1912);
+  }
+  for(const [x,y,angle]of [[707,110,.3],[711,115,-.4],[703,104,.8]]) {
+    if(seaAt(x,y))continue;
+    const z=terrainHeight(x,y);
+    islandDetail(x,y,.4,.035,z-.025,z+.035,'driftwood',angle);
+    islandDetail(x+.18*Math.cos(angle),y+.18*Math.sin(angle),.15,.018,z,z+.055,'driftwood',angle+.8);
+  }
+  // Low rock shelves flank a continuous, inclined sheet of water. Every end is
+  // sampled from terrain, so the cascade joins the creek instead of floating.
+  for(let y=187;y<194;y+=.5) {
+    const x=FERN_FALLS.x+Math.sin((y-FERN_FALLS.y0)*.6)*.15;
+    const za=terrainHeight(x,y)+.012,zb=terrainHeight(x,y+.5)+.012,slope=(zb-za)/.5;
+    const z=(za+zb)/2,hw=.25,hl=.16+.035*Math.sin(y*2),thickness=.008;
+    const planes=[[1,0,0,hl],[-1,0,0,hl],[0,1,0,hw],[0,-1,0,hw],[0,-slope,1,z],[0,slope,-1,-z+thickness]];
+    FERN_CASCADE.push({x,y:y+.25,c:1,s:0,hl,hw,z0:Math.min(za,zb)-thickness,z1:Math.max(za,zb),planes});
+    if(Math.floor(y*2)%3===0)for(const side of [-1,1])islandStone(x+side*.34,y+.2,.18+hash(side,y,1913)*.12,hash(side,y,1914));
+  }
+  for(const [x,y]of [[626.15,196],[627.8,196.2],[627.6,197.7]])islandStone(x,y,.18,hash(x,y,1915));
+  islandDetailsB=bucketed(ISLAND_DETAILS);
+}
+
+function islandTimberShade(model,i,t,L) {
+  const top=HIT.face===5,wood=model.kind==='timber'||model.kind==='deck'||model.kind==='driftwood';
+  let base=wood?BRICK:GRAY;
+  if(model.kind==='trim'||model.kind==='sign')base=STONE;
+  if(model.kind==='pot')base=BRICK;
+  const brightness=(wood?1.6:2.2)+L*(top?.3:.2);
+  BG[i]=C(base,brightness);
+  if(model.word&&(HIT.face===3||HIT.face===4)) {
+    const along=HIT.face===3?HIT.u:-HIT.u;
+    if(wallText(i,along,t/projX,HIT.w,t,model.word,0,.195,Math.min(.028,.25/model.word.length),.04,C(GREEN,Math.max(5,L)),BG[i]))return true;
+  }
+  let ch=' ';
+  if(wood) {
+    if(top)ch=fract((model.y+HIT.v)*12)<.07?'|':' ';
+    else ch=fract(HIT.w*45)<.09?'=':' ';
+  }
+  else if(model.kind==='metal')ch=top?'=':'|';
+  else if(model.kind==='sign')ch=top?'=':' ';
+  set(i,ch,C(wood?WARM:base,L*.7));
+  return true;
+}
+function islandRockShade(model,i,t,L) {
+  const moss=HIT.face>=6&&model.seed>.4;
+  const grain=hash(Math.floor((model.x+HIT.u)*37),Math.floor(HIT.w*59),1916);
+  const base=moss?GREEN:GRAY;
+  BG[i]=C(base,1.1+L*(HIT.face>=6?.28:.16));
+  set(i,grain>.96?'.':' ',C(moss?GREEN:STONE,L*.65));
+  return true;
+}
+function drawIslandShrub(model,vx,vy) {
+  const grass=model.kind==='grass',height=model.z1-model.z0;
+  drawShape(vx,vy,model.z0,model.hl,height,(i,u,z,du,dz,L)=>{
+    const sway=Math.sin(T*1.3+model.seed*12)*.006*z/height,local=(u-sway)/model.hl;
+    if(grass) {
+      if(Math.abs(local)>.8*(1-z/height)||Math.abs(Math.sin(local*12+z*15))<.7)return false;
+      set(i,z>height*.8?'\'':'|',C(YEL,L*.75));return true;
+    }
+    if(local*local+((z-height*.48)/(height*.53))**2>1)return false;
+    const grain=hash(Math.floor(u*75),Math.floor(z*75),Math.floor(model.seed*1000));
+    if(grain>.88)return false;
+    BG[i]=C(GREEN,1.1+L*.18);
+    set(i,grain>.73?'\'':grain<.06&&model.seed>.8?'*':' ',C(grain<.06?WARM:GREEN,L*.85));return true;
+  });
+}
+function islandRoofShade(roof,i,t,L) {
+  if(roof.part==='chimney') {
+    landmarkStone(i,HIT.face<2?HIT.v:HIT.u,HIT.w,GRAY,L);
+    if(HIT.w>roof.z1-.035){BG[i]=C(GRAY,1+L*.15);set(i,'=',C(STONE,L*.8));}
+    return true;
+  }
+  const end=HIT.face===2||HIT.face===3,cabin=roof.cabin;
+  if(end) {
+    BG[i]=C(cabin.wood,1.8+L*.2);
+    set(i,fract(HIT.w*32)<.07?'=':' ',C(WARM,L*.6));return true;
+  }
+  const edge=Math.abs(HIT.v)>roof.hw-.025||HIT.w<roof.z0+.025;
+  const seam=fract(HIT.v*9)<.055;
+  BG[i]=C(edge?STONE:cabin.roof,1.2+L*(HIT.face===6?.27:.17));
+  let mark=seam?'/':' ';
+  if(edge)mark='=';
+  set(i,mark,C(edge?STONE:cabin.roof,L*.9));
+  paintSettledSnow(i,roof.x+HIT.u,roof.y+HIT.v,L,.7,0,HIT.w);
+  return true;
+}
+function islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
+  const cabin=ISLAND_CABINS.find(c=>mx>=c.x0&&mx<c.x1&&my>=c.y0&&my<c.y1);
+  if(!cabin)return;
+  const light=fog*amb*(side?10:13),along=side?wc-cabin.x0:wc-cabin.y0;
+  const width=side?cabin.x1-cabin.x0:cabin.y1-cabin.y0;
+  const corner=Math.min(along,width-along),front=side&&py>cabin.y1;
+  const terrace=!side&&px<cabin.x0&&cabin.id==='fern-house';
+  const door=front&&Math.abs(along-width/2)<.075||terrace&&Math.abs(along-1.5)<.075;
+  BG[i]=C(cabin.wood,1.9+light*.19);
+  if(front&&cabin.id!=='fern-house'&&wallText(i,along-width/2,uStep,z,d,cabin.room?'SHELTER':'PRIVATE',0,.275,.028,.028,C(STONE,Math.max(light,5)),BG[i]))return;
+  if(corner<.045||z>h-.035){BG[i]=C(STONE,2+light*.2);set(i,z>h-.035?'=':'|',C(STONE,light));return;}
+  if(z<.04){BG[i]=C(GRAY,1.4+light*.2);set(i,fract(wc*9)<.06?'|':' ',C(STONE,light*.5));return;}
+  if(door&&z<.27) {
+    const du=front?along-width/2:along-1.5;
+    if(Math.abs(du)>.06||z>.255){BG[i]=C(STONE,2+light*.2);set(i,z>.255?'_':'|',C(STONE,light));return;}
+    BG[i]=C(GREEN,1.2+light*.12);
+    let mark=' ';
+    if(z>.17&&z<.24)mark=':';
+    else if(Math.abs(du-.037)<.012&&Math.abs(z-.12)<.012)mark='o';
+    set(i,mark,C(z>.17?WARM:YEL,Math.max(light,night*8)));return;
+  }
+  const bay=width===3?.72:.5,spacing=width===3?1.55:1;
+  const du=along-bay-Math.round((along-bay)/spacing)*spacing;
+  if(Math.abs(du)<.14&&z>.12&&z<.27) {
+    const frame=Math.abs(du)>.12||z<.13||z>.26||Math.abs(du)<.009||Math.abs(z-.2)<.007;
+    if(frame) {
+      BG[i]=C(STONE,2+light*.2);
+      set(i,Math.abs(du)<.009?'|':'=',C(STONE,light));return;
+    }
+    BG[i]=C(night>.35?WARM:CYAN,1.2+night*4);
+    set(i,fract(du*4+z*6)<.05?'/':' ',C(WARM,Math.max(light*.65,night*11)));return;
+  }
+  set(i,fract(z*37)<.075?'=':fract(wc*8)<.025?'|':' ',C(WARM,light*.5));
+}
+function drawFernCascade() {
+  if(near(px,py,FERN_FALLS.x,191)>vis+12)return;
+  for(const sheet of FERN_CASCADE) {
+    drawBox({...sheet,x:sheet.x-px,y:sheet.y-py},(i,t,L)=>{
+      const worldY=sheet.y+HIT.v,flow=fract(worldY*11-T*2.4+Math.sin(HIT.u*31)*.25);
+      BG[i]=C(BLUE,1.5+day*2);
+      set(i,flow<.22?'~':flow>.92?':':' ',C(flow<.22?WHITE:CYAN,Math.max(4,L)));return true;
+    },rayMansard);
+  }
+  for(let k=0;k<9;k++) {
+    const p=fract(T*.65+k*.113),x=FERN_FALLS.x+(hash(k,2,1917)-.5)*.6;
+    const y=193.2+p*.25,z=terrainHeight(x,y)+.015+Math.sin(p*Math.PI)*.065;
+    drawArt(x-px,y-py,z,.025,.025,[p<.4?'.':'\''],()=>C(WHITE,8+day*3));
+  }
+}
+function drawWildScenery() {
+  if(!worldReady||!islandDetailsB)return;
+  forNear(islandDetailsB,model=>{
+    const vx=model.x-px,vy=model.y-py;
+    if(!inView(vx,vy,model.hl+.2))return;
+    if(model.kind==='shrub'||model.kind==='grass'){drawIslandShrub(model,vx,vy);return;}
+    if(model.kind==='lamp') {
+      drawBox({...model,x:vx,y:vy},(i,t,L)=>{BG[i]=C(WARM,3+night*6);set(i,'o',C(YEL,10+night*5));return true;});return;
+    }
+    drawBox({...model,x:vx,y:vy},(i,t,L)=>model.kind==='rock'?islandRockShade(model,i,t,L):islandTimberShade(model,i,t,L),model.planes?rayMansard:rayBox);
+  });
+  for(const roof of ISLAND_ROOFS)if(inView(roof.x-px,roof.y-py,roof.hl+roof.hw))
+    drawBox({...roof,x:roof.x-px,y:roof.y-py},(i,t,L)=>islandRoofShade(roof,i,t,L),rayMansard);
+  const [lx,ly]=WILD_ISLANDS[0].landing;
+  if(near(px,py,lx,ly)<vis) {
+    drawBox(boxAt(lx+1-px,ly+.7-py,1,0,.12,.08,0,.09),solid(BRICK,{top:'='}));
+    drawArt(lx+1-px,ly+.7-py,.105,.25,.035,['TACKLE'],()=>C(WARM,12));
+  }
+  if(near(px,py,540.5,247)<vis) {
+    const label=homeAt(SHOP[cityPlaceCell('fern-house')])?'FERN HOUSE':'FOR SALE';
+    drawArt(540.5-px,247.55-py,.294,.45,.022,[label],()=>C(GREEN,10));
+    if(night>.25)for(let k=0;k<4;k++) {
+      const p=fract(T*.14+k*.25),x=541.25+p*.17;
+      drawShape(x-px,245.1-py,.76+p*.3,.035+p*.04,.05,(i,u,z,du,dz,L)=>{
+        if(hash(Math.floor(u*120),Math.floor(z*120),k)>.3)return false;
+        set(i,'.',C(GRAY,3));return true;
+      });
+    }
+  }
+  drawFernCascade();
+}
+// Assemble the generated city after authored outdoor geometry has been created,
+// before saves or the first frame. Interior coordinates never enter this pass.
+function assembleArchipelago() {
+  if (worldReady) return;
+  const oldN = N, moved = new WeakSet();
+  const sourcePlaces = new WeakMap();
+  for (const p of CITY_PLACES.values()) sourcePlaces.set(p.shop, [(p.x0 + p.x1) / 2, (p.y0 + p.y1) / 2]);
+  function point(p, kind = 'city') {
+    if (!p || moved.has(p)) return;
+    moved.add(p);
+    [p[0], p[1]] = citySourcePoint(p[0], p[1], kind);
+  }
+  function geometry(o, kind = 'city', inherited = null) {
+    if (!o || typeof o !== 'object' || moved.has(o)) return;
+    if (Array.isArray(o)) {
+      for (const child of o) geometry(child, kind, inherited);
+      return;
+    }
+    moved.add(o);
+    let sourceY = o.y ?? o.y0;
+    if (sourceY == null) {
+      if (o.by != null) sourceY = o.by * 8;
+      else if (o.side) sourceY = o.line;
+      else sourceY = o.start ?? 0;
+    }
+    let sourceX = o.x ?? o.x0;
+    if (sourceX == null) sourceX = o.bx != null ? o.bx * 8 : 0;
+    if (o.ownerCell != null) {
+      sourceX = o.ownerCell % oldN + .5;
+      sourceY = Math.floor(o.ownerCell / oldN) + .5;
+    } else if (o.sh && sourcePlaces.has(o.sh)) {
+      [sourceX, sourceY] = sourcePlaces.get(o.sh);
+    }
+    const [targetX, targetY] = citySourcePoint(sourceX, sourceY, kind);
+    const offset = inherited || [targetX - sourceX, targetY - sourceY];
+    const [dx, dy] = offset;
+    if (o.sh && sourcePlaces.has(o.sh)) {
+      // Original east-edge doors wrapped x=256 back to zero. Keep them beside
+      // their owning building before applying the neighborhood translation.
+      for (const key of ['x','x0','x1','cx','ex','gx']) if (Number.isFinite(o[key])) {
+        o[key] = sourceX + mod(o[key] - sourceX + oldN / 2, oldN) - oldN / 2;
+      }
+    }
+    for (const key of ['x','x0','x1','cx','ex','gx']) if (Number.isFinite(o[key])) o[key] += dx;
+    for (const key of ['y','y0','y1','cy','ey','gy']) if (Number.isFinite(o[key])) o[key] += dy;
+    if (Number.isFinite(o.bx)) o.bx += dx / 8;
+    if (Number.isFinite(o.by)) o.by += dy / 8;
+    if (Number.isInteger(o.ownerCell)) o.ownerCell = citySourceCell(o.ownerCell);
+    if (Number.isInteger(o.block)) o.block = citySourceCell(o.block,true);
+    if (o.side != null && Number.isFinite(o.start) && Number.isFinite(o.line)) {
+      o.start += o.side ? dx : dy;
+      o.end += o.side ? dx : dy;
+      o.line += o.side ? dy : dx;
+      if (o.sign?.center != null) o.sign.center += o.side ? dx : dy;
+    }
+    for (const key of ['tiers','crown','roofRects','roofParts','faces','architecture','belle','solids']) geometry(o[key],kind,offset);
+    if (o.sh) {
+      geometry(o.sh.architecture, kind, offset);
+      geometry(o.sh.belle, kind, offset);
+    }
+  }
+  function arrayCells(source, blocks = false, blank) {
+    const size = blocks ? CITY_LAYOUT.width / 8 : CITY_LAYOUT.width;
+    const out = Array.isArray(source) ? new Array(size * size + 1) : new source.constructor(size * size + 1);
+    if (blank !== undefined) out.fill(blank);
+    const stride = blocks ? CITY_SOURCE_NB : CITY_SOURCE_N;
+    for (let k = stride * (blocks ? 1 : 8); k < stride * (blocks ? 25 : 200); k++) {
+      if (source[k] !== undefined) out[citySourceCell(k,blocks)] = source[k];
+    }
+    return out;
+  }
+  function sparseCells(source) {
+    const out = arrayCells(source);
+    source.length = out.length;
+    for (let k = 0; k < source.length; k++) {
+      delete source[k];
+      if (out[k] !== undefined) source[k] = out[k];
+    }
+  }
+  function blockMap(source) {
+    const entries = Array.from(source);
+    source.clear();
+    for (const [k,value] of entries) source.set(citySourceCell(k,true),value);
+  }
+  const originalCounts = {
+    places: CITY_PLACES.size,
+    homes: Array.from(CITY_PLACES.values()).filter(p => p.shop.kind === SHOP_APTS).length,
+    people: people.length,
+  };
+  const serviceLanes = SERVICES.map(s => {
+    const [, y] = citySourcePoint(s.bx * 8, s.by * 8);
+    return [s, s.lane + y - s.by * 8];
+  });
+  for (let i = lamps.length - 1; i >= 0; i--) {
+    if (seaAt(lamps[i].x, lamps[i].y) && !onPier(lamps[i].x, lamps[i].y)) lamps.splice(i, 1);
+  }
+  // The airport moves independently, keeping its runway, aircraft and terminal together.
+  for (const o of [AIRPORT,RUNWAY,TAXIWAY,APRON,HELIPADS,TOWER,AIRPORT_BLDG,aircraft]) geometry(o,'airport');
+  for (const craft of aircraft) {
+    geometry(craft.home, 'airport');
+    if (craft.path) for (const p of craft.path) point(p, 'airport');
+  }
+  for (let k = 0; k < STANDS_X.length; k++) STANDS_X[k] += CITY_LAYOUT.airportX;
+  STAND_Y += CITY_LAYOUT.airportY;
+  // The causeway runs beside the east edge of the airfield, then turns into its landside road.
+  Object.assign(CAUSEWAY, { x: AIRPORT.x1 + 14, y0: AIRPORT.y0 + 1, y1: 105 });
+  moved.add(CAUSEWAY);
+
+  const belleRoofs = belleBuildingsB.flat();
+  for (const root of [GRAND_HOTEL,AQUARIUM,CASINO,EXCHANGE,MUSEUM,CLUB,GARDEN,ISLE,LIGHTHOUSE,FOOTBRIDGE,
+    FAIR,WHEEL,CAROUSEL,WHEEL_BOARD,MARINA,SERVICES,GAS_STATIONS,BELLE_BUILDINGS,BACKROOMS_SEAM,
+    COURIER_DEPOT,COURIER_SURFACES,COURIER_STAIRS,COURIER_LADDERS,COURIER_SCENERY,COURIER_SITE,COURIER_GARDEN,
+    COURIER_FOREMAN,COURIER_NICO,COURIER_ARCH,COURIER_ARCADE_SIGN,COURIER_SIGNS,COURIER_RODS,COURIER_LATTICE,COURIER_BULBS,
+    lamps,trees,benches,parks,extras,cranes,stacks,solids,radios,potties,stations,NIGHT_MARKET,STALLS,BOOTHS,fairFolk,
+    FISH_HUT,GRILLS,lanterns,vendors,machines,roofs,GAS_CLEAR,ARCH_BUILDINGS,ARCH_DETAILS,ARCH_BLOCKERS,ARCH_STEPS,
+    LANDMARK_BUILDINGS,LANDMARK_SOLIDS,LANDMARK_BLOCKERS,MERCHANT_BUILDINGS,PAVILION_SOLIDS,belleRoofs,belleDetails,
+    doors,people,footCops,cars,elPillars,ANGLERS,SLOTS,fleet]) geometry(root);
+  for (const cop of footCops) {
+    const corner = cop.corner;
+    const [x, y] = citySourcePoint(corner.ix * 8, corner.iy * 8);
+    corner.ix = x / 8;
+    corner.iy = y / 8;
+  }
+  for (const visitor of fairFolk) {
+    [visitor.tx, visitor.ty] = citySourcePoint(visitor.tx, visitor.ty);
+  }
+  for (const p of people) {
+    p.path = [];
+    if (p.goal) geometry(p.goal);
+  }
+  for (const p of parks) {
+    const [x, y] = citySourcePoint(p[0] * 8, p[1] * 8);
+    p[0] = x / 8;
+    p[1] = y / 8;
+  }
+  for (const light of lights) {
+    const sourceX = light.bx, sourceY = light.by;
+    geometry(light);
+    [light.bx, light.by] = citySourcePoint(sourceX, sourceY);
+  }
+  for (const b of [GRAND_HOTEL,AQUARIUM]) b.doorU += CITY_LAYOUT.cityX;
+  MARINA.end += CITY_LAYOUT.southY;
+  for (let i = 0; i < MARINA.fingers.length; i++) MARINA.fingers[i] += CITY_LAYOUT.southY;
+  geometry(MARINA.office);
+  for (const [service, lane] of serviceLanes) {
+    service.lane = lane;
+    point(service.door);
+  }
+  point(COURIER_DEPOT.roof);
+  point(COURIER_DEPOT.door);
+  for (const ladder of COURIER_LADDERS) { point(ladder.bottom);point(ladder.top); }
+  for (const rod of COURIER_RODS) { point(rod.a);point(rod.b); }
+  for (const p of COURIER_NEON) point(p);
+  for (const stall of STALLS) point(stall.at);
+  for (const booth of BOOTHS) point(booth.at);
+  for (const pier of PIERS) {
+    const x = (pier[0] + pier[2]) / 2, y = (pier[1] + pier[3]) / 2;
+    const [targetX, targetY] = citySourcePoint(x, y);
+    const dx = targetX - x, dy = targetY - y;
+    pier[0] += dx;
+    pier[2] += dx;
+    pier[1] += dy;
+    pier[3] += dy;
+  }
+  for (const station of EL_STATIONS) {
+    geometry(station);
+    for (const stair of station.stairs) {
+      stair.ox += CITY_LAYOUT.cityX;
+      stair.oy += CITY_LAYOUT.southY;
+      geometry(stair);
+    }
+  }
+  EL_Y+=CITY_LAYOUT.southY;EL_Y0+=CITY_LAYOUT.southY;EL_Y1+=CITY_LAYOUT.southY;
+  for(let i=elPillars.length-1;i>=0;i--)if(elPillars[i].x<140||elPillars[i].x>352)elPillars.splice(i,1);
+  for (let i = 0; i < 2; i++) {
+    EL_TRACK[i] += CITY_LAYOUT.southY;
+    EL_PLAT[i] += CITY_LAYOUT.southY;
+  }
+  for (const seed of DIST_SEEDS) {
+    const [x, y] = citySourcePoint(seed[0] * 8, seed[1] * 8);
+    seed[0] = x / 8;
+    seed[1] = y / 8;
+  }
+  for (const r of [...SUPER, ...removed]) {
+    const [x, y] = citySourcePoint(r[0] * 8, r[1] * 8);
+    const dx = x / 8 - r[0], dy = y / 8 - r[1];
+    r[0] += dx;
+    r[1] += dy;
+    if (r.length > 3) {
+      r[2] += dx;
+      r[3] += dy;
+    }
+  }
+  for (const p of CITY_PLACES.values()) {
+    p.legacyCells = p.cells.slice();
+    p.cell = citySourceCell(p.cell);
+    p.cells = p.cells.map(k => citySourceCell(k));
+    geometry(p);
+    if (Array.isArray(p.shop.pad)) point(p.shop.pad);
+  }
+  for (const faces of [...ARCH_FACES, ...MERCHANT_FACES, ...BELLE_FACES]) {
+    for (const f of faces) geometry(f);
+    sparseCells(faces);
+  }
+  map=arrayCells(map);STY=arrayCells(STY);SEED=arrayCells(SEED);SHOP=arrayCells(SHOP);ROAD=arrayCells(ROAD);
+  GAS_CELL=arrayCells(GAS_CELL);BELLE_ROOF_CELLS=arrayCells(BELLE_ROOF_CELLS);
+  architectureStepCells=arrayCells(architectureStepCells);architectureWalkCells=arrayCells(architectureWalkCells);architectureCarCells=arrayCells(architectureCarCells);
+  LANDMARK_ROOF_MASK=arrayCells(LANDMARK_ROOF_MASK);LANDMARK_BLOCK_MASK=arrayCells(LANDMARK_BLOCK_MASK);PAVILION_ROOF_MASK=arrayCells(PAVILION_ROOF_MASK);BELLE_ROOF_INFILL=arrayCells(BELLE_ROOF_INFILL);
+  for(const a of [courierSurfaceCells,lampGlowCells,streetGeometryCells,GAS_ZONE])sparseCells(a);
+  groundSnowCells.length=CITY_LAYOUT.width*CITY_LAYOUT.height+1;groundSnowCells.fill(undefined);
+  DIST=arrayCells(DIST,true,'sea');KIND=arrayCells(KIND,true,'sea');DIST_OWNER=arrayCells(DIST_OWNER,true,-1);
+  HSEG=arrayCells(HSEG,true);VSEG=arrayCells(VSEG,true);
+  blockMap(landmarkOf);blockMap(LANDMARK_BY_BLOCK);blockMap(STATION_AT);
+  const oldSt = ST_NAMES, oldAve = AVE_NAMES;
+  ST_NAMES = new Array(CITY_LAYOUT.height / 8).fill('COAST ROAD');
+  AVE_NAMES = new Array(CITY_LAYOUT.width / 8).fill('SHORE WAY');
+  oldSt.forEach((name, i) => {
+    const [, y] = citySourcePoint(0, i * 8);
+    ST_NAMES[y / 8] = name;
+  });
+  oldAve.forEach((name, i) => { AVE_NAMES[i + CITY_LAYOUT.cityX / 8] = name; });
+  const bridgeNames = Object.entries(BRIDGE_NAMES);
+  for (const k of Object.keys(BRIDGE_NAMES)) delete BRIDGE_NAMES[k];
+  for (const [k, name] of bridgeNames) BRIDGE_NAMES[Number(k) + CITY_LAYOUT.cityX / 8] = name;
+  SHORE_N = CITY_LAYOUT.northY / 8;
+  SHORE_S = (200 + CITY_LAYOUT.southY) / 8;
+  EL_ROW += CITY_LAYOUT.southY / 8;
+  ISLE_BX += CITY_LAYOUT.cityX / 8;
+  FAIR_BX += CITY_LAYOUT.cityX / 8;
+  MARINA_BX += CITY_LAYOUT.cityX / 8;
+  BRIDGE_X = BRIDGE_X.map(x => x + CITY_LAYOUT.cityX / 8);
+  [px, py] = citySourcePoint(px, py);
+  N = CITY_LAYOUT.width;
+  NB = N / 8;
+  worldReady = true;
+  CITY_LAYOUT_ID = CITY_LAYOUT.id;
+  CITY_SAVE_VERSION = 5;
+  Object.assign(MAP_WORLD, { width: CITY_LAYOUT.chartWidth, height: CITY_LAYOUT.chartHeight, wrap: false });
+
+  // Keep the street grid inside intact neighborhoods; its outer ring follows the
+  // stepped headlands instead of enclosing the former rectangular footprint.
+  cityBlockMask = new Uint8Array(NB * NB);
+  for (let y = 1; y < 25; y++) for (let x = 0; x < CITY_SOURCE_NB; x++) {
+    const [wx, wy] = citySourcePoint(x * 8, y * 8);
+    cityBlockMask[bi(wx / 8, wy / 8)] = 1;
+  }
+  for (let y = 0; y < NB; y++) for (let x = 0; x < NB; x++) {
+    const k = bi(x, y), here = !!cityBlockMask[k];
+    const above = !!cityBlockMask[bi(x, y - 1)], left = !!cityBlockMask[bi(x - 1, y)];
+    if (!here && !above) HSEG[k] = 0;
+    else if (here !== above) HSEG[k] = 1;
+    if (!here && !left) VSEG[k] = 0;
+    else if (here !== left) VSEG[k] = 1;
+  }
+  for(const bx of BRIDGE_X)for(let y=21;y<27;y++)VSEG[bi(bx,y)]=1;
+  buildCityCoasts();
+  ROAD.fill(0);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++) {
+    const lx=x&7,ly=y&7,bx=x>>3,by=y>>3;
+    let road = 0;
+    if (lx < 2 && ly < 2) road = degree(bx, by) ? 3 : 0;
+    else if (lx < 2 && vseg(bx, by)) road = 1;
+    else if (ly < 2 && hseg(bx, by)) road = 2;
+    ROAD[idx(x, y)] = road;
+  }
+  for (let y = 0; y < NB; y++) for (let x = 0; x < NB; x++) {
+    const k = bi(x, y);
+    if (DIST[k] === 'sea' && CITY_ISLANDS.some(o => cityIslandEdge(x * 8 + 4, y * 8 + 4, o) > -4)) {
+      DIST[k] = KIND[k] = 'waterfront';
+    }
+  }
+  // Junctions moved with their neighboring lots; rebuild poles on the new grid.
+  lights.length = 0;
+  for (let y = 0; y < NB; y++) for (let x = 0; x < NB; x++) {
+    if (degree(x, y) < 3) continue;
+    const bx = x * 8, by = y * 8;
+    if (vseg(x, y - 1)) lights.push({ x: bx + 2 - CURB, y: by - .25, vert: true, bx, by });
+    if (vseg(x, y)) lights.push({ x: bx + CURB, y: by + 2.25, vert: true, bx, by });
+    if (hseg(x - 1, y)) lights.push({ x: bx - .25, y: by + CURB, vert: false, bx, by });
+    if (hseg(x, y)) lights.push({ x: bx + 2.25, y: by + 2 - CURB, vert: false, bx, by });
+  }
+  // Outdated seam structure is replaced with the raised crossings below.
+  bridgeBits.length = towers.length = boats.length = 0;
+  for (let y = 80; y < 380; y += 2) for (let x = 56; x < 480; x += 2) {
+    if (!naturalCoastAt(x, y) || coastalGround(x, y).depth <= 2 || onPier(x, y) || ROAD[idx(x, y)] || hash(x, y, 736) >= .09) continue;
+    trees.push({ x, y, kind: hash(x, y, 737) > .4 ? 'pine' : 'birch', s: .8 + hash(x, y, 738) * .5, seed: hash(x, y, 739) });
+  }
+  for (let i = 0; i < 16; i++) {
+    let kind = 'sail';
+    if (i % 4 === 0) kind = 'ferry';
+    else if (i % 3 === 0) kind = 'tug';
+    boats.push({ kind, a: 140, b: 372, y: 187 + i % 3 * 4, sp: .15 + i % 4 * .04, ph: i / 16 });
+  }
+  buildWildIslandFields();
+  buildWildIslands();
+  function rebucket(b, items) {
+    const fresh = bucketed(items);
+    b.length = fresh.length;
+    for (let i = 0; i < fresh.length; i++) b[i] = fresh[i];
+  }
+  for(const [b,items]of [[lampsB,lamps],[treesB,trees],[benchesB,benches],[extrasB,extras],[solidsB,solids],[lanternsB,lanterns],[machinesB,machines],[roofsB,roofs],
+    [architectureBuildingsB,ARCH_BUILDINGS],[architectureDetailsB,ARCH_DETAILS],[architectureBlockersB,ARCH_BLOCKERS],[architectureStepsB,ARCH_STEPS],
+    [landmarkSolidsB,LANDMARK_SOLIDS],[landmarkBlockersB,LANDMARK_BLOCKERS],[pavilionSolidsB,PAVILION_SOLIDS],[belleBuildingsB,belleRoofs],[belleDetailsB,belleDetails],
+    [doorsB,doors],[lightsB,lights],[elPillarsB,elPillars],[bridgeB,bridgeBits],
+    [courierSceneryB,COURIER_SCENERY],[courierSignsB,COURIER_SIGNS],[courierSurfacesB,COURIER_SURFACES],[courierRodsB,COURIER_RODS],[courierLatticeB,COURIER_LATTICE],[courierBulbsB,COURIER_BULBS]])rebucket(b,items);
+  routeCache.clear();POND_SD.clear();
+  GN=N/2;carGrid=Array.from({length:GN*GN+1},()=>[]);pplGrid=Array.from({length:GN*GN+1},()=>[]);
+  for (const c of cars) {
+    delete c.sceneKey;
+    delete c.route;
+    c.dest = c.nh = null;
+    plan(c);
+  }
+  TERRAIN_N = N * TERRAIN_SCALE;
+  terrainHeights = new Float32Array(TERRAIN_N * TERRAIN_N + 1);
+  terrainCells = new Uint8Array(N * N + 1);
+  buildTerrain();
+  buildIslandScenery();
+  CITY_LAYOUT_CHECKPOINT={...originalCounts,layout:CITY_LAYOUT_ID};
+}
+let CITY_LAYOUT_CHECKPOINT=null;
+assembleArchipelago();
 // ===== your save: money, tickets, what you carry, your storage unit and closet, and what you own (homes, and where
 // your cars and boats are), how hungry, thirsty and hurt you are, the city time, and the last spot you stood on the
 // street, kept in localStorage every few seconds and when you leave. Not saved: the police (you start each visit clean).
 const SAVE_KEY = 'ascii-city-save';
-const SAVE_BACKUP_KEY = 'ascii-city-save-backup-v1-coastal-v1';
+let SAVE_BACKUP_KEY = worldReady ? 'ascii-city-save-backup-v2-coastal-v1' : 'ascii-city-save-backup-v1-coastal-v1';
 let citySaveBlocked = false; // protect an unrecognized save or one whose backup could not be written
 let citySaveBackupPending = null;
 function keepCitySaveBackup(text) {
@@ -30677,7 +32197,13 @@ function keepCitySaveBackup(text) {
 let streetSpot = null; // where you last were on foot outdoors (inside a shop or on a train, you come back out where you went in)
 function noteStreet() {
   if (mode === 'walk') streetSpot = { x: px, y: py, a };
+  else if(mode==='room'&&homeRecord(room)&&room.ret)streetSpot={x:room.ret[0],y:room.ret[1],a:room.ret[2]||0};
   else if (mode === 'drive' && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) };
+}
+function saveCityJourney() {
+  if(mode==='sea'&&sea&&(sea.hired||sea.deal==='mine'))return {kind:'boat',id:sea.id};
+  if(mode==='air'&&pilot?.owned&&!pilot.wrecked&&!pilot.ditched)return {kind:'aircraft',id:pilot.id};
+  return null;
 }
 function saveGame() {
   if (citySaveBackupPending != null && keepCitySaveBackup(citySaveBackupPending)) {
@@ -30692,6 +32218,7 @@ function saveGame() {
     courier: { job: courierJob, records: courierRecords },
     drugContacts,
     waypoint:mapWaypoint,
+    journey:saveCityJourney(),
     homes: savedCityHomes(), cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
 }
@@ -30702,8 +32229,12 @@ function loadGame() {
     text = localStorage.getItem(SAVE_KEY);
     if (text == null) return;
     prepared = prepareCitySave(JSON.parse(text));
+    if (prepared && !prepared.upgraded) for (const key of ['ascii-city-save-backup-v3-archipelago-v1','ascii-city-save-backup-v4-archipelago-v2']) {
+      if (localStorage.getItem(key) != null) SAVE_BACKUP_KEY = key;
+    }
   } catch (e) { citySaveBlocked = true; return; }
   if (!prepared) { citySaveBlocked = true; return; }
+  if (prepared.backupKey) SAVE_BACKUP_KEY = prepared.backupKey;
   citySaveBlocked = true;
   // Still load progress if storage is full, but retry the backup before allowing any overwrite.
   if (prepared.upgraded && !keepCitySaveBackup(text)) citySaveBackupPending = text;
@@ -30734,7 +32265,7 @@ function loadGame() {
     decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY),
     fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
     workshop: restoreWorkshop(h.workshop,h.kind),
-    door: Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => mod(v, N)) : null,
+    door: Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => worldCoord(v)) : null,
     pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
   }
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) {
@@ -30760,7 +32291,14 @@ function loadGame() {
   if (isFinite(d.boxRank)) boxRank = clamp(d.boxRank | 0, 0, BOXERS.length);
   const at = d.at;
   if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
-    px = mod(at.x, N); py = mod(at.y, N); a = at.a || 0; streetSpot = { x: px, y: py, a };
+    px = worldCoord(at.x); py = worldCoord(at.y); a = at.a || 0; streetSpot = { x: px, y: py, a };
+  }
+  if(d.journey?.kind==='boat') {
+    const boat=fleet.find(b=>b.id===d.journey.id&&(b.hired||b.deal==='mine'));
+    if(boat&&waterClear(boat,boat.x,boat.y,boat.hx,boat.hy))boardBoat(boat);
+  } else if(d.journey?.kind==='aircraft') {
+    const craft=aircraft.find(c=>c.id===d.journey.id&&c.owned&&!c.wrecked&&!c.ditched);
+    if(craft){pilot=craft;mode='air';craft.state='flown';px=craft.x;py=craft.y;airCamYaw=craft.yaw;}
   }
   citySaveBlocked = citySaveBackupPending != null;
 }
@@ -30913,7 +32451,7 @@ const free = (x, y) => {
   if (mode === 'walk') { const st = elStairStep(px, py, x, y, elPass); if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))]; } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))]; // (high above the lamps, booths and fences)
-  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
+  return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
@@ -30935,8 +32473,8 @@ function leaveTireMarks(c, hx, hy, oldX, oldY) {
   const mx = rel(c.x - oldX), my = rel(c.y - oldY), length = Math.hypot(mx, my);
   if (length < 0.008 || length > 0.2) return;
   for (const side of [-1, 1]) tireMarks.push({
-    x: mod(oldX + mx / 2 - hx * 0.13 - hy * side * 0.085, N),
-    y: mod(oldY + my / 2 - hy * 0.13 + hx * side * 0.085, N),
+    x: worldCoord(oldX + mx / 2 - hx * 0.13 - hy * side * 0.085),
+    y: worldCoord(oldY + my / 2 - hy * 0.13 + hx * side * 0.085),
     c: mx / length, s: my / length, hl: length / 2 + 0.005, t: T
   });
   if (tireMarks.length > 256) tireMarks.splice(0, tireMarks.length - 256);
@@ -31017,7 +32555,7 @@ function drive(dt) {
     else if (sp > 0.2 && actx) tone(actx.currentTime, 70, 0.12, 0.08 * sp); // a soft thud
     if (bodyHit || hitCar) a = oldA;
     c.v = 0; c.travelA = a;
-  } else { c.x = mod(nx, N); c.y = mod(ny, N); if (drifting) leaveTireMarks(c, hx, hy, oldX, oldY); }
+  } else { c.x = worldCoord(nx); c.y = worldCoord(ny); if (drifting) leaveTireMarks(c, hx, hy, oldX, oldY); }
   c.hx = Math.cos(a); c.hy = Math.sin(a); c.ex = c.x; c.ey = c.y; c.brake = f < 0 || handbrake; px = c.x; py = c.y;
   const road = ROAD[idx(Math.floor(c.x), Math.floor(c.y))]; // into a junction on red, right in front of a cop
   if (road === 3 && c.lastRoad && c.lastRoad !== 3 && Math.abs(c.v) > 0.4) {
@@ -31078,7 +32616,7 @@ function loop(t) {
   else if (mode === 'air') { if (!sleep) stepFlight(dt); } // (flight.js)
   else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
     a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
-    px = mod(elRiding().x + ride.off, N);
+    px = worldCoord(elRiding().x + ride.off);
   }
   stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
@@ -31190,7 +32728,7 @@ function gotoShop(word) {
     }
   }
   if (!best) return say(`No ${word} in town.`);
-  px = mod(best.x, N); py = mod(best.y, N); a = best.a; pitch = 0;
+  px = worldCoord(best.x); py = worldCoord(best.y); a = best.a; pitch = 0;
   say(`Outside ${word}. ${openAt(best.sh, tod) ? 'Walk up and press E.' : `Closed, opens at ${best.sh.hours[0]}:00.`}`, 5);
 }
 { const w = new URLSearchParams(location.search).get('goto'); if (w) gotoShop(w.toUpperCase()); }
@@ -31244,7 +32782,7 @@ function keyDown(code) { onkeydown({ code, repeat: false }); }
 function keyUp(code) { onkeyup({ code }); }
 
 // the big button's label: what E does here, as a word or two (from the prompt line, so it always agrees with it)
-const E_WORDS = [[/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
+const E_WORDS = [[/^knock/, 'Knock'], [/^read/, 'Read'], [/^talk/, 'Talk'], [/^hand it over/, 'Give'], [/^(get in|take this car)/, 'Get in'], [/^get out/, 'Get out'],
   [/^get off/, 'Get off'], [/^board/, 'Board'], [/^pick up/, 'Pick up'], [/^buy/, 'Buy'], [/^(shop|bait)/, 'Shop'], [/^cook/, 'Cook'], [/^play/, 'Play'],
   [/^(enter|go into|go in)/, 'Enter'], [/^go down|stairs down|take the stairs down|back down/, 'Go down'], [/^up/, 'Go up'],
   [/^elevator/, 'Elevator'], [/^leave|the guard lets you out/, 'Exit'], [/^sleep/, 'Sleep'], [/^your closet/, 'Closet'],

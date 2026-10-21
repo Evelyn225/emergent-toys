@@ -93,7 +93,7 @@ function callWorkshopSupplier(home=workshopHome()||nearestWorkshopHome()) {
   let point=null;
   const offsets=[.35,.6,1,1.5].flatMap(r=>[[r,0],[-r,0],[0,r],[0,-r],[r,r],[-r,r],[r,-r],[-r,-r]]);
   for(const [ox,oy] of offsets) {
-    const x=mod(door[0]+ox,N),y=mod(door[1]+oy,N);
+    const x=worldCoord(door[0]+ox),y=worldCoord(door[1]+oy);
     if(!map[idx(Math.floor(x),Math.floor(y))]&&!isWater(x,y)&&!architectureBlocked(x,y)&&!landmarkBlocked(x,y)&&!lampAt(x,y,.05)) {point=[x,y];break;}
   }
   if(!point){say('Mara cannot find a clear place by this building.',4);return false;}

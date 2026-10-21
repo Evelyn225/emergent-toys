@@ -401,7 +401,7 @@ function useHeld(near) {
       fx.bang = 1.2;
       if (wanted.stars > 0 && !wanted.busted) { // the cops wheel round toward the noise, and lose you for a moment
         const an = Math.random() * Math.PI * 2;
-        wanted.seen = false; wanted.lastX = mod(px + Math.cos(an) * 2.5, N); wanted.lastY = mod(py + Math.sin(an) * 2.5, N); wanted.hideT += 6;
+        wanted.seen = false; wanted.lastX = worldCoord(px + Math.cos(an) * 2.5); wanted.lastY = worldCoord(py + Math.sin(an) * 2.5); wanted.hideT += 6;
         return ['BANG BANG BANG BANG! You toss the firecrackers and slip away while every cop on the street turns toward the racket.', 'kick'];
       }
       for (const p of people) if (!p.hidden && Math.hypot(rel(p.x - px), rel(p.y - py)) < 0.8) p.talk = 3;
@@ -511,7 +511,7 @@ const ballBlocked = (x, y, z) => map[idx(Math.floor(x), Math.floor(y))] > z || z
 function kickBall(x, y, a, power = 2.6) {
   let d = 0; // set down just in front of you, short of any wall you're standing against
   while (d < 0.12 && !ballBlocked(x + Math.cos(a) * (d + 0.02), y + Math.sin(a) * (d + 0.02), 0.02)) d += 0.02;
-  ball = { x: mod(x + Math.cos(a) * d, N), y: mod(y + Math.sin(a) * d, N), vx: Math.cos(a) * power, vy: Math.sin(a) * power, z: 0.02, vz: power * 0.25 };
+  ball = { x: worldCoord(x + Math.cos(a) * d), y: worldCoord(y + Math.sin(a) * d), vx: Math.cos(a) * power, vy: Math.sin(a) * power, z: 0.02, vz: power * 0.25 };
 }
 function stepBall(dt) {
   if (!ball) return;
@@ -522,7 +522,7 @@ function stepBall(dt) {
   for (let s = 0; s < n; s++) for (const ax of ['x', 'y']) { // move one axis at a time, bouncing off whatever's solid
     const nx = ax === 'x' ? ball.x + ball.vx * dt / n : ball.x, ny = ax === 'y' ? ball.y + ball.vy * dt / n : ball.y;
     if (ballBlocked(nx, ny, ball.z)) { if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
-    else { ball.x = mod(nx, N); ball.y = mod(ny, N); }
+    else { ball.x = worldCoord(nx); ball.y = worldCoord(ny); }
   }
   if (isWater(ball.x, ball.y) && ball.z === 0) { ball = null; return 'lost'; } // into the drink
   // dribbling: walk into it and it rolls on ahead of you

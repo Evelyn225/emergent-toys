@@ -37,7 +37,7 @@ function belleRoofInfill() {
   }
   return infill;
 }
-const BELLE_ROOF_INFILL = belleRoofInfill();
+let BELLE_ROOF_INFILL = belleRoofInfill();
 function belleRoofFootprint(b) {
   const width = b.x1 - b.x0, height = b.y1 - b.y0, cells = new Uint8Array(width * height);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
@@ -79,7 +79,7 @@ function belleFaceAt(mx, my, dir) {
   const k = idx(mx, my), cached = BELLE_FACES[dir][k];
   if (cached) return cached;
   // A removed neighbor can reveal a face absent from the initial geometry. Resolve it once against the current map.
-  const x = mod(mx, N), y = mod(my, N), sh = SHOP[k], height = map[k], [nx, ny] = ARCH_DIRECTIONS[dir];
+  const x = worldCoord(mx), y = worldCoord(my), sh = SHOP[k], height = map[k], [nx, ny] = ARCH_DIRECTIONS[dir];
   const side = ny ? 1 : 0, low = map[idx(x + nx, y + ny)];
   const same = step => {
     const xx = x + side * step, yy = y + (1 - side) * step, at = idx(xx, yy);

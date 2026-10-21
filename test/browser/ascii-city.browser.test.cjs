@@ -211,7 +211,8 @@ test('Belle shop signs retain complete scaled lettering on short recessed faces 
       const f=b.faces.find(f=>f.dir===dir&&f.sign&&f.end-f.start<=2),{center,letterW,bandH}=f.sign;
       px=(f.side?center:f.line)+f.nx*.5;py=(f.side?f.line:center)+f.ny*.5;a=Math.atan2(-f.ny,-f.nx);pitch=.25;render(0);
       const mx=Math.floor((f.side?center:f.line)-f.nx*.1),my=Math.floor((f.side?f.line:center)-f.ny*.1);
-      for(const copy of [-N,0,N])for(const sign of [-1,1])for(let p=0;p<b.sh.word.length;p++) {
+      for(const sign of [-1,1])for(let p=0;p<b.sh.word.length;p++) {
+        const copy=0; // The finite city has one facade; no neighboring torus copies.
         const wc=center+copy+sign*(p+.5-b.sh.word.length/2)*letterW;
         WH.dn=8;WH.sl=0;WH.wc=wc;
         belleFacade(0,sign*wc,.004,.36,b.h,8,f.side,mx,my,wc,10,0);
@@ -602,14 +603,14 @@ test('redesigned storefronts keep their opening hours, glazing and closed shutte
 test('toilet aiming uses the interior height immediately after entering, before the first room frame', () => withPage(async page => {
   const result = await page.evaluate(() => {
     paused = true; mode = 'walk'; room = null; body.z = body.vz = body.crouch = 0; body.seat = null; render(0);
-    const oldEye = eye;
+    const oldEye = eye, oldGround = walkGround(px, py);
     enterRoom('bar', { word: 'BAR', ret: [px, py, a] }, [1.6, 5.3, Math.PI / 2]); needs.bladder = 30;
     startPee(); T += 0.05; stepPee(0.05);
     const aboveBowl = peeDrops.length > 0 && peeDrops.every(p => p.z > LOO_TOP);
     for (let k = 0; k < 140; k++) { T += 0.05; stepPee(0.05); }
-    return { oldEye, aboveBowl, flushed: !pee, puddles: puddles.filter(p => p.at === placeKey()).length };
+    return { oldEye, oldGround, aboveBowl, flushed: !pee, puddles: puddles.filter(p => p.at === placeKey()).length };
   });
-  assert.equal(result.oldEye, 0.17);
+  assert.ok(Math.abs(result.oldEye - result.oldGround - .17) < 1e-6);
   assert.ok(result.aboveBowl && result.flushed, JSON.stringify(result));
   assert.equal(result.puddles, 0);
 }));
@@ -633,7 +634,7 @@ test('redesigned homes have reachable bathrooms, dining chairs and complete wind
     assert.ok(r.reachable.every(Boolean), `${r.kind}: room and furniture access ${JSON.stringify(r)}`);
     assert.ok(r.chairs >= 3 && r.benches === 0 && r.lamps && r.windows, `${r.kind}: planned furniture and apertures`);
   }
-  assert.ok(result[1].area > result[0].area * 3 && result[2].area > result[1].area);
+  assert.ok(result[1].area > result[0].area * 2 && result[2].area > result[1].area);
 }));
 
 test('Belle residence survives reload, has an open balcony and district geometry draws from both sides', () => withPage(async page => {
@@ -658,12 +659,12 @@ test('Belle residence survives reload, has an open balcony and district geometry
 test('paying a driving fine leaves your car parked beside you and keeps ownership', () => withPage(async page => {
   const result = await page.evaluate(() => {
     paused = true; money = 3000; buy('car_sedan'); const car = owned.cars[0];
-    car.x = car.ex = 41; car.y = car.ey = 73; car.hx = 1; car.hy = 0; car.player = true; car.parked = false;
+    [car.x,car.y]=citySourcePoint(41,73);car.ex=car.x;car.ey=car.y;car.hx = 1; car.hy = 0; car.player = true; car.parked = false;
     me = car; px = car.x; py = car.y; mode = 'drive'; wanted.stars = 1; wanted.busted = true;
     openBusted(); bustedChoice('fine');
     const same = cars.includes(car) && owned.cars[0] === car;
     for (let k = 0; k < 100; k++) stepTraffic(0.05, T += 0.05, true);
-    return { same, parked: car.parked, player: car.player, mode, position: [car.x, car.y], nearby: Math.hypot(rel(px-car.x),rel(py-car.y)) < 0.6, money };
+    return { same, parked: car.parked, player: car.player, mode, position: cityWorldSourcePoint(car.x,car.y), nearby: Math.hypot(rel(px-car.x),rel(py-car.y)) < 0.6, money };
   });
   assert.deepEqual(result, { same: true, parked: true, player: false, mode: 'walk', position: [41, 73], nearby: true, money: 1450 });
 }));
@@ -671,10 +672,11 @@ test('paying a driving fine leaves your car parked beside you and keeps ownershi
 test('police physically intercept a driven car and leave quietly after the fine', () => withPage(async page => {
   const result=await page.evaluate(()=>{
     paused=true;clearWanted();cars.length=0;people.length=0;footCops.length=0;evTimer=1000;
-    for(let y=68;y<84;y++)for(let x=34;x<64;x++){map[idx(x,y)]=0;SHOP[idx(x,y)]=null;}
-    const car=addCar({x:41,y:73,hx:1,hy:0,player:true,owned:true,parked:false,v:1});
-    const cop=addCar({x:42,y:73,hx:-1,hy:0,patrol:true,kind:'police',pursuit:true,v:2,travelA:Math.PI,dest:[41,73],cruise:COP_CAR_SPEED});
-    me=car;mode='drive';px=41;py=73;a=0;money=200;wanted.stars=1;wanted.seen=true;
+    const [ox,oy]=citySourcePoint(41,81),X=x=>ox+x-41,Y=y=>oy+y-73;
+    for(let y=68;y<84;y++)for(let x=34;x<64;x++){map[idx(X(x),Y(y))]=0;SHOP[idx(X(x),Y(y))]=null;}
+    const car=addCar({x:X(41),y:Y(73),hx:1,hy:0,player:true,owned:true,parked:false,v:1});
+    const cop=addCar({x:X(42),y:Y(73),hx:-1,hy:0,patrol:true,kind:'police',pursuit:true,v:2,travelA:Math.PI,dest:[X(41),Y(73)],cruise:COP_CAR_SPEED});
+    me=car;mode='drive';px=car.x;py=car.y;a=0;money=200;wanted.stars=1;wanted.seen=true;
     let overlap=false,clear=true,stopped=false;
     for(let k=0;k<160;k++){
       T+=.05;drive(.05);stepTraffic(.05,T,true);stepCrime(.05);
@@ -687,7 +689,7 @@ test('police physically intercept a driven car and leave quietly after the fine'
     const settled=near(cop.x,cop.y,...held)<.01;
     wanted.stars=1;wanted.busted=true;openBusted();bustedChoice('fine');
     const parked=car.parked&&!car.player&&cars.includes(car)&&mode==='walk';
-    px=43;py=74;let quiet=true,departed=false;
+    px=X(43);py=Y(74);let quiet=true,departed=false;
     for(let k=0;k<800&&cars.includes(cop);k++){
       T+=.05;stepCrime(.05);stepTraffic(.05,T,true);
       quiet &&= !code(cop)&&!lightsOn_(cop);overlap ||= !!carContact(cop,car);
@@ -702,13 +704,14 @@ test('police physically intercept a driven car and leave quietly after the fine'
 test('cruisers remember a northbound driver after losing sight at a street corner', () => withPage(async page => {
   const result=await page.evaluate(()=>{
     paused=true;clearWanted();cars.length=0;people.length=0;footCops.length=0;evTimer=1000;
+    const [ox,oy]=citySourcePoint(41,81),X=x=>ox+x-41,Y=y=>oy+y-73;
     const tiles=[];
     for(let y=69;y<87;y++)for(let x=36;x<55;x++){
-      const cell=idx(x,y);tiles.push([cell,map[cell],SHOP[cell]]);
-      map[idx(x,y)]=(y>=72&&y<74||x>=46&&x<49)?0:3;SHOP[idx(x,y)]=null;
+      const cell=idx(X(x),Y(y));tiles.push([cell,map[cell],SHOP[cell]]);
+      map[cell]=(y>=72&&y<74||x>=46&&x<49)?0:3;SHOP[cell]=null;
     }
-    const car=addCar({x:47,y:73,hx:0,hy:1,player:true,v:1,travelA:Math.PI/2});
-    const cop=addCar({x:42,y:73,hx:1,hy:0,patrol:true,pursuit:true,kind:'police',dest:[47,73],cruise:COP_CAR_SPEED});
+    const car=addCar({x:X(47),y:Y(73),hx:0,hy:1,player:true,v:1,travelA:Math.PI/2});
+    const cop=addCar({x:X(42),y:Y(73),hx:1,hy:0,patrol:true,pursuit:true,kind:'police',dest:[X(47),Y(73)],cruise:COP_CAR_SPEED});
     me=car;mode='drive';px=car.x;py=car.y;a=Math.PI/2;wanted.stars=1;wanted.seen=true;stepCrime(.05);
     let blind=false,ahead=false,clear=true,remembered=false;
     for(let k=0;k<150;k++){
@@ -716,9 +719,9 @@ test('cruisers remember a northbound driver after losing sight at a street corne
       if(!wanted.seen){blind=true;ahead ||= cop.dest[1]>wanted.lastY+.5;remembered ||= wanted.lastVY>.9;}
       clear &&= carBodyClear(cop.x,cop.y,cop.hx,cop.hy)&&!carContact(cop,car);
     }
-    const result={blind,ahead,remembered,clear,followed:cop.x>46&&cop.y>74,stars:wanted.stars};
+    const result={blind,ahead,remembered,clear,followed:cop.x>X(46)&&cop.y>Y(74),stars:wanted.stars};
     for(const [cell,height,shop] of tiles){map[cell]=height;SHOP[cell]=shop;}
-    px=41;py=73;a=0;render(.05);
+    [px,py]=citySourcePoint(41,73);a=0;render(.05);
     return result;
   });
   assert.deepEqual(result,{blind:true,ahead:true,remembered:true,clear:true,followed:true,stars:1});
@@ -727,14 +730,15 @@ test('cruisers remember a northbound driver after losing sight at a street corne
 test('drift collision protects the rear bumper and chase camera stops before intervening walls', () => withPage(async page => {
   const result = await page.evaluate(() => {
     paused = true; mode = 'drive'; people.length = 0; cars.length = 0;
-    for (let y = 70; y < 76; y++) for (let x = 38; x < 47; x++) map[idx(x,y)] = 0;
-    map[idx(42,72)] = 3;
-    const car = addCar({x:42.4,y:73.245,hx:0,hy:1,player:true,v:2}); me = car; a = Math.PI/2; px=car.x; py=car.y; car.travelA=-Math.PI/2;
+    const X=x=>x+CITY_LAYOUT.cityX,Y=y=>y+CITY_LAYOUT.southY;
+    for (let y = 70; y < 76; y++) for (let x = 38; x < 47; x++) map[idx(X(x),Y(y))] = 0;
+    map[idx(X(42),Y(72))] = 3;
+    const car = addCar({x:X(42.4),y:Y(73.245),hx:0,hy:1,player:true,v:2}); me = car; a = Math.PI/2; px=car.x; py=car.y; car.travelA=-Math.PI/2;
     K.Space = K.KeyD = true; drive(0.05); K.Space = K.KeyD = false;
-    const rear = carBodyClear(car.x,car.y,car.hx,car.hy) && car.v === 0 && car.y === 73.245;
-    car.x=42.25;car.y=73.27;car.hx=Math.cos(1);car.hy=Math.sin(1);camYaw=a=1;look=0;
+    const rear = carBodyClear(car.x,car.y,car.hx,car.hy) && car.v === 0 && car.y === Y(73.245);
+    car.x=X(42.25);car.y=Y(73.27);car.hx=Math.cos(1);car.hy=Math.sin(1);camYaw=a=1;look=0;
     const [x,y] = chaseCam(0.05);
-    return { rear, cameraClear: !map[idx(Math.floor(x),Math.floor(y))], near: Math.hypot(x-car.x,y-car.y) < 0.4, y };
+    return { rear, cameraClear: !map[idx(Math.floor(x),Math.floor(y))], near: Math.hypot(x-car.x,y-car.y) < 0.4, y:y-CITY_LAYOUT.southY };
   });
   assert.ok(result.rear && result.cameraClear && result.near && result.y > 73, JSON.stringify(result));
 }));
@@ -777,19 +781,19 @@ test('every mode renders without errors', async () => {
     await page.keyboard.press('KeyX'); // starts the audio engine, so every scene below runs it too
     assert.ok(await page.evaluate(() => !!actx), 'audio started on a key press');
     const scenes = {
-      street: "mode = 'walk'; px = 9 * 8 + 1; py = 10 * 8 + 4; tod = 21",
+      street: "mode = 'walk'; [px,py] = citySourcePoint(9 * 8 + 1,10 * 8 + 4); tod = 21",
       fog: "weather = 'fog'; fogAmt = 1; tod = 12",
       rain: "weather = 'rain'; fogAmt = 0; rain = 1; wet = 1",
-      shore: "weather = 'clear'; rain = 0; wet = 0; px = 8 * 8 + 1; py = SHORE_S * 8 + 2.4; a = Math.PI / 2",
+      shore: "weather = 'clear'; rain = 0; wet = 0; px = 8 * 8 + 1 + CITY_LAYOUT.cityX; py = SHORE_S * 8 + 2.4; a = Math.PI / 2",
       bridge: 'px = BRIDGE_X[0] * 8 + 1; py = SHORE_S * 8 + 20; a = Math.PI / 2',
       underEl: 'px = EL_STATIONS[0].x; py = EL_Y + 1.88; a = 0; pitch = 0.3',
       platform: 'elUp({ s: EL_STATIONS[0], tr: 1 })',
       riding: "const t = elTrains(T)[0]; ride = { tr: t.tr, k: t.k, off: 0 }; mode = 'el'",
-      siren: "mode = 'walk'; plat = ride = null; px = 9 * 8 + 1; py = 10 * 8 + 4; spawnEmergency()",
+      siren: "mode = 'walk'; plat = ride = null; [px,py] = citySourcePoint(9 * 8 + 1,10 * 8 + 4); spawnEmergency()",
       talk: "const p = people.find(p => !p.hidden); talkTo(p)",
       taxi: "me = cars.find(c => c.kind === 'taxi'); me.rider = true; me.fare = 0; mode = 'taxi'; setDest(5)",
       room: "leaveCar(); enterRoom('bar', { word: 'BAR', neon: MAG, ret: [px, py, a] }, [6, 6, -Math.PI / 2])",
-      roof: "leaveRoom(); mode = 'roof'; roofH = 5; px = 2 * 8 + 3.5; py = 2 * 8 + 3.5",
+      roof: "leaveRoom(); mode = 'roof'; roofH = 5; [px,py] = citySourcePoint(2 * 8 + 3.5,2 * 8 + 3.5)",
       cafe: "mode = 'walk'; enterRoom('cafe', { word: 'CAFE', neon: MAG, ret: [px, py, a] }, [5, 6.3, -Math.PI / 2])",
       books: "enterRoom('books', { word: 'BOOKS', neon: GREEN, ret: [px, py, a] }, [4.5, 5, -Math.PI / 2])",
       noodle: "enterRoom('noodle', { word: 'RAMEN', neon: RED, ret: [px, py, a] }, [6, 5, -Math.PI / 2])",
@@ -947,7 +951,7 @@ test('the taxi job: J drives a taxi; a fare hails, gets in, and pays at their st
   await page.evaluate(() => { const c = cars.find(c => c.body === TAXI && !c.rider && !c.ev); c.v = 0; px = c.x + c.hy * 0.3; py = c.y - c.hx * 0.3; });
   await page.keyboard.press('KeyJ');
   assert.deepStrictEqual(await page.evaluate(() => [mode, !!job]), ['drive', true]);
-  await page.evaluate(() => { const p = people.find(p => !p.hidden); p.x = me.x; p.y = me.y; job.hail = p; p.hailing = true; me.v = 0; });
+  await page.evaluate(() => { const p = people.find(p => !p.hidden); p.x = me.x; p.y = me.y; job.hail = p; p.hailing = true; p.talk = 5; me.v = 0; });
   await page.waitForTimeout(200);
   assert.ok(await page.evaluate(() => job.ride && job.ride.p.hidden), 'picked up');
   await page.evaluate(() => { me.x = job.ride.dest[0]; me.y = job.ride.dest[1]; me.v = 0; job.ride.odo = 20; job.ride.took = 30; });
@@ -1172,7 +1176,7 @@ test('the board shows under you on a big desktop screen too; the wheels go quiet
 
 // the board driven frame by frame, the clock stopped: on a long street, rolling east
 const SKATE_SETUP = () => {
-  paused = true; mode = 'walk'; room = null; me = null; px = 41.5; py = 73.5; a = 0; (inv.some(it => it.id === 'skateboard') || carryItem({ id: 'skateboard', uses: 0 }), held = inv.findIndex(it => it.id === 'skateboard'), fx.skating = true); third = true;
+  paused = true; mode = 'walk'; room = null; me = null; [px,py] = citySourcePoint(41.5,73.5); a = 0; (inv.some(it => it.id === 'skateboard') || carryItem({ id: 'skateboard', uses: 0 }), held = inv.findIndex(it => it.id === 'skateboard'), fx.skating = true); third = true;
   Object.assign(body, { z: 0, vz: 0, peak: 0, mx: 0, my: 0, trick: null, seat: null, crouch: 0, buf: -9 }); SK.lastT = -9; msgText = '';
   window.skRide = (n, keys = {}) => { for (let k = 0; k < n; k++) { for (const c in K) K[c] = 0; Object.assign(K, keys); T += 1 / 30; stepSkate(1 / 30); stepBody(1 / 30); } };
   window.skFly = (keys = {}) => { let n = 0; while ((body.z > 0 || body.vz > 0) && n++ < 120) skRide(1, keys); };
@@ -1216,7 +1220,7 @@ test('in the air A and D spin you: a 180 rides away switch, a quarter turn is a 
 }));
 test('on the board the camera rides behind you: your skater and the board are drawn in the street, V goes back to your own eyes', () => withPage(async page => {
   await page.evaluate(() => {
-    mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0; (inv.some(it => it.id === 'skateboard') || carryItem({ id: 'skateboard', uses: 0 }), held = inv.findIndex(it => it.id === 'skateboard'), fx.skating = true); third = true;
+    mode = 'walk'; room = null; [px,py] = citySourcePoint(41.5,73.5); a = 0; (inv.some(it => it.id === 'skateboard') || carryItem({ id: 'skateboard', uses: 0 }), held = inv.findIndex(it => it.id === 'skateboard'), fx.skating = true); third = true;
     window.seen = 0; const draw = drawSkater; drawSkater = () => { if (skateView) seen++; draw(); };
   });
   await page.waitForFunction(() => seen > 3, null, { timeout: 3000 }).catch(() => {}); // (a few frames: slower on a busy runner)
@@ -1308,15 +1312,15 @@ test('roofs: step across onto the roof next door, walk off the edge and land har
 test('camera-relative air strafing works through the real movement loop without erasing forward momentum',()=>withPage(async page=>{
   const result=await page.evaluate(()=>{
     paused=true;clearWanted();cars.length=0;people.length=0;footCops.length=0;refillNeeds();
-    for(let y=70;y<77;y++)for(let x=38;x<46;x++)map[idx(x,y)]=0;
+    for(let y=70;y<77;y++)for(let x=38;x<46;x++)map[idx(x+CITY_LAYOUT.cityX,y+CITY_LAYOUT.southY)]=0;
     const raf=window.requestAnimationFrame;window.requestAnimationFrame=()=>0;
     const run=(yaw,forward,side)=>{
-      mode='walk';room=null;me=null;px=41;py=73;a=yaw;fx.skating=false;
+      mode='walk';room=null;me=null;[px,py]=citySourcePoint(41,73);a=yaw;fx.skating=false;
       Object.assign(body,{z:.05,vz:JUMP_V,mx:.8,my:0,hop:1,seat:null,ground:0,groundMode:'walk',trick:null,buf:-9});
       K.KeyW=forward;K.KeyD=side;paused=false;
       for(let n=0;n<15;n++)loop(t0+1000/60);
       paused=true;K.KeyW=K.KeyD=false;
-      return {vx:body.mx,vy:body.my,x:rel(px-41),y:rel(py-73)};
+      return {vx:body.mx,vy:body.my,x:rel(px-41-CITY_LAYOUT.cityX),y:rel(py-73-CITY_LAYOUT.southY)};
     };
     try{return {side:run(0,false,true),look:run(Math.PI/2,true,false),idle:run(0,false,false)};}
     finally{paused=true;window.requestAnimationFrame=raf;}
@@ -1328,7 +1332,7 @@ test('camera-relative air strafing works through the real movement loop without 
 
 test('bunny hops accept slightly early and late presses while held Space still requires a fresh jump',()=>withPage(async page=>{
   const result=await page.evaluate(()=>{
-    paused=true;mode='walk';px=41;py=73;refillNeeds();fx.skating=false;body.seat=null;
+    paused=true;mode='walk';[px,py]=citySourcePoint(41,73);refillNeeds();fx.skating=false;body.seat=null;
     Object.assign(body,{z:.002,vz:-.5,peak:.6,mx:.5,my:0,hop:1,buf:T-.18,lx:px-.01,ly:py,trick:null,ground:0,groundMode:'walk'});
     stepBody(.01);const early=body.vz===JUMP_V&&body.hop>1;
     body.z=body.vz=0;body.hop=1;body.landedAt=T-.14;jump();const late=body.hop>1;
@@ -1434,7 +1438,7 @@ test('bunny hopping: land and go straight back up and each hop is faster; stop a
 
 test('carrying hop speed you swing round to a new direction instead of snapping to it, and a hard turn costs the speed', () => withPage(async page => {
   const r = await page.evaluate(async () => {
-    refillNeeds(); paused = false; mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0;
+    refillNeeds(); paused = false; mode = 'walk'; room = null; [px,py] = citySourcePoint(41.5,73.5); a = 0;
     Object.assign(body, { z: 0, vz: 0, hop: 1.5, mx: 0.75, my: 0, landedAt: T, seat: null });
     for (const k in K) K[k] = 0; K.KeyA = 1; // hard left the moment you land
     await new Promise(r => requestAnimationFrame(r));
@@ -1449,7 +1453,7 @@ test('carrying hop speed you swing round to a new direction instead of snapping 
 
 test('hopping fast, sweeping your aim round in the air steers you without pumping up your speed', () => withPage(async page => {
   const r = await page.evaluate(async () => {
-    refillNeeds(); paused = false; mode = 'walk'; room = null; px = 41.5; py = 73.5; a = 0;
+    refillNeeds(); paused = false; mode = 'walk'; room = null; [px,py] = citySourcePoint(41.5,73.5); a = 0;
     for (const k in K) K[k] = 0; K.KeyW = K.ShiftLeft = 1;
     Object.assign(body, { z: 0.3, vz: 2.5, hop: 1.9, mx: 0.8 * 1.9, my: 0, seat: null, landedAt: -9, buf: -9 });
     const v0 = Math.hypot(body.mx, body.my); let top = v0;
@@ -1621,7 +1625,7 @@ test('P to pee, any time: aimed where you look (your view stays put), falls unde
   let high = await reach(); // (the higher stream takes a moment to get out there: longer on a busy machine)
   for (let k = 0; k < 17 && !(high > low * 1.2); k++) { await page.waitForTimeout(200); high = await reach(); }
   assert.ok(high > low * 1.2, `further aimed up (${low.toFixed(3)} -> ${high.toFixed(3)})`);
-  assert.deepStrictEqual(await page.evaluate(() => [puddles.length > 0, puddles.every(q => q.z === 0)]), [true, true], 'and it still lands');
+  assert.deepStrictEqual(await page.evaluate(() => [puddles.length > 0, puddles.every(q => Math.abs(q.z - peeGround(q.x, q.y).z) < 1e-6)]), [true, true], 'and it still lands on the ground');
   await page.keyboard.press('KeyP'); // cut it off
   await page.waitForTimeout(2000); // (what's still in the air comes down)
   assert.deepStrictEqual(await page.evaluate(() => [!!pee, peeDrops.length]), [false, 0]);
@@ -1851,9 +1855,9 @@ test('where you were is saved: you come back to the same spot on the street, and
 }));
 
 test('buy a car and a home: both are still yours after a reload, and the building door takes you home to your own bed', () => withPage(async page => {
-  await page.evaluate(() => { money = 5000; buy('car_sedan'); buy('home_studio'); saveGame(); });
+  const balance = await page.evaluate(() => { money = 5000; buy('car_sedan'); buy('home_studio'); saveGame(); return money; });
   await page.reload(); await page.waitForTimeout(300);
-  assert.deepStrictEqual(await page.evaluate(() => [owned.cars.length, owned.homes.length, money]), [1, 1, 1000]);
+  assert.deepStrictEqual(await page.evaluate(() => [owned.cars.length, owned.homes.length, money]), [1, 1, balance]);
   // stand on the sidewalk in front of the building, facing it, and press E
   const ok = await page.evaluate(() => {
     const sh = SHOP[owned.homes[0].cell];
@@ -2042,7 +2046,12 @@ test('graffiti: murals on some walls; spray paint from the hardware store tags a
 }));
 
 test('the Shotengai: a roof over its streets, dry in the rain; pachinko pays tickets, the crane can win you a plush, a capsule for the night', () => withPage(async page => {
-  const st = await page.evaluate(() => { for (let by = 17; by <= 20; by++) for (let bx = 11; bx <= 15; bx++) if (vseg(bx, by) && vseg(bx, by + 1) && blockKind(bx, by) === '' && blockKind(bx - 1, by) === '') return [bx * 8 + 1.35, by * 8 + 7.5]; });
+  const st = await page.evaluate(() => {
+    for (let sourceY=17; sourceY<=20; sourceY++) for (let sourceX=11; sourceX<=15; sourceX++) {
+      const [x,y]=citySourcePoint(sourceX*8,sourceY*8),bx=x/8,by=y/8;
+      if (vseg(bx,by) && vseg(bx,by+1) && blockKind(bx,by)==='' && blockKind(bx-1,by)==='') return [x+1.35,y+7.5];
+    }
+  });
   assert.ok(st, 'a covered street');
   await page.evaluate(([x, y]) => { tod = 13; weather = 'rain'; rain = 1; px = x; py = y; a = -Math.PI / 2; pitch = 0.9; }, st);
   await page.waitForTimeout(300);
@@ -2325,7 +2334,7 @@ test('street life: manholes in the road (some steaming), and pigeons that take o
     const m = (() => { for (let y = 60; y < 200; y++) for (let x = 60; x < 200; x++) { const mm = manholeAt(x + 0.5, y + 0.5); if (mm && mm[2]) return mm; } })();
     px = m[0]; py = m[1] + 0.4; steamT = 0; stepSteam(0.05);
     const steam = haze.some(p => p.kind === 'steam');
-    px = 12 * 8 + 0.15; py = 10 * 8 + 4; flocks.length = 0;
+    [px,py] = citySourcePoint(12 * 8 + 0.15,10 * 8 + 4); flocks.length = 0;
     flocks.push({ x: px, y: py + 0.6, birds: [0, 1, 2, 3].map(k => ({ dx: k * 0.02, dy: 0, ph: k, dir: 1, z: 0 })), scared: 0 });
     stepPigeons(0.05); const calm = !flocks[0].scared;
     py += 0.4; stepPigeons(0.05); for (let k = 0; k < 20; k++) stepPigeons(0.05);

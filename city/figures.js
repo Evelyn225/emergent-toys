@@ -610,7 +610,7 @@ const ANIMAL_BODIES = {
 const DOG_LOOKS = new Map();
 const dogLook = col => DOG_LOOKS.get(col) || DOG_LOOKS.set(col, animalLook('dog', { body: [col, 9], wing: [col, 6], pale: [col, 12], leg: [col, 8], mark: [RED, 10], beak: [GRAY, 1], pupil: [GRAY, 0], tongue: [MAG, 11] })).get(col);
 // a dog (vx, vy) from you, facing (fx, fy); s: how big (1 a mid-sized dog); frame: see ANIMAL_BODIES.dog
-const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0) => drawAnimal(vx, vy, 0, 0.13 * s, fx, fy, dogLook(col), frame);
+const drawDog = (vx, vy, fx, fy, col, s = 1, frame = 0, z = 0) => drawAnimal(vx, vy, z, 0.13 * s, fx, fy, dogLook(col), frame);
 // a dog's eyes: on the front of its head, either side above the muzzle (clear of the ears)
 const dogEyes = (hc, part) => [1, -1].map(sg => ({ p: fAdd(hc, [sg * 1, 1.55, 0.55]), n: [sg * 0.4, 1, 0.2], role: FR.EYE, part }));
 // a dog sitting up: haunches down, front legs straight, head up, tongue out, tail sweeping the floor (wag: -1 / 1)

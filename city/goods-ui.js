@@ -482,10 +482,20 @@ function dropHere() {
   if (!heldItem()) return;
   if (at === null) return say('Not up here.');
   const reach = mode === 'room' ? 0.7 : 0.09; // a step in front of you (rooms are in metres, the street in 10m cells)
-  const x = mode === 'room' ? px + Math.cos(a) * reach : mod(px + Math.cos(a) * reach, N), y = mode === 'room' ? py + Math.sin(a) * reach : mod(py + Math.sin(a) * reach, N);
-  say(`You put the ${dropHeldAt(x, y, at, mode === 'roof' ? roofH : 0)} down.`);
+  const x = mode === 'room' ? px + Math.cos(a) * reach : worldCoord(px + Math.cos(a) * reach), y = mode === 'room' ? py + Math.sin(a) * reach : worldCoord(py + Math.sin(a) * reach);
+  let z = 0;
+  if (mode === 'roof') z = roofH;
+  else if (mode !== 'room') z = outdoorGroundHeight(x, y);
+  say(`You put the ${dropHeldAt(x, y, at, z)} down.`);
 }
-const droppedHere = () => { const at = placeKey(); return at === null ? null : droppedNear(px, py, at, mode === 'room' ? 1.1 : 0.2, mode === 'roof' ? roofH : 0); };
+const droppedHere = () => {
+  const at = placeKey();
+  if (at === null) return null;
+  let z = 0;
+  if (mode === 'roof') z = roofH;
+  else if (mode !== 'room') z = outdoorGroundHeight(px, py);
+  return droppedNear(px, py, at, mode === 'room' ? 1.1 : 0.2, z);
+};
 // lying on the ground: the small item picture, shrunk to life size (s = world units per character: cells or metres)
 function drawDropped(d, vx, vy, s) {
   const [lines, col] = droppedArt(d), art = pad(lines.filter(l => l.length)), W = art[0].length;

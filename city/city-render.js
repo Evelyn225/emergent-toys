@@ -43,7 +43,7 @@ function belleFacade(i, u, uStep, z, h, d, side, mx, my, wc, L, glowL) {
   else dir = rel(px - mx) < 0 ? 2 : 3;
   const f = belleFaceAt(mx, my, dir);
   const start = f.start, end = f.end;
-  const wallAlong = mod(wc, N), along = wallAlong - start, width = end - start, bays = Math.max(1, Math.floor(width / 0.85)), spacing = width / bays;
+  const wallAlong = worldCoord(wc), along = wallAlong - start, width = end - start, bays = Math.max(1, Math.floor(width / 0.85)), spacing = width / bays;
   const bay = Math.floor(along / spacing), du = along - (bay + 0.5) * spacing, half = Math.min(0.23, spacing * 0.29);
   const base = [STONE, WHITE, GRAY, BRICK, STONE][b.material], grain = hash(Math.floor(wc * 7), Math.floor(z * 10), sk);
   const course = fract(z * 8), joint = fract(wc * 2 + (Math.floor(z * 8) & 1) * 0.5);
@@ -134,13 +134,14 @@ function grandHotelFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 // uStep = how far u moves between this screen column and the next
 function facade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const ah = arcadeRoofHit(z,side,mx,my,wc); // the Shotengai canopy occludes the painted wall behind it
-  if (ah) return arcadeRoofCell(i,mod(ah[0],N),mod(ah[1],N));
+  if (ah) return arcadeRoofCell(i,worldCoord(ah[0]),worldCoord(ah[1]));
   if (backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc)) return; // (a stretch of blank wall down a lane: backrooms.js)
   baseFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   graffitiCell(i,u,uStep,z,h,d,side,mx,my,fog,wc);
 }
 function baseFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   const k = idx(mx, my), sty = STY[k], sh = SHOP[k], sk = sk0(SEED[k]);
+  if(sh?.wilderness)return islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   if(sh?.courier)return courierFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc);
   if (sh?.gas) return gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc); // (gas-render.js)
   if (sty === 23) return museumFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc);
@@ -536,10 +537,11 @@ function floorBaseCell(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), f = Math.max(0, 1 - d / vis * 1.5);
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
-  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), road = ROAD[idx(mx, my)], shade = underEl(wy);
+  const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), shade = underEl(wy,wx);
+  const road = worldReady&&roadBridgeAt(wx,wy)&&seaAt(wx,wy)&&eye<roadGroundHeight(wx,wy)-.12 ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
-  let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false;
+  let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null;
   if (!road) { // not a street: parks, plazas, the waterfront, the sea...
     const kind = blockKind(bx, by);
     if (GAS_CELL[idx(mx, my)] === 1) return gasFloor(i, r, x, wx, wy, f, L); // a gas station's forecourt (gas-render.js)
@@ -557,7 +559,7 @@ function floorBaseCell(i, r, x, rx, ry) {
       soft = true; base = BRICK; k = 1.3;
       const e = Math.abs(rel(wx - FOOTBRIDGE.x)) / FOOTBRIDGE.hw;
       ch = e > 0.88 ? '|' : fract(wy * 5) < 0.2 ? '=' : '-';
-      const pool = lampsOn * Math.max(0, 1 - Math.abs(fract((mod(wy, N) - FOOTBRIDGE.y0 - 1.5) / FB_LAMP + 0.5) - 0.5) * FB_LAMP / 0.5);
+      const pool = lampsOn * Math.max(0, 1 - Math.abs(fract((worldCoord(wy) - FOOTBRIDGE.y0 - 1.5) / FB_LAMP + 0.5) - 0.5) * FB_LAMP / 0.5);
       if (pool > 0) { base = WARM; k = 1.3 + pool * 1.6; }
     } else if (onIsland(wx, wy)) { // the island: rocks round the shore, a gravel path out to the lighthouse, rough grass
       soft = true;
@@ -573,6 +575,14 @@ function floorBaseCell(i, r, x, rx, ry) {
       const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = isleEdge(wx, wy) > -0.3; // white water round the island
       set(i, surf ? '~' : n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', surf ? C(WHITE, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
+      if(worldReady&&wx>=465) {
+        const island=wildIslandAt(wx,wy,.65);
+        if(island) {
+          const edge=-wildIslandEdge(wx,wy,island),wash=.12+.18*Math.sin(T*.9+wx*.35+wy*.2);
+          BG[i]=C(CYAN,1+day*1.8);
+          if(edge<wash&&n>.4)set(i,'~',C(WHITE,L*1.15));
+        }
+      }
       if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her
         const froth = noise(wx * 7, wy * 7 + T * 0.8, 95), k = WAKE_HIT.k * (WAKE_HIT.arm ? 0.6 + 0.4 * froth : froth); // (churn: broken white water)
         if (k > 0.18) { set(i, k > 0.5 ? '~' : WAKE_HIT.arm ? '-' : ':', C(WHITE, Math.max(L * 1.5, 5 + k * 10))); BG[i] = C(BLUE, 1 + day * 3 + k * 1.6); FL[i] = 0; }
@@ -580,10 +590,18 @@ function floorBaseCell(i, r, x, rx, ry) {
       const lb = beamOnWater(wx, wy); // the lighthouse beam sweeping over it
       if (lb > 0.05) { BG[i] = C(WARM, 1 + lb * 7); if (CH[i] === ' ') CH[i] = '-'; COL[i] = C(YEL, 6 + lb * 9); FL[i] = 0; }
       return;
+    } else if (wildIslandAt(wx,wy)) {
+      islandTexture=islandSurface(wx,wy);soft=true;base=islandTexture.base;ch=islandTexture.ch;k=islandTexture.tone;
+    } else if (worldReady&&naturalCoastAt(wx,wy)) {
+      const coast=coastalGround(wx,wy);soft=true;
+      islandTexture=islandShoreSurface(wx,wy,coast.depth,coast.beach);
+      base=islandTexture.base;ch=islandTexture.ch;k=islandTexture.tone;
     } else if (kind === 'waterfront') {
       soft = true;
-      const south = (by & (NB - 1)) === SHORE_S, toWater = south ? shoreS(wx) - mod(wy, N) : mod(wy, N) - shoreN(wx);
-      const beach = hash(bx & (NB - 1), south ? 1 : 2, 47) < 0.35;
+      const south = (by & (NB - 1)) === SHORE_S;
+      const coast = worldReady ? coastalGround(wx,wy) : null;
+      const toWater = coast ? coast.depth : south ? shoreS(wx) - worldCoord(wy) : worldCoord(wy) - shoreN(wx);
+      const beach = coast ? coast.beach : hash(bx & (NB - 1), south ? 1 : 2, 47) < 0.35;
       if (toWater < 0.2 && !beach) { ch = '#'; k = 1.4; } // the sea wall
       else if (beach && toWater < 1.6) { // sand, and surf where it meets the water
         const surf = toWater < 0.25; ch = surf ? '~' : (r * 7 + x * 3) % 5 ? '.' : ':'; base = surf ? WHITE : YEL; k = surf ? 1.2 : 0.8;
@@ -623,6 +641,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   }
   let col = C(base, L * k);
   BG[i] = bgAt(base === GREEN || base === BLUE ? base : GRAY, day * 2.2 * f * (shade ? 0.4 : 1));
+  if(islandTexture)BG[i]=bgAt(islandTexture.background,day*(2.6*islandTexture.tone+(islandTexture.lift||0))*f,d);
   if (!soft && wet > 0.05 && snowCover < 0.2 && noise(wx * 3, wy * 3, 41) < wet * 0.5) FL[i] = 2; // puddle, filled in by reflect()
   LAMPL[i] = 0;
   if (lampsOn > 0) {
@@ -655,7 +674,7 @@ function beamOnWater(wx, wy) { // how brightly the beam lights the sea at (wx, w
 // the el deck: its underside (girders and cross ties) seen from the street, and its top (two tracks, and the
 // platforms at stations) seen from up there. ly = across the deck, 0..2*EL_HALF
 function slabFace(i, wx, wy, below, d) {
-  const L = Math.max(0, 1 - d / vis) * amb * 9, ly = mod(wy, N) - EL_Y0, W = EL_HALF * 2;
+  const L = Math.max(0, 1 - d / vis) * amb * 9, ly = worldCoord(wy) - EL_Y0, W = EL_HALF * 2;
   if (below) {
     BG[i] = C(GRAY, 1);
     if (Math.abs(ly - W / 2) < 0.06 || ly < 0.07 || ly > W - 0.07) return set(i, '=', C(GRAY, L * 0.9)); // girders
@@ -667,7 +686,7 @@ function slabFace(i, wx, wy, below, d) {
     return set(i, ly < 0.03 || ly > W - 0.03 ? '|' : edge ? '=' : '.', edge ? C(YEL, L * 1.4) : C(GRAY, L));
   }
   if (ly < 0.04 || ly > W - 0.04) return set(i, '|', C(GRAY, L * 1.2)); // edge rail
-  for (const t of EL_TRACK) if (Math.abs(Math.abs(mod(wy, N) - t) - 0.1) < 0.025) return set(i, '=', C(GRAY, L * 1.4)); // rails
+  for (const t of EL_TRACK) if (Math.abs(Math.abs(worldCoord(wy) - t) - 0.1) < 0.025) return set(i, '=', C(GRAY, L * 1.4)); // rails
   set(i, fract(wx * 4) < 0.35 ? '-' : ' ', C(BRICK, L * 0.8)); // sleepers
 }
 // the deck's side, seen from the street: a riveted steel girder

@@ -28,7 +28,7 @@ test('jump from a roof onto the el, board at the station, and take its stairs do
     T=1;interact();const boarded=mode;elGetOff();T=15;interact();
     const stairs={mode,z:body.z,near:!!nearElStairs()};
     // A jump from the street cannot teleport up onto the deck.
-    mode='walk';room=null;px=40;py=EL_TRACK[0];body.z=body.vz=body.peak=0;jump();
+    mode='walk';room=null;px=40+CITY_LAYOUT.cityX;py=EL_TRACK[0];body.z=body.vz=body.peak=0;jump();
     for(let i=0;i<100;i++){stepBody(.01);stepRoof();}
     return {landed,boarded,stairs,street:{mode,z:body.z}};
   });

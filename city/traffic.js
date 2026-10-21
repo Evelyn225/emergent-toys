@@ -3,7 +3,7 @@
 // Intersections are addressed by their base cell (x, y multiples of 8).
 const CYCLE = 16, HALF = CYCLE / 2, GREEN_T = HALF - 2;
 const signalled = (x, y) => degree(x >> 3, y >> 3) >= 3;
-const phase = (x, y, t) => mod(t + hash(mod(x, N), mod(y, N), 9) * CYCLE, CYCLE);
+const phase = (x, y, t) => mod(t + hash(worldCoord(x), worldCoord(y), 9) * CYCLE, CYCLE);
 const light = (x, y, vert, t) => {
   if (!signalled(x, y)) return 'G';
   const p = phase(x, y, t) - (vert ? 0 : HALF); return p >= 0 && p < GREEN_T ? 'G' : p >= GREEN_T && p < GREEN_T + 1 ? 'Y' : 'R';
@@ -48,7 +48,7 @@ function plan(c) {
   const straight = c.nh[0] === c.hx && c.nh[1] === c.hy;
   const P = straight ? (dir > 0 ? c.B + 2 : c.B)
           : vert ? c.B + 1 - 0.4 * c.nh[0] : c.B + 1 + 0.4 * c.nh[1]; // the new lane's coordinate
-  c.left = mod((P - along) * dir, N);
+  c.left = worldReady ? Math.max(0, (P - along) * dir) : worldCoord((P - along) * dir);
 }
 
 // how many stretches of street it is from each intersection to either end of the one a call's scene is on (breadth
@@ -56,7 +56,7 @@ function plan(c) {
 function sceneRoute(c) {
   const [x, y] = c.dest, key = x + ',' + y;
   if (c.sceneKey === key) return c.sceneF;
-  const bx = Math.floor(mod(x, N) / 8), by = Math.floor(mod(y, N) / 8), horiz = Math.abs(mod(y, 8) - 1) < 0.8;
+  const bx = Math.floor(worldCoord(x) / 8), by = Math.floor(worldCoord(y) / 8), horiz = Math.abs(mod(y, 8) - 1) < 0.8;
   const f = new Int16Array(NB * NB).fill(9999), queue = horiz ? [bi(bx, by), bi(bx + 1, by)] : [bi(bx, by), bi(bx, by + 1)];
   for (const k of queue) f[k] = 0;
   for (let h = 0; h < queue.length; h++) {
@@ -101,9 +101,9 @@ function carContact(c, o, x = c.ex, y = c.ey, hx = c.hx, hy = c.hy) {
 function resolveCruiserContact(c, o, hit) {
   const { nx, ny } = hit, depth = hit.depth + 0.0001;
   const movingPlayer = o === me && mode === 'drive', share = movingPlayer ? depth / 2 : 0;
-  const ox = mod(o.x + nx * share, N), oy = mod(o.y + ny * share, N);
+  const ox = worldCoord(o.x + nx * share), oy = worldCoord(o.y + ny * share);
   const canPush = share && carBodyClear(ox, oy, o.hx, o.hy, ...carFootprint(o)) && !isWater(ox, oy);
-  const back = canPush ? depth - share : depth, cx = mod(c.x - nx * back, N), cy = mod(c.y - ny * back, N);
+  const back = canPush ? depth - share : depth, cx = worldCoord(c.x - nx * back), cy = worldCoord(c.y - ny * back);
   if (!carBodyClear(cx, cy, c.hx, c.hy, ...carFootprint(c)) || isWater(cx, cy)) return false;
   c.x = cx; c.y = cy;
   if (canPush) { o.x = ox; o.y = oy; o.ex = ox; o.ey = oy; px = ox; py = oy; }
@@ -125,6 +125,7 @@ function resolveCruiserContact(c, o, hit) {
 // The full rotated footprint, including the rear bumper. Separating axes keep even a sideways drift out of walls.
 function carBodyClear(x, y, hx, hy, hl = 0.24, hw = 0.11) {
   const ex = Math.abs(hx) * hl + Math.abs(hy) * hw, ey = Math.abs(hy) * hl + Math.abs(hx) * hw;
+  if(worldReady&&ROAD_BRIDGES.some(b=>y+ey>=b.y0&&y-ey<=b.y1&&[-1,1].some(side=>Math.abs(x-b.x-side*.97)<ex+.01)))return false;
   const diagonal = 0.5 * (Math.abs(hx) + Math.abs(hy));
   for (let my = Math.floor(y - ey); my <= Math.floor(y + ey); my++) for (let mx = Math.floor(x - ex); mx <= Math.floor(x + ex); mx++) {
     if (!map[idx(mx, my)]) continue;
@@ -175,7 +176,7 @@ function steerCruiser(c, tx, ty, speed, dt, arrive = true) {
   const step = Math.min(distance, c.v * dt), samples = Math.max(1, Math.ceil(step / 0.035), Math.ceil(Math.abs(angle - oldAngle) / 0.06));
   const sx = Math.cos(c.travelA) * step / samples, sy = Math.sin(c.travelA) * step / samples;
   for (let k = 1; k <= samples; k++) {
-    const ha = oldAngle + (angle - oldAngle) * k / samples, nhx = Math.cos(ha), nhy = Math.sin(ha), nx = mod(c.x + sx, N), ny = mod(c.y + sy, N);
+    const ha = oldAngle + (angle - oldAngle) * k / samples, nhx = Math.cos(ha), nhy = Math.sin(ha), nx = worldCoord(c.x + sx), ny = worldCoord(c.y + sy);
     if (!carBodyClear(nx, ny, nhx, nhy, ...carFootprint(c)) || isWater(nx, ny)) { c.v = 0; c.travelA = oldAngle; c.routeT = 0; break; }
     const other = (c.near || cars).find(o => o !== c && carContact(c, o, nx, ny, nhx, nhy));
     if (other) {
@@ -226,8 +227,8 @@ function addCar(props) {
 // snap a car onto the nearest lane in the direction it points and hand it back to the AI
 function toLane(c) {
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
-  if (vert) { c.x = mod(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir, N); c.hx = 0; c.hy = dir; }
-  else { c.y = mod(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir, N); c.hx = dir; c.hy = 0; }
+  if (vert) { c.x = worldCoord(Math.round((c.x - 1) / 8) * 8 + 1 + 0.4 * dir); c.hx = 0; c.hy = dir; }
+  else { c.y = worldCoord(Math.round((c.y - 1) / 8) * 8 + 1 - 0.4 * dir); c.hx = dir; c.hy = 0; }
   c.ex = c.x; c.ey = c.y; c.laneYaw = null; c.offV = 0; c.pass = null; c.pit = null; c.gas = null; plan(c);
 }
 
@@ -271,8 +272,8 @@ function taxiLaneTarget(c, line) {
 // Near somewhere with no streets round it (out over the bay, at the airport) there may be none: then null
 function randomLane(near = 0, x = 0, y = 0) {
   for (let k = 0; !near || k < 64; k++) {
-    const bx = near ? Math.floor((x + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
-    const by = near ? Math.floor((y + (Math.random() * 2 - 1) * near) / 8) & (NB - 1) : Math.random() * NB | 0;
+    const bx = near ? worldBlock(Math.floor((x + (Math.random() * 2 - 1) * near) / 8)) : Math.random() * NB | 0;
+    const by = near ? worldBlock(Math.floor((y + (Math.random() * 2 - 1) * near) / 8)) : Math.random() * NB | 0;
     const vert = Math.random() < 0.5, dir = pick([-1, 1]);
     if (!(vert ? vseg(bx, by) : hseg(bx, by))) continue;
     const along = (vert ? by : bx) * 8 + 2.5 + Math.random() * 4.5, lane = (vert ? bx : by) * 8 + 1 + (vert ? 0.4 : -0.4) * dir;
@@ -294,8 +295,8 @@ function ahead(c, x, y, band) {
 }
 
 // spatial buckets of 2x2 cells, so each car only checks what's around it (ahead() never looks past 2 cells)
-const GN = N / 2, carGrid = Array.from({ length: GN * GN }, () => []), pplGrid = Array.from({ length: GN * GN }, () => []);
-const bucketOf = (x, y) => Math.floor(mod(y, N) / 2) * GN + Math.floor(mod(x, N) / 2);
+let GN = N / 2, carGrid = Array.from({ length: GN * GN }, () => []), pplGrid = Array.from({ length: GN * GN }, () => []);
+const bucketOf = (x, y) => worldReady && !inWorldGrid(x,y) ? GN * GN : Math.floor(worldCoord(y) / 2) * GN + Math.floor(worldCoord(x) / 2);
 function fillGrid(grid, items, xk, yk) { // empties only the buckets it filled last time
   const used = grid.used || (grid.used = []);
   for (const k of used) grid[k].length = 0;
@@ -304,8 +305,11 @@ function fillGrid(grid, items, xk, yk) { // empties only the buckets it filled l
 }
 function nearby(grid, x, y, out) { // everything in the 3x3 buckets round (x, y)
   out.length = 0;
-  const gx = Math.floor(mod(x, N) / 2), gy = Math.floor(mod(y, N) / 2);
-  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of grid[((gy + j) & (GN - 1)) * GN + ((gx + i) & (GN - 1))]) out.push(o);
+  const gx = Math.floor(worldCoord(x) / 2), gy = Math.floor(worldCoord(y) / 2);
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    if (worldReady && (gx+i<0 || gy+j<0 || gx+i>=GN || gy+j>=GN)) continue;
+    for (const o of grid[((gy + j) & (GN - 1)) * GN + ((gx + i) & (GN - 1))]) out.push(o);
+  }
   return out;
 }
 const nearPeople = [];
@@ -439,7 +443,7 @@ function stepTraffic(dt, t, everywhere = false) {
     if (c.pursuit) room_ = Infinity; // dispatch and pursuit do not queue behind ordinary traffic or pedestrians
 
     const vert = c.hx === 0, along = vert ? c.y : c.x, dir = c.hx + c.hy;
-    const line = mod(((dir > 0 ? c.B : c.B + 2) - along) * dir, N);
+    const line = worldCoord(((dir > 0 ? c.B : c.B + 2) - along) * dir);
     const nx = vert ? c.x - mod(c.x, 8) : c.B, ny = vert ? c.B : c.y - mod(c.y, 8); // the next intersection
     if (line < 3 && !code(c) && !c.rush) {
       const s = light(nx, ny, vert, t);
@@ -525,11 +529,11 @@ function stepTraffic(dt, t, everywhere = false) {
     c.brake = target < c.v;
     c.v = Math.min(target, c.v + (c.kind === 'police' ? COP_CAR_ACCEL : code(c) || c.rush ? 1.4 : 0.8) * dt);
     const d = c.v * dt, step = Math.min(d, c.left);
-    if (vert) c.y = mod(c.y + dir * step, N); else c.x = mod(c.x + dir * step, N);
+    if (vert) c.y = worldCoord(c.y + dir * step); else c.x = worldCoord(c.x + dir * step);
     c.left -= step;
     if (c.rider) c.fare += step;
     if (c.left <= 0) { [c.hx, c.hy] = c.nh; plan(c); }
-    c.ex = mod(c.x + c.hy * c.off, N); c.ey = mod(c.y - c.hx * c.off, N);
+    c.ex = worldCoord(c.x + c.hy * c.off); c.ey = worldCoord(c.y - c.hx * c.off);
     const gz = GAS_ZONE[idx(Math.floor(c.x), Math.floor(c.y))];
     if (gz || c.gas) gasConsider(c, gz || null);
     if (taxi) {

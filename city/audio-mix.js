@@ -34,7 +34,8 @@ const busyHour = h => clamp(Math.sin((h - 5) / 19 * Math.PI) * 1.3, 0, 1);
 // distance to open water, in cells (0 on it)
 function seaDist(x, y) {
   if (seaAt(x, y) && !onPier(x, y)) return 0;
-  const m = mod(y, N);
+  if(worldReady)return Math.max(0,archipelagoEdge(x,y));
+  const m = worldCoord(y);
   return Math.max(0, Math.min(m - shoreN(x), shoreS(x) - m));
 }
 
@@ -73,9 +74,11 @@ function audioMix(s) {
     if (k === 'aviary') out.city = 0.04;
     if (s.room.burgled) { out.restaurant = out.bossa = out.coffee = out.karaoke = out.arcade = 0; out.city *= 0.6; } // broken into at night: nobody here, nothing on, just the street outside
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
+    if (k === 'islandhome') { out.waves=.3;out.city=0; }
     return out;
   }
   const d = AUDIO_DISTRICT[s.district] || AUDIO_DISTRICT.midtown;
+  out.waterfall=s.waterfall||0;
   // up high (a roof, the el) the street is further away and the wind gets at you
   const height = s.mode === 'roof' ? s.roofH : s.mode === 'el' || s.mode === 'elplat' ? 0.7 : s.mode === 'fair' ? s.fairEye || 0 : 0;
   const far = 1 / (1 + Math.max(height, s.mode === 'air' ? s.airHeight || 0 : 0) * 0.25);
@@ -88,6 +91,7 @@ function audioMix(s) {
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
   if (s.gardens) { out.city *= 0.35; out.crowd *= 0.4; out.night *= 0.5; out.waves = Math.max(out.waves, 0.15); } // the traffic's far off behind the trees; the lake lapping
   if (s.gardens) out.birds = (0.25 + 0.75 * s.day) * (1 - 0.65 * s.rain); // songbirds in the gardens by day
+  if (s.wilderness) { out.city=out.crowd=0;out.birds=.4*s.day*(1-.65*s.rain); }
   if (s.district === 'shotengai') out.pachinko = Math.max(out.pachinko, 0.28 * far); // parlour roar spilling into the covered street
   if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the Sunset Pier: a crowd, and the booths' bleeps and jingles drifting over it

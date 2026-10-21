@@ -73,7 +73,7 @@ function leaveAircraft(why) {
 function spotNear(x, y) {
   if (free(x, y)) return [x, y];
   for (let r = 0.2; r < 6; r += 0.2) for (let k = 0; k < 12; k++) {
-    const qx = mod(x + Math.cos(k / 12 * TAU) * r, N), qy = mod(y + Math.sin(k / 12 * TAU) * r, N);
+    const qx = worldCoord(x + Math.cos(k / 12 * TAU) * r), qy = worldCoord(y + Math.sin(k / 12 * TAU) * r);
     if (free(qx, qy) && !overWater(qx, qy)) return [qx, qy];
   }
   return [x, y];
@@ -83,7 +83,7 @@ function nearestShore(x, y) {
   for (let r = 0.5; r < 120; r += 0.5) {
     const n = Math.max(16, Math.round(r * 6)), k0 = Math.random() * TAU;
     for (let k = 0; k < n; k++) {
-      const qx = mod(x + Math.cos(k0 + k / n * TAU) * r, N), qy = mod(y + Math.sin(k0 + k / n * TAU) * r, N);
+      const qx = worldCoord(x + Math.cos(k0 + k / n * TAU) * r), qy = worldCoord(y + Math.sin(k0 + k / n * TAU) * r);
       if (!seaAt(qx, qy) && !isWater(qx, qy) && free(qx, qy)) return [qx, qy];
     }
   }
@@ -196,13 +196,13 @@ function airCam(dt) {
   if (wreckCam) return wreckView(c, T_, dt);
   if (!third) { // the cockpit: out over the nose
     const ahead = T_.heli ? 0.12 : T_.len * 0.32, z = c.z + (T_.heli ? 0.2 : T_.r * 1.9 + (c.ground ? T_.r * 1.8 : 0));
-    return [mod(c.x + Math.cos(c.yaw) * ahead, N), mod(c.y + Math.sin(c.yaw) * ahead, N), c.yaw, z, f(Math.tan(c.pitch) * projY / rows)];
+    return [worldCoord(c.x + Math.cos(c.yaw) * ahead), worldCoord(c.y + Math.sin(c.yaw) * ahead), c.yaw, z, f(Math.tan(c.pitch) * projY / rows)];
   }
   airCamYaw += (mod(c.yaw - airCamYaw + Math.PI, TAU) - Math.PI) * (1 - Math.exp(-2.5 * dt));
   const want = T_.heli ? 1.15 : T_.len * 0.9 + 0.45, up = T_.heli ? 0.38 : 0.22 + T_.len * 0.12, bx = Math.cos(airCamYaw), by = Math.sin(airCamYaw);
   let back = 0.2; // (pulled in short of a wall behind it: in a hangar, not out the back of it looking at the back wall)
   for (let s = 0.2; s <= want; s += 0.05) { if (airportBlocked(c.x - bx * s, c.y - by * s, 0.08)) break; back = s; }
-  const cx = mod(c.x - bx * back, N), cy = mod(c.y - by * back, N), roof = builtHeight(cx, cy), floor = builtHeight(cx, cy, c.z + 0.05);
+  const cx = worldCoord(c.x - bx * back), cy = worldCoord(c.y - by * back), roof = builtHeight(cx, cy), floor = builtHeight(cx, cy, c.z + 0.05);
   let cz = Math.max(c.z + up + (c.ground ? 0.12 : 0) - Math.sin(c.pitch) * back * 0.5, builtHeight(cx, cy, c.z + up) + 0.15);
   if (roof > floor + 0.3 && c.z < roof) cz = Math.min(cz, roof - 0.12); // (indoors: under the roof)
   const down = Math.atan2(cz - (c.z + 0.15), back); // (looking down at it a little, and up and down with its nose)
@@ -214,7 +214,7 @@ function wreckView(c, T_, dt) {
   const w = wreckCam, k = w.t / WRECK_T[w.kind], size = T_.heli ? 1 : T_.len, shake = Math.max(0, 1 - w.t / 1.2) * 0.05 * size;
   airCamYaw += dt * (w.kind === 'crash' ? 0.7 : 0.25);
   const back = size * (w.kind === 'crash' ? 1 + k * 1.2 : 1.3), j = () => (Math.random() - 0.5) * shake;
-  const cx = mod(c.x - Math.cos(airCamYaw) * back + j(), N), cy = mod(c.y - Math.sin(airCamYaw) * back + j(), N);
+  const cx = worldCoord(c.x - Math.cos(airCamYaw) * back + j()), cy = worldCoord(c.y - Math.sin(airCamYaw) * back + j());
   const cz = w.kind === 'crash' ? Math.max(c.z, builtHeight(cx, cy)) + 0.25 + k * size * 0.5 + j() : Math.max(0.03, 0.4 * size * (1 - k)) + j();
   const tilt = Math.atan2(cz - c.z, back);
   return [cx, cy, airCamYaw, cz, Math.max(-0.95, Math.min(1.2, (-Math.tan(tilt) * 0.8 + j() * 4) * projY / rows))];
@@ -299,7 +299,7 @@ const chuteAlt = () => body.z + (mode === 'roof' ? roofH * 10 : 0); // (metres; 
 function bailOut() {
   const c = pilot, T_ = PLANE_TYPES[c.type], side = T_.heli ? 0.2 : T_.r + 0.2;
   c.state = 'abandoned'; pilot = null; mode = 'walk'; // (the empty aircraft: stepAbandoned)
-  px = mod(c.x + Math.sin(c.yaw) * side, N); py = mod(c.y - Math.cos(c.yaw) * side, N); a = c.yaw; pitch = -0.45;
+  px = worldCoord(c.x + Math.sin(c.yaw) * side); py = worldCoord(c.y - Math.cos(c.yaw) * side); a = c.yaw; pitch = -0.45;
   if (c.stolen) newsEvent('ejected', px, py);
   body.z = Math.max(0.5, c.z * 10 - 1); body.vz = Math.min(0, (c.vz || 0) * 10); body.peak = body.z; body.seat = null; body.trick = null;
   const vx = T_.heli ? c.hvx || 0 : Math.cos(c.yaw) * c.v * Math.cos(c.pitch), vy = T_.heli ? c.hvy || 0 : Math.sin(c.yaw) * c.v * Math.cos(c.pitch);

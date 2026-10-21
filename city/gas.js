@@ -7,7 +7,7 @@
 
 // the solids, measured from the forecourt's corner (x0, y0)
 function gasSolid(st, x, y, alongX, hl, hw, z0, z1, kind, extra) {
-  const o = { x: mod(st.x0 + x, N), y: mod(st.y0 + y, N), c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k: st.k, st, ...extra };
+  const o = { x: worldCoord(st.x0 + x), y: worldCoord(st.y0 + y), c: alongX ? 1 : 0, s: alongX ? 0 : 1, hl, hw, z0, z1, kind, k: st.k, st, ...extra };
   solids.push(o); solidsB[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o);
   return o;
 }
@@ -24,7 +24,7 @@ for (const st of GAS_STATIONS) {
   gasSolid(st, 0.12, 0.2, false, 0.17, 0.02, 0.33, 0.66, 'gassign');
   gasSolid(st, 2.45, 1.91, true, 0.13, 0.05, 0, 0.09, 'gasice'); // the ice chest by the shop door
   for (const [x, y, hl, hw] of [[0.2, -0.16, 0.5, 0.16], [2.6, -0.16, 0.42, 0.16], [3.16, 1.35, 0.16, 0.65]])
-    GAS_CLEAR.push({ x: mod(st.x0 + x, N), y: mod(st.y0 + y, N), c: 1, s: 0, hl, hw, z0: 0, z1: 0.02 }); // (flat: no shelter from the snow)
+    GAS_CLEAR.push({ x: worldCoord(st.x0 + x), y: worldCoord(st.y0 + y), c: 1, s: 0, hl, hw, z0: 0, z1: 0.02 }); // (flat: no shelter from the snow)
 }
 // is a car's body (as carBodyClear's) clear of the islands (and the sign's pole)?
 function gasCarClear(x, y, hx, hy, hl, hw) {
@@ -106,7 +106,7 @@ function placeOnPath(c) {
   while (P.i < P.len.length - 2 && P.len[P.i + 1] < p.s) P.i++;
   const a = P.pts[P.i], b = P.pts[P.i + 1], seg = P.len[P.i + 1] - P.len[P.i] || 1, f = clamp((p.s - P.len[P.i]) / seg, 0, 1);
   const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-  c.x = mod(p.st.x0 + a[0] + (b[0] - a[0]) * f, N); c.y = mod(p.st.y0 + a[1] + (b[1] - a[1]) * f, N);
+  c.x = worldCoord(p.st.x0 + a[0] + (b[0] - a[0]) * f); c.y = worldCoord(p.st.y0 + a[1] + (b[1] - a[1]) * f);
   c.hx = (b[0] - a[0]) / d; c.hy = (b[1] - a[1]) / d; c.ex = c.x; c.ey = c.y; c.off = 0;
 }
 // how far c can go along its heading before it's up against something: a car (whichever way it's facing), somebody on
@@ -166,7 +166,7 @@ function stepPit(c, dt) {
 }
 function gasRejoin(c) { // back in the westbound lane of the main street, just past the way out
   const st = c.pit.st;
-  c.x = mod(st.x0 - 0.45, N); c.y = mod(st.y0 - 0.6, N); c.hx = -1; c.hy = 0; c.ex = c.x; c.ey = c.y;
+  c.x = worldCoord(st.x0 - 0.45); c.y = worldCoord(st.y0 - 0.6); c.hx = -1; c.hy = 0; c.ex = c.x; c.ey = c.y;
   c.pit = null; c.pitBlk = null; c.off = 0; c.offV = 0; c.pass = null; c.laneYaw = null; c.travelA = null;
   plan(c);
 }

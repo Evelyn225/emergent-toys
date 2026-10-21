@@ -19,12 +19,12 @@ const SEAM_HW = 0.055, SEAM_H = 0.215; // (a door's half width and its height, i
 // is the camera on the lane side of the seam's wall, looking at that face (the wall cell, from the west)?
 const seamSide = () => BACKROOMS_SEAM && rel(BACKROOMS_SEAM.x - px) > 0 && rel(BACKROOMS_SEAM.x - px) < 1.2;
 // the wall cell lookHit is on is the seam's, seen from the lane (no shop to go into from this side)
-const seamWall = h => seamSide() && mod(h.mx, N) === BACKROOMS_SEAM.x && mod(h.my, N) === BACKROOMS_SEAM.cy;
+const seamWall = h => seamSide() && worldCoord(h.mx) === BACKROOMS_SEAM.x && worldCoord(h.my) === BACKROOMS_SEAM.cy;
 // the seam's face from the lane: blank, grimy concrete on the ground floor (no shopfront this side), the doorframe's
 // outline cut into it, a hairline darker than the wall. True if it drew this cell.
 function backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc) {
   const S = BACKROOMS_SEAM;
-  if (!S || side || mod(mx, N) !== S.x || mod(my, N) !== S.cy || z >= 0.4 || !seamSide()) return false;
+  if (!S || side || worldCoord(mx) !== S.x || worldCoord(my) !== S.cy || z >= 0.4 || !seamSide()) return false;
   const e = rel(wc - S.y), dz = d / projY, L = fog * amb * 15, wall = day * 2.6 * (0.45 + 0.55 * fog);
   const edge = Math.abs(Math.abs(e) - SEAM_HW) < Math.max(uStep * 0.55, 0.002) && z < SEAM_H || Math.abs(z - SEAM_H) < Math.max(dz * 0.55, 0.002) && Math.abs(e) < SEAM_HW;
   if (edge) { BG[i] = bgAt(GRAY, wall * 0.55, d); return set(i, Math.abs(z - SEAM_H) < dz * 0.55 ? '-' : '|', C(GRAY, L * 0.25)), true; }
@@ -32,7 +32,7 @@ function backroomsSeamFace(i, uStep, z, d, side, mx, my, fog, wc) {
   BG[i] = bgAt(GRAY, wall * (0.85 + noise(wc * 6, z * 6, 154) * 0.25), d); return set(i, z > 0.38 ? '=' : g > 0.93 ? '.' : g > 0.9 ? ',' : ' ', C(GRAY, L * 0.4)), true;
 }
 // walking into it from the lane (a step's look ahead at x, y)
-const backroomsSeamAt = (x, y) => { const S = BACKROOMS_SEAM; return !!S && Math.floor(mod(x, N)) === S.x && Math.floor(mod(y, N)) === S.cy && Math.abs(rel(y - S.y)) < SEAM_HW && rel(x - S.x) < 0.12; };
+const backroomsSeamAt = (x, y) => { const S = BACKROOMS_SEAM; return !!S && Math.floor(worldCoord(x)) === S.x && Math.floor(worldCoord(y)) === S.cy && Math.abs(rel(y - S.y)) < SEAM_HW && rel(x - S.x) < 0.12; };
 function enterBackrooms() {
   enterRoom('backrooms', { word: '', neon: YEL, ret: [px, py, a], line: '', cell: [BACKROOMS_SEAM.x, BACKROOMS_SEAM.cy] }, [BACKROOMS_ENTRY, BACKROOMS.length - 1.6, -Math.PI / 2]);
   say('The wall gives like a curtain. You stumble through, and the hum of the lights closes round you.', 4);

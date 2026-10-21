@@ -18,7 +18,7 @@ function timeCourierRuns() {
     K.KeyW=K.ShiftLeft=true;
     body.z=body.vz=body.peak=body.crouch=0;body.hop=1;body.buf=body.landedAt=-9;
     body.seat=null;body.groundMode=null;
-    enterRoom('courier',{word:'COURIER',cell:[179,103],ret:[179.5,104.2,-Math.PI/2]},[10.3,4.9,0]);
+    enterRoom('courier',{word:'COURIER',cell:worldReady?citySourcePoint(179,103):[179,103],ret:[...(worldReady?citySourcePoint(179.5,104.2):[179.5,104.2]),-Math.PI/2]},[10.3,4.9,0]);
     paused=false;
     const legs=[];
     function go(x,y) {
@@ -30,7 +30,7 @@ function timeCourierRuns() {
     }
     // Start at the parcel counter: reaching the depot stairs counts against the bonus too.
     go(4,4.9);go(4,1.7);interact();
-    const path=[...prefix,...(first?fastFirst:safeFirst),...middle,...(second?fastSecond:safeSecond),...tail];
+    const path=[...prefix,...(first?fastFirst:safeFirst),...middle,...(second?fastSecond:safeSecond),...tail].map(p=>worldReady?[...citySourcePoint(p[0],p[1]),...p.slice(2)]:p);
     for(let k=0;k<path.length;k++) {
       const [x,y,action]=path[k];if(!go(x,y))break;
       if(action==='jump'){a=Math.atan2(path[k+1][1]-py,path[k+1][0]-px);jump();}
@@ -56,7 +56,7 @@ function timeSiteRuns() {
     K.KeyW=K.ShiftLeft=true;
     body.z=body.vz=body.peak=body.crouch=0;body.hop=1;body.buf=body.landedAt=-9;
     body.seat=null;body.groundMode=null;
-    enterRoom('courier',{word:'COURIER',cell:[179,103],ret:[179.5,104.2,-Math.PI/2]},[10.3,4.9,0]);
+    enterRoom('courier',{word:'COURIER',cell:worldReady?citySourcePoint(179,103):[179,103],ret:[...(worldReady?citySourcePoint(179.5,104.2):[179.5,104.2]),-Math.PI/2]},[10.3,4.9,0]);
     paused=false;
     const legs=[];
     function go(x,y) {
@@ -67,7 +67,7 @@ function timeSiteRuns() {
       return reached;
     }
     go(4,4.9);go(4,1.7);interact();
-    const path=[...prefix,...tail];
+    const path=[...prefix,...tail].map(p=>worldReady?[...citySourcePoint(p[0],p[1]),...p.slice(2)]:p);
     for(let k=0;k<path.length;k++) {
       const [x,y,action]=path[k];if(!go(x,y))break;
       if(action==='jump'){a=Math.atan2(path[k+1][1]-py,path[k+1][0]-px);jump();}
@@ -99,7 +99,7 @@ function timeNightRuns() {
     for(const key of Object.keys(K))K[key]=false;
     K.KeyW=K.ShiftLeft=true;
     body.z=body.vz=body.peak=body.crouch=0;body.hop=1;body.buf=body.landedAt=-9;body.seat=null;body.groundMode=null;
-    enterRoom('courier',{word:'COURIER',cell:[179,103],ret:[179.5,104.2,-Math.PI/2]},[10.3,4.9,0]);
+    enterRoom('courier',{word:'COURIER',cell:worldReady?citySourcePoint(179,103):[179,103],ret:[...(worldReady?citySourcePoint(179.5,104.2):[179.5,104.2]),-Math.PI/2]},[10.3,4.9,0]);
     paused=false;
     const legs=[];
     // A hop leg keeps jumping on every landing and only stops once it's close, or past its mark. A leap leg hops on
@@ -119,8 +119,8 @@ function timeNightRuns() {
       return reached;
     }
     go(4,4.9);go(4,1.7);interact();
-    for(const [x,y,action,tol,edge] of [...prefix,...tail]) {
-      if(!go(x,y,action,tol,edge))break;
+    for(const [x,y,action,tol,edge] of [...prefix,...tail].map(p=>worldReady?[...citySourcePoint(p[0],p[1]),...p.slice(2)]:p)) {
+      if(!go(x,y,action,tol,worldReady&&edge!==undefined?edge+CITY_LAYOUT.southY:edge))break;
       if(!action)for(let k=0;k<200&&(body.z>0||body.vz>0);k++)loop(t0+10);
     }
     K.KeyW=false;for(let k=0;k<200&&body.z>0;k++)loop(t0+10);

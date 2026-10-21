@@ -187,12 +187,12 @@ function buyerDoor(home) {
   const clear=(x,y)=>!map[idx(Math.floor(x),Math.floor(y))]&&!isWater(x,y);
   if (home.door) for(const offset of [.24,-.24,.4,-.4,0]) {
     const [x,y]=home.door;
-    for(const [dx,dy] of [[offset,0],[0,offset]]) if(clear(mod(x+dx,N),mod(y+dy,N))) return [mod(x+dx,N),mod(y+dy,N)];
+    for(const [dx,dy] of [[offset,0],[0,offset]]) if(clear(worldCoord(x+dx),worldCoord(y+dy))) return [worldCoord(x+dx),worldCoord(y+dy)];
   }
   const cx=home.cell%N,cy=Math.floor(home.cell/N),sh=SHOP[home.cell];
   for(let r=1;r<9;r++) for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++) {
-    const x=mod(cx+dx,N),y=mod(cy+dy,N);
-    if(clear(x+.5,y+.5)&&[[1,0],[-1,0],[0,1],[0,-1]].some(([ox,oy])=>SHOP[idx(mod(x+ox,N),mod(y+oy,N))]===sh)) return [x+.5,y+.5];
+    const x=worldCoord(cx+dx),y=worldCoord(cy+dy);
+    if(clear(x+.5,y+.5)&&[[1,0],[-1,0],[0,1],[0,-1]].some(([ox,oy])=>SHOP[idx(worldCoord(x+ox),worldCoord(y+oy))]===sh)) return [x+.5,y+.5];
   }
   return null;
 }

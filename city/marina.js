@@ -30,7 +30,7 @@ function trailWake(b, x, y, hw, moving) {
 // every frame, seen or not (a trail laid only while she's drawn dies whenever you look away): the bay boats going
 // round, and the one you're driving
 function stepWakes() {
-  const stern = (b, x, y, hx, hy, moving) => { const { hl, hw } = BOAT_KINDS[b.kind]; trailWake(b, mod(x - hx * hl * 0.9, N), mod(y - hy * hl * 0.9, N), hw, moving); };
+  const stern = (b, x, y, hx, hy, moving) => { const { hl, hw } = BOAT_KINDS[b.kind]; trailWake(b, worldCoord(x - hx * hl * 0.9), worldCoord(y - hy * hl * 0.9), hw, moving); };
   for (const b of boats) {
     const p = boatAt(b, T);
     if (Math.hypot(rel(p.x - px), rel(p.y - py)) > vis + 4) continue; // (out past sight: and so slow her trail's under a cell)
@@ -235,11 +235,11 @@ SOLID_SHADE.bollard = () => (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return 
 // where the camera goes out on the water: behind and above the boat (easing round), or at the helm
 function seaCam(dt, chase) {
   const b = sea, k = BOAT_KINDS[b.kind];
-  if (!chase) { const back = k.hl * (b.kind === 'sailboat' ? 0.8 : 0.45); camYaw = a; return [mod(b.x - b.hx * back, N), mod(b.y - b.hy * back, N), a]; }
+  if (!chase) { const back = k.hl * (b.kind === 'sailboat' ? 0.8 : 0.45); camYaw = a; return [worldCoord(b.x - b.hx * back), worldCoord(b.y - b.hy * back), a]; }
   camYaw += (mod(a - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 4);
   const bx = Math.cos(camYaw), by = Math.sin(camYaw);
   let back = 0.7 + k.hl * 1.6;
   while (back > 0.3 && map[idx(Math.floor(b.x - bx * back), Math.floor(b.y - by * back))]) back -= 0.05;
-  return [mod(b.x - bx * back, N), mod(b.y - by * back, N), camYaw];
+  return [worldCoord(b.x - bx * back), worldCoord(b.y - by * back), camYaw];
 }
 const seaEye = () => { const k = BOAT_KINDS[sea.kind]; return chaseOn ? 0.22 + k.hl * 0.25 : k.fb + (sea.kind === 'cruiser' ? 0.25 : 0.16); }; // (the cruiser: up on the flybridge)

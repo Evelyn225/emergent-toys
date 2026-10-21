@@ -379,7 +379,7 @@ function swanCam(dt) {
   const hx = Math.cos(camYaw), hy = Math.sin(camYaw);
   let back = 0.38;
   while (back > 0.15 && map[idx(Math.floor(px - hx * back), Math.floor(py - hy * back))]) back -= 0.03;
-  return [mod(px - hx * back, N), mod(py - hy * back, N), camYaw];
+  return [worldCoord(px - hx * back), worldCoord(py - hy * back), camYaw];
 }
 
 // ---- inside the conservatory: the tropical house (a waterfall into a pool, palms, butterflies, steam) and, through a

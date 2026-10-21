@@ -3,7 +3,13 @@ let bigMapEl = null, bigMapCv = null, bigMapSheet = null;
 const BIGMAP = { cx: 0, cy: 0, z: 4, pts: new Map(), pinch: null, keys: {}, found: null, hits: [], hitK: -1,
   category:'all',query:'',selected:null,places:[],limit:30,points:[],returnPaused:false,tap:null };
 const BIGMAP_Z = 48; // most px per cell: a shop front across the screen. The least: the whole city just fills the screen
-const bigMapMinZ = () => Math.min(bigMapCv.clientWidth/MAP_WORLD.width,bigMapCv.clientHeight/MAP_WORLD.height)*.9;
+function bigMapViewport() {
+  const W=bigMapCv.clientWidth,H=bigMapCv.clientHeight,visible=!bigMapEl.querySelector('.directory').hidden;
+  if(!visible)return {x:0,y:0,w:W,h:H};
+  if(W>700)return {x:332,y:110,w:W-344,h:H-140};
+  return {x:12,y:110,w:W-24,h:Math.max(80,H*.58-134)};
+}
+const bigMapMinZ = () => {const v=bigMapViewport();return Math.min(v.w/MAP_WORLD.width,v.h/MAP_WORLD.height)*.9;};
 const BIGMAP_CSS = `
   #bigmap { background: #080b10; color:#d3d8df; }
   #bigmap canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
@@ -71,8 +77,11 @@ function bigMapRender() {
 // what's named on the map: [x, y, text, colour, kind]. kind: 'area' (always), 'place' (always), 'shop' (zoomed in)
 function bigMapLabels() {
   const out = [];
-  for (const sd of DIST_SEEDS) { const [sx] = sd, d = seedName(sd), sy = d === 'industrial' ? (sd[1] > (SHORE_N + SHORE_S) / 2 ? SHORE_S - 0.4 : SHORE_N + 1.4) : sd[1]; out.push([sx * 8, sy * 8, (DISTRICT_TITLE[d] || d).replace(/^the /, 'The '), 'rgba(255,255,255,0.55)', 'area']); }
+  const areaSeeds = [...DIST_SEEDS].sort((a,b) => Number(b[2] === 'shotengai') - Number(a[2] === 'shotengai'));
+  for (const sd of areaSeeds) { const [sx] = sd, d = seedName(sd), sy = d === 'industrial' ? (sd[1] > (SHORE_N + SHORE_S) / 2 ? SHORE_S - 0.4 : SHORE_N + 1.4) : sd[1]; out.push([sx * 8, sy * 8, (DISTRICT_TITLE[d] || d).replace(/^the /, 'The '), 'rgba(255,255,255,0.55)', 'area']); }
   const place = (x, y, t) => out.push([x, y, t, '#fd8', 'place']);
+  if(worldReady)for(const island of WILD_ISLANDS)out.push([island.x,island.y,island.name,'#a6d5a1','area']);
+  if(worldReady){place(FERN_STRIP.x0+10,FERN_STRIP.y,'Fern airstrip');place(...WILD_ISLANDS[0].landing,'Fern boat landing');place(...FERN_HOUSE.door,'Fern House');place(627,197,'Fern Falls');}
   place(GRAND_HOTEL.bx * 8 + 5, GRAND_HOTEL.by * 8 + 5, 'Grand Hotel');
   place(MARINA.x, MARINA.y0 + 2, 'Marina'); place(FAIR.cx, FAIR.y0 + 3, 'Sunset Pier'); place(FISH_HUT.x - 1, FISH_HUT.y - 1, 'Bait & Tackle'); place(WHEEL.x, WHEEL.y - 1.5, 'Ferris wheel');
   place(...COURIER_DEPOT.roof,COURIER_COMPANY);
@@ -195,7 +204,7 @@ function bigMapDraw() {
   if (z >= 14) for (const [lx, ly, t, col, kind] of bigMapNames) if (kind === 'shop') label(lx, ly, t, col, small, false);
   x.font='12px monospace';x.fillStyle='#a6babf';x.textAlign='right';x.fillText('N ↑',W-18,128);
   const scale=100; x.strokeStyle='#a6babf';x.lineWidth=1;x.beginPath();x.moveTo(W-18-scale,148);x.lineTo(W-18,148);x.stroke();x.fillText(mapMetres(scale/z*10),W-18,163);
-  bigMapEl.querySelector('.tip').textContent=mapWaypoint?`${mapWaypoint.name} · ${mapMetres(mapRouteDistance())} · ${MAP_NAV.path?'walking route to street approach':'direction only; no street route found'}`:TOUCH?'Tap places or drop a pin · drag / pinch to explore':'Click a place or drop a pin · / search · F city · M / Esc close';
+  bigMapEl.querySelector('.tip').textContent=mapWaypoint?`${mapWaypoint.name} · ${mapMetres(mapRouteDistance())} · ${mapRouteLabel()}`:TOUCH?'Tap places or drop a pin · drag / pinch to explore':'Click a place or drop a pin · / search · F city · M / Esc close';
   x.textAlign = 'left'; x.textBaseline = 'alphabetic';
 }
 
@@ -207,7 +216,11 @@ function bigMapZoom(f, X, Y) { // zoom by f about screen point (X, Y): the spot 
 }
 function bigMapPan(dx, dy) { BIGMAP.cx = mapCoordinate(BIGMAP.cx - dx / BIGMAP.z,MAP_WORLD.width); BIGMAP.cy = mapCoordinate(BIGMAP.cy - dy / BIGMAP.z,MAP_WORLD.height); }
 function bigMapCentre() { const p=mapPlayerLocation();BIGMAP.cx = p.x; BIGMAP.cy = p.y; }
-function bigMapFit() {BIGMAP.cx=MAP_WORLD.width/2;BIGMAP.cy=MAP_WORLD.height/2;BIGMAP.z=bigMapMinZ();}
+function bigMapFit() {
+  const v=bigMapViewport();BIGMAP.z=bigMapMinZ();
+  BIGMAP.cx=MAP_WORLD.width/2-(v.x+v.w/2-bigMapCv.clientWidth/2)/BIGMAP.z;
+  BIGMAP.cy=MAP_WORLD.height/2-(v.y+v.h/2-bigMapCv.clientHeight/2)/BIGMAP.z;
+}
 function bigMapPick(X,Y) {
   const hit=BIGMAP.points.filter(p=>Math.hypot(p.x-X,p.y-Y)<14).sort((a,b)=>Math.hypot(a.x-X,a.y-Y)-Math.hypot(b.x-X,b.y-Y))[0];
   if(hit)return selectMapPlace(hit.id,false);
@@ -247,6 +260,10 @@ function openBigMap() {
       if(m==='more'){BIGMAP.limit+=30;mapDirectoryUI();}
       if(m==='unselect'){BIGMAP.selected=null;mapDirectoryUI();}
       if(m==='waypoint')setMapWaypoint(BIGMAP.places.find(p=>p.id===BIGMAP.selected));
+      if(m==='island-marina'||m==='island-airport') {
+        const name=m==='island-marina'?'Marina':'Airport',departure=BIGMAP.places.find(p=>p.name===name);
+        if(departure){selectMapPlace(departure.id);setMapWaypoint(departure);}
+      }
       if(m==='clear-route')clearMapWaypoint();
       if(m==='find-housing'){BIGMAP.category='homes';BIGMAP.selected=null;BIGMAP.query='REALTY';q.value='REALTY';mapDirectoryUI();}
       if(m==='call-supplier') {

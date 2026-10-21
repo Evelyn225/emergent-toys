@@ -15,7 +15,7 @@ function enterTerminal(d) {
 // and out: by the door you walk into, the main doors or the nearer airside one
 function leaveTerminal() {
   const d = py < room.H / 2 ? (px > room.W / 2 ? 1 : 2) : 0, o = TERMINAL_DOORS[d];
-  px = mod(TERMINAL.x + o.u, N); py = mod(TERMINAL.y + (o.land ? -1 : 1) * (TERMINAL.hw + 0.22), N); a = o.land ? -Math.PI / 2 : Math.PI / 2;
+  px = worldCoord(TERMINAL.x + o.u); py = worldCoord(TERMINAL.y + (o.land ? -1 : 1) * (TERMINAL.hw + 0.22)); a = o.land ? -Math.PI / 2 : Math.PI / 2;
 }
 
 // ---- out of the windows. The gates' side: the airliners parked at them, nose in, a jet bridge out to each; the apron,

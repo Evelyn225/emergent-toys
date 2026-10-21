@@ -15,7 +15,7 @@ const NOTO_LOOK = { haircut: 0.5, coat: 0.5, tattoo: 0.6 }; // what's left after
 const NOTO_KNOWN = 30, NOTO_INFAMOUS = 65, NOTO_SPOT_R = 2.2, NOTO_CALL = 0.25, NOTO_CALL_GAP = 120; // (seconds between call-ins at most)
 const noto = { level: 0, day: dayNum, looked: {}, log: [], lookDay: -9, scanT: 0, callT: -Infinity };
 // where (x, y) is, as the papers put it
-const placeTitle = (x, y) => { const d = districtName(Math.floor(mod(x, N) / 8), Math.floor(mod(y, N) / 8)); return d === 'belle' ? 'the Belle Époque Quarter' : DISTRICT_TITLE[d] || 'the city'; };
+const placeTitle = (x, y) => { const d = districtName(Math.floor(worldCoord(x) / 8), Math.floor(worldCoord(y) / 8)); return d === 'belle' ? 'the Belle Époque Quarter' : DISTRICT_TITLE[d] || 'the city'; };
 // a count as the papers print one: in words, up to ten
 const inWords = n => ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][n] || String(n);
 // something for the papers: a kind (a crime's, or one of NEWS's), where, and anything the line needs; the same thing

@@ -39,11 +39,16 @@ function findMapRoute(start,goal,world=MAP_WORLD,passable=mapWalkableCell) {
   }
   if(previous[to]===-2)return null;
   const path=[];
-  for(let k=to;k>=0;k=previous[k])path.push({x:k%W+.5,y:Math.floor(k/W)+.5});
+  for(let k=to;k>=0;k=previous[k])path.push(world===MAP_WORLD&&worldReady?mapRoutePoint(k%W,Math.floor(k/W)):{x:k%W+.5,y:Math.floor(k/W)+.5});
   path.reverse();return path;
 }
 function mapWalkableCell(x,y) {
-  return !map[idx(x,y)]&&!isWater(x+.5,y+.5)&&!architectureBlocked(x+.5,y+.5)&&!landmarkBlocked(x+.5,y+.5);
+  const p=mapRoutePoint(x,y);
+  return inWorldGrid(x,y)&&!map[idx(x,y)]&&!isWater(p.x,p.y)&&!architectureBlocked(p.x,p.y)&&!landmarkBlocked(p.x,p.y);
+}
+function mapRoutePoint(x,y) {
+  if(worldReady&&x===Math.floor(FOOTBRIDGE.x)&&onFootbridge(FOOTBRIDGE.x,y+.5))return {x:FOOTBRIDGE.x,y:y+.5};
+  return {x:x+.5,y:y+.5};
 }
 let mapWaypoint=null;
 function loadMapWaypoint(raw) {

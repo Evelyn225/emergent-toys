@@ -1,6 +1,6 @@
 // Content identities are assigned before any layout relocation. Keep these IDs when moving a lot;
 // its current grid cell is an address into the runtime map, not its save identity.
-const CITY_LAYOUT_ID = 'coastal-v1';
+let CITY_LAYOUT_ID = 'coastal-v1';
 const CITY_PLACES = new Map();
 const cityPlaceByShop = new WeakMap();
 for (let cell = 0; cell < SHOP.length; cell++) {

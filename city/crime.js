@@ -58,7 +58,7 @@ function stepCorner(c, dir) { // the corner one step along the sidewalk in dir (
   else if (dir === 2) { if (qx) qx = 0; else { if (!hseg(ix - 1, iy)) return null; ix--; qx = 1; } }
   else if (dir === 1) { if (!qy) qy = 1; else { if (!vseg(ix, iy)) return null; iy++; qy = 0; } }
   else { if (qy) qy = 0; else { if (!vseg(ix, iy - 1)) return null; iy--; qy = 1; } }
-  return degree(ix & (NB - 1), iy & (NB - 1)) ? { ix, iy, qx, qy } : null;
+  return degree(worldBlock(ix), worldBlock(iy)) ? { ix, iy, qx, qy } : null;
 }
 for (const b of SERVICES) if (b.kind === 'police') for (let k = 0; k < 3; k++) {
   const corner = { ix: b.bx + (k === 1 ? 1 : 0), iy: b.by, qx: k & 1, qy: 1 };
@@ -74,15 +74,15 @@ function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn
     c.dir = d; c.goal = next;
   }
   const [gx, gy] = cornerXY(c.goal), dx = rel(gx - c.x), dy = rel(gy - c.y), d = Math.hypot(dx, dy), s = 0.42 * dt;
-  if (d <= s) { c.x = mod(gx, N); c.y = mod(gy, N); c.corner = c.goal; c.goal = null; }
-  else { c.x = mod(c.x + dx / d * s, N); c.y = mod(c.y + dy / d * s, N); c.ph += dt * 4; }
+  if (d <= s) { c.x = worldCoord(gx); c.y = worldCoord(gy); c.corner = c.goal; c.goal = null; }
+  else { c.x = worldCoord(c.x + dx / d * s); c.y = worldCoord(c.y + dy / d * s); c.ph += dt * 4; }
 }
 function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls (just out of the car: a sprint)
   if (c.down) return;
   const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = Math.min(d, (c.burst > T ? COP_FOOT_SPEED * 1.1 : COP_FOOT_SPEED) * dt);
   const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
-  if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = mod(nx, N);
-  if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = mod(ny, N);
+  if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = worldCoord(nx);
+  if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = worldCoord(ny);
   c.ph += dt * 7;
 }
 const roomOpen = (x, y) => x >= 0 && y >= 0 && x < room.W && y < room.H && ROOMW.cell(Math.floor(x), Math.floor(y)) === 0 && !(room.def.block && room.def.block(x, y)) &&
@@ -246,7 +246,7 @@ function roofSearchLead(dt) {
     if (!target) continue;
     const vx = rel(target[0] - c.x), vy = rel(target[1] - c.y), d = Math.hypot(vx, vy), step = Math.min(d, (c.sees ? COP_FOOT_SPEED : 0.7) * dt);
     if (d < 0.025) { c.path.shift(); continue; }
-    const nx = mod(c.x + vx / d * step, N), ny = mod(c.y + vy / d * step, N), height = policeRoofHeight(c.x, c.y), nh = policeRoofHeight(nx, ny);
+    const nx = worldCoord(c.x + vx / d * step), ny = worldCoord(c.y + vy / d * step), height = policeRoofHeight(c.x, c.y), nh = policeRoofHeight(nx, ny);
     if (nh > 0 && Math.abs(nh - height) <= 0.35) { c.x = nx; c.y = ny; c.ph += dt * 7; }
     if (d <= step) c.path.shift();
   }
@@ -341,7 +341,7 @@ function policeSearchTarget() {
       turns.sort((a_, b) => !!ROAD[idx(Math.floor(x + b[0]), Math.floor(y + b[1]))] - !!ROAD[idx(Math.floor(x + a_[0]), Math.floor(y + a_[1]))]);
       [hx, hy] = turns[0];
     }
-    x = mod(x + hx * stride, N); y = mod(y + hy * stride, N);
+    x = worldCoord(x + hx * stride); y = worldCoord(y + hy * stride);
   }
   return [x, y];
 }
@@ -400,7 +400,7 @@ function policeReturnLane(c) {
     && !cars.some(o => o !== c && o.parked && carContact(c, o, l.x, l.y, l.hx, l.hy));
   // Rotating back into the lane can need more room than the sideways cruiser currently occupies.
   for (const offset of [0, -0.6, 0.6, -1.2, 1.2]) {
-    const candidate = { ...lane, x: mod(lane.x + lane.hx * offset, N), y: mod(lane.y + lane.hy * offset, N) };
+    const candidate = { ...lane, x: worldCoord(lane.x + lane.hx * offset), y: worldCoord(lane.y + lane.hy * offset) };
     if (available(candidate)) return candidate;
   }
   let best = lane, distance = Infinity;
@@ -422,7 +422,7 @@ function stepReturningPolice(dt) {
     if ((c.pathT -= dt) <= 0) { c.pathT = 0.5; c.path = indoors ? roomPath(c.x, c.y, ...door) : policeRoofPath(c.x, c.y, ...door); }
     const goal = c.path[0] || door, vx = indoors ? goal[0] - c.x : rel(goal[0] - c.x), vy = indoors ? goal[1] - c.y : rel(goal[1] - c.y), d = Math.hypot(vx, vy), step = Math.min(d, (indoors ? 1.6 : 0.5) * dt);
     if (d > 1e-5) {
-      const nx = mod(c.x + vx / d * step, N), ny = mod(c.y + vy / d * step, N);
+      const nx = worldCoord(c.x + vx / d * step), ny = worldCoord(c.y + vy / d * step);
       const open = indoors ? roomOpen(nx, ny) : policeRoofHeight(nx, ny) > 0 && Math.abs(policeRoofHeight(nx, ny) - policeRoofHeight(c.x, c.y)) <= 0.35;
       if (open) { c.x = nx; c.y = ny; }
     }
@@ -437,7 +437,7 @@ function stepReturningPolice(dt) {
     if ((c.returnPathT -= dt) <= 0) { c.returnPathT = 0.7; c.returnPath = pursuitRoute(c, car.x, car.y); }
     const goal = c.returnPath?.[0] || [car.x, car.y], d = near(c.x, c.y, ...goal), vx = rel(goal[0] - c.x), vy = rel(goal[1] - c.y), step = Math.min(d, 0.5 * dt);
     if (d > 1e-5) {
-      const nx = mod(c.x + vx / d * step, N), ny = mod(c.y + vy / d * step, N);
+      const nx = worldCoord(c.x + vx / d * step), ny = worldCoord(c.y + vy / d * step);
       if (!map[idx(Math.floor(nx), Math.floor(ny))]) { c.x = nx; c.y = ny; c.ph += dt * 4; }
     }
     if (d <= step && c.returnPath?.length) c.returnPath.shift();
@@ -470,10 +470,10 @@ function placeRoadblock() {
   const mid = Math.floor((vert ? me.x : me.y) / 8) * 8 + 1; // the middle of the street you're on
   if (Math.abs(rel((vert ? me.x : me.y) - mid)) > 1.1) return null; // (not on a street)
   for (let d = 2; d <= ROADBLOCK_AHEAD[1]; d++) { // the street ahead, as far as it goes
-    const along = (vert ? me.y : me.x) + dir * d, x = vert ? mid : mod(along, N), y = vert ? mod(along, N) : mid, r = ROAD[idx(Math.floor(x), Math.floor(y))];
+    const along = (vert ? me.y : me.x) + dir * d, x = vert ? mid : worldCoord(along), y = vert ? worldCoord(along) : mid, r = ROAD[idx(Math.floor(x), Math.floor(y))];
     if (r !== street && r !== 3) return null; // it ends (or bends) before then
     if (d < ROADBLOCK_AHEAD[0] || r !== street || mod(along, 8) < 3.5 || mod(along, 8) > 6.5) continue; // mid-block, far enough off
-    const spots = [-1, 0, 1].map(k => vert ? [mod(x + k * ROADBLOCK_SPACING, N), y] : [x, mod(y + k * ROADBLOCK_SPACING, N)]);
+    const spots = [-1, 0, 1].map(k => vert ? [worldCoord(x + k * ROADBLOCK_SPACING), y] : [x, worldCoord(y + k * ROADBLOCK_SPACING)]);
     const hx = vert ? 1 : 0, hy = vert ? 0 : 1; // (lying across the street)
     if (!spots.every(([sx, sy]) => carBodyClear(sx, sy, hx, hy) && !cars.some(o => near(o.x, o.y, sx, sy) < 0.5))) continue;
     const block = { x, y, cars: [], cops: [], t: T, stale: false };
@@ -482,7 +482,7 @@ function placeRoadblock() {
         state: 'scene', x: sx, y: sy, ex: sx, ey: sy, hx: k === 1 ? -hx : hx, hy: k === 1 ? -hy : hy };
       cars.push(c); block.cars.push(c);
       if (k !== 1) { // an officer behind each end car, on your side of it
-        const cop = { x: vert ? sx : mod(sx - dir * 0.35, N), y: vert ? mod(sy - dir * 0.35, N) : sy, car: c, corner: null, dir: 0, goal: null, chase: false, ph: 0, extra: true, post: true };
+        const cop = { x: vert ? sx : worldCoord(sx - dir * 0.35), y: vert ? worldCoord(sy - dir * 0.35) : sy, car: c, corner: null, dir: 0, goal: null, chase: false, ph: 0, extra: true, post: true };
         footCops.push(cop); block.cops.push(cop);
       }
     });
@@ -516,13 +516,13 @@ function stepRoadblocks() {
 // helicopter flies, so a fast car can get out from under it. Once the heat's off it flies away.
 const HELI_STARS = 5, HELI_Z = 4, HELI_ORBIT = 3, HELI_SPEED = 2.6, SPOT_SPEED = 1.9, SPOT_R = 0.7, SPOT_REACH = 4, HELI_GONE = 45;
 let heli = null; // { x, y, z, h (heading), sx, sy (where the light's on the ground), leaving }
-const underCover = (x, y) => mode === 'room' || (mode === 'walk' || mode === 'drive' || mode === 'taxi') && (arcadeAt(x, y) || underEl(y));
+const underCover = (x, y) => mode === 'room' || (mode === 'walk' || mode === 'drive' || mode === 'taxi') && (arcadeAt(x, y) || underEl(y,x));
 function stepHeli(dt) {
   const hot = wanted.stars >= HELI_STARS, [wx, wy] = crimePos();
   if (!heli) {
     if (!hot) return false;
     const k = Math.random() * TAU; // in from somewhere off over the rooftops
-    heli = { x: mod(wanted.lastX + Math.cos(k) * 30, N), y: mod(wanted.lastY + Math.sin(k) * 30, N), z: HELI_Z, h: k + Math.PI, sx: 0, sy: 0, leaving: false, sweep: Math.random() * TAU };
+    heli = { x: worldCoord(wanted.lastX + Math.cos(k) * 30), y: worldCoord(wanted.lastY + Math.sin(k) * 30), z: HELI_Z, h: k + Math.PI, sx: 0, sy: 0, leaving: false, sweep: Math.random() * TAU };
     heli.sx = heli.x; heli.sy = heli.y;
   }
   if (!hot) heli.leaving = true;
@@ -539,15 +539,15 @@ function stepHeli(dt) {
     const want = Math.atan2(vy, vx), turn = mod(want - heli.h + Math.PI, TAU) - Math.PI;
     heli.h += clamp(turn, -1.2 * dt, 1.2 * dt);
     const sp = Math.min(HELI_SPEED, d * 0.8) * Math.max(0.3, Math.cos(turn));
-    heli.x = mod(heli.x + Math.cos(heli.h) * sp * dt, N); heli.y = mod(heli.y + Math.sin(heli.h) * sp * dt, N);
+    heli.x = worldCoord(heli.x + Math.cos(heli.h) * sp * dt); heli.y = worldCoord(heli.y + Math.sin(heli.h) * sp * dt);
   }
   // the light: on you, or sweeping round the search
   heli.sweep += dt * 0.9;
   const lx = lit ? wx : wanted.searchX + Math.cos(heli.sweep) * 1.6, ly = lit ? wy : wanted.searchY + Math.sin(heli.sweep * 1.3) * 1.6;
   let sx = rel(lx - heli.sx), sy = rel(ly - heli.sy), sd = Math.hypot(sx, sy);
-  if (sd > 0.001) { const step = Math.min(sd, SPOT_SPEED * dt); heli.sx = mod(heli.sx + sx / sd * step, N); heli.sy = mod(heli.sy + sy / sd * step, N); }
+  if (sd > 0.001) { const step = Math.min(sd, SPOT_SPEED * dt); heli.sx = worldCoord(heli.sx + sx / sd * step); heli.sy = worldCoord(heli.sy + sy / sd * step); }
   sx = rel(heli.sx - heli.x); sy = rel(heli.sy - heli.y); sd = Math.hypot(sx, sy);
-  if (sd > SPOT_REACH) { heli.sx = mod(heli.x + sx / sd * SPOT_REACH, N); heli.sy = mod(heli.y + sy / sd * SPOT_REACH, N); } // (as far as the beam can lean)
+  if (sd > SPOT_REACH) { heli.sx = worldCoord(heli.x + sx / sd * SPOT_REACH); heli.sy = worldCoord(heli.y + sy / sd * SPOT_REACH); } // (as far as the beam can lean)
   if (heli.leaving && near(heli.x, heli.y, wx, wy) > HELI_GONE) heli = null;
   return lit;
 }

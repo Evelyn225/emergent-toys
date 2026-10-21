@@ -2,7 +2,7 @@
 // your cars and boats are), how hungry, thirsty and hurt you are, the city time, and the last spot you stood on the
 // street, kept in localStorage every few seconds and when you leave. Not saved: the police (you start each visit clean).
 const SAVE_KEY = 'ascii-city-save';
-const SAVE_BACKUP_KEY = 'ascii-city-save-backup-v1-coastal-v1';
+let SAVE_BACKUP_KEY = worldReady ? 'ascii-city-save-backup-v2-coastal-v1' : 'ascii-city-save-backup-v1-coastal-v1';
 let citySaveBlocked = false; // protect an unrecognized save or one whose backup could not be written
 let citySaveBackupPending = null;
 function keepCitySaveBackup(text) {
@@ -14,7 +14,13 @@ function keepCitySaveBackup(text) {
 let streetSpot = null; // where you last were on foot outdoors (inside a shop or on a train, you come back out where you went in)
 function noteStreet() {
   if (mode === 'walk') streetSpot = { x: px, y: py, a };
+  else if(mode==='room'&&homeRecord(room)&&room.ret)streetSpot={x:room.ret[0],y:room.ret[1],a:room.ret[2]||0};
   else if (mode === 'drive' && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) };
+}
+function saveCityJourney() {
+  if(mode==='sea'&&sea&&(sea.hired||sea.deal==='mine'))return {kind:'boat',id:sea.id};
+  if(mode==='air'&&pilot?.owned&&!pilot.wrecked&&!pilot.ditched)return {kind:'aircraft',id:pilot.id};
+  return null;
 }
 function saveGame() {
   if (citySaveBackupPending != null && keepCitySaveBackup(citySaveBackupPending)) {
@@ -29,6 +35,7 @@ function saveGame() {
     courier: { job: courierJob, records: courierRecords },
     drugContacts,
     waypoint:mapWaypoint,
+    journey:saveCityJourney(),
     homes: savedCityHomes(), cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
 }
@@ -39,8 +46,12 @@ function loadGame() {
     text = localStorage.getItem(SAVE_KEY);
     if (text == null) return;
     prepared = prepareCitySave(JSON.parse(text));
+    if (prepared && !prepared.upgraded) for (const key of ['ascii-city-save-backup-v3-archipelago-v1','ascii-city-save-backup-v4-archipelago-v2']) {
+      if (localStorage.getItem(key) != null) SAVE_BACKUP_KEY = key;
+    }
   } catch (e) { citySaveBlocked = true; return; }
   if (!prepared) { citySaveBlocked = true; return; }
+  if (prepared.backupKey) SAVE_BACKUP_KEY = prepared.backupKey;
   citySaveBlocked = true;
   // Still load progress if storage is full, but retry the backup before allowing any overwrite.
   if (prepared.upgraded && !keepCitySaveBackup(text)) citySaveBackupPending = text;
@@ -71,7 +82,7 @@ function loadGame() {
     decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY),
     fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
     workshop: restoreWorkshop(h.workshop,h.kind),
-    door: Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => mod(v, N)) : null,
+    door: Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => worldCoord(v)) : null,
     pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
   }
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) {
@@ -97,7 +108,14 @@ function loadGame() {
   if (isFinite(d.boxRank)) boxRank = clamp(d.boxRank | 0, 0, BOXERS.length);
   const at = d.at;
   if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
-    px = mod(at.x, N); py = mod(at.y, N); a = at.a || 0; streetSpot = { x: px, y: py, a };
+    px = worldCoord(at.x); py = worldCoord(at.y); a = at.a || 0; streetSpot = { x: px, y: py, a };
+  }
+  if(d.journey?.kind==='boat') {
+    const boat=fleet.find(b=>b.id===d.journey.id&&(b.hired||b.deal==='mine'));
+    if(boat&&waterClear(boat,boat.x,boat.y,boat.hx,boat.hy))boardBoat(boat);
+  } else if(d.journey?.kind==='aircraft') {
+    const craft=aircraft.find(c=>c.id===d.journey.id&&c.owned&&!c.wrecked&&!c.ditched);
+    if(craft){pilot=craft;mode='air';craft.state='flown';px=craft.x;py=craft.y;airCamYaw=craft.yaw;}
   }
   citySaveBlocked = citySaveBackupPending != null;
 }

@@ -137,7 +137,7 @@ function roofCells(mx, my) { // the flat roof round (mx, my): its cells, all the
   }
   return out;
 }
-const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], elDeckHeight(x,y), courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
+const roofHeightAt = (x, y) => Math.max(map[idx(Math.floor(x), Math.floor(y))], islandRoofHeight(x,y), elDeckHeight(x,y), courierRoofHeight(x,y), museumRoofHeight(x, y), belleRoofHeight(x, y), architectureRoofHeight(x, y), landmarkRoofHeight(x, y), pavilionRoofHeight(x, y), homeBalconyHeight(x, y));
 const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower: just the one way down)
 function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
@@ -152,7 +152,7 @@ const overRoof = (x, y) => { const h = roofHeightAt(x, y); return h > 0 && body.
 // your feet moved `dz` metres relative to the ground under them (a step down is +, onto something higher is -)
 function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body.peak || 0) + Math.min(0, dz); } // (it lands next frame, counting the fall right)
 // the ground under your feet on the street, in cells: a building's front steps, or the el stairs (elevated.js)
-const walkGround = (x, y) => Math.max(architectureGroundHeight(x, y), elStairGround(x, y));
+const walkGround = outdoorGroundHeight;
 let elPass = null; // the turnstile you've swiped through: { st }, till you're up on the platform or off the stairs
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
   if (mode === 'walk' && underEl(py) && elStairGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
@@ -182,7 +182,7 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
-  const g = elStairGround(px, py); // (off the deck onto the top of the el stairs: no drop at all)
+  const g = walkGround(px, py); // (off the deck onto the stairs, or down onto natural ground)
   shiftFeet((roofH - g) * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
 function outdoorFeet() {
@@ -242,7 +242,7 @@ function drawBoard3D() {
   const roll = tr ? e * tr.flip * Math.PI * 2 : 0, yaw = tr ? e * tr.turn * Math.PI * 2 : 0;
   const nose = tr ? Math.sin(Math.min(1, p * 4) * Math.PI) * 0.35 : 0; // the pop: nose up for an instant
   const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, bob = moving ? Math.sin(T * 9) * 0.004 : 0;
-  const cy = eye * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob; // Ground height uses the same camera projection as the street.
+  const cy = (eye - walkGround(px, py)) * 10 - BOARD_H - body.z - (tr ? Math.sin(p * Math.PI) * 0.12 : 0) + bob;
   const cz = 2.0; // Slightly ahead of the feet, visible with a shallower downward glance.
   const sr = Math.sin(roll), cr = Math.cos(roll), sw = Math.sin(yaw), cw_ = Math.cos(yaw), sp = Math.sin(nose), cp = Math.cos(nose);
   const pX = projX, pY = projY;

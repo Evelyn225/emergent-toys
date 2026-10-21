@@ -54,15 +54,22 @@ function traceShot(x, y, z, hx, hy, slope) {
   let end = SHOT_RANGE, what = 'air';
   for (let d = 0.02; d < SHOT_RANGE; d += 0.02) { // the road, or the first building, along the way
     const zz = z + slope * d;
-    if (zz <= 0) { end = slope < 0 ? Math.max(0, -z / slope) : d; what = 'ground'; break; }
-    if (map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))] > zz) { end = d; what = 'wall'; break; }
+    if (zz <= Math.max(terrainHeight(x + hx * d, y + hy * d),roadBridgeBuiltHeight(x+hx*d,y+hy*d,zz))) {
+      let lo = Math.max(0, d - .02), hi = d;
+      for (let n = 0; n < 10; n++) {
+        const mid = (lo + hi) / 2;
+        if (z + slope * mid <= Math.max(terrainHeight(x + hx * mid, y + hy * mid),roadBridgeBuiltHeight(x+hx*mid,y+hy*mid,z+slope*mid))) hi = mid; else lo = mid;
+      }
+      end = hi; what = 'ground'; break;
+    }
+    if (Math.max(map[idx(Math.floor(x + hx * d), Math.floor(y + hy * d))],islandRoofHeight(x+hx*d,y+hy*d)) > zz) { end = d; what = 'wall'; break; }
   }
   let best = null;
   const closer = d => d > 0 && d < (best ? best.d : end);
   const figure = (o, kind) => { // somebody standing (a body 3cm either side of the line, up to head height), or lying flat
-    const ox = rel(o.x - x), oy = rel(o.y - y), along = ox * hx + oy * hy, across = Math.abs(oy * hx - ox * hy), zz = z + slope * along;
+    const ox = rel(o.x - x), oy = rel(o.y - y), along = ox * hx + oy * hy, across = Math.abs(oy * hx - ox * hy), zz = z + slope * along - outdoorGroundHeight(o.x, o.y);
     if (!closer(along)) return;
-    if (o.down ? across < 0.08 && zz < 0.04 : across < 0.032 && zz < (kind === 'cop' ? 0.185 : 0.175)) best = { d: along, what: kind, who: o };
+    if (zz >= 0 && (o.down ? across < 0.08 && zz < 0.04 : across < 0.032 && zz < (kind === 'cop' ? 0.185 : 0.175))) best = { d: along, what: kind, who: o };
   };
   for (const p of people) if (!p.hidden && !p.dead && near(p.x, p.y, x, y) < SHOT_RANGE) figure(p, 'person');
   for (const c of footCops) if (!c.dead && near(c.x, c.y, x, y) < SHOT_RANGE) figure(c, 'cop');
@@ -76,10 +83,11 @@ function traceShot(x, y, z, hx, hy, slope) {
       const a_ = (-half - o) / v, b_ = (half - o) / v;
       t0 = Math.max(t0, Math.min(a_, b_)); t1 = Math.min(t1, Math.max(a_, b_));
     }
-    if (t0 <= t1 && closer(t0) && z + slope * t0 < h) best = { d: t0, what: 'car', who: c };
+    const localZ = z + slope * t0 - roadGroundHeight(c.x, c.y);
+    if (t0 <= t1 && closer(t0) && localZ >= 0 && localZ < h) best = { d: t0, what: 'car', who: c };
   }
   const r = best || { d: end, what };
-  return { ...r, x: mod(x + hx * r.d, N), y: mod(y + hy * r.d, N), z: Math.max(0, z + slope * r.d) };
+  return { ...r, x: worldCoord(x + hx * r.d), y: worldCoord(y + hy * r.d), z: Math.max(0, z + slope * r.d) };
 }
 
 // ---- Q: pull the trigger. From (x, y, z), turned to yaw, looking up `slope`; indoors, the room's own coordinates.

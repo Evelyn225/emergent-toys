@@ -28,7 +28,7 @@ const PEE_SEEN = ['"Ugh, seriously?"', '"There are kids around!"', '"Oh, come ON
 function peeGround(x, y) {
   if (mode === 'room') { const h = ROOMW.cell(Math.floor(x), Math.floor(y)); return h ? { wall: h } : { z: stairRise(x, y) }; }
   const h = map[idx(Math.floor(x), Math.floor(y))] || 0;
-  return h > (mode === 'roof' ? roofH + 1e-6 : 0) ? { wall: h } : { z: h }; // (off a roof's edge it falls to whatever's below)
+  return h > (mode === 'roof' ? roofH + 1e-6 : 0) ? { wall: h } : { z: Math.max(h, outdoorGroundHeight(x, y)) }; // (off a roof's edge it falls to whatever's below)
 }
 
 // A drop moves only a few centimetres per frame, so test its short segment against the grid wall it entered.
@@ -128,7 +128,7 @@ function peeMarkHit(hit, p) {
     else if (hit.nx) { [hit.ux, hit.uy, hit.uz] = [0, 1, 0]; [hit.vx, hit.vy, hit.vz] = [0, 0, 1]; }
     else { [hit.ux, hit.uy, hit.uz] = [1, 0, 0]; [hit.vx, hit.vy, hit.vz] = [0, 0, 1]; }
   }
-  const s = p.s, x = p.at === '' ? mod(hit.x, N) : hit.x, y = p.at === '' ? mod(hit.y, N) : hit.y;
+  const s = p.s, x = p.at === '' ? worldCoord(hit.x) : hit.x, y = p.at === '' ? worldCoord(hit.y) : hit.y;
   let best = null, bd = Infinity;
   for (const q of peeMarks) {
     if (q.at !== p.at || q.s !== s || q.nx * hit.nx + q.ny * hit.ny + q.nz * hit.nz < 0.95) continue;
@@ -140,8 +140,8 @@ function peeMarkHit(hit, p) {
     const dx = p.at === '' ? rel(x - best.x) : x - best.x, dy = p.at === '' ? rel(y - best.y) : y - best.y, dz = hit.z - best.z;
     const u = dx * best.ux + dy * best.uy + dz * best.uz, v = dx * best.vx + dy * best.vy + dz * best.vz, w = PEE_DROP / (best.area + PEE_DROP);
     const mx = (best.ux * u + best.vx * v) * w, my = (best.uy * u + best.vy * v) * w, mz = (best.uz * u + best.vz * v) * w;
-    best.x = best.at === '' ? mod(best.x + mx, N) : best.x + mx;
-    best.y = best.at === '' ? mod(best.y + my, N) : best.y + my;
+    best.x = best.at === '' ? worldCoord(best.x + mx) : best.x + mx;
+    best.y = best.at === '' ? worldCoord(best.y + my) : best.y + my;
     best.z += mz;
     best.area = Math.min(best.area + PEE_DROP, 0.5); best.life = 1;
     return;
@@ -267,7 +267,7 @@ function peeLand(p, x, y, z) {
     const ang = Math.random() * Math.PI * 2, sp = (0.3 + Math.random() * 0.5) * p.s;
     peeDrops.push({ at: p.at, s: p.s, x, y, z: z + 0.01 * p.s, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, vz: (0.8 + Math.random() * 0.8) * p.s, t0: T, splash: true });
   }
-  if (!room_) { x = mod(x, N); y = mod(y, N); }
+  if (!room_) { x = worldCoord(x); y = worldCoord(y); }
   let best = null, bd = Infinity;
   for (const q of puddles) {
     if (q.at !== p.at || Math.abs(q.z - z) > 0.05 * p.s) continue;
@@ -277,6 +277,8 @@ function peeLand(p, x, y, z) {
   if (best) { // spreads, creeping a little toward where it's landing
     const w = PEE_DROP / (best.area + PEE_DROP);
     best.x += (room_ ? x - best.x : rel(x - best.x)) * w; best.y += (room_ ? y - best.y : rel(y - best.y)) * w;
+    const ground = peeGround(best.x, best.y);
+    if (Number.isFinite(ground.z)) best.z = ground.z;
     best.area = Math.min(best.area + PEE_DROP, 2.5); best.life = 1;
   } else {
     puddles.push({ at: p.at, s: p.s, x, y, z, area: PEE_DROP * 4, life: 1, seed: Math.random() * 100 });
