@@ -73,6 +73,7 @@ const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px 
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
   const islandPrompt=islandBuildingPrompt();if(islandPrompt)return islandPrompt;
+  const scenePrompt=streetScenePrompt();if(scenePrompt)return scenePrompt;
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return ''; // (up the el stairs: nothing at street level is in reach)
   const deliveryPrompt=courierPrompt();if(deliveryPrompt)return deliveryPrompt;
   const workshopLine = workshopPrompt(); if (workshopLine) return workshopLine;

@@ -6,6 +6,20 @@ const vm = require('node:vm');
 const path = require('node:path');
 const { loadCity } = require('./helpers/load-city.cjs');
 
+test('side-on sunrise and sunset discs stay bounded even beyond integer precision',()=>{
+  const ctx=vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../city/core.js'),'utf8'),ctx);
+  const source=fs.readFileSync(path.join(__dirname,'../city/city-render.js'),'utf8');
+  const disc=source.slice(source.indexOf('function disc('),source.indexOf('// lightning:'));
+  vm.runInContext(`let cols=64,rows=48,cw=8,projX=32,projY=24,hor=24,a=0,overcast=0;
+    FOV=Math.PI/2;
+    const ZB=new Float64Array(cols*rows).fill(Infinity),BG=new Uint8Array(cols*rows);let painted=0;
+    const set=(i)=>{if(i<0||i>=cols*rows)throw Error('off-screen write');painted++;};
+    ${disc}
+    for(const az of [-Math.PI/2,Math.PI/2,-Math.PI/2+1e-15,Math.PI/2-1e-15,0,Math.PI/4])disc(az,0,15,11,2.2,false);
+    if(!painted||painted>cols*rows)throw Error('invalid visible disc');`,ctx,{timeout:250});
+});
+
 test('column clipping preserves all visible depths, faces and texture coordinates', () => {
   const ctx = vm.createContext({});
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../city/core.js'), 'utf8'), ctx);

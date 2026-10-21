@@ -138,7 +138,7 @@ const stallSpeed = T_ => T_.vr * 0.85;
 // the top of whatever's built at (x, y), from the ground up: a building's roof, the el's deck, the airport's
 // buildings, a bridge tower; 0 on the ground. Given the height z something's at, a hangar it's inside is just its floor
 function builtHeight(x, y, z = Infinity) {
-  let h = Math.max(map[idx(Math.floor(x),Math.floor(y))] || 0, terrainHeight(x, y), islandRoofHeight(x,y), islandSightHeight(x,y), roadBridgeBuiltHeight(x,y,z), policeRoofHeight(x, y), airportHeight(x, y, z));
+  let h = Math.max(map[idx(Math.floor(x),Math.floor(y))] || 0, terrainHeight(x, y), islandRoofHeight(x,y), islandSightHeight(x,y), streetSceneHeight(x,y), roadBridgeBuiltHeight(x,y,z), policeRoofHeight(x, y), airportHeight(x, y, z));
   for (const t of towers) if (Math.abs(rel(x - t.x)) < 0.4 && Math.abs(rel(y - t.y)) < 0.25) h = Math.max(h, TOWER_H);
   return h;
 }
