@@ -1415,7 +1415,8 @@ test('covered streets stay free of snow and the Shotengai glass has no yellow ro
 const HOP_MAX_TEST = 1.9;
 test('bunny hopping: land and go straight back up and each hop is faster; stop and it is gone', () => withPage(async page => {
   const r = await page.evaluate(() => {
-    refillNeeds();
+    refillNeeds();paused=true;mode='walk';room=null;[px,py]=citySourcePoint(80,121);a=0;
+    body.ground=walkGround(px,py);body.groundMode=mode;
     // Frame by frame: keep moving and press jump just before landing, with or without air strafing.
     const go = (frames, { space = 1, strafe = 0 } = {}) => { K.KeyW = 1; K.Space = space; K.KeyD = strafe ? 1 : 0;
       for (let i = 0; i < frames; i++) {
@@ -2594,7 +2595,10 @@ test('the big map: opened from the pause menu, dragged and zoomed, Esc back to t
   assert.ok(await page.evaluate(z => BIGMAP.z > z, start[3]), 'the wheel zooms in');
   for (let k = 0; k < 20; k++) await page.mouse.wheel(0, 800);
   await page.waitForTimeout(100);
-  assert.ok(await page.evaluate(() => Math.abs(BIGMAP.z * N - Math.min(innerWidth, innerHeight)*.9) < 1), 'zoomed out, the whole city fits within both screen dimensions');
+  assert.ok(await page.evaluate(() => {
+    const v=bigMapViewport(),w=BIGMAP.z*MAP_WORLD.width,h=BIGMAP.z*MAP_WORLD.height;
+    return w<=v.w*.9+1&&h<=v.h*.9+1&&Math.max(w/v.w,h/v.h)>.89;
+  }), 'zoomed out, the finite chart fits in the space beside the directory');
   await page.keyboard.press('Escape');
   assert.deepStrictEqual(await page.evaluate(() => [bigMapOpen(), paused, pauseEl.style.display]), [false, true, 'flex']);
 }));

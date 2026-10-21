@@ -125,9 +125,9 @@ test('trains reverse at finite terminals and no deck or station repeats offshore
  const result=await page.evaluate(()=>{
   let min=Infinity,max=-Infinity,reversed=false,last=null;
   for(let t=0;t<450;t+=.5){const train=elTrain(0,0,t);min=Math.min(min,train.x);max=Math.max(max,train.x);if(last&&last.dir!==train.dir)reversed=true;last=train;}
-  return {min,max,reversed,stations:EL_STATIONS.map(s=>s.x),outside:elDeckHeight(700,EL_Y+1),station:!!elStationAt(0),trains:elTrains(0).length};
+  return {min,max,reversed,stations:EL_STATIONS.map(s=>s.x),aligned:EL_STATIONS.every(s=>elDeckHeight(s.x,EL_Y+1)===EL_TOP&&s.stairs.every(st=>st.ox===s.x)),outside:elDeckHeight(700,EL_Y+1),station:!!elStationAt(0),trains:elTrains(0).length};
  });
- assert.ok(result.reversed);assert.equal(result.min,Math.min(...result.stations));assert.equal(result.max,Math.max(...result.stations));assert.equal(result.outside,0);assert.equal(result.station,false);assert.equal(result.trains,2);
+ assert.ok(result.reversed);assert.equal(result.min,Math.min(...result.stations));assert.equal(result.max,Math.max(...result.stations));assert.equal(result.aligned,true);assert.equal(result.outside,0);assert.equal(result.station,false);assert.equal(result.trains,2);
 }));
 
 test('a coastal save migrates once with property contents, vehicles and its original bytes preserved',()=>fixture(async page=>{

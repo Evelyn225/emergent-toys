@@ -163,7 +163,9 @@ function assembleArchipelago() {
     pier[3] += dy;
   }
   for (const station of EL_STATIONS) {
-    geometry(station);
+    // Stations stay on the straight railway beside their stairs. Without a y
+    // coordinate, the generic transform mistakes the terminals for coastal lots.
+    geometry(station,'city',[CITY_LAYOUT.cityX,CITY_LAYOUT.southY]);
     for (const stair of station.stairs) {
       stair.ox += CITY_LAYOUT.cityX;
       stair.oy += CITY_LAYOUT.southY;
