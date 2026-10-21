@@ -161,7 +161,7 @@ function promptText() {
   if (who) return task && task.who === who ? (fetchHave() ? 'E: hand it over' : 'E: talk') : 'E: talk';
   if (nearDog()) return 'E: call the dog';
   const el = nearElStairs();
-  if (el) return elPass && elPass.st === el.s.stairs[el.tr] ? `Up the stairs to the ${el.s.name} el` : `E: swipe in for the ${el.s.name} el, ${el.tr ? 'eastbound' : 'westbound'} (${fmt$(SUBWAY_FARE)})`;
+  if (el) return elPass && elPass.st === el.s.stairs[el.tr] ? `Up the stairs to the ${el.s.name} el` : `E: swipe in for the ${el.s.name} el, ${el.tr ? 'south' : 'north'} platform (${fmt$(SUBWAY_FARE)})`;
   const st = nearStation();
   if (st) return `E: go down to ${st.name} station (${fmt$(SUBWAY_FARE)})`;
   if (ball && Math.hypot(rel(ball.x - px), rel(ball.y - py)) < 0.3) return 'E: pick up the ball';
