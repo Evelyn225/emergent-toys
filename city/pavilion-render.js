@@ -11,14 +11,12 @@ function merchantFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
   if (Math.min(along,width - along) < .08 || h - z < .07) {
     set(i,h - z < .07 ? '=' : '|',C(p.trim,L)); return true;
   }
+  if (z > .28 && z < .49 && architectureSignedFace(f, sh)) {
+    const sg = Math.sign(u * wc) || 1, zc = f.front ? .4275 : .365;
+    if (wallText(i,u,uStep,z,d,sh.word,sg * (f.start + width / 2),zc,
+      Math.min(.095,(width - .35) / Math.max(1,sh.word.length)),.055,C(japan ? WHITE : YEL,Math.max(L,open ? night * 13 : 0)),C(p.trim,2))) return true;
+  }
   if (z < .43) {
-    if (z > .33 && f.front) {
-      const sg = Math.sign(u * wc) || 1;
-      set(i,' ',0);
-      wallText(i,u,uStep,z,d,sh.word,sg * (f.start + width / 2),.365,
-        Math.min(.095,(width - .35) / Math.max(1,sh.word.length)),.055,C(japan ? WHITE : YEL,Math.max(L,open ? night * 13 : 0)),C(p.trim,2));
-      return true;
-    }
     if (architectureLeaseSign(i,u,uStep,z,d,wc,f,sh,L)) return true;
     const door = local + width * .15, doorHalf = Math.min(.14,width * .12);
     if (f.front && Math.abs(door) < doorHalf + .012 && z < .27) { // the way in: down to the pavement, under the awning
@@ -104,8 +102,10 @@ function pavilionDetailShade(o, i, t, L) {
   if (o.kind === 'shopboard' && face <= 4) {
     const along = face === 3 || face === 2 ? HIT.u : -HIT.u;
     if (face <= 2) { set(i,'|',C(YEL,L)); return true; }
-    const word = o.b.sh.word, letterW = Math.min(.1,(o.hl * 2 - .12) / word.length), hz = (.39 - z) / .05;
-    const ch = signLine(word,along / letterW + word.length / 2,hz,i,.365,midDepth(...R(o.x,o.y)),t,letterW,.05,farDepth(...R(o.x,o.y),o.hl),...faceDir(o.c,o.s));
+    const word = o.b.sh.word, letterW = Math.min(.1,(o.hl * 2 - .12) / word.length), zc = (o.z0 + o.z1) / 2;
+    const hz = (zc + .025 - z) / .05, normal = face === 3 ? 1 : -1;
+    const [vx, vy] = R(o.x - o.s * o.hw * normal,o.y + o.c * o.hw * normal);
+    const ch = signLine(word,along / letterW + word.length / 2,hz,i,zc,midDepth(vx,vy),t,letterW,.05,farDepth(vx,vy,o.hl),...faceDir(o.c,o.s));
     set(i,ch ?? ' ',C(o.b.region === 'chinatown' ? YEL : WHITE,Math.max(L,openAt(o.b.sh,tod) ? night * 13 : 0))); return true;
   }
   if (o.kind === 'blade') {

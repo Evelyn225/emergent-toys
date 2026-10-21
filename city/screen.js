@@ -24,7 +24,9 @@ const oneCell = (off, step) => { const k = off / step + 0.0137; return k >= -0.5
 // text painted on a wall: centered on wall coordinate u0 at height z0, one cell per letter however close you are.
 // Returns false when (u, z) is outside the text, so the caller draws the wall there instead.
 function wallText(i, u, uStep, z, d, text, u0, z0, cwid, bandH, col, bgc = NONE) {
-  if (Math.abs(z - z0) > bandH / 2) return false;
+  // Even a sub-cell band must reach the row containing its centre. Otherwise
+  // narrow storefront lettering can vanish entirely as the player walks away.
+  if (Math.abs(z - z0) > bandH / 2 && !oneCell(z - z0, d / projY)) return false;
   const q = (u - u0) / cwid + text.length / 2, p = Math.floor(q);
   if (p < 0 || p >= text.length) return false;
   if (wallTextBig(u, uStep, d, u0, cwid, bandH, text.length)) { // close enough: every letter drawn large in blocks
