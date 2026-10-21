@@ -19,14 +19,12 @@ function heldGesture(it, u) {
   } else if (HELD_FLIP.has(id)) {
     // The hand stays full width; only the object turns edge-on (drawHeldDense).
     pose.y = -u * pulse * 1.2;
-  } else if (id === 'snowglobe' || id === 'cityglobe' || kind === 'keys') {
-    pose.angle = Math.sin(phase * Math.PI * 6) * pulse * .13;
+  } else if (id === 'snowglobe' || id === 'cityglobe') {
+    pose.angle = pulse * .1;
     pose.y = -u * pulse * .6;
   } else if (HELD_PAGES.has(id)) {
-    pose.angle = Math.sin(phase * Math.PI * 2) * .1; pose.y = -u * pulse * .7;
-  } else {
-    pose.angle = Math.sin(phase * Math.PI * 2) * .07; pose.y = -u * pulse * .65;
-  }
+    pose.y = -u * pulse * .7;
+  } // Keys and ordinary gear remain steady; only purposeful gestures move the hand.
   return pose;
 }
 

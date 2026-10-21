@@ -76,7 +76,12 @@ test('raised ground occludes objects behind it and vehicles are drawn at terrain
     const [vehicleX,vehicleY]=citySourcePoint(131.5,231.5);
     drawVehicle({kind:'car',body:WHITE,id:1,v:0},vehicleX-px,vehicleY-py,1,0);
     drawBox=box;
-    const vehicleError=Math.max(...calls.map(b=>Math.abs(saved-b.eye-terrainHeight(vehicleX,vehicleY))));
+    // The rigid chassis now rests on the plane through its four tyre contacts,
+    // rather than keeping a horizontal body at the centre terrain sample.
+    const [hl,hw]=VEHICLES.car;
+    const support=[-1,1].flatMap(front=>[-1,1].map(side=>roadGroundHeight(vehicleX+front*hl*.62,vehicleY+side*hw*.88)));
+    const chassisHeight=support.reduce((sum,z)=>sum+z,0)/4;
+    const vehicleError=Math.max(...calls.map(b=>Math.abs(saved-b.eye-chassisHeight)));
     const eyeRestored=eye===saved;
     const sprites=CITY.sprites;CITY.sprites=()=>{};
     [px,py]=citySourcePoint(132,238.1);a=-Math.PI/2;pitch=.08;render(0);
@@ -88,8 +93,9 @@ test('raised ground occludes objects behind it and vehicles are drawn at terrain
     drawShape(0,-5,.01,.4,.08,()=>{flatDrawn++;return true;});
     drawTerrainColumn=terrain;
     CITY.sprites=sprites;
-    return {vehicleError,occluded,drawn,flatDrawn,eyeRestored};
+    return {vehicleError,vehicleParts:calls.length,occluded,drawn,flatDrawn,eyeRestored};
   });
+  assert.ok(result.vehicleParts>1,JSON.stringify(result));
   assert.ok(result.vehicleError < 1e-8, JSON.stringify(result));
   assert.ok(result.occluded > 100, JSON.stringify(result));
   assert.equal(result.drawn, 0, JSON.stringify(result));

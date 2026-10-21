@@ -471,7 +471,9 @@ function roadTraction(x, y) {
 }
 
 // Air input accelerates along the camera-relative wish direction without replacing existing momentum.
-const AIR_ACCEL = 8, AIR_WISH_CAP = 0.7;
+const HOP_TURN_RATE = 1.4; // radians per second, limiting abrupt mouse reversals
+const AIR_ACCEL = 1.4, AIR_WISH_CAP = 0.3; // chained hops
+const JUMP_AIR_ACCEL = 8, JUMP_AIR_WISH_CAP = .7; // a deliberate single jump can still round a corner
 function airStrafe(forward, side, speed, dt, yaw = a) {
   if (dt <= 0 || !Number.isFinite(speed)) return;
   const input = Math.hypot(forward, side);
@@ -479,9 +481,10 @@ function airStrafe(forward, side, speed, dt, yaw = a) {
   const cx = Math.cos(yaw), cy = Math.sin(yaw);
   const wx = (cx * forward - cy * side) / input, wy = (cy * forward + cx * side) / input;
   const wishSpeed = speed * input, vx = body.mx || 0, vy = body.my || 0;
-  const add = wishSpeed * AIR_WISH_CAP - (vx * wx + vy * wy);
+  const hopping=(body.hop||1)>1.01;
+  const add = wishSpeed * (hopping?AIR_WISH_CAP:JUMP_AIR_WISH_CAP) - (vx * wx + vy * wy);
   if (add <= 0) return;
-  const acceleration = Math.min(add, AIR_ACCEL * wishSpeed * dt);
+  const acceleration = Math.min(add, (hopping?AIR_ACCEL:JUMP_AIR_ACCEL) * wishSpeed * dt);
   body.mx = vx + wx * acceleration; body.my = vy + wy * acceleration;
 }
 // Hopping (body.hop > 1), your momentum also swings round toward where you're going, rate radians a second, at the
@@ -491,6 +494,19 @@ function airSteer(wx, wy, rate, dt) {
   if (dt <= 0 || v < 1e-6 || !(wx || wy)) return;
   const va = Math.atan2(vy, vx), turn = clamp(mod(Math.atan2(wy, wx) - va + Math.PI, Math.PI * 2) - Math.PI, -rate * dt, rate * dt);
   body.mx = Math.cos(va + turn) * v; body.my = Math.sin(va + turn) * v;
+}
+
+// A rigid chassis follows the plane through its four tyre contact samples.
+function vehicleGroundFrame([hl,hw],x,y,hx,hy,sample=roadGroundHeight) {
+  const axle=hl*.62,track=hw*.88;
+  const z=(u,v)=>sample(x+hx*u-hy*v,y+hy*u+hx*v);
+  const fl=z(axle,track),fr=z(axle,-track),bl=z(-axle,track),br=z(-axle,-track);
+  const along=clamp((fl+fr-bl-br)/(4*axle),-.65,.65),across=clamp((fl+bl-fr-br)/(4*track),-.65,.65);
+  const norm=v=>{const n=Math.hypot(...v);return v.map(q=>q/n);};
+  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const f=norm([hx,hy,along]),normal=norm([-hx*along+hy*across,-hy*along-hx*across,1]);
+  const side=norm(cross(normal,f)),up=cross(f,side);
+  return {z:(fl+fr+bl+br)/4,f,side,up,hx,hy,tilted:Math.abs(along)+Math.abs(across)>1e-5};
 }
 // ===== hunger, thirst and health. Food fills `food`, drink fills `drink` (0-100); both run down as you play
 // (real time: neither fast-forward nor a night's sleep speeds them up), thirst a little faster. Run either dry and
@@ -725,7 +741,7 @@ const FIG_POSES = {
   // flat on their back (knocked down by a car: people.js), arms flung out, one knee up
   down: () => ({ seat: -1.2, legs: [[1.55, 0.2, 1.55, 0.15], [1.1, 0.35, 2.0, 0.25]], arms: [[-1.5, 0.9, -1.4, 0.8], [-1.4, 0.75, -1.5, 0.9]], lean: -1.5 }),
   // shot (gun.js): flat out and still, one arm flung wide, the other across them, legs crooked
-  dead: () => ({ seat: -1.25, legs: [[1.5, 0.42, 1.25, 0.35], [1.62, 0.05, 1.75, 0.02]], arms: [[-1.55, 1.35, -1.6, 1.5], [0.6, -0.35, 1.9, -0.9]], lean: -1.56, roll: 0.12 }),
+  dead: () => ({ ...FIG_POSES.stand(), prone: true, legs: [[.04,.08,.05,.08],[.06,-.08,.05,-.08]], arms: [[.18,.4,.15,.4],[.2,.65,.2,.65]] }),
 };
 // a pose key: 'stand', 'walk3', 'sit7' (seat height in pixels), 'dance2'
 function figPose(key) {
@@ -859,6 +875,20 @@ function figBody(look, key) {
   if (look.badge) decals.push({ p: U(-1.45 * bw, 2.0 * bd + 0.01, 5.6), n: ey, role: R.BADGE, part: parts.indexOf(chest) });
   if (belted) decals.push({ p: U(0, 1.8 * bd + 0.01, 0.3), n: ey, role: R.BUCKLE, part: parts.indexOf(waist) });
   if (bot === 'pants' || bot === 'shorts') for (const sg of [1, -1]) decals.push({ p: [sg * 1.35 * bw, -1.7 * bd - 0.01, hipZ - 0.75], n: [0, -1, 0], role: R.POCKET, part: parts.indexOf(pelvis) });
+  if(P.prone) {
+    // Lay the whole body down; rotating only the torso leaves a seated silhouette.
+    const turn=v=>[v[0],-v[2],v[1]],point=v=>turn([v[0],v[1],v[2]-hipZ]);
+    for(const p of parts) {
+      if(p.k===2){p.a=point(p.a);p.b=point(p.b);}
+      else {p.c=point(p.c);p.ax=p.ax.map(turn);}
+    }
+    const bottom=Math.min(...parts.map(p=>p.k===2?Math.min(p.a[2],p.b[2])-p.r:p.c[2]-(p.k===1?p.ax.reduce((n,ax,k)=>n+Math.abs(ax[2])*p.h[k],0):Math.hypot(...p.ax.map((ax,k)=>ax[2]*p.r[k])))));
+    const lift=.2-bottom;
+    for(const p of parts)if(p.k===2){p.a[2]+=lift;p.b[2]+=lift;}else p.c[2]+=lift;
+    for(const d of decals){d.p=point(d.p);d.p[2]+=lift;d.n=turn(d.n);}
+    const face=[point(faceFrom),point(faceTo)];for(const v of face)v[2]+=lift;
+    return {parts,decals,face};
+  }
   return { parts, decals, face: [faceFrom, faceTo] };
 }
 
@@ -1053,7 +1083,7 @@ const figWorkerLook = seed => figLook({ hair: 'short', hat: 'hardhat', top: 'lon
 // guard), chat: false (not someone you can talk to), still: true (not a person at all: a mannequin, a cut-out, the shop
 // cat; still there when you break in at night), light (least brightness) }
 const figProp = (x, y, fig, o) => ({ fig, x, y, z: 0, h: 1.75, pose: 'stand', face: null, ...o });
-const isRoomPerson = s => !!s.fig && s.chat !== false; // someone you could talk to
+const isRoomPerson = s => !!s.fig && !s.dead && !s.hidden && s.chat !== false; // someone you could talk to
 // where something drawn as a figure is heading, from how it's moved since it was last drawn
 function figMotion(o) {
   const ex = rel(o.x - (o._mx ?? o.x)), ey = rel(o.y - (o._my ?? o.y)), d = Math.hypot(ex, ey);
@@ -1065,10 +1095,10 @@ function figMotion(o) {
 function drawFigProp(s, rx, ry) {
   figMotion(s);
   const unit = s.h / FIG_TALL;
-  let key = typeof s.pose === 'function' ? s.pose(s) : s.pose;
+  let key = s.dead ? 'dead' : typeof s.pose === 'function' ? s.pose(s) : s.pose;
   if (key === 'sit' || key === 'sitfold') key += Math.round((s.seatZ ?? 0.45) / unit);
   else if (key === 'stand' && s._moving) key = 'walk' + Math.floor(s._dist / (s.h * 0.85) * 8) % 8; // a stride every 1.5m or so
-  const [fx, fy] = s.dir != null ? [Math.cos(s.dir), Math.sin(s.dir)] : s.face || (s._fx != null && s._moving ? [s._fx, s._fy] : [0, 0]);
+  const [fx, fy] = s.dead&&s.down?[-s.down.fx,-s.down.fy]:s.dir != null ? [Math.cos(s.dir), Math.sin(s.dir)] : s.face || (s._fx != null && s._moving ? [s._fx, s._fy] : [0, 0]);
   drawFigure(rx, ry, s.z, s.h, fx, fy, s.fig, key, s.light && { light: s.light });
 }
 
@@ -1702,7 +1732,53 @@ const BUILD = {
 };
 // the Shotengai's streets have a roof over them (city-render.js draws it, from underneath)
 const ARCADE_Z = 0.62; // 6m up
-const arcadeAt = (x, y) => ROAD[idx(Math.floor(x), Math.floor(y))] > 0 && districtAt(x, y) === 'shotengai';
+// Cache one facade-to-facade span per metre of shopping street. Missing lots,
+// open squares and coastal edges have open sky, rather than unsupported roof panels.
+const ARCADE_SPANS = new Map(), ARCADE_CELLS = new Map(), ARCADE_BLOCKS = new Set(); let arcadeSpanSize = 0;
+function prepareArcadeSpans() {
+  if(arcadeSpanSize===N)return;
+  ARCADE_SPANS.clear();ARCADE_CELLS.clear();ARCADE_BLOCKS.clear();arcadeSpanSize=N;
+  for(let by=0;by<NB;by++)for(let bx=0;bx<NB;bx++)if(districtOf(bx,by)==='shotengai')
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)ARCADE_BLOCKS.add(bi(bx+dx,by+dy));
+}
+function arcadeSpanFor(ns, lane, along) {
+  prepareArcadeSpans();
+  const key=(ns?'v':'h')+lane+','+along;
+  if(ARCADE_SPANS.has(key))return ARCADE_SPANS.get(key);
+  const at=(cross)=>ns?idx(cross,along):idx(along,cross);
+  const cx=ns?lane+1:along+.5,cy=ns?along+.5:lane+1;
+  let span=null;
+  if(ROAD[at(lane)] && districtAt(cx,cy)==='shotengai') {
+    let lo=lane-1,hi=lane+2;
+    while(lo>=lane-3 && !(map[at(lo)]>=ARCADE_Z))lo--;
+    while(hi<=lane+4 && !(map[at(hi)]>=ARCADE_Z))hi++;
+    if(lo>=lane-3 && hi<=lane+4) {
+      let clear=true;
+      for(let q=lo+1;q<hi;q++) {
+        const x=ns?q+.5:along+.5,y=ns?along+.5:q+.5;
+        if(map[at(q)] || isWater(x,y)) {clear=false;break;}
+      }
+      if(clear)span={ns,lo:lo+1,hi,along};
+    }
+  }
+  ARCADE_SPANS.set(key,span);return span;
+}
+function arcadeSpanAt(x,y) {
+  x=worldCoord(x);y=worldCoord(y);
+  prepareArcadeSpans();
+  if(worldReady&&!inWorldGrid(x,y) || !ARCADE_BLOCKS.has(bi(Math.floor(x/8),Math.floor(y/8))))return null;
+  const cell=idx(Math.floor(x),Math.floor(y));
+  if(ARCADE_CELLS.has(cell))return ARCADE_CELLS.get(cell);
+  if(map[cell])return null;
+  for(const ns of [true,false]) {
+    const cross=ns?x:y,along=Math.floor(ns?y:x),lane=Math.round((cross-1)/8)*8;
+    if(Math.abs(cross-lane-1)>4)continue;
+    const span=arcadeSpanFor(ns,lane,along);
+    if(span && cross>=span.lo && cross<span.hi){ARCADE_CELLS.set(cell,span);return span;}
+  }
+  ARCADE_CELLS.set(cell,null);return null;
+}
+const arcadeAt = (x,y) => !!arcadeSpanAt(x,y);
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const kind = blockKind(bx, by), lm = landmarkOf.get(bi(bx, by));
   if (lm === 'clock') setCells(bx, by, 4, 4, 5, 5, 12, 3);
@@ -4166,6 +4242,7 @@ const gasFilling = c => !!c.pit && c.pit.stage === 'fill' && !c.player && !c.par
 function stepPit(c, dt) {
   const p = c.pit;
   c.ex = c.x; c.ey = c.y;
+  if(p.dead){c.v=0;c.brake=true;if(p.hidden){c.parked=true;c.pit=null;}return;}
   if (p.stage === 'fill') { // the driver's out at the pump
     c.v = 0; c.brake = true;
     if (T > p.until) { p.stage = 'out'; p.path = gasPath(gasExitPoses(p.lane)); p.s = 0; p.go = false; }
@@ -5220,6 +5297,7 @@ function roomTalkLine(kind, h = tod) {
 function roomPerson() {
   if (mode !== 'room' || !room || !room.props) return null;
   const k = room.def.keeper, keeperD = k ? Math.hypot(px - k[0], py - k[1]) : Infinity;
+  if(k && !room.keeperDead && keeperD<2 && ((k[0]-px)*Math.cos(a)+(k[1]-py)*Math.sin(a))/(keeperD||1)>.8)return null;
   let best = null, bd = 1.4;
   for (const s of room.props) {
     if (!isRoomPerson(s) || k && Math.hypot(s.x - k[0], s.y - k[1]) < 0.6) continue; // (not the one behind the counter)
@@ -6131,6 +6209,7 @@ function removeHeld() {
 const BOOK_LINES = ['"It was a dark and stormy night..." You read a chapter.', 'A detective novel. The butler, surely.', 'Poetry. You read one, then another.',
   'A guidebook to the city. Half the shops in it have closed.'];
 function useHeld(near) {
+  if(wanted.busted)return ['',null];
   const it = heldItem();
   if (!it) return fx.smoke>0 ? takeSmokeDrag() : ['Your hands are empty.', null];
   const d = ITEMS[it.id];
@@ -8388,6 +8467,7 @@ function roomSearchLead(dt) {
   }
   let anySees = false;
   for (const c of roomCops) {
+    if(c.dead){c.sees=false;continue;}
     c.sees = Math.hypot(c.x - px, c.y - py) < 9 && roomPoliceSees(c);
     if (c.sees) { anySees = true; wanted.roomX = px; wanted.roomY = py; c.targetX = px; c.targetY = py; c.searchI = 0; }
     else if (Math.hypot(c.x - c.targetX, c.y - c.targetY) < 0.28) {
@@ -8455,6 +8535,7 @@ function roofSearchLead(dt) {
   }
   let seen = false;
   for (const c of roofCops) {
+    if(c.dead){c.sees=false;continue;}
     c.sees = roofPoliceSees(c);
     if (c.sees) { seen = true; c.targetX = px; c.targetY = py; }
     if ((c.pathT -= dt) <= 0) { c.pathT = 0.25; c.path = policeRoofPath(c.x, c.y, c.targetX, c.targetY); }
@@ -8471,6 +8552,7 @@ function roofSearchLead(dt) {
 function drawRoofPolice() {
   for (const c of roofCops) {
     const z = policeRoofHeight(c.x, c.y);
+    if(c.dead){drawFigure(...R(c.x,c.y),z,.18,-c.down.fx,-c.down.fy,copLook(c),'dead');continue;}
     figMotion(c); const aim = c.aimT > T, [ax, ay] = aimAt(rel(px - c.x), rel(py - c.y)); // (shooting at you: gun.js)
     drawFigure(...R(c.x, c.y), z, 0.18, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : walkPose(c, 'run'), { light: 7 });
     if (c.sees && fract(T * 3) < 0.5) drawArt(...R(c.x, c.y), z + 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
@@ -8478,6 +8560,7 @@ function drawRoofPolice() {
 }
 function drawRoomPolice() {
   for (const c of roomCops) {
+    if(c.dead){drawFigure(c.x-px,c.y-py,0,1.8,-c.down.fx,-c.down.fy,copLook(c),'dead');continue;}
     figMotion(c);
     const aim = c.aimT > T, [ax, ay] = aimAt(px - c.x, py - c.y); // (shooting at you: gun.js)
     drawFigure(c.x - px, c.y - py, 0, 1.8, aim ? ax : c._fx || 0, aim ? ay : c._fy || 0, copLook(c), aim ? 'aim' : c._moving ? 'run' + (Math.floor(c._dist / 1.3 * 8) & 7) : 'stand', { light: 9 });
@@ -8632,7 +8715,7 @@ function policeReturnLane(c) {
 function stepReturningPolice(dt) {
   for (const [agents, indoors] of [[roomCops, true], [roofCops, false]]) for (let k = agents.length - 1; k >= 0; k--) {
     const c = agents[k];
-    if (!c.returning) continue;
+    if (!c.returning || c.dead) continue;
     const inPlace = indoors ? mode === 'room' : mode === 'roof', door = c.returnDoor;
     if (!inPlace || !door) { policeExitToStreet(c); agents.splice(k, 1); continue; }
     if ((c.pathT -= dt) <= 0) { c.pathT = 0.5; c.path = indoors ? roomPath(c.x, c.y, ...door) : policeRoofPath(c.x, c.y, ...door); }
@@ -8837,8 +8920,8 @@ function stepCrime(dt) {
   }
   // caught: a hand on your shoulder, or boxed in and stopped
   const grabbed = onFoot && footCops.some(c => c.chase && !c.down && near(c.x, c.y, px, py) < 0.22)
-    || inside && roomCops.some(c => c.sees && Math.hypot(c.x - px, c.y - py) < 0.32)
-    || onRoof && body.z < 1 && roofCops.some(c => c.sees && near(c.x, c.y, px, py) < 0.22);
+    || inside && roomCops.some(c => !c.dead && c.sees && Math.hypot(c.x - px, c.y - py) < 0.32)
+    || onRoof && body.z < 1 && roofCops.some(c => !c.dead && c.sees && near(c.x, c.y, px, py) < 0.22);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
   if (grabbed || wanted.bustT > 2.5) { if (wanted.stars >= 2) newsEvent('arrest', px, py, { crime: wanted.crime }); wanted.busted = true; return 'busted'; }
@@ -9033,7 +9116,7 @@ function cancelCourier() {
 function courierRoute() { return courierJob && COURIER_ROUTES.find(r=>r.id===courierJob.id); }
 function courierAtRecipient() {
   const r=courierRoute();
-  return !!r && mode==='roof' && Math.abs(roofH-r.recipient.z)<.12 && near(px,py,r.recipient.x,r.recipient.y)<.3 && body.z<.5;
+  return !!r && !r.recipient.dead && !r.recipient.hidden && mode==='roof' && Math.abs(roofH-r.recipient.z)<.12 && near(px,py,r.recipient.x,r.recipient.y)<.3 && body.z<.5;
 }
 function finishCourier() {
   const route=courierRoute();
@@ -9653,7 +9736,7 @@ const ANGLER_TIPS = ['"Squid come in after dark. They like the lights."', '"Pond
   '"Out past the end of the long piers, that\'s where the big ones are."', '"Rain\'s good. The fish don\'t mind rain."', '"Dawn and dusk. That\'s when they bite."',
   '"Caught a boot once. Then the other boot. Different years."', '"You can fish off a boat, you know. Have to sit still, mind."', '"Catfish. Nights, in the ponds. Ugly things. Good eating."'];
 // standing by one (a little closer than you'd stand to a stranger), and their line on the go
-const nearAngler = () => mode === 'walk' ? ANGLERS.find(o => Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.32) || null : null;
+const nearAngler = () => mode === 'walk' ? ANGLERS.find(o => !o.dead && !o.hidden && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.32) || null : null;
 // where one's at in their own slow round: most of the time waiting, then a bite and a fish reeled up (0..1 through it),
 // every minute or two
 function anglerPhase(o, t = T) {
@@ -9964,7 +10047,7 @@ const gun = { cool: 0, reload: 0, kick: 0, spin: 0, aimHeld: false, aim: 0, last
 const bodies = []; // { who, cop, x, y, t, amb, atT }
 const pools = []; // { x, y, t }: blood, spreading, then dried and gone
 const heldGun = () => { const it = heldItem(); return it && ITEMS[it.id].kind === 'gun' ? it : null; };
-const canAimGun = () => !!heldGun() && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') && !freecam && !gun.reload;
+const canAimGun = () => !wanted.busted && !!heldGun() && (mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat') && !freecam && !gun.reload;
 const gunAim = () => canAimGun() ? gun.aim : 0;
 const ammoLeft = () => inv.reduce((n, it) => n + (it.id === 'ammo' ? it.uses : 0), 0);
 // what the pawnbroker says, handing it over
@@ -9972,7 +10055,7 @@ const GUN_SOLD = 'The pawnbroker looks at the door, then at you, and brings a bu
 // R: thumb the rounds in. Done when the time's up (stepGun)
 function reloadGun() {
   const g = heldGun();
-  if (!g || gun.reload > 0) return null;
+  if (wanted.busted || !g || gun.reload > 0) return null;
   if (g.uses >= CYLINDER) return ['All six are in.', null];
   if (!ammoLeft()) return ['No rounds. The pawnbroker sells them by the box, after nine.', 'click'];
   gun.reload = RELOAD_T;
@@ -10008,13 +10091,16 @@ function traceShot(x, y, z, hx, hy, slope) {
   }
   let best = null;
   const closer = d => d > 0 && d < (best ? best.d : end);
-  const figure = (o, kind) => { // somebody standing (a body 3cm either side of the line, up to head height), or lying flat
-    const ox = rel(o.x - x), oy = rel(o.y - y), along = ox * hx + oy * hy, across = Math.abs(oy * hx - ox * hy), zz = z + slope * along - outdoorGroundHeight(o.x, o.y);
+  const figure = (o, kind, spot = null) => { // somebody standing (a body 3cm either side of the line, up to head height), or lying flat
+    const tx=spot?.x??o.x,ty=spot?.y??o.y;
+    const ox = rel(tx - x), oy = rel(ty - y), along = ox * hx + oy * hy, across = Math.abs(oy * hx - ox * hy), zz = z + slope * along - (spot?.z??outdoorGroundHeight(tx,ty));
     if (!closer(along)) return;
-    if (zz >= 0 && (o.down ? across < 0.08 && zz < 0.04 : across < 0.032 && zz < (kind === 'cop' ? 0.185 : 0.175))) best = { d: along, what: kind, who: o };
+    if (zz >= 0 && (o.down ? across < 0.08 && zz < 0.04 : across < 0.032 && zz < (spot?.h??(kind === 'cop' ? 0.185 : 0.175)))) best = { d: along, what: kind, who: o, anchor:spot };
   };
   for (const p of people) if (!p.hidden && !p.dead && near(p.x, p.y, x, y) < SHOT_RANGE) figure(p, 'person');
   for (const c of footCops) if (!c.dead && near(c.x, c.y, x, y) < SHOT_RANGE) figure(c, 'cop');
+  for(const c of roofCops)if(!c.dead)figure(c,'cop',{x:c.x,y:c.y,z:policeRoofHeight(c.x,c.y),h:.18});
+  if(typeof gunSceneFigures==='function')for(const target of gunSceneFigures())figure(target.who,'person',target);
   for (const c of cars) { // a car: where the line goes into its box, if that's below its roof
     if (c.player || near(c.x, c.y, x, y) > SHOT_RANGE + 0.4) continue;
     const [hl, hw, h] = CAR_HIT[c.kind] || CAR_DEFAULT, ox = rel(x - c.x), oy = rel(y - c.y);
@@ -10036,22 +10122,26 @@ function traceShot(x, y, z, hx, hy, slope) {
 // What happened, for gun-ui.js: null (not ready), { empty }, or the shot and what it hit
 function fireGun(x, y, z, yaw, slope, indoors = false) {
   const g = heldGun();
-  if (!g || gun.cool > 0 || gun.reload > 0) return null;
+  if (wanted.busted || !g || gun.cool > 0 || gun.reload > 0) return null;
   if (g.uses <= 0) { gun.cool = 0.25; return { empty: true }; }
   g.uses--; gun.cool = FIRE_GAP; gun.kick = 1; gun.spin++; gun.lastShotT = T;
   wanted.fired = true; // (and now they'll shoot back)
-  if (indoors) { // in a shop: into the ceiling, near enough. They're on the phone before the ringing stops
-    const [rx, ry] = crimePos();
-    if (gunCrime('gunfire', rx, ry) === '') reports.push({ t: T + reportDelay(), x: rx, y: ry, kind: 'gunfire' });
-    const shot = { x0: x, y0: y, z0: z, x: x + Math.cos(yaw) * 3, y: y + Math.sin(yaw) * 3, z: z + slope * 3, what: 'wall', indoors: true, t: T };
-    gun.shots.push(shot); return shot;
+  if (indoors) {
+    const hx=Math.cos(yaw),hy=Math.sin(yaw),hit=typeof traceRoomShot==='function'?traceRoomShot(x,y,z,hx,hy,slope):{d:3,x:x+hx*3,y:y+hy*3,z:z+slope*3,what:'wall'};
+    const [rx,ry]=crimePos();
+    if(hit.what==='person'||hit.what==='cop')killRoomFigure(hit.who,hx,hy);
+    if(hit.what==='cop')addWanted('copkill',rx,ry,true);
+    const witnesses=typeof room!=='undefined'&&room?.props.some(p=>p.fig&&!p.fig.build&&!p.still&&!p.dead&&!p.hidden);
+    if(witnesses)reports.push({t:T+reportDelay(),x:rx,y:ry,kind:hit.what==='person'?'murder':'gunfire'});
+    else gunCrime('gunfire',rx,ry);
+    const shot={x0:x,y0:y,z0:z,...hit,indoors:true,t:T};gun.shots.push(shot);return shot;
   }
   const hx = Math.cos(yaw), hy = Math.sin(yaw), hit = traceShot(x, y, z, hx, hy, slope);
   const shot = { x0: x, y0: y, z0: z, ...hit, t: T };
   gun.shots.push(shot);
   if (hit.what === 'person' || hit.what === 'cop') {
     if (!hit.who.dead) {
-      killFigure(hit.who, hx, hy, hit.what === 'cop');
+      killFigure(hit.who, hx, hy, hit.what === 'cop',hit.anchor);
       if (gunCrime(hit.what === 'cop' ? 'copkill' : 'murder', x, y) === '') gunCrime('gunfire', x, y); // (nobody saw it: they heard it)
     } else gunCrime('gunfire', x, y);
   } else {
@@ -10075,12 +10165,12 @@ function gunCrime(kind, x, y) {
   return '';
 }
 // somebody shot: down where they stood, falling away from the shot, and staying there
-function killFigure(o, hx, hy, cop = false) {
-  o.down = { t: 0, dur: Infinity, fx: hx, fy: hy }; o.dead = true;
+function killFigure(o, hx, hy, cop = false, anchor = null) {
+  o.down = { t: 0, dur: Infinity, fx: hx, fy: hy }; o.dead = true; o.looted=false;
   for (const k of ['talk', 'flee', 'gawk', 'help', 'hailing', 'follow', 'chase', 'goal']) delete o[k];
   if (o.path) o.path.length = 0;
-  bodies.push({ who: o, cop, x: o.x, y: o.y, t: T, amb: null, atT: 0 });
-  pools.push({ x: o.x, y: o.y, t: T });
+  bodies.push({ who: o, cop, x: anchor?.x??o.x, y: anchor?.y??o.y, t: T, amb: null, atT: 0 });
+  pools.push({ x: anchor?.x??o.x, y: anchor?.y??o.y, t: T });
   if (pools.length > 24) pools.shift();
   for (const p of people) if (p.help === o || p.gawk === o) { delete p.help; delete p.gawk; }
 }
@@ -10114,8 +10204,9 @@ function removeBody(k) {
   if (b.cop) { // the department sends somebody else out on that beat
     const at = footCops.indexOf(o);
     if (at >= 0) footCops.splice(at, 1);
+    for(const group of [roofCops,roomCops]){const i=group.indexOf(o);if(i>=0)group.splice(i,1);}
     if (o.base) { const corner = { ix: o.base.bx, iy: o.base.by, qx: 0, qy: 1 }, [x, y] = cornerXY(corner); footCops.push({ x, y, corner, dir: 0, goal: null, chase: false, ph: Math.random() * 9, base: o.base }); }
-  } else respawnPerson(o);
+  } else if(people.includes(o))respawnPerson(o);else o.hidden=true;
 }
 // every frame: the reload, the bodies and their ambulances, the panic dying down, and the police shooting back.
 // Returns 'down' when they've put you on the ground
@@ -10151,8 +10242,8 @@ function copsShoot(dt) {
   if (!wanted.fired || !wanted.stars || wanted.busted) return null;
   const inside = mode === 'room', [wx, wy] = crimePos(), driving = !!me && (mode === 'drive' || mode === 'taxi');
   const moving = driving ? Math.abs(me.v) : Math.hypot(body.mx || 0, body.my || 0);
-  const shooters = inside ? roomCops.filter(c => c.sees).map(c => [c, Math.hypot(c.x - px, c.y - py) / 10]) // (a room's in metres)
-    : mode === 'roof' ? roofCops.filter(c => c.sees).map(c => [c, near(c.x, c.y, px, py)])
+  const shooters = inside ? roomCops.filter(c => !c.dead && c.sees).map(c => [c, Math.hypot(c.x - px, c.y - py) / 10]) // (a room's in metres)
+    : mode === 'roof' ? roofCops.filter(c => !c.dead && c.sees).map(c => [c, near(c.x, c.y, px, py)])
     : [...footCops.filter(c => c.chase && !c.down), ...cars.filter(c => c.pursuit && !c.player && !c.wrecked)]
       .map(c => [c, near(c.x, c.y, wx, wy)]).filter(([c, d]) => d < COP_FIRE_R && lineOfSight(c.x, c.y, wx, wy)).sort((p, q) => p[1] - q[1]).slice(0, COP_GUNS);
   const live = new Set(shooters.map(s => s[0]));
@@ -10246,7 +10337,7 @@ function restoreWorkshop(raw, kind = 'home_studio') {
   w.parts = w.parts.filter(p => {
     const d=WORKSHOP_PARTS[p.id]; if (!d.halfX) return true;
     const hx=Math.abs(Math.cos(p.a))*d.halfX+Math.abs(Math.sin(p.a))*d.halfY, hy=Math.abs(Math.sin(p.a))*d.halfX+Math.abs(Math.cos(p.a))*d.halfY;
-    return p.x-hx>=1 && p.x+hx<=width-1.4 && p.y-hy>=height-6 && p.y+hy<=height-1.4 && Math.abs(p.x-(kind==='home_belle'?9:width/2))>=hx+1;
+    return p.x-hx>=1-1e-6 && p.x+hx<=width-1+1e-6 && p.y-hy>=height-6 && p.y+hy<=height-1+1e-6 && Math.abs(p.x-(kind==='home_belle'?9:width/2))>=hx+1;
   });
   w.parts = w.parts.filter((p,index,all) => WORKSHOP_PARTS[p.id].halfX || all.some(b => b.id === 'bench' && b.key === p.bench) &&
     !all.slice(0,index).some(q=>q.id===p.id && q.bench===p.bench));
@@ -13175,6 +13266,7 @@ function citySprites() {
   drawCampfires(); // (cooking-ui.js)
   forNear(extrasB, o => {
     if (!inView(rel(o.x - px), rel(o.y - py), 0.6)) return;
+    if(o.hidden)return;
     if (o.spire && mode === 'roof' && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.8 || o.when && !o.when()) return; // (not the spire you're standing under)
     if (o.parkLamp) drawParkLamp(...R(o.x, o.y));
     else if (o.fairPost) drawFairPost(o, ...R(o.x, o.y));
@@ -13182,14 +13274,14 @@ function citySprites() {
     else if (o.bike != null) drawBike(o, ...R(o.x, o.y));
     else if (o.banner) drawBanner(o, ...R(o.x, o.y));
     else if (o.fishSign) drawFishSign(o, ...R(o.x, o.y));
-    else if (o.person != null) drawFigure(...R(o.x, o.y), o.z, 0.175, 0, 0, o.look ||= figStreetLook(hash(o.x, o.y, 9081) * 1e9 | 0, o.person, GRAY), 'stand', { light: 6 });
+    else if (o.person != null) drawFigure(...R(o.x, o.y), o.z, 0.175, o.dead?-o.down.fx:0, o.dead?-o.down.fy:0, o.look ||= figStreetLook(hash(o.x, o.y, 9081) * 1e9 | 0, o.person, GRAY), o.dead?'dead':'stand', { light: 6 });
     else drawArt(...R(o.x, o.y), o.z, o.w, o.h, o.art, o.col);
   });
   drawGrandHotelDome();
   for (const v of vendors) {
     if (!inView(rel(v.x - px), rel(v.y - py), 0.5)) continue;
     drawCart(v);
-    drawFigure(...R(v.x + v.ox, v.y + v.oy), 0, 0.175, 0, 0, v.look ||= figStreetLook(hash(v.x, v.y, 9080) * 1e9 | 0, v.shirt, GRAY)); // (minding the cart: facing you)
+    if(!v.hidden)drawFigure(...R(v.x + v.ox, v.y + v.oy), 0, 0.175, v.dead?-v.down.fx:0, v.dead?-v.down.fy:0, v.look ||= figStreetLook(hash(v.x, v.y, 9080) * 1e9 | 0, v.shirt, GRAY),v.dead?'dead':'stand'); // (minding the cart: facing you)
   }
   for (const r of radios) { const [vx, vy] = R(r.x, r.y); if (inView(vx, vy, 1.2)) drawRadioTower(vx, vy); }
   for (const s of stations) { const [vx, vy] = R(s.x, s.y); if (Math.hypot(vx, vy) < vis && inView(vx, vy, 1)) drawStationEntrance(s, vx, vy); }
@@ -13242,9 +13334,9 @@ function citySprites() {
     const [vx, vy] = R(b.x, b.y);
     if (Math.hypot(vx, vy) < vis) drawVehicle(b.parked || (b.parked = { kind: b.kind, body: EV_BODY[b.kind], ev: true, state: 'home', v: 0 }), vx, vy, -1, 0);
   }
-  for (const m of fairFolk) { // the crowd at the fair (fair.js)
+  for (const m of fairFolk) if(!m.hidden) { // the crowd at the fair (fair.js)
     const [vx, vy] = R(m.x, m.y);
-    if (Math.abs(vx) < vis && Math.abs(vy) < vis) { figMotion(m); drawFigure(vx, vy, 0, 0.175, m._fx || 0, m._fy || 0, streetLook(m), walkPose(m)); }
+    if (Math.abs(vx) < vis && Math.abs(vy) < vis) { figMotion(m); drawFigure(vx, vy, 0, 0.175, m._fx || 0, m._fy || 0, streetLook(m), m.dead?'dead':walkPose(m)); }
   }
   for (const m of people) if (!m.hidden) { // facing the way they last walked: from behind, their back (and their pockets)
     if (m.dead && sheeted(m)) drawSheet(m, ...R(m.x, m.y)); // (shot, and the paramedics are here: gun-ui.js)
@@ -13908,7 +14000,7 @@ function drawAmbulance(m, vx, vy, hx, hy) {
   const white = (f, L) => C(WHITE, (2.5 + L * 0.7) * shadeFace(f));
   const sill = (i, w, L) => { BG[i] = C(GRAY, 1); return set(i, '_', C(GRAY, L * 0.3)), true; };
   const wheel = (i, L) => { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; };
-  drawBox(boxAt(vx + hx * mo, vy + hy * mo, hx, hy, mhl, hw, 0.012, MH), (i, t, L) => { // the box
+  vehicleDrawBox(boxAt(vx + hx * mo, vy + hy * mo, hx, hy, mhl, hw, 0.012, MH), (i, t, L) => { // the box
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
     BG[i] = white(f, L);
     if (f === 6) return set(i, ' ', 0), true;
@@ -13931,7 +14023,7 @@ function drawAmbulance(m, vx, vy, hx, hy) {
     if (u > mhl * 0.6 && w > 0.1 && w < 0.14) { BG[i] = C(CYAN, 2 + L * 0.15); return set(i, ' ', 0), true; } // a little side window
     return set(i, ' ', 0), true;
   });
-  drawBox(boxAt(vx + hx * co, vy + hy * co, hx, hy, chl, hw * 0.94, 0.012, CH), (i, t, L) => { // the cab
+  vehicleDrawBox(boxAt(vx + hx * co, vy + hy * co, hx, hy, chl, hw * 0.94, 0.012, CH), (i, t, L) => { // the cab
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
     BG[i] = white(f, L);
     if (f === 6 || f === 2) return set(i, ' ', 0), true;
@@ -13949,11 +14041,11 @@ function drawAmbulance(m, vx, vy, hx, hy) {
     return set(i, Math.abs(u + chl * 0.65) < 0.004 ? '|' : ' ', C(GRAY, L * 0.5)), true;
   });
   const lb = mo + mhl - 0.02; // the light bar, and a lamp on each back corner
-  drawBox(boxAt(vx + hx * lb, vy + hy * lb, hx, hy, 0.018, hw * 0.85, MH, MH + 0.016), (i, t, L) => {
+  vehicleDrawBox(boxAt(vx + hx * lb, vy + hy * lb, hx, hy, 0.018, hw * 0.85, MH, MH + 0.016), (i, t, L) => {
     const side = HIT.v > 0 ? RED : BLUE, on = !m.wrecked && lightsOn_(m) && strobe() === side;
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
-  for (const s of [-1, 1]) drawBox(boxAt(vx + hx * (mo - mhl + 0.012) - hy * s * hw * 0.8, vy + hy * (mo - mhl + 0.012) + hx * s * hw * 0.8, hx, hy, 0.01, 0.012, MH, MH + 0.012), (i, t, L) => {
+  for (const s of [-1, 1]) vehicleDrawBox(boxAt(vx + hx * (mo - mhl + 0.012) - hy * s * hw * 0.8, vy + hy * (mo - mhl + 0.012) + hx * s * hw * 0.8, hx, hy, 0.01, 0.012, MH, MH + 0.012), (i, t, L) => {
     const on = lightsOn_(m) && strobe() === (s > 0 ? RED : BLUE);
     BG[i] = C(RED, on ? 15 : 4); return set(i, on ? '*' : ' ', C(WHITE, 15)), true;
   });
@@ -13972,11 +14064,38 @@ function drawCarFire(m, vx, vy, hx, hy) {
     drawRod(fx_ - hy * s_, fy_ + hx * s_, top, fx_ - hy * s_ + hx * sway, fy_ + hx * s_ + hy * sway, top + tall * fl, 0.016, flame);
   }
 }
+let vehicleDrawFrame=null;
+function vehicleDrawBox(b,shade) {
+  const frame=vehicleDrawFrame;
+  if(!frame?.tilted)return drawBox(b,shade);
+  const {f,side,up,hx,hy,vx,vy}=frame;
+  const turn=(x,y,z)=>{
+    const u=x*hx+y*hy,v=-x*hy+y*hx;
+    return [f[0]*u+side[0]*v+up[0]*z,f[1]*u+side[1]*v+up[1]*z,f[2]*u+side[2]*v+up[2]*z];
+  };
+  // Conservative world bounds retain drawBox's normal culling and depth tests.
+  let x0=Infinity,y0=Infinity,z0=Infinity,x1=-Infinity,y1=-Infinity,z1=-Infinity;
+  for(const u of [-b.hl,b.hl])for(const v of [-b.hw,b.hw])for(const z of [b.z0,b.z1]) {
+    const q=turn(b.x-vx+u*b.c-v*b.s,b.y-vy+u*b.s+v*b.c,z);
+    x0=Math.min(x0,q[0]);x1=Math.max(x1,q[0]);y0=Math.min(y0,q[1]);y1=Math.max(y1,q[1]);z0=Math.min(z0,q[2]);z1=Math.max(z1,q[2]);
+  }
+  const envelope=boxAt(vx+(x0+x1)/2,vy+(y0+y1)/2,1,0,(x1-x0)/2,(y1-y0)/2,z0,z1);
+  const inverse=(x,y,z)=>{
+    const u=x*f[0]+y*f[1]+z*f[2],v=x*side[0]+y*side[1]+z*side[2];
+    return [hx*u-hy*v,hy*u+hx*v,x*up[0]+y*up[1]+z*up[2]];
+  };
+  const origin=inverse(-vx,-vy,eye);
+  drawBox(envelope,shade,(ox,oy,oz,rx,ry,rz)=>{
+    const r=inverse(rx,ry,rz);
+    return rayBox(origin[0]+vx,origin[1]+vy,origin[2],r[0],r[1],r[2],b);
+  });
+}
 function drawVehicle(m, vx, vy, hx, hy) {
-  const savedEye = eye;
-  eye -= roadGroundHeight(px + vx, py + vy);
+  const savedEye=eye,savedFrame=vehicleDrawFrame;
+  const frame=vehicleGroundFrame(VEHICLES[m.kind],px+vx,py+vy,hx,hy);
+  eye-=frame.z;vehicleDrawFrame={...frame,vx,vy};
   try { drawVehicleBody(m, vx, vy, hx, hy); }
-  finally { eye = savedEye; }
+  finally { eye=savedEye;vehicleDrawFrame=savedFrame; }
 }
 function drawVehicleBody(m, vx, vy, hx, hy) {
   drawCarFire(m, vx, vy, hx, hy);
@@ -13988,7 +14107,7 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
   const fobHeadlight = !fobBlinking || Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0;
   const braking = !wreck && (m.brake || m.v < 0.05), body = wreck ? GRAY : m.body, burnt = wreck ? 0.35 : 1;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
-  drawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
+  vehicleDrawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w, k = shadeFace(f);
     BG[i] = C(body, (1.5 + L * 0.45) * k * burnt);
     if (wreck) return set(i, hash(Math.floor(u * 30), Math.floor(w * 50), m.id) < 0.3 ? '%' : f === 5 ? '.' : ' ', C(GRAY, 2 + L * 0.2)), true; // (scorched)
@@ -14009,7 +14128,7 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
     return set(i, Math.abs(w - 0.05) < 0.006 ? '-' : ' ', C(body, L * 0.6)), true;
   });
   // cabin: glass all round, pillars at the corners, a roof
-  if (cab) drawBox(boxAt(vx + hx * cof, vy + hy * cof, hx, hy, chl, hw * 0.9, top, cab), (i, t, L) => {
+  if (cab) vehicleDrawBox(boxAt(vx + hx * cof, vy + hy * cof, hx, hy, chl, hw * 0.9, top, cab), (i, t, L) => {
     const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w;
     if (f === 5 || f === 6) { BG[i] = C(body, (1.5 + L * 0.45) * shadeFace(f)); return set(i, ' ', 0), true; }
     const edge = f <= 2 ? Math.abs(v) > hw * 0.8 : Math.abs(u - cof) > chl * 0.85;
@@ -14020,14 +14139,14 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
     return set(i, ' ', 0), true;
   });
   const roof = cab || top; // what sits on the roof
-  if (m.kind === 'taxi') drawBox(boxAt(vx, vy, hx, hy, 0.03, 0.05, roof, roof + 0.02), (i, t, L) => {
+  if (m.kind === 'taxi') vehicleDrawBox(boxAt(vx, vy, hx, hy, 0.03, 0.05, roof, roof + 0.02), (i, t, L) => {
     BG[i] = C(YEL, lightsOn ? 13 : 9); return set(i, HIT.face <= 4 ? '=' : ' ', C(GRAY, 3)), true;
   });
-  if (m.ev || m.patrol) drawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
+  if (m.ev || m.patrol) vehicleDrawBox(boxAt(vx + hx * (m.kind === 'amb' ? hl * 0.7 : 0), vy + hy * (m.kind === 'amb' ? hl * 0.7 : 0), hx, hy, 0.02, hw * 0.8, roof, roof + 0.015), (i, t, L) => {
     const side = HIT.v > 0 ? RED : BLUE, on = !wreck && lightsOn_(m) && strobe() === side; // the light bar: red on one side, blue the other
     BG[i] = C(side, on ? 15 : 3); return set(i, on ? '*' : '=', C(on ? WHITE : side, on ? 15 : 7)), true;
   });
-  if (m.kind === 'fire') drawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
+  if (m.kind === 'fire') vehicleDrawBox(boxAt(vx - hx * 0.05, vy - hy * 0.05, hx, hy, 0.28, 0.035, top, top + 0.025), (i, t, L) => {
     BG[i] = C(GRAY, 1 + L * 0.2); return set(i, Math.abs(fract(HIT.u * 30) - 0.5) < 0.2 ? '|' : '=', C(WHITE, L * 0.8)), true; // the ladder
   });
 }
@@ -14816,6 +14935,21 @@ const washbasin = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
   rod(vx - fx * 0.2, vy - fy * 0.2, 0.86, vx - fx * 0.12, vy - fy * 0.12, 0.98, 0.012, GRAY, 1.3); // the tap
   drawBox(boxAt(vx - fx * 0.27, vy - fy * 0.27, fx, fy, 0.01, 0.25, 1.15, 1.75), (i, t, L) => { BG[i] = C(CYAN, 1.6 + (HIT.w - 1.15) * 2); return set(i, fract((HIT.v + HIT.w) * 3) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; }); // the mirror
 }, [0.24, 0.24, 0.86]);
+// An oval enamel bath: curved shell, open rim, recessed basin and a wall-end tap.
+const BATHTUB = (x,y) => ({...ROOM_MODEL(x,y,(vx,vy)=>{
+  const enamel=solid(WHITE,{bright:2.1}), n=32;
+  for(let k=0;k<n;k++) {
+    const t=(k+.5)*Math.PI*2/n, tx=-.37*Math.sin(t),ty=.99*Math.cos(t),len=Math.hypot(tx,ty);
+    drawBox(boxAt(vx+.37*Math.cos(t),vy+.99*Math.sin(t),tx/len,ty/len,len*Math.PI/n+.006,.048,.1,.62),enamel);
+  }
+  // The bottom sits below the rim; from above you can see into the bowl.
+  const basin=(i,t,L)=>{BG[i]=C(CYAN,1.4+L*.15);return set(i,HIT.face===5&&Math.hypot(HIT.u,HIT.v)<.04?'o':' ',C(GRAY,L)),true;};
+  drawBox(boxAt(vx,vy,0,1,.67,.31,.08,.18),basin);
+  for(const end of [-1,1])drum(vx,vy+end*.67,.31,.08,.18,basin);
+  rod(vx,vy-.99,.62,vx,vy-.99,.84,.018,GRAY,1.5);
+  rod(vx,vy-.99,.84,vx,vy-.81,.84,.018,GRAY,1.5);
+  for(const side of [-1,1])drum(vx+side*.13,vy-.95,.035,.63,.67,CHROME);
+},[.42,1.04,.62]),bath:true});
 // a bathroom wall from inside: white tiles to shoulder height (thin grout lines), a trim, painted plaster above
 function wcWall(i, u, z, L) {
   if (z > 1.3) { BG[i] = C(WHITE, 1.7 + L * 0.1); return set(i, ' ', 0); }
@@ -15576,11 +15710,12 @@ function homePlan(w, h, tier) {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) extra[x + ',' + y] = c;
   };
   const home = tier === 0
-    ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.3, 4.4], fridge: [8.45, 5.2], pet: [1.4, 7.2], dining: [5.5, 5.8] }
-    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.5 : 8.7], shelf: [10.8, 3.5], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
+    ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.18, 4.4], fridge: [8.45, 5.6], pet: [1.4, 7.2], dining: [5.5, 5.8] }
+    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.5 : 8.7], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
   const wc = tier === 0 ? { x0: 7, y0: 1, x1: 9, y1: 4, sign: [6, 3, 3.5] }
     : { x0: 15, y0: 1, x1: inside, y1: 5, sign: [14, 4, 4.5] };
   wall(wc.x0 - 1, 1, wc.x0 - 1, wc.y1, 'W');
+  if (wc.x1 < inside) wall(wc.x1, 1, wc.x1, wc.y1, 'W');
   wall(wc.x0 - 1, wc.y1, wc.x1 - 1, wc.y1, 'W');
   wall(wc.x0, wc.y1, tier ? wc.x0 + 1 : wc.x0, wc.y1, '.');
   if (tier) { // bedroom and study/library, with wide doorways into the living room
@@ -15605,7 +15740,7 @@ function homePlan(w, h, tier) {
   if (tier) windows.push({ face: 'west', center: tier === 2 ? 12.7 : 11, half: 2.3 }, { face: 'north', center: 4.2, half: 2 }, { face: 'north', center: 11.8, half: 1.8 });
   const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6], [3.5, h - 4], [inside - 3, h - 4]]
     : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3], [3.5, h - 4], [w - 3, h - 4]];
-  return { home, wc, balcony, windows, lamps, tier, grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
+  return { home, wc, balcony, windows, lamps, tier, shelfAxis: [0,1], bedBounds: [home.bed[0],home.bed[1]+.2,tier?1.25:1,.85], grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
 }
 // Upholstered seating and separate dining chairs, with real legs and backs.
 function homeChair(x, y, fx, fy, col = BRICK) {
@@ -15641,7 +15776,7 @@ function homeDef(w, h, tier) {
     return set(i, ' ', 0), true;
   };
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
-    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
+    spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
       BX(bed[0], bed[1] + 0.2, tier ? 1.25 : 1, 0.85, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? tier === 2 ? GREEN : BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
       BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
@@ -15653,11 +15788,11 @@ function homeDef(w, h, tier) {
         BG[i] = C(NEON[(T * 0.7 | 0) & 3], 3 + hash(Math.floor(HIT.u * 20), Math.floor(HIT.w * 20), T * 4 | 0) * 6); return set(i, ' ', 0), true;
       }),
       BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
-      BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' })), // a shelf for things you bring home
+      BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' }), 0, 1), // a shelf for things you bring home
       BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
-      ...toilet(plan.wc.x1 - 0.75, 1.9, 1, porcelain),
-      BX(plan.wc.x0 + 0.4, 1.45, 0.32, 0.35, 0, 0.85, solid(WHITE, { top: 'o' })), // basin
-      ...(tier ? [BX(plan.wc.x1 - 1.25, 4.25, 1, 0.38, 0, 0.6, solid(WHITE, { top: '~' }))] : []), // bath
+      ...toilet(plan.wc.x1 - (tier ? 1.4 : .8), 1.42, -1, porcelain),
+      washbasin(plan.wc.x0 + 0.4, 1.35, 0, 1),
+      ...(tier ? [BATHTUB(plan.wc.x1 - .43, 3.4)] : []),
       { ...BX(sofa[0], sofa[1], tier ? 1.55 : 0.95, 0.45, 0.15, 0.5, solid(tier === 2 ? GREEN : BLUE, { panel: 0.7 })), seat: true, x: sofa[0], y: sofa[1], fx: 0, fy: -1 },
       BX(sofa[0], sofa[1] + 0.4, tier ? 1.55 : 0.95, 0.1, 0.3, 1.0, solid(tier === 2 ? GREEN : BLUE)),
       ...[-1, 1].map(s => BX(sofa[0] + s * (tier ? 1.5 : 0.92), sofa[1], 0.12, 0.45, 0.3, 0.75, solid(tier === 2 ? GREEN : BLUE))),
@@ -16074,7 +16209,7 @@ function roomCeil(i, r, x, rx, ry) {
 }
 function roomSprites() {
   for (const s of room.props) {
-    if (s.tick) s.tick(s); // (someone walking about)
+    if (s.tick && !s.dead) s.tick(s); // (someone walking about)
     if (s.draw) { if (inView(s.x - px, s.y - py, 1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
     if (s.box) { drawBox({ ...s.box, x: s.box.x - px, y: s.box.y - py }, s.shade); continue; }
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
@@ -16089,8 +16224,8 @@ function roomSprites() {
     drawWorkshopPreview();
     const { shelf, pet } = homeLayout(room);
     for (const [k, it] of (home.decor || []).entries()) {
-      const x = shelf[0] + (k - ((home.decor.length - 1) / 2)) * 0.3;
-      drawDropped({ ...it, displayZ: 1.07 }, x - px, shelf[1] - py, 0.065);
+      const offset = (k - ((home.decor.length - 1) / 2)) * 0.3, axis = room.def.shelfAxis || [1,0];
+      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 0.065);
     }
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
@@ -17042,11 +17177,11 @@ function pawnWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.0) { BG[i] = C(GRAY, 1.3); return set(i, fract(u * 2) < 0.05 ? '|' : ' ', C(GRAY, L * 0.5)), true; }
   BG[i] = C(STONE, 1.3); return set(i, (Math.floor(u * 5) + Math.floor(z * 3)) % 9 ? ' ' : '.', C(GRAY, L * 0.4)), true;
 }
-const grille = (x, y, hl, z0, z1) => BX(x, y, hl, 0.02, z0, z1, (i, t, L) => { // a grille, with a window to talk through in the middle
+const grille = (x, y, hl, z0, z1) => Object.assign(BX(x, y, hl, 0.02, z0, z1, (i, t, L) => { // a grille, with a window to talk through in the middle
   if (Math.abs(HIT.u) < 0.45 && HIT.w < z0 + 0.5 || HIT.face >= 5) return false;
   if (fract(HIT.u / 0.12) < 0.25 || Math.abs(HIT.w - z0 - 0.52) < 0.03) { BG[i] = C(GRAY, 2.5 + L * 0.3); return set(i, '|', C(WHITE, 8)), true; }
   return false;
-});
+}), {shotPermeable:true});
 ROOM_DEFS.pawn = { grid: boxRoom(12, 9), light: 0.75, floor: 'lino', ceil: 'strip', sign: true, signAt: 6, wall: pawnWall, keeper: [6, 1.55],
   props: r => {
     const p = [...glassCase(6, 2.4, 2.1, 0.35, 1.0, caseGoods('o@*0', [YEL, WHITE, YEL, CYAN], true, 97), GRAY), grille(6, 2.1, 2.1, 1.0, 2.25), standing(6, 1.55, r.neon),
@@ -17054,7 +17189,7 @@ ROOM_DEFS.pawn = { grid: boxRoom(12, 9), light: 0.75, floor: 'lino', ceil: 'stri
       ...glassCase(10.55, 5.2, 1.2, 0.35, 1.0, caseGoods('O0o', [YEL, WHITE, GRAY], true, 98), GRAY, 0, 1),
       tvSet(10.75, 1.55, 0, -1, 0.3, 0.35), tvSet(10.75, 2.35, 0, -1, 0.3, 0.35), tvSet(10.75, 1.95, 0.55, -1, 0.3, 0.35, movie),
       BX(10.75, 1.95, 0.25, 0.75, 0, 0.0001, solid(GRAY)), bike(3.6, 7.6, BLUE), ceilingFan(6, 5)];
-    p.push(...shoppers([[5.5, 3.3, 0, -1], [9.6, 5.2, 1, 0], [2.2, 4.2, -1, 0]], 0.4));
+    p.push(...shoppers([[4.1, 3.3, 0, -1], [9.6, 5.2, 1, 0], [2.2, 4.2, -1, 0]], 0.4));
     return p;
   } };
 
@@ -17647,7 +17782,17 @@ function gasFacade(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
 // before the solids: who's filling up where (for the pumps' displays), and the drivers out at the pumps, the hose from
 // the pump to the filler cap
 const GAS_FILLING = []; // (per station, by lane: the car filling up there, while it's near enough to see)
+function gasFigureTargets() {
+  const out=[];
+  for(const c of cars)if(gasFilling(c)) {
+    const p=c.pit,st=p.st,l=p.lane,[isle]=GAS_FILL[l],sd=Math.sign(GAS.islands[isle]-GAS.lanes[l]);p.gasDriver=true;
+    out.push(sceneFigureTarget(p,st.x0+GAS.pumpX+.13,st.y0+GAS.lanes[l]+sd*.175,0,.175,{sd,car:c}));
+  }
+  for(const b of bodies)if(b.who.gasDriver&&!out.some(p=>p.who===b.who))out.push(sceneFigureTarget(b.who,b.x,b.y,0));
+  return out;
+}
 function gasSprites() {
+  for(const p of gasFigureTargets())if(p.who.dead&&!p.who.hidden)drawSceneFigure(p,p.who.look ||= figStreetLook(17,BLUE,BLUE));
   for (const st of GAS_STATIONS) {
     const [vx, vy] = R(st.x0 + 1.5, st.y0 + 1);
     GAS_FILLING[st.k] = Math.abs(vx) < vis + 2 && Math.abs(vy) < vis + 2 ? [null, null, null] : null;
@@ -17658,6 +17803,7 @@ function gasSprites() {
     GAS_FILLING[st.k][l] = c;
     const [vx, vy] = R(st.x0 + GAS.pumpX + 0.13, st.y0 + ly + sd * 0.175);
     if (!inView(vx, vy, 0.4)) continue;
+    if(p.dead||p.hidden)continue;
     drawFigure(vx, vy, 0, 0.175, 0, -sd, p.look ||= figStreetLook(c.id * 7919 + 17, pick([RED, BLUE, GREEN, WHITE, GRAY]), BLUE), 'stand');
     // the hose: out of the pump's side, sagging, into the filler cap
     const [ax, ay] = R(st.x0 + GAS.pumpX + 0.05, st.y0 + iy - sd * 0.045), [bx, by] = R(st.x0 + GAS.pumpX, st.y0 + ly + sd * 0.115);
@@ -18425,12 +18571,12 @@ ROOM_DEFS.courier={grid:boxRoom(14,10,{'3,0':'E','4,0':'E'}),light:.9,floor:'woo
     props.push(BX(10,4,.3,.2,1,1.4,solid(STONE,{top:'='})),BX(11.2,4,.25,.18,1,1.3,solid(BRICK)));
     return props;
   }};
-const courierRecipientNear=()=>mode==='roof'&&COURIER_ROUTES.find(r=>near(px,py,r.recipient.x,r.recipient.y)<.3&&Math.abs(roofH-r.recipient.z)<.1);
+const courierRecipientNear=()=>mode==='roof'&&COURIER_ROUTES.find(r=>!r.recipient.dead&&!r.recipient.hidden&&near(px,py,r.recipient.x,r.recipient.y)<.3&&Math.abs(roofH-r.recipient.z)<.1);
 // Nico plays on after his guitar comes back, for the rest of that night.
 let courierEncore=false;
 function stepCourierEncore() { if(courierEncore&&tod>=4&&tod<20)courierEncore=false; }
 // How loud his playing is where you stand: carried across the roofs, gone indoors.
-const courierSerenade=()=>courierEncore&&mode!=='room'?clamp(1-near(px,py,COURIER_NICO.x,COURIER_NICO.y)/3,0,1)**1.5:0;
+const courierSerenade=()=>courierEncore&&!COURIER_NICO.dead&&!COURIER_NICO.hidden&&mode!=='room'?clamp(1-near(px,py,COURIER_NICO.x,COURIER_NICO.y)/3,0,1)**1.5:0;
 function courierPrompt() {
   if(mode==='ladder')return 'W/S: climb up/down | E or Space: let go';
   if(courierAtRecipient()){const r=courierRoute();return `E: deliver the ${r.parcel} to ${r.recipient.name}`;}
@@ -18948,11 +19094,13 @@ function drawCourier() {
       return set(i,'#',C(o.shortcut?CYAN:YEL,Math.max(L*1.2,night*7))),true; // (reflective paint: it catches any light)
     });
   });
-  drawFigure(...R(COURIER_GARDEN.x,COURIER_GARDEN.y),COURIER_GARDEN.z,.175,0,0,COURIER_FOLK.garden);
-  drawFigure(...R(COURIER_FOREMAN.x,COURIER_FOREMAN.y),COURIER_FOREMAN.z,.175,0,0,COURIER_FOLK.foreman);
-  // Nico paces until his guitar turns up, then sits on his crate and plays.
+  for(const p of courierFigureTargets())drawSceneFigure(p,COURIER_FOLK[p.key],p.pose,p.hx||0,0,{light:night*7});
+}
+function courierFigureTargets() {
   const pace=Math.cos(T*.9),nico=courierEncore?[COURIER_NICO.x+.23,COURIER_NICO.y+.12]:[COURIER_NICO.x+Math.sin(T*.9)*.08,COURIER_NICO.y];
-  drawFigure(...R(...nico),COURIER_NICO.z,.175,courierEncore?0:Math.sign(pace),0,COURIER_FOLK.nico,courierEncore?'sit7':Math.abs(pace)>.15?'walk'+(Math.floor(T*7)&7):'stand',{light:night*7});
+  return [sceneFigureTarget(COURIER_GARDEN,COURIER_GARDEN.x,COURIER_GARDEN.y,COURIER_GARDEN.z,.175,{key:'garden'}),
+    sceneFigureTarget(COURIER_FOREMAN,COURIER_FOREMAN.x,COURIER_FOREMAN.y,COURIER_FOREMAN.z,.175,{key:'foreman'}),
+    sceneFigureTarget(COURIER_NICO,...nico,COURIER_NICO.z,.175,{key:'nico',hx:courierEncore?0:Math.sign(pace),pose:courierEncore?'sit7':Math.abs(pace)>.15?'walk'+(Math.floor(T*7)&7):'stand'})];
 }
 // Big neon letters in the city's 3x5 font, centred on a sign face: s across the face (left to right as you read it),
 // w up it. Returns the letter's index where a lit stroke is, else -1.
@@ -19643,9 +19791,11 @@ function shotengaiUpper(i, u, z, zz, fl, fz, h, d, uStep, sh, sk, open, L, glowL
 // It's glass: the steel shows (beams down the sides, a rib every 5m, a bar down the middle and across between the
 // ribs) and between them you see the sky, and the buildings above the roofline
 function arcadeRoofPart(wx, wy) {
-  const k = idx(Math.floor(wx), Math.floor(wy)), r = ROAD[k], ns = r === 1 || r === 3 && fract(wy / 8) >= 0.25;
-  const across = (ns ? mod(wx, 8) : mod(wy, 8)) / 2, along = ns ? wy : wx;
+  const span=arcadeSpanAt(wx,wy);if(!span)return null;
+  const across=((span.ns?wx:wy)-span.lo)/(span.hi-span.lo),along=span.ns?wy:wx;
   if (across < 0.02 || across > 0.98) return 'beam';
+  const lane=Math.round(((span.ns?wx:wy)-1)/8)*8;
+  if(fract(along)<.035 && !arcadeSpanFor(span.ns,lane,Math.floor(along)-1) || fract(along)>.965 && !arcadeSpanFor(span.ns,lane,Math.floor(along)+1))return 'rib';
   if (fract(along * 2) < 0.035) return 'rib';
   if (Math.abs(across - 0.5) < 0.015 || Math.abs(fract(along * 2) - 0.5) < 0.025) return 'bar';
   return null; // glass
@@ -20963,6 +21113,20 @@ function stepGardens(dt) {
   if (gardensOpen(tod)) stepGardens.rang = false;
 }
 const GARDEN_FOLK = [], GARDEN_ANIMALS = {}; // the paddlers and picnickers' looks, made the first time they're drawn
+const GARDEN_ACTORS=Array.from({length:8},()=>({}));
+function gardenFigureTargets() {
+  const out=[];
+  for(let k=0;k<2;k++) {
+    const th=T*.03+k*3,hx=-Math.sin(th)*LAKE.rx,hy=Math.cos(th)*LAKE.ry;
+    const p=sceneFigureTarget(GARDEN_ACTORS[k],...gw(LAKE.x+Math.cos(th)*LAKE.rx*.55,LAKE.y+Math.sin(th)*LAKE.ry*.55),.01,.17,{k,hx,hy,pose:'sit6',paddler:true,shirt:[RED,BLUE][k]});
+    if(gardensOpen(tod)||p.who.dead)out.push(p);
+  }
+  for(const [x,y,k]of [[16.5,12.4,1],[6.2,8.6,2],[18.6,9.8,3]])for(const side of [-1,1]) {
+    const index=k*2+(side>0),p=sceneFigureTarget(GARDEN_ACTORS[index],...gw(x+side*.045,y+side*.01),0,.17,{k:index,hx:-side,hy:0,pose:'grass',shirt:(side<0?[YEL,BLUE,GREEN]:[MAG,RED,WHITE])[k-1]});
+    if(gardensOpen(tod)&&day>=.3||p.who.dead)out.push(p);
+  }
+  return out;
+}
 function gardenSprites() {
   const [cx, cy] = gw(GARDEN.w / 2, GARDEN.h / 2);
   if (Math.hypot(rel(cx - px), rel(cy - py)) > vis + 14) return;
@@ -20993,11 +21157,10 @@ function gardenSprites() {
   const pk = T * 0.02, pgx = 12 + Math.cos(pk) * 1.4, pgy = 6.2 + Math.sin(pk * 2) * 0.5; // the peacock, strutting about the middle lawn
   animal(pgx, pgy, 0, 0.13, -Math.sin(pk) * 1.4, Math.cos(pk * 2), A.peacock, Math.floor(T * 4) & 3);
   BOATS_PARKED.forEach(([bx, by], k) => { if (!boat || boat.from !== k) drawSwanBoat(...V(bx, by), 1, 0); }); // moored along the jetty, pointing out over the lake (less the one you're out in)
-  for (let k = 0; k < (gardensOpen(tod) ? 2 : 0); k++) { // two boats out on the lake, being paddled round (by day)
-    const th = T * 0.03 + k * 3, bgx = LAKE.x + Math.cos(th) * LAKE.rx * 0.55, bgy = LAKE.y + Math.sin(th) * LAKE.ry * 0.55;
-    const [bx, by] = V(bgx, bgy), hx = -Math.sin(th) * LAKE.rx, hy = Math.cos(th) * LAKE.ry, hn = Math.hypot(hx, hy);
-    drawSwanBoat(bx, by, hx / hn, hy / hn);
-    drawFigure(bx, by, 0.01, 0.17, hx, hy, GARDEN_FOLK[k] ||= figAnyone([RED, BLUE][k]), 'sit6'); // the paddler, sat low in the swan (it hides their legs), facing the way it's going
+  for(const p of gardenFigureTargets()) {
+    if(p.who.hidden)continue;
+    if(p.paddler){const n=Math.hypot(p.hx,p.hy);drawSwanBoat(...R(p.x,p.y),p.hx/n,p.hy/n);}
+    drawSceneFigure(p,GARDEN_FOLK[p.k] ||= figAnyone(p.shirt),p.pose,p.hx,p.hy);
   }
   // the gates: iron, open by day, shut at night, and the name over the main one
   for (const [ggx, ggy, o] of GARDEN_GATES) {
@@ -21021,10 +21184,7 @@ function gardenSprites() {
   for (const [pgx2, pgy2, k] of [[16.5, 12.4, 1], [6.2, 8.6, 2], [18.6, 9.8, 3]]) {
     if (!gardensOpen(tod) || day < 0.3) continue;
     drawPicnicBlanket(...V(pgx2, pgy2), k & 1 ? RED : BLUE);
-    for (const [s, shirt] of [[-1, [YEL, BLUE, GREEN][k - 1]], [1, [MAG, RED, WHITE][k - 1]]]) { // facing each other across the blanket
-      const [fx_, fy_] = gw(pgx2 + s * 0.045, pgy2 + s * 0.01);
-      drawFigure(rel(fx_ - px), rel(fy_ - py), 0, 0.17, -s, 0, GARDEN_FOLK[k * 2 + (s > 0)] ||= figAnyone(shirt), 'grass');
-    }
+
   }
   if (body.seat && body.seat.grass) { // the picnic basket, on the blanket's far left corner
     const s = body.seat, al = PICNIC_AHEAD + PICNIC_LONG * 0.55, ac = -PICNIC_HALF * 0.55, bx = s.x + s.fx * al - s.fy * ac, by = s.y + s.fy * al + s.fx * ac;
@@ -22250,10 +22410,12 @@ function clubSide(i, u, uStep, z, d, side, along, len, sgn, a0, L, glow, blink) 
 }
 // the bouncer and the velvet rope on the sidewalk outside
 const BOUNCER = figBouncerLook(), CLUB_DANCERS = [MAG, CYAN, YEL].map((col, k) => figDancerLook(k + 11, col)); // (SEQUINS' first three)
+const CLUB_BOUNCER={};
+const clubFigureTarget=()=>sceneFigureTarget(CLUB_BOUNCER,CLUB.bx*8+5.06,CLUB.by*8+1.9,0,.19);
 function clubSprites() {
   const dx_ = CLUB.bx * 8 + 2 + 3, dy_ = CLUB.by * 8 + 2 - 0.1, [vx, vy] = R(dx_, dy_);
   if (Math.hypot(vx, vy) > vis) return;
-  drawFigure(vx + 0.06, vy, 0, 0.19, 0, -1, BOUNCER, 'fold', { light: 6 }); // arms folded, facing the street
+  drawSceneFigure(clubFigureTarget(),BOUNCER,'fold',0,-1,{light:6}); // arms folded, facing the street
   drawVelvetRope(vx - 0.13, vy, vx - 0.03, vy);
 }
 // brass posts with a red rope sagging between them, hooked on just under their knobs
@@ -23191,7 +23353,7 @@ const nearPerson = () => {
   }
   return best;
 };
-const nearVendor = () => vendors.find(v => Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
+const nearVendor = () => vendors.find(v => !v.dead && !v.hidden && Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
 // a vending machine you're facing, within arm's reach (3m of its middle)
 const nearMachine = () => mode === 'walk' ? machinesB[bi(Math.floor(px / 8), Math.floor(py / 8))].find(m => {
   const ex = m.x - px, ey = m.y - py, d = Math.hypot(ex, ey), dot = (ex * Math.cos(a) + ey * Math.sin(a)) / d;
@@ -23211,8 +23373,20 @@ const nearExit = () => {
 };
 const nearLighthouse = () => mode === 'walk' && Math.hypot(rel(LIGHTHOUSE.x - px), rel(LIGHTHOUSE.y - py)) < LIGHTHOUSE.r + 0.12;
 // in your own place: which thing you're by (bed, closet, tv)
-const homeSpot = () => { const s = room.def.spots; if (!s) return null; let best = null, bd = 1.3; for (const k in s) { const d = Math.hypot(px - s[k][0], py - s[k][1]); if (d < bd) { bd = d; best = k; } } return best; }; // (the nearest: the stove and the fridge are side by side)
-const nearKeeper = () => { const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
+const homeSpot = () => {
+  const s=room.def.spots;if(!s)return null;let best=null,bd=1.3;
+  for(const k in s) {
+    let d=Math.hypot(px-s[k][0],py-s[k][1]);
+    if(k==='bed' && room.def.bedBounds) {
+      const [x,y,hx,hy]=room.def.bedBounds;
+      const edge=Math.hypot(Math.max(0,Math.abs(px-x)-hx),Math.max(0,Math.abs(py-y)-hy));
+      if(edge>.65)continue;d=edge+.3;
+    }
+    if(d<bd){bd=d;best=k;}
+  }
+  return best;
+};
+const nearKeeper = () => { if(room.keeperDead)return false;const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
   const islandPrompt=islandBuildingPrompt();if(islandPrompt)return islandPrompt;
@@ -23810,9 +23984,9 @@ function interact() {
       enterRoom(kind, { word: 'HOME', ret: [px, py, a], cell: [home.cell % N, Math.floor(home.cell / N)] }, def.entry);
       return say('Home. Workshop cupboard by the entrance; 120 spaces in your closet.', 5);
     }
-    if (sh.club && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
-    if (sh.fee && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
-    if (sh.fee) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : sh.museum ? 'Enjoy the collection. No flash photography.' : 'Mind the butterflies.'}"`, 3);
+    if (sh.club && !CLUB_BOUNCER.dead && !CLUB_BOUNCER.hidden && wanted.stars) return say('The bouncer folds his arms. "Not with the cops on your tail, pal."', 3);
+    if (sh.fee && !(sh.club && (CLUB_BOUNCER.dead || CLUB_BOUNCER.hidden)) && !pay(sh.fee)) return say(`Admission's ${fmt$(sh.fee)}. You're short.`);
+    if (sh.fee && !(sh.club && (CLUB_BOUNCER.dead || CLUB_BOUNCER.hidden))) say(sh.club ? `${fmt$(sh.fee)} cover. The bouncer unhooks the rope. "Look, don't touch."` : `Admission: ${fmt$(sh.fee)}. "${sh.aqua ? 'Enjoy the fishes!' : sh.museum ? 'Enjoy the collection. No flash photography.' : 'Mind the butterflies.'}"`, 3);
     const kind = sh.kind === SHOP_APTS ? lobbyKind(lookHit.mx, lookHit.my) : ROOM_FOR[sh.word] || 'store'; // (an apartment building: the way up suits the building, lobbies.js)
     const r = { ...sh, cell: [lookHit.mx, lookHit.my], district: districtAt(lookHit.mx + 0.5, lookHit.my + 0.5), ret: [px, py, a], line: pick(LINES).replace('{}', sh.word) };
     enterRoom(kind, r, [0, 0, -Math.PI / 2]);
@@ -24134,6 +24308,7 @@ function folkSpot(f) {
 function stepFairFolk(dt) {
   if (Math.hypot(rel(FAIR.cx - px), rel((FAIR.y0 + FAIR.y1) / 2 - py)) > 40) return; // (nobody's watching)
   for (const f of fairFolk) {
+    if(f.dead||f.hidden)continue;
     if (f.talk > 0) { f.talk -= dt; continue; }
     if (f.queue) continue;
     const ex = f.tx - f.x, ey = f.ty - f.y, d = Math.hypot(ex, ey);
@@ -26058,13 +26233,50 @@ const DEV_CSS = `
 const devOpen = () => !!devEl && devEl.style.display === 'flex';
 
 function toggleFreecam() {
-  if (freecam) { freecam = null; return; }
+  if (freecam) { leaveFreecam(); return; }
   let x = px, y = py, yaw = a;
   if (mode === 'sea') [x, y, yaw] = seaCam(0, chaseOn);
   else if (chaseOn && me) [x, y, yaw] = chaseCam(0);
   let z = mode === 'room' ? 1.7 : 0.17;
   if (Number.isFinite(eye)) z = eye;
   freecam = { x, y, yaw, pitch, z };
+}
+
+// Resume at the inspected location. A camera inside solid geometry goes to the nearest
+// usable floor/roof, rather than stranding the player in a wall.
+function leaveFreecam() {
+  const cam = freecam, indoors = mode === 'room';
+  if (!cam) return;
+  if (indoors) freecam = null; else devFree();
+  px = indoors ? cam.x : worldCoord(cam.x); py = indoors ? cam.y : worldCoord(cam.y);
+  a = cam.yaw; pitch = cam.pitch; chaseOn = false;
+  Object.assign(body, { z: 0, vz: 0, mx: 0, my: 0, peak: 0, hop: 1, crouch: 0, seat: null, trick: null, buf: -9, landedAt: -9, swirl: 0 });
+  if (indoors) {
+    if (!free(px, py)) {
+      let best = Infinity, at = room.def.entry;
+      for (let y=.5; y<room.H; y+=.25) for (let x=.5; x<room.W; x+=.25) {
+        const d = Math.hypot(x-cam.x,y-cam.y);
+        if (d<best && free(x,y)) { best=d; at=[x,y]; }
+      }
+      [px,py]=at;
+    }
+    body.z = clamp(cam.z - 1.7 - stairRise(px,py), 0, Math.max(0,(room.def.height||3)-1.8));
+  } else {
+    const h=roofHeightAt(px,py), ground=walkGround(px,py);
+    if (h>ground) { mode='roof'; roofH=h; roofLot=new Set(); }
+    body.z=Math.max(0,(cam.z-.17-(mode==='roof'?roofH:ground))*10);
+    if (!free(px,py)) {
+      const x=px,y=py; let found=false;
+      for (let r=.1;r<=4&&!found;r+=.1) for(let k=0;k<32;k++) {
+        const nx=worldCoord(x+Math.cos(k*Math.PI/16)*r),ny=worldCoord(y+Math.sin(k*Math.PI/16)*r);
+        if(free(nx,ny)) {px=nx;py=ny;found=true;break;}
+      }
+    }
+  }
+  // The first physics frame must compare against the new terrain, not the
+  // ground left behind when freecam started.
+  body.ground=mode==='walk'?walkGround(px,py):0;body.groundMode=mode;
+  body.lastA=a;body.lx=px;body.ly=py;
 }
 
 function stepFreecam(dt) {
@@ -26156,19 +26368,20 @@ function devPlaces() {
   EL_STATIONS.forEach(s => out.push(['El stations', s.name, () => devAt(s.x, EL_Y + 0.12, Math.PI / 2)]));
   owned.homes.forEach((h, k) => out.push(['Your homes', `${ITEMS[h.kind].name} ${k + 1}`, () => { const [x, y] = homeKerb(h.cell % N, Math.floor(h.cell / N)); devAt(x, y, 0); }]));
   const words = new Map(); // every kind of shop, by its sign: you land outside the nearest one
-  for (let k = 0; k < N * N; k++) { const sh = SHOP[k]; if (sh && sh.word && sh.kind !== SHOP_APTS) words.set(sh.word, (words.get(sh.word) || new Set()).add(sh)); }
+  for (let k = 0; k < N * N; k++) { const sh = SHOP[k]; if (sh && sh.word && sh.kind !== SHOP_APTS && sh.kind !== SHOP_SHUT) words.set(sh.word, (words.get(sh.word) || new Set()).add(sh)); }
   for (const [w, set] of [...words].sort((p, q) => p[0] < q[0] ? -1 : 1)) out.push(['Shops (nearest)', `${w} (${set.size})`, () => { devFree(); gotoShop(w); }]);
   return out;
 }
 function devItems() {
-  const out = [], KIND = { food: 'Food', drink: 'Drinks', smoke: 'Smokes', gear: 'Gear', toy: 'Toys' };
-  for (const id in ITEMS) { const it = ITEMS[id]; if (KIND[it.kind]) out.push([KIND[it.kind], it.name, () => devGive(id)]); }
+  const out = [], KIND = { food: 'Food & meals', drink: 'Drinks', ingredient: 'Ingredients', fish: 'Fish', smoke: 'Smokes', drug: 'Drugs', gun: 'Guns', ammo: 'Ammunition', gear: 'Gear', toy: 'Toys', keys: 'Keys', junk: 'Fishing finds', wish: 'Fishing finds', cash: 'Fishing finds' };
+  for (const id in ITEMS) { const it = ITEMS[id]; if (!['car','home','tattoo','look'].includes(it.kind)) out.push([KIND[it.kind]||'Other items', it.name, () => devGive(id)]); }
   const order = Object.values(KIND);
   return out.sort((p, q) => order.indexOf(p[0]) - order.indexOf(q[0]) || (p[1].toLowerCase() < q[1].toLowerCase() ? -1 : 1));
 }
 function devGive(id) {
   if (inv.length >= INV_SIZE) return say(`Your bag is full (${INV_SIZE}). Drop something first, or use Other: empty your pockets.`, 3);
-  carryItem({ id, uses: ITEMS[id].uses || 0 }); say(`Spawned ${aOrSome(ITEMS[id].name)}.`, 2);
+  const item=ITEMS[id];
+  carryItem({ id, uses: item.kind==='gun'?CYLINDER:item.uses||0, ...(item.kg?{kg:Math.round((item.kg[0]+item.kg[1])*5)/10}:{}), ...(item.cooked?{q:'fine'}:{}) }); say(`Spawned ${aOrSome(ITEMS[id].name)}.`, 2);
 }
 const devCash = n => { money = Math.max(0, Math.round((money + n) * 100) / 100); say(`Money: ${fmt$(money)}`, 2); };
 
@@ -26188,7 +26401,7 @@ function devBody() {
   devEl.acts = [];
   const act = (label, fn, extra = '') => { devEl.acts.push(fn); return btn(devEl.acts.length - 1, label, extra); };
   if (devTab === 'camera') return `<div class="bar">${act('Freecam: ' + (freecam ? 'on' : 'off'), () => { toggleFreecam(); closeDev(); }, `role="switch" aria-checked="${!!freecam}"`)}</div>
-    <p class="note">Fly through walls with the world frozen. Toggle off to return to your player.</p>
+    <p class="note">Fly through walls with the world frozen. Toggle off to continue from the camera’s location.</p>
     <p class="note">WASD move &middot; mouse/arrows look &middot; E/Q up/down &middot; Shift faster</p>`;
   if (devTab === 'money') return `<p class="note">you have ${fmt$(money)} and ${tickets} tickets</p>
     <div class="bar">${[100, 1000, 10000, 100000].map(n => act(`+${fmt$(n)}`, () => devCash(n))).join('')}${act('Broke ($0)', () => devCash(-money))}</div>
@@ -26218,6 +26431,7 @@ function renderDev(keepFocus) {
   if (s && keepFocus !== false) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
 }
 function openDev() {
+  if(wanted.busted)return;
   if (!devEl) {
     devEl = menuEl('dev', 1000, '<div class="panel" role="dialog" aria-label="Dev tools"></div>');
     const st = document.createElement('style'); st.textContent = DEV_CSS; document.head.appendChild(st);
@@ -26250,7 +26464,7 @@ function openDev() {
   releaseMouse();
   devEl.style.display = 'flex'; renderDev();
 }
-function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = false; lockMouse(); }
+function closeDev() { if (!devOpen()) return; devEl.style.display = 'none'; paused = !!wanted.busted; if(!paused)lockMouse(); }
 const devKey = e => { if (e.code !== 'F2' || e.repeat) return false; e.preventDefault(); devOpen() ? closeDev() : openDev(); return true; };
 // Searchable places are data; the map, list, contacts and waypoints share the same records.
 const MAP_CATEGORIES={all:'All',contacts:'Contacts',homes:'Homes',food:'Food',transport:'Transport',essentials:'Services',activities:'Things to do',shops:'Shops'};
@@ -27461,6 +27675,7 @@ const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice
   'Local cat elected to community board', `Rents soar in ${pick(['Chinatown', 'the Brownstones', 'Midtown'])}`, 'Ambulance response times improve',
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
+  if(wanted.busted)return;
   if (workshopPlacement) {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return;}
   if (heldGun()) return pullTrigger(); // (gun-ui.js)
   if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
@@ -28910,14 +29125,12 @@ function heldGesture(it, u) {
   } else if (HELD_FLIP.has(id)) {
     // The hand stays full width; only the object turns edge-on (drawHeldDense).
     pose.y = -u * pulse * 1.2;
-  } else if (id === 'snowglobe' || id === 'cityglobe' || kind === 'keys') {
-    pose.angle = Math.sin(phase * Math.PI * 6) * pulse * .13;
+  } else if (id === 'snowglobe' || id === 'cityglobe') {
+    pose.angle = pulse * .1;
     pose.y = -u * pulse * .6;
   } else if (HELD_PAGES.has(id)) {
-    pose.angle = Math.sin(phase * Math.PI * 2) * .1; pose.y = -u * pulse * .7;
-  } else {
-    pose.angle = Math.sin(phase * Math.PI * 2) * .07; pose.y = -u * pulse * .65;
-  }
+    pose.y = -u * pulse * .7;
+  } // Keys and ordinary gear remain steady; only purposeful gestures move the hand.
   return pose;
 }
 
@@ -29466,15 +29679,18 @@ function anglerRig(o, vx, vy) {
 const anglerNear = (o, far) => { const [vx, vy] = R(o.x, o.y); return Math.hypot(vx, vy) < Math.min(vis, far) && inView(vx, vy, 1) ? [vx, vy] : null; };
 function drawAnglers() {
   for (const o of ANGLERS) {
+    if(o.hidden)continue;
     const v = anglerNear(o, 14);
     if (!v) continue;
     const [vx, vy] = v, r = anglerRig(o, vx, vy);
+    if(o.dead){drawFigure(vx,vy,outdoorGroundHeight(o.x,o.y),.175,-o.down.fx,-o.down.fy,o.look||=figStreetLook(hash(o.seed,9,1623)*1e9|0,o.shirt,GRAY),'dead');continue;}
     drawFigure(vx, vy, 0, 0.175, r.ca, r.sa, o.look ||= figStreetLook(hash(o.seed, 9, 1623) * 1e9 | 0, o.shirt, GRAY), 'stand', { light: 6 });
     drawBox(boxAt(vx - r.sa * 0.07 - r.ca * 0.02, vy + r.ca * 0.07 - r.sa * 0.02, 1, 0, 0.014, 0.014, 0, 0.028), (i, t, L) => { BG[i] = C(BLUE, 1 + L * 0.3); return set(i, HIT.face === 5 ? '~' : '|', C(HIT.face === 5 ? CYAN : WHITE, L * 0.7)), true; }); // a bucket at their feet
   }
 }
 function drawAnglerLines() {
   for (const o of ANGLERS) {
+    if(o.dead||o.hidden)continue;
     const v = anglerNear(o, 14);
     if (!v) continue;
     const r = anglerRig(o, ...v), lift = r.lift;
@@ -29685,6 +29901,55 @@ Object.assign(DROPPED_ART, {
 // kicking up when it goes off, swung open to reload; the crosshair; the shot (the flash, the street lit up for an
 // instant, a streak to where it went, the bang and the buildings throwing it back); the blood, the sheet the
 // paramedics put over somebody; the police shooting back; and the screaming.
+
+// The same actor objects drive drawing, hit tests, death and interaction checks.
+function gunSceneFigures(includeDead=false){
+  const out=[],add=(who,x=who.x,y=who.y,z=outdoorGroundHeight(x,y),h=.175)=>{if((includeDead||!who.dead)&&!who.hidden)out.push({who,x,y,z,h});};
+  for(const p of fairFolk)add(p);
+  for(const p of extras)if(p.person!=null&&(!p.when||p.when()))add(p,p.x,p.y,p.z||0);
+  for(const p of vendors)add(p,p.x+(p.ox||0),p.y+(p.oy||0));
+  for(const p of ANGLERS)add(p);
+  if(supplierVisit)add(supplierVisit);
+  if(drugBuyer)add(drugBuyer);
+  for(const target of [clubFigureTarget(),...courierFigureTargets(),...gardenFigureTargets(),...gasFigureTargets()])if((includeDead||!target.who.dead)&&!target.who.hidden)out.push(target);
+  if(typeof streetSceneTargets==='function')out.push(...streetSceneTargets().filter(p=>(includeDead||!p.who.dead)&&!p.who.hidden));
+  return out;
+}
+
+function sceneFigureTarget(who,x,y,z,h=.175,extra={}) {
+  if(!who.dead)who.sceneAt={x,y,z,h};
+  return {who,...(who.sceneAt||{x,y,z,h}),...extra};
+}
+function drawSceneFigure(p,look,pose='stand',hx=0,hy=0,opts) {
+  const o=p.who;if(o.hidden)return;
+  drawFigure(...R(p.x,p.y),p.z,p.h,o.dead?-o.down.fx:hx,o.dead?-o.down.fy:hy,look,o.dead?'dead':pose,opts);
+}
+
+// Indoor rays use room metres and stop at real walls, counters and furniture.
+function traceRoomShot(x,y,z,hx,hy,slope) {
+  let end=SHOT_RANGE*10,what='air';
+  for(let d=.025;d<end;d+=.025){
+    const xx=x+hx*d,yy=y+hy*d,zz=z+slope*d;
+    if(zz<=0){end=d;what='ground';break;}
+    if(xx<0||yy<0||xx>=room.W||yy>=room.H||zz>= (room.def.height||3) || ROOMW.cell(Math.floor(xx),Math.floor(yy))>zz){end=d;what='wall';break;}
+  }
+  for(const p of room.props)if(p.box&&!p.shotPermeable){
+    const hit=rayBox(x,y,z,hx,hy,slope,p.box);if(hit>0&&hit<end){end=hit;what='wall';}
+  }
+  let who=null;
+  for(const p of [...room.props,...roomCops]){
+    const cop=roomCops.includes(p);
+    if((!cop&&(!p.fig||p.fig.build||p.still||p.cutout))||p.dead||p.hidden)continue;
+    const h=p.h||1.8,ox=p.x-x,oy=p.y-y,d=ox*hx+oy*hy,across=Math.abs(oy*hx-ox*hy),zz=z+slope*d-(p.z||0);
+    const seated=typeof p.pose==='string'&&p.pose.startsWith('sit'),height=seated?Math.min(h,(p.seatZ??.45)+1.15):h;
+    if(d>0&&d<end&&across<h*.18&&zz>=0&&zz<=height){end=d;what=cop?'cop':'person';who=p;}
+  }
+  return {d:end,x:x+hx*end,y:y+hy*end,z:Math.max(0,z+slope*end),what,who};
+}
+function killRoomFigure(p,hx,hy){
+  p.dead=true;p.looted=false;p.down={t:.2,dur:Infinity,fx:hx,fy:hy};p.z=0;p._moving=false;p.sees=false;delete p.fireT;delete p.aimT;
+  const k=room.def.keeper;if(k&&Math.hypot(p.x-k[0],p.y-k[1])<.6)room.keeperDead=true;
+}
 
 // ---- Q and R
 function pullTrigger() {
@@ -30750,6 +31015,9 @@ function wantedHud() {
 // ---- busted: pay the fine, or go to jail
 let bustedEl = null, finePaid = 0;
 function openBusted() {
+  wanted.busted=true;
+  if(devOpen())closeDev();
+  releaseHeldMouse();
   if (bustedEl && bustedEl.style.display === 'flex') return;
   const deliveryFailed=failCourier();
   if(climbing)finishCourierClimb('bottom');
@@ -30819,18 +31087,27 @@ function startCrime(id, done) { startGame(id, 'crime'); game.onDone = done; }
 
 // pickpocketing: someone on the sidewalk, close, and you're behind them
 function pickTarget() {
-  if (mode !== 'walk') return null;
-  for (const p of people) {
-    if (p.hidden || p.follow || p.hailing) continue;
-    const ex = rel(px - p.x), ey = rel(py - p.y), d = Math.hypot(ex, ey);
-    if (d > 0.3) continue;
-    const [lx, ly] = p.last || [0, 0];
-    if (lx * ex + ly * ey < 0 || !(lx || ly)) return p; // behind them (or they're standing still)
+  let best=null,bd=mode==='room'?1.8:.3;
+  const check=(p,x=p.x,y=p.y)=>{
+    if(p.hidden||p.follow||p.hailing)return;
+    const ex=rel(px-x),ey=rel(py-y),d=Math.hypot(ex,ey);if(d>bd)return;
+    const [lx,ly]=p.last||[0,0];
+    if(p.dead||lx*ex+ly*ey<0||!(lx||ly)){best=p;bd=d;}
+  };
+  if(mode==='room') {for(const p of room.props)if(p.fig&&p.dead)check(p);for(const p of roomCops)if(p.dead)check(p);}
+  else if(mode==='walk') {
+    for(const p of people)check(p);
+    for(const b of bodies)if(b.who.dead)check(b.who,b.x,b.y);
   }
-  return null;
+  return best;
 }
 const LIFTS = ['cigarettes', 'candy', 'newspaper', 'apple', 'yoyo', 'chips'];
 function pickpocket(p) {
+  if(p.dead){
+    if(p.looted)return say('Their pockets are empty.',2);
+    p.looted=true;const cash=Math.round((2+Math.random()*20)*4)/4;earn(cash);
+    return say(`You find ${fmt$(cash)} in their pockets.`,3);
+  }
   p.talk = 1e9; // they stand there, none the wiser (yet)
   startCrime('pickpocket', ok => {
     p.talk = 0;
@@ -30926,6 +31203,7 @@ function crimeKey(code) {
       return painting ? stealHotelPainting(painting) : say('The paintings are mounted along the far wall.');
     }
     if (mode === 'room' && room.burgled) return grabStock();
+    const corpse=pickTarget();if(corpse?.dead)return pickpocket(corpse);
     if (canShoplift()) return shoplift();
     const p = pickTarget();
     if (p) return pickpocket(p);
@@ -30938,7 +31216,7 @@ function crimePrompt() {
   if (mode === 'room' && room.burgled && room.kind === 'museum') return museumPrompt() + (nearExit() ? '   E: leave' : '');
   if (mode === 'room' && room.burgled) return (room.alarm ? 'ALARM! Get out!   ' : '') + 'G: take something' + (nearVault() ? '   E: crack the vault' : nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter, the vault or the door)
   const vm = nearMachine(), use = vm ? `E: ${VENDING[vm.kind].title.toLowerCase()}   ` : ''; // (a machine right here still works: say so)
-  if (pickTarget()) return use + 'G: pick their pocket';
+  const target=pickTarget();if(target)return use+(target.dead?'G: search pockets':'G: pick their pocket');
   const sh = lockTarget();
   if (!sh || !nightTime()) return '';
   return use + ((jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`);
@@ -31103,14 +31381,18 @@ function workshopCandidate() {
     if (!b || Math.hypot(b.x-px,b.y-py)>3) return {ok:false, reason:'Stand near a bench with a free spot for this piece.'};
     return {ok:true, ...workshopAttachment(id,b), a:mod(b.a+placement.a,Math.PI*2)};
   }
-  const x = Math.round((px+Math.cos(a)*1.8)*4)/4, y = Math.round((py+Math.sin(a)*1.8)*4)/4, angle=placement.a;
+  let x = Math.round((px+Math.cos(a)*1.8)*4)/4, y = Math.round((py+Math.sin(a)*1.8)*4)/4; const angle=placement.a;
   const d=WORKSHOP_PARTS[id];
   const hx = Math.abs(Math.cos(angle))*d.halfX+Math.abs(Math.sin(angle))*d.halfY, hy=Math.abs(Math.sin(angle))*d.halfX+Math.abs(Math.cos(angle))*d.halfY;
+  // Quarter-grid positioning snaps the actual footprint to a nearby inner wall.
+  if(Math.abs(x-hx-1)<.35)x=1+hx;
+  if(Math.abs(x+hx-(room.W-1))<.35)x=room.W-1-hx;
+  if(Math.abs(y+hy-(room.H-1))<.35)y=room.H-1-hy;
   const p = {id,x,y,a:angle}, bad = reason => ({...p,ok:false,reason});
-  if (y-hy < room.H-6 || y+hy > room.H-1.4 || x-hx < 1 || x+hx > room.W-1.4) return bad('Use the open workshop area near the entrance.');
+  if (y-hy < room.H-6 || y+hy > room.H-1+1e-6 || x-hx < 1-1e-6 || x+hx > room.W-1+1e-6) return bad('Use the open workshop area near the entrance.');
   if (Math.abs(x-room.def.entry[0]) < hx+1) return bad('Keep the center aisle to the door clear.');
   for (let yy=y-hy-.15;yy<=y+hy+.15;yy+=.2) for(let xx=x-hx-.15;xx<=x+hx+.15;xx+=.2) {
-    if (roomAt(Math.floor(xx),Math.floor(yy))!=='.' || room.props.some(o=>o.box && !o.walk && o.box.z0<1.3 && inBox(o.box,xx,yy,.1))) return bad('Leave space around the furniture.');
+    if (roomAt(clamp(xx,1.0001,room.W-1.0001),clamp(yy,1.0001,room.H-1.0001))!=='.' || room.props.some(o=>o.box && !o.walk && o.box.z0<1.3 && inBox(o.box,xx,yy,.1))) return bad('Leave space around the furniture.');
   }
   return {...p,ok:true};
 }
@@ -31172,7 +31454,7 @@ function updateDrugBuyer() {
 }
 function nearDrugBuyer() {
   updateDrugBuyer();
-  if(mode!=='walk'||!drugBuyer)return null;
+  if(mode!=='walk'||!drugBuyer||drugBuyer.dead||drugBuyer.hidden)return null;
   const ex=rel(drugBuyer.x-px),ey=rel(drugBuyer.y-py),d=Math.hypot(ex,ey);
   return d<.5&&(d<.12||(ex*Math.cos(a)+ey*Math.sin(a))/d>.4) ? drugBuyer : null;
 }
@@ -31221,6 +31503,8 @@ function workshopUse() {
 let drugSaleContext=null, buyerAwayUntil=0, supplierEl=null, supplierVisit=null;
 function streetContactLook(profile) {return figLook(profile.look);}
 function drawStreetContact(contact,marker,color,pose='fold') {
+  if(contact.hidden)return;
+  if(contact.dead){drawFigure(...R(contact.x,contact.y),outdoorGroundHeight(contact.x,contact.y),.175,-contact.down.fx,-contact.down.fy,contact.look,'dead');return;}
   const [vx,vy]=R(contact.x,contact.y);if(!inView(vx,vy,.25))return;
   const ground=architectureGroundHeight(contact.x,contact.y), n=Math.hypot(vx,vy)||1;
   drawFigure(vx,vy,ground,.175,-vx/n,-vy/n,contact.look,pose);
@@ -31324,7 +31608,7 @@ function callWorkshopSupplier(home=workshopHome()||nearestWorkshopHome()) {
 }
 function nearWorkshopSupplier() {
   if(supplierVisit && (T>=supplierVisit.until||!owned.homes.some(h=>h.cell===supplierVisit.home)))supplierVisit=null;
-  if(!supplierVisit||mode!=='walk')return null;
+  if(!supplierVisit||supplierVisit.dead||supplierVisit.hidden||mode!=='walk')return null;
   const ex=rel(supplierVisit.x-px),ey=rel(supplierVisit.y-py),d=Math.hypot(ex,ey);
   const buyer=nearDrugBuyer();
   if(buyer && Math.hypot(rel(buyer.x-px),rel(buyer.y-py))<d)return null;
@@ -33059,26 +33343,36 @@ function movingShade(o,i,t,L) {
   if(top)paintSettledSnow(i,o.x+HIT.u*o.c-HIT.v*o.s,o.y+HIT.u*o.s+HIT.v*o.c,L,.75,0,z);
   return true;
 }
+const SCENE_ACTORS={mover:{},neighbor:{},artist:{}};
+function streetSceneTargets() {
+  const out=[],m=STREET_SCENES.moving,c=STREET_SCENES.chalk;
+  const add=(key,active,p,h,hx,hy,pose)=>{
+    const who=SCENE_ACTORS[key];
+    if(!who.dead)Object.assign(who,{...p,z:outdoorGroundHeight(p.x,p.y),h,hx,hy,pose});
+    if(!who.hidden&&(active||who.dead))out.push({who,x:who.x,y:who.y,z:who.z,h:who.h,key});
+  };
+  if(m) {
+    const heading=Math.cos(T*.18)>0?1:-1;
+    add('mover',movingPhase()==='loading',scenePoint(m,.34*Math.sin(T*.18),.22),.175,m.c*heading,m.s*heading,'carry'+(Math.floor(T*4)%8));
+    add('neighbor',movingPhase()==='loading',scenePoint(m,-.35,.18),.17,m.nx,m.ny,'fold');
+  }
+  if(c)add('artist',tod>=9&&tod<17&&rain<.2&&snow<.2&&snowCover<.15&&chalkWash()<.65,{x:c.x+.6,y:c.y+.55},.17,-.6,-.8,fract(T*.12)<.8?'crouch':'stand');
+  return out;
+}
 function drawStreetScenes() {
   const m=STREET_SCENES.moving;
-  if(m&&near(px,py,m.x,m.y)<vis) {
-    for(const o of STREET_SCENES.boxes)if(streetSceneBoxActive(o)) {
-      const [x,y]=R(o.x,o.y);drawBox({...o,x,y},(i,t,L)=>movingShade(o,i,t,L));
-    }
-    if(movingPhase()==='loading') {
-      const shift=.34*Math.sin(T*.18),p=scenePoint(m,shift,.22),heading=Math.cos(T*.18)>0?1:-1;
-      drawFigure(...R(p.x,p.y),0,.175,m.c*heading,m.s*heading,SCENE_LOOKS.mover,'carry'+(Math.floor(T*4)%8));
-      const carried={x:p.x+m.c*heading*.025,y:p.y+m.s*heading*.025,c:m.c,s:m.s,hl:.028,hw:.025,z0:.07,z1:.115,base:WARM,kind:'box'};
-      const [vx,vy]=R(carried.x,carried.y);drawBox({...carried,x:vx,y:vy},(i,t,L)=>movingShade(carried,i,t,L));
-      const q=scenePoint(m,-.35,.18);
-      drawFigure(...R(q.x,q.y),0,.17,m.nx,m.ny,SCENE_LOOKS.neighbor,'fold');
-    }
+  if(m&&near(px,py,m.x,m.y)<vis)for(const o of STREET_SCENES.boxes)if(streetSceneBoxActive(o)) {
+    const [x,y]=R(o.x,o.y);drawBox({...o,x,y},(i,t,L)=>movingShade(o,i,t,L));
   }
-  const c=STREET_SCENES.chalk;
-  if(c&&tod>=9&&tod<17&&rain<.2&&snow<.2&&snowCover<.15&&chalkWash()<.65&&near(px,py,c.x,c.y)<vis) {
-    const x=c.x+.6,y=c.y+.55;
-    drawFigure(...R(x,y),terrainHeight(x,y),.17,-.6,-.8,SCENE_LOOKS.artist,fract(T*.12)<.8?'crouch':'stand');
-    drawArt(...R(x+.1,y),.005,.045,.04,[' ___ ','|===|','|___|'],()=>C(MAG,10));
+  for(const p of streetSceneTargets()) {
+    const o=p.who;if(near(px,py,p.x,p.y)>vis)continue;
+    drawFigure(...R(p.x,p.y),p.z,p.h,o.dead?o.down.fx:o.hx,o.dead?o.down.fy:o.hy,SCENE_LOOKS[p.key],o.dead?'dead':o.pose);
+    if(o.dead)continue;
+    if(p.key==='mover') {
+      const carried={x:o.x+o.hx*.025,y:o.y+o.hy*.025,c:m.c,s:m.s,hl:.028,hw:.025,z0:o.z+.07,z1:o.z+.115,base:WARM,kind:'box'};
+      const [vx,vy]=R(carried.x,carried.y);drawBox({...carried,x:vx,y:vy},(i,t,L)=>movingShade(carried,i,t,L));
+    }
+    if(p.key==='artist')drawArt(...R(o.x+.1,o.y),o.z+.005,.045,.04,[' ___ ','|===|','|___|'],()=>C(MAG,10));
   }
 }
 // A cached pavement stencil, rather than repeated screen letters stretched over
@@ -33157,7 +33451,7 @@ function streetSceneNear() {
     if(near(px,py,p.x,p.y)<.34)return 'railway';
   }
   const m=STREET_SCENES.moving;
-  if(m&&movingPhase()==='loading') {
+  if(m&&movingPhase()==='loading'&&!SCENE_ACTORS.neighbor.dead&&!SCENE_ACTORS.mover.dead) {
     const person=scenePoint(m,-.35,.18),vx=person.x-px,vy=person.y-py,distance=Math.hypot(vx,vy);
     if(distance<.24&&(distance<.05||(Math.cos(a)*vx+Math.sin(a)*vy)/distance>.5))return 'moving';
   }
@@ -33328,6 +33622,7 @@ function relock(e) {
 onkeydown = e => {
   if (NATIVE_MOUSE_APP && e.code === 'Escape') e.preventDefault();
   if (e.code === 'F11' && GLYPHPORT_DESKTOP_APP) { e.preventDefault(); if (!e.repeat) toggleDesktopFullscreen(); return; }
+  if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
   if (freecam) {
@@ -33339,7 +33634,6 @@ onkeydown = e => {
     return;
   }
   if (bigMapKey(e, true)) return; // the big map (from the pause menu) has the keys while it's up
-  if (bustedKey(e)) return; // caught: nothing till you've chosen
   if (gameKey(e)) { if (!game) relock(e); return; } // at a cabinet or on a shift
   if (!e.repeat && prizeKey(e)) return relock(e);
   if (!e.repeat && courierBoardKey(e)) return relock(e); // the courier dispatch board
@@ -33436,7 +33730,7 @@ if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
   addEventListener('blur', lostCapture);
 }
 addEventListener('mousedown', e => {
-  if (!mouseCaptured() || paused || freecam || sleep || game || panelOpen() || devOpen()) return;
+  if (wanted.busted || !mouseCaptured() || paused || freecam || sleep || game || panelOpen() || devOpen()) return;
   if (e.button === 0 && (onFootMode() || (mode === 'sea' || mode === 'boat') && heldRod())) {
     K.MouseUse = 1; audioStart(); useHeldItem();
   }
@@ -33621,7 +33915,7 @@ function loop(t) {
           const va = Math.atan2(vy, vx), turn = clamp(mod(Math.atan2(wy, wx) - va + Math.PI, Math.PI * 2) - Math.PI, -10 * dt, 10 * dt);
           body.mx = Math.cos(va + turn) * w; body.my = Math.sin(va + turn) * w;
         } else { body.mx = wx; body.my = wy; } // (walking: you go where you're going)
-      } else if (airborne && dt > 0) { airStrafe(f, s + lurch, scale / dt, dt); if (body.hop > 1.001) airSteer(ix, iy, 3, dt); }
+      } else if (airborne && dt > 0) { airStrafe(f, s + lurch, scale / dt, dt); if (body.hop > 1.001) airSteer(ix, iy, HOP_TURN_RATE, dt); }
       move(dt > 0 ? body.mx * dt : ix, dt > 0 ? body.my * dt : iy); // (air keeps its horizontal momentum; see moves.js)
     }
   } else if(mode==='ladder')stepCourierLadder(dt);
@@ -33735,7 +34029,7 @@ function gotoShop(word) {
   let best = null, bd = Infinity;
   for (let k = 0; k < N * N; k++) {
     const sh = SHOP[k];
-    if (!sh || sh.word !== word) continue;
+    if (!sh || sh.word !== word || sh.kind === SHOP_SHUT) continue;
     const x = k % N, y = k / N | 0;
     for (const [ox, oy, ang] of [[0, 1, -Math.PI / 2], [0, -1, Math.PI / 2], [1, 0, Math.PI], [-1, 0, 0]]) { // a street cell beside it
       const nx = x + ox, ny = y + oy;

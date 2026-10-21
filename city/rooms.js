@@ -72,6 +72,21 @@ const washbasin = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
   rod(vx - fx * 0.2, vy - fy * 0.2, 0.86, vx - fx * 0.12, vy - fy * 0.12, 0.98, 0.012, GRAY, 1.3); // the tap
   drawBox(boxAt(vx - fx * 0.27, vy - fy * 0.27, fx, fy, 0.01, 0.25, 1.15, 1.75), (i, t, L) => { BG[i] = C(CYAN, 1.6 + (HIT.w - 1.15) * 2); return set(i, fract((HIT.v + HIT.w) * 3) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; }); // the mirror
 }, [0.24, 0.24, 0.86]);
+// An oval enamel bath: curved shell, open rim, recessed basin and a wall-end tap.
+const BATHTUB = (x,y) => ({...ROOM_MODEL(x,y,(vx,vy)=>{
+  const enamel=solid(WHITE,{bright:2.1}), n=32;
+  for(let k=0;k<n;k++) {
+    const t=(k+.5)*Math.PI*2/n, tx=-.37*Math.sin(t),ty=.99*Math.cos(t),len=Math.hypot(tx,ty);
+    drawBox(boxAt(vx+.37*Math.cos(t),vy+.99*Math.sin(t),tx/len,ty/len,len*Math.PI/n+.006,.048,.1,.62),enamel);
+  }
+  // The bottom sits below the rim; from above you can see into the bowl.
+  const basin=(i,t,L)=>{BG[i]=C(CYAN,1.4+L*.15);return set(i,HIT.face===5&&Math.hypot(HIT.u,HIT.v)<.04?'o':' ',C(GRAY,L)),true;};
+  drawBox(boxAt(vx,vy,0,1,.67,.31,.08,.18),basin);
+  for(const end of [-1,1])drum(vx,vy+end*.67,.31,.08,.18,basin);
+  rod(vx,vy-.99,.62,vx,vy-.99,.84,.018,GRAY,1.5);
+  rod(vx,vy-.99,.84,vx,vy-.81,.84,.018,GRAY,1.5);
+  for(const side of [-1,1])drum(vx+side*.13,vy-.95,.035,.63,.67,CHROME);
+},[.42,1.04,.62]),bath:true});
 // a bathroom wall from inside: white tiles to shoulder height (thin grout lines), a trim, painted plaster above
 function wcWall(i, u, z, L) {
   if (z > 1.3) { BG[i] = C(WHITE, 1.7 + L * 0.1); return set(i, ' ', 0); }
@@ -832,11 +847,12 @@ function homePlan(w, h, tier) {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) extra[x + ',' + y] = c;
   };
   const home = tier === 0
-    ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.3, 4.4], fridge: [8.45, 5.2], pet: [1.4, 7.2], dining: [5.5, 5.8] }
-    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.5 : 8.7], shelf: [10.8, 3.5], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
+    ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.18, 4.4], fridge: [8.45, 5.6], pet: [1.4, 7.2], dining: [5.5, 5.8] }
+    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.5 : 8.7], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
   const wc = tier === 0 ? { x0: 7, y0: 1, x1: 9, y1: 4, sign: [6, 3, 3.5] }
     : { x0: 15, y0: 1, x1: inside, y1: 5, sign: [14, 4, 4.5] };
   wall(wc.x0 - 1, 1, wc.x0 - 1, wc.y1, 'W');
+  if (wc.x1 < inside) wall(wc.x1, 1, wc.x1, wc.y1, 'W');
   wall(wc.x0 - 1, wc.y1, wc.x1 - 1, wc.y1, 'W');
   wall(wc.x0, wc.y1, tier ? wc.x0 + 1 : wc.x0, wc.y1, '.');
   if (tier) { // bedroom and study/library, with wide doorways into the living room
@@ -861,7 +877,7 @@ function homePlan(w, h, tier) {
   if (tier) windows.push({ face: 'west', center: tier === 2 ? 12.7 : 11, half: 2.3 }, { face: 'north', center: 4.2, half: 2 }, { face: 'north', center: 11.8, half: 1.8 });
   const lamps = tier ? [[4.5, 4], [11.6, 3.8], [5, tier === 2 ? 12 : 11], [13, tier === 2 ? 13 : 10.7], [17, 2.8], [entryX, h - 2.6], [3.5, h - 4], [inside - 3, h - 4]]
     : [[3.2, 2.2], [3.2, 6.3], home.dining, [8, 2.3], [3.5, h - 4], [w - 3, h - 4]];
-  return { home, wc, balcony, windows, lamps, tier, grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
+  return { home, wc, balcony, windows, lamps, tier, shelfAxis: [0,1], bedBounds: [home.bed[0],home.bed[1]+.2,tier?1.25:1,.85], grid: boxRoom(w, h, extra, false), entry: [entryX, h - 1.6, -Math.PI / 2] };
 }
 // Upholstered seating and separate dining chairs, with real legs and backs.
 function homeChair(x, y, fx, fy, col = BRICK) {
@@ -897,7 +913,7 @@ function homeDef(w, h, tier) {
     return set(i, ' ', 0), true;
   };
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
-    spots: { bed, closet, tv, shelf: [shelf[0], shelf[1] + 1.1], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
+    spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
       BX(bed[0], bed[1] + 0.2, tier ? 1.25 : 1, 0.85, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? tier === 2 ? GREEN : BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
       BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
@@ -909,11 +925,11 @@ function homeDef(w, h, tier) {
         BG[i] = C(NEON[(T * 0.7 | 0) & 3], 3 + hash(Math.floor(HIT.u * 20), Math.floor(HIT.w * 20), T * 4 | 0) * 6); return set(i, ' ', 0), true;
       }),
       BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
-      BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' })), // a shelf for things you bring home
+      BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' }), 0, 1), // a shelf for things you bring home
       BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
-      ...toilet(plan.wc.x1 - 0.75, 1.9, 1, porcelain),
-      BX(plan.wc.x0 + 0.4, 1.45, 0.32, 0.35, 0, 0.85, solid(WHITE, { top: 'o' })), // basin
-      ...(tier ? [BX(plan.wc.x1 - 1.25, 4.25, 1, 0.38, 0, 0.6, solid(WHITE, { top: '~' }))] : []), // bath
+      ...toilet(plan.wc.x1 - (tier ? 1.4 : .8), 1.42, -1, porcelain),
+      washbasin(plan.wc.x0 + 0.4, 1.35, 0, 1),
+      ...(tier ? [BATHTUB(plan.wc.x1 - .43, 3.4)] : []),
       { ...BX(sofa[0], sofa[1], tier ? 1.55 : 0.95, 0.45, 0.15, 0.5, solid(tier === 2 ? GREEN : BLUE, { panel: 0.7 })), seat: true, x: sofa[0], y: sofa[1], fx: 0, fy: -1 },
       BX(sofa[0], sofa[1] + 0.4, tier ? 1.55 : 0.95, 0.1, 0.3, 1.0, solid(tier === 2 ? GREEN : BLUE)),
       ...[-1, 1].map(s => BX(sofa[0] + s * (tier ? 1.5 : 0.92), sofa[1], 0.12, 0.45, 0.3, 0.75, solid(tier === 2 ? GREEN : BLUE))),
@@ -1330,7 +1346,7 @@ function roomCeil(i, r, x, rx, ry) {
 }
 function roomSprites() {
   for (const s of room.props) {
-    if (s.tick) s.tick(s); // (someone walking about)
+    if (s.tick && !s.dead) s.tick(s); // (someone walking about)
     if (s.draw) { if (inView(s.x - px, s.y - py, 1)) s.draw(s.x - px, s.y - py, s); continue; } // a piece of furniture that draws itself (room models; its box, if any, only blocks)
     if (s.box) { drawBox({ ...s.box, x: s.box.x - px, y: s.box.y - py }, s.shade); continue; }
     if (s.bench) { drawBench(s.x - px, s.y - py, s.fx, s.fy, 0.1); continue; }
@@ -1345,8 +1361,8 @@ function roomSprites() {
     drawWorkshopPreview();
     const { shelf, pet } = homeLayout(room);
     for (const [k, it] of (home.decor || []).entries()) {
-      const x = shelf[0] + (k - ((home.decor.length - 1) / 2)) * 0.3;
-      drawDropped({ ...it, displayZ: 1.07 }, x - px, shelf[1] - py, 0.065);
+      const offset = (k - ((home.decor.length - 1) / 2)) * 0.3, axis = room.def.shelfAxis || [1,0];
+      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 0.065);
     }
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room

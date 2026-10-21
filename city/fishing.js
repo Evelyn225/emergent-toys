@@ -274,7 +274,7 @@ const ANGLER_TIPS = ['"Squid come in after dark. They like the lights."', '"Pond
   '"Out past the end of the long piers, that\'s where the big ones are."', '"Rain\'s good. The fish don\'t mind rain."', '"Dawn and dusk. That\'s when they bite."',
   '"Caught a boot once. Then the other boot. Different years."', '"You can fish off a boat, you know. Have to sit still, mind."', '"Catfish. Nights, in the ponds. Ugly things. Good eating."'];
 // standing by one (a little closer than you'd stand to a stranger), and their line on the go
-const nearAngler = () => mode === 'walk' ? ANGLERS.find(o => Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.32) || null : null;
+const nearAngler = () => mode === 'walk' ? ANGLERS.find(o => !o.dead && !o.hidden && Math.hypot(rel(o.x - px), rel(o.y - py)) < 0.32) || null : null;
 // where one's at in their own slow round: most of the time waiting, then a bite and a fish reeled up (0..1 through it),
 // every minute or two
 function anglerPhase(o, t = T) {

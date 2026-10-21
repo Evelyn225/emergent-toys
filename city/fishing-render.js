@@ -458,15 +458,18 @@ function anglerRig(o, vx, vy) {
 const anglerNear = (o, far) => { const [vx, vy] = R(o.x, o.y); return Math.hypot(vx, vy) < Math.min(vis, far) && inView(vx, vy, 1) ? [vx, vy] : null; };
 function drawAnglers() {
   for (const o of ANGLERS) {
+    if(o.hidden)continue;
     const v = anglerNear(o, 14);
     if (!v) continue;
     const [vx, vy] = v, r = anglerRig(o, vx, vy);
+    if(o.dead){drawFigure(vx,vy,outdoorGroundHeight(o.x,o.y),.175,-o.down.fx,-o.down.fy,o.look||=figStreetLook(hash(o.seed,9,1623)*1e9|0,o.shirt,GRAY),'dead');continue;}
     drawFigure(vx, vy, 0, 0.175, r.ca, r.sa, o.look ||= figStreetLook(hash(o.seed, 9, 1623) * 1e9 | 0, o.shirt, GRAY), 'stand', { light: 6 });
     drawBox(boxAt(vx - r.sa * 0.07 - r.ca * 0.02, vy + r.ca * 0.07 - r.sa * 0.02, 1, 0, 0.014, 0.014, 0, 0.028), (i, t, L) => { BG[i] = C(BLUE, 1 + L * 0.3); return set(i, HIT.face === 5 ? '~' : '|', C(HIT.face === 5 ? CYAN : WHITE, L * 0.7)), true; }); // a bucket at their feet
   }
 }
 function drawAnglerLines() {
   for (const o of ANGLERS) {
+    if(o.dead||o.hidden)continue;
     const v = anglerNear(o, 14);
     if (!v) continue;
     const r = anglerRig(o, ...v), lift = r.lift;

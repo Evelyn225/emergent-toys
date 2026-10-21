@@ -35,6 +35,9 @@ function wantedHud() {
 // ---- busted: pay the fine, or go to jail
 let bustedEl = null, finePaid = 0;
 function openBusted() {
+  wanted.busted=true;
+  if(devOpen())closeDev();
+  releaseHeldMouse();
   if (bustedEl && bustedEl.style.display === 'flex') return;
   const deliveryFailed=failCourier();
   if(climbing)finishCourierClimb('bottom');
@@ -104,18 +107,27 @@ function startCrime(id, done) { startGame(id, 'crime'); game.onDone = done; }
 
 // pickpocketing: someone on the sidewalk, close, and you're behind them
 function pickTarget() {
-  if (mode !== 'walk') return null;
-  for (const p of people) {
-    if (p.hidden || p.follow || p.hailing) continue;
-    const ex = rel(px - p.x), ey = rel(py - p.y), d = Math.hypot(ex, ey);
-    if (d > 0.3) continue;
-    const [lx, ly] = p.last || [0, 0];
-    if (lx * ex + ly * ey < 0 || !(lx || ly)) return p; // behind them (or they're standing still)
+  let best=null,bd=mode==='room'?1.8:.3;
+  const check=(p,x=p.x,y=p.y)=>{
+    if(p.hidden||p.follow||p.hailing)return;
+    const ex=rel(px-x),ey=rel(py-y),d=Math.hypot(ex,ey);if(d>bd)return;
+    const [lx,ly]=p.last||[0,0];
+    if(p.dead||lx*ex+ly*ey<0||!(lx||ly)){best=p;bd=d;}
+  };
+  if(mode==='room') {for(const p of room.props)if(p.fig&&p.dead)check(p);for(const p of roomCops)if(p.dead)check(p);}
+  else if(mode==='walk') {
+    for(const p of people)check(p);
+    for(const b of bodies)if(b.who.dead)check(b.who,b.x,b.y);
   }
-  return null;
+  return best;
 }
 const LIFTS = ['cigarettes', 'candy', 'newspaper', 'apple', 'yoyo', 'chips'];
 function pickpocket(p) {
+  if(p.dead){
+    if(p.looted)return say('Their pockets are empty.',2);
+    p.looted=true;const cash=Math.round((2+Math.random()*20)*4)/4;earn(cash);
+    return say(`You find ${fmt$(cash)} in their pockets.`,3);
+  }
   p.talk = 1e9; // they stand there, none the wiser (yet)
   startCrime('pickpocket', ok => {
     p.talk = 0;
@@ -211,6 +223,7 @@ function crimeKey(code) {
       return painting ? stealHotelPainting(painting) : say('The paintings are mounted along the far wall.');
     }
     if (mode === 'room' && room.burgled) return grabStock();
+    const corpse=pickTarget();if(corpse?.dead)return pickpocket(corpse);
     if (canShoplift()) return shoplift();
     const p = pickTarget();
     if (p) return pickpocket(p);
@@ -223,7 +236,7 @@ function crimePrompt() {
   if (mode === 'room' && room.burgled && room.kind === 'museum') return museumPrompt() + (nearExit() ? '   E: leave' : '');
   if (mode === 'room' && room.burgled) return (room.alarm ? 'ALARM! Get out!   ' : '') + 'G: take something' + (nearVault() ? '   E: crack the vault' : nearKeeper() ? '   E: the till' : nearExit() ? '   E: leave' : ''); // (E only does something at the counter, the vault or the door)
   const vm = nearMachine(), use = vm ? `E: ${VENDING[vm.kind].title.toLowerCase()}   ` : ''; // (a machine right here still works: say so)
-  if (pickTarget()) return use + 'G: pick their pocket';
+  const target=pickTarget();if(target)return use+(target.dead?'G: search pockets':'G: pick their pocket');
   const sh = lockTarget();
   if (!sh || !nightTime()) return '';
   return use + ((jammed.get(sh) || 0) > T ? "The lock's jammed." : `${sh.word}: closed   L: pick the lock`);

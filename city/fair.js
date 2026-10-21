@@ -109,6 +109,7 @@ function folkSpot(f) {
 function stepFairFolk(dt) {
   if (Math.hypot(rel(FAIR.cx - px), rel((FAIR.y0 + FAIR.y1) / 2 - py)) > 40) return; // (nobody's watching)
   for (const f of fairFolk) {
+    if(f.dead||f.hidden)continue;
     if (f.talk > 0) { f.talk -= dt; continue; }
     if (f.queue) continue;
     const ex = f.tx - f.x, ey = f.ty - f.y, d = Math.hypot(ex, ey);

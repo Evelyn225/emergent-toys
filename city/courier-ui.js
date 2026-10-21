@@ -37,12 +37,12 @@ ROOM_DEFS.courier={grid:boxRoom(14,10,{'3,0':'E','4,0':'E'}),light:.9,floor:'woo
     props.push(BX(10,4,.3,.2,1,1.4,solid(STONE,{top:'='})),BX(11.2,4,.25,.18,1,1.3,solid(BRICK)));
     return props;
   }};
-const courierRecipientNear=()=>mode==='roof'&&COURIER_ROUTES.find(r=>near(px,py,r.recipient.x,r.recipient.y)<.3&&Math.abs(roofH-r.recipient.z)<.1);
+const courierRecipientNear=()=>mode==='roof'&&COURIER_ROUTES.find(r=>!r.recipient.dead&&!r.recipient.hidden&&near(px,py,r.recipient.x,r.recipient.y)<.3&&Math.abs(roofH-r.recipient.z)<.1);
 // Nico plays on after his guitar comes back, for the rest of that night.
 let courierEncore=false;
 function stepCourierEncore() { if(courierEncore&&tod>=4&&tod<20)courierEncore=false; }
 // How loud his playing is where you stand: carried across the roofs, gone indoors.
-const courierSerenade=()=>courierEncore&&mode!=='room'?clamp(1-near(px,py,COURIER_NICO.x,COURIER_NICO.y)/3,0,1)**1.5:0;
+const courierSerenade=()=>courierEncore&&!COURIER_NICO.dead&&!COURIER_NICO.hidden&&mode!=='room'?clamp(1-near(px,py,COURIER_NICO.x,COURIER_NICO.y)/3,0,1)**1.5:0;
 function courierPrompt() {
   if(mode==='ladder')return 'W/S: climb up/down | E or Space: let go';
   if(courierAtRecipient()){const r=courierRoute();return `E: deliver the ${r.parcel} to ${r.recipient.name}`;}
@@ -560,11 +560,13 @@ function drawCourier() {
       return set(i,'#',C(o.shortcut?CYAN:YEL,Math.max(L*1.2,night*7))),true; // (reflective paint: it catches any light)
     });
   });
-  drawFigure(...R(COURIER_GARDEN.x,COURIER_GARDEN.y),COURIER_GARDEN.z,.175,0,0,COURIER_FOLK.garden);
-  drawFigure(...R(COURIER_FOREMAN.x,COURIER_FOREMAN.y),COURIER_FOREMAN.z,.175,0,0,COURIER_FOLK.foreman);
-  // Nico paces until his guitar turns up, then sits on his crate and plays.
+  for(const p of courierFigureTargets())drawSceneFigure(p,COURIER_FOLK[p.key],p.pose,p.hx||0,0,{light:night*7});
+}
+function courierFigureTargets() {
   const pace=Math.cos(T*.9),nico=courierEncore?[COURIER_NICO.x+.23,COURIER_NICO.y+.12]:[COURIER_NICO.x+Math.sin(T*.9)*.08,COURIER_NICO.y];
-  drawFigure(...R(...nico),COURIER_NICO.z,.175,courierEncore?0:Math.sign(pace),0,COURIER_FOLK.nico,courierEncore?'sit7':Math.abs(pace)>.15?'walk'+(Math.floor(T*7)&7):'stand',{light:night*7});
+  return [sceneFigureTarget(COURIER_GARDEN,COURIER_GARDEN.x,COURIER_GARDEN.y,COURIER_GARDEN.z,.175,{key:'garden'}),
+    sceneFigureTarget(COURIER_FOREMAN,COURIER_FOREMAN.x,COURIER_FOREMAN.y,COURIER_FOREMAN.z,.175,{key:'foreman'}),
+    sceneFigureTarget(COURIER_NICO,...nico,COURIER_NICO.z,.175,{key:'nico',hx:courierEncore?0:Math.sign(pace),pose:courierEncore?'sit7':Math.abs(pace)>.15?'walk'+(Math.floor(T*7)&7):'stand'})];
 }
 // Big neon letters in the city's 3x5 font, centred on a sign face: s across the face (left to right as you read it),
 // w up it. Returns the letter's index where a lit stroke is, else -1.

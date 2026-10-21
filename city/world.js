@@ -426,7 +426,53 @@ const BUILD = {
 };
 // the Shotengai's streets have a roof over them (city-render.js draws it, from underneath)
 const ARCADE_Z = 0.62; // 6m up
-const arcadeAt = (x, y) => ROAD[idx(Math.floor(x), Math.floor(y))] > 0 && districtAt(x, y) === 'shotengai';
+// Cache one facade-to-facade span per metre of shopping street. Missing lots,
+// open squares and coastal edges have open sky, rather than unsupported roof panels.
+const ARCADE_SPANS = new Map(), ARCADE_CELLS = new Map(), ARCADE_BLOCKS = new Set(); let arcadeSpanSize = 0;
+function prepareArcadeSpans() {
+  if(arcadeSpanSize===N)return;
+  ARCADE_SPANS.clear();ARCADE_CELLS.clear();ARCADE_BLOCKS.clear();arcadeSpanSize=N;
+  for(let by=0;by<NB;by++)for(let bx=0;bx<NB;bx++)if(districtOf(bx,by)==='shotengai')
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)ARCADE_BLOCKS.add(bi(bx+dx,by+dy));
+}
+function arcadeSpanFor(ns, lane, along) {
+  prepareArcadeSpans();
+  const key=(ns?'v':'h')+lane+','+along;
+  if(ARCADE_SPANS.has(key))return ARCADE_SPANS.get(key);
+  const at=(cross)=>ns?idx(cross,along):idx(along,cross);
+  const cx=ns?lane+1:along+.5,cy=ns?along+.5:lane+1;
+  let span=null;
+  if(ROAD[at(lane)] && districtAt(cx,cy)==='shotengai') {
+    let lo=lane-1,hi=lane+2;
+    while(lo>=lane-3 && !(map[at(lo)]>=ARCADE_Z))lo--;
+    while(hi<=lane+4 && !(map[at(hi)]>=ARCADE_Z))hi++;
+    if(lo>=lane-3 && hi<=lane+4) {
+      let clear=true;
+      for(let q=lo+1;q<hi;q++) {
+        const x=ns?q+.5:along+.5,y=ns?along+.5:q+.5;
+        if(map[at(q)] || isWater(x,y)) {clear=false;break;}
+      }
+      if(clear)span={ns,lo:lo+1,hi,along};
+    }
+  }
+  ARCADE_SPANS.set(key,span);return span;
+}
+function arcadeSpanAt(x,y) {
+  x=worldCoord(x);y=worldCoord(y);
+  prepareArcadeSpans();
+  if(worldReady&&!inWorldGrid(x,y) || !ARCADE_BLOCKS.has(bi(Math.floor(x/8),Math.floor(y/8))))return null;
+  const cell=idx(Math.floor(x),Math.floor(y));
+  if(ARCADE_CELLS.has(cell))return ARCADE_CELLS.get(cell);
+  if(map[cell])return null;
+  for(const ns of [true,false]) {
+    const cross=ns?x:y,along=Math.floor(ns?y:x),lane=Math.round((cross-1)/8)*8;
+    if(Math.abs(cross-lane-1)>4)continue;
+    const span=arcadeSpanFor(ns,lane,along);
+    if(span && cross>=span.lo && cross<span.hi){ARCADE_CELLS.set(cell,span);return span;}
+  }
+  ARCADE_CELLS.set(cell,null);return null;
+}
+const arcadeAt = (x,y) => !!arcadeSpanAt(x,y);
 for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
   const kind = blockKind(bx, by), lm = landmarkOf.get(bi(bx, by));
   if (lm === 'clock') setCells(bx, by, 4, 4, 5, 5, 12, 3);

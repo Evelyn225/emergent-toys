@@ -139,14 +139,18 @@ function workshopCandidate() {
     if (!b || Math.hypot(b.x-px,b.y-py)>3) return {ok:false, reason:'Stand near a bench with a free spot for this piece.'};
     return {ok:true, ...workshopAttachment(id,b), a:mod(b.a+placement.a,Math.PI*2)};
   }
-  const x = Math.round((px+Math.cos(a)*1.8)*4)/4, y = Math.round((py+Math.sin(a)*1.8)*4)/4, angle=placement.a;
+  let x = Math.round((px+Math.cos(a)*1.8)*4)/4, y = Math.round((py+Math.sin(a)*1.8)*4)/4; const angle=placement.a;
   const d=WORKSHOP_PARTS[id];
   const hx = Math.abs(Math.cos(angle))*d.halfX+Math.abs(Math.sin(angle))*d.halfY, hy=Math.abs(Math.sin(angle))*d.halfX+Math.abs(Math.cos(angle))*d.halfY;
+  // Quarter-grid positioning snaps the actual footprint to a nearby inner wall.
+  if(Math.abs(x-hx-1)<.35)x=1+hx;
+  if(Math.abs(x+hx-(room.W-1))<.35)x=room.W-1-hx;
+  if(Math.abs(y+hy-(room.H-1))<.35)y=room.H-1-hy;
   const p = {id,x,y,a:angle}, bad = reason => ({...p,ok:false,reason});
-  if (y-hy < room.H-6 || y+hy > room.H-1.4 || x-hx < 1 || x+hx > room.W-1.4) return bad('Use the open workshop area near the entrance.');
+  if (y-hy < room.H-6 || y+hy > room.H-1+1e-6 || x-hx < 1-1e-6 || x+hx > room.W-1+1e-6) return bad('Use the open workshop area near the entrance.');
   if (Math.abs(x-room.def.entry[0]) < hx+1) return bad('Keep the center aisle to the door clear.');
   for (let yy=y-hy-.15;yy<=y+hy+.15;yy+=.2) for(let xx=x-hx-.15;xx<=x+hx+.15;xx+=.2) {
-    if (roomAt(Math.floor(xx),Math.floor(yy))!=='.' || room.props.some(o=>o.box && !o.walk && o.box.z0<1.3 && inBox(o.box,xx,yy,.1))) return bad('Leave space around the furniture.');
+    if (roomAt(clamp(xx,1.0001,room.W-1.0001),clamp(yy,1.0001,room.H-1.0001))!=='.' || room.props.some(o=>o.box && !o.walk && o.box.z0<1.3 && inBox(o.box,xx,yy,.1))) return bad('Leave space around the furniture.');
   }
   return {...p,ok:true};
 }
@@ -208,7 +212,7 @@ function updateDrugBuyer() {
 }
 function nearDrugBuyer() {
   updateDrugBuyer();
-  if(mode!=='walk'||!drugBuyer)return null;
+  if(mode!=='walk'||!drugBuyer||drugBuyer.dead||drugBuyer.hidden)return null;
   const ex=rel(drugBuyer.x-px),ey=rel(drugBuyer.y-py),d=Math.hypot(ex,ey);
   return d<.5&&(d<.12||(ex*Math.cos(a)+ey*Math.sin(a))/d>.4) ? drugBuyer : null;
 }

@@ -184,6 +184,20 @@ function stepGardens(dt) {
   if (gardensOpen(tod)) stepGardens.rang = false;
 }
 const GARDEN_FOLK = [], GARDEN_ANIMALS = {}; // the paddlers and picnickers' looks, made the first time they're drawn
+const GARDEN_ACTORS=Array.from({length:8},()=>({}));
+function gardenFigureTargets() {
+  const out=[];
+  for(let k=0;k<2;k++) {
+    const th=T*.03+k*3,hx=-Math.sin(th)*LAKE.rx,hy=Math.cos(th)*LAKE.ry;
+    const p=sceneFigureTarget(GARDEN_ACTORS[k],...gw(LAKE.x+Math.cos(th)*LAKE.rx*.55,LAKE.y+Math.sin(th)*LAKE.ry*.55),.01,.17,{k,hx,hy,pose:'sit6',paddler:true,shirt:[RED,BLUE][k]});
+    if(gardensOpen(tod)||p.who.dead)out.push(p);
+  }
+  for(const [x,y,k]of [[16.5,12.4,1],[6.2,8.6,2],[18.6,9.8,3]])for(const side of [-1,1]) {
+    const index=k*2+(side>0),p=sceneFigureTarget(GARDEN_ACTORS[index],...gw(x+side*.045,y+side*.01),0,.17,{k:index,hx:-side,hy:0,pose:'grass',shirt:(side<0?[YEL,BLUE,GREEN]:[MAG,RED,WHITE])[k-1]});
+    if(gardensOpen(tod)&&day>=.3||p.who.dead)out.push(p);
+  }
+  return out;
+}
 function gardenSprites() {
   const [cx, cy] = gw(GARDEN.w / 2, GARDEN.h / 2);
   if (Math.hypot(rel(cx - px), rel(cy - py)) > vis + 14) return;
@@ -214,11 +228,10 @@ function gardenSprites() {
   const pk = T * 0.02, pgx = 12 + Math.cos(pk) * 1.4, pgy = 6.2 + Math.sin(pk * 2) * 0.5; // the peacock, strutting about the middle lawn
   animal(pgx, pgy, 0, 0.13, -Math.sin(pk) * 1.4, Math.cos(pk * 2), A.peacock, Math.floor(T * 4) & 3);
   BOATS_PARKED.forEach(([bx, by], k) => { if (!boat || boat.from !== k) drawSwanBoat(...V(bx, by), 1, 0); }); // moored along the jetty, pointing out over the lake (less the one you're out in)
-  for (let k = 0; k < (gardensOpen(tod) ? 2 : 0); k++) { // two boats out on the lake, being paddled round (by day)
-    const th = T * 0.03 + k * 3, bgx = LAKE.x + Math.cos(th) * LAKE.rx * 0.55, bgy = LAKE.y + Math.sin(th) * LAKE.ry * 0.55;
-    const [bx, by] = V(bgx, bgy), hx = -Math.sin(th) * LAKE.rx, hy = Math.cos(th) * LAKE.ry, hn = Math.hypot(hx, hy);
-    drawSwanBoat(bx, by, hx / hn, hy / hn);
-    drawFigure(bx, by, 0.01, 0.17, hx, hy, GARDEN_FOLK[k] ||= figAnyone([RED, BLUE][k]), 'sit6'); // the paddler, sat low in the swan (it hides their legs), facing the way it's going
+  for(const p of gardenFigureTargets()) {
+    if(p.who.hidden)continue;
+    if(p.paddler){const n=Math.hypot(p.hx,p.hy);drawSwanBoat(...R(p.x,p.y),p.hx/n,p.hy/n);}
+    drawSceneFigure(p,GARDEN_FOLK[p.k] ||= figAnyone(p.shirt),p.pose,p.hx,p.hy);
   }
   // the gates: iron, open by day, shut at night, and the name over the main one
   for (const [ggx, ggy, o] of GARDEN_GATES) {
@@ -242,10 +255,7 @@ function gardenSprites() {
   for (const [pgx2, pgy2, k] of [[16.5, 12.4, 1], [6.2, 8.6, 2], [18.6, 9.8, 3]]) {
     if (!gardensOpen(tod) || day < 0.3) continue;
     drawPicnicBlanket(...V(pgx2, pgy2), k & 1 ? RED : BLUE);
-    for (const [s, shirt] of [[-1, [YEL, BLUE, GREEN][k - 1]], [1, [MAG, RED, WHITE][k - 1]]]) { // facing each other across the blanket
-      const [fx_, fy_] = gw(pgx2 + s * 0.045, pgy2 + s * 0.01);
-      drawFigure(rel(fx_ - px), rel(fy_ - py), 0, 0.17, -s, 0, GARDEN_FOLK[k * 2 + (s > 0)] ||= figAnyone(shirt), 'grass');
-    }
+
   }
   if (body.seat && body.seat.grass) { // the picnic basket, on the blanket's far left corner
     const s = body.seat, al = PICNIC_AHEAD + PICNIC_LONG * 0.55, ac = -PICNIC_HALF * 0.55, bx = s.x + s.fx * al - s.fy * ac, by = s.y + s.fy * al + s.fx * ac;

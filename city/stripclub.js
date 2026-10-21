@@ -73,10 +73,12 @@ function clubSide(i, u, uStep, z, d, side, along, len, sgn, a0, L, glow, blink) 
 }
 // the bouncer and the velvet rope on the sidewalk outside
 const BOUNCER = figBouncerLook(), CLUB_DANCERS = [MAG, CYAN, YEL].map((col, k) => figDancerLook(k + 11, col)); // (SEQUINS' first three)
+const CLUB_BOUNCER={};
+const clubFigureTarget=()=>sceneFigureTarget(CLUB_BOUNCER,CLUB.bx*8+5.06,CLUB.by*8+1.9,0,.19);
 function clubSprites() {
   const dx_ = CLUB.bx * 8 + 2 + 3, dy_ = CLUB.by * 8 + 2 - 0.1, [vx, vy] = R(dx_, dy_);
   if (Math.hypot(vx, vy) > vis) return;
-  drawFigure(vx + 0.06, vy, 0, 0.19, 0, -1, BOUNCER, 'fold', { light: 6 }); // arms folded, facing the street
+  drawSceneFigure(clubFigureTarget(),BOUNCER,'fold',0,-1,{light:6}); // arms folded, facing the street
   drawVelvetRope(vx - 0.13, vy, vx - 0.03, vy);
 }
 // brass posts with a red rope sagging between them, hooked on just under their knobs
