@@ -227,6 +227,7 @@ function gunNoise(at, len, type, freq, q, gain, pan = 0) {
 // the bang: a crack, the blast, a thump in your chest, and the street throwing it back off every wall a few times
 // over, a little later and a little duller each time ('in': a room, short and boxy; 'far': somebody else's, down the street)
 function gunBang(at, vol, pan = 0, where = '') {
+  if (playGameplayEffect('gunshot', at, vol, pan, where)) return;
   const far = where === 'far';
   if (!far) gunNoise(at, 0.06, 'highpass', 2200, 0.7, 0.5 * vol, pan);
   gunNoise(at, far ? 0.3 : 0.4, 'lowpass', far ? 1100 : 3200, 0.8, 0.9 * vol, pan);
@@ -241,6 +242,7 @@ const dryFire = at => { tone(at, 2600, 0.025, 0.09, 'square'); gunNoise(at, 0.03
 const whizz = (at, pan) => gunNoise(at, 0.12, 'bandpass', 5000, 6, 0.1, pan);
 // thumbing the cylinder out, six rounds in one after another, and snapping it shut
 function reloadSound(at) {
+  if (playGameplayEffect('reload', at)) return;
   gunNoise(at, 0.05, 'bandpass', 2400, 3, 0.22);
   for (let k = 0; k < 6; k++) gunNoise(at + 0.3 + k * 0.17, 0.035, 'bandpass', 3800 + k * 90, 5, 0.12);
   gunNoise(at + RELOAD_T - 0.12, 0.07, 'bandpass', 1800, 2, 0.3);

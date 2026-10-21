@@ -32,6 +32,7 @@ const CHOPPER_SIZE = 2; // (against the Hornet's 1: a big twin-engined thing, an
 // the rotor's thud-thud-thud: one low pulse every tenth of a second or so, louder close by, panned to its side
 let chopperBeat = 0;
 function stepChopperSound(dt) {
+  if (gameplayBuffers.rotor) return; // The shared recorded loop follows position/height in audioTick.
   if (!heli || !actx || paused || (chopperBeat -= dt) > 0) return;
   chopperBeat = 0.105;
   const vx = rel(heli.x - px), vy = rel(heli.y - py), d = Math.hypot(vx, vy, heli.z), loud = clamp(1 - d / 40, 0, 1);
