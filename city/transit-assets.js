@@ -40,7 +40,7 @@ const TRANSIT_ASSETS = {
   }
 };
 const TRANSIT_PA = {
-  gap: .075, lead: .025, fade: .008, gain: .95, doorsLead: 4,
+  gap: .075, announcementGap: 2, lead: .025, fade: .008, gain: .95, doorsLead: 4,
   highpass: 380, lowpass: 3800, presence: 2200, presenceGain: 3.5,
   reflectionTime: .022, reflectionGain: .2
 };
