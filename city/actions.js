@@ -20,6 +20,19 @@ function ejectDriver(c) {
   Object.assign(p, { x, y, hidden: false, inside: null, path: [], wait: 0, talk: 3, goal: null });
   snapToCorner(p);
 }
+// A stolen cruiser is now a player's vehicle, not a dispatched police unit.
+// In particular, ending a chase must not send it home or take it out of cars.
+function takePoliceCar(c) {
+  if (!c.patrol && !c.pursuit && !c.returning) return;
+  if (c.base) c.base.out = false;
+  Object.assign(c, { patrol:false, pursuit:false, returning:false, waitingCrew:false,
+    merging:null, dest:null, route:null, state:null, home:false, extra:false, base:null });
+  for (const p of footCops) {
+    if (p.car === c) p.car = null;
+    if (p.returnCar === c) { p.returnCar = null; if (!p.chase) backToBeat(p); }
+  }
+  for (const p of [...roomCops,...roofCops]) if (p.returnCar === c) p.returnCar = null;
+}
 // where you step out: right beside the car, whichever side (or end) has room; the kerb only if nowhere near does
 function exitSpot(c) {
   const lx = c.hy, ly = -c.hx; // (the car's left)
@@ -271,6 +284,7 @@ function interact() {
       a = camYaw = carYaw(c);
     }
     else { // a stolen car: if anyone saw, the police hear about it
+      takePoliceCar(c);
       mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
       const pump = gasFilling(c); c.pit = null; c.gas = null; // (filling up at a gas station: gas.js)
       if (pump && !c.owned && !c.mine) {

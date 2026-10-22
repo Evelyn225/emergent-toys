@@ -294,9 +294,9 @@ function deliWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(STONE, 1.6); return set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 7 ? ' ' : '.', C(GRAY, L * 0.3)), true;
 }
 ROOM_DEFS.deli = { grid: ['##############', '#............#', '#............#', '#............#', '#.........W.W#', '#.........W..#', '#.........W..#', '#.........W..#', '######DD######'],
-  wc: { x0: 11, y0: 5, x1: 13, y1: 8, sign: [10, 4, 10.5] }, light: 0.95, floor: 'checker', ceil: 'tin', sign: true, signAt: 7, wall: deliWall, keeper: [7, 1.3],
+  wc: { x0: 11, y0: 5, x1: 13, y1: 8, sign: [10, 4, 10.5] }, light: 0.95, floor: 'checker', ceil: 'tin', sign: true, signAt: 7, wall: deliWall, keeper: [7, 1.4],
   props: r => {
-    const p = [...glassCase(7, 2.1, 3, 0.4, 1.25, deliGoods, WHITE), standing(7, 1.3, WHITE), standing(5, 1.3, WHITE),
+    const p = [...glassCase(7, 2.1, 3, 0.4, 1.25, deliGoods, WHITE), standing(7, 1.4, WHITE), standing(5, 1.4, WHITE),
       BX(9.2, 1.05, 0.25, 0.2, 0.95, 1.3, (i, t, L) => { // the slicer on the back counter: its blade spinning
         if (HIT.face === 4 && Math.hypot(HIT.u, HIT.w - 1.12) < 0.15) { BG[i] = C(GRAY, 5); return set(i, '-\\|/'[Math.floor(T * 12) & 3], C(WHITE, 15)), true; }
         BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
@@ -673,9 +673,9 @@ const sunglassSpinner = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
     if (slot < 0.2 || fract((HIT.w - 0.5) / 0.2) < 0.4) return false;
     return set(i, slot < 0.55 ? 'o' : slot < 0.65 ? '-' : 'o', C(ITEM_COL[(Math.floor(an / TAU * 8) + row) & 7], 13)), true; });
 }, [0.2, 0.2, 1.75]);
-ROOM_DEFS.pharmacy = { grid: ['############', '#..........#', '#..........#', '#..........#', '#.SS....SS.#', '####....SS.#', '#..........#', '#..#.......#', '#####DD#####'], light: 1.1, floor: 'lino', ceil: 'strip', sign: true, signAt: 6, wall: pharmacyWall, keeper: [6, 1.35],
+ROOM_DEFS.pharmacy = { grid: ['############', '#..........#', '#..........#', '#..........#', '#.SS....SS.#', '####....SS.#', '#..........#', '#..#.......#', '#####DD#####'], light: 1.1, floor: 'lino', ceil: 'strip', sign: true, signAt: 6, wall: pharmacyWall, keeper: [6, 1.4],
   props: r => {
-    const p = [BX(6, 2.15, 2.4, 0.32, 0, 1.15, solid(WHITE, { panel: 0.8, trim: 1.1, top: '=' })), standing(6, 1.35, WHITE), standing(4.4, 1.2, WHITE), // the pharmacist, and one counting pills
+    const p = [BX(6, 2.15, 2.4, 0.32, 0, 1.15, solid(WHITE, { panel: 0.8, trim: 1.1, top: '=' })), standing(6, 1.4, WHITE), standing(4.4, 1.4, WHITE), // the pharmacist, and one counting pills
       { x: 6, y: 2.4, draw: (vx, vy) => hallSign(vx, vy, 0.95, 1.94, 2.12, 3, 'PRESCRIPTIONS', C(GREEN, 4), C(WHITE, 15)) },
       aisleSign(2.9, 4.95, 'COLD & FLU', C(BLUE, 4), C(WHITE, 15), 0.6), aisleSign(9.1, 4.95, 'VITAMINS', C(ORANGE, 4), C(WHITE, 15), 0.5),
       BX(10.8, 7.4, 0.3, 0.3, 0, 1.3, (i, t, L) => { if (HIT.face === 2 && HIT.w > 0.9 && HIT.w < 1.2) { BG[i] = C(CYAN, 3); return set(i, HIT.w > 1.05 ? '1' : '2', C(WHITE, 14)), true; } // the blood pressure machine
@@ -858,9 +858,9 @@ function herbsWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(RED, 0.9 + L * 0.05); return set(i, Math.abs(z - 2.45) < 0.04 ? '=' : ' ', C(YEL, 10)), true;
 }
 ROOM_DEFS.herbs = { grid: ['###############', '#........#....#', '#........#....#', '#.............#', '#.............#', '#........#....#', '#........#....#', '######DD#######'],
-  light: 0.7, floor: 'wood', ceil: 'lantern', sign: true, signAt: 5, wall: herbsWall, keeper: [5, 1.3],
+  light: 0.7, floor: 'wood', ceil: 'lantern', sign: true, signAt: 5, wall: herbsWall, keeper: [5, 1.4],
   props: r => {
-    const p = [BX(5, 2.1, 2, 0.3, 0, 1.0, solid(BRICK, { panel: 0.5, trim: 0.96, top: '=' })), standing(5, 1.3, RED),
+    const p = [BX(5, 2.1, 2, 0.3, 0, 1.0, solid(BRICK, { panel: 0.5, trim: 0.96, top: '=' })), standing(5, 1.4, RED),
       jar(3.4, 2.05, 1.0, RED), jar(3.75, 2.15, 1.0, YEL), jar(6.4, 2.1, 1.0, BRICK), brassScale(5.7, 2.1, 1.0),
       ...glassCase(1.75, 4.2, 0.7, 0.3, 1.0, caseGoods('Yy&', [WARM, YEL, BRICK], false, 95), BRICK, 0, 1),
       sack(1.7, 5.75, BRICK, '@'), sack(1.7, 6.4, RED, 'o'), sack(2.35, 6.45, YEL, '*'), sack(3.0, 6.45, GREEN, '%'),
@@ -1000,9 +1000,9 @@ function jewelWall(i, u, uStep, z, d, mx, my, L) {
 }
 const stanchion = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { drum(vx, vy, 0.12, 0, 0.03, CHROME); rod(vx, vy, 0, vx, vy, 0.9, 0.018, YEL, 1.5); dot(vx, vy, 0.93, 0.04, CHROME); }, [0.12, 0.12, 0.95]);
 ROOM_DEFS.jeweler = { grid: ['#############', '#........#..#', '#...........#', '#........#..#', '#........#..#', '#........#..#', '#####DD######'],
-  light: 1, floor: 'marble', ceil: 'chandelier', sign: true, signAt: 5, wall: jewelWall, keeper: [5, 1.3],
+  light: 1, floor: 'marble', ceil: 'chandelier', sign: true, signAt: 5, wall: jewelWall, keeper: [5, 1.4],
   props: r => {
-    const sparkle = seed => caseGoods('o*@.', [YEL, WHITE, CYAN, RED], true, seed), p = [...glassCase(5, 2.05, 2, 0.32, 1.05, sparkle(101), BRICK), standing(5, 1.3, GRAY),
+    const sparkle = seed => caseGoods('o*@.', [YEL, WHITE, CYAN, RED], true, seed), p = [...glassCase(5, 2.05, 2, 0.32, 1.05, sparkle(101), BRICK), standing(5, 1.4, GRAY),
       ...glassCase(1.85, 3.9, 0.75, 0.3, 1.05, sparkle(102), BRICK, 0, 1), ...glassCase(8.15, 4.3, 0.75, 0.3, 1.05, sparkle(103), BRICK, 0, 1),
       figProp(8.6, 5.6, figGuardLook(7), { face: [-1, -0.3], chat: false }), stanchion(3.2, 5.6), stanchion(3.2, 4.6),
       ROOM_MODEL(3.2, 5.1, (vx, vy) => { for (let k = 0; k < 6; k++) { const a0 = k / 6, a1 = (k + 1) / 6, z0 = 0.86 - Math.sin(a0 * Math.PI) * 0.15, z1 = 0.86 - Math.sin(a1 * Math.PI) * 0.15; rod(vx, vy - 0.5 + a0, z0, vx, vy - 0.5 + a1, z1, 0.02, RED, 1.4); } }), // the velvet rope

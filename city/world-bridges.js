@@ -1,5 +1,7 @@
 // Ramps, deck and clearance share one description. Heights are cells (10 m).
-const ROAD_BRIDGES = [25,38].map((bx,i)=>({id:i?'harbor':'iron',x:bx*8+1,hw:1,y0:168,y1:216,ramp:12,h:1.65,thickness:.12}));
+// The north shore road occupies y=168..170. Start beyond its outer kerb so
+// the ramp and railings cannot cut across that junction or its house entrances.
+const ROAD_BRIDGES = [25,38].map((bx,i)=>({id:i?'harbor':'iron',x:bx*8+1,hw:1,y0:170,y1:216,ramp:12,h:1.65,thickness:.12}));
 function roadBridgeAt(x,y) {
   return worldReady ? ROAD_BRIDGES.find(b=>Math.abs(x-b.x)<=b.hw&&y>=b.y0&&y<=b.y1) || null : null;
 }

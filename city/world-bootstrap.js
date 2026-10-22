@@ -28,13 +28,15 @@ function assembleArchipelago() {
     if (o.ownerCell != null) {
       sourceX = o.ownerCell % oldN + .5;
       sourceY = Math.floor(o.ownerCell / oldN) + .5;
-    } else if (o.sh && sourcePlaces.has(o.sh)) {
-      [sourceX, sourceY] = sourcePlaces.get(o.sh);
+    } else if (sourcePlaces.has(o.sh || o.b?.sh)) {
+      // Projecting signs, eaves and balconies belong to their building, even
+      // when their centre falls across a neighborhood boundary.
+      [sourceX, sourceY] = sourcePlaces.get(o.sh || o.b.sh);
     }
     const [targetX, targetY] = citySourcePoint(sourceX, sourceY, kind);
     const offset = inherited || [targetX - sourceX, targetY - sourceY];
     const [dx, dy] = offset;
-    if (o.sh && sourcePlaces.has(o.sh)) {
+    if (sourcePlaces.has(o.sh || o.b?.sh)) {
       // Original east-edge doors wrapped x=256 back to zero. Keep them beside
       // their owning building before applying the neighborhood translation.
       for (const key of ['x','x0','x1','cx','ex','gx']) if (Number.isFinite(o[key])) {
