@@ -53,11 +53,11 @@
     },
     {
       "key": "doors",
-      "source": "Please stand clear of the closing doors.mp3",
+      "source": "stand clear of the closing doors.mp3",
       "file": "transit/doors.wav",
-      "sourceSha256": "6137398dd66c29efc818b7bf1f4160e7f8f031bb90756e95fb593844fb2ca367",
+      "sourceSha256": "bc6880e224ae591824c91f0876c2f6fb04ef9917cb6004412d8ccbd8053675ca",
       "lufs": -20.01,
-      "truePeakDB": -13.72
+      "truePeakDB": -13.42
     },
     {
       "key": "alight",

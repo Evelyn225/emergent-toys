@@ -8,7 +8,7 @@ const TRANSIT_ASSETS = {
     west: { source: 'This is a westbound train.mp3', file: 'transit/west.wav' },
     returnEast: { source: 'This train will now return eastbound.mp3', file: 'transit/return-east.wav' },
     returnWest: { source: 'This train will now return westbound.mp3', file: 'transit/return-west.wav' },
-    doors: { source: 'Please stand clear of the closing doors.mp3', file: 'transit/doors.wav' },
+    doors: { source: 'stand clear of the closing doors.mp3', file: 'transit/doors.wav' },
     alight: { source: 'Please allow passengers to leave the train before boarding.mp3', file: 'transit/alight.wav' },
     edge: { source: 'Please stand back from the platform edge.mp3', file: 'transit/edge.wav' },
     belongings: { source: 'Please remember to take your belongings with you.mp3', file: 'transit/belongings.wav' }
