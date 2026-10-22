@@ -49,5 +49,10 @@ function transitFiles(phrase, station) {
   if (!first) return null;
   if (station == null) return [first];
   const name = TRANSIT_ASSETS.stations[station]?.file;
-  return name ? [first, name] : null;
+  if (!name) return null;
+  if (phrase === 'east' || phrase === 'west') {
+    const next=TRANSIT_ASSETS.phrases.next.file;
+    return next ? [first,next,name] : null;
+  }
+  return [first, name];
 }

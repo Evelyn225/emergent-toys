@@ -18,6 +18,10 @@ test('every actual transit label has a recording, while unknown/missing labels s
   ev("TRANSIT_ASSETS.stations['KING ST'].file = 'transit/king-st.wav'");
   assert.equal(ev("transitFiles('arrival', 'unrecorded')"), null);
   assert.deepEqual(json("transitFiles('next', '3RD AVE')"), ['transit/next.wav', 'transit/3rd-ave.wav']);
+  for(const direction of ['east','west'])assert.deepEqual(json(`transitFiles('${direction}', '3RD AVE')`), [`transit/${direction}.wav`,'transit/next.wav','transit/3rd-ave.wav']);
+  ev('TRANSIT_ASSETS.phrases.next.file = null');
+  assert.equal(ev("transitFiles('east', '3RD AVE')"),null);
+  ev("TRANSIT_ASSETS.phrases.next.file = 'transit/next.wav'");
 });
 
 test('prepared clips exist, have distinct original paths, consistent measured levels and mono PCM encoding', () => {

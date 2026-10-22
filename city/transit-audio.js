@@ -132,7 +132,7 @@ async function transitPump() {
     envelope.gain.linearRampToValueAtTime(0, end);
     source.connect(envelope); envelope.connect(transitPABus());
     voice.sources.push(source); voice.nodes.push(envelope);
-    // Both halves use one AudioContext clock, regardless of frame rate or network timing.
+    // Connected clips use one AudioContext clock, regardless of frame rate or network timing.
     source.start(when); when = end + TRANSIT_PA.gap;
   }
   transitReadyAt = when - TRANSIT_PA.gap + TRANSIT_PA.announcementGap;
@@ -142,11 +142,11 @@ async function transitPump() {
     if (transitVoice === voice) { transitVoice = null; transitPump(); }
   };
 }
-function transitDirection(dir, reversal = false) {
+function transitDirection(dir, reversal = false, nextStation = null) {
   if (mode !== 'el' || !dir) return;
   let phrase = dir > 0 ? 'east' : 'west';
   if (reversal) phrase = dir > 0 ? 'returnEast' : 'returnWest';
-  transitAnnounce(phrase);
+  transitAnnounce(phrase, nextStation);
 }
 function transitBoarded() {
   transitSync();
@@ -157,7 +157,10 @@ function transitBoarded() {
     transitAnnounce('doors', null, () => elRiding()?.stopped, 1);
   if (mode === 'room' && now?.phase >= 18 - TRANSIT_PA.doorsLead && now.phase < 18)
     transitAnnounce('doors', null, () => room?.kind === 'train' && room.dest == null, 1);
-  if (mode === 'el') transitDirection(elRiding().dir);
+  if (mode === 'el') {
+    const train=elRiding();
+    transitDirection(train.dir,false,EL_STATIONS[train.next].name);
+  }
 }
 function transitSubwayDeparted() {
   transitSync();

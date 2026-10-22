@@ -73,12 +73,15 @@ test('el actual boarding, warning, departure, arrival and both endpoint reversal
   });
   assert.deepEqual(result.boarding, { mode: 'el', dir: 1 });
   assert.deepEqual(result.departure.map(e => e.phrase), ['east', 'doors', 'next']);
+  assert.equal(result.departure[0].station, '11TH AVE');
+  assert.deepEqual(result.departure[0].files, ['transit/east.wav','transit/next.wav','transit/11th-ave.wav']);
   assert.equal(result.departure.at(-1).station, '11TH AVE');
   assert.deepEqual(result.departure.at(-1).files, ['transit/next.wav', 'transit/11th-ave.wav']);
   assert.equal(result.arrival.at(-1).station, '11TH AVE');
   assert.equal(result.eastEnd.mode, 'el'); assert.equal(result.eastEnd.dir, -1); assert.equal(result.eastEnd.station, 3);
   assert.equal(result.eastEnd.events.at(-1).phrase, 'returnWest');
   assert.equal(result.returnBoarding.at(-1).phrase, 'west');
+  assert.deepEqual(result.returnBoarding.at(-1).files, ['transit/west.wav','transit/next.wav','transit/18th-ave.wav']);
   assert.equal(result.returnDeparture.at(-1).station, '3RD AVE');
   assert.equal(result.returnDeparture.at(-1).phrase, 'next');
   assert.equal(result.westEnd.mode, 'el'); assert.equal(result.westEnd.dir, 1); assert.equal(result.westEnd.station, 0);
@@ -116,6 +119,24 @@ test('subway keyboard boarding selects exactly one destination and arrives in th
     transitDirection(1); transitDirection(-1, true);
     return events.filter(e => ['east', 'west', 'returnEast', 'returnWest'].includes(e.phrase));
   }), []);
+}));
+
+test('boarding joins direction, next-stop phrase and station on one clock, and the rider can still get off',()=>fixture(async page=>{
+  await page.evaluate(async()=>{
+    T=1;elUp({s:EL_STATIONS[0],tr:0});
+    const files=['transit/east.wav','transit/next.wav','transit/11th-ave.wav'];
+    const names=new Map(await Promise.all(files.map(async file=>[await clipBuffer(file),file])));
+    window.boardingStarts=[];
+    const makeSource=actx.createBufferSource.bind(actx);
+    actx.createBufferSource=function(){const source=makeSource(),start=source.start.bind(source);source.start=function(when){if(names.has(source.buffer))boardingStarts.push({file:names.get(source.buffer),when,duration:source.buffer.duration});start(when);};return source;};
+    elBoard();
+  });
+  await page.waitForFunction(()=>boardingStarts.length===3);
+  const result=await page.evaluate(()=>({starts:boardingStarts,stopped:elRiding().stopped,mode}));
+  assert.equal(result.mode,'el');assert.equal(result.stopped,true);
+  assert.deepEqual(result.starts.map(s=>s.file),['transit/east.wav','transit/next.wav','transit/11th-ave.wav']);
+  for(let i=1;i<3;i++)assert.ok(Math.abs(result.starts[i].when-result.starts[i-1].when-result.starts[i-1].duration-.075)<1e-8);
+  assert.deepEqual(await page.evaluate(()=>{elGetOff();return {mode,voice:transitVoice,queued:transitQueue.length};}),{mode:'elplat',voice:null,queued:0});
 }));
 
 test('a departure on the first resumed frame is announced once, and late boarding prioritizes the doors', () => fixture(async page => {
@@ -291,7 +312,7 @@ test('the shared heavier PA graph renders both station halves without clipping a
   assert.ok(result.peak > .01 && result.peak < .8, JSON.stringify(result));
   assert.ok(result.firstEnergy > 1 && result.secondEnergy > 1, 'both the prefix and station remain audible');
   assert.ok(result.reflection < result.lead, 'the reflection ends before a subsequent utterance begins');
-  await page.waitForTimeout(400);
+  await page.waitForFunction(() => Math.abs(sfxBus.gain.value - .25 ** 2 * 1.5) < .02);
   assert.ok(Math.abs(await page.evaluate(() => sfxBus.gain.value) - .25 ** 2 * 1.5) < .02);
 }));
 
