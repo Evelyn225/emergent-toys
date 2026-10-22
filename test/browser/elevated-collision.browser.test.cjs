@@ -82,10 +82,13 @@ test('walk beneath either stair flight without being lifted, then swipe and clim
     for(let i=0;i<265;i++){move(st.c*.01,st.s*.01);stepBody(.01);stepRoof();}
     const top={mode,ground:walkGround(px,py)};
     for(let i=0;i<30;i++){move(st.ax*.006,st.ay*.006);stepBody(.01);stepRoof();}
-    return {under,top,platform:mode};
+    const platform=mode;
+    for(let i=0;i<30;i++){move(-st.ax*.006,-st.ay*.006);stepBody(.01);stepRoof();}
+    for(let i=0;i<265;i++){move(-st.c*.01,-st.s*.01);stepBody(.01);stepRoof();}
+    return {under,top,platform,down:{mode,ground:elWalkGround(px,py),z:body.z,u:st.c*rel(px-st.ox)-st.off}};
   })));
   assert.equal(result.length,8);
-  for(const r of result){assert.equal(r.under.mode,'walk');assert.equal(r.under.highest,0);assert.equal(r.under.z,0);assert.ok(r.under.v<.19);assert.equal(r.top.ground,1.27);assert.equal(r.platform,'elplat');}
+  for(const r of result){assert.equal(r.under.mode,'walk');assert.equal(r.under.highest,0);assert.equal(r.under.z,0);assert.ok(r.under.v<.19);assert.equal(r.top.ground,1.27);assert.equal(r.platform,'elplat');assert.equal(r.down.mode,'walk');assert.equal(r.down.ground,0);assert.equal(r.down.z,0);assert.ok(r.down.u< -1.3);}
 }));
 
 test('el riders are inside a rotating 3D carriage with the moving live city visible through its windows',()=>withCity(async page=>{
