@@ -46,7 +46,7 @@ function marinaPrompt() {
     const k = BOAT_KINDS[sea.kind];
     if (landingSpot(sea)) return Math.abs(sea.v) > 0.25 ? 'Slow down to step off' : `E: tie up and step off${sea.hired && inMarina(sea.x, sea.y) ? ' (return rental)' : ''}`;
     const speed = `${Math.round(Math.abs(sea.v) * 19.4)} knots${sea.v > k.top + .1 ? ' (cruising)' : ''}`;
-    return typeof TOUCH !== 'undefined' && TOUCH ? `stick: throttle / helm; full forward: cruise; back: brake   ${speed}` : `W throttle | Shift: cruise | S brake / astern | A/D steer | V: camera   ${speed}`;
+    return typeof TOUCH !== 'undefined' && TOUCH ? `stick: throttle / helm; full forward: cruise; back: brake   ${speed}` : `W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look around | V: camera   ${speed}`;
   }
   const b = nearBoat();
   if (!b) return nearOffice() ? (marinaOpen() ? 'MARINA: boats by the trip or to buy, down on the jetty.' : 'MARINA: shut. Open 7am till 9pm.') : '';

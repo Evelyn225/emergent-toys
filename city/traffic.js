@@ -110,13 +110,14 @@ function resolveCruiserContact(c, o, hit) {
   const ca = c.travelA ?? Math.atan2(c.hy, c.hx), oa = o.travelA ?? Math.atan2(o.hy, o.hx);
   const closing = (Math.cos(ca) * c.v - Math.cos(oa) * o.v) * nx + (Math.sin(ca) * c.v - Math.sin(oa) * o.v) * ny;
   if (closing > 0) {
+    if(c.pursuit)c.contactRecoveryT=T+1.3;
     // Impact requires actual body contact; following someone's bumper alone cannot spin them out.
     const rear = rel(c.x - o.x) * o.hx + rel(c.y - o.y) * o.hy;
     if (c.pursuit && movingPlayer && closing > 0.35 && Math.abs(o.v) > 0.7 && rear < -0.06 && Math.abs(nx * o.hy - ny * o.hx) > 0.5) {
       o.spunT = T + 2.5; wanted.pitPending = true; damageCar(o, 8);
     }
     if (closing > 0.5) { damageCar(o, (closing - 0.5) * 16); damageCar(c, (closing - 0.5) * 10); } // (a proper knock: both of them)
-    c.v *= 0.15;
+    c.v *= c.pursuit ? .55 : .15;
     if (movingPlayer) o.v *= 0.65;
   }
   c.ex = c.x; c.ey = c.y; c.routeT = 0;
@@ -168,7 +169,7 @@ function steerCruiser(c, tx, ty, speed, dt, arrive = true) {
   if (arrive) targetSpeed = Math.min(targetSpeed, Math.sqrt(2 * braking * Math.max(0, distance - 0.02)));
   targetSpeed *= Math.max(0, Math.cos(turn));
   c.brake = targetSpeed < c.v;
-  c.v += clamp(targetSpeed - c.v, -braking * dt, COP_CAR_ACCEL * (0.75 + traction * 0.25) * dt);
+  c.v += clamp(targetSpeed - c.v, -braking * dt, COP_CAR_ACCEL * (c.contactRecoveryT>T?2:1) * (0.75 + traction * 0.25) * dt);
   c.travelA ??= oldAngle;
   const slip = mod(angle - c.travelA + Math.PI, TAU) - Math.PI;
   c.travelA += slip * (1 - Math.exp(-dt * 12 * traction));
@@ -205,9 +206,18 @@ function cruiserLineClear(c, tx, ty) {
 }
 function stepPursuitCar(c, dt) {
   c.pursuitDrive = true;
+  // A blocked bumper should trigger a short reverse and a fresh approach, not a long idle.
+  if(c.backout>0){
+    c.backout=Math.max(0,c.backout-dt);
+    const x=worldCoord(c.x-c.hx*.45*dt),y=worldCoord(c.y-c.hy*.45*dt);
+    if(carBodyClear(x,y,c.hx,c.hy,...carFootprint(c))&&!isWater(x,y)&&!cars.some(o=>o!==c&&carContact(c,o,x,y,c.hx,c.hy))){c.x=x;c.y=y;}
+    c.ex=c.x;c.ey=c.y;c.v=0;c.routeT=0;return;
+  }
   let [tx, ty] = c.dest, distance = Math.hypot(rel(tx - c.x), rel(ty - c.y));
   const driving = mode === 'drive' && me;
   if (wanted.seen && driving) { const lead = Math.min(0.6, distance / 6), heading = me.travelA ?? Math.atan2(me.hy, me.hx); tx += Math.cos(heading) * me.v * lead; ty += Math.sin(heading) * me.v * lead; }
+  if(c.detourGoal&&T<c.detourUntil&&near(c.x,c.y,...c.detourGoal)>.15)[tx,ty]=c.detourGoal;
+  else c.detourGoal=null;
   const direct = cruiserLineClear(c, tx, ty);
   if (!direct && (c.routeT = (c.routeT || 0) - dt) <= 0) { c.routeT = 0.6; c.route = pursuitRoute(c, tx, ty); }
   let goal = direct ? [tx, ty] : c.route?.[0];
@@ -215,7 +225,17 @@ function stepPursuitCar(c, dt) {
   if (!direct && c.route.length > 1 && Math.hypot(rel(goal[0] - c.x), rel(goal[1] - c.y)) < 0.18) { c.route.shift(); goal = c.route[0]; }
   const stopForOfficer = mode !== 'drive' && distance < 1.05;
   const stoppedDriver = driving && wanted.seen && Math.abs(me.v) < 0.1 && near(c.x, c.y, me.x, me.y) < 0.52;
+  const before=[c.x,c.y];
   steerCruiser(c, goal[0], goal[1], stopForOfficer || stoppedDriver ? 0 : COP_CAR_SPEED, dt, direct || c.route.length <= 1);
+  const facing=(rel(goal[0]-c.x)*c.hx+rel(goal[1]-c.y)*c.hy)/(near(c.x,c.y,...goal)||1);
+  c.stuckT=facing>.5&&!stopForOfficer&&!stoppedDriver&&distance>.8&&near(c.x,c.y,...before)<.05*dt?(c.stuckT||0)+dt:0;
+  if(c.stuckT>.45){
+    c.stuckT=0;c.backout=.45;c.routeT=0;
+    for(const side of [c.detourSide||1,-(c.detourSide||1)]){
+      const x=worldCoord(c.x+c.hx*.8-c.hy*side*.55),y=worldCoord(c.y+c.hy*.8+c.hx*side*.55);
+      if(carBodyClear(x,y,c.hx,c.hy,...carFootprint(c))&&!isWater(x,y)){c.detourGoal=[x,y];c.detourUntil=T+2;c.detourSide=-side;break;}
+    }
+  }
 }
 let carId = 0;
 function addCar(props) {

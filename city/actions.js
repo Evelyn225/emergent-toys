@@ -119,7 +119,7 @@ function elBoard() {
   const t = elHere();
   if (!t) return false;
   const car=clamp(Math.round(rel(px-t.x)/EL_CAR_LEN),-1,1);
-  ride = { tr: t.tr, k: t.k, off: car*EL_CAR_LEN+.1, car };
+  ride = { tr: t.tr, k: t.k, off: car*EL_CAR_LEN+.1, car, side:0 };
   mode = 'el';px=worldCoord(t.x+ride.off);py=EL_TRACK[t.tr]; // stand in the aisle, inside the selected carriage
   a=(t.tr?1:-1)*Math.PI/3;pitch=0;
   transitBoarded();
@@ -153,6 +153,7 @@ function interact() {
   if(courierUse())return;
   if (workshopUse()) return;
   if (mode === 'room') {
+    if(hotelAmenityUse())return;
     if (room.kind === 'train') return;
     if (grandHotelUse()) return;
     if (homeRecord(room)) { // your place: sleep whenever you like, your closet, the telly
@@ -395,7 +396,10 @@ function stepSleep(dt) {
     if (tod > 7) dayNum++; // slept through midnight
     tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
-    if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby, suite: !!sleep.lobby.suite }, sleep.lobby.suite ? [4.5, 5.3, -Math.PI / 2] : [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
+    if (!sleep.home) {
+      const lobby=sleep.lobby,def=lobby.suite?ROOM_DEFS.hotelSuite:lobby.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom;
+      enterRoom('hotelroom',{lobby,suite:!!lobby.suite},def.entry);
+    } // (at home you wake where you are)
   }
   if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say('7:00. You slept well, and the sky has cleared.', 4); }
   if (sleep.t > 5) { sleep = null; fade = 0; }

@@ -23,6 +23,7 @@ const FIRES = GRILLS.filter(o => o.on === 'fire');
 function fireGlow(wx, wy) {
   let k = 0;
   for (const o of FIRES) {
+    if(o.nightOnly&&night<.3)continue;
     const d = Math.hypot(rel(wx - o.x), rel(wy - o.y)), R = 0.32 + fireRoar(o) * 0.3;
     if (d < R) k = Math.max(k, (1 - d / R) ** 2.2 * (0.85 + 0.15 * Math.sin(T * 9 + d * 20) * Math.sin(T * 5.3)));
   }
@@ -32,21 +33,23 @@ function drawCampfires() {
   for (const o of FIRES) {
     const [vx, vy] = R(o.x, o.y);
     if (Math.hypot(vx, vy) > Math.min(vis, 16) || !inView(vx, vy, 0.4)) continue;
+    const ground=o.z??outdoorGroundHeight(o.x,o.y);
     const roar = fireRoar(o), warm = 0.35 + 0.65 * Math.max(night, overcast * 0.5);
     for (let k = 0; k < 10; k++) { // the stones
       const an = k / 10 * TAU + 0.3, sx = vx + Math.cos(an) * 0.075, sy = vy + Math.sin(an) * 0.075, face = Math.cos(an - Math.atan2(-vy, -vx)); // (the side towards the fire's lit)
-      dot(sx, sy, 0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i, hash(k, 1, 1811) > 0.5 ? 'o' : '@', C(GRAY, L * 0.8)), true; });
+      dot(sx, sy, ground+0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i, hash(k, 1, 1811) > 0.5 ? 'o' : '@', C(GRAY, L * 0.8)), true; });
     }
     for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
       const an = k / 5 * TAU + 0.6;
-      drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, 0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, 0.055, 0.006, (i, t, L) => {
-        const ember = HIT.w > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
+      drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, ground+0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, ground+0.055, 0.006, (i, t, L) => {
+        const ember = HIT.w-ground > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
         BG[i] = ember ? C(RED, 2 + warm * 3) : C(BRICK, 1 + L * 0.15); return set(i, ember ? '*' : '=', ember ? C(ORANGE, 14) : C(BRICK, L * 0.7)), true;
       });
     }
+    if(o.nightOnly&&night<.3)continue;
     // the flames and the sparks over them: a billboard, so it's round from every side
     const H = 0.1 + 0.08 * roar, top = 0.36;
-    drawShape(vx, vy, 0.008, 0.07, top, (i, u, z, du, dz, L) => {
+    drawShape(vx, vy, ground+0.008, 0.07, top, (i, u, z, du, dz, L) => {
       if (z > H) { // above it: sparks drifting up and fading
         const cell = hash(Math.floor(u / du + Math.sin(z * 30 + T) * 2), Math.floor(z / dz - T * 9), 1815);
         if (cell > 0.985 - roar * 0.008 && Math.abs(u) < 0.03 + (z - H) * 0.15) return set(i, cell > 0.997 ? '*' : '.', C(z > H + 0.12 ? ORANGE : YEL, 14 - (z - H) * 25)), true;

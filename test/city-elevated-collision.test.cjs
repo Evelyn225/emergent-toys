@@ -7,11 +7,11 @@ test('the elevated landing surface and station platforms wrap with the world',()
   const {ev}=loadCity();
   assert.equal(ev('elDeckHeight(20,EL_Y+1)'),ev('EL_TOP'));
   assert.equal(ev('elDeckHeight(20+N,EL_Y+1-N)'),ev('EL_TOP'));
-  assert.equal(ev('elDeckHeight(20,EL_Y0-.01)'),0);
-  assert.equal(ev('elDeckHeight(20,EL_Y1+.01)'),0);
+  assert.equal(ev('elDeckHeight(20,EL_Y0-.06)'),0);
+  assert.equal(ev('elDeckHeight(20,EL_Y1+.06)'),0);
   assert.equal(ev('elPlatformAt(EL_STATIONS[0].x+N,EL_PLAT[0]-N).tr'),0);
   assert.equal(ev('elPlatformAt(EL_STATIONS[0].x,EL_TRACK[0])'),null);
-  assert.equal(ev('elPlatformAt(EL_STATIONS[0].x,EL_Y0-.02)'),null);
+  assert.equal(ev('elPlatformAt(EL_STATIONS[0].x,EL_Y0-.06)'),null);
 });
 
 test('moving elevated cars hit bodies on the track but clear the sidewalk, platform and air above',()=>{
@@ -76,7 +76,7 @@ test('both stair orientations allow headroom underneath without lifting the stre
     elStairOn=st;
     const tread=outdoorGroundHeight(...to);elStairOn=null;
     return {under,street,tread,post:elStairPostAt(...post,0),low:elStairStep(...from,...low,null,0),
-      seam:Math.abs((st.oy+st.ay*ELS.top)-(st.tr?EL_Y1:EL_Y0))<1e-10};
+      seam:Math.abs((st.oy+st.ay*ELS.top)-(st.tr?EL_Y1+EL_PLATFORM_OUT:EL_Y0-EL_PLATFORM_OUT))<1e-10};
   })))`));
   for(const r of cases){assert.equal(r.under,null);assert.equal(r.street,0);assert.ok(r.tread>.17);assert.equal(r.post,true);assert.equal(r.low,true);assert.equal(r.seam,true);}
 });
@@ -84,7 +84,7 @@ test('both stair orientations allow headroom underneath without lifting the stre
 test('station railings protect the outer edge and platform ends, leaving stair mouths and train boarding open',()=>{
   const {ev}=loadCity();
   const cases=JSON.parse(ev(`JSON.stringify(EL_STATIONS.flatMap(s=>s.stairs.map(st=>{
-    const tr=st.tr,y=tr?EL_Y1-.008:EL_Y0+.008,opening=st.ox+st.c*(st.off+(ELS.u3+ELS.u4)/2);
+    const tr=st.tr,y=tr?EL_Y1+EL_PLATFORM_OUT:EL_Y0-EL_PLATFORM_OUT,opening=st.ox+st.c*(st.off+(ELS.u3+ELS.u4)/2);
     const rails=elPlatformRails(s,tr),mid=rails.filter(r=>Math.abs(r[2]-r[0])>.1).sort((a,b)=>(b[2]-b[0])-(a[2]-a[0]))[0],x=(mid[0]+mid[2])/2;
     return {outer:elPlatformRailAt(x,y,EL_TOP),end:elPlatformRailAt(s.x0,EL_PLAT[tr],EL_TOP),
       stair:elPlatformRailAt(opening,y,EL_TOP),boarding:elPlatformRailAt(s.x,EL_PLAT[tr]+(tr?-.12:.12),EL_TOP),

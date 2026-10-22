@@ -134,7 +134,7 @@ test('Grand Hotel: suite, patrols, distraction, theft, quiet escape and save', a
       const booked = [money, room.kind, room.suite, room.W, room.H, tod];
       sleep = null; fade = 0; leaveRoom();
       return [early, booked, room.kind, room.ret];
-    }), [[1000, false], [750, 'hotelroom', true, 9, 7, 7], 'grandhotel', [53, 64.2, -Math.PI / 2]]);
+    }), [[1000, false], [750, 'hotelroom', true, 18, 14, 7], 'grandhotel', [53, 64.2, -Math.PI / 2]]);
 
     assert.deepEqual(await page.evaluate(() => {
       px = HOTEL_HEIST_DOOR[0]; py = 2.1; tod = 22; interact();

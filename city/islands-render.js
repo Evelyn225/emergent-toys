@@ -75,6 +75,7 @@ function buildIslandScenery() {
   }
   for(const [x,y]of [[626.15,196],[627.8,196.2],[627.6,197.7]])islandStone(x,y,.18,hash(x,y,1915));
   buildIslandSights();
+  buildCoastLife();
   islandDetailsB=bucketed(ISLAND_DETAILS);
 }
 

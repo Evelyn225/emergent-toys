@@ -10,12 +10,14 @@ const EL_PLAT = [EL_Y0 + 0.08, EL_Y1 - 0.08]; // where you stand on each platfor
 const underEl = (y,x=px) => (!worldReady||x>=140&&x<=352)&&Math.abs(rel(y - (EL_Y + 1))) < EL_HALF;
 const EL_STATIONS = [2, 10, 18, 26].map(bx => ({ x: bx * 8 + 5, x0: bx * 8 + 2.6, x1: bx * 8 + 7.4, name: AVE_NAMES[bx] }));
 const elStationAt = x => EL_STATIONS.find(s => worldReady ? x>=s.x0&&x<s.x1 : worldCoord(x - s.x0) < s.x1 - s.x0);
-const elDeckHeight = (x,y) => underEl(y,x) ? EL_TOP : 0;
+const EL_PLATFORM_OUT=.05;
+function elPlatformSurface(x,y){const s=elStationAt(x);return !!s&&(Math.abs(rel(y-EL_Y0))<=EL_PLATFORM_OUT+1e-8||Math.abs(rel(y-EL_Y1))<=EL_PLATFORM_OUT+1e-8);}
+const elDeckHeight = (x,y) => underEl(y,x)||elPlatformSurface(x,y) ? EL_TOP : 0;
 function elPlatformAt(x,y) {
-  if(!underEl(y,x))return null;
+  if(!elDeckHeight(x,y))return null;
   const s=elStationAt(x);
   if(!s)return null;
-  for(const tr of [0,1])if(Math.abs(rel(y-EL_PLAT[tr]))<.14)return {s,tr};
+  for(const tr of [0,1])if(Math.abs(rel(y-EL_PLAT[tr]))<.14||(tr?y>EL_PLAT[tr]&&y<=EL_Y1+EL_PLATFORM_OUT:y<EL_PLAT[tr]&&y>=EL_Y0-EL_PLATFORM_OUT))return {s,tr};
   return null;
 }
 // ---- the stairs up: one per platform, a straight run along the curb side of the sidewalk (clear of the bays and
@@ -23,7 +25,7 @@ function elPlatformAt(x,y) {
 // platform's end. In each stair's own frame u runs along the street (up the stairs) and v out from the building face
 // toward the deck; st.ox, st.oy is the face at the station's middle, st.off how far along it's been slid to find a
 // clear run (streetscape.js). A turnstile at the foot (st.x, st.y: where you stand to swipe).
-const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: 0.4 };
+const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: 0.35 };
 // The top landing meets the deck edge, without overlapping its upper surface.
 const ELS_POSTS = [[(ELS.u0+ELS.u1)/2,EL_TOP/4],[ELS.u1,EL_TOP/2],[ELS.u2,EL_TOP/2],[(ELS.u2+ELS.u3)/2,EL_TOP*.75],[ELS.u3,EL_TOP],[ELS.u4,EL_TOP]];
 let elStairOn = null; // the stair surface occupied by the player; null while walking underneath
@@ -87,7 +89,7 @@ function elStairStep(x0, y0, x, y, pass, feet=elStairGround(x0,y0), height=.17) 
   }
   if (!a && !b) return null;
   if (on) { // on them: a step at a time; off the bottom, or off the top onto the deck, but not over the rails
-    if (!b) return a.g > EL_TREAD * 0.6 && !(underEl(y) && a.g > EL_TOP - 0.01);
+    if (!b) return a.g > EL_TREAD * 0.6 && !(elDeckHeight(x,y) && a.g > EL_TOP - 0.01);
     return Math.abs(b.g - a.g) > EL_TREAD;
   }
   if (!b)return null;
@@ -99,13 +101,13 @@ function elStairStep(x0, y0, x, y, pass, feet=elStairGround(x0,y0), height=.17) 
 // and the outer edge has a gap exactly where the stair landing joins it.
 const EL_RAIL_H=.11, EL_RAIL_R=.004;
 function elPlatformRails(station,tr) {
-  const st=station.stairs[tr],y=tr?EL_Y1-.008:EL_Y0+.008,inner=EL_PLAT[tr]+(tr?-.12:.12);
+  const st=station.stairs[tr],y=tr?EL_Y1+EL_PLATFORM_OUT:EL_Y0-EL_PLATFORM_OUT,inner=EL_PLAT[tr]+(tr?-.12:.12);
   const ends=[ELS.u3,ELS.u4].map(u=>st.ox+st.c*(st.off+u)).sort((a,b)=>a-b);
-  const lo=clamp(ends[0]-.025,station.x0,station.x1),hi=clamp(ends[1]+.025,station.x0,station.x1);
+  const lo=clamp(ends[0],station.x0,station.x1),hi=clamp(ends[1],station.x0,station.x1);
   return [[station.x0,y,lo,y],[hi,y,station.x1,y],[station.x0,y,station.x0,inner],[station.x1,y,station.x1,inner]];
 }
 function elPlatformRailAt(x,y,feet,pad=.025) {
-  if(feet>EL_TOP+EL_RAIL_H||feet+.17<EL_TOP||Math.abs(rel(y-EL_Y-1))>EL_HALF+.05)return false;
+  if(feet>EL_TOP+EL_RAIL_H||feet+.17<EL_TOP||Math.abs(rel(y-EL_Y-1))>EL_HALF+EL_PLATFORM_OUT+.03)return false;
   for(const station of EL_STATIONS) {
     if(Math.abs(rel(x-station.x))>3)continue;
     for(const tr of [0,1])for(const [ax,ay,bx,by] of elPlatformRails(station,tr)) {
@@ -172,4 +174,18 @@ function elTrainImpact(from,to,t0,t1,height=.17) {
     }
   }
   return null;
+}
+
+function elNextArrival(station,tr,t=T){
+ const now=elTrains(t).filter(o=>o.tr===tr);
+ const here=now.find(o=>o.stopped&&EL_STATIONS[o.station]===station);if(here)return {...here,seconds:0};
+ for(let seconds=1;seconds<=EL_CYCLE*2;seconds++){
+  const arrival=elTrains(t+seconds).find(o=>o.tr===tr&&o.stopped&&EL_STATIONS[o.station]===station);
+  if(arrival)return {...arrival,seconds};
+ }
+ return null;
+}
+function elTrainBodyAt(x,y,z){
+ if(z+.17<EL_TOP+.02||z>EL_TOP+.02+EL_H)return false;
+ return elTrains(T).some(t=>Math.abs(rel(y-EL_TRACK[t.tr]))<EL_HW+.025&&Array.from({length:EL_CARS},(_,j)=>t.x-t.dir*(j-1)*EL_CAR_LEN).some(cx=>Math.abs(rel(x-cx))<EL_HL+.025));
 }

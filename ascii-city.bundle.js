@@ -3629,13 +3629,14 @@ function resolveCruiserContact(c, o, hit) {
   const ca = c.travelA ?? Math.atan2(c.hy, c.hx), oa = o.travelA ?? Math.atan2(o.hy, o.hx);
   const closing = (Math.cos(ca) * c.v - Math.cos(oa) * o.v) * nx + (Math.sin(ca) * c.v - Math.sin(oa) * o.v) * ny;
   if (closing > 0) {
+    if(c.pursuit)c.contactRecoveryT=T+1.3;
     // Impact requires actual body contact; following someone's bumper alone cannot spin them out.
     const rear = rel(c.x - o.x) * o.hx + rel(c.y - o.y) * o.hy;
     if (c.pursuit && movingPlayer && closing > 0.35 && Math.abs(o.v) > 0.7 && rear < -0.06 && Math.abs(nx * o.hy - ny * o.hx) > 0.5) {
       o.spunT = T + 2.5; wanted.pitPending = true; damageCar(o, 8);
     }
     if (closing > 0.5) { damageCar(o, (closing - 0.5) * 16); damageCar(c, (closing - 0.5) * 10); } // (a proper knock: both of them)
-    c.v *= 0.15;
+    c.v *= c.pursuit ? .55 : .15;
     if (movingPlayer) o.v *= 0.65;
   }
   c.ex = c.x; c.ey = c.y; c.routeT = 0;
@@ -3687,7 +3688,7 @@ function steerCruiser(c, tx, ty, speed, dt, arrive = true) {
   if (arrive) targetSpeed = Math.min(targetSpeed, Math.sqrt(2 * braking * Math.max(0, distance - 0.02)));
   targetSpeed *= Math.max(0, Math.cos(turn));
   c.brake = targetSpeed < c.v;
-  c.v += clamp(targetSpeed - c.v, -braking * dt, COP_CAR_ACCEL * (0.75 + traction * 0.25) * dt);
+  c.v += clamp(targetSpeed - c.v, -braking * dt, COP_CAR_ACCEL * (c.contactRecoveryT>T?2:1) * (0.75 + traction * 0.25) * dt);
   c.travelA ??= oldAngle;
   const slip = mod(angle - c.travelA + Math.PI, TAU) - Math.PI;
   c.travelA += slip * (1 - Math.exp(-dt * 12 * traction));
@@ -3724,9 +3725,18 @@ function cruiserLineClear(c, tx, ty) {
 }
 function stepPursuitCar(c, dt) {
   c.pursuitDrive = true;
+  // A blocked bumper should trigger a short reverse and a fresh approach, not a long idle.
+  if(c.backout>0){
+    c.backout=Math.max(0,c.backout-dt);
+    const x=worldCoord(c.x-c.hx*.45*dt),y=worldCoord(c.y-c.hy*.45*dt);
+    if(carBodyClear(x,y,c.hx,c.hy,...carFootprint(c))&&!isWater(x,y)&&!cars.some(o=>o!==c&&carContact(c,o,x,y,c.hx,c.hy))){c.x=x;c.y=y;}
+    c.ex=c.x;c.ey=c.y;c.v=0;c.routeT=0;return;
+  }
   let [tx, ty] = c.dest, distance = Math.hypot(rel(tx - c.x), rel(ty - c.y));
   const driving = mode === 'drive' && me;
   if (wanted.seen && driving) { const lead = Math.min(0.6, distance / 6), heading = me.travelA ?? Math.atan2(me.hy, me.hx); tx += Math.cos(heading) * me.v * lead; ty += Math.sin(heading) * me.v * lead; }
+  if(c.detourGoal&&T<c.detourUntil&&near(c.x,c.y,...c.detourGoal)>.15)[tx,ty]=c.detourGoal;
+  else c.detourGoal=null;
   const direct = cruiserLineClear(c, tx, ty);
   if (!direct && (c.routeT = (c.routeT || 0) - dt) <= 0) { c.routeT = 0.6; c.route = pursuitRoute(c, tx, ty); }
   let goal = direct ? [tx, ty] : c.route?.[0];
@@ -3734,7 +3744,17 @@ function stepPursuitCar(c, dt) {
   if (!direct && c.route.length > 1 && Math.hypot(rel(goal[0] - c.x), rel(goal[1] - c.y)) < 0.18) { c.route.shift(); goal = c.route[0]; }
   const stopForOfficer = mode !== 'drive' && distance < 1.05;
   const stoppedDriver = driving && wanted.seen && Math.abs(me.v) < 0.1 && near(c.x, c.y, me.x, me.y) < 0.52;
+  const before=[c.x,c.y];
   steerCruiser(c, goal[0], goal[1], stopForOfficer || stoppedDriver ? 0 : COP_CAR_SPEED, dt, direct || c.route.length <= 1);
+  const facing=(rel(goal[0]-c.x)*c.hx+rel(goal[1]-c.y)*c.hy)/(near(c.x,c.y,...goal)||1);
+  c.stuckT=facing>.5&&!stopForOfficer&&!stoppedDriver&&distance>.8&&near(c.x,c.y,...before)<.05*dt?(c.stuckT||0)+dt:0;
+  if(c.stuckT>.45){
+    c.stuckT=0;c.backout=.45;c.routeT=0;
+    for(const side of [c.detourSide||1,-(c.detourSide||1)]){
+      const x=worldCoord(c.x+c.hx*.8-c.hy*side*.55),y=worldCoord(c.y+c.hy*.8+c.hx*side*.55);
+      if(carBodyClear(x,y,c.hx,c.hy,...carFootprint(c))&&!isWater(x,y)){c.detourGoal=[x,y];c.detourUntil=T+2;c.detourSide=-side;break;}
+    }
+  }
 }
 let carId = 0;
 function addCar(props) {
@@ -4949,7 +4969,7 @@ function stepDown(p, dt) {
   return false;
 }
 // what they look like on the way down, down, and getting up
-const downPose = d => d.t < 0.2 || d.t > d.dur - 0.6 ? 'sprawl' : d.dur === Infinity ? 'dead' : 'down'; // (shot: they don't get up)
+const downPose = d => d.dur === Infinity ? 'dead' : d.t < 0.2 || d.t > d.dur - 0.6 ? 'sprawl' : 'down'; // (shot: they don't get up)
 // everyone near enough to see it stops and stares, and the nearest comes running to kneel by them till they're up.
 // Returns how many saw it
 const GAWK_R = 1.6;
@@ -5322,12 +5342,14 @@ const EL_PLAT = [EL_Y0 + 0.08, EL_Y1 - 0.08]; // where you stand on each platfor
 const underEl = (y,x=px) => (!worldReady||x>=140&&x<=352)&&Math.abs(rel(y - (EL_Y + 1))) < EL_HALF;
 const EL_STATIONS = [2, 10, 18, 26].map(bx => ({ x: bx * 8 + 5, x0: bx * 8 + 2.6, x1: bx * 8 + 7.4, name: AVE_NAMES[bx] }));
 const elStationAt = x => EL_STATIONS.find(s => worldReady ? x>=s.x0&&x<s.x1 : worldCoord(x - s.x0) < s.x1 - s.x0);
-const elDeckHeight = (x,y) => underEl(y,x) ? EL_TOP : 0;
+const EL_PLATFORM_OUT=.05;
+function elPlatformSurface(x,y){const s=elStationAt(x);return !!s&&(Math.abs(rel(y-EL_Y0))<=EL_PLATFORM_OUT+1e-8||Math.abs(rel(y-EL_Y1))<=EL_PLATFORM_OUT+1e-8);}
+const elDeckHeight = (x,y) => underEl(y,x)||elPlatformSurface(x,y) ? EL_TOP : 0;
 function elPlatformAt(x,y) {
-  if(!underEl(y,x))return null;
+  if(!elDeckHeight(x,y))return null;
   const s=elStationAt(x);
   if(!s)return null;
-  for(const tr of [0,1])if(Math.abs(rel(y-EL_PLAT[tr]))<.14)return {s,tr};
+  for(const tr of [0,1])if(Math.abs(rel(y-EL_PLAT[tr]))<.14||(tr?y>EL_PLAT[tr]&&y<=EL_Y1+EL_PLATFORM_OUT:y<EL_PLAT[tr]&&y>=EL_Y0-EL_PLATFORM_OUT))return {s,tr};
   return null;
 }
 // ---- the stairs up: one per platform, a straight run along the curb side of the sidewalk (clear of the bays and
@@ -5335,7 +5357,7 @@ function elPlatformAt(x,y) {
 // platform's end. In each stair's own frame u runs along the street (up the stairs) and v out from the building face
 // toward the deck; st.ox, st.oy is the face at the station's middle, st.off how far along it's been slid to find a
 // clear run (streetscape.js). A turnstile at the foot (st.x, st.y: where you stand to swipe).
-const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: 0.4 };
+const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: 0.35 };
 // The top landing meets the deck edge, without overlapping its upper surface.
 const ELS_POSTS = [[(ELS.u0+ELS.u1)/2,EL_TOP/4],[ELS.u1,EL_TOP/2],[ELS.u2,EL_TOP/2],[(ELS.u2+ELS.u3)/2,EL_TOP*.75],[ELS.u3,EL_TOP],[ELS.u4,EL_TOP]];
 let elStairOn = null; // the stair surface occupied by the player; null while walking underneath
@@ -5399,7 +5421,7 @@ function elStairStep(x0, y0, x, y, pass, feet=elStairGround(x0,y0), height=.17) 
   }
   if (!a && !b) return null;
   if (on) { // on them: a step at a time; off the bottom, or off the top onto the deck, but not over the rails
-    if (!b) return a.g > EL_TREAD * 0.6 && !(underEl(y) && a.g > EL_TOP - 0.01);
+    if (!b) return a.g > EL_TREAD * 0.6 && !(elDeckHeight(x,y) && a.g > EL_TOP - 0.01);
     return Math.abs(b.g - a.g) > EL_TREAD;
   }
   if (!b)return null;
@@ -5411,13 +5433,13 @@ function elStairStep(x0, y0, x, y, pass, feet=elStairGround(x0,y0), height=.17) 
 // and the outer edge has a gap exactly where the stair landing joins it.
 const EL_RAIL_H=.11, EL_RAIL_R=.004;
 function elPlatformRails(station,tr) {
-  const st=station.stairs[tr],y=tr?EL_Y1-.008:EL_Y0+.008,inner=EL_PLAT[tr]+(tr?-.12:.12);
+  const st=station.stairs[tr],y=tr?EL_Y1+EL_PLATFORM_OUT:EL_Y0-EL_PLATFORM_OUT,inner=EL_PLAT[tr]+(tr?-.12:.12);
   const ends=[ELS.u3,ELS.u4].map(u=>st.ox+st.c*(st.off+u)).sort((a,b)=>a-b);
-  const lo=clamp(ends[0]-.025,station.x0,station.x1),hi=clamp(ends[1]+.025,station.x0,station.x1);
+  const lo=clamp(ends[0],station.x0,station.x1),hi=clamp(ends[1],station.x0,station.x1);
   return [[station.x0,y,lo,y],[hi,y,station.x1,y],[station.x0,y,station.x0,inner],[station.x1,y,station.x1,inner]];
 }
 function elPlatformRailAt(x,y,feet,pad=.025) {
-  if(feet>EL_TOP+EL_RAIL_H||feet+.17<EL_TOP||Math.abs(rel(y-EL_Y-1))>EL_HALF+.05)return false;
+  if(feet>EL_TOP+EL_RAIL_H||feet+.17<EL_TOP||Math.abs(rel(y-EL_Y-1))>EL_HALF+EL_PLATFORM_OUT+.03)return false;
   for(const station of EL_STATIONS) {
     if(Math.abs(rel(x-station.x))>3)continue;
     for(const tr of [0,1])for(const [ax,ay,bx,by] of elPlatformRails(station,tr)) {
@@ -5484,6 +5506,20 @@ function elTrainImpact(from,to,t0,t1,height=.17) {
     }
   }
   return null;
+}
+
+function elNextArrival(station,tr,t=T){
+ const now=elTrains(t).filter(o=>o.tr===tr);
+ const here=now.find(o=>o.stopped&&EL_STATIONS[o.station]===station);if(here)return {...here,seconds:0};
+ for(let seconds=1;seconds<=EL_CYCLE*2;seconds++){
+  const arrival=elTrains(t+seconds).find(o=>o.tr===tr&&o.stopped&&EL_STATIONS[o.station]===station);
+  if(arrival)return {...arrival,seconds};
+ }
+ return null;
+}
+function elTrainBodyAt(x,y,z){
+ if(z+.17<EL_TOP+.02||z>EL_TOP+.02+EL_H)return false;
+ return elTrains(T).some(t=>Math.abs(rel(y-EL_TRACK[t.tr]))<EL_HW+.025&&Array.from({length:EL_CARS},(_,j)=>t.x-t.dir*(j-1)*EL_CAR_LEN).some(cx=>Math.abs(rel(x-cx))<EL_HL+.025));
 }
 // Belle Époque's stone cornices, iron balconies and sloping copper roofs are geometry, depth-tested
 // against the street scene. Their positions follow complete facade bays, with room at every corner.
@@ -6067,6 +6103,7 @@ const ITEMS = {
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
   vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
   movinglamp: { name: 'moving-day table lamp', price: 0, kind: 'gear' },
+  telescope: {name:'brass telescope',price:85,kind:'gear'},
   // property (property.js): not carried, owned
   car_hatch: { name: 'old hatchback', price: 450, kind: 'car' }, car_sedan: { name: 'sedan', price: 1500, kind: 'car' },
   car_sports: { name: 'sports car', price: 4000, kind: 'car' },
@@ -6136,7 +6173,7 @@ const STOCK_WORD = {
   LIQUOR: ['beer', 'whiskey', 'cigarettes', 'chips'], PHARMACY: ['water', 'energy', 'umbrella'],
   GROCERY: ['apple', 'chips', 'water', 'soda', 'eggs', 'bread', 'butter', 'cheese', 'rice', 'pasta', 'drynoodles', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon', 'rawchicken', 'mince', 'bacon', 'tofu'], // (and the makings of dinner: cooking.js)
   MARKET: ['apple', 'chips', 'water', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon'], FRUIT: ['apple', 'lemon', 'tomatoes'],
-  PAWN: ['skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda', 'spraypaint'],
+  PAWN: ['telescope', 'skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda', 'spraypaint'],
   HARDWARE: ['umbrella', 'spraypaint'], RECORDS: ['vinyl', 'boombox'], BOOKS: ['book', 'newspaper', 'coffee'], FLORIST: ['flowers'],
   CAFE: ['coffee', 'latte', 'croissant', 'donut'], COFFEE: ['coffee', 'latte', 'croissant'], DONUTS: ['donut', 'coffee'], BAKERY: ['bagel', 'croissant', 'donut'],
   PIZZA: ['slice', 'soda'], TACOS: ['taco', 'soda'], KEBAB: ['kebab', 'soda'], DINER: ['burger', 'coffee', 'soda'],
@@ -6438,6 +6475,7 @@ function useHeld(near) {
       for (const p of people) if (!p.hidden && Math.hypot(rel(p.x - px), rel(p.y - py)) < 0.8) p.talk = 3;
       return [pick(['BANG BANG BANG! Everyone nearby jumps out of their skin.', 'A string of firecrackers goes off at your feet. Somewhere a car alarm joins in.']) + (it.uses > 0 ? ` (${it.uses} left)` : ''), 'kick'];
     }
+    case 'telescope': fx.telescope=!fx.telescope;return [fx.telescope?'You raise the telescope. Q lowers it.':'You lower the telescope.',null];
     case 'goldfish': return [pick(['You hold the bag up to the light. The goldfish looks at you, then at the city, unimpressed.', 'The goldfish does a lap of its bag. Then another.', 'You name the goldfish. It doesn\'t react, but you know.']), null];
     case 'mysterybox': { // open it: something from the pile, nobody said what
       removeHeld();
@@ -8482,12 +8520,30 @@ function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn
   if (d <= s) { c.x = worldCoord(gx); c.y = worldCoord(gy); c.corner = c.goal; c.goal = null; }
   else { c.x = worldCoord(c.x + dx / d * s); c.y = worldCoord(c.y + dy / d * s); c.ph += dt * 4; }
 }
-function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls (just out of the car: a sprint)
+function copFootClear(c,x,y) {
+  return !map[idx(Math.floor(x),Math.floor(y))]&&!isWater(x,y)&&!cars.some(o=>Math.abs(rel((o.ex??o.x)-x))<.6&&Math.abs(rel((o.ey??o.y)-y))<.6&&carPersonOverlap(o,{x,y})>0);
+}
+function cruiserOfficerExit(c){
+  for(const side of [1,-1])for(const along of [0,-.18,.18]){
+    const x=worldCoord(c.x-c.hy*side*.23+c.hx*along),y=worldCoord(c.y+c.hx*side*.23+c.hy*along);
+    if(copFootClear(c,x,y))return [x,y];
+  }
+  return null;
+}
+function chaseStep(c, tx, ty, dt) { // Approach the suspect while avoiding walls and vehicle hulls.
   if (c.down) return;
-  const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = Math.min(d, (c.burst > T ? COP_FOOT_SPEED * 1.1 : COP_FOOT_SPEED) * dt);
-  const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
-  if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = worldCoord(nx);
-  if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = worldCoord(ny);
+  // Reach a window rather than trying to occupy the driver's car.
+  if(mode==='drive'&&me&&near(c.x,c.y,me.x,me.y)<1.5){
+    const side=Math.sign(-rel(c.x-me.x)*me.hy+rel(c.y-me.y)*me.hx)||1;
+    tx=me.x-me.hy*side*.2;ty=me.y+me.hx*side*.2;
+  }
+  const dx=rel(tx-c.x),dy=rel(ty-c.y),d=Math.hypot(dx,dy),step=Math.min(d,(c.burst>T?COP_FOOT_SPEED*1.1:COP_FOOT_SPEED)*dt);
+  if(d<.015)return;
+  const heading=Math.atan2(dy,dx),angles=[0,...[.65,1.25,1.8].flatMap(v=>[v*(c.detourSide||1),-v*(c.detourSide||1)])];
+  for(const offset of angles){
+    const nx=c.x+Math.cos(heading+offset)*step,ny=c.y+Math.sin(heading+offset)*step;
+    if(copFootClear(c,nx,ny)){c.x=worldCoord(nx);c.y=worldCoord(ny);if(offset)c.detourSide=Math.sign(offset);break;}
+  }
   c.ph += dt * 7;
 }
 const roomOpen = (x, y) => x >= 0 && y >= 0 && x < room.W && y < room.H && ROOMW.cell(Math.floor(x), Math.floor(y)) === 0 && !(room.def.block && room.def.block(x, y)) &&
@@ -8765,7 +8821,7 @@ function callUnits() {
       if (!p) continue; // (no streets for miles: out over the bay)
       c = addCar({ ...p, kind: 'police', body: BLUE, patrol: true, extra: true });
     }
-    Object.assign(c, { pursuit: true, returning: false, state: 'out', home: false, born: T, waitingCrew: false, merging: null, route: null, routeT: 0, pursuitDrive: false, cruise: COP_CAR_SPEED, dest: [wanted.lastX, wanted.lastY] });
+    Object.assign(c, { pursuit: true, returning: false, state: 'out', home: false, born: T, waitingCrew: false, merging: null, route: null, routeT: 0, pursuitDrive: false, backout:0, stuckT:0, detourGoal:null, contactRecoveryT:0, cruise: COP_CAR_SPEED, dest: [wanted.lastX, wanted.lastY] });
   }
 }
 function clearWanted() {
@@ -8786,7 +8842,7 @@ function clearWanted() {
   searchedRoom = null; roomLead = null; roofLead = null;
   for (const c of units) {
     c.pursuit = false; c.returning = true; c.waitingCrew = true; c.v = 0; c.cruise = 1.3; c.state = 'back'; c.arrived = false;
-    c.merging = null; c.route = null; c.routeT = 0; c.travelA = null; c.pursuitDrive = false;
+    c.merging = null; c.route = null; c.routeT = 0; c.travelA = null; c.pursuitDrive = false;c.backout=c.stuckT=c.contactRecoveryT=0;c.detourGoal=null;
     c.base ||= SERVICES.filter(b => b.kind === 'police').reduce((best, b) => !best || near(b.x, b.y, c.x, c.y) < near(best.x, best.y, c.x, c.y) ? b : best, null);
     c.dest = c.base ? [c.base.x, c.base.lane] : null; c.dropped = false; c.drops = 0;
     if (c.base) c.base.out = true;
@@ -8923,9 +8979,17 @@ function stepRoadblocks() {
 // streets round there. Caught in the light, you're seen: from up there the buildings don't hide you, only a roof over
 // your head does (indoors, under the el's deck, under the Shotengai's glass). The light swings slower than the
 // helicopter flies, so a fast car can get out from under it. Once the heat's off it flies away.
-const HELI_STARS = 5, HELI_Z = 4, HELI_ORBIT = 3, HELI_SPEED = 2.6, SPOT_SPEED = 1.9, SPOT_R = 0.7, SPOT_REACH = 4, HELI_GONE = 45;
+const HELI_STARS = 5, HELI_Z = 4, HELI_ORBIT = 3, HELI_SPEED = 4.8, SPOT_SPEED = 5.5, SPOT_R = 0.7, SPOT_REACH = 4, HELI_GONE = 45;
 let heli = null; // { x, y, z, h (heading), sx, sy (where the light's on the ground), leaving }
 const underCover = (x, y) => mode === 'room' || (mode === 'walk' || mode === 'drive' || mode === 'taxi') && (arcadeAt(x, y) || underEl(y,x));
+function heliLineOfSight(x,y){
+  const dx=rel(x-heli.x),dy=rel(y-heli.y),steps=Math.ceil(Math.hypot(dx,dy)*3),targetZ=roadGroundHeight(x,y)+.15;
+  for(let k=1;k<steps;k++){
+    const f=k/steps,wx=heli.x+dx*f,wy=heli.y+dy*f,z=heli.z+(targetZ-heli.z)*f;
+    if(map[idx(Math.floor(wx),Math.floor(wy))]>z)return false;
+  }
+  return true;
+}
 function stepHeli(dt) {
   const hot = wanted.stars >= HELI_STARS, [wx, wy] = crimePos();
   if (!heli) {
@@ -8935,12 +8999,14 @@ function stepHeli(dt) {
     heli.sx = heli.x; heli.sy = heli.y;
   }
   if (!hot) heli.leaving = true;
+  const visual=!underCover(wx,wy)&&near(heli.x,heli.y,wx,wy)<18&&heliLineOfSight(wx,wy);
+  const tracking=visual||wanted.seen&&T-(wanted.observedT??-Infinity)<2;
   const lit = !heli.leaving && near(heli.sx, heli.sy, wx, wy) < SPOT_R && !underCover(wx, wy);
   // the helicopter: circling you while it has you (off to one side, its beam leaning in, where you can see it), circling
   // the search otherwise; away over the rooftops once it's called off. High enough to clear the towers it passes over.
   heli.orbit = (heli.orbit ?? heli.h + Math.PI) + dt * 0.22;
   const ox = Math.cos(heli.orbit) * HELI_ORBIT, oy = Math.sin(heli.orbit) * HELI_ORBIT;
-  let tx = heli.leaving ? heli.x + Math.cos(heli.h) * 50 : (lit ? wx : wanted.searchX) + ox, ty = heli.leaving ? heli.y + Math.sin(heli.h) * 50 : (lit ? wy : wanted.searchY) + oy;
+  let tx = heli.leaving ? heli.x + Math.cos(heli.h) * 50 : (tracking ? wx : wanted.searchX) + ox, ty = heli.leaving ? heli.y + Math.sin(heli.h) * 50 : (tracking ? wy : wanted.searchY) + oy;
   const clear = Math.max(HELI_Z, (map[idx(Math.floor(heli.x), Math.floor(heli.y))] || 0) + 1.5, builtHeight(heli.x, heli.y) + 1.5);
   heli.z += clamp(clear - heli.z, -0.8 * dt, 1.5 * dt);
   const vx = rel(tx - heli.x), vy = rel(ty - heli.y), d = Math.hypot(vx, vy);
@@ -8952,13 +9018,13 @@ function stepHeli(dt) {
   }
   // the light: on you, or sweeping round the search
   heli.sweep += dt * 0.9;
-  const lx = lit ? wx : wanted.searchX + Math.cos(heli.sweep) * 1.6, ly = lit ? wy : wanted.searchY + Math.sin(heli.sweep * 1.3) * 1.6;
+  const lx = tracking ? wx : wanted.searchX + Math.cos(heli.sweep) * 1.6, ly = tracking ? wy : wanted.searchY + Math.sin(heli.sweep * 1.3) * 1.6;
   let sx = rel(lx - heli.sx), sy = rel(ly - heli.sy), sd = Math.hypot(sx, sy);
   if (sd > 0.001) { const step = Math.min(sd, SPOT_SPEED * dt); heli.sx = worldCoord(heli.sx + sx / sd * step); heli.sy = worldCoord(heli.sy + sy / sd * step); }
   sx = rel(heli.sx - heli.x); sy = rel(heli.sy - heli.y); sd = Math.hypot(sx, sy);
   if (sd > SPOT_REACH) { heli.sx = worldCoord(heli.x + sx / sd * SPOT_REACH); heli.sy = worldCoord(heli.y + sy / sd * SPOT_REACH); } // (as far as the beam can lean)
   if (heli.leaving && near(heli.x, heli.y, wx, wy) > HELI_GONE) heli = null;
-  return lit;
+  return !!heli&&!heli.leaving&&(visual||lit);
 }
 
 // ---- the spray shop: any AUTO REPAIR will respray a car you pull up at its door in and knock the dents out (put a
@@ -9013,13 +9079,14 @@ function stepCrime(dt) {
   for (const c of cars) if (c.pursuit) c.dest = [wanted.searchX, wanted.searchY];
   const onFoot = mode === 'walk';
   for (const c of footCops) { // officers within a few blocks join the chase on foot
-    if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < (c.post ? 3 : 20) && (!c.post || mode !== 'drive')) { c.chase = true; c.returnCar = null; } // (at a roadblock: only for you on foot, close by)
+    if (!c.chase && near(c.x,c.y,wanted.lastX,wanted.lastY)<(c.post?12:25)) { c.chase = true; c.returnCar = null; } // Roadblock officers leave their posts to intercept nearby drivers too.
     if (c.chase) chaseStep(c, wanted.searchX, wanted.searchY, dt);
   }
   // pulls up, an officer jumps out and sprints for you; outrun him and the car comes round again for another go
-  if (onFoot || inside) for (const c of cars) if (c.pursuit && (!c.dropped || T - c.dropT > 8 && (c.drops || 0) < 3) && near(c.x, c.y, wx, wy) < 1.4) {
+  if (onFoot || inside || mode==='drive'&&me&&Math.abs(me.v)<.55) for (const c of cars) if (c.pursuit && (!c.dropped || T - c.dropT > 8 && (c.drops || 0) < 3) && near(c.x, c.y, wx, wy) < 1.4) {
+    const exit=cruiserOfficerExit(c);if(!exit)continue;
     c.dropped = true; c.dropT = T; c.drops = (c.drops || 0) + 1;
-    footCops.push({ x: c.x, y: c.y, car: c, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true, burst: T + 5 });
+    footCops.push({ x: exit[0], y: exit[1], car: c, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true, burst: T + 5 });
   }
   // A nearby cruiser tells you to pull over. Only an actual rear-quarter impact can perform a PIT.
   let told = false;
@@ -9034,7 +9101,7 @@ function stepCrime(dt) {
     || onRoof && body.z < 1 && roofCops.some(c => !c.dead && c.sees && near(c.x, c.y, px, py) < 0.22);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
-  if (grabbed || wanted.bustT > 2.5) { if (wanted.stars >= 2) newsEvent('arrest', px, py, { crime: wanted.crime }); wanted.busted = true; return 'busted'; }
+  if (grabbed || wanted.bustT > 1.6) { if (wanted.stars >= 2) newsEvent('arrest', px, py, { crime: wanted.crime }); wanted.busted = true; return 'busted'; }
   return told ? 'pullover' : wanted.seen ? 'seen' : 'hiding';
 }
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
@@ -9044,11 +9111,19 @@ function tidyPolice() {
   for (let k = footCops.length - 1; k >= 0; k--) { const c = footCops[k]; if (c.extra && !c.chase && !c.returnCar && near(c.x, c.y, wx, wy) > 25) footCops.splice(k, 1); }
 }
 // what being caught costs. Paying it settles everything, and the car goes back
+const HEIST_LOOT=new Set(['diamond','orrery','hotelmasterpiece','hotelharbour','hotelstilllife']);
+const stolenGoods=it=>!!it.stolen||HEIST_LOOT.has(it.id);
+function confiscateStolenGoods(){
+ let count=0;
+ for(let k=inv.length-1;k>=0;k--)if(stolenGoods(inv[k])){removeInventoryAt(k);count++;}
+ return count;
+}
 const fineFor = stars => FINE[stars];
 function payFine() {
   const f = fineFor(wanted.stars);
   if (wanted.killed || !pay(f)) return false; // (there's no fine for a killing)
   confiscateGun(); // (they keep the gun: gun.js)
+  confiscateStolenGoods();
   clearWanted(); return true;
 }
 // jail: everything you're carrying is taken (not your money) and locked in evidence, and you do your time. Break out
@@ -9433,7 +9508,7 @@ function marinaPrompt() {
     const k = BOAT_KINDS[sea.kind];
     if (landingSpot(sea)) return Math.abs(sea.v) > 0.25 ? 'Slow down to step off' : `E: tie up and step off${sea.hired && inMarina(sea.x, sea.y) ? ' (return rental)' : ''}`;
     const speed = `${Math.round(Math.abs(sea.v) * 19.4)} knots${sea.v > k.top + .1 ? ' (cruising)' : ''}`;
-    return typeof TOUCH !== 'undefined' && TOUCH ? `stick: throttle / helm; full forward: cruise; back: brake   ${speed}` : `W throttle | Shift: cruise | S brake / astern | A/D steer | V: camera   ${speed}`;
+    return typeof TOUCH !== 'undefined' && TOUCH ? `stick: throttle / helm; full forward: cruise; back: brake   ${speed}` : `W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look around | V: camera   ${speed}`;
   }
   const b = nearBoat();
   if (!b) return nearOffice() ? (marinaOpen() ? 'MARINA: boats by the trip or to buy, down on the jetty.' : 'MARINA: shut. Open 7am till 9pm.') : '';
@@ -10280,7 +10355,7 @@ function killFigure(o, hx, hy, cop = false, anchor = null) {
   for (const k of ['talk', 'flee', 'gawk', 'help', 'hailing', 'follow', 'chase', 'goal']) delete o[k];
   if (o.path) o.path.length = 0;
   bodies.push({ who: o, cop, x: anchor?.x??o.x, y: anchor?.y??o.y, t: T, amb: null, atT: 0 });
-  pools.push({ x: anchor?.x??o.x, y: anchor?.y??o.y, t: T });
+  pools.push({ x: anchor?.x??o.x, y: anchor?.y??o.y, z:anchor?.z??outdoorGroundHeight(o.x,o.y), t: T });
   if (pools.length > 24) pools.shift();
   for (const p of people) if (p.help === o || p.gawk === o) { delete p.help; delete p.gawk; }
 }
@@ -10349,7 +10424,7 @@ const sheeted = o => bodies.some(b => b.who === o && b.atT && T - b.atT > 2.5);
 
 // ---- the police, shooting back. Only after you've fired, only while they're after you, only with a clear look at you
 function copsShoot(dt) {
-  if (!wanted.fired || !wanted.stars || wanted.busted) return null;
+  if (!(wanted.fired||wanted.killed&&wanted.stars>=4) || !wanted.stars || wanted.busted) return null;
   const inside = mode === 'room', [wx, wy] = crimePos(), driving = !!me && (mode === 'drive' || mode === 'taxi');
   const moving = driving ? Math.abs(me.v) : Math.hypot(body.mx || 0, body.my || 0);
   const shooters = inside ? roomCops.filter(c => !c.dead && c.sees).map(c => [c, Math.hypot(c.x - px, c.y - py) / 10]) // (a room's in metres)
@@ -11915,7 +11990,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
   const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), shade = underEl(wy,wx);
-  const road = worldReady&&roadBridgeAt(wx,wy)&&seaAt(wx,wy)&&eye<roadGroundHeight(wx,wy)-.12 ? 0 : ROAD[idx(mx,my)];
+  const road = worldReady&&roadBridgeAt(wx,wy)&&seaAt(wx,wy) ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null;
@@ -13363,6 +13438,7 @@ function citySprites() {
   drawLandmarks();
   drawPavilions();
   drawStreetScenes();
+  drawCoastLife();
   drawHomeBalconies();
   drawSkater(); // you, on the board, seen from behind (skate.js)
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
@@ -13400,6 +13476,7 @@ function citySprites() {
     if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, 0.6)) (o.kind === 'tank' ? drawTank : o.kind === 'antenna' ? drawAntenna : drawBoard)(o, vx, vy);
   });
   for (const k of cranes) {
+    if(k.hidden)continue;
     const [vx, vy] = R(k.x, k.y);
     if (Math.abs(vx) > vis + 5 || Math.abs(vy) > vis + 5) continue;
     const th = k.slew + T * 0.03; // the jib slews slowly
@@ -13836,9 +13913,9 @@ function drawElStairs(st) {
   if (far) return;
   // rails round the landings (open where the stairs come in, and onto the deck)
   for (const [ua, ub, z] of [[ELS.u1, ELS.u2, H / 2]]) for (const v of [ELS.v0, ELS.v1]) { const [ax, ay] = at(ua, v), [bx, by] = at(ub, v); rod(ax, ay, z + 0.1, bx, by, z + 0.1, 0.004); }
-  { const [ax, ay] = at(ELS.u4, ELS.v0), [bx, by] = at(ELS.u4, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the far end of the top
+  { const [ax, ay] = at(ELS.u4, ELS.v0), [bx, by] = at(ELS.u4, ELS.top); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the far end of the top
   { const [ax, ay] = at(ELS.u3, ELS.v0), [bx, by] = at(ELS.u4, ELS.v0); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the building side of the top
-  { const [ax, ay] = at(ELS.u3, ELS.v1), [bx, by] = at(ELS.u3, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the near side, past the stairs' head
+  { const [ax, ay] = at(ELS.u3, ELS.v1), [bx, by] = at(ELS.u3, ELS.top); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the near side, past the stairs' head
   // the turnstile at the foot: a post, its arm across the way (swung round once you've swiped)
   { const pu = ELS.u0 - 0.02, pv = ELS.v1 - 0.015, [x, y] = at(pu, pv), open = elPass && elPass.st === st;
     drawBox(boxAt(x, y, c, s, 0.012, 0.012, 0, 0.09), STEEL.cap);
@@ -14700,7 +14777,33 @@ function drawElCar(vx, vy, cab) {
   });
 }
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
+const EL_BOARD_CACHE=new Map();
+function drawElStation(station){
+ for(const tr of [0,1]){
+  const y=tr?EL_Y1+EL_PLATFORM_OUT/2:EL_Y0-EL_PLATFORM_OUT/2,[vx,vy]=R((station.x0+station.x1)/2,y);
+  drawBox(boxAt(vx,vy,1,0,(station.x1-station.x0)/2,EL_PLATFORM_OUT/2,EL_TOP-.025,EL_TOP),STEEL.cap);
+  const key=station.name+tr,cached=EL_BOARD_CACHE.get(key);
+  const service=cached?.t===Math.floor(T)?cached.service:elNextArrival(station,tr);
+  EL_BOARD_CACHE.set(key,{t:Math.floor(T),service});
+  if(!service)continue;
+  const next=EL_STATIONS[service.next].name,wait=service.seconds?'IN '+Math.floor(service.seconds/60)+':'+String(service.seconds%60).padStart(2,'0'):'BOARDING';
+  const boardY=tr?EL_Y1+EL_PLATFORM_OUT-.01:EL_Y0-EL_PLATFORM_OUT+.01,[x,z]=R(station.x,boardY);
+  const lines=[wait+' '+(service.dir>0?'EAST':'WEST'),'NEXT '+next],normal=py<boardY?-1:1,width=.6/Math.max(...lines.map(l=>l.length));
+  drawBox(boxAt(x,z,1,0,.34,.025,EL_TOP+.23,EL_TOP+.39),(i,t,L)=>{
+    BG[i]=C(GRAY,1);
+    if(Math.abs(HIT.v)<.024||Math.abs(HIT.u)>.315)return set(i,' ',0),true;
+    const row=HIT.w>EL_TOP+.31?0:1,center=EL_TOP+(row ? .27 : .35),u=HIT.u*normal,q=u/width+lines[row].length/2,col=Math.floor(q),ch=lines[row][col];
+    if(!ch||Math.abs(HIT.w-center)>.025)return set(i,' ',0),true;
+    const cell=t/projX,zcell=t/projY;
+    const large=width/cell>2.2&&.05/zcell>2.8;
+    const mark=large?glyphOn(ch,Math.floor(fract(q)*4),Math.floor((center+.025-HIT.w)/.05*5))?'#':' ':oneCell((fract(q)-.5)*width,cell)&&oneCell(HIT.w-center,zcell)?ch:' ';
+    return set(i,mark,C(YEL,15)),true;
+  });
+  for(const off of [-.28,.28])rod(x+off,z,EL_TOP,x+off,z,EL_TOP+.23,.008);
+ }
+}
 function elSprites() {
+  for(const station of EL_STATIONS)if(inView(rel(station.x-px),rel(EL_Y+1-py),3))drawElStation(station);
   forNear(elPillarsB, p => { if (inView(rel(p.x - px), rel(p.y - py), 0.1)) drawElPillar(p); });
   for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.ox + stairs.c * stairs.off - px), rel(stairs.oy + stairs.ay * 0.25 - py), 1.7)) drawElStairs(stairs);
   for(const station of EL_STATIONS)if(inView(rel(station.x-px),rel(EL_Y+1-py),3))for(const tr of [0,1])
@@ -14710,6 +14813,7 @@ function elSprites() {
       for(let i=0;i<=n;i++){const t=i/n,x=vx+(wx-vx)*t,y=vy+(wy-vy)*t;rod(x,y,EL_TOP,x,y,EL_TOP+EL_RAIL_H,.005);}
     }
   for (const t of elTrains(T)) {
+    drawElRiders(t);
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
       const [vx, vy] = R(t.x - t.dir * (j - 1) * EL_CAR_LEN, EL_TRACK[t.tr]);
@@ -15100,10 +15204,14 @@ const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
 const SEAT = (x, y, fx, fy, h = 0.45) => ({ seat: true, x, y, fx, fy, h });
 // a sofa facing (fx, fy), hl long either side of (x, y): the cushions, the back, an arm at each end, three places on it
 const couch = (x, y, hl, fx, fy, col = BRICK) => {
-  const ax = -fy, ay = fx, up = solid(col, { top: '=', bright: 1.4 });
-  return [BX(x, y, hl, 0.4, 0, 0.42, up, ax, ay), BX(x - fx * 0.32, y - fy * 0.32, hl, 0.1, 0.42, 0.9, solid(col, { bright: 1.4 }), ax, ay),
-    ...[-1, 1].map(e => BX(x + ax * e * hl, y + ay * e * hl, 0.4, 0.08, 0.42, 0.62, up, fx, fy)),
-    ...[-0.55, 0, 0.55].map(k => SEAT(x + ax * k * hl + fx * 0.05, y + ay * k * hl + fy * 0.05, fx, fy, 0.42))];
+  const ax=-fy,ay=fx,cloth=solid(col,{bright:2,top:'~'}),at=(u,v)=>[x+ax*u+fx*v,y+ay*u+fy*v];
+  return [ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,ax,ay,hl,.39,.12,.29),solid(col,{bright:1}));
+    for(const k of [-1,0,1]){const [cx,cy]=[vx+ax*k*(hl-.18)*2/3,vy+ay*k*(hl-.18)*2/3];drawBox(boxAt(cx,cy,ax,ay,(hl-.18)/3-.015,.34,.29,.48),cloth);}
+    drawBox(boxAt(vx-fx*.34,vy-fy*.34,ax,ay,hl,.08,.27,.94),cloth);
+    for(const sign of [-1,1]){const [cx,cy]=[vx+ax*sign*(hl-.09),vy+ay*sign*(hl-.09)];drawBox(boxAt(cx,cy,fx,fy,.38,.09,.27,.73),cloth);drum(cx+fx*.28,cy+fy*.28,.09,.27,.73,cloth);}
+  },[Math.abs(ax)*hl+Math.abs(fx)*.4,Math.abs(ay)*hl+Math.abs(fy)*.4,.94]),
+  ...[-.55,0,.55].map(k=>{const [sx,sy]=at(k*hl,.06);return SEAT(sx,sy,fx,fy,.48);})];
 };
 // a round pouffe, h high, to perch on facing (fx, fy)
 const POUF = (x, y, col, fx, fy, h = 0.4) => ({ ...ROOM_MODEL(x, y, (vx, vy) => drum(vx, vy, 0.24, 0, h, (i, t, L) => {
@@ -15321,7 +15429,7 @@ function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city
   if (my !== 0 || Math.abs(u - room.W / 2) > width || z < 0.9 || z > 2.3) return false;
   const du = u - room.W / 2;
   if (Math.abs(du) > width - 0.15 || z < 0.97 || z > 2.23 || Math.abs(du) < 0.04) { set(i, Math.abs(du) > width - 0.15 ? '|' : '=', C(GRAY, L)); BG[i] = C(WARM, 2); return true; } // frame
-  viewOut(i, u, z, room.suite ? 22 : 14, 18); return true; // six floors up, across the avenue
+  if(room.exterior)homeView(i,u,z,'north');else viewOut(i,u,z,room.suite?22:14,18);return true; // six floors up, across the avenue
 }
 function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a bay every 1.2m, numbered
   if (z > 2.45) { set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 6 ? ' ' : '.', C(GRAY, L * 0.4)); return true; }
@@ -15657,11 +15765,15 @@ const ROOM_DEFS = {
 const plantCol = (c, row, L) => C(row === 3 ? BRICK : GREEN, L);
 
 function makeRoom(kind, extra = {}) {
-  const def = kind === 'hotelroom' && extra.suite ? ROOM_DEFS.hotelSuite : ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
+  const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
   if (def.home) r.props.push(...workshopProps(r));
-  if (def.home) r.exterior = homeExterior(r);
+  if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
+    const host=r.lobby||r;r.exterior=homeExterior({...r,cell:host.cell,ret:host.ret});
+    if(kind==='lighthouse'||kind==='lamproom')r.exterior={x0:LIGHTHOUSE.x-LIGHTHOUSE.r,x1:LIGHTHOUSE.x+LIGHTHOUSE.r,y0:LIGHTHOUSE.y-LIGHTHOUSE.r,y1:LIGHTHOUSE.y+LIGHTHOUSE.r,up:kind==='lamproom'?2.8:0,faces:{}};
+    if(kind==='hotelroom'&&!r.suite&&r.lobby?.word==='MOTEL')r.exterior.up=.02;
+  }
   return r;
 }
 
@@ -15782,6 +15894,7 @@ function hospitalWall(i, u, uStep, z, d, mx, my, L) {
 }
 function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== room.H - 1 && Math.abs(fract(u / 3) - 0.5) < 0.1 && z > 1.3 && z < 1.9) { // a deep-set window: sea below, sky above
+    if(room.exterior){homeView(i,u,z,mx===0?'west':mx===room.W-1?'east':'north');return true;}
     const [su, sz] = glassSlopes(u, z); // the horizon's at your eye, wherever you stand; the sea, 30m down
     if (sz < 0) { const q = (-30 - z) / sz, n = noise((u + su * q) * 0.2 + T * 0.3, q * 0.2, 887); BG[i] = C(BLUE, 2 + day * 3); return set(i, n > 0.6 ? '~' : n > 0.45 ? '-' : ' ', C(CYAN, 6 + day * 6)), true; }
     BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 2 + day * 6) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
@@ -15792,6 +15905,7 @@ function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
   return set(i, joint ? (fract(z * 3) < 0.08 ? '_' : '|') : ' ', C(GRAY, L * 0.6)), true;
 }
 function lampRoomWall(i, u, uStep, z, d, mx, my, L) {
+  if(room.exterior&&z>.95&&z<2.45&&fract(u*1.2)>.05){homeView(i,u,z,mx===0?'west':mx===room.W-1?'east':my===0?'north':'south');return true;}
   if (z < 0.9 || z > 2.5) { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, z < 0.9 && fract(z * 4) < 0.15 ? '=' : ' ', C(GRAY, L)), true; } // ironwork below and above the glass
   if (fract(u * 1.2) < 0.05) { BG[i] = C(GRAY, 2); return set(i, '|', C(GRAY, L)), true; } // the mullions
   if (z < 1.45) { BG[i] = C(BLUE, 1 + day * 3); return set(i, hash(Math.floor(u * 6 + T * 0.5), Math.floor(z * 20), 3) > 0.8 ? '~' : ' ', C(CYAN, 5 + day * 6)), true; } // the sea, far below
@@ -21430,7 +21544,7 @@ function stepBoat(dt) { // pedal and steer; the shore and the jetty stop you
 }
 // behind your swan, a little above, swinging round after it (V); pulled in if the shore's in the way
 function swanCam(dt) {
-  camYaw += (mod(a - camYaw + Math.PI, TAU) - Math.PI) * Math.min(1, dt * 3);
+  camYaw += (mod(a + look - camYaw + Math.PI, TAU) - Math.PI) * Math.min(1, dt * 3);
   const hx = Math.cos(camYaw), hy = Math.sin(camYaw);
   let back = 0.38;
   while (back > 0.15 && map[idx(Math.floor(px - hx * back), Math.floor(py - hy * back))]) back -= 0.03;
@@ -22883,8 +22997,8 @@ SOLID_SHADE.bollard = () => (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return 
 // where the camera goes out on the water: behind and above the boat (easing round), or at the helm
 function seaCam(dt, chase) {
   const b = sea, k = BOAT_KINDS[b.kind];
-  if (!chase) { const back = k.hl * (b.kind === 'sailboat' ? 0.8 : 0.45); camYaw = a; return [worldCoord(b.x - b.hx * back), worldCoord(b.y - b.hy * back), a]; }
-  camYaw += (mod(a - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 4);
+  if (!chase) { const back = k.hl * (b.kind === 'sailboat' ? 0.8 : 0.45); camYaw = a+look; return [worldCoord(b.x - b.hx * back), worldCoord(b.y - b.hy * back), a+look]; }
+  camYaw += (mod(a+look - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 4);
   const bx = Math.cos(camYaw), by = Math.sin(camYaw);
   let back = 0.7 + k.hl * 1.6;
   while (back > 0.3 && map[idx(Math.floor(b.x - bx * back), Math.floor(b.y - by * back))]) back -= 0.05;
@@ -22969,6 +23083,7 @@ function drawRoadBridges() {
         if(HIT.face===5) {
           const edge=Math.abs(HIT.u),along=HIT.v+(y0+y1)/2;
           BG[i]=C(GRAY,1+L*.14);
+          if(snowCover>.02){paintSettledSnow(i,b.x+HIT.u,along,L,1,edge<.73?.6:.08,HIT.w);if((BG[i]>>4)===WHITE)return true;}
           if(edge>.73)return set(i,',',C(WHITE,L*.65)),true;
           if(edge<.035&&fract(along*.5)<.55)return set(i,'=',C(YEL,L)),true;
           return set(i,hash(Math.floor(HIT.u*15),Math.floor(along*15),61)>.9?'.':' ',C(GRAY,L*.55)),true;
@@ -22980,6 +23095,9 @@ function drawRoadBridges() {
     for(let y=b.y0;y<=b.y1;y+=2)for(const side of [-1,1]) {
       const h=roadBridgeHeight(b,y);
       drawBox(boxAt(vx+side*.97,rel(y-py),1,0,.009,.009,h,h+.115),STEEL.cap);
+    }
+    for(const y of [b.y0+b.ramp+2,b.y1-b.ramp-2]) {
+      drawBox(boxAt(vx,rel(y-py),1,0,1.42,.34,b.h-b.thickness-.12,b.h-b.thickness+.015),STEEL.cap);
     }
     for(const y of [b.y0+b.ramp+2,b.y1-b.ramp-2])for(const side of [-1,1]) {
       drawBox(boxAt(vx+side*1.25,rel(y-py),1,0,.14,.32,0,b.h-b.thickness),STEEL.cap);
@@ -23139,7 +23257,7 @@ function render(dt) {
   // Freecam renders while simulation time is frozen, but still gets a new sprite-generation allowance each frame.
   figFineT = T; figFineN = 0;
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
-  eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' ? EL_TOP+.19 : mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
+  eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' ? EL_TOP+(ride?.seat ? .135 : .19) : mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? (chaseOn ? 0.2 : 0.11) : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
   else if (mode === 'air') eye = airEye;
@@ -23150,7 +23268,7 @@ function render(dt) {
     if (mode === 'walk') eye += walkGround(px, py);
     if (mode === 'drive' || mode === 'taxi') eye += Math.max(roadGroundHeight(px, py), me ? roadGroundHeight(me.x, me.y) : 0);
   }
-  tf = Math.tan(FOV / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
+  tf = Math.tan((telescopeActive()?FOV/6:FOV) / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
@@ -23217,7 +23335,8 @@ function render(dt) {
   }
   if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
-  if (city) { drawTireMarks(); drawBlood(); } // (and blood: gun-ui.js)
+  if (city) drawTireMarks();
+  drawBlood(); // (and blood: gun-ui.js)
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
   drawPeeMarks(); // stains on walls and solid static objects
@@ -23237,6 +23356,7 @@ function render(dt) {
     drawHeld(dt); // what's in your hand (or mouth, or under your feet)
   }
   present();
+  drawTelescope();
   drawDrugVision();
   if (freecam) freecamHud();
   else {
@@ -23493,7 +23613,9 @@ function elFrame() {
     });
     rod(vx+side*.45*EL_HL,vy,floor,vx+side*.45*EL_HL,vy,ceiling-.015,.0035,GRAY,1.8);
   }
+  drawElRiders({tr:ride.tr,k:ride.k,...train},true);
 }
+
 const nearestCar = r => {
   let best = null, bd = r;
   for (const c of cars) { if (c.player || c.rider || c.ev) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
@@ -23555,6 +23677,7 @@ function promptText() {
   if (cp) return cp;
   { const sp = sprayPrompt(); if (sp) return sp; } // (at the wheel, at a garage's door)
   if (mode === 'room') {
+    const hotelPrompt=hotelAmenityPrompt();if(hotelPrompt)return hotelPrompt;
     if (room.kind === 'jail' && nearCabbie()) return 'E: talk to your cab driver   (he does not want to talk to you)';
     if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go${room.tried ? '' : '   E: try to break out (one chance)'}` : 'E: the guard lets you out';
     if (room.kind === 'train') return room.dest == null
@@ -23610,7 +23733,7 @@ function promptText() {
     const base = mode === 'boat' ? gardensPrompt() : marinaPrompt();
     return heldRod() && boatSpeed() < 0.12 ? `${base}   Q: ${third ? 'fish over the side' : 'hold to cast'}` : base;
   }
-  if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
+  if (mode === 'el') { const t = elRiding(); return t.stopped ? `WASD: walk | C: sit / stand | E: get off at ${EL_STATIONS[t.station].name}` : `WASD: walk | C: sit / stand | Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
     if (elHere()) return 'E: board the train';
     const next = elTrains(T).filter(t => t.tr === plat.tr && EL_STATIONS[t.next] === plat.s && !t.stopped).map(t => t.left);
@@ -23761,7 +23884,7 @@ function needMeters() {
 }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
-  drawHeldBig();
+  if(!telescopeActive())drawHeldBig();
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
@@ -23939,7 +24062,7 @@ function elBoard() {
   const t = elHere();
   if (!t) return false;
   const car=clamp(Math.round(rel(px-t.x)/EL_CAR_LEN),-1,1);
-  ride = { tr: t.tr, k: t.k, off: car*EL_CAR_LEN+.1, car };
+  ride = { tr: t.tr, k: t.k, off: car*EL_CAR_LEN+.1, car, side:0 };
   mode = 'el';px=worldCoord(t.x+ride.off);py=EL_TRACK[t.tr]; // stand in the aisle, inside the selected carriage
   a=(t.tr?1:-1)*Math.PI/3;pitch=0;
   transitBoarded();
@@ -23973,6 +24096,7 @@ function interact() {
   if(courierUse())return;
   if (workshopUse()) return;
   if (mode === 'room') {
+    if(hotelAmenityUse())return;
     if (room.kind === 'train') return;
     if (grandHotelUse()) return;
     if (homeRecord(room)) { // your place: sleep whenever you like, your closet, the telly
@@ -24215,7 +24339,10 @@ function stepSleep(dt) {
     if (tod > 7) dayNum++; // slept through midnight
     tod = 7; weather = 'clear'; wTimer = 150; rain = 0; fogAmt = 0; wet = Math.min(wet, 0.3);
     for (const p of people) if (!p.follow && !(p.talk > 0)) settle(p);
-    if (!sleep.home) enterRoom('hotelroom', { lobby: sleep.lobby, suite: !!sleep.lobby.suite }, sleep.lobby.suite ? [4.5, 5.3, -Math.PI / 2] : [3.4, 3.2, -Math.PI / 2]); // (at home you wake where you are)
+    if (!sleep.home) {
+      const lobby=sleep.lobby,def=lobby.suite?ROOM_DEFS.hotelSuite:lobby.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom;
+      enterRoom('hotelroom',{lobby,suite:!!lobby.suite},def.entry);
+    } // (at home you wake where you are)
   }
   if (sleep.t > 3.2 && !sleep.said) { sleep.said = true; say('7:00. You slept well, and the sky has cleared.', 4); }
   if (sleep.t > 5) { sleep = null; fade = 0; }
@@ -24649,14 +24776,15 @@ function drawChopper() {
   }, rayCopperDrum);
   // the beam: specks of light down the line from the helicopter's belly to the pool, in front of whatever's behind
   const bx = vx + hx * 0.17 * CHOPPER_SIZE, by = vy + hy * 0.17 * CHOPPER_SIZE, bz = z - 0.07 * CHOPPER_SIZE; // (from the lamp under its nose)
-  for (let k = 1; k < 48; k++) {
-    const f = k / 48, x = bx + (lx - bx) * f, y = by + (ly - by) * f, wz = bz + (ground - bz) * f, depth = dx * x + dy * y;
-    if (depth < 0.2 || depth > vis) continue;
-    const c = Math.floor(cols / 2 + (-dy * x + dx * y) * projX / depth), r = Math.floor(hor - (wz - eye) * projY / depth);
-    if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
-    const i = r * cols + c;
-    if (depth >= ZB[i] || hash(c, r, Math.floor(T * 12)) > 0.75) continue;
-    set(i, ':', C(WHITE, 5 + strength * 9)); FOGS[i] = 0;
+  // A widening volume: rings grow from the lamp to the existing circular ground pool.
+  for(let k=1;k<24;k++)for(let j=0;j<12;j++){
+    const f=k/24,theta=j/12*TAU,radius=SPOT_R*f;
+    const x=bx+(lx-bx)*f+Math.cos(theta)*radius,y=by+(ly-by)*f+Math.sin(theta)*radius,wz=bz+(ground-bz)*f;
+    const depth=dx*x+dy*y;if(depth<.2||depth>vis)continue;
+    const c=Math.floor(cols/2+(-dy*x+dx*y)*projX/depth),r=Math.floor(hor-(wz-eye)*projY/depth);
+    if(c<0||r<0||c>=cols||r>=rows)continue;
+    const i=r*cols+c;if(depth>=ZB[i]||hash(j,k,Math.floor(T*8))>.68)continue;
+    set(i,':',C(WHITE,3+strength*8));FOGS[i]=0;
   }
   // the machine itself: a big one, white with a dark belly and the yellow and blue squares down its side, lit up
   drawHeliModel([vx, vy, z], craftFrame(heli.h, -0.12, 0), CHOPPER_SIZE, { body: WHITE, belly: GRAY, checker: true, stripe: BLUE, bright: 1.5, rotor: 0.5, ang: T * 27, police: true, id: 7 });
@@ -26813,7 +26941,7 @@ function stepFreecam(dt) {
   const vy = cy * forward * horizontal + cx * side;
   const vz = slope * horizontal * forward + up;
   const length = Math.max(1, Math.hypot(vx, vy, vz));
-  const speed = (K.ShiftLeft || K.ShiftRight ? 30 : 6) * (mode === 'room' ? 1 : 0.1) * dt / length;
+  const speed = (K.ShiftLeft || K.ShiftRight ? 120 : 24) * (mode === 'room' ? 1 : 0.1) * dt / length;
   cam.x += vx * speed; cam.y += vy * speed; cam.z += vz * speed;
   if (mode !== 'room') { cam.x = worldCoord(cam.x); cam.y = worldCoord(cam.y); }
 }
@@ -29623,6 +29751,22 @@ DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
   if(dEll(x,y,0,9,4.4,1.7)<1)return dLit(.65-x*.04,GRAY,9);
   return null;
 });
+
+// The telescope magnifies the existing scene, without another world render.
+const telescopeActive=()=>!!fx.telescope&&heldItem()?.id==='telescope'&&onFootMode()&&!freecam;
+DENSE.telescope=()=>sculpt(36,18,(x,y)=>{
+ if(x< -14||x>14||Math.abs(y)>(x>7?5.5:x> -5?4:3))return null;
+ if(x>11)return [Math.abs(y)>4.3?'o':' ',C(Math.abs(y)>4.3?GRAY:CYAN,Math.abs(y)>4.3?10:3)];
+ return [Math.abs(x+5)<.5||Math.abs(x-7)<.5?'|':'=',C(YEL,8+Math.max(0,5-Math.abs(y)))];
+});
+DROPPED_ART.telescope=()=>[[' ___============(O)'],ch=>C(ch==='O'?CYAN:YEL,12)];
+function drawTelescope(){
+ if(!telescopeActive())return;
+ const x=cv.width/2,y=cv.height/2,r=Math.min(x,y)*.84;
+ g.save();g.fillStyle='#050506';g.beginPath();g.rect(0,0,cv.width,cv.height);g.arc(x,y,r,0,TAU,true);g.fill('evenodd');
+ g.strokeStyle='rgba(220,210,170,.45)';g.lineWidth=2;g.beginPath();g.arc(x,y,r,0,TAU);g.stroke();
+ g.font='12px monospace';g.fillStyle='#ddd';g.fillText('6×   Q: lower telescope',x-80,y+r+22);g.restore();
+}
 // Small gestures when an item is used. The picture and its hand move together; the world and aim stay put.
 const HELD_SQUEEZE = new Set(['duck', 'sharkplush', 'plushcat', 'plushbear', 'petcat', 'petdog']);
 const HELD_FLIP = new Set(['luckycoin', 'oldcoin', 'goldring', 'pearl', 'wishcoins']);
@@ -30296,6 +30440,7 @@ const FIRES = GRILLS.filter(o => o.on === 'fire');
 function fireGlow(wx, wy) {
   let k = 0;
   for (const o of FIRES) {
+    if(o.nightOnly&&night<.3)continue;
     const d = Math.hypot(rel(wx - o.x), rel(wy - o.y)), R = 0.32 + fireRoar(o) * 0.3;
     if (d < R) k = Math.max(k, (1 - d / R) ** 2.2 * (0.85 + 0.15 * Math.sin(T * 9 + d * 20) * Math.sin(T * 5.3)));
   }
@@ -30305,21 +30450,23 @@ function drawCampfires() {
   for (const o of FIRES) {
     const [vx, vy] = R(o.x, o.y);
     if (Math.hypot(vx, vy) > Math.min(vis, 16) || !inView(vx, vy, 0.4)) continue;
+    const ground=o.z??outdoorGroundHeight(o.x,o.y);
     const roar = fireRoar(o), warm = 0.35 + 0.65 * Math.max(night, overcast * 0.5);
     for (let k = 0; k < 10; k++) { // the stones
       const an = k / 10 * TAU + 0.3, sx = vx + Math.cos(an) * 0.075, sy = vy + Math.sin(an) * 0.075, face = Math.cos(an - Math.atan2(-vy, -vx)); // (the side towards the fire's lit)
-      dot(sx, sy, 0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i, hash(k, 1, 1811) > 0.5 ? 'o' : '@', C(GRAY, L * 0.8)), true; });
+      dot(sx, sy, ground+0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i, hash(k, 1, 1811) > 0.5 ? 'o' : '@', C(GRAY, L * 0.8)), true; });
     }
     for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
       const an = k / 5 * TAU + 0.6;
-      drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, 0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, 0.055, 0.006, (i, t, L) => {
-        const ember = HIT.w > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
+      drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, ground+0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, ground+0.055, 0.006, (i, t, L) => {
+        const ember = HIT.w-ground > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
         BG[i] = ember ? C(RED, 2 + warm * 3) : C(BRICK, 1 + L * 0.15); return set(i, ember ? '*' : '=', ember ? C(ORANGE, 14) : C(BRICK, L * 0.7)), true;
       });
     }
+    if(o.nightOnly&&night<.3)continue;
     // the flames and the sparks over them: a billboard, so it's round from every side
     const H = 0.1 + 0.08 * roar, top = 0.36;
-    drawShape(vx, vy, 0.008, 0.07, top, (i, u, z, du, dz, L) => {
+    drawShape(vx, vy, ground+0.008, 0.07, top, (i, u, z, du, dz, L) => {
       if (z > H) { // above it: sparks drifting up and fading
         const cell = hash(Math.floor(u / du + Math.sin(z * 30 + T) * 2), Math.floor(z / dz - T * 9), 1815);
         if (cell > 0.985 - roar * 0.008 && Math.abs(u) < 0.03 + (z - H) * 0.15) return set(i, cell > 0.997 ? '*' : '.', C(z > H + 0.12 ? ORANGE : YEL, 14 - (z - H) * 25)), true;
@@ -30432,6 +30579,7 @@ function gunSceneFigures(includeDead=false){
   if(drugBuyer)add(drugBuyer);
   for(const target of [clubFigureTarget(),...courierFigureTargets(),...gardenFigureTargets(),...gasFigureTargets()])if((includeDead||!target.who.dead)&&!target.who.hidden)out.push(target);
   if(typeof streetSceneTargets==='function')out.push(...streetSceneTargets().filter(p=>(includeDead||!p.who.dead)&&!p.who.hidden));
+  if(typeof coastFigureTargets==='function')out.push(...coastFigureTargets().filter(p=>includeDead||!p.who.dead));
   return out;
 }
 
@@ -30465,7 +30613,9 @@ function traceRoomShot(x,y,z,hx,hy,slope) {
   }
   return {d:end,x:x+hx*end,y:y+hy*end,z:Math.max(0,z+slope*end),what,who};
 }
+const bloodRoomKey=()=>placeKey()+((room?.lobby?.cell||room?.lobby?.ret)?':'+(room.lobby.cell||room.lobby.ret).slice(0,2).join(','):'');
 function killRoomFigure(p,hx,hy){
+  pools.push({x:p.x,y:p.y,t:T,at:bloodRoomKey(),scale:10,z:0});if(pools.length>48)pools.shift();
   p.dead=true;p.looted=false;p.down={t:.2,dur:Infinity,fx:hx,fy:hy};p.z=0;p._moving=false;p.sees=false;delete p.fireT;delete p.aimT;
   const k=room.def.keeper;if(k&&Math.hypot(p.x-k[0],p.y-k[1])<.6)room.keeperDead=true;
 }
@@ -30650,10 +30800,12 @@ function drawShots() {
 // spatters, a wet sheen in the middle while it's fresh, going dark brown as it dries
 function drawBlood() {
   for (const b of pools) {
+    if((b.at??'')!==(mode==='room'?bloodRoomKey():''))continue;
+    const scale=b.scale||1,ground=b.z??(mode==='room'?0:walkGround(b.x,b.y));
     const vx = rel(b.x - px), vy = rel(b.y - py);
     if (Math.hypot(vx, vy) > Math.min(vis, 14)) continue;
-    const age = T - b.t, r = 0.025 + 0.085 * (1 - Math.exp(-age / 3.5)), dry = clamp((age - 50) / 130, 0, 1), seed = b.x * 13 + b.y * 7;
-    drawBox(boxAt(vx, vy, 1, 0, r * 1.35, r * 1.35, 0, 0.0004), (i, t, L) => {
+    const age = T - b.t, r = scale*(0.025 + 0.085 * (1 - Math.exp(-age / 3.5))), dry = clamp((age - 50) / 130, 0, 1), seed = b.x * 13 + b.y * 7;
+    drawBox(boxAt(vx, vy, 1, 0, r * 1.35, r * 1.35, ground+.0001, ground+0.0004*scale), (i, t, L) => {
       const an = Math.atan2(HIT.v, HIT.u), q = Math.hypot(HIT.u, HIT.v);
       const edge = r * (0.78 + 0.14 * Math.sin(an * 3 + seed) + 0.08 * Math.sin(an * 7 + seed * 1.7) + 0.05 * Math.sin(an * 13 + seed * 0.3)), k = q / edge;
       if (k > 1.25 || k > 1 && hash(Math.floor(HIT.u * 300), Math.floor(HIT.v * 300), 4411) > 0.35) { BG[i] = BG_UNSET; return false; }
@@ -31572,10 +31724,10 @@ function outOfCar(keepCar = false) { // paying a fine leaves the car parked wher
 }
 function bustedChoice(how) {
   const f = fineFor(wanted.stars);
-  const armed = inv.some(it => ITEMS[it.id].kind === 'gun');
+  const armed = inv.some(it => ITEMS[it.id].kind === 'gun'),stolen=inv.some(stolenGoods);
   if (how === 'fine' && !payFine()) return;
   hidePanel(bustedEl); endTaxiShift(); outOfCar(how === 'fine');
-  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."${armed ? ' They keep the revolver.' : ''}`, 4);
+  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."${armed ? ' They keep the revolver.' : ''}${stolen?' They confiscate the stolen goods.':''}`, 4);
   const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
   goToJail();
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T }, [11, 3.2, Math.PI / 2]); // facing the bars
@@ -32303,7 +32455,7 @@ const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower:
 function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
   const h = roofHeightAt(x, y), feet = base + body.z / 10;
-  if(elPlatformRailAt(x,y,feet))return false;
+  if(elPlatformRailAt(x,y,feet)||elTrainBodyAt(x,y,feet))return false;
   if(courierRoofBlocked(x,y,feet)||h>feet&&courierRoofBlocked(x,y,h))return false; // (nor step up through a railing)
   if (roofFixed()) return h === roofH && !landmarkTowerBlocked(x,y,roofH);
   return h <= base + ROOF_STEP + body.z / 10;
@@ -32317,7 +32469,7 @@ function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body
 const walkGround = outdoorGroundHeight;
 let elPass = null; // the turnstile you've swiped through: { st }, till you're up on the platform or off the stairs
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
-  if (mode === 'walk' && underEl(py) && elWalkGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
+  if (mode === 'walk' && elDeckHeight(px,py) && elWalkGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
     mode = 'roof'; roofH = EL_TOP; roofLot = new Set(); room = null; elPass = null; return;
   }
   if (mode === 'walk' && elPass && !elStairAt(px, py) && Math.hypot(rel(px - elPass.st.x), rel(py - elPass.st.y)) > 0.6) elPass = null; // (walked away from the turnstile)
@@ -32333,7 +32485,7 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
   if (mode !== 'roof' || roofFixed()) return;
   const h = roofHeightAt(px, py);
   if (h === roofH) {
-    if(h===EL_TOP&&!body.z&&underEl(py)) {
+    if(h===EL_TOP&&!body.z&&elDeckHeight(px,py)) {
       const p=elPlatformAt(px,py);
       if(p){mode='elplat';plat=p;room=null;roofLot=null;}
     }
@@ -32981,6 +33133,7 @@ function buildIslandScenery() {
   }
   for(const [x,y]of [[626.15,196],[627.8,196.2],[627.6,197.7]])islandStone(x,y,.18,hash(x,y,1915));
   buildIslandSights();
+  buildCoastLife();
   islandDetailsB=bucketed(ISLAND_DETAILS);
 }
 
@@ -33329,6 +33482,143 @@ function drawIslandLife() {
     drawArt(x-px,y-py,z,.016,.014,[night>.5?'.':Math.sin(T*12+flower.seed)>0?'v':'^'],()=>C(night>.5?YEL:MAG,night>.5?12:10));drawn++;
   }
 }
+// Hotel rooms have fitted plans and real amenities, with clear routes from the door.
+function hotelRoomPlan(tier){
+ const w=tier===2?18:tier===1?13:10,h=tier===2?14:tier===1?12:10,bath={x0:w-5,x1:w-1,y0:1,y1:6,sign:[w-5,6,w-4.5]},extra={};
+ for(let y=1;y<=6;y++)extra[(w-5)+','+y]='W';
+ for(let x=w-5;x<w-1;x++)if(x!==w-3)extra[x+',6']='W';
+ if(tier===2)for(let y=1;y<10;y++)if(y!==7&&y!==8)extra['8,'+y]='#';
+ return {w,h,bath,grid:boxRoom(w,h,extra),entry:[w/2,h-1.6,-Math.PI/2]};
+}
+function hotelTelevision(x,y){return [BX(x,y,.92,.13,.65,1.65,(i,t,L)=>{
+ const edge=Math.abs(HIT.u)>.82||HIT.w<.74||HIT.w>1.54;
+ BG[i]=C(edge||!room.tv?GRAY:[BLUE,CYAN,GREEN,WARM][Math.floor(T/8)%4],edge||!room.tv?1:4);
+ return set(i,edge?'#':room.tv?(fract(HIT.u*4+T*.2)<.04?'|':' '):' ',C(WHITE,10)),true;
+ }),BX(x,y,.99,.3,.1,.65,solid(BRICK,{panel:.5,top:'='}))];}
+function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
+ const u=HIT.u,z=HIT.w,frame=Math.abs(u)>.76||z<1.53||z>2.27;
+ const hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
+ BG[i]=C(frame?YEL:z<hill?GREEN:BLUE,frame?3:4);return set(i,frame?(Math.abs(u)>.76?'|':'='):z<1.7?'~':' ',C(frame?YEL:z<1.7?CYAN:GREEN,Math.max(5,L*.7))),true;
+});}
+function hotelDefinition(tier){
+ const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:1.2],sofa=[tv[0],h-2.9],stove=tier?[w-1.5,h-4]:null;
+ return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,stove},tier,
+ wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,z<.12||Math.abs(z-.8)<.025||z>(tier===2?3.6:3)-.16?'=':' ',C(YEL,L*.65)),true;},
+ props:r=>{
+ const bed=tier===2?[3.9,3.6]:[2.6,3.2],wood=solid(BRICK,{panel:.45,top:'='}),cloth=solid(tier===2?GREEN:BLUE,{bright:2,top:'~'});
+ const p=[BX(...bed,1.3,1.05,.15,.58,cloth),BX(bed[0],bed[1]-1.05,1.4,.08,.12,1.3,wood),
+ ...[-.65,.65].map(x=>BX(bed[0]+x,bed[1]-.7,.5,.28,.58,.72,solid(WHITE,{top:'~'}))),
+ ...[-1,1].flatMap(side=>[BX(bed[0]+side*1.45,bed[1]-.7,.3,.35,.1,.65,wood),ROOM_MODEL(bed[0]+side*1.45,bed[1]-.7,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
+ ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,-1,tier===2?GREEN:BLUE),...hotelTelevision(...tv),hotelLandscape(bed[0],1.03),
+ ...toilet(w-2,1.6,-1,porcelain),washbasin(w-4.1,1.4,0,1),
+ ...(tier?[BATHTUB(w-1.5,4.1)]:[BX(w-2.1,4.4,.7,.7,.02,.07,solid(WHITE)),BX(w-2.8,4.4,.025,.7,.07,1.9,solid(CYAN,{bright:1}))]),
+ POT_PLANT(tier===2?9.5:1.5,h-1.5,1.4)];
+ if(tier)p.push(BX(...stove,1.7,.38,.1,.94,stoveShade(1,.55),0,1),BX(stove[0],stove[1]+2.3,.43,.4,0,1.7,solid(WHITE,{panel:.7})),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
+ if(tier)p.push(ROOM_MODEL(sofa[0],sofa[1]-1.25,(vx,vy)=>{
+   for(const side of [-1,1])rod(vx+side*.3,vy,.05,vx+side*.3,vy,.42,.035,YEL);
+   drum(vx,vy,.52,.4,.46,solid(tier===2?GREEN:BRICK,{bright:2,top:'~'}));
+ },[.52,.52,.46]));
+ if(tier===2)for(const side of [-1,1])p.push(BX(w/2+side*2.9,1.06,.19,.05,.12,3.25,(i,t,L)=>{BG[i]=C(GREEN,2+L*.15);return set(i,fract(HIT.u*35)<.15?'|':' ',C(YEL,L*.7)),true;}));
+ if(tier===2)p.push(...tableBox(10.9,3.6,1.2,.55),...homeChair(10.9,4.8,0,-1),POT_PLANT(9.7,1.5,1.9),...couch(4,10,1.5,1,0,STONE),...tableBox(6.3,10,.6,.8));
+ return p;
+ }};
+}
+ROOM_DEFS.motelRoom=hotelDefinition(0);ROOM_DEFS.hotelroom=hotelDefinition(1);ROOM_DEFS.hotelSuite=hotelDefinition(2);
+const GRAND_LOBBY_PROPS=ROOM_DEFS.grandhotel.props;
+ROOM_DEFS.grandhotel.grid=boxRoom(24,17);ROOM_DEFS.grandhotel.height=5.2;
+ROOM_DEFS.grandhotel.props=r=>[...GRAND_LOBBY_PROPS(r).filter(p=>!(p.box&&p.box.z1===.55&&p.box.z0===0&&p.box.hl===1.1)),
+ ...couch(4.2,9,1.55,1,0,BRICK),...couch(19.7,9,1.55,-1,0,GREEN),...tableBox(6.3,9,.6,.9),...tableBox(17.5,9,.6,.9),
+ ...[3,20.5].flatMap(x=>[POT_PLANT(x,13.5,2.4),ROOM_MODEL(x,6.6,(vx,vy)=>{drum(vx,vy,.24,0,4.8,solid(STONE,{bright:2}));drawBox(boxAt(vx,vy,1,0,.34,.34,4.6,4.85),solid(YEL));})]),
+ ROOM_MODEL(12,8,(vx,vy)=>{for(const side of [-1,1]){rod(vx,vy,5,vx+side*.8,vy,4.2,.025,YEL);dot(vx+side*.8,vy,4.15,.14,solid(WARM,{bright:5}));}rod(vx,vy,5,vx,vy,3.9,.025,YEL);dot(vx,vy,3.85,.19,solid(WARM,{bright:5}));})];
+function hotelAmenityPrompt(){
+ if(mode!=='room'||room.kind!=='hotelroom')return '';
+ const spots=room.def.hotelAmenities;if(!spots)return '';
+ if(near(px,py,...spots.tv)<1.65)return room.tv?'E: switch off the TV':'E: watch TV';
+ if(spots.stove&&near(px,py,...spots.stove)<1.8)return 'E: cook at the kitchen stove';
+ return '';
+}
+function hotelAmenityUse(){
+ if(mode!=='room'||room.kind!=='hotelroom')return false;
+ const spots=room.def.hotelAmenities;if(!spots)return false;
+ if(near(px,py,...spots.tv)<1.65){room.tv=!room.tv;say(room.tv?'You turn on the television.':'You turn off the television.',2);return true;}
+ if(spots.stove&&near(px,py,...spots.stove)<1.8){room.fridge||=[];openCooking('stove',room.fridge);return true;}
+ return false;
+}
+// Warm ceilings and parquet stay quiet at a distance; rugs define the sitting areas.
+ROOM_CEILS.hotel=(i,r,x,wx,wy)=>{
+ const grand=room.def.tier===2||room.kind==='grandhotel',edge=Math.min(wx-1,wy-1,room.W-1-wx,room.H-1-wy),lamp=Math.hypot(mod(wx,4)-2,mod(wy,4)-2)<.16;
+ BG[i]=C(WHITE,grand?5:4);return set(i,lamp?'o':edge<.16?'=':' ',C(lamp?WARM:YEL,lamp?15:8));
+};
+ROOM_FLOORS.hotel=(i,f,wx,wy,r,x,L)=>{
+ const tier=room.def.tier,spot=room.def.hotelAmenities?.tv,sofa=spot?[spot[0],room.H-2.9]:[room.W/2,9];
+ if(Math.abs(wx-sofa[0])<(tier===2?2.6:1.65)&&wy>sofa[1]-2.1&&wy<sofa[1]+.6){
+  const border=Math.abs(wx-sofa[0])>(tier===2?2.4:1.5)||wy<sofa[1]-1.95||wy>sofa[1]+.45;
+  BG[i]=C(tier===2?GREEN:BLUE,2+f*2);return set(i,border?'=':hash(Math.floor(wx*4),Math.floor(wy*4),3)>.96?'+':' ',C(WARM,L));
+ }
+ const u=tier===2?wx+wy:wx,v=tier===2?wx-wy:wy;
+ BG[i]=C(BRICK,2+f*2+(Math.floor(v*2)&1)*.5);
+ return set(i,fract(v*2)<.04?tier===2?'/':'=':fract(u/1.8+(Math.floor(v*2)&1)*.5)<.025?'|':' ',C(WARM,L*.7));
+};
+for(const def of [ROOM_DEFS.motelRoom,ROOM_DEFS.hotelroom,ROOM_DEFS.hotelSuite]){def.floor='hotel';def.ceil='hotel';}
+ROOM_DEFS.grandhotel.ceil='hotel';
+// Small, deterministic gatherings live on clear beach/grass patches, never on streets or landings.
+const COAST_GATHERINGS=[];
+function coastPatchClear(x,y,r=.8){
+ const base=terrainHeight(x,y);
+ for(const [ox,oy]of [[0,0],[r,r],[r,-r],[-r,r],[-r,-r]]){
+  const wx=x+ox,wy=y+oy;
+  if(seaAt(wx,wy)||onPier(wx,wy)||ROAD[idx(wx,wy)]||map[idx(wx,wy)]||Math.abs(terrainHeight(wx,wy)-base)>.04)return false;
+ }
+ return !solids.some(s=>near(s.x,s.y,x,y)<r+.3)&&!trees.some(t=>near(t.x,t.y,x,y)<r*.8)&&!doors.some(d=>near(d.x,d.y,x,y)<2);
+}
+function buildCoastLife(){
+ COAST_GATHERINGS.length=0;
+ const candidates=[];
+ for(let y=74;y<410;y+=3)for(let x=58;x<470;x+=3){
+  if(!naturalCoastAt(x,y))continue;
+  const ground=coastalGround(x,y);
+  if(ground.depth>1.1&&ground.depth<3.2&&coastPatchClear(x,y))candidates.push({x,y,beach:ground.beach,seed:hash(x,y,9621)});
+ }
+ for(const island of WILD_ISLANDS)for(let y=island.y-island.ry;y<island.y+island.ry;y+=3)for(let x=island.x-island.rx;x<island.x+island.rx;x+=3){
+  const edge=wildIslandEdge(x,y,island);
+  if(edge>1.4&&edge<3.5&&near(x,y,...island.landing)>4&&!onFernStrip(x,y,5)&&coastPatchClear(x,y))candidates.push({x,y,beach:island.id==='sand',seed:hash(x,y,9621)});
+ }
+ candidates.sort((a,b)=>a.seed-b.seed);
+ for(const site of candidates){
+  if(COAST_GATHERINGS.length>=24)break;
+  if(COAST_GATHERINGS.some(o=>near(o.x,o.y,site.x,site.y)<16))continue;
+  const z=terrainHeight(site.x,site.y),index=COAST_GATHERINGS.length,fire=index%3===1;
+  const group={...site,z,fire,people:[]};COAST_GATHERINGS.push(group);
+  const cloth=islandDetail(site.x,site.y,.29,.22,z+.003,z+.006,'cloth');cloth.base=index%2?BLUE:RED;cloth.seed=site.seed;
+  islandDetail(site.x+.16,site.y+.04,.045,.035,z+.006,z+.07,'timber');
+  for(let n=0;n<3+(index%2);n++){
+   const angle=n*TAU/4+.35,x=site.x+Math.cos(angle)*.32,y=site.y+Math.sin(angle)*.32;
+   group.people.push({x,y,z:terrainHeight(x,y)+.004,seed:index*17+n,pose:n===2?'stand':'sit2',look:figStreetLook(9670+index*17+n,[BLUE,GREEN,MAG,ORANGE][n],BLUE)});
+  }
+  if(fire){const o={x:site.x-.58,y:site.y+.1,z:terrainHeight(site.x-.58,site.y+.1),on:'fire',nightOnly:true};group.campfire=o;GRILLS.push(o);FIRES.push(o);}
+  for(let n=0;n<9;n++){
+   const a=n*TAU/9,x=site.x+Math.cos(a)*(.85+n*.035),y=site.y+Math.sin(a)*(.85+n*.035);
+   if(!coastPatchClear(x,y,.12))continue;
+   islandCover(x,y,n%3?'flower':'fern',hash(x,y,9622),.2);
+  }
+ }
+}
+function coastGroupActive(group){return season()!=='winter'&&rain<.45&&tod>=8&&(tod<21||group.fire);}
+function coastFigureTargets(){
+ const out=[];
+ for(const group of COAST_GATHERINGS)for(const p of group.people)if(p.dead||coastGroupActive(group))out.push(sceneFigureTarget(p,p.x,p.y,p.z));
+ return out;
+}
+function drawCoastLife(){
+ for(const group of COAST_GATHERINGS){
+  if(near(px,py,group.x,group.y)>Math.min(vis,18))continue;
+  for(const p of group.people){
+   if(!p.dead&&!coastGroupActive(group)||!inView(rel(p.x-px),rel(p.y-py),.2))continue;
+   const face=Math.atan2(group.y-p.y,group.x-p.x);
+   drawSceneFigure(sceneFigureTarget(p,p.x,p.y,p.z),p.look,p.pose,Math.cos(face),Math.sin(face));
+  }
+ }
+}
 // Assemble the generated city after authored outdoor geometry has been created,
 // before saves or the first frame. Interior coordinates never enter this pass.
 function assembleArchipelago() {
@@ -33616,6 +33906,18 @@ function assembleArchipelago() {
   }
   // Outdated seam structure is replaced with the raised crossings below.
   bridgeBits.length = towers.length = boats.length = 0;
+  // Keep working cranes on the industrial quay, rather than across public piers.
+  for(const crane of cranes)if(onPier(crane.x,crane.y)){
+    const candidates=[];
+    for(let y=crane.y-32;y<crane.y+32;y++)for(let x=crane.x-32;x<crane.x+32;x++){
+      if(![[0,0],[.6,.6],[.6,-.6],[-.6,.6],[-.6,-.6]].every(([ox,oy])=>!seaAt(x+ox,y+oy)&&!ROAD[idx(x+ox,y+oy)]&&!map[idx(x+ox,y+oy)]&&!onPier(x+ox,y+oy)))continue;
+      if(cranes.some(o=>o!==crane&&near(o.x,o.y,x,y)<2)||doors.some(o=>near(o.x,o.y,x,y)<2))continue;
+      const kind=blockKind(Math.floor(x/8),Math.floor(y/8));
+      candidates.push({x,y,score:near(x,y,crane.x,crane.y)+(['yard','construction'].includes(kind)?0:100)});
+    }
+    candidates.sort((a,b)=>a.score-b.score);
+    if(candidates.length){crane.x=candidates[0].x;crane.y=candidates[0].y;}
+  }
   for (let y = 80; y < 380; y += 2) for (let x = 56; x < 480; x += 2) {
     if (!naturalCoastAt(x, y) || coastalGround(x, y).depth <= 2 || onPier(x, y) || ROAD[idx(x, y)] || hash(x, y, 736) >= .09) continue;
     trees.push({ x, y, kind: hash(x, y, 737) > .4 ? 'pine' : 'birch', s: .8 + hash(x, y, 738) * .5, seed: hash(x, y, 739) });
@@ -34142,6 +34444,63 @@ function newGame() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* n
 loadGame();
 setInterval(saveGame, 10000);
 addEventListener('pagehide', saveGame);
+// Moving carriage coordinates stay relative to its centre, independent of the camera.
+const EL_RIDERS=new Map();
+function elPassengerSet(tr,k,time=T){
+ const train=elTrain(tr,k,time),leg=Math.floor((time+(worldReady?tr*108:k*EL_CYCLE/2+tr*17))/36),key=tr+':'+k;
+ let state=EL_RIDERS.get(key);
+ const make=cycle=>Array.from({length:EL_CARS*8},(_,index)=>{
+  const slot=index%8,car=Math.floor(index/8)-1,seed=(cycle+1000)*701+tr*91+index*13;
+  if(hash(seed,2,8910)<.4)return null;
+  const seated=slot<6,side=(slot%2?1:-1),u=seated?[-.69,0,.69][Math.floor(slot/2)]:slot===6?-.25:.25,v=seated?side*.105:side*.025;
+  return {seed,slot,car,seated,u,v,side,look:figStreetLook(seed,[BLUE,RED,GREEN,YEL,STONE][index%5],BLUE)};
+ }).filter(Boolean);
+ if(!state||state.leg!==leg){state={leg,previous:state?.riders||make(leg-1),riders:make(leg)};EL_RIDERS.set(key,state);}
+ const elapsed=train.stopped?DWELL-train.left:10,doorSide=tr?1:-1;
+ const pose=(p,exiting)=>{
+  const moving=elapsed<(exiting?3:6),progress=exiting?clamp(elapsed/3,0,1):clamp((elapsed-3)/3,0,1),door=(p.u<0?-1:1)*.45*EL_HL;
+  const u=moving?door+(p.u-door)*(exiting?1-progress:progress):p.u;
+  const v=moving?doorSide*.23+(p.v-doorSide*.23)*(exiting?1-progress:progress):p.v;
+  return {...p,u,v,boarding:moving,seated:!moving&&p.seated,exiting};
+ };
+ const out=elapsed<3?state.previous.filter(p=>hash(p.seed,4,8910)>.35).map(p=>pose(p,true)):[];
+ for(const p of state.riders)if(elapsed>=3||hash(p.seed,4,8910)<=.35)out.push(pose(p,false));
+ return out;
+}
+function drawElRiders(train,inside=false){
+ for(const p of elPassengerSet(train.tr,train.k)){
+  if(inside&&p.car!==ride.car||!inside&&Math.abs(p.v)<EL_HW)continue;
+  const x=worldCoord(train.x+p.car*EL_CAR_LEN+p.u),y=EL_TRACK[train.tr]+p.v;
+  if(!inView(rel(x-px),rel(y-py),.2))continue;
+  const pose=p.seated?'sit7':p.boarding?'walk'+(Math.floor(T*7+p.slot)&7):'stand';
+  drawFigure(...R(x,y),EL_TOP+.02,.175,0,p.seated?-p.side:0,p.look,pose,{light:10});
+ }
+}
+function elSeatToggle(){
+ if(!ride)return;
+ if(ride.seat){ride.seat=null;return;}
+ const passengers=elPassengerSet(ride.tr,ride.k),local=ride.off-ride.car*EL_CAR_LEN;
+ let best=null,dist=.25;
+ for(const u of [-.69,0,.69])for(const side of [-1,1]){
+  if(passengers.some(p=>p.car===ride.car&&p.seated&&Math.abs(p.u-u)<.02&&p.side===side))continue;
+  const d=Math.hypot(local-u,(ride.side||0)-side*.10);if(d<dist){dist=d;best={u,side};}
+ }
+ if(best){ride.seat=best;ride.off=ride.car*EL_CAR_LEN+best.u;ride.side=best.side*.10;a=best.side>0?-Math.PI/2:Math.PI/2;}
+ else say('Move beside an empty blue seat to sit.',2);
+}
+function stepElRide(dt){
+ const f=(K.KeyW||K.ArrowUp?1:0)-(K.KeyS||K.ArrowDown?1:0),s=(K.KeyD?1:0)-(K.KeyA?1:0);
+ a+=((K.ArrowRight?1:0)-(K.ArrowLeft?1:0))*2*dt;
+ if(f||s){if(ride.seat){ride.seat=null;ride.side=0;}
+  const speed=.22*dt/Math.max(1,Math.hypot(f,s)),vx=(Math.cos(a)*f-Math.sin(a)*s)*speed,vy=(Math.sin(a)*f+Math.cos(a)*s)*speed;
+  const local=ride.off-ride.car*EL_CAR_LEN,u=clamp(local+vx,-EL_HL+.04,EL_HL-.04),v=clamp((ride.side||0)+vy,-EL_HW+.04,EL_HW-.04);
+  const occupants=elPassengerSet(ride.tr,ride.k).filter(p=>p.car===ride.car&&!p.seated);
+  const clear=(x,y)=>!occupants.some(p=>Math.hypot(x-p.u,y-p.v)<.04)&&!(Math.abs(y)>.065&&[-.69,0,.69].some(c=>Math.abs(x-c)<.215))&&![-1,1].some(c=>Math.hypot(x-c*.45*EL_HL,y)<.023);
+  if(clear(u,ride.side||0))ride.off=ride.car*EL_CAR_LEN+u;
+  if(clear(ride.off-ride.car*EL_CAR_LEN,v))ride.side=v;
+ }
+ px=worldCoord(elRiding().x+ride.off);py=EL_TRACK[ride.tr]+(ride.side||0);
+}
 // Closing a menu recaptures the desktop mouse, including Esc. In a browser, Esc needs a click or another key.
 function relock(e) {
   if ((e.code === 'Escape' && !NATIVE_MOUSE_APP) || paused || mouseCaptured()) return;
@@ -34153,6 +34512,7 @@ onkeydown = e => {
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
+  if (mode==='el'&&e.code==='KeyC'&&!e.repeat&&!paused){elSeatToggle();return;}
   if (freecam) {
     if (e.code === 'Escape' && !e.repeat) { togglePause(); return; }
     if (e.code === 'KeyE' && paused && pauseEl?.style.display === 'flex' && !e.repeat) { closePause(true); return; }
@@ -34229,6 +34589,7 @@ function turnBy(mx, my) {
   if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s;
+  else if (mode === 'sea' || mode === 'boat') look=clamp(look+mx*.003*s,-Math.PI,Math.PI);
   else if (skatingNow()) { SK.look = clamp(SK.look + mx * 0.003 * s, -2.6, 2.6); SK.lookT = T; } // on the board: look round (the camera swings back behind you)
   else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
@@ -34308,7 +34669,7 @@ function move(fx, fy) {
   if(mode==='walk') {
     const stair=elStairAt(px,py);
     if(!stair) {
-      if(elStairOn&&oldStair?.g>=EL_TOP-.01&&underEl(py,px)) {
+      if(elStairOn&&oldStair?.g>=EL_TOP-.01&&elDeckHeight(px,py)) {
         mode='roof';roofH=EL_TOP;roofLot=new Set();room=null;elPass=null;
       }
       elStairOn=null;
@@ -34470,10 +34831,7 @@ function loop(t) {
   else if (mode === 'boat') stepBoat(dt);
   else if (mode === 'sea') stepSea(dt);
   else if (mode === 'air') { if (!sleep) stepFlight(dt); } // (flight.js)
-  else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
-    a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
-    px = worldCoord(elRiding().x + ride.off);
-  }
+  else if (mode === 'el') stepElRide(dt);
   stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
@@ -34529,8 +34887,8 @@ function loop(t) {
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
-  } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
-    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? swanCam(dt) : chaseCam(dt);
+  } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea' || mode === 'boat') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
+    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? (chaseOn?swanCam(dt):[px,py,a+look]) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else if (skateCamOn()) { // on the board: from behind your skater (skate.js), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw, cz] = skateCam(dt);

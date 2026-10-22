@@ -71,10 +71,10 @@ function outOfCar(keepCar = false) { // paying a fine leaves the car parked wher
 }
 function bustedChoice(how) {
   const f = fineFor(wanted.stars);
-  const armed = inv.some(it => ITEMS[it.id].kind === 'gun');
+  const armed = inv.some(it => ITEMS[it.id].kind === 'gun'),stolen=inv.some(stolenGoods);
   if (how === 'fine' && !payFine()) return;
   hidePanel(bustedEl); endTaxiShift(); outOfCar(how === 'fine');
-  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."${armed ? ' They keep the revolver.' : ''}`, 4);
+  if (how === 'fine') return say(`You pay the ${fmt$(f)} fine. "Don't let me see you again."${armed ? ' They keep the revolver.' : ''}${stolen?' They confiscate the stolen goods.':''}`, 4);
   const [st] = SERVICES.filter(b => b.kind === 'police').map(b => [b, Math.hypot(rel(b.x - px), rel(b.y - py))]).reduce((m, b) => b[1] < m[1] ? b : m, [null, Infinity]);
   goToJail();
   enterRoom('jail', { word: 'JAIL', ret: [st.x + 0.6, st.by * 8 + 1.9, Math.PI / 2], until: T + JAIL_T }, [11, 3.2, Math.PI / 2]); // facing the bars

@@ -14,6 +14,7 @@ function gunSceneFigures(includeDead=false){
   if(drugBuyer)add(drugBuyer);
   for(const target of [clubFigureTarget(),...courierFigureTargets(),...gardenFigureTargets(),...gasFigureTargets()])if((includeDead||!target.who.dead)&&!target.who.hidden)out.push(target);
   if(typeof streetSceneTargets==='function')out.push(...streetSceneTargets().filter(p=>(includeDead||!p.who.dead)&&!p.who.hidden));
+  if(typeof coastFigureTargets==='function')out.push(...coastFigureTargets().filter(p=>includeDead||!p.who.dead));
   return out;
 }
 
@@ -47,7 +48,9 @@ function traceRoomShot(x,y,z,hx,hy,slope) {
   }
   return {d:end,x:x+hx*end,y:y+hy*end,z:Math.max(0,z+slope*end),what,who};
 }
+const bloodRoomKey=()=>placeKey()+((room?.lobby?.cell||room?.lobby?.ret)?':'+(room.lobby.cell||room.lobby.ret).slice(0,2).join(','):'');
 function killRoomFigure(p,hx,hy){
+  pools.push({x:p.x,y:p.y,t:T,at:bloodRoomKey(),scale:10,z:0});if(pools.length>48)pools.shift();
   p.dead=true;p.looted=false;p.down={t:.2,dur:Infinity,fx:hx,fy:hy};p.z=0;p._moving=false;p.sees=false;delete p.fireT;delete p.aimT;
   const k=room.def.keeper;if(k&&Math.hypot(p.x-k[0],p.y-k[1])<.6)room.keeperDead=true;
 }
@@ -232,10 +235,12 @@ function drawShots() {
 // spatters, a wet sheen in the middle while it's fresh, going dark brown as it dries
 function drawBlood() {
   for (const b of pools) {
+    if((b.at??'')!==(mode==='room'?bloodRoomKey():''))continue;
+    const scale=b.scale||1,ground=b.z??(mode==='room'?0:walkGround(b.x,b.y));
     const vx = rel(b.x - px), vy = rel(b.y - py);
     if (Math.hypot(vx, vy) > Math.min(vis, 14)) continue;
-    const age = T - b.t, r = 0.025 + 0.085 * (1 - Math.exp(-age / 3.5)), dry = clamp((age - 50) / 130, 0, 1), seed = b.x * 13 + b.y * 7;
-    drawBox(boxAt(vx, vy, 1, 0, r * 1.35, r * 1.35, 0, 0.0004), (i, t, L) => {
+    const age = T - b.t, r = scale*(0.025 + 0.085 * (1 - Math.exp(-age / 3.5))), dry = clamp((age - 50) / 130, 0, 1), seed = b.x * 13 + b.y * 7;
+    drawBox(boxAt(vx, vy, 1, 0, r * 1.35, r * 1.35, ground+.0001, ground+0.0004*scale), (i, t, L) => {
       const an = Math.atan2(HIT.v, HIT.u), q = Math.hypot(HIT.u, HIT.v);
       const edge = r * (0.78 + 0.14 * Math.sin(an * 3 + seed) + 0.08 * Math.sin(an * 7 + seed * 1.7) + 0.05 * Math.sin(an * 13 + seed * 0.3)), k = q / edge;
       if (k > 1.25 || k > 1 && hash(Math.floor(HIT.u * 300), Math.floor(HIT.v * 300), 4411) > 0.35) { BG[i] = BG_UNSET; return false; }

@@ -151,7 +151,7 @@ function render(dt) {
   // Freecam renders while simulation time is frozen, but still gets a new sprite-generation allowance each frame.
   figFineT = T; figFineN = 0;
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
-  eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' ? EL_TOP+.19 : mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
+  eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' ? EL_TOP+(ride?.seat ? .135 : .19) : mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? (chaseOn ? 0.2 : 0.11) : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
   else if (mode === 'air') eye = airEye;
@@ -162,7 +162,7 @@ function render(dt) {
     if (mode === 'walk') eye += walkGround(px, py);
     if (mode === 'drive' || mode === 'taxi') eye += Math.max(roadGroundHeight(px, py), me ? roadGroundHeight(me.x, me.y) : 0);
   }
-  tf = Math.tan(FOV / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
+  tf = Math.tan((telescopeActive()?FOV/6:FOV) / 2) * (1 - gunAim() * 0.12); projX = cols / 2 / tf; projY = projX * cw / FS;
   hor = (rows >> 1) + pitch * rows | 0;
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
@@ -229,7 +229,8 @@ function render(dt) {
   }
   if (city) { sunMoon(); lightning(); }
   ZBG.set(ZB); // sprites draw characters over whatever background was there, so backgrounds keep this depth for fog
-  if (city) { drawTireMarks(); drawBlood(); } // (and blood: gun-ui.js)
+  if (city) drawTireMarks();
+  drawBlood(); // (and blood: gun-ui.js)
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
   drawPeeMarks(); // stains on walls and solid static objects
@@ -249,6 +250,7 @@ function render(dt) {
     drawHeld(dt); // what's in your hand (or mouth, or under your feet)
   }
   present();
+  drawTelescope();
   drawDrugVision();
   if (freecam) freecamHud();
   else {

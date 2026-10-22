@@ -40,15 +40,15 @@ test('jump from a roof onto the el, board at the station, and take its stairs do
 
 test('walking off the el edge falls, and stepping onto its tracks allows free movement',()=>withCity(async page=>{
   const result=await page.evaluate(()=>{
-    elUp({s:EL_STATIONS[0],tr:0});
+    T=20;elUp({s:EL_STATIONS[0],tr:0});
     for(let i=0;i<45;i++){move(0,.008);stepBody(.01);stepRoof();}
     const tracks={mode,height:roofH,free:free(px+.1,py)};
-    py=EL_Y1+.02;stepRoof();const leaving={mode,z:body.z};
+    py=EL_Y1+.06;stepRoof();const leaving={mode,z:body.z};
     for(let i=0;i<300;i++){stepBody(.01);stepRoof();}
     const landed={mode,z:body.z};
-    elUp({s:EL_STATIONS[0],tr:0});px=EL_STATIONS[0].x+2;py=EL_Y0-.02;stepRoof(); // (off the edge clear of the stairs)
+    elUp({s:EL_STATIONS[0],tr:0});px=EL_STATIONS[0].x+2;py=EL_Y0-.06;stepRoof(); // (off the edge clear of the stairs)
     const platformEdge={mode,z:body.z};
-    const st=EL_STATIONS[0].stairs[0];elUp({s:EL_STATIONS[0],tr:0});px=st.ox+st.c*(st.off+(ELS.u3+ELS.u4)/2);py=EL_Y0-.02;stepRoof(); // (off it onto the stairs' top landing)
+    const st=EL_STATIONS[0].stairs[0];elUp({s:EL_STATIONS[0],tr:0});px=st.ox+st.c*(st.off+(ELS.u3+ELS.u4)/2);py=EL_Y0-.08;stepRoof(); // (off it onto the stairs' top landing)
     return {tracks,leaving,landed,platformEdge,stairsTop:{mode,z:body.z,ground:walkGround(px,py)}};
   });
   assert.deepEqual(result.tracks,{mode:'roof',height:1.27,free:true});
@@ -117,10 +117,10 @@ test('el riders are inside a rotating 3D carriage with the moving live city visi
 
 test('actual movement is stopped at station guardrails and passes through stair and boarding openings',()=>withCity(async page=>{
   const result=await page.evaluate(()=>EL_STATIONS.flatMap(s=>s.stairs.map(st=>{
-    const tr=st.tr,sign=tr?1:-1,rails=elPlatformRails(s,tr),outer=rails.filter(r=>Math.abs(r[2]-r[0])>.1).sort((a,b)=>(b[2]-b[0])-(a[2]-a[0]))[0];
+    T=20;const tr=st.tr,sign=tr?1:-1,rails=elPlatformRails(s,tr),outer=rails.filter(r=>Math.abs(r[2]-r[0])>.1).sort((a,b)=>(b[2]-b[0])-(a[2]-a[0]))[0];
     elUp({s,tr});px=(outer[0]+outer[2])/2;
     for(let i=0;i<35;i++){move(0,sign*.006);stepBody(.01);stepRoof();}
-    const edge={mode,inside:py>EL_Y0&&py<EL_Y1};
+    const edge={mode,inside:py>EL_Y0-EL_PLATFORM_OUT&&py<EL_Y1+EL_PLATFORM_OUT};
     elUp({s,tr});px=s.x0+.09;
     for(let i=0;i<30;i++){move(-.006,0);stepBody(.01);stepRoof();}
     const end=px>=s.x0;

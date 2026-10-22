@@ -128,6 +128,7 @@ function citySprites() {
   drawLandmarks();
   drawPavilions();
   drawStreetScenes();
+  drawCoastLife();
   drawHomeBalconies();
   drawSkater(); // you, on the board, seen from behind (skate.js)
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
@@ -165,6 +166,7 @@ function citySprites() {
     if (Math.hypot(vx, vy) < vis + 1 && inView(vx, vy, 0.6)) (o.kind === 'tank' ? drawTank : o.kind === 'antenna' ? drawAntenna : drawBoard)(o, vx, vy);
   });
   for (const k of cranes) {
+    if(k.hidden)continue;
     const [vx, vy] = R(k.x, k.y);
     if (Math.abs(vx) > vis + 5 || Math.abs(vy) > vis + 5) continue;
     const th = k.slew + T * 0.03; // the jib slews slowly
@@ -601,9 +603,9 @@ function drawElStairs(st) {
   if (far) return;
   // rails round the landings (open where the stairs come in, and onto the deck)
   for (const [ua, ub, z] of [[ELS.u1, ELS.u2, H / 2]]) for (const v of [ELS.v0, ELS.v1]) { const [ax, ay] = at(ua, v), [bx, by] = at(ub, v); rod(ax, ay, z + 0.1, bx, by, z + 0.1, 0.004); }
-  { const [ax, ay] = at(ELS.u4, ELS.v0), [bx, by] = at(ELS.u4, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the far end of the top
+  { const [ax, ay] = at(ELS.u4, ELS.v0), [bx, by] = at(ELS.u4, ELS.top); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the far end of the top
   { const [ax, ay] = at(ELS.u3, ELS.v0), [bx, by] = at(ELS.u4, ELS.v0); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the building side of the top
-  { const [ax, ay] = at(ELS.u3, ELS.v1), [bx, by] = at(ELS.u3, ELS.top - 0.05); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the near side, past the stairs' head
+  { const [ax, ay] = at(ELS.u3, ELS.v1), [bx, by] = at(ELS.u3, ELS.top); rod(ax, ay, H + 0.1, bx, by, H + 0.1, 0.004); } // the near side, past the stairs' head
   // the turnstile at the foot: a post, its arm across the way (swung round once you've swiped)
   { const pu = ELS.u0 - 0.02, pv = ELS.v1 - 0.015, [x, y] = at(pu, pv), open = elPass && elPass.st === st;
     drawBox(boxAt(x, y, c, s, 0.012, 0.012, 0, 0.09), STEEL.cap);
@@ -1465,7 +1467,33 @@ function drawElCar(vx, vy, cab) {
   });
 }
 // the el: pillars, stairs at the stations, and the trains (cars drawn one by one, so they foreshorten properly)
+const EL_BOARD_CACHE=new Map();
+function drawElStation(station){
+ for(const tr of [0,1]){
+  const y=tr?EL_Y1+EL_PLATFORM_OUT/2:EL_Y0-EL_PLATFORM_OUT/2,[vx,vy]=R((station.x0+station.x1)/2,y);
+  drawBox(boxAt(vx,vy,1,0,(station.x1-station.x0)/2,EL_PLATFORM_OUT/2,EL_TOP-.025,EL_TOP),STEEL.cap);
+  const key=station.name+tr,cached=EL_BOARD_CACHE.get(key);
+  const service=cached?.t===Math.floor(T)?cached.service:elNextArrival(station,tr);
+  EL_BOARD_CACHE.set(key,{t:Math.floor(T),service});
+  if(!service)continue;
+  const next=EL_STATIONS[service.next].name,wait=service.seconds?'IN '+Math.floor(service.seconds/60)+':'+String(service.seconds%60).padStart(2,'0'):'BOARDING';
+  const boardY=tr?EL_Y1+EL_PLATFORM_OUT-.01:EL_Y0-EL_PLATFORM_OUT+.01,[x,z]=R(station.x,boardY);
+  const lines=[wait+' '+(service.dir>0?'EAST':'WEST'),'NEXT '+next],normal=py<boardY?-1:1,width=.6/Math.max(...lines.map(l=>l.length));
+  drawBox(boxAt(x,z,1,0,.34,.025,EL_TOP+.23,EL_TOP+.39),(i,t,L)=>{
+    BG[i]=C(GRAY,1);
+    if(Math.abs(HIT.v)<.024||Math.abs(HIT.u)>.315)return set(i,' ',0),true;
+    const row=HIT.w>EL_TOP+.31?0:1,center=EL_TOP+(row ? .27 : .35),u=HIT.u*normal,q=u/width+lines[row].length/2,col=Math.floor(q),ch=lines[row][col];
+    if(!ch||Math.abs(HIT.w-center)>.025)return set(i,' ',0),true;
+    const cell=t/projX,zcell=t/projY;
+    const large=width/cell>2.2&&.05/zcell>2.8;
+    const mark=large?glyphOn(ch,Math.floor(fract(q)*4),Math.floor((center+.025-HIT.w)/.05*5))?'#':' ':oneCell((fract(q)-.5)*width,cell)&&oneCell(HIT.w-center,zcell)?ch:' ';
+    return set(i,mark,C(YEL,15)),true;
+  });
+  for(const off of [-.28,.28])rod(x+off,z,EL_TOP,x+off,z,EL_TOP+.23,.008);
+ }
+}
 function elSprites() {
+  for(const station of EL_STATIONS)if(inView(rel(station.x-px),rel(EL_Y+1-py),3))drawElStation(station);
   forNear(elPillarsB, p => { if (inView(rel(p.x - px), rel(p.y - py), 0.1)) drawElPillar(p); });
   for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.ox + stairs.c * stairs.off - px), rel(stairs.oy + stairs.ay * 0.25 - py), 1.7)) drawElStairs(stairs);
   for(const station of EL_STATIONS)if(inView(rel(station.x-px),rel(EL_Y+1-py),3))for(const tr of [0,1])
@@ -1475,6 +1503,7 @@ function elSprites() {
       for(let i=0;i<=n;i++){const t=i/n,x=vx+(wx-vx)*t,y=vy+(wy-vy)*t;rod(x,y,EL_TOP,x,y,EL_TOP+EL_RAIL_H,.005);}
     }
   for (const t of elTrains(T)) {
+    drawElRiders(t);
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
       const [vx, vy] = R(t.x - t.dir * (j - 1) * EL_CAR_LEN, EL_TRACK[t.tr]);

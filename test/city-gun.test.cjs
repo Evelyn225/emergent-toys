@@ -24,7 +24,7 @@ const fire = (ev, slope = 0) => ev(`(() => { const s = fireGun(px, py, 0.17, a, 
 
 test('under the counter: the pawnbroker has it from nine till two, not for the police\'s most wanted, and it can\'t be lifted', () => {
   const { ev } = loadCity();
-  assert.deepStrictEqual(j(ev, "(tod = 12, stockFor('pawn', 'PAWN'))"), ['skateboard', 'boombox', 'umbrella', 'vinyl']);
+  assert.deepStrictEqual(j(ev, "(tod = 12, stockFor('pawn', 'PAWN'))"), ['telescope', 'skateboard', 'boombox', 'umbrella', 'vinyl']);
   assert.deepStrictEqual(j(ev, "(tod = 21.5, stockFor('pawn', 'PAWN')).slice(-2)"), ['revolver', 'ammo']);
   assert.ok(ev("tod = 1.5; stockFor('pawn', 'PAWN').includes('revolver') && openAt({ kind: SHOP_LIT, hours: hoursOf('PAWN') }, 1.5)"), 'still there at half one, and still open');
   assert.deepStrictEqual(j(ev, "(tod = 22, stealable(stockFor('pawn', 'PAWN'))).filter(id => ITEMS[id].kind === 'gun' || ITEMS[id].kind === 'ammo')"), []);

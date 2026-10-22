@@ -121,10 +121,14 @@ const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
 const SEAT = (x, y, fx, fy, h = 0.45) => ({ seat: true, x, y, fx, fy, h });
 // a sofa facing (fx, fy), hl long either side of (x, y): the cushions, the back, an arm at each end, three places on it
 const couch = (x, y, hl, fx, fy, col = BRICK) => {
-  const ax = -fy, ay = fx, up = solid(col, { top: '=', bright: 1.4 });
-  return [BX(x, y, hl, 0.4, 0, 0.42, up, ax, ay), BX(x - fx * 0.32, y - fy * 0.32, hl, 0.1, 0.42, 0.9, solid(col, { bright: 1.4 }), ax, ay),
-    ...[-1, 1].map(e => BX(x + ax * e * hl, y + ay * e * hl, 0.4, 0.08, 0.42, 0.62, up, fx, fy)),
-    ...[-0.55, 0, 0.55].map(k => SEAT(x + ax * k * hl + fx * 0.05, y + ay * k * hl + fy * 0.05, fx, fy, 0.42))];
+  const ax=-fy,ay=fx,cloth=solid(col,{bright:2,top:'~'}),at=(u,v)=>[x+ax*u+fx*v,y+ay*u+fy*v];
+  return [ROOM_MODEL(x,y,(vx,vy)=>{
+    drawBox(boxAt(vx,vy,ax,ay,hl,.39,.12,.29),solid(col,{bright:1}));
+    for(const k of [-1,0,1]){const [cx,cy]=[vx+ax*k*(hl-.18)*2/3,vy+ay*k*(hl-.18)*2/3];drawBox(boxAt(cx,cy,ax,ay,(hl-.18)/3-.015,.34,.29,.48),cloth);}
+    drawBox(boxAt(vx-fx*.34,vy-fy*.34,ax,ay,hl,.08,.27,.94),cloth);
+    for(const sign of [-1,1]){const [cx,cy]=[vx+ax*sign*(hl-.09),vy+ay*sign*(hl-.09)];drawBox(boxAt(cx,cy,fx,fy,.38,.09,.27,.73),cloth);drum(cx+fx*.28,cy+fy*.28,.09,.27,.73,cloth);}
+  },[Math.abs(ax)*hl+Math.abs(fx)*.4,Math.abs(ay)*hl+Math.abs(fy)*.4,.94]),
+  ...[-.55,0,.55].map(k=>{const [sx,sy]=at(k*hl,.06);return SEAT(sx,sy,fx,fy,.48);})];
 };
 // a round pouffe, h high, to perch on facing (fx, fy)
 const POUF = (x, y, col, fx, fy, h = 0.4) => ({ ...ROOM_MODEL(x, y, (vx, vy) => drum(vx, vy, 0.24, 0, h, (i, t, L) => {
@@ -342,7 +346,7 @@ function hotelRoomWall(i, u, uStep, z, d, mx, my, L) { // a window onto the city
   if (my !== 0 || Math.abs(u - room.W / 2) > width || z < 0.9 || z > 2.3) return false;
   const du = u - room.W / 2;
   if (Math.abs(du) > width - 0.15 || z < 0.97 || z > 2.23 || Math.abs(du) < 0.04) { set(i, Math.abs(du) > width - 0.15 ? '|' : '=', C(GRAY, L)); BG[i] = C(WARM, 2); return true; } // frame
-  viewOut(i, u, z, room.suite ? 22 : 14, 18); return true; // six floors up, across the avenue
+  if(room.exterior)homeView(i,u,z,'north');else viewOut(i,u,z,room.suite?22:14,18);return true; // six floors up, across the avenue
 }
 function storageWall(i, u, uStep, z, d, mx, my, L) { // roll-up locker doors, a bay every 1.2m, numbered
   if (z > 2.45) { set(i, (Math.floor(u * 4) + Math.floor(z * 4)) % 6 ? ' ' : '.', C(GRAY, L * 0.4)); return true; }
@@ -678,11 +682,15 @@ const ROOM_DEFS = {
 const plantCol = (c, row, L) => C(row === 3 ? BRICK : GREEN, L);
 
 function makeRoom(kind, extra = {}) {
-  const def = kind === 'hotelroom' && extra.suite ? ROOM_DEFS.hotelSuite : ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
+  const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
   if (def.home) r.props.push(...workshopProps(r));
-  if (def.home) r.exterior = homeExterior(r);
+  if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
+    const host=r.lobby||r;r.exterior=homeExterior({...r,cell:host.cell,ret:host.ret});
+    if(kind==='lighthouse'||kind==='lamproom')r.exterior={x0:LIGHTHOUSE.x-LIGHTHOUSE.r,x1:LIGHTHOUSE.x+LIGHTHOUSE.r,y0:LIGHTHOUSE.y-LIGHTHOUSE.r,y1:LIGHTHOUSE.y+LIGHTHOUSE.r,up:kind==='lamproom'?2.8:0,faces:{}};
+    if(kind==='hotelroom'&&!r.suite&&r.lobby?.word==='MOTEL')r.exterior.up=.02;
+  }
   return r;
 }
 
@@ -803,6 +811,7 @@ function hospitalWall(i, u, uStep, z, d, mx, my, L) {
 }
 function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== room.H - 1 && Math.abs(fract(u / 3) - 0.5) < 0.1 && z > 1.3 && z < 1.9) { // a deep-set window: sea below, sky above
+    if(room.exterior){homeView(i,u,z,mx===0?'west':mx===room.W-1?'east':'north');return true;}
     const [su, sz] = glassSlopes(u, z); // the horizon's at your eye, wherever you stand; the sea, 30m down
     if (sz < 0) { const q = (-30 - z) / sz, n = noise((u + su * q) * 0.2 + T * 0.3, q * 0.2, 887); BG[i] = C(BLUE, 2 + day * 3); return set(i, n > 0.6 ? '~' : n > 0.45 ? '-' : ' ', C(CYAN, 6 + day * 6)), true; }
     BG[i] = day > 0.3 ? C(day > 0.6 ? CYAN : BLUE, 2 + day * 6) : dusk > 0.3 ? C(ORANGE, 4) : C(BLUE, 1);
@@ -813,6 +822,7 @@ function lighthouseWall(i, u, uStep, z, d, mx, my, L) {
   return set(i, joint ? (fract(z * 3) < 0.08 ? '_' : '|') : ' ', C(GRAY, L * 0.6)), true;
 }
 function lampRoomWall(i, u, uStep, z, d, mx, my, L) {
+  if(room.exterior&&z>.95&&z<2.45&&fract(u*1.2)>.05){homeView(i,u,z,mx===0?'west':mx===room.W-1?'east':my===0?'north':'south');return true;}
   if (z < 0.9 || z > 2.5) { BG[i] = C(GRAY, 2 + L * 0.15); return set(i, z < 0.9 && fract(z * 4) < 0.15 ? '=' : ' ', C(GRAY, L)), true; } // ironwork below and above the glass
   if (fract(u * 1.2) < 0.05) { BG[i] = C(GRAY, 2); return set(i, '|', C(GRAY, L)), true; } // the mullions
   if (z < 1.45) { BG[i] = C(BLUE, 1 + day * 3); return set(i, hash(Math.floor(u * 6 + T * 0.5), Math.floor(z * 20), 3) > 0.8 ? '~' : ' ', C(CYAN, 5 + day * 6)), true; } // the sea, far below
