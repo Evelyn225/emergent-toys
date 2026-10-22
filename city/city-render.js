@@ -573,16 +573,13 @@ function floorBaseCell(i, r, x, rx, ry) {
       soft = true; base = BRICK; k = 1.3;
       ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';
     } else if (seaAt(wx, wy)) { // open water: drifting waves; reflect() mirrors the skyline into it
-      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91), surf = onIsland(wx, wy, .3); // white water round the island
-      set(i, surf ? '~' : n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', surf ? C(WHITE, L * 1.6) : C(n > 0.62 ? CYAN : BLUE, L * 1.5));
+      const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91);
+      set(i, n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
-      if(worldReady&&wx>=465) {
-        const island=wildIslandAt(wx,wy,.65);
-        if(island) {
-          const edge=-wildIslandEdge(wx,wy,island),wash=.12+.18*Math.sin(T*.9+wx*.35+wy*.2);
-          BG[i]=C(CYAN,1+day*1.8);
-          if(edge<wash&&n>.4)set(i,'~',C(WHITE,L*1.15));
-        }
+      const foam=seaShoreFoam(wx,wy);
+      if(foam>.12&&hash(Math.floor(wx*21),Math.floor(wy*21),1875)<foam) {
+        set(i,foam>.45?'~':'.',C(WHITE,L*1.4));
+        FL[i]=0; // breaking foam stays visible over the skyline reflection
       }
       if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her
         const froth = noise(wx * 7, wy * 7 + T * 0.8, 95), k = WAKE_HIT.k * (WAKE_HIT.arm ? 0.6 + 0.4 * froth : froth); // (churn: broken white water)

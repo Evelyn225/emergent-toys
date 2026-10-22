@@ -191,9 +191,52 @@ function islandSurface(x,y) {
     return {base:WARM,background:BRICK,ch:grain>.85?':':' ',color:'#8c805c',tone:.95};
   return islandShoreSurface(x,y,edge,true,island.id==='sand',grain,patch);
 }
+// Foam rolls shoreward, then thins as the wash retreats. The existing wet sand
+// is the run-up limit; geometry, swimming and collision keep their usual coast.
+const shoreWetSandLimit = patch => .4 + patch * .2;
+const shoreWavePhase = (x,y) => fract(T/7+.12*Math.sin(x*.13+y*.17));
+function shoreWaveFront(phase,wetLimit) {
+  const run=phase<.72?phase/.72:1-(phase-.72)/.28*.65;
+  return -1.4+(1.4+wetLimit-.08)*run;
+}
+function shoreWaveFoam(x,y,edge,wetLimit=0,phase=shoreWavePhase(x,y)) {
+  if(edge<=-1.4||edge>=wetLimit)return 0;
+  const crest=shoreWaveFront(phase,wetLimit),width=.065+.055*(crest+1.4)/(1.4+wetLimit-.08);
+  const offset=edge-crest,fade=Math.min(1,phase*10,(1-phase)*6);
+  const foam=Math.max(0,1-Math.abs(offset)/width);
+  const trail=.28*Math.max(0,1-Math.abs(offset+.14)/.18);
+  return Math.max(foam,trail)*fade;
+}
+function seaShoreFoam(x,y) {
+  // Mainland and wild-island edges already use cached distance fields. Bound
+  // the small analytic shores so open ocean does no extra trigonometry there.
+  let edge=-1000,beach=false;
+  if(!worldReady||x<CITY_COAST_SIZE) {
+    const coast=coastalGround(x,y);edge=coast.depth;beach=coast.beach;
+  }
+  if(onIsland(x,y,1.4)) {
+    const e=isleEdge(x,y);if(e>edge){edge=e;beach=false;}
+  }
+  if(x>AIRPORT.x0-2&&x<AIRPORT.x1+2&&y>AIRPORT.y0-2&&y<AIRPORT.y1+2) {
+    const e=airportEdge(x,y);if(e>edge){edge=e;beach=false;}
+  }
+  if(worldReady&&x>=465)for(const island of WILD_ISLANDS) {
+    const e=wildIslandEdge(x,y,island);
+    if(e>edge){edge=e;beach=island.id!=='rock';}
+  }
+  if(edge<=-1.4)return 0;
+  return shoreWaveFoam(x,y,edge,beach?shoreWetSandLimit(noise(x*.3,y*.3,1876)):0);
+}
 function islandShoreSurface(x,y,edge,beach,allSand=false,grain=hash(Math.floor(x*21),Math.floor(y*21),1875),patch=noise(x*.3,y*.3,1876)) {
   if(!beach&&edge<1.2+patch*.6)return {base:GRAY,background:GRAY,ch:grain>.93?':':' ',color:'#727777',tone:.9};
-  if(edge<.4+patch*.2)return {base:WARM,background:BRICK,ch:grain>.92?':':' ',color:'#827858',tone:.8};
+  if(edge<shoreWetSandLimit(patch)) {
+    const phase=shoreWavePhase(x,y),limit=shoreWetSandLimit(patch);
+    const foam=shoreWaveFoam(x,y,edge,limit,phase),washed=edge<shoreWaveFront(phase,limit);
+    const background=washed?BLUE:BRICK,color=washed?'#284e68':'#827858';
+    if(foam>.12&&grain<foam)return {base:WHITE,background,ch:foam>.45?'~':'.',color,tone:1.25};
+    if(washed)return {base:CYAN,background,ch:grain>.9?'-':' ',color,tone:.9};
+    return {base:WARM,background:BRICK,ch:grain>.92?':':' ',color:'#827858',tone:.8};
+  }
   if(beach&&(edge<2.3+patch*1.2||allSand)) {
     const grass=edge>1.6&&grain>.91&&patch>.55;
     let ch=grain>.93?'.':' ';

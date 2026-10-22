@@ -1,0 +1,51 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { loadCity } = require('./helpers/load-city.cjs');
+const { ev } = loadCity();
+
+test('shore breakers advance, retreat and stay below the wet-sand limit', () => {
+  const result=ev(`(() => {
+    const x=719,y=115,limit=.5,offset=.12*Math.sin(x*.13+y*.17);
+    const peak=phase=>{
+      T=(phase-offset)*7;
+      let strength=0,edge=-2;
+      for(let e=-1.5;e<.7;e+=.002) {
+        const foam=shoreWaveFoam(x,y,e,limit);
+        if(foam>strength){strength=foam;edge=e;}
+      }
+      return {edge,strength};
+    };
+    const early=peak(.2),landing=peak(.7),retreat=peak(.9);
+    let escaped=0,deep=0;
+    for(let n=0;n<140;n++) {
+      T=n*.1;
+      for(let e=limit;e<limit+2;e+=.05)escaped+=shoreWaveFoam(x,y,e,limit);
+      deep+=shoreWaveFoam(x,y,-2,limit);
+    }
+    T=0;const start=shoreWaveFoam(x,y,-.6,limit);
+    T=7;const repeat=shoreWaveFoam(x,y,-.6,limit);
+    return {early,landing,retreat,escaped,deep,repeat:Math.abs(start-repeat)};
+  })()`);
+  assert.ok(result.landing.edge > result.early.edge + .8,JSON.stringify(result));
+  assert.ok(result.landing.edge > result.retreat.edge + .5,JSON.stringify(result));
+  assert.ok(result.landing.strength > .9,JSON.stringify(result));
+  assert.equal(result.escaped,0);
+  assert.equal(result.deep,0);
+  assert.ok(result.repeat<1e-10);
+});
+
+test('beach wash animates only the existing wet sand', () => {
+  const result=ev(`(() => {
+    const limit=shoreWetSandLimit(.5),wet=new Set(),dry=new Set();
+    for(let n=0;n<140;n++) {
+      T=n*.1;
+      wet.add(islandShoreSurface(719,115,.2,true,false,.01,.5).base);
+      dry.add(JSON.stringify(islandShoreSurface(719,115,limit+.001,true,false,.01,.5)));
+    }
+    return {wash:wet.has(WHITE),sand:wet.has(WARM),dry:dry.size};
+  })()`);
+  assert.equal(result.wash,true);
+  assert.equal(result.sand,true);
+  assert.equal(result.dry,1);
+});
