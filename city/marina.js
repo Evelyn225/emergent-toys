@@ -235,8 +235,8 @@ SOLID_SHADE.bollard = () => (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return 
 // where the camera goes out on the water: behind and above the boat (easing round), or at the helm
 function seaCam(dt, chase) {
   const b = sea, k = BOAT_KINDS[b.kind];
-  if (!chase) { const back = k.hl * (b.kind === 'sailboat' ? 0.8 : 0.45); camYaw = a; return [worldCoord(b.x - b.hx * back), worldCoord(b.y - b.hy * back), a]; }
-  camYaw += (mod(a - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 4);
+  if (!chase) { const back = k.hl * (b.kind === 'sailboat' ? 0.8 : 0.45); camYaw = a+look; return [worldCoord(b.x - b.hx * back), worldCoord(b.y - b.hy * back), a+look]; }
+  camYaw += (mod(a+look - camYaw + Math.PI, 2 * Math.PI) - Math.PI) * Math.min(1, dt * 4);
   const bx = Math.cos(camYaw), by = Math.sin(camYaw);
   let back = 0.7 + k.hl * 1.6;
   while (back > 0.3 && map[idx(Math.floor(b.x - bx * back), Math.floor(b.y - by * back))]) back -= 0.05;

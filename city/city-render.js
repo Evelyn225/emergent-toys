@@ -539,7 +539,7 @@ function floorBaseCell(i, r, x, rx, ry) {
   ZB[i] = d; FL[i] = 1;
   const wx = px + rx * d, wy = py + ry * d, lx = mod(wx, 8), ly = mod(wy, 8), mx = Math.floor(wx), my = Math.floor(wy);
   const bx = Math.floor(wx / 8), by = Math.floor(wy / 8), shade = underEl(wy,wx);
-  const road = worldReady&&roadBridgeAt(wx,wy)&&seaAt(wx,wy)&&eye<roadGroundHeight(wx,wy)-.12 ? 0 : ROAD[idx(mx,my)];
+  const road = worldReady&&roadBridgeAt(wx,wy)&&seaAt(wx,wy) ? 0 : ROAD[idx(mx,my)];
   // under the el the street is in the deck's shadow, striped with light between the ties
   const L = f * 6 * (0.6 + amb) * (1 - wet * 0.25) * (shade ? (fract(wx * 2) < 0.35 ? 0.35 : 0.6) : 1);
   let ch = (r + x) & 1 ? '.' : ' ', base = GRAY, k = 1, soft = false, islandTexture=null;

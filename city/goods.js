@@ -39,6 +39,7 @@ const ITEMS = {
   book: { name: 'paperback', price: 12, kind: 'gear' }, newspaper: { name: 'newspaper', price: 1, kind: 'gear' },
   vinyl: { name: 'vinyl record', price: 18, kind: 'gear' }, flowers: { name: 'flowers', price: 14, kind: 'gear' },
   movinglamp: { name: 'moving-day table lamp', price: 0, kind: 'gear' },
+  telescope: {name:'brass telescope',price:85,kind:'gear'},
   // property (property.js): not carried, owned
   car_hatch: { name: 'old hatchback', price: 450, kind: 'car' }, car_sedan: { name: 'sedan', price: 1500, kind: 'car' },
   car_sports: { name: 'sports car', price: 4000, kind: 'car' },
@@ -108,7 +109,7 @@ const STOCK_WORD = {
   LIQUOR: ['beer', 'whiskey', 'cigarettes', 'chips'], PHARMACY: ['water', 'energy', 'umbrella'],
   GROCERY: ['apple', 'chips', 'water', 'soda', 'eggs', 'bread', 'butter', 'cheese', 'rice', 'pasta', 'drynoodles', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon', 'rawchicken', 'mince', 'bacon', 'tofu'], // (and the makings of dinner: cooking.js)
   MARKET: ['apple', 'chips', 'water', 'potatoes', 'onion', 'tomatoes', 'garlic', 'mushrooms', 'greens', 'peppers', 'chilli', 'lemon'], FRUIT: ['apple', 'lemon', 'tomatoes'],
-  PAWN: ['skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda', 'spraypaint'],
+  PAWN: ['telescope', 'skateboard', 'boombox', 'umbrella', 'vinyl'], SPORTS: ['ball', 'skateboard', 'water', 'energy'], SKATE: ['skateboard', 'soda', 'spraypaint'],
   HARDWARE: ['umbrella', 'spraypaint'], RECORDS: ['vinyl', 'boombox'], BOOKS: ['book', 'newspaper', 'coffee'], FLORIST: ['flowers'],
   CAFE: ['coffee', 'latte', 'croissant', 'donut'], COFFEE: ['coffee', 'latte', 'croissant'], DONUTS: ['donut', 'coffee'], BAKERY: ['bagel', 'croissant', 'donut'],
   PIZZA: ['slice', 'soda'], TACOS: ['taco', 'soda'], KEBAB: ['kebab', 'soda'], DINER: ['burger', 'coffee', 'soda'],
@@ -410,6 +411,7 @@ function useHeld(near) {
       for (const p of people) if (!p.hidden && Math.hypot(rel(p.x - px), rel(p.y - py)) < 0.8) p.talk = 3;
       return [pick(['BANG BANG BANG! Everyone nearby jumps out of their skin.', 'A string of firecrackers goes off at your feet. Somewhere a car alarm joins in.']) + (it.uses > 0 ? ` (${it.uses} left)` : ''), 'kick'];
     }
+    case 'telescope': fx.telescope=!fx.telescope;return [fx.telescope?'You raise the telescope. Q lowers it.':'You lower the telescope.',null];
     case 'goldfish': return [pick(['You hold the bag up to the light. The goldfish looks at you, then at the city, unimpressed.', 'The goldfish does a lap of its bag. Then another.', 'You name the goldfish. It doesn\'t react, but you know.']), null];
     case 'mysterybox': { // open it: something from the pile, nobody said what
       removeHeld();

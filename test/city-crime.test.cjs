@@ -170,7 +170,7 @@ test('wanted goes up to five stars, with more units at each; ramming a cruiser o
   assert.deepStrictEqual([ev('ESCAPE_T[5]'), ev('fineFor(5)')], [100, 1000]);
 });
 
-test('roadblocks: at four stars, three cruisers across the street ahead of you, with officers who stay put while you drive; packed up once the heat is off', () => {
+test('roadblocks: at four stars, three cruisers across the street ahead of you, whose officers intercept nearby drivers; packed up once the heat is off', () => {
   const { ev, step } = driving();
   ev("addWanted('bankjob', px, py, true)");
   step(0.5);
@@ -185,8 +185,11 @@ test('roadblocks: at four stars, three cruisers across the street ahead of you, 
   const gaps = b.cars.map(c => c[0]).sort((p, q) => p - q);
   assert.ok(gaps[1] - gaps[0] - 2 * 0.24 > 0.22, 'a gap a car can just get through');
   assert.strictEqual(b.cops, 2);
-  step(3);
-  assert.ok(ev('roadblocks[0].cops.every(c => !c.chase)'), 'the officers hold the line while you are at the wheel');
+  ev('me.x=roadblocks[0].x-1; me.y=roadblocks[0].y; px=me.x;py=me.y;');
+  const before=JSON.parse(ev('JSON.stringify(roadblocks[0].cops.map(c=>[c.x,c.y]))'));
+  step(.5);
+  assert.ok(ev('roadblocks[0].cops.every(c=>c.chase)'), 'officers react to the driver');
+  assert.ok(JSON.parse(ev('JSON.stringify(roadblocks[0].cops.map(c=>[c.x,c.y]))')).some((p,i)=>Math.hypot(p[0]-before[i][0],p[1]-before[i][1])>.01),'officers leave the barricade to intercept');
   assert.strictEqual(ev('roadblocks.length'), 1, 'one at a time');
   ev('clearWanted(); px = mod(px - 40, N); me.x = px');
   step(0.1);

@@ -68,7 +68,9 @@ function elFrame() {
     });
     rod(vx+side*.45*EL_HL,vy,floor,vx+side*.45*EL_HL,vy,ceiling-.015,.0035,GRAY,1.8);
   }
+  drawElRiders({tr:ride.tr,k:ride.k,...train},true);
 }
+
 const nearestCar = r => {
   let best = null, bd = r;
   for (const c of cars) { if (c.player || c.rider || c.ev) continue; const d = Math.hypot(rel(c.x - px), rel(c.y - py)); if (d < bd) { bd = d; best = c; } } // (not the ambulance)
@@ -130,6 +132,7 @@ function promptText() {
   if (cp) return cp;
   { const sp = sprayPrompt(); if (sp) return sp; } // (at the wheel, at a garage's door)
   if (mode === 'room') {
+    const hotelPrompt=hotelAmenityPrompt();if(hotelPrompt)return hotelPrompt;
     if (room.kind === 'jail' && nearCabbie()) return 'E: talk to your cab driver   (he does not want to talk to you)';
     if (room.kind === 'jail') return T < room.until ? `In the cell: ${Math.ceil(room.until - T)}s to go${room.tried ? '' : '   E: try to break out (one chance)'}` : 'E: the guard lets you out';
     if (room.kind === 'train') return room.dest == null
@@ -185,7 +188,7 @@ function promptText() {
     const base = mode === 'boat' ? gardensPrompt() : marinaPrompt();
     return heldRod() && boatSpeed() < 0.12 ? `${base}   Q: ${third ? 'fish over the side' : 'hold to cast'}` : base;
   }
-  if (mode === 'el') { const t = elRiding(); return t.stopped ? `E: get off at ${EL_STATIONS[t.station].name}` : `Next stop: ${EL_STATIONS[t.next].name}`; }
+  if (mode === 'el') { const t = elRiding(); return t.stopped ? `WASD: walk | C: sit / stand | E: get off at ${EL_STATIONS[t.station].name}` : `WASD: walk | C: sit / stand | Next stop: ${EL_STATIONS[t.next].name}`; }
   if (mode === 'elplat') {
     if (elHere()) return 'E: board the train';
     const next = elTrains(T).filter(t => t.tr === plat.tr && EL_STATIONS[t.next] === plat.s && !t.stopped).map(t => t.left);
@@ -336,7 +339,7 @@ function needMeters() {
 }
 let hudBottom = 0; // where the text block top left ends (px), for the map and the stars to sit under on a narrow screen
 function hud() {
-  drawHeldBig();
+  if(!telescopeActive())drawHeldBig();
   drawGunHud(); // (the crosshair, the flash, being hit: gun-ui.js)
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);

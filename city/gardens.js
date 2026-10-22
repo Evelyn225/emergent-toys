@@ -385,7 +385,7 @@ function stepBoat(dt) { // pedal and steer; the shore and the jetty stop you
 }
 // behind your swan, a little above, swinging round after it (V); pulled in if the shore's in the way
 function swanCam(dt) {
-  camYaw += (mod(a - camYaw + Math.PI, TAU) - Math.PI) * Math.min(1, dt * 3);
+  camYaw += (mod(a + look - camYaw + Math.PI, TAU) - Math.PI) * Math.min(1, dt * 3);
   const hx = Math.cos(camYaw), hy = Math.sin(camYaw);
   let back = 0.38;
   while (back > 0.15 && map[idx(Math.floor(px - hx * back), Math.floor(py - hy * back))]) back -= 0.03;

@@ -82,7 +82,7 @@ function stepFreecam(dt) {
   const vy = cy * forward * horizontal + cx * side;
   const vz = slope * horizontal * forward + up;
   const length = Math.max(1, Math.hypot(vx, vy, vz));
-  const speed = (K.ShiftLeft || K.ShiftRight ? 30 : 6) * (mode === 'room' ? 1 : 0.1) * dt / length;
+  const speed = (K.ShiftLeft || K.ShiftRight ? 120 : 24) * (mode === 'room' ? 1 : 0.1) * dt / length;
   cam.x += vx * speed; cam.y += vy * speed; cam.z += vz * speed;
   if (mode !== 'room') { cam.x = worldCoord(cam.x); cam.y = worldCoord(cam.y); }
 }

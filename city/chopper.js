@@ -15,14 +15,15 @@ function drawChopper() {
   }, rayCopperDrum);
   // the beam: specks of light down the line from the helicopter's belly to the pool, in front of whatever's behind
   const bx = vx + hx * 0.17 * CHOPPER_SIZE, by = vy + hy * 0.17 * CHOPPER_SIZE, bz = z - 0.07 * CHOPPER_SIZE; // (from the lamp under its nose)
-  for (let k = 1; k < 48; k++) {
-    const f = k / 48, x = bx + (lx - bx) * f, y = by + (ly - by) * f, wz = bz + (ground - bz) * f, depth = dx * x + dy * y;
-    if (depth < 0.2 || depth > vis) continue;
-    const c = Math.floor(cols / 2 + (-dy * x + dx * y) * projX / depth), r = Math.floor(hor - (wz - eye) * projY / depth);
-    if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
-    const i = r * cols + c;
-    if (depth >= ZB[i] || hash(c, r, Math.floor(T * 12)) > 0.75) continue;
-    set(i, ':', C(WHITE, 5 + strength * 9)); FOGS[i] = 0;
+  // A widening volume: rings grow from the lamp to the existing circular ground pool.
+  for(let k=1;k<24;k++)for(let j=0;j<12;j++){
+    const f=k/24,theta=j/12*TAU,radius=SPOT_R*f;
+    const x=bx+(lx-bx)*f+Math.cos(theta)*radius,y=by+(ly-by)*f+Math.sin(theta)*radius,wz=bz+(ground-bz)*f;
+    const depth=dx*x+dy*y;if(depth<.2||depth>vis)continue;
+    const c=Math.floor(cols/2+(-dy*x+dx*y)*projX/depth),r=Math.floor(hor-(wz-eye)*projY/depth);
+    if(c<0||r<0||c>=cols||r>=rows)continue;
+    const i=r*cols+c;if(depth>=ZB[i]||hash(j,k,Math.floor(T*8))>.68)continue;
+    set(i,':',C(WHITE,3+strength*8));FOGS[i]=0;
   }
   // the machine itself: a big one, white with a dark belly and the yellow and blue squares down its side, lit up
   drawHeliModel([vx, vy, z], craftFrame(heli.h, -0.12, 0), CHOPPER_SIZE, { body: WHITE, belly: GRAY, checker: true, stripe: BLUE, bright: 1.5, rotor: 0.5, ang: T * 27, police: true, id: 7 });

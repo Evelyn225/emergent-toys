@@ -128,9 +128,12 @@
     "city/islands-content.js",
     "city/islands-render.js",
     "city/island-sights.js",
+    "city/hotel-polish.js",
+    "city/coast-life.js",
     "city/world-bootstrap.js",
     "city/street-scenes-render.js",
     "city/save.js",
+    "city/el-life.js",
     "city/main.js",
     "city/touch.js"
   ]

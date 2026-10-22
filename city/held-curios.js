@@ -214,3 +214,19 @@ DENSE.movinglamp = () => sculpt(30, 27, (x,y) => {
   if(dEll(x,y,0,9,4.4,1.7)<1)return dLit(.65-x*.04,GRAY,9);
   return null;
 });
+
+// The telescope magnifies the existing scene, without another world render.
+const telescopeActive=()=>!!fx.telescope&&heldItem()?.id==='telescope'&&onFootMode()&&!freecam;
+DENSE.telescope=()=>sculpt(36,18,(x,y)=>{
+ if(x< -14||x>14||Math.abs(y)>(x>7?5.5:x> -5?4:3))return null;
+ if(x>11)return [Math.abs(y)>4.3?'o':' ',C(Math.abs(y)>4.3?GRAY:CYAN,Math.abs(y)>4.3?10:3)];
+ return [Math.abs(x+5)<.5||Math.abs(x-7)<.5?'|':'=',C(YEL,8+Math.max(0,5-Math.abs(y)))];
+});
+DROPPED_ART.telescope=()=>[[' ___============(O)'],ch=>C(ch==='O'?CYAN:YEL,12)];
+function drawTelescope(){
+ if(!telescopeActive())return;
+ const x=cv.width/2,y=cv.height/2,r=Math.min(x,y)*.84;
+ g.save();g.fillStyle='#050506';g.beginPath();g.rect(0,0,cv.width,cv.height);g.arc(x,y,r,0,TAU,true);g.fill('evenodd');
+ g.strokeStyle='rgba(220,210,170,.45)';g.lineWidth=2;g.beginPath();g.arc(x,y,r,0,TAU);g.stroke();
+ g.font='12px monospace';g.fillStyle='#ddd';g.fillText('6×   Q: lower telescope',x-80,y+r+22);g.restore();
+}

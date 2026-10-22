@@ -12,6 +12,7 @@ function drawRoadBridges() {
         if(HIT.face===5) {
           const edge=Math.abs(HIT.u),along=HIT.v+(y0+y1)/2;
           BG[i]=C(GRAY,1+L*.14);
+          if(snowCover>.02){paintSettledSnow(i,b.x+HIT.u,along,L,1,edge<.73?.6:.08,HIT.w);if((BG[i]>>4)===WHITE)return true;}
           if(edge>.73)return set(i,',',C(WHITE,L*.65)),true;
           if(edge<.035&&fract(along*.5)<.55)return set(i,'=',C(YEL,L)),true;
           return set(i,hash(Math.floor(HIT.u*15),Math.floor(along*15),61)>.9?'.':' ',C(GRAY,L*.55)),true;
@@ -23,6 +24,9 @@ function drawRoadBridges() {
     for(let y=b.y0;y<=b.y1;y+=2)for(const side of [-1,1]) {
       const h=roadBridgeHeight(b,y);
       drawBox(boxAt(vx+side*.97,rel(y-py),1,0,.009,.009,h,h+.115),STEEL.cap);
+    }
+    for(const y of [b.y0+b.ramp+2,b.y1-b.ramp-2]) {
+      drawBox(boxAt(vx,rel(y-py),1,0,1.42,.34,b.h-b.thickness-.12,b.h-b.thickness+.015),STEEL.cap);
     }
     for(const y of [b.y0+b.ramp+2,b.y1-b.ramp-2])for(const side of [-1,1]) {
       drawBox(boxAt(vx+side*1.25,rel(y-py),1,0,.14,.32,0,b.h-b.thickness),STEEL.cap);

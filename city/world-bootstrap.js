@@ -285,6 +285,18 @@ function assembleArchipelago() {
   }
   // Outdated seam structure is replaced with the raised crossings below.
   bridgeBits.length = towers.length = boats.length = 0;
+  // Keep working cranes on the industrial quay, rather than across public piers.
+  for(const crane of cranes)if(onPier(crane.x,crane.y)){
+    const candidates=[];
+    for(let y=crane.y-32;y<crane.y+32;y++)for(let x=crane.x-32;x<crane.x+32;x++){
+      if(![[0,0],[.6,.6],[.6,-.6],[-.6,.6],[-.6,-.6]].every(([ox,oy])=>!seaAt(x+ox,y+oy)&&!ROAD[idx(x+ox,y+oy)]&&!map[idx(x+ox,y+oy)]&&!onPier(x+ox,y+oy)))continue;
+      if(cranes.some(o=>o!==crane&&near(o.x,o.y,x,y)<2)||doors.some(o=>near(o.x,o.y,x,y)<2))continue;
+      const kind=blockKind(Math.floor(x/8),Math.floor(y/8));
+      candidates.push({x,y,score:near(x,y,crane.x,crane.y)+(['yard','construction'].includes(kind)?0:100)});
+    }
+    candidates.sort((a,b)=>a.score-b.score);
+    if(candidates.length){crane.x=candidates[0].x;crane.y=candidates[0].y;}
+  }
   for (let y = 80; y < 380; y += 2) for (let x = 56; x < 480; x += 2) {
     if (!naturalCoastAt(x, y) || coastalGround(x, y).depth <= 2 || onPier(x, y) || ROAD[idx(x, y)] || hash(x, y, 736) >= .09) continue;
     trees.push({ x, y, kind: hash(x, y, 737) > .4 ? 'pine' : 'birch', s: .8 + hash(x, y, 738) * .5, seed: hash(x, y, 739) });

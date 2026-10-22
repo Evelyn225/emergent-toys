@@ -77,12 +77,30 @@ function patrolStep(c, dt) { // walk to the next corner; there, carry on or turn
   if (d <= s) { c.x = worldCoord(gx); c.y = worldCoord(gy); c.corner = c.goal; c.goal = null; }
   else { c.x = worldCoord(c.x + dx / d * s); c.y = worldCoord(c.y + dy / d * s); c.ph += dt * 4; }
 }
-function chaseStep(c, tx, ty, dt) { // run straight for (tx, ty), sliding along walls (just out of the car: a sprint)
+function copFootClear(c,x,y) {
+  return !map[idx(Math.floor(x),Math.floor(y))]&&!isWater(x,y)&&!cars.some(o=>Math.abs(rel((o.ex??o.x)-x))<.6&&Math.abs(rel((o.ey??o.y)-y))<.6&&carPersonOverlap(o,{x,y})>0);
+}
+function cruiserOfficerExit(c){
+  for(const side of [1,-1])for(const along of [0,-.18,.18]){
+    const x=worldCoord(c.x-c.hy*side*.23+c.hx*along),y=worldCoord(c.y+c.hx*side*.23+c.hy*along);
+    if(copFootClear(c,x,y))return [x,y];
+  }
+  return null;
+}
+function chaseStep(c, tx, ty, dt) { // Approach the suspect while avoiding walls and vehicle hulls.
   if (c.down) return;
-  const dx = rel(tx - c.x), dy = rel(ty - c.y), d = Math.hypot(dx, dy) || 1, s = Math.min(d, (c.burst > T ? COP_FOOT_SPEED * 1.1 : COP_FOOT_SPEED) * dt);
-  const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
-  if (!map[idx(Math.floor(nx), Math.floor(c.y))]) c.x = worldCoord(nx);
-  if (!map[idx(Math.floor(c.x), Math.floor(ny))]) c.y = worldCoord(ny);
+  // Reach a window rather than trying to occupy the driver's car.
+  if(mode==='drive'&&me&&near(c.x,c.y,me.x,me.y)<1.5){
+    const side=Math.sign(-rel(c.x-me.x)*me.hy+rel(c.y-me.y)*me.hx)||1;
+    tx=me.x-me.hy*side*.2;ty=me.y+me.hx*side*.2;
+  }
+  const dx=rel(tx-c.x),dy=rel(ty-c.y),d=Math.hypot(dx,dy),step=Math.min(d,(c.burst>T?COP_FOOT_SPEED*1.1:COP_FOOT_SPEED)*dt);
+  if(d<.015)return;
+  const heading=Math.atan2(dy,dx),angles=[0,...[.65,1.25,1.8].flatMap(v=>[v*(c.detourSide||1),-v*(c.detourSide||1)])];
+  for(const offset of angles){
+    const nx=c.x+Math.cos(heading+offset)*step,ny=c.y+Math.sin(heading+offset)*step;
+    if(copFootClear(c,nx,ny)){c.x=worldCoord(nx);c.y=worldCoord(ny);if(offset)c.detourSide=Math.sign(offset);break;}
+  }
   c.ph += dt * 7;
 }
 const roomOpen = (x, y) => x >= 0 && y >= 0 && x < room.W && y < room.H && ROOMW.cell(Math.floor(x), Math.floor(y)) === 0 && !(room.def.block && room.def.block(x, y)) &&
@@ -360,7 +378,7 @@ function callUnits() {
       if (!p) continue; // (no streets for miles: out over the bay)
       c = addCar({ ...p, kind: 'police', body: BLUE, patrol: true, extra: true });
     }
-    Object.assign(c, { pursuit: true, returning: false, state: 'out', home: false, born: T, waitingCrew: false, merging: null, route: null, routeT: 0, pursuitDrive: false, cruise: COP_CAR_SPEED, dest: [wanted.lastX, wanted.lastY] });
+    Object.assign(c, { pursuit: true, returning: false, state: 'out', home: false, born: T, waitingCrew: false, merging: null, route: null, routeT: 0, pursuitDrive: false, backout:0, stuckT:0, detourGoal:null, contactRecoveryT:0, cruise: COP_CAR_SPEED, dest: [wanted.lastX, wanted.lastY] });
   }
 }
 function clearWanted() {
@@ -381,7 +399,7 @@ function clearWanted() {
   searchedRoom = null; roomLead = null; roofLead = null;
   for (const c of units) {
     c.pursuit = false; c.returning = true; c.waitingCrew = true; c.v = 0; c.cruise = 1.3; c.state = 'back'; c.arrived = false;
-    c.merging = null; c.route = null; c.routeT = 0; c.travelA = null; c.pursuitDrive = false;
+    c.merging = null; c.route = null; c.routeT = 0; c.travelA = null; c.pursuitDrive = false;c.backout=c.stuckT=c.contactRecoveryT=0;c.detourGoal=null;
     c.base ||= SERVICES.filter(b => b.kind === 'police').reduce((best, b) => !best || near(b.x, b.y, c.x, c.y) < near(best.x, best.y, c.x, c.y) ? b : best, null);
     c.dest = c.base ? [c.base.x, c.base.lane] : null; c.dropped = false; c.drops = 0;
     if (c.base) c.base.out = true;
@@ -518,9 +536,17 @@ function stepRoadblocks() {
 // streets round there. Caught in the light, you're seen: from up there the buildings don't hide you, only a roof over
 // your head does (indoors, under the el's deck, under the Shotengai's glass). The light swings slower than the
 // helicopter flies, so a fast car can get out from under it. Once the heat's off it flies away.
-const HELI_STARS = 5, HELI_Z = 4, HELI_ORBIT = 3, HELI_SPEED = 2.6, SPOT_SPEED = 1.9, SPOT_R = 0.7, SPOT_REACH = 4, HELI_GONE = 45;
+const HELI_STARS = 5, HELI_Z = 4, HELI_ORBIT = 3, HELI_SPEED = 4.8, SPOT_SPEED = 5.5, SPOT_R = 0.7, SPOT_REACH = 4, HELI_GONE = 45;
 let heli = null; // { x, y, z, h (heading), sx, sy (where the light's on the ground), leaving }
 const underCover = (x, y) => mode === 'room' || (mode === 'walk' || mode === 'drive' || mode === 'taxi') && (arcadeAt(x, y) || underEl(y,x));
+function heliLineOfSight(x,y){
+  const dx=rel(x-heli.x),dy=rel(y-heli.y),steps=Math.ceil(Math.hypot(dx,dy)*3),targetZ=roadGroundHeight(x,y)+.15;
+  for(let k=1;k<steps;k++){
+    const f=k/steps,wx=heli.x+dx*f,wy=heli.y+dy*f,z=heli.z+(targetZ-heli.z)*f;
+    if(map[idx(Math.floor(wx),Math.floor(wy))]>z)return false;
+  }
+  return true;
+}
 function stepHeli(dt) {
   const hot = wanted.stars >= HELI_STARS, [wx, wy] = crimePos();
   if (!heli) {
@@ -530,12 +556,14 @@ function stepHeli(dt) {
     heli.sx = heli.x; heli.sy = heli.y;
   }
   if (!hot) heli.leaving = true;
+  const visual=!underCover(wx,wy)&&near(heli.x,heli.y,wx,wy)<18&&heliLineOfSight(wx,wy);
+  const tracking=visual||wanted.seen&&T-(wanted.observedT??-Infinity)<2;
   const lit = !heli.leaving && near(heli.sx, heli.sy, wx, wy) < SPOT_R && !underCover(wx, wy);
   // the helicopter: circling you while it has you (off to one side, its beam leaning in, where you can see it), circling
   // the search otherwise; away over the rooftops once it's called off. High enough to clear the towers it passes over.
   heli.orbit = (heli.orbit ?? heli.h + Math.PI) + dt * 0.22;
   const ox = Math.cos(heli.orbit) * HELI_ORBIT, oy = Math.sin(heli.orbit) * HELI_ORBIT;
-  let tx = heli.leaving ? heli.x + Math.cos(heli.h) * 50 : (lit ? wx : wanted.searchX) + ox, ty = heli.leaving ? heli.y + Math.sin(heli.h) * 50 : (lit ? wy : wanted.searchY) + oy;
+  let tx = heli.leaving ? heli.x + Math.cos(heli.h) * 50 : (tracking ? wx : wanted.searchX) + ox, ty = heli.leaving ? heli.y + Math.sin(heli.h) * 50 : (tracking ? wy : wanted.searchY) + oy;
   const clear = Math.max(HELI_Z, (map[idx(Math.floor(heli.x), Math.floor(heli.y))] || 0) + 1.5, builtHeight(heli.x, heli.y) + 1.5);
   heli.z += clamp(clear - heli.z, -0.8 * dt, 1.5 * dt);
   const vx = rel(tx - heli.x), vy = rel(ty - heli.y), d = Math.hypot(vx, vy);
@@ -547,13 +575,13 @@ function stepHeli(dt) {
   }
   // the light: on you, or sweeping round the search
   heli.sweep += dt * 0.9;
-  const lx = lit ? wx : wanted.searchX + Math.cos(heli.sweep) * 1.6, ly = lit ? wy : wanted.searchY + Math.sin(heli.sweep * 1.3) * 1.6;
+  const lx = tracking ? wx : wanted.searchX + Math.cos(heli.sweep) * 1.6, ly = tracking ? wy : wanted.searchY + Math.sin(heli.sweep * 1.3) * 1.6;
   let sx = rel(lx - heli.sx), sy = rel(ly - heli.sy), sd = Math.hypot(sx, sy);
   if (sd > 0.001) { const step = Math.min(sd, SPOT_SPEED * dt); heli.sx = worldCoord(heli.sx + sx / sd * step); heli.sy = worldCoord(heli.sy + sy / sd * step); }
   sx = rel(heli.sx - heli.x); sy = rel(heli.sy - heli.y); sd = Math.hypot(sx, sy);
   if (sd > SPOT_REACH) { heli.sx = worldCoord(heli.x + sx / sd * SPOT_REACH); heli.sy = worldCoord(heli.y + sy / sd * SPOT_REACH); } // (as far as the beam can lean)
   if (heli.leaving && near(heli.x, heli.y, wx, wy) > HELI_GONE) heli = null;
-  return lit;
+  return !!heli&&!heli.leaving&&(visual||lit);
 }
 
 // ---- the spray shop: any AUTO REPAIR will respray a car you pull up at its door in and knock the dents out (put a
@@ -608,13 +636,14 @@ function stepCrime(dt) {
   for (const c of cars) if (c.pursuit) c.dest = [wanted.searchX, wanted.searchY];
   const onFoot = mode === 'walk';
   for (const c of footCops) { // officers within a few blocks join the chase on foot
-    if (!c.chase && near(c.x, c.y, wanted.lastX, wanted.lastY) < (c.post ? 3 : 20) && (!c.post || mode !== 'drive')) { c.chase = true; c.returnCar = null; } // (at a roadblock: only for you on foot, close by)
+    if (!c.chase && near(c.x,c.y,wanted.lastX,wanted.lastY)<(c.post?12:25)) { c.chase = true; c.returnCar = null; } // Roadblock officers leave their posts to intercept nearby drivers too.
     if (c.chase) chaseStep(c, wanted.searchX, wanted.searchY, dt);
   }
   // pulls up, an officer jumps out and sprints for you; outrun him and the car comes round again for another go
-  if (onFoot || inside) for (const c of cars) if (c.pursuit && (!c.dropped || T - c.dropT > 8 && (c.drops || 0) < 3) && near(c.x, c.y, wx, wy) < 1.4) {
+  if (onFoot || inside || mode==='drive'&&me&&Math.abs(me.v)<.55) for (const c of cars) if (c.pursuit && (!c.dropped || T - c.dropT > 8 && (c.drops || 0) < 3) && near(c.x, c.y, wx, wy) < 1.4) {
+    const exit=cruiserOfficerExit(c);if(!exit)continue;
     c.dropped = true; c.dropT = T; c.drops = (c.drops || 0) + 1;
-    footCops.push({ x: c.x, y: c.y, car: c, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true, burst: T + 5 });
+    footCops.push({ x: exit[0], y: exit[1], car: c, corner: null, dir: 0, goal: null, chase: true, ph: 0, extra: true, burst: T + 5 });
   }
   // A nearby cruiser tells you to pull over. Only an actual rear-quarter impact can perform a PIT.
   let told = false;
@@ -629,7 +658,7 @@ function stepCrime(dt) {
     || onRoof && body.z < 1 && roofCops.some(c => !c.dead && c.sees && near(c.x, c.y, px, py) < 0.22);
   const boxed = me && Math.abs(me.v) < 0.3 && (cars.some(c => c.pursuit && c !== me && near(c.x, c.y, me.x, me.y) < 1.4) || footCops.some(c => c.chase && !c.down && near(c.x, c.y, me.x, me.y) < 0.5));
   wanted.bustT = boxed ? wanted.bustT + dt : 0;
-  if (grabbed || wanted.bustT > 2.5) { if (wanted.stars >= 2) newsEvent('arrest', px, py, { crime: wanted.crime }); wanted.busted = true; return 'busted'; }
+  if (grabbed || wanted.bustT > 1.6) { if (wanted.stars >= 2) newsEvent('arrest', px, py, { crime: wanted.crime }); wanted.busted = true; return 'busted'; }
   return told ? 'pullover' : wanted.seen ? 'seen' : 'hiding';
 }
 // after the chase, extra units go home (out of sight) and officers who jumped out of cars walk off
@@ -639,11 +668,19 @@ function tidyPolice() {
   for (let k = footCops.length - 1; k >= 0; k--) { const c = footCops[k]; if (c.extra && !c.chase && !c.returnCar && near(c.x, c.y, wx, wy) > 25) footCops.splice(k, 1); }
 }
 // what being caught costs. Paying it settles everything, and the car goes back
+const HEIST_LOOT=new Set(['diamond','orrery','hotelmasterpiece','hotelharbour','hotelstilllife']);
+const stolenGoods=it=>!!it.stolen||HEIST_LOOT.has(it.id);
+function confiscateStolenGoods(){
+ let count=0;
+ for(let k=inv.length-1;k>=0;k--)if(stolenGoods(inv[k])){removeInventoryAt(k);count++;}
+ return count;
+}
 const fineFor = stars => FINE[stars];
 function payFine() {
   const f = fineFor(wanted.stars);
   if (wanted.killed || !pay(f)) return false; // (there's no fine for a killing)
   confiscateGun(); // (they keep the gun: gun.js)
+  confiscateStolenGoods();
   clearWanted(); return true;
 }
 // jail: everything you're carrying is taken (not your money) and locked in evidence, and you do your time. Break out

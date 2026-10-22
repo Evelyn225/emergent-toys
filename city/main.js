@@ -9,6 +9,7 @@ onkeydown = e => {
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
+  if (mode==='el'&&e.code==='KeyC'&&!e.repeat&&!paused){elSeatToggle();return;}
   if (freecam) {
     if (e.code === 'Escape' && !e.repeat) { togglePause(); return; }
     if (e.code === 'KeyE' && paused && pauseEl?.style.display === 'flex' && !e.repeat) { closePause(true); return; }
@@ -85,6 +86,7 @@ function turnBy(mx, my) {
   if (fx.yoyo && yoyo.out && onFootMode()) return yoyoSwing(mx * s, my * s); // the yo-yo's out: the mouse swings it, the view holds still
   if (mode === 'drive') { look = clamp(look + mx * 0.003 * s, -1.8, 1.8); lookT = T; } // driving: turn your head (the car keeps going where it's pointed)
   else if (mode === 'taxi') look += mx * 0.003 * s;
+  else if (mode === 'sea' || mode === 'boat') look=clamp(look+mx*.003*s,-Math.PI,Math.PI);
   else if (skatingNow()) { SK.look = clamp(SK.look + mx * 0.003 * s, -2.6, 2.6); SK.lookT = T; } // on the board: look round (the camera swings back behind you)
   else if (mode !== 'drive' && mode !== 'sea' && !(mode === 'fair' && fairRide.kind === 'carousel')) a += mx * 0.003 * s;
   pitch -= my * 0.002 * s * (settings.invertY ? -1 : 1); clampPitch();
@@ -164,7 +166,7 @@ function move(fx, fy) {
   if(mode==='walk') {
     const stair=elStairAt(px,py);
     if(!stair) {
-      if(elStairOn&&oldStair?.g>=EL_TOP-.01&&underEl(py,px)) {
+      if(elStairOn&&oldStair?.g>=EL_TOP-.01&&elDeckHeight(px,py)) {
         mode='roof';roofH=EL_TOP;roofLot=new Set();room=null;elPass=null;
       }
       elStairOn=null;
@@ -326,10 +328,7 @@ function loop(t) {
   else if (mode === 'boat') stepBoat(dt);
   else if (mode === 'sea') stepSea(dt);
   else if (mode === 'air') { if (!sleep) stepFlight(dt); } // (flight.js)
-  else if (mode === 'el') { // riding: you move with the train; look around with the mouse or arrows
-    a += ((K.ArrowRight ? 1 : 0) - (K.ArrowLeft ? 1 : 0)) * 2 * dt;
-    px = worldCoord(elRiding().x + ride.off);
-  }
+  else if (mode === 'el') stepElRide(dt);
   stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
@@ -385,8 +384,8 @@ function loop(t) {
   if (mode === 'air') { // from behind it, or from its cockpit; then put the real position back
     const saved = [px, py, a, pitch], [cx, cy, yaw, cz, vp] = airCam(dt);
     px = cx; py = cy; a = yaw; pitch = vp; airEye = cz; chaseOn = third || !!wreckCam; render(dt); [px, py, a, pitch] = saved;
-  } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
-    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? swanCam(dt) : chaseCam(dt);
+  } else if ((chaseOn = (!!me || mode === 'sea' || mode === 'boat') && third) || mode === 'sea' || mode === 'boat') { // render from behind the car (or boat, or at its helm; or your swan), then put the real position back
+    const saved = [px, py, a], [cx, cy, yaw] = mode === 'sea' ? seaCam(dt, chaseOn) : mode === 'boat' ? (chaseOn?swanCam(dt):[px,py,a+look]) : chaseCam(dt);
     px = cx; py = cy; a = yaw; render(dt); [px, py, a] = saved;
   } else if (skateCamOn()) { // on the board: from behind your skater (skate.js), then put the real position back
     const saved = [px, py, a], [cx, cy, yaw, cz] = skateCam(dt);

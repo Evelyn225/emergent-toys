@@ -145,7 +145,7 @@ function killFigure(o, hx, hy, cop = false, anchor = null) {
   for (const k of ['talk', 'flee', 'gawk', 'help', 'hailing', 'follow', 'chase', 'goal']) delete o[k];
   if (o.path) o.path.length = 0;
   bodies.push({ who: o, cop, x: anchor?.x??o.x, y: anchor?.y??o.y, t: T, amb: null, atT: 0 });
-  pools.push({ x: anchor?.x??o.x, y: anchor?.y??o.y, t: T });
+  pools.push({ x: anchor?.x??o.x, y: anchor?.y??o.y, z:anchor?.z??outdoorGroundHeight(o.x,o.y), t: T });
   if (pools.length > 24) pools.shift();
   for (const p of people) if (p.help === o || p.gawk === o) { delete p.help; delete p.gawk; }
 }
@@ -214,7 +214,7 @@ const sheeted = o => bodies.some(b => b.who === o && b.atT && T - b.atT > 2.5);
 
 // ---- the police, shooting back. Only after you've fired, only while they're after you, only with a clear look at you
 function copsShoot(dt) {
-  if (!wanted.fired || !wanted.stars || wanted.busted) return null;
+  if (!(wanted.fired||wanted.killed&&wanted.stars>=4) || !wanted.stars || wanted.busted) return null;
   const inside = mode === 'room', [wx, wy] = crimePos(), driving = !!me && (mode === 'drive' || mode === 'taxi');
   const moving = driving ? Math.abs(me.v) : Math.hypot(body.mx || 0, body.my || 0);
   const shooters = inside ? roomCops.filter(c => !c.dead && c.sees).map(c => [c, Math.hypot(c.x - px, c.y - py) / 10]) // (a room's in metres)
