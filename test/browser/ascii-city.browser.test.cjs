@@ -1772,6 +1772,10 @@ test('holding the pocket watch melts snow and dries the ground through the real 
 
 test('the museum by day: $10 in, plaques to read, the gift shop; by night a heist: a guard\'s torch catches you, or you crack a case and the silent alarm runs out', () => withPage(async page => {
   const day = await page.evaluate(() => {
+    // A passing car or pedestrian at the kerb legitimately takes E before the
+    // door. Keep this admission/heist fixture independent of random traffic.
+    paused = true; cars.length = people.length = footCops.length = 0;
+    mode = 'walk'; room = null; body.z = body.vz = 0; body.seat = null;
     tod = 14; money = 100;
     const sh = MUSEUM.sh; lookHit = { d: 0.2, mx: MUSEUM.bx * 8 + 4, my: MUSEUM.by * 8 + 2 }; px = MUSEUM.bx * 8 + 4.5; py = MUSEUM.by * 8 + 1.7; a = Math.PI / 2;
     interact();

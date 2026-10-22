@@ -31,3 +31,9 @@ Apartment shelves sit against the wall with a clear approach. Beds offer **E: sl
 Cars follow the road's pitch and cross slope, including the bridge approaches. Shotengai roof spans attach to opposing facades; missing buildings and coastal gaps stay open to the sky.
 
 ![Taxi climbing a bridge approach](taxi-grade.png)
+
+## Placement fixes
+
+`ramen-clerks.png` shows the kitchen staff clear of the back wall, viewed from
+the customer side of the counter. `bridge-approach.png` shows Iron Bridge
+starting beyond the waterfront junction, leaving the cross street at ground level.

@@ -184,10 +184,11 @@ function drawTireMarks() {
 }
 function drive(dt) {
   const oldA = a;
-  const spun = me.spunT > T || me.wrecked; // spun out by the police (no say in it till you've stopped turning), or a burnt-out shell
-  const c = me, f = spun ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = spun ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+  // A wreck disables controls but need not have the PIT manoeuvre's spin timer.
+  const c = me, spun = c.spunT > T, disabled = spun || c.wrecked;
+  const f = disabled ? 0 : (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0), s = disabled ? 0 : (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
   const traction = roadTraction(c.x, c.y), braking = 0.55 + traction * 0.45, acceleration = 0.75 + traction * 0.25;
-  if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (me.spunT - T) / 2.5; }
+  if (spun) { c.v *= 1 - 2.5 * dt; a += dt * 5 * Math.min(1, Math.abs(c.v) * 2 + 0.3) * (c.spunT - T) / 2.5; }
   if (f > 0) c.v += (c.v < 0 ? 2.5 * braking : acceleration) * dt;
   else if (f < 0) c.v -= (c.v > 0 ? 2.5 * braking : 0.8 * acceleration) * dt;
   else c.v *= 1 - 0.7 * dt;

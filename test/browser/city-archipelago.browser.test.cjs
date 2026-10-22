@@ -105,7 +105,7 @@ test('both bridges have graded walking surfaces and all hired boat types sail un
   const problems=[];boats.length=0;const heights=[];
   for(const bridge of ROAD_BRIDGES){
    mode='walk';me=null;px=bridge.x-.4;py=bridge.y0;body.z=body.vz=0;
-   for(let n=0;n<960;n++){const old=py;move(0,.05);if(py===old)problems.push('walk blocked');heights.push(walkGround(px,py));}
+   for(let n=0;n<Math.round((bridge.y1-bridge.y0)/.05);n++){const old=py;move(0,.05);if(py===old)problems.push('walk blocked');heights.push(walkGround(px,py));}
    if(Math.abs(py-bridge.y1)>.1)problems.push('walk incomplete');
    for(const kind of ['speedboat','cruiser','sailboat'])for(const cruise of [false,true]){
     const boat={kind,x:bridge.x-4,y:197.5,hx:1,hy:0,v:0,deal:'mine'};fleet.push(boat);boardBoat(boat);K.KeyW=true;K.ShiftLeft=cruise;
