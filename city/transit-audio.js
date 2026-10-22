@@ -2,6 +2,7 @@
 // A location/epoch guards both pending decodes and already scheduled AudioBufferSources.
 let transitEpoch = 0, transitLocation = null, transitTime = null, transitObserved = null;
 let transitQueue = [], transitVoice = null, transitLoading = false, transitBus = null;
+let transitReadyAt = 0, transitWait = null;
 let transitReminderAt = -Infinity;
 
 function transitPlayerLocation() {
@@ -20,6 +21,8 @@ function transitAudible() {
 }
 function cancelTransitAnnouncements() {
   transitEpoch++;
+  if (transitWait != null) clearTimeout(transitWait);
+  transitWait = null; transitReadyAt = 0;
   transitQueue = []; transitLoading = false;
   if (transitVoice) {
     for (const source of transitVoice.sources) { source.onended = null; source.stop(); source.disconnect(); }
@@ -69,7 +72,7 @@ function transitValid(item) {
   return item.epoch === transitEpoch && transitAudible() && transitSameLocation(item.location) &&
     T >= item.at && T - item.at <= item.maxAge && Math.abs(T - transitTime) <= .25 && item.relevant();
 }
-function transitAnnounce(phrase, station = null, relevant = () => true, maxAge = 5) {
+function transitAnnounce(phrase, station = null, relevant = () => true, maxAge = 8) {
   const files = transitFiles(phrase, station);
   if (!files || !transitLocation || !transitAudible()) return;
   transitQueue.push({ files, epoch: transitEpoch, location: transitLocation, at: T, maxAge, relevant });
@@ -91,9 +94,25 @@ function transitPABus() {
 }
 async function transitPump() {
   if (transitVoice || transitLoading) return;
-  const item = transitQueue.shift();
+  const item = transitQueue[0];
   if (!item) return;
-  if (!transitValid(item)) return transitPump();
+  if (!transitValid(item)) { transitQueue.shift(); return transitPump(); }
+  // Whole announcements get breathing room; phrase/station halves below keep
+  // their short, shared-clock seam. This also applies after an idle queue.
+  const wait = transitReadyAt - actx.currentTime;
+  if (wait > 0) {
+    if (transitWait == null) {
+      const epoch = transitEpoch;
+      transitWait = setTimeout(() => {
+        if (epoch !== transitEpoch) return;
+        transitWait = null; transitPump();
+      }, Math.max(10, wait * 1000));
+    }
+    return;
+  }
+  if (transitWait != null) clearTimeout(transitWait);
+  transitWait = null;
+  transitQueue.shift();
   transitLoading = true;
   const buffers = await Promise.all(item.files.map(file => clipBuffer(file)));
   // An obsolete load must not clear the new location's loading flag or start its queue.
@@ -116,6 +135,7 @@ async function transitPump() {
     // Both halves use one AudioContext clock, regardless of frame rate or network timing.
     source.start(when); when = end + TRANSIT_PA.gap;
   }
+  transitReadyAt = when - TRANSIT_PA.gap + TRANSIT_PA.announcementGap;
   voice.sources[voice.sources.length - 1].onended = () => {
     for (const source of voice.sources) source.disconnect();
     for (const node of voice.nodes) node.disconnect();
@@ -123,17 +143,13 @@ async function transitPump() {
   };
 }
 function transitDirection(dir, reversal = false) {
-  if (!dir) return;
+  if (mode !== 'el' || !dir) return;
   let phrase = dir > 0 ? 'east' : 'west';
   if (reversal) phrase = dir > 0 ? 'returnEast' : 'returnWest';
   transitAnnounce(phrase);
 }
-function transitSubwayDirection(from, to) {
-  return Math.sign(stations[to].x - stations[from].x);
-}
 function transitBoarded() {
   transitSync();
-  // Subway direction is unknown until its directly selected destination is known.
   const now = transitSnapshot();
   // Boarding inside the warning window still hears it, even if its threshold was crossed
   // on the platform. Keep the timetable and the destination picker unchanged.
@@ -146,7 +162,6 @@ function transitBoarded() {
 function transitSubwayDeparted() {
   transitSync();
   const journey = room, dest = room.dest;
-  transitDirection(transitSubwayDirection(room.st, dest));
   transitAnnounce('next', stations[dest].name, () => room === journey && room.dest === dest);
 }
 function transitSubwayArrived() {

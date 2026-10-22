@@ -94,14 +94,14 @@ test('subway keyboard boarding selects exactly one destination and arrives in th
   assert.equal(await page.evaluate(() => room.kind), 'train');
   await page.keyboard.press('Digit1');
   const result = await page.evaluate(() => {
-    const selected = room.dest, direction = Math.sign(stations[selected].x - stations[room.st].x);
+    const selected = room.dest;
     const before = room.rideT; advance(9.01);
-    return { before, selected, direction, kind: room.kind, at: room.st, name: stations[room.st].name, events };
+    return { before, selected, kind: room.kind, at: room.st, name: stations[room.st].name, events };
   });
   assert.equal(result.before, 9); assert.equal(result.kind, 'station'); assert.equal(result.at, result.selected);
   const next = result.events.filter(e => e.phrase === 'next');
   assert.equal(next.length, 1); assert.equal(next[0].station, result.name);
-  assert.ok(result.events.some(e => e.phrase === (result.direction > 0 ? 'east' : 'west')));
+  assert.ok(result.events.every(e => !['east', 'west', 'returnEast', 'returnWest'].includes(e.phrase)));
   assert.ok(result.events.some(e => e.phrase === 'doors'));
   assert.equal(result.events.filter(e => e.phrase === 'arrival').length, 1);
   await page.evaluate(() => {
@@ -111,7 +111,11 @@ test('subway keyboard boarding selects exactly one destination and arrives in th
   });
   assert.ok(await page.evaluate(() => westOption > 0));
   await page.keyboard.press('Digit' + await page.evaluate(() => westOption));
-  assert.equal(await page.evaluate(() => events[0].phrase), 'west');
+  assert.equal(await page.evaluate(() => events[0].phrase), 'next');
+  assert.deepEqual(await page.evaluate(() => {
+    transitDirection(1); transitDirection(-1, true);
+    return events.filter(e => ['east', 'west', 'returnEast', 'returnWest'].includes(e.phrase));
+  }), []);
 }));
 
 test('a departure on the first resumed frame is announced once, and late boarding prioritizes the doors', () => fixture(async page => {
@@ -165,15 +169,69 @@ test('real decoded phrase/station sources share a precise clock, cache fetches a
     transitAnnounce('arrival', '3RD AVE');
   });
   await page.waitForFunction(() => starts.length === 2);
-  const first = await page.evaluate(() => ({ starts, gap: TRANSIT_PA.gap, buffers: transitVoice.sources.map(s => s.buffer.numberOfChannels) }));
+  const first = await page.evaluate(() => ({ starts, gap: TRANSIT_PA.gap, announcementGap: TRANSIT_PA.announcementGap, buffers: transitVoice.sources.map(s => s.buffer.numberOfChannels) }));
+  assert.equal(first.gap, .075);
+  assert.equal(first.announcementGap, 2);
   assert.ok(Math.abs(first.starts[1].when - first.starts[0].when - first.starts[0].duration - first.gap) < 1e-8);
   assert.deepEqual(first.buffers, [1, 1]);
   await page.waitForFunction(() => starts.length === 4);
   const starts = await page.evaluate(() => starts);
-  assert.ok(starts[2].when >= starts[1].when + starts[1].duration, 'announcements never overlap');
+  assert.ok(starts[2].when >= starts[1].when + starts[1].duration + first.announcementGap, 'complete announcements have a two-second pause');
+  assert.ok(Math.abs(starts[3].when - starts[2].when - starts[2].duration - first.gap) < 1e-8, 'the second station join keeps its short seam');
   assert.ok(Object.values(counts).every(count => count === 1));
   assert.equal(Object.keys(counts).length, 33);
   await page.evaluate(() => cancelTransitAnnouncements());
+}));
+
+test('announcement pauses survive an idle queue, discard obsolete warnings and reset when leaving transit', () => fixture(async page => {
+  await page.evaluate(() => {
+    T = 1; elUp({ s: EL_STATIONS[0], tr: 0 });
+    // Short real AudioBuffers exercise end events/timers without waiting for full recordings.
+    const buffers = new Map(), names = new Map();
+    clipBuffer = file => {
+      if (!buffers.has(file)) {
+        const buffer = actx.createBuffer(1, 1920, actx.sampleRate);
+        buffers.set(file, buffer); names.set(buffer, file);
+      }
+      return Promise.resolve(buffers.get(file));
+    };
+    window.spacingStarts = [];
+    const makeSource = actx.createBufferSource.bind(actx);
+    actx.createBufferSource = function() {
+      const source = makeSource(), start = source.start.bind(source);
+      source.start = function(when) {
+        if (names.has(source.buffer)) spacingStarts.push({ file: names.get(source.buffer), when, duration: source.buffer.duration });
+        start(when);
+      };
+      return source;
+    };
+    transitAnnounce('next', '3RD AVE');
+  });
+  await page.waitForFunction(() => spacingStarts.length === 2 && !transitVoice);
+  await page.evaluate(() => {
+    window.warningRelevant = true;
+    transitAnnounce('doors', null, () => warningRelevant, 1);
+    transitAnnounce('arrival', '3RD AVE');
+    warningRelevant = false;
+  });
+  assert.ok(await page.evaluate(() => transitWait != null));
+  await page.waitForFunction(() => spacingStarts.length === 4);
+  const starts = await page.evaluate(() => spacingStarts);
+  assert.ok(starts[2].when >= starts[1].when + starts[1].duration + 2);
+  assert.deepEqual(starts.map(s => s.file), ['transit/next.wav', 'transit/3rd-ave.wav', 'transit/arrival.wav', 'transit/3rd-ave.wav']);
+  await page.waitForFunction(() => !transitVoice);
+  const deadline = await page.evaluate(() => {
+    const deadline = transitReadyAt;
+    transitAnnounce('belongings'); // Waiting in the old platform's pause.
+    elDown();
+    enterRoom('station', { st: 7, word: stations[7].name, t0: T - 10 }, [23, ST_TRACK - 2, 0]);
+    transitAnnounce('arrival', 'GRAND ST');
+    return deadline;
+  });
+  await page.waitForFunction(() => spacingStarts.length === 6);
+  assert.ok(await page.evaluate(() => spacingStarts[4].when) < deadline, 'the new location can speak immediately');
+  await page.waitForTimeout(2200);
+  assert.deepEqual(await page.evaluate(() => ({ count: spacingStarts.length, timer: transitWait, queue: transitQueue.length })), { count: 6, timer: null, queue: 0 });
 }));
 
 test('late loads, missing responses and context changes cannot produce stale or dangling speech', () => fixture(async page => {
