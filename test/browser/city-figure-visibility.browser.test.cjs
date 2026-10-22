@@ -70,14 +70,18 @@ test('a foreground bar keeps its stroke while the same skin color remains visibl
 test('moving across the jail cell preserves the officer skin behind the actual bars',()=>withPage(async page=>{
   const result=await page.evaluate(()=>{
     T=0;enterRoom('jail',{word:'JAIL',until:60,ret:[px,py,a]},[9,5.3,Math.PI/2]);env(0);
-    const officer=room.props.find(s=>s.fig&&s.tick&&s.y===7.5),look=officer.fig;
+    const officer=room.props.find(s=>s.fig&&s.tick&&s.y===7.5);
+    // Random civilian builds can leave only two face pixels under a bar. Use a
+    // fixed adult officer and distinct skin palette to exercise the overlap consistently.
+    const look=officer.fig=figLook({hair:'short',hat:'copcap',top:'uniform',bot:'pants',bw:1,col:{skin:[SKIN,12],top:[BLUE,6],hat:[BLUE,5]}});
     officer.tick=null;officer.x=11;officer.face=[0,-1];
     const props=room.props.filter(s=>!s.fig||s===officer),withoutBars=props.filter(s=>!s.peeThrough),out=[];
     for(let step=0;step<5;step++) {
       if(step)move(.8,0);
       a=Math.atan2(officer.y-py,officer.x-px);pitch=0;
       room.props=withoutBars;render(0);
-      const skin=Array.from(BG,(bg,i)=>bg>>4===look.base[FR.SKIN]?{i,bg,depth:ZBG[i]}:null).filter(Boolean);
+      const depth=dx*(officer.x-px)+dy*(officer.y-py);
+      const skin=Array.from(BG,(bg,i)=>bg>>4===look.base[FR.SKIN]&&Math.abs(ZBG[i]-depth)<1e-4?{i,bg,depth:ZBG[i]}:null).filter(Boolean);
       room.props=props;render(0);
       const behind=skin.filter(s=>ZB[s.i]<s.depth&&CH[s.i]==='|');
       out.push({samples:behind.length,same:officer.fig===look,skin:behind.every(s=>BG[s.i]===s.bg)});

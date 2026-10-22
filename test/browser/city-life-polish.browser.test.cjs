@@ -23,10 +23,10 @@ test('the el has physical walls, a walkable aisle, empty usable seats and changi
   const p1=elPassengerSet(0,0,14),p2=elPassengerSet(0,0,50),changes=p1.map(p=>p.seed).join()!==p2.map(p=>p.seed).join(),boarding=elPassengerSet(0,0,4).some(p=>p.boarding);
   T=14;const passengers=elPassengerSet(0,0,T);let seat;
   for(const u of [-.69,0,.69])for(const side of [-1,1])if(!passengers.some(p=>p.car===0&&p.seated&&p.u===u&&p.side===side))seat={u,side};
-  ride.off=seat.u;ride.side=0;elSeatToggle();const seated=!!ride.seat;elSeatToggle();const standing=!ride.seat;
+  ride.off=seat.u;ride.side=0;elSeatToggle();const seated=!!ride.seat;elSeatToggle();const standing=!ride.seat;const aisle=ride.side===0;const stoodAt=ride.off;a=0;K.KeyW=true;stepElRide(.1);K.KeyW=false;const walkedAfterStanding=ride.off>stoodAt;
   T=1;const train=elTrain(0,0,T);const hull=elTrainBodyAt(train.x,EL_TRACK[0],EL_TOP),below=elTrainBodyAt(train.x,EL_TRACK[0],0),platform=elTrainBodyAt(train.x,EL_PLAT[0],EL_TOP);
-  return {walked,walls,changes,boarding,seated,standing,hull,below,platform};
- });assert.deepEqual(r,{walked:true,walls:true,changes:true,boarding:true,seated:true,standing:true,hull:true,below:false,platform:false});
+  return {walked,walls,changes,boarding,seated,standing,aisle,walkedAfterStanding,hull,below,platform};
+ });assert.deepEqual(r,{walked:true,walls:true,changes:true,boarding:true,seated:true,standing:true,aisle:true,walkedAfterStanding:true,hull:true,below:false,platform:false});
 }));
 
 test('arrival displays follow the actual timetable and stair handrails meet the widened boarding deck',()=>fixture(async page=>{
@@ -91,4 +91,26 @@ test('hotel and lighthouse windows use the actual exterior geometry and a statio
   const display=CH.filter((ch,i)=>ch!==' '&&COL[i]===C(YEL,15)&&ZB[i]<1).length;
   return {lighthouse,hotel,display};
  });assert.ok(r.lighthouse>100);assert.ok(r.hotel>100);assert.ok(r.display>10,JSON.stringify(r));
+}));
+
+test('getting off at either end of a carriage leaves room inside the platform railings',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  const errors=[];
+  for(const tr of [0,1])for(const car of [-1,1])for(const end of [-1,1]){
+   T=tr?109:1;room=null;mode='el';ride={tr,k:0,car,off:car*EL_CAR_LEN+end*(EL_HL-.04),side:0};stepElRide(0);elGetOff();
+   if(!elPlatformAt(px,py)||elPlatformRailAt(px,py,EL_TOP)||!free(px+(plat.s.x-px>0?.04:-.04),py))errors.push([tr,car,end,px,py]);
+  }
+  return errors;
+ });assert.deepEqual(r,[]);
+}));
+
+test('passenger turnover reserves the player seat, and freecam keeps its own C key',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  room=null;mode='el';T=50;ride={tr:0,k:0,car:0,off:0,side:0};
+  const p=elPassengerSet(0,0,T).find(p=>p.car===0&&p.seated);ride.seat={u:p.u,side:p.side};ride.off=p.u;ride.side=p.side*.1;
+  const hasRider=()=>elPassengerSet(0,0,T).some(o=>o.car===0&&o.seated&&o.side===p.side&&o.u===p.u);
+  const reserved=!hasRider(),seat=ride.seat;ride.seat=null;const remainsEmpty=!hasRider();ride.seat=seat;
+  freecam={x:0,y:0,z:2,yaw:0,pitch:0};paused=false;audioStart=()=>{};onkeydown({code:'KeyC',repeat:false,preventDefault(){}});
+  const camera=K.KeyC===1&&!!ride.seat;K.KeyC=0;freecam=null;return {reserved,remainsEmpty,camera};
+ });assert.deepEqual(r,{reserved:true,remainsEmpty:true,camera:true});
 }));

@@ -9,7 +9,6 @@ onkeydown = e => {
   if (bustedKey(e)) return; // Arrest owns input even when dev tools were open.
   if (devKey(e)) return; // the dev tools (F2)
   if (devOpen()) { if (e.code === 'Escape') closeDev(); return; } // (typing in them never reaches the game)
-  if (mode==='el'&&e.code==='KeyC'&&!e.repeat&&!paused){elSeatToggle();return;}
   if (freecam) {
     if (e.code === 'Escape' && !e.repeat) { togglePause(); return; }
     if (e.code === 'KeyE' && paused && pauseEl?.style.display === 'flex' && !e.repeat) { closePause(true); return; }
@@ -36,6 +35,7 @@ onkeydown = e => {
   if (e.repeat) return;
   audioStart(); // sound can only start from a key press or click
   if (e.code === 'KeyN') toggleSound();
+  if(mode==='el'&&e.code==='KeyC'){elSeatToggle();return;}
   if (chute && (e.code === 'Space' || e.code === 'KeyE')) return pullCord(); // (in the air, out of an aircraft)
   if (e.code === 'KeyE' && !sleep) interact();
   if(e.code==='Space'&&mode==='ladder'){leaveCourierLadder();return;}
