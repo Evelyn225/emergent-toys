@@ -596,7 +596,7 @@ function drawElStairs(st) {
   landing(ELS.u1, ELS.u2, ELS.v0, ELS.v1, H / 2);
   landing(ELS.u3, ELS.u4, ELS.v0, ELS.top, H);
   // the posts: under the landings and halfway along each flight
-  for (const [u, z] of [[(ELS.u0 + ELS.u1) / 2, H / 4], [ELS.u1, H / 2], [ELS.u2, H / 2], [(ELS.u2 + ELS.u3) / 2, H * 0.75], [ELS.u3, H], [ELS.u4, H]])
+  for (const [u, z] of ELS_POSTS)
     for (const v of [ELS.v0 + 0.01, ELS.v1 - 0.01]) { const [x, y] = at(u, v); rod(x, y, 0, x, y, z - 0.015, 0.008); }
   if (far) return;
   // rails round the landings (open where the stairs come in, and onto the deck)
@@ -1468,6 +1468,12 @@ function drawElCar(vx, vy, cab) {
 function elSprites() {
   forNear(elPillarsB, p => { if (inView(rel(p.x - px), rel(p.y - py), 0.1)) drawElPillar(p); });
   for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.ox + stairs.c * stairs.off - px), rel(stairs.oy + stairs.ay * 0.25 - py), 1.7)) drawElStairs(stairs);
+  for(const station of EL_STATIONS)if(inView(rel(station.x-px),rel(EL_Y+1-py),3))for(const tr of [0,1])
+    for(const [ax,ay,bx,by] of elPlatformRails(station,tr)) {
+      const [vx,vy]=R(ax,ay),[wx,wy]=R(bx,by),n=Math.max(1,Math.ceil(Math.hypot(bx-ax,by-ay)/.3));
+      for(const z of [.055,EL_RAIL_H])rod(vx,vy,EL_TOP+z,wx,wy,EL_TOP+z,EL_RAIL_R);
+      for(let i=0;i<=n;i++){const t=i/n,x=vx+(wx-vx)*t,y=vy+(wy-vy)*t;rod(x,y,EL_TOP,x,y,EL_TOP+EL_RAIL_H,.005);}
+    }
   for (const t of elTrains(T)) {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {

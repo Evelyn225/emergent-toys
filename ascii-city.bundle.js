@@ -5335,8 +5335,10 @@ function elPlatformAt(x,y) {
 // platform's end. In each stair's own frame u runs along the street (up the stairs) and v out from the building face
 // toward the deck; st.ox, st.oy is the face at the station's middle, st.off how far along it's been slid to find a
 // clear run (streetscape.js). A turnstile at the foot (st.x, st.y: where you stand to swipe).
-const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: EL_Y0 - EL_Y + 0.05 };
-// (top: the top landing reaches a little past the deck's edge, 0.4 out from the face, so you step off it onto the deck)
+const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: 0.4 };
+// The top landing meets the deck edge, without overlapping its upper surface.
+const ELS_POSTS = [[(ELS.u0+ELS.u1)/2,EL_TOP/4],[ELS.u1,EL_TOP/2],[ELS.u2,EL_TOP/2],[(ELS.u2+ELS.u3)/2,EL_TOP*.75],[ELS.u3,EL_TOP],[ELS.u4,EL_TOP]];
+let elStairOn = null; // the stair surface occupied by the player; null while walking underneath
 for (const s of EL_STATIONS) s.stairs = [0, 1].map(tr => {
   const ay = tr ? -1 : 1, oy = tr ? EL_Y + 2 : EL_Y; // (c, s: u's direction; for the south side, u runs west)
   return elStairFoot({ tr, ox: s.x, oy, ax: 0, ay, c: ay, s: 0, off: 0 });
@@ -5373,19 +5375,58 @@ function elStairAt(x, y) {
   return null;
 }
 const elStairGround = (x, y) => { const h = elStairAt(x, y); return h ? h.g : 0; };
+const elWalkGround = (x,y) => { const h=elStairAt(x,y);return h&&h.st===elStairOn?h.g:0; };
+function elStairPostAt(x,y,feet,height=.17,pad=.025) {
+  if(Math.abs(rel(y-EL_Y-1))>1.1)return false;
+  for(const station of EL_STATIONS) for(const st of station.stairs) {
+    const dx=rel(x-st.ox),dy=rel(y-st.oy),u=st.c*dx+st.s*dy-st.off,v=st.ax*dx+st.ay*dy;
+    if(v<ELS.v0-pad||v>ELS.v1+pad||u<ELS.u0||u>ELS.u4+pad)continue;
+    for(const [pu,z] of ELS_POSTS)for(const pv of [ELS.v0+.01,ELS.v1-.01])
+      if(feet<z-.015&&feet+height>0&&Math.abs(u-pu)<.008+pad&&Math.abs(v-pv)<.008+pad)return true;
+  }
+  return false;
+}
 // walking from (x0, y0) to (x, y) as the stairs see it: true (blocked), false (fine), or null (nothing to do with them).
 // On the stairs you keep to them (the rails), up or down a step at a time, or off the top onto the deck; from the
 // street you can only step onto the bottom step, and only once you've swiped through the turnstile (pass)
 const EL_TREAD = 0.08;
-function elStairStep(x0, y0, x, y, pass) {
+function elStairStep(x0, y0, x, y, pass, feet=elStairGround(x0,y0), height=.17) {
   const a = elStairAt(x0, y0), b = elStairAt(x, y);
+  const on=a&&feet>=a.g-.025;
+  if(!on) {
+    if(elStairPostAt(x,y,feet,height))return true;
+    if(b&&feet+height<b.g-.02)return null; // enough headroom beneath the steel treads
+  }
   if (!a && !b) return null;
-  if (a) { // on them: a step at a time; off the bottom, or off the top onto the deck, but not over the rails
+  if (on) { // on them: a step at a time; off the bottom, or off the top onto the deck, but not over the rails
     if (!b) return a.g > EL_TREAD * 0.6 && !(underEl(y) && a.g > EL_TOP - 0.01);
     return Math.abs(b.g - a.g) > EL_TREAD;
   }
-  if (b.g > EL_TREAD * 0.6) return true; // from the street: the steelwork under the stairs
+  if (!b)return null;
+  if (b.g > EL_TREAD * 0.6) return true; // low treads without headroom cannot be walked through
   return !(pass && pass.st === b.st); // the bottom step, through the turnstile
+}
+
+// Guard the station's outer edge and ends. The train-facing edge stays open for boarding,
+// and the outer edge has a gap exactly where the stair landing joins it.
+const EL_RAIL_H=.11, EL_RAIL_R=.004;
+function elPlatformRails(station,tr) {
+  const st=station.stairs[tr],y=tr?EL_Y1-.008:EL_Y0+.008,inner=EL_PLAT[tr]+(tr?-.12:.12);
+  const ends=[ELS.u3,ELS.u4].map(u=>st.ox+st.c*(st.off+u)).sort((a,b)=>a-b);
+  const lo=clamp(ends[0]-.025,station.x0,station.x1),hi=clamp(ends[1]+.025,station.x0,station.x1);
+  return [[station.x0,y,lo,y],[hi,y,station.x1,y],[station.x0,y,station.x0,inner],[station.x1,y,station.x1,inner]];
+}
+function elPlatformRailAt(x,y,feet,pad=.025) {
+  if(feet>EL_TOP+EL_RAIL_H||feet+.17<EL_TOP||Math.abs(rel(y-EL_Y-1))>EL_HALF+.05)return false;
+  for(const station of EL_STATIONS) {
+    if(Math.abs(rel(x-station.x))>3)continue;
+    for(const tr of [0,1])for(const [ax,ay,bx,by] of elPlatformRails(station,tr)) {
+      const dx=rel(bx-ax),dy=by-ay,rx=rel(x-ax),ry=rel(y-ay),d=dx*dx+dy*dy;
+      const t=d?clamp((rx*dx+ry*dy)/d,0,1):0;
+      if(Math.hypot(rx-t*dx,ry-t*dy)<EL_RAIL_R+pad)return true;
+    }
+  }
+  return false;
 }
 
 // pillars at both curbs, clear of the cross streets
@@ -5962,7 +6003,7 @@ const TRANSIT_ASSETS = {
   }
 };
 const TRANSIT_PA = {
-  gap: .075, announcementGap: 2, lead: .025, fade: .008, gain: .95, doorsLead: 4,
+  gap: .075, announcementGap: 2, lead: .025, fade: .008, gain: .855, doorsLead: 4,
   highpass: 380, lowpass: 3800, presence: 2200, presenceGain: 3.5,
   reflectionTime: .022, reflectionGain: .2
 };
@@ -11109,7 +11150,7 @@ function terrainHeight(x, y) {
 }
 
 function outdoorGroundHeight(x, y) {
-  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elStairGround(x, y));
+  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elWalkGround(x, y));
 }
 
 buildTerrain();
@@ -13785,7 +13826,7 @@ function drawElStairs(st) {
   landing(ELS.u1, ELS.u2, ELS.v0, ELS.v1, H / 2);
   landing(ELS.u3, ELS.u4, ELS.v0, ELS.top, H);
   // the posts: under the landings and halfway along each flight
-  for (const [u, z] of [[(ELS.u0 + ELS.u1) / 2, H / 4], [ELS.u1, H / 2], [ELS.u2, H / 2], [(ELS.u2 + ELS.u3) / 2, H * 0.75], [ELS.u3, H], [ELS.u4, H]])
+  for (const [u, z] of ELS_POSTS)
     for (const v of [ELS.v0 + 0.01, ELS.v1 - 0.01]) { const [x, y] = at(u, v); rod(x, y, 0, x, y, z - 0.015, 0.008); }
   if (far) return;
   // rails round the landings (open where the stairs come in, and onto the deck)
@@ -14657,6 +14698,12 @@ function drawElCar(vx, vy, cab) {
 function elSprites() {
   forNear(elPillarsB, p => { if (inView(rel(p.x - px), rel(p.y - py), 0.1)) drawElPillar(p); });
   for (const s of EL_STATIONS) for (const stairs of s.stairs) if (inView(rel(stairs.ox + stairs.c * stairs.off - px), rel(stairs.oy + stairs.ay * 0.25 - py), 1.7)) drawElStairs(stairs);
+  for(const station of EL_STATIONS)if(inView(rel(station.x-px),rel(EL_Y+1-py),3))for(const tr of [0,1])
+    for(const [ax,ay,bx,by] of elPlatformRails(station,tr)) {
+      const [vx,vy]=R(ax,ay),[wx,wy]=R(bx,by),n=Math.max(1,Math.ceil(Math.hypot(bx-ax,by-ay)/.3));
+      for(const z of [.055,EL_RAIL_H])rod(vx,vy,EL_TOP+z,wx,wy,EL_TOP+z,EL_RAIL_R);
+      for(let i=0;i<=n;i++){const t=i/n,x=vx+(wx-vx)*t,y=vy+(wy-vy)*t;rod(x,y,EL_TOP,x,y,EL_TOP+EL_RAIL_H,.005);}
+    }
   for (const t of elTrains(T)) {
     if (mode === 'el' && ride && ride.tr === t.tr && ride.k === t.k) continue; // the one you're on
     for (let j = 0; j < EL_CARS; j++) {
@@ -23083,7 +23130,7 @@ function render(dt) {
   // Freecam renders while simulation time is frozen, but still gets a new sprite-generation allowance each frame.
   figFineT = T; figFineN = 0;
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
-  eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' || mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
+  eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' ? EL_TOP+.19 : mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? (chaseOn ? 0.2 : 0.11) : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
   else if (mode === 'air') eye = airEye;
@@ -23391,14 +23438,51 @@ function dash() {
   }
 }
 
-// riding the el: the carriage round you - roof, floor and window posts
+// A real carriage around the rider, drawn into the existing city depth buffer.
+// Windows leave that one world render untouched: no second scene or reflection pass.
 function elFrame() {
-  const posts = Math.max(3, cols / 45 | 0), bodyCol = C(GRAY, 4);
-  for (let r = 0; r < rows; r++) for (let x = 0; x < cols; x++) {
-    const i = r * cols + x, top = r < 3, bot = r >= rows - 4, post = Math.abs((x + cols / posts / 2) % (cols / posts) - cols / posts / 2) < 1.5;
-    if (!top && !bot && !post) continue;
-    FOGS[i] = FOGB[i] = 0; BG[i] = C(GRAY, top || bot ? 1 : 2);
-    set(i, top ? (r === 2 ? '=' : ' ') : bot ? (r === rows - 4 ? '_' : (x & 3) ? ' ' : '.') : '|', top && r === 2 || bot ? bodyCol : C(GRAY, 6));
+  const train=elRiding();if(!train||!ride)return;
+  const car=ride.car??clamp(Math.round(ride.off/EL_CAR_LEN),-1,1),[vx,vy]=R(worldCoord(train.x+car*EL_CAR_LEN),EL_TRACK[ride.tr]);
+  const floor=EL_TOP+.02,ceiling=floor+.285,hl=EL_HL-.008,hw=EL_HW-.006;
+  const paint=(i,ch,col,bg)=>{FOGS[i]=FOGB[i]=0;BG[i]=bg;set(i,ch,col);return true;};
+  const box=(u,v,l,w,z0,z1,shade)=>drawBox(boxAt(vx+u,vy+v,1,0,l,w,floor+z0,floor+z1),shade);
+  box(0,0,hl,hw,-.008,0,(i,t,L)=>paint(i,fract(HIT.u*55)<.05?'.':' ',C(GRAY,5),C(GRAY,2)));
+  box(0,0,hl,hw,.285,.3,(i,t,L)=>{
+    const light=Math.abs(Math.abs(HIT.v)-.055)<.009;
+    return paint(i,light?'=':fract(HIT.u*12)<.02?'|':' ',C(WHITE,light?15:7),C(light?WARM:WHITE,light?10:4));
+  });
+  for(const side of [-1,1]) {
+    box(0,side*hw,hl,.004,0,.285,(i,t,L)=>{
+      const u=HIT.u,z=HIT.w-floor,door=[-.45*EL_HL,.45*EL_HL].find(d=>Math.abs(u-d)<.105);
+      const window=[-.69,0,.69].some(x=>Math.abs(u-x)<.19);
+      if(door!==undefined) {
+        if(Math.abs(u-door)<.068&&z>.16&&z<.25)return false;
+        const seam=Math.abs(u-door)<.004,edge=Math.abs(u-door)>.096;
+        return paint(i,seam?'|':edge?'|':z<.018?'=':' ',C(edge?YEL:GRAY,10),C(GRAY,3.5));
+      }
+      if(window&&z>.1&&z<.25)return false;
+      const frame=window&&(Math.abs(z-.1)<.006||Math.abs(z-.25)<.006);
+      const rib=fract((u+1)*28)<.04,trim=z<.012||Math.abs(z-.095)<.004;
+      return paint(i,frame||trim?'=':rib?'|':z>.26&&fract(u*25)<.1?'|':' ',C(GRAY,8),C(z>.25?WARM:WHITE,z>.25?4:3.5));
+    });
+    for(const x of [-.69,0,.69]) {
+      const seat=(i,t,L)=>paint(i,HIT.face===5&&fract((HIT.u+.2)*30)<.08?'|':HIT.face===5?'_':' ',C(BLUE,12),C(BLUE,HIT.face===5?6:4));
+      box(x,side*(hw-.028),.19,.025,.025,.045,seat);
+      box(x,side*(hw-.005),.19,.005,.045,.095,seat);
+    }
+    for(const x of [-.7,0,.7]) {
+      const y=vy+side*.055;
+      rod(vx+x,y,ceiling-.015,vx+x,y,ceiling-.055,.0025,GRAY,1.6);
+      rod(vx+x-.013,y,ceiling-.055,vx+x+.013,y,ceiling-.055,.0025,WHITE,1.4);
+    }
+    rod(vx-hl,vy+side*.055,ceiling-.015,vx+hl,vy+side*.055,ceiling-.015,.003,GRAY,1.8);
+  }
+  for(const side of [-1,1]) {
+    box(side*hl,0,.004,hw,0,.285,(i,t,L)=>{
+      const v=HIT.v,z=HIT.w-floor,door=Math.abs(v)<.045;
+      return paint(i,door&&Math.abs(v)<.003?'|':door&&(Math.abs(z-.12)<.005||Math.abs(z-.24)<.005)?'=':' ',C(GRAY,10),C(door&&z>.12&&z<.24?GRAY:WHITE,door?2:4));
+    });
+    rod(vx+side*.45*EL_HL,vy,floor,vx+side*.45*EL_HL,vy,ceiling-.015,.0035,GRAY,1.8);
   }
 }
 const nearestCar = r => {
@@ -23827,12 +23911,14 @@ const nearElStairs = () => {
   return null;
 };
 function elUp({ s, tr }) {
+  elStairOn=null;
   body.z=body.vz=body.peak=0;roofH=EL_TOP;
   mode = 'elplat'; plat = { s, tr }; px = s.x; py = EL_PLAT[tr]; a = tr ? 0 : Math.PI; pitch = 0; // facing the way the trains go
   transitSync();
   say(`${s.name} el platform`);
 }
 function elDown() { // (E on the platform: a shortcut to the foot of the stairs)
+  elStairOn=null;
   const stairs=plat.s.stairs[plat.tr];
   mode = 'walk'; px = stairs.x; py = stairs.y; a = Math.atan2(-stairs.s, -stairs.c); plat = null;
   body.z=body.vz=body.peak=0;roofH=0;
@@ -23843,8 +23929,10 @@ const elHere = () => plat && elTrains(T).find(t => t.tr === plat.tr && t.stopped
 function elBoard() {
   const t = elHere();
   if (!t) return false;
-  ride = { tr: t.tr, k: t.k, off: clamp(rel(px - t.x), -EL_CAR_LEN, EL_CAR_LEN) };
-  mode = 'el'; py = EL_TRACK[t.tr] + (t.tr ? 0.12 : -0.12); // by the window on the platform side
+  const car=clamp(Math.round(rel(px-t.x)/EL_CAR_LEN),-1,1);
+  ride = { tr: t.tr, k: t.k, off: car*EL_CAR_LEN+.1, car };
+  mode = 'el';px=worldCoord(t.x+ride.off);py=EL_TRACK[t.tr]; // stand in the aisle, inside the selected carriage
+  a=(t.tr?1:-1)*Math.PI/3;pitch=0;
   transitBoarded();
   say(`Next stop: ${EL_STATIONS[t.next].name}`);
   return true;
@@ -23872,7 +23960,7 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (islandBuildingUse()) return;
   if (streetSceneUse()) return;
-  if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
+  if (mode === 'walk' && elWalkGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
   if(courierUse())return;
   if (workshopUse()) return;
   if (mode === 'room') {
@@ -32195,6 +32283,7 @@ const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower:
 function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
   const h = roofHeightAt(x, y), feet = base + body.z / 10;
+  if(elPlatformRailAt(x,y,feet))return false;
   if(courierRoofBlocked(x,y,feet)||h>feet&&courierRoofBlocked(x,y,h))return false; // (nor step up through a railing)
   if (roofFixed()) return h === roofH && !landmarkTowerBlocked(x,y,roofH);
   return h <= base + ROOF_STEP + body.z / 10;
@@ -32208,7 +32297,7 @@ function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body
 const walkGround = outdoorGroundHeight;
 let elPass = null; // the turnstile you've swiped through: { st }, till you're up on the platform or off the stairs
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
-  if (mode === 'walk' && underEl(py) && elStairGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
+  if (mode === 'walk' && underEl(py) && elWalkGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
     mode = 'roof'; roofH = EL_TOP; roofLot = new Set(); room = null; elPass = null; return;
   }
   if (mode === 'walk' && elPass && !elStairAt(px, py) && Math.hypot(rel(px - elPass.st.x), rel(py - elPass.st.y)) > 0.6) elPass = null; // (walked away from the turnstile)
@@ -32235,6 +32324,8 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
+  const stair=elStairAt(px,py);
+  elStairOn=stair&&Math.abs(stair.g-roofH)<=EL_TREAD?stair.st:null;
   const g = walkGround(px, py); // (off the deck onto the stairs, or down onto natural ground)
   shiftFeet((roofH - g) * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
@@ -34173,13 +34264,19 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && s.box.z1 > 0.05 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture (not rugs and mats: you walk on those)
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
-  if (mode === 'walk') { const st = elStairStep(px, py, x, y, elPass); if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))]; } // (the el stairs: elevated.js)
+  if (mode === 'walk') {
+    const feet=walkGround(px,py)+body.z/10;
+    if(elPlatformRailAt(x,y,feet))return false;
+    const st = elStairStep(px, py, x, y, elPass,feet,.17-body.crouch*.07);
+    if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))];
+  } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && !streetSceneBlocked(x,y,.03,walkGround(px,py)+body.z/10) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
+  const oldStair=mode==='walk'?elStairAt(px,py):null;
   const m = mode === 'room' ? 0.25 : 0.05;
   // walking into a way out (a shop's door, the top of the subway stairs) takes you through it
   const n = Math.hypot(fx, fy);
@@ -34188,6 +34285,16 @@ function move(fx, fy) {
   const stuck = !free(px, py); // (somewhere you shouldn't be, a teleport or a gate shutting on you: you can always walk out)
   if (stuck || free(px + fx + Math.sign(fx) * m, py)) px += fx;
   if (stuck || free(px, py + fy + Math.sign(fy) * m)) py += fy;
+  if(mode==='walk') {
+    const stair=elStairAt(px,py);
+    if(!stair) {
+      if(elStairOn&&oldStair?.g>=EL_TOP-.01&&underEl(py,px)) {
+        mode='roof';roofH=EL_TOP;roofLot=new Set();room=null;elPass=null;
+      }
+      elStairOn=null;
+    }
+    else if(!elStairOn&&stair.g<=EL_TREAD*.6&&elPass?.st===stair.st&&(!oldStair||oldStair.g<=EL_TREAD*.6))elStairOn=stair.st;
+  } else elStairOn=null;
   stepHomeBalcony(fx);
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something

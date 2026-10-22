@@ -22,14 +22,51 @@ function dash() {
   }
 }
 
-// riding the el: the carriage round you - roof, floor and window posts
+// A real carriage around the rider, drawn into the existing city depth buffer.
+// Windows leave that one world render untouched: no second scene or reflection pass.
 function elFrame() {
-  const posts = Math.max(3, cols / 45 | 0), bodyCol = C(GRAY, 4);
-  for (let r = 0; r < rows; r++) for (let x = 0; x < cols; x++) {
-    const i = r * cols + x, top = r < 3, bot = r >= rows - 4, post = Math.abs((x + cols / posts / 2) % (cols / posts) - cols / posts / 2) < 1.5;
-    if (!top && !bot && !post) continue;
-    FOGS[i] = FOGB[i] = 0; BG[i] = C(GRAY, top || bot ? 1 : 2);
-    set(i, top ? (r === 2 ? '=' : ' ') : bot ? (r === rows - 4 ? '_' : (x & 3) ? ' ' : '.') : '|', top && r === 2 || bot ? bodyCol : C(GRAY, 6));
+  const train=elRiding();if(!train||!ride)return;
+  const car=ride.car??clamp(Math.round(ride.off/EL_CAR_LEN),-1,1),[vx,vy]=R(worldCoord(train.x+car*EL_CAR_LEN),EL_TRACK[ride.tr]);
+  const floor=EL_TOP+.02,ceiling=floor+.285,hl=EL_HL-.008,hw=EL_HW-.006;
+  const paint=(i,ch,col,bg)=>{FOGS[i]=FOGB[i]=0;BG[i]=bg;set(i,ch,col);return true;};
+  const box=(u,v,l,w,z0,z1,shade)=>drawBox(boxAt(vx+u,vy+v,1,0,l,w,floor+z0,floor+z1),shade);
+  box(0,0,hl,hw,-.008,0,(i,t,L)=>paint(i,fract(HIT.u*55)<.05?'.':' ',C(GRAY,5),C(GRAY,2)));
+  box(0,0,hl,hw,.285,.3,(i,t,L)=>{
+    const light=Math.abs(Math.abs(HIT.v)-.055)<.009;
+    return paint(i,light?'=':fract(HIT.u*12)<.02?'|':' ',C(WHITE,light?15:7),C(light?WARM:WHITE,light?10:4));
+  });
+  for(const side of [-1,1]) {
+    box(0,side*hw,hl,.004,0,.285,(i,t,L)=>{
+      const u=HIT.u,z=HIT.w-floor,door=[-.45*EL_HL,.45*EL_HL].find(d=>Math.abs(u-d)<.105);
+      const window=[-.69,0,.69].some(x=>Math.abs(u-x)<.19);
+      if(door!==undefined) {
+        if(Math.abs(u-door)<.068&&z>.16&&z<.25)return false;
+        const seam=Math.abs(u-door)<.004,edge=Math.abs(u-door)>.096;
+        return paint(i,seam?'|':edge?'|':z<.018?'=':' ',C(edge?YEL:GRAY,10),C(GRAY,3.5));
+      }
+      if(window&&z>.1&&z<.25)return false;
+      const frame=window&&(Math.abs(z-.1)<.006||Math.abs(z-.25)<.006);
+      const rib=fract((u+1)*28)<.04,trim=z<.012||Math.abs(z-.095)<.004;
+      return paint(i,frame||trim?'=':rib?'|':z>.26&&fract(u*25)<.1?'|':' ',C(GRAY,8),C(z>.25?WARM:WHITE,z>.25?4:3.5));
+    });
+    for(const x of [-.69,0,.69]) {
+      const seat=(i,t,L)=>paint(i,HIT.face===5&&fract((HIT.u+.2)*30)<.08?'|':HIT.face===5?'_':' ',C(BLUE,12),C(BLUE,HIT.face===5?6:4));
+      box(x,side*(hw-.028),.19,.025,.025,.045,seat);
+      box(x,side*(hw-.005),.19,.005,.045,.095,seat);
+    }
+    for(const x of [-.7,0,.7]) {
+      const y=vy+side*.055;
+      rod(vx+x,y,ceiling-.015,vx+x,y,ceiling-.055,.0025,GRAY,1.6);
+      rod(vx+x-.013,y,ceiling-.055,vx+x+.013,y,ceiling-.055,.0025,WHITE,1.4);
+    }
+    rod(vx-hl,vy+side*.055,ceiling-.015,vx+hl,vy+side*.055,ceiling-.015,.003,GRAY,1.8);
+  }
+  for(const side of [-1,1]) {
+    box(side*hl,0,.004,hw,0,.285,(i,t,L)=>{
+      const v=HIT.v,z=HIT.w-floor,door=Math.abs(v)<.045;
+      return paint(i,door&&Math.abs(v)<.003?'|':door&&(Math.abs(z-.12)<.005||Math.abs(z-.24)<.005)?'=':' ',C(GRAY,10),C(door&&z>.12&&z<.24?GRAY:WHITE,door?2:4));
+    });
+    rod(vx+side*.45*EL_HL,vy,floor,vx+side*.45*EL_HL,vy,ceiling-.015,.0035,GRAY,1.8);
   }
 }
 const nearestCar = r => {

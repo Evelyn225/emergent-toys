@@ -23,8 +23,10 @@ function elPlatformAt(x,y) {
 // platform's end. In each stair's own frame u runs along the street (up the stairs) and v out from the building face
 // toward the deck; st.ox, st.oy is the face at the station's middle, st.off how far along it's been slid to find a
 // clear run (streetscape.js). A turnstile at the foot (st.x, st.y: where you stand to swipe).
-const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: EL_Y0 - EL_Y + 0.05 };
-// (top: the top landing reaches a little past the deck's edge, 0.4 out from the face, so you step off it onto the deck)
+const ELS = { u0: -1.3, u1: -0.25, u2: -0.05, u3: 1.0, u4: 1.3, v0: 0.19, v1: 0.35, top: 0.4 };
+// The top landing meets the deck edge, without overlapping its upper surface.
+const ELS_POSTS = [[(ELS.u0+ELS.u1)/2,EL_TOP/4],[ELS.u1,EL_TOP/2],[ELS.u2,EL_TOP/2],[(ELS.u2+ELS.u3)/2,EL_TOP*.75],[ELS.u3,EL_TOP],[ELS.u4,EL_TOP]];
+let elStairOn = null; // the stair surface occupied by the player; null while walking underneath
 for (const s of EL_STATIONS) s.stairs = [0, 1].map(tr => {
   const ay = tr ? -1 : 1, oy = tr ? EL_Y + 2 : EL_Y; // (c, s: u's direction; for the south side, u runs west)
   return elStairFoot({ tr, ox: s.x, oy, ax: 0, ay, c: ay, s: 0, off: 0 });
@@ -61,19 +63,58 @@ function elStairAt(x, y) {
   return null;
 }
 const elStairGround = (x, y) => { const h = elStairAt(x, y); return h ? h.g : 0; };
+const elWalkGround = (x,y) => { const h=elStairAt(x,y);return h&&h.st===elStairOn?h.g:0; };
+function elStairPostAt(x,y,feet,height=.17,pad=.025) {
+  if(Math.abs(rel(y-EL_Y-1))>1.1)return false;
+  for(const station of EL_STATIONS) for(const st of station.stairs) {
+    const dx=rel(x-st.ox),dy=rel(y-st.oy),u=st.c*dx+st.s*dy-st.off,v=st.ax*dx+st.ay*dy;
+    if(v<ELS.v0-pad||v>ELS.v1+pad||u<ELS.u0||u>ELS.u4+pad)continue;
+    for(const [pu,z] of ELS_POSTS)for(const pv of [ELS.v0+.01,ELS.v1-.01])
+      if(feet<z-.015&&feet+height>0&&Math.abs(u-pu)<.008+pad&&Math.abs(v-pv)<.008+pad)return true;
+  }
+  return false;
+}
 // walking from (x0, y0) to (x, y) as the stairs see it: true (blocked), false (fine), or null (nothing to do with them).
 // On the stairs you keep to them (the rails), up or down a step at a time, or off the top onto the deck; from the
 // street you can only step onto the bottom step, and only once you've swiped through the turnstile (pass)
 const EL_TREAD = 0.08;
-function elStairStep(x0, y0, x, y, pass) {
+function elStairStep(x0, y0, x, y, pass, feet=elStairGround(x0,y0), height=.17) {
   const a = elStairAt(x0, y0), b = elStairAt(x, y);
+  const on=a&&feet>=a.g-.025;
+  if(!on) {
+    if(elStairPostAt(x,y,feet,height))return true;
+    if(b&&feet+height<b.g-.02)return null; // enough headroom beneath the steel treads
+  }
   if (!a && !b) return null;
-  if (a) { // on them: a step at a time; off the bottom, or off the top onto the deck, but not over the rails
+  if (on) { // on them: a step at a time; off the bottom, or off the top onto the deck, but not over the rails
     if (!b) return a.g > EL_TREAD * 0.6 && !(underEl(y) && a.g > EL_TOP - 0.01);
     return Math.abs(b.g - a.g) > EL_TREAD;
   }
-  if (b.g > EL_TREAD * 0.6) return true; // from the street: the steelwork under the stairs
+  if (!b)return null;
+  if (b.g > EL_TREAD * 0.6) return true; // low treads without headroom cannot be walked through
   return !(pass && pass.st === b.st); // the bottom step, through the turnstile
+}
+
+// Guard the station's outer edge and ends. The train-facing edge stays open for boarding,
+// and the outer edge has a gap exactly where the stair landing joins it.
+const EL_RAIL_H=.11, EL_RAIL_R=.004;
+function elPlatformRails(station,tr) {
+  const st=station.stairs[tr],y=tr?EL_Y1-.008:EL_Y0+.008,inner=EL_PLAT[tr]+(tr?-.12:.12);
+  const ends=[ELS.u3,ELS.u4].map(u=>st.ox+st.c*(st.off+u)).sort((a,b)=>a-b);
+  const lo=clamp(ends[0]-.025,station.x0,station.x1),hi=clamp(ends[1]+.025,station.x0,station.x1);
+  return [[station.x0,y,lo,y],[hi,y,station.x1,y],[station.x0,y,station.x0,inner],[station.x1,y,station.x1,inner]];
+}
+function elPlatformRailAt(x,y,feet,pad=.025) {
+  if(feet>EL_TOP+EL_RAIL_H||feet+.17<EL_TOP||Math.abs(rel(y-EL_Y-1))>EL_HALF+.05)return false;
+  for(const station of EL_STATIONS) {
+    if(Math.abs(rel(x-station.x))>3)continue;
+    for(const tr of [0,1])for(const [ax,ay,bx,by] of elPlatformRails(station,tr)) {
+      const dx=rel(bx-ax),dy=by-ay,rx=rel(x-ax),ry=rel(y-ay),d=dx*dx+dy*dy;
+      const t=d?clamp((rx*dx+ry*dy)/d,0,1):0;
+      if(Math.hypot(rx-t*dx,ry-t*dy)<EL_RAIL_R+pad)return true;
+    }
+  }
+  return false;
 }
 
 // pillars at both curbs, clear of the cross streets

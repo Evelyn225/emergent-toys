@@ -140,13 +140,19 @@ const free = (x, y) => {
     !room.props.some(s => s.box && !s.walk && s.box.z0 < 1.2 && s.box.z1 > 0.05 && inBox(s.box, x, y, 0.2) || s.bench && Math.hypot(x - s.x, y - s.y) < 0.5); // furniture (not rugs and mats: you walk on those)
   if (mode === 'roof') return roofFree(x, y); // on the roofs (moves.js)
   if (mode === 'elplat') return roofFree(x,y,EL_TOP);
-  if (mode === 'walk') { const st = elStairStep(px, py, x, y, elPass); if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))]; } // (the el stairs: elevated.js)
+  if (mode === 'walk') {
+    const feet=walkGround(px,py)+body.z/10;
+    if(elPlatformRailAt(x,y,feet))return false;
+    const st = elStairStep(px, py, x, y, elPass,feet,.17-body.crouch*.07);
+    if (st !== null) return !st && !map[idx(Math.floor(x), Math.floor(y))];
+  } // (the el stairs: elevated.js)
   if (overRoof(x, y)) return true; // falling from a roof, above the next building: you'll come down on it
   if (body.z > 3) return !map[idx(Math.floor(x), Math.floor(y))] && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10); // (high above the lamps, booths and fences)
   return !map[idx(Math.floor(x), Math.floor(y))] && !isWater(x, y) && !roadBridgeRailAt(x,y,walkGround(px,py)+body.z/10) && !(mode === 'walk' && machineAt(x, y, 0.02)) && !(mode === 'walk' && parkedCarAt(x, y, 0.04)) && !solidAt(x, y, 0.03) && !fairBlocked(x, y, 0.03) && !airportBlocked(x, y, 0.03) && !aircraftAt(x, y, 0.03) && !(mode === 'walk' && gateShutHere(x, y)) &&
     !architectureBlocked(x, y, 0.03) && !landmarkBlocked(x, y, 0.03) && !streetSceneBlocked(x,y,.03,walkGround(px,py)+body.z/10) && !islandSightBlocked(x,y,walkGround(px,py)+body.z/10) && Math.hypot(rel(x - LIGHTHOUSE.x), rel(y - LIGHTHOUSE.y)) > LIGHTHOUSE.r; // you walk round the lighthouse
 };
 function move(fx, fy) {
+  const oldStair=mode==='walk'?elStairAt(px,py):null;
   const m = mode === 'room' ? 0.25 : 0.05;
   // walking into a way out (a shop's door, the top of the subway stairs) takes you through it
   const n = Math.hypot(fx, fy);
@@ -155,6 +161,16 @@ function move(fx, fy) {
   const stuck = !free(px, py); // (somewhere you shouldn't be, a teleport or a gate shutting on you: you can always walk out)
   if (stuck || free(px + fx + Math.sign(fx) * m, py)) px += fx;
   if (stuck || free(px, py + fy + Math.sign(fy) * m)) py += fy;
+  if(mode==='walk') {
+    const stair=elStairAt(px,py);
+    if(!stair) {
+      if(elStairOn&&oldStair?.g>=EL_TOP-.01&&underEl(py,px)) {
+        mode='roof';roofH=EL_TOP;roofLot=new Set();room=null;elPass=null;
+      }
+      elStairOn=null;
+    }
+    else if(!elStairOn&&stair.g<=EL_TREAD*.6&&elPass?.st===stair.st&&(!oldStair||oldStair.g<=EL_TREAD*.6))elStairOn=stair.st;
+  } else elStairOn=null;
   stepHomeBalcony(fx);
 }
 const CRASH_V = 1; // 36 km/h (1 unit/s = 10 m/s): slower than this and you've only bumped into something

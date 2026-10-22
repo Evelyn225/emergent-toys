@@ -150,7 +150,7 @@ function terrainHeight(x, y) {
 }
 
 function outdoorGroundHeight(x, y) {
-  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elStairGround(x, y));
+  return Math.max(roadGroundHeight(x, y), architectureGroundHeight(x, y), elWalkGround(x, y));
 }
 
 buildTerrain();
