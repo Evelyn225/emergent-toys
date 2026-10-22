@@ -498,11 +498,8 @@ function drawCourier() {
       }
       if(o.kind==='print-sign') {
         BG[i]=C(GREEN,2);
-        for(const [row,text] of ['PRINT','& POST'].entries()) {
-          const q=HIT.u/.09+text.length/2,k=Math.floor(q);
-          if(k>=0&&k<text.length&&oneCell((fract(q)-.5)*.09,t/projX)&&oneCell(HIT.w-(.785-row*.08),t/projY))return set(i,text[k],C(STONE,L)),true;
-        }
-        return set(i,' ',0),true;
+        const side=HIT.face===3?1:-1,row=HIT.w>.745?0:1,text=['PRINT','& POST'][row];
+        return set(i,HIT.face===3||HIT.face===4?worldText(text,HIT.u*side,HIT.w,t,i,x-o.s*side*o.hw,y+o.c*side*o.hw,.785-row*.08,o.c*side,o.s*side,.09,.045):' ',C(STONE,L)),true;
       }
       if(o.kind==='cabin')return courierCabin(i,t,L,o);
       if(o.kind==='arch-sign')return courierArchSign(i,t,L,o,x,y);
@@ -617,8 +614,8 @@ function courierCabin(i,t,L,o) {
   if(south&&Math.abs(u+.35)<.06&&w<.2)return BG[i]=C(BLUE,1+L*.3),set(i,Math.abs(u+.35)>.05||w>.19?'|':Math.abs(u+.31)<.008&&Math.abs(w-.1)<.008?'o':' ',C(GRAY,L)),true;
   if(south&&Math.abs(u-.05)<.15&&w>.1&&w<.2)return BG[i]=C(CYAN,2+day),set(i,Math.abs(u-.05)>.14||w<.105||w>.195?'=':':',C(CYAN,Math.max(L,night*10))),true;
   if(south&&u>.25&&u<.5&&Math.abs(w-.17)<.03) {
-    const text='SITE',q=(u-.375)/.06+text.length/2,k=Math.floor(q);
-    if(k>=0&&k<text.length&&oneCell((fract(q)-.5)*.06,t/projX))return set(i,text[k],C(BLUE,Math.max(L,6))),true;
+    const [x,y]=R(o.x+o.c*.375-o.s*o.hw,o.y+o.s*.375+o.c*o.hw);
+    return set(i,worldText('SITE',u-.375,HIT.w,t,i,x,y,o.z0+.17,o.c,o.s,.06,.04),C(BLUE,Math.max(L,6))),true;
   }
   return set(i,fract(u*12)<.08||w<.012||w>.255?'|':' ',C(GRAY,L*.6)),true;
 }

@@ -1,31 +1,12 @@
-// Small gestures when an item is used. The picture and its hand move together; the world and aim stay put.
-const HELD_SQUEEZE = new Set(['duck', 'sharkplush', 'plushcat', 'plushbear', 'petcat', 'petdog']);
+// Item art can change on use, but its hand stays steady.
 const HELD_FLIP = new Set(['luckycoin', 'oldcoin', 'goldring', 'pearl', 'wishcoins']);
-const HELD_PAGES = new Set(['book', 'newspaper', 'postcard', 'vinyl', 'vhs', 'hotelmasterpiece', 'hotelharbour', 'hotelstilllife']);
 function heldUsePhase(it) {
   if (!heldUse || heldUse.item !== it) return -1;
   const phase = (T - heldUse.t) / heldUse.duration;
   return phase >= 0 && phase < 1 ? phase : -1;
 }
 function heldGesture(it, u) {
-  const phase = heldUsePhase(it), pose = { x: 0, y: 0, angle: 0, sx: 1, sy: 1 };
-  if (phase < 0) return pose;
-  const pulse = Math.sin(phase * Math.PI), id = it.id, kind = ITEMS[id].kind;
-  if (kind === 'drink' || kind === 'food' || kind === 'drug' || id === 'harmonica') {
-    pose.x = -u * pulse; pose.y = -u * (kind === 'drink' ? 2.2 : 1.2) * pulse;
-    pose.angle = (kind === 'drink' ? -.2 : -.07) * pulse;
-  } else if (HELD_SQUEEZE.has(id)) {
-    pose.sx = 1 + pulse * .09; pose.sy = 1 - pulse * .13; pose.y = -u * pulse * .4;
-  } else if (HELD_FLIP.has(id)) {
-    // The hand stays full width; only the object turns edge-on (drawHeldDense).
-    pose.y = -u * pulse * 1.2;
-  } else if (id === 'snowglobe' || id === 'cityglobe') {
-    pose.angle = pulse * .1;
-    pose.y = -u * pulse * .6;
-  } else if (HELD_PAGES.has(id)) {
-    pose.y = -u * pulse * .7;
-  } // Keys and ordinary gear remain steady; only purposeful gestures move the hand.
-  return pose;
+  return { x: 0, y: 0, angle: 0, sx: 1, sy: 1 };
 }
 
 let heldPictureCache = null;
@@ -44,7 +25,7 @@ function heldPageTurn(it, picture) {
     r >= 2 && r < picture.height - 2 && c >= left && c < right ? C(ch === '/' ? WHITE : WARM, 13) : picture.col(ch, r, c) };
 }
 function heldPicture(it) {
-  // Cell animation runs at 15 fps; the hand's movement remains smooth. Only the current picture is retained.
+  // Cell animation runs at 15 fps. Only the current picture is retained.
   const key = [it.id, it.uses, it.q, it.of, it.kg, Math.floor(T * 15), weather, night > .3,
     fx.boombox, Math.floor(fx.spark * 2), fx.vape > 0, hurrying(), Math.floor(heldUsePhase(it) * 15),
     Math.floor(a * 30), Math.floor(tod * 60)].join('|');
@@ -95,10 +76,8 @@ function heldFrame(it, picture = null) {
   if (picture) s = Math.max(7, Math.min(s, Math.floor(cv.width * .64 / (picture.width * D_ASPECT)),
     Math.floor(cv.height * .46 / picture.height)));
   const u = picture ? s / .72 : base, hsz = Math.round(u * 1.15), pose = heldGesture(it, u);
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
-  const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * .35 : Math.sin(T * 1.5) * u * .08;
   const lift = it.id === 'yoyo' ? .55 + .45 * smooth(clamp(yoyo.len / .18, 0, 1)) : 0;
-  let cx = cv.width * (.84 - lift * .14) + pose.x, hy = cv.height - 5.6 * hsz + bob - lift * cv.height * .34 + pose.y;
+  let cx = cv.width * (.84 - lift * .14) + pose.x, hy = cv.height - 5.6 * hsz - lift * cv.height * .34 + pose.y;
   if (picture) {
     g.font = s + 'px monospace';
     const width = picture.width * g.measureText('M').width;

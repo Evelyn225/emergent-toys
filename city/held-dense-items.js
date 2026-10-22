@@ -738,7 +738,7 @@ Object.assign(DENSE, {
     return null;
   }),
   onigiri: (it, f) => sculpt(26, 14, (x, y) => { // a rice triangle, a band of nori, a pickled plum peeking out
-    const bite = dBitesTop(x, y, 0.35 + f * 0.65, -6.4, 7); if (bite === true) return null;
+    const bite = dBitesTop(x, y, f, -6.4, 12.4); if (bite === true) return null;
     if (y < -6.4 || y > 6 || Math.abs(x) > (y + 6.4) * 0.68) return null;
     if (y > 2.4 && Math.abs(x) < 3) return ['#', C(GREEN, 4)];
     if (bite === 'rim' && Math.abs(x) < 1.2) return ['@', C(RED, 13)];

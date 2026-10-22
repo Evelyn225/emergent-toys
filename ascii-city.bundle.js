@@ -1632,7 +1632,8 @@ const PIERS = [[FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1]];
 // the marina office stands on the promenade at the foot of the jetty
 let MARINA_BX = 13, MARINA = { x: MARINA_BX * 8 + 4, y0: SHORE_S * 8 + 3, fingers: [SHORE_S * 8 + 7, SHORE_S * 8 + 10], end: SHORE_S * 8 + 12.6, reach: 3.3 };
 MARINA.office = { x: MARINA.x - 2.2, y: SHORE_S * 8 + 3.55 };
-for (const p of [[MARINA.x - 0.2, MARINA.y0, MARINA.x + 0.2, MARINA.end], [MARINA.x - 1, MARINA.end - 0.3, MARINA.x + 1, MARINA.end],
+const MARINA_HEAD = [MARINA.x - 2, MARINA.end - .9, MARINA.x + 2, MARINA.end];
+for (const p of [[MARINA.x - 0.2, MARINA.y0, MARINA.x + 0.2, MARINA.end], MARINA_HEAD,
   ...MARINA.fingers.map(fy => [MARINA.x - MARINA.reach, fy - 0.15, MARINA.x + MARINA.reach, fy + 0.15])]) PIERS.push(Object.assign(p, { marina: true }));
 const inMarina = (x, y) => Math.abs(rel(x - MARINA.x)) < MARINA.reach + 1.2 && rel(y - MARINA.y0) > -1.2 && rel(y - MARINA.end) < 0.8;
 for (let bx = 0; bx < NB; bx++) {
@@ -11286,23 +11287,27 @@ buildTerrain();
 // Island ferries use ship-local walking coordinates and the ordinary outdoor
 // renderer. Windows are openings onto the same world, not another scene pass.
 const FERRY={hl:2.25,hw:.62,deck:.14,roof:.47,dwell:32,speed:2.1,fare:4,count:2,cycle:0};
+const FERRY_DECK={aft:-2.18,bow:1.96,side:.59,clearance:.04};
+const FERRY_CABIN={aft:-.98,front:1.62,side:.474,wall:.018,door:.12,height:.32};
+const FERRY_BENCH={hl:.085,hw:.028,bottom:.038,top:.046,back:.096};
 const FERRY_STOPS=[],FERRY_LEGS=[];
 let ferryRide=null,ferryClockOffset=0;
 const FERRY_SEATS=[];
 for(const u of [-.7,-.1,.5,1.1])for(const side of [-1,1])
-  FERRY_SEATS.push({u,v:side*.385,face:side*Math.PI/2,inside:true});
+  FERRY_SEATS.push({u,v:side*.415,face:-side*Math.PI/2,inside:true});
 for(const u of [-1.85,-1.3])for(const side of [-1,1])
-  FERRY_SEATS.push({u,v:side*.38,face:side*Math.PI/2,inside:false});
+  FERRY_SEATS.push({u,v:side*.415,face:-side*Math.PI/2,inside:false});
 const FERRY_SOLIDS=[
-  ...FERRY_SEATS.map(s=>({u:s.u,v:s.v,hl:.18,hw:.075,seat:true})),
+  ...FERRY_SEATS.map(s=>({u:s.u,v:s.v,hl:FERRY_BENCH.hl,hw:FERRY_BENCH.hw+.006,seat:true})),
   {u:.68,v:0,hl:.57,hw:.09,cafe:true},
-  {u:1.89,v:0,hl:.26,hw:.43,bridge:true}
+  {u:1.88,v:0,hl:.26,hw:.44,bridge:true}
 ];
 function ferryWalkClear(u,v) {
-  if(Math.abs(u)>FERRY.hl-.09||Math.abs(v)>FERRY.hw-.065)return false;
+  if(u<FERRY_DECK.aft+FERRY_DECK.clearance||u>FERRY_DECK.bow-FERRY_DECK.clearance||Math.abs(v)>FERRY_DECK.side-FERRY_DECK.clearance)return false;
   // Cabin bulkheads have a wide door at the aft end; side passages stay open.
-  if(Math.abs(u+.98)<.055&&Math.abs(v)<.46&&Math.abs(v)>.12)return false;
-  if(u>-.98&&u<1.63&&Math.abs(Math.abs(v)-.465)<.025)return false;
+  const cabin=FERRY_CABIN;
+  if(Math.abs(u-(cabin.aft+cabin.wall/2))<cabin.wall/2+.025&&Math.abs(v)<cabin.side+.025&&Math.abs(v)>cabin.door-.025)return false;
+  if(u>cabin.aft&&u<cabin.front&&Math.abs(Math.abs(v)-(cabin.side-cabin.wall/2))<cabin.wall/2+.025)return false;
   return !FERRY_SOLIDS.some(s=>Math.abs(u-s.u)<s.hl+.025&&Math.abs(v-s.v)<s.hw+.025);
 }
 function ferryPoint(ship,u,v) {
@@ -11311,6 +11316,20 @@ function ferryPoint(ship,u,v) {
 function ferryLocal(ship,x,y) {
   const ex=x-ship.x,ey=y-ship.y;
   return [ex*ship.c+ey*ship.s,-ex*ship.s+ey*ship.c];
+}
+function ferryGangway(ship) {
+  if(!ship.stopped)return null;
+  const stop=FERRY_STOPS[ship.stop],a=ferryPoint(ship,-.98,-FERRY.hw),b=[...stop.land];
+  // End at the exposed pier edge rather than layering a raised slab over it.
+  const pier=PIERS.find(p=>b[0]>=p[0]&&b[0]<=p[2]&&b[1]>=p[1]&&b[1]<=p[3]);
+  if(pier) {
+    const ux=a[0]-b[0],uy=a[1]-b[1];
+    const f=Math.min(1,ux>0?(pier[2]-b[0])/ux:ux<0?(pier[0]-b[0])/ux:Infinity,uy>0?(pier[3]-b[1])/uy:uy<0?(pier[1]-b[1])/uy:Infinity);
+    b[0]+=ux*f;b[1]+=uy*f;
+  }
+  const ex=b[0]-a[0],ey=b[1]-a[1],length=Math.hypot(ex,ey);
+  const h0=FERRY.deck,h1=outdoorGroundHeight(...stop.land),thickness=.012;
+  return {x:(a[0]+b[0])/2,y:(a[1]+b[1])/2,c:ex/length,s:ey/length,hl:length/2,hw:.1,h0,h1,axis:'x',thickness,a,b};
 }
 // A navigation disc contains the whole hull, so turns are safe too. Pier
 // rectangles are tested analytically: a thin jetty cannot fall between samples.
@@ -11763,7 +11782,7 @@ const sk0 = seed => seed * 1e4 | 0;
 const FACADE_BG = [GRAY, BLUE, BRICK, GRAY, GRAY, GRAY, GRAY, WARM, GRAY, BRICK, RED, GRAY, BRICK, WHITE, WARM, GRAY, WHITE, GRAY];
 const ARCADE_SIGN = new Set(['ARCADE']);
 // a 3x5 pixel font for signs seen up close: 15 bits a glyph, top row first, left to right
-const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448, '$': 15518 };
+const GLYPH5 = { 'A': 11245, 'B': 27566, 'C': 14627, 'D': 27502, 'E': 31143, 'F': 31140, 'G': 14699, 'H': 23533, 'I': 29847, 'J': 4714, 'K': 23469, 'L': 18727, 'M': 24557, 'N': 27501, 'O': 11114, 'P': 27556, 'Q': 11123, 'R': 27565, 'S': 14478, 'T': 29842, 'U': 23407, 'V': 23402, 'W': 23549, 'X': 23213, 'Y': 23186, 'Z': 29351, '0': 31599, '1': 11415, '2': 25255, '3': 25230, '4': 23497, '5': 31118, '6': 14831, '7': 29330, '8': 31727, '9': 31694, '/': 4772, '.': 2, '-': 448, '$': 15518, ':': 1040, '&': 10923, '!': 9346, "'": 9216 };
 const glyphOn = (ch, gx, gy) => gx >= 0 && gx < 3 && gy >= 0 && gy < 5 && (GLYPH5[ch] >> (14 - gy * 3 - gx) & 1) === 1;
 // a sign's letters: big enough on screen (judged once for the whole sign, from tFar, the depth of its far end) and each
 // letter is drawn large in blocks; smaller, one character per letter in the middle of its span. lq: how far across in
@@ -14389,6 +14408,12 @@ function signLine(word, lq, hz, i, zc, tc, t, letterW, bandH, far, ex, ey) {
   return best;
 }
 const midDepth = (vx, vy) => Math.max(0.05, dx * vx + dy * vy);
+// Flat prop labels share the shop font and project each distant letter once.
+// (ex, ey) runs left-to-right on the visible face; reverse it on the back.
+function worldText(word,u,z,t,i,vx,vy,zc,ex,ey,letterW,bandH) {
+  const far=Math.max(.05,dx*vx+dy*vy+Math.abs(dx*ex+dy*ey)*word.length*letterW/2);
+  return signLine(word,u/letterW+word.length/2,(zc+bandH/2-z)/bandH,i,zc,midDepth(vx,vy),t,letterW,bandH,far,ex,ey)||' ';
+}
 // the way a broad face's text runs (see faceQ), for a box along (c, s)
 const faceDir = (c, s) => HIT.face === 3 ? [c, s] : [-c, -s];
 // which way a broad face (3: +v, 4: -v) reads: 0 at its left edge, 1 at its right, as you look at it
@@ -15093,15 +15118,12 @@ function drawElStation(station){
   if(!service)continue;
   const next=EL_STATIONS[service.next].name,wait=service.seconds?'IN '+Math.floor(service.seconds/60)+':'+String(service.seconds%60).padStart(2,'0'):'BOARDING';
   const boardY=tr?EL_Y1+EL_PLATFORM_OUT-.01:EL_Y0-EL_PLATFORM_OUT+.01,[x,z]=R(station.x,boardY);
-  const lines=[wait+' '+(service.dir>0?'EAST':'WEST'),'NEXT '+next],normal=py<boardY?-1:1,width=.6/Math.max(...lines.map(l=>l.length));
+  const lines=[wait+' '+(service.dir>0?'EAST':'WEST'),'NEXT '+next],width=.6/Math.max(...lines.map(l=>l.length));
   drawBox(boxAt(x,z,1,0,.34,.025,EL_TOP+.23,EL_TOP+.39),(i,t,L)=>{
     BG[i]=C(GRAY,1);
     if(Math.abs(HIT.v)<.024||Math.abs(HIT.u)>.315)return set(i,' ',0),true;
-    const row=HIT.w>EL_TOP+.31?0:1,center=EL_TOP+(row ? .27 : .35),u=HIT.u*normal,q=u/width+lines[row].length/2,col=Math.floor(q),ch=lines[row][col];
-    if(!ch||Math.abs(HIT.w-center)>.025)return set(i,' ',0),true;
-    const cell=t/projX,zcell=t/projY;
-    const large=width/cell>2.2&&.05/zcell>2.8;
-    const mark=large?glyphOn(ch,Math.floor(fract(q)*4),Math.floor((center+.025-HIT.w)/.05*5))?'#':' ':oneCell((fract(q)-.5)*width,cell)&&oneCell(HIT.w-center,zcell)?ch:' ';
+    const row=HIT.w>EL_TOP+.31?0:1,center=EL_TOP+(row ? .27 : .35),side=HIT.face===3?1:-1;
+    const mark=worldText(lines[row],HIT.u*side,HIT.w,t,i,x,z+side*.025,center,side,0,width,.05);
     return set(i,mark,C(YEL,15)),true;
   });
   for(const off of [-.28,.28])rod(x+off,z,EL_TOP,x+off,z,EL_TOP+.23,.008);
@@ -19567,11 +19589,8 @@ function drawCourier() {
       }
       if(o.kind==='print-sign') {
         BG[i]=C(GREEN,2);
-        for(const [row,text] of ['PRINT','& POST'].entries()) {
-          const q=HIT.u/.09+text.length/2,k=Math.floor(q);
-          if(k>=0&&k<text.length&&oneCell((fract(q)-.5)*.09,t/projX)&&oneCell(HIT.w-(.785-row*.08),t/projY))return set(i,text[k],C(STONE,L)),true;
-        }
-        return set(i,' ',0),true;
+        const side=HIT.face===3?1:-1,row=HIT.w>.745?0:1,text=['PRINT','& POST'][row];
+        return set(i,HIT.face===3||HIT.face===4?worldText(text,HIT.u*side,HIT.w,t,i,x-o.s*side*o.hw,y+o.c*side*o.hw,.785-row*.08,o.c*side,o.s*side,.09,.045):' ',C(STONE,L)),true;
       }
       if(o.kind==='cabin')return courierCabin(i,t,L,o);
       if(o.kind==='arch-sign')return courierArchSign(i,t,L,o,x,y);
@@ -19686,8 +19705,8 @@ function courierCabin(i,t,L,o) {
   if(south&&Math.abs(u+.35)<.06&&w<.2)return BG[i]=C(BLUE,1+L*.3),set(i,Math.abs(u+.35)>.05||w>.19?'|':Math.abs(u+.31)<.008&&Math.abs(w-.1)<.008?'o':' ',C(GRAY,L)),true;
   if(south&&Math.abs(u-.05)<.15&&w>.1&&w<.2)return BG[i]=C(CYAN,2+day),set(i,Math.abs(u-.05)>.14||w<.105||w>.195?'=':':',C(CYAN,Math.max(L,night*10))),true;
   if(south&&u>.25&&u<.5&&Math.abs(w-.17)<.03) {
-    const text='SITE',q=(u-.375)/.06+text.length/2,k=Math.floor(q);
-    if(k>=0&&k<text.length&&oneCell((fract(q)-.5)*.06,t/projX))return set(i,text[k],C(BLUE,Math.max(L,6))),true;
+    const [x,y]=R(o.x+o.c*.375-o.s*o.hw,o.y+o.s*.375+o.c*o.hw);
+    return set(i,worldText('SITE',u-.375,HIT.w,t,i,x,y,o.z0+.17,o.c,o.s,.06,.04),C(BLUE,Math.max(L,6))),true;
   }
   return set(i,fract(u*12)<.08||w<.012||w>.255?'|':' ',C(GRAY,L*.6)),true;
 }
@@ -23069,12 +23088,6 @@ GAMES.lapdance = () => {
 // a hull with a stepped bow and a waterline, and on top whatever that kind of boat carries (a windscreen and an
 // outboard, a cabin and a mast with two sails, a wheelhouse and funnel, two decks of windows). Used for the boats going
 // round the bay, the ones in the marina, and the one you're at the helm of. Also: the marina office and its board.
-// the letter of a word painted across a face at q (0..1 along it) on the row dz from its middle line, or ' ': only
-// where it's big enough on screen to read (see the pier booths' signs)
-function signChar(word, q, dz, t, half) {
-  const n = word.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * half) * n;
-  return Math.abs(dz) < t / projY / 2 && k >= 0 && k < word.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
-}
 const BOW_SLICES = 6;
 // ---- wakes: where each moving boat's stern has been lately, laid on the water (floorBaseCell asks wakeAt): two arms of
 // foam spreading out behind it at the angle wakes make, churned white water close behind, all of it fading. A trail
@@ -23145,7 +23158,8 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
     if (f === 6) return false;
     if (stern && f === 2 && b.name && w > 0.012 && w < top - 0.007) { // her name across the transom
       BG[i] = C(hullCol, (1.4 + L * 0.45) * shadeFace(f));
-      const ch = signChar(b.name.toUpperCase(), (HIT.v / hw + 1) / 2, w - top * 0.5, t, hw);
+      const word=b.name.toUpperCase();
+      const ch=worldText(word,HIT.v,HIT.w,t,i,vx-hx*hl,vy-hy*hl,z+top*.5,-hy,hx,2*hw/(word.length+2),Math.min(.025,top*.4));
       return set(i, ch, C(hullCol === WHITE || hullCol === YEL ? BLUE : WHITE, Math.max(L, 9))), true;
     }
     if (f === 5) { BG[i] = C(deck, 1.5 + L * 0.35); return set(i, deck === BRICK && fract(HIT.u * 40) < 0.2 ? '=' : ' ', C(BRICK, L * 0.6)), true; }
@@ -29565,7 +29579,7 @@ Object.assign(DENSE, {
     return null;
   }),
   onigiri: (it, f) => sculpt(26, 14, (x, y) => { // a rice triangle, a band of nori, a pickled plum peeking out
-    const bite = dBitesTop(x, y, 0.35 + f * 0.65, -6.4, 7); if (bite === true) return null;
+    const bite = dBitesTop(x, y, f, -6.4, 12.4); if (bite === true) return null;
     if (y < -6.4 || y > 6 || Math.abs(x) > (y + 6.4) * 0.68) return null;
     if (y > 2.4 && Math.abs(x) < 3) return ['#', C(GREEN, 4)];
     if (bite === 'rim' && Math.abs(x) < 1.2) return ['@', C(RED, 13)];
@@ -30097,34 +30111,15 @@ function drawTelescope(){
  g.strokeStyle='rgba(220,210,170,.45)';g.lineWidth=2;g.beginPath();g.arc(x,y,r,0,TAU);g.stroke();
  g.font='12px monospace';g.fillStyle='#ddd';g.fillText('6×   Q: lower telescope',x-80,y+r+22);g.restore();
 }
-// Small gestures when an item is used. The picture and its hand move together; the world and aim stay put.
-const HELD_SQUEEZE = new Set(['duck', 'sharkplush', 'plushcat', 'plushbear', 'petcat', 'petdog']);
+// Item art can change on use, but its hand stays steady.
 const HELD_FLIP = new Set(['luckycoin', 'oldcoin', 'goldring', 'pearl', 'wishcoins']);
-const HELD_PAGES = new Set(['book', 'newspaper', 'postcard', 'vinyl', 'vhs', 'hotelmasterpiece', 'hotelharbour', 'hotelstilllife']);
 function heldUsePhase(it) {
   if (!heldUse || heldUse.item !== it) return -1;
   const phase = (T - heldUse.t) / heldUse.duration;
   return phase >= 0 && phase < 1 ? phase : -1;
 }
 function heldGesture(it, u) {
-  const phase = heldUsePhase(it), pose = { x: 0, y: 0, angle: 0, sx: 1, sy: 1 };
-  if (phase < 0) return pose;
-  const pulse = Math.sin(phase * Math.PI), id = it.id, kind = ITEMS[id].kind;
-  if (kind === 'drink' || kind === 'food' || kind === 'drug' || id === 'harmonica') {
-    pose.x = -u * pulse; pose.y = -u * (kind === 'drink' ? 2.2 : 1.2) * pulse;
-    pose.angle = (kind === 'drink' ? -.2 : -.07) * pulse;
-  } else if (HELD_SQUEEZE.has(id)) {
-    pose.sx = 1 + pulse * .09; pose.sy = 1 - pulse * .13; pose.y = -u * pulse * .4;
-  } else if (HELD_FLIP.has(id)) {
-    // The hand stays full width; only the object turns edge-on (drawHeldDense).
-    pose.y = -u * pulse * 1.2;
-  } else if (id === 'snowglobe' || id === 'cityglobe') {
-    pose.angle = pulse * .1;
-    pose.y = -u * pulse * .6;
-  } else if (HELD_PAGES.has(id)) {
-    pose.y = -u * pulse * .7;
-  } // Keys and ordinary gear remain steady; only purposeful gestures move the hand.
-  return pose;
+  return { x: 0, y: 0, angle: 0, sx: 1, sy: 1 };
 }
 
 let heldPictureCache = null;
@@ -30143,7 +30138,7 @@ function heldPageTurn(it, picture) {
     r >= 2 && r < picture.height - 2 && c >= left && c < right ? C(ch === '/' ? WHITE : WARM, 13) : picture.col(ch, r, c) };
 }
 function heldPicture(it) {
-  // Cell animation runs at 15 fps; the hand's movement remains smooth. Only the current picture is retained.
+  // Cell animation runs at 15 fps. Only the current picture is retained.
   const key = [it.id, it.uses, it.q, it.of, it.kg, Math.floor(T * 15), weather, night > .3,
     fx.boombox, Math.floor(fx.spark * 2), fx.vape > 0, hurrying(), Math.floor(heldUsePhase(it) * 15),
     Math.floor(a * 30), Math.floor(tod * 60)].join('|');
@@ -30194,10 +30189,8 @@ function heldFrame(it, picture = null) {
   if (picture) s = Math.max(7, Math.min(s, Math.floor(cv.width * .64 / (picture.width * D_ASPECT)),
     Math.floor(cv.height * .46 / picture.height)));
   const u = picture ? s / .72 : base, hsz = Math.round(u * 1.15), pose = heldGesture(it, u);
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD;
-  const bob = moving ? Math.sin(T * (fx.skating ? 4 : 9)) * u * .35 : Math.sin(T * 1.5) * u * .08;
   const lift = it.id === 'yoyo' ? .55 + .45 * smooth(clamp(yoyo.len / .18, 0, 1)) : 0;
-  let cx = cv.width * (.84 - lift * .14) + pose.x, hy = cv.height - 5.6 * hsz + bob - lift * cv.height * .34 + pose.y;
+  let cx = cv.width * (.84 - lift * .14) + pose.x, hy = cv.height - 5.6 * hsz - lift * cv.height * .34 + pose.y;
   if (picture) {
     g.font = s + 'px monospace';
     const width = picture.width * g.measureText('M').width;
@@ -30996,13 +30989,12 @@ const GUN_GRIP = [43, 9]; // (the column and row your fist closes round)
 const CYL_FACE = [' .---. ', '/ o o \\', '| o+o |', '\\ o o /', " `---' "]; // swung out: the chambers, filling as you load
 const gunView = { spin: 0, t: 0 }; // the cylinder's turn as drawn, easing after gun.spin
 function gunGeom() {
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, aim = gunAim();
+  const aim = gunAim();
   const u = Math.max(10, Math.min(Math.max(14, cv.height / 36), cv.width / 45));
   const hsz = Math.round(u * 1.15), s = Math.round(u * (0.7 + aim * 0.04));
-  const bob = (moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08) * (1 - aim * 0.75);
   const k = gun.kick, rl = gun.reload > 0 ? Math.min(1, (RELOAD_T - gun.reload) * 5, gun.reload * 5) : 0;
   const cx = Math.round(cv.width * (0.82 - aim * 0.075) + k * u * 0.6);
-  const hy = Math.round(cv.height - 5.6 * hsz + bob + k * u * 0.5 + rl * u * 0.6 - aim * u * 1.5);
+  const hy = Math.round(cv.height - 5.6 * hsz + k * u * 0.5 + rl * u * 0.6 - aim * u * 1.5);
   return { u, s, hsz, cx, hy, ang: 0.05 + k * 0.32 + rl * 0.85 - aim * 0.06 };
 }
 // the picture as it is this instant: the cylinder's flutes moved round, the hammer back or down, the cylinder out
@@ -33477,8 +33469,9 @@ function islandTimberShade(model,i,t,L) {
   const brightness=(wood?1.6:2.2)+L*(top?.3:.2);
   BG[i]=C(base,brightness);
   if(model.word&&(HIT.face===3||HIT.face===4)) {
-    const along=HIT.face===3?HIT.u:-HIT.u;
-    if(wallText(i,along,t/projX,HIT.w,t,model.word,0,model.labelZ??.195,Math.min(.028,model.hl*1.7/model.word.length),model.labelH??.04,C(GREEN,Math.max(5,L)),BG[i]))return true;
+    const side=HIT.face===3?1:-1,[x,y]=R(model.x-model.s*side*model.hw,model.y+model.c*side*model.hw);
+    set(i,worldText(model.word,HIT.u*side,HIT.w,t,i,x,y,model.labelZ??.195,model.c*side,model.s*side,Math.min(.028,model.hl*1.7/model.word.length),model.labelH??.04),C(GREEN,Math.max(5,L)));
+    return true;
   }
   let ch=' ';
   if(wood) {
@@ -34839,16 +34832,16 @@ function stepElRide(dt){
 }
 // One physical ship model serves shore views and the walkable interior. Window
 // openings preserve the city's original colour and depth buffers behind them.
-function ferryLetter(text,u,z,t,half,middle) {
-  const width=Math.min(.027,half*1.8/(text.length+1)),q=u/width+text.length/2,k=Math.floor(q);
-  return k>=0&&k<text.length&&oneCell((fract(q)-.5)*width,t/projX)&&oneCell(z-middle,t/projY)?text[k]:' ';
-}
 function drawFerry(ship) {
   const [vx,vy]=R(ship.x,ship.y);if(Math.hypot(vx,vy)>vis+FERRY.hl)return;
   const z=FERRY.deck;
   const part=(u,v,hl,hw,z0,z1,shade)=>drawBox(boxAt(vx+ship.c*u-ship.s*v,vy+ship.s*u+ship.c*v,ship.c,ship.s,hl,hw,z0,z1),shade);
   const paint=(i,ch,base,level,background=base,bgLevel=level*.35)=>{set(i,ch,C(base,level));BG[i]=C(background,bgLevel);return true;};
   const flat=(base,level=1,ch=' ')=>(i,t,L)=>paint(i,ch,base,Math.max(3,L*level));
+  const text=(i,t,word,u,cu,cv,au,av,height,half,band=.035)=>{
+    const [x,y]=ferryPoint(ship,cu,cv),width=Math.min(.027,half*1.8/(word.length+1));
+    return worldText(word,u,HIT.w,t,i,x-px,y-py,z+height,ship.c*au-ship.s*av,ship.s*au+ship.c*av,width,band);
+  };
   const line=(u0,v0,z0,u1,v1,z1,r,base=WHITE,light=1)=> {
     const [x0,y0]=ferryPoint(ship,u0,v0),[x1,y1]=ferryPoint(ship,u1,v1);
     rod(x0-px,y0-py,z0,x1-px,y1-py,z1,r,base,light);
@@ -34856,36 +34849,38 @@ function drawFerry(ship) {
   const hull=(i,t,L)=> {
     const h=HIT.w;
     if(HIT.face===6)return false;
-    if(HIT.face===5)return paint(i,fract((HIT.u+HIT.v)*24)<.045?'·':' ',STONE,L*.7,STONE,2+day*3);
+    if(HIT.face===5) {
+      const u=HIT.u-.12,v=HIT.v,cabin=FERRY_CABIN;
+      // One deck surface: carpet and paint are materials, not overlapping slabs.
+      if(u>cabin.aft+cabin.wall&&u<cabin.front&&Math.abs(v)<cabin.side-cabin.wall)
+        return paint(i,hash(Math.floor(u*90),Math.floor(v*90),9141)>.965?'.':' ',BLUE,Math.max(10,L),BLUE,7+day*2);
+      if(Math.abs(u+.98)<.16&&Math.abs(v+.51)<.025)return paint(i,'=',YEL,Math.max(8,L),STONE,2+day*3);
+      return paint(i,fract(v*32)<.055?'|':' ',BRICK,L*.7,STONE,2+day*3);
+    }
     const stripe=h>.075&&h<.106;
     if(HIT.face<=4&&h>.035&&h<.065&&Math.abs(fract(HIT.u*2)-.5)<.09)return paint(i,'O',GRAY,L,GRAY,2);
     return paint(i,h<.02?'_':stripe?'=':' ',stripe?WHITE:BLUE,L, stripe?WHITE:BLUE,1+L*.3);
   };
   part(-.12,0,2.13,FERRY.hw,.005,z,hull);
   for(let n=0;n<4;n++)part(2.01+n*.055,0,.03,FERRY.hw*(1-n*.13),.01,z+.015,hull);
-  // Teak aft deck, a soft carpet runner through the lounge, yellow gate stripe.
-  part(-1.61,0,.61,.59,z-.002,z+.002,(i,t,L)=>paint(i,fract(HIT.u*38)<.08?'|':' ',BRICK,L*.7,BRICK,2+day*2.5));
-  part(.3,0,1.27,.445,z+.001,z+.004,(i,t,L)=>paint(i,fract(HIT.u*38)<.035?'.':' ',BLUE,Math.max(5,L*.7),BLUE,2.5+day));
-  part(-.98,-.51,.16,.025,z+.003,z+.006,flat(YEL,1.1,'='));
   // Cabin walls: broad uninterrupted window bays with slim mullions. Both
   // inside and outside look through to the real world and the opposite windows.
+  const cabin=FERRY_CABIN,innerAft=cabin.aft+cabin.wall,cabinHalf=(cabin.front-innerAft)/2,cabinCenter=(cabin.front+innerAft)/2;
   for(const side of [-1,1]) {
-    part(.32,side*.465,1.3,.009,z,z+.32,(i,t,L)=> {
-      const u=HIT.u+.32,h=HIT.w-z;
+    const wallV=side*(cabin.side-cabin.wall/2);
+    part(cabinCenter,wallV,cabinHalf,cabin.wall/2,z,z+cabin.height,(i,t,L)=> {
+      const u=HIT.u+cabinCenter,h=HIT.w-z;
       const mullion=Math.abs(fract((u+1.03)/.6)-.5)>.48;
       if(h>.105&&h<.278&&!mullion)return false;
+      if(HIT.face===(side>0?3:4)&&h>.025&&h<.065)
+        return paint(i,text(i,t,'ISLAND BELLE',HIT.u*side,cabinCenter,side*cabin.side,side,0,.045,cabinHalf,.026),WHITE,Math.max(7,L),BLUE,3);
       const trim=Math.abs(h-.1)<.007||Math.abs(h-.282)<.007;
       return paint(i,trim?'=':mullion?'|':' ',trim?BRICK:WHITE,Math.max(6,L*.85),h<.095?BLUE:WHITE,h<.095?3:3+day*2);
     });
-    // Lower rubbing strake along the exterior, with the vessel's name aft.
-    part(.25,side*.478,1.36,.008,z+.025,z+.065,(i,t,L)=> {
-      const ch=ferryLetter('ISLAND BELLE',HIT.u,HIT.w-z,t,1.36,.045);
-      return paint(i,ch,WHITE,Math.max(7,L),BLUE,3);
-    });
   }
-  part(-.98,0,.009,.465,z,z+.32,(i,t,L)=> {
+  part(cabin.aft+cabin.wall/2,0,cabin.wall/2,cabin.side,z,z+cabin.height,(i,t,L)=> {
     const v=HIT.v,h=HIT.w-z;
-    if(Math.abs(v)<.12&&h<.285)return false;
+    if(Math.abs(v)<cabin.door&&h<.285)return false;
     if(Math.abs(v)>.17&&Math.abs(v)<.415&&h>.11&&h<.275)return false;
     return paint(i,Math.abs(Math.abs(v)-.125)<.012?'|':' ',WHITE,Math.max(6,L),WHITE,3+day*2);
   });
@@ -34895,44 +34890,50 @@ function drawFerry(ship) {
     return paint(i,lamp?'=':fract(HIT.u*20)<.025?'|':' ',lamp?WARM:WHITE,lamp?15:Math.max(7,L*.8),lamp?WARM:WHITE,lamp?10:4);
   });
   part(.32,0,1.34,.505,z+.34,z+.355,flat(BLUE,.8));
-  part(1.9,0,.25,.44,z,z+.37,(i,t,L)=> {
+  part(1.88,0,.26,.44,z,z+.37,(i,t,L)=> {
     if(HIT.w-z>.14&&HIT.w-z<.31&&Math.abs(HIT.v)<.39)return paint(i,' ',CYAN,6,BLUE,2);
     return paint(i,' ',WHITE,Math.max(6,L),WHITE,4);
   });
-  part(1.9,0,.27,.46,z+.37,z+.39,flat(WHITE));
+  part(1.88,0,.28,.46,z+.37,z+.39,flat(WHITE));
   part(.85,0,.12,.095,z+.355,z+.49,flat(BLUE,.9));
   part(.85,0,.135,.11,z+.49,z+.51,flat(WHITE));
   // Railings around the entire open deck and both side promenades. The port
   // gate has its own bar and a gangway only while securely alongside a terminal.
   for(const side of [-1,1]) {
-    for(const [u0,u1] of side<0?[[-2.18,-1.17],[-.79,2.14]]:[[-2.18,2.14]]) {
-      for(const h of [.055,.115])line(u0,side*.59,z+h,u1,side*.59,z+h,.0035);
+    for(const [u0,u1] of side<0?[[FERRY_DECK.aft,-1.17],[-.79,FERRY_DECK.bow]]:[[FERRY_DECK.aft,FERRY_DECK.bow]]) {
+      for(const h of [.055,.115])line(u0,side*FERRY_DECK.side,z+h,u1,side*FERRY_DECK.side,z+h,.0035);
     }
-    for(let u=-2.18;u<=2.15;u+=.36)if(!(side<0&&Math.abs(u+.98)<.2))line(u,side*.59,z,u,side*.59,z+.115,.0045);
+    for(let u=FERRY_DECK.aft;u<FERRY_DECK.bow;u+=.36)if(!(side<0&&Math.abs(u+.98)<.2))line(u,side*FERRY_DECK.side,z,u,side*FERRY_DECK.side,z+.115,.0045);
+    line(FERRY_DECK.bow,side*FERRY_DECK.side,z,FERRY_DECK.bow,side*FERRY_DECK.side,z+.115,.0045);
   }
-  for(const u of [-2.18,2.14])for(const h of [.055,.115])line(u,-.59,z+h,u,.59,z+h,.0035);
-  line(-1.17,-.59,z+.11,-.79,-.59,z+.11,.004,YEL,1.2);
+  for(const u of [FERRY_DECK.aft,FERRY_DECK.bow])for(const h of [.055,.115])line(u,-FERRY_DECK.side,z+h,u,FERRY_DECK.side,z+h,.0035);
+  if(!ship.stopped)line(-1.17,-.59,z+.11,-.79,-.59,z+.11,.004,YEL,1.2);
   if(ship.stopped) {
-    const stop=FERRY_STOPS[ship.stop],gate=ferryPoint(ship,-.98,-.59);
-    // Gate is aft; the broad landing plate reaches the actual timber pier.
-    const ex=stop.land[0]-gate[0],ey=stop.land[1]-gate[1],len=Math.hypot(ex,ey);
-    drawBox(boxAt((gate[0]+stop.land[0])/2-px,(gate[1]+stop.land[1])/2-py,ex/len,ey/len,len/2,.09,.09,z+.005),(i,t,L)=>paint(i,fract(HIT.u*24)<.07?'=':' ',GRAY,L*.9,GRAY,2+day*2));
+    const ramp=ferryGangway(ship);
+    const box=boxAt(ramp.x-px,ramp.y-py,ramp.c,ramp.s,ramp.hl,ramp.hw,Math.min(ramp.h0,ramp.h1)-ramp.thickness,Math.max(ramp.h0,ramp.h1));
+    box.planes=courierSurfacePlanes(ramp);
+    drawBox(box,(i,t,L)=>paint(i,fract(HIT.u*24)<.07?'=':' ',GRAY,L*.9,GRAY,2+day*2),rayBeveledBay);
+    for(const side of [-1,1]) {
+      const ox=-ramp.s*side*ramp.hw,oy=ramp.c*side*ramp.hw;
+      for(const up of [.055,.11])rod(ramp.a[0]+ox-px,ramp.a[1]+oy-py,ramp.h0+up,ramp.b[0]+ox-px,ramp.b[1]+oy-py,ramp.h1+up,.0035,WHITE,1);
+      for(const [point,h] of [[ramp.a,ramp.h0],[ramp.b,ramp.h1]])rod(point[0]+ox-px,point[1]+oy-py,h,point[0]+ox-px,point[1]+oy-py,h+.11,.004,GRAY,1);
+    }
   }
   // Window seats and the aft deck benches share the same collision records.
   for(let k=0;k<FERRY_SEATS.length;k++) {
-    const seat=FERRY_SEATS[k],side=Math.sign(seat.v),base=seat.inside?BLUE:BRICK;
-    part(seat.u,seat.v,.18,.075,z+.035,z+.052,flat(base,1.15,'_'));
-    part(seat.u,seat.v+side*.065,.18,.009,z+.052,z+.105,flat(base,1));
-    for(const end of [-1,1])part(seat.u+end*.16,seat.v,.008,.072,z+.052,z+.076,flat(GRAY));
-    for(const end of [-1,1])part(seat.u+end*.12,seat.v,.008,.04,z+.006,z+.035,flat(GRAY,.6));
+    const seat=FERRY_SEATS[k],side=Math.sign(seat.v),base=seat.inside?BLUE:BRICK,b=FERRY_BENCH;
+    part(seat.u,seat.v,b.hl,b.hw,z+b.bottom,z+b.top,flat(base,1.15,'_'));
+    part(seat.u,seat.v+side*(b.hw-.004),b.hl,.006,z+b.top,z+b.back,flat(base,1));
+    for(const end of [-1,1])part(seat.u+end*(b.hl-.005),seat.v,.005,b.hw,z+b.top,z+.072,flat(GRAY));
+    for(const end of [-1,1])for(const across of [-1,1])part(seat.u+end*.055,seat.v+across*.019,.004,.004,z,z+b.bottom,flat(GRAY,.6));
     if(ferrySeatOccupied(ship.id,k)) {
       const [x,y]=ferryPoint(ship,seat.u,seat.v),look=figStreetLook(9400+ship.id*31+k,[GREEN,RED,STONE,YEL][k%4],BLUE);
-      drawFigure(x-px,y-py,z+.007,.175,-ship.s*side,ship.c*side,look,'sit7',{light:Math.max(7,day*12)});
+      drawFigure(x-px,y-py,z+b.top-7*.175/FIG_TALL,.175,ship.s*side,-ship.c*side,look,'sit7',{light:Math.max(7,day*12)});
     }
   }
   // Café island: timber facing, brass foot rail, pastry cabinet, espresso
   // machine, cups, menu and a stable barista figure behind the serving edge.
-  part(.68,0,.57,.09,z+.01,z+.099,(i,t,L)=>paint(i,fract(HIT.u*24)<.08?'|':' ',BRICK,Math.max(5,L*.9),BRICK,3));
+  part(.68,0,.57,.09,z,z+.099,(i,t,L)=>paint(i,fract(HIT.u*24)<.08?'|':' ',BRICK,Math.max(5,L*.9),BRICK,3));
   part(.68,0,.59,.105,z+.099,z+.108,flat(STONE,1.1));
   for(const side of [-1,1])line(.16,side*.13,z+.025,1.2,side*.13,z+.025,.003,YEL,1.2);
   part(.98,0,.12,.065,z+.108,z+.185,flat(GRAY,.95));
@@ -34944,15 +34945,16 @@ function drawFerry(ship) {
   });
   for(const u of [.23,.32,.41])part(u,0,.025,.04,z+.11,z+.127,flat(YEL,.9,'o'));
   part(.65,0,.1,.015,z+.12,z+.2,(i,t,L)=> {
-    const h=HIT.w-z;
-    return paint(i,ferryLetter('CAFE',HIT.u,h,t,.1,.17),WARM,13,BLUE,3);
+    const side=HIT.face===3?1:-1;
+    return paint(i,HIT.face===3||HIT.face===4?text(i,t,'CAFE',HIT.u*side,.65,side*.015,side,0,.17,.1):' ',WARM,13,BLUE,3);
   });
   const [bx,by]=ferryPoint(ship,1.41,0);
-  drawFigure(bx-px,by-py,z+.002,.175,-ship.c,-ship.s,figStreetLook(9281,WHITE,BLUE),'stand',{light:10});
+  drawFigure(bx-px,by-py,z,.175,-ship.c,-ship.s,figStreetLook(9281,WHITE,BLUE),'stand',{light:10});
   // Destination display faces into the lounge above the serving counter.
   part(1.62,0,.012,.3,z+.235,z+.297,(i,t,L)=> {
     const text=ship.stopped?'AT '+FERRY_STOPS[ship.stop].name:'NEXT '+FERRY_STOPS[ship.next].name;
-    return paint(i,ferryLetter(text.toUpperCase(),HIT.v,HIT.w-z,t,.3,.266),YEL,13,BLACK,1);
+    const side=HIT.face===2?1:-1,[x,y]=ferryPoint(ship,1.62-side*.012,0),word=text.toUpperCase(),width=Math.min(.027,.54/(word.length+1));
+    return paint(i,HIT.face<=2?worldText(word,HIT.v*side,HIT.w,t,i,x-px,y-py,z+.266,-ship.s*side,ship.c*side,width,.038):' ',YEL,13,BLACK,1);
   });
   // A lifebuoy and flag make the open deck recognisable from the water.
   part(-1.65,.595,.075,.006,z+.03,z+.11,(i,t,L)=>paint(i,Math.abs(HIT.u)<.045&&HIT.w>z+.045&&HIT.w<z+.09?' ':'O',ORANGE,Math.max(7,L),WHITE,3));
@@ -34961,12 +34963,14 @@ function drawFerry(ship) {
 }
 function drawFerryTerminal(stop) {
   const [x,y]=R(...stop.land);if(Math.hypot(x,y)>vis)return;
-  const ship=nextFerry(stop),wait=ship.wait<.1?'BOARDING':`IN ${Math.ceil(ship.wait)}s`;
-  const base=Math.max(.1,outdoorGroundHeight(...stop.land));
-  rod(x+.18,y,base,x+.18,y,base+.26,.007,GRAY,1.1);
+  const ship=nextFerry(stop),wait=ship.wait<.1?'BOARDING':`IN ${Math.ceil(ship.wait)}S`;
+  const base=outdoorGroundHeight(stop.land[0]+.18,stop.land[1]);
+  drawBox(boxAt(x+.18,y,1,0,.03,.03,base,base+.008),(i,t,L)=>{BG[i]=C(GRAY,2+L*.2);set(i,' ',C(GRAY,L));return true;});
+  rod(x+.18,y,base+.006,x+.18,y,base+.26,.007,GRAY,1.1);
   drawBox(boxAt(x+.18,y,Math.cos(stop.yaw),Math.sin(stop.yaw),.3,.025,base+.16,base+.26),(i,t,L)=>{
     const upper=HIT.w>base+.212,text=upper?'ISLAND FERRY':wait;
-    BG[i]=C(BLUE,3);set(i,ferryLetter(text,HIT.u,HIT.w-base,t,.3,upper ? .235 : .185),C(upper?WHITE:YEL,13));return true;
+    const side=HIT.face===3?1:-1,c=Math.cos(stop.yaw),s=Math.sin(stop.yaw),cx=x+.18-s*side*.025,cy=y+c*side*.025;
+    BG[i]=C(BLUE,3);set(i,HIT.face===3||HIT.face===4?worldText(text,HIT.u*side,HIT.w,t,i,cx,cy,base+(upper ? .235 : .185),c*side,s*side,Math.min(.027,.54/(text.length+1)),.035):' ',C(upper?WHITE:YEL,13));return true;
   });
 }
 function drawFerries() {

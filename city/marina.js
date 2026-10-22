@@ -2,12 +2,6 @@
 // a hull with a stepped bow and a waterline, and on top whatever that kind of boat carries (a windscreen and an
 // outboard, a cabin and a mast with two sails, a wheelhouse and funnel, two decks of windows). Used for the boats going
 // round the bay, the ones in the marina, and the one you're at the helm of. Also: the marina office and its board.
-// the letter of a word painted across a face at q (0..1 along it) on the row dz from its middle line, or ' ': only
-// where it's big enough on screen to read (see the pier booths' signs)
-function signChar(word, q, dz, t, half) {
-  const n = word.length + 2, lq = q * n - 1, k = Math.floor(lq), cellU = t / projX / (2 * half) * n;
-  return Math.abs(dz) < t / projY / 2 && k >= 0 && k < word.length && (cellU > 0.6 || Math.abs(fract(lq) - 0.5) < cellU / 2) ? word[k] : ' ';
-}
 const BOW_SLICES = 6;
 // ---- wakes: where each moving boat's stern has been lately, laid on the water (floorBaseCell asks wakeAt): two arms of
 // foam spreading out behind it at the angle wakes make, churned white water close behind, all of it fading. A trail
@@ -78,7 +72,8 @@ function drawBoat3D(b, vx, vy, hx, hy, moving = 0) {
     if (f === 6) return false;
     if (stern && f === 2 && b.name && w > 0.012 && w < top - 0.007) { // her name across the transom
       BG[i] = C(hullCol, (1.4 + L * 0.45) * shadeFace(f));
-      const ch = signChar(b.name.toUpperCase(), (HIT.v / hw + 1) / 2, w - top * 0.5, t, hw);
+      const word=b.name.toUpperCase();
+      const ch=worldText(word,HIT.v,HIT.w,t,i,vx-hx*hl,vy-hy*hl,z+top*.5,-hy,hx,2*hw/(word.length+2),Math.min(.025,top*.4));
       return set(i, ch, C(hullCol === WHITE || hullCol === YEL ? BLUE : WHITE, Math.max(L, 9))), true;
     }
     if (f === 5) { BG[i] = C(deck, 1.5 + L * 0.35); return set(i, deck === BRICK && fract(HIT.u * 40) < 0.2 ? '=' : ' ', C(BRICK, L * 0.6)), true; }

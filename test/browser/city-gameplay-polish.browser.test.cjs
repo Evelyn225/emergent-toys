@@ -47,14 +47,14 @@ test('the dev catalogue covers live inventory items and spawns a loaded gun, wei
  });
  assert.deepEqual(r.missing,[]);assert.equal(r.inv[0].uses,6);assert.ok(r.inv[1].kg>0);assert.equal(r.inv[2].q,'fine');
 }));
-test('keys and ordinary gear stay steady during use while a drink still rises to your mouth',()=>fixture(async p=>{
+test('keys, ordinary gear and drinks stay steady during use',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
   money=10000;buy('car_sedan');const key=inv.find(it=>ITEMS[it.id].kind==='keys');
   animateHeldUse(key);T+=.2;const keys=heldGesture(key,16);
   const compass={id:'compass',uses:0};animateHeldUse(compass);T+=.2;const gear=heldGesture(compass,16);
   const drink={id:'coffee',uses:3};animateHeldUse(drink);T+=.2;return {keys,gear,drink:heldGesture(drink,16)};
  });
- const still={x:0,y:0,angle:0,sx:1,sy:1};assert.deepEqual(r.keys,still);assert.deepEqual(r.gear,still);assert.ok(r.drink.y<0);
+ const still={x:0,y:0,angle:0,sx:1,sy:1};assert.deepEqual(r.keys,still);assert.deepEqual(r.gear,still);assert.deepEqual(r.drink,still);
 }));
 test('a corpse lies flat, can be searched from either side, and pays once without a minigame or victim report',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{

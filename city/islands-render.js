@@ -89,8 +89,9 @@ function islandTimberShade(model,i,t,L) {
   const brightness=(wood?1.6:2.2)+L*(top?.3:.2);
   BG[i]=C(base,brightness);
   if(model.word&&(HIT.face===3||HIT.face===4)) {
-    const along=HIT.face===3?HIT.u:-HIT.u;
-    if(wallText(i,along,t/projX,HIT.w,t,model.word,0,model.labelZ??.195,Math.min(.028,model.hl*1.7/model.word.length),model.labelH??.04,C(GREEN,Math.max(5,L)),BG[i]))return true;
+    const side=HIT.face===3?1:-1,[x,y]=R(model.x-model.s*side*model.hw,model.y+model.c*side*model.hw);
+    set(i,worldText(model.word,HIT.u*side,HIT.w,t,i,x,y,model.labelZ??.195,model.c*side,model.s*side,Math.min(.028,model.hl*1.7/model.word.length),model.labelH??.04),C(GREEN,Math.max(5,L)));
+    return true;
   }
   let ch=' ';
   if(wood) {

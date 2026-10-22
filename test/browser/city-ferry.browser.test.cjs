@@ -133,3 +133,60 @@ test('a seated passenger can wait to each island without a long forced voyage',(
   assert.equal(result.mode,'ferry');assert.equal(result.ship.stop,stop);assert.equal(result.ship.stopped,true);assert.equal(result.seated,true);assert.equal(result.button,true);assert.ok(result.time-before<=20.001);
  }
 }));
+
+test('terminal lettering reads forward on both faces, enlarges up close and never repeats at an angle',()=>fixture(async page=>{
+ const result=await page.evaluate(()=>{
+  const samples=[];
+  for(const index of [0,1]) {
+   const stop=FERRY_STOPS[index],cx=stop.land[0]+.18,cy=stop.land[1],c=Math.cos(stop.yaw),s=Math.sin(stop.yaw);
+   for(const side of [-1,1])for(const offset of [0,.65]) {
+    px=cx-s*1.5*side+c*offset;py=cy+c*1.5*side+s*offset;a=Math.atan2(cy-py,cx-px);pitch=0;freecam={z:.225};render(0);
+    ZB.fill(Infinity);CH.fill(' ');drawFerryTerminal(stop);
+    const lines=[];for(let row=0;row<rows;row++){const line=CH.slice(row*cols,(row+1)*cols).join('').replace(/\s/g,'');if(line.includes('FERRY'))lines.push(line);}
+    samples.push({index,side,offset,lines});
+   }
+  }
+  const stop=FERRY_STOPS[1];px=stop.land[0]+.18+.3;py=stop.land[1];a=Math.PI;render(0);ZB.fill(Infinity);CH.fill(' ');drawFerryTerminal(stop);
+  const ink=CH.filter(ch=>ch==='#').length,inkRows=new Set();CH.forEach((ch,i)=>{if(ch==='#')inkRows.add(Math.floor(i/cols));});
+  return {samples,ink,rows:inkRows.size};
+ });
+ for(const sample of result.samples)assert.deepEqual(sample.lines,['ISLANDFERRY'],JSON.stringify(sample));
+ assert.ok(result.ink>100,JSON.stringify(result));assert.ok(result.rows>=5,JSON.stringify(result));
+}));
+
+test('gangways meet the deck and pier exactly, and terminal supports reach the planks at every stop',()=>fixture(async page=>{
+ const result=await page.evaluate(()=>{
+  const rows=[];
+  for(const stop of FERRY_STOPS){
+   const ship=ferryShip(0,stop.time+.1),r=ferryGangway(ship),[u,v]=ferryLocal(ship,...r.a);
+   const planes=courierSurfacePlanes(r),top=planes.find(p=>p[4]===5),height=x=>(top[3]-top[0]*x)/top[2];
+   const pier=PIERS.find(p=>stop.land[0]>=p[0]&&stop.land[0]<=p[2]&&stop.land[1]>=p[1]&&stop.land[1]<=p[3]);
+   const edge=Math.min(Math.abs(r.b[0]-pier[0]),Math.abs(r.b[0]-pier[2]),Math.abs(r.b[1]-pier[1]),Math.abs(r.b[1]-pier[3]));
+   const boxes=[],posts=[],box=drawBox,line=rod;px=stop.land[0];py=stop.land[1];
+   try{drawBox=b=>boxes.push(b);rod=(...args)=>posts.push(args);drawFerryTerminal(stop);}finally{drawBox=box;rod=line;}
+   const base=outdoorGroundHeight(stop.land[0]+.18,stop.land[1]);
+   rows.push({id:stop.id,deckError:Math.abs(height(-r.hl)-FERRY.deck),pierError:Math.abs(height(r.hl)-outdoorGroundHeight(...stop.land)),gateError:Math.abs(u+.98)+Math.abs(v+FERRY.hw),edge,baseError:Math.abs(boxes[0].z0-base),postOverlap:posts[0][2]<=boxes[0].z1,rampLength:r.hl*2});
+  }
+  return {rows,headWidth:(MARINA_HEAD[2]-MARINA_HEAD[0])*10,headDepth:(MARINA_HEAD[3]-MARINA_HEAD[1])*10};
+ });
+ assert.ok(result.headWidth>=40);assert.ok(result.headDepth>8.9);
+ for(const row of result.rows){for(const key of ['deckError','pierError','gateError','edge','baseError'])assert.ok(row[key]<1e-9,JSON.stringify(row));assert.equal(row.postOverlap,true);assert.ok(row.rampLength>.3&&row.rampLength<.5,JSON.stringify(row));}
+}));
+
+test('bow rail stops walking before the taper, and seated passengers face the aisle with their hips on the bench',()=>fixture(async page=>{
+ const result=await page.evaluate(()=>{
+  [px,py]=FERRY_STOPS[0].land;useFerry();ferryRide.u=1.4;ferryRide.v=-.52;ferryRide.seat=null;ferrySync();a=ferryRide.yaw;K.KeyW=1;stepFerryRide(10);K.KeyW=0;
+  const stopped=ferryRide.u,ship=ferryShip(ferryRide.id),figures=[],lines=[],boxes=[],box=drawBox,line=rod,figure=drawFigure;
+  try{drawBox=b=>boxes.push(b);rod=(...args)=>lines.push(args);drawFigure=(...args)=>figures.push(args);drawFerry(ship);}finally{drawBox=box;rod=line;drawFigure=figure;}
+  const seated=figures.filter(f=>f[7]==='sit7').map(f=>{
+   const [u,v]=ferryLocal(ship,f[0]+px,f[1]+py),seat=FERRY_SEATS.find(s=>Math.hypot(s.u-u,s.v-v)<1e-8);
+   return {seat:!!seat,inward:f[4]*(ship.s*Math.sign(v))+f[5]*(-ship.c*Math.sign(v)),hipError:Math.abs(f[2]+7*f[3]/FIG_TALL-(FERRY.deck+FERRY_BENCH.top))};
+  });
+  const front=lines.filter(l=>{const [u0]=ferryLocal(ship,l[0]+px,l[1]+py),[u1]=ferryLocal(ship,l[3]+px,l[4]+py);return Math.abs(u0-FERRY_DECK.bow)<1e-8&&Math.abs(u1-FERRY_DECK.bow)<1e-8;});
+  const floors=boxes.filter(b=>Math.abs(b.z1-FERRY.deck)<1e-9&&b.hl>1);
+  return {stopped,rail:FERRY_DECK.bow,taper:2.01,seated,front:front.length,floors:floors.length,seatLength:FERRY_BENCH.hl*20,seatDepth:FERRY_BENCH.hw*20};
+ });
+ assert.ok(result.stopped<result.rail&&result.stopped>result.rail-.07,JSON.stringify(result));assert.ok(result.rail<result.taper);assert.ok(result.front>=2);assert.equal(result.floors,1);
+ assert.ok(result.seatLength<2&&result.seatDepth<.65);assert.ok(result.seated.length>1,JSON.stringify(result));
+ for(const row of result.seated){assert.equal(row.seat,true);assert.ok(row.inward>.99);assert.ok(row.hipError<1e-9);}
+}));
