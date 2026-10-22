@@ -2,7 +2,7 @@
 
 `transit-assets.js` is the central manifest. `phrases` maps utterance IDs to exact original filenames and prepared upload paths; `stations` uses actual station labels (`3RD AVE`, `BLEECKER ST`, etc.). Both train systems resolve the same station entries. All 23 distinct current station labels and all ten supplied phrase/reminder recordings are present: **no missing recordings**.
 
-Original recordings remain untouched in ignored `audio/ascii city/`. Prepared files live in `audio/ascii-city/transit/`: mono, 24 kHz, 16-bit PCM WAV avoids MP3 encoder padding at phrase seams. Inputs use explicit filenames/extensions, including the supplied “Please stand clear…” filename rather than an invented filename for its spoken wording.
+Original recordings remain untouched in ignored `audio/ascii city/`. Prepared files live in `audio/ascii-city/transit/`: mono, 24 kHz, 16-bit PCM WAV avoids MP3 encoder padding at phrase seams. Inputs use explicit filenames/extensions, including the replacement `stand clear of the closing doors.mp3` recording.
 
 Run `node tools/prepare-city-transit.cjs` to regenerate the 33 upload clips from originals. It uses the installed `ffmpeg-static`, accepts its supported input formats, and writes `levels.json` with source SHA-256 hashes, measured loudness/true peak and missing assets. Original sources are local prerequisites for regeneration, not runtime/deployment dependencies.
 
