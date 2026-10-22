@@ -36,6 +36,13 @@ onkeydown = e => {
   audioStart(); // sound can only start from a key press or click
   if (e.code === 'KeyN') toggleSound();
   if(mode==='el'&&e.code==='KeyC'){elSeatToggle();return;}
+  if(mode==='ferry'&&e.code==='KeyC'){ferrySeatToggle();return;}
+  if(mode==='ferry'&&e.code==='Space'){ferryWaitNextPort();return;}
+  if(mode==='ferry'&&!sleep) {
+    if(e.code==='KeyI')openInventory();
+    if(e.code==='KeyQ'&&['food','drink'].includes(ITEMS[heldItem()?.id]?.kind))useHeldItem();
+    const slot=/^Digit([1-8])$/.exec(e.code);if(slot)holdQuickSlot(+slot[1]-1);
+  }
   if (chute && (e.code === 'Space' || e.code === 'KeyE')) return pullCord(); // (in the air, out of an aircraft)
   if (e.code === 'KeyE' && !sleep) interact();
   if(e.code==='Space'&&mode==='ladder'){leaveCourierLadder();return;}
@@ -117,7 +124,7 @@ if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
 }
 addEventListener('mousedown', e => {
   if (wanted.busted || !mouseCaptured() || paused || freecam || sleep || game || panelOpen() || devOpen()) return;
-  if (e.button === 0 && (onFootMode() || (mode === 'sea' || mode === 'boat') && heldRod())) {
+  if (e.button === 0 && (onFootMode() || mode==='ferry'&&['food','drink'].includes(ITEMS[heldItem()?.id]?.kind) || (mode === 'sea' || mode === 'boat') && heldRod())) {
     K.MouseUse = 1; audioStart(); useHeldItem();
   }
   if (e.button === 2) {
@@ -329,6 +336,7 @@ function loop(t) {
   else if (mode === 'sea') stepSea(dt);
   else if (mode === 'air') { if (!sleep) stepFlight(dt); } // (flight.js)
   else if (mode === 'el') stepElRide(dt);
+  else if (mode === 'ferry') stepFerryRide(dt);
   stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)

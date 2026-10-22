@@ -94,6 +94,7 @@ function touchActions() {
     return [['Camera', 'KeyV', 'pop'], [heli ? 'Back' : 'Power -', 'KeyS', 'pop'], [heli ? 'Forward' : 'Power +', 'KeyW', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
   }
   if (mode === 'sea') return [['Camera', 'KeyV', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
+  if(mode==='ferry')return [['Sit / stand','KeyC','pop'],['Inventory','KeyI','pop'],...ferryRide.seat!=null?[['Next island','Space','pop']]:[],...heldItem()&&['food','drink'].includes(ITEMS[heldItem().id]?.kind)?[['Eat / drink','KeyQ','pop']]:[],...e?[[e,'KeyE','main']]:[]];
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
     if (/\bJ: /.test(p)) out.push(['Drive taxi', 'KeyJ', 'pop']);

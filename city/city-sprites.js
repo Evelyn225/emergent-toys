@@ -113,6 +113,7 @@ function walkPose(m, gait = 'walk') {
   return T - (m._phT ?? -1) < 0.3 || m.chase ? gait + (Math.floor(m.ph * 2) & 7) : 'stand'; // (still walking if they stepped a moment ago: a pause doesn't stop them)
 }
 function citySprites() {
+  drawFerries();
   drawWildScenery();
   drawRoadBridges();
   drawDrugBuyer();

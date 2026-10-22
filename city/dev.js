@@ -49,6 +49,8 @@ function leaveFreecam() {
       [px,py]=at;
     }
     body.z = clamp(cam.z - 1.7 - stairRise(px,py), 0, Math.max(0,(room.def.height||3)-1.8));
+  } else if(ferryFromFreecam(cam)) {
+    body.z=0;
   } else {
     const h=roofHeightAt(px,py), ground=walkGround(px,py);
     if (h>ground) { mode='roof'; roofH=h; roofLot=new Set(); }
@@ -117,6 +119,7 @@ function devFree() {
   if (mode === 'fair' && fairRide) { fairRide = null; fairEye = 0.17; }
   if (mode === 'sea' && sea) { sea.v = 0; if (sea.hired) { sea.hired = false; const s = SLOTS[sea.slot]; Object.assign(sea, { x: s.x, y: s.y, hx: s.hx, hy: s.hy }); } sea = null; }
   if (mode === 'el') ride = null;
+  if(mode==='ferry')ferryRide=null;
   plat = null; body.seat = null; mode = 'walk'; pitch = 0; look = 0;
 }
 const devAt = (x, y, ang) => { devFree(); px = worldCoord(x); py = worldCoord(y); a = ang; };
@@ -138,6 +141,7 @@ function devPlaces() {
     ['Grand Hotel', () => devAt(GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2)],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   land.push([COURIER_COMPANY,()=>devAt(...COURIER_DEPOT.door,0)]);
+  if(FERRY_STOPS.length)land.push(['Island ferry terminal',()=>devAt(...FERRY_STOPS[0].land,Math.PI/2)]);
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
   const nearestLm = {}; // (there are several of each: the nearest one)

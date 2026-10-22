@@ -296,7 +296,7 @@ function charLine(x0, y0, x1, y1, w, size, col) {
 let handDrawn = null; // what the hand held in the last frame drawn ({ id, t }), or null: for the tests
 function drawHeldBig() {
   handDrawn = null;
-  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry'&&['food','drink'].includes(ITEMS[heldItem()?.id]?.kind);
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();

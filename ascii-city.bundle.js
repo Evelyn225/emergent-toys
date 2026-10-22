@@ -6018,12 +6018,18 @@ function audioMix(s) {
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
   out.engine = s.mode === 'air' ? 0.35 + 0.55 * clamp(s.throttle || 0, 0, 1) : s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
+  if(s.mode==='ferry') {
+    out.engine=s.ferryInside ? .12 : .18;out.engine+=s.ferryMoving ? .1 : 0;
+    out.city*=.2;out.waves*=s.ferryInside ? .35 : .85;out.wind*=s.ferryInside ? .15 : .75;
+    out.rain*=s.ferryInside ? .12 : 1;out.crowd=s.ferryInside ? .08 : .025;
+  }
   for (const k in out) out[k] = clamp(out[k], 0, 1);
   return out;
 }
 
 // what's underfoot, for the footstep sound
 function surfaceAt(mode, room, x, y) {
+  if(mode==='ferry')return ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46?'carpet':'wood';
   if (mode === 'room') {
     const f = room.def.floor;
     return f === 'carpet' ? 'carpet' : f === 'wood' ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';
@@ -9626,7 +9632,7 @@ function hullPoints(b, x, y, hx, hy) {
   const k = BOAT_KINDS[b.kind];
   return [[k.hl, 0], [k.hl * 0.6, k.hw], [k.hl * 0.6, -k.hw], [0, k.hw], [0, -k.hw], [-k.hl, k.hw], [-k.hl, -k.hw]].map(([u, v]) => [x + hx * u - hy * v, y + hy * u + hx * v]);
 }
-const waterClear = (b, x, y, hx, hy) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy) && roadBridgeClearance(qx,qy) > (b.kind==='sailboat'?1.05:.28) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
+const waterClear = (b, x, y, hx, hy) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy) && roadBridgeClearance(qx,qy) > (b.kind==='sailboat'?1.05:.28) && !ferryHullAt(qx,qy) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
 function trafficClear(b, x, y, hx, hy, t = T) { // the boats going round the bay
   const pts = hullPoints(b, x, y, hx, hy);
   return !boats.some(o => { const p = boatAt(o, t), r = BOAT_HL[o.kind] * 0.85; return Math.abs(rel(p.x - x)) < 3 && pts.some(([qx, qy]) => Math.hypot(rel(p.x - qx), rel(p.y - qy)) < r); });
@@ -11277,6 +11283,264 @@ function outdoorGroundHeight(x, y) {
 }
 
 buildTerrain();
+// Island ferries use ship-local walking coordinates and the ordinary outdoor
+// renderer. Windows are openings onto the same world, not another scene pass.
+const FERRY={hl:2.25,hw:.62,deck:.14,roof:.47,dwell:32,speed:2.1,fare:4,count:2,cycle:0};
+const FERRY_STOPS=[],FERRY_LEGS=[];
+let ferryRide=null,ferryClockOffset=0;
+const FERRY_SEATS=[];
+for(const u of [-.7,-.1,.5,1.1])for(const side of [-1,1])
+  FERRY_SEATS.push({u,v:side*.385,face:side*Math.PI/2,inside:true});
+for(const u of [-1.85,-1.3])for(const side of [-1,1])
+  FERRY_SEATS.push({u,v:side*.38,face:side*Math.PI/2,inside:false});
+const FERRY_SOLIDS=[
+  ...FERRY_SEATS.map(s=>({u:s.u,v:s.v,hl:.18,hw:.075,seat:true})),
+  {u:.68,v:0,hl:.57,hw:.09,cafe:true},
+  {u:1.89,v:0,hl:.26,hw:.43,bridge:true}
+];
+function ferryWalkClear(u,v) {
+  if(Math.abs(u)>FERRY.hl-.09||Math.abs(v)>FERRY.hw-.065)return false;
+  // Cabin bulkheads have a wide door at the aft end; side passages stay open.
+  if(Math.abs(u+.98)<.055&&Math.abs(v)<.46&&Math.abs(v)>.12)return false;
+  if(u>-.98&&u<1.63&&Math.abs(Math.abs(v)-.465)<.025)return false;
+  return !FERRY_SOLIDS.some(s=>Math.abs(u-s.u)<s.hl+.025&&Math.abs(v-s.v)<s.hw+.025);
+}
+function ferryPoint(ship,u,v) {
+  return [ship.x+ship.c*u-ship.s*v,ship.y+ship.s*u+ship.c*v];
+}
+function ferryLocal(ship,x,y) {
+  const ex=x-ship.x,ey=y-ship.y;
+  return [ex*ship.c+ey*ship.s,-ex*ship.s+ey*ship.c];
+}
+// A navigation disc contains the whole hull, so turns are safe too. Pier
+// rectangles are tested analytically: a thin jetty cannot fall between samples.
+function ferrySeaClear(x,y,pad=2.65) {
+  if(x<pad||y<pad||x>MAP_WORLD.width-pad||y>MAP_WORLD.height-pad)return false;
+  if(PIERS.some(p=>Math.hypot(Math.max(p[0]-x,0,x-p[2]),Math.max(p[1]-y,0,y-p[3]))<pad))return false;
+  const nearRect=(x0,y0,x1,y1)=>Math.hypot(Math.max(x0-x,0,x-x1),Math.max(y0-y,0,y-y1))<pad;
+  if(nearRect(FOOTBRIDGE.x-FOOTBRIDGE.hw,FOOTBRIDGE.y0,FOOTBRIDGE.x+FOOTBRIDGE.hw,FOOTBRIDGE.y1)||
+    nearRect(CAUSEWAY.x-CAUSEWAY.hw,CAUSEWAY.y0,CAUSEWAY.x+CAUSEWAY.hw,CAUSEWAY.y1)||roadBridgePierAt(x,y,pad))return false;
+  for(let k=0;k<13;k++) {
+    const angle=k*Math.PI/6,r=k===12?0:pad,qx=x+Math.cos(angle)*r,qy=y+Math.sin(angle)*r;
+    if(!seaAt(qx,qy)||roadBridgePierAt(qx,qy)||roadBridgeClearance(qx,qy)<.65)return false;
+  }
+  return true;
+}
+function ferryWaterPath(from,to,cache) {
+  const step=2,w=Math.ceil(MAP_WORLD.width/step),h=Math.ceil(MAP_WORLD.height/step);
+  const cell=p=>Math.floor(p[1]/step)*w+Math.floor(p[0]/step),start=cell(from),goal=cell(to);
+  const score=new Map([[start,0]]),prev=new Map(),closed=new Set(),heap=[];
+  const point=k=>[(k%w+.5)*step,(Math.floor(k/w)+.5)*step];
+  const heuristic=k=>Math.hypot(k%w-goal%w,Math.floor(k/w)-Math.floor(goal/w));
+  const push=(k,f)=>{let n=heap.length;heap.push({k,f});while(n){const p=(n-1)>>1;if(heap[p].f<=f)break;heap[n]=heap[p];n=p;}heap[n]={k,f};};
+  const pop=()=>{const first=heap[0],last=heap.pop();if(heap.length){let n=0;while(n*2+1<heap.length){let c=n*2+1;if(c+1<heap.length&&heap[c+1].f<heap[c].f)c++;if(last.f<=heap[c].f)break;heap[n]=heap[c];n=c;}heap[n]=last;}return first.k;};
+  const clear=k=>{if(!cache.has(k))cache.set(k,ferrySeaClear(...point(k),3.1));return cache.get(k);};
+  push(start,heuristic(start));
+  while(heap.length&&closed.size<80000) {
+    const k=pop();if(closed.has(k))continue;
+    if(k===goal) {
+      const path=[to];let q=k;
+      while(q!==start){path.push(point(q));q=prev.get(q);}
+      path.push(point(start),from);path.reverse();
+      // String-pull across clear water. Every half-cell is checked, rather than
+      // trusting just the waypoints around an island headland.
+      const out=[path[0]];
+      const segmentClear=(a,b)=>{const n=Math.ceil(Math.hypot(a[0]-b[0],a[1]-b[1])/.5);for(let j=0;j<=n;j++)if(!ferrySeaClear(a[0]+(b[0]-a[0])*j/n,a[1]+(b[1]-a[1])*j/n))return false;return true;};
+      for(let i=0;i<path.length-1;){let j=path.length-1;while(j>i+1&&!segmentClear(path[i],path[j]))j--;out.push(path[j]);i=j;}
+      return out;
+    }
+    closed.add(k);const x=k%w,y=Math.floor(k/w);
+    for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++) {
+      if(!ox&&!oy||x+ox<0||y+oy<0||x+ox>=w||y+oy>=h)continue;
+      const next=k+oy*w+ox;if(closed.has(next)||!clear(next))continue;
+      if(ox&&oy&&(!clear(k+ox)||!clear(k+oy*w)))continue;
+      const g=score.get(k)+Math.hypot(ox,oy);
+      if(g>=(score.get(next)??Infinity))continue;
+      score.set(next,g);prev.set(next,k);push(next,g+heuristic(next));
+    }
+  }
+  throw Error('No safe ferry route between island terminals');
+}
+function buildFerryNetwork() {
+  FERRY_STOPS.length=FERRY_LEGS.length=0;FERRY.cycle=0;
+  if(!worldReady)return;
+  const city={id:'city',name:'City Marina',x:MARINA.x+.98,y:MARINA.end+.98,yaw:0,land:[MARINA.x,MARINA.end-.13],out:[0,1]};
+  FERRY_STOPS.push(city);
+  for(const id of ['cabin','rock','wood','sand','fern']) {
+    const island=WILD_ISLANDS.find(i=>i.id===id),p=island.dock;
+    FERRY_STOPS.push({id,name:island.name,x:p[0]-.98,y:(p[1]+p[3])/2+.98,yaw:Math.PI/2,land:[p[0]+.18,(p[1]+p[3])/2],out:[-1,0]});
+  }
+  for(const stop of FERRY_STOPS) {
+    stop.approach=[stop.x+stop.out[0]*5,stop.y+stop.out[1]*5];
+    for(let n=0;n<8&&!ferrySeaClear(...stop.approach,3.1);n++) {
+      stop.approach[0]+=stop.out[0]*2;stop.approach[1]+=stop.out[1]*2;
+    }
+  }
+  const cache=new Map();
+  for(let k=0;k<FERRY_STOPS.length;k++) {
+    const from=FERRY_STOPS[k],to=FERRY_STOPS[(k+1)%FERRY_STOPS.length];
+    const path=[[from.x,from.y],...ferryWaterPath(from.approach,to.approach,cache),[to.x,to.y]];
+    const lengths=path.slice(1).map((p,i)=>Math.hypot(p[0]-path[i][0],p[1]-path[i][1]));
+    const length=lengths.reduce((a,b)=>a+b,0),motions=[];let yaw=from.yaw;
+    for(let n=0;n<lengths.length;n++) {
+      const p=path[n],q=path[n+1],target=n===0?from.yaw:n===lengths.length-1?to.yaw:Math.atan2(q[1]-p[1],q[0]-p[0]);
+      const turn=mod(target-yaw+Math.PI,Math.PI*2)-Math.PI;
+      if(Math.abs(turn)>.001)motions.push({p,q:p,yaw,target:yaw+turn,seconds:Math.abs(turn)/.22*1.5});
+      yaw=target;
+      if(lengths[n]>.00001)motions.push({p,q,yaw,target:yaw,seconds:lengths[n]/(n===0||n===lengths.length-1 ? .42 : FERRY.speed)});
+    }
+    const seconds=motions.reduce((sum,m)=>sum+m.seconds,0);
+    from.time=FERRY.cycle;FERRY_LEGS.push({from:k,to:(k+1)%FERRY_STOPS.length,path,lengths,length,motions,seconds,start:FERRY.cycle});
+    FERRY.cycle+=FERRY.dwell+seconds;
+  }
+}
+function ferryShip(id,time=T) {
+  if(!FERRY.cycle)return null;
+  const phase=mod(time+ferryClockOffset+id*FERRY.cycle/FERRY.count,FERRY.cycle);
+  const leg=FERRY_LEGS.find(l=>phase<l.start+FERRY.dwell+l.seconds)||FERRY_LEGS.at(-1),stop=FERRY_STOPS[leg.from];
+  const elapsed=phase-leg.start,stopped=elapsed<FERRY.dwell;
+  let x=stop.x,y=stop.y,yaw=stop.yaw;
+  if(!stopped) {
+    let time=elapsed-FERRY.dwell,n=0;
+    while(n<leg.motions.length-1&&time>leg.motions[n].seconds)time-=leg.motions[n++].seconds;
+    const motion=leg.motions[n],f=clamp(time/motion.seconds,0,1);
+    x=motion.p[0]+(motion.q[0]-motion.p[0])*f;y=motion.p[1]+(motion.q[1]-motion.p[1])*f;
+    yaw=motion.yaw+(motion.target-motion.yaw)*f*f*(3-2*f);
+  }
+  return {id,x,y,yaw,c:Math.cos(yaw),s:Math.sin(yaw),stopped,stop:leg.from,next:leg.to,left:stopped?FERRY.dwell-elapsed:leg.seconds-(elapsed-FERRY.dwell)};
+}
+function nearFerryTerminal() {
+  return mode==='walk'?FERRY_STOPS.find(s=>Math.hypot(px-s.land[0],py-s.land[1])<.7):null;
+}
+function nextFerry(stop,time=T) {
+  let best=null;
+  for(let id=0;id<FERRY.count;id++) {
+    const ship=ferryShip(id,time),phase=mod(time+ferryClockOffset+id*FERRY.cycle/FERRY.count,FERRY.cycle);
+    const wait=ship.stopped&&ship.stop===FERRY_STOPS.indexOf(stop)?0:mod(stop.time-phase,FERRY.cycle)+.05;
+    if(!best||wait<best.wait)best={id,wait,ship};
+  }
+  return best;
+}
+function ferrySync() {
+  if(mode!=='ferry'||!ferryRide)return;
+  const ship=ferryShip(ferryRide.id);if(!ship)return;
+  if(Number.isFinite(ferryRide.yaw))a+=mod(ship.yaw-ferryRide.yaw+Math.PI,Math.PI*2)-Math.PI;
+  ferryRide.yaw=ship.yaw;[px,py]=ferryPoint(ship,ferryRide.u,ferryRide.v);
+}
+function ferrySeatToggle() {
+  if(!ferryRide)return;
+  if(ferryRide.seat!=null) {
+    const seat=FERRY_SEATS[ferryRide.seat];ferryRide.seat=null;ferryRide.v=seat.v>0 ? .22 : -.22;ferrySync();return;
+  }
+  let best=-1,distance=.32;
+  for(let k=0;k<FERRY_SEATS.length;k++) {
+    if(ferrySeatOccupied(ferryRide.id,k))continue;
+    if(FERRY_SEATS[k].inside&&Math.abs(ferryRide.v)>.44)continue;
+    const s=FERRY_SEATS[k],d=Math.hypot(s.u-ferryRide.u,s.v-ferryRide.v);
+    if(d<distance){distance=d;best=k;}
+  }
+  if(best<0)return say('Move beside an empty window seat or deck bench.',2);
+  const s=FERRY_SEATS[best];ferryRide.seat=best;ferryRide.u=s.u;ferryRide.v=s.v;a=ferryShip(ferryRide.id).yaw+s.face;ferrySync();
+}
+function ferrySeatOccupied(id,k) {
+  return hash(id,k,9128)>.7&&!(mode==='ferry'&&ferryRide?.id===id&&ferryRide.seat===k);
+}
+function stepFerryRide(dt) {
+  if(!ferryRide)return;
+  ferrySync();
+  const ship=ferryShip(ferryRide.id),state=ship.stopped?'dock:'+ship.stop:'sail:'+ship.next;
+  if(ferryRide.state&&ferryRide.state!==state)say(ship.stopped?`${FERRY_STOPS[ship.stop].name}. The boarding gate is open for ${FERRY.dwell} seconds.`:`Casting off. Next island: ${FERRY_STOPS[ship.next].name}.`,5);
+  ferryRide.state=state;
+  a+=((K.ArrowRight?1:0)-(K.ArrowLeft?1:0))*2*dt;
+  const f=(K.KeyW||K.ArrowUp?1:0)-(K.KeyS||K.ArrowDown?1:0),s=(K.KeyD?1:0)-(K.KeyA?1:0);
+  if(!f&&!s)return;
+  if(ferryRide.seat!=null)ferrySeatToggle();
+  const angle=a-ferryRide.yaw,speed=(K.ShiftLeft||K.ShiftRight ? .52:.32)*dt/Math.max(1,Math.hypot(f,s));
+  const du=(Math.cos(angle)*f-Math.sin(angle)*s)*speed,dv=(Math.sin(angle)*f+Math.cos(angle)*s)*speed;
+  // Sweep even large test/time steps; collision cannot skip a seat or bulkhead.
+  const n=Math.max(1,Math.ceil(Math.hypot(du,dv)/.025));
+  for(let j=0;j<n;j++) {
+    if(ferryWalkClear(ferryRide.u+du/n,ferryRide.v))ferryRide.u+=du/n;
+    if(ferryWalkClear(ferryRide.u,ferryRide.v+dv/n))ferryRide.v+=dv/n;
+  }
+  ferrySync();
+}
+function ferryCafeNear() {
+  return mode==='ferry'&&ferryRide&&Math.abs(ferryRide.u-.68)<.8&&Math.abs(ferryRide.v)<.28;
+}
+function ferryHullAt(x,y,time=T) {
+  if(!FERRY.cycle)return false;
+  for(let id=0;id<FERRY.count;id++) {
+    const ship=ferryShip(id,time);
+    if(Math.hypot(x-ship.x,y-ship.y)>FERRY.hl+FERRY.hw)continue;
+    const [u,v]=ferryLocal(ship,x,y);if(Math.abs(u)<FERRY.hl&&Math.abs(v)<FERRY.hw)return true;
+  }
+  return false;
+}
+function ferryPrompt() {
+  if(mode==='ferry'&&ferryRide) {
+    const ship=ferryShip(ferryRide.id),status=ship.stopped?`${FERRY_STOPS[ship.stop].name} · departs in ${Math.ceil(ship.left)}s`:`Next: ${FERRY_STOPS[ship.next].name} · ${Math.ceil(ship.left)}s`;
+    const gate=Math.hypot(ferryRide.u+.98,ferryRide.v+.53)<.36;
+    return `${status} | C: sit / stand${ferryRide.seat!=null?' | Space: wait to next island':''}${ferryCafeNear()?' | E: café · food & drinks':ship.stopped&&gate?' | E: step ashore':' | Boarding gate: aft, port side'}`;
+  }
+  const stop=nearFerryTerminal();if(!stop)return '';
+  const next=nextFerry(stop);
+  return `ISLAND FERRY · all five outer islands | E: ${next.wait<.1?'board':'wait & board'} · ${fmt$(FERRY.fare)}${next.wait>.1?` · arrives in ${Math.ceil(next.wait)}s`:''}`;
+}
+function advanceFerryTimetable(seconds) {
+  // Skip a long connection or a seated voyage, with at most one game hour
+  // spent waiting. Taking the ferry should not consume a day or starve you.
+  const wait=Math.min(20,seconds);ferryClockOffset+=seconds-wait;
+  if(wait>0){T+=wait;env(wait);stepNeeds(wait,false);}
+  if(seconds>.1)for(let n=wakes.length-1;n>=0;n--)if(typeof wakes[n].b==='string'&&wakes[n].b.startsWith('island-ferry:'))wakes.splice(n,1);
+}
+function ferryWaitNextPort() {
+  if(!ferryRide||ferryRide.seat==null)return say('Sit on a window seat or deck bench to wait until the next island.',3);
+  const ship=ferryShip(ferryRide.id),seconds=ship.left+(ship.stopped?FERRY_LEGS[ship.stop].seconds:0)+.1;
+  advanceFerryTimetable(seconds);ferrySync();
+  say(`${FERRY_STOPS[ferryShip(ferryRide.id).stop].name}. Stand up and use the aft gate to step ashore, or stay for the next island.`,5);
+}
+function useFerry() {
+  if(mode==='ferry'&&ferryRide) {
+    if(ferryCafeNear()){openShop('ISLAND FERRY CAFÉ',['coffee','tea','water','soda','sandwich','onigiri','chips']);return true;}
+    const ship=ferryShip(ferryRide.id);
+    if(!ship.stopped){say('Stay aboard until the next island. The café is in the forward lounge.',3);return true;}
+    if(Math.hypot(ferryRide.u+.98,ferryRide.v+.53)>.36){say('The boarding gate is aft on the port side. Follow the yellow deck markings.',3);return true;}
+    const stop=FERRY_STOPS[ship.stop];[px,py]=stop.land;mode='walk';ferryRide=null;a=stop.yaw-Math.PI/2;body.seat=null;body.z=body.vz=0;noteStreet();
+    say(`${stop.name}. The ferry returns; E at this terminal to board again.`,4);return true;
+  }
+  const stop=nearFerryTerminal();if(!stop)return false;
+  if(!pay(FERRY.fare)){say(`The island ferry costs ${fmt$(FERRY.fare)}.`,3);return true;}
+  const next=nextFerry(stop);noteStreet();
+  advanceFerryTimetable(next.wait);
+  ferryRide={id:next.id,u:-.98,v:-.51,seat:null,yaw:stop.yaw};mode='ferry';body.seat=null;body.z=body.vz=0;pitch=0;a=stop.yaw-Math.PI/2;ferrySync();
+  say(`Welcome aboard the Island Belle. Walk through the aft doors for window seating and the café; the open deck is behind you. ${fmt$(FERRY.fare)} paid.`,6);return true;
+}
+function savedFerryJourney() {
+  return mode==='ferry'&&ferryRide?{kind:'ferry',id:ferryRide.id,u:ferryRide.u,v:ferryRide.v,seat:ferryRide.seat,clock:mod(T+ferryClockOffset,FERRY.cycle),view:a-ferryRide.yaw,pitch}:null;
+}
+function ferryFromFreecam(cam) {
+  if(!FERRY.cycle||cam.z<FERRY.deck+.08||cam.z>FERRY.deck+.34)return false;
+  for(let id=0;id<FERRY.count;id++) {
+    const ship=ferryShip(id),[u,v]=ferryLocal(ship,cam.x,cam.y);
+    let seat=null;
+    if(!ferryWalkClear(u,v)) {
+      seat=FERRY_SEATS.findIndex((s,k)=>!ferrySeatOccupied(id,k)&&Math.hypot(u-s.u,v-s.v)<.08);
+      if(seat<0)continue;
+    }
+    ferryRide={id,u:seat!=null?FERRY_SEATS[seat].u:u,v:seat!=null?FERRY_SEATS[seat].v:v,seat,yaw:ship.yaw};
+    mode='ferry';ferrySync();return true;
+  }
+  return false;
+}
+function loadFerryJourney(journey) {
+  if(!FERRY.cycle||journey?.kind!=='ferry'||!Number.isInteger(journey.id)||journey.id<0||journey.id>=FERRY.count||![journey.u,journey.v,journey.clock,journey.view].every(Number.isFinite))return false;
+  const seat=Number.isInteger(journey.seat)&&FERRY_SEATS[journey.seat];
+  if(!seat&&!ferryWalkClear(journey.u,journey.v))return false;
+  ferryClockOffset=mod(journey.clock,FERRY.cycle)-T;
+  ferryRide={id:journey.id,u:seat?seat.u:journey.u,v:seat?seat.v:journey.v,seat:seat?journey.seat:null,yaw:ferryShip(journey.id).yaw};
+  mode='ferry';body.seat=null;body.z=body.vz=0;a=ferryRide.yaw+journey.view;pitch=clamp(Number.isFinite(journey.pitch)?journey.pitch:0,-1.2,1.6);ferrySync();return true;
+}
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 // ---- screen
 let cols, rows, cw, CH, COL, BG, ZB, ZBG, FL, FOGS, FOGB, BASE, LAMPL; // ZBG / FOGB: depth and fog of the background colour; LAMPL: streetlamp light on a puddle
@@ -12309,7 +12573,7 @@ function reflect() {
 const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
 function rainFx(dt) {
   const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
-  const roofed = eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye); // under the Shotengai's roof, or the airport's: dry
+  const roofed = mode==='ferry'&&ferryRide&&ferryRide.u>-.98&&ferryRide.u<1.63&&Math.abs(ferryRide.v)<.46 || eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye); // covered ferry lounge, Shotengai or airport
   const n = roofed ? 0 : drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];
@@ -13463,6 +13727,7 @@ function walkPose(m, gait = 'walk') {
   return T - (m._phT ?? -1) < 0.3 || m.chase ? gait + (Math.floor(m.ph * 2) & 7) : 'stand'; // (still walking if they stepped a moment ago: a pause doesn't stop them)
 }
 function citySprites() {
+  drawFerries();
   drawWildScenery();
   drawRoadBridges();
   drawDrugBuyer();
@@ -22840,6 +23105,10 @@ function stepWakes() {
     stern(b, p.x, p.y, hx / n, hy / n, 0.6);
   }
   for (const b of fleet) stern(b, b.x, b.y, b.hx, b.hy, b === sea ? clamp(Math.abs(b.v) / 0.8, 0, 1) : 0);
+  if(FERRY.cycle)for(let id=0;id<FERRY.count;id++) {
+    const ship=ferryShip(id);if(Math.hypot(ship.x-px,ship.y-py)>vis+4)continue;
+    trailWake('island-ferry:'+id,ship.x-ship.c*FERRY.hl,ship.y-ship.s*FERRY.hl,FERRY.hw,ship.stopped?0:.85);
+  }
 }
 // how much foam at (wx, wy): 0 none; and whether it's one of the arms (else the churn down the middle). foot: how much
 // water the screen cell covers there, so a far arm still lands on a whole cell instead of flickering between them
@@ -23300,6 +23569,7 @@ function render(dt) {
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' ? EL_TOP+(ride?.seat ? .135 : .19) : mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? (chaseOn ? 0.2 : 0.11) : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
+  else if(mode==='ferry')eye=FERRY.deck+(ferryRide?.seat!=null ? .115 : .17);
   else if (mode === 'air') eye = airEye;
   else if (skateView) eye = skateView.eye; // (behind you on the board: skate.js)
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
@@ -23768,6 +24038,7 @@ function promptText() {
     return [onRoofLot() ? 'E: take the stairs down' : 'E: fire escape down', edge].filter(Boolean).join('   ');
   }
   if (mode === 'fair') return fairRidePrompt();
+  if(mode==='ferry'||nearFerryTerminal())return ferryPrompt();
   if (mode === 'boat' || mode === 'sea') { // (with a rod in hand and the boat still, you can fish over the side: fishing.js)
     if (fishing && fishingFrom()) return fishPrompt();
     const base = mode === 'boat' ? gardensPrompt() : marinaPrompt();
@@ -23929,11 +24200,12 @@ function hud() {
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
-  const where = mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
+  const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
+    : settings.help && mode==='ferry'?'WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | E café / boarding gate | I bag | Q eat / drink | M map'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
     : settings.help && heldGun() ? 'WASD move | left click / Q fire | hold right click: aim | R reload | E use / talk | Esc: pause'
@@ -24248,6 +24520,7 @@ function interact() {
   if (mode === 'roof' && !onRoofLot()) return fireEscape() ? say('You clang down the fire escape and drop the last bit to the sidewalk.', 3) : say('No way down from here. Jump, or find another roof.', 3);
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; roofLot = null; return; }
   if (mode === 'el') return elGetOff();
+  if (mode === 'ferry') return useFerry();
   if (mode === 'boat') return useGardens();
   if (mode === 'sea') return useMarina();
   if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
@@ -24260,7 +24533,7 @@ function interact() {
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
-  if (useGardens() || useMarina()) return;
+  if (useFerry() || useGardens() || useMarina()) return;
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);
   const c = nearestCar(0.5);
@@ -26186,7 +26459,7 @@ function audioTick(dt) {
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
-    wilderness:worldReady&&!!wildIslandAt(px,py),
+    wilderness:worldReady&&!!wildIslandAt(px,py),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
@@ -26202,6 +26475,9 @@ function audioTick(dt) {
     const v = Math.abs((me || sea).v), m = me ? 1 : 0.7;
     synth.engineOsc.frequency.setTargetAtTime((38 + v * 32) * m, now, 0.08);
     synth.engineLP.frequency.setTargetAtTime(300 + v * 400 * m, now, 0.1);
+  } else if(mode==='ferry') {
+    synth.engineOsc.frequency.setTargetAtTime(ferryShip(ferryRide.id).stopped?28:36,now,.5);
+    synth.engineLP.frequency.setTargetAtTime(220,now,.5);
   } else if (pilot) { // a prop's drone or a jet's whine, up with the throttle; a helicopter's rotor thudding round
     const T_ = PLANE_TYPES[pilot.type], th = T_.heli ? pilot.rotor || 0 : pilot.throttle || 0;
     synth.engineOsc.frequency.setTargetAtTime(T_.heli ? 30 + th * 25 : pilot.type === 'jet' ? 90 + th * 160 : 55 + th * 70, now, 0.15);
@@ -26216,13 +26492,14 @@ function audioTick(dt) {
   tickSirens(indoors);
   if (bolt && bolt !== heardBolt) { heardBolt = bolt; sfxThunder(bolt.d, indoors); }
   // footsteps: one every step-length of ground covered on foot
-  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry';
+  const footPos=mode==='ferry'?[ferryRide.u,ferryRide.v,mode]:[px,py,mode];
   if (onFoot && lastPos && lastPos[2] === mode) {
-    const moved = Math.hypot(rel(px - lastPos[0]), rel(py - lastPos[1])), run = K.ShiftLeft || K.ShiftRight;
+    const moved = Math.hypot(rel(footPos[0] - lastPos[0]), rel(footPos[1] - lastPos[1])), run = K.ShiftLeft || K.ShiftRight;
     if (moved < 1) stepAcc += moved / (mode === 'room' ? (run ? 1.0 : 0.75) : run ? 0.14 : 0.1);
     if (stepAcc >= 1) { stepAcc = 0; sfxStep(surfaceAt(mode, room, px, py), run); }
   }
-  lastPos = [px, py, mode];
+  lastPos = footPos;
 }
 // Event one-shots never wait for the network: warm the cache at unlock and retain
 // synthesised fallbacks until ready. Loops start only from current simulation state.
@@ -26948,6 +27225,8 @@ function leaveFreecam() {
       [px,py]=at;
     }
     body.z = clamp(cam.z - 1.7 - stairRise(px,py), 0, Math.max(0,(room.def.height||3)-1.8));
+  } else if(ferryFromFreecam(cam)) {
+    body.z=0;
   } else {
     const h=roofHeightAt(px,py), ground=walkGround(px,py);
     if (h>ground) { mode='roof'; roofH=h; roofLot=new Set(); }
@@ -27016,6 +27295,7 @@ function devFree() {
   if (mode === 'fair' && fairRide) { fairRide = null; fairEye = 0.17; }
   if (mode === 'sea' && sea) { sea.v = 0; if (sea.hired) { sea.hired = false; const s = SLOTS[sea.slot]; Object.assign(sea, { x: s.x, y: s.y, hx: s.hx, hy: s.hy }); } sea = null; }
   if (mode === 'el') ride = null;
+  if(mode==='ferry')ferryRide=null;
   plat = null; body.seat = null; mode = 'walk'; pitch = 0; look = 0;
 }
 const devAt = (x, y, ang) => { devFree(); px = worldCoord(x); py = worldCoord(y); a = ang; };
@@ -27037,6 +27317,7 @@ function devPlaces() {
     ['Grand Hotel', () => devAt(GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2)],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   land.push([COURIER_COMPANY,()=>devAt(...COURIER_DEPOT.door,0)]);
+  if(FERRY_STOPS.length)land.push(['Island ferry terminal',()=>devAt(...FERRY_STOPS[0].land,Math.PI/2)]);
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
   const nearestLm = {}; // (there are several of each: the nearest one)
@@ -27203,7 +27484,8 @@ function mapDirectory() {
       description:stock.length?`Sells ${stock.join(', ')}.`:'Visit the counter to see what is available.',
       status:openAt(sh,tod)?'Open now':'Closed now',hours:sh.hours,fee:sh.fee||0});
   }
-  if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note,status:'Boat landing on west shore'});
+  if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note+' Island ferry calls at the west-shore jetty.',status:'Ferry / boat landing on west shore'});
+  for(const stop of FERRY_STOPS)add({id:`ferry:${stop.id}`,name:`Island ferry · ${stop.name}`,x:stop.land[0],y:stop.land[1],category:'transport',kind:'ferry',description:'Island Belle ferry loop: City Marina, Cabin Cove, Cormorant Rock, Juniper Isle, Crescent Sands and Fern Island. Walk aboard, sit by a real sea-view window, visit the café or use the open deck. $4 per boarding. Press E at the terminal to wait and board.',status:'Ferries run all day'});
   if(worldReady)for(const sight of ISLAND_SIGHTS)add({...sight,category:'activities',kind:'sight',description:sight.text,status:'Outdoor sight · free'});
   for(const [kind,site] of Object.entries(STREET_SCENES))if(site&&kind!=='boxes') {
     const along=kind==='moving'?(movingPhase()==='leftovers'?.46:-.35):0;
@@ -27272,7 +27554,7 @@ function mapRouteLabel() {
   if(!mapWaypoint)return 'direction only';
   const p=mapPlayerLocation(),island=wildIslandAt(mapWaypoint.x,mapWaypoint.y,12)||wildIslandAt(p.x,p.y,12);
   if(!island)return 'direction only';
-  return island.id==='fern'?'boat / light aircraft access':'boat access';
+  return island.id==='fern'?'ferry / boat / light aircraft access':'ferry / boat access';
 }
 function mapDirectoryUI() {
   const list=bigMapEl.querySelector('.places'),details=bigMapEl.querySelector('.place-detail'),hits=mapFilteredPlaces();
@@ -28010,7 +28292,7 @@ function charLine(x0, y0, x1, y1, w, size, col) {
 let handDrawn = null; // what the hand held in the last frame drawn ({ id, t }), or null: for the tests
 function drawHeldBig() {
   handDrawn = null;
-  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry'&&['food','drink'].includes(ITEMS[heldItem()?.id]?.kind);
   if (onFoot && fx.smoke > 0) drawCigarette();
   drawVapeCloud();
   const it = heldItem();
@@ -33998,6 +34280,7 @@ function assembleArchipelago() {
   terrainCells = new Uint8Array(N * N + 1);
   buildTerrain();
   buildIslandScenery();
+  buildFerryNetwork();
   CITY_LAYOUT_CHECKPOINT={...originalCounts,layout:CITY_LAYOUT_ID};
 }
 let CITY_LAYOUT_CHECKPOINT=null;
@@ -34374,6 +34657,7 @@ function noteStreet() {
   else if (mode === 'drive' && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) };
 }
 function saveCityJourney() {
+  if(mode==='ferry')return savedFerryJourney();
   if(mode==='sea'&&sea&&(sea.hired||sea.deal==='mine'))return {kind:'boat',id:sea.id};
   if(mode==='air'&&pilot?.owned&&!pilot.wrecked&&!pilot.ditched)return {kind:'aircraft',id:pilot.id};
   return null;
@@ -34471,7 +34755,8 @@ function loadGame() {
   if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
     px = worldCoord(at.x); py = worldCoord(at.y); a = at.a || 0; streetSpot = { x: px, y: py, a };
   }
-  if(d.journey?.kind==='boat') {
+  if(d.journey?.kind==='ferry')loadFerryJourney(d.journey);
+  else if(d.journey?.kind==='boat') {
     const boat=fleet.find(b=>b.id===d.journey.id&&(b.hired||b.deal==='mine'));
     if(boat&&waterClear(boat,boat.x,boat.y,boat.hx,boat.hy))boardBoat(boat);
   } else if(d.journey?.kind==='aircraft') {
@@ -34544,6 +34829,143 @@ function stepElRide(dt){
  }
  px=worldCoord(elRiding().x+ride.off);py=EL_TRACK[ride.tr]+(ride.side||0);
 }
+// One physical ship model serves shore views and the walkable interior. Window
+// openings preserve the city's original colour and depth buffers behind them.
+function ferryLetter(text,u,z,t,half,middle) {
+  const width=Math.min(.027,half*1.8/(text.length+1)),q=u/width+text.length/2,k=Math.floor(q);
+  return k>=0&&k<text.length&&oneCell((fract(q)-.5)*width,t/projX)&&oneCell(z-middle,t/projY)?text[k]:' ';
+}
+function drawFerry(ship) {
+  const [vx,vy]=R(ship.x,ship.y);if(Math.hypot(vx,vy)>vis+FERRY.hl)return;
+  const z=FERRY.deck;
+  const part=(u,v,hl,hw,z0,z1,shade)=>drawBox(boxAt(vx+ship.c*u-ship.s*v,vy+ship.s*u+ship.c*v,ship.c,ship.s,hl,hw,z0,z1),shade);
+  const paint=(i,ch,base,level,background=base,bgLevel=level*.35)=>{set(i,ch,C(base,level));BG[i]=C(background,bgLevel);return true;};
+  const flat=(base,level=1,ch=' ')=>(i,t,L)=>paint(i,ch,base,Math.max(3,L*level));
+  const line=(u0,v0,z0,u1,v1,z1,r,base=WHITE,light=1)=> {
+    const [x0,y0]=ferryPoint(ship,u0,v0),[x1,y1]=ferryPoint(ship,u1,v1);
+    rod(x0-px,y0-py,z0,x1-px,y1-py,z1,r,base,light);
+  };
+  const hull=(i,t,L)=> {
+    const h=HIT.w;
+    if(HIT.face===6)return false;
+    if(HIT.face===5)return paint(i,fract((HIT.u+HIT.v)*24)<.045?'·':' ',STONE,L*.7,STONE,2+day*3);
+    const stripe=h>.075&&h<.106;
+    if(HIT.face<=4&&h>.035&&h<.065&&Math.abs(fract(HIT.u*2)-.5)<.09)return paint(i,'O',GRAY,L,GRAY,2);
+    return paint(i,h<.02?'_':stripe?'=':' ',stripe?WHITE:BLUE,L, stripe?WHITE:BLUE,1+L*.3);
+  };
+  part(-.12,0,2.13,FERRY.hw,.005,z,hull);
+  for(let n=0;n<4;n++)part(2.01+n*.055,0,.03,FERRY.hw*(1-n*.13),.01,z+.015,hull);
+  // Teak aft deck, a soft carpet runner through the lounge, yellow gate stripe.
+  part(-1.61,0,.61,.59,z-.002,z+.002,(i,t,L)=>paint(i,fract(HIT.u*38)<.08?'|':' ',BRICK,L*.7,BRICK,2+day*2.5));
+  part(.3,0,1.27,.445,z+.001,z+.004,(i,t,L)=>paint(i,fract(HIT.u*38)<.035?'.':' ',BLUE,Math.max(5,L*.7),BLUE,2.5+day));
+  part(-.98,-.51,.16,.025,z+.003,z+.006,flat(YEL,1.1,'='));
+  // Cabin walls: broad uninterrupted window bays with slim mullions. Both
+  // inside and outside look through to the real world and the opposite windows.
+  for(const side of [-1,1]) {
+    part(.32,side*.465,1.3,.009,z,z+.32,(i,t,L)=> {
+      const u=HIT.u+.32,h=HIT.w-z;
+      const mullion=Math.abs(fract((u+1.03)/.6)-.5)>.48;
+      if(h>.105&&h<.278&&!mullion)return false;
+      const trim=Math.abs(h-.1)<.007||Math.abs(h-.282)<.007;
+      return paint(i,trim?'=':mullion?'|':' ',trim?BRICK:WHITE,Math.max(6,L*.85),h<.095?BLUE:WHITE,h<.095?3:3+day*2);
+    });
+    // Lower rubbing strake along the exterior, with the vessel's name aft.
+    part(.25,side*.478,1.36,.008,z+.025,z+.065,(i,t,L)=> {
+      const ch=ferryLetter('ISLAND BELLE',HIT.u,HIT.w-z,t,1.36,.045);
+      return paint(i,ch,WHITE,Math.max(7,L),BLUE,3);
+    });
+  }
+  part(-.98,0,.009,.465,z,z+.32,(i,t,L)=> {
+    const v=HIT.v,h=HIT.w-z;
+    if(Math.abs(v)<.12&&h<.285)return false;
+    if(Math.abs(v)>.17&&Math.abs(v)<.415&&h>.11&&h<.275)return false;
+    return paint(i,Math.abs(Math.abs(v)-.125)<.012?'|':' ',WHITE,Math.max(6,L),WHITE,3+day*2);
+  });
+  // Cream ceiling, recessed lamps, a blue cap and a little raised wheelhouse.
+  part(.32,0,1.32,.49,z+.32,z+.34,(i,t,L)=> {
+    const lamp=Math.abs(HIT.v)<.025&&Math.abs(fract((HIT.u+.32)*2)-.5)<.15;
+    return paint(i,lamp?'=':fract(HIT.u*20)<.025?'|':' ',lamp?WARM:WHITE,lamp?15:Math.max(7,L*.8),lamp?WARM:WHITE,lamp?10:4);
+  });
+  part(.32,0,1.34,.505,z+.34,z+.355,flat(BLUE,.8));
+  part(1.9,0,.25,.44,z,z+.37,(i,t,L)=> {
+    if(HIT.w-z>.14&&HIT.w-z<.31&&Math.abs(HIT.v)<.39)return paint(i,' ',CYAN,6,BLUE,2);
+    return paint(i,' ',WHITE,Math.max(6,L),WHITE,4);
+  });
+  part(1.9,0,.27,.46,z+.37,z+.39,flat(WHITE));
+  part(.85,0,.12,.095,z+.355,z+.49,flat(BLUE,.9));
+  part(.85,0,.135,.11,z+.49,z+.51,flat(WHITE));
+  // Railings around the entire open deck and both side promenades. The port
+  // gate has its own bar and a gangway only while securely alongside a terminal.
+  for(const side of [-1,1]) {
+    for(const [u0,u1] of side<0?[[-2.18,-1.17],[-.79,2.14]]:[[-2.18,2.14]]) {
+      for(const h of [.055,.115])line(u0,side*.59,z+h,u1,side*.59,z+h,.0035);
+    }
+    for(let u=-2.18;u<=2.15;u+=.36)if(!(side<0&&Math.abs(u+.98)<.2))line(u,side*.59,z,u,side*.59,z+.115,.0045);
+  }
+  for(const u of [-2.18,2.14])for(const h of [.055,.115])line(u,-.59,z+h,u,.59,z+h,.0035);
+  line(-1.17,-.59,z+.11,-.79,-.59,z+.11,.004,YEL,1.2);
+  if(ship.stopped) {
+    const stop=FERRY_STOPS[ship.stop],gate=ferryPoint(ship,-.98,-.59);
+    // Gate is aft; the broad landing plate reaches the actual timber pier.
+    const ex=stop.land[0]-gate[0],ey=stop.land[1]-gate[1],len=Math.hypot(ex,ey);
+    drawBox(boxAt((gate[0]+stop.land[0])/2-px,(gate[1]+stop.land[1])/2-py,ex/len,ey/len,len/2,.09,.09,z+.005),(i,t,L)=>paint(i,fract(HIT.u*24)<.07?'=':' ',GRAY,L*.9,GRAY,2+day*2));
+  }
+  // Window seats and the aft deck benches share the same collision records.
+  for(let k=0;k<FERRY_SEATS.length;k++) {
+    const seat=FERRY_SEATS[k],side=Math.sign(seat.v),base=seat.inside?BLUE:BRICK;
+    part(seat.u,seat.v,.18,.075,z+.035,z+.052,flat(base,1.15,'_'));
+    part(seat.u,seat.v+side*.065,.18,.009,z+.052,z+.105,flat(base,1));
+    for(const end of [-1,1])part(seat.u+end*.16,seat.v,.008,.072,z+.052,z+.076,flat(GRAY));
+    for(const end of [-1,1])part(seat.u+end*.12,seat.v,.008,.04,z+.006,z+.035,flat(GRAY,.6));
+    if(ferrySeatOccupied(ship.id,k)) {
+      const [x,y]=ferryPoint(ship,seat.u,seat.v),look=figStreetLook(9400+ship.id*31+k,[GREEN,RED,STONE,YEL][k%4],BLUE);
+      drawFigure(x-px,y-py,z+.007,.175,-ship.s*side,ship.c*side,look,'sit7',{light:Math.max(7,day*12)});
+    }
+  }
+  // Café island: timber facing, brass foot rail, pastry cabinet, espresso
+  // machine, cups, menu and a stable barista figure behind the serving edge.
+  part(.68,0,.57,.09,z+.01,z+.099,(i,t,L)=>paint(i,fract(HIT.u*24)<.08?'|':' ',BRICK,Math.max(5,L*.9),BRICK,3));
+  part(.68,0,.59,.105,z+.099,z+.108,flat(STONE,1.1));
+  for(const side of [-1,1])line(.16,side*.13,z+.025,1.2,side*.13,z+.025,.003,YEL,1.2);
+  part(.98,0,.12,.065,z+.108,z+.185,flat(GRAY,.95));
+  part(.98,-.067,.09,.005,z+.135,z+.174,(i,t,L)=>paint(i,Math.abs(HIT.u)<.04?'o':'|',WHITE,12,GRAY,3));
+  for(const u of [.91,1.02])part(u,-.09,.018,.017,z+.109,z+.13,flat(WHITE,1.15));
+  part(.32,0,.15,.08,z+.108,z+.17,(i,t,L)=> {
+    if(HIT.face!==5&&HIT.w>z+.119&&HIT.w<z+.16)return false;
+    return paint(i,'-',WHITE,Math.max(6,L),GRAY,3);
+  });
+  for(const u of [.23,.32,.41])part(u,0,.025,.04,z+.11,z+.127,flat(YEL,.9,'o'));
+  part(.65,0,.1,.015,z+.12,z+.2,(i,t,L)=> {
+    const h=HIT.w-z;
+    return paint(i,ferryLetter('CAFE',HIT.u,h,t,.1,.17),WARM,13,BLUE,3);
+  });
+  const [bx,by]=ferryPoint(ship,1.41,0);
+  drawFigure(bx-px,by-py,z+.002,.175,-ship.c,-ship.s,figStreetLook(9281,WHITE,BLUE),'stand',{light:10});
+  // Destination display faces into the lounge above the serving counter.
+  part(1.62,0,.012,.3,z+.235,z+.297,(i,t,L)=> {
+    const text=ship.stopped?'AT '+FERRY_STOPS[ship.stop].name:'NEXT '+FERRY_STOPS[ship.next].name;
+    return paint(i,ferryLetter(text.toUpperCase(),HIT.v,HIT.w-z,t,.3,.266),YEL,13,BLACK,1);
+  });
+  // A lifebuoy and flag make the open deck recognisable from the water.
+  part(-1.65,.595,.075,.006,z+.03,z+.11,(i,t,L)=>paint(i,Math.abs(HIT.u)<.045&&HIT.w>z+.045&&HIT.w<z+.09?' ':'O',ORANGE,Math.max(7,L),WHITE,3));
+  line(-2.02,0,z,-2.02,0,z+.38,.0045,GRAY,1.1);
+  part(-2.02,.075,.003,.075,z+.28,z+.36,(i,t,L)=>paint(i,' ',RED,Math.max(7,L),RED,5));
+}
+function drawFerryTerminal(stop) {
+  const [x,y]=R(...stop.land);if(Math.hypot(x,y)>vis)return;
+  const ship=nextFerry(stop),wait=ship.wait<.1?'BOARDING':`IN ${Math.ceil(ship.wait)}s`;
+  const base=Math.max(.1,outdoorGroundHeight(...stop.land));
+  rod(x+.18,y,base,x+.18,y,base+.26,.007,GRAY,1.1);
+  drawBox(boxAt(x+.18,y,Math.cos(stop.yaw),Math.sin(stop.yaw),.3,.025,base+.16,base+.26),(i,t,L)=>{
+    const upper=HIT.w>base+.212,text=upper?'ISLAND FERRY':wait;
+    BG[i]=C(BLUE,3);set(i,ferryLetter(text,HIT.u,HIT.w-base,t,.3,upper ? .235 : .185),C(upper?WHITE:YEL,13));return true;
+  });
+}
+function drawFerries() {
+  if(!FERRY.cycle)return;
+  for(const stop of FERRY_STOPS)drawFerryTerminal(stop);
+  for(let id=0;id<FERRY.count;id++)drawFerry(ferryShip(id));
+}
 // Closing a menu recaptures the desktop mouse, including Esc. In a browser, Esc needs a click or another key.
 function relock(e) {
   if ((e.code === 'Escape' && !NATIVE_MOUSE_APP) || paused || mouseCaptured()) return;
@@ -34582,6 +35004,13 @@ onkeydown = e => {
   audioStart(); // sound can only start from a key press or click
   if (e.code === 'KeyN') toggleSound();
   if(mode==='el'&&e.code==='KeyC'){elSeatToggle();return;}
+  if(mode==='ferry'&&e.code==='KeyC'){ferrySeatToggle();return;}
+  if(mode==='ferry'&&e.code==='Space'){ferryWaitNextPort();return;}
+  if(mode==='ferry'&&!sleep) {
+    if(e.code==='KeyI')openInventory();
+    if(e.code==='KeyQ'&&['food','drink'].includes(ITEMS[heldItem()?.id]?.kind))useHeldItem();
+    const slot=/^Digit([1-8])$/.exec(e.code);if(slot)holdQuickSlot(+slot[1]-1);
+  }
   if (chute && (e.code === 'Space' || e.code === 'KeyE')) return pullCord(); // (in the air, out of an aircraft)
   if (e.code === 'KeyE' && !sleep) interact();
   if(e.code==='Space'&&mode==='ladder'){leaveCourierLadder();return;}
@@ -34663,7 +35092,7 @@ if (NATIVE_MOUSE_APP && window.__TAURI__.event?.listen) {
 }
 addEventListener('mousedown', e => {
   if (wanted.busted || !mouseCaptured() || paused || freecam || sleep || game || panelOpen() || devOpen()) return;
-  if (e.button === 0 && (onFootMode() || (mode === 'sea' || mode === 'boat') && heldRod())) {
+  if (e.button === 0 && (onFootMode() || mode==='ferry'&&['food','drink'].includes(ITEMS[heldItem()?.id]?.kind) || (mode === 'sea' || mode === 'boat') && heldRod())) {
     K.MouseUse = 1; audioStart(); useHeldItem();
   }
   if (e.button === 2) {
@@ -34875,6 +35304,7 @@ function loop(t) {
   else if (mode === 'sea') stepSea(dt);
   else if (mode === 'air') { if (!sleep) stepFlight(dt); } // (flight.js)
   else if (mode === 'el') stepElRide(dt);
+  else if (mode === 'ferry') stepFerryRide(dt);
   stepBody(dt); stepRoof();stepElImpact(elStart,T-dt,T);
   stepTraffic(dt, T);
   stepCarDamage(dt); // (smoke, fire, the bang: damage-fx.js)
@@ -35091,6 +35521,7 @@ function touchActions() {
     return [['Camera', 'KeyV', 'pop'], [heli ? 'Back' : 'Power -', 'KeyS', 'pop'], [heli ? 'Forward' : 'Power +', 'KeyW', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
   }
   if (mode === 'sea') return [['Camera', 'KeyV', 'pop'], ...e ? [[e, 'KeyE', 'main']] : []];
+  if(mode==='ferry')return [['Sit / stand','KeyC','pop'],['Inventory','KeyI','pop'],...ferryRide.seat!=null?[['Next island','Space','pop']]:[],...heldItem()&&['food','drink'].includes(ITEMS[heldItem().id]?.kind)?[['Eat / drink','KeyQ','pop']]:[],...e?[[e,'KeyE','main']]:[]];
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
     if (/\bJ: /.test(p)) out.push(['Drive taxi', 'KeyJ', 'pop']);

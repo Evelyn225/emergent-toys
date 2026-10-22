@@ -265,6 +265,7 @@ function interact() {
   if (mode === 'roof' && !onRoofLot()) return fireEscape() ? say('You clang down the fire escape and drop the last bit to the sidewalk.', 3) : say('No way down from here. Jump, or find another roof.', 3);
   if (mode === 'roof') { mode = 'room'; px = room.def.ex; py = 1.7; a = Math.PI / 2; roofLot = null; return; }
   if (mode === 'el') return elGetOff();
+  if (mode === 'ferry') return useFerry();
   if (mode === 'boat') return useGardens();
   if (mode === 'sea') return useMarina();
   if (mode === 'fair') return say(fairRide.kind === 'wheel' ? 'The bar stays down till you\'re back at the bottom.' : 'Not while it\'s going round.', 2);
@@ -277,7 +278,7 @@ function interact() {
   if (dr) return say(pickUpDropped(dr)[1]);
   const vm = nearMachine(); // before the cars: you're looking right at it
   if (vm) return openShop(VENDING[vm.kind].title, VENDING[vm.kind].stock);
-  if (useGardens() || useMarina()) return;
+  if (useFerry() || useGardens() || useMarina()) return;
   const ac = nearAircraft();
   if (ac) return enterAircraft(ac);
   const c = nearestCar(0.5);

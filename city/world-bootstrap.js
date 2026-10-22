@@ -337,6 +337,7 @@ function assembleArchipelago() {
   terrainCells = new Uint8Array(N * N + 1);
   buildTerrain();
   buildIslandScenery();
+  buildFerryNetwork();
   CITY_LAYOUT_CHECKPOINT={...originalCounts,layout:CITY_LAYOUT_ID};
 }
 let CITY_LAYOUT_CHECKPOINT=null;

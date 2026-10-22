@@ -48,7 +48,8 @@ function mapDirectory() {
       description:stock.length?`Sells ${stock.join(', ')}.`:'Visit the counter to see what is available.',
       status:openAt(sh,tod)?'Open now':'Closed now',hours:sh.hours,fee:sh.fee||0});
   }
-  if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note,status:'Boat landing on west shore'});
+  if(worldReady)for(const island of WILD_ISLANDS)add({id:`island:${island.id}`,name:island.name,x:island.landing[0],y:island.landing[1],category:'activities',kind:'island',description:island.note+' Island ferry calls at the west-shore jetty.',status:'Ferry / boat landing on west shore'});
+  for(const stop of FERRY_STOPS)add({id:`ferry:${stop.id}`,name:`Island ferry · ${stop.name}`,x:stop.land[0],y:stop.land[1],category:'transport',kind:'ferry',description:'Island Belle ferry loop: City Marina, Cabin Cove, Cormorant Rock, Juniper Isle, Crescent Sands and Fern Island. Walk aboard, sit by a real sea-view window, visit the café or use the open deck. $4 per boarding. Press E at the terminal to wait and board.',status:'Ferries run all day'});
   if(worldReady)for(const sight of ISLAND_SIGHTS)add({...sight,category:'activities',kind:'sight',description:sight.text,status:'Outdoor sight · free'});
   for(const [kind,site] of Object.entries(STREET_SCENES))if(site&&kind!=='boxes') {
     const along=kind==='moving'?(movingPhase()==='leftovers'?.46:-.35):0;
@@ -117,7 +118,7 @@ function mapRouteLabel() {
   if(!mapWaypoint)return 'direction only';
   const p=mapPlayerLocation(),island=wildIslandAt(mapWaypoint.x,mapWaypoint.y,12)||wildIslandAt(p.x,p.y,12);
   if(!island)return 'direction only';
-  return island.id==='fern'?'boat / light aircraft access':'boat access';
+  return island.id==='fern'?'ferry / boat / light aircraft access':'ferry / boat access';
 }
 function mapDirectoryUI() {
   const list=bigMapEl.querySelector('.places'),details=bigMapEl.querySelector('.place-detail'),hits=mapFilteredPlaces();

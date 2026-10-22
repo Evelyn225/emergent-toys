@@ -183,6 +183,7 @@ function promptText() {
     return [onRoofLot() ? 'E: take the stairs down' : 'E: fire escape down', edge].filter(Boolean).join('   ');
   }
   if (mode === 'fair') return fairRidePrompt();
+  if(mode==='ferry'||nearFerryTerminal())return ferryPrompt();
   if (mode === 'boat' || mode === 'sea') { // (with a rod in hand and the boat still, you can fish over the side: fishing.js)
     if (fishing && fishingFrom()) return fishPrompt();
     const base = mode === 'boat' ? gardensPrompt() : marinaPrompt();
@@ -344,11 +345,12 @@ function hud() {
   drawCourierBag();
   const hh = Math.floor(tod), mm = Math.floor(fract(tod) * 60);
   const isle = onAirport(px, py) ? 'Glyphport International Airport' : onCauseway(px, py) ? 'the Airport Causeway' : onIsland(px, py) ? 'Lighthouse Island' : onFootbridge(px, py) ? 'the Lighthouse Walk' : onFair(px, py) ? 'the Sunset Pier' : inGardens(px, py) || mode === 'boat' ? 'the Botanical Gardens' : inMarina(px, py) ? 'the Marina' : mode === 'sea' ? 'out on the bay' : '';
-  const where = mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
+  const where = mode==='ferry'?'Aboard the Island Belle':mode === 'room' ? '' : wildIslandAt(px,py)?.name || isle || [streetName(px, py), DISTRICT_TITLE[districtName(Math.floor(px / 8), Math.floor(py / 8))]].filter(Boolean).join(', ');
   const help = TOUCH ? settings.help ? mode === 'air' ? 'left thumb: the stick (up to climb) | Power +/-: throttle' : mode === 'sea' ? 'left thumb: throttle / helm | full forward: cruise | back: brake | drag: look' : skatingNow() ? 'left thumb: push, brake, carve (in the air: spin) | Ollie: tap, or swipe off it for a trick | drag: look' : 'left thumb: move | drag: look' : ''
     : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
+    : settings.help && mode==='ferry'?'WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | E café / boarding gate | I bag | Q eat / drink | M map'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
     : settings.help && heldGun() ? 'WASD move | left click / Q fire | hold right click: aim | R reload | E use / talk | Esc: pause'

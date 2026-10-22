@@ -38,6 +38,10 @@ function stepWakes() {
     stern(b, p.x, p.y, hx / n, hy / n, 0.6);
   }
   for (const b of fleet) stern(b, b.x, b.y, b.hx, b.hy, b === sea ? clamp(Math.abs(b.v) / 0.8, 0, 1) : 0);
+  if(FERRY.cycle)for(let id=0;id<FERRY.count;id++) {
+    const ship=ferryShip(id);if(Math.hypot(ship.x-px,ship.y-py)>vis+4)continue;
+    trailWake('island-ferry:'+id,ship.x-ship.c*FERRY.hl,ship.y-ship.s*FERRY.hl,FERRY.hw,ship.stopped?0:.85);
+  }
 }
 // how much foam at (wx, wy): 0 none; and whether it's one of the arms (else the churn down the middle). foot: how much
 // water the screen cell covers there, so a far arm still lands on a whole cell instead of flickering between them
