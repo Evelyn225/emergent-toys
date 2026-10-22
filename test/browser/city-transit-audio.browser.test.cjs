@@ -136,7 +136,12 @@ test('boarding joins direction, next-stop phrase and station on one clock, and t
   assert.equal(result.mode,'el');assert.equal(result.stopped,true);
   assert.deepEqual(result.starts.map(s=>s.file),['transit/east.wav','transit/next.wav','transit/11th-ave.wav']);
   for(let i=1;i<3;i++)assert.ok(Math.abs(result.starts[i].when-result.starts[i-1].when-result.starts[i-1].duration-.075)<1e-8);
-  assert.deepEqual(await page.evaluate(()=>{elGetOff();return {mode,voice:transitVoice,queued:transitQueue.length};}),{mode:'elplat',voice:null,queued:0});
+  assert.deepEqual(await page.evaluate(()=>{const voice=transitVoice;elGetOff();return {mode,kept:transitVoice===voice,sources:transitVoice.sources.length,queued:transitQueue.length};}),{mode:'elplat',kept:true,sources:3,queued:0});
+  await page.waitForFunction(()=>!transitVoice);
+  assert.equal(await page.evaluate(()=>mode),'elplat','the announcement finishes naturally on the same platform');
+  await page.evaluate(()=>elBoard());
+  await page.waitForFunction(()=>!!transitVoice);
+  assert.deepEqual(await page.evaluate(()=>{elGetOff();elDown();return {mode,voice:transitVoice,queued:transitQueue.length};}),{mode:'walk',voice:null,queued:0});
 }));
 
 test('a departure on the first resumed frame is announced once, and late boarding prioritizes the doors', () => fixture(async page => {

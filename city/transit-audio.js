@@ -19,12 +19,13 @@ function transitAudible() {
   return !!actx && actx.state === 'running' && soundOn && settings.master > 0 && settings.effects > 0 &&
     !paused && !freecam && !document.hidden;
 }
-function cancelTransitAnnouncements() {
+function cancelTransitAnnouncements(keepVoice = false) {
   transitEpoch++;
   if (transitWait != null) clearTimeout(transitWait);
-  transitWait = null; transitReadyAt = 0;
+  transitWait = null;
+  if (!keepVoice) transitReadyAt = 0;
   transitQueue = []; transitLoading = false;
-  if (transitVoice) {
+  if (transitVoice && !keepVoice) {
     for (const source of transitVoice.sources) { source.onended = null; source.stop(); source.disconnect(); }
     for (const node of transitVoice.nodes) node.disconnect();
     transitVoice = null;
@@ -58,7 +59,14 @@ function transitSync() {
   const changed = !transitSameLocation(transitLocation);
   const jumped = transitTime != null && (T < transitTime || T - transitTime > .25);
   if (changed || jumped) {
-    cancelTransitAnnouncements();
+    // The current train's PA is still audible just outside its doors. Retain
+    // the scheduled utterance, but discard the old train's queued speech.
+    let keepVoice=false;
+    if (!jumped && transitVoice && transitLocation?.key === 'el' && location.key.startsWith('elplat:')) {
+      const ride=transitLocation.owner,train=elTrain(ride.tr,ride.k,T),platform=elPlatformAt(px,py);
+      keepVoice=!!(train.stopped && platform?.tr===ride.tr && platform.s===EL_STATIONS[train.station]);
+    }
+    cancelTransitAnnouncements(keepVoice);
     transitLocation = location;
     transitObserved = transitSnapshot();
     // Cache promises as well as decoded buffers. A failed fetch is cached as null.
