@@ -141,8 +141,16 @@ function devPlaces() {
     ['Grand Hotel', () => devAt(GRAND_HOTEL.doorU, GRAND_HOTEL.by * 8 + 8.4, -Math.PI / 2)],
     ['Aquarium', () => devAt(AQUARIUM.doorU, AQUARIUM.by * 8 + 8.4, -Math.PI / 2)], ['Museum', () => devAt(MUSEUM.bx * 8 + 5, MUSEUM.by * 8 + 1.6, Math.PI / 2)], ['Night market (Chinatown)', () => { const s = STALLS[1]; devAt(s.at[0], s.at[1] - 0.4, Math.PI / 2); }], ['Out on the bay (in a boat)', () => { devFree(); const b = fleet.find(o => o.deal === 'mine') || fleet[0]; boardBoat(b); }]];
   land.push([COURIER_COMPANY,()=>devAt(...COURIER_DEPOT.door,0)]);
-  if(FERRY_STOPS.length)land.push(['Island ferry terminal',()=>devAt(...FERRY_STOPS[0].land,Math.PI/2)]);
+  if(FERRY_STOPS.length) {
+    land.push(['Island ferry terminal',()=>devAt(...FERRY_STOPS[0].land,Math.PI/2)]);
+    land.push(['Island ferry (aboard)',()=>{
+      devFree();const ship=ferryShip(0);
+      ferryRide={id:0,u:-1.12,v:0,seat:null,yaw:ship.yaw};mode='ferry';
+      body.z=body.vz=body.crouch=0;a=ship.yaw;ferrySync();
+    }]);
+  }
   for (const [l, go] of land) out.push(['Landmarks', l, go]);
+  if(worldReady)for(const island of WILD_ISLANDS)out.push(['Islands',island.name,()=>devAt(...island.landing,0)]);
   const LM = { cathedral: 'Cathedral', clock: 'Clock tower', screens: 'The big screens', radio: 'Radio tower' };
   const nearestLm = {}; // (there are several of each: the nearest one)
   for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) {
