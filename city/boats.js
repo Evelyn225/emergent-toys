@@ -121,7 +121,7 @@ function hullPoints(b, x, y, hx, hy) {
   const k = BOAT_KINDS[b.kind];
   return [[k.hl, 0], [k.hl * 0.6, k.hw], [k.hl * 0.6, -k.hw], [0, k.hw], [0, -k.hw], [-k.hl, k.hw], [-k.hl, -k.hw]].map(([u, v]) => [x + hx * u - hy * v, y + hy * u + hx * v]);
 }
-const waterClear = (b, x, y, hx, hy) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy) && roadBridgeClearance(qx,qy) > (b.kind==='sailboat'?1.05:.28) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
+const waterClear = (b, x, y, hx, hy) => hullPoints(b, x, y, hx, hy).every(([qx, qy]) => navigable(qx, qy) && roadBridgeClearance(qx,qy) > (b.kind==='sailboat'?1.05:.28) && !ferryHullAt(qx,qy) && !fleet.some(o => o !== b && boatDist(o, qx, qy) < 0.01));
 function trafficClear(b, x, y, hx, hy, t = T) { // the boats going round the bay
   const pts = hullPoints(b, x, y, hx, hy);
   return !boats.some(o => { const p = boatAt(o, t), r = BOAT_HL[o.kind] * 0.85; return Math.abs(rel(p.x - x)) < 3 && pts.some(([qx, qy]) => Math.hypot(rel(p.x - qx), rel(p.y - qy)) < r); });

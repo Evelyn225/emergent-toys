@@ -102,12 +102,18 @@ function audioMix(s) {
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
   out.engine = s.mode === 'air' ? 0.35 + 0.55 * clamp(s.throttle || 0, 0, 1) : s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
+  if(s.mode==='ferry') {
+    out.engine=s.ferryInside ? .12 : .18;out.engine+=s.ferryMoving ? .1 : 0;
+    out.city*=.2;out.waves*=s.ferryInside ? .35 : .85;out.wind*=s.ferryInside ? .15 : .75;
+    out.rain*=s.ferryInside ? .12 : 1;out.crowd=s.ferryInside ? .08 : .025;
+  }
   for (const k in out) out[k] = clamp(out[k], 0, 1);
   return out;
 }
 
 // what's underfoot, for the footstep sound
 function surfaceAt(mode, room, x, y) {
+  if(mode==='ferry')return ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46?'carpet':'wood';
   if (mode === 'room') {
     const f = room.def.floor;
     return f === 'carpet' ? 'carpet' : f === 'wood' ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';

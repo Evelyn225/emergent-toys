@@ -815,7 +815,7 @@ function reflect() {
 const drops = Array.from({ length: 700 }, () => [Math.random(), Math.random(), 0.7 + Math.random() * 0.6]);
 function rainFx(dt) {
   const under = heldItem() && heldItem().id === 'umbrella'; // the umbrella keeps most of it off
-  const roofed = eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye); // under the Shotengai's roof, or the airport's: dry
+  const roofed = mode==='ferry'&&ferryRide&&ferryRide.u>-.98&&ferryRide.u<1.63&&Math.abs(ferryRide.v)<.46 || eye < ARCADE_Z && arcadeAt(px, py) || airportIndoors(px, py, eye); // covered ferry lounge, Shotengai or airport
   const n = roofed ? 0 : drops.length * rain * (under ? 0.3 : 1) | 0;
   for (let k = 0; k < n; k++) {
     const d = drops[k];

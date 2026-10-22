@@ -18,6 +18,7 @@ function noteStreet() {
   else if (mode === 'drive' && me) streetSpot = { x: me.x, y: me.y, a: Math.atan2(me.hy, me.hx) };
 }
 function saveCityJourney() {
+  if(mode==='ferry')return savedFerryJourney();
   if(mode==='sea'&&sea&&(sea.hired||sea.deal==='mine'))return {kind:'boat',id:sea.id};
   if(mode==='air'&&pilot?.owned&&!pilot.wrecked&&!pilot.ditched)return {kind:'aircraft',id:pilot.id};
   return null;
@@ -115,7 +116,8 @@ function loadGame() {
   if (at && isFinite(at.x) && isFinite(at.y) && !map[idx(Math.floor(at.x), Math.floor(at.y))] && !isWater(at.x, at.y)) {
     px = worldCoord(at.x); py = worldCoord(at.y); a = at.a || 0; streetSpot = { x: px, y: py, a };
   }
-  if(d.journey?.kind==='boat') {
+  if(d.journey?.kind==='ferry')loadFerryJourney(d.journey);
+  else if(d.journey?.kind==='boat') {
     const boat=fleet.find(b=>b.id===d.journey.id&&(b.hired||b.deal==='mine'));
     if(boat&&waterClear(boat,boat.x,boat.y,boat.hx,boat.hy))boardBoat(boat);
   } else if(d.journey?.kind==='aircraft') {

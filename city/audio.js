@@ -297,7 +297,7 @@ function audioTick(dt) {
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
-    wilderness:worldReady&&!!wildIslandAt(px,py),
+    wilderness:worldReady&&!!wildIslandAt(px,py),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
@@ -313,6 +313,9 @@ function audioTick(dt) {
     const v = Math.abs((me || sea).v), m = me ? 1 : 0.7;
     synth.engineOsc.frequency.setTargetAtTime((38 + v * 32) * m, now, 0.08);
     synth.engineLP.frequency.setTargetAtTime(300 + v * 400 * m, now, 0.1);
+  } else if(mode==='ferry') {
+    synth.engineOsc.frequency.setTargetAtTime(ferryShip(ferryRide.id).stopped?28:36,now,.5);
+    synth.engineLP.frequency.setTargetAtTime(220,now,.5);
   } else if (pilot) { // a prop's drone or a jet's whine, up with the throttle; a helicopter's rotor thudding round
     const T_ = PLANE_TYPES[pilot.type], th = T_.heli ? pilot.rotor || 0 : pilot.throttle || 0;
     synth.engineOsc.frequency.setTargetAtTime(T_.heli ? 30 + th * 25 : pilot.type === 'jet' ? 90 + th * 160 : 55 + th * 70, now, 0.15);
@@ -327,11 +330,12 @@ function audioTick(dt) {
   tickSirens(indoors);
   if (bolt && bolt !== heardBolt) { heardBolt = bolt; sfxThunder(bolt.d, indoors); }
   // footsteps: one every step-length of ground covered on foot
-  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat';
+  const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry';
+  const footPos=mode==='ferry'?[ferryRide.u,ferryRide.v,mode]:[px,py,mode];
   if (onFoot && lastPos && lastPos[2] === mode) {
-    const moved = Math.hypot(rel(px - lastPos[0]), rel(py - lastPos[1])), run = K.ShiftLeft || K.ShiftRight;
+    const moved = Math.hypot(rel(footPos[0] - lastPos[0]), rel(footPos[1] - lastPos[1])), run = K.ShiftLeft || K.ShiftRight;
     if (moved < 1) stepAcc += moved / (mode === 'room' ? (run ? 1.0 : 0.75) : run ? 0.14 : 0.1);
     if (stepAcc >= 1) { stepAcc = 0; sfxStep(surfaceAt(mode, room, px, py), run); }
   }
-  lastPos = [px, py, mode];
+  lastPos = footPos;
 }
