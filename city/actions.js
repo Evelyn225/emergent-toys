@@ -132,7 +132,7 @@ function elGetOff() {
   if (!t.stopped) return say('Wait for the next stop.');
   const s = EL_STATIONS[t.station];
   mode = 'elplat'; plat = { s, tr: ride.tr }; ride = null; py = EL_PLAT[plat.tr];
-  px = clamp(px, s.x0, s.x1);
+  px = clamp(px, s.x0+.09, s.x1-.09);
   body.z=body.vz=body.peak=0;roofH=EL_TOP;
   say(`${s.name}`);
   transitSync();

@@ -10,6 +10,7 @@ function elPassengerSet(tr,k,time=T){
   return {seed,slot,car,seated,u,v,side,look:figStreetLook(seed,[BLUE,RED,GREEN,YEL,STONE][index%5],BLUE)};
  }).filter(Boolean);
  if(!state||state.leg!==leg){state={leg,previous:state?.riders||make(leg-1),riders:make(leg)};EL_RIDERS.set(key,state);}
+ if(mode==='el'&&ride?.seat&&ride.tr===tr&&ride.k===k)state.riders=state.riders.filter(p=>!(ride.car===p.car&&p.seated&&p.side===ride.seat.side&&Math.abs(p.u-ride.seat.u)<.02));
  const elapsed=train.stopped?DWELL-train.left:10,doorSide=tr?1:-1;
  const pose=(p,exiting)=>{
   const moving=elapsed<(exiting?3:6),progress=exiting?clamp(elapsed/3,0,1):clamp((elapsed-3)/3,0,1),door=(p.u<0?-1:1)*.45*EL_HL;
@@ -18,7 +19,9 @@ function elPassengerSet(tr,k,time=T){
   return {...p,u,v,boarding:moving,seated:!moving&&p.seated,exiting};
  };
  const out=elapsed<3?state.previous.filter(p=>hash(p.seed,4,8910)>.35).map(p=>pose(p,true)):[];
- for(const p of state.riders)if(elapsed>=3||hash(p.seed,4,8910)<=.35)out.push(pose(p,false));
+ for(const p of state.riders){
+  if(elapsed>=3||hash(p.seed,4,8910)<=.35)out.push(pose(p,false));
+ }
  return out;
 }
 function drawElRiders(train,inside=false){
@@ -32,7 +35,7 @@ function drawElRiders(train,inside=false){
 }
 function elSeatToggle(){
  if(!ride)return;
- if(ride.seat){ride.seat=null;return;}
+ if(ride.seat){ride.seat=null;ride.side=0;return;}
  const passengers=elPassengerSet(ride.tr,ride.k),local=ride.off-ride.car*EL_CAR_LEN;
  let best=null,dist=.25;
  for(const u of [-.69,0,.69])for(const side of [-1,1]){
