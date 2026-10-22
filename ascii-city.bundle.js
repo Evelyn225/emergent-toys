@@ -1164,7 +1164,7 @@ function drawFigure(rx, ry, z0, h, fx, fy, look, pose = 'stand', opts) {
     }
     BG[i] = sparkle && role === FR.TOP && hash(i, Math.floor(T * 7), 9074) > 0.8 ? C(WHITE, 15) : C(look.base[role], look.lvl[role] * k);
     return set(i, ' ', 0), true;
-  });
+  }, true); // thin foreground strokes (jail bars, poles) keep their glyph over the figure's background
 }
 
 // ---- animals: built and drawn just like people (parts, cast from the side you see into a cached sprite, painted as
@@ -23023,7 +23023,8 @@ function drawArt(rx_, ry_, z, w, h, art, colFn) {
 // a billboard painted by a function of world position instead of ascii art, for things too big for art to scale well.
 // hw = half width. fn(i, u, z, du, dz, L): u across (0 = centre, + right), z = height, du/dz = one cell's size there;
 // it paints the cell and returns true, or false to leave it see-through.
-function drawShape(rx_, ry_, z0, hw, h, fn) {
+// behindGlyphs lets solid figure backgrounds show through thin foreground strokes while retaining those strokes.
+function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false) {
   const depth = dx * rx_ + dy * ry_;
   if (depth < 0.05 || depth > vis) return;
   const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc, du = 1 / sc, dz = depth / projY;
@@ -23034,11 +23035,14 @@ function drawShape(rx_, ry_, z0, hw, h, fn) {
     const z = eye + (hor - r - 0.5) * dz - z0;
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth >= ZB[i]) continue;
+      const behind = depth >= ZB[i];
+      if (behind && (!behindGlyphs || depth >= ZBG[i])) continue;
+      const foreground = behind ? CH[i] : null, foregroundCol = behind ? COL[i] : 0;
       const bg = BG[i]; BG[i] = BG_UNSET;
       const drew = fn(i, (c + 0.5 - cx) * du, z, du, dz, L);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = depth; // (a background it paints is its own, for the fog)
-      if (drew) { ZB[i] = depth; FL[i] = 0; }
+      if (behind) { CH[i] = foreground; COL[i] = foregroundCol; }
+      else if (drew) { ZB[i] = depth; FL[i] = 0; }
     }
   }
 }
