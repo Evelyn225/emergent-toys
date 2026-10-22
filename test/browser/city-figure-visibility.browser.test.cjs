@@ -36,7 +36,7 @@ test('figures outside the view or fully behind geometry never request sprites', 
         [-10, 0, 0], [.04, 0, 0], [vis + 1, 0, 0],
         [.1, 10, 0], [.1, -10, 0], [1, 0, 10], [1, 0, -10], [1, 0, 0, true]
       ]) {
-        ZB.fill(occluded ? .1 : Infinity);
+        ZB.fill(occluded ? .1 : Infinity); ZBG.set(ZB);
         drawFigure(x, y, z, .175, -1, 0, look);
       }
       const rejected = requests.length;
@@ -48,6 +48,43 @@ test('figures outside the view or fully behind geometry never request sprites', 
     } finally { figSprite = original; }
   });
   assert.deepEqual(result, { rejected: 0, visible: 1, painted: true });
+}));
+
+test('a foreground bar keeps its stroke while the same skin color remains visible behind it',()=>withPage(async page=>{
+  const result=await page.evaluate(()=>{
+    dx=1;dy=0;eye=.17;hor=rows/2;
+    const look=figLook({hair:'bald',col:{skin:[SKIN,12]}});
+    ZB.fill(Infinity);ZBG.fill(Infinity);BG.fill(C(GRAY,3));
+    drawFigure(1,0,0,.175,-1,0,look);
+    const face=Array.from(BG, (bg,i)=>bg>>4===SKIN?i:-1).filter(i=>i>=0);
+    const colors=face.map(i=>BG[i]);
+    ZB.fill(.5);ZBG.fill(Infinity);BG.fill(C(GRAY,3));CH.fill('|');COL.fill(C(WHITE,12));
+    drawFigure(1,0,0,.175,-1,0,look);
+    return {face:face.length,skin:face.every((i,k)=>BG[i]===colors[k]),
+      bars:face.every(i=>CH[i]==='|'&&COL[i]===C(WHITE,12)&&ZB[i]===.5),
+      backgroundDepth:face.every(i=>ZBG[i]===1)};
+  });
+  assert.ok(result.face>10);assert.equal(result.skin,true);assert.equal(result.bars,true);assert.equal(result.backgroundDepth,true);
+}));
+
+test('moving across the jail cell preserves the officer skin behind the actual bars',()=>withPage(async page=>{
+  const result=await page.evaluate(()=>{
+    T=0;enterRoom('jail',{word:'JAIL',until:60,ret:[px,py,a]},[9,5.3,Math.PI/2]);env(0);
+    const officer=room.props.find(s=>s.fig&&s.tick&&s.y===7.5),look=officer.fig;
+    officer.tick=null;officer.x=11;officer.face=[0,-1];
+    const props=room.props.filter(s=>!s.fig||s===officer),withoutBars=props.filter(s=>!s.peeThrough),out=[];
+    for(let step=0;step<5;step++) {
+      if(step)move(.8,0);
+      a=Math.atan2(officer.y-py,officer.x-px);pitch=0;
+      room.props=withoutBars;render(0);
+      const skin=Array.from(BG,(bg,i)=>bg>>4===look.base[FR.SKIN]?{i,bg,depth:ZBG[i]}:null).filter(Boolean);
+      room.props=props;render(0);
+      const behind=skin.filter(s=>ZB[s.i]<s.depth&&CH[s.i]==='|');
+      out.push({samples:behind.length,same:officer.fig===look,skin:behind.every(s=>BG[s.i]===s.bg)});
+    }
+    return out;
+  });
+  for(const r of result){assert.ok(r.samples>5,JSON.stringify(r));assert.equal(r.same,true);assert.equal(r.skin,true);}
 }));
 
 test('partially visible figures still paint at every screen edge', () => withPage(async page => {
