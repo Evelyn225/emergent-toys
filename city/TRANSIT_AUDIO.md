@@ -8,6 +8,8 @@ Run `node tools/prepare-city-transit.cjs` to regenerate the 33 upload clips from
 
 The current voice treatment follows the requested heavier, more femme PA sound: pitch ratio 1.12 (about two semitones above the original), shifted formants for brighter resonance, preserved tempo, 300–4800 Hz filtering, presence boost, 4:1 compression and soft saturation. Pre-leveling gives the saturation a consistent input; final two-pass normalization targets −20 LUFS with a −3 dBTP ceiling. Only outer silence is trimmed, with consonant margins and tiny fades. The shared runtime PA bus adds a 380–3800 Hz speaker range, 2200 Hz presence and a quiet 22 ms reflection. The profile is a processing choice; perceived voice/gender and intelligibility still merit listening review.
 
+Runtime PA gain is 0.855, a 10% reduction from the previous 0.95 level, before the effects/master controls.
+
 ## Triggers and timing
 
 - Subway: boarding preserves the station train's existing cycle while the player chooses a destination. Selection triggers “The next stop is…” plus exactly that destination, without east/west direction messages. The unchanged nine-second journey calls the existing arrival action, which requests “This is…” plus the destination, followed by a belongings reminder when the reminder cooldown permits.

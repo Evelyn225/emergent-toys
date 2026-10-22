@@ -61,7 +61,34 @@ test('the el stairs: a step at a time up and down, the rails keep you on them, t
   assert.equal(r.swiped, false);
   assert.equal(r.rail, true, 'over the rail halfway up: no');
   assert.equal(r.railLow, false, 'off the side of the bottom step: fine');
-  assert.equal(r.under, true, 'the steelwork under the stairs is solid from the street');
+  assert.equal(r.under, null, 'the street remains walkable beneath the raised flight');
   assert.equal(r.deck, false, 'off the top landing onto the deck');
   assert.equal(r.street, null, 'the sidewalk elsewhere is nothing to do with the stairs');
+});
+
+test('both stair orientations allow headroom underneath without lifting the street, while posts and low treads stay solid',()=>{
+  const {ev}=loadCity();
+  const cases=JSON.parse(ev(`JSON.stringify(EL_STATIONS.flatMap(s=>s.stairs.map(st=>{
+    const at=(u,v)=>[worldCoord(st.ox+st.c*(st.off+u)+st.ax*v),st.oy+st.s*(st.off+u)+st.ay*v],vm=(ELS.v0+ELS.v1)/2;
+    const from=at(.25,ELS.v1+.08),to=at(.25,vm),post=at(ELS.u3,ELS.v0+.01),low=at(ELS.u0+.15,vm);
+    elStairOn=null;
+    const street=outdoorGroundHeight(...to),under=elStairStep(...from,...to,null,0);
+    elStairOn=st;
+    const tread=outdoorGroundHeight(...to);elStairOn=null;
+    return {under,street,tread,post:elStairPostAt(...post,0),low:elStairStep(...from,...low,null,0),
+      seam:Math.abs((st.oy+st.ay*ELS.top)-(st.tr?EL_Y1:EL_Y0))<1e-10};
+  })))`));
+  for(const r of cases){assert.equal(r.under,null);assert.equal(r.street,0);assert.ok(r.tread>.17);assert.equal(r.post,true);assert.equal(r.low,true);assert.equal(r.seam,true);}
+});
+
+test('station railings protect the outer edge and platform ends, leaving stair mouths and train boarding open',()=>{
+  const {ev}=loadCity();
+  const cases=JSON.parse(ev(`JSON.stringify(EL_STATIONS.flatMap(s=>s.stairs.map(st=>{
+    const tr=st.tr,y=tr?EL_Y1-.008:EL_Y0+.008,opening=st.ox+st.c*(st.off+(ELS.u3+ELS.u4)/2);
+    const rails=elPlatformRails(s,tr),mid=rails.filter(r=>Math.abs(r[2]-r[0])>.1).sort((a,b)=>(b[2]-b[0])-(a[2]-a[0]))[0],x=(mid[0]+mid[2])/2;
+    return {outer:elPlatformRailAt(x,y,EL_TOP),end:elPlatformRailAt(s.x0,EL_PLAT[tr],EL_TOP),
+      stair:elPlatformRailAt(opening,y,EL_TOP),boarding:elPlatformRailAt(s.x,EL_PLAT[tr]+(tr?-.12:.12),EL_TOP),
+      below:elPlatformRailAt(x,y,0),above:elPlatformRailAt(x,y,EL_TOP+EL_RAIL_H+.01),outside:elPlatformRailAt(s.x1+.5,y,EL_TOP)};
+  })))`));
+  for(const r of cases)assert.deepEqual(r,{outer:true,end:true,stair:false,boarding:false,below:false,above:false,outside:false});
 });

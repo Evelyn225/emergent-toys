@@ -100,12 +100,14 @@ const nearElStairs = () => {
   return null;
 };
 function elUp({ s, tr }) {
+  elStairOn=null;
   body.z=body.vz=body.peak=0;roofH=EL_TOP;
   mode = 'elplat'; plat = { s, tr }; px = s.x; py = EL_PLAT[tr]; a = tr ? 0 : Math.PI; pitch = 0; // facing the way the trains go
   transitSync();
   say(`${s.name} el platform`);
 }
 function elDown() { // (E on the platform: a shortcut to the foot of the stairs)
+  elStairOn=null;
   const stairs=plat.s.stairs[plat.tr];
   mode = 'walk'; px = stairs.x; py = stairs.y; a = Math.atan2(-stairs.s, -stairs.c); plat = null;
   body.z=body.vz=body.peak=0;roofH=0;
@@ -116,8 +118,10 @@ const elHere = () => plat && elTrains(T).find(t => t.tr === plat.tr && t.stopped
 function elBoard() {
   const t = elHere();
   if (!t) return false;
-  ride = { tr: t.tr, k: t.k, off: clamp(rel(px - t.x), -EL_CAR_LEN, EL_CAR_LEN) };
-  mode = 'el'; py = EL_TRACK[t.tr] + (t.tr ? 0.12 : -0.12); // by the window on the platform side
+  const car=clamp(Math.round(rel(px-t.x)/EL_CAR_LEN),-1,1);
+  ride = { tr: t.tr, k: t.k, off: car*EL_CAR_LEN+.1, car };
+  mode = 'el';px=worldCoord(t.x+ride.off);py=EL_TRACK[t.tr]; // stand in the aisle, inside the selected carriage
+  a=(t.tr?1:-1)*Math.PI/3;pitch=0;
   transitBoarded();
   say(`Next stop: ${EL_STATIONS[t.next].name}`);
   return true;
@@ -145,7 +149,7 @@ function enterRoom(kind, extra, spawn) {
 function interact() {
   if (islandBuildingUse()) return;
   if (streetSceneUse()) return;
-  if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
+  if (mode === 'walk' && elWalkGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
   if(courierUse())return;
   if (workshopUse()) return;
   if (mode === 'room') {

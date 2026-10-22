@@ -69,3 +69,63 @@ test('a moving el train hospitalises the player through the actual frame loop an
   assert.equal(result.mode,'room');assert.equal(result.kind,'hospital');assert.ok(result.wake>0);
   assert.match(result.message,/hit by an elevated train/);assert.equal(result.courier,null);assert.equal(result.failed,1);
 }));
+
+test('walk beneath either stair flight without being lifted, then swipe and climb onto its platform',()=>withCity(async page=>{
+  const result=await page.evaluate(()=>EL_STATIONS.flatMap(s=>s.stairs.map(st=>{
+    const at=(u,v)=>[st.ox+st.c*(st.off+u)+st.ax*v,st.oy+st.s*(st.off+u)+st.ay*v],vm=(ELS.v0+ELS.v1)/2;
+    mode='walk';room=null;elPass=null;elStairOn=null;body.z=body.vz=body.peak=body.crouch=0;
+    [px,py]=at(.25,.44);
+    let highest=0;
+    for(let i=0;i<55;i++){move(-st.ax*.005,-st.ay*.005);stepBody(.01);stepRoof();highest=Math.max(highest,walkGround(px,py)-Math.max(roadGroundHeight(px,py),architectureGroundHeight(px,py)));}
+    const under={mode,highest,v:st.ax*rel(px-st.ox)+st.ay*rel(py-st.oy),z:body.z};
+    [px,py]=at(ELS.u0-.08,vm);elStairOn=null;elPass={st};body.z=body.vz=body.peak=0;
+    for(let i=0;i<265;i++){move(st.c*.01,st.s*.01);stepBody(.01);stepRoof();}
+    const top={mode,ground:walkGround(px,py)};
+    for(let i=0;i<30;i++){move(st.ax*.006,st.ay*.006);stepBody(.01);stepRoof();}
+    return {under,top,platform:mode};
+  })));
+  assert.equal(result.length,8);
+  for(const r of result){assert.equal(r.under.mode,'walk');assert.equal(r.under.highest,0);assert.equal(r.under.z,0);assert.ok(r.under.v<.19);assert.equal(r.top.ground,1.27);assert.equal(r.platform,'elplat');}
+}));
+
+test('el riders are inside a rotating 3D carriage with the moving live city visible through its windows',()=>withCity(async page=>{
+  const result=await page.evaluate(()=>{
+    requestAnimationFrame=()=>0;env(0);T=1;elUp({s:EL_STATIONS[0],tr:0});elBoard();
+    const original=elFrame;let before,after;
+    elFrame=()=>{before=Array.from(ZB);original();after=Array.from(ZB);};
+    try {
+      const sample=(time,angle)=>{
+        T=time;px=worldCoord(elRiding().x+ride.off);a=angle;pitch=0;render(0);
+        return {depth:after.slice(),world:Array.from(BG,(bg,i)=>before[i]===after[i]?bg:-1),
+          interior:after.filter((z,i)=>z<before[i]).length,windows:after.filter((z,i)=>z===before[i]).length};
+      };
+      const first=sample(20,-Math.PI/2),next=sample(24,-Math.PI/2),aisle=sample(24,0),back=sample(24,Math.PI);
+      return {mode,inside:Math.abs(py-EL_TRACK[ride.tr])<.01,eye,expectedEye:EL_TOP+.19,cells:CH.length,
+        interior:first.interior,windows:first.windows,movingWindows:first.world.filter((bg,i)=>bg>=0&&next.world[i]>=0&&bg!==next.world[i]).length,
+        rotated:aisle.depth.some((z,i)=>Math.abs(z-back.depth[i])>.01),validDepth:after.every(z=>z>=0&&!Number.isNaN(z))};
+    }finally{elFrame=original;}
+  });
+  assert.equal(result.mode,'el');assert.equal(result.inside,true);assert.equal(result.eye,result.expectedEye);
+  assert.ok(result.interior>result.cells*.1,'visible carriage surrounds the rider');
+  assert.ok(result.windows>result.cells*.1,'window rays preserve the live world depth');
+  assert.ok(result.movingWindows>20,'the real city changes as the train travels');
+  assert.equal(result.rotated,true);assert.equal(result.validDepth,true);
+}));
+
+test('actual movement is stopped at station guardrails and passes through stair and boarding openings',()=>withCity(async page=>{
+  const result=await page.evaluate(()=>EL_STATIONS.flatMap(s=>s.stairs.map(st=>{
+    const tr=st.tr,sign=tr?1:-1,rails=elPlatformRails(s,tr),outer=rails.filter(r=>Math.abs(r[2]-r[0])>.1).sort((a,b)=>(b[2]-b[0])-(a[2]-a[0]))[0];
+    elUp({s,tr});px=(outer[0]+outer[2])/2;
+    for(let i=0;i<35;i++){move(0,sign*.006);stepBody(.01);stepRoof();}
+    const edge={mode,inside:py>EL_Y0&&py<EL_Y1};
+    elUp({s,tr});px=s.x0+.09;
+    for(let i=0;i<30;i++){move(-.006,0);stepBody(.01);stepRoof();}
+    const end=px>=s.x0;
+    elUp({s,tr});for(let i=0;i<45;i++){move(0,-sign*.008);stepBody(.01);stepRoof();}
+    const boarding=mode==='roof'&&Math.abs(py-EL_TRACK[tr])<.15;
+    elUp({s,tr});px=st.ox+st.c*(st.off+(ELS.u3+ELS.u4)/2);
+    for(let i=0;i<35;i++){move(0,sign*.006);stepBody(.01);stepRoof();}
+    return {edge,end,boarding,stairs:mode==='walk'&&walkGround(px,py)===EL_TOP&&body.z<.01};
+  })));
+  for(const r of result)assert.deepEqual(r,{edge:{mode:'elplat',inside:true},end:true,boarding:true,stairs:true});
+}));

@@ -73,7 +73,7 @@ test('the el stairs run clear of the buildings, the pillars, the lamps and the t
   const r=JSON.parse(ev(`JSON.stringify(EL_STATIONS.flatMap(s=>s.stairs.map(st=>{
     const top=[st.ox+st.c*(st.off+(ELS.u3+ELS.u4)/2),st.oy+st.ay*(ELS.top-0.02)];
     return {clear:elStairClear(st),lamps:lamps.filter(l=>elStairLocal(l.x,l.y)).length,trees:trees.filter(t=>elStairLocal(t.x,t.y)).length,
-      reaches:!!elStationAt(top[0])&&underEl(top[1])&&elStairGround(top[0],top[1])===EL_TOP,foot:elStairGround(st.x,st.y)};
+      reaches:!!elStationAt(top[0])&&underEl(top[1]+st.ay*.04)&&elStairGround(top[0],top[1])===EL_TOP&&Math.abs(st.oy+st.ay*ELS.top-(st.tr?EL_Y1:EL_Y0))<1e-10,foot:elStairGround(st.x,st.y)};
   })))`));
   assert.equal(r.length,8);
   for(const s of r){assert.ok(s.clear,JSON.stringify(s));assert.equal(s.lamps,0);assert.equal(s.trees,0);assert.ok(s.reaches,'the top landing runs out onto the deck at the station');assert.equal(s.foot,0,'the turnstile stands on the street');}

@@ -142,6 +142,7 @@ const roofFixed = () => !!room && room.kind === 'cathedral'; // (the bell tower:
 function roofFree(x, y, base=roofH) { // can you be at (x, y) on the roofs? Anywhere whose top isn't above your feet (and a step)
   if (homeBalconyActive()) return homeBalconyFree(x,y);
   const h = roofHeightAt(x, y), feet = base + body.z / 10;
+  if(elPlatformRailAt(x,y,feet))return false;
   if(courierRoofBlocked(x,y,feet)||h>feet&&courierRoofBlocked(x,y,h))return false; // (nor step up through a railing)
   if (roofFixed()) return h === roofH && !landmarkTowerBlocked(x,y,roofH);
   return h <= base + ROOF_STEP + body.z / 10;
@@ -155,7 +156,7 @@ function shiftFeet(dz) { body.z = Math.max(1e-3, body.z + dz); body.peak = (body
 const walkGround = outdoorGroundHeight;
 let elPass = null; // the turnstile you've swiped through: { st }, till you're up on the platform or off the stairs
 function stepRoof() { // onto another roof, off them altogether, or (falling past one) down onto it
-  if (mode === 'walk' && underEl(py) && elStairGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
+  if (mode === 'walk' && underEl(py) && elWalkGround(px, py) >= EL_TOP - 0.01) { // off the top of the el stairs onto the deck
     mode = 'roof'; roofH = EL_TOP; roofLot = new Set(); room = null; elPass = null; return;
   }
   if (mode === 'walk' && elPass && !elStairAt(px, py) && Math.hypot(rel(px - elPass.st.x), rel(py - elPass.st.y)) > 0.6) elPass = null; // (walked away from the turnstile)
@@ -182,6 +183,8 @@ function stepRoof() { // onto another roof, off them altogether, or (falling pas
     if (!followingSlope) shiftFeet((roofH - h) * 10);
     roofH = h; return;
   }
+  const stair=elStairAt(px,py);
+  elStairOn=stair&&Math.abs(stair.g-roofH)<=EL_TREAD?stair.st:null;
   const g = walkGround(px, py); // (off the deck onto the stairs, or down onto natural ground)
   shiftFeet((roofH - g) * 10); mode = 'walk'; room = null; roofH = 0; roofLot = null; // down to the street
 }
