@@ -31,6 +31,10 @@ function ferryLocal(ship,x,y) {
   const ex=x-ship.x,ey=y-ship.y;
   return [ex*ship.c+ey*ship.s,-ex*ship.s+ey*ship.c];
 }
+function ferrySignPosition(stop) {
+  // Along the edge of the pier, leaving its boarding point and centre open.
+  return stop.id==='city'?[stop.land[0]+1.1,stop.land[1]]:[stop.land[0]+.85,stop.land[1]+.4];
+}
 function ferryGangway(ship) {
   if(!ship.stopped)return null;
   const stop=FERRY_STOPS[ship.stop],a=ferryPoint(ship,-.98,-FERRY.hw),b=[...stop.land];
