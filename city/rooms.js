@@ -1327,14 +1327,14 @@ function roomSprites() {
     if (s.art) drawArt(s.x - px, s.y - py, s.z, s.w, s.h, typeof s.art === 'function' ? s.art() : s.art, s.col); // (a seat marker draws nothing: what it's on does)
   }
   const at = placeKey();
-  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
+  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 1); // things you put down in here
   const home = homeRecord(room);
   if (home) {
     drawWorkshopPreview();
     const { shelf, pet } = homeLayout(room);
     for (const [k, it] of (home.decor || []).entries()) {
       const offset = (k - ((home.decor.length - 1) / 2)) * 0.3, axis = room.def.shelfAxis || [1,0];
-      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 0.065);
+      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 1);
     }
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room

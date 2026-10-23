@@ -1,11 +1,14 @@
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
-function drawArt(rx_, ry_, z, w, h, art, colFn) {
+// solid: each character is a cell of colour (colFn's colour as the background), the way the animals and fish are drawn;
+// too small to fill half a row or a column, it isn't drawn at all rather than as a speck bigger than itself
+function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
   const depth = dx * rx_ + dy * ry_;
   if (depth < 0.05 || depth > vis) return;
   const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc;
   const left = cx - w * sc / 2, right = cx + w * sc / 2;
   const top = hor - (z + h - eye) * projY / depth, bot = hor - (z - eye) * projY / depth;
+  if (solid && bot - top < 0.5 && right - left < 1) return;
   const c0 = Math.max(0, Math.floor(left)), c1 = Math.min(cols, Math.ceil(right));
   const r0 = Math.max(0, Math.floor(top)), r1 = Math.min(rows, Math.ceil(bot));
   const L = (1 - depth / vis) * 15 * amb, AR = art.length, AC = art[0].length;
@@ -14,9 +17,10 @@ function drawArt(rx_, ry_, z, w, h, art, colFn) {
     const ay = Math.min(AR - 1, Math.max(0, (r + 0.5 - top) / (bot - top) * AR | 0)), line = art[ay];
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth >= ZB[i]) continue;
+      if (depth * (solid ? 0.97 : 1) >= ZB[i]) continue; // (solid things sit on the ground: the floor under a thin one's row is a little nearer than it)
       const ax = Math.min(AC - 1, Math.max(0, (c + 0.5 - left) / (right - left) * AC | 0)), ch = line[ax];
       if (ch === ' ') continue;
+      if (solid) { BG[i] = colFn(ch, ay, L, ax); set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue; }
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
       const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));

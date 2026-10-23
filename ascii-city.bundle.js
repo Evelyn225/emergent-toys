@@ -14028,7 +14028,7 @@ function citySprites() {
     drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
-  for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.007); } // things you put down
+  for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.1); } // things you put down
   if (job && job.ride) { // the fare's stop: a big marker hanging over the street
     const [vx, vy] = R(job.ride.dest[0], job.ride.dest[1]);
     drawArt(vx, vy, 0.25, 0.12, 0.18, ['\\ /', ' V '], () => C(YEL, fract(T * 2) < 0.7 ? 15 : 9));
@@ -16872,14 +16872,14 @@ function roomSprites() {
     if (s.art) drawArt(s.x - px, s.y - py, s.z, s.w, s.h, typeof s.art === 'function' ? s.art() : s.art, s.col); // (a seat marker draws nothing: what it's on does)
   }
   const at = placeKey();
-  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
+  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 1); // things you put down in here
   const home = homeRecord(room);
   if (home) {
     drawWorkshopPreview();
     const { shelf, pet } = homeLayout(room);
     for (const [k, it] of (home.decor || []).entries()) {
       const offset = (k - ((home.decor.length - 1) / 2)) * 0.3, axis = room.def.shelfAxis || [1,0];
-      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 0.065);
+      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 1);
     }
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
@@ -23670,12 +23670,15 @@ function drawRoadBridges() {
 }
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
-function drawArt(rx_, ry_, z, w, h, art, colFn) {
+// solid: each character is a cell of colour (colFn's colour as the background), the way the animals and fish are drawn;
+// too small to fill half a row or a column, it isn't drawn at all rather than as a speck bigger than itself
+function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
   const depth = dx * rx_ + dy * ry_;
   if (depth < 0.05 || depth > vis) return;
   const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc;
   const left = cx - w * sc / 2, right = cx + w * sc / 2;
   const top = hor - (z + h - eye) * projY / depth, bot = hor - (z - eye) * projY / depth;
+  if (solid && bot - top < 0.5 && right - left < 1) return;
   const c0 = Math.max(0, Math.floor(left)), c1 = Math.min(cols, Math.ceil(right));
   const r0 = Math.max(0, Math.floor(top)), r1 = Math.min(rows, Math.ceil(bot));
   const L = (1 - depth / vis) * 15 * amb, AR = art.length, AC = art[0].length;
@@ -23684,9 +23687,10 @@ function drawArt(rx_, ry_, z, w, h, art, colFn) {
     const ay = Math.min(AR - 1, Math.max(0, (r + 0.5 - top) / (bot - top) * AR | 0)), line = art[ay];
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth >= ZB[i]) continue;
+      if (depth * (solid ? 0.97 : 1) >= ZB[i]) continue; // (solid things sit on the ground: the floor under a thin one's row is a little nearer than it)
       const ax = Math.min(AC - 1, Math.max(0, (c + 0.5 - left) / (right - left) * AC | 0)), ch = line[ax];
       if (ch === ' ') continue;
+      if (solid) { BG[i] = colFn(ch, ay, L, ax); set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue; }
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
       const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));
@@ -28949,10 +28953,47 @@ const droppedHere = () => {
   const d=droppedNear(px,py,at,mode==='room'?1.1:.2,z);
   return d&&interactionClear(d.x,d.y,(d.displayZ??(d.at?0:d.z||0))+(d.at?.1:.01))?d:null;
 };
-// lying on the ground: the small item picture, shrunk to life size (s = world units per character: cells or metres)
-function drawDropped(d, vx, vy, s) {
-  const [lines, col] = droppedArt(d), art = pad(lines.filter(l => l.length)), W = art[0].length;
-  drawArt(vx, vy, d.displayZ ?? (d.at ? 0 : d.z || 0), W * s * 0.5, art.length * s, art, (c, row, L) => { const k = col(c, row); return C(k >> 4, (k & 15) * clamp(L / 11, 0.3, 1)); });
+// put down or on display: the held picture (the small one if it has none), cropped to what's drawn and painted solid at
+// life size. ITEM_SIZE: its longer side in metres, by item, else by kind; fish go by their weight
+const ITEM_SIZE = {
+  apple: 0.08, luckycoin: 0.025, oldcoin: 0.03, wishcoins: 0.04, goldring: 0.025, pearl: 0.015, diamond: 0.05, redstring: 0.07, tigerbalm: 0.05,
+  key_car_hatch: 0.08, key_car_sports: 0.08, pocketwatch: 0.06, compass: 0.07, divewatch: 0.05, pocketknife: 0.1, fortunecookie: 0.07,
+  cigarettes: 0.09, vape: 0.1, yoyo: 0.06, duck: 0.1, cityglobe: 0.12, replicastar: 0.1, trolleywheel: 0.12, tincan: 0.1,
+  book: 0.18, soggybook: 0.18, vhs: 0.19, postcard: 0.15, vinyl: 0.31, spraypaint: 0.2, mysterybox: 0.2, dinotoy: 0.2, goldfish: 0.22,
+  lantern: 0.3, firecrackers: 0.25, orrery: 0.35, boombox: 0.45, movinglamp: 0.45, skateboard: 0.8, rod: 1.4, carbonrod: 1.4,
+  oldboot: 0.3, seaweed: 0.35, plasticbag: 0.35, tyre: 0.6, trafficcone: 0.7, flipflop: 0.25, bottlemsg: 0.25,
+  hotelmasterpiece: 0.6, hotelharbour: 0.6, hotelstilllife: 0.6,
+};
+const KIND_SIZE = { food: 0.13, drink: 0.14, ingredient: 0.13, junk: 0.3, toy: 0.15, keys: 0.08, smoke: 0.09, pet: 0.45 };
+const itemSize = d => ITEM_SIZE[d.id] ?? (['fish', 'wish'].includes(ITEMS[d.id]?.kind) ? catchLength(d.kg) : KIND_SIZE[ITEMS[d.id]?.kind] ?? 0.15);
+// long things put down lie flat: how much looking down at them shortens their height (a deck, a rod a finger thick,
+// a fish on its side; crabs and squid stay on their legs)
+const LYING = { skateboard: 0.45, rod: 0.2, carbonrod: 0.2 };
+const lying = d => { const I = ITEMS[d.id]; return LYING[d.id] ?? (['fish', 'wish'].includes(I?.kind) && !I.crab && !I.squid ? 0.45 : 0); };
+const droppedPictures = new Map(); // ponytail: cleared wholesale when it fills; a real LRU if many animated items share a room
+function droppedPicture(d) {
+  const key = [d.id, d.uses, d.q, d.of, d.kg, Math.floor(T * 4)].join('|');
+  let p = droppedPictures.get(key);
+  if (p) return p;
+  const dense = !!DENSE[d.id], [lines, col] = (DENSE[d.id] || droppedArt)(d, usesLeft(d));
+  const rowsDrawn = lines.map((l, r) => r).filter(r => lines[r].trim()), r0 = rowsDrawn[0] ?? 0, r1 = rowsDrawn.at(-1) ?? 0;
+  const firsts = lines.map(l => l.search(/\S/)).filter(k => k >= 0), c0 = firsts.length ? Math.min(...firsts) : 0, c1 = Math.max(...lines.map(l => l.trimEnd().length));
+  const art = pad(lines.slice(r0, r1 + 1).map(l => l.slice(c0, c1))), aspect = dense ? D_ASPECT : 0.5;
+  p = { art, col: (ch, r, k) => col(ch, r + r0, k + c0), w: art[0].length * aspect, h: art.length };
+  const flat = lying(d);
+  if (flat && p.h > p.w) { // held upright: turned a quarter onto its side
+    const H = art.length, turned = Array.from({ length: art[0].length }, (_, r) => art.map((l, k) => l[r]).reverse().join(''));
+    p = { art: turned, col: (ch, r, k) => col(ch, H - 1 - k + r0, r + c0), w: p.h, h: p.w };
+  }
+  if (flat) p.h *= flat;
+  if (droppedPictures.size > 200) droppedPictures.clear();
+  droppedPictures.set(key, p);
+  return p;
+}
+// unit: world units in a metre (0.1 outdoors, where a cell is 10 m; 1 indoors)
+function drawDropped(d, vx, vy, unit) {
+  const p = droppedPicture(d), m = itemSize(d) * unit / Math.max(p.w, p.h);
+  drawArt(vx, vy, d.displayZ ?? (d.at ? 0 : d.z || 0), p.w * m, p.h * m, p.art, (c, r, L, k) => { const v = p.col(c, r, k); return C(v >> 4, (v & 15) * clamp(L / 11, 0.3, 1)); }, true);
 }
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
