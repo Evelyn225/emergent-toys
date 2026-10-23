@@ -74,19 +74,21 @@ test('damage: a round leaves a hole on the face of the wall it hit, and clanks o
       mode = 'walk'; room = null; px = cx + .5; py = cy + 1.4; a = -Math.PI / 2; pitch = 0; render(0);
       pullTrigger();
       const wall = sounds.splice(0).filter(s => s.kind === 'burst' && s.f >= 2000), hole = { ...bulletHoles[0] };
-      render(0); const p = fishProj(rel(hole.x - px), rel(hole.y - py), hole.z), drawn = CH[Math.floor(p.r) * cols + Math.floor(p.c)];
+      render(0); const p = fishProj(rel(hole.x - px), rel(hole.y - py), hole.z),pixel=Math.floor(p.r)*cols+Math.floor(p.c),spark=CH[pixel];
+      T+=.1;render(0);const drawn=CH[pixel]; // inspect the lasting mark after the 0.09 s impact puff
       // a parked car a few metres ahead, to the east
       const cars0kind = Object.keys(VEHICLES)[0];
       a = 0; pitch = -.3; render(0); gun.cool = 0; cars.push({ kind: cars0kind, x: px + .4, y: py, hx: 1, hy: 0, v: 0, parked: true, ex: px + .4, ey: py, dmg: 0 });
       pullTrigger();
       const clank = sounds.filter(s => s.kind === 'tone' && s.f > 800);
-      return { cy, holes: bulletHoles.length, hole, wall: wall.length, drawn, clank: clank.length, carHit: cars.at(-1).dmg > 0 };
+      return { cy, holes: bulletHoles.length, hole, wall: wall.length, spark, drawn, clank: clank.length, carHit: cars.at(-1).dmg > 0 };
     } finally { burst = realBurst; tone = realTone; }
   });
   assert.equal(r.holes, 1, 'the car hit leaves no wall hole');
   assert.ok(Math.abs(r.hole.y - (r.cy + 1)) < .002 && r.hole.ny === 1 && r.hole.nx === 0, 'on the south face, facing out: ' + JSON.stringify(r.hole));
   assert.ok(r.wall >= 1, 'a chip off the wall');
-  assert.match(r.drawn, /[o.]/, 'the hole is drawn on the wall');
+  assert.equal(r.spark,'*','the impact flashes at the wall');
+  assert.match(r.drawn, /[o.]/, 'the hole remains after the impact puff');
   assert.ok(r.carHit && r.clank >= 1, 'a clank off the car: ' + JSON.stringify(r));
 }));
 

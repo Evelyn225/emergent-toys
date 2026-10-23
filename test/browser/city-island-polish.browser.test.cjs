@@ -18,22 +18,25 @@ async function fixture(run) {
 
 test('the rendered pitched roofs match walking, aircraft and shot collision heights',()=>fixture(async page=>{
   const result=await page.evaluate(()=>{
-    const shade=islandRoofShade;let pixels=0,error=0;
+    const shade=islandRoofShade,samples=[];let pixels=0,error=0;
     islandRoofShade=(roof,i,t,L)=>{
       if(!roof.part&&HIT.face>=6) {
         const x=roof.x+HIT.u,y=roof.y+HIT.v;
-        pixels++;error=Math.max(error,Math.abs(HIT.w-islandRoofHeight(x,y)),Math.abs(HIT.w-builtHeight(x,y)),Math.abs(HIT.w-roofHeightAt(x,y)));
+        samples.push({i,t,x,y,z:HIT.w});
       }
       return shade(roof,i,t,L);
     };
     px=536;py=244;a=0;pitch=.12;freecam={z:1.1};render(0);
     islandRoofShade=shade;freecam=null;
-    const roof=ISLAND_ROOFS[0],height=islandRoofHeight(roof.x,roof.y),eave=islandRoofHeight(roof.x+roof.hl-.02,roof.y);
-    const hit=traceShot(roof.x-3,roof.y,roof.z0+.08,1,0,0);
-    return {pixels,error,pitch:height-eave,hit:hit.what,shotError:Math.abs(islandRoofHeight(hit.x,hit.y)-hit.z),doorOpen:free(...FERN_HOUSE.door)};
+    // Judge the final visible surface: a chimney legitimately stands above
+    // the roof pixels that were drawn first and then covered by it.
+    for(const s of samples)if(Math.abs(ZB[s.i]-s.t)<1e-6){pixels++;error=Math.max(error,Math.abs(s.z-islandRoofHeight(s.x,s.y)),Math.abs(s.z-builtHeight(s.x,s.y)),Math.abs(s.z-roofHeightAt(s.x,s.y)));}
+    const roof=ISLAND_ROOFS[0],height=islandRoofHeight(roof.x,roof.y),eave=islandRoofHeight(roof.x,roof.y+roof.hw-.02),along=islandRoofHeight(roof.x+roof.hl-.02,roof.y);
+    const hit=traceShot(roof.x,roof.y-3,roof.z0+.08,0,1,0);
+    return {pixels,error,pitch:height-eave,along:height-along,hit:hit.what,shotError:Math.abs(islandRoofHeight(hit.x,hit.y)-hit.z),doorOpen:free(...FERN_HOUSE.door)};
   });
   assert.ok(result.pixels>20,JSON.stringify(result));assert.ok(result.error<1e-6,JSON.stringify(result));
-  assert.ok(result.pitch>.15);assert.equal(result.hit,'wall');assert.ok(result.shotError<.005,JSON.stringify(result));assert.equal(result.doorOpen,true);
+  assert.ok(result.pitch>.15);assert.ok(Math.abs(result.along)<1e-8,JSON.stringify(result));assert.equal(result.hit,'wall');assert.ok(result.shotError<.005,JSON.stringify(result));assert.equal(result.doorOpen,true);
 }));
 
 test('the cascade joins its terrain bed and animates visible water instead of a floating box',()=>fixture(async page=>{
