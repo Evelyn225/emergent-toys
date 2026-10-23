@@ -515,7 +515,7 @@ const itemSize = d => ITEM_SIZE[d.id] ?? (['fish', 'wish'].includes(ITEMS[d.id]?
 // a fish on its side; crabs and squid stay on their legs)
 const LYING = { skateboard: 0.45, rod: 0.2, carbonrod: 0.2 };
 const lying = d => { const I = ITEMS[d.id]; return LYING[d.id] ?? (['fish', 'wish'].includes(I?.kind) && !I.crab && !I.squid ? 0.45 : 0); };
-const droppedPictures = new Map(); // ponytail: cleared wholesale when it fills; a real LRU if many animated items share a room
+const droppedPictures = new Map(); // bounded short-lived pictures, including animated items
 function droppedPicture(d) {
   const key = [d.id, d.uses, d.q, d.of, d.kg, Math.floor(T * 4)].join('|');
   let p = droppedPictures.get(key);

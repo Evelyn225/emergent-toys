@@ -17,7 +17,7 @@ function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
     const ay = Math.min(AR - 1, Math.max(0, (r + 0.5 - top) / (bot - top) * AR | 0)), line = art[ay];
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth * (solid ? 0.97 : 1) >= ZB[i]) continue; // (solid things sit on the ground: the floor under a thin one's row is a little nearer than it)
+      if (depth * (solid && FL[i] === 1 ? 0.97 : 1) >= ZB[i]) continue; // only the ground gets a subpixel contact allowance; walls and props always occlude
       const ax = Math.min(AC - 1, Math.max(0, (c + 0.5 - left) / (right - left) * AC | 0)), ch = line[ax];
       if (ch === ' ') continue;
       if (solid) { BG[i] = colFn(ch, ay, L, ax); set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue; }

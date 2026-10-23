@@ -203,6 +203,16 @@ test('an onigiri bite visibly removes the upper rice while keeping the hand stea
  for(const key of ['cx','hy','angle','sx','sy'])assert.equal(after.frame[key],before.frame[key],key);
 }));
 
+test('solid dropped pictures stay behind walls and props, with contact allowance only on the floor',()=>withItems(async page=>{
+ const r=await page.evaluate(()=>{
+  a=0;render(0);
+  const sample=kind=>{ZB.fill(.99);FL.fill(kind);BG.fill(C(GRAY,1));
+   drawArt(1,0,eye-.02,.2,.04,['@@'],()=>C(RED,12),true);
+   return BG.reduce((n,v)=>n+(v===C(RED,12)),0);};
+  return{wall:sample(0),floor:sample(1),water:sample(3)};
+ });assert.equal(r.wall,0);assert.equal(r.water,0);assert.ok(r.floor>0,JSON.stringify(r));
+}));
+
 test('put down or on display, items are solid pictures at life size, long ones lying flat', () => withItems(async page => {
   const r = await page.evaluate(() => {
     const calls = [], art = drawArt, size = {};
