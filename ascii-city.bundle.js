@@ -15430,19 +15430,7 @@ const bunk = (x, y, fy = 1) => [SEAT(x - 0.4, y, 0, fy, 0.58), SEAT(x + 0.3, y, 
 const steel = (i, t, L) => { BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : fract(HIT.w * 6) < 0.12 ? '-' : ' ', C(WHITE, L * 0.7)), true; };
 const porcelain = (i, t, L) => { BG[i] = C(WHITE, (3.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : ' ', C(GRAY, L * 0.7)), true; };
 let flushT = -9;
-const toilet = (x, y, back = -1, mat = steel) => [
-  BX(x, y + back * 0.3, 0.24, 0.09, 0, 0.82, mat), // the cistern
-  BX(x + 0.16, y + back * 0.2, 0.025, 0.04, 0.68, 0.72, (i, t, L) => (set(i, '-', C(WHITE, L)), true)), // its flush handle
-  BX(x, y + back * 0.02, 0.11, 0.13, 0, 0.3, mat), // the pedestal
-  { ...BX(x, y + back * 0.04, 0.21, 0.26, 0.3, 0.42, (i, t, L) => { // the bowl: an oval rim, water in the middle
-    const rim = mat === steel ? GRAY : WHITE;
-    if (HIT.face !== 5) return false; // leave the box's square sides transparent; the pedestal forms the bowl's base
-    const e = Math.hypot(HIT.u / 0.21, HIT.v / 0.26), swirl = T - flushT < 2.5;
-    if (e > 1) return false;
-    if (e > 0.68) { BG[i] = C(rim, 2.2 + L * 0.3); return set(i, 'o', C(mat === steel ? WHITE : GRAY, L)), true; }
-    if (swirl) { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, '@*o~'[(Math.floor(Math.atan2(HIT.v, HIT.u) * 2 + T * 12) & 3)], C(CYAN, L * 1.3)), true; }
-    BG[i] = C(BLUE, 1.4 + L * 0.15); return set(i, e < 0.3 && hash(Math.floor(T * 2), 1, 15) > 0.6 ? '~' : ' ', C(CYAN, L)), true;
-  }), loo: [x, y + back * 0.04] }];
+const toilet = (x,y,back=-1,mat=steel) => BATHROOM_TOILET(x,y,back,mat);
 function jailProps(r) {
   const p = [];
   for (const cx of [4, 11, 18]) { // the three cells on your side (yours is the middle) and the three across
@@ -15570,28 +15558,9 @@ const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && 
 // from wherever you see it (through the doorway too), and the face on the other side of the same wall isn't
 const wcFaceInside = (mx, my, side, w = room.def.wc) => !!w && (side ? inWc(mx + 0.5, my + (py < my ? -0.5 : 1.5), w) : inWc(mx + (px < mx ? -0.5 : 1.5), my + 0.5, w));
 // a washbasin on its pedestal, its back to the wall behind (-fx, -fy), a mirror over it
-const washbasin = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
-  drum(vx, vy, 0.06, 0, 0.72, (i, t, L) => { BG[i] = C(WHITE, (3 + L * 0.3) * drumLit(0.06)); return set(i, ' ', 0), true; });
-  drum(vx, vy, 0.22, 0.72, 0.86, (i, t, L) => { if (HIT.face === 5) { const r = Math.hypot(HIT.u, HIT.v); BG[i] = C(r < 0.15 ? CYAN : WHITE, r < 0.15 ? 2 : 4); return set(i, r < 0.03 ? 'o' : ' ', C(GRAY, 4)), true; }
-    BG[i] = C(WHITE, (3.4 + L * 0.3) * drumLit(0.22)); return set(i, ' ', 0), true; });
-  rod(vx - fx * 0.2, vy - fy * 0.2, 0.86, vx - fx * 0.12, vy - fy * 0.12, 0.98, 0.012, GRAY, 1.3); // the tap
-  drawBox(boxAt(vx - fx * 0.27, vy - fy * 0.27, fx, fy, 0.01, 0.25, 1.15, 1.75), (i, t, L) => { BG[i] = C(CYAN, 1.6 + (HIT.w - 1.15) * 2); return set(i, fract((HIT.v + HIT.w) * 3) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; }); // the mirror
-}, [0.24, 0.24, 0.86]);
-// An oval enamel bath: curved shell, open rim, recessed basin and a wall-end tap.
-const BATHTUB = (x,y) => ({...ROOM_MODEL(x,y,(vx,vy)=>{
-  const enamel=solid(WHITE,{bright:2.1}), n=32;
-  for(let k=0;k<n;k++) {
-    const t=(k+.5)*Math.PI*2/n, tx=-.37*Math.sin(t),ty=.99*Math.cos(t),len=Math.hypot(tx,ty);
-    drawBox(boxAt(vx+.37*Math.cos(t),vy+.99*Math.sin(t),tx/len,ty/len,len*Math.PI/n+.006,.048,.1,.62),enamel);
-  }
-  // The bottom sits below the rim; from above you can see into the bowl.
-  const basin=(i,t,L)=>{BG[i]=C(CYAN,1.4+L*.15);return set(i,HIT.face===5&&Math.hypot(HIT.u,HIT.v)<.04?'o':' ',C(GRAY,L)),true;};
-  drawBox(boxAt(vx,vy,0,1,.67,.31,.08,.18),basin);
-  for(const end of [-1,1])drum(vx,vy+end*.67,.31,.08,.18,basin);
-  rod(vx,vy-.99,.62,vx,vy-.99,.84,.018,GRAY,1.5);
-  rod(vx,vy-.99,.84,vx,vy-.81,.84,.018,GRAY,1.5);
-  for(const side of [-1,1])drum(vx+side*.13,vy-.95,.035,.63,.67,CHROME);
-},[.42,1.04,.62]),bath:true});
+const washbasin = (x,y,fx,fy) => BATHROOM_SINK(x,y,fx,fy);
+// A hollow oval enamel bath, with supported shell and a fitted tap.
+const BATHTUB = (x,y) => BATHROOM_TUB(x,y);
 // a bathroom wall from inside: white tiles to shoulder height (thin grout lines), a trim, painted plaster above
 function wcWall(i, u, z, L) {
   if (z > 1.3) { BG[i] = C(WHITE, 1.7 + L * 0.1); return set(i, ' ', 0); }
@@ -34057,7 +34026,7 @@ function hotelDefinition(tier){
  const p=[...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
  ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),ROOM_MODEL(bed[0]+side*standOffset,bed[1]-.65,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
  ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,-1,tier===2?GREEN:BLUE),...hotelTelevision(...tv),hotelLandscape(bed[0],1.03),
- ...toilet(w-2,1.6,-1,porcelain),washbasin(w-4.1,1.4,0,1),
+ ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
  ...(tier?[BATHTUB(w-1.5,4.1)]:[BX(w-2.1,4.4,.7,.7,.02,.07,solid(WHITE)),BX(w-2.8,4.4,.025,.7,.07,1.9,solid(CYAN,{bright:1}))]),
  POT_PLANT(tier===2?9.5:1.5,h-1.5,1.4)];
  if(tier)p.push(BX(...stove,1.7,.38,.1,.94,stoveShade(1,.55),0,1),BX(stove[0],stove[1]+2.3,.43,.4,0,1.7,solid(WHITE,{panel:.7})),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
@@ -34892,6 +34861,103 @@ function FURNITURE_POUF(x,y,col,fx,fy,height=.4) {
   return {...furnitureModel(x,y,1,0,.24,.24,height,(vx,vy)=>{
     coveLathe(vx,vy,0,[[0,0],[0,.2],[.035,.22],[height*.35,.24],[height-.055,.235],[height-.02,.22],[height,.18],[height,0]],furnitureCloth(col));
   }),seat:true,fx,fy,h:height};
+}
+// Hollow elliptical profiles share their outer lip, inner wall and floor. The
+// ray parameter stays in world units; normals use the inverse ellipse scale.
+function bathroomRayOval(ox,oy,oz,rx,ry,rz,b) {
+  const t=coveRayLathe((ox-b.x)/b.sx,(oy-b.y)/b.sy,oz,rx/b.sx,ry/b.sy,rz,b.lathe);
+  if(t<0)return t;
+  HIT.u*=b.sx;HIT.v*=b.sy;
+  const nx=HIT.nx/b.sx,ny=HIT.ny/b.sy,nz=HIT.nz,n=Math.hypot(nx,ny,nz);
+  HIT.nx=nx/n;HIT.ny=ny/n;HIT.nz=nz/n;HIT.face=HIT.nz>.9?5:HIT.nz<-.9?6:0;
+  return t;
+}
+function bathroomOval(x,y,sx,sy,base,profile,shade) {
+  const points=profile.map(([z,r])=>[base+z,r]),r=Math.max(...points.map(p=>p[1]));
+  drawBox({...boxAt(x,y,1,0,sx*r,sy*r,Math.min(...points.map(p=>p[0])),Math.max(...points.map(p=>p[0]))),sx,sy,lathe:{x:0,y:0,profile:points}},shade,bathroomRayOval);
+}
+function bathroomEnamel(i,t,L) {
+  BG[i]=C(WHITE,3.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+}
+function bathroomPipe(ax,ay,az,bx,by,bz,r,base=GRAY) {
+  // Bathroom fixtures are viewed from within arm's reach: keep the plumbing a
+  // solid curved surface instead of changing it into line glyphs nearby.
+  drawBox({...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(az,bz)-r,Math.max(az,bz)+r),ax,ay,az,bx,by,bz,r},
+    (i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,base),coveRayCapsule);
+}
+function bathroomTap(x,y,fx,fy,z) {
+  const at=(u,v,h)=>[x-fy*u+fx*v,y+fx*u+fy*v,z+h];
+  const tube=(u,v,h,uu,vv,hh,r=.012)=>bathroomPipe(...at(u,v,h),...at(uu,vv,hh),r,GRAY);
+  tube(0,-.19,0,0,-.19,.16);
+  for(let k=0;k<6;k++) {
+    const a=k*Math.PI/12,b=(k+1)*Math.PI/12;
+    tube(0,-.14-.05*Math.cos(a),.16+.05*Math.sin(a),0,-.14-.05*Math.cos(b),.16+.05*Math.sin(b));
+  }
+  tube(0,-.14,.21,0,-.06,.21);tube(0,-.06,.21,0,-.06,.18);
+  for(const side of [-1,1]) {
+    tube(0,-.19,.075,side*.045,-.19,.075,.01);
+    const [x0,y0,z0]=at(side*.045,-.19,.075);
+    coveLathe(x0,y0,z0-.015,[[0,0],[0,.018],[.03,.018],[.03,0]],
+      (i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
+  }
+}
+function bathroomMirrorMount(x,y,fx,fy) {
+  for(let d=.2;d<=1;d+=.02) {
+    const wx=x-fx*d,wy=y-fy*d,cx=Math.floor(wx),cy=Math.floor(wy),cell=room?.grid[cy]?.[cx];
+    if(!cell||!'#W'.includes(cell))continue;
+    const plane=fx>0?cx+1:fx<0?cx:fy>0?cy+1:cy;
+    return {x:fx?plane+fx*.025:x,y:fy?plane+fy*.025:y,wall:true};
+  }
+  return {x:x-fx*.2,y:y-fy*.2,wall:false};
+}
+function BATHROOM_SINK(x,y,fx,fy) {
+  let mirror;
+  return furnitureModel(x,y,1,0,.24,.24,.86,(vx,vy)=>{
+    coveLathe(vx,vy,0,[[0,0],[0,.09],[.025,.09],[.07,.07],[.59,.055],[.72,.095],[.735,0]],bathroomEnamel);
+    bathroomOval(vx,vy,.22,.22,0,[[.72,0],[.72,.42],[.75,.72],[.82,.96],[.845,1],[.86,.96],[.86,.77],[.835,.74],[.775,.38],[.765,0]],bathroomEnamel);
+    coveLathe(vx,vy,.765,[[0,0],[0,.023],[.002,.023],[.002,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
+    bathroomTap(vx,vy,fx,fy,.86);
+    mirror||=bathroomMirrorMount(x,y,fx,fy);
+    const mx=vx+mirror.x-x,my=vy+mirror.y-y,c=-fy,s=fx;
+    if(!mirror.wall)for(const side of [-1,1])bathroomPipe(mx+c*side*.16,my+s*side*.16,.84,mx+c*side*.16,my+s*side*.16,1.2,.012,GRAY);
+    coveRound(mx,my,c,s,.25,.025,1.15,1.75,.018,GRAY);
+    coveRound(mx+fx*.026,my+fy*.026,c,s,.222,.002,1.18,1.72,.001,(i,t,L)=>{
+      const sheen=Math.exp(-(((HIT.u+.08*Math.sin(a))/.13+(HIT.w-1.45)*.8)**2));
+      BG[i]=C(CYAN,2.3+L*.12+sheen*.8);set(i,' ',0);return true;
+    });
+  });
+}
+function BATHROOM_TOILET(x,y,back=-1,mat=steel) {
+  const metal=mat===steel,finish=metal?(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY):bathroomEnamel;
+  const cy=y+back*.3,by=y+back*.04;
+  const cistern={...furnitureModel(x,cy,1,0,.24,.09,.82,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.23,.085,.48,.8,.025,finish);
+    coveRound(vx,vy,1,0,.24,.09,.79,.82,.012,finish);
+    bathroomPipe(vx,vy,.48,vx,vy,.31,.018,metal?GRAY:WHITE);
+    bathroomPipe(vx,vy,.31,vx,vy-back*.16,.31,.018,metal?GRAY:WHITE);
+    bathroomPipe(vx+.13,vy-back*.095,.7,vx+.19,vy-back*.095,.7,.012,GRAY);
+  }),box:boxAt(x,cy,1,0,.24,.09,.3,.82)};
+  const pedestal=furnitureModel(x,y+back*.02,1,0,.11,.13,.31,(vx,vy)=>{
+    bathroomOval(vx,vy,.11,.13,0,[[0,0],[0,.9],[.025,1],[.11,.68],[.26,.58],[.31,.78],[.31,0]],finish);
+  });
+  const bowl={...furnitureModel(x,by,1,0,.21,.26,.42,(vx,vy)=>{
+    bathroomOval(vx,vy,.21,.26,0,[[.28,0],[.28,.55],[.32,.72],[.37,.94],[.405,1],[.42,.97],[.42,.72],[.395,.68],[.32,.35],[.31,0]],finish);
+    bathroomOval(vx,vy,.21,.26,.327,[[0,0],[0,.36],[.001,.36],[.001,0]],(i,t,L)=>{
+      const swirl=T-flushT<2.5;
+      BG[i]=C(BLUE,1.7+L*.13);
+      const ripple=Math.sin(Math.atan2(HIT.v,HIT.u)*3-T*10)*Math.hypot(HIT.u,HIT.v);
+      set(i,swirl&&ripple>.045?'~':' ',C(CYAN,L));return true;
+    });
+  }),box:boxAt(x,by,1,0,.21,.26,.28,.42),loo:[x,by]};
+  return [cistern,pedestal,bowl];
+}
+function BATHROOM_TUB(x,y) {
+  return {...furnitureModel(x,y,1,0,.42,1.04,.62,(vx,vy)=>{
+    for(const u of [-.2,.2])for(const v of [-.5,.5])coveRound(vx+u,vy+v,1,0,.035,.045,0,.105,.015,GRAY);
+    bathroomOval(vx,vy,.42,1.04,0,[[.08,0],[.08,.68],[.14,.82],[.3,.96],[.56,1],[.605,1],[.62,.985],[.62,.9],[.56,.87],[.24,.68],[.19,.57],[.18,0]],bathroomEnamel);
+    coveLathe(vx,vy-.48,.187,[[0,0],[0,.025],[.003,.025],[.003,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
+    bathroomTap(vx,vy-.8,0,1,.62);
+  }),bath:true};
 }
 // Shared close-up home models. Surfaces have real edges and joined supports;
 // screens and bulbs are the only emissive parts of their housings.
