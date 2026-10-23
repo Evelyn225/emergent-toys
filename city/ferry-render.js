@@ -130,15 +130,15 @@ function drawFerry(ship) {
   part(-2.02,.075,.003,.075,z+.28,z+.36,(i,t,L)=>paint(i,' ',RED,Math.max(7,L),RED,5));
 }
 function drawFerryTerminal(stop) {
-  const [x,y]=R(...stop.land);if(Math.hypot(x,y)>vis)return;
+  const position=ferrySignPosition(stop),[x,y]=R(...position);if(Math.hypot(x,y)>vis)return;
   const ship=nextFerry(stop),wait=ship.wait<.1?'BOARDING':`IN ${Math.ceil(ship.wait)}S`;
-  const base=outdoorGroundHeight(stop.land[0]+.18,stop.land[1]);
-  drawBox(boxAt(x+.18,y,1,0,.03,.03,base,base+.008),(i,t,L)=>{BG[i]=C(GRAY,2+L*.2);set(i,' ',C(GRAY,L));return true;});
-  rod(x+.18,y,base+.006,x+.18,y,base+.26,.007,GRAY,1.1);
-  drawBox(boxAt(x+.18,y,Math.cos(stop.yaw),Math.sin(stop.yaw),.3,.025,base+.16,base+.26),(i,t,L)=>{
+  const base=outdoorGroundHeight(...position);
+  drawBox(boxAt(x,y,1,0,.03,.03,base,base+.008),(i,t,L)=>{BG[i]=C(GRAY,2+L*.2);set(i,' ',C(GRAY,L));return true;});
+  rod(x,y,base+.006,x,y,base+.26,.007,GRAY,1.1);
+  drawBox(boxAt(x,y,1,0,.3,.025,base+.16,base+.26),(i,t,L)=>{
     const upper=HIT.w>base+.212,text=upper?'ISLAND FERRY':wait;
-    const side=HIT.face===3?1:-1,c=Math.cos(stop.yaw),s=Math.sin(stop.yaw),cx=x+.18-s*side*.025,cy=y+c*side*.025;
-    BG[i]=C(BLUE,3);set(i,HIT.face===3||HIT.face===4?worldText(text,HIT.u*side,HIT.w,t,i,cx,cy,base+(upper ? .235 : .185),c*side,s*side,Math.min(.027,.54/(text.length+1)),.035):' ',C(upper?WHITE:YEL,13));return true;
+    const side=HIT.face===3?1:-1;
+    BG[i]=C(BLUE,3);set(i,HIT.face===3||HIT.face===4?worldText(text,HIT.u*side,HIT.w,t,i,x,y+side*.025,base+(upper ? .235 : .185),side,0,Math.min(.027,.54/(text.length+1)),.035):' ',C(upper?WHITE:YEL,13));return true;
   });
 }
 function drawFerries() {
