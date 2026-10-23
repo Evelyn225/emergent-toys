@@ -50,7 +50,7 @@ test('hotel tiers have reachable bathrooms, usable sofas and TVs, with kitchens 
    enterRoom('hotelroom',{suite:tier===2,lobby:{word:tier===0?'MOTEL':'HOTEL',ret:[100,100,0]}},def.entry);
    const seats=room.props.filter(p=>p.seat),seated=seats.length,amenities=def.hotelAmenities;[px,py]=[seats[0].x,seats[0].y+.65];const sitting=sitDown()&&!!body.seat;standUp();[px,py]=def.entry;
    const route=roomPath(px,py,room.W-2.5,3.5);
-   [px,py]=[amenities.tv[0],amenities.tv[1]+1];interact();const tv=room.tv===true;
+   [px,py]=amenities.tvApproach;interact();const tv=room.tv===true;
    let cooking=false;if(amenities.stove){[px,py]=[amenities.stove[0]-1,amenities.stove[1]];interact();cooking=cookCtx?.on==='stove';hidePanel(cookEl);}
    env(0);render(0);result.push({tier,w:room.W,h:room.H,seated,sitting,tv,cooking,bath:route.length>0,windows:!!room.exterior});
   }return result;
@@ -113,4 +113,20 @@ test('passenger turnover reserves the player seat, and freecam keeps its own C k
   freecam={x:0,y:0,z:2,yaw:0,pitch:0};paused=false;audioStart=()=>{};onkeydown({code:'KeyC',repeat:false,preventDefault(){}});
   const camera=K.KeyC===1&&!!ride.seat;K.KeyC=0;freecam=null;return {reserved,remainsEmpty,camera};
  });assert.deepEqual(r,{reserved:true,remainsEmpty:true,camera:true});
+}));
+
+test('motel bathroom opens beside the shower and its television faces the bed and sofa',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  enterRoom('hotelroom',{lobby:{word:'MOTEL',ret:[100,100,0]}},ROOM_DEFS.motelRoom.entry);
+  const {tv,tvAngle,tvApproach}=room.def.hotelAmenities,bed=room.props.find(p=>p.furniture==='bed'),head=room.props.find(p=>p.furniture==='headboard'),seat=room.props.find(p=>p.seat);
+  const route=[[4.5,4.8],[5.5,4.8],[6.5,4.8],[6.5,3.5],[8.4,3.5],[8.4,5.4]];
+  const clear=route.every(p=>free(...p))&&route.slice(1).every((p,k)=>roomWalkLine(...route[k],...p));
+  const ahead=(tv[0]-bed.x)*(bed.x-head.x)+(tv[1]-bed.y)*(bed.y-head.y)>0;
+  const normal=[-Math.sin(tvAngle),Math.cos(tvAngle)],screenFacesSeat=(seat.x-tv[0])*normal[0]+(seat.y-tv[1])*normal[1]>0;
+  const seatFacesScreen=(tv[0]-seat.x)*seat.fx+(tv[1]-seat.y)*seat.fy>0;
+  const approach=free(...tvApproach);[px,py]=tvApproach;a=Math.atan2(tv[1]-py,tv[0]-px);render(0);
+  return{clear,ahead,screenFacesSeat,seatFacesScreen,approach};
+ });
+ for(const [k,v]of Object.entries(r))assert.ok(v,k+': '+JSON.stringify(r));
+ await page.keyboard.press('e');assert.equal(await page.evaluate(()=>room.tv),true);
 }));

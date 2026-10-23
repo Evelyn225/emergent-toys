@@ -11432,6 +11432,23 @@ function ferryGangway(ship) {
   const h0=FERRY.deck,h1=outdoorGroundHeight(...stop.land),thickness=.012;
   return {x:(a[0]+b[0])/2,y:(a[1]+b[1])/2,c:ex/length,s:ey/length,hl:length/2,hw:.1,h0,h1,axis:'x',thickness,a,b};
 }
+// The boarding bridge is a walkable continuation of the deck only while docked.
+function ferryRampAt(ship,u,v) {
+  const ramp=ferryGangway(ship);if(!ramp)return null;
+  const [x,y]=ferryPoint(ship,u,v),ex=x-ramp.a[0],ey=y-ramp.a[1],length=ramp.hl*2;
+  const along=ex*ramp.c+ey*ramp.s,across=-ex*ramp.s+ey*ramp.c;
+  if(along<-.08||along>length+.04||Math.abs(across)>ramp.hw-.025)return null;
+  return {ramp,x,y,f:clamp(along/length,0,1),end:along>=length};
+}
+function ferryGround() {
+  if(!ferryRide)return FERRY.deck;
+  const at=ferryRampAt(ferryShip(ferryRide.id),ferryRide.u,ferryRide.v);
+  return at?at.ramp.h0+(at.ramp.h1-at.ramp.h0)*at.f:FERRY.deck;
+}
+function ferryStepAshore(stop,x=stop.land[0],y=stop.land[1]) {
+  px=x;py=y;mode='walk';ferryRide=null;body.seat=null;body.z=body.vz=0;noteStreet();
+  say(`${stop.name}. The ferry returns; E at this terminal to board again.`,4);
+}
 // A navigation disc contains the whole hull, so turns are safe too. Pier
 // rectangles are tested analytically: a thin jetty cannot fall between samples.
 function ferrySeaClear(x,y,pad=2.65) {
@@ -11567,6 +11584,10 @@ function ferrySeatOccupied(id,k) {
 }
 function stepFerryRide(dt) {
   if(!ferryRide)return;
+  const current=ferryShip(ferryRide.id);
+  // A departing bridge cannot carry somebody into open water.
+  if(!current.stopped&&ferryRide.v<-FERRY_DECK.side+FERRY_DECK.clearance&&ferryRide.dockStop!=null){ferryStepAshore(FERRY_STOPS[ferryRide.dockStop]);return;}
+  if(current.stopped)ferryRide.dockStop=current.stop;
   ferrySync();
   const ship=ferryShip(ferryRide.id),state=ship.stopped?'dock:'+ship.stop:'sail:'+ship.next;
   if(ferryRide.state&&ferryRide.state!==state)say(ship.stopped?`${FERRY_STOPS[ship.stop].name}. The boarding gate is open for ${FERRY.dwell} seconds.`:`Casting off. Next island: ${FERRY_STOPS[ship.next].name}.`,5);
@@ -11580,8 +11601,13 @@ function stepFerryRide(dt) {
   // Sweep even large test/time steps; collision cannot skip a seat or bulkhead.
   const n=Math.max(1,Math.ceil(Math.hypot(du,dv)/.025));
   for(let j=0;j<n;j++) {
-    if(ferryWalkClear(ferryRide.u+du/n,ferryRide.v))ferryRide.u+=du/n;
-    if(ferryWalkClear(ferryRide.u,ferryRide.v+dv/n))ferryRide.v+=dv/n;
+    for(const axis of [0,1]) {
+      const u=ferryRide.u+(axis===0?du/n:0),v=ferryRide.v+(axis===1?dv/n:0);
+      const at=ferryRampAt(ship,u,v);
+      if(!ferryWalkClear(u,v)&&!at)continue;
+      ferryRide.u=u;ferryRide.v=v;
+      if(at?.end){ferryStepAshore(FERRY_STOPS[ship.stop],at.x+at.ramp.c*.02,at.y+at.ramp.s*.02);return;}
+    }
   }
   ferrySync();
 }
@@ -11601,7 +11627,7 @@ function ferryPrompt() {
   if(mode==='ferry'&&ferryRide) {
     const ship=ferryShip(ferryRide.id),status=ship.stopped?`${FERRY_STOPS[ship.stop].name} · departs in ${Math.ceil(ship.left)}s`:`Next: ${FERRY_STOPS[ship.next].name} · ${Math.ceil(ship.left)}s`;
     const gate=Math.hypot(ferryRide.u+.98,ferryRide.v+.53)<.36;
-    return `${status} | C: sit / stand${ferryRide.seat!=null?' | Space: wait to next island':''}${ferryCafeNear()?' | E: café · food & drinks':ship.stopped&&gate?' | E: step ashore':' | Boarding gate: aft, port side'}`;
+    return `${status} | C: sit / stand${ferryRide.seat!=null?' | Space: wait to next island':''}${ferryCafeNear()?' | E: café · food & drinks':ship.stopped&&gate?' | Walk ashore':''}`;
   }
   const stop=nearFerryTerminal();if(!stop)return '';
   const next=nextFerry(stop);
@@ -11626,8 +11652,7 @@ function useFerry() {
     const ship=ferryShip(ferryRide.id);
     if(!ship.stopped){say('Stay aboard until the next island. The café is in the forward lounge.',3);return true;}
     if(Math.hypot(ferryRide.u+.98,ferryRide.v+.53)>.36){say('The boarding gate is aft on the port side. Follow the yellow deck markings.',3);return true;}
-    const stop=FERRY_STOPS[ship.stop];[px,py]=stop.land;mode='walk';ferryRide=null;a=stop.yaw-Math.PI/2;body.seat=null;body.z=body.vz=0;noteStreet();
-    say(`${stop.name}. The ferry returns; E at this terminal to board again.`,4);return true;
+    ferryStepAshore(FERRY_STOPS[ship.stop]);return true;
   }
   const stop=nearFerryTerminal();if(!stop)return false;
   if(!pay(FERRY.fare)){say(`The island ferry costs ${fmt$(FERRY.fare)}.`,3);return true;}
@@ -11656,9 +11681,10 @@ function ferryFromFreecam(cam) {
 function loadFerryJourney(journey) {
   if(!FERRY.cycle||journey?.kind!=='ferry'||!Number.isInteger(journey.id)||journey.id<0||journey.id>=FERRY.count||![journey.u,journey.v,journey.clock,journey.view].every(Number.isFinite))return false;
   const seat=Number.isInteger(journey.seat)&&FERRY_SEATS[journey.seat];
-  if(!seat&&!ferryWalkClear(journey.u,journey.v))return false;
-  ferryClockOffset=mod(journey.clock,FERRY.cycle)-T;
+  const clock=mod(journey.clock,FERRY.cycle)-T,previous=ferryClockOffset;ferryClockOffset=clock;
+  if(!seat&&!ferryWalkClear(journey.u,journey.v)&&!ferryRampAt(ferryShip(journey.id),journey.u,journey.v)){ferryClockOffset=previous;return false;}
   ferryRide={id:journey.id,u:seat?seat.u:journey.u,v:seat?seat.v:journey.v,seat:seat?journey.seat:null,yaw:ferryShip(journey.id).yaw};
+  ferryRide.dockStop=ferryShip(journey.id).stop;
   mode='ferry';body.seat=null;body.z=body.vz=0;a=ferryRide.yaw+journey.view;pitch=clamp(Number.isFinite(journey.pitch)?journey.pitch:0,-1.2,1.6);ferrySync();return true;
 }
 const cv = document.getElementById('c'), g = cv.getContext('2d');
@@ -23630,7 +23656,7 @@ function render(dt,sceneOnly=false,mask=null) {
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' ? EL_TOP+(ride?.seat ? .135 : .19) : mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? (chaseOn ? 0.2 : 0.11) : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
-  else if(mode==='ferry')eye=FERRY.deck+(ferryRide?.seat!=null ? .115 : .17);
+  else if(mode==='ferry')eye=ferryGround()+(ferryRide?.seat!=null ? .115 : .17);
   else if (mode === 'air') eye = airEye;
   else if (skateView) eye = skateView.eye; // (behind you on the board: skate.js)
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
@@ -24266,7 +24292,7 @@ function hud() {
     : settings.help && skatingNow() ? 'W push | S brake | A/D carve (in the air: spin) | SPACE hold, let go: ollie | arrows: flip tricks | right-drag: flick a trick | mouse: look | V: camera'
     : settings.help && mode === 'boat' ? 'W/S pedal | A/D steer | mouse: look | V: camera | E: tie up (at the jetty)'
     : settings.help && mode === 'sea' ? 'W throttle | Shift: cruise | S brake / astern | A/D steer | mouse: look | V: camera | E: tie up (beside land)'
-    : settings.help && mode==='ferry'?'WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | E café / boarding gate | I bag | Q eat / drink | M map'
+    : settings.help && mode==='ferry'?'WASD walk | mouse / arrows look | C sit / stand | Space wait to next island (seated) | walk ashore at dock | E café | I bag | Q eat / drink | M map'
     : settings.help && chute ? (chute.open ? 'A/D or mouse: steer | W: faster down | S: flare' : 'SPACE or E: pull the cord | A/D: turn | W: track forward')
     : settings.help && mode === 'air' ? (PLANE_TYPES[pilot.type].heli ? 'MOUSE: turn, up & down | W/S forward & back | A/D turn | R/F up & down | V: camera | E: get out (landed)' : 'MOUSE: fly (up/down nose, sideways bank) | W/S throttle (S brakes, then backs up) | A/D bank | arrows nose | V: camera | E: get out (stopped)')
     : settings.help && heldGun() ? 'WASD move | left click / Q fire | hold right click: aim | R reload | E use / talk | Esc: pause'
@@ -34194,30 +34220,31 @@ function drawIslandLife() {
 }
 // Hotel rooms have fitted plans and real amenities, with clear routes from the door.
 function hotelRoomPlan(tier){
- const w=tier===2?18:tier===1?13:10,h=tier===2?14:tier===1?12:10,bath={x0:w-5,x1:w-1,y0:1,y1:6,sign:[w-5,6,w-4.5]},extra={};
- for(let y=1;y<=6;y++)extra[(w-5)+','+y]='W';
- for(let x=w-5;x<w-1;x++)if(x!==w-3)extra[x+',6']='W';
+ const w=tier===2?18:tier===1?13:10,h=tier===2?14:tier===1?12:10,bath={x0:w-4,x1:w-1,y0:1,y1:6,sign:[w-5,6,w-4.5]},extra={};
+ for(let y=1;y<=6;y++)extra[(w-5)+','+y]=tier===0&&(y===4||y===5)?'.':'W';
+ for(let x=w-5;x<w-1;x++)if(tier===0||x!==w-3)extra[x+',6']='W';
+ if(tier===0)bath.sign=[w-5,3,3.5];
  if(tier===2)for(let y=1;y<10;y++)if(y!==7&&y!==8)extra['8,'+y]='#';
  return {w,h,bath,grid:boxRoom(w,h,extra),entry:[w/2,h-1.6,-Math.PI/2]};
 }
-function hotelTelevision(x,y){return [ROOM_MODEL(x,y,(vx,vy)=>TELEVISION(x,y,room,1.1).draw(vx,vy)),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1)];}
+function hotelTelevision(x,y,angle=0){return [ROOM_MODEL(x,y,(vx,vy)=>TELEVISION(x,y,room,1.1,angle).draw(vx,vy)),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1,angle)];}
 function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
  const u=HIT.u,z=HIT.w,frame=Math.abs(u)>.76||z<1.53||z>2.27;
  const hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
  BG[i]=C(frame?YEL:z<hill?GREEN:BLUE,frame?3:4);return set(i,frame?(Math.abs(u)>.76?'|':'='):z<1.7?'~':' ',C(frame?YEL:z<1.7?CYAN:GREEN,Math.max(5,L*.7))),true;
 });}
 function hotelDefinition(tier){
- const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:1.32],sofa=[tv[0],h-2.9],stove=tier?[w-1.5,h-4]:null;
- return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,stove},tier,
+ const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.5,h-4]:null;
+ return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,tvAngle,tvApproach:[tv[0]-Math.sin(tvAngle)*1.2,tv[1]+Math.cos(tvAngle)*1.2],sofa,stove},tier,
  wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,z<.12||Math.abs(z-.8)<.025||z>(tier===2?3.6:3)-.16?'=':' ',C(YEL,L*.65)),true;},
  props:r=>{
  const bed=tier===2?[3.9,3.6]:[2.6,3.2],bedWidth=tier===2?1.3:1.14,standWidth=tier===2?.3:.22,standOffset=bedWidth+standWidth+.01;
  const p=[...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
  ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),ROOM_MODEL(bed[0]+side*standOffset,bed[1]-.65,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
- ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,-1,tier===2?GREEN:BLUE),...hotelTelevision(...tv),hotelLandscape(bed[0],1.03),
+ ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,tier?-1:1,tier===2?GREEN:BLUE),...hotelTelevision(...tv,tvAngle),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
  ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.6,5.1,.6)),
- POT_PLANT(tier===2?9.5:1.5,h-1.5,1.4)];
+ POT_PLANT(tier===2?9.5:tier?1.5:8.5,h-1.5,1.4)];
  if(tier)p.push(BX(...stove,1.7,.38,.1,.94,stoveShade(1,.55),0,1),BX(stove[0],stove[1]+2.3,.43,.4,0,1.7,solid(WHITE,{panel:.7})),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
  if(tier)p.push(ROOM_MODEL(sofa[0],sofa[1]-1.25,(vx,vy)=>{
    for(const side of [-1,1])rod(vx+side*.3,vy,.05,vx+side*.3,vy,.42,.035,YEL);
@@ -34255,7 +34282,7 @@ ROOM_CEILS.hotel=(i,r,x,wx,wy)=>{
  BG[i]=C(WHITE,grand?5:4);return set(i,lamp?'o':edge<.16?'=':' ',C(lamp?WARM:YEL,lamp?15:8));
 };
 ROOM_FLOORS.hotel=(i,f,wx,wy,r,x,L)=>{
- const tier=room.def.tier,spot=room.def.hotelAmenities?.tv,sofa=spot?[spot[0],room.H-2.9]:[room.W/2,9];
+ const tier=room.def.tier,spot=room.def.hotelAmenities?.tv,sofa=room.def.hotelAmenities?.sofa||[room.W/2,9];
  if(Math.abs(wx-sofa[0])<(tier===2?2.6:1.65)&&wy>sofa[1]-2.1&&wy<sofa[1]+.6){
   const border=Math.abs(wx-sofa[0])>(tier===2?2.4:1.5)||wy<sofa[1]-1.95||wy>sofa[1]+.45;
   BG[i]=C(tier===2?GREEN:BLUE,2+f*2);return set(i,border?'=':hash(Math.floor(wx*4),Math.floor(wy*4),3)>.96?'+':' ',C(WARM,L));

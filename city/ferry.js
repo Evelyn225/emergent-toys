@@ -49,6 +49,23 @@ function ferryGangway(ship) {
   const h0=FERRY.deck,h1=outdoorGroundHeight(...stop.land),thickness=.012;
   return {x:(a[0]+b[0])/2,y:(a[1]+b[1])/2,c:ex/length,s:ey/length,hl:length/2,hw:.1,h0,h1,axis:'x',thickness,a,b};
 }
+// The boarding bridge is a walkable continuation of the deck only while docked.
+function ferryRampAt(ship,u,v) {
+  const ramp=ferryGangway(ship);if(!ramp)return null;
+  const [x,y]=ferryPoint(ship,u,v),ex=x-ramp.a[0],ey=y-ramp.a[1],length=ramp.hl*2;
+  const along=ex*ramp.c+ey*ramp.s,across=-ex*ramp.s+ey*ramp.c;
+  if(along<-.08||along>length+.04||Math.abs(across)>ramp.hw-.025)return null;
+  return {ramp,x,y,f:clamp(along/length,0,1),end:along>=length};
+}
+function ferryGround() {
+  if(!ferryRide)return FERRY.deck;
+  const at=ferryRampAt(ferryShip(ferryRide.id),ferryRide.u,ferryRide.v);
+  return at?at.ramp.h0+(at.ramp.h1-at.ramp.h0)*at.f:FERRY.deck;
+}
+function ferryStepAshore(stop,x=stop.land[0],y=stop.land[1]) {
+  px=x;py=y;mode='walk';ferryRide=null;body.seat=null;body.z=body.vz=0;noteStreet();
+  say(`${stop.name}. The ferry returns; E at this terminal to board again.`,4);
+}
 // A navigation disc contains the whole hull, so turns are safe too. Pier
 // rectangles are tested analytically: a thin jetty cannot fall between samples.
 function ferrySeaClear(x,y,pad=2.65) {
@@ -184,6 +201,10 @@ function ferrySeatOccupied(id,k) {
 }
 function stepFerryRide(dt) {
   if(!ferryRide)return;
+  const current=ferryShip(ferryRide.id);
+  // A departing bridge cannot carry somebody into open water.
+  if(!current.stopped&&ferryRide.v<-FERRY_DECK.side+FERRY_DECK.clearance&&ferryRide.dockStop!=null){ferryStepAshore(FERRY_STOPS[ferryRide.dockStop]);return;}
+  if(current.stopped)ferryRide.dockStop=current.stop;
   ferrySync();
   const ship=ferryShip(ferryRide.id),state=ship.stopped?'dock:'+ship.stop:'sail:'+ship.next;
   if(ferryRide.state&&ferryRide.state!==state)say(ship.stopped?`${FERRY_STOPS[ship.stop].name}. The boarding gate is open for ${FERRY.dwell} seconds.`:`Casting off. Next island: ${FERRY_STOPS[ship.next].name}.`,5);
@@ -197,8 +218,13 @@ function stepFerryRide(dt) {
   // Sweep even large test/time steps; collision cannot skip a seat or bulkhead.
   const n=Math.max(1,Math.ceil(Math.hypot(du,dv)/.025));
   for(let j=0;j<n;j++) {
-    if(ferryWalkClear(ferryRide.u+du/n,ferryRide.v))ferryRide.u+=du/n;
-    if(ferryWalkClear(ferryRide.u,ferryRide.v+dv/n))ferryRide.v+=dv/n;
+    for(const axis of [0,1]) {
+      const u=ferryRide.u+(axis===0?du/n:0),v=ferryRide.v+(axis===1?dv/n:0);
+      const at=ferryRampAt(ship,u,v);
+      if(!ferryWalkClear(u,v)&&!at)continue;
+      ferryRide.u=u;ferryRide.v=v;
+      if(at?.end){ferryStepAshore(FERRY_STOPS[ship.stop],at.x+at.ramp.c*.02,at.y+at.ramp.s*.02);return;}
+    }
   }
   ferrySync();
 }
@@ -218,7 +244,7 @@ function ferryPrompt() {
   if(mode==='ferry'&&ferryRide) {
     const ship=ferryShip(ferryRide.id),status=ship.stopped?`${FERRY_STOPS[ship.stop].name} · departs in ${Math.ceil(ship.left)}s`:`Next: ${FERRY_STOPS[ship.next].name} · ${Math.ceil(ship.left)}s`;
     const gate=Math.hypot(ferryRide.u+.98,ferryRide.v+.53)<.36;
-    return `${status} | C: sit / stand${ferryRide.seat!=null?' | Space: wait to next island':''}${ferryCafeNear()?' | E: café · food & drinks':ship.stopped&&gate?' | E: step ashore':' | Boarding gate: aft, port side'}`;
+    return `${status} | C: sit / stand${ferryRide.seat!=null?' | Space: wait to next island':''}${ferryCafeNear()?' | E: café · food & drinks':ship.stopped&&gate?' | Walk ashore':''}`;
   }
   const stop=nearFerryTerminal();if(!stop)return '';
   const next=nextFerry(stop);
@@ -243,8 +269,7 @@ function useFerry() {
     const ship=ferryShip(ferryRide.id);
     if(!ship.stopped){say('Stay aboard until the next island. The café is in the forward lounge.',3);return true;}
     if(Math.hypot(ferryRide.u+.98,ferryRide.v+.53)>.36){say('The boarding gate is aft on the port side. Follow the yellow deck markings.',3);return true;}
-    const stop=FERRY_STOPS[ship.stop];[px,py]=stop.land;mode='walk';ferryRide=null;a=stop.yaw-Math.PI/2;body.seat=null;body.z=body.vz=0;noteStreet();
-    say(`${stop.name}. The ferry returns; E at this terminal to board again.`,4);return true;
+    ferryStepAshore(FERRY_STOPS[ship.stop]);return true;
   }
   const stop=nearFerryTerminal();if(!stop)return false;
   if(!pay(FERRY.fare)){say(`The island ferry costs ${fmt$(FERRY.fare)}.`,3);return true;}
@@ -273,8 +298,9 @@ function ferryFromFreecam(cam) {
 function loadFerryJourney(journey) {
   if(!FERRY.cycle||journey?.kind!=='ferry'||!Number.isInteger(journey.id)||journey.id<0||journey.id>=FERRY.count||![journey.u,journey.v,journey.clock,journey.view].every(Number.isFinite))return false;
   const seat=Number.isInteger(journey.seat)&&FERRY_SEATS[journey.seat];
-  if(!seat&&!ferryWalkClear(journey.u,journey.v))return false;
-  ferryClockOffset=mod(journey.clock,FERRY.cycle)-T;
+  const clock=mod(journey.clock,FERRY.cycle)-T,previous=ferryClockOffset;ferryClockOffset=clock;
+  if(!seat&&!ferryWalkClear(journey.u,journey.v)&&!ferryRampAt(ferryShip(journey.id),journey.u,journey.v)){ferryClockOffset=previous;return false;}
   ferryRide={id:journey.id,u:seat?seat.u:journey.u,v:seat?seat.v:journey.v,seat:seat?journey.seat:null,yaw:ferryShip(journey.id).yaw};
+  ferryRide.dockStop=ferryShip(journey.id).stop;
   mode='ferry';body.seat=null;body.z=body.vz=0;a=ferryRide.yaw+journey.view;pitch=clamp(Number.isFinite(journey.pitch)?journey.pitch:0,-1.2,1.6);ferrySync();return true;
 }

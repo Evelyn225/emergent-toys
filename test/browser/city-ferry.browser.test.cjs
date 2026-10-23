@@ -192,3 +192,32 @@ test('bow rail stops walking before the taper, and seated passengers face the ai
  assert.ok(result.seatLength<2&&result.seatDepth<.65);assert.ok(result.seated.length>1,JSON.stringify(result));
  for(const row of result.seated){assert.equal(row.seat,true);assert.ok(row.inward>.99);assert.ok(row.hipError<1e-9);}
 }));
+
+test('walk off the ferry across its gangway at every port, following its slope without E',()=>fixture(async page=>{
+ const rows=[];
+ for(let port=0;port<6;port++){
+  await page.evaluate(port=>{mode='walk';ferryRide=null;const stop=FERRY_STOPS[port];T=stop.time+.1;ferryClockOffset=0;[px,py]=stop.land;useFerry();a=ferryShip(ferryRide.id).yaw-Math.PI/2;},port);
+  await page.keyboard.down('w');
+  rows.push(await page.evaluate(()=>{
+   const cash=money,heights=[],ramp=ferryGangway(ferryShip(ferryRide.id));
+   for(let n=0;n<400&&mode==='ferry';n++){stepFerryRide(.025);if(mode==='ferry')heights.push(ferryGround());}
+   return{mode,dry:dryLand(px,py),free:free(px,py),paid:cash-money,start:heights[0],low:Math.min(...heights),end:ramp.h1};
+  }));
+  await page.keyboard.up('w');
+ }
+ for(const r of rows){assert.equal(r.mode,'walk',JSON.stringify(r));assert.ok(r.dry&&r.free,JSON.stringify(r));assert.equal(r.paid,0);assert.ok(r.start>r.low&&Math.abs(r.low-r.end)<.015,JSON.stringify(r));}
+}));
+test('boarding instructions are absent during a voyage, the closed gate blocks walking, and bridge saves/departure stay safe',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  [px,py]=FERRY_STOPS[0].land;useFerry();const id=ferryRide.id;
+  T=FERRY.dwell+1;ferryRide.u=-.98;ferryRide.v=-.51;a=ferryShip(id).yaw-Math.PI/2;K.KeyW=1;
+  for(let k=0;k<50;k++)stepFerryRide(.05);K.KeyW=0;
+  const blocked=mode==='ferry'&&ferryRide.v>=-.55,prompt=ferryPrompt();
+  T=1;const ship=ferryShip(id),ramp=ferryGangway(ship);
+  [ferryRide.u,ferryRide.v]=ferryLocal(ship,(ramp.a[0]+ramp.b[0])/2,(ramp.a[1]+ramp.b[1])/2);ferrySync();
+  const journey=savedFerryJourney(),resumed=loadFerryJourney(journey),height=ferryGround();
+  T=FERRY.dwell+1;stepFerryRide(0);
+  return{blocked,prompt,resumed,height,mid:(ramp.h0+ramp.h1)/2,ashore:mode==='walk'&&dryLand(px,py)};
+ });
+ assert.ok(r.blocked&&r.resumed&&r.ashore,JSON.stringify(r));assert.doesNotMatch(r.prompt,/Boarding gate|E: step ashore/);assert.ok(Math.abs(r.height-r.mid)<1e-8,JSON.stringify(r));
+}));
