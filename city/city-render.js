@@ -815,7 +815,7 @@ function reflect() {
       if (f < 2) continue;
       const s = 2 * b - r - 1 + (f >= 3 ? Math.round(Math.sin(r * 1.7 + T * 3) * 0.6) : 0), j = s * cols + x; // water ripples
       const lamp = f === 2 ? LAMPL[i] : 0; // a puddle under a streetlamp holds its light as well as the reflection
-      if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ') {
+      if (s >= 0 && s < rows && FL[j] === 0 && CH[j] !== ' ' && ZB[j] >= ZB[i]) { // (only what stands beyond this patch of water can show in it: a sign in front of the bay can't)
         const lv = (COL[j] & 15) * 0.55;
         CH[i] = CH[j]; COL[i] = lamp * 0.8 > lv ? C(WARM, lamp * 0.8) : f === 4 ? C(CYAN, lv > 4 ? 6 : 3) : (COL[j] & 0xf0) | (lv | 0); // (a pond's in one tint: on the canvas path every change of colour is another draw)
       } else if (f === 2) set(i, '~', lamp ? C(WARM, Math.max(3 + day * 3, lamp)) : C(BLUE, 3 + day * 3));

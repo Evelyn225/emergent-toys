@@ -35,6 +35,33 @@ test('shore breakers advance, retreat and stay below the wet-sand limit', () => 
   assert.ok(result.repeat<1e-10);
 });
 
+test('foam rides the water: never ahead of the wave front on dry sand, and joined to the water behind it', () => {
+  const r=ev(`(() => {
+    const x=719,y=115,limit=.5;let ahead=0,gaps=0;
+    for(let n=0;n<140;n++) {
+      T=n*.1;const crest=shoreWaveFront(shoreWavePhase(x,y),limit);
+      for(let e=-1.5;e<limit;e+=.005) if(e>crest&&shoreWaveFoam(x,y,e,limit)>0)ahead++;
+      // the foam's shoreward end is the waterline itself
+      const at=shoreWaveFoam(x,y,crest-.001,limit),phase=shoreWavePhase(x,y);
+      if(Math.min(phase,1-phase)>.1&&at<.5)gaps++;
+    }
+    return {ahead,gaps};
+  })()`);
+  assert.equal(r.ahead,0,'no foam ahead of the water');assert.equal(r.gaps,0,'the foam reaches the waterline');
+});
+test('at a wall or rocks (no beach to run up) there is no white line crossing still water: the wave breaks against the edge and falls back', () => {
+  const r=ev(`(() => {
+    const x=300,y=200;let offshore=0,peak=0,calm=1;
+    for(let n=0;n<140;n++) {
+      T=n*.05;
+      for(let e=-1.4;e<-.2;e+=.01)offshore+=shoreWaveFoam(x,y,e,0);
+      const at=shoreWaveFoam(x,y,-.03,0);peak=Math.max(peak,at);calm=Math.min(calm,at);
+    }
+    return {offshore,peak,calm};
+  })()`);
+  assert.equal(r.offshore,0,'nothing travelling over the open water');
+  assert.ok(r.peak>.8&&r.calm===0,'it surges white at the edge, then clears: '+JSON.stringify(r));
+});
 test('beach wash animates only the existing wet sand', () => {
   const result=ev(`(() => {
     const limit=shoreWetSandLimit(.5),wet=new Set(),dry=new Set();
