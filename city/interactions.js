@@ -61,6 +61,11 @@ function interactionFocus() {
     offer('drop',d,d.x,d.y,z,z+.2*unit,.16*unit,inside?1.6:.28);
   }
   if(inside) {
+    for(const prop of room.bathroomDoors||[]){
+      const d=prop.bathroomDoor,c=d.vertical?0:1,s=d.vertical?1:0,width=d.end-d.start;
+      const offset=d.open>.85?width/2-.06:width*d.open/2;
+      offer('bathroom-door',prop,prop.x+c*offset,prop.y+s*offset,.4,2.1,d.open>.85?.12:Math.min(.45,width*(1-d.open)/2),2.2,prop);
+    }
     for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
     const keeper=room.def.keeper;
     for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
@@ -78,12 +83,14 @@ function interactionFocus() {
   return best;
 }
 function focusedInteractionPrompt(target=interactionFocus()) {
+  if(target?.kind==='bathroom-door')return target.who.bathroomDoor.target===1?'E: close bathroom door':'E: open bathroom door';
   if(target?.kind==='home-fixture')return homeFixturePrompt(target.who);
   if(target?.kind==='drop')return `E: pick up the ${itemName(target.who)}`;
   if(target?.kind==='person'||target?.kind==='room-person'&&!target.who.cabbie)return 'E: talk';
   return '';
 }
 function useFocusedInteraction(target=interactionFocus()) {
+  if(target?.kind==='bathroom-door'){bathroomDoorUse(target.who);return true;}
   if(target?.kind==='home-fixture'){homeFixtureUse(target.who);return true;}
   if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
   if(target?.kind==='person'){talkTo(target.who);return true;}

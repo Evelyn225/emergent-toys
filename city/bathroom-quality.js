@@ -183,3 +183,60 @@ function bathroomSurrounds(r) {
     }),box:boxAt(x,y,c,s,half,.5,2.2,height),bathroomOpening:p,radius:half+.8};
   });
 }
+
+// Pocket leaves slide into the partition; only the portion in the doorway is
+// rendered/solid. Track, opaque leaf and collision all use the same opening.
+function bathroomDoorBox(d,open=d.open) {
+  const left=d.start+(d.end-d.start)*open,right=d.end;
+  if(right-left<.005)return null;
+  const u=(left+right)/2;
+  return boxAt(d.vertical?d.cross+.5:u,d.vertical?u:d.cross+.5,d.vertical?0:1,d.vertical?1:0,(right-left)/2,.025,.04,2.16);
+}
+function BATHROOM_POCKET_DOOR(r,p,index) {
+  const {vertical,cross,start,end}=p,width=end-start,c=vertical?0:1,s=vertical?1:0;
+  const home=homeRecord(r),d={...p,index,home,open:home?.bathroomDoors?.[index]===false?0:1};
+  d.target=d.open;
+  const x=vertical?cross+.5:(start+end)/2,y=vertical?(start+end)/2:cross+.5;
+  const prop={...ROOM_MODEL(x,y,(vx,vy)=>{
+    const part=(u,v,hl,hw,z0,z1,shade)=>drawBox(boxAt(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1),shade);
+    const paint=(i,t,L)=>{BG[i]=C(WHITE,2.7+L*.22);set(i,' ',0);return true;};
+    const trimPaint=(i,t,L)=>{BG[i]=C(WHITE,2.15+L*.2);set(i,' ',0);return true;};
+    // The track is entirely ABOVE the leaf, never behind a translucent seam.
+    part(0,0,width/2,.035,2.16,2.19,solid(GRAY));
+    const box=bathroomDoorBox(d);
+    if(box) {
+      drawBox({...box,x:vx+box.x-x,y:vy+box.y-y},paint);
+      const half=box.hl,offset=(box.x-x)*c+(box.y-y)*s;
+      if(half>.12)for(const side of [-1,1]) {
+        // Shallow, joined rails on each solid face. Nothing clips through the wall.
+        for(const z of [.18,1.05,2.02])part(offset,side*.029,Math.max(.01,half-.06),.004,z,z+.025,trimPaint);
+        for(const edge of [-1,1])part(offset+edge*(half-.05),side*.029,.018,.004,.18,2.045,trimPaint);
+      }
+    }
+    // The recessed pull remains reachable at the pocket edge when fully open.
+    const handle=-width/2+Math.min(d.open*width,width-.073)+.055;
+    if(handle<width/2-.005)for(const side of [-1,1]) {
+      part(handle,side*.03,.018,.006,.92,1.14,solid(GRAY));
+      part(handle,side*.037,.008,.002,.95,1.11,solid(BLACK));
+    }
+  }),radius:width+.7,bathroomDoor:d};
+  prop.box=bathroomDoorBox(d);d.prop=prop;return prop;
+}
+function bathroomDoorUse(prop) {
+  const d=prop.bathroomDoor;d.target=d.target===1?0:1;
+  if(d.home){d.home.bathroomDoors||=[];d.home.bathroomDoors[d.index]=d.target===1;saveGame();}
+  if(actx){burst(actx.currentTime,.22,[filt('lowpass',1100)],.035);tone(actx.currentTime+.2,95,.035,.025);}
+}
+function stepBathroomDoors(dt) {
+  if(mode!=='room'||!room.bathroomDoors)return;
+  for(const prop of room.bathroomDoors) {
+    const d=prop.bathroomDoor;
+    if(d.target===0&&wanted.stars&&searchedRoom===room&&roomCops.some(c=>!c.dead&&Math.hypot(c.x-prop.x,c.y-prop.y)<1.5))bathroomDoorUse(prop);
+    if(d.open===d.target)continue;
+    const next=d.open+Math.sign(d.target-d.open)*Math.min(Math.abs(d.target-d.open),dt*1.7/(d.end-d.start)),box=bathroomDoorBox(d,next);
+    if(next<d.open&&box&&(inBox(box,px,py,.23)||room.props.some(p=>isRoomPerson(p)&&!p.dead&&inBox(box,p.x,p.y,.23)))) {
+      d.target=1;if(d.home){d.home.bathroomDoors||=[];d.home.bathroomDoors[d.index]=true;saveGame();}say('Give the sliding door room to close.',2);continue;
+    }
+    d.open=next;prop.box=box;
+  }
+}

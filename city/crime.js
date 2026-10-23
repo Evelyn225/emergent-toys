@@ -113,7 +113,7 @@ function nearestRoomCell(x, y) {
   }
   return best;
 }
-function roomPath(fromX, fromY, toX, toY) {
+function roomPath(fromX, fromY, toX, toY, planDoors=true) {
   const start = nearestRoomCell(fromX, fromY), end = nearestRoomCell(toX, toY);
   if (!start || !end) return [];
   const key = (x, y) => y * room.W + x, first = key(...start), last = key(...end), prev = new Int32Array(room.W * room.H).fill(-1), queue = [first];
@@ -126,7 +126,14 @@ function roomPath(fromX, fromY, toX, toY) {
       prev[nk] = id; queue.push(nk);
     }
   }
-  if (prev[last] < 0) return [];
+  if (prev[last] < 0) {
+    // Route through operable doors, then open them on approach. A shut bathroom
+    // must not strand a pursuing officer at the building's entrance.
+    const doors=planDoors?(room.bathroomDoors||[]).filter(p=>p.box):[];
+    if(!doors.length)return [];
+    const walk=doors.map(p=>p.walk);doors.forEach(p=>p.walk=true);
+    try{return roomPath(fromX,fromY,toX,toY,false);}finally{doors.forEach((p,k)=>p.walk=walk[k]);}
+  }
   const path = [];
   for (let id = last; id !== first; id = prev[id]) path.push([id % room.W + 0.5, (id / room.W | 0) + 0.5]);
   return path.reverse();
