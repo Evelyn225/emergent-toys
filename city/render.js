@@ -147,7 +147,8 @@ function drawDeck(x, rx, ry, t0, t1) {
   }
 }
 
-function render(dt) {
+function render(dt,sceneOnly=false,mask=null) {
+  if(!sceneOnly&&mode==='room'&&room.kind==='islandshelter')coveWindowBegin();
   // Freecam renders while simulation time is frozen, but still gets a new sprite-generation allowance each frame.
   figFineT = T; figFineN = 0;
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
@@ -168,14 +169,15 @@ function render(dt) {
   dx = Math.cos(a); dy = Math.sin(a);
   lookHit = null;
   for (let x = 0; x < cols; x++) {
+    if(mask&&!mask.columns[x])continue;
     const cx = 2 * x / cols - 1, rx = dx - dy * tf * cx, ry = dy + dx * tf * cx;
     const cx2 = cx + 2 / cols, rx2 = dx - dy * tf * cx2, ry2 = dy + dx * tf * cx2; // next column's ray
-    for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; ZB[i] = -1; } // -1: nothing drawn here yet
+    for (let r = 0; r < rows; r++) { const i = r * cols + x; BG[i] = NONE; ZB[i] = mask&&!mask.cells[i]?0:-1; } // masked pixels are already occluded at the camera
     // DDA through the grid, front to back; `clip` = lowest row not yet covered
     // The el deck is a box over the middle of its street (y in EL_Y0..EL_Y1, z in EL_BOT..EL_TOP), narrower than a cell
     // pair, so it isn't part of the grid: work out where this ray is inside it ([te, tx]) and draw it when the DDA
     // gets that far. It leaves gaps in the column, so once it's drawn every later write checks ZB first.
-    let mx = Math.floor(px), my = Math.floor(py), clip = rows, first = true, dPrev = 0, hCur = W.cell(mx, my), holes = false;
+    let mx = Math.floor(px), my = Math.floor(py), clip = rows, first = true, dPrev = 0, hCur = W.cell(mx, my), holes = !!mask;
     let te = Infinity, tx = -Infinity;
     if (W.deck) {
       const yc = py + rel(EL_Y + 1 - py), y0 = yc - EL_HALF, y1 = yc + EL_HALF;
@@ -239,9 +241,11 @@ function render(dt) {
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
+  if(!sceneOnly&&!city&&room.kind==='islandshelter')coveWindowComposite();
   if (city) drawAnglerLines(); // (the regulars' lines too)
-  drawFishing(); // the line, the bobber and the rings round it (fishing-render.js; after the water's reflections, or they'd double it)
+  if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above
   drawShots(); // a shot's streak, the police's flashes (gun-ui.js)
+  if(sceneOnly)return;
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
     if (mode === 'air') airDash();
