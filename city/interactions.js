@@ -1,6 +1,13 @@
 // E and its prompt resolve the same visible target before proximity fallbacks.
 // Rooms use metres; the outdoor world uses ten-metre cells.
+function interactionEye() {
+  if(mode==='room')return 1.7+stairRise(px,py)+eyeLift();
+  if(mode==='roof')return roofH+.17+eyeLift()*.1;
+  if(mode==='walk')return .17+walkGround(px,py)+eyeLift()*.1;
+  return eye;
+}
 function interactionClear(x,y,z,ignore=null) {
+  const eye=interactionEye();
   const inside=mode==='room',ex=inside?x-px:rel(x-px),ey=inside?y-py:rel(y-py),ez=z-eye;
   const n=Math.max(2,Math.ceil(Math.hypot(ex,ey)/(inside?.07:.012)));
   for(let k=1;k<n;k++) {
@@ -29,6 +36,7 @@ function interactionClear(x,y,z,ignore=null) {
   return true;
 }
 function interactionScore(x,y,z0,z1,radius,reach,ignore=null) {
+  const eye=interactionEye();
   const inside=mode==='room',ex=inside?x-px:rel(x-px),ey=inside?y-py:rel(y-py),d=Math.hypot(ex,ey);
   if(d>reach)return Infinity;
   const forward=ex*Math.cos(a)+ey*Math.sin(a),side=-ex*Math.sin(a)+ey*Math.cos(a);

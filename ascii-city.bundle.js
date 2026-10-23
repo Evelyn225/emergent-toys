@@ -15621,13 +15621,8 @@ const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
 const SEAT = (x, y, fx, fy, h = 0.45) => ({ seat: true, x, y, fx, fy, h });
 // a sofa facing (fx, fy), hl long either side of (x, y): the cushions, the back, an arm at each end, three places on it
 const couch = (x, y, hl, fx, fy, col = BRICK) => {
-  const ax=-fy,ay=fx,cloth=solid(col,{bright:2,top:'~'}),at=(u,v)=>[x+ax*u+fx*v,y+ay*u+fy*v];
-  return [ROOM_MODEL(x,y,(vx,vy)=>{
-    drawBox(boxAt(vx,vy,ax,ay,hl,.39,.12,.29),solid(col,{bright:1}));
-    for(const k of [-1,0,1]){const [cx,cy]=[vx+ax*k*(hl-.18)*2/3,vy+ay*k*(hl-.18)*2/3];drawBox(boxAt(cx,cy,ax,ay,(hl-.18)/3-.015,.34,.29,.48),cloth);}
-    drawBox(boxAt(vx-fx*.34,vy-fy*.34,ax,ay,hl,.08,.27,.94),cloth);
-    for(const sign of [-1,1]){const [cx,cy]=[vx+ax*sign*(hl-.09),vy+ay*sign*(hl-.09)];drawBox(boxAt(cx,cy,fx,fy,.38,.09,.27,.73),cloth);drum(cx+fx*.28,cy+fy*.28,.09,.27,.73,cloth);}
-  },[Math.abs(ax)*hl+Math.abs(fx)*.4,Math.abs(ay)*hl+Math.abs(fy)*.4,.94]),
+  const ax=-fy,ay=fx,at=(u,v)=>[x+ax*u+fx*v,y+ay*u+fy*v];
+  return [ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureSofa(vx,vy,hl,fx,fy,col),[Math.abs(ax)*hl+Math.abs(fx)*.4,Math.abs(ay)*hl+Math.abs(fy)*.4,.94]),
   ...[-.55,0,.55].map(k=>{const [sx,sy]=at(k*hl,.06);return SEAT(sx,sy,fx,fy,.48);})];
 };
 // a round pouffe, h high, to perch on facing (fx, fy)
@@ -15836,7 +15831,7 @@ const laundryCart = (x, y) => {
     return set(i, lumpy ? (k > 0.55 ? '~' : '_') : k > 0.85 ? '~' : ' ', C(WHITE, L * 0.6)), true;
   }), ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.3, y + sy * 0.2, 0.03, 0.03, 0, 0.12, (i, t, L) => (set(i, 'o', C(GRAY, L)), true))))];
 };
-const tableBox = (x, y, hl = 0.6, hw = 0.4) => [BX(x, y, hl, hw, 0.72, 0.78, solid(BRICK, { top: '=' })), BX(x, y, 0.06, 0.06, 0, 0.72, solid(GRAY))];
+const tableBox = (x, y, hl = 0.6, hw = 0.4) => [ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureTable(vx,vy,hl,hw),[hl,hw,.78])];
 const inBox = (b, x, y, pad) => { const qx = x - b.x, qy = y - b.y; return Math.abs(qx * b.c + qy * b.s) < b.hl + pad && Math.abs(-qx * b.s + qy * b.c) < b.hw + pad; };
 
 
@@ -16391,9 +16386,7 @@ function homePlan(w, h, tier) {
 }
 // Upholstered seating and separate dining chairs, with real legs and backs.
 function homeChair(x, y, fx, fy, col = BRICK) {
-  const seat = { ...BX(x, y, 0.3, 0.3, 0.42, 0.5, solid(col)), seat: true, x, y, fx, fy };
-  return [seat, BX(x - fx * 0.28, y - fy * 0.28, 0.31, 0.045, 0.48, 1.12, solid(col), fy, -fx),
-    ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.23, y + sy * 0.23, 0.035, 0.035, 0, 0.42, solid(BRICK))))];
+  return [{...ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureChair(vx,vy,fx,fy,col),[.31,.31,1.12]),seat:true,fx,fy,h:.5}];
 }
 // the kitchen counter with the hob set in it: four rings on top (red while something's on: cooking-ui.js), the knobs
 // along the front edge and the oven door under them with its window; worktop either side
@@ -16436,9 +16429,7 @@ function homeDef(w, h, tier) {
       ...toilet(plan.wc.x1 - (tier ? 1.4 : .8), 1.42, -1, porcelain),
       washbasin(plan.wc.x0 + 0.4, 1.35, 0, 1),
       ...(tier ? [BATHTUB(plan.wc.x1 - .43, 3.4)] : []),
-      { ...BX(sofa[0], sofa[1], tier ? 1.55 : 0.95, 0.45, 0.15, 0.5, solid(tier === 2 ? GREEN : BLUE, { panel: 0.7 })), seat: true, x: sofa[0], y: sofa[1], fx: 0, fy: -1 },
-      BX(sofa[0], sofa[1] + 0.4, tier ? 1.55 : 0.95, 0.1, 0.3, 1.0, solid(tier === 2 ? GREEN : BLUE)),
-      ...[-1, 1].map(s => BX(sofa[0] + s * (tier ? 1.5 : 0.92), sofa[1], 0.12, 0.45, 0.3, 0.75, solid(tier === 2 ? GREEN : BLUE))),
+      ...couch(sofa[0],sofa[1],tier?1.55:.95,0,-1,tier===2?GREEN:BLUE),
       ...tableBox(dining[0], dining[1], tier ? 1.25 : 0.6, 0.5),
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
@@ -24348,7 +24339,14 @@ function hud() {
 }
 // E and its prompt resolve the same visible target before proximity fallbacks.
 // Rooms use metres; the outdoor world uses ten-metre cells.
+function interactionEye() {
+  if(mode==='room')return 1.7+stairRise(px,py)+eyeLift();
+  if(mode==='roof')return roofH+.17+eyeLift()*.1;
+  if(mode==='walk')return .17+walkGround(px,py)+eyeLift()*.1;
+  return eye;
+}
 function interactionClear(x,y,z,ignore=null) {
+  const eye=interactionEye();
   const inside=mode==='room',ex=inside?x-px:rel(x-px),ey=inside?y-py:rel(y-py),ez=z-eye;
   const n=Math.max(2,Math.ceil(Math.hypot(ex,ey)/(inside?.07:.012)));
   for(let k=1;k<n;k++) {
@@ -24377,6 +24375,7 @@ function interactionClear(x,y,z,ignore=null) {
   return true;
 }
 function interactionScore(x,y,z0,z1,radius,reach,ignore=null) {
+  const eye=interactionEye();
   const inside=mode==='room',ex=inside?x-px:rel(x-px),ey=inside?y-py:rel(y-py),d=Math.hypot(ex,ey);
   if(d>reach)return Infinity;
   const forward=ex*Math.cos(a)+ey*Math.sin(a),side=-ex*Math.sin(a)+ey*Math.cos(a);
@@ -34635,6 +34634,49 @@ function coveWindowComposite() {
     const view=coveWindowScene(face,visible);
     for(const [i]of visible){CH[i]=view.CH[i];COL[i]=view.COL[i];BG[i]=view.BG[i];FOGS[i]=view.FOGS[i];FOGB[i]=view.FOGB[i];}
   }
+}
+// Shared furniture at the Cabin Cove geometry/material standard. These builders
+// preserve each caller's footprint and seat height; rounded edges stay geometric.
+function furnitureCloth(base) {
+  return (i,t,L)=>{
+    const footprint=t/projX,fine=coveDetail(t),weave=Math.sin(HIT.u*190)*Math.sin((HIT.v+HIT.w)*190)*.12*fine;
+    const seam=coveGroove(HIT.u,.44,.002,footprint)*.3;
+    BG[i]=C(base,2.2+L*.36*coveLight(HIT.nx,HIT.ny,HIT.nz)+weave-seam);set(i,' ',0);return true;
+  };
+}
+function drawFurnitureSofa(vx,vy,hl,fx,fy,col=BRICK,seat=.48) {
+  const c=-fy,s=fx,cloth=furnitureCloth(col),at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
+  const part=(u,v,hx,hy,z0,z1,rad,mat='wood')=>{const[x,y]=at(u,v);coveRound(x,y,c,s,hx,hy,z0,z1,rad,mat);};
+  for(const u of [-hl+.15,hl-.15])for(const v of [-.27,.27])part(u,v,.045,.045,0,.16,.018);
+  part(0,0,hl-.04,.37,.12,seat-.18,.035);
+  const count=hl>1.3?3:2,inside=hl-.18,width=inside/count;
+  for(let k=0;k<count;k++) {
+    const u=-inside+width*(2*k+1);
+    part(u,.035,width-.012,.335,seat-.18,seat,.065,cloth);
+    part(u,-.32,width-.012,.07,seat-.015,.94,.06,cloth);
+  }
+  // Arm pads join the base and rear bolster rather than ending inside the seat.
+  for(const sign of [-1,1])part(sign*(hl-.085),0,.085,.39,seat-.2,.73,.065,cloth);
+}
+function drawFurnitureChair(vx,vy,fx,fy,col=BRICK) {
+  const c=-fy,s=fx,at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
+  const part=(u,v,hx,hy,z0,z1,rad,mat='wood')=>{const[x,y]=at(u,v);coveRound(x,y,c,s,hx,hy,z0,z1,rad,mat);};
+  for(const u of [-.23,.23])for(const v of [-.23,.23])part(u,v,.035,.035,0,v<0?1.12:.42,.012);
+  for(const u of [-.23,.23])part(u,0,.024,.23,.18,.225,.008);
+  for(const v of [-.23,.23])part(0,v,.23,.025,.34,.42,.01);
+  part(0,0,.3,.3,.42,.5,.035,furnitureCloth(col));
+  for(const z of [.79,1.025])part(0,-.255,.265,.035,z-.075,z+.075,.025);
+}
+function drawFurnitureTable(vx,vy,hl=.6,hw=.4,height=.78) {
+  const legX=Math.max(.055,hl-.11),legY=Math.max(.055,hw-.11),under=height-.06;
+  for(const x of [-legX,legX])for(const y of [-legY,legY])coveRound(vx+x,vy+y,1,0,.042,.042,0,under,.014,'wood');
+  for(const y of [-legY,legY])coveRound(vx,vy+y,1,0,legX,.026,under-.12,under,.01,'wood');
+  for(const x of [-legX,legX])coveRound(vx+x,vy,1,0,.026,legY,under-.12,under,.01,'wood');
+  coveRound(vx,vy,1,0,hl,hw,under,height,.023,(i,t,L)=>{
+    coveTimber(i,HIT.u,HIT.v,L,t,HIT.nx,HIT.ny,HIT.nz,3);
+    if(HIT.face===5){const joint=coveGroove(HIT.v+hw,.24,.003,t/projX);BG[i]=C(BRICK,(BG[i]&15)-joint*.7);}
+    return true;
+  });
 }
 // Shared close-up home models. Surfaces have real edges and joined supports;
 // screens and bulbs are the only emissive parts of their housings.
