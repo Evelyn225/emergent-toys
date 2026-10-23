@@ -123,8 +123,11 @@ SOLID_SHADE.fishcrate = o => (i, t, L) => {
   const f = HIT.face, u = HIT.u, v = HIT.v;
   if (f === 5) {
     BG[i] = C(WHITE, 1.6 + L * 0.3); // ice
-    const row = Math.floor((v + o.hw) / (2 * o.hw) * 3), k = mod(Math.floor((u + o.hl) * 70 + row * 2), 7);
-    return set(i, row & 1 ? '><(((o>'[k] : '<o)))><'[k], C(row === 1 ? GRAY : BLUE, Math.max(L, 9))), true;
+    // three rows of half-metre fish, 11 cm deep, each row the other way round (in cells: 0.05 is half a metre)
+    const across = (v + o.hw) / (2 * o.hw) * 3, row = Math.floor(across), along = fract((u + o.hl) * 20 + row * 0.37);
+    const fish = standardFish(row & 1 ? 1 - along : along, (fract(across) - 0.5) * 2.4, 0, row === 1 ? GRAY : BLUE, WHITE);
+    if (fish) BG[i] = C(fish[0], clamp(Math.max(L, 9) * fish[1] * 0.8, 1, 15));
+    return set(i, ' ', 0), true;
   }
   BG[i] = C(WARM, (1.1 + L * 0.28) * shadeFace(f));
   return set(i, fract(HIT.w * 60) < 0.25 ? '-' : ' ', C(BRICK, L * 0.8)), true;

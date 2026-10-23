@@ -113,6 +113,24 @@ test('the tunnel\'s big fish pass overhead as solid bellies, and its bubbles are
   for (const v of Object.values(r.views)) assert.ok(v.o < 10 && v.v === 0, 'no ASCII fish or blocks of bubble: ' + JSON.stringify(v));
 }));
 
+test('the pet shop\'s tanks, the fish hut\'s crate and the birds seen through the aviary glass are painted, not >< or v characters', () => fixture(async page => {
+  const r = await page.evaluate(() => {
+    const count = (chars, bases) => { const n = { chars: 0, painted: 0 }; for (let i = 0; i < cols * rows; i++) { if (chars.includes(CH[i])) n.chars++; if (CH[i] === ' ' && bases.includes(BG[i] >> 4) && (BG[i] & 15) > 3) n.painted++; } return n; };
+    enterRoom('petshop', { word: 'PET SHOP', ret: [100, 100, 0] }, [2.1, 4, Math.PI]); room.props = [];
+    const shop = { chars: 0, painted: 0 };
+    for (const time of [12, 17, 23]) { T = time; pitch = 0.25; render(0); const n = count('<>o', [ORANGE, YEL, CYAN, WHITE]); shop.chars += n.chars; shop.painted += n.painted; }
+    room = me = null; mode = 'walk';
+    const cx = FISH_HUT.x - FISH_HUT.hl - 0.075, cy = FISH_HUT.y - FISH_HUT.hw + 0.2; px = cx - 0.12; py = cy; a = 0; pitch = -0.9; T = 5; render(0);
+    const crate = count('<>()', [BLUE, GRAY]);
+    [px, py] = citySourcePoint(60.8, 90.7); a = Math.PI / 2; pitch = 0.3; render(0);
+    const aviary = count('v^', [RED, YEL, ORANGE, MAG]); // (the birds' warm colours: the glass and leaves are cool)
+    return { shop, crate, aviary };
+  });
+  assert.equal(r.shop.chars, 0, JSON.stringify(r)); assert.ok(r.shop.painted > 150, 'fish painted in the tanks: ' + JSON.stringify(r));
+  assert.equal(r.crate.chars, 0, JSON.stringify(r)); assert.ok(r.crate.painted > 300, 'fish laid on the ice: ' + JSON.stringify(r));
+  assert.equal(r.aviary.chars, 0, JSON.stringify(r)); assert.ok(r.aviary.painted > 4, 'birds among the trees: ' + JSON.stringify(r));
+}));
+
 test('aviary birds, conservatory butterflies and the lizard are shaped animals that face the way they move',() => fixture(async page => {
   const r = await page.evaluate(() => {
     const span = (kind, f) => { const xs = ANIMAL_BODIES[kind](f).parts.flatMap(p => p.k === 2 ? [p.a[0], p.b[0]] : [p.c[0]]); return Math.max(...xs) - Math.min(...xs); };

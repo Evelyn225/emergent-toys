@@ -16592,8 +16592,13 @@ function petWall(i, u, uStep, z, d, mx, my, L) { // walls of fish tanks
   if (z < 0.82 || z > 1.88 || fract(u / 1.6) < 0.03) { set(i, '=', C(GRAY, L)); return true; }
   BG[i] = C(BLUE, 3);
   const lane = Math.floor(z * 7), dir = lane & 1 ? 1 : -1, s = fract(u * 0.7 - T * 0.25 * dir + hash(lane, mx + my, 3));
-  if (s < 0.09) { set(i, (dir > 0 ? '><>' : '<><')[s / 0.03 | 0], C([ORANGE, YEL, RED, CYAN][lane & 3], 15)); return true; }
-  if (hash(Math.floor(u * 10), Math.floor(z * 10 - T * 2), 5) > 0.97) { set(i, 'o', C(WHITE, 8)); return true; } // bubbles
+  if (s < 0.14) { // one of the aquarium's little species, 20 cm long (s runs 0.7 to the metre), swimming along its lane
+    const f = FISH[['tiny', 'clown', 'tang', 'tiny'][lane & 3]], q = s / 0.14;
+    const fish = f.shape(dir > 0 ? q : 1 - q, (fract(z * 7) - 0.5) / 7 / (0.2 * f.h / f.len), T + lane, lane >> 2);
+    if (fish) { BG[i] = C(fish[0], clamp(L * fish[1] * 0.9, 1, 15)); set(i, ' ', 0); return true; }
+  }
+  const bx = fract(u * 10) - 0.5, bz = fract(z * 10 - T * 2) - 0.5; // bubbles: a little disc in one 10 cm square in thirty
+  if (bx * bx + bz * bz < 0.05 && hash(Math.floor(u * 10), Math.floor(z * 10 - T * 2), 5) > 0.97) BG[i] = C(WHITE, 9);
   set(i, ' ', 0); return true;
 }
 function floristWall(i, u, uStep, z, d, mx, my, L) { // vines and blooms on the side walls
@@ -21757,8 +21762,11 @@ function glassDepth(i, u, z, h, gh, side, L, glow, aviary) {
     const slot = Math.floor(lu * 3), c = (slot + 0.3 + hash(slot, k, seed) * 0.4) / 3, tall = (0.35 + hash(slot, k, seed + 1) * 0.5) * h; // a plant every third of a cell, its trunk at c
     const trunk = Math.abs(lu - c) < 0.012 && lz < tall, crown = Math.hypot((lu - c) * 2.2, lz - tall) < 0.12 + 0.06 * noise(lu * 30, lz * 30, seed);
     const fern = lz < 0.12 + 0.08 * noise(lu * 12, k, seed + 2);
-    if (aviary && Math.hypot((lu - c - 0.08 * Math.sin(T * 0.7 + slot)) * 3, lz - tall * 0.8 - 0.05 * Math.sin(T * 1.3 + slot)) < 0.02 && hash(slot, k, seed + 3) > 0.4)
-      return set(i, fract(T * 4 + slot) < 0.5 ? 'v' : '^', C(BIRD_COL[slot & 7], 13)); // a bird darting between the trees
+    // a bird darting between the trees (in cells: 0.01 is 10 cm): a body, its wings beating up and down
+    const bu = lu - c - 0.08 * Math.sin(T * 0.7 + slot), bz = lz - tall * 0.8 - 0.05 * Math.sin(T * 1.3 + slot), beat = fract(T * 4 + slot) < 0.5 ? 1 : -1;
+    if (aviary && hash(slot, k, seed + 3) > 0.4 && (Math.hypot(bu, bz * 2) < 0.008 || Math.abs(bu) < 0.022 && Math.abs(bz - beat * Math.abs(bu) * 0.6) < 0.006)) {
+      BG[i] = C(BIRD_COL[slot & 7], 11 * fade); return set(i, ' ', 0);
+    }
     if (crown || fern) { BG[i] = C(GREEN, (1.5 + glow * 2) * fade); return set(i, noise(lu * 40, lz * 40, seed + 4) > 0.5 ? '%' : aviary ? '@' : '"', C(GREEN, Math.max(L, glow * 10) * fade)); }
     if (trunk) return set(i, '|', C(BRICK, Math.max(L, glow * 8) * fade));
   }
@@ -30761,8 +30769,11 @@ SOLID_SHADE.fishcrate = o => (i, t, L) => {
   const f = HIT.face, u = HIT.u, v = HIT.v;
   if (f === 5) {
     BG[i] = C(WHITE, 1.6 + L * 0.3); // ice
-    const row = Math.floor((v + o.hw) / (2 * o.hw) * 3), k = mod(Math.floor((u + o.hl) * 70 + row * 2), 7);
-    return set(i, row & 1 ? '><(((o>'[k] : '<o)))><'[k], C(row === 1 ? GRAY : BLUE, Math.max(L, 9))), true;
+    // three rows of half-metre fish, 11 cm deep, each row the other way round (in cells: 0.05 is half a metre)
+    const across = (v + o.hw) / (2 * o.hw) * 3, row = Math.floor(across), along = fract((u + o.hl) * 20 + row * 0.37);
+    const fish = standardFish(row & 1 ? 1 - along : along, (fract(across) - 0.5) * 2.4, 0, row === 1 ? GRAY : BLUE, WHITE);
+    if (fish) BG[i] = C(fish[0], clamp(Math.max(L, 9) * fish[1] * 0.8, 1, 15));
+    return set(i, ' ', 0), true;
   }
   BG[i] = C(WARM, (1.1 + L * 0.28) * shadeFace(f));
   return set(i, fract(HIT.w * 60) < 0.25 ? '-' : ' ', C(BRICK, L * 0.8)), true;

@@ -88,8 +88,11 @@ function glassDepth(i, u, z, h, gh, side, L, glow, aviary) {
     const slot = Math.floor(lu * 3), c = (slot + 0.3 + hash(slot, k, seed) * 0.4) / 3, tall = (0.35 + hash(slot, k, seed + 1) * 0.5) * h; // a plant every third of a cell, its trunk at c
     const trunk = Math.abs(lu - c) < 0.012 && lz < tall, crown = Math.hypot((lu - c) * 2.2, lz - tall) < 0.12 + 0.06 * noise(lu * 30, lz * 30, seed);
     const fern = lz < 0.12 + 0.08 * noise(lu * 12, k, seed + 2);
-    if (aviary && Math.hypot((lu - c - 0.08 * Math.sin(T * 0.7 + slot)) * 3, lz - tall * 0.8 - 0.05 * Math.sin(T * 1.3 + slot)) < 0.02 && hash(slot, k, seed + 3) > 0.4)
-      return set(i, fract(T * 4 + slot) < 0.5 ? 'v' : '^', C(BIRD_COL[slot & 7], 13)); // a bird darting between the trees
+    // a bird darting between the trees (in cells: 0.01 is 10 cm): a body, its wings beating up and down
+    const bu = lu - c - 0.08 * Math.sin(T * 0.7 + slot), bz = lz - tall * 0.8 - 0.05 * Math.sin(T * 1.3 + slot), beat = fract(T * 4 + slot) < 0.5 ? 1 : -1;
+    if (aviary && hash(slot, k, seed + 3) > 0.4 && (Math.hypot(bu, bz * 2) < 0.008 || Math.abs(bu) < 0.022 && Math.abs(bz - beat * Math.abs(bu) * 0.6) < 0.006)) {
+      BG[i] = C(BIRD_COL[slot & 7], 11 * fade); return set(i, ' ', 0);
+    }
     if (crown || fern) { BG[i] = C(GREEN, (1.5 + glow * 2) * fade); return set(i, noise(lu * 40, lz * 40, seed + 4) > 0.5 ? '%' : aviary ? '@' : '"', C(GREEN, Math.max(L, glow * 10) * fade)); }
     if (trunk) return set(i, '|', C(BRICK, Math.max(L, glow * 8) * fade));
   }
