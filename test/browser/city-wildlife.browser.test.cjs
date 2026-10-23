@@ -44,6 +44,23 @@ test('street pigeons are shaped birds: feet down and head up, pecking with the h
   assert.ok(r.up.span > r.stand.span * 3 && r.down.span > r.stand.span * 3, 'wings spread wide in flight');
 }));
 
+test('birds are life size beside people at the same distance: pigeon < gull < cormorant, all well under a person', () => fixture(async page => {
+  const r = await page.evaluate(() => {
+    [px, py] = citySourcePoint(12 * 8 + 0.15, 10 * 8 + 4); a = Math.PI / 2; pitch = -0.12;
+    render(0); const z = terrainHeight(px, py + 0.5), metres = 10 / (projX / 0.5); // (columns to metres, side on, 5 m away; projX is set by a frame)
+    const extent = fn => { render(0); const ch = CH.slice(), bg = BG.slice(); fn(); let r0 = 99, r1 = -1, c0 = 999, c1 = -1;
+      for (let i = 0; i < CH.length; i++) if (CH[i] !== ch[i] || BG[i] !== bg[i]) { const r = i / cols | 0, c = i % cols; r0 = Math.min(r0, r); r1 = Math.max(r1, r); c0 = Math.min(c0, c); c1 = Math.max(c1, c); }
+      return { rows: r1 - r0 + 1, length: (c1 - c0 + 1) * metres }; };
+    return { person: extent(() => drawFigure(0, 0.5, z, 0.175, 1, 0, streetLook({ x: 0, y: 0, seed: 1 }), 'stand')),
+      pigeon: extent(() => drawAnimal(0, 0.5, z, 0.09, 1, 0, PIGEON_LOOKS[0], 0)),
+      gull: extent(() => drawAnimal(0, 0.5, z, ISLAND_BIRD_SIZE.gull, 1, 0, ISLAND_GULL_LOOK, 0)),
+      cormorant: extent(() => drawAnimal(0, 0.5, z, ISLAND_BIRD_SIZE.cormorant, 1, 0, ISLAND_CORMORANT_LOOK, 0)) };
+  });
+  assert.ok(r.pigeon.length < r.gull.length && r.gull.length < r.cormorant.length, JSON.stringify(r));
+  assert.ok(r.gull.length > 0.45 && r.gull.length < 0.75 && r.cormorant.length > 0.65 && r.cormorant.length < 1.05, 'gull ~60 cm, cormorant ~80 cm: ' + JSON.stringify(r));
+  assert.ok(r.gull.rows * 3 < r.person.rows && r.cormorant.rows * 3 < r.person.rows, 'well under a person: ' + JSON.stringify(r));
+}));
+
 test('a flock draws as shaped birds in their plumage (no ASCII), and scared birds face the way they fly', () => fixture(async page => {
   const r = await page.evaluate(() => {
     [px, py] = citySourcePoint(12 * 8 + 0.15, 10 * 8 + 4); a = Math.PI / 2; pitch = -0.75;

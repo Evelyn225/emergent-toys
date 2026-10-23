@@ -190,6 +190,8 @@ ANIMAL_BODIES.islandbird=frame=>{
   }
   return {parts,decals:animalEyes([0,3.4,5],1.5,1)};
 };
+// life size, beside people and pigeons: a herring gull ~60 cm nose to tail, a cormorant ~80 cm (the body is ~10.5 units long)
+const ISLAND_BIRD_SIZE={gull:.15,cormorant:.2};
 const ISLAND_GULL_LOOK=animalLook('islandbird',{body:[WHITE,14],wing:[GRAY,10],mark:[GRAY,2],beak:[YEL,13]});
 const ISLAND_CORMORANT_LOOK=animalLook('islandbird',{body:[GRAY,3],wing:[GRAY,2],mark:[GRAY,1],beak:[WARM,10]});
 function islandBirdPose(b,time=T) {
@@ -206,7 +208,7 @@ function drawIslandLife() {
     if(!freecam&&!paused&&near(px,py,bird.x,bird.y)<.65&&T-bird.scaredAt>12)bird.scaredAt=T;
     const p=islandBirdPose(bird),vx=p.x-px,vy=p.y-py;
     if(!inView(vx,vy,.12))continue;
-    drawAnimal(vx,vy,p.z,.055,Math.cos(bird.seed),Math.sin(bird.seed),bird.kind==='gull'?ISLAND_GULL_LOOK:ISLAND_CORMORANT_LOOK,p.frame);
+    drawAnimal(vx,vy,p.z,ISLAND_BIRD_SIZE[bird.kind]??.15,Math.cos(bird.seed),Math.sin(bird.seed),bird.kind==='gull'?ISLAND_GULL_LOOK:ISLAND_CORMORANT_LOOK,p.frame);
   }
   if(rain>.2||season()==='winter')return;
   let drawn=0;
