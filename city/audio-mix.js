@@ -144,3 +144,8 @@ function surfaceAt(mode, room, x, y) {
   if (kind === 'construction' || kind === 'yard') return 'gravel';
   return 'stone';
 }
+// Outdoor sources stay in world coordinates while the listener is in a room.
+function audioWorldPosition(mode,room,x,y) {
+  const ret=mode==='room'&&(room?.ret||room?.lobby?.ret);
+  return ret?[ret[0],ret[1]]:[x,y];
+}

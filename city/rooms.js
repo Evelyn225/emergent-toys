@@ -121,13 +121,8 @@ const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
 const SEAT = (x, y, fx, fy, h = 0.45) => ({ seat: true, x, y, fx, fy, h });
 // a sofa facing (fx, fy), hl long either side of (x, y): the cushions, the back, an arm at each end, three places on it
 const couch = (x, y, hl, fx, fy, col = BRICK) => {
-  const ax=-fy,ay=fx,cloth=solid(col,{bright:2,top:'~'}),at=(u,v)=>[x+ax*u+fx*v,y+ay*u+fy*v];
-  return [ROOM_MODEL(x,y,(vx,vy)=>{
-    drawBox(boxAt(vx,vy,ax,ay,hl,.39,.12,.29),solid(col,{bright:1}));
-    for(const k of [-1,0,1]){const [cx,cy]=[vx+ax*k*(hl-.18)*2/3,vy+ay*k*(hl-.18)*2/3];drawBox(boxAt(cx,cy,ax,ay,(hl-.18)/3-.015,.34,.29,.48),cloth);}
-    drawBox(boxAt(vx-fx*.34,vy-fy*.34,ax,ay,hl,.08,.27,.94),cloth);
-    for(const sign of [-1,1]){const [cx,cy]=[vx+ax*sign*(hl-.09),vy+ay*sign*(hl-.09)];drawBox(boxAt(cx,cy,fx,fy,.38,.09,.27,.73),cloth);drum(cx+fx*.28,cy+fy*.28,.09,.27,.73,cloth);}
-  },[Math.abs(ax)*hl+Math.abs(fx)*.4,Math.abs(ay)*hl+Math.abs(fy)*.4,.94]),
+  const ax=-fy,ay=fx,at=(u,v)=>[x+ax*u+fx*v,y+ay*u+fy*v];
+  return [ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureSofa(vx,vy,hl,fx,fy,col),[Math.abs(ax)*hl+Math.abs(fx)*.4,Math.abs(ay)*hl+Math.abs(fy)*.4,.94]),
   ...[-.55,0,.55].map(k=>{const [sx,sy]=at(k*hl,.06);return SEAT(sx,sy,fx,fy,.48);})];
 };
 // a round pouffe, h high, to perch on facing (fx, fy)
@@ -336,7 +331,7 @@ const laundryCart = (x, y) => {
     return set(i, lumpy ? (k > 0.55 ? '~' : '_') : k > 0.85 ? '~' : ' ', C(WHITE, L * 0.6)), true;
   }), ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.3, y + sy * 0.2, 0.03, 0.03, 0, 0.12, (i, t, L) => (set(i, 'o', C(GRAY, L)), true))))];
 };
-const tableBox = (x, y, hl = 0.6, hw = 0.4) => [BX(x, y, hl, hw, 0.72, 0.78, solid(BRICK, { top: '=' })), BX(x, y, 0.06, 0.06, 0, 0.72, solid(GRAY))];
+const tableBox = (x, y, hl = 0.6, hw = 0.4) => [ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureTable(vx,vy,hl,hw),[hl,hw,.78])];
 const inBox = (b, x, y, pad) => { const qx = x - b.x, qy = y - b.y; return Math.abs(qx * b.c + qy * b.s) < b.hl + pad && Math.abs(-qx * b.s + qy * b.c) < b.hw + pad; };
 
 
@@ -891,9 +886,7 @@ function homePlan(w, h, tier) {
 }
 // Upholstered seating and separate dining chairs, with real legs and backs.
 function homeChair(x, y, fx, fy, col = BRICK) {
-  const seat = { ...BX(x, y, 0.3, 0.3, 0.42, 0.5, solid(col)), seat: true, x, y, fx, fy };
-  return [seat, BX(x - fx * 0.28, y - fy * 0.28, 0.31, 0.045, 0.48, 1.12, solid(col), fy, -fx),
-    ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.23, y + sy * 0.23, 0.035, 0.035, 0, 0.42, solid(BRICK))))];
+  return [{...ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureChair(vx,vy,fx,fy,col),[.31,.31,1.12]),seat:true,fx,fy,h:.5}];
 }
 // the kitchen counter with the hob set in it: four rings on top (red while something's on: cooking-ui.js), the knobs
 // along the front edge and the oven door under them with its window; worktop either side
@@ -936,9 +929,7 @@ function homeDef(w, h, tier) {
       ...toilet(plan.wc.x1 - (tier ? 1.4 : .8), 1.42, -1, porcelain),
       washbasin(plan.wc.x0 + 0.4, 1.35, 0, 1),
       ...(tier ? [BATHTUB(plan.wc.x1 - .43, 3.4)] : []),
-      { ...BX(sofa[0], sofa[1], tier ? 1.55 : 0.95, 0.45, 0.15, 0.5, solid(tier === 2 ? GREEN : BLUE, { panel: 0.7 })), seat: true, x: sofa[0], y: sofa[1], fx: 0, fy: -1 },
-      BX(sofa[0], sofa[1] + 0.4, tier ? 1.55 : 0.95, 0.1, 0.3, 1.0, solid(tier === 2 ? GREEN : BLUE)),
-      ...[-1, 1].map(s => BX(sofa[0] + s * (tier ? 1.5 : 0.92), sofa[1], 0.12, 0.45, 0.3, 0.75, solid(tier === 2 ? GREEN : BLUE))),
+      ...couch(sofa[0],sofa[1],tier?1.55:.95,0,-1,tier===2?GREEN:BLUE),
       ...tableBox(dining[0], dining[1], tier ? 1.25 : 0.6, 0.5),
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),

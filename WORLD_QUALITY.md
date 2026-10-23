@@ -70,3 +70,13 @@ The reported-fix batch is implemented and reviewed in Chromium, including shorel
 At home, F opens furnishings; Q unpacks a held purchase, Q rotates during placement, E places, and Esc cancels. Lamps and frames use aimed E. The compact camera captures the view with Q; the album holds eight local photographs. Each home supports 48 movable furnishings. Plush sharks can go on the floor or supported tables. IDEA occupies one existing open hardware-store location and is searchable by name.
 
 The numbered passes above remain the work queue. The new models establish reusable rounded geometry and filtered materials, but no broad category is marked complete merely because these foundations exist.
+
+
+## Completed chunks
+
+- Reported fixes and home furnishing foundation: [PR #135](https://github.com/Evelyn225/emergent-toys/pull/135). Botanical-garden birds replace city beds on islands; new home furniture, photos, lamps and records are usable and persistent.
+- Shared furniture, first chunk: dining chairs, four-leg tables and upholstered sofas now have rounded solids, connected rails/legs, separate cushions and filtered materials. The shared helpers reach existing apartments, hotels, cafés and other callers. Standard home sofas now use the shared builder. Reviewed front, back, oblique and studio views; existing seating and hotel controls are covered by browser regressions. Beds, shelves, wardrobes, counters, stools and benches remain in pass 1.
+- Interaction follow-up: line of sight derives eye height from the current player state, so a room entered before the next render uses indoor metres immediately. Grand Hotel check-in exercises that transition.
+
+- Interaction integration checks: transparent counter grilles preserve sight; seated head height and jail cab-driver conversations remain selectable; the VIP host keeps the service action; ceiling lamps require a deliberate aim. Shop reachability checks now choose a visible counter approach. Casino staking tests isolate games from patrons and aim at equipment, while person selection has separate coverage. Camera and flatpack art use visible glyphs, including at the hand grip.
+- Indoor audio uses the building's actual outdoor location for both nature ambience and sirens. Real Web Audio checks confirm mainland sirens stay silent in an island interior, nearby sources play, moving inside does not change the outdoor source location, and changing buildings clears distant voices.

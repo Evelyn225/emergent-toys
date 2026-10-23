@@ -6061,6 +6061,11 @@ function surfaceAt(mode, room, x, y) {
   if (kind === 'construction' || kind === 'yard') return 'gravel';
   return 'stone';
 }
+// Outdoor sources stay in world coordinates while the listener is in a room.
+function audioWorldPosition(mode,room,x,y) {
+  const ret=mode==='room'&&(room?.ret||room?.lobby?.ret);
+  return ret?[ret[0],ret[1]]:[x,y];
+}
 // One source of truth for recordings, prepared upload assets and exact in-game labels.
 // Originals stay in audio/ascii city/. Null files deliberately skip the entire utterance.
 const TRANSIT_ASSETS = {
@@ -15621,13 +15626,8 @@ const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
 const SEAT = (x, y, fx, fy, h = 0.45) => ({ seat: true, x, y, fx, fy, h });
 // a sofa facing (fx, fy), hl long either side of (x, y): the cushions, the back, an arm at each end, three places on it
 const couch = (x, y, hl, fx, fy, col = BRICK) => {
-  const ax=-fy,ay=fx,cloth=solid(col,{bright:2,top:'~'}),at=(u,v)=>[x+ax*u+fx*v,y+ay*u+fy*v];
-  return [ROOM_MODEL(x,y,(vx,vy)=>{
-    drawBox(boxAt(vx,vy,ax,ay,hl,.39,.12,.29),solid(col,{bright:1}));
-    for(const k of [-1,0,1]){const [cx,cy]=[vx+ax*k*(hl-.18)*2/3,vy+ay*k*(hl-.18)*2/3];drawBox(boxAt(cx,cy,ax,ay,(hl-.18)/3-.015,.34,.29,.48),cloth);}
-    drawBox(boxAt(vx-fx*.34,vy-fy*.34,ax,ay,hl,.08,.27,.94),cloth);
-    for(const sign of [-1,1]){const [cx,cy]=[vx+ax*sign*(hl-.09),vy+ay*sign*(hl-.09)];drawBox(boxAt(cx,cy,fx,fy,.38,.09,.27,.73),cloth);drum(cx+fx*.28,cy+fy*.28,.09,.27,.73,cloth);}
-  },[Math.abs(ax)*hl+Math.abs(fx)*.4,Math.abs(ay)*hl+Math.abs(fy)*.4,.94]),
+  const ax=-fy,ay=fx,at=(u,v)=>[x+ax*u+fx*v,y+ay*u+fy*v];
+  return [ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureSofa(vx,vy,hl,fx,fy,col),[Math.abs(ax)*hl+Math.abs(fx)*.4,Math.abs(ay)*hl+Math.abs(fy)*.4,.94]),
   ...[-.55,0,.55].map(k=>{const [sx,sy]=at(k*hl,.06);return SEAT(sx,sy,fx,fy,.48);})];
 };
 // a round pouffe, h high, to perch on facing (fx, fy)
@@ -15836,7 +15836,7 @@ const laundryCart = (x, y) => {
     return set(i, lumpy ? (k > 0.55 ? '~' : '_') : k > 0.85 ? '~' : ' ', C(WHITE, L * 0.6)), true;
   }), ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.3, y + sy * 0.2, 0.03, 0.03, 0, 0.12, (i, t, L) => (set(i, 'o', C(GRAY, L)), true))))];
 };
-const tableBox = (x, y, hl = 0.6, hw = 0.4) => [BX(x, y, hl, hw, 0.72, 0.78, solid(BRICK, { top: '=' })), BX(x, y, 0.06, 0.06, 0, 0.72, solid(GRAY))];
+const tableBox = (x, y, hl = 0.6, hw = 0.4) => [ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureTable(vx,vy,hl,hw),[hl,hw,.78])];
 const inBox = (b, x, y, pad) => { const qx = x - b.x, qy = y - b.y; return Math.abs(qx * b.c + qy * b.s) < b.hl + pad && Math.abs(-qx * b.s + qy * b.c) < b.hw + pad; };
 
 
@@ -16391,9 +16391,7 @@ function homePlan(w, h, tier) {
 }
 // Upholstered seating and separate dining chairs, with real legs and backs.
 function homeChair(x, y, fx, fy, col = BRICK) {
-  const seat = { ...BX(x, y, 0.3, 0.3, 0.42, 0.5, solid(col)), seat: true, x, y, fx, fy };
-  return [seat, BX(x - fx * 0.28, y - fy * 0.28, 0.31, 0.045, 0.48, 1.12, solid(col), fy, -fx),
-    ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.23, y + sy * 0.23, 0.035, 0.035, 0, 0.42, solid(BRICK))))];
+  return [{...ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureChair(vx,vy,fx,fy,col),[.31,.31,1.12]),seat:true,fx,fy,h:.5}];
 }
 // the kitchen counter with the hob set in it: four rings on top (red while something's on: cooking-ui.js), the knobs
 // along the front edge and the oven door under them with its window; worktop either side
@@ -16436,9 +16434,7 @@ function homeDef(w, h, tier) {
       ...toilet(plan.wc.x1 - (tier ? 1.4 : .8), 1.42, -1, porcelain),
       washbasin(plan.wc.x0 + 0.4, 1.35, 0, 1),
       ...(tier ? [BATHTUB(plan.wc.x1 - .43, 3.4)] : []),
-      { ...BX(sofa[0], sofa[1], tier ? 1.55 : 0.95, 0.45, 0.15, 0.5, solid(tier === 2 ? GREEN : BLUE, { panel: 0.7 })), seat: true, x: sofa[0], y: sofa[1], fx: 0, fy: -1 },
-      BX(sofa[0], sofa[1] + 0.4, tier ? 1.55 : 0.95, 0.1, 0.3, 1.0, solid(tier === 2 ? GREEN : BLUE)),
-      ...[-1, 1].map(s => BX(sofa[0] + s * (tier ? 1.5 : 0.92), sofa[1], 0.12, 0.45, 0.3, 0.75, solid(tier === 2 ? GREEN : BLUE))),
+      ...couch(sofa[0],sofa[1],tier?1.55:.95,0,-1,tier===2?GREEN:BLUE),
       ...tableBox(dining[0], dining[1], tier ? 1.25 : 0.6, 0.5),
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
@@ -23110,7 +23106,7 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
     for (const y of [5.2, 6.8]) { p.push(STOOL(3.05, y, MAG)); if (chance(busy)) p.push({ ...sitting(3.05, y, shirt(), 0.6), face: [-1, 0] }); } // stools at the bar, facing it
     p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
     p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
-    p.push(standing(13.4, 10.2, GRAY)); // the host by the curtain
+    p.push({...standing(13.4, 10.2, GRAY),service:'vip'}); // the host by the curtain
     p.push({ vm: { kind: 'CIGARETTES', c: 0, s: 1, fs: -1 }, x: 1.4, y: 9.8 }); // a cigarette machine by the bar, the same as the ones on the street
     return p;
   } };
@@ -24348,7 +24344,14 @@ function hud() {
 }
 // E and its prompt resolve the same visible target before proximity fallbacks.
 // Rooms use metres; the outdoor world uses ten-metre cells.
+function interactionEye() {
+  if(mode==='room')return 1.7+stairRise(px,py)+eyeLift();
+  if(mode==='roof')return roofH+.17+eyeLift()*.1;
+  if(mode==='walk')return .17+walkGround(px,py)+eyeLift()*.1;
+  return eye;
+}
 function interactionClear(x,y,z,ignore=null) {
+  const eye=interactionEye();
   const inside=mode==='room',ex=inside?x-px:rel(x-px),ey=inside?y-py:rel(y-py),ez=z-eye;
   const n=Math.max(2,Math.ceil(Math.hypot(ex,ey)/(inside?.07:.012)));
   for(let k=1;k<n;k++) {
@@ -24367,7 +24370,7 @@ function interactionClear(x,y,z,ignore=null) {
   if(inside) {
     const saved={...HIT};let clear=true;
     try {
-      for(const prop of room.props)if(prop!==ignore&&!(ignore&&prop.furnishingKey===ignore.key)&&prop.box&&!prop.walk) {
+      for(const prop of room.props)if(prop!==ignore&&!(ignore&&prop.furnishingKey===ignore.key)&&prop.box&&!prop.walk&&!prop.shotPermeable) {
         const t=rayBox(px,py,eye,ex,ey,ez,prop.box);
         if(t>.01&&t<.98){clear=false;break;}
       }
@@ -24376,7 +24379,8 @@ function interactionClear(x,y,z,ignore=null) {
   }
   return true;
 }
-function interactionScore(x,y,z0,z1,radius,reach,ignore=null) {
+function interactionScore(x,y,z0,z1,radius,reach,ignore=null,strict=false) {
+  const eye=interactionEye();
   const inside=mode==='room',ex=inside?x-px:rel(x-px),ey=inside?y-py:rel(y-py),d=Math.hypot(ex,ey);
   if(d>reach)return Infinity;
   const forward=ex*Math.cos(a)+ey*Math.sin(a),side=-ex*Math.sin(a)+ey*Math.cos(a);
@@ -24384,15 +24388,15 @@ function interactionScore(x,y,z0,z1,radius,reach,ignore=null) {
   const slope=pitch*rows/projY,aimZ=eye+slope*Math.max(.01,forward),z=clamp(aimZ,z0,z1);
   const horizontal=Math.max(0,Math.abs(Math.atan2(side,Math.max(.001,forward)))-Math.atan2(radius,Math.max(.001,d)));
   const vertical=Math.abs(Math.atan2(z-eye,Math.max(.001,d))-Math.atan(slope));
-  if(horizontal>.23||vertical>.32||!interactionClear(x,y,z,ignore))return Infinity;
+  if(horizontal>(strict?.12:.23)||vertical>(strict?.12:.32)||!interactionClear(x,y,z,ignore))return Infinity;
   return horizontal*horizontal+vertical*vertical*.7+.012*d/reach;
 }
 function interactionFocus() {
-  if(!['walk','room','roof'].includes(mode)||sleep||freecam||wanted.busted||mode==='room'&&['jail','train'].includes(room.kind)||mode==='walk'&&elWalkGround(px,py)>EL_TREAD)return null;
+  if(!['walk','room','roof'].includes(mode)||sleep||freecam||wanted.busted||mode==='room'&&room.kind==='train'||mode==='walk'&&elWalkGround(px,py)>EL_TREAD)return null;
   const inside=mode==='room',unit=inside?1:.1;
   let best=null,score=Infinity;
-  const offer=(kind,who,x,y,z0,z1,radius,reach,ignore=null)=>{
-    const value=interactionScore(x,y,z0,z1,radius,reach,ignore);
+  const offer=(kind,who,x,y,z0,z1,radius,reach,ignore=null,strict=false)=>{
+    const value=interactionScore(x,y,z0,z1,radius,reach,ignore,strict);
     if(value<score){score=value;best={kind,who};}
   };
   const at=placeKey();
@@ -24401,10 +24405,12 @@ function interactionFocus() {
     offer('drop',d,d.x,d.y,z,z+.2*unit,.16*unit,inside?1.6:.28);
   }
   if(inside) {
-    for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part);
+    for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
     const keeper=room.def.keeper;
-    for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12))
-      offer('room-person',p,p.x,p.y,.3,p.pose==='sit'?1.4:1.8,.28,1.8);
+    for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
+      const seated=typeof p.pose==='string'&&p.pose.startsWith('sit');
+      offer(p.service?'service':'room-person',p,p.x,p.y,.3,seated?(p.seatZ??.45)+1.05:1.8,.28,1.8);
+    }
     if(keeper&&!room.keeperDead)offer('keeper',keeper,...keeper,.7,1.8,.28,2);
   }else if(mode==='walk') {
     for(const p of [...people,...fairFolk])if(!p.hidden&&!p.dead&&!p.flee&&!p.down) {
@@ -24418,14 +24424,14 @@ function interactionFocus() {
 function focusedInteractionPrompt(target=interactionFocus()) {
   if(target?.kind==='home-fixture')return homeFixturePrompt(target.who);
   if(target?.kind==='drop')return `E: pick up the ${itemName(target.who)}`;
-  if(target?.kind==='person'||target?.kind==='room-person')return 'E: talk';
+  if(target?.kind==='person'||target?.kind==='room-person'&&!target.who.cabbie)return 'E: talk';
   return '';
 }
 function useFocusedInteraction(target=interactionFocus()) {
   if(target?.kind==='home-fixture'){homeFixtureUse(target.who);return true;}
   if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
   if(target?.kind==='person'){talkTo(target.who);return true;}
-  if(target?.kind==='room-person'){talkInRoom();return true;}
+  if(target?.kind==='room-person'&&!target.who.cabbie){talkInRoom();return true;}
   return false;
 }
 // ---- actions
@@ -26537,11 +26543,7 @@ function playClip(name, gain, when = actx.currentTime, spatial=null) {
   });
 }
 function worldSoundProfile(x,y,z,range=180,reference=14) {
-  let x0=px,y0=py,z0=eye;
-  if(mode==='room') {
-    const ret=room.ret||room.lobby?.ret;
-    if(ret){[x0,y0]=ret;z0=terrainHeight(x0,y0)+.17;}
-  }
+  const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'?terrainHeight(x0,y0)+.17:eye;
   return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
 let peeLoopVoice = null;
@@ -26582,7 +26584,8 @@ const sirens = new Map(); // car -> voice
 const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
+  const [lx,ly]=audioWorldPosition(mode,room,px,py);
+  for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - lx), rel(c.y - ly)) < SIREN_R) {
     const recorded = c.kind === 'police';
     if (recorded && !policeSirenBuffer) continue; // try next frame after the shared clip finishes loading
     const o = recorded ? actx.createBufferSource() : actx.createOscillator();
@@ -26595,7 +26598,7 @@ function tickSirens(indoors) {
     sirens.set(c, { o, lp, g, p, recorded, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
-    const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
+    const rx = rel(c.ex - lx), ry = rel(c.ey - ly), d = Math.hypot(rx, ry) || 0.01;
     if (!cars.includes(c) || !code(c) || wanted.busted || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     const doppler = clamp(34 / (34 - vr), 0.5, 2);
@@ -26648,7 +26651,7 @@ function audioTick(dt) {
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record:homeRecordAudio(), district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
-    wilderness:worldReady&&!!wildIslandAt(...(mode==='room'?(room.ret||room.lobby?.ret||[px,py]).slice(0,2):[px,py])),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
+    wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
@@ -34636,6 +34639,49 @@ function coveWindowComposite() {
     for(const [i]of visible){CH[i]=view.CH[i];COL[i]=view.COL[i];BG[i]=view.BG[i];FOGS[i]=view.FOGS[i];FOGB[i]=view.FOGB[i];}
   }
 }
+// Shared furniture at the Cabin Cove geometry/material standard. These builders
+// preserve each caller's footprint and seat height; rounded edges stay geometric.
+function furnitureCloth(base) {
+  return (i,t,L)=>{
+    const footprint=t/projX,fine=coveDetail(t),weave=Math.sin(HIT.u*190)*Math.sin((HIT.v+HIT.w)*190)*.12*fine;
+    const seam=coveGroove(HIT.u,.44,.002,footprint)*.3;
+    BG[i]=C(base,2.2+L*.36*coveLight(HIT.nx,HIT.ny,HIT.nz)+weave-seam);set(i,' ',0);return true;
+  };
+}
+function drawFurnitureSofa(vx,vy,hl,fx,fy,col=BRICK,seat=.48) {
+  const c=-fy,s=fx,cloth=furnitureCloth(col),at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
+  const part=(u,v,hx,hy,z0,z1,rad,mat='wood')=>{const[x,y]=at(u,v);coveRound(x,y,c,s,hx,hy,z0,z1,rad,mat);};
+  for(const u of [-hl+.15,hl-.15])for(const v of [-.27,.27])part(u,v,.045,.045,0,.16,.018);
+  part(0,0,hl-.04,.37,.12,seat-.18,.035);
+  const count=hl>1.3?3:2,inside=hl-.18,width=inside/count;
+  for(let k=0;k<count;k++) {
+    const u=-inside+width*(2*k+1);
+    part(u,.035,width-.012,.335,seat-.18,seat,.065,cloth);
+    part(u,-.32,width-.012,.07,seat-.015,.94,.06,cloth);
+  }
+  // Arm pads join the base and rear bolster rather than ending inside the seat.
+  for(const sign of [-1,1])part(sign*(hl-.085),0,.085,.39,seat-.2,.73,.065,cloth);
+}
+function drawFurnitureChair(vx,vy,fx,fy,col=BRICK) {
+  const c=-fy,s=fx,at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
+  const part=(u,v,hx,hy,z0,z1,rad,mat='wood')=>{const[x,y]=at(u,v);coveRound(x,y,c,s,hx,hy,z0,z1,rad,mat);};
+  for(const u of [-.23,.23])for(const v of [-.23,.23])part(u,v,.035,.035,0,v<0?1.12:.42,.012);
+  for(const u of [-.23,.23])part(u,0,.024,.23,.18,.225,.008);
+  for(const v of [-.23,.23])part(0,v,.23,.025,.34,.42,.01);
+  part(0,0,.3,.3,.42,.5,.035,furnitureCloth(col));
+  for(const z of [.79,1.025])part(0,-.255,.265,.035,z-.075,z+.075,.025);
+}
+function drawFurnitureTable(vx,vy,hl=.6,hw=.4,height=.78) {
+  const legX=Math.max(.055,hl-.11),legY=Math.max(.055,hw-.11),under=height-.06;
+  for(const x of [-legX,legX])for(const y of [-legY,legY])coveRound(vx+x,vy+y,1,0,.042,.042,0,under,.014,'wood');
+  for(const y of [-legY,legY])coveRound(vx,vy+y,1,0,legX,.026,under-.12,under,.01,'wood');
+  for(const x of [-legX,legX])coveRound(vx+x,vy,1,0,.026,legY,under-.12,under,.01,'wood');
+  coveRound(vx,vy,1,0,hl,hw,under,height,.023,(i,t,L)=>{
+    coveTimber(i,HIT.u,HIT.v,L,t,HIT.nx,HIT.ny,HIT.nz,3);
+    if(HIT.face===5){const joint=coveGroove(HIT.v+hw,.24,.003,t/projX);BG[i]=C(BRICK,(BG[i]&15)-joint*.7);}
+    return true;
+  });
+}
 // Shared close-up home models. Surfaces have real edges and joined supports;
 // screens and bulbs are the only emissive parts of their housings.
 function televisionProgramme(u,v,time,channel) {
@@ -35008,27 +35054,27 @@ ROOM_DEFS.idea={grid:boxRoom(18,14),entry:[9,12.4,-Math.PI/2],height:3.4,light:.
 ROOM_CEILS.idea=(i)=>{BG[i]=C(WHITE,5);set(i,' ',0);};
 DENSE.camera=()=>sculpt(36,20,(x,y)=>{
   const dx=Math.max(Math.abs(x)-7,0),dy=Math.max(Math.abs(y)-3.6,0);
-  if(Math.hypot(dx,dy)>1.5)return y>-6&&y<-4.9&&x>3&&x<6?[' ',C(GRAY,9)]:null;
+  if(Math.hypot(dx,dy)>1.5)return y>-6&&y<-4.9&&x>3&&x<6?['#',C(GRAY,9)]:null;
   const lens=Math.hypot(x-1.5,y);
-  if(lens<3.3){if(lens>2.6)return [' ',C(GRAY,6+4*dSphere(x-1.5,y,3.3))];return [' ',C(x<1&&y<-1?WHITE:BLUE,x<1&&y<-1?11:2+3*dSphere(x-1.5,y,2.7))];}
-  if(x<-4&&y<-1.8)return [' ',C(CYAN,4)];
-  return [' ',C(GRAY,x>6?2:3+dLight(-.25,-.4,.8)*5)];
+  if(lens<3.3){if(lens>2.6)return ['#',C(GRAY,6+4*dSphere(x-1.5,y,3.3))];return ['#',C(x<1&&y<-1?WHITE:BLUE,x<1&&y<-1?11:2+3*dSphere(x-1.5,y,2.7))];}
+  if(x<-4&&y<-1.8)return ['#',C(CYAN,4)];
+  return ['#',C(GRAY,x>6?2:3+dLight(-.25,-.4,.8)*5)];
 });
 // Flatpacks keep their own silhouette in the bag and in the player's hands.
 function heldFurnitureFlatpack(it) {
-  return sculpt(40,26,(x,y)=>{
+  return sculpt(64,26,(x,y)=>{
     const u=x+17,v=y+8;
     if(u<0||u>34)return null;
     const top=-u*.14,edge=top+5;
     if(v<top||v>edge+15)return null;
     const lid=v<edge,right=u>27,tape=Math.abs(u-16)<1.1;
-    if(tape)return [' ',C(STONE,lid?9:7)];
+    if(tape)return ['#',C(STONE,lid?9:7)];
     if(!lid&&!right&&u>3&&u<12&&v>edge+4&&v<edge+10){
       const icon=(Math.abs(u-7.5)<3.5&&Math.abs(v-edge-7)<.45)||(Math.abs(u-5)<.45&&v>edge+7)||(Math.abs(u-10)<.45&&v>edge+7);
       return [icon?'|':' ',C(BRICK,7)];
     }
     if(!lid&&!right&&u>19&&u<24&&v>edge+9&&v<edge+12)return ['|',C(BRICK,3)];
-    return [' ',C(WARM,lid?8:right?4:6)];
+    return ['#',C(WARM,lid?8:right?4:6)];
   });
 }
 for(const id of Object.keys(HOME_FURNITURE))if(id.startsWith('f_'))DENSE[id]=heldFurnitureFlatpack;

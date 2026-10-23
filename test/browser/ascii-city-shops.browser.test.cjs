@@ -41,7 +41,7 @@ async function walkRooms(page) {
         const wx = x / S, wy = y / S;
         if (roomAt(wx, wy + 0.45) === 'D') door = true; // (a step from the way out)
         if (!free(wx, wy)) { seen[y * W + x] = 1; continue; }
-        if (k && !clerk && Math.hypot(wx - k[0], wy - k[1]) < 1.9) clerk = [wx, wy];
+        if (k && !clerk && Math.hypot(wx - k[0], wy - k[1]) < 1.9) { [px,py]=[wx,wy]; if(nearKeeper())clerk=[wx,wy]; }
         if (!wc && inWc(wx, wy)) { [px, py] = [wx, wy]; if (looNear()) wc = [wx, wy]; }
         q.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
       }
