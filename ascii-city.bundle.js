@@ -26250,12 +26250,13 @@ const shells = [];
 const fwBase = () => ({ x: FAIR.cx, y: FAIR.y1 + 18 }); // the barges
 function stepFireworks(dt) {
   for (let k = shells.length - 1; k >= 0; k--) if (T - shells[k].t0 > shells[k].rise + 3.5) shells.splice(k, 1);
-  if (!eventNow('fireworks') || weather === 'storm' || mode === 'room') return;
+  if (!eventNow('fireworks') || weather === 'storm') return; // (indoors too: you hear it through the walls)
   const finale = tod < 2 && tod > 1.6, rate = finale ? 6 : 1.4;
   if (Math.random() < dt * rate) {
     const b = fwBase(), kind = pick(['peony', 'peony', 'willow', 'ring', 'crackle']);
     shells.push({ x: b.x + (Math.random() - 0.5) * 30, y: b.y + (Math.random() - 0.5) * 8, h: 18 + Math.random() * 14, t0: T, rise: 1.6 + Math.random() * 0.8,
       col: pick(FW_COLS), col2: pick(FW_COLS), kind, n: kind === 'ring' ? 28 : 46, seed: Math.random() * 1e4, boomed: false });
+    fwLaunch(shells[shells.length - 1]);
   }
   for (const s of shells) if (!s.boomed && T - s.t0 > s.rise) { s.boomed = true; fwBoom(s); }
 }
@@ -26301,6 +26302,14 @@ function drawFireworks() {
       put(x, y, z, ch, C(k & 1 && s.col2 !== s.col ? s.col2 : s.col, 5 + fade * 10), bt < 0.5 && k % 12 === 0 ? C(s.col, 1 + fade * 3) : 0);
     }
   }
+}
+// the lift charge: a dull thump from the mortar on the barge as the shell goes up, heard from there like the boom
+function fwLaunch(s) {
+  if (!actx) return;
+  const profile = worldSoundProfile(s.x, s.y, 0.05), at = actx.currentTime + profile.delay;
+  if (profile.gain < .001) return;
+  tone(at, 55 + Math.random() * 10, 0.25, 0.35 * profile.gain, 'sine', profile.pan);
+  burst(at, 0.18, [filt('lowpass', Math.min(400, profile.cutoff))], 0.25 * profile.gain, profile.pan);
 }
 // the boom: as far off as it is, it arrives that much later (sound does 34 cells a second)
 function fwBoom(s) {

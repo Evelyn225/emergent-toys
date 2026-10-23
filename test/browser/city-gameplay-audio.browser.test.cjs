@@ -217,3 +217,31 @@ test('indoor sirens use the actual outdoor location instead of the room furnitur
   assert.deepEqual([result.mainland,result.nearby,result.movedInside,result.anotherBuilding],[0,1,1,0]);
   assert.ok(result.distance>=2&&result.distance<3);
 }));
+
+test('fireworks: each shell thumps off the barge and bursts later, and the show carries on, muffled, while you are indoors', () => fixture(async page => {
+  const result = await page.evaluate(() => {
+    const calls = [], realTone = tone, realClip = playClip;
+    tone = (at, freq, len, gain, type, pan) => { if (freq < 80) calls.push({ what: 'thump', delay: at - actx.currentTime, gain }); };
+    playClip = (name, gain, when, spatial) => { if (name === 'firework') calls.push({ what: 'boom', delay: when - actx.currentTime, gain, cutoff: spatial.cutoff }); };
+    const show = () => {
+      calls.length = 0; shells.length = 0; stepFireworks(1);
+      const s = shells[0]; if (!s) return null;
+      const launch = calls.find(c => c.what === 'thump');
+      T = s.t0 + s.rise + .01; stepFireworks(0);
+      return { launch, boom: calls.find(c => c.what === 'boom') };
+    };
+    try {
+      dayNum = 5; tod = 21.5; weather = 'clear'; a = Math.PI / 2;
+      mode = 'walk'; room = null; px = FAIR.cx; py = FAIR.y1 + 2; eye = terrainHeight(px, py) + .17;
+      const outside = show();
+      enterRoom('bar', { word: 'BAR', cell: [Math.floor(px), Math.floor(py)], ret: [px, py, 0] }, [3, 3, 0]);
+      return { weekday: weekday(), outside, inside: show() };
+    } finally { tone = realTone; playClip = realClip; }
+  });
+  const { outside, inside } = result;
+  assert.equal(result.weekday, 'Sat');
+  assert.ok(outside?.launch && outside.boom, JSON.stringify(outside));
+  assert.ok(outside.launch.delay > .3 && outside.boom.delay > outside.launch.delay * .8, 'both travel from the bay: ' + JSON.stringify(outside));
+  assert.ok(inside?.launch && inside.boom, 'the show goes on while you are in the bar: ' + JSON.stringify(inside));
+  assert.ok(inside.boom.gain < outside.boom.gain * .3 && inside.boom.cutoff <= 900, 'through the walls: ' + JSON.stringify(inside));
+}));
