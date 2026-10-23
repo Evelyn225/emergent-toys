@@ -185,7 +185,7 @@ test('phone interaction buttons say Knock at the private house and Read beside t
   assert.match(await page.evaluate(()=>msgText),/VISITORS' LOG/);
 },true));
 
-test('Fern House has a separate reachable interior, workshop, storage, terrace and persistent contents',()=>fixture(async page=>{
+test('Fern House has a separate reachable interior, workshop, storage, front entry and persistent contents',()=>fixture(async page=>{
   const expected=await page.evaluate(()=>{
     money=10000;[px,py]=FERN_HOUSE.door;interact();
     const bought=buyProperty('home_island',px,py);closeShop();interact();
@@ -195,13 +195,14 @@ test('Fern House has a separate reachable interior, workshop, storage, terrace a
     for(const [name,[x,y]]of Object.entries(rooms.spots))reachable[name]=!!findMapRoute({x:px,y:py},{x,y},{width:24,height:24,wrap:false},pass);
     home.decor=[{id:'yoyo',uses:0}];home.fridge=[{id:'slice',uses:1}];closet.push({id:'weed',uses:8,q:'fine'});
     const w=workshopState(home);w.owned.bench=1;w.parts=[{id:'bench',key:1,x:18,y:20,a:0}];w.supplies=7;
-    [px,py]=rooms.spots.terrace;interact();const terrace=mode==='walk'&&near(px,py,...FERN_HOUSE.terrace)<.01;
-    interact();const reentered=mode==='room'&&homeRecord()===home;leaveRoom();saveGame();
-    return {bought:bought[0],reachable,terrace,reentered,insideSaved,home:JSON.parse(JSON.stringify(home)),closet:JSON.parse(JSON.stringify(closet))};
+    leaveRoom();const front=mode==='walk'&&near(px,py,...FERN_HOUSE.door)<.01;
+    [px,py]=FERN_HOUSE.terrace;interact();const closedBack=mode==='walk';
+    [px,py]=FERN_HOUSE.door;interact();const reentered=mode==='room'&&homeRecord()===home;leaveRoom();saveGame();
+    return {bought:bought[0],reachable,front,closedBack,reentered,insideSaved,frontDoor:[...FERN_HOUSE.door],home:JSON.parse(JSON.stringify(home)),closet:JSON.parse(JSON.stringify(closet))};
   });
   assert.equal(expected.bought,true);assert.ok(Object.values(expected.reachable).every(Boolean),JSON.stringify(expected.reachable));
-  assert.equal(expected.terrace,true);assert.equal(expected.reentered,true);
-  assert.deepEqual([expected.insideSaved.x,expected.insideSaved.y],[540.5,247.2]);
+  assert.equal(expected.front,true);assert.equal(expected.closedBack,true);assert.equal(expected.reentered,true);
+  assert.deepEqual([expected.insideSaved.x,expected.insideSaved.y],expected.frontDoor);
   await page.reload();
   const restored=await page.evaluate(()=>({home:owned.homes.find(h=>h.kind==='home_island'),closet}));
   assert.deepEqual(restored.home.decor,expected.home.decor);assert.deepEqual(restored.home.fridge,expected.home.fridge);

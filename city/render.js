@@ -149,7 +149,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 }
 
 function render(dt,sceneOnly=false,mask=null) {
-  if(!sceneOnly&&mode==='room'&&room.kind==='islandshelter')coveWindowBegin();
+  if(!sceneOnly&&mode==='room'&&['islandshelter','islandhome'].includes(room.kind))coveWindowBegin();
   // Freecam renders while simulation time is frozen, but still gets a new sprite-generation allowance each frame.
   figFineT = T; figFineN = 0;
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
@@ -243,7 +243,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
-  if(!sceneOnly&&!city&&room.kind==='islandshelter')coveWindowComposite();
+  if(!sceneOnly&&!city&&['islandshelter','islandhome'].includes(room.kind))coveWindowComposite();
   if (city) drawAnglerLines(); // (the regulars' lines too)
   if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above
   drawShots(); // a shot's streak, the police's flashes (gun-ui.js)

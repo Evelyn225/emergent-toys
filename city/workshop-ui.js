@@ -211,6 +211,7 @@ function startWorkshopBatch(bench) {
   game.onDone=quality=>{say(finishWorkshopBatch(home,bench,quality)[1],6);updateDrugBuyer();saveGame();};
 }
 function buyerDoor(home) {
+  if(home.kind==='home_island')return [...FERN_HOUSE.door];
   const clear=(x,y)=>!map[idx(Math.floor(x),Math.floor(y))]&&!isWater(x,y);
   if (home.door) for(const offset of [.24,-.24,.4,-.4,0]) {
     const [x,y]=home.door;

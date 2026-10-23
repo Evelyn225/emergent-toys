@@ -408,7 +408,7 @@ function stepSleep(dt) {
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {
-  if (room.kind === 'islandhome') room.ret = px < 2.2 && py > 14 && py < 19 ? [...FERN_HOUSE.terrace,0] : [...FERN_HOUSE.door,-Math.PI/2];
+  if (room.kind === 'islandhome') room.ret = [...FERN_HOUSE.door,Math.PI];
   body.seat = null;
   if (hotelAlarm) stepGrandHotel(); // A late exit still triggers the alarm while you're inside.
   if (room.kind === 'grandhotelheist') return enterRoom('grandhotel', room.lobby, [10.7, 2.65, Math.PI / 2]);
