@@ -23,7 +23,7 @@ test('side-on sunrise and sunset discs stay bounded even beyond integer precisio
 test('column clipping preserves all visible depths, faces and texture coordinates', () => {
   const ctx = vm.createContext({});
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../city/core.js'), 'utf8'), ctx);
-  vm.runInContext(`let cols=64,rows=48,dx=1,dy=0,tf=.7,projX=cols/2/tf,projY=26,hor=24,eye=.5,vis=40,amb=1;
+  vm.runInContext(`let mode='walk',room=null,cols=64,rows=48,dx=1,dy=0,tf=.7,projX=cols/2/tf,projY=26,hor=24,eye=.5,vis=40,amb=1;
     const ZB=new Float64Array(cols*rows),ZBG=new Float64Array(cols*rows),BG=new Uint8Array(cols*rows),FL=new Uint8Array(cols*rows);`, ctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../city/render.js'), 'utf8'), ctx);
   const result = vm.runInContext(`(() => {

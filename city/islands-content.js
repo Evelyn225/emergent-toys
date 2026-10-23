@@ -192,7 +192,7 @@ ROOM_DEFS.islandhome={
     ...toilet(21.5,2,1,porcelain),washbasin(20.6,1.5,0,1),
     ...tableBox(15,6,1.4,.65),...homeChair(15,7.2,0,-1,GREEN),...homeChair(15,4.8,0,1,GREEN),
     ...couch(5,17,1.8,0,-1,GREEN),...tableBox(5,15.4,.9,.4),
-    BX(5,13.5,.8,.2,0,.6,solid(BRICK)),BX(5,13.5,.6,.1,.6,1.3,(i,t,L)=>{BG[i]=C(r.tv?CYAN:GRAY,r.tv?6:1);set(i,r.tv?'~':' ',C(WHITE,L));return true;}),
+    BX(5,13.5,.8,.2,0,.6,solid(BRICK)),TELEVISION(5,13.5,r),
     BX(17,12,.5,.3,0,1.1,solid(BRICK,{panel:.3,top:'='})),
     POT_PLANT(10.8,12,1.5),POT_PLANT(21,8,1.4),
     ...[[4,5],[16,6],[5,17],[18,17]].map(([x,y])=>BX(x,y,.22,.22,2.8,2.95,(i,t,L)=>{BG[i]=C(WARM,7);set(i,'=',C(YEL,15));return true;})),
@@ -201,6 +201,7 @@ ROOM_DEFS.islandhome={
 
 function fernRoomWall(i,u,uStep,z,d,mx,my,L) {
   homeWall(i,u,uStep,z,d,mx,my,L);
+  if(roomAt(mx,my)==='W'||inWc(px,py))return true;
   if(z<.8){BG[i]=C(BRICK,1.6+L*.2);set(i,Math.abs(z-.76)<.035?'=':fract(u*3)<.045?'|':' ',C(WARM,L*.6));}
   return true;
 }

@@ -77,7 +77,8 @@ function drawFireworks() {
 // the boom: as far off as it is, it arrives that much later (sound does 34 cells a second)
 function fwBoom(s) {
   if (!actx) return;
-  const dist = Math.hypot(rel(s.x - px), rel(s.y - py), s.h), at = actx.currentTime + dist / 34, loud = clamp(1.6 - dist / 120, 0.15, 1);
-  playClip('firework', 0.6 * loud, at);
-  if (s.kind === 'crackle') for (let k = 0; k < 14; k++) burst(at + 1.2 + k * 0.07 + Math.random() * 0.05, 0.05, [filt('highpass', 2500, 1)], 0.08 * loud);
+  const profile=worldSoundProfile(s.x,s.y,s.h),at=actx.currentTime+profile.delay;
+  if(profile.gain<.001)return;
+  playClip('firework',.6*profile.gain,at,profile);
+  if(s.kind==='crackle')for(let k=0;k<14;k++)burst(at+1.2+k*.07+Math.random()*.05,.05,[filt('highpass',1200,1),filt('lowpass',profile.cutoff)],.08*profile.gain,profile.pan);
 }

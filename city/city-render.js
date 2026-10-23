@@ -573,12 +573,24 @@ function floorBaseCell(i, r, x, rx, ry) {
       soft = true; base = BRICK; k = 1.3;
       ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';
     } else if (seaAt(wx, wy)) { // open water: drifting waves; reflect() mirrors the skyline into it
+      const shore=seaShoreBand(wx,wy);
+      if(shore?.beach) {
+        const surface=islandShoreSurface(wx,wy,shore.edge,true);
+        // The whole intertidal surface changes ownership. Backwash exposes
+        // wet sand outside the resting coastline instead of drawing a stripe
+        // over water that never retreats.
+        if(!surface.water||surface.foam) {
+          BG[i]=bgAt(surface.background,day*(surface.foam?9:3)*f,d);
+          set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return;
+        }
+      }
       const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91);
       set(i, n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
-      const foam=seaShoreFoam(wx,wy);
-      if(foam>.12&&hash(Math.floor(wx*21),Math.floor(wy*21),1875)<foam) {
+      const foam=shore?shoreWaveFoam(wx,wy,shore.edge,shore.limit):0;
+      if(foam>.15) {
         set(i,foam>.45?'~':'.',C(WHITE,L*1.4));
+        BG[i]=C(foam>.55?WHITE:CYAN,day*9+1);
         FL[i]=0; // breaking foam stays visible over the skyline reflection
       }
       if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her

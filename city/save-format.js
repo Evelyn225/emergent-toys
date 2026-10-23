@@ -91,5 +91,5 @@ function migrateIslandStride(data) {
   if (match) data.waypoint.id = cityHomeId({cell: cell(Number(match[1]))});
 }
 function savedCityHomes() {
-  return owned.homes.map(home => ({ ...home, placeId: cityPlaceAtCell(home.cell)?.id || home.placeId }));
+  return owned.homes.map(home => ({ ...home, furnishings:homeFurnishings(home),lights:home.lights||{},placeId: cityPlaceAtCell(home.cell)?.id || home.placeId }));
 }

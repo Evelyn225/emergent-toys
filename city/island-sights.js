@@ -9,11 +9,11 @@ function islandGroundModel(x,y,hl,hw,height,kind,obstacle=false) {
   return o;
 }
 function islandWaymark(x,y,word,width=.35) {
-  width=Math.min(width*.45,.2);
+  width=Math.min(width*.34,.15);
   const z=terrainHeight(x,y);
-  islandDetail(x,y,.007,.007,z-.02,z+.18,'timber');
-  const sign=islandDetail(x,y,width,.012,z+.105,z+.18,'sign');
-  Object.assign(sign,{word,labelZ:z+.1425,labelH:.025});
+  islandDetail(x,y,.006,.006,z-.02,z+.145,'timber');
+  const sign=islandDetail(x,y,width,.009,z+.095,z+.15,'sign');
+  Object.assign(sign,{word,labelZ:z+.1225,labelH:.025,ink:BLACK});
 }
 function islandCover(x,y,kind,seed,size=.15) {
   if(seaAt(x,y)||onPier(x,y)||map[idx(x,y)]||onFernStrip(x,y,4))return;
@@ -49,7 +49,12 @@ function buildIslandSights() {
   for(const [x,y]of [[527.7,239.2],[526,238.7]])islandGroundModel(x,y,.27,.045,.06,'driftwood');
   const pack=islandGroundModel(528,238.9,.06,.05,.1,'canvas');pack.base=GREEN;
   islandWaymark(527.8,237.85,'WOODLAND CAMP',.45);
-  islandWaymark(523.6,236.1,'HOUSE / FALLS',.45);
+  const fire=GRILLS.find(g=>g.on==='fire'&&near(g.x,g.y,525.5,238)<1);
+  if(fire) {
+    for(let k=0;k<12;k++){const a=k*TAU/12;islandStone(fire.x+Math.cos(a)*.12,fire.y+Math.sin(a)*.12,.023,hash(k,5,1950));}
+    for(const side of [-1,1])islandGroundModel(fire.x+side*.045,fire.y,.07,.014,.025,'driftwood');
+    islandWaymark(fire.x+.28,fire.y-.2,'FIRE RING',.36);
+  }
   for(const [x,y,word]of [[545.5,230.4,'AIRSTRIP'],[590.3,243.5,'FALLS / LOOKOUT'],[603,250.4,'FERN RIDGE']])islandWaymark(x,y,word,.42);
   // A survey cairn and a brass telescope give the ridge a recognisable silhouette.
   for(let k=0;k<3;k++) {
@@ -84,13 +89,24 @@ function buildIslandSights() {
     ISLAND_BIRDS.push({x,y,z:rock.z1+.008,seed:x,kind:'cormorant',scaredAt:-99});
   }
   islandWaymark(698,353.9,'BIRD ROOST',.4);
+  for(let k=0;k<4;k++) {
+    const x=699.1+k*.24,y=353.1+Math.sin(k)*.16;
+    islandStone(x,y,.045,.5+k*.1);
+    const stone=ISLAND_DETAILS[ISLAND_DETAILS.length-1];
+    ISLAND_BIRDS.push({x,y,z:stone.z1+.008,seed:30+k,kind:'cormorant',scaredAt:-99});
+  }
   // Crescent Sands: a tide pool rim, driftwood ribs, dune flowers and shore birds.
   islandSkiff(710.3,112.7);
-  for(let k=0;k<8;k++) {
-    const angle=k*TAU/8,x=720+Math.cos(angle)*.86,y=115.4+Math.sin(angle)*.6;
-    islandStone(x,y,.055+hash(k,1,1942)*.04,hash(k,2,1942));
-    if(k%2===0)islandCover(x+.15,y+.2,'rush',k/8,.2);
+  for(const pool of TIDE_POOL_SITES) {
+    const samples=[terrainHeight(pool.x,pool.y)];
+    for(let k=0;k<8;k++)samples.push(terrainHeight(pool.x+Math.cos(k*TAU/8)*(pool.r+.07),pool.y+Math.sin(k*TAU/8)*(pool.r+.07)));
+    const p=islandDetail(pool.x,pool.y,pool.r+.07,pool.r+.07,Math.min(...samples)-.018,Math.max(...samples)+.055,'tidepool'),r=pool.r;
+    p.r=r;p.waterZ=p.z1-.022;p.waterRadius=r-.06;
+    p.profile=[[p.z0,0],[p.z0,r+.06],[p.z1-.02,r+.05],[p.z1,r],[p.z1-.01,r-.055],[p.z1-.055,r-.08],[p.z1-.06,0]];
+    ISLAND_OBSTACLES.push(p);
+    for(let k=0;k<6;k++){const a=k*TAU/6;islandCover(pool.x+Math.cos(a)*(pool.r+.17),pool.y+Math.sin(a)*(pool.r+.17),'rush',k/8,.2);}
   }
+  for(let k=0;k<3;k++){const x=720.2+k*.35,y=116.35;ISLAND_BIRDS.push({x,y,z:terrainHeight(x,y)+.008,seed:45+k,kind:'gull',scaredAt:-99});}
   islandWaymark(719,115.35,'TIDE POOLS',.38);
   // Juniper: a modest sheltered garden, washing on the line and sea-facing trees.
   for(const y of [241.7,242.5])for(let x=785;x<787.2;x+=.35)islandCover(x,y,'flower',hash(x,y,1943),.13);
@@ -101,6 +117,24 @@ function buildIslandSights() {
     cloth.z0=cloth.z1-.15;cloth.seed=k;cloth.base=[WHITE,CYAN,STONE,BLUE][k];
   }
   islandWaymark(787,243.85,'SEA GARDEN',.38);
+}
+function drawIslandTidePool(p) {
+  const x=p.x-px,y=p.y-py,r=p.r,water=p.waterZ;
+  const stone=(i,t,L)=>{const grain=hash(Math.floor(HIT.u*160),Math.floor(HIT.w*160),1951);BG[i]=C(GRAY,2+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain*.5);set(i,' ',0);return true;};
+  coveLathe(x,y,0,p.profile,stone);
+  drum(x,y,p.waterRadius,water-.003,water,(i,t,L)=>{
+    const ripple=Math.sin(HIT.u*80+HIT.v*23+T*.8);
+    BG[i]=C(BLUE,3);set(i,ripple>.985?'~':' ',C(CYAN,9));
+    const u=HIT.u+r*.28,v=HIT.v-r*.2,angle=Math.atan2(v,u),radius=Math.hypot(u,v);
+    if(radius<.025+.018*Math.cos(angle*5)){BG[i]=C(ORANGE,5+L*.3);set(i,' ',0);}
+    return true;
+  });
+  // Shells and a crab sit on the actual lip; seaweed rises out of the bowl.
+  coveLathe(x+r*.55,y-r*.65,p.z1-.017,[[0,0],[0,.035],[.014,.028],[.024,.008],[.024,0]],homeStone);
+  for(let k=0;k<3;k++)coveTube(x-r*.48+k*.018,y-r*.1,water-.035,x-r*.48+k*.018+.01*Math.sin(T+k),y-r*.1,water+.015,.004,GREEN);
+  const cx=x+r*.72,cy=y+r*.47,z=p.z1-.008;
+  drawBox(boxAt(cx,cy,1,0,.025,.02,z,z+.025),(i,t,L)=>{BG[i]=C(BRICK,4+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;},homeRayEllipsoid);
+  for(const side of [-1,1])for(let k=0;k<3;k++)coveTube(cx+side*.015,cy+(k-1)*.013,z+.008,cx+side*.045,cy+(k-1)*.025,z,.003,BRICK);
 }
 function islandSkiff(x,y) {
   const z=terrainHeight(x,y);

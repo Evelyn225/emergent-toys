@@ -27,6 +27,7 @@ onkeydown = e => {
     if(e.shiftKey&&!paused)showMap=!showMap;else openBigMap();
     return;
   }
+  if(homeFurnishingKey(e))return;
   if (workshopPlacement && !paused && workshopKey(e)) return;
   if (e.code === 'Escape' && !e.repeat) return togglePause();
   if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)

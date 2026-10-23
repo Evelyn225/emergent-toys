@@ -61,6 +61,7 @@ const TAXI_STOPS = ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway'];
 const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use', gun: 'Fire' };
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
 function touchActions() {
+  if(furnishingPlacement)return [['Cancel','Escape','pop'],['Rotate','KeyQ','pop'],['Place','KeyE','main']];
   if (freecam) return [['Up', 'KeyE', 'main'], ['Down', 'KeyQ', 'pop']];
   if (workshopPlacement) return [['Cancel','KeyX','pop'],['Rotate','KeyQ','pop'],['Place','KeyE','main']];
   if (sleep || bustedEl && bustedEl.style.display === 'flex') return []; // (busted: tap a row)
@@ -97,6 +98,7 @@ function touchActions() {
   if(mode==='ferry')return [['Sit / stand','KeyC','pop'],['Inventory','KeyI','pop'],...ferryRide.seat!=null?[['Next island','Space','pop']]:[],...heldItem()&&['food','drink'].includes(ITEMS[heldItem().id]?.kind)?[['Eat / drink','KeyQ','pop']]:[],...e?[[e,'KeyE','main']]:[]];
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
+    if(mode==='room'&&homeRecord(room))out.push(['Furnish','KeyF','pop']);
     if (/\bJ: /.test(p)) out.push(['Drive taxi', 'KeyJ', 'pop']);
     if (/\bH: /.test(p)) out.push(['Hail taxi', 'KeyH', 'pop']);
     if (/\bG: pick/.test(p)) out.push(['Pick pocket', 'KeyG', 'pop']);

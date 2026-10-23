@@ -63,6 +63,7 @@ function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false) {
 // side. b: {x, y relative to you, c, s heading, hl, hw, z0, z1}. shade(i, t, L) paints the cell from HIT (which face,
 // where on it) and returns true if it drew. Backgrounds get the box's depth too, so fog treats it as solid.
 function drawBox(b, shade, intersect = rayBox) {
+  const homeLight=mode==='room'&&room?.homeBaseLight?room.def.light/room.homeBaseLight:1;
   // A box crossing the camera's near plane otherwise tests every screen cell, even when entirely off to one side.
   // Conservative bounds also cover sloped custom shapes contained by this box.
   const along = dx * b.c + dy * b.s, across = -dx * b.s + dy * b.c;
@@ -112,7 +113,7 @@ function drawBox(b, shade, intersect = rayBox) {
       const t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
       if (t < 0 || t >= ZB[i] || t > vis) continue;
       const bg = BG[i]; BG[i] = BG_UNSET;
-      const drew = shade(i, t, (1 - t / vis) * 15 * amb);
+      const drew = shade(i, t, (1 - t / vis) * 15 * amb * homeLight);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = t; // (as drawShape: only a background it paints is its own, for the fog)
       if (drew) { ZB[i] = t; FL[i] = 0; }
     }
@@ -246,6 +247,7 @@ function render(dt,sceneOnly=false,mask=null) {
   if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above
   drawShots(); // a shot's streak, the police's flashes (gun-ui.js)
   if(sceneOnly)return;
+  drawFurnishingPreview();
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
     if (mode === 'air') airDash();

@@ -49,3 +49,8 @@ test('beach wash animates only the existing wet sand', () => {
   assert.equal(result.sand,true);
   assert.equal(result.dry,1);
 });
+
+test('backwash exposes sand seaward of the resting coast and foam has an opaque pale surface',()=>{
+ const r=ev(`(()=>{const x=707,y=100,patch=.5,offset=.12*Math.sin(x*.13+y*.17),samples=[];for(let phase=0;phase<1;phase+=.02){T=(phase-offset)*7;samples.push(islandShoreSurface(x,y,-.4,true,false,.8,patch));}return {exposed:samples.some(s=>!s.water&&s.background===BRICK),covered:samples.some(s=>s.water&&s.background===BLUE),foam:samples.some(s=>s.foam&&[WHITE,CYAN].includes(s.background)),join:Math.abs(shoreWaveFront(0,.5)-shoreWaveFront(1,.5))};})()`);
+ assert.equal(r.exposed,true);assert.equal(r.covered,true);assert.equal(r.foam,true);assert.ok(r.join<1e-9);
+});

@@ -6,11 +6,7 @@ function hotelRoomPlan(tier){
  if(tier===2)for(let y=1;y<10;y++)if(y!==7&&y!==8)extra['8,'+y]='#';
  return {w,h,bath,grid:boxRoom(w,h,extra),entry:[w/2,h-1.6,-Math.PI/2]};
 }
-function hotelTelevision(x,y){return [BX(x,y,.92,.13,.65,1.65,(i,t,L)=>{
- const edge=Math.abs(HIT.u)>.82||HIT.w<.74||HIT.w>1.54;
- BG[i]=C(edge||!room.tv?GRAY:[BLUE,CYAN,GREEN,WARM][Math.floor(T/8)%4],edge||!room.tv?1:4);
- return set(i,edge?'#':room.tv?(fract(HIT.u*4+T*.2)<.04?'|':' '):' ',C(WHITE,10)),true;
- }),BX(x,y,.99,.3,.1,.65,solid(BRICK,{panel:.5,top:'='}))];}
+function hotelTelevision(x,y){return [ROOM_MODEL(x,y,(vx,vy)=>TELEVISION(x,y,room,1.1).draw(vx,vy)),BX(x,y,.99,.3,.1,.65,solid(BRICK,{panel:.5,top:'='}))];}
 function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
  const u=HIT.u,z=HIT.w,frame=Math.abs(u)>.76||z<1.53||z>2.27;
  const hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
