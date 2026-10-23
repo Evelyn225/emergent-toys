@@ -89,7 +89,31 @@ test('aquarium fish are shaped species: each a solid silhouette, its eye at the 
   assert.deepEqual(r.heads, []);
 }));
 
-test('aviary birds, conservatory butterflies and the lizard are shaped animals that face the way they move', () => fixture(async page => {
+test('the tunnel\'s big fish pass overhead as solid bellies, and its bubbles are little discs, not blocks of o', () => fixture(async page => {
+  const r = await page.evaluate(() => {
+    const shapes = {};
+    for (const kind of ['shark', 'ray', 'turtle', 'fish']) { // how much of its box each covers, and what's down its middle
+      let filled = 0, n = 0; const mid = tunnelBelly(kind, 0.5, 0, GRAY);
+      for (let al = 0.005; al < 1; al += 0.01) for (let ac = -2; ac < 2; ac += 0.02) { n++; if (tunnelBelly(kind, al, ac, GRAY)) filled++; }
+      shapes[kind] = { fill: filled / n, mid: mid && mid[0] };
+    }
+    enterRoom('aquarium', { word: 'AQUARIUM', ret: [100, 100, 0] }, [12, 8, -Math.PI / 2]);
+    const views = {};
+    for (const time of [21, 33.3]) { // the turtle, then the shark, gliding over you
+      pitch = 1.4; T = time; render(0); const count = { o: 0, v: 0 };
+      for (let i = 0; i < cols * rows; i++) { if (CH[i] === 'o' || CH[i] === 'v') count[CH[i]]++; if (CH[i] === ' ') count[BG[i] >> 4] = (count[BG[i] >> 4] || 0) + 1; }
+      views[time] = { o: count.o, v: count.v, white: count[WHITE] || 0, yellow: count[YEL] || 0 };
+    }
+    return { shapes, views };
+  });
+  for (const [kind, v] of Object.entries(r.shapes)) assert.ok(v.fill > 0.08 && v.fill < 0.6, `${kind} covers ${v.fill}`);
+  assert.deepEqual(Object.fromEntries(Object.entries(r.shapes).map(([k, v]) => [k, v.mid])), await page.evaluate(() => ({ shark: WHITE, ray: WHITE, turtle: YEL, fish: WHITE })));
+  assert.ok(r.views[21].yellow > 200, 'the turtle\'s plastron overhead: ' + JSON.stringify(r.views));
+  assert.ok(r.views[33.3].white > 200, 'the shark\'s belly overhead: ' + JSON.stringify(r.views));
+  for (const v of Object.values(r.views)) assert.ok(v.o < 10 && v.v === 0, 'no ASCII fish or blocks of bubble: ' + JSON.stringify(v));
+}));
+
+test('aviary birds, conservatory butterflies and the lizard are shaped animals that face the way they move',() => fixture(async page => {
   const r = await page.evaluate(() => {
     const span = (kind, f) => { const xs = ANIMAL_BODIES[kind](f).parts.flatMap(p => p.k === 2 ? [p.a[0], p.b[0]] : [p.c[0]]); return Math.max(...xs) - Math.min(...xs); };
     const tops = (kind, f) => Math.max(...ANIMAL_BODIES[kind](f).parts.flatMap(p => p.k === 2 ? [p.a[2], p.b[2]] : [p.c[2]]));

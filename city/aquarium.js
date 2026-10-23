@@ -245,6 +245,33 @@ function aquaWall(i, u, uStep, z, d, mx, my, L) {
     if (wallText(i, u, uStep, z, d, 'OPEN OCEAN', 2.6, 2.3, 0.2, 0.28, C(WHITE, 14), C(BLUE, 2))) return true;
   return set(i, (Math.floor(u * 3) + Math.floor(z * 3)) % 7 ? ' ' : '.', C(BLUE, L * 0.5)), true;
 }
+// one of the big ones as you see it from underneath, in solid colour: along 0 its snout .. 1 its tail, across -1 .. 1
+// its half width. Pale bellies; the shark's pectoral fins swept back and its tail fin edge on, the ray's diamond and
+// whip, the turtle's plastron and flippers. [colour, brightness] or null
+function tunnelBelly(kind, along, across, col) {
+  const x = Math.abs(across);
+  if (kind === 'shark') {
+    const w = along < 0.15 ? Math.sqrt(along / 0.15) * 0.9 : along > 0.7 ? Math.max(0.15, (1 - along) / 0.3) : 1;
+    if (x < w) return x < w * 0.55 ? [WHITE, 11] : [col, 8];
+    if (along > 0.3 && along < 0.46 && x < w + (along - 0.3) * 9 && x > w + (along - 0.36) * 9) return [col, 7]; // the pectoral fins
+    return along > 0.86 && x < 0.12 ? [col, 6] : null; // the tail fin, edge on
+  }
+  if (kind === 'ray') {
+    if (along > 0.7) return x < 0.06 ? [col, 6] : null; // the whip of a tail
+    const w = Math.max(0, 1 - Math.abs(along - 0.35) * 2.6);
+    return x < w ? (x > w * 0.8 ? [col, 7] : [WHITE, 10]) : null;
+  }
+  if (kind === 'turtle') {
+    const w = Math.sin(along * Math.PI) * 0.85;
+    if (along < 0.12) return x < 0.3 ? [GREEN, 9] : null; // the head
+    if (x < w) return x < w * 0.7 ? [YEL, 9] : [col, 7]; // the plastron, the shell's rim round it
+    const flip = along > 0.2 && along < 0.36 ? 1.9 - (along - 0.2) * 6 : along > 0.74 && along < 0.86 ? 1.25 - (along - 0.74) * 3 : 0; // flippers, front and back, tapering behind
+    return flip && x < flip ? [GREEN, 8] : null;
+  }
+  const w = Math.sin(along * Math.PI);
+  if (x < w) return [x < w * 0.5 ? WHITE : col, x < w * 0.5 ? 10 : 11];
+  return along > 0.9 && x < (along - 0.9) * 6 ? [col, 9] : null; // the tail
+}
 // overhead: the tunnel's water with the big ones gliding across it, dark everywhere else with a few blue lights
 function aquaCeil(i, r, x, wx, wy) {
   const tn = AQUA_TUNNEL;
@@ -261,11 +288,13 @@ function aquaCeil(i, r, x, wx, wy) {
     const head = sp > 0 ? tn.y0 - 3 + pos : tn.y1 + 3 - pos, along = (sp > 0 ? head - wy : wy - head) / len;
     const across = (wx - lx - 0.2 * Math.sin(T * 0.3 + lx)) / (wd / 2);
     if (along < 0 || along > 1) continue;
-    const w = kind === 'ray' ? Math.max(0, 1 - Math.abs(along - 0.4) * 2.2) : kind === 'shark' ? (along < 0.15 ? along / 0.15 : along > 0.7 ? Math.max(0.2, (1 - along) / 0.3) : 1) : Math.sin(along * Math.PI);
-    if (Math.abs(across) < w) return set(i, along < 0.12 ? (sp > 0 ? 'v' : '^') : kind === 'turtle' ? '#' : kind === 'shark' && Math.abs(across) > w * 0.7 && along > 0.3 && along < 0.45 ? '<' : '=', C(col, 12));
-    if (kind === 'shark' && along > 0.85 && Math.abs(across) < 0.15) return set(i, '|', C(col, 10)); // the tail
+    const hit = tunnelBelly(kind, along, across, col);
+    if (hit) { BG[i] = C(hit[0], hit[1]); return set(i, ' ', 0); }
   }
-  return set(i, hash(Math.floor(wx * 6), Math.floor(wy * 6 + T * 0.3), 35) > 0.993 ? 'o' : ' ', C(WHITE, 8)); // bubbles going up
+  // bubbles going up: a little silvery disc in the middle of one 1/6 m square in a hundred and fifty
+  const bx = fract(wx * 6) - 0.5, by = fract(wy * 6 + T * 0.3) - 0.5, br = bx * bx + by * by;
+  if (br < 0.06 && hash(Math.floor(wx * 6), Math.floor(wy * 6 + T * 0.3), 35) > 0.993) BG[i] = C(br > 0.035 ? WHITE : CYAN, br > 0.035 ? 11 : 6);
+  return set(i, ' ', 0);
 }
 // underfoot: dark blue carpet with the light off the tanks rippling over it
 function aquaFloor(i, f, wx, wy) {
