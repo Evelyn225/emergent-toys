@@ -391,13 +391,13 @@ const ROOM_DEFS = {
   bar: { grid: boxRoom(12, 8, { '1,4': 'W', '3,4': 'W', '3,5': 'W', '3,6': 'W' }), wc: { x0: 1, y0: 5, x1: 3, y1: 7, sign: [1, 4, 1.5] }, light: 0.6, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, neon: true, glyphs: 'il!Y', keeper: [6, 1.4],
     props: r => {
       const p = [...counterBox(6, 1.8, 4, 1.1), standing(6, 1.4, r.neon),
-                 JUKEBOX(10.55, 5.5, -1, 0), ...toilet(1.6, 6.4, 1, porcelain)];
+                 JUKEBOX(10.55, 5.5, -1, 0), ...toilet(1.6, 6.4, 1, porcelain),washbasin(1.35,5.45,1,0)];
       for (let x = 3; x <= 9; x += 1.5) { p.push(STOOL(x, 2.65, RED)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
       return p;
     } },
   diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, 1.4], wall: dinerWall,
     props: r => {
-      const p = [...counterBox(6, 1.75, 2), standing(6, 1.4, WHITE), ...toilet(1.6, 1.4, -1, porcelain)];
+      const p = [...counterBox(6, 1.75, 2), standing(6, 1.4, WHITE), ...toilet(1.6, 1.4, -1, porcelain),washbasin(1.35,2.55,1,0)];
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
         for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] }); } // (on a stool, at the table)
@@ -656,7 +656,7 @@ function makeRoom(kind, extra = {}) {
   if(def.wc){
     const frames=bathroomSurrounds(r);r.props.push(...frames);
     r.bathroomDoors=frames.map((frame,index)=>BATHROOM_POCKET_DOOR(r,frame.bathroomOpening,index));
-    r.props.push(...r.bathroomDoors);
+    r.props.push(...r.bathroomDoors,...bathroomAccessories(r));
   }
   if (def.home) r.props.push(...workshopProps(r),...furnishingProps(r));
   if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
@@ -1110,7 +1110,7 @@ function roomWall(i, u, uStep, z, h, d, side, mx, my, fog, wc) {
     return set(i, Math.abs(u - D.ex) < 0.04 ? '|' : ':', C(GRAY, L * 1.2));
   }
   if (TANKS[c]) return tankCell(i, u, uStep, z, d, side, mx, my, L, c, wc);
-  if (!D.home && wcFaceInside(mx, my, side)) return wcWall(i, u, z, L); // in the bathroom
+  if (wcFaceInside(mx, my, side)) return wcWall(i, u, z, L); // in the bathroom
   if (c === 'W' && D.wc) { // the bathroom's wall seen from outside: the room's own walls (or a plain one), the WC sign by the doorway
     const [sx, sy, su] = D.wc.sign; // (u runs whichever way reads left to right, so it's negative from some sides)
     if (mx === sx && my === sy && wallText(i, u, uStep, z, d, 'WC', Math.sign(u) * su, 1.95, 0.22, 0.3, C(CYAN, 15), C(BLUE, 3))) return;

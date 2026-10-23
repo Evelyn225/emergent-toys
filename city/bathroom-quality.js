@@ -40,9 +40,9 @@ function bathroomTap(x,y,fx,fy,z) {
       (i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
   }
 }
-function bathroomMirrorMount(x,y,fx,fy) {
+function bathroomMirrorMount(x,y,fx,fy,r=room) {
   for(let d=.2;d<=1;d+=.02) {
-    const wx=x-fx*d,wy=y-fy*d,cx=Math.floor(wx),cy=Math.floor(wy),cell=room?.grid[cy]?.[cx];
+    const wx=x-fx*d,wy=y-fy*d,cx=Math.floor(wx),cy=Math.floor(wy),cell=r?.grid[cy]?.[cx];
     if(!cell||!'#W'.includes(cell))continue;
     const plane=fx>0?cx+1:fx<0?cx:fy>0?cy+1:cy;
     return {x:fx?plane+fx*.025:x,y:fy?plane+fy*.025:y,wall:true};
@@ -51,7 +51,7 @@ function bathroomMirrorMount(x,y,fx,fy) {
 }
 function BATHROOM_SINK(x,y,fx,fy) {
   let mirror;
-  return furnitureModel(x,y,1,0,.24,.24,.86,(vx,vy)=>{
+  return {...furnitureModel(x,y,1,0,.24,.24,.86,(vx,vy)=>{
     coveLathe(vx,vy,0,[[0,0],[0,.09],[.025,.09],[.07,.07],[.59,.055],[.72,.095],[.735,0]],bathroomEnamel);
     bathroomOval(vx,vy,.22,.22,0,[[.72,0],[.72,.42],[.75,.72],[.82,.96],[.845,1],[.86,.96],[.86,.77],[.835,.74],[.775,.38],[.765,0]],bathroomEnamel);
     coveLathe(vx,vy,.765,[[0,0],[0,.023],[.002,.023],[.002,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
@@ -64,7 +64,7 @@ function BATHROOM_SINK(x,y,fx,fy) {
       const sheen=Math.exp(-(((HIT.u+.08*Math.sin(a))/.13+(HIT.w-1.45)*.8)**2));
       BG[i]=C(CYAN,2.3+L*.12+sheen*.8);set(i,' ',0);return true;
     });
-  });
+  }),bathroomSink:{x,y,fx,fy}};
 }
 function BATHROOM_TOILET(x,y,back=-1,mat=steel) {
   const metal=mat===steel,finish=metal?(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY):bathroomEnamel;
@@ -87,7 +87,7 @@ function BATHROOM_TOILET(x,y,back=-1,mat=steel) {
       const ripple=Math.sin(Math.atan2(HIT.v,HIT.u)*3-T*10)*Math.hypot(HIT.u,HIT.v);
       set(i,swirl&&ripple>.045?'~':' ',C(CYAN,L));return true;
     });
-  }),box:boxAt(x,by,1,0,.21,.26,.28,.42),loo:[x,by]};
+  }),box:boxAt(x,by,1,0,.21,.26,.28,.42),loo:[x,by],bathroomToilet:{x,y,back,metal}};
   return [cistern,pedestal,bowl];
 }
 function BATHROOM_TUB(x,y) {
@@ -239,4 +239,49 @@ function stepBathroomDoors(dt) {
     }
     d.open=next;prop.box=box;
   }
+}
+
+const BATHROOM_ROLL_PROFILE=[[-.08,.017],[-.08,.055],[.08,.055],[.08,.017],[-.08,.017]];
+function bathroomRayRoll(ox,oy,oz,rx,ry,rz,b) {
+  const t=coveRayLathe(oy-b.y,oz-b.centerZ,ox-b.x,ry,rz,rx,b.lathe);if(t<0)return t;
+  const u=HIT.w,v=HIT.u,w=HIT.v+b.centerZ,nx=HIT.nz,ny=HIT.nx,nz=HIT.ny;
+  HIT.u=u;HIT.v=v;HIT.w=w;HIT.nx=nx;HIT.ny=ny;HIT.nz=nz;
+  HIT.face=Math.abs(nx)>.9?(nx>0?1:2):Math.abs(nz)>.9?(nz>0?5:6):0;return t;
+}
+function bathroomAccessories(r) {
+  const props=[];
+  for(const prop of r.props) {
+    const loo=prop.bathroomToilet,sink=prop.bathroomSink;
+    if(loo&&!loo.metal) {
+      const x=loo.x-.38,mount=bathroomMirrorMount(x,loo.y,0,-loo.back,r);if(!mount.wall)continue;
+      const wall=mount.y+loo.back*.025,y=wall-loo.back*.11,z=.65;
+      props.push({...ROOM_MODEL(x,y,(vx,vy)=>{
+        for(const side of [-1,1])bathroomPipe(vx+side*.1,vy+loo.back*.11,z,vx+side*.1,vy,z,.009);
+        bathroomPipe(vx-.105,vy,z,vx+.105,vy,z,.009);
+        drawBox({...boxAt(vx,vy,1,0,.08,.055,z-.055,z+.055),centerZ:z,lathe:{x:0,y:0,profile:BATHROOM_ROLL_PROFILE}},(i,t,L)=>{
+          const end=HIT.face===1||HIT.face===2,ring=end?coveGroove(Math.hypot(HIT.v,HIT.w-z),.006,.0005,t/projX):0;
+          BG[i]=C(WHITE,3.3+L*.24-ring*.7);set(i,' ',0);return true;
+        },bathroomRayRoll);
+        drawBox(boxAt(vx,vy-loo.back*.055,1,0,.05,.001,.51,z),solid(WHITE));
+      }),radius:.3,bathroomAccessory:{kind:'paper',wall:[x,wall],anchor:[x,y,z]}});
+    }
+    if(sink) {
+      const {x,y,fx,fy}=sink,c=-fy,s=fx;let mount;
+      for(const offset of [.4,-.4]) {
+        const candidate=bathroomMirrorMount(x+c*offset,y+s*offset,fx,fy,r);
+        if(candidate.wall&&[-1,1].every(side=>r.grid[Math.floor(candidate.y+fy*.1+s*side*.14)]?.[Math.floor(candidate.x+fx*.1+c*side*.14)]==='.')){mount=candidate;break;}
+      }
+      if(!mount)continue;
+      const wx=mount.x-fx*.025,wy=mount.y-fy*.025,tx=wx+fx*.08,ty=wy+fy*.08;
+      props.push({...ROOM_MODEL(tx,ty,(vx,vy)=>{
+        for(const side of [-1,1])bathroomPipe(vx+c*side*.12-fx*.08,vy+s*side*.12-fy*.08,1.2,vx+c*side*.12,vy+s*side*.12,1.2,.012);
+        bathroomPipe(vx-c*.12,vy-s*.12,1.2,vx+c*.12,vy+s*.12,1.2,.012);
+        drawBox(boxAt(vx+fx*.012,vy+fy*.012,c,s,.09,.005,.88,1.215),(i,t,L)=>{
+          const hem=HIT.w<.91||Math.abs(HIT.u)>.078;
+          BG[i]=C(BLUE,2.2+L*.23-(hem?.3:0));set(i,' ',0);return true;
+        });
+      }),radius:.5,bathroomAccessory:{kind:'towel',wall:[wx,wy],anchor:[tx,ty,1.2]}});
+    }
+  }
+  return props;
 }

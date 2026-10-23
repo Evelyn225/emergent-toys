@@ -88,3 +88,27 @@ test('bathroom surrounds span real partition gaps and leave the original walking
  assert.ok(r.find(p=>p.kind==='bar').openings===1&&r.find(p=>p.kind==='islandhome').openings===1,JSON.stringify(r));
  for(const p of r)assert.deepEqual(p.problems,[],JSON.stringify(p));
 }));
+test('bathroom paper has an open core with correct axis normals, and mounted fittings stay on real wall faces',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  const bad=[];let paper=0,towels=0,core,normal;
+  for(const kind of Object.keys(ROOM_DEFS).filter(k=>ROOM_DEFS[k].wc)){
+   const r=makeRoom(kind);room=r;mode='room';
+   for(const prop of r.props.filter(p=>p.bathroomAccessory)){
+    const d=prop.bathroomAccessory,[wx,wy]=d.wall,[x,y]=d.anchor,dist=Math.hypot(x-wx,y-wy),nx=(x-wx)/dist,ny=(y-wy)/dist;
+    if(!'#W'.includes(r.grid[Math.floor(wy-ny*.01)]?.[Math.floor(wx-nx*.01)]||' '))bad.push([kind,'floating mount',d]);
+    const pad=d.kind==='towel'?.14:.11;
+    for(const side of [-1,1])if(r.grid[Math.floor(y+nx*side*pad)]?.[Math.floor(x-ny*side*pad)]!=='.')bad.push([kind,'side wall overlap',d]);
+    if(d.kind==='towel')towels++;else{
+     paper++;
+     if(core===undefined){
+      const draw=drawBox,shapes=[];drawBox=(box,shade,ray=rayBox)=>shapes.push({box,ray});try{prop.draw(prop.x,prop.y);}finally{drawBox=draw;}
+      const roll=shapes.find(s=>s.ray===bathroomRayRoll);
+      core=roll.ray(x-.5,y,.65,1,0,0,roll.box);
+      roll.ray(x-.5,y+.035,.65,1,0,0,roll.box);normal={nx:HIT.nx,n:Math.hypot(HIT.nx,HIT.ny,HIT.nz)};
+     }
+    }
+   }
+  }
+  return{bad,paper,towels,core,normal};
+ });assert.deepEqual(r.bad,[]);assert.ok(r.paper>6&&r.towels>6,JSON.stringify(r));assert.ok(r.core<0&&r.normal.nx<-.9&&Math.abs(r.normal.n-1)<1e-8,JSON.stringify(r));
+}));

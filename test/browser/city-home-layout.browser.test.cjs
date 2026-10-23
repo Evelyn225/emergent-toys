@@ -61,3 +61,11 @@ test('Fern has one dock-facing entrance and old saved property doors resolve to 
  assert.ok(r.front&&r.oldClosed&&r.backClosed&&r.gridClosed&&r.trail,JSON.stringify(r));assert.deepEqual(r.meeting,r.door);
  await p.reload();assert.deepEqual(await p.evaluate(()=>owned.homes.find(h=>h.kind==='home_island').door),r.door);
 }));
+
+test('Fern bathroom perimeter walls stay tiled from either side of its doorway',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  enterRoom('islandhome',{ret:[100,100,0]},ROOM_DEFS.islandhome.entry);render(0);
+  const sample=(x,y,mx)=>{px=x;py=y;roomWall(0,mx+.4,.01,.5,3.4,3,1,mx,0,1,false);return BG[0]>>4;};
+  return{outside:sample(20,8,20),inside:sample(20,3,20),bedroom:sample(20,3,3),white:WHITE,wood:BRICK};
+ });assert.equal(r.outside,r.white);assert.equal(r.inside,r.white);assert.equal(r.bedroom,r.wood);
+}));
