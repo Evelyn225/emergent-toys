@@ -30,7 +30,7 @@ function stepFireworks(dt) {
       col: pick(FW_COLS), col2: pick(FW_COLS), kind, n: kind === 'ring' ? 28 : 46, seed: Math.random() * 1e4, boomed: false });
     fwLaunch(shells[shells.length - 1]);
   }
-  for (const s of shells) if (!s.boomed && T - s.t0 > s.rise) { s.boomed = true; fwBoom(s); }
+  for (const s of shells) if (!s.boomed && T - s.t0 > s.rise) { s.boomed = true; fwBoom(s); fireworkSmoke(s); }
 }
 // where star k of shell s is, t seconds after the burst
 function starAt(s, k, t) {

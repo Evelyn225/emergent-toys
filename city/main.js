@@ -350,7 +350,7 @@ function loop(t) {
   stepEvents(dt);
   stepStreetScenes(dt);
   stepGardens(dt);
-  stepHaze(dt);
+  stepHaze(dt); stepWorldSmoke(dt);
   stepPee(dt);
   stepSteam(dt);
   stepPigeons(dt);
