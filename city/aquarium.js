@@ -35,28 +35,98 @@ const TANKS = {
   K: { name: 'KELP FOREST', base: 0.4, top: 2.5, water: GREEN, bright: 0.9 },
   H: { name: 'SEAHORSES', base: 0.7, top: 2.2, water: CYAN, bright: 1.1 },
 };
-// the fish: art facing right (row by row), size in metres, colour by character
-const FISH = {
-  tiny: { art: ['><>'], len: 0.12, h: 0.05, col: (k, c) => [YEL, CYAN, ORANGE, WHITE][k & 3] },
-  sardine: { art: ['>=>'], len: 0.14, h: 0.04, col: () => WHITE },
-  fish: { art: ['><(((o>'], len: 0.32, h: 0.07, col: (k, c) => c === 'o' ? WHITE : [ORANGE, YEL, GRAY, BRICK][k & 3] },
-  clown: { art: ["><|=|o>"], len: 0.2, h: 0.06, col: (k, c) => c === '|' ? WHITE : ORANGE },
-  tang: { art: ['<\\==o>'], len: 0.24, h: 0.08, col: (k, c) => c === '\\' ? YEL : BLUE },
-  angel: { art: [' /|', '<=o>', ' \\|'], len: 0.24, h: 0.24, col: (k, c) => c === 'o' ? WHITE : k & 1 ? YEL : GRAY },
-  octopus: { art: [' .--.', '( oo )', '/\\/\\/\\'], len: 0.36, h: 0.26, col: () => RED },
-  shark: { art: ['       /|', '><=========o>', '      \\/'], len: 1.9, h: 0.45, col: (k, c) => c === 'o' ? WHITE : GRAY },
-  ray: { art: ['   _.--._', '~~(_______)>'], len: 1.3, h: 0.28, col: (k, c) => c === '~' ? GRAY : BRICK },
-  turtle: { art: ['   ____', ' _/####\\_o', '  /    \\'], len: 0.9, h: 0.4, col: (k, c) => c === '#' ? BRICK : GREEN },
-  jelly: { art: ['.-"-.', '(   )', ' )|( ', '(|||)', ' ) ( '], len: 0.34, h: 0.55, col: (k, c) => [MAG, CYAN, WHITE, ORANGE][k & 3] },
-  seahorse: { art: [' _', '(o\\', ' )|', ' (/', '  ~'], len: 0.12, h: 0.3, col: (k, c) => k & 1 ? YEL : ORANGE },
+// ---- the fish: each species a side profile, painted in solid colour the way the animals are. In a fish's own frame
+// x runs 0 (tail) to 1 (snout) as it faces right, y from -0.5 (belly) to 0.5 (back), in its length and height. A
+// shape returns [colour, brightness] (1 = as lit), or null where the fish isn't. Darker over the back and paler
+// underneath, as real fish are; the fins, eye and markings are each species' own.
+// (t: seconds, for a tail beat or a pulse; k: which one, for colour)
+const fishHalf = (x, x0, A) => x < x0 || x > 1 ? 0 : A * Math.pow(Math.sin(Math.PI * Math.pow((x - x0) / (1 - x0), 0.72)), 0.6); // (its half height there)
+const fishBody = (x, y, x0, A) => { // a body tapering from the tail joint x0 to the snout: where y is across it (-1 belly .. 1 back), or -1 outside
+  const hb = fishHalf(x, x0, A);
+  return hb > 1e-4 && Math.abs(y) < hb ? Math.abs(y) / hb * Math.sign(y || 1) : -1;
 };
-const MIRROR = { '<': '>', '>': '<', '(': ')', ')': '(', '/': '\\', '\\': '/', '[': ']', ']': '[', '{': '}', '}': '{' };
-for (const f of Object.values(FISH)) { // pad the rows, and a copy facing left
-  const W = Math.max(...f.art.map(r => r.length));
-  f.art = f.art.map(r => r.padEnd(W));
-  f.left = f.art.map(r => [...r].reverse().map(c => MIRROR[c] || c).join(''));
-  f.W = W;
+const fishShade = n => n > 0 ? 1.05 - n * 0.35 : 1.15 + n * 0.1; // (countershaded: dark back, pale belly; n -1 belly .. 1 back)
+const fishTail = (x, y, x0, spread, beat) => { // a forked tail behind the joint, flicking
+  if (x >= x0 || x < 0) return false;
+  const s = (x0 - x) / x0, yy = y - beat * s * 0.12;
+  return Math.abs(yy) < 0.04 + s * spread && !(s > 0.55 && Math.abs(yy) < (s - 0.55) * spread * 1.4);
+};
+const fishEye = (x, y, ex, ey, r) => Math.hypot((x - ex) * 2.4, y - ey) < r;
+function standardFish(x, y, t, body, belly, { x0 = 0.24, A = 0.42, spread = 0.36, fin = body, eye = 0.84, mark } = {}) {
+  if (fishTail(x, y, x0, spread, Math.sin(t * 7))) return [fin, 0.85];
+  const n = fishBody(x, y, x0, A);
+  if (n === -1) { // outside the body: only the dorsal fin, a low triangle along the back amidships
+    const back = fishHalf(x, x0, A);
+    return x > 0.42 && x < 0.66 && y > 0 && y < back + 0.13 * (0.66 - x) / 0.24 ? [fin, 0.8] : null;
+  }
+  if (fishEye(x, y, eye, 0.08, 0.07)) return [GRAY, 0.15];
+  if (mark) { const m = mark(x, y, n); if (m) return m; }
+  return [n < -0.35 ? belly : body, fishShade(n)];
 }
+const FISH = {
+  tiny: { len: 0.12, h: 0.05, shape: (x, y, t, k) => standardFish(x, y, t, [YEL, CYAN, ORANGE, WHITE][k & 3], WHITE, { A: 0.4 }) },
+  sardine: { len: 0.14, h: 0.04, shape: (x, y, t) => standardFish(x, y, t, BLUE, WHITE, { A: 0.34, spread: 0.3, fin: GRAY,
+    mark: (x, y, n) => n > -0.35 && n < 0.35 ? [WHITE, 1.25 - (x > 0.4 && x < 0.8 && Math.abs(n) < 0.1 && fract(x * 18) < 0.3 ? 0.7 : 0)] : null }) }, // (a silver flank, a row of dark spots)
+  fish: { len: 0.32, h: 0.07, shape: (x, y, t, k) => standardFish(x, y, t, [ORANGE, YEL, GRAY, BRICK][k & 3], [YEL, WHITE, WHITE, YEL][k & 3]) },
+  clown: { len: 0.2, h: 0.06, shape: (x, y, t) => standardFish(x, y, t, ORANGE, ORANGE, { A: 0.44, spread: 0.32, x0: 0.22,
+    mark: x => { for (const bx of [0.34, 0.58, 0.82]) { const d = Math.abs(x - bx); if (d < 0.045) return [WHITE, 1.3]; if (d < 0.065) return [GRAY, 0.2]; } return null; } }) }, // (three white bands, edged black)
+  tang: { len: 0.24, h: 0.08, shape: (x, y, t) => x < 0.3 && fishTail(x, y, 0.26, 0.42, Math.sin(t * 7)) ? [YEL, 1.2] : standardFish(x, y, t, BLUE, BLUE, { A: 0.48, x0: 0.26, spread: 0.42, fin: BLUE,
+    mark: (x, y, n) => n > 0.1 && x > 0.35 && x < 0.75 && Math.abs(y - 0.12 - (x - 0.35) * 0.15) < 0.07 ? [GRAY, 0.2] : null }) }, // (a yellow tail, the dark palette mark)
+  angel: { len: 0.24, h: 0.24, shape: (x, y, t, k) => { // a tall disc, fins streaming up and down behind, vertical stripes
+    const body = k & 1 ? YEL : GRAY, n = fishBody(x, y, 0.3, 0.32);
+    if (n !== -1) { if (fishEye(x, y, 0.82, 0.06, 0.06)) return [GRAY, 0.15]; return [Math.abs(fract(x * 5) - 0.5) < 0.12 ? GRAY : body, Math.abs(fract(x * 5) - 0.5) < 0.12 ? 0.35 : fishShade(n)]; }
+    const fin = (x > 0.12 && x < 0.62) && (Math.abs(y) < 0.5 - (0.62 - x) * 0.25) && Math.abs(y) > 0.28 - (0.62 - x) * 0.5;
+    return fin || fishTail(x, y, 0.3, 0.2, Math.sin(t * 5)) ? [body, 0.75] : null;
+  } },
+  octopus: { len: 0.36, h: 0.26, shape: (x, y, t) => { // the mantle up top, eyes on its side, arms curling under it
+    if (Math.hypot((x - 0.6) / 0.28, (y - 0.18) / 0.3) < 1) return fishEye(x, y, 0.7, 0.08, 0.05) ? [YEL, 0.9] : [RED, fishShade((y - 0.18) / 0.3)];
+    for (let a = 0; a < 4; a++) {
+      const ax = 0.3 + a * 0.13 + 0.05 * Math.sin(t * 1.5 + a + y * 9), top = 0.02;
+      if (y < top && y > -0.5 && Math.abs(x - ax - 0.06 * Math.sin(y * 12 + t * 2 + a)) < 0.035 * (1 + y)) return [RED, fract(y * 18) < 0.3 ? 1.3 : 0.9]; // (suckers)
+    }
+    return null;
+  } },
+  shark: { len: 1.9, h: 0.45, shape: (x, y, t) => { // a torpedo, the tall dorsal, the long upper lobe of the tail, gill slits
+    const beat = Math.sin(t * 2.5);
+    if (x < 0.2) { const s = (0.2 - x) / 0.2, yy = y - beat * s * 0.08; if (yy > -0.05 && yy < 0.06 + s * 0.42 && yy < 0.06 + s * 0.42 && (yy > s * 0.3 - 0.05 || s < 0.5) || yy < 0 && yy > -0.06 - s * 0.2 && s < 0.6) return [GRAY, 0.75]; return null; }
+    if (x > 0.48 && x < 0.66 && y > 0.1 && y < 0.5 - (x - 0.48) * 1.8 + (x - 0.48) * 0.6) return [GRAY, 0.7]; // the dorsal
+    if (x > 0.6 && x < 0.72 && y < -0.08 && y > -0.42 + (x - 0.6) * 2) return [GRAY, 0.8]; // a pectoral fin
+    const n = fishBody(x, y, 0.2, 0.34);
+    if (n === -1) return null;
+    if (fishEye(x, y, 0.9, 0.06, 0.035)) return [GRAY, 0.1];
+    if (x > 0.75 && x < 0.82 && n > -0.2 && n < 0.45 && fract(x * 70) < 0.25) return [GRAY, 0.4]; // the gill slits
+    return [n < -0.25 ? WHITE : GRAY, n < -0.25 ? 1.2 : fishShade(n) * 0.9];
+  } },
+  ray: { len: 1.3, h: 0.28, shape: (x, y, t) => { // side on: a thin disc, its wing tips rippling, the whip of a tail
+    if (x < 0.4) return Math.abs(y + 0.02 - 0.05 * Math.sin(x * 9 + t * 2)) < 0.025 ? [BRICK, 0.7] : null;
+    const tt = (x - 0.4) / 0.6, thick = 0.16 * Math.sin(Math.PI * tt), wave = 0.22 * Math.sin(Math.PI * tt) * Math.sin(t * 1.6 + tt * 4);
+    if (Math.abs(y - wave * 0.3) < thick) return fishEye(x, y, 0.88, 0.05, 0.04) ? [GRAY, 0.15] : [y < wave * 0.3 - thick * 0.3 ? WHITE : BRICK, y < wave * 0.3 - thick * 0.3 ? 1.1 : 0.9];
+    if (Math.abs(y - wave) < 0.05 && tt > 0.15 && tt < 0.85) return [BRICK, 0.8]; // the wing's edge, curling
+    return null;
+  } },
+  turtle: { len: 0.9, h: 0.4, shape: (x, y, t) => { // a domed shell in plates, flippers rowing, a head out front
+    const stroke = Math.sin(t * 1.4);
+    if (y > -0.1 && Math.hypot((x - 0.5) / 0.32, (y + 0.1) / 0.5) < 1) { const plate = Math.abs(fract(x * 7 + (y > 0.15 ? 0.5 : 0)) - 0.5) < 0.06 || Math.abs(y - 0.15) < 0.025; return [BRICK, plate ? 0.5 : 1.05 - y * 0.6]; }
+    if (y <= -0.1 && y > -0.2 && x > 0.2 && x < 0.8) return [YEL, 0.9]; // the pale plastron under it
+    if (x > 0.78 && Math.hypot((x - 0.88) / 0.1, (y + 0.08) / 0.14) < 1) return fishEye(x, y, 0.93, -0.03, 0.03) ? [GRAY, 0.1] : [GREEN, 0.95]; // the head
+    const fx = 0.68 + 0.08 * stroke; if (Math.abs(y + 0.22 + (x - fx) * 1.4) < 0.06 && x > fx - 0.04 && x < fx + 0.2) return [GREEN, 0.85]; // front flipper
+    if (Math.abs(y + 0.18 + (0.3 - x) * 0.6) < 0.04 && x > 0.12 && x < 0.3) return [GREEN, 0.8]; // a hind one
+    return null;
+  } },
+  jelly: { len: 0.34, h: 0.55, shape: (x, y, t, k) => { // a bell, pulsing, and the tentacles trailing under it
+    const col = [MAG, CYAN, WHITE, ORANGE][k & 3], pulse = 1 + 0.12 * Math.sin(t * 3 + k);
+    if (y > 0.05 && Math.hypot((x - 0.5) / (0.42 * pulse), (y - 0.05) / 0.45) < 1) return [col, 0.7 + (y - 0.05) * 1.1 + (Math.hypot((x - 0.5) / (0.42 * pulse), (y - 0.05) / 0.45) > 0.85 ? 0.4 : 0)]; // (a brighter rim)
+    if (y <= 0.05) for (let a = 0; a < 5; a++) { const ax = 0.2 + a * 0.15 + 0.04 * Math.sin(y * 10 - t * 2 + a); if (Math.abs(x - ax) < 0.018 && y > -0.5 + 0.1 * (a & 1)) return [col, 0.55]; }
+    return null;
+  } },
+  seahorse: { len: 0.12, h: 0.3, shape: (x, y, t, k) => { // upright: a curled tail, a belly, a head with its snout out front
+    const col = k & 1 ? YEL : ORANGE, cx = 0.5 + 0.18 * Math.sin((y + 0.5) * 5.5) + 0.03 * Math.sin(t), w = 0.14 + 0.12 * Math.max(0, Math.sin((y + 0.35) * 3.2));
+    if (y > 0.28 && Math.hypot((x - 0.48) / 0.18, (y - 0.38) / 0.1) < 1) return fishEye(x, y, 0.55, 0.4, 0.05) ? [GRAY, 0.1] : [col, 1];
+    if (y > 0.3 && y < 0.42 && x > 0.6 && x < 0.95 && Math.abs(y - 0.36) < 0.035) return [col, 0.85]; // the snout
+    if (y < 0.3 && y > -0.5 && Math.abs(x - cx) < w * (y < -0.25 ? 0.5 : 1)) return [col, fract(y * 14) < 0.2 ? 0.7 : 1]; // ridged rings
+    return null;
+  } },
+};
 // who lives in each kind of tank, per metre of tank: [species, how many] (at least one of each)
 const STOCKING = {
   O: [['shark', 0.12], ['ray', 0.12], ['turtle', 0.06], ['fish', 0.6], ['tiny', 1], ['sardine', 1]],
@@ -113,14 +183,14 @@ function placeFish(run) {
   }
 }
 // the fish character at (u, z) on a run's glass, or null
-function fishAt(run, u, z, flip = 1) {
+// (u along the wall, z up: the shape's in the tank's own coordinates, so either side of the glass sees it the right
+// way round. [colour, brightness] or null)
+function fishAt(run, u, z) {
   for (const s of run.fish) {
-    const f = s.f, q = (u - s.u) / f.len + 0.5, rr = (s.z + f.h / 2 - z) / f.h;
-    if (q < 0 || q >= 1 || rr < 0 || rr >= 1) continue;
-    let art = s.dir * flip > 0 ? f.art : f.left; // (from the far side of the glass it's swimming the other way)
-    if (s.sp === 'jelly' && fract(T * 0.8 + s.ph) < 0.5) art = art.map((r, k) => k > 1 ? r.replace(/[()]/g, '|') : r); // a pulse
-    const ch = art[Math.floor(rr * art.length)][Math.floor((flip > 0 ? q : 1 - q) * f.W)]; // (screen left to right)
-    if (ch !== ' ') return [ch, f.col(s.k, ch)];
+    const f = s.f, q = (u - s.u) / f.len + 0.5, y = (z - s.z) / f.h;
+    if (q < 0 || q >= 1 || y < -0.5 || y >= 0.5) continue;
+    const hit = f.shape(s.dir > 0 ? q : 1 - q, y, T + s.ph * 9, s.k);
+    if (hit) return hit;
   }
   return null;
 }
@@ -141,8 +211,8 @@ function tankCell(i, su, uStep, z, d, side, mx, my, L, c, u) {
   placeFish(run);
   const caustic = noise(u * 2.2 + T * 0.25, z * 3 - T * 0.15, 33);
   BG[i] = C(tk.water, (1 + caustic * 2.2) * tk.bright * (0.6 + 0.4 * Lt / 15));
-  const fish = fishAt(run, u, z, flip);
-  if (fish) return set(i, fish[0], C(fish[1], Lt));
+  const fish = fishAt(run, u, z);
+  if (fish) { BG[i] = C(fish[0], clamp(Lt * fish[1] * 0.75, 1, 15)); return set(i, ' ', 0); } // (solid, like the animals)
   for (let b = 0; b < 6; b++) { // bubbles, rising off the bubbler in the corner
     const bz = tk.base + mod(T * 0.45 + b * 0.37, tk.top - tk.base), bu = run.u0 + 0.22 + 0.025 * Math.sin(T * 3 + b);
     if (Math.abs(u - bu) < Math.max(uStep / 2, 0.018) && Math.abs(z - bz) < Math.max(dz / 2, 0.018)) return set(i, 'o', C(WHITE, Lt * 0.8));
@@ -175,6 +245,33 @@ function aquaWall(i, u, uStep, z, d, mx, my, L) {
     if (wallText(i, u, uStep, z, d, 'OPEN OCEAN', 2.6, 2.3, 0.2, 0.28, C(WHITE, 14), C(BLUE, 2))) return true;
   return set(i, (Math.floor(u * 3) + Math.floor(z * 3)) % 7 ? ' ' : '.', C(BLUE, L * 0.5)), true;
 }
+// one of the big ones as you see it from underneath, in solid colour: along 0 its snout .. 1 its tail, across -1 .. 1
+// its half width. Pale bellies; the shark's pectoral fins swept back and its tail fin edge on, the ray's diamond and
+// whip, the turtle's plastron and flippers. [colour, brightness] or null
+function tunnelBelly(kind, along, across, col) {
+  const x = Math.abs(across);
+  if (kind === 'shark') {
+    const w = along < 0.15 ? Math.sqrt(along / 0.15) * 0.9 : along > 0.7 ? Math.max(0.15, (1 - along) / 0.3) : 1;
+    if (x < w) return x < w * 0.55 ? [WHITE, 11] : [col, 8];
+    if (along > 0.3 && along < 0.46 && x < w + (along - 0.3) * 9 && x > w + (along - 0.36) * 9) return [col, 7]; // the pectoral fins
+    return along > 0.86 && x < 0.12 ? [col, 6] : null; // the tail fin, edge on
+  }
+  if (kind === 'ray') {
+    if (along > 0.7) return x < 0.06 ? [col, 6] : null; // the whip of a tail
+    const w = Math.max(0, 1 - Math.abs(along - 0.35) * 2.6);
+    return x < w ? (x > w * 0.8 ? [col, 7] : [WHITE, 10]) : null;
+  }
+  if (kind === 'turtle') {
+    const w = Math.sin(along * Math.PI) * 0.85;
+    if (along < 0.12) return x < 0.3 ? [GREEN, 9] : null; // the head
+    if (x < w) return x < w * 0.7 ? [YEL, 9] : [col, 7]; // the plastron, the shell's rim round it
+    const flip = along > 0.2 && along < 0.36 ? 1.9 - (along - 0.2) * 6 : along > 0.74 && along < 0.86 ? 1.25 - (along - 0.74) * 3 : 0; // flippers, front and back, tapering behind
+    return flip && x < flip ? [GREEN, 8] : null;
+  }
+  const w = Math.sin(along * Math.PI);
+  if (x < w) return [x < w * 0.5 ? WHITE : col, x < w * 0.5 ? 10 : 11];
+  return along > 0.9 && x < (along - 0.9) * 6 ? [col, 9] : null; // the tail
+}
 // overhead: the tunnel's water with the big ones gliding across it, dark everywhere else with a few blue lights
 function aquaCeil(i, r, x, wx, wy) {
   const tn = AQUA_TUNNEL;
@@ -191,11 +288,13 @@ function aquaCeil(i, r, x, wx, wy) {
     const head = sp > 0 ? tn.y0 - 3 + pos : tn.y1 + 3 - pos, along = (sp > 0 ? head - wy : wy - head) / len;
     const across = (wx - lx - 0.2 * Math.sin(T * 0.3 + lx)) / (wd / 2);
     if (along < 0 || along > 1) continue;
-    const w = kind === 'ray' ? Math.max(0, 1 - Math.abs(along - 0.4) * 2.2) : kind === 'shark' ? (along < 0.15 ? along / 0.15 : along > 0.7 ? Math.max(0.2, (1 - along) / 0.3) : 1) : Math.sin(along * Math.PI);
-    if (Math.abs(across) < w) return set(i, along < 0.12 ? (sp > 0 ? 'v' : '^') : kind === 'turtle' ? '#' : kind === 'shark' && Math.abs(across) > w * 0.7 && along > 0.3 && along < 0.45 ? '<' : '=', C(col, 12));
-    if (kind === 'shark' && along > 0.85 && Math.abs(across) < 0.15) return set(i, '|', C(col, 10)); // the tail
+    const hit = tunnelBelly(kind, along, across, col);
+    if (hit) { BG[i] = C(hit[0], hit[1]); return set(i, ' ', 0); }
   }
-  return set(i, hash(Math.floor(wx * 6), Math.floor(wy * 6 + T * 0.3), 35) > 0.993 ? 'o' : ' ', C(WHITE, 8)); // bubbles going up
+  // bubbles going up: a little silvery disc in the middle of one 1/6 m square in a hundred and fifty
+  const bx = fract(wx * 6) - 0.5, by = fract(wy * 6 + T * 0.3) - 0.5, br = bx * bx + by * by;
+  if (br < 0.06 && hash(Math.floor(wx * 6), Math.floor(wy * 6 + T * 0.3), 35) > 0.993) BG[i] = C(br > 0.035 ? WHITE : CYAN, br > 0.035 ? 11 : 6);
+  return set(i, ' ', 0);
 }
 // underfoot: dark blue carpet with the light off the tanks rippling over it
 function aquaFloor(i, f, wx, wy) {
@@ -260,10 +359,10 @@ function aquaFront(i, u, uStep, z, d, side, L) {
     const f = FISH[s.sp], len = f.len * FACADE_SCALE, h = f.h * FACADE_SCALE;
     const p = mod(T * s.speed + s.ph * 2 * span, 2 * span), there = p < span, fu = u0 + 0.1 + (there ? p : 2 * span - p);
     const fz = 0.04 + h / 2 + (0.24 - h) * s.zf + 0.008 * Math.sin(T * 0.7 + s.wob);
-    const q = (u - fu) / len + 0.5, rr = (fz + h / 2 - z) / h;
-    if (q < 0 || q >= 1 || rr < 0 || rr >= 1) continue;
-    const art = there ? f.art : f.left, ch = art[Math.floor(rr * art.length)][Math.floor(q * f.W)];
-    if (ch !== ' ') return set(i, ch, C(f.col(s.k, ch), open ? glow : glow * 0.6));
+    const q = (u - fu) / len + 0.5, y = (z - fz) / h;
+    if (q < 0 || q >= 1 || y < -0.5 || y >= 0.5) continue;
+    const hit = f.shape(there ? q : 1 - q, y, T + s.ph * 9, s.k);
+    if (hit) { BG[i] = C(hit[0], clamp((open ? glow : glow * 0.6) * hit[1] * 0.75, 1, 15)); return set(i, ' ', 0); }
   }
   if (z < 0.05) return set(i, (Math.floor(u * 80) & 3) ? '.' : '*', C(YEL, 8)); // the sandy bottom
   const ks = Math.floor(u * 40), sx = (ks + 0.5) / 40 + 0.004 * Math.sin(T * 0.6 + z * 30 + ks);

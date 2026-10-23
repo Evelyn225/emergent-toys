@@ -109,7 +109,7 @@ test('an item can be put down and picked up on a hill and ground effects meet th
     carryItem({id:'yoyo',uses:0});held=0;dropHere();
     const item=dropped.at(-1),height=terrainHeight(item.x,item.y);
     const visible=drawArt,calls=[];
-    drawArt=(x,y,z)=>calls.push(z);drawDropped(item,0,1,.007);drawArt=visible;
+    drawArt=(x,y,z)=>calls.push(z);drawDropped(item,0,1,.1);drawArt=visible;
     const nearby=droppedHere()===item,ground=peeGround(px,py).z;
     pickUpDropped(item);
     return {height,z:item.z,renderZ:calls[0],nearby,picked:inv.some(it=>it.id==='yoyo'),ground,error:Math.abs(ground-outdoorGroundHeight(px,py))};

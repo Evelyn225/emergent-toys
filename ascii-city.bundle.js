@@ -14037,7 +14037,7 @@ function citySprites() {
     drawFigure(vx, vy, walkGround(c.x, c.y), 0.18, c._fx || 0, c._fy || 0, copLook(c), walkPose(c, c.chase ? 'run' : 'walk'));
     if (c.chase && fract(T * 3) < 0.5) drawArt(vx, vy, 0.2, 0.03, 0.05, ['!'], () => C(RED, 15));
   }
-  for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.007); } // things you put down
+  for (const d of dropped) if (d.at === '') { const [vx, vy] = R(d.x, d.y); if (Math.hypot(vx, vy) < 12) drawDropped(d, vx, vy, 0.1); } // things you put down
   if (job && job.ride) { // the fare's stop: a big marker hanging over the street
     const [vx, vy] = R(job.ride.dest[0], job.ride.dest[1]);
     drawArt(vx, vy, 0.25, 0.12, 0.18, ['\\ /', ' V '], () => C(YEL, fract(T * 2) < 0.7 ? 15 : 9));
@@ -16602,8 +16602,13 @@ function petWall(i, u, uStep, z, d, mx, my, L) { // walls of fish tanks
   if (z < 0.82 || z > 1.88 || fract(u / 1.6) < 0.03) { set(i, '=', C(GRAY, L)); return true; }
   BG[i] = C(BLUE, 3);
   const lane = Math.floor(z * 7), dir = lane & 1 ? 1 : -1, s = fract(u * 0.7 - T * 0.25 * dir + hash(lane, mx + my, 3));
-  if (s < 0.09) { set(i, (dir > 0 ? '><>' : '<><')[s / 0.03 | 0], C([ORANGE, YEL, RED, CYAN][lane & 3], 15)); return true; }
-  if (hash(Math.floor(u * 10), Math.floor(z * 10 - T * 2), 5) > 0.97) { set(i, 'o', C(WHITE, 8)); return true; } // bubbles
+  if (s < 0.14) { // one of the aquarium's little species, 20 cm long (s runs 0.7 to the metre), swimming along its lane
+    const f = FISH[['tiny', 'clown', 'tang', 'tiny'][lane & 3]], q = s / 0.14;
+    const fish = f.shape(dir > 0 ? q : 1 - q, (fract(z * 7) - 0.5) / 7 / (0.2 * f.h / f.len), T + lane, lane >> 2);
+    if (fish) { BG[i] = C(fish[0], clamp(L * fish[1] * 0.9, 1, 15)); set(i, ' ', 0); return true; }
+  }
+  const bx = fract(u * 10) - 0.5, bz = fract(z * 10 - T * 2) - 0.5; // bubbles: a little disc in one 10 cm square in thirty
+  if (bx * bx + bz * bz < 0.05 && hash(Math.floor(u * 10), Math.floor(z * 10 - T * 2), 5) > 0.97) BG[i] = C(WHITE, 9);
   set(i, ' ', 0); return true;
 }
 function floristWall(i, u, uStep, z, d, mx, my, L) { // vines and blooms on the side walls
@@ -16877,14 +16882,14 @@ function roomSprites() {
     if (s.art) drawArt(s.x - px, s.y - py, s.z, s.w, s.h, typeof s.art === 'function' ? s.art() : s.art, s.col); // (a seat marker draws nothing: what it's on does)
   }
   const at = placeKey();
-  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
+  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 1); // things you put down in here
   const home = homeRecord(room);
   if (home) {
     drawWorkshopPreview();
     const { shelf, pet } = homeLayout(room);
     for (const [k, it] of (home.decor || []).entries()) {
       const offset = (k - ((home.decor.length - 1) / 2)) * 0.3, axis = room.def.shelfAxis || [1,0];
-      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 0.065);
+      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 1);
     }
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
@@ -19938,28 +19943,98 @@ const TANKS = {
   K: { name: 'KELP FOREST', base: 0.4, top: 2.5, water: GREEN, bright: 0.9 },
   H: { name: 'SEAHORSES', base: 0.7, top: 2.2, water: CYAN, bright: 1.1 },
 };
-// the fish: art facing right (row by row), size in metres, colour by character
-const FISH = {
-  tiny: { art: ['><>'], len: 0.12, h: 0.05, col: (k, c) => [YEL, CYAN, ORANGE, WHITE][k & 3] },
-  sardine: { art: ['>=>'], len: 0.14, h: 0.04, col: () => WHITE },
-  fish: { art: ['><(((o>'], len: 0.32, h: 0.07, col: (k, c) => c === 'o' ? WHITE : [ORANGE, YEL, GRAY, BRICK][k & 3] },
-  clown: { art: ["><|=|o>"], len: 0.2, h: 0.06, col: (k, c) => c === '|' ? WHITE : ORANGE },
-  tang: { art: ['<\\==o>'], len: 0.24, h: 0.08, col: (k, c) => c === '\\' ? YEL : BLUE },
-  angel: { art: [' /|', '<=o>', ' \\|'], len: 0.24, h: 0.24, col: (k, c) => c === 'o' ? WHITE : k & 1 ? YEL : GRAY },
-  octopus: { art: [' .--.', '( oo )', '/\\/\\/\\'], len: 0.36, h: 0.26, col: () => RED },
-  shark: { art: ['       /|', '><=========o>', '      \\/'], len: 1.9, h: 0.45, col: (k, c) => c === 'o' ? WHITE : GRAY },
-  ray: { art: ['   _.--._', '~~(_______)>'], len: 1.3, h: 0.28, col: (k, c) => c === '~' ? GRAY : BRICK },
-  turtle: { art: ['   ____', ' _/####\\_o', '  /    \\'], len: 0.9, h: 0.4, col: (k, c) => c === '#' ? BRICK : GREEN },
-  jelly: { art: ['.-"-.', '(   )', ' )|( ', '(|||)', ' ) ( '], len: 0.34, h: 0.55, col: (k, c) => [MAG, CYAN, WHITE, ORANGE][k & 3] },
-  seahorse: { art: [' _', '(o\\', ' )|', ' (/', '  ~'], len: 0.12, h: 0.3, col: (k, c) => k & 1 ? YEL : ORANGE },
+// ---- the fish: each species a side profile, painted in solid colour the way the animals are. In a fish's own frame
+// x runs 0 (tail) to 1 (snout) as it faces right, y from -0.5 (belly) to 0.5 (back), in its length and height. A
+// shape returns [colour, brightness] (1 = as lit), or null where the fish isn't. Darker over the back and paler
+// underneath, as real fish are; the fins, eye and markings are each species' own.
+// (t: seconds, for a tail beat or a pulse; k: which one, for colour)
+const fishHalf = (x, x0, A) => x < x0 || x > 1 ? 0 : A * Math.pow(Math.sin(Math.PI * Math.pow((x - x0) / (1 - x0), 0.72)), 0.6); // (its half height there)
+const fishBody = (x, y, x0, A) => { // a body tapering from the tail joint x0 to the snout: where y is across it (-1 belly .. 1 back), or -1 outside
+  const hb = fishHalf(x, x0, A);
+  return hb > 1e-4 && Math.abs(y) < hb ? Math.abs(y) / hb * Math.sign(y || 1) : -1;
 };
-const MIRROR = { '<': '>', '>': '<', '(': ')', ')': '(', '/': '\\', '\\': '/', '[': ']', ']': '[', '{': '}', '}': '{' };
-for (const f of Object.values(FISH)) { // pad the rows, and a copy facing left
-  const W = Math.max(...f.art.map(r => r.length));
-  f.art = f.art.map(r => r.padEnd(W));
-  f.left = f.art.map(r => [...r].reverse().map(c => MIRROR[c] || c).join(''));
-  f.W = W;
+const fishShade = n => n > 0 ? 1.05 - n * 0.35 : 1.15 + n * 0.1; // (countershaded: dark back, pale belly; n -1 belly .. 1 back)
+const fishTail = (x, y, x0, spread, beat) => { // a forked tail behind the joint, flicking
+  if (x >= x0 || x < 0) return false;
+  const s = (x0 - x) / x0, yy = y - beat * s * 0.12;
+  return Math.abs(yy) < 0.04 + s * spread && !(s > 0.55 && Math.abs(yy) < (s - 0.55) * spread * 1.4);
+};
+const fishEye = (x, y, ex, ey, r) => Math.hypot((x - ex) * 2.4, y - ey) < r;
+function standardFish(x, y, t, body, belly, { x0 = 0.24, A = 0.42, spread = 0.36, fin = body, eye = 0.84, mark } = {}) {
+  if (fishTail(x, y, x0, spread, Math.sin(t * 7))) return [fin, 0.85];
+  const n = fishBody(x, y, x0, A);
+  if (n === -1) { // outside the body: only the dorsal fin, a low triangle along the back amidships
+    const back = fishHalf(x, x0, A);
+    return x > 0.42 && x < 0.66 && y > 0 && y < back + 0.13 * (0.66 - x) / 0.24 ? [fin, 0.8] : null;
+  }
+  if (fishEye(x, y, eye, 0.08, 0.07)) return [GRAY, 0.15];
+  if (mark) { const m = mark(x, y, n); if (m) return m; }
+  return [n < -0.35 ? belly : body, fishShade(n)];
 }
+const FISH = {
+  tiny: { len: 0.12, h: 0.05, shape: (x, y, t, k) => standardFish(x, y, t, [YEL, CYAN, ORANGE, WHITE][k & 3], WHITE, { A: 0.4 }) },
+  sardine: { len: 0.14, h: 0.04, shape: (x, y, t) => standardFish(x, y, t, BLUE, WHITE, { A: 0.34, spread: 0.3, fin: GRAY,
+    mark: (x, y, n) => n > -0.35 && n < 0.35 ? [WHITE, 1.25 - (x > 0.4 && x < 0.8 && Math.abs(n) < 0.1 && fract(x * 18) < 0.3 ? 0.7 : 0)] : null }) }, // (a silver flank, a row of dark spots)
+  fish: { len: 0.32, h: 0.07, shape: (x, y, t, k) => standardFish(x, y, t, [ORANGE, YEL, GRAY, BRICK][k & 3], [YEL, WHITE, WHITE, YEL][k & 3]) },
+  clown: { len: 0.2, h: 0.06, shape: (x, y, t) => standardFish(x, y, t, ORANGE, ORANGE, { A: 0.44, spread: 0.32, x0: 0.22,
+    mark: x => { for (const bx of [0.34, 0.58, 0.82]) { const d = Math.abs(x - bx); if (d < 0.045) return [WHITE, 1.3]; if (d < 0.065) return [GRAY, 0.2]; } return null; } }) }, // (three white bands, edged black)
+  tang: { len: 0.24, h: 0.08, shape: (x, y, t) => x < 0.3 && fishTail(x, y, 0.26, 0.42, Math.sin(t * 7)) ? [YEL, 1.2] : standardFish(x, y, t, BLUE, BLUE, { A: 0.48, x0: 0.26, spread: 0.42, fin: BLUE,
+    mark: (x, y, n) => n > 0.1 && x > 0.35 && x < 0.75 && Math.abs(y - 0.12 - (x - 0.35) * 0.15) < 0.07 ? [GRAY, 0.2] : null }) }, // (a yellow tail, the dark palette mark)
+  angel: { len: 0.24, h: 0.24, shape: (x, y, t, k) => { // a tall disc, fins streaming up and down behind, vertical stripes
+    const body = k & 1 ? YEL : GRAY, n = fishBody(x, y, 0.3, 0.32);
+    if (n !== -1) { if (fishEye(x, y, 0.82, 0.06, 0.06)) return [GRAY, 0.15]; return [Math.abs(fract(x * 5) - 0.5) < 0.12 ? GRAY : body, Math.abs(fract(x * 5) - 0.5) < 0.12 ? 0.35 : fishShade(n)]; }
+    const fin = (x > 0.12 && x < 0.62) && (Math.abs(y) < 0.5 - (0.62 - x) * 0.25) && Math.abs(y) > 0.28 - (0.62 - x) * 0.5;
+    return fin || fishTail(x, y, 0.3, 0.2, Math.sin(t * 5)) ? [body, 0.75] : null;
+  } },
+  octopus: { len: 0.36, h: 0.26, shape: (x, y, t) => { // the mantle up top, eyes on its side, arms curling under it
+    if (Math.hypot((x - 0.6) / 0.28, (y - 0.18) / 0.3) < 1) return fishEye(x, y, 0.7, 0.08, 0.05) ? [YEL, 0.9] : [RED, fishShade((y - 0.18) / 0.3)];
+    for (let a = 0; a < 4; a++) {
+      const ax = 0.3 + a * 0.13 + 0.05 * Math.sin(t * 1.5 + a + y * 9), top = 0.02;
+      if (y < top && y > -0.5 && Math.abs(x - ax - 0.06 * Math.sin(y * 12 + t * 2 + a)) < 0.035 * (1 + y)) return [RED, fract(y * 18) < 0.3 ? 1.3 : 0.9]; // (suckers)
+    }
+    return null;
+  } },
+  shark: { len: 1.9, h: 0.45, shape: (x, y, t) => { // a torpedo, the tall dorsal, the long upper lobe of the tail, gill slits
+    const beat = Math.sin(t * 2.5);
+    if (x < 0.2) { const s = (0.2 - x) / 0.2, yy = y - beat * s * 0.08; if (yy > -0.05 && yy < 0.06 + s * 0.42 && yy < 0.06 + s * 0.42 && (yy > s * 0.3 - 0.05 || s < 0.5) || yy < 0 && yy > -0.06 - s * 0.2 && s < 0.6) return [GRAY, 0.75]; return null; }
+    if (x > 0.48 && x < 0.66 && y > 0.1 && y < 0.5 - (x - 0.48) * 1.8 + (x - 0.48) * 0.6) return [GRAY, 0.7]; // the dorsal
+    if (x > 0.6 && x < 0.72 && y < -0.08 && y > -0.42 + (x - 0.6) * 2) return [GRAY, 0.8]; // a pectoral fin
+    const n = fishBody(x, y, 0.2, 0.34);
+    if (n === -1) return null;
+    if (fishEye(x, y, 0.9, 0.06, 0.035)) return [GRAY, 0.1];
+    if (x > 0.75 && x < 0.82 && n > -0.2 && n < 0.45 && fract(x * 70) < 0.25) return [GRAY, 0.4]; // the gill slits
+    return [n < -0.25 ? WHITE : GRAY, n < -0.25 ? 1.2 : fishShade(n) * 0.9];
+  } },
+  ray: { len: 1.3, h: 0.28, shape: (x, y, t) => { // side on: a thin disc, its wing tips rippling, the whip of a tail
+    if (x < 0.4) return Math.abs(y + 0.02 - 0.05 * Math.sin(x * 9 + t * 2)) < 0.025 ? [BRICK, 0.7] : null;
+    const tt = (x - 0.4) / 0.6, thick = 0.16 * Math.sin(Math.PI * tt), wave = 0.22 * Math.sin(Math.PI * tt) * Math.sin(t * 1.6 + tt * 4);
+    if (Math.abs(y - wave * 0.3) < thick) return fishEye(x, y, 0.88, 0.05, 0.04) ? [GRAY, 0.15] : [y < wave * 0.3 - thick * 0.3 ? WHITE : BRICK, y < wave * 0.3 - thick * 0.3 ? 1.1 : 0.9];
+    if (Math.abs(y - wave) < 0.05 && tt > 0.15 && tt < 0.85) return [BRICK, 0.8]; // the wing's edge, curling
+    return null;
+  } },
+  turtle: { len: 0.9, h: 0.4, shape: (x, y, t) => { // a domed shell in plates, flippers rowing, a head out front
+    const stroke = Math.sin(t * 1.4);
+    if (y > -0.1 && Math.hypot((x - 0.5) / 0.32, (y + 0.1) / 0.5) < 1) { const plate = Math.abs(fract(x * 7 + (y > 0.15 ? 0.5 : 0)) - 0.5) < 0.06 || Math.abs(y - 0.15) < 0.025; return [BRICK, plate ? 0.5 : 1.05 - y * 0.6]; }
+    if (y <= -0.1 && y > -0.2 && x > 0.2 && x < 0.8) return [YEL, 0.9]; // the pale plastron under it
+    if (x > 0.78 && Math.hypot((x - 0.88) / 0.1, (y + 0.08) / 0.14) < 1) return fishEye(x, y, 0.93, -0.03, 0.03) ? [GRAY, 0.1] : [GREEN, 0.95]; // the head
+    const fx = 0.68 + 0.08 * stroke; if (Math.abs(y + 0.22 + (x - fx) * 1.4) < 0.06 && x > fx - 0.04 && x < fx + 0.2) return [GREEN, 0.85]; // front flipper
+    if (Math.abs(y + 0.18 + (0.3 - x) * 0.6) < 0.04 && x > 0.12 && x < 0.3) return [GREEN, 0.8]; // a hind one
+    return null;
+  } },
+  jelly: { len: 0.34, h: 0.55, shape: (x, y, t, k) => { // a bell, pulsing, and the tentacles trailing under it
+    const col = [MAG, CYAN, WHITE, ORANGE][k & 3], pulse = 1 + 0.12 * Math.sin(t * 3 + k);
+    if (y > 0.05 && Math.hypot((x - 0.5) / (0.42 * pulse), (y - 0.05) / 0.45) < 1) return [col, 0.7 + (y - 0.05) * 1.1 + (Math.hypot((x - 0.5) / (0.42 * pulse), (y - 0.05) / 0.45) > 0.85 ? 0.4 : 0)]; // (a brighter rim)
+    if (y <= 0.05) for (let a = 0; a < 5; a++) { const ax = 0.2 + a * 0.15 + 0.04 * Math.sin(y * 10 - t * 2 + a); if (Math.abs(x - ax) < 0.018 && y > -0.5 + 0.1 * (a & 1)) return [col, 0.55]; }
+    return null;
+  } },
+  seahorse: { len: 0.12, h: 0.3, shape: (x, y, t, k) => { // upright: a curled tail, a belly, a head with its snout out front
+    const col = k & 1 ? YEL : ORANGE, cx = 0.5 + 0.18 * Math.sin((y + 0.5) * 5.5) + 0.03 * Math.sin(t), w = 0.14 + 0.12 * Math.max(0, Math.sin((y + 0.35) * 3.2));
+    if (y > 0.28 && Math.hypot((x - 0.48) / 0.18, (y - 0.38) / 0.1) < 1) return fishEye(x, y, 0.55, 0.4, 0.05) ? [GRAY, 0.1] : [col, 1];
+    if (y > 0.3 && y < 0.42 && x > 0.6 && x < 0.95 && Math.abs(y - 0.36) < 0.035) return [col, 0.85]; // the snout
+    if (y < 0.3 && y > -0.5 && Math.abs(x - cx) < w * (y < -0.25 ? 0.5 : 1)) return [col, fract(y * 14) < 0.2 ? 0.7 : 1]; // ridged rings
+    return null;
+  } },
+};
 // who lives in each kind of tank, per metre of tank: [species, how many] (at least one of each)
 const STOCKING = {
   O: [['shark', 0.12], ['ray', 0.12], ['turtle', 0.06], ['fish', 0.6], ['tiny', 1], ['sardine', 1]],
@@ -20016,14 +20091,14 @@ function placeFish(run) {
   }
 }
 // the fish character at (u, z) on a run's glass, or null
-function fishAt(run, u, z, flip = 1) {
+// (u along the wall, z up: the shape's in the tank's own coordinates, so either side of the glass sees it the right
+// way round. [colour, brightness] or null)
+function fishAt(run, u, z) {
   for (const s of run.fish) {
-    const f = s.f, q = (u - s.u) / f.len + 0.5, rr = (s.z + f.h / 2 - z) / f.h;
-    if (q < 0 || q >= 1 || rr < 0 || rr >= 1) continue;
-    let art = s.dir * flip > 0 ? f.art : f.left; // (from the far side of the glass it's swimming the other way)
-    if (s.sp === 'jelly' && fract(T * 0.8 + s.ph) < 0.5) art = art.map((r, k) => k > 1 ? r.replace(/[()]/g, '|') : r); // a pulse
-    const ch = art[Math.floor(rr * art.length)][Math.floor((flip > 0 ? q : 1 - q) * f.W)]; // (screen left to right)
-    if (ch !== ' ') return [ch, f.col(s.k, ch)];
+    const f = s.f, q = (u - s.u) / f.len + 0.5, y = (z - s.z) / f.h;
+    if (q < 0 || q >= 1 || y < -0.5 || y >= 0.5) continue;
+    const hit = f.shape(s.dir > 0 ? q : 1 - q, y, T + s.ph * 9, s.k);
+    if (hit) return hit;
   }
   return null;
 }
@@ -20044,8 +20119,8 @@ function tankCell(i, su, uStep, z, d, side, mx, my, L, c, u) {
   placeFish(run);
   const caustic = noise(u * 2.2 + T * 0.25, z * 3 - T * 0.15, 33);
   BG[i] = C(tk.water, (1 + caustic * 2.2) * tk.bright * (0.6 + 0.4 * Lt / 15));
-  const fish = fishAt(run, u, z, flip);
-  if (fish) return set(i, fish[0], C(fish[1], Lt));
+  const fish = fishAt(run, u, z);
+  if (fish) { BG[i] = C(fish[0], clamp(Lt * fish[1] * 0.75, 1, 15)); return set(i, ' ', 0); } // (solid, like the animals)
   for (let b = 0; b < 6; b++) { // bubbles, rising off the bubbler in the corner
     const bz = tk.base + mod(T * 0.45 + b * 0.37, tk.top - tk.base), bu = run.u0 + 0.22 + 0.025 * Math.sin(T * 3 + b);
     if (Math.abs(u - bu) < Math.max(uStep / 2, 0.018) && Math.abs(z - bz) < Math.max(dz / 2, 0.018)) return set(i, 'o', C(WHITE, Lt * 0.8));
@@ -20078,6 +20153,33 @@ function aquaWall(i, u, uStep, z, d, mx, my, L) {
     if (wallText(i, u, uStep, z, d, 'OPEN OCEAN', 2.6, 2.3, 0.2, 0.28, C(WHITE, 14), C(BLUE, 2))) return true;
   return set(i, (Math.floor(u * 3) + Math.floor(z * 3)) % 7 ? ' ' : '.', C(BLUE, L * 0.5)), true;
 }
+// one of the big ones as you see it from underneath, in solid colour: along 0 its snout .. 1 its tail, across -1 .. 1
+// its half width. Pale bellies; the shark's pectoral fins swept back and its tail fin edge on, the ray's diamond and
+// whip, the turtle's plastron and flippers. [colour, brightness] or null
+function tunnelBelly(kind, along, across, col) {
+  const x = Math.abs(across);
+  if (kind === 'shark') {
+    const w = along < 0.15 ? Math.sqrt(along / 0.15) * 0.9 : along > 0.7 ? Math.max(0.15, (1 - along) / 0.3) : 1;
+    if (x < w) return x < w * 0.55 ? [WHITE, 11] : [col, 8];
+    if (along > 0.3 && along < 0.46 && x < w + (along - 0.3) * 9 && x > w + (along - 0.36) * 9) return [col, 7]; // the pectoral fins
+    return along > 0.86 && x < 0.12 ? [col, 6] : null; // the tail fin, edge on
+  }
+  if (kind === 'ray') {
+    if (along > 0.7) return x < 0.06 ? [col, 6] : null; // the whip of a tail
+    const w = Math.max(0, 1 - Math.abs(along - 0.35) * 2.6);
+    return x < w ? (x > w * 0.8 ? [col, 7] : [WHITE, 10]) : null;
+  }
+  if (kind === 'turtle') {
+    const w = Math.sin(along * Math.PI) * 0.85;
+    if (along < 0.12) return x < 0.3 ? [GREEN, 9] : null; // the head
+    if (x < w) return x < w * 0.7 ? [YEL, 9] : [col, 7]; // the plastron, the shell's rim round it
+    const flip = along > 0.2 && along < 0.36 ? 1.9 - (along - 0.2) * 6 : along > 0.74 && along < 0.86 ? 1.25 - (along - 0.74) * 3 : 0; // flippers, front and back, tapering behind
+    return flip && x < flip ? [GREEN, 8] : null;
+  }
+  const w = Math.sin(along * Math.PI);
+  if (x < w) return [x < w * 0.5 ? WHITE : col, x < w * 0.5 ? 10 : 11];
+  return along > 0.9 && x < (along - 0.9) * 6 ? [col, 9] : null; // the tail
+}
 // overhead: the tunnel's water with the big ones gliding across it, dark everywhere else with a few blue lights
 function aquaCeil(i, r, x, wx, wy) {
   const tn = AQUA_TUNNEL;
@@ -20094,11 +20196,13 @@ function aquaCeil(i, r, x, wx, wy) {
     const head = sp > 0 ? tn.y0 - 3 + pos : tn.y1 + 3 - pos, along = (sp > 0 ? head - wy : wy - head) / len;
     const across = (wx - lx - 0.2 * Math.sin(T * 0.3 + lx)) / (wd / 2);
     if (along < 0 || along > 1) continue;
-    const w = kind === 'ray' ? Math.max(0, 1 - Math.abs(along - 0.4) * 2.2) : kind === 'shark' ? (along < 0.15 ? along / 0.15 : along > 0.7 ? Math.max(0.2, (1 - along) / 0.3) : 1) : Math.sin(along * Math.PI);
-    if (Math.abs(across) < w) return set(i, along < 0.12 ? (sp > 0 ? 'v' : '^') : kind === 'turtle' ? '#' : kind === 'shark' && Math.abs(across) > w * 0.7 && along > 0.3 && along < 0.45 ? '<' : '=', C(col, 12));
-    if (kind === 'shark' && along > 0.85 && Math.abs(across) < 0.15) return set(i, '|', C(col, 10)); // the tail
+    const hit = tunnelBelly(kind, along, across, col);
+    if (hit) { BG[i] = C(hit[0], hit[1]); return set(i, ' ', 0); }
   }
-  return set(i, hash(Math.floor(wx * 6), Math.floor(wy * 6 + T * 0.3), 35) > 0.993 ? 'o' : ' ', C(WHITE, 8)); // bubbles going up
+  // bubbles going up: a little silvery disc in the middle of one 1/6 m square in a hundred and fifty
+  const bx = fract(wx * 6) - 0.5, by = fract(wy * 6 + T * 0.3) - 0.5, br = bx * bx + by * by;
+  if (br < 0.06 && hash(Math.floor(wx * 6), Math.floor(wy * 6 + T * 0.3), 35) > 0.993) BG[i] = C(br > 0.035 ? WHITE : CYAN, br > 0.035 ? 11 : 6);
+  return set(i, ' ', 0);
 }
 // underfoot: dark blue carpet with the light off the tanks rippling over it
 function aquaFloor(i, f, wx, wy) {
@@ -20163,10 +20267,10 @@ function aquaFront(i, u, uStep, z, d, side, L) {
     const f = FISH[s.sp], len = f.len * FACADE_SCALE, h = f.h * FACADE_SCALE;
     const p = mod(T * s.speed + s.ph * 2 * span, 2 * span), there = p < span, fu = u0 + 0.1 + (there ? p : 2 * span - p);
     const fz = 0.04 + h / 2 + (0.24 - h) * s.zf + 0.008 * Math.sin(T * 0.7 + s.wob);
-    const q = (u - fu) / len + 0.5, rr = (fz + h / 2 - z) / h;
-    if (q < 0 || q >= 1 || rr < 0 || rr >= 1) continue;
-    const art = there ? f.art : f.left, ch = art[Math.floor(rr * art.length)][Math.floor(q * f.W)];
-    if (ch !== ' ') return set(i, ch, C(f.col(s.k, ch), open ? glow : glow * 0.6));
+    const q = (u - fu) / len + 0.5, y = (z - fz) / h;
+    if (q < 0 || q >= 1 || y < -0.5 || y >= 0.5) continue;
+    const hit = f.shape(there ? q : 1 - q, y, T + s.ph * 9, s.k);
+    if (hit) { BG[i] = C(hit[0], clamp((open ? glow : glow * 0.6) * hit[1] * 0.75, 1, 15)); return set(i, ' ', 0); }
   }
   if (z < 0.05) return set(i, (Math.floor(u * 80) & 3) ? '.' : '*', C(YEL, 8)); // the sandy bottom
   const ks = Math.floor(u * 40), sx = (ks + 0.5) / 40 + 0.004 * Math.sin(T * 0.6 + z * 30 + ks);
@@ -21668,8 +21772,11 @@ function glassDepth(i, u, z, h, gh, side, L, glow, aviary) {
     const slot = Math.floor(lu * 3), c = (slot + 0.3 + hash(slot, k, seed) * 0.4) / 3, tall = (0.35 + hash(slot, k, seed + 1) * 0.5) * h; // a plant every third of a cell, its trunk at c
     const trunk = Math.abs(lu - c) < 0.012 && lz < tall, crown = Math.hypot((lu - c) * 2.2, lz - tall) < 0.12 + 0.06 * noise(lu * 30, lz * 30, seed);
     const fern = lz < 0.12 + 0.08 * noise(lu * 12, k, seed + 2);
-    if (aviary && Math.hypot((lu - c - 0.08 * Math.sin(T * 0.7 + slot)) * 3, lz - tall * 0.8 - 0.05 * Math.sin(T * 1.3 + slot)) < 0.02 && hash(slot, k, seed + 3) > 0.4)
-      return set(i, fract(T * 4 + slot) < 0.5 ? 'v' : '^', C(BIRD_COL[slot & 7], 13)); // a bird darting between the trees
+    // a bird darting between the trees (in cells: 0.01 is 10 cm): a body, its wings beating up and down
+    const bu = lu - c - 0.08 * Math.sin(T * 0.7 + slot), bz = lz - tall * 0.8 - 0.05 * Math.sin(T * 1.3 + slot), beat = fract(T * 4 + slot) < 0.5 ? 1 : -1;
+    if (aviary && hash(slot, k, seed + 3) > 0.4 && (Math.hypot(bu, bz * 2) < 0.008 || Math.abs(bu) < 0.022 && Math.abs(bz - beat * Math.abs(bu) * 0.6) < 0.006)) {
+      BG[i] = C(BIRD_COL[slot & 7], 11 * fade); return set(i, ' ', 0);
+    }
     if (crown || fern) { BG[i] = C(GREEN, (1.5 + glow * 2) * fade); return set(i, noise(lu * 40, lz * 40, seed + 4) > 0.5 ? '%' : aviary ? '@' : '"', C(GREEN, Math.max(L, glow * 10) * fade)); }
     if (trunk) return set(i, '|', C(BRICK, Math.max(L, glow * 8) * fade));
   }
@@ -22102,18 +22209,64 @@ function aviaryWall(i, su, uStep, z, d, mx, my, L) {
   return set(i, m ? 'x' : ' ', C(GRAY, L * 0.45)), true;
 }
 const BIRD_COL = [RED, GREEN, BLUE, YEL, CYAN, ORANGE, MAG, WHITE];
+// ---- the glasshouses' animals, built like the others (figures.js). Frames: birds 0 wings up, 1 wings down;
+// the butterfly 0 open, 1 folded; the lizard 0 still, 1 a step
+ANIMAL_BODIES.parrot = frame => { // a big parrot in flight: a curved beak, a long tail, broad wings
+  const R = AR, up = frame === 0, parts = [figEll([0, 0, 4], AN_I, [1.6, 3.2, 1.6], () => R.BODY), figEll([0, 3.2, 5], AN_I, [1.3, 1.4, 1.3], () => R.HEAD),
+    figCap([0, 4.3, 5.2], [0, 4.9, 4.3], 0.45, () => R.BEAK), figEll([0, 3.6, 5.3], AN_I, [1.35, 0.5, 0.45], () => R.PALE), // (its pale cheek)
+    figCap([0, -2.6, 3.9], [0, -7, 3.3], 0.6, () => R.MARK), figCap([0, -7, 3.3], [0, -10, 3], 0.32, () => R.MARK)];
+  for (const s of [-1, 1]) parts.push(figCap([s * 1.4, 0.2, 4.4], [s * 6, -0.6, up ? 8 : 1.4], 0.95, () => R.WING), figCap([s * 6, -0.6, up ? 8 : 1.4], [s * 9.5, -1.6, up ? 9.5 : 0.4], 0.55, () => R.WING));
+  return { parts, decals: animalEyes([0, 3.2, 5], 1.3, 1) };
+};
+ANIMAL_BODIES.finch = frame => { // a small bird darting about
+  const R = AR, up = frame === 0, parts = [figEll([0, 0, 3], AN_I, [1.2, 2, 1.2], () => R.BODY), figEll([0, 1.9, 3.8], AN_I, [0.9, 0.95, 0.9], () => R.HEAD),
+    figCap([0, 2.7, 3.8], [0, 3.3, 3.6], 0.3, () => R.BEAK), figCap([0, -1.8, 3.1], [0, -3.6, 3.3], 0.35, () => R.MARK)];
+  for (const s of [-1, 1]) parts.push(figCap([s * 1, 0, 3.4], [s * 4, -0.6, up ? 5.6 : 1.2], 0.55, () => R.WING));
+  return { parts, decals: animalEyes([0, 1.9, 3.8], 0.9, 1) };
+};
+ANIMAL_BODIES.butterfly = frame => { // a slender body; wings flat out, or folded up over its back
+  const R = AR, open = frame === 0, parts = [figCap([0, -1.3, 0], [0, 1.3, 0.1], 0.28, () => R.BODY), figEll([0, 1.5, 0.15], AN_I, [0.35, 0.35, 0.35], () => R.BODY)];
+  for (const s of [-1, 1]) {
+    if (open) { // held up in a shallow V (~35 degrees), as in flight, so they read from the side as well as from above
+      const c = Math.cos(0.6), sn = Math.sin(0.6), tilt = [[s * c, 0, sn], [0, 1, 0], [-s * sn, 0, c]];
+      parts.push(figEll([s * 2.1 * c, 0.7, 2.1 * sn], tilt, [2, 1.6, 0.12], h => Math.hypot(h.l[0] - 0.3, h.l[1] - 0.2) < 0.32 ? R.MARK : R.WING),
+        figEll([s * 1.6 * c, -1, 1.6 * sn], tilt, [1.4, 1.2, 0.12], () => R.WING));
+    }
+    else parts.push(figEll([s * 0.2, 0.4, 2.1], AN_I, [0.12, 1.6, 2], h => Math.hypot(h.l[1] - 0.2, h.l[2] - 0.3) < 0.3 ? R.MARK : R.WING));
+    parts.push(figCap([s * 0.1, 1.7, 0.3], [s * 0.7, 3, 0.9], 0.07, () => R.BODY, false)); // the antennae
+  }
+  return { parts, decals: [] };
+};
+ANIMAL_BODIES.lizard = frame => { // low on its belly, legs splayed, a long tapering tail
+  const R = AR, parts = [figCap([0, -2, 0.7], [0, 3, 0.75], 0.95, () => R.BODY), figEll([0, 4.2, 0.85], AN_I, [0.8, 1.3, 0.6], () => R.HEAD),
+    figCap([0, -2.2, 0.6], [0, -6, 0.4], 0.55, () => R.BODY), figCap([0, -6, 0.4], [0, -9, 0.3], 0.25, () => R.BODY)];
+  for (const [s, y] of [[-1, 2], [1, 2], [-1, -1.3], [1, -1.3]]) { const step = frame && (s * y > 0) ? 0.6 : 0; parts.push(figCap([s * 0.8, y, 0.6], [s * 2, y + 0.6 + step, 0.1], 0.28, () => R.LEG, false)); }
+  return { parts, decals: animalEyes([0, 4.2, 0.85], 0.8, 1) };
+};
+// macaw-bright: a body and a wing in different colours, a long tail in a third
+const PARROT_LOOKS = [[RED, BLUE, YEL], [GREEN, BLUE, RED], [BLUE, YEL, CYAN], [YEL, GREEN, BLUE], [CYAN, BLUE, YEL], [ORANGE, GREEN, RED]]
+  .map(([body, wing, mark]) => animalLook('parrot', { body: [body, 11], wing: [wing, 10], mark: [mark, 10], beak: [GRAY, 3], pale: [WHITE, 13] }));
+const FINCH_LOOKS = BIRD_COL.map(col => animalLook('finch', { body: [col, 11], head: [col, 9], wing: [col, 7], mark: [GRAY, 4], beak: [YEL, 12] }));
+const BUTTERFLY_LOOKS = [YEL, ORANGE, BLUE, MAG, WHITE].map(col => animalLook('butterfly', { body: [GRAY, 2], wing: [col, 13], mark: [GRAY, 2] }));
+const LIZARD_LOOK = animalLook('lizard', { body: [GREEN, 9], head: [GREEN, 10], pale: [YEL, 10], leg: [GREEN, 7] });
+// a prop that draws a shaped animal facing the way it last moved (rooms: one unit a metre). size: as drawAnimal's h
+const animalProp = (x, y, z, size, look, frame, tick) => {
+  const s = { x, y, z, hx: 1, hy: 0, radius: 0.6, tick: o => {
+    const x0 = o.x, y0 = o.y; tick(o); const mx = o.x - x0, my = o.y - y0, d = Math.hypot(mx, my);
+    if (d > 1e-5) { o.hx = mx / d; o.hy = my / d; }
+  }, draw: (vx, vy, o) => drawAnimal(vx, vy, o.z, size, o.hx, o.hy, typeof look === 'function' ? look(o) : look, frame(o)) };
+  return s;
+};
 function aviaryProps(r) {
   const p = [];
   for (const [x, y, s] of [[3, 3, 1.2], [10.5, 3.5, 1.4], [4, 8.5, 1], [11, 8, 1.1]]) p.push(SP(x, y, 1.2 * s, 4 * s, ART.tree, (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : L)));
   for (let k = 0; k < 16; k++) { // birds: loops round the dome, or (seed out) a flurry round you
-    const big = k < 6, col = BIRD_COL[k & 7];
-    p.push({ ...SP(7, 6, big ? 0.26 : 0.14, big ? 0.26 : 0.12, big ? ['  _', ' (o>', '//\\', 'V_/'] : ['v'], (c, row, L) => c === '>' ? C(YEL, 15) : C(col, Math.max(L, 10)), 3),
-      tick: s => {
-        const fed = T - seedT < 12, th = T * (0.4 + (k % 5) * 0.12) + k * 1.7;
-        const tx = fed ? px + Math.cos(th * 2) * (1.4 + (k % 3) * 0.4) : 7 + Math.cos(th) * (2 + (k % 4) * 0.8), ty = fed ? py + Math.sin(th * 2) * (1.4 + (k % 3) * 0.4) : 6 + Math.sin(th) * (1.5 + (k % 3) * 0.6);
-        s.x += (tx - s.x) * 0.05; s.y += (ty - s.y) * 0.05; s.z = fed ? 1.2 + Math.sin(th * 3) * 0.4 : 2 + Math.sin(th * 1.3) * 1.5;
-        s.art = big ? (fract(T * 3 + k / 7) < 0.5 ? ['  _', ' (o>', '//\\', 'V_/'] : ['  _', ' (o>', '\\\\/', 'V_/']) : [fract(T * 6 + k / 5) < 0.5 ? 'v' : '^'];
-      } });
+    const big = k < 6; // (six big parrots, ~0.8 m nose to tail; finches ~15 cm)
+    p.push(animalProp(7, 6, 3, big ? 1.1 : 0.5, big ? PARROT_LOOKS[k] : FINCH_LOOKS[k & 7], () => fract(T * (big ? 3 : 7) + k / 7) < 0.5 ? 0 : 1, s => {
+      const fed = T - seedT < 12, th = T * (0.4 + (k % 5) * 0.12) + k * 1.7;
+      const tx = fed ? px + Math.cos(th * 2) * (1.4 + (k % 3) * 0.4) : 7 + Math.cos(th) * (2 + (k % 4) * 0.8), ty = fed ? py + Math.sin(th * 2) * (1.4 + (k % 3) * 0.4) : 6 + Math.sin(th) * (1.5 + (k % 3) * 0.6);
+      s.x += (tx - s.x) * 0.05; s.y += (ty - s.y) * 0.05; s.z = fed ? 1.2 + Math.sin(th * 3) * 0.4 : 2 + Math.sin(th * 1.3) * 1.5;
+    }));
   }
   p.push(...counterBox(11.5, 10, 0.8, 0.9), standing(11.5, 9.4, GREEN)); // the keeper with the seed
   if (chance(0.6)) p.push(standing(5.5, 6.5, shirt())); if (chance(0.5)) p.push(figProp(8.5, 9, figAnyone(YEL, { kid: true, bot: 'shorts' }), { h: 1.2 }));
@@ -22134,12 +22287,13 @@ function conservatoryProps(r) {
   for (const [x, y] of [[15.2, 6], [19.4, 6.4], [24, 8.6], [17.6, 11.4], [21, 13.4], [14.8, 9.6]]) plant('barrel', x, y, 0.5, 0.5, (c, row, L) => c === '*' ? C(MAG, 15) : C(GREEN, L));
   for (const [x, y] of [[21.8, 7.6], [15.6, 13], [24, 2.4]]) plant('agave', x, y, 0.8, 0.7, (c, row, L) => C(CYAN, L * 0.9));
   for (const [x, y, w] of [[19.5, 4.4, 0.6], [23, 9.6, 0.8], [16.4, 7.4, 0.5]]) p.push(BX(x, y, w, w * 0.7, 0, w * 0.6, solid(BRICK, { top: '.', bright: 1.2 }))); // rocks
-  p.push({ ...SP(19.5, 4.4, 0.25, 0.08, PLANT_ART.lizard, (c, row, L) => C(GREEN, 12), 0.42), tick: s => { s.x = 19.5 + Math.sin(T * 0.2) * 0.25; } }); // a lizard basking on a warm rock
-  for (let k = 0; k < 10; k++) { const col = [YEL, ORANGE, BLUE, MAG, WHITE][k % 5]; // butterflies
-    p.push({ ...SP(6, 8, 0.18, 0.1, ['}{'], (c, row, L) => C(col, 15), 1.2), tick: s => {
+  // a lizard basking on a warm rock, shuffling along it now and then (~0.35 m)
+  p.push(animalProp(19.5, 4.4, 0.42, 0.75, LIZARD_LOOK, o => Math.abs(Math.cos(T * 0.2)) > 0.3 ? Math.floor(T * 4) & 1 : 0, s => { s.x = 19.5 + Math.sin(T * 0.2) * 0.25; }));
+  for (let k = 0; k < 10; k++) // butterflies (~8 cm across)
+    p.push(animalProp(6, 8, 1.2, 0.22, BUTTERFLY_LOOKS[k % 5], () => fract(T * 5 + k / 3) < 0.5 ? 0 : 1, s => {
       const th = T * (0.5 + (k % 3) * 0.2) + k * 2.3;
       s.x = 6.5 + Math.cos(th) * (2 + k % 4) + Math.sin(th * 2.7) * 0.6; s.y = 7.5 + Math.sin(th * 0.8) * (2.5 + k % 3); s.z = 1 + Math.sin(th * 3.1) * 0.6 + (k % 3) * 0.5;
-      s.art = [fract(T * 5 + k / 3) < 0.5 ? '}{' : '||']; } }); }
+    }));
   p.push(BENCHP(4, 13.2, 0, -1), BENCHP(19, 13.2, 0, -1));
   if (chance(0.7)) p.push(standing(8.2, 8.4, shirt())); if (chance(0.6)) p.push(standing(18.5, 6.6, shirt()));
   return p;
@@ -23526,12 +23680,15 @@ function drawRoadBridges() {
 }
 const isWordChar = ch => ch !== undefined && /[A-WYZ0-9$%]/.test(ch); // capitals & digits; not X (lattice/crane art)
 // billboard: rx_,ry_ = position relative to player; z = base height; w,h = world size
-function drawArt(rx_, ry_, z, w, h, art, colFn) {
+// solid: each character is a cell of colour (colFn's colour as the background), the way the animals and fish are drawn;
+// too small to fill half a row or a column, it isn't drawn at all rather than as a speck bigger than itself
+function drawArt(rx_, ry_, z, w, h, art, colFn, solid = false) {
   const depth = dx * rx_ + dy * ry_;
   if (depth < 0.05 || depth > vis) return;
   const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc;
   const left = cx - w * sc / 2, right = cx + w * sc / 2;
   const top = hor - (z + h - eye) * projY / depth, bot = hor - (z - eye) * projY / depth;
+  if (solid && bot - top < 0.5 && right - left < 1) return;
   const c0 = Math.max(0, Math.floor(left)), c1 = Math.min(cols, Math.ceil(right));
   const r0 = Math.max(0, Math.floor(top)), r1 = Math.min(rows, Math.ceil(bot));
   const L = (1 - depth / vis) * 15 * amb, AR = art.length, AC = art[0].length;
@@ -23540,9 +23697,10 @@ function drawArt(rx_, ry_, z, w, h, art, colFn) {
     const ay = Math.min(AR - 1, Math.max(0, (r + 0.5 - top) / (bot - top) * AR | 0)), line = art[ay];
     for (let c = c0; c < c1; c++) {
       const i = r * cols + c;
-      if (depth >= ZB[i]) continue;
+      if (depth * (solid && FL[i] === 1 ? 0.97 : 1) >= ZB[i]) continue; // only the ground gets a subpixel contact allowance; walls and props always occlude
       const ax = Math.min(AC - 1, Math.max(0, (c + 0.5 - left) / (right - left) * AC | 0)), ch = line[ax];
       if (ch === ' ') continue;
+      if (solid) { BG[i] = colFn(ch, ay, L, ax); set(i, ' ', 0); ZB[i] = depth; FL[i] = 0; continue; }
       // up close, a letter that's part of a word (signs on carts, stations, billboards, taxis) gets just the middle
       // cell of its stretched span instead of smearing into "HHHOOOTTT"
       const word = stretched && isWordChar(ch) && (isWordChar(line[ax - 1]) || isWordChar(line[ax + 1]));
@@ -28805,10 +28963,47 @@ const droppedHere = () => {
   const d=droppedNear(px,py,at,mode==='room'?1.1:.2,z);
   return d&&interactionClear(d.x,d.y,(d.displayZ??(d.at?0:d.z||0))+(d.at?.1:.01))?d:null;
 };
-// lying on the ground: the small item picture, shrunk to life size (s = world units per character: cells or metres)
-function drawDropped(d, vx, vy, s) {
-  const [lines, col] = droppedArt(d), art = pad(lines.filter(l => l.length)), W = art[0].length;
-  drawArt(vx, vy, d.displayZ ?? (d.at ? 0 : d.z || 0), W * s * 0.5, art.length * s, art, (c, row, L) => { const k = col(c, row); return C(k >> 4, (k & 15) * clamp(L / 11, 0.3, 1)); });
+// put down or on display: the held picture (the small one if it has none), cropped to what's drawn and painted solid at
+// life size. ITEM_SIZE: its longer side in metres, by item, else by kind; fish go by their weight
+const ITEM_SIZE = {
+  apple: 0.08, luckycoin: 0.025, oldcoin: 0.03, wishcoins: 0.04, goldring: 0.025, pearl: 0.015, diamond: 0.05, redstring: 0.07, tigerbalm: 0.05,
+  key_car_hatch: 0.08, key_car_sports: 0.08, pocketwatch: 0.06, compass: 0.07, divewatch: 0.05, pocketknife: 0.1, fortunecookie: 0.07,
+  cigarettes: 0.09, vape: 0.1, yoyo: 0.06, duck: 0.1, cityglobe: 0.12, replicastar: 0.1, trolleywheel: 0.12, tincan: 0.1,
+  book: 0.18, soggybook: 0.18, vhs: 0.19, postcard: 0.15, vinyl: 0.31, spraypaint: 0.2, mysterybox: 0.2, dinotoy: 0.2, goldfish: 0.22,
+  lantern: 0.3, firecrackers: 0.25, orrery: 0.35, boombox: 0.45, movinglamp: 0.45, skateboard: 0.8, rod: 1.4, carbonrod: 1.4,
+  oldboot: 0.3, seaweed: 0.35, plasticbag: 0.35, tyre: 0.6, trafficcone: 0.7, flipflop: 0.25, bottlemsg: 0.25,
+  hotelmasterpiece: 0.6, hotelharbour: 0.6, hotelstilllife: 0.6,
+};
+const KIND_SIZE = { food: 0.13, drink: 0.14, ingredient: 0.13, junk: 0.3, toy: 0.15, keys: 0.08, smoke: 0.09, pet: 0.45 };
+const itemSize = d => ITEM_SIZE[d.id] ?? (['fish', 'wish'].includes(ITEMS[d.id]?.kind) ? catchLength(d.kg) : KIND_SIZE[ITEMS[d.id]?.kind] ?? 0.15);
+// long things put down lie flat: how much looking down at them shortens their height (a deck, a rod a finger thick,
+// a fish on its side; crabs and squid stay on their legs)
+const LYING = { skateboard: 0.45, rod: 0.2, carbonrod: 0.2 };
+const lying = d => { const I = ITEMS[d.id]; return LYING[d.id] ?? (['fish', 'wish'].includes(I?.kind) && !I.crab && !I.squid ? 0.45 : 0); };
+const droppedPictures = new Map(); // bounded short-lived pictures, including animated items
+function droppedPicture(d) {
+  const key = [d.id, d.uses, d.q, d.of, d.kg, Math.floor(T * 4)].join('|');
+  let p = droppedPictures.get(key);
+  if (p) return p;
+  const dense = !!DENSE[d.id], [lines, col] = (DENSE[d.id] || droppedArt)(d, usesLeft(d));
+  const rowsDrawn = lines.map((l, r) => r).filter(r => lines[r].trim()), r0 = rowsDrawn[0] ?? 0, r1 = rowsDrawn.at(-1) ?? 0;
+  const firsts = lines.map(l => l.search(/\S/)).filter(k => k >= 0), c0 = firsts.length ? Math.min(...firsts) : 0, c1 = Math.max(...lines.map(l => l.trimEnd().length));
+  const art = pad(lines.slice(r0, r1 + 1).map(l => l.slice(c0, c1))), aspect = dense ? D_ASPECT : 0.5;
+  p = { art, col: (ch, r, k) => col(ch, r + r0, k + c0), w: art[0].length * aspect, h: art.length };
+  const flat = lying(d);
+  if (flat && p.h > p.w) { // held upright: turned a quarter onto its side
+    const H = art.length, turned = Array.from({ length: art[0].length }, (_, r) => art.map((l, k) => l[r]).reverse().join(''));
+    p = { art: turned, col: (ch, r, k) => col(ch, H - 1 - k + r0, r + c0), w: p.h, h: p.w };
+  }
+  if (flat) p.h *= flat;
+  if (droppedPictures.size > 200) droppedPictures.clear();
+  droppedPictures.set(key, p);
+  return p;
+}
+// unit: world units in a metre (0.1 outdoors, where a cell is 10 m; 1 indoors)
+function drawDropped(d, vx, vy, unit) {
+  const p = droppedPicture(d), m = itemSize(d) * unit / Math.max(p.w, p.h);
+  drawArt(vx, vy, d.displayZ ?? (d.at ? 0 : d.z || 0), p.w * m, p.h * m, p.art, (c, r, L, k) => { const v = p.col(c, r, k); return C(v >> 4, (v & 15) * clamp(L / 11, 0.3, 1)); }, true);
 }
 
 // ---- the hotbar and the effects you're under, bottom left (in rows, upwards, if they don't fit across; on a phone,
@@ -30625,8 +30820,11 @@ SOLID_SHADE.fishcrate = o => (i, t, L) => {
   const f = HIT.face, u = HIT.u, v = HIT.v;
   if (f === 5) {
     BG[i] = C(WHITE, 1.6 + L * 0.3); // ice
-    const row = Math.floor((v + o.hw) / (2 * o.hw) * 3), k = mod(Math.floor((u + o.hl) * 70 + row * 2), 7);
-    return set(i, row & 1 ? '><(((o>'[k] : '<o)))><'[k], C(row === 1 ? GRAY : BLUE, Math.max(L, 9))), true;
+    // three rows of half-metre fish, 11 cm deep, each row the other way round (in cells: 0.05 is half a metre)
+    const across = (v + o.hw) / (2 * o.hw) * 3, row = Math.floor(across), along = fract((u + o.hl) * 20 + row * 0.37);
+    const fish = standardFish(row & 1 ? 1 - along : along, (fract(across) - 0.5) * 2.4, 0, row === 1 ? GRAY : BLUE, WHITE);
+    if (fish) BG[i] = C(fish[0], clamp(Math.max(L, 9) * fish[1] * 0.8, 1, 15));
+    return set(i, ' ', 0), true;
   }
   BG[i] = C(WARM, (1.1 + L * 0.28) * shadeFace(f));
   return set(i, fract(HIT.w * 60) < 0.25 ? '-' : ' ', C(BRICK, L * 0.8)), true;
@@ -30760,13 +30958,30 @@ function drawFishing() {
   if (f.st === 'reel' && f.catch && f.z > 0.004) { // up out of the water on the end of the line, wriggling
     const d = ITEMS[f.catch.id], q = fishProj(bx, by, Math.max(0.001, f.z - 0.02));
     if (q) {
-      const word = d.kind === 'fish' || d.kind === 'wish' ? (Math.sin(T * 18) > 0 ? '<o)))><' : '<o)))>-') : d.kind === 'junk' ? '[#]' : '(*)';
-      const n = clamp(Math.round(0.05 * projX / q.depth), 1, word.length), w0 = word.slice(0, n);
       fishSeg(p, q, lineCol);
-      for (let k = 0; k < w0.length; k++) fishPut(q.c - w0.length / 2 + k, q.r, q.depth * 0.99, w0[k], C(d.col ?? (d.kind === 'junk' ? GRAY : YEL), 14));
+      if (d.kind === 'fish' || d.kind === 'wish') drawLineFish(bx, by, Math.max(0.001, f.z - 0.02), d.col ?? YEL, catchLength(f.catch.kg)); // (the fish itself, wriggling)
+      else { const word = d.kind === 'junk' ? '[#]' : '(*)', n = clamp(Math.round(0.05 * projX / q.depth), 1, word.length), w0 = word.slice(0, n);
+        for (let k = 0; k < w0.length; k++) fishPut(q.c - w0.length / 2 + k, q.r, q.depth * 0.99, w0[k], C(d.kind === 'junk' ? GRAY : YEL, 14)); } // (junk and curios: their pictures)
     }
   }
 }
+// ---- a fish on the end of a line, built like the other animals but nose-up, hanging: a deep, flat body, a dorsal
+// fin, a forked tail flicking (frames 0, 1), an eye each side. Twelve units snout to tail
+ANIMAL_BODIES.linefish = frame => {
+  const R = AR, flick = frame ? 0.9 : -0.9;
+  const parts = [figEll([0, 0, 6.8], AN_I, [1.1, 2.4, 4.6], h => h.l[1] < -0.45 ? R.PALE : R.BODY), // (a pale belly)
+    figCap([0, 2, 5.4], [0, 3.1, 8], 0.45, () => R.MARK), // the dorsal fin
+    figCap([0, 0, 2.6], [0, 1.9 + flick, -0.2], 0.45, () => R.MARK), figCap([0, 0, 2.6], [0, -1.9 + flick, -0.2], 0.45, () => R.MARK)]; // the tail, forked
+  return { parts, decals: animalEyes([0, 0.7, 10.2], 1.05, 0, 0.3, 0.1) };
+};
+const LINE_FISH_LOOKS = new Map();
+const lineFishLook = col => LINE_FISH_LOOKS.get(col) || LINE_FISH_LOOKS.set(col, animalLook('linefish', { body: [col, 11], mark: [col, 7], pale: [WHITE, 13] })).get(col);
+// (x, y) from you, its snout at height z on the line, side on to you, so long (metres) and hanging below it
+function drawLineFish(x, y, z, col, metres) {
+  const L = metres / 10;
+  drawAnimal(x, y, Math.max(0, z - L), L * FIG_TALL / 12, -dy, dx, lineFishLook(col), Math.sin(T * 16) > 0 ? 0 : 1);
+}
+const catchLength = kg => clamp(0.3 * Math.cbrt((kg || 0.5) / 0.5), 0.12, 1.6); // (a half-kilo fish is about 30 cm; length goes as the cube root of weight)
 function fishRing(bx, by, R, k, lit) {
   const p = fishProj(bx, by, 0);
   if (!p) return;
@@ -30985,7 +31200,7 @@ function drawAnglerLines() {
     const top = fishProj(r.tx, r.ty, r.tz), end = fishProj(lift ? fx_ : r.bx, lift ? fy_ : r.by, lift ? fz + 0.015 : (r.under ? 0 : 0.006));
     if (top && end) fishSeg(top, end, C(WHITE, 8 * Math.max(0.5, amb)));
     if (!lift) { const p = fishProj(r.bx, r.by, r.under ? 0 : 0.003 + Math.sin(T * 2.3 + o.seed) * 0.002); if (p) fishPut(p.c, p.r, p.depth, r.under ? '@' : 'o', C(r.under ? WHITE : RED, 14)); }
-    else { const p = fishProj(fx_, fy_, fz); if (p) { const w0 = Math.sin(T * 16) > 0 ? '<o)><' : '<o)>-', n = clamp(Math.round(0.05 * projX / p.depth), 1, 5); for (let k = 0; k < n; k++) fishPut(p.c - n / 2 + k, p.r, p.depth * 0.99, w0[k], C(SILVER_FISH[o.seed % 3], 14)); } }
+    else drawLineFish(fx_, fy_, fz, SILVER_FISH[o.seed % 3], 0.25); // (their catch, coming up the line)
   }
 }
 const SILVER_FISH = [WHITE, CYAN, YEL];
@@ -32101,7 +32316,31 @@ function stepSteam(dt) {
 // get within a few metres and they all take off at once, away from you, wings going, up and gone
 const flocks = []; // { x, y, birds: [{ dx, dy, ph, dir, fx, fy, fz }], scared: 0 (or the time they went up) }
 let flockT = 0;
-const PIGEON = { peck: pad([' _ ', '(o>', ' "']), look: pad([' _ ', '(o>', '/ \\']), up: ['\\v/'], down: ['/^\\'] };
+// A pigeon, built like the other animals (figures.js): a plump body, small head on a sheened neck, two dark bars on
+// each folded wing, a dark-tipped tail, pink feet. Frames: 0 head up, 1 pecking, 2 wings up, 3 wings down.
+ANIMAL_BODIES.pigeon = frame => {
+  const R = AR, fly = frame >= 2, peck = frame === 1;
+  const head = peck ? [0, 3.4, 1.5] : [0, 2.5, 6.1], neckTop = peck ? [0, 2.9, 2.2] : [0, 2.1, 5.6];
+  const parts = [figEll([0, -0.3, 3.7], AN_I, [2.1, 3.3, 2.1], h => h.l[1] > 0.55 && h.l[2] < 0.2 ? R.PALE : R.BODY), // (a paler breast)
+    figCap([0, 1.6, 4.4], neckTop, 1.15, () => R.MARK), figEll(head, AN_I, [1.05, 1.2, 1.05], () => R.HEAD),
+    figCap(fAdd(head, [0, 1, -0.15]), fAdd(head, [0, 1.95, -0.5]), 0.28, () => R.BEAK), figEll(fAdd(head, [0, 1.05, 0.15]), AN_I, [0.32, 0.25, 0.22], () => R.PALE),
+    figEll([0, -3.9, 3.4], AN_I, [1.15, 1.9, 0.38], h => h.l[1] < -0.55 ? R.PUPIL : R.WING)]; // the tail, its dark band
+  for (const side of [-1, 1]) {
+    if (!fly) {
+      parts.push(figEll([side * 1.75, -0.8, 4.1], AN_I, [0.85, 2.8, 1.25], h => Math.abs(h.l[1] + 0.15) < 0.09 || Math.abs(h.l[1] + 0.45) < 0.09 ? R.PUPIL : R.WING)); // folded, two bars
+      parts.push(figCap([side * 0.7, 0, 1.9], [side * 0.7, 0.4, 0.15], 0.28, () => R.LEG, false));
+    } else {
+      const tipZ = frame === 2 ? 8.5 : 0.8, midZ = frame === 2 ? 6.8 : 2.4;
+      parts.push(figCap([side * 1.6, 0, 4.4], [side * 5.5, -0.6, midZ], 0.9, () => R.WING), figCap([side * 5.5, -0.6, midZ], [side * 9, -1.4, tipZ], 0.5, () => R.PUPIL));
+    }
+  }
+  return { parts, decals: animalEyes(head, 1.05, 2) };
+};
+// three plumages a city flock mixes: the usual slate blue-grey, a dark chequer, a pale one
+const PIGEON_LOOKS = [
+  animalLook('pigeon', { body: [GRAY, 7], head: [GRAY, 6], wing: [GRAY, 9], mark: [GREEN, 6], pupil: [GRAY, 2], beak: [GRAY, 3], pale: [GRAY, 10], leg: [MAG, 6] }),
+  animalLook('pigeon', { body: [GRAY, 4], head: [GRAY, 3], wing: [GRAY, 5], mark: [MAG, 5], pupil: [GRAY, 1], beak: [GRAY, 2], pale: [GRAY, 7], leg: [MAG, 6] }),
+  animalLook('pigeon', { body: [WHITE, 12], head: [WHITE, 11], wing: [WHITE, 13], mark: [GREEN, 9], pupil: [BRICK, 7], beak: [GRAY, 4], pale: [WHITE, 14], leg: [MAG, 7] })];
 const pigeonSpot = (x, y) => { // somewhere a pigeon would be: open ground or a sidewalk, not out in the traffic
   if (map[idx(Math.floor(x), Math.floor(y))] || isWater(x, y) || !free(x, y) || inGardens(x, y)) return false;
   const road = ROAD[idx(Math.floor(x), Math.floor(y))];
@@ -32137,15 +32376,18 @@ function drawPigeons() {
   for (const f of flocks) for (const b of f.birds) {
     const vx = rel(f.x + b.dx - px), vy = rel(f.y + b.dy - py);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    let art;
-    if (f.scared) art = fract(T * 7 + b.ph) < 0.5 ? PIGEON.up : PIGEON.down;
-    else { // pecking, looking about, shuffling a step now and then
+    b.hd ??= b.dir < 0 ? Math.PI : 0; // (which way it's facing)
+    let frame;
+    if (f.scared) { frame = fract(T * 7 + b.ph) < 0.5 ? 2 : 3; b.hd = Math.atan2(b.fy, b.fx); } // flying off the way it's going
+    else { // pecking, looking about, shuffling a step forward and turning now and then
       const t = fract(T * 0.35 + b.ph * 0.1);
-      art = t < 0.55 ? (fract(T * 2.5 + b.ph) < 0.5 ? PIGEON.peck : PIGEON.look) : PIGEON.look;
-      if (t > 0.9) b.dx += b.dir * 0.004 * (1 / 60);
+      frame = t < 0.55 && fract(T * 2.5 + b.ph) < 0.5 ? 1 : 0;
+      if (t > 0.9) { b.dx += Math.cos(b.hd) * 0.004 / 60; b.dy += Math.sin(b.hd) * 0.004 / 60; }
+      const cycle = Math.floor(T * 0.35 + b.ph * 0.1);
+      if (t > 0.97 && b.turned !== cycle) { b.turned = cycle; b.hd += (hash(cycle, Math.floor(b.ph * 100), 2381) - 0.5) * 1.4; } // (up to 40 degrees, once a cycle)
     }
-    if (!f.scared && b.dir < 0) art = art.map(l => [...l].reverse().join('').replace(/>/g, '<'));
-    drawArt(vx, vy, terrainHeight(f.x+b.dx,f.y+b.dy)+(b.z||0), f.scared ? 0.022 : 0.03, f.scared ? 0.007 : 0.028, art, (c, row, L) => c === '>' || c === '<' ? C(ORANGE, Math.max(L, 6)) : row === 1 && c === 'o' ? C(WHITE, Math.max(L, 8)) : C(GRAY, Math.max(L, 6)));
+    if (!inView(vx, vy, 0.05)) continue;
+    drawAnimal(vx, vy, terrainHeight(f.x + b.dx, f.y + b.dy) + (b.z || 0), 0.09, Math.cos(b.hd), Math.sin(b.hd), PIGEON_LOOKS[Math.floor(b.ph * 7) % 7 < 5 ? 0 : Math.floor(b.ph * 7) % 7 - 4], frame);
   }
 }
 // ===== playing a minigame (minigames.js): an arcade cabinet or a work shift takes over the screen. The game's grid is
@@ -34225,6 +34467,8 @@ ANIMAL_BODIES.islandbird=frame=>{
   }
   return {parts,decals:animalEyes([0,3.4,5],1.5,1)};
 };
+// life size, beside people and pigeons: a herring gull ~60 cm nose to tail, a cormorant ~80 cm (the body is ~10.5 units long)
+const ISLAND_BIRD_SIZE={gull:.15,cormorant:.2};
 const ISLAND_GULL_LOOK=animalLook('islandbird',{body:[WHITE,14],wing:[GRAY,10],mark:[GRAY,2],beak:[YEL,13]});
 const ISLAND_CORMORANT_LOOK=animalLook('islandbird',{body:[GRAY,3],wing:[GRAY,2],mark:[GRAY,1],beak:[WARM,10]});
 function islandBirdPose(b,time=T) {
@@ -34241,7 +34485,7 @@ function drawIslandLife() {
     if(!freecam&&!paused&&near(px,py,bird.x,bird.y)<.65&&T-bird.scaredAt>12)bird.scaredAt=T;
     const p=islandBirdPose(bird),vx=p.x-px,vy=p.y-py;
     if(!inView(vx,vy,.12))continue;
-    drawAnimal(vx,vy,p.z,.055,Math.cos(bird.seed),Math.sin(bird.seed),bird.kind==='gull'?ISLAND_GULL_LOOK:ISLAND_CORMORANT_LOOK,p.frame);
+    drawAnimal(vx,vy,p.z,ISLAND_BIRD_SIZE[bird.kind]??.15,Math.cos(bird.seed),Math.sin(bird.seed),bird.kind==='gull'?ISLAND_GULL_LOOK:ISLAND_CORMORANT_LOOK,p.frame);
   }
   if(rain>.2||season()==='winter')return;
   let drawn=0;
@@ -34250,7 +34494,10 @@ function drawIslandLife() {
     if(near(px,py,flower.x,flower.y)>7)continue;
     const phase=T*.6+flower.seed*TAU,x=flower.x+Math.sin(phase)*.12,y=flower.y+Math.cos(phase*.7)*.1,z=terrainHeight(x,y)+.13+Math.sin(phase*2)*.025;
     if(!inView(x-px,y-py,.02))continue;
-    drawArt(x-px,y-py,z,.016,.014,[night>.5?'.':Math.sin(T*12+flower.seed)>0?'v':'^'],()=>C(night>.5?YEL:MAG,night>.5?12:10));drawn++;
+    // by night a firefly's glow; by day a butterfly (~8 cm across), wings beating, facing the way it's going
+    if(night>.5)drawArt(x-px,y-py,z,.016,.014,['.'],()=>C(YEL,12));
+    else drawAnimal(x-px,y-py,z,.026,Math.cos(phase)*.12,-Math.sin(phase*.7)*.07,BUTTERFLY_LOOKS[Math.floor(flower.seed*5)%5],Math.sin(T*12+flower.seed)>0?0:1);
+    drawn++;
   }
 }
 // Hotel rooms have fitted plans and real amenities, with clear routes from the door.

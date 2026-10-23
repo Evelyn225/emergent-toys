@@ -202,3 +202,44 @@ test('an onigiri bite visibly removes the upper rice while keeping the hand stea
  assert.equal(after.uses,before.uses-1);assert.ok(after.ink<before.ink*.8,JSON.stringify({before:before.ink,after:after.ink}));
  for(const key of ['cx','hy','angle','sx','sy'])assert.equal(after.frame[key],before.frame[key],key);
 }));
+
+test('solid dropped pictures stay behind walls and props, with contact allowance only on the floor',()=>withItems(async page=>{
+ const r=await page.evaluate(()=>{
+  a=0;render(0);
+  const sample=kind=>{ZB.fill(.99);FL.fill(kind);BG.fill(C(GRAY,1));
+   drawArt(1,0,eye-.02,.2,.04,['@@'],()=>C(RED,12),true);
+   return BG.reduce((n,v)=>n+(v===C(RED,12)),0);};
+  return{wall:sample(0),floor:sample(1),water:sample(3)};
+ });assert.equal(r.wall,0);assert.equal(r.water,0);assert.ok(r.floor>0,JSON.stringify(r));
+}));
+
+test('put down or on display, items are solid pictures at life size, long ones lying flat', () => withItems(async page => {
+  const r = await page.evaluate(() => {
+    const calls = [], art = drawArt, size = {};
+    drawArt = (x, y, z, w, h, a, col, solid) => calls.push({ w, h, solid });
+    for (const [id, unit] of [['coffee', 1], ['coffee', 0.1], ['apple', 1], ['skateboard', 1], ['rod', 1], ['luckycoin', 1]]) {
+      calls.length = 0; drawDropped({ id, uses: ITEMS[id].uses || 1, x: 0, y: 0, at: 'x' }, 0, 1, unit); size[id + unit] = calls[0];
+    }
+    drawArt = art;
+    const bad = []; // every item that can be carried has a picture to put down and a believable size
+    for (const id in ITEMS) {
+      if (['home', 'car', 'look', 'tattoo'].includes(ITEMS[id].kind)) continue;
+      try { const p = droppedPicture({ id, uses: ITEMS[id].uses || 1, kg: 1 }), s = itemSize({ id, kg: 1 }); if (!p.art.join('').trim() || !(s > 0.01 && s < 1.7)) bad.push(id); } catch (e) { bad.push(id + ': ' + e.message); }
+    }
+    paused = false; enterRoom('florist', { word: 'FLORIST', ret: [100, 100, 0] }, [5, 5.8, -Math.PI / 2]); room.props = [];
+    dropped.length = 0; dropped.push({ id: 'soda', uses: ITEMS.soda.uses, x: 5, y: 4.4, at: placeKey(), z: 0 }); pitch = -0.6; render(0);
+    let letters = 0, red = 0;
+    for (let i = 0; i < cols * rows; i++) { if ('COLA'.includes(CH[i]) && COL[i] >> 4 === WHITE) letters++; if (CH[i] === ' ' && BG[i] >> 4 === RED) red++; }
+    return { size, bad, letters, red };
+  });
+  const { size } = r, long = s => Math.max(s.w, s.h);
+  for (const s of Object.values(size)) assert.equal(s.solid, true);
+  assert.ok(size.coffee1.h > 0.1 && size.coffee1.h < 0.16 && size.coffee1.w < size.coffee1.h, 'a cup ~13 cm tall: ' + JSON.stringify(size.coffee1));
+  assert.ok(Math.abs(size['coffee0.1'].h - size.coffee1.h * 0.1) < 1e-9, 'outdoors in 10 m cells');
+  assert.ok(long(size.apple1) > 0.06 && long(size.apple1) < 0.1, 'an apple ~8 cm: ' + JSON.stringify(size.apple1));
+  assert.ok(size.skateboard1.w > 0.7 && size.skateboard1.h < 0.3, 'a skateboard lies on its wheels: ' + JSON.stringify(size.skateboard1));
+  assert.ok(size.rod1.w > 1.2 && size.rod1.h < 0.03, 'a rod lies on the ground: ' + JSON.stringify(size.rod1));
+  assert.ok(long(size.luckycoin1) < 0.03, 'a coin is a coin: ' + JSON.stringify(size.luckycoin1));
+  assert.deepEqual(r.bad, []);
+  assert.ok(r.red > 4 && r.letters === 0, 'a can on the floor is painted, not spelled out: ' + JSON.stringify(r));
+}));

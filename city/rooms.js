@@ -1048,8 +1048,13 @@ function petWall(i, u, uStep, z, d, mx, my, L) { // walls of fish tanks
   if (z < 0.82 || z > 1.88 || fract(u / 1.6) < 0.03) { set(i, '=', C(GRAY, L)); return true; }
   BG[i] = C(BLUE, 3);
   const lane = Math.floor(z * 7), dir = lane & 1 ? 1 : -1, s = fract(u * 0.7 - T * 0.25 * dir + hash(lane, mx + my, 3));
-  if (s < 0.09) { set(i, (dir > 0 ? '><>' : '<><')[s / 0.03 | 0], C([ORANGE, YEL, RED, CYAN][lane & 3], 15)); return true; }
-  if (hash(Math.floor(u * 10), Math.floor(z * 10 - T * 2), 5) > 0.97) { set(i, 'o', C(WHITE, 8)); return true; } // bubbles
+  if (s < 0.14) { // one of the aquarium's little species, 20 cm long (s runs 0.7 to the metre), swimming along its lane
+    const f = FISH[['tiny', 'clown', 'tang', 'tiny'][lane & 3]], q = s / 0.14;
+    const fish = f.shape(dir > 0 ? q : 1 - q, (fract(z * 7) - 0.5) / 7 / (0.2 * f.h / f.len), T + lane, lane >> 2);
+    if (fish) { BG[i] = C(fish[0], clamp(L * fish[1] * 0.9, 1, 15)); set(i, ' ', 0); return true; }
+  }
+  const bx = fract(u * 10) - 0.5, bz = fract(z * 10 - T * 2) - 0.5; // bubbles: a little disc in one 10 cm square in thirty
+  if (bx * bx + bz * bz < 0.05 && hash(Math.floor(u * 10), Math.floor(z * 10 - T * 2), 5) > 0.97) BG[i] = C(WHITE, 9);
   set(i, ' ', 0); return true;
 }
 function floristWall(i, u, uStep, z, d, mx, my, L) { // vines and blooms on the side walls
@@ -1323,14 +1328,14 @@ function roomSprites() {
     if (s.art) drawArt(s.x - px, s.y - py, s.z, s.w, s.h, typeof s.art === 'function' ? s.art() : s.art, s.col); // (a seat marker draws nothing: what it's on does)
   }
   const at = placeKey();
-  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 0.07); // things you put down in here
+  for (const d of dropped) if (d.at === at) drawDropped(d, d.x - px, d.y - py, 1); // things you put down in here
   const home = homeRecord(room);
   if (home) {
     drawWorkshopPreview();
     const { shelf, pet } = homeLayout(room);
     for (const [k, it] of (home.decor || []).entries()) {
       const offset = (k - ((home.decor.length - 1) / 2)) * 0.3, axis = room.def.shelfAxis || [1,0];
-      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 0.065);
+      drawDropped({ ...it, displayZ: 1.07 }, shelf[0] + axis[0]*offset - px, shelf[1] + axis[1]*offset - py, 1);
     }
     const pets = home.pets || (home.pet ? [home.pet] : []);
     // the pets: sat by their spot, turning to watch you when you're close, else gazing out into the room
