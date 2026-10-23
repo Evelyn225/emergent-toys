@@ -6061,6 +6061,11 @@ function surfaceAt(mode, room, x, y) {
   if (kind === 'construction' || kind === 'yard') return 'gravel';
   return 'stone';
 }
+// Outdoor sources stay in world coordinates while the listener is in a room.
+function audioWorldPosition(mode,room,x,y) {
+  const ret=mode==='room'&&(room?.ret||room?.lobby?.ret);
+  return ret?[ret[0],ret[1]]:[x,y];
+}
 // One source of truth for recordings, prepared upload assets and exact in-game labels.
 // Originals stay in audio/ascii city/. Null files deliberately skip the entire utterance.
 const TRANSIT_ASSETS = {
@@ -23101,7 +23106,7 @@ ROOM_DEFS.stripclub = { grid: boxRoom(CLUB_W, CLUB_H), block: (x, y) => x < 1.75
     for (const y of [5.2, 6.8]) { p.push(STOOL(3.05, y, MAG)); if (chance(busy)) p.push({ ...sitting(3.05, y, shirt(), 0.6), face: [-1, 0] }); } // stools at the bar, facing it
     p.push(BX(15.5, 11.5, 1.6, 1.4, 0, 2.4, (i, t, L) => { BG[i] = C(RED, 1 + L * 0.1); return set(i, fract(HIT.u * 6) < 0.3 ? '|' : ' ', C(RED, L * 1.1)), true; })); // the VIP booth, curtained off
     p.push({ ...SP(13.6, 11.2, 0.6, 0.35, ['VIP'], () => C(YEL, 15), 2.2) });
-    p.push(standing(13.4, 10.2, GRAY)); // the host by the curtain
+    p.push({...standing(13.4, 10.2, GRAY),service:'vip'}); // the host by the curtain
     p.push({ vm: { kind: 'CIGARETTES', c: 0, s: 1, fs: -1 }, x: 1.4, y: 9.8 }); // a cigarette machine by the bar, the same as the ones on the street
     return p;
   } };
@@ -24365,7 +24370,7 @@ function interactionClear(x,y,z,ignore=null) {
   if(inside) {
     const saved={...HIT};let clear=true;
     try {
-      for(const prop of room.props)if(prop!==ignore&&!(ignore&&prop.furnishingKey===ignore.key)&&prop.box&&!prop.walk) {
+      for(const prop of room.props)if(prop!==ignore&&!(ignore&&prop.furnishingKey===ignore.key)&&prop.box&&!prop.walk&&!prop.shotPermeable) {
         const t=rayBox(px,py,eye,ex,ey,ez,prop.box);
         if(t>.01&&t<.98){clear=false;break;}
       }
@@ -24374,7 +24379,7 @@ function interactionClear(x,y,z,ignore=null) {
   }
   return true;
 }
-function interactionScore(x,y,z0,z1,radius,reach,ignore=null) {
+function interactionScore(x,y,z0,z1,radius,reach,ignore=null,strict=false) {
   const eye=interactionEye();
   const inside=mode==='room',ex=inside?x-px:rel(x-px),ey=inside?y-py:rel(y-py),d=Math.hypot(ex,ey);
   if(d>reach)return Infinity;
@@ -24383,15 +24388,15 @@ function interactionScore(x,y,z0,z1,radius,reach,ignore=null) {
   const slope=pitch*rows/projY,aimZ=eye+slope*Math.max(.01,forward),z=clamp(aimZ,z0,z1);
   const horizontal=Math.max(0,Math.abs(Math.atan2(side,Math.max(.001,forward)))-Math.atan2(radius,Math.max(.001,d)));
   const vertical=Math.abs(Math.atan2(z-eye,Math.max(.001,d))-Math.atan(slope));
-  if(horizontal>.23||vertical>.32||!interactionClear(x,y,z,ignore))return Infinity;
+  if(horizontal>(strict?.12:.23)||vertical>(strict?.12:.32)||!interactionClear(x,y,z,ignore))return Infinity;
   return horizontal*horizontal+vertical*vertical*.7+.012*d/reach;
 }
 function interactionFocus() {
-  if(!['walk','room','roof'].includes(mode)||sleep||freecam||wanted.busted||mode==='room'&&['jail','train'].includes(room.kind)||mode==='walk'&&elWalkGround(px,py)>EL_TREAD)return null;
+  if(!['walk','room','roof'].includes(mode)||sleep||freecam||wanted.busted||mode==='room'&&room.kind==='train'||mode==='walk'&&elWalkGround(px,py)>EL_TREAD)return null;
   const inside=mode==='room',unit=inside?1:.1;
   let best=null,score=Infinity;
-  const offer=(kind,who,x,y,z0,z1,radius,reach,ignore=null)=>{
-    const value=interactionScore(x,y,z0,z1,radius,reach,ignore);
+  const offer=(kind,who,x,y,z0,z1,radius,reach,ignore=null,strict=false)=>{
+    const value=interactionScore(x,y,z0,z1,radius,reach,ignore,strict);
     if(value<score){score=value;best={kind,who};}
   };
   const at=placeKey();
@@ -24400,10 +24405,12 @@ function interactionFocus() {
     offer('drop',d,d.x,d.y,z,z+.2*unit,.16*unit,inside?1.6:.28);
   }
   if(inside) {
-    for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part);
+    for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
     const keeper=room.def.keeper;
-    for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12))
-      offer('room-person',p,p.x,p.y,.3,p.pose==='sit'?1.4:1.8,.28,1.8);
+    for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
+      const seated=typeof p.pose==='string'&&p.pose.startsWith('sit');
+      offer(p.service?'service':'room-person',p,p.x,p.y,.3,seated?(p.seatZ??.45)+1.05:1.8,.28,1.8);
+    }
     if(keeper&&!room.keeperDead)offer('keeper',keeper,...keeper,.7,1.8,.28,2);
   }else if(mode==='walk') {
     for(const p of [...people,...fairFolk])if(!p.hidden&&!p.dead&&!p.flee&&!p.down) {
@@ -24417,14 +24424,14 @@ function interactionFocus() {
 function focusedInteractionPrompt(target=interactionFocus()) {
   if(target?.kind==='home-fixture')return homeFixturePrompt(target.who);
   if(target?.kind==='drop')return `E: pick up the ${itemName(target.who)}`;
-  if(target?.kind==='person'||target?.kind==='room-person')return 'E: talk';
+  if(target?.kind==='person'||target?.kind==='room-person'&&!target.who.cabbie)return 'E: talk';
   return '';
 }
 function useFocusedInteraction(target=interactionFocus()) {
   if(target?.kind==='home-fixture'){homeFixtureUse(target.who);return true;}
   if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
   if(target?.kind==='person'){talkTo(target.who);return true;}
-  if(target?.kind==='room-person'){talkInRoom();return true;}
+  if(target?.kind==='room-person'&&!target.who.cabbie){talkInRoom();return true;}
   return false;
 }
 // ---- actions
@@ -26536,11 +26543,7 @@ function playClip(name, gain, when = actx.currentTime, spatial=null) {
   });
 }
 function worldSoundProfile(x,y,z,range=180,reference=14) {
-  let x0=px,y0=py,z0=eye;
-  if(mode==='room') {
-    const ret=room.ret||room.lobby?.ret;
-    if(ret){[x0,y0]=ret;z0=terrainHeight(x0,y0)+.17;}
-  }
+  const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'?terrainHeight(x0,y0)+.17:eye;
   return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
 let peeLoopVoice = null;
@@ -26581,7 +26584,8 @@ const sirens = new Map(); // car -> voice
 const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
+  const [lx,ly]=audioWorldPosition(mode,room,px,py);
+  for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - lx), rel(c.y - ly)) < SIREN_R) {
     const recorded = c.kind === 'police';
     if (recorded && !policeSirenBuffer) continue; // try next frame after the shared clip finishes loading
     const o = recorded ? actx.createBufferSource() : actx.createOscillator();
@@ -26594,7 +26598,7 @@ function tickSirens(indoors) {
     sirens.set(c, { o, lp, g, p, recorded, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
-    const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
+    const rx = rel(c.ex - lx), ry = rel(c.ey - ly), d = Math.hypot(rx, ry) || 0.01;
     if (!cars.includes(c) || !code(c) || wanted.busted || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     const doppler = clamp(34 / (34 - vr), 0.5, 2);
@@ -26647,7 +26651,7 @@ function audioTick(dt) {
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record:homeRecordAudio(), district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
-    wilderness:worldReady&&!!wildIslandAt(...(mode==='room'?(room.ret||room.lobby?.ret||[px,py]).slice(0,2):[px,py])),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
+    wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
@@ -35050,27 +35054,27 @@ ROOM_DEFS.idea={grid:boxRoom(18,14),entry:[9,12.4,-Math.PI/2],height:3.4,light:.
 ROOM_CEILS.idea=(i)=>{BG[i]=C(WHITE,5);set(i,' ',0);};
 DENSE.camera=()=>sculpt(36,20,(x,y)=>{
   const dx=Math.max(Math.abs(x)-7,0),dy=Math.max(Math.abs(y)-3.6,0);
-  if(Math.hypot(dx,dy)>1.5)return y>-6&&y<-4.9&&x>3&&x<6?[' ',C(GRAY,9)]:null;
+  if(Math.hypot(dx,dy)>1.5)return y>-6&&y<-4.9&&x>3&&x<6?['#',C(GRAY,9)]:null;
   const lens=Math.hypot(x-1.5,y);
-  if(lens<3.3){if(lens>2.6)return [' ',C(GRAY,6+4*dSphere(x-1.5,y,3.3))];return [' ',C(x<1&&y<-1?WHITE:BLUE,x<1&&y<-1?11:2+3*dSphere(x-1.5,y,2.7))];}
-  if(x<-4&&y<-1.8)return [' ',C(CYAN,4)];
-  return [' ',C(GRAY,x>6?2:3+dLight(-.25,-.4,.8)*5)];
+  if(lens<3.3){if(lens>2.6)return ['#',C(GRAY,6+4*dSphere(x-1.5,y,3.3))];return ['#',C(x<1&&y<-1?WHITE:BLUE,x<1&&y<-1?11:2+3*dSphere(x-1.5,y,2.7))];}
+  if(x<-4&&y<-1.8)return ['#',C(CYAN,4)];
+  return ['#',C(GRAY,x>6?2:3+dLight(-.25,-.4,.8)*5)];
 });
 // Flatpacks keep their own silhouette in the bag and in the player's hands.
 function heldFurnitureFlatpack(it) {
-  return sculpt(40,26,(x,y)=>{
+  return sculpt(64,26,(x,y)=>{
     const u=x+17,v=y+8;
     if(u<0||u>34)return null;
     const top=-u*.14,edge=top+5;
     if(v<top||v>edge+15)return null;
     const lid=v<edge,right=u>27,tape=Math.abs(u-16)<1.1;
-    if(tape)return [' ',C(STONE,lid?9:7)];
+    if(tape)return ['#',C(STONE,lid?9:7)];
     if(!lid&&!right&&u>3&&u<12&&v>edge+4&&v<edge+10){
       const icon=(Math.abs(u-7.5)<3.5&&Math.abs(v-edge-7)<.45)||(Math.abs(u-5)<.45&&v>edge+7)||(Math.abs(u-10)<.45&&v>edge+7);
       return [icon?'|':' ',C(BRICK,7)];
     }
     if(!lid&&!right&&u>19&&u<24&&v>edge+9&&v<edge+12)return ['|',C(BRICK,3)];
-    return [' ',C(WARM,lid?8:right?4:6)];
+    return ['#',C(WARM,lid?8:right?4:6)];
   });
 }
 for(const id of Object.keys(HOME_FURNITURE))if(id.startsWith('f_'))DENSE[id]=heldFurnitureFlatpack;

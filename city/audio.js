@@ -197,11 +197,7 @@ function playClip(name, gain, when = actx.currentTime, spatial=null) {
   });
 }
 function worldSoundProfile(x,y,z,range=180,reference=14) {
-  let x0=px,y0=py,z0=eye;
-  if(mode==='room') {
-    const ret=room.ret||room.lobby?.ret;
-    if(ret){[x0,y0]=ret;z0=terrainHeight(x0,y0)+.17;}
-  }
+  const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'?terrainHeight(x0,y0)+.17:eye;
   return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
 let peeLoopVoice = null;
@@ -242,7 +238,8 @@ const sirens = new Map(); // car -> voice
 const SIREN_R = 28; // heard out to here (280m), fading to nothing at the edge
 function tickSirens(indoors) {
   const now = actx.currentTime, right = [-Math.sin(a), Math.cos(a)];
-  for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - px), rel(c.y - py)) < SIREN_R) {
+  const [lx,ly]=audioWorldPosition(mode,room,px,py);
+  for (const c of cars) if (code(c) && !wanted.busted && !sirens.has(c) && Math.hypot(rel(c.x - lx), rel(c.y - ly)) < SIREN_R) {
     const recorded = c.kind === 'police';
     if (recorded && !policeSirenBuffer) continue; // try next frame after the shared clip finishes loading
     const o = recorded ? actx.createBufferSource() : actx.createOscillator();
@@ -255,7 +252,7 @@ function tickSirens(indoors) {
     sirens.set(c, { o, lp, g, p, recorded, t0: Math.random() * 5 });
   }
   for (const [c, v] of sirens) {
-    const rx = rel(c.ex - px), ry = rel(c.ey - py), d = Math.hypot(rx, ry) || 0.01;
+    const rx = rel(c.ex - lx), ry = rel(c.ey - ly), d = Math.hypot(rx, ry) || 0.01;
     if (!cars.includes(c) || !code(c) || wanted.busted || d > SIREN_R + 4) { v.g.gain.setTargetAtTime(0, now, 0.3); v.o.stop(now + 1.5); sirens.delete(c); continue; }
     const vr = -(c.hx * rx + c.hy * ry) / d * c.v; // closing speed, cells/s (sound: ~34 cells/s)
     const doppler = clamp(34 / (34 - vr), 0.5, 2);
@@ -308,7 +305,7 @@ function audioTick(dt) {
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record:homeRecordAudio(), district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
-    wilderness:worldReady&&!!wildIslandAt(...(mode==='room'?(room.ret||room.lobby?.ret||[px,py]).slice(0,2):[px,py])),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
+    wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);

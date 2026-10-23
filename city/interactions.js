@@ -26,7 +26,7 @@ function interactionClear(x,y,z,ignore=null) {
   if(inside) {
     const saved={...HIT};let clear=true;
     try {
-      for(const prop of room.props)if(prop!==ignore&&!(ignore&&prop.furnishingKey===ignore.key)&&prop.box&&!prop.walk) {
+      for(const prop of room.props)if(prop!==ignore&&!(ignore&&prop.furnishingKey===ignore.key)&&prop.box&&!prop.walk&&!prop.shotPermeable) {
         const t=rayBox(px,py,eye,ex,ey,ez,prop.box);
         if(t>.01&&t<.98){clear=false;break;}
       }
@@ -35,7 +35,7 @@ function interactionClear(x,y,z,ignore=null) {
   }
   return true;
 }
-function interactionScore(x,y,z0,z1,radius,reach,ignore=null) {
+function interactionScore(x,y,z0,z1,radius,reach,ignore=null,strict=false) {
   const eye=interactionEye();
   const inside=mode==='room',ex=inside?x-px:rel(x-px),ey=inside?y-py:rel(y-py),d=Math.hypot(ex,ey);
   if(d>reach)return Infinity;
@@ -44,15 +44,15 @@ function interactionScore(x,y,z0,z1,radius,reach,ignore=null) {
   const slope=pitch*rows/projY,aimZ=eye+slope*Math.max(.01,forward),z=clamp(aimZ,z0,z1);
   const horizontal=Math.max(0,Math.abs(Math.atan2(side,Math.max(.001,forward)))-Math.atan2(radius,Math.max(.001,d)));
   const vertical=Math.abs(Math.atan2(z-eye,Math.max(.001,d))-Math.atan(slope));
-  if(horizontal>.23||vertical>.32||!interactionClear(x,y,z,ignore))return Infinity;
+  if(horizontal>(strict?.12:.23)||vertical>(strict?.12:.32)||!interactionClear(x,y,z,ignore))return Infinity;
   return horizontal*horizontal+vertical*vertical*.7+.012*d/reach;
 }
 function interactionFocus() {
-  if(!['walk','room','roof'].includes(mode)||sleep||freecam||wanted.busted||mode==='room'&&['jail','train'].includes(room.kind)||mode==='walk'&&elWalkGround(px,py)>EL_TREAD)return null;
+  if(!['walk','room','roof'].includes(mode)||sleep||freecam||wanted.busted||mode==='room'&&room.kind==='train'||mode==='walk'&&elWalkGround(px,py)>EL_TREAD)return null;
   const inside=mode==='room',unit=inside?1:.1;
   let best=null,score=Infinity;
-  const offer=(kind,who,x,y,z0,z1,radius,reach,ignore=null)=>{
-    const value=interactionScore(x,y,z0,z1,radius,reach,ignore);
+  const offer=(kind,who,x,y,z0,z1,radius,reach,ignore=null,strict=false)=>{
+    const value=interactionScore(x,y,z0,z1,radius,reach,ignore,strict);
     if(value<score){score=value;best={kind,who};}
   };
   const at=placeKey();
@@ -61,10 +61,12 @@ function interactionFocus() {
     offer('drop',d,d.x,d.y,z,z+.2*unit,.16*unit,inside?1.6:.28);
   }
   if(inside) {
-    for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part);
+    for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
     const keeper=room.def.keeper;
-    for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12))
-      offer('room-person',p,p.x,p.y,.3,p.pose==='sit'?1.4:1.8,.28,1.8);
+    for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
+      const seated=typeof p.pose==='string'&&p.pose.startsWith('sit');
+      offer(p.service?'service':'room-person',p,p.x,p.y,.3,seated?(p.seatZ??.45)+1.05:1.8,.28,1.8);
+    }
     if(keeper&&!room.keeperDead)offer('keeper',keeper,...keeper,.7,1.8,.28,2);
   }else if(mode==='walk') {
     for(const p of [...people,...fairFolk])if(!p.hidden&&!p.dead&&!p.flee&&!p.down) {
@@ -78,13 +80,13 @@ function interactionFocus() {
 function focusedInteractionPrompt(target=interactionFocus()) {
   if(target?.kind==='home-fixture')return homeFixturePrompt(target.who);
   if(target?.kind==='drop')return `E: pick up the ${itemName(target.who)}`;
-  if(target?.kind==='person'||target?.kind==='room-person')return 'E: talk';
+  if(target?.kind==='person'||target?.kind==='room-person'&&!target.who.cabbie)return 'E: talk';
   return '';
 }
 function useFocusedInteraction(target=interactionFocus()) {
   if(target?.kind==='home-fixture'){homeFixtureUse(target.who);return true;}
   if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
   if(target?.kind==='person'){talkTo(target.who);return true;}
-  if(target?.kind==='room-person'){talkInRoom();return true;}
+  if(target?.kind==='room-person'&&!target.who.cabbie){talkInRoom();return true;}
   return false;
 }

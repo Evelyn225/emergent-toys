@@ -202,3 +202,18 @@ test('decoded loop output repeats sample-exactly across multiple wraps', () => f
   });
   assert.ok(result.every(r => r.error < 1e-6), JSON.stringify(result));
 }));
+
+test('indoor sirens use the actual outdoor location instead of the room furniture coordinates', () => fixture(async page => {
+  const result=await page.evaluate(()=>{
+    const c={kind:'amb',state:'out',returning:false,x:12,y:18,ex:12,ey:18,hx:1,hy:0,v:0};cars.push(c);
+    enterRoom('islandshelter',{ret:[626,195,0]},[12,18,0]);
+    tickSirens(true);const mainland=sirens.size;
+    Object.assign(c,{x:628,y:195,ex:628,ey:195});tickSirens(true);const nearby=sirens.size;
+    px=5;py=4;tickSirens(true);const movedInside=sirens.size;
+    const distance=worldSoundProfile(628,195,0).distance;
+    room.ret=[53,64.2,0];tickSirens(true);const anotherBuilding=sirens.size;
+    return {mainland,nearby,movedInside,distance,anotherBuilding};
+  });
+  assert.deepEqual([result.mainland,result.nearby,result.movedInside,result.anotherBuilding],[0,1,1,0]);
+  assert.ok(result.distance>=2&&result.distance<3);
+}));

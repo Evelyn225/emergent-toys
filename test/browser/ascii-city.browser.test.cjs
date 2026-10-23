@@ -2349,9 +2349,18 @@ test('street life: manholes in the road (some steaming), and pigeons that take o
 }));
 
 test('the casino: blackjack, roulette and slots take your stake and pay out; jade helps', () => withPage(async page => {
-  await page.evaluate(() => { money = 500; enterRoom('casino', { word: 'CASINO', neon: YEL, ret: [px, py, a], line: '' }, [11, 14, -Math.PI / 2]); });
+  await page.evaluate(() => {
+    money=500;enterRoom('casino',{word:'CASINO',neon:YEL,ret:[px,py,a],line:''},[11,14,-Math.PI/2]);
+    // This checks staking and payout. Patrons can now take focus when directly
+    // in front of a game; person selection is exercised by interaction tests.
+    room.props=room.props.filter(p=>!isRoomPerson(p));
+  });
   for (const [id, x, y] of [['blackjack', 5, 7.4], ['roulette', 11, 10.4], ['slots', 2.2, 4.5]]) {
-    await page.evaluate(([x, y]) => { px = x; py = y; }, [x, y]);
+    await page.evaluate(([id,x,y]) => {
+      px=x;py=y;env(0);render(0);
+      const target=room.props.find(p=>p.casino===id&&Math.hypot(p.cx-x,p.cy-y)<.1),tx=target.box?.x??target.x,ty=target.box?.y??target.y;
+      a=Math.atan2(ty-py,tx-px);pitch=((target.box?.z1??1.2)-interactionEye())/Math.hypot(tx-px,ty-py)*projY/rows;
+    }, [id,x,y]);
     assert.match(await page.evaluate(() => promptText()), new RegExp(`play ${id === 'slots' ? 'the slots' : id}`));
     await page.keyboard.press('KeyE');
     assert.deepStrictEqual(await page.evaluate(() => [game.kind, game.g.id]), ['casino', id]);

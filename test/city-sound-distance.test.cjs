@@ -19,3 +19,9 @@ test('islands use the botanical garden nature bed without city sounds by day, ni
  }
  for(const kind of ['islandshelter','islandhome']) {const mix=j(`audioMix({...${base},mode:'room',room:{kind:'${kind}'}})`);assert.equal(mix.city,0);assert.ok(mix.birds>0&&mix.waves>0);}
 });
+test('island interiors and nested hotel rooms listen from their outdoor doorway, not local furniture coordinates',()=>{
+ assert.deepEqual(j("audioWorldPosition('room',{ret:[626,195,1.2]},12,18)"),[626,195]);
+ assert.deepEqual(j("audioWorldPosition('room',{lobby:{ret:[53,64.2,-1.5]}},6,4)"),[53,64.2]);
+ assert.deepEqual(j("audioWorldPosition('walk',null,626,195)"),[626,195]);
+ assert.deepEqual(j("audioWorldPosition('room',{},12,18)"),[12,18]);
+});
