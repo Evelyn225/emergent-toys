@@ -10698,17 +10698,17 @@ GAMES.workshop = (rnd, word, opts = {}) => {
     if (g.over) return [];
     t = Math.min(32, t + dt); heat = clamp(heat + (keys.act ? .3 : -.18) * dt, 0, 1);
     if (heat >= band[0] && heat <= band[1]) steady += dt;
-    const m = current();
+    const m = current(), ev = []; // (what just happened, for the sound: workshop-ui.js)
     if (m) {
-      if (t - m.at > 1.6) m.missed = true;
-      else if (keys[m.key + 'P']) { m.done = true; completed++; if (m.key === 'up') heat = Math.max(0, heat - .08); }
+      if (t - m.at > 1.6) { m.missed = true; ev.push('miss'); }
+      else if (keys[m.key + 'P']) { m.done = true; completed++; ev.push(m.key === 'up' ? 'vent' : 'seal'); if (m.key === 'up') heat = Math.max(0, heat - .08); }
     }
     if (t >= 32) {
       g.over = true; g.score = Math.round(75 * steady / 32 + 25 * completed / moves.length);
       g.result = g.score >= 80 ? 'perfect' : g.score >= 45 ? 'fine' : 'burnt';
-      return ['clear'];
+      ev.push('clear');
     }
-    return [];
+    return ev;
   };
   g.state = () => ({ t, heat, band, moves, current: current() });
   g.reward = () => 0;
@@ -26672,7 +26672,7 @@ function tickCarAlarms() {
 function hushSirens() {
   hushGameplayAudio();
   if (!actx) return;
-  for (const v of [...sirens.values(), ...carAlarms.values()]) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
+  for (const v of [...sirens.values(), ...carAlarms.values(), workshopHumVoice].filter(Boolean)) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) hushSirens(); });
 
@@ -26708,6 +26708,7 @@ let stepAcc = 0, lastPos = null, clackT = 0, rotorT = 0;
 function audioTick(dt) {
   tickGameplayAudio();
   if (!actx || actx.state !== 'running') return;
+  tickWorkshopHum();
   const now = actx.currentTime, indoors = mode === 'room';
   master.gain.setTargetAtTime(soundOn ? MASTER * settings.master ** 2 * 1.5 * (1 - fade) : 0, now, 0.3); // the world goes quiet as you fall asleep
   // the el: how close a moving train is, if you're by the el
@@ -32161,6 +32162,7 @@ function stepGame(dt) {
 // blips and buzzes
 function sfxGame(e) {
   if (game && game.kind === 'cook' && sfxCook(e)) return; // (the pan's own noises: cooking-ui.js)
+  if (game && game.kind === 'workshop' && sfxWorkshop(e)) return; // (the bench's: workshop-ui.js)
   const at = actx.currentTime, sq = (f, len, gain = 0.05) => tone(at, f, len, gain, 'square');
   if (e === 'eat' || e === 'place' || e === 'serve') { sq(880, 0.06); tone(at + 0.06, 1320, 0.08, 0.05, 'square'); }
   else if (e === 'brick') sq(660 + Math.random() * 200, 0.05);
@@ -32729,6 +32731,28 @@ function drawWorkshopPreview() {
   const p=workshopCandidate(); if (!Number.isFinite(p.x)) return;
   const d=WORKSHOP_PARTS[p.id], floor=!!d.halfX, b=boxAt(p.x-px,p.y-py,Math.cos(p.a),Math.sin(p.a),d.halfX||.25,d.halfY||.25,floor ? .02 : .94,floor ? .08 : 1.5);
   drawBox(b,(i,t,L)=>{set(i,'+',C(p.ok?GREEN:RED,13));return true;});
+}
+// ---- the batch, heard: the rotor humming up and down with the power you give it, the hiss of a vent, the press
+// coming down on a seal (a miss and the end: the arcade's own blips, minigame-ui.js)
+let workshopHumVoice = null;
+function sfxWorkshop(e) {
+  const at = actx.currentTime;
+  if (e === 'vent') { burst(at, 0.55, [filt('highpass', 2500, 0.7)], 0.09); return true; }
+  if (e === 'seal') { tone(at, 85, 0.16, 0.14); burst(at, 0.08, [filt('lowpass', 500)], 0.12); tone(at + 0.05, 1800, 0.02, 0.04, 'square'); return true; }
+  return false;
+}
+function tickWorkshopHum() {
+  const now = actx.currentTime;
+  if (!(game?.kind === 'workshop' && !game.g.over && gameplayAudioAllowed())) {
+    if (workshopHumVoice) { workshopHumVoice.g.gain.setTargetAtTime(0, now, 0.05); workshopHumVoice.o.stop(now + 0.3); workshopHumVoice = null; }
+    return;
+  }
+  if (!workshopHumVoice) {
+    const o = actx.createOscillator(), lp = filt('lowpass', 500), g = actx.createGain();
+    o.type = 'sawtooth'; g.gain.value = 0; shot(o, lp, g, sfxBus); o.start(); workshopHumVoice = { o, lp, g };
+  }
+  const heat = game.g.state().heat, v = workshopHumVoice;
+  v.o.frequency.setTargetAtTime(55 + heat * 140, now, 0.08); v.lp.frequency.setTargetAtTime(400 + heat * 1400, now, 0.1); v.g.gain.setTargetAtTime(0.035, now, 0.1);
 }
 function startWorkshopBatch(bench) {
   const home=workshopHome(), problem=home && workshopCanRun(home,bench);

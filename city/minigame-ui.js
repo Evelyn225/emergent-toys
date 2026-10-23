@@ -77,6 +77,7 @@ function stepGame(dt) {
 // blips and buzzes
 function sfxGame(e) {
   if (game && game.kind === 'cook' && sfxCook(e)) return; // (the pan's own noises: cooking-ui.js)
+  if (game && game.kind === 'workshop' && sfxWorkshop(e)) return; // (the bench's: workshop-ui.js)
   const at = actx.currentTime, sq = (f, len, gain = 0.05) => tone(at, f, len, gain, 'square');
   if (e === 'eat' || e === 'place' || e === 'serve') { sq(880, 0.06); tone(at + 0.06, 1320, 0.08, 0.05, 'square'); }
   else if (e === 'brick') sq(660 + Math.random() * 200, 0.05);

@@ -146,6 +146,29 @@ test('sports: the ball thuds as it bounces (dying away), knocks off walls, is he
   assert.ok(r.lost === 'lost' && r.splash, 'and into the drink with a splash');
 }));
 
+test('workshops: the batch rotor hums with the power you give it, vents hiss, seals thunk, and it all stops with the batch', () => fixture(async page => {
+  const r = await page.evaluate(async () => {
+    audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });
+    const clock = s => { const t0 = actx.currentTime; return new Promise(res => { const wait = () => actx.currentTime > t0 + s ? res() : setTimeout(wait, 20); wait(); }); };
+    const heard = [], realBurst = burst, realTone = tone;
+    burst = (at, len, filters) => heard.push('noise:' + filters[0].type); tone = (at, f) => heard.push('tone:' + Math.round(f));
+    try {
+      startGame('workshop', 'workshop', '', {});
+      sfxGame('vent'); const vent = heard.splice(0); sfxGame('seal'); const seal = heard.splice(0);
+      burst = realBurst; tone = realTone;
+      audioTick(1 / 30); await clock(.4); const idle = workshopHumVoice.o.frequency.value;
+      for (let k = 0; k < 60; k++) game.g.step(1 / 30, { act: true });
+      audioTick(1 / 30); await clock(.4); const powered = workshopHumVoice.o.frequency.value;
+      game = null; audioTick(1 / 30); const after = workshopHumVoice;
+      return { vent, seal, idle, powered, after };
+    } finally { burst = realBurst; tone = realTone; }
+  });
+  assert.deepEqual(r.vent, ['noise:highpass'], 'a vent is a hiss, not an arcade blip');
+  assert.ok(r.seal.includes('tone:85') && r.seal.includes('noise:lowpass'), 'a seal is the press coming down: ' + JSON.stringify(r.seal));
+  assert.ok(r.powered > r.idle + 20, 'the rotor hums higher with more power: ' + JSON.stringify(r));
+  assert.equal(r.after, null, 'and stops when the batch is done');
+}));
+
 test('crime: a shot parked car sets its alarm off where it stands, one voice, gone after a while or when you get in', () => fixture(async page => {
   const r = await page.evaluate(async () => {
     audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });

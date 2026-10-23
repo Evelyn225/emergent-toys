@@ -308,7 +308,7 @@ function tickCarAlarms() {
 function hushSirens() {
   hushGameplayAudio();
   if (!actx) return;
-  for (const v of [...sirens.values(), ...carAlarms.values()]) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
+  for (const v of [...sirens.values(), ...carAlarms.values(), workshopHumVoice].filter(Boolean)) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) hushSirens(); });
 
@@ -344,6 +344,7 @@ let stepAcc = 0, lastPos = null, clackT = 0, rotorT = 0;
 function audioTick(dt) {
   tickGameplayAudio();
   if (!actx || actx.state !== 'running') return;
+  tickWorkshopHum();
   const now = actx.currentTime, indoors = mode === 'room';
   master.gain.setTargetAtTime(soundOn ? MASTER * settings.master ** 2 * 1.5 * (1 - fade) : 0, now, 0.3); // the world goes quiet as you fall asleep
   // the el: how close a moving train is, if you're by the el
