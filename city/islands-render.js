@@ -43,12 +43,12 @@ function buildIslandScenery() {
     }
   }
   const house=FERN_HOUSE;
-  islandDetail(540.5,247.17,.58,.35,.28,.31,'timber');
-  for(const x of [540.03,540.97])islandDetail(x,247.45,.018,.018,0,.29,'trim');
-  islandDetail(540.14,247.025,.035,.025,.23,.28,'lamp');
-  Object.assign(islandDetail(540.5,247.52,.265,.018,.285,.32,'sign'),{word:'FERN HOUSE',houseSign:true,ink:BLACK,labelZ:.3025,labelH:.021});
+  // A small dock-facing porch; the former south doorway is closed.
+  islandDetail(538.88,245.5,.12,.58,0,.008,'timber');
+  islandDetail(538.98,245.86,.025,.035,.23,.28,'lamp');
+  Object.assign(islandDetail(538.98,246.35,.265,.018,.285,.32,'sign',Math.PI/2),{word:'FERN HOUSE',houseSign:true,ink:BLACK,labelZ:.3025,labelH:.021});
   const [tx,ty]=house.terrace;
-  islandDetail(tx,ty,1.1,1.6,0,.004,'deck');
+  islandDetail(tx,ty,1.2,1.6,0,.004,'deck');
   for(const y of [244.2,246.8]) {
     islandDetail(tx,y,.58,.12,.045,.055,'timber');
     islandDetail(tx,y+.1,.58,.02,.055,.11,'timber');
@@ -154,6 +154,7 @@ function islandRoofShade(roof,i,t,L) {
 function islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
   const cabin=ISLAND_CABINS.find(c=>mx>=c.x0&&mx<c.x1&&my>=c.y0&&my<c.y1);
   if(!cabin)return;
+  if(cabin.id==='fern-house')return fernHouseFacade(cabin,i,z,d,side,wc,fog);
   if(cabin.id==='cabin-cove')return coveFacade(cabin,i,z,h,d,side,wc,fog);
   const light=fog*amb*(side?10:13),along=side?wc-cabin.x0:wc-cabin.y0;
   const width=side?cabin.x1-cabin.x0:cabin.y1-cabin.y0;
@@ -222,9 +223,9 @@ function drawWildScenery() {
     }
     drawBox({...model,x:vx,y:vy},(i,t,L)=>model.kind==='rock'?islandRockShade(model,i,t,L):islandTimberShade(model,i,t,L),model.planes?rayMansard:rayBox);
   });
-  for(const roof of ISLAND_ROOFS)if(inView(roof.x-px,roof.y-py,roof.hl+roof.hw))
+  for(const roof of ISLAND_ROOFS)if(!(COVE_VIEW.active&&roof.cabin===COVE_VIEW.hiddenCabin)&&inView(roof.x-px,roof.y-py,roof.hl+roof.hw))
     drawBox({...roof,x:roof.x-px,y:roof.y-py},(i,t,L)=>islandRoofShade(roof,i,t,L),rayMansard);
-  if(!COVE_VIEW.active)drawCoveExterior();
+  if(!COVE_VIEW.active){drawCoveExterior();drawFernExterior();}
   const [lx,ly]=WILD_ISLANDS[0].landing;
   if(near(px,py,lx,ly)<vis) {
     drawBox(boxAt(lx+1-px,ly+.7-py,1,0,.12,.08,0,.09),solid(BRICK,{top:'='}));

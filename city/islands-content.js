@@ -43,10 +43,10 @@ function buildWildIslands() {
     if(cabin.id==='cabin-cove'){ISLAND_ROOFS.push(...coveRoofParts(cabin));continue;}
     const hl=(cabin.x1-cabin.x0)/2+.09,hw=(cabin.y1-cabin.y0)/2+.12;
     ISLAND_ROOFS.push({x:(cabin.x0+cabin.x1)/2,y:(cabin.y0+cabin.y1)/2,c:1,s:0,hl,hw,z0:cabin.h-.015,z1:cabin.h+cabin.pitch,
-      planes:landmarkPlanes(hl,hw,cabin.h-.015,cabin.h+cabin.pitch,'gable'),cabin});
+      planes:landmarkPlanes(hl,hw,cabin.h-.015,cabin.h+cabin.pitch,cabin.id==='fern-house'?'crossgable':'gable'),cabin});
   }
-  ISLAND_ROOFS.push({x:541.25,y:245.1,c:1,s:0,hl:.075,hw:.08,z0:.42,z1:.74,
-    planes:landmarkPlanes(.075,.08,.42,.74,null),part:'chimney',cabin:ISLAND_CABINS[0]});
+  ISLAND_ROOFS.push({x:541.25,y:245.1,c:1,s:0,hl:.075,hw:.08,z0:fernChimneyTop()-.35,z1:fernChimneyTop(),
+    planes:landmarkPlanes(.075,.08,fernChimneyTop()-.35,fernChimneyTop(),null),part:'chimney',cabin:ISLAND_CABINS[0]});
 }
 
 function islandCabinAtDoor() {
@@ -65,7 +65,7 @@ function islandBuildingPrompt() {
   if(cabin)return cabin.room?'E: enter the fishing shelter':'E: knock on the door';
   const [lx,ly]=WILD_ISLANDS[0].landing;
   if(near(px,py,lx+1,ly+.7)<.45)return 'E: island tackle box';
-  if(near(px,py,...FERN_HOUSE.door)<.55||near(px,py,...FERN_HOUSE.terrace)<.8)
+  if(px<FERN_HOUSE.x0&&near(px,py,...FERN_HOUSE.door)<.55)
     return homeAt(SHOP[cityPlaceCell('fern-house')])?'E: enter Fern House':`E: Fern House for sale (${fmt$(ITEMS.home_island.price)})`;
   return '';
 }
@@ -94,11 +94,11 @@ function islandBuildingUse() {
   }
   const [lx,ly]=WILD_ISLANDS[0].landing;
   if(near(px,py,lx+1,ly+.7)<.45){openShop('Island tackle box',['rod','carbonrod','water','sandwich']);return true;}
-  const atDoor=near(px,py,...FERN_HOUSE.door)<.55,atTerrace=near(px,py,...FERN_HOUSE.terrace)<.8;
-  if(!atDoor&&!atTerrace)return false;
+  const atDoor=px<FERN_HOUSE.x0&&near(px,py,...FERN_HOUSE.door)<.55;
+  if(!atDoor)return false;
   const cell=cityPlaceCell('fern-house'),home=homeAt(SHOP[cell]);
   if(!home) { openShop('Fern House · sea-view retreat',['home_island']);return true; }
-  enterRoom('islandhome',{word:'FERN HOUSE',cell:[cell%N,Math.floor(cell/N)],ret:[...FERN_HOUSE.door,-Math.PI/2]},atTerrace?[1.5,16.5,0]:ROOM_DEFS.islandhome.entry);
+  enterRoom('islandhome',{word:'FERN HOUSE',cell:[cell%N,Math.floor(cell/N)],ret:[...FERN_HOUSE.door,Math.PI]},ROOM_DEFS.islandhome.entry);
   say('Fern House. The sea below the windows, the workshop down the hall.',3);
   return true;
 }

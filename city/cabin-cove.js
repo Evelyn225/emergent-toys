@@ -439,13 +439,13 @@ function coveWindowMask(visible) {
   return mask;
 }
 function coveWindowScene(face,visible) {
-  const key=[cols,rows,px,py,a,pitch,eye,tf,projY,Math.floor(T*24),Math.floor(tod*120),weather,Math.floor(snowCover*32)].join('|');
+  const key=[room.kind,cols,rows,px,py,a,pitch,eye,tf,projY,Math.floor(T*24),Math.floor(tod*120),weather,Math.floor(snowCover*32)].join('|');
   let cached=COVE_VIEW.cache.get(face);
   if(cached?.key===key)return cached.buffers;
   const buffers=cached?.buffers.CH.length===cols*rows?cached.buffers:coveViewBuffers();
   const savedBuffers={CH,COL,BG,ZB,ZBG,FL,FOGS,FOGB,BASE,LAMPL};
   const saved=[mode,room,px,py,freecam,amb,vis,eye,dx,dy,tf,projX,projY,hor,lookHit,figFineT,figFineN];
-  const wh={...WH},hit={...HIT},cell=CITY.cell,c=COVE_CABIN;
+  const savedYaw=a,wh={...WH},hit={...HIT},cell=CITY.cell,c=room.kind==='islandhome'?ISLAND_CABINS[0]:COVE_CABIN,fern=room.kind==='islandhome';
   try {
     [CH,COL,BG,ZB,ZBG,FL,FOGS,FOGB,BASE,LAMPL]=[buffers.CH,buffers.COL,buffers.BG,buffers.ZB,buffers.ZBG,buffers.FL,buffers.FOGS,buffers.FOGB,buffers.BASE,buffers.LAMPL];
     const mask=coveWindowMask(visible);
@@ -453,13 +453,14 @@ function coveWindowScene(face,visible) {
     const x=(c.x0+c.x1)/2+(px-room.W/2)/10,y=(c.y0+c.y1)/2+(py-room.H/2)/10,z=eye/10;
     px=face==='west'?c.x0+(saved[2]-1)/10:face==='east'?c.x1+(saved[2]-(room.W-1))/10:x;
     py=face==='north'?c.y0+(saved[3]-1)/10:face==='south'?c.y1+(saved[3]-(room.H-1))/10:y;
-    mode='walk';room=null;freecam={z};COVE_VIEW.active=true;
+    if(fern){const cx=(c.x0+c.x1)/2,cy=(c.y0+c.y1)/2,ex=px-cx,ey=py-cy;px=cx-ey;py=cy+ex;a+=Math.PI/2;}
+    mode='walk';room=null;freecam={z};COVE_VIEW.active=true;COVE_VIEW.hiddenCabin=fern?c:null;
     amb=.35+.65*day*(1-.35*overcast)*(1-.3*storm)+flash()*.9;
     vis=MAXD*(1-.72*fogAmt-.25*rain-.3*snow);
     CITY.cell=(x,y)=>x>=c.x0&&x<c.x1&&y>=c.y0&&y<c.y1?0:cell(x,y);
     render(0,true,mask);COVE_VIEW.passes++;
   } finally {
-    CITY.cell=cell;COVE_VIEW.active=false;
+    CITY.cell=cell;COVE_VIEW.active=false;COVE_VIEW.hiddenCabin=null;a=savedYaw;
     [mode,room,px,py,freecam,amb,vis,eye,dx,dy,tf,projX,projY,hor,lookHit,figFineT,figFineN]=saved;
     [CH,COL,BG,ZB,ZBG,FL,FOGS,FOGB,BASE,LAMPL]=[savedBuffers.CH,savedBuffers.COL,savedBuffers.BG,savedBuffers.ZB,savedBuffers.ZBG,savedBuffers.FL,savedBuffers.FOGS,savedBuffers.FOGB,savedBuffers.BASE,savedBuffers.LAMPL];
     Object.assign(WH,wh);Object.assign(HIT,hit);

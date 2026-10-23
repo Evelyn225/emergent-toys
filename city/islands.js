@@ -12,17 +12,21 @@ const WILD_ISLANDS = [
     dock: [767, 247, 776, 248], landing: [775.5, 247.5], note: 'A private house among the trees. You can knock, but nobody seems to be home. Boat access.' },
 ];
 const FERN_STRIP = { x0: 551, x1: 617, y: 220, hw: 1.3 };
-const FERN_HOUSE = { x0: 539, y0: 244, x1: 542, y1: 247, door: [540.5, 247.2], terrace: [537.8, 245.5] };
+const FERN_HOUSE = { x0: 539, y0: 244, x1: 542, y1: 247, door: [538.8, 245.5], terrace: [537.8, 245.5] };
 const ISLAND_CABINS = [
-  {...FERN_HOUSE, id:'fern-house', name:'Fern House', h:.38, pitch:.22, wood:BRICK, roof:GRAY},
+  {...FERN_HOUSE, id:'fern-house', name:'Fern House', h:.38, pitch:.48, wood:BRICK, roof:GRAY},
   {id:'cabin-cove',name:'Cabin Cove fishing shelter',door:[492,392.2],room:'islandshelter',x0:491,y0:390,x1:493,y1:392,h:.29,pitch:.4,wood:BRICK,roof:GREEN},
   {id:'juniper-house',name:'Juniper House',door:[791,241.2],x0:790,y0:239,x1:792,y1:241,h:.3,pitch:.18,wood:STONE,roof:BRICK},
 ];
+function fernChimneyTop() {
+  const cabin=ISLAND_CABINS[0],hw=(cabin.y1-cabin.y0)/2+.12;
+  return cabin.h+cabin.pitch-(cabin.pitch+.015)/hw*Math.abs(245.1-(cabin.y0+cabin.y1)/2)+.23;
+}
 const ISLAND_ROOFS=[];
 const FERN_FALLS={x:627,y0:186,y1:200,poolY:196.5};
 const TIDE_POOL_SITES=[{x:720,y:115.4,r:.4},{x:720.85,y:115.7,r:.25},{x:720.3,y:114.65,r:.23}];
 const FERN_TRAILS = [
-  [[521.5,235.5],[536,238],[536,248],[540.5,248],[540.5,247.2]],
+  [[521.5,235.5],[536,238],[536,245.5],[...FERN_HOUSE.door]],
   [[536,238],[545,230],[551,224],[555,222]],
   [[545,230],[565,240],[590,243],[615,236],[628,215],[627,197]],
   [[521.5,235.5],[525.5,236.2],[528,237.5]],

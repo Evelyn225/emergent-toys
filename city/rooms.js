@@ -990,19 +990,20 @@ function homeCityView(i, x, y, z, vx, vy, vz) {
   return set(i, day < 0.2 && hash(Math.floor(Math.atan2(vy, vx) * 100), Math.floor(vz * 100), 889) > 0.985 ? '.' : ' ', C(WHITE, 12));
 }
 function homeWall(i, u, uStep, z, d, mx, my, L) {
-  const def = room.def, face = mx === 0 ? 'west' : my === 0 ? 'north' : mx === room.W - 1 ? 'east' : null, along = Math.abs(u);
+  const def = room.def, face = mx === 0 ? 'west' : my === 0 ? 'north' : mx === room.W - 1 ? 'east' : my===room.H-1?'south':null, along = Math.abs(u);
   if (roomAt(mx, my) === 'B') { // the balcony's iron rail: open air between slim, curved balusters
     if (z > 1.03 || z < 0.14 || Math.abs(fract(along * 4) - 0.5) < 0.06 || Math.abs(fract(along * 2) - 0.5) < 0.025 + Math.sin(z * Math.PI) * 0.09) {
       BG[i] = C(GRAY, 1); return set(i, z > 1.03 ? '=' : '|', C(GRAY, L)), true;
     }
     homeOutdoorRay(i); return true;
   }
-  for (const win of def.windows) if (face === win.face && Math.abs(along - win.center) < win.half && z > 0.85 && z < (def.tier ? 2.95 : 2.5)) {
-    const du = Math.abs(along - win.center), top = def.tier ? 2.95 : 2.5;
-    if (du > win.half - 0.09 || z < 0.95 || z > top - 0.1 || du < 0.035 || Math.abs(z - 2.12) < 0.035) {
+  for (const win of def.windows) if (face === win.face && Math.abs(along - win.center) < win.half && z > (win.bottom??.85) && z < (win.top??(def.tier ? 2.95 : 2.5))) {
+    const du = Math.abs(along - win.center), bottom=win.bottom??.85,top=win.top??(def.tier ? 2.95 : 2.5);
+    if (du > win.half - 0.09 || z < bottom+.1 || z > top - 0.1 || du < 0.035 || Math.abs(z - 2.12) < 0.035) {
       BG[i] = C(def.tier === 2 ? WHITE : BRICK, 2 + L * 0.25); return set(i, du < 0.035 || du > win.half - 0.09 ? '|' : '=', C(WHITE, L)), true;
     }
-    homeView(i, u, z, face); return true;
+    if(room.kind==='islandhome'){const marks=COVE_VIEW.marks.get(face)||[];if(!COVE_VIEW.marks.has(face))COVE_VIEW.marks.set(face,marks);marks.push([i,d]);BG[i]=C(CYAN,4);set(i,' ',0);}
+    else homeView(i, u, z, face); return true;
   }
   BG[i] = C(def.tier === 2 ? STONE : WHITE, 3 + L * 0.38);
   if (z < 0.12 || z > (def.height || 3) - 0.16 || def.tier === 2 && Math.abs(z - 0.9) < 0.045) return set(i, '=', C(def.tier === 2 ? YEL : WHITE, L)), true;

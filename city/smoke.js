@@ -33,7 +33,7 @@ function stepHaze(dt) {
 }
 // ---- smoke off things burning out in the world: lit campfires, Fern House's stove after dark, and the cloud a firework
 // leaves hanging where it burst (lit up by the next). Only where you could see it, and never so much it crowds out the rest
-const FERN_CHIMNEY = [541.25, 245.1, 0.76]; // (its top: islands-content.js)
+const FERN_CHIMNEY = [541.25, 245.1, fernChimneyTop()+.02]; // (its top: islands-content.js)
 let worldSmokeT = 0, fwLight = { col: WHITE, t: -99 };
 function worldPuff(x, y, z, r, rMax, kind, life, vz) {
   haze.push({ at: '', kind, s: 0.1, x: x + (Math.random() - 0.5) * r, y: y + (Math.random() - 0.5) * r, z, r, rMax, vx: 0, vy: 0, vz, life: 1, fade: 1 / life, seed: Math.random() * 100 });

@@ -2022,17 +2022,21 @@ const WILD_ISLANDS = [
     dock: [767, 247, 776, 248], landing: [775.5, 247.5], note: 'A private house among the trees. You can knock, but nobody seems to be home. Boat access.' },
 ];
 const FERN_STRIP = { x0: 551, x1: 617, y: 220, hw: 1.3 };
-const FERN_HOUSE = { x0: 539, y0: 244, x1: 542, y1: 247, door: [540.5, 247.2], terrace: [537.8, 245.5] };
+const FERN_HOUSE = { x0: 539, y0: 244, x1: 542, y1: 247, door: [538.8, 245.5], terrace: [537.8, 245.5] };
 const ISLAND_CABINS = [
-  {...FERN_HOUSE, id:'fern-house', name:'Fern House', h:.38, pitch:.22, wood:BRICK, roof:GRAY},
+  {...FERN_HOUSE, id:'fern-house', name:'Fern House', h:.38, pitch:.48, wood:BRICK, roof:GRAY},
   {id:'cabin-cove',name:'Cabin Cove fishing shelter',door:[492,392.2],room:'islandshelter',x0:491,y0:390,x1:493,y1:392,h:.29,pitch:.4,wood:BRICK,roof:GREEN},
   {id:'juniper-house',name:'Juniper House',door:[791,241.2],x0:790,y0:239,x1:792,y1:241,h:.3,pitch:.18,wood:STONE,roof:BRICK},
 ];
+function fernChimneyTop() {
+  const cabin=ISLAND_CABINS[0],hw=(cabin.y1-cabin.y0)/2+.12;
+  return cabin.h+cabin.pitch-(cabin.pitch+.015)/hw*Math.abs(245.1-(cabin.y0+cabin.y1)/2)+.23;
+}
 const ISLAND_ROOFS=[];
 const FERN_FALLS={x:627,y0:186,y1:200,poolY:196.5};
 const TIDE_POOL_SITES=[{x:720,y:115.4,r:.4},{x:720.85,y:115.7,r:.25},{x:720.3,y:114.65,r:.23}];
 const FERN_TRAILS = [
-  [[521.5,235.5],[536,238],[536,248],[540.5,248],[540.5,247.2]],
+  [[521.5,235.5],[536,238],[536,245.5],[...FERN_HOUSE.door]],
   [[536,238],[545,230],[551,224],[555,222]],
   [[545,230],[565,240],[590,243],[615,236],[628,215],[627,197]],
   [[521.5,235.5],[525.5,236.2],[528,237.5]],
@@ -16524,19 +16528,20 @@ function homeCityView(i, x, y, z, vx, vy, vz) {
   return set(i, day < 0.2 && hash(Math.floor(Math.atan2(vy, vx) * 100), Math.floor(vz * 100), 889) > 0.985 ? '.' : ' ', C(WHITE, 12));
 }
 function homeWall(i, u, uStep, z, d, mx, my, L) {
-  const def = room.def, face = mx === 0 ? 'west' : my === 0 ? 'north' : mx === room.W - 1 ? 'east' : null, along = Math.abs(u);
+  const def = room.def, face = mx === 0 ? 'west' : my === 0 ? 'north' : mx === room.W - 1 ? 'east' : my===room.H-1?'south':null, along = Math.abs(u);
   if (roomAt(mx, my) === 'B') { // the balcony's iron rail: open air between slim, curved balusters
     if (z > 1.03 || z < 0.14 || Math.abs(fract(along * 4) - 0.5) < 0.06 || Math.abs(fract(along * 2) - 0.5) < 0.025 + Math.sin(z * Math.PI) * 0.09) {
       BG[i] = C(GRAY, 1); return set(i, z > 1.03 ? '=' : '|', C(GRAY, L)), true;
     }
     homeOutdoorRay(i); return true;
   }
-  for (const win of def.windows) if (face === win.face && Math.abs(along - win.center) < win.half && z > 0.85 && z < (def.tier ? 2.95 : 2.5)) {
-    const du = Math.abs(along - win.center), top = def.tier ? 2.95 : 2.5;
-    if (du > win.half - 0.09 || z < 0.95 || z > top - 0.1 || du < 0.035 || Math.abs(z - 2.12) < 0.035) {
+  for (const win of def.windows) if (face === win.face && Math.abs(along - win.center) < win.half && z > (win.bottom??.85) && z < (win.top??(def.tier ? 2.95 : 2.5))) {
+    const du = Math.abs(along - win.center), bottom=win.bottom??.85,top=win.top??(def.tier ? 2.95 : 2.5);
+    if (du > win.half - 0.09 || z < bottom+.1 || z > top - 0.1 || du < 0.035 || Math.abs(z - 2.12) < 0.035) {
       BG[i] = C(def.tier === 2 ? WHITE : BRICK, 2 + L * 0.25); return set(i, du < 0.035 || du > win.half - 0.09 ? '|' : '=', C(WHITE, L)), true;
     }
-    homeView(i, u, z, face); return true;
+    if(room.kind==='islandhome'){const marks=COVE_VIEW.marks.get(face)||[];if(!COVE_VIEW.marks.has(face))COVE_VIEW.marks.set(face,marks);marks.push([i,d]);BG[i]=C(CYAN,4);set(i,' ',0);}
+    else homeView(i, u, z, face); return true;
   }
   BG[i] = C(def.tier === 2 ? STONE : WHITE, 3 + L * 0.38);
   if (z < 0.12 || z > (def.height || 3) - 0.16 || def.tier === 2 && Math.abs(z - 0.9) < 0.045) return set(i, '=', C(def.tier === 2 ? YEL : WHITE, L)), true;
@@ -23649,7 +23654,7 @@ function drawDeck(x, rx, ry, t0, t1) {
 }
 
 function render(dt,sceneOnly=false,mask=null) {
-  if(!sceneOnly&&mode==='room'&&room.kind==='islandshelter')coveWindowBegin();
+  if(!sceneOnly&&mode==='room'&&['islandshelter','islandhome'].includes(room.kind))coveWindowBegin();
   // Freecam renders while simulation time is frozen, but still gets a new sprite-generation allowance each frame.
   figFineT = T; figFineN = 0;
   const W = mode === 'room' ? ROOMW : CITY, city = W === CITY;
@@ -23743,7 +23748,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
   if (city) { reflect(); fogSteps(); drawFireworks(); rainFx(dt); } else { FOGS.fill(0); FOGB.fill(0); }
-  if(!sceneOnly&&!city&&room.kind==='islandshelter')coveWindowComposite();
+  if(!sceneOnly&&!city&&['islandshelter','islandhome'].includes(room.kind))coveWindowComposite();
   if (city) drawAnglerLines(); // (the regulars' lines too)
   if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above
   drawShots(); // a shot's streak, the police's flashes (gun-ui.js)
@@ -24842,7 +24847,7 @@ function stepSleep(dt) {
   if (sleep.t > 5) { sleep = null; fade = 0; }
 }
 function leaveRoom() {
-  if (room.kind === 'islandhome') room.ret = px < 2.2 && py > 14 && py < 19 ? [...FERN_HOUSE.terrace,0] : [...FERN_HOUSE.door,-Math.PI/2];
+  if (room.kind === 'islandhome') room.ret = [...FERN_HOUSE.door,Math.PI];
   body.seat = null;
   if (hotelAlarm) stepGrandHotel(); // A late exit still triggers the alarm while you're inside.
   if (room.kind === 'grandhotelheist') return enterRoom('grandhotel', room.lobby, [10.7, 2.65, Math.PI / 2]);
@@ -31557,7 +31562,7 @@ function stepHaze(dt) {
 }
 // ---- smoke off things burning out in the world: lit campfires, Fern House's stove after dark, and the cloud a firework
 // leaves hanging where it burst (lit up by the next). Only where you could see it, and never so much it crowds out the rest
-const FERN_CHIMNEY = [541.25, 245.1, 0.76]; // (its top: islands-content.js)
+const FERN_CHIMNEY = [541.25, 245.1, fernChimneyTop()+.02]; // (its top: islands-content.js)
 let worldSmokeT = 0, fwLight = { col: WHITE, t: -99 };
 function worldPuff(x, y, z, r, rMax, kind, life, vz) {
   haze.push({ at: '', kind, s: 0.1, x: x + (Math.random() - 0.5) * r, y: y + (Math.random() - 0.5) * r, z, r, rMax, vx: 0, vy: 0, vz, life: 1, fade: 1 / life, seed: Math.random() * 100 });
@@ -32795,6 +32800,7 @@ function startWorkshopBatch(bench) {
   game.onDone=quality=>{say(finishWorkshopBatch(home,bench,quality)[1],6);updateDrugBuyer();saveGame();};
 }
 function buyerDoor(home) {
+  if(home.kind==='home_island')return [...FERN_HOUSE.door];
   const clear=(x,y)=>!map[idx(Math.floor(x),Math.floor(y))]&&!isWater(x,y);
   if (home.door) for(const offset of [.24,-.24,.4,-.4,0]) {
     const [x,y]=home.door;
@@ -33591,10 +33597,10 @@ function buildWildIslands() {
     if(cabin.id==='cabin-cove'){ISLAND_ROOFS.push(...coveRoofParts(cabin));continue;}
     const hl=(cabin.x1-cabin.x0)/2+.09,hw=(cabin.y1-cabin.y0)/2+.12;
     ISLAND_ROOFS.push({x:(cabin.x0+cabin.x1)/2,y:(cabin.y0+cabin.y1)/2,c:1,s:0,hl,hw,z0:cabin.h-.015,z1:cabin.h+cabin.pitch,
-      planes:landmarkPlanes(hl,hw,cabin.h-.015,cabin.h+cabin.pitch,'gable'),cabin});
+      planes:landmarkPlanes(hl,hw,cabin.h-.015,cabin.h+cabin.pitch,cabin.id==='fern-house'?'crossgable':'gable'),cabin});
   }
-  ISLAND_ROOFS.push({x:541.25,y:245.1,c:1,s:0,hl:.075,hw:.08,z0:.42,z1:.74,
-    planes:landmarkPlanes(.075,.08,.42,.74,null),part:'chimney',cabin:ISLAND_CABINS[0]});
+  ISLAND_ROOFS.push({x:541.25,y:245.1,c:1,s:0,hl:.075,hw:.08,z0:fernChimneyTop()-.35,z1:fernChimneyTop(),
+    planes:landmarkPlanes(.075,.08,fernChimneyTop()-.35,fernChimneyTop(),null),part:'chimney',cabin:ISLAND_CABINS[0]});
 }
 
 function islandCabinAtDoor() {
@@ -33613,7 +33619,7 @@ function islandBuildingPrompt() {
   if(cabin)return cabin.room?'E: enter the fishing shelter':'E: knock on the door';
   const [lx,ly]=WILD_ISLANDS[0].landing;
   if(near(px,py,lx+1,ly+.7)<.45)return 'E: island tackle box';
-  if(near(px,py,...FERN_HOUSE.door)<.55||near(px,py,...FERN_HOUSE.terrace)<.8)
+  if(px<FERN_HOUSE.x0&&near(px,py,...FERN_HOUSE.door)<.55)
     return homeAt(SHOP[cityPlaceCell('fern-house')])?'E: enter Fern House':`E: Fern House for sale (${fmt$(ITEMS.home_island.price)})`;
   return '';
 }
@@ -33642,11 +33648,11 @@ function islandBuildingUse() {
   }
   const [lx,ly]=WILD_ISLANDS[0].landing;
   if(near(px,py,lx+1,ly+.7)<.45){openShop('Island tackle box',['rod','carbonrod','water','sandwich']);return true;}
-  const atDoor=near(px,py,...FERN_HOUSE.door)<.55,atTerrace=near(px,py,...FERN_HOUSE.terrace)<.8;
-  if(!atDoor&&!atTerrace)return false;
+  const atDoor=px<FERN_HOUSE.x0&&near(px,py,...FERN_HOUSE.door)<.55;
+  if(!atDoor)return false;
   const cell=cityPlaceCell('fern-house'),home=homeAt(SHOP[cell]);
   if(!home) { openShop('Fern House · sea-view retreat',['home_island']);return true; }
-  enterRoom('islandhome',{word:'FERN HOUSE',cell:[cell%N,Math.floor(cell/N)],ret:[...FERN_HOUSE.door,-Math.PI/2]},atTerrace?[1.5,16.5,0]:ROOM_DEFS.islandhome.entry);
+  enterRoom('islandhome',{word:'FERN HOUSE',cell:[cell%N,Math.floor(cell/N)],ret:[...FERN_HOUSE.door,Math.PI]},ROOM_DEFS.islandhome.entry);
   say('Fern House. The sea below the windows, the workshop down the hall.',3);
   return true;
 }
@@ -33799,12 +33805,12 @@ function buildIslandScenery() {
     }
   }
   const house=FERN_HOUSE;
-  islandDetail(540.5,247.17,.58,.35,.28,.31,'timber');
-  for(const x of [540.03,540.97])islandDetail(x,247.45,.018,.018,0,.29,'trim');
-  islandDetail(540.14,247.025,.035,.025,.23,.28,'lamp');
-  Object.assign(islandDetail(540.5,247.52,.265,.018,.285,.32,'sign'),{word:'FERN HOUSE',houseSign:true,ink:BLACK,labelZ:.3025,labelH:.021});
+  // A small dock-facing porch; the former south doorway is closed.
+  islandDetail(538.88,245.5,.12,.58,0,.008,'timber');
+  islandDetail(538.98,245.86,.025,.035,.23,.28,'lamp');
+  Object.assign(islandDetail(538.98,246.35,.265,.018,.285,.32,'sign',Math.PI/2),{word:'FERN HOUSE',houseSign:true,ink:BLACK,labelZ:.3025,labelH:.021});
   const [tx,ty]=house.terrace;
-  islandDetail(tx,ty,1.1,1.6,0,.004,'deck');
+  islandDetail(tx,ty,1.2,1.6,0,.004,'deck');
   for(const y of [244.2,246.8]) {
     islandDetail(tx,y,.58,.12,.045,.055,'timber');
     islandDetail(tx,y+.1,.58,.02,.055,.11,'timber');
@@ -33910,6 +33916,7 @@ function islandRoofShade(roof,i,t,L) {
 function islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
   const cabin=ISLAND_CABINS.find(c=>mx>=c.x0&&mx<c.x1&&my>=c.y0&&my<c.y1);
   if(!cabin)return;
+  if(cabin.id==='fern-house')return fernHouseFacade(cabin,i,z,d,side,wc,fog);
   if(cabin.id==='cabin-cove')return coveFacade(cabin,i,z,h,d,side,wc,fog);
   const light=fog*amb*(side?10:13),along=side?wc-cabin.x0:wc-cabin.y0;
   const width=side?cabin.x1-cabin.x0:cabin.y1-cabin.y0;
@@ -33978,9 +33985,9 @@ function drawWildScenery() {
     }
     drawBox({...model,x:vx,y:vy},(i,t,L)=>model.kind==='rock'?islandRockShade(model,i,t,L):islandTimberShade(model,i,t,L),model.planes?rayMansard:rayBox);
   });
-  for(const roof of ISLAND_ROOFS)if(inView(roof.x-px,roof.y-py,roof.hl+roof.hw))
+  for(const roof of ISLAND_ROOFS)if(!(COVE_VIEW.active&&roof.cabin===COVE_VIEW.hiddenCabin)&&inView(roof.x-px,roof.y-py,roof.hl+roof.hw))
     drawBox({...roof,x:roof.x-px,y:roof.y-py},(i,t,L)=>islandRoofShade(roof,i,t,L),rayMansard);
-  if(!COVE_VIEW.active)drawCoveExterior();
+  if(!COVE_VIEW.active){drawCoveExterior();drawFernExterior();}
   const [lx,ly]=WILD_ISLANDS[0].landing;
   if(near(px,py,lx,ly)<vis) {
     drawBox(boxAt(lx+1-px,ly+.7-py,1,0,.12,.08,0,.09),solid(BRICK,{top:'='}));
@@ -34793,13 +34800,13 @@ function coveWindowMask(visible) {
   return mask;
 }
 function coveWindowScene(face,visible) {
-  const key=[cols,rows,px,py,a,pitch,eye,tf,projY,Math.floor(T*24),Math.floor(tod*120),weather,Math.floor(snowCover*32)].join('|');
+  const key=[room.kind,cols,rows,px,py,a,pitch,eye,tf,projY,Math.floor(T*24),Math.floor(tod*120),weather,Math.floor(snowCover*32)].join('|');
   let cached=COVE_VIEW.cache.get(face);
   if(cached?.key===key)return cached.buffers;
   const buffers=cached?.buffers.CH.length===cols*rows?cached.buffers:coveViewBuffers();
   const savedBuffers={CH,COL,BG,ZB,ZBG,FL,FOGS,FOGB,BASE,LAMPL};
   const saved=[mode,room,px,py,freecam,amb,vis,eye,dx,dy,tf,projX,projY,hor,lookHit,figFineT,figFineN];
-  const wh={...WH},hit={...HIT},cell=CITY.cell,c=COVE_CABIN;
+  const savedYaw=a,wh={...WH},hit={...HIT},cell=CITY.cell,c=room.kind==='islandhome'?ISLAND_CABINS[0]:COVE_CABIN,fern=room.kind==='islandhome';
   try {
     [CH,COL,BG,ZB,ZBG,FL,FOGS,FOGB,BASE,LAMPL]=[buffers.CH,buffers.COL,buffers.BG,buffers.ZB,buffers.ZBG,buffers.FL,buffers.FOGS,buffers.FOGB,buffers.BASE,buffers.LAMPL];
     const mask=coveWindowMask(visible);
@@ -34807,13 +34814,14 @@ function coveWindowScene(face,visible) {
     const x=(c.x0+c.x1)/2+(px-room.W/2)/10,y=(c.y0+c.y1)/2+(py-room.H/2)/10,z=eye/10;
     px=face==='west'?c.x0+(saved[2]-1)/10:face==='east'?c.x1+(saved[2]-(room.W-1))/10:x;
     py=face==='north'?c.y0+(saved[3]-1)/10:face==='south'?c.y1+(saved[3]-(room.H-1))/10:y;
-    mode='walk';room=null;freecam={z};COVE_VIEW.active=true;
+    if(fern){const cx=(c.x0+c.x1)/2,cy=(c.y0+c.y1)/2,ex=px-cx,ey=py-cy;px=cx-ey;py=cy+ex;a+=Math.PI/2;}
+    mode='walk';room=null;freecam={z};COVE_VIEW.active=true;COVE_VIEW.hiddenCabin=fern?c:null;
     amb=.35+.65*day*(1-.35*overcast)*(1-.3*storm)+flash()*.9;
     vis=MAXD*(1-.72*fogAmt-.25*rain-.3*snow);
     CITY.cell=(x,y)=>x>=c.x0&&x<c.x1&&y>=c.y0&&y<c.y1?0:cell(x,y);
     render(0,true,mask);COVE_VIEW.passes++;
   } finally {
-    CITY.cell=cell;COVE_VIEW.active=false;
+    CITY.cell=cell;COVE_VIEW.active=false;COVE_VIEW.hiddenCabin=null;a=savedYaw;
     [mode,room,px,py,freecam,amb,vis,eye,dx,dy,tf,projX,projY,hor,lookHit,figFineT,figFineN]=saved;
     [CH,COL,BG,ZB,ZBG,FL,FOGS,FOGB,BASE,LAMPL]=[savedBuffers.CH,savedBuffers.COL,savedBuffers.BG,savedBuffers.ZB,savedBuffers.ZBG,savedBuffers.FL,savedBuffers.FOGS,savedBuffers.FOGB,savedBuffers.BASE,savedBuffers.LAMPL];
     Object.assign(WH,wh);Object.assign(HIT,hit);
@@ -35391,12 +35399,12 @@ function fernHomeQuality() {
   for(let x=1;x<=22;x++)extra[x+',10']='#';
   for(const x of [5,6,15,16])extra[x+',10']='.';
   for(let y=11;y<=22;y++)extra['13,'+y]='#';
-  extra['13,16']=extra['13,17']='.';extra['0,16']='D';
+  extra['13,16']=extra['13,17']='.';
   for(let y=1;y<=6;y++)extra['18,'+y]='W';
   for(let x=18;x<=22;x++)extra[x+',6']='W';extra['19,6']=extra['20,6']='.';
   def.grid=boxRoom(24,24,extra);def.wc={x0:19,y0:1,x1:23,y1:6,sign:[21,6,21.5]};
   def.home={shelf:[1.18,13],pet:[2,20],bed:[4.1,2.25],closet:[7.5,1.4],sofa:[3,16.8],tv:[3,11.4],fridge:[11.6,1.45],dining:[14.7,6]};
-  def.spots={bed:[4.1,3.7],closet:[7.5,2.5],shelf:[2.2,13],pet:[2,20],fridge:[11.6,2.6],stove:[16.4,2.6],workshop:[15.5,13],tv:[3,12.65],terrace:[1.4,16.5]};
+  def.spots={bed:[4.1,3.7],closet:[7.5,2.5],shelf:[2.2,13],pet:[2,20],fridge:[11.6,2.6],stove:[16.4,2.6],workshop:[15.5,13],tv:[3,12.65]};
   def.bedBounds=[4.1,2.25,1.3,1.05];def.lamps=[[4.5,5],[14.5,6],[5,17],[18,16]];
   def.shelfAxis=[0,1];
   def.floor='fernwood';def.bathFloor='fernBath';
@@ -35425,6 +35433,75 @@ ROOM_FLOORS.fernBath=(i,f,x,y,row,column,L)=>{
   const grout=Math.max(coveGroove(x,.4,.008,footprint),coveGroove(y,.4,.008,footprint));
   BG[i]=C(STONE,4.5+L*.18-grout*1.2);set(i,' ',0);
 };
+// Fern's front is west toward the dock. The room's south entrance therefore
+// maps through a quarter turn; windows and the world-view camera share it.
+const FERN_WINDOWS=[
+  {face:'west',center:4.8,half:1.5},{face:'west',center:16.4,half:1.4},
+  {face:'north',center:14.5,half:2,bottom:1.13},{face:'east',center:8.2,half:1.3},
+  {face:'south',center:4.5,half:1.6},{face:'south',center:18,half:1.6}
+].map(w=>({bottom:.95,top:2.85,...w}));
+ROOM_DEFS.islandhome.windows=FERN_WINDOWS;
+ROOM_DEFS.islandhome.doorWall=true;
+function fernExteriorWindow(win) {
+  const c=FERN_HOUSE,cx=(c.x0+c.x1)/2,cy=(c.y0+c.y1)/2;
+  const west=win.face==='west',east=win.face==='east',north=win.face==='north',south=win.face==='south';
+  const x=west?c.x0:east?c.x1:cx+(win.center-12)/10,y=north?c.y0:south?c.y1:cy+(win.center-12)/10;
+  return {x:cx-(y-cy),y:cy+(x-cx),c:west||east?-1:0,s:west||east?0:1,
+    nx:north?1:south?-1:0,ny:west?-1:east?1:0,half:win.half/10,bottom:win.bottom/10,top:win.top/10};
+}
+function drawFernDoor(x,y,c,s,scale=1,facing=1) {
+  const part=(u,v,hl,hw,z0,z1,mat=coveDoorPaint)=>coveRound(x+(c*u-s*v*facing)*scale,y+(s*u+c*v*facing)*scale,c,s,hl*scale,hw*scale,z0*scale,z1*scale,.0015*scale,mat);
+  part(0,.003,.091,.003,.012,.244);
+  for(const side of [-1,1])part(side*.082,.009,.009,.004,.017,.239);
+  for(const [z0,z1]of [[.017,.033],[.119,.136],[.224,.239]])part(0,.009,.073,.004,z0,z1);
+  for(const side of [-1,1])for(const [lo,hi]of [[.04,.112],[.144,.217]])part(side*.0385,.0055,.0305,.0025,lo,hi);
+  for(const side of [-1,1])part(side*.103,.008,.009,.014,.005,.246,bathroomPaint);
+  part(0,.008,.112,.014,.246,.264,bathroomPaint);part(0,.013,.112,.02,0,.008,bathroomPaint);
+  const at=(u,v,z)=>[x+(c*u-s*v*facing)*scale,y+(s*u+c*v*facing)*scale,z*scale];
+  bathroomPipe(...at(.066,.017,.118),...at(.066,.023,.118),.003*scale,YEL);
+  bathroomPipe(...at(.049,.023,.118),...at(.069,.023,.118),.003*scale,YEL);
+  for(const z of [.057,.203])part(-.091,.014,.006,.002,z-.006,z+.006,GRAY);
+}
+const FERN_INTERIOR_PROPS=ROOM_DEFS.islandhome.props;
+ROOM_DEFS.islandhome.props=r=>[
+  ...FERN_INTERIOR_PROPS(r),
+  {...ROOM_MODEL(12,23,(vx,vy)=>{
+    drawFernDoor(vx,vy,1,0,10,-1);
+    drawBox(boxAt(vx,vy,1,0,1,.04,2.64,3.4),solid(WHITE));
+  }),radius:3},
+  ...FERN_WINDOWS.map(w=>{
+    const west=w.face==='west',east=w.face==='east',north=w.face==='north';
+    const x=west?1.04:east?22.96:w.center,y=north?1.04:w.face==='south'?22.96:w.center,c=west||east?0:1,s=west||east?1:0;
+    return {...ROOM_MODEL(x,y,(vx,vy)=>{
+      for(const side of [-1,1])coveRound(vx+c*side*w.half,vy+s*side*w.half,c,s,.055,.06,w.bottom-.055,w.top+.055,.012,bathroomPaint);
+      for(const z of [w.bottom,w.top])coveRound(vx,vy,c,s,w.half-.055,.06,z-.055,z+.055,.012,bathroomPaint);
+      coveRound(vx,vy,c,s,.025,.05,w.bottom+.055,w.top-.055,.012,bathroomPaint);
+      coveRound(vx,vy,c,s,w.half-.055,.05,2.085,2.155,.012,bathroomPaint);
+    }),radius:w.half+.25};
+  })
+];
+function fernHouseFacade(cabin,i,z,d,side,wc,fog) {
+  const wx=side?wc:px<cabin.x0?cabin.x0:cabin.x1,wy=side?py<cabin.y0?cabin.y0:cabin.y1:wc;
+  const nx=side?0:px<cabin.x0?-1:1,ny=side?py<cabin.y0?-1:1:0;
+  const along=side?wx-cabin.x0:wy-cabin.y0,L=fog*amb*(side?10:13);
+  if(nx===-1&&Math.abs(wy-245.5)<.1&&z<.27){BG[i]=C(GREEN,1.8+L*.15);set(i,' ',0);return;}
+  for(const w of FERN_WINDOWS){const p=fernExteriorWindow(w),u=(wx-p.x)*p.c+(wy-p.y)*p.s;
+    if(p.nx!==nx||p.ny!==ny||Math.abs(u)>p.half||z<p.bottom||z>p.top)continue;
+    BG[i]=C(night>.35?WARM:CYAN,night>.35?2+night*2:2+day*2);set(i,' ',0);return;
+  }
+  if(z<.04){BG[i]=C(GRAY,1.8+L*.15);set(i,' ',0);return;}
+  coveTimber(i,along,z,L,d,nx,ny,0,7,.1);
+}
+function drawFernExterior() {
+  if(!worldReady||!inView(540.5-px,245.5-py,2.4))return;
+  for(const win of FERN_WINDOWS){const p=fernExteriorWindow(win),x=p.x+p.nx*.004-px,y=p.y+p.ny*.004-py;
+    for(const side of [-1,1])coveRound(x+p.c*side*p.half,y+p.s*side*p.half,p.c,p.s,.006,.006,p.bottom-.006,p.top+.006,.0015,bathroomPaint);
+    for(const z of [p.bottom,p.top])coveRound(x,y,p.c,p.s,p.half-.006,.006,z-.006,z+.006,.0015,bathroomPaint);
+    coveRound(x,y,p.c,p.s,.0025,.005,p.bottom+.006,p.top-.006,.001,bathroomPaint);
+    coveRound(x,y,p.c,p.s,p.half-.006,.005,.2085,.2155,.001,bathroomPaint);
+  }
+  drawFernDoor(FERN_HOUSE.x0-px,245.5-py,0,1);
+}
 function homeRayEllipsoid(ox,oy,oz,rx,ry,rz,b) {
   const z=(b.z0+b.z1)/2,h=(b.z1-b.z0)/2,x=ox-b.x,y=oy-b.y;
   const u=(x*b.c+y*b.s)/b.hl,v=(-x*b.s+y*b.c)/b.hw,w=(oz-z)/h,du=(rx*b.c+ry*b.s)/b.hl,dv=(-rx*b.s+ry*b.c)/b.hw,dw=rz/h;
@@ -36478,7 +36555,7 @@ function loadGame() {
     workshop: restoreWorkshop(h.workshop,h.kind),
     furnishings: restoreHomeFurnishings(h.furnishings,h.kind),
     lights: Object.fromEntries(Object.entries(h.lights||{}).filter(([k,v])=>/^fixed[0-9]{1,2}$/.test(k)&&typeof v==='boolean')),
-    door: Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => worldCoord(v)) : null,
+    door: h.kind==='home_island'?[...FERN_HOUSE.door]:Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => worldCoord(v)) : null,
     pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
   }
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) {

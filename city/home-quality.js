@@ -126,12 +126,12 @@ function fernHomeQuality() {
   for(let x=1;x<=22;x++)extra[x+',10']='#';
   for(const x of [5,6,15,16])extra[x+',10']='.';
   for(let y=11;y<=22;y++)extra['13,'+y]='#';
-  extra['13,16']=extra['13,17']='.';extra['0,16']='D';
+  extra['13,16']=extra['13,17']='.';
   for(let y=1;y<=6;y++)extra['18,'+y]='W';
   for(let x=18;x<=22;x++)extra[x+',6']='W';extra['19,6']=extra['20,6']='.';
   def.grid=boxRoom(24,24,extra);def.wc={x0:19,y0:1,x1:23,y1:6,sign:[21,6,21.5]};
   def.home={shelf:[1.18,13],pet:[2,20],bed:[4.1,2.25],closet:[7.5,1.4],sofa:[3,16.8],tv:[3,11.4],fridge:[11.6,1.45],dining:[14.7,6]};
-  def.spots={bed:[4.1,3.7],closet:[7.5,2.5],shelf:[2.2,13],pet:[2,20],fridge:[11.6,2.6],stove:[16.4,2.6],workshop:[15.5,13],tv:[3,12.65],terrace:[1.4,16.5]};
+  def.spots={bed:[4.1,3.7],closet:[7.5,2.5],shelf:[2.2,13],pet:[2,20],fridge:[11.6,2.6],stove:[16.4,2.6],workshop:[15.5,13],tv:[3,12.65]};
   def.bedBounds=[4.1,2.25,1.3,1.05];def.lamps=[[4.5,5],[14.5,6],[5,17],[18,16]];
   def.shelfAxis=[0,1];
   def.floor='fernwood';def.bathFloor='fernBath';
