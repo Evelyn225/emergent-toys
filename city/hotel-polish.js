@@ -6,21 +6,20 @@ function hotelRoomPlan(tier){
  if(tier===2)for(let y=1;y<10;y++)if(y!==7&&y!==8)extra['8,'+y]='#';
  return {w,h,bath,grid:boxRoom(w,h,extra),entry:[w/2,h-1.6,-Math.PI/2]};
 }
-function hotelTelevision(x,y){return [ROOM_MODEL(x,y,(vx,vy)=>TELEVISION(x,y,room,1.1).draw(vx,vy)),BX(x,y,.99,.3,.1,.65,solid(BRICK,{panel:.5,top:'='}))];}
+function hotelTelevision(x,y){return [ROOM_MODEL(x,y,(vx,vy)=>TELEVISION(x,y,room,1.1).draw(vx,vy)),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1)];}
 function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
  const u=HIT.u,z=HIT.w,frame=Math.abs(u)>.76||z<1.53||z>2.27;
  const hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
  BG[i]=C(frame?YEL:z<hill?GREEN:BLUE,frame?3:4);return set(i,frame?(Math.abs(u)>.76?'|':'='):z<1.7?'~':' ',C(frame?YEL:z<1.7?CYAN:GREEN,Math.max(5,L*.7))),true;
 });}
 function hotelDefinition(tier){
- const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:1.2],sofa=[tv[0],h-2.9],stove=tier?[w-1.5,h-4]:null;
+ const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:1.32],sofa=[tv[0],h-2.9],stove=tier?[w-1.5,h-4]:null;
  return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,stove},tier,
  wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,z<.12||Math.abs(z-.8)<.025||z>(tier===2?3.6:3)-.16?'=':' ',C(YEL,L*.65)),true;},
  props:r=>{
- const bed=tier===2?[3.9,3.6]:[2.6,3.2],wood=solid(BRICK,{panel:.45,top:'='}),cloth=solid(tier===2?GREEN:BLUE,{bright:2,top:'~'});
- const p=[BX(...bed,1.3,1.05,.15,.58,cloth),BX(bed[0],bed[1]-1.05,1.4,.08,.12,1.3,wood),
- ...[-.65,.65].map(x=>BX(bed[0]+x,bed[1]-.7,.5,.28,.58,.72,solid(WHITE,{top:'~'}))),
- ...[-1,1].flatMap(side=>[BX(bed[0]+side*1.45,bed[1]-.7,.3,.35,.1,.65,wood),ROOM_MODEL(bed[0]+side*1.45,bed[1]-.7,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
+ const bed=tier===2?[3.9,3.6]:[2.6,3.2],bedWidth=tier===2?1.3:1.14,standWidth=tier===2?.3:.22,standOffset=bedWidth+standWidth+.01;
+ const p=[...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
+ ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),ROOM_MODEL(bed[0]+side*standOffset,bed[1]-.65,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
  ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,-1,tier===2?GREEN:BLUE),...hotelTelevision(...tv),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.6,-1,porcelain),washbasin(w-4.1,1.4,0,1),
  ...(tier?[BATHTUB(w-1.5,4.1)]:[BX(w-2.1,4.4,.7,.7,.02,.07,solid(WHITE)),BX(w-2.8,4.4,.025,.7,.07,1.9,solid(CYAN,{bright:1}))]),

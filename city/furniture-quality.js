@@ -41,3 +41,71 @@ function drawFurnitureTable(vx,vy,hl=.6,hw=.4,height=.78) {
     return true;
   });
 }
+
+// Bedding, carcasses and their blocking footprints are authored together. The
+// local v axis runs from the headboard toward the foot; u runs across the bed.
+function furnitureModel(x,y,c,s,hl,hw,height,draw) {
+  return {...ROOM_MODEL(x,y,draw),radius:Math.hypot(hl,hw),box:boxAt(x,y,c,s,hl,hw,0,height)};
+}
+function FURNITURE_BED(x,y,halfWidth,halfLength,col=BLUE,angle=0,top=.55,headHeight=1) {
+  const c=Math.cos(angle),s=Math.sin(angle),at=(u,v)=>[x+c*u-s*v,y+s*u+c*v];
+  const frameTop=top-.2,pillowTop=top+.14;
+  const body=furnitureModel(x,y,c,s,halfWidth,halfLength,pillowTop,(vx,vy)=>{
+    const part=(u,v,hl,hw,z0,z1,r,material='wood')=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1,r,material);
+    for(const u of [-halfWidth+.13,halfWidth-.13])for(const v of [-halfLength+.16,halfLength-.16])part(u,v,.055,.055,0,.2,.018);
+    part(0,0,halfWidth,halfLength,.15,frameTop,.03);
+    part(0,0,halfWidth-.025,halfLength-.025,frameTop,top-.035,.07,furnitureCloth(WHITE));
+    // A separate tucked duvet follows the same head/foot direction as the frame.
+    const shoulder=-halfLength*.28,foot=halfLength-.03;
+    part(0,(shoulder+foot)/2,halfWidth-.02,(foot-shoulder)/2,top-.035,top,.016,furnitureCloth(col));
+    part(0,shoulder+.045,halfWidth-.025,.055,top,top+.025,.012,furnitureCloth(col));
+    const two=halfWidth>.7,count=two?2:1,pillowWidth=two?halfWidth*.4:halfWidth*.77;
+    for(let k=0;k<count;k++)part(two?(k-.5)*halfWidth:.0,-halfLength*.66,pillowWidth,halfLength*.22,top-.01,pillowTop,.065,furnitureCloth(WHITE));
+  });
+  const [hx,hy]=at(0,-halfLength-.05),head=furnitureModel(hx,hy,c,s,halfWidth+.08,.08,headHeight,(vx,vy)=>{
+    const part=(u,hw,z0,z1,r,seed)=>coveRound(vx+c*u,vy+s*u,c,s,hw,.08,z0,z1,r,'wood',seed);
+    for(const side of [-1,1])part(side*(halfWidth+.04),.04,.1,headHeight,.025,7);
+    part(0,halfWidth,.1,.34,.025,7);part(0,halfWidth,headHeight-.12,headHeight,.025,7);
+    // A thinner panel fits between the rails and stiles, recessed on both faces.
+    coveRound(vx,vy,c,s,halfWidth,.045,.31,headHeight-.1,.015,'wood',9);
+  });
+  body.furniture='bed';head.furniture='headboard';return [body,head];
+}
+function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
+  const c=Math.cos(angle),s=Math.sin(angle),thick=.035,base=.085,cap=height-.045;
+  const model=furnitureModel(x,y,c,s,hl,hw,height,(vx,vy)=>{
+    const part=(u,v,hx,hy,z0,z1,r=.01,material='wood')=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hx,hy,z0,z1,r,material);
+    // Recessed plinth, joined side walls, back and cap. A shelf's top remains the
+    // exact support plane used by home.decor, not a second floating trim board.
+    part(0,0,hl-.035,hw-.025,0,base,.012);
+    for(const side of [-1,1])part(side*(hl-thick/2),0,thick/2,hw,base,cap);
+    part(0,-hw+thick/2,hl-thick,thick/2,base,cap);
+    part(0,0,hl,hw,cap,height,.015);
+    if(open) {
+      const levels=[base,.37*height,.69*height];
+      for(const z of levels)part(0,0,hl-thick,hw-thick,z,z+.035,.008);
+      for(let shelf=0;shelf<2;shelf++)for(let k=0;k<3;k++) {
+        const u=(k-1)*.057+(shelf?1:-1)*hl*.43,z=levels[shelf]+.035,h=.17+((k+shelf)%3)*.023;
+        part(u,hw*.1,.022,Math.min(.07,hw-.04),z,z+h,.004,(i,t,L)=>{
+          const color=[BLUE,STONE,BRICK][(k+shelf)%3],binding=HIT.w>z+h-.015||HIT.w<z+.014;
+          BG[i]=C(binding?WARM:color,2.5+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+        });
+      }
+    }else {
+      const drawer=height<1.25,doorTop=drawer?height-.27:height-.075,doorBottom=base+.025;
+      const half=(hl-.05)/2;
+      for(const side of [-1,1]) {
+        part(side*half,hw-.038,half-.008,.014,doorBottom,doorTop,.012);
+        const u=side*.045,z=drawer?(doorBottom+doorTop)/2:height*.55;
+        const ax=vx+c*u-s*(hw-.012),ay=vy+s*u+c*(hw-.012);
+        coveTube(ax,ay,z-.065,ax,ay,z+.065,.009,GRAY);
+      }
+      if(drawer) {
+        part(0,hw-.038,hl-.035,.014,height-.245,height-.07,.012);
+        const ax=vx-s*(hw-.012),ay=vy+c*(hw-.012),z=height-.155;
+        coveTube(ax-c*.095,ay-s*.095,z,ax+c*.095,ay+s*.095,z,.009,GRAY);
+      }
+    }
+  });
+  model.furniture=open?'shelf':'cabinet';return model;
+}

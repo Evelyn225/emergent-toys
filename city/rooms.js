@@ -853,7 +853,7 @@ function homePlan(w, h, tier) {
   };
   const home = tier === 0
     ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.18, 4.4], fridge: [8.45, 5.6], pet: [1.4, 7.2], dining: [5.5, 5.8] }
-    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.5 : 8.7], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
+    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.6 : 8.7], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
   const wc = tier === 0 ? { x0: 7, y0: 1, x1: 9, y1: 4, sign: [6, 3, 3.5] }
     : { x0: 15, y0: 1, x1: inside, y1: 5, sign: [14, 4, 4.5] };
   wall(wc.x0 - 1, 1, wc.x0 - 1, wc.y1, 'W');
@@ -918,13 +918,12 @@ function homeDef(w, h, tier) {
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
-      BX(bed[0], bed[1] + 0.2, tier ? 1.25 : 1, 0.85, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? tier === 2 ? GREEN : BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
-      BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
-      BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
-      BX(1.45, h - 2.6, .4, .5, 0, 1.1, solid(BRICK, { panel: .3, top: '=' })), // workshop supply cupboard
+      ...FURNITURE_BED(bed[0],bed[1]+.2,.85,tier?1.25:1,tier===2?GREEN:BLUE,-Math.PI/2),
+      FURNITURE_STORAGE(closet[0],closet[1]-.6,.8,.3,2.1),
+      FURNITURE_STORAGE(1.45,h-2.6,.5,.4,1.1,-Math.PI/2),
       TELEVISION(tv[0],tv[1]-.3,r),
-      BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
-      BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' }), 0, 1), // a shelf for things you bring home
+      FURNITURE_STORAGE(tv[0],tv[1]-.3,.8,.25,.61),
+      FURNITURE_STORAGE(shelf[0],shelf[1],.75,.18,1.05,-Math.PI/2,true),
       BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
       ...toilet(plan.wc.x1 - (tier ? 1.4 : .8), 1.42, -1, porcelain),
       washbasin(plan.wc.x0 + 0.4, 1.35, 0, 1),
@@ -934,7 +933,7 @@ function homeDef(w, h, tier) {
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
       BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, stoveShade(tier, tier ? 0.55 : 0.5), 0, 1), // the kitchen counter, the hob and oven in it (cooking.js)
-      ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), BX(10.9, 1.4, 0.7, 0.18, 0, 2.4, solid(BRICK, { panel: 0.3, top: '=' })),
+      ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), FURNITURE_STORAGE(10.9,1.4,.7,.18,2.4,0,true),
         ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), POT_PLANT(1.6, 8.9, 1.5)] : []),
       ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),
         POT_PLANT(23.6, 14.8, 1.6), POT_PLANT(21, 9, 1.5)] : []),

@@ -835,10 +835,10 @@ test('a night at the hotel: pay, sleep, wake at 7 in a room to a clear morning',
     });
     assert.deepStrictEqual(early, [100, '"Sorry, check-in begins at 6pm."']);
     await page.evaluate(() => { tod = 21; weather = 'rain'; rain = 1; bookRoom(); });
-    await page.waitForTimeout(3600);
+    await page.waitForFunction(() => room.kind === 'hotelroom' && sleep?.done, null, { timeout: 15000 });
     const r = await page.evaluate(() => ({ money, kind: room.kind, hour: Math.floor(tod), weather, rain, sleeping: !!sleep }));
     assert.deepStrictEqual(r, { money: 60, kind: 'hotelroom', hour: 7, weather: 'clear', rain: 0, sleeping: true });
-    await page.waitForTimeout(2000);
+    await page.waitForFunction(() => !sleep && fade === 0, null, { timeout: 15000 });
     assert.strictEqual(await page.evaluate(() => [!!sleep, fade].join()), 'false,0', 'awake, and the screen faded back in');
     assert.strictEqual(await page.evaluate(() => { leaveRoom(); return room.kind; }), 'hotel', 'the room door leads back to the lobby');
     assert.deepStrictEqual(errors, []);
