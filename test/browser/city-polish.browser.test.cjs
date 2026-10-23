@@ -127,6 +127,9 @@ test('touch cooking provides Heat, Add and the recipe action; buttons heat and c
   for (const [recipe, verb] of [['omelette','Flip'], ['risotto','Stir'], ['roastchicken','Turn']]) {
     await page.evaluate(id => { startGame('cook', 'cook', '', { recipe: id }); game.onDone = () => {}; showTouch(); drawGame(); }, recipe);
     assert.deepEqual(await page.locator('#touch .pad button').allTextContents(), ['Off heat', 'Add', verb, 'Heat (hold)']);
+    const help = await page.evaluate(() => gameText(game.g.status(), game.g));
+    assert.match(help, /HOLD HEAT/);
+    assert.ok(!/SPACE|UP|DOWN/.test(help));
     const heat = page.locator('#touch .pad [data-key="Space"]');
     const before = await page.evaluate(() => game.g.state().heat);
     await heat.dispatchEvent('touchstart');
@@ -151,11 +154,15 @@ test('touch cooking provides Heat, Add and the recipe action; buttons heat and c
       assert.equal(done, 'done');
       completed[key]++;
     }
-    const help = await page.evaluate(() => gameText(game.g.status(), game.g));
-    assert.match(help, /HOLD HEAT/);
-    assert.ok(!/SPACE|UP|DOWN/.test(help));
+    await page.evaluate(() => { stepGame(0); showTouch(); drawGame(); });
+    assert.equal(await page.evaluate(() => game.g.over), true);
+    assert.match(await page.evaluate(() => gameText(game.g.status(), game.g)), /Dish ready/);
+    assert.deepEqual(await page.locator('#touch .pad button').allTextContents(), ['Done']);
     const cue = await page.evaluate(() => gameText('FLIP IT!  [UP]   ADD CHEESE!  [DOWN]', game.g));
     assert.ok(!/\[UP\]|\[DOWN\]/.test(cue));
+    const done = page.locator('#touch .pad [data-key="KeyE"]');
+    await done.dispatchEvent('touchstart');await done.dispatchEvent('touchend');
+    assert.equal(await page.evaluate(() => game), null, 'Done intentionally dismisses the completed dish');
   }
   assert.ok(completed.up > 0 && completed.down > 0, 'both cooking action buttons must complete timed moves');
 }));
