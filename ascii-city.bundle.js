@@ -36339,7 +36339,7 @@ function assembleArchipelago() {
     const p=fixtures[i];
     if(Math.abs(p.x-CAUSEWAY.x)>=CAUSEWAY.hw||p.y<CAUSEWAY.y1-2||p.y>CAUSEWAY.y1+3)continue;
     if(fixtures.some(q=>q!==p&&Math.abs(q.x-airportCurb)<.01&&Math.abs(q.y-p.y)<.01))fixtures.splice(i,1);
-    else p.x=airportCurb;
+    else {p.x=airportCurb;if(fixtures===lamps&&p.ax)p.ax=-Math.abs(p.ax);}
   }
   rebuildLampGlow();
   // Outdated seam structure is replaced with the raised crossings below.
