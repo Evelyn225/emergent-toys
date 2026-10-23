@@ -17,7 +17,7 @@ test.before(async () => {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
-  browser = await chromium.launch();
+  browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 });
 test.after(async () => { await browser?.close(); server?.closeAllConnections(); if (server) await new Promise(resolve => server.close(resolve)); });
 async function fixture(run) {
@@ -57,4 +57,35 @@ test('smoke: lit campfires and Fern House stove smoke after dark, cold ones do n
   assert.ok(r.chimney >= 4 && r.chimneyAbove, 'Fern House chimney smokes after dark: ' + JSON.stringify(r));
   assert.equal(r.indoors, 0, 'no outdoor smoke is made while you are inside');
   assert.equal(r.clouds, 24); assert.equal(r.newest, 39); assert.equal(r.oldest, 16); assert.ok(r.lit);
+}));
+
+test('damage: a round leaves a hole on the face of the wall it hit, and clanks off a car or chips a wall where it lands', () => fixture(async page => {
+  const r = await page.evaluate(async () => {
+    audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });
+    const sounds = [], realBurst = burst, realTone = tone;
+    burst = (at, len, filters, gain, pan) => sounds.push({ kind: 'burst', f: filters[0].frequency.value, gain, pan });
+    tone = (at, freq, len, gain, type, pan) => sounds.push({ kind: 'tone', f: freq, gain, pan });
+    try {
+      let spot = null; // a building's south wall with open, flat ground in front of it
+      for (let y = 300; y < 500 && !spot; y++) for (let x = 300; x < 500 && !spot; x++)
+        if (map[idx(x, y)] > .6 && !map[idx(x, y + 1)] && !map[idx(x, y + 2)] && !ROAD[idx(x, y + 1)] && Math.abs(terrainHeight(x + .5, y + 1.4) - terrainHeight(x + .5, y + 1.05)) < .002) spot = [x, y];
+      const [cx, cy] = spot;
+      clearInventory(); carryItem({ id: 'revolver', uses: 6 }); held = 0; gun.cool = gun.reload = 0;
+      mode = 'walk'; room = null; px = cx + .5; py = cy + 1.4; a = -Math.PI / 2; pitch = 0; render(0);
+      pullTrigger();
+      const wall = sounds.splice(0).filter(s => s.kind === 'burst' && s.f >= 2000), hole = { ...bulletHoles[0] };
+      render(0); const p = fishProj(rel(hole.x - px), rel(hole.y - py), hole.z), drawn = CH[Math.floor(p.r) * cols + Math.floor(p.c)];
+      // a parked car a few metres ahead, to the east
+      const cars0kind = Object.keys(VEHICLES)[0];
+      a = 0; pitch = -.3; render(0); gun.cool = 0; cars.push({ kind: cars0kind, x: px + .4, y: py, hx: 1, hy: 0, v: 0, parked: true, ex: px + .4, ey: py, dmg: 0 });
+      pullTrigger();
+      const clank = sounds.filter(s => s.kind === 'tone' && s.f > 800);
+      return { cy, holes: bulletHoles.length, hole, wall: wall.length, drawn, clank: clank.length, carHit: cars.at(-1).dmg > 0 };
+    } finally { burst = realBurst; tone = realTone; }
+  });
+  assert.equal(r.holes, 1, 'the car hit leaves no wall hole');
+  assert.ok(Math.abs(r.hole.y - (r.cy + 1)) < .002 && r.hole.ny === 1 && r.hole.nx === 0, 'on the south face, facing out: ' + JSON.stringify(r.hole));
+  assert.ok(r.wall >= 1, 'a chip off the wall');
+  assert.match(r.drawn, /[o.]/, 'the hole is drawn on the wall');
+  assert.ok(r.carHit && r.clank >= 1, 'a clank off the car: ' + JSON.stringify(r));
 }));

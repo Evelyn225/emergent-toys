@@ -23741,6 +23741,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
   drawPeeMarks(); // stains on walls and solid static objects
+  if (city) drawBulletHoles(); // (gun-ui.js)
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
@@ -31152,6 +31153,37 @@ function killRoomFigure(p,hx,hy){
   const k=room.def.keeper;if(k&&Math.hypot(p.x-k[0],p.y-k[1])<.6)room.keeperDead=true;
 }
 
+// ---- where a round ends up: the sound of it striking, heard from there (a clank off a car, a chip off a wall, a thud
+// into the ground), and in a building's wall a hole that stays. (A hole sits on the face the shot crossed into)
+const bulletHoles = []; // { x, y, z, nx, ny }: out of doors, the oldest go first
+function shotImpact(r, indoors, slope) {
+  if (r.what === 'air' || r.what === 'person' || r.what === 'cop') return;
+  if (actx) {
+    const p = indoors ? soundDistanceProfile((r.x - px) / 10, (r.y - py) / 10, (r.z - eye) / 10, a, 8, 0.6, false) : worldSoundProfile(r.x, r.y, r.z, 40, 3);
+    const at = actx.currentTime + p.delay, g = p.gain, hi = f => filt('lowpass', Math.min(f, p.cutoff));
+    if (r.what === 'car') { tone(at, 820 + Math.random() * 200, 0.18, 0.07 * g, 'triangle', p.pan); tone(at, 1340, 0.1, 0.03 * g, 'square', p.pan); burst(at, 0.05, [filt('bandpass', 3000, 3), hi(8000)], 0.12 * g, p.pan); }
+    else if (r.what === 'wall') { burst(at, 0.04, [filt('bandpass', 2200, 1.2), hi(8000)], 0.14 * g, p.pan); burst(at + 0.01, 0.12, [hi(500)], 0.08 * g, p.pan); }
+    else burst(at, 0.08, [hi(900)], 0.14 * g, p.pan);
+  }
+  if (indoors || r.what !== 'wall') return;
+  const hx = Math.cos(a), hy = Math.sin(a), cx = Math.floor(r.x), cy = Math.floor(r.y);
+  if (!(map[idx(cx, cy)] > r.z)) return; // (a building's wall, not a roof or a rock)
+  const xFace = Math.floor(r.x - hx * 0.03) !== cx, yFace = Math.floor(r.y - hy * 0.03) !== cy; // (back out past the trace's 0.02 step)
+  if (xFace === yFace) return; // (a corner, or it came down onto it)
+  const t = xFace ? ((hx > 0 ? cx : cx + 1) - r.x) / hx : ((hy > 0 ? cy : cy + 1) - r.y) / hy;
+  const nx = xFace ? -Math.sign(hx) : 0, ny = xFace ? 0 : -Math.sign(hy);
+  bulletHoles.push({ x: worldCoord(r.x + hx * t + nx * 0.001), y: worldCoord(r.y + hy * t + ny * 0.001), z: r.z + slope * t, nx, ny });
+  if (bulletHoles.length > 60) bulletHoles.shift();
+}
+function drawBulletHoles() {
+  for (const h of bulletHoles) {
+    const vx = rel(h.x - px), vy = rel(h.y - py);
+    if (vx * h.nx + vy * h.ny >= 0) continue; // (from round the back of the wall)
+    const p = fishProj(vx, vy, h.z);
+    if (p && p.depth < Math.min(vis, 6)) fishPut(p.c, p.r, p.depth, p.depth < 0.6 ? 'o' : '.', C(GRAY, 2.5), C(GRAY, 0.6));
+  }
+}
+
 // ---- Q and R
 function pullTrigger() {
   const indoors = mode === 'room', slope = (hor - (rows >> 1)) / projY; // (the crosshair's on the middle row)
@@ -31159,6 +31191,7 @@ function pullTrigger() {
   if (!r) return;
   if (r.empty) { if (actx) dryFire(actx.currentTime); return say('*click* It\'s empty. R to reload.', 1.5); }
   if (actx) { gunBang(actx.currentTime, 1, 0, indoors ? 'in' : ''); screams(px, py); }
+  shotImpact(r, indoors, slope);
   if (r.what === 'person' || r.what === 'cop') say(pick(r.what === 'cop' ? ['The officer drops. Somebody on the radio is asking for them.', 'The officer goes down and stays down.']
     : ['They go down and don\'t get up.', 'They drop where they stood.', 'They fall. Nobody near them moves to help.']), 2.5);
   else if (r.what === 'car') say(pick(['The round punches through a door panel.', '*PANG* off the car.']), 1.5);
