@@ -71,7 +71,6 @@ function buildIslandSights() {
   }
   islandGroundModel(489.9,395.3,.12,.08,.075,'timber');
   islandSkiff(481,397.2);
-  islandWaymark(489,395.1,'MENDED NETS',.4);
   // Cormorant Rock: two solid, faceted sea stacks with bird perches.
   for(const [x,y,hl,hw,height]of [[700.6,350.6,.62,.5,.95],[702.1,352.5,.45,.5,1.25]]) {
     const rock=islandGroundModel(x,y,hl,hw,height,'rock',true);

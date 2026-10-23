@@ -2025,7 +2025,7 @@ const FERN_STRIP = { x0: 551, x1: 617, y: 220, hw: 1.3 };
 const FERN_HOUSE = { x0: 539, y0: 244, x1: 542, y1: 247, door: [540.5, 247.2], terrace: [537.8, 245.5] };
 const ISLAND_CABINS = [
   {...FERN_HOUSE, id:'fern-house', name:'Fern House', h:.38, pitch:.22, wood:BRICK, roof:GRAY},
-  {id:'cabin-cove',name:'Cabin Cove fishing shelter',door:[492,392.2],room:'islandshelter',x0:491,y0:390,x1:493,y1:392,h:.29,pitch:.17,wood:BRICK,roof:GREEN},
+  {id:'cabin-cove',name:'Cabin Cove fishing shelter',door:[492,392.2],room:'islandshelter',x0:491,y0:390,x1:493,y1:392,h:.29,pitch:.4,wood:BRICK,roof:GREEN},
   {id:'juniper-house',name:'Juniper House',door:[791,241.2],x0:790,y0:239,x1:792,y1:241,h:.3,pitch:.18,wood:STONE,roof:BRICK},
 ];
 const ISLAND_ROOFS=[];
@@ -33223,6 +33223,7 @@ function buildWildIslands() {
     }
   }
   for(const cabin of ISLAND_CABINS) {
+    if(cabin.id==='cabin-cove'){ISLAND_ROOFS.push(...coveRoofParts(cabin));continue;}
     const hl=(cabin.x1-cabin.x0)/2+.09,hw=(cabin.y1-cabin.y0)/2+.12;
     ISLAND_ROOFS.push({x:(cabin.x0+cabin.x1)/2,y:(cabin.y0+cabin.y1)/2,c:1,s:0,hl,hw,z0:cabin.h-.015,z1:cabin.h+cabin.pitch,
       planes:landmarkPlanes(hl,hw,cabin.h-.015,cabin.h+cabin.pitch,'gable'),cabin});
@@ -33704,7 +33705,6 @@ function buildIslandSights() {
   }
   islandGroundModel(489.9,395.3,.12,.08,.075,'timber');
   islandSkiff(481,397.2);
-  islandWaymark(489,395.1,'MENDED NETS',.4);
   // Cormorant Rock: two solid, faceted sea stacks with bird perches.
   for(const [x,y,hl,hw,height]of [[700.6,350.6,.62,.5,.95],[702.1,352.5,.45,.5,1.25]]) {
     const rock=islandGroundModel(x,y,hl,hw,height,'rock',true);
@@ -34018,7 +34018,7 @@ function coveRayRounded(ox,oy,oz,rx,ry,rz,b) {
 }
 function coveRound(x,y,c,s,hl,hw,z0,z1,r,material='wood',seed=0) {
   const b={...boxAt(x,y,c,s,hl,hw,z0,z1),round:Math.min(r,hl*.98,hw*.98,(z1-z0)*.49)};
-  drawBox(b,(i,t,L)=>material==='wood'?coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed):coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,material),coveRayRounded);
+  drawBox(b,(i,t,L)=>typeof material==='function'?material(i,t,L):material==='wood'?coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed):coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,material),coveRayRounded);
 }
 // Analytic surfaces of revolution: the profile includes the lip and inside of
 // a vessel, so handles and rims enclose actual space rather than a painted top.
@@ -34115,18 +34115,33 @@ function coveCup(vx,vy,z) {
   drum(vx,vy,.069,z+.125,z+.128,(i,t,L)=>{BG[i]=C(BRICK,1.1);set(i,' ',0);return true;});
   coveArc(vx+.09,vy,z+.1,.06,-Math.PI*.6,Math.PI*.6,.012,STONE);
 }
+const COVE_RACK={railY:-.35,railHalf:.065,upper:2.15,railHeight:.08,round:.015,rodRadius:.007,shoeY:.08,shoeTop:.12};
+function coveRodPoints(vx,vy,k) {
+  const rack=COVE_RACK,x=vx-.72+k*.48,cornerY=rack.railY+rack.railHalf-rack.round,cornerZ=rack.upper+rack.railHeight/2-rack.round;
+  // Tangency to the rounded upper-front corner includes the shaft radius, so
+  // the rods meet the rail instead of floating just ahead of its rounded edge.
+  const radius=rack.round+rack.rodRadius;let lean=0;
+  for(let n=0;n<5;n++)lean=(rack.shoeY-cornerY-radius*Math.hypot(1,lean))/(cornerZ-rack.shoeTop);
+  const contactZ=cornerZ+radius*lean/Math.hypot(1,lean);
+  const at=z=>[x+.12*(z-rack.shoeTop)/(2.24-rack.shoeTop),vy+rack.shoeY-lean*(z-rack.shoeTop),z];
+  return {butt:at(rack.shoeTop),joint:at(1.55),tip:at(2.24),reel:at(.43),contact:at(contactZ)};
+}
 function coveGear(vx,vy) {
+  const rack=COVE_RACK;
+  for(const x of [-.94,.94])coveRound(vx+x,vy-.14,0,1,.31,.055,0,.07,.018,'wood');
   for(const x of [-.94,.94])coveRound(vx+x,vy-.38,1,0,.045,.055,0,2.38,.018,'wood');
-  for(const z of [.17,1.13,2.28])coveRound(vx,vy-.35,1,0,1.04,.065,z-.04,z+.04,.015,'wood');
+  for(const z of [.17,1.13,rack.upper])coveRound(vx,vy+rack.railY,1,0,1.04,rack.railHalf,z-rack.railHeight/2,z+rack.railHeight/2,rack.round,'wood');
+  coveRound(vx,vy+rack.shoeY,1,0,1.04,.075,.07,rack.shoeTop,.012,'wood');
   for(let k=0;k<4;k++) {
-    const x=vx-.72+k*.48,y=vy+.02;
-    rod(x,y,.12,x+.06,y,1.55,.014,[GREEN,BRICK,GRAY,GREEN][k],1.3);
-    rod(x+.06,y,1.55,x+.12,y-.04,2.24,.007,GRAY,1.2);
-    coveLathe(x,y+.035,.43,[[0,0],[0,.057],[.014,.065],[.045,.065],[.057,.05],[.057,0]],(i,t,L)=>{
+    const {butt,joint,tip,reel}=coveRodPoints(vx,vy,k);
+    rod(...butt,...joint,.014,[GREEN,BRICK,GRAY,GREEN][k],1.3);
+    rod(...joint,...tip,rack.rodRadius,GRAY,1.2);
+    coveLathe(reel[0],reel[1]+.035,reel[2],[[0,0],[0,.057],[.014,.065],[.045,.065],[.057,.05],[.057,0]],(i,t,L)=>{
       if(HIT.face===5){const spoke=Math.abs(Math.sin(Math.atan2(HIT.v,HIT.u)*4))<.16;BG[i]=C(spoke?GRAY:BRICK,spoke?5:2);set(i,' ',0);return true;}
       return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz);
     });
-    rod(x+.12,y-.04,2.24,x+.18,y+.04,1.15,.0025,STONE,.7);
+    rod(...tip,joint[0]+.008,joint[1]+.012,joint[2],.0025,STONE,.7);
+    rod(joint[0]+.008,joint[1]+.012,joint[2],reel[0],reel[1]+.035,reel[2]+.057,.0025,STONE,.7);
   }
 }
 function coveChest(vx,vy) {
@@ -34172,7 +34187,7 @@ function coveRoomFrame(win,vx,vy) {
 function coveInteriorProps() {
   const props=[coveBench(1.7,6,1),coveBench(10.2,6,-1),
     {...ROOM_MODEL(4,3.4,(vx,vy)=>{coveTable(vx,vy);coveLogbook(vx,vy);coveCup(vx+.7,vy+.13,.81);},[1.15,.55,.87]),radius:1.5},
-    ROOM_MODEL(8.6,1.6,coveGear,[1.05,.25,2.38]),ROPE_COIL(2,1.7),
+    {...ROOM_MODEL(8.6,1.6,coveGear),box:boxAt(8.6,1.46,1,0,1.05,.31,0,2.38)},ROPE_COIL(2,1.7),
     ROOM_MODEL(9.8,3.4,coveChest,[.44,.34,.53]),ROOM_MODEL(6,5,coveLantern),
     ROOM_MODEL(1.45,2.9,coveBucket,[.2,.2,.5])];
   for(const win of COVE_WINDOWS) {
@@ -34183,6 +34198,14 @@ function coveInteriorProps() {
     for(const y of [-2,1,3])coveRound(vx,vy+y,1,0,5,.075,2.48,2.7,.025,'wood',3);
     for(const x of [-4.95,4.95])coveRound(vx+x,vy,0,1,3.95,.05,.03,.16,.016,'wood');
   }),radius:7});
+  props.push({...ROOM_MODEL(6,9,(vx,vy)=>drawCoveDoor(vx,vy,10,-1)),radius:1.25});
+  props.push(ROOM_MODEL(7.65,8.98,(vx,vy)=>{
+    const plaque=boxAt(vx,vy,1,0,.3,.02,1.64,1.88);
+    drawBox(plaque,(i,t,L)=>{
+      BG[i]=C(STONE,6+L*.2);
+      set(i,HIT.face===4?worldText('EXIT',-HIT.u,HIT.w,t,i,vx,vy-.02,1.76,-1,0,.11,.14):' ',C(BLACK,15));return true;
+    });
+  }));
   return props;
 }
 ROOM_DEFS.islandshelter.props=coveInteriorProps;
@@ -34204,10 +34227,7 @@ ROOM_CEILS.cove=(i,r,column,x,y)=>{
 function coveInteriorWall(i,u,uStep,z,d,mx,my,L) {
   const along=Math.abs(u),face=mx===0?'west':mx===room.W-1?'east':my===0?'north':'south';
   if(room.grid[my]?.[mx]==='D') {
-    BG[i]=C(GREEN,2.2+L*.16);
-    if(wallText(i,u,uStep,z,d,'EXIT',6,2.25,.13,.17,C(STONE,Math.max(8,L))))return true;
-    const panel=Math.abs(along-6)>.04&&Math.abs(along-6)<.78&&z>.25&&z<1.9;
-    set(i,panel&&Math.abs(z-1.1)<.025?'=':' ',C(YEL,L));return true;
+    if(Math.abs(along-6)<.98&&z<2.46){BG[i]=C(BRICK,1.3+L*.12);set(i,' ',0);return true;}
   }
   const win=COVE_WINDOWS.find(w=>w.face===face&&Math.abs(along-w.center)<w.half&&z>w.bottom&&z<w.top);
   if(win) {
@@ -34239,9 +34259,7 @@ function coveFacade(cabin,i,z,h,d,side,wc,fog) {
     BG[i]=C(grout?GRAY:STONE,(grout?1.4:3)+light*.18+(stone%3)*.15);set(i,' ',0);return;
   }
   if(face==='south'&&Math.abs(wc-492)<.1&&z<.25) {
-    BG[i]=C(GREEN,2.3+light*.18);
-    const panel=Math.abs(wc-492)<.074&&z>.035&&z<.22;
-    if(panel){const edge=Math.min(.074-Math.abs(wc-492),z-.035,.22-z);BG[i]=C(GREEN,(edge<.006?1.6:3)+light*.14);}
+    BG[i]=C(BRICK,1.3+light*.12);
     set(i,' ',0);return;
   }
   for(const win of COVE_WINDOWS)if(win.face===face) {
@@ -34257,15 +34275,79 @@ function coveFacade(cabin,i,z,h,d,side,wc,fog) {
   BG[i]=C(BRICK,3.3+light*.31*coveLight(nx,ny,.1)+grain-joint*1.5+(board%3)*.08+Math.cos(z/.025*Math.PI*2)*.6*relief);
   set(i,' ',0);
 }
-function coveRoofShade(roof,i,t,L) {
-  if(HIT.face===2||HIT.face===3) {
-    const row=Math.floor(HIT.w/.025),groove=coveGroove(HIT.w,.025,.001,t/projY);
-    BG[i]=C(BRICK,3.4+L*.24+(row%3)*.1-groove*1.6);set(i,' ',0);return true;
+function coveRoofProfile(c=COVE_CABIN) {
+  const hl=(c.x1-c.x0)/2+.09,hw=(c.y1-c.y0)/2+.12,eave=c.h+.015,ridge=c.h+c.pitch,thickness=.016;
+  return {x:(c.x0+c.x1)/2,y:(c.y0+c.y1)/2,hl,hw,eave,ridge,thickness,slope:(ridge-eave)/hl};
+}
+function coveRoofParts(cabin) {
+  const p=coveRoofProfile(cabin),{x,y,hl,hw,ridge,eave,slope,thickness}=p;
+  // The timber gable ends at the wall. Only the thin roof covering projects
+  // beyond it. Both slopes, their soffits and the gable use these exact planes.
+  const body={x,y,c:1,s:0,hl:(cabin.x1-cabin.x0)/2,hw:(cabin.y1-cabin.y0)/2,z0:cabin.h-.015,z1:ridge-thickness,cabin,part:'cove-gable'};
+  body.planes=landmarkPlanes(body.hl,body.hw,body.z0,body.z1,null).concat([[slope,0,1,body.z1],[-slope,0,1,body.z1]]);
+  const parts=[body];
+  for(const side of [-1,1]) {
+    const offset=side*hl/2,top=ridge-slope*hl/2;
+    const cover={x:x+offset,y,c:1,s:0,hl:hl/2,hw,z0:eave-thickness,z1:ridge,cabin,part:'cove-cover',side,slope};
+    cover.planes=landmarkPlanes(cover.hl,hw,cover.z0,ridge,null).concat([[side*slope,0,1,top],[-side*slope,0,-1,-top+thickness]]);
+    parts.push(cover);
   }
-  const far=coveDetail(t,.1),course=Math.floor(HIT.u/.055),q=fract(HIT.u/.055),seam=fract(HIT.v/.13+(course&1)*.5);
-  const edge=q<.06||seam<.035,light=coveLight(Math.sign(HIT.u)*.16,0,.985);
-  BG[i]=C(GREEN,2+(L*.27+1.8)*light-(edge?.8:0)*far+Math.sin(course*8+Math.floor(HIT.v/.13))*far*.15);
+  return parts;
+}
+function coveRoofShade(roof,i,t,L) {
+  if(roof.part==='cove-gable'||HIT.face===5||HIT.face===7) {
+    const row=Math.floor(HIT.w/.025),groove=coveGroove(HIT.w,.025,.001,t/projY);
+    const soffit=roof.part!=='cove-gable';
+    BG[i]=C(BRICK,(soffit?1.8:3.4)+L*.24+(row%3)*.1-groove*1.6);set(i,' ',0);return true;
+  }
+  // Closed edge faces form the fascia; no dotted rods or solid wooden triangle
+  // hangs out under the verge. The ridge and shingle courses share world x.
+  if(HIT.face<4){BG[i]=C(BRICK,2.2+L*.22);set(i,' ',0);return true;}
+  const u=roof.x+HIT.u-(COVE_CABIN.x0+COVE_CABIN.x1)/2,across=Math.abs(u),course=Math.floor(across/.055);
+  const footprint=t/projX,groove=Math.max(coveGroove(across,.055,.002,footprint),coveGroove(HIT.v+(course&1)*.065,.13,.002,footprint));
+  const n=Math.hypot(roof.slope,1),light=coveLight(roof.side*roof.slope/n,0,1/n),ridge=Math.abs(u)<.018;
+  BG[i]=C(GREEN,(ridge?2.3:1.9)+(L*.25+1.4)*light-groove*.9+Math.sin(course*8+Math.floor(HIT.v/.13))*coveDetail(t,.1)*.12);
   set(i,' ',0);paintSettledSnow(i,roof.x+HIT.u,roof.y+HIT.v,L,.7,0,HIT.w);return true;
+}
+const COVE_DOOR={half:.091,bottom:.012,top:.244,window:{half:.064,bottom:.146,top:.212}};
+const COVE_PLAQUE={half:.32,bottom:.345,top:.42,center:.3825};
+function coveDoorPaint(i,t,L) {
+  // Painted timber stays quiet at oblique angles; sub-cell grain creates
+  // conspicuous moire on this broad face. The actual bevels supply its relief.
+  BG[i]=C(GREEN,1.7+(1.2+L*.23)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+}
+function drawCoveDoor(x,y,scale=1,facing=1) {
+  const d=COVE_DOOR,w=d.window;
+  const wood=(u,v,hl,hw,z0,z1,r=.0015,mat=coveDoorPaint)=>coveRound(x+u*scale,y+v*scale*facing,1,0,hl*scale,hw*scale,z0*scale,z1*scale,r*scale,mat);
+  const metal=(ax,ay,az,bx,by,bz,r)=>coveTube(x+ax*scale,y+ay*scale*facing,az*scale,x+bx*scale,y+by*scale*facing,bz*scale,r*scale,YEL);
+  // A recessed leaf and panels sit behind joined stiles/rails. The surrounding
+  // timber jambs meet their lintel and threshold, rather than crossing them.
+  wood(0,.003,d.half,.002,d.bottom,d.top,.0015);
+  for(const side of [-1,1])wood(side*.082,.009,.009,.004,.017,.239);
+  for(const [z0,z1]of [[.017,.033],[.119,.136],[.224,.239]])wood(0,.009,.073,.004,z0,z1);
+  wood(0,.009,.004,.004,.033,.119);
+  for(const side of [-1,1])wood(side*.0385,.0055,.0305,.0025,.04,.112,.0025);
+  // Small, inset glass pane with a deep bead and a slender central mullion.
+  for(const side of [-1,1])wood(side*(w.half+.003),.009,.003,.004,w.bottom-.006,w.top+.006);
+  for(const z of [w.bottom-.003,w.top+.003])wood(0,.009,w.half,.004,z-.003,z+.003);
+  drawBox(boxAt(x,y+.0065*scale*facing,1,0,w.half*scale,.0015*scale,w.bottom*scale,w.top*scale),(i,t,L)=>{
+    if(facing<0) {
+      const marks=COVE_VIEW.marks.get('south')||[];if(!COVE_VIEW.marks.has('south'))COVE_VIEW.marks.set('south',marks);
+      marks.push([i,t]);BG[i]=C(CYAN,4);set(i,' ',0);return true;
+    }
+    const reflection=Math.abs(HIT.u*.7+HIT.w-.19)<.003;
+    BG[i]=C(night>.35?WARM:CYAN,night>.35?2.8+night*2.2:1.8+L*.1+(reflection?.8:0));set(i,' ',0);return true;
+  });
+  wood(0,.0105,.002,.003,w.bottom,w.top,.001);
+  for(const side of [-1,1])wood(side*.103,.008,.009,.014,.005,.246,.002,'wood');
+  wood(0,.008,.112,.014,.246,.264,.002,'wood');
+  wood(0,.013,.112,.02,0,.008,.002,'wood');
+  // Hardware has real thickness and rounded ends; the handle is on the latch
+  // side, while both hinge leaves are seated against the opposite stile.
+  wood(.066,.015,.006,.002,.103,.132,.001,YEL);
+  metal(.066,.017,.118,.066,.023,.118,.003);
+  metal(.049,.023,.118,.069,.023,.118,.003);
+  for(const z of [.057,.203])wood(-.091,.014,.006,.002,z-.006,z+.006,.001,GRAY);
 }
 function drawCoveExterior() {
   const c=COVE_CABIN,cx=(c.x0+c.x1)/2,cy=(c.y0+c.y1)/2;
@@ -34280,22 +34362,18 @@ function drawCoveExterior() {
     const mid=(w.bottom+w.top)/2;part(x,y,w.c,w.s,w.half-.006,.005,mid-.0025,mid+.0025,.001);
     part(x+nx*.007,y+ny*.007,w.c,w.s,w.half+.012,.015,w.bottom-.014,w.bottom-.006,.002);
   }
-  for(const side of [-1,1])part(492+side*.107,c.y1+.005,1,0,.007,.01,0,.26);
-  part(492,c.y1+.005,1,0,.1,.01,.25,.263);
-  const sign=boxAt(492-px,c.y1+.016-py,1,0,.31,.006,.263,.291);
+  drawCoveDoor(c.door[0]-px,c.y1-py);
+  // The plaque's back meets the actual gable, clear of both roof slopes.
+  const plaque=COVE_PLAQUE,sign=boxAt(cx-px,c.y1+.006-py,1,0,plaque.half,.006,plaque.bottom,plaque.top);
   drawBox(sign,(i,t,L)=>{
     const word=HIT.face===3?'FISHING SHELTER':'';
-    BG[i]=C(STONE,6+L*.24);set(i,word?worldText(word,HIT.u,HIT.w,t,i,sign.x,sign.y+sign.hw,.277,1,0,.036,.02):' ',C(BLACK,15));return true;
+    BG[i]=C(STONE,6+L*.24);set(i,word?worldText(word,HIT.u,HIT.w,t,i,sign.x,sign.y+sign.hw,plaque.center,1,0,.036,.065):' ',C(BLACK,15));return true;
   });
-  // Brass handle is seated on the door plane and stays out of the entrance path.
-  coveTube(492.066-px,c.y1+.006-py,.105,492.085-px,c.y1+.006-py,.105,.003,YEL);
-  const roof=ISLAND_ROOFS.find(r=>r.cabin===c),slope=(roof.z1-roof.z0)/roof.hl;
-  for(const y of [cy-roof.hw,cy+roof.hw])for(const side of [-1,1])
-    coveTube(cx-px,y-py,roof.z1,cx+side*roof.hl-px,y-py,roof.z1-slope*roof.hl,.006,STONE);
+  const roof=coveRoofProfile(c);
   for(const side of [-1,1]) {
     const x=cx+side*roof.hl;
-    coveTube(x-px,cy-roof.hw-py,roof.z0,x-px,cy+roof.hw-py,roof.z0,.007,GREEN);
-    coveTube(x-px,c.y1+.08-py,roof.z0,x-px,c.y1+.08-py,.02,.0055,GREEN);
+    coveTube(x-px,cy-roof.hw-py,roof.eave,x-px,cy+roof.hw-py,roof.eave,.007,GREEN);
+    coveTube(x-px,c.y1+.08-py,roof.eave,x-px,c.y1+.08-py,.02,.0055,GREEN);
   }
 }
 
