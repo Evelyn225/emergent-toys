@@ -5920,7 +5920,7 @@ function snowExposed(x,y,z=0) {
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
 // Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, arcade, rain, birds, cathedral,
-// pachinko, waterfall, aquarium, soft aquarium water) and synthesised ones (waves, wind, rumble, tunnel, engine).
+// pachinko, waterfall, aquarium, soft aquarium water) and synthesised ones (waves, wind, rumble, tunnel, engine, washers).
 // One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
@@ -5959,7 +5959,7 @@ function seaDist(x, y) {
 function audioMix(s) {
   const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, arcade: 0, rain: 0,
     birds: 0, cathedral: 0, pachinko: 0, waterfall: 0, aquarium: 0, waterSoft: 0,
-    fluorescent: 0, watch: s.watch ? 1 : 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+    fluorescent: 0, watch: s.watch ? 1 : 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0, washers: 0 };
   if (s.mode === 'room') {
     const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
@@ -5975,7 +5975,7 @@ function audioMix(s) {
     if (k === 'station') out.tunnel = 0.7;
     if (k === 'cathedral') out.cathedral = 0.8;
     if (k === 'pachinko') out.pachinko = 0.75;
-    if (k === 'laundry') out.fluorescent = 0.28;
+    if (k === 'laundry') { out.fluorescent = 0.28; out.washers = 0.7; } // open all night, and somebody's always got a load in
     if (k === 'jail') out.fluorescent = 0.55;
     if (k === 'backrooms') out.fluorescent = 1; // (nothing else in there but the lights)
     if (k === 'aviary') out.birds = 0.8;
@@ -6061,9 +6061,14 @@ function surfaceAt(mode, room, x, y) {
   if (kind === 'construction' || kind === 'yard') return 'gravel';
   return 'stone';
 }
-// Outdoor sources stay in world coordinates while the listener is in a room.
+// Outdoor sources stay in world coordinates while the listener is in a room. A subway station or train
+// listens from its street entrance (a station reached by train has no doorway of its own); the lamp room
+// from the lighthouse door below it.
 function audioWorldPosition(mode,room,x,y) {
-  const ret=mode==='room'&&(room?.ret||room?.lobby?.ret);
+  if(mode!=='room'||!room)return [x,y];
+  const station=(room.kind==='station'||room.kind==='train')&&stations[room.st];
+  if(station)return [station.x,station.y];
+  const ret=room.ret||room.lobby?.ret||room.below?.ret;
   return ret?[ret[0],ret[1]]:[x,y];
 }
 // One source of truth for recordings, prepared upload assets and exact in-game labels.
@@ -25324,7 +25329,7 @@ function carBang(c) {
   for (let k = 0; k < 10; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.3, y: c.y + (Math.random() - 0.5) * 0.3, z: 0.05 + Math.random() * 0.1,
     r: 0.1, rMax: 0.35, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, vz: 0.3, life: 1, fade: 1 / 5, seed: Math.random() * 100 });
   const d = Math.hypot(rel(c.x - px), rel(c.y - py));
-  if (actx && d < 30) { playClip('crash', clamp(1 - d / 30, 0.2, 1)); tone(actx.currentTime, 40, 0.9, 0.12 * clamp(1 - d / 30, 0, 1), 'sawtooth'); }
+  if (actx) { const p = worldClip('crash', 1, c.x, c.y, terrainHeight(c.x, c.y) + 0.05, 60, 12); if (p.gain > 0.001) tone(actx.currentTime + p.delay, 40, 0.9, 0.12 * p.gain, 'sawtooth', p.pan); }
   if (c === me && mode === 'drive') { leaveCar(); hurt(35); return say('It goes up with you half out of the door. You hit the tarmac, singed.', 5); }
   if (onFootMode() && mode === 'walk' && d < 0.6) { hurt(25 * (1 - d / 0.6)); say('The blast knocks you flat.', 3); }
   if (c.owned) say(`Your ${ITEMS[c.model].name} is a burnt-out shell. The garage will tow it and fix it up (the key fob, ${fmt$(TOW_FEE)}).`, 6);
@@ -26019,7 +26024,7 @@ function stepAirWrecks(dt) {
   stepCraftFalls(dt);
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
-    if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
+    if (actx) { const p = worldClip('crash', 1, c.x, c.y, c.z, 80, 14); if (p.gain > 0.001) tone(actx.currentTime + p.delay, 35, 1.1, 0.14 * p.gain, 'sawtooth', p.pan); }
     if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; if (c.stolen) newsEvent('blownup', c.x, c.y); } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
@@ -26200,9 +26205,8 @@ function stepAbandoned(dt) {
     if (c.state !== 'abandoned') continue;
     const heli = PLANE_TYPES[c.type].heli;
     const ev = flyStep(c, { throttle: 0, pitch: heli ? 0 : -0.25, turn: heli ? 0.4 : 0.1, lift: -1, dead: true }, dt);
-    const d = Math.hypot(rel(c.x - px), rel(c.y - py));
-    if (ev.includes('crash')) { c.state = 'parked'; if (actx && d < 40) playClip('crash', clamp(1 - d / 40, 0.2, 1)); }
-    else if (ev.includes('ditch')) { c.state = 'parked'; c.sinkT = T; if (actx && d < 40) playClip('crash', 0.3 * clamp(1 - d / 40, 0, 1)); }
+    if (ev.includes('crash')) { c.state = 'parked'; if (actx) worldClip('crash', 1, c.x, c.y, c.z, 80, 14); }
+    else if (ev.includes('ditch')) { c.state = 'parked'; c.sinkT = T; if (actx) worldClip('crash', 0.3, c.x, c.y, c.z, 80, 14); }
     else if (ev.includes('land') || ev.includes('hard')) c.state = 'parked';
   }
 }
@@ -26342,7 +26346,10 @@ function useLaundry() { // true if E did something here
   return true;
 }
 function stepLaundry() {
-  if (wash && !wash.told && T >= wash.done) { wash.told = true; say(myLaundromat() ? 'Your machine clunks to a stop.' : 'Your laundry will be done by now.', 3); }
+  if (wash && !wash.told && T >= wash.done) {
+    wash.told = true; say(myLaundromat() ? 'Your machine clunks to a stop.' : 'Your laundry will be done by now.', 3);
+    if (myLaundromat() && actx) sfxWasherDone();
+  }
 }
 // ===== audio: recorded beds and synthesised layers, glided toward audioMix()'s targets every frame, plus one-shots
 // (footsteps, sirens, the till, the shop bell, train clatter). Starts on the first key press or click (browsers
@@ -26358,10 +26365,10 @@ const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3'
 // overall level of each layer at full mix
 const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3, karaoke: 0.35, arcade: 0.35,
                 rain: 0.28, birds: 0.35, cathedral: 0.5, pachinko: 0.45, waterfall: 0.4, aquarium: 0.3, waterSoft: 0.16,
-                fluorescent: 0.2, watch: 0.2,
+                fluorescent: 0.2, watch: 0.2, washers: 0.3,
                 board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
-const CAL = { board: 0.8, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const CAL = { board: 0.8, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16, washers: 1 };
 const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
 let actx = null, master = null, soundOn = true, noiseBuf = null, musicBus, ambBus, sfxBus; // the three volume settings' buses
 const beds = {}, synth = {};
@@ -26380,7 +26387,7 @@ function audioStart() {
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
   for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' || k === 'aquarium' ? musicBus : ambBus);
-  beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, ambBus); // muffled through the walls indoors
+  beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, beds.rain.pan); // muffled through the walls indoors
   makeSynths();
   preloadGameplayAudio();
   clipBuffer('police-siren.wav').then(buf => { policeSirenBuffer = buf; });
@@ -26404,9 +26411,10 @@ function toggleSound() {
 // ---- recorded beds
 // Its two <audio> elements are only made when the bed is first wanted, and let go again after a minute of silence
 // (a phone only has room for so many streams: nine beds' worth, loaded all visit, was too many)
+// (each through a panner, so music playing from somewhere in the room comes from that side)
 function makeBed(file, bus) {
-  const out = actx.createGain(); out.gain.value = 0; out.connect(bus);
-  return { file, out, voices: null, cur: 0, idle: 99, xf: false };
+  const out = actx.createGain(), pan = actx.createStereoPanner(); out.gain.value = 0; chain(out, pan, bus);
+  return { file, out, pan, voices: null, cur: 0, idle: 99, xf: false };
 }
 function bedVoices(b) {
   b.voices = [0, 1].map(() => {
@@ -26483,6 +26491,11 @@ function makeSynths() {
   // a car engine: a growl that rises with speed
   synth.engine = layer(); synth.engineOsc = actx.createOscillator(); synth.engineOsc.type = 'sawtooth'; synth.engineOsc.frequency.value = 45;
   synth.engineLP = filt('lowpass', 380); chain(synth.engineOsc, synth.engineLP, synth.engine); synth.engineOsc.start();
+  // a laundromat: a wall of drums, each load thudding round as it tumbles, water sloshing, the motors' hum
+  synth.washers = layer(); const tumble = actx.createGain(); tumble.gain.value = 0.5; lfo(tumble.gain, 0.9, 0.4);
+  chain(noiseSrc(0.6), filt('lowpass', 180), tumble, synth.washers);
+  const slosh = actx.createGain(); slosh.gain.value = 0.3; lfo(slosh.gain, 0.37, 0.25); chain(noiseSrc(), filt('bandpass', 650, 1.2), slosh, synth.washers);
+  const motor = actx.createOscillator(); motor.frequency.value = 50; const mg = actx.createGain(); mg.gain.value = 0.05; chain(motor, mg, synth.washers); motor.start();
   synth.fluorescent = layer(); loopClip('fluorescent-light-hum', synth.fluorescent);
   synth.watch = layer(); loopClip('pocket-watch-ticking', synth.watch);
 }
@@ -26546,6 +26559,13 @@ function worldSoundProfile(x,y,z,range=180,reference=14) {
   const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'?terrainHeight(x0,y0)+.17:eye;
   return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
+// a recording heard from somewhere in the world: later, quieter and duller with distance, panned to its side,
+// muffled indoors. Returns the profile so a caller can place its own layers alongside
+function worldClip(name,gain,x,y,z,range,reference) {
+  const profile=worldSoundProfile(x,y,z,range,reference);
+  if(profile.gain>.001)playClip(name,gain*profile.gain,actx.currentTime+profile.delay,profile);
+  return profile;
+}
 let peeLoopVoice = null;
 function setPeeAudio(on) {
   if (!actx) return;
@@ -26566,6 +26586,11 @@ function setPeeAudio(on) {
     gain.gain.setTargetAtTime(0.24, actx.currentTime, 0.08);
     peeLoopVoice = { source, gain };
   });
+}
+function sfxWasherDone() { // the drum's last heavy turn, then the door lock clicking free
+  const at = actx.currentTime;
+  tone(at, 70, 0.35, 0.16); burst(at, 0.2, [filt('lowpass', 300)], 0.12);
+  tone(at + 0.9, 2200, 0.03, 0.05, 'square'); burst(at + 0.9, 0.04, [filt('bandpass', 2500, 2)], 0.08);
 }
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
 function sfxKnock() {
@@ -26650,11 +26675,15 @@ function audioTick(dt) {
   let waterfall=0;
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record:homeRecordAudio(), district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
+  const record = homeRecordAudio(), serenade = courierSerenade();
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
     wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
-    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
-  for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
+    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade });
+  // music from a place, not your own boombox: the record player across the room, Nico up on the bar roof
+  const musicPan = fx.boombox ? {} : record ? { [record.song]: record.pan } :
+    serenade ? { bossa: soundDistanceProfile(rel(COURIER_NICO.x - px), rel(COURIER_NICO.y - py), 0, a).pan } : {};
+  for (const k in beds) { tickBed(beds[k], mix[k] * LEVEL[k], dt); beds[k].pan.pan.setTargetAtTime(musicPan[k] || 0, now, 0.1); }
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
   if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
@@ -26765,14 +26794,9 @@ function tickGameplayAudio() {
   const helicopters = aircraft.filter(craft => PLANE_TYPES[craft.type].heli && craft.rotor > .02 && !craft.wrecked && !craft.ditched &&
     (mode === 'air' && craft === pilot || craft.state === 'abandoned'));
   if (heli) helicopters.push(heli);
-  let earX = px, earY = py, earZ = terrainHeight(px, py);
-  if (mode === 'room') {
-    const station = (room.kind === 'station' || room.kind === 'train') && stations[room.st];
-    const ret = room.ret || room.lobby?.ret;
-    if (station) { earX = station.x; earY = station.y; }
-    else if (ret) [earX, earY] = ret;
-    earZ = terrainHeight(earX, earY);
-  } else if (mode === 'air' && pilot) earZ = pilot.z;
+  const [earX, earY] = audioWorldPosition(mode, room, px, py);
+  let earZ = terrainHeight(earX, earY);
+  if (mode === 'air' && pilot) earZ = pilot.z;
   else if (mode === 'roof') earZ = roofH;
   else if (mode === 'el' || mode === 'elplat') earZ = EL_TOP;
   for (const craft of helicopters) {
@@ -34928,7 +34952,10 @@ function homeFixtureUse(t) {
 function homeRecordAudio() {
   const home=mode==='room'&&homeRecord(room);if(!home)return null;
   const player=homeFurnishings(home).parts.filter(p=>p.id==='f_recordplayer'&&p.on).sort((a,b)=>near(px,py,a.x,a.y)-near(px,py,b.x,b.y))[0];
-  return player?{song:['bossa','coffee','arcade'][player.track||0],gain:1/(1+(near(px,py,player.x,player.y)/4)**2)}:null;
+  if(!player)return null;
+  // panned to its side, easing to the middle as you stand over it
+  const d=near(px,py,player.x,player.y),side=soundDistanceProfile(player.x-px,player.y-py,0,a).pan*Math.min(1,d/1.5);
+  return {song:['bossa','coffee','arcade'][player.track||0],gain:1/(1+(d/4)**2),pan:side};
 }
 function openHomeFurnishings() {
   const home=mode==='room'&&homeRecord(room);if(!home)return;

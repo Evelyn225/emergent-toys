@@ -3,7 +3,7 @@
 // which is what makes day turn into night, and indoors into outdoors, without a seam.
 //
 // Layers: recorded beds (city, night, crowd, restaurant, bossa, coffee, karaoke, arcade, rain, birds, cathedral,
-// pachinko, waterfall, aquarium, soft aquarium water) and synthesised ones (waves, wind, rumble, tunnel, engine).
+// pachinko, waterfall, aquarium, soft aquarium water) and synthesised ones (waves, wind, rumble, tunnel, engine, washers).
 // One-shots (footsteps, sirens, the till) are handled in audio.js.
 
 // how much traffic / crowd / night-time nature each district has
@@ -42,7 +42,7 @@ function seaDist(x, y) {
 function audioMix(s) {
   const out = { board: 0, city: 0, crowd: 0, night: 0, restaurant: 0, bossa: 0, coffee: 0, karaoke: 0, arcade: 0, rain: 0,
     birds: 0, cathedral: 0, pachinko: 0, waterfall: 0, aquarium: 0, waterSoft: 0,
-    fluorescent: 0, watch: s.watch ? 1 : 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0 };
+    fluorescent: 0, watch: s.watch ? 1 : 0, waves: 0, wind: 0, rumble: 0, tunnel: 0, engine: 0, washers: 0 };
   if (s.mode === 'room') {
     const k = s.room.kind, [rest, bossa, coffee] = ROOM_AUDIO[k] || [0, 0, 0];
     const cafe = CAFE_WORDS.has(s.room.word);
@@ -58,7 +58,7 @@ function audioMix(s) {
     if (k === 'station') out.tunnel = 0.7;
     if (k === 'cathedral') out.cathedral = 0.8;
     if (k === 'pachinko') out.pachinko = 0.75;
-    if (k === 'laundry') out.fluorescent = 0.28;
+    if (k === 'laundry') { out.fluorescent = 0.28; out.washers = 0.7; } // open all night, and somebody's always got a load in
     if (k === 'jail') out.fluorescent = 0.55;
     if (k === 'backrooms') out.fluorescent = 1; // (nothing else in there but the lights)
     if (k === 'aviary') out.birds = 0.8;
@@ -144,8 +144,13 @@ function surfaceAt(mode, room, x, y) {
   if (kind === 'construction' || kind === 'yard') return 'gravel';
   return 'stone';
 }
-// Outdoor sources stay in world coordinates while the listener is in a room.
+// Outdoor sources stay in world coordinates while the listener is in a room. A subway station or train
+// listens from its street entrance (a station reached by train has no doorway of its own); the lamp room
+// from the lighthouse door below it.
 function audioWorldPosition(mode,room,x,y) {
-  const ret=mode==='room'&&(room?.ret||room?.lobby?.ret);
+  if(mode!=='room'||!room)return [x,y];
+  const station=(room.kind==='station'||room.kind==='train')&&stations[room.st];
+  if(station)return [station.x,station.y];
+  const ret=room.ret||room.lobby?.ret||room.below?.ret;
   return ret?[ret[0],ret[1]]:[x,y];
 }

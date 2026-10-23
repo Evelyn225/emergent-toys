@@ -217,3 +217,60 @@ test('indoor sirens use the actual outdoor location instead of the room furnitur
   assert.deepEqual([result.mainland,result.nearby,result.movedInside,result.anotherBuilding],[0,1,1,0]);
   assert.ok(result.distance>=2&&result.distance<3);
 }));
+
+test('a record player and a rooftop serenade pan toward their source; your own boombox stays centred', () => fixture(async (page, wait) => {
+  const pans = () => page.evaluate(() => Object.fromEntries(['bossa', 'coffee'].map(k => [k, beds[k].pan.pan.value])));
+  await page.evaluate(() => { homeRecordAudio = () => ({ song: 'coffee', gain: 1, pan: -.6 }); audioTick(.016); });
+  await wait(() => beds.coffee.pan.pan.value < -.55);
+  const record = await pans();
+  await page.evaluate(() => {
+    homeRecordAudio = () => null; px = COURIER_NICO.x; py = COURIER_NICO.y - 1; a = 0;
+    courierEncore = true; COURIER_NICO.dead = COURIER_NICO.hidden = false; audioTick(.016);
+  });
+  await wait(() => Math.abs(beds.bossa.pan.pan.value) > .8 && Math.abs(beds.coffee.pan.pan.value) < .05);
+  const serenade = await pans();
+  await page.evaluate(() => { fx.boombox = true; fx.song = 'bossa'; audioTick(.016); });
+  await wait(() => Math.abs(beds.bossa.pan.pan.value) < .05);
+  assert.ok(record.coffee < -.55 && Math.abs(record.bossa) < .05, JSON.stringify(record));
+  assert.ok(serenade.bossa > .8, 'Nico is to the right when facing east with him to the south: ' + JSON.stringify(serenade));
+}));
+
+test('a laundromat sounds of its washers, and your load audibly finishes once', () => fixture(async (page, wait) => {
+  await page.evaluate(() => {
+    money = Math.max(money, 50); wash = null;
+    enterRoom('laundry', { word: 'LAUNDRY', cell: [40, 40], ret: [40.5, 41.5, 0] }, [3, 1.5, -Math.PI / 2]);
+    audioTick(.016);
+  });
+  await wait(() => synth.washers.gain.value > .1);
+  await page.keyboard.press('e');
+  const result = await page.evaluate(() => {
+    const started = !!wash, real = sfxWasherDone; let clunks = 0;
+    sfxWasherDone = () => { clunks++; real(); };
+    T = wash.done + .1; stepLaundry(); stepLaundry();
+    sfxWasherDone = real; leaveRoom(); audioTick(.016);
+    return { started, clunks };
+  });
+  assert.deepEqual(result, { started: true, clunks: 1 });
+  await wait(() => synth.washers.gain.value < .01);
+}));
+
+test('explosions are heard from where they happen: delayed, dulled and panned outdoors, silent from another island indoors', () => fixture(async page => {
+  const result = await page.evaluate(() => {
+    const heard = [], real = playClip;
+    playClip = (name, gain, when, spatial) => heard.push({ name, gain, delay: when - actx.currentTime, cutoff: spatial?.cutoff, pan: spatial?.pan });
+    const blast = (x, y) => { heard.length = 0; carBang({ kind: 'sedan', x, y }); return heard[0] || null; };
+    try {
+      mode = 'walk'; room = null; px = 300; py = 300; a = 0; eye = terrainHeight(px, py) + .17;
+      const near = blast(301, 300.6), far = blast(330, 300);
+      enterRoom('islandshelter', { ret: [626, 195, 0] }, [12, 18, 0]);
+      const otherIsland = blast(12, 18), besideShelter = blast(627, 195);
+      return { near, far, otherIsland, besideShelter };
+    } finally { playClip = real; }
+  });
+  const { near, far, otherIsland, besideShelter } = result;
+  assert.equal(near.name, 'crash');
+  assert.ok(near.gain > .9 && near.cutoff > 8000 && near.pan > .4, JSON.stringify(near));
+  assert.ok(far.gain < near.gain * .25 && far.cutoff < near.cutoff / 3 && Math.abs(far.delay - 30 / 34) < .02, JSON.stringify(far));
+  assert.equal(otherIsland, null, 'a mainland blast at the room furniture coordinates is out of earshot');
+  assert.ok(besideShelter && besideShelter.gain < .15 && besideShelter.cutoff <= 900, JSON.stringify(besideShelter));
+}));

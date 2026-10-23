@@ -43,7 +43,10 @@ function homeFixtureUse(t) {
 function homeRecordAudio() {
   const home=mode==='room'&&homeRecord(room);if(!home)return null;
   const player=homeFurnishings(home).parts.filter(p=>p.id==='f_recordplayer'&&p.on).sort((a,b)=>near(px,py,a.x,a.y)-near(px,py,b.x,b.y))[0];
-  return player?{song:['bossa','coffee','arcade'][player.track||0],gain:1/(1+(near(px,py,player.x,player.y)/4)**2)}:null;
+  if(!player)return null;
+  // panned to its side, easing to the middle as you stand over it
+  const d=near(px,py,player.x,player.y),side=soundDistanceProfile(player.x-px,player.y-py,0,a).pan*Math.min(1,d/1.5);
+  return {song:['bossa','coffee','arcade'][player.track||0],gain:1/(1+(d/4)**2),pan:side};
 }
 function openHomeFurnishings() {
   const home=mode==='room'&&homeRecord(room);if(!home)return;

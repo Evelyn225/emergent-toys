@@ -23,6 +23,7 @@ test('fixed lamps switch independently and record player music fades with distan
  await p.evaluate(()=>{const [x,y]=room.def.lamps[0];px=x;py=y+1.5;a=-Math.PI/2;pitch=((room.def.height-.65-eye)/1.5)*projY/rows;render(0);});assert.match(await p.evaluate(()=>promptText()),/lamp off/);await p.keyboard.press('e');
  assert.ok(await p.evaluate(()=>homeRecord().lights.fixed0===false&&homeRecord().lights.fixed1!==false));
  await p.evaluate(()=>{buy('f_recordplayer');px=18;py=20;a=0;pitch=0;render(0);useHeldItem();confirmFurnishingPlacement();const q=homeFurnishings(homeRecord()).parts[0];px=q.x;py=q.y+1.2;a=-Math.PI/2;pitch=-.45;render(0);});assert.match(await p.evaluate(()=>promptText()),/play record/);await p.keyboard.press('e');
- const gain=await p.evaluate(()=>{const near=homeRecordAudio().gain;px-=6;const far=homeRecordAudio().gain;return {near,far};});assert.ok(gain.near>gain.far*2);
+ const gain=await p.evaluate(()=>{const near=homeRecordAudio(),ahead=near.pan;px-=6;const far=homeRecordAudio().gain;const right=homeRecordAudio().pan;a=Math.PI/2;const left=homeRecordAudio().pan;a=-Math.PI/2;return {near:near.gain,far,ahead,right,left};});
+ assert.ok(gain.near>gain.far*2);assert.ok(Math.abs(gain.ahead)<.05,'straight ahead plays in the middle');assert.ok(gain.right>.5&&gain.left<-.5,JSON.stringify(gain));
  await p.evaluate(()=>{const q=homeFurnishings(homeRecord()).parts[0];px=q.x;py=q.y+1.2;a=-Math.PI/2;pitch=-.45;render(0);});await p.keyboard.press('e');assert.equal(await p.evaluate(()=>homeRecordAudio()),null);
 }));

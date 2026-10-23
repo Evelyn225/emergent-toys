@@ -70,14 +70,9 @@ function tickGameplayAudio() {
   const helicopters = aircraft.filter(craft => PLANE_TYPES[craft.type].heli && craft.rotor > .02 && !craft.wrecked && !craft.ditched &&
     (mode === 'air' && craft === pilot || craft.state === 'abandoned'));
   if (heli) helicopters.push(heli);
-  let earX = px, earY = py, earZ = terrainHeight(px, py);
-  if (mode === 'room') {
-    const station = (room.kind === 'station' || room.kind === 'train') && stations[room.st];
-    const ret = room.ret || room.lobby?.ret;
-    if (station) { earX = station.x; earY = station.y; }
-    else if (ret) [earX, earY] = ret;
-    earZ = terrainHeight(earX, earY);
-  } else if (mode === 'air' && pilot) earZ = pilot.z;
+  const [earX, earY] = audioWorldPosition(mode, room, px, py);
+  let earZ = terrainHeight(earX, earY);
+  if (mode === 'air' && pilot) earZ = pilot.z;
   else if (mode === 'roof') earZ = roofH;
   else if (mode === 'el' || mode === 'elplat') earZ = EL_TOP;
   for (const craft of helicopters) {
