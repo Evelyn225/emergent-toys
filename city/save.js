@@ -92,6 +92,7 @@ function loadGame() {
     furnishings: restoreHomeFurnishings(h.furnishings,h.kind),
     lights: Object.fromEntries(Object.entries(h.lights||{}).filter(([k,v])=>/^fixed[0-9]{1,2}$/.test(k)&&typeof v==='boolean')),
     door: h.kind==='home_island'?[...FERN_HOUSE.door]:Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => worldCoord(v)) : null,
+    bathroomDoors: Array.isArray(h.bathroomDoors)?h.bathroomDoors.slice(0,8).map(v=>v!==false):[],
     pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
   }
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) {

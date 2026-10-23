@@ -307,6 +307,7 @@ function loop(t) {
   }
   if (sleep) stepSleep(dt);
   if (mode !== 'air') { pitch += ((K.KeyR && !(heldGun() && onFootMode()) ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective; with the revolver in your hand, R reloads)
+  stepBathroomDoors(dt);
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
   if (chute) stepChute(dt); // (hanging under a parachute, or falling before it opens: flight.js)
   else if (!sleep && skatingNow()) stepSkate(dt); // (on the board: skate.js)

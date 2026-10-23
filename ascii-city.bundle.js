@@ -8648,7 +8648,7 @@ function nearestRoomCell(x, y) {
   }
   return best;
 }
-function roomPath(fromX, fromY, toX, toY) {
+function roomPath(fromX, fromY, toX, toY, planDoors=true) {
   const start = nearestRoomCell(fromX, fromY), end = nearestRoomCell(toX, toY);
   if (!start || !end) return [];
   const key = (x, y) => y * room.W + x, first = key(...start), last = key(...end), prev = new Int32Array(room.W * room.H).fill(-1), queue = [first];
@@ -8661,7 +8661,14 @@ function roomPath(fromX, fromY, toX, toY) {
       prev[nk] = id; queue.push(nk);
     }
   }
-  if (prev[last] < 0) return [];
+  if (prev[last] < 0) {
+    // Route through operable doors, then open them on approach. A shut bathroom
+    // must not strand a pursuing officer at the building's entrance.
+    const doors=planDoors?(room.bathroomDoors||[]).filter(p=>p.box):[];
+    if(!doors.length)return [];
+    const walk=doors.map(p=>p.walk);doors.forEach(p=>p.walk=true);
+    try{return roomPath(fromX,fromY,toX,toY,false);}finally{doors.forEach((p,k)=>p.walk=walk[k]);}
+  }
   const path = [];
   for (let id = last; id !== first; id = prev[id]) path.push([id % room.W + 0.5, (id / room.W | 0) + 0.5]);
   return path.reverse();
@@ -16191,7 +16198,11 @@ function makeRoom(kind, extra = {}) {
   const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
-  if(def.wc)r.props.push(...bathroomSurrounds(r));
+  if(def.wc){
+    const frames=bathroomSurrounds(r);r.props.push(...frames);
+    r.bathroomDoors=frames.map((frame,index)=>BATHROOM_POCKET_DOOR(r,frame.bathroomOpening,index));
+    r.props.push(...r.bathroomDoors);
+  }
   if (def.home) r.props.push(...workshopProps(r),...furnishingProps(r));
   if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
     const host=r.lobby||r;r.exterior=homeExterior({...r,cell:host.cell,ret:host.ret});
@@ -24408,6 +24419,11 @@ function interactionFocus() {
     offer('drop',d,d.x,d.y,z,z+.2*unit,.16*unit,inside?1.6:.28);
   }
   if(inside) {
+    for(const prop of room.bathroomDoors||[]){
+      const d=prop.bathroomDoor,c=d.vertical?0:1,s=d.vertical?1:0,width=d.end-d.start;
+      const offset=d.open>.85?width/2-.06:width*d.open/2;
+      offer('bathroom-door',prop,prop.x+c*offset,prop.y+s*offset,.4,2.1,d.open>.85?.12:Math.min(.45,width*(1-d.open)/2),2.2,prop);
+    }
     for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
     const keeper=room.def.keeper;
     for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12)) {
@@ -24425,12 +24441,14 @@ function interactionFocus() {
   return best;
 }
 function focusedInteractionPrompt(target=interactionFocus()) {
+  if(target?.kind==='bathroom-door')return target.who.bathroomDoor.target===1?'E: close bathroom door':'E: open bathroom door';
   if(target?.kind==='home-fixture')return homeFixturePrompt(target.who);
   if(target?.kind==='drop')return `E: pick up the ${itemName(target.who)}`;
   if(target?.kind==='person'||target?.kind==='room-person'&&!target.who.cabbie)return 'E: talk';
   return '';
 }
 function useFocusedInteraction(target=interactionFocus()) {
+  if(target?.kind==='bathroom-door'){bathroomDoorUse(target.who);return true;}
   if(target?.kind==='home-fixture'){homeFixtureUse(target.who);return true;}
   if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
   if(target?.kind==='person'){talkTo(target.who);return true;}
@@ -35271,6 +35289,63 @@ function bathroomSurrounds(r) {
     }),box:boxAt(x,y,c,s,half,.5,2.2,height),bathroomOpening:p,radius:half+.8};
   });
 }
+
+// Pocket leaves slide into the partition; only the portion in the doorway is
+// rendered/solid. Track, opaque leaf and collision all use the same opening.
+function bathroomDoorBox(d,open=d.open) {
+  const left=d.start+(d.end-d.start)*open,right=d.end;
+  if(right-left<.005)return null;
+  const u=(left+right)/2;
+  return boxAt(d.vertical?d.cross+.5:u,d.vertical?u:d.cross+.5,d.vertical?0:1,d.vertical?1:0,(right-left)/2,.025,.04,2.16);
+}
+function BATHROOM_POCKET_DOOR(r,p,index) {
+  const {vertical,cross,start,end}=p,width=end-start,c=vertical?0:1,s=vertical?1:0;
+  const home=homeRecord(r),d={...p,index,home,open:home?.bathroomDoors?.[index]===false?0:1};
+  d.target=d.open;
+  const x=vertical?cross+.5:(start+end)/2,y=vertical?(start+end)/2:cross+.5;
+  const prop={...ROOM_MODEL(x,y,(vx,vy)=>{
+    const part=(u,v,hl,hw,z0,z1,shade)=>drawBox(boxAt(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1),shade);
+    const paint=(i,t,L)=>{BG[i]=C(WHITE,2.7+L*.22);set(i,' ',0);return true;};
+    const trimPaint=(i,t,L)=>{BG[i]=C(WHITE,2.15+L*.2);set(i,' ',0);return true;};
+    // The track is entirely ABOVE the leaf, never behind a translucent seam.
+    part(0,0,width/2,.035,2.16,2.19,solid(GRAY));
+    const box=bathroomDoorBox(d);
+    if(box) {
+      drawBox({...box,x:vx+box.x-x,y:vy+box.y-y},paint);
+      const half=box.hl,offset=(box.x-x)*c+(box.y-y)*s;
+      if(half>.12)for(const side of [-1,1]) {
+        // Shallow, joined rails on each solid face. Nothing clips through the wall.
+        for(const z of [.18,1.05,2.02])part(offset,side*.029,Math.max(.01,half-.06),.004,z,z+.025,trimPaint);
+        for(const edge of [-1,1])part(offset+edge*(half-.05),side*.029,.018,.004,.18,2.045,trimPaint);
+      }
+    }
+    // The recessed pull remains reachable at the pocket edge when fully open.
+    const handle=-width/2+Math.min(d.open*width,width-.073)+.055;
+    if(handle<width/2-.005)for(const side of [-1,1]) {
+      part(handle,side*.03,.018,.006,.92,1.14,solid(GRAY));
+      part(handle,side*.037,.008,.002,.95,1.11,solid(BLACK));
+    }
+  }),radius:width+.7,bathroomDoor:d};
+  prop.box=bathroomDoorBox(d);d.prop=prop;return prop;
+}
+function bathroomDoorUse(prop) {
+  const d=prop.bathroomDoor;d.target=d.target===1?0:1;
+  if(d.home){d.home.bathroomDoors||=[];d.home.bathroomDoors[d.index]=d.target===1;saveGame();}
+  if(actx){burst(actx.currentTime,.22,[filt('lowpass',1100)],.035);tone(actx.currentTime+.2,95,.035,.025);}
+}
+function stepBathroomDoors(dt) {
+  if(mode!=='room'||!room.bathroomDoors)return;
+  for(const prop of room.bathroomDoors) {
+    const d=prop.bathroomDoor;
+    if(d.target===0&&wanted.stars&&searchedRoom===room&&roomCops.some(c=>!c.dead&&Math.hypot(c.x-prop.x,c.y-prop.y)<1.5))bathroomDoorUse(prop);
+    if(d.open===d.target)continue;
+    const next=d.open+Math.sign(d.target-d.open)*Math.min(Math.abs(d.target-d.open),dt*1.7/(d.end-d.start)),box=bathroomDoorBox(d,next);
+    if(next<d.open&&box&&(inBox(box,px,py,.23)||room.props.some(p=>isRoomPerson(p)&&!p.dead&&inBox(box,p.x,p.y,.23)))) {
+      d.target=1;if(d.home){d.home.bathroomDoors||=[];d.home.bathroomDoors[d.index]=true;saveGame();}say('Give the sliding door room to close.',2);continue;
+    }
+    d.open=next;prop.box=box;
+  }
+}
 // Shared close-up home models. Surfaces have real edges and joined supports;
 // screens and bulbs are the only emissive parts of their housings.
 function televisionProgramme(u,v,time,channel) {
@@ -36556,6 +36631,7 @@ function loadGame() {
     furnishings: restoreHomeFurnishings(h.furnishings,h.kind),
     lights: Object.fromEntries(Object.entries(h.lights||{}).filter(([k,v])=>/^fixed[0-9]{1,2}$/.test(k)&&typeof v==='boolean')),
     door: h.kind==='home_island'?[...FERN_HOUSE.door]:Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => worldCoord(v)) : null,
+    bathroomDoors: Array.isArray(h.bathroomDoors)?h.bathroomDoors.slice(0,8).map(v=>v!==false):[],
     pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
   }
   for (const c of d.cars || []) if (CAR_MODELS[c.model]) {
@@ -37114,6 +37190,7 @@ function loop(t) {
   }
   if (sleep) stepSleep(dt);
   if (mode !== 'air') { pitch += ((K.KeyR && !(heldGun() && onFootMode()) ? 1 : 0) - (K.KeyF ? 1 : 0)) * dt; clampPitch(); } // (in the air R/F are the collective; with the revolver in your hand, R reloads)
+  stepBathroomDoors(dt);
   const elStart=onFootMode()&&mode!=='room'?outdoorFeet():null;
   if (chute) stepChute(dt); // (hanging under a parachute, or falling before it opens: flight.js)
   else if (!sleep && skatingNow()) stepSkate(dt); // (on the board: skate.js)
