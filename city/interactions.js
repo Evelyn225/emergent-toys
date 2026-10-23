@@ -63,7 +63,7 @@ function interactionFocus() {
   if(inside) {
     for(const prop of room.bathroomDoors||[]){
       const d=prop.bathroomDoor,c=d.vertical?0:1,s=d.vertical?1:0,width=d.end-d.start;
-      const offset=d.open>.85?width/2-.06:width*d.open/2;
+      const offset=d.dir*(d.open>.85?width/2-.06:width*d.open/2);
       offer('bathroom-door',prop,prop.x+c*offset,prop.y+s*offset,.4,2.1,d.open>.85?.12:Math.min(.45,width*(1-d.open)/2),2.2,prop);
     }
     for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part,true);
