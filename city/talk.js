@@ -244,16 +244,6 @@ function roomTalkLine(kind, h = tod) {
 }
 // who you'd be talking to: someone sitting or standing within reach, roughly in front, nearer than the counter
 function roomPerson() {
-  if (mode !== 'room' || !room || !room.props) return null;
-  const k = room.def.keeper, keeperD = k ? Math.hypot(px - k[0], py - k[1]) : Infinity;
-  if(k && !room.keeperDead && keeperD<2 && ((k[0]-px)*Math.cos(a)+(k[1]-py)*Math.sin(a))/(keeperD||1)>.8)return null;
-  let best = null, bd = 1.4;
-  for (const s of room.props) {
-    if (!isRoomPerson(s) || k && Math.hypot(s.x - k[0], s.y - k[1]) < 0.6) continue; // (not the one behind the counter)
-    const ex = s.x - px, ey = s.y - py, d = Math.hypot(ex, ey), facing = (Math.cos(a) * ex + Math.sin(a) * ey) / (d || 1);
-    const score = d - facing * 0.4;
-    if (d < 1.4 && facing > -0.2 && score < bd) { bd = score; best = s; }
-  }
-  return best && Math.hypot(best.x - px, best.y - py) < keeperD - 0.2 ? best : null;
+  const target=interactionFocus();return target?.kind==='room-person'?target.who:null;
 }
 const talkInRoom = () => say(`"${roomTalkLine(room.kind)}"`, 4);

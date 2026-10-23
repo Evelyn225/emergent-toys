@@ -338,6 +338,7 @@ function assembleArchipelago() {
   buildTerrain();
   buildIslandScenery();
   buildFerryNetwork();
+  buildIdeaStore();
   CITY_LAYOUT_CHECKPOINT={...originalCounts,layout:CITY_LAYOUT_ID};
 }
 let CITY_LAYOUT_CHECKPOINT=null;

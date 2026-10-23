@@ -489,12 +489,14 @@ function dropHere() {
   say(`You put the ${dropHeldAt(x, y, at, z)} down.`);
 }
 const droppedHere = () => {
+  const target=interactionFocus();if(target?.kind==='drop')return target.who;
   const at = placeKey();
   if (at === null) return null;
   let z = 0;
   if (mode === 'roof') z = roofH;
   else if (mode !== 'room') z = outdoorGroundHeight(px, py);
-  return droppedNear(px, py, at, mode === 'room' ? 1.1 : 0.2, z);
+  const d=droppedNear(px,py,at,mode==='room'?1.1:.2,z);
+  return d&&interactionClear(d.x,d.y,(d.displayZ??(d.at?0:d.z||0))+(d.at?.1:.01))?d:null;
 };
 // lying on the ground: the small item picture, shrunk to life size (s = world units per character: cells or metres)
 function drawDropped(d, vx, vy, s) {
@@ -549,7 +551,7 @@ function showPanel(el, html) {
   releaseMouse();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl].some(el => el && el.style.display === 'flex');
+const panelOpen = () => [shopEl, invEl, storeEl, typeof furnishingEl !== 'undefined' && furnishingEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
@@ -622,6 +624,7 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if(furnishingEl?.style.display==='flex'){if(['Escape','KeyE','KeyF','KeyI'].includes(e.code))hidePanel(furnishingEl);return true;}
   if (fishingCompetitionPanelKey(e)) return true;
   if (workshopPanelKey(e)) return true;
   if (cookPanelKey(e)) return true;
@@ -649,6 +652,9 @@ const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
   if(wanted.busted)return;
+  if(furnishingPlacement){furnishingPlacement.a=mod(furnishingPlacement.a+Math.PI/2,TAU);return;}
+  if(heldItem()?.id==='camera')return takeHomePhoto();
+  if(HOME_FURNITURE[heldItem()?.id]&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());
   if (workshopPlacement) {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return;}
   if (heldGun()) return pullTrigger(); // (gun-ui.js)
   if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();

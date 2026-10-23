@@ -1,6 +1,7 @@
 // Small, deterministic gatherings live on clear beach/grass patches, never on streets or landings.
 const COAST_GATHERINGS=[];
 function coastPatchClear(x,y,r=.8){
+ if(TIDE_POOL_SITES.some(p=>near(x,y,p.x,p.y)<p.r+r+.2))return false;
  const base=terrainHeight(x,y);
  for(const [ox,oy]of [[0,0],[r,r],[r,-r],[-r,r],[-r,-r]]){
   const wx=x+ox,wy=y+oy;

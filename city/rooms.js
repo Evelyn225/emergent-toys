@@ -685,7 +685,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
-  if (def.home) r.props.push(...workshopProps(r));
+  if (def.home) r.props.push(...workshopProps(r),...furnishingProps(r));
   if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
     const host=r.lobby||r;r.exterior=homeExterior({...r,cell:host.cell,ret:host.ret});
     if(kind==='lighthouse'||kind==='lamproom')r.exterior={x0:LIGHTHOUSE.x-LIGHTHOUSE.r,x1:LIGHTHOUSE.x+LIGHTHOUSE.r,y0:LIGHTHOUSE.y-LIGHTHOUSE.r,y1:LIGHTHOUSE.y+LIGHTHOUSE.r,up:kind==='lamproom'?2.8:0,faces:{}};
@@ -929,11 +929,7 @@ function homeDef(w, h, tier) {
       BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
       BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
       BX(1.45, h - 2.6, .4, .5, 0, 1.1, solid(BRICK, { panel: .3, top: '=' })), // workshop supply cupboard
-      BX(tv[0], tv[1] - 0.3, 0.7, 0.12, 0.6, 1.3, (i, t, L) => { // the telly: static, or a show on
-        if (HIT.face !== 4 && HIT.face !== 3) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
-        if (!r.tv) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
-        BG[i] = C(NEON[(T * 0.7 | 0) & 3], 3 + hash(Math.floor(HIT.u * 20), Math.floor(HIT.w * 20), T * 4 | 0) * 6); return set(i, ' ', 0), true;
-      }),
+      TELEVISION(tv[0],tv[1]-.3,r),
       BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
       BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' }), 0, 1), // a shelf for things you bring home
       BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
@@ -951,13 +947,7 @@ function homeDef(w, h, tier) {
         ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), POT_PLANT(1.6, 8.9, 1.5)] : []),
       ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),
         POT_PLANT(23.6, 14.8, 1.6), POT_PLANT(21, 9, 1.5)] : []),
-      ...plan.lamps.flatMap(([x, y]) => {
-        const ceiling = tier ? 3.6 : 3;
-        const glow = (i, t, L) => { BG[i] = C(STONE, 8); return set(i, HIT.face === 5 ? '=' : 'o', C(WARM, 15)), true; };
-        return [BX(x, y, 0.012, 0.012, ceiling - 0.55, ceiling - 0.05, solid(tier === 2 ? YEL : GRAY)),
-          BX(x, y, tier === 2 ? 0.32 : 0.18, tier === 2 ? 0.32 : 0.18, ceiling - 0.65, ceiling - 0.55, glow),
-          ...(tier === 2 ? [-1, 1].map(s => BX(x + s * 0.28, y, 0.06, 0.06, ceiling - 0.8, ceiling - 0.52, glow)) : [])];
-      }),
+      ...plan.lamps.map(([x,y],k)=>HOME_PENDANT(x,y,tier?3.6:3,r,k)),
     ] };
 }
 const POTTY_SCRAWL = ['FOR A GOOD', 'TIME CALL', '555-0142', '', 'DAVE WAS', 'HERE'];
@@ -1185,7 +1175,7 @@ function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
   ZB[i] = d; FL[i] = 1;
   if (room.def.balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
-  if (room.def.wc && inWc(wx, wy)) { const k = (Math.floor(wx * 5) + Math.floor(wy * 5)) & 1; BG[i] = k ? C(WHITE, 1.3 + L * 0.2) : C(GRAY, 0.5 + L * 0.06); return set(i, ' ', 0); } // the bathroom floor: little black and white squares
+  if (room.def.wc && inWc(wx, wy)) { if(ROOM_FLOORS[room.def.bathFloor])return ROOM_FLOORS[room.def.bathFloor](i,f,wx,wy,r,x,L);const k = (Math.floor(wx * 5) + Math.floor(wy * 5)) & 1; BG[i] = k ? C(WHITE, 1.3 + L * 0.2) : C(GRAY, 0.5 + L * 0.06); return set(i, ' ', 0); }
   if (ROOM_FLOORS[room.def.floor]) return ROOM_FLOORS[room.def.floor](i, f, wx, wy, r, x, L);
   switch (room.def.floor) {
     case 'home': {
@@ -1327,10 +1317,8 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'home') {
     const b = room.def.balcony;
     if (b && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx >= b.x0 - 1 && wy >= b.y0 && wy < b.y1)) return homeOutdoorRay(i, rx, ry);
-    const lamp = room.def.lamps.some(([lx, ly]) => (wx - lx) ** 2 + (wy - ly) ** 2 < 0.12);
-    const rose = room.def.lamps.some(([lx, ly]) => Math.abs((wx - lx) ** 2 + (wy - ly) ** 2 - 0.28) < 0.045);
-    BG[i] = C(WHITE, 5);
-    return set(i, lamp ? 'o' : rose && room.def.tier === 2 ? '+' : ' ', C(lamp ? WARM : YEL, lamp ? 15 : 9));
+    BG[i] = C(WHITE,2+3*room.def.light/(room.homeBaseLight||room.def.light));
+    return set(i,' ',0); // Light comes from the fitted pendant model below.
   }
   if (st === 'pendant') { // warm hanging lamps, about 2m apart
     const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;

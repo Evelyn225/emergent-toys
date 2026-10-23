@@ -20,6 +20,7 @@ const ISLAND_CABINS = [
 ];
 const ISLAND_ROOFS=[];
 const FERN_FALLS={x:627,y0:186,y1:200,poolY:196.5};
+const TIDE_POOL_SITES=[{x:720,y:115.4,r:.4},{x:720.85,y:115.7,r:.25},{x:720.3,y:114.65,r:.23}];
 const FERN_TRAILS = [
   [[521.5,235.5],[536,238],[536,248],[540.5,248],[540.5,247.2]],
   [[536,238],[545,230],[551,224],[555,222]],
@@ -42,6 +43,16 @@ const ISLAND_SIGHTS = [
   {id:'juniper-garden',island:'wood',name:'Juniper sea garden',x:787,y:243.5,text:'A sheltered garden of flowers and wind-bent juniper. The washing moves on its line. The house is private; the shoreline path is open to visitors.'},
 ];
 const ISLAND_OBSTACLES = [];
+function islandPoolHeight(o,x,y) {
+  const radius=Math.hypot(x-o.x,y-o.y);
+  let top=radius<=o.waterRadius?o.waterZ:0;
+  for(let k=1;k<o.profile.length;k++) {
+    const [za,ra]=o.profile[k-1],[zb,rb]=o.profile[k];
+    if(radius<Math.min(ra,rb)||radius>Math.max(ra,rb))continue;
+    top=Math.max(top,ra===rb?Math.max(za,zb):za+(zb-za)*(radius-ra)/(rb-ra));
+  }
+  return top;
+}
 function islandSightHeight(x,y) {
   if(!worldReady||x<465)return 0;
   let top=0;
@@ -50,7 +61,7 @@ function islandSightHeight(x,y) {
 }
 function islandSightBlocked(x,y,z=0,pad=.03) {
   if(!worldReady||x<465)return false;
-  return ISLAND_OBSTACLES.some(o=>z<o.z1&&z+.17>o.z0&&Math.abs(x-o.x)<o.hl+pad&&Math.abs(y-o.y)<o.hw+pad);
+  return ISLAND_OBSTACLES.some(o=>z<o.z1&&z+.17>o.z0&&(o.kind==='tidepool'?Math.hypot(x-o.x,y-o.y)<o.r+.06+pad:Math.abs(x-o.x)<o.hl+pad&&Math.abs(y-o.y)<o.hw+pad));
 }
 const WILD_FIELDS=new Map();
 const WILD_PATH_FIELDS=new Map();
@@ -183,9 +194,7 @@ function islandSurface(x,y) {
     return {base:GRAY,background:GRAY,ch,color:'#727777',tone:.8+patch*.3};
   }
   if(island.id==='sand') {
-    const pool=Math.hypot((x-720)/.8,(y-115.4)/.55);
-    if(pool<1)return {base:CYAN,background:BLUE,ch:fract(T*.5+grain)<.13?'~':' ',color:'#528b9f',tone:1.1,water:true};
-    if(pool<1.18)return {base:GRAY,background:GRAY,ch:grain>.8?'o':'.',color:'#727777',tone:1};
+    if(TIDE_POOL_SITES.some(p=>near(x,y,p.x,p.y)<p.r+.12))return {base:GRAY,background:GRAY,ch:grain>.9?':':' ',color:'#727777',tone:1};
   }
   if((island.id==='cabin'||island.id==='wood')&&islandPathDistance(x,y,island)<.12+patch*.07)
     return {base:WARM,background:BRICK,ch:grain>.85?':':' ',color:'#8c805c',tone:.95};
@@ -196,18 +205,18 @@ function islandSurface(x,y) {
 const shoreWetSandLimit = patch => .4 + patch * .2;
 const shoreWavePhase = (x,y) => fract(T/7+.12*Math.sin(x*.13+y*.17));
 function shoreWaveFront(phase,wetLimit) {
-  const run=phase<.72?phase/.72:1-(phase-.72)/.28*.65;
-  return -1.4+(1.4+wetLimit-.08)*run;
+  const run=phase<.65?smooth(phase/.65):1-smooth((phase-.65)/.35);
+  return -1.05+(1.05+wetLimit-.04)*run;
 }
 function shoreWaveFoam(x,y,edge,wetLimit=0,phase=shoreWavePhase(x,y)) {
   if(edge<=-1.4||edge>=wetLimit)return 0;
-  const crest=shoreWaveFront(phase,wetLimit),width=.065+.055*(crest+1.4)/(1.4+wetLimit-.08);
-  const offset=edge-crest,fade=Math.min(1,phase*10,(1-phase)*6);
+  const crest=shoreWaveFront(phase,wetLimit),width=.065+.035*(crest+1.05)/(1.05+wetLimit-.04);
+  const offset=edge-crest,fade=Math.min(1,phase*10,(1-phase)*10);
   const foam=Math.max(0,1-Math.abs(offset)/width);
-  const trail=.28*Math.max(0,1-Math.abs(offset+.14)/.18);
+  const trail=.15*Math.max(0,1-Math.abs(offset+.1)/.15);
   return Math.max(foam,trail)*fade;
 }
-function seaShoreFoam(x,y) {
+function seaShoreBand(x,y) {
   // Mainland and wild-island edges already use cached distance fields. Bound
   // the small analytic shores so open ocean does no extra trigonometry there.
   let edge=-1000,beach=false;
@@ -224,17 +233,17 @@ function seaShoreFoam(x,y) {
     const e=wildIslandEdge(x,y,island);
     if(e>edge){edge=e;beach=island.id!=='rock';}
   }
-  if(edge<=-1.4)return 0;
-  return shoreWaveFoam(x,y,edge,beach?shoreWetSandLimit(noise(x*.3,y*.3,1876)):0);
+  return edge>-1.4?{edge,beach,limit:beach?shoreWetSandLimit(noise(x*.3,y*.3,1876)):0}:null;
 }
+function seaShoreFoam(x,y){const band=seaShoreBand(x,y);return band?shoreWaveFoam(x,y,band.edge,band.limit):0;}
 function islandShoreSurface(x,y,edge,beach,allSand=false,grain=hash(Math.floor(x*21),Math.floor(y*21),1875),patch=noise(x*.3,y*.3,1876)) {
   if(!beach&&edge<1.2+patch*.6)return {base:GRAY,background:GRAY,ch:grain>.93?':':' ',color:'#727777',tone:.9};
   if(edge<shoreWetSandLimit(patch)) {
     const phase=shoreWavePhase(x,y),limit=shoreWetSandLimit(patch);
     const foam=shoreWaveFoam(x,y,edge,limit,phase),washed=edge<shoreWaveFront(phase,limit);
     const background=washed?BLUE:BRICK,color=washed?'#284e68':'#827858';
-    if(foam>.12&&grain<foam)return {base:WHITE,background,ch:foam>.45?'~':'.',color,tone:1.25};
-    if(washed)return {base:CYAN,background,ch:grain>.9?'-':' ',color,tone:.9};
+    if(foam>.15)return {base:WHITE,background:foam>.55?WHITE:CYAN,ch:foam>.55?'~':' ',color:'#d5eff3',tone:1.25,lift:4,foam:true,water:true};
+    if(washed)return {base:CYAN,background,ch:grain>.9?'-':' ',color,tone:.9,water:true};
     return {base:WARM,background:BRICK,ch:grain>.92?':':' ',color:'#827858',tone:.8};
   }
   if(beach&&(edge<2.3+patch*1.2||allSand)) {

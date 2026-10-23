@@ -110,6 +110,7 @@ const LANDMARK_BY_BLOCK = new Map(LANDMARK_BUILDINGS.map(b => [b.block,b]));
 let LANDMARK_ROOF_MASK = architectureCellMask(LANDMARK_SOLIDS.filter(o => o.walkRoof), 0);
 let LANDMARK_BLOCK_MASK = architectureCellMask(LANDMARK_BLOCKERS, .5);
 function landmarkSurfaceHeight(o, x, y) {
+  if(o.kind==='tidepool'&&o.profile)return islandPoolHeight(o,x,y);
   const u = rel(x - o.x), v = rel(y - o.y);
   if (Math.abs(u) > o.hl || Math.abs(v) > o.hw) return 0;
   let top = o.z1, bottom = o.z0;

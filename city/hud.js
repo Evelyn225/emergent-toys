@@ -78,14 +78,7 @@ const nearestCar = r => {
 };
 // someone right in front of you, close enough to talk to
 const nearPerson = () => {
-  if (mode !== 'walk') return null;
-  let best = null, bd = 0.45;
-  for (const p of [...people, ...fairFolk]) { // (and the crowd at the fair)
-    if (p.hidden || p.dead || p.flee) continue; // (not somebody lying dead, or running for their life)
-    const ex = rel(p.x - px), ey = rel(p.y - py), d = Math.hypot(ex, ey);
-    if (d < bd && (ex * Math.cos(a) + ey * Math.sin(a)) / d > 0.85) { bd = d; best = p; }
-  }
-  return best;
+  const target=interactionFocus();return target?.kind==='person'?target.who:null;
 };
 const nearVendor = () => vendors.find(v => !v.dead && !v.hidden && Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
 // a vending machine you're facing, within arm's reach (3m of its middle)
@@ -120,9 +113,11 @@ const homeSpot = () => {
   }
   return best;
 };
-const nearKeeper = () => { if(room.keeperDead)return false;const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
+const nearKeeper = () => { if(room.keeperDead)return false;const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2&&interactionClear(k[0],k[1],1.5); };
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
+  if(furnishingPlacement){const p=furnishingCandidate();return p.ok?'E: place · Q: rotate · Esc: cancel':p.reason+' · Q: rotate · Esc: cancel';}
+  const focused=focusedInteractionPrompt();if(focused)return focused;
   const islandPrompt=islandBuildingPrompt();if(islandPrompt)return islandPrompt;
   const scenePrompt=streetScenePrompt();if(scenePrompt)return scenePrompt;
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return ''; // (up the el stairs: nothing at street level is in reach)

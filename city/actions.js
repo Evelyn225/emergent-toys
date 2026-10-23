@@ -141,12 +141,14 @@ function enterRoom(kind, extra, spawn) {
   fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
   const residence = homeRecord(room);
+  if(residence)updateHomeLights();
   if (residence && room.ret) residence.door = room.ret.slice(0, 2);
   if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'backrooms' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
   transitSync();
 }
 function interact() {
+  if(useFocusedInteraction())return;
   if (islandBuildingUse()) return;
   if (streetSceneUse()) return;
   if (mode === 'walk' && elWalkGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)

@@ -186,12 +186,23 @@ function clipBuffer(name) {
   }).then(b => actx.decodeAudioData(b)).catch(() => null);
   return CLIPS[name];
 }
-function playClip(name, gain, when = actx.currentTime) {
+function playClip(name, gain, when = actx.currentTime, spatial=null) {
   clipBuffer(name).then(buf => {
     if (!buf) return;
     const s = actx.createBufferSource(), g_ = actx.createGain();
-    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; shot(s, g_, sfxBus); s.start(Math.max(actx.currentTime, when));
+    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain;
+    if(spatial){const lp=filt('lowpass',spatial.cutoff),pan=actx.createStereoPanner();pan.pan.value=spatial.pan;shot(s,lp,g_,pan,sfxBus);}
+    else shot(s,g_,sfxBus);
+    s.start(Math.max(actx.currentTime, when));
   });
+}
+function worldSoundProfile(x,y,z,range=180,reference=14) {
+  let x0=px,y0=py,z0=eye;
+  if(mode==='room') {
+    const ret=room.ret||room.lobby?.ret;
+    if(ret){[x0,y0]=ret;z0=terrainHeight(x0,y0)+.17;}
+  }
+  return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
 let peeLoopVoice = null;
 function setPeeAudio(on) {
@@ -296,8 +307,8 @@ function audioTick(dt) {
   let waterfall=0;
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
-    wilderness:worldReady&&!!wildIslandAt(px,py),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record:homeRecordAudio(), district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
+    wilderness:worldReady&&!!wildIslandAt(...(mode==='room'?(room.ret||room.lobby?.ret||[px,py]).slice(0,2):[px,py])),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);

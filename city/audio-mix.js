@@ -74,7 +74,9 @@ function audioMix(s) {
     if (k === 'aviary') out.city = 0.04;
     if (s.room.burgled) { out.restaurant = out.bossa = out.coffee = out.karaoke = out.arcade = 0; out.city *= 0.6; } // broken into at night: nobody here, nothing on, just the street outside
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
-    if (k === 'islandhome') { out.waves=.3;out.city=0; }
+    if (k === 'islandhome'||k==='islandshelter'||s.wilderness) { out.waves=.3;out.city=out.night=out.crowd=0;out.birds=.12*s.day*(1-.65*s.rain);out.wind=.06; }
+    if(s.record)out[s.record.song]=.7*s.record.gain;
+    if(s.boombox)out[s.song||'bossa']=.7;
     return out;
   }
   const d = AUDIO_DISTRICT[s.district] || AUDIO_DISTRICT.midtown;
@@ -91,7 +93,6 @@ function audioMix(s) {
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
   if (s.gardens) { out.city *= 0.35; out.crowd *= 0.4; out.night *= 0.5; out.waves = Math.max(out.waves, 0.15); } // the traffic's far off behind the trees; the lake lapping
   if (s.gardens) out.birds = (0.25 + 0.75 * s.day) * (1 - 0.65 * s.rain); // songbirds in the gardens by day
-  if (s.wilderness) { out.city=out.crowd=0;out.birds=.4*s.day*(1-.65*s.rain); }
   if (s.district === 'shotengai') out.pachinko = Math.max(out.pachinko, 0.28 * far); // parlour roar spilling into the covered street
   if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the Sunset Pier: a crowd, and the booths' bleeps and jingles drifting over it
@@ -99,6 +100,9 @@ function audioMix(s) {
     out.arcade = 0.4 * s.fairNear * far;
   }
   if (s.serenade) out.bossa = Math.max(out.bossa, 0.8 * s.serenade); // Nico on the bar roof, after his guitar came back
+  // Use the botanical garden's nature recording, including after dark. Apply
+  // this after event beds so a distant city fireworks show cannot restore crowds.
+  if(s.wilderness){out.city=out.crowd=out.night=out.pachinko=out.arcade=0;out.birds=(.25+.75*s.day)*(1-.65*s.rain);}
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
   out.engine = s.mode === 'air' ? 0.35 + 0.55 * clamp(s.throttle || 0, 0, 1) : s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
@@ -111,12 +115,22 @@ function audioMix(s) {
   return out;
 }
 
+// Ten metres per outdoor cell. No minimum gain: distant sources fade to silence
+// and lose their sharp high frequencies before they disappear.
+function soundDistanceProfile(rx,ry,rz,yaw,range=180,reference=14,indoors=false) {
+  const distance=Math.hypot(rx,ry,rz),edge=1-smooth(clamp((distance/range-.75)/.25,0,1));
+  return {distance,gain:edge/(1+(distance/reference)**2)*(indoors?.15:1),
+    cutoff:Math.max(180,Math.min(indoors?900:18000,18000/(1+distance/12)**1.5)),
+    pan:clamp((-Math.sin(yaw)*rx+Math.cos(yaw)*ry)/Math.max(.01,distance),-.9,.9),delay:distance/34};
+}
+
 // what's underfoot, for the footstep sound
 function surfaceAt(mode, room, x, y) {
   if(mode==='ferry')return ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46?'carpet':'wood';
   if (mode === 'room') {
     const f = room.def.floor;
-    return f === 'carpet' ? 'carpet' : f === 'wood' ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';
+    const w=room.def.wc;if(w&&x>=w.x0&&x<w.x1&&y>=w.y0&&y<w.y1)return 'tile';
+    return f === 'carpet' ? 'carpet' : ['wood','home','hotel','cove','islandwood','fernwood'].includes(f) ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';
   }
   if (mode === 'elplat' || mode === 'roof') return mode === 'roof' ? 'gravel' : 'metal';
   if (onPier(x, y)) return 'wood';

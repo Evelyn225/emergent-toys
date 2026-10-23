@@ -27,9 +27,9 @@ function buildIslandScenery() {
     // Small cleats sit away from the boarding point and leave the deck open.
     islandDetail(x0+1.7,y0+.12,.07,.025,0,.035,'metal');
     const [lx,ly]=island.landing;
-    islandDetail(lx+1.8,ly+.7,.022,.022,0,.22,'timber');
-    const marker=islandDetail(lx+1.8,ly+.7,.15,.025,.16,.23,'sign',Math.PI/2);
-    marker.word=island.name.toUpperCase();if(island.id==='cabin')marker.ink=BLACK;
+    islandDetail(lx+1.8,ly+.7,.016,.016,0,.18,'timber');
+    const marker=islandDetail(lx+1.8,ly+.7,.12,.018,.13,.185,'sign',Math.PI/2);
+    Object.assign(marker,{word:island.name.toUpperCase(),ink:BLACK,labelZ:.1575,labelH:.033});
     for(let y=Math.floor(island.y-island.ry);y<island.y+island.ry;y+=4)for(let x=Math.floor(island.x-island.rx);x<island.x+island.rx;x+=4) {
       const seed=hash(x,y,1910),wx=x+(seed-.5)*2,wy=y+(hash(x,y,1911)-.5)*2,edge=wildIslandEdge(wx,wy,island);
       if(edge<.7||edge>16||onPier(wx,wy)||near(wx,wy,lx,ly)<5||map[idx(Math.floor(wx),Math.floor(wy))])continue;
@@ -46,7 +46,7 @@ function buildIslandScenery() {
   islandDetail(540.5,247.17,.58,.35,.28,.31,'timber');
   for(const x of [540.03,540.97])islandDetail(x,247.45,.018,.018,0,.29,'trim');
   islandDetail(540.14,247.025,.035,.025,.23,.28,'lamp');
-  islandDetail(540.5,247.52,.33,.025,.285,.32,'sign');
+  Object.assign(islandDetail(540.5,247.52,.265,.018,.285,.32,'sign'),{word:'FERN HOUSE',houseSign:true,ink:BLACK,labelZ:.3025,labelH:.021});
   const [tx,ty]=house.terrace;
   islandDetail(tx,ty,1.1,1.6,0,.004,'deck');
   for(const y of [244.2,246.8]) {
@@ -90,8 +90,9 @@ function islandTimberShade(model,i,t,L) {
   const brightness=(wood?1.6:2.2)+L*(top?.3:.2);
   BG[i]=C(base,brightness);
   if(model.word&&(HIT.face===3||HIT.face===4)) {
+    const word=model.houseSign?(homeAt(SHOP[cityPlaceCell('fern-house')])?'FERN HOUSE':'FOR SALE'):model.word;
     const side=HIT.face===3?1:-1,[x,y]=R(model.x-model.s*side*model.hw,model.y+model.c*side*model.hw);
-    set(i,worldText(model.word,HIT.u*side,HIT.w,t,i,x,y,model.labelZ??.195,model.c*side,model.s*side,Math.min(.028,model.hl*1.7/model.word.length),model.labelH??.04),C(model.ink??GREEN,Math.max(5,L)));
+    set(i,worldText(word,HIT.u*side,HIT.w,t,i,x,y,model.labelZ??.195,model.c*side,model.s*side,Math.min(.028,model.hl*1.7/word.length),model.labelH??.04),C(model.ink??BLACK,15));
     return true;
   }
   let ch=' ';
@@ -205,6 +206,7 @@ function drawWildScenery() {
   forNear(islandDetailsB,model=>{
     const vx=model.x-px,vy=model.y-py;
     if(!inView(vx,vy,model.hl+.2))return;
+    if(model.kind==='tidepool'){drawIslandTidePool(model);return;}
     if(model.kind==='cover') {
       if((model.cover==='flower'||model.cover==='fern')&&season()==='winter')return;
       if(near(px,py,model.x,model.y)<12)drawShape(vx,vy,model.z0,model.hl,model.z1-model.z0,(i,u,z,du,dz,L)=>islandCoverShade(model,i,u,z,L));
@@ -229,8 +231,6 @@ function drawWildScenery() {
     drawArt(lx+1-px,ly+.7-py,.105,.25,.035,['TACKLE'],()=>C(WARM,12));
   }
   if(near(px,py,540.5,247)<vis) {
-    const label=homeAt(SHOP[cityPlaceCell('fern-house')])?'FERN HOUSE':'FOR SALE';
-    drawArt(540.5-px,247.55-py,.294,.45,.022,[label],()=>C(GREEN,10));
     if(night>.25)for(let k=0;k<4;k++) {
       const p=fract(T*.14+k*.25),x=541.25+p*.17;
       drawShape(x-px,245.1-py,.76+p*.3,.035+p*.04,.05,(i,u,z,du,dz,L)=>{

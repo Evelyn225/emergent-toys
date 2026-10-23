@@ -1,0 +1,136 @@
+// Shared close-up home models. Surfaces have real edges and joined supports;
+// screens and bulbs are the only emissive parts of their housings.
+function televisionProgramme(u,v,time,channel) {
+  let base=BLUE,level=4,ch=' ',ink=WHITE;
+  if(channel===0) { // live harbour: passing ferry, moving clouds and gulls
+    const horizon=.52,cloud=Math.sin(u*12+time*.13)+Math.cos(u*23-time*.07);
+    if(v<.36&&Math.abs(v-(.21+cloud*.035))<.045){base=WHITE;level=8;}
+    if(v>horizon){base=CYAN;level=3;ch=Math.sin(u*42+v*85-time*2)>.96?'~':' ';}
+    const boat=fract(time*.025)*1.4-.2,dx=u-boat;
+    if(v>.54&&v<.61&&Math.abs(dx)<.2-(v-.54)*.8){base=WHITE;level=9;}
+    if(v>.45&&v<.54&&Math.abs(dx+.015)<.125){base=STONE;level=7;if(v<.515&&Math.sin((dx+.14)*75)>-.1){base=BLUE;level=1;}}
+    const bird=fract(time*.04+.2);if(Math.abs(v-(.2+.03*Math.sin(u*21+time)))<.012&&Math.abs(u-bird)<.035){base=GRAY;level=1;}
+  } else if(channel===1) { // cooking show: chef, chopping board, pan and steam
+    base=v>.67?BRICK:STONE;level=v>.67?4:7;
+    if(u>.09&&u<.9&&v>.2&&v<.3){base=BRICK;level=3;}
+    if(((u-.38)/.095)**2+((v-.38)/.12)**2<1){base=WARM;level=9;}
+    if(Math.abs(u-.38)<.1&&v>.44&&v<.7){base=WHITE;level=10;}
+    if(v>.29&&v<.34&&Math.abs(u-.38)<.12){base=WHITE;level=12;}
+    const hand=.62+.08*Math.sin(time*2.4),arm=.51+(u-.42)*(.6+.22*Math.sin(time*2.4));
+    if(u>.42&&u<hand&&Math.abs(v-arm)<.027){base=WARM;level=9;}
+    if(((u-.72)/.14)**2+((v-.72)/.04)**2<1){base=GRAY;level=1;}
+    if(v>.32&&v<.65&&Math.min(Math.abs(u-.68-.025*Math.sin(v*22-time*2)),Math.abs(u-.76-.02*Math.sin(v*25-time*1.7)))<.012){base=WHITE;level=10;ch='~';}
+    if(v>.7&&v<.73&&u>.2&&u<.5){base=YEL;level=7;}
+  } else if(channel===2) { // miniature rail documentary, train moving past skyline
+    const skyline=.48+.12*Math.sin(Math.floor(u*15)*8);
+    base=v>skyline?GRAY:BLUE;level=v>skyline?3:6;
+    if(v>skyline&&v<.65&&fract(u*45)<.3&&fract(v*35)<.25){base=WARM;level=8;}
+    if(v>.74){base=BRICK;level=3;}
+    const train=fract(u-time*.07);
+    if(v>.53&&v<.73&&train<.85){base=STONE;level=8;if(v<.64&&v>.56&&fract(train*10)<.68){base=CYAN;level=2;}if(v>.69){base=BLUE;level=2;}}
+    if(v>.76&&v<.8){base=GRAY;level=1;}
+  } else { // evening news: anchor, animated weather map and ticker
+    base=BLUE;level=3;
+    if(u>.52&&u<.94&&v>.15&&v<.65){base=CYAN;level=5;if(Math.sin(u*18+v*8)>.15){base=GREEN;level=4;}}
+    if(((u-.29)/.085)**2+((v-.35)/.105)**2<1){base=WARM;level=10;}
+    if(v>.42&&v<.69&&Math.abs(u-.29)<.12-(.69-v)*.12){base=GRAY;level=2;}
+    if(v>.64&&v<.75){base=BRICK;level=4;}
+    if(u>.55&&v>.2&&v<.65&&Math.abs(u-(.68+.03*Math.sin(v*15+time*.5)))<.018){base=WHITE;level=11;}
+    if(v>.8){base=WHITE;level=9;ch=fract(u*32+time*.8)<.35?'-':' ';ink=BLACK;}
+  }
+  return {base,level,ch,ink};
+}
+function TELEVISION(x,y,r,scale=1,angle=0) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const c=Math.cos(angle),s=Math.sin(angle),at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    const shell={...boxAt(vx,vy,c,s,.74*scale,.07*scale,.7*scale,1.55*scale),round:.025*scale};
+    drawBox(shell,(i,t,L)=>{
+      if(HIT.face===3&&Math.abs(HIT.u)<.65*scale&&HIT.w>.79*scale&&HIT.w<1.47*scale)return false;
+      BG[i]=C(GRAY,.8+L*.14*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+    },coveRayRounded);
+    const [sx,sy]=at(0,.063*scale);
+    drawBox(boxAt(sx,sy,c,s,.65*scale,.001*scale,.79*scale,1.47*scale),(i,t,L)=>{
+      if(!r.tv||HIT.face!==3){BG[i]=C(GRAY,.4+L*.035);set(i,' ',0);return true;}
+      const frame=televisionProgramme((HIT.u/(.65*scale)+1)/2,(1.47*scale-HIT.w)/(.68*scale),T,(r.tvChannel??Math.floor(T/24))%4);
+      BG[i]=C(frame.base,frame.level);set(i,frame.ch,C(frame.ink,12));return true;
+    });
+    for(const side of [-1,1]){const [ax,ay]=at(side*.42*scale,.01*scale),[bx,by]=at(side*.5*scale,.1*scale);coveTube(ax,ay,.7*scale,bx,by,.61*scale,.018*scale,GRAY);}
+  }),radius:scale,box:boxAt(x,y,Math.cos(angle),Math.sin(angle),.74*scale,.12*scale,.61*scale,1.55*scale)};
+}
+
+function homeStone(i,t,L) {BG[i]=C(STONE,3.5+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
+function HOME_PENDANT(x,y,ceiling,r,index) {
+  return ROOM_MODEL(x,y,(vx,vy)=>{
+    const on=homeRecord(r)?.lights?.['fixed'+index]!==false;
+    coveLathe(vx,vy,ceiling-.045,[[0,0],[0,.075],[.035,.075],[.045,.04],[.045,0]],homeStone);
+    coveTube(vx,vy,ceiling-.045,vx,vy,ceiling-.57,.012,GRAY);
+    coveLathe(vx,vy,ceiling-.7,[[0,.24],[.018,.25],[.16,.075],[.18,.05],[.18,0]],homeStone);
+    dot(vx,vy,ceiling-.68,.055,(i,t,L)=>{BG[i]=C(on?WARM:STONE,on?12:2+L*.15);set(i,' ',0);return true;});
+  });
+}
+function FERN_KITCHEN(r) {
+  return {...ROOM_MODEL(15.35,1.42,(vx,vy)=>{
+    const sink=vx-.9,cut=(i,t,L)=>{if(HIT.face===5&&Math.hypot((HIT.u+.9)/.28,HIT.v/.28)<1)return false;return homeStone(i,t,L);};
+    for(const offset of [-1.4,-.7,0,.7,1.4]) {
+      coveRound(vx+offset,vy,1,0,.34,.39,.08,.88,.025,(i,t,L)=>{
+        if(HIT.face===5&&Math.hypot(HIT.u+offset+.9,HIT.v)<.28)return false;
+        return coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,3);
+      });
+      coveRound(vx+offset,vy+.395,1,0,.31,.025,.14,.82,.02,'wood',4);
+      coveTube(vx+offset-.1,vy+.43,.72,vx+offset+.1,vy+.43,.72,.014,GRAY);
+    }
+    const top={...boxAt(vx,vy,1,0,1.77,.42,.88,.95),round:.025};drawBox(top,cut,coveRayRounded);
+    coveLathe(sink,vy,.76,[[0,0],[0,.12],[.04,.2],[.19,.28],[.2,.29],[.21,.27],[.05,.17],[.04,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
+    coveTube(sink,vy-.26,.95,sink,vy-.26,1.23,.018,GRAY);coveTube(sink,vy-.26,1.23,sink,vy-.03,1.23,.018,GRAY);
+    const oven=vx+1.08;
+    for(const dx of [-.14,.14])for(const dy of [-.16,.16])coveLathe(oven+dx,vy+dy,.95,[[0,0],[0,.09],[.012,.09],[.012,0]],(i,t,L)=>{BG[i]=C(GRAY,1.1);set(i,' ',0);return true;});
+    coveRound(oven,vy+.424,1,0,.28,.014,.26,.63,.025,GRAY);
+    coveTube(oven-.21,vy+.456,.69,oven+.21,vy+.456,.69,.014,GRAY);
+  }),radius:2,box:boxAt(15.35,1.42,1,0,1.77,.42,0,.95)};
+}
+function fernHomeQuality() {
+  const def=ROOM_DEFS.islandhome,extra={};
+  for(let y=1;y<=10;y++)extra['9,'+y]='#';
+  for(let x=1;x<=22;x++)extra[x+',10']='#';
+  for(const x of [5,6,15,16])extra[x+',10']='.';
+  for(let y=11;y<=22;y++)extra['13,'+y]='#';
+  extra['13,16']=extra['13,17']='.';extra['0,16']='D';
+  for(let y=1;y<=6;y++)extra['18,'+y]='W';
+  for(let x=18;x<=22;x++)extra[x+',6']='W';extra['19,6']=extra['20,6']='.';
+  def.grid=boxRoom(24,24,extra);def.wc={x0:19,y0:1,x1:23,y1:6,sign:[18,5,5.5]};
+  def.home={shelf:[1.18,13],pet:[2,20],bed:[4.1,2.25],closet:[7.5,1.4],sofa:[5,16.8],tv:[5,11.4],fridge:[11.6,1.45],dining:[14.7,6]};
+  def.spots={bed:[4.1,3.7],closet:[7.5,2.5],shelf:[2.2,13],pet:[2,20],fridge:[11.6,2.6],stove:[16.4,2.6],workshop:[15.5,13],tv:[5,12.65],terrace:[1.4,16.5]};
+  def.bedBounds=[4.1,2.25,1.3,1.05];def.lamps=[[4.5,5],[14.5,6],[5,17],[18,16]];
+  def.shelfAxis=[0,1];
+  def.floor='fernwood';def.bathFloor='fernBath';
+  def.props=r=>[
+    ROOM_MODEL(4.1,2.25,(vx,vy)=>{
+      for(const x of [-1.1,1.1])for(const y of [-.8,.8])coveRound(vx+x,vy+y,1,0,.08,.08,0,.28,.025,'wood');
+      coveRound(vx,vy,1,0,1.32,1.05,.22,.38,.045,'wood');
+      coveRound(vx,vy,1,0,1.28,1.01,.38,.61,.09,(i,t,L)=>{BG[i]=C(HIT.v>.1?GREEN:WHITE,3+L*.22);set(i,' ',0);return true;});
+      coveRound(vx,1.08-py,1,0,1.4,.08,.18,1.22,.035,'wood');
+      for(const side of [-1,1])coveRound(vx+side*.6,vy-.67,1,0,.48,.23,.61,.75,.065,(i,t,L)=>{BG[i]=C(WHITE,4+L*.2);set(i,' ',0);return true;});
+    },[1.32,1.05,.75]),
+    BX(7.5,1.35,.9,.35,0,2.2,solid(BRICK,{panel:.5})),
+    BX(1.18,13,.75,.18,0,1.05,solid(BRICK,{panel:.5}),0,1),
+    BX(11.6,1.45,.45,.45,0,1.9,solid(WHITE,{panel:.7})),FERN_KITCHEN(r),
+    ...toilet(21,1.42,-1,porcelain),washbasin(19.45,1.35,0,1),BATHTUB(22.5,3.7),
+    ...tableBox(14.7,6,1.15,.65),...homeChair(14.7,7.2,0,-1,GREEN),...homeChair(14.7,4.8,0,1,GREEN),
+    ...couch(5,16.8,1.8,0,-1,GREEN),...tableBox(5,14.4,.9,.45),
+    BX(5,11.3,.9,.3,0,.6,solid(BRICK)),TELEVISION(5,11.4,r),
+    BX(14.4,13,.4,.65,0,1.1,solid(BRICK,{panel:.5})),
+    POT_PLANT(10.65,11.6,1.5),POT_PLANT(22.45,8.6,1.4),
+    ...def.lamps.map(([x,y],k)=>HOME_PENDANT(x,y,def.height,r,k)),
+  ];
+}
+fernHomeQuality();
+ROOM_FLOORS.fernwood=(i,f,x,y,row,column,L)=>{
+  const depth=Math.max(.1,eye*projY/Math.max(1,row-hor)),footprint=depth/projX;
+  const board=Math.floor(y/.3),seam=Math.max(coveGroove(y,.3,.008,footprint),coveGroove(x+(board&1)*1.3,2.6,.008,footprint));
+  BG[i]=C(BRICK,3.2+f*1.8-seam*.9);set(i,' ',0);
+};
+ROOM_FLOORS.fernBath=(i,f,x,y,row,column,L)=>{
+  const footprint=Math.max(.001,eye*projY/Math.max(1,row-hor)/projX);
+  const grout=Math.max(coveGroove(x,.4,.008,footprint),coveGroove(y,.4,.008,footprint));
+  BG[i]=C(STONE,4.5+L*.18-grout*1.2);set(i,' ',0);
+};

@@ -357,7 +357,7 @@ function useHeld(near) {
     case 'umbrella': return [near.rain > 0.3 ? 'You hold the umbrella up against the rain.' : 'You twirl the umbrella. It isn\'t raining.', null];
     case 'book': return [pick(BOOK_LINES), 'page'];
     case 'newspaper': return [`Headline: ${pick(near.headlines)}`, 'page'];
-    case 'vinyl': return ['You admire the sleeve. Shame you don\'t have a record player.', null];
+    case 'vinyl': return ['A record in a paper sleeve. Put it on a record player at home.', null];
     case 'jadebangle': return [pick(['You turn the bangle round your wrist. Cool and smooth. Lucky, they say.', 'The jade catches the light. You feel a tiny bit luckier.']), null];
     case 'jadedragon': return [pick(['You rub the dragon\'s head for luck.', 'The little jade dragon stares back, very sure of itself.', 'You give the dragon a pat. Good fortune, apparently, follows.']), null];
     case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head. You feel a tiny bit luckier.', 'The lucky cat beckons good fortune your way. A little bit of it, anyway.']), null];

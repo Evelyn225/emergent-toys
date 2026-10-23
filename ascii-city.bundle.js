@@ -2030,6 +2030,7 @@ const ISLAND_CABINS = [
 ];
 const ISLAND_ROOFS=[];
 const FERN_FALLS={x:627,y0:186,y1:200,poolY:196.5};
+const TIDE_POOL_SITES=[{x:720,y:115.4,r:.4},{x:720.85,y:115.7,r:.25},{x:720.3,y:114.65,r:.23}];
 const FERN_TRAILS = [
   [[521.5,235.5],[536,238],[536,248],[540.5,248],[540.5,247.2]],
   [[536,238],[545,230],[551,224],[555,222]],
@@ -2052,6 +2053,16 @@ const ISLAND_SIGHTS = [
   {id:'juniper-garden',island:'wood',name:'Juniper sea garden',x:787,y:243.5,text:'A sheltered garden of flowers and wind-bent juniper. The washing moves on its line. The house is private; the shoreline path is open to visitors.'},
 ];
 const ISLAND_OBSTACLES = [];
+function islandPoolHeight(o,x,y) {
+  const radius=Math.hypot(x-o.x,y-o.y);
+  let top=radius<=o.waterRadius?o.waterZ:0;
+  for(let k=1;k<o.profile.length;k++) {
+    const [za,ra]=o.profile[k-1],[zb,rb]=o.profile[k];
+    if(radius<Math.min(ra,rb)||radius>Math.max(ra,rb))continue;
+    top=Math.max(top,ra===rb?Math.max(za,zb):za+(zb-za)*(radius-ra)/(rb-ra));
+  }
+  return top;
+}
 function islandSightHeight(x,y) {
   if(!worldReady||x<465)return 0;
   let top=0;
@@ -2060,7 +2071,7 @@ function islandSightHeight(x,y) {
 }
 function islandSightBlocked(x,y,z=0,pad=.03) {
   if(!worldReady||x<465)return false;
-  return ISLAND_OBSTACLES.some(o=>z<o.z1&&z+.17>o.z0&&Math.abs(x-o.x)<o.hl+pad&&Math.abs(y-o.y)<o.hw+pad);
+  return ISLAND_OBSTACLES.some(o=>z<o.z1&&z+.17>o.z0&&(o.kind==='tidepool'?Math.hypot(x-o.x,y-o.y)<o.r+.06+pad:Math.abs(x-o.x)<o.hl+pad&&Math.abs(y-o.y)<o.hw+pad));
 }
 const WILD_FIELDS=new Map();
 const WILD_PATH_FIELDS=new Map();
@@ -2193,9 +2204,7 @@ function islandSurface(x,y) {
     return {base:GRAY,background:GRAY,ch,color:'#727777',tone:.8+patch*.3};
   }
   if(island.id==='sand') {
-    const pool=Math.hypot((x-720)/.8,(y-115.4)/.55);
-    if(pool<1)return {base:CYAN,background:BLUE,ch:fract(T*.5+grain)<.13?'~':' ',color:'#528b9f',tone:1.1,water:true};
-    if(pool<1.18)return {base:GRAY,background:GRAY,ch:grain>.8?'o':'.',color:'#727777',tone:1};
+    if(TIDE_POOL_SITES.some(p=>near(x,y,p.x,p.y)<p.r+.12))return {base:GRAY,background:GRAY,ch:grain>.9?':':' ',color:'#727777',tone:1};
   }
   if((island.id==='cabin'||island.id==='wood')&&islandPathDistance(x,y,island)<.12+patch*.07)
     return {base:WARM,background:BRICK,ch:grain>.85?':':' ',color:'#8c805c',tone:.95};
@@ -2206,18 +2215,18 @@ function islandSurface(x,y) {
 const shoreWetSandLimit = patch => .4 + patch * .2;
 const shoreWavePhase = (x,y) => fract(T/7+.12*Math.sin(x*.13+y*.17));
 function shoreWaveFront(phase,wetLimit) {
-  const run=phase<.72?phase/.72:1-(phase-.72)/.28*.65;
-  return -1.4+(1.4+wetLimit-.08)*run;
+  const run=phase<.65?smooth(phase/.65):1-smooth((phase-.65)/.35);
+  return -1.05+(1.05+wetLimit-.04)*run;
 }
 function shoreWaveFoam(x,y,edge,wetLimit=0,phase=shoreWavePhase(x,y)) {
   if(edge<=-1.4||edge>=wetLimit)return 0;
-  const crest=shoreWaveFront(phase,wetLimit),width=.065+.055*(crest+1.4)/(1.4+wetLimit-.08);
-  const offset=edge-crest,fade=Math.min(1,phase*10,(1-phase)*6);
+  const crest=shoreWaveFront(phase,wetLimit),width=.065+.035*(crest+1.05)/(1.05+wetLimit-.04);
+  const offset=edge-crest,fade=Math.min(1,phase*10,(1-phase)*10);
   const foam=Math.max(0,1-Math.abs(offset)/width);
-  const trail=.28*Math.max(0,1-Math.abs(offset+.14)/.18);
+  const trail=.15*Math.max(0,1-Math.abs(offset+.1)/.15);
   return Math.max(foam,trail)*fade;
 }
-function seaShoreFoam(x,y) {
+function seaShoreBand(x,y) {
   // Mainland and wild-island edges already use cached distance fields. Bound
   // the small analytic shores so open ocean does no extra trigonometry there.
   let edge=-1000,beach=false;
@@ -2234,17 +2243,17 @@ function seaShoreFoam(x,y) {
     const e=wildIslandEdge(x,y,island);
     if(e>edge){edge=e;beach=island.id!=='rock';}
   }
-  if(edge<=-1.4)return 0;
-  return shoreWaveFoam(x,y,edge,beach?shoreWetSandLimit(noise(x*.3,y*.3,1876)):0);
+  return edge>-1.4?{edge,beach,limit:beach?shoreWetSandLimit(noise(x*.3,y*.3,1876)):0}:null;
 }
+function seaShoreFoam(x,y){const band=seaShoreBand(x,y);return band?shoreWaveFoam(x,y,band.edge,band.limit):0;}
 function islandShoreSurface(x,y,edge,beach,allSand=false,grain=hash(Math.floor(x*21),Math.floor(y*21),1875),patch=noise(x*.3,y*.3,1876)) {
   if(!beach&&edge<1.2+patch*.6)return {base:GRAY,background:GRAY,ch:grain>.93?':':' ',color:'#727777',tone:.9};
   if(edge<shoreWetSandLimit(patch)) {
     const phase=shoreWavePhase(x,y),limit=shoreWetSandLimit(patch);
     const foam=shoreWaveFoam(x,y,edge,limit,phase),washed=edge<shoreWaveFront(phase,limit);
     const background=washed?BLUE:BRICK,color=washed?'#284e68':'#827858';
-    if(foam>.12&&grain<foam)return {base:WHITE,background,ch:foam>.45?'~':'.',color,tone:1.25};
-    if(washed)return {base:CYAN,background,ch:grain>.9?'-':' ',color,tone:.9};
+    if(foam>.15)return {base:WHITE,background:foam>.55?WHITE:CYAN,ch:foam>.55?'~':' ',color:'#d5eff3',tone:1.25,lift:4,foam:true,water:true};
+    if(washed)return {base:CYAN,background,ch:grain>.9?'-':' ',color,tone:.9,water:true};
     return {base:WARM,background:BRICK,ch:grain>.92?':':' ',color:'#827858',tone:.8};
   }
   if(beach&&(edge<2.3+patch*1.2||allSand)) {
@@ -3413,6 +3422,7 @@ const LANDMARK_BY_BLOCK = new Map(LANDMARK_BUILDINGS.map(b => [b.block,b]));
 let LANDMARK_ROOF_MASK = architectureCellMask(LANDMARK_SOLIDS.filter(o => o.walkRoof), 0);
 let LANDMARK_BLOCK_MASK = architectureCellMask(LANDMARK_BLOCKERS, .5);
 function landmarkSurfaceHeight(o, x, y) {
+  if(o.kind==='tidepool'&&o.profile)return islandPoolHeight(o,x,y);
   const u = rel(x - o.x), v = rel(y - o.y);
   if (Math.abs(u) > o.hl || Math.abs(v) > o.hw) return 0;
   let top = o.z1, bottom = o.z0;
@@ -5361,17 +5371,7 @@ function roomTalkLine(kind, h = tod) {
 }
 // who you'd be talking to: someone sitting or standing within reach, roughly in front, nearer than the counter
 function roomPerson() {
-  if (mode !== 'room' || !room || !room.props) return null;
-  const k = room.def.keeper, keeperD = k ? Math.hypot(px - k[0], py - k[1]) : Infinity;
-  if(k && !room.keeperDead && keeperD<2 && ((k[0]-px)*Math.cos(a)+(k[1]-py)*Math.sin(a))/(keeperD||1)>.8)return null;
-  let best = null, bd = 1.4;
-  for (const s of room.props) {
-    if (!isRoomPerson(s) || k && Math.hypot(s.x - k[0], s.y - k[1]) < 0.6) continue; // (not the one behind the counter)
-    const ex = s.x - px, ey = s.y - py, d = Math.hypot(ex, ey), facing = (Math.cos(a) * ex + Math.sin(a) * ey) / (d || 1);
-    const score = d - facing * 0.4;
-    if (d < 1.4 && facing > -0.2 && score < bd) { bd = score; best = s; }
-  }
-  return best && Math.hypot(best.x - px, best.y - py) < keeperD - 0.2 ? best : null;
+  const target=interactionFocus();return target?.kind==='room-person'?target.who:null;
 }
 const talkInRoom = () => say(`"${roomTalkLine(room.kind)}"`, 4);
 // ---- the elevated train: a steel deck on pillars along H(., EL_ROW).
@@ -5991,7 +5991,9 @@ function audioMix(s) {
     if (k === 'aviary') out.city = 0.04;
     if (s.room.burgled) { out.restaurant = out.bossa = out.coffee = out.karaoke = out.arcade = 0; out.city *= 0.6; } // broken into at night: nobody here, nothing on, just the street outside
     if (k === 'aquarium') { out.waves = 0.22; out.city = 0.02; } // the tanks' pumps and bubblers, like the sea far off
-    if (k === 'islandhome') { out.waves=.3;out.city=0; }
+    if (k === 'islandhome'||k==='islandshelter'||s.wilderness) { out.waves=.3;out.city=out.night=out.crowd=0;out.birds=.12*s.day*(1-.65*s.rain);out.wind=.06; }
+    if(s.record)out[s.record.song]=.7*s.record.gain;
+    if(s.boombox)out[s.song||'bossa']=.7;
     return out;
   }
   const d = AUDIO_DISTRICT[s.district] || AUDIO_DISTRICT.midtown;
@@ -6008,7 +6010,6 @@ function audioMix(s) {
   out.rumble = s.mode === 'el' ? 0.85 : s.elNear;
   if (s.gardens) { out.city *= 0.35; out.crowd *= 0.4; out.night *= 0.5; out.waves = Math.max(out.waves, 0.15); } // the traffic's far off behind the trees; the lake lapping
   if (s.gardens) out.birds = (0.25 + 0.75 * s.day) * (1 - 0.65 * s.rain); // songbirds in the gardens by day
-  if (s.wilderness) { out.city=out.crowd=0;out.birds=.4*s.day*(1-.65*s.rain); }
   if (s.district === 'shotengai') out.pachinko = Math.max(out.pachinko, 0.28 * far); // parlour roar spilling into the covered street
   if (s.fireworks) out.crowd = Math.max(out.crowd, 0.8 * clamp(1 - s.seaDist / 30, 0.2, 1)); // the crowd on the shore, oohing
   if (s.fairNear) { // the Sunset Pier: a crowd, and the booths' bleeps and jingles drifting over it
@@ -6016,6 +6017,9 @@ function audioMix(s) {
     out.arcade = 0.4 * s.fairNear * far;
   }
   if (s.serenade) out.bossa = Math.max(out.bossa, 0.8 * s.serenade); // Nico on the bar roof, after his guitar came back
+  // Use the botanical garden's nature recording, including after dark. Apply
+  // this after event beds so a distant city fireworks show cannot restore crowds.
+  if(s.wilderness){out.city=out.crowd=out.night=out.pachinko=out.arcade=0;out.birds=(.25+.75*s.day)*(1-.65*s.rain);}
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
   out.board = s.skating ? 0.7 : 0; // wheels on asphalt
   out.engine = s.mode === 'air' ? 0.35 + 0.55 * clamp(s.throttle || 0, 0, 1) : s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
@@ -6028,12 +6032,22 @@ function audioMix(s) {
   return out;
 }
 
+// Ten metres per outdoor cell. No minimum gain: distant sources fade to silence
+// and lose their sharp high frequencies before they disappear.
+function soundDistanceProfile(rx,ry,rz,yaw,range=180,reference=14,indoors=false) {
+  const distance=Math.hypot(rx,ry,rz),edge=1-smooth(clamp((distance/range-.75)/.25,0,1));
+  return {distance,gain:edge/(1+(distance/reference)**2)*(indoors?.15:1),
+    cutoff:Math.max(180,Math.min(indoors?900:18000,18000/(1+distance/12)**1.5)),
+    pan:clamp((-Math.sin(yaw)*rx+Math.cos(yaw)*ry)/Math.max(.01,distance),-.9,.9),delay:distance/34};
+}
+
 // what's underfoot, for the footstep sound
 function surfaceAt(mode, room, x, y) {
   if(mode==='ferry')return ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46?'carpet':'wood';
   if (mode === 'room') {
     const f = room.def.floor;
-    return f === 'carpet' ? 'carpet' : f === 'wood' ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';
+    const w=room.def.wc;if(w&&x>=w.x0&&x<w.x1&&y>=w.y0&&y<w.y1)return 'tile';
+    return f === 'carpet' ? 'carpet' : ['wood','home','hotel','cove','islandwood','fernwood'].includes(f) ? 'wood' : f === 'rubber' ? 'carpet' : 'tile';
   }
   if (mode === 'elplat' || mode === 'roof') return mode === 'roof' ? 'gravel' : 'metal';
   if (onPier(x, y)) return 'wood';
@@ -6471,7 +6485,7 @@ function useHeld(near) {
     case 'umbrella': return [near.rain > 0.3 ? 'You hold the umbrella up against the rain.' : 'You twirl the umbrella. It isn\'t raining.', null];
     case 'book': return [pick(BOOK_LINES), 'page'];
     case 'newspaper': return [`Headline: ${pick(near.headlines)}`, 'page'];
-    case 'vinyl': return ['You admire the sleeve. Shame you don\'t have a record player.', null];
+    case 'vinyl': return ['A record in a paper sleeve. Put it on a record player at home.', null];
     case 'jadebangle': return [pick(['You turn the bangle round your wrist. Cool and smooth. Lucky, they say.', 'The jade catches the light. You feel a tiny bit luckier.']), null];
     case 'jadedragon': return [pick(['You rub the dragon\'s head for luck.', 'The little jade dragon stares back, very sure of itself.', 'You give the dragon a pat. Good fortune, apparently, follows.']), null];
     case 'plushcat': return [pick(['The lucky cat waves its paw. Fortune incoming, surely.', 'You pat the lucky cat on the head. You feel a tiny bit luckier.', 'The lucky cat beckons good fortune your way. A little bit of it, anyway.']), null];
@@ -10708,6 +10722,65 @@ GAMES.workshop = (rnd, word, opts = {}) => {
   };
   return g;
 };
+// Bounded, renderer-independent home contents and photograph save data.
+const HOME_FURNITURE={
+  f_chair:{name:'timber dining chair',price:45,hx:.29,hy:.32,height:1.05,seat:.45},
+  f_table:{name:'oak dining table',price:120,hx:.95,hy:.5,height:.8},
+  f_sofa:{name:'soft two-seat sofa',price:240,hx:1.2,hy:.46,height:.95,seat:.45},
+  f_lamp:{name:'shaded floor lamp',price:65,hx:.24,hy:.24,height:1.75,fixture:'lamp'},
+  f_recordplayer:{name:'record player with cabinet and record',price:180,hx:.55,hy:.35,height:1.1,fixture:'record'},
+  f_frame:{name:'oak photograph frame',price:25,hx:.4,hy:.035,height:.6,wall:true,fixture:'photo'},
+  f_rug:{name:'woven blue rug',price:40,hx:1.3,hy:.9,height:.014,rug:true},
+  f_plant:{name:'potted palm',price:35,hx:.25,hy:.25,height:1.6},
+  sharkplush:{name:'plush shark',price:15,hx:.24,hy:.48,height:.35,plush:true},
+};
+for(const [id,d]of Object.entries(HOME_FURNITURE))if(!ITEMS[id])ITEMS[id]={name:d.name+' flatpack',price:d.price,kind:'gear',furniture:true};
+ITEMS.camera={name:'compact camera',price:120,kind:'gear'};
+STOCK_WORD.IDEA=[...Object.keys(HOME_FURNITURE),'camera','vinyl'];
+STOCK_WORD.RECORDS.push('f_recordplayer');STOCK_WORD.PAWN.push('camera');
+let homePhotos={next:1,photos:[]};
+function restoreHomePhotos(raw) {
+  const photos=[];
+  for(const p of (Array.isArray(raw?.photos)?raw.photos:[]).slice(0,8)) {
+    if(!Number.isInteger(p.id)||p.id<1||p.w!==48||p.h!==28||typeof p.chars!=='string'||Array.from(p.chars).length!==1344||!Array.isArray(p.fg)||!Array.isArray(p.bg)||p.fg.length!==1344||p.bg.length!==1344)continue;
+    if(![...p.fg,...p.bg].every(c=>Number.isInteger(c)&&c>=0&&c<=255)||photos.some(q=>q.id===p.id))continue;
+    photos.push({id:p.id,w:48,h:28,chars:p.chars,fg:p.fg.slice(),bg:p.bg.slice(),title:String(p.title||'Photograph').slice(0,64)});
+  }
+  return {next:Math.max(1,Number.isInteger(raw?.next)&&raw.next<1e9?raw.next:1,...photos.map(p=>p.id+1)),photos};
+}
+function restoreHomeFurnishings(raw,kind) {
+  const size=HOME_ROOM_SIZE[kind]||HOME_ROOM_SIZE.home_studio,parts=[];
+  for(const p of (Array.isArray(raw?.parts)?raw.parts:[]).slice(0,48)) {
+    if(!HOME_FURNITURE[p.id]||!Number.isInteger(p.key)||p.key<1||parts.some(q=>q.key===p.key)||![p.x,p.y,p.a].every(Number.isFinite)||p.x<1||p.x>size[0]-1||p.y<1||p.y>size[1]-1)continue;
+    const d=HOME_FURNITURE[p.id];
+    parts.push({key:p.key,id:p.id,x:p.x,y:p.y,a:mod(p.a,TAU),z:d.wall?clamp(+p.z||1.6,.4,4):d.plush?clamp(+p.z||0,0,2):0,on:p.on!==false,track:clamp(Math.floor(+p.track||0),0,2),photo:Number.isInteger(p.photo)?p.photo:0});
+  }
+  return {next:Math.max(1,Number.isInteger(raw?.next)&&raw.next<1e9?raw.next:1,...parts.map(p=>p.key+1)),parts};
+}
+function homeFurnishings(home){return home.furnishings||(home.furnishings={next:1,parts:[]});}
+function furnishingItemState(it){return HOME_FURNITURE[it.id]&&it.furnishing?{furnishing:{on:it.furnishing.on!==false,track:clamp(Math.floor(+it.furnishing.track||0),0,2),photo:Math.max(0,Math.floor(+it.furnishing.photo||0))}}:{};}
+function furnishingBox(p) {
+  const d=HOME_FURNITURE[p.id],base=d.plush?p.z||0:0;return {x:p.x,y:p.y,c:Math.cos(p.a),s:Math.sin(p.a),hl:d.hx,hw:d.hy,z0:d.wall?p.z-d.height/2:base,z1:d.wall?p.z+d.height/2:base+d.height};
+}
+function furnishingOverlap(a,b,pad=0) {
+  for(const [nx,ny]of [[a.c,a.s],[-a.s,a.c],[b.c,b.s],[-b.s,b.c]]) {
+    const ra=a.hl*Math.abs(a.c*nx+a.s*ny)+a.hw*Math.abs(-a.s*nx+a.c*ny),rb=b.hl*Math.abs(b.c*nx+b.s*ny)+b.hw*Math.abs(-b.s*nx+b.c*ny);
+    if(Math.abs((b.x-a.x)*nx+(b.y-a.y)*ny)>=ra+rb+pad-1e-5)return false;
+  }
+  return true;
+}
+function furnishingFit(p,grid,obstacles) {
+  const d=HOME_FURNITURE[p.id],b=furnishingBox(p),W=grid[0].length,H=grid.length;
+  const hx=Math.abs(b.c)*b.hl+Math.abs(b.s)*b.hw,hy=Math.abs(b.s)*b.hl+Math.abs(b.c)*b.hw;
+  for(let y=Math.floor(b.y-hy);y<=Math.floor(b.y+hy);y++)for(let x=Math.floor(b.x-hx);x<=Math.floor(b.x+hx);x++) {
+    const cell=grid[y]?.[x];if(cell==='.'||!furnishingOverlap(b,{x:x+.5,y:y+.5,c:1,s:0,hl:.5,hw:.5}))continue;
+    return cell==='D'?'Keep the doorway clear.':'The furniture crosses a wall.';
+  }
+  if(p.x-hx<1-1e-5||p.x+hx>W-1+1e-5||p.y-hy<1-1e-5||p.y+hy>H-1+1e-5)return 'Keep the furniture inside the room.';
+  if(!d.rug)for(const o of obstacles)if(o.box&&!o.walk&&!(p.key!=null&&o.furnishingKey===p.key)&&b.z0<o.box.z1-.01&&b.z1>o.box.z0+.01&&furnishingOverlap(b,o.box,.025))return 'Leave the other furniture clear.';
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(grid[y][x]==='D'&&!d.rug&&furnishingOverlap(b,{x:x+.5,y:y+.5,c:1,s:0,hl:1,hw:1}))return 'Leave room to reach the door.';
+  return '';
+}
 // Temporary, deliberately fantastical screen effects. Timers use simulation seconds, never wall-clock time.
 const DRUG_EFFECTS = {
   weed: { duration: 80, label: 'green haze', line: 'You use a little weed. The city takes a long, warm breath.', sound: 'drag' },
@@ -11067,7 +11140,7 @@ function migrateIslandStride(data) {
   if (match) data.waypoint.id = cityHomeId({cell: cell(Number(match[1]))});
 }
 function savedCityHomes() {
-  return owned.homes.map(home => ({ ...home, placeId: cityPlaceAtCell(home.cell)?.id || home.placeId }));
+  return owned.homes.map(home => ({ ...home, furnishings:homeFurnishings(home),lights:home.lights||{},placeId: cityPlaceAtCell(home.cell)?.id || home.placeId }));
 }
 // Map topology lives here so the map and walking routes can later use a bounded world.
 const MAP_WORLD = {width:N,height:N,wrap:true};
@@ -12354,12 +12427,24 @@ function floorBaseCell(i, r, x, rx, ry) {
       soft = true; base = BRICK; k = 1.3;
       ch = fract(wy * 6) < 0.15 ? '=' : hash(mx, Math.floor(wy * 6), 33) > 0.85 ? ':' : '|';
     } else if (seaAt(wx, wy)) { // open water: drifting waves; reflect() mirrors the skyline into it
+      const shore=seaShoreBand(wx,wy);
+      if(shore?.beach) {
+        const surface=islandShoreSurface(wx,wy,shore.edge,true);
+        // The whole intertidal surface changes ownership. Backwash exposes
+        // wet sand outside the resting coastline instead of drawing a stripe
+        // over water that never retreats.
+        if(!surface.water||surface.foam) {
+          BG[i]=bgAt(surface.background,day*(surface.foam?9:3)*f,d);
+          set(i,surface.ch,C(surface.base,Math.max(surface.foam?8:0,L*surface.tone)));FL[i]=surface.foam?0:1;return;
+        }
+      }
       const n = noise(wx * 2.5 + T * 0.25, wy * 2.5 - T * 0.1, 91);
       set(i, n > 0.62 ? '~' : n > 0.47 ? '-' : ' ', C(n > 0.62 ? CYAN : BLUE, L * 1.5));
       BG[i] = C(BLUE, 1 + day * 3); FL[i] = 3;
-      const foam=seaShoreFoam(wx,wy);
-      if(foam>.12&&hash(Math.floor(wx*21),Math.floor(wy*21),1875)<foam) {
+      const foam=shore?shoreWaveFoam(wx,wy,shore.edge,shore.limit):0;
+      if(foam>.15) {
         set(i,foam>.45?'~':'.',C(WHITE,L*1.4));
+        BG[i]=C(foam>.55?WHITE:CYAN,day*9+1);
         FL[i]=0; // breaking foam stays visible over the skyline reflection
       }
       if (wakes.length && wakeAt(wx, wy, Math.max(d * d / (eye * projY), d / projX)) > 0.08) { // a boat's wake: foam on the arms, broken up; churned water behind her
@@ -16100,7 +16185,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
-  if (def.home) r.props.push(...workshopProps(r));
+  if (def.home) r.props.push(...workshopProps(r),...furnishingProps(r));
   if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
     const host=r.lobby||r;r.exterior=homeExterior({...r,cell:host.cell,ret:host.ret});
     if(kind==='lighthouse'||kind==='lamproom')r.exterior={x0:LIGHTHOUSE.x-LIGHTHOUSE.r,x1:LIGHTHOUSE.x+LIGHTHOUSE.r,y0:LIGHTHOUSE.y-LIGHTHOUSE.r,y1:LIGHTHOUSE.y+LIGHTHOUSE.r,up:kind==='lamproom'?2.8:0,faces:{}};
@@ -16344,11 +16429,7 @@ function homeDef(w, h, tier) {
       BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
       BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
       BX(1.45, h - 2.6, .4, .5, 0, 1.1, solid(BRICK, { panel: .3, top: '=' })), // workshop supply cupboard
-      BX(tv[0], tv[1] - 0.3, 0.7, 0.12, 0.6, 1.3, (i, t, L) => { // the telly: static, or a show on
-        if (HIT.face !== 4 && HIT.face !== 3) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
-        if (!r.tv) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
-        BG[i] = C(NEON[(T * 0.7 | 0) & 3], 3 + hash(Math.floor(HIT.u * 20), Math.floor(HIT.w * 20), T * 4 | 0) * 6); return set(i, ' ', 0), true;
-      }),
+      TELEVISION(tv[0],tv[1]-.3,r),
       BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
       BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' }), 0, 1), // a shelf for things you bring home
       BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
@@ -16366,13 +16447,7 @@ function homeDef(w, h, tier) {
         ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), POT_PLANT(1.6, 8.9, 1.5)] : []),
       ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),
         POT_PLANT(23.6, 14.8, 1.6), POT_PLANT(21, 9, 1.5)] : []),
-      ...plan.lamps.flatMap(([x, y]) => {
-        const ceiling = tier ? 3.6 : 3;
-        const glow = (i, t, L) => { BG[i] = C(STONE, 8); return set(i, HIT.face === 5 ? '=' : 'o', C(WARM, 15)), true; };
-        return [BX(x, y, 0.012, 0.012, ceiling - 0.55, ceiling - 0.05, solid(tier === 2 ? YEL : GRAY)),
-          BX(x, y, tier === 2 ? 0.32 : 0.18, tier === 2 ? 0.32 : 0.18, ceiling - 0.65, ceiling - 0.55, glow),
-          ...(tier === 2 ? [-1, 1].map(s => BX(x + s * 0.28, y, 0.06, 0.06, ceiling - 0.8, ceiling - 0.52, glow)) : [])];
-      }),
+      ...plan.lamps.map(([x,y],k)=>HOME_PENDANT(x,y,tier?3.6:3,r,k)),
     ] };
 }
 const POTTY_SCRAWL = ['FOR A GOOD', 'TIME CALL', '555-0142', '', 'DAVE WAS', 'HERE'];
@@ -16600,7 +16675,7 @@ function roomFloor(i, r, x, rx, ry) {
   const d = eye * projY / (r - hor + 0.5), wx = px + rx * d, wy = py + ry * d, f = Math.max(0, 1 - d / 30), L = f * 7 * room.def.light;
   ZB[i] = d; FL[i] = 1;
   if (room.def.balcony && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H)) { FL[i] = 0; return homeOutdoorRay(i, rx, ry); }
-  if (room.def.wc && inWc(wx, wy)) { const k = (Math.floor(wx * 5) + Math.floor(wy * 5)) & 1; BG[i] = k ? C(WHITE, 1.3 + L * 0.2) : C(GRAY, 0.5 + L * 0.06); return set(i, ' ', 0); } // the bathroom floor: little black and white squares
+  if (room.def.wc && inWc(wx, wy)) { if(ROOM_FLOORS[room.def.bathFloor])return ROOM_FLOORS[room.def.bathFloor](i,f,wx,wy,r,x,L);const k = (Math.floor(wx * 5) + Math.floor(wy * 5)) & 1; BG[i] = k ? C(WHITE, 1.3 + L * 0.2) : C(GRAY, 0.5 + L * 0.06); return set(i, ' ', 0); }
   if (ROOM_FLOORS[room.def.floor]) return ROOM_FLOORS[room.def.floor](i, f, wx, wy, r, x, L);
   switch (room.def.floor) {
     case 'home': {
@@ -16742,10 +16817,8 @@ function roomCeil(i, r, x, rx, ry) {
   if (st === 'home') {
     const b = room.def.balcony;
     if (b && (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H || wx >= b.x0 - 1 && wy >= b.y0 && wy < b.y1)) return homeOutdoorRay(i, rx, ry);
-    const lamp = room.def.lamps.some(([lx, ly]) => (wx - lx) ** 2 + (wy - ly) ** 2 < 0.12);
-    const rose = room.def.lamps.some(([lx, ly]) => Math.abs((wx - lx) ** 2 + (wy - ly) ** 2 - 0.28) < 0.045);
-    BG[i] = C(WHITE, 5);
-    return set(i, lamp ? 'o' : rose && room.def.tier === 2 ? '+' : ' ', C(lamp ? WARM : YEL, lamp ? 15 : 9));
+    BG[i] = C(WHITE,2+3*room.def.light/(room.homeBaseLight||room.def.light));
+    return set(i,' ',0); // Light comes from the fitted pendant model below.
   }
   if (st === 'pendant') { // warm hanging lamps, about 2m apart
     const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
@@ -23497,6 +23570,7 @@ function drawShape(rx_, ry_, z0, hw, h, fn, behindGlyphs = false) {
 // side. b: {x, y relative to you, c, s heading, hl, hw, z0, z1}. shade(i, t, L) paints the cell from HIT (which face,
 // where on it) and returns true if it drew. Backgrounds get the box's depth too, so fog treats it as solid.
 function drawBox(b, shade, intersect = rayBox) {
+  const homeLight=mode==='room'&&room?.homeBaseLight?room.def.light/room.homeBaseLight:1;
   // A box crossing the camera's near plane otherwise tests every screen cell, even when entirely off to one side.
   // Conservative bounds also cover sloped custom shapes contained by this box.
   const along = dx * b.c + dy * b.s, across = -dx * b.s + dy * b.c;
@@ -23546,7 +23620,7 @@ function drawBox(b, shade, intersect = rayBox) {
       const t = intersect(0, 0, eye, rx, ry, (hor - r - 0.5) / projY, b);
       if (t < 0 || t >= ZB[i] || t > vis) continue;
       const bg = BG[i]; BG[i] = BG_UNSET;
-      const drew = shade(i, t, (1 - t / vis) * 15 * amb);
+      const drew = shade(i, t, (1 - t / vis) * 15 * amb * homeLight);
       if (BG[i] === BG_UNSET) BG[i] = bg; else if (drew) ZBG[i] = t; // (as drawShape: only a background it paints is its own, for the fog)
       if (drew) { ZB[i] = t; FL[i] = 0; }
     }
@@ -23680,6 +23754,7 @@ function render(dt,sceneOnly=false,mask=null) {
   if(!sceneOnly)drawFishing(); // the player's line and rod view belong to the main camera; window passes retain ambient anglers above
   drawShots(); // a shot's streak, the police's flashes (gun-ui.js)
   if(sceneOnly)return;
+  drawFurnishingPreview();
   if (!freecam) {
     if (mode === 'drive' || mode === 'taxi') dash();
     if (mode === 'air') airDash();
@@ -23956,14 +24031,7 @@ const nearestCar = r => {
 };
 // someone right in front of you, close enough to talk to
 const nearPerson = () => {
-  if (mode !== 'walk') return null;
-  let best = null, bd = 0.45;
-  for (const p of [...people, ...fairFolk]) { // (and the crowd at the fair)
-    if (p.hidden || p.dead || p.flee) continue; // (not somebody lying dead, or running for their life)
-    const ex = rel(p.x - px), ey = rel(p.y - py), d = Math.hypot(ex, ey);
-    if (d < bd && (ex * Math.cos(a) + ey * Math.sin(a)) / d > 0.85) { bd = d; best = p; }
-  }
-  return best;
+  const target=interactionFocus();return target?.kind==='person'?target.who:null;
 };
 const nearVendor = () => vendors.find(v => !v.dead && !v.hidden && Math.hypot(rel(v.x - px), rel(v.y - py)) < 0.35);
 // a vending machine you're facing, within arm's reach (3m of its middle)
@@ -23998,9 +24066,11 @@ const homeSpot = () => {
   }
   return best;
 };
-const nearKeeper = () => { if(room.keeperDead)return false;const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2; };
+const nearKeeper = () => { if(room.keeperDead)return false;const k = room.def.keeper; return k && Math.hypot(px - k[0], py - k[1]) < 2&&interactionClear(k[0],k[1],1.5); };
 function promptText() {
   if (chute) return chute.open ? '' : 'SPACE: pull the cord';
+  if(furnishingPlacement){const p=furnishingCandidate();return p.ok?'E: place · Q: rotate · Esc: cancel':p.reason+' · Q: rotate · Esc: cancel';}
+  const focused=focusedInteractionPrompt();if(focused)return focused;
   const islandPrompt=islandBuildingPrompt();if(islandPrompt)return islandPrompt;
   const scenePrompt=streetScenePrompt();if(scenePrompt)return scenePrompt;
   if (mode === 'walk' && elStairGround(px, py) > EL_TREAD) return ''; // (up the el stairs: nothing at street level is in reach)
@@ -24276,6 +24346,88 @@ function hud() {
     });
   }
 }
+// E and its prompt resolve the same visible target before proximity fallbacks.
+// Rooms use metres; the outdoor world uses ten-metre cells.
+function interactionClear(x,y,z,ignore=null) {
+  const inside=mode==='room',ex=inside?x-px:rel(x-px),ey=inside?y-py:rel(y-py),ez=z-eye;
+  const n=Math.max(2,Math.ceil(Math.hypot(ex,ey)/(inside?.07:.012)));
+  for(let k=1;k<n;k++) {
+    const f=k/n,xx=px+ex*f,yy=py+ey*f,zz=eye+ez*f;
+    const h=inside?ROOMW.cell(Math.floor(xx),Math.floor(yy)):CITY.cell(Math.floor(xx),Math.floor(yy));
+    if(h>zz+.015)return false;
+    if(!inside&&terrainHeight(xx,yy)>zz+.003)return false;
+  }
+  if(!inside)for(let by=-1;by<=1;by++)for(let bx=-1;bx<=1;bx++)for(const solid of solidsB[bi(Math.floor(px/8)+bx,Math.floor(py/8)+by)]) {
+    const sx=rel(solid.x-px),sy=rel(solid.y-py);
+    if(Math.hypot(sx,sy)>Math.hypot(ex,ey)+solid.hl+solid.hw)continue;
+    const saved={...HIT};let t;
+    try{t=rayBox(0,0,eye,ex,ey,ez,{...solid,x:sx,y:sy});}finally{Object.assign(HIT,saved);}
+    if(t>.01&&t<.98)return false;
+  }
+  if(inside) {
+    const saved={...HIT};let clear=true;
+    try {
+      for(const prop of room.props)if(prop!==ignore&&!(ignore&&prop.furnishingKey===ignore.key)&&prop.box&&!prop.walk) {
+        const t=rayBox(px,py,eye,ex,ey,ez,prop.box);
+        if(t>.01&&t<.98){clear=false;break;}
+      }
+    }finally{Object.assign(HIT,saved);}
+    if(!clear)return false;
+  }
+  return true;
+}
+function interactionScore(x,y,z0,z1,radius,reach,ignore=null) {
+  const inside=mode==='room',ex=inside?x-px:rel(x-px),ey=inside?y-py:rel(y-py),d=Math.hypot(ex,ey);
+  if(d>reach)return Infinity;
+  const forward=ex*Math.cos(a)+ey*Math.sin(a),side=-ex*Math.sin(a)+ey*Math.cos(a);
+  if(forward<-.01)return Infinity;
+  const slope=pitch*rows/projY,aimZ=eye+slope*Math.max(.01,forward),z=clamp(aimZ,z0,z1);
+  const horizontal=Math.max(0,Math.abs(Math.atan2(side,Math.max(.001,forward)))-Math.atan2(radius,Math.max(.001,d)));
+  const vertical=Math.abs(Math.atan2(z-eye,Math.max(.001,d))-Math.atan(slope));
+  if(horizontal>.23||vertical>.32||!interactionClear(x,y,z,ignore))return Infinity;
+  return horizontal*horizontal+vertical*vertical*.7+.012*d/reach;
+}
+function interactionFocus() {
+  if(!['walk','room','roof'].includes(mode)||sleep||freecam||wanted.busted||mode==='room'&&['jail','train'].includes(room.kind)||mode==='walk'&&elWalkGround(px,py)>EL_TREAD)return null;
+  const inside=mode==='room',unit=inside?1:.1;
+  let best=null,score=Infinity;
+  const offer=(kind,who,x,y,z0,z1,radius,reach,ignore=null)=>{
+    const value=interactionScore(x,y,z0,z1,radius,reach,ignore);
+    if(value<score){score=value;best={kind,who};}
+  };
+  const at=placeKey();
+  if(at!==null)for(const d of dropped)if(d.at===at&&Math.abs((d.z||0)-(inside?0:mode==='roof'?roofH:outdoorGroundHeight(px,py)))<.08) {
+    const z=d.displayZ??(inside?0:d.z||0);
+    offer('drop',d,d.x,d.y,z,z+.2*unit,.16*unit,inside?1.6:.28);
+  }
+  if(inside) {
+    for(const t of homeFixtureTargets())offer('home-fixture',t,t.x,t.y,t.z0,t.z1,t.radius,t.reach,t.part);
+    const keeper=room.def.keeper;
+    for(const p of room.props)if(isRoomPerson(p)&&!(keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12))
+      offer('room-person',p,p.x,p.y,.3,p.pose==='sit'?1.4:1.8,.28,1.8);
+    if(keeper&&!room.keeperDead)offer('keeper',keeper,...keeper,.7,1.8,.28,2);
+  }else if(mode==='walk') {
+    for(const p of [...people,...fairFolk])if(!p.hidden&&!p.dead&&!p.flee&&!p.down) {
+      if(near(px,py,p.x,p.y)>.45)continue;
+      const ground=walkGround(p.x,p.y);
+      offer('person',p,p.x,p.y,ground+.03,ground+.18,.035,.45);
+    }
+  }
+  return best;
+}
+function focusedInteractionPrompt(target=interactionFocus()) {
+  if(target?.kind==='home-fixture')return homeFixturePrompt(target.who);
+  if(target?.kind==='drop')return `E: pick up the ${itemName(target.who)}`;
+  if(target?.kind==='person'||target?.kind==='room-person')return 'E: talk';
+  return '';
+}
+function useFocusedInteraction(target=interactionFocus()) {
+  if(target?.kind==='home-fixture'){homeFixtureUse(target.who);return true;}
+  if(target?.kind==='drop'){say(pickUpDropped(target.who)[1]);return true;}
+  if(target?.kind==='person'){talkTo(target.who);return true;}
+  if(target?.kind==='room-person'){talkInRoom();return true;}
+  return false;
+}
 // ---- actions
 function curbOf(c) { // sidewalk spot on the car's right, next to its lane
   const vert = Math.abs(c.hy) > Math.abs(c.hx), dir = Math.sign(vert ? c.hy : c.hx) || 1;
@@ -24419,12 +24571,14 @@ function enterRoom(kind, extra, spawn) {
   fx.skating = false; body.seat = null; // the board comes up under your arm at the door (and you're on your feet)
   room = makeRoom(kind, extra); mode = 'room'; [px, py, a] = spawn; pitch = 0;
   const residence = homeRecord(room);
+  if(residence)updateHomeLights();
   if (residence && room.ret) residence.door = room.ret.slice(0, 2);
   if (room.line == null) room.line = pick(room.word ? LINES : LINES.slice(1)).replace('{}', room.word); // (whoever's behind the counter always has something to say)
   if (actx && kind !== 'station' && kind !== 'train' && kind !== 'backrooms' && !LOBBY_KINDS.has(kind)) sfxDoor(); // the bell over the shop door
   transitSync();
 }
 function interact() {
+  if(useFocusedInteraction())return;
   if (islandBuildingUse()) return;
   if (streetSceneUse()) return;
   if (mode === 'walk' && elWalkGround(px, py) > EL_TREAD) return; // (up the el stairs: the street's out of reach)
@@ -26145,9 +26299,10 @@ function drawFireworks() {
 // the boom: as far off as it is, it arrives that much later (sound does 34 cells a second)
 function fwBoom(s) {
   if (!actx) return;
-  const dist = Math.hypot(rel(s.x - px), rel(s.y - py), s.h), at = actx.currentTime + dist / 34, loud = clamp(1.6 - dist / 120, 0.15, 1);
-  playClip('firework', 0.6 * loud, at);
-  if (s.kind === 'crackle') for (let k = 0; k < 14; k++) burst(at + 1.2 + k * 0.07 + Math.random() * 0.05, 0.05, [filt('highpass', 2500, 1)], 0.08 * loud);
+  const profile=worldSoundProfile(s.x,s.y,s.h),at=actx.currentTime+profile.delay;
+  if(profile.gain<.001)return;
+  playClip('firework',.6*profile.gain,at,profile);
+  if(s.kind==='crackle')for(let k=0;k<14;k++)burst(at+1.2+k*.07+Math.random()*.05,.05,[filt('highpass',1200,1),filt('lowpass',profile.cutoff)],.08*profile.gain,profile.pan);
 }
 // ===== the laundromat: open all night. Put a load in one of the machines along the back wall, wait (the bench is
 // there for it), and come back for clean clothes. Change into them while the police are after someone in what you
@@ -26371,12 +26526,23 @@ function clipBuffer(name) {
   }).then(b => actx.decodeAudioData(b)).catch(() => null);
   return CLIPS[name];
 }
-function playClip(name, gain, when = actx.currentTime) {
+function playClip(name, gain, when = actx.currentTime, spatial=null) {
   clipBuffer(name).then(buf => {
     if (!buf) return;
     const s = actx.createBufferSource(), g_ = actx.createGain();
-    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain; shot(s, g_, sfxBus); s.start(Math.max(actx.currentTime, when));
+    s.buffer = buf; s.playbackRate.value = 0.93 + Math.random() * 0.14; g_.gain.value = gain;
+    if(spatial){const lp=filt('lowpass',spatial.cutoff),pan=actx.createStereoPanner();pan.pan.value=spatial.pan;shot(s,lp,g_,pan,sfxBus);}
+    else shot(s,g_,sfxBus);
+    s.start(Math.max(actx.currentTime, when));
   });
+}
+function worldSoundProfile(x,y,z,range=180,reference=14) {
+  let x0=px,y0=py,z0=eye;
+  if(mode==='room') {
+    const ret=room.ret||room.lobby?.ret;
+    if(ret){[x0,y0]=ret;z0=terrainHeight(x0,y0)+.17;}
+  }
+  return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
 let peeLoopVoice = null;
 function setPeeAudio(on) {
@@ -26481,8 +26647,8 @@ function audioTick(dt) {
   let waterfall=0;
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
-    wilderness:worldReady&&!!wildIslandAt(px,py),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record:homeRecordAudio(), district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
+    wilderness:worldReady&&!!wildIslandAt(...(mode==='room'?(room.ret||room.lobby?.ret||[px,py]).slice(0,2):[px,py])),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
@@ -28516,12 +28682,14 @@ function dropHere() {
   say(`You put the ${dropHeldAt(x, y, at, z)} down.`);
 }
 const droppedHere = () => {
+  const target=interactionFocus();if(target?.kind==='drop')return target.who;
   const at = placeKey();
   if (at === null) return null;
   let z = 0;
   if (mode === 'roof') z = roofH;
   else if (mode !== 'room') z = outdoorGroundHeight(px, py);
-  return droppedNear(px, py, at, mode === 'room' ? 1.1 : 0.2, z);
+  const d=droppedNear(px,py,at,mode==='room'?1.1:.2,z);
+  return d&&interactionClear(d.x,d.y,(d.displayZ??(d.at?0:d.z||0))+(d.at?.1:.01))?d:null;
 };
 // lying on the ground: the small item picture, shrunk to life size (s = world units per character: cells or metres)
 function drawDropped(d, vx, vy, s) {
@@ -28576,7 +28744,7 @@ function showPanel(el, html) {
   releaseMouse();
 }
 function hidePanel(el) { if (el && el.style.display !== 'none') { el.style.display = 'none'; paused = false; } }
-const panelOpen = () => [shopEl, invEl, storeEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl].some(el => el && el.style.display === 'flex');
+const panelOpen = () => [shopEl, invEl, storeEl, typeof furnishingEl !== 'undefined' && furnishingEl, typeof cookEl !== 'undefined' && cookEl, typeof workshopEl !== 'undefined' && workshopEl, typeof drugSaleEl !== 'undefined' && drugSaleEl, typeof supplierEl !== 'undefined' && supplierEl, typeof fishingCompetitionEl !== 'undefined' && fishingCompetitionEl].some(el => el && el.style.display === 'flex');
 // title, item ids, and the cart if it's a street vendor (for the fetch favour)
 function openShop(title, stock, vendor = null) {
   shopEl = shopEl || panel('shop');
@@ -28649,6 +28817,7 @@ function openStorage(list = storeCtx[0], where = storeCtx[1], title = storeCtx[2
 // keys while a panel is up; true if handled
 function panelKey(e) {
   if (!panelOpen()) return false;
+  if(furnishingEl?.style.display==='flex'){if(['Escape','KeyE','KeyF','KeyI'].includes(e.code))hidePanel(furnishingEl);return true;}
   if (fishingCompetitionPanelKey(e)) return true;
   if (workshopPanelKey(e)) return true;
   if (cookPanelKey(e)) return true;
@@ -28676,6 +28845,9 @@ const HEADLINES = () => newsLines().length ? newsLines() : [...MARKET.news.slice
   'Record crowds at the waterfront', 'Fog to roll in this week, say forecasters', ...EVENTS.map(e => e[4])];
 function useHeldItem() {
   if(wanted.busted)return;
+  if(furnishingPlacement){furnishingPlacement.a=mod(furnishingPlacement.a+Math.PI/2,TAU);return;}
+  if(heldItem()?.id==='camera')return takeHomePhoto();
+  if(HOME_FURNITURE[heldItem()?.id]&&(ITEMS[heldItem().id].furniture||homeRecord(room)))return beginFurnishingPlacement(heldItem());
   if (workshopPlacement) {workshopPlacement.a=mod(workshopPlacement.a+Math.PI/2,Math.PI*2);return;}
   if (heldGun()) return pullTrigger(); // (gun-ui.js)
   if (heldItem() && heldItem().id === 'spraypaint') return sprayTag();
@@ -32301,7 +32473,8 @@ function workshopProps(r) {
 }
 function refreshWorkshopRoom() {
   if (!workshopHome()) return;
-  room.props = [...room.def.props(room), ...workshopProps(room)];
+  room.props = [...room.def.props(room), ...workshopProps(room),...furnishingProps(room)];
+  updateHomeLights();
 }
 function nearWorkshopBench() {
   const home = workshopHome(); if (!home) return null;
@@ -33376,7 +33549,7 @@ ROOM_DEFS.islandhome={
     ...toilet(21.5,2,1,porcelain),washbasin(20.6,1.5,0,1),
     ...tableBox(15,6,1.4,.65),...homeChair(15,7.2,0,-1,GREEN),...homeChair(15,4.8,0,1,GREEN),
     ...couch(5,17,1.8,0,-1,GREEN),...tableBox(5,15.4,.9,.4),
-    BX(5,13.5,.8,.2,0,.6,solid(BRICK)),BX(5,13.5,.6,.1,.6,1.3,(i,t,L)=>{BG[i]=C(r.tv?CYAN:GRAY,r.tv?6:1);set(i,r.tv?'~':' ',C(WHITE,L));return true;}),
+    BX(5,13.5,.8,.2,0,.6,solid(BRICK)),TELEVISION(5,13.5,r),
     BX(17,12,.5,.3,0,1.1,solid(BRICK,{panel:.3,top:'='})),
     POT_PLANT(10.8,12,1.5),POT_PLANT(21,8,1.4),
     ...[[4,5],[16,6],[5,17],[18,17]].map(([x,y])=>BX(x,y,.22,.22,2.8,2.95,(i,t,L)=>{BG[i]=C(WARM,7);set(i,'=',C(YEL,15));return true;})),
@@ -33385,6 +33558,7 @@ ROOM_DEFS.islandhome={
 
 function fernRoomWall(i,u,uStep,z,d,mx,my,L) {
   homeWall(i,u,uStep,z,d,mx,my,L);
+  if(roomAt(mx,my)==='W'||inWc(px,py))return true;
   if(z<.8){BG[i]=C(BRICK,1.6+L*.2);set(i,Math.abs(z-.76)<.035?'=':fract(u*3)<.045?'|':' ',C(WARM,L*.6));}
   return true;
 }
@@ -33417,9 +33591,9 @@ function buildIslandScenery() {
     // Small cleats sit away from the boarding point and leave the deck open.
     islandDetail(x0+1.7,y0+.12,.07,.025,0,.035,'metal');
     const [lx,ly]=island.landing;
-    islandDetail(lx+1.8,ly+.7,.022,.022,0,.22,'timber');
-    const marker=islandDetail(lx+1.8,ly+.7,.15,.025,.16,.23,'sign',Math.PI/2);
-    marker.word=island.name.toUpperCase();if(island.id==='cabin')marker.ink=BLACK;
+    islandDetail(lx+1.8,ly+.7,.016,.016,0,.18,'timber');
+    const marker=islandDetail(lx+1.8,ly+.7,.12,.018,.13,.185,'sign',Math.PI/2);
+    Object.assign(marker,{word:island.name.toUpperCase(),ink:BLACK,labelZ:.1575,labelH:.033});
     for(let y=Math.floor(island.y-island.ry);y<island.y+island.ry;y+=4)for(let x=Math.floor(island.x-island.rx);x<island.x+island.rx;x+=4) {
       const seed=hash(x,y,1910),wx=x+(seed-.5)*2,wy=y+(hash(x,y,1911)-.5)*2,edge=wildIslandEdge(wx,wy,island);
       if(edge<.7||edge>16||onPier(wx,wy)||near(wx,wy,lx,ly)<5||map[idx(Math.floor(wx),Math.floor(wy))])continue;
@@ -33436,7 +33610,7 @@ function buildIslandScenery() {
   islandDetail(540.5,247.17,.58,.35,.28,.31,'timber');
   for(const x of [540.03,540.97])islandDetail(x,247.45,.018,.018,0,.29,'trim');
   islandDetail(540.14,247.025,.035,.025,.23,.28,'lamp');
-  islandDetail(540.5,247.52,.33,.025,.285,.32,'sign');
+  Object.assign(islandDetail(540.5,247.52,.265,.018,.285,.32,'sign'),{word:'FERN HOUSE',houseSign:true,ink:BLACK,labelZ:.3025,labelH:.021});
   const [tx,ty]=house.terrace;
   islandDetail(tx,ty,1.1,1.6,0,.004,'deck');
   for(const y of [244.2,246.8]) {
@@ -33480,8 +33654,9 @@ function islandTimberShade(model,i,t,L) {
   const brightness=(wood?1.6:2.2)+L*(top?.3:.2);
   BG[i]=C(base,brightness);
   if(model.word&&(HIT.face===3||HIT.face===4)) {
+    const word=model.houseSign?(homeAt(SHOP[cityPlaceCell('fern-house')])?'FERN HOUSE':'FOR SALE'):model.word;
     const side=HIT.face===3?1:-1,[x,y]=R(model.x-model.s*side*model.hw,model.y+model.c*side*model.hw);
-    set(i,worldText(model.word,HIT.u*side,HIT.w,t,i,x,y,model.labelZ??.195,model.c*side,model.s*side,Math.min(.028,model.hl*1.7/model.word.length),model.labelH??.04),C(model.ink??GREEN,Math.max(5,L)));
+    set(i,worldText(word,HIT.u*side,HIT.w,t,i,x,y,model.labelZ??.195,model.c*side,model.s*side,Math.min(.028,model.hl*1.7/word.length),model.labelH??.04),C(model.ink??BLACK,15));
     return true;
   }
   let ch=' ';
@@ -33595,6 +33770,7 @@ function drawWildScenery() {
   forNear(islandDetailsB,model=>{
     const vx=model.x-px,vy=model.y-py;
     if(!inView(vx,vy,model.hl+.2))return;
+    if(model.kind==='tidepool'){drawIslandTidePool(model);return;}
     if(model.kind==='cover') {
       if((model.cover==='flower'||model.cover==='fern')&&season()==='winter')return;
       if(near(px,py,model.x,model.y)<12)drawShape(vx,vy,model.z0,model.hl,model.z1-model.z0,(i,u,z,du,dz,L)=>islandCoverShade(model,i,u,z,L));
@@ -33619,8 +33795,6 @@ function drawWildScenery() {
     drawArt(lx+1-px,ly+.7-py,.105,.25,.035,['TACKLE'],()=>C(WARM,12));
   }
   if(near(px,py,540.5,247)<vis) {
-    const label=homeAt(SHOP[cityPlaceCell('fern-house')])?'FERN HOUSE':'FOR SALE';
-    drawArt(540.5-px,247.55-py,.294,.45,.022,[label],()=>C(GREEN,10));
     if(night>.25)for(let k=0;k<4;k++) {
       const p=fract(T*.14+k*.25),x=541.25+p*.17;
       drawShape(x-px,245.1-py,.76+p*.3,.035+p*.04,.05,(i,u,z,du,dz,L)=>{
@@ -33643,11 +33817,11 @@ function islandGroundModel(x,y,hl,hw,height,kind,obstacle=false) {
   return o;
 }
 function islandWaymark(x,y,word,width=.35) {
-  width=Math.min(width*.45,.2);
+  width=Math.min(width*.34,.15);
   const z=terrainHeight(x,y);
-  islandDetail(x,y,.007,.007,z-.02,z+.18,'timber');
-  const sign=islandDetail(x,y,width,.012,z+.105,z+.18,'sign');
-  Object.assign(sign,{word,labelZ:z+.1425,labelH:.025});
+  islandDetail(x,y,.006,.006,z-.02,z+.145,'timber');
+  const sign=islandDetail(x,y,width,.009,z+.095,z+.15,'sign');
+  Object.assign(sign,{word,labelZ:z+.1225,labelH:.025,ink:BLACK});
 }
 function islandCover(x,y,kind,seed,size=.15) {
   if(seaAt(x,y)||onPier(x,y)||map[idx(x,y)]||onFernStrip(x,y,4))return;
@@ -33683,7 +33857,12 @@ function buildIslandSights() {
   for(const [x,y]of [[527.7,239.2],[526,238.7]])islandGroundModel(x,y,.27,.045,.06,'driftwood');
   const pack=islandGroundModel(528,238.9,.06,.05,.1,'canvas');pack.base=GREEN;
   islandWaymark(527.8,237.85,'WOODLAND CAMP',.45);
-  islandWaymark(523.6,236.1,'HOUSE / FALLS',.45);
+  const fire=GRILLS.find(g=>g.on==='fire'&&near(g.x,g.y,525.5,238)<1);
+  if(fire) {
+    for(let k=0;k<12;k++){const a=k*TAU/12;islandStone(fire.x+Math.cos(a)*.12,fire.y+Math.sin(a)*.12,.023,hash(k,5,1950));}
+    for(const side of [-1,1])islandGroundModel(fire.x+side*.045,fire.y,.07,.014,.025,'driftwood');
+    islandWaymark(fire.x+.28,fire.y-.2,'FIRE RING',.36);
+  }
   for(const [x,y,word]of [[545.5,230.4,'AIRSTRIP'],[590.3,243.5,'FALLS / LOOKOUT'],[603,250.4,'FERN RIDGE']])islandWaymark(x,y,word,.42);
   // A survey cairn and a brass telescope give the ridge a recognisable silhouette.
   for(let k=0;k<3;k++) {
@@ -33718,13 +33897,24 @@ function buildIslandSights() {
     ISLAND_BIRDS.push({x,y,z:rock.z1+.008,seed:x,kind:'cormorant',scaredAt:-99});
   }
   islandWaymark(698,353.9,'BIRD ROOST',.4);
+  for(let k=0;k<4;k++) {
+    const x=699.1+k*.24,y=353.1+Math.sin(k)*.16;
+    islandStone(x,y,.045,.5+k*.1);
+    const stone=ISLAND_DETAILS[ISLAND_DETAILS.length-1];
+    ISLAND_BIRDS.push({x,y,z:stone.z1+.008,seed:30+k,kind:'cormorant',scaredAt:-99});
+  }
   // Crescent Sands: a tide pool rim, driftwood ribs, dune flowers and shore birds.
   islandSkiff(710.3,112.7);
-  for(let k=0;k<8;k++) {
-    const angle=k*TAU/8,x=720+Math.cos(angle)*.86,y=115.4+Math.sin(angle)*.6;
-    islandStone(x,y,.055+hash(k,1,1942)*.04,hash(k,2,1942));
-    if(k%2===0)islandCover(x+.15,y+.2,'rush',k/8,.2);
+  for(const pool of TIDE_POOL_SITES) {
+    const samples=[terrainHeight(pool.x,pool.y)];
+    for(let k=0;k<8;k++)samples.push(terrainHeight(pool.x+Math.cos(k*TAU/8)*(pool.r+.07),pool.y+Math.sin(k*TAU/8)*(pool.r+.07)));
+    const p=islandDetail(pool.x,pool.y,pool.r+.07,pool.r+.07,Math.min(...samples)-.018,Math.max(...samples)+.055,'tidepool'),r=pool.r;
+    p.r=r;p.waterZ=p.z1-.022;p.waterRadius=r-.06;
+    p.profile=[[p.z0,0],[p.z0,r+.06],[p.z1-.02,r+.05],[p.z1,r],[p.z1-.01,r-.055],[p.z1-.055,r-.08],[p.z1-.06,0]];
+    ISLAND_OBSTACLES.push(p);
+    for(let k=0;k<6;k++){const a=k*TAU/6;islandCover(pool.x+Math.cos(a)*(pool.r+.17),pool.y+Math.sin(a)*(pool.r+.17),'rush',k/8,.2);}
   }
+  for(let k=0;k<3;k++){const x=720.2+k*.35,y=116.35;ISLAND_BIRDS.push({x,y,z:terrainHeight(x,y)+.008,seed:45+k,kind:'gull',scaredAt:-99});}
   islandWaymark(719,115.35,'TIDE POOLS',.38);
   // Juniper: a modest sheltered garden, washing on the line and sea-facing trees.
   for(const y of [241.7,242.5])for(let x=785;x<787.2;x+=.35)islandCover(x,y,'flower',hash(x,y,1943),.13);
@@ -33735,6 +33925,24 @@ function buildIslandSights() {
     cloth.z0=cloth.z1-.15;cloth.seed=k;cloth.base=[WHITE,CYAN,STONE,BLUE][k];
   }
   islandWaymark(787,243.85,'SEA GARDEN',.38);
+}
+function drawIslandTidePool(p) {
+  const x=p.x-px,y=p.y-py,r=p.r,water=p.waterZ;
+  const stone=(i,t,L)=>{const grain=hash(Math.floor(HIT.u*160),Math.floor(HIT.w*160),1951);BG[i]=C(GRAY,2+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain*.5);set(i,' ',0);return true;};
+  coveLathe(x,y,0,p.profile,stone);
+  drum(x,y,p.waterRadius,water-.003,water,(i,t,L)=>{
+    const ripple=Math.sin(HIT.u*80+HIT.v*23+T*.8);
+    BG[i]=C(BLUE,3);set(i,ripple>.985?'~':' ',C(CYAN,9));
+    const u=HIT.u+r*.28,v=HIT.v-r*.2,angle=Math.atan2(v,u),radius=Math.hypot(u,v);
+    if(radius<.025+.018*Math.cos(angle*5)){BG[i]=C(ORANGE,5+L*.3);set(i,' ',0);}
+    return true;
+  });
+  // Shells and a crab sit on the actual lip; seaweed rises out of the bowl.
+  coveLathe(x+r*.55,y-r*.65,p.z1-.017,[[0,0],[0,.035],[.014,.028],[.024,.008],[.024,0]],homeStone);
+  for(let k=0;k<3;k++)coveTube(x-r*.48+k*.018,y-r*.1,water-.035,x-r*.48+k*.018+.01*Math.sin(T+k),y-r*.1,water+.015,.004,GREEN);
+  const cx=x+r*.72,cy=y+r*.47,z=p.z1-.008;
+  drawBox(boxAt(cx,cy,1,0,.025,.02,z,z+.025),(i,t,L)=>{BG[i]=C(BRICK,4+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;},homeRayEllipsoid);
+  for(const side of [-1,1])for(let k=0;k<3;k++)coveTube(cx+side*.015,cy+(k-1)*.013,z+.008,cx+side*.045,cy+(k-1)*.025,z,.003,BRICK);
 }
 function islandSkiff(x,y) {
   const z=terrainHeight(x,y);
@@ -33826,11 +34034,7 @@ function hotelRoomPlan(tier){
  if(tier===2)for(let y=1;y<10;y++)if(y!==7&&y!==8)extra['8,'+y]='#';
  return {w,h,bath,grid:boxRoom(w,h,extra),entry:[w/2,h-1.6,-Math.PI/2]};
 }
-function hotelTelevision(x,y){return [BX(x,y,.92,.13,.65,1.65,(i,t,L)=>{
- const edge=Math.abs(HIT.u)>.82||HIT.w<.74||HIT.w>1.54;
- BG[i]=C(edge||!room.tv?GRAY:[BLUE,CYAN,GREEN,WARM][Math.floor(T/8)%4],edge||!room.tv?1:4);
- return set(i,edge?'#':room.tv?(fract(HIT.u*4+T*.2)<.04?'|':' '):' ',C(WHITE,10)),true;
- }),BX(x,y,.99,.3,.1,.65,solid(BRICK,{panel:.5,top:'='}))];}
+function hotelTelevision(x,y){return [ROOM_MODEL(x,y,(vx,vy)=>TELEVISION(x,y,room,1.1).draw(vx,vy)),BX(x,y,.99,.3,.1,.65,solid(BRICK,{panel:.5,top:'='}))];}
 function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
  const u=HIT.u,z=HIT.w,frame=Math.abs(u)>.76||z<1.53||z>2.27;
  const hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
@@ -33900,6 +34104,7 @@ ROOM_DEFS.grandhotel.ceil='hotel';
 // Small, deterministic gatherings live on clear beach/grass patches, never on streets or landings.
 const COAST_GATHERINGS=[];
 function coastPatchClear(x,y,r=.8){
+ if(TIDE_POOL_SITES.some(p=>near(x,y,p.x,p.y)<p.r+r+.2))return false;
  const base=terrainHeight(x,y);
  for(const [ox,oy]of [[0,0],[r,r],[r,-r],[-r,r],[-r,-r]]){
   const wx=x+ox,wy=y+oy;
@@ -34431,6 +34636,402 @@ function coveWindowComposite() {
     for(const [i]of visible){CH[i]=view.CH[i];COL[i]=view.COL[i];BG[i]=view.BG[i];FOGS[i]=view.FOGS[i];FOGB[i]=view.FOGB[i];}
   }
 }
+// Shared close-up home models. Surfaces have real edges and joined supports;
+// screens and bulbs are the only emissive parts of their housings.
+function televisionProgramme(u,v,time,channel) {
+  let base=BLUE,level=4,ch=' ',ink=WHITE;
+  if(channel===0) { // live harbour: passing ferry, moving clouds and gulls
+    const horizon=.52,cloud=Math.sin(u*12+time*.13)+Math.cos(u*23-time*.07);
+    if(v<.36&&Math.abs(v-(.21+cloud*.035))<.045){base=WHITE;level=8;}
+    if(v>horizon){base=CYAN;level=3;ch=Math.sin(u*42+v*85-time*2)>.96?'~':' ';}
+    const boat=fract(time*.025)*1.4-.2,dx=u-boat;
+    if(v>.54&&v<.61&&Math.abs(dx)<.2-(v-.54)*.8){base=WHITE;level=9;}
+    if(v>.45&&v<.54&&Math.abs(dx+.015)<.125){base=STONE;level=7;if(v<.515&&Math.sin((dx+.14)*75)>-.1){base=BLUE;level=1;}}
+    const bird=fract(time*.04+.2);if(Math.abs(v-(.2+.03*Math.sin(u*21+time)))<.012&&Math.abs(u-bird)<.035){base=GRAY;level=1;}
+  } else if(channel===1) { // cooking show: chef, chopping board, pan and steam
+    base=v>.67?BRICK:STONE;level=v>.67?4:7;
+    if(u>.09&&u<.9&&v>.2&&v<.3){base=BRICK;level=3;}
+    if(((u-.38)/.095)**2+((v-.38)/.12)**2<1){base=WARM;level=9;}
+    if(Math.abs(u-.38)<.1&&v>.44&&v<.7){base=WHITE;level=10;}
+    if(v>.29&&v<.34&&Math.abs(u-.38)<.12){base=WHITE;level=12;}
+    const hand=.62+.08*Math.sin(time*2.4),arm=.51+(u-.42)*(.6+.22*Math.sin(time*2.4));
+    if(u>.42&&u<hand&&Math.abs(v-arm)<.027){base=WARM;level=9;}
+    if(((u-.72)/.14)**2+((v-.72)/.04)**2<1){base=GRAY;level=1;}
+    if(v>.32&&v<.65&&Math.min(Math.abs(u-.68-.025*Math.sin(v*22-time*2)),Math.abs(u-.76-.02*Math.sin(v*25-time*1.7)))<.012){base=WHITE;level=10;ch='~';}
+    if(v>.7&&v<.73&&u>.2&&u<.5){base=YEL;level=7;}
+  } else if(channel===2) { // miniature rail documentary, train moving past skyline
+    const skyline=.48+.12*Math.sin(Math.floor(u*15)*8);
+    base=v>skyline?GRAY:BLUE;level=v>skyline?3:6;
+    if(v>skyline&&v<.65&&fract(u*45)<.3&&fract(v*35)<.25){base=WARM;level=8;}
+    if(v>.74){base=BRICK;level=3;}
+    const train=fract(u-time*.07);
+    if(v>.53&&v<.73&&train<.85){base=STONE;level=8;if(v<.64&&v>.56&&fract(train*10)<.68){base=CYAN;level=2;}if(v>.69){base=BLUE;level=2;}}
+    if(v>.76&&v<.8){base=GRAY;level=1;}
+  } else { // evening news: anchor, animated weather map and ticker
+    base=BLUE;level=3;
+    if(u>.52&&u<.94&&v>.15&&v<.65){base=CYAN;level=5;if(Math.sin(u*18+v*8)>.15){base=GREEN;level=4;}}
+    if(((u-.29)/.085)**2+((v-.35)/.105)**2<1){base=WARM;level=10;}
+    if(v>.42&&v<.69&&Math.abs(u-.29)<.12-(.69-v)*.12){base=GRAY;level=2;}
+    if(v>.64&&v<.75){base=BRICK;level=4;}
+    if(u>.55&&v>.2&&v<.65&&Math.abs(u-(.68+.03*Math.sin(v*15+time*.5)))<.018){base=WHITE;level=11;}
+    if(v>.8){base=WHITE;level=9;ch=fract(u*32+time*.8)<.35?'-':' ';ink=BLACK;}
+  }
+  return {base,level,ch,ink};
+}
+function TELEVISION(x,y,r,scale=1,angle=0) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const c=Math.cos(angle),s=Math.sin(angle),at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    const shell={...boxAt(vx,vy,c,s,.74*scale,.07*scale,.7*scale,1.55*scale),round:.025*scale};
+    drawBox(shell,(i,t,L)=>{
+      if(HIT.face===3&&Math.abs(HIT.u)<.65*scale&&HIT.w>.79*scale&&HIT.w<1.47*scale)return false;
+      BG[i]=C(GRAY,.8+L*.14*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+    },coveRayRounded);
+    const [sx,sy]=at(0,.063*scale);
+    drawBox(boxAt(sx,sy,c,s,.65*scale,.001*scale,.79*scale,1.47*scale),(i,t,L)=>{
+      if(!r.tv||HIT.face!==3){BG[i]=C(GRAY,.4+L*.035);set(i,' ',0);return true;}
+      const frame=televisionProgramme((HIT.u/(.65*scale)+1)/2,(1.47*scale-HIT.w)/(.68*scale),T,(r.tvChannel??Math.floor(T/24))%4);
+      BG[i]=C(frame.base,frame.level);set(i,frame.ch,C(frame.ink,12));return true;
+    });
+    for(const side of [-1,1]){const [ax,ay]=at(side*.42*scale,.01*scale),[bx,by]=at(side*.5*scale,.1*scale);coveTube(ax,ay,.7*scale,bx,by,.61*scale,.018*scale,GRAY);}
+  }),radius:scale,box:boxAt(x,y,Math.cos(angle),Math.sin(angle),.74*scale,.12*scale,.61*scale,1.55*scale)};
+}
+
+function homeStone(i,t,L) {BG[i]=C(STONE,3.5+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
+function HOME_PENDANT(x,y,ceiling,r,index) {
+  return ROOM_MODEL(x,y,(vx,vy)=>{
+    const on=homeRecord(r)?.lights?.['fixed'+index]!==false;
+    coveLathe(vx,vy,ceiling-.045,[[0,0],[0,.075],[.035,.075],[.045,.04],[.045,0]],homeStone);
+    coveTube(vx,vy,ceiling-.045,vx,vy,ceiling-.57,.012,GRAY);
+    coveLathe(vx,vy,ceiling-.7,[[0,.24],[.018,.25],[.16,.075],[.18,.05],[.18,0]],homeStone);
+    dot(vx,vy,ceiling-.68,.055,(i,t,L)=>{BG[i]=C(on?WARM:STONE,on?12:2+L*.15);set(i,' ',0);return true;});
+  });
+}
+function FERN_KITCHEN(r) {
+  return {...ROOM_MODEL(15.35,1.42,(vx,vy)=>{
+    const sink=vx-.9,cut=(i,t,L)=>{if(HIT.face===5&&Math.hypot((HIT.u+.9)/.28,HIT.v/.28)<1)return false;return homeStone(i,t,L);};
+    for(const offset of [-1.4,-.7,0,.7,1.4]) {
+      coveRound(vx+offset,vy,1,0,.34,.39,.08,.88,.025,(i,t,L)=>{
+        if(HIT.face===5&&Math.hypot(HIT.u+offset+.9,HIT.v)<.28)return false;
+        return coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,3);
+      });
+      coveRound(vx+offset,vy+.395,1,0,.31,.025,.14,.82,.02,'wood',4);
+      coveTube(vx+offset-.1,vy+.43,.72,vx+offset+.1,vy+.43,.72,.014,GRAY);
+    }
+    const top={...boxAt(vx,vy,1,0,1.77,.42,.88,.95),round:.025};drawBox(top,cut,coveRayRounded);
+    coveLathe(sink,vy,.76,[[0,0],[0,.12],[.04,.2],[.19,.28],[.2,.29],[.21,.27],[.05,.17],[.04,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
+    coveTube(sink,vy-.26,.95,sink,vy-.26,1.23,.018,GRAY);coveTube(sink,vy-.26,1.23,sink,vy-.03,1.23,.018,GRAY);
+    const oven=vx+1.08;
+    for(const dx of [-.14,.14])for(const dy of [-.16,.16])coveLathe(oven+dx,vy+dy,.95,[[0,0],[0,.09],[.012,.09],[.012,0]],(i,t,L)=>{BG[i]=C(GRAY,1.1);set(i,' ',0);return true;});
+    coveRound(oven,vy+.424,1,0,.28,.014,.26,.63,.025,GRAY);
+    coveTube(oven-.21,vy+.456,.69,oven+.21,vy+.456,.69,.014,GRAY);
+  }),radius:2,box:boxAt(15.35,1.42,1,0,1.77,.42,0,.95)};
+}
+function fernHomeQuality() {
+  const def=ROOM_DEFS.islandhome,extra={};
+  for(let y=1;y<=10;y++)extra['9,'+y]='#';
+  for(let x=1;x<=22;x++)extra[x+',10']='#';
+  for(const x of [5,6,15,16])extra[x+',10']='.';
+  for(let y=11;y<=22;y++)extra['13,'+y]='#';
+  extra['13,16']=extra['13,17']='.';extra['0,16']='D';
+  for(let y=1;y<=6;y++)extra['18,'+y]='W';
+  for(let x=18;x<=22;x++)extra[x+',6']='W';extra['19,6']=extra['20,6']='.';
+  def.grid=boxRoom(24,24,extra);def.wc={x0:19,y0:1,x1:23,y1:6,sign:[18,5,5.5]};
+  def.home={shelf:[1.18,13],pet:[2,20],bed:[4.1,2.25],closet:[7.5,1.4],sofa:[5,16.8],tv:[5,11.4],fridge:[11.6,1.45],dining:[14.7,6]};
+  def.spots={bed:[4.1,3.7],closet:[7.5,2.5],shelf:[2.2,13],pet:[2,20],fridge:[11.6,2.6],stove:[16.4,2.6],workshop:[15.5,13],tv:[5,12.65],terrace:[1.4,16.5]};
+  def.bedBounds=[4.1,2.25,1.3,1.05];def.lamps=[[4.5,5],[14.5,6],[5,17],[18,16]];
+  def.shelfAxis=[0,1];
+  def.floor='fernwood';def.bathFloor='fernBath';
+  def.props=r=>[
+    ROOM_MODEL(4.1,2.25,(vx,vy)=>{
+      for(const x of [-1.1,1.1])for(const y of [-.8,.8])coveRound(vx+x,vy+y,1,0,.08,.08,0,.28,.025,'wood');
+      coveRound(vx,vy,1,0,1.32,1.05,.22,.38,.045,'wood');
+      coveRound(vx,vy,1,0,1.28,1.01,.38,.61,.09,(i,t,L)=>{BG[i]=C(HIT.v>.1?GREEN:WHITE,3+L*.22);set(i,' ',0);return true;});
+      coveRound(vx,1.08-py,1,0,1.4,.08,.18,1.22,.035,'wood');
+      for(const side of [-1,1])coveRound(vx+side*.6,vy-.67,1,0,.48,.23,.61,.75,.065,(i,t,L)=>{BG[i]=C(WHITE,4+L*.2);set(i,' ',0);return true;});
+    },[1.32,1.05,.75]),
+    BX(7.5,1.35,.9,.35,0,2.2,solid(BRICK,{panel:.5})),
+    BX(1.18,13,.75,.18,0,1.05,solid(BRICK,{panel:.5}),0,1),
+    BX(11.6,1.45,.45,.45,0,1.9,solid(WHITE,{panel:.7})),FERN_KITCHEN(r),
+    ...toilet(21,1.42,-1,porcelain),washbasin(19.45,1.35,0,1),BATHTUB(22.5,3.7),
+    ...tableBox(14.7,6,1.15,.65),...homeChair(14.7,7.2,0,-1,GREEN),...homeChair(14.7,4.8,0,1,GREEN),
+    ...couch(5,16.8,1.8,0,-1,GREEN),...tableBox(5,14.4,.9,.45),
+    BX(5,11.3,.9,.3,0,.6,solid(BRICK)),TELEVISION(5,11.4,r),
+    BX(14.4,13,.4,.65,0,1.1,solid(BRICK,{panel:.5})),
+    POT_PLANT(10.65,11.6,1.5),POT_PLANT(22.45,8.6,1.4),
+    ...def.lamps.map(([x,y],k)=>HOME_PENDANT(x,y,def.height,r,k)),
+  ];
+}
+fernHomeQuality();
+ROOM_FLOORS.fernwood=(i,f,x,y,row,column,L)=>{
+  const depth=Math.max(.1,eye*projY/Math.max(1,row-hor)),footprint=depth/projX;
+  const board=Math.floor(y/.3),seam=Math.max(coveGroove(y,.3,.008,footprint),coveGroove(x+(board&1)*1.3,2.6,.008,footprint));
+  BG[i]=C(BRICK,3.2+f*1.8-seam*.9);set(i,' ',0);
+};
+ROOM_FLOORS.fernBath=(i,f,x,y,row,column,L)=>{
+  const footprint=Math.max(.001,eye*projY/Math.max(1,row-hor)/projX);
+  const grout=Math.max(coveGroove(x,.4,.008,footprint),coveGroove(y,.4,.008,footprint));
+  BG[i]=C(STONE,4.5+L*.18-grout*1.2);set(i,' ',0);
+};
+function homeRayEllipsoid(ox,oy,oz,rx,ry,rz,b) {
+  const z=(b.z0+b.z1)/2,h=(b.z1-b.z0)/2,x=ox-b.x,y=oy-b.y;
+  const u=(x*b.c+y*b.s)/b.hl,v=(-x*b.s+y*b.c)/b.hw,w=(oz-z)/h,du=(rx*b.c+ry*b.s)/b.hl,dv=(-rx*b.s+ry*b.c)/b.hw,dw=rz/h;
+  const a=du*du+dv*dv+dw*dw,q=u*du+v*dv+w*dw,disc=q*q-a*(u*u+v*v+w*w-1);if(disc<0)return -1;
+  const t=(-q-Math.sqrt(disc))/a;if(t<.01)return -1;
+  HIT.u=(u+du*t)*b.hl;HIT.v=(v+dv*t)*b.hw;HIT.w=oz+rz*t;
+  const nx=(u+du*t)/b.hl,ny=(v+dv*t)/b.hw,nz=(w+dw*t)/h,n=Math.hypot(nx,ny,nz);
+  HIT.nx=(nx*b.c-ny*b.s)/n;HIT.ny=(nx*b.s+ny*b.c)/n;HIT.nz=nz/n;HIT.face=0;return t;
+}
+function homePlushShark(vx,vy,c,s,zBase=0) {
+  const ell=(x,y,z,hx,hy,hz,base)=>drawBox(boxAt(vx+c*x-s*y,vy+s*x+c*y,c,s,hx,hy,zBase+z-hz,zBase+z+hz),(i,t,L)=>{BG[i]=C(base,2.5+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;},homeRayEllipsoid);
+  ell(0,0,.18,.19,.38,.17,BLUE);ell(0,.2,.115,.165,.23,.09,WHITE);
+  for(const side of [-1,1]){ell(side*.2,0,.14,.14,.08,.035,BLUE);ell(side*.115,-.37,.15,.14,.1,.04,BLUE);ell(side*.14,.27,.24,.027,.027,.027,BLACK);ell(side*.148,.282,.25,.009,.009,.009,WHITE);}
+  ell(0,-.08,.34,.035,.13,.14,BLUE);
+}
+const HOME_PHOTO_GLYPHS=new WeakMap();
+function furnishingProp(p,r) {
+  const d=HOME_FURNITURE[p.id],c=Math.cos(p.a),s=Math.sin(p.a);
+  const prop=ROOM_MODEL(p.x,p.y,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    const wood=(u,v,hx,hy,z0,z1,rad=.025,mat='wood')=>{const [x,y]=at(u,v);coveRound(x,y,c,s,hx,hy,z0,z1,rad,mat);};
+    const tube=(u,v,z,uu,vv,zz,rad=.015,base=GRAY)=>{const [x,y]=at(u,v),[xx,yy]=at(uu,vv);coveTube(x,y,z,xx,yy,zz,rad,base);};
+    const fabric=(i,t,L)=>{BG[i]=C(BLUE,2.8+L*.27*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    if(p.id==='f_chair') {
+      for(const x of [-.22,.22])for(const y of [-.22,.22])wood(x,y,.035,.035,0,.43,.014);
+      wood(0,0,.29,.29,.4,.47,.025);for(const x of [-.25,.25])wood(x,-.25,.03,.03,.45,1.05,.014);
+      for(const z of [.76,.94])wood(0,-.25,.25,.028,z-.065,z+.065,.02);
+    }else if(p.id==='f_table') {
+      for(const x of [-.8,.8])for(const y of [-.35,.35])wood(x,y,.045,.045,0,.73,.018);
+      for(const y of [-.4,.4])wood(0,y,.84,.03,.6,.73,.015);
+      for(const y of [-.333,0,.333])wood(0,y,.95,.164,.73,.8,.025);
+    }else if(p.id==='f_sofa') {
+      for(const x of [-1,1])for(const y of [-.3,.3])wood(x,y,.06,.06,0,.18);
+      wood(0,0,1.2,.46,.15,.34,.07,'wood');
+      for(const side of [-1,1]){wood(side*.53,.025,.51,.38,.32,.49,.09,fabric);wood(side*1.12,0,.08,.46,.34,.72,.065,fabric);wood(side*.53,-.36,.51,.1,.46,.95,.075,fabric);}
+    }else if(p.id==='f_lamp') {
+      coveLathe(vx,vy,0,[[0,0],[0,.18],[.025,.22],[.05,.16],[.06,.04],[.06,0]],homeStone);tube(0,0,.05,0,0,1.55,.018);
+      coveLathe(vx,vy,1.3,[[0,.24],[.02,.25],[.4,.14],[.42,.13],[.42,.115],[.02,.23]],homeStone);
+      dot(vx,vy,1.43,.06,(i,t,L)=>{BG[i]=C(p.on?WARM:STONE,p.on?12:3);set(i,' ',0);return true;});
+    }else if(p.id==='f_recordplayer') {
+      for(const x of [-.44,.44])for(const y of [-.25,.25])wood(x,y,.04,.04,0,.16,.018);
+      wood(0,0,.55,.35,.15,.87,.025);wood(0,.35,.5,.025,.24,.75,.018);wood(0,0,.55,.35,.87,.94,.025);
+      const [x,y]=at(-.13,0);coveLathe(x,y,.94,[[0,0],[0,.24],[.025,.24],[.025,0]],(i,t,L)=>{BG[i]=C(BLACK,1);const angle=Math.atan2(HIT.v,HIT.u)+(p.on?T*3:0);set(i,Math.hypot(HIT.u,HIT.v)<.075?(Math.sin(angle*2)>.5?'-':' '):' ',C(p.on?YEL:STONE,8));return true;});
+      tube(.36,-.2,.96,.36,-.2,1.04,.012,YEL);tube(.36,-.2,1.04,p.on?.1:.36,p.on?.08:.19,p.on?.99:1.04,.012,YEL);
+      wood(.44,.26,.035,.035,.94,.97,.012,GRAY);
+    }else if(p.id==='f_frame') {
+      wood(0,0,.4,.035,p.z-.3,p.z+.3,.012);
+      const [x,y]=at(0,.036),photo=homePhotos.photos.find(q=>q.id===p.photo);
+      if(photo&&!HOME_PHOTO_GLYPHS.has(photo))HOME_PHOTO_GLYPHS.set(photo,Array.from(photo.chars));
+      const chars=photo&&HOME_PHOTO_GLYPHS.get(photo);
+      drawBox(boxAt(x,y,c,s,.35,.001,p.z-.25,p.z+.25),(i,t,L)=>{
+        const u=clamp((HIT.u/.35+1)/2,0,.999),v=clamp((p.z+.25-HIT.w)/.5,0,.999);
+        if(!photo){BG[i]=C(STONE,4+L*.15);set(i,' ',0);return true;}
+        const k=Math.floor(v*photo.h)*photo.w+Math.floor(u*photo.w),shade=col=>col===NONE?C(GRAY,2):C(col>>4,(col&15)*clamp(L/12,.25,1));
+        BG[i]=shade(photo.bg[k]);set(i,chars[k],shade(photo.fg[k]));return true;
+      });
+    }else if(p.id==='f_rug') {
+      wood(0,0,1.3,.9,.002,.014,.005,(i,t,L)=>{const edge=Math.abs(HIT.u)>1.21||Math.abs(HIT.v)>.81;BG[i]=C(edge?STONE:BLUE,2.7+L*.2);set(i,edge?'=':' ',C(STONE,L));return true;});
+    }else if(p.id==='f_plant')POT_PLANT(p.x,p.y,1.6).draw(vx,vy);
+    else if(p.id==='sharkplush')homePlushShark(vx,vy,c,s,p.z||0);
+  });
+  prop.radius=Math.hypot(d.hx,d.hy)+.2;prop.box=furnishingBox(p);prop.walk=!!(d.rug||d.wall);prop.furnishingKey=p.key;
+  if(d.seat)Object.assign(prop,{seat:true,h:d.seat,fx:-s,fy:c});return prop;
+}
+function furnishingProps(r) {const home=homeRecord(r);return home?homeFurnishings(home).parts.map(p=>furnishingProp(p,r)):[];}
+let furnishingPlacement=null,furnishingEl=null,photoLastT=-10;
+function furnishingPanel() {
+  if(furnishingEl)return furnishingEl;
+  furnishingEl=panel('furnishings');
+  const style=document.createElement('style');
+  style.textContent=`#furnishings .carry-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #ffffff18}#furnishings .carry-row>span{flex:1 1 160px;min-width:0}#furnishings .carry-row>button{padding:7px 9px;min-height:36px;border:1px solid #ffffff35;color:#ddd;background:#ffffff08}#furnishings .carry-row>button[data-photo]{flex:1;text-align:left}#furnishings .carry-row>button:hover,#furnishings .carry-row>button:focus-visible{color:white;background:#ffffff20}#furnishings h2{margin-top:22px}`;
+  document.head.appendChild(style);return furnishingEl;
+}
+const homeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function refreshFurnishedRoom() {
+  if(mode!=='room'||!homeRecord(room))return;
+  room.props=room.def.props(room);room.props.push(...workshopProps(room),...furnishingProps(room));updateHomeLights();
+}
+function updateHomeLights() {
+  if(mode!=='room'||!homeRecord(room))return;
+  const home=homeRecord(room),lights=(room.def.lamps||[]).map((p,k)=>home.lights?.['fixed'+k]!==false);
+  for(const p of homeFurnishings(home).parts)if(p.id==='f_lamp')lights.push(p.on);
+  room.homeBaseLight??=room.def.light;
+  room.def={...room.def,light:room.homeBaseLight*(.2+.8*(lights.filter(Boolean).length/Math.max(1,lights.length)))};
+}
+function homeFixtureTargets() {
+  const home=mode==='room'&&homeRecord(room);if(!home)return [];
+  const targets=(room.def.lamps||[]).map(([x,y],k)=>({kind:'fixed-lamp',key:'fixed'+k,x,y,z0:(room.def.height||3)-.8,z1:room.def.height||3,radius:.25,reach:3.2}));
+  for(const part of homeFurnishings(home).parts) {
+    const d=HOME_FURNITURE[part.id];if(d.fixture)targets.push({kind:d.fixture,part,key:part.key,x:part.x,y:part.y,z0:d.wall?part.z-.3:d.height-.4,z1:d.wall?part.z+.3:d.height,radius:Math.min(.35,d.hx),reach:2});
+  }
+  return targets;
+}
+function homeFixturePrompt(t) {
+  const home=homeRecord(room),on=t.part?t.part.on:home?.lights?.[t.key]!==false;
+  if(t.kind==='lamp'||t.kind==='fixed-lamp')return 'E: switch lamp '+(on?'off':'on');
+  if(t.kind==='record')return on?'E: stop record · F: furnishings':'E: play record · F: furnishings';
+  return 'E: choose photograph · F: furnishings';
+}
+function homeFixtureUse(t) {
+  const home=homeRecord(room);if(!home)return;
+  if(t.kind==='photo')return openHomePhotos(t.part);
+  if(t.part)t.part.on=!t.part.on;
+  else {home.lights||={};home.lights[t.key]=home.lights[t.key]===false;}
+  updateHomeLights();saveGame();say(t.kind==='record'?(t.part.on?'The needle settles into the groove.':'You lift the needle.'):'Click.',2);
+  if(actx)sfxUse('click');
+}
+function homeRecordAudio() {
+  const home=mode==='room'&&homeRecord(room);if(!home)return null;
+  const player=homeFurnishings(home).parts.filter(p=>p.id==='f_recordplayer'&&p.on).sort((a,b)=>near(px,py,a.x,a.y)-near(px,py,b.x,b.y))[0];
+  return player?{song:['bossa','coffee','arcade'][player.track||0],gain:1/(1+(near(px,py,player.x,player.y)/4)**2)}:null;
+}
+function openHomeFurnishings() {
+  const home=mode==='room'&&homeRecord(room);if(!home)return;
+  furnishingPanel();
+  const parts=homeFurnishings(home).parts;
+  const packs=inv.map((it,k)=>HOME_FURNITURE[it.id]?`<button class="item" data-place="${k}">Unpack ${HOME_FURNITURE[it.id].name}</button>`:'').join('');
+  showPanel(furnishingEl,`<h1>Home furnishings</h1><p class="sub">Buy flatpacks, lamps, frames and the plush shark at IDEA. Q with a flatpack also starts placement.</p>${packs||'<p>No flatpacks in your bag.</p>'}<h2>In the room</h2>${parts.map(p=>`<div class="carry-row"><span>${HOME_FURNITURE[p.id].name}</span><button data-move="${p.key}">Move</button><button data-pack="${p.key}">Pack</button>${p.id==='f_recordplayer'?`<button data-track="${p.key}">Next record</button>`:''}</div>`).join('')||'<p>No placed furnishings yet.</p>'}<h2>Photographs (${homePhotos.photos.length}/8)</h2><button class="item" data-album>Open album</button><p class="hint">E places · Q rotates · Esc cancels. Exit routes stay clear. F reopens this menu.</p>`);
+  furnishingEl.onclick=e=>{
+    const button=e.target.closest('button');if(!button)return;
+    if(button.dataset.place!=null)return beginFurnishingPlacement(inv[+button.dataset.place]);
+    const key=+(button.dataset.move??button.dataset.pack??button.dataset.track),part=parts.find(p=>p.key===key);
+    if(button.hasAttribute('data-album'))return openHomePhotos();
+    if(!part)return;
+    if(button.dataset.move!=null)return beginFurnishingPlacement(null,part);
+    if(button.dataset.pack!=null){if(inv.length>=INV_SIZE)return say('Your bag is full.',2);parts.splice(parts.indexOf(part),1);carryItem({id:part.id,uses:0,furnishing:{on:part.on,track:part.track,photo:part.photo}});refreshFurnishedRoom();}
+    if(button.dataset.track!=null)part.track=((part.track||0)+1)%3;
+    saveGame();openHomeFurnishings();
+  };
+}
+function beginFurnishingPlacement(item,part=null) {
+  const home=mode==='room'&&homeRecord(room);
+  if(!home)return say('Unpack furniture inside a home you own.',3);
+  if(homeFurnishings(home).parts.length>=48&&!part)return say('This home has room for 48 movable furnishings.',3);
+  const id=part?.id||item?.id;if(!HOME_FURNITURE[id])return;
+  if(workshopPlacement)endWorkshopPlacement();if(body.seat)standUp();hidePanel(furnishingEl);closeInventory();
+  furnishingPlacement={home,id,item,part,a:part?.a||0,held};held=-1;lockMouse();
+  say(HOME_FURNITURE[id].wall?'Look at a wall to hang the frame. E places; Esc cancels.':'Walk and look to position it. E places; Q rotates; Esc cancels.',5);
+}
+function furnishingCandidate() {
+  const q=furnishingPlacement;if(!q||homeRecord(room)!==q.home)return {ok:false,reason:'Return home.'};
+  const d=HOME_FURNITURE[q.id],p={id:q.id,key:q.part?.key??-1,a:q.a,x:0,y:0,z:d.wall?1.6:0};
+  if(d.wall) {
+    let found=false,previous=[Math.floor(px),Math.floor(py)];
+    for(let t=.05;t<=3;t+=.025) {
+      const x=px+Math.cos(a)*t,y=py+Math.sin(a)*t,mx=Math.floor(x),my=Math.floor(y),cell=roomAt(mx,my);
+      if(cell!=='.') {
+        if(cell==='D')return {...p,ok:false,reason:'Keep doors clear.'};
+        if(mx!==previous[0]){p.a=Math.cos(a)>0?Math.PI/2:-Math.PI/2;p.x=Math.cos(a)>0?mx-d.hy:mx+1+d.hy;p.y=y;}
+        else {p.a=Math.sin(a)>0?Math.PI:0;p.y=Math.sin(a)>0?my-d.hy:my+1+d.hy;p.x=x;}
+        p.z=clamp(eye+pitch*rows/projY*t,.65,(room.def.height||3)-.4);found=true;break;
+      }
+      previous=[mx,my];
+    }
+    if(!found)return {...p,ok:false,reason:'Look at a wall within three metres.'};
+  }else {
+    p.x=Math.round((px+Math.cos(a)*1.8)*10)/10;p.y=Math.round((py+Math.sin(a)*1.8)*10)/10;
+    const hx=Math.abs(Math.cos(p.a))*d.hx+Math.abs(Math.sin(p.a))*d.hy,hy=Math.abs(Math.sin(p.a))*d.hx+Math.abs(Math.cos(p.a))*d.hy;
+    for(const axis of ['x','y']) {
+      const half=axis==='x'?hx:hy,limit=axis==='x'?room.W:room.H;
+      if(Math.abs(p[axis]-half-1)<.3)p[axis]=1+half;
+      if(Math.abs(p[axis]+half-(limit-1))<.3)p[axis]=limit-1-half;
+    }
+  }
+  if(d.plush) {
+    p.z=0;const footprint=furnishingBox(p);
+    for(const prop of room.props)if(prop.box&&!prop.walk&&prop.furnishingKey!==p.key) {
+      const b=prop.box,height=b.z1;
+      if(prop.draw&&prop.furnishingKey==null)continue;
+      if(height>.3&&height<.85&&[-1,1].every(u=>[-1,1].every(v=>inBox(b,p.x+footprint.c*d.hx*u-footprint.s*d.hy*v,p.y+footprint.s*d.hx*u+footprint.c*d.hy*v,-.01))))p.z=Math.max(p.z,height);
+    }
+  }
+  let reason=furnishingFit(p,room.grid,room.props);
+  if(!reason&&!d.wall&&!d.rug) {
+    const obstacle=furnishingBox(p),pass=extra=>(x,y)=>room.grid[y]?.[x]==='.'&&!room.props.some(o=>o.box&&!o.walk&&!(q.part&&o.furnishingKey===q.part.key)&&inBox(o.box,x+.5,y+.5,.1))&&(!extra||!inBox(extra,x+.5,y+.5,.1));
+    const from={x:room.def.entry[0],y:room.def.entry[1]},world={width:room.W,height:room.H,wrap:false};
+    for(const [x,y]of Object.values(room.def.spots||{}))if(findMapRoute(from,{x,y},world,pass(null))&&!findMapRoute(from,{x,y},world,pass(obstacle))){reason='Keep a walking route to the home amenities.';break;}
+  }
+  return {...p,ok:!reason,reason};
+}
+function cancelFurnishingPlacement() {if(!furnishingPlacement)return;held=furnishingPlacement.held<inv.length?furnishingPlacement.held:-1;furnishingPlacement=null;}
+function confirmFurnishingPlacement() {
+  const q=furnishingPlacement,p=furnishingCandidate();if(!p.ok)return say(p.reason,3);
+  const state=homeFurnishings(q.home);
+  if(q.part)Object.assign(q.part,{x:p.x,y:p.y,a:p.a,z:p.z});
+  else {
+    const index=inv.indexOf(q.item);if(index<0)return cancelFurnishingPlacement();removeInventoryAt(index);
+    state.parts.push({key:state.next++,id:p.id,x:p.x,y:p.y,a:p.a,z:p.z,on:p.id!=='f_recordplayer',photo:0,track:0,...(furnishingItemState(q.item).furnishing||{})});
+  }
+  cancelFurnishingPlacement();refreshFurnishedRoom();saveGame();say('Placed. F: arrange furnishings.',3);
+}
+function homeFurnishingKey(e) {
+  if(mode!=='room'||paused||game||sleep||!homeRecord(room))return false;
+  if(furnishingPlacement) {
+    if(e.code==='Escape'){cancelFurnishingPlacement();return true;}
+    if(e.code==='KeyE'){if(!e.repeat)confirmFurnishingPlacement();return true;}
+    if(e.code==='KeyQ'){if(!e.repeat)furnishingPlacement.a=mod(furnishingPlacement.a+Math.PI/2,TAU);return true;}
+  }else if(e.code==='KeyF'&&!e.repeat){openHomeFurnishings();return true;}
+  return false;
+}
+function drawFurnishingPreview() {
+  if(!furnishingPlacement||mode!=='room')return;
+  const p=furnishingCandidate(),b=furnishingBox(p);
+  drawBox({...b,x:b.x-px,y:b.y-py},(i,t,L)=>{if(HIT.face<5&&fract(HIT.u*10)>.12&&fract(HIT.w*10)>.12)return false;set(i,p.ok?'+':'x',C(p.ok?GREEN:RED,14));return true;});
+}
+function takeHomePhoto() {
+  if(T-photoLastT<.6)return;photoLastT=T;
+  if(homePhotos.photos.length>=8)return say('Your album is full. F at home opens it; delete a photograph to make room.',4);
+  const photo={id:homePhotos.next++,w:48,h:28,chars:'',fg:[],bg:[],title:mode==='room'?room.word||'Home':wildIslandAt(px,py)?.name||districtAt(px,py)||'City view'};
+  for(let y=0;y<28;y++)for(let x=0;x<48;x++) {
+    const i=Math.min(rows-1,Math.floor((y+.5)*rows/28))*cols+Math.min(cols-1,Math.floor((x+.5)*cols/48));
+    photo.chars+=Array.from(CH[i]||' ')[0];photo.fg.push(COL[i]);photo.bg.push(BG[i]);
+  }
+  homePhotos.photos.push(photo);saveGame();if(actx)sfxUse('click');say(`Photograph ${photo.id} saved. Display it in a frame at home.`,3);
+}
+function openHomePhotos(part=null) {
+  furnishingPanel();
+  showPanel(furnishingEl,`<h1>${part?'Choose a photograph':'Photo album'}</h1><p class="sub">Use the compact camera with Q to capture your view. Eight photographs fit in the local album.</p>${homePhotos.photos.map(p=>`<div class="carry-row"><button data-photo="${p.id}">${p.id}: ${homeHtml(p.title)}</button><button data-delete-photo="${p.id}">Delete</button></div>`).join('')||'<p>No photographs yet.</p>'}<button data-photo="0">${part?'Leave frame empty':'Back to furnishings'}</button>`);
+  furnishingEl.onclick=e=>{const button=e.target.closest('button');if(!button)return;if(button.dataset.deletePhoto!=null){homePhotos.photos=homePhotos.photos.filter(p=>p.id!==+button.dataset.deletePhoto);saveGame();return openHomePhotos(part);}if(button.dataset.photo!=null){if(part){part.photo=+button.dataset.photo;saveGame();hidePanel(furnishingEl);}else openHomeFurnishings();}};
+}
+function buildIdeaStore() {
+  const place=Array.from(CITY_PLACES.values()).filter(p=>p.shop.word==='HARDWARE'&&p.shop.kind!==SHOP_SHUT).sort((a,b)=>a.x0-b.x0||a.y0-b.y0)[0];
+  if(place){Object.assign(place.shop,{word:'IDEA',neon:BLUE,hours:[9,21]});}
+}
+ROOM_FOR.IDEA='idea';
+ROOM_DEFS.idea={grid:boxRoom(18,14),entry:[9,12.4,-Math.PI/2],height:3.4,light:.9,floor:'fernwood',ceil:'idea',keeper:[9,2],
+  wall:(i,u,us,z,d,mx,my,L)=>{BG[i]=C(z<.7?BLUE:WHITE,z<.7?2+L*.1:5+L*.15);if(my===0&&wallText(i,u,us,z,d,'IDEA',9,2.3,.4,.55,C(BLUE,12),C(YEL,8)))return true;set(i,' ',0);return true;},
+  props:r=>[
+    ...counterBox(9,2.8,1.7),standing(9,2,BLUE),
+    ...[{id:'f_sofa',x:3,y:5,a:0},{id:'f_table',x:3,y:8,a:0},{id:'f_chair',x:3,y:10,a:0},{id:'f_recordplayer',x:9,y:5,a:0,on:true},{id:'f_lamp',x:10.3,y:5,a:0,on:true},{id:'f_plant',x:15,y:9,a:0},{id:'f_frame',x:16.965,y:6,a:Math.PI/2,z:1.8,photo:0}].map((p,k)=>furnishingProp({...p,key:-100-k},r)),
+    ...tableBox(14.3,5,.9,.4),ROOM_MODEL(14.3,5,(vx,vy)=>homePlushShark(vx,vy,1,0,.8)),
+    ...[[3,5],[9,6],[14,5],[3,10],[9,10],[14,10]].map(([x,y],k)=>HOME_PENDANT(x,y,3.4,r,k)),
+  ]};
+ROOM_CEILS.idea=(i)=>{BG[i]=C(WHITE,5);set(i,' ',0);};
+DENSE.camera=()=>sculpt(36,20,(x,y)=>{
+  const dx=Math.max(Math.abs(x)-7,0),dy=Math.max(Math.abs(y)-3.6,0);
+  if(Math.hypot(dx,dy)>1.5)return y>-6&&y<-4.9&&x>3&&x<6?[' ',C(GRAY,9)]:null;
+  const lens=Math.hypot(x-1.5,y);
+  if(lens<3.3){if(lens>2.6)return [' ',C(GRAY,6+4*dSphere(x-1.5,y,3.3))];return [' ',C(x<1&&y<-1?WHITE:BLUE,x<1&&y<-1?11:2+3*dSphere(x-1.5,y,2.7))];}
+  if(x<-4&&y<-1.8)return [' ',C(CYAN,4)];
+  return [' ',C(GRAY,x>6?2:3+dLight(-.25,-.4,.8)*5)];
+});
+// Flatpacks keep their own silhouette in the bag and in the player's hands.
+function heldFurnitureFlatpack(it) {
+  return sculpt(40,26,(x,y)=>{
+    const u=x+17,v=y+8;
+    if(u<0||u>34)return null;
+    const top=-u*.14,edge=top+5;
+    if(v<top||v>edge+15)return null;
+    const lid=v<edge,right=u>27,tape=Math.abs(u-16)<1.1;
+    if(tape)return [' ',C(STONE,lid?9:7)];
+    if(!lid&&!right&&u>3&&u<12&&v>edge+4&&v<edge+10){
+      const icon=(Math.abs(u-7.5)<3.5&&Math.abs(v-edge-7)<.45)||(Math.abs(u-5)<.45&&v>edge+7)||(Math.abs(u-10)<.45&&v>edge+7);
+      return [icon?'|':' ',C(BRICK,7)];
+    }
+    if(!lid&&!right&&u>19&&u<24&&v>edge+9&&v<edge+12)return ['|',C(BRICK,3)];
+    return [' ',C(WARM,lid?8:right?4:6)];
+  });
+}
+for(const id of Object.keys(HOME_FURNITURE))if(id.startsWith('f_'))DENSE[id]=heldFurnitureFlatpack;
 // Assemble the generated city after authored outdoor geometry has been created,
 // before saves or the first frame. Interior coordinates never enter this pass.
 function assembleArchipelago() {
@@ -34771,6 +35372,7 @@ function assembleArchipelago() {
   buildTerrain();
   buildIslandScenery();
   buildFerryNetwork();
+  buildIdeaStore();
   CITY_LAYOUT_CHECKPOINT={...originalCounts,layout:CITY_LAYOUT_ID};
 }
 let CITY_LAYOUT_CHECKPOINT=null;
@@ -35158,7 +35760,7 @@ function saveGame() {
   }
   if (citySaveBlocked) return false;
   noteStreet();
-  const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
+  const items = list => list.map(it => ({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(it.kg ? { kg: it.kg } : {}), ...(it.q ? { q: it.q } : {}), ...(it.of ? { of: it.of } : {}) })); // (a catch's weight; a dish's quality, and the fish in it)
   const data = { v: CITY_SAVE_VERSION, world: { layout: CITY_LAYOUT_ID }, day: dayNum, tod, tags, money, tickets, fish: fishLog, fishingCompetition:fishCompetition, held, quickSlots: [...quickSlots], inv: items(inv), stored: items(stored), closet: items(closet), tattoos: [...tattoos],
     noto: { level: noto.level, day: noto.day, looked: noto.looked, lookDay: noto.lookDay, log: noto.log },
     shares, market: { prices: STOCKS.map(s => [s.sym, s.price, s.open, s.hist]), lastMin: MARKET.lastMin },
@@ -35167,7 +35769,7 @@ function saveGame() {
     streetScenes: {chalkDay:streetSceneState.chalkDay,wash:streetSceneState.wash,lampWeek:streetSceneState.lampWeek},
     waypoint:mapWaypoint,
     journey:saveCityJourney(),
-    homes: savedCityHomes(), cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
+    homes: savedCityHomes(), photos: homePhotos, cars: owned.cars.map(c => ({ model: c.model, x: c.x, y: c.y, hx: c.hx, hy: c.hy, body: c.body, dmg: c.dmg || 0, wrecked: !!c.wrecked })), boats: savedBoats(), at: streetSpot, season: seasonShift, seasonDays: SEASON_DAYS, stolen: museumStolen, hotelStolen: grandHotelStolen, needs: { food: needs.food, drink: needs.drink, health: needs.health, bladder: needs.bladder, fit: needs.fit, trained: needs.trained }, boxRank, planes: savedPlanes() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
 }
 function loadGame() {
@@ -35189,7 +35791,7 @@ function loadGame() {
   // Still load progress if storage is full, but retry the backup before allowing any overwrite.
   if (prepared.upgraded && !keepCitySaveBackup(text)) citySaveBackupPending = text;
   const d = prepared.data;
-  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses, ...(Number.isFinite(it.kg) ? { kg: it.kg } : {}), ...(DISH_EAT[it.q] ? { q: it.q } : {}), ...(ITEMS[it.of] ? { of: it.of } : {}) }); } };
+  const items = (list, into, limit = Infinity) => { into.length = 0; for (const it of list || []) { if (into.length >= limit) break; if (ITEMS[it.id]) into.push({ id: it.id, uses: it.uses, ...furnishingItemState(it), ...(Number.isFinite(it.kg) ? { kg: it.kg } : {}), ...(DISH_EAT[it.q] ? { q: it.q } : {}), ...(ITEMS[it.of] ? { of: it.of } : {}) }); } };
   money = d.money ?? money; tickets = d.tickets || 0; if (d.day !== undefined) dayNum = d.day;
   if (Number.isFinite(d.tod) && d.tod >= 0 && d.tod < 24) tod = d.tod;
   loadStreetScenes(d.streetScenes);
@@ -35210,6 +35812,7 @@ function loadGame() {
   held = clamp(d.held ?? -1, -1, inv.length - 1);
   for (const sym in d.shares || {}) if (stockBy(sym)) shares[sym] = d.shares[sym];
   if (d.market) { for (const [sym, p, o, h] of d.market.prices || []) { const s = stockBy(sym); if (s) { s.price = p; s.open = o; if (h && h.length) s.hist = h.slice(-48); } } MARKET.lastMin = d.market.lastMin ?? null; }
+  homePhotos=restoreHomePhotos(d.photos);
   owned.homes.length = 0; for (const h of d.homes || []) {
     const cell = restoreHomeCell(h.cell, h.placeId);
     if (cell < 0 || ITEMS[h.kind]?.kind !== 'home') continue;
@@ -35217,6 +35820,8 @@ function loadGame() {
     decor: (Array.isArray(h.decor) ? h.decor : []).filter(isHomeDecor).slice(0, HOME_SHELF_CAPACITY),
     fridge: (Array.isArray(h.fridge) ? h.fridge : []).filter(isFridgeItem).slice(0, STORE_SIZE),
     workshop: restoreWorkshop(h.workshop,h.kind),
+    furnishings: restoreHomeFurnishings(h.furnishings,h.kind),
+    lights: Object.fromEntries(Object.entries(h.lights||{}).filter(([k,v])=>/^fixed[0-9]{1,2}$/.test(k)&&typeof v==='boolean')),
     door: Array.isArray(h.door) && h.door.length === 2 && h.door.every(Number.isFinite) ? h.door.map(v => worldCoord(v)) : null,
     pets: (Array.isArray(h.pets) ? h.pets : h.pet ? [h.pet] : []).filter(p => p === 'petcat' || p === 'petdog').filter((p, i, all) => all.indexOf(p) === i) });
   }
@@ -35496,6 +36101,7 @@ onkeydown = e => {
     if(e.shiftKey&&!paused)showMap=!showMap;else openBigMap();
     return;
   }
+  if(homeFurnishingKey(e))return;
   if (workshopPlacement && !paused && workshopKey(e)) return;
   if (e.code === 'Escape' && !e.repeat) return togglePause();
   if (e.code === 'KeyE' && paused && pauseEl && pauseEl.style.display !== 'none' && !e.repeat) return closePause(true); // E resumes too (and takes the mouse back)
@@ -35989,6 +36595,7 @@ const TAXI_STOPS = ['Park', 'Across town', 'Anywhere', 'Waterfront', 'Subway'];
 const ITEM_VERB = { drink: 'Drink', food: 'Eat', smoke: 'Smoke', toy: 'Play', gear: 'Use', gun: 'Fire' };
 // [label, key, kind] for what's worth a button right now. kind: main (the big one) | jump | pop (pops up beside it)
 function touchActions() {
+  if(furnishingPlacement)return [['Cancel','Escape','pop'],['Rotate','KeyQ','pop'],['Place','KeyE','main']];
   if (freecam) return [['Up', 'KeyE', 'main'], ['Down', 'KeyQ', 'pop']];
   if (workshopPlacement) return [['Cancel','KeyX','pop'],['Rotate','KeyQ','pop'],['Place','KeyE','main']];
   if (sleep || bustedEl && bustedEl.style.display === 'flex') return []; // (busted: tap a row)
@@ -36025,6 +36632,7 @@ function touchActions() {
   if(mode==='ferry')return [['Sit / stand','KeyC','pop'],['Inventory','KeyI','pop'],...ferryRide.seat!=null?[['Next island','Space','pop']]:[],...heldItem()&&['food','drink'].includes(ITEMS[heldItem().id]?.kind)?[['Eat / drink','KeyQ','pop']]:[],...e?[[e,'KeyE','main']]:[]];
   if (mode === 'room' && room.kind === 'train' && room.dest == null) room.opts.forEach((s, k) => out.push([stations[s].name, 'Digit' + (k + 1), 'pop']));
   if (onFootMode()) {
+    if(mode==='room'&&homeRecord(room))out.push(['Furnish','KeyF','pop']);
     if (/\bJ: /.test(p)) out.push(['Drive taxi', 'KeyJ', 'pop']);
     if (/\bH: /.test(p)) out.push(['Hail taxi', 'KeyH', 'pop']);
     if (/\bG: pick/.test(p)) out.push(['Pick pocket', 'KeyG', 'pop']);
