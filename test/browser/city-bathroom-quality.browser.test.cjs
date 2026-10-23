@@ -101,7 +101,14 @@ test('bathroom paper has an open core with correct axis normals, and mounted fit
     const pad=d.kind==='towel'?d.half+.02:.11;
     for(const side of [-1,1])if(r.grid[Math.floor(y+nx*side*pad)]?.[Math.floor(x-ny*side*pad)]!=='.')bad.push([kind,'side wall overlap',d]);
     for(const q of r.props)if(q!==prop&&q.box&&!q.walk&&q.box.z1>.6&&q.box.z0<1.215&&[-1,0,1].some(k=>inBox(q.box,x-ny*k*pad,y+nx*k*pad,0)))bad.push([kind,'inside another fitting',d]);
-    if(d.kind==='towel')towels++;else{
+    if(d.kind==='towel'){
+     towels++;
+     const draw=drawBox,shapes=[];drawBox=(box,shade,ray=rayBox)=>shapes.push({box,shade,ray});try{prop.draw(prop.x,prop.y);}finally{drawBox=draw;}
+     const fold=shapes.find(s=>s.ray===coveRayCapsule&&s.box.r===.02);
+     if(!fold){bad.push([kind,'missing cloth fold']);continue;}
+     HIT.face=0;HIT.nx=0;HIT.ny=0;HIT.nz=1;HIT.u=0;HIT.w=1.2;fold.shade(0,1,1);const color=BG[0];
+     HIT.u=1;HIT.w=0;fold.shade(0,1,1);if(BG[0]!==color)bad.push([kind,'fold uses stale UV coordinates']);
+    }else{
      paper++;
      if(core===undefined){
       const draw=drawBox,shapes=[];drawBox=(box,shade,ray=rayBox)=>shapes.push({box,ray});try{prop.draw(prop.x,prop.y);}finally{drawBox=draw;}
