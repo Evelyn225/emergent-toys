@@ -286,7 +286,7 @@ function bathroomAccessories(r) {
         for(const side of [-1,1])bathroomPipe(vx+c*side*half-fx*.08,vy+s*side*half-fy*.08,1.2,vx+c*side*half,vy+s*side*half,1.2,.012);
         bathroomPipe(vx-c*half,vy-s*half,1.2,vx+c*half,vy+s*half,1.2,.012);
         const cloth=(i,t,L)=>{
-          const hem=HIT.w<.91||Math.abs(HIT.u)>half-.042;
+          const hem=HIT.face!==0&&(HIT.w<.91||Math.abs(HIT.u)>half-.042);
           BG[i]=C(BLUE,(1.1+L*.28-(hem?.12:0))*(HIT.face===0?coveLight(HIT.nx,HIT.ny,HIT.nz):shadeFace(HIT.face)));set(i,' ',0);return true;
         };
         // Two hanging layers meet the curved fold over the rail, rather than
