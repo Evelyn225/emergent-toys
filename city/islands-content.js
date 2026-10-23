@@ -39,6 +39,7 @@ function buildWildIslands() {
     }
   }
   for(const cabin of ISLAND_CABINS) {
+    if(cabin.id==='cabin-cove'){ISLAND_ROOFS.push(...coveRoofParts(cabin));continue;}
     const hl=(cabin.x1-cabin.x0)/2+.09,hw=(cabin.y1-cabin.y0)/2+.12;
     ISLAND_ROOFS.push({x:(cabin.x0+cabin.x1)/2,y:(cabin.y0+cabin.y1)/2,c:1,s:0,hl,hw,z0:cabin.h-.015,z1:cabin.h+cabin.pitch,
       planes:landmarkPlanes(hl,hw,cabin.h-.015,cabin.h+cabin.pitch,'gable'),cabin});

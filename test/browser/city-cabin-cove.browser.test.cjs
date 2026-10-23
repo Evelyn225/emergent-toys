@@ -88,3 +88,97 @@ test('masked window cells match a full outdoor render, including sea reflections
  for(const frame of r.frames){assert.equal(frame.onWall,true);assert.ok(Math.abs(frame.insideWidth-frame.outsideWidth)<1e-9);assert.ok(frame.heightError<1e-9);}
  assert.equal(r.signBlack,true);assert.ok(r.sea>30,JSON.stringify(r));assert.equal(r.seaDifferences,0,JSON.stringify(r));
 }));
+
+test('cabin roof has a closed thin overhang, wall-mounted gables, and a sign clear of the roof from approach angles',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  mode='walk';room=null;freecam=null;
+  const c=COVE_CABIN,parts=ISLAND_ROOFS.filter(p=>p.cabin===c),body=parts.find(p=>p.part==='cove-gable');
+  let samples=0,error=0,undersides=0;
+  for(let x=c.x0-.08;x<c.x1+.09;x+=.07)for(const y of [c.y0-.06,(c.y0+c.y1)/2,c.y1+.06]) {
+    let highest=0;
+    for(const part of parts) {
+      const t=rayMansard(x,y,2,0,0,-1,part);
+      if(t>0)highest=Math.max(highest,HIT.w);
+    }
+    samples++;error=Math.max(error,Math.abs(highest-islandRoofHeight(x,y)),Math.abs(highest-builtHeight(x,y)));
+    if(y>c.y1)for(const part of parts.filter(p=>p.part==='cove-cover')) {
+      if(rayMansard(x,y,.1,0,0,1,part)>0&&HIT.face===7)undersides++;
+    }
+  }
+  const sign=COVE_PLAQUE;
+  const signGap=Math.min(...[-sign.half,0,sign.half].map(u=>landmarkSurfaceHeight(body,body.x+u,c.y1)-sign.top));
+  const text=worldText,views=[];
+  try {
+    for(const distance of [1.5,2.4,3.2])for(const offset of [-.65,0,.65]) {
+      px=c.door[0]+offset;py=c.y1+distance;a=Math.atan2(-distance,-offset);pitch=.03;env(0);
+      const cells=[];
+      worldText=(word,...args)=>{const ch=text(word,...args);if(word==='FISHING SHELTER'&&ch!==' ')cells.push({i:args[3],t:args[2],ch});return ch;};
+      render(0);
+      views.push(cells.filter(p=>CH[p.i]===p.ch&&Math.abs(ZB[p.i]-p.t)<.001).sort((a,b)=>a.i-b.i).map(p=>p.ch).join(''));
+    }
+  }finally{worldText=text;}
+  return {samples,error,undersides,signGap,views,bodyWithinWalls:body.hw===(c.y1-c.y0)/2&&body.hl===(c.x1-c.x0)/2,
+    noNetSign:!ISLAND_DETAILS.some(p=>p.word==='MENDED NETS'),netsRemain:ISLAND_DETAILS.some(p=>p.kind==='net'&&near(p.x,p.y,489.1,395.15)<.1)};
+ });
+ assert.ok(r.samples>80);assert.ok(r.error<1e-6,JSON.stringify(r));assert.ok(r.undersides>25,JSON.stringify(r));
+ assert.ok(r.signGap>.1);assert.equal(r.bodyWithinWalls,true);assert.ok(r.views.every(t=>t==='FISHINGSHELTER'),JSON.stringify(r));
+ assert.equal(r.noNetSign,true);assert.equal(r.netsRemain,true);
+}));
+
+test('inside door has recessed panels and joined trim, live glass with occlusion, and a usable exit',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  const box=drawBox,record=[];
+  // Capture real indoor geometry and probe its recesses, rather than painted
+  // panel lines. The camera faces the inward (-y) surface of the doorway.
+  drawBox=(b,shade,ray)=>record.push({b,ray});
+  try{drawCoveDoor(6,9,10,-1);}finally{drawBox=box;}
+  const surface=(x,z)=>{
+    let nearest=Infinity;
+    for(const {b,ray}of record) {const t=(ray||rayBox)(x,8,z,0,1,0,b);if(t>0)nearest=Math.min(nearest,t);}
+    return nearest;
+  };
+  const panel=surface(6.385,.75),stile=surface(6.82,.75),glass=surface(6.3,1.8),bead=surface(6.67,1.8);
+  px=6;py=7.3;a=Math.PI/2;pitch=-.1;env(0);render(0);
+  const glassPixels=(COVE_VIEW.marks.get('south')||[]).filter(([i,d])=>Math.abs(ZB[i]-d)<.0001).length;
+  const sprite=CITY.sprites;CITY.sprites=()=>{sprite();drawBox(boxAt(492-px,392.8-py,1,0,.045,.04,.15,.2),(i,t,L)=>{BG[i]=C(MAG,10);set(i,'Q',C(MAG,14));return true;});};
+  let movingView=0,occluded=0;
+  try {
+    T+=.1;render(0);movingView=(COVE_VIEW.marks.get('south')||[]).filter(([i,d])=>Math.abs(ZB[i]-d)<.0001&&CH[i]==='Q').length;
+    room.props.push(BX(6,8.7,.7,.03,1.45,2.12,(i,t,L)=>{BG[i]=C(BLUE,8);set(i,'P',C(WHITE,14));return true;}));
+    T+=.1;render(0);occluded=(COVE_VIEW.marks.get('south')||[]).filter(([i,d])=>ZB[i]<d&&CH[i]==='P').length;room.props.pop();
+  }finally{CITY.sprites=sprite;}
+  return {panel,stile,glass,bead,glassPixels,movingView,occluded};
+ });
+ assert.ok(r.panel-r.stile>.03,JSON.stringify(r));assert.ok(r.glass-r.bead>.02,JSON.stringify(r));
+ assert.ok(r.glassPixels>100,JSON.stringify(r));assert.ok(r.movingView>15,JSON.stringify(r));assert.ok(r.occluded>50,JSON.stringify(r));
+ await page.evaluate(()=>{px=6;py=8.3;a=Math.PI/2;});await page.keyboard.press('e');
+ assert.equal(await page.evaluate(()=>mode),'walk');
+ assert.ok(await page.evaluate(()=>near(px,py,...COVE_CABIN.door)<.01));
+}));
+
+test('fishing rods rest on the rack shoe and touch its rounded upper rail without passing through the timber',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  const original=drawBox,parts=[];
+  drawBox=(b,shade,ray)=>parts.push({b,ray});
+  try{coveGear(0,0);}finally{drawBox=original;}
+  const rack=COVE_RACK,rail=parts.find(({b})=>b.hl===1.04&&Math.abs(b.z1-(rack.upper+.04))<1e-6).b;
+  const shoe=parts.find(({b})=>b.hl===1.04&&b.z1===rack.shoeTop).b;
+  const distance=(p,b)=>{
+    const x=Math.abs(p[0]-b.x)-b.hl+b.round,y=Math.abs(p[1]-b.y)-b.hw+b.round,z=Math.abs(p[2]-(b.z0+b.z1)/2)-(b.z1-b.z0)/2+b.round;
+    return Math.hypot(Math.max(x,0),Math.max(y,0),Math.max(z,0))+Math.min(Math.max(x,y,z),0)-b.round;
+  };
+  const rods=[];
+  for(let k=0;k<4;k++) {
+    const p=coveRodPoints(0,0,k),contactError=Math.abs(distance(p.contact,rail)-rack.rodRadius);
+    let penetration=0;
+    for(let n=0;n<=100;n++) {
+      const f=n/100,point=p.joint.map((v,j)=>v+(p.tip[j]-v)*f);
+      penetration=Math.max(penetration,rack.rodRadius-distance(point,rail));
+    }
+    rods.push({contactError,penetration,shoeError:Math.abs(distance(p.butt,shoe)),lean:p.butt[1]-p.tip[1],buttInShoe:Math.abs(p.butt[1]-shoe.y)<shoe.hw-shoe.round});
+  }
+  return rods;
+ });
+ assert.equal(r.length,4);
+ for(const rod of r){assert.ok(rod.contactError<1e-6,JSON.stringify(r));assert.ok(rod.penetration<1e-6,JSON.stringify(r));assert.ok(rod.shoeError<1e-6,JSON.stringify(r));assert.ok(rod.lean>.3);assert.equal(rod.buttInShoe,true);}
+}));

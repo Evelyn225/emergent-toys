@@ -15,7 +15,7 @@ const FERN_STRIP = { x0: 551, x1: 617, y: 220, hw: 1.3 };
 const FERN_HOUSE = { x0: 539, y0: 244, x1: 542, y1: 247, door: [540.5, 247.2], terrace: [537.8, 245.5] };
 const ISLAND_CABINS = [
   {...FERN_HOUSE, id:'fern-house', name:'Fern House', h:.38, pitch:.22, wood:BRICK, roof:GRAY},
-  {id:'cabin-cove',name:'Cabin Cove fishing shelter',door:[492,392.2],room:'islandshelter',x0:491,y0:390,x1:493,y1:392,h:.29,pitch:.17,wood:BRICK,roof:GREEN},
+  {id:'cabin-cove',name:'Cabin Cove fishing shelter',door:[492,392.2],room:'islandshelter',x0:491,y0:390,x1:493,y1:392,h:.29,pitch:.4,wood:BRICK,roof:GREEN},
   {id:'juniper-house',name:'Juniper House',door:[791,241.2],x0:790,y0:239,x1:792,y1:241,h:.3,pitch:.18,wood:STONE,roof:BRICK},
 ];
 const ISLAND_ROOFS=[];
