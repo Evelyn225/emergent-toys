@@ -218,6 +218,23 @@ test('indoor sirens use the actual outdoor location instead of the room furnitur
   assert.ok(result.distance>=2&&result.distance<3);
 }));
 
+test('a record player and a rooftop serenade pan toward their source; your own boombox stays centred', () => fixture(async (page, wait) => {
+  const pans = () => page.evaluate(() => Object.fromEntries(['bossa', 'coffee'].map(k => [k, beds[k].pan.pan.value])));
+  await page.evaluate(() => { homeRecordAudio = () => ({ song: 'coffee', gain: 1, pan: -.6 }); audioTick(.016); });
+  await wait(() => beds.coffee.pan.pan.value < -.55);
+  const record = await pans();
+  await page.evaluate(() => {
+    homeRecordAudio = () => null; px = COURIER_NICO.x; py = COURIER_NICO.y - 1; a = 0;
+    courierEncore = true; COURIER_NICO.dead = COURIER_NICO.hidden = false; audioTick(.016);
+  });
+  await wait(() => Math.abs(beds.bossa.pan.pan.value) > .8 && Math.abs(beds.coffee.pan.pan.value) < .05);
+  const serenade = await pans();
+  await page.evaluate(() => { fx.boombox = true; fx.song = 'bossa'; audioTick(.016); });
+  await wait(() => Math.abs(beds.bossa.pan.pan.value) < .05);
+  assert.ok(record.coffee < -.55 && Math.abs(record.bossa) < .05, JSON.stringify(record));
+  assert.ok(serenade.bossa > .8, 'Nico is to the right when facing east with him to the south: ' + JSON.stringify(serenade));
+}));
+
 test('explosions are heard from where they happen: delayed, dulled and panned outdoors, silent from another island indoors', () => fixture(async page => {
   const result = await page.evaluate(() => {
     const heard = [], real = playClip;

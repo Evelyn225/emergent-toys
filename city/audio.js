@@ -34,7 +34,7 @@ function audioStart() {
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
   for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' || k === 'aquarium' ? musicBus : ambBus);
-  beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, ambBus); // muffled through the walls indoors
+  beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, beds.rain.pan); // muffled through the walls indoors
   makeSynths();
   preloadGameplayAudio();
   clipBuffer('police-siren.wav').then(buf => { policeSirenBuffer = buf; });
@@ -58,9 +58,10 @@ function toggleSound() {
 // ---- recorded beds
 // Its two <audio> elements are only made when the bed is first wanted, and let go again after a minute of silence
 // (a phone only has room for so many streams: nine beds' worth, loaded all visit, was too many)
+// (each through a panner, so music playing from somewhere in the room comes from that side)
 function makeBed(file, bus) {
-  const out = actx.createGain(); out.gain.value = 0; out.connect(bus);
-  return { file, out, voices: null, cur: 0, idle: 99, xf: false };
+  const out = actx.createGain(), pan = actx.createStereoPanner(); out.gain.value = 0; chain(out, pan, bus);
+  return { file, out, pan, voices: null, cur: 0, idle: 99, xf: false };
 }
 function bedVoices(b) {
   b.voices = [0, 1].map(() => {
@@ -311,11 +312,15 @@ function audioTick(dt) {
   let waterfall=0;
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record:homeRecordAudio(), district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
+  const record = homeRecordAudio(), serenade = courierSerenade();
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
     wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
-    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
-  for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
+    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade });
+  // music from a place, not your own boombox: the record player across the room, Nico up on the bar roof
+  const musicPan = fx.boombox ? {} : record ? { [record.song]: record.pan } :
+    serenade ? { bossa: soundDistanceProfile(rel(COURIER_NICO.x - px), rel(COURIER_NICO.y - py), 0, a).pan } : {};
+  for (const k in beds) { tickBed(beds[k], mix[k] * LEVEL[k], dt); beds[k].pan.pan.setTargetAtTime(musicPan[k] || 0, now, 0.1); }
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
   if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
