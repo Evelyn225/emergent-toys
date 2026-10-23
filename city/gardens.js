@@ -540,8 +540,11 @@ ANIMAL_BODIES.finch = frame => { // a small bird darting about
 ANIMAL_BODIES.butterfly = frame => { // a slender body; wings flat out, or folded up over its back
   const R = AR, open = frame === 0, parts = [figCap([0, -1.3, 0], [0, 1.3, 0.1], 0.28, () => R.BODY), figEll([0, 1.5, 0.15], AN_I, [0.35, 0.35, 0.35], () => R.BODY)];
   for (const s of [-1, 1]) {
-    if (open) parts.push(figEll([s * 2.1, 0.7, 0.1], AN_I, [2, 1.6, 0.12], h => Math.hypot(h.l[0] - s * 0.3, h.l[1] - 0.2) < 0.32 ? R.MARK : R.WING),
-      figEll([s * 1.6, -1, 0.05], AN_I, [1.4, 1.2, 0.12], () => R.WING));
+    if (open) { // held up in a shallow V (~35 degrees), as in flight, so they read from the side as well as from above
+      const c = Math.cos(0.6), sn = Math.sin(0.6), tilt = [[s * c, 0, sn], [0, 1, 0], [-s * sn, 0, c]];
+      parts.push(figEll([s * 2.1 * c, 0.7, 2.1 * sn], tilt, [2, 1.6, 0.12], h => Math.hypot(h.l[0] - 0.3, h.l[1] - 0.2) < 0.32 ? R.MARK : R.WING),
+        figEll([s * 1.6 * c, -1, 1.6 * sn], tilt, [1.4, 1.2, 0.12], () => R.WING));
+    }
     else parts.push(figEll([s * 0.2, 0.4, 2.1], AN_I, [0.12, 1.6, 2], h => Math.hypot(h.l[1] - 0.2, h.l[2] - 0.3) < 0.3 ? R.MARK : R.WING));
     parts.push(figCap([s * 0.1, 1.7, 0.3], [s * 0.7, 3, 0.9], 0.07, () => R.BODY, false)); // the antennae
   }

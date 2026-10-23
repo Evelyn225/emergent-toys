@@ -217,6 +217,9 @@ function drawIslandLife() {
     if(near(px,py,flower.x,flower.y)>7)continue;
     const phase=T*.6+flower.seed*TAU,x=flower.x+Math.sin(phase)*.12,y=flower.y+Math.cos(phase*.7)*.1,z=terrainHeight(x,y)+.13+Math.sin(phase*2)*.025;
     if(!inView(x-px,y-py,.02))continue;
-    drawArt(x-px,y-py,z,.016,.014,[night>.5?'.':Math.sin(T*12+flower.seed)>0?'v':'^'],()=>C(night>.5?YEL:MAG,night>.5?12:10));drawn++;
+    // by night a firefly's glow; by day a butterfly (~8 cm across), wings beating, facing the way it's going
+    if(night>.5)drawArt(x-px,y-py,z,.016,.014,['.'],()=>C(YEL,12));
+    else drawAnimal(x-px,y-py,z,.026,Math.cos(phase)*.12,-Math.sin(phase*.7)*.07,BUTTERFLY_LOOKS[Math.floor(flower.seed*5)%5],Math.sin(T*12+flower.seed)>0?0:1);
+    drawn++;
   }
 }

@@ -93,7 +93,7 @@ test('aviary birds, conservatory butterflies and the lizard are shaped animals t
   const r = await page.evaluate(() => {
     const span = (kind, f) => { const xs = ANIMAL_BODIES[kind](f).parts.flatMap(p => p.k === 2 ? [p.a[0], p.b[0]] : [p.c[0]]); return Math.max(...xs) - Math.min(...xs); };
     const tops = (kind, f) => Math.max(...ANIMAL_BODIES[kind](f).parts.flatMap(p => p.k === 2 ? [p.a[2], p.b[2]] : [p.c[2]]));
-    const frames = { parrotBeat: tops('parrot', 0) > tops('parrot', 1) + 3, finchBeat: tops('finch', 0) > tops('finch', 1) + 1.5, butterflyFolds: span('butterfly', 0) > span('butterfly', 1) * 3 && tops('butterfly', 1) > tops('butterfly', 0) + 1 };
+    const frames = { parrotBeat: tops('parrot', 0) > tops('parrot', 1) + 3, finchBeat: tops('finch', 0) > tops('finch', 1) + 1.5, butterflyFolds: span('butterfly', 0) > span('butterfly', 1) * 2 && tops('butterfly', 1) > tops('butterfly', 0) + 0.5 };
     const rooms = {};
     for (const kind of ['aviary', 'conservatory']) {
       enterRoom(kind, { word: kind.toUpperCase(), ret: [100, 100, 0] }, [7, 10, -Math.PI / 2]);
@@ -122,6 +122,20 @@ test('the fish on your line is a shaped fish of its own colour and size, not a s
   assert.ok(!r.small.ascii && !r.big.ascii, 'no <o)))>< on the line');
   assert.ok(r.small.cells > 3 && r.big.cells > r.small.cells * 2, 'a painted fish, bigger for a bigger catch: ' + JSON.stringify(r));
   assert.ok(Math.abs(r.lengths[0] - 0.3) < 1e-9 && Math.abs(r.lengths[1] - 0.6) < 1e-9 && r.lengths[2] > 1.2 && r.lengths[2] < 1.6, JSON.stringify(r.lengths));
+}));
+
+test('island butterflies by day are shaped butterflies in their colours; by night, fireflies glow', () => fixture(async page => {
+  const r = await page.evaluate(() => {
+    const f = ISLAND_FLOWERS[0]; T = 10;
+    const phase = T * 0.6 + f.seed * TAU, x = f.x + Math.sin(phase) * 0.12, y = f.y + Math.cos(phase * 0.7) * 0.1;
+    px = x; py = y + 0.06; a = -Math.PI / 2; pitch = -0.1;
+    const look = () => { render(0); let wing = 0, glow = 0; for (let i = 0; i < BG.length; i++) { if (CH[i] === ' ' && [YEL, ORANGE, BLUE, MAG, WHITE].includes(BG[i] >> 4) && (BG[i] & 15) > 8) wing++; if (CH[i] === '.' && (COL[i] >> 4) === YEL && (COL[i] & 15) >= 12) glow++; } return { wing, glow, ascii: /[v^]/.test(CH.join('').slice(0, cols * (hor + 4))) }; };
+    tod = 13; env(0); const day = look();
+    tod = 23; env(0); const nightLook = look();
+    return { day, night: nightLook };
+  });
+  assert.ok(r.day.wing >= 4, 'a butterfly by day: ' + JSON.stringify(r));
+  assert.ok(r.night.glow >= 1 && r.night.wing < r.day.wing, 'a firefly by night: ' + JSON.stringify(r));
 }));
 
 test('a flock draws as shaped birds in their plumage (no ASCII), and scared birds face the way they fly', () => fixture(async page => {
