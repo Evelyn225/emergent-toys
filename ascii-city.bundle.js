@@ -16363,7 +16363,7 @@ function homePlan(w, h, tier) {
   };
   const home = tier === 0
     ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.18, 4.4], fridge: [8.45, 5.6], pet: [1.4, 7.2], dining: [5.5, 5.8] }
-    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.5 : 8.7], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
+    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.6 : 8.7], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
   const wc = tier === 0 ? { x0: 7, y0: 1, x1: 9, y1: 4, sign: [6, 3, 3.5] }
     : { x0: 15, y0: 1, x1: inside, y1: 5, sign: [14, 4, 4.5] };
   wall(wc.x0 - 1, 1, wc.x0 - 1, wc.y1, 'W');
@@ -16428,13 +16428,12 @@ function homeDef(w, h, tier) {
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
-      BX(bed[0], bed[1] + 0.2, tier ? 1.25 : 1, 0.85, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? tier === 2 ? GREEN : BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
-      BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
-      BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
-      BX(1.45, h - 2.6, .4, .5, 0, 1.1, solid(BRICK, { panel: .3, top: '=' })), // workshop supply cupboard
+      ...FURNITURE_BED(bed[0],bed[1]+.2,.85,tier?1.25:1,tier===2?GREEN:BLUE,-Math.PI/2),
+      FURNITURE_STORAGE(closet[0],closet[1]-.6,.8,.3,2.1),
+      FURNITURE_STORAGE(1.45,h-2.6,.5,.4,1.1,-Math.PI/2),
       TELEVISION(tv[0],tv[1]-.3,r),
-      BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
-      BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' }), 0, 1), // a shelf for things you bring home
+      FURNITURE_STORAGE(tv[0],tv[1]-.3,.8,.25,.61),
+      FURNITURE_STORAGE(shelf[0],shelf[1],.75,.18,1.05,-Math.PI/2,true),
       BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
       ...toilet(plan.wc.x1 - (tier ? 1.4 : .8), 1.42, -1, porcelain),
       washbasin(plan.wc.x0 + 0.4, 1.35, 0, 1),
@@ -16444,7 +16443,7 @@ function homeDef(w, h, tier) {
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
       BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, stoveShade(tier, tier ? 0.55 : 0.5), 0, 1), // the kitchen counter, the hob and oven in it (cooking.js)
-      ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), BX(10.9, 1.4, 0.7, 0.18, 0, 2.4, solid(BRICK, { panel: 0.3, top: '=' })),
+      ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), FURNITURE_STORAGE(10.9,1.4,.7,.18,2.4,0,true),
         ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), POT_PLANT(1.6, 8.9, 1.5)] : []),
       ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),
         POT_PLANT(23.6, 14.8, 1.6), POT_PLANT(21, 9, 1.5)] : []),
@@ -34061,21 +34060,20 @@ function hotelRoomPlan(tier){
  if(tier===2)for(let y=1;y<10;y++)if(y!==7&&y!==8)extra['8,'+y]='#';
  return {w,h,bath,grid:boxRoom(w,h,extra),entry:[w/2,h-1.6,-Math.PI/2]};
 }
-function hotelTelevision(x,y){return [ROOM_MODEL(x,y,(vx,vy)=>TELEVISION(x,y,room,1.1).draw(vx,vy)),BX(x,y,.99,.3,.1,.65,solid(BRICK,{panel:.5,top:'='}))];}
+function hotelTelevision(x,y){return [ROOM_MODEL(x,y,(vx,vy)=>TELEVISION(x,y,room,1.1).draw(vx,vy)),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1)];}
 function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
  const u=HIT.u,z=HIT.w,frame=Math.abs(u)>.76||z<1.53||z>2.27;
  const hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
  BG[i]=C(frame?YEL:z<hill?GREEN:BLUE,frame?3:4);return set(i,frame?(Math.abs(u)>.76?'|':'='):z<1.7?'~':' ',C(frame?YEL:z<1.7?CYAN:GREEN,Math.max(5,L*.7))),true;
 });}
 function hotelDefinition(tier){
- const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:1.2],sofa=[tv[0],h-2.9],stove=tier?[w-1.5,h-4]:null;
+ const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:1.32],sofa=[tv[0],h-2.9],stove=tier?[w-1.5,h-4]:null;
  return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,stove},tier,
  wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,z<.12||Math.abs(z-.8)<.025||z>(tier===2?3.6:3)-.16?'=':' ',C(YEL,L*.65)),true;},
  props:r=>{
- const bed=tier===2?[3.9,3.6]:[2.6,3.2],wood=solid(BRICK,{panel:.45,top:'='}),cloth=solid(tier===2?GREEN:BLUE,{bright:2,top:'~'});
- const p=[BX(...bed,1.3,1.05,.15,.58,cloth),BX(bed[0],bed[1]-1.05,1.4,.08,.12,1.3,wood),
- ...[-.65,.65].map(x=>BX(bed[0]+x,bed[1]-.7,.5,.28,.58,.72,solid(WHITE,{top:'~'}))),
- ...[-1,1].flatMap(side=>[BX(bed[0]+side*1.45,bed[1]-.7,.3,.35,.1,.65,wood),ROOM_MODEL(bed[0]+side*1.45,bed[1]-.7,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
+ const bed=tier===2?[3.9,3.6]:[2.6,3.2],bedWidth=tier===2?1.3:1.14,standWidth=tier===2?.3:.22,standOffset=bedWidth+standWidth+.01;
+ const p=[...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
+ ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),ROOM_MODEL(bed[0]+side*standOffset,bed[1]-.65,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
  ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,-1,tier===2?GREEN:BLUE),...hotelTelevision(...tv),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.6,-1,porcelain),washbasin(w-4.1,1.4,0,1),
  ...(tier?[BATHTUB(w-1.5,4.1)]:[BX(w-2.1,4.4,.7,.7,.02,.07,solid(WHITE)),BX(w-2.8,4.4,.025,.7,.07,1.9,solid(CYAN,{bright:1}))]),
@@ -34706,6 +34704,74 @@ function drawFurnitureTable(vx,vy,hl=.6,hw=.4,height=.78) {
     return true;
   });
 }
+
+// Bedding, carcasses and their blocking footprints are authored together. The
+// local v axis runs from the headboard toward the foot; u runs across the bed.
+function furnitureModel(x,y,c,s,hl,hw,height,draw) {
+  return {...ROOM_MODEL(x,y,draw),radius:Math.hypot(hl,hw),box:boxAt(x,y,c,s,hl,hw,0,height)};
+}
+function FURNITURE_BED(x,y,halfWidth,halfLength,col=BLUE,angle=0,top=.55,headHeight=1) {
+  const c=Math.cos(angle),s=Math.sin(angle),at=(u,v)=>[x+c*u-s*v,y+s*u+c*v];
+  const frameTop=top-.2,pillowTop=top+.14;
+  const body=furnitureModel(x,y,c,s,halfWidth,halfLength,pillowTop,(vx,vy)=>{
+    const part=(u,v,hl,hw,z0,z1,r,material='wood')=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1,r,material);
+    for(const u of [-halfWidth+.13,halfWidth-.13])for(const v of [-halfLength+.16,halfLength-.16])part(u,v,.055,.055,0,.2,.018);
+    part(0,0,halfWidth,halfLength,.15,frameTop,.03);
+    part(0,0,halfWidth-.025,halfLength-.025,frameTop,top-.035,.07,furnitureCloth(WHITE));
+    // A separate tucked duvet follows the same head/foot direction as the frame.
+    const shoulder=-halfLength*.28,foot=halfLength-.03;
+    part(0,(shoulder+foot)/2,halfWidth-.02,(foot-shoulder)/2,top-.035,top,.016,furnitureCloth(col));
+    part(0,shoulder+.045,halfWidth-.025,.055,top,top+.025,.012,furnitureCloth(col));
+    const two=halfWidth>.7,count=two?2:1,pillowWidth=two?halfWidth*.4:halfWidth*.77;
+    for(let k=0;k<count;k++)part(two?(k-.5)*halfWidth:.0,-halfLength*.66,pillowWidth,halfLength*.22,top-.01,pillowTop,.065,furnitureCloth(WHITE));
+  });
+  const [hx,hy]=at(0,-halfLength-.05),head=furnitureModel(hx,hy,c,s,halfWidth+.08,.08,headHeight,(vx,vy)=>{
+    const part=(u,hw,z0,z1,r,seed)=>coveRound(vx+c*u,vy+s*u,c,s,hw,.08,z0,z1,r,'wood',seed);
+    for(const side of [-1,1])part(side*(halfWidth+.04),.04,.1,headHeight,.025,7);
+    part(0,halfWidth,.1,.34,.025,7);part(0,halfWidth,headHeight-.12,headHeight,.025,7);
+    // A thinner panel fits between the rails and stiles, recessed on both faces.
+    coveRound(vx,vy,c,s,halfWidth,.045,.31,headHeight-.1,.015,'wood',9);
+  });
+  body.furniture='bed';head.furniture='headboard';return [body,head];
+}
+function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
+  const c=Math.cos(angle),s=Math.sin(angle),thick=.035,base=.085,cap=height-.045;
+  const model=furnitureModel(x,y,c,s,hl,hw,height,(vx,vy)=>{
+    const part=(u,v,hx,hy,z0,z1,r=.01,material='wood')=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hx,hy,z0,z1,r,material);
+    // Recessed plinth, joined side walls, back and cap. A shelf's top remains the
+    // exact support plane used by home.decor, not a second floating trim board.
+    part(0,0,hl-.035,hw-.025,0,base,.012);
+    for(const side of [-1,1])part(side*(hl-thick/2),0,thick/2,hw,base,cap);
+    part(0,-hw+thick/2,hl-thick,thick/2,base,cap);
+    part(0,0,hl,hw,cap,height,.015);
+    if(open) {
+      const levels=[base,.37*height,.69*height];
+      for(const z of levels)part(0,0,hl-thick,hw-thick,z,z+.035,.008);
+      for(let shelf=0;shelf<2;shelf++)for(let k=0;k<3;k++) {
+        const u=(k-1)*.057+(shelf?1:-1)*hl*.43,z=levels[shelf]+.035,h=.17+((k+shelf)%3)*.023;
+        part(u,hw*.1,.022,Math.min(.07,hw-.04),z,z+h,.004,(i,t,L)=>{
+          const color=[BLUE,STONE,BRICK][(k+shelf)%3],binding=HIT.w>z+h-.015||HIT.w<z+.014;
+          BG[i]=C(binding?WARM:color,2.5+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+        });
+      }
+    }else {
+      const drawer=height<1.25,doorTop=drawer?height-.27:height-.075,doorBottom=base+.025;
+      const half=(hl-.05)/2;
+      for(const side of [-1,1]) {
+        part(side*half,hw-.038,half-.008,.014,doorBottom,doorTop,.012);
+        const u=side*.045,z=drawer?(doorBottom+doorTop)/2:height*.55;
+        const ax=vx+c*u-s*(hw-.012),ay=vy+s*u+c*(hw-.012);
+        coveTube(ax,ay,z-.065,ax,ay,z+.065,.009,GRAY);
+      }
+      if(drawer) {
+        part(0,hw-.038,hl-.035,.014,height-.245,height-.07,.012);
+        const ax=vx-s*(hw-.012),ay=vy+c*(hw-.012),z=height-.155;
+        coveTube(ax-c*.095,ay-s*.095,z,ax+c*.095,ay+s*.095,z,.009,GRAY);
+      }
+    }
+  });
+  model.furniture=open?'shelf':'cabinet';return model;
+}
 // Shared close-up home models. Surfaces have real edges and joined supports;
 // screens and bulbs are the only emissive parts of their housings.
 function televisionProgramme(u,v,time,channel) {
@@ -34812,21 +34878,15 @@ function fernHomeQuality() {
   def.shelfAxis=[0,1];
   def.floor='fernwood';def.bathFloor='fernBath';
   def.props=r=>[
-    ROOM_MODEL(4.1,2.25,(vx,vy)=>{
-      for(const x of [-1.1,1.1])for(const y of [-.8,.8])coveRound(vx+x,vy+y,1,0,.08,.08,0,.28,.025,'wood');
-      coveRound(vx,vy,1,0,1.32,1.05,.22,.38,.045,'wood');
-      coveRound(vx,vy,1,0,1.28,1.01,.38,.61,.09,(i,t,L)=>{BG[i]=C(HIT.v>.1?GREEN:WHITE,3+L*.22);set(i,' ',0);return true;});
-      coveRound(vx,1.08-py,1,0,1.4,.08,.18,1.22,.035,'wood');
-      for(const side of [-1,1])coveRound(vx+side*.6,vy-.67,1,0,.48,.23,.61,.75,.065,(i,t,L)=>{BG[i]=C(WHITE,4+L*.2);set(i,' ',0);return true;});
-    },[1.32,1.05,.75]),
-    BX(7.5,1.35,.9,.35,0,2.2,solid(BRICK,{panel:.5})),
-    BX(1.18,13,.75,.18,0,1.05,solid(BRICK,{panel:.5}),0,1),
+    ...FURNITURE_BED(4.1,2.25,1.32,1.05,GREEN,0,.61,1.22),
+    FURNITURE_STORAGE(7.5,1.35,.9,.35,2.2),
+    FURNITURE_STORAGE(1.18,13,.75,.18,1.05,-Math.PI/2,true),
     BX(11.6,1.45,.45,.45,0,1.9,solid(WHITE,{panel:.7})),FERN_KITCHEN(r),
     ...toilet(21,1.42,-1,porcelain),washbasin(19.45,1.35,0,1),BATHTUB(22.5,3.7),
     ...tableBox(14.7,6,1.15,.65),...homeChair(14.7,7.2,0,-1,GREEN),...homeChair(14.7,4.8,0,1,GREEN),
     ...couch(5,16.8,1.8,0,-1,GREEN),...tableBox(5,14.4,.9,.45),
-    BX(5,11.3,.9,.3,0,.6,solid(BRICK)),TELEVISION(5,11.4,r),
-    BX(14.4,13,.4,.65,0,1.1,solid(BRICK,{panel:.5})),
+    FURNITURE_STORAGE(5,11.3,.9,.3,.61),TELEVISION(5,11.4,r),
+    FURNITURE_STORAGE(14.4,13,.65,.4,1.1,-Math.PI/2),
     POT_PLANT(10.65,11.6,1.5),POT_PLANT(22.45,8.6,1.4),
     ...def.lamps.map(([x,y],k)=>HOME_PENDANT(x,y,def.height,r,k)),
   ];
