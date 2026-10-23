@@ -109,6 +109,21 @@ test('aviary birds, conservatory butterflies and the lizard are shaped animals t
   for (const v of Object.values(r.rooms)) { assert.equal(v.ascii, 0); assert.ok(v.moved > 100 && v.facing === v.moved, JSON.stringify(v)); }
 }));
 
+test('the fish on your line is a shaped fish of its own colour and size, not a string of characters', () => fixture(async page => {
+  const r = await page.evaluate(() => {
+    clearInventory(); carryItem({ id: 'rod', uses: 0 }); held = 0;
+    px = FISH_HUT.x - 3; py = shoreS(px) - 0.25; a = Math.PI / 2; pitch = -0.15;
+    const id = Object.keys(ITEMS).find(k => ITEMS[k].kind === 'fish' && ITEMS[k].col === ORANGE);
+    const paint = kg => { fishing = { st: 'reel', t: 0.5, dur: 2, catch: { id, kg }, x: px + 0.05, y: py + 0.35, z: 0.06, sx: px, sy: py + 0.9, sz: 0, d: 1, rod: 'rod', water: 'sea' };
+      render(0); let n = 0; for (let i = 0; i < BG.length; i++) if (CH[i] === ' ' && (BG[i] >> 4) === ORANGE) n++; return { cells: n, ascii: /<o\)\)\)/.test(CH.join('')) }; };
+    const small = paint(0.3), big = paint(6);
+    return { small, big, lengths: [catchLength(0.5), catchLength(4), catchLength(40)] };
+  });
+  assert.ok(!r.small.ascii && !r.big.ascii, 'no <o)))>< on the line');
+  assert.ok(r.small.cells > 3 && r.big.cells > r.small.cells * 2, 'a painted fish, bigger for a bigger catch: ' + JSON.stringify(r));
+  assert.ok(Math.abs(r.lengths[0] - 0.3) < 1e-9 && Math.abs(r.lengths[1] - 0.6) < 1e-9 && r.lengths[2] > 1.2 && r.lengths[2] < 1.6, JSON.stringify(r.lengths));
+}));
+
 test('a flock draws as shaped birds in their plumage (no ASCII), and scared birds face the way they fly', () => fixture(async page => {
   const r = await page.evaluate(() => {
     [px, py] = citySourcePoint(12 * 8 + 0.15, 10 * 8 + 4); a = Math.PI / 2; pitch = -0.75;

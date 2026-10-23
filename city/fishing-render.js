@@ -258,13 +258,30 @@ function drawFishing() {
   if (f.st === 'reel' && f.catch && f.z > 0.004) { // up out of the water on the end of the line, wriggling
     const d = ITEMS[f.catch.id], q = fishProj(bx, by, Math.max(0.001, f.z - 0.02));
     if (q) {
-      const word = d.kind === 'fish' || d.kind === 'wish' ? (Math.sin(T * 18) > 0 ? '<o)))><' : '<o)))>-') : d.kind === 'junk' ? '[#]' : '(*)';
-      const n = clamp(Math.round(0.05 * projX / q.depth), 1, word.length), w0 = word.slice(0, n);
       fishSeg(p, q, lineCol);
-      for (let k = 0; k < w0.length; k++) fishPut(q.c - w0.length / 2 + k, q.r, q.depth * 0.99, w0[k], C(d.col ?? (d.kind === 'junk' ? GRAY : YEL), 14));
+      if (d.kind === 'fish' || d.kind === 'wish') drawLineFish(bx, by, Math.max(0.001, f.z - 0.02), d.col ?? YEL, catchLength(f.catch.kg)); // (the fish itself, wriggling)
+      else { const word = d.kind === 'junk' ? '[#]' : '(*)', n = clamp(Math.round(0.05 * projX / q.depth), 1, word.length), w0 = word.slice(0, n);
+        for (let k = 0; k < w0.length; k++) fishPut(q.c - w0.length / 2 + k, q.r, q.depth * 0.99, w0[k], C(d.kind === 'junk' ? GRAY : YEL, 14)); } // (junk and curios: their pictures)
     }
   }
 }
+// ---- a fish on the end of a line, built like the other animals but nose-up, hanging: a deep, flat body, a dorsal
+// fin, a forked tail flicking (frames 0, 1), an eye each side. Twelve units snout to tail
+ANIMAL_BODIES.linefish = frame => {
+  const R = AR, flick = frame ? 0.9 : -0.9;
+  const parts = [figEll([0, 0, 6.8], AN_I, [1.1, 2.4, 4.6], h => h.l[1] < -0.45 ? R.PALE : R.BODY), // (a pale belly)
+    figCap([0, 2, 5.4], [0, 3.1, 8], 0.45, () => R.MARK), // the dorsal fin
+    figCap([0, 0, 2.6], [0, 1.9 + flick, -0.2], 0.45, () => R.MARK), figCap([0, 0, 2.6], [0, -1.9 + flick, -0.2], 0.45, () => R.MARK)]; // the tail, forked
+  return { parts, decals: animalEyes([0, 0.7, 10.2], 1.05, 0, 0.3, 0.1) };
+};
+const LINE_FISH_LOOKS = new Map();
+const lineFishLook = col => LINE_FISH_LOOKS.get(col) || LINE_FISH_LOOKS.set(col, animalLook('linefish', { body: [col, 11], mark: [col, 7], pale: [WHITE, 13] })).get(col);
+// (x, y) from you, its snout at height z on the line, side on to you, so long (metres) and hanging below it
+function drawLineFish(x, y, z, col, metres) {
+  const L = metres / 10;
+  drawAnimal(x, y, Math.max(0, z - L), L * FIG_TALL / 12, -dy, dx, lineFishLook(col), Math.sin(T * 16) > 0 ? 0 : 1);
+}
+const catchLength = kg => clamp(0.3 * Math.cbrt((kg || 0.5) / 0.5), 0.12, 1.6); // (a half-kilo fish is about 30 cm; length goes as the cube root of weight)
 function fishRing(bx, by, R, k, lit) {
   const p = fishProj(bx, by, 0);
   if (!p) return;
@@ -483,7 +500,7 @@ function drawAnglerLines() {
     const top = fishProj(r.tx, r.ty, r.tz), end = fishProj(lift ? fx_ : r.bx, lift ? fy_ : r.by, lift ? fz + 0.015 : (r.under ? 0 : 0.006));
     if (top && end) fishSeg(top, end, C(WHITE, 8 * Math.max(0.5, amb)));
     if (!lift) { const p = fishProj(r.bx, r.by, r.under ? 0 : 0.003 + Math.sin(T * 2.3 + o.seed) * 0.002); if (p) fishPut(p.c, p.r, p.depth, r.under ? '@' : 'o', C(r.under ? WHITE : RED, 14)); }
-    else { const p = fishProj(fx_, fy_, fz); if (p) { const w0 = Math.sin(T * 16) > 0 ? '<o)><' : '<o)>-', n = clamp(Math.round(0.05 * projX / p.depth), 1, 5); for (let k = 0; k < n; k++) fishPut(p.c - n / 2 + k, p.r, p.depth * 0.99, w0[k], C(SILVER_FISH[o.seed % 3], 14)); } }
+    else drawLineFish(fx_, fy_, fz, SILVER_FISH[o.seed % 3], 0.25); // (their catch, coming up the line)
   }
 }
 const SILVER_FISH = [WHITE, CYAN, YEL];
