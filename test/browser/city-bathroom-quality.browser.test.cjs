@@ -73,6 +73,15 @@ test('bathroom surrounds span real partition gaps and leave the original walking
    }
    const top=shapes.find(s=>s.box.z0===2.26&&s.box.z1===(r.def.height||3));
    if(!top)problems.push('unclosed lintel');
+   // nothing shares the wall's jamb planes (they z-fight), and the wide, thin soffit is a flat box, not a rounded march
+   for(const s of shapes){
+    const b=s.box,ex=[b.x-b.hl*Math.abs(b.c)-b.hw*Math.abs(b.s),b.x+b.hl*Math.abs(b.c)+b.hw*Math.abs(b.s)],ey=[b.y-b.hl*Math.abs(b.s)-b.hw*Math.abs(b.c),b.y+b.hl*Math.abs(b.s)+b.hw*Math.abs(b.c)];
+    const [ends,depth]=q.vertical?[ey,ex]:[ex,ey],inWall=depth[0]<q.cross+1-1e-6&&depth[1]>q.cross+1e-6;
+    // (a box in the wall's depth, beyond a jamb, whose face looks into the opening from that jamb's own plane)
+    if(b.z0<2.2&&inWall&&(Math.abs(ends[1]-q.start)<1e-6||Math.abs(ends[0]-q.end)<1e-6))problems.push('trim face in a jamb plane');
+   }
+   const soffit=shapes.find(s=>s.box.z0===2.2&&s.box.z1===2.26);
+   if(!soffit||soffit.box.round)problems.push('soffit missing or rounded');
   }
   return{kind,openings:r.props.filter(p=>p.bathroomOpening).length,problems};
  }));

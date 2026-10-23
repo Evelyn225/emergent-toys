@@ -34988,6 +34988,9 @@ function bathroomOval(x,y,sx,sy,base,profile,shade) {
   const points=profile.map(([z,r])=>[base+z,r]),r=Math.max(...points.map(p=>p[1]));
   drawBox({...boxAt(x,y,1,0,sx*r,sy*r,Math.min(...points.map(p=>p[0])),Math.max(...points.map(p=>p[0]))),sx,sy,lathe:{x:0,y:0,profile:points}},shade,bathroomRayOval);
 }
+function bathroomPaint(i,t,L) { // matte painted joinery: doors, soffits
+  BG[i]=C(WHITE,3.1+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+}
 function bathroomEnamel(i,t,L) {
   BG[i]=C(WHITE,3.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
 }
@@ -35143,9 +35146,10 @@ function bathroomSurrounds(r) {
   return bathroomOpenings(r).map(p=>{
     const {vertical,cross,start,end}=p,c=vertical?0:1,s=vertical?1:0,x=vertical?cross+.5:(start+end)/2,y=vertical?(start+end)/2:cross+.5,half=(end-start)/2;
     return {...ROOM_MODEL(x,y,(vx,vy)=>{
-      const trim=(u,v,hl,hw,z0,z1)=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1,.01,WHITE);
-      for(const side of [-1,1])trim(side*(half+.016),0,.016,.5,0,2.2);
-      trim(0,0,half+.032,.5,2.2,2.26);
+      const trim=(u,v,hl,hw,z0,z1)=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1,.01,bathroomPaint);
+      for(const side of [-1,1])trim(side*(half-.006),0,.006,.5,0,2.2); // (a liner proud of the jamb, never in its plane)
+      // (the soffit is a flat box: a rounded marcher breaks up on so wide and thin a slab seen edge-on from below)
+      drawBox(boxAt(vx,vy,c,s,half,.5,2.2,2.26),bathroomPaint);
       // Close above the opening instead of leaving a free-floating lintel.
       if(height>2.26)drawBox(boxAt(vx,vy,c,s,half,.5,2.26,height),solid(WHITE));
       for(const face of [-1,1]) {
