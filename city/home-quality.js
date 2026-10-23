@@ -104,21 +104,15 @@ function fernHomeQuality() {
   def.shelfAxis=[0,1];
   def.floor='fernwood';def.bathFloor='fernBath';
   def.props=r=>[
-    ROOM_MODEL(4.1,2.25,(vx,vy)=>{
-      for(const x of [-1.1,1.1])for(const y of [-.8,.8])coveRound(vx+x,vy+y,1,0,.08,.08,0,.28,.025,'wood');
-      coveRound(vx,vy,1,0,1.32,1.05,.22,.38,.045,'wood');
-      coveRound(vx,vy,1,0,1.28,1.01,.38,.61,.09,(i,t,L)=>{BG[i]=C(HIT.v>.1?GREEN:WHITE,3+L*.22);set(i,' ',0);return true;});
-      coveRound(vx,1.08-py,1,0,1.4,.08,.18,1.22,.035,'wood');
-      for(const side of [-1,1])coveRound(vx+side*.6,vy-.67,1,0,.48,.23,.61,.75,.065,(i,t,L)=>{BG[i]=C(WHITE,4+L*.2);set(i,' ',0);return true;});
-    },[1.32,1.05,.75]),
-    BX(7.5,1.35,.9,.35,0,2.2,solid(BRICK,{panel:.5})),
-    BX(1.18,13,.75,.18,0,1.05,solid(BRICK,{panel:.5}),0,1),
+    ...FURNITURE_BED(4.1,2.25,1.32,1.05,GREEN,0,.61,1.22),
+    FURNITURE_STORAGE(7.5,1.35,.9,.35,2.2),
+    FURNITURE_STORAGE(1.18,13,.75,.18,1.05,-Math.PI/2,true),
     BX(11.6,1.45,.45,.45,0,1.9,solid(WHITE,{panel:.7})),FERN_KITCHEN(r),
     ...toilet(21,1.42,-1,porcelain),washbasin(19.45,1.35,0,1),BATHTUB(22.5,3.7),
     ...tableBox(14.7,6,1.15,.65),...homeChair(14.7,7.2,0,-1,GREEN),...homeChair(14.7,4.8,0,1,GREEN),
     ...couch(5,16.8,1.8,0,-1,GREEN),...tableBox(5,14.4,.9,.45),
-    BX(5,11.3,.9,.3,0,.6,solid(BRICK)),TELEVISION(5,11.4,r),
-    BX(14.4,13,.4,.65,0,1.1,solid(BRICK,{panel:.5})),
+    FURNITURE_STORAGE(5,11.3,.9,.3,.61),TELEVISION(5,11.4,r),
+    FURNITURE_STORAGE(14.4,13,.65,.4,1.1,-Math.PI/2),
     POT_PLANT(10.65,11.6,1.5),POT_PLANT(22.45,8.6,1.4),
     ...def.lamps.map(([x,y],k)=>HOME_PENDANT(x,y,def.height,r,k)),
   ];

@@ -11,26 +11,26 @@ const backWc = (w, h) => boxRoom(w, h, { [`${w - 4},1`]: 'W', [`${w - 4},2`]: 'W
 const wcAt = w => ({ x0: w - 3, y0: 1, x1: w - 1, y1: 3, sign: [w - 3, 3, w - 2.5] });
 const wcFittings = w => [...toilet(w - 2.4, 1.4, -1, porcelain), washbasin(w - 1.45, 1.3, 0, 1)];
 // a table top on a pedestal, hl x hw, h high; shade paints the top (and the edge)
-const eatTable = (x, y, hl, hw, shade, h = 0.76) => [BX(x, y, hl, hw, h - 0.05, h, shade), BX(x, y, 0.05, 0.05, 0, h - 0.05, solid(GRAY)), BX(x, y, 0.22, 0.22, 0, 0.03, solid(GRAY))];
+const eatTable = (x,y,hl,hw,shade,h=.76) => [FURNITURE_EAT_TABLE(x,y,hl,hw,shade,h)];
 // a table for two (along x: chairs at either end) or four (and either side), the chairs facing it, maybe people in them
 function dining(x, y, { n = 2, hl = 0.4, hw = 0.4, top, chairCol = BRICK, busy = 0.4, h = 0.76, chair = homeChair } = {}) {
   const p = eatTable(x, y, hl, hw, top || solid(BRICK, { top: '=' }), h);
   const spots = [[x - hl - 0.42, y, 1, 0], [x + hl + 0.42, y, -1, 0], ...(n > 2 ? [[x, y - hw - 0.42, 0, 1], [x, y + hw + 0.42, 0, -1]] : [])];
   for (const [cx, cy, fx, fy] of spots) {
-    p.push(...chair(cx, cy, fx, fy, chairCol));
-    if (chance(busy)) p.push({ ...sitting(cx, cy, shirt(), 0.48), face: [fx, fy] });
+    const parts=chair(cx,cy,fx,fy,chairCol),height=parts.find(p=>p.seat)?.h??.48;
+    p.push(...parts);
+    if (chance(busy)) p.push({ ...sitting(cx, cy, shirt(), height), face: [fx, fy] });
   }
   return p;
 }
 // a booth along x: a table between two benches with tall backs, facing each other across it (fy of the +y bench: -1)
 function booth(x, y, hl, col, { top, busy = 0.45, depth = 0.55 } = {}) {
-  const vinyl = solid(col, { top: '=', bright: 1.5 }), p = eatTable(x, y, hl, 0.38, top || solid(GRAY, { top: '=' }));
+  const p = eatTable(x, y, hl, 0.38, top || solid(GRAY, { top: '=' }));
   for (const e of [-1, 1]) {
     const by = y + e * (0.38 + depth / 2 + 0.05);
-    p.push(BX(x, by, hl, depth / 2, 0, 0.46, vinyl), BX(x, by + e * (depth / 2 - 0.06), hl, 0.07, 0.46, 1.25, (i, t, L) => { // the back, buttoned
-      BG[i] = C(col, (1.5 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : fract(HIT.u * 4) < 0.1 ? '|' : ' ', C(WHITE, L * 0.5)), true; }));
+    p.push(...FURNITURE_BOOTH_SEAT(x,by,hl,depth,-e,col));
     for (const sx of [x - hl * 0.45, x + hl * 0.45]) { // (the one by the wall still in reach: you slide in)
-      p.push(SEAT(sx, by, 0, -e));
+      p.push(SEAT(sx, by, 0, -e,.46));
       if (chance(busy)) p.push({ ...sitting(sx, by, shirt(), 0.46), face: [0, -e] });
     }
   }
@@ -50,7 +50,7 @@ function stoolsY(x, y0, y1, step, col, fx, busy = 0.4, seatZ = 0.62) {
 }
 // a plain bench without a back, facing (fx, fy), hl either side of (x, y): room for two
 function plainBench(x, y, hl, fx, fy, col = BRICK, busy = 0.35) {
-  const ax = -fy, ay = fx, p = [BX(x, y, hl, 0.2, 0.4, 0.45, solid(col, { top: '=', bright: 1.3 }), ax, ay), ...[-1, 1].map(e => BX(x + ax * e * (hl - 0.08), y + ay * e * (hl - 0.08), 0.05, 0.17, 0, 0.4, solid(col), ax, ay))];
+  const ax=-fy,ay=fx,p=[FURNITURE_BENCH(x,y,hl,fx,fy,col)];
   for (const e of [-1, 1]) {
     const sx = x + ax * e * hl * 0.5, sy = y + ay * e * hl * 0.5;
     p.push(SEAT(sx, sy, fx, fy)); if (chance(busy)) p.push({ ...sitting(sx, sy, shirt(), 0.45), face: [fx, fy] });
@@ -58,9 +58,7 @@ function plainBench(x, y, hl, fx, fy, col = BRICK, busy = 0.35) {
   return p;
 }
 // a moulded plastic chair on steel legs, facing (fx, fy)
-const shellChair = (x, y, fx, fy, col) => [{ ...BX(x, y, 0.22, 0.22, 0.42, 0.47, solid(col, { bright: 1.5 })), seat: true, x, y, fx, fy, h: 0.47 },
-  BX(x - fx * 0.21, y - fy * 0.21, 0.22, 0.03, 0.47, 0.86, solid(col, { bright: 1.5 }), fy, -fx),
-  ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.17, y + sy * 0.17, 0.015, 0.015, 0, 0.42, solid(GRAY))))];
+const shellChair = (x,y,fx,fy,col) => FURNITURE_SHELL_CHAIR(x,y,fx,fy,col);
 // a crate (beer, fruit), h high; slatted
 const crateShade = col => (i, t, L) => { BG[i] = C(col, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (fract(HIT.u * 5) < 0.2 ? '=' : ' ') : fract(HIT.w * 6) < 0.25 ? '=' : ' ', C(GRAY, L * 0.6)), true; };
 // the menu, from what they sell: 'NAME PRICE' a line (worked out once a visit)

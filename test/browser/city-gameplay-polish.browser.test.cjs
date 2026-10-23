@@ -98,7 +98,7 @@ test('each apartment has a wall shelf, reachable fixtures, clear bedside sleep a
    return {id,bedside,sleeping,shelf:{s:shelf.s,edge:shelf.x-shelf.hw},reachable,toilet:{y:toilet.loo[1],back:Math.sign(cistern.box.y-toilet.loo[1])},bath:!!bath,walls:wc.x1===room.W-1||!!ROOMW.cell(wc.x1,2)};
   });
  });
- for(const r of results){assert.equal(r.bedside.open,true,JSON.stringify(r));assert.equal(r.bedside.spot,'bed');assert.match(r.bedside.prompt,/sleep/);assert.ok(r.bedside.path>0);assert.equal(r.sleeping,true);assert.equal(r.shelf.s,1);assert.ok(Math.abs(r.shelf.edge-(r.id==='home_studio'?1:10))<1e-6);assert.ok(r.reachable.every(Boolean),JSON.stringify(r));assert.equal(r.toilet.back,-1);assert.ok(r.toilet.y<1.5);assert.equal(r.walls,true);assert.equal(r.bath,r.id!=='home_studio');}
+ for(const r of results){assert.equal(r.bedside.open,true,JSON.stringify(r));assert.equal(r.bedside.spot,'bed');assert.match(r.bedside.prompt,/sleep/);assert.ok(r.bedside.path>0);assert.equal(r.sleeping,true);assert.equal(Math.abs(r.shelf.s),1);assert.ok(Math.abs(r.shelf.edge-(r.id==='home_studio'?1:10))<1e-6);assert.ok(r.reachable.every(Boolean),JSON.stringify(r));assert.equal(r.toilet.back,-1);assert.ok(r.toilet.y<1.5);assert.equal(r.walls,true);assert.equal(r.bath,r.id!=='home_studio');}
 }));
 test('equipment snaps flush to all three workshop walls, survives reload and keeps the door aisle clear',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{

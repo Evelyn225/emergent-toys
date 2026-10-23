@@ -12,10 +12,10 @@ const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3'
 // overall level of each layer at full mix
 const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3, karaoke: 0.35, arcade: 0.35,
                 rain: 0.28, birds: 0.35, cathedral: 0.5, pachinko: 0.45, waterfall: 0.4, aquarium: 0.3, waterSoft: 0.16,
-                fluorescent: 0.2, watch: 0.2,
+                fluorescent: 0.2, watch: 0.2, washers: 0.3,
                 board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
-const CAL = { board: 0.8, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const CAL = { board: 0.8, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16, washers: 1 };
 const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
 let actx = null, master = null, soundOn = true, noiseBuf = null, musicBus, ambBus, sfxBus; // the three volume settings' buses
 const beds = {}, synth = {};
@@ -34,7 +34,7 @@ function audioStart() {
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const n = noiseBuf.getChannelData(0); for (let k = 0; k < n.length; k++) n[k] = Math.random() * 2 - 1;
   for (const k in BED_FILES) beds[k] = makeBed(BED_FILES[k], k === 'bossa' || k === 'coffee' || k === 'karaoke' || k === 'arcade' || k === 'aquarium' ? musicBus : ambBus);
-  beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, ambBus); // muffled through the walls indoors
+  beds.rain.out.disconnect(); beds.rain.lp = filt('lowpass', 18000); chain(beds.rain.out, beds.rain.lp, beds.rain.pan); // muffled through the walls indoors
   makeSynths();
   preloadGameplayAudio();
   clipBuffer('police-siren.wav').then(buf => { policeSirenBuffer = buf; });
@@ -58,9 +58,10 @@ function toggleSound() {
 // ---- recorded beds
 // Its two <audio> elements are only made when the bed is first wanted, and let go again after a minute of silence
 // (a phone only has room for so many streams: nine beds' worth, loaded all visit, was too many)
+// (each through a panner, so music playing from somewhere in the room comes from that side)
 function makeBed(file, bus) {
-  const out = actx.createGain(); out.gain.value = 0; out.connect(bus);
-  return { file, out, voices: null, cur: 0, idle: 99, xf: false };
+  const out = actx.createGain(), pan = actx.createStereoPanner(); out.gain.value = 0; chain(out, pan, bus);
+  return { file, out, pan, voices: null, cur: 0, idle: 99, xf: false };
 }
 function bedVoices(b) {
   b.voices = [0, 1].map(() => {
@@ -137,6 +138,11 @@ function makeSynths() {
   // a car engine: a growl that rises with speed
   synth.engine = layer(); synth.engineOsc = actx.createOscillator(); synth.engineOsc.type = 'sawtooth'; synth.engineOsc.frequency.value = 45;
   synth.engineLP = filt('lowpass', 380); chain(synth.engineOsc, synth.engineLP, synth.engine); synth.engineOsc.start();
+  // a laundromat: a wall of drums, each load thudding round as it tumbles, water sloshing, the motors' hum
+  synth.washers = layer(); const tumble = actx.createGain(); tumble.gain.value = 0.5; lfo(tumble.gain, 0.9, 0.4);
+  chain(noiseSrc(0.6), filt('lowpass', 180), tumble, synth.washers);
+  const slosh = actx.createGain(); slosh.gain.value = 0.3; lfo(slosh.gain, 0.37, 0.25); chain(noiseSrc(), filt('bandpass', 650, 1.2), slosh, synth.washers);
+  const motor = actx.createOscillator(); motor.frequency.value = 50; const mg = actx.createGain(); mg.gain.value = 0.05; chain(motor, mg, synth.washers); motor.start();
   synth.fluorescent = layer(); loopClip('fluorescent-light-hum', synth.fluorescent);
   synth.watch = layer(); loopClip('pocket-watch-ticking', synth.watch);
 }
@@ -200,6 +206,13 @@ function worldSoundProfile(x,y,z,range=180,reference=14) {
   const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'?terrainHeight(x0,y0)+.17:eye;
   return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
+// a recording heard from somewhere in the world: later, quieter and duller with distance, panned to its side,
+// muffled indoors. Returns the profile so a caller can place its own layers alongside
+function worldClip(name,gain,x,y,z,range,reference) {
+  const profile=worldSoundProfile(x,y,z,range,reference);
+  if(profile.gain>.001)playClip(name,gain*profile.gain,actx.currentTime+profile.delay,profile);
+  return profile;
+}
 let peeLoopVoice = null;
 function setPeeAudio(on) {
   if (!actx) return;
@@ -220,6 +233,11 @@ function setPeeAudio(on) {
     gain.gain.setTargetAtTime(0.24, actx.currentTime, 0.08);
     peeLoopVoice = { source, gain };
   });
+}
+function sfxWasherDone() { // the drum's last heavy turn, then the door lock clicking free
+  const at = actx.currentTime;
+  tone(at, 70, 0.35, 0.16); burst(at, 0.2, [filt('lowpass', 300)], 0.12);
+  tone(at + 0.9, 2200, 0.03, 0.05, 'square'); burst(at + 0.9, 0.04, [filt('bandpass', 2500, 2)], 0.08);
 }
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
 function sfxKnock() {
@@ -338,11 +356,15 @@ function audioTick(dt) {
   let waterfall=0;
   if(mode==='room'&&room.kind==='conservatory')waterfall=clamp(1-Math.hypot(px-CONS_POOL.x,py-.8)/6.5,0,1);
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
-  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record:homeRecordAudio(), district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
+  const record = homeRecordAudio(), serenade = courierSerenade();
+  const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
     wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
     seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
-    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
-  for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
+    fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade });
+  // music from a place, not your own boombox: the record player across the room, Nico up on the bar roof
+  const musicPan = fx.boombox ? {} : record ? { [record.song]: record.pan } :
+    serenade ? { bossa: soundDistanceProfile(rel(COURIER_NICO.x - px), rel(COURIER_NICO.y - py), 0, a).pan } : {};
+  for (const k in beds) { tickBed(beds[k], mix[k] * LEVEL[k], dt); beds[k].pan.pan.setTargetAtTime(musicPan[k] || 0, now, 0.1); }
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
   if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);

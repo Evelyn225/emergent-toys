@@ -65,28 +65,9 @@ const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && 
 // from wherever you see it (through the doorway too), and the face on the other side of the same wall isn't
 const wcFaceInside = (mx, my, side, w = room.def.wc) => !!w && (side ? inWc(mx + 0.5, my + (py < my ? -0.5 : 1.5), w) : inWc(mx + (px < mx ? -0.5 : 1.5), my + 0.5, w));
 // a washbasin on its pedestal, its back to the wall behind (-fx, -fy), a mirror over it
-const washbasin = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
-  drum(vx, vy, 0.06, 0, 0.72, (i, t, L) => { BG[i] = C(WHITE, (3 + L * 0.3) * drumLit(0.06)); return set(i, ' ', 0), true; });
-  drum(vx, vy, 0.22, 0.72, 0.86, (i, t, L) => { if (HIT.face === 5) { const r = Math.hypot(HIT.u, HIT.v); BG[i] = C(r < 0.15 ? CYAN : WHITE, r < 0.15 ? 2 : 4); return set(i, r < 0.03 ? 'o' : ' ', C(GRAY, 4)), true; }
-    BG[i] = C(WHITE, (3.4 + L * 0.3) * drumLit(0.22)); return set(i, ' ', 0), true; });
-  rod(vx - fx * 0.2, vy - fy * 0.2, 0.86, vx - fx * 0.12, vy - fy * 0.12, 0.98, 0.012, GRAY, 1.3); // the tap
-  drawBox(boxAt(vx - fx * 0.27, vy - fy * 0.27, fx, fy, 0.01, 0.25, 1.15, 1.75), (i, t, L) => { BG[i] = C(CYAN, 1.6 + (HIT.w - 1.15) * 2); return set(i, fract((HIT.v + HIT.w) * 3) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; }); // the mirror
-}, [0.24, 0.24, 0.86]);
-// An oval enamel bath: curved shell, open rim, recessed basin and a wall-end tap.
-const BATHTUB = (x,y) => ({...ROOM_MODEL(x,y,(vx,vy)=>{
-  const enamel=solid(WHITE,{bright:2.1}), n=32;
-  for(let k=0;k<n;k++) {
-    const t=(k+.5)*Math.PI*2/n, tx=-.37*Math.sin(t),ty=.99*Math.cos(t),len=Math.hypot(tx,ty);
-    drawBox(boxAt(vx+.37*Math.cos(t),vy+.99*Math.sin(t),tx/len,ty/len,len*Math.PI/n+.006,.048,.1,.62),enamel);
-  }
-  // The bottom sits below the rim; from above you can see into the bowl.
-  const basin=(i,t,L)=>{BG[i]=C(CYAN,1.4+L*.15);return set(i,HIT.face===5&&Math.hypot(HIT.u,HIT.v)<.04?'o':' ',C(GRAY,L)),true;};
-  drawBox(boxAt(vx,vy,0,1,.67,.31,.08,.18),basin);
-  for(const end of [-1,1])drum(vx,vy+end*.67,.31,.08,.18,basin);
-  rod(vx,vy-.99,.62,vx,vy-.99,.84,.018,GRAY,1.5);
-  rod(vx,vy-.99,.84,vx,vy-.81,.84,.018,GRAY,1.5);
-  for(const side of [-1,1])drum(vx+side*.13,vy-.95,.035,.63,.67,CHROME);
-},[.42,1.04,.62]),bath:true});
+const washbasin = (x,y,fx,fy) => BATHROOM_SINK(x,y,fx,fy);
+// A hollow oval enamel bath, with supported shell and a fitted tap.
+const BATHTUB = (x,y) => BATHROOM_TUB(x,y);
 // a bathroom wall from inside: white tiles to shoulder height (thin grout lines), a trim, painted plaster above
 function wcWall(i, u, z, L) {
   if (z > 1.3) { BG[i] = C(WHITE, 1.7 + L * 0.1); return set(i, ' ', 0); }
@@ -116,7 +97,7 @@ const barCrowd = () => { const h = mod(tod - 16, 24); return h < 12 ? 0.15 + 0.8
 // ---- furniture as real boxes (see drawBox), in metres. BX(x, y, half length, half width, z0, z1, shade, cos, sin):
 // the long side runs along (cos, sin). Benches are their own kind ({ bench }), drawn by drawBench.
 const BX = (x, y, hl, hw, z0, z1, shade, ca = 1, sa = 0) => ({ box: { x, y, c: ca, s: sa, hl, hw, z0, z1 }, shade });
-const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
+const BENCHP = (x,y,fx,fy) => ({...FURNITURE_BENCH(x,y,.75,fx,fy,BRICK,true),bench:true,fx,fy,h:.45});
 // somewhere you can sit (C), on whatever's drawn there: facing (fx, fy) (none: whichever way you were), the seat h high
 const SEAT = (x, y, fx, fy, h = 0.45) => ({ seat: true, x, y, fx, fy, h });
 // a sofa facing (fx, fy), hl long either side of (x, y): the cushions, the back, an arm at each end, three places on it
@@ -126,8 +107,7 @@ const couch = (x, y, hl, fx, fy, col = BRICK) => {
   ...[-.55,0,.55].map(k=>{const [sx,sy]=at(k*hl,.06);return SEAT(sx,sy,fx,fy,.48);})];
 };
 // a round pouffe, h high, to perch on facing (fx, fy)
-const POUF = (x, y, col, fx, fy, h = 0.4) => ({ ...ROOM_MODEL(x, y, (vx, vy) => drum(vx, vy, 0.24, 0, h, (i, t, L) => {
-  BG[i] = C(col, (HIT.face === 5 ? 2.2 : 1.6) + L * 0.3 * drumLit(0.24)); return set(i, HIT.face === 5 ? (Math.hypot(HIT.u, HIT.v) < 0.04 ? 'o' : ' ') : fract(HIT.w * 6) < 0.2 ? '-' : ' ', C(col, L * 0.6)), true; }), [0.24, 0.24, h]), seat: true, fx, fy, h });
+const POUF = (x,y,col,fx,fy,h=.4) => FURNITURE_POUF(x,y,col,fx,fy,h);
 // people in some of the seats among props p, facing the way each seat does: each one taken with chance odds
 const fillSeats = (p, odds) => { for (const s of p.slice()) if (s.seat && s.fx != null && chance(odds)) p.push({ ...sitting(s.x, s.y, shirt(), s.h ?? 0.45), face: [s.fx, s.fy] }); return p; };
 // ---- room furniture in 3D (metres). Each is a prop { x, y, draw(vx, vy) } drawn from where you are.
@@ -148,13 +128,7 @@ const POT_PLANT = (x, y, h = 1.3, seed = x * 7 + y, solid = true) => ROOM_MODEL(
   }
 }, solid && [0.19, 0.19, h], (i, t, L) => { BG[i] = HIT.w < 0.3 ? C(ORANGE, 2 + L * 0.3) : C(GREEN, 1.5 + L * 0.3); return set(i, HIT.w < 0.3 ? ' ' : '&', C(GREEN, L * 0.6)), true; });
 // a bar stool: a padded seat on a chrome post, a ring for your feet, a round base. seatZ: the top of the cushion
-const STOOL = (x, y, col = RED, seatZ = 0.62) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
-  drum(vx, vy, 0.2, 0, 0.03, CHROME);
-  rod(vx, vy, 0.03, vx, vy, seatZ - 0.07, 0.022, GRAY, 1.2);
-  for (let k = 0; k < 10; k++) { const a0 = k / 10 * Math.PI * 2, a1 = (k + 1) / 10 * Math.PI * 2; rod(vx + Math.cos(a0) * 0.15, vy + Math.sin(a0) * 0.15, 0.26, vx + Math.cos(a1) * 0.15, vy + Math.sin(a1) * 0.15, 0.26, 0.01, GRAY, 1.2); }
-  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; rod(vx, vy, 0.3, vx + Math.cos(a) * 0.15, vy + Math.sin(a) * 0.15, 0.26, 0.008, GRAY, 1.2); } // the struts holding the ring
-  drum(vx, vy, 0.19, seatZ - 0.08, seatZ, (i, t, L) => { BG[i] = C(col, (HIT.face === 5 ? 2.4 : 1.8) + L * 0.3 * drumLit(0.19)); return set(i, HIT.face === 5 ? ' ' : '=', C(col, L * 0.6)), true; });
-}, [0.2, 0.2, seatZ]), seat: true, h: seatZ });
+const STOOL = (x,y,col=RED,seatZ=.62) => FURNITURE_STOOL(x,y,col,seatZ);
 // the jukebox, facing (fx, fy): a rounded top in slices, neon tubes up its front cycling colour, the record turning in
 // its lit window, a speaker grille below, wood sides with a chrome edge
 const JUKEBOX = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
@@ -312,8 +286,7 @@ const solid = (base, { panel = 0, top = ' ', trim = 0, bright = 1 } = {}) => (i,
   const along = f <= 2 ? HIT.v : HIT.u;
   return set(i, panel && Math.abs(fract(along / panel) - 0.5) < 0.06 ? '|' : ' ', C(base, L * 0.6)), true;
 };
-const counterBox = (x, y, half, z1 = 1.05) => [BX(x, y, half, 0.3, 0, z1, solid(BRICK, { panel: 0.6, trim: z1 - 0.06, top: '=' })),
-  BX(x - half * 0.6, y, 0.18, 0.15, z1, z1 + 0.25, (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return set(i, HIT.face === 1 || HIT.face === 4 ? '$' : '#', C(GREEN, L)), true; })]; // and the till
+const counterBox = (x,y,half,z1=1.05) => [FURNITURE_COUNTER(x,y,half,z1),FURNITURE_REGISTER(x-half*.6,y,z1)];
 // a wire laundry cart on castors, heaped with somebody's washing (each garment its own colour, and it stays that colour:
 // the old sprite picked a new one every frame, so the heap strobed)
 const laundryCart = (x, y) => {
@@ -853,7 +826,7 @@ function homePlan(w, h, tier) {
   };
   const home = tier === 0
     ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.18, 4.4], fridge: [8.45, 5.6], pet: [1.4, 7.2], dining: [5.5, 5.8] }
-    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.5 : 8.7], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
+    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.6 : 8.7], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
   const wc = tier === 0 ? { x0: 7, y0: 1, x1: 9, y1: 4, sign: [6, 3, 3.5] }
     : { x0: 15, y0: 1, x1: inside, y1: 5, sign: [14, 4, 4.5] };
   wall(wc.x0 - 1, 1, wc.x0 - 1, wc.y1, 'W');
@@ -918,13 +891,12 @@ function homeDef(w, h, tier) {
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
-      BX(bed[0], bed[1] + 0.2, tier ? 1.25 : 1, 0.85, 0, 0.55, (i, t, L) => { const f = HIT.face, blanket = HIT.v > -0.2; BG[i] = C(blanket ? tier === 2 ? GREEN : BLUE : WHITE, (blanket ? 2 : 3) + L * 0.25 * shadeFace(f)); return set(i, f === 5 && !blanket ? '~' : ' ', C(GRAY, L * 0.6)), true; }),
-      BX(bed[0] - (tier ? 1.3 : 1.05), bed[1] + 0.2, 0.08, 0.9, 0.1, 1.0, solid(BRICK, { panel: 0.3 })),
-      BX(closet[0], closet[1] - 0.6, 0.8, 0.3, 0, 2.1, solid(BRICK, { panel: 0.5 })),
-      BX(1.45, h - 2.6, .4, .5, 0, 1.1, solid(BRICK, { panel: .3, top: '=' })), // workshop supply cupboard
+      ...FURNITURE_BED(bed[0],bed[1]+.2,.85,tier?1.25:1,tier===2?GREEN:BLUE,-Math.PI/2),
+      FURNITURE_STORAGE(closet[0],closet[1]-.6,.8,.3,2.1),
+      FURNITURE_STORAGE(1.45,h-2.6,.5,.4,1.1,-Math.PI/2),
       TELEVISION(tv[0],tv[1]-.3,r),
-      BX(tv[0], tv[1] - 0.3, 0.8, 0.25, 0, 0.6, solid(BRICK, { top: '=' })), // the stand
-      BX(shelf[0], shelf[1], 0.75, 0.18, 0, 1.05, solid(BRICK, { panel: 0.55, top: '=' }), 0, 1), // a shelf for things you bring home
+      FURNITURE_STORAGE(tv[0],tv[1]-.3,.8,.25,.61),
+      FURNITURE_STORAGE(shelf[0],shelf[1],.75,.18,1.05,-Math.PI/2,true),
       BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
       ...toilet(plan.wc.x1 - (tier ? 1.4 : .8), 1.42, -1, porcelain),
       washbasin(plan.wc.x0 + 0.4, 1.35, 0, 1),
@@ -934,7 +906,7 @@ function homeDef(w, h, tier) {
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
       BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, stoveShade(tier, tier ? 0.55 : 0.5), 0, 1), // the kitchen counter, the hob and oven in it (cooking.js)
-      ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), BX(10.9, 1.4, 0.7, 0.18, 0, 2.4, solid(BRICK, { panel: 0.3, top: '=' })),
+      ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), FURNITURE_STORAGE(10.9,1.4,.7,.18,2.4,0,true),
         ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), POT_PLANT(1.6, 8.9, 1.5)] : []),
       ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),
         POT_PLANT(23.6, 14.8, 1.6), POT_PLANT(21, 9, 1.5)] : []),

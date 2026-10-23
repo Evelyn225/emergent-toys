@@ -133,7 +133,7 @@ function citySprites() {
   drawHomeBalconies();
   drawSkater(); // you, on the board, seen from behind (skate.js)
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
-  forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
+  forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx,vy,b.fx,b.fy,.01,terrainHeight(b.x,b.y)); });
   gardenSprites();
   clubSprites();
   drawPigeons();
@@ -1269,14 +1269,9 @@ function drawVending(m, vx, vy, sc = 1) { // sc: 10 indoors (metres, not cells)
   });
 }
 
-// a bench facing (fx, fy): seat, backrest, two legs; s scales it (0.01 outdoors in cells, 1 indoors in metres)
-function drawBench(vx, vy, fx, fy, s) {
-  const ax = -fy, ay = fx, wood = (i, t, L) => { BG[i] = C(BRICK, (1 + L * 0.35) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : '-', C(BRICK, L * 0.8)), true; };
-  drawBox(boxAt(vx, vy, ax, ay, 7.5 * s, 2 * s, 4 * s, 4.8 * s), wood); // seat
-  drawBox(boxAt(vx - fx * 1.9 * s, vy - fy * 1.9 * s, ax, ay, 7.5 * s, 0.4 * s, 4.8 * s, 8.5 * s), wood); // back
-  for (const e of [-6, 6]) drawBox(boxAt(vx + ax * e * s, vy + ay * e * s, ax, ay, 0.5 * s, 1.8 * s, 0, 4 * s), (i, t, L) => {
-    BG[i] = C(GRAY, 1); return set(i, '|', C(GRAY, L * 0.7)), true;
-  });
+// The shared slatted bench; s=.01 outdoors in cells and .1 indoors in metres.
+function drawBench(vx,vy,fx,fy,s,base=0) {
+  drawFurnitureBench(vx,vy,.75,fx,fy,BRICK,true,s/.1,base);
 }
 
 // a subway entrance in 3D: railings round a stairwell cut into the sidewalk (its treads are drawn by floorCell,

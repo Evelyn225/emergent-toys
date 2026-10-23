@@ -30,5 +30,8 @@ function useLaundry() { // true if E did something here
   return true;
 }
 function stepLaundry() {
-  if (wash && !wash.told && T >= wash.done) { wash.told = true; say(myLaundromat() ? 'Your machine clunks to a stop.' : 'Your laundry will be done by now.', 3); }
+  if (wash && !wash.told && T >= wash.done) {
+    wash.told = true; say(myLaundromat() ? 'Your machine clunks to a stop.' : 'Your laundry will be done by now.', 3);
+    if (myLaundromat() && actx) sfxWasherDone();
+  }
 }
