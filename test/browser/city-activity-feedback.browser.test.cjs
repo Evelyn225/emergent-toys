@@ -197,6 +197,28 @@ test('cooking: a burnt dish leaves the kitchen smoky and chirps the smoke alarm 
   assert.ok(r.grillHaze.length === 2 && r.grillHaze.every(k => k === 'steam') && r.grillAlarm === null, JSON.stringify(r));
 }));
 
+test('fishing: the bobber is heard out where it lands (later, quieter, to its side), and a bad cast ticks on the ice', () => fixture(async page => {
+  const r = await page.evaluate(async () => {
+    audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });
+    const heard = [], realClip = playClip, realSweep = fishSweep, realNoise = fishNoise;
+    playClip = (name, gain, when, spatial) => heard.push({ what: name, gain, delay: when - actx.currentTime, pan: spatial?.pan });
+    fishSweep = (at, f0, f1, len, gain, type, pan) => heard.push({ what: 'sweep', gain, pan });
+    fishNoise = (at, len, f0, f1, q, gain, attack, pan) => heard.push({ what: 'noise', gain, pan, delay: at - actx.currentTime });
+    try {
+      mode = 'walk'; room = null; px = 300; py = 300; a = 0; eye = terrainHeight(px, py) + .17;
+      fishing = { x: 300.2, y: 298.2, z: 0, st: 'wait' }; // (18 m out and off to the left)
+      fishSfx.push('plop'); stepFishingUI(); const plop = heard.splice(0);
+      fishSfx.push('skitter'); stepFishingUI(); const skitter = heard.splice(0);
+      fishSfx.push('whoosh'); stepFishingUI(); const whoosh = heard.splice(0);
+      return { plop, skitter, whoosh };
+    } finally { playClip = realClip; fishSweep = realSweep; fishNoise = realNoise; fishing = null; }
+  });
+  const drip = r.plop.find(h => h.what === 'water-drip');
+  assert.ok(drip && drip.gain < .6 && Math.abs(drip.delay - Math.hypot(.2, 1.8) / 34) < .01 && drip.pan < -.5, 'the plop comes from the bobber: ' + JSON.stringify(r.plop));
+  assert.ok(r.skitter.length >= 4 && r.skitter.every(h => h.pan < -.5), 'ticks across the ice, out there: ' + JSON.stringify(r.skitter));
+  assert.ok(r.whoosh.every(h => !h.pan && h.delay < .2), 'the cast itself is right here with you');
+}));
+
 test('crime: a shot parked car sets its alarm off where it stands, one voice, gone after a while or when you get in', () => fixture(async page => {
   const r = await page.evaluate(async () => {
     audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });

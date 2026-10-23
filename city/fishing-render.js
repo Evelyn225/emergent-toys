@@ -404,27 +404,31 @@ const heldIsRod = it => !!ITEMS[it.id].rod;
 // ---- sounds, a prompt, and the hut's counter
 // the sounds, made up as they go (there's no recording of a reel in the box): a pitch sweep, and noise through a
 // filter that sweeps
-function fishSweep(at, f0, f1, len, gain, type = 'sine') {
-  const o = actx.createOscillator(), g_ = actx.createGain();
-  o.type = type; o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f1, at + len);
+function fishSweep(at, f0, f1, len, gain, type = 'sine', pan = 0) {
+  const o = actx.createOscillator(), g_ = actx.createGain(), p = actx.createStereoPanner();
+  o.type = type; o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f1, at + len); p.pan.value = pan;
   g_.gain.setValueAtTime(0, at); g_.gain.linearRampToValueAtTime(gain, at + 0.005); g_.gain.exponentialRampToValueAtTime(0.0005, at + len);
-  shot(o, g_, sfxBus); o.start(at); o.stop(at + len + 0.05);
+  shot(o, g_, p, sfxBus); o.start(at); o.stop(at + len + 0.05);
 }
-function fishNoise(at, len, f0, f1, q, gain, attack = 0.3) {
-  const s = actx.createBufferSource(), fl = actx.createBiquadFilter(), g_ = actx.createGain();
-  s.buffer = noiseBuf; fl.type = 'bandpass'; fl.Q.value = q; fl.frequency.setValueAtTime(f0, at); fl.frequency.exponentialRampToValueAtTime(f1, at + len);
+function fishNoise(at, len, f0, f1, q, gain, attack = 0.3, pan = 0) {
+  const s = actx.createBufferSource(), fl = actx.createBiquadFilter(), g_ = actx.createGain(), p = actx.createStereoPanner();
+  s.buffer = noiseBuf; fl.type = 'bandpass'; fl.Q.value = q; fl.frequency.setValueAtTime(f0, at); fl.frequency.exponentialRampToValueAtTime(f1, at + len); p.pan.value = pan;
   g_.gain.setValueAtTime(0, at); g_.gain.linearRampToValueAtTime(gain, at + len * attack); g_.gain.exponentialRampToValueAtTime(0.0005, at + len);
-  shot(s, fl, g_, sfxBus); s.start(at, Math.random() * 1.5, len + 0.05);
+  shot(s, fl, g_, p, sfxBus); s.start(at, Math.random() * 1.5, len + 0.05);
 }
 const reelTick = at => fishNoise(at, 0.018, 3200, 2800, 6, 0.09, 0.1); // one click of the ratchet
 function stepFishingUI() {
   while (fishSfx.length) {
     const s = fishSfx.shift();
     if (!actx) continue;
-    const at = actx.currentTime;
+    // what happens out at the bobber is heard from there: a little later, quieter and off to its side
+    const out = fishing && ['plop', 'splash', 'skitter', 'ground'].includes(s) ? worldSoundProfile(fishing.x, fishing.y, fishing.z ?? 0, 40, 2) : null;
+    const at = actx.currentTime + (out ? out.delay : 0), k = out ? out.gain : 1, pan = out ? out.pan : 0;
     if (s === 'whoosh') { fishNoise(at, 0.32, 500, 2800, 1.4, 0.2); fishNoise(at + 0.12, 0.5, 4000, 6000, 3, 0.03, 0.1); } // the swish, and the line singing off the spool
-    if (s === 'plop') { playClip('water-drip', 0.6); fishSweep(at, 170, 560, 0.08, 0.14); }
-    if (s === 'splash') { fishNoise(at, 0.55, 2400, 350, 0.7, 0.32, 0.05); fishSweep(at, 320, 80, 0.22, 0.16); fishSweep(at + 0.02, 800, 1700, 0.3, 0.03, 'triangle'); playClip('water-drip', 0.5, at + 0.12); } // the plunge, and the line twanging
+    if (s === 'plop') { playClip('water-drip', 0.6 * k, at, out); fishSweep(at, 170, 560, 0.08, 0.14 * k, 'sine', pan); }
+    if (s === 'skitter') for (let n = 0; n < 5; n++) fishNoise(at + n * 0.07, 0.04, 3600, 3000, 4, 0.06 * k * (1 - n * 0.15), 0.1, pan); // ticking away over the ice
+    if (s === 'ground') { fishSweep(at, 140, 70, 0.06, 0.1 * k, 'sine', pan); fishNoise(at, 0.08, 900, 500, 1, 0.08 * k, 0.1, pan); } // a dull tap in the dirt
+    if (s === 'splash') { fishNoise(at, 0.55, 2400, 350, 0.7, 0.32 * k, 0.05, pan); fishSweep(at, 320, 80, 0.22, 0.16 * k, 'sine', pan); fishSweep(at + 0.02, 800, 1700, 0.3, 0.03, 'triangle'); playClip('water-drip', 0.5 * k, at + 0.12, out); } // the plunge, and the line twanging
     if (s === 'reel') for (let k = 0; k < 7; k++) reelTick(at + k * 0.04);
     if (s === 'land') { fishSweep(at, 170, 55, 0.14, 0.22); fishNoise(at, 0.18, 900, 500, 1, 0.15, 0.05); for (let k = 1; k < 4; k++) fishNoise(at + k * 0.11, 0.06, 1100, 700, 1.2, 0.08, 0.1); } // a wet slap, then flapping
   }
