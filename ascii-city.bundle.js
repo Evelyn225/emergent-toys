@@ -15631,8 +15631,7 @@ const couch = (x, y, hl, fx, fy, col = BRICK) => {
   ...[-.55,0,.55].map(k=>{const [sx,sy]=at(k*hl,.06);return SEAT(sx,sy,fx,fy,.48);})];
 };
 // a round pouffe, h high, to perch on facing (fx, fy)
-const POUF = (x, y, col, fx, fy, h = 0.4) => ({ ...ROOM_MODEL(x, y, (vx, vy) => drum(vx, vy, 0.24, 0, h, (i, t, L) => {
-  BG[i] = C(col, (HIT.face === 5 ? 2.2 : 1.6) + L * 0.3 * drumLit(0.24)); return set(i, HIT.face === 5 ? (Math.hypot(HIT.u, HIT.v) < 0.04 ? 'o' : ' ') : fract(HIT.w * 6) < 0.2 ? '-' : ' ', C(col, L * 0.6)), true; }), [0.24, 0.24, h]), seat: true, fx, fy, h });
+const POUF = (x,y,col,fx,fy,h=.4) => FURNITURE_POUF(x,y,col,fx,fy,h);
 // people in some of the seats among props p, facing the way each seat does: each one taken with chance odds
 const fillSeats = (p, odds) => { for (const s of p.slice()) if (s.seat && s.fx != null && chance(odds)) p.push({ ...sitting(s.x, s.y, shirt(), s.h ?? 0.45), face: [s.fx, s.fy] }); return p; };
 // ---- room furniture in 3D (metres). Each is a prop { x, y, draw(vx, vy) } drawn from where you are.
@@ -18824,26 +18823,26 @@ const backWc = (w, h) => boxRoom(w, h, { [`${w - 4},1`]: 'W', [`${w - 4},2`]: 'W
 const wcAt = w => ({ x0: w - 3, y0: 1, x1: w - 1, y1: 3, sign: [w - 3, 3, w - 2.5] });
 const wcFittings = w => [...toilet(w - 2.4, 1.4, -1, porcelain), washbasin(w - 1.45, 1.3, 0, 1)];
 // a table top on a pedestal, hl x hw, h high; shade paints the top (and the edge)
-const eatTable = (x, y, hl, hw, shade, h = 0.76) => [BX(x, y, hl, hw, h - 0.05, h, shade), BX(x, y, 0.05, 0.05, 0, h - 0.05, solid(GRAY)), BX(x, y, 0.22, 0.22, 0, 0.03, solid(GRAY))];
+const eatTable = (x,y,hl,hw,shade,h=.76) => [FURNITURE_EAT_TABLE(x,y,hl,hw,shade,h)];
 // a table for two (along x: chairs at either end) or four (and either side), the chairs facing it, maybe people in them
 function dining(x, y, { n = 2, hl = 0.4, hw = 0.4, top, chairCol = BRICK, busy = 0.4, h = 0.76, chair = homeChair } = {}) {
   const p = eatTable(x, y, hl, hw, top || solid(BRICK, { top: '=' }), h);
   const spots = [[x - hl - 0.42, y, 1, 0], [x + hl + 0.42, y, -1, 0], ...(n > 2 ? [[x, y - hw - 0.42, 0, 1], [x, y + hw + 0.42, 0, -1]] : [])];
   for (const [cx, cy, fx, fy] of spots) {
-    p.push(...chair(cx, cy, fx, fy, chairCol));
-    if (chance(busy)) p.push({ ...sitting(cx, cy, shirt(), 0.48), face: [fx, fy] });
+    const parts=chair(cx,cy,fx,fy,chairCol),height=parts.find(p=>p.seat)?.h??.48;
+    p.push(...parts);
+    if (chance(busy)) p.push({ ...sitting(cx, cy, shirt(), height), face: [fx, fy] });
   }
   return p;
 }
 // a booth along x: a table between two benches with tall backs, facing each other across it (fy of the +y bench: -1)
 function booth(x, y, hl, col, { top, busy = 0.45, depth = 0.55 } = {}) {
-  const vinyl = solid(col, { top: '=', bright: 1.5 }), p = eatTable(x, y, hl, 0.38, top || solid(GRAY, { top: '=' }));
+  const p = eatTable(x, y, hl, 0.38, top || solid(GRAY, { top: '=' }));
   for (const e of [-1, 1]) {
     const by = y + e * (0.38 + depth / 2 + 0.05);
-    p.push(BX(x, by, hl, depth / 2, 0, 0.46, vinyl), BX(x, by + e * (depth / 2 - 0.06), hl, 0.07, 0.46, 1.25, (i, t, L) => { // the back, buttoned
-      BG[i] = C(col, (1.5 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : fract(HIT.u * 4) < 0.1 ? '|' : ' ', C(WHITE, L * 0.5)), true; }));
+    p.push(...FURNITURE_BOOTH_SEAT(x,by,hl,depth,-e,col));
     for (const sx of [x - hl * 0.45, x + hl * 0.45]) { // (the one by the wall still in reach: you slide in)
-      p.push(SEAT(sx, by, 0, -e));
+      p.push(SEAT(sx, by, 0, -e,.46));
       if (chance(busy)) p.push({ ...sitting(sx, by, shirt(), 0.46), face: [0, -e] });
     }
   }
@@ -18871,9 +18870,7 @@ function plainBench(x, y, hl, fx, fy, col = BRICK, busy = 0.35) {
   return p;
 }
 // a moulded plastic chair on steel legs, facing (fx, fy)
-const shellChair = (x, y, fx, fy, col) => [{ ...BX(x, y, 0.22, 0.22, 0.42, 0.47, solid(col, { bright: 1.5 })), seat: true, x, y, fx, fy, h: 0.47 },
-  BX(x - fx * 0.21, y - fy * 0.21, 0.22, 0.03, 0.47, 0.86, solid(col, { bright: 1.5 }), fy, -fx),
-  ...[-1, 1].flatMap(sx => [-1, 1].map(sy => BX(x + sx * 0.17, y + sy * 0.17, 0.015, 0.015, 0, 0.42, solid(GRAY))))];
+const shellChair = (x,y,fx,fy,col) => FURNITURE_SHELL_CHAIR(x,y,fx,fy,col);
 // a crate (beer, fruit), h high; slatted
 const crateShade = col => (i, t, L) => { BG[i] = C(col, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (fract(HIT.u * 5) < 0.2 ? '=' : ' ') : fract(HIT.w * 6) < 0.25 ? '=' : ' ', C(GRAY, L * 0.6)), true; };
 // the menu, from what they sell: 'NAME PRICE' a line (worked out once a visit)
@@ -20821,15 +20818,12 @@ Object.assign(ROOM_FOR, { CHICKEN: 'chickenshop', KEBAB: 'kebabshop', BENTO: 'be
 
 // a round table on its pedestal, n chairs round it facing in, people in some; a lazy susan in the middle if asked
 function roundTable(x, y, r, n, { cloth = WHITE, chairCol = RED, busy = 0.4, chair = homeChair, susan = false, h = 0.76, a0 = 0 } = {}) {
-  const p = [ROOM_MODEL(x, y, (vx, vy) => {
-    drum(vx, vy, r, h - 0.05, h, (i, t, L) => { BG[i] = C(cloth, (HIT.face === 5 ? 4 : 3) + L * 0.3); return set(i, HIT.face === 5 ? ' ' : '|', C(GRAY, L * 0.4)), true; });
-    drum(vx, vy, 0.06, 0, h - 0.05, solid(GRAY));
-    if (susan) drum(vx, vy, r * 0.45, h, h + 0.04, (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.2); return set(i, HIT.face === 5 && fract(Math.atan2(HIT.v, HIT.u) * 1.3) < 0.3 ? 'o' : '-', C(WHITE, 9)), true; }); // the dishes going round
-  }, [r * 0.8, r * 0.8, h])];
+  const p = [FURNITURE_ROUND_TABLE(x,y,r,h,cloth,susan)];
   for (let k = 0; k < n; k++) {
     const a = a0 + k / n * Math.PI * 2, cx = x + Math.cos(a) * (r + 0.38), cy = y + Math.sin(a) * (r + 0.38), fx = -Math.cos(a), fy = -Math.sin(a);
-    p.push(...chair(cx, cy, fx, fy, chairCol));
-    if (chance(busy)) p.push({ ...sitting(cx, cy, shirt(), 0.46), face: [fx, fy] });
+    const parts=chair(cx,cy,fx,fy,chairCol),height=parts.find(p=>p.seat)?.h??.46;
+    p.push(...parts);
+    if (chance(busy)) p.push({ ...sitting(cx, cy, shirt(), height), face: [fx, fy] });
   }
   return p;
 }
@@ -34836,6 +34830,68 @@ function FURNITURE_REGISTER(x,y,height) {
     });
     for(let row=0;row<3;row++)for(let k=0;k<4;k++)coveRound(vx-(k-1.5)*.055,vy-.048-row*.033,1,0,.021,.012,height+.045,height+.055,.004,k===3?GREEN:STONE);
   }),box:boxAt(x,y,1,0,.18,.15,height,height+.25)};
+}
+
+function drawFurniturePedestal(vx,vy,height,radius=.22) {
+  coveLathe(vx,vy,0,[[0,0],[0,radius-.018],[.012,radius],[.035,radius],[.055,.07],[height-.09,.045],[height-.05,.12],[height-.045,0]],
+    (i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
+}
+function FURNITURE_EAT_TABLE(x,y,hl,hw,shade,height=.76) {
+  return furnitureModel(x,y,1,0,hl,hw,height,(vx,vy)=>{
+    drawFurniturePedestal(vx,vy,height,Math.min(.22,hl*.65,hw*.65));
+    coveRound(vx,vy,1,0,hl,hw,height-.05,height,.018,shade);
+  });
+}
+function FURNITURE_ROUND_TABLE(x,y,r,height,col,susan=false) {
+  return furnitureModel(x,y,1,0,r*.8,r*.8,height,(vx,vy)=>{
+    drawFurniturePedestal(vx,vy,height,Math.min(.24,r*.55));
+    coveLathe(vx,vy,height-.05,[[0,0],[0,r-.02],[.012,r],[.035,r],[.05,r-.018],[.05,0]],furnitureCloth(col));
+    if(susan) {
+      const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+      coveLathe(vx,vy,height,[[0,0],[0,r*.18],[.012,r*.18],[.012,r*.43],[.025,r*.45],[.035,r*.43],[.035,0]],metal);
+      for(let k=0;k<3;k++) {
+        const a=k*Math.PI*2/3+T*.08,rr=r*.14;
+        coveLathe(vx+Math.cos(a)*r*.24,vy+Math.sin(a)*r*.24,height+.035,
+          [[0,0],[0,rr*.45],[.008,rr*.9],[.015,rr],[.02,rr*.9],[.012,rr*.3],[.012,0]],
+          (i,t,L)=>{BG[i]=C(WHITE,4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
+      }
+    }
+  });
+}
+function FURNITURE_BOOTH_SEAT(x,y,hl,depth,fy,col) {
+  const cloth=furnitureCloth(col),count=Math.max(2,Math.ceil(hl/.65)),width=hl/count;
+  const seat=furnitureModel(x,y,1,0,hl,depth/2,.46,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl-.04,depth/2-.03,0,.15,.025,'wood');
+    coveRound(vx,vy,1,0,hl,depth/2,.13,.32,.03,'wood');
+    for(let k=0;k<count;k++)coveRound(vx-hl+width*(2*k+1),vy,1,0,width-.006,depth/2,.31,.46,.06,cloth);
+  });
+  const by=y-fy*(depth/2-.06),back={...furnitureModel(x,by,1,0,hl,.07,1.25,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,.07,.33,1.25,.045,'wood');
+    for(let k=0;k<count;k++)coveRound(vx-hl+width*(2*k+1),vy+fy*.018,1,0,width-.007,.052,.46,1.23,.045,cloth);
+  }),box:boxAt(x,by,1,0,hl,.07,.33,1.25)};
+  return [seat,back];
+}
+function FURNITURE_SHELL_CHAIR(x,y,fx,fy,col) {
+  const c=-fy,s=fx,plastic=(i,t,L)=>{BG[i]=C(col,3+L*.31*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const seat={...furnitureModel(x,y,1,0,.22,.22,.47,(vx,vy)=>{
+    for(const u of [-.17,.17])for(const v of [-.17,.17])coveRound(vx+u,vy+v,1,0,.015,.015,0,.425,.006,GRAY);
+    coveRound(vx,vy,1,0,.22,.22,.415,.47,.025,plastic);
+  }),seat:true,fx,fy,h:.47};
+  const bx=x-fx*.1825,by=y-fy*.1825,back={...furnitureModel(bx,by,c,s,.22,.0575,.86,(vx,vy)=>{
+    // One shallow curve, swept across the back. Adjacent ribs overlap at their
+    // ends; the shell stays within the existing rear edge of the chair.
+    for(let k=0;k<6;k++) {
+      const u0=-.21+k*.07,u1=u0+.07,v0=-.0275+.055*(u0/.22)**2,v1=-.0275+.055*(u1/.22)**2;
+      const du=u1-u0,dv=v1-v0,len=Math.hypot(du,dv),u=(u0+u1)/2,v=(v0+v1)/2;
+      coveRound(vx+c*u+fx*v,vy+s*u+fy*v,(c*du+fx*dv)/len,(s*du+fy*dv)/len,len/2+.004,.022,.45,.86,.018,plastic);
+    }
+  }),box:boxAt(bx,by,c,s,.22,.0575,.45,.86)};
+  return [seat,back];
+}
+function FURNITURE_POUF(x,y,col,fx,fy,height=.4) {
+  return {...furnitureModel(x,y,1,0,.24,.24,height,(vx,vy)=>{
+    coveLathe(vx,vy,0,[[0,0],[0,.2],[.035,.22],[height*.35,.24],[height-.055,.235],[height-.02,.22],[height,.18],[height,0]],furnitureCloth(col));
+  }),seat:true,fx,fy,h:height};
 }
 // Shared close-up home models. Surfaces have real edges and joined supports;
 // screens and bulbs are the only emissive parts of their housings.

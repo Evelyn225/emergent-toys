@@ -5,15 +5,12 @@
 
 // a round table on its pedestal, n chairs round it facing in, people in some; a lazy susan in the middle if asked
 function roundTable(x, y, r, n, { cloth = WHITE, chairCol = RED, busy = 0.4, chair = homeChair, susan = false, h = 0.76, a0 = 0 } = {}) {
-  const p = [ROOM_MODEL(x, y, (vx, vy) => {
-    drum(vx, vy, r, h - 0.05, h, (i, t, L) => { BG[i] = C(cloth, (HIT.face === 5 ? 4 : 3) + L * 0.3); return set(i, HIT.face === 5 ? ' ' : '|', C(GRAY, L * 0.4)), true; });
-    drum(vx, vy, 0.06, 0, h - 0.05, solid(GRAY));
-    if (susan) drum(vx, vy, r * 0.45, h, h + 0.04, (i, t, L) => { BG[i] = C(GRAY, 3 + L * 0.2); return set(i, HIT.face === 5 && fract(Math.atan2(HIT.v, HIT.u) * 1.3) < 0.3 ? 'o' : '-', C(WHITE, 9)), true; }); // the dishes going round
-  }, [r * 0.8, r * 0.8, h])];
+  const p = [FURNITURE_ROUND_TABLE(x,y,r,h,cloth,susan)];
   for (let k = 0; k < n; k++) {
     const a = a0 + k / n * Math.PI * 2, cx = x + Math.cos(a) * (r + 0.38), cy = y + Math.sin(a) * (r + 0.38), fx = -Math.cos(a), fy = -Math.sin(a);
-    p.push(...chair(cx, cy, fx, fy, chairCol));
-    if (chance(busy)) p.push({ ...sitting(cx, cy, shirt(), 0.46), face: [fx, fy] });
+    const parts=chair(cx,cy,fx,fy,chairCol),height=parts.find(p=>p.seat)?.h??.46;
+    p.push(...parts);
+    if (chance(busy)) p.push({ ...sitting(cx, cy, shirt(), height), face: [fx, fy] });
   }
   return p;
 }

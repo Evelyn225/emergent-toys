@@ -74,3 +74,29 @@ test('a street bench supports the sitter at its actual seat height, and C restor
   assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
+
+test('a booth cushion supports C seating at the same height and leaves a clear side approach',async()=>{
+ const browser=await chromium.launch();
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{requestAnimationFrame=()=>0;HTMLCanvasElement.prototype.requestPointerLock=()=>Promise.resolve();});
+  await page.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);
+  const result=await page.evaluate(()=>{
+   paused=false;mode='walk';room=me=null;body.z=body.vz=0;
+   ROOM_DEFS.boothProbe={grid:boxRoom(12,12),height:3,light:1,props:()=>booth(4,5,1.1,RED,{busy:0})};
+   enterRoom('boothProbe',{ret:[100,100,0]},[5.4,5.705,Math.PI]);env(0);render(0);
+   const target=nearSeat(),draw=drawBox,heights=[];
+   drawBox=(box,shade,ray=rayBox)=>{
+    const t=ray(target.x-px,target.y-py,1.6,0,0,-1,box);if(t>0)heights.push(1.6-t);
+    return draw(box,shade,ray);
+   };
+   try{render(0);}finally{drawBox=draw;}
+   return {surface:Math.max(...heights),open:free(px,py),from:[px,py]};
+  });
+  assert.equal(result.open,true);
+  await page.keyboard.press('c');
+  const seated=await page.evaluate(()=>({h:body.seat?.h,at:!!body.seat}));
+  assert.equal(seated.at,true);assert.ok(Math.abs(seated.h-result.surface)<1e-6,JSON.stringify({result,seated}));
+  await page.keyboard.press('c');assert.deepEqual(await page.evaluate(()=>[px,py]),result.from);
+ }finally{await browser.close();}
+});

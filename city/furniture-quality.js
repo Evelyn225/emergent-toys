@@ -186,3 +186,65 @@ function FURNITURE_REGISTER(x,y,height) {
     for(let row=0;row<3;row++)for(let k=0;k<4;k++)coveRound(vx-(k-1.5)*.055,vy-.048-row*.033,1,0,.021,.012,height+.045,height+.055,.004,k===3?GREEN:STONE);
   }),box:boxAt(x,y,1,0,.18,.15,height,height+.25)};
 }
+
+function drawFurniturePedestal(vx,vy,height,radius=.22) {
+  coveLathe(vx,vy,0,[[0,0],[0,radius-.018],[.012,radius],[.035,radius],[.055,.07],[height-.09,.045],[height-.05,.12],[height-.045,0]],
+    (i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
+}
+function FURNITURE_EAT_TABLE(x,y,hl,hw,shade,height=.76) {
+  return furnitureModel(x,y,1,0,hl,hw,height,(vx,vy)=>{
+    drawFurniturePedestal(vx,vy,height,Math.min(.22,hl*.65,hw*.65));
+    coveRound(vx,vy,1,0,hl,hw,height-.05,height,.018,shade);
+  });
+}
+function FURNITURE_ROUND_TABLE(x,y,r,height,col,susan=false) {
+  return furnitureModel(x,y,1,0,r*.8,r*.8,height,(vx,vy)=>{
+    drawFurniturePedestal(vx,vy,height,Math.min(.24,r*.55));
+    coveLathe(vx,vy,height-.05,[[0,0],[0,r-.02],[.012,r],[.035,r],[.05,r-.018],[.05,0]],furnitureCloth(col));
+    if(susan) {
+      const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+      coveLathe(vx,vy,height,[[0,0],[0,r*.18],[.012,r*.18],[.012,r*.43],[.025,r*.45],[.035,r*.43],[.035,0]],metal);
+      for(let k=0;k<3;k++) {
+        const a=k*Math.PI*2/3+T*.08,rr=r*.14;
+        coveLathe(vx+Math.cos(a)*r*.24,vy+Math.sin(a)*r*.24,height+.035,
+          [[0,0],[0,rr*.45],[.008,rr*.9],[.015,rr],[.02,rr*.9],[.012,rr*.3],[.012,0]],
+          (i,t,L)=>{BG[i]=C(WHITE,4+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;});
+      }
+    }
+  });
+}
+function FURNITURE_BOOTH_SEAT(x,y,hl,depth,fy,col) {
+  const cloth=furnitureCloth(col),count=Math.max(2,Math.ceil(hl/.65)),width=hl/count;
+  const seat=furnitureModel(x,y,1,0,hl,depth/2,.46,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl-.04,depth/2-.03,0,.15,.025,'wood');
+    coveRound(vx,vy,1,0,hl,depth/2,.13,.32,.03,'wood');
+    for(let k=0;k<count;k++)coveRound(vx-hl+width*(2*k+1),vy,1,0,width-.006,depth/2,.31,.46,.06,cloth);
+  });
+  const by=y-fy*(depth/2-.06),back={...furnitureModel(x,by,1,0,hl,.07,1.25,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,.07,.33,1.25,.045,'wood');
+    for(let k=0;k<count;k++)coveRound(vx-hl+width*(2*k+1),vy+fy*.018,1,0,width-.007,.052,.46,1.23,.045,cloth);
+  }),box:boxAt(x,by,1,0,hl,.07,.33,1.25)};
+  return [seat,back];
+}
+function FURNITURE_SHELL_CHAIR(x,y,fx,fy,col) {
+  const c=-fy,s=fx,plastic=(i,t,L)=>{BG[i]=C(col,3+L*.31*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const seat={...furnitureModel(x,y,1,0,.22,.22,.47,(vx,vy)=>{
+    for(const u of [-.17,.17])for(const v of [-.17,.17])coveRound(vx+u,vy+v,1,0,.015,.015,0,.425,.006,GRAY);
+    coveRound(vx,vy,1,0,.22,.22,.415,.47,.025,plastic);
+  }),seat:true,fx,fy,h:.47};
+  const bx=x-fx*.1825,by=y-fy*.1825,back={...furnitureModel(bx,by,c,s,.22,.0575,.86,(vx,vy)=>{
+    // One shallow curve, swept across the back. Adjacent ribs overlap at their
+    // ends; the shell stays within the existing rear edge of the chair.
+    for(let k=0;k<6;k++) {
+      const u0=-.21+k*.07,u1=u0+.07,v0=-.0275+.055*(u0/.22)**2,v1=-.0275+.055*(u1/.22)**2;
+      const du=u1-u0,dv=v1-v0,len=Math.hypot(du,dv),u=(u0+u1)/2,v=(v0+v1)/2;
+      coveRound(vx+c*u+fx*v,vy+s*u+fy*v,(c*du+fx*dv)/len,(s*du+fy*dv)/len,len/2+.004,.022,.45,.86,.018,plastic);
+    }
+  }),box:boxAt(bx,by,c,s,.22,.0575,.45,.86)};
+  return [seat,back];
+}
+function FURNITURE_POUF(x,y,col,fx,fy,height=.4) {
+  return {...furnitureModel(x,y,1,0,.24,.24,height,(vx,vy)=>{
+    coveLathe(vx,vy,0,[[0,0],[0,.2],[.035,.22],[height*.35,.24],[height-.055,.235],[height-.02,.22],[height,.18],[height,0]],furnitureCloth(col));
+  }),seat:true,fx,fy,h:height};
+}
