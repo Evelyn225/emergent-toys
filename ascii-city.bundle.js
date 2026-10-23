@@ -16191,7 +16191,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
-  if(def.wc)r.props.push(...bathroomSurrounds(r));
+  if(def.wc)r.props.push(...bathroomSurrounds(r),...bathroomDoors(r));
   if (def.home) r.props.push(...workshopProps(r),...furnishingProps(r));
   if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
     const host=r.lobby||r;r.exterior=homeExterior({...r,cell:host.cell,ret:host.ret});
@@ -35101,7 +35101,7 @@ function bathroomOval(x,y,sx,sy,base,profile,shade) {
   drawBox({...boxAt(x,y,1,0,sx*r,sy*r,Math.min(...points.map(p=>p[0])),Math.max(...points.map(p=>p[0]))),sx,sy,lathe:{x:0,y:0,profile:points}},shade,bathroomRayOval);
 }
 function bathroomPaint(i,t,L) { // matte painted joinery: doors, soffits
-  BG[i]=C(WHITE,3.1+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+  BG[i]=C(WHITE,(.8+L*.32)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true; // (lit by the room: no glow in a dark bar)
 }
 function bathroomEnamel(i,t,L) {
   BG[i]=C(WHITE,3.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
@@ -35252,6 +35252,43 @@ function bathroomOpenings(r) {
   scan(w.y0-1,w.x0,w.x1,false);scan(w.y1,w.x0,w.x1,false);
   scan(w.x0-1,w.y0,w.y1,true);scan(w.x1,w.y0,w.y1,true);
   return result;
+}
+// Pocket doors for those openings. The partitions are a metre thick, so the leaf slides into the wall beside the
+// opening (towards the longer run of wall) and, open, sits wholly inside it, a little past the jamb. It opens for
+// whoever comes within reach of the doorway from either side and slides shut behind them. It has no collision: it is
+// open before anyone can reach it, and inside the wall while open.
+const DOOR_REACH = 1.3, DOOR_TIME = .45;
+function bathroomDoorSound(kind, x, y) { // the leaf rolling on its track; shut, the latch
+  if (typeof actx === 'undefined' || !actx) return;
+  const at = actx.currentTime, pan = soundDistanceProfile((x - px) / 10, (y - py) / 10, 0, a, 8, .6).pan;
+  burst(at, .32, [filt('lowpass', 380)], .05, pan);
+  if (kind === 'close') tone(at + .36, 1400, .02, .03, 'square', pan);
+}
+function bathroomDoors(r) {
+  const solid = (x, y) => '#W'.includes(r.grid[y]?.[x] || ' ');
+  return bathroomOpenings(r).flatMap(q => {
+    const width = q.end - q.start, cell = u => q.vertical ? [q.cross, u] : [u, q.cross];
+    const run = dir => { let n = 0; for (let u = dir < 0 ? q.start - 1 : q.end; solid(...cell(u)) && n < width + 1; u += dir) n++; return n; };
+    const dir = run(1) >= run(-1) ? 1 : -1;
+    if (run(dir) < width + .1) return []; // (no wall to slide into)
+    const x = q.vertical ? q.cross + .5 : (q.start + q.end) / 2, y = q.vertical ? (q.start + q.end) / 2 : q.cross + .5;
+    const c = q.vertical ? 0 : 1, s = q.vertical ? 1 : 0, hl = width / 2 + .02, travel = width + .06;
+    const p = { ...ROOM_MODEL(x, y, (vx, vy) => {
+      const dt = Math.min(.1, Math.max(0, T - (p.t ?? T))), near = (fx, fy) => Math.hypot(fx - x, fy - y) < DOOR_REACH;
+      const target = near(px, py) || roomCops.some(o => !o.dead && near(o.x, o.y)) ? 1 : 0;
+      if (p.t === undefined) { p.open = p.target = target; } // (as it is when you walk in: no sound)
+      else if (target !== p.target) { p.target = target; bathroomDoorSound(target ? 'open' : 'close', x, y); }
+      p.t = T; p.open = clamp(p.open + (target ? 1 : -1) * dt / DOOR_TIME, 0, 1);
+      if (p.open >= 1) return; // (all of it in the wall)
+      const shift = p.open * p.open * (3 - 2 * p.open) * travel * dir;
+      drawBox({ ...boxAt(vx + c * shift, vy + s * shift, c, s, hl, .02, .012, 2.19), round: .008, leaf: true }, (i, t, L) => {
+        // a recessed finger pull towards its leading edge, on both faces
+        if (Math.abs(HIT.u + dir * (hl - .1)) < .025 && Math.abs(HIT.w - 1.02) < .07 && HIT.face !== 5 && HIT.face !== 6) { BG[i] = C(GRAY, 1.2 + L * .1); set(i, ' ', 0); return true; }
+        return bathroomPaint(i, t, L);
+      });
+    }), bathroomDoor: q, radius: width + 1.2 };
+    return [p];
+  });
 }
 function bathroomSurrounds(r) {
   const height=r.def.height||3;
