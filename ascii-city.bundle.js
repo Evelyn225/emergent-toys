@@ -35106,11 +35106,53 @@ function bathroomPaint(i,t,L) { // matte painted joinery: doors, soffits
 function bathroomEnamel(i,t,L) {
   BG[i]=C(WHITE,3.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
 }
-function bathroomPipe(ax,ay,az,bx,by,bz,r,base=GRAY) {
+function bathroomPipe(ax,ay,az,bx,by,bz,r,base=GRAY,tag) {
   // Bathroom fixtures are viewed from within arm's reach: keep the plumbing a
   // solid curved surface instead of changing it into line glyphs nearby.
-  drawBox({...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(az,bz)-r,Math.max(az,bz)+r),ax,ay,az,bx,by,bz,r},
+  drawBox({...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(az,bz)-r,Math.max(az,bz)+r),ax,ay,az,bx,by,bz,r,...tag},
     (i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,base),coveRayCapsule);
+}
+// ---- what's fixed to the walls round the fittings: a paper holder within reach of the toilet, a towel bar and towel
+// beside the basin. Each finds the real wall face (as the mirror does) and stays clear of the other fittings.
+const bathroomClear = (x,y,self,pad=.04) => '.'.includes(room?.grid[Math.floor(y)]?.[Math.floor(x)]||'#')&&
+  !room.props.some(p=>p!==self&&p.box&&!p.walk&&p.box.z1>.5&&p.box.z0<1.3&&inBox(p.box,x,y,pad));
+function bathroomRollHolder(x,y,front) { // (x, y): the bowl; front: the way it faces (along y)
+  let mount=null;
+  const prop={...ROOM_MODEL(x,y,(vx,vy)=>{
+    if(mount===undefined)return;
+    if(!mount) { // the nearer side wall within reach, if there is one
+      const sides=[-1,1].map(side=>bathroomMirrorMount(x,y+front*.12,-side,0)).filter(m=>m.wall&&Math.abs(m.x-x)<.75);
+      mount=sides.sort((p,q)=>Math.abs(p.x-x)-Math.abs(q.x-x))[0];
+      if(!mount||!bathroomClear(mount.x+Math.sign(x-mount.x)*.08,mount.y,prop,.02)){mount=undefined;return;}
+    }
+    const n=Math.sign(x-mount.x),wx=vx+mount.x-x-n*.025,wy=vy+mount.y-y,z=.72; // (wx: the wall face itself)
+    coveRound(wx+n*.006,wy,0,1,.035,.006,z-.04,z+.04,.004,GRAY); // the backplate, on the wall
+    bathroomPipe(wx+n*.012,wy-.05,z,wx+n*.075,wy-.05,z,.007,GRAY,{rollArm:true});
+    bathroomPipe(wx+n*.075,wy-.065,z,wx+n*.075,wy+.065,z,.008,GRAY);
+    bathroomPipe(wx+n*.075,wy-.05,z,wx+n*.075,wy+.05,z,.055,WHITE,{roll:true,wall:mount.x-n*.025}); // the paper
+  }),radius:1};
+  return prop;
+}
+function bathroomTowelBar(x,y,mirror,self,vx,vy) { // beside the basin's mirror, on its wall, on whichever side is clear
+  const c=-mirror.fy,s=mirror.fx;
+  if(mirror.towel===undefined) {
+    mirror.towel=null;
+    find: for(const [off,half] of [[.5,.17],[.4,.08]])for(const side of [1,-1]) { // (a full bar; where there isn't room, a hand-towel ring)
+      const ox=mirror.x+c*side*off+mirror.fx*.04,oy=mirror.y+s*side*off+mirror.fy*.04;
+      const walled=(qx,qy)=>'#W'.includes(room?.grid[Math.floor(qy-mirror.fy*.12)]?.[Math.floor(qx-mirror.fx*.12)]||' '); // (wall right behind it)
+      if([-half-.01,0,half+.01].every(k=>bathroomClear(ox+c*k,oy+s*k,self)&&walled(ox+c*k,oy+s*k))){mirror.towel={x:ox,y:oy,half};break find;}
+    }
+  }
+  const t=mirror.towel;if(!t)return;
+  const tx=vx+t.x-x,ty=vy+t.y-y,face=[-mirror.fx,-mirror.fy];
+  for(const k of [-t.half,t.half])bathroomPipe(tx+c*k-mirror.fx*.065,ty+s*k-mirror.fy*.065,1.05,tx+c*k,ty+s*k,1.05,.008,GRAY,{towelPost:true}); // (from the wall face out to the bar)
+  bathroomPipe(tx-c*t.half,ty-s*t.half,1.05,tx+c*t.half,ty+s*t.half,1.05,.01,GRAY);
+  // the towel, folded over the bar: two layers hanging, a woven stripe near the hem
+  const hue=room?.def?.home?[CYAN,RED,GREEN][Math.floor(hash(Math.floor(x*7),Math.floor(y*7),1977)*3)]:WHITE;
+  drawBox({...boxAt(tx,ty,c,s,t.half-.02,.018,t.half>.1?.62:.8,1.06),towel:true,wall:face},(i,tt,L)=>{
+    const stripe=Math.abs(HIT.w-(t.half>.1?.7:.88))<.02; // (a hand's breadth above the hem)
+    BG[i]=C(stripe?GRAY:hue,(1+L*.3)*(HIT.face===5?1:.85)*(stripe?.8:1));set(i,' ',0);return true;
+  });
 }
 function bathroomTap(x,y,fx,fy,z) {
   const at=(u,v,h)=>[x-fy*u+fx*v,y+fx*u+fy*v,z+h];
@@ -35139,12 +35181,13 @@ function bathroomMirrorMount(x,y,fx,fy) {
 }
 function BATHROOM_SINK(x,y,fx,fy) {
   let mirror;
-  return furnitureModel(x,y,1,0,.24,.24,.86,(vx,vy)=>{
+  const prop=furnitureModel(x,y,1,0,.24,.24,.86,(vx,vy)=>{
     coveLathe(vx,vy,0,[[0,0],[0,.09],[.025,.09],[.07,.07],[.59,.055],[.72,.095],[.735,0]],bathroomEnamel);
     bathroomOval(vx,vy,.22,.22,0,[[.72,0],[.72,.42],[.75,.72],[.82,.96],[.845,1],[.86,.96],[.86,.77],[.835,.74],[.775,.38],[.765,0]],bathroomEnamel);
     coveLathe(vx,vy,.765,[[0,0],[0,.023],[.002,.023],[.002,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
     bathroomTap(vx,vy,fx,fy,.86);
-    mirror||=bathroomMirrorMount(x,y,fx,fy);
+    mirror||={...bathroomMirrorMount(x,y,fx,fy),fx,fy};
+    if(mirror.wall)bathroomTowelBar(x,y,mirror,prop,vx,vy);
     const mx=vx+mirror.x-x,my=vy+mirror.y-y,c=-fy,s=fx;
     if(!mirror.wall)for(const side of [-1,1])bathroomPipe(mx+c*side*.16,my+s*side*.16,.84,mx+c*side*.16,my+s*side*.16,1.2,.012,GRAY);
     coveRound(mx,my,c,s,.25,.025,1.15,1.75,.018,GRAY);
@@ -35153,6 +35196,8 @@ function BATHROOM_SINK(x,y,fx,fy) {
       BG[i]=C(CYAN,2.3+L*.12+sheen*.8);set(i,' ',0);return true;
     });
   });
+  prop.radius=Math.max(prop.radius||0,1.2); prop.sink=()=>mirror; // (the towel bar stands to one side of it)
+  return prop;
 }
 function BATHROOM_TOILET(x,y,back=-1,mat=steel) {
   const metal=mat===steel,finish=metal?(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY):bathroomEnamel;
@@ -35176,7 +35221,7 @@ function BATHROOM_TOILET(x,y,back=-1,mat=steel) {
       set(i,swirl&&ripple>.045?'~':' ',C(CYAN,L));return true;
     });
   }),box:boxAt(x,by,1,0,.21,.26,.28,.42),loo:[x,by]};
-  return [cistern,pedestal,bowl];
+  return metal?[cistern,pedestal,bowl]:[cistern,pedestal,bowl,bathroomRollHolder(x,by,-back)]; // (a cell's steel pan has none)
 }
 function BATHROOM_TUB(x,y) {
   return {...furnitureModel(x,y,1,0,.42,1.04,.62,(vx,vy)=>{

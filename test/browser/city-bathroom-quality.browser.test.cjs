@@ -110,6 +110,37 @@ test('the pocket door closes behind you once you are in, and slides with a sound
  assert.ok(Math.abs(r.shutDepth-r.leafDepth)<.1,'the shut leaf is what you see: '+JSON.stringify(r));
  assert.deepEqual(r.heard,['open','close']);
 }));
+test('a paper holder within reach of each toilet and a towel bar beside each basin, fixed to real walls and clear of the fittings',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  const out={holders:0,towels:0,problems:[]};
+  for(const kind of Object.keys(ROOM_DEFS)){
+   let rm;try{rm=makeRoom(kind);}catch{continue;}
+   room=rm;mode='room';px=rm.W/2;py=rm.H/2;
+   const solid=(x,y)=>'#W'.includes(rm.grid[Math.floor(y)]?.[Math.floor(x)]||' ');
+   for(const p of rm.props){
+    if(!p.draw)continue;
+    const shapes=[],draw=drawBox;drawBox=(b,s,ray)=>shapes.push(b);try{p.draw(p.x,p.y,p);}catch(e){out.problems.push(kind+': '+e.message);}finally{drawBox=draw;}
+    for(const b of shapes){
+     if(b.roll){
+      out.holders++;
+      if(!(solid(b.wall+.01,b.ay)&&!solid(b.wall-.01,b.ay)||solid(b.wall-.01,b.ay)&&!solid(b.wall+.01,b.ay)))out.problems.push(kind+': roll holder not on a wall face');
+      if(b.az<.6||b.az>.85)out.problems.push(kind+': roll at '+b.az);
+     }
+     if(b.towel){
+      out.towels++;
+      const [wx,wy]=b.wall,behind=[b.x+wx*.08,b.y+wy*.08];
+      if(!solid(...behind))out.problems.push(kind+': towel not against a wall');
+      if(b.z0<.5)out.problems.push(kind+': towel on the floor');
+      for(const q of rm.props)if(q!==p&&q.box&&!q.walk&&q.box.z1>.6&&q.box.z0<1.06&&[-1,0,1].some(k=>inBox(q.box,b.x+b.c*k*b.hl,b.y+b.s*k*b.hl,0)))out.problems.push(kind+': towel inside another fitting');
+     }
+    }
+   }
+  }
+  return out;
+ });
+ assert.deepEqual(r.problems,[]);
+ assert.ok(r.holders>=20&&r.towels>=29,JSON.stringify(r)); // (every basin with a wall mirror has a towel)
+}));
 test('bathroom surrounds span real partition gaps and leave the original walking opening clear',()=>fixture(async page=>{
  const r=await page.evaluate(()=>Object.keys(ROOM_DEFS).filter(kind=>ROOM_DEFS[kind].wc).map(kind=>{
   const r=makeRoom(kind),problems=[];
