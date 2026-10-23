@@ -233,7 +233,7 @@ function figBody(look, key) {
 
 // ---- ray casting the parts: a ray along -V through (u, z) on the view plane. Fills FIG_HIT; returns t or -1.
 const FIG_HIT = { t: 0, l: [0, 0, 0], s: 0, n: [0, 0, 0] };
-function figHitPart(P, o, d) {
+function figHitPart(P, o, d, exit = false) {
   if (P.k === 2) { // capsule (Inigo Quilez's), and how far along it
     const ba = fSub(P.b, P.a), oa = fSub(o, P.a), baba = fDot(ba, ba), bard = fDot(ba, d), baoa = fDot(ba, oa), rdoa = fDot(d, oa), oaoa = fDot(oa, oa);
     const A = baba - bard * bard, B = baba * rdoa - baoa * bard, Cc = baba * oaoa - baoa * baoa - P.r * P.r * baba;
@@ -253,7 +253,7 @@ function figHitPart(P, o, d) {
     const lo = [fDot(q, A[0]) / P.r[0], fDot(q, A[1]) / P.r[1], fDot(q, A[2]) / P.r[2]], ld = [fDot(d, A[0]) / P.r[0], fDot(d, A[1]) / P.r[1], fDot(d, A[2]) / P.r[2]];
     const a = fDot(ld, ld), b = fDot(lo, ld), c = fDot(lo, lo) - 1, h = b * b - a * c;
     if (h < 0) return -1;
-    const t = (-b - Math.sqrt(h)) / a;
+    const t = (-b + (exit ? 1 : -1) * Math.sqrt(h)) / a;
     if (t < 0) return -1;
     const l = fAdd(lo, fMul(ld, t));
     FIG_HIT.t = t; FIG_HIT.l = l;
@@ -306,9 +306,16 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
     for (let k = base ? f0 : 0, kn = base ? f1 : body.parts.length; k < kn; k++) { // (round the head, only the head and what's on it: anything else is as the ordinary sprite has it)
       const P = body.parts[k], e = box[k];
       if (u < e[0] || u > e[1] || z < e[2] || z > e[3]) continue;
-      const t = figHitPart(P, o, d);
+      let t = figHitPart(P, o, d);
       if (t < 0 || t >= best) continue;
       let ro = P.role(FIG_HIT);
+      // A cutaway hair/hat shell may reject its near side while its far side
+      // is still visible beside the face. Keep that surface, at its own depth.
+      if (!ro && P.k === 0) {
+        t = figHitPart(P, o, d, true);
+        if (t < 0 || t >= best) continue;
+        ro = P.role(FIG_HIT);
+      }
       if (!ro) continue;
       if (P.shade && FIG_DARK[ro]) {
         const n = P.k === 2 ? fNorm([FIG_HIT.n[0], FIG_HIT.n[1], 0]) : FIG_HIT.n;

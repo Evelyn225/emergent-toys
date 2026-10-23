@@ -6,6 +6,24 @@ const {loadCity}=require('./helpers/load-city.cjs');
 // counts of each role in a sprite, by name
 const COUNT=`(spr=>{const n={};for(const k of spr)if(k){const name=Object.keys(FR).find(r=>FR[r]===k);n[name]=(n[name]||0)+1;}return n;})`;
 
+test('close-up afro hair has no holes beside the face from front and oblique views',()=>{
+  const {ev}=loadCity();
+  const r=JSON.parse(ev(`JSON.stringify((()=>{
+    const body=figBody(figLook({hair:'afro'}),'stand'),head=body.parts[body.face[0]],out=[];
+    for(const S of [1,2,4])for(const view of [0,1,15]) {
+      const spr=figRaster(body,view,S),W=FIG_W*S;let holes=0,eyes=0;
+      for(let r=Math.ceil((FIG_H-head.c[2]-3)*S);r<(FIG_H-head.c[2]+1)*S;r++) {
+        const row=Array.from(spr.slice(r*W,(r+1)*W)),lo=row.findIndex(Boolean),hi=row.findLastIndex(Boolean);
+        if(lo>=0)for(let c=lo;c<=hi;c++)if(!row[c])holes++;
+      }
+      for(const k of spr)if(k===FR.EYE)eyes++;
+      out.push({S,view,holes,eyes});
+    }
+    return out;
+  })())`));
+  for(const q of r){assert.equal(q.holes,0,JSON.stringify(q));assert.ok(q.eyes>0,JSON.stringify(q));}
+});
+
 test('a face has two eyes a pixel each, and from behind there is none: hair over the head and back pockets instead',()=>{
   const {ev}=loadCity();
   const r=JSON.parse(ev(`JSON.stringify((()=>{

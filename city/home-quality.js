@@ -68,9 +68,10 @@ function HOME_PENDANT(x,y,ceiling,r,index) {
     dot(vx,vy,ceiling-.68,.055,(i,t,L)=>{BG[i]=C(on?WARM:STONE,on?12:2+L*.15);set(i,' ',0);return true;});
   });
 }
-function HOME_FRIDGE(x,y) {
-  const doors=[[.13,1.28],[1.31,1.85]].map(([z0,z1])=>{
-    const bottom=z0+.012,top=z1-.012,hl=.39,hw=.022,b=.012;
+function HOME_FRIDGE(x,y,{angle=0,height=1.9,halfWidth=.43,halfDepth=.4}={}) {
+  const c=Math.cos(angle),s=Math.sin(angle),hw=halfDepth,doorWidth=halfWidth-.04;
+  const doors=[[.13,height*1.28/1.9],[height*1.31/1.9,height-.05]].map(([z0,z1])=>{
+    const bottom=z0+.012,top=z1-.012,hl=doorWidth,hw=.022,b=.012;
     const planes=[[1,0,0,hl,1],[-1,0,0,hl,2],[0,1,0,hw,3],[0,-1,0,hw,4],[0,0,1,top,5],[0,0,-1,-bottom,6],
       [1,1,0,hl+hw-b,7],[-1,1,0,hl+hw-b,8],[0,1,1,hw+top-b,9],[0,1,-1,hw-bottom-b,10]];
     const normals=Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]));
@@ -78,23 +79,27 @@ function HOME_FRIDGE(x,y) {
   });
   const enamel=(i,t,L)=>{BG[i]=C(WHITE,2.9+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    for(const u of [-.3,.3])for(const v of [-.3,.3])coveRound(vx+u,vy+v,1,0,.035,.035,0,.09,.01,GRAY);
-    coveRound(vx,vy,1,0,.43,.4,.08,1.9,.045,enamel);
+    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    const part=(u,v,hl,depth,z0,z1,r,shade)=>{const[xx,yy]=at(u,v);coveRound(xx,yy,c,s,hl,depth,z0,z1,r,shade);};
+    const pipe=(u,v,z,uu,vv,zz,r)=>bathroomPipe(...at(u,v),z,...at(uu,vv),zz,r);
+    for(const u of [-halfWidth+.13,halfWidth-.13])for(const v of [-hw+.1,hw-.1])part(u,v,.035,.035,0,.09,.01,GRAY);
+    part(0,0,halfWidth,hw,.08,height,.045,enamel);
     for(const door of doors) {
-      const {z0,z1,hl,hw,bottom,top,planes,normals}=door;
-      drawBox(boxAt(vx,vy+.402,1,0,.399,.012,z0,z1),(i,t,L)=>{BG[i]=C(GRAY,.6+L*.1);set(i,' ',0);return true;});
-      drawBox({...boxAt(vx,vy+.427,1,0,hl,hw,bottom,top),planes,normals},enamel,homeRayWorktop);
-      const lo=z0+.13,hi=Math.min(z1-.1,lo+.36);
-      for(const z of [lo,hi])bathroomPipe(vx+.28,vy+.45,z,vx+.28,vy+.48,z,.012);
-      bathroomPipe(vx+.28,vy+.48,lo,vx+.28,vy+.48,hi,.014);
+      const {z0,z1,hl,bottom,top,planes,normals}=door,[sx,sy]=at(0,hw+.002),[dx,dy]=at(0,hw+.027);
+      drawBox(boxAt(sx,sy,c,s,doorWidth+.009,.012,z0,z1),(i,t,L)=>{BG[i]=C(GRAY,.6+L*.1);set(i,' ',0);return true;});
+      drawBox({...boxAt(dx,dy,c,s,hl,.022,bottom,top),planes,normals},enamel,homeRayWorktop);
+      const lo=z0+.13,hi=Math.min(z1-.1,lo+.36),handle=halfWidth-.15;
+      for(const z of [lo,hi])pipe(handle,hw+.05,z,handle,hw+.08,z,.012);
+      pipe(handle,hw+.08,lo,handle,hw+.08,hi,.014);
     }
-    coveRound(vx,vy+.4,1,0,.34,.015,.08,.115,.008,GRAY);
-  }),radius:1.1,box:boxAt(x,y+.035,1,0,.43,.465,0,1.9)};
+    part(0,hw,halfWidth-.09,.015,.08,.115,.008,GRAY);
+  }),radius:Math.hypot(halfWidth,hw)+.3,box:boxAt(x-s*.05,y+c*.05,c,s,halfWidth,hw+.05,0,height),
+    kitchenAppliance:{kind:'fridge',angle,height}};
 }
 // Fixed convex worktop planes avoid marching across a broad, thin slab.
 function homeRayWorktop(ox,oy,oz,rx,ry,rz,b) {
   const t=rayBeveledBay(ox,oy,oz,rx,ry,rz,b);if(t<0)return t;
-  const n=b.normals[HIT.face];HIT.nx=n[0];HIT.ny=n[1];HIT.nz=n[2];return t;
+  const n=b.normals[HIT.face];HIT.nx=b.c*n[0]-b.s*n[1];HIT.ny=b.s*n[0]+b.c*n[1];HIT.nz=n[2];return t;
 }
 function FERN_KITCHEN(r) {
   const planes=[[1,0,0,1.77,1],[-1,0,0,1.77,2],[0,1,0,.42,3],[0,-1,0,.42,4],[0,0,1,.95,5],[0,0,-1,-.88,6],

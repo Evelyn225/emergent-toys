@@ -137,6 +137,7 @@
     "city/furniture-quality.js",
     "city/bathroom-quality.js",
     "city/home-quality.js",
+    "city/kitchen-quality.js",
     "city/fern-quality.js",
     "city/home-furniture-render.js",
     "city/home-furnishing-ui.js",

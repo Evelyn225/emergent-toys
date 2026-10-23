@@ -283,6 +283,16 @@ function assembleArchipelago() {
     if (hseg(x - 1, y)) lights.push({ x: bx - .25, y: by + CURB, vert: false, bx, by });
     if (hseg(x, y)) lights.push({ x: bx + 2.25, y: by + 2 - CURB, vert: false, bx, by });
   }
+  // The airport road joins the west lane of this street. Its old curb is in the
+  // approach itself; put posts on the opposite curb, without moving the road.
+  const airportCurb=Math.floor(CAUSEWAY.x/8)*8+2-CURB;
+  for(const fixtures of [lamps,lights])for(let i=fixtures.length-1;i>=0;i--) {
+    const p=fixtures[i];
+    if(Math.abs(p.x-CAUSEWAY.x)>=CAUSEWAY.hw||p.y<CAUSEWAY.y1-2||p.y>CAUSEWAY.y1+3)continue;
+    if(fixtures.some(q=>q!==p&&Math.abs(q.x-airportCurb)<.01&&Math.abs(q.y-p.y)<.01))fixtures.splice(i,1);
+    else {p.x=airportCurb;if(fixtures===lamps&&p.ax)p.ax=-Math.abs(p.ax);}
+  }
+  rebuildLampGlow();
   // Outdated seam structure is replaced with the raised crossings below.
   bridgeBits.length = towers.length = boats.length = 0;
   // Keep working cranes on the industrial quay, rather than across public piers.

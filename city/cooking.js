@@ -101,7 +101,7 @@ GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
   // the moves: put in each extra ingredient early on (DOWN), then the flips or stirs (UP)
   const adds = r.needs.slice(1).map((need, k, a) => [0.12 + 0.25 * (k + 1) / (a.length + 1), 'down', `ADD THE ${(need === 'fish' ? 'FISH' : ITEMS[need].name.replace(/^(bag|loaf) of /, '')).toUpperCase()}`]);
   const moves = [...adds, ...how.moves].map(([at, key, label]) => ({ at, key, label, state: 'wait', t: 0 }));
-  let heat = 0.15, done = 0, char = 0, t = 0, missed = 0, flare = 0, sizzleT = 0, flipT = -9, drift = 0;
+  let heat = 0.15, done = 0, char = 0, t = 0, missed = 0, flare = 0, sizzleT = 0, flipT = -9, drift = 0, lastMove = null;
   const [lo, hi] = how.band;
   const now = () => moves.find(m => m.state === 'now');
   g.step = (dt, k) => {
@@ -121,7 +121,7 @@ GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
       if (m.state === 'wait') { m.state = 'now'; m.t = 0; ev.push('due'); }
       m.t += dt;
       const press = m.key === 'up' ? k.upP : k.downP;
-      if (press) { m.state = 'done'; flipT = t; ev.push(m.label.startsWith('ADD') ? 'add' : m.label.startsWith('STIR') ? 'stir' : 'flip'); }
+      if (press) { m.state = 'done'; flipT = t; lastMove = m; ev.push(m.label.startsWith('ADD') ? 'add' : m.label.startsWith('STIR') ? 'stir' : 'flip'); }
       else if (m.t > 1.6) { m.state = 'missed'; missed++; ev.push('miss'); }
       else if (heat > lo && !m.label.startsWith('ADD')) char += 0.05 * dt; // (the side that's down's still cooking)
     }
@@ -185,14 +185,16 @@ GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
     }
     if (heat > lo + 0.1) for (let s = 0; s < 6; s++) if (hash(s, Math.floor(t * 8), 1703) < heat - 0.3) text(cx - 5 + s * 2 + hash(s, Math.floor(t * 8), 1704) * 2, fyy - 1 - hash(s, 7, Math.floor(t * 8)) * 2, hash(s, 3, Math.floor(t * 8)) < 0.5 ? '*' : "'", C(YEL, 12)); // spitting
     if (char > 0.2) for (let s = 0; s < 4; s++) text(cx - 3 + s * 2 + Math.sin(t * 2 + s), fyy - 2 - ((t * 1.5 + s * 0.7) % 3), s & 1 ? '(' : ')', C(GRAY, 6 + char * 5)); // smoke, curling up
-    // the move that's due, big, blinking
+    // The required action stays visible. Heat advice has its own line and
+    // cannot replace it while you're trying to hold the temperature steady.
     const m = now();
-    if (m && fract(t * 3) < 0.7) text(W / 2, 2, `${m.label}!  [${m.key === 'up' ? 'UP' : 'DOWN'}]`, C(m.key === 'up' ? YEL : CYAN, 15), 'center');
-    else if (heat > hi) text(W / 2, 2, 'TOO HOT', C(RED, 14), 'center');
-    else if (heat < lo && done > 0.05) text(W / 2, 2, 'TOO COOL', C(CYAN, 12), 'center');
+    if (m) text(W / 2, 2, `${m.label}!  [${m.key === 'up' ? 'UP' : 'DOWN'}]`, C(m.key === 'up' ? YEL : CYAN, 15), 'center');
+    else if (lastMove && t - flipT < .8) text(W / 2, 2, lastMove.label.startsWith('ADD') ? 'ADDED' : lastMove.label.startsWith('STIR') ? 'STIRRED' : lastMove.label.startsWith('FLIP') ? 'FLIPPED' : 'TURNED', C(GREEN, 14), 'center');
+    if (heat > hi) text(W / 2, 3, 'TOO HOT - RELEASE HEAT', C(RED, 14), 'center');
+    else if (heat < lo && done > 0.05) text(W / 2, 3, 'TOO COOL - HOLD HEAT', C(CYAN, 12), 'center');
     if (flare > 0) text(W / 2, 13.5, 'FLARE-UP!', C(ORANGE, 15), 'center');
   };
-  g.status = () => `HOLD SPACE heat, keep it in the green   UP flip / stir   DOWN add   ${Math.round(done * 100)}% done`;
+  g.status = () => g.over ? 'Dish ready - added to your bag' : `HOLD SPACE heat, keep it in the green   UP flip / stir   DOWN add   ${Math.round(done * 100)}% done`;
   g.reward = () => 0;
   g.state = () => ({ heat, done, char, missed, moves, t });
   return g;

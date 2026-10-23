@@ -42,7 +42,7 @@ test('at the stove at home: E for the panel, 1 cooks, the pan played, a dish in 
     assert.equal(done.result, 'perfect');
     assert.equal(done.fridge, 0, 'the butter came out of the fridge');
     assert.match(done.line, /^Perfect\. Pan-fried mackerel/);
-    await page.keyboard.press('Space'); // (the results card)
+    await page.keyboard.press('KeyE'); // deliberately finish; the heat key leaves the result readable
     const eaten = await page.evaluate(() => { const was = needs.food = 30; held = 0; useHeldItem(); return { game, more: needs.food > was, fed: fx.fed > 0 }; });
     assert.deepEqual(eaten, { game: null, more: true, fed: true });
     // out on the beach: a grill

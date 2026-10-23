@@ -229,7 +229,7 @@ function bigMapPick(X,Y) {
     y:mapCoordinate(BIGMAP.cy+(Y-bigMapCv.clientHeight/2)/BIGMAP.z,MAP_WORLD.height),description:'A place you marked. Walking routes stop at the nearest clear street approach.'};
   const sh=SHOP[idx(Math.floor(p.x),Math.floor(p.y))],place=sh&&mapFilteredPlaces().find(place=>place.shop===sh);
   if(place)return selectMapPlace(place.id,false);
-  BIGMAP.places=BIGMAP.places.filter(p=>p.id!=='pin');BIGMAP.places.push(p);selectMapPlace(p.id,false);
+  BIGMAP.places=BIGMAP.places.filter(p=>p.id!=='pin');BIGMAP.places.push(p);selectMapPlace(p.id,false);setMapWaypoint(p);
 }
 
 function openBigMap() {

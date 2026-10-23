@@ -17,6 +17,10 @@ function gameKey(e) {
   if (k) K[e.code] = 1; // held, for the paddle (keyup clears it as usual)
   if (e.repeat) return true;
   if (game.g.over) { // the results screen: go again, or walk away
+    if (game.kind === 'cook') { // Heat is still Space/Enter: it must never dismiss the finished dish.
+      if (e.code === 'KeyE' || e.code === 'Escape') game = null;
+      return true;
+    }
     if ((k === 'act') && game.kind === 'arcade') { if (pay(CREDIT)) { const id = game.g.id; startGame(id, 'arcade'); } else say(`A credit's ${fmt$(CREDIT)}. You're out of cash.`); }
     else if (k === 'act' && game.kind === 'table') { if (pay(MJ_BUYIN)) startGame(game.g.id, 'table'); else say(`The buy-in's ${fmt$(MJ_BUYIN)}. You're out of cash.`); } // another hand
     else if (e.code === 'Escape' || e.code === 'KeyE' || k === 'act') game = null;
@@ -153,7 +157,7 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? '   E / ESC take it off the heat' : game.kind === 'workshop' ? '   E / ESC stop (supplies kept)' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? g.over ? '   E / ESC finish' : '   E / ESC take it off the heat' : game.kind === 'workshop' ? '   E / ESC stop (supplies kept)' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
   const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
   const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
@@ -166,7 +170,7 @@ function drawGame() {
       ? [res.win ? 'YOU WIN' : 'YOU LOSE', `${{ KO: 'KNOCKOUT', TKO: 'STOPPAGE', decision: 'ON POINTS', towel: 'THE TOWEL' }[res.how] || ''}  vs  ${g.name.toUpperCase()}`,
          res.win ? `PURSE ${fmt$(g.purse)}` : 'NO PURSE', ...TOUCH ? [] : ['', 'E or SPACE to leave']]
       : game.kind === 'cook'
-      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
+      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E / ESC to finish']]
       : game.kind === 'workshop'
       ? ['BATCH SEALED', `${DRUG_QUALITY[res]} Neon`, 'A buyer waits outside with cash', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
       : game.kind === 'arcade'

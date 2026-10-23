@@ -896,7 +896,7 @@ function figBody(look, key) {
 
 // ---- ray casting the parts: a ray along -V through (u, z) on the view plane. Fills FIG_HIT; returns t or -1.
 const FIG_HIT = { t: 0, l: [0, 0, 0], s: 0, n: [0, 0, 0] };
-function figHitPart(P, o, d) {
+function figHitPart(P, o, d, exit = false) {
   if (P.k === 2) { // capsule (Inigo Quilez's), and how far along it
     const ba = fSub(P.b, P.a), oa = fSub(o, P.a), baba = fDot(ba, ba), bard = fDot(ba, d), baoa = fDot(ba, oa), rdoa = fDot(d, oa), oaoa = fDot(oa, oa);
     const A = baba - bard * bard, B = baba * rdoa - baoa * bard, Cc = baba * oaoa - baoa * baoa - P.r * P.r * baba;
@@ -916,7 +916,7 @@ function figHitPart(P, o, d) {
     const lo = [fDot(q, A[0]) / P.r[0], fDot(q, A[1]) / P.r[1], fDot(q, A[2]) / P.r[2]], ld = [fDot(d, A[0]) / P.r[0], fDot(d, A[1]) / P.r[1], fDot(d, A[2]) / P.r[2]];
     const a = fDot(ld, ld), b = fDot(lo, ld), c = fDot(lo, lo) - 1, h = b * b - a * c;
     if (h < 0) return -1;
-    const t = (-b - Math.sqrt(h)) / a;
+    const t = (-b + (exit ? 1 : -1) * Math.sqrt(h)) / a;
     if (t < 0) return -1;
     const l = fAdd(lo, fMul(ld, t));
     FIG_HIT.t = t; FIG_HIT.l = l;
@@ -969,9 +969,16 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
     for (let k = base ? f0 : 0, kn = base ? f1 : body.parts.length; k < kn; k++) { // (round the head, only the head and what's on it: anything else is as the ordinary sprite has it)
       const P = body.parts[k], e = box[k];
       if (u < e[0] || u > e[1] || z < e[2] || z > e[3]) continue;
-      const t = figHitPart(P, o, d);
+      let t = figHitPart(P, o, d);
       if (t < 0 || t >= best) continue;
       let ro = P.role(FIG_HIT);
+      // A cutaway hair/hat shell may reject its near side while its far side
+      // is still visible beside the face. Keep that surface, at its own depth.
+      if (!ro && P.k === 0) {
+        t = figHitPart(P, o, d, true);
+        if (t < 0 || t >= best) continue;
+        ro = P.role(FIG_HIT);
+      }
       if (!ro) continue;
       if (P.shade && FIG_DARK[ro]) {
         const n = P.k === 2 ? fNorm([FIG_HIT.n[0], FIG_HIT.n[1], 0]) : FIG_HIT.n;
@@ -5868,14 +5875,18 @@ const elStairLocal = (x, y) => { // a fixture's [u, v] in the stairs' frame if i
 for (let k = trees.length - 1; k >= 0; k--) if (elStairLocal(trees[k].x, trees[k].y)) trees.splice(k, 1);
 for (const l of lamps) { const h = elStairLocal(l.x, l.y); if (!h) continue; const [st, u] = h, to = u < (ELS.u0 + ELS.u4) / 2 ? ELS.u0 - 0.7 : ELS.u4 + 0.3, d = to - u; l.x = worldCoord(l.x + st.c * d); l.y += st.s * d; }
 for (const [items, buckets] of [[trees, treesB], [lamps, lampsB]]) { for (const b of buckets) b.length = 0; for (const o of items) buckets[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o); }
-// Ground-light queries visit only the heads whose pools can reach this cell, including relocated lamps.
-for (const l of lamps) {
-  const belle = districtAt(l.x,l.y)==='belle';
-  l.gx=worldCoord(l.x+(belle?0:l.ax*REACH));l.gy=worldCoord(l.y+(belle?0:l.ay*REACH));
-  for(let y=Math.floor(l.gy-.55);y<=Math.floor(l.gy+.55);y++)for(let x=Math.floor(l.gx-.55);x<=Math.floor(l.gx+.55);x++) {
-    const cell=idx(x,y);(lampGlowCells[cell]||(lampGlowCells[cell]=[])).push(l);
+// Rebuild after the finished world relocates fixtures as well as after the stairs pass.
+function rebuildLampGlow() {
+  lampGlowCells.length=0;lampGlowCells.length=N*N+1;
+  for (const l of lamps) {
+    const belle = districtAt(l.x,l.y)==='belle';
+    l.gx=worldCoord(l.x+(belle?0:l.ax*REACH));l.gy=worldCoord(l.y+(belle?0:l.ay*REACH));
+    for(let y=Math.floor(l.gy-.55);y<=Math.floor(l.gy+.55);y++)for(let x=Math.floor(l.gx-.55);x<=Math.floor(l.gx+.55);x++) {
+      const cell=idx(x,y);(lampGlowCells[cell]||(lampGlowCells[cell]=[])).push(l);
+    }
   }
 }
+rebuildLampGlow();
 function geometrySurfaceHeight(o,x,y) {
   const rx=rel(x-o.x),ry=rel(y-o.y),u=rx*o.c+ry*o.s,v=-rx*o.s+ry*o.c;
   if(Math.abs(u)>o.hl||Math.abs(v)>o.hw)return 0;
@@ -10211,7 +10222,7 @@ GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
   // the moves: put in each extra ingredient early on (DOWN), then the flips or stirs (UP)
   const adds = r.needs.slice(1).map((need, k, a) => [0.12 + 0.25 * (k + 1) / (a.length + 1), 'down', `ADD THE ${(need === 'fish' ? 'FISH' : ITEMS[need].name.replace(/^(bag|loaf) of /, '')).toUpperCase()}`]);
   const moves = [...adds, ...how.moves].map(([at, key, label]) => ({ at, key, label, state: 'wait', t: 0 }));
-  let heat = 0.15, done = 0, char = 0, t = 0, missed = 0, flare = 0, sizzleT = 0, flipT = -9, drift = 0;
+  let heat = 0.15, done = 0, char = 0, t = 0, missed = 0, flare = 0, sizzleT = 0, flipT = -9, drift = 0, lastMove = null;
   const [lo, hi] = how.band;
   const now = () => moves.find(m => m.state === 'now');
   g.step = (dt, k) => {
@@ -10231,7 +10242,7 @@ GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
       if (m.state === 'wait') { m.state = 'now'; m.t = 0; ev.push('due'); }
       m.t += dt;
       const press = m.key === 'up' ? k.upP : k.downP;
-      if (press) { m.state = 'done'; flipT = t; ev.push(m.label.startsWith('ADD') ? 'add' : m.label.startsWith('STIR') ? 'stir' : 'flip'); }
+      if (press) { m.state = 'done'; flipT = t; lastMove = m; ev.push(m.label.startsWith('ADD') ? 'add' : m.label.startsWith('STIR') ? 'stir' : 'flip'); }
       else if (m.t > 1.6) { m.state = 'missed'; missed++; ev.push('miss'); }
       else if (heat > lo && !m.label.startsWith('ADD')) char += 0.05 * dt; // (the side that's down's still cooking)
     }
@@ -10295,14 +10306,16 @@ GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
     }
     if (heat > lo + 0.1) for (let s = 0; s < 6; s++) if (hash(s, Math.floor(t * 8), 1703) < heat - 0.3) text(cx - 5 + s * 2 + hash(s, Math.floor(t * 8), 1704) * 2, fyy - 1 - hash(s, 7, Math.floor(t * 8)) * 2, hash(s, 3, Math.floor(t * 8)) < 0.5 ? '*' : "'", C(YEL, 12)); // spitting
     if (char > 0.2) for (let s = 0; s < 4; s++) text(cx - 3 + s * 2 + Math.sin(t * 2 + s), fyy - 2 - ((t * 1.5 + s * 0.7) % 3), s & 1 ? '(' : ')', C(GRAY, 6 + char * 5)); // smoke, curling up
-    // the move that's due, big, blinking
+    // The required action stays visible. Heat advice has its own line and
+    // cannot replace it while you're trying to hold the temperature steady.
     const m = now();
-    if (m && fract(t * 3) < 0.7) text(W / 2, 2, `${m.label}!  [${m.key === 'up' ? 'UP' : 'DOWN'}]`, C(m.key === 'up' ? YEL : CYAN, 15), 'center');
-    else if (heat > hi) text(W / 2, 2, 'TOO HOT', C(RED, 14), 'center');
-    else if (heat < lo && done > 0.05) text(W / 2, 2, 'TOO COOL', C(CYAN, 12), 'center');
+    if (m) text(W / 2, 2, `${m.label}!  [${m.key === 'up' ? 'UP' : 'DOWN'}]`, C(m.key === 'up' ? YEL : CYAN, 15), 'center');
+    else if (lastMove && t - flipT < .8) text(W / 2, 2, lastMove.label.startsWith('ADD') ? 'ADDED' : lastMove.label.startsWith('STIR') ? 'STIRRED' : lastMove.label.startsWith('FLIP') ? 'FLIPPED' : 'TURNED', C(GREEN, 14), 'center');
+    if (heat > hi) text(W / 2, 3, 'TOO HOT - RELEASE HEAT', C(RED, 14), 'center');
+    else if (heat < lo && done > 0.05) text(W / 2, 3, 'TOO COOL - HOLD HEAT', C(CYAN, 12), 'center');
     if (flare > 0) text(W / 2, 13.5, 'FLARE-UP!', C(ORANGE, 15), 'center');
   };
-  g.status = () => `HOLD SPACE heat, keep it in the green   UP flip / stir   DOWN add   ${Math.round(done * 100)}% done`;
+  g.status = () => g.over ? 'Dish ready - added to your bag' : `HOLD SPACE heat, keep it in the green   UP flip / stir   DOWN add   ${Math.round(done * 100)}% done`;
   g.reward = () => 0;
   g.state = () => ({ heat, done, char, missed, moves, t });
   return g;
@@ -16386,7 +16399,7 @@ function homePlan(w, h, tier) {
   };
   const home = tier === 0
     ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.18, 4.4], fridge: [8.45, 5.6], pet: [1.4, 7.2], dining: [5.5, 5.8] }
-    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [2.7, tier === 2 ? 13.6 : 11.8], tv: [2.7, tier === 2 ? 9.63 : 8.63], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
+    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [2.7, tier === 2 ? 13.6 : 11.8], tv: [2.7, tier === 2 ? 9.63 : 8.63], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - .38, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
   const wc = tier === 0 ? { x0: 7, y0: 1, x1: 9, y1: 4, sign: [6, 3, 3.5] }
     : { x0: 15, y0: 1, x1: inside, y1: 5, sign: [14, 4, 4.5] };
   wall(wc.x0 - 1, 1, wc.x0 - 1, wc.y1, 'W');
@@ -16440,14 +16453,6 @@ const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : 
 }; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
-  const fridgeShade = (i, t, L) => {
-    const f = HIT.face;
-    BG[i] = C(f === 3 || f === 4 ? WHITE : GRAY, (2 + L * 0.3) * shadeFace(f));
-    if (f === 5) return set(i, '_', C(GRAY, L)), true;
-    if ((f === 3 || f === 4) && HIT.w > 0.5 && HIT.w < 1.45 && Math.abs(HIT.u - 0.28) < 0.05) return set(i, '|', C(GRAY, L)), true;
-    if ((f === 3 || f === 4) && Math.abs(HIT.w - 0.85) < 0.04) return set(i, '=', C(GRAY, L)), true;
-    return set(i, ' ', 0), true;
-  };
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
@@ -16457,7 +16462,7 @@ function homeDef(w, h, tier) {
       TELEVISION(tv[0],tv[1]-.3,r),
       FURNITURE_STORAGE(tv[0],tv[1]-.3,.8,.25,.61),
       FURNITURE_STORAGE(shelf[0],shelf[1],.75,.18,1.05,-Math.PI/2,true),
-      BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
+      HOME_FRIDGE(fridge[0],fridge[1],{angle:Math.PI/2,height:1.65,halfWidth:.4,halfDepth:.38}),
       ...toilet(plan.wc.x1 - (tier ? 1.4 : .8), 1.42, -1, porcelain),
       washbasin(plan.wc.x0 + 0.4, 1.35, 0, 1),
       ...(tier ? [BATHTUB(plan.wc.x1 - .43, 3.4)] : []),
@@ -16465,7 +16470,7 @@ function homeDef(w, h, tier) {
       ...tableBox(dining[0], dining[1], tier ? 1.25 : 0.6, 0.5),
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
-      BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, stoveShade(tier, tier ? 0.55 : 0.5), 0, 1), // the kitchen counter, the hob and oven in it (cooking.js)
+      FITTED_KITCHEN(fridge[0]+(tier?.05:0),fridge[1]+(tier?-2.5:1.7),tier?1.55:.55,.33,Math.PI/2,tier===2?WHITE:BRICK),
       ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), FURNITURE_STORAGE(10.9,1.4,.7,.18,2.4,0,true),
         ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), POT_PLANT(1.6, 8.9, 1.5)] : []),
       ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),
@@ -24483,17 +24488,14 @@ function hud() {
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | left click / Q: item | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
   // phone held upright), goes underneath them
-  const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, top = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
-  const maxW = top ? cv.width - 12 : beside;
+  const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, baseTop = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
+  const top=baseTop+drawNavigationCompass(baseTop),maxW=top?cv.width-12:beside;
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = [...(fishingCompetitionStatus()?wrapText(fishingCompetitionStatus(),maxW):[]),...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
   const meters = needMeters();
   hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
-  drawMapNavigation();
   wantedHud();
-  if (job && mode === 'drive') jobArrow();
-  else if(courierRoute()&&mode!=='room')jobArrow(...courierGuide());
   minimap();
   const hotbarTop = hotbar();
   g.font = FS + 'px monospace';
@@ -28094,19 +28096,58 @@ function mapRouteDistance() {
   const path=MAP_NAV.path,p=mapPlayerLocation();
   return path?Math.max(0,path.length-1-MAP_NAV.next)*10+mapDistance(p,path[MAP_NAV.next])*10:mapDistance(p,mapWaypoint)*10;
 }
-function drawMapNavigation() {
-  if(!mapWaypoint)return;
-  const p=mapPlayerLocation(),next=MAP_NAV.path?.[Math.min(MAP_NAV.next+1,MAP_NAV.path.length-1)]||mapWaypoint;
-  const yaw=Math.atan2(mapDifference(next.y-p.y,MAP_WORLD.height),mapDifference(next.x-p.x,MAP_WORLD.width));
-  const turn=mod(yaw-a+Math.PI,Math.PI*2)-Math.PI;
-  let direction='AHEAD';if(turn>.5)direction='RIGHT';else if(turn<-.5)direction='LEFT';if(Math.abs(turn)>2.5)direction='BEHIND';
-  const text=`${MAP_NAV.nearby?'NEARBY':direction} > ${mapWaypoint.name} · ${mapMetres(mapRouteDistance())}${MAP_NAV.path?'':` · ${mapRouteLabel()}`}`;
-  let max=cv.width-24-(TOUCH?TOUCH_PAD_W:0);
-  if(showMap&&!TOUCH&&cv.width>700)max=Math.min(max,cv.width-360);
-  const lines=wrapText(text,Math.max(100,max));
-  let y=hudBottom+6;g.font=FS+'px monospace';
-  for(const line of lines){g.fillStyle='rgba(0,0,0,.8)';g.fillRect(6,y,g.measureText(line).width+12,FS+5);g.fillStyle='#8de5df';g.fillText(line,12,y+2);y+=FS+5;}
-  hudBottom=y+4;
+// Bearings use world space even on a boat or in a moving train. Interior positions
+// are local, so an indoor destination is labelled outside rather than given a false bearing.
+function navigationTargets() {
+  const targets=[],p=mapPlayerLocation();
+  const add=(t,name,color,radius=0,stop='')=>{
+    if(!t||!Number.isFinite(t.x)||!Number.isFinite(t.y))return;
+    targets.push({...t,name,color,radius,stop,distance:mapDistance(p,t)*10});
+  };
+  if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df');
+  if(job&&mode==='drive') {const t=jobTarget();add(t,job.ride?'DROP OFF':'PICK UP','#ffd575',DROP_R,'STOP');}
+  if(courierRoute()) {const [t,guide]=courierGuide();add(t,guide.label,'#ffd575',guide.radius,guide.stop);}
+  add(taskTarget(),'CURRENT FAVOUR','#4ff');
+  if(mode==='taxi'&&me?.dest)add({x:me.dest[0],y:me.dest[1]},me.destName||'TAXI DESTINATION','#ffd575');
+  return targets;
+}
+function navigationBearing(t) {
+  const p=mapPlayerLocation(),yaw=Math.atan2(mapDifference(t.y-p.y,MAP_WORLD.height),mapDifference(t.x-p.x,MAP_WORLD.width));
+  return mod(yaw-(chaseOn?camYaw:a)+Math.PI,Math.PI*2)-Math.PI;
+}
+function drawNavigationCompass(top) {
+  const targets=navigationTargets();if(!targets.length)return 0;
+  const bar=TOUCH?touchBarBox():null,right=bar&&top<bar.bottom&&bar.left>cv.width*.55?bar.left-12:cv.width;
+  const width=Math.min(420,right-16),left=(right-width)/2,cx=right/2,y=top+4,indoor=mode==='room';
+  const height=indoor?FS+12:FS*3+20,range=Math.PI/2,scale=(width/2-14)/range;
+  const first=targets.find(t=>t.radius&&t.distance<t.radius*10)||targets[0];
+  const distance=first===targets[0]&&mapWaypoint?mapRouteDistance():first.distance;
+  const prefix=indoor?'OUTSIDE · ':first.radius&&first.distance<first.radius*10?first.stop+' · ':'';
+  const suffix=` · ${mapMetres(distance)}`;let name=first.name;
+  g.save();g.font=FS+'px monospace';g.textBaseline='top';
+  g.fillStyle='rgba(0,0,0,.72)';g.fillRect(left,y,width,height);
+  g.beginPath();g.rect(left+4,y,width-8,height);g.clip();
+  if(!indoor) {
+    const heading=chaseOn?camYaw:a,step=Math.PI/12;
+    for(let n=Math.floor((heading-range)/step);n<=Math.ceil((heading+range)/step);n++) {
+      const angle=n*step,delta=angle-heading,x=cx+delta*scale,cardinal=mod(n,6)===0;
+      g.fillStyle=cardinal?'#d2d6df':'#68717f';g.fillRect(x,y+FS+4,1,cardinal?6:3);
+      if(cardinal) {const text=['E','S','W','N'][mod(n/6,4)];g.fillText(text,x-g.measureText(text).width/2,y+2);}
+    }
+    // Side chevrons keep destinations behind you visible without wrapping them onto the forward tape.
+    for(const target of [...targets].reverse()) {
+      const turn=navigationBearing(target),edge=Math.abs(turn)>range,x=cx+clamp(turn,-range,range)*scale;
+      g.fillStyle=target.color;g.beginPath();
+      if(edge) {const sign=Math.sign(turn);g.moveTo(x+sign*4,y+FS+12);g.lineTo(x-sign*3,y+FS+8);g.lineTo(x-sign*3,y+FS+16);}
+      else {g.moveTo(x,y+FS+7);g.lineTo(x-4,y+FS+12);g.lineTo(x,y+FS+17);g.lineTo(x+4,y+FS+12);}
+      g.closePath();g.fill();
+    }
+    g.fillStyle='#fff';g.fillRect(cx-1,y+FS+1,2,5);
+  }
+  while(name.length>1&&g.measureText(prefix+name+suffix).width>width-20)name=name.slice(0,-2).trimEnd()+'…';
+  const label=prefix+name+suffix;
+  g.fillStyle=first.color;g.fillText(label,cx-g.measureText(label).width/2,y+(indoor?6:FS*2+14));g.restore();
+  return height+8;
 }
 // Full map and city directory. M opens it directly; Pause can open it without changing the return destination.
 let bigMapEl = null, bigMapCv = null, bigMapSheet = null;
@@ -28339,7 +28380,7 @@ function bigMapPick(X,Y) {
     y:mapCoordinate(BIGMAP.cy+(Y-bigMapCv.clientHeight/2)/BIGMAP.z,MAP_WORLD.height),description:'A place you marked. Walking routes stop at the nearest clear street approach.'};
   const sh=SHOP[idx(Math.floor(p.x),Math.floor(p.y))],place=sh&&mapFilteredPlaces().find(place=>place.shop===sh);
   if(place)return selectMapPlace(place.id,false);
-  BIGMAP.places=BIGMAP.places.filter(p=>p.id!=='pin');BIGMAP.places.push(p);selectMapPlace(p.id,false);
+  BIGMAP.places=BIGMAP.places.filter(p=>p.id!=='pin');BIGMAP.places.push(p);selectMapPlace(p.id,false);setMapWaypoint(p);
 }
 
 function openBigMap() {
@@ -32409,6 +32450,10 @@ function gameKey(e) {
   if (k) K[e.code] = 1; // held, for the paddle (keyup clears it as usual)
   if (e.repeat) return true;
   if (game.g.over) { // the results screen: go again, or walk away
+    if (game.kind === 'cook') { // Heat is still Space/Enter: it must never dismiss the finished dish.
+      if (e.code === 'KeyE' || e.code === 'Escape') game = null;
+      return true;
+    }
     if ((k === 'act') && game.kind === 'arcade') { if (pay(CREDIT)) { const id = game.g.id; startGame(id, 'arcade'); } else say(`A credit's ${fmt$(CREDIT)}. You're out of cash.`); }
     else if (k === 'act' && game.kind === 'table') { if (pay(MJ_BUYIN)) startGame(game.g.id, 'table'); else say(`The buy-in's ${fmt$(MJ_BUYIN)}. You're out of cash.`); } // another hand
     else if (e.code === 'Escape' || e.code === 'KeyE' || k === 'act') game = null;
@@ -32545,7 +32590,7 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? '   E / ESC take it off the heat' : game.kind === 'workshop' ? '   E / ESC stop (supplies kept)' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? g.over ? '   E / ESC finish' : '   E / ESC take it off the heat' : game.kind === 'workshop' ? '   E / ESC stop (supplies kept)' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
   const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
   const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
@@ -32558,7 +32603,7 @@ function drawGame() {
       ? [res.win ? 'YOU WIN' : 'YOU LOSE', `${{ KO: 'KNOCKOUT', TKO: 'STOPPAGE', decision: 'ON POINTS', towel: 'THE TOWEL' }[res.how] || ''}  vs  ${g.name.toUpperCase()}`,
          res.win ? `PURSE ${fmt$(g.purse)}` : 'NO PURSE', ...TOUCH ? [] : ['', 'E or SPACE to leave']]
       : game.kind === 'cook'
-      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
+      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E / ESC to finish']]
       : game.kind === 'workshop'
       ? ['BATCH SEALED', `${DRUG_QUALITY[res]} Neon`, 'A buyer waits outside with cash', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
       : game.kind === 'arcade'
@@ -33591,7 +33636,7 @@ const SK_POINTS = { ollie: 50, kickflip: 100, heelflip: 100, 'pop shuvit': 100, 
 // every frame on the board, in place of walking
 function stepSkate(dt) {
   if (T - SK.lastT > 0.25) { // just stepped on: rolling off at whatever pace you were walking
-    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: -1, bail: 0, bailAt: null, combo: null, look: 0, camYaw: null, camZ: null });
+    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: K.Space ? SK.charge : -1, bail: 0, bailAt: null, combo: null, look: 0, camYaw: null, camZ: null });
     if (third) pitch = -0.12;
   }
   SK.lastT = T;
@@ -34516,7 +34561,7 @@ function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
  BG[i]=C(frame?YEL:z<hill?GREEN:BLUE,frame?3:4);return set(i,frame?(Math.abs(u)>.76?'|':'='):z<1.7?'~':' ',C(frame?YEL:z<1.7?CYAN:GREEN,Math.max(5,L*.7))),true;
 });}
 function hotelDefinition(tier){
- const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.5,h-4]:null;
+ const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.38,h-4+(tier===1?.3:0)]:null;
  return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,tvAngle,tvApproach:[tv[0]-Math.sin(tvAngle)*1.2,tv[1]+Math.cos(tvAngle)*1.2],sofa,stove},tier,
  wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,z<.12||Math.abs(z-.8)<.025||z>(tier===2?3.6:3)-.16?'=':' ',C(YEL,L*.65)),true;},
  props:r=>{
@@ -34527,7 +34572,7 @@ function hotelDefinition(tier){
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
  ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.6,5.1,.6)),
  POT_PLANT(tier===2?9.5:tier?1.5:8.5,h-1.5,1.4)];
- if(tier)p.push(BX(...stove,1.7,.38,.1,.94,stoveShade(1,.55),0,1),BX(stove[0],stove[1]+2.3,.43,.4,0,1.7,solid(WHITE,{panel:.7})),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
+ if(tier)p.push(FITTED_KITCHEN(...stove,tier===1?1.3:1.7,.38,Math.PI/2,tier===2?WHITE:BRICK),HOME_FRIDGE(w-1.4,h-1.7,{angle:Math.PI/2,height:1.7}),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
  if(tier)p.push(ROOM_MODEL(sofa[0],sofa[1]-1.25,(vx,vy)=>{
    for(const side of [-1,1])rod(vx+side*.3,vy,.05,vx+side*.3,vy,.42,.035,YEL);
    drum(vx,vy,.52,.4,.46,solid(tier===2?GREEN:BRICK,{bright:2,top:'~'}));
@@ -35732,9 +35777,10 @@ function HOME_PENDANT(x,y,ceiling,r,index) {
     dot(vx,vy,ceiling-.68,.055,(i,t,L)=>{BG[i]=C(on?WARM:STONE,on?12:2+L*.15);set(i,' ',0);return true;});
   });
 }
-function HOME_FRIDGE(x,y) {
-  const doors=[[.13,1.28],[1.31,1.85]].map(([z0,z1])=>{
-    const bottom=z0+.012,top=z1-.012,hl=.39,hw=.022,b=.012;
+function HOME_FRIDGE(x,y,{angle=0,height=1.9,halfWidth=.43,halfDepth=.4}={}) {
+  const c=Math.cos(angle),s=Math.sin(angle),hw=halfDepth,doorWidth=halfWidth-.04;
+  const doors=[[.13,height*1.28/1.9],[height*1.31/1.9,height-.05]].map(([z0,z1])=>{
+    const bottom=z0+.012,top=z1-.012,hl=doorWidth,hw=.022,b=.012;
     const planes=[[1,0,0,hl,1],[-1,0,0,hl,2],[0,1,0,hw,3],[0,-1,0,hw,4],[0,0,1,top,5],[0,0,-1,-bottom,6],
       [1,1,0,hl+hw-b,7],[-1,1,0,hl+hw-b,8],[0,1,1,hw+top-b,9],[0,1,-1,hw-bottom-b,10]];
     const normals=Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]));
@@ -35742,23 +35788,27 @@ function HOME_FRIDGE(x,y) {
   });
   const enamel=(i,t,L)=>{BG[i]=C(WHITE,2.9+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    for(const u of [-.3,.3])for(const v of [-.3,.3])coveRound(vx+u,vy+v,1,0,.035,.035,0,.09,.01,GRAY);
-    coveRound(vx,vy,1,0,.43,.4,.08,1.9,.045,enamel);
+    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    const part=(u,v,hl,depth,z0,z1,r,shade)=>{const[xx,yy]=at(u,v);coveRound(xx,yy,c,s,hl,depth,z0,z1,r,shade);};
+    const pipe=(u,v,z,uu,vv,zz,r)=>bathroomPipe(...at(u,v),z,...at(uu,vv),zz,r);
+    for(const u of [-halfWidth+.13,halfWidth-.13])for(const v of [-hw+.1,hw-.1])part(u,v,.035,.035,0,.09,.01,GRAY);
+    part(0,0,halfWidth,hw,.08,height,.045,enamel);
     for(const door of doors) {
-      const {z0,z1,hl,hw,bottom,top,planes,normals}=door;
-      drawBox(boxAt(vx,vy+.402,1,0,.399,.012,z0,z1),(i,t,L)=>{BG[i]=C(GRAY,.6+L*.1);set(i,' ',0);return true;});
-      drawBox({...boxAt(vx,vy+.427,1,0,hl,hw,bottom,top),planes,normals},enamel,homeRayWorktop);
-      const lo=z0+.13,hi=Math.min(z1-.1,lo+.36);
-      for(const z of [lo,hi])bathroomPipe(vx+.28,vy+.45,z,vx+.28,vy+.48,z,.012);
-      bathroomPipe(vx+.28,vy+.48,lo,vx+.28,vy+.48,hi,.014);
+      const {z0,z1,hl,bottom,top,planes,normals}=door,[sx,sy]=at(0,hw+.002),[dx,dy]=at(0,hw+.027);
+      drawBox(boxAt(sx,sy,c,s,doorWidth+.009,.012,z0,z1),(i,t,L)=>{BG[i]=C(GRAY,.6+L*.1);set(i,' ',0);return true;});
+      drawBox({...boxAt(dx,dy,c,s,hl,.022,bottom,top),planes,normals},enamel,homeRayWorktop);
+      const lo=z0+.13,hi=Math.min(z1-.1,lo+.36),handle=halfWidth-.15;
+      for(const z of [lo,hi])pipe(handle,hw+.05,z,handle,hw+.08,z,.012);
+      pipe(handle,hw+.08,lo,handle,hw+.08,hi,.014);
     }
-    coveRound(vx,vy+.4,1,0,.34,.015,.08,.115,.008,GRAY);
-  }),radius:1.1,box:boxAt(x,y+.035,1,0,.43,.465,0,1.9)};
+    part(0,hw,halfWidth-.09,.015,.08,.115,.008,GRAY);
+  }),radius:Math.hypot(halfWidth,hw)+.3,box:boxAt(x-s*.05,y+c*.05,c,s,halfWidth,hw+.05,0,height),
+    kitchenAppliance:{kind:'fridge',angle,height}};
 }
 // Fixed convex worktop planes avoid marching across a broad, thin slab.
 function homeRayWorktop(ox,oy,oz,rx,ry,rz,b) {
   const t=rayBeveledBay(ox,oy,oz,rx,ry,rz,b);if(t<0)return t;
-  const n=b.normals[HIT.face];HIT.nx=n[0];HIT.ny=n[1];HIT.nz=n[2];return t;
+  const n=b.normals[HIT.face];HIT.nx=b.c*n[0]-b.s*n[1];HIT.ny=b.s*n[0]+b.c*n[1];HIT.nz=n[2];return t;
 }
 function FERN_KITCHEN(r) {
   const planes=[[1,0,0,1.77,1],[-1,0,0,1.77,2],[0,1,0,.42,3],[0,-1,0,.42,4],[0,0,1,.95,5],[0,0,-1,-.88,6],
@@ -35824,6 +35874,94 @@ ROOM_FLOORS.fernBath=(i,f,x,y,row,column,L)=>{
   const grout=Math.max(coveGroove(x,.4,.008,footprint),coveGroove(y,.4,.008,footprint));
   BG[i]=C(STONE,4.5+L*.18-grout*1.2);set(i,' ',0);
 };
+// Fitted kitchen units share the same top, opening and appliance measurements.
+// Local u runs along the cupboards; +v is the usable front of the counter.
+function kitchenTopProfile(hl,hw,bottom,top,bevel=.015) {
+  const planes=[[1,0,0,hl,1],[-1,0,0,hl,2],[0,1,0,hw,3],[0,-1,0,hw,4],
+    [0,0,1,top,5],[0,0,-1,-bottom,6],
+    [1,0,1,hl+top-bevel,7],[-1,0,1,hl+top-bevel,8],
+    [0,1,1,hw+top-bevel,9],[0,-1,1,hw+top-bevel,10]];
+  const normals=Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]));
+  return {planes,normals};
+}
+function kitchenPanelProfile(hl,hw,bottom,top,bevel=.006) {
+  const planes=[[1,0,0,hl,1],[-1,0,0,hl,2],[0,1,0,hw,3],[0,-1,0,hw,4],
+    [0,0,1,top,5],[0,0,-1,-bottom,6],[1,1,0,hl+hw-bevel,7],[-1,1,0,hl+hw-bevel,8],
+    [0,1,1,hw+top-bevel,9],[0,1,-1,hw-bottom-bevel,10]];
+  return {planes,normals:Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]))};
+}
+function FITTED_KITCHEN(x,y,hl,depth,angle=0,color=BRICK) {
+  const c=Math.cos(angle),s=Math.sin(angle),compact=hl<.8,height=.94;
+  const sink=compact?-.265:-hl+.37,radius=compact?.18:.235,hob=compact?.25:0;
+  const top=kitchenTopProfile(hl,depth,height-.065,height),ovenHalf=compact?.22:.28;
+  const count=Math.max(2,Math.round(hl*2/.62)),half=hl/count;
+  const doorProfile=kitchenPanelProfile(half-.009,.014,.12,.66),drawerProfile=kitchenPanelProfile(half-.04,.008,.68,.86),
+    ovenProfile=kitchenPanelProfile(ovenHalf,.014,.13,.875);
+  const model=ROOM_MODEL(x,y,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    const part=(u,v,hx,hy,z0,z1,shade,bevel=.012)=>{
+      const[xx,yy]=at(u,v);coveRound(xx,yy,c,s,hx,hy,z0,z1,bevel,shade);
+    };
+    const pipe=(u,v,z,uu,vv,zz,r=.012,base=GRAY)=>bathroomPipe(...at(u,v),z,...at(uu,vv),zz,r,base);
+    const wood=furnitureTimber(color),flatWood=(i,t,L)=>{
+      const f=HIT.face,nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0;
+      coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,c*nu-s*nv,s*nu+c*nv,f===6?-1:0,3);
+      if(color!==BRICK)BG[i]=C(color,BG[i]&15);return true;
+    };
+    // The recessed plinth meets the floor; the carcass has no hidden top face
+    // that could cap the sink. Only the fitted worktop owns that surface.
+    part(0,-.035,hl-.035,depth-.075,0,.1,wood);
+    drawBox(boxAt(vx,vy,c,s,hl-.025,depth-.025,.09,height-.065),(i,t,L)=>HIT.face===5?false:flatWood(i,t,L));
+    for(let k=0;k<count;k++) {
+      const u=-hl+half*(2*k+1);
+      if(Math.abs(u-hob)<ovenHalf+half*.5)continue;
+      const [xx,yy]=at(u,depth-.008),[dx,dy]=at(u,depth+.008);
+      drawBox({...boxAt(xx,yy,c,s,half-.009,.014,.12,.66),...doorProfile},wood,homeRayWorktop);
+      drawBox({...boxAt(dx,dy,c,s,half-.04,.008,.68,.86),...drawerProfile},wood,homeRayWorktop);
+      pipe(u-.075,depth+.025,.77,u+.075,depth+.025,.77,.009);
+    }
+    drawBox({...boxAt(vx,vy,c,s,hl,depth,height-.065,height),...top},(i,t,L)=>{
+      if(HIT.face===5&&Math.hypot(HIT.u-sink,HIT.v)<radius*.96)return false;
+      return homeStone(i,t,L);
+    },homeRayWorktop);
+    // The sink's lip, inner bowl and bottom are one closed revolved profile.
+    const [sx,sy]=at(sink,0);
+    coveLathe(sx,sy,.74,[[0,0],[0,.04],[.02,radius*.4],[.16,radius*.88],[.205,radius],
+      [.211,radius],[.211,radius*.92],[.16,radius*.85],[.04,radius*.34],[.034,0]],
+      (i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
+    coveLathe(sx,sy,.775,[[0,0],[0,.024],[.003,.024],[.003,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
+    const [tx,ty]=at(sink,.19-radius-.045);bathroomTap(tx,ty,-s,c,height);
+
+    const active=cookingOn()==='stove',baking=active&&RECIPE[cookCtx?.recipe]?.how==='oven';
+    for(const u of compact?[0]:[-.135,.135])for(const v of [-.135,.135]) {
+      const [bx,by]=at(hob+u,v),r=compact?.075:.09;
+      coveLathe(bx,by,height,[[0,0],[0,r],[.014,r],[.014,0]],(i,t,L)=>{
+        BG[i]=C(GRAY,(.65+L*.12)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+      });
+      coveLathe(bx,by,height+.014,[[0,r*.6],[0,r*.78],[.005,r*.78],[.005,r*.6],[0,r*.6]],(i,t,L)=>{
+        BG[i]=active&&!baking?C(RED,7+Math.sin(T*4)*.6):C(GRAY,1.4+L*.12);set(i,' ',0);return true;
+      });
+    }
+    // A separate enamel door, recessed dark glass, supported handle and knobs.
+    // Heat changes only the elements or oven glass, never the cupboard case.
+    const enamel=(i,t,L)=>{BG[i]=C(WHITE,(1.1+L*.28)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    const [ox,oy]=at(hob,depth+.016);
+    drawBox({...boxAt(ox,oy,c,s,ovenHalf,.014,.13,.875),...ovenProfile},(i,t,L)=>{
+      if(HIT.face===3&&Math.abs(HIT.u)<ovenHalf-.035&&HIT.w>.23&&HIT.w<.62)return false;
+      return enamel(i,t,L);
+    },homeRayWorktop);
+    const [gx,gy]=at(hob,depth+.025);
+    drawBox(boxAt(gx,gy,c,s,ovenHalf-.035,.002,.23,.62),(i,t,L)=>{
+      const rack=coveGroove(HIT.w-.3,.11,.004,t/projX);
+      BG[i]=C(baking?ORANGE:GRAY,baking?3+Math.sin(T*2)*.2:.45+L*.04);
+      set(i,' ',0);if(rack>.25)BG[i]=C(GRAY,1+L*.12);return true;
+    });
+    pipe(hob-ovenHalf+.045,depth+.07,.69,hob+ovenHalf-.045,depth+.07,.69);
+    for(const u of compact?[-.055,.055]:[-.165,-.055,.055,.165])pipe(hob+u,depth+.033,.82,hob+u,depth+.065,.82,.023);
+  });
+  return {...model,radius:hl+.6,box:boxAt(x-s*.0575,y+c*.0575,c,s,hl,depth+.0575,0,height+.02),
+    kitchen:{hl,depth,angle,height,sink,radius,hob,compact}};
+}
 // Fern's front is west toward the dock. The room's south entrance therefore
 // maps through a quarter turn; windows and the world-view camera share it.
 const FERN_WINDOWS=[
@@ -36441,6 +36579,16 @@ function assembleArchipelago() {
     if (hseg(x - 1, y)) lights.push({ x: bx - .25, y: by + CURB, vert: false, bx, by });
     if (hseg(x, y)) lights.push({ x: bx + 2.25, y: by + 2 - CURB, vert: false, bx, by });
   }
+  // The airport road joins the west lane of this street. Its old curb is in the
+  // approach itself; put posts on the opposite curb, without moving the road.
+  const airportCurb=Math.floor(CAUSEWAY.x/8)*8+2-CURB;
+  for(const fixtures of [lamps,lights])for(let i=fixtures.length-1;i>=0;i--) {
+    const p=fixtures[i];
+    if(Math.abs(p.x-CAUSEWAY.x)>=CAUSEWAY.hw||p.y<CAUSEWAY.y1-2||p.y>CAUSEWAY.y1+3)continue;
+    if(fixtures.some(q=>q!==p&&Math.abs(q.x-airportCurb)<.01&&Math.abs(q.y-p.y)<.01))fixtures.splice(i,1);
+    else {p.x=airportCurb;if(fixtures===lamps&&p.ax)p.ax=-Math.abs(p.ax);}
+  }
+  rebuildLampGlow();
   // Outdated seam structure is replaced with the raised crossings below.
   bridgeBits.length = towers.length = boats.length = 0;
   // Keep working cranes on the industrial quay, rather than across public piers.
