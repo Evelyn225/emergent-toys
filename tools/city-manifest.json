@@ -135,6 +135,7 @@
     "city/coast-life.js",
     "city/cabin-cove.js",
     "city/furniture-quality.js",
+    "city/bathroom-quality.js",
     "city/home-quality.js",
     "city/home-furniture-render.js",
     "city/home-furnishing-ui.js",

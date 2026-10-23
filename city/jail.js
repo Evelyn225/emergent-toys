@@ -28,19 +28,7 @@ const bunk = (x, y, fy = 1) => [SEAT(x - 0.4, y, 0, fy, 0.58), SEAT(x + 0.3, y, 
 const steel = (i, t, L) => { BG[i] = C(GRAY, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : fract(HIT.w * 6) < 0.12 ? '-' : ' ', C(WHITE, L * 0.7)), true; };
 const porcelain = (i, t, L) => { BG[i] = C(WHITE, (3.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : ' ', C(GRAY, L * 0.7)), true; };
 let flushT = -9;
-const toilet = (x, y, back = -1, mat = steel) => [
-  BX(x, y + back * 0.3, 0.24, 0.09, 0, 0.82, mat), // the cistern
-  BX(x + 0.16, y + back * 0.2, 0.025, 0.04, 0.68, 0.72, (i, t, L) => (set(i, '-', C(WHITE, L)), true)), // its flush handle
-  BX(x, y + back * 0.02, 0.11, 0.13, 0, 0.3, mat), // the pedestal
-  { ...BX(x, y + back * 0.04, 0.21, 0.26, 0.3, 0.42, (i, t, L) => { // the bowl: an oval rim, water in the middle
-    const rim = mat === steel ? GRAY : WHITE;
-    if (HIT.face !== 5) return false; // leave the box's square sides transparent; the pedestal forms the bowl's base
-    const e = Math.hypot(HIT.u / 0.21, HIT.v / 0.26), swirl = T - flushT < 2.5;
-    if (e > 1) return false;
-    if (e > 0.68) { BG[i] = C(rim, 2.2 + L * 0.3); return set(i, 'o', C(mat === steel ? WHITE : GRAY, L)), true; }
-    if (swirl) { BG[i] = C(BLUE, 2 + L * 0.2); return set(i, '@*o~'[(Math.floor(Math.atan2(HIT.v, HIT.u) * 2 + T * 12) & 3)], C(CYAN, L * 1.3)), true; }
-    BG[i] = C(BLUE, 1.4 + L * 0.15); return set(i, e < 0.3 && hash(Math.floor(T * 2), 1, 15) > 0.6 ? '~' : ' ', C(CYAN, L)), true;
-  }), loo: [x, y + back * 0.04] }];
+const toilet = (x,y,back=-1,mat=steel) => BATHROOM_TOILET(x,y,back,mat);
 function jailProps(r) {
   const p = [];
   for (const cx of [4, 11, 18]) { // the three cells on your side (yours is the middle) and the three across

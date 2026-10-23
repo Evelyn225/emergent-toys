@@ -65,28 +65,9 @@ const inWc = (x, y, w = room && room.def.wc) => !!w && x >= w.x0 && x < w.x1 && 
 // from wherever you see it (through the doorway too), and the face on the other side of the same wall isn't
 const wcFaceInside = (mx, my, side, w = room.def.wc) => !!w && (side ? inWc(mx + 0.5, my + (py < my ? -0.5 : 1.5), w) : inWc(mx + (px < mx ? -0.5 : 1.5), my + 0.5, w));
 // a washbasin on its pedestal, its back to the wall behind (-fx, -fy), a mirror over it
-const washbasin = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
-  drum(vx, vy, 0.06, 0, 0.72, (i, t, L) => { BG[i] = C(WHITE, (3 + L * 0.3) * drumLit(0.06)); return set(i, ' ', 0), true; });
-  drum(vx, vy, 0.22, 0.72, 0.86, (i, t, L) => { if (HIT.face === 5) { const r = Math.hypot(HIT.u, HIT.v); BG[i] = C(r < 0.15 ? CYAN : WHITE, r < 0.15 ? 2 : 4); return set(i, r < 0.03 ? 'o' : ' ', C(GRAY, 4)), true; }
-    BG[i] = C(WHITE, (3.4 + L * 0.3) * drumLit(0.22)); return set(i, ' ', 0), true; });
-  rod(vx - fx * 0.2, vy - fy * 0.2, 0.86, vx - fx * 0.12, vy - fy * 0.12, 0.98, 0.012, GRAY, 1.3); // the tap
-  drawBox(boxAt(vx - fx * 0.27, vy - fy * 0.27, fx, fy, 0.01, 0.25, 1.15, 1.75), (i, t, L) => { BG[i] = C(CYAN, 1.6 + (HIT.w - 1.15) * 2); return set(i, fract((HIT.v + HIT.w) * 3) < 0.05 ? '/' : ' ', C(WHITE, 12)), true; }); // the mirror
-}, [0.24, 0.24, 0.86]);
-// An oval enamel bath: curved shell, open rim, recessed basin and a wall-end tap.
-const BATHTUB = (x,y) => ({...ROOM_MODEL(x,y,(vx,vy)=>{
-  const enamel=solid(WHITE,{bright:2.1}), n=32;
-  for(let k=0;k<n;k++) {
-    const t=(k+.5)*Math.PI*2/n, tx=-.37*Math.sin(t),ty=.99*Math.cos(t),len=Math.hypot(tx,ty);
-    drawBox(boxAt(vx+.37*Math.cos(t),vy+.99*Math.sin(t),tx/len,ty/len,len*Math.PI/n+.006,.048,.1,.62),enamel);
-  }
-  // The bottom sits below the rim; from above you can see into the bowl.
-  const basin=(i,t,L)=>{BG[i]=C(CYAN,1.4+L*.15);return set(i,HIT.face===5&&Math.hypot(HIT.u,HIT.v)<.04?'o':' ',C(GRAY,L)),true;};
-  drawBox(boxAt(vx,vy,0,1,.67,.31,.08,.18),basin);
-  for(const end of [-1,1])drum(vx,vy+end*.67,.31,.08,.18,basin);
-  rod(vx,vy-.99,.62,vx,vy-.99,.84,.018,GRAY,1.5);
-  rod(vx,vy-.99,.84,vx,vy-.81,.84,.018,GRAY,1.5);
-  for(const side of [-1,1])drum(vx+side*.13,vy-.95,.035,.63,.67,CHROME);
-},[.42,1.04,.62]),bath:true});
+const washbasin = (x,y,fx,fy) => BATHROOM_SINK(x,y,fx,fy);
+// A hollow oval enamel bath, with supported shell and a fitted tap.
+const BATHTUB = (x,y) => BATHROOM_TUB(x,y);
 // a bathroom wall from inside: white tiles to shoulder height (thin grout lines), a trim, painted plaster above
 function wcWall(i, u, z, L) {
   if (z > 1.3) { BG[i] = C(WHITE, 1.7 + L * 0.1); return set(i, ' ', 0); }
