@@ -26708,7 +26708,7 @@ let stepAcc = 0, lastPos = null, clackT = 0, rotorT = 0;
 function audioTick(dt) {
   tickGameplayAudio();
   if (!actx || actx.state !== 'running') return;
-  tickWorkshopHum();
+  tickWorkshopHum(); tickSmokeAlarm();
   const now = actx.currentTime, indoors = mode === 'room';
   master.gain.setTargetAtTime(soundOn ? MASTER * settings.master ** 2 * 1.5 * (1 - fade) : 0, now, 0.3); // the world goes quiet as you fall asleep
   // the el: how close a moving train is, if you're by the el
@@ -31087,7 +31087,27 @@ function startCooking(r) {
   hidePanel(cookEl);
   cookCtx.recipe = r.id;
   startGame('cook', 'cook', '', { recipe: r.id });
-  game.onDone = verdict => { say(serveDish(r, verdict, cookCtx.pantry), 5); if (actx) sfxUse('chime'); };
+  game.onDone = verdict => { say(serveDish(r, verdict, cookCtx.pantry), 5); if (actx) sfxUse('chime'); cookSmoke(verdict); };
+}
+// what's left in the air afterwards, where you cooked (at the grill or the fire; at a stove, in front of you): a wisp of
+// steam off a good dish, smoke off a burnt one (indoors it hangs about the kitchen, and sets the smoke alarm off)
+let smokeAlarm = null; // { at: the room, until }
+function cookSmoke(verdict) {
+  const at = placeKey(), inside = mode === 'room', s = inside ? 1 : 0.1, spot = cookCtx?.spot;
+  if (at === null) return;
+  const x = spot ? spot.x : px + Math.cos(a) * 0.6 * s, y = spot ? spot.y : py + Math.sin(a) * 0.6 * s;
+  const z = inside ? 1.1 : (spot?.z ?? terrainHeight(x, y)) + 0.1, burnt = verdict === 'burnt';
+  for (let k = 0; k < (burnt ? 8 : 2); k++) haze.push({ at, kind: burnt ? 'smoke' : 'steam', s, x: x + (Math.random() - 0.5) * 0.3 * s, y: y + (Math.random() - 0.5) * 0.3 * s,
+    z: z + k * 0.08 * s, r: (burnt ? 0.25 : 0.12) * s, rMax: (burnt ? 0.9 : 0.3) * s, vx: 0, vy: 0, vz: 0.06 * s, life: 1, fade: burnt ? (inside ? 1 / 40 : 1 / 8) : 1 / 4, seed: Math.random() * 100 });
+  while (haze.length > 140) haze.shift();
+  if (burnt && inside) smokeAlarm = { at, until: T + 8, next: T };
+}
+// its chirps, three at a time, while you're in the room with it
+function tickSmokeAlarm() {
+  if (!smokeAlarm || T > smokeAlarm.until) { smokeAlarm = null; return; }
+  if (placeKey() !== smokeAlarm.at || T < smokeAlarm.next) return;
+  smokeAlarm.next = T + 1.4;
+  for (let k = 0; k < 3; k++) tone(actx.currentTime + k * 0.22, 3100, 0.14, 0.035, 'square');
 }
 // keys while the panel's up (goods-ui.js panelKey asks); true if handled
 function cookPanelKey(e) {

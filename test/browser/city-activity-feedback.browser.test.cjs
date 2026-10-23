@@ -169,6 +169,34 @@ test('workshops: the batch rotor hums with the power you give it, vents hiss, se
   assert.equal(r.after, null, 'and stops when the batch is done');
 }));
 
+test('cooking: a burnt dish leaves the kitchen smoky and chirps the smoke alarm while you are in there; a good one just steams', () => fixture(async page => {
+  const r = await page.evaluate(async () => {
+    audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });
+    const chirps = [], realTone = tone; tone = (at, f) => { if (f === 3100) chirps.push(at); };
+    const cook = verdict => { // the real path: the panel, a recipe, the pan, and the end of it
+      clearInventory(); carryItem({ id: Object.keys(ITEMS).find(k => ITEMS[k].kind === 'fish'), uses: 1 }); carryItem({ id: 'butter', uses: 1 });
+      openCooking(mode === 'room' ? 'stove' : 'grill', [], mode === 'room' ? null : nearGrill()); startCooking(RECIPES.find(r => r.id === 'panfish'));
+      const done = game.onDone; game = null; done(verdict);
+    };
+    try {
+      enterRoom('islandshelter', { ret: [626, 195, 0] }, [6, 8, 0]); haze.length = 0;
+      cook('burnt'); const key = placeKey(), smoke = haze.filter(p => p.at === key && p.kind === 'smoke');
+      for (let k = 0; k < 10; k++) { T += .5; tickSmokeAlarm(); } const inRoom = chirps.length;
+      const lingering = haze.filter(p => p.at === key).length; for (let k = 0; k < 60; k++) stepHaze(.25); const after15s = haze.filter(p => p.at === key).length;
+      chirps.length = 0; smokeAlarm = { at: key, until: T + 8, next: T }; leaveRoom(); for (let k = 0; k < 6; k++) { T += .5; tickSmokeAlarm(); } const outside = chirps.length;
+      // a fine dish at the grill outside: a little steam, no alarm
+      const grill = GRILLS.find(g => g.on === 'grill'); mode = 'walk'; room = null; px = grill.x; py = grill.y + .2; haze.length = 0; smokeAlarm = null;
+      cook('fine');
+      return { smoke: smoke.length, inRoom, lingering, after15s, outside, grillHaze: haze.map(p => p.kind), grillAlarm: smokeAlarm };
+    } finally { tone = realTone; }
+  });
+  assert.ok(r.smoke >= 6, 'smoke fills the kitchen: ' + JSON.stringify(r));
+  assert.ok(r.inRoom >= 6 && r.inRoom % 3 === 0, 'the alarm chirps in threes: ' + JSON.stringify(r));
+  assert.ok(r.after15s >= r.lingering * .75, 'and the smoke hangs about indoors');
+  assert.equal(r.outside, 0, 'not heard once you have left the room');
+  assert.ok(r.grillHaze.length === 2 && r.grillHaze.every(k => k === 'steam') && r.grillAlarm === null, JSON.stringify(r));
+}));
+
 test('crime: a shot parked car sets its alarm off where it stands, one voice, gone after a while or when you get in', () => fixture(async page => {
   const r = await page.evaluate(async () => {
     audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });
