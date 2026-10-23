@@ -26522,7 +26522,7 @@ function playClip(name, gain, when = actx.currentTime, spatial=null) {
   });
 }
 function worldSoundProfile(x,y,z,range=180,reference=14) {
-  const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'?terrainHeight(x0,y0)+.17:eye;
+  const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'||!Number.isFinite(eye)?terrainHeight(x0,y0)+.17:eye; // (eye: set by the first render)
   return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
 // a recording heard from somewhere in the world: later, quieter and duller with distance, panned to its side,

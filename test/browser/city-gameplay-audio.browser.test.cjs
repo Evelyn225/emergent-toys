@@ -218,6 +218,17 @@ test('indoor sirens use the actual outdoor location instead of the room furnitur
   assert.ok(result.distance>=2&&result.distance<3);
 }));
 
+test('world sounds are placed sensibly before the first frame has set the eye height (no NaN reaching Web Audio)', () => fixture(async page => {
+  const r = await page.evaluate(() => {
+    const fern = FIRES.find(o => near(o.x, o.y, 525.5, 238) < 1);
+    eye = undefined; mode = 'walk'; room = null; px = fern.x - .3; py = fern.y; a = 0; night = 1;
+    const p = worldSoundProfile(fern.x, fern.y, 0);
+    for (let k = 0; k < 40; k++) tickFireSounds(.1); // (threw building a NaN filter, CI after #140)
+    return [p.gain, p.cutoff, p.pan, p.delay].every(Number.isFinite);
+  });
+  assert.equal(r, true);
+}));
+
 test('fires: Fern camp burns at night or while cooking, and lit campfires and burning cars crackle from where they are', () => fixture(async page => {
   const result = await page.evaluate(() => {
     const fern = FIRES.find(o => near(o.x, o.y, 525.5, 238) < 1), pops = [], realBurst = burst;
