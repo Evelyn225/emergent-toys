@@ -50,8 +50,8 @@ test('hotel tiers have reachable bathrooms, usable sofas and TVs, with kitchens 
    enterRoom('hotelroom',{suite:tier===2,lobby:{word:tier===0?'MOTEL':'HOTEL',ret:[100,100,0]}},def.entry);
    const seats=room.props.filter(p=>p.seat),seated=seats.length,amenities=def.hotelAmenities;[px,py]=[seats[0].x,seats[0].y+.65];const sitting=sitDown()&&!!body.seat;standUp();[px,py]=def.entry;
    const route=roomPath(px,py,room.W-2.5,3.5);
-   [px,py]=amenities.tvApproach;interact();const tv=room.tv===true;
-   let cooking=false;if(amenities.stove){[px,py]=[amenities.stove[0]-1,amenities.stove[1]];interact();cooking=cookCtx?.on==='stove';hidePanel(cookEl);}
+   [px,py]=amenities.tvApproach;a=Math.atan2(amenities.tv[1]-py,amenities.tv[0]-px);render(0);interact();const tv=room.tv===true;
+   let cooking=false;if(amenities.stove){[px,py]=[amenities.stove[0]-1,amenities.stove[1]];a=Math.atan2(amenities.stove[1]-py,amenities.stove[0]-px);render(0);interact();cooking=cookCtx?.on==='stove';hidePanel(cookEl);}
    env(0);render(0);result.push({tier,w:room.W,h:room.H,seated,sitting,tv,cooking,bath:route.length>0,windows:!!room.exterior});
   }return result;
  });for(const o of r){assert.ok(o.seated>=3);assert.equal(o.sitting,true);assert.equal(o.tv,true);assert.equal(o.cooking,o.tier>0);assert.equal(o.bath,true);assert.equal(o.windows,true);}assert.ok(r[2].w*r[2].h>r[1].w*r[1].h);
