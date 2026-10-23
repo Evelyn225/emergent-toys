@@ -827,7 +827,7 @@ function homePlan(w, h, tier) {
   };
   const home = tier === 0
     ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.18, 4.4], fridge: [8.45, 5.6], pet: [1.4, 7.2], dining: [5.5, 5.8] }
-    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.6 : 8.7], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
+    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [2.7, tier === 2 ? 13.6 : 11.8], tv: [2.7, tier === 2 ? 9.63 : 8.63], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
   const wc = tier === 0 ? { x0: 7, y0: 1, x1: 9, y1: 4, sign: [6, 3, 3.5] }
     : { x0: 15, y0: 1, x1: inside, y1: 5, sign: [14, 4, 4.5] };
   wall(wc.x0 - 1, 1, wc.x0 - 1, wc.y1, 'W');
