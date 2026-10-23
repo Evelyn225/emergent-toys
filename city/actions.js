@@ -293,7 +293,7 @@ function interact() {
     }
     else { // a stolen car: if anyone saw, the police hear about it
       takePoliceCar(c);
-      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
+      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0; delete c.alarmT; // (the alarm: off with the key)
       const pump = gasFilling(c); c.pit = null; c.gas = null; // (filling up at a gas station: gas.js)
       if (pump && !c.owned && !c.mine) {
         c.mine = true; ejectDriver(c);

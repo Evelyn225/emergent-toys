@@ -987,8 +987,9 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], wreck = !!m.wrecked, lightsOn = !wreck && (night > 0.4 || overcast > 0.5);
   // damage (damage.js): dents and scrapes over the body, more of them the worse it is; a wreck is burnt black
   const dmg = m.dmg || 0, dented = (u, w) => dmg >= DMG_DENTS && hash(Math.floor(u * 22), Math.floor(w * 40), m.id) < (dmg - 15) / 160;
-  const fobBlinking = m.owned && m.fobBlinkAt !== undefined && T - m.fobBlinkAt < 2.4;
-  const fobHeadlight = !fobBlinking || Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0;
+  const alarmFlash = carAlarming(m) && fract(T * 1.5) < 0.5; // (an alarm going: every light on it flashing)
+  const fobBlinking = m.owned && m.fobBlinkAt !== undefined && T - m.fobBlinkAt < 2.4 || carAlarming(m);
+  const fobHeadlight = !fobBlinking || (carAlarming(m) ? alarmFlash : Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0);
   const braking = !wreck && (m.brake || m.v < 0.05), body = wreck ? GRAY : m.body, burnt = wreck ? 0.35 : 1;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
   vehicleDrawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
@@ -998,7 +999,7 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
     if (f > 2 && f < 5 && w > 0.025 && dented(u, w)) { BG[i] = C(body, (0.8 + L * 0.3) * k); return set(i, hash(i, m.id, 3) < 0.5 ? '%' : '~', C(GRAY, 4 + L * 0.3)), true; }
     if (f === 5) return set(i, m.kind === 'amb' && Math.abs(u) < 0.05 && Math.abs(v) < 0.05 ? '+' : ' ', C(RED, 12)), true;
     if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(fobBlinking ? (fobHeadlight ? WHITE : BLACK) : WHITE, fobBlinking || lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
-    if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking ? 15 : 8)), true;
+    if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking || alarmFlash ? 15 : 8)), true;
     if (f === 6) return set(i, ' ', 0), true;
     const wheel = w < 0.035 && Math.min(Math.abs(u - hl * 0.62), Math.abs(u + hl * 0.62)) < 0.04;
     if (wheel) { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; }
