@@ -117,7 +117,7 @@ function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(ambB
 // a short recorded loop, decoded once and played round and round into `dest` (whose gain the mix drives)
 function loopClip(name, dest) {
   fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).then(buf => {
-    const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(dest); s.start();
+    const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(dest); s.start(); dest.src = s; // (so the mix can pitch it)
   }).catch(() => {}); // (no file, or opened from disk: silent)
 }
 function makeSynths() {
@@ -170,6 +170,13 @@ function sfxStep(surface, run) {
   if (thump) tone(at, thump * (0.9 + Math.random() * 0.2), 0.07, g * 1.2);
   if (surface === 'metal') tone(at, 600 + Math.random() * 150, 0.1, g * 0.12, 'sine');
 }
+// the board's own noises (skate.js): a foot pushing off, a foot dragged to brake, the deck scraping along a wall
+function sfxSkate(kind, k = 1) {
+  const at = actx.currentTime;
+  if (kind === 'push') burst(at, 0.09, [filt('lowpass', 700)], 0.08);
+  else if (kind === 'drag') burst(at, 0.16, [filt('bandpass', 1600, 0.8)], 0.05 * k);
+  else burst(at, 0.2, [filt('bandpass', 2600, 1.5)], 0.09 * k);
+}
 function sfxTill() { // cha-ching: the drawer, then the bell
   const at = actx.currentTime;
   burst(at, 0.08, [filt('bandpass', 2500, 1)], 0.25);
@@ -197,7 +204,7 @@ function playClip(name, gain, when = actx.currentTime, spatial=null) {
   });
 }
 function worldSoundProfile(x,y,z,range=180,reference=14) {
-  const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'?terrainHeight(x0,y0)+.17:eye;
+  const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'||!Number.isFinite(eye)?terrainHeight(x0,y0)+.17:eye; // (eye: set by the first render)
   return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
 let peeLoopVoice = null;
@@ -340,12 +347,13 @@ function audioTick(dt) {
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record:homeRecordAudio(), district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
     wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
-    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
+    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling() ? Math.max(SK.v / SK_TOP, 0.25) : 0, onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
   if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
+  if (fx.skating) synth.board.src?.playbackRate.setTargetAtTime(0.75 + 0.3 * Math.min(1.3, SK.v / SK_TOP), now, 0.1); // (the wheels' whirr rising with speed)
   synth.fluorescent.gain.setTargetAtTime(mix.fluorescent * LEVEL.fluorescent, now, GLIDE);
   synth.watch.gain.setTargetAtTime(mix.watch * LEVEL.watch, now, GLIDE);
   if (indoors && room.kind === 'conservatory') {

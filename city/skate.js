@@ -15,7 +15,7 @@ const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 0
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
 // kick: the push in progress (0..1), charge: when Space went down (-1: it isn't), combo: { names, pts, t }
 const SK = { v: 0, dir: 0, spin: 0, stance: 1, steer: 0, kick: 0, kicking: false, charge: -1, popT: -9, bail: 0, bailAt: null,
-  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0 };
+  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0, dragT: 0, scrapeT: -9 };
 let skateView = null; // while the frame's drawn from behind you: { x, y, a } (where you really are) and the camera's eye
 const skateCamOn = () => skatingNow() && third && !freecam;
 const skateAir = () => body.z > 0 || body.vz > 0;
@@ -46,10 +46,12 @@ function stepSkate(dt) {
   else {
     const top = (K.ShiftLeft || K.ShiftRight ? SK_RUN_TOP : SK_TOP) * (fx.caffeine > 0 ? 1.1 : 1);
     if (f > 0 && SK.charge < 0 && (SK.v < top - 0.01 || SK.kick > 0)) { // a push: a foot down, kicking along
-      SK.kicking = true; SK.kick += dt / 0.7;
+      SK.kicking = true; const kick0 = SK.kick; SK.kick += dt / 0.7;
       if (SK.kick >= 1) SK.kick = 0;
+      if (actx && kick0 < 0.15 && SK.kick >= 0.15) sfxSkate('push'); // (the foot meeting the street)
       if (SK.kick > 0.15 && SK.kick < 0.6) SK.v = Math.min(top, SK.v + SK_PUSH * 2.2 * dt);
     } else SK.kick = 0;
+    if (f < 0 && SK.v > 0.1 && (SK.dragT -= dt) <= 0) { SK.dragT = 0.12; if (actx) sfxSkate('drag', Math.min(1, SK.v / SK_TOP)); } // a foot dragged along to slow you
     SK.v = Math.max(0, SK.v - (f < 0 ? SK_BRAKE : SK_ROLL + SK.v * 0.05) * dt);
     a += s * (2.6 - 1.3 * Math.min(1, SK.v / SK_TOP)) * dt; // carving: tighter slow, wider fast
     SK.dir = a;
@@ -66,6 +68,7 @@ function stepSkate(dt) {
   if (want > 1e-6 && got < want * 0.98) { // something in the way: scrape along it, or stop dead
     const lost = SK.v * (1 - got / want);
     SK.v *= got / want;
+    if (actx && lost > 0.03 && T > SK.scrapeT) { SK.scrapeT = T + 0.15; sfxSkate('scrape', clamp(lost * 3, 0.3, 1)); }
     if (got > 1e-6) { SK.dir = Math.atan2(my, mx); if (!air) a = SK.dir; }
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }

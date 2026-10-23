@@ -104,7 +104,7 @@ function audioMix(s) {
   // this after event beds so a distant city fireworks show cannot restore crowds.
   if(s.wilderness){out.city=out.crowd=out.night=out.pachinko=out.arcade=0;out.birds=(.25+.75*s.day)*(1-.65*s.rain);}
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
-  out.board = s.skating ? 0.7 : 0; // wheels on asphalt
+  out.board = s.skating ? 0.3 + 0.4 * clamp(s.skating, 0, 1.3) : 0; // wheels on asphalt, louder the faster they roll (skating: speed / cruising top)
   out.engine = s.mode === 'air' ? 0.35 + 0.55 * clamp(s.throttle || 0, 0, 1) : s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
   if(s.mode==='ferry') {
     out.engine=s.ferryInside ? .12 : .18;out.engine+=s.ferryMoving ? .1 : 0;

@@ -90,6 +90,36 @@ test('damage: a round leaves a hole on the face of the wall it hit, and clanks o
   assert.ok(r.carHit && r.clank >= 1, 'a clank off the car: ' + JSON.stringify(r));
 }));
 
+test('skating: each push lands with a scuff, a dragged foot scrapes, a wall scrapes, and the wheels whirr up with speed', () => fixture(async page => {
+  const r = await page.evaluate(async () => {
+    audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });
+    paused = true; mode = 'walk'; room = null; me = null; [px, py] = citySourcePoint(41.5, 73.5); a = 0; third = true;
+    carryItem({ id: 'skateboard', uses: 0 }); held = inv.findIndex(it => it.id === 'skateboard'); fx.skating = true;
+    Object.assign(body, { z: 0, vz: 0, peak: 0, mx: 0, my: 0, trick: null, seat: null, crouch: 0, buf: -9 }); SK.lastT = -9;
+    const heard = [], real = sfxSkate; sfxSkate = (kind, k) => heard.push(kind);
+    const ride = (n, keys = {}) => { for (let k = 0; k < n; k++) { for (const c in K) K[c] = 0; Object.assign(K, keys); T += 1 / 30; stepSkate(1 / 30); stepBody(1 / 30); } };
+    const count = kind => heard.filter(h => h === kind).length;
+    try {
+      ride(1); ride(42, { KeyW: 1 }); const pushes = count('push'), cruising = SK.v;
+      const clock = s => { const t0 = actx.currentTime; return new Promise(res => { const wait = () => actx.currentTime > t0 + s ? res() : setTimeout(wait, 20); wait(); }); };
+      await new Promise(res => { const wait = () => synth.board.src ? res() : setTimeout(wait, 20); wait(); });
+      audioTick(1 / 30); await clock(.4); const fast = synth.board.src.playbackRate.value;
+      const v0 = SK.v; SK.v = .15; audioTick(1 / 30); await clock(.4); const slow = synth.board.src.playbackRate.value; SK.v = v0;
+      heard.length = 0; ride(20, { KeyS: 1 }); const drags = count('drag');
+      // into the wall of the nearest building, at an angle, at speed
+      let wall = null;
+      for (let y = 300; y < 500 && !wall; y++) for (let x = 300; x < 500 && !wall; x++)
+        if (map[idx(x, y)] > .6 && !map[idx(x, y + 1)] && !map[idx(x, y + 2)] && !ROAD[idx(x, y + 1)]) wall = [x, y];
+      px = wall[0] + .5; py = wall[1] + 1.3; a = -Math.PI / 2 + .35; SK.dir = a; SK.v = SK_TOP; heard.length = 0; ride(30);
+      return { pushes, cruising, drags, scrapes: count('scrape'), slow, fast };
+    } finally { sfxSkate = real; }
+  });
+  assert.ok(r.pushes >= 2 && r.pushes <= 3, 'one scuff per push, not per frame: ' + JSON.stringify(r));
+  assert.ok(r.drags >= 3, 'the dragged foot scrapes while braking: ' + JSON.stringify(r));
+  assert.ok(r.scrapes >= 1, 'the deck scrapes along the wall: ' + JSON.stringify(r));
+  assert.ok(r.fast > r.slow, 'the wheels whirr higher at speed');
+}));
+
 test('crime: a shot parked car sets its alarm off where it stands, one voice, gone after a while or when you get in', () => fixture(async page => {
   const r = await page.evaluate(async () => {
     audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });

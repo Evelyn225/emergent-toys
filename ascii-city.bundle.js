@@ -6026,7 +6026,7 @@ function audioMix(s) {
   // this after event beds so a distant city fireworks show cannot restore crowds.
   if(s.wilderness){out.city=out.crowd=out.night=out.pachinko=out.arcade=0;out.birds=(.25+.75*s.day)*(1-.65*s.rain);}
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
-  out.board = s.skating ? 0.7 : 0; // wheels on asphalt
+  out.board = s.skating ? 0.3 + 0.4 * clamp(s.skating, 0, 1.3) : 0; // wheels on asphalt, louder the faster they roll (skating: speed / cruising top)
   out.engine = s.mode === 'air' ? 0.35 + 0.55 * clamp(s.throttle || 0, 0, 1) : s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
   if(s.mode==='ferry') {
     out.engine=s.ferryInside ? .12 : .18;out.engine+=s.ferryMoving ? .1 : 0;
@@ -26479,7 +26479,7 @@ function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(ambB
 // a short recorded loop, decoded once and played round and round into `dest` (whose gain the mix drives)
 function loopClip(name, dest) {
   fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).then(buf => {
-    const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(dest); s.start();
+    const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(dest); s.start(); dest.src = s; // (so the mix can pitch it)
   }).catch(() => {}); // (no file, or opened from disk: silent)
 }
 function makeSynths() {
@@ -26532,6 +26532,13 @@ function sfxStep(surface, run) {
   if (thump) tone(at, thump * (0.9 + Math.random() * 0.2), 0.07, g * 1.2);
   if (surface === 'metal') tone(at, 600 + Math.random() * 150, 0.1, g * 0.12, 'sine');
 }
+// the board's own noises (skate.js): a foot pushing off, a foot dragged to brake, the deck scraping along a wall
+function sfxSkate(kind, k = 1) {
+  const at = actx.currentTime;
+  if (kind === 'push') burst(at, 0.09, [filt('lowpass', 700)], 0.08);
+  else if (kind === 'drag') burst(at, 0.16, [filt('bandpass', 1600, 0.8)], 0.05 * k);
+  else burst(at, 0.2, [filt('bandpass', 2600, 1.5)], 0.09 * k);
+}
 function sfxTill() { // cha-ching: the drawer, then the bell
   const at = actx.currentTime;
   burst(at, 0.08, [filt('bandpass', 2500, 1)], 0.25);
@@ -26559,7 +26566,7 @@ function playClip(name, gain, when = actx.currentTime, spatial=null) {
   });
 }
 function worldSoundProfile(x,y,z,range=180,reference=14) {
-  const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'?terrainHeight(x0,y0)+.17:eye;
+  const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'||!Number.isFinite(eye)?terrainHeight(x0,y0)+.17:eye; // (eye: set by the first render)
   return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
 let peeLoopVoice = null;
@@ -26702,12 +26709,13 @@ function audioTick(dt) {
   else if(worldReady&&mode!=='room')waterfall=clamp(1-near(px,py,627,190)/8,0,1);
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record:homeRecordAudio(), district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
     wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
-    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
+    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling() ? Math.max(SK.v / SK_TOP, 0.25) : 0, onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade: courierSerenade() });
   for (const k in beds) tickBed(beds[k], mix[k] * LEVEL[k], dt);
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
   if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
+  if (fx.skating) synth.board.src?.playbackRate.setTargetAtTime(0.75 + 0.3 * Math.min(1.3, SK.v / SK_TOP), now, 0.1); // (the wheels' whirr rising with speed)
   synth.fluorescent.gain.setTargetAtTime(mix.fluorescent * LEVEL.fluorescent, now, GLIDE);
   synth.watch.gain.setTargetAtTime(mix.watch * LEVEL.watch, now, GLIDE);
   if (indoors && room.kind === 'conservatory') {
@@ -33225,7 +33233,7 @@ const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 0
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
 // kick: the push in progress (0..1), charge: when Space went down (-1: it isn't), combo: { names, pts, t }
 const SK = { v: 0, dir: 0, spin: 0, stance: 1, steer: 0, kick: 0, kicking: false, charge: -1, popT: -9, bail: 0, bailAt: null,
-  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0 };
+  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0, dragT: 0, scrapeT: -9 };
 let skateView = null; // while the frame's drawn from behind you: { x, y, a } (where you really are) and the camera's eye
 const skateCamOn = () => skatingNow() && third && !freecam;
 const skateAir = () => body.z > 0 || body.vz > 0;
@@ -33256,10 +33264,12 @@ function stepSkate(dt) {
   else {
     const top = (K.ShiftLeft || K.ShiftRight ? SK_RUN_TOP : SK_TOP) * (fx.caffeine > 0 ? 1.1 : 1);
     if (f > 0 && SK.charge < 0 && (SK.v < top - 0.01 || SK.kick > 0)) { // a push: a foot down, kicking along
-      SK.kicking = true; SK.kick += dt / 0.7;
+      SK.kicking = true; const kick0 = SK.kick; SK.kick += dt / 0.7;
       if (SK.kick >= 1) SK.kick = 0;
+      if (actx && kick0 < 0.15 && SK.kick >= 0.15) sfxSkate('push'); // (the foot meeting the street)
       if (SK.kick > 0.15 && SK.kick < 0.6) SK.v = Math.min(top, SK.v + SK_PUSH * 2.2 * dt);
     } else SK.kick = 0;
+    if (f < 0 && SK.v > 0.1 && (SK.dragT -= dt) <= 0) { SK.dragT = 0.12; if (actx) sfxSkate('drag', Math.min(1, SK.v / SK_TOP)); } // a foot dragged along to slow you
     SK.v = Math.max(0, SK.v - (f < 0 ? SK_BRAKE : SK_ROLL + SK.v * 0.05) * dt);
     a += s * (2.6 - 1.3 * Math.min(1, SK.v / SK_TOP)) * dt; // carving: tighter slow, wider fast
     SK.dir = a;
@@ -33276,6 +33286,7 @@ function stepSkate(dt) {
   if (want > 1e-6 && got < want * 0.98) { // something in the way: scrape along it, or stop dead
     const lost = SK.v * (1 - got / want);
     SK.v *= got / want;
+    if (actx && lost > 0.03 && T > SK.scrapeT) { SK.scrapeT = T + 0.15; sfxSkate('scrape', clamp(lost * 3, 0.3, 1)); }
     if (got > 1e-6) { SK.dir = Math.atan2(my, mx); if (!air) a = SK.dir; }
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }
