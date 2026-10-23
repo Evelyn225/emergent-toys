@@ -32091,7 +32091,31 @@ function stepSteam(dt) {
 // get within a few metres and they all take off at once, away from you, wings going, up and gone
 const flocks = []; // { x, y, birds: [{ dx, dy, ph, dir, fx, fy, fz }], scared: 0 (or the time they went up) }
 let flockT = 0;
-const PIGEON = { peck: pad([' _ ', '(o>', ' "']), look: pad([' _ ', '(o>', '/ \\']), up: ['\\v/'], down: ['/^\\'] };
+// A pigeon, built like the other animals (figures.js): a plump body, small head on a sheened neck, two dark bars on
+// each folded wing, a dark-tipped tail, pink feet. Frames: 0 head up, 1 pecking, 2 wings up, 3 wings down.
+ANIMAL_BODIES.pigeon = frame => {
+  const R = AR, fly = frame >= 2, peck = frame === 1;
+  const head = peck ? [0, 3.4, 1.5] : [0, 2.5, 6.1], neckTop = peck ? [0, 2.9, 2.2] : [0, 2.1, 5.6];
+  const parts = [figEll([0, -0.3, 3.7], AN_I, [2.1, 3.3, 2.1], h => h.l[1] > 0.55 && h.l[2] < 0.2 ? R.PALE : R.BODY), // (a paler breast)
+    figCap([0, 1.6, 4.4], neckTop, 1.15, () => R.MARK), figEll(head, AN_I, [1.05, 1.2, 1.05], () => R.HEAD),
+    figCap(fAdd(head, [0, 1, -0.15]), fAdd(head, [0, 1.95, -0.5]), 0.28, () => R.BEAK), figEll(fAdd(head, [0, 1.05, 0.15]), AN_I, [0.32, 0.25, 0.22], () => R.PALE),
+    figEll([0, -3.9, 3.4], AN_I, [1.15, 1.9, 0.38], h => h.l[1] < -0.55 ? R.PUPIL : R.WING)]; // the tail, its dark band
+  for (const side of [-1, 1]) {
+    if (!fly) {
+      parts.push(figEll([side * 1.75, -0.8, 4.1], AN_I, [0.85, 2.8, 1.25], h => Math.abs(h.l[1] + 0.15) < 0.09 || Math.abs(h.l[1] + 0.45) < 0.09 ? R.PUPIL : R.WING)); // folded, two bars
+      parts.push(figCap([side * 0.7, 0, 1.9], [side * 0.7, 0.4, 0.15], 0.28, () => R.LEG, false));
+    } else {
+      const tipZ = frame === 2 ? 8.5 : 0.8, midZ = frame === 2 ? 6.8 : 2.4;
+      parts.push(figCap([side * 1.6, 0, 4.4], [side * 5.5, -0.6, midZ], 0.9, () => R.WING), figCap([side * 5.5, -0.6, midZ], [side * 9, -1.4, tipZ], 0.5, () => R.PUPIL));
+    }
+  }
+  return { parts, decals: animalEyes(head, 1.05, 2) };
+};
+// three plumages a city flock mixes: the usual slate blue-grey, a dark chequer, a pale one
+const PIGEON_LOOKS = [
+  animalLook('pigeon', { body: [GRAY, 7], head: [GRAY, 6], wing: [GRAY, 9], mark: [GREEN, 6], pupil: [GRAY, 2], beak: [GRAY, 3], pale: [GRAY, 10], leg: [MAG, 6] }),
+  animalLook('pigeon', { body: [GRAY, 4], head: [GRAY, 3], wing: [GRAY, 5], mark: [MAG, 5], pupil: [GRAY, 1], beak: [GRAY, 2], pale: [GRAY, 7], leg: [MAG, 6] }),
+  animalLook('pigeon', { body: [WHITE, 12], head: [WHITE, 11], wing: [WHITE, 13], mark: [GREEN, 9], pupil: [BRICK, 7], beak: [GRAY, 4], pale: [WHITE, 14], leg: [MAG, 7] })];
 const pigeonSpot = (x, y) => { // somewhere a pigeon would be: open ground or a sidewalk, not out in the traffic
   if (map[idx(Math.floor(x), Math.floor(y))] || isWater(x, y) || !free(x, y) || inGardens(x, y)) return false;
   const road = ROAD[idx(Math.floor(x), Math.floor(y))];
@@ -32127,15 +32151,18 @@ function drawPigeons() {
   for (const f of flocks) for (const b of f.birds) {
     const vx = rel(f.x + b.dx - px), vy = rel(f.y + b.dy - py);
     if (Math.abs(vx) > vis || Math.abs(vy) > vis) continue;
-    let art;
-    if (f.scared) art = fract(T * 7 + b.ph) < 0.5 ? PIGEON.up : PIGEON.down;
-    else { // pecking, looking about, shuffling a step now and then
+    b.hd ??= b.dir < 0 ? Math.PI : 0; // (which way it's facing)
+    let frame;
+    if (f.scared) { frame = fract(T * 7 + b.ph) < 0.5 ? 2 : 3; b.hd = Math.atan2(b.fy, b.fx); } // flying off the way it's going
+    else { // pecking, looking about, shuffling a step forward and turning now and then
       const t = fract(T * 0.35 + b.ph * 0.1);
-      art = t < 0.55 ? (fract(T * 2.5 + b.ph) < 0.5 ? PIGEON.peck : PIGEON.look) : PIGEON.look;
-      if (t > 0.9) b.dx += b.dir * 0.004 * (1 / 60);
+      frame = t < 0.55 && fract(T * 2.5 + b.ph) < 0.5 ? 1 : 0;
+      if (t > 0.9) { b.dx += Math.cos(b.hd) * 0.004 / 60; b.dy += Math.sin(b.hd) * 0.004 / 60; }
+      const cycle = Math.floor(T * 0.35 + b.ph * 0.1);
+      if (t > 0.97 && b.turned !== cycle) { b.turned = cycle; b.hd += (hash(cycle, Math.floor(b.ph * 100), 2381) - 0.5) * 1.4; } // (up to 40 degrees, once a cycle)
     }
-    if (!f.scared && b.dir < 0) art = art.map(l => [...l].reverse().join('').replace(/>/g, '<'));
-    drawArt(vx, vy, terrainHeight(f.x+b.dx,f.y+b.dy)+(b.z||0), f.scared ? 0.022 : 0.03, f.scared ? 0.007 : 0.028, art, (c, row, L) => c === '>' || c === '<' ? C(ORANGE, Math.max(L, 6)) : row === 1 && c === 'o' ? C(WHITE, Math.max(L, 8)) : C(GRAY, Math.max(L, 6)));
+    if (!inView(vx, vy, 0.05)) continue;
+    drawAnimal(vx, vy, terrainHeight(f.x + b.dx, f.y + b.dy) + (b.z || 0), 0.09, Math.cos(b.hd), Math.sin(b.hd), PIGEON_LOOKS[Math.floor(b.ph * 7) % 7 < 5 ? 0 : Math.floor(b.ph * 7) % 7 - 4], frame);
   }
 }
 // ===== playing a minigame (minigames.js): an arcade cabinet or a work shift takes over the screen. The game's grid is
