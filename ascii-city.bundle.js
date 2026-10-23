@@ -896,7 +896,7 @@ function figBody(look, key) {
 
 // ---- ray casting the parts: a ray along -V through (u, z) on the view plane. Fills FIG_HIT; returns t or -1.
 const FIG_HIT = { t: 0, l: [0, 0, 0], s: 0, n: [0, 0, 0] };
-function figHitPart(P, o, d) {
+function figHitPart(P, o, d, exit = false) {
   if (P.k === 2) { // capsule (Inigo Quilez's), and how far along it
     const ba = fSub(P.b, P.a), oa = fSub(o, P.a), baba = fDot(ba, ba), bard = fDot(ba, d), baoa = fDot(ba, oa), rdoa = fDot(d, oa), oaoa = fDot(oa, oa);
     const A = baba - bard * bard, B = baba * rdoa - baoa * bard, Cc = baba * oaoa - baoa * baoa - P.r * P.r * baba;
@@ -916,7 +916,7 @@ function figHitPart(P, o, d) {
     const lo = [fDot(q, A[0]) / P.r[0], fDot(q, A[1]) / P.r[1], fDot(q, A[2]) / P.r[2]], ld = [fDot(d, A[0]) / P.r[0], fDot(d, A[1]) / P.r[1], fDot(d, A[2]) / P.r[2]];
     const a = fDot(ld, ld), b = fDot(lo, ld), c = fDot(lo, lo) - 1, h = b * b - a * c;
     if (h < 0) return -1;
-    const t = (-b - Math.sqrt(h)) / a;
+    const t = (-b + (exit ? 1 : -1) * Math.sqrt(h)) / a;
     if (t < 0) return -1;
     const l = fAdd(lo, fMul(ld, t));
     FIG_HIT.t = t; FIG_HIT.l = l;
@@ -969,9 +969,16 @@ function figRasterAt(body, th, near, S = 1, ownerOut = null) {
     for (let k = base ? f0 : 0, kn = base ? f1 : body.parts.length; k < kn; k++) { // (round the head, only the head and what's on it: anything else is as the ordinary sprite has it)
       const P = body.parts[k], e = box[k];
       if (u < e[0] || u > e[1] || z < e[2] || z > e[3]) continue;
-      const t = figHitPart(P, o, d);
+      let t = figHitPart(P, o, d);
       if (t < 0 || t >= best) continue;
       let ro = P.role(FIG_HIT);
+      // A cutaway hair/hat shell may reject its near side while its far side
+      // is still visible beside the face. Keep that surface, at its own depth.
+      if (!ro && P.k === 0) {
+        t = figHitPart(P, o, d, true);
+        if (t < 0 || t >= best) continue;
+        ro = P.role(FIG_HIT);
+      }
       if (!ro) continue;
       if (P.shade && FIG_DARK[ro]) {
         const n = P.k === 2 ? fNorm([FIG_HIT.n[0], FIG_HIT.n[1], 0]) : FIG_HIT.n;
@@ -5868,14 +5875,18 @@ const elStairLocal = (x, y) => { // a fixture's [u, v] in the stairs' frame if i
 for (let k = trees.length - 1; k >= 0; k--) if (elStairLocal(trees[k].x, trees[k].y)) trees.splice(k, 1);
 for (const l of lamps) { const h = elStairLocal(l.x, l.y); if (!h) continue; const [st, u] = h, to = u < (ELS.u0 + ELS.u4) / 2 ? ELS.u0 - 0.7 : ELS.u4 + 0.3, d = to - u; l.x = worldCoord(l.x + st.c * d); l.y += st.s * d; }
 for (const [items, buckets] of [[trees, treesB], [lamps, lampsB]]) { for (const b of buckets) b.length = 0; for (const o of items) buckets[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o); }
-// Ground-light queries visit only the heads whose pools can reach this cell, including relocated lamps.
-for (const l of lamps) {
-  const belle = districtAt(l.x,l.y)==='belle';
-  l.gx=worldCoord(l.x+(belle?0:l.ax*REACH));l.gy=worldCoord(l.y+(belle?0:l.ay*REACH));
-  for(let y=Math.floor(l.gy-.55);y<=Math.floor(l.gy+.55);y++)for(let x=Math.floor(l.gx-.55);x<=Math.floor(l.gx+.55);x++) {
-    const cell=idx(x,y);(lampGlowCells[cell]||(lampGlowCells[cell]=[])).push(l);
+// Rebuild after the finished world relocates fixtures as well as after the stairs pass.
+function rebuildLampGlow() {
+  lampGlowCells.length=0;lampGlowCells.length=N*N+1;
+  for (const l of lamps) {
+    const belle = districtAt(l.x,l.y)==='belle';
+    l.gx=worldCoord(l.x+(belle?0:l.ax*REACH));l.gy=worldCoord(l.y+(belle?0:l.ay*REACH));
+    for(let y=Math.floor(l.gy-.55);y<=Math.floor(l.gy+.55);y++)for(let x=Math.floor(l.gx-.55);x<=Math.floor(l.gx+.55);x++) {
+      const cell=idx(x,y);(lampGlowCells[cell]||(lampGlowCells[cell]=[])).push(l);
+    }
   }
 }
+rebuildLampGlow();
 function geometrySurfaceHeight(o,x,y) {
   const rx=rel(x-o.x),ry=rel(y-o.y),u=rx*o.c+ry*o.s,v=-rx*o.s+ry*o.c;
   if(Math.abs(u)>o.hl||Math.abs(v)>o.hw)return 0;
@@ -10211,7 +10222,7 @@ GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
   // the moves: put in each extra ingredient early on (DOWN), then the flips or stirs (UP)
   const adds = r.needs.slice(1).map((need, k, a) => [0.12 + 0.25 * (k + 1) / (a.length + 1), 'down', `ADD THE ${(need === 'fish' ? 'FISH' : ITEMS[need].name.replace(/^(bag|loaf) of /, '')).toUpperCase()}`]);
   const moves = [...adds, ...how.moves].map(([at, key, label]) => ({ at, key, label, state: 'wait', t: 0 }));
-  let heat = 0.15, done = 0, char = 0, t = 0, missed = 0, flare = 0, sizzleT = 0, flipT = -9, drift = 0;
+  let heat = 0.15, done = 0, char = 0, t = 0, missed = 0, flare = 0, sizzleT = 0, flipT = -9, drift = 0, lastMove = null;
   const [lo, hi] = how.band;
   const now = () => moves.find(m => m.state === 'now');
   g.step = (dt, k) => {
@@ -10231,7 +10242,7 @@ GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
       if (m.state === 'wait') { m.state = 'now'; m.t = 0; ev.push('due'); }
       m.t += dt;
       const press = m.key === 'up' ? k.upP : k.downP;
-      if (press) { m.state = 'done'; flipT = t; ev.push(m.label.startsWith('ADD') ? 'add' : m.label.startsWith('STIR') ? 'stir' : 'flip'); }
+      if (press) { m.state = 'done'; flipT = t; lastMove = m; ev.push(m.label.startsWith('ADD') ? 'add' : m.label.startsWith('STIR') ? 'stir' : 'flip'); }
       else if (m.t > 1.6) { m.state = 'missed'; missed++; ev.push('miss'); }
       else if (heat > lo && !m.label.startsWith('ADD')) char += 0.05 * dt; // (the side that's down's still cooking)
     }
@@ -10295,14 +10306,16 @@ GAMES.cook = (rnd = Math.random, word = '', o = {}) => {
     }
     if (heat > lo + 0.1) for (let s = 0; s < 6; s++) if (hash(s, Math.floor(t * 8), 1703) < heat - 0.3) text(cx - 5 + s * 2 + hash(s, Math.floor(t * 8), 1704) * 2, fyy - 1 - hash(s, 7, Math.floor(t * 8)) * 2, hash(s, 3, Math.floor(t * 8)) < 0.5 ? '*' : "'", C(YEL, 12)); // spitting
     if (char > 0.2) for (let s = 0; s < 4; s++) text(cx - 3 + s * 2 + Math.sin(t * 2 + s), fyy - 2 - ((t * 1.5 + s * 0.7) % 3), s & 1 ? '(' : ')', C(GRAY, 6 + char * 5)); // smoke, curling up
-    // the move that's due, big, blinking
+    // The required action stays visible. Heat advice has its own line and
+    // cannot replace it while you're trying to hold the temperature steady.
     const m = now();
-    if (m && fract(t * 3) < 0.7) text(W / 2, 2, `${m.label}!  [${m.key === 'up' ? 'UP' : 'DOWN'}]`, C(m.key === 'up' ? YEL : CYAN, 15), 'center');
-    else if (heat > hi) text(W / 2, 2, 'TOO HOT', C(RED, 14), 'center');
-    else if (heat < lo && done > 0.05) text(W / 2, 2, 'TOO COOL', C(CYAN, 12), 'center');
+    if (m) text(W / 2, 2, `${m.label}!  [${m.key === 'up' ? 'UP' : 'DOWN'}]`, C(m.key === 'up' ? YEL : CYAN, 15), 'center');
+    else if (lastMove && t - flipT < .8) text(W / 2, 2, lastMove.label.startsWith('ADD') ? 'ADDED' : lastMove.label.startsWith('STIR') ? 'STIRRED' : lastMove.label.startsWith('FLIP') ? 'FLIPPED' : 'TURNED', C(GREEN, 14), 'center');
+    if (heat > hi) text(W / 2, 3, 'TOO HOT - RELEASE HEAT', C(RED, 14), 'center');
+    else if (heat < lo && done > 0.05) text(W / 2, 3, 'TOO COOL - HOLD HEAT', C(CYAN, 12), 'center');
     if (flare > 0) text(W / 2, 13.5, 'FLARE-UP!', C(ORANGE, 15), 'center');
   };
-  g.status = () => `HOLD SPACE heat, keep it in the green   UP flip / stir   DOWN add   ${Math.round(done * 100)}% done`;
+  g.status = () => g.over ? 'Dish ready - added to your bag' : `HOLD SPACE heat, keep it in the green   UP flip / stir   DOWN add   ${Math.round(done * 100)}% done`;
   g.reward = () => 0;
   g.state = () => ({ heat, done, char, missed, moves, t });
   return g;
@@ -24317,17 +24330,14 @@ function hud() {
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | left click / Q: item | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
   // phone held upright), goes underneath them
-  const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, top = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
-  const maxW = top ? cv.width - 12 : beside;
+  const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, baseTop = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
+  const top=baseTop+drawNavigationCompass(baseTop),maxW=top?cv.width-12:beside;
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = [...(fishingCompetitionStatus()?wrapText(fishingCompetitionStatus(),maxW):[]),...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
   const meters = needMeters();
   hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
-  drawMapNavigation();
   wantedHud();
-  if (job && mode === 'drive') jobArrow();
-  else if(courierRoute()&&mode!=='room')jobArrow(...courierGuide());
   minimap();
   const hotbarTop = hotbar();
   g.font = FS + 'px monospace';
@@ -27928,19 +27938,58 @@ function mapRouteDistance() {
   const path=MAP_NAV.path,p=mapPlayerLocation();
   return path?Math.max(0,path.length-1-MAP_NAV.next)*10+mapDistance(p,path[MAP_NAV.next])*10:mapDistance(p,mapWaypoint)*10;
 }
-function drawMapNavigation() {
-  if(!mapWaypoint)return;
-  const p=mapPlayerLocation(),next=MAP_NAV.path?.[Math.min(MAP_NAV.next+1,MAP_NAV.path.length-1)]||mapWaypoint;
-  const yaw=Math.atan2(mapDifference(next.y-p.y,MAP_WORLD.height),mapDifference(next.x-p.x,MAP_WORLD.width));
-  const turn=mod(yaw-a+Math.PI,Math.PI*2)-Math.PI;
-  let direction='AHEAD';if(turn>.5)direction='RIGHT';else if(turn<-.5)direction='LEFT';if(Math.abs(turn)>2.5)direction='BEHIND';
-  const text=`${MAP_NAV.nearby?'NEARBY':direction} > ${mapWaypoint.name} · ${mapMetres(mapRouteDistance())}${MAP_NAV.path?'':` · ${mapRouteLabel()}`}`;
-  let max=cv.width-24-(TOUCH?TOUCH_PAD_W:0);
-  if(showMap&&!TOUCH&&cv.width>700)max=Math.min(max,cv.width-360);
-  const lines=wrapText(text,Math.max(100,max));
-  let y=hudBottom+6;g.font=FS+'px monospace';
-  for(const line of lines){g.fillStyle='rgba(0,0,0,.8)';g.fillRect(6,y,g.measureText(line).width+12,FS+5);g.fillStyle='#8de5df';g.fillText(line,12,y+2);y+=FS+5;}
-  hudBottom=y+4;
+// Bearings use world space even on a boat or in a moving train. Interior positions
+// are local, so an indoor destination is labelled outside rather than given a false bearing.
+function navigationTargets() {
+  const targets=[],p=mapPlayerLocation();
+  const add=(t,name,color,radius=0,stop='')=>{
+    if(!t||!Number.isFinite(t.x)||!Number.isFinite(t.y))return;
+    targets.push({...t,name,color,radius,stop,distance:mapDistance(p,t)*10});
+  };
+  if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df');
+  if(job&&mode==='drive') {const t=jobTarget();add(t,job.ride?'DROP OFF':'PICK UP','#ffd575',DROP_R,'STOP');}
+  if(courierRoute()) {const [t,guide]=courierGuide();add(t,guide.label,'#ffd575',guide.radius,guide.stop);}
+  add(taskTarget(),'CURRENT FAVOUR','#4ff');
+  if(mode==='taxi'&&me?.dest)add({x:me.dest[0],y:me.dest[1]},me.destName||'TAXI DESTINATION','#ffd575');
+  return targets;
+}
+function navigationBearing(t) {
+  const p=mapPlayerLocation(),yaw=Math.atan2(mapDifference(t.y-p.y,MAP_WORLD.height),mapDifference(t.x-p.x,MAP_WORLD.width));
+  return mod(yaw-(chaseOn?camYaw:a)+Math.PI,Math.PI*2)-Math.PI;
+}
+function drawNavigationCompass(top) {
+  const targets=navigationTargets();if(!targets.length)return 0;
+  const bar=TOUCH?touchBarBox():null,right=bar&&top<bar.bottom&&bar.left>cv.width*.55?bar.left-12:cv.width;
+  const width=Math.min(420,right-16),left=(right-width)/2,cx=right/2,y=top+4,indoor=mode==='room';
+  const height=indoor?FS+12:FS*3+20,range=Math.PI/2,scale=(width/2-14)/range;
+  const first=targets.find(t=>t.radius&&t.distance<t.radius*10)||targets[0];
+  const distance=first===targets[0]&&mapWaypoint?mapRouteDistance():first.distance;
+  const prefix=indoor?'OUTSIDE · ':first.radius&&first.distance<first.radius*10?first.stop+' · ':'';
+  const suffix=` · ${mapMetres(distance)}`;let name=first.name;
+  g.save();g.font=FS+'px monospace';g.textBaseline='top';
+  g.fillStyle='rgba(0,0,0,.72)';g.fillRect(left,y,width,height);
+  g.beginPath();g.rect(left+4,y,width-8,height);g.clip();
+  if(!indoor) {
+    const heading=chaseOn?camYaw:a,step=Math.PI/12;
+    for(let n=Math.floor((heading-range)/step);n<=Math.ceil((heading+range)/step);n++) {
+      const angle=n*step,delta=angle-heading,x=cx+delta*scale,cardinal=mod(n,6)===0;
+      g.fillStyle=cardinal?'#d2d6df':'#68717f';g.fillRect(x,y+FS+4,1,cardinal?6:3);
+      if(cardinal) {const text=['E','S','W','N'][mod(n/6,4)];g.fillText(text,x-g.measureText(text).width/2,y+2);}
+    }
+    // Side chevrons keep destinations behind you visible without wrapping them onto the forward tape.
+    for(const target of [...targets].reverse()) {
+      const turn=navigationBearing(target),edge=Math.abs(turn)>range,x=cx+clamp(turn,-range,range)*scale;
+      g.fillStyle=target.color;g.beginPath();
+      if(edge) {const sign=Math.sign(turn);g.moveTo(x+sign*4,y+FS+12);g.lineTo(x-sign*3,y+FS+8);g.lineTo(x-sign*3,y+FS+16);}
+      else {g.moveTo(x,y+FS+7);g.lineTo(x-4,y+FS+12);g.lineTo(x,y+FS+17);g.lineTo(x+4,y+FS+12);}
+      g.closePath();g.fill();
+    }
+    g.fillStyle='#fff';g.fillRect(cx-1,y+FS+1,2,5);
+  }
+  while(name.length>1&&g.measureText(prefix+name+suffix).width>width-20)name=name.slice(0,-2).trimEnd()+'…';
+  const label=prefix+name+suffix;
+  g.fillStyle=first.color;g.fillText(label,cx-g.measureText(label).width/2,y+(indoor?6:FS*2+14));g.restore();
+  return height+8;
 }
 // Full map and city directory. M opens it directly; Pause can open it without changing the return destination.
 let bigMapEl = null, bigMapCv = null, bigMapSheet = null;
@@ -28173,7 +28222,7 @@ function bigMapPick(X,Y) {
     y:mapCoordinate(BIGMAP.cy+(Y-bigMapCv.clientHeight/2)/BIGMAP.z,MAP_WORLD.height),description:'A place you marked. Walking routes stop at the nearest clear street approach.'};
   const sh=SHOP[idx(Math.floor(p.x),Math.floor(p.y))],place=sh&&mapFilteredPlaces().find(place=>place.shop===sh);
   if(place)return selectMapPlace(place.id,false);
-  BIGMAP.places=BIGMAP.places.filter(p=>p.id!=='pin');BIGMAP.places.push(p);selectMapPlace(p.id,false);
+  BIGMAP.places=BIGMAP.places.filter(p=>p.id!=='pin');BIGMAP.places.push(p);selectMapPlace(p.id,false);setMapWaypoint(p);
 }
 
 function openBigMap() {
@@ -32159,6 +32208,10 @@ function gameKey(e) {
   if (k) K[e.code] = 1; // held, for the paddle (keyup clears it as usual)
   if (e.repeat) return true;
   if (game.g.over) { // the results screen: go again, or walk away
+    if (game.kind === 'cook') { // Heat is still Space/Enter: it must never dismiss the finished dish.
+      if (e.code === 'KeyE' || e.code === 'Escape') game = null;
+      return true;
+    }
     if ((k === 'act') && game.kind === 'arcade') { if (pay(CREDIT)) { const id = game.g.id; startGame(id, 'arcade'); } else say(`A credit's ${fmt$(CREDIT)}. You're out of cash.`); }
     else if (k === 'act' && game.kind === 'table') { if (pay(MJ_BUYIN)) startGame(game.g.id, 'table'); else say(`The buy-in's ${fmt$(MJ_BUYIN)}. You're out of cash.`); } // another hand
     else if (e.code === 'Escape' || e.code === 'KeyE' || k === 'act') game = null;
@@ -32295,7 +32348,7 @@ function drawGame() {
   const st = gameText(g.status(), g), parts = st.length > gw + 4 ? st.split(/\s{3}/) : [st], half = Math.ceil(parts.length / 2);
   const sts = parts.length > 1 ? [parts.slice(0, half).join('   '), parts.slice(half).join('   ')] : parts;
   sts.forEach((l, k) => putText(y0 + gh + 2 + k, x0 + ((gw - l.length) >> 1), l, C(WHITE, 12)));
-  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? '   E / ESC take it off the heat' : game.kind === 'workshop' ? '   E / ESC stop (supplies kept)' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
+  const leave = TOUCH ? '' : game.kind === 'arcade' || game.kind === 'table' || game.kind === 'casino' || game.kind === 'market' || game.kind === 'show' ? '   E / ESC leave' : game.kind === 'crime' ? 'E / ESC back off' : game.kind === 'cook' ? g.over ? '   E / ESC finish' : '   E / ESC take it off the heat' : game.kind === 'workshop' ? '   E / ESC stop (supplies kept)' : game.kind === 'bout' ? '   E / ESC throw in the towel' : '   E / ESC clock off';
   const pend = game.kind === 'arcade' && !game.paid && !g.prize ? g.reward() : 0; // what this game's worth so far, counted in as it goes
   const earning = game.kind === 'shift' && !game.paid ? g.reward() : 0; // a shift: what you've earned so far, counted in as you go
   const foot = game.kind === 'arcade' ? `TICKETS ${tickets + pend}${pend ? ` (+${pend} this game)` : ''}   ${fmt$(money)}${leave}` : game.kind === 'shift' ? `${fmt$(money + earning)}   (+${fmt$(earning)} this shift)${leave}` : game.kind === 'crime' ? leave : `${fmt$(money)}${leave}`;
@@ -32308,7 +32361,7 @@ function drawGame() {
       ? [res.win ? 'YOU WIN' : 'YOU LOSE', `${{ KO: 'KNOCKOUT', TKO: 'STOPPAGE', decision: 'ON POINTS', towel: 'THE TOWEL' }[res.how] || ''}  vs  ${g.name.toUpperCase()}`,
          res.win ? `PURSE ${fmt$(g.purse)}` : 'NO PURSE', ...TOUCH ? [] : ['', 'E or SPACE to leave']]
       : game.kind === 'cook'
-      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
+      ? [{ perfect: 'PERFECT', fine: 'NOT BAD', burnt: 'BURNT' }[res] || 'DONE', g.title.toLowerCase(), res === 'perfect' ? 'Fills you right up. Well fed: hungry slower a while' : res === 'burnt' ? 'Less in it than there should be' : 'A decent meal', ...TOUCH ? [] : ['', 'E / ESC to finish']]
       : game.kind === 'workshop'
       ? ['BATCH SEALED', `${DRUG_QUALITY[res]} Neon`, 'A buyer waits outside with cash', ...TOUCH ? [] : ['', 'E or SPACE to finish']]
       : game.kind === 'arcade'
@@ -33341,7 +33394,7 @@ const SK_POINTS = { ollie: 50, kickflip: 100, heelflip: 100, 'pop shuvit': 100, 
 // every frame on the board, in place of walking
 function stepSkate(dt) {
   if (T - SK.lastT > 0.25) { // just stepped on: rolling off at whatever pace you were walking
-    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: -1, bail: 0, bailAt: null, combo: null, look: 0, camYaw: null, camZ: null });
+    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: K.Space ? SK.charge : -1, bail: 0, bailAt: null, combo: null, look: 0, camYaw: null, camZ: null });
     if (third) pitch = -0.12;
   }
   SK.lastT = T;
@@ -36279,6 +36332,16 @@ function assembleArchipelago() {
     if (hseg(x - 1, y)) lights.push({ x: bx - .25, y: by + CURB, vert: false, bx, by });
     if (hseg(x, y)) lights.push({ x: bx + 2.25, y: by + 2 - CURB, vert: false, bx, by });
   }
+  // The airport road joins the west lane of this street. Its old curb is in the
+  // approach itself; put posts on the opposite curb, without moving the road.
+  const airportCurb=Math.floor(CAUSEWAY.x/8)*8+2-CURB;
+  for(const fixtures of [lamps,lights])for(let i=fixtures.length-1;i>=0;i--) {
+    const p=fixtures[i];
+    if(Math.abs(p.x-CAUSEWAY.x)>=CAUSEWAY.hw||p.y<CAUSEWAY.y1-2||p.y>CAUSEWAY.y1+3)continue;
+    if(fixtures.some(q=>q!==p&&Math.abs(q.x-airportCurb)<.01&&Math.abs(q.y-p.y)<.01))fixtures.splice(i,1);
+    else p.x=airportCurb;
+  }
+  rebuildLampGlow();
   // Outdated seam structure is replaced with the raised crossings below.
   bridgeBits.length = towers.length = boats.length = 0;
   // Keep working cranes on the industrial quay, rather than across public piers.

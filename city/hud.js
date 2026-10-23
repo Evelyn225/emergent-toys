@@ -352,17 +352,14 @@ function hud() {
     : settings.help ? `WASD move | mouse or arrows look | R/F up/down | shift run | space jump | C crouch / sit | E use / talk | left click / Q: item | P pee | H hail taxi | M: map | N: sound | Esc: pause` : 'Esc: pause';
   // on a phone the buttons take the top right: the text stays left of them, or, if that leaves it too little room (a
   // phone held upright), goes underneath them
-  const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, top = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
-  const maxW = top ? cv.width - 12 : beside;
+  const bar = TOUCH ? touchBarBox() : null, beside = bar ? bar.left - 12 : cv.width - 12, baseTop = bar && beside < cv.width * 0.55 ? bar.bottom + 4 : 0;
+  const top=baseTop+drawNavigationCompass(baseTop),maxW=top?cv.width-12:beside;
   const lines = [...wrapText(`${weekday()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}  ${season()}, ${weather}${hurrying() ? '  >> x40' : ''}   ${fmt$(money)}${where ? '   ' + where : ''}`, maxW),
                  ...(help ? wrapText(help, maxW) : [])];
   const task_ = [...(fishingCompetitionStatus()?wrapText(fishingCompetitionStatus(),maxW):[]),...(task ? wrapText('TASK: ' + taskText(), maxW) : []),...(courierJob?wrapText(courierText(),maxW):[])];
   const meters = needMeters();
   hudBottom = top + (lines.length + task_.length + 1) * FS + 14;
-  drawMapNavigation();
   wantedHud();
-  if (job && mode === 'drive') jobArrow();
-  else if(courierRoute()&&mode!=='room')jobArrow(...courierGuide());
   minimap();
   const hotbarTop = hotbar();
   g.font = FS + 'px monospace';

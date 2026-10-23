@@ -189,17 +189,56 @@ function mapRouteDistance() {
   const path=MAP_NAV.path,p=mapPlayerLocation();
   return path?Math.max(0,path.length-1-MAP_NAV.next)*10+mapDistance(p,path[MAP_NAV.next])*10:mapDistance(p,mapWaypoint)*10;
 }
-function drawMapNavigation() {
-  if(!mapWaypoint)return;
-  const p=mapPlayerLocation(),next=MAP_NAV.path?.[Math.min(MAP_NAV.next+1,MAP_NAV.path.length-1)]||mapWaypoint;
-  const yaw=Math.atan2(mapDifference(next.y-p.y,MAP_WORLD.height),mapDifference(next.x-p.x,MAP_WORLD.width));
-  const turn=mod(yaw-a+Math.PI,Math.PI*2)-Math.PI;
-  let direction='AHEAD';if(turn>.5)direction='RIGHT';else if(turn<-.5)direction='LEFT';if(Math.abs(turn)>2.5)direction='BEHIND';
-  const text=`${MAP_NAV.nearby?'NEARBY':direction} > ${mapWaypoint.name} · ${mapMetres(mapRouteDistance())}${MAP_NAV.path?'':` · ${mapRouteLabel()}`}`;
-  let max=cv.width-24-(TOUCH?TOUCH_PAD_W:0);
-  if(showMap&&!TOUCH&&cv.width>700)max=Math.min(max,cv.width-360);
-  const lines=wrapText(text,Math.max(100,max));
-  let y=hudBottom+6;g.font=FS+'px monospace';
-  for(const line of lines){g.fillStyle='rgba(0,0,0,.8)';g.fillRect(6,y,g.measureText(line).width+12,FS+5);g.fillStyle='#8de5df';g.fillText(line,12,y+2);y+=FS+5;}
-  hudBottom=y+4;
+// Bearings use world space even on a boat or in a moving train. Interior positions
+// are local, so an indoor destination is labelled outside rather than given a false bearing.
+function navigationTargets() {
+  const targets=[],p=mapPlayerLocation();
+  const add=(t,name,color,radius=0,stop='')=>{
+    if(!t||!Number.isFinite(t.x)||!Number.isFinite(t.y))return;
+    targets.push({...t,name,color,radius,stop,distance:mapDistance(p,t)*10});
+  };
+  if(mapWaypoint)add(mapWaypoint,mapWaypoint.name,'#8de5df');
+  if(job&&mode==='drive') {const t=jobTarget();add(t,job.ride?'DROP OFF':'PICK UP','#ffd575',DROP_R,'STOP');}
+  if(courierRoute()) {const [t,guide]=courierGuide();add(t,guide.label,'#ffd575',guide.radius,guide.stop);}
+  add(taskTarget(),'CURRENT FAVOUR','#4ff');
+  if(mode==='taxi'&&me?.dest)add({x:me.dest[0],y:me.dest[1]},me.destName||'TAXI DESTINATION','#ffd575');
+  return targets;
+}
+function navigationBearing(t) {
+  const p=mapPlayerLocation(),yaw=Math.atan2(mapDifference(t.y-p.y,MAP_WORLD.height),mapDifference(t.x-p.x,MAP_WORLD.width));
+  return mod(yaw-(chaseOn?camYaw:a)+Math.PI,Math.PI*2)-Math.PI;
+}
+function drawNavigationCompass(top) {
+  const targets=navigationTargets();if(!targets.length)return 0;
+  const bar=TOUCH?touchBarBox():null,right=bar&&top<bar.bottom&&bar.left>cv.width*.55?bar.left-12:cv.width;
+  const width=Math.min(420,right-16),left=(right-width)/2,cx=right/2,y=top+4,indoor=mode==='room';
+  const height=indoor?FS+12:FS*3+20,range=Math.PI/2,scale=(width/2-14)/range;
+  const first=targets.find(t=>t.radius&&t.distance<t.radius*10)||targets[0];
+  const distance=first===targets[0]&&mapWaypoint?mapRouteDistance():first.distance;
+  const prefix=indoor?'OUTSIDE · ':first.radius&&first.distance<first.radius*10?first.stop+' · ':'';
+  const suffix=` · ${mapMetres(distance)}`;let name=first.name;
+  g.save();g.font=FS+'px monospace';g.textBaseline='top';
+  g.fillStyle='rgba(0,0,0,.72)';g.fillRect(left,y,width,height);
+  g.beginPath();g.rect(left+4,y,width-8,height);g.clip();
+  if(!indoor) {
+    const heading=chaseOn?camYaw:a,step=Math.PI/12;
+    for(let n=Math.floor((heading-range)/step);n<=Math.ceil((heading+range)/step);n++) {
+      const angle=n*step,delta=angle-heading,x=cx+delta*scale,cardinal=mod(n,6)===0;
+      g.fillStyle=cardinal?'#d2d6df':'#68717f';g.fillRect(x,y+FS+4,1,cardinal?6:3);
+      if(cardinal) {const text=['E','S','W','N'][mod(n/6,4)];g.fillText(text,x-g.measureText(text).width/2,y+2);}
+    }
+    // Side chevrons keep destinations behind you visible without wrapping them onto the forward tape.
+    for(const target of [...targets].reverse()) {
+      const turn=navigationBearing(target),edge=Math.abs(turn)>range,x=cx+clamp(turn,-range,range)*scale;
+      g.fillStyle=target.color;g.beginPath();
+      if(edge) {const sign=Math.sign(turn);g.moveTo(x+sign*4,y+FS+12);g.lineTo(x-sign*3,y+FS+8);g.lineTo(x-sign*3,y+FS+16);}
+      else {g.moveTo(x,y+FS+7);g.lineTo(x-4,y+FS+12);g.lineTo(x,y+FS+17);g.lineTo(x+4,y+FS+12);}
+      g.closePath();g.fill();
+    }
+    g.fillStyle='#fff';g.fillRect(cx-1,y+FS+1,2,5);
+  }
+  while(name.length>1&&g.measureText(prefix+name+suffix).width>width-20)name=name.slice(0,-2).trimEnd()+'…';
+  const label=prefix+name+suffix;
+  g.fillStyle=first.color;g.fillText(label,cx-g.measureText(label).width/2,y+(indoor?6:FS*2+14));g.restore();
+  return height+8;
 }

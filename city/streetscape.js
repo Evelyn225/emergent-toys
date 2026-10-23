@@ -133,14 +133,18 @@ const elStairLocal = (x, y) => { // a fixture's [u, v] in the stairs' frame if i
 for (let k = trees.length - 1; k >= 0; k--) if (elStairLocal(trees[k].x, trees[k].y)) trees.splice(k, 1);
 for (const l of lamps) { const h = elStairLocal(l.x, l.y); if (!h) continue; const [st, u] = h, to = u < (ELS.u0 + ELS.u4) / 2 ? ELS.u0 - 0.7 : ELS.u4 + 0.3, d = to - u; l.x = worldCoord(l.x + st.c * d); l.y += st.s * d; }
 for (const [items, buckets] of [[trees, treesB], [lamps, lampsB]]) { for (const b of buckets) b.length = 0; for (const o of items) buckets[bi(Math.floor(o.x / 8), Math.floor(o.y / 8))].push(o); }
-// Ground-light queries visit only the heads whose pools can reach this cell, including relocated lamps.
-for (const l of lamps) {
-  const belle = districtAt(l.x,l.y)==='belle';
-  l.gx=worldCoord(l.x+(belle?0:l.ax*REACH));l.gy=worldCoord(l.y+(belle?0:l.ay*REACH));
-  for(let y=Math.floor(l.gy-.55);y<=Math.floor(l.gy+.55);y++)for(let x=Math.floor(l.gx-.55);x<=Math.floor(l.gx+.55);x++) {
-    const cell=idx(x,y);(lampGlowCells[cell]||(lampGlowCells[cell]=[])).push(l);
+// Rebuild after the finished world relocates fixtures as well as after the stairs pass.
+function rebuildLampGlow() {
+  lampGlowCells.length=0;lampGlowCells.length=N*N+1;
+  for (const l of lamps) {
+    const belle = districtAt(l.x,l.y)==='belle';
+    l.gx=worldCoord(l.x+(belle?0:l.ax*REACH));l.gy=worldCoord(l.y+(belle?0:l.ay*REACH));
+    for(let y=Math.floor(l.gy-.55);y<=Math.floor(l.gy+.55);y++)for(let x=Math.floor(l.gx-.55);x<=Math.floor(l.gx+.55);x++) {
+      const cell=idx(x,y);(lampGlowCells[cell]||(lampGlowCells[cell]=[])).push(l);
+    }
   }
 }
+rebuildLampGlow();
 function geometrySurfaceHeight(o,x,y) {
   const rx=rel(x-o.x),ry=rel(y-o.y),u=rx*o.c+ry*o.s,v=-rx*o.s+ry*o.c;
   if(Math.abs(u)>o.hl||Math.abs(v)>o.hw)return 0;

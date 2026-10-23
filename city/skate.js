@@ -30,7 +30,7 @@ const SK_POINTS = { ollie: 50, kickflip: 100, heelflip: 100, 'pop shuvit': 100, 
 // every frame on the board, in place of walking
 function stepSkate(dt) {
   if (T - SK.lastT > 0.25) { // just stepped on: rolling off at whatever pace you were walking
-    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: -1, bail: 0, bailAt: null, combo: null, look: 0, camYaw: null, camZ: null });
+    Object.assign(SK, { v: Math.min(SK_TOP, Math.hypot(body.mx || 0, body.my || 0)), dir: a, spin: 0, stance: 1, kick: 0, charge: K.Space ? SK.charge : -1, bail: 0, bailAt: null, combo: null, look: 0, camYaw: null, camZ: null });
     if (third) pitch = -0.12;
   }
   SK.lastT = T;
