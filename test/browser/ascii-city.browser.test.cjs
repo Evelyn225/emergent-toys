@@ -1934,7 +1934,8 @@ test('the aquarium: admission at the door, fish in every kind of tank, a touch p
   const glyphs = () => page.evaluate(() => CH.join(''));
   await page.evaluate(() => { tod = 12; weather = 'clear'; cars.length = 0; px = AQUARIUM.doorU + 0.3; py = AQUARIUM.by * 8 + 9.2; a = -Math.PI / 2; pitch = 0; }); // admission without a random car taking the interaction prompt
   await page.waitForTimeout(300);
-  assert.match(await glyphs(), /><|<>|=o>|<o=/, 'fish in the windows');
+  const fishCells = (bases) => page.evaluate(b => { let n = 0; for (let i = 0; i < CH.length; i++) if (CH[i] === ' ' && BG[i] !== NONE && (BG[i] & 15) >= 5 && (!b || b.includes(BG[i] & 0xf0))) n++; return n; }, bases); // (solid painted fish: brighter than any water)
+  assert.ok(await fishCells(await page.evaluate(() => [ORANGE, YEL, BRICK, MAG].map(c => C(c, 1) & 0xf0))) >= 2, 'fish in the windows');
   await page.evaluate(() => { px = AQUARIUM.doorU; py = AQUARIUM.by * 8 + 8.25; });
   await page.waitForTimeout(100);
   assert.match(await page.evaluate(() => promptText()), /enter AQUARIUM \(\$8\.00\)/);
@@ -1943,8 +1944,9 @@ test('the aquarium: admission at the door, fish in every kind of tank, a touch p
   for (const [name, at] of [['ocean', [12, 3.6, -Math.PI / 2]], ['reef', [20.4, 7.5, 0]], ['jelly', [3.4, 7.5, Math.PI]], ['kelp', [18.5, 5.5, -Math.PI / 2]], ['seahorses', [2.6, 12.5, Math.PI]]]) {
     await page.evaluate(([x, y, ang]) => { px = x; py = y; a = ang; pitch = 0; }, at);
     await page.waitForTimeout(250);
-    const s = await glyphs();
-    assert.ok(/[<>"]/.test(s) || /[()|]{3}/.test(s), `${name}: something swimming`);
+    let seen = 0; // (watch a while, glancing up too: they swim high, and up and down the tank)
+    for (let k = 0; k < 12 && seen < 3; k++) { await page.evaluate(p => { pitch = p; }, k & 1 ? 0.9 : 0); await page.waitForTimeout(250); seen = await fishCells(); }
+    assert.ok(seen >= 3, `${name}: something swimming`);
   }
   assert.ok(await page.evaluate(() => { px = 12; py = 9; a = -Math.PI / 2; pitch = 0.5; return !ROOMW.cell(12, 9); }), 'the tunnel floor is walkable');
   await page.evaluate(() => { px = 5.5; py = 14.2; });

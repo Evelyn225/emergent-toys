@@ -61,6 +61,34 @@ test('birds are life size beside people at the same distance: pigeon < gull < co
   assert.ok(r.gull.rows * 3 < r.person.rows && r.cormorant.rows * 3 < r.person.rows, 'well under a person: ' + JSON.stringify(r));
 }));
 
+test('aquarium fish are shaped species: each a solid silhouette, its eye at the end it swims toward, still inside its tank', () => fixture(async page => {
+  const r = await page.evaluate(() => {
+    const species = {};
+    for (const [sp, f] of Object.entries(FISH)) { // how much of its box each fills, and where its eye is
+      let filled = 0, n = 0, eyeX = [];
+      for (let x = 0.005; x < 1; x += 0.01) for (let y = -0.495; y < 0.5; y += 0.01) { n++; const h = f.shape(x, y, 3, 1); if (h) { filled++; if (h[0] === GRAY && h[1] <= 0.15) eyeX.push(x); } }
+      species[sp] = { fill: filled / n, eye: eyeX.length ? eyeX.reduce((p, q) => p + q, 0) / eyeX.length : null };
+    }
+    enterRoom('aquarium', { word: 'AQUARIUM', ret: [100, 100, 0] }, [12, 13, -Math.PI / 2]);
+    const run = tankRun(10, 1, 1, 'O'), heads = [];
+    for (const time of [10, 40, 70]) { T = time; placeFish(run);
+      for (const s of run.fish) {
+        if (s.z < s.lo - 1e-9 || s.z > s.hi + 1e-9 || s.u < run.u0 || s.u > run.u1) heads.push('outside: ' + s.sp);
+        if (!['fish', 'shark', 'tiny', 'sardine'].includes(s.sp)) continue;
+        if (run.fish.some(o => o !== s && Math.abs(o.u - s.u) < (o.f.len + s.f.len) / 2 && Math.abs(o.z - s.z) < (o.f.h + s.f.h) / 2)) continue; // (in a school: its neighbour's eye could be the one found)
+        let eye = null; // find its eye on the glass, from the side it's on
+        for (let u = s.u - s.f.len / 2; u < s.u + s.f.len / 2 && eye === null; u += s.f.len / 120) for (let z = s.z - s.f.h / 2; z < s.z + s.f.h / 2; z += s.f.h / 40) { const h = fishAt(run, u, z); if (h && h[0] === GRAY && h[1] <= 0.15) { eye = u; break; } }
+        if (eye !== null && Math.sign(eye - s.u) !== s.dir) heads.push('backwards: ' + s.sp);
+      }
+    }
+    return { species, heads };
+  });
+  for (const [sp, v] of Object.entries(r.species)) assert.ok(v.fill > 0.12 && v.fill < 0.9, `${sp} fills ${v.fill}`);
+  for (const sp of ['tiny', 'sardine', 'fish', 'clown', 'tang', 'angel', 'shark', 'turtle', 'seahorse']) assert.ok(r.species[sp].eye !== null, sp + ' has an eye');
+  for (const sp of ['tiny', 'sardine', 'fish', 'clown', 'tang', 'angel', 'shark', 'turtle']) assert.ok(r.species[sp].eye > 0.6, sp + ' looks ahead: ' + r.species[sp].eye);
+  assert.deepEqual(r.heads, []);
+}));
+
 test('a flock draws as shaped birds in their plumage (no ASCII), and scared birds face the way they fly', () => fixture(async page => {
   const r = await page.evaluate(() => {
     [px, py] = citySourcePoint(12 * 8 + 0.15, 10 * 8 + 4); a = Math.PI / 2; pitch = -0.75;
