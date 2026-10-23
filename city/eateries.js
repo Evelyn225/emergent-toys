@@ -50,7 +50,7 @@ function stoolsY(x, y0, y1, step, col, fx, busy = 0.4, seatZ = 0.62) {
 }
 // a plain bench without a back, facing (fx, fy), hl either side of (x, y): room for two
 function plainBench(x, y, hl, fx, fy, col = BRICK, busy = 0.35) {
-  const ax = -fy, ay = fx, p = [BX(x, y, hl, 0.2, 0.4, 0.45, solid(col, { top: '=', bright: 1.3 }), ax, ay), ...[-1, 1].map(e => BX(x + ax * e * (hl - 0.08), y + ay * e * (hl - 0.08), 0.05, 0.17, 0, 0.4, solid(col), ax, ay))];
+  const ax=-fy,ay=fx,p=[FURNITURE_BENCH(x,y,hl,fx,fy,col)];
   for (const e of [-1, 1]) {
     const sx = x + ax * e * hl * 0.5, sy = y + ay * e * hl * 0.5;
     p.push(SEAT(sx, sy, fx, fy)); if (chance(busy)) p.push({ ...sitting(sx, sy, shirt(), 0.45), face: [fx, fy] });
