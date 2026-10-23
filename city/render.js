@@ -156,7 +156,7 @@ function render(dt,sceneOnly=false,mask=null) {
   eye = mode === 'room' ? 1.7 + stairRise(px, py) : mode === 'roof' ? roofH + 0.17 : mode === 'el' ? EL_TOP+(ride?.seat ? .135 : .19) : mode === 'elplat' ? EL_TOP + 0.17 : mode === 'fair' ? fairEye
       : mode === 'walk' ? 0.17 : mode === 'boat' ? (chaseOn ? 0.2 : 0.11) : mode === 'sea' ? seaEye() : chaseOn ? 0.28 : 0.12;
   if (freecam) eye = freecam.z;
-  else if(mode==='ferry')eye=FERRY.deck+(ferryRide?.seat!=null ? .115 : .17);
+  else if(mode==='ferry')eye=ferryGround()+(ferryRide?.seat!=null ? .115 : .17);
   else if (mode === 'air') eye = airEye;
   else if (skateView) eye = skateView.eye; // (behind you on the board: skate.js)
   else if(mode==='ladder'&&climbing)eye=climbing.z+.17;
