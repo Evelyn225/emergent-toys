@@ -34139,7 +34139,7 @@ function hotelDefinition(tier){
  ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),ROOM_MODEL(bed[0]+side*standOffset,bed[1]-.65,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
  ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,-1,tier===2?GREEN:BLUE),...hotelTelevision(...tv),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
- ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.7,5.1)),
+ ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.6,5.1,.6)),
  POT_PLANT(tier===2?9.5:1.5,h-1.5,1.4)];
  if(tier)p.push(BX(...stove,1.7,.38,.1,.94,stoveShade(1,.55),0,1),BX(stove[0],stove[1]+2.3,.43,.4,0,1.7,solid(WHITE,{panel:.7})),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
  if(tier)p.push(ROOM_MODEL(sofa[0],sofa[1]-1.25,(vx,vy)=>{
@@ -35074,13 +35074,13 @@ function BATHROOM_TUB(x,y) {
 
 // A shallow, walk-in tray. Its rim stays below the room's 5 cm obstruction
 // threshold; only the glass side has a full-height collision footprint.
-function BATHROOM_SHOWER(x,y) {
-  const tray={...furnitureModel(x,y,1,0,.7,.9,.047,(vx,vy)=>{
-    coveRound(vx,vy,1,0,.7,.9,.005,.047,.035,(i,t,L)=>{
-      if(HIT.face===5&&Math.abs(HIT.u)<.635&&Math.abs(HIT.v)<.835)return false;
+function BATHROOM_SHOWER(x,y,halfWidth=.7) {
+  const tray={...furnitureModel(x,y,1,0,halfWidth,.9,.047,(vx,vy)=>{
+    coveRound(vx,vy,1,0,halfWidth,.9,.005,.047,.035,(i,t,L)=>{
+      if(HIT.face===5&&Math.abs(HIT.u)<halfWidth-.065&&Math.abs(HIT.v)<.835)return false;
       return bathroomEnamel(i,t,L);
     });
-    coveRound(vx,vy,1,0,.635,.835,.005,.013,.025,bathroomEnamel);
+    coveRound(vx,vy,1,0,halfWidth-.065,.835,.005,.013,.025,bathroomEnamel);
     coveLathe(vx,vy+.48,.013,[[0,0],[0,.065],[.003,.065],[.003,0]],(i,t,L)=>{
       coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
       if(HIT.face===5&&Math.abs(HIT.u)<.047&&fract(HIT.v/.018)<.25)BG[i]=C(GRAY,.6);
@@ -35103,7 +35103,7 @@ function BATHROOM_SHOWER(x,y) {
       BG[i]=C(WHITE,3+L*.25);set(i,' ',0);return true;
     });
   }),shower:true,radius:1.2};
-  const side={...furnitureModel(x-.68,y+.03,1,0,.02,.85,2.12,(vx,vy)=>{
+  const side={...furnitureModel(x-halfWidth+.02,y+.03,1,0,.02,.85,2.12,(vx,vy)=>{
     for(const v of [-.85,.85])bathroomPipe(vx,vy+v,.047,vx,vy+v,2.12,.018);
     for(const z of [.065,2.1])bathroomPipe(vx,vy-.85,z,vx,vy+.85,z,.018);
     // Clear glass keeps the plumbing/world visible; a broad, filtered glint
@@ -35113,7 +35113,7 @@ function BATHROOM_SHOWER(x,y) {
       if(band>width||HIT.face!==1&&HIT.face!==2)return false;
       BG[i]=C(CYAN,2+L*.12);set(i,' ',0);return true;
     });
-  }),box:boxAt(x-.68,y+.03,1,0,.02,.85,.047,2.12)};
+  }),box:boxAt(x-halfWidth+.02,y+.03,1,0,.02,.85,.047,2.12)};
   return [tray,side];
 }
 

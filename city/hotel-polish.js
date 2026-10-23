@@ -22,7 +22,7 @@ function hotelDefinition(tier){
  ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),ROOM_MODEL(bed[0]+side*standOffset,bed[1]-.65,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
  ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,-1,tier===2?GREEN:BLUE),...hotelTelevision(...tv),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
- ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.7,5.1)),
+ ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.6,5.1,.6)),
  POT_PLANT(tier===2?9.5:1.5,h-1.5,1.4)];
  if(tier)p.push(BX(...stove,1.7,.38,.1,.94,stoveShade(1,.55),0,1),BX(stove[0],stove[1]+2.3,.43,.4,0,1.7,solid(WHITE,{panel:.7})),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
  if(tier)p.push(ROOM_MODEL(sofa[0],sofa[1]-1.25,(vx,vy)=>{

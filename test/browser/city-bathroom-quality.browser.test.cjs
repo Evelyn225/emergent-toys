@@ -53,7 +53,7 @@ test('motel shower has a recessed tray, fitted plumbing and an unobstructed entr
   const surface=(x,y)=>Math.max(-Infinity,...shapes.map(s=>{const t=s.ray(x,y,.2,0,0,-1,s.box);return t>0&&s.shade(0,t,1)!==false?.2-t:-Infinity;}));
   const back=shapes.filter(s=>Math.abs(s.box.ay-5.995)<1e-8&&Math.abs(s.box.by-5.94)<1e-8);
   const route=[];for(let y=3.5;y<5.7;y+=.05)route.push(free(tray.x,y));
-  return{inside:surface(tray.x,tray.y),rim:surface(tray.x+.67,tray.y),route:route.every(Boolean),
+  return{inside:surface(tray.x,tray.y),rim:surface(tray.x+tray.box.hl-.03,tray.y),route:route.every(Boolean),
    rear:tray.y+tray.box.hw,wall:room.grid[6][8],glassBlocked:!free(side.x,side.y),backMounts:back.length};
  });
  assert.ok(Math.abs(r.inside-.013)<1e-6&&Math.abs(r.rim-.047)<1e-6,JSON.stringify(r));
