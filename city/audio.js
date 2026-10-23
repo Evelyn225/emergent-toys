@@ -266,13 +266,33 @@ function tickSirens(indoors) {
   }
 }
 
+// ---- car alarms (damage.js): each one going cycles through a warble, a whoop and beeps, heard from where it's parked
+const carAlarms = new Map(); // car -> voice
+function tickCarAlarms() {
+  const now = actx.currentTime;
+  for (const c of cars) if (carAlarming(c) && !carAlarms.has(c)) {
+    const o = actx.createOscillator(), lp = filt('lowpass', 4000), g = actx.createGain(), p = actx.createStereoPanner();
+    o.type = 'square'; g.gain.value = 0; shot(o, lp, g, p, sfxBus); o.start();
+    carAlarms.set(c, { o, lp, g, p });
+  }
+  for (const [c, v] of carAlarms) {
+    if (!cars.includes(c) || !carAlarming(c)) { v.g.gain.setTargetAtTime(0, now, 0.05); v.o.stop(now + 0.3); carAlarms.delete(c); continue; }
+    const t = T - c.alarmT, phase = Math.floor(t / 2.5) % 3, prof = worldSoundProfile(c.x, c.y, terrainHeight(c.x, c.y) + 0.08, 60, 4);
+    const f = phase === 0 ? (Math.floor(t * 10) % 2 ? 950 : 1250) : phase === 1 ? 500 + 1200 * fract(t / 0.6) : 1400;
+    v.o.frequency.setTargetAtTime(f, now, 0.005);
+    v.g.gain.setTargetAtTime(0.1 * prof.gain * (phase === 2 && fract(t * 3) >= 0.5 ? 0 : 1), now, 0.01);
+    v.lp.frequency.setTargetAtTime(Math.min(4000, prof.cutoff), now, 0.05);
+    v.p.pan.setTargetAtTime(prof.pan, now, 0.05);
+  }
+}
+
 // the game's frozen (a shop, the inventory, the map, the dev tools, a hidden tab: anything that stops the frame loop,
 // not only the pause menu, which mutes everything): the sirens fall silent rather than hold whatever note they were on.
 // tickSirens brings them back with the first frame after
 function hushSirens() {
   hushGameplayAudio();
   if (!actx) return;
-  for (const v of sirens.values()) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
+  for (const v of [...sirens.values(), ...carAlarms.values()]) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) hushSirens(); });
 
@@ -349,7 +369,7 @@ function audioTick(dt) {
     const t = elRiding(), speed = !t || t.stopped ? 0 : t.left < 3 || t.left > HOP_T - 3 ? 1 : 3; // slow pulling in and out
     if (speed && (clackT -= dt * speed) < 0) { clackT = 1; const at = now; burst(at, 0.05, [filt('bandpass', 1300, 2)], 0.1, -0.3); burst(at + 0.11, 0.05, [filt('bandpass', 1200, 2)], 0.08, 0.3); }
   }
-  tickSirens(indoors); tickFireSounds(dt);
+  tickSirens(indoors); tickCarAlarms(); tickFireSounds(dt);
   if (bolt && bolt !== heardBolt) { heardBolt = bolt; sfxThunder(bolt.d, indoors); }
   // footsteps: one every step-length of ground covered on foot
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry';

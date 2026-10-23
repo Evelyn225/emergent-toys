@@ -7,8 +7,13 @@
 // damage-fx.js (smoke, the bang, the dashboard).
 const DMG_DENTS = 25, DMG_SMOKE = 50, DMG_BAD = 75, DMG_FIRE = 100, BURN_T = 6, TOW_FEE = 200;
 const crashDamage = speed => Math.max(0, (speed - 0.6) * 22); // 1 (36 km/h): 9; flat out (79): 35; boosting: 57
+// a car left parked with nobody in it (not a police car) that's shot or knocked sets its alarm off: CAR_ALARM_T
+// seconds of whooping (audio.js) and flashing lights (city-sprites.js)
+const CAR_ALARM_T = 20;
+const carAlarming = c => c.alarmT !== undefined && T - c.alarmT < CAR_ALARM_T && !c.player && !c.wrecked && c.fireT == null; // (getting in turns it off)
 function damageCar(c, n) {
   if (!c || c.wrecked || !(n > 0)) return;
+  if (c.parked && !c.player && !c.patrol) c.alarmT = T;
   c.dmg = Math.min(DMG_FIRE, (c.dmg || 0) + n);
   if (c.dmg >= DMG_FIRE && c.fireT == null) c.fireT = 0; // alight
   if (c.fireT != null && !c.player && !c.parked) { c.parked = true; c.v = 0; c.ex = c.x; c.ey = c.y; c.pursuit = false; c.bail = true; } // (whoever's driving it stops and gets out)

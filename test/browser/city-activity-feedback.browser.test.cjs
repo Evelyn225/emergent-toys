@@ -89,3 +89,23 @@ test('damage: a round leaves a hole on the face of the wall it hit, and clanks o
   assert.match(r.drawn, /[o.]/, 'the hole is drawn on the wall');
   assert.ok(r.carHit && r.clank >= 1, 'a clank off the car: ' + JSON.stringify(r));
 }));
+
+test('crime: a shot parked car sets its alarm off where it stands, one voice, gone after a while or when you get in', () => fixture(async page => {
+  const r = await page.evaluate(async () => {
+    audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });
+    mode = 'walk'; room = null; px = 314.5; py = 304.4; a = 0; pitch = -.3; render(0);
+    const kind = Object.keys(VEHICLES)[0], c = { kind, x: px + .4, y: py - .15, hx: 1, hy: 0, v: 0, parked: true, ex: px + .4, ey: py - .15, dmg: 0 };
+    cars.push(c); clearInventory(); carryItem({ id: 'revolver', uses: 6 }); held = 0; gun.cool = gun.reload = 0;
+    a = Math.atan2(c.y - py, c.x - px); render(0); pullTrigger();
+    a += Math.PI / 2; tickCarAlarms(); // (turned to the right: the car's now on your left)
+    const t0 = actx.currentTime; await new Promise(res => { const wait = () => actx.currentTime > t0 + .3 ? res() : setTimeout(wait, 20); wait(); });
+    const v = carAlarms.get(c), going = { alarming: carAlarming(c), voices: carAlarms.size, gain: v?.g.gain.value, pan: v?.p.pan.value };
+    T += CAR_ALARM_T + .1; tickCarAlarms(); const after = carAlarms.size;
+    damageCar(c, 1); tickCarAlarms(); const again = carAlarms.size;
+    c.player = true; tickCarAlarms(); const inside = carAlarms.size;
+    return { going, after, again, inside };
+  });
+  assert.ok(r.going.alarming && r.going.voices === 1 && r.going.gain > .01, JSON.stringify(r.going));
+  assert.ok(r.going.pan < -.3, 'the car is off to your left: ' + JSON.stringify(r.going));
+  assert.deepEqual([r.after, r.again, r.inside], [0, 1, 0]);
+}));

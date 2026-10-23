@@ -4361,8 +4361,13 @@ const GAS_FILL = [[0, 4], [0, 3], [1, 3]];
 // damage-fx.js (smoke, the bang, the dashboard).
 const DMG_DENTS = 25, DMG_SMOKE = 50, DMG_BAD = 75, DMG_FIRE = 100, BURN_T = 6, TOW_FEE = 200;
 const crashDamage = speed => Math.max(0, (speed - 0.6) * 22); // 1 (36 km/h): 9; flat out (79): 35; boosting: 57
+// a car left parked with nobody in it (not a police car) that's shot or knocked sets its alarm off: CAR_ALARM_T
+// seconds of whooping (audio.js) and flashing lights (city-sprites.js)
+const CAR_ALARM_T = 20;
+const carAlarming = c => c.alarmT !== undefined && T - c.alarmT < CAR_ALARM_T && !c.player && !c.wrecked && c.fireT == null; // (getting in turns it off)
 function damageCar(c, n) {
   if (!c || c.wrecked || !(n > 0)) return;
+  if (c.parked && !c.player && !c.patrol) c.alarmT = T;
   c.dmg = Math.min(DMG_FIRE, (c.dmg || 0) + n);
   if (c.dmg >= DMG_FIRE && c.fireT == null) c.fireT = 0; // alight
   if (c.fireT != null && !c.player && !c.parked) { c.parked = true; c.v = 0; c.ex = c.x; c.ey = c.y; c.pursuit = false; c.bail = true; } // (whoever's driving it stops and gets out)
@@ -14715,8 +14720,9 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], wreck = !!m.wrecked, lightsOn = !wreck && (night > 0.4 || overcast > 0.5);
   // damage (damage.js): dents and scrapes over the body, more of them the worse it is; a wreck is burnt black
   const dmg = m.dmg || 0, dented = (u, w) => dmg >= DMG_DENTS && hash(Math.floor(u * 22), Math.floor(w * 40), m.id) < (dmg - 15) / 160;
-  const fobBlinking = m.owned && m.fobBlinkAt !== undefined && T - m.fobBlinkAt < 2.4;
-  const fobHeadlight = !fobBlinking || Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0;
+  const alarmFlash = carAlarming(m) && fract(T * 1.5) < 0.5; // (an alarm going: every light on it flashing)
+  const fobBlinking = m.owned && m.fobBlinkAt !== undefined && T - m.fobBlinkAt < 2.4 || carAlarming(m);
+  const fobHeadlight = !fobBlinking || (carAlarming(m) ? alarmFlash : Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0);
   const braking = !wreck && (m.brake || m.v < 0.05), body = wreck ? GRAY : m.body, burnt = wreck ? 0.35 : 1;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
   vehicleDrawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
@@ -14726,7 +14732,7 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
     if (f > 2 && f < 5 && w > 0.025 && dented(u, w)) { BG[i] = C(body, (0.8 + L * 0.3) * k); return set(i, hash(i, m.id, 3) < 0.5 ? '%' : '~', C(GRAY, 4 + L * 0.3)), true; }
     if (f === 5) return set(i, m.kind === 'amb' && Math.abs(u) < 0.05 && Math.abs(v) < 0.05 ? '+' : ' ', C(RED, 12)), true;
     if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(fobBlinking ? (fobHeadlight ? WHITE : BLACK) : WHITE, fobBlinking || lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
-    if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking ? 15 : 8)), true;
+    if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking || alarmFlash ? 15 : 8)), true;
     if (f === 6) return set(i, ' ', 0), true;
     const wheel = w < 0.035 && Math.min(Math.abs(u - hl * 0.62), Math.abs(u + hl * 0.62)) < 0.04;
     if (wheel) { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; }
@@ -24730,7 +24736,7 @@ function interact() {
     }
     else { // a stolen car: if anyone saw, the police hear about it
       takePoliceCar(c);
-      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
+      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0; delete c.alarmT; // (the alarm: off with the key)
       const pump = gasFilling(c); c.pit = null; c.gas = null; // (filling up at a gas station: gas.js)
       if (pump && !c.owned && !c.mine) {
         c.mine = true; ejectDriver(c);
@@ -26622,13 +26628,33 @@ function tickSirens(indoors) {
   }
 }
 
+// ---- car alarms (damage.js): each one going cycles through a warble, a whoop and beeps, heard from where it's parked
+const carAlarms = new Map(); // car -> voice
+function tickCarAlarms() {
+  const now = actx.currentTime;
+  for (const c of cars) if (carAlarming(c) && !carAlarms.has(c)) {
+    const o = actx.createOscillator(), lp = filt('lowpass', 4000), g = actx.createGain(), p = actx.createStereoPanner();
+    o.type = 'square'; g.gain.value = 0; shot(o, lp, g, p, sfxBus); o.start();
+    carAlarms.set(c, { o, lp, g, p });
+  }
+  for (const [c, v] of carAlarms) {
+    if (!cars.includes(c) || !carAlarming(c)) { v.g.gain.setTargetAtTime(0, now, 0.05); v.o.stop(now + 0.3); carAlarms.delete(c); continue; }
+    const t = T - c.alarmT, phase = Math.floor(t / 2.5) % 3, prof = worldSoundProfile(c.x, c.y, terrainHeight(c.x, c.y) + 0.08, 60, 4);
+    const f = phase === 0 ? (Math.floor(t * 10) % 2 ? 950 : 1250) : phase === 1 ? 500 + 1200 * fract(t / 0.6) : 1400;
+    v.o.frequency.setTargetAtTime(f, now, 0.005);
+    v.g.gain.setTargetAtTime(0.1 * prof.gain * (phase === 2 && fract(t * 3) >= 0.5 ? 0 : 1), now, 0.01);
+    v.lp.frequency.setTargetAtTime(Math.min(4000, prof.cutoff), now, 0.05);
+    v.p.pan.setTargetAtTime(prof.pan, now, 0.05);
+  }
+}
+
 // the game's frozen (a shop, the inventory, the map, the dev tools, a hidden tab: anything that stops the frame loop,
 // not only the pause menu, which mutes everything): the sirens fall silent rather than hold whatever note they were on.
 // tickSirens brings them back with the first frame after
 function hushSirens() {
   hushGameplayAudio();
   if (!actx) return;
-  for (const v of sirens.values()) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
+  for (const v of [...sirens.values(), ...carAlarms.values()]) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) hushSirens(); });
 
@@ -26705,7 +26731,7 @@ function audioTick(dt) {
     const t = elRiding(), speed = !t || t.stopped ? 0 : t.left < 3 || t.left > HOP_T - 3 ? 1 : 3; // slow pulling in and out
     if (speed && (clackT -= dt * speed) < 0) { clackT = 1; const at = now; burst(at, 0.05, [filt('bandpass', 1300, 2)], 0.1, -0.3); burst(at + 0.11, 0.05, [filt('bandpass', 1200, 2)], 0.08, 0.3); }
   }
-  tickSirens(indoors); tickFireSounds(dt);
+  tickSirens(indoors); tickCarAlarms(); tickFireSounds(dt);
   if (bolt && bolt !== heardBolt) { heardBolt = bolt; sfxThunder(bolt.d, indoors); }
   // footsteps: one every step-length of ground covered on foot
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry';
