@@ -45,3 +45,46 @@ test('home and hotel bathroom fixtures stay on the usable side of their partitio
  }));
  for(const r of results)assert.deepEqual(r.overlaps,[],JSON.stringify(r));
 }));
+test('motel shower has a recessed tray, fitted plumbing and an unobstructed entrance',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>{
+  enterRoom('hotelroom',{lobby:{word:'MOTEL',ret:[100,100,0]}},[8.3,3.5,Math.PI/2]);render(0);
+  const tray=room.props.find(p=>p.shower),side=room.props.find(p=>p.box?.z0===.047),draw=drawBox,shapes=[];
+  drawBox=(box,shade,ray=rayBox)=>shapes.push({box,ray,shade});try{tray.draw(tray.x,tray.y);}finally{drawBox=draw;}
+  const surface=(x,y)=>Math.max(-Infinity,...shapes.map(s=>{const t=s.ray(x,y,.2,0,0,-1,s.box);return t>0&&s.shade(0,t,1)!==false?.2-t:-Infinity;}));
+  const back=shapes.filter(s=>Math.abs(s.box.ay-5.995)<1e-8&&Math.abs(s.box.by-5.94)<1e-8);
+  const route=[];for(let y=3.5;y<5.7;y+=.05)route.push(free(tray.x,y));
+  return{inside:surface(tray.x,tray.y),rim:surface(tray.x+tray.box.hl-.03,tray.y),route:route.every(Boolean),
+   rear:tray.y+tray.box.hw,wall:room.grid[6][8],glassBlocked:!free(side.x,side.y),backMounts:back.length};
+ });
+ assert.ok(Math.abs(r.inside-.013)<1e-6&&Math.abs(r.rim-.047)<1e-6,JSON.stringify(r));
+ assert.ok(r.route&&r.glassBlocked,'walk into the tray from the open front, not through the glass: '+JSON.stringify(r));
+ assert.ok(Math.abs(r.rear-6)<1e-6&&r.wall==='W'&&r.backMounts===2,'rear fittings meet the partition: '+JSON.stringify(r));
+}));
+test('bathroom surrounds span real partition gaps and leave the original walking opening clear',()=>fixture(async page=>{
+ const r=await page.evaluate(()=>Object.keys(ROOM_DEFS).filter(kind=>ROOM_DEFS[kind].wc).map(kind=>{
+  const r=makeRoom(kind),problems=[];
+  room=r;mode='room';
+  for(const p of r.props.filter(p=>p.bathroomOpening)){
+   const q=p.bathroomOpening,shapes=[],draw=drawBox;
+   drawBox=(box,shade,ray=rayBox)=>shapes.push({box,ray});try{p.draw(p.x,p.y);}finally{drawBox=draw;}
+   for(let u=q.start+.22;u<q.end-.2;u+=.1){
+    const x=q.vertical?q.cross+.5:u,y=q.vertical?u:q.cross+.5;
+    if(shapes.some(s=>{const t=s.ray(x,y,0,0,0,1,s.box);return t>0&&t<2.19;}))problems.push('trim inside opening');
+   }
+   const top=shapes.find(s=>s.box.z0===2.26&&s.box.z1===(r.def.height||3));
+   if(!top)problems.push('unclosed lintel');
+   // nothing shares the wall's jamb planes (they z-fight), and the wide, thin soffit is a flat box, not a rounded march
+   for(const s of shapes){
+    const b=s.box,ex=[b.x-b.hl*Math.abs(b.c)-b.hw*Math.abs(b.s),b.x+b.hl*Math.abs(b.c)+b.hw*Math.abs(b.s)],ey=[b.y-b.hl*Math.abs(b.s)-b.hw*Math.abs(b.c),b.y+b.hl*Math.abs(b.s)+b.hw*Math.abs(b.c)];
+    const [ends,depth]=q.vertical?[ey,ex]:[ex,ey],inWall=depth[0]<q.cross+1-1e-6&&depth[1]>q.cross+1e-6;
+    // (a box in the wall's depth, beyond a jamb, whose face looks into the opening from that jamb's own plane)
+    if(b.z0<2.2&&inWall&&(Math.abs(ends[1]-q.start)<1e-6||Math.abs(ends[0]-q.end)<1e-6))problems.push('trim face in a jamb plane');
+   }
+   const soffit=shapes.find(s=>s.box.z0===2.2&&s.box.z1===2.26);
+   if(!soffit||soffit.box.round)problems.push('soffit missing or rounded');
+  }
+  return{kind,openings:r.props.filter(p=>p.bathroomOpening).length,problems};
+ }));
+ assert.ok(r.find(p=>p.kind==='bar').openings===1&&r.find(p=>p.kind==='islandhome').openings===1,JSON.stringify(r));
+ for(const p of r)assert.deepEqual(p.problems,[],JSON.stringify(p));
+}));

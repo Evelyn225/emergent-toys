@@ -16152,6 +16152,7 @@ function makeRoom(kind, extra = {}) {
   const def = kind==='hotelroom'?(extra.suite?ROOM_DEFS.hotelSuite:extra.lobby?.word==='MOTEL'?ROOM_DEFS.motelRoom:ROOM_DEFS.hotelroom):ROOM_DEFS[kind], r = { neon: MAG, word: '', ...extra, kind, def, grid: def.grid, W: def.grid[0].length, H: def.grid.length };
   r.menu = MENU_ITEMS[MENUS[r.word] ?? 5];
   r.props = def.props(r);
+  if(def.wc)r.props.push(...bathroomSurrounds(r));
   if (def.home) r.props.push(...workshopProps(r),...furnishingProps(r));
   if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
     const host=r.lobby||r;r.exterior=homeExterior({...r,cell:host.cell,ret:host.ret});
@@ -34138,7 +34139,7 @@ function hotelDefinition(tier){
  ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),ROOM_MODEL(bed[0]+side*standOffset,bed[1]-.65,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
  ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,-1,tier===2?GREEN:BLUE),...hotelTelevision(...tv),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
- ...(tier?[BATHTUB(w-1.5,4.1)]:[BX(w-2.1,4.4,.7,.7,.02,.07,solid(WHITE)),BX(w-2.8,4.4,.025,.7,.07,1.9,solid(CYAN,{bright:1}))]),
+ ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.6,5.1,.6)),
  POT_PLANT(tier===2?9.5:1.5,h-1.5,1.4)];
  if(tier)p.push(BX(...stove,1.7,.38,.1,.94,stoveShade(1,.55),0,1),BX(stove[0],stove[1]+2.3,.43,.4,0,1.7,solid(WHITE,{panel:.7})),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
  if(tier)p.push(ROOM_MODEL(sofa[0],sofa[1]-1.25,(vx,vy)=>{
@@ -34987,6 +34988,9 @@ function bathroomOval(x,y,sx,sy,base,profile,shade) {
   const points=profile.map(([z,r])=>[base+z,r]),r=Math.max(...points.map(p=>p[1]));
   drawBox({...boxAt(x,y,1,0,sx*r,sy*r,Math.min(...points.map(p=>p[0])),Math.max(...points.map(p=>p[0]))),sx,sy,lathe:{x:0,y:0,profile:points}},shade,bathroomRayOval);
 }
+function bathroomPaint(i,t,L) { // matte painted joinery: doors, soffits
+  BG[i]=C(WHITE,3.1+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+}
 function bathroomEnamel(i,t,L) {
   BG[i]=C(WHITE,3.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
 }
@@ -35069,6 +35073,91 @@ function BATHROOM_TUB(x,y) {
     coveLathe(vx,vy-.48,.187,[[0,0],[0,.025],[.003,.025],[.003,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
     bathroomTap(vx,vy-.8,0,1,.62);
   }),bath:true};
+}
+
+// A shallow, walk-in tray. Its rim stays below the room's 5 cm obstruction
+// threshold; only the glass side has a full-height collision footprint.
+function BATHROOM_SHOWER(x,y,halfWidth=.7) {
+  const tray={...furnitureModel(x,y,1,0,halfWidth,.9,.047,(vx,vy)=>{
+    coveRound(vx,vy,1,0,halfWidth,.9,.005,.047,.035,(i,t,L)=>{
+      if(HIT.face===5&&Math.abs(HIT.u)<halfWidth-.065&&Math.abs(HIT.v)<.835)return false;
+      return bathroomEnamel(i,t,L);
+    });
+    coveRound(vx,vy,1,0,halfWidth-.065,.835,.005,.013,.025,bathroomEnamel);
+    coveLathe(vx,vy+.48,.013,[[0,0],[0,.065],[.003,.065],[.003,0]],(i,t,L)=>{
+      coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+      if(HIT.face===5&&Math.abs(HIT.u)<.047&&fract(HIT.v/.018)<.25)BG[i]=C(GRAY,.6);
+      return true;
+    });
+    // The controls, riser and head share the rear wall plane at y + .9.
+    for(const z of [.95,1.8])bathroomPipe(vx,vy+.895,z,vx,vy+.84,z,.032);
+    bathroomPipe(vx,vy+.84,.95,vx,vy+.84,1.98,.017);
+    bathroomPipe(vx,vy+.84,1.98,vx,vy+.72,2.09,.017);
+    bathroomPipe(vx,vy+.72,2.09,vx,vy+.49,2.09,.017);
+    coveLathe(vx,vy+.49,2.035,[[0,0],[0,.1],[.018,.115],[.04,.08],[.055,0]],(i,t,L)=>{
+      coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+      if(HIT.nz<-.8&&hash(Math.floor(HIT.u*120),Math.floor(HIT.v*120),7)>.6)BG[i]=C(GRAY,1);
+      return true;
+    });
+    bathroomPipe(vx-.12,vy+.84,.98,vx+.12,vy+.84,.98,.028);
+    for(const side of [-1,1])bathroomPipe(vx+side*.12,vy+.84,.98,vx+side*.12,vy+.77,.98,.023);
+    coveRound(vx+.38,vy+.82,1,0,.19,.08,1.27,1.3,.012,GRAY);
+    coveLathe(vx+.38,vy+.82,1.3,[[0,0],[0,.04],[.12,.04],[.13,.025],[.15,.025],[.15,0]],(i,t,L)=>{
+      BG[i]=C(WHITE,3+L*.25);set(i,' ',0);return true;
+    });
+  }),shower:true,radius:1.2};
+  const side={...furnitureModel(x-halfWidth+.02,y+.03,1,0,.02,.85,2.12,(vx,vy)=>{
+    for(const v of [-.85,.85])bathroomPipe(vx,vy+v,.047,vx,vy+v,2.12,.018);
+    for(const z of [.065,2.1])bathroomPipe(vx,vy-.85,z,vx,vy+.85,z,.018);
+    // Clear glass keeps the plumbing/world visible; a broad, filtered glint
+    // reads as glass without replacing everything behind it with a blue wall.
+    drawBox(boxAt(vx,vy,1,0,.005,.83,.08,2.08),(i,t,L)=>{
+      const band=Math.abs(HIT.v-.19-(HIT.w-1.1)*.14),width=Math.max(.024,t/projX);
+      if(band>width||HIT.face!==1&&HIT.face!==2)return false;
+      BG[i]=C(CYAN,2+L*.12);set(i,' ',0);return true;
+    });
+  }),box:boxAt(x-halfWidth+.02,y+.03,1,0,.02,.85,.047,2.12)};
+  return [tray,side];
+}
+
+// Discover the real gaps in WC partitions. Both faces and the full wall depth
+// use the same opening bounds; none of the new trim occupies walking space.
+function bathroomOpenings(r) {
+  const w=r.def.wc;if(!w)return [];
+  const solid=(x,y)=>'#W'.includes(r.grid[y]?.[x]||' '),open=(x,y)=>r.grid[y]?.[x]==='.';
+  const result=[];
+  const scan=(cross,lo,hi,vertical)=>{
+    for(let start=lo;start<hi;start++) {
+      const cell=u=>vertical?[cross,u]:[u,cross];
+      if(!open(...cell(start)))continue;
+      let end=start+1;while(end<hi&&open(...cell(end)))end++;
+      if(solid(...cell(start-1))&&solid(...cell(end))&&
+        Array.from({length:end-start},(_,k)=>start+k).every(u=>vertical?open(cross-1,u)&&open(cross+1,u):open(u,cross-1)&&open(u,cross+1)))
+        result.push({vertical,cross,start,end});
+      start=end-1;
+    }
+  };
+  scan(w.y0-1,w.x0,w.x1,false);scan(w.y1,w.x0,w.x1,false);
+  scan(w.x0-1,w.y0,w.y1,true);scan(w.x1,w.y0,w.y1,true);
+  return result;
+}
+function bathroomSurrounds(r) {
+  const height=r.def.height||3;
+  return bathroomOpenings(r).map(p=>{
+    const {vertical,cross,start,end}=p,c=vertical?0:1,s=vertical?1:0,x=vertical?cross+.5:(start+end)/2,y=vertical?(start+end)/2:cross+.5,half=(end-start)/2;
+    return {...ROOM_MODEL(x,y,(vx,vy)=>{
+      const trim=(u,v,hl,hw,z0,z1)=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1,.01,bathroomPaint);
+      for(const side of [-1,1])trim(side*(half-.006),0,.006,.5,0,2.2); // (a liner proud of the jamb, never in its plane)
+      // (the soffit is a flat box: a rounded marcher breaks up on so wide and thin a slab seen edge-on from below)
+      drawBox(boxAt(vx,vy,c,s,half,.5,2.2,2.26),bathroomPaint);
+      // Close above the opening instead of leaving a free-floating lintel.
+      if(height>2.26)drawBox(boxAt(vx,vy,c,s,half,.5,2.26,height),solid(WHITE));
+      for(const face of [-1,1]) {
+        for(const side of [-1,1])trim(side*(half+.045),face*.516,.045,.016,0,2.3);
+        trim(0,face*.516,half,.016,2.26,2.3);
+      }
+    }),box:boxAt(x,y,c,s,half,.5,2.2,height),bathroomOpening:p,radius:half+.8};
+  });
 }
 // Shared close-up home models. Surfaces have real edges and joined supports;
 // screens and bulbs are the only emissive parts of their housings.
