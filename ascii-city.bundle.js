@@ -16361,7 +16361,7 @@ function homePlan(w, h, tier) {
   };
   const home = tier === 0
     ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.18, 4.4], fridge: [8.45, 5.6], pet: [1.4, 7.2], dining: [5.5, 5.8] }
-    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [5, tier === 2 ? 13.6 : 11.8], tv: [5, tier === 2 ? 9.6 : 8.7], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
+    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [2.7, tier === 2 ? 13.6 : 11.8], tv: [2.7, tier === 2 ? 9.63 : 8.63], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
   const wc = tier === 0 ? { x0: 7, y0: 1, x1: 9, y1: 4, sign: [6, 3, 3.5] }
     : { x0: 15, y0: 1, x1: inside, y1: 5, sign: [14, 4, 4.5] };
   wall(wc.x0 - 1, 1, wc.x0 - 1, wc.y1, 'W');
@@ -33750,7 +33750,7 @@ ROOM_DEFS.islandhome={
 
 function fernRoomWall(i,u,uStep,z,d,mx,my,L) {
   homeWall(i,u,uStep,z,d,mx,my,L);
-  if(roomAt(mx,my)==='W'||inWc(px,py))return true;
+  if(roomAt(mx,my)==='W')return true;
   if(z<.8){BG[i]=C(BRICK,1.6+L*.2);set(i,Math.abs(z-.76)<.035?'=':fract(u*3)<.045?'|':' ',C(WARM,L*.6));}
   return true;
 }
@@ -35333,19 +35333,51 @@ function HOME_PENDANT(x,y,ceiling,r,index) {
     dot(vx,vy,ceiling-.68,.055,(i,t,L)=>{BG[i]=C(on?WARM:STONE,on?12:2+L*.15);set(i,' ',0);return true;});
   });
 }
+function HOME_FRIDGE(x,y) {
+  const doors=[[.13,1.28],[1.31,1.85]].map(([z0,z1])=>{
+    const bottom=z0+.012,top=z1-.012,hl=.39,hw=.022,b=.012;
+    const planes=[[1,0,0,hl,1],[-1,0,0,hl,2],[0,1,0,hw,3],[0,-1,0,hw,4],[0,0,1,top,5],[0,0,-1,-bottom,6],
+      [1,1,0,hl+hw-b,7],[-1,1,0,hl+hw-b,8],[0,1,1,hw+top-b,9],[0,1,-1,hw-bottom-b,10]];
+    const normals=Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]));
+    return {z0,z1,hl,hw,bottom,top,planes,normals};
+  });
+  const enamel=(i,t,L)=>{BG[i]=C(WHITE,2.9+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const u of [-.3,.3])for(const v of [-.3,.3])coveRound(vx+u,vy+v,1,0,.035,.035,0,.09,.01,GRAY);
+    coveRound(vx,vy,1,0,.43,.4,.08,1.9,.045,enamel);
+    for(const door of doors) {
+      const {z0,z1,hl,hw,bottom,top,planes,normals}=door;
+      drawBox(boxAt(vx,vy+.402,1,0,.399,.012,z0,z1),(i,t,L)=>{BG[i]=C(GRAY,.6+L*.1);set(i,' ',0);return true;});
+      drawBox({...boxAt(vx,vy+.427,1,0,hl,hw,bottom,top),planes,normals},enamel,homeRayWorktop);
+      const lo=z0+.13,hi=Math.min(z1-.1,lo+.36);
+      for(const z of [lo,hi])bathroomPipe(vx+.28,vy+.45,z,vx+.28,vy+.48,z,.012);
+      bathroomPipe(vx+.28,vy+.48,lo,vx+.28,vy+.48,hi,.014);
+    }
+    coveRound(vx,vy+.4,1,0,.34,.015,.08,.115,.008,GRAY);
+  }),radius:1.1,box:boxAt(x,y+.035,1,0,.43,.465,0,1.9)};
+}
+// Fixed convex worktop planes avoid marching across a broad, thin slab.
+function homeRayWorktop(ox,oy,oz,rx,ry,rz,b) {
+  const t=rayBeveledBay(ox,oy,oz,rx,ry,rz,b);if(t<0)return t;
+  const n=b.normals[HIT.face];HIT.nx=n[0];HIT.ny=n[1];HIT.nz=n[2];return t;
+}
 function FERN_KITCHEN(r) {
+  const planes=[[1,0,0,1.77,1],[-1,0,0,1.77,2],[0,1,0,.42,3],[0,-1,0,.42,4],[0,0,1,.95,5],[0,0,-1,-.88,6],
+    [1,0,1,2.695,7],[-1,0,1,2.695,8],[0,1,1,1.345,9],[0,-1,1,1.345,10]];
+  const normals=Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]));
   return {...ROOM_MODEL(15.35,1.42,(vx,vy)=>{
     const sink=vx-.9,cut=(i,t,L)=>{if(HIT.face===5&&Math.hypot((HIT.u+.9)/.28,HIT.v/.28)<1)return false;return homeStone(i,t,L);};
     for(const offset of [-1.4,-.7,0,.7,1.4]) {
-      coveRound(vx+offset,vy,1,0,.34,.39,.08,.88,.025,(i,t,L)=>{
-        if(HIT.face===5&&Math.hypot(HIT.u+offset+.9,HIT.v)<.28)return false;
-        return coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,3);
+      drawBox(boxAt(vx+offset,vy,1,0,.34,.39,.08,.88),(i,t,L)=>{
+        if(HIT.face===5)return false; // the worktop owns this exposed surface
+        const f=HIT.face,nx=f===1?1:f===2?-1:0,ny=f===3?1:f===4?-1:0;
+        return coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,nx,ny,f===6?-1:0,3);
       });
       coveRound(vx+offset,vy+.395,1,0,.31,.025,.14,.82,.02,'wood',4);
       coveTube(vx+offset-.1,vy+.43,.72,vx+offset+.1,vy+.43,.72,.014,GRAY);
     }
-    const top={...boxAt(vx,vy,1,0,1.77,.42,.88,.95),round:.025};drawBox(top,cut,coveRayRounded);
-    coveLathe(sink,vy,.76,[[0,0],[0,.12],[.04,.2],[.19,.28],[.2,.29],[.21,.27],[.05,.17],[.04,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
+    const top={...boxAt(vx,vy,1,0,1.77,.42,.88,.95),planes,normals};drawBox(top,cut,homeRayWorktop);
+    coveLathe(sink,vy,.76,[[0,0],[0,.12],[.19,.28],[.2,.29],[.21,.27],[.04,.12],[.04,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
     coveTube(sink,vy-.26,.95,sink,vy-.26,1.23,.018,GRAY);coveTube(sink,vy-.26,1.23,sink,vy-.03,1.23,.018,GRAY);
     const oven=vx+1.08;
     for(const dx of [-.14,.14])for(const dy of [-.16,.16])coveLathe(oven+dx,vy+dy,.95,[[0,0],[0,.09],[.012,.09],[.012,0]],(i,t,L)=>{BG[i]=C(GRAY,1.1);set(i,' ',0);return true;});
@@ -35362,9 +35394,9 @@ function fernHomeQuality() {
   extra['13,16']=extra['13,17']='.';extra['0,16']='D';
   for(let y=1;y<=6;y++)extra['18,'+y]='W';
   for(let x=18;x<=22;x++)extra[x+',6']='W';extra['19,6']=extra['20,6']='.';
-  def.grid=boxRoom(24,24,extra);def.wc={x0:19,y0:1,x1:23,y1:6,sign:[18,5,5.5]};
-  def.home={shelf:[1.18,13],pet:[2,20],bed:[4.1,2.25],closet:[7.5,1.4],sofa:[5,16.8],tv:[5,11.4],fridge:[11.6,1.45],dining:[14.7,6]};
-  def.spots={bed:[4.1,3.7],closet:[7.5,2.5],shelf:[2.2,13],pet:[2,20],fridge:[11.6,2.6],stove:[16.4,2.6],workshop:[15.5,13],tv:[5,12.65],terrace:[1.4,16.5]};
+  def.grid=boxRoom(24,24,extra);def.wc={x0:19,y0:1,x1:23,y1:6,sign:[21,6,21.5]};
+  def.home={shelf:[1.18,13],pet:[2,20],bed:[4.1,2.25],closet:[7.5,1.4],sofa:[3,16.8],tv:[3,11.4],fridge:[11.6,1.45],dining:[14.7,6]};
+  def.spots={bed:[4.1,3.7],closet:[7.5,2.5],shelf:[2.2,13],pet:[2,20],fridge:[11.6,2.6],stove:[16.4,2.6],workshop:[15.5,13],tv:[3,12.65],terrace:[1.4,16.5]};
   def.bedBounds=[4.1,2.25,1.3,1.05];def.lamps=[[4.5,5],[14.5,6],[5,17],[18,16]];
   def.shelfAxis=[0,1];
   def.floor='fernwood';def.bathFloor='fernBath';
@@ -35372,11 +35404,11 @@ function fernHomeQuality() {
     ...FURNITURE_BED(4.1,2.25,1.32,1.05,GREEN,0,.61,1.22),
     FURNITURE_STORAGE(7.5,1.35,.9,.35,2.2),
     FURNITURE_STORAGE(1.18,13,.75,.18,1.05,-Math.PI/2,true),
-    BX(11.6,1.45,.45,.45,0,1.9,solid(WHITE,{panel:.7})),FERN_KITCHEN(r),
+    HOME_FRIDGE(11.6,1.45),FERN_KITCHEN(r),
     ...toilet(21,1.42,-1,porcelain),washbasin(19.45,1.35,0,1),BATHTUB(22.5,3.7),
     ...tableBox(14.7,6,1.15,.65),...homeChair(14.7,7.2,0,-1,GREEN),...homeChair(14.7,4.8,0,1,GREEN),
-    ...couch(5,16.8,1.8,0,-1,GREEN),...tableBox(5,14.4,.9,.45),
-    FURNITURE_STORAGE(5,11.3,.9,.3,.61),TELEVISION(5,11.4,r),
+    ...couch(3,16.8,1.8,0,-1,GREEN),...tableBox(3,14.4,.9,.45),
+    FURNITURE_STORAGE(3,11.3,.9,.3,.61),TELEVISION(3,11.4,r),
     FURNITURE_STORAGE(14.4,13,.65,.4,1.1,-Math.PI/2),
     POT_PLANT(10.65,11.6,1.5),POT_PLANT(22.45,8.6,1.4),
     ...def.lamps.map(([x,y],k)=>HOME_PENDANT(x,y,def.height,r,k)),

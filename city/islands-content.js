@@ -202,7 +202,7 @@ ROOM_DEFS.islandhome={
 
 function fernRoomWall(i,u,uStep,z,d,mx,my,L) {
   homeWall(i,u,uStep,z,d,mx,my,L);
-  if(roomAt(mx,my)==='W'||inWc(px,py))return true;
+  if(roomAt(mx,my)==='W')return true;
   if(z<.8){BG[i]=C(BRICK,1.6+L*.2);set(i,Math.abs(z-.76)<.035?'=':fract(u*3)<.045?'|':' ',C(WARM,L*.6));}
   return true;
 }
