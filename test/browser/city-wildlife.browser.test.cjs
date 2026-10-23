@@ -89,6 +89,26 @@ test('aquarium fish are shaped species: each a solid silhouette, its eye at the 
   assert.deepEqual(r.heads, []);
 }));
 
+test('aviary birds, conservatory butterflies and the lizard are shaped animals that face the way they move', () => fixture(async page => {
+  const r = await page.evaluate(() => {
+    const span = (kind, f) => { const xs = ANIMAL_BODIES[kind](f).parts.flatMap(p => p.k === 2 ? [p.a[0], p.b[0]] : [p.c[0]]); return Math.max(...xs) - Math.min(...xs); };
+    const tops = (kind, f) => Math.max(...ANIMAL_BODIES[kind](f).parts.flatMap(p => p.k === 2 ? [p.a[2], p.b[2]] : [p.c[2]]));
+    const frames = { parrotBeat: tops('parrot', 0) > tops('parrot', 1) + 3, finchBeat: tops('finch', 0) > tops('finch', 1) + 1.5, butterflyFolds: span('butterfly', 0) > span('butterfly', 1) * 3 && tops('butterfly', 1) > tops('butterfly', 0) + 1 };
+    const rooms = {};
+    for (const kind of ['aviary', 'conservatory']) {
+      enterRoom(kind, { word: kind.toUpperCase(), ret: [100, 100, 0] }, [7, 10, -Math.PI / 2]);
+      const animals = room.props.filter(p => p.draw && p.tick && !p.fig), ascii = room.props.filter(p => p.art && /\(o>|\}\{|~=</.test(p.art.join('')));
+      let facing = 0, moved = 0;
+      for (let k = 0; k < 30; k++) { T += 0.05; for (const p of animals) { const x0 = p.x, y0 = p.y; p.tick(p); const d = Math.hypot(p.x - x0, p.y - y0); if (d > 1e-4) { moved++; if ((p.x - x0) / d * p.hx + (p.y - y0) / d * p.hy > 0.99) facing++; } } }
+      rooms[kind] = { animals: animals.length, ascii: ascii.length, moved, facing };
+    }
+    return { frames, rooms };
+  });
+  assert.deepEqual(r.frames, { parrotBeat: true, finchBeat: true, butterflyFolds: true });
+  assert.equal(r.rooms.aviary.animals, 16); assert.equal(r.rooms.conservatory.animals, 11);
+  for (const v of Object.values(r.rooms)) { assert.equal(v.ascii, 0); assert.ok(v.moved > 100 && v.facing === v.moved, JSON.stringify(v)); }
+}));
+
 test('a flock draws as shaped birds in their plumage (no ASCII), and scared birds face the way they fly', () => fixture(async page => {
   const r = await page.evaluate(() => {
     [px, py] = citySourcePoint(12 * 8 + 0.15, 10 * 8 + 4); a = Math.PI / 2; pitch = -0.75;

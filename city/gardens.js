@@ -522,18 +522,61 @@ function aviaryWall(i, su, uStep, z, d, mx, my, L) {
   return set(i, m ? 'x' : ' ', C(GRAY, L * 0.45)), true;
 }
 const BIRD_COL = [RED, GREEN, BLUE, YEL, CYAN, ORANGE, MAG, WHITE];
+// ---- the glasshouses' animals, built like the others (figures.js). Frames: birds 0 wings up, 1 wings down;
+// the butterfly 0 open, 1 folded; the lizard 0 still, 1 a step
+ANIMAL_BODIES.parrot = frame => { // a big parrot in flight: a curved beak, a long tail, broad wings
+  const R = AR, up = frame === 0, parts = [figEll([0, 0, 4], AN_I, [1.6, 3.2, 1.6], () => R.BODY), figEll([0, 3.2, 5], AN_I, [1.3, 1.4, 1.3], () => R.HEAD),
+    figCap([0, 4.3, 5.2], [0, 4.9, 4.3], 0.45, () => R.BEAK), figEll([0, 3.6, 5.3], AN_I, [1.35, 0.5, 0.45], () => R.PALE), // (its pale cheek)
+    figCap([0, -2.6, 3.9], [0, -7, 3.3], 0.6, () => R.MARK), figCap([0, -7, 3.3], [0, -10, 3], 0.32, () => R.MARK)];
+  for (const s of [-1, 1]) parts.push(figCap([s * 1.4, 0.2, 4.4], [s * 6, -0.6, up ? 8 : 1.4], 0.95, () => R.WING), figCap([s * 6, -0.6, up ? 8 : 1.4], [s * 9.5, -1.6, up ? 9.5 : 0.4], 0.55, () => R.WING));
+  return { parts, decals: animalEyes([0, 3.2, 5], 1.3, 1) };
+};
+ANIMAL_BODIES.finch = frame => { // a small bird darting about
+  const R = AR, up = frame === 0, parts = [figEll([0, 0, 3], AN_I, [1.2, 2, 1.2], () => R.BODY), figEll([0, 1.9, 3.8], AN_I, [0.9, 0.95, 0.9], () => R.HEAD),
+    figCap([0, 2.7, 3.8], [0, 3.3, 3.6], 0.3, () => R.BEAK), figCap([0, -1.8, 3.1], [0, -3.6, 3.3], 0.35, () => R.MARK)];
+  for (const s of [-1, 1]) parts.push(figCap([s * 1, 0, 3.4], [s * 4, -0.6, up ? 5.6 : 1.2], 0.55, () => R.WING));
+  return { parts, decals: animalEyes([0, 1.9, 3.8], 0.9, 1) };
+};
+ANIMAL_BODIES.butterfly = frame => { // a slender body; wings flat out, or folded up over its back
+  const R = AR, open = frame === 0, parts = [figCap([0, -1.3, 0], [0, 1.3, 0.1], 0.28, () => R.BODY), figEll([0, 1.5, 0.15], AN_I, [0.35, 0.35, 0.35], () => R.BODY)];
+  for (const s of [-1, 1]) {
+    if (open) parts.push(figEll([s * 2.1, 0.7, 0.1], AN_I, [2, 1.6, 0.12], h => Math.hypot(h.l[0] - s * 0.3, h.l[1] - 0.2) < 0.32 ? R.MARK : R.WING),
+      figEll([s * 1.6, -1, 0.05], AN_I, [1.4, 1.2, 0.12], () => R.WING));
+    else parts.push(figEll([s * 0.2, 0.4, 2.1], AN_I, [0.12, 1.6, 2], h => Math.hypot(h.l[1] - 0.2, h.l[2] - 0.3) < 0.3 ? R.MARK : R.WING));
+    parts.push(figCap([s * 0.1, 1.7, 0.3], [s * 0.7, 3, 0.9], 0.07, () => R.BODY, false)); // the antennae
+  }
+  return { parts, decals: [] };
+};
+ANIMAL_BODIES.lizard = frame => { // low on its belly, legs splayed, a long tapering tail
+  const R = AR, parts = [figCap([0, -2, 0.7], [0, 3, 0.75], 0.95, () => R.BODY), figEll([0, 4.2, 0.85], AN_I, [0.8, 1.3, 0.6], () => R.HEAD),
+    figCap([0, -2.2, 0.6], [0, -6, 0.4], 0.55, () => R.BODY), figCap([0, -6, 0.4], [0, -9, 0.3], 0.25, () => R.BODY)];
+  for (const [s, y] of [[-1, 2], [1, 2], [-1, -1.3], [1, -1.3]]) { const step = frame && (s * y > 0) ? 0.6 : 0; parts.push(figCap([s * 0.8, y, 0.6], [s * 2, y + 0.6 + step, 0.1], 0.28, () => R.LEG, false)); }
+  return { parts, decals: animalEyes([0, 4.2, 0.85], 0.8, 1) };
+};
+// macaw-bright: a body and a wing in different colours, a long tail in a third
+const PARROT_LOOKS = [[RED, BLUE, YEL], [GREEN, BLUE, RED], [BLUE, YEL, CYAN], [YEL, GREEN, BLUE], [CYAN, BLUE, YEL], [ORANGE, GREEN, RED]]
+  .map(([body, wing, mark]) => animalLook('parrot', { body: [body, 11], wing: [wing, 10], mark: [mark, 10], beak: [GRAY, 3], pale: [WHITE, 13] }));
+const FINCH_LOOKS = BIRD_COL.map(col => animalLook('finch', { body: [col, 11], head: [col, 9], wing: [col, 7], mark: [GRAY, 4], beak: [YEL, 12] }));
+const BUTTERFLY_LOOKS = [YEL, ORANGE, BLUE, MAG, WHITE].map(col => animalLook('butterfly', { body: [GRAY, 2], wing: [col, 13], mark: [GRAY, 2] }));
+const LIZARD_LOOK = animalLook('lizard', { body: [GREEN, 9], head: [GREEN, 10], pale: [YEL, 10], leg: [GREEN, 7] });
+// a prop that draws a shaped animal facing the way it last moved (rooms: one unit a metre). size: as drawAnimal's h
+const animalProp = (x, y, z, size, look, frame, tick) => {
+  const s = { x, y, z, hx: 1, hy: 0, radius: 0.6, tick: o => {
+    const x0 = o.x, y0 = o.y; tick(o); const mx = o.x - x0, my = o.y - y0, d = Math.hypot(mx, my);
+    if (d > 1e-5) { o.hx = mx / d; o.hy = my / d; }
+  }, draw: (vx, vy, o) => drawAnimal(vx, vy, o.z, size, o.hx, o.hy, typeof look === 'function' ? look(o) : look, frame(o)) };
+  return s;
+};
 function aviaryProps(r) {
   const p = [];
   for (const [x, y, s] of [[3, 3, 1.2], [10.5, 3.5, 1.4], [4, 8.5, 1], [11, 8, 1.1]]) p.push(SP(x, y, 1.2 * s, 4 * s, ART.tree, (c, row, L) => row > 4 ? C(BRICK, L) : C(GREEN, c === '%' ? L * 0.45 : L)));
   for (let k = 0; k < 16; k++) { // birds: loops round the dome, or (seed out) a flurry round you
-    const big = k < 6, col = BIRD_COL[k & 7];
-    p.push({ ...SP(7, 6, big ? 0.26 : 0.14, big ? 0.26 : 0.12, big ? ['  _', ' (o>', '//\\', 'V_/'] : ['v'], (c, row, L) => c === '>' ? C(YEL, 15) : C(col, Math.max(L, 10)), 3),
-      tick: s => {
-        const fed = T - seedT < 12, th = T * (0.4 + (k % 5) * 0.12) + k * 1.7;
-        const tx = fed ? px + Math.cos(th * 2) * (1.4 + (k % 3) * 0.4) : 7 + Math.cos(th) * (2 + (k % 4) * 0.8), ty = fed ? py + Math.sin(th * 2) * (1.4 + (k % 3) * 0.4) : 6 + Math.sin(th) * (1.5 + (k % 3) * 0.6);
-        s.x += (tx - s.x) * 0.05; s.y += (ty - s.y) * 0.05; s.z = fed ? 1.2 + Math.sin(th * 3) * 0.4 : 2 + Math.sin(th * 1.3) * 1.5;
-        s.art = big ? (fract(T * 3 + k / 7) < 0.5 ? ['  _', ' (o>', '//\\', 'V_/'] : ['  _', ' (o>', '\\\\/', 'V_/']) : [fract(T * 6 + k / 5) < 0.5 ? 'v' : '^'];
-      } });
+    const big = k < 6; // (six big parrots, ~0.8 m nose to tail; finches ~15 cm)
+    p.push(animalProp(7, 6, 3, big ? 1.1 : 0.5, big ? PARROT_LOOKS[k] : FINCH_LOOKS[k & 7], () => fract(T * (big ? 3 : 7) + k / 7) < 0.5 ? 0 : 1, s => {
+      const fed = T - seedT < 12, th = T * (0.4 + (k % 5) * 0.12) + k * 1.7;
+      const tx = fed ? px + Math.cos(th * 2) * (1.4 + (k % 3) * 0.4) : 7 + Math.cos(th) * (2 + (k % 4) * 0.8), ty = fed ? py + Math.sin(th * 2) * (1.4 + (k % 3) * 0.4) : 6 + Math.sin(th) * (1.5 + (k % 3) * 0.6);
+      s.x += (tx - s.x) * 0.05; s.y += (ty - s.y) * 0.05; s.z = fed ? 1.2 + Math.sin(th * 3) * 0.4 : 2 + Math.sin(th * 1.3) * 1.5;
+    }));
   }
   p.push(...counterBox(11.5, 10, 0.8, 0.9), standing(11.5, 9.4, GREEN)); // the keeper with the seed
   if (chance(0.6)) p.push(standing(5.5, 6.5, shirt())); if (chance(0.5)) p.push(figProp(8.5, 9, figAnyone(YEL, { kid: true, bot: 'shorts' }), { h: 1.2 }));
@@ -554,12 +597,13 @@ function conservatoryProps(r) {
   for (const [x, y] of [[15.2, 6], [19.4, 6.4], [24, 8.6], [17.6, 11.4], [21, 13.4], [14.8, 9.6]]) plant('barrel', x, y, 0.5, 0.5, (c, row, L) => c === '*' ? C(MAG, 15) : C(GREEN, L));
   for (const [x, y] of [[21.8, 7.6], [15.6, 13], [24, 2.4]]) plant('agave', x, y, 0.8, 0.7, (c, row, L) => C(CYAN, L * 0.9));
   for (const [x, y, w] of [[19.5, 4.4, 0.6], [23, 9.6, 0.8], [16.4, 7.4, 0.5]]) p.push(BX(x, y, w, w * 0.7, 0, w * 0.6, solid(BRICK, { top: '.', bright: 1.2 }))); // rocks
-  p.push({ ...SP(19.5, 4.4, 0.25, 0.08, PLANT_ART.lizard, (c, row, L) => C(GREEN, 12), 0.42), tick: s => { s.x = 19.5 + Math.sin(T * 0.2) * 0.25; } }); // a lizard basking on a warm rock
-  for (let k = 0; k < 10; k++) { const col = [YEL, ORANGE, BLUE, MAG, WHITE][k % 5]; // butterflies
-    p.push({ ...SP(6, 8, 0.18, 0.1, ['}{'], (c, row, L) => C(col, 15), 1.2), tick: s => {
+  // a lizard basking on a warm rock, shuffling along it now and then (~0.35 m)
+  p.push(animalProp(19.5, 4.4, 0.42, 0.75, LIZARD_LOOK, o => Math.abs(Math.cos(T * 0.2)) > 0.3 ? Math.floor(T * 4) & 1 : 0, s => { s.x = 19.5 + Math.sin(T * 0.2) * 0.25; }));
+  for (let k = 0; k < 10; k++) // butterflies (~8 cm across)
+    p.push(animalProp(6, 8, 1.2, 0.22, BUTTERFLY_LOOKS[k % 5], () => fract(T * 5 + k / 3) < 0.5 ? 0 : 1, s => {
       const th = T * (0.5 + (k % 3) * 0.2) + k * 2.3;
       s.x = 6.5 + Math.cos(th) * (2 + k % 4) + Math.sin(th * 2.7) * 0.6; s.y = 7.5 + Math.sin(th * 0.8) * (2.5 + k % 3); s.z = 1 + Math.sin(th * 3.1) * 0.6 + (k % 3) * 0.5;
-      s.art = [fract(T * 5 + k / 3) < 0.5 ? '}{' : '||']; } }); }
+    }));
   p.push(BENCHP(4, 13.2, 0, -1), BENCHP(19, 13.2, 0, -1));
   if (chance(0.7)) p.push(standing(8.2, 8.4, shirt())); if (chance(0.6)) p.push(standing(18.5, 6.6, shirt()));
   return p;
