@@ -1,23 +1,27 @@
 // Island ferries use ship-local walking coordinates and the ordinary outdoor
 // renderer. Windows are openings onto the same world, not another scene pass.
 const FERRY={hl:2.25,hw:.62,deck:.14,roof:.47,dwell:32,speed:2.1,fare:4,count:2,cycle:0};
+const FERRY_DECK={aft:-2.18,bow:1.96,side:.59,clearance:.04};
+const FERRY_CABIN={aft:-.98,front:1.62,side:.474,wall:.018,door:.12,height:.32};
+const FERRY_BENCH={hl:.085,hw:.028,bottom:.038,top:.046,back:.096};
 const FERRY_STOPS=[],FERRY_LEGS=[];
 let ferryRide=null,ferryClockOffset=0;
 const FERRY_SEATS=[];
 for(const u of [-.7,-.1,.5,1.1])for(const side of [-1,1])
-  FERRY_SEATS.push({u,v:side*.385,face:side*Math.PI/2,inside:true});
+  FERRY_SEATS.push({u,v:side*.415,face:-side*Math.PI/2,inside:true});
 for(const u of [-1.85,-1.3])for(const side of [-1,1])
-  FERRY_SEATS.push({u,v:side*.38,face:side*Math.PI/2,inside:false});
+  FERRY_SEATS.push({u,v:side*.415,face:-side*Math.PI/2,inside:false});
 const FERRY_SOLIDS=[
-  ...FERRY_SEATS.map(s=>({u:s.u,v:s.v,hl:.18,hw:.075,seat:true})),
+  ...FERRY_SEATS.map(s=>({u:s.u,v:s.v,hl:FERRY_BENCH.hl,hw:FERRY_BENCH.hw+.006,seat:true})),
   {u:.68,v:0,hl:.57,hw:.09,cafe:true},
-  {u:1.89,v:0,hl:.26,hw:.43,bridge:true}
+  {u:1.88,v:0,hl:.26,hw:.44,bridge:true}
 ];
 function ferryWalkClear(u,v) {
-  if(Math.abs(u)>FERRY.hl-.09||Math.abs(v)>FERRY.hw-.065)return false;
+  if(u<FERRY_DECK.aft+FERRY_DECK.clearance||u>FERRY_DECK.bow-FERRY_DECK.clearance||Math.abs(v)>FERRY_DECK.side-FERRY_DECK.clearance)return false;
   // Cabin bulkheads have a wide door at the aft end; side passages stay open.
-  if(Math.abs(u+.98)<.055&&Math.abs(v)<.46&&Math.abs(v)>.12)return false;
-  if(u>-.98&&u<1.63&&Math.abs(Math.abs(v)-.465)<.025)return false;
+  const cabin=FERRY_CABIN;
+  if(Math.abs(u-(cabin.aft+cabin.wall/2))<cabin.wall/2+.025&&Math.abs(v)<cabin.side+.025&&Math.abs(v)>cabin.door-.025)return false;
+  if(u>cabin.aft&&u<cabin.front&&Math.abs(Math.abs(v)-(cabin.side-cabin.wall/2))<cabin.wall/2+.025)return false;
   return !FERRY_SOLIDS.some(s=>Math.abs(u-s.u)<s.hl+.025&&Math.abs(v-s.v)<s.hw+.025);
 }
 function ferryPoint(ship,u,v) {
@@ -26,6 +30,20 @@ function ferryPoint(ship,u,v) {
 function ferryLocal(ship,x,y) {
   const ex=x-ship.x,ey=y-ship.y;
   return [ex*ship.c+ey*ship.s,-ex*ship.s+ey*ship.c];
+}
+function ferryGangway(ship) {
+  if(!ship.stopped)return null;
+  const stop=FERRY_STOPS[ship.stop],a=ferryPoint(ship,-.98,-FERRY.hw),b=[...stop.land];
+  // End at the exposed pier edge rather than layering a raised slab over it.
+  const pier=PIERS.find(p=>b[0]>=p[0]&&b[0]<=p[2]&&b[1]>=p[1]&&b[1]<=p[3]);
+  if(pier) {
+    const ux=a[0]-b[0],uy=a[1]-b[1];
+    const f=Math.min(1,ux>0?(pier[2]-b[0])/ux:ux<0?(pier[0]-b[0])/ux:Infinity,uy>0?(pier[3]-b[1])/uy:uy<0?(pier[1]-b[1])/uy:Infinity);
+    b[0]+=ux*f;b[1]+=uy*f;
+  }
+  const ex=b[0]-a[0],ey=b[1]-a[1],length=Math.hypot(ex,ey);
+  const h0=FERRY.deck,h1=outdoorGroundHeight(...stop.land),thickness=.012;
+  return {x:(a[0]+b[0])/2,y:(a[1]+b[1])/2,c:ex/length,s:ey/length,hl:length/2,hw:.1,h0,h1,axis:'x',thickness,a,b};
 }
 // A navigation disc contains the whole hull, so turns are safe too. Pier
 // rectangles are tested analytically: a thin jetty cannot fall between samples.

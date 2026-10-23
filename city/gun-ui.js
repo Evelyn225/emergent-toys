@@ -101,13 +101,12 @@ const GUN_GRIP = [43, 9]; // (the column and row your fist closes round)
 const CYL_FACE = [' .---. ', '/ o o \\', '| o+o |', '\\ o o /', " `---' "]; // swung out: the chambers, filling as you load
 const gunView = { spin: 0, t: 0 }; // the cylinder's turn as drawn, easing after gun.spin
 function gunGeom() {
-  const moving = K.KeyW || K.KeyS || K.KeyA || K.KeyD, aim = gunAim();
+  const aim = gunAim();
   const u = Math.max(10, Math.min(Math.max(14, cv.height / 36), cv.width / 45));
   const hsz = Math.round(u * 1.15), s = Math.round(u * (0.7 + aim * 0.04));
-  const bob = (moving ? Math.sin(T * 9) * u * 0.35 : Math.sin(T * 1.5) * u * 0.08) * (1 - aim * 0.75);
   const k = gun.kick, rl = gun.reload > 0 ? Math.min(1, (RELOAD_T - gun.reload) * 5, gun.reload * 5) : 0;
   const cx = Math.round(cv.width * (0.82 - aim * 0.075) + k * u * 0.6);
-  const hy = Math.round(cv.height - 5.6 * hsz + bob + k * u * 0.5 + rl * u * 0.6 - aim * u * 1.5);
+  const hy = Math.round(cv.height - 5.6 * hsz + k * u * 0.5 + rl * u * 0.6 - aim * u * 1.5);
   return { u, s, hsz, cx, hy, ang: 0.05 + k * 0.32 + rl * 0.85 - aim * 0.06 };
 }
 // the picture as it is this instant: the cylinder's flutes moved round, the hammer back or down, the cylinder out

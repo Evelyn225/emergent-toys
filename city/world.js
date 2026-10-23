@@ -324,7 +324,8 @@ const PIERS = [[FAIR.x0, FAIR.y0, FAIR.x1, FAIR.y1]];
 // the marina office stands on the promenade at the foot of the jetty
 let MARINA_BX = 13, MARINA = { x: MARINA_BX * 8 + 4, y0: SHORE_S * 8 + 3, fingers: [SHORE_S * 8 + 7, SHORE_S * 8 + 10], end: SHORE_S * 8 + 12.6, reach: 3.3 };
 MARINA.office = { x: MARINA.x - 2.2, y: SHORE_S * 8 + 3.55 };
-for (const p of [[MARINA.x - 0.2, MARINA.y0, MARINA.x + 0.2, MARINA.end], [MARINA.x - 1, MARINA.end - 0.3, MARINA.x + 1, MARINA.end],
+const MARINA_HEAD = [MARINA.x - 2, MARINA.end - .9, MARINA.x + 2, MARINA.end];
+for (const p of [[MARINA.x - 0.2, MARINA.y0, MARINA.x + 0.2, MARINA.end], MARINA_HEAD,
   ...MARINA.fingers.map(fy => [MARINA.x - MARINA.reach, fy - 0.15, MARINA.x + MARINA.reach, fy + 0.15])]) PIERS.push(Object.assign(p, { marina: true }));
 const inMarina = (x, y) => Math.abs(rel(x - MARINA.x)) < MARINA.reach + 1.2 && rel(y - MARINA.y0) > -1.2 && rel(y - MARINA.end) < 0.8;
 for (let bx = 0; bx < NB; bx++) {

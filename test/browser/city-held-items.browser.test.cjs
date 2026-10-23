@@ -164,7 +164,7 @@ test('only the item is culled behind the hand pixels: scenery shows through and 
   }
 }));
 
-test('use gestures animate the intended item, finish cleanly and stay separate from inventory slots and the camera', () => withItems(async page => {
+test('using items keeps the hand steady while pages and blades animate, and stays separate from inventory slots and camera', () => withItems(async page => {
   const r = await page.evaluate(() => {
     const camera = [px, py, a, pitch], gestures = [], pictures = [];
     for (const id of ['duck', 'book', 'newspaper', 'pocketknife', 'oldcoin', 'snowglobe', 'coffee', 'plushcat', 'compass']) {
@@ -184,7 +184,21 @@ test('use gestures animate the intended item, finish cleanly and stay separate f
     const sameFrame = heldPicture(inv[0]) === heldPicture(inv[0]);
     return { gestures, pictures, active, other, finished, sameFrame, cameraUnchanged: JSON.stringify(camera) === JSON.stringify([px, py, a, pitch]) };
   });
-  assert.deepEqual(r.gestures, ['duck','book','newspaper','oldcoin','snowglobe','coffee','plushcat']); assert.deepEqual(r.pictures, ['book', 'newspaper', 'pocketknife']);
+  assert.deepEqual(r.gestures, []); assert.deepEqual(r.pictures, ['book', 'newspaper', 'pocketknife']);
   assert.ok(r.active > 0); assert.equal(r.other, -1); assert.equal(r.finished, -1);
   assert.equal(r.sameFrame, true); assert.equal(r.cameraUnchanged, true);
+}));
+
+test('an onigiri bite visibly removes the upper rice while keeping the hand steady',()=>withItems(async page=>{
+ const before=await page.evaluate(()=>{
+  paused=false;inv.length=0;inv.push({id:'onigiri',uses:2});held=0;needs.food=30;T=10;
+  const picture=heldPicture(inv[0]),frame=heldFrame(inv[0],picture);
+  return {ink:picture.art.join('').replace(/\s/g,'').length,uses:inv[0].uses,frame};
+ });
+ await page.keyboard.press('q');
+ const after=await page.evaluate(()=>{
+  T+=.2;const picture=heldPicture(inv[0]);return {ink:picture.art.join('').replace(/\s/g,'').length,uses:inv[0].uses,frame:heldFrame(inv[0],picture)};
+ });
+ assert.equal(after.uses,before.uses-1);assert.ok(after.ink<before.ink*.8,JSON.stringify({before:before.ink,after:after.ink}));
+ for(const key of ['cx','hy','angle','sx','sy'])assert.equal(after.frame[key],before.frame[key],key);
 }));

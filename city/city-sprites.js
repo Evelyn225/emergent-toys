@@ -775,6 +775,12 @@ function signLine(word, lq, hz, i, zc, tc, t, letterW, bandH, far, ex, ey) {
   return best;
 }
 const midDepth = (vx, vy) => Math.max(0.05, dx * vx + dy * vy);
+// Flat prop labels share the shop font and project each distant letter once.
+// (ex, ey) runs left-to-right on the visible face; reverse it on the back.
+function worldText(word,u,z,t,i,vx,vy,zc,ex,ey,letterW,bandH) {
+  const far=Math.max(.05,dx*vx+dy*vy+Math.abs(dx*ex+dy*ey)*word.length*letterW/2);
+  return signLine(word,u/letterW+word.length/2,(zc+bandH/2-z)/bandH,i,zc,midDepth(vx,vy),t,letterW,bandH,far,ex,ey)||' ';
+}
 // the way a broad face's text runs (see faceQ), for a box along (c, s)
 const faceDir = (c, s) => HIT.face === 3 ? [c, s] : [-c, -s];
 // which way a broad face (3: +v, 4: -v) reads: 0 at its left edge, 1 at its right, as you look at it
@@ -1479,15 +1485,12 @@ function drawElStation(station){
   if(!service)continue;
   const next=EL_STATIONS[service.next].name,wait=service.seconds?'IN '+Math.floor(service.seconds/60)+':'+String(service.seconds%60).padStart(2,'0'):'BOARDING';
   const boardY=tr?EL_Y1+EL_PLATFORM_OUT-.01:EL_Y0-EL_PLATFORM_OUT+.01,[x,z]=R(station.x,boardY);
-  const lines=[wait+' '+(service.dir>0?'EAST':'WEST'),'NEXT '+next],normal=py<boardY?-1:1,width=.6/Math.max(...lines.map(l=>l.length));
+  const lines=[wait+' '+(service.dir>0?'EAST':'WEST'),'NEXT '+next],width=.6/Math.max(...lines.map(l=>l.length));
   drawBox(boxAt(x,z,1,0,.34,.025,EL_TOP+.23,EL_TOP+.39),(i,t,L)=>{
     BG[i]=C(GRAY,1);
     if(Math.abs(HIT.v)<.024||Math.abs(HIT.u)>.315)return set(i,' ',0),true;
-    const row=HIT.w>EL_TOP+.31?0:1,center=EL_TOP+(row ? .27 : .35),u=HIT.u*normal,q=u/width+lines[row].length/2,col=Math.floor(q),ch=lines[row][col];
-    if(!ch||Math.abs(HIT.w-center)>.025)return set(i,' ',0),true;
-    const cell=t/projX,zcell=t/projY;
-    const large=width/cell>2.2&&.05/zcell>2.8;
-    const mark=large?glyphOn(ch,Math.floor(fract(q)*4),Math.floor((center+.025-HIT.w)/.05*5))?'#':' ':oneCell((fract(q)-.5)*width,cell)&&oneCell(HIT.w-center,zcell)?ch:' ';
+    const row=HIT.w>EL_TOP+.31?0:1,center=EL_TOP+(row ? .27 : .35),side=HIT.face===3?1:-1;
+    const mark=worldText(lines[row],HIT.u*side,HIT.w,t,i,x,z+side*.025,center,side,0,width,.05);
     return set(i,mark,C(YEL,15)),true;
   });
   for(const off of [-.28,.28])rod(x+off,z,EL_TOP,x+off,z,EL_TOP+.23,.008);
