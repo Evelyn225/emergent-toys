@@ -28,8 +28,9 @@ function buildWildIslands() {
   }
   const place={id:'fern-house',shop:sh,cell:cells[0],cells,legacyCells:[],x0:house.x0,y0:house.y0,x1:house.x1,y1:house.y1};
   CITY_PLACES.set(place.id,place);cityPlaceByShop.set(sh,place);
-  const fire={x:WILD_ISLANDS[0].landing[0]+4,y:238,on:'fire'};
-  GRILLS.push(fire);solidBox(fire.x,fire.y,true,.07,.07,0,.11,'campfire',0);
+  // (its stones and logs are island-sights.js's ring; it burns at night, or while you cook over it)
+  const fire={x:WILD_ISLANDS[0].landing[0]+4,y:238,on:'fire',nightOnly:true,ring:true};
+  GRILLS.push(fire);FIRES.push(fire);solidBox(fire.x,fire.y,true,.07,.07,0,.11,'campfire',0);
   solids[solids.length-1].spot=fire;
   // One unlocked fishing shelter and one private house, each with a real front door.
   for(const cabin of ISLAND_CABINS.slice(1)) {

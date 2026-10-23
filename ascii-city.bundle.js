@@ -26631,6 +26631,20 @@ function hushSirens() {
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) hushSirens(); });
 
+// ---- fires: a lit campfire crackles and pops, a burning car quicker and louder, heard from where they are
+function tickFireSounds(dt) {
+  for (const o of FIRES) if (fireLit(o)) firePop(dt, 4 + fireRoar(o) * 6, 0.5, 1, o);
+  for (const c of cars) if (burning(c)) firePop(dt, 16, 1, 2, c);
+}
+function firePop(dt, rate, loud, reference, o) {
+  if (Math.random() >= dt * rate) return;
+  const p = worldSoundProfile(o.x, o.y, (o.z ?? terrainHeight(o.x, o.y)) + 0.03, reference * 6, reference);
+  if (p.gain < 0.002) return;
+  const at = actx.currentTime + p.delay + Math.random() * 0.03, deep = Math.random() < 0.2; // (now and then a deeper snap of a log)
+  burst(at, deep ? 0.05 : 0.015 + Math.random() * 0.02, [filt(deep ? 'bandpass' : 'highpass', deep ? 400 : 1500 + Math.random() * 2500), filt('lowpass', p.cutoff)],
+    (deep ? 0.1 : 0.06) * loud * p.gain * (0.4 + Math.random() * 0.6), p.pan);
+}
+
 // ---- thunder: a crack (if it's close) rolling into a long low rumble, arriving d/34 seconds after the flash
 function sfxThunder(d, indoors) {
   const at = actx.currentTime + d / 34, near = clamp(1.2 - d / 70, 0.15, 1), s = actx.createBufferSource();
@@ -26690,7 +26704,7 @@ function audioTick(dt) {
     const t = elRiding(), speed = !t || t.stopped ? 0 : t.left < 3 || t.left > HOP_T - 3 ? 1 : 3; // slow pulling in and out
     if (speed && (clackT -= dt * speed) < 0) { clackT = 1; const at = now; burst(at, 0.05, [filt('bandpass', 1300, 2)], 0.1, -0.3); burst(at + 0.11, 0.05, [filt('bandpass', 1200, 2)], 0.08, 0.3); }
   }
-  tickSirens(indoors);
+  tickSirens(indoors); tickFireSounds(dt);
   if (bolt && bolt !== heardBolt) { heardBolt = bolt; sfxThunder(bolt.d, indoors); }
   // footsteps: one every step-length of ground covered on foot
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry';
@@ -30952,11 +30966,13 @@ SOLID_SHADE.grill = o => (i, t, L) => {
 // while you've something over it. (Its solid box is only there to walk round)
 SOLID_SHADE.campfire = () => () => false;
 const fireRoar = o => cookCtx && cookCtx.spot === o && game && game.g.id === 'cook' ? 1 : 0.6;
-const FIRES = GRILLS.filter(o => o.on === 'fire');
+const FIRES = GRILLS.filter(o => o.on === 'fire'); // (campfires added later push themselves: coast-life.js, islands-content.js)
+// a camp's fire burns after dark, and whenever someone's cooking over it
+const fireLit = o => !o.nightOnly || night >= .3 || fireRoar(o) === 1;
 function fireGlow(wx, wy) {
   let k = 0;
   for (const o of FIRES) {
-    if(o.nightOnly&&night<.3)continue;
+    if(!fireLit(o))continue;
     const d = Math.hypot(rel(wx - o.x), rel(wy - o.y)), R = 0.32 + fireRoar(o) * 0.3;
     if (d < R) k = Math.max(k, (1 - d / R) ** 2.2 * (0.85 + 0.15 * Math.sin(T * 9 + d * 20) * Math.sin(T * 5.3)));
   }
@@ -30968,18 +30984,18 @@ function drawCampfires() {
     if (Math.hypot(vx, vy) > Math.min(vis, 16) || !inView(vx, vy, 0.4)) continue;
     const ground=o.z??outdoorGroundHeight(o.x,o.y);
     const roar = fireRoar(o), warm = 0.35 + 0.65 * Math.max(night, overcast * 0.5);
-    for (let k = 0; k < 10; k++) { // the stones
+    if (!o.ring) for (let k = 0; k < 10; k++) { // the stones (a ring the islands built has its own)
       const an = k / 10 * TAU + 0.3, sx = vx + Math.cos(an) * 0.075, sy = vy + Math.sin(an) * 0.075, face = Math.cos(an - Math.atan2(-vy, -vx)); // (the side towards the fire's lit)
       dot(sx, sy, ground+0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i, hash(k, 1, 1811) > 0.5 ? 'o' : '@', C(GRAY, L * 0.8)), true; });
     }
-    for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
+    if (!o.ring) for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
       const an = k / 5 * TAU + 0.6;
       drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, ground+0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, ground+0.055, 0.006, (i, t, L) => {
         const ember = HIT.w-ground > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
         BG[i] = ember ? C(RED, 2 + warm * 3) : C(BRICK, 1 + L * 0.15); return set(i, ember ? '*' : '=', ember ? C(ORANGE, 14) : C(BRICK, L * 0.7)), true;
       });
     }
-    if(o.nightOnly&&night<.3)continue;
+    if(!fireLit(o))continue;
     // the flames and the sparks over them: a billboard, so it's round from every side
     const H = 0.1 + 0.08 * roar, top = 0.36;
     drawShape(vx, vy, ground+0.008, 0.07, top, (i, u, z, du, dz, L) => {
@@ -33397,8 +33413,9 @@ function buildWildIslands() {
   }
   const place={id:'fern-house',shop:sh,cell:cells[0],cells,legacyCells:[],x0:house.x0,y0:house.y0,x1:house.x1,y1:house.y1};
   CITY_PLACES.set(place.id,place);cityPlaceByShop.set(sh,place);
-  const fire={x:WILD_ISLANDS[0].landing[0]+4,y:238,on:'fire'};
-  GRILLS.push(fire);solidBox(fire.x,fire.y,true,.07,.07,0,.11,'campfire',0);
+  // (its stones and logs are island-sights.js's ring; it burns at night, or while you cook over it)
+  const fire={x:WILD_ISLANDS[0].landing[0]+4,y:238,on:'fire',nightOnly:true,ring:true};
+  GRILLS.push(fire);FIRES.push(fire);solidBox(fire.x,fire.y,true,.07,.07,0,.11,'campfire',0);
   solids[solids.length-1].spot=fire;
   // One unlocked fishing shelter and one private house, each with a real front door.
   for(const cabin of ISLAND_CABINS.slice(1)) {

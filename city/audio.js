@@ -276,6 +276,20 @@ function hushSirens() {
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) hushSirens(); });
 
+// ---- fires: a lit campfire crackles and pops, a burning car quicker and louder, heard from where they are
+function tickFireSounds(dt) {
+  for (const o of FIRES) if (fireLit(o)) firePop(dt, 4 + fireRoar(o) * 6, 0.5, 1, o);
+  for (const c of cars) if (burning(c)) firePop(dt, 16, 1, 2, c);
+}
+function firePop(dt, rate, loud, reference, o) {
+  if (Math.random() >= dt * rate) return;
+  const p = worldSoundProfile(o.x, o.y, (o.z ?? terrainHeight(o.x, o.y)) + 0.03, reference * 6, reference);
+  if (p.gain < 0.002) return;
+  const at = actx.currentTime + p.delay + Math.random() * 0.03, deep = Math.random() < 0.2; // (now and then a deeper snap of a log)
+  burst(at, deep ? 0.05 : 0.015 + Math.random() * 0.02, [filt(deep ? 'bandpass' : 'highpass', deep ? 400 : 1500 + Math.random() * 2500), filt('lowpass', p.cutoff)],
+    (deep ? 0.1 : 0.06) * loud * p.gain * (0.4 + Math.random() * 0.6), p.pan);
+}
+
 // ---- thunder: a crack (if it's close) rolling into a long low rumble, arriving d/34 seconds after the flash
 function sfxThunder(d, indoors) {
   const at = actx.currentTime + d / 34, near = clamp(1.2 - d / 70, 0.15, 1), s = actx.createBufferSource();
@@ -335,7 +349,7 @@ function audioTick(dt) {
     const t = elRiding(), speed = !t || t.stopped ? 0 : t.left < 3 || t.left > HOP_T - 3 ? 1 : 3; // slow pulling in and out
     if (speed && (clackT -= dt * speed) < 0) { clackT = 1; const at = now; burst(at, 0.05, [filt('bandpass', 1300, 2)], 0.1, -0.3); burst(at + 0.11, 0.05, [filt('bandpass', 1200, 2)], 0.08, 0.3); }
   }
-  tickSirens(indoors);
+  tickSirens(indoors); tickFireSounds(dt);
   if (bolt && bolt !== heardBolt) { heardBolt = bolt; sfxThunder(bolt.d, indoors); }
   // footsteps: one every step-length of ground covered on foot
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry';
