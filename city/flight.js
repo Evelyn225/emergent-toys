@@ -171,7 +171,7 @@ function stepAirWrecks(dt) {
   stepCraftFalls(dt);
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
-    if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
+    if (actx) { const p = worldClip('crash', 1, c.x, c.y, c.z, 80, 14); if (p.gain > 0.001) tone(actx.currentTime + p.delay, 35, 1.1, 0.14 * p.gain, 'sawtooth', p.pan); }
     if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; if (c.stolen) newsEvent('blownup', c.x, c.y); } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
@@ -352,9 +352,8 @@ function stepAbandoned(dt) {
     if (c.state !== 'abandoned') continue;
     const heli = PLANE_TYPES[c.type].heli;
     const ev = flyStep(c, { throttle: 0, pitch: heli ? 0 : -0.25, turn: heli ? 0.4 : 0.1, lift: -1, dead: true }, dt);
-    const d = Math.hypot(rel(c.x - px), rel(c.y - py));
-    if (ev.includes('crash')) { c.state = 'parked'; if (actx && d < 40) playClip('crash', clamp(1 - d / 40, 0.2, 1)); }
-    else if (ev.includes('ditch')) { c.state = 'parked'; c.sinkT = T; if (actx && d < 40) playClip('crash', 0.3 * clamp(1 - d / 40, 0, 1)); }
+    if (ev.includes('crash')) { c.state = 'parked'; if (actx) worldClip('crash', 1, c.x, c.y, c.z, 80, 14); }
+    else if (ev.includes('ditch')) { c.state = 'parked'; c.sinkT = T; if (actx) worldClip('crash', 0.3, c.x, c.y, c.z, 80, 14); }
     else if (ev.includes('land') || ev.includes('hard')) c.state = 'parked';
   }
 }

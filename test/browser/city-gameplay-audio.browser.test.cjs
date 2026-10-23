@@ -217,3 +217,24 @@ test('indoor sirens use the actual outdoor location instead of the room furnitur
   assert.deepEqual([result.mainland,result.nearby,result.movedInside,result.anotherBuilding],[0,1,1,0]);
   assert.ok(result.distance>=2&&result.distance<3);
 }));
+
+test('explosions are heard from where they happen: delayed, dulled and panned outdoors, silent from another island indoors', () => fixture(async page => {
+  const result = await page.evaluate(() => {
+    const heard = [], real = playClip;
+    playClip = (name, gain, when, spatial) => heard.push({ name, gain, delay: when - actx.currentTime, cutoff: spatial?.cutoff, pan: spatial?.pan });
+    const blast = (x, y) => { heard.length = 0; carBang({ kind: 'sedan', x, y }); return heard[0] || null; };
+    try {
+      mode = 'walk'; room = null; px = 300; py = 300; a = 0; eye = terrainHeight(px, py) + .17;
+      const near = blast(301, 300.6), far = blast(330, 300);
+      enterRoom('islandshelter', { ret: [626, 195, 0] }, [12, 18, 0]);
+      const otherIsland = blast(12, 18), besideShelter = blast(627, 195);
+      return { near, far, otherIsland, besideShelter };
+    } finally { playClip = real; }
+  });
+  const { near, far, otherIsland, besideShelter } = result;
+  assert.equal(near.name, 'crash');
+  assert.ok(near.gain > .9 && near.cutoff > 8000 && near.pan > .4, JSON.stringify(near));
+  assert.ok(far.gain < near.gain * .25 && far.cutoff < near.cutoff / 3 && Math.abs(far.delay - 30 / 34) < .02, JSON.stringify(far));
+  assert.equal(otherIsland, null, 'a mainland blast at the room furniture coordinates is out of earshot');
+  assert.ok(besideShelter && besideShelter.gain < .15 && besideShelter.cutoff <= 900, JSON.stringify(besideShelter));
+}));

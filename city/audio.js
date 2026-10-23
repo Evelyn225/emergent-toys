@@ -200,6 +200,13 @@ function worldSoundProfile(x,y,z,range=180,reference=14) {
   const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'?terrainHeight(x0,y0)+.17:eye;
   return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
+// a recording heard from somewhere in the world: later, quieter and duller with distance, panned to its side,
+// muffled indoors. Returns the profile so a caller can place its own layers alongside
+function worldClip(name,gain,x,y,z,range,reference) {
+  const profile=worldSoundProfile(x,y,z,range,reference);
+  if(profile.gain>.001)playClip(name,gain*profile.gain,actx.currentTime+profile.delay,profile);
+  return profile;
+}
 let peeLoopVoice = null;
 function setPeeAudio(on) {
   if (!actx) return;

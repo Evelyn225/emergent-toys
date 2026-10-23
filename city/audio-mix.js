@@ -144,8 +144,13 @@ function surfaceAt(mode, room, x, y) {
   if (kind === 'construction' || kind === 'yard') return 'gravel';
   return 'stone';
 }
-// Outdoor sources stay in world coordinates while the listener is in a room.
+// Outdoor sources stay in world coordinates while the listener is in a room. A subway station or train
+// listens from its street entrance (a station reached by train has no doorway of its own); the lamp room
+// from the lighthouse door below it.
 function audioWorldPosition(mode,room,x,y) {
-  const ret=mode==='room'&&(room?.ret||room?.lobby?.ret);
+  if(mode!=='room'||!room)return [x,y];
+  const station=(room.kind==='station'||room.kind==='train')&&stations[room.st];
+  if(station)return [station.x,station.y];
+  const ret=room.ret||room.lobby?.ret||room.below?.ret;
   return ret?[ret[0],ret[1]]:[x,y];
 }

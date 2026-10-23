@@ -6061,9 +6061,14 @@ function surfaceAt(mode, room, x, y) {
   if (kind === 'construction' || kind === 'yard') return 'gravel';
   return 'stone';
 }
-// Outdoor sources stay in world coordinates while the listener is in a room.
+// Outdoor sources stay in world coordinates while the listener is in a room. A subway station or train
+// listens from its street entrance (a station reached by train has no doorway of its own); the lamp room
+// from the lighthouse door below it.
 function audioWorldPosition(mode,room,x,y) {
-  const ret=mode==='room'&&(room?.ret||room?.lobby?.ret);
+  if(mode!=='room'||!room)return [x,y];
+  const station=(room.kind==='station'||room.kind==='train')&&stations[room.st];
+  if(station)return [station.x,station.y];
+  const ret=room.ret||room.lobby?.ret||room.below?.ret;
   return ret?[ret[0],ret[1]]:[x,y];
 }
 // One source of truth for recordings, prepared upload assets and exact in-game labels.
@@ -25324,7 +25329,7 @@ function carBang(c) {
   for (let k = 0; k < 10; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.3, y: c.y + (Math.random() - 0.5) * 0.3, z: 0.05 + Math.random() * 0.1,
     r: 0.1, rMax: 0.35, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, vz: 0.3, life: 1, fade: 1 / 5, seed: Math.random() * 100 });
   const d = Math.hypot(rel(c.x - px), rel(c.y - py));
-  if (actx && d < 30) { playClip('crash', clamp(1 - d / 30, 0.2, 1)); tone(actx.currentTime, 40, 0.9, 0.12 * clamp(1 - d / 30, 0, 1), 'sawtooth'); }
+  if (actx) { const p = worldClip('crash', 1, c.x, c.y, terrainHeight(c.x, c.y) + 0.05, 60, 12); if (p.gain > 0.001) tone(actx.currentTime + p.delay, 40, 0.9, 0.12 * p.gain, 'sawtooth', p.pan); }
   if (c === me && mode === 'drive') { leaveCar(); hurt(35); return say('It goes up with you half out of the door. You hit the tarmac, singed.', 5); }
   if (onFootMode() && mode === 'walk' && d < 0.6) { hurt(25 * (1 - d / 0.6)); say('The blast knocks you flat.', 3); }
   if (c.owned) say(`Your ${ITEMS[c.model].name} is a burnt-out shell. The garage will tow it and fix it up (the key fob, ${fmt$(TOW_FEE)}).`, 6);
@@ -26019,7 +26024,7 @@ function stepAirWrecks(dt) {
   stepCraftFalls(dt);
   for (const c of stepAircraftFires(dt)) {
     const d = Math.hypot(rel(c.x - px), rel(c.y - py));
-    if (actx && d < 40) { playClip('crash', clamp(1 - d / 40, 0.2, 1)); tone(actx.currentTime, 35, 1.1, 0.14 * clamp(1 - d / 40, 0, 1), 'sawtooth'); }
+    if (actx) { const p = worldClip('crash', 1, c.x, c.y, c.z, 80, 14); if (p.gain > 0.001) tone(actx.currentTime + p.delay, 35, 1.1, 0.14 * p.gain, 'sawtooth', p.pan); }
     if (c === pilot) { if (!c.ground) { c.blown = true; c.crashSpeed = 6; if (c.stolen) newsEvent('blownup', c.x, c.y); } if (!wreckCam) startWreck(c, 'crash'); continue; } // (still up there in it: as bad as it gets)
     if (onFootMode() && d < 0.9) { hurt(30 * (1 - d / 0.9)); say('The blast knocks you flat.', 3); }
     for (let k = 0; k < 14; k++) haze.push({ at: '', kind: 'soot', s: 0.1, x: c.x + (Math.random() - 0.5) * 0.5, y: c.y + (Math.random() - 0.5) * 0.5, z: c.z + 0.1, r: 0.12, rMax: 0.45, vx: 0, vy: 0, vz: 0.3, life: 1, fade: 1 / 6, seed: Math.random() * 100 });
@@ -26200,9 +26205,8 @@ function stepAbandoned(dt) {
     if (c.state !== 'abandoned') continue;
     const heli = PLANE_TYPES[c.type].heli;
     const ev = flyStep(c, { throttle: 0, pitch: heli ? 0 : -0.25, turn: heli ? 0.4 : 0.1, lift: -1, dead: true }, dt);
-    const d = Math.hypot(rel(c.x - px), rel(c.y - py));
-    if (ev.includes('crash')) { c.state = 'parked'; if (actx && d < 40) playClip('crash', clamp(1 - d / 40, 0.2, 1)); }
-    else if (ev.includes('ditch')) { c.state = 'parked'; c.sinkT = T; if (actx && d < 40) playClip('crash', 0.3 * clamp(1 - d / 40, 0, 1)); }
+    if (ev.includes('crash')) { c.state = 'parked'; if (actx) worldClip('crash', 1, c.x, c.y, c.z, 80, 14); }
+    else if (ev.includes('ditch')) { c.state = 'parked'; c.sinkT = T; if (actx) worldClip('crash', 0.3, c.x, c.y, c.z, 80, 14); }
     else if (ev.includes('land') || ev.includes('hard')) c.state = 'parked';
   }
 }
@@ -26546,6 +26550,13 @@ function worldSoundProfile(x,y,z,range=180,reference=14) {
   const [x0,y0]=audioWorldPosition(mode,room,px,py),z0=mode==='room'?terrainHeight(x0,y0)+.17:eye;
   return soundDistanceProfile(rel(x-x0),rel(y-y0),z-z0,a,range,reference,mode==='room');
 }
+// a recording heard from somewhere in the world: later, quieter and duller with distance, panned to its side,
+// muffled indoors. Returns the profile so a caller can place its own layers alongside
+function worldClip(name,gain,x,y,z,range,reference) {
+  const profile=worldSoundProfile(x,y,z,range,reference);
+  if(profile.gain>.001)playClip(name,gain*profile.gain,actx.currentTime+profile.delay,profile);
+  return profile;
+}
 let peeLoopVoice = null;
 function setPeeAudio(on) {
   if (!actx) return;
@@ -26765,14 +26776,9 @@ function tickGameplayAudio() {
   const helicopters = aircraft.filter(craft => PLANE_TYPES[craft.type].heli && craft.rotor > .02 && !craft.wrecked && !craft.ditched &&
     (mode === 'air' && craft === pilot || craft.state === 'abandoned'));
   if (heli) helicopters.push(heli);
-  let earX = px, earY = py, earZ = terrainHeight(px, py);
-  if (mode === 'room') {
-    const station = (room.kind === 'station' || room.kind === 'train') && stations[room.st];
-    const ret = room.ret || room.lobby?.ret;
-    if (station) { earX = station.x; earY = station.y; }
-    else if (ret) [earX, earY] = ret;
-    earZ = terrainHeight(earX, earY);
-  } else if (mode === 'air' && pilot) earZ = pilot.z;
+  const [earX, earY] = audioWorldPosition(mode, room, px, py);
+  let earZ = terrainHeight(earX, earY);
+  if (mode === 'air' && pilot) earZ = pilot.z;
   else if (mode === 'roof') earZ = roofH;
   else if (mode === 'el' || mode === 'elplat') earZ = EL_TOP;
   for (const craft of helicopters) {
