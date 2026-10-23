@@ -71,7 +71,8 @@ test('too soon and it bolts; too late and it\'s away (and something else comes a
 
 test('cast at dry land and nothing bites; at a frozen pond it skitters across the ice; walk off and the line comes in', () => {
   const { ev } = angler();
-  ev('a = -Math.PI / 2; cast(0.5)');
+  ev('a = -Math.PI / 2; fishSfx.length = 0; cast(0.5)');
+  assert.strictEqual(ev('fishSfx.join()'), 'whoosh,ground', 'it lands with a thud on the ground');
   assert.strictEqual(ev('fishing.st'), 'land');
   ev('steps(30)');
   assert.strictEqual(ev('fishing.st'), 'land', 'never a bite');
@@ -79,6 +80,7 @@ test('cast at dry land and nothing bites; at a frozen pond it skitters across th
   ev(`seasonShift = 3 - seasonIdx(); px = ${x} - 1.2; py = ${y}; a = 0; fishing = null; cast(0.2)`);
   assert.strictEqual(ev('fishing.st'), 'land');
   assert.match(ev('msgText'), /frozen/);
+  assert.strictEqual(ev('fishSfx.at(-1)'), 'skitter', 'and skitters on the ice');
   ev(`seasonShift++; fishing = null; cast(0.2)`);
   assert.strictEqual(ev('fishing.water'), 'pond', 'thawed');
   ev('py += 3; steps(0.05, 1)');

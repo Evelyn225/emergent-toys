@@ -6033,7 +6033,7 @@ function audioMix(s) {
   // this after event beds so a distant city fireworks show cannot restore crowds.
   if(s.wilderness){out.city=out.crowd=out.night=out.pachinko=out.arcade=0;out.birds=(.25+.75*s.day)*(1-.65*s.rain);}
   if (s.boombox) out[s.song || 'bossa'] = 0.7; // your boombox, playing whichever tape's in
-  out.board = s.skating ? 0.7 : 0; // wheels on asphalt
+  out.board = s.skating ? 0.3 + 0.4 * clamp(s.skating, 0, 1.3) : 0; // wheels on asphalt, louder the faster they roll (skating: speed / cruising top)
   out.engine = s.mode === 'air' ? 0.35 + 0.55 * clamp(s.throttle || 0, 0, 1) : s.mode === 'drive' ? 0.35 + 0.65 * clamp(Math.abs(s.speed) / 2.5, 0, 1) : s.mode === 'taxi' ? 0.25 + 0.3 * clamp(s.speed / 2, 0, 1) : s.mode === 'sea' ? 0.25 + 0.5 * clamp(Math.abs(s.speed) / 1.5, 0, 1) : 0;
   if(s.mode==='ferry') {
     out.engine=s.ferryInside ? .12 : .18;out.engine+=s.ferryMoving ? .1 : 0;
@@ -6668,21 +6668,23 @@ function kickBall(x, y, a, power = 2.6) {
   while (d < 0.12 && !ballBlocked(x + Math.cos(a) * (d + 0.02), y + Math.sin(a) * (d + 0.02), 0.02)) d += 0.02;
   ball = { x: worldCoord(x + Math.cos(a) * d), y: worldCoord(y + Math.sin(a) * d), vx: Math.cos(a) * power, vy: Math.sin(a) * power, z: 0.02, vz: power * 0.25 };
 }
+// (what it sounds like, heard from where it is: audio.js, when there's sound at all)
+const ballSound = (kind, speed) => { if (typeof actx !== 'undefined' && actx) sfxBall(kind, ball.x, ball.y, ball.z, clamp(speed / 2, 0.15, 1)); };
 function stepBall(dt) {
   if (!ball) return;
   ball.vz -= 2 * dt; ball.z += ball.vz * dt;
-  if (ball.z < 0) { ball.z = 0; ball.vz = Math.abs(ball.vz) > 0.08 ? -ball.vz * 0.5 : 0; }
+  if (ball.z < 0) { ball.z = 0; if (Math.abs(ball.vz) > 0.08) { ballSound('bounce', Math.abs(ball.vz) * 4); ball.vz = -ball.vz * 0.5; } else ball.vz = 0; }
   const f = Math.max(0, 1 - (ball.z > 0 ? 0.2 : 1.1) * dt); ball.vx *= f; ball.vy *= f;
   const n = Math.max(1, Math.ceil(Math.hypot(ball.vx, ball.vy) * dt / 0.01)); // (small steps: a fence is only 2cm thick)
   for (let s = 0; s < n; s++) for (const ax of ['x', 'y']) { // move one axis at a time, bouncing off whatever's solid
     const nx = ax === 'x' ? ball.x + ball.vx * dt / n : ball.x, ny = ax === 'y' ? ball.y + ball.vy * dt / n : ball.y;
-    if (ballBlocked(nx, ny, ball.z)) { if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
+    if (ballBlocked(nx, ny, ball.z)) { const v = Math.abs(ax === 'x' ? ball.vx : ball.vy); if (v > 0.1) ballSound('wall', v); if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
     else { ball.x = worldCoord(nx); ball.y = worldCoord(ny); }
   }
-  if (isWater(ball.x, ball.y) && ball.z === 0) { ball = null; return 'lost'; } // into the drink
-  // dribbling: walk into it and it rolls on ahead of you
+  if (isWater(ball.x, ball.y) && ball.z === 0) { ballSound('splash', 2); ball = null; return 'lost'; } // into the drink
+  // dribbling: walk into it and it rolls on ahead of you (a touch you hear, not one every frame you're against it)
   const dx_ = rel(ball.x - px), dy_ = rel(ball.y - py), d = Math.hypot(dx_, dy_);
-  if (d < 0.07 && mode === 'walk') { const s = 0.9; ball.vx += dx_ / (d || 1) * s; ball.vy += dy_ / (d || 1) * s; }
+  if (d < 0.07 && mode === 'walk') { const s = 0.9; ball.vx += dx_ / (d || 1) * s; ball.vy += dy_ / (d || 1) * s; if (!(ball.touchT > T - 0.3)) { ball.touchT = T; ballSound('touch', 1); } }
   return null;
 }
 function pickUpBall() {
@@ -9812,7 +9814,7 @@ const HUT_HOURS = [5, 20]; // (anglers get up early)
 const hutOpen = (t = tod) => t >= HUT_HOURS[0] && t < HUT_HOURS[1];
 let fishing = null; // the line, while it's out (see stepFishing)
 const fishLog = { caught: 0, best: null }; // how many you've landed, and your heaviest fish { id, kg }
-const fishSfx = []; // sounds for fishing-render.js to play: 'whoosh' | 'plop' | 'splash' | 'reel' | 'land'
+const fishSfx = []; // sounds for fishing-render.js to play: 'whoosh' | 'plop' | 'splash' | 'skitter' | 'ground' | 'reel' | 'land'
 const fishFx = []; // spray off the water { x, y, z, vx, vy, vz, life }
 // where you can fish from: on foot, or sat still in a boat (yours, a rental, a swan), looking from your seat (picking
 // the rod up out there swaps the chase view, V, for your seat)
@@ -9914,7 +9916,7 @@ function stepFishing(dt, rnd = Math.random) {
       f.water = waterKind(f.x, f.y); f.z = terrainHeight(f.x, f.y); f.t = 0;
       if (f.water && f.water !== 'ice') { f.st = 'wait'; f.next = biteWait(f.rod, rnd); splash(f.x, f.y, 6, 0.25); fishSfx.push('plop'); f.ring = T; }
       else {
-        f.st = 'land';
+        f.st = 'land'; fishSfx.push(f.water === 'ice' ? 'skitter' : 'ground');
         say(f.water === 'ice' ? 'The bobber skitters across the ice. The pond is frozen solid.' : pick(['It lands on dry ground. Nothing is biting there.', 'Not even close to the water.', 'You catch some ground. It does not fight.']), 2.5);
       }
     }
@@ -10708,17 +10710,17 @@ GAMES.workshop = (rnd, word, opts = {}) => {
     if (g.over) return [];
     t = Math.min(32, t + dt); heat = clamp(heat + (keys.act ? .3 : -.18) * dt, 0, 1);
     if (heat >= band[0] && heat <= band[1]) steady += dt;
-    const m = current();
+    const m = current(), ev = []; // (what just happened, for the sound: workshop-ui.js)
     if (m) {
-      if (t - m.at > 1.6) m.missed = true;
-      else if (keys[m.key + 'P']) { m.done = true; completed++; if (m.key === 'up') heat = Math.max(0, heat - .08); }
+      if (t - m.at > 1.6) { m.missed = true; ev.push('miss'); }
+      else if (keys[m.key + 'P']) { m.done = true; completed++; ev.push(m.key === 'up' ? 'vent' : 'seal'); if (m.key === 'up') heat = Math.max(0, heat - .08); }
     }
     if (t >= 32) {
       g.over = true; g.score = Math.round(75 * steady / 32 + 25 * completed / moves.length);
       g.result = g.score >= 80 ? 'perfect' : g.score >= 45 ? 'fine' : 'burnt';
-      return ['clear'];
+      ev.push('clear');
     }
-    return [];
+    return ev;
   };
   g.state = () => ({ t, heat, band, moves, current: current() });
   g.reward = () => 0;
@@ -26445,7 +26447,7 @@ function layer() { const g = actx.createGain(); g.gain.value = 0; g.connect(ambB
 // a short recorded loop, decoded once and played round and round into `dest` (whose gain the mix drives)
 function loopClip(name, dest) {
   fetch(AUDIO_DIR + name + '.mp3').then(r => r.arrayBuffer()).then(b => actx.decodeAudioData(b)).then(buf => {
-    const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(dest); s.start();
+    const s = actx.createBufferSource(); s.buffer = buf; s.loop = true; s.connect(dest); s.start(); dest.src = s; // (so the mix can pitch it)
   }).catch(() => {}); // (no file, or opened from disk: silent)
 }
 function makeSynths() {
@@ -26502,6 +26504,22 @@ function sfxStep(surface, run) {
   if (surface === 'gravel') burst(at + 0.035, tail, [filt(type, f * 0.8, q), filt('lowpass', 2500)], g * 0.35, stepSide * 0.12); // crunch
   if (thump) tone(at, thump * (0.9 + Math.random() * 0.2), 0.07, g * 1.2);
   if (surface === 'metal') tone(at, 600 + Math.random() * 150, 0.1, g * 0.12, 'sine');
+}
+// the board's own noises (skate.js): a foot pushing off, a foot dragged to brake, the deck scraping along a wall
+function sfxSkate(kind, k = 1) {
+  const at = actx.currentTime;
+  if (kind === 'push') burst(at, 0.09, [filt('lowpass', 700)], 0.08);
+  else if (kind === 'drag') burst(at, 0.16, [filt('bandpass', 1600, 0.8)], 0.05 * k);
+  else burst(at, 0.2, [filt('bandpass', 2600, 1.5)], 0.09 * k);
+}
+// the ball (goods.js), heard from where it is: a bounce or a rebound off a wall (k: how hard), a touch, a splash
+function sfxBall(kind, x, y, z, k) {
+  const p = worldSoundProfile(x, y, z, 30, 2), at = actx.currentTime + p.delay, g = p.gain;
+  if (g < 0.002) return;
+  if (kind === 'splash') { burst(at, 0.3, [filt('bandpass', 1200, 0.8), filt('lowpass', p.cutoff)], 0.15 * g, p.pan); playClip('water-drip', 0.4 * g, at, p); return; }
+  if (kind === 'touch') { burst(at, 0.05, [filt('lowpass', Math.min(900, p.cutoff))], 0.05 * g, p.pan); tone(at, 120, 0.05, 0.05 * g, 'sine', p.pan); return; }
+  tone(at, 150 + Math.random() * 30, 0.07, 0.12 * k * g, 'sine', p.pan); // the leather's thup
+  burst(at, 0.04, [filt('lowpass', Math.min(kind === 'wall' ? 2200 : 1400, p.cutoff))], 0.1 * k * g, p.pan);
 }
 function sfxTill() { // cha-ching: the drawer, then the bell
   const at = actx.currentTime;
@@ -26637,7 +26655,7 @@ function tickCarAlarms() {
 function hushSirens() {
   hushGameplayAudio();
   if (!actx) return;
-  for (const v of [...sirens.values(), ...carAlarms.values()]) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
+  for (const v of [...sirens.values(), ...carAlarms.values(), workshopHumVoice].filter(Boolean)) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) hushSirens(); });
 
@@ -26673,6 +26691,7 @@ let stepAcc = 0, lastPos = null, clackT = 0, rotorT = 0;
 function audioTick(dt) {
   tickGameplayAudio();
   if (!actx || actx.state !== 'running') return;
+  tickWorkshopHum(); tickSmokeAlarm();
   const now = actx.currentTime, indoors = mode === 'room';
   master.gain.setTargetAtTime(soundOn ? MASTER * settings.master ** 2 * 1.5 * (1 - fade) : 0, now, 0.3); // the world goes quiet as you fall asleep
   // the el: how close a moving train is, if you're by the el
@@ -26686,7 +26705,7 @@ function audioTick(dt) {
   const record = homeRecordAudio(), serenade = courierSerenade();
   const mix = audioMix({ mode, room, day, night, rain, fog: fogAmt, tod, roofH, storm, record, district: districtAt(px, py), gardens: mode === 'boat' || inGardens(px, py), waterfall, watch: hurrying(), barCrowd: room ? barCrowd() : 0,
     wilderness:worldReady&&!!wildIslandAt(...audioWorldPosition(mode,room,px,py)),ferryInside:mode==='ferry'&&ferryRide?.u>-.98&&Math.abs(ferryRide.v)<.46,ferryMoving:mode==='ferry'&&!ferryShip(ferryRide.id).stopped,
-    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling(), onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
+    seaDist: seaDist(px, py), boombox: fx.boombox, song: fx.song, skating: wheelsRolling() ? Math.max(SK.v / SK_TOP, 0.25) : 0, onBridge: ROAD[idx(Math.floor(px), Math.floor(py))] === 1 && onBridge(bx, by), elNear, speed: me ? me.v : sea ? sea.v : pilot ? pilot.v : 0, throttle: pilot ? (PLANE_TYPES[pilot.type].heli ? pilot.rotor || 0 : pilot.throttle || 0) : 0, airHeight: pilot ? pilot.z : 0,
     fairNear: mode === 'room' ? 0 : clamp(1 - Math.hypot(rel(px - FAIR.cx), rel(py - (FAIR.y0 + FAIR.y1) / 2)) / 12, 0, 1), fairEye: fairRide ? fairEye : 0, fireworks: eventNow('fireworks') && weather !== 'storm', serenade });
   // music from a place, not your own boombox: the record player across the room, Nico up on the bar roof
   const musicPan = fx.boombox ? {} : record ? { [record.song]: record.pan } :
@@ -26695,6 +26714,7 @@ function audioTick(dt) {
   beds.rain.lp.frequency.setTargetAtTime(indoors ? 450 : 18000, now, 0.3);
   for (const k in CAL) synth[k].gain.setTargetAtTime(mix[k] * LEVEL[k] * CAL[k], now, k === 'board' ? 0.04 : GLIDE); // (the wheels cut out the instant you pop, and back on landing)
   if (pilot && PLANE_TYPES[pilot.type].heli && gameplayBuffers.rotor) synth.engine.gain.setTargetAtTime(0, now, .08);
+  if (fx.skating) synth.board.src?.playbackRate.setTargetAtTime(0.75 + 0.3 * Math.min(1.3, SK.v / SK_TOP), now, 0.1); // (the wheels' whirr rising with speed)
   synth.fluorescent.gain.setTargetAtTime(mix.fluorescent * LEVEL.fluorescent, now, GLIDE);
   synth.watch.gain.setTargetAtTime(mix.watch * LEVEL.watch, now, GLIDE);
   if (indoors && room.kind === 'conservatory') {
@@ -30827,27 +30847,31 @@ const heldIsRod = it => !!ITEMS[it.id].rod;
 // ---- sounds, a prompt, and the hut's counter
 // the sounds, made up as they go (there's no recording of a reel in the box): a pitch sweep, and noise through a
 // filter that sweeps
-function fishSweep(at, f0, f1, len, gain, type = 'sine') {
-  const o = actx.createOscillator(), g_ = actx.createGain();
-  o.type = type; o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f1, at + len);
+function fishSweep(at, f0, f1, len, gain, type = 'sine', pan = 0) {
+  const o = actx.createOscillator(), g_ = actx.createGain(), p = actx.createStereoPanner();
+  o.type = type; o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(f1, at + len); p.pan.value = pan;
   g_.gain.setValueAtTime(0, at); g_.gain.linearRampToValueAtTime(gain, at + 0.005); g_.gain.exponentialRampToValueAtTime(0.0005, at + len);
-  shot(o, g_, sfxBus); o.start(at); o.stop(at + len + 0.05);
+  shot(o, g_, p, sfxBus); o.start(at); o.stop(at + len + 0.05);
 }
-function fishNoise(at, len, f0, f1, q, gain, attack = 0.3) {
-  const s = actx.createBufferSource(), fl = actx.createBiquadFilter(), g_ = actx.createGain();
-  s.buffer = noiseBuf; fl.type = 'bandpass'; fl.Q.value = q; fl.frequency.setValueAtTime(f0, at); fl.frequency.exponentialRampToValueAtTime(f1, at + len);
+function fishNoise(at, len, f0, f1, q, gain, attack = 0.3, pan = 0) {
+  const s = actx.createBufferSource(), fl = actx.createBiquadFilter(), g_ = actx.createGain(), p = actx.createStereoPanner();
+  s.buffer = noiseBuf; fl.type = 'bandpass'; fl.Q.value = q; fl.frequency.setValueAtTime(f0, at); fl.frequency.exponentialRampToValueAtTime(f1, at + len); p.pan.value = pan;
   g_.gain.setValueAtTime(0, at); g_.gain.linearRampToValueAtTime(gain, at + len * attack); g_.gain.exponentialRampToValueAtTime(0.0005, at + len);
-  shot(s, fl, g_, sfxBus); s.start(at, Math.random() * 1.5, len + 0.05);
+  shot(s, fl, g_, p, sfxBus); s.start(at, Math.random() * 1.5, len + 0.05);
 }
 const reelTick = at => fishNoise(at, 0.018, 3200, 2800, 6, 0.09, 0.1); // one click of the ratchet
 function stepFishingUI() {
   while (fishSfx.length) {
     const s = fishSfx.shift();
     if (!actx) continue;
-    const at = actx.currentTime;
+    // what happens out at the bobber is heard from there: a little later, quieter and off to its side
+    const out = fishing && ['plop', 'splash', 'skitter', 'ground'].includes(s) ? worldSoundProfile(fishing.x, fishing.y, fishing.z ?? 0, 40, 2) : null;
+    const at = actx.currentTime + (out ? out.delay : 0), k = out ? out.gain : 1, pan = out ? out.pan : 0;
     if (s === 'whoosh') { fishNoise(at, 0.32, 500, 2800, 1.4, 0.2); fishNoise(at + 0.12, 0.5, 4000, 6000, 3, 0.03, 0.1); } // the swish, and the line singing off the spool
-    if (s === 'plop') { playClip('water-drip', 0.6); fishSweep(at, 170, 560, 0.08, 0.14); }
-    if (s === 'splash') { fishNoise(at, 0.55, 2400, 350, 0.7, 0.32, 0.05); fishSweep(at, 320, 80, 0.22, 0.16); fishSweep(at + 0.02, 800, 1700, 0.3, 0.03, 'triangle'); playClip('water-drip', 0.5, at + 0.12); } // the plunge, and the line twanging
+    if (s === 'plop') { playClip('water-drip', 0.6 * k, at, out); fishSweep(at, 170, 560, 0.08, 0.14 * k, 'sine', pan); }
+    if (s === 'skitter') for (let n = 0; n < 5; n++) fishNoise(at + n * 0.07, 0.04, 3600, 3000, 4, 0.06 * k * (1 - n * 0.15), 0.1, pan); // ticking away over the ice
+    if (s === 'ground') { fishSweep(at, 140, 70, 0.06, 0.1 * k, 'sine', pan); fishNoise(at, 0.08, 900, 500, 1, 0.08 * k, 0.1, pan); } // a dull tap in the dirt
+    if (s === 'splash') { fishNoise(at, 0.55, 2400, 350, 0.7, 0.32 * k, 0.05, pan); fishSweep(at, 320, 80, 0.22, 0.16 * k, 'sine', pan); fishSweep(at + 0.02, 800, 1700, 0.3, 0.03, 'triangle'); playClip('water-drip', 0.5 * k, at + 0.12, out); } // the plunge, and the line twanging
     if (s === 'reel') for (let k = 0; k < 7; k++) reelTick(at + k * 0.04);
     if (s === 'land') { fishSweep(at, 170, 55, 0.14, 0.22); fishNoise(at, 0.18, 900, 500, 1, 0.15, 0.05); for (let k = 1; k < 4; k++) fishNoise(at + k * 0.11, 0.06, 1100, 700, 1.2, 0.08, 0.1); } // a wet slap, then flapping
   }
@@ -31049,7 +31073,27 @@ function startCooking(r) {
   hidePanel(cookEl);
   cookCtx.recipe = r.id;
   startGame('cook', 'cook', '', { recipe: r.id });
-  game.onDone = verdict => { say(serveDish(r, verdict, cookCtx.pantry), 5); if (actx) sfxUse('chime'); };
+  game.onDone = verdict => { say(serveDish(r, verdict, cookCtx.pantry), 5); if (actx) sfxUse('chime'); cookSmoke(verdict); };
+}
+// what's left in the air afterwards, where you cooked (at the grill or the fire; at a stove, in front of you): a wisp of
+// steam off a good dish, smoke off a burnt one (indoors it hangs about the kitchen, and sets the smoke alarm off)
+let smokeAlarm = null; // { at: the room, until }
+function cookSmoke(verdict) {
+  const at = placeKey(), inside = mode === 'room', s = inside ? 1 : 0.1, spot = cookCtx?.spot;
+  if (at === null) return;
+  const x = spot ? spot.x : px + Math.cos(a) * 0.6 * s, y = spot ? spot.y : py + Math.sin(a) * 0.6 * s;
+  const z = inside ? 1.1 : (spot?.z ?? terrainHeight(x, y)) + 0.1, burnt = verdict === 'burnt';
+  for (let k = 0; k < (burnt ? 8 : 2); k++) haze.push({ at, kind: burnt ? 'smoke' : 'steam', s, x: x + (Math.random() - 0.5) * 0.3 * s, y: y + (Math.random() - 0.5) * 0.3 * s,
+    z: z + k * 0.08 * s, r: (burnt ? 0.25 : 0.12) * s, rMax: (burnt ? 0.9 : 0.3) * s, vx: 0, vy: 0, vz: 0.06 * s, life: 1, fade: burnt ? (inside ? 1 / 40 : 1 / 8) : 1 / 4, seed: Math.random() * 100 });
+  while (haze.length > 140) haze.shift();
+  if (burnt && inside) smokeAlarm = { at, until: T + 8, next: T };
+}
+// its chirps, three at a time, while you're in the room with it
+function tickSmokeAlarm() {
+  if (!smokeAlarm || T > smokeAlarm.until) { smokeAlarm = null; return; }
+  if (placeKey() !== smokeAlarm.at || T < smokeAlarm.next) return;
+  smokeAlarm.next = T + 1.4;
+  for (let k = 0; k < 3; k++) tone(actx.currentTime + k * 0.22, 3100, 0.14, 0.035, 'square');
 }
 // keys while the panel's up (goods-ui.js panelKey asks); true if handled
 function cookPanelKey(e) {
@@ -32124,6 +32168,7 @@ function stepGame(dt) {
 // blips and buzzes
 function sfxGame(e) {
   if (game && game.kind === 'cook' && sfxCook(e)) return; // (the pan's own noises: cooking-ui.js)
+  if (game && game.kind === 'workshop' && sfxWorkshop(e)) return; // (the bench's: workshop-ui.js)
   const at = actx.currentTime, sq = (f, len, gain = 0.05) => tone(at, f, len, gain, 'square');
   if (e === 'eat' || e === 'place' || e === 'serve') { sq(880, 0.06); tone(at + 0.06, 1320, 0.08, 0.05, 'square'); }
   else if (e === 'brick') sq(660 + Math.random() * 200, 0.05);
@@ -32693,6 +32738,28 @@ function drawWorkshopPreview() {
   const d=WORKSHOP_PARTS[p.id], floor=!!d.halfX, b=boxAt(p.x-px,p.y-py,Math.cos(p.a),Math.sin(p.a),d.halfX||.25,d.halfY||.25,floor ? .02 : .94,floor ? .08 : 1.5);
   drawBox(b,(i,t,L)=>{set(i,'+',C(p.ok?GREEN:RED,13));return true;});
 }
+// ---- the batch, heard: the rotor humming up and down with the power you give it, the hiss of a vent, the press
+// coming down on a seal (a miss and the end: the arcade's own blips, minigame-ui.js)
+let workshopHumVoice = null;
+function sfxWorkshop(e) {
+  const at = actx.currentTime;
+  if (e === 'vent') { burst(at, 0.55, [filt('highpass', 2500, 0.7)], 0.09); return true; }
+  if (e === 'seal') { tone(at, 85, 0.16, 0.14); burst(at, 0.08, [filt('lowpass', 500)], 0.12); tone(at + 0.05, 1800, 0.02, 0.04, 'square'); return true; }
+  return false;
+}
+function tickWorkshopHum() {
+  const now = actx.currentTime;
+  if (!(game?.kind === 'workshop' && !game.g.over && gameplayAudioAllowed())) {
+    if (workshopHumVoice) { workshopHumVoice.g.gain.setTargetAtTime(0, now, 0.05); workshopHumVoice.o.stop(now + 0.3); workshopHumVoice = null; }
+    return;
+  }
+  if (!workshopHumVoice) {
+    const o = actx.createOscillator(), lp = filt('lowpass', 500), g = actx.createGain();
+    o.type = 'sawtooth'; g.gain.value = 0; shot(o, lp, g, sfxBus); o.start(); workshopHumVoice = { o, lp, g };
+  }
+  const heat = game.g.state().heat, v = workshopHumVoice;
+  v.o.frequency.setTargetAtTime(55 + heat * 140, now, 0.08); v.lp.frequency.setTargetAtTime(400 + heat * 1400, now, 0.1); v.g.gain.setTargetAtTime(0.035, now, 0.1);
+}
 function startWorkshopBatch(bench) {
   const home=workshopHome(), problem=home && workshopCanRun(home,bench);
   if (!home || problem) return say(problem || 'Use your own workshop.',4);
@@ -33207,7 +33274,7 @@ const SK_CAM_BACK = 0.42, SK_CAM_UP = 0.17, SK_CAM_SIDE = 0.35, SK_COMBO_GAP = 0
 // far round you've turned since the pop; stance: which side you face (+1 right of where you're going, regular);
 // kick: the push in progress (0..1), charge: when Space went down (-1: it isn't), combo: { names, pts, t }
 const SK = { v: 0, dir: 0, spin: 0, stance: 1, steer: 0, kick: 0, kicking: false, charge: -1, popT: -9, bail: 0, bailAt: null,
-  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0 };
+  trickKeyT: -1, look: 0, lookT: -9, camYaw: null, camZ: null, camBack: 0, camSide: 1, lastT: -9, combo: null, score: 0, best: 0, dragT: 0, scrapeT: -9 };
 let skateView = null; // while the frame's drawn from behind you: { x, y, a } (where you really are) and the camera's eye
 const skateCamOn = () => skatingNow() && third && !freecam;
 const skateAir = () => body.z > 0 || body.vz > 0;
@@ -33238,10 +33305,12 @@ function stepSkate(dt) {
   else {
     const top = (K.ShiftLeft || K.ShiftRight ? SK_RUN_TOP : SK_TOP) * (fx.caffeine > 0 ? 1.1 : 1);
     if (f > 0 && SK.charge < 0 && (SK.v < top - 0.01 || SK.kick > 0)) { // a push: a foot down, kicking along
-      SK.kicking = true; SK.kick += dt / 0.7;
+      SK.kicking = true; const kick0 = SK.kick; SK.kick += dt / 0.7;
       if (SK.kick >= 1) SK.kick = 0;
+      if (actx && kick0 < 0.15 && SK.kick >= 0.15) sfxSkate('push'); // (the foot meeting the street)
       if (SK.kick > 0.15 && SK.kick < 0.6) SK.v = Math.min(top, SK.v + SK_PUSH * 2.2 * dt);
     } else SK.kick = 0;
+    if (f < 0 && SK.v > 0.1 && (SK.dragT -= dt) <= 0) { SK.dragT = 0.12; if (actx) sfxSkate('drag', Math.min(1, SK.v / SK_TOP)); } // a foot dragged along to slow you
     SK.v = Math.max(0, SK.v - (f < 0 ? SK_BRAKE : SK_ROLL + SK.v * 0.05) * dt);
     a += s * (2.6 - 1.3 * Math.min(1, SK.v / SK_TOP)) * dt; // carving: tighter slow, wider fast
     SK.dir = a;
@@ -33258,6 +33327,7 @@ function stepSkate(dt) {
   if (want > 1e-6 && got < want * 0.98) { // something in the way: scrape along it, or stop dead
     const lost = SK.v * (1 - got / want);
     SK.v *= got / want;
+    if (actx && lost > 0.03 && T > SK.scrapeT) { SK.scrapeT = T + 0.15; sfxSkate('scrape', clamp(lost * 3, 0.3, 1)); }
     if (got > 1e-6) { SK.dir = Math.atan2(my, mx); if (!air) a = SK.dir; }
     if (lost > 0.45) return skateBail('BAIL! Straight into it.');
   }

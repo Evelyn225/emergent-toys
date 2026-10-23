@@ -39,6 +39,12 @@ test('the active batch rewards balanced power and timed moves, while neglected b
   ev('globalThis.bad=GAMES.workshop(Math.random);for(let n=0;n<1100;n++) bad.step(1/30,{})');
   assert.equal(ev('bad.result'),'burnt');
 });
+test('the batch says what just happened: each vent and seal once as you make it, a miss when a prompt goes by, clear at the end',()=>{
+  const {ev}=fixture();
+  const run=play=>ev(`(()=>{const g=GAMES.workshop(Math.random),ev=[];for(let n=0;n<1100&&!g.over;n++){const s=g.state(),m=s.current;ev.push(...g.step(1/30,${play}?{act:s.heat<.55,upP:m?.key==='up',downP:m?.key==='down'}:{}));}return ev.join(' ');})()`);
+  assert.equal(run(true),'vent seal vent seal clear');
+  assert.equal(run(false),'miss miss miss miss clear');
+});
 test('selling only removes carried drugs and pays their quality; stored batches and held gear stay intact',()=>{
   const {ev,json}=fixture();
   ev("carryItem({id:'book',uses:0});carryItem({id:'neon',uses:6,q:'perfect'},false);carryItem({id:'neon',uses:2,q:'burnt'},false);closet.push({id:'neon',uses:4,q:'fine'});money=0");

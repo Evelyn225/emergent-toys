@@ -79,7 +79,7 @@ const HUT_HOURS = [5, 20]; // (anglers get up early)
 const hutOpen = (t = tod) => t >= HUT_HOURS[0] && t < HUT_HOURS[1];
 let fishing = null; // the line, while it's out (see stepFishing)
 const fishLog = { caught: 0, best: null }; // how many you've landed, and your heaviest fish { id, kg }
-const fishSfx = []; // sounds for fishing-render.js to play: 'whoosh' | 'plop' | 'splash' | 'reel' | 'land'
+const fishSfx = []; // sounds for fishing-render.js to play: 'whoosh' | 'plop' | 'splash' | 'skitter' | 'ground' | 'reel' | 'land'
 const fishFx = []; // spray off the water { x, y, z, vx, vy, vz, life }
 // where you can fish from: on foot, or sat still in a boat (yours, a rental, a swan), looking from your seat (picking
 // the rod up out there swaps the chase view, V, for your seat)
@@ -181,7 +181,7 @@ function stepFishing(dt, rnd = Math.random) {
       f.water = waterKind(f.x, f.y); f.z = terrainHeight(f.x, f.y); f.t = 0;
       if (f.water && f.water !== 'ice') { f.st = 'wait'; f.next = biteWait(f.rod, rnd); splash(f.x, f.y, 6, 0.25); fishSfx.push('plop'); f.ring = T; }
       else {
-        f.st = 'land';
+        f.st = 'land'; fishSfx.push(f.water === 'ice' ? 'skitter' : 'ground');
         say(f.water === 'ice' ? 'The bobber skitters across the ice. The pond is frozen solid.' : pick(['It lands on dry ground. Nothing is biting there.', 'Not even close to the water.', 'You catch some ground. It does not fight.']), 2.5);
       }
     }
