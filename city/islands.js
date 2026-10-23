@@ -210,9 +210,16 @@ function shoreWaveFront(phase,wetLimit) {
 }
 function shoreWaveFoam(x,y,edge,wetLimit=0,phase=shoreWavePhase(x,y)) {
   if(edge<=-1.4||edge>=wetLimit)return 0;
+  // A wall or rocks: no sand for the water to run up and drain from, so no line sweeping over still water. Each
+  // wave breaks white against the edge as it arrives and falls back.
+  if(!wetLimit) {
+    const band=Math.max(0,1+edge/.18),surge=phase<.55||phase>.9?0:Math.sin((phase-.55)/.35*Math.PI);
+    return band*surge;
+  }
   const crest=shoreWaveFront(phase,wetLimit),width=.065+.035*(crest+1.05)/(1.05+wetLimit-.04);
   const offset=edge-crest,fade=Math.min(1,phase*10,(1-phase)*10);
-  const foam=Math.max(0,1-Math.abs(offset)/width);
+  if(offset>0)return 0; // (the foam rides the water: none on the sand ahead of it, and it ends at the waterline)
+  const foam=Math.max(0,1+offset/width);
   const trail=.15*Math.max(0,1-Math.abs(offset+.1)/.15);
   return Math.max(foam,trail)*fade;
 }

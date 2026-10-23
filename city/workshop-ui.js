@@ -180,6 +180,28 @@ function drawWorkshopPreview() {
   const d=WORKSHOP_PARTS[p.id], floor=!!d.halfX, b=boxAt(p.x-px,p.y-py,Math.cos(p.a),Math.sin(p.a),d.halfX||.25,d.halfY||.25,floor ? .02 : .94,floor ? .08 : 1.5);
   drawBox(b,(i,t,L)=>{set(i,'+',C(p.ok?GREEN:RED,13));return true;});
 }
+// ---- the batch, heard: the rotor humming up and down with the power you give it, the hiss of a vent, the press
+// coming down on a seal (a miss and the end: the arcade's own blips, minigame-ui.js)
+let workshopHumVoice = null;
+function sfxWorkshop(e) {
+  const at = actx.currentTime;
+  if (e === 'vent') { burst(at, 0.55, [filt('highpass', 2500, 0.7)], 0.09); return true; }
+  if (e === 'seal') { tone(at, 85, 0.16, 0.14); burst(at, 0.08, [filt('lowpass', 500)], 0.12); tone(at + 0.05, 1800, 0.02, 0.04, 'square'); return true; }
+  return false;
+}
+function tickWorkshopHum() {
+  const now = actx.currentTime;
+  if (!(game?.kind === 'workshop' && !game.g.over && gameplayAudioAllowed())) {
+    if (workshopHumVoice) { workshopHumVoice.g.gain.setTargetAtTime(0, now, 0.05); workshopHumVoice.o.stop(now + 0.3); workshopHumVoice = null; }
+    return;
+  }
+  if (!workshopHumVoice) {
+    const o = actx.createOscillator(), lp = filt('lowpass', 500), g = actx.createGain();
+    o.type = 'sawtooth'; g.gain.value = 0; shot(o, lp, g, sfxBus); o.start(); workshopHumVoice = { o, lp, g };
+  }
+  const heat = game.g.state().heat, v = workshopHumVoice;
+  v.o.frequency.setTargetAtTime(55 + heat * 140, now, 0.08); v.lp.frequency.setTargetAtTime(400 + heat * 1400, now, 0.1); v.g.gain.setTargetAtTime(0.035, now, 0.1);
+}
 function startWorkshopBatch(bench) {
   const home=workshopHome(), problem=home && workshopCanRun(home,bench);
   if (!home || problem) return say(problem || 'Use your own workshop.',4);

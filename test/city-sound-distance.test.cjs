@@ -19,6 +19,12 @@ test('islands use the botanical garden nature bed without city sounds by day, ni
  }
  for(const kind of ['islandshelter','islandhome']) {const mix=j(`audioMix({...${base},mode:'room',room:{kind:'${kind}'}})`);assert.equal(mix.city,0);assert.ok(mix.birds>0&&mix.waves>0);}
 });
+test('the skateboard rolls louder the faster it goes, and is silent off the ground', () => {
+ const base="{mode:'walk',room:null,day:1,night:0,rain:0,fog:0,tod:13,roofH:0,district:'midtown',barCrowd:0,seaDist:30,onBridge:false,elNear:0,speed:0}";
+ const roll=k=>j(`audioMix({...${base},skating:${k}})`).board;
+ assert.equal(roll(0),0);assert.ok(roll(.25)<roll(.6)&&roll(.6)<roll(1)&&roll(1)<roll(1.3));
+ assert.ok(Math.abs(roll(1)-.7)<1e-9,'cruising top keeps the old level');
+});
 test('island interiors and nested hotel rooms listen from their outdoor doorway, not local furniture coordinates',()=>{
  assert.deepEqual(j("audioWorldPosition('room',{ret:[626,195,1.2]},12,18)"),[626,195]);
  assert.deepEqual(j("audioWorldPosition('room',{lobby:{ret:[53,64.2,-1.5]}},6,4)"),[53,64.2]);

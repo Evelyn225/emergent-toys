@@ -163,17 +163,17 @@ GAMES.workshop = (rnd, word, opts = {}) => {
     if (g.over) return [];
     t = Math.min(32, t + dt); heat = clamp(heat + (keys.act ? .3 : -.18) * dt, 0, 1);
     if (heat >= band[0] && heat <= band[1]) steady += dt;
-    const m = current();
+    const m = current(), ev = []; // (what just happened, for the sound: workshop-ui.js)
     if (m) {
-      if (t - m.at > 1.6) m.missed = true;
-      else if (keys[m.key + 'P']) { m.done = true; completed++; if (m.key === 'up') heat = Math.max(0, heat - .08); }
+      if (t - m.at > 1.6) { m.missed = true; ev.push('miss'); }
+      else if (keys[m.key + 'P']) { m.done = true; completed++; ev.push(m.key === 'up' ? 'vent' : 'seal'); if (m.key === 'up') heat = Math.max(0, heat - .08); }
     }
     if (t >= 32) {
       g.over = true; g.score = Math.round(75 * steady / 32 + 25 * completed / moves.length);
       g.result = g.score >= 80 ? 'perfect' : g.score >= 45 ? 'fine' : 'burnt';
-      return ['clear'];
+      ev.push('clear');
     }
-    return [];
+    return ev;
   };
   g.state = () => ({ t, heat, band, moves, current: current() });
   g.reward = () => 0;
