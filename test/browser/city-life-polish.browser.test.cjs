@@ -117,6 +117,7 @@ test('passenger turnover reserves the player seat, and freecam keeps its own C k
 
 test('motel bathroom opens beside the shower and its television faces the bed and sofa',()=>fixture(async page=>{
  const r=await page.evaluate(()=>{
+  paused=false;
   enterRoom('hotelroom',{lobby:{word:'MOTEL',ret:[100,100,0]}},ROOM_DEFS.motelRoom.entry);
   const {tv,tvAngle,tvApproach}=room.def.hotelAmenities,bed=room.props.find(p=>p.furniture==='bed'),head=room.props.find(p=>p.furniture==='headboard'),seat=room.props.find(p=>p.seat);
   const route=[[4.5,4.8],[5.5,4.8],[6.5,4.8],[6.5,3.5],[8.4,3.5],[8.4,5.4]];
