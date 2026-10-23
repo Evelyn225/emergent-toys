@@ -16386,7 +16386,7 @@ function homePlan(w, h, tier) {
   };
   const home = tier === 0
     ? { bed: [2.6, 2.3], closet: [5.1, 2], sofa: [2.9, 6.2], tv: [2.9, 4.4], shelf: [1.18, 4.4], fridge: [8.45, 5.6], pet: [1.4, 7.2], dining: [5.5, 5.8] }
-    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [2.7, tier === 2 ? 13.6 : 11.8], tv: [2.7, tier === 2 ? 9.63 : 8.63], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - 0.65, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
+    : { bed: [3.4, 3.4], closet: [7.4, 2], sofa: [2.7, tier === 2 ? 13.6 : 11.8], tv: [2.7, tier === 2 ? 9.63 : 8.63], shelf: [10.18, tier === 2 ? 5.3 : 4.8], fridge: [inside - .38, h - 3.3], pet: [2, h - 2.3], dining: [13, tier === 2 ? 13 : 10.7] };
   const wc = tier === 0 ? { x0: 7, y0: 1, x1: 9, y1: 4, sign: [6, 3, 3.5] }
     : { x0: 15, y0: 1, x1: inside, y1: 5, sign: [14, 4, 4.5] };
   wall(wc.x0 - 1, 1, wc.x0 - 1, wc.y1, 'W');
@@ -16440,14 +16440,6 @@ const stoveShade = (tier, half) => { const counter = solid(tier === 2 ? WHITE : 
 }; };
 function homeDef(w, h, tier) {
   const plan = homePlan(w, h, tier), { bed, closet, sofa, tv, shelf, fridge, pet, dining } = plan.home;
-  const fridgeShade = (i, t, L) => {
-    const f = HIT.face;
-    BG[i] = C(f === 3 || f === 4 ? WHITE : GRAY, (2 + L * 0.3) * shadeFace(f));
-    if (f === 5) return set(i, '_', C(GRAY, L)), true;
-    if ((f === 3 || f === 4) && HIT.w > 0.5 && HIT.w < 1.45 && Math.abs(HIT.u - 0.28) < 0.05) return set(i, '|', C(GRAY, L)), true;
-    if ((f === 3 || f === 4) && Math.abs(HIT.w - 0.85) < 0.04) return set(i, '=', C(GRAY, L)), true;
-    return set(i, ' ', 0), true;
-  };
   return { ...plan, light: tier === 2 ? 0.9 : 0.8, height: tier ? 3.6 : 3, floor: 'home', ceil: 'home', wall: homeWall,
     spots: { bed, closet, tv, shelf: [shelf[0] + 1.1, shelf[1]], fridge: [fridge[0] - 1.1, fridge[1]], pet, stove: [fridge[0] - 1.1, fridge[1] + (tier ? -2.5 : 1.7)], workshop: [2.7, h - 2.6] },
     props: r => [
@@ -16457,7 +16449,7 @@ function homeDef(w, h, tier) {
       TELEVISION(tv[0],tv[1]-.3,r),
       FURNITURE_STORAGE(tv[0],tv[1]-.3,.8,.25,.61),
       FURNITURE_STORAGE(shelf[0],shelf[1],.75,.18,1.05,-Math.PI/2,true),
-      BX(fridge[0], fridge[1], 0.4, 0.38, 0, 1.65, fridgeShade),
+      HOME_FRIDGE(fridge[0],fridge[1],{angle:Math.PI/2,height:1.65,halfWidth:.4,halfDepth:.38}),
       ...toilet(plan.wc.x1 - (tier ? 1.4 : .8), 1.42, -1, porcelain),
       washbasin(plan.wc.x0 + 0.4, 1.35, 0, 1),
       ...(tier ? [BATHTUB(plan.wc.x1 - .43, 3.4)] : []),
@@ -16465,7 +16457,7 @@ function homeDef(w, h, tier) {
       ...tableBox(dining[0], dining[1], tier ? 1.25 : 0.6, 0.5),
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
-      BX(fridge[0], fridge[1] + (tier ? -2.5 : 1.7), tier ? 1.55 : 0.55, 0.33, 0, 0.94, stoveShade(tier, tier ? 0.55 : 0.5), 0, 1), // the kitchen counter, the hob and oven in it (cooking.js)
+      FITTED_KITCHEN(fridge[0]+(tier?.05:0),fridge[1]+(tier?-2.5:1.7),tier?1.55:.55,.33,Math.PI/2,tier===2?WHITE:BRICK),
       ...(tier ? [...tableBox(12.6, 2.9, 1.1, 0.45), ...homeChair(12.6, 4, 0, -1), FURNITURE_STORAGE(10.9,1.4,.7,.18,2.4,0,true),
         ...tableBox(sofa[0], sofa[1] - 1.6, 0.85, 0.4), POT_PLANT(1.6, 8.9, 1.5)] : []),
       ...(plan.balcony ? [...tableBox(22.3, 6, 0.65, 0.5), ...homeChair(22.3, 7.2, 0, -1, WHITE), ...homeChair(22.3, 4.8, 0, 1, WHITE),
@@ -34269,7 +34261,7 @@ function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
  BG[i]=C(frame?YEL:z<hill?GREEN:BLUE,frame?3:4);return set(i,frame?(Math.abs(u)>.76?'|':'='):z<1.7?'~':' ',C(frame?YEL:z<1.7?CYAN:GREEN,Math.max(5,L*.7))),true;
 });}
 function hotelDefinition(tier){
- const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.5,h-4]:null;
+ const plan=hotelRoomPlan(tier),{w,h,bath}=plan,tv=[tier===2?11:tier?3.5:2.5,tier?h-5.3:h-1.31],tvAngle=tier?0:Math.PI,sofa=[tv[0],tier?h-2.9:6.4],stove=tier?[w-1.38,h-4+(tier===1?.3:0)]:null;
  return {grid:plan.grid,entry:plan.entry,light:.85+tier*.05,height:tier===2?3.6:3,floor:tier===2?'royal':'wood',ceil:'pendant',wc:bath,hotelAmenities:{tv,tvAngle,tvApproach:[tv[0]-Math.sin(tvAngle)*1.2,tv[1]+Math.cos(tvAngle)*1.2],sofa,stove},tier,
  wall:(...args)=>{if(hotelRoomWall(...args))return true;const [i,u,,z,,,,L]=args;BG[i]=C(z<.8?BRICK:WHITE,z<.8?2+L*.1:4+L*.1);return set(i,z<.12||Math.abs(z-.8)<.025||z>(tier===2?3.6:3)-.16?'=':' ',C(YEL,L*.65)),true;},
  props:r=>{
@@ -34280,7 +34272,7 @@ function hotelDefinition(tier){
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
  ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.6,5.1,.6)),
  POT_PLANT(tier===2?9.5:tier?1.5:8.5,h-1.5,1.4)];
- if(tier)p.push(BX(...stove,1.7,.38,.1,.94,stoveShade(1,.55),0,1),BX(stove[0],stove[1]+2.3,.43,.4,0,1.7,solid(WHITE,{panel:.7})),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
+ if(tier)p.push(FITTED_KITCHEN(...stove,tier===1?1.3:1.7,.38,Math.PI/2,tier===2?WHITE:BRICK),HOME_FRIDGE(w-1.4,h-1.7,{angle:Math.PI/2,height:1.7}),...tableBox(tier===2?13.2:8,h-3.1,tier===2?1.1:.65,.55),...homeChair(tier===2?13.2:8,h-1.9,0,-1));
  if(tier)p.push(ROOM_MODEL(sofa[0],sofa[1]-1.25,(vx,vy)=>{
    for(const side of [-1,1])rod(vx+side*.3,vy,.05,vx+side*.3,vy,.42,.035,YEL);
    drum(vx,vy,.52,.4,.46,solid(tier===2?GREEN:BRICK,{bright:2,top:'~'}));
@@ -35485,9 +35477,10 @@ function HOME_PENDANT(x,y,ceiling,r,index) {
     dot(vx,vy,ceiling-.68,.055,(i,t,L)=>{BG[i]=C(on?WARM:STONE,on?12:2+L*.15);set(i,' ',0);return true;});
   });
 }
-function HOME_FRIDGE(x,y) {
-  const doors=[[.13,1.28],[1.31,1.85]].map(([z0,z1])=>{
-    const bottom=z0+.012,top=z1-.012,hl=.39,hw=.022,b=.012;
+function HOME_FRIDGE(x,y,{angle=0,height=1.9,halfWidth=.43,halfDepth=.4}={}) {
+  const c=Math.cos(angle),s=Math.sin(angle),hw=halfDepth,doorWidth=halfWidth-.04;
+  const doors=[[.13,height*1.28/1.9],[height*1.31/1.9,height-.05]].map(([z0,z1])=>{
+    const bottom=z0+.012,top=z1-.012,hl=doorWidth,hw=.022,b=.012;
     const planes=[[1,0,0,hl,1],[-1,0,0,hl,2],[0,1,0,hw,3],[0,-1,0,hw,4],[0,0,1,top,5],[0,0,-1,-bottom,6],
       [1,1,0,hl+hw-b,7],[-1,1,0,hl+hw-b,8],[0,1,1,hw+top-b,9],[0,1,-1,hw-bottom-b,10]];
     const normals=Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]));
@@ -35495,23 +35488,27 @@ function HOME_FRIDGE(x,y) {
   });
   const enamel=(i,t,L)=>{BG[i]=C(WHITE,2.9+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    for(const u of [-.3,.3])for(const v of [-.3,.3])coveRound(vx+u,vy+v,1,0,.035,.035,0,.09,.01,GRAY);
-    coveRound(vx,vy,1,0,.43,.4,.08,1.9,.045,enamel);
+    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    const part=(u,v,hl,depth,z0,z1,r,shade)=>{const[xx,yy]=at(u,v);coveRound(xx,yy,c,s,hl,depth,z0,z1,r,shade);};
+    const pipe=(u,v,z,uu,vv,zz,r)=>bathroomPipe(...at(u,v),z,...at(uu,vv),zz,r);
+    for(const u of [-halfWidth+.13,halfWidth-.13])for(const v of [-hw+.1,hw-.1])part(u,v,.035,.035,0,.09,.01,GRAY);
+    part(0,0,halfWidth,hw,.08,height,.045,enamel);
     for(const door of doors) {
-      const {z0,z1,hl,hw,bottom,top,planes,normals}=door;
-      drawBox(boxAt(vx,vy+.402,1,0,.399,.012,z0,z1),(i,t,L)=>{BG[i]=C(GRAY,.6+L*.1);set(i,' ',0);return true;});
-      drawBox({...boxAt(vx,vy+.427,1,0,hl,hw,bottom,top),planes,normals},enamel,homeRayWorktop);
-      const lo=z0+.13,hi=Math.min(z1-.1,lo+.36);
-      for(const z of [lo,hi])bathroomPipe(vx+.28,vy+.45,z,vx+.28,vy+.48,z,.012);
-      bathroomPipe(vx+.28,vy+.48,lo,vx+.28,vy+.48,hi,.014);
+      const {z0,z1,hl,bottom,top,planes,normals}=door,[sx,sy]=at(0,hw+.002),[dx,dy]=at(0,hw+.027);
+      drawBox(boxAt(sx,sy,c,s,doorWidth+.009,.012,z0,z1),(i,t,L)=>{BG[i]=C(GRAY,.6+L*.1);set(i,' ',0);return true;});
+      drawBox({...boxAt(dx,dy,c,s,hl,.022,bottom,top),planes,normals},enamel,homeRayWorktop);
+      const lo=z0+.13,hi=Math.min(z1-.1,lo+.36),handle=halfWidth-.15;
+      for(const z of [lo,hi])pipe(handle,hw+.05,z,handle,hw+.08,z,.012);
+      pipe(handle,hw+.08,lo,handle,hw+.08,hi,.014);
     }
-    coveRound(vx,vy+.4,1,0,.34,.015,.08,.115,.008,GRAY);
-  }),radius:1.1,box:boxAt(x,y+.035,1,0,.43,.465,0,1.9)};
+    part(0,hw,halfWidth-.09,.015,.08,.115,.008,GRAY);
+  }),radius:Math.hypot(halfWidth,hw)+.3,box:boxAt(x-s*.05,y+c*.05,c,s,halfWidth,hw+.05,0,height),
+    kitchenAppliance:{kind:'fridge',angle,height}};
 }
 // Fixed convex worktop planes avoid marching across a broad, thin slab.
 function homeRayWorktop(ox,oy,oz,rx,ry,rz,b) {
   const t=rayBeveledBay(ox,oy,oz,rx,ry,rz,b);if(t<0)return t;
-  const n=b.normals[HIT.face];HIT.nx=n[0];HIT.ny=n[1];HIT.nz=n[2];return t;
+  const n=b.normals[HIT.face];HIT.nx=b.c*n[0]-b.s*n[1];HIT.ny=b.s*n[0]+b.c*n[1];HIT.nz=n[2];return t;
 }
 function FERN_KITCHEN(r) {
   const planes=[[1,0,0,1.77,1],[-1,0,0,1.77,2],[0,1,0,.42,3],[0,-1,0,.42,4],[0,0,1,.95,5],[0,0,-1,-.88,6],
@@ -35577,6 +35574,94 @@ ROOM_FLOORS.fernBath=(i,f,x,y,row,column,L)=>{
   const grout=Math.max(coveGroove(x,.4,.008,footprint),coveGroove(y,.4,.008,footprint));
   BG[i]=C(STONE,4.5+L*.18-grout*1.2);set(i,' ',0);
 };
+// Fitted kitchen units share the same top, opening and appliance measurements.
+// Local u runs along the cupboards; +v is the usable front of the counter.
+function kitchenTopProfile(hl,hw,bottom,top,bevel=.015) {
+  const planes=[[1,0,0,hl,1],[-1,0,0,hl,2],[0,1,0,hw,3],[0,-1,0,hw,4],
+    [0,0,1,top,5],[0,0,-1,-bottom,6],
+    [1,0,1,hl+top-bevel,7],[-1,0,1,hl+top-bevel,8],
+    [0,1,1,hw+top-bevel,9],[0,-1,1,hw+top-bevel,10]];
+  const normals=Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]));
+  return {planes,normals};
+}
+function kitchenPanelProfile(hl,hw,bottom,top,bevel=.006) {
+  const planes=[[1,0,0,hl,1],[-1,0,0,hl,2],[0,1,0,hw,3],[0,-1,0,hw,4],
+    [0,0,1,top,5],[0,0,-1,-bottom,6],[1,1,0,hl+hw-bevel,7],[-1,1,0,hl+hw-bevel,8],
+    [0,1,1,hw+top-bevel,9],[0,1,-1,hw-bottom-bevel,10]];
+  return {planes,normals:Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]))};
+}
+function FITTED_KITCHEN(x,y,hl,depth,angle=0,color=BRICK) {
+  const c=Math.cos(angle),s=Math.sin(angle),compact=hl<.8,height=.94;
+  const sink=compact?-.265:-hl+.37,radius=compact?.18:.235,hob=compact?.25:0;
+  const top=kitchenTopProfile(hl,depth,height-.065,height),ovenHalf=compact?.22:.28;
+  const count=Math.max(2,Math.round(hl*2/.62)),half=hl/count;
+  const doorProfile=kitchenPanelProfile(half-.009,.014,.12,.66),drawerProfile=kitchenPanelProfile(half-.04,.008,.68,.86),
+    ovenProfile=kitchenPanelProfile(ovenHalf,.014,.13,.875);
+  const model=ROOM_MODEL(x,y,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    const part=(u,v,hx,hy,z0,z1,shade,bevel=.012)=>{
+      const[xx,yy]=at(u,v);coveRound(xx,yy,c,s,hx,hy,z0,z1,bevel,shade);
+    };
+    const pipe=(u,v,z,uu,vv,zz,r=.012,base=GRAY)=>bathroomPipe(...at(u,v),z,...at(uu,vv),zz,r,base);
+    const wood=furnitureTimber(color),flatWood=(i,t,L)=>{
+      const f=HIT.face,nu=f===1?1:f===2?-1:0,nv=f===3?1:f===4?-1:0;
+      coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,c*nu-s*nv,s*nu+c*nv,f===6?-1:0,3);
+      if(color!==BRICK)BG[i]=C(color,BG[i]&15);return true;
+    };
+    // The recessed plinth meets the floor; the carcass has no hidden top face
+    // that could cap the sink. Only the fitted worktop owns that surface.
+    part(0,-.035,hl-.035,depth-.075,0,.1,wood);
+    drawBox(boxAt(vx,vy,c,s,hl-.025,depth-.025,.09,height-.065),(i,t,L)=>HIT.face===5?false:flatWood(i,t,L));
+    for(let k=0;k<count;k++) {
+      const u=-hl+half*(2*k+1);
+      if(Math.abs(u-hob)<ovenHalf+half*.5)continue;
+      const [xx,yy]=at(u,depth-.008),[dx,dy]=at(u,depth+.008);
+      drawBox({...boxAt(xx,yy,c,s,half-.009,.014,.12,.66),...doorProfile},wood,homeRayWorktop);
+      drawBox({...boxAt(dx,dy,c,s,half-.04,.008,.68,.86),...drawerProfile},wood,homeRayWorktop);
+      pipe(u-.075,depth+.025,.77,u+.075,depth+.025,.77,.009);
+    }
+    drawBox({...boxAt(vx,vy,c,s,hl,depth,height-.065,height),...top},(i,t,L)=>{
+      if(HIT.face===5&&Math.hypot(HIT.u-sink,HIT.v)<radius*.96)return false;
+      return homeStone(i,t,L);
+    },homeRayWorktop);
+    // The sink's lip, inner bowl and bottom are one closed revolved profile.
+    const [sx,sy]=at(sink,0);
+    coveLathe(sx,sy,.74,[[0,0],[0,.04],[.02,radius*.4],[.16,radius*.88],[.205,radius],
+      [.211,radius],[.211,radius*.92],[.16,radius*.85],[.04,radius*.34],[.034,0]],
+      (i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
+    coveLathe(sx,sy,.775,[[0,0],[0,.024],[.003,.024],[.003,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
+    const [tx,ty]=at(sink,.19-radius-.045);bathroomTap(tx,ty,-s,c,height);
+
+    const active=cookingOn()==='stove',baking=active&&RECIPE[cookCtx?.recipe]?.how==='oven';
+    for(const u of compact?[0]:[-.135,.135])for(const v of [-.135,.135]) {
+      const [bx,by]=at(hob+u,v),r=compact?.075:.09;
+      coveLathe(bx,by,height,[[0,0],[0,r],[.014,r],[.014,0]],(i,t,L)=>{
+        BG[i]=C(GRAY,(.65+L*.12)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+      });
+      coveLathe(bx,by,height+.014,[[0,r*.6],[0,r*.78],[.005,r*.78],[.005,r*.6],[0,r*.6]],(i,t,L)=>{
+        BG[i]=active&&!baking?C(RED,7+Math.sin(T*4)*.6):C(GRAY,1.4+L*.12);set(i,' ',0);return true;
+      });
+    }
+    // A separate enamel door, recessed dark glass, supported handle and knobs.
+    // Heat changes only the elements or oven glass, never the cupboard case.
+    const enamel=(i,t,L)=>{BG[i]=C(WHITE,(1.1+L*.28)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+    const [ox,oy]=at(hob,depth+.016);
+    drawBox({...boxAt(ox,oy,c,s,ovenHalf,.014,.13,.875),...ovenProfile},(i,t,L)=>{
+      if(HIT.face===3&&Math.abs(HIT.u)<ovenHalf-.035&&HIT.w>.23&&HIT.w<.62)return false;
+      return enamel(i,t,L);
+    },homeRayWorktop);
+    const [gx,gy]=at(hob,depth+.025);
+    drawBox(boxAt(gx,gy,c,s,ovenHalf-.035,.002,.23,.62),(i,t,L)=>{
+      const rack=coveGroove(HIT.w-.3,.11,.004,t/projX);
+      BG[i]=C(baking?ORANGE:GRAY,baking?3+Math.sin(T*2)*.2:.45+L*.04);
+      set(i,' ',0);if(rack>.25)BG[i]=C(GRAY,1+L*.12);return true;
+    });
+    pipe(hob-ovenHalf+.045,depth+.07,.69,hob+ovenHalf-.045,depth+.07,.69);
+    for(const u of compact?[-.055,.055]:[-.165,-.055,.055,.165])pipe(hob+u,depth+.033,.82,hob+u,depth+.065,.82,.023);
+  });
+  return {...model,radius:hl+.6,box:boxAt(x-s*.0575,y+c*.0575,c,s,hl,depth+.0575,0,height+.02),
+    kitchen:{hl,depth,angle,height,sink,radius,hob,compact}};
+}
 // Fern's front is west toward the dock. The room's south entrance therefore
 // maps through a quarter turn; windows and the world-view camera share it.
 const FERN_WINDOWS=[
