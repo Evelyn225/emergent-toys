@@ -12,10 +12,10 @@ const BED_FILES = { city: 'city-day.mp3', night: 'night.mp3', crowd: 'crowd.mp3'
 // overall level of each layer at full mix
 const LEVEL = { city: 0.5, crowd: 0.35, night: 0.5, restaurant: 0.45, bossa: 0.3, coffee: 0.3, karaoke: 0.35, arcade: 0.35,
                 rain: 0.28, birds: 0.35, cathedral: 0.5, pachinko: 0.45, waterfall: 0.4, aquarium: 0.3, waterSoft: 0.16,
-                fluorescent: 0.2, watch: 0.2,
+                fluorescent: 0.2, watch: 0.2, washers: 0.3,
                 board: 0.5, waves: 0.5, wind: 0.3, rumble: 0.7, tunnel: 0.3, engine: 0.4 };
 // measured RMS of each synthesised layer at gain 1, scaled to match a recorded bed (~0.07 at -20 LUFS) at gain 1
-const CAL = { board: 0.8, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16 };
+const CAL = { board: 0.8, waves: 0.57, wind: 0.82, rumble: 0.33, tunnel: 0.64, engine: 0.16, washers: 1 };
 const XF = 4, GLIDE = 0.45, MASTER = 0.55; // loop crossfade seconds; time constant of every level change; overall volume
 let actx = null, master = null, soundOn = true, noiseBuf = null, musicBus, ambBus, sfxBus; // the three volume settings' buses
 const beds = {}, synth = {};
@@ -138,6 +138,11 @@ function makeSynths() {
   // a car engine: a growl that rises with speed
   synth.engine = layer(); synth.engineOsc = actx.createOscillator(); synth.engineOsc.type = 'sawtooth'; synth.engineOsc.frequency.value = 45;
   synth.engineLP = filt('lowpass', 380); chain(synth.engineOsc, synth.engineLP, synth.engine); synth.engineOsc.start();
+  // a laundromat: a wall of drums, each load thudding round as it tumbles, water sloshing, the motors' hum
+  synth.washers = layer(); const tumble = actx.createGain(); tumble.gain.value = 0.5; lfo(tumble.gain, 0.9, 0.4);
+  chain(noiseSrc(0.6), filt('lowpass', 180), tumble, synth.washers);
+  const slosh = actx.createGain(); slosh.gain.value = 0.3; lfo(slosh.gain, 0.37, 0.25); chain(noiseSrc(), filt('bandpass', 650, 1.2), slosh, synth.washers);
+  const motor = actx.createOscillator(); motor.frequency.value = 50; const mg = actx.createGain(); mg.gain.value = 0.05; chain(motor, mg, synth.washers); motor.start();
   synth.fluorescent = layer(); loopClip('fluorescent-light-hum', synth.fluorescent);
   synth.watch = layer(); loopClip('pocket-watch-ticking', synth.watch);
 }
@@ -228,6 +233,11 @@ function setPeeAudio(on) {
     gain.gain.setTargetAtTime(0.24, actx.currentTime, 0.08);
     peeLoopVoice = { source, gain };
   });
+}
+function sfxWasherDone() { // the drum's last heavy turn, then the door lock clicking free
+  const at = actx.currentTime;
+  tone(at, 70, 0.35, 0.16); burst(at, 0.2, [filt('lowpass', 300)], 0.12);
+  tone(at + 0.9, 2200, 0.03, 0.05, 'square'); burst(at + 0.9, 0.04, [filt('bandpass', 2500, 2)], 0.08);
 }
 function sfxDoor() { const at = actx.currentTime; tone(at, 1568, 0.5, 0.08); tone(at + 0.12, 1976, 0.6, 0.07); } // a shop bell
 function sfxKnock() {

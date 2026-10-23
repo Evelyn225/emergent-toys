@@ -25,6 +25,12 @@ test('island interiors and nested hotel rooms listen from their outdoor doorway,
  assert.deepEqual(j("audioWorldPosition('walk',null,626,195)"),[626,195]);
  assert.deepEqual(j("audioWorldPosition('room',{},12,18)"),[12,18]);
 });
+test('laundromats have their washers running; nowhere else does',()=>{
+ const base="{mode:'room',day:1,night:0,rain:0,fog:0,tod:3,roofH:0,district:'midtown',barCrowd:0,seaDist:9,onBridge:false,elNear:0,speed:0}";
+ assert.ok(j(`audioMix({...${base},room:{kind:'laundry'}})`).washers>.5);
+ for(const kind of ['store','bar','home'])assert.equal(j(`audioMix({...${base},room:{kind:'${kind}'}})`).washers,0);
+ assert.equal(j(`audioMix({...${base},mode:'walk',room:null})`).washers,0);
+});
 test('stations reached by train, train cars and the lighthouse lamp room also listen from outdoors',()=>{
  ev("stations.push({x:40.5,y:72.25})");const st=j('stations.length-1');
  for(const kind of ['station','train'])assert.deepEqual(j(`audioWorldPosition('room',{kind:'${kind}',st:${st}},23,5)`),[40.5,72.25]);

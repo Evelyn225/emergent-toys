@@ -235,6 +235,25 @@ test('a record player and a rooftop serenade pan toward their source; your own b
   assert.ok(serenade.bossa > .8, 'Nico is to the right when facing east with him to the south: ' + JSON.stringify(serenade));
 }));
 
+test('a laundromat sounds of its washers, and your load audibly finishes once', () => fixture(async (page, wait) => {
+  await page.evaluate(() => {
+    money = Math.max(money, 50); wash = null;
+    enterRoom('laundry', { word: 'LAUNDRY', cell: [40, 40], ret: [40.5, 41.5, 0] }, [3, 1.5, -Math.PI / 2]);
+    audioTick(.016);
+  });
+  await wait(() => synth.washers.gain.value > .1);
+  await page.keyboard.press('e');
+  const result = await page.evaluate(() => {
+    const started = !!wash, real = sfxWasherDone; let clunks = 0;
+    sfxWasherDone = () => { clunks++; real(); };
+    T = wash.done + .1; stepLaundry(); stepLaundry();
+    sfxWasherDone = real; leaveRoom(); audioTick(.016);
+    return { started, clunks };
+  });
+  assert.deepEqual(result, { started: true, clunks: 1 });
+  await wait(() => synth.washers.gain.value < .01);
+}));
+
 test('explosions are heard from where they happen: delayed, dulled and panned outdoors, silent from another island indoors', () => fixture(async page => {
   const result = await page.evaluate(() => {
     const heard = [], real = playClip;
