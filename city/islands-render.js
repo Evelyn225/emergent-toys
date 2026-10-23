@@ -28,7 +28,8 @@ function buildIslandScenery() {
     islandDetail(x0+1.7,y0+.12,.07,.025,0,.035,'metal');
     const [lx,ly]=island.landing;
     islandDetail(lx+1.8,ly+.7,.022,.022,0,.22,'timber');
-    islandDetail(lx+1.8,ly+.7,.15,.025,.16,.23,'sign',Math.PI/2).word=island.name.toUpperCase();
+    const marker=islandDetail(lx+1.8,ly+.7,.15,.025,.16,.23,'sign',Math.PI/2);
+    marker.word=island.name.toUpperCase();if(island.id==='cabin')marker.ink=BLACK;
     for(let y=Math.floor(island.y-island.ry);y<island.y+island.ry;y+=4)for(let x=Math.floor(island.x-island.rx);x<island.x+island.rx;x+=4) {
       const seed=hash(x,y,1910),wx=x+(seed-.5)*2,wy=y+(hash(x,y,1911)-.5)*2,edge=wildIslandEdge(wx,wy,island);
       if(edge<.7||edge>16||onPier(wx,wy)||near(wx,wy,lx,ly)<5||map[idx(Math.floor(wx),Math.floor(wy))])continue;
@@ -90,7 +91,7 @@ function islandTimberShade(model,i,t,L) {
   BG[i]=C(base,brightness);
   if(model.word&&(HIT.face===3||HIT.face===4)) {
     const side=HIT.face===3?1:-1,[x,y]=R(model.x-model.s*side*model.hw,model.y+model.c*side*model.hw);
-    set(i,worldText(model.word,HIT.u*side,HIT.w,t,i,x,y,model.labelZ??.195,model.c*side,model.s*side,Math.min(.028,model.hl*1.7/model.word.length),model.labelH??.04),C(GREEN,Math.max(5,L)));
+    set(i,worldText(model.word,HIT.u*side,HIT.w,t,i,x,y,model.labelZ??.195,model.c*side,model.s*side,Math.min(.028,model.hl*1.7/model.word.length),model.labelH??.04),C(model.ink??GREEN,Math.max(5,L)));
     return true;
   }
   let ch=' ';
@@ -129,6 +130,7 @@ function drawIslandShrub(model,vx,vy) {
   });
 }
 function islandRoofShade(roof,i,t,L) {
+  if(roof.cabin.id==='cabin-cove')return coveRoofShade(roof,i,t,L);
   if(roof.part==='chimney') {
     landmarkStone(i,HIT.face<2?HIT.v:HIT.u,HIT.w,GRAY,L);
     if(HIT.w>roof.z1-.035){BG[i]=C(GRAY,1+L*.15);set(i,'=',C(STONE,L*.8));}
@@ -151,6 +153,7 @@ function islandRoofShade(roof,i,t,L) {
 function islandCabinFacade(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
   const cabin=ISLAND_CABINS.find(c=>mx>=c.x0&&mx<c.x1&&my>=c.y0&&my<c.y1);
   if(!cabin)return;
+  if(cabin.id==='cabin-cove')return coveFacade(cabin,i,z,h,d,side,wc,fog);
   const light=fog*amb*(side?10:13),along=side?wc-cabin.x0:wc-cabin.y0;
   const width=side?cabin.x1-cabin.x0:cabin.y1-cabin.y0;
   const corner=Math.min(along,width-along),front=side&&py>cabin.y1;
@@ -219,6 +222,7 @@ function drawWildScenery() {
   });
   for(const roof of ISLAND_ROOFS)if(inView(roof.x-px,roof.y-py,roof.hl+roof.hw))
     drawBox({...roof,x:roof.x-px,y:roof.y-py},(i,t,L)=>islandRoofShade(roof,i,t,L),rayMansard);
+  if(!COVE_VIEW.active)drawCoveExterior();
   const [lx,ly]=WILD_ISLANDS[0].landing;
   if(near(px,py,lx,ly)<vis) {
     drawBox(boxAt(lx+1-px,ly+.7-py,1,0,.12,.08,0,.09),solid(BRICK,{top:'='}));
