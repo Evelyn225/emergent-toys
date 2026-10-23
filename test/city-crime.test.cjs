@@ -235,6 +235,17 @@ test('the spray shop: at an AUTO REPAIR door, a respray clears the stars and the
   assert.strictEqual(ev('sprayRefusal(me)'), 'money');
 });
 
+test('car alarms: a parked car with nobody in it goes off when hit, for a while; a driven car or a police car does not', () => {
+  const { ev } = scene();
+  ev("var parked = { kind: 'sedan', parked: true, dmg: 0 }, driven = { kind: 'sedan', dmg: 0 }, cruiser = { kind: 'police', patrol: true, parked: true, dmg: 0 }, yours = { kind: 'sedan', parked: true, player: true, dmg: 0 }");
+  ev('T = 100; for (const c of [parked, driven, cruiser, yours]) damageCar(c, 5)');
+  assert.strictEqual(ev('[parked, driven, cruiser, yours].map(carAlarming).join()'), 'true,false,false,false');
+  ev('T = 100 + CAR_ALARM_T - 0.1'); assert.strictEqual(ev('carAlarming(parked)'), true, 'still going');
+  ev('T = 100 + CAR_ALARM_T + 0.1'); assert.strictEqual(ev('carAlarming(parked)'), false, 'and then it gives up');
+  ev('damageCar(parked, 2)'); assert.strictEqual(ev('carAlarming(parked)'), true, 'hit it again, off it goes again');
+  ev('parked.player = true'); assert.strictEqual(ev('carAlarming(parked)'), false, 'getting in turns it off');
+});
+
 test('car damage: crashes add up, a smoking car is down on power, past the top it burns and then goes up; the traffic gets out of a burning car', () => {
   const { ev } = driving();
   assert.strictEqual(ev('crashDamage(0.9)'), 0 + ev('(0.9 - 0.6) * 22'));

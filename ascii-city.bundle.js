@@ -4361,8 +4361,13 @@ const GAS_FILL = [[0, 4], [0, 3], [1, 3]];
 // damage-fx.js (smoke, the bang, the dashboard).
 const DMG_DENTS = 25, DMG_SMOKE = 50, DMG_BAD = 75, DMG_FIRE = 100, BURN_T = 6, TOW_FEE = 200;
 const crashDamage = speed => Math.max(0, (speed - 0.6) * 22); // 1 (36 km/h): 9; flat out (79): 35; boosting: 57
+// a car left parked with nobody in it (not a police car) that's shot or knocked sets its alarm off: CAR_ALARM_T
+// seconds of whooping (audio.js) and flashing lights (city-sprites.js)
+const CAR_ALARM_T = 20;
+const carAlarming = c => c.alarmT !== undefined && T - c.alarmT < CAR_ALARM_T && !c.player && !c.wrecked && c.fireT == null; // (getting in turns it off)
 function damageCar(c, n) {
   if (!c || c.wrecked || !(n > 0)) return;
+  if (c.parked && !c.player && !c.patrol) c.alarmT = T;
   c.dmg = Math.min(DMG_FIRE, (c.dmg || 0) + n);
   if (c.dmg >= DMG_FIRE && c.fireT == null) c.fireT = 0; // alight
   if (c.fireT != null && !c.player && !c.parked) { c.parked = true; c.v = 0; c.ex = c.x; c.ey = c.y; c.pursuit = false; c.bail = true; } // (whoever's driving it stops and gets out)
@@ -14720,8 +14725,9 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
   const [hl, hw, top, cab, chl, cof] = VEHICLES[m.kind], wreck = !!m.wrecked, lightsOn = !wreck && (night > 0.4 || overcast > 0.5);
   // damage (damage.js): dents and scrapes over the body, more of them the worse it is; a wreck is burnt black
   const dmg = m.dmg || 0, dented = (u, w) => dmg >= DMG_DENTS && hash(Math.floor(u * 22), Math.floor(w * 40), m.id) < (dmg - 15) / 160;
-  const fobBlinking = m.owned && m.fobBlinkAt !== undefined && T - m.fobBlinkAt < 2.4;
-  const fobHeadlight = !fobBlinking || Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0;
+  const alarmFlash = carAlarming(m) && fract(T * 1.5) < 0.5; // (an alarm going: every light on it flashing)
+  const fobBlinking = m.owned && m.fobBlinkAt !== undefined && T - m.fobBlinkAt < 2.4 || carAlarming(m);
+  const fobHeadlight = !fobBlinking || (carAlarming(m) ? alarmFlash : Math.floor((T - m.fobBlinkAt) * 4) % 2 === 0);
   const braking = !wreck && (m.brake || m.v < 0.05), body = wreck ? GRAY : m.body, burnt = wreck ? 0.35 : 1;
   // body: wheels and a dark sill along the bottom, headlights and grille at the front, tail lights at the back
   vehicleDrawBox(boxAt(vx, vy, hx, hy, hl, hw, 0.012, top), (i, t, L) => {
@@ -14731,7 +14737,7 @@ function drawVehicleBody(m, vx, vy, hx, hy) {
     if (f > 2 && f < 5 && w > 0.025 && dented(u, w)) { BG[i] = C(body, (0.8 + L * 0.3) * k); return set(i, hash(i, m.id, 3) < 0.5 ? '%' : '~', C(GRAY, 4 + L * 0.3)), true; }
     if (f === 5) return set(i, m.kind === 'amb' && Math.abs(u) < 0.05 && Math.abs(v) < 0.05 ? '+' : ' ', C(RED, 12)), true;
     if (f === 1) return set(i, w < 0.05 && Math.abs(v) > hw * 0.55 ? 'O' : w < 0.04 ? '=' : ' ', w < 0.05 && Math.abs(v) > hw * 0.55 ? C(fobBlinking ? (fobHeadlight ? WHITE : BLACK) : WHITE, fobBlinking || lightsOn ? 15 : 10) : C(GRAY, L * 0.5)), true;
-    if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking ? 15 : 8)), true;
+    if (f === 2) return set(i, w < 0.055 && w > 0.03 && Math.abs(v) > hw * 0.55 ? ']' : ' ', C(RED, braking || alarmFlash ? 15 : 8)), true;
     if (f === 6) return set(i, ' ', 0), true;
     const wheel = w < 0.035 && Math.min(Math.abs(u - hl * 0.62), Math.abs(u + hl * 0.62)) < 0.04;
     if (wheel) { BG[i] = C(GRAY, 1); return set(i, '@', C(GRAY, L * 0.5)), true; }
@@ -23696,6 +23702,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
   drawPeeMarks(); // stains on walls and solid static objects
+  if (city) drawBulletHoles(); // (gun-ui.js)
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of
@@ -24684,7 +24691,7 @@ function interact() {
     }
     else { // a stolen car: if anyone saw, the police hear about it
       takePoliceCar(c);
-      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0;
+      mode = 'drive'; c.player = true; c.v = 0; a = Math.atan2(c.hy, c.hx); c.travelA = a; look = 0; delete c.alarmT; // (the alarm: off with the key)
       const pump = gasFilling(c); c.pit = null; c.gas = null; // (filling up at a gas station: gas.js)
       if (pump && !c.owned && !c.mine) {
         c.mine = true; ejectDriver(c);
@@ -26204,14 +26211,15 @@ const shells = [];
 const fwBase = () => ({ x: FAIR.cx, y: FAIR.y1 + 18 }); // the barges
 function stepFireworks(dt) {
   for (let k = shells.length - 1; k >= 0; k--) if (T - shells[k].t0 > shells[k].rise + 3.5) shells.splice(k, 1);
-  if (!eventNow('fireworks') || weather === 'storm' || mode === 'room') return;
+  if (!eventNow('fireworks') || weather === 'storm') return; // (indoors too: you hear it through the walls)
   const finale = tod < 2 && tod > 1.6, rate = finale ? 6 : 1.4;
   if (Math.random() < dt * rate) {
     const b = fwBase(), kind = pick(['peony', 'peony', 'willow', 'ring', 'crackle']);
     shells.push({ x: b.x + (Math.random() - 0.5) * 30, y: b.y + (Math.random() - 0.5) * 8, h: 18 + Math.random() * 14, t0: T, rise: 1.6 + Math.random() * 0.8,
       col: pick(FW_COLS), col2: pick(FW_COLS), kind, n: kind === 'ring' ? 28 : 46, seed: Math.random() * 1e4, boomed: false });
+    fwLaunch(shells[shells.length - 1]);
   }
-  for (const s of shells) if (!s.boomed && T - s.t0 > s.rise) { s.boomed = true; fwBoom(s); }
+  for (const s of shells) if (!s.boomed && T - s.t0 > s.rise) { s.boomed = true; fwBoom(s); fireworkSmoke(s); }
 }
 // where star k of shell s is, t seconds after the burst
 function starAt(s, k, t) {
@@ -26255,6 +26263,14 @@ function drawFireworks() {
       put(x, y, z, ch, C(k & 1 && s.col2 !== s.col ? s.col2 : s.col, 5 + fade * 10), bt < 0.5 && k % 12 === 0 ? C(s.col, 1 + fade * 3) : 0);
     }
   }
+}
+// the lift charge: a dull thump from the mortar on the barge as the shell goes up, heard from there like the boom
+function fwLaunch(s) {
+  if (!actx) return;
+  const profile = worldSoundProfile(s.x, s.y, 0.05), at = actx.currentTime + profile.delay;
+  if (profile.gain < .001) return;
+  tone(at, 55 + Math.random() * 10, 0.25, 0.35 * profile.gain, 'sine', profile.pan);
+  burst(at, 0.18, [filt('lowpass', Math.min(400, profile.cutoff))], 0.25 * profile.gain, profile.pan);
 }
 // the boom: as far off as it is, it arrives that much later (sound does 34 cells a second)
 function fwBoom(s) {
@@ -26587,15 +26603,49 @@ function tickSirens(indoors) {
   }
 }
 
+// ---- car alarms (damage.js): each one going cycles through a warble, a whoop and beeps, heard from where it's parked
+const carAlarms = new Map(); // car -> voice
+function tickCarAlarms() {
+  const now = actx.currentTime;
+  for (const c of cars) if (carAlarming(c) && !carAlarms.has(c)) {
+    const o = actx.createOscillator(), lp = filt('lowpass', 4000), g = actx.createGain(), p = actx.createStereoPanner();
+    o.type = 'square'; g.gain.value = 0; shot(o, lp, g, p, sfxBus); o.start();
+    carAlarms.set(c, { o, lp, g, p });
+  }
+  for (const [c, v] of carAlarms) {
+    if (!cars.includes(c) || !carAlarming(c)) { v.g.gain.setTargetAtTime(0, now, 0.05); v.o.stop(now + 0.3); carAlarms.delete(c); continue; }
+    const t = T - c.alarmT, phase = Math.floor(t / 2.5) % 3, prof = worldSoundProfile(c.x, c.y, terrainHeight(c.x, c.y) + 0.08, 60, 4);
+    const f = phase === 0 ? (Math.floor(t * 10) % 2 ? 950 : 1250) : phase === 1 ? 500 + 1200 * fract(t / 0.6) : 1400;
+    v.o.frequency.setTargetAtTime(f, now, 0.005);
+    v.g.gain.setTargetAtTime(0.1 * prof.gain * (phase === 2 && fract(t * 3) >= 0.5 ? 0 : 1), now, 0.01);
+    v.lp.frequency.setTargetAtTime(Math.min(4000, prof.cutoff), now, 0.05);
+    v.p.pan.setTargetAtTime(prof.pan, now, 0.05);
+  }
+}
+
 // the game's frozen (a shop, the inventory, the map, the dev tools, a hidden tab: anything that stops the frame loop,
 // not only the pause menu, which mutes everything): the sirens fall silent rather than hold whatever note they were on.
 // tickSirens brings them back with the first frame after
 function hushSirens() {
   hushGameplayAudio();
   if (!actx) return;
-  for (const v of sirens.values()) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
+  for (const v of [...sirens.values(), ...carAlarms.values()]) v.g.gain.setTargetAtTime(0, actx.currentTime, 0.04);
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) hushSirens(); });
+
+// ---- fires: a lit campfire crackles and pops, a burning car quicker and louder, heard from where they are
+function tickFireSounds(dt) {
+  for (const o of FIRES) if (fireLit(o)) firePop(dt, 4 + fireRoar(o) * 6, 0.5, 1, o);
+  for (const c of cars) if (burning(c)) firePop(dt, 16, 1, 2, c);
+}
+function firePop(dt, rate, loud, reference, o) {
+  if (Math.random() >= dt * rate) return;
+  const p = worldSoundProfile(o.x, o.y, (o.z ?? terrainHeight(o.x, o.y)) + 0.03, reference * 6, reference);
+  if (p.gain < 0.002) return;
+  const at = actx.currentTime + p.delay + Math.random() * 0.03, deep = Math.random() < 0.2; // (now and then a deeper snap of a log)
+  burst(at, deep ? 0.05 : 0.015 + Math.random() * 0.02, [filt(deep ? 'bandpass' : 'highpass', deep ? 400 : 1500 + Math.random() * 2500), filt('lowpass', p.cutoff)],
+    (deep ? 0.1 : 0.06) * loud * p.gain * (0.4 + Math.random() * 0.6), p.pan);
+}
 
 // ---- thunder: a crack (if it's close) rolling into a long low rumble, arriving d/34 seconds after the flash
 function sfxThunder(d, indoors) {
@@ -26660,7 +26710,7 @@ function audioTick(dt) {
     const t = elRiding(), speed = !t || t.stopped ? 0 : t.left < 3 || t.left > HOP_T - 3 ? 1 : 3; // slow pulling in and out
     if (speed && (clackT -= dt * speed) < 0) { clackT = 1; const at = now; burst(at, 0.05, [filt('bandpass', 1300, 2)], 0.1, -0.3); burst(at + 0.11, 0.05, [filt('bandpass', 1200, 2)], 0.08, 0.3); }
   }
-  tickSirens(indoors);
+  tickSirens(indoors); tickCarAlarms(); tickFireSounds(dt);
   if (bolt && bolt !== heardBolt) { heardBolt = bolt; sfxThunder(bolt.d, indoors); }
   // footsteps: one every step-length of ground covered on foot
   const onFoot = mode === 'walk' || mode === 'room' || mode === 'roof' || mode === 'elplat'||mode==='ferry';
@@ -30917,11 +30967,13 @@ SOLID_SHADE.grill = o => (i, t, L) => {
 // while you've something over it. (Its solid box is only there to walk round)
 SOLID_SHADE.campfire = () => () => false;
 const fireRoar = o => cookCtx && cookCtx.spot === o && game && game.g.id === 'cook' ? 1 : 0.6;
-const FIRES = GRILLS.filter(o => o.on === 'fire');
+const FIRES = GRILLS.filter(o => o.on === 'fire'); // (campfires added later push themselves: coast-life.js, islands-content.js)
+// a camp's fire burns after dark, and whenever someone's cooking over it
+const fireLit = o => !o.nightOnly || night >= .3 || fireRoar(o) === 1;
 function fireGlow(wx, wy) {
   let k = 0;
   for (const o of FIRES) {
-    if(o.nightOnly&&night<.3)continue;
+    if(!fireLit(o))continue;
     const d = Math.hypot(rel(wx - o.x), rel(wy - o.y)), R = 0.32 + fireRoar(o) * 0.3;
     if (d < R) k = Math.max(k, (1 - d / R) ** 2.2 * (0.85 + 0.15 * Math.sin(T * 9 + d * 20) * Math.sin(T * 5.3)));
   }
@@ -30933,18 +30985,18 @@ function drawCampfires() {
     if (Math.hypot(vx, vy) > Math.min(vis, 16) || !inView(vx, vy, 0.4)) continue;
     const ground=o.z??outdoorGroundHeight(o.x,o.y);
     const roar = fireRoar(o), warm = 0.35 + 0.65 * Math.max(night, overcast * 0.5);
-    for (let k = 0; k < 10; k++) { // the stones
+    if (!o.ring) for (let k = 0; k < 10; k++) { // the stones (a ring the islands built has its own)
       const an = k / 10 * TAU + 0.3, sx = vx + Math.cos(an) * 0.075, sy = vy + Math.sin(an) * 0.075, face = Math.cos(an - Math.atan2(-vy, -vx)); // (the side towards the fire's lit)
       dot(sx, sy, ground+0.009, 0.013, (i, t, L) => { BG[i] = C(face < 0 ? ORANGE : GRAY, 1.1 + L * 0.2 + (face < 0 ? warm * 2.5 : 0)); return set(i, hash(k, 1, 1811) > 0.5 ? 'o' : '@', C(GRAY, L * 0.8)), true; });
     }
-    for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
+    if (!o.ring) for (let k = 0; k < 5; k++) { // the logs, leaning in to a point
       const an = k / 5 * TAU + 0.6;
       drawRod(vx + Math.cos(an) * 0.05, vy + Math.sin(an) * 0.05, ground+0.004, vx + Math.cos(an) * 0.008, vy + Math.sin(an) * 0.008, ground+0.055, 0.006, (i, t, L) => {
         const ember = HIT.w-ground > 0.03 && hash(k, Math.floor(T * 4 + HIT.w * 30), 1813) > 0.6;
         BG[i] = ember ? C(RED, 2 + warm * 3) : C(BRICK, 1 + L * 0.15); return set(i, ember ? '*' : '=', ember ? C(ORANGE, 14) : C(BRICK, L * 0.7)), true;
       });
     }
-    if(o.nightOnly&&night<.3)continue;
+    if(!fireLit(o))continue;
     // the flames and the sparks over them: a billboard, so it's round from every side
     const H = 0.1 + 0.08 * roar, top = 0.36;
     drawShape(vx, vy, ground+0.008, 0.07, top, (i, u, z, du, dz, L) => {
@@ -31101,6 +31153,37 @@ function killRoomFigure(p,hx,hy){
   const k=room.def.keeper;if(k&&Math.hypot(p.x-k[0],p.y-k[1])<.6)room.keeperDead=true;
 }
 
+// ---- where a round ends up: the sound of it striking, heard from there (a clank off a car, a chip off a wall, a thud
+// into the ground), and in a building's wall a hole that stays. (A hole sits on the face the shot crossed into)
+const bulletHoles = []; // { x, y, z, nx, ny }: out of doors, the oldest go first
+function shotImpact(r, indoors, slope) {
+  if (r.what === 'air' || r.what === 'person' || r.what === 'cop') return;
+  if (actx) {
+    const p = indoors ? soundDistanceProfile((r.x - px) / 10, (r.y - py) / 10, (r.z - eye) / 10, a, 8, 0.6, false) : worldSoundProfile(r.x, r.y, r.z, 40, 3);
+    const at = actx.currentTime + p.delay, g = p.gain, hi = f => filt('lowpass', Math.min(f, p.cutoff));
+    if (r.what === 'car') { tone(at, 820 + Math.random() * 200, 0.18, 0.07 * g, 'triangle', p.pan); tone(at, 1340, 0.1, 0.03 * g, 'square', p.pan); burst(at, 0.05, [filt('bandpass', 3000, 3), hi(8000)], 0.12 * g, p.pan); }
+    else if (r.what === 'wall') { burst(at, 0.04, [filt('bandpass', 2200, 1.2), hi(8000)], 0.14 * g, p.pan); burst(at + 0.01, 0.12, [hi(500)], 0.08 * g, p.pan); }
+    else burst(at, 0.08, [hi(900)], 0.14 * g, p.pan);
+  }
+  if (indoors || r.what !== 'wall') return;
+  const hx = Math.cos(a), hy = Math.sin(a), cx = Math.floor(r.x), cy = Math.floor(r.y);
+  if (!(map[idx(cx, cy)] > r.z)) return; // (a building's wall, not a roof or a rock)
+  const xFace = Math.floor(r.x - hx * 0.03) !== cx, yFace = Math.floor(r.y - hy * 0.03) !== cy; // (back out past the trace's 0.02 step)
+  if (xFace === yFace) return; // (a corner, or it came down onto it)
+  const t = xFace ? ((hx > 0 ? cx : cx + 1) - r.x) / hx : ((hy > 0 ? cy : cy + 1) - r.y) / hy;
+  const nx = xFace ? -Math.sign(hx) : 0, ny = xFace ? 0 : -Math.sign(hy);
+  bulletHoles.push({ x: worldCoord(r.x + hx * t + nx * 0.001), y: worldCoord(r.y + hy * t + ny * 0.001), z: r.z + slope * t, nx, ny });
+  if (bulletHoles.length > 60) bulletHoles.shift();
+}
+function drawBulletHoles() {
+  for (const h of bulletHoles) {
+    const vx = rel(h.x - px), vy = rel(h.y - py);
+    if (vx * h.nx + vy * h.ny >= 0) continue; // (from round the back of the wall)
+    const p = fishProj(vx, vy, h.z);
+    if (p && p.depth < Math.min(vis, 6)) fishPut(p.c, p.r, p.depth, p.depth < 0.6 ? 'o' : '.', C(GRAY, 2.5), C(GRAY, 0.6));
+  }
+}
+
 // ---- Q and R
 function pullTrigger() {
   const indoors = mode === 'room', slope = (hor - (rows >> 1)) / projY; // (the crosshair's on the middle row)
@@ -31108,6 +31191,7 @@ function pullTrigger() {
   if (!r) return;
   if (r.empty) { if (actx) dryFire(actx.currentTime); return say('*click* It\'s empty. R to reload.', 1.5); }
   if (actx) { gunBang(actx.currentTime, 1, 0, indoors ? 'in' : ''); screams(px, py); }
+  shotImpact(r, indoors, slope);
   if (r.what === 'person' || r.what === 'cop') say(pick(r.what === 'cop' ? ['The officer drops. Somebody on the radio is asking for them.', 'The officer goes down and stays down.']
     : ['They go down and don\'t get up.', 'They drop where they stood.', 'They fall. Nobody near them moves to help.']), 2.5);
   else if (r.what === 'car') say(pick(['The round punches through a door panel.', '*PANG* off the car.']), 1.5);
@@ -31393,6 +31477,28 @@ function stepHaze(dt) {
     if ((p.life -= p.fade * dt) <= 0) haze.splice(k, 1);
   }
 }
+// ---- smoke off things burning out in the world: lit campfires, Fern House's stove after dark, and the cloud a firework
+// leaves hanging where it burst (lit up by the next). Only where you could see it, and never so much it crowds out the rest
+const FERN_CHIMNEY = [541.25, 245.1, 0.76]; // (its top: islands-content.js)
+let worldSmokeT = 0, fwLight = { col: WHITE, t: -99 };
+function worldPuff(x, y, z, r, rMax, kind, life, vz) {
+  haze.push({ at: '', kind, s: 0.1, x: x + (Math.random() - 0.5) * r, y: y + (Math.random() - 0.5) * r, z, r, rMax, vx: 0, vy: 0, vz, life: 1, fade: 1 / life, seed: Math.random() * 100 });
+  while (haze.length > 140) haze.shift();
+}
+function stepWorldSmoke(dt) {
+  if (mode === 'room' || (worldSmokeT -= dt) > 0) return;
+  worldSmokeT = 0.5;
+  const seen = (x, y) => Math.hypot(rel(x - px), rel(y - py)) < vis;
+  for (const o of FIRES) if (fireLit(o) && seen(o.x, o.y)) worldPuff(o.x, o.y, (o.z ?? terrainHeight(o.x, o.y)) + 0.16, 0.03, 0.16, 'smoke', 7, 0.07);
+  const [cx, cy, cz] = FERN_CHIMNEY;
+  if (night > 0.2 && seen(cx, cy)) worldPuff(cx, cy, terrainHeight(cx, cy) + cz, 0.025, 0.14, 'smoke', 8, 0.05);
+}
+function fireworkSmoke(s) { // (called at the burst: events.js)
+  fwLight = { col: s.col, t: T };
+  let mine = 0;
+  for (let k = haze.length - 1; k >= 0; k--) if (haze[k].kind === 'fwsmoke' && ++mine >= 24) haze.splice(k, 1); // (the oldest go first)
+  worldPuff(s.x, s.y, s.h, 1, 2.6, 'fwsmoke', 14, 0.02);
+}
 // drawn last in the scene (after the walls and the people), see-through: a soft core, wisps round its edge, the
 // world showing between them. Behind a wall, hidden.
 function drawHaze() {
@@ -31403,7 +31509,7 @@ function drawHaze() {
     if (p.at !== at) continue;
     const rx_ = room_ ? p.x - px : rel(p.x - px), ry_ = room_ ? p.y - py : rel(p.y - py), depth = dx * rx_ + dy * ry_;
     const near = Math.hypot(rx_, ry_, p.z - eye) / p.r;
-    if (near < 1 && p.life * (1 - near) > inside && p.kind !== 'engine' && p.kind !== 'soot') { inside = p.life * (1 - near); insideKind = p.kind; } // (a car's smoke drifts past you, it doesn't swallow the view)
+    if (near < 1 && p.life * (1 - near) > inside && p.kind !== 'engine' && p.kind !== 'soot' && p.kind !== 'fwsmoke') { inside = p.life * (1 - near); insideKind = p.kind; } // (a car's smoke drifts past you, it doesn't swallow the view)
     if (depth < 0.05 * p.s * 10 || depth > vis) continue;
     const sc = projX / depth, cx = cols / 2 + (-dy * rx_ + dx * ry_) * sc, rw = p.r * sc, cy = hor - (p.z - eye) * projY / depth, rh = p.r * projY / depth * 0.75;
     const c0 = Math.max(0, Math.floor(cx - rw)), c1 = Math.min(cols, Math.ceil(cx + rw)), r0 = Math.max(0, Math.floor(cy - rh)), r1 = Math.min(rows, Math.ceil(cy + rh));
@@ -31425,6 +31531,10 @@ function drawHaze() {
 function hazeCell(i, dens, kind) {
   if (kind === 'soot') { // a burning car's: thick and black
     set(i, dens > 0.6 ? '%' : dens > 0.4 ? '~' : ':', C(GRAY, 2 + dens * 3)); if (dens > 0.45) BG[i] = C(GRAY, 0.3 + dens * 0.8); FOGS[i] = 0; return;
+  }
+  if (kind === 'fwsmoke') { // a firework's: faint against the night, lit up in the colour of each burst after it
+    const flash = Math.exp(-(T - fwLight.t) * 2.5), col = flash > 0.15 ? fwLight.col : GRAY;
+    set(i, dens > 0.6 ? '%' : dens > 0.4 ? '~' : ':', C(col, (1.2 + dens * 2.5) * (0.5 + flash * 2))); if (dens > 0.55) BG[i] = C(col, dens * (0.25 + flash * 1.2)); FOGS[i] = 0; return;
   }
   const vape = kind === 'vape', lit = Math.max(vape ? 0.7 : 0.35, amb) * (kind === 'steam' ? 1.25 : 1); // (steam: whiter; a vape cloud's thick and pale, even at night)
   set(i, dens > 0.7 ? '%' : dens > 0.5 ? '~' : dens > 0.33 ? ':' : '.', C(vape ? (dens > 0.55 ? YEL : WARM) : dens > 0.55 ? WHITE : GRAY, (5 + dens * 9) * lit));
@@ -33362,8 +33472,9 @@ function buildWildIslands() {
   }
   const place={id:'fern-house',shop:sh,cell:cells[0],cells,legacyCells:[],x0:house.x0,y0:house.y0,x1:house.x1,y1:house.y1};
   CITY_PLACES.set(place.id,place);cityPlaceByShop.set(sh,place);
-  const fire={x:WILD_ISLANDS[0].landing[0]+4,y:238,on:'fire'};
-  GRILLS.push(fire);solidBox(fire.x,fire.y,true,.07,.07,0,.11,'campfire',0);
+  // (its stones and logs are island-sights.js's ring; it burns at night, or while you cook over it)
+  const fire={x:WILD_ISLANDS[0].landing[0]+4,y:238,on:'fire',nightOnly:true,ring:true};
+  GRILLS.push(fire);FIRES.push(fire);solidBox(fire.x,fire.y,true,.07,.07,0,.11,'campfire',0);
   solids[solids.length-1].spot=fire;
   // One unlocked fishing shelter and one private house, each with a real front door.
   for(const cabin of ISLAND_CABINS.slice(1)) {
@@ -36744,7 +36855,7 @@ function loop(t) {
   stepEvents(dt);
   stepStreetScenes(dt);
   stepGardens(dt);
-  stepHaze(dt);
+  stepHaze(dt); stepWorldSmoke(dt);
   stepPee(dt);
   stepSteam(dt);
   stepPigeons(dt);

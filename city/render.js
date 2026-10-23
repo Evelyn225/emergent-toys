@@ -238,6 +238,7 @@ function render(dt,sceneOnly=false,mask=null) {
   drawPuddles(); // (under whoever's standing in one)
   W.sprites();
   drawPeeMarks(); // stains on walls and solid static objects
+  if (city) drawBulletHoles(); // (gun-ui.js)
   if (!city && room.def.fx) room.def.fx(); // a room's own lighting over the top (the museum's torches)
   drawStream();
   drawHaze(); // smoke hanging in the air, over everything it's in front of

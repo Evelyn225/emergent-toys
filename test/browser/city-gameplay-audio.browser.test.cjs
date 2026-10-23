@@ -218,6 +218,61 @@ test('indoor sirens use the actual outdoor location instead of the room furnitur
   assert.ok(result.distance>=2&&result.distance<3);
 }));
 
+test('fires: Fern camp burns at night or while cooking, and lit campfires and burning cars crackle from where they are', () => fixture(async page => {
+  const result = await page.evaluate(() => {
+    const fern = FIRES.find(o => near(o.x, o.y, 525.5, 238) < 1), pops = [], realBurst = burst;
+    burst = (at, len, filters, gain, pan) => pops.push({ gain, pan, cutoff: filters[1].frequency.value });
+    const listen = fn => { pops.length = 0; fn(); for (let k = 0; k < 200; k++) tickFireSounds(.05); return pops.length ? { n: pops.length, gain: Math.max(...pops.map(p => p.gain)), pan: pops[0].pan, cutoff: Math.max(...pops.map(p => p.cutoff)) } : null; };
+    try {
+      if (!fern) return { fern: false };
+      const lit = { day: (night = 0, fireLit(fern)), night: (night = 1, fireLit(fern)) };
+      night = 0; cookCtx = { spot: fern }; game = { g: { id: 'cook' } }; lit.cooking = fireLit(fern); cookCtx = game = null;
+      mode = 'walk'; room = null; px = fern.x - .3; py = fern.y; a = -Math.PI / 2; eye = terrainHeight(px, py) + .17;
+      const byDay = listen(() => { night = 0; });
+      const atNight = listen(() => { night = 1; });
+      const shelter = listen(() => enterRoom('islandshelter', { ret: [fern.x - .3, fern.y, 0] }, [6, 8, 0]));
+      leaveRoom(); mode = 'walk'; room = null; px = 300; py = 300; a = -Math.PI / 2; eye = terrainHeight(px, py) + .17; night = 0;
+      const car = { kind: 'sedan', x: 300.4, y: 300, fireT: 1, dmg: 100 }; cars.push(car);
+      const carFire = listen(() => {}); cars.length = 0;
+      return { fern: true, ring: !!fern.ring, lit, byDay, atNight, shelter, carFire };
+    } finally { burst = realBurst; }
+  });
+  assert.ok(result.fern && result.ring, 'Fern camp fire is drawn and lit like the other campfires');
+  assert.deepEqual(result.lit, { day: false, night: true, cooking: true });
+  assert.equal(result.byDay, null, 'a cold fire ring is silent');
+  assert.ok(result.atNight && result.atNight.n > 5 && result.atNight.pan > .5, JSON.stringify(result.atNight));
+  assert.ok(result.shelter && result.shelter.gain < result.atNight.gain * .3 && result.shelter.cutoff <= 900, JSON.stringify(result.shelter));
+  assert.ok(result.carFire && result.carFire.n > result.atNight.n && result.carFire.gain > result.atNight.gain && result.carFire.pan > .5, JSON.stringify(result.carFire));
+}));
+
+test('fireworks: each shell thumps off the barge and bursts later, and the show carries on, muffled, while you are indoors', () => fixture(async page => {
+  const result = await page.evaluate(() => {
+    const calls = [], realTone = tone, realClip = playClip;
+    tone = (at, freq, len, gain, type, pan) => { if (freq < 80) calls.push({ what: 'thump', delay: at - actx.currentTime, gain }); };
+    playClip = (name, gain, when, spatial) => { if (name === 'firework') calls.push({ what: 'boom', delay: when - actx.currentTime, gain, cutoff: spatial.cutoff }); };
+    const show = () => {
+      calls.length = 0; shells.length = 0; stepFireworks(1);
+      const s = shells[0]; if (!s) return null;
+      const launch = calls.find(c => c.what === 'thump');
+      T = s.t0 + s.rise + .01; stepFireworks(0);
+      return { launch, boom: calls.find(c => c.what === 'boom') };
+    };
+    try {
+      dayNum = 5; tod = 21.5; weather = 'clear'; a = Math.PI / 2;
+      mode = 'walk'; room = null; px = FAIR.cx; py = FAIR.y1 + 2; eye = terrainHeight(px, py) + .17;
+      const outside = show();
+      enterRoom('bar', { word: 'BAR', cell: [Math.floor(px), Math.floor(py)], ret: [px, py, 0] }, [3, 3, 0]);
+      return { weekday: weekday(), outside, inside: show() };
+    } finally { tone = realTone; playClip = realClip; }
+  });
+  const { outside, inside } = result;
+  assert.equal(result.weekday, 'Sat');
+  assert.ok(outside?.launch && outside.boom, JSON.stringify(outside));
+  assert.ok(outside.launch.delay > .3 && outside.boom.delay > outside.launch.delay * .8, 'both travel from the bay: ' + JSON.stringify(outside));
+  assert.ok(inside?.launch && inside.boom, 'the show goes on while you are in the bar: ' + JSON.stringify(inside));
+  assert.ok(inside.boom.gain < outside.boom.gain * .3 && inside.boom.cutoff <= 900, 'through the walls: ' + JSON.stringify(inside));
+}));
+
 test('a record player and a rooftop serenade pan toward their source; your own boombox stays centred', () => fixture(async (page, wait) => {
   const pans = () => page.evaluate(() => Object.fromEntries(['bossa', 'coffee'].map(k => [k, beds[k].pan.pan.value])));
   await page.evaluate(() => { homeRecordAudio = () => ({ song: 'coffee', gain: 1, pan: -.6 }); audioTick(.016); });
