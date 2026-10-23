@@ -13,58 +13,20 @@ function bathroomOval(x,y,sx,sy,base,profile,shade) {
   drawBox({...boxAt(x,y,1,0,sx*r,sy*r,Math.min(...points.map(p=>p[0])),Math.max(...points.map(p=>p[0]))),sx,sy,lathe:{x:0,y:0,profile:points}},shade,bathroomRayOval);
 }
 function bathroomPaint(i,t,L) { // matte painted joinery: doors, soffits
-  BG[i]=C(WHITE,(.8+L*.32)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true; // (lit by the room: no glow in a dark bar)
+  BG[i]=C(WHITE,(.8+L*.32)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+}
+function bathroomFlatPaint(i,t,L) {
+  // rayBox writes face/UV, not curved normals; use only this hit's face.
+  BG[i]=C(WHITE,(.8+L*.32)*shadeFace(HIT.face));set(i,' ',0);return true;
 }
 function bathroomEnamel(i,t,L) {
   BG[i]=C(WHITE,3.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
 }
-function bathroomPipe(ax,ay,az,bx,by,bz,r,base=GRAY,tag) {
+function bathroomPipe(ax,ay,az,bx,by,bz,r,base=GRAY) {
   // Bathroom fixtures are viewed from within arm's reach: keep the plumbing a
   // solid curved surface instead of changing it into line glyphs nearby.
-  drawBox({...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(az,bz)-r,Math.max(az,bz)+r),ax,ay,az,bx,by,bz,r,...tag},
+  drawBox({...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(az,bz)-r,Math.max(az,bz)+r),ax,ay,az,bx,by,bz,r},
     (i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,base),coveRayCapsule);
-}
-// ---- what's fixed to the walls round the fittings: a paper holder within reach of the toilet, a towel bar and towel
-// beside the basin. Each finds the real wall face (as the mirror does) and stays clear of the other fittings.
-const bathroomClear = (x,y,self,pad=.04) => '.'.includes(room?.grid[Math.floor(y)]?.[Math.floor(x)]||'#')&&
-  !room.props.some(p=>p!==self&&p.box&&!p.walk&&p.box.z1>.5&&p.box.z0<1.3&&inBox(p.box,x,y,pad));
-function bathroomRollHolder(x,y,front) { // (x, y): the bowl; front: the way it faces (along y)
-  let mount=null;
-  const prop={...ROOM_MODEL(x,y,(vx,vy)=>{
-    if(mount===undefined)return;
-    if(!mount) { // the nearer side wall within reach, if there is one
-      const sides=[-1,1].map(side=>bathroomMirrorMount(x,y+front*.12,-side,0)).filter(m=>m.wall&&Math.abs(m.x-x)<.75);
-      mount=sides.sort((p,q)=>Math.abs(p.x-x)-Math.abs(q.x-x))[0];
-      if(!mount||!bathroomClear(mount.x+Math.sign(x-mount.x)*.08,mount.y,prop,.02)){mount=undefined;return;}
-    }
-    const n=Math.sign(x-mount.x),wx=vx+mount.x-x-n*.025,wy=vy+mount.y-y,z=.72; // (wx: the wall face itself)
-    coveRound(wx+n*.006,wy,0,1,.035,.006,z-.04,z+.04,.004,GRAY); // the backplate, on the wall
-    bathroomPipe(wx+n*.012,wy-.05,z,wx+n*.075,wy-.05,z,.007,GRAY,{rollArm:true});
-    bathroomPipe(wx+n*.075,wy-.065,z,wx+n*.075,wy+.065,z,.008,GRAY);
-    bathroomPipe(wx+n*.075,wy-.05,z,wx+n*.075,wy+.05,z,.055,WHITE,{roll:true,wall:mount.x-n*.025}); // the paper
-  }),radius:1};
-  return prop;
-}
-function bathroomTowelBar(x,y,mirror,self,vx,vy) { // beside the basin's mirror, on its wall, on whichever side is clear
-  const c=-mirror.fy,s=mirror.fx;
-  if(mirror.towel===undefined) {
-    mirror.towel=null;
-    find: for(const [off,half] of [[.5,.17],[.4,.08]])for(const side of [1,-1]) { // (a full bar; where there isn't room, a hand-towel ring)
-      const ox=mirror.x+c*side*off+mirror.fx*.04,oy=mirror.y+s*side*off+mirror.fy*.04;
-      const walled=(qx,qy)=>'#W'.includes(room?.grid[Math.floor(qy-mirror.fy*.12)]?.[Math.floor(qx-mirror.fx*.12)]||' '); // (wall right behind it)
-      if([-half-.01,0,half+.01].every(k=>bathroomClear(ox+c*k,oy+s*k,self)&&walled(ox+c*k,oy+s*k))){mirror.towel={x:ox,y:oy,half};break find;}
-    }
-  }
-  const t=mirror.towel;if(!t)return;
-  const tx=vx+t.x-x,ty=vy+t.y-y,face=[-mirror.fx,-mirror.fy];
-  for(const k of [-t.half,t.half])bathroomPipe(tx+c*k-mirror.fx*.065,ty+s*k-mirror.fy*.065,1.05,tx+c*k,ty+s*k,1.05,.008,GRAY,{towelPost:true}); // (from the wall face out to the bar)
-  bathroomPipe(tx-c*t.half,ty-s*t.half,1.05,tx+c*t.half,ty+s*t.half,1.05,.01,GRAY);
-  // the towel, folded over the bar: two layers hanging, a woven stripe near the hem
-  const hue=room?.def?.home?[CYAN,RED,GREEN][Math.floor(hash(Math.floor(x*7),Math.floor(y*7),1977)*3)]:WHITE;
-  drawBox({...boxAt(tx,ty,c,s,t.half-.02,.018,t.half>.1?.62:.8,1.06),towel:true,wall:face},(i,tt,L)=>{
-    const stripe=Math.abs(HIT.w-(t.half>.1?.7:.88))<.02; // (a hand's breadth above the hem)
-    BG[i]=C(stripe?GRAY:hue,(1+L*.3)*(HIT.face===5?1:.85)*(stripe?.8:1));set(i,' ',0);return true;
-  });
 }
 function bathroomTap(x,y,fx,fy,z) {
   const at=(u,v,h)=>[x-fy*u+fx*v,y+fx*u+fy*v,z+h];
@@ -82,9 +44,9 @@ function bathroomTap(x,y,fx,fy,z) {
       (i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
   }
 }
-function bathroomMirrorMount(x,y,fx,fy) {
+function bathroomMirrorMount(x,y,fx,fy,r=room) {
   for(let d=.2;d<=1;d+=.02) {
-    const wx=x-fx*d,wy=y-fy*d,cx=Math.floor(wx),cy=Math.floor(wy),cell=room?.grid[cy]?.[cx];
+    const wx=x-fx*d,wy=y-fy*d,cx=Math.floor(wx),cy=Math.floor(wy),cell=r?.grid[cy]?.[cx];
     if(!cell||!'#W'.includes(cell))continue;
     const plane=fx>0?cx+1:fx<0?cx:fy>0?cy+1:cy;
     return {x:fx?plane+fx*.025:x,y:fy?plane+fy*.025:y,wall:true};
@@ -93,13 +55,12 @@ function bathroomMirrorMount(x,y,fx,fy) {
 }
 function BATHROOM_SINK(x,y,fx,fy) {
   let mirror;
-  const prop=furnitureModel(x,y,1,0,.24,.24,.86,(vx,vy)=>{
+  return {...furnitureModel(x,y,1,0,.24,.24,.86,(vx,vy)=>{
     coveLathe(vx,vy,0,[[0,0],[0,.09],[.025,.09],[.07,.07],[.59,.055],[.72,.095],[.735,0]],bathroomEnamel);
     bathroomOval(vx,vy,.22,.22,0,[[.72,0],[.72,.42],[.75,.72],[.82,.96],[.845,1],[.86,.96],[.86,.77],[.835,.74],[.775,.38],[.765,0]],bathroomEnamel);
     coveLathe(vx,vy,.765,[[0,0],[0,.023],[.002,.023],[.002,0]],(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY));
     bathroomTap(vx,vy,fx,fy,.86);
-    mirror||={...bathroomMirrorMount(x,y,fx,fy),fx,fy};
-    if(mirror.wall)bathroomTowelBar(x,y,mirror,prop,vx,vy);
+    mirror||=bathroomMirrorMount(x,y,fx,fy);
     const mx=vx+mirror.x-x,my=vy+mirror.y-y,c=-fy,s=fx;
     if(!mirror.wall)for(const side of [-1,1])bathroomPipe(mx+c*side*.16,my+s*side*.16,.84,mx+c*side*.16,my+s*side*.16,1.2,.012,GRAY);
     coveRound(mx,my,c,s,.25,.025,1.15,1.75,.018,GRAY);
@@ -107,9 +68,7 @@ function BATHROOM_SINK(x,y,fx,fy) {
       const sheen=Math.exp(-(((HIT.u+.08*Math.sin(a))/.13+(HIT.w-1.45)*.8)**2));
       BG[i]=C(CYAN,2.3+L*.12+sheen*.8);set(i,' ',0);return true;
     });
-  });
-  prop.radius=Math.max(prop.radius||0,1.2); prop.sink=()=>mirror; // (the towel bar stands to one side of it)
-  return prop;
+  }),bathroomSink:{x,y,fx,fy}};
 }
 function BATHROOM_TOILET(x,y,back=-1,mat=steel) {
   const metal=mat===steel,finish=metal?(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY):bathroomEnamel;
@@ -132,8 +91,8 @@ function BATHROOM_TOILET(x,y,back=-1,mat=steel) {
       const ripple=Math.sin(Math.atan2(HIT.v,HIT.u)*3-T*10)*Math.hypot(HIT.u,HIT.v);
       set(i,swirl&&ripple>.045?'~':' ',C(CYAN,L));return true;
     });
-  }),box:boxAt(x,by,1,0,.21,.26,.28,.42),loo:[x,by]};
-  return metal?[cistern,pedestal,bowl]:[cistern,pedestal,bowl,bathroomRollHolder(x,by,-back)]; // (a cell's steel pan has none)
+  }),box:boxAt(x,by,1,0,.21,.26,.28,.42),loo:[x,by],bathroomToilet:{x,y,back,metal}};
+  return [cistern,pedestal,bowl];
 }
 function BATHROOM_TUB(x,y) {
   return {...furnitureModel(x,y,1,0,.42,1.04,.62,(vx,vy)=>{
@@ -210,43 +169,6 @@ function bathroomOpenings(r) {
   scan(w.x0-1,w.y0,w.y1,true);scan(w.x1,w.y0,w.y1,true);
   return result;
 }
-// Pocket doors for those openings. The partitions are a metre thick, so the leaf slides into the wall beside the
-// opening (towards the longer run of wall) and, open, sits wholly inside it, a little past the jamb. It opens for
-// whoever comes within reach of the doorway from either side and slides shut behind them. It has no collision: it is
-// open before anyone can reach it, and inside the wall while open.
-const DOOR_REACH = 1.3, DOOR_TIME = .45;
-function bathroomDoorSound(kind, x, y) { // the leaf rolling on its track; shut, the latch
-  if (typeof actx === 'undefined' || !actx) return;
-  const at = actx.currentTime, pan = soundDistanceProfile((x - px) / 10, (y - py) / 10, 0, a, 8, .6).pan;
-  burst(at, .32, [filt('lowpass', 380)], .05, pan);
-  if (kind === 'close') tone(at + .36, 1400, .02, .03, 'square', pan);
-}
-function bathroomDoors(r) {
-  const solid = (x, y) => '#W'.includes(r.grid[y]?.[x] || ' ');
-  return bathroomOpenings(r).flatMap(q => {
-    const width = q.end - q.start, cell = u => q.vertical ? [q.cross, u] : [u, q.cross];
-    const run = dir => { let n = 0; for (let u = dir < 0 ? q.start - 1 : q.end; solid(...cell(u)) && n < width + 1; u += dir) n++; return n; };
-    const dir = run(1) >= run(-1) ? 1 : -1;
-    if (run(dir) < width + .1) return []; // (no wall to slide into)
-    const x = q.vertical ? q.cross + .5 : (q.start + q.end) / 2, y = q.vertical ? (q.start + q.end) / 2 : q.cross + .5;
-    const c = q.vertical ? 0 : 1, s = q.vertical ? 1 : 0, hl = width / 2 + .02, travel = width + .06;
-    const p = { ...ROOM_MODEL(x, y, (vx, vy) => {
-      const dt = Math.min(.1, Math.max(0, T - (p.t ?? T))), near = (fx, fy) => Math.hypot(fx - x, fy - y) < DOOR_REACH;
-      const target = near(px, py) || roomCops.some(o => !o.dead && near(o.x, o.y)) ? 1 : 0;
-      if (p.t === undefined) { p.open = p.target = target; } // (as it is when you walk in: no sound)
-      else if (target !== p.target) { p.target = target; bathroomDoorSound(target ? 'open' : 'close', x, y); }
-      p.t = T; p.open = clamp(p.open + (target ? 1 : -1) * dt / DOOR_TIME, 0, 1);
-      if (p.open >= 1) return; // (all of it in the wall)
-      const shift = p.open * p.open * (3 - 2 * p.open) * travel * dir;
-      drawBox({ ...boxAt(vx + c * shift, vy + s * shift, c, s, hl, .02, .012, 2.19), round: .008, leaf: true }, (i, t, L) => {
-        // a recessed finger pull towards its leading edge, on both faces
-        if (Math.abs(HIT.u + dir * (hl - .1)) < .025 && Math.abs(HIT.w - 1.02) < .07 && HIT.face !== 5 && HIT.face !== 6) { BG[i] = C(GRAY, 1.2 + L * .1); set(i, ' ', 0); return true; }
-        return bathroomPaint(i, t, L);
-      });
-    }), bathroomDoor: q, radius: width + 1.2 };
-    return [p];
-  });
-}
 function bathroomSurrounds(r) {
   const height=r.def.height||3;
   return bathroomOpenings(r).map(p=>{
@@ -255,7 +177,7 @@ function bathroomSurrounds(r) {
       const trim=(u,v,hl,hw,z0,z1)=>coveRound(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1,.01,bathroomPaint);
       for(const side of [-1,1])trim(side*(half-.006),0,.006,.5,0,2.2); // (a liner proud of the jamb, never in its plane)
       // (the soffit is a flat box: a rounded marcher breaks up on so wide and thin a slab seen edge-on from below)
-      drawBox(boxAt(vx,vy,c,s,half,.5,2.2,2.26),bathroomPaint);
+      drawBox(boxAt(vx,vy,c,s,half,.5,2.2,2.26),bathroomFlatPaint);
       // Close above the opening instead of leaving a free-floating lintel.
       if(height>2.26)drawBox(boxAt(vx,vy,c,s,half,.5,2.26,height),solid(WHITE));
       for(const face of [-1,1]) {
@@ -264,4 +186,116 @@ function bathroomSurrounds(r) {
       }
     }),box:boxAt(x,y,c,s,half,.5,2.2,height),bathroomOpening:p,radius:half+.8};
   });
+}
+
+// Pocket leaves slide into the partition; only the portion in the doorway is
+// rendered/solid. Track, opaque leaf and collision all use the same opening.
+function bathroomDoorBox(d,open=d.open) {
+  const width=d.end-d.start,left=d.start+(d.dir>0?width*open:0),right=d.end-(d.dir<0?width*open:0);
+  if(right-left<.005)return null;
+  const u=(left+right)/2;
+  return boxAt(d.vertical?d.cross+.5:u,d.vertical?u:d.cross+.5,d.vertical?0:1,d.vertical?1:0,(right-left)/2,.025,.04,2.16);
+}
+function BATHROOM_POCKET_DOOR(r,p,index) {
+  const {vertical,cross,start,end}=p,width=end-start,c=vertical?0:1,s=vertical?1:0;
+  const cell=u=>vertical?[cross,u]:[u,cross],wallCell=u=>{const [x,y]=cell(u);return '#W'.includes(r.grid[y]?.[x]||' ');};
+  const run=dir=>{let n=0;for(let u=dir<0?start-1:end;wallCell(u)&&n<width+1;u+=dir)n++;return n;};
+  const dir=run(1)>=run(-1)?1:-1;
+  const home=homeRecord(r),d={...p,index,home,dir,open:home?.bathroomDoors?.[index]===false?0:1};
+  d.target=d.open;
+  const x=vertical?cross+.5:(start+end)/2,y=vertical?(start+end)/2:cross+.5;
+  const prop={...ROOM_MODEL(x,y,(vx,vy)=>{
+    const part=(u,v,hl,hw,z0,z1,shade)=>drawBox(boxAt(vx+c*u-s*v,vy+s*u+c*v,c,s,hl,hw,z0,z1),shade);
+    const paint=bathroomFlatPaint;
+    const trimPaint=(i,t,L)=>{BG[i]=C(WHITE,(.65+L*.28)*shadeFace(HIT.face));set(i,' ',0);return true;};
+    // The track is entirely ABOVE the leaf, never behind a translucent seam.
+    part(0,0,width/2,.035,2.16,2.19,solid(GRAY));
+    const box=bathroomDoorBox(d);
+    if(box) {
+      drawBox({...box,x:vx+box.x-x,y:vy+box.y-y},paint);
+      const half=box.hl,offset=(box.x-x)*c+(box.y-y)*s;
+      if(half>.12)for(const side of [-1,1]) {
+        // Shallow, joined rails on each solid face. Nothing clips through the wall.
+        for(const z of [.18,1.05,2.02])part(offset,side*.029,Math.max(.01,half-.06),.004,z,z+.025,trimPaint);
+        for(const edge of [-1,1])part(offset+edge*(half-.05),side*.029,.018,.004,.18,2.045,trimPaint);
+      }
+    }
+    // The recessed pull remains reachable at the pocket edge when fully open.
+    const handle=dir*(-width/2+Math.min(d.open*width,width-.073)+.055);
+    if(Math.abs(handle)<width/2-.005)for(const side of [-1,1]) {
+      part(handle,side*.03,.018,.006,.92,1.14,solid(GRAY));
+      part(handle,side*.037,.008,.002,.95,1.11,solid(BLACK));
+    }
+  }),radius:width+.7,bathroomDoor:d};
+  prop.box=bathroomDoorBox(d);d.prop=prop;return prop;
+}
+function bathroomDoorUse(prop) {
+  const d=prop.bathroomDoor;d.target=d.target===1?0:1;
+  if(d.home){d.home.bathroomDoors||=[];d.home.bathroomDoors[d.index]=d.target===1;saveGame();}
+  if(actx){burst(actx.currentTime,.22,[filt('lowpass',1100)],.035);tone(actx.currentTime+.2,95,.035,.025);}
+}
+function stepBathroomDoors(dt) {
+  if(mode!=='room'||!room.bathroomDoors)return;
+  for(const prop of room.bathroomDoors) {
+    const d=prop.bathroomDoor;
+    if(d.target===0&&wanted.stars&&searchedRoom===room&&roomCops.some(c=>!c.dead&&Math.hypot(c.x-prop.x,c.y-prop.y)<1.5))bathroomDoorUse(prop);
+    if(d.open===d.target)continue;
+    const next=d.open+Math.sign(d.target-d.open)*Math.min(Math.abs(d.target-d.open),dt*1.7/(d.end-d.start)),box=bathroomDoorBox(d,next);
+    if(next<d.open&&box&&(inBox(box,px,py,.23)||room.props.some(p=>isRoomPerson(p)&&!p.dead&&inBox(box,p.x,p.y,.23)))) {
+      d.target=1;if(d.home){d.home.bathroomDoors||=[];d.home.bathroomDoors[d.index]=true;saveGame();}say('Give the sliding door room to close.',2);continue;
+    }
+    d.open=next;prop.box=box;
+  }
+}
+
+const BATHROOM_ROLL_PROFILE=[[-.08,.017],[-.08,.055],[.08,.055],[.08,.017],[-.08,.017]];
+function bathroomRayRoll(ox,oy,oz,rx,ry,rz,b) {
+  const t=coveRayLathe(oy-b.y,oz-b.centerZ,ox-b.x,ry,rz,rx,b.lathe);if(t<0)return t;
+  const u=HIT.w,v=HIT.u,w=HIT.v+b.centerZ,nx=HIT.nz,ny=HIT.nx,nz=HIT.ny;
+  HIT.u=u;HIT.v=v;HIT.w=w;HIT.nx=nx;HIT.ny=ny;HIT.nz=nz;
+  HIT.face=Math.abs(nx)>.9?(nx>0?1:2):Math.abs(nz)>.9?(nz>0?5:6):0;return t;
+}
+function bathroomAccessories(r) {
+  const props=[];
+  const clear=(x,y,self,pad=.02)=>r.grid[Math.floor(y)]?.[Math.floor(x)]==='.'&&
+    !r.props.some(p=>p!==self&&p.box&&!p.walk&&p.box.z1>.5&&p.box.z0<1.3&&inBox(p.box,x,y,pad));
+  for(const prop of r.props) {
+    const loo=prop.bathroomToilet,sink=prop.bathroomSink;
+    if(loo&&!loo.metal) {
+      const x=loo.x-.38,mount=bathroomMirrorMount(x,loo.y,0,-loo.back,r);if(!mount.wall)continue;
+      const wall=mount.y+loo.back*.025,y=wall-loo.back*.11,z=.65;
+      props.push({...ROOM_MODEL(x,y,(vx,vy)=>{
+        for(const side of [-1,1])bathroomPipe(vx+side*.1,vy+loo.back*.11,z,vx+side*.1,vy,z,.009);
+        bathroomPipe(vx-.105,vy,z,vx+.105,vy,z,.009);
+        drawBox({...boxAt(vx,vy,1,0,.08,.055,z-.055,z+.055),centerZ:z,lathe:{x:0,y:0,profile:BATHROOM_ROLL_PROFILE}},(i,t,L)=>{
+          const end=HIT.face===1||HIT.face===2,ring=end?coveGroove(Math.hypot(HIT.v,HIT.w-z),.006,.0005,t/projX):0;
+          BG[i]=C(WHITE,3.3+L*.24-ring*.7);set(i,' ',0);return true;
+        },bathroomRayRoll);
+        drawBox(boxAt(vx,vy-loo.back*.055,1,0,.05,.001,.51,z),solid(WHITE));
+      }),radius:.3,bathroomAccessory:{kind:'paper',wall:[x,wall],anchor:[x,y,z]}});
+    }
+    if(sink) {
+      const {x,y,fx,fy}=sink,c=-fy,s=fx;let mount,half;
+      for(const [offset,span] of [[.4,.12],[-.4,.12],[.4,.07],[-.4,.07]]) {
+        const candidate=bathroomMirrorMount(x+c*offset,y+s*offset,fx,fy,r);
+        if(candidate.wall&&[-1,0,1].every(side=>clear(candidate.x+fx*.055+c*side*(span+.02),candidate.y+fy*.055+s*side*(span+.02),prop))){mount=candidate;half=span;break;}
+      }
+      if(!mount)continue;
+      const wx=mount.x-fx*.025,wy=mount.y-fy*.025,tx=wx+fx*.08,ty=wy+fy*.08;
+      props.push({...ROOM_MODEL(tx,ty,(vx,vy)=>{
+        for(const side of [-1,1])bathroomPipe(vx+c*side*half-fx*.08,vy+s*side*half-fy*.08,1.2,vx+c*side*half,vy+s*side*half,1.2,.012);
+        bathroomPipe(vx-c*half,vy-s*half,1.2,vx+c*half,vy+s*half,1.2,.012);
+        const cloth=(i,t,L)=>{
+          const hem=HIT.w<.91||Math.abs(HIT.u)>half-.042;
+          BG[i]=C(BLUE,(1.1+L*.28-(hem?.12:0))*(HIT.face===0?coveLight(HIT.nx,HIT.ny,HIT.nz):shadeFace(HIT.face)));set(i,' ',0);return true;
+        };
+        // Two hanging layers meet the curved fold over the rail, rather than
+        // a flat blue rectangle floating against it.
+        const ax=vx-c*(half-.03),ay=vy-s*(half-.03),bx=vx+c*(half-.03),by=vy+s*(half-.03);
+        drawBox({...boxAt(vx,vy,c,s,half-.01,.02,1.18,1.22),ax,ay,az:1.2,bx,by,bz:1.2,r:.02},cloth,coveRayCapsule);
+        for(const side of [-1,1])drawBox(boxAt(vx+fx*side*.016,vy+fy*side*.016,c,s,half-.03,.003,side>0?.88:.92,1.2),cloth);
+      }),radius:.5,bathroomAccessory:{kind:'towel',half,wall:[wx,wy],anchor:[tx,ty,1.2]}});
+    }
+  }
+  return props;
 }
