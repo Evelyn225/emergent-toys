@@ -177,6 +177,15 @@ function sfxSkate(kind, k = 1) {
   else if (kind === 'drag') burst(at, 0.16, [filt('bandpass', 1600, 0.8)], 0.05 * k);
   else burst(at, 0.2, [filt('bandpass', 2600, 1.5)], 0.09 * k);
 }
+// the ball (goods.js), heard from where it is: a bounce or a rebound off a wall (k: how hard), a touch, a splash
+function sfxBall(kind, x, y, z, k) {
+  const p = worldSoundProfile(x, y, z, 30, 2), at = actx.currentTime + p.delay, g = p.gain;
+  if (g < 0.002) return;
+  if (kind === 'splash') { burst(at, 0.3, [filt('bandpass', 1200, 0.8), filt('lowpass', p.cutoff)], 0.15 * g, p.pan); playClip('water-drip', 0.4 * g, at, p); return; }
+  if (kind === 'touch') { burst(at, 0.05, [filt('lowpass', Math.min(900, p.cutoff))], 0.05 * g, p.pan); tone(at, 120, 0.05, 0.05 * g, 'sine', p.pan); return; }
+  tone(at, 150 + Math.random() * 30, 0.07, 0.12 * k * g, 'sine', p.pan); // the leather's thup
+  burst(at, 0.04, [filt('lowpass', Math.min(kind === 'wall' ? 2200 : 1400, p.cutoff))], 0.1 * k * g, p.pan);
+}
 function sfxTill() { // cha-ching: the drawer, then the bell
   const at = actx.currentTime;
   burst(at, 0.08, [filt('bandpass', 2500, 1)], 0.25);

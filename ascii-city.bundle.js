@@ -6656,21 +6656,23 @@ function kickBall(x, y, a, power = 2.6) {
   while (d < 0.12 && !ballBlocked(x + Math.cos(a) * (d + 0.02), y + Math.sin(a) * (d + 0.02), 0.02)) d += 0.02;
   ball = { x: worldCoord(x + Math.cos(a) * d), y: worldCoord(y + Math.sin(a) * d), vx: Math.cos(a) * power, vy: Math.sin(a) * power, z: 0.02, vz: power * 0.25 };
 }
+// (what it sounds like, heard from where it is: audio.js, when there's sound at all)
+const ballSound = (kind, speed) => { if (typeof actx !== 'undefined' && actx) sfxBall(kind, ball.x, ball.y, ball.z, clamp(speed / 2, 0.15, 1)); };
 function stepBall(dt) {
   if (!ball) return;
   ball.vz -= 2 * dt; ball.z += ball.vz * dt;
-  if (ball.z < 0) { ball.z = 0; ball.vz = Math.abs(ball.vz) > 0.08 ? -ball.vz * 0.5 : 0; }
+  if (ball.z < 0) { ball.z = 0; if (Math.abs(ball.vz) > 0.08) { ballSound('bounce', Math.abs(ball.vz) * 4); ball.vz = -ball.vz * 0.5; } else ball.vz = 0; }
   const f = Math.max(0, 1 - (ball.z > 0 ? 0.2 : 1.1) * dt); ball.vx *= f; ball.vy *= f;
   const n = Math.max(1, Math.ceil(Math.hypot(ball.vx, ball.vy) * dt / 0.01)); // (small steps: a fence is only 2cm thick)
   for (let s = 0; s < n; s++) for (const ax of ['x', 'y']) { // move one axis at a time, bouncing off whatever's solid
     const nx = ax === 'x' ? ball.x + ball.vx * dt / n : ball.x, ny = ax === 'y' ? ball.y + ball.vy * dt / n : ball.y;
-    if (ballBlocked(nx, ny, ball.z)) { if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
+    if (ballBlocked(nx, ny, ball.z)) { const v = Math.abs(ax === 'x' ? ball.vx : ball.vy); if (v > 0.1) ballSound('wall', v); if (ax === 'x') ball.vx *= -0.6; else ball.vy *= -0.6; }
     else { ball.x = worldCoord(nx); ball.y = worldCoord(ny); }
   }
-  if (isWater(ball.x, ball.y) && ball.z === 0) { ball = null; return 'lost'; } // into the drink
-  // dribbling: walk into it and it rolls on ahead of you
+  if (isWater(ball.x, ball.y) && ball.z === 0) { ballSound('splash', 2); ball = null; return 'lost'; } // into the drink
+  // dribbling: walk into it and it rolls on ahead of you (a touch you hear, not one every frame you're against it)
   const dx_ = rel(ball.x - px), dy_ = rel(ball.y - py), d = Math.hypot(dx_, dy_);
-  if (d < 0.07 && mode === 'walk') { const s = 0.9; ball.vx += dx_ / (d || 1) * s; ball.vy += dy_ / (d || 1) * s; }
+  if (d < 0.07 && mode === 'walk') { const s = 0.9; ball.vx += dx_ / (d || 1) * s; ball.vy += dy_ / (d || 1) * s; if (!(ball.touchT > T - 0.3)) { ball.touchT = T; ballSound('touch', 1); } }
   return null;
 }
 function pickUpBall() {
@@ -26538,6 +26540,15 @@ function sfxSkate(kind, k = 1) {
   if (kind === 'push') burst(at, 0.09, [filt('lowpass', 700)], 0.08);
   else if (kind === 'drag') burst(at, 0.16, [filt('bandpass', 1600, 0.8)], 0.05 * k);
   else burst(at, 0.2, [filt('bandpass', 2600, 1.5)], 0.09 * k);
+}
+// the ball (goods.js), heard from where it is: a bounce or a rebound off a wall (k: how hard), a touch, a splash
+function sfxBall(kind, x, y, z, k) {
+  const p = worldSoundProfile(x, y, z, 30, 2), at = actx.currentTime + p.delay, g = p.gain;
+  if (g < 0.002) return;
+  if (kind === 'splash') { burst(at, 0.3, [filt('bandpass', 1200, 0.8), filt('lowpass', p.cutoff)], 0.15 * g, p.pan); playClip('water-drip', 0.4 * g, at, p); return; }
+  if (kind === 'touch') { burst(at, 0.05, [filt('lowpass', Math.min(900, p.cutoff))], 0.05 * g, p.pan); tone(at, 120, 0.05, 0.05 * g, 'sine', p.pan); return; }
+  tone(at, 150 + Math.random() * 30, 0.07, 0.12 * k * g, 'sine', p.pan); // the leather's thup
+  burst(at, 0.04, [filt('lowpass', Math.min(kind === 'wall' ? 2200 : 1400, p.cutoff))], 0.1 * k * g, p.pan);
 }
 function sfxTill() { // cha-ching: the drawer, then the bell
   const at = actx.currentTime;

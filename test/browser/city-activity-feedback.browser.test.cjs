@@ -120,6 +120,32 @@ test('skating: each push lands with a scuff, a dragged foot scrapes, a wall scra
   assert.ok(r.fast > r.slow, 'the wheels whirr higher at speed');
 }));
 
+test('sports: the ball thuds as it bounces (dying away), knocks off walls, is heard once as you dribble into it, and splashes', () => fixture(async page => {
+  const r = await page.evaluate(async () => {
+    audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });
+    const heard = [], real = sfxBall; sfxBall = (kind, x, y, z, k) => heard.push({ kind, k });
+    try {
+      mode = 'walk'; room = null; px = 314.5; py = 304.4; a = -Math.PI / 2; // (in front of a building's south wall)
+      kickBall(px, py, a);
+      for (let k = 0; k < 150; k++) { T += 1 / 30; stepBall(1 / 30); }
+      const kicked = heard.splice(0), walls = kicked.filter(h => h.kind === 'wall'), bounces = kicked.filter(h => h.kind === 'bounce');
+      // walk into it: one touch, not one a frame
+      ball.vx = ball.vy = ball.vz = 0; ball.z = 0; px = ball.x; py = ball.y + .05;
+      for (let k = 0; k < 6; k++) { T += 1 / 30; stepBall(1 / 30); px = ball.x; py = ball.y + .05; }
+      const touches = heard.splice(0).filter(h => h.kind === 'touch').length;
+      // into the sea
+      let sea = null;
+      for (let y = 0; y < 512 && !sea; y += 2) for (let x = 0; x < 864 && !sea; x += 2) if (isWater(x + .5, y + .5) && !isWater(x + .5, y - 1.5)) sea = [x + .5, y + .5];
+      px = sea[0]; py = sea[1] - 1; ball = { x: sea[0], y: sea[1], z: 0, vx: 0, vy: 0, vz: 0 }; const lost = stepBall(1 / 30);
+      return { walls: walls.map(h => h.k), bounces: bounces.map(h => h.k), touches, lost, splash: heard.some(h => h.kind === 'splash') };
+    } finally { sfxBall = real; }
+  });
+  assert.ok(r.walls.length >= 1, 'it comes back off the wall: ' + JSON.stringify(r));
+  assert.ok(r.bounces.length >= 2 && r.bounces[0] > r.bounces.at(-1), 'bounces die away: ' + JSON.stringify(r));
+  assert.equal(r.touches, 1, 'a touch, not one every frame');
+  assert.ok(r.lost === 'lost' && r.splash, 'and into the drink with a splash');
+}));
+
 test('crime: a shot parked car sets its alarm off where it stands, one voice, gone after a while or when you get in', () => fixture(async page => {
   const r = await page.evaluate(async () => {
     audioStart(); await new Promise(res => { const wait = () => actx.state === 'running' ? res() : setTimeout(wait, 20); wait(); });
