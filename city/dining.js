@@ -18,7 +18,7 @@ function roundTable(x, y, r, n, { cloth = WHITE, chairCol = RED, busy = 0.4, cha
   return p;
 }
 // a low plastic stool (pho, dumplings): no back, sit facing (fx, fy)
-const lowStool = (x, y, fx, fy, col) => [{ ...BX(x, y, 0.16, 0.16, 0, 0.42, solid(col, { top: 'o', bright: 1.6 })), seat: true, x, y, fx, fy, h: 0.42 }];
+const lowStool = (x,y,fx,fy,col) => [FURNITURE_STOOL(x,y,col,.42,true,fx,fy)];
 
 // ---- Thai (THAI): teak and deep red, gold elephants along the walls, the spirit house up in its corner with marigolds,
 // woks flaring through the pass, orchids

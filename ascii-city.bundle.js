@@ -13866,7 +13866,7 @@ function citySprites() {
   drawHomeBalconies();
   drawSkater(); // you, on the board, seen from behind (skate.js)
   forNear(treesB, t => { const [vx, vy] = R(t.x, t.y); if (Math.abs(vx) < vis && Math.abs(vy) < vis) drawTree(t, vx, vy); });
-  forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx, vy, b.fx, b.fy, 0.01); });
+  forNear(benchesB, b => { const [vx, vy] = R(b.x, b.y); drawBench(vx,vy,b.fx,b.fy,.01,terrainHeight(b.x,b.y)); });
   gardenSprites();
   clubSprites();
   drawPigeons();
@@ -15001,14 +15001,9 @@ function drawVending(m, vx, vy, sc = 1) { // sc: 10 indoors (metres, not cells)
   });
 }
 
-// a bench facing (fx, fy): seat, backrest, two legs; s scales it (0.01 outdoors in cells, 1 indoors in metres)
-function drawBench(vx, vy, fx, fy, s) {
-  const ax = -fy, ay = fx, wood = (i, t, L) => { BG[i] = C(BRICK, (1 + L * 0.35) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? '=' : '-', C(BRICK, L * 0.8)), true; };
-  drawBox(boxAt(vx, vy, ax, ay, 7.5 * s, 2 * s, 4 * s, 4.8 * s), wood); // seat
-  drawBox(boxAt(vx - fx * 1.9 * s, vy - fy * 1.9 * s, ax, ay, 7.5 * s, 0.4 * s, 4.8 * s, 8.5 * s), wood); // back
-  for (const e of [-6, 6]) drawBox(boxAt(vx + ax * e * s, vy + ay * e * s, ax, ay, 0.5 * s, 1.8 * s, 0, 4 * s), (i, t, L) => {
-    BG[i] = C(GRAY, 1); return set(i, '|', C(GRAY, L * 0.7)), true;
-  });
+// The shared slatted bench; s=.01 outdoors in cells and .1 indoors in metres.
+function drawBench(vx,vy,fx,fy,s,base=0) {
+  drawFurnitureBench(vx,vy,.75,fx,fy,BRICK,true,s/.1,base);
 }
 
 // a subway entrance in 3D: railings round a stairwell cut into the sidewalk (its treads are drawn by floorCell,
@@ -15626,7 +15621,7 @@ const barCrowd = () => { const h = mod(tod - 16, 24); return h < 12 ? 0.15 + 0.8
 // ---- furniture as real boxes (see drawBox), in metres. BX(x, y, half length, half width, z0, z1, shade, cos, sin):
 // the long side runs along (cos, sin). Benches are their own kind ({ bench }), drawn by drawBench.
 const BX = (x, y, hl, hw, z0, z1, shade, ca = 1, sa = 0) => ({ box: { x, y, c: ca, s: sa, hl, hw, z0, z1 }, shade });
-const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
+const BENCHP = (x,y,fx,fy) => ({...FURNITURE_BENCH(x,y,.75,fx,fy,BRICK,true),bench:true,fx,fy,h:.45});
 // somewhere you can sit (C), on whatever's drawn there: facing (fx, fy) (none: whichever way you were), the seat h high
 const SEAT = (x, y, fx, fy, h = 0.45) => ({ seat: true, x, y, fx, fy, h });
 // a sofa facing (fx, fy), hl long either side of (x, y): the cushions, the back, an arm at each end, three places on it
@@ -15658,13 +15653,7 @@ const POT_PLANT = (x, y, h = 1.3, seed = x * 7 + y, solid = true) => ROOM_MODEL(
   }
 }, solid && [0.19, 0.19, h], (i, t, L) => { BG[i] = HIT.w < 0.3 ? C(ORANGE, 2 + L * 0.3) : C(GREEN, 1.5 + L * 0.3); return set(i, HIT.w < 0.3 ? ' ' : '&', C(GREEN, L * 0.6)), true; });
 // a bar stool: a padded seat on a chrome post, a ring for your feet, a round base. seatZ: the top of the cushion
-const STOOL = (x, y, col = RED, seatZ = 0.62) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
-  drum(vx, vy, 0.2, 0, 0.03, CHROME);
-  rod(vx, vy, 0.03, vx, vy, seatZ - 0.07, 0.022, GRAY, 1.2);
-  for (let k = 0; k < 10; k++) { const a0 = k / 10 * Math.PI * 2, a1 = (k + 1) / 10 * Math.PI * 2; rod(vx + Math.cos(a0) * 0.15, vy + Math.sin(a0) * 0.15, 0.26, vx + Math.cos(a1) * 0.15, vy + Math.sin(a1) * 0.15, 0.26, 0.01, GRAY, 1.2); }
-  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; rod(vx, vy, 0.3, vx + Math.cos(a) * 0.15, vy + Math.sin(a) * 0.15, 0.26, 0.008, GRAY, 1.2); } // the struts holding the ring
-  drum(vx, vy, 0.19, seatZ - 0.08, seatZ, (i, t, L) => { BG[i] = C(col, (HIT.face === 5 ? 2.4 : 1.8) + L * 0.3 * drumLit(0.19)); return set(i, HIT.face === 5 ? ' ' : '=', C(col, L * 0.6)), true; });
-}, [0.2, 0.2, seatZ]), seat: true, h: seatZ });
+const STOOL = (x,y,col=RED,seatZ=.62) => FURNITURE_STOOL(x,y,col,seatZ);
 // the jukebox, facing (fx, fy): a rounded top in slices, neon tubes up its front cycling colour, the record turning in
 // its lit window, a speaker grille below, wood sides with a chrome edge
 const JUKEBOX = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
@@ -15822,8 +15811,7 @@ const solid = (base, { panel = 0, top = ' ', trim = 0, bright = 1 } = {}) => (i,
   const along = f <= 2 ? HIT.v : HIT.u;
   return set(i, panel && Math.abs(fract(along / panel) - 0.5) < 0.06 ? '|' : ' ', C(base, L * 0.6)), true;
 };
-const counterBox = (x, y, half, z1 = 1.05) => [BX(x, y, half, 0.3, 0, z1, solid(BRICK, { panel: 0.6, trim: z1 - 0.06, top: '=' })),
-  BX(x - half * 0.6, y, 0.18, 0.15, z1, z1 + 0.25, (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return set(i, HIT.face === 1 || HIT.face === 4 ? '$' : '#', C(GREEN, L)), true; })]; // and the till
+const counterBox = (x,y,half,z1=1.05) => [FURNITURE_COUNTER(x,y,half,z1),FURNITURE_REGISTER(x-half*.6,y,z1)];
 // a wire laundry cart on castors, heaped with somebody's washing (each garment its own colour, and it stays that colour:
 // the old sprite picked a new one every frame, so the heap strobed)
 const laundryCart = (x, y) => {
@@ -18875,7 +18863,7 @@ function stoolsY(x, y0, y1, step, col, fx, busy = 0.4, seatZ = 0.62) {
 }
 // a plain bench without a back, facing (fx, fy), hl either side of (x, y): room for two
 function plainBench(x, y, hl, fx, fy, col = BRICK, busy = 0.35) {
-  const ax = -fy, ay = fx, p = [BX(x, y, hl, 0.2, 0.4, 0.45, solid(col, { top: '=', bright: 1.3 }), ax, ay), ...[-1, 1].map(e => BX(x + ax * e * (hl - 0.08), y + ay * e * (hl - 0.08), 0.05, 0.17, 0, 0.4, solid(col), ax, ay))];
+  const ax=-fy,ay=fx,p=[FURNITURE_BENCH(x,y,hl,fx,fy,col)];
   for (const e of [-1, 1]) {
     const sx = x + ax * e * hl * 0.5, sy = y + ay * e * hl * 0.5;
     p.push(SEAT(sx, sy, fx, fy)); if (chance(busy)) p.push({ ...sitting(sx, sy, shirt(), 0.45), face: [fx, fy] });
@@ -20846,7 +20834,7 @@ function roundTable(x, y, r, n, { cloth = WHITE, chairCol = RED, busy = 0.4, cha
   return p;
 }
 // a low plastic stool (pho, dumplings): no back, sit facing (fx, fy)
-const lowStool = (x, y, fx, fy, col) => [{ ...BX(x, y, 0.16, 0.16, 0, 0.42, solid(col, { top: 'o', bright: 1.6 })), seat: true, x, y, fx, fy, h: 0.42 }];
+const lowStool = (x,y,fx,fy,col) => [FURNITURE_STOOL(x,y,col,.42,true,fx,fy)];
 
 // ---- Thai (THAI): teak and deep red, gold elephants along the walls, the spirit house up in its corner with marigolds,
 // woks flaring through the pass, orchids
@@ -34771,6 +34759,83 @@ function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
     }
   });
   model.furniture=open?'shelf':'cabinet';return model;
+}
+
+function furnitureTimber(base=BRICK,unit=1) {
+  return (i,t,L)=>{
+    coveTimber(i,HIT.u/unit,(HIT.v+HIT.w)/unit,L,t/unit,HIT.nx,HIT.ny,HIT.nz,3);
+    if(base!==BRICK)BG[i]=C(base,BG[i]&15);
+    return true;
+  };
+}
+function drawFurnitureBench(vx,vy,hl,fx,fy,col=BRICK,back=false,unit=1,base=0) {
+  const c=-fy,s=fx,wood=furnitureTimber(col,unit);
+  const part=(u,v,hx,hy,z0,z1,r,mat=wood)=>coveRound(vx+(c*u+fx*v)*unit,vy+(s*u+fy*v)*unit,c,s,hx*unit,hy*unit,base+z0*unit,base+z1*unit,r*unit,mat);
+  // Two seat boards, four feet, joined side bearers and a low stretcher.
+  for(const v of [-.102,.102])part(0,v,hl,.098,.39,.45,.018);
+  for(const u of [-hl+.12,hl-.12]) {
+    for(const v of [-.145,.145])part(u,v,.035,.035,0,.39,.012,back?GRAY:wood);
+    part(u,0,.045,.19,.32,.39,.012,back?GRAY:wood);
+  }
+  part(0,0,hl-.12,.025,.16,.205,.009,back?GRAY:wood);
+  if(back) {
+    for(const u of [-hl+.12,hl-.12])part(u,-.19,.03,.03,.18,.85,.012,GRAY);
+    for(const z of [.55,.69,.83])part(0,-.19,hl,.035,z-.045,z+.02,.018);
+  }
+}
+function FURNITURE_BENCH(x,y,hl,fx,fy,col=BRICK,back=false) {
+  return furnitureModel(x,y,-fy,fx,hl,back?.23:.2,back?.85:.45,
+    (vx,vy)=>drawFurnitureBench(vx,vy,hl,fx,fy,col,back));
+}
+function FURNITURE_STOOL(x,y,col=RED,seatZ=.62,low=false,fx=0,fy=1) {
+  const model=furnitureModel(x,y,1,0,low?.16:.2,low?.16:.2,seatZ,(vx,vy)=>{
+    if(low) {
+      const mat=(i,t,L)=>{BG[i]=C(col,2.7+L*.32*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+      const part=(u,v,hx,hy,z0,z1,r)=>coveRound(vx+u,vy+v,1,0,hx,hy,z0,z1,r,mat);
+      for(const u of [-.12,.12])for(const v of [-.12,.12])part(u,v,.025,.025,0,seatZ-.045,.009);
+      for(const u of [-.12,.12])part(u,0,.022,.12,.15,.19,.008);
+      part(0,0,.16,.16,seatZ-.055,seatZ,.023);
+    }else {
+      const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+      coveLathe(vx,vy,0,[[0,0],[0,.175],[.008,.2],[.025,.2],[.04,.16],[.055,.045],[seatZ-.075,.025],[seatZ-.06,0]],metal);
+      const ring=.26;
+      const profile=Array.from({length:17},(_,k)=>{const a=k*Math.PI/8-Math.PI/2;return [ring+Math.sin(a)*.012,.15+Math.cos(a)*.012];});
+      coveLathe(vx,vy,0,profile,metal);
+      for(let k=0;k<3;k++) {
+        const a=k*Math.PI*2/3;
+        coveRound(vx+Math.cos(a)*.075,vy+Math.sin(a)*.075,Math.cos(a),Math.sin(a),.075,.008,ring-.008,ring+.008,.006,GRAY);
+      }
+      const cloth=furnitureCloth(col);
+      coveLathe(vx,vy,seatZ-.08,[[0,0],[0,.16],[.015,.185],[.045,.19],[.065,.18],[.08,.145],[.08,0]],cloth);
+    }
+  });
+  return {...model,seat:true,fx:low?fx:undefined,fy:low?fy:undefined,h:seatZ};
+}
+function FURNITURE_COUNTER(x,y,half,height=1.05) {
+  const model=furnitureModel(x,y,1,0,half,.3,height,(vx,vy)=>{
+    coveRound(vx,vy,1,0,half-.05,.255,0,.12,.012,'wood');
+    coveRound(vx,vy,1,0,half-.035,.265,.1,height-.065,.018,'wood');
+    const count=Math.ceil(half*2/.9),panel=half/count;
+    for(let k=0;k<count;k++)coveRound(vx-half+panel*(2*k+1),vy+.277,1,0,panel-.04,.013,.2,height-.15,.01,'wood',k+2);
+    coveRound(vx,vy,1,0,half,.3,height-.065,height,.025,(i,t,L)=>{
+      BG[i]=C(STONE,4+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+    });
+  });
+  model.furniture='counter';return model;
+}
+function FURNITURE_REGISTER(x,y,height) {
+  return {...furnitureModel(x,y,1,0,.18,.15,height+.25,(vx,vy)=>{
+    // Shared counters put their keeper on -Y: keys and display face the keeper.
+    coveRound(vx,vy,1,0,.18,.15,height,height+.045,.015,GRAY);
+    coveRound(vx,vy+.055,1,0,.15,.07,height+.04,height+.24,.015,GRAY);
+    const dark=C(GRAY,.3);
+    drawBox(boxAt(vx,vy-.016,-1,0,.13,.002,height+.115,height+.215),(i,t,L)=>{
+      BG[i]=dark;
+      if(HIT.face!==3||!wallText(i,HIT.u,t/projX,HIT.w,t,'0.00',0,height+.165,.043,.07,C(GREEN,11),dark))set(i,' ',0);
+      return true;
+    });
+    for(let row=0;row<3;row++)for(let k=0;k<4;k++)coveRound(vx-(k-1.5)*.055,vy-.048-row*.033,1,0,.021,.012,height+.045,height+.055,.004,k===3?GREEN:STONE);
+  }),box:boxAt(x,y,1,0,.18,.15,height,height+.25)};
 }
 // Shared close-up home models. Surfaces have real edges and joined supports;
 // screens and bulbs are the only emissive parts of their housings.

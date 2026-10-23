@@ -116,7 +116,7 @@ const barCrowd = () => { const h = mod(tod - 16, 24); return h < 12 ? 0.15 + 0.8
 // ---- furniture as real boxes (see drawBox), in metres. BX(x, y, half length, half width, z0, z1, shade, cos, sin):
 // the long side runs along (cos, sin). Benches are their own kind ({ bench }), drawn by drawBench.
 const BX = (x, y, hl, hw, z0, z1, shade, ca = 1, sa = 0) => ({ box: { x, y, c: ca, s: sa, hl, hw, z0, z1 }, shade });
-const BENCHP = (x, y, fx, fy) => ({ bench: true, x, y, fx, fy });
+const BENCHP = (x,y,fx,fy) => ({...FURNITURE_BENCH(x,y,.75,fx,fy,BRICK,true),bench:true,fx,fy,h:.45});
 // somewhere you can sit (C), on whatever's drawn there: facing (fx, fy) (none: whichever way you were), the seat h high
 const SEAT = (x, y, fx, fy, h = 0.45) => ({ seat: true, x, y, fx, fy, h });
 // a sofa facing (fx, fy), hl long either side of (x, y): the cushions, the back, an arm at each end, three places on it
@@ -148,13 +148,7 @@ const POT_PLANT = (x, y, h = 1.3, seed = x * 7 + y, solid = true) => ROOM_MODEL(
   }
 }, solid && [0.19, 0.19, h], (i, t, L) => { BG[i] = HIT.w < 0.3 ? C(ORANGE, 2 + L * 0.3) : C(GREEN, 1.5 + L * 0.3); return set(i, HIT.w < 0.3 ? ' ' : '&', C(GREEN, L * 0.6)), true; });
 // a bar stool: a padded seat on a chrome post, a ring for your feet, a round base. seatZ: the top of the cushion
-const STOOL = (x, y, col = RED, seatZ = 0.62) => ({ ...ROOM_MODEL(x, y, (vx, vy) => {
-  drum(vx, vy, 0.2, 0, 0.03, CHROME);
-  rod(vx, vy, 0.03, vx, vy, seatZ - 0.07, 0.022, GRAY, 1.2);
-  for (let k = 0; k < 10; k++) { const a0 = k / 10 * Math.PI * 2, a1 = (k + 1) / 10 * Math.PI * 2; rod(vx + Math.cos(a0) * 0.15, vy + Math.sin(a0) * 0.15, 0.26, vx + Math.cos(a1) * 0.15, vy + Math.sin(a1) * 0.15, 0.26, 0.01, GRAY, 1.2); }
-  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; rod(vx, vy, 0.3, vx + Math.cos(a) * 0.15, vy + Math.sin(a) * 0.15, 0.26, 0.008, GRAY, 1.2); } // the struts holding the ring
-  drum(vx, vy, 0.19, seatZ - 0.08, seatZ, (i, t, L) => { BG[i] = C(col, (HIT.face === 5 ? 2.4 : 1.8) + L * 0.3 * drumLit(0.19)); return set(i, HIT.face === 5 ? ' ' : '=', C(col, L * 0.6)), true; });
-}, [0.2, 0.2, seatZ]), seat: true, h: seatZ });
+const STOOL = (x,y,col=RED,seatZ=.62) => FURNITURE_STOOL(x,y,col,seatZ);
 // the jukebox, facing (fx, fy): a rounded top in slices, neon tubes up its front cycling colour, the record turning in
 // its lit window, a speaker grille below, wood sides with a chrome edge
 const JUKEBOX = (x, y, fx, fy) => ROOM_MODEL(x, y, (vx, vy) => {
@@ -312,8 +306,7 @@ const solid = (base, { panel = 0, top = ' ', trim = 0, bright = 1 } = {}) => (i,
   const along = f <= 2 ? HIT.v : HIT.u;
   return set(i, panel && Math.abs(fract(along / panel) - 0.5) < 0.06 ? '|' : ' ', C(base, L * 0.6)), true;
 };
-const counterBox = (x, y, half, z1 = 1.05) => [BX(x, y, half, 0.3, 0, z1, solid(BRICK, { panel: 0.6, trim: z1 - 0.06, top: '=' })),
-  BX(x - half * 0.6, y, 0.18, 0.15, z1, z1 + 0.25, (i, t, L) => { BG[i] = C(GRAY, 1 + L * 0.2); return set(i, HIT.face === 1 || HIT.face === 4 ? '$' : '#', C(GREEN, L)), true; })]; // and the till
+const counterBox = (x,y,half,z1=1.05) => [FURNITURE_COUNTER(x,y,half,z1),FURNITURE_REGISTER(x-half*.6,y,z1)];
 // a wire laundry cart on castors, heaped with somebody's washing (each garment its own colour, and it stays that colour:
 // the old sprite picked a new one every frame, so the heap strobed)
 const laundryCart = (x, y) => {

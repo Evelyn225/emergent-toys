@@ -109,3 +109,80 @@ function FURNITURE_STORAGE(x,y,hl,hw,height,angle=0,open=false) {
   });
   model.furniture=open?'shelf':'cabinet';return model;
 }
+
+function furnitureTimber(base=BRICK,unit=1) {
+  return (i,t,L)=>{
+    coveTimber(i,HIT.u/unit,(HIT.v+HIT.w)/unit,L,t/unit,HIT.nx,HIT.ny,HIT.nz,3);
+    if(base!==BRICK)BG[i]=C(base,BG[i]&15);
+    return true;
+  };
+}
+function drawFurnitureBench(vx,vy,hl,fx,fy,col=BRICK,back=false,unit=1,base=0) {
+  const c=-fy,s=fx,wood=furnitureTimber(col,unit);
+  const part=(u,v,hx,hy,z0,z1,r,mat=wood)=>coveRound(vx+(c*u+fx*v)*unit,vy+(s*u+fy*v)*unit,c,s,hx*unit,hy*unit,base+z0*unit,base+z1*unit,r*unit,mat);
+  // Two seat boards, four feet, joined side bearers and a low stretcher.
+  for(const v of [-.102,.102])part(0,v,hl,.098,.39,.45,.018);
+  for(const u of [-hl+.12,hl-.12]) {
+    for(const v of [-.145,.145])part(u,v,.035,.035,0,.39,.012,back?GRAY:wood);
+    part(u,0,.045,.19,.32,.39,.012,back?GRAY:wood);
+  }
+  part(0,0,hl-.12,.025,.16,.205,.009,back?GRAY:wood);
+  if(back) {
+    for(const u of [-hl+.12,hl-.12])part(u,-.19,.03,.03,.18,.85,.012,GRAY);
+    for(const z of [.55,.69,.83])part(0,-.19,hl,.035,z-.045,z+.02,.018);
+  }
+}
+function FURNITURE_BENCH(x,y,hl,fx,fy,col=BRICK,back=false) {
+  return furnitureModel(x,y,-fy,fx,hl,back?.23:.2,back?.85:.45,
+    (vx,vy)=>drawFurnitureBench(vx,vy,hl,fx,fy,col,back));
+}
+function FURNITURE_STOOL(x,y,col=RED,seatZ=.62,low=false,fx=0,fy=1) {
+  const model=furnitureModel(x,y,1,0,low?.16:.2,low?.16:.2,seatZ,(vx,vy)=>{
+    if(low) {
+      const mat=(i,t,L)=>{BG[i]=C(col,2.7+L*.32*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+      const part=(u,v,hx,hy,z0,z1,r)=>coveRound(vx+u,vy+v,1,0,hx,hy,z0,z1,r,mat);
+      for(const u of [-.12,.12])for(const v of [-.12,.12])part(u,v,.025,.025,0,seatZ-.045,.009);
+      for(const u of [-.12,.12])part(u,0,.022,.12,.15,.19,.008);
+      part(0,0,.16,.16,seatZ-.055,seatZ,.023);
+    }else {
+      const metal=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,GRAY);
+      coveLathe(vx,vy,0,[[0,0],[0,.175],[.008,.2],[.025,.2],[.04,.16],[.055,.045],[seatZ-.075,.025],[seatZ-.06,0]],metal);
+      const ring=.26;
+      const profile=Array.from({length:17},(_,k)=>{const a=k*Math.PI/8-Math.PI/2;return [ring+Math.sin(a)*.012,.15+Math.cos(a)*.012];});
+      coveLathe(vx,vy,0,profile,metal);
+      for(let k=0;k<3;k++) {
+        const a=k*Math.PI*2/3;
+        coveRound(vx+Math.cos(a)*.075,vy+Math.sin(a)*.075,Math.cos(a),Math.sin(a),.075,.008,ring-.008,ring+.008,.006,GRAY);
+      }
+      const cloth=furnitureCloth(col);
+      coveLathe(vx,vy,seatZ-.08,[[0,0],[0,.16],[.015,.185],[.045,.19],[.065,.18],[.08,.145],[.08,0]],cloth);
+    }
+  });
+  return {...model,seat:true,fx:low?fx:undefined,fy:low?fy:undefined,h:seatZ};
+}
+function FURNITURE_COUNTER(x,y,half,height=1.05) {
+  const model=furnitureModel(x,y,1,0,half,.3,height,(vx,vy)=>{
+    coveRound(vx,vy,1,0,half-.05,.255,0,.12,.012,'wood');
+    coveRound(vx,vy,1,0,half-.035,.265,.1,height-.065,.018,'wood');
+    const count=Math.ceil(half*2/.9),panel=half/count;
+    for(let k=0;k<count;k++)coveRound(vx-half+panel*(2*k+1),vy+.277,1,0,panel-.04,.013,.2,height-.15,.01,'wood',k+2);
+    coveRound(vx,vy,1,0,half,.3,height-.065,height,.025,(i,t,L)=>{
+      BG[i]=C(STONE,4+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+    });
+  });
+  model.furniture='counter';return model;
+}
+function FURNITURE_REGISTER(x,y,height) {
+  return {...furnitureModel(x,y,1,0,.18,.15,height+.25,(vx,vy)=>{
+    // Shared counters put their keeper on -Y: keys and display face the keeper.
+    coveRound(vx,vy,1,0,.18,.15,height,height+.045,.015,GRAY);
+    coveRound(vx,vy+.055,1,0,.15,.07,height+.04,height+.24,.015,GRAY);
+    const dark=C(GRAY,.3);
+    drawBox(boxAt(vx,vy-.016,-1,0,.13,.002,height+.115,height+.215),(i,t,L)=>{
+      BG[i]=dark;
+      if(HIT.face!==3||!wallText(i,HIT.u,t/projX,HIT.w,t,'0.00',0,height+.165,.043,.07,C(GREEN,11),dark))set(i,' ',0);
+      return true;
+    });
+    for(let row=0;row<3;row++)for(let k=0;k<4;k++)coveRound(vx-(k-1.5)*.055,vy-.048-row*.033,1,0,.021,.012,height+.045,height+.055,.004,k===3?GREEN:STONE);
+  }),box:boxAt(x,y,1,0,.18,.15,height,height+.25)};
+}
