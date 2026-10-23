@@ -17,6 +17,12 @@ Fix the reported defects first. Then complete the numbered quality passes in ord
 - [x] IDEA furniture shop and a plush shark, using proper fitted furniture and product models.
 - [x] Framed pictures: an in-game camera/print or local image upload, with bounded local save storage and no external upload requirement.
 
+- [x] Reflections show only what stands beyond the water: signs in front of the bay (ferry terminal) no longer mirror into it.
+- [x] Shore foam rides the water: none on dry sand ahead of the wash, ending at the waterline; at walls and rocks the wave breaks white at the edge and falls back instead of a line sweeping over still water.
+- [ ] Ferry: remove the boarding-gate location message that stays up for the whole ride; step ashore by walking off, without E.
+- [ ] Fern House: rotate so the front faces the dock; close the backyard spot that lets you walk in; real external windows like Cabin Cove's; better doors.
+- [ ] Fern House interior: TV stands in a doorway (lofts too; check all homes); move the washroom sign beside its door; washroom walls should be washroom walls from outside too (copy the loft's bathroom walls) instead of every wall changing on entry; rework the sink (fewer polygons, it may be laggy) and the fridge.
+
 ## Quality bar for each pass
 
 - Shared measurements for connected surfaces, visible geometry and collision; follow [corridor geometry notes](corridor-geometry-notes.md).
