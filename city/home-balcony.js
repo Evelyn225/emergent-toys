@@ -78,6 +78,7 @@ function drawHomeBalconies() {
     for (const y of [b.y0,b.y1]) drawBox(boxAt(rel(b.x0 + .3 - px),rel(y - py),1,0,.3,.01,b.z,b.z + .11),rail);
     for (const o of model) {
       const p = o.box || o, x = b.x0 + (p.x - 19) / 10, y = b.y + (p.y - 10) / 10;
+      if(o.homePlant){o.drawScaled(rel(x-px),rel(y-py),.1,b.z);continue;}
       const shade = o.shade || o.far; // (a model drawn in metres has a plain stand-in for out here, or isn't drawn)
       if (o.box && shade) {
         const q = o.box;

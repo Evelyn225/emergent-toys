@@ -8,9 +8,11 @@ function furnishingPanel() {
 }
 const homeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function refreshFurnishedRoom() {
-  if(mode!=='room'||!homeRecord(room))return;
+  const home=mode==='room'&&homeRecord(room);if(!home)return;
+  homeBalconyModels.delete(home);
   room.props=room.def.props(room);room.props.push(...workshopProps(room),...furnishingProps(room));updateHomeLights();
 }
+
 function updateHomeLights() {
   if(mode!=='room'||!homeRecord(room))return;
   const home=homeRecord(room),lights=(room.def.lamps||[]).map((p,k)=>home.lights?.['fixed'+k]!==false);

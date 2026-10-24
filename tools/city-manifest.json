@@ -158,6 +158,7 @@
     "city/fern-quality.js",
     "city/home-record-player.js",
     "city/home-frames.js",
+    "city/home-plants.js",
     "city/home-furniture-render.js",
     "city/home-furnishing-ui.js",
     "city/world-bootstrap.js",
