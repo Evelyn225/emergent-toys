@@ -126,13 +126,27 @@ function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
     });
   },[hl,hw,height]),radius:hl+.5,foodCase:{kind,hl,hw,height,shelf,levels}};
 }
+// Nigiri pairs, cut from the salmon block beside every other pair: rice
+// shaped by hand, a striped slice draped over it.
+function kitchenPrepSushi(x,y,z,k) {
+  for(const side of [-1,1]) {
+    const u=x+side*.034;
+    coveRound(u,y-.06,1,0,.027,.046,z,z+.027,.012,kitchenFoodShade(WHITE));
+    coveRound(u,y-.06,1,0,.03,.05,z+.027,z+.039,.005,kitchenSalmon);
+  }
+  if(k%2===0)coveRound(x,y+.1,1,0,.09,.04,z,z+.05,.012,kitchenSalmon);
+}
+function kitchenSalmon(i,t,L) {
+  const stripe=coveGroove(HIT.v+HIT.u*.45,.016,.002,t/projX)*coveDetail(t);
+  BG[i]=C(ORANGE,3+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)+stripe*.8);set(i,' ',0);return true;
+}
 function KITCHEN_PREP(x,y,hl,hw,height,kind='dumplings') {
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     coveRound(vx,vy,1,0,hl,hw,0,height-.035,.015,'wood');
     drawBox({...boxAt(vx,vy,1,0,hl,hw,height-.035,height),...kitchenTopProfile(hl,hw,height-.035,height)},kitchenSteel,homeRayWorktop);
     const boardH=.018,bhl=hl-.12,bhw=hw-.07;
     drawBox({...boxAt(vx,vy,1,0,bhl,bhw,height,height+boardH),...kitchenTopProfile(bhl,bhw,height,height+boardH,.007)},(i,t,L)=>{
-      const fine=coveDetail(t),flour=(Math.sin(HIT.u*170)*Math.sin(HIT.v*210)>.65)*fine;
+      const fine=coveDetail(t),flour=kind!=='sushi'&&(Math.sin(HIT.u*170)*Math.sin(HIT.v*210)>.65)*fine; // (a sushi board is wiped clean)
       coveTimber(i,HIT.u,HIT.v,L,t,HIT.nx,HIT.ny,HIT.nz,7);
       if(flour)BG[i]=C(WHITE,4+L*.2);return true;
     },homeRayWorktop);
@@ -140,6 +154,7 @@ function KITCHEN_PREP(x,y,hl,hw,height,kind='dumplings') {
       const xx=vx-bhl*.7+k*bhl*1.4/5;
       if(kind==='dumplings')for(const side of [-1,1])
         foodOval(xx,vy+side*.12,height+boardH,.028,.023,.035,kitchenFoodShade(WHITE));
+      else if(kind==='sushi')kitchenPrepSushi(xx,vy,height+boardH,k);
       else for(let strand=0;strand<3;strand++)for(let seg=0;seg<4;seg++) {
         const ya=-.16+seg*.08,yb=ya+.08,xa=xx+Math.sin(seg+strand)*.012,xb=xx+Math.sin(seg+1+strand)*.012;
         const az=height+boardH+.003,bz=az;

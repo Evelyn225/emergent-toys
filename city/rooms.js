@@ -581,10 +581,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [...counterBox(6, BACK_COUNTER_Y, 1.4), standing(6, BACK_COUNTER_STAFF_Y, RED), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1), POT_PLANT(12.3, 7.2, 1.5)];
       for (const [x, y] of [[3, 4], [9, 4], [3, 6.8], [9, 6.8]]) {
-        p.push({ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
-          const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
-          return set(i, f === 5 && Math.abs(Math.abs(HIT.u) - 0.32) < 0.06 || f === 5 && Math.abs(Math.abs(HIT.v) - 0.32) < 0.06 ? '#' : ' ', C(WHITE, 13)), true;
-        }) }, BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK)));
+        p.push(MAHJONG_TABLE(x, y)); // felt, tile walls, hands and discards
         for (const [ox, oy] of [[-0.75, 0], [0.75, 0], [0, 0.75], [0, -0.75]]) { // (round the table)
           p.push(...homeChair(x + ox, y + oy, -ox / 0.75, -oy / 0.75, BRICK));
           if (chance(0.6)) p.push({ ...sitting(x + ox, y + oy, shirt(), 0.48), face: [-ox / 0.75, -oy / 0.75] });
