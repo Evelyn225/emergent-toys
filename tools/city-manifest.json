@@ -147,6 +147,7 @@
     "city/kitchen-hotline.js",
     "city/kitchen-counter-appliances.js",
     "city/kitchen-counter-food.js",
+    "city/kitchen-hotplates.js",
     "city/fern-quality.js",
     "city/home-furniture-render.js",
     "city/home-furnishing-ui.js",

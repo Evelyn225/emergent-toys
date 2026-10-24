@@ -53,10 +53,7 @@ ROOM_DEFS.thai = { grid: backWc(13, 9), wc: wcAt(13), light: 0.8, floor: 'oak', 
 
 // ---- pho (PHO): the stockpots simmering, steel tables with their caddies of sauces, low plastic stools in every colour,
 // green tiles, photos of the bowls over the counter, a fan going round
-const stockPot = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.32, 0.32, 0, 0.45), solid(GRAY, { panel: 0.3 })); // the burner
-  kitchenCookware(vx,vy,.45,1,0,{kind:'pot',scale:4.1,wide:2.7,filled:true});
-}, [0.32, 0.32, 1.15]);
+const stockPot = (x,y) => KITCHEN_POT_STOVE(x,y);
 function phoWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.68, 0.32, 0.36, C(RED, 15), C(YEL, 7))) return true;
