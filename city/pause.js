@@ -166,5 +166,12 @@ function closePause(lock) {
 const togglePause = () => paused ? closePause(NATIVE_MOUSE_APP) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
 // (not while a cabinet or a shift has the screen: Esc there walks away from it)
-document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !desktopMouseCaptured && !paused && (freecam || !sleep && !game)) openPause(); });
+document.addEventListener('pointerlockchange', () => {
+  const wasLocked=browserMouseObservedLocked;browserMouseObservedLocked=!!document.pointerLockElement;
+  // Capture requests can finish after a menu has opened. Release that late
+  // capture deliberately, and ignore duplicate notifications of an old loss.
+  if(browserMouseObservedLocked&&paused){releaseMouse();return;}
+  if(consumeMouseRelease())return;
+  if (wasLocked&&!browserMouseObservedLocked && !desktopMouseCaptured && !paused && (freecam || !sleep && !game)) openPause();
+});
 applySettings();
