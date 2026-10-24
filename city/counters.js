@@ -82,16 +82,7 @@ ROOM_DEFS.bento = { grid: boxRoom(9, 7), light: 1.0, floor: 'hinoki', ceil: 'str
 
 // ---- takoyaki (TAKOYAKI): the iron plate of little round wells, a ball turning in each, the octopus painted on the
 // wall; a bench to wait on
-const takoGriddle = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 1.3, 0.35, 0, 0.92), solid(GRAY, { panel: 0.65 }));
-  drawBox(boxAt(vx, vy, 1, 0, 1.2, 0.3, 0.92, 0.97), (i, t, L) => { // the plate: rows of wells, a ball in each, turned now and then, sauced when done
-    if (HIT.face !== 5) { BG[i] = C(GRAY, 1); return set(i, ' ', 0), true; }
-    const cu = fract(HIT.u / 0.12) - 0.5, cv = fract(HIT.v / 0.12) - 0.5, r = Math.hypot(cu, cv), k = Math.floor(HIT.u / 0.12) * 7 + Math.floor(HIT.v / 0.12);
-    if (r > 0.42) { BG[i] = C(GRAY, 0.8); return set(i, ' ', 0), true; }
-    const done = fract(T * 0.05 + hash(k, 1, 108)), turned = fract(T * 0.4 + hash(k, 2, 109)) < 0.1;
-    BG[i] = C(done > 0.5 ? BRICK : YEL, done > 0.5 ? 4 : 7); return set(i, turned ? '@' : done > 0.7 && r < 0.2 ? '~' : ' ', C(done > 0.7 ? WHITE : ORANGE, 10)), true;
-  });
-}, [1.3, 0.35, 0.97]);
+const takoGriddle = (x,y) => KITCHEN_TAKO_GRIDDLE(x,y);
 function takoWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 1.25 && z < 2.75 && Math.abs(u - 2.2) < 0.9) { // the octopus: a round red head, two eyes, its legs waving
@@ -150,7 +141,7 @@ function donutWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.donutshop = { grid: boxRoom(10, 7), light: 1.1, floor: 'pastel', ceil: 'pendant', sign: false, neon: true, wall: donutWall, keeper: [5.0, 1.55],
   props: r => [KITCHEN_FOOD_CASE(5,2.3,1.9,.35,1.15,'donuts',MAG), { ...standing(5.0, 1.55, MAG), face: [0, 1] },
-    BX(7.9, 1.35, 0.6, 0.3, 0, 0.9, solid(GRAY, { top: '=', panel: 0.4 })), BX(7.7, 1.35, 0.25, 0.2, 0.9, 1.4, solid(GRAY, { top: 'o', trim: 1.32 })), // the coffee machine
+    FURNITURE_COUNTER(7.9,1.35,.6,1), KITCHEN_ESPRESSO(7.7,1.35),
     ...dining(2.2, 4.0, { hl: 0.3, hw: 0.3, chair: shellChair, chairCol: MAG, top: solid(WHITE, { top: '=' }), busy: 0.35 }), ...dining(7.8, 4.0, { hl: 0.3, hw: 0.3, chair: shellChair, chairCol: CYAN, top: solid(WHITE, { top: '=' }), busy: 0.35 }),
     BX(2.4, 5.78, 1.35, 0.17, 0.98, 1.04, solid(BRICK, { top: '=' })), BX(7.6, 5.78, 1.35, 0.17, 0.98, 1.04, solid(BRICK, { top: '=' })),
     ...stools(1.6, 3.4, 5.3, 0.9, MAG, 0, 1, 0.3), ...stools(6.8, 8.6, 5.3, 0.9, MAG, 0, 1, 0.3)] };
@@ -195,10 +186,7 @@ function bagelWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.bagelshop = { grid: boxRoom(10, 7), light: 1.0, floor: 'checker', ceil: 'tin', sign: false, wall: bagelWall, keeper: [5.0, 1.55],
   props: r => [KITCHEN_FOOD_CASE(5,2.3,1.9,.33,1.15,'schmear',GREEN), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
-    ROOM_MODEL(8.2, 1.4, (vx, vy) => { // the kettle: a steel pot on its burner, boiling
-      drawBox(boxAt(vx, vy, 1, 0, 0.4, 0.4, 0, 0.5), solid(GRAY, { panel: 0.4 }));
-      drum(vx, vy, 0.36, 0.5, 1.0, (i, t, L) => { if (HIT.face === 5) { const b = noise(HIT.u * 10, HIT.v * 10 + T * 3, 118); BG[i] = C(WHITE, 3 + b * 4); return set(i, b > 0.6 ? 'o' : '~', C(CYAN, 9)), true; } BG[i] = C(GRAY, (3 + L * 0.3) * drumLit(0.36)); return set(i, ' ', 0), true; });
-    }, [0.4, 0.4, 1.0]),
+    KITCHEN_POT_STOVE(8.2,1.4,true),
     ...dining(2.2, 4.1, { hl: 0.35, chair: homeChair, chairCol: GREEN, top: solid(BRICK, { top: '=' }), busy: 0.35 }),
     BX(8.78, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(8.25, 3.9, 4.9, 1.0, GREEN, 1, 0.35),
     ...plainBench(2.4, 5.55, 0.8, 0, -1, GREEN, 0.3)] };

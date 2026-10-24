@@ -138,7 +138,7 @@ function kitchenSushi(x,y,z,k) {
     });
   }
 }
-function kitchenCookware(x,y,z,c=1,s=0,{kind='pan',scale=1,wide=scale,filled=false}={}) {
+function kitchenCookware(x,y,z,c=1,s=0,{kind='pan',scale=1,wide=scale,filled=false,liquid=null}={}) {
   const profile=kitchenProfile(kind,scale,wide);
   coveLathe(x,y,z,profile,kitchenSteel);
   if(kind==='pan') {
@@ -151,7 +151,7 @@ function kitchenCookware(x,y,z,c=1,s=0,{kind='pan',scale=1,wide=scale,filled=fal
     const fill=(kind==='pot'?.127:.017)*scale,r=kitchenInnerRadius(kind,fill,scale,wide);
     coveLathe(x,y,z+fill,[[0,0],[0,r],[.001,r],[.001,0]],(i,t,L)=>{
       const fine=coveDetail(t),ripple=Math.sin(Math.hypot(HIT.u,HIT.v)*190-T*3)*fine*.25;
-      BG[i]=C(kind==='pot'?ORANGE:YEL,2+L*.18+ripple);set(i,' ',0);return true;
+      BG[i]=C(liquid??(kind==='pot'?ORANGE:YEL),2+L*.18+ripple);set(i,' ',0);return true;
     });
   }
 }
