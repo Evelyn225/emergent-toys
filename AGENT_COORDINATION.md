@@ -1,6 +1,6 @@
 # Current quality work: Codex and Claude
 
-Updated 2026-10-24. Read this alongside `WORLD_QUALITY.md` and
+Updated 2026-10-24 (Claude, after PR #198). Read this alongside `WORLD_QUALITY.md` and
 `corridor-geometry-notes.md`. Do not edit `CLOUD_HANDOFF.md`.
 
 PRs #195 (dining ledges/tables) and #196 (juice-bar produce) are merged into
@@ -13,10 +13,24 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   checks pass, alongside bundle/parser/render-cost/pure-story checks; visual
   review includes both sides, night and phone. Owns `city/street-scenes.js`,
   `city/street-scenes-render.js`, and railway/street-scene tests.
-- **Claude:** continue pass 3 with soda coolers, roastery bean sacks, yakitori
-  beer crates, and remaining stacked boxes. Start a separate branch from current
-  main. These tasks may touch `city/counters.js`, `city/eateries.js`,
-  `city/dining.js`, and new kitchen modules/tests.
+- **Claude:** pass 3 coolers, sacks and crates are done on
+  `codex/dining-crates-coolers`, **PR #198** (open, current with main incl. #197;
+  bundle rebuilt, both checklist notes kept). New module
+  `city/kitchen-crates-coolers.js` and test
+  `test/browser/city-crates-coolers.browser.test.cjs`; edits to
+  `city/counters.js`, `city/eateries.js`, `city/dining.js`,
+  `city/storefronts.js` (cooler facing only), `tools/city-manifest.json`.
+  Covers the shared drinks cooler (kebab, takoyaki, taqueria, bodega, motel),
+  bakery and pizzeria flour sacks, roastery coffee sacks and yakitori beer
+  crates. Checks: Node 1069/1069, shop/kitchen/dining browser suites, life-polish,
+  railway + crate tests on the merged tree.
+  **Next (Claude, new branch from main after #198):** the rest of the pass 3
+  audit in dining rooms: mahjong parlour tea urns and tile tables
+  (`city/dining.js`), the sushi chefs' bench (`city/eateries.js`), then a sweep
+  of every dining room for remaining painted props. Leaving the seafood
+  restaurant's painted fish tank (`city/dining.js` `fishTank`) for the wildlife
+  pass, and the bodega/market painted crates (`city/storefronts.js`) for the
+  shop-interiors pass, unless Codex wants them.
 
 ## Integration
 

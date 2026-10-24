@@ -217,7 +217,7 @@ ROOM_DEFS.mahjong = { grid: backWc(15, 10), wc: wcAt(15), light: 0.85, floor: 'l
 // ---- the coffee roastery (COFFEE; CAFE keeps the old cafe): the roaster turning its beans over in the cooling tray,
 // sacks of green coffee stacked, a pour-over bar with stools, a long table to work at, armchairs by the plants
 const roaster = (x,y) => KITCHEN_COFFEE_ROASTER(x,y);
-const beanSacks = (x, y) => [[0, 0, 0], [0.5, 0, 0], [0.25, 0.05, 0.38]].map(([dx, dy, z]) => BX(x + dx, y + dy, 0.24, 0.2, z, z + 0.38, (i, t, L) => { BG[i] = C(STONE, (2.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, (HIT.face === 3 || HIT.face === 4) && Math.abs(HIT.w - z - 0.2) < 0.05 ? '#' : fract(HIT.u * 10 + HIT.w * 10) < 0.15 ? ',' : ' ', C(BRICK, 6)), true; }));
+const beanSacks = (x, y) => [KITCHEN_COFFEE_SACK(x, y, 'ETHIOPIA'), KITCHEN_COFFEE_SACK(x + 0.5, y + 0.02, 'COLOMBIA')]; // open, beans showing
 const pourOver = (x,y) => KITCHEN_POUR_OVER(x,y);
 function roasteryWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
