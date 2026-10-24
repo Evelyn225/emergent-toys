@@ -97,7 +97,7 @@ function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
       coveTube(vx-hl+.012,vy+side*(hw-.012),height,vx+hl-.012,vy+side*(hw-.012),height,.012,GRAY);
       coveTube(vx+side*(hl-.012),vy-hw+.012,height,vx+side*(hl-.012),vy+hw-.012,height,.012,GRAY);
     }
-    const count=COUNTER_FOOD_CASES[kind]||(kind==='icecream'?8:kind==='deli'?9:kind==='pizza'?6:9),step=(hl*2-.3)/count;
+    const count=COUNTER_FOOD_CASES[kind]||(kind==='icecream'?8:kind==='deli'?9:kind==='pizza'?6:Math.min(9,Math.max(1,Math.floor((hl*2-.3)/.20)))),step=(hl*2-.3)/count;
     for(const level of levels) {
       if(level!==shelf)drawBox({...boxAt(vx,vy,1,0,hl-.018,hw-.018,level-.015,level),
         ...kitchenTopProfile(hl-.018,hw-.018,level-.015,level,.003)},kitchenSteel,homeRayWorktop);
@@ -112,7 +112,7 @@ function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
           foodTray(xx,vy,shelf,Math.min(step*.44,kind==='pizza'?.24:.16),hw-.075,.024);
           if(kind==='pizza') {if(hash(k,3,951)>.15)counterPizza(xx,vy,shelf+.008);}
           else if(kind==='deli')counterDeli(xx,vy,shelf+.008,k);
-          else for(const side of [-1,1])counterPastry(xx,vy+side*.16,shelf+.008,k+(side>0?1:0));
+          else for(const side of [-1,1])counterPastry(xx,vy+side*Math.min(.16,hw-.155),shelf+.008,k+(side>0?1:0));
         }
       }
     }
