@@ -15965,6 +15965,8 @@ const cabinet = (x, y, k, body) => BX(x, y, 0.35, 0.4, 0, 1.8, (i, t, L) => { //
 
 
 const homeLayout = r => r.def.home;
+// Keep the café's body-width staff aisle and appliances tied to one worktop.
+const CAFE_BAR={x:4.6,y:2.15,half:1.4,height:1,keeperY:1.45,espressoX:5.25,caseX:7.2,caseHalf:.7};
 const ROOM_DEFS = {
   store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
     light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, posters: true, keeper: [5, 1.4],
@@ -16116,17 +16118,13 @@ const ROOM_DEFS = {
     } },
   // the cafe: the counter and its pastry case, five tables, and the toilet through the door in the back corner
   cafe: { grid: ['#############', '#........W..#', '#........W..#', '#........WW.#', '#...........#', '#...........#', '#...........#', '#####DD######'],
-    wc: { x0: 10, y0: 1, x1: 12, y1: 3, sign: [10, 3, 10.5] }, light: 0.9, floor: 'wood', ceil: 'pendant', sign: false, wall: cafeWall, keeper: [4.6, 1.4],
+    wc: { x0: 10, y0: 1, x1: 12, y1: 3, sign: [10, 3, 10.5] }, light: 0.9, floor: 'wood', ceil: 'pendant', sign: false, wall: cafeWall, keeper: [CAFE_BAR.x, CAFE_BAR.keeperY],
     props: r => {
-      const p = [...counterBox(4.6, 1.7, 1.4), standing(4.6, 1.4, r.neon), ...toilet(10.6, 1.4, -1, porcelain), washbasin(11.55, 1.3, 0, 1), POT_PLANT(11.4, 6.2, 1.4),
-        BX(3.7, 1.65, 0.28, 0.2, 1.05, 1.5, solid(GRAY, { top: 'o', trim: 1.42 })), // the espresso machine
-        BX(7.2, 1.7, 0.7, 0.3, 0, 1.05, (i, t, L) => { // the pastry case
-          const f = HIT.face; BG[i] = f === 5 ? C(GRAY, 2) : C(CYAN, 1 + L * 0.1);
-          if ((f === 4 || f === 3) && HIT.w > 0.3 && HIT.w < 0.95) return set(i, fract(HIT.w * 4) < 0.4 ? '@o*o'[hash(Math.floor(HIT.u * 8), Math.floor(HIT.w * 4), 9) * 4 | 0] : '_', C(fract(HIT.w * 4) < 0.4 ? ORANGE : GRAY, 13)), true;
-          return set(i, f === 5 ? '=' : ' ', C(GRAY, L)), true;
-        })];
-      for (const [x, y] of [[2.2, 4.4], [5, 3.4], [7.8, 4.4], [2.2, 6.4], [7.8, 6.4]]) { // a clear way in down the middle
-        p.push(...tableBox(x, y, 0.4, 0.4), ...homeChair(x + 0.7, y, -1, 0, BRICK), ...homeChair(x - 0.7, y, 1, 0, BRICK));
+      const b=CAFE_BAR,p = [...counterBox(b.x,b.y,b.half,b.height), standing(b.x,b.keeperY,r.neon), ...toilet(10.6, 1.4, -1, porcelain), washbasin(11.55, 1.3, 0, 1), POT_PLANT(11.4, 6.2, 1.4),
+        KITCHEN_ESPRESSO(b.espressoX,b.y), KITCHEN_FOOD_CASE(b.caseX,b.y,b.caseHalf,.3,1.05,'bakery')];
+      for (const [x, y] of [[2.2, 4.4], [5, 3.7], [7.8, 4.4], [2.2, 6.4], [7.8, 6.4]]) { // a clear way in and a full approach in front of the bar
+        p.push(...tableBox(x, y, 0.4, 0.4), ...homeChair(x + 0.7, y, -1, 0, BRICK), ...homeChair(x - 0.7, y, 1, 0, BRICK),
+          KITCHEN_SETTING(x+.2,y,.78,{fx:-1,fy:0,meal:'coffee'}),KITCHEN_SETTING(x-.2,y,.78,{fx:1,fy:0,meal:'coffee'}));
         if (chance(0.55)) p.push({ ...sitting(x + 0.7, y, shirt(), 0.48), face: [-1, 0] }); // (facing their table)
         if (chance(0.3)) p.push({ ...sitting(x - 0.7, y, shirt(), 0.48), face: [1, 0] });
       }
@@ -36071,7 +36069,7 @@ function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
       coveTube(vx-hl+.012,vy+side*(hw-.012),height,vx+hl-.012,vy+side*(hw-.012),height,.012,GRAY);
       coveTube(vx+side*(hl-.012),vy-hw+.012,height,vx+side*(hl-.012),vy+hw-.012,height,.012,GRAY);
     }
-    const count=COUNTER_FOOD_CASES[kind]||(kind==='icecream'?8:kind==='deli'?9:kind==='pizza'?6:9),step=(hl*2-.3)/count;
+    const count=COUNTER_FOOD_CASES[kind]||(kind==='icecream'?8:kind==='deli'?9:kind==='pizza'?6:Math.min(9,Math.max(1,Math.floor((hl*2-.3)/.20)))),step=(hl*2-.3)/count;
     for(const level of levels) {
       if(level!==shelf)drawBox({...boxAt(vx,vy,1,0,hl-.018,hw-.018,level-.015,level),
         ...kitchenTopProfile(hl-.018,hw-.018,level-.015,level,.003)},kitchenSteel,homeRayWorktop);
@@ -36086,7 +36084,7 @@ function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
           foodTray(xx,vy,shelf,Math.min(step*.44,kind==='pizza'?.24:.16),hw-.075,.024);
           if(kind==='pizza') {if(hash(k,3,951)>.15)counterPizza(xx,vy,shelf+.008);}
           else if(kind==='deli')counterDeli(xx,vy,shelf+.008,k);
-          else for(const side of [-1,1])counterPastry(xx,vy+side*.16,shelf+.008,k+(side>0?1:0));
+          else for(const side of [-1,1])counterPastry(xx,vy+side*Math.min(.16,hw-.155),shelf+.008,k+(side>0?1:0));
         }
       }
     }
