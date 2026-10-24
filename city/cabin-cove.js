@@ -77,13 +77,20 @@ function coveRayLathe(ox,oy,oz,rx,ry,rz,b) {
     }
     const slope=(rb-ra)/dz,r0=ra+slope*(oz-za),a=rx*rx+ry*ry-(slope*rz)**2;
     const q=2*(x*rx+y*ry-r0*slope*rz),cc=x*x+y*y-r0*r0,disc=q*q-4*a*cc;
-    if(disc<0)continue;
-    const roots=Math.abs(a)<1e-10?(Math.abs(q)>1e-10?[-cc/q]:[]):[(-q-Math.sqrt(disc))/(2*a),(-q+Math.sqrt(disc))/(2*a)];
+    // Shallow inner floors are cones with steep slopes. At their axis two
+    // large equal terms cancel; rounding used to discard the inside floor or
+    // split its double root. Bound that ambiguity by the operands' precision.
+    const error=8*Number.EPSILON*(Math.abs(q*q)+Math.abs(4*a*cc));
+    if(disc < -error)continue;
+    const root=Math.sqrt(Math.abs(disc)<=error?0:disc),stable=-.5*(q+(q<0?-root:root));
+    const roots=Math.abs(a)<1e-10?(Math.abs(q)>1e-10?[-cc/q]:[]):stable?[stable/a,cc/stable]:[-q/(2*a)];
     for(const t of roots) {
       const z=oz+rz*t;
       if(t<=.01||t>=best||z<Math.min(za,zb)-1e-8||z>Math.max(za,zb)+1e-8)continue;
-      const u=x+rx*t,v=y+ry*t,r=Math.hypot(u,v)||1,n=Math.hypot(1,slope),sign=Math.sign(dz);
-      best=t;segment=k;hitNx=u/r/n*sign;hitNy=v/r/n*sign;hitNz=-slope/n*sign;
+      const u=x+rx*t,v=y+ry*t,r=Math.hypot(u,v),n=Math.hypot(1,slope),sign=Math.sign(dz);
+      best=t;segment=k;
+      if(r<1e-10){hitNx=hitNy=0;hitNz=Math.sign(-slope*sign);}
+      else {hitNx=u/r/n*sign;hitNy=v/r/n*sign;hitNz=-slope/n*sign;}
     }
   }
   if(segment<0)return -1;
