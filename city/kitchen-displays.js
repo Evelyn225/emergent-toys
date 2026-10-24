@@ -34,7 +34,7 @@ function foodRayTray(ox,oy,oz,rx,ry,rz,b) {
   HIT.nx=nx;HIT.ny=ny;HIT.nz=nz;HIT.face=nz?5:0;return best;
 }
 const foodTrayProfiles=new Map();
-function foodTray(x,y,z,hl,hw,depth=.045) {
+function foodTray(x,y,z,hl,hw,depth=.045,shade=kitchenSteel) {
   // One closed shell owns the rim, four inner walls and recessed floor, rather
   // than five overlapping panel passes for every tray in a display.
   const key=[hl,hw,z,depth].join(':');
@@ -42,7 +42,7 @@ function foodTray(x,y,z,hl,hw,depth=.045) {
     if(foodTrayProfiles.size>=32)foodTrayProfiles.clear();
     foodTrayProfiles.set(key,kitchenTopProfile(hl,hw,z,z+depth,.002));
   }
-  drawBox({...boxAt(x,y,1,0,hl,hw,z,z+depth),...foodTrayProfiles.get(key)},kitchenSteel,foodRayTray);
+  drawBox({...boxAt(x,y,1,0,hl,hw,z,z+depth),...foodTrayProfiles.get(key)},shade,foodRayTray);
 }
 function counterPizza(x,y,z,scale=1) {
   const h=.018*scale,r=.18*scale;
@@ -85,9 +85,10 @@ function counterDeli(x,y,z,kind) {
     foodOval(x+u,y+v,z,.022,.016,.045,kitchenFoodShade(GREEN),.7,.7141428429);
 }
 function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
-  const bottom=height-.42,shelf=bottom+.025;
+  const bottom=height-.42,shelf=bottom+.025,cabinet=base===BRICK?'wood':base===STONE?furnitureTimber(STONE):base;
+  const levels=kind==='bento'||kind==='donuts'?[shelf,shelf+.17]:[shelf];
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    coveRound(vx,vy,1,0,hl,hw,0,bottom,.015,base===BRICK?'wood':base);
+    coveRound(vx,vy,1,0,hl,hw,0,bottom,.015,cabinet);
     drawBox({...boxAt(vx,vy,1,0,hl-.025,hw-.025,bottom,shelf),...kitchenTopProfile(hl-.025,hw-.025,bottom,shelf,.008)},kitchenSteel,homeRayWorktop);
     // Frames are joined rods. The shelf's top owns the supporting surface.
     for(const side of [-1,1]) {
@@ -96,18 +97,23 @@ function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
       coveTube(vx-hl+.012,vy+side*(hw-.012),height,vx+hl-.012,vy+side*(hw-.012),height,.012,GRAY);
       coveTube(vx+side*(hl-.012),vy-hw+.012,height,vx+side*(hl-.012),vy+hw-.012,height,.012,GRAY);
     }
-    const count=kind==='icecream'?8:kind==='deli'?9:kind==='pizza'?6:9,step=(hl*2-.3)/count;
-    for(let k=0;k<count;k++) {
-      const u=-hl+.15+step*(k+.5),xx=vx+u;
-      if(kind==='icecream')for(const side of [-1,1]) {
-        const yy=vy+side*.19,th=.012,col=ICE[(k*3+(side>0?5:0))%ICE.length][0];
-        foodTray(xx,yy,shelf,Math.min(.2,step*.43),.16,.095);
-        foodOval(xx,yy,shelf+.008,Math.min(.18,step*.4),.142,.103,kitchenFoodShade(col));
-      }else {
-        foodTray(xx,vy,shelf,Math.min(step*.44,kind==='pizza'?.24:.16),hw-.075,.024);
-        if(kind==='pizza') {if(hash(k,3,951)>.15)counterPizza(xx,vy,shelf+.008);}
-        else if(kind==='deli')counterDeli(xx,vy,shelf+.008,k);
-        else for(const side of [-1,1])counterPastry(xx,vy+side*.16,shelf+.008,k+(side>0?1:0));
+    const count=COUNTER_FOOD_CASES[kind]||(kind==='icecream'?8:kind==='deli'?9:kind==='pizza'?6:9),step=(hl*2-.3)/count;
+    for(const level of levels) {
+      if(level!==shelf)drawBox({...boxAt(vx,vy,1,0,hl-.018,hw-.018,level-.015,level),
+        ...kitchenTopProfile(hl-.018,hw-.018,level-.015,level,.003)},kitchenSteel,homeRayWorktop);
+      for(let k=0;k<count;k++) {
+        const u=-hl+.15+step*(k+.5),xx=vx+u;
+        if(COUNTER_FOOD_CASES[kind])counterCaseServing(xx,vy,level,kind,k,step,hw);
+        else if(kind==='icecream')for(const side of [-1,1]) {
+          const yy=vy+side*.19,th=.012,col=ICE[(k*3+(side>0?5:0))%ICE.length][0];
+          foodTray(xx,yy,shelf,Math.min(.2,step*.43),.16,.095);
+          foodOval(xx,yy,shelf+.008,Math.min(.18,step*.4),.142,.103,kitchenFoodShade(col));
+        }else {
+          foodTray(xx,vy,shelf,Math.min(step*.44,kind==='pizza'?.24:.16),hw-.075,.024);
+          if(kind==='pizza') {if(hash(k,3,951)>.15)counterPizza(xx,vy,shelf+.008);}
+          else if(kind==='deli')counterDeli(xx,vy,shelf+.008,k);
+          else for(const side of [-1,1])counterPastry(xx,vy+side*.16,shelf+.008,k+(side>0?1:0));
+        }
       }
     }
     // Only narrow reflected streaks write glass depth. Clear pixels preserve
@@ -118,7 +124,7 @@ function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
       if(glint<.5)return false;
       BG[i]=C(CYAN,2+L*.2);set(i,' ',0);return true;
     });
-  },[hl,hw,height]),radius:hl+.5,foodCase:{kind,hl,hw,height,shelf}};
+  },[hl,hw,height]),radius:hl+.5,foodCase:{kind,hl,hw,height,shelf,levels}};
 }
 function KITCHEN_PREP(x,y,hl,hw,height,kind='dumplings') {
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
