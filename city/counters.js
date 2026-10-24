@@ -19,7 +19,7 @@ ROOM_DEFS.chickenshop = { grid: boxRoom(11, 8), light: 1.1, floor: 'checker', ce
   props: r => [KITCHEN_FOOD_CASE(3.5,2.3,1.05,.3,1.35,'chicken',RED), KITCHEN_SERVICE_COUNTER(6.5,2.3,1.5,.3,1.05,RED,GRAY), // the warmer, the counter
     { ...standing(5.6, 1.6, RED), face: [0, 1] }, fryer(8.3, 1.4), heatLamp(3.0, 2.3, 1.75), heatLamp(4.0, 2.3, 1.75),
     ...dining(2.6, 4.6, { hl: 0.35, chair: shellChair, chairCol: RED, top: solid(WHITE, { top: '=' }) }), ...dining(8.3, 4.6, { hl: 0.35, chair: shellChair, chairCol: YEL, top: solid(WHITE, { top: '=' }) }),
-    BX(2.4, 6.78, 1.35, 0.17, 0.98, 1.04, solid(GRAY, { top: '=' })), BX(8.6, 6.78, 1.35, 0.17, 0.98, 1.04, solid(GRAY, { top: '=' })), // the ledges under the window
+    KITCHEN_WALL_LEDGE(2.4,6.83,1.35,.17,1.04,0,-1,GRAY), KITCHEN_WALL_LEDGE(8.6,6.83,1.35,.17,1.04,0,-1,GRAY), // the ledges under the window
     ...stools(1.6, 3.4, 6.3, 0.9, RED, 0, 1, 0.3), ...stools(7.8, 9.6, 6.3, 0.9, RED, 0, 1, 0.3)] };
 
 // ---- the kebab shop (KEBAB): the doner turning in front of its burners, the salads in their trays under the glass,
@@ -52,7 +52,7 @@ const sodaCooler = (x, y, hl, hw, ca = 1, sa = 0) => BX(x, y, hl, hw, 0, 1.95, (
 ROOM_DEFS.kebabshop = { grid: boxRoom(11, 8), light: 1.0, floor: 'lino', ceil: 'strip', sign: false, wall: kebabWall, keeper: [5.6, 1.6],
   props: r => [doner(2.4, 1.45), { ...standing(3.2, 1.4, WHITE), face: [-1, 0] }, // the spit, somebody carving it
     KITCHEN_FOOD_CASE(5.6,2.35,1.7,.32,1.15,'salad',GRAY), { ...standing(5.6, 1.6, WHITE), face: [0, 1] }, sodaCooler(9.2, 1.45, 0.6, 0.38),
-    BX(9.78, 4.9, 1.3, 0.2, 0.98, 1.04, solid(GRAY, { top: '=' }), 0, 1), ...stoolsY(9.15, 3.9, 5.9, 1.0, GREEN, 1, 0.35), // the ledge down the side
+    KITCHEN_WALL_LEDGE(9.8,4.9,1.3,.2,1.04,-1,0,GRAY), ...stoolsY(9.15, 3.9, 5.9, 1.0, GREEN, 1, 0.35), // the ledge down the side
     ...dining(2.4, 4.4, { hl: 0.35, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.35 }), ...dining(2.4, 6.2, { hl: 0.35, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.3 })] };
 
 // ---- the bento shop (BENTO): a chilled case of boxed lunches, the rice cooker steaming, pale wood, a noren over the
@@ -77,7 +77,7 @@ function bentoWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.bento = { grid: boxRoom(9, 7), light: 1.0, floor: 'hinoki', ceil: 'strip', sign: false, wall: bentoWall, keeper: [4.6, 1.5],
   props: r => [KITCHEN_FOOD_CASE(4.6,2.2,2,.35,1.05,'bento',STONE), { ...standing(4.6, 1.5, WHITE), face: [0, 1] },
     KITCHEN_SERVICE_COUNTER(7.3,1.4,.55,.32,.9,GRAY,GRAY), KITCHEN_RICE_COOKER(7.3,1.4),
-    BX(1.22, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(1.75, 3.9, 4.9, 1.0, BRICK, -1, 0.35), // the ledge on the left
+    KITCHEN_WALL_LEDGE(1.2,4.4,.9,.2,1.04,1,0), ...stoolsY(1.75, 3.9, 4.9, 1.0, BRICK, -1, 0.35), // the ledge on the left
     ...plainBench(7.6, 4.4, 0.75, -1, 0, BRICK)] };
 
 // ---- takoyaki (TAKOYAKI): the iron plate of little round wells, a ball turning in each, the octopus painted on the
@@ -97,7 +97,7 @@ function takoWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.takoyaki = { grid: boxRoom(9, 7), light: 1.05, floor: 'lino', ceil: 'strip', sign: false, wall: takoWall, keeper: [4.5, 1.6],
   props: r => [takoGriddle(4.5, 2.4), { ...standing(4.5, 1.6, ORANGE), face: [0, 1] }, sodaCooler(7.45, 1.45, 0.45, 0.35),
-    ...plainBench(1.45, 4.4, 0.75, 1, 0, BRICK, 0.4), BX(7.78, 4.4, 0.8, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(7.25, 4.0, 4.8, 0.8, RED, 1, 0.35)] };
+    ...plainBench(1.45, 4.4, 0.75, 1, 0, BRICK, 0.4), KITCHEN_WALL_LEDGE(7.8,4.4,.8,.2,1.04,-1,0), ...stoolsY(7.25, 4.0, 4.8, 0.8, RED, 1, 0.35)] };
 
 // ---- yakitori (YAKITORI): the charcoal trough with its skewers across it, a long counter and stools all along it, red
 // lanterns, wooden menu tags on the wall, beer crates (turned over, they're seats)
@@ -143,7 +143,7 @@ ROOM_DEFS.donutshop = { grid: boxRoom(10, 7), light: 1.1, floor: 'pastel', ceil:
   props: r => [KITCHEN_FOOD_CASE(5,2.3,1.9,.35,1.15,'donuts',MAG), { ...standing(5.0, 1.55, MAG), face: [0, 1] },
     FURNITURE_COUNTER(7.9,1.35,.6,1), KITCHEN_ESPRESSO(7.7,1.35),
     ...dining(2.2, 4.0, { hl: 0.3, hw: 0.3, chair: shellChair, chairCol: MAG, top: solid(WHITE, { top: '=' }), busy: 0.35 }), ...dining(7.8, 4.0, { hl: 0.3, hw: 0.3, chair: shellChair, chairCol: CYAN, top: solid(WHITE, { top: '=' }), busy: 0.35 }),
-    BX(2.4, 5.78, 1.35, 0.17, 0.98, 1.04, solid(BRICK, { top: '=' })), BX(7.6, 5.78, 1.35, 0.17, 0.98, 1.04, solid(BRICK, { top: '=' })),
+    KITCHEN_WALL_LEDGE(2.4,5.83,1.35,.17,1.04,0,-1), KITCHEN_WALL_LEDGE(7.6,5.83,1.35,.17,1.04,0,-1),
     ...stools(1.6, 3.4, 5.3, 0.9, MAG, 0, 1, 0.3), ...stools(6.8, 8.6, 5.3, 0.9, MAG, 0, 1, 0.3)] };
 
 // ---- the juice bar (JUICE): crates of fruit along the wall, three blenders whirring on the counter, a wall painted
@@ -166,7 +166,7 @@ ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil:
   props: r => [KITCHEN_SERVICE_COUNTER(5,2.3,2,.3,1,GREEN), { ...standing(5.0, 1.55, GREEN), face: [0, 1] },
     blender(4.2, 2.25, ORANGE), blender(5.0, 2.25, MAG), blender(5.8, 2.25, GREEN),
     ...fruitCrate(1.45, 1.5, ORANGE, 8, 'o'), ...fruitCrate(1.45, 2.15, GREEN, 6, 'o'), ...fruitCrate(8.55, 1.5, YEL, 9, ')'), ...fruitCrate(8.55, 2.15, RED, 6, 'o'),
-    BX(8.78, 4.3, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(8.25, 3.8, 4.8, 1.0, GREEN, 1, 0.35),
+    KITCHEN_WALL_LEDGE(8.8,4.3,.9,.2,1.04,-1,0), ...stoolsY(8.25, 3.8, 4.8, 1.0, GREEN, 1, 0.35),
     ...plainBench(2.3, 5.5, 0.8, 0, -1, BRICK, 0.4), ...plainBench(1.45, 3.7, 0.7, 1, 0, BRICK, 0.3)] };
 
 // ---- bagels (BAGELS): baskets of bagels on the wall behind the counter, the kettle boiling them, tubs of cream cheese
@@ -181,7 +181,7 @@ ROOM_DEFS.bagelshop = { grid: boxRoom(10, 7), light: 1.0, floor: 'checker', ceil
   props: r => [KITCHEN_BAGEL_RACK(), KITCHEN_FOOD_CASE(5,2.3,1.9,.33,1.15,'schmear',GREEN), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
     KITCHEN_POT_STOVE(8.2,1.4,true),
     ...dining(2.2, 4.1, { hl: 0.35, chair: homeChair, chairCol: GREEN, top: solid(BRICK, { top: '=' }), busy: 0.35 }),
-    BX(8.78, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(8.25, 3.9, 4.9, 1.0, GREEN, 1, 0.35),
+    KITCHEN_WALL_LEDGE(8.8,4.4,.9,.2,1.04,-1,0), ...stoolsY(8.25, 3.9, 4.9, 1.0, GREEN, 1, 0.35),
     ...plainBench(2.4, 5.55, 0.8, 0, -1, GREEN, 0.3)] };
 
 Object.assign(ROOM_FOR, { CHICKEN: 'chickenshop', KEBAB: 'kebabshop', BENTO: 'bento', TAKOYAKI: 'takoyaki', YAKITORI: 'yakitori', DONUTS: 'donutshop', JUICE: 'juicebar', BAGELS: 'bagelshop' });

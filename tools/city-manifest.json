@@ -149,6 +149,7 @@
     "city/kitchen-counter-food.js",
     "city/kitchen-hotplates.js",
     "city/kitchen-woks.js",
+    "city/kitchen-dining-furniture.js",
     "city/kitchen-wall-displays.js",
     "city/fern-quality.js",
     "city/home-furniture-render.js",

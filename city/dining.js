@@ -177,15 +177,16 @@ function izakayaWall(i, u, uStep, z, d, mx, my, L) {
   }
   BG[i] = C(BRICK, 1.4 + L * 0.15 - Math.max(0, z - 2) * 0.3); return set(i, fract(u * 2.5) < 0.05 ? '|' : ' ', C(GRAY, 2)), true;
 }
-const zabuton = (x, y, fx, fy) => ({ ...BX(x, y, 0.24, 0.24, 0, 0.1, solid(BLUE, { top: '#', bright: 1.5 })), walk: true, seat: true, x, y, fx, fy, h: 0.12 }); // a floor cushion
+const zabuton = (x,y,fx,fy) => ({...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,1,0,.24,.24,0,.1,.045,furnitureCloth(BLUE)),[.24,.24,.1]),
+  walk:true,seat:true,x,y,fx,fy,h:.12});
 ROOM_DEFS.izakaya = { grid: backWc(13, 9), wc: wcAt(13), light: 0.7, floor: 'izakaya', ceil: 'lantern', sign: false, wall: izakayaWall, keeper: [5.3, 1.7],
   props: r => {
     const p = [KITCHEN_SERVICE_COUNTER(5.3,2.5,2.7,.3,1,BRICK,BRICK), { ...standing(5.3, 1.7, BLUE), face: [0, 1] },
       ...stools(2.9, 7.7, 3.15, 0.8, BRICK, 0, -1, 0.45), akachochin(2.0, 4.0), akachochin(8.8, 4.0),
       ...dining(9.4, 6.4, { n: 4, hl: 0.55, hw: 0.4, top: teak, chairCol: BRICK, busy: 0.45 }), ...wcFittings(13)];
     for (const y of [5.6, 7.3]) { // the tatami: low tables, a cushion either side
-      p.push(BX(2.1, y, 0.45, 0.3, 0, 0.34, teak));
-      for (const [x, fx] of [[1.3, 1], [2.9, -1]]) { p.push(zabuton(x, y, fx, 0)); if (chance(0.45)) p.push({ ...sitting(x, y, shirt(), 0.12), face: [fx, 0] }); }
+      p.push(KITCHEN_LOW_TABLE(2.1,y));
+      for (const [x, fx] of [[1.3, 1], [2.9, -1]]) { p.push(zabuton(x, y, fx, 0)); if (chance(0.45)) p.push({ ...sitting(x, y, shirt(), 0.12), face: [fx, 0] },KITCHEN_SETTING(2.1-fx*.22,y,.34,{fx,fy:0,meal:'dumplings'})); }
     }
     return p;
   } };
@@ -229,9 +230,9 @@ ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hi
   props: r => [KITCHEN_SERVICE_COUNTER(6,2.4,2.4,.3,1,BRICK,BRICK), { ...standing(6.0, 1.7, GREEN), face: [0, 1] }, roaster(1.7, 1.5), ...beanSacks(1.4, 3.6),
     pourOver(4.4, 2.4), pourOver(4.8, 2.4), pourOver(5.2, 2.4), KITCHEN_ESPRESSO(7.5,2.4),
     ...stools(4.0, 8.0, 3.05, 1.0, BRICK, 0, -1, 0.4),
-    BX(3.6, 6.2, 1.4, 0.45, 0.72, 0.78, solid(BRICK, { top: '=', bright: 1.2 })), ...[2.7, 4.5].map(x => BX(x, 6.2, 0.06, 0.35, 0, 0.72, solid(GRAY))), // the long table
-    ...[2.8, 4.4].flatMap(x => [[5.4, 1], [7.0, -1]].flatMap(([y, fy]) => [...homeChair(x, y, 0, fy, BRICK), ...(chance(0.45) ? [{ ...sitting(x, y, shirt(), 0.48), face: [0, fy] }] : [])])),
-    ...armchair(10.8, 5.3, -1, 0, GREEN), ...armchair(10.8, 7.0, -1, 0, BRICK), BX(9.9, 6.15, 0.25, 0.25, 0, 0.5, solid(BRICK, { top: '=' })), POT_PLANT(11.4, 4.1, 1.5), ...wcFittings(13)] };
+    KITCHEN_TRESTLE_TABLE(3.6,6.2),
+    ...[2.8, 4.4].flatMap(x => [[5.4, 1], [7.0, -1]].flatMap(([y, fy]) => [...homeChair(x, y, 0, fy, BRICK), ...(chance(0.45) ? [{ ...sitting(x, y, shirt(), 0.48), face: [0, fy] },KITCHEN_SETTING(x,y+fy*.6,.78,{fx:0,fy,meal:'coffee'})] : [])])),
+    ...armchair(10.8, 5.3, -1, 0, GREEN), ...armchair(10.8, 7.0, -1, 0, BRICK), FURNITURE_EAT_TABLE(9.9,6.15,.25,.25,teak,.5), POT_PLANT(11.4, 4.1, 1.5), ...wcFittings(13)] };
 
 // ---- the noodle house (NOODLES; RAMEN keeps the noodle bar): the cook pulling noodles by hand at the floury table in
 // the window to the kitchen, the pots boiling, red lacquer round tables, the menu brushed on red strips
