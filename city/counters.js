@@ -11,17 +11,7 @@ const friedChicken = (i, u, v, w, L, f) => { // golden pieces heaped in the warm
   if (k < 0.25) return false;
   BG[i] = C(k > 0.7 ? ORANGE : BRICK, k > 0.7 ? 7 : 4 + L * 0.2); return set(i, k > 0.85 ? '%' : k > 0.5 ? '&' : ' ', C(YEL, 9)), true;
 };
-const fryer = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.45, 0.35, 0, 0.92), (i, t, L) => {
-    BG[i] = C(GRAY, (2.4 + L * 0.3) * shadeFace(HIT.face));
-    if (HIT.face !== 5) return set(i, HIT.face === 3 && Math.abs(HIT.w - 0.75) < 0.03 ? '=' : ' ', C(WHITE, 8)), true;
-    const b = noise(HIT.u * 12, HIT.v * 12 + T * 2, 105); BG[i] = C(ORANGE, 3 + b * 4); return set(i, b > 0.6 ? 'o' : b > 0.45 ? '.' : ' ', C(YEL, 12)), true; // the oil
-  });
-  for (const e of [-1, 1]) { // the baskets, hung up to drain
-    drawBox(boxAt(vx + e * 0.2, vy - 0.05, 1, 0, 0.16, 0.2, 0.95, 1.12), (i, t, L) => { BG[i] = C(GRAY, 1.2 + L * 0.2); return set(i, '#', C(GRAY, L)), true; });
-    rod(vx + e * 0.2, vy + 0.15, 1.05, vx + e * 0.2, vy + 0.45, 1.2, 0.015, GRAY, 1.2);
-  }
-}, [0.45, 0.35, 0.92]);
+const fryer = (x,y) => KITCHEN_FRYER(x,y);
 function chickenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.45 && wallText(i, u, uStep, z, d, room.word, 5.5, 2.7, 0.32, 0.4, C(RED, 15), C(WHITE, 7))) return true;
@@ -40,16 +30,7 @@ ROOM_DEFS.chickenshop = { grid: boxRoom(11, 8), light: 1.1, floor: 'checker', ce
 
 // ---- the kebab shop (KEBAB): the doner turning in front of its burners, the salads in their trays under the glass,
 // lit photos of everything over the counter, mirror tiles, a ledge down the side for eating standing up (or not)
-const doner = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drum(vx, vy, 0.025, 0.9, 1.95, CHROME);
-  for (let k = 0; k < 7; k++) { const r = 0.08 + k * 0.025; drum(vx, vy, r, 1.0 + k * 0.12, 1.12 + k * 0.12, (i, t, L) => { // the cone of meat, widest at the top
-    const a = Math.atan2(HIT.v, HIT.u) + T * 0.8; BG[i] = C(fract(a * 1.6 + k * 0.3) < 0.25 ? ORANGE : BRICK, 3 + L * 0.3 * drumLit(r));
-    return set(i, fract(a * 3) < 0.25 ? '=' : fract(HIT.w * 16) < 0.3 ? '-' : ' ', C(BRICK, 7)), true; }); }
-  drawBox(boxAt(vx, vy - 0.35, 1, 0, 0.3, 0.05, 0.95, 2.0), (i, t, L) => { // the burners behind it, glowing
-    if (HIT.face !== 3) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; }
-    const g = noise(HIT.u * 6, HIT.w * 6 - T * 2, 106); BG[i] = C(ORANGE, 5 + g * 5); return set(i, fract(HIT.w * 6) < 0.15 ? '=' : ' ', C(RED, 12)), true; });
-  drawBox(boxAt(vx, vy, 1, 0, 0.3, 0.3, 0.85, 0.9), solid(GRAY, { top: '=' })); // the drip tray
-}, [0.3, 0.4, 2.0]);
+const doner = (x,y) => KITCHEN_SPIT(x,y);
 const saladBar = (i, u, v, w, L, f) => { // lettuce, tomato, onion, red cabbage, chillies, the sauces, each in its steel tray
   if (f !== 5) return false;
   const k = Math.floor((u + 3) / 0.36), [c, lv] = [[GREEN, 7], [RED, 7], [WHITE, 9], [MAG, 5], [GREEN, 4], [ORANGE, 8], [WHITE, 11], [RED, 4]][k & 7];
@@ -149,15 +130,7 @@ ROOM_DEFS.takoyaki = { grid: boxRoom(9, 7), light: 1.05, floor: 'lino', ceil: 's
 
 // ---- yakitori (YAKITORI): the charcoal trough with its skewers across it, a long counter and stools all along it, red
 // lanterns, wooden menu tags on the wall, beer crates (turned over, they're seats)
-const yakiGrill = (x, y, hl) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, hl, 0.2, 0, 0.95), solid(GRAY, { panel: 0.5 }));
-  drawBox(boxAt(vx, vy, 1, 0, hl - 0.05, 0.15, 0.95, 0.98), (i, t, L) => { const g = noise(HIT.u * 8, HIT.v * 8 + T, 110); BG[i] = C(g > 0.55 ? ORANGE : RED, 2 + g * 6); return set(i, g > 0.7 ? '*' : '.', C(YEL, 10)), true; }); // the coals
-  for (let k = 0; k * 0.16 < hl * 2 - 0.2; k++) { // the skewers, three pieces on each
-    const sx = vx - hl + 0.12 + k * 0.16;
-    rod(sx, vy - 0.22, 1.02, sx, vy + 0.22, 1.02, 0.004, STONE, 1.2);
-    for (let m = 0; m < 3; m++) dot(sx, vy - 0.08 + m * 0.08, 1.03, 0.025, (i, t, L) => { BG[i] = C(hash(k, m, 111) > 0.5 ? BRICK : ORANGE, 4 + L * 0.3); return set(i, ' ', 0), true; });
-  }
-}, [hl, 0.2, 0.98]);
+const yakiGrill = (x,y,hl) => KITCHEN_YAKITORI(x,y,hl);
 const akachochin = (x, y) => hung(x, y, 2.35, (vx, vy, z) => drum(vx, vy, 0.17, z - 0.45, z, (i, t, L) => { // a red paper lantern, lit
   BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 7) < 0.18 ? '-' : HIT.face === 4 && Math.abs(HIT.w - z + 0.22) < 0.08 ? '#' : ' ', C(GRAY, 2)), true; }));
 function yakiWall(i, u, uStep, z, d, mx, my, L) {
@@ -177,7 +150,7 @@ function yakiWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.yakitori = { grid: boxRoom(11, 7), light: 0.75, floor: 'oak', ceil: 'lantern', sign: false, wall: yakiWall, keeper: [5.5, 1.45],
   props: r => [BX(5.5, 2.75, 3.6, 0.28, 0, 1.0, solid(BRICK, { top: '=', panel: 0.6, bright: 1.3 })), yakiGrill(5.5, 1.95, 1.6), // the counter, the grill behind it
     { ...standing(5.5, 1.45, WHITE), face: [0, 1] }, { ...standing(3.2, 1.4, WHITE), face: [1, 0] },
-    ...stools(2.3, 8.7, 3.45, 0.8, BRICK, 0, -1, 0.45), akachochin(2.4, 4.5), akachochin(8.6, 4.5),
+    ...stools(2.3, 8.7, 3.45, 0.9, BRICK, 0, -1, 0.45), akachochin(2.4, 4.5), akachochin(8.6, 4.5),
     BX(9.55, 1.35, 0.3, 0.22, 0, 0.9, crateShade(YEL)), BX(9.55, 1.35, 0.3, 0.22, 0.9, 1.25, crateShade(YEL)), // crates of empties
     BX(8.6, 5.2, 0.3, 0.25, 0, 0.6, crateShade(YEL)), // and three turned over: a table and somewhere to sit either side
     ...[[7.95, 1], [9.25, -1]].flatMap(([x, fx]) => [BX(x, 5.2, 0.2, 0.17, 0, 0.38, crateShade(YEL)), SEAT(x, 5.2, fx, 0, 0.4), ...(chance(0.35) ? [{ ...sitting(x, 5.2, shirt(), 0.4), face: [fx, 0] }] : [])])] };

@@ -159,13 +159,7 @@ const papelPicado = (y, x0, x1, z) => ROOM_MODEL((x0 + x1) / 2, y, (vx, vy) => {
       BG[i] = C(PICADO[k % PICADO.length], 7 + L * 0.2); return set(i, ' ', 0), true; });
   }
 });
-const trompo = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // the spit of marinated pork, turning, the pineapple on top, the burner glowing behind
-  drum(vx, vy, 0.04, 0.95, 1.85, CHROME);
-  for (let k = 0; k < 6; k++) { const r = 0.2 - Math.abs(k - 2.5) * 0.025; drum(vx, vy, r, 1.05 + k * 0.12, 1.17 + k * 0.12, (i, t, L) => {
-    const a = Math.atan2(HIT.v, HIT.u) + T * 1.2; BG[i] = C(fract(a * 1.3 + k * 0.4) < 0.3 ? RED : ORANGE, 3.5 + L * 0.3); return set(i, fract(a * 2.5) < 0.2 ? '#' : ' ', C(BRICK, 6)), true; }); }
-  drum(vx, vy, 0.09, 1.79, 1.92, (i, t, L) => { BG[i] = C(YEL, 8); return set(i, HIT.face === 5 ? '*' : '#', C(GREEN, 8)), true; }); // the pineapple
-  drawBox(boxAt(vx, vy - 0.32, 1, 0, 0.18, 0.04, 1.0, 1.9), (i, t, L) => { BG[i] = C(ORANGE, 6 + 3 * noise(HIT.u * 8, HIT.w * 8 - T * 3, 91)); return set(i, ' ', 0), true; });
-}, [0.3, 0.3, 1.9]);
+const trompo = (x,y) => KITCHEN_SPIT(x,y,'pastor');
 function tacoWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.7, 2.1, room.menu, 1.25, C(GRAY, 0.6), C(YEL, 15), 'TACOS', C(MAG, 15))) return true;
   if (z < 0.95) { const k = (Math.floor(u * 5) + Math.floor(z * 5)) & 1, mot = Math.abs(fract(u * 5) - 0.5) + Math.abs(fract(z * 5) - 0.5) < 0.22; BG[i] = C(k ? BLUE : WHITE, k ? 4 : 5.5); return set(i, mot ? '+' : ' ', C(k ? WHITE : BLUE, 10)), true; } // talavera tiles
