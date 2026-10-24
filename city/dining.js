@@ -78,10 +78,7 @@ ROOM_DEFS.pho = { grid: backWc(13, 9), wc: wcAt(13), light: 1.05, floor: 'lino',
 
 // ---- dumplings (DUMPLINGS): the cooks folding them at a floury table behind the counter, bamboo steamers stacked up and
 // steaming, round tables with low stools, paper menus pinned up, round red lanterns
-const steamers = (x, y, n) => ROOM_MODEL(x, y, (vx, vy) => {
-  for (let k = 0; k < n; k++) drum(vx, vy, 0.17, 1.0 + k * 0.1, 1.09 + k * 0.1, (i, t, L) => { BG[i] = C(YEL, (3.4 + L * 0.3) * drumLit(0.17)); return set(i, HIT.face === 5 ? (fract(HIT.u * 12) < 0.3 ? '=' : ' ') : '|', C(BRICK, 6)), true; }); // bamboo, woven
-  drum(vx, vy, 0.17, 1.0 + n * 0.1, 1.04 + n * 0.1, (i, t, L) => { BG[i] = C(YEL, 4); return set(i, HIT.face === 5 && fract(T * 2 + HIT.u * 3) < 0.2 ? '~' : ' ', C(WHITE, 12)), true; }); // the lid, the steam lifting it
-}, [0.17, 0.17, 1.05 + n * 0.1]);
+const steamers = (x,y,n) => KITCHEN_STEAMER_STACK(x,y,n);
 function dumplingWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.55, 0.3, 0.34, C(YEL, 14), C(RED, 2.4))) return true;
@@ -104,10 +101,7 @@ ROOM_DEFS.dumplings = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: '
 // ---- dim sum (DIM SUM): the banquet hall: round tables in white cloths with lazy susans, six chairs apiece, a trolley
 // of steamers going round, the gold dragon and phoenix on the red wall, a fish tank by the door
 const DIMSUM_LOOP = (t, k) => [7.4 + 1.7 * Math.cos(t * 0.15 + k * Math.PI), 6.3 + 1.0 * Math.sin(t * 0.15 + k * Math.PI)];
-const trolley = k => ({ ...ROOM_MODEL(7.4, 6.3, (vx, vy) => { // (no footprint: it goes round you)
-  drawBox(boxAt(vx, vy, 1, 0, 0.32, 0.22, 0.12, 0.8), solid(GRAY, { panel: 0.3, top: '=' }));
-  for (const [e, w] of [[-0.15, -0.08], [0.15, -0.08], [-0.15, 0.08], [0.15, 0.08]]) drum(vx + e, vy + w, 0.08, 0.8, 0.88 + hash(k, e * 10 + w * 100, 123) * 0.1, (i, t, L) => { BG[i] = C(YEL, 4 + L * 0.3); return set(i, HIT.face === 5 ? '=' : '|', C(BRICK, 6)), true; });
-}), tick: s => { [s.x, s.y] = DIMSUM_LOOP(T, k); } });
+const trolley = k => KITCHEN_DIMSUM_CART(k); // mobile decoration has no invisible walking barrier
 // whoever's pushing it, a step behind, facing the way they're going
 const trolleyServer = (k, col) => ({ ...standing(7.4, 6.3, col), tick: s => { const t = T - 2.2, a = t * 0.15 + k * Math.PI; [s.x, s.y] = DIMSUM_LOOP(t, k); s.face = [-Math.sin(a) * 1.7, Math.cos(a)]; } });
 function dragonWall(i, u, uStep, z, d, mx, my, L) {
