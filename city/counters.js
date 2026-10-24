@@ -173,19 +173,12 @@ ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil:
 // under the glass; subway tiles, deep green, two tables and a ledge
 function bagelWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 1.15 && z < 2.25 && u > 2.4 && u < 7.6) { // the baskets, two rows of them, bagels heaped in each
-    const bu = fract((u - 2.4) / 1.3), row = Math.floor((z - 1.15) / 0.55), bz = fract((z - 1.15) / 0.55), k = Math.floor((u - 2.4) / 1.3) + row * 4;
-    if (bu < 0.06 || bu > 0.94 || bz < 0.08) { BG[i] = C(GRAY, 2.4); return set(i, bz < 0.08 ? '=' : '|', C(GRAY, 5)), true; }
-    if (bz > 0.82) { BG[i] = C(WHITE, 7); return wallText(i, u, uStep, z, d, ['PLAIN', 'SESAME', 'POPPY', 'EVERYTHING', 'ONION', 'RAISIN', 'SALT', 'GARLIC'][k & 7], 2.4 + (Math.floor((u - 2.4) / 1.3) + 0.5) * 1.3, 1.15 + row * 0.55 + 0.5, 0.07, 0.08, C(GRAY, 3), C(WHITE, 7)) || set(i, ' ', 0), true; }
-    const ring = Math.hypot(fract(bu * 4) - 0.5, (fract(bz * 3) - 0.5) * 1.4);
-    BG[i] = ring > 0.15 && ring < 0.45 ? C(ORANGE, 5 + hash(Math.floor(bu * 4), Math.floor(bz * 3), k) * 3) : C(BRICK, 1.5); return set(i, ring > 0.15 && ring < 0.45 && (k & 3) === 1 ? '.' : ' ', C(WHITE, 10)), true;
-  }
   if (backWall(my) && z > 2.4 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.62, 0.3, 0.34, C(YEL, 14), C(GREEN, 1.4))) return true;
   if (z < 1.35) { BG[i] = C(WHITE, 4.6 + L * 0.2); return set(i, fract(z / 0.15) < 0.12 ? '-' : fract(u / 0.3 + (Math.floor(z / 0.15) & 1) * 0.5) < 0.06 ? '|' : ' ', C(GRAY, 3)), true; } // subway tiles
   BG[i] = C(GREEN, 1.3 + L * 0.12); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.bagelshop = { grid: boxRoom(10, 7), light: 1.0, floor: 'checker', ceil: 'tin', sign: false, wall: bagelWall, keeper: [5.0, 1.55],
-  props: r => [KITCHEN_FOOD_CASE(5,2.3,1.9,.33,1.15,'schmear',GREEN), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_BAGEL_RACK(), KITCHEN_FOOD_CASE(5,2.3,1.9,.33,1.15,'schmear',GREEN), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
     KITCHEN_POT_STOVE(8.2,1.4,true),
     ...dining(2.2, 4.1, { hl: 0.35, chair: homeChair, chairCol: GREEN, top: solid(BRICK, { top: '=' }), busy: 0.35 }),
     BX(8.78, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(8.25, 3.9, 4.9, 1.0, GREEN, 1, 0.35),
