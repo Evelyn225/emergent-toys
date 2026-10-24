@@ -20808,19 +20808,12 @@ ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil:
 // under the glass; subway tiles, deep green, two tables and a ledge
 function bagelWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 1.15 && z < 2.25 && u > 2.4 && u < 7.6) { // the baskets, two rows of them, bagels heaped in each
-    const bu = fract((u - 2.4) / 1.3), row = Math.floor((z - 1.15) / 0.55), bz = fract((z - 1.15) / 0.55), k = Math.floor((u - 2.4) / 1.3) + row * 4;
-    if (bu < 0.06 || bu > 0.94 || bz < 0.08) { BG[i] = C(GRAY, 2.4); return set(i, bz < 0.08 ? '=' : '|', C(GRAY, 5)), true; }
-    if (bz > 0.82) { BG[i] = C(WHITE, 7); return wallText(i, u, uStep, z, d, ['PLAIN', 'SESAME', 'POPPY', 'EVERYTHING', 'ONION', 'RAISIN', 'SALT', 'GARLIC'][k & 7], 2.4 + (Math.floor((u - 2.4) / 1.3) + 0.5) * 1.3, 1.15 + row * 0.55 + 0.5, 0.07, 0.08, C(GRAY, 3), C(WHITE, 7)) || set(i, ' ', 0), true; }
-    const ring = Math.hypot(fract(bu * 4) - 0.5, (fract(bz * 3) - 0.5) * 1.4);
-    BG[i] = ring > 0.15 && ring < 0.45 ? C(ORANGE, 5 + hash(Math.floor(bu * 4), Math.floor(bz * 3), k) * 3) : C(BRICK, 1.5); return set(i, ring > 0.15 && ring < 0.45 && (k & 3) === 1 ? '.' : ' ', C(WHITE, 10)), true;
-  }
   if (backWall(my) && z > 2.4 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.62, 0.3, 0.34, C(YEL, 14), C(GREEN, 1.4))) return true;
   if (z < 1.35) { BG[i] = C(WHITE, 4.6 + L * 0.2); return set(i, fract(z / 0.15) < 0.12 ? '-' : fract(u / 0.3 + (Math.floor(z / 0.15) & 1) * 0.5) < 0.06 ? '|' : ' ', C(GRAY, 3)), true; } // subway tiles
   BG[i] = C(GREEN, 1.3 + L * 0.12); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.bagelshop = { grid: boxRoom(10, 7), light: 1.0, floor: 'checker', ceil: 'tin', sign: false, wall: bagelWall, keeper: [5.0, 1.55],
-  props: r => [KITCHEN_FOOD_CASE(5,2.3,1.9,.33,1.15,'schmear',GREEN), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_BAGEL_RACK(), KITCHEN_FOOD_CASE(5,2.3,1.9,.33,1.15,'schmear',GREEN), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
     KITCHEN_POT_STOVE(8.2,1.4,true),
     ...dining(2.2, 4.1, { hl: 0.35, chair: homeChair, chairCol: GREEN, top: solid(BRICK, { top: '=' }), busy: 0.35 }),
     BX(8.78, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(8.25, 3.9, 4.9, 1.0, GREEN, 1, 0.35),
@@ -20970,13 +20963,6 @@ const tiffany = (x, y) => hung(x, y, 1.95, (vx, vy, z) => drum(vx, vy, 0.24, z -
   const seg = Math.floor((Math.atan2(HIT.v, HIT.u) / Math.PI + 1) * 4); BG[i] = C([RED, YEL, GREEN, ORANGE][seg & 3], 6 + 2 * Math.max(night, 0.4)); return set(i, fract(HIT.w * 10) < 0.2 ? '-' : ' ', C(BRICK, 4)), true; }));
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
-  if (backWall(my) && z > 1.2 && z < 2.3 && u > 1.6 && u < 7.6) { // the cups, on shelves: every one different
-    const sz = (z - 1.2) / 0.36, row = Math.floor(sz);
-    if (fract(sz) < 0.12) { BG[i] = C(BRICK, 2); return set(i, '=', C(WARM, L)), true; }
-    const k = Math.floor(u / 0.24) + row * 31, cu = fract(u / 0.24);
-    BG[i] = C(BRICK, 1.1); if (cu > 0.2 && cu < 0.75 && fract(sz) > 0.15 && fract(sz) < 0.6) { BG[i] = C([WHITE, BLUE, RED, GREEN, YEL, WHITE][k % 6], [9, 5, 5, 4, 7, 10][k % 6]); return set(i, fract(sz) > 0.5 ? '-' : ' ', C(GRAY, 4)), true; }
-    return set(i, cu > 0.75 && cu < 0.9 && fract(sz) > 0.3 && fract(sz) < 0.5 ? ')' : ' ', C(WHITE, 6)), true; // (a handle)
-  }
   if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.24, 0.26, C(BRICK, 3), C(YEL, 4.5)) || set(i, ' ', 0), true; } // on a brass plate
   if (!backWall(my) && z > 1.9 && z < 2.4 && Math.abs(fract(Math.abs(u) / 3.5) - 0.5) < 0.08) { // a clock
     const cu = (fract(Math.abs(u) / 3.5) - 0.5) * 3.5, cz = z - 2.15, r = Math.hypot(cu, cz), ang = Math.atan2(cu, cz);
@@ -20986,7 +20972,7 @@ function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(WARM, 1.6 + L * 0.15); return set(i, fract(u / 0.8) < 0.03 ? '|' : ' ', C(BRICK, 3)), true; // dark panelling
 }
 ROOM_DEFS.kissaten = { grid: backWc(13, 8), wc: wcAt(13), light: 0.65, floor: 'oak', ceil: 'pendant', sign: false, wall: kissatenWall, keeper: [4.6, 1.65],
-  props: r => [BX(4.6, 2.4, 2.6, 0.3, 0, 1.0, solid(BRICK, { top: '=', panel: 0.5, bright: 1.1 })), { ...standing(4.6, 1.65, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_CUP_RACK(), BX(4.6, 2.4, 2.6, 0.3, 0, 1.0, solid(BRICK, { top: '=', panel: 0.5, bright: 1.1 })), { ...standing(4.6, 1.65, WHITE), face: [0, 1] },
     siphon(3.6, 2.4), siphon(4.1, 2.4), siphon(4.6, 2.4), ...stools(2.4, 6.9, 3.05, 0.9, RED, 0, -1, 0.35),
     ...booth(1.95, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(8.0, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(10.3, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 }),
     tiffany(1.95, 5.0), tiffany(8.0, 5.0), tiffany(10.3, 5.0), ...wcFittings(13)] };
@@ -36855,6 +36841,68 @@ function KITCHEN_POT_STOVE(x,y,water=false) {
     }
   }),box:boxAt(x,y+.008,1,0,water?.47:.40,hw+.012,0,top+potHeight+.012),radius:.65,
     kitchenPlate:{kind:water?'bagel-kettle':'stockpot',top,scale,wide},tick:s=>kitchenSteamerSteam(s,top+.127*scale+.025)};
+}
+// Mounted displays replace flat wall pictures. Upright rings and hollow cups
+// share the food/tableware profiles; labels use the prop font's projection.
+const KITCHEN_BAGEL_FLAVOURS=['PLAIN','SESAME','POPPY','EVERYTHING','ONION','RAISIN','SALT','GARLIC'];
+const KITCHEN_UPRIGHT_RING_SHAPE={x:0,y:0,profile:COUNTER_DONUT_PROFILE.map(([z,r])=>[z-.022,r])};
+function kitchenRayUprightRing(ox,oy,oz,rx,ry,rz,b) {
+  const t=coveRayLathe(ox-b.x,oz-b.centerZ,oy-b.y,rx,rz,ry,KITCHEN_UPRIGHT_RING_SHAPE);
+  if(t<0)return t;
+  const v=HIT.v,w=HIT.w,ny=HIT.ny,nz=HIT.nz;
+  HIT.v=w;HIT.w=b.centerZ+v;HIT.ny=nz;HIT.nz=ny;HIT.face=0;return t;
+}
+function kitchenUprightBagel(x,y,floor,kind) {
+  const centerZ=floor+.068,sesameKind=kind===1||kind===3||kind===6||kind===7,poppyKind=kind===2||kind===3;
+  drawBox({...boxAt(x,y,1,0,.068,.022,floor,floor+.136),centerZ},(i,t,L)=>{
+    const fine=coveDetail(t),grain=Math.sin(HIT.u*470)*Math.sin((HIT.w-centerZ)*410)*fine;
+    const sesame=sesameKind&&grain>.79,poppy=poppyKind&&grain<-.83;
+    BG[i]=C(poppy?BLACK:sesame?STONE:WARM,poppy?0:3.2+L*.33*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain*.18);set(i,' ',0);return true;
+  },kitchenRayUprightRing);
+}
+function KITCHEN_BAGEL_RACK(x=5,y=1.15) {
+  const levels=[1.22,1.72],half=1.38,wood=furnitureTimber(BRICK),labels=[];
+  for(let row=0;row<2;row++)for(let col=0;col<4;col++)labels.push({word:KITCHEN_BAGEL_FLAVOURS[row*4+col],x:x-1.05+col*.7,y:y+.133,z:levels[row]-.0625});
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const side of [-1,1])coveRound(vx+side*1.36,vy-.125,1,0,.02,.025,1.105,1.98,.006,wood);
+    coveRound(vx,vy-.125,1,0,half,.025,1.94,1.98,.006,wood);
+    for(const [row,z]of levels.entries()) {
+      drawBox({...boxAt(vx,vy,1,0,half,.125,z-.025,z),...kitchenTopProfile(half,.125,z-.025,z,.003)},wood,homeRayWorktop);
+      for(let col=0;col<4;col++) {
+        const u=-1.05+col*.7,kind=row*4+col,word=KITCHEN_BAGEL_FLAVOURS[kind];
+        foodTray(vx+u,vy,z,.30,.125,.04,wood);
+        drawBox({...boxAt(vx+u,vy-.118,1,0,.30,.007,z+.008,z+.15),
+          ...kitchenPanelProfile(.30,.007,z+.008,z+.15,.003)},wood,homeRayWorktop);
+        for(const du of [-.2175,-.0725,.0725,.2175])for(const dv of [-.05,.06])
+          kitchenUprightBagel(vx+u+du,vy+dv,z+.008,kind);
+        const bandZ=z-.0625;
+        drawBox({...boxAt(vx+u,vy+.125,1,0,.295,.008,z-.10,z-.025),
+          ...kitchenPanelProfile(.295,.008,z-.10,z-.025,.003)},(i,t,L)=>{
+          if(HIT.face!==3)return wood(i,t,L);
+          BG[i]=C(STONE,4+L*.25);
+          set(i,worldText(word,HIT.u,HIT.w,t,i,vx+u,vy+.133,bandZ,1,0,.038,.052),C(BLACK,0));return true;
+        },homeRayWorktop);
+        for(const du of [-.27,.27])foodOval(vx+u+du,vy+.134,z-.07,.006,.003,.012,kitchenSteel);
+      }
+    }
+  }),box:boxAt(x,y,1,0,half,.15,1.105,1.98),radius:1.6,kitchenRack:{kind:'bagels',levels,labels}};
+}
+function KITCHEN_CUP_RACK(x=4.6,y=1.12) {
+  const levels=[1.20,1.56,1.92],half=1.8,wood=furnitureTimber(BRICK),colors=[WHITE,BLUE,RED,GREEN,YEL,WHITE],scales=[.8,.95,1.15];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const side of [-1,1]) {
+      coveRound(vx+side*half,vy-.095,1,0,.025,.025,1.145,2.10,.007,wood);
+      for(const z of [1.30,2.02])foodOval(vx+side*half,vy-.068,z,.009,.003,.018,kitchenSteel);
+    }
+    for(const [row,z]of levels.entries()) {
+      drawBox({...boxAt(vx,vy,1,0,half,.12,z-.025,z),...kitchenTopProfile(half,.12,z-.025,z,.003)},wood,homeRayWorktop);
+      for(let k=0;k<12;k++) {
+        const u=(k-5.5)*.28,scale=scales[(k+row)%3],col=colors[(k+row*2)%colors.length];
+        kitchenVessel(vx+u,vy,z,'cup',col,scale);
+        kitchenHandle(vx+u+.04*scale,vy,z+.057*scale,1,0,.032*scale,.006,col);
+      }
+    }
+  }),box:boxAt(x,y,1,0,half+.025,.12,1.145,2.10),radius:2,kitchenRack:{kind:'cups',levels}};
 }
 // Fern's front is west toward the dock. The room's south entrance therefore
 // maps through a quarter turn; windows and the world-view camera share it.

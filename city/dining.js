@@ -141,13 +141,6 @@ const tiffany = (x, y) => hung(x, y, 1.95, (vx, vy, z) => drum(vx, vy, 0.24, z -
   const seg = Math.floor((Math.atan2(HIT.v, HIT.u) / Math.PI + 1) * 4); BG[i] = C([RED, YEL, GREEN, ORANGE][seg & 3], 6 + 2 * Math.max(night, 0.4)); return set(i, fract(HIT.w * 10) < 0.2 ? '-' : ' ', C(BRICK, 4)), true; }));
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
-  if (backWall(my) && z > 1.2 && z < 2.3 && u > 1.6 && u < 7.6) { // the cups, on shelves: every one different
-    const sz = (z - 1.2) / 0.36, row = Math.floor(sz);
-    if (fract(sz) < 0.12) { BG[i] = C(BRICK, 2); return set(i, '=', C(WARM, L)), true; }
-    const k = Math.floor(u / 0.24) + row * 31, cu = fract(u / 0.24);
-    BG[i] = C(BRICK, 1.1); if (cu > 0.2 && cu < 0.75 && fract(sz) > 0.15 && fract(sz) < 0.6) { BG[i] = C([WHITE, BLUE, RED, GREEN, YEL, WHITE][k % 6], [9, 5, 5, 4, 7, 10][k % 6]); return set(i, fract(sz) > 0.5 ? '-' : ' ', C(GRAY, 4)), true; }
-    return set(i, cu > 0.75 && cu < 0.9 && fract(sz) > 0.3 && fract(sz) < 0.5 ? ')' : ' ', C(WHITE, 6)), true; // (a handle)
-  }
   if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.24, 0.26, C(BRICK, 3), C(YEL, 4.5)) || set(i, ' ', 0), true; } // on a brass plate
   if (!backWall(my) && z > 1.9 && z < 2.4 && Math.abs(fract(Math.abs(u) / 3.5) - 0.5) < 0.08) { // a clock
     const cu = (fract(Math.abs(u) / 3.5) - 0.5) * 3.5, cz = z - 2.15, r = Math.hypot(cu, cz), ang = Math.atan2(cu, cz);
@@ -157,7 +150,7 @@ function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(WARM, 1.6 + L * 0.15); return set(i, fract(u / 0.8) < 0.03 ? '|' : ' ', C(BRICK, 3)), true; // dark panelling
 }
 ROOM_DEFS.kissaten = { grid: backWc(13, 8), wc: wcAt(13), light: 0.65, floor: 'oak', ceil: 'pendant', sign: false, wall: kissatenWall, keeper: [4.6, 1.65],
-  props: r => [BX(4.6, 2.4, 2.6, 0.3, 0, 1.0, solid(BRICK, { top: '=', panel: 0.5, bright: 1.1 })), { ...standing(4.6, 1.65, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_CUP_RACK(), BX(4.6, 2.4, 2.6, 0.3, 0, 1.0, solid(BRICK, { top: '=', panel: 0.5, bright: 1.1 })), { ...standing(4.6, 1.65, WHITE), face: [0, 1] },
     siphon(3.6, 2.4), siphon(4.1, 2.4), siphon(4.6, 2.4), ...stools(2.4, 6.9, 3.05, 0.9, RED, 0, -1, 0.35),
     ...booth(1.95, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(8.0, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(10.3, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 }),
     tiffany(1.95, 5.0), tiffany(8.0, 5.0), tiffany(10.3, 5.0), ...wcFittings(13)] };
