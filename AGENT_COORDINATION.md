@@ -8,11 +8,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 
 ## File ownership
 
-- **Codex:** reported store-window miniature railway geometry and rendering
-  cost, on `codex/window-railway-repair`. Repair complete: all 12 focused browser
-  checks pass, alongside bundle/parser/render-cost/pure-story checks; visual
-  review includes both sides, night and phone. Owns `city/street-scenes.js`,
-  `city/street-scenes-render.js`, and railway/street-scene tests.
+- **Codex:** pass 4 home lighting on `codex/home-lighting-quality`.
+  Owns `city/home-lighting-quality.js`, `city/home-quality.js`,
+  `city/home-furniture-render.js`, and a new home-lighting browser test.
+  Starting with fitted pendants and movable floor lamps; kitchen files remain
+  with Claude. The window railway is complete and merged in #197, full CI green.
 - **Claude:** continue pass 3 with soda coolers, roastery bean sacks, yakitori
   beer crates, and remaining stacked boxes. Start a separate branch from current
   main. These tasks may touch `city/counters.js`, `city/eateries.js`,
