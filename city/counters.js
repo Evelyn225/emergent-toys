@@ -43,15 +43,10 @@ function kebabWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.2) { BG[i] = C(WHITE, 4.2 + L * 0.2); return set(i, fract(u * 4) < 0.05 || fract(z * 4) < 0.05 ? '+' : ' ', C(GRAY, 3)), true; }
   BG[i] = C(GREEN, 1.6 + L * 0.15); return set(i, fract(u / 0.3) < 0.04 || fract(z / 0.3) < 0.04 ? '+' : fract((u + z) * 2) < 0.05 ? '/' : ' ', C(WHITE, 5)), true; // mirror tiles
 }
-const sodaCooler = (x, y, hl, hw, ca = 1, sa = 0) => BX(x, y, hl, hw, 0, 1.95, (i, t, L) => { // a glass-fronted fridge of bright cans and bottles
-  const front = ca ? HIT.face === 3 : HIT.face === 1 || HIT.face === 2;
-  if (!front) { BG[i] = C(GRAY, 2 + L * 0.2); return set(i, ' ', 0), true; }
-  const a = ca ? HIT.u : HIT.v; BG[i] = C(CYAN, 1.2);
-  return set(i, fract(HIT.w * 3) < 0.12 ? '=' : fract(a * 8) < 0.5 ? 'i' : ' ', C([RED, GREEN, ORANGE, WHITE, YEL, CYAN, MAG][Math.floor(a * 8 + 8 + HIT.w * 3) % 7], 13)), true;
-}, ca, sa);
+const sodaCooler = (x, y, hl, hw, fx = 0, fy = 1) => KITCHEN_DRINKS_COOLER(x, y, hl, hw, fx, fy); // glass doors facing (fx, fy)
 ROOM_DEFS.kebabshop = { grid: boxRoom(11, 8), light: 1.0, floor: 'lino', ceil: 'strip', sign: false, wall: kebabWall, keeper: [5.6, 1.6],
   props: r => [doner(2.4, 1.45), { ...standing(3.2, 1.4, WHITE), face: [-1, 0] }, // the spit, somebody carving it
-    KITCHEN_FOOD_CASE(5.6,2.35,1.7,.32,1.15,'salad',GRAY), { ...standing(5.6, 1.6, WHITE), face: [0, 1] }, sodaCooler(9.2, 1.45, 0.6, 0.38),
+    KITCHEN_FOOD_CASE(5.6,2.35,1.7,.32,1.15,'salad',GRAY), { ...standing(5.6, 1.6, WHITE), face: [0, 1] }, sodaCooler(9.2, 1.43, 0.6, 0.38),
     KITCHEN_WALL_LEDGE(9.8,4.9,1.3,.2,1.04,-1,0,GRAY), ...stoolsY(9.15, 3.9, 5.9, 1.0, GREEN, 1, 0.35), // the ledge down the side
     ...dining(2.4, 4.4, { hl: 0.35, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.35 }), ...dining(2.4, 6.2, { hl: 0.35, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.3 })] };
 
@@ -96,7 +91,7 @@ function takoWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(WHITE, 5.5 + L * 0.2); return set(i, z > 2.8 && fract(u * 3) < 0.4 ? '~' : ' ', C(RED, 8)), true; // white, a red wave round the top
 }
 ROOM_DEFS.takoyaki = { grid: boxRoom(9, 7), light: 1.05, floor: 'lino', ceil: 'strip', sign: false, wall: takoWall, keeper: [4.5, 1.6],
-  props: r => [takoGriddle(4.5, 2.4), { ...standing(4.5, 1.6, ORANGE), face: [0, 1] }, sodaCooler(7.45, 1.45, 0.45, 0.35),
+  props: r => [takoGriddle(4.5, 2.4), { ...standing(4.5, 1.6, ORANGE), face: [0, 1] }, sodaCooler(7.45, 1.4, 0.45, 0.35),
     ...plainBench(1.45, 4.4, 0.75, 1, 0, BRICK, 0.4), KITCHEN_WALL_LEDGE(7.8,4.4,.8,.2,1.04,-1,0), ...stoolsY(7.25, 4.0, 4.8, 0.8, RED, 1, 0.35)] };
 
 // ---- yakitori (YAKITORI): the charcoal trough with its skewers across it, a long counter and stools all along it, red
@@ -122,9 +117,9 @@ ROOM_DEFS.yakitori = { grid: boxRoom(11, 7), light: 0.75, floor: 'oak', ceil: 'l
   props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.75,3.6,.28,1,BRICK,BRICK), yakiGrill(5.5, 1.95, 1.6), // the counter, the grill behind it
     { ...standing(5.5, 1.45, WHITE), face: [0, 1] }, { ...standing(3.2, 1.4, WHITE), face: [1, 0] },
     ...stools(2.3, 8.7, 3.45, 0.9, BRICK, 0, -1, 0.45), akachochin(2.4, 4.5), akachochin(8.6, 4.5),
-    BX(9.55, 1.35, 0.3, 0.22, 0, 0.9, crateShade(YEL)), BX(9.55, 1.35, 0.3, 0.22, 0.9, 1.25, crateShade(YEL)), // crates of empties
-    BX(8.6, 5.2, 0.3, 0.25, 0, 0.6, crateShade(YEL)), // and three turned over: a table and somewhere to sit either side
-    ...[[7.95, 1], [9.25, -1]].flatMap(([x, fx]) => [BX(x, 5.2, 0.2, 0.17, 0, 0.38, crateShade(YEL)), SEAT(x, 5.2, fx, 0, 0.4), ...(chance(0.35) ? [{ ...sitting(x, 5.2, shirt(), 0.4), face: [fx, 0] }] : [])])] };
+    KITCHEN_BEER_CRATE(9.55, 1.35, { levels: 4, open: true }), // crates of empties
+    KITCHEN_BEER_CRATE(8.6, 5.2, { levels: 2, hw: 0.25 }), // and three turned over: a table and somewhere to sit either side
+    ...[[7.95, 1], [9.25, -1]].flatMap(([x, fx]) => [KITCHEN_BEER_CRATE(x, 5.2, { hl: 0.2, hw: 0.17, h: 0.4 }), SEAT(x, 5.2, fx, 0, 0.4), ...(chance(0.35) ? [{ ...sitting(x, 5.2, shirt(), 0.4), face: [fx, 0] }] : [])])] };
 
 // ---- donuts (DONUTS): trays of rings behind the glass (glazed, pink, chocolate, sprinkles), a giant one in neon, a
 // coffee machine; a ledge under the window, two little tables

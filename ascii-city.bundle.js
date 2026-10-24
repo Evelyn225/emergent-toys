@@ -19140,7 +19140,7 @@ function bakeryWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.bakery = { grid: boxRoom(11, 8), light: 1.0, floor: 'oak', ceil: 'pendant', sign: false, wall: bakeryWall, keeper: [5.0, 1.55],
   props: r => [KITCHEN_FOOD_CASE(5,2.35,2.2,.4,1.1,'bakery'), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
     KITCHEN_DECK_OVEN(9.18,1.5),KITCHEN_BREAD_RACK(4.5,1.14,3.1),
-    ...[[1.4, 1.5], [1.4, 2.2], [1.6, 1.85]].map(([x, y], k) => BX(x, y, 0.3, 0.22, k > 1 ? 0.35 : 0, k > 1 ? 0.7 : 0.35, (i, t, L) => { BG[i] = C(WHITE, 4.5 + L * 0.2); return set(i, (HIT.face === 3 || HIT.face === 1) && Math.abs(HIT.w - (k > 1 ? 0.52 : 0.18)) < 0.04 ? '-' : ' ', C(BLUE, 6)), true; })), // flour sacks
+    KITCHEN_FLOUR_SACKS(1.45, 1.85), // flour sacks, stacked
     ...dining(2.2, 5.6, { hl: 0.35, meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 }), ...dining(8.6, 5.6, { hl: 0.35, meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 })] };
 
 Object.assign(ROOM_FOR, { PIZZA: 'pizzeria', BURGERS: 'burgerjoint', TACOS: 'taqueria', SUSHI: 'sushibar', 'ICE CREAM': 'icecream', BAKERY: 'bakery' });
@@ -20677,15 +20677,10 @@ function kebabWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.2) { BG[i] = C(WHITE, 4.2 + L * 0.2); return set(i, fract(u * 4) < 0.05 || fract(z * 4) < 0.05 ? '+' : ' ', C(GRAY, 3)), true; }
   BG[i] = C(GREEN, 1.6 + L * 0.15); return set(i, fract(u / 0.3) < 0.04 || fract(z / 0.3) < 0.04 ? '+' : fract((u + z) * 2) < 0.05 ? '/' : ' ', C(WHITE, 5)), true; // mirror tiles
 }
-const sodaCooler = (x, y, hl, hw, ca = 1, sa = 0) => BX(x, y, hl, hw, 0, 1.95, (i, t, L) => { // a glass-fronted fridge of bright cans and bottles
-  const front = ca ? HIT.face === 3 : HIT.face === 1 || HIT.face === 2;
-  if (!front) { BG[i] = C(GRAY, 2 + L * 0.2); return set(i, ' ', 0), true; }
-  const a = ca ? HIT.u : HIT.v; BG[i] = C(CYAN, 1.2);
-  return set(i, fract(HIT.w * 3) < 0.12 ? '=' : fract(a * 8) < 0.5 ? 'i' : ' ', C([RED, GREEN, ORANGE, WHITE, YEL, CYAN, MAG][Math.floor(a * 8 + 8 + HIT.w * 3) % 7], 13)), true;
-}, ca, sa);
+const sodaCooler = (x, y, hl, hw, fx = 0, fy = 1) => KITCHEN_DRINKS_COOLER(x, y, hl, hw, fx, fy); // glass doors facing (fx, fy)
 ROOM_DEFS.kebabshop = { grid: boxRoom(11, 8), light: 1.0, floor: 'lino', ceil: 'strip', sign: false, wall: kebabWall, keeper: [5.6, 1.6],
   props: r => [doner(2.4, 1.45), { ...standing(3.2, 1.4, WHITE), face: [-1, 0] }, // the spit, somebody carving it
-    KITCHEN_FOOD_CASE(5.6,2.35,1.7,.32,1.15,'salad',GRAY), { ...standing(5.6, 1.6, WHITE), face: [0, 1] }, sodaCooler(9.2, 1.45, 0.6, 0.38),
+    KITCHEN_FOOD_CASE(5.6,2.35,1.7,.32,1.15,'salad',GRAY), { ...standing(5.6, 1.6, WHITE), face: [0, 1] }, sodaCooler(9.2, 1.43, 0.6, 0.38),
     KITCHEN_WALL_LEDGE(9.8,4.9,1.3,.2,1.04,-1,0,GRAY), ...stoolsY(9.15, 3.9, 5.9, 1.0, GREEN, 1, 0.35), // the ledge down the side
     ...dining(2.4, 4.4, { hl: 0.35, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.35 }), ...dining(2.4, 6.2, { hl: 0.35, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.3 })] };
 
@@ -20730,7 +20725,7 @@ function takoWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(WHITE, 5.5 + L * 0.2); return set(i, z > 2.8 && fract(u * 3) < 0.4 ? '~' : ' ', C(RED, 8)), true; // white, a red wave round the top
 }
 ROOM_DEFS.takoyaki = { grid: boxRoom(9, 7), light: 1.05, floor: 'lino', ceil: 'strip', sign: false, wall: takoWall, keeper: [4.5, 1.6],
-  props: r => [takoGriddle(4.5, 2.4), { ...standing(4.5, 1.6, ORANGE), face: [0, 1] }, sodaCooler(7.45, 1.45, 0.45, 0.35),
+  props: r => [takoGriddle(4.5, 2.4), { ...standing(4.5, 1.6, ORANGE), face: [0, 1] }, sodaCooler(7.45, 1.4, 0.45, 0.35),
     ...plainBench(1.45, 4.4, 0.75, 1, 0, BRICK, 0.4), KITCHEN_WALL_LEDGE(7.8,4.4,.8,.2,1.04,-1,0), ...stoolsY(7.25, 4.0, 4.8, 0.8, RED, 1, 0.35)] };
 
 // ---- yakitori (YAKITORI): the charcoal trough with its skewers across it, a long counter and stools all along it, red
@@ -20756,9 +20751,9 @@ ROOM_DEFS.yakitori = { grid: boxRoom(11, 7), light: 0.75, floor: 'oak', ceil: 'l
   props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.75,3.6,.28,1,BRICK,BRICK), yakiGrill(5.5, 1.95, 1.6), // the counter, the grill behind it
     { ...standing(5.5, 1.45, WHITE), face: [0, 1] }, { ...standing(3.2, 1.4, WHITE), face: [1, 0] },
     ...stools(2.3, 8.7, 3.45, 0.9, BRICK, 0, -1, 0.45), akachochin(2.4, 4.5), akachochin(8.6, 4.5),
-    BX(9.55, 1.35, 0.3, 0.22, 0, 0.9, crateShade(YEL)), BX(9.55, 1.35, 0.3, 0.22, 0.9, 1.25, crateShade(YEL)), // crates of empties
-    BX(8.6, 5.2, 0.3, 0.25, 0, 0.6, crateShade(YEL)), // and three turned over: a table and somewhere to sit either side
-    ...[[7.95, 1], [9.25, -1]].flatMap(([x, fx]) => [BX(x, 5.2, 0.2, 0.17, 0, 0.38, crateShade(YEL)), SEAT(x, 5.2, fx, 0, 0.4), ...(chance(0.35) ? [{ ...sitting(x, 5.2, shirt(), 0.4), face: [fx, 0] }] : [])])] };
+    KITCHEN_BEER_CRATE(9.55, 1.35, { levels: 4, open: true }), // crates of empties
+    KITCHEN_BEER_CRATE(8.6, 5.2, { levels: 2, hw: 0.25 }), // and three turned over: a table and somewhere to sit either side
+    ...[[7.95, 1], [9.25, -1]].flatMap(([x, fx]) => [KITCHEN_BEER_CRATE(x, 5.2, { hl: 0.2, hw: 0.17, h: 0.4 }), SEAT(x, 5.2, fx, 0, 0.4), ...(chance(0.35) ? [{ ...sitting(x, 5.2, shirt(), 0.4), face: [fx, 0] }] : [])])] };
 
 // ---- donuts (DONUTS): trays of rings behind the glass (glazed, pink, chocolate, sprinkles), a giant one in neon, a
 // coffee machine; a ledge under the window, two little tables
@@ -21036,7 +21031,7 @@ ROOM_DEFS.mahjong = { grid: backWc(15, 10), wc: wcAt(15), light: 0.85, floor: 'l
 // ---- the coffee roastery (COFFEE; CAFE keeps the old cafe): the roaster turning its beans over in the cooling tray,
 // sacks of green coffee stacked, a pour-over bar with stools, a long table to work at, armchairs by the plants
 const roaster = (x,y) => KITCHEN_COFFEE_ROASTER(x,y);
-const beanSacks = (x, y) => [[0, 0, 0], [0.5, 0, 0], [0.25, 0.05, 0.38]].map(([dx, dy, z]) => BX(x + dx, y + dy, 0.24, 0.2, z, z + 0.38, (i, t, L) => { BG[i] = C(STONE, (2.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, (HIT.face === 3 || HIT.face === 4) && Math.abs(HIT.w - z - 0.2) < 0.05 ? '#' : fract(HIT.u * 10 + HIT.w * 10) < 0.15 ? ',' : ' ', C(BRICK, 6)), true; }));
+const beanSacks = (x, y) => [KITCHEN_COFFEE_SACK(x, y, 'ETHIOPIA'), KITCHEN_COFFEE_SACK(x + 0.5, y + 0.02, 'COLOMBIA')]; // open, beans showing
 const pourOver = (x,y) => KITCHEN_POUR_OVER(x,y);
 function roasteryWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -21114,7 +21109,7 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
   props: r => [BX(7.55, 6.4, 1.0, 0.28, 0, 1.05, solid(BRICK, { top: '=', panel: 0.5 }), 0, 1), BX(7.3, 6.4, 1.0, 0.02, 1.05, 1.95, plexi, 0, 1), // the counter, the plexiglass
     { ...standing(8.4, 6.4, r.neon), face: [-1, 0] }, shopCat(7.6, 7.05, 1.05),
     ...glassCase(5.0, 1.95, 2.0, 0.32, 1.15, deliMeats, GRAY), { ...standing(4.4, 1.4, WHITE), face: [0, 1] }, BX(6.6, 1.3, 0.6, 0.25, 0, 0.92, grillTop),
-    sodaCooler(1.38, 6.2, 1.0, 0.36, 0, 1), BX(3.1, 7.55, 0.32, 0.25, 0, 0.9, crateShade(RED)), BX(3.1, 7.55, 0.3, 0.23, 0.9, 1.2, crateShade(RED)), // crates of soda, stacked
+    sodaCooler(1.38, 6.2, 1.0, 0.36, 1, 0), BX(3.1, 7.55, 0.32, 0.25, 0, 0.9, crateShade(RED)), BX(3.1, 7.55, 0.3, 0.23, 0.9, 1.2, crateShade(RED)), // crates of soda, stacked
     BX(1.5, 2.3, 0.2, 0.17, 0, 0.38, crateShade(BLUE)), SEAT(1.5, 2.3, 1, 0, 0.4), ...(chance(0.5) ? [{ ...sitting(1.5, 2.3, shirt(), 0.4), face: [1, 0] }] : [])] }; // a milk crate to sit on, and the old man who does
 
 // ---- the market hall (MARKET): stalls under striped awnings round the walls (fish on ice, fruit and veg, the butcher,
@@ -21203,7 +21198,7 @@ ROOM_DEFS.motel = { grid: boxRoom(10, 8, { '7,0': 'E', '8,0': 'E' }), light: 0.8
   props: r => [BX(3.0, 2.4, 1.3, 0.32, 0, 1.1, solid(BRICK, { top: '=', panel: 0.45, trim: 1.04 })), { ...standing(3.0, 1.7, r.neon), face: [0, 1] },
     ROOM_MODEL(3.6, 2.35, (vx, vy) => { drum(vx, vy, 0.05, 1.1, 1.13, solid(GRAY)); dot(vx, vy, 1.15, 0.035, (i, t, L) => { BG[i] = C(YEL, 8); return set(i, ' ', 0), true; }); }), // the bell
     BX(6.1, 1.4, 0.4, 0.35, 0, 1.5, (i, t, L) => { BG[i] = C(WHITE, (3 + L * 0.3) * shadeFace(HIT.face)); if (HIT.face <= 4 && HIT.w > 1.15 && HIT.w < 1.4) { BG[i] = C(BLUE, 5); return set(i, '*', C(WHITE, 14)), true; } return set(i, HIT.face <= 4 && Math.abs(HIT.w - 0.7) < 0.03 ? '=' : ' ', C(GRAY, 6)), true; }), // the ice machine, a snowflake band on it
-    sodaCooler(8.6, 3.0, 0.45, 0.35, 0, 1), BX(8.75, 4.4, 0.4, 0.15, 0, 1.4, (i, t, L) => { BG[i] = C(BRICK, 1.5); return set(i, HIT.face === 1 || HIT.face === 2 ? (fract(HIT.w * 4) < 0.6 ? '#' : '=') : ' ', C([YEL, CYAN, MAG, GREEN][Math.floor(HIT.v * 6 + HIT.w * 4 + 9) & 3], 10)), true; }, 0, 1), // brochures
+    sodaCooler(8.6, 3.0, 0.45, 0.35, -1, 0), BX(8.75, 4.4, 0.4, 0.15, 0, 1.4, (i, t, L) => { BG[i] = C(BRICK, 1.5); return set(i, HIT.face === 1 || HIT.face === 2 ? (fract(HIT.w * 4) < 0.6 ? '#' : '=') : ' ', C([YEL, CYAN, MAG, GREEN][Math.floor(HIT.v * 6 + HIT.w * 4 + 9) & 3], 10)), true; }, 0, 1), // brochures
     ...couch(1.5, 6.0, 0.9, 1, 0, BRICK), ...(chance(0.4) ? [{ ...sitting(1.55, 6.5, shirt(), 0.42), face: [1, 0] }] : []), BX(3.0, 6.0, 0.4, 0.3, 0, 0.45, solid(BRICK, { top: '=' }), 0, 1), // the couch, the coffee table
     POT_PLANT(8.5, 6.8, 1.3)] };
 
@@ -37124,6 +37119,192 @@ function KITCHEN_PRODUCE_CRATE(x,y,kind) {
     drawBox({...boxAt(vx,vy,1,0,PRODUCE_HL,PRODUCE_HW,0,base),...baseProfile},slats,homeRayWorktop);
   }),box:boxAt(x,y,1,0,PRODUCE_HL,PRODUCE_HW,0,height),radius:Math.hypot(PRODUCE_HL,PRODUCE_HW),
     produceCrate:{kind,floor,rim:PRODUCE_RIM,inner:[PRODUCE_HL-PRODUCE_WALL,PRODUCE_HW-PRODUCE_WALL],fruit,bananas}};
+}
+// Drinks coolers, sacks and beer crates are built objects: a cooler is a lit
+// carcass with shelves, real cans and bottles behind framed glass doors; sacks
+// are filled pillows or open standing jute; crates are plastic shells holding
+// bottles in a divided grid. Nothing is painted onto a box face any more.
+const COOLER_HEIGHT=1.95,COOLER_LEVELS=[.12,.44,.76,1.08,1.40],COOLER_TOP=1.75,COOLER_WALL=.03;
+const COOLER_COLOURS=[RED,GREEN,ORANGE,WHITE,YEL,CYAN,BLUE,MAG];
+const COOLER_CAN=[[0,0],[0,.030],[.004,.033],[.112,.033],[.120,.026],[.122,.026],[.122,0]];
+const COOLER_BOTTLE=[[0,0],[0,.027],[.005,.030],[.15,.030],[.20,.014],[.25,.012],[.255,.014],[.262,.013],[.262,0]];
+const CRATE_BOTTLE=[[0,0],[0,.033],[.006,.036],[.19,.036],[.235,.016],[.275,.014],[.282,.016],[.29,.014],[.29,0]];
+function coolerCanShade(col,top) {
+  return (i,t,L)=>{
+    const lid=HIT.w>top-.008,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
+    if(lid)return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz);
+    BG[i]=C(col,4.2+L*.42*light);set(i,' ',0);return true;
+  };
+}
+function coolerBottleShade(col,glass,base) {
+  return (i,t,L)=>{
+    const z=HIT.w-base,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
+    if(z>.248){BG[i]=C(col,5+L*.3*light);set(i,' ',0);return true;} // the cap
+    BG[i]=z>.06&&z<.13?C(col,4.4+L*.42*light):C(glass,2.2+L*.3*light);set(i,' ',0);return true;
+  };
+}
+// (fx,fy) points out of the doors into the room; the back stands at the wall.
+function KITCHEN_DRINKS_COOLER(x,y,half,depth,fx,fy) {
+  const c=-fy,s=fx,doors=Math.max(2,Math.round(half*2/.6)),pitch=half*2/doors,steel=kitchenSteel;
+  const panel=(hl,hw,z0,z1)=>({...kitchenPanelProfile(hl,hw,z0,z1,.004)});
+  const facing=()=>HIT.nx*fx+HIT.ny*fy>.6;
+  const carcass=(i,t,L)=>facing()&&HIT.w<COOLER_TOP&&HIT.w>COOLER_LEVELS[0]?(BG[i]=C(WHITE,6+L*.25),set(i,' ',0),true):steel(i,t,L);
+  const header=(i,t,L)=>{
+    if(!facing())return steel(i,t,L);
+    BG[i]=C(WHITE,9+L*.2);
+    set(i,worldText('COLD DRINKS',-HIT.u,HIT.w,t,i,headerX,headerY,COOLER_TOP+.1,ex,ey,.055,.075),C(BLACK,0));return true;
+  };
+  const grille=(i,t,L)=>{
+    if(!facing())return steel(i,t,L);
+    const slot=coveGroove(HIT.w,.025,.010,t/projX);BG[i]=C(GRAY,Math.max(.5,2.4+L*.2-slot*2));set(i,' ',0);return true;
+  };
+  const glass=(i,t,L)=>{
+    const glint=coveGroove(HIT.u+HIT.w*.55,1.1,.004,t/projX)*coveDetail(t);
+    if(glint<.5)return false;BG[i]=C(CYAN,2.4+L*.2);set(i,' ',0);return true;
+  };
+  const ex=fy,ey=-fx;let headerX=0,headerY=0;
+  // Products: one front-facing row per shelf, cans and bottles on alternate
+  // shelves, grouped in facings of three.
+  const goods=[],inner=half-COOLER_WALL-.01;
+  for(const [row,z]of COOLER_LEVELS.entries()) {
+    const can=row%2===0,spacing=can?.074:.068,n=Math.floor(inner*2/spacing);
+    for(let k=0;k<n;k++) {
+      const col=COOLER_COLOURS[Math.floor(hash(Math.floor(k/3),row,x*7+y,601)*COOLER_COLOURS.length)];
+      const glassCol=[GREEN,BRICK,WHITE][Math.floor(k/3+row)%3];
+      goods.push({u:(k-(n-1)/2)*spacing,v:depth-.12,z,can,shade:can?coolerCanShade(col,z+.122):coolerBottleShade(col,glassCol,z)});
+    }
+  }
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
+    [headerX,headerY]=at(0,depth-.01);
+    for(let d=0;d<doors;d++) { // handles first: the nearest parts
+      const u=-half+pitch*(d+.5)+(d%2?-1:1)*(pitch/2-.07),[ax,ay]=at(u,depth+.035),[bx,by]=at(u,depth+.01);
+      coveTube(ax,ay,.80,ax,ay,1.30,.011,GRAY);
+      for(const z of [.82,1.28])coveTube(ax,ay,z,bx,by,z,.007,GRAY);
+    }
+    for(let d=0;d<=doors;d++) {
+      const [sx,sy]=at(-half+pitch*d,depth-.015),w=d===0||d===doors?.022:.03;
+      drawBox({...boxAt(sx,sy,c,s,w,.015,COOLER_LEVELS[0],COOLER_TOP),...panel(w,.015,COOLER_LEVELS[0],COOLER_TOP)},steel,homeRayWorktop);
+    }
+    for(const [z0,z1]of [[COOLER_LEVELS[0],COOLER_LEVELS[0]+.04],[COOLER_TOP-.04,COOLER_TOP]]) {
+      const [rx,ry]=at(0,depth-.015);drawBox({...boxAt(rx,ry,c,s,half,.015,z0,z1),...panel(half,.015,z0,z1)},steel,homeRayWorktop);
+    }
+    const [wx,wy]=at(0,depth-.015);drawBox(boxAt(wx,wy,c,s,half-.02,.004,COOLER_LEVELS[0]+.04,COOLER_TOP-.04),glass);
+    for(const q of goods) {
+      const [gx,gy]=at(q.u,q.v);coveLathe(gx,gy,q.z,q.can?COOLER_CAN:COOLER_BOTTLE,q.shade);
+    }
+    for(const z of COOLER_LEVELS.slice(1)) {
+      const [sx,sy]=at(0,-.03);
+      drawBox({...boxAt(sx,sy,c,s,half-COOLER_WALL,depth-.08,z-.015,z),...kitchenTopProfile(half-COOLER_WALL,depth-.08,z-.015,z,.003)},steel,homeRayWorktop);
+    }
+    const [hx,hy]=at(0,0);
+    drawBox({...boxAt(hx,hy,c,s,half,depth,COOLER_TOP,COOLER_HEIGHT),...kitchenTopProfile(half,depth,COOLER_TOP,COOLER_HEIGHT,.01)},header,homeRayWorktop);
+    drawBox({...boxAt(hx,hy,c,s,half,depth,0,COOLER_LEVELS[0]),...panel(half,depth,0,COOLER_LEVELS[0])},grille,homeRayWorktop);
+    for(const side of [-1,1]) {
+      const [sx,sy]=at(side*(half-COOLER_WALL/2),0);
+      drawBox({...boxAt(sx,sy,c,s,COOLER_WALL/2,depth,COOLER_LEVELS[0],COOLER_TOP),...panel(COOLER_WALL/2,depth,COOLER_LEVELS[0],COOLER_TOP)},steel,homeRayWorktop);
+    }
+    const [bx,by]=at(0,-depth+COOLER_WALL/2);
+    drawBox({...boxAt(bx,by,c,s,half,COOLER_WALL/2,COOLER_LEVELS[0],COOLER_TOP),...panel(half,COOLER_WALL/2,COOLER_LEVELS[0],COOLER_TOP)},carcass,homeRayWorktop);
+  }),box:boxAt(x,y,c,s,half,depth,0,COOLER_HEIGHT),radius:Math.hypot(half,depth)+.05,
+    drinksCooler:{half,depth,fx,fy,doors,goods:goods.map(({u,v,z,can})=>({u,v,z,can}))}};
+}
+
+// ---- sacks
+function sackWeave(base,lv) {
+  return (i,t,L)=>{
+    const f=t/projX,weave=(coveGroove(HIT.u,.006,.002,f)+coveGroove(HIT.w+HIT.v,.006,.002,f))*coveDetail(t);
+    BG[i]=C(base,lv+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)-weave*.6);set(i,' ',0);return true;
+  };
+}
+// Paper flour sacks lie flat, printed with blue bands: two layers of two,
+// one across the top. Each layer's underside meets the flat top beneath.
+const FLOUR_SACK={hl:.3,hw:.225,h:.16,r:.06};
+function flourSackLayout() {
+  const {hl,hw,h}=FLOUR_SACK,out=[];
+  for(let layer=0;layer<2;layer++)for(const v of [-hw,hw])out.push({u:0,v,c:1,s:0,z0:layer*h,z1:(layer+1)*h});
+  out.push({u:0,v:0,c:0,s:1,z0:2*h,z1:3*h});
+  return out.map(q=>({...q,hl,hw}));
+}
+function KITCHEN_FLOUR_SACKS(x,y) {
+  const sacks=flourSackLayout(),{hl,hw,h,r}=FLOUR_SACK,paper=sackWeave(WHITE,6);
+  const printed=(i,t,L)=>{
+    paper(i,t,L);
+    if(HIT.nz>.3&&Math.abs(Math.abs(HIT.u)-hl*.66)<.02)BG[i]=C(BLUE,4+L*.2); // the printed bands
+    return true;
+  };
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(let k=sacks.length-1;k>=0;k--) {
+      const q=sacks[k],sx=vx+q.u,sy=vy+q.v;
+      coveRound(sx,sy,q.c,q.s,q.hl,q.hw,q.z0,q.z1,r,printed);
+    }
+  }),box:boxAt(x,y,1,0,hl,hw*2,0,3*h),radius:Math.hypot(hl,hw*2),sacks:{kind:'flour',parts:sacks,round:r}};
+}
+// Open jute coffee sacks stand with their tops rolled down round the beans,
+// printed with two stripes all the way round.
+const COFFEE_SACK=[[0,0],[0,.17],[.03,.2],[.25,.23],[.44,.212],[.50,.214],[.525,.228],[.548,.218],[.55,.200],[.535,.192],[.47,.188],[.47,0]];
+const COFFEE_BEANS=.47;
+function KITCHEN_COFFEE_SACK(x,y,origin) {
+  const jute=sackWeave(STONE,3);
+  const shade=(i,t,L)=>{
+    if(HIT.nz>.9&&HIT.w<COFFEE_BEANS+.002) { // green coffee: pale olive beans
+      const bean=Math.sin(HIT.u*420)*Math.sin(HIT.v*380+HIT.u*90)*coveDetail(t);
+      BG[i]=C(YEL,2.6+L*.22-Math.max(0,bean)*1.1);set(i,' ',0);return true;
+    }
+    jute(i,t,L);
+    if(Math.abs(HIT.w-.13)<.014||Math.abs(HIT.w-.37)<.014)BG[i]=C(RED,2.6+L*.2);
+    return true;
+  };
+  return {...ROOM_MODEL(x,y,(vx,vy)=>coveLathe(vx,vy,0,COFFEE_SACK,shade)),
+    box:boxAt(x,y,1,0,.23,.23,0,.55),radius:.25,sack:{kind:'coffee',origin,beans:COFFEE_BEANS}};
+}
+
+// ---- beer crates
+const CRATE_COLS=5,CRATE_ROWS=4;
+function crateShell(col,hl,hw) {
+  // (top,base) bound one crate. Closed crates have open lattice sides, dark
+  // because their insides are in shadow; every crate has a hand hold at each
+  // end and a seam where it sits on the one below. Upturned bases show the
+  // drainage grid.
+  return (i,t,L,top=-9,base=-9,lattice=false)=>{
+    const light=coveLight(HIT.nx,HIT.ny,HIT.nz),f=t/projX,z=HIT.w;
+    let dark=0;
+    if(HIT.face===5)dark=Math.min(1,coveGroove(HIT.u,.045,.014,f)+coveGroove(HIT.v,.045,.014,f))*.7;
+    else if(HIT.face!==6) {
+      const end=HIT.face<=2,along=end?HIT.v/hw:HIT.u/hl,cells=end?2:4,k=fract((along+1)/2*cells);
+      if(z<base+.012)dark=1.6;
+      else if(end&&Math.abs(HIT.v)<.07&&z>top-.09&&z<top-.045)dark=2.4; // the hand hold
+      else if(lattice&&k>.14&&k<.86&&z>base+.05&&z<top-(end?.11:.07))dark=2.4;
+    }
+    BG[i]=C(col,Math.max(.3,4.6+L*.42*light-dark*2));set(i,' ',0);return true;
+  };
+}
+// A stack of `levels` crates, each `h` tall. Closed crates are stacked or
+// upturned (their solid base on top); an open top crate holds empty bottles
+// in a divided grid with their necks above the rim.
+function KITCHEN_BEER_CRATE(x,y,{levels=1,open=false,hl=.3,hw=.22,h=.3,col=YEL}={}) {
+  const shade=crateShell(col,hl,hw),closed=open?levels-1:levels,top=closed*h,openH=.25;
+  const cellU=(hl-.008)*2/CRATE_COLS,cellV=(hw-.008)*2/CRATE_ROWS,bottles=[];
+  if(open)for(let i=0;i<CRATE_COLS;i++)for(let j=0;j<CRATE_ROWS;j++)
+    if(hash(i,j,x*13+y,611)>.1)bottles.push({u:-hl+.008+cellU*(i+.5),v:-hw+.008+cellV*(j+.5),z:top+.008});
+  const glass=(i,t,L)=>{
+    const light=coveLight(HIT.nx,HIT.ny,HIT.nz),glint=HIT.nz<.3&&light>.9;
+    BG[i]=C(BRICK,1.6+L*.28*light+(glint?2:0));set(i,' ',0);return true;
+  };
+  const profiles=Array.from({length:closed},(_,k)=>kitchenTopProfile(hl,hw,k*h,(k+1)*h,.012));
+  const crates=profiles.map((_,k)=>(i,t,L)=>shade(i,t,L,(k+1)*h,k*h,true)),rim=(i,t,L)=>shade(i,t,L,top+openH,top);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const q of bottles)coveLathe(vx+q.u,vy+q.v,q.z,CRATE_BOTTLE,glass);
+    if(open) {
+      for(let i=1;i<CRATE_COLS;i++)drawBox({...boxAt(vx-hl+.008+cellU*i,vy,1,0,.003,hw-.008,top+.008,top+openH-.03),
+        ...kitchenPanelProfile(.003,hw-.008,top+.008,top+openH-.03,.001)},shade,homeRayWorktop);
+      for(let j=1;j<CRATE_ROWS;j++)drawBox({...boxAt(vx,vy-hw+.008+cellV*j,1,0,hl-.008,.003,top+.008,top+openH-.03),
+        ...kitchenPanelProfile(hl-.008,.003,top+.008,top+openH-.03,.001)},shade,homeRayWorktop);
+      foodTray(vx,vy,top,hl,hw,openH,rim);
+    }
+    for(let k=closed-1;k>=0;k--)drawBox({...boxAt(vx,vy,1,0,hl,hw,k*h,(k+1)*h),...profiles[k]},crates[k],homeRayWorktop);
+  }),box:boxAt(x,y,1,0,hl,hw,0,open?top+openH:top),radius:Math.hypot(hl,hw)+.02,
+    beerCrate:{levels,open,hl,hw,h,top,openH,bottles,cell:[cellU,cellV]}};
 }
 // Fern's front is west toward the dock. The room's south entrance therefore
 // maps through a quarter turn; windows and the world-view camera share it.

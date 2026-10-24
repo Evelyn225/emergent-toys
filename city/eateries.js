@@ -284,7 +284,7 @@ function bakeryWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.bakery = { grid: boxRoom(11, 8), light: 1.0, floor: 'oak', ceil: 'pendant', sign: false, wall: bakeryWall, keeper: [5.0, 1.55],
   props: r => [KITCHEN_FOOD_CASE(5,2.35,2.2,.4,1.1,'bakery'), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
     KITCHEN_DECK_OVEN(9.18,1.5),KITCHEN_BREAD_RACK(4.5,1.14,3.1),
-    ...[[1.4, 1.5], [1.4, 2.2], [1.6, 1.85]].map(([x, y], k) => BX(x, y, 0.3, 0.22, k > 1 ? 0.35 : 0, k > 1 ? 0.7 : 0.35, (i, t, L) => { BG[i] = C(WHITE, 4.5 + L * 0.2); return set(i, (HIT.face === 3 || HIT.face === 1) && Math.abs(HIT.w - (k > 1 ? 0.52 : 0.18)) < 0.04 ? '-' : ' ', C(BLUE, 6)), true; })), // flour sacks
+    KITCHEN_FLOUR_SACKS(1.45, 1.85), // flour sacks, stacked
     ...dining(2.2, 5.6, { hl: 0.35, meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 }), ...dining(8.6, 5.6, { hl: 0.35, meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 })] };
 
 Object.assign(ROOM_FOR, { PIZZA: 'pizzeria', BURGERS: 'burgerjoint', TACOS: 'taqueria', SUSHI: 'sushibar', 'ICE CREAM': 'icecream', BAKERY: 'bakery' });
