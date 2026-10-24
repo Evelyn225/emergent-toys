@@ -15982,6 +15982,7 @@ const ROOM_DEFS = {
   diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, BACK_COUNTER_STAFF_Y], wall: dinerWall,
     props: r => {
       const p = [...counterBox(6, BACK_COUNTER_Y, 2), standing(6, BACK_COUNTER_STAFF_Y, WHITE), ...toilet(1.6, 1.4, -1, porcelain),washbasin(1.35,2.55,1,0)];
+      p.push(KITCHEN_FLATTOP(10,1.4,1,.35,'burger'));
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
         for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] },
@@ -16282,9 +16283,6 @@ const trainShade = (open, k) => (i, t, L) => {
 
 function dinerWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== 0) return false;
-  if (z > 1.0 && z < 1.6 && Math.abs(u - room.W / 2) < 1.8) { // kitchen pass-through, with a hot glow
-    set(i, hash(Math.floor(u * 8), Math.floor(z * 8 + T * 3), 5) > 0.8 ? '~' : '.', C(ORANGE, 10)); BG[i] = C(ORANGE, 2); return true;
-  }
   if (wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.35, 0.3, C(room.neon, 15))) return true;
   for (const [u0, s] of [[2.6, 0], [room.W - 2.6, 1]]) if (Math.abs(u - u0) < 1.3 && z > 1.45 && z < 2.35) { // menu boards
     BG[i] = C(GRAY, 1);
@@ -20856,7 +20854,6 @@ const spiritHouse = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.28, 0.22, 1.98]);
 function thaiWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 1.05 && z < 1.6 && u > 3.6 && u < 6.4) { const g = noise(u * 6, z * 6 - T * 3, 120); BG[i] = C(ORANGE, 2 + g * 4); return set(i, g > 0.65 ? '^' : '.', C(YEL, 10)), true; } // the pass, woks flaring behind it
   if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.3, 0.34, C(YEL, 14), C(RED, 2))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.7, 2.05, menuLines(), 1.15, C(RED, 1.4), C(YEL, 14))) return true;
   if (!backWall(my) && z > 1.35 && z < 2.25) { // gold elephants, trunks up, one after another
@@ -20870,7 +20867,7 @@ function thaiWall(i, u, uStep, z, d, mx, my, L) {
 }
 const teak = solid(BRICK, { top: '=', bright: 1.2 });
 ROOM_DEFS.thai = { grid: backWc(13, 9), wc: wcAt(13), light: 0.8, floor: 'oak', ceil: 'pendant', sign: false, wall: thaiWall, keeper: [5.0, 1.6],
-  props: r => [...counterBox(5.0, 2.3, 1.4), { ...standing(5.0, 1.6, RED), face: [0, 1] }, spiritHouse(1.5, 1.45), POT_PLANT(8.4, 1.4, 1.2), POT_PLANT(11.5, 6.0, 1.1),
+  props: r => [...counterBox(5.0, 2.3, 1.4), { ...standing(5.0, 1.6, RED), face: [0, 1] }, KITCHEN_WOK_RANGE(), spiritHouse(1.5, 1.45), POT_PLANT(8.4, 1.4, 1.2), POT_PLANT(11.5, 6.0, 1.1),
     ...dining(2.6, 4.9, { top: teak, chairCol: BRICK }), ...dining(6.0, 4.9, { top: teak, chairCol: BRICK, busy: 0.35 }), ...dining(9.8, 4.9, { top: teak, chairCol: BRICK }),
     ...dining(2.6, 7.2, { top: teak, chairCol: BRICK, busy: 0.3 }), ...dining(9.8, 7.2, { top: teak, chairCol: BRICK, busy: 0.3 }), ...wcFittings(13)] };
 
@@ -35862,7 +35859,10 @@ function kitchenProfile(kind,scale=1,wide=scale) {
   return kitchenScaledProfiles.get(key);
 }
 function kitchenInnerRadius(kind,height,scale=1,wide=scale) {
-  const profile=kitchenProfile(kind,scale,wide);let inner=Infinity;
+  return kitchenProfileInnerRadius(kitchenProfile(kind,scale,wide),height);
+}
+function kitchenProfileInnerRadius(profile,height) {
+  let inner=Infinity;
   for(let k=1;k<profile.length;k++) {
     const [za,ra]=profile[k-1],[zb,rb]=profile[k];
     if(zb>=za||height<zb||height>za)continue;
@@ -36863,7 +36863,7 @@ function KITCHEN_TAKO_GRIDDLE(x,y) {
     }
   }),box:boxAt(x,y+.007,1,0,1.3,.358,0,1.006),radius:1.6,kitchenPlate:{kind:'takoyaki'}};
 }
-function KITCHEN_FLATTOP(x,y,hl=1,hw=.35) {
+function KITCHEN_FLATTOP(x,y,hl=1,hw=.35,meal='tacos') {
   const channel={u:0,v:.27,hl:hl-.06,hw:.045,bottom:.915,top:.960};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     coveRound(vx,vy,1,0,hl,hw,0,.90,.015,kitchenSteel);
@@ -36874,12 +36874,16 @@ function KITCHEN_FLATTOP(x,y,hl=1,hw=.35) {
     foodTray(vx,vy+channel.v,channel.bottom,channel.hl,channel.hw,channel.top-channel.bottom);
     coveRound(vx,vy-hw+.025,1,0,hl,.025,.96,1.12,.008,kitchenSteel);
     for(const u of [-.4,0,.4])foodOval(vx+u,vy+hw+.001,.74,.03,.012,.065,kitchenGlaze(BRICK));
-    for(const u of [-.60,-.28])coveLathe(vx+u,vy-.09,.96,[[0,0],[0,.08],[.004,.08],[.005,0]],kitchenFoodShade(YEL));
-    for(let k=0;k<8;k++) {
+    if(meal==='burger')for(const u of [-.60,-.20,.20,.60])for(const v of [-.12,.10])
+      foodOval(vx+u,vy+v,.96,.075,.075,.025,kitchenFoodShade(BRICK));
+    else {
+     for(const u of [-.60,-.28])coveLathe(vx+u,vy-.09,.96,[[0,0],[0,.08],[.004,.08],[.005,0]],kitchenFoodShade(YEL));
+     for(let k=0;k<8;k++) {
       const u=.05+(k%4)*.17,v=-.08+Math.floor(k/4)*.15;
       foodOval(vx+u,vy+v,.96,.045,.025,.025,kitchenFoodShade(k%2?BRICK:ORANGE));
+     }
     }
-  }),box:boxAt(x,y+.007,1,0,hl,hw+.013,0,1.12),radius:hl+.3,kitchenPlate:{kind:'flat-top',channel},
+  }),box:boxAt(x,y+.007,1,0,hl,hw+.013,0,1.12),radius:hl+.3,kitchenPlate:{kind:'flat-top',channel,meal},
     tick:s=>kitchenSteamerSteam(s,.988)};
 }
 function KITCHEN_POT_STOVE(x,y,water=false) {
@@ -36900,6 +36904,47 @@ function KITCHEN_POT_STOVE(x,y,water=false) {
     }
   }),box:boxAt(x,y+.008,1,0,water?.47:.40,hw+.012,0,top+potHeight+.012),radius:.65,
     kitchenPlate:{kind:water?'bagel-kettle':'stockpot',top,scale,wide},tick:s=>kitchenSteamerSteam(s,top+.127*scale+.025)};
+}
+// Thin closed iron bowls, their supporting rings and the food share heights.
+// The small flames light themselves; the range and wall retain ordinary light.
+const WOK={top:.84,base:.91,fill:.98,centers:[-.37,.37],y:-.01};
+const WOK_PROFILE=[[0,0],[0,.08],[.015,.125],[.05,.185],[.095,.225],[.13,.24],
+  [.135,.24],[.135,.235],[.095,.220],[.05,.180],[.015,.118],[.006,.078],[.006,0]];
+const WOK_SUPPORT=[[0,0],[0,.11],[.015,.11],[.015,.09],[.065,.095],[.07,.095],
+  [.07,.06],[.015,.055],[.015,0]];
+const WOK_LIQUID=[kitchenProfileInnerRadius(WOK_PROFILE,WOK.fill-WOK.base),kitchenProfileInnerRadius(WOK_PROFILE,WOK.fill+.001-WOK.base)];
+function kitchenWok(x,y) {
+  coveLathe(x,y,WOK.top,WOK_SUPPORT,kitchenIron);
+  for(let k=0;k<6;k++){
+    const a=k*Math.PI/3,r=.10;
+    coveLathe(x+Math.cos(a)*r,y+Math.sin(a)*r,.855,[[0,0],[0,.008],[.046,.002],[.046,0]],(i,t,L)=>{
+      BG[i]=C(BLUE,7+Math.sin(T*9+k)*.5);set(i,' ',0);return true;
+    });
+  }
+  coveLathe(x,y,WOK.base,WOK_PROFILE,kitchenIron);
+  coveTube(x,y+.223,1.019,x,y+.325,1.05,.008,GRAY);
+  coveRound(x,y+.40,0,1,.09,.017,1.035,1.065,.014,'wood',17);
+  coveLathe(x,y,WOK.fill,[[0,0],[0,WOK_LIQUID[0]],[.001,WOK_LIQUID[1]],[.001,0]],kitchenFoodShade(BRICK));
+  // Joined short curves lie on the food surface, rather than floating over it.
+  for(let n=0;n<5;n++)for(let k=0;k<3;k++){
+    const at=q=>[-.11+q*.22,(n-2)*.03+Math.sin(q*Math.PI+n*.4)*.015];
+    const a=at(k/3),b=at((k+1)/3);
+    coveTube(x+a[0],y+a[1],WOK.fill+.004,x+b[0],y+b[1],WOK.fill+.004,.003,YEL);
+  }
+  for(let k=0;k<6;k++){
+    const a=k*Math.PI/3,r=.12;
+    foodOval(x+Math.cos(a)*r,y+Math.sin(a)*r,WOK.fill+.001,.022,.014,.018,kitchenFoodShade(k%2?GREEN:RED));
+  }
+}
+function KITCHEN_WOK_RANGE(x=7.2,y=1.4) {
+  const cabinet=KITCHEN_SERVICE_COUNTER(0,0,.8,.35,WOK.top,GRAY,GRAY);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    cabinet.draw(vx,vy);
+    coveRound(vx,vy-.33,1,0,.8,.02,WOK.top,1.08,.008,kitchenSteel);
+    for(const u of WOK.centers)kitchenWok(vx+u,vy+WOK.y);
+    for(const u of [-.37,.37])foodOval(vx+u,vy+.351,.67,.028,.012,.055,kitchenGlaze(BRICK));
+  }),box:boxAt(x,y+.07,1,0,.8,.42,0,1.08),radius:1,kitchenWok:true,
+    tick:s=>kitchenSteamerSteam(s,WOK.fill+.025,WOK.centers[mod(Math.floor(T/1.1),2)],WOK.y)};
 }
 // Mounted displays replace flat wall pictures. Upright rings and hollow cups
 // share the food/tableware profiles; labels use the prop font's projection.

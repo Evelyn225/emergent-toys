@@ -33,7 +33,6 @@ const spiritHouse = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
 }, [0.28, 0.22, 1.98]);
 function thaiWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
-  if (backWall(my) && z > 1.05 && z < 1.6 && u > 3.6 && u < 6.4) { const g = noise(u * 6, z * 6 - T * 3, 120); BG[i] = C(ORANGE, 2 + g * 4); return set(i, g > 0.65 ? '^' : '.', C(YEL, 10)), true; } // the pass, woks flaring behind it
   if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.3, 0.34, C(YEL, 14), C(RED, 2))) return true;
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.7, 2.05, menuLines(), 1.15, C(RED, 1.4), C(YEL, 14))) return true;
   if (!backWall(my) && z > 1.35 && z < 2.25) { // gold elephants, trunks up, one after another
@@ -47,7 +46,7 @@ function thaiWall(i, u, uStep, z, d, mx, my, L) {
 }
 const teak = solid(BRICK, { top: '=', bright: 1.2 });
 ROOM_DEFS.thai = { grid: backWc(13, 9), wc: wcAt(13), light: 0.8, floor: 'oak', ceil: 'pendant', sign: false, wall: thaiWall, keeper: [5.0, 1.6],
-  props: r => [...counterBox(5.0, 2.3, 1.4), { ...standing(5.0, 1.6, RED), face: [0, 1] }, spiritHouse(1.5, 1.45), POT_PLANT(8.4, 1.4, 1.2), POT_PLANT(11.5, 6.0, 1.1),
+  props: r => [...counterBox(5.0, 2.3, 1.4), { ...standing(5.0, 1.6, RED), face: [0, 1] }, KITCHEN_WOK_RANGE(), spiritHouse(1.5, 1.45), POT_PLANT(8.4, 1.4, 1.2), POT_PLANT(11.5, 6.0, 1.1),
     ...dining(2.6, 4.9, { top: teak, chairCol: BRICK }), ...dining(6.0, 4.9, { top: teak, chairCol: BRICK, busy: 0.35 }), ...dining(9.8, 4.9, { top: teak, chairCol: BRICK }),
     ...dining(2.6, 7.2, { top: teak, chairCol: BRICK, busy: 0.3 }), ...dining(9.8, 7.2, { top: teak, chairCol: BRICK, busy: 0.3 }), ...wcFittings(13)] };
 

@@ -45,7 +45,7 @@ function KITCHEN_TAKO_GRIDDLE(x,y) {
     }
   }),box:boxAt(x,y+.007,1,0,1.3,.358,0,1.006),radius:1.6,kitchenPlate:{kind:'takoyaki'}};
 }
-function KITCHEN_FLATTOP(x,y,hl=1,hw=.35) {
+function KITCHEN_FLATTOP(x,y,hl=1,hw=.35,meal='tacos') {
   const channel={u:0,v:.27,hl:hl-.06,hw:.045,bottom:.915,top:.960};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     coveRound(vx,vy,1,0,hl,hw,0,.90,.015,kitchenSteel);
@@ -56,12 +56,16 @@ function KITCHEN_FLATTOP(x,y,hl=1,hw=.35) {
     foodTray(vx,vy+channel.v,channel.bottom,channel.hl,channel.hw,channel.top-channel.bottom);
     coveRound(vx,vy-hw+.025,1,0,hl,.025,.96,1.12,.008,kitchenSteel);
     for(const u of [-.4,0,.4])foodOval(vx+u,vy+hw+.001,.74,.03,.012,.065,kitchenGlaze(BRICK));
-    for(const u of [-.60,-.28])coveLathe(vx+u,vy-.09,.96,[[0,0],[0,.08],[.004,.08],[.005,0]],kitchenFoodShade(YEL));
-    for(let k=0;k<8;k++) {
+    if(meal==='burger')for(const u of [-.60,-.20,.20,.60])for(const v of [-.12,.10])
+      foodOval(vx+u,vy+v,.96,.075,.075,.025,kitchenFoodShade(BRICK));
+    else {
+     for(const u of [-.60,-.28])coveLathe(vx+u,vy-.09,.96,[[0,0],[0,.08],[.004,.08],[.005,0]],kitchenFoodShade(YEL));
+     for(let k=0;k<8;k++) {
       const u=.05+(k%4)*.17,v=-.08+Math.floor(k/4)*.15;
       foodOval(vx+u,vy+v,.96,.045,.025,.025,kitchenFoodShade(k%2?BRICK:ORANGE));
+     }
     }
-  }),box:boxAt(x,y+.007,1,0,hl,hw+.013,0,1.12),radius:hl+.3,kitchenPlate:{kind:'flat-top',channel},
+  }),box:boxAt(x,y+.007,1,0,hl,hw+.013,0,1.12),radius:hl+.3,kitchenPlate:{kind:'flat-top',channel,meal},
     tick:s=>kitchenSteamerSteam(s,.988)};
 }
 function KITCHEN_POT_STOVE(x,y,water=false) {

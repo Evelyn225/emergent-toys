@@ -19,7 +19,10 @@ function kitchenProfile(kind,scale=1,wide=scale) {
   return kitchenScaledProfiles.get(key);
 }
 function kitchenInnerRadius(kind,height,scale=1,wide=scale) {
-  const profile=kitchenProfile(kind,scale,wide);let inner=Infinity;
+  return kitchenProfileInnerRadius(kitchenProfile(kind,scale,wide),height);
+}
+function kitchenProfileInnerRadius(profile,height) {
+  let inner=Infinity;
   for(let k=1;k<profile.length;k++) {
     const [za,ra]=profile[k-1],[zb,rb]=profile[k];
     if(zb>=za||height<zb||height>za)continue;
