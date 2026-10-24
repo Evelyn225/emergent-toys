@@ -345,12 +345,10 @@ function booksWall(i, u, uStep, z, d, mx, my, L) { // floor-to-ceiling shelves o
   const k = hash(Math.floor(u * 14), Math.floor(z / 0.42), mx * 7 + my);
   set(i, k > 0.15 ? '|' : ' ', C(ITEM_COL[k * 80 & 7], L)); BG[i] = C(BRICK, 1); return true;
 }
-function noodleWall(i, u, uStep, z, d, mx, my, L) { // the open kitchen: steam rising off the pots, red walls hung with signs
-  if (my === 0 && mx < 11 && z < 2.4) {
-    if (z < 1.0) { set(i, fract(u * 2) < 0.1 ? '|' : '#', C(GRAY, L * 0.6)); return true; }
-    if (z < 1.2) { set(i, Math.abs(fract(u / 1.5) - 0.5) < 0.2 ? 'U' : '_', C(GRAY, L)); return true; } // pots on the range
-    const s = noise(u * 3, z * 4 - T * 1.5, 41);
-    set(i, s > 0.62 && z < 2 ? '~' : ' ', C(WHITE, 6 + s * 6)); BG[i] = C(RED, 1); return true;
+function noodleWall(i, u, uStep, z, d, mx, my, L) { // a steel backsplash behind real pots, red walls hung with signs
+  if (my === 0 && mx < 11 && z < 1.4) {
+    const seam=coveGroove(u,.6,.003,uStep);
+    BG[i]=C(GRAY,2+L*.16-seam*.7);set(i,' ',0);return true;
   }
   if (z > 1.4 && z < 2.2 && fract(u / 2) < 0.3) { // hanging signs
     BG[i] = C(RED, 3); set(i, fract(z * 6) < 0.3 ? '-' : ' ', C(YEL, 12)); return true;
@@ -405,7 +403,8 @@ const ROOM_DEFS = {
       const p = [...counterBox(6, 1.75, 2), standing(6, BACK_COUNTER_STAFF_Y, WHITE), ...toilet(1.6, 1.4, -1, porcelain),washbasin(1.35,2.55,1,0)];
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
-        for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] }); } // (on a stool, at the table)
+        for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] },
+          KITCHEN_SETTING(x+s*.4,y,.78,{fx:-Math.sign(s),fy:0,meal:'burger'})); } // (on a stool, at the table)
       }
       return p;
     } },
@@ -561,9 +560,10 @@ const ROOM_DEFS = {
   noodle: { grid: ['###############', '#..........W..#', '#..........W..#', '#..........W..#', '#.............#', '#..........WWW#', '######DD#######'],
     wc: { x0: 12, y0: 1, x1: 14, y1: 5, sign: [11, 3, 3.5] }, light: 0.75, floor: 'tile', ceil: 'lantern', sign: true, signAt: 6, wall: noodleWall, keeper: [6, 1.4],
     props: r => {
-      const p = [BX(6, 2.0, 4.6, 0.3, 0, 1.0, solid(BRICK, { panel: 0.75, trim: 0.95, top: '=' })), standing(6, 1.4, WHITE), standing(3.5, 1.4, WHITE),
+      const p = [FURNITURE_COUNTER(6,2,4.6,1), standing(6, 1.4, WHITE), standing(3.5, 1.4, WHITE),
+        KITCHEN_POT_STOVE(9.55,1.35),KITCHEN_POT_STOVE(10.4,1.35),
         ...toilet(12.6, 1.4, -1, porcelain), washbasin(13.68, 3.3, -1, 0)];
-      for (let x = 2; x <= 10; x += 1.35) { p.push(STOOL(x, 2.65, BRICK)); if (chance(0.5)) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
+      for (let x = 2; x <= 10; x += 1.35) { p.push(STOOL(x, 2.65, BRICK)); if (chance(0.5)) p.push(sitting(x, 2.7, shirt(), 0.6, true),KITCHEN_SETTING(x,2.03,1,{meal:'soup'})); }
       return p;
     } },
   garage: { grid: boxRoom(14, 10), light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: garageWall, keeper: [6.5, 6.4],

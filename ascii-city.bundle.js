@@ -15926,12 +15926,10 @@ function booksWall(i, u, uStep, z, d, mx, my, L) { // floor-to-ceiling shelves o
   const k = hash(Math.floor(u * 14), Math.floor(z / 0.42), mx * 7 + my);
   set(i, k > 0.15 ? '|' : ' ', C(ITEM_COL[k * 80 & 7], L)); BG[i] = C(BRICK, 1); return true;
 }
-function noodleWall(i, u, uStep, z, d, mx, my, L) { // the open kitchen: steam rising off the pots, red walls hung with signs
-  if (my === 0 && mx < 11 && z < 2.4) {
-    if (z < 1.0) { set(i, fract(u * 2) < 0.1 ? '|' : '#', C(GRAY, L * 0.6)); return true; }
-    if (z < 1.2) { set(i, Math.abs(fract(u / 1.5) - 0.5) < 0.2 ? 'U' : '_', C(GRAY, L)); return true; } // pots on the range
-    const s = noise(u * 3, z * 4 - T * 1.5, 41);
-    set(i, s > 0.62 && z < 2 ? '~' : ' ', C(WHITE, 6 + s * 6)); BG[i] = C(RED, 1); return true;
+function noodleWall(i, u, uStep, z, d, mx, my, L) { // a steel backsplash behind real pots, red walls hung with signs
+  if (my === 0 && mx < 11 && z < 1.4) {
+    const seam=coveGroove(u,.6,.003,uStep);
+    BG[i]=C(GRAY,2+L*.16-seam*.7);set(i,' ',0);return true;
   }
   if (z > 1.4 && z < 2.2 && fract(u / 2) < 0.3) { // hanging signs
     BG[i] = C(RED, 3); set(i, fract(z * 6) < 0.3 ? '-' : ' ', C(YEL, 12)); return true;
@@ -15986,7 +15984,8 @@ const ROOM_DEFS = {
       const p = [...counterBox(6, 1.75, 2), standing(6, BACK_COUNTER_STAFF_Y, WHITE), ...toilet(1.6, 1.4, -1, porcelain),washbasin(1.35,2.55,1,0)];
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
-        for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] }); } // (on a stool, at the table)
+        for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] },
+          KITCHEN_SETTING(x+s*.4,y,.78,{fx:-Math.sign(s),fy:0,meal:'burger'})); } // (on a stool, at the table)
       }
       return p;
     } },
@@ -16142,9 +16141,10 @@ const ROOM_DEFS = {
   noodle: { grid: ['###############', '#..........W..#', '#..........W..#', '#..........W..#', '#.............#', '#..........WWW#', '######DD#######'],
     wc: { x0: 12, y0: 1, x1: 14, y1: 5, sign: [11, 3, 3.5] }, light: 0.75, floor: 'tile', ceil: 'lantern', sign: true, signAt: 6, wall: noodleWall, keeper: [6, 1.4],
     props: r => {
-      const p = [BX(6, 2.0, 4.6, 0.3, 0, 1.0, solid(BRICK, { panel: 0.75, trim: 0.95, top: '=' })), standing(6, 1.4, WHITE), standing(3.5, 1.4, WHITE),
+      const p = [FURNITURE_COUNTER(6,2,4.6,1), standing(6, 1.4, WHITE), standing(3.5, 1.4, WHITE),
+        KITCHEN_POT_STOVE(9.55,1.35),KITCHEN_POT_STOVE(10.4,1.35),
         ...toilet(12.6, 1.4, -1, porcelain), washbasin(13.68, 3.3, -1, 0)];
-      for (let x = 2; x <= 10; x += 1.35) { p.push(STOOL(x, 2.65, BRICK)); if (chance(0.5)) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
+      for (let x = 2; x <= 10; x += 1.35) { p.push(STOOL(x, 2.65, BRICK)); if (chance(0.5)) p.push(sitting(x, 2.7, shirt(), 0.6, true),KITCHEN_SETTING(x,2.03,1,{meal:'soup'})); }
       return p;
     } },
   garage: { grid: boxRoom(14, 10), light: 0.85, floor: 'concrete', ceil: 'strip', sign: true, wall: garageWall, keeper: [6.5, 6.4],
@@ -19033,8 +19033,8 @@ ROOM_DEFS.taqueria = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'sa
   props: r => [BX(5.5, 2.6, 2.7, 0.32, 0, 1.0, (i, t, L) => { BG[i] = HIT.face === 5 ? C(GRAY, 3) : (Math.floor(HIT.u * 5) + Math.floor(HIT.w * 5)) & 1 ? C(BLUE, 4) : C(WHITE, 5); return set(i, HIT.face === 5 ? '=' : ' ', C(GRAY, 6)), true; }), // the counter, tiled
     { ...standing(5.2, 1.55, ORANGE), face: [0, 1] }, trompo(2.9, 1.4), standing(3.6, 1.4, WHITE),
     KITCHEN_FLATTOP(7.6,1.4),
-    BX(11.6, 5.6, 0.35, 1.0, 0.85, 0.95, (i, t, L) => { if (HIT.face !== 5) { BG[i] = C(GRAY, 2.5); return set(i, ' ', 0), true; } const k = Math.floor((HIT.v + 1) / 0.33); BG[i] = C([RED, GREEN, ORANGE, WHITE, YEL, BRICK][k % 6], 6); return set(i, Math.abs(fract((HIT.v + 1) / 0.33) - 0.5) < 0.3 ? 'o' : ' ', C(GRAY, 2)), true; }, 0, 1), BX(11.6, 5.6, 0.35, 1.0, 0, 0.85, solid(GRAY, { panel: 0.5 }), 0, 1), // the salsa bar
-    BX(11.6, 7.4, 0.35, 0.5, 0, 1.9, (i, t, L) => { if (HIT.face !== 1 && HIT.face !== 2) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; } BG[i] = C(CYAN, 1.2); return set(i, fract(HIT.w * 3) < 0.12 ? '=' : fract(HIT.v * 8) < 0.5 ? 'i' : ' ', C(PICADO[Math.floor(HIT.v * 8 + 8) % 7], 13)), true; }, 0, 1), // the cooler of sodas
+    KITCHEN_SALSA_BAR(),
+    BX(11.6, 7.4, 0.35, 0.5, 0, 1.9, (i, t, L) => { if (HIT.face !== 1 && HIT.face !== 2) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; } BG[i] = C(CYAN, 1.2); return set(i, fract(HIT.w * 3) < 0.12 ? '=' : fract(HIT.v * 8) < 0.5 ? 'i' : ' ', C(PICADO[Math.floor(HIT.v * 8 + 8) % 7], 13)), true; }), // the cooler faces into the room and stays inside the wall
     ...dining(3.0, 5.0, { n: 4, hl: 0.55, hw: 0.4, top: solid(ORANGE, { top: '=' }), chairCol: BLUE, busy: 0.4 }), ...dining(7.2, 5.0, { n: 4, hl: 0.55, hw: 0.4, top: solid(GREEN, { top: '=' }), chairCol: RED, busy: 0.35 }),
     BX(1.25, 7.4, 0.2, 1.2, 1.0, 1.06, solid(BRICK, { top: '=' }), 0, 1), ...[6.6, 7.4, 8.2].flatMap(y => { const q = [STOOL(1.75, y, YEL, 0.7)]; if (chance(0.35)) q.push({ ...sitting(1.75, y, shirt(), 0.7), face: [-1, 0] }); return q; }), // the ledge along the wall
     papelPicado(3.4, 1, 12, 2.7), papelPicado(5.6, 1, 12, 2.75), papelPicado(7.6, 1, 12, 2.7), ...wcFittings(13)] };
@@ -36757,6 +36757,34 @@ function counterCaseServing(x,y,z,kind,k,step,hw) {
       else counterDonut(x,y+side*.13,z+.008,k+(side>0?1:0));
     }
   }
+}
+// The service side faces -X. Six real pans fit along the wall, with their
+// openings cut from the same worktop measurements as their inner tray walls.
+const KITCHEN_SALSA={bottom:.88,top:.93,binHalfX:.24,binHalfY:.125,pitch:.30,
+  labels:['ROJA','VERDE','ONION','CREMA','LIME','PICO'],kinds:[1,0,2,5,4,6]};
+function kitchenSalsaOpening(u,v) {
+  const k=Math.round(v/KITCHEN_SALSA.pitch+2.5);
+  return k>=0&&k<6&&Math.abs(u)<KITCHEN_SALSA.binHalfX-.008&&Math.abs(v-(k-2.5)*KITCHEN_SALSA.pitch)<KITCHEN_SALSA.binHalfY-.008;
+}
+function KITCHEN_SALSA_BAR(x=11.63,y=5.6) {
+  const s=KITCHEN_SALSA;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.29,.94,0,.10,.014,kitchenIron);
+    coveRound(vx,vy,1,0,.32,.97,.10,s.bottom,.015,kitchenSteel);
+    drawBox({...boxAt(vx,vy,1,0,.35,1,s.bottom,s.top),...kitchenTopProfile(.35,1,s.bottom,s.top,.006)},(i,t,L)=>{
+      if(HIT.face===5&&kitchenSalsaOpening(HIT.u,HIT.v))return false;
+      return kitchenSteel(i,t,L);
+    },homeRayWorktop);
+    for(let k=0;k<6;k++){
+      const v=(k-2.5)*s.pitch;
+      counterSalad(vx,vy+v,s.bottom,s.binHalfX,s.binHalfY,s.kinds[k]);
+      drawBox({...boxAt(vx-.326,vy+v,0,1,.13,.006,.76,.84),...kitchenPanelProfile(.13,.006,.76,.84,.002)},(i,t,L)=>{
+        if(HIT.face!==3)return kitchenSteel(i,t,L);
+        BG[i]=C(STONE,4+L*.25);
+        set(i,worldText(s.labels[k],HIT.u,HIT.w,t,i,vx-.332,vy+v,.80,0,1,.024,.042),C(BLACK,0));return true;
+      },homeRayWorktop);
+    }
+  }),box:boxAt(x,y,1,0,.35,1,0,.965),radius:1.2,kitchenSalsa:true};
 }
 // Wells, grease channels and simmering pots use the same actual surfaces that
 // support their food; a painted circle cannot stand in for a recess.
