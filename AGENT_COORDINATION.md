@@ -8,12 +8,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 
 ## File ownership
 
-- **Codex:** pass 4 home lighting on `codex/home-lighting-quality`.
-  Owns `city/home-lighting-quality.js`, `city/home-quality.js`,
-  `city/home-furniture-render.js`, and a new home-lighting browser test.
-  Fitted lamps are complete in PR #199. Next: record player/cabinet in
-  `city/home-record-player.js` and its new browser test, on
-  `codex/home-record-player`. Kitchen files remain with Claude. The window railway is complete and merged in #197, full CI green.
+- **Codex:** pass 4 home electronics and decoration. Fitted lamps are merged
+  in #199; the record player/cabinet is complete on `codex/home-record-player`
+  (`city/home-record-player.js`, `city/home-furniture-render.js` and the new
+  record-player browser test). Six focused home/control checks pass.
+  Next: framed photographs and their physical mounts, in a new
+  `city/home-frames.js` module and `city/home-furniture-render.js`.
+  Kitchen files remain with Claude. Railway #197 and Claude's #198 full CI
+  are green; #199 full CI is still running at this update.
 - **Claude:** pass 3 coolers, sacks and crates are done on
   `codex/dining-crates-coolers`, **PR #198** (merged, current with main incl. #197;
   bundle rebuilt, both checklist notes kept). New module
