@@ -92,21 +92,7 @@ const checkCloth = (i, t, L) => { BG[i] = (Math.floor(HIT.u * 6) + Math.floor(HI
 
 // ---- the pizzeria (PIZZA): the wood-fired oven glowing in the corner, pies under the heat lamps on the counter,
 // tables in checked cloths, a chalkboard menu, the tricolour round the walls
-const pizzaOven = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  const brick = (i, t, L) => { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 9) < 0.15 || fract((HIT.u + HIT.v) * 5 + Math.floor(HIT.w * 9) * 0.5) < 0.1 ? '=' : ' ', C(STONE, L * 0.5)), true; };
-  drawBox(boxAt(vx, vy, 1, 0, 0.85, 0.75, 0, 0.95), brick); // the base
-  for (let k = 0; k < 5; k++) drum(vx, vy - 0.05, 0.72 - k * k * 0.035, 0.95 + k * 0.13, 1.08 + k * 0.13, (i, t, L) => { BG[i] = C(BRICK, (1.4 + L * 0.25) * drumLit(0.7)); return set(i, fract(HIT.w * 8) < 0.2 ? '=' : ' ', C(STONE, L * 0.4)), true; }); // the dome, course by course
-  drawBox(boxAt(vx, vy + 0.62, 1, 0, 0.3, 0.06, 0.95, 1.35), (i, t, L) => { // the mouth: the fire inside, flickering
-    if (HIT.face !== 3) return brick(i, t, L);
-    const arch = Math.hypot(HIT.u / 0.28, (HIT.w - 0.95) / 0.38);
-    if (arch > 1) return brick(i, t, L);
-    const fl = noise(HIT.u * 9, HIT.w * 7 - T * 3, 86);
-    BG[i] = C(fl > 0.55 ? YEL : ORANGE, 6 + fl * 9); return set(i, fl > 0.6 ? '^' : fl > 0.45 ? '~' : ' ', C(RED, 12)), true;
-  });
-  rod(vx, vy - 0.05, 1.6, vx, vy - 0.05, 3.1, 0.12, GRAY, 0.8); // the flue
-  rod(vx + 0.75, vy + 0.6, 0, vx + 0.95, vy + 0.4, 1.9, 0.015, BRICK, 1.2); // the peel, leaning
-  drawBox(boxAt(vx + 0.93, vy + 0.42, 0.6, 0.8, 0.12, 0.012, 1.9, 2.15), solid(BRICK));
-}, [0.95, 0.85, 1.6]);
+const pizzaOven = (x,y) => KITCHEN_PIZZA_OVEN(x,y);
 function pizzaWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.75, 1.95, room.menu, 1.2, C(GRAY, 0.8), C(WHITE, 14), 'MENU', C(YEL, 14))) return true;
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 4.6, 2.62, 0.3, 0.42, C(RED, 15), C(GRAY, 0.6))) return true; // in red neon
@@ -120,7 +106,7 @@ function pizzaWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(YEL, 2.4 + L * 0.12); return set(i, ' ', 0), true; // warm plaster
 }
 ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'cotto', ceil: 'pendant', sign: false, wall: pizzaWall, keeper: [6.6, 1.75],
-  props: r => [pizzaOven(1.9, 1.6),
+  props: r => [pizzaOven(1.95, 1.85),
     KITCHEN_FOOD_CASE(6.6,2.45,2,.38,1.05,'pizza'), { ...standing(6.6, 1.75, WHITE), face: [0, 1] },
     ...[4.9, 6.6, 8.3].map(x => hung(x, 2.45, 2.0, (vx, vy, z) => drum(vx, vy, 0.12, z - 0.12, z, (i, t, L) => { BG[i] = C(HIT.face === 6 ? YEL : RED, HIT.face === 6 ? 13 : 4); return set(i, ' ', 0), true; }))), // the heat lamps
     BX(8.3, 1.4, 0.55, 0.35, 0, 0.9, solid(GRAY, { top: '=', panel: 0.35 })), // the prep counter at the back, a sack of flour on it
@@ -302,25 +288,13 @@ ROOM_DEFS.icecream = { grid: boxRoom(11, 8), light: 1.1, floor: 'pastel', ceil: 
 // ---- the bakery (BAKERY): baskets of loaves on wooden racks behind the counter, the glass case of cakes and pastries,
 // the deck oven glowing, flour sacks stacked, a table by the door
 function bakeryWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z > 0.95 && z < 2.45 && u > 1.5 && u < 9.5) { // the bread racks: shelves of baskets, loaves in them
-    const sz = (z - 0.95) / 0.5, row = Math.floor(sz);
-    if (fract(sz) < 0.12) { BG[i] = C(BRICK, 2.2); return set(i, '=', C(WARM, L)), true; }
-    const bu = fract(u / 0.55), k = Math.floor(u / 0.55);
-    if (bu < 0.08) { BG[i] = C(BRICK, 1.6); return set(i, '|', C(WARM, L * 0.6)), true; }
-    const kind = hash(k, row, 96), loaf = fract(sz) > 0.45 && Math.hypot(bu - 0.54, (fract(sz) - 0.7) * 1.6) < (kind < 0.4 ? 0.42 : 0.3);
-    BG[i] = loaf ? C(ORANGE, 5 + L * 0.2 + (kind > 0.7 ? -1.5 : 0)) : C(YEL, 2.5); return set(i, loaf && fract(bu * 7) < 0.2 ? '/' : fract(sz) < 0.45 ? '#' : ' ', C(BRICK, 4)), true; // a loaf in its basket, slashed
-  }
   if (backWall(my) && z > 2.5 && wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.7, 0.24, 0.3, C(BRICK, 4), C(YEL, 9))) return true;
   if (z < 0.95) { BG[i] = C(BRICK, 1.8 + L * 0.2); return set(i, fract(u * 3) < 0.05 ? '|' : ' ', C(WARM, 4)), true; }
   BG[i] = C(YEL, 6 + L * 0.15); return set(i, ' ', 0), true; // cream walls
 }
 ROOM_DEFS.bakery = { grid: boxRoom(11, 8), light: 1.0, floor: 'oak', ceil: 'pendant', sign: false, wall: bakeryWall, keeper: [5.0, 1.55],
   props: r => [KITCHEN_FOOD_CASE(5,2.35,2.2,.4,1.1,'bakery'), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
-    ROOM_MODEL(9.4, 1.5, (vx, vy) => { // the deck oven: steel, three decks, their little windows glowing
-      drawBox(boxAt(vx, vy, 1, 0, 0.75, 0.45, 0, 2.1), (i, t, L) => { BG[i] = C(GRAY, (2.6 + L * 0.3) * shadeFace(HIT.face));
-        if (HIT.face === 3 && Math.abs(HIT.u) < 0.5 && fract((HIT.w - 0.3) / 0.6) > 0.25 && fract((HIT.w - 0.3) / 0.6) < 0.7 && HIT.w > 0.3 && HIT.w < 2.1) { BG[i] = C(ORANGE, 6 + 2 * noise(HIT.u * 5, T, 98)); return set(i, '.', C(YEL, 10)), true; }
-        return set(i, HIT.face === 3 && fract((HIT.w - 0.3) / 0.6) < 0.06 ? '=' : ' ', C(WHITE, 8)), true; });
-    }, [0.75, 0.45, 2.1]),
+    KITCHEN_DECK_OVEN(9.18,1.5),KITCHEN_BREAD_RACK(4.5,1.14,3.1),
     ...[[1.4, 1.5], [1.4, 2.2], [1.6, 1.85]].map(([x, y], k) => BX(x, y, 0.3, 0.22, k > 1 ? 0.35 : 0, k > 1 ? 0.7 : 0.35, (i, t, L) => { BG[i] = C(WHITE, 4.5 + L * 0.2); return set(i, (HIT.face === 3 || HIT.face === 1) && Math.abs(HIT.w - (k > 1 ? 0.52 : 0.18)) < 0.04 ? '-' : ' ', C(BLUE, 6)), true; })), // flour sacks
     ...dining(2.2, 5.6, { hl: 0.35, meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 }), ...dining(8.6, 5.6, { hl: 0.35, meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 })] };
 
