@@ -109,7 +109,7 @@ ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'c
   props: r => [pizzaOven(1.95, 1.85),
     KITCHEN_FOOD_CASE(6.6,2.45,2,.38,1.05,'pizza'), { ...standing(6.6, 1.75, WHITE), face: [0, 1] },
     ...[4.9, 6.6, 8.3].map(x => hung(x, 2.45, 2.0, (vx, vy, z) => drum(vx, vy, 0.12, z - 0.12, z, (i, t, L) => { BG[i] = C(HIT.face === 6 ? YEL : RED, HIT.face === 6 ? 13 : 4); return set(i, ' ', 0), true; }))), // the heat lamps
-    BX(8.3, 1.4, 0.55, 0.35, 0, 0.9, solid(GRAY, { top: '=', panel: 0.35 })), // the prep counter at the back, a sack of flour on it
+    KITCHEN_SERVICE_COUNTER(8.3,1.4,.55,.35,.9,GRAY,GRAY), // the prep counter at the back, a sack of flour on it
     BX(8.05, 1.4, 0.2, 0.15, 0.9, 1.25, (i, t, L) => { BG[i] = C(WHITE, 4); return set(i, HIT.face <= 4 && Math.abs(HIT.w - 1.08) < 0.04 ? '~' : ' ', C(GRAY, 3)), true; }),
     ...dining(2.4, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }), ...dining(10.2, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }),
     ...dining(2.4, 7.3, { top: checkCloth, meal: 'pizza', busy: 0.35 }), ...dining(10.2, 7.3, { top: checkCloth, meal: 'pizza', busy: 0.35 }),
@@ -140,7 +140,7 @@ function burgerWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(CYAN, 1.6 + L * 0.12); return set(i, fract(u / 1.6) < 0.02 ? '|' : ' ', C(WHITE, 4)), true; // mint walls
 }
 ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor: 'checker', ceil: 'strip', sign: false, neon: true, wall: burgerWall, keeper: [5.9, 1.6],
-  props: r => [BX(6.0, BURGER_COUNTER_Y, 2.8, 0.32, 0, 1.05, (i, t, L) => { BG[i] = C(HIT.face === 5 ? WHITE : RED, (HIT.face === 5 ? 3 : 2) + L * 0.3); return set(i, HIT.face === 5 ? '=' : Math.abs(HIT.w - 0.9) < 0.04 ? '=' : ' ', C(GRAY, 6)), true; }), // the counter, chrome-edged
+  props: r => [KITCHEN_SERVICE_COUNTER(6,BURGER_COUNTER_Y,2.8,.32,1.05,RED,WHITE),
     { ...standing(5.9, 1.6, RED), face: [0, 1] }, shakeMachine(4.0, 1.45), sodaFountain(7.9, 1.45),
     ...stools(3.6, 8.6, BURGER_COUNTER_Y+.7, 1.0, RED, 0, -1, 0.35),
     ...[3.6, 5.85, 8.0].flatMap(y => booth(1.65, y, 0.55, RED, { busy: 0.4, meal: 'burger' })), ...booth(11.35, 8.0, 0.55, RED, { busy: 0.4, meal: 'burger' }), // down both walls
@@ -172,7 +172,7 @@ ROOM_FLOORS.saltillo = (i, f, wx, wy, r, x, L) => { // big square terracotta til
   BG[i] = g ? C(STONE, 0.8 + f * 1.5) : C(BRICK, 1.2 + f * 2.6 + hash(tx, ty, 99) * 0.5); return set(i, g ? ' ' : hash(Math.floor(wx * 8), Math.floor(wy * 8), 100) > 0.94 ? '.' : ' ', C(ORANGE, L * 0.5));
 };
 ROOM_DEFS.taqueria = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'saltillo', ceil: 'strip', sign: false, wall: tacoWall, keeper: [5.2, 1.55],
-  props: r => [BX(5.5, 2.6, 2.7, 0.32, 0, 1.0, (i, t, L) => { BG[i] = HIT.face === 5 ? C(GRAY, 3) : (Math.floor(HIT.u * 5) + Math.floor(HIT.w * 5)) & 1 ? C(BLUE, 4) : C(WHITE, 5); return set(i, HIT.face === 5 ? '=' : ' ', C(GRAY, 6)), true; }), // the counter, tiled
+  props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.6,2.7,.32,1,BLUE,GRAY,true),
     { ...standing(5.2, 1.55, ORANGE), face: [0, 1] }, trompo(2.9, 1.4), standing(3.6, 1.4, WHITE),
     KITCHEN_FLATTOP(7.6,1.4),
     KITCHEN_SALSA_BAR(),

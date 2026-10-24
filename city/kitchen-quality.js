@@ -87,3 +87,33 @@ function FITTED_KITCHEN(x,y,hl,depth,angle=0,color=BRICK) {
   return {...model,radius:hl+.6,box:boxAt(x-s*.0575,y+c*.0575,c,s,hl,depth+.0575,0,height+.02),
     kitchen:{hl,depth,angle,height,sink,radius,hob,compact}};
 }
+// Dining cabinets keep their existing footprint and serving height. All pulls
+// stay below the worktop's overhang, so the visible and blocking bounds agree.
+function KITCHEN_SERVICE_COUNTER(x,y,hl,hw,height,color=BRICK,topColor=STONE,tiled=false) {
+  const count=Math.ceil(hl*2/.8),half=hl/count,wood=furnitureTimber(color),paint=kitchenGlaze(color),timberTop=furnitureTimber(BRICK),
+    panel=kitchenPanelProfile(half-.009,.012,.18,height-.12,.003),
+    worktop=kitchenTopProfile(hl,hw,height-.04,height,.006);
+  const material=(offset=0)=>(i,t,L)=>{
+    if(!tiled)return (color===GRAY?kitchenSteel:color===BRICK||color===STONE?wood:paint)(i,t,L);
+    const u=HIT.u+offset,z=HIT.w,grout=Math.max(coveGroove(u,.2,.003,t/projX),coveGroove(z,.2,.003,t/projX));
+    const col=(Math.floor(u/.2)+Math.floor(z/.2))&1?BLUE:WHITE;
+    BG[i]=C(grout>.5?GRAY:col,(grout>.5?2:3.8)+L*.20*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+  };
+  const body=material(),doors=Array.from({length:count},(_,k)=>material(-hl+half*(2*k+1)));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy-.025,1,0,hl-.04,hw-.045,0,.10,.009,kitchenIron);
+    coveRound(vx,vy-.025,1,0,hl-.025,hw-.035,.08,height-.04,.012,body);
+    for(let k=0;k<count;k++){
+      const u=-hl+half*(2*k+1),z=height-.22;
+      drawBox({...boxAt(vx+u,vy+hw-.052,1,0,half-.009,.012,.18,height-.12),...panel},doors[k],homeRayWorktop);
+      for(const side of [-1,1])coveTube(vx+u+side*.065,vy+hw-.044,z,vx+u+side*.065,vy+hw-.010,z,.006,GRAY);
+      coveTube(vx+u-.065,vy+hw-.010,z,vx+u+.065,vy+hw-.010,z,.008,GRAY);
+    }
+    drawBox({...boxAt(vx,vy,1,0,hl,hw,height-.04,height),...worktop},(i,t,L)=>{
+      if(topColor===GRAY)return kitchenSteel(i,t,L);
+      if(topColor===BRICK)return timberTop(i,t,L);
+      const grain=Math.sin(HIT.u*260)*Math.sin(HIT.v*210)*coveDetail(t)*.12;
+      BG[i]=C(topColor,3.5+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain);set(i,' ',0);return true;
+    },homeRayWorktop);
+  }),box:boxAt(x,y,1,0,hl,hw,0,height),radius:Math.hypot(hl,hw),serviceCounter:{hl,hw,height,color,topColor,tiled}};
+}
