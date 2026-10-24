@@ -2416,13 +2416,30 @@ test('dog walkers: out with their dogs in the morning, at lunch and before dinne
   assert.ok(counts.morning > 10 && counts.lunch > 10 && counts.evening > 10, JSON.stringify(counts));
   assert.strictEqual(counts.night + counts.early, 0);
   const pet = await page.evaluate(() => {
-    tod = 8.3; mode = 'walk';
-    const m = people.find(p => p.role === 'dogwalker'); m.hidden = false; m.act = 'wander';
-    const d = dogOf(m); px = d.x; py = d.y + 0.05;
-    const prompt = promptText(); interact();
-    return [walkingDog(m), /pet the dog/.test(prompt) || /pick their pocket|talk/.test(prompt), msgText.length > 0];
+    tod = 8.3; mode = 'walk'; room = me = null; body.seat = null; body.z = body.vz = body.crouch = 0;
+    // Use a visible dog on clear outdoor floor. The old fixture unhid an
+    // arbitrary owner and retained the spawn camera: aimed E could talk to
+    // that person instead, even though the distance-only dog check passed.
+    for (const m of people) {
+      if (!walkingDog(m)) continue;
+      const d = dogOf(m), dx = rel(d.x - m.x), dy = rel(d.y - m.y), length = Math.hypot(dx, dy);
+      if (length < 0.02) continue;
+      px = worldCoord(d.x + dx / length * 0.12); py = worldCoord(d.y + dy / length * 0.12);
+      if (!free(px, py) || nearestCar(0.5)) continue;
+      a = Math.atan2(rel(d.y - py), rel(d.x - px)); pitch = -1.2; // the real downward-look limit, toward the dog's paws
+      if (interactionFocus() || nearWalkedDog() !== m) continue;
+      const prompt = promptText();
+      if (!/pet the dog|^G: pick their pocket$/.test(prompt)) continue;
+      msgText = ''; interact();
+      return { walking: walkingDog(m), prompt, message: msgText, waiting: m.talk };
+    }
+    return null;
   });
-  assert.deepStrictEqual(pet, [true, true, true]);
+  assert.ok(pet, 'a visible dog has a clear close approach');
+  assert.equal(pet.walking, true);
+  assert.match(pet.prompt, /pet the dog|pick their pocket/);
+  assert.match(pet.message, /dog|nose|snort|friendly|belly/i, 'E produces a fresh petting response');
+  assert.equal(pet.waiting, 3, 'the owner waits while you pet their dog');
 }));
 
 test('the stock exchange: trade with the broker while the market is open; your shares are still yours after a reload', () => withPage(async page => {
