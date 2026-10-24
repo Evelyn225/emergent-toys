@@ -4,13 +4,16 @@
 // (backWc). Rooms are in metres; y runs from the back wall (0) to the door.
 
 // a round table on its pedestal, n chairs round it facing in, people in some; a lazy susan in the middle if asked
-function roundTable(x, y, r, n, { cloth = WHITE, chairCol = RED, busy = 0.4, chair = homeChair, susan = false, h = 0.76, a0 = 0 } = {}) {
+function roundTable(x, y, r, n, { cloth = WHITE, chairCol = RED, busy = 0.4, chair = homeChair, susan = false, h = 0.76, a0 = 0, meal = 'dumplings' } = {}) {
   const p = [FURNITURE_ROUND_TABLE(x,y,r,h,cloth,susan)];
   for (let k = 0; k < n; k++) {
     const a = a0 + k / n * Math.PI * 2, cx = x + Math.cos(a) * (r + 0.38), cy = y + Math.sin(a) * (r + 0.38), fx = -Math.cos(a), fy = -Math.sin(a);
     const parts=chair(cx,cy,fx,fy,chairCol),height=parts.find(p=>p.seat)?.h??.46;
     p.push(...parts);
-    if (chance(busy)) p.push({ ...sitting(cx, cy, shirt(), height), face: [fx, fy] });
+    if (chance(busy)) {
+      p.push({ ...sitting(cx, cy, shirt(), height), face: [fx, fy] });
+      p.push(KITCHEN_SETTING(x-fx*(r-.15),y-fy*(r-.15),h,{fx,fy,meal}));
+    }
   }
   return p;
 }
@@ -52,9 +55,7 @@ ROOM_DEFS.thai = { grid: backWc(13, 9), wc: wcAt(13), light: 0.8, floor: 'oak', 
 // green tiles, photos of the bowls over the counter, a fan going round
 const stockPot = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
   drawBox(boxAt(vx, vy, 1, 0, 0.32, 0.32, 0, 0.45), solid(GRAY, { panel: 0.3 })); // the burner
-  drum(vx, vy, 0.3, 0.45, 1.15, (i, t, L) => {
-    if (HIT.face === 5) { const b = noise(HIT.u * 9, HIT.v * 9 + T * 2, 121); BG[i] = C(ORANGE, 2 + b * 3); return set(i, b > 0.62 ? 'o' : ' ', C(YEL, 9)), true; } // the broth
-    BG[i] = C(GRAY, (3.2 + L * 0.3) * drumLit(0.3)); return set(i, Math.abs(HIT.w - 1.05) < 0.02 ? '-' : ' ', C(WHITE, 8)), true; });
+  kitchenCookware(vx,vy,.45,1,0,{kind:'pot',scale:4.1,wide:2.7,filled:true});
 }, [0.32, 0.32, 1.15]);
 function phoWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -67,12 +68,12 @@ function phoWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.2) { BG[i] = C(GREEN, 2.6 + L * 0.2); return set(i, fract(u * 5) < 0.05 || fract(z * 5) < 0.05 ? '+' : ' ', C(WHITE, 5)), true; } // green tiles
   BG[i] = C(WHITE, 5 + L * 0.2); return set(i, ' ', 0), true;
 }
-const steelTop = solid(GRAY, { top: 'o', bright: 1.6 }); // (the caddy of sauces and chopsticks: the o's)
+const steelTop = solid(GRAY, { bright: 1.6 });
 ROOM_DEFS.pho = { grid: backWc(13, 9), wc: wcAt(13), light: 1.05, floor: 'lino', ceil: 'strip', sign: false, wall: phoWall, keeper: [5.0, 1.6],
   props: r => [BX(5.0, 2.4, 2.2, 0.3, 0, 1.0, solid(GRAY, { top: '=', panel: 0.55, bright: 1.4 })), { ...standing(5.0, 1.6, WHITE), face: [0, 1] },
     stockPot(1.45, 1.45), stockPot(2.25, 1.45), { ...standing(2.0, 2.2, WHITE), face: [0, -1] },
-    ...dining(2.8, 4.5, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, chair: lowStool, chairCol: RED, busy: 0.4 }), ...dining(9.4, 4.5, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, chair: lowStool, chairCol: BLUE, busy: 0.4 }),
-    ...dining(2.8, 6.6, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, chair: lowStool, chairCol: GREEN, busy: 0.35 }), ...dining(9.4, 6.6, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, chair: lowStool, chairCol: YEL, busy: 0.35 }),
+    ...dining(2.8, 4.5, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: RED, busy: 0.4 }), ...dining(9.4, 4.5, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: BLUE, busy: 0.4 }),
+    ...dining(2.8, 6.6, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: GREEN, busy: 0.35 }), ...dining(9.4, 6.6, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: YEL, busy: 0.35 }),
     ...wcFittings(13)] };
 
 // ---- dumplings (DUMPLINGS): the cooks folding them at a floury table behind the counter, bamboo steamers stacked up and
@@ -176,7 +177,7 @@ function kissatenWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.kissaten = { grid: backWc(13, 8), wc: wcAt(13), light: 0.65, floor: 'oak', ceil: 'pendant', sign: false, wall: kissatenWall, keeper: [4.6, 1.65],
   props: r => [BX(4.6, 2.4, 2.6, 0.3, 0, 1.0, solid(BRICK, { top: '=', panel: 0.5, bright: 1.1 })), { ...standing(4.6, 1.65, WHITE), face: [0, 1] },
     siphon(3.6, 2.4), siphon(4.1, 2.4), siphon(4.6, 2.4), ...stools(2.4, 6.9, 3.05, 0.9, RED, 0, -1, 0.35),
-    ...booth(1.95, 5.0, 0.55, RED, { top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(8.0, 5.0, 0.55, RED, { top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(10.3, 5.0, 0.55, RED, { top: solid(BRICK, { top: '=' }), busy: 0.35 }),
+    ...booth(1.95, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(8.0, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(10.3, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 }),
     tiffany(1.95, 5.0), tiffany(8.0, 5.0), tiffany(10.3, 5.0), ...wcFittings(13)] };
 
 // ---- the izakaya (IZAKAYA): the counter and its stools, sake bottles up the wall behind, red lanterns, a tatami corner

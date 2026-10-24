@@ -13,25 +13,31 @@ const wcFittings = w => [...toilet(w - 2.4, 1.4, -1, porcelain), washbasin(w - 1
 // a table top on a pedestal, hl x hw, h high; shade paints the top (and the edge)
 const eatTable = (x,y,hl,hw,shade,h=.76) => [FURNITURE_EAT_TABLE(x,y,hl,hw,shade,h)];
 // a table for two (along x: chairs at either end) or four (and either side), the chairs facing it, maybe people in them
-function dining(x, y, { n = 2, hl = 0.4, hw = 0.4, top, chairCol = BRICK, busy = 0.4, h = 0.76, chair = homeChair } = {}) {
+function dining(x, y, { n = 2, hl = 0.4, hw = 0.4, top, chairCol = BRICK, busy = 0.4, h = 0.76, chair = homeChair, meal = 'rice' } = {}) {
   const p = eatTable(x, y, hl, hw, top || solid(BRICK, { top: '=' }), h);
   const spots = [[x - hl - 0.42, y, 1, 0], [x + hl + 0.42, y, -1, 0], ...(n > 2 ? [[x, y - hw - 0.42, 0, 1], [x, y + hw + 0.42, 0, -1]] : [])];
   for (const [cx, cy, fx, fy] of spots) {
     const parts=chair(cx,cy,fx,fy,chairCol),height=parts.find(p=>p.seat)?.h??.48;
     p.push(...parts);
-    if (chance(busy)) p.push({ ...sitting(cx, cy, shirt(), height), face: [fx, fy] });
+    if (chance(busy)) {
+      p.push({ ...sitting(cx, cy, shirt(), height), face: [fx, fy] });
+      p.push(KITCHEN_SETTING(x-fx*(hl-.15),y-fy*(hw-.15),h,{fx,fy,meal}));
+    }
   }
   return p;
 }
 // a booth along x: a table between two benches with tall backs, facing each other across it (fy of the +y bench: -1)
-function booth(x, y, hl, col, { top, busy = 0.45, depth = 0.55 } = {}) {
+function booth(x, y, hl, col, { top, busy = 0.45, depth = 0.55, meal = 'rice' } = {}) {
   const p = eatTable(x, y, hl, 0.38, top || solid(GRAY, { top: '=' }));
   for (const e of [-1, 1]) {
     const by = y + e * (0.38 + depth / 2 + 0.05);
     p.push(...FURNITURE_BOOTH_SEAT(x,by,hl,depth,-e,col));
     for (const sx of [x - hl * 0.45, x + hl * 0.45]) { // (the one by the wall still in reach: you slide in)
       p.push(SEAT(sx, by, 0, -e,.46));
-      if (chance(busy)) p.push({ ...sitting(sx, by, shirt(), 0.46), face: [0, -e] });
+      if (chance(busy)) {
+        p.push({ ...sitting(sx, by, shirt(), 0.46), face: [0, -e] });
+        p.push(KITCHEN_SETTING(sx,y+e*.21,.76,{fx:0,fy:-e,meal}));
+      }
     }
   }
   return p;
@@ -129,8 +135,8 @@ ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'c
     ...[4.9, 6.6, 8.3].map(x => hung(x, 2.45, 2.0, (vx, vy, z) => drum(vx, vy, 0.12, z - 0.12, z, (i, t, L) => { BG[i] = C(HIT.face === 6 ? YEL : RED, HIT.face === 6 ? 13 : 4); return set(i, ' ', 0), true; }))), // the heat lamps
     BX(8.3, 1.4, 0.55, 0.35, 0, 0.9, solid(GRAY, { top: '=', panel: 0.35 })), // the prep counter at the back, a sack of flour on it
     BX(8.05, 1.4, 0.2, 0.15, 0.9, 1.25, (i, t, L) => { BG[i] = C(WHITE, 4); return set(i, HIT.face <= 4 && Math.abs(HIT.w - 1.08) < 0.04 ? '~' : ' ', C(GRAY, 3)), true; }),
-    ...dining(2.4, 5.0, { top: checkCloth, busy: 0.45 }), ...dining(10.2, 5.0, { top: checkCloth, busy: 0.45 }),
-    ...dining(2.4, 7.3, { top: checkCloth, busy: 0.35 }), ...dining(10.2, 7.3, { top: checkCloth, busy: 0.35 }),
+    ...dining(2.4, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }), ...dining(10.2, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }),
+    ...dining(2.4, 7.3, { top: checkCloth, meal: 'pizza', busy: 0.35 }), ...dining(10.2, 7.3, { top: checkCloth, meal: 'pizza', busy: 0.35 }),
     POT_PLANT(1.45, 3.3, 1.3), ...wcFittings(13)] };
 
 // ---- the burger joint (BURGERS): red booths down both walls, a chrome counter with stools, the shake machine and the
@@ -166,7 +172,7 @@ ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor
   props: r => [BX(6.0, 2.35, 2.8, 0.32, 0, 1.05, (i, t, L) => { BG[i] = C(HIT.face === 5 ? WHITE : RED, (HIT.face === 5 ? 3 : 2) + L * 0.3); return set(i, HIT.face === 5 ? '=' : Math.abs(HIT.w - 0.9) < 0.04 ? '=' : ' ', C(GRAY, 6)), true; }), // the counter, chrome-edged
     { ...standing(5.9, 1.6, RED), face: [0, 1] }, shakeMachine(4.0, 1.45), sodaFountain(7.9, 1.45),
     ...stools(3.6, 8.6, 3.05, 1.0, RED, 0, -1, 0.35),
-    ...[3.6, 5.85, 8.0].flatMap(y => booth(1.65, y, 0.55, RED, { busy: 0.4 })), ...booth(11.35, 8.0, 0.55, RED, { busy: 0.4 }), // down both walls
+    ...[3.6, 5.85, 8.0].flatMap(y => booth(1.65, y, 0.55, RED, { busy: 0.4, meal: 'burger' })), ...booth(11.35, 8.0, 0.55, RED, { busy: 0.4, meal: 'burger' }), // down both walls
     JUKEBOX(11.55, 5.9, -1, 0), ...wcFittings(13)] };
 
 // ---- the taqueria (TACOS): the spit of al pastor turning by the grill, the salsa bar, a cooler of bright sodas,
@@ -224,10 +230,9 @@ function sushiAt(s) { // a point s metres round the belt: [x, y]
 const sushiBelt = () => ROOM_MODEL((SUSHI_LOOP.x0 + SUSHI_LOOP.x1) / 2, (SUSHI_LOOP.y0 + SUSHI_LOOP.y1) / 2, (vx, vy) => {
   const { x0, x1, y0, y1 } = SUSHI_LOOP, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, P = 2 * (x1 - x0 + y1 - y0);
   for (let k = 0; k < 22; k++) {
-    const [x, y] = sushiAt(k * P / 22 + T * 0.18), px_ = vx + x - cx, py_ = vy + y - cy, col = [RED, BLUE, YEL, GREEN][k & 3];
+    const [x, y] = sushiAt(k * P / 22 + T * 0.18), px_ = vx + x - cx, py_ = vy + y - cy;
     if (hash(k, 3, 94) < 0.18) continue; // (an empty gap: somebody took it)
-    drum(px_, py_, 0.1, 0.95, 0.97, (i, t, L) => { BG[i] = C(col, 4 + L * 0.2); return set(i, HIT.face === 5 ? ' ' : '-', C(WHITE, 10)), true; });
-    for (const e of [-1, 1]) drawBox(boxAt(px_ + e * 0.03, py_, 1, 0, 0.028, 0.045, 0.97, 1.0), (i, t, L) => { BG[i] = C(HIT.w > 0.99 ? (k % 3 ? ORANGE : RED) : WHITE, HIT.w > 0.99 ? 8 : 9); return set(i, ' ', 0), true; }); // nigiri: rice, fish on top
+    kitchenSushi(px_,py_,.95,k);
   }
 });
 function sushiCounterShade(i, t, L) { // pale wood, the steel belt round its top edge
@@ -337,6 +342,6 @@ ROOM_DEFS.bakery = { grid: boxRoom(11, 8), light: 1.0, floor: 'oak', ceil: 'pend
         return set(i, HIT.face === 3 && fract((HIT.w - 0.3) / 0.6) < 0.06 ? '=' : ' ', C(WHITE, 8)), true; });
     }, [0.75, 0.45, 2.1]),
     ...[[1.4, 1.5], [1.4, 2.2], [1.6, 1.85]].map(([x, y], k) => BX(x, y, 0.3, 0.22, k > 1 ? 0.35 : 0, k > 1 ? 0.7 : 0.35, (i, t, L) => { BG[i] = C(WHITE, 4.5 + L * 0.2); return set(i, (HIT.face === 3 || HIT.face === 1) && Math.abs(HIT.w - (k > 1 ? 0.52 : 0.18)) < 0.04 ? '-' : ' ', C(BLUE, 6)), true; })), // flour sacks
-    ...dining(2.2, 5.6, { hl: 0.35, top: solid(BRICK, { top: '=' }), busy: 0.35 }), ...dining(8.6, 5.6, { hl: 0.35, top: solid(BRICK, { top: '=' }), busy: 0.35 })] };
+    ...dining(2.2, 5.6, { hl: 0.35, meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 }), ...dining(8.6, 5.6, { hl: 0.35, meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 })] };
 
 Object.assign(ROOM_FOR, { PIZZA: 'pizzeria', BURGERS: 'burgerjoint', TACOS: 'taqueria', SUSHI: 'sushibar', 'ICE CREAM': 'icecream', BAKERY: 'bakery' });
