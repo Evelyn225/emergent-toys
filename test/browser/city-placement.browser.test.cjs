@@ -21,7 +21,8 @@ test('ramen and other back-counter staff retain their full heads from either sid
   const results=[];
   for(const kind of ['noodle','store','bar','diner','petshop','florist','cafe','tea','deli','pharmacy','herbs','jeweler','fruitshop','drugstore','markethall']){
    enterRoom(kind,{word:kind==='noodle'?'RAMEN':'SHOP',neon:CYAN,ret:[px,py,a]},[6,4,0]);
-   const targets=room.props.filter(p=>p.fig&&!p.still&&p.y<1.45);
+   const keeper=room.def.keeper;
+   const targets=room.props.filter(p=>p.fig&&!p.still&&(p.y<1.45||keeper&&Math.hypot(p.x-keeper[0],p.y-keeper[1])<.12));
    // Keep the real counters/walls, excluding patrons who can legitimately hide a clerk.
    room.props=room.props.filter(p=>!p.fig||targets.includes(p));
    for(const p of targets)for(const side of [-1,0,1]){

@@ -13,6 +13,8 @@ test('legacy counter staff clear their cabinets and back walls while remaining r
      clerk=room.props.find(o=>o.fig&&Math.hypot(o.x-k[0],o.y-k[1])<1e-6),bad=[];
     for(const q of room.props)if(q.box&&q.box.z0<1&&q.box.z1>.2&&inBox(q.box,clerk.x,clerk.y,.18))bad.push(['cabinet',q.box.x,q.box.y]);
     for(const sx of [-1,1])for(const sy of [-1,1])if(roomAt(clerk.x+sx*.18,clerk.y+sy*.18)!=='.')bad.push(['wall',sx,sy]);
+    for(const q of room.props.filter(q=>q.furniture==='counter'))for(let y=0;y<room.H;y++)for(let x=0;x<room.W;x++)
+     if('#WS'.includes(room.grid[y][x])&&furnishingOverlap(q.box,{x:x+.5,y:y+.5,c:1,s:0,hl:.5,hw:.5}))bad.push(['counter in wall/shelf',x,y]);
     // Choose clear floor on the customer side without standing in an occupied
     // stool. Check the same aimed interaction used by the visible prompt.
     let approach=null;

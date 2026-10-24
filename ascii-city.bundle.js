@@ -15965,23 +15965,23 @@ const cabinet = (x, y, k, body) => BX(x, y, 0.35, 0.4, 0, 1.8, (i, t, L) => { //
 const homeLayout = r => r.def.home;
 // Keep the café's body-width staff aisle and appliances tied to one worktop.
 const CAFE_BAR={x:4.6,y:2.15,half:1.4,height:1,keeperY:1.45,espressoX:5.25,caseX:7.2,caseHalf:.7};
-// The narrowest legacy back-counter aisle is y=1..1.4. Keep the clerk's
-// 0.36m body centred in it, rather than standing on the cabinet's rear edge.
-const BACK_COUNTER_STAFF_Y=1.2;
+// Leave a real aisle between the back wall and cabinet; the clerk's whole
+// projected silhouette also needs room behind it in oblique views.
+const BACK_COUNTER_STAFF_Y=1.4,BACK_COUNTER_Y=2.05;
 const ROOM_DEFS = {
   store: { grid: ['##########', '#........#', '#.SS..SS.#', '#........#', '#.SS..SS.#', '#........#', '#........#', '####DD####'],
     light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, posters: true, keeper: [5, BACK_COUNTER_STAFF_Y],
-    props: r => [...counterBox(5, 1.7, 1.6), standing(5, BACK_COUNTER_STAFF_Y, r.neon)] },
+    props: r => [...counterBox(5, BACK_COUNTER_Y, .95), standing(5, BACK_COUNTER_STAFF_Y, r.neon)] }, // fits between the shelf islands at x=4 and x=6
   bar: { grid: boxRoom(12, 8, { '1,4': 'W', '3,4': 'W', '3,5': 'W', '3,6': 'W' }), wc: { x0: 1, y0: 5, x1: 3, y1: 7, sign: [1, 4, 1.5] }, light: 0.6, floor: 'wood', ceil: 'pendant', shelves: true, sign: true, neon: true, glyphs: 'il!Y', keeper: [6, BACK_COUNTER_STAFF_Y],
     props: r => {
-      const p = [...counterBox(6, 1.8, 4, 1.1), standing(6, BACK_COUNTER_STAFF_Y, r.neon),
+      const p = [...counterBox(6, BACK_COUNTER_Y, 4, 1.1), standing(6, BACK_COUNTER_STAFF_Y, r.neon),
                  JUKEBOX(10.55, 5.5, -1, 0), ...toilet(1.6, 6.4, 1, porcelain),washbasin(1.35,5.45,1,0)];
       for (let x = 3; x <= 9; x += 1.5) { p.push(STOOL(x, 2.65, RED)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
       return p;
     } },
   diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, BACK_COUNTER_STAFF_Y], wall: dinerWall,
     props: r => {
-      const p = [...counterBox(6, 1.75, 2), standing(6, BACK_COUNTER_STAFF_Y, WHITE), ...toilet(1.6, 1.4, -1, porcelain),washbasin(1.35,2.55,1,0)];
+      const p = [...counterBox(6, BACK_COUNTER_Y, 2), standing(6, BACK_COUNTER_STAFF_Y, WHITE), ...toilet(1.6, 1.4, -1, porcelain),washbasin(1.35,2.55,1,0)];
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
         for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] },
@@ -16089,12 +16089,12 @@ const ROOM_DEFS = {
       return p;
     } },
   petshop: { grid: boxRoom(10, 8), light: 0.8, floor: 'tile', ceil: 'strip', sign: true, wall: petWall, keeper: [5, BACK_COUNTER_STAFF_Y],
-    props: r => [...counterBox(5, 1.7, 1.6), standing(5, BACK_COUNTER_STAFF_Y, r.neon),
+    props: r => [...counterBox(5, BACK_COUNTER_Y, 1.6), standing(5, BACK_COUNTER_STAFF_Y, r.neon),
                  ...petCage(2.2, 4, KITTEN_LOOK, () => fract(T / 6 + 0.4) < 0.04 ? 'f1' : 'f0', 0.5), ...petCage(7.8, 4, dogLook(WARM), () => 'f' + (5 + ((T * 4) & 1)), 0.5),
                  figProp(4.2, 5.3, dogLook(BRICK), { h: 1.22 / 2, pose: () => 'f' + (5 + ((T * 2) & 1)), face: [0, 0], chat: false, light: 6 })] }, // a kitten, a puppy, and the shop dog
   florist: { grid: boxRoom(10, 7), light: 1, floor: 'tile', ceil: 'strip', shelves: true, sign: true, glyphs: '*@&%', wall: floristWall, keeper: [5, BACK_COUNTER_STAFF_Y],
     props: r => {
-      const p = [...counterBox(5, 1.7, 1.6), standing(5, BACK_COUNTER_STAFF_Y, r.neon)];
+      const p = [...counterBox(5, BACK_COUNTER_Y, 1.6), standing(5, BACK_COUNTER_STAFF_Y, r.neon)];
       for (let k = 0; k < 7; k++) {
         const x = 1.5 + Math.random() * 7, y = 2.8 + Math.random() * 2.6, bloom = ITEM_COL[k & 7];
         p.push(chance(0.5) ? POT_PLANT(x, y, 0.9 + Math.random() * 0.6, x * 7 + y, false) : BOUQUET(x, y, bloom)); // (scattered at random: they don't block, so they can't wall off the counter)
@@ -16159,7 +16159,7 @@ const ROOM_DEFS = {
   tea: { grid: ['##############', '#.........W..#', '#.........W..#', '#.........WW.#', '#............#', '#............#', '#............#', '#............#', '######DD######'],
     wc: { x0: 11, y0: 1, x1: 13, y1: 3, sign: [11, 3, 11.5] }, light: 0.7, floor: 'wood', ceil: 'lantern', sign: true, signAt: 6, wall: teaWall, keeper: [6, BACK_COUNTER_STAFF_Y],
     props: r => {
-      const p = [...counterBox(6, 1.7, 1.4), standing(6, BACK_COUNTER_STAFF_Y, RED), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1), POT_PLANT(12.3, 7.2, 1.5)];
+      const p = [...counterBox(6, BACK_COUNTER_Y, 1.4), standing(6, BACK_COUNTER_STAFF_Y, RED), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1), POT_PLANT(12.3, 7.2, 1.5)];
       for (const [x, y] of [[3, 4], [9, 4], [3, 6.8], [9, 6.8]]) {
         p.push({ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
           const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
