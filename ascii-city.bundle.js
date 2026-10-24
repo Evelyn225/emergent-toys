@@ -18058,15 +18058,8 @@ const oilShelf = (x, y, hl) => BX(x, y, hl, 0.2, 0, 0.62, (i, t, L) => {
   if (k < 0.15 || fract(HIT.u * 9) < 0.2) return set(i, ' ', 0), true;
   return set(i, w < 0.3 ? 'U' : '[', C(w < 0.3 ? BLUE : [YEL, GRAY, RED, BLUE][k * 4 | 0], 13)), true;
 });
-const roller = (x, y) => BX(x, y, 0.3, 0.2, 0.92, 1.04, (i, t, L) => { // hot dogs turning on the rollers, under a sneeze guard
-  if (HIT.face === 5) { BG[i] = C(BRICK, 3.2); return set(i, fract(HIT.v * 9 + T * 0.4) < 0.5 ? '=' : '-', C(ORANGE, 13)), true; }
-  BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }, 0, 1);
-const coffeeMaker = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // a brewer, its glass pot on the hot plate
-  BXD(vx - 0.08, vy, 0.12, 0.17, 0.92, 1.42, solid(GRAY, { top: '=' }));
-  BXD(vx + 0.02, vy, 0.12, 0.17, 1.32, 1.42, solid(GRAY));
-  drum(vx + 0.06, vy, 0.08, 0.93, 1.12, (i, t, L) => { BG[i] = HIT.w < 1.05 ? C(BRICK, 1.2) : C(CYAN, 0.8 + L * 0.1); return set(i, HIT.w > 1.05 && fract(HIT.w * 30) < 0.2 ? '.' : ' ', C(WHITE, 8)), true; });
-  dot(vx + 0.06, vy, 0.935, 0.03, (i, t, L) => { BG[i] = C(RED, 9); return set(i, ' ', 0), true; }); // (the hot plate's light)
-}, [0.25, 0.2, 1.42]);
+const roller = (x,y) => KITCHEN_HOTDOG_ROLLER(x,y);
+const coffeeMaker = (x,y) => KITCHEN_DRIP_BREWER(x,y);
 ROOM_DEFS.gas = { grid: ['#############', '#........W..#', '#...........#', '#..SS....W..#', '#..SS....WWW#', '#..SS.......#', '#..SS.......#', '#...........#', '#...........#', '######DD#####'],
   wc: { x0: 10, y0: 1, x1: 12, y1: 4, sign: [9, 1, 1.5] }, light: 1.2, floor: 'lino', ceil: 'strip', sign: false, wall: gasWall, keeper: [10.4, 7.2], glyphs: 'o#=@%',
   props: r => {
@@ -18088,10 +18081,7 @@ ROOM_DEFS.gas = { grid: ['#############', '#........W..#', '#...........#', '#..
       BX(1.3, 2, 0.9, 0.3, 0, 0.92, solid(BRICK, { panel: 0.6, top: '=' }), 0, 1), coffeeMaker(1.25, 1.55), coffeeMaker(1.25, 2.15), // coffee
       ...Array.from({ length: 6 }, (_, k) => BX(1.3, 2.7, 0.06, 0.06, 0.92 + k * 0.06, 0.97 + k * 0.06, solid(WHITE))), // a stack of cups
       BX(1.3, 6.1, 0.8, 0.3, 0, 0.92, solid(BRICK, { panel: 0.6, top: '=' }), 0, 1), roller(1.3, 5.75), // hot food
-      ROOM_MODEL(1.3, 6.55, (vx, vy) => { // the slushie machine: red and blue churning
-        for (const [e, col] of [[-0.12, RED], [0.12, BLUE]]) drum(vx, vy + e, 0.1, 0.92, 1.32, (i, t, L) => { BG[i] = C(col, 3 + L * 0.3); return set(i, fract(HIT.w * 6 - T * 1.5 + Math.atan2(HIT.v, HIT.u)) < 0.2 ? '~' : ' ', C(WHITE, 12)), true; });
-        BXD(vx, vy, 0.13, 0.24, 1.32, 1.42, solid(WHITE, { top: '=' }));
-      }, [0.15, 0.26, 1.42]),
+      KITCHEN_SLUSH_MACHINE(1.3,6.55),
       BX(1.6, 8.55, 0.55, 0.3, 0, 0.85, (i, t, L) => { // the ice chest
         BG[i] = C(WHITE, (2.6 + L * 0.3) * shadeFace(HIT.face));
         if (HIT.face === 4 && Math.abs(HIT.w - 0.5) < 0.15) return set(i, ' ICE '[Math.floor((HIT.u + 0.55) / 1.1 * 5)] || ' ', C(BLUE, 14)), true;
@@ -20740,8 +20730,7 @@ function bentoWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.bento = { grid: boxRoom(9, 7), light: 1.0, floor: 'hinoki', ceil: 'strip', sign: false, wall: bentoWall, keeper: [4.6, 1.5],
   props: r => [...glassCase(4.6, 2.2, 2.0, 0.35, 1.05, bentoBoxes, STONE), { ...standing(4.6, 1.5, WHITE), face: [0, 1] },
-    BX(7.3, 1.4, 0.55, 0.32, 0, 0.9, solid(GRAY, { top: '=', panel: 0.5 })), ROOM_MODEL(7.3, 1.4, (vx, vy) => drum(vx, vy, 0.18, 0.9, 1.2, (i, t, L) => { // the rice cooker
-      BG[i] = C(WHITE, (3.6 + L * 0.3) * drumLit(0.18)); return set(i, HIT.face === 5 ? 'o' : Math.abs(HIT.w - 1.05) < 0.02 ? '-' : ' ', C(GRAY, 5)), true; })),
+    BX(7.3, 1.4, 0.55, 0.32, 0, 0.9, solid(GRAY, { top: '=', panel: 0.5 })), KITCHEN_RICE_COOKER(7.3,1.4),
     BX(1.22, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(1.75, 3.9, 4.9, 1.0, BRICK, -1, 0.35), // the ledge on the left
     ...plainBench(7.6, 4.4, 0.75, -1, 0, BRICK)] };
 
@@ -20832,10 +20821,7 @@ ROOM_DEFS.donutshop = { grid: boxRoom(10, 7), light: 1.1, floor: 'pastel', ceil:
 // with oranges; stools at the side, a bench in the window
 const fruitCrate = (x, y, col, lv, glyph) => [BX(x, y, 0.32, 0.26, 0, 0.55, crateShade(BRICK)), BX(x, y, 0.3, 0.24, 0.55, 0.62, (i, t, L) => { // a crate heaped with one fruit
   if (HIT.face !== 5) return false; const k = hash(Math.floor(HIT.u * 14), Math.floor(HIT.v * 14), 117); BG[i] = C(col, lv * (0.7 + k * 0.4)); return set(i, k > 0.6 ? glyph : ' ', C(col, lv + 5)), true; })];
-const blender = (x, y, col) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.1, 0.1, 1.0, 1.12), solid(GRAY));
-  drum(vx, vy, 0.09, 1.12, 1.42, (i, t, L) => { const s = fract(Math.atan2(HIT.v, HIT.u) / 6.28 + T * 3 + HIT.w * 2); BG[i] = C(col, 6 + s * 4); return set(i, s < 0.2 ? '~' : ' ', C(WHITE, 12)), true; }); // whizzing
-}, [0.1, 0.1, 1.42]);
+const blender = (x,y,col) => KITCHEN_BLENDER(x,y,col);
 function juiceWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.6, 0.3, 0.36, C(GREEN, 15), C(YEL, 8))) return true;
@@ -36430,10 +36416,10 @@ function kitchenBasketLid(x,y,z) {
       x+Math.cos(b)*.025,y,z+.039+Math.sin(b)*.025,.006,BRICK);
   }
 }
-function kitchenSteamerSteam(s,z) {
+function kitchenSteamerSteam(s,z,offsetX=0,offsetY=0) {
   if(mode!=='room'||!room||Math.hypot(s.x-px,s.y-py)>12||T<(s.steamDue??-1))return;
   s.steamDue=T+1.1;
-  haze.push({at:placeKey(),kind:'steam',s:1,x:s.x,y:s.y,z,r:.018,rMax:.06,
+  haze.push({at:placeKey(),kind:'steam',s:1,x:s.x+offsetX,y:s.y+offsetY,z,r:.018,rMax:.06,
     vx:.004,vy:.002,vz:.09,life:1,fade:1/1.6,seed:s.x*13+s.y*7+T});
   while(haze.length>140)haze.shift();
 }
@@ -36658,6 +36644,105 @@ function KITCHEN_YAKITORI(x,y,hl) {
       for(let m=0;m<3;m++)foodOval(vx+u,vy-.08+m*.08,.988,.026,.031,.032,kitchenFoodShade(m===1?GREEN:k%2?BRICK:ORANGE));
     }
   }),box:boxAt(x,y,1,0,hl,.24,0,1.021),radius:hl+.3,kitchenHotline:{kind:'yakitori',half:hl}};
+}
+// Small appliances sit on their existing worktops. Cases, vessels, liquids and
+// controls remain separate surfaces, with filtered fine detail at a distance.
+function KITCHEN_BLENDER(x,y,col) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.105,.10,1,1.12,.018,kitchenSteel);
+    coveLathe(vx,vy,1.12,[[0,0],[0,.055],[.03,.060],[.28,.086],[.30,.087],[.304,.083],
+      [.304,.077],[.032,.053],[.01,0]],(i,t,L)=>kitchenDrinkGlass(i,t,L,vx,vy));
+    const juice=(i,t,L)=>{
+      const swirl=Math.sin(Math.atan2(HIT.v,HIT.u)*3+T*4+HIT.w*21)*coveDetail(t);
+      BG[i]=C(col,3.7+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)+swirl*.35);set(i,' ',0);return true;
+    };
+    const r=.053+(.077-.053)*(.23-.032)/(.304-.032);
+    coveLathe(vx,vy,1.13,[[0,0],[.022,.053],[.22,r],[.22,0]],juice);
+    coveLathe(vx,vy,1.424,[[0,0],[0,.089],[.02,.088],[.028,.075],[.028,0]],kitchenSteel);
+    coveLathe(vx,vy,1.452,[[0,0],[0,.025],[.02,.025],[.02,0]],kitchenGlaze(BRICK));
+    kitchenHandle(vx+.071,vy,1.29,1,0,.048,.007,GRAY);
+    foodOval(vx,vy+.104,1.04,.025,.009,.035,kitchenGlaze(BRICK));
+  }),box:boxAt(x,y,1,0,.14,.12,1,1.472),radius:.3,kitchenCounter:{kind:'blender',support:1}};
+}
+function KITCHEN_RICE_COOKER(x,y) {
+  const white=kitchenGlaze(WHITE),black=kitchenGlaze(BLACK);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveLathe(vx,vy,.90,[[0,0],[0,.12],[.015,.155],[.04,.177],[.18,.18],[.20,.175],[.20,0]],kitchenGlaze(WHITE));
+    coveLathe(vx,vy,1.10,[[0,0],[0,.18],[.008,.185],[.025,.17],[.048,.11],[.052,0]],(i,t,L)=>{
+      if(HIT.w<1.109)return kitchenSteel(i,t,L);return white(i,t,L);
+    });
+    for(const side of [-1,1])coveTube(vx+side*.055,vy+.04,1.148,vx+side*.055,vy+.04,1.17,.008,GRAY);
+    coveTube(vx-.055,vy+.04,1.17,vx+.055,vy+.04,1.17,.008,GRAY);
+    // A dark recessed vent is on the lid, clear of the carrying handle.
+    coveLathe(vx-.06,vy,1.149,[[0,0],[0,.012],[.006,.012],[.006,.008],[.002,.008],[.002,0]],(i,t,L)=>{
+      if(HIT.part===5)return black(i,t,L);return kitchenSteel(i,t,L);
+    });
+    foodOval(vx,vy+.178,.99,.05,.01,.04,kitchenGlaze(BRICK));
+    foodOval(vx+.02,vy+.188,1.002,.008,.003,.010,(i,t,L)=>{BG[i]=C(ORANGE,9);set(i,' ',0);return true;});
+  }),box:boxAt(x,y,1,0,.19,.195,.90,1.18),radius:.3,kitchenCounter:{kind:'rice-cooker',support:.90},
+    tick:s=>kitchenSteamerSteam(s,1.155,-.06,0)};
+}
+function kitchenCounterCarafe(x,y,z) {
+  coveLathe(x,y,z,COFFEE_CARAFE,(i,t,L)=>{
+    if(HIT.w>z+.162||HIT.part===1||HIT.part===9)return kitchenSteel(i,t,L);
+    return kitchenDrinkGlass(i,t,L,x,y);
+  });
+  const r=.061-(.073-.02)*(.061-.056)/(.10-.02);
+  coveLathe(x,y,z+.007,[[0,0],[.013,.061],[.066,r],[.066,0]],kitchenFoodShade(BRICK));
+  kitchenHandle(x,y+.061,z+.075,0,1,.031,.006,BRICK);
+}
+function KITCHEN_DRIP_BREWER(x,y) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.20,.17,.92,.94,.007,kitchenSteel);
+    coveRound(vx-.15,vy,1,0,.05,.16,.94,1.42,.013,kitchenGlaze(BRICK));
+    coveRound(vx-.03,vy,1,0,.17,.16,1.27,1.42,.015,kitchenSteel);
+    coveLathe(vx+.07,vy,.94,[[0,0],[0,.075],[.01,.075],[.01,0]],kitchenSteel);
+    kitchenCounterCarafe(vx+.07,vy,.95);
+    coveLathe(vx+.07,vy,1.14,[[0,0],[0,.025],[.11,.07],[.13,.07],[.13,0]],kitchenGlaze(BRICK));
+    foodOval(vx+.141,vy+.11,1.32,.008,.018,.035,kitchenGlaze(BLACK));
+    foodOval(vx+.142,vy+.06,1.33,.003,.006,.012,(i,t,L)=>{BG[i]=C(RED,8);set(i,' ',0);return true;});
+  }),box:boxAt(x,y,1,0,.205,.17,.92,1.42),radius:.35,kitchenCounter:{kind:'drip-brewer',support:.92}};
+}
+function KITCHEN_HOTDOG_ROLLER(x,y) {
+  // Round sausages touch both neighbouring rollers instead of floating at
+  // their highest points. The cross-section uses their summed radii.
+  const bottom=.968+Math.sqrt((.012+.021)**2-.03**2)-.021;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.19,.30,.92,.955,.008,kitchenSteel);
+    for(const side of [-1,1])coveRound(vx,vy+side*.283,1,0,.19,.017,.95,.99,.006,kitchenSteel);
+    for(let k=0;k<6;k++)coveTube(vx-.15+k*.06,vy-.27,.968,vx-.15+k*.06,vy+.27,.968,.012,GRAY);
+    for(let k=0;k<5;k++)for(const side of [-1,1])foodOval(vx-.12+k*.06,vy+side*.13,bottom,.021,.10,.042,(i,t,L)=>{
+      const stripe=Math.sin(HIT.v*90+T*1.2)*coveDetail(t);
+      BG[i]=C(BRICK,3.2+L*.32*coveLight(HIT.nx,HIT.ny,HIT.nz)+stripe*.3);set(i,' ',0);return true;
+    });
+    for(const u of [-.19,.19])for(const v of [-.30,.30])coveTube(vx+u,vy+v,.95,vx+u,vy+v,1.22,.006,GRAY);
+    for(const side of [-1,1])coveTube(vx-.19,vy+side*.30,1.22,vx+.19,vy+side*.30,1.22,.006,GRAY);
+    const glass=(i,t,L)=>{
+      if(Math.abs(HIT.v+.12)>.004||coveDetail(t)<.2)return false;
+      BG[i]=C(WHITE,3+L*.15);set(i,' ',0);return true;
+    };
+    drawBox(boxAt(vx,vy,1,0,.19,.30,1.214,1.216),glass);
+    drawBox(boxAt(vx+.19,vy,1,0,.001,.30,.96,1.216),glass);
+  }),box:boxAt(x,y,1,0,.21,.315,.92,1.226),radius:.4,kitchenCounter:{kind:'hotdog-roller',support:.92}};
+}
+function KITCHEN_SLUSH_MACHINE(x,y) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.17,.25,.92,1.055,.012,kitchenSteel);
+    for(const [side,col]of [[-1,RED],[1,BLUE]]) {
+      const cy=vy+side*.12;
+      coveLathe(vx-.015,cy,1.055,[[0,0],[0,.085],[.025,.095],[.275,.095],[.29,.09],[.29,0]],
+        (i,t,L)=>kitchenDrinkGlass(i,t,L,vx-.015,cy));
+      coveLathe(vx-.015,cy,1.067,[[0,0],[0,.078],[.02,.089],[.245,.089],[.245,0]],(i,t,L)=>{
+        const swirl=Math.sin(HIT.w*45+Math.atan2(HIT.v,HIT.u)*3-T*2)*coveDetail(t);
+        BG[i]=C(col,3.6+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)+swirl*.4);set(i,' ',0);return true;
+      });
+      coveTube(vx+.075,cy,1.09,vx+.15,cy,1.09,.01,GRAY);
+      coveTube(vx+.15,cy,1.09,vx+.15,cy,1.04,.01,GRAY);
+      coveTube(vx+.105,cy,1.10,vx+.13,cy,1.16,.008,BRICK);
+    }
+    coveRound(vx-.015,vy,1,0,.115,.235,1.345,1.42,.012,kitchenGlaze(WHITE));
+    foodTray(vx+.14,vy,.92,.045,.23,.025);
+  }),box:boxAt(x,y,1,0,.19,.26,.92,1.42),radius:.4,kitchenCounter:{kind:'slush-machine',support:.92}};
 }
 // Fern's front is west toward the dock. The room's south entrance therefore
 // maps through a quarter turn; windows and the world-view camera share it.
