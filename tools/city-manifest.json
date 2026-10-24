@@ -143,6 +143,7 @@
     "city/kitchen-appliances.js",
     "city/kitchen-drinks.js",
     "city/kitchen-steamers.js",
+    "city/kitchen-coffee.js",
     "city/fern-quality.js",
     "city/home-furniture-render.js",
     "city/home-furnishing-ui.js",
