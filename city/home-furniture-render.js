@@ -15,6 +15,7 @@ function homePlushShark(vx,vy,c,s,zBase=0) {
 }
 const HOME_PHOTO_GLYPHS=new WeakMap();
 function furnishingProp(p,r) {
+  if(p.id==='f_lamp')return HOME_FLOOR_LAMP(p);
   const d=HOME_FURNITURE[p.id],c=Math.cos(p.a),s=Math.sin(p.a);
   const prop=ROOM_MODEL(p.x,p.y,(vx,vy)=>{
     const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
@@ -33,10 +34,6 @@ function furnishingProp(p,r) {
       for(const x of [-1,1])for(const y of [-.3,.3])wood(x,y,.06,.06,0,.18);
       wood(0,0,1.2,.46,.15,.34,.07,'wood');
       for(const side of [-1,1]){wood(side*.53,.025,.51,.38,.32,.49,.09,fabric);wood(side*1.12,0,.08,.46,.34,.72,.065,fabric);wood(side*.53,-.36,.51,.1,.46,.95,.075,fabric);}
-    }else if(p.id==='f_lamp') {
-      coveLathe(vx,vy,0,[[0,0],[0,.18],[.025,.22],[.05,.16],[.06,.04],[.06,0]],homeStone);tube(0,0,.05,0,0,1.55,.018);
-      coveLathe(vx,vy,1.3,[[0,.24],[.02,.25],[.4,.14],[.42,.13],[.42,.115],[.02,.23]],homeStone);
-      dot(vx,vy,1.43,.06,(i,t,L)=>{BG[i]=C(p.on?WARM:STONE,p.on?12:3);set(i,' ',0);return true;});
     }else if(p.id==='f_recordplayer') {
       for(const x of [-.44,.44])for(const y of [-.25,.25])wood(x,y,.04,.04,0,.16,.018);
       wood(0,0,.55,.35,.15,.87,.025);wood(0,.35,.5,.025,.24,.75,.018);wood(0,0,.55,.35,.87,.94,.025);

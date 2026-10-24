@@ -59,15 +59,6 @@ function TELEVISION(x,y,r,scale=1,angle=0) {
 }
 
 function homeStone(i,t,L) {BG[i]=C(STONE,3.5+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
-function HOME_PENDANT(x,y,ceiling,r,index) {
-  return ROOM_MODEL(x,y,(vx,vy)=>{
-    const on=homeRecord(r)?.lights?.['fixed'+index]!==false;
-    coveLathe(vx,vy,ceiling-.045,[[0,0],[0,.075],[.035,.075],[.045,.04],[.045,0]],homeStone);
-    coveTube(vx,vy,ceiling-.045,vx,vy,ceiling-.57,.012,GRAY);
-    coveLathe(vx,vy,ceiling-.7,[[0,.24],[.018,.25],[.16,.075],[.18,.05],[.18,0]],homeStone);
-    dot(vx,vy,ceiling-.68,.055,(i,t,L)=>{BG[i]=C(on?WARM:STONE,on?12:2+L*.15);set(i,' ',0);return true;});
-  });
-}
 function HOME_FRIDGE(x,y,{angle=0,height=1.9,halfWidth=.43,halfDepth=.4}={}) {
   const c=Math.cos(angle),s=Math.sin(angle),hw=halfDepth,doorWidth=halfWidth-.04;
   const doors=[[.13,height*1.28/1.9],[height*1.31/1.9,height-.05]].map(([z0,z1])=>{
