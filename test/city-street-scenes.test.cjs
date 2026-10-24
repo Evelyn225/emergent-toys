@@ -38,7 +38,7 @@ test('miniature coaches follow equal arc distances around the oval and rise to t
   const result=ev(`(()=>{
     let min=Infinity,max=0,height=0,wrap=0;
     for(let k=0;k<256;k++) {
-      const d=RAILWAY_ARC[256]*k/256,a=railwayAtDistance(d),b=railwayAtDistance(d-.063),c=railwayAtDistance(d+RAILWAY_ARC[256]);
+      const d=RAILWAY_LENGTH*k/256,a=railwayAtDistance(d),b=railwayAtDistance(d-.063),c=railwayAtDistance(d+RAILWAY_LENGTH);
       const distance=Math.hypot(a.x-b.x,a.y-b.y);min=Math.min(min,distance);max=Math.max(max,distance);
       height=Math.max(height,a.z);wrap=Math.max(wrap,Math.hypot(a.x-c.x,a.y-c.y));
     }
@@ -46,6 +46,6 @@ test('miniature coaches follow equal arc distances around the oval and rise to t
     tod=23;const closed=!railwayClock().running;streetSceneState.demoUntil=T+48;const demo=railwayClock().running;
     return {min,max,height,wrap,stopped,moving,closed,demo};
   })()`);
-  assert.ok(result.min>.055&&result.max<.064,JSON.stringify(result));assert.ok(Math.abs(result.height-.096)<1e-6);
+  assert.ok(result.min>.055&&result.max<.064,JSON.stringify(result));assert.ok(Math.abs(result.height-.1)<1e-6);
   assert.ok(result.wrap<1e-10);assert.ok(result.stopped&&result.moving&&result.closed&&result.demo);
 });

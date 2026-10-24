@@ -449,21 +449,40 @@ function railwayClock() {
   const cycle = mod(T,24), travel = cycle < 3 ? 0 : (cycle-3)/21;
   return { running, stopped: !running || cycle < 3, angle: running ? travel*TAU : 0 };
 }
+// One sampled centreline supplies the rails, bridge and rolling stock. Include
+// exact grade junctions so the approach solids meet the level bridge deck.
+const RAILWAY_ANGLES=Array.from({length:128},(_,k)=>k/128*Math.PI*2);
+for(const x of [-.15,-.06,.06,.15]){const a=Math.acos(x/.255);RAILWAY_ANGLES.push(a,Math.PI*2-a);}
+RAILWAY_ANGLES.sort((a,b)=>a-b);RAILWAY_ANGLES.push(Math.PI*2);
+const RAILWAY_PATH=RAILWAY_ANGLES.map(angle=>{
+  const x=.255*Math.cos(angle),cap=Math.max(0,Math.abs(x)-.15),upper=Math.sin(angle)>=0;
+  // Straight front/rear runs, with round ends. The bridge grades belong on
+  // straight track, so both rail heads and rigid wheelsets share one plane.
+  const y=.23+(upper?1:-1)*Math.sqrt(Math.max(0,.105*.105-cap*cap));
+  const t=upper?0:clamp((.15-Math.abs(x))/.09,0,1),rise=.018*t*t*(3-2*t);
+  const c=cap>1e-12?-(y-.23):(upper?-1:1),s=cap>1e-12?x-Math.sign(x)*.15:0,length=Math.hypot(c,s);
+  return {x,y,z:.082+rise,c:c/length,s:s/length};
+});
+const RAILWAY_ARC=new Float64Array(RAILWAY_PATH.length);
+for(let k=1;k<RAILWAY_PATH.length;k++){
+  const a=RAILWAY_PATH[k-1],b=RAILWAY_PATH[k];
+  RAILWAY_ARC[k]=RAILWAY_ARC[k-1]+Math.hypot(b.x-a.x,b.y-a.y);
+}
+const RAILWAY_LENGTH=RAILWAY_ARC[RAILWAY_ARC.length-1];
+function railwaySample(k,t) {
+  const a=RAILWAY_PATH[k],b=RAILWAY_PATH[k+1];
+  return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,z:a.z+(b.z-a.z)*t,c:b.x-a.x,s:b.y-a.y};
+}
 function railwayPoint(angle) {
-  const u=.255*Math.cos(angle),v=.23+.105*Math.sin(angle);
-  const rise = v < .23 ? .018 * terrainEase(clamp((.105-Math.abs(u))/.045,0,1)) : 0;
-  return {x:u,y:v,z:.078+rise,c:-.255*Math.sin(angle),s:.105*Math.cos(angle)};
+  const at=mod(angle,Math.PI*2);let lo=0,hi=RAILWAY_ANGLES.length-1;
+  while(hi-lo>1){const mid=(lo+hi)>>1;if(RAILWAY_ANGLES[mid]<at)lo=mid;else hi=mid;}
+  return railwaySample(lo,(at-RAILWAY_ANGLES[lo])/(RAILWAY_ANGLES[hi]-RAILWAY_ANGLES[lo]));
 }
-// Equal arc distances keep the coaches coupled around both ends of the oval.
-const RAILWAY_ARC = new Float64Array(257);
-for(let k=1;k<RAILWAY_ARC.length;k++) {
-  const a=(k-1)/256*Math.PI*2,b=k/256*Math.PI*2;
-  RAILWAY_ARC[k]=RAILWAY_ARC[k-1]+Math.hypot(.255*(Math.cos(b)-Math.cos(a)),.105*(Math.sin(b)-Math.sin(a)));
-}
+// Equal horizontal arc distances keep the coaches coupled around both ends.
 function railwayAtDistance(distance) {
-  const at=mod(distance,RAILWAY_ARC[256]);let lo=0,hi=256;
+  const at=mod(distance,RAILWAY_LENGTH);let lo=0,hi=RAILWAY_ARC.length-1;
   while(hi-lo>1){const mid=(lo+hi)>>1;if(RAILWAY_ARC[mid]<at)lo=mid;else hi=mid;}
-  return railwayPoint((lo+(at-RAILWAY_ARC[lo])/(RAILWAY_ARC[hi]-RAILWAY_ARC[lo]))/256*TAU);
+  return railwaySample(lo,(at-RAILWAY_ARC[lo])/(RAILWAY_ARC[hi]-RAILWAY_ARC[lo]));
 }
 // Moderate loss of tyre grip follows lingering wetness and accumulated, exposed snow.
 function roadTraction(x, y) {
@@ -37993,6 +38012,209 @@ function assembleArchipelago() {
 }
 let CITY_LAYOUT_CHECKPOINT=null;
 assembleArchipelago();
+// Window-local geometry. Static solids are built once and indexed by bounds;
+// a pane cell visits only nearby leaves instead of testing every miniature.
+let RAILWAY_TREE=null;
+const RAILWAY_WHEELS=[];
+const RAILWAY_HIT={piece:null,t:0,face:0,u:0,v:0,z:0};
+function railwayBounds(o) {
+  if(o.bounds)return o.bounds;
+  const x=Math.abs(o.c)*o.hl+Math.abs(o.s)*o.hw,y=Math.abs(o.s)*o.hl+Math.abs(o.c)*o.hw;
+  return o.bounds=[o.x-x,o.y-y,o.z0,o.x+x,o.y+y,o.z1];
+}
+function railwayTree(pieces) {
+  const bounds=[Infinity,Infinity,Infinity,-Infinity,-Infinity,-Infinity];
+  for(const o of pieces){const b=railwayBounds(o);for(let k=0;k<3;k++){bounds[k]=Math.min(bounds[k],b[k]);bounds[k+3]=Math.max(bounds[k+3],b[k+3]);}}
+  if(pieces.length<=3)return {bounds,pieces};
+  let axis=0;for(let k=1;k<3;k++)if(bounds[k+3]-bounds[k]>bounds[axis+3]-bounds[axis])axis=k;
+  pieces.sort((a,b)=>{const x=railwayBounds(a),y=railwayBounds(b);return x[axis]+x[axis+3]-y[axis]-y[axis+3];});
+  const at=pieces.length>>1;
+  return {bounds,left:railwayTree(pieces.slice(0,at)),right:railwayTree(pieces.slice(at))};
+}
+// No slab closures or temporary hit objects in this per-cell hot path.
+function railwayBoundsHit(b,x,z,du,dz,limit) {
+  let lo=Math.max(0,b[1]),hi=Math.min(limit,b[4]);
+  if(Math.abs(du)<1e-12){if(x<b[0]||x>b[3])return false;}
+  else{const a=(b[0]-x)/du,c=(b[3]-x)/du;lo=Math.max(lo,Math.min(a,c));hi=Math.min(hi,Math.max(a,c));}
+  if(lo>hi)return false;
+  if(Math.abs(dz)<1e-12){if(z<b[2]||z>b[5])return false;}
+  else{const a=(b[2]-z)/dz,c=(b[5]-z)/dz;lo=Math.max(lo,Math.min(a,c));hi=Math.min(hi,Math.max(a,c));}
+  return lo<=hi;
+}
+function railwayRay(ox,oy,oz,rx,ry,rz,o) {
+  let lo=0,hi=Infinity,face=0;
+  const p=o.miniPlanes||o.planeData;
+  if(p){
+    const x=ox-(o.miniPlanes?0:o.x),y=oy-(o.miniPlanes?0:o.y);
+    for(let k=0;k<p.length;k+=4){
+      const dist=p[k+3]-p[k]*x-p[k+1]*y-p[k+2]*oz,vel=p[k]*rx+p[k+1]*ry+p[k+2]*rz;
+      if(Math.abs(vel)<1e-12){if(dist< -1e-12)return -1;continue;}
+      const t=dist/vel;if(vel<0&&t>lo){lo=t;face=o.miniFaces?o.miniFaces[k/4]:k/4;}else if(vel>0)hi=Math.min(hi,t);
+      if(lo>hi+1e-12)return -1;
+    }
+  }else{
+    const x=ox-o.x,y=oy-o.y,u=x*o.c+y*o.s,v=-x*o.s+y*o.c,du=rx*o.c+ry*o.s,dv=-rx*o.s+ry*o.c;
+    // The axes are deliberately unrolled: no arrays allocated for each ray.
+    for(let k=0;k<3;k++){
+      const q=k===0?u:k===1?v:oz,d=k===0?du:k===1?dv:rz,a=k===0?-o.hl:k===1?-o.hw:o.z0,b=k===0?o.hl:k===1?o.hw:o.z1;
+      if(Math.abs(d)<1e-12){if(q<a||q>b)return -1;continue;}
+      const t0=(a-q)/d,t1=(b-q)/d,entry=Math.min(t0,t1);
+      if(entry>lo){lo=entry;face=k===0?(d>0?2:1):k===1?(d>0?4:3):(d>0?6:5);}
+      hi=Math.min(hi,Math.max(t0,t1));if(lo>hi)return -1;
+    }
+  }
+  if(lo<1e-7)return -1;
+  HIT.face=face;HIT.u=(ox+rx*lo-o.x)*o.c+(oy+ry*lo-o.y)*o.s;
+  HIT.v=-(ox+rx*lo-o.x)*o.s+(oy+ry*lo-o.y)*o.c;HIT.w=oz+rz*lo;
+  // Moving train solids carry pitched local coordinates for their paintwork.
+  if(o.pose){const u=HIT.u,w=HIT.w-o.poseZ;HIT.u=u*o.pose.cp+w*o.pose.sp;HIT.w=-u*o.pose.sp+w*o.pose.cp;}
+  return lo;
+}
+function railwayVisit(node,x,z,du,dz) {
+  if(!node||!railwayBoundsHit(node.bounds,x,z,du,dz,RAILWAY_HIT.t))return;
+  if(node.pieces){for(const o of node.pieces)railwayTest(o,x,z,du,dz);}
+  else{railwayVisit(node.left,x,z,du,dz);railwayVisit(node.right,x,z,du,dz);}
+}
+function railwayTest(o,x,z,du,dz,unculled=false) {
+  if(!unculled&&!railwayBoundsHit(railwayBounds(o),x,z,du,dz,RAILWAY_HIT.t))return;
+  const t=railwayRay(x,0,z,du,1,dz,o);
+  if(t>0&&t<RAILWAY_HIT.t){RAILWAY_HIT.piece=o;RAILWAY_HIT.t=t;RAILWAY_HIT.face=HIT.face;RAILWAY_HIT.u=HIT.u;RAILWAY_HIT.v=HIT.v;RAILWAY_HIT.z=HIT.w;}
+}
+function railwayCast(x,z,du,dz,limit,brute=false) {
+  RAILWAY_HIT.piece=null;RAILWAY_HIT.t=limit;
+  if(brute)for(const o of RAILWAY_MODELS)railwayTest(o,x,z,du,dz,true);
+  else railwayVisit(RAILWAY_TREE,x,z,du,dz);
+  for(const o of RAILWAY_TRAIN)railwayTest(o,x,z,du,dz,brute);
+  for(const o of RAILWAY_ENGINE)railwayTest(o,x,z,du,dz,brute);
+  for(const o of RAILWAY_WHEELS)railwayTest(o,x,z,du,dz,brute);
+  return RAILWAY_HIT;
+}
+// A triangle extruded vertically: its five closed faces share exact vertices
+// with its neighbour. Two triangles form each curved/graded strip segment.
+function railwayPrism(points,low,high,base,kind) {
+  const [a,b,c]=points,det=(b.x-a.x)*(c.y-a.y)-(c.x-a.x)*(b.y-a.y);
+  const sx=((b.z-a.z)*(c.y-a.y)-(c.z-a.z)*(b.y-a.y))/det;
+  const sy=((b.x-a.x)*(c.z-a.z)-(c.x-a.x)*(b.z-a.z))/det;
+  const h=a.z-sx*a.x-sy*a.y,planes=[-sx,-sy,1,h+high,sx,sy,-1,-h-low];
+  for(let k=0;k<3;k++){
+    const p=points[k],q=points[(k+1)%3],sign=det>0?1:-1,nx=(q.y-p.y)*sign,ny=(p.x-q.x)*sign;
+    planes.push(nx,ny,0,nx*p.x+ny*p.y);
+  }
+  const o={x:0,y:0,c:1,s:0,base,kind,miniPlanes:Float64Array.from(planes),miniFaces:[5,6,1,2,3],
+    bounds:[Math.min(...points.map(p=>p.x)),Math.min(...points.map(p=>p.y)),Math.min(...points.map(p=>p.z))+low,
+      Math.max(...points.map(p=>p.x)),Math.max(...points.map(p=>p.y)),Math.max(...points.map(p=>p.z))+high]};
+  RAILWAY_MODELS.push(o);return o;
+}
+function railwayStrip(a,b,offset,half,low,high,base,kind) {
+  const edge=(p,v)=>({x:p.x-p.s*v,y:p.y+p.c*v,z:p.z});
+  const p=edge(a,offset-half),q=edge(a,offset+half),r=edge(b,offset-half),s=edge(b,offset+half);
+  railwayPrism([p,r,s],low,high,base,kind);railwayPrism([p,s,q],low,high,base,kind);
+}
+function buildRailwayTrack() {
+  const post=p=>{
+    const len=Math.hypot(p.c,p.s),c=p.c/len,s=p.s/len;
+    for(const side of [-1,1])miniBox(p.x-s*side*.021,p.y+c*side*.021,.0014,.0014,p.z-.0085,p.z+.012,GRAY,'railing');
+  };
+  for(let k=0;k<RAILWAY_PATH.length-1;k++){
+    const a=RAILWAY_PATH[k],b=RAILWAY_PATH[k+1],front=(a.y+b.y)/2<.23,mid=(a.x+b.x)/2;
+    railwayStrip(a,b,0,.016,-.0085,-.0025,BRICK,'trackbed');
+    for(const side of [-1,1])railwayStrip(a,b,side*.0085,.0012,-.0025,0,YEL,'rail');
+    if(!front&&Math.abs(mid)<.06)railwayStrip(a,b,0,.023,-.014,-.0085,STONE,'bridge');
+    if(front&&Math.abs(mid)<.15){
+      railwayStrip(a,b,0,.023,-.014,-.0085,STONE,'bridge');
+      // The ramps rest on shaped masonry; the middle stays open over water.
+      if(Math.abs(mid)>.06&&Math.max(a.z,b.z)-.014>.078){
+        // Foundation wedges have a level bottom and the actual graded top.
+        const before=RAILWAY_MODELS.length;railwayStrip(a,b,0,.021,-.06,-.014,BRICK,'abutment');
+        for(const o of RAILWAY_MODELS.slice(before)){
+          // Replace the sloped underside with the display's ground plane.
+          o.miniPlanes.set([0,0,-1,-.078],4);o.bounds[2]=.078;
+        }
+      }
+      for(const side of [-1,1])railwayStrip(a,b,side*.021,.0014,.012,.015,GRAY,'railing');
+      const start=Math.abs(Math.abs(a.x)-.15)<1e-8,end=Math.abs(Math.abs(b.x)-.15)<1e-8;
+      if(k%3===0||start)post(start?railwayAtDistance(RAILWAY_ARC[k]+.0015):a);
+      if(end)post(railwayAtDistance(RAILWAY_ARC[k+1]-.0015));
+    }
+  }
+  for(const x of [-.045,.045])for(const front of [false,true]){
+    const angle=Math.acos(x/.255),p=railwayPoint(front?Math.PI*2-angle:angle);
+    miniBox(x,p.y,.007,.019,.062,p.z-.014,BRICK,'pier');
+  }
+}
+function railwayTrainSolid(kind,base,hl,hw,z0,z1,offset=0,side=0) {
+  let planes=[1,0,0,hl,-1,0,0,hl,0,1,0,hw,0,-1,0,hw,0,0,1,z1,0,0,-1,-z0],faces=[1,2,3,4,5,6];
+  if(kind==='wheel'){
+    const r=(z1-z0)/2,mid=(z1+z0)/2;planes=[0,1,0,hw,0,-1,0,hw];faces=[3,4];
+    for(let k=0;k<8;k++){const a=(k+.5)*Math.PI/4,nx=Math.cos(a),nz=Math.sin(a);planes.push(nx,0,nz,r*Math.cos(Math.PI/8)+nz*mid);faces.push(nz>0?5:6);}
+  }
+  return {x:0,y:0,c:1,s:0,hl,hw,z0,z1,offset,side,base,kind,localPlanes:Float64Array.from(planes),miniPlanes:new Float64Array(planes.length),miniFaces:faces,bounds:new Array(6)};
+}
+function railwayPlace(o,pose) {
+  o.pose=pose;o.c=pose.c;o.s=pose.s;
+  o.x=pose.x+pose.c*pose.cp*o.offset-pose.s*o.side;
+  o.y=pose.y+pose.s*pose.cp*o.offset+pose.c*o.side;
+  const z=pose.z+pose.sp*o.offset,p=o.miniPlanes;
+  // Transform cached local faces into window coordinates once per frame.
+  const local=o.localPlanes;
+  for(let k=0;k<local.length;k+=4){
+    const u=local[k],v=local[k+1],w=local[k+2],nx=pose.c*(pose.cp*u-pose.sp*w)-pose.s*v,ny=pose.s*(pose.cp*u-pose.sp*w)+pose.c*v,nz=pose.sp*u+pose.cp*w;
+    p[k]=nx;p[k+1]=ny;p[k+2]=nz;p[k+3]=local[k+3]+nx*o.x+ny*o.y+nz*z;
+  }
+  const ex=Math.abs(pose.c*pose.cp)*o.hl+Math.abs(pose.s)*o.hw+Math.abs(pose.c*pose.sp)*(o.z1-o.z0)/2;
+  const ey=Math.abs(pose.s*pose.cp)*o.hl+Math.abs(pose.c)*o.hw+Math.abs(pose.s*pose.sp)*(o.z1-o.z0)/2;
+  const mid=(o.z0+o.z1)/2,mx=o.x-pose.c*pose.sp*mid,my=o.y-pose.s*pose.sp*mid,mz=z+pose.cp*mid;
+  const ez=Math.abs(pose.sp)*o.hl+pose.cp*(o.z1-o.z0)/2;
+  o.bounds[0]=mx-ex;o.bounds[1]=my-ey;o.bounds[2]=mz-ez;o.bounds[3]=mx+ex;o.bounds[4]=my+ey;o.bounds[5]=mz+ez;
+  // Keep each part's local height relative to its own pitched origin.
+  o.poseZ=z;
+}
+
+// A column sees the same horizontal ray at every row. Project conservative
+// bounds once, then retain only solids covering each row. Static lists survive
+// unchanged camera frames; the seventeen moving solids have separate lists.
+const RAILWAY_COLUMNS=[];
+let railwayMotionVersion=0;
+function railwayColumnRows(b,x,du,normal,d) {
+  let lo=Math.max(0,b[1]),hi=b[4];
+  if(Math.abs(du)<1e-12){if(x<b[0]||x>b[3])return null;}
+  else{const a=(b[0]-x)/du,c=(b[3]-x)/du;lo=Math.max(lo,Math.min(a,c));hi=Math.min(hi,Math.max(a,c));}
+  if(lo>hi)return null;
+  const z0=Math.min((b[2]*normal+eye*lo)/(normal+lo),(b[2]*normal+eye*hi)/(normal+hi));
+  const z1=Math.max((b[5]*normal+eye*lo)/(normal+lo),(b[5]*normal+eye*hi)/(normal+hi));
+  const first=Math.max(0,Math.floor(hor-(z1-eye)*projY/d-1)),last=Math.min(rows-1,Math.ceil(hor-(z0-eye)*projY/d));
+  return first<=last?[first,last]:null;
+}
+function railwayColumnIndex(node,x,du,normal,d,buckets) {
+  if(!railwayColumnRows(node.bounds,x,du,normal,d))return;
+  if(node.pieces){for(const o of node.pieces)railwayColumnPiece(o,x,du,normal,d,buckets);}
+  else{railwayColumnIndex(node.left,x,du,normal,d,buckets);railwayColumnIndex(node.right,x,du,normal,d,buckets);}
+}
+function railwayColumnPiece(o,x,du,normal,d,buckets) {
+  const span=railwayColumnRows(railwayBounds(o),x,du,normal,d);if(!span)return;
+  for(let r=span[0];r<=span[1];r++)buckets[r].push(o);
+}
+function railwayColumnCast(i,x,z,du,dz,limit,normal,d) {
+  const col=i%cols,row=(i/cols)|0;
+  let cache=RAILWAY_COLUMNS[col];
+  if(!cache||cache.rows!==rows)cache=RAILWAY_COLUMNS[col]={rows,static:Array.from({length:rows},()=>[]),moving:Array.from({length:rows},()=>[])};
+  if(cache.x!==x||cache.du!==du||cache.normal!==normal||cache.d!==d||cache.eye!==eye||cache.hor!==hor||cache.proj!==projY){
+    for(const list of cache.static)list.length=0;
+    Object.assign(cache,{x,du,normal,d,eye,hor,proj:projY,version:-1});
+    railwayColumnIndex(RAILWAY_TREE,x,du,normal,d,cache.static);
+  }
+  if(cache.version!==railwayMotionVersion){
+    for(const list of cache.moving)list.length=0;
+    for(const o of RAILWAY_TRAIN)railwayColumnPiece(o,x,du,normal,d,cache.moving);
+    for(const o of RAILWAY_ENGINE)railwayColumnPiece(o,x,du,normal,d,cache.moving);
+    for(const o of RAILWAY_WHEELS)railwayColumnPiece(o,x,du,normal,d,cache.moving);
+    cache.version=railwayMotionVersion;
+  }
+  RAILWAY_HIT.piece=null;RAILWAY_HIT.t=limit;
+  for(const o of cache.static[row])railwayTest(o,x,z,du,dz);
+  for(const o of cache.moving[row])railwayTest(o,x,z,du,dz);
+  return RAILWAY_HIT;
+}
 // The display is raycast in the window's own coordinates, behind its pane.
 // Static miniature pieces are cached; only the three short train cars move.
 const RAILWAY_MODELS=[], RAILWAY_TRAIN=[], RAILWAY_ENGINE=[], RAILWAY_PIECES=[];
@@ -38052,49 +38274,60 @@ function miniBox(x,y,hl,hw,z0,z1,base,kind='wall') {
 function buildRailwayModels() {
   if(!STREET_SCENES.railway)return;
   // A station on the inside of the oval, a little town, and a hillside tunnel.
-  miniBox(-.145,.184,.07,.022,.078,.083,STONE,'platform');
-  miniBox(-.15,.215,.046,.022,.083,.125,WARM,'station');
-  miniBox(-.15,.215,.053,.03,.125,.143,RED,'roof');
-  miniBox(-.21,.215,.012,.02,.078,.147,STONE,'clock');
-  for(const [x,y,h,base]of [[.13,.25,.05,BRICK],[.21,.25,.07,STONE],[.12,.31,.085,WARM]]) {
+  miniBox(-.139,.181,.069,.026,.078,.086,STONE,'platform');
+  miniBox(-.14,.185,.046,.022,.086,.128,WARM,'station');
+  miniBox(-.14,.185,.053,.03,.128,.146,RED,'roof');
+  miniBox(-.196,.177,.008,.012,.086,.15,STONE,'clock');
+  for(const [x,y,h,base]of [[.14,.23,.05,BRICK],[.19,.245,.07,STONE],[.13,.275,.085,WARM]]) {
     miniBox(x,y,.025,.02,.078,.078+h,base,'house');
     miniBox(x,y,.031,.025,.078+h,.092+h,RED,'roof');
   }
   // A genuinely open tunnel: the train vanishes beneath the hill and emerges
   // through its other portal, instead of being painted on top of the scenery.
-  miniBox(0,.32,.067,.057,.122,.169,GREEN,'hill');
+  miniBox(0,.32,.067,.057,.14,.183,GREEN,'hill');
   miniBox(0,.278,.067,.013,.078,.122,GREEN,'hill');
   // Portals leave the track through their middle, with a lintel above it.
   for(const x of [-.075,.075]) {
-    for(const y of [.302,.359])miniBox(x,y,.008,.008,.078,.127,GRAY,'portal');
-    miniBox(x,.33,.008,.036,.117,.133,GRAY,'portal');
+    for(const y of [.302,.359])miniBox(x,y,.008,.008,.078,.14,GRAY,'portal');
+    miniBox(x,.33,.008,.036,.135,.148,GRAY,'portal');
   }
-  for(const x of [-.05,.05])miniBox(x,.124,.007,.026,.062,.095,BRICK,'pier');
-  miniBox(0,.125,.071,.021,.091,.096,STONE,'bridge');
-  for(const v of [.104,.146])miniBox(0,v,.075,.003,.096,.11,GRAY,'railing');
+  buildRailwayTrack();
   for(const [x,y,h]of [[-.28,.31,.05],[.28,.32,.07],[-.3,.12,.05],[.3,.17,.05],[.02,.24,.055]]) {
     miniBox(x,y,.003,.003,.078,.078+h,BRICK,'trunk');
     miniBox(x,y,.015,.012,.098,.078+h+.012,GREEN,'tree');
   }
-  for(let k=0;k<3;k++)RAILWAY_TRAIN.push({x:0,y:0,hl:k?.026:.03,hw:.012,z0:.078,z1:.102,c:1,s:0,base:k?WARM:RED,kind:k?'coach':'engine'});
-  for(const [offset,hl,hw,z0,z1,base,kind]of [[-.018,.012,.014,.018,.039,RED,'engine'],[.018,.006,.006,.025,.047,GRAY,'chimney']])
-    RAILWAY_ENGINE.push({x:0,y:0,offset,hl,hw,z0,z1,dz0:z0,dz1:z1,c:1,s:0,base,kind});
-  RAILWAY_PIECES.push(...RAILWAY_MODELS,...RAILWAY_TRAIN,...RAILWAY_ENGINE);
+  for(let k=0;k<3;k++) {
+    RAILWAY_TRAIN.push(railwayTrainSolid(k?'coach':'engine',k?WARM:RED,k?.026:.03,.012,.006,.028));
+    for(const offset of [-.018,.018])for(const side of [-.01,.01]){
+      const wheel=railwayTrainSolid('wheel',GRAY,.0035,.0025,0,.007,0,side);
+      wheel.car=k;wheel.axle=Math.sign(offset);RAILWAY_WHEELS.push(wheel);
+    }
+  }
+  for(const [offset,hl,hw,z0,z1,base,kind]of [[-.018,.012,.014,.024,.042,RED,'engine'],[.018,.006,.006,.031,.051,GRAY,'chimney']])
+    RAILWAY_ENGINE.push(railwayTrainSolid(kind,base,hl,hw,z0,z1,offset));
+  RAILWAY_PIECES.push(...RAILWAY_MODELS,...RAILWAY_TRAIN,...RAILWAY_ENGINE,...RAILWAY_WHEELS);
+  RAILWAY_TREE=railwayTree(RAILWAY_MODELS.slice());
 }
 let railwayFrame=-1,railwayRunning=null,railwayDistance=0;
 function updateWindowTrain() {
   const running=tod>=8&&tod<22||T<streetSceneState.demoUntil;
   if(railwayFrame===T&&railwayRunning===running)return;
-  railwayFrame=T;railwayRunning=running;
+  railwayFrame=T;railwayRunning=running;railwayMotionVersion++;
   const clock=railwayClock();
-  railwayDistance=clock.angle/TAU*RAILWAY_ARC[256]+RAILWAY_ARC[167];
+  railwayDistance=clock.angle/TAU*RAILWAY_LENGTH+RAILWAY_ARC[Math.round((RAILWAY_ARC.length-1)*167/256)];
   for(let k=0;k<RAILWAY_TRAIN.length;k++) {
-    const p=railwayAtDistance(railwayDistance-k*.063),o=RAILWAY_TRAIN[k],len=Math.hypot(p.c,p.s);
-    Object.assign(o,{x:p.x,y:p.y,z0:p.z,z1:p.z+.025,c:p.c/len,s:p.s/len});
+    const d=railwayDistance-k*.063,front=railwayAtDistance(d+.018),back=railwayAtDistance(d-.018);
+    const hx=front.x-back.x,hy=front.y-back.y,hz=front.z-back.z,len=Math.hypot(hx,hy),length=Math.hypot(len,hz);
+    const pose={x:(front.x+back.x)/2,y:(front.y+back.y)/2,z:(front.z+back.z)/2,c:hx/len,s:hy/len,cp:len/length,sp:hz/length};
+    railwayPlace(RAILWAY_TRAIN[k],pose);
+    for(const o of RAILWAY_WHEELS)if(o.car===k){
+      const p=o.axle>0?front:back,l=Math.hypot(p.c,p.s);
+      railwayPlace(o,{x:p.x,y:p.y,z:p.z,c:p.c/l,s:p.s/l,cp:1,sp:0});
+    }
   }
-  const e=RAILWAY_TRAIN[0];
-  for(const o of RAILWAY_ENGINE)Object.assign(o,{x:e.x+e.c*o.offset,y:e.y+e.s*o.offset,c:e.c,s:e.s,z0:e.z0+o.dz0,z1:e.z0+o.dz1});
+  for(const o of RAILWAY_ENGINE)railwayPlace(o,RAILWAY_TRAIN[0].pose);
 }
+
 function windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
   const site=STREET_SCENES.railway;
   if(!site||SHOP[idx(mx,my)]!==site.b.sh||side!==site.f.side||z<site.z0-.01||z>site.z1+.04)return false;
@@ -38125,27 +38358,30 @@ function windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
   }
   const ceiling=(site.z1-.01-z)/dz;
   if(ceiling>0&&ceiling<distance){distance=ceiling;base=WARM;ch='=';level=4;}
-  const table=(.078-z)/dz;
+  let table=(.078-z)/dz;
   if(table>0&&table<distance&&Math.abs(along+du*table)<site.half) {
-    distance=table;const x=along+du*table,y=table;
-    const river=Math.abs(x-.015*Math.sin(y*40))<.038;
-    base=river?CYAN:GREEN;ch=river?(fract(y*110+T*.3)<.25?'~':' '):'.';level=river?10:5;
-    const q=Math.hypot(x/.255,(y-.23)/.105),rail=Math.abs(q-1);
-    if(rail<.07){base=rail<.022?YEL:BRICK;ch=rail<.022?'=':'#';level=rail<.022?13:7;}
-    // A lighter gravel apron connects the station with the tiny houses.
-    if(y>.21&&y<.285&&x>-.08&&x<.09){base=STONE;ch='.';level=7;}
+    let x=along+du*table;
+    const river=Math.abs(x)<.06;
+    if(river)table=(.062-z)/dz;
+    if(table>0&&table<distance){
+      x=along+du*table;
+      if(!river||Math.abs(x)<.06){distance=table;base=river?CYAN:GREEN;ch=river?(fract(table*110+T*.3)<.25?'~':' '):'.';level=river?8:5;}
+      if(!river&&table>.21&&table<.285&&x>-.08&&x<.09){base=STONE;ch='.';level=7;}
+    }
   }
-  let nearest=null,face=0,hu=0,hv=0,hz=0;
-  for(const o of RAILWAY_PIECES) {
-    const t=o.planeData?rayMansard(along,0,z,du,1,dz,o):rayBox(along,0,z,du,1,dz,o);
-    if(t>0&&t<distance){distance=t;nearest=o;face=HIT.face;hu=HIT.u;hv=HIT.v;hz=HIT.w;}
+  if(Math.abs(du)>1e-8)for(const bank of [-.06,.06]){
+    const t=(bank-along)/du,w=z+dz*t;
+    if(t>0&&t<distance&&w>.062&&w<.078){distance=t;base=BRICK;ch=':';level=5;}
   }
+  const hit=railwayColumnCast(i,along,z,du,dz,distance,normal,d),nearest=hit.piece,face=hit.face,hu=hit.u,hv=hit.v,hz=hit.z;
   if(nearest) {
     const o=nearest; base=o.base;level=face===5?12:face===3||face===4?9:7;ch=face===5?'_':' ';
     if(o.kind==='roof'){ch=face===5?'=':'/';level=10;}
     else if(o.kind==='tree'||o.kind==='hill'){ch=o.kind==='tree'?'%':':';level=face===5?10:5;}
     else if(o.kind==='portal'){ch=face===5?'_':'|';level=10;}
-    else if(o.kind==='railing'){ch='=';level=11;}
+    else if(o.kind==='railing'||o.kind==='rail'){ch='=';level=12;}
+    else if(o.kind==='trackbed'){base=BRICK;ch=Math.abs(fract(hu*100)-.5)<.18?'=':'.';level=7;}
+    else if(o.kind==='wheel'){ch='o';level=3;}
     else if(o.kind==='station'||o.kind==='house') {
       if(face!==5&&hz>o.z0+.012&&hz<o.z1-.01&&Math.abs(fract(hu*120)-.5)<.27){base=YEL;ch='#';level=13;}
     } else if(o.kind==='clock'){ch=face===5?'_':hz>.124?'o':'|';level=13;}

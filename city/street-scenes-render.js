@@ -57,49 +57,60 @@ function miniBox(x,y,hl,hw,z0,z1,base,kind='wall') {
 function buildRailwayModels() {
   if(!STREET_SCENES.railway)return;
   // A station on the inside of the oval, a little town, and a hillside tunnel.
-  miniBox(-.145,.184,.07,.022,.078,.083,STONE,'platform');
-  miniBox(-.15,.215,.046,.022,.083,.125,WARM,'station');
-  miniBox(-.15,.215,.053,.03,.125,.143,RED,'roof');
-  miniBox(-.21,.215,.012,.02,.078,.147,STONE,'clock');
-  for(const [x,y,h,base]of [[.13,.25,.05,BRICK],[.21,.25,.07,STONE],[.12,.31,.085,WARM]]) {
+  miniBox(-.139,.181,.069,.026,.078,.086,STONE,'platform');
+  miniBox(-.14,.185,.046,.022,.086,.128,WARM,'station');
+  miniBox(-.14,.185,.053,.03,.128,.146,RED,'roof');
+  miniBox(-.196,.177,.008,.012,.086,.15,STONE,'clock');
+  for(const [x,y,h,base]of [[.14,.23,.05,BRICK],[.19,.245,.07,STONE],[.13,.275,.085,WARM]]) {
     miniBox(x,y,.025,.02,.078,.078+h,base,'house');
     miniBox(x,y,.031,.025,.078+h,.092+h,RED,'roof');
   }
   // A genuinely open tunnel: the train vanishes beneath the hill and emerges
   // through its other portal, instead of being painted on top of the scenery.
-  miniBox(0,.32,.067,.057,.122,.169,GREEN,'hill');
+  miniBox(0,.32,.067,.057,.14,.183,GREEN,'hill');
   miniBox(0,.278,.067,.013,.078,.122,GREEN,'hill');
   // Portals leave the track through their middle, with a lintel above it.
   for(const x of [-.075,.075]) {
-    for(const y of [.302,.359])miniBox(x,y,.008,.008,.078,.127,GRAY,'portal');
-    miniBox(x,.33,.008,.036,.117,.133,GRAY,'portal');
+    for(const y of [.302,.359])miniBox(x,y,.008,.008,.078,.14,GRAY,'portal');
+    miniBox(x,.33,.008,.036,.135,.148,GRAY,'portal');
   }
-  for(const x of [-.05,.05])miniBox(x,.124,.007,.026,.062,.095,BRICK,'pier');
-  miniBox(0,.125,.071,.021,.091,.096,STONE,'bridge');
-  for(const v of [.104,.146])miniBox(0,v,.075,.003,.096,.11,GRAY,'railing');
+  buildRailwayTrack();
   for(const [x,y,h]of [[-.28,.31,.05],[.28,.32,.07],[-.3,.12,.05],[.3,.17,.05],[.02,.24,.055]]) {
     miniBox(x,y,.003,.003,.078,.078+h,BRICK,'trunk');
     miniBox(x,y,.015,.012,.098,.078+h+.012,GREEN,'tree');
   }
-  for(let k=0;k<3;k++)RAILWAY_TRAIN.push({x:0,y:0,hl:k?.026:.03,hw:.012,z0:.078,z1:.102,c:1,s:0,base:k?WARM:RED,kind:k?'coach':'engine'});
-  for(const [offset,hl,hw,z0,z1,base,kind]of [[-.018,.012,.014,.018,.039,RED,'engine'],[.018,.006,.006,.025,.047,GRAY,'chimney']])
-    RAILWAY_ENGINE.push({x:0,y:0,offset,hl,hw,z0,z1,dz0:z0,dz1:z1,c:1,s:0,base,kind});
-  RAILWAY_PIECES.push(...RAILWAY_MODELS,...RAILWAY_TRAIN,...RAILWAY_ENGINE);
+  for(let k=0;k<3;k++) {
+    RAILWAY_TRAIN.push(railwayTrainSolid(k?'coach':'engine',k?WARM:RED,k?.026:.03,.012,.006,.028));
+    for(const offset of [-.018,.018])for(const side of [-.01,.01]){
+      const wheel=railwayTrainSolid('wheel',GRAY,.0035,.0025,0,.007,0,side);
+      wheel.car=k;wheel.axle=Math.sign(offset);RAILWAY_WHEELS.push(wheel);
+    }
+  }
+  for(const [offset,hl,hw,z0,z1,base,kind]of [[-.018,.012,.014,.024,.042,RED,'engine'],[.018,.006,.006,.031,.051,GRAY,'chimney']])
+    RAILWAY_ENGINE.push(railwayTrainSolid(kind,base,hl,hw,z0,z1,offset));
+  RAILWAY_PIECES.push(...RAILWAY_MODELS,...RAILWAY_TRAIN,...RAILWAY_ENGINE,...RAILWAY_WHEELS);
+  RAILWAY_TREE=railwayTree(RAILWAY_MODELS.slice());
 }
 let railwayFrame=-1,railwayRunning=null,railwayDistance=0;
 function updateWindowTrain() {
   const running=tod>=8&&tod<22||T<streetSceneState.demoUntil;
   if(railwayFrame===T&&railwayRunning===running)return;
-  railwayFrame=T;railwayRunning=running;
+  railwayFrame=T;railwayRunning=running;railwayMotionVersion++;
   const clock=railwayClock();
-  railwayDistance=clock.angle/TAU*RAILWAY_ARC[256]+RAILWAY_ARC[167];
+  railwayDistance=clock.angle/TAU*RAILWAY_LENGTH+RAILWAY_ARC[Math.round((RAILWAY_ARC.length-1)*167/256)];
   for(let k=0;k<RAILWAY_TRAIN.length;k++) {
-    const p=railwayAtDistance(railwayDistance-k*.063),o=RAILWAY_TRAIN[k],len=Math.hypot(p.c,p.s);
-    Object.assign(o,{x:p.x,y:p.y,z0:p.z,z1:p.z+.025,c:p.c/len,s:p.s/len});
+    const d=railwayDistance-k*.063,front=railwayAtDistance(d+.018),back=railwayAtDistance(d-.018);
+    const hx=front.x-back.x,hy=front.y-back.y,hz=front.z-back.z,len=Math.hypot(hx,hy),length=Math.hypot(len,hz);
+    const pose={x:(front.x+back.x)/2,y:(front.y+back.y)/2,z:(front.z+back.z)/2,c:hx/len,s:hy/len,cp:len/length,sp:hz/length};
+    railwayPlace(RAILWAY_TRAIN[k],pose);
+    for(const o of RAILWAY_WHEELS)if(o.car===k){
+      const p=o.axle>0?front:back,l=Math.hypot(p.c,p.s);
+      railwayPlace(o,{x:p.x,y:p.y,z:p.z,c:p.c/l,s:p.s/l,cp:1,sp:0});
+    }
   }
-  const e=RAILWAY_TRAIN[0];
-  for(const o of RAILWAY_ENGINE)Object.assign(o,{x:e.x+e.c*o.offset,y:e.y+e.s*o.offset,c:e.c,s:e.s,z0:e.z0+o.dz0,z1:e.z0+o.dz1});
+  for(const o of RAILWAY_ENGINE)railwayPlace(o,RAILWAY_TRAIN[0].pose);
 }
+
 function windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
   const site=STREET_SCENES.railway;
   if(!site||SHOP[idx(mx,my)]!==site.b.sh||side!==site.f.side||z<site.z0-.01||z>site.z1+.04)return false;
@@ -130,27 +141,30 @@ function windowRailwayCell(i,u,uStep,z,h,d,side,mx,my,fog,wc) {
   }
   const ceiling=(site.z1-.01-z)/dz;
   if(ceiling>0&&ceiling<distance){distance=ceiling;base=WARM;ch='=';level=4;}
-  const table=(.078-z)/dz;
+  let table=(.078-z)/dz;
   if(table>0&&table<distance&&Math.abs(along+du*table)<site.half) {
-    distance=table;const x=along+du*table,y=table;
-    const river=Math.abs(x-.015*Math.sin(y*40))<.038;
-    base=river?CYAN:GREEN;ch=river?(fract(y*110+T*.3)<.25?'~':' '):'.';level=river?10:5;
-    const q=Math.hypot(x/.255,(y-.23)/.105),rail=Math.abs(q-1);
-    if(rail<.07){base=rail<.022?YEL:BRICK;ch=rail<.022?'=':'#';level=rail<.022?13:7;}
-    // A lighter gravel apron connects the station with the tiny houses.
-    if(y>.21&&y<.285&&x>-.08&&x<.09){base=STONE;ch='.';level=7;}
+    let x=along+du*table;
+    const river=Math.abs(x)<.06;
+    if(river)table=(.062-z)/dz;
+    if(table>0&&table<distance){
+      x=along+du*table;
+      if(!river||Math.abs(x)<.06){distance=table;base=river?CYAN:GREEN;ch=river?(fract(table*110+T*.3)<.25?'~':' '):'.';level=river?8:5;}
+      if(!river&&table>.21&&table<.285&&x>-.08&&x<.09){base=STONE;ch='.';level=7;}
+    }
   }
-  let nearest=null,face=0,hu=0,hv=0,hz=0;
-  for(const o of RAILWAY_PIECES) {
-    const t=o.planeData?rayMansard(along,0,z,du,1,dz,o):rayBox(along,0,z,du,1,dz,o);
-    if(t>0&&t<distance){distance=t;nearest=o;face=HIT.face;hu=HIT.u;hv=HIT.v;hz=HIT.w;}
+  if(Math.abs(du)>1e-8)for(const bank of [-.06,.06]){
+    const t=(bank-along)/du,w=z+dz*t;
+    if(t>0&&t<distance&&w>.062&&w<.078){distance=t;base=BRICK;ch=':';level=5;}
   }
+  const hit=railwayColumnCast(i,along,z,du,dz,distance,normal,d),nearest=hit.piece,face=hit.face,hu=hit.u,hv=hit.v,hz=hit.z;
   if(nearest) {
     const o=nearest; base=o.base;level=face===5?12:face===3||face===4?9:7;ch=face===5?'_':' ';
     if(o.kind==='roof'){ch=face===5?'=':'/';level=10;}
     else if(o.kind==='tree'||o.kind==='hill'){ch=o.kind==='tree'?'%':':';level=face===5?10:5;}
     else if(o.kind==='portal'){ch=face===5?'_':'|';level=10;}
-    else if(o.kind==='railing'){ch='=';level=11;}
+    else if(o.kind==='railing'||o.kind==='rail'){ch='=';level=12;}
+    else if(o.kind==='trackbed'){base=BRICK;ch=Math.abs(fract(hu*100)-.5)<.18?'=':'.';level=7;}
+    else if(o.kind==='wheel'){ch='o';level=3;}
     else if(o.kind==='station'||o.kind==='house') {
       if(face!==5&&hz>o.z0+.012&&hz<o.z1-.01&&Math.abs(fract(hu*120)-.5)<.27){base=YEL;ch='#';level=13;}
     } else if(o.kind==='clock'){ch=face===5?'_':hz>.124?'o':'|';level=13;}
