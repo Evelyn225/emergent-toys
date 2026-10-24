@@ -75,6 +75,7 @@ test('beer crates: empties stand in their divided cells on the crate floor; uptu
    const du=Math.abs(b.u-(-d.hl+.008+cu*(i+.5))),dv=Math.abs(b.v-(-d.hw+.008+cv*(j+.5)));
    if(du+.036>cu/2-.003||dv+.036>cv/2-.003)bad.push(['cell',b.u,b.v]);
   }
+  for(const o of shapes)if(o.box.z0<model.box.z0-1e-9||o.box.z1>model.box.z1+1e-9)bad.push(['bounds',o.box.z0,o.box.z1]);
   const necks=d.bottles.every(b=>b.z+.29>d.top+d.openH),dividers=shapes.filter(o=>o.ray===homeRayWorktop&&(o.box.hl===.003||o.box.hw===.003)).length;
   const rnd=Math.random;try{Math.random=()=>.1;enterRoom('yakitori',{word:'YAKITORI',ret:[100,100,0]},[5,4,0]);}finally{Math.random=rnd;}
   const crates=room.props.filter(o=>o.beerCrate),seats=room.props.filter(o=>o.seat&&crates.some(c=>inBox(c.box,o.x,o.y,0)));
@@ -83,5 +84,5 @@ test('beer crates: empties stand in their divided cells on the crate floor; uptu
   return{bottles:d.bottles.length,bad,necks,dividers,crates:crates.length,seated,tableTop:table.box.z1,top:model.box.z1};
  });
  assert.deepEqual(r.bad,[]);assert.ok(r.bottles>=15&&r.necks&&r.dividers===7,JSON.stringify(r));
- assert.equal(r.crates,4);assert.deepEqual(r.seated,[true,true]);assert.equal(r.tableTop,.6);assert.ok(Math.abs(r.top-1.15)<1e-9);
+ assert.equal(r.crates,4);assert.deepEqual(r.seated,[true,true]);assert.equal(r.tableTop,.6);assert.ok(Math.abs(r.top-1.198)<1e-9);
 }));

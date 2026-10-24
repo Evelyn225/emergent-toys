@@ -1,6 +1,6 @@
 # Current quality work: Codex and Claude
 
-Updated 2026-10-24 (Claude, after PR #198). Read this alongside `WORLD_QUALITY.md` and
+Updated 2026-10-24 (Codex/Claude integration). Read this alongside `WORLD_QUALITY.md` and
 `corridor-geometry-notes.md`. Do not edit `CLOUD_HANDOFF.md`.
 
 PRs #195 (dining ledges/tables) and #196 (juice-bar produce) are merged into
@@ -8,13 +8,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 
 ## File ownership
 
-- **Codex:** reported store-window miniature railway geometry and rendering
-  cost, on `codex/window-railway-repair`. Repair complete: all 12 focused browser
-  checks pass, alongside bundle/parser/render-cost/pure-story checks; visual
-  review includes both sides, night and phone. Owns `city/street-scenes.js`,
-  `city/street-scenes-render.js`, and railway/street-scene tests.
+- **Codex:** pass 4 home lighting on `codex/home-lighting-quality`.
+  Owns `city/home-lighting-quality.js`, `city/home-quality.js`,
+  `city/home-furniture-render.js`, and a new home-lighting browser test.
+  Fitted lamps are complete in PR #199. Next: record player/cabinet in
+  `city/home-record-player.js` and its new browser test, on
+  `codex/home-record-player`. Kitchen files remain with Claude. The window railway is complete and merged in #197, full CI green.
 - **Claude:** pass 3 coolers, sacks and crates are done on
-  `codex/dining-crates-coolers`, **PR #198** (open, current with main incl. #197;
+  `codex/dining-crates-coolers`, **PR #198** (merged, current with main incl. #197;
   bundle rebuilt, both checklist notes kept). New module
   `city/kitchen-crates-coolers.js` and test
   `test/browser/city-crates-coolers.browser.test.cjs`; edits to
@@ -31,6 +32,9 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   restaurant's painted fish tank (`city/dining.js` `fishTank`) for the wildlife
   pass, and the bodega/market painted crates (`city/storefronts.js`) for the
   shop-interiors pass, unless Codex wants them.
+
+Codex review follow-up in #199: include the open beer crate bottle necks in
+its model bounds, and strengthen the crate check to test actual drawn parts.
 
 ## Integration
 

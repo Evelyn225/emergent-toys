@@ -192,6 +192,6 @@ function KITCHEN_BEER_CRATE(x,y,{levels=1,open=false,hl=.3,hw=.22,h=.3,col=YEL}=
       foodTray(vx,vy,top,hl,hw,openH,rim);
     }
     for(let k=closed-1;k>=0;k--)drawBox({...boxAt(vx,vy,1,0,hl,hw,k*h,(k+1)*h),...profiles[k]},crates[k],homeRayWorktop);
-  }),box:boxAt(x,y,1,0,hl,hw,0,open?top+openH:top),radius:Math.hypot(hl,hw)+.02,
+  }),box:boxAt(x,y,1,0,hl,hw,0,open?Math.max(top+openH,...bottles.map(q=>q.z+.29)):top),radius:Math.hypot(hl,hw)+.02,
     beerCrate:{levels,open,hl,hw,h,top,openH,bottles,cell:[cellU,cellV]}};
 }
