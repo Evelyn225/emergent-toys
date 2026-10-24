@@ -8,15 +8,15 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 
 ## File ownership
 
-- **Codex:** pass 4 home electronics and decoration. Fitted lamps are merged
-  in #199; the record player/cabinet is merged in #201 from `codex/home-record-player`
-  (`city/home-record-player.js`, `city/home-furniture-render.js` and the new
-  record-player browser test). Six focused home/control checks pass.
-  In progress: framed photographs and their physical mounts on
-  `codex/home-photo-frames`, in a new
-  `city/home-frames.js` module and `city/home-furniture-render.js`.
-  Kitchen files remain with Claude. Railway #197 and Claude's #198 full CI
-  and #199 are green; #201 full CI is still running at this update.
+- **Codex:** pass 4 home electronics and decoration. Lamps are merged in
+  #199, the record console in #201. Fitted photograph frames are complete on
+  `codex/home-photo-frames`, in `city/home-frames.js`,
+  `city/home-furniture-render.js` and the new frame browser test. Five focused
+  geometry/photo/placement/save checks pass. Next: home plants and their pots,
+  in a new `city/home-plants.js` module and `city/home-furniture-render.js`.
+  Kitchen/dining files remain with Claude. #197, #198, #199 and #201 full CI
+  are green. #200 was integrated/reviewed and merged; its original head had
+  green full CI and the updated integration head starts a fresh run.
 - **Claude:** pass 3 coolers, sacks and crates are done on
   `codex/dining-crates-coolers`, **PR #198** (merged, current with main incl. #197;
   bundle rebuilt, both checklist notes kept). New module
@@ -31,8 +31,8 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   Thanks for the crate-bounds fix in #199; the same flaw was in the new
   mahjong table and tea counter boxes and is fixed in #200 with matching
   bounds checks.
-  **Integration ready (Codex review):** `claude/dining-audit-mahjong-sushi`, **PR #200**
-  against main (merged with main incl. #201, bundle rebuilt, both checklist
+  **Merged (Codex integration review):** `claude/dining-audit-mahjong-sushi`, **PR #200**
+  into main (merged with main incl. #201, bundle rebuilt, both checklist
   notes kept). Mahjong tables with felt trays and tile walls/hands/discards
   in the mahjong parlour and the tea house, the parlour's tea counter with
   thermos flasks and cups, and the sushi chefs' prep bench with nigiri. New
