@@ -43,7 +43,7 @@ function MAHJONG_TABLE(x,y) {
     for(const r of runs)drawBox({...boxAt(vx+r.x,vy+r.y,r.c,r.s,r.hl,r.hw,MAHJONG_FELT,r.z1),...r.profile},r.shade,homeRayWorktop);
     foodTray(vx,vy,MAHJONG_TOP,.45,.45,.022,felt);
     drawFurnitureTable(vx,vy,.45,.45,MAHJONG_TOP);
-  }),mj:true,cx:x,cy:y,box:boxAt(x,y,1,0,.45,.45,0,MAHJONG_TOP+.022),radius:.66,
+  }),mj:true,cx:x,cy:y,box:boxAt(x,y,1,0,.45,.45,0,Math.max(...runs.map(r=>r.z1))),radius:.66,
     mahjong:{felt:MAHJONG_FELT,runs:runs.map(({kind,x,y,c,s,hl,hw,z1})=>({kind,x,y,c,s,hl,hw,z1}))}};
 }
 
@@ -65,5 +65,5 @@ function TEA_COUNTER(x,y,hl=.6,hw=.3,height=.85) {
     for(const q of flasks)coveLathe(vx+q.u,vy-.06,height,TEA_THERMOS,q.shade);
     for(const [u,a]of [[-.15,.4],[.15,-.3],[.45,1.1]])kitchenCup(vx+u,vy+.14,height,a,WHITE,true);
     counter.draw(vx,vy);
-  }),box:boxAt(x,y,1,0,hl,hw,0,height),radius:hl+.2,teaCounter:{height,flasks:flasks.map(q=>q.u)}};
+  }),box:boxAt(x,y,1,0,hl,hw,0,height+TEA_THERMOS[TEA_THERMOS.length-1][0]),radius:hl+.2,teaCounter:{height,flasks:flasks.map(q=>q.u)}};
 }
