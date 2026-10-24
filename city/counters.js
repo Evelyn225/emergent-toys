@@ -5,12 +5,6 @@
 
 // ---- fried chicken (CHICKEN): the fryers bubbling, drumsticks heaped under the heat lamps, red and white stripes,
 // plastic chairs, a ledge under the window with stools
-const friedChicken = (i, u, v, w, L, f) => { // golden pieces heaped in the warmer's trays
-  if (f !== 5 && (w < 0.05 || w > 0.26)) return false;
-  const a = f >= 5 ? u : f <= 2 ? v : u, k = hash(Math.floor(a * 7), Math.floor((f >= 5 ? v : w) * 7), 104);
-  if (k < 0.25) return false;
-  BG[i] = C(k > 0.7 ? ORANGE : BRICK, k > 0.7 ? 7 : 4 + L * 0.2); return set(i, k > 0.85 ? '%' : k > 0.5 ? '&' : ' ', C(YEL, 9)), true;
-};
 const fryer = (x,y) => KITCHEN_FRYER(x,y);
 function chickenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -22,7 +16,7 @@ function chickenWall(i, u, uStep, z, d, mx, my, L) {
 }
 const heatLamp = (x, y, z) => hung(x, y, z, (vx, vy, z_) => drum(vx, vy, 0.1, z_ - 0.1, z_, (i, t, L) => { BG[i] = C(HIT.face === 6 ? ORANGE : RED, HIT.face === 6 ? 12 : 4); return set(i, ' ', 0), true; }));
 ROOM_DEFS.chickenshop = { grid: boxRoom(11, 8), light: 1.1, floor: 'checker', ceil: 'strip', sign: false, wall: chickenWall, keeper: [5.6, 1.6],
-  props: r => [...glassCase(3.5, 2.3, 1.05, 0.3, 1.35, friedChicken, RED), BX(6.5, 2.3, 1.5, 0.3, 0, 1.05, solid(RED, { top: '=', trim: 0.98 })), // the warmer, the counter
+  props: r => [KITCHEN_FOOD_CASE(3.5,2.3,1.05,.3,1.35,'chicken',RED), BX(6.5, 2.3, 1.5, 0.3, 0, 1.05, solid(RED, { top: '=', trim: 0.98 })), // the warmer, the counter
     { ...standing(5.6, 1.6, RED), face: [0, 1] }, fryer(8.3, 1.4), heatLamp(3.0, 2.3, 1.75), heatLamp(4.0, 2.3, 1.75),
     ...dining(2.6, 4.6, { hl: 0.35, chair: shellChair, chairCol: RED, top: solid(WHITE, { top: '=' }) }), ...dining(8.3, 4.6, { hl: 0.35, chair: shellChair, chairCol: YEL, top: solid(WHITE, { top: '=' }) }),
     BX(2.4, 6.78, 1.35, 0.17, 0.98, 1.04, solid(GRAY, { top: '=' })), BX(8.6, 6.78, 1.35, 0.17, 0.98, 1.04, solid(GRAY, { top: '=' })), // the ledges under the window
@@ -31,12 +25,6 @@ ROOM_DEFS.chickenshop = { grid: boxRoom(11, 8), light: 1.1, floor: 'checker', ce
 // ---- the kebab shop (KEBAB): the doner turning in front of its burners, the salads in their trays under the glass,
 // lit photos of everything over the counter, mirror tiles, a ledge down the side for eating standing up (or not)
 const doner = (x,y) => KITCHEN_SPIT(x,y);
-const saladBar = (i, u, v, w, L, f) => { // lettuce, tomato, onion, red cabbage, chillies, the sauces, each in its steel tray
-  if (f !== 5) return false;
-  const k = Math.floor((u + 3) / 0.36), [c, lv] = [[GREEN, 7], [RED, 7], [WHITE, 9], [MAG, 5], [GREEN, 4], [ORANGE, 8], [WHITE, 11], [RED, 4]][k & 7];
-  if (fract((u + 3) / 0.36) < 0.1 || Math.abs(v) < 0.02) { BG[i] = C(GRAY, 3); return set(i, ' ', 0), true; }
-  BG[i] = C(c, lv + L * 0.2); return set(i, hash(Math.floor(u * 30), Math.floor(v * 30), 107) > 0.7 ? '.' : ' ', C(c, lv + 4)), true;
-};
 // a row of lit photos over a counter, centred on u0: each dish, its picture and its price (from what they sell)
 function photoMenu(i, u, uStep, z, d, u0, z0, bg) {
   const lines = menuLines(), n = lines.length, w = 1.4;
@@ -63,19 +51,12 @@ const sodaCooler = (x, y, hl, hw, ca = 1, sa = 0) => BX(x, y, hl, hw, 0, 1.95, (
 }, ca, sa);
 ROOM_DEFS.kebabshop = { grid: boxRoom(11, 8), light: 1.0, floor: 'lino', ceil: 'strip', sign: false, wall: kebabWall, keeper: [5.6, 1.6],
   props: r => [doner(2.4, 1.45), { ...standing(3.2, 1.4, WHITE), face: [-1, 0] }, // the spit, somebody carving it
-    ...glassCase(5.6, 2.35, 1.7, 0.32, 1.15, saladBar, GRAY), { ...standing(5.6, 1.6, WHITE), face: [0, 1] }, sodaCooler(9.2, 1.45, 0.6, 0.38),
+    KITCHEN_FOOD_CASE(5.6,2.35,1.7,.32,1.15,'salad',GRAY), { ...standing(5.6, 1.6, WHITE), face: [0, 1] }, sodaCooler(9.2, 1.45, 0.6, 0.38),
     BX(9.78, 4.9, 1.3, 0.2, 0.98, 1.04, solid(GRAY, { top: '=' }), 0, 1), ...stoolsY(9.15, 3.9, 5.9, 1.0, GREEN, 1, 0.35), // the ledge down the side
     ...dining(2.4, 4.4, { hl: 0.35, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.35 }), ...dining(2.4, 6.2, { hl: 0.35, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.3 })] };
 
 // ---- the bento shop (BENTO): a chilled case of boxed lunches, the rice cooker steaming, pale wood, a noren over the
 // kitchen door; a ledge and a bench to eat at
-const bentoBoxes = (i, u, v, w, L, f) => { // black lacquer boxes in rows: rice, salmon, egg, greens, pickles
-  if (f !== 5) return false;
-  const bu = fract((u + 3) / 0.42), bv = fract((v + 1) / 0.3), k = Math.floor((u + 3) / 0.42);
-  if (bu < 0.08 || bu > 0.92 || bv < 0.1 || bv > 0.9) { BG[i] = C(GRAY, 0.6); return set(i, ' ', 0), true; }
-  const q = (bu > 0.5) * 2 + (bv > 0.5), [c, lv] = [[WHITE, 10], [ORANGE, 7], [YEL, 10], [GREEN, 5], [MAG, 5]][(q + k) % 5];
-  BG[i] = C(c, lv); return set(i, c === WHITE && fract(bu * 9) < 0.3 ? '.' : ' ', C(GRAY, 4)), true;
-};
 function noren(i, u, z, u0, hw, col, z0 = 1.35, z1 = 2.1) { // a split curtain over a doorway (the dark of it below)
   if (Math.abs(u - u0) > hw || z > z1) return false;
   if (z > z0) { BG[i] = C(col, 3.2); return set(i, Math.abs(fract((u - u0 + hw) / (hw * 2 / 3)) - 0.5) > 0.47 ? ' ' : z > z0 + 0.25 && z < z0 + 0.45 && Math.abs(fract(u * 4 + z * 2) - 0.5) < 0.15 ? '~' : ' ', C(WHITE, 13)), true; }
@@ -94,7 +75,7 @@ function bentoWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(STONE, 3.4 + L * 0.15); return set(i, fract(u / 0.9) < 0.03 ? '|' : ' ', C(BRICK, 5)), true; // pale wood
 }
 ROOM_DEFS.bento = { grid: boxRoom(9, 7), light: 1.0, floor: 'hinoki', ceil: 'strip', sign: false, wall: bentoWall, keeper: [4.6, 1.5],
-  props: r => [...glassCase(4.6, 2.2, 2.0, 0.35, 1.05, bentoBoxes, STONE), { ...standing(4.6, 1.5, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_FOOD_CASE(4.6,2.2,2,.35,1.05,'bento',STONE), { ...standing(4.6, 1.5, WHITE), face: [0, 1] },
     BX(7.3, 1.4, 0.55, 0.32, 0, 0.9, solid(GRAY, { top: '=', panel: 0.5 })), KITCHEN_RICE_COOKER(7.3,1.4),
     BX(1.22, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(1.75, 3.9, 4.9, 1.0, BRICK, -1, 0.35), // the ledge on the left
     ...plainBench(7.6, 4.4, 0.75, -1, 0, BRICK)] };
@@ -156,14 +137,6 @@ ROOM_DEFS.yakitori = { grid: boxRoom(11, 7), light: 0.75, floor: 'oak', ceil: 'l
 
 // ---- donuts (DONUTS): trays of rings behind the glass (glazed, pink, chocolate, sprinkles), a giant one in neon, a
 // coffee machine; a ledge under the window, two little tables
-const donutTrays = (i, u, v, w, L, f) => {
-  if (f !== 5 && f !== 3) return false;
-  if (f === 3 && (w < 0.08 || w > 0.3)) return false;
-  const a = f === 5 ? u : u, b = f === 5 ? v : w * 2, cu = fract((a + 3) / 0.22) - 0.5, cv = fract((b + 1) / 0.22) - 0.5, r = Math.hypot(cu, cv), k = Math.floor((a + 3) / 0.22) + 3 * Math.floor((b + 1) / 0.22);
-  if (r > 0.45 || r < 0.15) return false; // (the hole)
-  const [c, lv] = [[ORANGE, 8], [MAG, 10], [BRICK, 3], [WHITE, 11]][hash(k, 2, 114) * 4 | 0];
-  BG[i] = C(c, lv); return set(i, hash(Math.floor(a * 60), Math.floor(b * 60), k) > 0.8 ? ',' : ' ', C([RED, CYAN, YEL, GREEN][k & 3], 13)), true; // sprinkles
-};
 function donutWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 1.4 && z < 2.7 && Math.abs(u - 2.1) < 0.7) { // the big one, in neon: a pink ring, sprinkles
@@ -176,7 +149,7 @@ function donutWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(MAG, 6 + L * 0.2); return set(i, hash(Math.floor(u * 6), Math.floor(z * 6), 116) > 0.9 ? '\'' : ' ', C([YEL, CYAN, WHITE][Math.floor(u * 6 + z * 6) % 3], 11)), true; // pink, sprinkled
 }
 ROOM_DEFS.donutshop = { grid: boxRoom(10, 7), light: 1.1, floor: 'pastel', ceil: 'pendant', sign: false, neon: true, wall: donutWall, keeper: [5.0, 1.55],
-  props: r => [...glassCase(5.0, 2.3, 1.9, 0.35, 1.15, donutTrays, MAG), { ...standing(5.0, 1.55, MAG), face: [0, 1] },
+  props: r => [KITCHEN_FOOD_CASE(5,2.3,1.9,.35,1.15,'donuts',MAG), { ...standing(5.0, 1.55, MAG), face: [0, 1] },
     BX(7.9, 1.35, 0.6, 0.3, 0, 0.9, solid(GRAY, { top: '=', panel: 0.4 })), BX(7.7, 1.35, 0.25, 0.2, 0.9, 1.4, solid(GRAY, { top: 'o', trim: 1.32 })), // the coffee machine
     ...dining(2.2, 4.0, { hl: 0.3, hw: 0.3, chair: shellChair, chairCol: MAG, top: solid(WHITE, { top: '=' }), busy: 0.35 }), ...dining(7.8, 4.0, { hl: 0.3, hw: 0.3, chair: shellChair, chairCol: CYAN, top: solid(WHITE, { top: '=' }), busy: 0.35 }),
     BX(2.4, 5.78, 1.35, 0.17, 0.98, 1.04, solid(BRICK, { top: '=' })), BX(7.6, 5.78, 1.35, 0.17, 0.98, 1.04, solid(BRICK, { top: '=' })),
@@ -207,12 +180,6 @@ ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil:
 
 // ---- bagels (BAGELS): baskets of bagels on the wall behind the counter, the kettle boiling them, tubs of cream cheese
 // under the glass; subway tiles, deep green, two tables and a ledge
-const schmear = (i, u, v, w, L, f) => { // the tubs: plain, chive, salmon, walnut
-  if (f !== 5) return false;
-  const k = Math.floor((u + 3) / 0.4), cu = fract((u + 3) / 0.4) - 0.5, cv = v / 0.3;
-  if (Math.hypot(cu, cv) > 0.42) return false;
-  const [c, lv] = [[WHITE, 11], [GREEN, 8], [ORANGE, 9], [BRICK, 5]][k & 3]; BG[i] = C(c, lv); return set(i, Math.hypot(cu, cv) > 0.36 ? 'o' : ' ', C(GRAY, 6)), true;
-};
 function bagelWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 1.15 && z < 2.25 && u > 2.4 && u < 7.6) { // the baskets, two rows of them, bagels heaped in each
@@ -227,7 +194,7 @@ function bagelWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(GREEN, 1.3 + L * 0.12); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.bagelshop = { grid: boxRoom(10, 7), light: 1.0, floor: 'checker', ceil: 'tin', sign: false, wall: bagelWall, keeper: [5.0, 1.55],
-  props: r => [...glassCase(5.0, 2.3, 1.9, 0.33, 1.15, schmear, GREEN), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_FOOD_CASE(5,2.3,1.9,.33,1.15,'schmear',GREEN), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
     ROOM_MODEL(8.2, 1.4, (vx, vy) => { // the kettle: a steel pot on its burner, boiling
       drawBox(boxAt(vx, vy, 1, 0, 0.4, 0.4, 0, 0.5), solid(GRAY, { panel: 0.4 }));
       drum(vx, vy, 0.36, 0.5, 1.0, (i, t, L) => { if (HIT.face === 5) { const b = noise(HIT.u * 10, HIT.v * 10 + T * 3, 118); BG[i] = C(WHITE, 3 + b * 4); return set(i, b > 0.6 ? 'o' : '~', C(CYAN, 9)), true; } BG[i] = C(GRAY, (3 + L * 0.3) * drumLit(0.36)); return set(i, ' ', 0), true; });
