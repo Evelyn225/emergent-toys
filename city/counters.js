@@ -148,8 +148,6 @@ ROOM_DEFS.donutshop = { grid: boxRoom(10, 7), light: 1.1, floor: 'pastel', ceil:
 
 // ---- the juice bar (JUICE): crates of fruit along the wall, three blenders whirring on the counter, a wall painted
 // with oranges; stools at the side, a bench in the window
-const fruitCrate = (x, y, col, lv, glyph) => [BX(x, y, 0.32, 0.26, 0, 0.55, crateShade(BRICK)), BX(x, y, 0.3, 0.24, 0.55, 0.62, (i, t, L) => { // a crate heaped with one fruit
-  if (HIT.face !== 5) return false; const k = hash(Math.floor(HIT.u * 14), Math.floor(HIT.v * 14), 117); BG[i] = C(col, lv * (0.7 + k * 0.4)); return set(i, k > 0.6 ? glyph : ' ', C(col, lv + 5)), true; })];
 const blender = (x,y,col) => KITCHEN_BLENDER(x,y,col);
 function juiceWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -165,7 +163,7 @@ function juiceWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil: 'pendant', sign: false, wall: juiceWall, keeper: [5.0, 1.55],
   props: r => [KITCHEN_SERVICE_COUNTER(5,2.3,2,.3,1,GREEN), { ...standing(5.0, 1.55, GREEN), face: [0, 1] },
     blender(4.2, 2.25, ORANGE), blender(5.0, 2.25, MAG), blender(5.8, 2.25, GREEN),
-    ...fruitCrate(1.45, 1.5, ORANGE, 8, 'o'), ...fruitCrate(1.45, 2.15, GREEN, 6, 'o'), ...fruitCrate(8.55, 1.5, YEL, 9, ')'), ...fruitCrate(8.55, 2.15, RED, 6, 'o'),
+    KITCHEN_PRODUCE_CRATE(1.45,1.5,'orange'), KITCHEN_PRODUCE_CRATE(1.45,2.15,'lime'), KITCHEN_PRODUCE_CRATE(8.55,1.5,'banana'), KITCHEN_PRODUCE_CRATE(8.55,2.15,'apple'),
     KITCHEN_WALL_LEDGE(8.8,4.3,.9,.2,1.04,-1,0), ...stoolsY(8.25, 3.8, 4.8, 1.0, GREEN, 1, 0.35),
     ...plainBench(2.3, 5.5, 0.8, 0, -1, BRICK, 0.4), ...plainBench(1.45, 3.7, 0.7, 1, 0, BRICK, 0.3)] };
 
