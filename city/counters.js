@@ -95,8 +95,7 @@ function bentoWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.bento = { grid: boxRoom(9, 7), light: 1.0, floor: 'hinoki', ceil: 'strip', sign: false, wall: bentoWall, keeper: [4.6, 1.5],
   props: r => [...glassCase(4.6, 2.2, 2.0, 0.35, 1.05, bentoBoxes, STONE), { ...standing(4.6, 1.5, WHITE), face: [0, 1] },
-    BX(7.3, 1.4, 0.55, 0.32, 0, 0.9, solid(GRAY, { top: '=', panel: 0.5 })), ROOM_MODEL(7.3, 1.4, (vx, vy) => drum(vx, vy, 0.18, 0.9, 1.2, (i, t, L) => { // the rice cooker
-      BG[i] = C(WHITE, (3.6 + L * 0.3) * drumLit(0.18)); return set(i, HIT.face === 5 ? 'o' : Math.abs(HIT.w - 1.05) < 0.02 ? '-' : ' ', C(GRAY, 5)), true; })),
+    BX(7.3, 1.4, 0.55, 0.32, 0, 0.9, solid(GRAY, { top: '=', panel: 0.5 })), KITCHEN_RICE_COOKER(7.3,1.4),
     BX(1.22, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(1.75, 3.9, 4.9, 1.0, BRICK, -1, 0.35), // the ledge on the left
     ...plainBench(7.6, 4.4, 0.75, -1, 0, BRICK)] };
 
@@ -187,10 +186,7 @@ ROOM_DEFS.donutshop = { grid: boxRoom(10, 7), light: 1.1, floor: 'pastel', ceil:
 // with oranges; stools at the side, a bench in the window
 const fruitCrate = (x, y, col, lv, glyph) => [BX(x, y, 0.32, 0.26, 0, 0.55, crateShade(BRICK)), BX(x, y, 0.3, 0.24, 0.55, 0.62, (i, t, L) => { // a crate heaped with one fruit
   if (HIT.face !== 5) return false; const k = hash(Math.floor(HIT.u * 14), Math.floor(HIT.v * 14), 117); BG[i] = C(col, lv * (0.7 + k * 0.4)); return set(i, k > 0.6 ? glyph : ' ', C(col, lv + 5)), true; })];
-const blender = (x, y, col) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.1, 0.1, 1.0, 1.12), solid(GRAY));
-  drum(vx, vy, 0.09, 1.12, 1.42, (i, t, L) => { const s = fract(Math.atan2(HIT.v, HIT.u) / 6.28 + T * 3 + HIT.w * 2); BG[i] = C(col, 6 + s * 4); return set(i, s < 0.2 ? '~' : ' ', C(WHITE, 12)), true; }); // whizzing
-}, [0.1, 0.1, 1.42]);
+const blender = (x,y,col) => KITCHEN_BLENDER(x,y,col);
 function juiceWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.6, 0.3, 0.36, C(GREEN, 15), C(YEL, 8))) return true;

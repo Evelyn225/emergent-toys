@@ -1128,15 +1128,8 @@ const oilShelf = (x, y, hl) => BX(x, y, hl, 0.2, 0, 0.62, (i, t, L) => {
   if (k < 0.15 || fract(HIT.u * 9) < 0.2) return set(i, ' ', 0), true;
   return set(i, w < 0.3 ? 'U' : '[', C(w < 0.3 ? BLUE : [YEL, GRAY, RED, BLUE][k * 4 | 0], 13)), true;
 });
-const roller = (x, y) => BX(x, y, 0.3, 0.2, 0.92, 1.04, (i, t, L) => { // hot dogs turning on the rollers, under a sneeze guard
-  if (HIT.face === 5) { BG[i] = C(BRICK, 3.2); return set(i, fract(HIT.v * 9 + T * 0.4) < 0.5 ? '=' : '-', C(ORANGE, 13)), true; }
-  BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }, 0, 1);
-const coffeeMaker = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { // a brewer, its glass pot on the hot plate
-  BXD(vx - 0.08, vy, 0.12, 0.17, 0.92, 1.42, solid(GRAY, { top: '=' }));
-  BXD(vx + 0.02, vy, 0.12, 0.17, 1.32, 1.42, solid(GRAY));
-  drum(vx + 0.06, vy, 0.08, 0.93, 1.12, (i, t, L) => { BG[i] = HIT.w < 1.05 ? C(BRICK, 1.2) : C(CYAN, 0.8 + L * 0.1); return set(i, HIT.w > 1.05 && fract(HIT.w * 30) < 0.2 ? '.' : ' ', C(WHITE, 8)), true; });
-  dot(vx + 0.06, vy, 0.935, 0.03, (i, t, L) => { BG[i] = C(RED, 9); return set(i, ' ', 0), true; }); // (the hot plate's light)
-}, [0.25, 0.2, 1.42]);
+const roller = (x,y) => KITCHEN_HOTDOG_ROLLER(x,y);
+const coffeeMaker = (x,y) => KITCHEN_DRIP_BREWER(x,y);
 ROOM_DEFS.gas = { grid: ['#############', '#........W..#', '#...........#', '#..SS....W..#', '#..SS....WWW#', '#..SS.......#', '#..SS.......#', '#...........#', '#...........#', '######DD#####'],
   wc: { x0: 10, y0: 1, x1: 12, y1: 4, sign: [9, 1, 1.5] }, light: 1.2, floor: 'lino', ceil: 'strip', sign: false, wall: gasWall, keeper: [10.4, 7.2], glyphs: 'o#=@%',
   props: r => {
@@ -1158,10 +1151,7 @@ ROOM_DEFS.gas = { grid: ['#############', '#........W..#', '#...........#', '#..
       BX(1.3, 2, 0.9, 0.3, 0, 0.92, solid(BRICK, { panel: 0.6, top: '=' }), 0, 1), coffeeMaker(1.25, 1.55), coffeeMaker(1.25, 2.15), // coffee
       ...Array.from({ length: 6 }, (_, k) => BX(1.3, 2.7, 0.06, 0.06, 0.92 + k * 0.06, 0.97 + k * 0.06, solid(WHITE))), // a stack of cups
       BX(1.3, 6.1, 0.8, 0.3, 0, 0.92, solid(BRICK, { panel: 0.6, top: '=' }), 0, 1), roller(1.3, 5.75), // hot food
-      ROOM_MODEL(1.3, 6.55, (vx, vy) => { // the slushie machine: red and blue churning
-        for (const [e, col] of [[-0.12, RED], [0.12, BLUE]]) drum(vx, vy + e, 0.1, 0.92, 1.32, (i, t, L) => { BG[i] = C(col, 3 + L * 0.3); return set(i, fract(HIT.w * 6 - T * 1.5 + Math.atan2(HIT.v, HIT.u)) < 0.2 ? '~' : ' ', C(WHITE, 12)), true; });
-        BXD(vx, vy, 0.13, 0.24, 1.32, 1.42, solid(WHITE, { top: '=' }));
-      }, [0.15, 0.26, 1.42]),
+      KITCHEN_SLUSH_MACHINE(1.3,6.55),
       BX(1.6, 8.55, 0.55, 0.3, 0, 0.85, (i, t, L) => { // the ice chest
         BG[i] = C(WHITE, (2.6 + L * 0.3) * shadeFace(HIT.face));
         if (HIT.face === 4 && Math.abs(HIT.w - 0.5) < 0.15) return set(i, ' ICE '[Math.floor((HIT.u + 0.55) / 1.1 * 5)] || ' ', C(BLUE, 14)), true;

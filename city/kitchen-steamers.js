@@ -32,10 +32,10 @@ function kitchenBasketLid(x,y,z) {
       x+Math.cos(b)*.025,y,z+.039+Math.sin(b)*.025,.006,BRICK);
   }
 }
-function kitchenSteamerSteam(s,z) {
+function kitchenSteamerSteam(s,z,offsetX=0,offsetY=0) {
   if(mode!=='room'||!room||Math.hypot(s.x-px,s.y-py)>12||T<(s.steamDue??-1))return;
   s.steamDue=T+1.1;
-  haze.push({at:placeKey(),kind:'steam',s:1,x:s.x,y:s.y,z,r:.018,rMax:.06,
+  haze.push({at:placeKey(),kind:'steam',s:1,x:s.x+offsetX,y:s.y+offsetY,z,r:.018,rMax:.06,
     vx:.004,vy:.002,vz:.09,life:1,fade:1/1.6,seed:s.x*13+s.y*7+T});
   while(haze.length>140)haze.shift();
 }
