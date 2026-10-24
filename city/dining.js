@@ -201,8 +201,7 @@ function mahjongWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(GREEN, 3 + L * 0.15 - Math.max(0, z - 2) * 0.5); return set(i, hash(Math.floor(u * 3), Math.floor(z * 3), 128) > 0.96 ? '.' : ' ', C(BRICK, 4)), true; // (stained by the smoke, up top)
 }
 const mahjongTable = (x, y) => {
-  const p = [{ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
-    return set(i, f === 5 && (Math.abs(Math.abs(HIT.u) - 0.32) < 0.06 || Math.abs(Math.abs(HIT.v) - 0.32) < 0.06) ? '#' : ' ', C(WHITE, 13)), true; }) }, BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK))];
+  const p = [MAHJONG_TABLE(x, y)];
   for (const [ox, oy] of [[-0.75, 0], [0.75, 0], [0, 0.75], [0, -0.75]]) {
     p.push(...homeChair(x + ox, y + oy, -ox / 0.75, -oy / 0.75, BRICK));
     if (chance(0.6)) p.push({ ...sitting(x + ox, y + oy, shirt(), 0.48), face: [-ox / 0.75, -oy / 0.75] });
@@ -211,7 +210,7 @@ const mahjongTable = (x, y) => {
 };
 ROOM_DEFS.mahjong = { grid: backWc(15, 10), wc: wcAt(15), light: 0.85, floor: 'lino', ceil: 'strip', sign: false, wall: mahjongWall, keeper: [4.0, 1.6],
   props: r => [...counterBox(4.0, 2.3, 1.2), { ...standing(4.0, 1.6, GRAY), face: [0, 1] },
-    BX(8.0, 1.4, 0.6, 0.3, 0, 0.85, solid(BRICK, { top: '=' })), ...[7.7, 8.0, 8.3].map(x => ROOM_MODEL(x, 1.4, (vx, vy) => drum(vx, vy, 0.07, 0.85, 1.2, (i, t, L) => { BG[i] = C(RED, 3 + L * 0.3 * drumLit(0.07)); return set(i, HIT.face === 5 ? 'o' : ' ', C(WHITE, 6)), true; }))), // the flasks of tea
+    TEA_COUNTER(8.0, 1.4), // the flasks of hot water, cups poured
     ...mahjongTable(2.6, 5.2), ...mahjongTable(7.0, 5.2), ...mahjongTable(11.2, 5.2), ...mahjongTable(2.6, 7.8), ...mahjongTable(11.2, 7.8), ...wcFittings(15)] };
 
 // ---- the coffee roastery (COFFEE; CAFE keeps the old cafe): the roaster turning its beans over in the cooling tray,
