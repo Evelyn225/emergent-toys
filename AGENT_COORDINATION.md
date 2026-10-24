@@ -8,16 +8,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 
 ## File ownership
 
-- **Codex:** home plants/pots on `codex/home-plants-quality`. Owns the new
-  `city/home-plants.js`, `city/home-furniture-render.js`, Fern plant calls in
-  `city/home-quality.js`, only the homeDef plant calls in `city/rooms.js`,
-  the plant drawing adapter in `city/home-balcony.js`, and cache invalidation
-  in `refreshFurnishedRoom` (`city/home-furnishing-ui.js`). Kitchen and tea
-  sections stay with Claude. Plants are complete: three new geometry/real-control
-  checks plus the three original furnishing checks pass; close/wide/balcony/night
-  views and local rendering costs reviewed. Next Codex chunk: remaining pass 4
-  electronics/decor audit (home files only), then pass 5.
-  #197–#202 full CI are green.
+- **Codex:** home wall clock on `codex/home-clock-quality` (pass 4). Owns
+  Clock complete; two geometry/real-control checks and three original furnishing
+  checks pass. Owns new `city/home-clock.js`, `city/home-furnishings.js`, clock dispatch in
+  `city/home-furniture-render.js` and fixture/IDEA additions in
+  `city/home-furnishing-ui.js`, with new browser tests. #204 palms and balcony
+  cache refresh are merged; full CI pending. #197–#202 full CI are green.
+  Next: pass 4 shelf books (`city/furniture-quality.js`, new helper/test),
+  remaining electronics/decor audit, then pass 5 (home files).
 - **Claude:** pass 3 coolers, sacks and crates are done on
   `codex/dining-crates-coolers`, **PR #198** (merged, current with main incl. #197;
   bundle rebuilt, both checklist notes kept). New module

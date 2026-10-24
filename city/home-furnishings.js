@@ -6,6 +6,7 @@ const HOME_FURNITURE={
   f_lamp:{name:'shaded floor lamp',price:65,hx:.24,hy:.24,height:1.75,fixture:'lamp'},
   f_recordplayer:{name:'record player with cabinet and record',price:180,hx:.55,hy:.35,height:1.1,fixture:'record'},
   f_frame:{name:'oak photograph frame',price:25,hx:.4,hy:.035,height:.6,wall:true,fixture:'photo'},
+  f_clock:{name:'oak wall clock',price:45,hx:.25,hy:.04,height:.5,wall:true,fixture:'clock'},
   f_rug:{name:'woven blue rug',price:40,hx:1.3,hy:.9,height:.014,rug:true},
   f_plant:{name:'potted palm',price:35,hx:.25,hy:.25,height:1.6},
   sharkplush:{name:'plush shark',price:15,hx:.24,hy:.48,height:.35,plush:true},

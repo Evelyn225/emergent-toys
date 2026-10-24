@@ -31,11 +31,13 @@ function homeFixtureTargets() {
 function homeFixturePrompt(t) {
   const home=homeRecord(room),on=t.part?t.part.on:home?.lights?.[t.key]!==false;
   if(t.kind==='lamp'||t.kind==='fixed-lamp')return 'E: switch lamp '+(on?'off':'on');
+  if(t.kind==='clock')return 'E: read clock · F: furnishings';
   if(t.kind==='record')return on?'E: stop record · F: furnishings':'E: play record · F: furnishings';
   return 'E: choose photograph · F: furnishings';
 }
 function homeFixtureUse(t) {
   const home=homeRecord(room);if(!home)return;
+  if(t.kind==='clock')return say('The clock reads '+String(Math.floor(tod)).padStart(2,'0')+':'+String(Math.floor(fract(tod)*60)).padStart(2,'0')+'.',4);
   if(t.kind==='photo')return openHomePhotos(t.part);
   if(t.part)t.part.on=!t.part.on;
   else {home.lights||={};home.lights[t.key]=home.lights[t.key]===false;}
@@ -75,7 +77,7 @@ function beginFurnishingPlacement(item,part=null) {
   const id=part?.id||item?.id;if(!HOME_FURNITURE[id])return;
   if(workshopPlacement)endWorkshopPlacement();if(body.seat)standUp();hidePanel(furnishingEl);closeInventory();
   furnishingPlacement={home,id,item,part,a:part?.a||0,held};held=-1;lockMouse();
-  say(HOME_FURNITURE[id].wall?'Look at a wall to hang the frame. E places; Esc cancels.':'Walk and look to position it. E places; Q rotates; Esc cancels.',5);
+  say(HOME_FURNITURE[id].wall?'Look at a wall to hang it. E places; Esc cancels.':'Walk and look to position it. E places; Q rotates; Esc cancels.',5);
 }
 function furnishingCandidate() {
   const q=furnishingPlacement;if(!q||homeRecord(room)!==q.home)return {ok:false,reason:'Return home.'};
@@ -167,7 +169,7 @@ ROOM_DEFS.idea={grid:boxRoom(18,14),entry:[9,12.4,-Math.PI/2],height:3.4,light:.
   wall:(i,u,us,z,d,mx,my,L)=>{BG[i]=C(z<.7?BLUE:WHITE,z<.7?2+L*.1:5+L*.15);if(my===0&&wallText(i,u,us,z,d,'IDEA',9,2.3,.4,.55,C(BLUE,12),C(YEL,8)))return true;set(i,' ',0);return true;},
   props:r=>[
     ...counterBox(9,2.8,1.7),standing(9,2,BLUE),
-    ...[{id:'f_sofa',x:3,y:5,a:0},{id:'f_table',x:3,y:8,a:0},{id:'f_chair',x:3,y:10,a:0},{id:'f_recordplayer',x:9,y:5,a:0,on:true},{id:'f_lamp',x:10.3,y:5,a:0,on:true},{id:'f_plant',x:15,y:9,a:0},{id:'f_frame',x:16.965,y:6,a:Math.PI/2,z:1.8,photo:0}].map((p,k)=>furnishingProp({...p,key:-100-k},r)),
+    ...[{id:'f_sofa',x:3,y:5,a:0},{id:'f_table',x:3,y:8,a:0},{id:'f_chair',x:3,y:10,a:0},{id:'f_recordplayer',x:9,y:5,a:0,on:true},{id:'f_lamp',x:10.3,y:5,a:0,on:true},{id:'f_plant',x:15,y:9,a:0},{id:'f_frame',x:16.965,y:6,a:Math.PI/2,z:1.8,photo:0},{id:'f_clock',x:16.96,y:3.8,a:Math.PI/2,z:2.1}].map((p,k)=>furnishingProp({...p,key:-100-k},r)),
     ...tableBox(14.3,5,.9,.4),ROOM_MODEL(14.3,5,(vx,vy)=>homePlushShark(vx,vy,1,0,.8)),
     ...[[3,5],[9,6],[14,5],[3,10],[9,10],[14,10]].map(([x,y],k)=>HOME_PENDANT(x,y,3.4,r,k)),
   ]};
