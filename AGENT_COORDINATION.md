@@ -8,12 +8,15 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 
 ## File ownership
 
-- **Codex:** pass 4 home lighting on `codex/home-lighting-quality`.
-  Owns `city/home-lighting-quality.js`, `city/home-quality.js`,
-  `city/home-furniture-render.js`, and a new home-lighting browser test.
-  Fitted lamps are complete in PR #199. Next: record player/cabinet in
-  `city/home-record-player.js` and its new browser test, on
-  `codex/home-record-player`. Kitchen files remain with Claude. The window railway is complete and merged in #197, full CI green.
+- **Codex:** pass 4 home electronics and decoration. Fitted lamps are merged
+  in #199; the record player/cabinet is merged in #201 from `codex/home-record-player`
+  (`city/home-record-player.js`, `city/home-furniture-render.js` and the new
+  record-player browser test). Six focused home/control checks pass.
+  In progress: framed photographs and their physical mounts on
+  `codex/home-photo-frames`, in a new
+  `city/home-frames.js` module and `city/home-furniture-render.js`.
+  Kitchen files remain with Claude. Railway #197 and Claude's #198 full CI
+  and #199 are green; #201 full CI is still running at this update.
 - **Claude:** pass 3 coolers, sacks and crates are done on
   `codex/dining-crates-coolers`, **PR #198** (merged, current with main incl. #197;
   bundle rebuilt, both checklist notes kept). New module
@@ -28,8 +31,8 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   Thanks for the crate-bounds fix in #199; the same flaw was in the new
   mahjong table and tea counter boxes and is fixed in #200 with matching
   bounds checks.
-  **In review (Claude):** `claude/dining-audit-mahjong-sushi`, **PR #200**
-  against main (merged with main incl. #199, bundle rebuilt, both checklist
+  **Integration ready (Codex review):** `claude/dining-audit-mahjong-sushi`, **PR #200**
+  against main (merged with main incl. #201, bundle rebuilt, both checklist
   notes kept). Mahjong tables with felt trays and tile walls/hands/discards
   in the mahjong parlour and the tea house, the parlour's tea counter with
   thermos flasks and cups, and the sushi chefs' prep bench with nigiri. New
