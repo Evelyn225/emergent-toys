@@ -37089,11 +37089,11 @@ function produceAppleProfile(hr,vr) {
   pts[8]=[2*vr-.008,0];return pts; // the stalk sits in a dimple
 }
 function KITCHEN_PRODUCE_CRATE(x,y,kind) {
-  const depth=kind==='banana'?.07:.10,base=PRODUCE_RIM-depth,floor=base+PRODUCE_WALL,wood=furnitureTimber(STONE);
+  const depth=kind==='banana'?.07:.10,base=PRODUCE_RIM-depth,floor=base+PRODUCE_WALL,wood=furnitureTimber(STONE,2);
   const slats=(i,t,L)=>{
     wood(i,t,L);
-    const side=Math.abs(HIT.nz)<.5,gap=side?coveGroove(HIT.w-.05,.1,.01,t/projX):coveGroove(HIT.v,.087,.008,t/projX);
-    BG[i]=C(STONE,Math.max(0,(BG[i]&15)-gap*3));return true;
+    const side=Math.abs(HIT.nz)<.5,gap=side?coveGroove(HIT.w-.075,.15,.012,t/projX):coveGroove(HIT.v,.13,.01,t/projX);
+    BG[i]=C(STONE,Math.max(0,(BG[i]&15)-gap*2));return true;
   };
   const baseProfile=kitchenTopProfile(PRODUCE_HL,PRODUCE_HW,0,base,.004);
   const fruit=kind==='banana'?null:produceLayout(kind,floor),bananas=kind==='banana'?produceBananas(floor):null;
