@@ -16181,10 +16181,7 @@ const ROOM_DEFS = {
     props: r => {
       const p = [...counterBox(6, BACK_COUNTER_Y, 1.4), standing(6, BACK_COUNTER_STAFF_Y, RED), ...toilet(11.6, 1.4, -1, porcelain), washbasin(12.55, 1.3, 0, 1), POT_PLANT(12.3, 7.2, 1.5)];
       for (const [x, y] of [[3, 4], [9, 4], [3, 6.8], [9, 6.8]]) {
-        p.push({ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { // a mahjong table: green felt, tiles on top
-          const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
-          return set(i, f === 5 && Math.abs(Math.abs(HIT.u) - 0.32) < 0.06 || f === 5 && Math.abs(Math.abs(HIT.v) - 0.32) < 0.06 ? '#' : ' ', C(WHITE, 13)), true;
-        }) }, BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK)));
+        p.push(MAHJONG_TABLE(x, y)); // felt, tile walls, hands and discards
         for (const [ox, oy] of [[-0.75, 0], [0.75, 0], [0, 0.75], [0, -0.75]]) { // (round the table)
           p.push(...homeChair(x + ox, y + oy, -ox / 0.75, -oy / 0.75, BRICK));
           if (chance(0.6)) p.push({ ...sitting(x + ox, y + oy, shirt(), 0.48), face: [-ox / 0.75, -oy / 0.75] });
@@ -19112,7 +19109,7 @@ ROOM_DEFS.sushibar = { grid: backWc(14, 9), wc: wcAt(14), light: 0.9, floor: 'hi
     const { x0, x1, y0, y1 } = SUSHI_LOOP,edge=SUSHI_WORK.edge,p = [
       BX((x0 + x1) / 2, y0, (x1 - x0) / 2 + edge, edge, 0, 0.95, sushiCounterShade), BX((x0 + x1) / 2, y1, (x1 - x0) / 2 + edge, edge, 0, 0.95, sushiCounterShade),
       BX(x0, (y0 + y1) / 2, edge, (y1 - y0) / 2 - edge, 0, 0.95, sushiCounterShade), BX(x1, (y0 + y1) / 2, edge, (y1 - y0) / 2 - edge, 0, 0.95, sushiCounterShade), // the island, round its belt
-      BX(6.0, SUSHI_WORK.y, 2.6, SUSHI_WORK.half, 0, 0.85, solid(GRAY, { top: '=' })), sushiBelt(), // the chefs' bench inside it
+      KITCHEN_PREP(6.0, SUSHI_WORK.y, 2.6, SUSHI_WORK.half, 0.85, 'sushi'), sushiBelt(), // the chefs' bench inside it
       { ...standing(6.0, SUSHI_WORK.south, WHITE), face: [0, 1] }, { ...standing(4.2, SUSHI_WORK.north, WHITE), face: [0, -1] }, ...wcFittings(14)];
     for (let x = x0; x <= x1 + 1e-6; x += 1.0) for (const [y, fy] of [[y0 - 0.55, 1], [y1 + 0.55, -1]]) { p.push(STOOL(x, y, RED, 0.62)); if (chance(0.4)) p.push({ ...sitting(x, y, shirt(), 0.62), face: [0, fy] }); }
     for (const [x, fx] of [[x0 - 0.55, 1], [x1 + 0.55, -1]]) { p.push(STOOL(x, (y0 + y1) / 2, RED, 0.62)); if (chance(0.4)) p.push({ ...sitting(x, (y0 + y1) / 2, shirt(), 0.62), face: [fx, 0] }); }
@@ -21034,8 +21031,7 @@ function mahjongWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(GREEN, 3 + L * 0.15 - Math.max(0, z - 2) * 0.5); return set(i, hash(Math.floor(u * 3), Math.floor(z * 3), 128) > 0.96 ? '.' : ' ', C(BRICK, 4)), true; // (stained by the smoke, up top)
 }
 const mahjongTable = (x, y) => {
-  const p = [{ mj: true, cx: x, cy: y, ...BX(x, y, 0.45, 0.45, 0.7, 0.76, (i, t, L) => { const f = HIT.face; BG[i] = f === 5 ? C(GREEN, 2) : C(BRICK, 1 + L * 0.2);
-    return set(i, f === 5 && (Math.abs(Math.abs(HIT.u) - 0.32) < 0.06 || Math.abs(Math.abs(HIT.v) - 0.32) < 0.06) ? '#' : ' ', C(WHITE, 13)), true; }) }, BX(x, y, 0.08, 0.08, 0, 0.7, solid(BRICK))];
+  const p = [MAHJONG_TABLE(x, y)];
   for (const [ox, oy] of [[-0.75, 0], [0.75, 0], [0, 0.75], [0, -0.75]]) {
     p.push(...homeChair(x + ox, y + oy, -ox / 0.75, -oy / 0.75, BRICK));
     if (chance(0.6)) p.push({ ...sitting(x + ox, y + oy, shirt(), 0.48), face: [-ox / 0.75, -oy / 0.75] });
@@ -21044,7 +21040,7 @@ const mahjongTable = (x, y) => {
 };
 ROOM_DEFS.mahjong = { grid: backWc(15, 10), wc: wcAt(15), light: 0.85, floor: 'lino', ceil: 'strip', sign: false, wall: mahjongWall, keeper: [4.0, 1.6],
   props: r => [...counterBox(4.0, 2.3, 1.2), { ...standing(4.0, 1.6, GRAY), face: [0, 1] },
-    BX(8.0, 1.4, 0.6, 0.3, 0, 0.85, solid(BRICK, { top: '=' })), ...[7.7, 8.0, 8.3].map(x => ROOM_MODEL(x, 1.4, (vx, vy) => drum(vx, vy, 0.07, 0.85, 1.2, (i, t, L) => { BG[i] = C(RED, 3 + L * 0.3 * drumLit(0.07)); return set(i, HIT.face === 5 ? 'o' : ' ', C(WHITE, 6)), true; }))), // the flasks of tea
+    TEA_COUNTER(8.0, 1.4), // the flasks of hot water, cups poured
     ...mahjongTable(2.6, 5.2), ...mahjongTable(7.0, 5.2), ...mahjongTable(11.2, 5.2), ...mahjongTable(2.6, 7.8), ...mahjongTable(11.2, 7.8), ...wcFittings(15)] };
 
 // ---- the coffee roastery (COFFEE; CAFE keeps the old cafe): the roaster turning its beans over in the cooling tray,
@@ -36144,13 +36140,27 @@ function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
     });
   },[hl,hw,height]),radius:hl+.5,foodCase:{kind,hl,hw,height,shelf,levels}};
 }
+// Nigiri pairs, cut from the salmon block beside every other pair: rice
+// shaped by hand, a striped slice draped over it.
+function kitchenPrepSushi(x,y,z,k) {
+  for(const side of [-1,1]) {
+    const u=x+side*.034;
+    coveRound(u,y-.06,1,0,.027,.046,z,z+.027,.012,kitchenFoodShade(WHITE));
+    coveRound(u,y-.06,1,0,.03,.05,z+.027,z+.039,.005,kitchenSalmon);
+  }
+  if(k%2===0)coveRound(x,y+.1,1,0,.09,.04,z,z+.05,.012,kitchenSalmon);
+}
+function kitchenSalmon(i,t,L) {
+  const stripe=coveGroove(HIT.v+HIT.u*.45,.016,.002,t/projX)*coveDetail(t);
+  BG[i]=C(ORANGE,3+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz)+stripe*.8);set(i,' ',0);return true;
+}
 function KITCHEN_PREP(x,y,hl,hw,height,kind='dumplings') {
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     coveRound(vx,vy,1,0,hl,hw,0,height-.035,.015,'wood');
     drawBox({...boxAt(vx,vy,1,0,hl,hw,height-.035,height),...kitchenTopProfile(hl,hw,height-.035,height)},kitchenSteel,homeRayWorktop);
     const boardH=.018,bhl=hl-.12,bhw=hw-.07;
     drawBox({...boxAt(vx,vy,1,0,bhl,bhw,height,height+boardH),...kitchenTopProfile(bhl,bhw,height,height+boardH,.007)},(i,t,L)=>{
-      const fine=coveDetail(t),flour=(Math.sin(HIT.u*170)*Math.sin(HIT.v*210)>.65)*fine;
+      const fine=coveDetail(t),flour=kind!=='sushi'&&(Math.sin(HIT.u*170)*Math.sin(HIT.v*210)>.65)*fine; // (a sushi board is wiped clean)
       coveTimber(i,HIT.u,HIT.v,L,t,HIT.nx,HIT.ny,HIT.nz,7);
       if(flour)BG[i]=C(WHITE,4+L*.2);return true;
     },homeRayWorktop);
@@ -36158,6 +36168,7 @@ function KITCHEN_PREP(x,y,hl,hw,height,kind='dumplings') {
       const xx=vx-bhl*.7+k*bhl*1.4/5;
       if(kind==='dumplings')for(const side of [-1,1])
         foodOval(xx,vy+side*.12,height+boardH,.028,.023,.035,kitchenFoodShade(WHITE));
+      else if(kind==='sushi')kitchenPrepSushi(xx,vy,height+boardH,k);
       else for(let strand=0;strand<3;strand++)for(let seg=0;seg<4;seg++) {
         const ya=-.16+seg*.08,yb=ya+.08,xa=xx+Math.sin(seg+strand)*.012,xb=xx+Math.sin(seg+1+strand)*.012;
         const az=height+boardH+.003,bz=az;
@@ -37335,6 +37346,75 @@ function KITCHEN_BEER_CRATE(x,y,{levels=1,open=false,hl=.3,hw=.22,h=.3,col=YEL}=
     for(let k=closed-1;k>=0;k--)drawBox({...boxAt(vx,vy,1,0,hl,hw,k*h,(k+1)*h),...profiles[k]},crates[k],homeRayWorktop);
   }),box:boxAt(x,y,1,0,hl,hw,0,open?top+openH:top),radius:Math.hypot(hl,hw)+.02,
     beerCrate:{levels,open,hl,hw,h,top,openH,bottles,cell:[cellU,cellV]}};
+}
+// Mahjong tables are joined tables carrying a felt-lined tray. Tiles are real
+// runs: four walls two high, each player's hand standing upright facing them,
+// and their discards face up in front of them. Each run is one closed box with
+// seams between its tiles, white faces under coloured backs.
+const MAHJONG_TILE={w:.026,l:.035,h:.02},MAHJONG_TOP=.70,MAHJONG_FELT=MAHJONG_TOP+.008;
+const MAHJONG_MARKS=[RED,GREEN,BLUE,BLACK];
+function mahjongRun(kind,back,ox,oy,hl,seed) {
+  const {w,h}=MAHJONG_TILE;
+  return (i,t,L)=>{
+    const light=coveLight(HIT.nx,HIT.ny,HIT.nz),f=t/projX,fine=coveDetail(t);
+    const along=HIT.u+hl,k=Math.floor(along/w),seam=coveGroove(along,w,.0016,f);
+    const layer=fract((HIT.w-MAHJONG_FELT)/h),out=HIT.nx*ox+HIT.ny*oy;
+    // which part of the tile this is: its printed face, plain white, or the back
+    const face=kind==='hand'?out>.5:kind==='discard'?HIT.face===5:false;
+    const white=face||(kind==='wall'?HIT.face!==5&&layer<.5:kind==='discard'?HIT.face!==5&&layer>.45:out>-.5&&HIT.face!==5);
+    BG[i]=C(white?WHITE:back,(white?4.4:2.8)+L*.38*light-seam*1.6);
+    if(face&&fine>.3) {
+      const cu=along-(k+.5)*w,cv=kind==='hand'?HIT.w-MAHJONG_FELT-.0175:HIT.v;
+      if(Math.abs(cu)<.006&&Math.abs(cv)<.009)BG[i]=C(MAHJONG_MARKS[Math.floor(hash(k,seed,631)*4)],4+L*.2);
+    }
+    set(i,' ',0);return true;
+  };
+}
+function MAHJONG_TABLE(x,y) {
+  const {w,l,h}=MAHJONG_TILE,back=YEL,wood=furnitureTimber(BRICK),runs=[];
+  // (u axis, outward normal) for each player's side
+  for(const [k,[ox,oy]]of [[1,0],[0,1],[-1,0],[0,-1]].entries()) {
+    const c=-oy,s=ox,at=(u,v)=>[c*u+ox*v,s*u+oy*v];
+    const wallLen=17*w/2,[wx,wy]=at(0,.24); // each wall stops just short of the next one's inner face
+    runs.push({kind:'wall',x:wx,y:wy,c,s,hl:wallLen,hw:l/2,z1:MAHJONG_FELT+2*h,ox,oy,k});
+    const [hx,hy]=at(0,.36);runs.push({kind:'hand',x:hx,y:hy,c,s,hl:13*w/2,hw:h/2,z1:MAHJONG_FELT+l,ox,oy,k});
+    const [dx_,dy_]=at(0,.12);runs.push({kind:'discard',x:dx_,y:dy_,c,s,hl:6*w/2,hw:l/2,z1:MAHJONG_FELT+h,ox,oy,k});
+  }
+  for(const r of runs){r.profile=kitchenTopProfile(r.hl,r.hw,MAHJONG_FELT,r.z1,.002);r.shade=mahjongRun(r.kind,back,r.ox,r.oy,r.hl,x*31+y*7+r.k);}
+  const felt=(i,t,L)=>{
+    if(HIT.nz>.9&&HIT.w<MAHJONG_FELT+.001) {
+      const fibre=Math.sin(HIT.u*700)*Math.sin(HIT.v*650)*coveDetail(t);
+      BG[i]=C(GREEN,2.2+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz)+fibre*.15);set(i,' ',0);return true;
+    }
+    return wood(i,t,L);
+  };
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const r of runs)drawBox({...boxAt(vx+r.x,vy+r.y,r.c,r.s,r.hl,r.hw,MAHJONG_FELT,r.z1),...r.profile},r.shade,homeRayWorktop);
+    foodTray(vx,vy,MAHJONG_TOP,.45,.45,.022,felt);
+    drawFurnitureTable(vx,vy,.45,.45,MAHJONG_TOP);
+  }),mj:true,cx:x,cy:y,box:boxAt(x,y,1,0,.45,.45,0,MAHJONG_TOP+.022),radius:.66,
+    mahjong:{felt:MAHJONG_FELT,runs:runs.map(({kind,x,y,c,s,hl,hw,z1})=>({kind,x,y,c,s,hl,hw,z1}))}};
+}
+
+// Chinese thermos flasks of hot water: a printed red body on a steel foot, a
+// steel shoulder and a cork, standing on the tea counter beside cups of tea.
+const TEA_THERMOS=[[0,0],[0,.055],[.012,.06],[.02,.066],[.24,.066],[.27,.058],[.30,.04],[.32,.034],[.35,.03],[.36,.026],[.36,0]];
+function teaThermosShade(seed,base) {
+  return (i,t,L)=>{
+    const z=HIT.w-base,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
+    if(z<.02||(z>.26&&z<.32))return coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz);
+    if(z>=.32){BG[i]=C(STONE,2.6+L*.3*light);set(i,' ',0);return true;} // the cork
+    const band=Math.abs(z-.215)<.012,flower=Math.sin(Math.atan2(HIT.v,HIT.u)*7+seed)*Math.sin(z*90)>.82&&coveDetail(t)>.3;
+    BG[i]=band?C(YEL,4.5+L*.3*light):C(flower?WHITE:RED,(flower?4:3.2)+L*.38*light);set(i,' ',0);return true;
+  };
+}
+function TEA_COUNTER(x,y,hl=.6,hw=.3,height=.85) {
+  const counter=KITCHEN_SERVICE_COUNTER(0,0,hl,hw,height,BRICK,BRICK),flasks=[-.3,0,.3].map((u,k)=>({u,shade:teaThermosShade(k*2.1,height)}));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const q of flasks)coveLathe(vx+q.u,vy-.06,height,TEA_THERMOS,q.shade);
+    for(const [u,a]of [[-.15,.4],[.15,-.3],[.45,1.1]])kitchenCup(vx+u,vy+.14,height,a,WHITE,true);
+    counter.draw(vx,vy);
+  }),box:boxAt(x,y,1,0,hl,hw,0,height),radius:hl+.2,teaCounter:{height,flasks:flasks.map(q=>q.u)}};
 }
 // Fern's front is west toward the dock. The room's south entrance therefore
 // maps through a quarter turn; windows and the world-view camera share it.
