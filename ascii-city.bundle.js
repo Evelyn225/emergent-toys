@@ -18984,14 +18984,9 @@ ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'c
 
 // ---- the burger joint (BURGERS): red booths down both walls, a chrome counter with stools, the shake machine and the
 // soda fountain behind it, lit menu boards with the burgers on them, the griddle glowing through the pass, neon
-const shakeMachine = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.25, 0.18, 1.0, 1.5), (i, t, L) => { BG[i] = C(GREEN, 3 + L * 0.3); return set(i, HIT.face === 3 && Math.abs(HIT.w - 1.4) < 0.03 ? '=' : ' ', C(WHITE, 12)), true; });
-  for (const e of [-1, 0, 1]) { rod(vx + e * 0.15, vy + 0.12, 1.42, vx + e * 0.15, vy + 0.12, 1.2, 0.012, GRAY, 1.4); drum(vx + e * 0.15, vy + 0.12, 0.05, 1.05, 1.2, CHROME); } // the spindles, a cup on each
-});
-const sodaFountain = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.4, 0.2, 1.0, 1.6), (i, t, L) => { BG[i] = C(GRAY, 2.5 + L * 0.3); if (HIT.face !== 3) return set(i, ' ', 0), true;
-    const k = Math.floor((HIT.u + 0.4) / 0.2); return set(i, HIT.w > 1.35 ? '#' : Math.abs(fract((HIT.u + 0.4) / 0.2) - 0.5) < 0.15 && HIT.w > 1.2 ? '|' : ' ', C([RED, ORANGE, BRICK, CYAN][k & 3], 13)), true; });
-});
+const shakeMachine = (x, y) => KITCHEN_SHAKE_MACHINE(x,y);
+const sodaFountain = (x, y) => KITCHEN_SODA_FOUNTAIN(x,y);
+const BURGER_COUNTER_Y=2.6; // leave a walkable staff aisle beside the supported machines
 function burgerWall(i, u, uStep, z, d, mx, my, L) {
   const M = 5.7; // (over the counter, clear of the bathroom)
   if (backWall(my)) {
@@ -19012,9 +19007,9 @@ function burgerWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(CYAN, 1.6 + L * 0.12); return set(i, fract(u / 1.6) < 0.02 ? '|' : ' ', C(WHITE, 4)), true; // mint walls
 }
 ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor: 'checker', ceil: 'strip', sign: false, neon: true, wall: burgerWall, keeper: [5.9, 1.6],
-  props: r => [BX(6.0, 2.35, 2.8, 0.32, 0, 1.05, (i, t, L) => { BG[i] = C(HIT.face === 5 ? WHITE : RED, (HIT.face === 5 ? 3 : 2) + L * 0.3); return set(i, HIT.face === 5 ? '=' : Math.abs(HIT.w - 0.9) < 0.04 ? '=' : ' ', C(GRAY, 6)), true; }), // the counter, chrome-edged
+  props: r => [BX(6.0, BURGER_COUNTER_Y, 2.8, 0.32, 0, 1.05, (i, t, L) => { BG[i] = C(HIT.face === 5 ? WHITE : RED, (HIT.face === 5 ? 3 : 2) + L * 0.3); return set(i, HIT.face === 5 ? '=' : Math.abs(HIT.w - 0.9) < 0.04 ? '=' : ' ', C(GRAY, 6)), true; }), // the counter, chrome-edged
     { ...standing(5.9, 1.6, RED), face: [0, 1] }, shakeMachine(4.0, 1.45), sodaFountain(7.9, 1.45),
-    ...stools(3.6, 8.6, 3.05, 1.0, RED, 0, -1, 0.35),
+    ...stools(3.6, 8.6, BURGER_COUNTER_Y+.7, 1.0, RED, 0, -1, 0.35),
     ...[3.6, 5.85, 8.0].flatMap(y => booth(1.65, y, 0.55, RED, { busy: 0.4, meal: 'burger' })), ...booth(11.35, 8.0, 0.55, RED, { busy: 0.4, meal: 'burger' }), // down both walls
     JUKEBOX(11.55, 5.9, -1, 0), ...wcFittings(13)] };
 
@@ -21071,11 +21066,7 @@ ROOM_DEFS.dimsum = { grid: backWc(15, 11), wc: wcAt(15), light: 0.95, height: 3.
 
 // ---- the kissaten (KISSATEN): an old coffee house: dark wood, red velvet booths, the siphons bubbling on the bar, a wall
 // of cups behind it, stained-glass lamps low over the tables
-const siphon = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  rod(vx, vy, 1.0, vx, vy, 1.05, 0.03, GRAY, 1); dot(vx, vy, 1.03, 0.02, (i, t, L) => { BG[i] = C(BLUE, 8 + Math.sin(T * 9) * 2); return set(i, '^', C(CYAN, 14)), true; }); // the burner, a blue flame
-  dot(vx, vy, 1.16, 0.08, (i, t, L) => { BG[i] = C(BRICK, 2.5); return set(i, 'o', C(WHITE, 6)), true; }); // the lower bulb, coffee in it
-  drum(vx, vy, 0.06, 1.25, 1.5, (i, t, L) => { const w = HIT.w - 1.25; BG[i] = w < 0.08 + 0.06 * Math.sin(T) ? C(BRICK, 2.5) : C(CYAN, 1); return set(i, w > 0.2 && fract(T * 3) < 0.5 ? '.' : ' ', C(WHITE, 8)), true; }); // the upper, rising and falling
-}, [0.08, 0.08, 1.5]);
+const siphon = (x, y) => KITCHEN_SIPHON(x,y);
 const tiffany = (x, y) => hung(x, y, 1.95, (vx, vy, z) => drum(vx, vy, 0.24, z - 0.18, z, (i, t, L) => { // a lamp of coloured glass, lit
   const seg = Math.floor((Math.atan2(HIT.v, HIT.u) / Math.PI + 1) * 4); BG[i] = C([RED, YEL, GREEN, ORANGE][seg & 3], 6 + 2 * Math.max(night, 0.4)); return set(i, fract(HIT.w * 10) < 0.2 ? '-' : ' ', C(BRICK, 4)), true; }));
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {
@@ -36351,6 +36342,99 @@ function KITCHEN_BREAD_RACK(x,y,hl=3.1) {
       }
     }
   }),box:boxAt(x,y,1,0,hl+.025,.13,.9,2.47),radius:hl+.3,kitchenAppliance:{kind:'bread-rack'}};
+}
+// Drinks have a supported cabinet, working clearance, and separate wet/glass
+// surfaces. Small ridges and reflections fade with projected size.
+const DRINK_STATION={top:1,shakeHalf:.34,sodaHalf:.46,halfDepth:.27};
+function kitchenDrinkBase(x,y,half) {
+  for(const side of [-1,1])for(const end of [-1,1])
+    coveLathe(x+side*(half-.05),y+end*.20,0,[[0,0],[0,.025],[.09,.025],[.09,0]],kitchenSteel);
+  coveRound(x,y,1,0,half,.25,.075,.97,.018,kitchenGlaze(WHITE));
+  drawBox({...boxAt(x,y,1,0,half+.015,.27,.97,DRINK_STATION.top),
+    ...kitchenTopProfile(half+.015,.27,.97,DRINK_STATION.top,.006)},kitchenSteel,homeRayWorktop);
+  // The cupboard is mounted to its front, with its handle ends in the door.
+  drawBox({...boxAt(x,y+.252,1,0,half-.025,.008,.14,.90),
+    ...kitchenPanelProfile(half-.025,.008,.14,.90,.004)},kitchenGlaze(WHITE),homeRayWorktop);
+  coveTube(x-.07,y+.279,.81,x+.07,y+.279,.81,.009,GRAY);
+  for(const side of [-1,1])coveTube(x+side*.07,y+.255,.81,x+side*.07,y+.279,.81,.007,GRAY);
+}
+function KITCHEN_SHAKE_MACHINE(x,y) {
+  const top=DRINK_STATION.top;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    kitchenDrinkBase(vx,vy,DRINK_STATION.shakeHalf);
+    coveRound(vx,vy-.13,1,0,.275,.065,top,1.61,.02,kitchenGlaze(GREEN));
+    drawBox({...boxAt(vx,vy+.055,1,0,.28,.145,top,top+.035),
+      ...kitchenTopProfile(.28,.145,top,top+.035,.006)},kitchenSteel,homeRayWorktop);
+    for(const u of [-.18,0,.18]) {
+      // Each head projects over a hollow steel mixing cup on a little rest.
+      coveRound(vx+u,vy+.025,1,0,.074,.135,1.46,1.65,.025,kitchenGlaze(GREEN));
+      coveLathe(vx+u,vy+.085,1.035,[[0,0],[0,.062],[.025,.062],[.025,0]],kitchenSteel);
+      coveLathe(vx+u,vy+.085,1.06,[[0,0],[0,.044],[.01,.047],[.22,.060],[.225,.060],
+        [.225,.055],[.018,.042],[.012,0]],kitchenSteel);
+      coveLathe(vx+u,vy+.085,1.24,[[0,0],[0,.052],[.001,.052],[.001,0]],kitchenGlaze(WARM));
+      coveTube(vx+u,vy+.085,1.235,vx+u,vy+.085,1.48,.008,GRAY);
+      foodOval(vx+u,vy+.165,1.52,.022,.012,.04,kitchenGlaze(WHITE));
+    }
+  }),box:boxAt(x,y+.015,1,0,.355,.285,0,1.65),radius:.65,kitchenDrink:{kind:'shake',support:top}};
+}
+function KITCHEN_SODA_FOUNTAIN(x,y) {
+  const top=DRINK_STATION.top,colors=[RED,ORANGE,BRICK,CYAN];
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    kitchenDrinkBase(vx,vy,DRINK_STATION.sodaHalf);
+    coveRound(vx,vy-.14,1,0,.405,.075,top,1.72,.018,kitchenSteel);
+    coveRound(vx,vy-.025,1,0,.405,.17,1.39,1.72,.018,kitchenSteel);
+    foodTray(vx,vy+.07,top,.405,.175,.035);
+    for(let k=0;k<4;k++) {
+      const u=(k-1.5)*.19;
+      // Real separate badges, levers and bent nozzles occupy the recess.
+      drawBox({...boxAt(vx+u,vy+.15,1,0,.073,.009,1.48,1.66),
+        ...kitchenPanelProfile(.073,.009,1.48,1.66,.004)},kitchenGlaze(colors[k]),homeRayWorktop);
+      coveTube(vx+u,vy+.105,1.40,vx+u,vy+.105,1.325,.012,GRAY);
+      coveTube(vx+u,vy+.105,1.325,vx+u,vy+.18,1.325,.012,GRAY);
+      coveTube(vx+u,vy+.18,1.325,vx+u,vy+.18,1.285,.012,GRAY);
+      coveTube(vx+u,vy+.11,1.39,vx+u,vy+.18,1.43,.009,GRAY);
+      foodOval(vx+u,vy+.18,1.418,.021,.016,.04,kitchenGlaze(colors[k]));
+    }
+    // A cup is supported by the recessed tray floor, clear of the nozzle.
+    kitchenVessel(vx-.095,vy+.10,top+.008,'cup',WHITE,1.15);
+  }),box:boxAt(x,y+.015,1,0,.475,.285,0,1.72),radius:.72,kitchenDrink:{kind:'soda',support:top}};
+}
+const SIPHON={bottom:1.11,radius:.085,bulbHeight:.17,fill:1.19,chamber:1.31};
+function kitchenDrinkGlass(i,t,L,x,y) {
+  // Clear areas retain the world behind them. Only the rim and narrow curved
+  // reflected strips write depth; coffee is a separate volume behind these.
+  const fine=coveDetail(t),rx=x+HIT.u,ry=y+HIT.v,rz=HIT.w-eye;
+  const facing=Math.abs(HIT.nx*rx+HIT.ny*ry+HIT.nz*rz)/Math.max(.01,Math.hypot(rx,ry,rz));
+  if(facing>.35&&!(fine>.2&&Math.abs(HIT.u+.031)<.007&&HIT.v>0))return false;
+  BG[i]=C(WHITE,2+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+}
+function KITCHEN_SIPHON(x,y) {
+  const z=SIPHON.bottom,coffee=kitchenFoodShade(BRICK),glass=kitchenGlaze(WHITE),
+    fillRadius=.081*Math.sqrt(1-((SIPHON.fill-z-.004)/.081-1)**2);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const clearGlass=(i,t,L)=>kitchenDrinkGlass(i,t,L,vx,vy);
+    coveLathe(vx,vy,1,[[0,0],[0,.12],[.018,.12],[.026,.10],[.026,0]],kitchenSteel);
+    coveTube(vx-.108,vy,1.018,vx-.108,vy,1.37,.012,GRAY);
+    coveTube(vx-.108,vy,1.30,vx,vy,1.30,.01,GRAY);
+    // A small spirit burner and a shaped flame sit below the lower globe.
+    coveLathe(vx,vy,1.026,[[0,0],[0,.033],[.035,.033],[.04,.019],[.04,0]],kitchenSteel);
+    foodOval(vx,vy,1.066,.013,.013,.038,(i,t,L)=>{
+      BG[i]=C(CYAN,7+Math.sin(T*9)*.8);set(i,' ',0);return true;
+    });
+    foodOval(vx,vy,z,.085,.085,.17,clearGlass);
+    foodOval(vx,vy,z+.004,.081,.081,.162,(i,t,L)=>HIT.w<SIPHON.fill&&coffee(i,t,L));
+    coveLathe(vx,vy,SIPHON.fill,[[0,0],[0,fillRadius],[.001,fillRadius],[.001,0]],coffee);
+    coveLathe(vx,vy,1.26,[[0,.022],[.045,.022],[.05,.029],[.05,.023],[0,.017],[0,.022]],clearGlass);
+    // The top is a genuinely hollow brewing chamber and rolled glass lip.
+    coveLathe(vx,vy,SIPHON.chamber,[[0,0],[0,.042],[.012,.060],[.208,.060],[.214,.057],
+      [.214,.053],[.016,.053],[.008,0]],(i,t,L)=>{
+      if(HIT.part===1||HIT.part===7||HIT.w>SIPHON.chamber+.202)return glass(i,t,L);
+      return clearGlass(i,t,L);
+    });
+    coveLathe(vx,vy,SIPHON.chamber+.015,[[0,0],[0,.052],[.052,.052],[.052,0]],coffee);
+    coveTube(vx,vy,SIPHON.fill,vx,vy,SIPHON.chamber+.03,.006,GRAY);
+    kitchenHandle(vx+.055,vy,SIPHON.chamber+.11,1,0,.047,.009,BRICK);
+  }),box:boxAt(x,y,1,0,.12,.12,1,1.524),radius:.35,kitchenDrink:{kind:'siphon',support:1}};
 }
 // Fern's front is west toward the dock. The room's south entrance therefore
 // maps through a quarter turn; windows and the world-view camera share it.

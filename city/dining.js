@@ -145,11 +145,7 @@ ROOM_DEFS.dimsum = { grid: backWc(15, 11), wc: wcAt(15), light: 0.95, height: 3.
 
 // ---- the kissaten (KISSATEN): an old coffee house: dark wood, red velvet booths, the siphons bubbling on the bar, a wall
 // of cups behind it, stained-glass lamps low over the tables
-const siphon = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  rod(vx, vy, 1.0, vx, vy, 1.05, 0.03, GRAY, 1); dot(vx, vy, 1.03, 0.02, (i, t, L) => { BG[i] = C(BLUE, 8 + Math.sin(T * 9) * 2); return set(i, '^', C(CYAN, 14)), true; }); // the burner, a blue flame
-  dot(vx, vy, 1.16, 0.08, (i, t, L) => { BG[i] = C(BRICK, 2.5); return set(i, 'o', C(WHITE, 6)), true; }); // the lower bulb, coffee in it
-  drum(vx, vy, 0.06, 1.25, 1.5, (i, t, L) => { const w = HIT.w - 1.25; BG[i] = w < 0.08 + 0.06 * Math.sin(T) ? C(BRICK, 2.5) : C(CYAN, 1); return set(i, w > 0.2 && fract(T * 3) < 0.5 ? '.' : ' ', C(WHITE, 8)), true; }); // the upper, rising and falling
-}, [0.08, 0.08, 1.5]);
+const siphon = (x, y) => KITCHEN_SIPHON(x,y);
 const tiffany = (x, y) => hung(x, y, 1.95, (vx, vy, z) => drum(vx, vy, 0.24, z - 0.18, z, (i, t, L) => { // a lamp of coloured glass, lit
   const seg = Math.floor((Math.atan2(HIT.v, HIT.u) / Math.PI + 1) * 4); BG[i] = C([RED, YEL, GREEN, ORANGE][seg & 3], 6 + 2 * Math.max(night, 0.4)); return set(i, fract(HIT.w * 10) < 0.2 ? '-' : ' ', C(BRICK, 4)), true; }));
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {

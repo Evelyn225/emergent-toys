@@ -117,14 +117,9 @@ ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'c
 
 // ---- the burger joint (BURGERS): red booths down both walls, a chrome counter with stools, the shake machine and the
 // soda fountain behind it, lit menu boards with the burgers on them, the griddle glowing through the pass, neon
-const shakeMachine = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.25, 0.18, 1.0, 1.5), (i, t, L) => { BG[i] = C(GREEN, 3 + L * 0.3); return set(i, HIT.face === 3 && Math.abs(HIT.w - 1.4) < 0.03 ? '=' : ' ', C(WHITE, 12)), true; });
-  for (const e of [-1, 0, 1]) { rod(vx + e * 0.15, vy + 0.12, 1.42, vx + e * 0.15, vy + 0.12, 1.2, 0.012, GRAY, 1.4); drum(vx + e * 0.15, vy + 0.12, 0.05, 1.05, 1.2, CHROME); } // the spindles, a cup on each
-});
-const sodaFountain = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.4, 0.2, 1.0, 1.6), (i, t, L) => { BG[i] = C(GRAY, 2.5 + L * 0.3); if (HIT.face !== 3) return set(i, ' ', 0), true;
-    const k = Math.floor((HIT.u + 0.4) / 0.2); return set(i, HIT.w > 1.35 ? '#' : Math.abs(fract((HIT.u + 0.4) / 0.2) - 0.5) < 0.15 && HIT.w > 1.2 ? '|' : ' ', C([RED, ORANGE, BRICK, CYAN][k & 3], 13)), true; });
-});
+const shakeMachine = (x, y) => KITCHEN_SHAKE_MACHINE(x,y);
+const sodaFountain = (x, y) => KITCHEN_SODA_FOUNTAIN(x,y);
+const BURGER_COUNTER_Y=2.6; // leave a walkable staff aisle beside the supported machines
 function burgerWall(i, u, uStep, z, d, mx, my, L) {
   const M = 5.7; // (over the counter, clear of the bathroom)
   if (backWall(my)) {
@@ -145,9 +140,9 @@ function burgerWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(CYAN, 1.6 + L * 0.12); return set(i, fract(u / 1.6) < 0.02 ? '|' : ' ', C(WHITE, 4)), true; // mint walls
 }
 ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor: 'checker', ceil: 'strip', sign: false, neon: true, wall: burgerWall, keeper: [5.9, 1.6],
-  props: r => [BX(6.0, 2.35, 2.8, 0.32, 0, 1.05, (i, t, L) => { BG[i] = C(HIT.face === 5 ? WHITE : RED, (HIT.face === 5 ? 3 : 2) + L * 0.3); return set(i, HIT.face === 5 ? '=' : Math.abs(HIT.w - 0.9) < 0.04 ? '=' : ' ', C(GRAY, 6)), true; }), // the counter, chrome-edged
+  props: r => [BX(6.0, BURGER_COUNTER_Y, 2.8, 0.32, 0, 1.05, (i, t, L) => { BG[i] = C(HIT.face === 5 ? WHITE : RED, (HIT.face === 5 ? 3 : 2) + L * 0.3); return set(i, HIT.face === 5 ? '=' : Math.abs(HIT.w - 0.9) < 0.04 ? '=' : ' ', C(GRAY, 6)), true; }), // the counter, chrome-edged
     { ...standing(5.9, 1.6, RED), face: [0, 1] }, shakeMachine(4.0, 1.45), sodaFountain(7.9, 1.45),
-    ...stools(3.6, 8.6, 3.05, 1.0, RED, 0, -1, 0.35),
+    ...stools(3.6, 8.6, BURGER_COUNTER_Y+.7, 1.0, RED, 0, -1, 0.35),
     ...[3.6, 5.85, 8.0].flatMap(y => booth(1.65, y, 0.55, RED, { busy: 0.4, meal: 'burger' })), ...booth(11.35, 8.0, 0.55, RED, { busy: 0.4, meal: 'burger' }), // down both walls
     JUKEBOX(11.55, 5.9, -1, 0), ...wcFittings(13)] };
 
