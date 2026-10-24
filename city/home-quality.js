@@ -143,7 +143,7 @@ function fernHomeQuality() {
     ...couch(3,16.8,1.8,0,-1,GREEN),...tableBox(3,14.4,.9,.45),
     FURNITURE_STORAGE(3,11.3,.9,.3,.61),TELEVISION(3,11.4,r),
     FURNITURE_STORAGE(14.4,13,.65,.4,1.1,-Math.PI/2),
-    POT_PLANT(10.65,11.6,1.5),POT_PLANT(22.45,8.6,1.4),
+    HOME_PALM(10.65,11.6,1.5),HOME_PALM(22.45,8.6,1.4),
     ...def.lamps.map(([x,y],k)=>HOME_PENDANT(x,y,def.height,r,k)),
   ];
 }
