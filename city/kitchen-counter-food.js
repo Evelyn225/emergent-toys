@@ -67,3 +67,31 @@ function counterCaseServing(x,y,z,kind,k,step,hw) {
     }
   }
 }
+// The service side faces -X. Six real pans fit along the wall, with their
+// openings cut from the same worktop measurements as their inner tray walls.
+const KITCHEN_SALSA={bottom:.88,top:.93,binHalfX:.24,binHalfY:.125,pitch:.30,
+  labels:['ROJA','VERDE','ONION','CREMA','LIME','PICO'],kinds:[1,0,2,5,4,6]};
+function kitchenSalsaOpening(u,v) {
+  const k=Math.round(v/KITCHEN_SALSA.pitch+2.5);
+  return k>=0&&k<6&&Math.abs(u)<KITCHEN_SALSA.binHalfX-.008&&Math.abs(v-(k-2.5)*KITCHEN_SALSA.pitch)<KITCHEN_SALSA.binHalfY-.008;
+}
+function KITCHEN_SALSA_BAR(x=11.63,y=5.6) {
+  const s=KITCHEN_SALSA;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.29,.94,0,.10,.014,kitchenIron);
+    coveRound(vx,vy,1,0,.32,.97,.10,s.bottom,.015,kitchenSteel);
+    drawBox({...boxAt(vx,vy,1,0,.35,1,s.bottom,s.top),...kitchenTopProfile(.35,1,s.bottom,s.top,.006)},(i,t,L)=>{
+      if(HIT.face===5&&kitchenSalsaOpening(HIT.u,HIT.v))return false;
+      return kitchenSteel(i,t,L);
+    },homeRayWorktop);
+    for(let k=0;k<6;k++){
+      const v=(k-2.5)*s.pitch;
+      counterSalad(vx,vy+v,s.bottom,s.binHalfX,s.binHalfY,s.kinds[k]);
+      drawBox({...boxAt(vx-.326,vy+v,0,1,.13,.006,.76,.84),...kitchenPanelProfile(.13,.006,.76,.84,.002)},(i,t,L)=>{
+        if(HIT.face!==3)return kitchenSteel(i,t,L);
+        BG[i]=C(STONE,4+L*.25);
+        set(i,worldText(s.labels[k],HIT.u,HIT.w,t,i,vx-.332,vy+v,.80,0,1,.024,.042),C(BLACK,0));return true;
+      },homeRayWorktop);
+    }
+  }),box:boxAt(x,y,1,0,.35,1,0,.965),radius:1.2,kitchenSalsa:true};
+}
