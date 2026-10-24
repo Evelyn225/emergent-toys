@@ -85,10 +85,10 @@ function counterDeli(x,y,z,kind) {
     foodOval(x+u,y+v,z,.022,.016,.045,kitchenFoodShade(GREEN),.7,.7141428429);
 }
 function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
-  const bottom=height-.42,shelf=bottom+.025,cabinet=base===BRICK?'wood':base===STONE?furnitureTimber(STONE):base;
+  const bottom=height-.42,shelf=bottom+.025,cabinet=KITCHEN_SERVICE_COUNTER(0,0,hl,hw,bottom,base,GRAY);
   const levels=kind==='bento'||kind==='donuts'?[shelf,shelf+.17]:[shelf];
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    coveRound(vx,vy,1,0,hl,hw,0,bottom,.015,cabinet);
+    cabinet.draw(vx,vy);
     drawBox({...boxAt(vx,vy,1,0,hl-.025,hw-.025,bottom,shelf),...kitchenTopProfile(hl-.025,hw-.025,bottom,shelf,.008)},kitchenSteel,homeRayWorktop);
     // Frames are joined rods. The shelf's top owns the supporting surface.
     for(const side of [-1,1]) {

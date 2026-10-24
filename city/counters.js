@@ -16,7 +16,7 @@ function chickenWall(i, u, uStep, z, d, mx, my, L) {
 }
 const heatLamp = (x, y, z) => hung(x, y, z, (vx, vy, z_) => drum(vx, vy, 0.1, z_ - 0.1, z_, (i, t, L) => { BG[i] = C(HIT.face === 6 ? ORANGE : RED, HIT.face === 6 ? 12 : 4); return set(i, ' ', 0), true; }));
 ROOM_DEFS.chickenshop = { grid: boxRoom(11, 8), light: 1.1, floor: 'checker', ceil: 'strip', sign: false, wall: chickenWall, keeper: [5.6, 1.6],
-  props: r => [KITCHEN_FOOD_CASE(3.5,2.3,1.05,.3,1.35,'chicken',RED), BX(6.5, 2.3, 1.5, 0.3, 0, 1.05, solid(RED, { top: '=', trim: 0.98 })), // the warmer, the counter
+  props: r => [KITCHEN_FOOD_CASE(3.5,2.3,1.05,.3,1.35,'chicken',RED), KITCHEN_SERVICE_COUNTER(6.5,2.3,1.5,.3,1.05,RED,GRAY), // the warmer, the counter
     { ...standing(5.6, 1.6, RED), face: [0, 1] }, fryer(8.3, 1.4), heatLamp(3.0, 2.3, 1.75), heatLamp(4.0, 2.3, 1.75),
     ...dining(2.6, 4.6, { hl: 0.35, chair: shellChair, chairCol: RED, top: solid(WHITE, { top: '=' }) }), ...dining(8.3, 4.6, { hl: 0.35, chair: shellChair, chairCol: YEL, top: solid(WHITE, { top: '=' }) }),
     BX(2.4, 6.78, 1.35, 0.17, 0.98, 1.04, solid(GRAY, { top: '=' })), BX(8.6, 6.78, 1.35, 0.17, 0.98, 1.04, solid(GRAY, { top: '=' })), // the ledges under the window
@@ -76,7 +76,7 @@ function bentoWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.bento = { grid: boxRoom(9, 7), light: 1.0, floor: 'hinoki', ceil: 'strip', sign: false, wall: bentoWall, keeper: [4.6, 1.5],
   props: r => [KITCHEN_FOOD_CASE(4.6,2.2,2,.35,1.05,'bento',STONE), { ...standing(4.6, 1.5, WHITE), face: [0, 1] },
-    BX(7.3, 1.4, 0.55, 0.32, 0, 0.9, solid(GRAY, { top: '=', panel: 0.5 })), KITCHEN_RICE_COOKER(7.3,1.4),
+    KITCHEN_SERVICE_COUNTER(7.3,1.4,.55,.32,.9,GRAY,GRAY), KITCHEN_RICE_COOKER(7.3,1.4),
     BX(1.22, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(1.75, 3.9, 4.9, 1.0, BRICK, -1, 0.35), // the ledge on the left
     ...plainBench(7.6, 4.4, 0.75, -1, 0, BRICK)] };
 
@@ -119,7 +119,7 @@ function yakiWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(BRICK, 1.5 + L * 0.15 - Math.max(0, z - 2) * 0.4); return set(i, fract(u * 2.5) < 0.05 ? '|' : ' ', C(GRAY, 2)), true; // dark wood, smoked darker up top
 }
 ROOM_DEFS.yakitori = { grid: boxRoom(11, 7), light: 0.75, floor: 'oak', ceil: 'lantern', sign: false, wall: yakiWall, keeper: [5.5, 1.45],
-  props: r => [BX(5.5, 2.75, 3.6, 0.28, 0, 1.0, solid(BRICK, { top: '=', panel: 0.6, bright: 1.3 })), yakiGrill(5.5, 1.95, 1.6), // the counter, the grill behind it
+  props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.75,3.6,.28,1,BRICK,BRICK), yakiGrill(5.5, 1.95, 1.6), // the counter, the grill behind it
     { ...standing(5.5, 1.45, WHITE), face: [0, 1] }, { ...standing(3.2, 1.4, WHITE), face: [1, 0] },
     ...stools(2.3, 8.7, 3.45, 0.9, BRICK, 0, -1, 0.45), akachochin(2.4, 4.5), akachochin(8.6, 4.5),
     BX(9.55, 1.35, 0.3, 0.22, 0, 0.9, crateShade(YEL)), BX(9.55, 1.35, 0.3, 0.22, 0.9, 1.25, crateShade(YEL)), // crates of empties
@@ -163,7 +163,7 @@ function juiceWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(YEL, 7 + L * 0.2); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil: 'pendant', sign: false, wall: juiceWall, keeper: [5.0, 1.55],
-  props: r => [BX(5.0, 2.3, 2.0, 0.3, 0, 1.0, solid(GREEN, { top: '=', panel: 0.4, bright: 1.4 })), { ...standing(5.0, 1.55, GREEN), face: [0, 1] },
+  props: r => [KITCHEN_SERVICE_COUNTER(5,2.3,2,.3,1,GREEN), { ...standing(5.0, 1.55, GREEN), face: [0, 1] },
     blender(4.2, 2.25, ORANGE), blender(5.0, 2.25, MAG), blender(5.8, 2.25, GREEN),
     ...fruitCrate(1.45, 1.5, ORANGE, 8, 'o'), ...fruitCrate(1.45, 2.15, GREEN, 6, 'o'), ...fruitCrate(8.55, 1.5, YEL, 9, ')'), ...fruitCrate(8.55, 2.15, RED, 6, 'o'),
     BX(8.78, 4.3, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(8.25, 3.8, 4.8, 1.0, GREEN, 1, 0.35),

@@ -18967,7 +18967,7 @@ ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'c
   props: r => [pizzaOven(1.95, 1.85),
     KITCHEN_FOOD_CASE(6.6,2.45,2,.38,1.05,'pizza'), { ...standing(6.6, 1.75, WHITE), face: [0, 1] },
     ...[4.9, 6.6, 8.3].map(x => hung(x, 2.45, 2.0, (vx, vy, z) => drum(vx, vy, 0.12, z - 0.12, z, (i, t, L) => { BG[i] = C(HIT.face === 6 ? YEL : RED, HIT.face === 6 ? 13 : 4); return set(i, ' ', 0), true; }))), // the heat lamps
-    BX(8.3, 1.4, 0.55, 0.35, 0, 0.9, solid(GRAY, { top: '=', panel: 0.35 })), // the prep counter at the back, a sack of flour on it
+    KITCHEN_SERVICE_COUNTER(8.3,1.4,.55,.35,.9,GRAY,GRAY), // the prep counter at the back, a sack of flour on it
     BX(8.05, 1.4, 0.2, 0.15, 0.9, 1.25, (i, t, L) => { BG[i] = C(WHITE, 4); return set(i, HIT.face <= 4 && Math.abs(HIT.w - 1.08) < 0.04 ? '~' : ' ', C(GRAY, 3)), true; }),
     ...dining(2.4, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }), ...dining(10.2, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }),
     ...dining(2.4, 7.3, { top: checkCloth, meal: 'pizza', busy: 0.35 }), ...dining(10.2, 7.3, { top: checkCloth, meal: 'pizza', busy: 0.35 }),
@@ -18998,7 +18998,7 @@ function burgerWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(CYAN, 1.6 + L * 0.12); return set(i, fract(u / 1.6) < 0.02 ? '|' : ' ', C(WHITE, 4)), true; // mint walls
 }
 ROOM_DEFS.burgerjoint = { grid: backWc(13, 10), wc: wcAt(13), light: 1.05, floor: 'checker', ceil: 'strip', sign: false, neon: true, wall: burgerWall, keeper: [5.9, 1.6],
-  props: r => [BX(6.0, BURGER_COUNTER_Y, 2.8, 0.32, 0, 1.05, (i, t, L) => { BG[i] = C(HIT.face === 5 ? WHITE : RED, (HIT.face === 5 ? 3 : 2) + L * 0.3); return set(i, HIT.face === 5 ? '=' : Math.abs(HIT.w - 0.9) < 0.04 ? '=' : ' ', C(GRAY, 6)), true; }), // the counter, chrome-edged
+  props: r => [KITCHEN_SERVICE_COUNTER(6,BURGER_COUNTER_Y,2.8,.32,1.05,RED,WHITE),
     { ...standing(5.9, 1.6, RED), face: [0, 1] }, shakeMachine(4.0, 1.45), sodaFountain(7.9, 1.45),
     ...stools(3.6, 8.6, BURGER_COUNTER_Y+.7, 1.0, RED, 0, -1, 0.35),
     ...[3.6, 5.85, 8.0].flatMap(y => booth(1.65, y, 0.55, RED, { busy: 0.4, meal: 'burger' })), ...booth(11.35, 8.0, 0.55, RED, { busy: 0.4, meal: 'burger' }), // down both walls
@@ -19030,7 +19030,7 @@ ROOM_FLOORS.saltillo = (i, f, wx, wy, r, x, L) => { // big square terracotta til
   BG[i] = g ? C(STONE, 0.8 + f * 1.5) : C(BRICK, 1.2 + f * 2.6 + hash(tx, ty, 99) * 0.5); return set(i, g ? ' ' : hash(Math.floor(wx * 8), Math.floor(wy * 8), 100) > 0.94 ? '.' : ' ', C(ORANGE, L * 0.5));
 };
 ROOM_DEFS.taqueria = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'saltillo', ceil: 'strip', sign: false, wall: tacoWall, keeper: [5.2, 1.55],
-  props: r => [BX(5.5, 2.6, 2.7, 0.32, 0, 1.0, (i, t, L) => { BG[i] = HIT.face === 5 ? C(GRAY, 3) : (Math.floor(HIT.u * 5) + Math.floor(HIT.w * 5)) & 1 ? C(BLUE, 4) : C(WHITE, 5); return set(i, HIT.face === 5 ? '=' : ' ', C(GRAY, 6)), true; }), // the counter, tiled
+  props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.6,2.7,.32,1,BLUE,GRAY,true),
     { ...standing(5.2, 1.55, ORANGE), face: [0, 1] }, trompo(2.9, 1.4), standing(3.6, 1.4, WHITE),
     KITCHEN_FLATTOP(7.6,1.4),
     KITCHEN_SALSA_BAR(),
@@ -20652,7 +20652,7 @@ function chickenWall(i, u, uStep, z, d, mx, my, L) {
 }
 const heatLamp = (x, y, z) => hung(x, y, z, (vx, vy, z_) => drum(vx, vy, 0.1, z_ - 0.1, z_, (i, t, L) => { BG[i] = C(HIT.face === 6 ? ORANGE : RED, HIT.face === 6 ? 12 : 4); return set(i, ' ', 0), true; }));
 ROOM_DEFS.chickenshop = { grid: boxRoom(11, 8), light: 1.1, floor: 'checker', ceil: 'strip', sign: false, wall: chickenWall, keeper: [5.6, 1.6],
-  props: r => [KITCHEN_FOOD_CASE(3.5,2.3,1.05,.3,1.35,'chicken',RED), BX(6.5, 2.3, 1.5, 0.3, 0, 1.05, solid(RED, { top: '=', trim: 0.98 })), // the warmer, the counter
+  props: r => [KITCHEN_FOOD_CASE(3.5,2.3,1.05,.3,1.35,'chicken',RED), KITCHEN_SERVICE_COUNTER(6.5,2.3,1.5,.3,1.05,RED,GRAY), // the warmer, the counter
     { ...standing(5.6, 1.6, RED), face: [0, 1] }, fryer(8.3, 1.4), heatLamp(3.0, 2.3, 1.75), heatLamp(4.0, 2.3, 1.75),
     ...dining(2.6, 4.6, { hl: 0.35, chair: shellChair, chairCol: RED, top: solid(WHITE, { top: '=' }) }), ...dining(8.3, 4.6, { hl: 0.35, chair: shellChair, chairCol: YEL, top: solid(WHITE, { top: '=' }) }),
     BX(2.4, 6.78, 1.35, 0.17, 0.98, 1.04, solid(GRAY, { top: '=' })), BX(8.6, 6.78, 1.35, 0.17, 0.98, 1.04, solid(GRAY, { top: '=' })), // the ledges under the window
@@ -20712,7 +20712,7 @@ function bentoWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.bento = { grid: boxRoom(9, 7), light: 1.0, floor: 'hinoki', ceil: 'strip', sign: false, wall: bentoWall, keeper: [4.6, 1.5],
   props: r => [KITCHEN_FOOD_CASE(4.6,2.2,2,.35,1.05,'bento',STONE), { ...standing(4.6, 1.5, WHITE), face: [0, 1] },
-    BX(7.3, 1.4, 0.55, 0.32, 0, 0.9, solid(GRAY, { top: '=', panel: 0.5 })), KITCHEN_RICE_COOKER(7.3,1.4),
+    KITCHEN_SERVICE_COUNTER(7.3,1.4,.55,.32,.9,GRAY,GRAY), KITCHEN_RICE_COOKER(7.3,1.4),
     BX(1.22, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(1.75, 3.9, 4.9, 1.0, BRICK, -1, 0.35), // the ledge on the left
     ...plainBench(7.6, 4.4, 0.75, -1, 0, BRICK)] };
 
@@ -20755,7 +20755,7 @@ function yakiWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(BRICK, 1.5 + L * 0.15 - Math.max(0, z - 2) * 0.4); return set(i, fract(u * 2.5) < 0.05 ? '|' : ' ', C(GRAY, 2)), true; // dark wood, smoked darker up top
 }
 ROOM_DEFS.yakitori = { grid: boxRoom(11, 7), light: 0.75, floor: 'oak', ceil: 'lantern', sign: false, wall: yakiWall, keeper: [5.5, 1.45],
-  props: r => [BX(5.5, 2.75, 3.6, 0.28, 0, 1.0, solid(BRICK, { top: '=', panel: 0.6, bright: 1.3 })), yakiGrill(5.5, 1.95, 1.6), // the counter, the grill behind it
+  props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.75,3.6,.28,1,BRICK,BRICK), yakiGrill(5.5, 1.95, 1.6), // the counter, the grill behind it
     { ...standing(5.5, 1.45, WHITE), face: [0, 1] }, { ...standing(3.2, 1.4, WHITE), face: [1, 0] },
     ...stools(2.3, 8.7, 3.45, 0.9, BRICK, 0, -1, 0.45), akachochin(2.4, 4.5), akachochin(8.6, 4.5),
     BX(9.55, 1.35, 0.3, 0.22, 0, 0.9, crateShade(YEL)), BX(9.55, 1.35, 0.3, 0.22, 0.9, 1.25, crateShade(YEL)), // crates of empties
@@ -20799,7 +20799,7 @@ function juiceWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(YEL, 7 + L * 0.2); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil: 'pendant', sign: false, wall: juiceWall, keeper: [5.0, 1.55],
-  props: r => [BX(5.0, 2.3, 2.0, 0.3, 0, 1.0, solid(GREEN, { top: '=', panel: 0.4, bright: 1.4 })), { ...standing(5.0, 1.55, GREEN), face: [0, 1] },
+  props: r => [KITCHEN_SERVICE_COUNTER(5,2.3,2,.3,1,GREEN), { ...standing(5.0, 1.55, GREEN), face: [0, 1] },
     blender(4.2, 2.25, ORANGE), blender(5.0, 2.25, MAG), blender(5.8, 2.25, GREEN),
     ...fruitCrate(1.45, 1.5, ORANGE, 8, 'o'), ...fruitCrate(1.45, 2.15, GREEN, 6, 'o'), ...fruitCrate(8.55, 1.5, YEL, 9, ')'), ...fruitCrate(8.55, 2.15, RED, 6, 'o'),
     BX(8.78, 4.3, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(8.25, 3.8, 4.8, 1.0, GREEN, 1, 0.35),
@@ -20890,7 +20890,7 @@ function phoWall(i, u, uStep, z, d, mx, my, L) {
 }
 const steelTop = solid(GRAY, { bright: 1.6 });
 ROOM_DEFS.pho = { grid: backWc(13, 9), wc: wcAt(13), light: 1.05, floor: 'lino', ceil: 'strip', sign: false, wall: phoWall, keeper: [5.0, 1.6],
-  props: r => [BX(5.0, 2.4, 2.2, 0.3, 0, 1.0, solid(GRAY, { top: '=', panel: 0.55, bright: 1.4 })), { ...standing(5.0, 1.6, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_SERVICE_COUNTER(5,2.4,2.2,.3,1,GRAY,GRAY), { ...standing(5.0, 1.6, WHITE), face: [0, 1] },
     stockPot(1.45, 1.45), stockPot(2.25, 1.45), { ...standing(2.0, 2.2, WHITE), face: [0, -1] },
     ...dining(2.8, 4.5, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: RED, busy: 0.4 }), ...dining(9.4, 4.5, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: BLUE, busy: 0.4 }),
     ...dining(2.8, 6.6, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: GREEN, busy: 0.35 }), ...dining(9.4, 6.6, { n: 4, hl: 0.5, hw: 0.4, top: steelTop, meal: 'soup', chair: lowStool, chairCol: YEL, busy: 0.35 }),
@@ -20911,7 +20911,7 @@ function dumplingWall(i, u, uStep, z, d, mx, my, L) {
 }
 const roundLantern = (x, y) => hung(x, y, 2.3, (vx, vy, z) => { drum(vx, vy, 0.22, z - 0.35, z, (i, t, L) => { BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 6) < 0.2 ? '-' : ' ', C(YEL, 10)), true; }); rod(vx, vy, z - 0.35, vx, vy, z - 0.6, 0.02, YEL, 1.4); }); // a tassel under it
 ROOM_DEFS.dumplings = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'strip', sign: false, wall: dumplingWall, keeper: [6.6, 1.7],
-  props: r => [BX(5.0, 2.55, 2.4, 0.3, 0, 1.0, solid(RED, { top: '=', panel: 0.6, bright: 1.3 })), KITCHEN_PREP(4.2,1.45,1.2,.35,.85),
+  props: r => [KITCHEN_SERVICE_COUNTER(5,2.55,2.4,.3,1,RED), KITCHEN_PREP(4.2,1.45,1.2,.35,.85),
     { ...standing(3.6, 2.05, WHITE), face: [0, -1] }, { ...standing(4.8, 2.05, WHITE), face: [0, -1] }, { ...standing(6.6, 1.7, RED), face: [0, 1] }, // two folding, one serving
     steamers(6.3, 2.55, 4), steamers(6.75, 2.55, 3), steamers(7.15, 2.55, 5),
     ...roundTable(2.5, 4.6, 0.45, 4, { chair: lowStool, chairCol: RED, busy: 0.45, a0: Math.PI / 4 }), ...roundTable(9.5, 4.6, 0.45, 4, { chair: lowStool, chairCol: BLUE, busy: 0.4, a0: Math.PI / 4 }),
@@ -20973,7 +20973,7 @@ function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(WARM, 1.6 + L * 0.15); return set(i, fract(u / 0.8) < 0.03 ? '|' : ' ', C(BRICK, 3)), true; // dark panelling
 }
 ROOM_DEFS.kissaten = { grid: backWc(13, 8), wc: wcAt(13), light: 0.65, floor: 'oak', ceil: 'pendant', sign: false, wall: kissatenWall, keeper: [4.6, 1.65],
-  props: r => [KITCHEN_CUP_RACK(), BX(4.6, 2.4, 2.6, 0.3, 0, 1.0, solid(BRICK, { top: '=', panel: 0.5, bright: 1.1 })), { ...standing(4.6, 1.65, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_CUP_RACK(), KITCHEN_SERVICE_COUNTER(4.6,2.4,2.6,.3,1,BRICK,BRICK), { ...standing(4.6, 1.65, WHITE), face: [0, 1] },
     siphon(3.6, 2.4), siphon(4.1, 2.4), siphon(4.6, 2.4), ...stools(2.4, 6.9, 3.05, 0.9, RED, 0, -1, 0.35),
     ...booth(1.95, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(8.0, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.4 }), ...booth(10.3, 5.0, 0.55, RED, { meal: 'coffee', top: solid(BRICK, { top: '=' }), busy: 0.35 }),
     tiffany(1.95, 5.0), tiffany(8.0, 5.0), tiffany(10.3, 5.0), ...wcFittings(13)] };
@@ -21004,7 +21004,7 @@ function izakayaWall(i, u, uStep, z, d, mx, my, L) {
 const zabuton = (x, y, fx, fy) => ({ ...BX(x, y, 0.24, 0.24, 0, 0.1, solid(BLUE, { top: '#', bright: 1.5 })), walk: true, seat: true, x, y, fx, fy, h: 0.12 }); // a floor cushion
 ROOM_DEFS.izakaya = { grid: backWc(13, 9), wc: wcAt(13), light: 0.7, floor: 'izakaya', ceil: 'lantern', sign: false, wall: izakayaWall, keeper: [5.3, 1.7],
   props: r => {
-    const p = [BX(5.3, 2.5, 2.7, 0.3, 0, 1.0, solid(BRICK, { top: '=', panel: 0.6, bright: 1.3 })), { ...standing(5.3, 1.7, BLUE), face: [0, 1] },
+    const p = [KITCHEN_SERVICE_COUNTER(5.3,2.5,2.7,.3,1,BRICK,BRICK), { ...standing(5.3, 1.7, BLUE), face: [0, 1] },
       ...stools(2.9, 7.7, 3.15, 0.8, BRICK, 0, -1, 0.45), akachochin(2.0, 4.0), akachochin(8.8, 4.0),
       ...dining(9.4, 6.4, { n: 4, hl: 0.55, hw: 0.4, top: teak, chairCol: BRICK, busy: 0.45 }), ...wcFittings(13)];
     for (const y of [5.6, 7.3]) { // the tatami: low tables, a cushion either side
@@ -21050,7 +21050,7 @@ function roasteryWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(WHITE, 4.6 + L * 0.15); return set(i, fract(z / 0.16) < 0.1 ? '-' : fract(u / 0.36 + (Math.floor(z / 0.16) & 1) * 0.5) < 0.05 ? '|' : ' ', C(GRAY, 4)), true; // white-painted brick
 }
 ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hinoki', ceil: 'pendant', sign: false, wall: roasteryWall, keeper: [6.0, 1.7],
-  props: r => [BX(6.0, 2.4, 2.4, 0.3, 0, 1.0, solid(BRICK, { top: '=', panel: 0.6, bright: 1.2 })), { ...standing(6.0, 1.7, GREEN), face: [0, 1] }, roaster(1.7, 1.5), ...beanSacks(1.4, 3.6),
+  props: r => [KITCHEN_SERVICE_COUNTER(6,2.4,2.4,.3,1,BRICK,BRICK), { ...standing(6.0, 1.7, GREEN), face: [0, 1] }, roaster(1.7, 1.5), ...beanSacks(1.4, 3.6),
     pourOver(4.4, 2.4), pourOver(4.8, 2.4), pourOver(5.2, 2.4), KITCHEN_ESPRESSO(7.5,2.4),
     ...stools(4.0, 8.0, 3.05, 1.0, BRICK, 0, -1, 0.4),
     BX(3.6, 6.2, 1.4, 0.45, 0.72, 0.78, solid(BRICK, { top: '=', bright: 1.2 })), ...[2.7, 4.5].map(x => BX(x, 6.2, 0.06, 0.35, 0, 0.72, solid(GRAY))), // the long table
@@ -21075,7 +21075,7 @@ function noodleHouseWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(YEL, 5.4 + L * 0.15); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.noodlehouse = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'lantern', sign: false, wall: noodleHouseWall, keeper: [6.6, 1.65],
-  props: r => [BX(6.0, 2.5, 2.6, 0.3, 0, 1.0, solid(RED, { top: '=', panel: 0.6, bright: 1.3 })), { ...standing(6.6, 1.65, RED), face: [0, 1] },
+  props: r => [KITCHEN_SERVICE_COUNTER(6,2.5,2.6,.3,1,RED), { ...standing(6.6, 1.65, RED), face: [0, 1] },
     KITCHEN_PREP(2.6,1.45,.9,.35,.9,'noodles'), { ...standing(2.6, 2.05, WHITE), face: [0, -1] }, noodlePuller(2.6, 1.95), // the noodle maker at work
     stockPot(8.0, 1.45), stockPot(8.75, 1.45),
     ...[[2.5, 4.6, 0.45], [9.5, 4.6, 0.45], [2.5, 6.9, 0.35], [9.5, 6.9, 0.35]].flatMap(([x, y, busy]) => roundTable(x, y, 0.45, 4, { cloth: RED, chair: lowStool, chairCol: BRICK, busy, a0: Math.PI / 4 })),
@@ -35811,6 +35811,36 @@ function FITTED_KITCHEN(x,y,hl,depth,angle=0,color=BRICK) {
   return {...model,radius:hl+.6,box:boxAt(x-s*.0575,y+c*.0575,c,s,hl,depth+.0575,0,height+.02),
     kitchen:{hl,depth,angle,height,sink,radius,hob,compact}};
 }
+// Dining cabinets keep their existing footprint and serving height. All pulls
+// stay below the worktop's overhang, so the visible and blocking bounds agree.
+function KITCHEN_SERVICE_COUNTER(x,y,hl,hw,height,color=BRICK,topColor=STONE,tiled=false) {
+  const count=Math.ceil(hl*2/.8),half=hl/count,wood=furnitureTimber(color),paint=kitchenGlaze(color),timberTop=furnitureTimber(BRICK),
+    panel=kitchenPanelProfile(half-.009,.012,.18,height-.12,.003),
+    worktop=kitchenTopProfile(hl,hw,height-.04,height,.006);
+  const material=(offset=0)=>(i,t,L)=>{
+    if(!tiled)return (color===GRAY?kitchenSteel:color===BRICK||color===STONE?wood:paint)(i,t,L);
+    const u=HIT.u+offset,z=HIT.w,grout=Math.max(coveGroove(u,.2,.003,t/projX),coveGroove(z,.2,.003,t/projX));
+    const col=(Math.floor(u/.2)+Math.floor(z/.2))&1?BLUE:WHITE;
+    BG[i]=C(grout>.5?GRAY:col,(grout>.5?2:3.8)+L*.20*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+  };
+  const body=material(),doors=Array.from({length:count},(_,k)=>material(-hl+half*(2*k+1)));
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy-.025,1,0,hl-.04,hw-.045,0,.10,.009,kitchenIron);
+    coveRound(vx,vy-.025,1,0,hl-.025,hw-.035,.08,height-.04,.012,body);
+    for(let k=0;k<count;k++){
+      const u=-hl+half*(2*k+1),z=height-.22;
+      drawBox({...boxAt(vx+u,vy+hw-.052,1,0,half-.009,.012,.18,height-.12),...panel},doors[k],homeRayWorktop);
+      for(const side of [-1,1])coveTube(vx+u+side*.065,vy+hw-.044,z,vx+u+side*.065,vy+hw-.010,z,.006,GRAY);
+      coveTube(vx+u-.065,vy+hw-.010,z,vx+u+.065,vy+hw-.010,z,.008,GRAY);
+    }
+    drawBox({...boxAt(vx,vy,1,0,hl,hw,height-.04,height),...worktop},(i,t,L)=>{
+      if(topColor===GRAY)return kitchenSteel(i,t,L);
+      if(topColor===BRICK)return timberTop(i,t,L);
+      const grain=Math.sin(HIT.u*260)*Math.sin(HIT.v*210)*coveDetail(t)*.12;
+      BG[i]=C(topColor,3.5+L*.26*coveLight(HIT.nx,HIT.ny,HIT.nz)+grain);set(i,' ',0);return true;
+    },homeRayWorktop);
+  }),box:boxAt(x,y,1,0,hl,hw,0,height),radius:Math.hypot(hl,hw),serviceCounter:{hl,hw,height,color,topColor,tiled}};
+}
 // Tableware uses closed revolved profiles: an outside, a lip, and a real inside.
 // All dimensions are metres; the fine glaze/grain fades with the pixel footprint.
 const KITCHEN_VESSELS={
@@ -36060,10 +36090,10 @@ function counterDeli(x,y,z,kind) {
     foodOval(x+u,y+v,z,.022,.016,.045,kitchenFoodShade(GREEN),.7,.7141428429);
 }
 function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
-  const bottom=height-.42,shelf=bottom+.025,cabinet=base===BRICK?'wood':base===STONE?furnitureTimber(STONE):base;
+  const bottom=height-.42,shelf=bottom+.025,cabinet=KITCHEN_SERVICE_COUNTER(0,0,hl,hw,bottom,base,GRAY);
   const levels=kind==='bento'||kind==='donuts'?[shelf,shelf+.17]:[shelf];
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    coveRound(vx,vy,1,0,hl,hw,0,bottom,.015,cabinet);
+    cabinet.draw(vx,vy);
     drawBox({...boxAt(vx,vy,1,0,hl-.025,hw-.025,bottom,shelf),...kitchenTopProfile(hl-.025,hw-.025,bottom,shelf,.008)},kitchenSteel,homeRayWorktop);
     // Frames are joined rods. The shelf's top owns the supporting surface.
     for(const side of [-1,1]) {
