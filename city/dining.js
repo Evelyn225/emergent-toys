@@ -226,17 +226,9 @@ ROOM_DEFS.mahjong = { grid: backWc(15, 10), wc: wcAt(15), light: 0.85, floor: 'l
 
 // ---- the coffee roastery (COFFEE; CAFE keeps the old cafe): the roaster turning its beans over in the cooling tray,
 // sacks of green coffee stacked, a pour-over bar with stools, a long table to work at, armchairs by the plants
-const roaster = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  drawBox(boxAt(vx, vy, 1, 0, 0.45, 0.35, 0, 1.1), (i, t, L) => { BG[i] = C(GRAY, (0.9 + L * 0.2) * shadeFace(HIT.face)); return set(i, HIT.face === 3 && Math.hypot(HIT.u, HIT.w - 0.75) < 0.2 ? 'O' : HIT.face === 3 && Math.abs(HIT.w - 1.0) < 0.03 ? '=' : ' ', C(YEL, 9)), true; }); // the body, its brass door
-  for (let k = 0; k < 4; k++) drum(vx - 0.1, vy - 0.05, 0.08 + k * 0.05, 1.1 + k * 0.1, 1.2 + k * 0.1, (i, t, L) => { BG[i] = C(YEL, (3 + L * 0.3) * drumLit(0.2)); return set(i, HIT.face === 5 ? '.' : ' ', C(BRICK, 6)), true; }); // the hopper
-  rod(vx + 0.25, vy - 0.2, 1.1, vx + 0.25, vy - 0.2, 3.0, 0.07, GRAY, 0.9); // the chimney
-  drum(vx + 0.05, vy + 0.6, 0.32, 0.55, 0.62, (i, t, L) => { // the cooling tray, the beans stirred round
-    if (HIT.face !== 5) { BG[i] = C(GRAY, 2.4); return set(i, ' ', 0), true; }
-    const a = Math.atan2(HIT.v, HIT.u) + T * 1.5; BG[i] = C(BRICK, 2 + fract(a * 1.5) * 1.5); return set(i, fract(a * 4 + Math.hypot(HIT.u, HIT.v) * 9) < 0.4 ? '.' : ':', C(WARM, 8)), true; });
-  drawBox(boxAt(vx + 0.05, vy + 0.6, 1, 0, 0.15, 0.15, 0, 0.55), solid(GRAY));
-}, [0.45, 0.65, 1.1]);
+const roaster = (x,y) => KITCHEN_COFFEE_ROASTER(x,y);
 const beanSacks = (x, y) => [[0, 0, 0], [0.5, 0, 0], [0.25, 0.05, 0.38]].map(([dx, dy, z]) => BX(x + dx, y + dy, 0.24, 0.2, z, z + 0.38, (i, t, L) => { BG[i] = C(STONE, (2.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, (HIT.face === 3 || HIT.face === 4) && Math.abs(HIT.w - z - 0.2) < 0.05 ? '#' : fract(HIT.u * 10 + HIT.w * 10) < 0.15 ? ',' : ' ', C(BRICK, 6)), true; }));
-const pourOver = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { rod(vx, vy, 1.0, vx, vy, 1.25, 0.012, BRICK, 1.2); drum(vx, vy, 0.06, 1.25, 1.35, (i, t, L) => { BG[i] = C(WHITE, 7); return set(i, ' ', 0), true; }); drum(vx, vy, 0.05, 1.0, 1.1, (i, t, L) => { BG[i] = C(CYAN, 1.4); return set(i, HIT.w < 1.04 + fract(T * 0.2) * 0.05 ? '~' : ' ', C(BRICK, 6)), true; }); }); // a cone dripping into its glass carafe
+const pourOver = (x,y) => KITCHEN_POUR_OVER(x,y);
 function roasteryWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 6.0, 2.6, 0.32, 0.36, C(WHITE, 15), C(GRAY, 1))) return true;
@@ -246,7 +238,7 @@ function roasteryWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hinoki', ceil: 'pendant', sign: false, wall: roasteryWall, keeper: [6.0, 1.7],
   props: r => [BX(6.0, 2.4, 2.4, 0.3, 0, 1.0, solid(BRICK, { top: '=', panel: 0.6, bright: 1.2 })), { ...standing(6.0, 1.7, GREEN), face: [0, 1] }, roaster(1.7, 1.5), ...beanSacks(1.4, 3.6),
-    pourOver(4.4, 2.4), pourOver(4.8, 2.4), pourOver(5.2, 2.4), BX(7.5, 2.4, 0.3, 0.22, 1.0, 1.45, solid(GRAY, { top: 'o', trim: 1.38 })), // the pour-overs, the espresso machine
+    pourOver(4.4, 2.4), pourOver(4.8, 2.4), pourOver(5.2, 2.4), KITCHEN_ESPRESSO(7.5,2.4),
     ...stools(4.0, 8.0, 3.05, 1.0, BRICK, 0, -1, 0.4),
     BX(3.6, 6.2, 1.4, 0.45, 0.72, 0.78, solid(BRICK, { top: '=', bright: 1.2 })), ...[2.7, 4.5].map(x => BX(x, 6.2, 0.06, 0.35, 0, 0.72, solid(GRAY))), // the long table
     ...[2.8, 4.4].flatMap(x => [[5.4, 1], [7.0, -1]].flatMap(([y, fy]) => [...homeChair(x, y, 0, fy, BRICK), ...(chance(0.45) ? [{ ...sitting(x, y, shirt(), 0.48), face: [0, fy] }] : [])])),
