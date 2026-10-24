@@ -112,15 +112,44 @@ test('recorded police sirens share a gapless buffer, spatialize, and stop when r
       assert.ok(indoors[i].gain < voices[i].gain * 0.15, 'walls attenuate sirens');
       assert.ok(indoors[i].cutoff < 800, 'walls muffle sirens');
     }
-    await page.evaluate(() => {
-      window.endedSirens = 0;
-      for (const v of sirens.values()) v.o.addEventListener('ended', () => endedSirens++);
-      sirenTestCars[0].returning = true; tickSirens(false);
+    // Exercise the same shutdown code on an offline clock. An online source's
+    // future stop depends on the runner's audio device progressing; that final
+    // wall-clock wait intermittently timed out after all live checks passed.
+    // Keep the sources, render through both stop times, and verify real output.
+    const stopped = await page.evaluate(async () => {
+      for (const v of sirens.values()) v.o.stop();
+      sirens.clear();
+      const online = actx, bus = sfxBus;
+      const offline = new OfflineAudioContext(2, 24000 * 3, 24000);
+      let ended = 0;
+      try {
+        actx = offline; sfxBus = offline.destination;
+        wanted.busted = false; for (const c of sirenTestCars) c.returning = false;
+        tickSirens(false);
+        const voices = [...sirens.values()];
+        const completions = voices.map(v => new Promise(resolve => {
+          v.o.addEventListener('ended', () => { ended++; resolve(); }, { once: true });
+          v.g.gain.setValueAtTime(.4, 0);
+        }));
+        sirenTestCars[0].returning = true; tickSirens(false);
+        const returning = sirens.size;
+        wanted.busted = true; tickSirens(false);
+        const busted = sirens.size;
+        const output = await offline.startRendering();
+        await Promise.all(completions);
+        const samples = output.getChannelData(0);
+        let early = 0, tail = 0;
+        for (let k = 0; k < 4800; k++) early += samples[k] ** 2;
+        for (let k = 48000; k < samples.length; k++) tail = Math.max(tail, Math.abs(samples[k]));
+        return { returning, busted, ended, voices: voices.length, early, tail };
+      } finally { actx = online; sfxBus = bus; sirens.clear(); }
     });
-    assert.equal(await page.evaluate(() => sirens.size), 1, 'returning officer is quiet');
-    await page.evaluate(() => { wanted.busted = true; tickSirens(false); });
-    assert.equal(await page.evaluate(() => sirens.size), 0, 'being caught stops remaining voices');
-    await page.waitForFunction(() => endedSirens === 2);
+    assert.equal(stopped.voices, 2);
+    assert.equal(stopped.returning, 1, 'returning officer is quiet');
+    assert.equal(stopped.busted, 0, 'being caught stops remaining voices');
+    assert.equal(stopped.ended, 2, 'both sources dispatch ended');
+    assert.ok(stopped.early > .01, 'sources render audio before their stop deadlines');
+    assert.equal(stopped.tail, 0, 'stopped sources render silence beyond both deadlines');
     assert.deepEqual(errors, []);
   } finally {
     releaseClip();
