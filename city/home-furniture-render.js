@@ -17,6 +17,7 @@ function furnishingProp(p,r) {
   if(p.id==='f_lamp')return HOME_FLOOR_LAMP(p);
   if(p.id==='f_recordplayer')return HOME_RECORD_PLAYER(p);
   if(p.id==='f_frame')return HOME_PHOTO_FRAME(p);
+  if(p.id==='f_clock')return HOME_WALL_CLOCK(p);
   if(p.id==='f_plant')return HOME_FURNISHING_PALM(p);
   const d=HOME_FURNITURE[p.id],c=Math.cos(p.a),s=Math.sin(p.a);
   const prop=ROOM_MODEL(p.x,p.y,(vx,vy)=>{

@@ -10806,6 +10806,7 @@ const HOME_FURNITURE={
   f_lamp:{name:'shaded floor lamp',price:65,hx:.24,hy:.24,height:1.75,fixture:'lamp'},
   f_recordplayer:{name:'record player with cabinet and record',price:180,hx:.55,hy:.35,height:1.1,fixture:'record'},
   f_frame:{name:'oak photograph frame',price:25,hx:.4,hy:.035,height:.6,wall:true,fixture:'photo'},
+  f_clock:{name:'oak wall clock',price:45,hx:.25,hy:.04,height:.5,wall:true,fixture:'clock'},
   f_rug:{name:'woven blue rug',price:40,hx:1.3,hy:.9,height:.014,rug:true},
   f_plant:{name:'potted palm',price:35,hx:.25,hy:.25,height:1.6},
   sharkplush:{name:'plush shark',price:15,hx:.24,hy:.48,height:.35,plush:true},
@@ -37809,6 +37810,74 @@ function HOME_FURNISHING_PALM(p) {
   const model=HOME_PALM(p.x,p.y,1.6,p.key||1,HOME_FURNITURE.f_plant.hx,p.a);
   model.box=furnishingBox(p);model.furnishingKey=p.key;return model;
 }
+// A wall-mounted clock: turned oak rim, recessed dial, raised indices and
+// hands under separate glass. All depths share the wall placement envelope.
+const HOME_CLOCK_RIM=[[-.03,.225],[-.03,.241],[-.022,.25],[.026,.25],[.04,.239],[.04,.227],[.033,.222],[-.018,.222],[-.018,.225],[-.03,.225]];
+function homeClockRay(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,c=b.c,s=b.s;
+  const t=coveRayLathe(x*c+y*s,oz-b.centerZ,-x*s+y*c,rx*c+ry*s,rz,-rx*s+ry*c,b.clockShape);
+  if(t<0)return t;
+  const u=HIT.u,z=HIT.v,v=HIT.w,nx=HIT.nx,nz=HIT.ny,nv=HIT.nz;
+  HIT.u=u;HIT.v=v;HIT.w=b.centerZ+z;
+  HIT.nx=nx*c-nv*s;HIT.ny=nx*s+nv*c;HIT.nz=nz;HIT.face=nv>.9?3:nv<-.9?4:0;
+  return t;
+}
+function homeClockRayHand(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,c=b.c,s=b.s,q=b.handRatio;
+  const t=coveRayCapsule(x*c+y*s,(-x*s+y*c)/q,oz,rx*c+ry*s,(-rx*s+ry*c)/q,rz,b.handShape);
+  if(t<0)return t;
+  const nx=HIT.nx,nv=HIT.ny/q,nz=HIT.nz,n=Math.hypot(nx,nv,nz);
+  HIT.nx=(nx*c-nv*s)/n;HIT.ny=(nx*s+nv*c)/n;HIT.nz=nz/n;HIT.w=oz+rz*t;
+  return t;
+}
+function HOME_WALL_CLOCK(p) {
+  const c=Math.cos(p.a),s=Math.sin(p.a),wood=furnitureTimber(BRICK),parts=[];
+  const plain=(base,level)=>(i,t,L)=>{BG[i]=C(base,level+L*.24*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const dark=plain(GRAY,.5),paper=plain(STONE,4.7),metal=kitchenSteel;
+  const shape=(role,profile,shade)=>{
+    const radius=Math.max(...profile.map(q=>q[1])),lo=Math.min(...profile.map(q=>q[0])),hi=Math.max(...profile.map(q=>q[0]));
+    const center=(lo+hi)/2;
+    parts.push({role,radius,lo,hi,center,shape:{x:0,y:0,profile:profile.map(([v,r])=>[v-center,r])},shade});
+  };
+  shape('rim',HOME_CLOCK_RIM,wood);
+  shape('back',[[-.03,0],[-.03,.225],[-.018,.225],[-.018,0]],dark);
+  shape('dial',[[-.018,0],[-.018,.223],[.009,.223],[.009,0]],paper);
+  shape('glass',[[.033,0],[.033,.222],[.034,.222],[.034,0]],(i,t,L)=>{
+    const glint=coveGroove(HIT.u+(HIT.w-p.z)*.65,.8,.002,t/projX)*coveDetail(t,.25);
+    if(glint<.65)return false;BG[i]=C(CYAN,2+L*.15);set(i,' ',0);return true;
+  });
+  shape('pivot',[[.009,0],[.009,.008],[.032,.008],[.032,0]],metal);
+  const indices=Array.from({length:12},(_,k)=>{
+    const a=k*TAU/12,r=k%3===0?.182:.19;
+    return {ax:Math.sin(a)*r,az:Math.cos(a)*r,bx:Math.sin(a)*.204,bz:Math.cos(a)*.204,r:k%3===0?.012:.008};
+  });
+  let lastTime,handPoints;
+  const hands=()=>{
+    if(lastTime!==tod){lastTime=tod;handPoints=[{role:'hour-hand',angle:tod*TAU/12,length:.115,r:.013,v:.015},{role:'minute-hand',angle:fract(tod)*TAU,length:.17,r:.009,v:.024}].map(q=>{
+      const x=Math.sin(q.angle),z=Math.cos(q.angle),ax=-x*.025,az=-z*.025,bx=x*q.length,bz=z*q.length,u=(ax+bx)/2;
+      return {...q,u,lo:p.z+Math.min(az,bz)-q.r,hi:p.z+Math.max(az,bz)+q.r,half:Math.abs(bx-ax)/2+q.r,shape:{ax:ax-u,ay:0,az:p.z+az,bx:bx-u,by:0,bz:p.z+bz,r:q.r}};
+    });}return handPoints;
+  };
+  return {...ROOM_MODEL(p.x,p.y,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
+    const tube=(role,u,v,z,uu,vv,zz,r,shade)=>{
+      const[ax,ay]=at(u,v),[bx,by]=at(uu,vv);
+      drawBox({...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,p.z+Math.min(z,zz)-r,p.z+Math.max(z,zz)+r),ax,ay,az:p.z+z,bx,by,bz:p.z+zz,r,clockRole:role},shade,coveRayCapsule);
+    };
+    // Draw nearer detail first so the dial cannot hide the actual hands.
+    const glass=parts.find(q=>q.role==='glass');
+    const lathe=q=>drawBox({...boxAt(vx-s*q.center,vy+c*q.center,c,s,q.radius,(q.hi-q.lo)/2,p.z-q.radius,p.z+q.radius),centerZ:p.z,clockShape:q.shape,clockRole:q.role},q.shade,homeClockRay);
+    lathe(glass);
+    lathe(parts.find(q=>q.role==='pivot'));
+    for(const q of hands()){
+      const[x,y]=at(q.u,q.v);
+      drawBox({...boxAt(x,y,c,s,q.half,.002,q.lo,q.hi),handRatio:.002/q.r,handShape:q.shape,clockRole:q.role},dark,homeClockRayHand);
+    }
+    for(const q of indices)tube('index',q.ax,.012,q.az,q.bx,.012,q.bz,q.r,dark);
+    for(const q of parts)if(q!==glass&&q.role!=='pivot')lathe(q);
+    for(const u of [-.13,.13])tube('wall-pad',u,-.035,-.10,u,-.035,-.085,.005,dark);
+  }),box:furnishingBox(p),walk:true,radius:Math.hypot(.25,.04),furnishingKey:p.key};
+}
 function homeRayEllipsoid(ox,oy,oz,rx,ry,rz,b) {
   const z=(b.z0+b.z1)/2,h=(b.z1-b.z0)/2,x=ox-b.x,y=oy-b.y;
   const u=(x*b.c+y*b.s)/b.hl,v=(-x*b.s+y*b.c)/b.hw,w=(oz-z)/h,du=(rx*b.c+ry*b.s)/b.hl,dv=(-rx*b.s+ry*b.c)/b.hw,dw=rz/h;
@@ -37828,6 +37897,7 @@ function furnishingProp(p,r) {
   if(p.id==='f_lamp')return HOME_FLOOR_LAMP(p);
   if(p.id==='f_recordplayer')return HOME_RECORD_PLAYER(p);
   if(p.id==='f_frame')return HOME_PHOTO_FRAME(p);
+  if(p.id==='f_clock')return HOME_WALL_CLOCK(p);
   if(p.id==='f_plant')return HOME_FURNISHING_PALM(p);
   const d=HOME_FURNITURE[p.id],c=Math.cos(p.a),s=Math.sin(p.a);
   const prop=ROOM_MODEL(p.x,p.y,(vx,vy)=>{
@@ -37888,11 +37958,13 @@ function homeFixtureTargets() {
 function homeFixturePrompt(t) {
   const home=homeRecord(room),on=t.part?t.part.on:home?.lights?.[t.key]!==false;
   if(t.kind==='lamp'||t.kind==='fixed-lamp')return 'E: switch lamp '+(on?'off':'on');
+  if(t.kind==='clock')return 'E: read clock · F: furnishings';
   if(t.kind==='record')return on?'E: stop record · F: furnishings':'E: play record · F: furnishings';
   return 'E: choose photograph · F: furnishings';
 }
 function homeFixtureUse(t) {
   const home=homeRecord(room);if(!home)return;
+  if(t.kind==='clock')return say('The clock reads '+String(Math.floor(tod)).padStart(2,'0')+':'+String(Math.floor(fract(tod)*60)).padStart(2,'0')+'.',4);
   if(t.kind==='photo')return openHomePhotos(t.part);
   if(t.part)t.part.on=!t.part.on;
   else {home.lights||={};home.lights[t.key]=home.lights[t.key]===false;}
@@ -37932,7 +38004,7 @@ function beginFurnishingPlacement(item,part=null) {
   const id=part?.id||item?.id;if(!HOME_FURNITURE[id])return;
   if(workshopPlacement)endWorkshopPlacement();if(body.seat)standUp();hidePanel(furnishingEl);closeInventory();
   furnishingPlacement={home,id,item,part,a:part?.a||0,held};held=-1;lockMouse();
-  say(HOME_FURNITURE[id].wall?'Look at a wall to hang the frame. E places; Esc cancels.':'Walk and look to position it. E places; Q rotates; Esc cancels.',5);
+  say(HOME_FURNITURE[id].wall?'Look at a wall to hang it. E places; Esc cancels.':'Walk and look to position it. E places; Q rotates; Esc cancels.',5);
 }
 function furnishingCandidate() {
   const q=furnishingPlacement;if(!q||homeRecord(room)!==q.home)return {ok:false,reason:'Return home.'};
@@ -38024,7 +38096,7 @@ ROOM_DEFS.idea={grid:boxRoom(18,14),entry:[9,12.4,-Math.PI/2],height:3.4,light:.
   wall:(i,u,us,z,d,mx,my,L)=>{BG[i]=C(z<.7?BLUE:WHITE,z<.7?2+L*.1:5+L*.15);if(my===0&&wallText(i,u,us,z,d,'IDEA',9,2.3,.4,.55,C(BLUE,12),C(YEL,8)))return true;set(i,' ',0);return true;},
   props:r=>[
     ...counterBox(9,2.8,1.7),standing(9,2,BLUE),
-    ...[{id:'f_sofa',x:3,y:5,a:0},{id:'f_table',x:3,y:8,a:0},{id:'f_chair',x:3,y:10,a:0},{id:'f_recordplayer',x:9,y:5,a:0,on:true},{id:'f_lamp',x:10.3,y:5,a:0,on:true},{id:'f_plant',x:15,y:9,a:0},{id:'f_frame',x:16.965,y:6,a:Math.PI/2,z:1.8,photo:0}].map((p,k)=>furnishingProp({...p,key:-100-k},r)),
+    ...[{id:'f_sofa',x:3,y:5,a:0},{id:'f_table',x:3,y:8,a:0},{id:'f_chair',x:3,y:10,a:0},{id:'f_recordplayer',x:9,y:5,a:0,on:true},{id:'f_lamp',x:10.3,y:5,a:0,on:true},{id:'f_plant',x:15,y:9,a:0},{id:'f_frame',x:16.965,y:6,a:Math.PI/2,z:1.8,photo:0},{id:'f_clock',x:16.96,y:3.8,a:Math.PI/2,z:2.1}].map((p,k)=>furnishingProp({...p,key:-100-k},r)),
     ...tableBox(14.3,5,.9,.4),ROOM_MODEL(14.3,5,(vx,vy)=>homePlushShark(vx,vy,1,0,.8)),
     ...[[3,5],[9,6],[14,5],[3,10],[9,10],[14,10]].map(([x,y],k)=>HOME_PENDANT(x,y,3.4,r,k)),
   ]};
