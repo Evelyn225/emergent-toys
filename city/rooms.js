@@ -401,6 +401,7 @@ const ROOM_DEFS = {
   diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, BACK_COUNTER_STAFF_Y], wall: dinerWall,
     props: r => {
       const p = [...counterBox(6, BACK_COUNTER_Y, 2), standing(6, BACK_COUNTER_STAFF_Y, WHITE), ...toilet(1.6, 1.4, -1, porcelain),washbasin(1.35,2.55,1,0)];
+      p.push(KITCHEN_FLATTOP(10,1.4,1,.35,'burger'));
       for (const [x, y] of [[2.6, 4.2], [9.4, 4.2], [2.6, 6.2], [9.4, 6.2]]) {
         p.push(...tableBox(x, y));
         for (const s of [-0.95, 0.95]) { p.push(STOOL(x + s, y, RED)); if (chance(0.4)) p.push({ ...sitting(x + s, y - 0.02, shirt(), 0.6), face: [-Math.sign(s), 0] },
@@ -701,9 +702,6 @@ const trainShade = (open, k) => (i, t, L) => {
 
 function dinerWall(i, u, uStep, z, d, mx, my, L) {
   if (my !== 0) return false;
-  if (z > 1.0 && z < 1.6 && Math.abs(u - room.W / 2) < 1.8) { // kitchen pass-through, with a hot glow
-    set(i, hash(Math.floor(u * 8), Math.floor(z * 8 + T * 3), 5) > 0.8 ? '~' : '.', C(ORANGE, 10)); BG[i] = C(ORANGE, 2); return true;
-  }
   if (wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.35, 0.3, C(room.neon, 15))) return true;
   for (const [u0, s] of [[2.6, 0], [room.W - 2.6, 1]]) if (Math.abs(u - u0) < 1.3 && z > 1.45 && z < 2.35) { // menu boards
     BG[i] = C(GRAY, 1);
