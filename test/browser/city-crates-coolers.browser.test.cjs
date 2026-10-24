@@ -10,7 +10,7 @@ async function fixture(run){const p=await browser.newPage(),errors=[];p.on('page
 test('every drinks cooler backs onto its wall and opens into the room, its products on real shelves behind clear glass',()=>fixture(async p=>{
  const r=await p.evaluate(()=>{
   const out=[],draw=drawBox;projX=10000;
-  for(const [kind,word]of [['kebabshop','KEBAB'],['takoyaki','TAKOYAKI'],['bodega','BODEGA'],['motel','MOTEL']]){
+  for(const [kind,word]of [['kebabshop','KEBAB'],['takoyaki','TAKOYAKI'],['bodega','BODEGA'],['motel','MOTEL'],['taqueria','TACOS']]){
    enterRoom(kind,{word,ret:[100,100,0]},[5,4,0]);
    for(const q of room.props.filter(o=>o.drinksCooler)){
     const d=q.drinksCooler,c=-d.fy,s=d.fx,bad=[],shapes=[];
@@ -33,7 +33,7 @@ test('every drinks cooler backs onto its wall and opens into the room, its produ
   }
   return out;
  });
- assert.deepEqual(r.map(q=>q.kind),['kebabshop','takoyaki','bodega','motel']);
+ assert.deepEqual(r.map(q=>q.kind),['kebabshop','takoyaki','bodega','motel','taqueria']);
  for(const q of r){assert.deepEqual(q.bad,[],q.kind);assert.ok(q.clear&&q.goods>=40&&q.cans>0&&q.cans<q.goods&&q.handles===q.doors,JSON.stringify(q));}
 }));
 
@@ -51,11 +51,16 @@ test('flour sacks rest layer on layer and open coffee sacks hold their beans bel
   const floor=sacks.filter(o=>o.box.z0===0).length;
   const lathe=[];drawBox=(box,shade,ray=rayBox)=>lathe.push({box,ray});try{KITCHEN_COFFEE_SACK(0,0,'ETHIOPIA').draw(0,0);}finally{drawBox=draw;}
   const sack=lathe[0],beans=sack.ray(0,0,2,0,0,-1,sack.box),rimTop=Math.max(...sack.box.profile.map(q=>q[0])),side=sack.ray(-1,0,.3,1,0,0,sack.box);
-  return{sacks:sacks.length,floor,bad,beans:2-beans,rimTop,side:-1+side};
+  // the pizzeria's opened sack stands on the prep counter's worktop
+  enterRoom('pizzeria',{word:'PIZZA',ret:[100,100,0]},[5,4,0]);
+  const upright=room.props.find(o=>o.sack?.upright),counter=room.props.filter(o=>o!==upright&&o.draw&&o.box&&inBox(o.box,upright.x,upright.y,0)),parts=[];
+  for(const o of counter){drawBox=(box,shade,ray=rayBox)=>parts.push({box,ray});try{o.draw(o.x,o.y);}finally{drawBox=draw;}}
+  const stands=parts.some(o=>{const t=o.ray(upright.x,upright.y,2,0,0,-1,o.box);return t>0&&Math.abs(2-t-upright.sack.floor)<1e-6;});
+  return{sacks:sacks.length,floor,bad,beans:2-beans,rimTop,side:-1+side,stands};
  });
  assert.equal(r.sacks,5);assert.equal(r.floor,2);assert.deepEqual(r.bad,[]);
  assert.ok(Math.abs(r.beans-.47)<1e-6&&r.rimTop>r.beans+.07,JSON.stringify(r));
- assert.ok(r.side<-.2&&r.side>-.24,'the sack wall bulges out from its base');
+ assert.ok(r.side<-.2&&r.side>-.24,'the sack wall bulges out from its base');assert.ok(r.stands,'the upright sack stands on the worktop');
 }));
 
 test('beer crates: empties stand in their divided cells on the crate floor; upturned crates are the table and the seats',()=>fixture(async p=>{

@@ -118,6 +118,17 @@ function KITCHEN_FLOUR_SACKS(x,y) {
     }
   }),box:boxAt(x,y,1,0,hl,hw*2,0,3*h),radius:Math.hypot(hl,hw*2),sacks:{kind:'flour',parts:sacks,round:r}};
 }
+// An opened paper sack standing on a worktop: its filled body, and the
+// mouth folded over in a flat roll across the top.
+function KITCHEN_UPRIGHT_FLOUR_SACK(x,y,z) {
+  const paper=sackWeave(WHITE,6),printed=(i,t,L)=>{
+    paper(i,t,L);if(Math.abs(HIT.w-z-.12)<.02&&HIT.nz<.5)BG[i]=C(BLUE,4+L*.2);return true;
+  };
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.17,.035,z+.30,z+.35,.017,paper);
+    coveRound(vx,vy,1,0,.2,.15,z,z+.31,.05,printed);
+  }),box:boxAt(x,y,1,0,.2,.15,z,z+.35),radius:.26,sack:{kind:'flour',upright:true,floor:z,body:[z,z+.31],fold:[z+.30,z+.35]}};
+}
 // Open jute coffee sacks stand with their tops rolled down round the beans,
 // printed with two stripes all the way round.
 const COFFEE_SACK=[[0,0],[0,.17],[.03,.2],[.25,.23],[.44,.212],[.50,.214],[.525,.228],[.548,.218],[.55,.200],[.535,.192],[.47,.188],[.47,0]];

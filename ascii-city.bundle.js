@@ -18985,7 +18985,7 @@ ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'c
     KITCHEN_FOOD_CASE(6.6,2.45,2,.38,1.05,'pizza'), { ...standing(6.6, 1.75, WHITE), face: [0, 1] },
     ...[4.9, 6.6, 8.3].map(x => hung(x, 2.45, 2.0, (vx, vy, z) => drum(vx, vy, 0.12, z - 0.12, z, (i, t, L) => { BG[i] = C(HIT.face === 6 ? YEL : RED, HIT.face === 6 ? 13 : 4); return set(i, ' ', 0), true; }))), // the heat lamps
     KITCHEN_SERVICE_COUNTER(8.3,1.4,.55,.35,.9,GRAY,GRAY), // the prep counter at the back, a sack of flour on it
-    BX(8.05, 1.4, 0.2, 0.15, 0.9, 1.25, (i, t, L) => { BG[i] = C(WHITE, 4); return set(i, HIT.face <= 4 && Math.abs(HIT.w - 1.08) < 0.04 ? '~' : ' ', C(GRAY, 3)), true; }),
+    KITCHEN_UPRIGHT_FLOUR_SACK(8.05, 1.4, 0.9),
     ...dining(2.4, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }), ...dining(10.2, 5.0, { top: checkCloth, meal: 'pizza', busy: 0.45 }),
     ...dining(2.4, 7.3, { top: checkCloth, meal: 'pizza', busy: 0.35 }), ...dining(10.2, 7.3, { top: checkCloth, meal: 'pizza', busy: 0.35 }),
     POT_PLANT(1.45, 3.3, 1.3), ...wcFittings(13)] };
@@ -19051,7 +19051,7 @@ ROOM_DEFS.taqueria = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'sa
     { ...standing(5.2, 1.55, ORANGE), face: [0, 1] }, trompo(2.9, 1.4), standing(3.6, 1.4, WHITE),
     KITCHEN_FLATTOP(7.6,1.4),
     KITCHEN_SALSA_BAR(),
-    BX(11.6, 7.4, 0.35, 0.5, 0, 1.9, (i, t, L) => { if (HIT.face !== 1 && HIT.face !== 2) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; } BG[i] = C(CYAN, 1.2); return set(i, fract(HIT.w * 3) < 0.12 ? '=' : fract(HIT.v * 8) < 0.5 ? 'i' : ' ', C(PICADO[Math.floor(HIT.v * 8 + 8) % 7], 13)), true; }), // the cooler faces into the room and stays inside the wall
+    KITCHEN_DRINKS_COOLER(11.6, 7.4, 0.5, 0.35, -1, 0), // the cooler faces into the room and stays inside the wall
     ...dining(3.0, 5.0, { n: 4, hl: 0.55, hw: 0.4, top: solid(ORANGE, { top: '=' }), chairCol: BLUE, busy: 0.4 }), ...dining(7.2, 5.0, { n: 4, hl: 0.55, hw: 0.4, top: solid(GREEN, { top: '=' }), chairCol: RED, busy: 0.35 }),
     KITCHEN_WALL_LEDGE(1.2,6.75,1.05,.2,1.06,1,0), ...[5.9,6.75,7.6].flatMap(y => { const q = [STOOL(1.75, y, YEL, 0.7)]; if (chance(0.35)) q.push({ ...sitting(1.75, y, shirt(), 0.7), face: [-1, 0] }); return q; }), // the ledge and all three stools stay inside the walls
     papelPicado(3.4, 1, 12, 2.7), papelPicado(5.6, 1, 12, 2.75), papelPicado(7.6, 1, 12, 2.7), ...wcFittings(13)] };
@@ -37258,6 +37258,17 @@ function KITCHEN_FLOUR_SACKS(x,y) {
       coveRound(sx,sy,q.c,q.s,q.hl,q.hw,q.z0,q.z1,r,printed);
     }
   }),box:boxAt(x,y,1,0,hl,hw*2,0,3*h),radius:Math.hypot(hl,hw*2),sacks:{kind:'flour',parts:sacks,round:r}};
+}
+// An opened paper sack standing on a worktop: its filled body, and the
+// mouth folded over in a flat roll across the top.
+function KITCHEN_UPRIGHT_FLOUR_SACK(x,y,z) {
+  const paper=sackWeave(WHITE,6),printed=(i,t,L)=>{
+    paper(i,t,L);if(Math.abs(HIT.w-z-.12)<.02&&HIT.nz<.5)BG[i]=C(BLUE,4+L*.2);return true;
+  };
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,.17,.035,z+.30,z+.35,.017,paper);
+    coveRound(vx,vy,1,0,.2,.15,z,z+.31,.05,printed);
+  }),box:boxAt(x,y,1,0,.2,.15,z,z+.35),radius:.26,sack:{kind:'flour',upright:true,floor:z,body:[z,z+.31],fold:[z+.30,z+.35]}};
 }
 // Open jute coffee sacks stand with their tops rolled down round the beans,
 // printed with two stripes all the way round.
