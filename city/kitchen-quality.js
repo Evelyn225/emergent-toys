@@ -82,6 +82,7 @@ function FITTED_KITCHEN(x,y,hl,depth,angle=0,color=BRICK) {
     });
     pipe(hob-ovenHalf+.045,depth+.07,.69,hob+ovenHalf-.045,depth+.07,.69);
     for(const u of compact?[-.055,.055]:[-.165,-.055,.055,.165])pipe(hob+u,depth+.033,.82,hob+u,depth+.065,.82,.023);
+    kitchenHobware(vx,vy,height,c,s,hob,compact);
   });
   return {...model,radius:hl+.6,box:boxAt(x-s*.0575,y+c*.0575,c,s,hl,depth+.0575,0,height+.02),
     kitchen:{hl,depth,angle,height,sink,radius,hob,compact}};

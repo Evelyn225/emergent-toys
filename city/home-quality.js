@@ -123,6 +123,7 @@ function FERN_KITCHEN(r) {
     for(const dx of [-.14,.14])for(const dy of [-.16,.16])coveLathe(oven+dx,vy+dy,.95,[[0,0],[0,.09],[.012,.09],[.012,0]],(i,t,L)=>{BG[i]=C(GRAY,1.1);set(i,' ',0);return true;});
     coveRound(oven,vy+.424,1,0,.28,.014,.26,.63,.025,GRAY);
     coveTube(oven-.21,vy+.456,.69,oven+.21,vy+.456,.69,.014,GRAY);
+    kitchenHobware(vx,vy,.95,1,0,1.08);
   }),radius:2,box:boxAt(15.35,1.42,1,0,1.77,.42,0,.95)};
 }
 function fernHomeQuality() {
@@ -147,6 +148,7 @@ function fernHomeQuality() {
     HOME_FRIDGE(11.6,1.45),FERN_KITCHEN(r),
     ...toilet(21,1.42,-1,porcelain),washbasin(19.45,1.35,0,1),BATHTUB(22.5,3.7),
     ...tableBox(14.7,6,1.15,.65),...homeChair(14.7,7.2,0,-1,GREEN),...homeChair(14.7,4.8,0,1,GREEN),
+    KITCHEN_SETTING(14.4,6.29,.78,{meal:'coffee'}),
     ...couch(3,16.8,1.8,0,-1,GREEN),...tableBox(3,14.4,.9,.45),
     FURNITURE_STORAGE(3,11.3,.9,.3,.61),TELEVISION(3,11.4,r),
     FURNITURE_STORAGE(14.4,13,.65,.4,1.1,-Math.PI/2),

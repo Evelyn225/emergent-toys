@@ -901,6 +901,7 @@ function homeDef(w, h, tier) {
       ...(tier ? [BATHTUB(plan.wc.x1 - .43, 3.4)] : []),
       ...couch(sofa[0],sofa[1],tier?1.55:.95,0,-1,tier===2?GREEN:BLUE),
       ...tableBox(dining[0], dining[1], tier ? 1.25 : 0.6, 0.5),
+      KITCHEN_SETTING(dining[0]-(tier?.55:.2),dining[1]+.23,.78,{meal:'coffee'}),
       ...[-1, 1].flatMap(s => homeChair(dining[0], dining[1] + s * 1.05, 0, -s, tier === 2 ? GREEN : BRICK)),
       ...(tier ? [-1, 1].flatMap(s => homeChair(dining[0] + s * 0.75, dining[1] + 1.05, 0, -1, tier === 2 ? GREEN : BRICK)) : []),
       FITTED_KITCHEN(fridge[0]+(tier?.05:0),fridge[1]+(tier?-2.5:1.7),tier?1.55:.55,.33,Math.PI/2,tier===2?WHITE:BRICK),
