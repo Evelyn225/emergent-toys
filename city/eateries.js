@@ -178,7 +178,7 @@ ROOM_DEFS.taqueria = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'sa
     KITCHEN_SALSA_BAR(),
     BX(11.6, 7.4, 0.35, 0.5, 0, 1.9, (i, t, L) => { if (HIT.face !== 1 && HIT.face !== 2) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; } BG[i] = C(CYAN, 1.2); return set(i, fract(HIT.w * 3) < 0.12 ? '=' : fract(HIT.v * 8) < 0.5 ? 'i' : ' ', C(PICADO[Math.floor(HIT.v * 8 + 8) % 7], 13)), true; }), // the cooler faces into the room and stays inside the wall
     ...dining(3.0, 5.0, { n: 4, hl: 0.55, hw: 0.4, top: solid(ORANGE, { top: '=' }), chairCol: BLUE, busy: 0.4 }), ...dining(7.2, 5.0, { n: 4, hl: 0.55, hw: 0.4, top: solid(GREEN, { top: '=' }), chairCol: RED, busy: 0.35 }),
-    BX(1.25, 7.4, 0.2, 1.2, 1.0, 1.06, solid(BRICK, { top: '=' }), 0, 1), ...[6.6, 7.4, 8.2].flatMap(y => { const q = [STOOL(1.75, y, YEL, 0.7)]; if (chance(0.35)) q.push({ ...sitting(1.75, y, shirt(), 0.7), face: [-1, 0] }); return q; }), // the ledge along the wall
+    KITCHEN_WALL_LEDGE(1.2,6.75,1.05,.2,1.06,1,0), ...[5.9,6.75,7.6].flatMap(y => { const q = [STOOL(1.75, y, YEL, 0.7)]; if (chance(0.35)) q.push({ ...sitting(1.75, y, shirt(), 0.7), face: [-1, 0] }); return q; }), // the ledge and all three stools stay inside the walls
     papelPicado(3.4, 1, 12, 2.7), papelPicado(5.6, 1, 12, 2.75), papelPicado(7.6, 1, 12, 2.7), ...wcFittings(13)] };
 
 // ---- the sushi bar (SUSHI): a conveyor belt round an island counter, plates going round on it, the chefs inside,

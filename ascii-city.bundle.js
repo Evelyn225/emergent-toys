@@ -19034,7 +19034,7 @@ ROOM_DEFS.taqueria = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'sa
     KITCHEN_SALSA_BAR(),
     BX(11.6, 7.4, 0.35, 0.5, 0, 1.9, (i, t, L) => { if (HIT.face !== 1 && HIT.face !== 2) { BG[i] = C(GRAY, 2); return set(i, ' ', 0), true; } BG[i] = C(CYAN, 1.2); return set(i, fract(HIT.w * 3) < 0.12 ? '=' : fract(HIT.v * 8) < 0.5 ? 'i' : ' ', C(PICADO[Math.floor(HIT.v * 8 + 8) % 7], 13)), true; }), // the cooler faces into the room and stays inside the wall
     ...dining(3.0, 5.0, { n: 4, hl: 0.55, hw: 0.4, top: solid(ORANGE, { top: '=' }), chairCol: BLUE, busy: 0.4 }), ...dining(7.2, 5.0, { n: 4, hl: 0.55, hw: 0.4, top: solid(GREEN, { top: '=' }), chairCol: RED, busy: 0.35 }),
-    BX(1.25, 7.4, 0.2, 1.2, 1.0, 1.06, solid(BRICK, { top: '=' }), 0, 1), ...[6.6, 7.4, 8.2].flatMap(y => { const q = [STOOL(1.75, y, YEL, 0.7)]; if (chance(0.35)) q.push({ ...sitting(1.75, y, shirt(), 0.7), face: [-1, 0] }); return q; }), // the ledge along the wall
+    KITCHEN_WALL_LEDGE(1.2,6.75,1.05,.2,1.06,1,0), ...[5.9,6.75,7.6].flatMap(y => { const q = [STOOL(1.75, y, YEL, 0.7)]; if (chance(0.35)) q.push({ ...sitting(1.75, y, shirt(), 0.7), face: [-1, 0] }); return q; }), // the ledge and all three stools stay inside the walls
     papelPicado(3.4, 1, 12, 2.7), papelPicado(5.6, 1, 12, 2.75), papelPicado(7.6, 1, 12, 2.7), ...wcFittings(13)] };
 
 // ---- the sushi bar (SUSHI): a conveyor belt round an island counter, plates going round on it, the chefs inside,
@@ -20653,7 +20653,7 @@ ROOM_DEFS.chickenshop = { grid: boxRoom(11, 8), light: 1.1, floor: 'checker', ce
   props: r => [KITCHEN_FOOD_CASE(3.5,2.3,1.05,.3,1.35,'chicken',RED), KITCHEN_SERVICE_COUNTER(6.5,2.3,1.5,.3,1.05,RED,GRAY), // the warmer, the counter
     { ...standing(5.6, 1.6, RED), face: [0, 1] }, fryer(8.3, 1.4), heatLamp(3.0, 2.3, 1.75), heatLamp(4.0, 2.3, 1.75),
     ...dining(2.6, 4.6, { hl: 0.35, chair: shellChair, chairCol: RED, top: solid(WHITE, { top: '=' }) }), ...dining(8.3, 4.6, { hl: 0.35, chair: shellChair, chairCol: YEL, top: solid(WHITE, { top: '=' }) }),
-    BX(2.4, 6.78, 1.35, 0.17, 0.98, 1.04, solid(GRAY, { top: '=' })), BX(8.6, 6.78, 1.35, 0.17, 0.98, 1.04, solid(GRAY, { top: '=' })), // the ledges under the window
+    KITCHEN_WALL_LEDGE(2.4,6.83,1.35,.17,1.04,0,-1,GRAY), KITCHEN_WALL_LEDGE(8.6,6.83,1.35,.17,1.04,0,-1,GRAY), // the ledges under the window
     ...stools(1.6, 3.4, 6.3, 0.9, RED, 0, 1, 0.3), ...stools(7.8, 9.6, 6.3, 0.9, RED, 0, 1, 0.3)] };
 
 // ---- the kebab shop (KEBAB): the doner turning in front of its burners, the salads in their trays under the glass,
@@ -20686,7 +20686,7 @@ const sodaCooler = (x, y, hl, hw, ca = 1, sa = 0) => BX(x, y, hl, hw, 0, 1.95, (
 ROOM_DEFS.kebabshop = { grid: boxRoom(11, 8), light: 1.0, floor: 'lino', ceil: 'strip', sign: false, wall: kebabWall, keeper: [5.6, 1.6],
   props: r => [doner(2.4, 1.45), { ...standing(3.2, 1.4, WHITE), face: [-1, 0] }, // the spit, somebody carving it
     KITCHEN_FOOD_CASE(5.6,2.35,1.7,.32,1.15,'salad',GRAY), { ...standing(5.6, 1.6, WHITE), face: [0, 1] }, sodaCooler(9.2, 1.45, 0.6, 0.38),
-    BX(9.78, 4.9, 1.3, 0.2, 0.98, 1.04, solid(GRAY, { top: '=' }), 0, 1), ...stoolsY(9.15, 3.9, 5.9, 1.0, GREEN, 1, 0.35), // the ledge down the side
+    KITCHEN_WALL_LEDGE(9.8,4.9,1.3,.2,1.04,-1,0,GRAY), ...stoolsY(9.15, 3.9, 5.9, 1.0, GREEN, 1, 0.35), // the ledge down the side
     ...dining(2.4, 4.4, { hl: 0.35, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.35 }), ...dining(2.4, 6.2, { hl: 0.35, chair: homeChair, chairCol: BRICK, top: solid(WHITE, { top: '=' }), busy: 0.3 })] };
 
 // ---- the bento shop (BENTO): a chilled case of boxed lunches, the rice cooker steaming, pale wood, a noren over the
@@ -20711,7 +20711,7 @@ function bentoWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.bento = { grid: boxRoom(9, 7), light: 1.0, floor: 'hinoki', ceil: 'strip', sign: false, wall: bentoWall, keeper: [4.6, 1.5],
   props: r => [KITCHEN_FOOD_CASE(4.6,2.2,2,.35,1.05,'bento',STONE), { ...standing(4.6, 1.5, WHITE), face: [0, 1] },
     KITCHEN_SERVICE_COUNTER(7.3,1.4,.55,.32,.9,GRAY,GRAY), KITCHEN_RICE_COOKER(7.3,1.4),
-    BX(1.22, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(1.75, 3.9, 4.9, 1.0, BRICK, -1, 0.35), // the ledge on the left
+    KITCHEN_WALL_LEDGE(1.2,4.4,.9,.2,1.04,1,0), ...stoolsY(1.75, 3.9, 4.9, 1.0, BRICK, -1, 0.35), // the ledge on the left
     ...plainBench(7.6, 4.4, 0.75, -1, 0, BRICK)] };
 
 // ---- takoyaki (TAKOYAKI): the iron plate of little round wells, a ball turning in each, the octopus painted on the
@@ -20731,7 +20731,7 @@ function takoWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.takoyaki = { grid: boxRoom(9, 7), light: 1.05, floor: 'lino', ceil: 'strip', sign: false, wall: takoWall, keeper: [4.5, 1.6],
   props: r => [takoGriddle(4.5, 2.4), { ...standing(4.5, 1.6, ORANGE), face: [0, 1] }, sodaCooler(7.45, 1.45, 0.45, 0.35),
-    ...plainBench(1.45, 4.4, 0.75, 1, 0, BRICK, 0.4), BX(7.78, 4.4, 0.8, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(7.25, 4.0, 4.8, 0.8, RED, 1, 0.35)] };
+    ...plainBench(1.45, 4.4, 0.75, 1, 0, BRICK, 0.4), KITCHEN_WALL_LEDGE(7.8,4.4,.8,.2,1.04,-1,0), ...stoolsY(7.25, 4.0, 4.8, 0.8, RED, 1, 0.35)] };
 
 // ---- yakitori (YAKITORI): the charcoal trough with its skewers across it, a long counter and stools all along it, red
 // lanterns, wooden menu tags on the wall, beer crates (turned over, they're seats)
@@ -20777,7 +20777,7 @@ ROOM_DEFS.donutshop = { grid: boxRoom(10, 7), light: 1.1, floor: 'pastel', ceil:
   props: r => [KITCHEN_FOOD_CASE(5,2.3,1.9,.35,1.15,'donuts',MAG), { ...standing(5.0, 1.55, MAG), face: [0, 1] },
     FURNITURE_COUNTER(7.9,1.35,.6,1), KITCHEN_ESPRESSO(7.7,1.35),
     ...dining(2.2, 4.0, { hl: 0.3, hw: 0.3, chair: shellChair, chairCol: MAG, top: solid(WHITE, { top: '=' }), busy: 0.35 }), ...dining(7.8, 4.0, { hl: 0.3, hw: 0.3, chair: shellChair, chairCol: CYAN, top: solid(WHITE, { top: '=' }), busy: 0.35 }),
-    BX(2.4, 5.78, 1.35, 0.17, 0.98, 1.04, solid(BRICK, { top: '=' })), BX(7.6, 5.78, 1.35, 0.17, 0.98, 1.04, solid(BRICK, { top: '=' })),
+    KITCHEN_WALL_LEDGE(2.4,5.83,1.35,.17,1.04,0,-1), KITCHEN_WALL_LEDGE(7.6,5.83,1.35,.17,1.04,0,-1),
     ...stools(1.6, 3.4, 5.3, 0.9, MAG, 0, 1, 0.3), ...stools(6.8, 8.6, 5.3, 0.9, MAG, 0, 1, 0.3)] };
 
 // ---- the juice bar (JUICE): crates of fruit along the wall, three blenders whirring on the counter, a wall painted
@@ -20800,7 +20800,7 @@ ROOM_DEFS.juicebar = { grid: boxRoom(10, 7), light: 1.15, floor: 'hinoki', ceil:
   props: r => [KITCHEN_SERVICE_COUNTER(5,2.3,2,.3,1,GREEN), { ...standing(5.0, 1.55, GREEN), face: [0, 1] },
     blender(4.2, 2.25, ORANGE), blender(5.0, 2.25, MAG), blender(5.8, 2.25, GREEN),
     ...fruitCrate(1.45, 1.5, ORANGE, 8, 'o'), ...fruitCrate(1.45, 2.15, GREEN, 6, 'o'), ...fruitCrate(8.55, 1.5, YEL, 9, ')'), ...fruitCrate(8.55, 2.15, RED, 6, 'o'),
-    BX(8.78, 4.3, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(8.25, 3.8, 4.8, 1.0, GREEN, 1, 0.35),
+    KITCHEN_WALL_LEDGE(8.8,4.3,.9,.2,1.04,-1,0), ...stoolsY(8.25, 3.8, 4.8, 1.0, GREEN, 1, 0.35),
     ...plainBench(2.3, 5.5, 0.8, 0, -1, BRICK, 0.4), ...plainBench(1.45, 3.7, 0.7, 1, 0, BRICK, 0.3)] };
 
 // ---- bagels (BAGELS): baskets of bagels on the wall behind the counter, the kettle boiling them, tubs of cream cheese
@@ -20815,7 +20815,7 @@ ROOM_DEFS.bagelshop = { grid: boxRoom(10, 7), light: 1.0, floor: 'checker', ceil
   props: r => [KITCHEN_BAGEL_RACK(), KITCHEN_FOOD_CASE(5,2.3,1.9,.33,1.15,'schmear',GREEN), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
     KITCHEN_POT_STOVE(8.2,1.4,true),
     ...dining(2.2, 4.1, { hl: 0.35, chair: homeChair, chairCol: GREEN, top: solid(BRICK, { top: '=' }), busy: 0.35 }),
-    BX(8.78, 4.4, 0.9, 0.18, 0.98, 1.04, solid(BRICK, { top: '=' }), 0, 1), ...stoolsY(8.25, 3.9, 4.9, 1.0, GREEN, 1, 0.35),
+    KITCHEN_WALL_LEDGE(8.8,4.4,.9,.2,1.04,-1,0), ...stoolsY(8.25, 3.9, 4.9, 1.0, GREEN, 1, 0.35),
     ...plainBench(2.4, 5.55, 0.8, 0, -1, GREEN, 0.3)] };
 
 Object.assign(ROOM_FOR, { CHICKEN: 'chickenshop', KEBAB: 'kebabshop', BENTO: 'bento', TAKOYAKI: 'takoyaki', YAKITORI: 'yakitori', DONUTS: 'donutshop', JUICE: 'juicebar', BAGELS: 'bagelshop' });
@@ -20998,15 +20998,16 @@ function izakayaWall(i, u, uStep, z, d, mx, my, L) {
   }
   BG[i] = C(BRICK, 1.4 + L * 0.15 - Math.max(0, z - 2) * 0.3); return set(i, fract(u * 2.5) < 0.05 ? '|' : ' ', C(GRAY, 2)), true;
 }
-const zabuton = (x, y, fx, fy) => ({ ...BX(x, y, 0.24, 0.24, 0, 0.1, solid(BLUE, { top: '#', bright: 1.5 })), walk: true, seat: true, x, y, fx, fy, h: 0.12 }); // a floor cushion
+const zabuton = (x,y,fx,fy) => ({...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,1,0,.24,.24,0,.1,.045,furnitureCloth(BLUE)),[.24,.24,.1]),
+  walk:true,seat:true,x,y,fx,fy,h:.12});
 ROOM_DEFS.izakaya = { grid: backWc(13, 9), wc: wcAt(13), light: 0.7, floor: 'izakaya', ceil: 'lantern', sign: false, wall: izakayaWall, keeper: [5.3, 1.7],
   props: r => {
     const p = [KITCHEN_SERVICE_COUNTER(5.3,2.5,2.7,.3,1,BRICK,BRICK), { ...standing(5.3, 1.7, BLUE), face: [0, 1] },
       ...stools(2.9, 7.7, 3.15, 0.8, BRICK, 0, -1, 0.45), akachochin(2.0, 4.0), akachochin(8.8, 4.0),
       ...dining(9.4, 6.4, { n: 4, hl: 0.55, hw: 0.4, top: teak, chairCol: BRICK, busy: 0.45 }), ...wcFittings(13)];
     for (const y of [5.6, 7.3]) { // the tatami: low tables, a cushion either side
-      p.push(BX(2.1, y, 0.45, 0.3, 0, 0.34, teak));
-      for (const [x, fx] of [[1.3, 1], [2.9, -1]]) { p.push(zabuton(x, y, fx, 0)); if (chance(0.45)) p.push({ ...sitting(x, y, shirt(), 0.12), face: [fx, 0] }); }
+      p.push(KITCHEN_LOW_TABLE(2.1,y));
+      for (const [x, fx] of [[1.3, 1], [2.9, -1]]) { p.push(zabuton(x, y, fx, 0)); if (chance(0.45)) p.push({ ...sitting(x, y, shirt(), 0.12), face: [fx, 0] },KITCHEN_SETTING(2.1-fx*.22,y,.34,{fx,fy:0,meal:'dumplings'})); }
     }
     return p;
   } };
@@ -21050,9 +21051,9 @@ ROOM_DEFS.roastery = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'hi
   props: r => [KITCHEN_SERVICE_COUNTER(6,2.4,2.4,.3,1,BRICK,BRICK), { ...standing(6.0, 1.7, GREEN), face: [0, 1] }, roaster(1.7, 1.5), ...beanSacks(1.4, 3.6),
     pourOver(4.4, 2.4), pourOver(4.8, 2.4), pourOver(5.2, 2.4), KITCHEN_ESPRESSO(7.5,2.4),
     ...stools(4.0, 8.0, 3.05, 1.0, BRICK, 0, -1, 0.4),
-    BX(3.6, 6.2, 1.4, 0.45, 0.72, 0.78, solid(BRICK, { top: '=', bright: 1.2 })), ...[2.7, 4.5].map(x => BX(x, 6.2, 0.06, 0.35, 0, 0.72, solid(GRAY))), // the long table
-    ...[2.8, 4.4].flatMap(x => [[5.4, 1], [7.0, -1]].flatMap(([y, fy]) => [...homeChair(x, y, 0, fy, BRICK), ...(chance(0.45) ? [{ ...sitting(x, y, shirt(), 0.48), face: [0, fy] }] : [])])),
-    ...armchair(10.8, 5.3, -1, 0, GREEN), ...armchair(10.8, 7.0, -1, 0, BRICK), BX(9.9, 6.15, 0.25, 0.25, 0, 0.5, solid(BRICK, { top: '=' })), POT_PLANT(11.4, 4.1, 1.5), ...wcFittings(13)] };
+    KITCHEN_TRESTLE_TABLE(3.6,6.2),
+    ...[2.8, 4.4].flatMap(x => [[5.4, 1], [7.0, -1]].flatMap(([y, fy]) => [...homeChair(x, y, 0, fy, BRICK), ...(chance(0.45) ? [{ ...sitting(x, y, shirt(), 0.48), face: [0, fy] },KITCHEN_SETTING(x,y+fy*.6,.78,{fx:0,fy,meal:'coffee'})] : [])])),
+    ...armchair(10.8, 5.3, -1, 0, GREEN), ...armchair(10.8, 7.0, -1, 0, BRICK), FURNITURE_EAT_TABLE(9.9,6.15,.25,.25,teak,.5), POT_PLANT(11.4, 4.1, 1.5), ...wcFittings(13)] };
 
 // ---- the noodle house (NOODLES; RAMEN keeps the noodle bar): the cook pulling noodles by hand at the floury table in
 // the window to the kitchen, the pots boiling, red lacquer round tables, the menu brushed on red strips
@@ -36945,6 +36946,42 @@ function KITCHEN_WOK_RANGE(x=7.2,y=1.4) {
     for(const u of [-.37,.37])foodOval(vx+u,vy+.351,.67,.028,.012,.055,kitchenGlaze(BRICK));
   }),box:boxAt(x,y+.07,1,0,.8,.42,0,1.08),radius:1,kitchenWok:true,
     tick:s=>kitchenSteamerSteam(s,WOK.fill+.025,WOK.centers[mod(Math.floor(T/1.1),2)],WOK.y)};
+}
+// Wall ledges carry their tops on actual joined brackets. (fx,fy) points into
+// the room; the back edge and mounting plates share the wall's face plane.
+function KITCHEN_WALL_LEDGE(x,y,half,depth,height,fx,fy,color=BRICK) {
+  const c=-fy,s=fx,wood=furnitureTimber(color),top=kitchenTopProfile(half,depth,height-.06,height,.005),
+    plate=kitchenPanelProfile(.035,.0075,height-.40,height-.06,.002);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
+    drawBox({...boxAt(vx,vy,c,s,half,depth,height-.06,height),...top},color===GRAY?kitchenSteel:wood,homeRayWorktop);
+    for(const u of [-half*.65,half*.65]){
+      const [mx,my]=at(u,-depth+.0075);
+      drawBox({...boxAt(mx,my,c,s,.035,.0075,height-.40,height-.06),...plate},kitchenSteel,homeRayWorktop);
+      const [bx,by]=at(u,-depth+.014),[tx,ty]=at(u,depth-.035);
+      coveTube(bx,by,height-.072,tx,ty,height-.072,.012,GRAY);
+      coveTube(bx,by,height-.36,tx,ty,height-.072,.012,GRAY);
+      for(const du of [-.018,.018])for(const z of [height-.32,height-.15]){
+        const [xx,yy]=at(u+du,-depth+.018);foodOval(xx,yy,z-.006,.005,.004,.012,kitchenSteel,c,s);
+      }
+    }
+  }),box:boxAt(x,y,c,s,half,depth,height-.40,height),radius:Math.hypot(half,depth),diningLedge:{half,depth,height,fx,fy}};
+}
+function KITCHEN_TRESTLE_TABLE(x,y,hl=1.4,hw=.45,height=.78) {
+  const foot=hl*.64,top=kitchenTopProfile(hl,hw,height-.06,height,.010),wood=furnitureTimber(BRICK);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const u of [-foot,foot]){
+      coveRound(vx+u,vy,1,0,.06,hw-.10,0,.045,.012,kitchenIron);
+      coveRound(vx+u,vy,1,0,.035,.035,.045,height-.075,.009,kitchenSteel);
+      coveRound(vx+u,vy,1,0,.055,hw-.06,height-.085,height-.06,.006,kitchenSteel);
+    }
+    coveRound(vx,vy,1,0,foot,.024,.32,.36,.008,kitchenSteel);
+    drawBox({...boxAt(vx,vy,1,0,hl,hw,height-.06,height),...top},wood,homeRayWorktop);
+  }),box:boxAt(x,y,1,0,hl,hw,0,height),radius:Math.hypot(hl,hw),diningTrestle:true};
+}
+function KITCHEN_LOW_TABLE(x,y) {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>drawFurnitureTable(vx,vy,.45,.3,.34)),
+    box:boxAt(x,y,1,0,.45,.3,0,.34),radius:.6,diningLowTable:true};
 }
 // Mounted displays replace flat wall pictures. Upright rings and hollow cups
 // share the food/tableware profiles; labels use the prop font's projection.
