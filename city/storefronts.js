@@ -34,7 +34,7 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
   props: r => [BX(7.55, 6.4, 1.0, 0.28, 0, 1.05, solid(BRICK, { top: '=', panel: 0.5 }), 0, 1), BX(7.3, 6.4, 1.0, 0.02, 1.05, 1.95, plexi, 0, 1), // the counter, the plexiglass
     { ...standing(8.4, 6.4, r.neon), face: [-1, 0] }, shopCat(7.6, 7.05, 1.05),
     ...glassCase(5.0, 1.95, 2.0, 0.32, 1.15, deliMeats, GRAY), { ...standing(4.4, 1.4, WHITE), face: [0, 1] }, BX(6.6, 1.3, 0.6, 0.25, 0, 0.92, grillTop),
-    sodaCooler(1.38, 6.2, 1.0, 0.36, 0, 1), BX(3.1, 7.55, 0.32, 0.25, 0, 0.9, crateShade(RED)), BX(3.1, 7.55, 0.3, 0.23, 0.9, 1.2, crateShade(RED)), // crates of soda, stacked
+    sodaCooler(1.38, 6.2, 1.0, 0.36, 1, 0), BX(3.1, 7.55, 0.32, 0.25, 0, 0.9, crateShade(RED)), BX(3.1, 7.55, 0.3, 0.23, 0.9, 1.2, crateShade(RED)), // crates of soda, stacked
     BX(1.5, 2.3, 0.2, 0.17, 0, 0.38, crateShade(BLUE)), SEAT(1.5, 2.3, 1, 0, 0.4), ...(chance(0.5) ? [{ ...sitting(1.5, 2.3, shirt(), 0.4), face: [1, 0] }] : [])] }; // a milk crate to sit on, and the old man who does
 
 // ---- the market hall (MARKET): stalls under striped awnings round the walls (fish on ice, fruit and veg, the butcher,
@@ -123,7 +123,7 @@ ROOM_DEFS.motel = { grid: boxRoom(10, 8, { '7,0': 'E', '8,0': 'E' }), light: 0.8
   props: r => [BX(3.0, 2.4, 1.3, 0.32, 0, 1.1, solid(BRICK, { top: '=', panel: 0.45, trim: 1.04 })), { ...standing(3.0, 1.7, r.neon), face: [0, 1] },
     ROOM_MODEL(3.6, 2.35, (vx, vy) => { drum(vx, vy, 0.05, 1.1, 1.13, solid(GRAY)); dot(vx, vy, 1.15, 0.035, (i, t, L) => { BG[i] = C(YEL, 8); return set(i, ' ', 0), true; }); }), // the bell
     BX(6.1, 1.4, 0.4, 0.35, 0, 1.5, (i, t, L) => { BG[i] = C(WHITE, (3 + L * 0.3) * shadeFace(HIT.face)); if (HIT.face <= 4 && HIT.w > 1.15 && HIT.w < 1.4) { BG[i] = C(BLUE, 5); return set(i, '*', C(WHITE, 14)), true; } return set(i, HIT.face <= 4 && Math.abs(HIT.w - 0.7) < 0.03 ? '=' : ' ', C(GRAY, 6)), true; }), // the ice machine, a snowflake band on it
-    sodaCooler(8.6, 3.0, 0.45, 0.35, 0, 1), BX(8.75, 4.4, 0.4, 0.15, 0, 1.4, (i, t, L) => { BG[i] = C(BRICK, 1.5); return set(i, HIT.face === 1 || HIT.face === 2 ? (fract(HIT.w * 4) < 0.6 ? '#' : '=') : ' ', C([YEL, CYAN, MAG, GREEN][Math.floor(HIT.v * 6 + HIT.w * 4 + 9) & 3], 10)), true; }, 0, 1), // brochures
+    sodaCooler(8.6, 3.0, 0.45, 0.35, -1, 0), BX(8.75, 4.4, 0.4, 0.15, 0, 1.4, (i, t, L) => { BG[i] = C(BRICK, 1.5); return set(i, HIT.face === 1 || HIT.face === 2 ? (fract(HIT.w * 4) < 0.6 ? '#' : '=') : ' ', C([YEL, CYAN, MAG, GREEN][Math.floor(HIT.v * 6 + HIT.w * 4 + 9) & 3], 10)), true; }, 0, 1), // brochures
     ...couch(1.5, 6.0, 0.9, 1, 0, BRICK), ...(chance(0.4) ? [{ ...sitting(1.55, 6.5, shirt(), 0.42), face: [1, 0] }] : []), BX(3.0, 6.0, 0.4, 0.3, 0, 0.45, solid(BRICK, { top: '=' }), 0, 1), // the couch, the coffee table
     POT_PLANT(8.5, 6.8, 1.3)] };
 
