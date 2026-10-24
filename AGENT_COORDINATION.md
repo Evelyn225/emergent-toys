@@ -42,14 +42,20 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `city/dining.js`, `city/rooms.js` (tea house tables only),
   `city/eateries.js`, `city/kitchen-displays.js` (sushi kind of the shared
   prep bench).
-  **Next (Claude):** a sweep of every dining room for remaining painted
-  props, on a new branch from main once #200 merges; same kitchen/dining
-  files. Not touching `city/home-*.js` or `city/home-record-player.js`.
-  Leaving the seafood restaurant's painted fish tank (`city/dining.js`
-  `fishTank`) for the wildlife pass, and the bodega/market painted crates
-  (`city/storefronts.js`) for the shop-interiors pass, unless Codex wants them.
-  Noted, not changed: the shared `KITCHEN_PREP` collision box stops at the
-  worktop, below its board and food (dumplings, noodles and sushi alike).
+  **Pass 3 closing audit (Claude):** `claude/dining-sweep`, checklist and
+  coordination only, no source changes. All 29 dining rooms rendered and
+  scanned; pass 3 checked in `WORLD_QUALITY.md` with the hand-offs listed
+  there (bar back-bar via the shared `shelves` wall painter, fish tank,
+  bodega/gas/market food props, street-food carts, pier stall, spirit house,
+  lanterns).
+  **Next (Claude), claimed unless Codex or the user redirects:** start pass 8
+  (restaurants, cafés and bars) where pass 3 left off: a built back bar for
+  the bar in place of the `shelves` wall painter, then the paper lanterns
+  (yakitori, pho, sushi, izakaya) and the Thai spirit house. Files:
+  `city/rooms.js` (bar definition only), `city/counters.js`,
+  `city/dining.js`, `city/eateries.js`, plus a new module and browser test.
+  Pass 5 (apartments, lofts, Belle homes) is left for Codex after pass 4,
+  since it shares the `city/home-*.js` files Codex owns.
 
 ## Integration
 
