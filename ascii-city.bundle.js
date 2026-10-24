@@ -11908,7 +11908,11 @@ function lockMouse() { // take the mouse (refused or impossible: a click will do
   }
   browserMouseCapture();
 }
+let browserMouseReleasePending=false,browserMouseRelockPending=false,browserMouseObservedLocked=false;
 function browserMouseCapture() {
+  // An exit event can arrive after a menu has already closed. Let that exit
+  // settle before requesting the next capture, keeping the events in order.
+  if(browserMouseReleasePending){browserMouseRelockPending=true;return;}
   desktopMouseCaptured = false;
   const limited = () => {
     if (NATIVE_MOUSE_APP && desktopMouseWanted) {
@@ -11923,6 +11927,7 @@ function browserMouseCapture() {
   } catch (error) { limited(); }
 }
 function releaseMouse() {
+  browserMouseRelockPending=false;
   K.MouseUse = 0; gun.aimHeld = false;
   cv.style.cursor = '';
   if (NATIVE_MOUSE_APP) {
@@ -11932,7 +11937,16 @@ function releaseMouse() {
     desktopMouseFallback = false;
     nativeMouseCapture(false).catch(() => {});
   }
-  if (document.pointerLockElement) document.exitPointerLock();
+  if (document.pointerLockElement&&!browserMouseReleasePending) {
+    browserMouseReleasePending=true;document.exitPointerLock();
+  }
+}
+function consumeMouseRelease() {
+  if(document.pointerLockElement||!browserMouseReleasePending)return false;
+  browserMouseReleasePending=false;
+  const relock=browserMouseRelockPending;browserMouseRelockPending=false;
+  if(relock&&!paused)browserMouseCapture();
+  return true;
 }
 const mouseCaptured = () => desktopMouseCaptured || Boolean(document.pointerLockElement);
 // ===== city world =====
@@ -17182,13 +17196,6 @@ ROOM_DEFS.grocer = { grid: ['##############', '#.......#....#', '#..SS...#....#'
 
 // ---- the deli (DELI, DELICATESSEN): a long glass counter of meats and cheeses under a rail of hanging salami, the
 // slicer, "now serving" over it all, take a number, two little tables, and the customers' toilet in the front corner
-const DELI_GOODS = [[RED, '@'], [MAG, '='], [YEL, '#'], [GREEN, 'o'], [BRICK, '%'], [WHITE, 'O'], [ORANGE, '=']];
-const deliGoods = (i, u, v, w, L, f) => { // trays in a row: each tray one thing
-  const tray = Math.floor((u + 4) / 0.55), [col, ch] = DELI_GOODS[(hash(tray, 7, 77) * DELI_GOODS.length) | 0];
-  if (fract((u + 4) / 0.55) < 0.06) return set(i, '|', C(GRAY, 9)), true; // between trays
-  if (f !== 5 && (w < 0.05 || w > 0.24)) return false;
-  BG[i] = C(col, 2.5); return set(i, hash(i, 5) > 0.4 ? ch : ' ', C(col, 13)), true;
-};
 const salami = (vx, vy, z) => drawRod(vx, vy, z, vx, vy, z - 0.42, 0.045, (i, t, L) => { BG[i] = C(BRICK, 1.4 + L * 0.2); return set(i, hash(i, 11) > 0.6 ? '.' : ' ', C(WHITE, 8)), true; });
 const cheeseWheel = (vx, vy, z) => drum(vx, vy, 0.14, z - 0.14, z, (i, t, L) => { BG[i] = C(YEL, (2.5 + L * 0.3) * drumLit(0.14)); return set(i, HIT.face === 5 ? 'o' : '=', C(ORANGE, L * 0.7)), true; });
 function deliWall(i, u, uStep, z, d, mx, my, L) {
@@ -17212,7 +17219,7 @@ function deliWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.deli = { grid: ['##############', '#............#', '#............#', '#............#', '#.........W.W#', '#.........W..#', '#.........W..#', '#.........W..#', '######DD######'],
   wc: { x0: 11, y0: 5, x1: 13, y1: 8, sign: [10, 4, 10.5] }, light: 0.95, floor: 'checker', ceil: 'tin', sign: true, signAt: 7, wall: deliWall, keeper: [7, 1.4],
   props: r => {
-    const p = [...glassCase(7, 2.1, 3, 0.4, 1.25, deliGoods, WHITE), standing(7, 1.4, WHITE), standing(5, 1.4, WHITE),
+    const p = [KITCHEN_FOOD_CASE(7,2.1,3,.4,1.25,'deli',WHITE), standing(7, 1.4, WHITE), standing(5, 1.4, WHITE),
       BX(9.2, 1.05, 0.25, 0.2, 0.95, 1.3, (i, t, L) => { // the slicer on the back counter: its blade spinning
         if (HIT.face === 4 && Math.hypot(HIT.u, HIT.w - 1.12) < 0.15) { BG[i] = C(GRAY, 5); return set(i, '-\\|/'[Math.floor(T * 12) & 3], C(WHITE, 15)), true; }
         BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),
@@ -18967,16 +18974,6 @@ const pizzaOven = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
   rod(vx + 0.75, vy + 0.6, 0, vx + 0.95, vy + 0.4, 1.9, 0.015, BRICK, 1.2); // the peel, leaning
   drawBox(boxAt(vx + 0.93, vy + 0.42, 0.6, 0.8, 0.12, 0.012, 1.9, 2.15), solid(BRICK));
 }, [0.95, 0.85, 1.6]);
-// pies on the counter under the heat lamps: whole and cut, cheese and tomato, pepperoni
-const pizzaPies = (i, u, v, w, L, f) => {
-  if (f !== 5) return false;
-  const k = Math.floor((u + 2) / 0.42), cu = fract((u + 2) / 0.42) - 0.5, r = Math.hypot(cu, v / 0.42 * 0.9);
-  if (r > 0.45) return false;
-  const pep = hash(Math.floor(cu * 12), Math.floor(v * 12), k) > 0.82, gone = hash(k, 1, 87) > 0.55 && Math.atan2(v, cu) > 1.2; // (a slice or two sold)
-  if (gone) return false;
-  BG[i] = r > 0.38 ? C(ORANGE, 5) : C(YEL, 7 + L * 0.2);
-  return set(i, pep ? 'o' : ' ', C(RED, 9)), true;
-};
 function pizzaWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && menuBoard(i, u, uStep, z, d, 7.75, 1.95, room.menu, 1.2, C(GRAY, 0.8), C(WHITE, 14), 'MENU', C(YEL, 14))) return true;
   if (backWall(my) && z > 2.35 && wallText(i, u, uStep, z, d, room.word, 4.6, 2.62, 0.3, 0.42, C(RED, 15), C(GRAY, 0.6))) return true; // in red neon
@@ -18991,7 +18988,7 @@ function pizzaWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.pizzeria = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'cotto', ceil: 'pendant', sign: false, wall: pizzaWall, keeper: [6.6, 1.75],
   props: r => [pizzaOven(1.9, 1.6),
-    ...glassCase(6.6, 2.45, 2.0, 0.38, 1.05, pizzaPies, BRICK), { ...standing(6.6, 1.75, WHITE), face: [0, 1] },
+    KITCHEN_FOOD_CASE(6.6,2.45,2,.38,1.05,'pizza'), { ...standing(6.6, 1.75, WHITE), face: [0, 1] },
     ...[4.9, 6.6, 8.3].map(x => hung(x, 2.45, 2.0, (vx, vy, z) => drum(vx, vy, 0.12, z - 0.12, z, (i, t, L) => { BG[i] = C(HIT.face === 6 ? YEL : RED, HIT.face === 6 ? 13 : 4); return set(i, ' ', 0), true; }))), // the heat lamps
     BX(8.3, 1.4, 0.55, 0.35, 0, 0.9, solid(GRAY, { top: '=', panel: 0.35 })), // the prep counter at the back, a sack of flour on it
     BX(8.05, 1.4, 0.2, 0.15, 0.9, 1.25, (i, t, L) => { BG[i] = C(WHITE, 4); return set(i, HIT.face <= 4 && Math.abs(HIT.w - 1.08) < 0.04 ? '~' : ' ', C(GRAY, 3)), true; }),
@@ -19079,6 +19076,10 @@ ROOM_DEFS.taqueria = { grid: backWc(13, 9), wc: wcAt(13), light: 1.0, floor: 'sa
 // ---- the sushi bar (SUSHI): a conveyor belt round an island counter, plates going round on it, the chefs inside,
 // stools all round; pale wood walls, a noren over the kitchen door, paper lanterns, the fish on its board
 const SUSHI_LOOP = { x0: 3.0, x1: 9.0, y0: 2.6, y1: 4.9 }; // the belt's path (its middle line), round the island
+const SUSHI_WORK = (()=>{
+  const y=(SUSHI_LOOP.y0+SUSHI_LOOP.y1)/2,half=.35,edge=.25;
+  return {y,half,edge,north:(SUSHI_LOOP.y0+edge+y-half)/2,south:(y+half+SUSHI_LOOP.y1-edge)/2};
+})();
 function sushiAt(s) { // a point s metres round the belt: [x, y]
   const { x0, x1, y0, y1 } = SUSHI_LOOP, w = x1 - x0, h = y1 - y0, P = 2 * (w + h);
   s = mod(s, P);
@@ -19123,13 +19124,13 @@ ROOM_FLOORS.cotto = (i, f, wx, wy, r, x, L) => {
   const row = Math.floor(wy / 0.26), cx = wx / 0.3 + (row & 1) * 0.5, cu = fract(cx) - 0.5, cv = fract(wy / 0.26) - 0.5, edge = Math.abs(cu) > 0.44 || Math.abs(cv) > 0.42 && Math.abs(cu) > 0.1;
   BG[i] = edge ? C(STONE, 0.9 + f * 1.6) : C(BRICK, 1.3 + f * 2.6 + hash(Math.floor(cx), row, 102) * 0.6); return set(i, ' ', 0);
 };
-ROOM_DEFS.sushibar = { grid: backWc(14, 9), wc: wcAt(14), light: 0.9, floor: 'hinoki', ceil: 'lantern', sign: false, wall: sushiWall, keeper: [6.0, 3.75],
+ROOM_DEFS.sushibar = { grid: backWc(14, 9), wc: wcAt(14), light: 0.9, floor: 'hinoki', ceil: 'lantern', sign: false, wall: sushiWall, keeper: [6.0, SUSHI_WORK.south],
   props: r => {
-    const { x0, x1, y0, y1 } = SUSHI_LOOP, p = [
-      BX((x0 + x1) / 2, y0, (x1 - x0) / 2 + 0.25, 0.25, 0, 0.95, sushiCounterShade), BX((x0 + x1) / 2, y1, (x1 - x0) / 2 + 0.25, 0.25, 0, 0.95, sushiCounterShade),
-      BX(x0, (y0 + y1) / 2, 0.25, (y1 - y0) / 2 - 0.25, 0, 0.95, sushiCounterShade), BX(x1, (y0 + y1) / 2, 0.25, (y1 - y0) / 2 - 0.25, 0, 0.95, sushiCounterShade), // the island, round its belt
-      BX(6.0, (y0 + y1) / 2, 2.6, 0.35, 0, 0.85, solid(GRAY, { top: '=' })), sushiBelt(), // the chefs' bench inside it
-      { ...standing(6.0, 3.75, WHITE), face: [0, 1] }, { ...standing(4.2, 3.75, WHITE), face: [0, -1] }, ...wcFittings(14)];
+    const { x0, x1, y0, y1 } = SUSHI_LOOP,edge=SUSHI_WORK.edge,p = [
+      BX((x0 + x1) / 2, y0, (x1 - x0) / 2 + edge, edge, 0, 0.95, sushiCounterShade), BX((x0 + x1) / 2, y1, (x1 - x0) / 2 + edge, edge, 0, 0.95, sushiCounterShade),
+      BX(x0, (y0 + y1) / 2, edge, (y1 - y0) / 2 - edge, 0, 0.95, sushiCounterShade), BX(x1, (y0 + y1) / 2, edge, (y1 - y0) / 2 - edge, 0, 0.95, sushiCounterShade), // the island, round its belt
+      BX(6.0, SUSHI_WORK.y, 2.6, SUSHI_WORK.half, 0, 0.85, solid(GRAY, { top: '=' })), sushiBelt(), // the chefs' bench inside it
+      { ...standing(6.0, SUSHI_WORK.south, WHITE), face: [0, 1] }, { ...standing(4.2, SUSHI_WORK.north, WHITE), face: [0, -1] }, ...wcFittings(14)];
     for (let x = x0; x <= x1 + 1e-6; x += 1.0) for (const [y, fy] of [[y0 - 0.55, 1], [y1 + 0.55, -1]]) { p.push(STOOL(x, y, RED, 0.62)); if (chance(0.4)) p.push({ ...sitting(x, y, shirt(), 0.62), face: [0, fy] }); }
     for (const [x, fx] of [[x0 - 0.55, 1], [x1 + 0.55, -1]]) { p.push(STOOL(x, (y0 + y1) / 2, RED, 0.62)); if (chance(0.4)) p.push({ ...sitting(x, (y0 + y1) / 2, shirt(), 0.62), face: [fx, 0] }); }
     for (const x of [2.2, 4.6, 9.4, 11.6]) p.push(hung(x, 6.2, 2.4, (vx, vy, z) => drum(vx, vy, 0.15, z - 0.36, z, (i, t, L) => { BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 6) < 0.2 ? '-' : ' ', C(GRAY, 2)), true; }))); // paper lanterns
@@ -19140,13 +19141,6 @@ ROOM_DEFS.sushibar = { grid: backWc(14, 9), wc: wcAt(14), light: 0.9, floor: 'hi
 // ---- the ice cream parlour (ICE CREAM): the dipping case of tubs in every colour, cones racked on the wall, pastel
 // stripes, little marble tables with wire chairs, a big neon cone
 const ICE = [[MAG, 9], [WHITE, 12], [GREEN, 9], [BRICK, 4], [YEL, 12], [ORANGE, 9], [CYAN, 10], [RED, 8]];
-const iceTubs = (i, u, v, w, L, f) => { // the tubs, seen through the glass top: two rows of colours, a scoop in some
-  if (f !== 5 && f !== 3) return false;
-  const k = Math.floor((u + 3) / 0.32), row = v < 0 ? 0 : 1, [c, lv] = ICE[(k * 3 + row * 5) % ICE.length];
-  if (fract((u + 3) / 0.32) < 0.12 || (f === 5 && Math.abs(v) < 0.03)) return false;
-  if (f === 3 && (w < 0.08 || w > 0.3)) return false;
-  BG[i] = C(c, lv); return set(i, f === 5 && hash(k, row, 95) > 0.6 && fract((u + 3) / 0.32) > 0.6 ? 'o' : ' ', C(c, lv + 3)), true;
-};
 const wireChair = (x, y, fx, fy, col) => { // a parlour chair: a round seat, a heart-shaped wire back
   const seat = { ...ROOM_MODEL(x, y, (vx, vy) => {
     drum(vx, vy, 0.2, 0.44, 0.48, (i, t, L) => { BG[i] = C(col, 4 + L * 0.3); return set(i, ' ', 0), true; });
@@ -19168,7 +19162,7 @@ function iceWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_FLOORS.pastel = (i, f, wx, wy, r, x, L) => { BG[i] = (Math.floor(wx * 2) + Math.floor(wy * 2)) & 1 ? C(MAG, 5 + f * 3) : C(WHITE, 6 + f * 4); return set(i, ' ', 0); };
 ROOM_DEFS.icecream = { grid: boxRoom(11, 8), light: 1.1, floor: 'pastel', ceil: 'pendant', sign: false, neon: true, wall: iceWall, keeper: [5.5, 1.5],
-  props: r => [...glassCase(5.5, 2.3, 2.6, 0.42, 1.1, iceTubs, WHITE), { ...standing(5.5, 1.5, MAG), face: [0, 1] },
+  props: r => [KITCHEN_FOOD_CASE(5.5,2.3,2.6,.42,1.1,'icecream',WHITE), { ...standing(5.5, 1.5, MAG), face: [0, 1] },
     ...[[2.0, 4.6], [5.5, 5.4], [9.0, 4.6]].flatMap(([x, y]) => dining(x, y, { hl: 0.32, hw: 0.32, top: solid(WHITE, { top: ' ', bright: 2 }), busy: 0.4, chair: wireChair, chairCol: MAG, h: 0.74 })),
     POT_PLANT(10.2, 6.9, 1.2)] };
 
@@ -19187,15 +19181,8 @@ function bakeryWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 0.95) { BG[i] = C(BRICK, 1.8 + L * 0.2); return set(i, fract(u * 3) < 0.05 ? '|' : ' ', C(WARM, 4)), true; }
   BG[i] = C(YEL, 6 + L * 0.15); return set(i, ' ', 0), true; // cream walls
 }
-const cakeCase = (i, u, v, w, L, f) => { // tiers of cakes and tarts, croissants in rows
-  if (f !== 3 && f !== 5) return false;
-  const k = Math.floor((u + 2) / 0.4), tier = f === 5 ? 0 : w < 0.2 ? 1 : 2, kind = hash(k, tier, 97);
-  if (fract((u + 2) / 0.4) < 0.15 || f === 3 && (w < 0.06 || w > 0.34)) return false;
-  BG[i] = C(kind < 0.3 ? ORANGE : kind < 0.55 ? BRICK : kind < 0.8 ? WHITE : MAG, kind < 0.3 ? 7 : kind < 0.55 ? 3 : kind < 0.8 ? 10 : 7);
-  return set(i, kind < 0.3 ? ')' : kind > 0.8 ? '*' : ' ', C(RED, 10)), true;
-};
 ROOM_DEFS.bakery = { grid: boxRoom(11, 8), light: 1.0, floor: 'oak', ceil: 'pendant', sign: false, wall: bakeryWall, keeper: [5.0, 1.55],
-  props: r => [...glassCase(5.0, 2.35, 2.2, 0.4, 1.1, cakeCase, BRICK), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_FOOD_CASE(5,2.35,2.2,.4,1.1,'bakery'), { ...standing(5.0, 1.55, WHITE), face: [0, 1] },
     ROOM_MODEL(9.4, 1.5, (vx, vy) => { // the deck oven: steel, three decks, their little windows glowing
       drawBox(boxAt(vx, vy, 1, 0, 0.75, 0.45, 0, 2.1), (i, t, L) => { BG[i] = C(GRAY, (2.6 + L * 0.3) * shadeFace(HIT.face));
         if (HIT.face === 3 && Math.abs(HIT.u) < 0.5 && fract((HIT.w - 0.3) / 0.6) > 0.25 && fract((HIT.w - 0.3) / 0.6) < 0.7 && HIT.w > 0.3 && HIT.w < 2.1) { BG[i] = C(ORANGE, 6 + 2 * noise(HIT.u * 5, T, 98)); return set(i, '.', C(YEL, 10)), true; }
@@ -21047,11 +21034,6 @@ const steamers = (x, y, n) => ROOM_MODEL(x, y, (vx, vy) => {
   for (let k = 0; k < n; k++) drum(vx, vy, 0.17, 1.0 + k * 0.1, 1.09 + k * 0.1, (i, t, L) => { BG[i] = C(YEL, (3.4 + L * 0.3) * drumLit(0.17)); return set(i, HIT.face === 5 ? (fract(HIT.u * 12) < 0.3 ? '=' : ' ') : '|', C(BRICK, 6)), true; }); // bamboo, woven
   drum(vx, vy, 0.17, 1.0 + n * 0.1, 1.04 + n * 0.1, (i, t, L) => { BG[i] = C(YEL, 4); return set(i, HIT.face === 5 && fract(T * 2 + HIT.u * 3) < 0.2 ? '~' : ' ', C(WHITE, 12)), true; }); // the lid, the steam lifting it
 }, [0.17, 0.17, 1.05 + n * 0.1]);
-const foldingTable = (i, t, L) => { // flour, and rows of dumplings waiting to go in
-  if (HIT.face !== 5) { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
-  const row = fract(HIT.v * 6), k = fract(HIT.u * 7);
-  BG[i] = C(WHITE, 4 + L * 0.2); return set(i, row > 0.3 && row < 0.7 && k > 0.2 && k < 0.8 && HIT.u > 0 ? 'o' : hash(Math.floor(HIT.u * 30), Math.floor(HIT.v * 30), 122) > 0.8 ? '.' : ' ', C(GRAY, 6)), true;
-};
 function dumplingWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.55, 0.3, 0.34, C(YEL, 14), C(RED, 2.4))) return true;
@@ -21064,7 +21046,7 @@ function dumplingWall(i, u, uStep, z, d, mx, my, L) {
 }
 const roundLantern = (x, y) => hung(x, y, 2.3, (vx, vy, z) => { drum(vx, vy, 0.22, z - 0.35, z, (i, t, L) => { BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 6) < 0.2 ? '-' : ' ', C(YEL, 10)), true; }); rod(vx, vy, z - 0.35, vx, vy, z - 0.6, 0.02, YEL, 1.4); }); // a tassel under it
 ROOM_DEFS.dumplings = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'strip', sign: false, wall: dumplingWall, keeper: [6.6, 1.7],
-  props: r => [BX(5.0, 2.55, 2.4, 0.3, 0, 1.0, solid(RED, { top: '=', panel: 0.6, bright: 1.3 })), BX(4.2, 1.45, 1.2, 0.35, 0, 0.85, foldingTable),
+  props: r => [BX(5.0, 2.55, 2.4, 0.3, 0, 1.0, solid(RED, { top: '=', panel: 0.6, bright: 1.3 })), KITCHEN_PREP(4.2,1.45,1.2,.35,.85),
     { ...standing(3.6, 2.05, WHITE), face: [0, -1] }, { ...standing(4.8, 2.05, WHITE), face: [0, -1] }, { ...standing(6.6, 1.7, RED), face: [0, 1] }, // two folding, one serving
     steamers(6.3, 2.55, 4), steamers(6.75, 2.55, 3), steamers(7.15, 2.55, 5),
     ...roundTable(2.5, 4.6, 0.45, 4, { chair: lowStool, chairCol: RED, busy: 0.45, a0: Math.PI / 4 }), ...roundTable(9.5, 4.6, 0.45, 4, { chair: lowStool, chairCol: BLUE, busy: 0.4, a0: Math.PI / 4 }),
@@ -21251,7 +21233,7 @@ function noodleHouseWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.noodlehouse = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'lantern', sign: false, wall: noodleHouseWall, keeper: [6.6, 1.65],
   props: r => [BX(6.0, 2.5, 2.6, 0.3, 0, 1.0, solid(RED, { top: '=', panel: 0.6, bright: 1.3 })), { ...standing(6.6, 1.65, RED), face: [0, 1] },
-    BX(2.6, 1.45, 0.9, 0.35, 0, 0.9, foldingTable), { ...standing(2.6, 2.05, WHITE), face: [0, -1] }, noodlePuller(2.6, 1.95), // the noodle maker at work
+    KITCHEN_PREP(2.6,1.45,.9,.35,.9,'noodles'), { ...standing(2.6, 2.05, WHITE), face: [0, -1] }, noodlePuller(2.6, 1.95), // the noodle maker at work
     stockPot(8.0, 1.45), stockPot(8.75, 1.45),
     ...[[2.5, 4.6, 0.45], [9.5, 4.6, 0.45], [2.5, 6.9, 0.35], [9.5, 6.9, 0.35]].flatMap(([x, y, busy]) => roundTable(x, y, 0.45, 4, { cloth: RED, chair: lowStool, chairCol: BRICK, busy, a0: Math.PI / 4 })),
     roundLantern(4.5, 5.8), roundLantern(7.7, 5.8), ...wcFittings(13)] };
@@ -27597,7 +27579,14 @@ function closePause(lock) {
 const togglePause = () => paused ? closePause(NATIVE_MOUSE_APP) : openPause();
 // letting go of the mouse lock (the browser eats the Esc that does it) pauses too
 // (not while a cabinet or a shift has the screen: Esc there walks away from it)
-document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !desktopMouseCaptured && !paused && (freecam || !sleep && !game)) openPause(); });
+document.addEventListener('pointerlockchange', () => {
+  const wasLocked=browserMouseObservedLocked;browserMouseObservedLocked=!!document.pointerLockElement;
+  // Capture requests can finish after a menu has opened. Release that late
+  // capture deliberately, and ignore duplicate notifications of an old loss.
+  if(browserMouseObservedLocked&&paused){releaseMouse();return;}
+  if(consumeMouseRelease())return;
+  if (wasLocked&&!browserMouseObservedLocked && !desktopMouseCaptured && !paused && (freecam || !sleep && !game)) openPause();
+});
 applySettings();
 // Check quietly at launch. Downloads are an explicit pause-menu action; the game also works offline.
 let desktopUpdate = null, desktopUpdateState = 'idle';
@@ -36133,6 +36122,151 @@ function kitchenHobware(x,y,height,c,s,hob,compact=false) {
   const active=cookingOn()==='stove',how=active?RECIPE[cookCtx?.recipe]?.how:null;
   const u=hob+(compact?0:.135),v=.135,kind=how==='pot'?'pot':'pan';
   kitchenCookware(x+c*u-s*v,y+s*u+c*v,height+.019,c,s,{kind,scale:compact?.9:1,filled:!!how&&how!=='oven'});
+}
+// Food cases contain supported solids behind sparse glass highlights. The clear
+// panes never replace the food with a picture painted on their outer surface.
+function foodRayEllipsoid(ox,oy,oz,rx,ry,rz,b) {
+  const x=ox-b.x,y=oy-b.y,zc=(b.z0+b.z1)/2,hz=(b.z1-b.z0)/2;
+  const u=(x*b.c+y*b.s)/b.hl,v=(-x*b.s+y*b.c)/b.hw,w=(oz-zc)/hz;
+  const du=(rx*b.c+ry*b.s)/b.hl,dv=(-rx*b.s+ry*b.c)/b.hw,dw=rz/hz;
+  const A=du*du+dv*dv+dw*dw,B=u*du+v*dv+w*dw,D=B*B-A*(u*u+v*v+w*w-1);
+  if(D<0)return -1;const t=(-B-Math.sqrt(D))/A;if(t<.01)return -1;
+  HIT.u=(u+du*t)*b.hl;HIT.v=(v+dv*t)*b.hw;HIT.w=oz+rz*t;
+  const nu=(u+du*t)/b.hl,nv=(v+dv*t)/b.hw,nz=(w+dw*t)/hz,n=Math.hypot(nu,nv,nz);
+  HIT.nx=(b.c*nu-b.s*nv)/n;HIT.ny=(b.s*nu+b.c*nv)/n;HIT.nz=nz/n;HIT.face=0;return t;
+}
+function foodOval(x,y,z,hl,hw,height,shade,c=1,s=0) {
+  drawBox(boxAt(x,y,c,s,hl,hw,z,z+height),shade,foodRayEllipsoid);
+}
+function foodRayTray(ox,oy,oz,rx,ry,rz,b) {
+  const outer=homeRayWorktop(ox,oy,oz,rx,ry,rz,b);if(outer<0)return outer;
+  const ih=b.hl-.008,iw=b.hw-.008;
+  if(HIT.face!==5||Math.abs(HIT.u)>=ih||Math.abs(HIT.v)>=iw)return outer;
+  const u=ox-b.x,v=oy-b.y,bottom=b.z0+.008;let best=Infinity,nx=0,ny=0,nz=0;
+  const take=(t,x,y,z)=>{
+    if(t<outer||t>=best)return;
+    const a=u+rx*t,d=v+ry*t,w=oz+rz*t;
+    if(Math.abs(a)>ih+1e-8||Math.abs(d)>iw+1e-8||w<bottom-1e-8||w>b.z1+1e-8)return;
+    best=t;nx=x;ny=y;nz=z;
+  };
+  if(Math.abs(rz)>1e-10)take((bottom-oz)/rz,0,0,1);
+  for(const side of [-1,1]) {
+    if(Math.abs(rx)>1e-10)take((side*ih-u)/rx,-side,0,0);
+    if(Math.abs(ry)>1e-10)take((side*iw-v)/ry,0,-side,0);
+  }
+  if(!Number.isFinite(best))return -1;
+  HIT.u=u+rx*best;HIT.v=v+ry*best;HIT.w=oz+rz*best;
+  HIT.nx=nx;HIT.ny=ny;HIT.nz=nz;HIT.face=nz?5:0;return best;
+}
+const foodTrayProfiles=new Map();
+function foodTray(x,y,z,hl,hw,depth=.045) {
+  // One closed shell owns the rim, four inner walls and recessed floor, rather
+  // than five overlapping panel passes for every tray in a display.
+  const key=[hl,hw,z,depth].join(':');
+  if(!foodTrayProfiles.has(key)) {
+    if(foodTrayProfiles.size>=32)foodTrayProfiles.clear();
+    foodTrayProfiles.set(key,kitchenTopProfile(hl,hw,z,z+depth,.002));
+  }
+  drawBox({...boxAt(x,y,1,0,hl,hw,z,z+depth),...foodTrayProfiles.get(key)},kitchenSteel,foodRayTray);
+}
+function counterPizza(x,y,z,scale=1) {
+  const h=.018*scale,r=.18*scale;
+  coveLathe(x,y,z,[[0,0],[0,r-.01],[.009,r],[h,r],[h+.006,r-.01],[h*.7,r-.025],[h*.7,0]],kitchenFoodShade(ORANGE));
+  coveLathe(x,y,z+h*.7,[[0,0],[0,r-.025],[.002,r-.025],[.002,0]],(i,t,L)=>{
+    const cut=coveGroove(Math.atan2(HIT.v,HIT.u)*r,Math.PI*r/3,.002,t/projX)*coveDetail(t);
+    BG[i]=C(YEL,3+L*.35-cut*1.4);set(i,' ',0);return true;
+  });
+  for(let k=0;k<6;k++) {
+    const a=k*Math.PI/3,rr=r*.56;
+    coveLathe(x+Math.cos(a)*rr,y+Math.sin(a)*rr,z+h*.7+.002,
+      [[0,0],[0,.018*scale],[.002,.018*scale],[.002,0]],kitchenFoodShade(RED));
+  }
+}
+function counterPastry(x,y,z,kind=0) {
+  if(kind%3===0) { // a crescent assembled from overlapping tapered dough lobes
+    for(let k=0;k<5;k++) {
+      const a=(k-2)*.43,rr=.055;
+      foodOval(x+Math.sin(a)*rr,y+Math.cos(a)*rr-.03,z,.035-.004*Math.abs(k-2),.027,.045-.005*Math.abs(k-2),kitchenFoodShade(ORANGE),Math.cos(a),-Math.sin(a));
+    }
+  }else {
+    const dark=kind%3===1;
+    coveLathe(x,y,z,[[0,0],[0,.063],[.009,.068],[.075,.068],[.08,.062],[.08,0]],kitchenFoodShade(dark?BRICK:WHITE));
+    coveLathe(x,y,z+.08,[[0,0],[0,.064],[.007,.06],[.007,0]],kitchenFoodShade(dark?WARM:MAG));
+    for(const [u,v]of [[-.022,0],[.022,0],[0,.025]])foodOval(x+u,y+v,z+.087,.013,.013,.019,kitchenFoodShade(RED));
+  }
+}
+function counterDeli(x,y,z,kind) {
+  if(kind%3===0) { // sliced meats, each slice has its own exposed edge
+    for(let k=0;k<4;k++)coveLathe(x+k*.009,y,z+k*.008,[[0,0],[0,.06],[.008,.06],[.008,0]],(i,t,L)=>{
+      const fat=Math.sin(HIT.u*340)*Math.sin(HIT.v*280)*coveDetail(t);
+      BG[i]=C(fat>.78?WHITE:RED,2.4+L*.32*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+    });
+  }else if(kind%3===1) {
+    coveLathe(x,y,z,[[0,0],[0,.08],[.08,.08],[.08,0]],(i,t,L)=>{
+      const rind=HIT.face!==5;
+      BG[i]=C(rind?ORANGE:YEL,2.6+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+    });
+  }else for(const [u,v]of [[-.035,-.018],[.035,-.018],[0,.035]])
+    foodOval(x+u,y+v,z,.022,.016,.045,kitchenFoodShade(GREEN),.7,.7141428429);
+}
+function KITCHEN_FOOD_CASE(x,y,hl,hw,height,kind,base=BRICK) {
+  const bottom=height-.42,shelf=bottom+.025;
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,hw,0,bottom,.015,base===BRICK?'wood':base);
+    drawBox({...boxAt(vx,vy,1,0,hl-.025,hw-.025,bottom,shelf),...kitchenTopProfile(hl-.025,hw-.025,bottom,shelf,.008)},kitchenSteel,homeRayWorktop);
+    // Frames are joined rods. The shelf's top owns the supporting surface.
+    for(const side of [-1,1]) {
+      for(const end of [-1,1])coveTube(vx+side*(hl-.012),vy+end*(hw-.012),shelf,
+        vx+side*(hl-.012),vy+end*(hw-.012),height,.012,GRAY);
+      coveTube(vx-hl+.012,vy+side*(hw-.012),height,vx+hl-.012,vy+side*(hw-.012),height,.012,GRAY);
+      coveTube(vx+side*(hl-.012),vy-hw+.012,height,vx+side*(hl-.012),vy+hw-.012,height,.012,GRAY);
+    }
+    const count=kind==='icecream'?8:kind==='deli'?9:kind==='pizza'?6:9,step=(hl*2-.3)/count;
+    for(let k=0;k<count;k++) {
+      const u=-hl+.15+step*(k+.5),xx=vx+u;
+      if(kind==='icecream')for(const side of [-1,1]) {
+        const yy=vy+side*.19,th=.012,col=ICE[(k*3+(side>0?5:0))%ICE.length][0];
+        foodTray(xx,yy,shelf,Math.min(.2,step*.43),.16,.095);
+        foodOval(xx,yy,shelf+.008,Math.min(.18,step*.4),.142,.103,kitchenFoodShade(col));
+      }else {
+        foodTray(xx,vy,shelf,Math.min(step*.44,kind==='pizza'?.24:.16),hw-.075,.024);
+        if(kind==='pizza') {if(hash(k,3,951)>.15)counterPizza(xx,vy,shelf+.008);}
+        else if(kind==='deli')counterDeli(xx,vy,shelf+.008,k);
+        else for(const side of [-1,1])counterPastry(xx,vy+side*.16,shelf+.008,k+(side>0?1:0));
+      }
+    }
+    // Only narrow reflected streaks write glass depth. Clear pixels preserve
+    // the actual objects behind both front and end panes, from either side.
+    drawBox(boxAt(vx,vy,1,0,hl-.012,hw-.012,shelf,height),(i,t,L)=>{
+      const f=HIT.face,u=f<=2?HIT.v:HIT.u,v=f===5?HIT.v:HIT.w;
+      const glint=coveGroove(u+v*.55,1.3,.003,t/projX)*coveDetail(t);
+      if(glint<.5)return false;
+      BG[i]=C(CYAN,2+L*.2);set(i,' ',0);return true;
+    });
+  },[hl,hw,height]),radius:hl+.5,foodCase:{kind,hl,hw,height,shelf}};
+}
+function KITCHEN_PREP(x,y,hl,hw,height,kind='dumplings') {
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    coveRound(vx,vy,1,0,hl,hw,0,height-.035,.015,'wood');
+    drawBox({...boxAt(vx,vy,1,0,hl,hw,height-.035,height),...kitchenTopProfile(hl,hw,height-.035,height)},kitchenSteel,homeRayWorktop);
+    const boardH=.018,bhl=hl-.12,bhw=hw-.07;
+    drawBox({...boxAt(vx,vy,1,0,bhl,bhw,height,height+boardH),...kitchenTopProfile(bhl,bhw,height,height+boardH,.007)},(i,t,L)=>{
+      const fine=coveDetail(t),flour=(Math.sin(HIT.u*170)*Math.sin(HIT.v*210)>.65)*fine;
+      coveTimber(i,HIT.u,HIT.v,L,t,HIT.nx,HIT.ny,HIT.nz,7);
+      if(flour)BG[i]=C(WHITE,4+L*.2);return true;
+    },homeRayWorktop);
+    for(let k=0;k<6;k++) {
+      const xx=vx-bhl*.7+k*bhl*1.4/5;
+      if(kind==='dumplings')for(const side of [-1,1])
+        foodOval(xx,vy+side*.12,height+boardH,.028,.023,.035,kitchenFoodShade(WHITE));
+      else for(let strand=0;strand<3;strand++)for(let seg=0;seg<4;seg++) {
+        const ya=-.16+seg*.08,yb=ya+.08,xa=xx+Math.sin(seg+strand)*.012,xb=xx+Math.sin(seg+1+strand)*.012;
+        const az=height+boardH+.003,bz=az;
+        const box={...boxAt((xa+xb)/2,vy+(ya+yb)/2,1,0,Math.abs(xb-xa)/2+.003,.043,az-.003,bz+.003),ax:xa,ay:vy+ya,az,bx:xb,by:vy+yb,bz,r:.003};
+        drawBox(box,kitchenFoodShade(YEL),coveRayCapsule);
+      }
+    }
+  },[hl,hw,height]),radius:hl+.3,prep:{kind,hl,hw,height}};
 }
 // Fern's front is west toward the dock. The room's south entrance therefore
 // maps through a quarter turn; windows and the world-view camera share it.

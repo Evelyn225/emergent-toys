@@ -266,13 +266,6 @@ ROOM_DEFS.grocer = { grid: ['##############', '#.......#....#', '#..SS...#....#'
 
 // ---- the deli (DELI, DELICATESSEN): a long glass counter of meats and cheeses under a rail of hanging salami, the
 // slicer, "now serving" over it all, take a number, two little tables, and the customers' toilet in the front corner
-const DELI_GOODS = [[RED, '@'], [MAG, '='], [YEL, '#'], [GREEN, 'o'], [BRICK, '%'], [WHITE, 'O'], [ORANGE, '=']];
-const deliGoods = (i, u, v, w, L, f) => { // trays in a row: each tray one thing
-  const tray = Math.floor((u + 4) / 0.55), [col, ch] = DELI_GOODS[(hash(tray, 7, 77) * DELI_GOODS.length) | 0];
-  if (fract((u + 4) / 0.55) < 0.06) return set(i, '|', C(GRAY, 9)), true; // between trays
-  if (f !== 5 && (w < 0.05 || w > 0.24)) return false;
-  BG[i] = C(col, 2.5); return set(i, hash(i, 5) > 0.4 ? ch : ' ', C(col, 13)), true;
-};
 const salami = (vx, vy, z) => drawRod(vx, vy, z, vx, vy, z - 0.42, 0.045, (i, t, L) => { BG[i] = C(BRICK, 1.4 + L * 0.2); return set(i, hash(i, 11) > 0.6 ? '.' : ' ', C(WHITE, 8)), true; });
 const cheeseWheel = (vx, vy, z) => drum(vx, vy, 0.14, z - 0.14, z, (i, t, L) => { BG[i] = C(YEL, (2.5 + L * 0.3) * drumLit(0.14)); return set(i, HIT.face === 5 ? 'o' : '=', C(ORANGE, L * 0.7)), true; });
 function deliWall(i, u, uStep, z, d, mx, my, L) {
@@ -296,7 +289,7 @@ function deliWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.deli = { grid: ['##############', '#............#', '#............#', '#............#', '#.........W.W#', '#.........W..#', '#.........W..#', '#.........W..#', '######DD######'],
   wc: { x0: 11, y0: 5, x1: 13, y1: 8, sign: [10, 4, 10.5] }, light: 0.95, floor: 'checker', ceil: 'tin', sign: true, signAt: 7, wall: deliWall, keeper: [7, 1.4],
   props: r => {
-    const p = [...glassCase(7, 2.1, 3, 0.4, 1.25, deliGoods, WHITE), standing(7, 1.4, WHITE), standing(5, 1.4, WHITE),
+    const p = [KITCHEN_FOOD_CASE(7,2.1,3,.4,1.25,'deli',WHITE), standing(7, 1.4, WHITE), standing(5, 1.4, WHITE),
       BX(9.2, 1.05, 0.25, 0.2, 0.95, 1.3, (i, t, L) => { // the slicer on the back counter: its blade spinning
         if (HIT.face === 4 && Math.hypot(HIT.u, HIT.w - 1.12) < 0.15) { BG[i] = C(GRAY, 5); return set(i, '-\\|/'[Math.floor(T * 12) & 3], C(WHITE, 15)), true; }
         BG[i] = C(GRAY, (2 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }),

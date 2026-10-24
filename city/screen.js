@@ -186,7 +186,11 @@ function lockMouse() { // take the mouse (refused or impossible: a click will do
   }
   browserMouseCapture();
 }
+let browserMouseReleasePending=false,browserMouseRelockPending=false,browserMouseObservedLocked=false;
 function browserMouseCapture() {
+  // An exit event can arrive after a menu has already closed. Let that exit
+  // settle before requesting the next capture, keeping the events in order.
+  if(browserMouseReleasePending){browserMouseRelockPending=true;return;}
   desktopMouseCaptured = false;
   const limited = () => {
     if (NATIVE_MOUSE_APP && desktopMouseWanted) {
@@ -201,6 +205,7 @@ function browserMouseCapture() {
   } catch (error) { limited(); }
 }
 function releaseMouse() {
+  browserMouseRelockPending=false;
   K.MouseUse = 0; gun.aimHeld = false;
   cv.style.cursor = '';
   if (NATIVE_MOUSE_APP) {
@@ -210,6 +215,15 @@ function releaseMouse() {
     desktopMouseFallback = false;
     nativeMouseCapture(false).catch(() => {});
   }
-  if (document.pointerLockElement) document.exitPointerLock();
+  if (document.pointerLockElement&&!browserMouseReleasePending) {
+    browserMouseReleasePending=true;document.exitPointerLock();
+  }
+}
+function consumeMouseRelease() {
+  if(document.pointerLockElement||!browserMouseReleasePending)return false;
+  browserMouseReleasePending=false;
+  const relock=browserMouseRelockPending;browserMouseRelockPending=false;
+  if(relock&&!paused)browserMouseCapture();
+  return true;
 }
 const mouseCaptured = () => desktopMouseCaptured || Boolean(document.pointerLockElement);

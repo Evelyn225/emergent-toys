@@ -82,11 +82,6 @@ const steamers = (x, y, n) => ROOM_MODEL(x, y, (vx, vy) => {
   for (let k = 0; k < n; k++) drum(vx, vy, 0.17, 1.0 + k * 0.1, 1.09 + k * 0.1, (i, t, L) => { BG[i] = C(YEL, (3.4 + L * 0.3) * drumLit(0.17)); return set(i, HIT.face === 5 ? (fract(HIT.u * 12) < 0.3 ? '=' : ' ') : '|', C(BRICK, 6)), true; }); // bamboo, woven
   drum(vx, vy, 0.17, 1.0 + n * 0.1, 1.04 + n * 0.1, (i, t, L) => { BG[i] = C(YEL, 4); return set(i, HIT.face === 5 && fract(T * 2 + HIT.u * 3) < 0.2 ? '~' : ' ', C(WHITE, 12)), true; }); // the lid, the steam lifting it
 }, [0.17, 0.17, 1.05 + n * 0.1]);
-const foldingTable = (i, t, L) => { // flour, and rows of dumplings waiting to go in
-  if (HIT.face !== 5) { BG[i] = C(BRICK, (1.6 + L * 0.3) * shadeFace(HIT.face)); return set(i, ' ', 0), true; }
-  const row = fract(HIT.v * 6), k = fract(HIT.u * 7);
-  BG[i] = C(WHITE, 4 + L * 0.2); return set(i, row > 0.3 && row < 0.7 && k > 0.2 && k < 0.8 && HIT.u > 0 ? 'o' : hash(Math.floor(HIT.u * 30), Math.floor(HIT.v * 30), 122) > 0.8 ? '.' : ' ', C(GRAY, 6)), true;
-};
 function dumplingWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.3 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.55, 0.3, 0.34, C(YEL, 14), C(RED, 2.4))) return true;
@@ -99,7 +94,7 @@ function dumplingWall(i, u, uStep, z, d, mx, my, L) {
 }
 const roundLantern = (x, y) => hung(x, y, 2.3, (vx, vy, z) => { drum(vx, vy, 0.22, z - 0.35, z, (i, t, L) => { BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 6) < 0.2 ? '-' : ' ', C(YEL, 10)), true; }); rod(vx, vy, z - 0.35, vx, vy, z - 0.6, 0.02, YEL, 1.4); }); // a tassel under it
 ROOM_DEFS.dumplings = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'strip', sign: false, wall: dumplingWall, keeper: [6.6, 1.7],
-  props: r => [BX(5.0, 2.55, 2.4, 0.3, 0, 1.0, solid(RED, { top: '=', panel: 0.6, bright: 1.3 })), BX(4.2, 1.45, 1.2, 0.35, 0, 0.85, foldingTable),
+  props: r => [BX(5.0, 2.55, 2.4, 0.3, 0, 1.0, solid(RED, { top: '=', panel: 0.6, bright: 1.3 })), KITCHEN_PREP(4.2,1.45,1.2,.35,.85),
     { ...standing(3.6, 2.05, WHITE), face: [0, -1] }, { ...standing(4.8, 2.05, WHITE), face: [0, -1] }, { ...standing(6.6, 1.7, RED), face: [0, 1] }, // two folding, one serving
     steamers(6.3, 2.55, 4), steamers(6.75, 2.55, 3), steamers(7.15, 2.55, 5),
     ...roundTable(2.5, 4.6, 0.45, 4, { chair: lowStool, chairCol: RED, busy: 0.45, a0: Math.PI / 4 }), ...roundTable(9.5, 4.6, 0.45, 4, { chair: lowStool, chairCol: BLUE, busy: 0.4, a0: Math.PI / 4 }),
@@ -286,7 +281,7 @@ function noodleHouseWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.noodlehouse = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'lantern', sign: false, wall: noodleHouseWall, keeper: [6.6, 1.65],
   props: r => [BX(6.0, 2.5, 2.6, 0.3, 0, 1.0, solid(RED, { top: '=', panel: 0.6, bright: 1.3 })), { ...standing(6.6, 1.65, RED), face: [0, 1] },
-    BX(2.6, 1.45, 0.9, 0.35, 0, 0.9, foldingTable), { ...standing(2.6, 2.05, WHITE), face: [0, -1] }, noodlePuller(2.6, 1.95), // the noodle maker at work
+    KITCHEN_PREP(2.6,1.45,.9,.35,.9,'noodles'), { ...standing(2.6, 2.05, WHITE), face: [0, -1] }, noodlePuller(2.6, 1.95), // the noodle maker at work
     stockPot(8.0, 1.45), stockPot(8.75, 1.45),
     ...[[2.5, 4.6, 0.45], [9.5, 4.6, 0.45], [2.5, 6.9, 0.35], [9.5, 6.9, 0.35]].flatMap(([x, y, busy]) => roundTable(x, y, 0.45, 4, { cloth: RED, chair: lowStool, chairCol: BRICK, busy, a0: Math.PI / 4 })),
     roundLantern(4.5, 5.8), roundLantern(7.7, 5.8), ...wcFittings(13)] };

@@ -66,7 +66,8 @@ test('real E still opens each owned home fridge and cooks with its saved pantry 
   await p.keyboard.press('e');assert.ok(await p.evaluate(()=>panelOpen()),kind);await p.keyboard.press('e');
   await p.evaluate(()=>{[px,py]=room.def.spots.stove;a=0;render(0);});
   assert.equal(await p.evaluate(()=>promptText()),'E: cook');await p.keyboard.press('e');
-  assert.ok(await p.evaluate(()=>cookCtx?.pantry===homeRecord().fridge&&cookEl.style.display==='flex'&&cookCtx.pantry[0].id==='butter'),kind);
+  assert.deepEqual(await p.evaluate(()=>({pantry:cookCtx?.pantry===homeRecord().fridge,display:cookEl.style.display,first:cookCtx?.pantry[0]?.id})),
+    {pantry:true,display:'flex',first:'butter'},kind);
   await p.keyboard.press('e');
  }
 }));
