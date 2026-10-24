@@ -141,6 +141,7 @@
     "city/kitchen-tableware.js",
     "city/kitchen-displays.js",
     "city/kitchen-appliances.js",
+    "city/kitchen-drinks.js",
     "city/fern-quality.js",
     "city/home-furniture-render.js",
     "city/home-furnishing-ui.js",
