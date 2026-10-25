@@ -377,3 +377,18 @@ older noodle-pulling lines found in the closing audit. Next Codex #221 shop
 display-case review, then remaining shop stack and home/hotel passes5–6.
 Claude owns pass12 lights/utilities; no street-only or shared helper edits.
 #218's final full CI is green; #219's updated run continues.
+
+Codex active review now `codex/review-shop-display-cases` (#221):
+`city/shop-display-cases.js`, its browser test and shared bundle/notes only.
+Current main through #220 integrated; checking actual goods support and fixed
+geometry allocation before visual/cost review. Next #222 fridge walls.
+Claude keeps pass12 and should leave this shop PR branch unchanged.
+
+#221 Codex review complete on `codex/review-shop-display-cases`: actual
+ring-stone support repaired; case goods/frame/cabinet profiles and materials
+prepared once, preserving thin-tube LOD, footprint and Claude's goods layouts.
+New actual-ray/cache check and separate stone/cache mutations verified;
+case/display/aircraft-terminal and shop route/seating checks pass. Close/wide/
+oblique/night views and ABAB costs reviewed. No shared helper edits.
+Next Codex #222 shop fridge walls, then #223 gondolas and remaining shops.
+#219 final full CI green; Claude remains on pass12 lights/utilities.
