@@ -7,7 +7,7 @@ function hotelRoomPlan(tier){
  if(tier===2)for(let y=1;y<10;y++)if(y!==7&&y!==8)extra['8,'+y]='#';
  return {w,h,bath,grid:boxRoom(w,h,extra),entry:[w/2,h-1.6,-Math.PI/2]};
 }
-function hotelTelevision(x,y,angle=0){return [ROOM_MODEL(x,y,(vx,vy)=>TELEVISION(x,y,room,1.1,angle).draw(vx,vy)),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1,angle)];}
+function hotelTelevision(x,y,angle=0,r){return [TELEVISION(x,y,r,1.1,angle),FURNITURE_STORAGE(x,y,.99,.3,.61*1.1,angle)];}
 function hotelLandscape(x,y){return BX(x,y,.85,.025,1.45,2.35,(i,t,L)=>{
  const u=HIT.u,z=HIT.w,frame=Math.abs(u)>.76||z<1.53||z>2.27;
  const hill=1.88+.12*Math.sin(u*5)+.05*Math.cos(u*11);
@@ -21,7 +21,7 @@ function hotelDefinition(tier){
  const bed=tier===2?[3.9,3.6]:[2.6,3.2],bedWidth=tier===2?1.3:1.14,standWidth=tier===2?.3:.22,standOffset=bedWidth+standWidth+.01;
  const p=[...FURNITURE_BED(...bed,bedWidth,1.05,tier===2?GREEN:BLUE,0,.58,1.3),
  ...[-1,1].flatMap(side=>[FURNITURE_STORAGE(bed[0]+side*standOffset,bed[1]-.65,standWidth,.35,.65),ROOM_MODEL(bed[0]+side*standOffset,bed[1]-.65,(vx,vy)=>{rod(vx,vy,.65,vx,vy,1,.025,YEL);drawBox(boxAt(vx,vy,1,0,.16,.16,.9,1.1),solid(WARM,{bright:5}));})]),
- ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,tier?-1:1,tier===2?GREEN:BLUE),...hotelTelevision(...tv,tvAngle),hotelLandscape(bed[0],1.03),
+ ...couch(sofa[0],sofa[1],tier===2?1.7:1.05,0,tier?-1:1,tier===2?GREEN:BLUE),...hotelTelevision(...tv,tvAngle,r),hotelLandscape(bed[0],1.03),
  ...toilet(w-2,1.42,-1,porcelain),washbasin(w-3.65,1.4,0,1),
  ...(tier?[BATHTUB(w-1.5,4.1)]:BATHROOM_SHOWER(w-1.6,5.1,.6)),
  POT_PLANT(tier===2?9.5:tier?1.5:8.5,h-1.5,1.4)];
