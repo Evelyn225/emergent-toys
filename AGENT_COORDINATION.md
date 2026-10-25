@@ -152,3 +152,28 @@ cache reuse and clear central glass are tested. TV #225 full CI is green.
 Remaining pass4 decoration audit stays with Codex, then passes5/6; other
 displayed item families share the inventory pass27 renderer. No Claude-owned
 source changed; rooms.js edit is only the home display loop in roomSprites.
+
+Codex active `codex/home-plush-shark-quality` (pass4 decoration audit):
+new `city/home-plush-shark.js`, only the plush builder/dispatch in
+`city/home-furniture-render.js`, new browser test and shared manifest/bundle/
+append-only notes. Fixing fins outside the saved placement envelope and the
+unsupported belly; preserving the existing footprint and bed-placement data.
+Shared homeRayEllipsoid/worktop/clock/KITCHEN helpers remain untouched.
+Claude continues cathedral/pass10 plus shop/restaurant work. Next is the
+remaining pass4 audit, then apartment/loft/Belle layouts in pass5.
+
+Plush chunk also fixes bed support selection in `city/home-furnishing-ui.js`:
+the old candidate path skipped all drawn bed models, while their conservative
+boxes include pillows. Probe cached rendered bed pieces for a clear flat
+support plane; retain overlap rejection against pillows and other furniture.
+No bed builder or shared geometry helper changes.
+
+`codex/home-plush-shark-quality` complete: placed shark fits the saved
+envelope, has a flat supported underside and joined details, and real bed
+placement works without accepting pillows/folds/edges. Three focused plus
+three existing furnishing browser checks pass; fin and bed-branch mutations
+are rejected. Day/night/phone and bed views reviewed, ABAB costs recorded
+in WORLD_QUALITY.md. The old homePlushShark helper remains unchanged for
+other callers; no shared ellipsoid/clock/worktop/KITCHEN helper edits.
+#227 keepsake full CI is green. Next: close the pass4 decoration audit,
+then pass5 home layouts and pass6 hotels; cathedral remains Claude's work.
