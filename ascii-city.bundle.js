@@ -37735,7 +37735,7 @@ function SHOP_GONDOLA(b,kind,seed) {
   const steel=flat((i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz));
   const plinth=flat((i,t,L)=>{BG[i]=C(GRAY,.9+L*.06);set(i,' ',0);return true;});
   const peg=flat((i,t,L)=>{const f=t/projX,hole=Math.min(1,coveGroove(HIT.u,.025,.006,f)*coveGroove(HIT.w,.025,.006,f)*4)*coveDetail(t,.3);BG[i]=C(WHITE,3.6+L*.12-hole*1.6);set(i,' ',0);return true;});
-  const goodsShade=q=>flat((i,t,L)=>{
+  const goodsShade=q=>(S.bottles?f=>f:flat)((i,t,L)=>{ // (a turned bottle's ray gives its own normals)
     const front=HIT.face===3||HIT.face===4,light=coveLight(HIT.nx,HIT.ny,HIT.nz);
     if(S.label&&front&&Math.abs(HIT.w-(q.z+q.h*.55))<q.h*.18){BG[i]=C(WHITE,5+L*.2*light);set(i,' ',0);return true;} // the label band
     if(S.spines&&front){ // each spine its own colour, a dark line where two meet, a title line across
