@@ -1,6 +1,6 @@
 # Current quality work: Codex and Claude
 
-Updated 2026-10-25 (Codex/Claude integration). Read this alongside `WORLD_QUALITY.md` and
+Updated 2026-10-25 (Claude: pass 8 bar back bar). Read this alongside `WORLD_QUALITY.md` and
 `corridor-geometry-notes.md`. Do not edit `CLOUD_HANDOFF.md`.
 
 PRs #195 (dining ledges/tables) and #196 (juice-bar produce) are merged into
@@ -52,12 +52,19 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   there (bar back-bar via the shared `shelves` wall painter, fish tank,
   bodega/gas/market food props, street-food carts, pier stall, spirit house,
   lanterns).
-  **Next (Claude), claimed unless Codex or the user redirects:** start pass 8
-  (restaurants, cafés and bars) where pass 3 left off: a built back bar for
-  the bar in place of the `shelves` wall painter, then the paper lanterns
-  (yakitori, pho, sushi, izakaya) and the Thai spirit house. Files:
-  `city/rooms.js` (bar definition only), `city/counters.js`,
-  `city/dining.js`, `city/eateries.js`, plus a new module and browser test.
+  **Pass 8 (Claude), in progress, one branch and PR per chunk:**
+  1. Bar back bar on `claude/bar-back-bar`, **PR pending**: new
+     `city/bar-backbar.js` and `test/browser/city-bar-backbar.browser.test.cjs`;
+     edits to `city/rooms.js` (bar definition only: drops `shelves`/`glyphs`,
+     adds the fitting), manifest and bundle. The shared `shelves: true`
+     painter itself is untouched and still stocks the store, florist, books
+     shop (pass 7).
+  2. Paper lanterns (yakitori, izakaya, dumplings, noodle house, sushi):
+     next, on its own branch. Files: `city/counters.js`, `city/dining.js`,
+     `city/eateries.js`, a new module and browser test. The noodle bar and
+     tea house painted `ceil: 'lantern'` live in `city/rooms.js` and stay
+     out of scope.
+  3. Thai spirit house (`city/dining.js`): after the lanterns.
   Pass 5 (apartments, lofts, Belle homes) is left for Codex after pass 4,
   since it shares the `city/home-*.js` files Codex owns.
 
