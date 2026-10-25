@@ -54,6 +54,34 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   use `KITCHEN_FOOD_CASE`). Pass 8 PRs #215–#220 are open. Next in pass 7:
   the `fridgeWall` painter, the shelf islands, then the shops' painted boxes
   group by group. `city/home-*.js` stays with Codex.
+- **Claude pass 8 progress:** dim sum live seafood tank, PR #215
+  (`claude/dimsum-seafood-tank`, new `city/seafood-tank.js`); sushi island
+  counter on `claude/sushi-island` (new `city/sushi-island.js`, test
+  `city-sushi-island`, sushibar props in `city/eateries.js`). Remaining audit
+  queue, one PR each: karaoke stage, speakers and lyrics screen
+  (`city/rooms.js` karaoke definition only), painted wall fixtures (pho fan,
+  kissaten clock, ice-cream cone rack, burger pass, roastery trailing plants),
+  then the pass 8 closing sweep. After pass 8 Claude moves to pass 7 shop
+  interiors, avoiding `city/home-*.js`.
+
+- **Claude pass 8 progress:** dim sum live seafood tank on
+  `claude/dimsum-seafood-tank` (new `city/seafood-tank.js`, test
+  `city-seafood-tank`, dimsum props in `city/dining.js`). Remaining audit
+  queue, one PR each: sushi island counter (still `BX` boxes), karaoke stage,
+  speakers and lyrics screen (`city/rooms.js` karaoke definition only), then
+  painted wall fixtures (pho fan, kissaten clock, ice-cream cone rack, burger
+  pass, roastery trailing plants), then the pass 8 closing sweep. After pass 8
+  Claude moves to pass 7 shop interiors, avoiding `city/home-*.js`.
+
+- **Claude pass 10 (leisure interiors):** cinema rows, arcade cabinets and the
+  casino floor on `claude/leisure-cinema-casino`, from main (new
+  `city/leisure-fittings.js`; the cinema and arcade defs and `cabinet` in
+  `city/rooms.js`, `city/casino.js`). Independent of the pass 7 shop stack
+  (#233). The club, aquarium touch pool and plush stand, and the cathedral on
+  `claude/leisure-club-aquarium` (new `city/cathedral-fittings.js`;
+  `city/stripclub.js`, `city/aquarium.js`, `city/cathedral.js`), stacked on
+  #233. The conservatory and aviary planting is sprites and goes with pass 18
+  (parks and vegetation). Next: pass 11 (street objects).
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
@@ -221,3 +249,73 @@ pass6 hotels. Own homeWall/homePlan/homeDef portions of rooms.js and new
 home-only modules/tests; Claude's store/florist/books/bar/karaoke definitions,
 shop makeRoom additions and shelf wall code remain with Claude. Shared
 clock/ellipsoid/worktop/KITCHEN helpers continue to require coordination.
+
+Codex integration review (2026-10-25): reran only the failed CI jobs for
+#223 (indoor conversation assertion) and #232 (transit-speech timeout).
+Reviewed #233 on `codex/review-leisure-integration`, merging current main
+and preserving both agents' appended notes/module lists before rebuilding.
+Fixed a real 4cm air gap under casino table tops and added the missing slot
+lever pivot. A rendered-ray regression fails on both original defects and
+passes after repair; existing cabinet/row bounds and arcade/cinema/casino/
+break-in controls pass. Next review is #234, then Codex returns to pass5
+home openings/layouts and pass6 hotels. Claude can continue pass11 street
+objects; this review changes no street files or shared geometry helpers.
+
+Codex #234 integration review on `codex/review-cathedral-integration`
+(separate checkout `/workspace/leisure-234-review`): preserved #233's review
+fixes, main's home modules and both agents' notes, rebuilding the bundle.
+Repaired actual sanctuary support for the altar/candlesticks/priest, moved
+font water above its stone floor, supported the votive tiers and pew
+kneelers, and normalized/seated the pulpit book rest. New actual-surface
+regression fails on the old defects and passes after repair. All six
+leisure geometry checks, seven club/aquarium/cathedral gameplay/route checks
+and seven bundle/parse/render checks pass; day/night/close/oblique/wide
+views reviewed. #223's requested CI rerun is fully green. #232's original
+head rerun is also fully green; Claude's subsequent main integration has
+its own new CI run. #233 is merged. Next Codex work remains pass5 home
+openings/trim/layouts, then hotels; Claude can proceed with pass11 streets.
+No street modules or shared home/kitchen geometry helpers were edited.
+
+Codex active `codex/home-window-casings` (pass5): new home-only
+`city/home-windows.js` and focused browser test, plus homeDef/homeWall
+sections of rooms.js. Replaces the three native apartment families' painted
+window frames with fitted casings/sills/mullions; keeps their current real
+exterior-view windows and leaves Fern/Cabin Cove, shops and shared helpers
+alone. Claude retains pass11 street objects. Bundle/manifest and appended
+notes are the only other shared files.
+
+`codex/home-window-casings` complete: the three native apartment families
+have fitted closed frames, recessed bars and deep sills with their real
+exterior views. A17cm studio window shift clears the native bookcase;
+bookcase geometry and saved shelf placements are unchanged. New contact/
+join/clear-pane/cache/furniture checks and both defect mutations pass,
+with11 existing home/Fern/TV/native-purchase-balcony regressions and seven
+bundle/parse/render checks. All three styles inspected close/wide/oblique/
+low/night/phone; ABAB costs appended to WORLD_QUALITY.md. Next Codex queue:
+pass5 doors/trim/layout character, then pass6 hotels; Claude owns pass11
+streets and the pending shop/restaurant stack. No shared helper edits.
+The full1069-test Node run on #233's final reviewed tree passed.
+
+2026-10-25 solo takeover: the user reports Claude is out of credits and asks
+Codex to keep going. Codex now reviews/integrates Claude's pending restaurant
+#215–#220, shop #221–#232 and street-vending #236 work before continuing
+passes5/6 and the broader checklist. Claude's ownership reservations are
+paused during this authorized takeover; preserve his implementations and
+notes, repair review defects, keep each original chunk/PR separate, and
+rebuild generated output. Active review: `codex/review-seafood-integration`;
+next is sushi island #216. On resuming, read the latest appended progress
+before choosing overlapping files.
+
+#215 solo review complete on `codex/review-seafood-integration`: fixed pull
+bounds, bubble peaks and distant gravel aliasing; cached static profiles and
+materials. Four tank checks plus home-window controls, all five shop/seating/
+route checks and four bundle/parse checks pass. Original-defect regression
+fails before correction; close/wide/oblique/above/night views reviewed and
+costs appended. Next #216: belt rails currently intersect the plate rims.
+
+#216 solo review complete (`codex/review-sushi-integration`): expanded the
+belt to clear the actual plate rims, with no collision-footprint changes.
+New rendered plate/slab probes catch the original990 intersections; all10
+sushi/prep/tableware checks and four bundle/parse checks pass. Close/wide/
+corner/end/night views and ABAB costs reviewed. Next #217 karaoke: review
+speaker/screen bounds and startup-time lyrics. #233/#234/#237 full CI green.
