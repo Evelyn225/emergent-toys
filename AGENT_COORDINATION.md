@@ -31,8 +31,10 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   gone (#224). Books bookcases on `claude/books-bookcases`, stacked on #224:
   the wall unit takes `wall: 'left'|'right'`, taller levels, and a list of
   runs; `booksWall` is gone. Earlier pass 7 PRs: #221 display cases, #222
-  fridge walls. Next: the shops' painted boxes group by group.
-  `city/home-*.js` stays with Codex.
+  fridge walls. Grocer floor on `claude/grocer-produce` (new
+  `city/grocer-produce.js`; the grocer def in `city/shops.js`), stacked on
+  #221, #222 and #226 because they all edit `city/shops.js`. Next: the other
+  shops' painted boxes group by group. `city/home-*.js` stays with Codex.
 - **Claude pass 7 (shop interiors):** shop fridge walls on
   `claude/shop-fridges` (new `city/shop-fridges.js`; runs and wall painters in
   `city/shops.js`; label/stock options and plain-box long parts in my
