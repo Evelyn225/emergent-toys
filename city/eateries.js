@@ -204,10 +204,6 @@ const sushiBelt = () => ROOM_MODEL((SUSHI_LOOP.x0 + SUSHI_LOOP.x1) / 2, (SUSHI_L
     kitchenSushi(px_,py_,.95,k);
   }
 });
-function sushiCounterShade(i, t, L) { // pale wood, the steel belt round its top edge
-  if (HIT.face === 5) { BG[i] = C(GRAY, 2.6 + L * 0.2); return set(i, fract(HIT.u * 10 + HIT.v * 10 - T * 2) < 0.15 ? '-' : ' ', C(WHITE, 6)), true; }
-  BG[i] = C(STONE, (2.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, fract(HIT.w * 7) < 0.1 ? '-' : ' ', C(BRICK, L * 0.5)), true;
-}
 function sushiWall(i, u, uStep, z, d, mx, my, L) {
   if (backWall(my) && Math.abs(u - 6.0) < 0.8 && z < 2.1) { // the noren, over the kitchen door: three panels, a wave on them
     if (z > 1.35) { BG[i] = C(BLUE, 3 + L * 0.2); return set(i, Math.abs(fract(u * 1.9) - 0.5) < 0.04 ? ' ' : z > 1.6 && z < 1.8 && Math.abs(fract(u * 4 + z * 2) - 0.5) < 0.15 ? '~' : ' ', C(WHITE, 13)), true; }
@@ -234,9 +230,8 @@ ROOM_FLOORS.cotto = (i, f, wx, wy, r, x, L) => {
 };
 ROOM_DEFS.sushibar = { grid: backWc(14, 9), wc: wcAt(14), light: 0.9, floor: 'hinoki', ceil: 'lantern', sign: false, wall: sushiWall, keeper: [6.0, SUSHI_WORK.south],
   props: r => {
-    const { x0, x1, y0, y1 } = SUSHI_LOOP,edge=SUSHI_WORK.edge,p = [
-      BX((x0 + x1) / 2, y0, (x1 - x0) / 2 + edge, edge, 0, 0.95, sushiCounterShade), BX((x0 + x1) / 2, y1, (x1 - x0) / 2 + edge, edge, 0, 0.95, sushiCounterShade),
-      BX(x0, (y0 + y1) / 2, edge, (y1 - y0) / 2 - edge, 0, 0.95, sushiCounterShade), BX(x1, (y0 + y1) / 2, edge, (y1 - y0) / 2 - edge, 0, 0.95, sushiCounterShade), // the island, round its belt
+    const { x0, x1, y0, y1 } = SUSHI_LOOP,p = [
+      ...SUSHI_ISLAND_PROPS(SUSHI_LOOP), // the island, built round its belt
       KITCHEN_PREP(6.0, SUSHI_WORK.y, 2.6, SUSHI_WORK.half, 0.85, 'sushi'), sushiBelt(), // the chefs' bench inside it
       { ...standing(6.0, SUSHI_WORK.south, WHITE), face: [0, 1] }, { ...standing(4.2, SUSHI_WORK.north, WHITE), face: [0, -1] }, ...wcFittings(14)];
     for (let x = x0; x <= x1 + 1e-6; x += 1.0) for (const [y, fy] of [[y0 - 0.55, 1], [y1 + 0.55, -1]]) { p.push(STOOL(x, y, RED, 0.62)); if (chance(0.4)) p.push({ ...sitting(x, y, shirt(), 0.62), face: [0, fy] }); }
