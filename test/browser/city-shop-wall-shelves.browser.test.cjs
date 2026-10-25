@@ -31,7 +31,7 @@ test('the back-wall shelves are one built unit on the wall face, clear of the cl
   enterRoom('thrift',{word:'THRIFT',ret:[100,100,0]},[5,5,0]);
   if(!free(9.2,1.5))out.push(['thrift',['fitting room blocked']]);
   enterRoom('store',{word:'STORE',ret:[100,100,0]},[5,5,0]);
-  for(const x of [1.5,2.5,7.5,8.5])if(!free(x,1.6))out.push(['store',['back aisle blocked',x]]);
+  for(const x of [1.5,2.5,7.5,8.3])if(!free(x,1.6))out.push(['store',['back aisle blocked',x]]);
   return out;
  },SHOPS);
  for(const [k,bad] of r)assert.deepEqual(bad,[],k);
