@@ -37705,7 +37705,7 @@ function CASHIER_CAGE_BARS(xs,y,z0,z1) {
 }
 // A gaming table: a wood base, a padded rail round a felt top let in below it.
 function gamingTable(vx,vy,hl,hw,h,felt) {
-  coveRound(vx,vy,1,0,hl-.15,hw-.15,0,h-.12,.04,'wood'); // the base
+  coveRound(vx,vy,1,0,hl-.15,hw-.15,0,h-.08,.04,'wood'); // the base meets the underside of the rail
   coveRound(vx,vy,1,0,hl,hw,h-.08,h,.04,leisurePaint(BRICK,1.4,.3)); // the padded rail
   drawBox(boxAt(vx,vy,1,0,hl-.08,hw-.08,h-.08,h+.001),felt); // the felt, just proud of the rail's inside
 }
@@ -37754,6 +37754,7 @@ function SLOT_MACHINE(x,y,fx,fy,ph) {
       drawBox({...boxAt(rx,ry,-s,c,.05,.09,1.03,1.21),centerZ:1.12,clockShape:{x:0,y:0,profile:reel}},reelShade(k+1),homeClockRay);} // the reels, axles across
     part(0,.31,.3,.02,.98,1.01,body,.006); // the window's sill
     part(0,.31,.22,.06,.45,.5,body,.01); // the coin tray
+    coveTube(vx+c*.285,vy+s*.285,.95,vx+c*.34,vy+s*.34,.95,.012); // the lever pivot, seated in the cabinet
     coveTube(vx+c*.34,vy+s*.34,.95,vx+c*.34,vy+s*.34,1.35,.012); // the lever
     coveLathe(vx+c*.34,vy+s*.34,1.34,[[0,0],[0,.03],[.04,.035],[.07,0]],leisurePaint(RED,3.6)); // its knob
   }),box:boxAt(x,y,c,s,.38,.37,0,1.6),radius:.5,slot:{fx,fy}};
