@@ -165,6 +165,7 @@
     "city/teahouse-quality.js",
     "city/bar-backbar.js",
     "city/bar-quality.js",
+    "city/eatery-wall-fixtures.js",
     "city/dining-wall-fixtures.js",
     "city/karaoke-stage.js",
     "city/sushi-island.js",
