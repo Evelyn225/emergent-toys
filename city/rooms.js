@@ -396,7 +396,7 @@ const ROOM_DEFS = {
       const p = [...counterBox(6, BACK_COUNTER_Y, 4, 1.1), standing(6, BACK_COUNTER_STAFF_Y, r.neon),
                  JUKEBOX(10.55, 5.5, -1, 0), ...toilet(1.6, 6.4, 1, porcelain),washbasin(1.35,5.45,1,0)];
       for (let x = 3; x <= 9; x += 1.5) { p.push(STOOL(x, 2.65, RED)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
-      p.push(BAR_BACK_BAR()); // near counters and people reject hidden shelf pixels first
+      p.push(r.neon===CYAN?BAR_MIRRORED_BACK_BAR(6,1,3.7,0,1,r.neon):BAR_BACK_BAR()); // near parts reject hidden shelf pixels first
       return p;
     } },
   diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, BACK_COUNTER_STAFF_Y], wall: dinerWall,

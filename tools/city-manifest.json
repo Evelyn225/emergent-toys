@@ -155,6 +155,7 @@
     "city/kitchen-produce.js",
     "city/kitchen-crates-coolers.js",
     "city/teahouse-quality.js",
+    "city/bar-backbar.js",
     "city/bar-quality.js",
     "city/restaurant-lanterns.js",
     "city/thai-spirit-house.js",

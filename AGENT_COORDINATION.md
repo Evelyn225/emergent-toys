@@ -12,13 +12,20 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   quality queue and the existing home quality queue. Completed and merged:
   **#206** home books/shelf placement; **#207** roof-browser state waits,
   repairing #206's only CI failure; **#208** built bar cabinet/bottles/glasses;
-  **#209** eight fitted hanging restaurant lanterns. #207–#209 full CI are green.
-  **Current chunk complete:** `codex/thai-spirit-house-quality`, new
+  **#209** eight fitted hanging restaurant lanterns. #207–#209 and #211 full CI are green.
+  **Thai shrine merged in #211:** `codex/thai-spirit-house-quality`, new
   `city/thai-spirit-house.js`, spiritHouse dispatch in `city/dining.js`,
   manifest and geometry tests. Roof/support/garland probes and all-shop routes
   pass; front/side/roof/garland/wide/night/phone views reviewed. Final local
-  rendering measurements are recorded in WORLD_QUALITY.md; publication
-  follows the same focused-check/PR workflow.
+  rendering measurements are recorded in WORLD_QUALITY.md.
+  **Overlap integration, #210:** Claude's `claude/bar-back-bar` now includes
+  current main through #211. CYAN-lit bars use its mirrored cabinet; other
+  bars retain #208's open shelves. All #209/#211 modules and notes are kept.
+  Codex corrected pull bounds, hollow upturned glasses and cached profiles;
+  both variants, staff service and all-shop routes pass, and four default
+  views match main exactly. The optimized lathe reject matches reference
+  rays. Visual/performance review is recorded in WORLD_QUALITY.md. Claude
+  remains unavailable; do not restart this completed chunk.
   **Next:** painted ceiling lantern patterns and the remaining restaurant
   audit (including the izakaya's painted sake bottles), then the remaining
   home electronics/decor audit and pass 5. Keep pass 8 open until audited.
