@@ -47,6 +47,10 @@ test('wire chairs: legs on the floor meeting the seat ring, the low ring where t
     const sb=seatRing.box.profile.map(q=>q[1]),sd=Math.hypot(top[0]-o.x,top[1]-o.y);if(sd<Math.min(...sb)-.008||sd>Math.max(...sb)+.008)bad.push(['seat ring misses the legs',+sd.toFixed(3)]);
    }
    const hoop=parts.filter(q=>q.ray===homeClockRay);if(hoop.length!==2||hoop.some(q=>q.box.z0<w.seat))bad.push('hoop');
+   // the inner ring is held in the hoop: bars run from inside the inner ring's band out into the hoop's
+   const B=WIRE_CHAIR_BACK,bars=parts.filter(q=>q.ray===homeClockRayHand).map(q=>{const h=q.box.handShape,cu=(q.box.x-(o.x-w.fx*.17))*w.fy-(q.box.y-(o.y-w.fy*.17))*w.fx; // (its ends are stored along the hoop from the bar's own centre)
+    return [Math.hypot(h.ax+cu,h.az-w.back),Math.hypot(h.bx+cu,h.bz-w.back)];});
+   if(bars.length<3||bars.some(([r0,r1])=>Math.min(r0,r1)>B.inner[1]||Math.min(r0,r1)<B.inner[0]-1e-9||Math.max(r0,r1)<B.hoop[0]||Math.max(r0,r1)>B.hoop[1]+1e-9))bad.push(['the inner ring floats',bars.length]);
    if(o.h!==w.seat)bad.push('seat height');
   }
   const sat=room.props.filter(o=>o.fig&&/^sit/.test(typeof o.pose==='string'?o.pose:'sit')).length;

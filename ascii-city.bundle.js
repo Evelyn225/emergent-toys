@@ -37704,7 +37704,9 @@ function HEAT_LAMP(x,y,bottom,col=RED) {
   }),radius:.15,heatLamp:{x,y,bottom,top:bottom+.13}};
 }
 // A wire parlour chair: a padded round seat on a wire ring, four splayed
-// legs joined by a ring low down, and a round hoop back facing the seat.
+// legs joined by a ring low down, and a round hoop back facing the seat, its
+// inner ring held in the hoop by four short bars.
+const WIRE_CHAIR_BACK={hoop:[.148,.165,.005],inner:[.07,.08,.003],bars:4,wire:.004};
 function WIRE_CHAIR(x,y,fx,fy,col) {
   const seatZ=.48,hz=.76,c=fy,s=-fx; // the back hoop faces (fx, fy): its axis is the lathe's +v, (-s, c)
   const wire=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz,WHITE);
@@ -37717,8 +37719,14 @@ function WIRE_CHAIR(x,y,fx,fy,col) {
     const bx=vx-fx*.17,by=vy-fy*.17;
     for(const e of [-1,1])coveTube(bx+fy*e*.1,by-fx*e*.1,seatZ-.05,bx+fy*e*.1,by-fx*e*.1,hz-.12,.008,WHITE); // two back posts up to the hoop
     // the hoop and its inner ring, turned side-on with the wall clock's lathe ray
-    for(const [r0,r1,d]of [[.148,.165,.005],[.07,.08,.003]])
+    const B=WIRE_CHAIR_BACK;
+    for(const [r0,r1,d]of [B.hoop,B.inner])
       drawBox({...boxAt(bx,by,c,s,r1,d,hz-r1,hz+r1),centerZ:hz,clockShape:{x:0,y:0,profile:[[-d,r0],[-d,r1],[d,r1],[d,r0],[-d,r0]]}},wire,homeClockRay);
+    for(let k=0;k<B.bars;k++){ // the bars, flat in the hoop's plane, from inside the inner ring out into the hoop
+      const a=(k+.5)*TAU/B.bars,ux=Math.cos(a),uz=Math.sin(a),r0=B.inner[0]+.004,r1=B.hoop[0]+.006,mid=(r0+r1)/2,half=(r1-r0)/2,W=B.wire;
+      drawBox({...boxAt(bx+c*ux*mid,by+s*ux*mid,c,s,Math.abs(ux)*half+W,.003,hz+uz*mid-Math.abs(uz)*half-W,hz+uz*mid+Math.abs(uz)*half+W),handRatio:.003/W,
+        handShape:{ax:ux*(r0-mid),ay:0,az:hz+uz*r0,bx:ux*(r1-mid),by:0,bz:hz+uz*r1,r:W}},wire,homeClockRayHand);
+    }
   },[.2,.2,seatZ]),seat:true,fx,fy,h:seatZ,wireChair:{x,y,fx,fy,seat:seatZ,back:hz}};
 }
 // The sushi bar's island is built round its belt rather than four painted
