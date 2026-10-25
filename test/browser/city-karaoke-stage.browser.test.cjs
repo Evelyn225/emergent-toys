@@ -65,3 +65,20 @@ test('the sung part of the line lights magenta on the screen as the song goes on
  });
  assert.deepEqual(r.out[0],['unsung']);assert.deepEqual(r.out[1],['sung','unsung']);assert.ok(r.seats);
 }));
+
+test('karaoke fixtures contain their rendered hardware, cache fixed profiles and show valid lyrics before time zero',()=>fixture(async p=>{
+ const bad=await p.evaluate(()=>{
+  const errors=[],save=drawBox;projX=10000;
+  const parts=o=>{const a=[];drawBox=(box,shade,ray=rayBox)=>a.push({box,ray});try{o.draw(o.x,o.y);}finally{drawBox=save;}return a;};
+  for(const o of room.props.filter(o=>o.karaokeSpeaker||o.karaokeScreen)){
+   const b=o.box;for(const q of parts(o)){const a=q.box;
+    if(a.x-a.hl<b.x-b.hl-1e-7||a.x+a.hl>b.x+b.hl+1e-7||a.y-a.hw<b.y-b.hw-1e-7||a.y+a.hw>b.y+b.hw+1e-7||a.z0<b.z0-1e-7||a.z1>b.z1+1e-7)errors.push(['hardware outside bounds',o.karaokeSpeaker?'speaker':'screen']);
+   }
+  }
+  const panel=kitchenPanelProfile;let builds=0;kitchenPanelProfile=(...args)=>{builds++;return panel(...args);};
+  try{for(const o of room.props.filter(o=>o.karaokeSpeaker||o.karaokeScreen)){parts(o);parts(o);}}finally{kitchenPanelProfile=panel;}
+  if(builds)errors.push(['static profiles rebuilt while drawing',builds]);
+  for(const t of [-20.01,-5,-.016,0,4.9,5]){try{const q=karaokeLyric(t);if(typeof q.line!=='string'||!q.line.length||!Number.isFinite(q.sung))errors.push(['invalid lyric',t]);}catch{errors.push(['lyric threw',t]);}}
+  return errors.slice(0,20);
+ });assert.deepEqual(bad,[]);
+}));

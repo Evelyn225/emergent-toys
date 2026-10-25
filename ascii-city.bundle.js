@@ -37637,7 +37637,7 @@ const KARAOKE={stage:{x:6,y:2.3,hl:2,hw:.6,top:.3,deck:.025,nosing:.02},
   lyric:{w:.16,h:.22}};
 // The lyric line and how much of it has been sung, from the music's clock.
 function karaokeLyric(t) {
-  const line=LYRICS[Math.floor(t/5)%LYRICS.length];
+  const line=LYRICS[mod(Math.floor(t/5),LYRICS.length)];
   return {line,sung:fract(t/5)*1.3*line.length};
 }
 function KARAOKE_STAGE_PLATFORM(neon) {
@@ -37651,7 +37651,7 @@ function KARAOKE_STAGE_PLATFORM(neon) {
     if(HIT.face===3&&HIT.w>top-deck-nosing-.03){BG[i]=C(neon,11);set(i,' ',0);return true;}
     return riser(i,t,L);
   };
-  const metal=(i,t,L)=>{const f=HIT.face;return coveMetal(i,L,0,f===3?1:f===4?-1:0,f===5?1:0);};
+  const metal=(i,t,L)=>{const f=HIT.face;return coveMetal(i,L,f===1?1:f===2?-1:0,f===3?1:f===4?-1:0,f===5?1:f===6?-1:0);};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     // The front nosing caps the front board; the deck and riser stop behind
     // them, so no two faces share a plane. (The room is on +y.)
@@ -37671,16 +37671,19 @@ function KARAOKE_SPEAKER(x,y) {
     BG[i]=badge?C(WHITE,7):C(GRAY,1.6+L*.1-holes*.9);set(i,' ',0);return true;
   };
   const cap=(i,t,L)=>coveMetal(i,L,HIT.nx,HIT.ny,HIT.nz);
+  const grilleProfile=kitchenPanelProfile(hl-.03,.008,.05,h-.05,.004),feet=[[0,0],[0,.025],[.015,.022],[.015,0]];
+  const rubber=(i,t,L)=>{BG[i]=C(GRAY,.4);set(i,' ',0);return true;};
+  const boundWidth=hl+corner*.2,boundDepth=hw+Math.max(corner*.2,.012),boundTop=h+.032;
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     for(const ex of [-1,1])for(const ez of [0,1]){ // steel corner caps on the front corners
       const cz=ez?h-corner:corner;coveRound(vx+ex*(hl-corner*.8),vy+hw-corner*.8,1,0,corner,corner,cz-corner,cz+corner,.012,cap);
     }
-    drawBox({...boxAt(vx,vy+hw+.004,1,0,hl-.03,.008,.05,h-.05),...kitchenPanelProfile(hl-.03,.008,.05,h-.05,.004)},grille,homeRayWorktop); // proud of the cabinet front
+    drawBox({...boxAt(vx,vy+hw+.004,1,0,hl-.03,.008,.05,h-.05),...grilleProfile},grille,homeRayWorktop); // proud of the cabinet front
     coveTube(vx-.08,vy,h+.02,vx+.08,vy,h+.02,.012,GRAY); // the carrying handle, on two posts
     for(const e of [-.08,.08])coveTube(vx+e,vy,h,vx+e,vy,h+.02,.01,GRAY);
     coveRound(vx,vy,1,0,hl,hw,.015,h,.025,cabinet);
-    for(const ex of [-1,1])for(const ey of [-1,1])coveLathe(vx+ex*(hl-.05),vy+ey*(hw-.05),0,[[0,0],[0,.025],[.015,.022],[.015,0]],(i,t,L)=>{BG[i]=C(GRAY,.4);set(i,' ',0);return true;});
-  }),box:boxAt(x,y,1,0,hl,hw,0,h+.03),radius:Math.hypot(hl,hw)+.05,karaokeSpeaker:{hl,hw,h}};
+    for(const ex of [-1,1])for(const ey of [-1,1])coveLathe(vx+ex*(hl-.05),vy+ey*(hw-.05),0,feet,rubber);
+  }),box:boxAt(x,y,1,0,boundWidth,boundDepth,0,boundTop),radius:Math.hypot(boundWidth,boundDepth)+.05,karaokeSpeaker:{hl,hw,h}};
 }
 // a floor wedge monitor on the stage, its sloped face turned up to the singer at -y
 function KARAOKE_MONITOR(x,y,z) {
@@ -37706,6 +37709,7 @@ function KARAOKE_SCREEN(wallY) {
   const {x,half,bottom,top,depth,stand}=KARAOKE.screen,{w,h}=KARAOKE.lyric,bezel=.04,mid=(bottom+top)/2;
   const cy=wallY+stand+depth/2;
   const caseShade=(i,t,L)=>{BG[i]=C(GRAY,.5+L*.06*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const caseProfile=kitchenPanelProfile(half,depth/2,bottom,top,.012);
   let cx=0,cyv=0;
   const picture=(i,t,L)=>{
     // a slow colour wash behind the words, and the line itself, sung part in magenta
@@ -37717,10 +37721,10 @@ function KARAOKE_SCREEN(wallY) {
   return {...ROOM_MODEL(x,cy,(vx,vy)=>{
     cx=vx;cyv=vy+depth/2+.001;
     drawBox(boxAt(vx,vy+depth/2+.0005,1,0,half-bezel,.0005,bottom+bezel,top-bezel),picture);
-    drawBox({...boxAt(vx,vy,1,0,half,depth/2,bottom,top),...kitchenPanelProfile(half,depth/2,bottom,top,.012)},caseShade,homeRayWorktop);
+    drawBox({...boxAt(vx,vy,1,0,half,depth/2,bottom,top),...caseProfile},caseShade,homeRayWorktop);
     for(const e of [-.5,.5]) // the wall brackets behind it
       drawBox(boxAt(vx+e,vy-depth/2-stand/2,1,0,.05,stand/2,mid-.2,mid+.2),(i,t,L)=>coveMetal(i,L,0,0,1));
-  }),box:boxAt(x,cy-stand/2,1,0,half,(depth+stand)/2,bottom,top),walk:true,radius:half+.1,karaokeScreen:{x,y:cy,half,bottom,top,depth,stand,wallY}};
+  }),box:boxAt(x,wallY+(stand+depth+.001)/2,1,0,half,(stand+depth+.001)/2,bottom,top),walk:true,radius:half+.1,karaokeScreen:{x,y:cy,half,bottom,top,depth,stand,wallY}};
 }
 // The sushi bar's island is built round its belt rather than four painted
 // boxes: a hinoki carcass on a recessed plinth, an eating ledge outside the

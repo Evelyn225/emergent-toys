@@ -295,3 +295,14 @@ New rendered plate/slab probes catch the original990 intersections; all10
 sushi/prep/tableware checks and four bundle/parse checks pass. Close/wide/
 corner/end/night views and ABAB costs reviewed. Next #217 karaoke: review
 speaker/screen bounds and startup-time lyrics. #233/#234/#237 full CI green.
+
+Renewed split (user asked where Claude should resume): Claude should pull
+latest main, read these appended notes, take over his #236 street-vending
+PR (integration/CI/review fixes) and continue pass11 with bins, hydrants and
+mailboxes, then its remaining street objects. Codex keeps the restaurant/
+shop backlog #217–#232 and home/hotel passes5–6. Codex is completing #217
+karaoke, then #218 wall fixtures. Keep street-only render hooks/modules
+with Claude; coordinate shared helpers before edits. Preserve both agents'
+manifest entries/notes, rebuild the bundle on integration, and use separate
+branches/PRs per chunk. This supersedes the solo-takeover reservation for
+#236/pass11; Codex will not modify them while Claude resumes.
