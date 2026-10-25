@@ -6,10 +6,26 @@ Updated 2026-10-25 (Codex/Claude integration). Read this alongside `WORLD_QUALIT
 PRs #195 (dining ledges/tables) and #196 (juice-bar produce) are merged into
 main. Both full CI runs passed; Codex independently checked the produce tests.
 
-## File ownership
+## Active split (Claude available again)
 
-- **Codex (Claude is currently unavailable):** owns the active restaurant
-  quality queue and the existing home quality queue. Completed and merged:
+- **Codex:** pass4 home electronics/decoration, then pass5 home layouts.
+  Active branch `codex/home-television-quality`: `city/home-quality.js`
+  (television only), new `city/home-television.js`, `city/hotel-polish.js`
+  (cached TV construction only), TV browser coverage and shared bundle/notes.
+  Keep `city/home-*.js` with Codex. Next is the remaining home electronics audit.
+- **Claude:** continue pass8 restaurant/café/bar audit and the following
+  restaurant-specific chunks, including remaining fish tanks and fixtures.
+  Start from main including #213. #208–#213 already cover both bar variants,
+  paper lanterns/ceiling layouts, Thai shrine and izakaya sake shelves;
+  do not repeat them. Own `city/dining.js`, `city/counters.js`,
+  `city/eateries.js` and restaurant-only modules/tests. Agree before changing
+  shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- Shared manifest, generated bundle and append-only completed notes remain
+  shared: preserve both module lists and rebuild on integration.
+
+## Previous completed work and handoffs
+
+- **Codex (previous solo queue while Claude was unavailable):** Completed and merged:
   **#206** home books/shelf placement; **#207** roof-browser state waits,
   repairing #206's only CI failure; **#208** built bar cabinet/bottles/glasses;
   **#209** eight fitted hanging restaurant lanterns. #207–#209 and #211 full CI are green.
@@ -24,8 +40,7 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   Codex corrected pull bounds, hollow upturned glasses and cached profiles;
   both variants, staff service and all-shop routes pass, and four default
   views match main exactly. The optimized lathe reject matches reference
-  rays. Visual/performance review is recorded in WORLD_QUALITY.md. Claude
-  remains unavailable; do not restart this completed chunk.
+  rays. Visual/performance review is recorded in WORLD_QUALITY.md. Do not restart this completed chunk.
   **Ceiling lantern patterns complete** (`codex/ceiling-lantern-layout`):
   removed flat ceiling marks in all eight lantern rooms; retain eight
   authored fixtures and fit32 smaller physical lanterns in the other five
@@ -75,7 +90,7 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   there (bar back-bar via the shared `shelves` wall painter, fish tank,
   bodega/gas/market food props, street-food carts, pier stall, spirit house,
   lanterns).
-  **Next queue (Codex taking over while Claude is unavailable):** start pass 8
+  **Previous queue (now completed through #213):** pass 8
   (restaurants, cafés and bars) where pass 3 left off: a built back bar for
   the bar in place of the `shelves` wall painter, then the paper lanterns
   (yakitori, pho, sushi, izakaya) and the Thai spirit house. Files:
