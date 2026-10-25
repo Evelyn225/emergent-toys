@@ -40,23 +40,6 @@ function televisionProgramme(u,v,time,channel) {
   }
   return {base,level,ch,ink};
 }
-function TELEVISION(x,y,r,scale=1,angle=0) {
-  return {...ROOM_MODEL(x,y,(vx,vy)=>{
-    const c=Math.cos(angle),s=Math.sin(angle),at=(u,v)=>[vx+c*u-s*v,vy+s*u+c*v];
-    const shell={...boxAt(vx,vy,c,s,.74*scale,.07*scale,.7*scale,1.55*scale),round:.025*scale};
-    drawBox(shell,(i,t,L)=>{
-      if(HIT.face===3&&Math.abs(HIT.u)<.65*scale&&HIT.w>.79*scale&&HIT.w<1.47*scale)return false;
-      BG[i]=C(GRAY,.8+L*.14*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
-    },coveRayRounded);
-    const [sx,sy]=at(0,.063*scale);
-    drawBox(boxAt(sx,sy,c,s,.65*scale,.001*scale,.79*scale,1.47*scale),(i,t,L)=>{
-      if(!r.tv||HIT.face!==3){BG[i]=C(GRAY,.4+L*.035);set(i,' ',0);return true;}
-      const frame=televisionProgramme((HIT.u/(.65*scale)+1)/2,(1.47*scale-HIT.w)/(.68*scale),T,(r.tvChannel??Math.floor(T/24))%4);
-      BG[i]=C(frame.base,frame.level);set(i,frame.ch,C(frame.ink,12));return true;
-    });
-    for(const side of [-1,1]){const [ax,ay]=at(side*.42*scale,.01*scale),[bx,by]=at(side*.5*scale,.1*scale);coveTube(ax,ay,.7*scale,bx,by,.61*scale,.018*scale,GRAY);}
-  }),radius:scale,box:boxAt(x,y,Math.cos(angle),Math.sin(angle),.74*scale,.12*scale,.61*scale,1.55*scale)};
-}
 
 function homeStone(i,t,L) {BG[i]=C(STONE,3.5+L*.22*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;}
 function HOME_FRIDGE(x,y,{angle=0,height=1.9,halfWidth=.43,halfDepth=.4}={}) {
