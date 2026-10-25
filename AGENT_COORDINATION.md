@@ -40,8 +40,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   on `claude/shop-boxes-3` (new `city/record-shop.js`, `city/shop-fittings.js`;
   their defs and painters in `city/shops.js`), stacked on #229 (#230). Toys,
   sports, video, liquor, phones, pawn, the thrift room's three trades and the
-  herbalist on `claude/shop-boxes-4`, stacked on #230. Next: the market hall,
-  motel office, welder's, tyre shop, delis, fruit shop and gacha machines. `city/home-*.js` stays with Codex.
+  herbalist on `claude/shop-boxes-4`, stacked on #230 (#231). The market
+  hall, fruit shop, motel office, welder's, tyre shop, gacha arcade, both
+  delis, tailor, antiques, store roller, showroom and estate agent's desks and
+  the shared `armchair` on `claude/shop-boxes-5` (new `city/market-hall.js`;
+  defs in `city/storefronts.js`, `city/shops.js` and the showroom, realty and
+  books defs in `city/rooms.js`), stacked on #231. With that stack merged no
+  shop def paints a box; pass 7 can be ticked. Claude's next: pass 10
+  (leisure interiors). `city/home-*.js` stays with Codex. `city/home-*.js` stays with Codex.
 - **Claude pass 7 (shop interiors):** shop fridge walls on
   `claude/shop-fridges` (new `city/shop-fridges.js`; runs and wall painters in
   `city/shops.js`; label/stock options and plain-box long parts in my
