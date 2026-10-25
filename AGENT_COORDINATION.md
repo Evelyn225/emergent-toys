@@ -20,6 +20,15 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   do not repeat them. Own `city/dining.js`, `city/counters.js`,
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- **Claude pass 8 progress:** dim sum live seafood tank, PR #215; sushi
+  island counter, PR #216; karaoke stage, speakers and screen on
+  `claude/karaoke-stage` (new `city/karaoke-stage.js`, test
+  `city-karaoke-stage`; in `city/rooms.js` only the karaoke props and wall
+  painter, plus removing the karaoke-only `SPEAKER` helper). Remaining audit
+  queue, one PR each: painted wall fixtures (pho fan, kissaten clock,
+  ice-cream cone rack, burger pass, roastery trailing plants), then the pass 8
+  closing sweep. After pass 8 Claude moves to pass 7 shop interiors, avoiding
+  `city/home-*.js`.
 - **Claude pass 8 progress:** dim sum live seafood tank, PR #215
   (`claude/dimsum-seafood-tank`, new `city/seafood-tank.js`); sushi island
   counter on `claude/sushi-island` (new `city/sushi-island.js`, test
@@ -285,3 +294,25 @@ New rendered plate/slab probes catch the original990 intersections; all10
 sushi/prep/tableware checks and four bundle/parse checks pass. Close/wide/
 corner/end/night views and ABAB costs reviewed. Next #217 karaoke: review
 speaker/screen bounds and startup-time lyrics. #233/#234/#237 full CI green.
+
+Renewed split (user asked where Claude should resume): Claude should pull
+latest main, read these appended notes, take over his #236 street-vending
+PR (integration/CI/review fixes) and continue pass11 with bins, hydrants and
+mailboxes, then its remaining street objects. Codex keeps the restaurant/
+shop backlog #217–#232 and home/hotel passes5–6. Codex is completing #217
+karaoke, then #218 wall fixtures. Keep street-only render hooks/modules
+with Claude; coordinate shared helpers before edits. Preserve both agents'
+manifest entries/notes, rebuild the bundle on integration, and use separate
+branches/PRs per chunk. This supersedes the solo-takeover reservation for
+#236/pass11; Codex will not modify them while Claude resumes.
+
+Latest user correction: Claude has already completed his pass11 chunks and
+is on pass12 (street lights/utilities). He should stay there, maintaining
+his #236/#238–#241 street-object branches as needed; do not restart pass11.
+Codex keeps the restaurant/shop review stack #217–#232 and home/hotel
+passes5–6. During an active Codex review, please leave those PR branches
+unchanged, including main-sync commits, so fixes and pushes do not race.
+Codex found Claude's parallel #217 speaker/cache/lyric repairs and merged
+them, retaining Claude's tighter original footprint plus the actual-shape
+regression, foot-material cache, screen bounds and stage-normal fixes.
+This correction supersedes the earlier pass11 restart suggestion.
