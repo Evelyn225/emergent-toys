@@ -74,3 +74,20 @@ test('the touch pool holds its creatures on the sand under clear water inside th
  });
  assert.deepEqual(r,[]);
 }));
+
+test('the cathedral: the cross stands on the altar, pews keep their rows, chandeliers hang from the vault, the votive stand lights as many as are lit',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  enterRoom('cathedral',{word:'CATHEDRAL',ret:[100,100,0]},[11,30,0]);const P=room.props;
+  const altar=P.find(o=>o.altar),cross=P.find(o=>o.cross);if(!altar||!cross||Math.abs(cross.cross.z-altar.altar.h)>1e-9||!inBox(altar.box,cross.x,cross.y,0))bad.push('cross not on the altar');
+  if(P.filter(o=>o.candlestick).length!==2||P.filter(o=>o.rail).length!==2||!P.some(o=>o.pulpit)||!P.some(o=>o.font)||!P.some(o=>o.steps&&o.walk))bad.push('a fitting missing');
+  const pews=P.filter(o=>o.pew);if(pews.length!==20||pews.some(o=>!o.seatRow))bad.push(['pews',pews.length]);
+  const ch=P.filter(o=>o.chandelier);if(ch.length!==3||ch.some(o=>o.chandelier.top!==CATH_H))bad.push('chandeliers');
+  const v=P.find(o=>o.votive),draw=drawBox;let flames=0;room.candles=5;
+  drawBox=(box,shade,ray=rayBox)=>{if(ray===foodRayEllipsoid&&box.hl===.01)flames++;};try{v.draw(v.x-px,v.y-py);}finally{drawBox=draw;}
+  if(flames!==5)bad.push(['votive flames',flames]);
+  const s=String(ROOM_DEFS.cathedral.props);if(s.includes('BX(')||s.includes('SP('))bad.push('painted props left in the cathedral');
+  return bad;
+ });
+ assert.deepEqual(r,[]);
+}));
