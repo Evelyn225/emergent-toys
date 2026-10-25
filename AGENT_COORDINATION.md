@@ -20,6 +20,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   do not repeat them. Own `city/dining.js`, `city/counters.js`,
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- **Claude pass 8 progress:** dim sum live seafood tank, PR #215; sushi
+  island counter, PR #216; karaoke stage, speakers and screen, PR #217; pho
+  fans, kissaten clock and roastery plants on `claude/restaurant-wall-fixtures`
+  (new `city/dining-wall-fixtures.js`, test `city-dining-wall-fixtures`, props
+  and wall painters in `city/dining.js`; calls `HOME_WALL_CLOCK` unchanged).
+  Remaining audit queue: ice-cream cone rack and burger pass
+  (`city/eateries.js`), then the pass 8 closing sweep. After pass 8 Claude
+  moves to pass 7 shop interiors, avoiding `city/home-*.js`.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 

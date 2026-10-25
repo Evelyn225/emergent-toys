@@ -157,6 +157,7 @@
     "city/teahouse-quality.js",
     "city/bar-backbar.js",
     "city/bar-quality.js",
+    "city/dining-wall-fixtures.js",
     "city/izakaya-sake.js",
     "city/restaurant-lanterns.js",
     "city/thai-spirit-house.js",
