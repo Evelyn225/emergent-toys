@@ -16260,6 +16260,7 @@ function makeRoom(kind, extra = {}) {
     r.props.push(...r.bathroomDoors);
   }
   r.props.push(...bathroomAccessories(r));
+  if(def.ceil==='lantern')r.props.push(...restaurantCeilingLanterns(r));
   if (def.home) r.props.push(...workshopProps(r),...furnishingProps(r));
   if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
     const host=r.lobby||r;r.exterior=homeExterior({...r,cell:host.cell,ret:host.ret});
@@ -16873,7 +16874,7 @@ const ceilAt = (key, spec, wx, wy) => {
   if (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H) return 0;
   return ceilMask(key, spec)[Math.floor(wy * CEIL_RES) * room.W * CEIL_RES + Math.floor(wx * CEIL_RES)];
 };
-const CEIL_PENDANT = { s: 2, r: 0.14 }, CEIL_LANTERN = { s: 1.6, r: 0.18 }, CEIL_STRIP = { s: 2.5, w: 0.4, strip: true },
+const CEIL_PENDANT = { s: 2, r: 0.14 }, CEIL_STRIP = { s: 2.5, w: 0.4, strip: true },
   CEIL_STATION = { s: 2.5, w: 0.4, strip: true, keep: x => x > 9 && x < 37 }; // (not down the tunnels)
 function roomCeil(i, r, x, rx, ry) {
   const d = ((room.def.height || 3) - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
@@ -16890,10 +16891,8 @@ function roomCeil(i, r, x, rx, ry) {
     const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
     return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
   }
-  if (st === 'lantern') { // red paper lanterns, about 1.6m apart
-    const on = ceilAt('lantern', CEIL_LANTERN, wx, wy) === 1;
-    if (on) BG[i] = C(RED, 6);
-    return set(i, on ? 'O' : (r + x) % 5 ? ' ' : '.', on ? C(YEL, 15) : C(RED, 2));
+  if (st === 'lantern') { // Light comes from the fitted paper shells below.
+    BG[i]=C(BRICK,2);return set(i,' ',0);
   }
   if (st === 'disco') { // spots of coloured light sweeping across the ceiling
     const on = hash(Math.floor(wx * 3), Math.floor(wy * 3), 9) > 0.88;
@@ -37719,6 +37718,26 @@ function PAPER_LANTERN(x,y,{ceiling=3,top=2.35,height=.45,radius=.17}={}) {
       drawBox({...boxAt(vx+(ax+bx)/2,vy+(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,z-r,z+r),ax:vx+ax,ay:vy+ay,az:z,bx:vx+bx,by:vy+by,bz:z,r,lanternRole:'crossbar'},dark,coveRayCapsule);
     }
   }),box:boxAt(x,y,1,0,radius,radius,base-.008,ceiling),walk:true,radius:radius+.01,paperLantern:{base,top,height,radius,ceiling,thickness}};
+}
+
+// Existing feature lanterns keep their authored positions. Other lantern rooms
+// get a sparse fitted row layout, built once after partitions and lintels exist.
+function restaurantCeilingLanterns(r) {
+  if(r.props.some(p=>p.paperLantern))return [];
+  const ceiling=r.def.height||3,top=ceiling-.24,height=.34,radius=.15,base=top-height-.008,gap=radius+.25;
+  const wc=r.def.wc,fixtures=[],tall=r.props.filter(p=>p.box&&p.box.z1>=base&&p.box.z0<ceiling);
+  const even=(size)=>{const n=Math.max(1,Math.round((size-2)/3));return Array.from({length:n},(_,k)=>1+(k+.5)*(size-2)/n);};
+  for(const y of even(r.H))for(const x of even(r.W)){
+    // Check the full surround, not just the centre: doorway and wall cells
+    // cannot carry any part of a paper shell or its ceiling mount.
+    let fits=true;
+    for(let gy=Math.floor(y-gap);gy<=Math.floor(y+gap);gy++)for(let gx=Math.floor(x-gap);gx<=Math.floor(x+gap);gx++)
+      if(!'.S'.includes(r.grid[gy]?.[gx]||'#'))fits=false;
+    if(wc&&x+gap>wc.x0&&x-gap<wc.x1&&y+gap>wc.y0&&y-gap<wc.y1)fits=false;
+    if(tall.some(p=>inBox(p.box,x,y,gap)))fits=false;
+    if(fits)fixtures.push({...PAPER_LANTERN(x,y,{ceiling,top,height,radius}),ceilingLantern:true});
+  }
+  return fixtures;
 }
 // The roof panels share one folded profile. Gables meet its underside; the
 // garland and blossoms share seven points, attached to the real tray face.

@@ -30,3 +30,23 @@ function PAPER_LANTERN(x,y,{ceiling=3,top=2.35,height=.45,radius=.17}={}) {
     }
   }),box:boxAt(x,y,1,0,radius,radius,base-.008,ceiling),walk:true,radius:radius+.01,paperLantern:{base,top,height,radius,ceiling,thickness}};
 }
+
+// Existing feature lanterns keep their authored positions. Other lantern rooms
+// get a sparse fitted row layout, built once after partitions and lintels exist.
+function restaurantCeilingLanterns(r) {
+  if(r.props.some(p=>p.paperLantern))return [];
+  const ceiling=r.def.height||3,top=ceiling-.24,height=.34,radius=.15,base=top-height-.008,gap=radius+.25;
+  const wc=r.def.wc,fixtures=[],tall=r.props.filter(p=>p.box&&p.box.z1>=base&&p.box.z0<ceiling);
+  const even=(size)=>{const n=Math.max(1,Math.round((size-2)/3));return Array.from({length:n},(_,k)=>1+(k+.5)*(size-2)/n);};
+  for(const y of even(r.H))for(const x of even(r.W)){
+    // Check the full surround, not just the centre: doorway and wall cells
+    // cannot carry any part of a paper shell or its ceiling mount.
+    let fits=true;
+    for(let gy=Math.floor(y-gap);gy<=Math.floor(y+gap);gy++)for(let gx=Math.floor(x-gap);gx<=Math.floor(x+gap);gx++)
+      if(!'.S'.includes(r.grid[gy]?.[gx]||'#'))fits=false;
+    if(wc&&x+gap>wc.x0&&x-gap<wc.x1&&y+gap>wc.y0&&y-gap<wc.y1)fits=false;
+    if(tall.some(p=>inBox(p.box,x,y,gap)))fits=false;
+    if(fits)fixtures.push({...PAPER_LANTERN(x,y,{ceiling,top,height,radius}),ceilingLantern:true});
+  }
+  return fixtures;
+}
