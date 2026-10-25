@@ -14,6 +14,7 @@ function homePlushShark(vx,vy,c,s,zBase=0) {
   ell(0,-.08,.34,.035,.13,.14,BLUE);
 }
 function furnishingProp(p,r) {
+  if(p.id==='sharkplush')return HOME_PLUSH_SHARK(p);
   if(p.id==='f_lamp')return HOME_FLOOR_LAMP(p);
   if(p.id==='f_recordplayer')return HOME_RECORD_PLAYER(p);
   if(p.id==='f_frame')return HOME_PHOTO_FRAME(p);
@@ -39,7 +40,7 @@ function furnishingProp(p,r) {
       for(const side of [-1,1]){wood(side*.53,.025,.51,.38,.32,.49,.09,fabric);wood(side*1.12,0,.08,.46,.34,.72,.065,fabric);wood(side*.53,-.36,.51,.1,.46,.95,.075,fabric);}
     }else if(p.id==='f_rug') {
       wood(0,0,1.3,.9,.002,.014,.005,(i,t,L)=>{const edge=Math.abs(HIT.u)>1.21||Math.abs(HIT.v)>.81;BG[i]=C(edge?STONE:BLUE,2.7+L*.2);set(i,edge?'=':' ',C(STONE,L));return true;});
-    }else if(p.id==='sharkplush')homePlushShark(vx,vy,c,s,p.z||0);
+    }
   });
   prop.radius=Math.hypot(d.hx,d.hy)+.2;prop.box=furnishingBox(p);prop.walk=!!(d.rug||d.wall);prop.furnishingKey=p.key;
   if(d.seat)Object.assign(prop,{seat:true,h:d.seat,fx:-s,fy:c});return prop;
