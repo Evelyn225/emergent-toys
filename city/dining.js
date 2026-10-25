@@ -77,7 +77,7 @@ function dumplingWall(i, u, uStep, z, d, mx, my, L) {
   if (z < 1.0) { BG[i] = C(RED, 2.2 + L * 0.2); return set(i, fract(u * 3) < 0.05 ? '|' : ' ', C(BRICK, 4)), true; }
   BG[i] = C(YEL, 5.5 + L * 0.15); return set(i, ' ', 0), true; // cream
 }
-const roundLantern = (x, y) => hung(x, y, 2.3, (vx, vy, z) => { drum(vx, vy, 0.22, z - 0.35, z, (i, t, L) => { BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 6) < 0.2 ? '-' : ' ', C(YEL, 10)), true; }); rod(vx, vy, z - 0.35, vx, vy, z - 0.6, 0.02, YEL, 1.4); }); // a tassel under it
+const roundLantern = (x, y) => ROUND_LANTERN_LAMP(x, y, 2.3); // a round red lantern, a tassel under it
 ROOM_DEFS.dumplings = { grid: backWc(13, 9), wc: wcAt(13), light: 0.95, floor: 'tile', ceil: 'strip', sign: false, wall: dumplingWall, keeper: [6.6, 1.7],
   props: r => [KITCHEN_SERVICE_COUNTER(5,2.55,2.4,.3,1,RED), KITCHEN_PREP(4.2,1.45,1.2,.35,.85),
     { ...standing(3.6, 2.05, WHITE), face: [0, -1] }, { ...standing(4.8, 2.05, WHITE), face: [0, -1] }, { ...standing(6.6, 1.7, RED), face: [0, 1] }, // two folding, one serving
@@ -128,8 +128,7 @@ ROOM_DEFS.dimsum = { grid: backWc(15, 11), wc: wcAt(15), light: 0.95, height: 3.
 // ---- the kissaten (KISSATEN): an old coffee house: dark wood, red velvet booths, the siphons bubbling on the bar, a wall
 // of cups behind it, stained-glass lamps low over the tables
 const siphon = (x, y) => KITCHEN_SIPHON(x,y);
-const tiffany = (x, y) => hung(x, y, 1.95, (vx, vy, z) => drum(vx, vy, 0.24, z - 0.18, z, (i, t, L) => { // a lamp of coloured glass, lit
-  const seg = Math.floor((Math.atan2(HIT.v, HIT.u) / Math.PI + 1) * 4); BG[i] = C([RED, YEL, GREEN, ORANGE][seg & 3], 6 + 2 * Math.max(night, 0.4)); return set(i, fract(HIT.w * 10) < 0.2 ? '-' : ' ', C(BRICK, 4)), true; }));
+const tiffany = (x, y) => TIFFANY_LAMP(x, y, 1.77); // a lamp of coloured glass, lit
 function kissatenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L, 1.0, 2.2)) return true;
   if (backWall(my) && z > 2.4 && z < 2.75 && Math.abs(u - 4.6) < 1.5) { BG[i] = C(YEL, 4.5); return wallText(i, u, uStep, z, d, room.word, 4.6, 2.57, 0.24, 0.26, C(BRICK, 3), C(YEL, 4.5)) || set(i, ' ', 0), true; } // on a brass plate
