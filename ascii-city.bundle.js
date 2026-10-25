@@ -20978,8 +20978,6 @@ Object.assign(ROOM_FOR, { COFFEE: 'roastery', NOODLES: 'noodlehouse', THAI: 'tha
 
 // ---- the bodega (BODEGA): the counter by the door behind its plexiglass, the cat asleep on it, cigarettes and lotto
 // behind; the deli case and the grill at the back, two narrow aisles, the cooler, a crate to sit on
-const grillTop = (i, t, L) => { BG[i] = C(GRAY, (HIT.face === 5 ? 1.2 : 2.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (hash(Math.floor(HIT.u * 12), Math.floor(T * 3), 130) > 0.85 ? '~' : '.') : ' ', C(ORANGE, 9)), true; };
-const plexi = (i, t, L) => fract((HIT.u + HIT.w) * 2.5) < 0.04 ? (set(i, '/', C(WHITE, 8)), true) : false; // (see-through, a glint across it)
 const shopCat = (x, y, z) => figProp(x, y, KITTEN_LOOK, { z, h: 0.3 / KITTEN_LOOK.scale(0), pose: () => fract(T / 7) < 0.05 ? 'f1' : 'f0', face: [0, 1], chat: false, still: true, light: 8 }); // (it lives here: still there after closing)
 function bodegaWall(i, u, uStep, z, d, mx, my, L) {
   if (my === room.H - 1 && z > 1.3 && z < 2.1 && hash(Math.floor(u / 0.5), Math.floor(z / 0.4), 131) > 0.55) { // flyers taped up in the window
@@ -20996,11 +20994,11 @@ function bodegaWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..#', '#.SS.SS..#', '#........#', '#........#', '#........#', '####DD####'],
   light: 1.0, floor: 'lino', ceil: 'strip', sign: false, glyphs: '%#o=]', wall: bodegaWall, keeper: [8.4, 6.4],
-  props: r => [BX(7.55, 6.4, 1.0, 0.28, 0, 1.05, solid(BRICK, { top: '=', panel: 0.5 }), 0, 1), BX(7.3, 6.4, 1.0, 0.02, 1.05, 1.95, plexi, 0, 1), // the counter, the plexiglass
+  props: r => [SHOP_COUNTER(7.55, 6.4, 1.0, 0.28, 1.05, 0, 1, BRICK), PLEXI_SCREEN(7.3, 6.4, 1.0, 1.05, 0.9, 0, 1), // the counter, the plexiglass
     { ...standing(8.4, 6.4, r.neon), face: [-1, 0] }, shopCat(7.6, 7.05, 1.05),
-    KITCHEN_FOOD_CASE(5.0, 1.95, 2.0, 0.32, 1.15, 'deli', GRAY), { ...standing(4.4, 1.4, WHITE), face: [0, 1] }, BX(6.6, 1.3, 0.6, 0.25, 0, 0.92, grillTop),
-    sodaCooler(1.38, 6.2, 1.0, 0.36, 1, 0), BX(3.1, 7.55, 0.32, 0.25, 0, 0.9, crateShade(RED)), BX(3.1, 7.55, 0.3, 0.23, 0.9, 1.2, crateShade(RED)), // crates of soda, stacked
-    BX(1.5, 2.3, 0.2, 0.17, 0, 0.38, crateShade(BLUE)), SEAT(1.5, 2.3, 1, 0, 0.4), ...(chance(0.5) ? [{ ...sitting(1.5, 2.3, shirt(), 0.4), face: [1, 0] }] : [])] }; // a milk crate to sit on, and the old man who does
+    KITCHEN_FOOD_CASE(5.0, 2.0, 2.0, 0.32, 1.15, 'deli', GRAY), { ...standing(4.4, 1.4, WHITE), face: [0, 1] }, KITCHEN_FLATTOP(6.6, 1.33, 0.6, 0.32, 'burger'),
+    sodaCooler(1.38, 6.2, 1.0, 0.36, 1, 0), KITCHEN_BEER_CRATE(3.1, 7.55, { levels: 4, open: true, hl: 0.32, hw: 0.25, col: RED }), // crates of soda, stacked, the top one open
+    KITCHEN_BEER_CRATE(1.5, 2.3, { hl: 0.2, hw: 0.17, h: 0.4, col: BLUE }), SEAT(1.5, 2.3, 1, 0, 0.4), ...(chance(0.5) ? [{ ...sitting(1.5, 2.3, shirt(), 0.4), face: [1, 0] }] : [])] }; // a milk crate to sit on, and the old man who does
 
 // ---- the market hall (MARKET): stalls under striped awnings round the walls (fish on ice, fruit and veg, the butcher,
 // cheese, flowers, bread), a coffee stand with stools, benches back to back down the middle
@@ -37908,10 +37906,11 @@ function CHECKOUT_COUNTER(x,y,hl) {
   return {...ROOM_MODEL(x,y,(vx,vy)=>{for(const [u,v,a,b,z0,z1,shade]of parts){const [px_,py_]=[vx-s*v+c*u,vy+c*v+s*u];drawBox(boxAt(px_,py_,c,s,a,b,z0,z1),shade);}}),
     box:boxAt(x,y,1,0,hw,hl,0,H),radius:hl+.1,checkout:{hl,hw,H,parts:parts.length}};
 }
-// The gas station shop's fittings, built: the counter and what stands on it
-// (till, pump console, a jar of jerky), the coffee and hot-food counters with
-// a stack of cups, the chest freezer of ice, the ATM, a peg stand of crisps
-// and the newspaper rack. (The oil shelf under the window is a wall-shelf run.)
+// The corner shops' fittings, built. The gas station: the counter and what
+// stands on it (till, pump console, a jar of jerky), the coffee and hot-food
+// counters with a stack of cups, the chest freezer of ice, the ATM, a peg
+// stand of crisps, the newspaper rack. The bodega: its counter behind a
+// plexiglass screen. (The gas station's oil shelf is a wall-shelf run.)
 // A part in a model's frame: u along (c,s), v along (-s,c). Rounded parts (r)
 // give their own normals; plain boxes get theirs from the face they hit.
 const GAS_PART=(vx,vy,c,s)=>(u,v,hl,hw,z0,z1,shade,r=0)=>{
@@ -38043,6 +38042,20 @@ function WET_FLOOR_CONE(x,y) {
   const shade=(i,t,L)=>{const band=Math.abs(HIT.w-.32)<.05;BG[i]=C(band?GRAY:YEL,(band?.6:3.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));
     return set(i,band&&coveDetail(t,.1)>.3&&fract(Math.atan2(HIT.v,HIT.u)/TAU*6)<.3?'!':' ',C(YEL,14)),true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>coveLathe(vx,vy,0,prof,shade)),box:boxAt(x,y,1,0,.16,.16,0,.6),radius:.2,wetFloor:true};
+}
+// A plexiglass screen standing on a counter top at z, along u (c,s): clear
+// panes with a glint across them in a steel frame of posts and a head rail,
+// a gap under the middle pane to pass things through.
+function PLEXI_SCREEN(x,y,hl,z,h,c,s) {
+  const posts=[-hl,-hl/3,hl/3,hl].map(u=>u+(u<0?.012:-.012)),gap=.12;
+  const pane=(i,t,L)=>fract((HIT.u+HIT.w)*2.5)<.04?(set(i,'/',C(WHITE,8)),true):false; // see-through but for the glint
+  const panes=[0,1,2].map(k=>{const a=posts[k]+.012,b=posts[k+1]-.012;return {u:(a+b)/2,hl:(b-a)/2,z0:k===1?z+gap:z};});
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    for(const p of panes)part(p.u,0,p.hl,.004,p.z0,z+h-.03,pane);
+    for(const u of posts)part(u,0,.012,.012,z,z+h-.03,GRAY,.004);
+    part(0,0,hl,.015,z+h-.03,z+h,GRAY,.006); // the head rail
+    part(0,0,panes[1].hl,.015,z+gap-.012,z+gap,GRAY,.004); // the rail over the pass-through
+  }),box:boxAt(x,y,c,s,hl,.015,z,z+h),radius:hl,plexi:{z,h,gap,panes}};
 }
 // Reach-in fridge runs along shop walls, built as glass-door coolers (the
 // pass 3 drinks cooler) instead of painted onto the wall. Each run stands on

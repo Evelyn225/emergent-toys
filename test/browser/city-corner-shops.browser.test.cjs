@@ -52,3 +52,32 @@ test('the gas station shop is fitted: counters with what stands on them, the fre
  });
  assert.deepEqual(r,[]);
 }));
+
+test('the bodega counter carries its plexiglass screen; grill, deli case and crates stand clear of each other',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const bad=[];projX=10000;
+  enterRoom('bodega',{word:'BODEGA',ret:[100,100,0]},[5,5,0]);
+  const P=room.props,counter=P.find(o=>o.shopCounter),screen=P.find(o=>o.plexi);
+  if(!counter||!screen){bad.push('missing counter or screen');return bad;}
+  if(Math.abs(screen.box.z0-counter.box.z1)>1e-9)bad.push('screen not on the counter top');
+  if(!inBox(counter.box,screen.x,screen.y,0))bad.push('screen off the counter');
+  // the screen sits between the clerk and the shop
+  const keeper=room.def.keeper;if(!(keeper[0]>screen.x))bad.push('clerk on the wrong side of the screen');
+  // panes see-through (but for the glint), the middle one raised over the pass-through
+  const pass=screen.plexi.panes[1];if(Math.abs(pass.z0-screen.plexi.z-screen.plexi.gap)>1e-9)bad.push('no pass-through');
+  const draw=drawBox,parts=[];drawBox=(box,shade,ray=rayBox)=>parts.push({box,shade,ray});try{screen.draw(screen.x,screen.y);}finally{drawBox=draw;}
+  const panes=parts.filter(q=>q.box.hw===.004);let clear=0,n=0;
+  for(const q of panes)for(let k=0;k<20;k++){HIT.u=k*.037;HIT.w=1.2+k*.021;HIT.face=3;n++;if(!q.shade(0,1,8))clear++;}
+  if(panes.length!==3||clear<n*.8)bad.push(['panes',panes.length,clear,n]);
+  // nothing solid overlaps (people and the cat aside; the screen stands on the counter)
+  const solid=P.filter(o=>o.box&&o.draw&&!o.fig&&!o.seat);
+  for(let a=0;a<solid.length;a++)for(let b=a+1;b<solid.length;b++){const A=solid[a].box,B=solid[b].box;
+   if(B.z0>=A.z1-1e-9||A.z0>=B.z1-1e-9)continue;
+   const ax=Math.abs(A.c??1)*A.hl+Math.abs(A.s??0)*A.hw,ay=Math.abs(A.s??0)*A.hl+Math.abs(A.c??1)*A.hw,bx=Math.abs(B.c??1)*B.hl+Math.abs(B.s??0)*B.hw,by=Math.abs(B.s??0)*B.hl+Math.abs(B.c??1)*B.hw;
+   if(Math.abs(A.x-B.x)<ax+bx-.005&&Math.abs(A.y-B.y)<ay+by-.005)bad.push(['overlap',+A.x.toFixed(2),+A.y.toFixed(2),+B.x.toFixed(2),+B.y.toFixed(2)]);}
+  if(String(ROOM_DEFS.bodega.props).includes('BX('))bad.push('a painted box is left in the bodega');
+  for(const [x,y] of [[6.8,6.4],[4.2,1.3],[3.1,6.9],[1.5,3]])if(!free(x,y))bad.push(['aisle blocked',x,y]);
+  return bad.slice(0,10);
+ });
+ assert.deepEqual(r,[]);
+}));

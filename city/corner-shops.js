@@ -1,7 +1,8 @@
-// The gas station shop's fittings, built: the counter and what stands on it
-// (till, pump console, a jar of jerky), the coffee and hot-food counters with
-// a stack of cups, the chest freezer of ice, the ATM, a peg stand of crisps
-// and the newspaper rack. (The oil shelf under the window is a wall-shelf run.)
+// The corner shops' fittings, built. The gas station: the counter and what
+// stands on it (till, pump console, a jar of jerky), the coffee and hot-food
+// counters with a stack of cups, the chest freezer of ice, the ATM, a peg
+// stand of crisps, the newspaper rack. The bodega: its counter behind a
+// plexiglass screen. (The gas station's oil shelf is a wall-shelf run.)
 // A part in a model's frame: u along (c,s), v along (-s,c). Rounded parts (r)
 // give their own normals; plain boxes get theirs from the face they hit.
 const GAS_PART=(vx,vy,c,s)=>(u,v,hl,hw,z0,z1,shade,r=0)=>{
@@ -133,4 +134,18 @@ function WET_FLOOR_CONE(x,y) {
   const shade=(i,t,L)=>{const band=Math.abs(HIT.w-.32)<.05;BG[i]=C(band?GRAY:YEL,(band?.6:3.6)+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));
     return set(i,band&&coveDetail(t,.1)>.3&&fract(Math.atan2(HIT.v,HIT.u)/TAU*6)<.3?'!':' ',C(YEL,14)),true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>coveLathe(vx,vy,0,prof,shade)),box:boxAt(x,y,1,0,.16,.16,0,.6),radius:.2,wetFloor:true};
+}
+// A plexiglass screen standing on a counter top at z, along u (c,s): clear
+// panes with a glint across them in a steel frame of posts and a head rail,
+// a gap under the middle pane to pass things through.
+function PLEXI_SCREEN(x,y,hl,z,h,c,s) {
+  const posts=[-hl,-hl/3,hl/3,hl].map(u=>u+(u<0?.012:-.012)),gap=.12;
+  const pane=(i,t,L)=>fract((HIT.u+HIT.w)*2.5)<.04?(set(i,'/',C(WHITE,8)),true):false; // see-through but for the glint
+  const panes=[0,1,2].map(k=>{const a=posts[k]+.012,b=posts[k+1]-.012;return {u:(a+b)/2,hl:(b-a)/2,z0:k===1?z+gap:z};});
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{const part=GAS_PART(vx,vy,c,s);
+    for(const p of panes)part(p.u,0,p.hl,.004,p.z0,z+h-.03,pane);
+    for(const u of posts)part(u,0,.012,.012,z,z+h-.03,GRAY,.004);
+    part(0,0,hl,.015,z+h-.03,z+h,GRAY,.006); // the head rail
+    part(0,0,panes[1].hl,.015,z+gap-.012,z+gap,GRAY,.004); // the rail over the pass-through
+  }),box:boxAt(x,y,c,s,hl,.015,z,z+h),radius:hl,plexi:{z,h,gap,panes}};
 }
