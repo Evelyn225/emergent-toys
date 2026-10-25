@@ -15636,13 +15636,66 @@ function drawKerbShelter(o, vx, vy, z, near) {
     return set(i, worldText(word, HIT.v * e * fs, HIT.w, t, i, ex, ey, z + 1.3 * k, tx, ty, .14 * k, .22 * k), C(WHITE, 14)), true;
   });
 }
-const KERB_DRAW = { hydrant: drawKerbHydrant, bin: drawKerbBin, mailbox: drawKerbMailbox, bollard: drawKerbBollard, cabinet: drawKerbCabinet, shelter: drawKerbShelter };
+// A timber pole (creosoted, tapering, its top chamfered), the crossarm reaching out over the road on a steel brace,
+// a porcelain insulator under each wire, the telephone cable on its bracket, and on some a transformer can on the
+// building side, its leads jumping up beside the pole to the first wire. Service drops run back to a wall bracket.
+const POLE_TIMBER = (i, t, L) => {
+  const grain = coveDetail(t, .3) ? Math.sin(HIT.w * 900 + Math.atan2(HIT.v, HIT.u) * 3) * .12 : 0;
+  BG[i] = C(BRICK, .9 + (1.1 + L * .2) * coveLight(HIT.nx, HIT.ny, HIT.nz) + grain); return set(i, ' ', 0), true;
+};
+const POLE_INSULATOR = [[0, 0], [0, .0025], [.004, .0055], [.006, .0035], [.009, .005], [.012, .003], [.014, 0]];
+const POLE_CAN = [[0, 0], [0, .024], [.004, .027], [.1, .027], [.104, .024], [.11, .012], [.112, 0]];
+// a wire: a near-black line, dark against the sky and the walls alike; solid once it's wider than a character
+const wire = (pts, r, k) => { for (let n = 0; n + 1 < pts.length; n++) { const [ax, ay, az] = pts[n], [bx, by, bz] = pts[n + 1];
+  drawRod(ax, ay, az, bx, by, bz, r, (i, t, L) => {
+    if (r * 2 * projX / t > 1.2) BG[i] = C(GRAY, .3 + L * k * .1);
+    return set(i, courierGlyph(HIT.u, HIT.v, HIT.w, bx - ax, by - ay, bz - az), C(GRAY, .4 + L * k * .1)), true;
+  }); } };
+function drawKerbPole(o, vx, vy, z, near) {
+  const top = z + o.h, at = (off, a = 0) => [vx + o.fx * off + o.c * a, vy + o.fy * off + o.s * a];
+  coveLathe(vx, vy, z, [[0, 0], [0, POLE.r0], [o.h - .004, POLE.r1], [o.h, .006], [o.h, 0]], POLE_TIMBER);
+  coveRound(...at(.09), o.fx, o.fy, .11, .0055, top - .04, top - .03, .002, POLE_TIMBER); // the crossarm
+  if (o.can) coveLathe(...at(-.042), top - .2, POLE_CAN, kerbPaint(GRAY, 2.4));
+  if (!near) return;
+  coveTube(...at(.012), top - .11, ...at(.1), top - .04, .0025, GRAY); // the arm's brace
+  for (const w of POLE_WIRES) if (!w.tel) coveLathe(...at(w.off), top - .03, POLE_INSULATOR, kerbPaint(WHITE, 2.8));
+  drawBox(boxAt(...at(.02), o.fx, o.fy, .022, .004, top - .086, top - .078), kerbPaint(GRAY, 1.6)); // the cable bracket
+  if (o.can) {
+    drawBox(boxAt(...at(-.016), o.fx, o.fy, .006, .02, top - .17, top - .15), kerbPaint(GRAY, 1.6)); // its hanger
+    for (const a of [-.01, .01]) wire([[...at(-.042, a), top - .088], [...at(-.018, a + Math.sign(a) * .008), top - .02], [...at(.045, Math.sign(a) * .018), top - .02], [...at(.06), top - .018]], .0012, .14);
+  }
+  if (o.drop) { // the service drop, sagging to its bracket on the wall
+    const w = POLE_WIRES[3], [ex, ey] = R(o.drop.x, o.drop.y), z0 = top - w.dz;
+    wire(Array.from({ length: 5 }, (_, n) => { const t = n / 4, [sx, sy] = at(w.off); return [sx + (ex - sx) * t, sy + (ey - sy) * t, z0 + (o.drop.z - z0) * t - .04 * t * (1 - t)]; }), .0015, .12);
+    drawBox(boxAt(ex + o.fx * .004, ey + o.fy * .004, o.fx, o.fy, .004, .008, o.drop.z - .004, o.drop.z + .012), kerbPaint(GRAY, 1.8));
+  }
+}
+// a guy wire from near the top of an end pole down to its anchor, a yellow guard sleeve over its foot
+function drawKerbGuy(o, vx, vy, z, near) {
+  const [px_, py_] = R(o.pole.x, o.pole.y), [gx, gy] = R(o.gx, o.gy), top = o.pole.z + o.pole.h - .05, k = .25;
+  wire([[px_, py_, top], [gx, gy, o.gz]], .0012, .14);
+  const lift = .004 / (top - o.gz); // (the sleeve's rounded foot rests on the ground)
+  coveTube(gx + (px_ - gx) * k * .25, gy + (py_ - gy) * k * .25, o.gz + (top - o.gz) * k * .25, gx + (px_ - gx) * lift, gy + (py_ - gy) * lift, o.gz + .004, .0035, YEL);
+  if (near) coveLathe(gx, gy, o.gz, [[0, 0], [0, .006], [.004, .004], [.004, 0]], kerbPaint(GRAY, 1.4)); // the anchor eye
+}
+// the wires, span by span: sampled finer up close; past POLE_WIRE_VIS (100 m) a wire is too fine to see at all
+const POLE_WIRE_VIS = 10;
+function drawPoleSpans() {
+  forNear(poleSpansB, sp => {
+    const [ax, ay] = R(sp.p.x, sp.p.y), [bx, by] = R(sp.q.x, sp.q.y), d = Math.min(Math.hypot(ax, ay), Math.hypot(bx, by));
+    if (d > Math.min(vis, POLE_WIRE_VIS) || !inView((ax + bx) / 2, (ay + by) / 2, sp.len / 2 + .2)) return;
+    const n = d < 3 ? 12 : d < 6 ? 6 : 3;
+    for (const w of POLE_WIRES) wire(Array.from({ length: n + 1 }, (_, k) => { const [x, y, z] = poleWirePoint(sp, w, k / n); return [...R(x, y), z]; }), w.tel ? .0028 : .0016, w.tel ? .1 : .14);
+  });
+}
+const KERB_DRAW = { hydrant: drawKerbHydrant, bin: drawKerbBin, mailbox: drawKerbMailbox, bollard: drawKerbBollard, cabinet: drawKerbCabinet, shelter: drawKerbShelter, pole: drawKerbPole, guy: drawKerbGuy };
 function drawKerbFixtures() {
   forNear(kerbsB, o => {
     const [vx, vy] = R(o.x, o.y), d = Math.hypot(vx, vy);
     if (d > vis || o.h * projY / d < .6 || !inView(vx, vy, .05)) return; // (none smaller than a character)
     KERB_DRAW[o.kind](o, vx, vy, terrainHeight(o.x, o.y), d < KERB_NEAR);
   });
+  drawPoleSpans();
 }
 // ===== the cell block: where you end up if you can't pay the fine. Your cell is the middle one of a row of three;
 // through its bars, a corridor, a guard walking up and down it, a desk at one end and the steel door out at the
@@ -39753,6 +39806,8 @@ const KERB_KINDS = {
   bollard: { hl: .011, hw: .011, h: .091 },
   cabinet: { hl: .043, hw: .029, h: .141 },
   shelter: { hl: .155, hw: .07, h: .245, line: .03 }, // (line: set back from the kerb line, so its back stays off the walking line)
+  pole: { hl: .015, hw: .015, h: .84 },
+  guy: { hl: .032, hw: .008, h: .2 }, // (the foot of a guy wire, where it comes down to its anchor)
 };
 // A shelter's solid parts in its own frame (a along the kerb, v out of its open front): the glass back, the advert
 // panel at one end, the glass screen at the other; the front is open, and the bench inside is a street bench.
@@ -39786,6 +39841,78 @@ function addKerb(x, y, kind, ax, ay, extra) {
     o.x = sx; o.y = sy;
   }
   return null;
+}
+// Timber pole lines in the Docks and the Yards: two poles a block side, down one side of each street, the wires on
+// an arm reaching out over the road (clear of the lamp posts on the kerb line). Lines along the avenues (v) are
+// carried higher than those along the cross streets (h), so where they cross over a junction they pass well clear.
+// A span joins neighbouring poles of a line; a pole at the end of a line is held by a guy wire to an anchor.
+const POLE = { r0: .014, r1: .011, hv: .84, hh: .62, at: [2.5, 5.5], sag: .012, span: 5.5, guy: .22, drop: .25 };
+const POLE_WIRES = [{ off: .06, dz: .018 }, { off: .12, dz: .018 }, { off: .18, dz: .018 }, { off: .04, dz: .08, tel: true }]; // off: out along the arm; dz: below the pole top
+const poleSpans = [], poleSpansB = bucketed([]);
+const poleAlong = p => p.ori === 'h' ? p.x : p.y;
+// a point on a span's wire, t = 0..1 from p to q, sagging
+function poleWirePoint(sp, w, t) {
+  const { p, q } = sp, za = p.z + p.h - w.dz, zb = q.z + q.h - w.dz;
+  return [p.x + p.fx * w.off + rel(q.x - p.x) * t, p.y + p.fy * w.off + rel(q.y - p.y) * t, za + (zb - za) * t - sp.sag * (w.tel ? 1.3 : 1) * 4 * t * (1 - t)];
+}
+// Is a stretch of wire (sample points) clear of the buildings, their fittings, the el, the lamps and the trees?
+function poleWireClear(pts, walls = true) {
+  for (const [x, y, z] of pts) {
+    const box = { x, y, c: 1, s: 0, hl: .006, hw: .006, z0: z - .006, z1: z + .006 };
+    if (streetGeometryCollision(box, walls) || Math.abs(rel(y - (EL_Y + 1))) < EL_HALF + .1) return false;
+    const bx = Math.floor(x / 8), by = Math.floor(y / 8);
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+      if (lampsB[bi(bx + i, by + j)].some(l => Math.abs(rel(l.x - x)) < .6 && Math.abs(rel(l.y - y)) < .6 && streetFixtureBoxes(l, 'lamp').some(b => streetBoxesOverlap(box, b)))) return false;
+      if (treesB[bi(bx + i, by + j)].some(t => Math.hypot(rel(t.x - x), rel(t.y - y)) < .18)) return false;
+    }
+  }
+  return true;
+}
+{
+  const lines = new Map();
+  for (let by = 0; by < NB; by++) for (let bx = 0; bx < NB; bx++) for (const ori of ['h', 'v']) {
+    if (!(ori === 'h' ? hseg(bx, by) : vseg(bx, by))) continue;
+    const o = hash(ori === 'h' ? by : bx, 0, ori === 'h' ? 1470 : 1471) < .5 ? CURB : 2 - CURB; // (the same side the whole way along)
+    const ax = ori === 'v' ? (o < 1 ? 1 : -1) : 0, ay = ori === 'h' ? (o < 1 ? 1 : -1) : 0;
+    const at = s => ori === 'h' ? [bx * 8 + s, by * 8 + o] : [bx * 8 + o, by * 8 + s];
+    const [lx, ly] = at(4);
+    if (districtAt(lx - ax * .6, ly - ay * .6) !== 'industrial') continue;
+    const key = ori + (ori === 'h' ? by * 8 + o : bx * 8 + o);
+    for (const s of POLE.at) {
+      const [x, y] = at(s), p = addKerb(x, y, 'pole', ax, ay, { h: ori === 'v' ? POLE.hv : POLE.hh, ori, z: typeof terrainHeight === 'function' ? terrainHeight(x, y) : 0 });
+      if (p) (lines.get(key) || lines.set(key, []).get(key)).push(p);
+    }
+  }
+  for (const ps of lines.values()) {
+    ps.sort((p, q) => poleAlong(p) - poleAlong(q));
+    for (let k = 0; k + 1 < ps.length; k++) {
+      const p = ps[k], q = ps[k + 1], len = poleAlong(q) - poleAlong(p), sp = { p, q, len, sag: len * POLE.sag };
+      if (len > POLE.span || !POLE_WIRES.every(w => poleWireClear(Array.from({ length: Math.ceil(len / .04) }, (_, n) => poleWirePoint(sp, w, (n + .5) / Math.ceil(len / .04)))))) continue;
+      p.next = q; q.prev = p; poleSpans.push(sp);
+      poleSpansB[bi(Math.floor((p.x + rel(q.x - p.x) / 2) / 8), Math.floor((p.y + rel(q.y - p.y) / 2) / 8))].push(sp);
+    }
+  }
+  // poles left with no wires come down again; the ends of each line get a guy wire, some poles a transformer, and some
+  // a service drop to the building behind them
+  for (const ps of lines.values()) for (const p of ps) {
+    if (!p.next && !p.prev) { kerbs.splice(kerbs.indexOf(p), 1); const b = kerbsB[bi(Math.floor(p.x / 8), Math.floor(p.y / 8))]; b.splice(b.indexOf(p), 1); KERB_REPORT.placed--; continue; }
+    const r = n => hash(Math.floor(p.x * 10), Math.floor(p.y * 10), n);
+    for (const dir of [!p.prev && -1, !p.next && 1].filter(Boolean)) {
+      const ux = p.ori === 'h' ? dir : 0, uy = p.ori === 'v' ? dir : 0, gx = worldCoord(p.x + ux * POLE.guy), gy = worldCoord(p.y + uy * POLE.guy), gz = typeof terrainHeight === 'function' ? terrainHeight(gx, gy) : 0;
+      if (!ROAD[idx(Math.floor(gx), Math.floor(gy))] || GAS_CELL[idx(Math.floor(gx), Math.floor(gy))]) continue;
+      const pts = Array.from({ length: 12 }, (_, n) => { const t = (n + .5) / 12; return [p.x + ux * POLE.guy * t, p.y + uy * POLE.guy * t, p.z + p.h - .05 + (gz - p.z - p.h + .05) * t]; });
+      if (!poleWireClear(pts.slice(0, 9))) continue;
+      const g = { x: worldCoord(gx - ux * .026), y: worldCoord(gy - uy * .026), kind: 'guy', c: p.c, s: p.s, fx: p.fx, fy: p.fy, hl: KERB_KINDS.guy.hl, hw: KERB_KINDS.guy.hw, h: KERB_KINDS.guy.h, pole: p, gx, gy, gz };
+      if (!kerbClear(g)) continue;
+      kerbs.push(g); kerbsB[bi(Math.floor(g.x / 8), Math.floor(g.y / 8))].push(g);
+    }
+    p.can = r(1472) < .25;
+    const wx = worldCoord(p.x - p.fx * (POLE.drop - .002)), wy = worldCoord(p.y - p.fy * (POLE.drop - .002)), tel = POLE_WIRES[3], z0 = p.z + p.h - tel.dz, z1 = z0 - .12;
+    if (r(1473) < .45 && map[idx(Math.floor(wx - p.fx * .05), Math.floor(wy - p.fy * .05))] > z0) {
+      const pts = Array.from({ length: 10 }, (_, n) => { const t = (n + .5) / 10, a = tel.off + (-POLE.drop - tel.off) * t; return [p.x + p.fx * a, p.y + p.fy * a, z0 + (z1 - z0) * t - .01 * 4 * t * (1 - t)]; });
+      if (poleWireClear(pts.slice(0, 8)) && poleWireClear(pts.slice(8), false)) p.drop = { x: wx, y: wy, z: z1 };
+    }
+  }
 }
 // Down each side of each street: a hydrant near the corner, a bin beside the
 // first lamp, now and then a mailbox beside the second, and a row of bollards

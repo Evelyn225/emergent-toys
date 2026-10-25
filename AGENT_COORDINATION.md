@@ -61,6 +61,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   bench in `benches`), its model in `city/kerb-fixtures-render.js`, and one
   `roofed` clause in `rainFx` (`city/city-render.js`). That completes the pass 11
   list (benches were done in pass 1). Next: pass 12 (street lights and utilities).
+- **Claude pass 12, overhead lines:** `claude/overhead-cables`, stacked on #241:
+  `pole` and `guy` kinds plus spans in `city/kerb-fixtures.js`, their models and
+  the wires in `city/kerb-fixtures-render.js` (`drawPoleSpans`, called from
+  `drawKerbFixtures`). That completes the pass 12 list with #242–#245. Next:
+  pass 13 (signs and shopfronts).
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
