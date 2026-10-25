@@ -95,7 +95,37 @@ function drawKerbCabinet(o, vx, vy, z, near) {
   const stone = kerbPaint(STONE, 2.6);
   drawBox(boxAt(bx, by, c, s, .42 * k, .27 * k, z, z + .1 * k), (i, t, L) => (kerbNormal(c, s), stone(i, t, L))); // the plinth
 }
-const KERB_DRAW = { hydrant: drawKerbHydrant, bin: drawKerbBin, mailbox: drawKerbMailbox, bollard: drawKerbBollard, cabinet: drawKerbCabinet };
+// A street shelter, open to the road: four steel posts, a roof with a lip, a
+// glass back with a frosted band at eye height, a glass screen at one end and a
+// lit advert panel at the other. (Its bench is a street bench: benches.)
+function drawKerbShelter(o, vx, vy, z, near) {
+  const k = KERB_K, c = o.c, s = o.s, fs = Math.sign(-s * o.fx + c * o.fy) || 1, steel = (i, t, L) => coveMetal(i, L, HIT.nx, HIT.ny, HIT.nz, GRAY);
+  const at = (a, v) => [vx + (c * a - s * v * fs) * k, vy + (s * a + c * v * fs) * k]; // a along the kerb, v out of the open front
+  const flat = (a0, a1, v0, v1, z0, z1, shade) => { const [x, y] = at((a0 + a1) / 2, (v0 + v1) / 2); drawBox(boxAt(x, y, c, s, (a1 - a0) / 2 * k, (v1 - v0) / 2 * k, z + z0 * k, z + z1 * k), (i, t, L) => (kerbNormal(c, s), shade(i, t, L))); };
+  const glass = (i, t, L) => { // clear, but for the frosted band and a glint; the pane's edge is its frame
+    const w = (HIT.w - z) / k;
+    if (w > 1.0 && w < 1.12) { BG[i] = C(WHITE, 2.6 + L * .1); return set(i, ' ', 0), true; }
+    if (near && Math.abs(fract((HIT.u / k + w) * .6) - .3) < .015) return set(i, '/', C(WHITE, 6)) || true;
+    return false;
+  };
+  const [rx, ry] = at(0, 0);
+  coveRound(rx, ry, c, s, 1.55 * k, .69 * k, z + 2.35 * k, z + 2.45 * k, .02 * k, kerbPaint(GRAY, 1.6)); // the roof
+  for (const a of [-1.45, 1.45]) for (const v of [-.6, .6]) { const [x, y] = at(a, v); coveRound(x, y, c, s, .03 * k, .03 * k, z, z + 2.35 * k, .01 * k, steel); } // the posts
+  flat(-1.42, 1.42, -.6, -.52, .08, .14, steel); flat(-1.42, 1.42, -.6, -.52, 2.22, 2.35, steel); // the back's rails, top and bottom
+  flat(-1.42, 1.42, -.565, -.555, .14, 2.22, glass); // the glass back
+  flat(-1.48, -1.42, -.57, .1, .14, 2.22, glass); // the glass end screen
+  const word = (o.word || 'DRINK COLA').split(' ')[0], glow = Math.max(night, overcast * .6);
+  const [ex, ey] = at(1.45, -.13);
+  flat(1.39, 1.51, -.565, .305, .2, 2.2, (i, t, L) => { // the advert panel, lit, its word on both broad faces
+    const w = (HIT.w - z) / k, face = HIT.face;
+    if (face !== 1 && face !== 2 || w < .3 || w > 2.1) { BG[i] = C(GRAY, 1.4 + L * .2 * coveLight(HIT.nx, HIT.ny, HIT.nz)); return set(i, ' ', 0), true; }
+    BG[i] = C(BLUE, 3 + glow * 6);
+    if (!near) return set(i, ' ', 0), true;
+    const e = face === 1 ? 1 : -1, tx = -s * fs * e, ty = c * fs * e; // (read left to right from either side: along -v from +a, +v from -a)
+    return set(i, worldText(word, HIT.v * e * fs, HIT.w, t, i, ex, ey, z + 1.3 * k, tx, ty, .14 * k, .22 * k), C(WHITE, 14)), true;
+  });
+}
+const KERB_DRAW = { hydrant: drawKerbHydrant, bin: drawKerbBin, mailbox: drawKerbMailbox, bollard: drawKerbBollard, cabinet: drawKerbCabinet, shelter: drawKerbShelter };
 function drawKerbFixtures() {
   forNear(kerbsB, o => {
     const [vx, vy] = R(o.x, o.y), d = Math.hypot(vx, vy);

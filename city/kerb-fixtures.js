@@ -10,7 +10,11 @@ const KERB_KINDS = {
   mailbox: { hl: .023, hw: .029, h: .127 },
   bollard: { hl: .011, hw: .011, h: .091 },
   cabinet: { hl: .043, hw: .029, h: .141 },
+  shelter: { hl: .155, hw: .07, h: .245, line: .03 }, // (line: set back from the kerb line, so its back stays off the walking line)
 };
+// A shelter's solid parts in its own frame (a along the kerb, v out of its open front): the glass back, the advert
+// panel at one end, the glass screen at the other; the front is open, and the bench inside is a street bench.
+const SHELTER_PARTS = [{ a: 0, v: -.056, hl: .145, hw: .004 }, { a: .145, v: -.0125, hl: .006, hw: .0435 }, { a: -.145, v: -.0225, hl: .004, hw: .0335 }];
 const kerbs = [];
 // Anything already standing on the sidewalk, with how far a fixture keeps from it.
 function kerbCrowded(x, y, r) {
@@ -30,6 +34,7 @@ const kerbsB = bucketed([]);
 const KERB_REPORT = { tried: 0, placed: 0, moved: 0 };
 function addKerb(x, y, kind, ax, ay, extra) {
   const k = KERB_KINDS[kind], c = Math.abs(ay), s = Math.abs(ax); // (the box runs along the kerb)
+  if (k.line) { x -= ax * k.line; y -= ay * k.line; } // (it faces the road: set back toward the buildings)
   const o = { x: worldCoord(x), y: worldCoord(y), kind, c, s, fx: ax, fy: ay, hl: k.hl, hw: k.hw, h: k.h, seed: hash(Math.floor(x * 10), Math.floor(y * 10), 1407), ...extra };
   KERB_REPORT.tried++;
   for (const along of [0, -.15, .15, -.3, .3]) {
@@ -56,6 +61,10 @@ for (const o of [CURB, 2 - CURB]) {
       addKerb(...at(3.85), 'bin', ax, ay, { col: ['chinatown', 'downtown'].includes(dist) ? GREEN : GRAY });
     if (!['industrial', 'belle'].includes(dist) && r(1403) < .22) addKerb(...at(6.85), 'mailbox', -ax, -ay, { col: dist === 'shotengai' ? RED : BLUE });
     if (dist !== 'belle' && r(1405) < .12) addKerb(...at(6.2), 'cabinet', -ax, -ay, { col: GREEN, telecom: true }); // a telecom cabinet
+    if (['downtown', 'midtown', 'chinatown', 'waterfront'].includes(dist) && r(1408) < .18) { // a shelter, open to the road, its bench inside
+      const sh = addKerb(...at(5.9), 'shelter', ax, ay, { word: ADS[Math.floor(r(1409) * ADS.length)] });
+      if (sh) { const b = { x: worldCoord(sh.x - ax * .03), y: worldCoord(sh.y - ay * .03), fx: ax, fy: ay, shelter: sh }; benches.push(b); benchesB[bi(Math.floor(b.x / 8), Math.floor(b.y / 8))].push(b); }
+    }
     if (landmarkOf.has(bi(Math.floor(lot[0] / 8), Math.floor(lot[1] / 8))) || dist === 'downtown' && r(1404) < .12)
       for (let k = 0; k < 5; k++) addKerb(...at(4.6 + k * .2), 'bollard', ax, ay, {});
   }
@@ -63,8 +72,11 @@ for (const o of [CURB, 2 - CURB]) {
 // on foot, they're solid; a kicked ball stops at them too
 function kerbAt(x, y, pad) {
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of kerbsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
-    const qx = rel(x - o.x), qy = rel(y - o.y);
-    if (Math.abs(qx * o.c + qy * o.s) < o.hl + pad && Math.abs(-qx * o.s + qy * o.c) < o.hw + pad) return o;
+    const qx = rel(x - o.x), qy = rel(y - o.y), u = qx * o.c + qy * o.s, v = -qx * o.s + qy * o.c;
+    if (Math.abs(u) >= o.hl + pad || Math.abs(v) >= o.hw + pad) continue;
+    if (o.kind !== 'shelter') return o;
+    const fs = Math.sign(-o.s * o.fx + o.c * o.fy) || 1; // (a shelter blocks only at its walls)
+    for (const q of SHELTER_PARTS) if (Math.abs(u - q.a) < q.hl + pad && Math.abs(v * fs - q.v) < q.hw + pad) return o;
   }
   return null;
 }
@@ -79,4 +91,13 @@ function kerbAt(x, y, pad) {
     const away = Math.sign(l.vert ? l.y - (l.by + 1) : l.x - (l.bx + 1)) || 1;
     if (addKerb(l.vert ? l.x : l.x + away * .5, l.vert ? l.y + away * .5 : l.y, 'cabinet', -ax, -ay, { col: GRAY, signal: true })) done.add(key);
   }
+}
+// under a shelter's roof (the rain stays off you there)
+function shelterRoofAt(x, y, z) {
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const q of kerbsB[bi(Math.floor(x / 8) + i, Math.floor(y / 8) + j)]) {
+    if (q.kind !== 'shelter' || z > q.h) continue;
+    const qx = rel(x - q.x), qy = rel(y - q.y);
+    if (Math.abs(qx * q.c + qy * q.s) < q.hl && Math.abs(-qx * q.s + qy * q.c) < q.hw) return q;
+  }
+  return null;
 }

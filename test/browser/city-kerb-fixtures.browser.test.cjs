@@ -13,7 +13,8 @@ test('hydrants, bins, mailboxes and bollards stand on the kerb line, clear of th
   const bad=[],count={};
   for(const o of kerbs){count[o.kind]=(count[o.kind]||0)+1;
    const across=o.c?mod(o.y,8):mod(o.x,8); // (a kerb runs along x when its box does)
-   if(Math.abs(across-CURB)>1e-9&&Math.abs(across-(2-CURB))>1e-9)bad.push([o.kind,'off the kerb line',+across.toFixed(3)]);
+   const line=CURB-(KERB_KINDS[o.kind].line||0); // (a shelter stands set back from the kerb line)
+   if(Math.abs(across-line)>1e-9&&Math.abs(across-(2-line))>1e-9)bad.push([o.kind,'off the kerb line',+across.toFixed(3)]);
    if(Math.min(Math.abs(across-.12),Math.abs(across-1.88))<o.hw+.02)bad.push([o.kind,'in the walking line']);
    if(!ROAD[idx(Math.floor(o.x),Math.floor(o.y))]||isWater(o.x,o.y))bad.push([o.kind,'not on a street']);
    const hit=streetGeometryCollision({x:o.x,y:o.y,c:o.c,s:o.s,hl:o.hl,hw:o.hw,z0:0,z1:o.h},true);if(hit)bad.push([o.kind,'inside',hit.kind]);
@@ -29,7 +30,7 @@ test('hydrants, bins, mailboxes and bollards stand on the kerb line, clear of th
  });
  assert.deepEqual(r.bad,[]);
  assert.equal(r.indexed,true);
- for(const k of ['hydrant','bin','mailbox','bollard','cabinet'])assert.ok(r.count[k]>100,`plenty of ${k}s: ${r.count[k]}`);
+ for(const k of ['hydrant','bin','mailbox','bollard','cabinet','shelter'])assert.ok(r.count[k]>100,`plenty of ${k}s: ${r.count[k]}`);
 }));
 
 test('each fixture is built inside its box, and on foot you walk round it while the walking line stays open',()=>fixture(async p=>{
@@ -41,12 +42,18 @@ test('each fixture is built inside its box, and on foot you walk round it while 
    const vx=o.x-px,vy=o.y-py;if(out.length<(o.kind==='bollard'?1:4)&&o.kind!=='bollard')bad.push([o.kind,'no fittings up close',out.length]);
    for(const q of out){const c=Math.abs(q.c??1),s=Math.abs(q.s??0),ex=q.hl*c+q.hw*s,ey=q.hl*s+q.hw*c,bx=o.hl*o.c+o.hw*o.s,by=o.hl*o.s+o.hw*o.c;
     if(Math.abs(q.x-vx)+ex>bx+1e-6||Math.abs(q.y-vy)+ey>by+1e-6||q.z1>z+o.h+1e-6||q.z0<z-1e-6)bad.push([o.kind,'a part outside its box',+((Math.abs(q.x-vx)+ex)*1000).toFixed(1),+((Math.abs(q.y-vy)+ey)*1000).toFixed(1),+(q.z1-z).toFixed(4)]);}
-   mode='walk';if(free(o.x,o.y))bad.push([o.kind,'walked through']);
+   mode='walk';const fs=Math.sign(-o.s*o.fx+o.c*o.fy)||1,lp=(a,v)=>[o.x+o.c*a-o.s*v*fs,o.y+o.s*a+o.c*v*fs];
+   if(o.kind!=='shelter'&&free(o.x,o.y))bad.push([o.kind,'walked through']);
+   if(o.kind==='shelter'){ // its walls are solid, its inside open and roofed, its bench inside
+    if(free(...lp(0,-.056)))bad.push('walked through the shelter back');if(free(...lp(.145,0)))bad.push('walked through the advert panel');
+    if(!free(...lp(0,.02)))bad.push('no way into the shelter');
+    if(!shelterRoofAt(...lp(0,.02),.17))bad.push('rain under the shelter roof');if(shelterRoofAt(...lp(0,.12),.17))bad.push('roof past the shelter');
+    if(!benches.some(b=>b.shelter===o&&shelterRoofAt(b.x,b.y,.05)))bad.push('no bench in the shelter');}
    const across=o.c?mod(o.y,8):mod(o.x,8),walk=across<1?.12:1.88,wx=o.c?o.x:o.x-across+walk,wy=o.c?o.y-across+walk:o.y;
    if(kerbAt(wx,wy,.02))bad.push([o.kind,'blocks the walking line']);
   }
   return {bad:bad.slice(0,10),kinds:Object.keys(seen).length};
  });
  assert.deepEqual(r.bad,[]);
- assert.ok(r.kinds>=10,'every kind in more than one facing was built');
+ assert.ok(r.kinds>=12,'every kind in more than one facing was built');
 }));
