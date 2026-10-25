@@ -11,7 +11,7 @@ const parts=()=>{
 
 async function fixture(run){const p=await browser.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));try{
  await p.addInitScript(()=>requestAnimationFrame=()=>0);await p.goto(pathToFileURL(path.resolve(__dirname,'../../ascii-city.html')).href);
- await p.evaluate(()=>{paused=false;mode='walk';room=me=null;T=10;env(0);render(0);enterRoom('bar',{word:'BAR',ret:[100,100,0]},[6,4.5,-Math.PI/2]);});
+ await p.evaluate(()=>{paused=false;mode='walk';room=me=null;T=10;env(0);render(0);enterRoom('bar',{word:'BAR',neon:CYAN,ret:[100,100,0]},[6,4.5,-Math.PI/2]);});
  await p.evaluate(`window.parts=${parts}`);
  await run(p);assert.deepEqual(errors,[]);
 }finally{await p.close();}}
@@ -77,12 +77,59 @@ test('back bar joints: boards span stile to stile, stiles reach worktop to canop
   const front=o=>(o.box.x-d.x)*d.fx+(o.box.y-d.y)*d.fy+o.box.hw;
   for(const o of [...boards,...stiles])if(Math.abs(front(o)-B.shelfDepth)>1e-6)bad.push(['front',front(o)]);
   for(const o of shapes){
-   const b=o.box,box=model.box;
-   if(b.z0<box.z0-eps||b.z1>box.z1+eps)bad.push(['height',b.z0,b.z1]);
-   const v=(b.x-d.x)*d.fx+(b.y-d.y)*d.fy,reach=b.r!=null?b.r:b.hw;
-   if(o.ray!==coveRayCapsule&&o.ray!==rayRod&&(v-(b.profile?b.hl:reach)< -eps||v+(b.profile?b.hl:reach)>B.depth+.025))bad.push(['depth',v,reach]);
+   const b=o.box,box=model.box,cu=box.c,su=box.s;
+   let along,across;
+   if(o.ray===coveRayCapsule){
+    along=Math.max(Math.abs((b.ax-box.x)*cu+(b.ay-box.y)*su),Math.abs((b.bx-box.x)*cu+(b.by-box.y)*su))+b.r;
+    across=Math.max(Math.abs(-(b.ax-box.x)*su+(b.ay-box.y)*cu),Math.abs(-(b.bx-box.x)*su+(b.by-box.y)*cu))+b.r;
+   }else{
+    const du=(b.x-box.x)*cu+(b.y-box.y)*su,dv=-(b.x-box.x)*su+(b.y-box.y)*cu;
+    const cc=b.c*cu+b.s*su,ss=-b.c*su+b.s*cu;
+    along=Math.abs(du)+Math.abs(cc)*b.hl+Math.abs(ss)*b.hw;
+    across=Math.abs(dv)+Math.abs(ss)*b.hl+Math.abs(cc)*b.hw;
+   }
+   if(b.z0<box.z0-eps||b.z1>box.z1+eps||along>box.hl+eps||across>box.hw+eps)bad.push(['bounds',b.z0,b.z1,along,across]);
   }
   return{bad};
  });
  assert.deepEqual(r.bad,[]);
+}));
+
+test('mirrored cabinet bounds include handles at cardinal and oblique orientations',()=>fixture(async p=>{
+ const result=await p.evaluate(()=>{
+  const out=[],draw=drawBox;projX=10000;
+  for(const [fx,fy]of [[0,1],[1,0],[0,-1],[Math.SQRT1_2,Math.SQRT1_2]]){
+   const model=BAR_MIRRORED_BACK_BAR(0,0,3.7,fx,fy),shapes=[],bad=[];
+   drawBox=(box,shade,ray=rayBox)=>shapes.push({box,ray});try{model.draw(0,0);}finally{drawBox=draw;}
+   const a=model.box,c=a.c,s=a.s;
+   for(const q of shapes){const b=q.box;let u,v;
+    if(q.ray===coveRayCapsule){u=Math.max(Math.abs((b.ax-a.x)*c+(b.ay-a.y)*s),Math.abs((b.bx-a.x)*c+(b.by-a.y)*s))+b.r;v=Math.max(Math.abs(-(b.ax-a.x)*s+(b.ay-a.y)*c),Math.abs(-(b.bx-a.x)*s+(b.by-a.y)*c))+b.r;}
+    else if(b.profile){u=Math.abs((b.x-a.x)*c+(b.y-a.y)*s)+b.hl;v=Math.abs(-(b.x-a.x)*s+(b.y-a.y)*c)+b.hl;}
+    else{const cc=b.c*c+b.s*s,ss=-b.c*s+b.s*c;u=Math.abs((b.x-a.x)*c+(b.y-a.y)*s)+Math.abs(cc)*b.hl+Math.abs(ss)*b.hw;v=Math.abs(-(b.x-a.x)*s+(b.y-a.y)*c)+Math.abs(ss)*b.hl+Math.abs(cc)*b.hw;}
+    if(u>a.hl+1e-8||v>a.hw+1e-8||b.z0<a.z0-1e-8||b.z1>a.z1+1e-8)bad.push([u,v,b.z0,b.z1]);
+   }out.push({fx,fy,bad});
+  }return out;
+ });for(const r of result)assert.deepEqual(r.bad,[],JSON.stringify(r));
+}));
+
+test('cached vessel rejection matches full lathe rays and upturned tumblers have a real open mouth below a closed base',()=>fixture(async p=>{
+ const r=await p.evaluate(()=>{
+  const {shapes}=parts(),unique=new Map(),bad=[];
+  for(const q of shapes)if(q.ray===backBarRayBottle)unique.set(q.box.profile,q);
+  let probes=0;
+  for(const q of unique.values()){
+   const b=q.box;
+   for(const [rx,ry,rz]of [[0,-1,0],[-1,0,.15],[0,0,-1]])for(let i=-5;i<=5;i++)for(let k=-1;k<=9;k++){
+    let x=b.x+i/5*b.hl,y=b.y+.5,z=b.z0+(b.z1-b.z0)*k/8;
+    if(rx){x=b.x+.5;y=b.y+i/5*b.hl;}else if(rz){y=b.y+k/8*b.hl;z=b.z1+.5;}
+    const fast=backBarRayBottle(x,y,z,rx,ry,rz,b),full=coveRayLathe(x,y,z,rx,ry,rz,b);
+    if((fast<0)!==(full<0)||(fast>0&&Math.abs(fast-full)>1e-7))bad.push([i,k,rx,ry,rz,fast,full]);probes++;
+   }
+  }
+  const glass=[...unique.values()].find(q=>Math.abs(q.box.z0-(BACK_BAR.top+.006))<1e-7&&Math.abs(q.box.z1-q.box.z0-.085)<1e-7),b=glass.box;
+  const below=b.z0-.5+coveRayLathe(b.x,b.y,b.z0-.5,0,0,1,b),above=b.z1+.5-coveRayLathe(b.x,b.y,b.z1+.5,0,0,-1,b);
+  if(!(below>b.z0+.07&&Math.abs(above-b.z1)<1e-7&&Math.abs(above-below-.006)<1e-7))bad.push(['glass cavity',below,above,b.z0,b.z1]);
+  const ring=b.z0-.5+coveRayLathe(b.x+.038,b.y,b.z0-.5,0,0,1,b);if(Math.abs(ring-b.z0)>1e-7)bad.push(['glass rim support',ring,b.z0]);
+  return{bad:bad.slice(0,20),probes,profiles:unique.size};
+ });assert.deepEqual(r.bad,[]);assert.ok(r.probes>4000);assert.ok(r.profiles>=10);
 }));

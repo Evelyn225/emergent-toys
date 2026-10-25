@@ -15994,9 +15994,10 @@ const ROOM_DEFS = {
     props: r => [...counterBox(5, BACK_COUNTER_Y, .95), standing(5, BACK_COUNTER_STAFF_Y, r.neon)] }, // fits between the shelf islands at x=4 and x=6
   bar: { grid: boxRoom(12, 8, { '1,4': 'W', '3,4': 'W', '3,5': 'W', '3,6': 'W' }), wc: { x0: 1, y0: 5, x1: 3, y1: 7, sign: [1, 4, 1.5] }, light: 0.6, floor: 'wood', ceil: 'pendant', sign: true, neon: true, keeper: [6, BACK_COUNTER_STAFF_Y],
     props: r => {
-      const p = [...counterBox(6, BACK_COUNTER_Y, 4, 1.1), standing(6, BACK_COUNTER_STAFF_Y, r.neon), BAR_BACK_BAR(6, 1, 3.7, 0, 1, r.neon),
+      const p = [...counterBox(6, BACK_COUNTER_Y, 4, 1.1), standing(6, BACK_COUNTER_STAFF_Y, r.neon),
                  JUKEBOX(10.55, 5.5, -1, 0), ...toilet(1.6, 6.4, 1, porcelain),washbasin(1.35,5.45,1,0)];
       for (let x = 3; x <= 9; x += 1.5) { p.push(STOOL(x, 2.65, RED)); if (chance(barCrowd())) p.push(sitting(x, 2.7, shirt(), 0.6, true)); }
+      p.push(r.neon===CYAN?BAR_MIRRORED_BACK_BAR(6,1,3.7,0,1,r.neon):BAR_BACK_BAR()); // near parts reject hidden shelf pixels first
       return p;
     } },
   diner: { grid: boxRoom(12, 8, { '1,3': 'W', '2,3': 'W', '3,3': 'W', '3,1': 'W' }), wc: { x0: 1, y0: 1, x1: 3, y1: 3, sign: [3, 1, 1.5] }, light: 1, floor: 'tile', ceil: 'strip', sign: false, keeper: [6, BACK_COUNTER_STAFF_Y], wall: dinerWall,
@@ -19111,7 +19112,7 @@ ROOM_DEFS.sushibar = { grid: backWc(14, 9), wc: wcAt(14), light: 0.9, floor: 'hi
       { ...standing(6.0, SUSHI_WORK.south, WHITE), face: [0, 1] }, { ...standing(4.2, SUSHI_WORK.north, WHITE), face: [0, -1] }, ...wcFittings(14)];
     for (let x = x0; x <= x1 + 1e-6; x += 1.0) for (const [y, fy] of [[y0 - 0.55, 1], [y1 + 0.55, -1]]) { p.push(STOOL(x, y, RED, 0.62)); if (chance(0.4)) p.push({ ...sitting(x, y, shirt(), 0.62), face: [0, fy] }); }
     for (const [x, fx] of [[x0 - 0.55, 1], [x1 + 0.55, -1]]) { p.push(STOOL(x, (y0 + y1) / 2, RED, 0.62)); if (chance(0.4)) p.push({ ...sitting(x, (y0 + y1) / 2, shirt(), 0.62), face: [fx, 0] }); }
-    for (const x of [2.2, 4.6, 9.4, 11.6]) p.push(hung(x, 6.2, 2.4, (vx, vy, z) => drum(vx, vy, 0.15, z - 0.36, z, (i, t, L) => { BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 6) < 0.2 ? '-' : ' ', C(GRAY, 2)), true; }))); // paper lanterns
+    for (const x of [2.2, 4.6, 9.4, 11.6]) p.push(PAPER_LANTERN(x,6.2,{ceiling:r.def.height||3,top:2.4,height:.36,radius:.15}));
     p.push(...dining(2.2, 7.4, { hl: 0.35, top: solid(BRICK, { top: '=' }), busy: 0.3 }), ...dining(11.2, 7.4, { hl: 0.35, top: solid(BRICK, { top: '=' }), busy: 0.3 }), ...dining(11.6, 5.0, { hl: 0.35, top: solid(BRICK, { top: '=' }), busy: 0.3 }));
     return p;
   } };
@@ -20746,8 +20747,7 @@ ROOM_DEFS.takoyaki = { grid: boxRoom(9, 7), light: 1.05, floor: 'lino', ceil: 's
 // ---- yakitori (YAKITORI): the charcoal trough with its skewers across it, a long counter and stools all along it, red
 // lanterns, wooden menu tags on the wall, beer crates (turned over, they're seats)
 const yakiGrill = (x,y,hl) => KITCHEN_YAKITORI(x,y,hl);
-const akachochin = (x, y) => hung(x, y, 2.35, (vx, vy, z) => drum(vx, vy, 0.17, z - 0.45, z, (i, t, L) => { // a red paper lantern, lit
-  BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 7) < 0.18 ? '-' : HIT.face === 4 && Math.abs(HIT.w - z + 0.22) < 0.08 ? '#' : ' ', C(GRAY, 2)), true; }));
+const akachochin = (x,y,r) => PAPER_LANTERN(x,y,{ceiling:r?.def.height||3});
 function yakiWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.25 && z < 2.75 && Math.abs(u - room.W / 2) < 1.6) { BG[i] = C(BRICK, 2.5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.3, 0.36, C(WHITE, 13), C(BRICK, 2.5)) || set(i, ' ', 0), true; } // on a board
@@ -20765,7 +20765,7 @@ function yakiWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.yakitori = { grid: boxRoom(11, 7), light: 0.75, floor: 'oak', ceil: 'lantern', sign: false, wall: yakiWall, keeper: [5.5, 1.45],
   props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.75,3.6,.28,1,BRICK,BRICK), yakiGrill(5.5, 1.95, 1.6), // the counter, the grill behind it
     { ...standing(5.5, 1.45, WHITE), face: [0, 1] }, { ...standing(3.2, 1.4, WHITE), face: [1, 0] },
-    ...stools(2.3, 8.7, 3.45, 0.9, BRICK, 0, -1, 0.45), akachochin(2.4, 4.5), akachochin(8.6, 4.5),
+    ...stools(2.3, 8.7, 3.45, 0.9, BRICK, 0, -1, 0.45), akachochin(2.4, 4.5,r), akachochin(8.6, 4.5,r),
     KITCHEN_BEER_CRATE(9.55, 1.35, { levels: 4, open: true }), // crates of empties
     KITCHEN_BEER_CRATE(8.6, 5.2, { levels: 2, hw: 0.25 }), // and three turned over: a table and somewhere to sit either side
     ...[[7.95, 1], [9.25, -1]].flatMap(([x, fx]) => [KITCHEN_BEER_CRATE(x, 5.2, { hl: 0.2, hw: 0.17, h: 0.4 }), SEAT(x, 5.2, fx, 0, 0.4), ...(chance(0.35) ? [{ ...sitting(x, 5.2, shirt(), 0.4), face: [fx, 0] }] : [])])] };
@@ -20851,15 +20851,7 @@ const lowStool = (x,y,fx,fy,col) => [FURNITURE_STOOL(x,y,col,.42,true,fx,fy)];
 
 // ---- Thai (THAI): teak and deep red, gold elephants along the walls, the spirit house up in its corner with marigolds,
 // woks flaring through the pass, orchids
-const spiritHouse = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  const gold = (i, t, L) => { BG[i] = C(YEL, (4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face <= 4 && fract(HIT.w * 20) < 0.2 ? '=' : ' ', C(ORANGE, 8)), true; };
-  drawBox(boxAt(vx, vy, 1, 0, 0.06, 0.06, 0, 1.35), solid(WHITE)); // the post
-  drawBox(boxAt(vx, vy, 1, 0, 0.28, 0.22, 1.35, 1.4), gold); // the platform
-  drawBox(boxAt(vx, vy, 1, 0, 0.18, 0.14, 1.4, 1.62), gold); // the little house
-  for (const [hl, z] of [[0.24, 1.62], [0.17, 1.7], [0.1, 1.78]]) drawBox(boxAt(vx, vy, 1, 0, hl, hl * 0.8, z, z + 0.08), (i, t, L) => { BG[i] = C(RED, 4 + L * 0.3); return set(i, HIT.face === 5 ? ' ' : '^', C(YEL, 10)), true; }); // its roofs, tiered
-  rod(vx, vy, 1.86, vx, vy, 1.98, 0.01, YEL, 1.6); // the finial
-  for (let k = 0; k < 7; k++) dot(vx - 0.27 + k * 0.09, vy + 0.23, 1.38 - Math.sin(k / 6 * Math.PI) * 0.05, 0.025, (i, t, L) => { BG[i] = C(ORANGE, 9); return set(i, '*', C(YEL, 13)), true; }); // marigolds
-}, [0.28, 0.22, 1.98]);
+const spiritHouse = (x,y) => THAI_SPIRIT_HOUSE(x,y);
 function thaiWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.3, 0.34, C(YEL, 14), C(RED, 2))) return true;
@@ -21011,7 +21003,7 @@ const zabuton = (x,y,fx,fy) => ({...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,1,0,
 ROOM_DEFS.izakaya = { grid: backWc(13, 9), wc: wcAt(13), light: 0.7, floor: 'izakaya', ceil: 'lantern', sign: false, wall: izakayaWall, keeper: [5.3, 1.7],
   props: r => {
     const p = [KITCHEN_SERVICE_COUNTER(5.3,2.5,2.7,.3,1,BRICK,BRICK), { ...standing(5.3, 1.7, BLUE), face: [0, 1] },
-      ...stools(2.9, 7.7, 3.15, 0.8, BRICK, 0, -1, 0.45), akachochin(2.0, 4.0), akachochin(8.8, 4.0),
+      ...stools(2.9, 7.7, 3.15, 0.8, BRICK, 0, -1, 0.45), akachochin(2.0, 4.0,r), akachochin(8.8, 4.0,r),
       ...dining(9.4, 6.4, { n: 4, hl: 0.55, hw: 0.4, top: teak, chairCol: BRICK, busy: 0.45 }), ...wcFittings(13)];
     for (const y of [5.6, 7.3]) { // the tatami: low tables, a cushion either side
       p.push(KITCHEN_LOW_TABLE(2.1,y));
@@ -37483,7 +37475,7 @@ function TEA_COUNTER(x,y,hl=.6,hw=.3,height=.85) {
 // lamp strip under its front edge. Bottles are turned glass, each standing
 // on the board below it; the worktop carries upturned glasses on a mat.
 // Local u runs along the wall, v out into the room from the wall face.
-const BACK_BAR={depth:.19,plinth:.1,top:.9,slab:.04,shelfDepth:.17,boards:[1.24,1.6],board:.03,canopy:[1.99,2.05],stile:.02,glow:.008,lamp:.022};
+const BACK_BAR={depth:.18,pullOut:.028,pullRadius:.008,plinth:.1,top:.9,slab:.04,shelfDepth:.17,boards:[1.24,1.6],board:.03,canopy:[1.99,2.05],stile:.02,glow:.008,lamp:.022};
 // (z, radius) from the base; every bottle closes at its cap. Few cone
 // segments: a wall of bottles is the scene's dominant cost.
 const BACK_BAR_BOTTLES={
@@ -37495,24 +37487,24 @@ const BACK_BAR_BOTTLES={
 const BACK_BAR_KINDS=Object.keys(BACK_BAR_BOTTLES);
 const BACK_BAR_GLASS={whisky:[BRICK,ORANGE],wine:[GREEN,BRICK],gin:[WHITE,CYAN],liqueur:[BLUE,MAG,RED]};
 const BACK_BAR_LABEL=[WHITE,YEL,STONE,RED,WHITE];
-const BACK_BAR_TUMBLER=[[0,0],[0,.034],[.004,.037],[.085,.04],[.085,0]];
+const BACK_BAR_TUMBLER=[[0,0],[0,.034],[.004,.037],[.085,.04],[.085,.036],[.010,.033],[.006,0]].map(([z,r])=>[.085-z,r]).reverse();
 const backBarCap=kind=>BACK_BAR_BOTTLES[kind].at(-1)[0];
 const backBarRadius=kind=>Math.max(...BACK_BAR_BOTTLES[kind].map(p=>p[1]));
 // Most cells a bottle's screen box covers miss it (beside the neck, between
 // bottles). Reject them against its bounding cylinder before the full lathe.
 function backBarRayBottle(ox,oy,oz,rx,ry,rz,b) {
-  const x=ox-b.x,y=oy-b.y,a=rx*rx+ry*ry,q=x*rx+y*ry,cc=x*x+y*y-b.hl*b.hl,disc=q*q-a*cc;
-  if(disc<0||a<1e-12)return a<1e-12&&cc<=0?coveRayLathe(ox,oy,oz,rx,ry,rz,b):-1;
-  const root=Math.sqrt(disc),t0=(-q-root)/a,t1=(-q+root)/a;
+  const x=ox-b.x,y=oy-b.y,a=rx*rx+ry*ry,q=x*rx+y*ry,cc=x*x+y*y-(b.hl+1e-8)**2,disc=q*q-a*cc,error=8*Number.EPSILON*(q*q+Math.abs(a*cc));
+  if(disc < -error||a<1e-12)return a<1e-12&&cc<=0?coveRayLathe(ox,oy,oz,rx,ry,rz,b):-1;
+  const root=Math.sqrt(Math.max(0,disc)),t0=(-q-root)/a,t1=(-q+root)/a;
   if(t1<.01)return -1;
   const z0=oz+rz*t0,z1=oz+rz*t1;
-  if(Math.max(z0,z1)<b.z0||Math.min(z0,z1)>b.z1)return -1;
+  if(Math.max(z0,z1)<b.z0-1e-8||Math.min(z0,z1)>b.z1+1e-8)return -1;
   return coveRayLathe(ox,oy,oz,rx,ry,rz,b);
 }
-function backBarBottle(x,y,z,profile,shade) {
-  const points=profile.map(([h,r])=>[h+z,r]),r=Math.max(...profile.map(p=>p[1]));
-  drawBox({...boxAt(x,y,1,0,r,r,z,points.at(-1)[0]),profile:points},shade,backBarRayBottle);
+function backBarBottle(x,y,shape,shade) {
+  drawBox({...shape,x,y},shade,backBarRayBottle);
 }
+
 function backBarBottleShade(kind,glass,label,base) {
   const top=backBarCap(kind),labelZ=kind==='wine'?[.06,.13]:kind==='liqueur'?[.04,.09]:[.05,.12];
   return (i,t,L)=>{
@@ -37547,9 +37539,9 @@ function backBarStock(half,bays,x,y) {
   return out;
 }
 // (x, y): the middle of the wall face it backs onto; (fx, fy) points into the room.
-function BAR_BACK_BAR(x,y,half,fx=0,fy=1,neon=MAG) {
+function BAR_MIRRORED_BACK_BAR(x,y,half,fx=0,fy=1,neon=MAG) {
   const c=-fy,s=fx,{depth,plinth,top,slab,shelfDepth,boards,board,canopy,stile,glow}=BACK_BAR;
-  const bays=Math.max(2,Math.round(half*2/.95)),pitch=half*2/bays,cx=x+fx*depth/2,cy=y+fy*depth/2;
+  const bays=Math.max(2,Math.round(half*2/.95)),pitch=half*2/bays,front=depth+BACK_BAR.pullOut+BACK_BAR.pullRadius,cx=x+fx*front/2,cy=y+fy*front/2;
   const stock=backBarStock(half,bays,x,y),glasses=[];
   for(let k=0;k<bays;k++)for(let n=0;n<3;n++)glasses.push({u:-half+pitch*(k+.5)+(n-1)*.09,v:.12});
   const timber=seed=>(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed);
@@ -37573,48 +37565,215 @@ function BAR_BACK_BAR(x,y,half,fx=0,fy=1,neon=MAG) {
     BG[i]=C(CYAN,1.4+L*.18*light+(glint?2.2:0));set(i,' ',0);return true;
   };
   const shades=stock.map(q=>backBarBottleShade(q.kind,q.glass,q.label,q.z));
-  const panel=(hl,hw,z0,z1,bevel=.004)=>kitchenPanelProfile(hl,hw,z0,z1,bevel);
+  const timbers=Array.from({length:bays+16},(_,k)=>timber(k)),carcassTimber=boxTimber(1);
+  const doorPanel=kitchenPanelProfile(pitch/2-.012,.006,plinth+.02,top-slab-.02,.004),matPanel=kitchenPanelProfile(.16,.05,top,top+.006,.002);
+  const shelfPanels=boards.map(b=>kitchenPanelProfile(pitch/2-stile,shelfDepth/2,b,b+board,.003));
+  const stilePanels=[stile/2,stile].map(hl=>kitchenPanelProfile(hl,shelfDepth/2,top,canopy[0],.003));
+  const worktopPanel=kitchenTopProfile(half+.01,depth/2+.01,top-slab,top,.01),canopyPanel=kitchenTopProfile(half+.01,depth/2,canopy[0],canopy[1],.01);
+  const lampPanel=kitchenPanelProfile(half,glow,canopy[0]-BACK_BAR.lamp,canopy[0],.002),profiles=new Map();
+  const shape=(profile,z)=>{const points=profile.map(([h,r])=>[z+h,r]),r=Math.max(...profile.map(p=>p[1]));return {...boxAt(0,0,1,0,r,r,Math.min(...points.map(p=>p[0])),Math.max(...points.map(p=>p[0]))),profile:points};};
+  const bottleShapes=stock.map(q=>{const key=q.kind+':'+q.z;if(!profiles.has(key))profiles.set(key,shape(BACK_BAR_BOTTLES[q.kind],q.z));return profiles.get(key);});
+  const glassShape=shape(BACK_BAR_TUMBLER,top+.006);
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     const at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
     // Nearest first, so the depth buffer turns away what sits behind.
-    for(const q of glasses){const [gx,gy]=at(q.u,q.v);coveLathe(gx,gy,top+.006,BACK_BAR_TUMBLER,tumbler);}
-    for(let k=0;k<bays;k++){const [mx,my]=at(-half+pitch*(k+.5),.12);drawBox({...boxAt(mx,my,c,s,.16,.05,top,top+.006),...panel(.16,.05,top,top+.006,.002)},mat,homeRayWorktop);}
-    stock.forEach((q,n)=>{const [bx,by]=at(q.u,q.v);backBarBottle(bx,by,q.z,BACK_BAR_BOTTLES[q.kind],shades[n]);});
+    for(const q of glasses){const [gx,gy]=at(q.u,q.v);backBarBottle(gx,gy,glassShape,tumbler);}
+    for(let k=0;k<bays;k++){const [mx,my]=at(-half+pitch*(k+.5),.12);drawBox({...boxAt(mx,my,c,s,.16,.05,top,top+.006),...matPanel},mat,homeRayWorktop);}
+    stock.forEach((q,n)=>{const [bx,by]=at(q.u,q.v);backBarBottle(bx,by,bottleShapes[n],shades[n]);});
     // Door pulls, doors, and the cabinet behind them.
     for(let k=0;k<bays;k++) {
       const mid=-half+pitch*(k+.5),pull=top-.13;
-      const [ax,ay]=at(mid-.06,depth+.028),[bx,by]=at(mid+.06,depth+.028);
-      coveTube(ax,ay,pull,bx,by,pull,.008,GRAY); // the pull bar, on two posts back to the door face
-      for(const e of [-.06,.06]){const [qx,qy]=at(mid+e,depth+.012),[rx,ry]=at(mid+e,depth+.028);coveTube(qx,qy,pull,rx,ry,pull,.006,GRAY);}
+      const [ax,ay]=at(mid-.06,depth+BACK_BAR.pullOut),[bx,by]=at(mid+.06,depth+BACK_BAR.pullOut);
+      coveTube(ax,ay,pull,bx,by,pull,BACK_BAR.pullRadius,GRAY); // the pull bar, on two posts back to the door face
+      for(const e of [-.06,.06]){const [qx,qy]=at(mid+e,depth+.012),[rx,ry]=at(mid+e,depth+BACK_BAR.pullOut);coveTube(qx,qy,pull,rx,ry,pull,.006,GRAY);}
       const [dx_,dy_]=at(-half+pitch*(k+.5),depth+.006);
-      drawBox({...boxAt(dx_,dy_,c,s,pitch/2-.012,.006,plinth+.02,top-slab-.02),...panel(pitch/2-.012,.006,plinth+.02,top-slab-.02)},timber(k+2),homeRayWorktop);
+      drawBox({...boxAt(dx_,dy_,c,s,pitch/2-.012,.006,plinth+.02,top-slab-.02),...doorPanel},timbers[k+2],homeRayWorktop);
     }
     const [tx,ty]=at(0,depth/2+.01);
-    drawBox({...boxAt(tx,ty,c,s,half+.01,depth/2+.01,top-slab,top),...kitchenTopProfile(half+.01,depth/2+.01,top-slab,top,.01)},stone,homeRayWorktop);
+    drawBox({...boxAt(tx,ty,c,s,half+.01,depth/2+.01,top-slab,top),...worktopPanel},stone,homeRayWorktop);
     // The carcass and recessed plinth are plain boxes, mostly behind the
     // doors: the renderer clips those column by column.
     const [kx,ky]=at(0,depth/2);
-    drawBox(boxAt(kx,ky,c,s,half,depth/2,plinth,top-slab),boxTimber(1));
+    drawBox(boxAt(kx,ky,c,s,half,depth/2,plinth,top-slab),carcassTimber);
     const [px0,py0]=at(0,(depth-.04)/2);
     drawBox(boxAt(px0,py0,c,s,half-.02,(depth-.04)/2,0,plinth),(i,t,L)=>{BG[i]=C(BRICK,1.2+L*.08);set(i,' ',0);return true;});
     // Upper fitting: full-height stiles from worktop to canopy, a board
     // between each pair at the same heights, all on the same front plane.
     for(let k=0;k<bays;k++)for(const b of boards) {
       const [sx,sy]=at(-half+pitch*(k+.5),shelfDepth/2),hl=pitch/2-stile;
-      drawBox({...boxAt(sx,sy,c,s,hl,shelfDepth/2,b,b+board),...kitchenPanelProfile(hl,shelfDepth/2,b,b+board,.003)},timber(5+k),homeRayWorktop);
+      drawBox({...boxAt(sx,sy,c,s,hl,shelfDepth/2,b,b+board),...shelfPanels[boards.indexOf(b)]},timbers[5+k],homeRayWorktop);
     }
     for(let k=0;k<=bays;k++) {
       const [sx,sy]=at(-half+pitch*k,shelfDepth/2),hl=k===0||k===bays?stile/2:stile,du=k===0?stile/2:k===bays?-stile/2:0,[ex,ey]=[sx+c*du,sy+s*du];
-      drawBox({...boxAt(ex,ey,c,s,hl,shelfDepth/2,top,canopy[0]),...kitchenPanelProfile(hl,shelfDepth/2,top,canopy[0],.003)},timber(k+9),homeRayWorktop);
+      drawBox({...boxAt(ex,ey,c,s,hl,shelfDepth/2,top,canopy[0]),...stilePanels[k===0||k===bays?0:1]},timbers[k+9],homeRayWorktop);
     }
     const [lx,ly]=at(0,shelfDepth+glow+.003);
-    drawBox({...boxAt(lx,ly,c,s,half,glow,canopy[0]-BACK_BAR.lamp,canopy[0]),...panel(half,glow,canopy[0]-BACK_BAR.lamp,canopy[0],.002)},lamp,homeRayWorktop);
+    drawBox({...boxAt(lx,ly,c,s,half,glow,canopy[0]-BACK_BAR.lamp,canopy[0]),...lampPanel},lamp,homeRayWorktop);
     const [ox,oy]=at(0,depth/2);
-    drawBox({...boxAt(ox,oy,c,s,half+.01,depth/2,canopy[0],canopy[1]),...kitchenTopProfile(half+.01,depth/2,canopy[0],canopy[1],.01)},timber(6),homeRayWorktop);
+    drawBox({...boxAt(ox,oy,c,s,half+.01,depth/2,canopy[0],canopy[1]),...canopyPanel},timbers[6],homeRayWorktop);
     const [mx,my]=at(0,.006);
     drawBox(boxAt(mx,my,c,s,half,.006,top,canopy[0]),mirror);
-  }),box:boxAt(cx,cy,c,s,half+.01,depth/2,0,canopy[1]),radius:Math.hypot(half,depth)+.05,
+  }),box:boxAt(cx,cy,c,s,half+.01,front/2,0,canopy[1]),radius:Math.hypot(half,depth)+.05,
     backBar:{x,y,half,fx,fy,bays,pitch,stock:stock.map(({kind,u,v,z,r,bay,row})=>({kind,u,v,z,r,bay,row})),glasses}};
+}
+// A shallow fitted back bar leaves the original staff aisle intact. All bottle
+// feet, glass bases, guard posts and brackets derive from the board tops.
+const BAR_BACK={half:3.8,depth:.09,bottom:.085,board:.028,levels:[.862,1.372,1.882],top:2.25};
+const BAR_BOTTLES=[
+  [[0,0],[0,.035],[.008,.042],[.20,.042],[.245,.016],[.29,.015],[.29,.018],[.316,.018],[.32,.014],[.32,0]],
+  [[0,0],[0,.040],[.008,.048],[.15,.048],[.19,.025],[.23,.020],[.23,.024],[.255,.024],[.259,0]],
+  [[0,0],[0,.033],[.008,.039],[.19,.039],[.235,.015],[.28,.014],[.28,.017],[.30,.017],[.304,0]],
+];
+const BAR_TUMBLER=[[0,0],[0,.028],[.005,.033],[.12,.037],[.125,.037],[.125,.033],[.012,.029],[.007,0]];
+function barTumblerShade(i,t,L) {
+  const inside=HIT.part>=6,rim=HIT.part===5;
+  BG[i]=C(CYAN,(inside?.6:rim?4.7:2.5)+L*(inside?.1:.28)*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;
+}
+function barBottleShade(glass,label,base,height,seed) {
+  return (i,t,L)=>{
+    const z=HIT.w-base,light=coveLight(HIT.nx,HIT.ny,HIT.nz),cap=z>height-.03,band=z>.07&&z<.15;
+    const glint=!band&&!cap?Math.max(0,HIT.nx*.6-HIT.ny*.8)**12*.9:0;
+    BG[i]=C(cap?YEL:band?label:glass,(cap?3.2:band?4.3:1.8)+L*(band?.3:.24)*light+glint);
+    // Quiet printed rules fade before they become disconnected pixels.
+    if(band&&coveDetail(t,.08)>.2&&Math.abs(z-.108-seed*.003)<.003)BG[i]=C(glass,2+L*.18);
+    set(i,' ',0);return true;
+  };
+}
+function BAR_BACK_BAR(x=6,y=1.09) {
+  const q=BAR_BACK,wood=furnitureTimber(BRICK),parts=[],vessels=[],tubes=[],bottles=[];
+  const panel=(role,u,v,hl,hw,z0,z1,shade=wood,bevel=.004)=>parts.push({role,u,v,box:boxAt(0,0,1,0,hl,hw,z0,z1),profile:kitchenPanelProfile(hl,hw,z0,z1,Math.min(bevel,hl*.8,hw*.8)),shade});
+  const vessel=(role,u,v,z,profile,shade)=>{
+    const points=profile.map(([h,r])=>[z+h,r]),r=Math.max(...points.map(p=>p[1]));
+    vessels.push({role,u,v,box:{...boxAt(0,0,1,0,r,r,z,Math.max(...points.map(p=>p[0]))),profile:points},shade});
+  };
+  const tube=(role,u,v,z,uu,vv,zz,r=.005)=>tubes.push({role,ax:u,ay:v,az:z,bx:uu,by:vv,bz:zz,r});
+  panel('plinth',0,0,q.half-.045,q.depth-.02,0,q.bottom);
+  panel('base',0,0,q.half-.025,q.depth,q.bottom,q.bottom+.035);
+  panel('back',0,-q.depth+.01,q.half,.01,q.bottom,q.top);
+  for(const side of [-1,1])panel('side',side*(q.half-.015),0,.015,q.depth,q.bottom,q.top);
+  // Six cabinet doors fit inside the carcass. Handles sit on two seated pins.
+  const width=(q.half-.03)*2/6;
+  for(let k=0;k<6;k++){
+    const u=-q.half+.03+width*(k+.5),handle=u+(k%2?-1:1)*(width/2-.10);
+    panel('door',u,q.depth-.008,width/2-.008,.008,q.bottom+.055,q.levels[0]-.025);
+    for(const z of [.38,.50])tube('handle-pin',handle,q.depth,z,handle,q.depth+.01,z,.004);
+    tube('handle',handle,q.depth+.01,.38,handle,q.depth+.01,.50,.005);
+  }
+  for(const [row,z]of q.levels.entries()){
+    const top=z+q.board;
+    panel('board',0,0,q.half-.03,q.depth,z,top);
+    for(const u of [-3.15,-1.05,1.05,3.15]){
+      // A horizontal arm meets the underside; its diagonal ends at the same arm.
+      tube('bracket-wall',u,-q.depth+.023,z-.14,u,-q.depth+.023,z-.004,.006);
+      tube('bracket-arm',u,-q.depth+.023,z-.006,u,q.depth-.025,z-.006,.006);
+      tube('bracket-brace',u,-q.depth+.023,z-.12,u,q.depth-.025,z-.006,.004);
+    }
+    for(const u of [-q.half+.055,-1.25,1.25,q.half-.055])tube('guard-post',u,q.depth-.012,top,u,q.depth-.012,top+.075,.005);
+    tube('guard',-q.half+.055,q.depth-.012,top+.075,q.half-.055,q.depth-.012,top+.075,.005);
+    for(let bay=0;bay<3;bay++)for(let k=0;k<5;k++){
+      const u=(bay-1)*2.5+(k-2)*.15,kind=(row+bay+k)%3,profile=BAR_BOTTLES[kind],height=profile.at(-1)[0];
+      const shade=barBottleShade([GREEN,BRICK,CYAN][kind],[STONE,WHITE,WARM][(k+bay)%3],top,height,k);
+      vessel('bottle',u,.015,top,profile,shade);bottles.push({u,v:.015,z:top,height,radius:Math.max(...profile.map(p=>p[1])),kind,row});
+    }
+    // Actual hollow tumblers occupy the gaps between bottles.
+    for(const u of [-1.4,-1.05,1.4,1.05])vessel('tumbler',u,.018,top,BAR_TUMBLER,barTumblerShade);
+  }
+  const metal=(i,t,L)=>{BG[i]=C(YEL,2.4+L*.25*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    // Nearest parts first: thin guards and handles can reject the wood behind.
+    for(const p of tubes){const ax=vx+p.ax,ay=vy+p.ay,bx=vx+p.bx,by=vy+p.by,r=p.r;
+      drawBox({...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(p.az,p.bz)-r,Math.max(p.az,p.bz)+r),ax,ay,az:p.az,bx,by,bz:p.bz,r,barRole:p.role},metal,coveRayCapsule);
+    }
+    for(const p of vessels)drawBox({...p.box,x:vx+p.u,y:vy+p.v,barRole:p.role},p.shade,coveRayLathe);
+    for(let k=parts.length-1;k>=0;k--){const p=parts[k];drawBox({...p.box,x:vx+p.u,y:vy+p.v,...p.profile,barRole:p.role},p.shade,homeRayWorktop);}
+  }),box:boxAt(x,y+.008,1,0,q.half,q.depth+.008,0,q.top),radius:Math.hypot(q.half,q.depth+.016),backBar:{levels:q.levels.map(z=>z+q.board),bottles}};
+}
+// Paper surrounds real space: the upper frame carries a socket and bulb, with
+// a cord seated in the ceiling rose. The dark hoops remain separate from glow.
+const PAPER_LANTERN_CURVE=[[0,.55],[.04,.55],[.08,.68],[.16,.86],[.26,.96],[.38,.994],[.5,1],[.62,.994],[.74,.96],[.84,.86],[.92,.68],[.96,.55],[1,.55]];
+function PAPER_LANTERN(x,y,{ceiling=3,top=2.35,height=.45,radius=.17}={}) {
+  const base=top-height,thickness=.0025,parts=[],ringRadius=radius*.55;
+  const outer=PAPER_LANTERN_CURVE.map(([h,r])=>[h*height,r*radius]);
+  const shell=[...outer,...outer.map(([h,r])=>[h,r-thickness]).reverse(),outer[0]];
+  parts.push(homeLampPart('paper',base,shell));
+  for(const [role,z0,z1]of [['lower-hoop',base-.008,base+.016],['upper-hoop',top-.016,top+.008]])
+    parts.push(homeLampPart(role,z0,[[0,ringRadius-.004],[0,ringRadius+.007],[z1-z0,ringRadius+.007],[z1-z0,ringRadius-.004],[0,ringRadius-.004]]));
+  parts.push(homeLampCylinder('socket',top-.045,top+.003,.012));
+  const bulb=HOME_LAMP_BULB.map(([h,r])=>[(.103-h)*.65,r*.65]).reverse(),bulbHeight=bulb.at(-1)[0];
+  parts.push(homeLampPart('bulb',top-.045-bulbHeight,bulb));
+  parts.push(homeLampCylinder('cord',top+.003,ceiling-.022,.0025));
+  parts.push(homeLampPart('mount',ceiling-.022,[[0,0],[0,.018],[.007,.035],[.022,.035],[.022,0]]));
+  const dark=(i,t,L)=>{BG[i]=C(GRAY,.6+L*.23*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const paper=(i,t,L)=>{
+    const inside=HIT.part>outer.length&&HIT.part<shell.length-1,footprint=t/projY;
+    const rib=coveGroove(HIT.w-base,height/12,.005,footprint),fine=coveDetail(t,.035);
+    const fibre=fine?Math.sin(HIT.u*640)*Math.sin(HIT.w*710)*fine*.08:0;
+    const warmth=1-Math.abs((HIT.w-base)/height-.5)*1.2;
+    BG[i]=C(inside?ORANGE:RED,(inside?6:5.6)+Math.max(.3,night)*1.3+warmth*1.2+L*.18*coveLight(HIT.nx,HIT.ny,HIT.nz)-rib*3+fibre);set(i,' ',0);return true;
+  };
+  const glow=(i,t,L)=>{BG[i]=C(WARM,12+2*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const p of parts)drawBox({...p.box,x:vx,y:vy,lanternRole:p.role},p.role==='paper'?paper:p.role==='bulb'?glow:dark,coveRayLathe);
+    for(const [ax,ay,bx,by]of [[-ringRadius+.002,0,ringRadius-.002,0],[0,-ringRadius+.002,0,ringRadius-.002]]){
+      const r=.003,z=top+.003;
+      drawBox({...boxAt(vx+(ax+bx)/2,vy+(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,z-r,z+r),ax:vx+ax,ay:vy+ay,az:z,bx:vx+bx,by:vy+by,bz:z,r,lanternRole:'crossbar'},dark,coveRayCapsule);
+    }
+  }),box:boxAt(x,y,1,0,radius,radius,base-.008,ceiling),walk:true,radius:radius+.01,paperLantern:{base,top,height,radius,ceiling,thickness}};
+}
+// The roof panels share one folded profile. Gables meet its underside; the
+// garland and blossoms share seven points, attached to the real tray face.
+function spiritPrism(vertices,depth) {
+  const lo=Math.min(...vertices.map(p=>p[0])),hi=Math.max(...vertices.map(p=>p[0])),u=(lo+hi)/2,points=vertices.map(([x,z])=>[x-u,z]);
+  const area=points.reduce((sum,p,k)=>{const q=points[(k+1)%points.length];return sum+p[0]*q[1]-q[0]*p[1];},0),sign=Math.sign(area),planes=[[0,1,0,depth,3],[0,-1,0,depth,4]];
+  for(let k=0;k<points.length;k++){
+    const a=points[k],b=points[(k+1)%points.length],n=Math.hypot(b[0]-a[0],b[1]-a[1]),nx=(b[1]-a[1])*sign/n,nz=(a[0]-b[0])*sign/n;
+    planes.push([nx,0,nz,nx*a[0]+nz*a[1],10+k]);
+  }
+  return {u,hl:(hi-lo)/2,hw:depth,z0:Math.min(...points.map(p=>p[1])),z1:Math.max(...points.map(p=>p[1])),planes,normals:Object.fromEntries(planes.map(p=>[p[4],p.slice(0,3).map(v=>v/Math.hypot(...p.slice(0,3)))]))};
+}
+function THAI_SPIRIT_HOUSE(x,y) {
+  const parts=[],vessels=[],pipes=[],flowers=[],roof=[[-.255,1.67],[-.204,1.64],[0,1.82],[.204,1.64],[.255,1.67]],sheet=.018;
+  const flat=(col,level)=>(i,t,L)=>{BG[i]=C(col,level+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
+  const gold=flat(YEL,3.4),paint=flat(RED,2.4),dark=flat(BRICK,1.2),stone=flat(WHITE,3.6),orange=flat(ORANGE,4.3),yellow=flat(YEL,4.6);
+  const panel=(role,u,v,hl,hw,z0,z1,shade,bevel=.003)=>parts.push({role,u,v,box:boxAt(0,0,1,0,hl,hw,z0,z1),profile:kitchenPanelProfile(hl,hw,z0,z1,Math.min(bevel,hl*.7,hw*.7)),shade});
+  const prism=(role,v,vertices,depth,shade)=>{const p=spiritPrism(vertices,depth);parts.push({role,u:p.u,v,box:boxAt(0,0,1,0,p.hl,p.hw,p.z0,p.z1),profile:{planes:p.planes,normals:p.normals},shade});};
+  const lathe=(role,u,v,z,profile,shade)=>{const p=homeLampPart(role,z,profile);vessels.push({...p,u,v,shade});};
+  const pipe=(role,u,v,z,uu,vv,zz,r,shade=gold)=>pipes.push({role,ax:u,ay:v,az:z,bx:uu,by:vv,bz:zz,r,shade});
+  lathe('pedestal',0,0,0,[[0,0],[0,.10],[.025,.13],[.07,.13],[.105,.07],[.16,.048],[1.18,.048],[1.23,.065],[1.28,.10],[1.35,.10],[1.35,0]],stone);
+  panel('tray',0,0,.28,.22,1.35,1.4,gold,.009);
+  panel('floor',0,0,.17,.14,1.4,1.44,gold);
+  panel('back',0,-.119,.145,.006,1.44,1.61,dark);
+  for(const side of [-1,1]){
+    panel('side',side*.15,0,.006,.115,1.44,1.61,paint);
+    for(const v of [-.115,.115])lathe('post',side*.145,v,1.44,[[0,0],[0,.013],[.014,.013],[.025,.009],[.155,.009],[.18,.013],[.18,0]],gold);
+    panel('lintel',0,side*.12,.17,.014,1.60,1.64,gold);
+    prism('gable',side*.12,[[-.204,1.64],[.204,1.64],[0,1.82]],.012,paint);
+  }
+  for(let k=1;k<roof.length;k++){
+    const a=roof[k-1],b=roof[k];prism('roof',0,[a,b,[b[0],b[1]+sheet],[a[0],a[1]+sheet]],.205,paint);
+    for(const v of [-.205,.205])pipe('roof-trim',a[0],v,a[1]+sheet,b[0],v,b[1]+sheet,.006);
+  }
+  pipe('ridge',0,-.205,1.82+sheet,0,.205,1.82+sheet,.006);
+  for(const v of [-.205,.205])for(const side of [-1,1])pipe('eave-tip',side*.255,v,1.67+sheet,side*.263,v,1.73,.004);
+  lathe('finial',0,0,1.82+sheet,[[0,0],[0,.021],[.008,.024],[.02,.016],[.035,.013],[.05,.018],[.065,.012],[.142,0]],gold);
+  panel('altar',0,-.03,.055,.045,1.44,1.465,dark);
+  lathe('figurine',0,-.03,1.465,[[0,0],[0,.023],[.007,.023],[.015,.014],[.04,.011],[.05,.016],[.064,.012],[.07,0]],gold);
+  for(const u of [-.205,.205])lathe('offering-cup',u,.145,1.4,[[0,0],[0,.018],[.008,.018],[.04,.025],[.045,.025],[.045,.021],[.012,.015],[.008,0]],gold);
+  const garland=Array.from({length:7},(_,k)=>({u:-.25+k/6*.5,v:.237,z:1.385-Math.sin(k/6*Math.PI)*.052}));
+  for(let k=0;k<garland.length;k++){
+    const p=garland[k];flowers.push({u:p.u,v:p.v,z:p.z,r:.011,shade:yellow});
+    for(let j=0;j<5;j++){const a=j*TAU/5+k*.41;flowers.push({u:p.u+Math.sin(a)*.009,v:p.v+.002,z:p.z+Math.cos(a)*.009,r:.007,shade:orange});}
+    if(k){const a=garland[k-1];pipe('garland-thread',a.u,a.v,a.z,p.u,p.v,p.z,.0018,dark);}
+  }
+  for(const p of [garland[0],garland.at(-1)])pipe('garland-pin',p.u,.219,p.z,p.u,p.v,p.z,.003);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    for(const p of flowers)drawBox({...boxAt(vx+p.u,vy+p.v,1,0,p.r,p.r,p.z-p.r,p.z+p.r),spiritRole:'flower'},p.shade,homeRayEllipsoid);
+    for(const p of pipes){const ax=vx+p.ax,ay=vy+p.ay,bx=vx+p.bx,by=vy+p.by,r=p.r;
+      drawBox({...boxAt((ax+bx)/2,(ay+by)/2,1,0,Math.abs(bx-ax)/2+r,Math.abs(by-ay)/2+r,Math.min(p.az,p.bz)-r,Math.max(p.az,p.bz)+r),ax,ay,az:p.az,bx,by,bz:p.bz,r,spiritRole:p.role},p.shade,coveRayCapsule);
+    }
+    for(const p of vessels)drawBox({...p.box,x:vx+p.u,y:vy+p.v,spiritRole:p.role},p.shade,coveRayLathe);
+    for(let k=parts.length-1;k>=0;k--){const p=parts[k];drawBox({...p.box,x:vx+p.u,y:vy+p.v,...p.profile,spiritRole:p.role},p.shade,homeRayWorktop);}
+  }),box:boxAt(x,y,1,0,.285,.27,0,1.98),radius:.4,spiritHouse:{roof,sheet,garland}};
 }
 // Fern's front is west toward the dock. The room's south entrance therefore
 // maps through a quarter turn; windows and the world-view camera share it.

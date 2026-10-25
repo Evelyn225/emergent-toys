@@ -22,15 +22,7 @@ const lowStool = (x,y,fx,fy,col) => [FURNITURE_STOOL(x,y,col,.42,true,fx,fy)];
 
 // ---- Thai (THAI): teak and deep red, gold elephants along the walls, the spirit house up in its corner with marigolds,
 // woks flaring through the pass, orchids
-const spiritHouse = (x, y) => ROOM_MODEL(x, y, (vx, vy) => {
-  const gold = (i, t, L) => { BG[i] = C(YEL, (4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face <= 4 && fract(HIT.w * 20) < 0.2 ? '=' : ' ', C(ORANGE, 8)), true; };
-  drawBox(boxAt(vx, vy, 1, 0, 0.06, 0.06, 0, 1.35), solid(WHITE)); // the post
-  drawBox(boxAt(vx, vy, 1, 0, 0.28, 0.22, 1.35, 1.4), gold); // the platform
-  drawBox(boxAt(vx, vy, 1, 0, 0.18, 0.14, 1.4, 1.62), gold); // the little house
-  for (const [hl, z] of [[0.24, 1.62], [0.17, 1.7], [0.1, 1.78]]) drawBox(boxAt(vx, vy, 1, 0, hl, hl * 0.8, z, z + 0.08), (i, t, L) => { BG[i] = C(RED, 4 + L * 0.3); return set(i, HIT.face === 5 ? ' ' : '^', C(YEL, 10)), true; }); // its roofs, tiered
-  rod(vx, vy, 1.86, vx, vy, 1.98, 0.01, YEL, 1.6); // the finial
-  for (let k = 0; k < 7; k++) dot(vx - 0.27 + k * 0.09, vy + 0.23, 1.38 - Math.sin(k / 6 * Math.PI) * 0.05, 0.025, (i, t, L) => { BG[i] = C(ORANGE, 9); return set(i, '*', C(YEL, 13)), true; }); // marigolds
-}, [0.28, 0.22, 1.98]);
+const spiritHouse = (x,y) => THAI_SPIRIT_HOUSE(x,y);
 function thaiWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.25 && wallText(i, u, uStep, z, d, room.word, 5.0, 2.5, 0.3, 0.34, C(YEL, 14), C(RED, 2))) return true;
@@ -182,7 +174,7 @@ const zabuton = (x,y,fx,fy) => ({...ROOM_MODEL(x,y,(vx,vy)=>coveRound(vx,vy,1,0,
 ROOM_DEFS.izakaya = { grid: backWc(13, 9), wc: wcAt(13), light: 0.7, floor: 'izakaya', ceil: 'lantern', sign: false, wall: izakayaWall, keeper: [5.3, 1.7],
   props: r => {
     const p = [KITCHEN_SERVICE_COUNTER(5.3,2.5,2.7,.3,1,BRICK,BRICK), { ...standing(5.3, 1.7, BLUE), face: [0, 1] },
-      ...stools(2.9, 7.7, 3.15, 0.8, BRICK, 0, -1, 0.45), akachochin(2.0, 4.0), akachochin(8.8, 4.0),
+      ...stools(2.9, 7.7, 3.15, 0.8, BRICK, 0, -1, 0.45), akachochin(2.0, 4.0,r), akachochin(8.8, 4.0,r),
       ...dining(9.4, 6.4, { n: 4, hl: 0.55, hw: 0.4, top: teak, chairCol: BRICK, busy: 0.45 }), ...wcFittings(13)];
     for (const y of [5.6, 7.3]) { // the tatami: low tables, a cushion either side
       p.push(KITCHEN_LOW_TABLE(2.1,y));

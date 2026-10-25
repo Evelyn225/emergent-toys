@@ -97,8 +97,7 @@ ROOM_DEFS.takoyaki = { grid: boxRoom(9, 7), light: 1.05, floor: 'lino', ceil: 's
 // ---- yakitori (YAKITORI): the charcoal trough with its skewers across it, a long counter and stools all along it, red
 // lanterns, wooden menu tags on the wall, beer crates (turned over, they're seats)
 const yakiGrill = (x,y,hl) => KITCHEN_YAKITORI(x,y,hl);
-const akachochin = (x, y) => hung(x, y, 2.35, (vx, vy, z) => drum(vx, vy, 0.17, z - 0.45, z, (i, t, L) => { // a red paper lantern, lit
-  BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 7) < 0.18 ? '-' : HIT.face === 4 && Math.abs(HIT.w - z + 0.22) < 0.08 ? '#' : ' ', C(GRAY, 2)), true; }));
+const akachochin = (x,y,r) => PAPER_LANTERN(x,y,{ceiling:r?.def.height||3});
 function yakiWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
   if (backWall(my) && z > 2.25 && z < 2.75 && Math.abs(u - room.W / 2) < 1.6) { BG[i] = C(BRICK, 2.5); return wallText(i, u, uStep, z, d, room.word, room.W / 2, 2.5, 0.3, 0.36, C(WHITE, 13), C(BRICK, 2.5)) || set(i, ' ', 0), true; } // on a board
@@ -116,7 +115,7 @@ function yakiWall(i, u, uStep, z, d, mx, my, L) {
 ROOM_DEFS.yakitori = { grid: boxRoom(11, 7), light: 0.75, floor: 'oak', ceil: 'lantern', sign: false, wall: yakiWall, keeper: [5.5, 1.45],
   props: r => [KITCHEN_SERVICE_COUNTER(5.5,2.75,3.6,.28,1,BRICK,BRICK), yakiGrill(5.5, 1.95, 1.6), // the counter, the grill behind it
     { ...standing(5.5, 1.45, WHITE), face: [0, 1] }, { ...standing(3.2, 1.4, WHITE), face: [1, 0] },
-    ...stools(2.3, 8.7, 3.45, 0.9, BRICK, 0, -1, 0.45), akachochin(2.4, 4.5), akachochin(8.6, 4.5),
+    ...stools(2.3, 8.7, 3.45, 0.9, BRICK, 0, -1, 0.45), akachochin(2.4, 4.5,r), akachochin(8.6, 4.5,r),
     KITCHEN_BEER_CRATE(9.55, 1.35, { levels: 4, open: true }), // crates of empties
     KITCHEN_BEER_CRATE(8.6, 5.2, { levels: 2, hw: 0.25 }), // and three turned over: a table and somewhere to sit either side
     ...[[7.95, 1], [9.25, -1]].flatMap(([x, fx]) => [KITCHEN_BEER_CRATE(x, 5.2, { hl: 0.2, hw: 0.17, h: 0.4 }), SEAT(x, 5.2, fx, 0, 0.4), ...(chance(0.35) ? [{ ...sitting(x, 5.2, shirt(), 0.4), face: [fx, 0] }] : [])])] };

@@ -4,7 +4,7 @@
 // lamp strip under its front edge. Bottles are turned glass, each standing
 // on the board below it; the worktop carries upturned glasses on a mat.
 // Local u runs along the wall, v out into the room from the wall face.
-const BACK_BAR={depth:.19,plinth:.1,top:.9,slab:.04,shelfDepth:.17,boards:[1.24,1.6],board:.03,canopy:[1.99,2.05],stile:.02,glow:.008,lamp:.022};
+const BACK_BAR={depth:.18,pullOut:.028,pullRadius:.008,plinth:.1,top:.9,slab:.04,shelfDepth:.17,boards:[1.24,1.6],board:.03,canopy:[1.99,2.05],stile:.02,glow:.008,lamp:.022};
 // (z, radius) from the base; every bottle closes at its cap. Few cone
 // segments: a wall of bottles is the scene's dominant cost.
 const BACK_BAR_BOTTLES={
@@ -16,24 +16,24 @@ const BACK_BAR_BOTTLES={
 const BACK_BAR_KINDS=Object.keys(BACK_BAR_BOTTLES);
 const BACK_BAR_GLASS={whisky:[BRICK,ORANGE],wine:[GREEN,BRICK],gin:[WHITE,CYAN],liqueur:[BLUE,MAG,RED]};
 const BACK_BAR_LABEL=[WHITE,YEL,STONE,RED,WHITE];
-const BACK_BAR_TUMBLER=[[0,0],[0,.034],[.004,.037],[.085,.04],[.085,0]];
+const BACK_BAR_TUMBLER=[[0,0],[0,.034],[.004,.037],[.085,.04],[.085,.036],[.010,.033],[.006,0]].map(([z,r])=>[.085-z,r]).reverse();
 const backBarCap=kind=>BACK_BAR_BOTTLES[kind].at(-1)[0];
 const backBarRadius=kind=>Math.max(...BACK_BAR_BOTTLES[kind].map(p=>p[1]));
 // Most cells a bottle's screen box covers miss it (beside the neck, between
 // bottles). Reject them against its bounding cylinder before the full lathe.
 function backBarRayBottle(ox,oy,oz,rx,ry,rz,b) {
-  const x=ox-b.x,y=oy-b.y,a=rx*rx+ry*ry,q=x*rx+y*ry,cc=x*x+y*y-b.hl*b.hl,disc=q*q-a*cc;
-  if(disc<0||a<1e-12)return a<1e-12&&cc<=0?coveRayLathe(ox,oy,oz,rx,ry,rz,b):-1;
-  const root=Math.sqrt(disc),t0=(-q-root)/a,t1=(-q+root)/a;
+  const x=ox-b.x,y=oy-b.y,a=rx*rx+ry*ry,q=x*rx+y*ry,cc=x*x+y*y-(b.hl+1e-8)**2,disc=q*q-a*cc,error=8*Number.EPSILON*(q*q+Math.abs(a*cc));
+  if(disc < -error||a<1e-12)return a<1e-12&&cc<=0?coveRayLathe(ox,oy,oz,rx,ry,rz,b):-1;
+  const root=Math.sqrt(Math.max(0,disc)),t0=(-q-root)/a,t1=(-q+root)/a;
   if(t1<.01)return -1;
   const z0=oz+rz*t0,z1=oz+rz*t1;
-  if(Math.max(z0,z1)<b.z0||Math.min(z0,z1)>b.z1)return -1;
+  if(Math.max(z0,z1)<b.z0-1e-8||Math.min(z0,z1)>b.z1+1e-8)return -1;
   return coveRayLathe(ox,oy,oz,rx,ry,rz,b);
 }
-function backBarBottle(x,y,z,profile,shade) {
-  const points=profile.map(([h,r])=>[h+z,r]),r=Math.max(...profile.map(p=>p[1]));
-  drawBox({...boxAt(x,y,1,0,r,r,z,points.at(-1)[0]),profile:points},shade,backBarRayBottle);
+function backBarBottle(x,y,shape,shade) {
+  drawBox({...shape,x,y},shade,backBarRayBottle);
 }
+
 function backBarBottleShade(kind,glass,label,base) {
   const top=backBarCap(kind),labelZ=kind==='wine'?[.06,.13]:kind==='liqueur'?[.04,.09]:[.05,.12];
   return (i,t,L)=>{
@@ -68,9 +68,9 @@ function backBarStock(half,bays,x,y) {
   return out;
 }
 // (x, y): the middle of the wall face it backs onto; (fx, fy) points into the room.
-function BAR_BACK_BAR(x,y,half,fx=0,fy=1,neon=MAG) {
+function BAR_MIRRORED_BACK_BAR(x,y,half,fx=0,fy=1,neon=MAG) {
   const c=-fy,s=fx,{depth,plinth,top,slab,shelfDepth,boards,board,canopy,stile,glow}=BACK_BAR;
-  const bays=Math.max(2,Math.round(half*2/.95)),pitch=half*2/bays,cx=x+fx*depth/2,cy=y+fy*depth/2;
+  const bays=Math.max(2,Math.round(half*2/.95)),pitch=half*2/bays,front=depth+BACK_BAR.pullOut+BACK_BAR.pullRadius,cx=x+fx*front/2,cy=y+fy*front/2;
   const stock=backBarStock(half,bays,x,y),glasses=[];
   for(let k=0;k<bays;k++)for(let n=0;n<3;n++)glasses.push({u:-half+pitch*(k+.5)+(n-1)*.09,v:.12});
   const timber=seed=>(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed);
@@ -94,46 +94,54 @@ function BAR_BACK_BAR(x,y,half,fx=0,fy=1,neon=MAG) {
     BG[i]=C(CYAN,1.4+L*.18*light+(glint?2.2:0));set(i,' ',0);return true;
   };
   const shades=stock.map(q=>backBarBottleShade(q.kind,q.glass,q.label,q.z));
-  const panel=(hl,hw,z0,z1,bevel=.004)=>kitchenPanelProfile(hl,hw,z0,z1,bevel);
+  const timbers=Array.from({length:bays+16},(_,k)=>timber(k)),carcassTimber=boxTimber(1);
+  const doorPanel=kitchenPanelProfile(pitch/2-.012,.006,plinth+.02,top-slab-.02,.004),matPanel=kitchenPanelProfile(.16,.05,top,top+.006,.002);
+  const shelfPanels=boards.map(b=>kitchenPanelProfile(pitch/2-stile,shelfDepth/2,b,b+board,.003));
+  const stilePanels=[stile/2,stile].map(hl=>kitchenPanelProfile(hl,shelfDepth/2,top,canopy[0],.003));
+  const worktopPanel=kitchenTopProfile(half+.01,depth/2+.01,top-slab,top,.01),canopyPanel=kitchenTopProfile(half+.01,depth/2,canopy[0],canopy[1],.01);
+  const lampPanel=kitchenPanelProfile(half,glow,canopy[0]-BACK_BAR.lamp,canopy[0],.002),profiles=new Map();
+  const shape=(profile,z)=>{const points=profile.map(([h,r])=>[z+h,r]),r=Math.max(...profile.map(p=>p[1]));return {...boxAt(0,0,1,0,r,r,Math.min(...points.map(p=>p[0])),Math.max(...points.map(p=>p[0]))),profile:points};};
+  const bottleShapes=stock.map(q=>{const key=q.kind+':'+q.z;if(!profiles.has(key))profiles.set(key,shape(BACK_BAR_BOTTLES[q.kind],q.z));return profiles.get(key);});
+  const glassShape=shape(BACK_BAR_TUMBLER,top+.006);
   return {...ROOM_MODEL(x,y,(vx,vy)=>{
     const at=(u,v)=>[vx+c*u+fx*v,vy+s*u+fy*v];
     // Nearest first, so the depth buffer turns away what sits behind.
-    for(const q of glasses){const [gx,gy]=at(q.u,q.v);coveLathe(gx,gy,top+.006,BACK_BAR_TUMBLER,tumbler);}
-    for(let k=0;k<bays;k++){const [mx,my]=at(-half+pitch*(k+.5),.12);drawBox({...boxAt(mx,my,c,s,.16,.05,top,top+.006),...panel(.16,.05,top,top+.006,.002)},mat,homeRayWorktop);}
-    stock.forEach((q,n)=>{const [bx,by]=at(q.u,q.v);backBarBottle(bx,by,q.z,BACK_BAR_BOTTLES[q.kind],shades[n]);});
+    for(const q of glasses){const [gx,gy]=at(q.u,q.v);backBarBottle(gx,gy,glassShape,tumbler);}
+    for(let k=0;k<bays;k++){const [mx,my]=at(-half+pitch*(k+.5),.12);drawBox({...boxAt(mx,my,c,s,.16,.05,top,top+.006),...matPanel},mat,homeRayWorktop);}
+    stock.forEach((q,n)=>{const [bx,by]=at(q.u,q.v);backBarBottle(bx,by,bottleShapes[n],shades[n]);});
     // Door pulls, doors, and the cabinet behind them.
     for(let k=0;k<bays;k++) {
       const mid=-half+pitch*(k+.5),pull=top-.13;
-      const [ax,ay]=at(mid-.06,depth+.028),[bx,by]=at(mid+.06,depth+.028);
-      coveTube(ax,ay,pull,bx,by,pull,.008,GRAY); // the pull bar, on two posts back to the door face
-      for(const e of [-.06,.06]){const [qx,qy]=at(mid+e,depth+.012),[rx,ry]=at(mid+e,depth+.028);coveTube(qx,qy,pull,rx,ry,pull,.006,GRAY);}
+      const [ax,ay]=at(mid-.06,depth+BACK_BAR.pullOut),[bx,by]=at(mid+.06,depth+BACK_BAR.pullOut);
+      coveTube(ax,ay,pull,bx,by,pull,BACK_BAR.pullRadius,GRAY); // the pull bar, on two posts back to the door face
+      for(const e of [-.06,.06]){const [qx,qy]=at(mid+e,depth+.012),[rx,ry]=at(mid+e,depth+BACK_BAR.pullOut);coveTube(qx,qy,pull,rx,ry,pull,.006,GRAY);}
       const [dx_,dy_]=at(-half+pitch*(k+.5),depth+.006);
-      drawBox({...boxAt(dx_,dy_,c,s,pitch/2-.012,.006,plinth+.02,top-slab-.02),...panel(pitch/2-.012,.006,plinth+.02,top-slab-.02)},timber(k+2),homeRayWorktop);
+      drawBox({...boxAt(dx_,dy_,c,s,pitch/2-.012,.006,plinth+.02,top-slab-.02),...doorPanel},timbers[k+2],homeRayWorktop);
     }
     const [tx,ty]=at(0,depth/2+.01);
-    drawBox({...boxAt(tx,ty,c,s,half+.01,depth/2+.01,top-slab,top),...kitchenTopProfile(half+.01,depth/2+.01,top-slab,top,.01)},stone,homeRayWorktop);
+    drawBox({...boxAt(tx,ty,c,s,half+.01,depth/2+.01,top-slab,top),...worktopPanel},stone,homeRayWorktop);
     // The carcass and recessed plinth are plain boxes, mostly behind the
     // doors: the renderer clips those column by column.
     const [kx,ky]=at(0,depth/2);
-    drawBox(boxAt(kx,ky,c,s,half,depth/2,plinth,top-slab),boxTimber(1));
+    drawBox(boxAt(kx,ky,c,s,half,depth/2,plinth,top-slab),carcassTimber);
     const [px0,py0]=at(0,(depth-.04)/2);
     drawBox(boxAt(px0,py0,c,s,half-.02,(depth-.04)/2,0,plinth),(i,t,L)=>{BG[i]=C(BRICK,1.2+L*.08);set(i,' ',0);return true;});
     // Upper fitting: full-height stiles from worktop to canopy, a board
     // between each pair at the same heights, all on the same front plane.
     for(let k=0;k<bays;k++)for(const b of boards) {
       const [sx,sy]=at(-half+pitch*(k+.5),shelfDepth/2),hl=pitch/2-stile;
-      drawBox({...boxAt(sx,sy,c,s,hl,shelfDepth/2,b,b+board),...kitchenPanelProfile(hl,shelfDepth/2,b,b+board,.003)},timber(5+k),homeRayWorktop);
+      drawBox({...boxAt(sx,sy,c,s,hl,shelfDepth/2,b,b+board),...shelfPanels[boards.indexOf(b)]},timbers[5+k],homeRayWorktop);
     }
     for(let k=0;k<=bays;k++) {
       const [sx,sy]=at(-half+pitch*k,shelfDepth/2),hl=k===0||k===bays?stile/2:stile,du=k===0?stile/2:k===bays?-stile/2:0,[ex,ey]=[sx+c*du,sy+s*du];
-      drawBox({...boxAt(ex,ey,c,s,hl,shelfDepth/2,top,canopy[0]),...kitchenPanelProfile(hl,shelfDepth/2,top,canopy[0],.003)},timber(k+9),homeRayWorktop);
+      drawBox({...boxAt(ex,ey,c,s,hl,shelfDepth/2,top,canopy[0]),...stilePanels[k===0||k===bays?0:1]},timbers[k+9],homeRayWorktop);
     }
     const [lx,ly]=at(0,shelfDepth+glow+.003);
-    drawBox({...boxAt(lx,ly,c,s,half,glow,canopy[0]-BACK_BAR.lamp,canopy[0]),...panel(half,glow,canopy[0]-BACK_BAR.lamp,canopy[0],.002)},lamp,homeRayWorktop);
+    drawBox({...boxAt(lx,ly,c,s,half,glow,canopy[0]-BACK_BAR.lamp,canopy[0]),...lampPanel},lamp,homeRayWorktop);
     const [ox,oy]=at(0,depth/2);
-    drawBox({...boxAt(ox,oy,c,s,half+.01,depth/2,canopy[0],canopy[1]),...kitchenTopProfile(half+.01,depth/2,canopy[0],canopy[1],.01)},timber(6),homeRayWorktop);
+    drawBox({...boxAt(ox,oy,c,s,half+.01,depth/2,canopy[0],canopy[1]),...canopyPanel},timbers[6],homeRayWorktop);
     const [mx,my]=at(0,.006);
     drawBox(boxAt(mx,my,c,s,half,.006,top,canopy[0]),mirror);
-  }),box:boxAt(cx,cy,c,s,half+.01,depth/2,0,canopy[1]),radius:Math.hypot(half,depth)+.05,
+  }),box:boxAt(cx,cy,c,s,half+.01,front/2,0,canopy[1]),radius:Math.hypot(half,depth)+.05,
     backBar:{x,y,half,fx,fy,bays,pitch,stock:stock.map(({kind,u,v,z,r,bay,row})=>({kind,u,v,z,r,bay,row})),glasses}};
 }

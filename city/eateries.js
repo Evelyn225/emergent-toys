@@ -241,7 +241,7 @@ ROOM_DEFS.sushibar = { grid: backWc(14, 9), wc: wcAt(14), light: 0.9, floor: 'hi
       { ...standing(6.0, SUSHI_WORK.south, WHITE), face: [0, 1] }, { ...standing(4.2, SUSHI_WORK.north, WHITE), face: [0, -1] }, ...wcFittings(14)];
     for (let x = x0; x <= x1 + 1e-6; x += 1.0) for (const [y, fy] of [[y0 - 0.55, 1], [y1 + 0.55, -1]]) { p.push(STOOL(x, y, RED, 0.62)); if (chance(0.4)) p.push({ ...sitting(x, y, shirt(), 0.62), face: [0, fy] }); }
     for (const [x, fx] of [[x0 - 0.55, 1], [x1 + 0.55, -1]]) { p.push(STOOL(x, (y0 + y1) / 2, RED, 0.62)); if (chance(0.4)) p.push({ ...sitting(x, (y0 + y1) / 2, shirt(), 0.62), face: [fx, 0] }); }
-    for (const x of [2.2, 4.6, 9.4, 11.6]) p.push(hung(x, 6.2, 2.4, (vx, vy, z) => drum(vx, vy, 0.15, z - 0.36, z, (i, t, L) => { BG[i] = C(RED, 6 + 3 * Math.max(night, 0.3)); return set(i, fract(HIT.w * 6) < 0.2 ? '-' : ' ', C(GRAY, 2)), true; }))); // paper lanterns
+    for (const x of [2.2, 4.6, 9.4, 11.6]) p.push(PAPER_LANTERN(x,6.2,{ceiling:r.def.height||3,top:2.4,height:.36,radius:.15}));
     p.push(...dining(2.2, 7.4, { hl: 0.35, top: solid(BRICK, { top: '=' }), busy: 0.3 }), ...dining(11.2, 7.4, { hl: 0.35, top: solid(BRICK, { top: '=' }), busy: 0.3 }), ...dining(11.6, 5.0, { hl: 0.35, top: solid(BRICK, { top: '=' }), busy: 0.3 }));
     return p;
   } };
