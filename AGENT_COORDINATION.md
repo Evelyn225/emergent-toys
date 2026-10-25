@@ -20,6 +20,13 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   do not repeat them. Own `city/dining.js`, `city/counters.js`,
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- **Claude pass 7 (shop interiors) started:** display cases on
+  `claude/shop-display-cases` (new `city/shop-display-cases.js` replacing
+  `glassCase`/`caseGoods` in `city/shops.js`; callers in `city/shops.js`,
+  `city/storefronts.js` and the airport café in `city/terminal.js`; the delis
+  use `KITCHEN_FOOD_CASE`). Pass 8 PRs #215–#220 are open. Next in pass 7:
+  the `fridgeWall` painter, the shelf islands, then the shops' painted boxes
+  group by group. `city/home-*.js` stays with Codex.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
