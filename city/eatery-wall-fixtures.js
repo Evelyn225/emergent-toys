@@ -3,7 +3,7 @@
 // pass with its steel shelf, heat lamps and ticket rail. Each mounts on the
 // wall face it stands off; (fx, fy) points into the room and local u runs
 // along the wall.
-const CONE_RACK={rows:[1.32,1.58],per:6,pitch:.28,ring:.03,v:.075,stack:4,step:.022};
+const CONE_RACK={rows:[1.32,1.58],per:6,pitch:.28,ring:.03,v:.075,stack:4,step:.02}; // (step: each cone's tip stands on the floor of the cone below)
 const WAFER_CONE=[[0,0],[0,.003],[.12,.028],[.13,.031],[.13,.027],[.02,.005],[.02,0]];
 function waferShade(seed) { // golden wafer, a diamond grid pressed into it
   return (i,t,L)=>{
@@ -57,8 +57,11 @@ function BURGER_KITCHEN_PASS(x,y,half,fx,fy) {
     const railZ=P.top+.18; // above the hood
     for(const q of tickets){const [tx,ty]=at(q.u,.03);drawBox(boxAt(tx,ty,c,s,.035,.001,railZ-q.h,railZ-.005),paper);}
     const [r0x,r0y]=at(-half+.05,.03),[r1x,r1y]=at(half-.05,.03);coveTube(r0x,r0y,railZ,r1x,r1y,railZ,.008,GRAY);
+    for(const e of [-1,1]){const u=e*(half-.1),[px_,py_]=at(u,.006),[qx,qy]=at(u,.012),[rx,ry]=at(u,.026); // its wall plates and standoffs
+      drawBox({...boxAt(px_,py_,c,s,.02,.006,railZ-.035,railZ+.035),...kitchenPanelProfile(.02,.006,railZ-.035,railZ+.035,.003)},steel,homeRayWorktop);
+      coveTube(qx,qy,railZ,rx,ry,railZ,.006,GRAY);}
     // the heat-lamp hood: a steel box over the shelf, two lamps under it
-    const hood0=P.frame/2+.001,hood1=P.shelf+.02,[hx,hy]=at(0,(hood0+hood1)/2); // in front of the frame
+    const hood0=.016,hood1=P.shelf+.02,[hx,hy]=at(0,(hood0+hood1)/2); // its back on the frame's face (the frame is .016 deep)
     for(const e of [-.45,.45]){const [lx,ly]=at(e,P.shelf/2+.02);coveLathe(lx,ly,P.top-.13,[[0,0],[0,.028],[.03,.035],[.045,.03],[.05,0]],lamp);
       coveTube(lx,ly,P.top-.08,lx,ly,P.top-.02,.006,GRAY);}
     drawBox({...boxAt(hx,hy,c,s,half-.12,(hood1-hood0)/2,P.top-.02,P.top+.02),...kitchenTopProfile(half-.12,(hood1-hood0)/2,P.top-.02,P.top+.02,.008)},steel,homeRayWorktop);

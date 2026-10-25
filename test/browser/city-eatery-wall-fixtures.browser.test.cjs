@@ -25,6 +25,7 @@ test('the cone rack: every bottom cone rests in its wire ring, stacks clear of t
   const r=at(.12),inner=d.ring-.003,outer=d.ring+.003;if(!(r>inner&&r<outer))bad.push(['falls through or misses the ring',r,inner,outer]);
   const top=Math.max(...CONE_RACK.rows)-.12,low=Math.min(...CONE_RACK.rows)-.12+(CONE_RACK.stack-1)*CONE_RACK.step+.13;
   if(low>=top)bad.push(['stacks touch the row above',low,top]);
+  const floor=WAFER_CONE[WAFER_CONE.length-1][0];if(Math.abs(CONE_RACK.step-floor)>1e-9)bad.push(['a stacked cone not standing on the floor of the one below',CONE_RACK.step,floor]);
   for(const q of d.holders)if(Math.abs(q.u)>d.half-.04)bad.push(['off the rail',q.u]);
   const i=0;BG[i]=0;iceWall(i,4.2,.01,1.5,3,4,0,8);
   return{bad,holders:d.holders.length,painted:CH[i]==='V'};
@@ -40,6 +41,11 @@ test('the burger pass: frame on the shelf, hood in front of the frame, lamps bet
   const flat=parts.filter(q=>q.ray===homeRayWorktop),frames=flat.filter(q=>q.box.hw===.008),shelf=flat.find(q=>q.box.z1===d.bottom),hood=flat.find(q=>q.box.z0===d.top-.02);
   if(!shelf||frames.filter(q=>q.box.z0===d.bottom).length!==2)bad.push('frame not standing on the shelf');
   if(back(hood,d.fx,d.fy,d.x,d.y)<.016-1e-9)bad.push('hood into the frame');
+  if(back(hood,d.fx,d.fy,d.x,d.y)>.016+1e-9)bad.push('hood not meeting the frame');
+  // the ticket rail is held off the wall: plates on the wall at its height, a standoff from each into the rail
+  const railZ=d.top+.18,plates=flat.filter(q=>Math.abs(back(q,d.fx,d.fy,d.x,d.y))<1e-9&&q.box.z0<railZ&&q.box.z1>railZ);
+  const standoffs=parts.filter(q=>q.ray===coveRayCapsule&&Math.abs(q.box.az-railZ)<1e-9&&Math.abs(q.box.bz-railZ)<1e-9&&Math.abs(((q.box.ax-q.box.bx)*d.fx+(q.box.ay-q.box.by)*d.fy))>.005);
+  if(plates.length<2||standoffs.length<2)bad.push(['ticket rail not held',plates.length,standoffs.length]);
   const lamps=parts.filter(q=>q.box.profile&&q.box.z0>d.bottom&&q.box.z1<d.top);if(lamps.length!==2)bad.push(['lamps',lamps.length]);
   const tickets=parts.filter(q=>q.ray===rayBox&&q.box.hw===.001);if(tickets.some(q=>q.box.z0<=hood.box.z1))bad.push('ticket behind the hood');
   // the shake machine and the soda fountain stand clear of the pass
