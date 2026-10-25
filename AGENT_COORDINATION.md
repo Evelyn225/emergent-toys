@@ -20,6 +20,15 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   do not repeat them. Own `city/dining.js`, `city/counters.js`,
   `city/eateries.js` and restaurant-only modules/tests. Agree before changing
   shared home/hotel helpers or overlapping areas in `city/rooms.js`.
+- **Claude pass 8 progress:** dim sum live seafood tank on
+  `claude/dimsum-seafood-tank` (new `city/seafood-tank.js`, test
+  `city-seafood-tank`, dimsum props in `city/dining.js`). Remaining audit
+  queue, one PR each: sushi island counter (still `BX` boxes), karaoke stage,
+  speakers and lyrics screen (`city/rooms.js` karaoke definition only), then
+  painted wall fixtures (pho fan, kissaten clock, ice-cream cone rack, burger
+  pass, roastery trailing plants), then the pass 8 closing sweep. After pass 8
+  Claude moves to pass 7 shop interiors, avoiding `city/home-*.js`.
+
 - **Claude pass 10 (leisure interiors):** cinema rows, arcade cabinets and the
   casino floor on `claude/leisure-cinema-casino`, from main (new
   `city/leisure-fittings.js`; the cinema and arcade defs and `cabinet` in
@@ -242,3 +251,20 @@ low/night/phone; ABAB costs appended to WORLD_QUALITY.md. Next Codex queue:
 pass5 doors/trim/layout character, then pass6 hotels; Claude owns pass11
 streets and the pending shop/restaurant stack. No shared helper edits.
 The full1069-test Node run on #233's final reviewed tree passed.
+
+2026-10-25 solo takeover: the user reports Claude is out of credits and asks
+Codex to keep going. Codex now reviews/integrates Claude's pending restaurant
+#215–#220, shop #221–#232 and street-vending #236 work before continuing
+passes5/6 and the broader checklist. Claude's ownership reservations are
+paused during this authorized takeover; preserve his implementations and
+notes, repair review defects, keep each original chunk/PR separate, and
+rebuild generated output. Active review: `codex/review-seafood-integration`;
+next is sushi island #216. On resuming, read the latest appended progress
+before choosing overlapping files.
+
+#215 solo review complete on `codex/review-seafood-integration`: fixed pull
+bounds, bubble peaks and distant gravel aliasing; cached static profiles and
+materials. Four tank checks plus home-window controls, all five shop/seating/
+route checks and four bundle/parse checks pass. Original-defect regression
+fails before correction; close/wide/oblique/above/night views reviewed and
+costs appended. Next #216: belt rails currently intersect the plate rims.
