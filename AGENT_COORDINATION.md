@@ -24,9 +24,13 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   `claude/shop-shelf-islands` (new `city/shop-gondolas.js`; one line in
   `makeRoom` in `city/rooms.js` turns 'S' cells into floor plus gondolas; the
   shop painters' dead 'S' branches in `city/shops.js`, `city/storefronts.js`
-  and `roomWall` are removed). Earlier pass 7 PRs: #221 display cases, #222
-  fridge walls. Next: the `shelves: true` back-wall painter, then the shops'
-  painted boxes group by group. `city/home-*.js` stays with Codex.
+  and `roomWall` are removed, #223). Back-wall shelves on
+  `claude/shop-wall-shelves`, stacked on #223: `def.shelves` is now a spec
+  (`{kind, x0, x1, timber}` or a function of the room) and `makeRoom` adds a
+  built wall unit from `city/shop-gondolas.js`; the painter in `roomWall` is
+  gone. Earlier pass 7 PRs: #221 display cases, #222 fridge walls. Next: the
+  books walls, then the shops' painted boxes group by group. `city/home-*.js`
+  stays with Codex.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
