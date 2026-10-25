@@ -23,8 +23,12 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
 - **Claude pass 10 (leisure interiors):** cinema rows, arcade cabinets and the
   casino floor on `claude/leisure-cinema-casino`, from main (new
   `city/leisure-fittings.js`; the cinema and arcade defs and `cabinet` in
-  `city/rooms.js`, `city/casino.js`). Independent of the pass 7 shop stack.
-  Next: the strip club, aquarium, conservatory, aviary and cathedral.
+  `city/rooms.js`, `city/casino.js`). Independent of the pass 7 shop stack
+  (#233). The club, aquarium touch pool and plush stand, and the cathedral on
+  `claude/leisure-club-aquarium` (new `city/cathedral-fittings.js`;
+  `city/stripclub.js`, `city/aquarium.js`, `city/cathedral.js`), stacked on
+  #233. The conservatory and aviary planting is sprites and goes with pass 18
+  (parks and vegetation). Next: pass 11 (street objects).
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
