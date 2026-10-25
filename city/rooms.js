@@ -659,6 +659,7 @@ function makeRoom(kind, extra = {}) {
     r.props.push(...r.bathroomDoors);
   }
   r.props.push(...bathroomAccessories(r));
+  if(def.ceil==='lantern')r.props.push(...restaurantCeilingLanterns(r));
   if (def.home) r.props.push(...workshopProps(r),...furnishingProps(r));
   if(def.home||['hotelroom','lighthouse','lamproom'].includes(kind)){
     const host=r.lobby||r;r.exterior=homeExterior({...r,cell:host.cell,ret:host.ret});
@@ -1272,7 +1273,7 @@ const ceilAt = (key, spec, wx, wy) => {
   if (wx < 0 || wy < 0 || wx >= room.W || wy >= room.H) return 0;
   return ceilMask(key, spec)[Math.floor(wy * CEIL_RES) * room.W * CEIL_RES + Math.floor(wx * CEIL_RES)];
 };
-const CEIL_PENDANT = { s: 2, r: 0.14 }, CEIL_LANTERN = { s: 1.6, r: 0.18 }, CEIL_STRIP = { s: 2.5, w: 0.4, strip: true },
+const CEIL_PENDANT = { s: 2, r: 0.14 }, CEIL_STRIP = { s: 2.5, w: 0.4, strip: true },
   CEIL_STATION = { s: 2.5, w: 0.4, strip: true, keep: x => x > 9 && x < 37 }; // (not down the tunnels)
 function roomCeil(i, r, x, rx, ry) {
   const d = ((room.def.height || 3) - eye) * projY / (hor - r - 0.5), wx = px + rx * d, wy = py + ry * d;
@@ -1289,10 +1290,8 @@ function roomCeil(i, r, x, rx, ry) {
     const on = ceilAt('pendant', CEIL_PENDANT, wx, wy) === 1;
     return set(i, on ? 'o' : (r + x) % 4 ? ' ' : '.', on ? C(WARM, 15) : C(BRICK, 2));
   }
-  if (st === 'lantern') { // red paper lanterns, about 1.6m apart
-    const on = ceilAt('lantern', CEIL_LANTERN, wx, wy) === 1;
-    if (on) BG[i] = C(RED, 6);
-    return set(i, on ? 'O' : (r + x) % 5 ? ' ' : '.', on ? C(YEL, 15) : C(RED, 2));
+  if (st === 'lantern') { // Light comes from the fitted paper shells below.
+    BG[i]=C(BRICK,2);return set(i,' ',0);
   }
   if (st === 'disco') { // spots of coloured light sweeping across the ceiling
     const on = hash(Math.floor(wx * 3), Math.floor(wy * 3), 9) > 0.88;

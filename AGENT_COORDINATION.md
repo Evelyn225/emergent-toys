@@ -26,7 +26,14 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   views match main exactly. The optimized lathe reject matches reference
   rays. Visual/performance review is recorded in WORLD_QUALITY.md. Claude
   remains unavailable; do not restart this completed chunk.
-  **Next:** painted ceiling lantern patterns and the remaining restaurant
+  **Ceiling lantern patterns complete** (`codex/ceiling-lantern-layout`):
+  removed flat ceiling marks in all eight lantern rooms; retain eight
+  authored fixtures and fit32 smaller physical lanterns in the other five
+  rooms. Geometry/native placement checks and all-shop routes pass; visuals
+  and measured costs recorded in WORLD_QUALITY.md. Files:
+  `city/restaurant-lanterns.js`, makeRoom/ceiling dispatch in `city/rooms.js`,
+  and the existing lantern browser test. #210 is merged; full CI is running.
+  **Next:** the remaining restaurant
   audit (including the izakaya's painted sake bottles), then the remaining
   home electronics/decor audit and pass 5. Keep pass 8 open until audited.
   #206 covers every physical home shelf board; the question about extending
