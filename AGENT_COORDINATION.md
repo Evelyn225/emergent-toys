@@ -33,6 +33,11 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   runs; `booksWall` is gone. Earlier pass 7 PRs: #221 display cases, #222
   fridge walls. Next: the shops' painted boxes group by group.
   `city/home-*.js` stays with Codex.
+- **Claude pass 7 (shop interiors):** shop fridge walls on
+  `claude/shop-fridges` (new `city/shop-fridges.js`; runs and wall painters in
+  `city/shops.js`; label/stock options and plain-box long parts in my
+  `city/kitchen-crates-coolers.js`). Next: the shelf islands, then the shops'
+  painted boxes group by group. `city/home-*.js` stays with Codex.
 - Shared manifest, generated bundle and append-only completed notes remain
   shared: preserve both module lists and rebuild on integration.
 
