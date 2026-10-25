@@ -38127,8 +38127,8 @@ function LUMBER(x,y,boards,c=0,s=1,t=.05,w=.12) {
 }
 // Coils of garden hose lying on the floor, turn on turn: each turn a ring.
 function HOSE_COILS(x,y,R=.34,turns=6,r=.022,col=GREEN) {
-  const ring=k=>{const zc=r+k*2*r,pts=[];for(let j=0;j<=10;j++){const a=Math.PI/2-j*Math.PI/10;pts.push([zc+r*Math.sin(a),R+r*Math.cos(a)]);}
-    for(let j=1;j<10;j++){const a=-Math.PI/2+j*Math.PI/10;pts.push([zc+r*Math.sin(a),R-r*Math.cos(a)]);}pts.push(pts[0]);return pts;};
+  // (an octagon of tube section: a finer one costs more than it shows at this size)
+  const ring=k=>{const zc=r+k*2*r,pts=[];for(let j=0;j<=8;j++){const a=Math.PI/2-j*Math.PI/4;pts.push([zc+r*Math.sin(a),R+r*Math.cos(a)]);}return pts;};
   const rings=Array.from({length:turns},(_,k)=>ring(k));
   const shade=(i,t,L)=>{BG[i]=C(col,2.2+L*.35*coveLight(HIT.nx,HIT.ny,HIT.nz));set(i,' ',0);return true;};
   return {...ROOM_MODEL(x,y,(vx,vy)=>{for(let k=turns-1;k>=0;k--)coveLathe(vx,vy,0,rings[k],shade);}),
