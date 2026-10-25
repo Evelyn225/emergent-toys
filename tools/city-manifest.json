@@ -185,6 +185,7 @@
     "city/home-windows.js",
     "city/home-furnishing-ui.js",
     "city/world-bootstrap.js",
+    "city/facade-utilities.js",
     "city/window-railway-geometry.js",
     "city/street-scenes-render.js",
     "city/save.js",
