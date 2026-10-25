@@ -53,7 +53,7 @@ main. Both full CI runs passed; Codex independently checked the produce tests.
   bodega/gas/market food props, street-food carts, pier stall, spirit house,
   lanterns).
   **Pass 8 (Claude), in progress, one branch and PR per chunk:**
-  1. Bar back bar on `claude/bar-back-bar`, **PR pending**: new
+  1. Bar back bar on `claude/bar-back-bar`, **PR #210**: new
      `city/bar-backbar.js` and `test/browser/city-bar-backbar.browser.test.cjs`;
      edits to `city/rooms.js` (bar definition only: drops `shelves`/`glyphs`,
      adds the fitting), manifest and bundle. The shared `shelves: true`
