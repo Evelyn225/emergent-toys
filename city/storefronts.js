@@ -5,13 +5,6 @@
 
 // ---- the bodega (BODEGA): the counter by the door behind its plexiglass, the cat asleep on it, cigarettes and lotto
 // behind; the deli case and the grill at the back, two narrow aisles, the cooler, a crate to sit on
-const deliMeats = (i, u, v, w, L, f) => { // cold cuts fanned out, the cheeses, the salads in their trays
-  if (f !== 5 && (w < 0.06 || w > 0.3)) return false;
-  const k = Math.floor((u + 3) / 0.38), cu = fract((u + 3) / 0.38);
-  if (cu < 0.08) return false;
-  const [c, lv] = [[RED, 6], [YEL, 9], [MAG, 6], [WHITE, 9], [ORANGE, 7], [GREEN, 5]][k % 6];
-  BG[i] = C(c, lv + L * 0.2); return set(i, k % 6 < 3 && fract(cu * 6) < 0.3 ? ')' : ' ', C(WHITE, 10)), true;
-};
 const grillTop = (i, t, L) => { BG[i] = C(GRAY, (HIT.face === 5 ? 1.2 : 2.4 + L * 0.3) * shadeFace(HIT.face)); return set(i, HIT.face === 5 ? (hash(Math.floor(HIT.u * 12), Math.floor(T * 3), 130) > 0.85 ? '~' : '.') : ' ', C(ORANGE, 9)), true; };
 const plexi = (i, t, L) => fract((HIT.u + HIT.w) * 2.5) < 0.04 ? (set(i, '/', C(WHITE, 8)), true) : false; // (see-through, a glint across it)
 const shopCat = (x, y, z) => figProp(x, y, KITTEN_LOOK, { z, h: 0.3 / KITTEN_LOOK.scale(0), pose: () => fract(T / 7) < 0.05 ? 'f1' : 'f0', face: [0, 1], chat: false, still: true, light: 8 }); // (it lives here: still there after closing)
@@ -32,7 +25,7 @@ ROOM_DEFS.bodega = { grid: ['##########', '#........#', '#........#', '#.SS.SS..
   light: 1.0, floor: 'lino', ceil: 'strip', sign: false, glyphs: '%#o=]', wall: bodegaWall, keeper: [8.4, 6.4],
   props: r => [BX(7.55, 6.4, 1.0, 0.28, 0, 1.05, solid(BRICK, { top: '=', panel: 0.5 }), 0, 1), BX(7.3, 6.4, 1.0, 0.02, 1.05, 1.95, plexi, 0, 1), // the counter, the plexiglass
     { ...standing(8.4, 6.4, r.neon), face: [-1, 0] }, shopCat(7.6, 7.05, 1.05),
-    ...glassCase(5.0, 1.95, 2.0, 0.32, 1.15, deliMeats, GRAY), { ...standing(4.4, 1.4, WHITE), face: [0, 1] }, BX(6.6, 1.3, 0.6, 0.25, 0, 0.92, grillTop),
+    KITCHEN_FOOD_CASE(5.0, 1.95, 2.0, 0.32, 1.15, 'deli', GRAY), { ...standing(4.4, 1.4, WHITE), face: [0, 1] }, BX(6.6, 1.3, 0.6, 0.25, 0, 0.92, grillTop),
     sodaCooler(1.38, 6.2, 1.0, 0.36, 1, 0), BX(3.1, 7.55, 0.32, 0.25, 0, 0.9, crateShade(RED)), BX(3.1, 7.55, 0.3, 0.23, 0.9, 1.2, crateShade(RED)), // crates of soda, stacked
     BX(1.5, 2.3, 0.2, 0.17, 0, 0.38, crateShade(BLUE)), SEAT(1.5, 2.3, 1, 0, 0.4), ...(chance(0.5) ? [{ ...sitting(1.5, 2.3, shirt(), 0.4), face: [1, 0] }] : [])] }; // a milk crate to sit on, and the old man who does
 
@@ -236,7 +229,7 @@ function antiqueWall(i, u, uStep, z, d, mx, my, L) {
 }
 ROOM_DEFS.antiques = { grid: boxRoom(12, 9), light: 0.7, floor: 'boards', ceil: 'pendant', sign: false, wall: antiqueWall, keeper: [9.6, 1.6],
   props: r => [...counterBox(9.6, 2.3, 1.1), { ...standing(9.6, 1.6, GRAY), face: [0, 1] }, grandfatherClock(1.45, 1.35), gramophone(6.4, 1.45),
-    ...glassCase(3.6, 1.6, 1.2, 0.35, 1.2, caseGoods('o*%&$', [YEL, WHITE, CYAN, MAG], true, 7), BRICK), ...glassCase(10.6, 5.4, 1.0, 0.35, 1.2, caseGoods('o@*=', [YEL, WHITE, GREEN], true, 9), BRICK, 0, 1),
+    ...glassCase(3.6, 1.6, 1.2, 0.35, 1.2, caseGoods('trinkets', [YEL, WHITE, CYAN, MAG], true, 7), BRICK), ...glassCase(10.6, 5.4, 1.0, 0.35, 1.2, caseGoods('trinkets', [YEL, WHITE, GREEN], true, 9), BRICK, 0, 1),
     ...armchair(4.4, 6.6, 1, 0, GREEN), ...armchair(7.2, 6.6, -1, 0, RED), BX(5.8, 6.6, 0.3, 0.3, 0, 0.55, solid(BRICK, { top: '=' })), // two armchairs over a little table
     ...(chance(0.4) ? [{ ...sitting(7.2, 6.6, shirt(), 0.42), face: [-1, 0] }] : []),
     ...[[1.5, 6.2, 0.4], [1.5, 6.2, 0.75], [1.55, 7.3, 0.3]].map(([x, y, z], k) => BX(x, y, 0.4, 0.28, z - (k === 1 ? 0.35 : z), z, solid([BRICK, ORANGE, GREEN][k], { top: '=', panel: 0.3 }))), // old suitcases piled up
@@ -259,13 +252,6 @@ ROOM_DEFS.drugstore = { grid: ['############', '#..........#', '#..........#', '
 
 // ---- the delicatessen (DELICATESSEN): hams and salamis hung over the marble counter, the salads and olives under the
 // glass, wheels of cheese stacked up, jars and wine up the wall, the slicer; a ledge in the window with stools
-const deliGlass = (i, u, v, w, L, f) => { // olives, peppers, artichokes, the salads, in bowls
-  if (f !== 5) return false;
-  const k = Math.floor((u + 3) / 0.45), cu = fract((u + 3) / 0.45) - 0.5, r = Math.hypot(cu, v / 0.3 * 0.5);
-  if (r > 0.42) return false;
-  const [c, lv, g] = [[GREEN, 5, 'o'], [RED, 7, '~'], [GREEN, 7, '%'], [YEL, 8, '.'], [GRAY, 2, 'o'], [ORANGE, 8, '.']][k % 6];
-  BG[i] = r > 0.36 ? C(WHITE, 8) : C(c, lv); return set(i, r < 0.36 && hash(Math.floor(u * 40), Math.floor(v * 40), 144) > 0.6 ? g : ' ', C(c, lv + 4)), true;
-};
 const hangingMeat = (x, ham) => hung(x, 2.4, 2.25, (vx, vy, z) => { if (ham) dot(vx, vy, z - 0.25, 0.13, (i, t, L) => { BG[i] = C(BRICK, 3 + L * 0.3); return set(i, ' ', 0), true; }); else drum(vx, vy, 0.04, z - 0.45, z, (i, t, L) => { BG[i] = C(BRICK, 2.4 + L * 0.3); return set(i, hash(Math.floor(HIT.w * 30), Math.floor(Math.atan2(HIT.v, HIT.u) * 3), 145) > 0.7 ? '.' : ' ', C(WHITE, 9)), true; }); });
 function delicatessenWall(i, u, uStep, z, d, mx, my, L) {
   if (frontWindow(i, u, uStep, z, d, my, L)) return true;
@@ -280,7 +266,7 @@ function delicatessenWall(i, u, uStep, z, d, mx, my, L) {
   BG[i] = C(GREEN, 1.3 + L * 0.12); return set(i, ' ', 0), true;
 }
 ROOM_DEFS.delicatessen = { grid: boxRoom(11, 8), light: 0.95, floor: 'checker', ceil: 'tin', sign: false, wall: delicatessenWall, keeper: [5.5, 1.7],
-  props: r => [...glassCase(5.5, 2.4, 2.4, 0.34, 1.15, deliGlass, WHITE), { ...standing(5.5, 1.7, WHITE), face: [0, 1] },
+  props: r => [KITCHEN_FOOD_CASE(5.5, 2.4, 2.4, 0.34, 1.15, 'deli', WHITE), { ...standing(5.5, 1.7, WHITE), face: [0, 1] },
     ...[3.6, 4.2, 4.8, 5.4, 6.0, 6.6, 7.2].map((x, k) => hangingMeat(x, k % 3 === 1)),
     BX(8.6, 1.35, 0.5, 0.3, 0, 0.9, solid(GRAY, { top: '=' })), ROOM_MODEL(8.6, 1.35, (vx, vy) => { drawBox(boxAt(vx, vy, 1, 0, 0.2, 0.15, 0.9, 1.0), solid(GRAY)); drum(vx + 0.05, vy + 0.05, 0.15, 1.0, 1.04, (i, t, L) => { BG[i] = C(GRAY, 4); return set(i, '-', C(WHITE, 10)), true; }); }), // the slicer
     ROOM_MODEL(9.7, 2.6, (vx, vy) => { for (let k = 0; k < 4; k++) drum(vx, vy, 0.28 - k * 0.03, k * 0.16, k * 0.16 + 0.15, (i, t, L) => { BG[i] = C(YEL, (5 + L * 0.3) * drumLit(0.28)); return set(i, HIT.face === 5 ? ' ' : '=', C(ORANGE, 8)), true; }); }, [0.28, 0.28, 0.64]), // cheeses, stacked

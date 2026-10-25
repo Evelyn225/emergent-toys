@@ -8,27 +8,6 @@
 
 // ---- bits of furniture, in metres (room coordinates). Shades follow the house style: (i, t, L) => paint, return true.
 const BXD = (vx, vy, hl, hw, z0, z1, shade, ca = 1, sa = 0) => drawBox(boxAt(vx, vy, ca, sa, hl, hw, z0, z1), shade); // (inside a model's draw)
-// a glass display case on a cabinet: whatever's in it painted on the glass top and front by goods(i, u, v, w, L, face)
-// (w from the glass's foot; return false for bare glass). Runs along (ca, sa); the customers' side is face 3
-function glassCase(x, y, hl, hw, h, goods, base = BRICK, ca = 1, sa = 0) {
-  const g = h - 0.42;
-  return [BX(x, y, hl, hw, 0, g, solid(base, { panel: 0.5, trim: g - 0.04, top: '=' }), ca, sa),
-    BX(x, y, hl, hw, g, h, (i, t, L) => {
-      const f = HIT.face, u = HIT.u, v = HIT.v, w = HIT.w - g;
-      const edge = f >= 5 ? hl - Math.abs(u) < 0.03 || hw - Math.abs(v) < 0.03 : w > 0.39 || (f <= 2 ? hw - Math.abs(v) : hl - Math.abs(u)) < 0.03;
-      if (edge) { BG[i] = C(GRAY, 3 + L * 0.3); return set(i, ' ', 0), true; } // the chrome frame
-      BG[i] = C(CYAN, 0.7 + L * 0.05);
-      if (goods(i, u, v, w, L, f)) return true;
-      return set(i, f === 5 && fract((u + v) * 3) < 0.04 ? '/' : ' ', C(WHITE, 7)), true; // (a glint)
-    }, ca, sa)];
-}
-// goods for a case: little things in rows, each a glyph from `glyphs` in one of `cols`, glittering if `glint`
-const caseGoods = (glyphs, cols, glint = false, seed = 0) => (i, u, v, w, L, f) => {
-  const a = f >= 5 ? u : f <= 2 ? v : u, b = f >= 5 ? v : w, k = hash(Math.floor(a * 9), Math.floor(b * 7), seed);
-  if (f !== 5 && (w < 0.06 || w > 0.3) || k < 0.35 || fract(a * 9) < 0.3) return false;
-  const shine = glint && hash(Math.floor(a * 9), Math.floor(T * 3), seed + 1) > 0.85;
-  return set(i, shine ? '*' : glyphs[k * 37 % glyphs.length | 0], C(cols[k * 23 % cols.length | 0], shine ? 15 : 12)), true;
-};
 // a clothes rail along x: chrome uprights and rail, garments hanging off it in a run of colours
 const clothesRack = (x, y, hl, seed, cols = ITEM_COL, long = false) => ROOM_MODEL(x, y, (vx, vy) => {
   for (const e of [-1, 1]) { rod(vx + e * hl, vy, 0, vx + e * hl, vy, 1.45, 0.015, GRAY, 1.2); rod(vx + e * hl, vy - 0.25, 0.01, vx + e * hl, vy + 0.25, 0.01, 0.015, GRAY, 1.2); }
@@ -456,7 +435,7 @@ const skateboard = (x, y, a_ = 0.4) => ROOM_MODEL(x, y, (vx, vy) => {
 });
 ROOM_DEFS.skate = { grid: boxRoom(12, 9), light: 0.85, floor: 'concrete', ceil: 'spots', sign: true, signAt: 6, neon: true, wall: skateWall, keeper: [3.3, 1.45],
   props: r => {
-    const p = [...glassCase(3.3, 2.3, 1.4, 0.35, 1.05, caseGoods('O0oT', [YEL, RED, CYAN, WHITE, GREEN], false, 31), MAG), standing(3.3, 1.45, r.neon),
+    const p = [...glassCase(3.3, 2.3, 1.4, 0.35, 1.05, caseGoods('skate', [YEL, RED, CYAN, WHITE, GREEN], false, 31), MAG), standing(3.3, 1.45, r.neon),
       quarterPipe(10.35, 3.2, 1.25), clothesRack(2.4, 6.6, 0.9, 32, [GRAY, RED, BLUE, GREEN, WHITE, ORANGE]), skateboard(7.8, 7.2), skateboard(9.6, 5.6, -0.9)];
     const kid = (x, y, fx, fy) => figProp(x, y, figAnyone(shirt(), { hat: chance(0.5) ? 'cap' : 'beanie', top: pick(['tee', 'long', 'jacket']), bot: pick(['pants', 'shorts']) }), { face: [fx, fy] });
     if (chance(0.7)) p.push(kid(8.6, 4.6, 1, -0.4)); // watching somebody's line
@@ -752,7 +731,7 @@ const smoke = (x, y, z) => ({ x, y, draw: (vx, vy) => { for (let k = 0; k < 4; k
 ROOM_DEFS.tobacco = { grid: ['############', '#.......W..#', '#..........#', '#.......WWW#', '####...#####', '#..........#', '#..........#', '#..........#', '#..........#', '#####DD#####'],
   wc: { x0: 9, y0: 1, x1: 11, y1: 3, sign: [8, 1, 1.5] }, light: 0.6, floor: 'boards', ceil: 'tin', sign: true, signAt: 4, wall: tobaccoWall, keeper: [10.1, 6.6],
   props: r => {
-    const p = [...glassCase(9.2, 6.6, 1.1, 0.32, 1.05, caseGoods('J?P7', [BRICK, WARM, GRAY, YEL], false, 94), BRICK, 0, 1), standing(10.1, 6.6, BRICK),
+    const p = [...glassCase(9.2, 6.6, 1.1, 0.32, 1.05, caseGoods('tobacco', [BRICK, WARM, GRAY, YEL], false, 94), BRICK, 0, 1), standing(10.1, 6.6, BRICK),
       humidor(2.3, 6.3, 0.95, 1.05), { x: 2.3, y: 7.45, draw: (vx, vy) => hallSign(vx, vy, 0.45, 2.45, 2.62, 3, 'HUMIDOR', C(BRICK, 2), C(YEL, 15)) },
       ...archway(5.5, 4.5, 1.5, 1, 0, BRICK), // through to the lounge
       ...armchair(2.4, 2, 1, 0, BRICK), ...armchair(4.8, 2, -1, 0, BRICK), ...armchair(6.9, 1.7, 0, 1, GREEN), ...tableBox(3.6, 2, 0.25, 0.25),
@@ -832,7 +811,7 @@ ROOM_DEFS.herbs = { grid: ['###############', '#........#....#', '#........#....
   props: r => {
     const p = [BX(5, 2.1, 2, 0.3, 0, 1.0, solid(BRICK, { panel: 0.5, trim: 0.96, top: '=' })), standing(5, 1.4, RED),
       jar(3.4, 2.05, 1.0, RED), jar(3.75, 2.15, 1.0, YEL), jar(6.4, 2.1, 1.0, BRICK), brassScale(5.7, 2.1, 1.0),
-      ...glassCase(1.75, 4.2, 0.7, 0.3, 1.0, caseGoods('Yy&', [WARM, YEL, BRICK], false, 95), BRICK, 0, 1),
+      ...glassCase(1.75, 4.2, 0.7, 0.3, 1.0, caseGoods('herbs', [WARM, YEL, BRICK], false, 95), BRICK, 0, 1),
       sack(1.7, 5.75, BRICK, '@'), sack(1.7, 6.4, RED, 'o'), sack(2.35, 6.45, YEL, '*'), sack(3.0, 6.45, GREEN, '%'),
       ...moonGate(9.5, 4, 1, 0, 1), // through to the tea room
       BX(11.8, 3.5, 0.45, 0.35, 0.28, 0.36, solid(BRICK, { top: '=' })), BX(11.8, 3.5, 0.3, 0.2, 0, 0.28, solid(BRICK)), // its low table
@@ -908,9 +887,9 @@ const grille = (x, y, hl, z0, z1) => Object.assign(BX(x, y, hl, 0.02, z0, z1, (i
 }), {shotPermeable:true});
 ROOM_DEFS.pawn = { grid: boxRoom(12, 9), light: 0.75, floor: 'lino', ceil: 'strip', sign: true, signAt: 6, wall: pawnWall, keeper: [6, 1.55],
   props: r => {
-    const p = [...glassCase(6, 2.4, 2.1, 0.35, 1.0, caseGoods('o@*0', [YEL, WHITE, YEL, CYAN], true, 97), GRAY), grille(6, 2.1, 2.1, 1.0, 2.25), standing(6, 1.55, r.neon),
+    const p = [...glassCase(6, 2.4, 2.1, 0.35, 1.0, caseGoods('jewellery', [YEL, WHITE, YEL, CYAN], true, 97), GRAY), grille(6, 2.1, 2.1, 1.0, 2.25), standing(6, 1.55, r.neon),
       guitar(1.03, 3.2, RED), guitar(1.03, 4.0, BRICK), guitar(1.03, 4.8, YEL), guitar(1.03, 5.6, BLUE),
-      ...glassCase(10.55, 5.2, 1.2, 0.35, 1.0, caseGoods('O0o', [YEL, WHITE, GRAY], true, 98), GRAY, 0, 1),
+      ...glassCase(10.55, 5.2, 1.2, 0.35, 1.0, caseGoods('watches', [YEL, WHITE, GRAY], true, 98), GRAY, 0, 1),
       tvSet(10.75, 1.55, 0, -1, 0.3, 0.35), tvSet(10.75, 2.35, 0, -1, 0.3, 0.35), tvSet(10.75, 1.95, 0.55, -1, 0.3, 0.35, movie),
       BX(10.75, 1.95, 0.25, 0.75, 0, 0.0001, solid(GRAY)), bike(3.6, 7.6, BLUE), ceilingFan(6, 5)];
     p.push(...shoppers([[4.1, 3.3, 0, -1], [9.6, 5.2, 1, 0], [2.2, 4.2, -1, 0]], 0.4));
@@ -972,7 +951,7 @@ const stanchion = (x, y) => ROOM_MODEL(x, y, (vx, vy) => { drum(vx, vy, 0.12, 0,
 ROOM_DEFS.jeweler = { grid: ['#############', '#........#..#', '#...........#', '#........#..#', '#........#..#', '#........#..#', '#####DD######'],
   light: 1, floor: 'marble', ceil: 'chandelier', sign: true, signAt: 5, wall: jewelWall, keeper: [5, 1.4],
   props: r => {
-    const sparkle = seed => caseGoods('o*@.', [YEL, WHITE, CYAN, RED], true, seed), p = [...glassCase(5, 2.05, 2, 0.32, 1.05, sparkle(101), BRICK), standing(5, 1.4, GRAY),
+    const sparkle = seed => caseGoods('jewellery', [YEL, WHITE, CYAN, RED], true, seed), p = [...glassCase(5, 2.05, 2, 0.32, 1.05, sparkle(101), BRICK), standing(5, 1.4, GRAY),
       ...glassCase(1.85, 3.9, 0.75, 0.3, 1.05, sparkle(102), BRICK, 0, 1), ...glassCase(8.15, 4.3, 0.75, 0.3, 1.05, sparkle(103), BRICK, 0, 1),
       figProp(8.6, 5.6, figGuardLook(7), { face: [-1, -0.3], chat: false }), stanchion(3.2, 5.6), stanchion(3.2, 4.6),
       ROOM_MODEL(3.2, 5.1, (vx, vy) => { for (let k = 0; k < 6; k++) { const a0 = k / 6, a1 = (k + 1) / 6, z0 = 0.86 - Math.sin(a0 * Math.PI) * 0.15, z1 = 0.86 - Math.sin(a1 * Math.PI) * 0.15; rod(vx, vy - 0.5 + a0, z0, vx, vy - 0.5 + a1, z1, 0.02, RED, 1.4); } }), // the velvet rope
@@ -1325,7 +1304,7 @@ ROOM_DEFS.tattoo = { grid: boxRoom(14, 11), light: 0.85, floor: 'checker', ceil:
   props: r => {
     const p = [tattooScreen(4.8, 1, 3.6), tattooScreen(9.2, 1, 3.6),
       ...[2.6, 7.0, 11.4].flatMap(sx => [tattooStation(sx, 2.3), SEAT(sx - 0.1, 2.3, 1, 0, 0.6), SEAT(sx + 0.25, 3.05, 0, -1, 0.52)]), // (sit in the chair, or on the artist's stool)
-      ...glassCase(10.2, 7.45, 1.5, 0.34, 1.0, caseGoods('o.oO*', [YEL, WHITE, GRAY, CYAN], true, 84), GRAY), // the counter: rings, studs, barbells
+      ...glassCase(10.2, 7.45, 1.5, 0.34, 1.0, caseGoods('piercing', [YEL, WHITE, GRAY, CYAN], true, 84), GRAY), // the counter: rings, studs, barbells
       { ...artist(10.2, 6.75, (r.cell ? r.cell[0] * 31 + r.cell[1] : 7) | 0, { face: [0, 1] }) }, // behind it
       BX(11.2, 7.45, 0.18, 0.15, 1.0, 1.24, (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, HIT.face === 4 ? '$' : '#', C(GREEN, L)), true; }), // the till
       BX(9.3, 7.4, 0.14, 0.2, 1.0, 1.08, solid(GRAY, { top: '#' })), BX(9.3, 7.4, 0.14, 0.2, 1.08, 1.14, solid(RED, { top: '=' })), // portfolios
