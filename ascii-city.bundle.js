@@ -18019,16 +18019,7 @@ Object.assign(ROOM_FOR, { GAS: 'gas' });
 // of them; a wall of sleeves face-out at the back, gig posters down the left, CDs and tapes racked on the right; a
 // listening station with its headphones; and the counter by the door, a record going round on the deck behind it
 const RECORD_COLS = [RED, ORANGE, YEL, GREEN, CYAN, BLUE, MAG, WHITE, BRICK];
-const recordBin = (x, y, hl, seed) => [ // along y; waist high, the sleeves standing in it as a row of spines
-  BX(x, y, hl, 0.42, 0, 0.62, solid(BRICK, { panel: 0.8, trim: 0.58, top: '=' }), 0, 1),
-  BX(x, y, hl - 0.04, 0.36, 0.62, 0.9, (i, t, L) => {
-    if (HIT.face !== 5) { BG[i] = C(GRAY, 0.8 + L * 0.1); return set(i, fract(HIT.u * 9) < 0.4 ? '|' : ' ', C(RECORD_COLS[hash(Math.floor(HIT.u * 9), seed, 71) * 9 | 0], L * 0.9)), true; }
-    const s = Math.floor((HIT.u + hl) * 14), col = RECORD_COLS[hash(s, seed, 72) * 9 | 0]; // the sleeves' top edges, one after another
-    BG[i] = C(col, 1.6 + L * 0.3); return set(i, fract((HIT.u + hl) * 14) < 0.25 ? '|' : ' ', C(GRAY, 1)), true;
-  }, 0, 1),
-  ...[-0.55, 0.55].map((f, k) => BX(x, y + f * hl, 0.02, 0.36, 0.9, 1.05, (i, t, L) => { // divider cards: A-K, L-Z
-    BG[i] = C(WHITE, 3.4 + L * 0.2); return set(i, HIT.face <= 2 && Math.abs(HIT.w - 0.98) < 0.03 ? (k ? 'L' : 'A') : ' ', C(GRAY, 1)), true; }, 0, 1)),
-];
+// (the bins, the face-out wall, the counter and the listening cabinet are built: record-shop.js)
 // a turntable on top of something z high: the platter going round, the tonearm across it
 const turntable = (x, y, z) => ROOM_MODEL(x, y, (vx, vy) => {
   drawBox(boxAt(vx, vy, 1, 0, 0.22, 0.17, z, z + 0.06), solid(GRAY, { top: ' ' }));
@@ -18042,39 +18033,25 @@ const turntable = (x, y, z) => ROOM_MODEL(x, y, (vx, vy) => {
   rod(vx + 0.15, vy - 0.12, z + 0.11, vx - 0.02, vy - 0.05, z + 0.085, 0.006, WHITE, 1.3); // the tonearm
 });
 function recordsWall(i, u, uStep, z, d, mx, my, L) {
-  if (backWall(my) && z > 0.4 && z < 2.6) { // sleeves face out, three rows of them on narrow ledges
-    if (wallText(i, u, uStep, z, d, 'NEW IN', 2.4, 2.75, 0.18, 0.25, C(YEL, 15))) return true;
-    const row = Math.floor((z - 0.4) / 0.72), cu = Math.floor(u / 0.36), fu = fract(u / 0.36), fz = fract((z - 0.4) / 0.72);
-    if (fz < 0.08) { BG[i] = C(BRICK, 1.4); return set(i, '=', C(WARM, L)), true; } // the ledge
-    if (fu < 0.07 || fz > 0.9) { BG[i] = C(GRAY, 1.2); return set(i, ' ', 0), true; }
-    const h = hash(cu, row, 73), col = RECORD_COLS[h * 9 | 0], cx = fu - 0.53, cz = fz - 0.5, ring = Math.hypot(cx, cz);
-    BG[i] = C(col, 2.4 + L * 0.2); // a sleeve: its colour, and a design on it (a disc, stripes or a block letter)
-    if (h < 0.4) return set(i, ring < 0.3 && ring > 0.12 ? 'O' : ' ', C(GRAY, 1)), true;
-    if (h < 0.7) return set(i, fract(cz * 5) < 0.3 ? '=' : ' ', C(WHITE, 12)), true;
-    return set(i, ring < 0.2 ? '#' : ' ', C(WHITE, 14)), true;
-  }
+  if (backWall(my) && wallText(i, u, uStep, z, d, 'NEW IN', 2.4, 2.75, 0.18, 0.25, C(YEL, 15))) return true; // (the sleeves under it are built)
   if (leftWall(mx) && z > 0.9 && z < 2.5) { // gig posters and flyers, pasted over each other
     const pu = Math.floor(u / 0.7), pz = Math.floor((z - 0.9) / 0.8), h = hash(pu, pz, 74), col = RECORD_COLS[h * 9 | 0];
     if (fract(u / 0.7) < 0.08 || fract((z - 0.9) / 0.8) < 0.06) return false;
     BG[i] = C(col, 2.2 + L * 0.2);
     return set(i, fract((z - 0.9) / 0.8) > 0.75 ? (fract(u * 9) < 0.6 ? '#' : ' ') : fract(z * 9) < 0.25 ? '-' : ' ', C(h > 0.5 ? WHITE : GRAY, h > 0.5 ? 13 : 1)), true;
   }
-  if (rightWall(mx) && u < 4.6 && z > 0.3 && z < 2.3) { // CDs and tapes, spines out
-    if (fract((z - 0.3) / 0.4) < 0.12) { BG[i] = C(GRAY, 1.6); return set(i, '=', C(GRAY, L)), true; }
-    const k = hash(Math.floor(u * 30), Math.floor((z - 0.3) / 0.4), 75);
-    BG[i] = C(GRAY, 0.6); return set(i, '|', C(RECORD_COLS[k * 9 | 0], L * 1.1)), true;
-  }
   if (z < 1.0) { BG[i] = C(GRAY, 0.6 + L * 0.1); return set(i, ' ', 0), true; }
   BG[i] = C(MAG, 0.8 + L * 0.12); return set(i, ' ', 0), true; // painted a deep purple, the way record shops are
 }
 ROOM_DEFS.records = { grid: boxRoom(12, 9), light: 0.75, floor: 'boards', ceil: 'pendant', sign: true, signAt: 6, wall: recordsWall, keeper: [10.35, 6.2],
+  shelves: { kind: 'cds', wall: 'right', from: 1, to: 4.6, levels: [0.3, 0.7, 1.1, 1.5, 1.9], height: 2.3 }, // CDs and tapes on the right
   props: r => {
-    const p = [...recordBin(3.3, 3.7, 1.7, 1), ...recordBin(6.1, 3.7, 1.7, 2),
-      BX(9.6, 6.2, 1.25, 0.32, 0, 1.0, solid(BRICK, { panel: 0.5, trim: 0.96, top: '=' }), 0, 1), // the counter by the door,
+    const p = [RECORD_BIN_UNIT(3.3, 3.7, 1.7, 1), RECORD_BIN_UNIT(6.1, 3.7, 1.7, 2), RECORD_FACEOUT_WALL(1, 11),
+      SHOP_COUNTER(9.6, 6.2, 1.25, 0.32, 1.0, 0, 1, BRICK), // the counter by the door,
       { ...standing(10.35, 6.2, r.neon), face: [-1, 0] }, // and behind it, facing the shop
-      BX(9.6, 7.0, 0.16, 0.2, 1.0, 1.25, (i, t, L) => { BG[i] = C(GRAY, 1.2); return set(i, HIT.face === 2 ? '$' : '#', C(GREEN, L)), true; }, 0, 1), // the till
+      GAS_TILL(9.6, 7.0, 1.0, 1, 0), // the till
       turntable(9.6, 5.5, 1.0), // what's playing
-      BX(1.35, 6.6, 0.4, 0.28, 0, 0.9, solid(GRAY, { top: '=' }), 0, 1), turntable(1.35, 6.6, 0.9), STOOL(2.1, 6.6, RED, 0.62), // the listening station
+      SHOP_COUNTER(1.35, 6.6, 0.4, 0.28, 0.9, 0, -1, GRAY), turntable(1.35, 6.6, 0.9), STOOL(2.1, 6.6, RED, 0.62), // the listening station
       ROOM_MODEL(1.35, 6.25, (vx, vy) => { rod(vx - 0.08, vy, 1.05, vx + 0.08, vy, 1.05, 0.01, GRAY, 1); for (const e of [-1, 1]) dot(vx + e * 0.09, vy, 0.98, 0.04, solid(GRAY)); }), // its headphones
       aisleSign(3.3, 3.7, 'ROCK  SOUL', C(GRAY, 1), C(YEL, 15), 0.6), aisleSign(6.1, 3.7, 'JAZZ  DUB', C(GRAY, 1), C(CYAN, 15), 0.6)];
     p.push(...shoppers([[2.4, 3.2, 1, 0], [4.2, 4.4, -1, 0], [5.2, 2.6, 1, 0], [7.0, 4.6, -1, 0]], 0.4)); // crate diggers, heads down
@@ -37617,6 +37594,7 @@ const GONDOLA_STOCK={
   wine:{widths:[.085],cols:[GREEN,BRICK,BLACK],bottles:true},
   toys:{widths:[.12,.18,.25,.3],cols:[RED,YEL,BLUE,GREEN,MAG,ORANGE,CYAN],label:true},
   oil:{widths:[.07,.07,.09,.13],cols:[YEL,GRAY,RED,BLUE,BLUE],label:true}, // quarts of motor oil, jugs of screenwash
+  cds:{widths:[.01,.01,.014],cols:[RED,ORANGE,YEL,GREEN,CYAN,BLUE,MAG,WHITE,BRICK],spines:true}, // CDs and tapes, spines out
   florist:{widths:[.12,.14,.16],cols:[RED,MAG,YEL,WHITE,ORANGE],pots:true}, // potted plants in bloom
   thrift:{widths:[.08,.11,.14,.18],cols:[BRICK,GREEN,BLUE,YEL,GRAY,WHITE,MAG],mixed:true}, // bric-a-brac: boxes, jugs and vases
 };
@@ -38056,6 +38034,58 @@ function PLEXI_SCREEN(x,y,hl,z,h,c,s) {
     part(0,0,hl,.015,z+h-.03,z+h,GRAY,.006); // the head rail
     part(0,0,panes[1].hl,.015,z+gap-.012,z+gap,GRAY,.004); // the rail over the pass-through
   }),box:boxAt(x,y,c,s,hl,.015,z,z+h),radius:hl,plexi:{z,h,gap,panes}};
+}
+// The record shop, built: LP bins down the middle, two rows of sleeves
+// standing in a sunk trough with divider cards between the sections; sleeves
+// face-out on ledges across the back wall; the counter, its till and the
+// listening station's cabinet. (CDs and tapes are a wall-shelf run.)
+const RECORD_BIN={rim:.62,lip:.14,wall:.018,sleeve:.31,pitch:.012,run:.42};
+// A bin along y: a timber cabinet with a trough let into its top, the LPs
+// stood in it in runs (a run is one solid: every sleeve its own colour across
+// the top and ends), a divider card between each run.
+function RECORD_BIN_UNIT(x,y,hl,seed) {
+  const B=RECORD_BIN,hw=.42,c=0,s=1,inner=hw-B.wall,rows=[-1,1].map(e=>e*inner/2),runs=[],cards=[];
+  const len=hl*2-2*B.wall-.02,n=Math.max(1,Math.floor(len/(B.run+.006)));
+  const runLen=len/n-.006;
+  for(let k=0;k<n;k++){const u=-len/2+(len/n)*(k+.5);
+    for(const v of rows)runs.push({u,v,len:runLen,seed:seed*31+k*7+(v>0)});
+    if(k)cards.push({u:-len/2+(len/n)*k,letter:'ABCDEFGHJKLMNPRSTW'[(seed*5+k*3)%18]});}
+  const flat=shade=>gondolaFlat(c,s,shade);
+  const wood=flat((i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed));
+  const sleeves=r=>flat((i,t,L)=>{ // the edges of the sleeves, one after another along the run
+    const j=Math.floor((HIT.u+r.len/2)/B.pitch),col=RECORD_COLS[Math.floor(hash(j,r.seed,72)*RECORD_COLS.length)];
+    const edge=coveGroove(HIT.u+r.len/2,B.pitch,.0015,t/projX)*coveDetail(t,.15);
+    BG[i]=C(col,1.8+L*.3*coveLight(HIT.nx,HIT.ny,HIT.nz)-edge*1.2);set(i,' ',0);return true;});
+  const card=q=>flat((i,t,L)=>{BG[i]=C(WHITE,3.6+L*.2);
+    if((HIT.face===1||HIT.face===2)&&wallText(i,HIT.v,t/projX,HIT.w,t,q.letter,0,B.rim+B.sleeve+.03,.025,.04,C(GRAY,1),BG[i]))return true;
+    set(i,' ',0);return true;});
+  const runShades=runs.map(sleeves),cardShades=cards.map(card);
+  return {...ROOM_MODEL(x,y,(vx,vy)=>{
+    const part=(u,v,a,b,z0,z1,shade)=>drawBox(boxAt(vx-s*v+c*u,vy+c*v+s*u,c,s,a,b,z0,z1),shade);
+    runs.forEach((r,n)=>part(r.u,r.v,r.len/2,inner/2-.012,B.rim,B.rim+B.sleeve,runShades[n]));
+    cards.forEach((q,n)=>part(q.u,0,.002,inner-.01,B.rim,B.rim+B.sleeve+.06,cardShades[n]));
+    for(const e of [-1,1]){part(0,e*(hw-B.wall/2),hl,B.wall/2,B.rim,B.rim+B.lip,wood);part(e*(hl-B.wall/2),0,B.wall/2,inner,B.rim,B.rim+B.lip,wood);} // the trough's sides
+    coveRound(vx,vy,c,s,hl,hw,.08,B.rim,.012,(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,HIT.nx,HIT.ny,HIT.nz,seed)); // the cabinet
+    coveRound(vx,vy,c,s,hl-.04,hw-.05,0,.1,.008,(i,t,L)=>{BG[i]=C(GRAY,.7+L*.05);set(i,' ',0);return true;}); // its plinth
+  }),box:boxAt(x,y,c,s,hl,hw,0,B.rim+B.sleeve+.06),radius:Math.hypot(hl,hw),recordBin:{runs,cards,hl,hw,inner}};
+}
+// Sleeves face-out on narrow ledges across the back wall (its face at y=1).
+function RECORD_FACEOUT_WALL(x0,x1,rows=[.4,1.12,1.84]) {
+  const B=RECORD_BIN,pitch=.36,ledge=.06,lip=.02,sleeves=[];
+  rows.forEach((z,row)=>{for(let u=x0+.03;u+B.sleeve<=x1-.02;u+=pitch)sleeves.push({x:u+B.sleeve/2,z:z+.025,row,h:hash(Math.floor(u/pitch),row,73)});});
+  const design=q=>(i,t,L)=>{ // its colour, and a disc, stripes or a block letter on it
+    const col=RECORD_COLS[Math.floor(q.h*RECORD_COLS.length)];BG[i]=C(col,2.4+L*.2);
+    if(HIT.face!==3){set(i,' ',0);return true;}
+    const cx=(HIT.u)/B.sleeve,cz=(HIT.w-q.z)/B.sleeve-.5,ring=Math.hypot(cx,cz);
+    if(q.h<.4)return set(i,ring<.3&&ring>.12?'O':' ',C(GRAY,1)),true;
+    if(q.h<.7)return set(i,fract(cz*5)<.3?'=':' ',C(WHITE,12)),true;
+    return set(i,ring<.2?'#':' ',C(WHITE,14)),true;};
+  const shades=sleeves.map(design),wood=(i,t,L)=>coveTimber(i,HIT.u,HIT.v+HIT.w,L,t,0,HIT.face===3?1:0,HIT.face===5?1:0,73);
+  const cx=(x0+x1)/2,cy=1+ledge/2,len=x1-x0;
+  return {...ROOM_MODEL(cx,cy,(vx,vy)=>{ // (vx,vy: the model's place relative to the eye)
+    sleeves.forEach((q,n)=>drawBox(boxAt(vx+q.x-cx,vy+1.008-cy,1,0,B.sleeve/2,.002,q.z,q.z+B.sleeve),shades[n])); // stood on the ledge against the wall
+    for(const z of rows){drawBox(boxAt(vx,vy,1,0,len/2,ledge/2,z,z+.025),wood);drawBox(boxAt(vx,vy+ledge/2-.006,1,0,len/2,.006,z+.025,z+.025+lip),wood);} // ledge and lip
+  }),box:boxAt(cx,cy,1,0,len/2,ledge/2,rows[0],rows.at(-1)+.025+B.sleeve),radius:len/2+.1,faceOut:{sleeves,rows,ledge,lip}};
 }
 // Reach-in fridge runs along shop walls, built as glass-door coolers (the
 // pass 3 drinks cooler) instead of painted onto the wall. Each run stands on

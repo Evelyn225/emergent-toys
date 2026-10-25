@@ -161,6 +161,7 @@
     "city/shop-gondolas.js",
     "city/grocer-produce.js",
     "city/corner-shops.js",
+    "city/record-shop.js",
     "city/shop-fridges.js",
     "city/shop-display-cases.js",
     "city/izakaya-sake.js",

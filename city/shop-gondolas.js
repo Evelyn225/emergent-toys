@@ -14,6 +14,7 @@ const GONDOLA_STOCK={
   wine:{widths:[.085],cols:[GREEN,BRICK,BLACK],bottles:true},
   toys:{widths:[.12,.18,.25,.3],cols:[RED,YEL,BLUE,GREEN,MAG,ORANGE,CYAN],label:true},
   oil:{widths:[.07,.07,.09,.13],cols:[YEL,GRAY,RED,BLUE,BLUE],label:true}, // quarts of motor oil, jugs of screenwash
+  cds:{widths:[.01,.01,.014],cols:[RED,ORANGE,YEL,GREEN,CYAN,BLUE,MAG,WHITE,BRICK],spines:true}, // CDs and tapes, spines out
   florist:{widths:[.12,.14,.16],cols:[RED,MAG,YEL,WHITE,ORANGE],pots:true}, // potted plants in bloom
   thrift:{widths:[.08,.11,.14,.18],cols:[BRICK,GREEN,BLUE,YEL,GRAY,WHITE,MAG],mixed:true}, // bric-a-brac: boxes, jugs and vases
 };

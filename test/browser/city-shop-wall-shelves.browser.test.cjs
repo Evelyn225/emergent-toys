@@ -7,7 +7,7 @@ async function fixture(run){const p=await browser.newPage(),errors=[];p.on('page
  await p.evaluate(()=>{paused=false;mode='walk';room=me=null;T=10;env(0);render(0);});
  await run(p);assert.deepEqual(errors,[]);
 }finally{await p.close();}}
-const SHOPS=[['store','STORE','grocery',1],['florist','FLORIST','florist',1],['drugstore','DRUGSTORE','pharmacy',1],['thrift','THRIFT','thrift',1],['books','BOOKS','books',3],['gas','GAS','oil',1]];
+const SHOPS=[['store','STORE','grocery',1],['florist','FLORIST','florist',1],['drugstore','DRUGSTORE','pharmacy',1],['thrift','THRIFT','thrift',1],['books','BOOKS','books',3],['gas','GAS','oil',1],['records','RECORDS','cds',1]];
 
 // a point in a unit's frame: u along its wall from its middle, v out from the wall face
 const FRAME=`(o,x,y)=>{const d=o.wallShelves,c=d.c,s=d.s,face=d.wall==='left'?[1,(d.a0+d.a1)/2]:d.wall==='right'?[room.W-1,(d.a0+d.a1)/2]:d.wall==='front'?[(d.a0+d.a1)/2,room.H-1]:[(d.a0+d.a1)/2,1];
